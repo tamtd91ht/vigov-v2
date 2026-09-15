@@ -28,23 +28,22 @@ owns_facts:
 Mỗi App ID cần đăng ký và duyệt riêng với Zalo — 300 xã không thể là 300 mini app. Một
 Mini App phục vụ mọi xã, nên nó **không có domain để mà phân biệt**.
 
-Thứ tự ưu tiên xác định xã ở kênh công dân:
+Kênh công dân tách **ba lớp**, không bao giờ gộp:
 
-| Ưu tiên | Nguồn | Độ tin |
+| Lớp | Trả lời câu | Tin được |
 |---|---|---|
-| 1 | **Deep-link** — mã QR dán tại trụ sở xã, link xã gửi qua ZNS | Cao — xã chủ động phát hành |
-| 2 | **Xã công dân đã chọn trước đó**, lưu trong hồ sơ | Cao |
-| 3 | **Vị trí GPS** đối chiếu ranh giới hành chính | Trung bình — chỉ **gợi ý** |
-| 4 | **Người dùng tự chọn** từ danh sách có tìm kiếm | Phương án cuối, **luôn phải có** |
+| **Khám phá** | Công dân *muốn* làm việc với xã nào (QR · deep link · GPS · picker · hồ sơ) | **Không** — chỉ gợi ý |
+| **Phiên** | Phiên này *đang* thao tác ở xã nào | **Có** — server phát hành sau khi công dân xác nhận |
+| **Uỷ quyền** | Công dân này được đọc/ghi gì ở xã đó | **Có** — quan hệ công dân↔xã + luật 4 |
 
-Ràng buộc không thương lượng:
+Tham số trên QR hay link là **dữ liệu client cung cấp**: nó dẫn giao diện, không cấp quyền.
+Mini App gọi **một API host duy nhất**, không bao giờ dựng URL theo từng xã.
 
-- GPS **gợi ý**, không **quyết định**. Vị trí giả mạo được, và ranh giới xã ở đô thị chạy
-  giữa lòng đường.
-- Đã chọn xã thì **hiện rõ tên xã trên mọi màn hình**. Gửi phản ánh nhầm xã là sự cố
-  nghiệp vụ thật: xã nhận việc không thuộc địa bàn, người dân chờ vô ích.
-- Đổi xã là **hành động tường minh**, không tự đổi theo GPS.
-- Backend **không tin** xã do Mini App gửi — đối chiếu với quan hệ công dân ↔ xã trong phiên.
+GPS **gợi ý**, không **quyết định**. Đã chọn xã thì tên xã hiện trên **mọi màn hình**, và xác
+nhận lại ở bước cuối trước khi gửi — gửi nhầm xã là sự cố nghiệp vụ thật.
+
+→ Chi tiết khuôn deep link, mức tin theo nguồn, màn hình chọn xã, và OA theo xã:
+ADR 0005 · ADR 0006 · `skills/zalo-miniapp-multi-tenant`
 
 ## Ranh giới tin cậy: `Host`
 

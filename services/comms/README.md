@@ -9,6 +9,21 @@ Article · RadioBulletin · Video · MapLayer · MapPin · GovContact · Notific
 Ownership is authoritative in `kb/30-indexes/data-ownership.json` (GENERATED — run `make kb`).
 No other service may open this service's schema; they read through gRPC or events (rule 2).
 
+## Notifications go out through a per-commune Official Account
+
+Each commune has **its own Zalo OA**: citizens expect the sender to be *"UBND xã X"*. So this
+service holds a **multi-OA adapter**, with credentials as per-commune configuration in the
+secret store — never in a config file, never in a process environment variable.
+
+A commune with no OA configured yet **degrades visibly**: staff see a "not notified" flag.
+Sending is eventually consistent with the business write — a petition must never fail to be
+accepted because a notification could not be sent.
+
+⚠ ADR 0006 records an **unverified precondition**: that one Mini App can work with many OAs.
+Check the vendor documentation before writing the first line of this channel.
+
+→ ADR 0006
+
 ## Layout
 
 ```

@@ -4,10 +4,21 @@
 
 ## Owns
 
-Tenant · Domain · Quota · TenantLifecycleEvent
+Tenant · Domain · Quota · TenantLifecycleEvent · **TenantAlias**
 
 Ownership is authoritative in `kb/30-indexes/data-ownership.json` (GENERATED — run `make kb`).
 No other service may open this service's schema; they read through gRPC or events (rule 2).
+
+## TenantAlias — why it exists
+
+`old tenant / old name / old code -> current tenant`.
+
+A QR code printed on a commune noticeboard is a physical object that outlives renames, domain
+changes and mergers. Without this table every printed QR becomes waste at the first merger —
+and mergers are certain, not hypothetical. The picker's search reads it too: the name a
+citizen knows may no longer be the official one.
+
+→ ADR 0005
 
 ## Layout
 
