@@ -1,0 +1,76 @@
+# Bản kê tri thức ViGov — agent NẠP TỆP NÀY TRƯỚC MỌI THỨ KHÁC.
+#
+# VÌ SAO CÓ TỆP NÀY: AI không có trí nhớ giữa các phiên. Nếu tri thức không nằm ở nơi nạp
+# được rẻ và đáng tin, mỗi phiên phải khám phá lại hệ thống — tốn, chậm, và kết luận khác
+# nhau mỗi lần. Tệp này đủ nhỏ để LUÔN nạp, và đủ mô tả để agent QUYẾT ĐỊNH cần gì mà
+# không phải mở tệp.
+#
+# Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
+
+version: 1
+generated_at: null            # `make kb` điền
+from_commit: null           # `make kb` điền
+
+budget:
+  always_load_max: 20000  # token — vượt thì PHẢI bớt, không được nới
+  in_use: null         # `make kb` đo
+
+always_load:                 # T0 — nạp mọi phiên, không hỏi
+  - kb/00-foundation/domain-boundaries.md
+  - kb/00-foundation/system-invariants.md
+  - kb/00-foundation/multi-tenant-model.md
+
+load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾT ĐỊNH mà không cần mở tệp
+  - id: ngon-ngu-chung
+    file: kb/00-foundation/ubiquitous-language.md
+    tier: T0
+    source: CURATED
+    load_when: "gặp thuật ngữ hành chính, đặt tên trường, dịch nghiệp vụ sang mã"
+
+  - id: cau-hoi-mo
+    file: kb/00-foundation/open-questions.json
+    tier: T0
+    source: CURATED
+    load_when: "trước khi ra bất kỳ quyết định kiến trúc nào — kiểm khách đã chốt chưa"
+
+  - id: so-huu-du-lieu
+    file: kb/30-indexes/data-ownership.json
+    tier: T3
+    source: GENERATED
+    load_when: "TRƯỚC KHI thêm bất kỳ thực thể, truy vấn, hay lời gọi chéo service nào"
+    warning: "không sửa tay — sinh bởi `make kb`"
+
+  - id: ban-do-ma
+    file: kb/30-indexes/code-map.json
+    tier: T3
+    source: GENERATED
+    load_when: "cần tìm một hàm/kiểu/endpoint nằm ở đâu — DÙNG THAY CHO grep toàn repo"
+    warning: "không sửa tay — sinh bởi `make kb`"
+
+  - id: luong-su-kien
+    file: kb/30-indexes/event-flows.json
+    tier: T3
+    source: GENERATED
+    load_when: "đổi một sự kiện, hoặc cần biết đổi cái này thì ai vỡ"
+
+  - id: ranh-gioi-giao-dich
+    file: kb/30-indexes/transaction-boundaries.json
+    tier: T3
+    source: CURATED + kiểm bằng GENERATED
+    load_when: "luồng nghiệp vụ nhiều bước — nhất quán mạnh hay cuối cùng, bù trừ ra sao"
+
+faq_routes:       # định tuyến thẳng — tiết kiệm nhiều token nhất
+  "X nằm ở đâu":              kb/30-indexes/code-map.json
+  "ai sở hữu thực thể X":     kb/30-indexes/data-ownership.json
+  "đổi cái này thì ai vỡ":    kb/30-indexes/event-flows.json
+  "hợp đồng API ra sao":      kb/20-contracts/
+  "vì sao làm thế này":       kb/10-decisions/
+  "đang cháy, làm gì":        kb/40-runbooks/
+  "khách đã chốt chưa":       kb/00-foundation/open-questions.json
+
+not_here:           # nói rõ điều KHÔNG biết — chặn agent đi tìm vô ích,
+  # và chặn agent 'bổ sung cho đủ' bằng cách viết thêm tài liệu (đó là cách lạm phát bắt đầu)
+  - "Chi tiết cài đặt bên trong service → ĐỌC MÃ. kb/ không mô tả lại mã."
+  - "Lịch sử đã làm gì → `git log`. kb/ không kể lại quá trình."
+  - "Trạng thái công việc → công cụ quản lý việc, không phải kb/."
+  - "Hướng dẫn dùng thư viện bên thứ ba → tài liệu của họ."

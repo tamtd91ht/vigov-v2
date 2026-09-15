@@ -1,0 +1,15 @@
+{
+  "_description": "Luong nghiep vu nhieu buoc: muc nhat quan + cach bu tru + VI SAO.",
+  "_note": "Tang CURATED (co kiem bang GENERATED). Cot 'vi_sao' KHONG cong cu nao suy ra duoc — day la ly do tep nay khong hoan toan tu sinh.",
+  "_template": {
+    "flow_name": {
+      "consistency": "manh | cuoi_cung",
+      "scope": "service nao, mot giao dich hay nhieu",
+      "max_lag": "chi khi nhat_quan = cuoi_cung",
+      "compensation": "that bai het luot thu thi lam gi — phai la hanh dong nghiep vu CO VET",
+      "why": "vi sao chon muc nhat quan nay — BAT BUOC, khong duoc bo trong",
+      "adr": "kb/10-decisions/NNNN-....md (neu co tranh luan)"
+    }
+  },
+  "_empty": "chua co luong nghiep vu nao — khai o day TRUOC khi viet ma"
+}

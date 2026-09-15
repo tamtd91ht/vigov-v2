@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package vigov.petitions.v1;
+
+// petitions — Tiếp dân.
+//
+// Contract rules that apply to every RPC here:
+//   * tenant_id travels in gRPC METADATA, never in a message body. A body is data the caller
+//     declares, and callers can declare it wrongly; metadata is set by the interceptor.
+//   * field numbers are never reused; a removed field becomes `reserved`
+//   * new fields are always optional with a safe default
+//
+// No business RPCs yet — this is the skeleton.
+
+service PetitionsService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message HealthRequest {}
+message HealthResponse {
+  bool ok = 1;
+}

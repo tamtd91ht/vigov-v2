@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package vigov.events.v1;
+
+// Event envelope shared by every service.
+//
+// tenant_id lives in the ENVELOPE, never inside a payload: the envelope is set by
+// infrastructure, while a payload is data the publisher declares — and publishers can declare
+// it wrongly. Consumers trust the envelope only.
+//
+// Event names are PAST TENSE and versioned: "petitions.received.v1". A consumer that receives
+// an envelope with no tenant_id must REFUSE it, never guess.
+
+message Envelope {
+  string id = 1;          // stable, for deduplication — queues deliver at least once
+  string name = 2;        // "<domain>.<what happened>.<version>"
+  string tenant_id = 3;
+  string occurred_at = 4; // RFC3339
+  bytes payload = 5;
+}

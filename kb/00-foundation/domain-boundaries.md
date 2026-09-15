@@ -1,0 +1,83 @@
+---
+id: domain-boundaries
+tier: T0
+source: CURATED
+owner: architecture
+derived_from_commit: null
+expires: null
+owns_facts:
+  - "ranh giới giữa các service và lý do cắt ở đó"
+  - "service nào được gọi thẳng service nào"
+  - "quy tắc đặt tên service"
+---
+
+# Miền nghiệp vụ và ranh giới service
+
+**Tệp này trả lời câu VÌ SAO.** Danh sách service hiện có, cổng, phụ thuộc thực tế nằm ở
+`kb/30-indexes/services.json` — **tầng GENERATED**, luôn đúng, không chép sang đây.
+
+## Nguyên tắc cắt ranh giới
+
+| # | Nguyên tắc | Vì sao |
+|---|---|---|
+| 1 | Cắt theo **miền nghiệp vụ hành chính**, không theo tầng kỹ thuật | Một thay đổi nghiệp vụ nên chạm đúng một service |
+| 2 | Service sở hữu **dữ liệu** của miền mình, không chỉ sở hữu mã | Sở hữu mã mà chung CSDL là monolith phân tán |
+| 3 | Ranh giới đi theo **nhịp thay đổi**, không theo kích thước | Thứ đổi cùng nhau thì ở cùng nhau |
+| 4 | Ranh giới đi theo **ranh giới trách nhiệm hành chính** | Văn thư, một cửa, thanh tra là các bộ phận khác nhau ngoài đời |
+
+## Vì sao KHÔNG cắt nhỏ hơn
+
+Cấp xã có quy mô nhỏ: vài chục cán bộ, vài nghìn hồ sơ một năm. Cắt quá nhỏ thì chi phí
+vận hành (triển khai, giám sát, truy vết) vượt lợi ích, và mỗi luồng nghiệp vụ phải đi qua
+nhiều lời gọi mạng cho một việc mà một giao dịch làm được.
+
+**Phép thử trước khi tách service mới:** luồng nghiệp vụ này có cần **nhất quán mạnh** với
+service hiện có không? Có → **đừng tách**, vì tách là chấp nhận nhất quán cuối cùng và phải
+viết bù trừ. Không → tách được.
+
+## Đường đi hợp lệ giữa các service
+
+| Từ → tới | Cách | Khi nào |
+|---|---|---|
+| bất kỳ → bất kỳ | **gRPC** qua hợp đồng | Cần dữ liệu ngay, chấp nhận phụ thuộc lúc chạy |
+| bất kỳ → bất kỳ | **Sự kiện** | Chấp nhận trễ; bên nhận giữ bản sao đọc của riêng mình |
+| bất kỳ → CSDL của người khác | **KHÔNG BAO GIỜ** | — |
+
+Thêm một đường gọi mới là thêm một cạnh vào đồ thị phụ thuộc. Trước khi thêm, tra
+`kb/30-indexes/dependencies.json` xem có tạo vòng không — vòng phụ thuộc đồng bộ là chỗ hệ
+thống sẽ kẹt khi một service chậm.
+
+## Đặt tên
+
+- **Định danh máy đọc dùng tiếng Anh** — tên service, proto package, import path, tên trường.
+  Văn xuôi tài liệu (`kb/*.md`) giữ tiếng Việt.
+- Service theo **miền nghiệp vụ**, không theo màn hình: `documents`, `petitions`, `dossiers`,
+  `finance`. Không có `admin-service` — "admin" là giao diện, không phải miền.
+- Sự kiện: `<miền>.<việc đã xảy ra>.<phiên bản>` — `petitions.received.v1`
+- Tên ở **thì quá khứ**: sự kiện mô tả việc **đã xảy ra**, không phải lệnh
+- **Ngoại lệ có chủ đích:** khi thuật ngữ hành chính không có bản dịch đúng, giữ nguyên khái
+  niệm và chú thích. `PhanAnh` / `KhieuNai` / `ToCao` là **ba thứ khác nhau về pháp lý**;
+  gộp cả ba thành `complaint` là làm mất phân biệt đó. → `kb/00-foundation/ubiquitous-language.md`
+
+## Tám service
+
+Cắt theo **bộ phận chịu trách nhiệm trong một UBND xã** — xem lý do đầy đủ ở
+`kb/10-decisions/0001-service-decomposition.md`.
+
+| Service | Bộ phận ngoài đời |
+|---|---|
+| `platform` | Nền tảng — nhà cung cấp vận hành, **chỉ siêu dữ liệu** |
+| `identity` | Tổ chức – cán bộ, và định danh công dân toàn nền tảng |
+| `documents` | Văn thư — văn bản đến/đi |
+| `petitions` | Tiếp dân — phản ánh, khiếu nại, tố cáo, và nhiệm vụ phát sinh |
+| `dossiers` | Một cửa — hồ sơ thủ tục hành chính |
+| `finance` | Tài chính – kế toán — dự toán, giải ngân |
+| `comms` | Thông tin – truyền thông — tin bài, truyền thanh, bản đồ, thông báo |
+| `reporting` | Read model — **không sở hữu dữ liệu gốc nào** |
+
+**Hai thứ cố ý KHÔNG phải service:** nhật ký thao tác (`pkg/audit`) và lưu trữ tệp
+(`pkg/storage`). Lý do ở ADR 0001.
+
+→ Thuật ngữ nghiệp vụ: `kb/00-foundation/ubiquitous-language.md`
+→ Ai sở hữu thực thể nào: `kb/30-indexes/data-ownership.json` (GENERATED)
+→ Luật 2: `.claude/rules/critical/2-service-boundary.md`

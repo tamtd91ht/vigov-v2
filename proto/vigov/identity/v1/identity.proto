@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package vigov.identity.v1;
+
+// Identity owns two clearly separated populations.
+//
+// Staff are per-commune, accountable, and governed by RBAC.
+// Citizens are PLATFORM-WIDE with a many-to-many relationship to communes, because a person
+// registered in one commune may live, work, or report an issue in another.
+// See kb/10-decisions/0002-citizen-identity-platform-level.md.
+
+service IdentityService {
+  rpc GetStaff(GetStaffRequest) returns (Staff);
+  rpc ListCitizenCommunes(ListCitizenCommunesRequest) returns (ListCitizenCommunesResponse);
+}
+
+message Staff {
+  string id = 1;
+  string tenant_id = 2;       // staff belong to exactly one commune
+  string username = 3;        // UNIQUE (tenant_id, username) — never globally unique
+  repeated string roles = 4;
+}
+
+// A citizen exists once for the whole platform.
+message Citizen {
+  string id = 1;
+  // Phone is unique PLATFORM-WIDE. It is never returned unmasked unless the caller holds
+  // explicit full-view permission, and every such read is audited.
+  string phone_masked = 2;
+}
+
+// The link between a citizen and a commune, with the capacity they act in.
+message CitizenCommune {
+  string citizen_id = 1;
+  string tenant_id = 2;
+  Capacity capacity = 3;
+  enum Capacity {
+    CAPACITY_UNSPECIFIED = 0;
+    PERMANENT_RESIDENT = 1;   // thường trú
+    TEMPORARY_RESIDENT = 2;   // tạm trú
+    TRANSIENT = 3;            // vãng lai — reporting an issue seen while passing through
+  }
+}
+
+message GetStaffRequest { string id = 1; }
+message ListCitizenCommunesRequest { string citizen_id = 1; }
+message ListCitizenCommunesResponse { repeated CitizenCommune items = 1; }

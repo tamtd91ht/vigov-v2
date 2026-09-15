@@ -1,0 +1,128 @@
+"""SessionStart — warn when the CODE is silently deciding a customer's open question.
+
+WHY THIS HOOK EXISTS — the signature, and most expensive, failure mode of a 100%-AI project:
+
+    The agent breaks NO rule. It simply does not notice that a chain of local decisions,
+    each reasonable on its own, is adding up to an ARCHITECTURAL DECISION it has no
+    authority to make.
+
+This happened on ViGov v1. "One commune or many" was open question #8, the customer had not
+decided, and the estimate said "real multi-tenant: +1-2 days". The brain even had a rule:
+"never decide the customer's open questions". But that rule was one sentence of prose with
+nothing checking it. After 103 commits the code had decided — SINGLE-COMMUNE, in 12 places:
+12 global unique keys, commune name from an environment variable, zero occurrences of
+tenant_id. Cost to reverse once found: 20-28 days.
+
+Every line was innocent. The sum had already decided. This hook makes the sum VISIBLE.
+
+Source of truth: kb/00-foundation/open-questions.json
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _common as c  # noqa: E402
+
+HOOK = "drift_guard"
+
+SCAN_EXT = (".go", ".ts", ".tsx", ".sql", ".proto")
+SCAN_DIRS = ("services", "web", "internal", "pkg", "cmd", "proto", "migrations")
+MAX_FILES = 1200          # safety cap — this hook must not slow session start
+
+
+def iter_files(root: str):
+    n = 0
+    for d in SCAN_DIRS:
+        base = os.path.join(root, d)
+        if not os.path.isdir(base):
+            continue
+        for dp, dn, fn in os.walk(base):
+            dn[:] = [x for x in dn if x not in
+                     ("node_modules", "vendor", "dist", "build", ".git", "testdata")]
+            for f in fn:
+                if f.endswith(SCAN_EXT) and not f.endswith("_test.go"):
+                    yield os.path.join(dp, f)
+                    n += 1
+                    if n >= MAX_FILES:
+                        return
+
+
+def load_questions(root: str) -> list:
+    p = os.path.join(root, "kb", "00-foundation", "open-questions.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def main() -> None:
+    c.utf8_streams()
+    c.read_input()
+    root = c.project_root()
+
+    questions = [q for q in load_questions(root)
+                 if q.get("status") in ("OPEN", "SILENTLY_DECIDED")]
+    if not questions:
+        sys.exit(0)
+
+    # Compile once, scan files ONCE — never rescan per question
+    probes = []
+    for qi, q in enumerate(questions):
+        for sig in q.get("code_signals", []):
+            try:
+                probes.append((qi, re.compile(sig["pattern"]), sig.get("means", "?")))
+            except Exception:
+                continue
+    if not probes:
+        sys.exit(0)
+
+    tally: dict = {}
+    for path in iter_files(root):
+        try:
+            with open(path, encoding="utf-8", errors="ignore") as f:
+                text = f.read()
+        except Exception:
+            continue
+        for qi, pat, means in probes:
+            n = len(pat.findall(text))
+            if n:
+                tally.setdefault(qi, {}).setdefault(means, 0)
+                tally[qi][means] += n
+
+    lines = []
+    for qi, q in enumerate(questions):
+        counts = tally.get(qi)
+        if not counts:
+            continue
+        # Report only when ONE direction dominates and the other is nearly absent
+        ranked = sorted(counts.items(), key=lambda kv: -kv[1])
+        top, top_n = ranked[0]
+        rest = sum(v for _, v in ranked[1:])
+        if top_n < 3 or rest * 3 > top_n:
+            continue
+        detail = " · ".join(f"{k}: {v} places" for k, v in ranked)
+        lines += [
+            f"[ViGov] WARNING: open question #{q.get('id','?')} \"{q.get('question','')}\" "
+            f"is being SILENTLY DECIDED toward: {top}.",
+            f"        Signals: {detail}. The customer has NOT decided.",
+            f"        Reversal cost: {q.get('reversal_cost','grows over time')}.",
+            f"        -> Raise it with the user BEFORE: "
+            f"{', '.join(q.get('ask_before', ['adding a new entity']))}",
+        ]
+
+    if lines:
+        print("\n" + "\n".join(lines) + "\n")
+        c.log_guard(HOOK, "SessionStart", "", "open question being silently decided", len(lines) // 4)
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

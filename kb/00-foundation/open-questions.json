@@ -1,0 +1,82 @@
+[
+  {
+    "id": 1,
+    "question": "Khi sáp nhập / chia tách xã, dữ liệu xã cũ xử lý ra sao?",
+    "status": "OPEN",
+    "why_it_matters": "Quyết định hình dạng tenant_id. Nếu tenant_id mang nghĩa (mã hành chính, tên miền), lần sáp nhập đầu tiên buộc sửa khoá ngoại trên toàn bộ dữ liệu lịch sử — tức sửa tài liệu lưu trữ, thứ pháp luật không cho phép.",
+    "code_signals": [
+      {
+        "pattern": "tenant_?[Ii]d\\s*(?::?=|==)\\s*[\"'`][a-z]",
+        "means": "tenant_id mang nghĩa",
+        "threshold": 1
+      },
+      {
+        "pattern": "TenantID\\s+ulid\\.|NewULID|ulid\\.Make",
+        "means": "tenant_id vô nghĩa",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "KHÔNG đảo ngược được sau khi có dữ liệu lưu trữ thật",
+    "ask_before": [
+      "thiết kế bảng đầu tiên",
+      "sinh tenant_id đầu tiên"
+    ]
+  },
+  {
+    "id": 2,
+    "question": "Công dân tương tác với MỘT hay NHIỀU xã? (thường trú khác tạm trú khác nơi phát sinh vụ việc)",
+    "status": "DECIDED",
+    "why_it_matters": "Nếu số điện thoại duy nhất toàn cục thì một công dân chỉ thuộc đúng một xã, vĩnh viễn. Điều đó sai trong đời thật ít nhất bốn cách: thường trú một nơi tạm trú nơi khác, phản ánh sự cố nhìn thấy ở xã khác, chuyển hộ khẩu, nộp hồ sơ thay người thân.",
+    "reversal_cost": "Cao — đụng mô hình định danh, phải di trú dữ liệu công dân",
+    "ask_before": [
+      "thiết kế bảng công dân",
+      "thiết kế luồng OTP"
+    ],
+    "decision": "NHIỀU xã — định danh công dân ở tầng nền tảng, quan hệ công dân↔xã là nhiều-nhiều",
+    "decided_on": "2026-09-15",
+    "adr": "kb/10-decisions/0002-citizen-identity-platform-level.md"
+  },
+  {
+    "id": 3,
+    "question": "Quản trị viên nhà cung cấp có được đọc dữ liệu nghiệp vụ của xã không?",
+    "status": "DECIDED",
+    "why_it_matters": "Vấn đề pháp lý và niềm tin của cơ quan nhà nước, không phải vấn đề kỹ thuật. Câu trả lời an toàn: không — vận hành thao tác siêu dữ liệu, muốn đọc nội dung phải có phiên hỗ trợ do xã cấp, có thời hạn, ghi vết, xã thấy được.",
+    "reversal_cost": "Trung bình — nhưng là rủi ro pháp lý nếu làm sai",
+    "ask_before": [
+      "thêm vai trò vượt phạm vi xã"
+    ],
+    "decision": "VIHAT chỉ thao tác SIÊU DỮ LIỆU — không có đường đọc dữ liệu nghiệp vụ của xã",
+    "decided_on": "2026-09-15",
+    "adr": "kb/10-decisions/0003-platform-admin-metadata-only.md"
+  },
+  {
+    "id": 4,
+    "question": "Cấp huyện/tỉnh xem tổng hợp nhiều xã tới mức chi tiết nào?",
+    "status": "OPEN",
+    "why_it_matters": "Đây là cửa duy nhất cố ý mở xuyên ranh giới cách ly — nơi mọi rò rỉ nghiêm trọng sẽ đi qua. Nguyên tắc an toàn: chỉ đọc, chỉ số liệu tổng hợp, phạm vi tính từ cây tổ chức (không nhận từ client), mọi lần đọc ghi nhật ký.",
+    "code_signals": [
+      {
+        "pattern": "@cross-tenant",
+        "means": "đã có đường đọc chéo",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Trung bình",
+    "ask_before": [
+      "viết endpoint báo cáo đầu tiên đọc nhiều xã"
+    ]
+  },
+  {
+    "id": 5,
+    "question": "Quy mô 12 tháng: bao nhiêu xã, cùng huyện hay nhiều tỉnh?",
+    "status": "DECIDED",
+    "why_it_matters": "Quyết định CSDL chung hay tách theo xã, và hình dạng cây tổ chức.",
+    "reversal_cost": "Cao nếu chọn sai mô hình lưu trữ",
+    "ask_before": [
+      "chốt chiến lược lưu trữ"
+    ],
+    "decision": "200+ xã — tenant_id là shard key, bảng lớn partition theo tenant từ migration đầu",
+    "decided_on": "2026-09-15",
+    "adr": "kb/10-decisions/0004-shard-by-tenant.md"
+  }
+]

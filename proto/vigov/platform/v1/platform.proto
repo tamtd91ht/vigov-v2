@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package vigov.platform.v1;
+
+// The platform service owns the commune registry and NOTHING ELSE.
+//
+// It deliberately has no RPC that returns business content. The vendor operating the platform
+// admin console cannot read a commune's petitions or documents because THERE IS NO PATH — not
+// because a permission flag is switched off. A flag can be flipped; a path has to be written,
+// and writing one would be caught in review.
+//
+// See kb/10-decisions/0003-platform-admin-metadata-only.md.
+
+service PlatformService {
+  // ResolveHost maps an incoming Host to a commune. Called by every service edge, so it must
+  // be cheap and cacheable with a short TTL.
+  rpc ResolveHost(ResolveHostRequest) returns (ResolveHostResponse);
+
+  // GetTenant returns metadata only: name, status, quota. Never business data.
+  rpc GetTenant(GetTenantRequest) returns (Tenant);
+}
+
+message Tenant {
+  // Opaque and immutable (ULID). NOT the administrative code, domain, or commune name —
+  // a merger must never force rewriting foreign keys on archival records.
+  string id = 1;
+  string host = 2;
+  string display_name = 3;   // point-in-time attribute, not an identifier
+  bool active = 4;
+  reserved 5;                // was 'admin_code' — removed, never reuse the number
+}
+
+message ResolveHostRequest { string host = 1; }
+message ResolveHostResponse { Tenant tenant = 1; }
+message GetTenantRequest { string id = 1; }

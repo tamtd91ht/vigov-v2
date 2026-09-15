@@ -1,0 +1,30 @@
+# Secrets — never committed
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+!*.pub
+
+# Runtime artefacts
+.claude/logs/
+.claude/settings.local.json
+__pycache__/
+*.pyc
+
+# Go
+/bin/
+/dist/
+vendor/
+
+# Generated from .proto — run `make proto`
+gen/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+web/build/
+
+# The GENERATED kb tiers are committed on purpose, so a fresh clone has working
+# knowledge before anyone runs `make kb`.
