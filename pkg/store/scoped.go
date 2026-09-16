@@ -41,9 +41,30 @@ func (s *Scoped) TenantID() tenant.ID { return s.tid }
 //
 // The caller writes the rest of the WHERE clause; $1 is always the commune, so a hand-written
 // query that forgets it will not compile against this signature in any useful way.
+//
+// This form assumes ONE table. For a join, use QueryJoin — `tenant_id` is ambiguous the moment
+// a second table is in scope, and PostgreSQL refuses the query rather than guessing.
 func (s *Scoped) Query(ctx context.Context, tail string, args ...any) (*sql.Rows, error) {
 	full := "WHERE tenant_id = $1 " + tail
 	return s.db.QueryContext(ctx, full, append([]any{string(s.tid)}, args...)...)
+}
+
+// QueryJoin runs a read across joined tables, still scoped to the commune.
+//
+// WHY A SECOND METHOD INSTEAD OF LOOSENING THE FIRST: Query owns the whole statement, which is
+// what makes forgetting the commune impossible. A joined query has to own its own FROM clause,
+// so the scope has to be applied differently — and the honest way to say that is a separate
+// method with a separate contract, not an escape hatch on the safe one.
+//
+// The contract: the caller writes the full statement, uses $1 for the commune, and qualifies
+// it with the alias of the table that owns the row — `nd.tenant_id = $1`, never a bare
+// `tenant_id = $1`, which is ambiguous across joined tables.
+//
+// Every other table in the join must ALSO be constrained to $1 in its ON clause. Joining on id
+// alone would match another commune's row wherever ids collide, which is exactly the leak
+// rule 1 exists to prevent, and no test of a single commune would ever show it.
+func (s *Scoped) QueryJoin(ctx context.Context, stmt string, args ...any) (*sql.Rows, error) {
+	return s.db.QueryContext(ctx, stmt, append([]any{string(s.tid)}, args...)...)
 }
 
 // Tx runs fn inside one transaction, scoped to the same commune.
