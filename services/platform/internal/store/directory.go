@@ -106,6 +106,45 @@ func (d *Directory) ByHostErr(ctx context.Context, host string) (tenant.Tenant, 
 	return out, nil
 }
 
+// ByID reads one commune by its opaque identifier.
+//
+// WHY IT DOES NOT REFUSE A DEACTIVATED COMMUNE, unlike ByHostErr: the two answer different
+// questions. ByHostErr answers "may this request be served", and a merged commune must stop
+// serving. ByID answers "what is this commune", and a merged commune still has to be
+// describable — rule 7 keeps its data and its codes, and something has to be able to render
+// the name attached to an archival record. The caller reads Active and decides; that is
+// exactly why the field exists rather than being folded into an error.
+//
+// It returns exactly one commune or an error. Like the rest of this type it never returns a
+// list, so there is no query here that could span communes.
+func (d *Directory) ByID(ctx context.Context, id tenant.ID) (tenant.Tenant, error) {
+	if !id.Valid() {
+		return tenant.Tenant{}, fmt.Errorf("directory: %w", domain.ErrIDKhongHopLe)
+	}
+
+	// The canonical host, so a caller building a link picks the same address every time; a
+	// commune may hold several hosts after a merger. LEFT JOIN because a commune that exists
+	// with no domain yet is a configuration state, not a missing commune — reporting "no such
+	// commune" for it would send the operator hunting the wrong table.
+	const q = `
+		SELECT t.id, COALESCE(d.host, ''), t.ten, t.dang_hoat_dong
+		FROM tenant t
+		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh
+		WHERE t.id = $1`
+
+	var out tenant.Tenant
+	var raw string
+	err := d.db.QueryRowContext(ctx, q, id.String()).Scan(&raw, &out.Host, &out.Name, &out.Active)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return tenant.Tenant{}, ErrKhongCoXa
+	case err != nil:
+		return tenant.Tenant{}, fmt.Errorf("directory: truy vấn xã %q: %w", id, err)
+	}
+	out.ID = tenant.ID(raw)
+	return out, nil
+}
+
 var (
 	ErrKhongCoXa       = errors.New("directory: không có xã nào ứng với host này")
 	ErrXaNgungHoatDong = errors.New("directory: xã đã ngừng hoạt động")

@@ -29,6 +29,19 @@ type Config struct {
 	// ListenAddr is the address this process serves on.
 	ListenAddr string
 
+	// GRPCListenAddr is the address this process serves gRPC on — a SEPARATE port from
+	// ListenAddr, not a shared one.
+	//
+	// WHY SEPARATE: gRPC needs HTTP/2 with prior knowledge, REST is served to browsers over
+	// HTTP/1.1, and sharing one listener means demultiplexing the two by protocol at runtime.
+	// Every proxy, health check and timeout in front of the process then has to understand
+	// both, and the failure when one of them does not is a connection that hangs rather than
+	// one that is refused.
+	//
+	// It is a PLATFORM-WIDE constant: a port is a property of the process, and one process
+	// serves every commune (rule 8, invariant 5).
+	GRPCListenAddr string
+
 	// DatabaseDSN is the connection string for THIS service's own schema. A service never
 	// holds a DSN for another service's database — that is rule 2, and a second DSN appearing
 	// in this struct is the first symptom of a distributed monolith.
@@ -148,6 +161,7 @@ func Load(serviceName string) (Config, error) {
 
 	cfg := Config{
 		ListenAddr:          firstNonEmpty(os.Getenv("LISTEN_ADDR"), ":8080"),
+		GRPCListenAddr:      firstNonEmpty(os.Getenv("GRPC_LISTEN_ADDR"), ":9090"),
 		DatabaseDSN:         dsn,
 		RedisDSN:            strings.TrimSpace(os.Getenv("REDIS_DSN")),
 		TenantCacheTTL:      duration(os.Getenv("TENANT_CACHE_TTL"), 30*time.Second),

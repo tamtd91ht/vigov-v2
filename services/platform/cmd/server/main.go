@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,9 +18,13 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"google.golang.org/grpc"
 
+	platformv1 "github.com/vihat/vigov/gen/vigov/platform/v1"
 	"github.com/vihat/vigov/pkg/config"
+	"github.com/vihat/vigov/pkg/grpcx"
 	"github.com/vihat/vigov/pkg/httpx"
+	svcgrpc "github.com/vihat/vigov/services/platform/internal/grpc"
 	svchttp "github.com/vihat/vigov/services/platform/internal/http"
 	svcstore "github.com/vihat/vigov/services/platform/internal/store"
 )
@@ -70,7 +75,8 @@ func run(log *slog.Logger) error {
 
 	// 3. directory — resolves Host -> commune, cached with a short TTL because this sits on the
 	//    path of EVERY request at 200+ communes (ADR 0004, decision 5).
-	directory := svcstore.NewCachedDirectory(svcstore.NewDirectory(db), cfg.TenantCacheTTL)
+	danhBa := svcstore.NewDirectory(db)
+	directory := svcstore.NewCachedDirectory(danhBa, cfg.TenantCacheTTL)
 
 	// 4. checker — authz.Checker backed by the identity service.
 	// TODO(next): identity does not expose the permission contract yet. Until it does, no
@@ -111,12 +117,58 @@ func run(log *slog.Logger) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	// 6. gRPC — the inter-service surface, on its OWN port. gRPC needs HTTP/2 and the REST
+	//    surface is served to browsers over HTTP/1.1; one listener for both means
+	//    demultiplexing by protocol, and every proxy and health check in front of the process
+	//    then has to understand both.
+	//
+	// TODO(security): CALLER AUTHENTICATION ON THE gRPC PORT IS NOT IMPLEMENTED.
+	//
+	//	What is in place today: network isolation only. This port is internal to the cluster
+	//	and must not be published. There is no mTLS, no service token, no caller identity —
+	//	any process that can open a TCP connection here can call both RPCs.
+	//
+	//	Why that is tolerable for THIS service and no other: ADR 0003 means no business data
+	//	crosses this boundary at all. ResolveHost returns a ULID that is already public — it
+	//	travels in the QR deep link every citizen scans (ADR 0005) — and GetTenant returns
+	//	registry metadata: name, host, active. An unauthenticated caller here learns which
+	//	communes exist, and nothing about any of them.
+	//
+	//	REQUIRED BEFORE A REAL DEPLOYMENT, and required BEFORE any other service exposes gRPC:
+	//	  1. mTLS between services, or a signed service token verified by a server interceptor
+	//	  2. the caller's identity recorded on the call, so a cross-service read is attributable
+	//	  3. this port bound to the internal interface only, never 0.0.0.0 on a public host
+	//
+	//	No stop-gap scheme is invented here on purpose. A hand-rolled shared secret would be
+	//	replaced by whatever is chosen in step 1 anyway, and in the meantime it would read
+	//	like authentication to anyone reviewing this file. A NAMED gap can be audited; a
+	//	silent one cannot.
+	grpcSrv := grpc.NewServer(
+		// The commune is lifted out of metadata into context here, once, before any handler.
+		// A call to a non-exempt RPC with no commune is refused with InvalidArgument — never
+		// defaulted (rule 1, forbidden #1).
+		grpc.UnaryInterceptor(grpcx.UnaryServerInterceptor()),
+	)
+	// The UNCACHED directory on purpose: the gRPC paths use ByHostErr / ByID, which keep
+	// "no such commune" and "the database is down" apart, and CachedDirectory implements only
+	// tenant.Directory, whose bool answer collapses the two. Caching this path needs a cache
+	// that preserves the distinction — TODO(next), it matters once every service edge resolves
+	// its Host through here (ADR 0004, decision 5).
+	platformv1.RegisterPlatformServiceServer(grpcSrv, svcgrpc.NewServer(danhBa, log))
+
+	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)
+	if err != nil {
+		return err
+	}
+
 	// Graceful shutdown. An administrative write cut in half by a deploy is a record in a state
 	// the retention rules do not allow (rule 2, invariant 6).
 	dungLai := make(chan os.Signal, 1)
 	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
-	loi := make(chan error, 1)
+	// Buffered for two: either server may fail, and an unbuffered send from a goroutine
+	// nobody is reading any more would leak it.
+	loi := make(chan error, 2)
 	go func() {
 		log.Info("khởi động", "service", "platform", "addr", cfg.ListenAddr,
 			"env", cfg.Env, "dsn", cfg.Redacted().DatabaseDSN)
@@ -124,15 +176,48 @@ func run(log *slog.Logger) error {
 			loi <- err
 		}
 	}()
+	go func() {
+		log.Info("khởi động gRPC", "service", "platform", "addr", cfg.GRPCListenAddr)
+		// Serve returns nil after GracefulStop, so no ErrServerClosed equivalent to filter.
+		if err := grpcSrv.Serve(grpcLis); err != nil {
+			loi <- err
+		}
+	}()
 
 	select {
 	case err := <-loi:
+		// One surface failing takes the process down rather than leaving it half-serving: a
+		// platform answering HTTP but not ResolveHost looks healthy while every other
+		// service's edge is failing to resolve its Host.
+		grpcSrv.Stop()
+		_ = srv.Close()
 		return err
+
 	case <-dungLai:
 		log.Info("nhận tín hiệu dừng, đang đóng kết nối")
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		return srv.Shutdown(ctx)
+
+		// Both surfaces drain, and neither waits for the other: an administrative write cut in
+		// half by a deploy is a record in a state the retention rules do not allow (rule 2,
+		// invariant 6).
+		xongGRPC := make(chan struct{})
+		go func() {
+			grpcSrv.GracefulStop()
+			close(xongGRPC)
+		}()
+
+		errHTTP := srv.Shutdown(ctx)
+
+		select {
+		case <-xongGRPC:
+		case <-ctx.Done():
+			// A call that will not finish must not hold a deploy open indefinitely. Forcing
+			// the stop here is visible in the logs; hanging is not.
+			log.Warn("gRPC không đóng kịp hạn, buộc dừng")
+			grpcSrv.Stop()
+		}
+		return errHTTP
 	}
 }
 
