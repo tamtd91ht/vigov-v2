@@ -548,11 +548,11 @@
     },
     "store.Allows": {
       "kind": "func",
-      "at": "services/identity/internal/store/checker.go:48"
+      "at": "services/identity/internal/store/checker.go:57"
     },
     "store.AllowsNhieu": {
       "kind": "func",
-      "at": "services/identity/internal/store/checker.go:73"
+      "at": "services/identity/internal/store/checker.go:82"
     },
     "store.ByHost": {
       "kind": "func",
@@ -580,7 +580,7 @@
     },
     "store.DatMatKhauHash": {
       "kind": "func",
-      "at": "services/identity/internal/store/can_bo.go:73"
+      "at": "services/identity/internal/store/can_bo.go:101"
     },
     "store.Directory": {
       "kind": "type",
@@ -596,7 +596,7 @@
     },
     "store.GhiNhanDangNhap": {
       "kind": "func",
-      "at": "services/identity/internal/store/can_bo.go:56"
+      "at": "services/identity/internal/store/can_bo.go:84"
     },
     "store.GhiNhanDung": {
       "kind": "func",
@@ -668,11 +668,11 @@
     },
     "store.TheoEmail": {
       "kind": "func",
-      "at": "services/identity/internal/store/can_bo.go:33"
+      "at": "services/identity/internal/store/can_bo.go:55"
     },
     "store.TheoID": {
       "kind": "func",
-      "at": "services/identity/internal/store/can_bo.go:45"
+      "at": "services/identity/internal/store/can_bo.go:73"
     },
     "store.ThuHoi": {
       "kind": "func",

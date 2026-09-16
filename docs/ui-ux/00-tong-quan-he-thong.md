@@ -213,7 +213,8 @@ Dữ liệu mẫu (5 bộ phận):
 | `bo_phan_id` | uuid | |
 | `vai_tro_id` | uuid | |
 | `dien_thoai` | text | |
-| `dang_hoat_dong` | bool | chip `Đang hoạt động` |
+| `co_tai_khoan` | bool | có tài khoản đăng nhập hay không — bảng này chứa cả danh bạ cán bộ. Mặc định `false`, cấp tường minh |
+| `dang_hoat_dong` | bool | tài khoản **chưa bị khoá**. Chip `Đang hoạt động` chỉ có nghĩa khi `co_tai_khoan = true` |
 | `dang_nhap_gan_nhat` | timestamp | hoặc `Chưa đăng nhập` |
 | `hien_tren_mini_app` | bool | dùng ở Danh bạ |
 

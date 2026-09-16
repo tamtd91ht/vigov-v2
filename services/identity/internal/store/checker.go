@@ -29,6 +29,14 @@ func NewChecker(db *store.DB, log *slog.Logger) *Checker {
 // Every join is constrained to the SAME commune, not just to the matching id. Joining on id
 // alone would match another commune's role wherever ids collide — the leak rule 1 exists to
 // prevent, and one that no single-commune test would ever show.
+//
+// `nd.co_tai_khoan` SITS NEXT TO `nd.dang_hoat_dong` AND IS NOT THE SAME CHECK. A person who has
+// no sign-in account holds no permission at all — the public staff directory shares this table
+// with the accounts (migration 0003), and a directory row may well carry a vai_tro_id because
+// the org chart needs one. Reading grants off that row would hand the subsystem to somebody who
+// was never given an account. Locked-out (`dang_hoat_dong = false`) is the other, separate case:
+// an account that exists and is currently shut. Both must hold, for the same fail-closed reason
+// stated at the top of this file — an error or an omission here widens access invisibly.
 const truyVanQuyen = `
 SELECT vq.quyen_ma
 FROM nguoi_dung nd
@@ -37,6 +45,7 @@ JOIN vai_tro_quyen vq ON vq.tenant_id = nd.tenant_id AND vq.vai_tro_id = vt.id
 WHERE nd.tenant_id = $1
   AND nd.id = $2
   AND nd.deleted_at IS NULL
+  AND nd.co_tai_khoan
   AND nd.dang_hoat_dong
   AND vt.deleted_at IS NULL
   AND vq.quyen_ma = ANY($3)`

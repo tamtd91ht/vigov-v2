@@ -76,11 +76,28 @@ type ghiChep struct {
 	ketThuc          map[int]string // tx id -> "commit" | "rollback"
 	loiTheo          map[string]error
 	khongCoNguoiDung bool
+
+	// The two flags of the one staff row this driver serves. They are SEPARATE because the
+	// columns are separate (migration 0003): coTaiKhoan says the person has a sign-in account at
+	// all, dangHoatDong says that account is not locked. The driver applies each one only when
+	// the statement's WHERE clause actually names it, which is what lets a test tell a query
+	// that filters from one that does not.
+	coTaiKhoan   bool
+	dangHoatDong bool
+
+	// soHangCanBo counts the staff rows actually handed to Go. Zero is the assertion that a row
+	// never crossed the boundary at all — see dang_nhap_danh_ba_test.go.
+	soHangCanBo int
 }
 
 func moDB(t *testing.T) (*store.DB, *ghiChep) {
 	t.Helper()
-	g := &ghiChep{ketThuc: map[int]string{}, loiTheo: map[string]error{}}
+	g := &ghiChep{
+		ketThuc:      map[int]string{},
+		loiTheo:      map[string]error{},
+		coTaiKhoan:   true,
+		dangHoatDong: true,
+	}
 	db := sql.OpenDB(ketNoiGia{g: g})
 	// More than one connection on purpose: a nested transaction (the defect shape this file
 	// hunts — an audit entry written in its OWN transaction) must be able to run and be caught,
@@ -124,6 +141,12 @@ func (g *ghiChep) soGiaoDich() int {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.soTx
+}
+
+func (g *ghiChep) soHangCanBoDaTra() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.soHangCanBo
 }
 
 // giaoDichDangMo reports the transaction that is open right now — the newest one the driver has
@@ -202,21 +225,45 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 	if !strings.Contains(q, "nguoi_dung") {
 		return &rowsGia{}, nil
 	}
+
 	c.g.mu.Lock()
-	trong := c.g.khongCoNguoiDung
-	c.g.mu.Unlock()
-	if trong {
-		return &rowsGia{cot: cotNguoiDung}, nil
-	}
-	return &rowsGia{cot: cotNguoiDung, hang: [][]driver.Value{{
+	// Each flag is applied ONLY where the WHERE clause names it — that is the whole point of
+	// reading the predicate rather than the whole statement: the SELECT list names both columns
+	// no matter what the filter does, so matching on the statement would report a filter that
+	// had been deleted.
+	dk := dieuKien(q)
+	trong := c.g.khongCoNguoiDung ||
+		(strings.Contains(dk, "co_tai_khoan") && !c.g.coTaiKhoan) ||
+		(strings.Contains(dk, "dang_hoat_dong") && !c.g.dangHoatDong)
+	hang := []driver.Value{
 		idNoiBo, maCanBo, "Nguyễn Văn A", emailCB, "Công chức Văn phòng",
-		"bp-001", "vt-001", dienThoaiGia, bamGia(), true,
-	}}}, nil
+		"bp-001", "vt-001", dienThoaiGia, bamGia(), c.g.coTaiKhoan, c.g.dangHoatDong,
+	}
+	c.g.mu.Unlock()
+
+	if trong {
+		return &rowsGia{cot: cotNguoiDung, g: c.g}, nil
+	}
+	return &rowsGia{cot: cotNguoiDung, g: c.g, hang: [][]driver.Value{hang}}, nil
 }
 
+// dieuKien returns the predicate half of a statement, or "" when it has none.
+func dieuKien(q string) string {
+	i := strings.Index(q, " WHERE ")
+	if i < 0 {
+		return ""
+	}
+	return q[i:]
+}
+
+// cotNguoiDung mirrors store.cotCanBo, IN ITS ORDER. co_tai_khoan sits immediately before
+// dang_hoat_dong in both, and the driver hands the row back positionally exactly as PostgreSQL
+// would: get the order wrong in either place and two booleans silently trade values with no
+// error anywhere. store.TestDocDungCapCoTaiKhoanVaDangHoatDong pins that order against the real
+// SELECT list.
 var cotNguoiDung = []string{
 	"id", "ma", "ho_ten", "email", "chuc_vu", "bo_phan_id", "vai_tro_id",
-	"dien_thoai", "mat_khau_hash", "dang_hoat_dong",
+	"dien_thoai", "mat_khau_hash", "co_tai_khoan", "dang_hoat_dong",
 }
 
 func giaTri(args []driver.NamedValue) []driver.Value {
@@ -247,6 +294,7 @@ type rowsGia struct {
 	cot  []string
 	hang [][]driver.Value
 	i    int
+	g    *ghiChep // nil for statements that are not a staff read
 }
 
 func (r *rowsGia) Columns() []string { return r.cot }
@@ -257,6 +305,11 @@ func (r *rowsGia) Next(dest []driver.Value) error {
 	}
 	copy(dest, r.hang[r.i])
 	r.i++
+	if r.g != nil {
+		r.g.mu.Lock()
+		r.g.soHangCanBo++
+		r.g.mu.Unlock()
+	}
 	return nil
 }
 

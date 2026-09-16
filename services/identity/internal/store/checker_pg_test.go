@@ -135,9 +135,15 @@ func dungXa(t *testing.T, db *sql.DB, tenantID, vaiTroID, nguoiID string, quyen 
 		}
 	}
 
+	// co_tai_khoan IS SET EXPLICITLY, and the reason is worth keeping. Migration 0003 defaults it
+	// to FALSE — authority is granted by a named person, never by a schema default — so a staff
+	// row inserted without it is a directory entry that can hold no permission. Leaving it out
+	// here turned every test in this file red at once, which is the default doing exactly what it
+	// was designed to do. These tests are about the permission check, so their people are
+	// accounts.
 	_, err = db.Exec(
-		`INSERT INTO nguoi_dung (tenant_id, id, ma, ho_ten, email, vai_tro_id)
-		 VALUES ($1,$2,$3,$4,$5,$6)`,
+		`INSERT INTO nguoi_dung (tenant_id, id, ma, ho_ten, email, vai_tro_id, co_tai_khoan)
+		 VALUES ($1,$2,$3,$4,$5,$6,true)`,
 		tenantID, nguoiID, "CB-"+nguoiID, "Nguyễn Văn A",
 		nguoiID+"@xa.danang.gov.vn", vaiTroID)
 	if err != nil {
@@ -220,6 +226,10 @@ func TestQuyenCuaXaNayKhongApDungOXaKhac(t *testing.T) {
 func TestCanBoNgungHoatDongBiTuChoi(t *testing.T) {
 	// An account is locked the moment a person leaves. The grant row is still there, so only
 	// the dang_hoat_dong predicate stands between a former employee and the subsystem.
+	//
+	// THE TWIN OF THIS TEST IS THE ONE BELOW. Two columns, two tests, on purpose: they were one
+	// column carrying both meanings until migration 0003, and a single test would let them be
+	// merged back without anything turning red.
 	db := moKetNoi(t)
 	xaA, _ := xaRieng(t)
 	dungXa(t, db, xaA, "vt-1", "nd-1", []string{"task.read"})
@@ -232,6 +242,40 @@ func TestCanBoNgungHoatDongBiTuChoi(t *testing.T) {
 	c := dungChecker(db)
 	if c.Allows(ctxXa(xaA), canBo("nd-1", xaA), "task.read") {
 		t.Error("tài khoản đã khoá mà vẫn qua được")
+	}
+}
+
+func TestNguoiChiCoTrongDanhBaKhongCoQuyenNao(t *testing.T) {
+	// The other half of the pair: NOT LOCKED (dang_hoat_dong stays true) but NO SIGN-IN ACCOUNT.
+	// This is the 26-minus-12 of the specification's seed — people who exist in the public staff
+	// directory and in the org chart, which is why the row can perfectly well carry a vai_tro_id,
+	// and therefore reach the grants through the join. Only nd.co_tai_khoan stands between a
+	// directory entry and the subsystem, and dang_hoat_dong cannot stand in for it: it is true
+	// here, as it is on every directory row.
+	db := moKetNoi(t)
+	xaA, _ := xaRieng(t)
+	dungXa(t, db, xaA, "vt-1", "nd-1", []string{"task.read"})
+	if _, err := db.Exec(
+		`UPDATE nguoi_dung SET co_tai_khoan = false WHERE tenant_id = $1 AND id = $2`,
+		xaA, "nd-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stated rather than assumed: the person is NOT locked. Were this false, the test would pass
+	// on the wrong predicate and prove nothing about co_tai_khoan.
+	var hoatDong bool
+	if err := db.QueryRow(
+		`SELECT dang_hoat_dong FROM nguoi_dung WHERE tenant_id = $1 AND id = $2`,
+		xaA, "nd-1").Scan(&hoatDong); err != nil {
+		t.Fatal(err)
+	}
+	if !hoatDong {
+		t.Fatal("dựng sai cảnh: người này phải CHƯA bị khoá, chỉ là không có tài khoản")
+	}
+
+	c := dungChecker(db)
+	if c.Allows(ctxXa(xaA), canBo("nd-1", xaA), "task.read") {
+		t.Error("người chỉ có trong danh bạ, không có tài khoản đăng nhập, mà vẫn có quyền")
 	}
 }
 
