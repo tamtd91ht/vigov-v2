@@ -70,9 +70,14 @@ HARD_DELETE = [
 #
 # SQL keywords are written upper-case throughout this codebase, so requiring upper case here
 # loses no real coverage. The ORM forms below stay case-sensitive for the same reason.
+#
+# The lookahead spans up to the statement terminator, NOT to the end of the line: a readable
+# multi-line UPDATE puts its WHERE on the next line, and a line-bounded check flagged every one
+# of them. Same lesson as the Go `delete()` case above — the guard has to match how the code is
+# actually written, or it gets switched off.
 EMPTY_FILTER = re.compile(
-    r"\bDELETE\s+FROM\b(?![^\n;]*\bWHERE\b)"
-    r"|\bUPDATE\s+\w+\s+SET\b(?![^\n;]*\bWHERE\b)"
+    r"\bDELETE\s+FROM\b(?![^;]*?\bWHERE\b)"
+    r"|\bUPDATE\s+\w+\s+SET\b(?![^;]*?\bWHERE\b)"
     r"|\.\s*(Updates?|Delete)\s*\(\s*\)")
 
 BUSINESS = re.compile(

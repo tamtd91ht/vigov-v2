@@ -203,6 +203,62 @@ CREATE INDEX IF NOT EXISTS nguoi_dung_dang_nhap
     ON nguoi_dung (tenant_id, email) WHERE deleted_at IS NULL AND dang_hoat_dong;
 
 -- ---------------------------------------------------------------------------
+-- phien — the session registry.
+--
+-- WHY A TABLE AND NOT ONLY A SIGNED TOKEN: a token that is merely signed cannot be taken
+-- back. Locking an account, changing a role or changing a password must end every open
+-- session AT ONCE (skills/session-and-token, required #7) — with a stateless token the former
+-- employee keeps working until it expires on its own.
+--
+-- Every request looks up `sid` here, so this table sits on the hot path and is indexed for
+-- exactly that lookup.
+--
+-- A session belongs to ONE commune. A staff member with accounts in two communes holds two
+-- separate sessions, and neither can be used against the other's domain.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS phien (
+    tenant_id      TEXT        NOT NULL,
+    id             TEXT        NOT NULL,           -- the `sid` carried in the token
+    nguoi_dung_id  TEXT        NOT NULL,
+    -- SHA-256 of the refresh token. The token itself is never stored: a leaked backup must not
+    -- hand over working sessions.
+    refresh_hash   TEXT        NOT NULL,
+    -- Rotating refresh tokens: reusing a superseded one revokes the whole chain, which is how
+    -- a stolen token is detected (skills/session-and-token, required #4).
+    thay_the_boi   TEXT,
+    tao_luc        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    het_han_luc    TIMESTAMPTZ NOT NULL,
+    thu_hoi_luc    TIMESTAMPTZ,
+    thu_hoi_ly_do  TEXT,
+    dung_gan_nhat  TIMESTAMPTZ,
+    ip_tao         TEXT        NOT NULL DEFAULT '',
+    -- User agent, truncated. Never personal data (rule 3).
+    thiet_bi       TEXT        NOT NULL DEFAULT '',
+    PRIMARY KEY (tenant_id, id),
+    FOREIGN KEY (tenant_id, nguoi_dung_id) REFERENCES nguoi_dung (tenant_id, id)
+) PARTITION BY HASH (tenant_id);
+
+DO $$ BEGIN
+    FOR i IN 0..31 LOOP
+        EXECUTE format(
+            'CREATE TABLE IF NOT EXISTS phien_p%s PARTITION OF phien '
+            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+    END LOOP;
+END $$;
+
+-- The hot-path lookup: is this sid still valid, right now.
+CREATE INDEX IF NOT EXISTS phien_con_hieu_luc
+    ON phien (tenant_id, id) WHERE thu_hoi_luc IS NULL;
+
+-- Revoking every session of one staff member, which happens on lock, role change and password
+-- change — three operations that must not scan the table.
+CREATE INDEX IF NOT EXISTS phien_theo_can_bo
+    ON phien (tenant_id, nguoi_dung_id) WHERE thu_hoi_luc IS NULL;
+
+CREATE INDEX IF NOT EXISTS phien_refresh
+    ON phien (tenant_id, refresh_hash);
+
+-- ---------------------------------------------------------------------------
 -- Seed: the 33 permission keys from the specification.
 --
 -- Seeded here rather than created by an administrator because the code is what enforces them:

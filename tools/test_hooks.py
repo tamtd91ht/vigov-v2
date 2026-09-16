@@ -135,6 +135,10 @@ CASES = [
     # file holding a map unwritable, and a guard that cries wolf gets switched off.
     ("data_safety_guard", "Go built-in delete on a map", PASS,
      w("services/nentang/internal/store/cache.go", "delete(c.entries, host)")),
+    # A readable UPDATE puts its WHERE on the next line. A line-bounded check flagged every one.
+    ("data_safety_guard", "UPDATE with WHERE on the next line", PASS,
+     w("services/donthu/internal/store/q.go",
+       'const q = `UPDATE don_thu SET trang_thai = $3\n\t WHERE tenant_id = $1 AND id = $2`')),
 
     # ---- rule 8 · secrets --------------------------------------------------
     ("secret_scan", "hardcoded secret", BLOCK,

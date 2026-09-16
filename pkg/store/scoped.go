@@ -37,15 +37,16 @@ func (d *DB) For(ctx context.Context) *Scoped {
 // the value, which keeps every use greppable.
 func (s *Scoped) TenantID() tenant.ID { return s.tid }
 
-// Query runs a read already filtered by commune.
+// Query runs a read of ONE table, already filtered by commune.
 //
-// The caller writes the rest of the WHERE clause; $1 is always the commune, so a hand-written
-// query that forgets it will not compile against this signature in any useful way.
+// The caller names the columns and the table; this adds `WHERE tenant_id = $1` and binds it,
+// so $1 is always the commune and the caller's own placeholders start at $2. There is no
+// signature here that omits the commune, which is the point of the package.
 //
-// This form assumes ONE table. For a join, use QueryJoin — `tenant_id` is ambiguous the moment
-// a second table is in scope, and PostgreSQL refuses the query rather than guessing.
-func (s *Scoped) Query(ctx context.Context, tail string, args ...any) (*sql.Rows, error) {
-	full := "WHERE tenant_id = $1 " + tail
+// For a join, use QueryJoin: `tenant_id` is ambiguous the moment a second table is in scope,
+// and PostgreSQL refuses the query rather than guessing.
+func (s *Scoped) Query(ctx context.Context, cot, bang, tail string, args ...any) (*sql.Rows, error) {
+	full := "SELECT " + cot + " FROM " + bang + " WHERE tenant_id = $1 " + tail
 	return s.db.QueryContext(ctx, full, append([]any{string(s.tid)}, args...)...)
 }
 
