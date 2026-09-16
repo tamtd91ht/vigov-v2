@@ -220,10 +220,17 @@ report(total <= TOKEN_BUDGET, "5. Always-loaded budget",
 
 
 # ---- 6. No .md outside kb/, services/*/README.md, .claude/ ---------------
+# docs/ui-ux/ is a NAMED exception, not an open door: it holds the UI specification
+# transcribed from an external running prototype. It answers "what does the screen look
+# like", which kb/ deliberately does not own — so it competes with no owning file (rule 9 #2).
+# The exception is the exact directory, never docs/ as a whole: the moment any .md may live
+# under docs/, documentation starts scattering again, which is what this invariant exists
+# to prevent.
 ALLOWED = (
     re.compile(r"^kb[/\\]"), re.compile(r"^\.claude[/\\]"),
     re.compile(r"^services[/\\][a-z0-9_\-]+[/\\]README\.md$"),
     re.compile(r"^apps[/\\][a-z0-9_\-]+[/\\]README\.md$"),
+    re.compile(r"^docs[/\\]ui-ux[/\\][^/\\]+\.md$"),
     re.compile(r"^(README|CLAUDE)\.md$"),
 )
 stray = []

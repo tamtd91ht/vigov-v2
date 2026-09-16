@@ -1,0 +1,34 @@
+# Dòng kết thúc — ghim theo repo, không theo cấu hình từng máy.
+#
+# VÌ SAO: `core.autocrlf=true` trên Windows chuyển LF sang CRLF lúc checkout. Mã trong git
+# vẫn sạch, nhưng `gofmt -l` chạy trên tệp ở đĩa thì báo TOÀN BỘ tệp Go cần định dạng lại —
+# 59 tệp, trong khi không có một thay đổi mã nào. Cổng `make check` vì thế đỏ vì môi trường,
+# không vì mã, và một cổng đỏ thường trực là cổng người ta học cách bỏ qua.
+#
+# Ghim ở đây thì mọi máy lấy cùng một dạng, bất kể cấu hình git cá nhân.
+
+* text=auto eol=lf
+
+# Mã và cấu hình — luôn LF, kể cả trên Windows
+*.go        text eol=lf
+*.sql       text eol=lf
+*.proto     text eol=lf
+*.py        text eol=lf
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.json      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.md        text eol=lf
+*.sh        text eol=lf
+Makefile    text eol=lf
+
+# Tệp nhị phân — git không đụng vào
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.webp      binary
+*.pdf       binary
+*.xlsx      binary
+*.zip       binary

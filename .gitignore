@@ -28,3 +28,6 @@ web/build/
 
 # The GENERATED kb tiers are committed on purpose, so a fresh clone has working
 # knowledge before anyone runs `make kb`.
+
+# Cấu hình MCP là của từng máy, không phải của dự án
+.mcp.json
