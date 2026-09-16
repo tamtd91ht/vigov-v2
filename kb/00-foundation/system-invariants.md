@@ -3,7 +3,7 @@ id: system-invariants
 tier: T0
 source: CURATED
 owner: architecture
-derived_from_commit: 184869f
+derived_from_commit: f9f35d4
 expires: null
 owns_facts:
   - "những điều luôn đúng trong hệ thống ViGov, vi phạm là sự cố"
@@ -30,7 +30,7 @@ Những điều **luôn đúng**. Vi phạm bất kỳ điều nào là **sự c
 |---|---|
 | 1 | Mọi bản ghi nghiệp vụ thuộc **đúng một xã** và **đúng một service sở hữu** |
 | 2 | Hồ sơ hành chính **không bị xoá cứng** — chỉ xoá mềm, hoặc ẩn danh |
-| 3 | Mọi thao tác ghi để lại **vết không sửa được**, trong cùng giao dịch |
+| 3 | Mọi thao tác ghi để lại **vết không sửa được**, trong cùng giao dịch — cưỡng chế ở tầng CSDL, ADR 0013 |
 | 4 | Mã nghiệp vụ đã cấp **không cấp lại**, kể cả sau khi xoá mềm |
 | 5 | Số văn bản đánh theo **từng cơ quan**, không đánh toàn hệ thống |
 
@@ -50,6 +50,7 @@ Những điều **luôn đúng**. Vi phạm bất kỳ điều nào là **sự c
 | Token lệch xã với domain | **401** + ghi nhật ký báo động |
 | Consumer nhận thông điệp thiếu `tenant_id` | **Từ chối xử lý** |
 | Lời gọi gRPC không mang `x-tenant-id` trong metadata | **Từ chối** `INVALID_ARGUMENT` — ngoại lệ chỉ theo danh sách trắng tường minh (ADR 0012) |
+| Di trú schema hỏng lúc khởi động | **Service không khởi động** — không chạy tiếp trên schema sai (ADR 0013) |
 | Không xác định được chủ sở hữu dữ liệu | **ĐIỀU KIỆN DỪNG** — hỏi người dùng |
 
 > Nguyên tắc chung: **hỏng thì đóng.** Không bao giờ có giá trị mặc định trên đường cách ly.
