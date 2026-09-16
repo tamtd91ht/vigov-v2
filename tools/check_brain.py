@@ -214,8 +214,18 @@ total += est_tokens(idx)
 for m in re.findall(r"^\s+-\s+(kb/[^\s]+)", idx, re.M):
     total += est_tokens(rd(os.path.join(ROOT, m.replace("/", os.sep))))
 
+# kb/INDEX.yaml carries this same number under `in_use`, written by `make kb`, and it is the
+# first thing a session reads. Until 2026-09-16 the two disagreed by 7x — INDEX.yaml claimed
+# 11% of the ceiling was used while the real figure was 80%. Only the ceiling is enforced here;
+# a stale mirror is REPORTED, because failing the gate on it would turn every edit to a rule
+# into a broken build until someone remembered to run `make kb`.
+ghi = re.search(r"^\s*in_use:\s*(\d+)", idx, re.M)
+lech = ""
+if ghi and abs(int(ghi.group(1)) - total) > 10:
+    lech = f" · kb/INDEX.yaml ghi {ghi.group(1)} — chạy `make kb`"
+
 report(total <= TOKEN_BUDGET, "5. Always-loaded budget",
-    f"~{total} / {TOKEN_BUDGET} tokens ({total*100//TOKEN_BUDGET}%)",
+    f"~{total} / {TOKEN_BUDGET} tokens ({total*100//TOKEN_BUDGET}%){lech}",
     ["over budget — REMOVE something; never raise the ceiling"])
 
 

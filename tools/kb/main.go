@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -134,31 +135,50 @@ func stampIndex(root string) {
 	_ = os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
-// alwaysLoadTokens estimates the always-loaded budget: the files listed under always_load,
-// at the ~4 chars/token rule of thumb used by tools/check_brain.py.
+var reAlwaysLoad = regexp.MustCompile(`(?m)^\s+-\s+(kb/\S+)`)
+
+// alwaysLoadTokens estimates the always-loaded budget.
+//
+// THIS MUST MIRROR tools/check_brain.py INVARIANT 5 EXACTLY. check_brain ENFORCES the ceiling
+// and fails the gate; this only writes the number into kb/INDEX.yaml, which is the first file
+// every session reads. When the two disagree, the number a reader acts on is the wrong one.
+//
+// It disagreed until 2026-09-16, in two ways, both understating:
+//
+//	scope    only the always_load list — leaving out CLAUDE.md and the ten @import-ed rule
+//	         files, which are the larger half of what is actually always loaded
+//	divisor  4 chars/token, the English rule of thumb, while this brain is written in
+//	         Vietnamese with diacritics at ~2.2 (check_brain.py:43)
+//
+// Together they reported 2870 of 25000 — 11% — when the real figure was 20075, or 80%. A
+// reader of INDEX.yaml would have concluded there was room for another twenty thousand tokens.
+//
+// Two details that look like nits and are not: count RUNES, not bytes, because Python's len()
+// counts characters and Vietnamese diacritics are multi-byte in UTF-8; and truncate PER FILE,
+// because est_tokens() is applied per file before summing.
 func alwaysLoadTokens(root, index string) int {
 	total := 0
-	inList := false
-	for _, ln := range strings.Split(index, "\n") {
-		t := strings.TrimSpace(ln)
-		if strings.HasPrefix(t, "always_load:") {
-			inList = true
-			continue
+	add := func(rel string) {
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			return // a missing file reads as empty in check_brain too
 		}
-		if inList {
-			if !strings.HasPrefix(t, "- ") {
-				if t != "" && !strings.HasPrefix(t, "#") {
-					break
-				}
-				continue
-			}
-			f := strings.TrimSpace(strings.TrimPrefix(t, "- "))
-			if b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f))); err == nil {
-				total += len(b)
+		total += int(float64(len([]rune(string(b)))) / 2.2)
+	}
+
+	add("CLAUDE.md")
+	if ents, err := os.ReadDir(filepath.Join(root, ".claude", "rules", "critical")); err == nil {
+		for _, e := range ents {
+			if strings.HasSuffix(e.Name(), ".md") {
+				add(".claude/rules/critical/" + e.Name())
 			}
 		}
 	}
-	return total / 4
+	add("kb/INDEX.yaml")
+	for _, m := range reAlwaysLoad.FindAllStringSubmatch(index, -1) {
+		add(m[1])
+	}
+	return total
 }
 
 func findRoot() (string, error) {
