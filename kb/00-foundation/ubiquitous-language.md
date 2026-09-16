@@ -3,12 +3,13 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: 5887496
+derived_from_commit: 96574b4
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
   - "ánh xạ khái niệm nghiệp vụ sang danh từ tài nguyên trên URL"
   - "vì sao khoá quyền feedback.* lệch với tài nguyên citizen-reports"
+  - "vì sao khái niệm cán bộ mang bốn cái tên trên bốn bề mặt"
   - "phân biệt phản ánh, khiếu nại, tố cáo"
   - "tên gọi các bước trong vòng đời phiếu phản ánh"
   - "tên gọi vai trò cán bộ cấp xã"
@@ -43,7 +44,7 @@ Ba từ này là **giá trị enum**, và giá trị enum **không dịch sang t
 | Đơn thư | `don_thu` | Bao gồm khiếu nại, tố cáo, kiến nghị |
 | Giải ngân | `giai_ngan` | |
 | Nhiệm vụ | `nhiem_vu` | Việc giao cho cán bộ |
-| Cán bộ, công chức | `can_bo` | Người dùng nội bộ |
+| Cán bộ, công chức | `can_bo` | Người dùng nội bộ — **bảng lại tên là `nguoi_dung`**, xem mục "Một khái niệm, bốn cái tên" |
 | Công dân | `cong_dan` | Người dân — **không** gọi là "khách hàng", "user" |
 | Đơn vị hành chính | `don_vi_hanh_chinh` | Xã / phường / thị trấn |
 
@@ -98,10 +99,34 @@ khác nhau đặt hai tên khác nhau cho cùng một thứ.
 | Nghiệm thu | `nghiem_thu` | `verification` | Với phiếu phản ánh đây là kiểm tra thực địa kèm ảnh, không phải nghiệm thu công trình có hội đồng (`acceptance`) |
 | Đóng phiếu | `dong_phieu` | `closure` | |
 | Cấp số văn bản | `so_di` | `number` | |
+| **Cán bộ** | `nguoi_dung` (bảng) · `can_bo` (nghiệp vụ) | **CHƯA CHỐT — HỎI KHÁCH** | Không phải chưa ai nghĩ tới: đây là **câu hỏi đang chờ khách**, và là khái niệm của màn hình kế tiếp (CRUD cán bộ). Xem mục ngay dưới |
 
 **Bảng này còn thiếu.** Nó mới phủ các khái niệm đã xuất hiện trong mã hoặc trong
 `.claude/skills/rest-api-design/SKILL.md`. Gặp khái niệm chưa có dòng ở đây: **dừng lại và
 hỏi**, đừng tự dịch rồi viết route — đường dẫn không sửa lại được sau khi một xã chạy thật.
+
+### Một khái niệm, bốn cái tên: `nguoi_dung` · `can_bo` · `CanBo` · `Staff`
+
+Ghi lại ở đây vì lệch **đã có thật trong mã**, và vì người đọc gặp cái tên thứ hai sẽ tưởng
+mình gặp hai khái niệm. Chỉ có **một** khái niệm: con người làm việc trong cơ quan xã.
+
+| Bề mặt | Tên đang dùng | Vì sao là tên đó |
+|---|---|---|
+| Bảng CSDL | `nguoi_dung` | `services/identity/migrations/0001_init.sql`. Bảng gộp **hai tập**: 26 người của danh bạ công khai và những người có tài khoản đăng nhập — phân biệt bằng cột `co_tai_khoan` (migration `0003`) |
+| Ngôn ngữ nghiệp vụ | `can_bo` | Từ hành chính đúng cho con người; "người dùng" là từ của phần mềm, không phải của xã |
+| Kiểu Go | `domain.CanBo`, `store.CanBoStore` | Tầng nghiệp vụ nói tiếng nghiệp vụ |
+| Hợp đồng gRPC | `Staff`, `BatchGetStaff` | Bề mặt hợp đồng dùng **tiếng Anh** (ADR 0011). `User` thì trùng với công dân — hai lớp tin cậy hoàn toàn khác nhau (luật 4) |
+| Đường dẫn URL | **chưa có** | Câu hỏi chờ khách. Đường dẫn cũ `/cau-hinh/nguoi-dung` của đặc tả **không dùng nữa** (ADR 0011) |
+
+**Vì sao không thống nhất lại thành một từ** — cùng dạng lập luận với `feedback.*` ở mục dưới:
+giá đổi tên khác nhau ở từng bề mặt. Tên bảng đã có migration đã áp và có hồ sơ lưu trữ trỏ
+vào; kiểu Go đổi rẻ nhưng đổi thì lệch với bảng; tên trong proto là bề mặt bên ngoài đọc và
+`Staff` đã là lựa chọn có lý do. Chỉ **một** bề mặt còn miễn phí: đường dẫn URL, vì chưa có
+route nào. Đó cũng chính là bề mặt **không được tự quyết**.
+
+**Điều KHÔNG được suy ra từ mục này:** rằng bốn tên cho một khái niệm là chuyện bình thường
+nên cái thứ năm cũng được. Bốn cái tên này là **giá đã trả rồi**, không phải giấy phép. Khái
+niệm mới thì đặt **một** tên và giữ nguyên qua các tầng.
 
 ### Khoá quyền `feedback.*` lệch với tài nguyên `citizen-reports` — cố ý
 
@@ -142,6 +167,11 @@ mang khái niệm nghiệp vụ hành chính.
 **Không trộn tiếng Anh vào khái niệm nghiệp vụ.** `feedback` không phải `phan_anh`:
 "feedback" gợi ý góp ý sản phẩm, "phản ánh" là một loại đơn có quy trình hành chính. Ngoại lệ
 duy nhất đã biết là khoá quyền `feedback.*` — xem mục trên, và đừng mở rộng nó.
+
+**Tên cột trong `docs/ui-ux/` không phải cam kết.** Đó là sản phẩm của prototype một xã. Khi
+tên của đặc tả gây nhầm lẫn thì đổi được, nhưng phải ghi lý do ngay tại migration — ví dụ
+`co_tai_khoan` thay cho `tai_khoan_hoat_dong` của đặc tả, vì từ sau chỉ khác `dang_hoat_dong`
+vài chữ cái mà nghĩa khác hẳn.
 
 → Kỹ năng: `skills/administrative-language` · `.claude/skills/rest-api-design/SKILL.md`
 → Ranh giới ngôn ngữ của hợp đồng: `kb/10-decisions/0011-contract-surface-language.md`

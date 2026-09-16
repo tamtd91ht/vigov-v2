@@ -147,5 +147,188 @@
     "decision": "CÓ, nhưng là cấu hình theo xã: cho_phep_mo_lai (true), nguong_sao_mo_lai (2), so_lan_mo_lai_toi_da (1), tinh_lai_han_khi_mo_lai (true). Đổi cấu hình KHÔNG hồi tố. Không cho mở lại thì dân gửi phiếu mới và số liệu đếm trùng một vụ việc.",
     "decided_on": "2026-09-16",
     "adr": "kb/10-decisions/0008-petition-lifecycle-config.md"
+  },
+  {
+    "id": 9,
+    "question": "Mật khẩu ĐẦU TIÊN của một cán bộ mới đến tay người đó bằng cách nào? (a) quản trị viên tự đặt rồi đọc cho người ta · (b) hệ thống sinh mật khẩu tạm, bắt đổi lần đăng nhập đầu · (c) gửi link kích hoạt qua thư điện tử để người đó tự đặt",
+    "status": "OPEN",
+    "why_it_matters": "Ba phương án cho ra ba schema khác nhau, và không phương án nào cài được sau mà không đụng CSDL: (b) cần một cột kiểu phai_doi_mat_khau, (c) cần cột hoặc bảng token kích hoạt có hạn dùng. Quan trọng hơn, câu hỏi này ĐANG CHẶN MỘT RÀNG BUỘC CSDL: services/identity/migrations/0003_nguoi_dung_co_tai_khoan.sql §4 cố ý KHÔNG thêm CHECK (NOT co_tai_khoan OR mat_khau_hash <> '') — vì luồng (c) cần đúng trạng thái đó (co_tai_khoan = true với hash rỗng) suốt thời gian link kích hoạt còn hiệu lực. Viết ràng buộc đó bây giờ là tự quyết câu hỏi của khách bằng cách làm cho một đáp án không cài được nữa. Riêng (c) còn một vòng lặp chết phải nói với khách trước khi họ chọn: máy chủ thư là cấu hình THEO XÃ và có thể chưa khai (docs/ui-ux/14-cau-hinh.md §10 — cảnh báo 'Chưa có máy chủ thư nào. Thông báo vẫn đúng đường nhưng chưa thật sự gửi đi'), nên xã mới onboard không gửi được link để tạo tài khoản đầu tiên, trong khi người khai máy chủ thư lại phải đăng nhập được đã.",
+    "code_signals": [
+      {
+        "pattern": "phai_?doi_?mat_?khau|must_?change_?password|doi_mat_khau_lan_dau",
+        "means": "đã có người chọn phương án (b) — mật khẩu tạm, bắt đổi lần đầu",
+        "threshold": 1
+      },
+      {
+        "pattern": "kich_?hoat_?token|token_?kich_?hoat|activation_?token",
+        "means": "đã có người chọn phương án (c) — link kích hoạt qua thư",
+        "threshold": 1
+      },
+      {
+        "pattern": "CHECK\\s*\\(\\s*NOT\\s+co_tai_khoan",
+        "means": "ràng buộc CSDL đã bị khoá lại — tức đã ngầm chọn (a): mật khẩu đặt ngay lúc tạo",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Trung bình và BẤT ĐỐI XỨNG. Thêm ràng buộc về sau là một dòng trong migration mới; gỡ ràng buộc về sau là ALTER TABLE trên bảng đang chạy, giữa sprint làm chính tính năng bị nó chặn — và ràng buộc gỡ vội là ràng buộc gỡ mà không ai tranh luận. Cột phai_doi_mat_khau hay bảng token kích hoạt thì thêm được bất cứ lúc nào, nhưng tài khoản đã phát ra theo luồng cũ thì không hồi tố được.",
+    "ask_before": [
+      "viết route tạo cán bộ",
+      "thêm CHECK vào co_tai_khoan"
+    ]
+  },
+  {
+    "id": 10,
+    "question": "Cán bộ nghỉ hưu / chuyển công tác thì KHOÁ hay XOÁ? Và 'xoá nhầm một dòng nhập trùng' có phải cùng một thao tác không?",
+    "status": "OPEN",
+    "why_it_matters": "Xoá mềm một cán bộ làm TÊN NGƯỜI XỬ LÝ BIẾN MẤT KHỎI MỌI HỒ SƠ CŨ, chứ không chỉ làm xấu giao diện. Đường đi cụ thể: audit_log.actor_id (services/identity/migrations/0001_init.sql:22) chỉ là TEXT, KHÔNG có khoá ngoại — vết kiểm toán cố ý sống sót độc lập — nên bản ghi vết vẫn còn, nhưng thứ dịch id đó ra tên người là BatchGetStaff, và hợp đồng đã chốt rằng một id bị xoá mềm thì KHÔNG trả về (proto/vigov/identity/v1/identity.proto:125). Kết quả: hồ sơ lưu trữ giữ được 'ai làm' dưới dạng id mà không hiển thị được ra tên, đúng lúc có thanh tra hỏi. Bảng phien thì có khoá ngoại thật tới nguoi_dung (0001_init.sql:238). Vế thứ hai mới là chỗ đặc tả im lặng: docs/ui-ux/12-danh-ba-can-bo.md:61 chỉ có MỘT nút '🗑 Xoá khỏi danh bạ', trong khi 'người này đã nghỉ việc' và 'dòng này nhập trùng, chưa từng làm gì' là hai tình huống cần hai thao tác khác nhau — cái trước phải giữ nguyên mọi dấu vết, cái sau thì không có dấu vết nào để giữ.",
+    "code_signals": [
+      {
+        "pattern": "func\\s+\\(\\w+\\s+\\*?CanBoStore\\)\\s+(Xoa|Khoa)|XoaCanBo|KhoaTaiKhoan",
+        "means": "đã có đường kết thúc vòng đời một cán bộ — xem nó phân biệt nghỉ việc với nhập trùng thế nào",
+        "threshold": 1
+      },
+      {
+        "pattern": "nghi_viec|nghi_huu|chuyen_cong_tac|ly_do_ngung",
+        "means": "đã có người mô hình hoá lý do rời cơ quan, tức đã tự quyết câu này",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Cao và một chiều. Dữ liệu đã xoá mềm thì khôi phục được, nhưng một chính sách đã chạy vài tháng thì không: các bản ghi đã đi qua nó mang trạng thái trộn lẫn, và không có cột nào phân biệt được về sau 'người này nghỉ việc' với 'dòng này nhập nhầm'.",
+    "ask_before": [
+      "viết route xoá cán bộ"
+    ]
+  },
+  {
+    "id": 11,
+    "question": "Số di động của cán bộ hiện cho cán bộ khác trong xã: CHE hay KHÔNG CHE? Nếu che thì khoá quyền nào mở được?",
+    "status": "OPEN",
+    "why_it_matters": "Đặc tả đang hiện ĐẦY ĐỦ ở cả hai màn (docs/ui-ux/14-cau-hinh.md:74 và 12-danh-ba-can-bo.md:45,59), còn luật 3 bất biến 3 đòi che trừ khi bên gọi có quyền xem đầy đủ TƯỜNG MINH. Chỗ kẹt không phải là chọn chính sách mà là KHÔNG CÓ KHOÁ ĐỂ KHAI: trong 33 khoá đã seed vào bảng quyen lẫn bảng 43 quyền của đặc tả, không khoá nào nghĩa là 'xem đầy đủ thông tin cán bộ' — admin.user là 'Quản lý người dùng', còn feedback.restricted là phạm vi NỘI DUNG phản ánh, không phải dữ liệu cá nhân. Không có khoá thì không tồn tại đường nào là 'tường minh', nên chỉ còn hai trạng thái: che tất, hoặc mở tất. Tự đặt thêm một khoá quyền là tự thiết kế mô hình phân quyền của khách. Nhiều khả năng khoá này chính là một trong 10 khoá thiếu: đặc tả ghi tiêu đề 43 quyền nhưng chỉ liệt kê 33 — xem việc treo cùng tên trong kb/90-ephemeral/2026-09-16-ban-giao-phien.md §7.",
+    "code_signals": [
+      {
+        "pattern": "Mask(Phone|Cccd)\\(\\s*\\w*\\.(DienThoai|DiDong)",
+        "means": "đã chọn CHE ở đường cán bộ — kiểm xem ai được mở và bằng khoá nào",
+        "threshold": 1
+      },
+      {
+        "pattern": "(staff|can_?bo|nguoi_?dung)\\.(read_?full|xem_?day_?du|pii)",
+        "means": "đã có người TỰ ĐẶT một khoá quyền xem đầy đủ thông tin cán bộ",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Thấp về kỹ thuật, cao về pháp lý và không lấy lại được. Đổi từ mở sang che chỉ là sửa tầng trả dữ liệu, nhưng khoảng thời gian đã mở là khoảng đã lộ: số đã nằm trong nhật ký truy cập, trong bản xuất Excel, trong màn hình người khác đã xem. Thêm một khoá quyền mới về sau còn kéo theo migration trên bảng quyen và vai_tro_quyen đang chạy.",
+    "ask_before": [
+      "viết route danh sách cán bộ",
+      "đặt tên khoá quyền mới"
+    ]
+  },
+  {
+    "id": 12,
+    "question": "Công khai số di động của cán bộ lên Zalo Mini App: ai quyết, và người bị công khai có được hỏi không?",
+    "status": "OPEN",
+    "why_it_matters": "Đây là công bố dữ liệu cá nhân ra kênh công khai, thuộc phạm vi Nghị định 13/2023/NĐ-CP — khác hẳn câu #11, vốn nói về cán bộ trong cùng xã nhìn nhau. Đặc tả cho bật HÀNG LOẠT bằng checkbox (docs/ui-ux/12-danh-ba-can-bo.md:37 và route hàng loạt ở §8), nghĩa là một quản trị viên công khai số di động của 26 người ra Mini App bằng MỘT cú bấm, không ai trong 26 người được hỏi. Chính đặc tả cũng đã lăn tăn nhưng dừng ở mức giao diện: 12-danh-ba-can-bo.md:124 ghi 'nên có cảnh báo khi bật công khai cho một cán bộ mới' — một cảnh báo hiện cho người BẤM, không phải sự đồng ý của người BỊ CÔNG KHAI. Cơ sở của sự đồng ý đó hiện không có ở đâu trong schema. Câu hỏi thật gồm hai nửa: ai có thẩm quyền quyết (lãnh đạo xã hay từng người), và hệ thống có phải lưu bằng chứng của việc đồng ý không.",
+    "code_signals": [
+      {
+        "pattern": "hien_tren_mini_app|HienTrenMiniApp",
+        "means": "đã có đường bật/tắt hiện công khai — kiểm nó có cơ sở đồng ý nào không",
+        "threshold": 1
+      },
+      {
+        "pattern": "dong_y_cong_khai|consent|dong_y_luc",
+        "means": "đã có người mô hình hoá sự đồng ý, tức đã tự quyết hình dạng của nó",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Không đảo ngược được phần đã công khai. Tắt cờ thì số thôi hiện, nhưng số đã ra Mini App công khai là số đã bị sao chép. Thêm cơ chế lưu sự đồng ý về sau còn kéo theo một câu hỏi không có lời đáp kỹ thuật: xin đồng ý HỒI TỐ cho những người đã bị công khai bằng cách nào.",
+    "ask_before": [
+      "viết route bật/tắt hiện trên Mini App"
+    ]
+  },
+  {
+    "id": 13,
+    "question": "Có chặn thao tác làm xã mất người quản trị CUỐI CÙNG không (khoá · xoá · hạ vai trò)?",
+    "status": "OPEN",
+    "why_it_matters": "Nếu xã tự khoá, xoá, hoặc hạ vai trò nốt người cuối cùng còn quyền admin.user thì KHÔNG AI TRONG XÃ MỞ LẠI ĐƯỢC, và nhà cung cấp cũng không được phép chạm vào: ADR 0003 và câu #3 (đã DECIDED) chốt VIHAT chỉ thao tác siêu dữ liệu. Đây không phải sự cố kỹ thuật có đường vá nóng — là BẾ TẮC THỦ TỤC, và xã sẽ gọi điện chứ không mở được ticket trong hệ thống. Đặc tả không nói gì, schema không chặn gì. Nếu khách chốt là PHẢI chặn thì phép kiểm không tầm thường và phải nói trước: quyền không nằm trên người mà đến từ vai_tro_quyen, nên phải đếm số cán bộ ĐANG HOẠT ĐỘNG, CHƯA XOÁ, CÓ TÀI KHOẢN, thuộc một vai trò có admin.user — và đếm TRONG CÙNG GIAO DỊCH với thao tác, nếu không hai quản trị viên khoá nhau cùng lúc sẽ cùng qua cửa. Ba đường dẫn tới cùng một rủi ro: khoá, xoá, hạ vai trò. Chặn mỗi đường đầu là chặn hụt, và chặn hụt ở đây trông y hệt chặn đủ cho tới ngày nó xảy ra.",
+    "code_signals": [
+      {
+        "pattern": "quan_tri_cuoi|last_?admin|ChanKhoaQuanTri",
+        "means": "đã có người cài phép chặn, tức đã tự quyết là CÓ chặn và tự chọn phạm vi",
+        "threshold": 1
+      },
+      {
+        "pattern": "func\\s+\\w*(Khoa|DoiVaiTro|Xoa)\\w*CanBo",
+        "means": "đã có ít nhất một trong ba đường — kiểm cả ba cùng lúc, đừng kiểm từng cái",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Rẻ khi cài trước, không lấy lại được khi đã xảy ra. Thêm phép chặn về sau chỉ là một truy vấn đếm trong giao dịch; nhưng một xã đã tự khoá mình ra ngoài thì không có đường nào trong hệ thống mở lại, vì mọi đường đều đòi một người có admin.user.",
+    "ask_before": [
+      "viết route khoá tài khoản",
+      "viết route đổi vai trò",
+      "viết route xoá cán bộ"
+    ]
+  },
+  {
+    "id": 14,
+    "question": "Người có quyền admin.user có được tự thao tác lên CHÍNH MÌNH không — tự đổi vai trò của mình, tự khoá mình?",
+    "status": "OPEN",
+    "why_it_matters": "Đặc tả không có một dòng nào. Hệ quả thì lớn hơn vẻ ngoài của câu hỏi: nếu không ràng buộc thì admin.user trên thực tế BAO TRÙM MỌI QUYỀN KHÁC, vì người giữ nó gán được bất kỳ ai — kể cả chính mình — vào vai trò mạnh nhất, và làm thế không vi phạm quy tắc nào đang có. Tức bảng phân quyền 33 khoá mô tả một mô hình phẳng, còn thực tế chạy là một mô hình có một khoá đứng trên tất cả. Đó là điều lãnh đạo xã cần biết khi ký duyệt ai được giữ khoá này, không phải chi tiết cài đặt. Nếu khách muốn ràng buộc thì schema hiện có đúng một điểm tựa: vai_tro.la_lanh_dao (services/identity/migrations/0001_init.sql:105) là chỗ DUY NHẤT phân biệt vai trò mạnh với vai trò yếu — mọi thang bậc khác sẽ phải bịa thêm. Câu này khác câu #13: #13 lo xã mất người quản trị cuối cùng, câu này lo một người tự nâng mình lên.",
+    "code_signals": [
+      {
+        "pattern": "la_lanh_dao",
+        "means": "cột này bị đọc ở đường phân quyền — tức đã có người dùng nó làm thang bậc vai trò",
+        "threshold": 1
+      },
+      {
+        "pattern": "(?i)tu_(doi|khoa)|self_?(role|lock|edit)",
+        "means": "đã có người xử lý ca tự thao tác lên chính mình, tức đã tự chọn một chính sách",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Trung bình. Thêm ràng buộc về sau là sửa tầng use case, không đụng dữ liệu. Nhưng khoảng thời gian chưa ràng buộc là khoảng mà mọi lần tự nâng quyền đều hợp lệ trong vết kiểm toán — về sau không phân biệt được lần nào là đúng thẩm quyền.",
+    "ask_before": [
+      "viết route đổi vai trò",
+      "viết route khoá tài khoản"
+    ]
+  },
+  {
+    "id": 15,
+    "question": "Mã cán bộ (nguoi_dung.ma) do ai đặt và sinh theo quy tắc nào — xã đã có mã cán bộ sẵn trong hồ sơ nhân sự chưa?",
+    "status": "OPEN",
+    "why_it_matters": "Không hỏi thì buộc phải bịa, vì schema bắt NOT NULL và UNIQUE (tenant_id, ma) (services/identity/migrations/0001_init.sql:167,184) trong khi form của cả hai màn đặc tả KHÔNG CÓ ô Mã (docs/ui-ux/12-danh-ba-can-bo.md §5, 14-cau-hinh.md:79). Hai ràng buộc thu hẹp lựa chọn tới mức lựa chọn dễ nhất là lựa chọn sai: mã đã cấp thì KHÔNG BAO GIỜ cấp lại, kể cả sau xoá mềm (luật 7 bất biến 3), và mã phải ĐỌC ĐƯỢC VỚI NGƯỜI vì nó là chủ thể trong vết kiểm toán — người đọc vết một năm sau phải tra ra được đó là ai. ULID sinh tự động thoả cả hai ràng buộc kỹ thuật mà hỏng đúng cái yêu cầu thứ hai. Nửa còn lại chỉ khách trả lời được: nhiều xã đã có mã cán bộ trong hồ sơ nhân sự sẵn có, và nếu có thì hệ thống phải NHẬN mã của xã chứ không sinh mã riêng rồi bắt xã nhớ hai hệ.",
+    "code_signals": [
+      {
+        "pattern": "(?i)(sinh|tao|gen)\\w*Ma(CanBo|NguoiDung)",
+        "means": "đã có hàm sinh mã cán bộ — tức quy tắc đã được ai đó chọn",
+        "threshold": 1
+      },
+      {
+        "pattern": "ma:\\s*(ulid|uuid)\\.|Ma:\\s*(ulid|uuid)\\.",
+        "means": "mã cán bộ đang là định danh máy sinh, không đọc được với người",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Cao sau khi cấp mã đầu tiên. Mã đã cấp không cấp lại và không đổi được, vì nó đã nằm trong vết kiểm toán và trong hồ sơ lưu trữ trỏ tới người xử lý. Đổi quy tắc về sau nghĩa là xã sống với hai hệ mã song song, vĩnh viễn.",
+    "ask_before": [
+      "viết route tạo cán bộ",
+      "sinh mã cán bộ đầu tiên"
+    ]
+  },
+  {
+    "id": 16,
+    "question": "dien_thoai và di_dong là MỘT trường hay HAI — số máy bàn cơ quan và số di động cá nhân?",
+    "status": "OPEN",
+    "why_it_matters": "Phải chốt TRƯỚC khi viết migration thêm cột, vì đây là câu hỏi phân loại dữ liệu chứ không phải câu hỏi tiện lợi. Số máy bàn của cơ quan là thông tin công vụ, số di động cá nhân là dữ liệu cá nhân theo Nghị định 13 — gộp vào một cột thì mọi quy tắc che, xuất Excel và công khai ra Mini App buộc phải áp CHUNG một mức cho hai loại dữ liệu có nghĩa pháp lý khác nhau, và mức đúng cho loại này luôn sai cho loại kia. Hiện bảng chỉ có dien_thoai, còn docs/ui-ux/12-danh-ba-can-bo.md:92-102 đòi thêm di_dong, co_zalo, anh_dai_dien_url, hien_tren_mini_app, thu_tu_danh_ba — tức đặc tả ngầm coi là HAI mà không nói ra, và cũng không nói cái nào là cái đang nằm trong dien_thoai. Câu này quyết định không gian trả lời của #11 và #12: tách hai trường thì 'che số di động, hiện số cơ quan' mới là một đáp án khả dĩ.",
+    "code_signals": [
+      {
+        "pattern": "di_dong|DiDong",
+        "means": "cột thứ hai đã tồn tại — tức đã có người quyết là TÁCH, kiểm xem hai cột được che khác nhau không",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Trung bình, nhưng tăng nhanh theo dữ liệu. Tách một cột đã có dữ liệu trộn hai loại số là backfill mà KHÔNG CÓ CÁCH NÀO ĐOÁN ĐÚNG: nhìn một dãy số không biết được đó là máy bàn cơ quan hay di động cá nhân, nên phải hỏi lại từng người trong 26 người của mỗi xã.",
+    "ask_before": [
+      "viết migration thêm cột cho danh bạ cán bộ",
+      "viết route danh sách cán bộ"
+    ]
   }
 ]

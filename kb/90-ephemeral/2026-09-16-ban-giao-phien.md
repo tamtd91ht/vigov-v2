@@ -3,7 +3,7 @@ id: 2026-09-16-ban-giao-phien
 tier: T5
 source: CURATED
 owner: architecture
-derived_from_commit: f9f35d4
+derived_from_commit: 96574b4
 expires: 2026-12-16
 owns_facts:
   - "trạng thái thi công tại 2026-09-17 và việc kế tiếp phải làm"
@@ -20,8 +20,8 @@ Hết hạn **2026-12-16**. Sau ngày đó tin `git log` chứ đừng tin tệp
 
 ## 1. Đã làm
 
-**Danh sách commit KHÔNG chép vào đây** — `git log 8b813ff..HEAD` trả lời câu đó chính xác
-hơn và không bao giờ lệch. Dưới đây chỉ những thứ `git log` không trả lời được.
+**Danh sách commit KHÔNG chép vào đây** — `git log --oneline f9f35d4..HEAD` trả lời câu đó
+chính xác hơn và không bao giờ lệch. Dưới đây chỉ những thứ `git log` không trả lời được.
 
 ### Quyết định đã chốt với khách trong phiên
 
@@ -54,17 +54,37 @@ hơn và không bao giờ lệch. Dưới đây chỉ những thứ `git log` kh
 | `pkg/grpcx` | Interceptor **hai đầu** + hằng khoá metadata. Danh sách miễn kiểm xã có **đúng một** thành viên: `ResolveHost` |
 | `pkg/secret` | Kiểu **tự từ chối in**: chặn **mọi** verb `fmt` qua `Formatter`, không phải `String()`. Lối ra thô tên `Lo()`, đúng ba chỗ gọi trong toàn repo |
 | `pkg/platformclient` | Client phân giải Host tới `platform`. Ở đây chứ không ở `pkg/tenant` vì `pkg/grpcx` đã import `pkg/tenant` → **vòng import** |
-| `pkg/migrate` | Trình chạy migration: `go:embed`, advisory lock, tiền-kiểm checksum, mỗi tệp một giao dịch. **Cả 8 service đã nối vào `main.go`** — ADR 0013 |
+| `pkg/token` | Ký/kiểm token phiên, mang `sid` để thu hồi được (luật 5, bất biến 4) |
+| `pkg/migrate` | Trình chạy migration: `go:embed`, advisory lock, tiền-kiểm checksum, mỗi tệp một giao dịch, hỏng thì service **không khởi động**. Cả 8 service đã nối vào `main.go` — ADR 0013 |
+| `pkg/page` + `pkg/store/page.go` | Phân trang **cursor** dùng chung, viết **trước** route danh sách đầu tiên. Neo là `(cột sắp xếp, id)` — **khoá phá hoà là bắt buộc**, thiếu nó thì trang sau lặp hoặc nuốt bản ghi mà không ai thấy. Cursor **không ký**, **không mang `tenant_id`**, không mang dữ liệu cá nhân. Không có `total`, không có `page`. `QueryPage` đi qua `Scoped.Query`, không có đường nào tới `*sql.DB` |
 | `platform/internal/{domain,store}` | Phân giải Host, cache, edge chain |
 | `platform/internal/grpc` | Server gRPC — siêu dữ liệu, không có đường trả nội dung nghiệp vụ (ADR 0003) |
 | `identity/internal/{domain,store,app}` | RBAC, `Checker`, phiên, đăng nhập |
 | `identity/internal/http` | **Route đăng nhập/đăng xuất + middleware dựng `Principal`**, token ký HMAC |
 | `identity/cmd/server` | **Wire chạy thật**: config → CSDL → migrate → Directory qua gRPC (có cache) → checker/canBo/phien → **một** signer → use case → idem → chuỗi edge → tắt êm |
 | `proto/` + `gen/` | Hợp đồng đã sinh mã. `BatchGetStaff` thay `GetStaff`; `x-tenant-id` khai ở cả 8 tệp proto |
-| `services/*/migrations/` | 16 tệp, 8 service. `0002` biến "append-only" từ comment thành ràng buộc CSDL. **Xem §2(a): chưa tệp nào chạy thật** |
+| `services/*/migrations/` | **17 tệp**, 8 service. `0002` biến "append-only" từ comment thành ràng buộc CSDL ở cả 8 service; `0003` (chỉ `identity`) tách `co_tai_khoan` khỏi `dang_hoat_dong`. **Xem §2.1: chưa tệp nào chạy thật** |
 
-**Còn trống hoàn toàn:** mọi route HTTP **nghiệp vụ** · **server gRPC của `identity`** (chưa
-có `internal/grpc`) · `documents` `petitions` `dossiers` `finance` `comms` `reporting` mới có
+**Ba thay đổi gần nhất đáng nói vì cái `git log` không nói:**
+
+| | |
+|---|---|
+| `co_tai_khoan` (schema `0003` + mã Go) | "Có tài khoản đăng nhập" và "chưa bị khoá" từng đọc chung **một** cột `dang_hoat_dong`. Hệ quả im lặng: 26 người chỉ có trong danh bạ bị đếm là "Đang hoạt động" — con số xã báo lên. Nay lọc ở **ba** đường: `CanBoStore.TheoEmail`, `TheoID`, và `truyVanQuyen` của `Checker`. Mặc định cột là **false** (đóng trước) |
+| `Staff.username` gỡ, `reserved 3` + `reserved "username"` | Trường trỏ vào **một cột chưa từng tồn tại** và khai luôn một ràng buộc duy nhất không có thật. Số không tái dùng, **và tên cũng bị giữ chỗ** — để chữ đó không quay lại gắn vào dữ liệu khác |
+| Gỡ **dữ liệu cá nhân thật** khỏi `docs/ui-ux/` | Họ tên + số di động thật của 7 lãnh đạo xã nằm trong đặc tả. Đã thay bằng số quy ước `0900000000` (luật 3, bất biến 5). Xem §7 #8: **lịch sử git vẫn còn** |
+
+**Brain và cổng kiểm — đã siết trong phiên:**
+
+| Thay đổi | |
+|---|---|
+| `tenant_scope_guard` nay đọc cả `.sql` | Bảng `PARTITION BY HASH` mà quên tạo mảnh bị chặn ngay lúc gõ, không phải lúc INSERT đầu tiên hỏng |
+| `rest_api_guard` chặn `Public` đi kèm `idem.Required` | Một route công khai mà chống trùng bằng khoá do client tự đặt là một khoá do người lạ tự đặt |
+| `doc_guard` cho **sửa** tệp có sẵn dưới `docs/ui-ux/` | Trước đó nó chặn đúng cái việc gỡ dữ liệu cá nhân ra khỏi đặc tả. Vẫn chặn **tạo mới** `.md` ngoài `kb/` |
+| `data_safety_guard` vá lần thứ 3 | Xem §4 |
+| `make check` | `gofmt` nay **chặn thật** (trước in tên tệp rồi thoát mã 0), `buf lint` bỏ tiền tố `-` nên lỗi không bị nuốt, `-race` bắt buộc, target `web` **bỏ qua một cách ồn ào** |
+
+**Còn trống hoàn toàn:** **server gRPC của `identity`** (chưa có `internal/grpc`) · mọi route
+HTTP **nghiệp vụ** · `documents` `petitions` `dossiers` `finance` `comms` `reporting` mới có
 `main.go` + migration, chưa có nghiệp vụ · toàn bộ frontend (`apps/*/src/` chỉ có `.gitkeep`)
 · `pkg/storage` · `data-ownership.json` vẫn rỗng.
 
@@ -83,46 +103,70 @@ hay bị đọc sai nhất:
 | Danh sách miễn kiểm xã có **đúng một** thành viên: `ResolveHost` | Vì nó **không thể** biết xã — nó chính là thứ đi tìm xã. Thêm thành viên thứ hai là **ĐIỀU KIỆN DỪNG**: hỏi người dùng |
 | Service nghiệp vụ **không** được nhận id xã trong thân message | Hình dạng đó chỉ hợp lệ ở `platform` vì ADR 0003 chặn mọi đường tới nội dung nghiệp vụ |
 
-### (a) Chạy migration thật, một lần, trên máy có CSDL ← **BẮT ĐẦU TỪ ĐÂY**
+### 2.1 Chạy migration thật, trên máy có `VIGOV_TEST_DSN` ← **BẮT ĐẦU TỪ ĐÂY**
 
-Trước khi viết thêm nghiệp vụ nào. Máy phát triển không có `VIGOV_TEST_DSN` nên hai bộ test
-tích hợp **tự bỏ qua** — chúng báo ok mà **không chạy một câu SQL nào**. Hệ quả: `0002`, khối
-kiểm PostgreSQL ≥ 13, khối chặn "bảng phân mảnh thiếu mảnh" và `pg_advisory_lock` thật **đều
-chưa từng thực thi**; test của `pkg/migrate` chạy trên driver giả.
+Vẫn là việc chặn mọi thứ khác. Máy phát triển không có DSN nên các bộ test tích hợp **tự bỏ
+qua** — chúng báo `ok` mà **không chạy một câu SQL nào**. Hệ quả: `0002`, `0003`, khối kiểm
+PostgreSQL ≥ 13, khối chặn "bảng phân mảnh thiếu mảnh" và `pg_advisory_lock` thật **đều chưa
+từng thực thi**; test của `pkg/migrate` chạy trên driver giả.
 
-Ba thứ phải tự mắt nhìn thấy xanh:
+**Nay có một ca cụ thể phải kiểm, không chỉ là nguyên tắc.** Đã chứng minh được: xoá dòng
+`AND nd.co_tai_khoan` khỏi `services/identity/internal/store/checker.go` mà **toàn bộ test vẫn
+xanh** — vì bài canh nó nằm trong bộ tích hợp và bộ đó SKIP khi thiếu DSN. Tức hiện tại lớp
+lọc quyền của người chỉ có trong danh bạ **không có ai canh trên máy này**.
 
-| # | Kiểm |
+```
+VIGOV_TEST_DSN=... go test -count=1 ./services/identity/internal/store/
+```
+
+| # | Phải tự mắt nhìn thấy |
 |---|---|
-| 1 | `current_schema()` dưới `SET search_path` của bộ test có trả đúng schema tạm không. Nếu trả `public` thì khối chặn kiểm nhầm schema và **luôn qua** — đúng dạng guard rỗng mà ADR 0013 nói tới |
-| 2 | 16 tệp áp hết, chạy lại lần hai không áp gì thêm |
-| 3 | UPDATE/DELETE trên `audit_log` **và** trên một tên partition gõ thẳng đều bị từ chối |
+| 1 | `TestNguoiChiCoTrongDanhBaKhongCoQuyenNao` (`checker_pg_test.go`) **xanh** khi mã nguyên vẹn, và **ĐỎ** khi gỡ dòng `AND nd.co_tai_khoan`. Không đỏ ⇒ bài test không canh gì cả |
+| 2 | `current_schema()` dưới `SET search_path` của bộ test có trả đúng schema tạm không. Nếu trả `public` thì khối chặn kiểm nhầm schema và **luôn qua** — đúng dạng guard rỗng mà ADR 0013 nói tới |
+| 3 | 17 tệp áp hết, chạy lại lần hai không áp gì thêm |
+| 4 | UPDATE/DELETE trên `audit_log` **và** trên một tên partition gõ thẳng đều bị từ chối |
+| 5 | `0003`: backfill in NOTICE đúng số dòng; chạy lại không đổi thêm dòng nào |
 
 CI đỏ ở đây thì **đọc thông báo trước khi sửa** — rất có thể chúng đang làm đúng việc.
 
-### (b) CRUD cán bộ đầu tiên
+### 2.2 CRUD cán bộ — **ĐANG BỊ CHẶN bởi một cụm câu hỏi chờ khách chốt**
 
-Quyền `admin.user`. Đổi vai trò hoặc khoá tài khoản **phải gọi**
-`PhienStore.ThuHoiCuaCanBo` trong cùng giao dịch (skill `session-and-token` #7).
+Đây là màn hình kế tiếp theo kế hoạch, nhưng **đừng bắt đầu bằng cách viết mã**. Cả cụm đã
+được ghi thành mục trong `kb/00-foundation/open-questions.json` — **#9 tới #16**, tám câu, mỗi
+câu có `ask_before` riêng. Đọc `docs/ui-ux/14-cau-hinh.md` và `docs/ui-ux/12-danh-ba-can-bo.md`
+rồi mang **cả cụm** đi hỏi một lượt; hỏi lẻ từng câu thì khách trả lời lệch nhau.
 
-Đường dẫn cũ `/cau-hinh/nguoi-dung` **không dùng nữa** (ADR 0011). Danh từ tài nguyên tiếng
-Anh cho khái niệm "cán bộ" **chưa có trong bảng ánh xạ** của
-`kb/00-foundation/ubiquitous-language.md` — **hỏi trước khi đặt**, đừng tự dịch.
+Ba câu đắt nhất:
 
-Đây cũng là bên tiêu thụ đầu tiên của `BatchGetStaff`: ghép theo `Staff.id`, **không** theo
-thứ tự và **không** giả định trả về đủ số id đã hỏi (ADR 0012, quyết định 2).
+| Câu | Vì sao không tự quyết được |
+|---|---|
+| **#9 — mật khẩu đầu tiên đến tay cán bộ bằng cách nào** | Đang chặn một ràng buộc CSDL (`CHECK` trên `co_tai_khoan`), và luồng "gửi link kích hoạt" có một vòng lặp chết với máy chủ thư theo xã |
+| **#11 — số di động cán bộ: che hay không** | Trong 33 khoá quyền đã nạp **không có khoá nào** nghĩa là "xem đầy đủ thông tin cán bộ". Không có khoá thì không tồn tại đường nào là "tường minh" theo luật 3 bất biến 3 — chỉ còn che tất hoặc mở tất. Đi kèm **#16**: `dien_thoai` và `di_dong` là một trường hay hai quyết định luôn không gian trả lời |
+| **#13 — chặn khoá / gỡ quyền người quản trị CUỐI CÙNG của xã** | Không chặn mà xảy ra thì **không ai mở lại được**: ADR 0003 cấm nhà cung cấp đụng dữ liệu nghiệp vụ của xã. Bế tắc thủ tục, không phải sự cố kỹ thuật |
 
-### (c) Còn lại của `identity`
+Khi đã có câu trả lời, các ràng buộc kỹ thuật vẫn nguyên:
+
+- Quyền `admin.user`. Đổi vai trò hoặc khoá tài khoản **phải gọi**
+  `PhienStore.ThuHoiCuaCanBo` trong cùng giao dịch (skill `session-and-token` #7).
+- Đường dẫn cũ `/cau-hinh/nguoi-dung` **không dùng nữa** (ADR 0011). Danh từ tài nguyên
+  tiếng Anh cho khái niệm "cán bộ" **vẫn chưa có trong bảng ánh xạ** của
+  `kb/00-foundation/ubiquitous-language.md` — **hỏi trước khi đặt**, đừng tự dịch.
+- Danh sách cán bộ là route danh sách đầu tiên ⇒ dùng `pkg/page`, **không** tự chế cursor.
+- Đây cũng là bên tiêu thụ đầu tiên của `BatchGetStaff`: ghép theo `Staff.id`, **không** theo
+  thứ tự và **không** giả định trả về đủ số id đã hỏi (ADR 0012, quyết định 2). Lưu ý
+  `Staff` hiện **không có trường họ tên** — xem §7 #10.
+
+### 2.3 Còn lại của `identity`
 
 `bo_phan` (cây), `vai_tro`, ma trận phân quyền, `thon_to_dan_pho`, `cong_dan` + OTP (ADR 0002).
 **Server gRPC của `identity` vẫn chưa tồn tại** — khi dựng thì dùng lại interceptor trong
 `pkg/grpcx`, không tự viết lại.
 
-### (d) `platform`: `danh_muc` + `loi_he_thong`
+### 2.4 `platform`: `danh_muc` + `loi_he_thong`
 
 Mọi service đọc qua gRPC, cache cục bộ. Xem `docs/ui-ux/14-cau-hinh.md` §5 và §7.
 
-### (e) `petitions`
+### 2.5 `petitions`
 
 **Chỉ bắt đầu sau khi có `lich_lam_viec` + `ngay_nghi_le`** — ADR 0007 nêu 5 lỗ hổng
 đặc tả chưa lấp (giờ hành chính mấy giờ, nghỉ trưa có trừ không…).
@@ -137,28 +181,35 @@ Tài nguyên là `/api/v1/citizen-reports`, **không phải** `feedback` — nh�
 
 1. `kb/INDEX.yaml` → tầng `always_load` (3 tệp T0)
 2. **ADR 0007–0013** — bảy quyết định mới nhất, chưa vào bộ nhớ ai
-3. `kb/00-foundation/open-questions.json` — còn **2 câu OPEN**: #1 sáp nhập xã, #4 báo cáo cấp huyện
+3. `kb/00-foundation/open-questions.json` — nay **10 câu OPEN**: #1 sáp nhập xã · #4 báo cáo
+   cấp huyện · **#9–#16 là cả cụm chặn CRUD cán bộ** (§2.2)
 4. `docs/ui-ux/00-tong-quan-he-thong.md` + tệp module đang làm
 5. Skill: `rest-api-design` (trước route đầu tiên) · `session-and-token` · `go-tenant-context` ·
    `load-data-once` · `audit-trail`
 
 **Lưu ý về `docs/ui-ux/`:** đó là đặc tả giao diện chép từ prototype **một xã**, đề xuất
 stack Next+Prisma. Lấy nghiệp vụ và chuỗi tiếng Việt; **bỏ** §7 phần backend. Đường dẫn API
-trong đó là tiếng Việt và **đã lỗi thời** theo ADR 0011.
+trong đó là tiếng Việt và **đã lỗi thời** theo ADR 0011. Tên cột trong đó cũng **không phải
+cam kết**: `0003` đặt `co_tai_khoan` thay cho `tai_khoan_hoat_dong` của đặc tả, có lý do viết
+ngay trong tệp migration.
 
 ---
 
 ## 4. Cạm bẫy đã gặp — đọc để khỏi mất thời gian lại
 
 Một nửa bảng này có chung một hình dạng: **thứ trông như biện pháp mà không phải biện pháp.**
-Gặp cái thứ tám cùng dạng thì đừng vá riêng nó — hỏi cả lớp đó còn ở đâu nữa.
+Gặp cái tiếp theo cùng dạng thì đừng vá riêng nó — hỏi cả lớp đó còn ở đâu nữa.
 
 | Vấn đề | Cách xử |
 |---|---|
+| **Test tích hợp SKIP nhưng cả gói vẫn báo `ok`** | Dạng nặng nhất của cái bảng này nói tới: đột biến một dòng vào **mã sản phẩm** mà không có gì đỏ. Đã kiểm chứng với `AND nd.co_tai_khoan`. Trước khi tin "có test canh chỗ này", **gỡ thử dòng đó ra và xem có đỏ không** |
 | **Không có `make`** trên máy Windows này | Chạy tay: `python tools/check_brain.py` · `python tools/test_hooks.py` · `go vet/build/test ./...` |
-| `gofmt -l .` **in tên tệp chưa định dạng rồi thoát mã 0** | Một cổng báo rồi cho qua không phải cổng. Đã vá trong `Makefile`: thu kết quả vào biến, `exit 1` nếu khác rỗng. **Dạng lỗi này còn ở đâu nữa — hỏi trước khi tin một cổng** |
-| `SET search_path` là trạng thái **SESSION** | Trên pool nó chỉ áp cho **kết nối đã phục vụ câu lệnh đó**. Trước đây may vì mọi thứ chạy trên một kết nối mở lười; `pkg/migrate` ghim kết nối riêng (advisory lock là session-scoped) nên là kết nối **thứ hai**, nằm ở `public`. Hai suite tích hợp phải `SetMaxOpenConns(1)` |
+| `gofmt -l .` **in tên tệp chưa định dạng rồi thoát mã 0** | Một cổng báo rồi cho qua không phải cổng. Đã vá trong `Makefile` (cả `buf lint` cũng từng bị nuốt lỗi vì tiền tố `-`). **Dạng lỗi này còn ở đâu nữa — hỏi trước khi tin một cổng** |
+| `SET search_path` là trạng thái **SESSION** | Trên pool nó chỉ áp cho **kết nối đã phục vụ câu lệnh đó**. `pkg/migrate` ghim kết nối riêng (advisory lock là session-scoped) nên là kết nối **thứ hai**, nằm ở `public`. Hai suite tích hợp phải `SetMaxOpenConns(1)` |
 | Trigger gắn trên bảng cha mà **không bắn** khi gõ thẳng tên partition | Mức **câu lệnh** không được nhân bản xuống partition, mức **dòng** thì có. Ca hỏng **im lặng** — trigger vẫn hiện trong `\d`. → ADR 0013 |
+| **Index con của bảng phân mảnh không drop riêng lẻ được** | PostgreSQL từ chối: *"cannot drop index … because index … requires it"*. Drop index **cha** thì kéo theo cả 32 con, và `CREATE` dựng lại đủ 33 quan hệ. Không bao giờ viết thao tác index theo từng mảnh. Đổi vị từ của partial index thì bắt buộc drop + create — nằm trong **một** giao dịch của `pkg/migrate` nên không có khe hở không index |
+| **Hai cột `bool` cạnh nhau, đọc theo vị trí trong `Scan`** | `co_tai_khoan` và `dang_hoat_dong` đứng liền nhau. Hoán đổi hai con trỏ là **lỗi im lặng đối xứng**: biên dịch được, test thường vẫn xanh, chỉ sai nghĩa. Ca duy nhất bắt được là `(false, true)` — phải có test đúng ca đó, và có test canh **thứ tự** của danh sách cột |
+| **Lọc ở Go thay vì lọc trong SQL** | Khi hai nhánh tốn thời gian khác hẳn nhau (ví dụ: có đọc hàm băm mật khẩu hay không), khoảng chênh đo được từ bên ngoài ⇒ **kênh biên thời gian** cho biết một email có tồn tại hay không. Điều kiện phân biệt người dùng phải nằm trong `WHERE`, để hai nhánh tốn như nhau |
 | `fmt` **không gọi `String()`** cho `%d %c %U %b %o` | Một `[]byte` khoá ký in ra nguyên vẹn dưới dạng byte. Phải cài `fmt.Formatter`, không phải `Stringer`. `%p` và `%T` thì `fmt` **không bao giờ** gọi Formatter — đã xác minh chúng chỉ lộ địa chỉ và tên kiểu. → `pkg/secret` |
 | `doc_guard` chặn mọi `Edit` vào `kb/` | Hook chỉ đọc `new_string`, không thấy frontmatter. **Dùng `Write` toàn tệp** |
 | `data_safety_guard` báo sai 3 lần | Đã vá cả ba (`delete()` của Go, UPDATE nhiều dòng, thân heredoc trong thông điệp commit). Nếu gặp lần bốn: sửa hook + thêm ca test, **đừng đi vòng** — hook nhiễu là hook bị tắt |
@@ -174,11 +225,11 @@ Gặp cái thứ tám cùng dạng thì đừng vá riêng nó — hỏi cả l�
 
 ```
 export VIGOV_TEST_DSN="postgres://postgres:<mật-khẩu>@192.168.3.135:5433/postgres?sslmode=disable"
-go test ./...
+go test -count=1 ./...
 ```
 
-Không đặt biến → test tích hợp **tự bỏ qua và vẫn báo ok**. Đó là lý do §2(a) tồn tại: xanh ở
-đây **không** có nghĩa là SQL đã chạy.
+Không đặt biến → test tích hợp **tự bỏ qua và vẫn báo ok** (§4, dòng đầu bảng). Đó là lý do
+§2.1 đứng trước mọi việc khác: xanh ở đây **không** có nghĩa là SQL đã chạy.
 
 **Mật khẩu KHÔNG nằm trong kho mã** (luật 8). Hỏi chủ dự án. Máy chủ trên là **máy test**;
 mỗi lượt chạy tự tạo schema riêng theo mốc thời gian rồi tự dọn.
@@ -198,7 +249,7 @@ go vet ./... && go build ./... && go test -race -count=1 ./...
 
 `make check` nay **chặn thật** ở `gofmt` và `buf lint` (trước đây cả hai cho qua), có `-race`,
 và có target `web` **bỏ qua một cách ồn ào** cho tới khi `apps/commune-admin/` có
-`node_modules`.
+`node_modules`. Nhưng xanh ở đây vẫn **không** bao gồm SQL — xem §2.1.
 
 ---
 
@@ -206,10 +257,14 @@ và có target `web` **bỏ qua một cách ồn ào** cho tới khi `apps/commu
 
 | # | Việc | Ghi chú |
 |---|---|---|
-| 1 | **16 tệp migration chưa từng chạy thật** | Việc số một. Xem §2(a) |
-| 2 | **`make check` chưa kiểm mã TypeScript** | Target `web` đã có nhưng in dòng BỎ QUA vì thiếu `node_modules`. Cài xong là nó kiểm thật, không phải sửa Makefile nữa |
-| 3 | **Backfill dữ liệu theo từng xã chưa tồn tại** | `pkg/migrate` chỉ lo DDL ⇒ **luật 7 bất biến 5 mới đạt một nửa**. Đừng đọc sự có mặt của gói thành "đã xong". → ADR 0013, mục Giới hạn |
-| 4 | **`REVOKE` trên `audit_log` thuộc khâu cấp phát CSDL** | Câu đúng, đủ cả dòng cho 32 mảnh, giữ trong comment tệp `0002`. Khâu cấp phát không làm thì lớp quyền vẫn hở dù trigger vẫn đúng |
-| 5 | **Đặc tả ghi 43 quyền nhưng chỉ liệt kê 33** | Đã nạp 33 vào `quyen`. Mười khoá còn lại là câu hỏi cho khách, **đừng bịa** |
-| 6 | **Bảng ánh xạ tên tài nguyên URL mới phủ một phần** | `kb/00-foundation/ubiquitous-language.md` — gặp khái niệm chưa có dòng thì hỏi, đừng tự dịch |
-| 7 | **Xác thực service↔service chưa có** | Rủi ro đã chấp nhận có chủ ý, kèm điều kiện gỡ: ADR 0012, quyết định 3. **Không** dựng cơ chế bí mật chia sẻ tạm |
+| 1 | **17 tệp migration chưa từng chạy thật** | Việc số một. Xem §2.1 |
+| 2 | **Bài test canh `co_tai_khoan` chưa từng chạy** | Cùng nguyên nhân với #1, nhưng hệ quả khác: đây là một bất biến **phân quyền** hiện không có gì canh trên máy này |
+| 3 | **`make check` chưa kiểm mã TypeScript** | Target `web` đã có nhưng in dòng BỎ QUA vì thiếu `node_modules`. Cài xong là nó kiểm thật, không phải sửa Makefile nữa |
+| 4 | **Backfill dữ liệu theo từng xã chưa tồn tại** | `pkg/migrate` chỉ lo DDL ⇒ **luật 7 bất biến 5 mới đạt một nửa**. Backfill trong `0003` là một câu UPDATE, cố ý, vì bảng chỉ vài chục dòng mỗi xã — ngưỡng cần cơ chế thật là khi thời gian giữ khoá thành đáng kể. → ADR 0013, mục Giới hạn |
+| 5 | **`REVOKE` trên `audit_log` thuộc khâu cấp phát CSDL** | Câu đúng, đủ cả dòng cho 32 mảnh, giữ trong comment tệp `0002`. **Không nằm trong tay mã nguồn**: khâu cấp phát không làm thì lớp quyền vẫn hở dù trigger vẫn đúng |
+| 6 | **Đặc tả ghi 43 quyền nhưng chỉ liệt kê 33** | Đã nạp 33 vào `quyen`. Mười khoá còn lại là câu hỏi cho khách, **đừng bịa**. Ít nhất một khoá thiếu đã có tên: "xem đầy đủ thông tin cán bộ" — **câu hỏi mở #11** |
+| 7 | **Bảng ánh xạ tên tài nguyên URL mới phủ một phần** | `kb/00-foundation/ubiquitous-language.md` — "cán bộ" đã có dòng nhưng cột tài nguyên ghi **CHƯA CHỐT**, và đó là khái niệm của màn hình kế tiếp. Hỏi, đừng tự dịch |
+| 8 | **Dữ liệu cá nhân thật vẫn còn trong LỊCH SỬ GIT** | Cây làm việc đã dọn (họ tên + số di động thật của 7 lãnh đạo xã trong `docs/ui-ux/`). Gỡ khỏi lịch sử là **viết lại lịch sử** trên `main` — cần quyết định của chủ dự án, không phải việc agent tự làm |
+| 9 | **Xác thực service↔service chưa có** | Rủi ro đã chấp nhận có chủ ý, kèm điều kiện gỡ: ADR 0012, quyết định 3. **Không** dựng cơ chế bí mật chia sẻ tạm |
+| 10 | **`Staff` không có trường họ tên** | Nên `BatchGetStaff` **chưa phục vụ được mục đích nó tự khai**: "màn hình danh sách trang trí từng dòng" cần hiển thị tên người. Thêm trường là sửa hợp đồng — cùng lúc phải trả lời câu che/không che ở §2.2 (#11), vì họ tên cán bộ cũng là dữ liệu cá nhân |
+| 11 | **Bàn giao việc đang xử lý khi khoá tài khoản — chưa hỏi, cố ý chưa ghi thành câu hỏi mở** | Grep toàn `docs/` cho "bàn giao" / "chuyển công tác" / "nghỉ việc": **không kết quả**. Tiền lệ gần nhất là `14-cau-hinh.md:390` — xoá **bộ phận** còn cán bộ hoặc hồ sơ thì chặn, yêu cầu chuyển trước. Chưa ghi vào `open-questions.json` vì **chưa có bảng giao việc nào tồn tại** để nói "việc đang giữ" nghĩa là gì; hỏi khách bây giờ là hỏi một câu trừu tượng. **Hỏi khi dựng bảng nghiệp vụ đầu tiên có người phụ trách** (`nhiem_vu`, `van_ban_den`) — và nhớ rằng câu trả lời nhiều khả năng là "tuỳ xã": xã 8 người để trưởng bộ phận gánh, xã 40 người có thủ tục bàn giao có biên bản |
