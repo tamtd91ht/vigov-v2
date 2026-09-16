@@ -3,7 +3,7 @@ id: system-invariants
 tier: T0
 source: CURATED
 owner: architecture
-derived_from_commit: null
+derived_from_commit: 184869f
 expires: null
 owns_facts:
   - "những điều luôn đúng trong hệ thống ViGov, vi phạm là sự cố"
@@ -49,6 +49,7 @@ Những điều **luôn đúng**. Vi phạm bất kỳ điều nào là **sự c
 | Không xác định được xã | **404** — không đoán, không mặc định |
 | Token lệch xã với domain | **401** + ghi nhật ký báo động |
 | Consumer nhận thông điệp thiếu `tenant_id` | **Từ chối xử lý** |
+| Lời gọi gRPC không mang `x-tenant-id` trong metadata | **Từ chối** `INVALID_ARGUMENT` — ngoại lệ chỉ theo danh sách trắng tường minh (ADR 0012) |
 | Không xác định được chủ sở hữu dữ liệu | **ĐIỀU KIỆN DỪNG** — hỏi người dùng |
 
 > Nguyên tắc chung: **hỏng thì đóng.** Không bao giờ có giá trị mặc định trên đường cách ly.

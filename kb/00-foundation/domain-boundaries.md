@@ -3,7 +3,7 @@ id: domain-boundaries
 tier: T0
 source: CURATED
 owner: architecture
-derived_from_commit: 5887496
+derived_from_commit: 184869f
 expires: null
 owns_facts:
   - "ranh giới giữa các service và lý do cắt ở đó"
@@ -43,6 +43,9 @@ viết bù trừ. Không → tách được.
 | bất kỳ → bất kỳ | **gRPC** qua hợp đồng | Cần dữ liệu ngay, chấp nhận phụ thuộc lúc chạy |
 | bất kỳ → bất kỳ | **Sự kiện** | Chấp nhận trễ; bên nhận giữ bản sao đọc của riêng mình |
 | bất kỳ → CSDL của người khác | **KHÔNG BAO GIỜ** | — |
+
+Lời gọi gRPC mang xã đi ra sao, vì sao mặc định theo lô, và chuyện gì xảy ra khi `platform`
+không tới được: `kb/10-decisions/0012-grpc-boundary-contract.md`.
 
 Thêm một đường gọi mới là thêm một cạnh vào đồ thị phụ thuộc. Trước khi thêm, tra
 `kb/30-indexes/dependencies.json` xem có tạo vòng không — vòng phụ thuộc đồng bộ là chỗ hệ
