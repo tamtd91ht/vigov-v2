@@ -69,6 +69,42 @@ TENANT_FROM_CLIENT = re.compile(
 WATCH_EXT = (".go",)
 PLATFORM = ("/services/platform/", "/internal/platform/")
 
+# A table declared PARTITION BY and given no partitions REJECTS EVERY INSERT. Because the
+# audit entry shares the business transaction (rule 6, invariant 3), the first real business
+# write rolls back entirely — not "the trail is missing", the OPERATION CANNOT HAPPEN. In a
+# petitions service that first write is a clerk taking a citizen's report.
+#
+# Six of eight services shipped exactly that, and it was not a slip: the skeleton template in
+# those files wrote `) PARTITION BY HASH (tenant_id);` and then stopped, so every business
+# table still to be written from it would have inherited the same hole.
+#
+# This guard never saw it because WATCH_EXT is `.go` only — migrations were outside every
+# hook in the brain. `0002` carries a DO-block backstop, but that one only checks the state
+# after a migration that CARRIES the block, and "remember to append the block" is precisely
+# the instruction that already failed here.
+DECLARE_PART = re.compile(
+    r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z_][a-z0-9_]*)\b[^;]*?\bPARTITION\s+BY\b",
+    re.IGNORECASE | re.DOTALL)
+CREATE_PART = re.compile(r"\bPARTITION\s+OF\s+([a-z_][a-z0-9_]*)", re.IGNORECASE)
+SQL_COMMENT = re.compile(r"--[^\n]*")
+
+
+def in_scope_sql(path: str) -> bool:
+    return path.endswith(".sql") and "/migrations/" in path and not c.should_skip(path)
+
+
+def scan_sql(content: str) -> list[str]:
+    """Every table declared PARTITION BY must get its partitions in the SAME file.
+
+    Comments are stripped first: the skeleton template shows the declaration in prose, and
+    flagging the very comment that teaches the shape would be a guard nobody keeps.
+    """
+    sql = SQL_COMMENT.sub("", content)
+    khai = {m.group(1).lower() for m in DECLARE_PART.finditer(sql)}
+    tao = {m.group(1).lower() for m in CREATE_PART.finditer(sql)}
+    return [f"table '{t}' is PARTITION BY with no PARTITION OF — every INSERT will fail"
+            for t in sorted(khai - tao)]
+
 
 def in_scope(path: str) -> bool:
     if not path.endswith(WATCH_EXT) or c.should_skip(path):
@@ -112,11 +148,45 @@ def main() -> None:
 
     ti = c.input_of(data)
     path = c.path_of(ti)
-    if not path or not in_scope(path):
+    if not path:
         sys.exit(0)
 
     content = c.new_content(ti)
     if not content or c.is_generated(content, path):
+        sys.exit(0)
+
+    if in_scope_sql(path):
+        sql_hits = scan_sql(content)
+        if sql_hits:
+            c.block(HOOK, f"partitioned table with no partitions — {os.path.basename(path)}",
+                    sql_hits,
+                    ["  A table declared PARTITION BY and given no partitions REJECTS EVERY",
+                     "  INSERT. The audit entry shares the business transaction (rule 6,",
+                     "  invariant 3), so the first real business write ROLLS BACK ENTIRELY —",
+                     "  not a missing trail, the operation itself cannot happen. In petitions",
+                     "  that first write is a clerk taking a citizen's report.",
+                     "",
+                     "  Create the partitions in the SAME file as the declaration. Splitting",
+                     "  them leaves the file broken when run alone, and running it alone is what",
+                     "  every integration test does:",
+                     "",
+                     "    DO $$ BEGIN",
+                     "      FOR i IN 0..31 LOOP",
+                     "        EXECUTE format(",
+                     "          'CREATE TABLE IF NOT EXISTS %I PARTITION OF audit_log '",
+                     "          'FOR VALUES WITH (MODULUS 32, REMAINDER %s)',",
+                     "          'audit_log_p' || lpad(i::text, 2, '0'), i);",
+                     "      END LOOP;",
+                     "    END $$;",
+                     "",
+                     "  MODULUS 32 is fixed by ADR 0010 — do not pick a different number.",
+                     "",
+                     "  → Rule 1: .claude/rules/critical/1-tenant-isolation.md",
+                     "  → ADR 0010: kb/10-decisions/0010-data-infrastructure.md"],
+                    tool=tool, path=path)
+        sys.exit(0)
+
+    if not in_scope(path):
         sys.exit(0)
 
     hits = scan(content)

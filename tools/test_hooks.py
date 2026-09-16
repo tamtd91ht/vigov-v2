@@ -65,6 +65,28 @@ CASES = [
     ("tenant_scope_guard", "tenant taken from the client", BLOCK,
      w("services/donthu/internal/http/h.go",
        'func h(w http.ResponseWriter, r *http.Request) {\n\ttid := r.URL.Query().Get("tenant_id")\n}')),
+    # Six of eight services shipped a partitioned audit_log with ZERO partitions, and no hook
+    # saw it because this guard watched only .go. A partitioned table with no partitions
+    # rejects every INSERT, and the audit entry shares the business transaction — so the first
+    # real business write rolls back entirely.
+    ("tenant_scope_guard", "partitioned table with no partitions", BLOCK,
+     w("services/petitions/migrations/0001_init.sql",
+       "CREATE TABLE IF NOT EXISTS audit_log (\n"
+       "  tenant_id text NOT NULL,\n  id BIGSERIAL\n) PARTITION BY HASH (tenant_id);")),
+    ("tenant_scope_guard", "partitioned table with its partitions", PASS,
+     w("services/petitions/migrations/0001_init.sql",
+       "CREATE TABLE IF NOT EXISTS audit_log (\n"
+       "  tenant_id text NOT NULL,\n  id BIGSERIAL\n) PARTITION BY HASH (tenant_id);\n"
+       "DO $$ BEGIN FOR i IN 0..31 LOOP EXECUTE format(\n"
+       "  'CREATE TABLE IF NOT EXISTS %I PARTITION OF audit_log "
+       "FOR VALUES WITH (MODULUS 32, REMAINDER %s)',\n"
+       "  'audit_log_p' || lpad(i::text,2,'0'), i); END LOOP; END $$;")),
+    # The skeleton template shows the declaration in a comment. Flagging the very comment that
+    # teaches the shape would be a guard nobody keeps.
+    ("tenant_scope_guard", "declaration inside a SQL comment", PASS,
+     w("services/comms/migrations/0001_init.sql",
+       "-- CREATE TABLE bai_viet (\n--   tenant_id text NOT NULL\n"
+       "-- ) PARTITION BY HASH (tenant_id);\n")),
     ("tenant_scope_guard", "explicit @cross-tenant escape", PASS,
      w("services/baocao/internal/app/huyen.go",
        "// @cross-tenant: tổng hợp phản ánh cấp huyện, chỉ số liệu, đã ghi nhật ký\n\trows, _ := s.db.Find(ctx, f)")),
