@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/vihat/vigov/pkg/secret"
 )
 
 // THE DEFECT CLASS THIS FILE CLOSES: a Signer printed into a log line.
@@ -23,7 +25,7 @@ import (
 
 // khoaBiMat is fake key material whose bytes are easy to spot in any output. Never a real key in
 // source (rule 8, forbidden #1).
-var khoaBiMat = []byte("khoa-ky-gia-KHONG-PHAI-KHOA-THAT-bimat")
+var khoaBiMat = secret.Secret("khoa-ky-gia-KHONG-PHAI-KHOA-THAT-bimat")
 
 // loKhoa reports whether an output leaks the key, in any of the shapes fmt and slog produce it:
 // the string itself, or the byte slice printed as numbers.
@@ -42,7 +44,7 @@ func loKhoa(t *testing.T, ra string) bool {
 
 func signerThu(t *testing.T) *Signer {
 	t.Helper()
-	s, err := NewSigner([][]byte{khoaBiMat, khoaCu})
+	s, err := NewSigner([]secret.Secret{khoaBiMat, khoaCu})
 	if err != nil {
 		t.Fatalf("NewSigner lỗi: %v", err)
 	}

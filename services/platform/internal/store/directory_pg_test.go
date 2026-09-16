@@ -282,7 +282,7 @@ func TestPgCacheDungVoiDatabaseThat(t *testing.T) {
 	themXa(t, db, ulidA, "Xã Thăng Bình", true)
 	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
 
-	c := NewCachedDirectory(NewDirectory(db), time.Minute)
+	c := tenant.NewCachedDirectory(NewDirectory(db), time.Minute)
 	for range 3 {
 		if _, ok := c.ByHost(context.Background(), "thangbinh.vigov.vn"); !ok {
 			t.Fatal("cache trả về không phân giải được")

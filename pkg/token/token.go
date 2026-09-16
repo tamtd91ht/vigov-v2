@@ -32,6 +32,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vihat/vigov/pkg/secret"
 	"github.com/vihat/vigov/pkg/tenant"
 )
 
@@ -106,7 +107,16 @@ type Signer struct {
 // It fails rather than defaulting or generating a key: a process that silently invents its own
 // signing key issues tokens no other replica can verify, and every restart logs everybody out
 // for reasons nobody can see from the outside.
-func NewSigner(khoa [][]byte) (*Signer, error) {
+//
+// IT TAKES []secret.Secret AND NOT [][]byte, and that is the whole point of the parameter type.
+// With bare byte slices the material travelled unprotected from pkg/config to here, so
+// `log.Info("khoá", "k", cfg.KhoaKyBytes())` printed every signing key on the deployment as a
+// list of numbers — a leak on a path that never touched this package at all. The bytes are
+// unwrapped ONE line below, at the only place that needs them.
+//
+// pkg/token imports pkg/secret and NEVER pkg/config: the protection belongs to the material,
+// not to whoever happened to read it from the environment.
+func NewSigner(khoa []secret.Secret) (*Signer, error) {
 	if len(khoa) == 0 {
 		return nil, ErrKhongCoKhoa
 	}
@@ -117,7 +127,7 @@ func NewSigner(khoa [][]byte) (*Signer, error) {
 		}
 		// Copied so a caller mutating its slice later cannot change what this signer trusts.
 		b := make([]byte, len(k))
-		copy(b, k)
+		copy(b, k.Lo())
 		sao = append(sao, b)
 	}
 	return &Signer{khoa: sao}, nil
@@ -136,8 +146,10 @@ func (s *Signer) SoKhoa() int { return len(s.khoa) }
 // monitoring vendor — from where a secret cannot be recalled (rule 8, invariant 1). One leaked
 // signing key forges a session in EVERY commune, not one.
 //
-// pkg/config guards the key on its way in; KhoaKyBytes() hands over a bare [][]byte, so the
-// protection has to be re-established here or it ends at this package boundary.
+// pkg/config guards the key on its way in and KhoaKyBytes() now hands over []secret.Secret, so
+// the material arrives protected — but it stops being protected the moment NewSigner copies it
+// into this struct's unexported field, and a struct field is exactly what fmt and slog reach by
+// reflection. The protection has to be re-established here or it ends at this type.
 //
 // THE RECEIVER IS A VALUE, NOT A POINTER, ON PURPOSE: a value receiver puts these methods in the
 // method set of BOTH Signer and *Signer, so a dereferenced copy is covered too.

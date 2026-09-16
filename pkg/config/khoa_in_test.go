@@ -94,31 +94,23 @@ func TestKhoaKhongHienRaTrenMoiDuongIn(t *testing.T) {
 }
 
 func TestKhoaKhongHienRaQuaVerbSoHoc(t *testing.T) {
-	// KNOWN GAP, SKIPPED ON PURPOSE — DO NOT DELETE THIS TEST.
+	// THE GAP THIS TEST DESCRIBED IS NOW CLOSED — it used to be skipped, and the skip is gone.
 	//
-	// String/GoString/MarshalJSON/MarshalText/LogValue cover the verbs fmt routes through a
-	// Stringer: %v %s %q %x %X. They do NOT cover the numeric verbs, because fmt never consults
-	// String() for them — and Khoa is a []byte, so %d, %c, %U and %b each print the key material
-	// one byte at a time:
+	// String/GoString/MarshalJSON/MarshalText/LogValue only cover the verbs fmt routes through a
+	// Stringer: %v %s %q %x %X. fmt never consults String() for a NUMERIC verb, and Khoa is a
+	// []byte, so %d, %c, %U and %b each used to print the key material one byte at a time —
+	// [107 104 111 97 ...] — while the type advertised itself as refusing to render.
 	//
-	//	fmt.Sprintf("%d", khoa) -> [107 104 111 97 ...]
-	//
-	// Unlikely to be written on purpose, which is exactly the property that makes it survive
-	// review: the type promises "refuses to render" and this is the one path where it does not.
-	//
-	// THE FIX IS IN PRODUCTION CODE, so it was not made here: give Khoa a fmt.Formatter, which
-	// takes precedence over every verb —
-	//
-	//	func (k Khoa) Format(f fmt.State, verb rune) { io.WriteString(f, "***") }
-	//
-	// Remove the Skip below once that exists; the assertions already say what is required.
-	t.Skip("hở đã biết: verb số học in ra khoá — cần Khoa implement fmt.Formatter (chỉ sửa được ở mã sản phẩm)")
-
+	// The fix is secret.Secret.Format (pkg/secret/secret.go), a fmt.Formatter, which takes
+	// precedence over EVERY verb. Delete that method and this test goes red; nothing else does.
 	k := Khoa(khoaThu)
-	for _, verb := range []string{"%d", "%c", "%U", "%08b"} {
+	for _, verb := range []string{"%d", "%c", "%U", "%08b", "%o"} {
 		ra := fmt.Sprintf(verb, k)
 		if strings.Contains(ra, fmt.Sprintf("%d", khoaThu[0])) {
 			t.Errorf("%s in ra khoá dưới dạng số: %q", verb, ra)
+		}
+		if strings.Contains(ra, khoaThu) {
+			t.Errorf("%s in ra khoá nguyên văn: %q", verb, ra)
 		}
 	}
 }
@@ -168,32 +160,23 @@ func TestKhoaKhongHienRaQuaSlog(t *testing.T) {
 }
 
 func TestDsnKhongLoMatKhauKhiGhiCaCauHinh(t *testing.T) {
-	// KNOWN GAP, SKIPPED ON PURPOSE — DO NOT DELETE THIS TEST.
+	// THE GAP THIS TEST DESCRIBED IS NOW CLOSED — it used to be skipped, and the skip is gone.
 	//
 	// The argument that produced the Khoa type — "Redacted() only protects the call sites that
-	// remember to use it" — applies word for word to DatabaseDSN and RedisDSN, and they are
-	// plain strings. So:
+	// remember to use it" — applied word for word to DatabaseDSN and RedisDSN, and they were
+	// plain strings. So one line written while debugging —
 	//
-	//	slog.Info("boot", "cfg", cfg)  ->  DatabaseDSN:postgres://vigov:<mật khẩu>@host/db
+	//	slog.Info("boot", "cfg", cfg)
 	//
-	// A database password reaches centralised logging, backups and third-party monitoring in one
-	// line, it cannot be recalled from any of them, and one deployment's database serves every
-	// commune (rule 8, invariants 1 and 3).
+	// printed the whole DSN, password included. A database password reaches centralised logging,
+	// backups and third-party monitoring in one line, it cannot be recalled from any of them, and
+	// one deployment's database serves every commune (rule 8, invariants 1 and 3).
 	//
-	// THE FIX IS IN PRODUCTION CODE, so it was not made here: give the two DSN fields a type of
-	// their own that redacts itself, exactly as Khoa does —
-	//
-	//	type DSN string
-	//	func (d DSN) String() string       { return redactDSN(string(d)) }
-	//	func (d DSN) LogValue() slog.Value { return slog.StringValue(redactDSN(string(d))) }
-	//
-	// with the raw value reachable through one explicit, greppable method for the sql.Open call.
-	// Remove the Skip below once that exists.
-	t.Skip("hở đã biết: DSN là string trần nên ghi log cả Config làm lộ mật khẩu CSDL (chỉ sửa được ở mã sản phẩm)")
-
+	// Both fields are secret.DSN now, which redacts on every rendering path.
 	datMoiTruong(t, map[string]string{
 		"DATABASE_DSN":         dsnGia,
 		"ENV":                  EnvProd,
+		"REDIS_DSN":            redisGia,
 		"SESSION_SIGNING_KEYS": khoaThu,
 	})
 	cfg, err := Load("identity")
@@ -202,9 +185,20 @@ func TestDsnKhongLoMatKhauKhiGhiCaCauHinh(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	slog.New(slog.NewTextHandler(&buf, nil)).Info("khởi động", "cfg", cfg)
+	log := slog.New(slog.NewTextHandler(&buf, nil))
+	log.Info("khởi động", "cfg", cfg)
+	log.Info("khởi động con trỏ", "cfg", &cfg)
+	log.Info("chỉ dsn", "dsn", cfg.DatabaseDSN)
+	log.With("cfg", cfg).Info("kèm sẵn")
 	if strings.Contains(buf.String(), "khong-phai-mat-khau-that") {
 		t.Errorf("mật khẩu trong DSN lọt vào log:\n%s", buf.String())
+	}
+
+	// AND THE OTHER HALF, which matters just as much: a DSN redacted down to "***" makes a
+	// service pointed at the wrong database by a bad deploy undiagnosable from its own startup
+	// line. The address has to survive.
+	if !strings.Contains(buf.String(), "localhost:5432") {
+		t.Errorf("che quá tay — dòng khởi động không còn đọc ra được đang nối tới đâu:\n%s", buf.String())
 	}
 }
 
@@ -212,10 +206,53 @@ func TestKhoaVanDungDuocChoTokenDuDaCheKhiIn(t *testing.T) {
 	// The protection must not have been achieved by destroying the material: pkg/token still
 	// needs the real bytes, and exactly once, through the one greppable exit.
 	k := Khoa(khoaThu)
-	if string(k.Bytes()) != khoaThu {
-		t.Fatal("Bytes() không trả về khoá thật — token sẽ ký bằng ***")
+	if string(k.Lo()) != khoaThu {
+		t.Fatal("Lo() không trả về khoá thật — token sẽ ký bằng ***")
 	}
 	if string(k) != khoaThu {
 		t.Fatal("chuyển kiểu về string phải giữ nguyên khoá")
+	}
+}
+
+func TestKhoaKyBytesKhongLoKhoaKhiGhiLog(t *testing.T) {
+	// THE THIRD HOLE OF THE SAME CLASS. KhoaKyBytes() used to return [][]byte, so the material
+	// left this package UNPROTECTED and one line was enough —
+	//
+	//	log.Info("khoá", "k", cfg.KhoaKyBytes())
+	//
+	// to print every signing key on the deployment as a list of numbers, on a path that never
+	// touched pkg/token at all. The return type is []secret.Secret now; the bytes become raw at
+	// exactly one place, inside token.NewSigner.
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":         dsnGia,
+		"ENV":                  EnvProd,
+		"SESSION_SIGNING_KEYS": khoaThu + "," + khoaThu + "-cu",
+	})
+	cfg, err := Load("identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	log.Info("khoá ký", "k", cfg.KhoaKyBytes())
+	log.Info("khoá ký đầu tiên", "k", cfg.KhoaKyBytes()[0])
+
+	ra := buf.String()
+	if strings.Contains(ra, khoaThu) {
+		t.Errorf("KhoaKyBytes làm lộ khoá khi ghi log:\n%s", ra)
+	}
+	// The byte form counts as a leak too: a key printed as numbers is still the key.
+	if strings.Contains(ra, fmt.Sprintf("%d", khoaThu[0])+" "+fmt.Sprintf("%d", khoaThu[1])) {
+		t.Errorf("KhoaKyBytes làm lộ khoá dưới dạng byte:\n%s", ra)
+	}
+
+	// ...and the material must still arrive intact at pkg/token, in order — the FIRST key signs.
+	got := cfg.KhoaKyBytes()
+	if len(got) != 2 {
+		t.Fatalf("trả về %d khoá, muốn 2", len(got))
+	}
+	if string(got[0].Lo()) != khoaThu || string(got[1].Lo()) != khoaThu+"-cu" {
+		t.Error("KhoaKyBytes không trả về khoá thật, hoặc sai thứ tự — xoay khoá sẽ ký bằng khoá đang loại bỏ")
 	}
 }

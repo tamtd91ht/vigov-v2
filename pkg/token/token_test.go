@@ -7,15 +7,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vihat/vigov/pkg/secret"
 	"github.com/vihat/vigov/pkg/tenant"
 )
 
 // Fake key material. Never a real key in source (rule 8, forbidden #1); these strings say so
 // in their own text so a scanner and a human both read them the same way.
+//
+// secret.Secret and not []byte: that is the type NewSigner takes now, so the tests hold the
+// material the same way production does.
 var (
-	khoaMoi = []byte("khoa-ky-gia-KHONG-PHAI-KHOA-THAT-moi-01")
-	khoaCu  = []byte("khoa-ky-gia-KHONG-PHAI-KHOA-THAT-cu-002")
-	khoaLa  = []byte("khoa-ky-gia-KHONG-PHAI-KHOA-THAT-ngoai1")
+	khoaMoi = secret.Secret("khoa-ky-gia-KHONG-PHAI-KHOA-THAT-moi-01")
+	khoaCu  = secret.Secret("khoa-ky-gia-KHONG-PHAI-KHOA-THAT-cu-002")
+	khoaLa  = secret.Secret("khoa-ky-gia-KHONG-PHAI-KHOA-THAT-ngoai1")
 )
 
 // xaGia builds a well-formed commune id: tenant.ID.Valid() requires ULID length.
@@ -41,7 +45,7 @@ func claimMau() Claims {
 }
 
 func TestKyRoiGiaiLaiDuoc(t *testing.T) {
-	s, err := NewSigner([][]byte{khoaMoi})
+	s, err := NewSigner([]secret.Secret{khoaMoi})
 	if err != nil {
 		t.Fatalf("NewSigner lỗi: %v", err)
 	}
@@ -66,7 +70,7 @@ func TestTokenKhongChuaVaiTro(t *testing.T) {
 	// The claim set is three fields and must stay three. Embedding a role means a privilege
 	// change takes effect only when the token expires — up to 12 hours of authority somebody
 	// has already had removed (skills/session-and-token, FORBIDDEN).
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 	tok := kyDuoc(t, s, claimMau())
 
 	than := tok[:strings.LastIndexByte(tok, '.')]
@@ -81,14 +85,14 @@ func TestTokenKhongChuaVaiTro(t *testing.T) {
 func TestKhoaCuTrongDanhSachVanXacMinhDuoc(t *testing.T) {
 	// The whole reason the key is a LIST: rotating it must not sign out every member of staff
 	// of every commune at once (rule 8, invariant 6).
-	cu, err := NewSigner([][]byte{khoaCu})
+	cu, err := NewSigner([]secret.Secret{khoaCu})
 	if err != nil {
 		t.Fatalf("NewSigner lỗi: %v", err)
 	}
 	tok := kyDuoc(t, cu, claimMau())
 
 	// After rotation the new key signs, the old key still verifies.
-	sau, err := NewSigner([][]byte{khoaMoi, khoaCu})
+	sau, err := NewSigner([]secret.Secret{khoaMoi, khoaCu})
 	if err != nil {
 		t.Fatalf("NewSigner lỗi: %v", err)
 	}
@@ -98,24 +102,24 @@ func TestKhoaCuTrongDanhSachVanXacMinhDuoc(t *testing.T) {
 
 	// And a token signed after rotation uses the FIRST key, so dropping the old one later
 	// invalidates only tokens older than one session lifetime.
-	chiKhoaMoi, _ := NewSigner([][]byte{khoaMoi})
+	chiKhoaMoi, _ := NewSigner([]secret.Secret{khoaMoi})
 	if _, err := chiKhoaMoi.Giai(kyDuoc(t, sau, claimMau())); err != nil {
 		t.Errorf("token mới phải ký bằng khoá đầu danh sách, nhận %v", err)
 	}
 }
 
 func TestKhoaNgoaiDanhSachThiKhongXacMinhDuoc(t *testing.T) {
-	la, _ := NewSigner([][]byte{khoaLa})
+	la, _ := NewSigner([]secret.Secret{khoaLa})
 	tok := kyDuoc(t, la, claimMau())
 
-	s, _ := NewSigner([][]byte{khoaMoi, khoaCu})
+	s, _ := NewSigner([]secret.Secret{khoaMoi, khoaCu})
 	if _, err := s.Giai(tok); !errors.Is(err, ErrKhongHopLe) {
 		t.Fatalf("muốn ErrKhongHopLe cho token ký bằng khoá lạ, nhận %v", err)
 	}
 }
 
 func TestTokenHongThiTuChoi(t *testing.T) {
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 	hopLe := kyDuoc(t, s, claimMau())
 	i := strings.LastIndexByte(hopLe, '.')
 
@@ -140,7 +144,7 @@ func TestTokenHongThiTuChoi(t *testing.T) {
 }
 
 func TestTokenHetHanThiTuChoi(t *testing.T) {
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 	c := claimMau()
 	c.ExpiresAt = time.Now().UTC().Add(-time.Second)
 
@@ -150,7 +154,7 @@ func TestTokenHetHanThiTuChoi(t *testing.T) {
 }
 
 func TestKyThieuClaimThiTuChoi(t *testing.T) {
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 	cases := map[string]Claims{
 		"thiếu xã":       {Sid: "phien-gia-0001", ExpiresAt: time.Now().Add(time.Hour)},
 		"thiếu sid":      {TenantID: xaGia("01JX"), ExpiresAt: time.Now().Add(time.Hour)},
@@ -171,7 +175,7 @@ func TestSignerTuChoiKhoaKhongDung(t *testing.T) {
 	if _, err := NewSigner(nil); !errors.Is(err, ErrKhongCoKhoa) {
 		t.Errorf("muốn ErrKhongCoKhoa, nhận %v", err)
 	}
-	if _, err := NewSigner([][]byte{[]byte("qua-ngan")}); !errors.Is(err, ErrKhoaQuaNgan) {
+	if _, err := NewSigner([]secret.Secret{[]byte("qua-ngan")}); !errors.Is(err, ErrKhoaQuaNgan) {
 		t.Errorf("muốn ErrKhoaQuaNgan, nhận %v", err)
 	}
 }
@@ -179,7 +183,7 @@ func TestSignerTuChoiKhoaKhongDung(t *testing.T) {
 func TestSignerKhongGiuThamChieuKhoaGoc(t *testing.T) {
 	// A caller reusing its buffer must not silently change what this signer trusts.
 	khoa := append([]byte(nil), khoaMoi...)
-	s, _ := NewSigner([][]byte{khoa})
+	s, _ := NewSigner([]secret.Secret{khoa})
 	tok := kyDuoc(t, s, claimMau())
 
 	for i := range khoa {

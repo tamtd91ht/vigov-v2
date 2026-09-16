@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vihat/vigov/pkg/secret"
 )
 
 // Forgery and expiry. THE DEFECT CLASS THESE COVER: a token that can be ALTERED and still
@@ -29,7 +31,7 @@ func tachToken(t *testing.T, tok string) (than, chuKy string) {
 func TestSuaMotBitTrongThanTokenLuonBiTuChoi(t *testing.T) {
 	// Every byte of the body, every bit that matters: the commune, the sid and the expiry all
 	// live in there. One accepted alteration is one request acting as another commune.
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 	tok := kyDuoc(t, s, claimMau())
 	than, _ := tachToken(t, tok)
 
@@ -52,7 +54,7 @@ func TestSuaChuKyLuonBiTuChoi(t *testing.T) {
 	// hmac.Equal compares the whole value in constant time. A prefix comparison, or a length
 	// mismatch treated as "close enough", would accept a truncated MAC — which is a forgery
 	// that costs an attacker 2^8 tries, not 2^256.
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 	tok := kyDuoc(t, s, claimMau())
 	than, chuKy := tachToken(t, tok)
 
@@ -89,8 +91,8 @@ func TestDoiXaRoiKyLaiBangKhoaNgoaiDanhSachThiBiTuChoi(t *testing.T) {
 	// The shape of a real cross-commune attempt: take a valid token, rewrite `tid` to another
 	// commune, re-sign with whatever key the attacker has. It must fail at the signature, before
 	// the commune is ever read — otherwise commune B serves a token it never issued.
-	that, _ := NewSigner([][]byte{khoaMoi})
-	la, _ := NewSigner([][]byte{khoaLa})
+	that, _ := NewSigner([]secret.Secret{khoaMoi})
+	la, _ := NewSigner([]secret.Secret{khoaLa})
 
 	c := claimMau()
 	c.TenantID = xaGia("01JB")
@@ -108,7 +110,7 @@ func TestDoiXaRoiKyLaiBangKhoaNgoaiDanhSachThiBiTuChoi(t *testing.T) {
 func TestGhepThanTokenNayVoiChuKyTokenKia(t *testing.T) {
 	// Two legitimate tokens of two communes, signed by the SAME key. Swapping their halves must
 	// not produce a third valid token — the MAC covers the body, so it cannot be transplanted.
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 
 	cA := claimMau()
 	cB := claimMau()
@@ -126,7 +128,7 @@ func TestGhepThanTokenNayVoiChuKyTokenKia(t *testing.T) {
 }
 
 func TestCatCutVaThemDauChamDeuBiTuChoi(t *testing.T) {
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 	tok := kyDuoc(t, s, claimMau())
 	than, chuKy := tachToken(t, tok)
 
@@ -165,7 +167,7 @@ func kyThan(s *Signer, than string) string {
 }
 
 func TestThanDungChuKyNhungPayloadHongThiTuChoiChuKhongPanic(t *testing.T) {
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 
 	b64 := func(v string) string { return base64.RawURLEncoding.EncodeToString([]byte(v)) }
 
@@ -192,7 +194,7 @@ func TestExpOBienVaTrongQuaKhu(t *testing.T) {
 	// There is deliberately NO grace window: a token one second past its expiry is refused. A
 	// leeway added "for clock skew" is a leeway an attacker also gets, on a credential whose
 	// whole purpose is to stop working at a known moment.
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 	bayGio := time.Now().UTC()
 
 	hetHan := map[string]time.Time{
@@ -221,7 +223,7 @@ func TestExpOBienVaTrongQuaKhu(t *testing.T) {
 func TestExpAmBiCoiLaHetHan(t *testing.T) {
 	// A negative exp is not a valid instant a signer would ever produce; it must land in the
 	// expired branch rather than sliding through as "not zero, therefore fine".
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 	than := Version + "." + base64.RawURLEncoding.EncodeToString(
 		[]byte(`{"tid":"01JAAAAAAAAAAAAAAAAAAAAAAA","sid":"phien-gia-0001","exp":-1}`))
 
@@ -233,7 +235,7 @@ func TestExpAmBiCoiLaHetHan(t *testing.T) {
 func TestSignerRongTuChoiMoiToken(t *testing.T) {
 	// Fail closed. A Signer built by struct literal instead of NewSigner has no keys; it must
 	// verify nothing rather than verify everything.
-	that, _ := NewSigner([][]byte{khoaMoi})
+	that, _ := NewSigner([]secret.Secret{khoaMoi})
 	tok := kyDuoc(t, that, claimMau())
 
 	var rong Signer
@@ -249,7 +251,7 @@ func TestPayloadChiCoDungBaTruong(t *testing.T) {
 	// The claim set is three fields and must stay three. A fourth — an `alg`, a role, a name —
 	// is either a forgery surface or a privilege cached past its revocation. This fails the
 	// moment somebody adds one, which is the only moment it is cheap to discuss.
-	s, _ := NewSigner([][]byte{khoaMoi})
+	s, _ := NewSigner([]secret.Secret{khoaMoi})
 	than, _ := tachToken(t, kyDuoc(t, s, claimMau()))
 
 	tho, err := base64.RawURLEncoding.DecodeString(than[len(Version)+1:])

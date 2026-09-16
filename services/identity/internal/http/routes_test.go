@@ -14,6 +14,7 @@ import (
 
 	"github.com/vihat/vigov/pkg/authz"
 	"github.com/vihat/vigov/pkg/httpx"
+	"github.com/vihat/vigov/pkg/secret"
 	"github.com/vihat/vigov/pkg/tenant"
 	"github.com/vihat/vigov/pkg/token"
 	"github.com/vihat/vigov/services/identity/internal/app"
@@ -187,7 +188,7 @@ type mayChu struct {
 func dungMayChu(t *testing.T) *mayChu {
 	t.Helper()
 
-	signer, err := token.NewSigner([][]byte{[]byte(khoaGia)})
+	signer, err := token.NewSigner([]secret.Secret{secret.Secret(khoaGia)})
 	if err != nil {
 		t.Fatalf("NewSigner lỗi: %v", err)
 	}

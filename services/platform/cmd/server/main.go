@@ -24,6 +24,7 @@ import (
 	"github.com/vihat/vigov/pkg/config"
 	"github.com/vihat/vigov/pkg/grpcx"
 	"github.com/vihat/vigov/pkg/httpx"
+	"github.com/vihat/vigov/pkg/tenant"
 	svcgrpc "github.com/vihat/vigov/services/platform/internal/grpc"
 	svchttp "github.com/vihat/vigov/services/platform/internal/http"
 	svcstore "github.com/vihat/vigov/services/platform/internal/store"
@@ -52,7 +53,10 @@ func run(log *slog.Logger) error {
 	}
 
 	// 2. store — one schema per service; never another service's schema (rule 2).
-	db, err := sql.Open("pgx", cfg.DatabaseDSN)
+	// .Lo() is the ONE place the DSN leaves secret.DSN with its password intact: the driver
+	// argument, and nowhere else. Anything else holding the raw string is a password waiting
+	// for a log line (rule 8).
+	db, err := sql.Open("pgx", cfg.DatabaseDSN.Lo())
 	if err != nil {
 		return err
 	}
@@ -75,8 +79,11 @@ func run(log *slog.Logger) error {
 
 	// 3. directory — resolves Host -> commune, cached with a short TTL because this sits on the
 	//    path of EVERY request at 200+ communes (ADR 0004, decision 5).
+	// The cache is pkg/tenant.CachedDirectory, not a platform-local type: it is a decorator over
+	// tenant.Directory with no platform logic in it, and the other seven services wrap their
+	// gRPC-backed directory with the same one. Two copies would be two invalidation rules.
 	danhBa := svcstore.NewDirectory(db)
-	directory := svcstore.NewCachedDirectory(danhBa, cfg.TenantCacheTTL)
+	directory := tenant.NewCachedDirectory(danhBa, cfg.TenantCacheTTL)
 
 	// 4. checker — authz.Checker backed by the identity service.
 	// TODO(next): identity does not expose the permission contract yet. Until it does, no
@@ -87,15 +94,6 @@ func run(log *slog.Logger) error {
 	// TODO(next): no events published yet.
 
 	mux := http.NewServeMux()
-
-	// /healthz is deliberately NOT behind the tenant middleware: it answers whether this
-	// process is alive, which is true or false regardless of which commune is asking. Putting
-	// it behind Host resolution would make the health check fail whenever the directory fails,
-	// and an orchestrator would then restart a healthy process during a database blip.
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
 
 	svchttp.Register(mux, svchttp.Deps{})
 
@@ -111,9 +109,22 @@ func run(log *slog.Logger) error {
 	h = httpx.Recover(traceID)(h)
 	h = httpx.StripTenantHeaders(h)
 
+	// /healthz is mounted on an OUTER mux, so it is genuinely outside the chain above.
+	//
+	// It used to sit on the inner mux while the comment beside it claimed the opposite. That is
+	// the shape this whole service exists to prevent: an orchestrator probes by IP, the Host
+	// matches no commune, TenantMiddleware answers 404 — and a healthy process is restarted
+	// during a database blip, which is exactly when restarting it is worst.
+	ngoai := http.NewServeMux()
+	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	ngoai.Handle("/", h)
+
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           h,
+		Handler:           ngoai,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

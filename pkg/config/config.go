@@ -17,11 +17,12 @@ package config
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/vihat/vigov/pkg/secret"
 )
 
 // Config holds what is genuinely the same for every commune on this deployment.
@@ -45,7 +46,15 @@ type Config struct {
 	// DatabaseDSN is the connection string for THIS service's own schema. A service never
 	// holds a DSN for another service's database — that is rule 2, and a second DSN appearing
 	// in this struct is the first symptom of a distributed monolith.
-	DatabaseDSN string
+	//
+	// THE TYPE IS WHAT KEEPS THE PASSWORD OUT OF THE LOGS. As a plain string, one
+	// `slog.Info("boot", "cfg", cfg)` written while debugging put the database password of the
+	// whole deployment into centralised logging, backups and third-party monitoring — from
+	// where it cannot be recalled (rule 8, invariants 1 and 3), while Redacted() below only
+	// ever protected the call sites that remembered to call it. secret.DSN redacts on EVERY
+	// rendering path and keeps the host readable, so the startup line still says which
+	// database this process opened. sql.Open takes .Lo().
+	DatabaseDSN secret.DSN
 
 	// RedisDSN is the cache used for duplicate-request protection and rate limiting.
 	//
@@ -55,7 +64,21 @@ type Config struct {
 	// Empty is allowed, and only means local development with no cache: every route then
 	// behaves per the CheDoHong it declared — idem.MoKhiHong passes, idem.DongKhiHong answers
 	// 503. A service must not fail to start because a cache is absent.
-	RedisDSN string
+	//
+	// Same type, same reason as DatabaseDSN: it carries a credential.
+	RedisDSN secret.DSN
+
+	// PlatformGRPCAddr is where the platform service answers ResolveHost — the RPC that maps an
+	// incoming Host to a commune (proto/vigov/platform/v1/platform.proto).
+	//
+	// IT HAS NO DEFAULT, deliberately. Every service edge resolves its commune through this
+	// address, so guessing it wrong means either refusing every request or — far worse —
+	// resolving communes against something that is not the registry. Rule 1, forbidden #1 is
+	// about defaults on the isolation path, and the address of the registry is on it.
+	//
+	// Empty is allowed HERE because the platform service itself does not call anybody: it holds
+	// the registry. Every other service refuses to start without it, and says so by name.
+	PlatformGRPCAddr string
 
 	// TenantCacheTTL bounds how long a deactivated commune keeps being served, and how long a
 	// reassigned domain keeps resolving to the old commune (ADR 0004, decision 5).
@@ -93,23 +116,17 @@ const (
 
 // Khoa is secret key material that refuses to print itself.
 //
-// WHY A TYPE AND NOT A PLAIN []byte: Redacted() below is the deliberate place to strip
-// credentials before a config is logged, but it only protects the call sites that remember to
-// use it. A key reaches centralised logging, backups and third-party monitoring through one
-// forgotten `slog.Info("cfg", "cfg", cfg)` — and a leaked signing key cannot be recalled from
-// any of them, while affecting EVERY commune at once (rule 8). Refusing to render is the only
-// protection that does not depend on anybody remembering.
-type Khoa []byte
-
-func (k Khoa) String() string               { return "***" }
-func (k Khoa) GoString() string             { return "***" }
-func (k Khoa) MarshalJSON() ([]byte, error) { return []byte(`"***"`), nil }
-func (k Khoa) MarshalText() ([]byte, error) { return []byte("***"), nil }
-func (k Khoa) LogValue() slog.Value         { return slog.StringValue("***") }
-
-// Bytes hands the raw material to pkg/token. The one explicit way out, so every use is
-// greppable.
-func (k Khoa) Bytes() []byte { return []byte(k) }
+// IT IS AN ALIAS, NOT A SECOND TYPE. This package used to carry its own implementation of
+// "refuses to render", and so did pkg/token, and the DSNs carried none at all — three
+// answers to one question, which is how the fourth one gets forgotten. There is now exactly
+// one implementation, in pkg/secret, and this name only says what the material is FOR.
+//
+// An alias rather than a defined type on purpose: `[]Khoa` and `[]secret.Secret` have to be
+// the same type, or every hand-over to pkg/token would need a conversion loop, and a
+// conversion loop is a place to write `[]byte(k)` by accident.
+//
+// The raw material comes out through secret.Secret.Lo(), and nowhere else.
+type Khoa = secret.Secret
 
 var (
 	ErrThieuBienMoiTruong = errors.New("config: thiếu biến môi trường bắt buộc")
@@ -162,8 +179,9 @@ func Load(serviceName string) (Config, error) {
 	cfg := Config{
 		ListenAddr:          firstNonEmpty(os.Getenv("LISTEN_ADDR"), ":8080"),
 		GRPCListenAddr:      firstNonEmpty(os.Getenv("GRPC_LISTEN_ADDR"), ":9090"),
-		DatabaseDSN:         dsn,
-		RedisDSN:            strings.TrimSpace(os.Getenv("REDIS_DSN")),
+		DatabaseDSN:         secret.DSN(dsn),
+		RedisDSN:            secret.DSN(strings.TrimSpace(os.Getenv("REDIS_DSN"))),
+		PlatformGRPCAddr:    strings.TrimSpace(os.Getenv("PLATFORM_GRPC_ADDR")),
 		TenantCacheTTL:      duration(os.Getenv("TENANT_CACHE_TTL"), 30*time.Second),
 		SessionSigningKeys:  khoa,
 		Env:                 env,
@@ -209,39 +227,18 @@ func (c Config) CanhBao() []string {
 	return ra
 }
 
-// Redacted returns the config with every DSN's credentials removed, so it can be logged.
+// Redacted returns a config whose DSN fields hold the redacted text itself, not merely a type
+// that redacts when printed.
 //
-// A DSN carries a password. Logging it sends one credential into centralised logging,
-// backups and third-party monitoring at once, and it cannot be recalled from any of them
-// (rule 8). Every DSN field added to Config must be redacted here as well.
-//
-// SessionSigningKeys needs no line here: the Khoa type refuses to render itself, which also
-// covers the call sites that forget to call this function at all.
+// IT IS NO LONGER THE PROTECTION, and that is the point of keeping it. Every field that can
+// carry a credential now refuses to render on its own (secret.Secret, secret.DSN), so a config
+// logged WITHOUT calling this function is already safe — which is the case Redacted() could
+// never cover, because it depended on somebody remembering. What this still buys is a value
+// that cannot leak even through .Lo(): hand THIS to anything that has to keep a copy.
 func (c Config) Redacted() Config {
-	c.DatabaseDSN = redactDSN(c.DatabaseDSN)
-	if c.RedisDSN != "" {
-		c.RedisDSN = redactDSN(c.RedisDSN)
-	}
+	c.DatabaseDSN = secret.DSN(c.DatabaseDSN.String())
+	c.RedisDSN = secret.DSN(c.RedisDSN.String())
 	return c
-}
-
-// redactDSN replaces the password inside a driver URL with three asterisks, keeping the
-// scheme, the user and the host so a misconfigured target is still recognisable in a log.
-func redactDSN(dsn string) string {
-	i := strings.Index(dsn, "://")
-	if i < 0 {
-		return "***"
-	}
-	rest := dsn[i+3:]
-	at := strings.LastIndex(rest, "@")
-	if at < 0 {
-		return dsn // no credentials present
-	}
-	cred := rest[:at]
-	if colon := strings.Index(cred, ":"); colon >= 0 {
-		cred = cred[:colon] + ":***"
-	}
-	return dsn[:i+3] + cred + rest[at:]
 }
 
 func firstNonEmpty(vals ...string) string {
@@ -281,11 +278,14 @@ func khoaKy(raw string) []Khoa {
 }
 
 // KhoaKyBytes hands the signing keys to pkg/token, in order.
-func (c Config) KhoaKyBytes() [][]byte {
-	ra := make([][]byte, 0, len(c.SessionSigningKeys))
-	for _, k := range c.SessionSigningKeys {
-		ra = append(ra, k.Bytes())
-	}
+//
+// IT RETURNS THE PROTECTED TYPE, NOT [][]byte. Returning bare byte slices ended the protection
+// at this function's boundary: `log.Info("khoá", "k", cfg.KhoaKyBytes())` printed the whole
+// platform's signing keys as numbers, and nothing on the way there was a Khoa any more. The
+// keys become raw bytes at exactly one place now — inside token.NewSigner, through Lo().
+func (c Config) KhoaKyBytes() []secret.Secret {
+	ra := make([]secret.Secret, 0, len(c.SessionSigningKeys))
+	ra = append(ra, c.SessionSigningKeys...)
 	return ra
 }
 

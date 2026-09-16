@@ -36,7 +36,7 @@ func dungEdge(t *testing.T, ttl time.Duration) (http.Handler, *tenant.ID) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	dir := NewCachedDirectory(NewDirectory(db), ttl)
+	dir := tenant.NewCachedDirectory(NewDirectory(db), ttl)
 
 	var h http.Handler = cuoi
 	h = httpx.TenantMiddleware(dir)(h)

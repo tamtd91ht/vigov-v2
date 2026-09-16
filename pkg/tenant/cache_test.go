@@ -1,22 +1,24 @@
-package store
+package tenant
 
 import (
 	"context"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/vihat/vigov/pkg/tenant"
 )
+
+// Moved here with CachedDirectory itself, from services/platform/internal/store: the cache is a
+// decorator over Directory that every service edge needs, and a test that moved with it is a
+// test that keeps being run.
 
 // dirGia is a stub directory that counts how often it is actually reached.
 type dirGia struct {
 	mu     sync.Mutex
 	soLan  int
-	ketQua map[string]tenant.Tenant
+	ketQua map[string]Tenant
 }
 
-func (d *dirGia) ByHost(_ context.Context, host string) (tenant.Tenant, bool) {
+func (d *dirGia) ByHost(_ context.Context, host string) (Tenant, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.soLan++
@@ -27,23 +29,23 @@ func (d *dirGia) ByHost(_ context.Context, host string) (tenant.Tenant, bool) {
 const ulidThangBinh = "01JD8ZQK9M3NPXR7TVWYB2C4EF"
 
 func dirMau() *dirGia {
-	return &dirGia{ketQua: map[string]tenant.Tenant{
+	return &dirGia{ketQua: map[string]Tenant{
 		"thangbinh.vigov.vn": {
-			ID: tenant.ID(ulidThangBinh), Host: "thangbinh.vigov.vn",
+			ID: ID(ulidThangBinh), Host: "thangbinh.vigov.vn",
 			Name: "Xã Thăng Bình", Active: true,
 		},
 	}}
 }
 
 func TestCacheTraLoiTuBoNho(t *testing.T) {
-	// This lookup runs on every request of every commune. If it reached the database each
-	// time it would be the busiest query in the system, answering the same question all day.
+	// This lookup runs on every request of every commune. If it reached the registry each time
+	// it would be the busiest call in the system, answering the same question all day.
 	inner := dirMau()
 	c := NewCachedDirectory(inner, time.Minute)
 
 	for i := range 5 {
 		got, ok := c.ByHost(context.Background(), "thangbinh.vigov.vn")
-		if !ok || got.ID != tenant.ID(ulidThangBinh) {
+		if !ok || got.ID != ID(ulidThangBinh) {
 			t.Fatalf("lần %d: ByHost trả %v, ok=%v", i, got.ID, ok)
 		}
 	}
@@ -53,8 +55,8 @@ func TestCacheTraLoiTuBoNho(t *testing.T) {
 }
 
 func TestCacheNhoCaLanTruot(t *testing.T) {
-	// An unknown Host is the shape of a scan. If misses are not remembered, every probe
-	// reaches the database and a scanner sets the query rate.
+	// An unknown Host is the shape of a scan. If misses are not remembered, every probe reaches
+	// the registry and a scanner sets the query rate.
 	inner := dirMau()
 	c := NewCachedDirectory(inner, time.Minute)
 
@@ -100,8 +102,8 @@ func TestCacheForgetDongCuaSoNgay(t *testing.T) {
 }
 
 func TestCacheForgetAll(t *testing.T) {
-	// A deactivated commune may hold several hosts. Serving a dissolved commune is worse than
-	// a moment of extra queries.
+	// A deactivated commune may hold several hosts. Serving a dissolved commune is worse than a
+	// moment of extra queries.
 	inner := dirMau()
 	inner.ketQua["cu.vigov.vn"] = inner.ketQua["thangbinh.vigov.vn"]
 	c := NewCachedDirectory(inner, time.Hour)
@@ -118,7 +120,7 @@ func TestCacheForgetAll(t *testing.T) {
 }
 
 func TestCacheTtlKhongThiKhongNho(t *testing.T) {
-	// ttl <= 0 disables caching, which is what tests exercising the real query want.
+	// ttl <= 0 disables caching, which is what tests exercising the real lookup want.
 	inner := dirMau()
 	c := NewCachedDirectory(inner, 0)
 

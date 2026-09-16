@@ -44,3 +44,45 @@ func TestGRPCListenAddrDocTuMoiTruong(t *testing.T) {
 		t.Errorf("GRPCListenAddr = %q", cfg.GRPCListenAddr)
 	}
 }
+
+func TestPlatformGRPCAddrKhongCoMacDinh(t *testing.T) {
+	// NO DEFAULT, ON PURPOSE. This is the address of the registry that answers "which commune",
+	// so every service edge resolves its commune through it. A guessed default would either
+	// refuse every request or resolve communes against something that is not the registry —
+	// rule 1, forbidden #1, a default on the isolation path.
+	//
+	// Empty is allowed HERE because the platform service holds the registry and calls nobody.
+	// Refusing to start belongs to the services that need it: platformclient.Dial("") fails by
+	// name so the operator reads which variable is missing, not "404 for every domain".
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":       dsnGia,
+		"ENV":                EnvDev,
+		"PLATFORM_GRPC_ADDR": "",
+	})
+
+	cfg, err := Load("platform")
+	if err != nil {
+		t.Fatalf("Load lỗi: %v", err)
+	}
+	if cfg.PlatformGRPCAddr != "" {
+		t.Errorf("PlatformGRPCAddr = %q, phải để trống chứ không đoán", cfg.PlatformGRPCAddr)
+	}
+}
+
+func TestPlatformGRPCAddrDocTuMoiTruong(t *testing.T) {
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":       dsnGia,
+		"ENV":                EnvDev,
+		"PLATFORM_GRPC_ADDR": "  platform.noi-bo:9090  ",
+	})
+
+	cfg, err := Load("identity")
+	if err != nil {
+		t.Fatalf("Load lỗi: %v", err)
+	}
+	// Trimmed: a trailing space pasted from a deployment manifest turns into a dial error that
+	// reads like the platform is down.
+	if cfg.PlatformGRPCAddr != "platform.noi-bo:9090" {
+		t.Errorf("PlatformGRPCAddr = %q", cfg.PlatformGRPCAddr)
+	}
+}

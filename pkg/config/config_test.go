@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vihat/vigov/pkg/secret"
 )
 
 // dsnGia is a fake DSN. Never a real credential in source (rule 8, forbidden #1).
@@ -124,7 +126,9 @@ func TestRedactedGiauMatKhau(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	an := cfg.Redacted().DatabaseDSN
+	// .String() is the redaction itself now — the type refuses to render the password on every
+	// path, and Redacted() only freezes that into the value.
+	an := cfg.Redacted().DatabaseDSN.String()
 
 	if strings.Contains(an, "khong-phai-mat-khau-that") {
 		t.Errorf("mật khẩu lọt ra sau khi che: %q", an)
@@ -145,8 +149,8 @@ func TestRedactedKhiKhongCoThongTinDangNhap(t *testing.T) {
 	}
 	for ten, dsn := range cases {
 		t.Run(ten, func(t *testing.T) {
-			c := Config{DatabaseDSN: dsn}
-			got := c.Redacted().DatabaseDSN
+			c := Config{DatabaseDSN: secret.DSN(dsn)}
+			got := c.Redacted().DatabaseDSN.String()
 			if strings.Contains(got, "khong-phai-mat-khau-that") {
 				t.Errorf("rò rỉ: %q", got)
 			}
@@ -204,7 +208,7 @@ func TestRedisDSNCungBiCheMatKhau(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	an := cfg.Redacted().RedisDSN
+	an := cfg.Redacted().RedisDSN.String()
 	if strings.Contains(an, "khong-phai-mat-khau-that") {
 		t.Errorf("mật khẩu Redis lọt ra sau khi che: %q", an)
 	}
