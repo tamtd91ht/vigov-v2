@@ -47,8 +47,35 @@ service IdentityService {
 message Staff {
   string id = 1;
   string tenant_id = 2;       // staff belong to exactly one commune
-  string username = 3;        // UNIQUE (tenant_id, username) — never globally unique
+
+  // Field 3 WAS `username`, and there has never been such a column. Sign-in is by `email`
+  // (services/identity/internal/store/can_bo.go, TheoEmail), and the only per-commune unique
+  // keys on `nguoi_dung` are UNIQUE (tenant_id, ma) and UNIQUE (tenant_id, email). The field
+  // therefore also asserted a constraint that exists nowhere — worse than a spare field,
+  // because whoever implements this service would have had to choose between inventing a
+  // column and returning an empty string, and both make the contract lie about the record.
+  //
+  // The number AND the name are reserved: a number is never reused (rule 2, invariant 4), and
+  // reserving the name stops the word coming back later attached to different data, which is
+  // how a wrong field returns without anybody noticing.
+  reserved 3;
+  reserved "username";
+
+  // AT MOST ONE element today: `nguoi_dung.vai_tro_id` is a single nullable column, so this
+  // list is empty or holds one entry — a caller must not assume more, and must not assume at
+  // least one either (the column is nullable). Kept repeated rather than narrowed to a
+  // singular field because the schema is the narrower fact of the two: if a staff member ever
+  // holds two roles, a caller written against a list keeps working, whereas a singular field
+  // would have to be removed and replaced.
+  //
+  // These are ROLES, not permissions. A permission is a flat `<nhóm>.<việc>` key held by a
+  // role (rule 5, invariant 3b); this contract never carries permissions, because a caller
+  // that reads them would be deciding authorisation outside the service that owns it.
   repeated string roles = 4;
+
+  // `mat_khau_hash` is deliberately absent and must never be added, in any form, hashed or
+  // not (rule 3, rule 8). Nothing outside identity has a reason to see it, and a credential
+  // that crosses a service boundary is a credential in somebody else's logs.
 }
 
 // A citizen exists once for the whole platform.
