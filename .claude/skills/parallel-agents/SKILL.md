@@ -43,7 +43,7 @@ turn; the answer and the report arrive independently.
 
 | Pair | Why |
 |---|---|
-| `test-designer` + any builder | It writes *test files anywhere* — its boundary crosses every other boundary by definition |
+| `test-designer` + any builder | Not a path collision — a `_test.go` file is never a `.proto`, a migration or a `kb/` document. It runs `go test ./...` across the whole module, so a package another agent is halfway through writing shows up as a compile error in code it does not own, and it chases a defect that is not there |
 | Two builders on **one change** | ROUTING §3 says it outright: the output of each step is the input of the next |
 | Any builder + the **verification gate** | `go build` / `go test` run while another agent is writing measures a tree that is halfway through a change. A green result means nothing |
 | Two agents that both run a **repo-global command** | Below |

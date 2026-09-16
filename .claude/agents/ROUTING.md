@@ -124,7 +124,18 @@ Where each conflict comes from:
 | go-service ∩ migration | `services/*/migrations/**` sits inside `services/<name>/**` |
 | go-service ∩ knowledge | `services/*/README.md` sits inside `services/<name>/**` |
 | contract ∩ knowledge | both write under `kb/` |
-| **test-designer ∩ everything** | its boundary is *test files anywhere*, which crosses every other boundary by definition |
+| **test-designer ∩ every writer** | see below — the reason is not the paths |
+
+**Why `test-designer` is sequential with every writer**, stated precisely because the loose
+version ("its boundary is test files anywhere") gives the right answer for the wrong reason: a
+`_test.go` file is never a `.proto`, a migration, a README or a `kb/` document, so on **paths**
+it collides with almost nobody. What it collides with is **shared state** — it runs
+`go test ./...` across the whole module, so a package another agent is halfway through writing
+surfaces as a compile error in code `test-designer` does not own, and it goes hunting a defect
+that does not exist. The same applies in reverse to anything that runs `make kb`.
+
+So the pair is sequential, but knowing *why* tells you the exception: an agent that touches no
+Go and runs no repo-wide command can still go alongside it.
 
 **Two `go-service-builder` runs on different services** are the trap: `services/identity/**`
 and `services/petitions/**` are disjoint, but both may write `go.mod` and `go.sum`. Parallel
