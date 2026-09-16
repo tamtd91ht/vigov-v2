@@ -3,7 +3,7 @@ id: 0012-grpc-boundary-contract
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 184869f
+derived_from_commit: b1c6cc7
 expires: null
 owns_facts:
   - "vì sao tenant_id đi trong metadata gRPC với khoá x-tenant-id, không bao giờ trong thân message"
@@ -59,20 +59,59 @@ quyết định đặt tên, hai lớp khớp nhau; và lớp kia đã viết r�
 (Khoá viết thường vì gRPC hạ chữ thường mọi khoá metadata — không phải một lựa chọn, là một
 ràng buộc của giao thức.)
 
-### Ngoại lệ, và vì sao nó phải là danh sách trắng tường minh
+### Ngoại lệ — HAI CHUYỆN KHÁC NHAU, đừng gộp
+
+Ở ranh giới này có hai thứ trông giống nhau và thường bị gộp làm một. Gộp chúng là cách
+`GetTenant` suýt được miễn kiểm metadata, trong khi nó **không** được miễn:
+
+| | **A. Miễn kiểm metadata** | **B. Id nằm trong thân message** |
+|---|---|---|
+| Trả lời câu | RPC này có bắt buộc mang `x-tenant-id` không | Giá trị id trong thân nghĩa là gì |
+| Thành viên | **Đúng một: `ResolveHost`** | `GetTenant` (id xã), `ResolveHost` (host) |
+| Quan hệ với nhau | **Không có.** B không kéo theo A | |
+
+#### A. Miễn kiểm metadata — danh sách trắng đúng một thành viên
 
 `ResolveHost` chạy **trước khi biết xã** — nó chính là thứ trả lời câu hỏi "xã nào". Bắt nó
-mang `x-tenant-id` là vòng lặp. `GetTenant` cũng nhận id trong thân, vì ở đó id là **chủ thể
-đang được tra**, không phải lời khai của bên gọi về chính mình.
+mang `x-tenant-id` là một vòng lặp: phải biết xã mới hỏi được xã là gì.
 
-Hai ngoại lệ đó phải được khai **tường minh theo tên RPC** trong interceptor, không bao giờ
+Đó là lý do **duy nhất** được chấp nhận để miễn: RPC **không thể** có xã tại thời điểm gọi —
+không phải "chưa tiện có", không phải "gọi nội bộ nên thôi".
+
+**`GetTenant` BẮT BUỘC mang `x-tenant-id`.** Nói thẳng ra đây để người đọc sau không phải
+suy luận. Nó luôn được gọi khi bên gọi **đã biết** mình đang phục vụ xã nào, nên mang thêm
+metadata không tốn gì; và một danh sách miễn càng ngắn thì càng rà được bằng mắt trong một
+lần review.
+
+Danh sách phải khai **tường minh theo tên method đầy đủ** trong interceptor, và không bao giờ
 được miễn trừ theo mặc định (kiểu "thiếu metadata thì bỏ qua kiểm tra"). Lý do: một miễn trừ
 theo mặc định im lặng nuốt luôn mọi RPC quên đặt metadata, và cách hỏng của nó là **xử lý
-thành công một lời gọi không có xã** — dạng mất cách ly mà không test nào đỏ.
+thành công một lời gọi không có xã** — dạng mất cách ly mà không test nào đỏ. Danh sách
+tường minh thì ca hỏng ngược lại: quên khai thì lời gọi **bị từ chối**, ồn ào, sửa trong một
+phút.
 
-Ngoại lệ này được phép tồn tại **chỉ vì** ADR 0003: `platform` không có đường trả về nội dung
-nghiệp vụ nào cả, nên một lời gọi nêu tên xã bất kỳ ở đây cũng không chạm tới được dữ liệu
-của xã đó. Service khác **không được sao chép hình dạng này**.
+**Phép thử trước khi thêm thành viên thứ hai:** *RPC này có thể biết xã tại thời điểm gọi
+không?* Có → **không miễn**, dù bất tiện. Thêm một thành viên vào danh sách là **ĐIỀU KIỆN
+DỪNG** — hỏi người dùng, đừng tự quyết trong lúc viết mã.
+
+#### B. Id nằm trong thân message — không phải một ngoại lệ
+
+`GetTenant` nhận id xã trong thân, `ResolveHost` nhận host trong thân. Ở cả hai, giá trị đó
+là **chủ thể đang được tra**, không phải lời khai của bên gọi về chính mình. Hai câu hoàn
+toàn khác nhau:
+
+| Câu | Đi đâu | Ai đặt |
+|---|---|---|
+| "Tôi **đang thuộc về** xã nào" | **Metadata** | Interceptor, lấy từ context — bên gọi không tự khai được |
+| "Tôi **đang hỏi về** xã nào" | **Thân message** | Bên gọi, vì đó là tham số tra cứu |
+
+Nên `GetTenant` mang **cả hai**: `x-tenant-id` nói bên gọi là ai, id trong thân nói đang hỏi
+về ai. Hai giá trị đó **có thể khác nhau** — một service hỏi siêu dữ liệu của xã khác.
+
+Điều đó chỉ chấp nhận được **vì ADR 0003**: `platform` không có đường trả về nội dung nghiệp
+vụ nào cả, nên một lời gọi nêu tên xã bất kỳ ở đây cũng không chạm tới được dữ liệu của xã
+đó. **Service nghiệp vụ không được sao chép hình dạng B**: ở đó, một id xã nằm trong thân
+message đúng là lời khai mà luật 1 cấm #2 cấm.
 
 ---
 
@@ -211,12 +250,12 @@ nằm trên đường đi của mọi request — và vì vậy là **một ADR 
 - **Dễ hơn:** mọi RPC mới chỉ cần theo mặc định đã chốt — metadata mang xã, hình dạng theo lô
 - **Khó hơn:** bên gọi `BatchGetStaff` phải tự chia lô và phải ghép theo `id`; không được
   dựa vào thứ tự hay số lượng trả về
-- **Phải trả ngay:** interceptor hai đầu và danh sách trắng ngoại lệ phải tồn tại **trước**
-  server gRPC đầu tiên phục vụ thật — không có interceptor thì hợp đồng trên chỉ là văn bản
+- **Phải trả ngay:** interceptor hai đầu và danh sách miễn phải tồn tại **trước** server gRPC
+  đầu tiên phục vụ thật — không có interceptor thì hợp đồng trên chỉ là văn bản
 - **Phải trả sau:** xác thực giữa service với service (quyết định 3) là món nợ có ngày đáo
   hạn xác định, không phải món nợ mở
 
-→ ADR 0003 (`platform` chỉ siêu dữ liệu — căn cứ của quyết định 3): `kb/10-decisions/0003-platform-admin-metadata-only.md`
+→ ADR 0003 (`platform` chỉ siêu dữ liệu — căn cứ của quyết định 3 và của hình dạng B): `kb/10-decisions/0003-platform-admin-metadata-only.md`
 → ADR 0005 (ULID công khai trong deep link): `kb/10-decisions/0005-miniapp-tenant-resolution.md`
 → Đường đi hợp lệ giữa các service: `kb/00-foundation/domain-boundaries.md`
 → Luật 1 (xã từ Host, cấm nhận `tenant_id` từ client): `.claude/rules/critical/1-tenant-isolation.md`

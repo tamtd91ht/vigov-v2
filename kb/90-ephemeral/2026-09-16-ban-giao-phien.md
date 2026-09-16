@@ -3,7 +3,7 @@ id: 2026-09-16-ban-giao-phien
 tier: T5
 source: CURATED
 owner: architecture
-derived_from_commit: 184869f
+derived_from_commit: b1c6cc7
 expires: 2026-12-16
 owns_facts:
   - "trạng thái thi công tại 2026-09-16 và việc kế tiếp phải làm"
@@ -50,36 +50,33 @@ hơn và không bao giờ lệch. Dưới đây chỉ những thứ `git log` kh
 | `pkg/password` | argon2id, `CanBamLai` để nâng chi phí |
 | `pkg/authz` | `Perm` phẳng; test gồm đủ 4 ca luật 5 |
 | `pkg/idem` | Chống trùng request, **khai opt-in từng route** |
+| `pkg/grpcx` | Interceptor **hai đầu** + hằng khoá metadata. Danh sách miễn kiểm xã có **đúng một** thành viên: `ResolveHost` |
 | `platform/internal/{domain,store}` | Phân giải Host, cache, edge chain |
+| `platform/internal/grpc` | Server gRPC — siêu dữ liệu, không có đường trả nội dung nghiệp vụ (ADR 0003) |
 | `identity/internal/{domain,store,app}` | RBAC, `Checker`, phiên, đăng nhập |
 | `identity/internal/http` | **Route đăng nhập/đăng xuất + middleware dựng `Principal`**, token ký HMAC |
 | `proto/` + `gen/` | Hợp đồng đã sinh mã. `BatchGetStaff` thay `GetStaff`; `x-tenant-id` khai ở cả 8 tệp proto |
 
-**Còn trống hoàn toàn:** mọi route HTTP **nghiệp vụ** · `documents` `petitions` `dossiers`
-`finance` `comms` `reporting` · toàn bộ frontend (`apps/*/src/` chỉ có `.gitkeep`) ·
-`pkg/storage` · `data-ownership.json` vẫn rỗng.
+**Còn trống hoàn toàn:** mọi route HTTP **nghiệp vụ** · server gRPC của `identity` ·
+`documents` `petitions` `dossiers` `finance` `comms` `reporting` · toàn bộ frontend
+(`apps/*/src/` chỉ có `.gitkeep`) · `pkg/storage` · `data-ownership.json` vẫn rỗng.
 
 ---
 
 ## 2. Việc kế tiếp — theo đúng thứ tự
 
-### (a) Tầng gRPC: `pkg/grpcx` + server gRPC cho `platform` ← **BẮT ĐẦU TỪ ĐÂY**
+### Luật chung cho mọi RPC viết từ đây trở đi
 
-Route HTTP đã chạm được tới `identity`, nhưng `main.go` chưa wire được service nào với service
-nào vì **chưa có tầng gRPC**. Đây là mảnh chặn mọi việc phía sau.
+**Đọc `kb/10-decisions/0012-grpc-boundary-contract.md` trước khi thêm một RPC nào.** Ba điều
+hay bị đọc sai nhất:
 
-**Đọc `kb/10-decisions/0012-grpc-boundary-contract.md` trước khi viết dòng đầu tiên** — bốn
-quyết định ở đó là hợp đồng, không phải gợi ý.
-
-| Việc | Ghi chú |
+| | |
 |---|---|
-| `pkg/grpcx`: hằng khoá metadata + interceptor **hai đầu** | Client lấy xã từ `context.Context`; server đọc ra và đặt lại vào context |
-| Server thiếu `x-tenant-id` → `INVALID_ARGUMENT` | Không đoán xã từ thân message, không có xã mặc định |
-| Ngoại lệ `ResolveHost` / `GetTenant` khai theo **danh sách trắng tên RPC** | Không bao giờ miễn trừ theo mặc định — ADR 0012, quyết định 1 |
-| Server gRPC cho `platform` | Chỉ siêu dữ liệu (ADR 0003). Không thêm RPC nào trả nội dung nghiệp vụ |
-| `ByHost` hỏng vì lý do truyền tải → **log mức báo động** | 404 vẫn là hành vi đúng, nhưng phải phân biệt được "không có xã" với "không hỏi được" |
+| `GetTenant` **bắt buộc** mang `x-tenant-id` | Việc nó nhận id xã **trong thân** là chuyện khác hẳn: id đó là **chủ thể đang được tra**, không phải lời khai của bên gọi về chính mình. Nhận id trong thân **không** kéo theo miễn trừ nào |
+| Danh sách miễn kiểm xã có **đúng một** thành viên: `ResolveHost` | Vì nó **không thể** biết xã — nó chính là thứ đi tìm xã. Thêm thành viên thứ hai là **ĐIỀU KIỆN DỪNG**: hỏi người dùng |
+| Service nghiệp vụ **không** được nhận id xã trong thân message | Hình dạng đó chỉ hợp lệ ở `platform` vì ADR 0003 chặn mọi đường tới nội dung nghiệp vụ |
 
-### (b) CRUD cán bộ đầu tiên
+### (a) CRUD cán bộ đầu tiên ← **BẮT ĐẦU TỪ ĐÂY**
 
 Quyền `admin.user`. Đổi vai trò hoặc khoá tài khoản **phải gọi**
 `PhienStore.ThuHoiCuaCanBo` trong cùng giao dịch (skill `session-and-token` #7).
@@ -91,15 +88,16 @@ Anh cho khái niệm "cán bộ" **chưa có trong bảng ánh xạ** của
 Đây cũng là bên tiêu thụ đầu tiên của `BatchGetStaff`: ghép theo `Staff.id`, **không** theo
 thứ tự và **không** giả định trả về đủ số id đã hỏi (ADR 0012, quyết định 2).
 
-### (c) Còn lại của `identity`
+### (b) Còn lại của `identity`
 
 `bo_phan` (cây), `vai_tro`, ma trận phân quyền, `thon_to_dan_pho`, `cong_dan` + OTP (ADR 0002).
+Server gRPC của `identity` dùng lại interceptor trong `pkg/grpcx`, không tự viết lại.
 
-### (d) `platform`: `danh_muc` + `loi_he_thong`
+### (c) `platform`: `danh_muc` + `loi_he_thong`
 
 Mọi service đọc qua gRPC, cache cục bộ. Xem `docs/ui-ux/14-cau-hinh.md` §5 và §7.
 
-### (e) `petitions`
+### (d) `petitions`
 
 **Chỉ bắt đầu sau khi có `lich_lam_viec` + `ngay_nghi_le`** — ADR 0007 nêu 5 lỗ hổng
 đặc tả chưa lấp (giờ hành chính mấy giờ, nghỉ trưa có trừ không…).
@@ -137,6 +135,7 @@ trong đó là tiếng Việt và **đã lỗi thời** theo ADR 0011.
 | `PARTITION BY HASH` mà quên tạo partition con | Mọi lệnh chèn lỗi *"no partition of relation found"*. Xem khối `DO $$` trong migration |
 | Test migration mỗi test tốn 17 giây | Dùng `TestMain` chạy migration **một lần** cho cả gói; mỗi test tự cách ly bằng id xã riêng |
 | `buf lint STANDARD` ép tên message theo tên RPC | Đổi tên RPC là đổi luôn tên `<Rpc>Request` / `<Rpc>Response`. Kiểu trả về phải **bọc**, không trả thẳng message nghiệp vụ |
+| Gộp "miễn kiểm metadata" với "id nằm trong thân message" | Hai chuyện khác nhau, và gộp lại thì đọc ra thành `GetTenant` được miễn. Xem ADR 0012, mục Ngoại lệ |
 
 ---
 
