@@ -28,8 +28,12 @@ user request
    └─ 5. Run the MANDATORY FOLLOW-UP (§5)  ─────────► never optional
 ```
 
-Dispatching is sequential and explicit. The main session keeps the thread; agents return
-findings and diffs, never further dispatches.
+Dispatching is explicit, and **sequential by default**: the main session keeps the thread, and
+agents return findings and diffs, never further dispatches.
+
+Several agents may go out in **one message** when their write boundaries are disjoint and
+neither needs the other's output — §3 lists which pairs conflict.
+→ `.claude/skills/parallel-agents/SKILL.md`
 
 ---
 
@@ -99,6 +103,38 @@ is the compensation?** Undecided → `contract-designer`, and if it is a busines
 
 **Generated paths (`kb/20-contracts/**`, `kb/30-indexes/**`, `*.pb.go`) have no owner** — they
 are produced by `make kb` and `buf generate`. Any agent editing them is a bug.
+
+### Which pairs may run at the same time
+
+Derived from the boundaries above. **CONFLICT means sequential**, always.
+
+| | contract | go-service | migration | admin-web | citizen-app | knowledge | test |
+|---|---|---|---|---|---|---|---|
+| **contract-designer** | — | ok | ok | ok | ok | **CONFLICT** | **CONFLICT** |
+| **go-service-builder** | ok | *see below* | **CONFLICT** | ok | ok | **CONFLICT** | **CONFLICT** |
+| **data-migration-builder** | ok | **CONFLICT** | — | ok | ok | ok | **CONFLICT** |
+| **admin-web-builder** | ok | ok | ok | — | ok | ok | **CONFLICT** |
+| **citizen-app-builder** | ok | ok | ok | ok | — | ok | **CONFLICT** |
+| **knowledge-keeper** | **CONFLICT** | **CONFLICT** | ok | ok | ok | — | **CONFLICT** |
+
+Where each conflict comes from:
+
+| Pair | Overlapping path |
+|---|---|
+| go-service ∩ migration | `services/*/migrations/**` sits inside `services/<name>/**` |
+| go-service ∩ knowledge | `services/*/README.md` sits inside `services/<name>/**` |
+| contract ∩ knowledge | both write under `kb/` |
+| **test-designer ∩ everything** | its boundary is *test files anywhere*, which crosses every other boundary by definition |
+
+**Two `go-service-builder` runs on different services** are the trap: `services/identity/**`
+and `services/petitions/**` are disjoint, but both may write `go.mod` and `go.sum`. Parallel
+only when neither touches `pkg/**` or adds a dependency.
+
+The two **read-only** agents (`isolation-reviewer`, `domain-expert`) hold no write tool and
+conflict with nothing — they run alongside anything, including each other.
+
+→ Decision procedure, shared state, and why verification stays serial:
+`.claude/skills/parallel-agents/SKILL.md`
 
 ### Cross-layer changes
 
