@@ -34,5 +34,6 @@ explicitly declared cross-read path.
 2. An endpoint that must be **public without authentication**
 3. A new role, or a role needing authority **beyond a single commune**
 
-→ Enforcement: `hooks/rbac_guard.py` (BLOCK)
+→ Enforcement: `hooks/rbac_guard.py` (advisory — runs PostToolUse, so it reports on the
+  written file rather than preventing the write; a half-written route must not be blocked)
 → Skills: `skills/session-and-token` · `skills/cross-tenant-reporting`

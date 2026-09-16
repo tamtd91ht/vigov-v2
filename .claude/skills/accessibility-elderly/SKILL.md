@@ -34,4 +34,34 @@ a rights issue, not a user-experience issue.
 Neutral, courteous forms of address. **Never** use administrative jargon where an everyday
 word exists. **Never** abbreviate. Short sentences, one idea each.
 
-→ `skills/zalo-miniapp-multi-tenant` · `skills/administrative-language`
+## Submitting a petition — the highest-traffic citizen flow
+
+This is the one screen most citizens will ever use. It is often used **outdoors, one-handed,
+on mobile data, by someone who is upset about the thing they are reporting**.
+
+| # | Requirement | Why |
+|---|---|---|
+| 1 | Content + photo are the only **required** fields | Every extra required field loses reports the commune needed |
+| 2 | Location offered from GPS, **editable by hand** | GPS is wrong indoors and in alleys |
+| 3 | Field (`linh_vuc`) may be left blank | Classification is a **clerk's** job, not the citizen's (rule 10) |
+| 4 | Draft survives the app closing | A dropped connection must not lose a typed report |
+| 5 | On success, show the **lookup code** large, and offer to copy it | It is the citizen's only handle on the case |
+| 6 | Photo upload shows progress and survives a retry | Rural connections drop mid-upload |
+| 7 | Never block submission on a failed **optional** step | A failed reverse-geocode must not stop the report |
+
+## Reading progress back
+
+Citizens check status far more often than they submit. Each status needs a **plain-language**
+line, not the internal key: `dang_xu_ly` → "Đang được xử lý", with the expected completion
+date and who to contact. Never show `tenant_id`, internal notes, or routing history (rule 4).
+
+## What a screen must never do
+
+| Never | Why |
+|---|---|
+| Show a raw status key (`da_dong`) or an internal code | Meaningless to a citizen |
+| Require an account to **look up** a case by code | The code is the identity for lookup |
+| Use red as the only signal of "overdue" | Colour alone fails colour-blind users (REQUIRED #6) |
+| Auto-log-out while a form is half-typed | Loses the report |
+
+→ `skills/zalo-miniapp-multi-tenant` · `skills/administrative-language` · `skills/petition-lifecycle`

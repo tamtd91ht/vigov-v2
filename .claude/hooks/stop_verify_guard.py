@@ -29,7 +29,16 @@ import _common as c  # noqa: E402
 HOOK = "stop_verify_guard"
 
 CODE_EXT = (".go", ".ts", ".tsx", ".js", ".jsx", ".proto", ".sql")
-CODE_DIR = ("/services/", "/web/", "/internal/", "/pkg/", "/cmd/", "/proto/", "/migrations/")
+CODE_DIR = ("/services/", "/apps/", "/web/", "/internal/", "/pkg/", "/cmd/", "/proto/",
+            "/migrations/")
+
+# Signals that a verification run FAILED. Matching the command alone let a red `go test`
+# satisfy the gate -- the exact failure this hook exists to stop.
+FAIL_SIGNAL = re.compile(
+    r'("is_error"\s*:\s*true|FAIL|--- FAIL|fail(?:ed|ure)|'
+    r'exit (?:code|status) [1-9]|npm ERR!|error:)',
+    re.IGNORECASE,
+)
 
 VERIFY_CMD = re.compile(
     r"\b(make\s+(check|test|verify)|go\s+test|go\s+vet|golangci-lint\s+run|"
@@ -38,18 +47,23 @@ VERIFY_CMD = re.compile(
 
 
 def is_code(path: str) -> bool:
+    # Normalise to a leading slash: transcripts record RELATIVE paths ("apps/x/y.tsx"),
+    # while CODE_DIR entries are written "/apps/". Without this, a relative top-level dir
+    # never matched and edits there were invisible to the gate.
     p = (path or "").replace("\\", "/")
     if not p.endswith(CODE_EXT) or c.should_skip(p):
         return False
+    if not p.startswith("/"):
+        p = "/" + p
     return any(d in p for d in CODE_DIR)
 
 
-def walk_transcript(path: str) -> tuple[int, int, list[str]]:
-    """(step of last code edit, step of last verification, files touched)."""
-    last_edit = last_verify = -1
+def walk_transcript(path: str) -> tuple[int, int, list[str], int]:
+    """(last code edit, last PASSING verification, files touched, last FAILING verification)."""
+    last_edit = last_verify = last_verify_failed = -1
     touched: list[str] = []
     if not path or not os.path.exists(path):
-        return last_edit, last_verify, touched
+        return last_edit, last_verify, touched, last_verify_failed
 
     step = 0
     try:
@@ -66,7 +80,11 @@ def walk_transcript(path: str) -> tuple[int, int, list[str]]:
                 blob = json.dumps(rec, ensure_ascii=False)
 
                 if '"Bash"' in blob and VERIFY_CMD.search(blob):
-                    last_verify = step
+                    # Only a PASSING run counts as verification.
+                    if FAIL_SIGNAL.search(blob):
+                        last_verify_failed = step
+                    else:
+                        last_verify = step
 
                 if any(t in blob for t in ('"Edit"', '"Write"', '"MultiEdit"')):
                     for m in re.finditer(r'"file_path"\s*:\s*"([^"]+)"', blob):
@@ -79,7 +97,7 @@ def walk_transcript(path: str) -> tuple[int, int, list[str]]:
     except Exception:
         pass
 
-    return last_edit, last_verify, touched
+    return last_edit, last_verify, touched, last_verify_failed
 
 
 def main() -> None:
@@ -89,15 +107,20 @@ def main() -> None:
     if data.get("stop_hook_active"):
         sys.exit(0)                      # already blocked once — do not loop
 
-    last_edit, last_verify, touched = walk_transcript(data.get("transcript_path") or "")
+    last_edit, last_verify, touched, last_failed = walk_transcript(
+        data.get("transcript_path") or "")
 
     if last_edit < 0:
         sys.exit(0)                      # no code was changed
     if last_verify > last_edit:
         sys.exit(0)                      # verified AFTER the last edit
 
-    reason = ("verification never ran" if last_verify < 0
-              else "verification ran, but BEFORE the last code edit")
+    if last_failed > last_edit:
+        reason = "verification ran after the last edit and FAILED"
+    elif last_verify < 0:
+        reason = "verification never ran"
+    else:
+        reason = "verification ran, but BEFORE the last code edit"
 
     c.warn(
         HOOK,

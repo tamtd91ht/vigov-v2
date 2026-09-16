@@ -78,5 +78,64 @@
     "decision": "200+ xã — tenant_id là shard key, bảng lớn partition theo tenant từ migration đầu",
     "decided_on": "2026-09-15",
     "adr": "kb/10-decisions/0004-shard-by-tenant.md"
+  },
+  {
+    "id": 6,
+    "question": "Danh mục lĩnh vực phản ánh gồm những gì, và SLA mỗi lĩnh vực bao nhiêu NGÀY LÀM VIỆC?",
+    "status": "OPEN",
+    "why_it_matters": "SLA là cam kết của chính quyền với dân. Đặt cứng trong mã là sai hai lần: sai vì mỗi xã một khác (luật 1), và sai vì con số phải do xã chốt chứ không phải do người viết mã đoán. Đoán sai thì mọi báo cáo đúng hạn/quá hạn gửi lãnh đạo đều sai theo.",
+    "code_signals": [
+      {
+        "pattern": "linh_?vuc\\s*(?::?=|==)\\s*\\[",
+        "means": "danh mục lĩnh vực viết cứng trong mã",
+        "threshold": 1
+      },
+      {
+        "pattern": "(?:sla|deadline)\\w*\\s*(?::?=|==)\\s*\\d+",
+        "means": "số ngày SLA viết cứng",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Rẻ khi chưa có dữ liệu thật; sau khi đã phát hành thì mọi phiếu cũ mang hạn sai",
+    "ask_before": [
+      "thêm bảng phiếu phản ánh",
+      "viết hàm tính hạn xử lý"
+    ]
+  },
+  {
+    "id": 7,
+    "question": "Ai được đóng phiếu phản ánh, và nghiệm thu thực địa (kèm ảnh) có bắt buộc không?",
+    "status": "OPEN",
+    "why_it_matters": "Đóng phiếu là tuyên bố với dân rằng việc đã xong. Nếu chuyên viên tự đóng được mà không cần nghiệm thu, chỉ số 'đã xử lý' sẽ đẹp lên mà thực địa không đổi — đây là dạng sai lệch mà thanh tra sẽ hỏi.",
+    "code_signals": [
+      {
+        "pattern": "func\\s+\\w*[Cc]lose\\w*\\(|dong_phieu",
+        "means": "đã có đường đóng phiếu",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Trung bình — đổi quy tắc sau khi có dữ liệu thì các phiếu đã đóng không truy lại được",
+    "ask_before": [
+      "viết hành động đóng phiếu",
+      "gắn quyền cho hành động đóng phiếu"
+    ]
+  },
+  {
+    "id": 8,
+    "question": "Công dân có được mở lại (khiếu nại kết quả) một phiếu đã đóng không?",
+    "status": "OPEN",
+    "why_it_matters": "Nếu có, phiếu không còn là vòng đời một chiều và cần trạng thái + thời hạn riêng. Nếu không, dân phải gửi phiếu mới và số liệu sẽ đếm trùng một vụ việc. Hai hướng cho ra hai mô hình dữ liệu khác nhau.",
+    "code_signals": [
+      {
+        "pattern": "reopen|mo_lai|reopened_at",
+        "means": "mã đã cho mở lại phiếu",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Cao sau khi có dữ liệu — đổi mô hình vòng đời là di trú hồ sơ lưu trữ",
+    "ask_before": [
+      "thiết kế bảng trạng thái phiếu",
+      "viết hành động đánh giá của công dân"
+    ]
   }
 ]

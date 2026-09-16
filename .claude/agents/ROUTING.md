@@ -6,7 +6,8 @@
 > again. Any design where one agent "coordinates the others" does not run — v1 had exactly
 > that design and it could never have worked.
 
-Nine agents. Five build, four review. Each has a **write boundary**; two agents never own the
+Nine agents: **seven that write, two read-only** (`isolation-reviewer`, `domain-expert`).
+Each has a **write boundary**; two agents never own the
 same path.
 
 ---

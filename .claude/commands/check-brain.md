@@ -17,7 +17,7 @@ to be machine-checked.
 | 2 | Every hook has ≥1 block case and ≥1 pass case | count in `tools/test_hooks.py` | 0 missing |
 | 3 | Every path and `/<command>` referenced under `.claude/**` exists | extract and resolve | 0 dead |
 | 4 | `skills/`, `commands/`, `agents/` have valid frontmatter | parse YAML | 0 missing |
-| 5 | Always-loaded budget | count `CLAUDE.md` + 9 rules + `kb` `always_load` | ≤ 20,000 tokens |
+| 5 | Always-loaded budget | count `CLAUDE.md` + the rules + `kb` `always_load` | ≤ 25,000 tokens |
 | 6 | No `.md` outside `kb/`, `services/*/README.md`, `.claude/` | list `**/*.md` | 0 |
 | 7 | `agents/ROUTING.md` and the agent files describe the same set | compare both lists | 0 drift |
 

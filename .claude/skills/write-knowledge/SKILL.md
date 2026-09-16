@@ -26,10 +26,13 @@ The hand-written copy is wrong by the next day.
 |---|---|---|
 | `kb/00-foundation/` T0 | Years | Domain, boundaries, invariants, **why the cut is there** |
 | `kb/10-decisions/` T1 | Permanent | ADRs — never edited, never deleted |
-| `kb/20-contracts/` T2 | Per API version | **GENERATED** — never hand-edited |
 | `kb/30-indexes/` T3 | Per commit | **GENERATED** — never hand-edited |
-| `kb/40-runbooks/` T4 | Per incident | Runbooks by **symptom** |
-| `kb/90-ephemeral/` T5 | Days–weeks | Plans, notes — **`expires` required** |
+| _`kb/20-contracts/` T2_ | Per API version | **Not created yet** — `proto/` is the contract source today |
+| _`kb/40-runbooks/` T4_ | Per incident | **Not created yet** — create on the first real incident |
+| _`kb/90-ephemeral/` T5_ | Days–weeks | **Not created yet** — `expires` required when it is |
+
+A tier in italics does not exist on disk. Create it when there is a real first occupant —
+**never an empty directory just to complete the set** (that is inflation, invariant 7).
 
 Organising by topic puts a fact with a five-year lifetime next to one with a five-day
 lifetime in the same file. The mechanical consequence: any single line changing makes **the

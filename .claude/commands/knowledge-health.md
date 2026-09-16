@@ -18,7 +18,7 @@ What is not measured cannot be managed.
 | **Dead links** | file paths cited by `kb/**` that do not exist | **0** |
 | **Orphans** | `kb/` files absent from `INDEX.yaml` and referenced by nothing | **< 5%** |
 | **Stale** | `derived_from_commit` more than 50 commits behind HEAD **and** a cited file changed since | **0** |
-| **Budget** | total tokens in the always-loaded tier | **≤ 20,000** |
+| **Budget** | total tokens in the always-loaded tier | **≤ 25,000** |
 
 Plus two quick checks:
 

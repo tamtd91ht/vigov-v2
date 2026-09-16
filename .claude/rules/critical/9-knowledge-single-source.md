@@ -30,7 +30,7 @@ ignores documentation and goes back to scanning source — and documentation bec
 | 5 | New documentation is created **only inside its tier**. No `.md` dropped wherever is convenient |
 | 6 | Documentation is tiered by **lifetime**, not by topic |
 | 7 | Missing knowledge means **telling the user** and proposing the right tier — never writing a new file to fill the gap |
-| 8 | `kb/20-contracts/` and `kb/30-indexes/` are the **GENERATED** tier — edit the source and run `make kb`, never the output |
+| 8 | `kb/30-indexes/` is the **GENERATED** tier — edit the source and run `make kb`, never the output |
 
 ## STRICTLY FORBIDDEN
 

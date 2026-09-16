@@ -8,6 +8,8 @@ expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
   - "phân biệt phản ánh, khiếu nại, tố cáo"
+  - "tên gọi các bước trong vòng đời phiếu phản ánh"
+  - "tên gọi vai trò cán bộ cấp xã"
 ---
 
 # Ngôn ngữ chung
@@ -40,6 +42,33 @@ mọi tầng trên đều sai theo, và sửa về sau là di trú dữ liệu.
 | Cán bộ, công chức | `can_bo` | Người dùng nội bộ |
 | Công dân | `cong_dan` | Người dân — **không** gọi là "khách hàng", "user" |
 | Đơn vị hành chính | `don_vi_hanh_chinh` | Xã / phường / thị trấn |
+
+## Phản ánh và SLA
+
+Vòng đời đầy đủ ở `skills/petition-lifecycle`; bảng này chỉ chốt **từ dùng**.
+
+| Tiếng Việt hành chính | Tên trong mã | Ghi chú |
+|---|---|---|
+| Phiếu phản ánh | `phieu_phan_anh` | Một lượt phản ánh, có **mã tra cứu** trả cho dân |
+| Mã tra cứu | `ma_tra_cuu` | Không tuần tự, không tái cấp (luật 4, 7) |
+| Lĩnh vực | `linh_vuc` | Rác thải, giao thông, trật tự đô thị… — **cấu hình theo xã** |
+| Tiếp nhận | `tiep_nhan` | **Mốc bắt đầu đếm hạn** — không phải lúc phân công |
+| Phân loại | `phan_loai` | Cán bộ xác định lĩnh vực — **không** để dân tự chọn |
+| Phân công | `phan_cong` | Giao cán bộ/đơn vị xử lý |
+| Nghiệm thu | `nghiem_thu` | Xác nhận đã xử lý trên thực địa, thường kèm ảnh |
+| Đóng phiếu | `dong_phieu` | Kết thúc — **bắt buộc có kết quả dân đọc được** |
+| Hạn xử lý | `sla_deadline` | Lưu **một lần** lúc tiếp nhận, tính bằng **ngày làm việc** |
+| Quá hạn | — | **Suy ra**, không có cột. Xem luật 10 |
+
+## Vai trò cán bộ
+
+| Tiếng Việt | Tên trong mã | Việc thật ở xã |
+|---|---|---|
+| Lãnh đạo | `lanh_dao` | Chủ tịch / Phó chủ tịch — **duyệt**, không tự xử lý |
+| Chuyên viên | `chuyen_vien` | Công chức xử lý chuyên môn |
+| Kế toán | `ke_toan` | Giải ngân |
+| Tiếp nhận một cửa | `tiep_nhan` | Cán bộ tiếp dân |
+| Quản trị | `quan_tri` | Phụ trách kỹ thuật của xã |
 
 ## Quy ước đặt tên
 

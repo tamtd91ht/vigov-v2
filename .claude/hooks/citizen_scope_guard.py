@@ -58,7 +58,7 @@ def main() -> None:
         sys.exit(0)
 
     content = c.new_content(ti)
-    if not content or c.is_generated(content):
+    if not content or c.is_generated(content, path):
         sys.exit(0)
 
     on_citizen_path = bool(CITIZEN_PATH.search(path)) or "citizen" in content.lower()[:2000]

@@ -126,7 +126,7 @@ def main() -> None:
         if not path or c.should_skip(path):
             sys.exit(0)
         content = c.new_content(ti)
-        if content and not c.is_generated(content):
+        if content and not c.is_generated(content, path):
             check_code(content, path, tool)
 
     sys.exit(0)

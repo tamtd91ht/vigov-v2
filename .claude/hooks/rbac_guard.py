@@ -66,7 +66,7 @@ def main() -> None:
         sys.exit(0)
 
     content = c.new_content(ti)
-    if not content or c.is_generated(content):
+    if not content or c.is_generated(content, path):
         sys.exit(0)
 
     hits = []

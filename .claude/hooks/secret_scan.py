@@ -105,7 +105,7 @@ def main() -> None:
         scan_env_example(content, path, tool)
         sys.exit(0)
 
-    if c.should_skip(path) or c.is_generated(content):
+    if c.should_skip(path) or c.is_generated(content, path):
         sys.exit(0)
 
     patterns = DOC_PATTERNS if path.endswith(DOC_EXT) else SECRET_PATTERNS

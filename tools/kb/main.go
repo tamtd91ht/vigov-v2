@@ -19,6 +19,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -83,8 +84,81 @@ func main() {
 		"call graph between services; used to detect synchronous dependency cycles.",
 		"no inter-service calls yet")
 
+	stampIndex(root)
+
 	fmt.Printf("kb: %d services, %d exported symbols\n", len(services), len(symbols))
 	fmt.Printf("kb: generated at %s\n", time.Now().Format(time.RFC3339))
+}
+
+// stampIndex fills the three metadata fields in kb/INDEX.yaml that the file itself declares
+// as "`make kb` điền".
+//
+// WHY: until 2026-09-16 nothing wrote them, so generated_at / from_commit / in_use stayed
+// null forever while the file claimed they were maintained. A file that documents its own
+// freshness and is never actually stamped is worse than one that says nothing — it invites
+// trust it has not earned.
+//
+// Only these three lines are rewritten; the rest of INDEX.yaml is hand-curated.
+func stampIndex(root string) {
+	path := filepath.Join(root, "kb", "INDEX.yaml")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+
+	commit := "unknown"
+	if b, err := exec.Command("git", "-C", root, "rev-parse", "--short", "HEAD").Output(); err == nil {
+		commit = strings.TrimSpace(string(b))
+	}
+	used := alwaysLoadTokens(root, string(raw))
+
+	repl := map[string]string{
+		"generated_at:": fmt.Sprintf("generated_at: %s", time.Now().UTC().Format(time.RFC3339)),
+		"from_commit:":  fmt.Sprintf("from_commit: %s", commit),
+		"in_use:":       fmt.Sprintf("  in_use: %d", used),
+	}
+
+	lines := strings.Split(string(raw), "\n")
+	for i, ln := range lines {
+		t := strings.TrimSpace(ln)
+		for k, v := range repl {
+			if strings.HasPrefix(t, k) {
+				// keep any trailing comment on the line
+				if idx := strings.Index(ln, "#"); idx >= 0 {
+					v += "   " + strings.TrimSpace(ln[idx:])
+				}
+				lines[i] = v
+			}
+		}
+	}
+	_ = os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+// alwaysLoadTokens estimates the always-loaded budget: the files listed under always_load,
+// at the ~4 chars/token rule of thumb used by tools/check_brain.py.
+func alwaysLoadTokens(root, index string) int {
+	total := 0
+	inList := false
+	for _, ln := range strings.Split(index, "\n") {
+		t := strings.TrimSpace(ln)
+		if strings.HasPrefix(t, "always_load:") {
+			inList = true
+			continue
+		}
+		if inList {
+			if !strings.HasPrefix(t, "- ") {
+				if t != "" && !strings.HasPrefix(t, "#") {
+					break
+				}
+				continue
+			}
+			f := strings.TrimSpace(strings.TrimPrefix(t, "- "))
+			if b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f))); err == nil {
+				total += len(b)
+			}
+		}
+	}
+	return total / 4
 }
 
 func findRoot() (string, error) {

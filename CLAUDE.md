@@ -115,15 +115,16 @@ own: if you see a risk, **state the risk**, then do what was asked.
 
 | Location | Contents |
 |---|---|
-| `rules/critical/` | **9 rules**, always loaded (below). Each has **exactly one** enforcing hook |
-| `hooks/` | **13 hooks**: 9 rule hooks + 4 cross-cutting |
+| `rules/critical/` | **10 rules**, always loaded (below). Each names an enforcing hook |
+| `hooks/` | **14 hooks**: 10 rule hooks + 4 cross-cutting |
 | `skills/` | Skills, lazily loaded by keyword |
 | `commands/` | Procedures invoked as `/command-name` |
 | `agents/` | **9 agents** — 5 build, 4 review. Entry point: `agents/ROUTING.md` |
 | `logs/guard.jsonl` | Guard log — evidence the enforcement layer actually ran |
 
-**Brain invariants.** 9 rules ↔ 9 hooks, one to one: a rule you cannot write a hook for is a
-rule nothing checks, which means it will drift — it belongs in `skills/`. And every agent
+**Brain invariants.** Every rule names at least one enforcing hook: a rule you cannot write a
+hook for is a rule nothing checks, which means it will drift — it belongs in `skills/`.
+(Rule 8 names two: `secret_scan` blocks, `session_start` warns on dangerous flags.) And every agent
 listed in `agents/ROUTING.md` exists on disk, and every agent on disk is listed there.
 `make brain` checks both.
 
@@ -146,3 +147,4 @@ Extending the brain: `.claude/README.md`.
 @.claude/rules/critical/7-data-preservation.md
 @.claude/rules/critical/8-secrets-config.md
 @.claude/rules/critical/9-knowledge-single-source.md
+@.claude/rules/critical/10-citizen-commitment.md

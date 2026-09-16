@@ -26,7 +26,7 @@ for _s in (sys.stdout, sys.stderr):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLAUDE = os.path.join(ROOT, ".claude")
-TOKEN_BUDGET = 20000
+TOKEN_BUDGET = 25000
 
 fails: list[str] = []
 
@@ -80,7 +80,7 @@ for r in rules:
         if h not in on_disk:
             rule_hook_gaps.append(f"{r}: points at a hook that does not exist: '{h}'")
 
-report(len(rules) == 9 and not unregistered and not missing_file and not rule_hook_gaps,
+report(len(rules) >= 9 and not unregistered and not missing_file and not rule_hook_gaps,
     "1. Rules <-> hooks, one to one",
     f"{len(rules)} rules · {len(on_disk)} hooks on disk · {len(registered)} registered",
     rule_hook_gaps + [f"hook not registered: {x}" for x in unregistered]
@@ -112,6 +112,16 @@ report(not gaps, "2. Every hook has a block case and a pass case",
 # ---- 3. Every path referenced under .claude/** exists --------------------
 PATH_RE = re.compile(r"`((?:\.claude|kb|tools|services|web|deploy)/[A-Za-z0-9_\-./]+"
                      r"\.(?:md|py|json|yaml|yml|go|ts|tsx|proto))`")
+
+# Bare DIRECTORY references, e.g. `kb/20-contracts/`. Without this, a route pointing at a
+# directory that does not exist stayed invisible — which is exactly how `kb/20-contracts/`
+# and `kb/40-runbooks/` survived while being cited as live routes.
+DIR_RE = re.compile(r"`(kb/[0-9]{2}-[a-z\-]+/)`")
+
+# A tier may be documented BEFORE it exists, as long as the line says so plainly. The line
+# must carry the marker, so "not created yet" is a claim the reader sees too — it cannot be
+# used to silence a genuinely broken link.
+PLANNED_MARK = ("not created yet", "chưa tồn tại", "chua ton tai")
 dead = []
 refs = 0
 for dp, _, fn in os.walk(CLAUDE):
@@ -120,10 +130,16 @@ for dp, _, fn in os.walk(CLAUDE):
     for f in fn:
         if not f.endswith(".md"):
             continue
-        for m in PATH_RE.findall(rd(os.path.join(dp, f))):
+        body = rd(os.path.join(dp, f))
+        planned = {ln.strip() for ln in body.splitlines()
+                   if any(k in ln.lower() for k in PLANNED_MARK)}
+        for m in PATH_RE.findall(body) + DIR_RE.findall(body):
             refs += 1
-            if not os.path.exists(os.path.join(ROOT, m.replace("/", os.sep))):
-                dead.append(f"{os.path.relpath(os.path.join(dp, f), ROOT)} -> {m}")
+            if os.path.exists(os.path.join(ROOT, m.replace("/", os.sep))):
+                continue
+            if any(m in ln for ln in planned):      # declared as not-yet-existing
+                continue
+            dead.append(f"{os.path.relpath(os.path.join(dp, f), ROOT)} -> {m}")
 
 # Skills are referenced by directory name
 SKILL_RE = re.compile(r"`?skills/([a-z0-9\-]+)`?")

@@ -44,7 +44,7 @@ This is the **first** of three isolation dimensions. All three must hold:
 **Why invariant #2 is the expensive one:** Vietnam periodically reorganises commune-level
 administrative units. If `tenant_id` carries meaning, the first merger forces **rewriting
 foreign keys across all historical data** — rewriting archival records, which the law does
-not permit. Getting it right now costs nothing.
+not permit. Getting it right now costs nothing. → `skills/admin-unit-merge`
 
 ## STOP CONDITIONS — ask the user, never decide alone
 

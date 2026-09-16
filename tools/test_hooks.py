@@ -165,6 +165,29 @@ CASES = [
        "---\nid: plan\ntier: T5\nsource: CURATED\nowner: ai\nexpires: 2026-10-15\n---\n# plan")),
     ("doc_guard", "a service README", PASS,
      w("services/donthu/README.md", "# Service Đơn thư")),
+
+    # --- rule 10 — the commitment made to the citizen ---
+    ("citizen_commitment_guard", "overdue stored as a struct field", BLOCK,
+     w("services/petitions/internal/domain/p.go",
+       "type Petition struct {\n\tCode string\n\tIsOverdue bool\n}")),
+    ("citizen_commitment_guard", "overdue added as a column", BLOCK,
+     w("services/petitions/migrations/0002_overdue.sql",
+       "ALTER TABLE petitions ADD COLUMN is_overdue BOOLEAN DEFAULT false;")),
+    ("citizen_commitment_guard", "deadline counted in calendar days", BLOCK,
+     w("services/petitions/internal/app/sla.go",
+       "func deadline(t time.Time) time.Time { return t.AddDate(0, 0, slaDays) }")),
+    ("citizen_commitment_guard", "overdue DERIVED by a method", PASS,
+     w("services/petitions/internal/domain/p.go",
+       "func (p Petition) IsOverdue(now time.Time) bool {\n"
+       "\treturn p.ClosedAt.IsZero() && now.After(p.SLADeadline)\n}")),
+    ("citizen_commitment_guard", "deadline in working days", PASS,
+     w("services/petitions/internal/app/sla.go",
+       "func deadline(ctx context.Context, from time.Time) time.Time {\n"
+       "\treturn sla.WorkingDays(ctx, from, n)\n}")),
+    ("citizen_commitment_guard", "statutory calendar days, declared", PASS,
+     w("services/petitions/internal/app/khieunai.go",
+       "// @sla-ok: Law on Complaints art. 28 counts calendar days\n"
+       "func due(t time.Time) time.Time { return t.AddDate(0, 0, 30) } // sla")),
 ]
 
 

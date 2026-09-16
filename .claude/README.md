@@ -6,7 +6,7 @@ is not documentation — **it is the only control mechanism**.
 
 ---
 
-## Brain invariant: 9 rules ↔ 9 hooks, one to one
+## Brain invariant: every rule names an enforcing hook
 
 | Rule | Invariant | Hook | Level |
 |---|---|---|---|
@@ -19,6 +19,7 @@ is not documentation — **it is the only control mechanism**.
 | 7 `data-preservation` | Administrative files are archival records | `data_safety_guard` | BLOCK |
 | 8 `secrets-config` | Secrets never reach code, bundle, git or docs | `secret_scan` | BLOCK |
 | 9 `knowledge-single-source` | One fact one place; never hand-write what can be generated | `doc_guard` | BLOCK |
+| 10 `citizen-commitment` | An SLA deadline is a commitment; overdue is derived, never stored | `citizen_commitment_guard` | BLOCK |
 
 **Adding a rule you cannot write a hook for** means the rule cannot be checked, which means
 it will drift — **it belongs in `skills/`, not in `rules/critical/`.**
@@ -63,7 +64,7 @@ done while tests are red" is a **more common** failure than "wrote a secret into
 
 ## Agents — `agents/ROUTING.md` is the entry point
 
-Nine agents: five build, four review. The main session reads `agents/ROUTING.md`, catches the
+Nine agents: seven that write, two read-only. The main session reads `agents/ROUTING.md`, catches the
 event, dispatches, and runs the mandatory follow-up.
 
 | Agent | Mode | Owns |
@@ -100,7 +101,7 @@ files on disk still describe the same set.
 
 | Command | What it checks |
 |---|---|
-| `make hooks` / `/check-hooks` | **47 cases**: every hook gets a must-block case and a must-pass case |
+| `make hooks` / `/check-hooks` | **53 cases**: every hook gets a must-block case and a must-pass case |
 | `/check-brain` | 7 structural invariants (below) |
 | `/knowledge-health` | Dead links · orphans · expired · budget |
 | `/review-isolation` | All three isolation dimensions across the source |
@@ -113,11 +114,11 @@ protection is off in silence: everything still looks normal, it just stops block
 
 | # | Invariant | Threshold |
 |---|---|---|
-| 1 | Every rule has exactly one hook, and vice versa | 9 ↔ 9 |
+| 1 | Every rule names an enforcing hook; every hook is registered | 10 rules · 14 hooks |
 | 2 | Every hook has at least one block case and one pass case | 0 missing |
 | 3 | Every path and `/<command>` referenced under `.claude/**` exists | 0 dead |
 | 4 | Every file in `skills/`, `commands/`, `agents/` has valid frontmatter | 0 missing |
-| 5 | Always-loaded budget | ≤ 20,000 tokens |
+| 5 | Always-loaded budget | ≤ 25,000 tokens |
 | 6 | No `.md` outside `kb/`, `services/*/README.md`, `.claude/` | 0 |
 | 7 | `ROUTING.md` and the agent files describe the same set | 0 drift |
 
