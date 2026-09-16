@@ -22,6 +22,7 @@ import (
 	"github.com/vihat/vigov/pkg/config"
 	"github.com/vihat/vigov/pkg/httpx"
 	"github.com/vihat/vigov/pkg/idem"
+	"github.com/vihat/vigov/pkg/migrate"
 	"github.com/vihat/vigov/pkg/platformclient"
 	"github.com/vihat/vigov/pkg/store"
 	"github.com/vihat/vigov/pkg/tenant"
@@ -29,6 +30,7 @@ import (
 	"github.com/vihat/vigov/services/identity/internal/app"
 	svchttp "github.com/vihat/vigov/services/identity/internal/http"
 	idstore "github.com/vihat/vigov/services/identity/internal/store"
+	"github.com/vihat/vigov/services/identity/migrations"
 )
 
 func main() {
@@ -77,6 +79,28 @@ func run(log *slog.Logger) error {
 		// see "wrong email or password" for a reason that has nothing to do with either.
 		return fmt.Errorf("identity: không nối được cơ sở dữ liệu: %w", err)
 	}
+
+	// 2b. schema migrations, BEFORE anything is served.
+	//
+	// WHY THE SERVICE MUST NOT START WHEN THIS FAILS: every query below is written against a
+	// schema this process assumes is there. Serving on a schema of unknown shape does not fail
+	// at startup where somebody is watching — it fails on the first request of whichever commune
+	// happens to hit the missing column, and the error reaching the counter says nothing about a
+	// migration. `0002_audit_log_append_only.sql` is the case in hand: until it runs, audit
+	// entries are editable and everything downstream believes they are not.
+	//
+	// The files are EMBEDDED in this binary (services/identity/migrations), so what is applied is
+	// what was compiled — not whatever happens to be on the container's disk.
+	ctxMig, huyMig := context.WithTimeout(context.Background(), 5*time.Minute)
+	kqMig, err := migrate.Chay(ctxMig, db, migrations.FS, "identity")
+	huyMig()
+	if err != nil {
+		return fmt.Errorf("identity: migration không chạy được: %w", err)
+	}
+	// Logged even when nothing was applied: "applied 0 files" at startup is how an operator finds
+	// out the replica is already at the schema they expected, without opening a psql prompt.
+	log.Info("migration xong", "service", "identity", "da_ap", kqMig.DaAp, "bo_qua", len(kqMig.BoQua))
+
 	kho := store.New(db)
 
 	// 3. directory — Host -> commune, over gRPC to the platform service.

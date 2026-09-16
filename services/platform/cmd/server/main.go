@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -24,10 +25,12 @@ import (
 	"github.com/vihat/vigov/pkg/config"
 	"github.com/vihat/vigov/pkg/grpcx"
 	"github.com/vihat/vigov/pkg/httpx"
+	"github.com/vihat/vigov/pkg/migrate"
 	"github.com/vihat/vigov/pkg/tenant"
 	svcgrpc "github.com/vihat/vigov/services/platform/internal/grpc"
 	svchttp "github.com/vihat/vigov/services/platform/internal/http"
 	svcstore "github.com/vihat/vigov/services/platform/internal/store"
+	"github.com/vihat/vigov/services/platform/migrations"
 )
 
 func main() {
@@ -76,6 +79,25 @@ func run(log *slog.Logger) error {
 		// like an unknown commune.
 		return err
 	}
+
+	// 2b. schema migrations, BEFORE anything is served.
+	//
+	// WHY THE SERVICE MUST NOT START WHEN THIS FAILS: the registry queries below are written
+	// against a schema this process assumes is there. A missing migration does not fail at
+	// startup where somebody is watching — it fails on the first Host resolution, and every
+	// commune then looks unknown for a reason the error message never names.
+	//
+	// The files are EMBEDDED in this binary (services/platform/migrations), so what is applied is
+	// what was compiled — not whatever happens to be on the container's disk.
+	ctxMig, huyMig := context.WithTimeout(context.Background(), 5*time.Minute)
+	kqMig, err := migrate.Chay(ctxMig, db, migrations.FS, "platform")
+	huyMig()
+	if err != nil {
+		return fmt.Errorf("platform: migration không chạy được: %w", err)
+	}
+	// Logged even when nothing was applied: "applied 0 files" at startup is how an operator finds
+	// out the replica is already at the schema they expected, without opening a psql prompt.
+	log.Info("migration xong", "service", "platform", "da_ap", kqMig.DaAp, "bo_qua", len(kqMig.BoQua))
 
 	// 3. directory — resolves Host -> commune, cached with a short TTL because this sits on the
 	//    path of EVERY request at 200+ communes (ADR 0004, decision 5).

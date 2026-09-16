@@ -7,15 +7,16 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/vihat/vigov/pkg/authz"
+	"github.com/vihat/vigov/pkg/migrate"
 	pkgstore "github.com/vihat/vigov/pkg/store"
 	"github.com/vihat/vigov/pkg/tenant"
+	"github.com/vihat/vigov/services/identity/migrations"
 )
 
 // Integration tests for the permission check, against a real PostgreSQL.
@@ -54,6 +55,14 @@ func TestMain(m *testing.M) {
 	defer cancel()
 
 	schemaChung = fmt.Sprintf("vigov_id_test_%d", time.Now().UnixNano())
+	// ONE physical connection for the whole suite. `SET search_path` is SESSION state, so on a
+	// pool it applies to whichever connection happened to serve that statement and to no other —
+	// the next statement can land on a fresh connection in the public schema. It happened to work
+	// while everything ran on one lazily-opened connection; pkg/migrate deliberately pins its own
+	// connection (the advisory lock is session-scoped), which would have been a second one.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
 	if _, err := db.ExecContext(ctx, "CREATE SCHEMA "+schemaChung); err != nil {
 		fmt.Fprintln(os.Stderr, "tạo schema:", err)
 		os.Exit(1)
@@ -63,15 +72,17 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	sqlBytes, err := os.ReadFile(filepath.Join("..", "..", "migrations", "0001_init.sql"))
+	// THE REAL RUNNER, not a hand-picked file. This used to read `0001_init.sql` by name, which
+	// is why `0002_audit_log_append_only.sql` had never executed anywhere: the only two things in
+	// the repository that touched migrations both named one file. Going through pkg/migrate means
+	// every migration this service ships is exercised here, and a new one is exercised the day it
+	// is added rather than the day somebody remembers to extend this list.
+	kq, err := migrate.Chay(ctx, db, migrations.FS, "identity")
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "đọc migration:", err)
-		os.Exit(1)
-	}
-	if _, err := db.ExecContext(ctx, string(sqlBytes)); err != nil {
 		fmt.Fprintln(os.Stderr, "chạy migration:", err)
 		os.Exit(1)
 	}
+	fmt.Fprintln(os.Stderr, "migration đã áp:", kq.DaAp)
 
 	dbChung = db
 	ma := m.Run()

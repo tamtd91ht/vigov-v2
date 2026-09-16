@@ -346,6 +346,14 @@
       "kind": "func",
       "at": "pkg/idem/idem.go:562"
     },
+    "migrate.Chay": {
+      "kind": "func",
+      "at": "pkg/migrate/migrate.go:109"
+    },
+    "migrate.KetQua": {
+      "kind": "type",
+      "at": "pkg/migrate/migrate.go:88"
+    },
     "password.Bam": {
       "kind": "func",
       "at": "pkg/password/password.go:48"

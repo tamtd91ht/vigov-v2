@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/vihat/vigov/pkg/migrate"
 	"github.com/vihat/vigov/pkg/tenant"
+	"github.com/vihat/vigov/services/platform/migrations"
 )
 
 // Integration tests against a real PostgreSQL.
@@ -40,6 +41,15 @@ func moKetNoi(t *testing.T) (*sql.DB, string) {
 	if err != nil {
 		t.Fatalf("mở kết nối: %v", err)
 	}
+
+	// ONE physical connection for the whole test. `SET search_path` is SESSION state, so on a pool
+	// it applies to whichever connection served that statement and to no other — the next
+	// statement can land on a fresh connection in the public schema, where this test would then
+	// create its tables. It happened to work while everything ran on one lazily-opened connection;
+	// pkg/migrate deliberately pins its own connection (the advisory lock is session-scoped),
+	// which would have been a second one.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -70,20 +80,20 @@ func moKetNoi(t *testing.T) (*sql.DB, string) {
 	return db, schema
 }
 
-// chayMigration runs the service's real migration file. Testing against a hand-written copy
-// of the schema would test the copy, not what ships.
+// chayMigration applies the service's real migrations THROUGH THE REAL RUNNER. Testing against a
+// hand-written copy of the schema would test the copy, not what ships.
+//
+// It used to read `0001_init.sql` by name. That is why `0002_audit_log_append_only.sql` had never
+// executed anywhere: the only two places in the repository that touched migrations both named one
+// file, so a file added afterwards was applied by nothing. Going through pkg/migrate means every
+// migration this service ships is exercised here, including the ones added after this line was
+// written.
 func chayMigration(t *testing.T, db *sql.DB) {
 	t.Helper()
 
-	duongDan := filepath.Join("..", "..", "migrations", "0001_init.sql")
-	sqlBytes, err := os.ReadFile(duongDan)
-	if err != nil {
-		t.Fatalf("đọc %s: %v", duongDan, err)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	if _, err := db.ExecContext(ctx, string(sqlBytes)); err != nil {
+	if _, err := migrate.Chay(ctx, db, migrations.FS, "platform"); err != nil {
 		t.Fatalf("chạy migration: %v", err)
 	}
 }
