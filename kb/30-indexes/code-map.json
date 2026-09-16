@@ -86,21 +86,53 @@
       "kind": "func",
       "at": "pkg/authz/authz.go:33"
     },
+    "config.Bytes": {
+      "kind": "func",
+      "at": "pkg/config/config.go:99"
+    },
     "config.CanhBao": {
       "kind": "func",
-      "at": "pkg/config/config.go:121"
+      "at": "pkg/config/config.go:171"
     },
     "config.Config": {
       "kind": "type",
-      "at": "pkg/config/config.go:27"
+      "at": "pkg/config/config.go:28"
+    },
+    "config.GoString": {
+      "kind": "func",
+      "at": "pkg/config/config.go:92"
+    },
+    "config.Khoa": {
+      "kind": "type",
+      "at": "pkg/config/config.go:89"
+    },
+    "config.KhoaKyBytes": {
+      "kind": "func",
+      "at": "pkg/config/config.go:270"
     },
     "config.Load": {
       "kind": "func",
-      "at": "pkg/config/config.go:76"
+      "at": "pkg/config/config.go:112"
+    },
+    "config.LogValue": {
+      "kind": "func",
+      "at": "pkg/config/config.go:95"
+    },
+    "config.MarshalJSON": {
+      "kind": "func",
+      "at": "pkg/config/config.go:93"
+    },
+    "config.MarshalText": {
+      "kind": "func",
+      "at": "pkg/config/config.go:94"
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "pkg/config/config.go:144"
+      "at": "pkg/config/config.go:206"
+    },
+    "config.String": {
+      "kind": "func",
+      "at": "pkg/config/config.go:91"
     },
     "domain.CanBo": {
       "kind": "type",
@@ -138,13 +170,57 @@
       "kind": "type",
       "at": "pkg/events/events.go:33"
     },
+    "http.CanBoDoc": {
+      "kind": "type",
+      "at": "services/identity/internal/http/routes.go:44"
+    },
+    "http.DangNhap": {
+      "kind": "func",
+      "at": "services/identity/internal/http/handler.go:70"
+    },
+    "http.DangNhapUC": {
+      "kind": "type",
+      "at": "services/identity/internal/http/routes.go:50"
+    },
+    "http.DangXuat": {
+      "kind": "func",
+      "at": "services/identity/internal/http/handler.go:148"
+    },
+    "http.DangXuatUC": {
+      "kind": "type",
+      "at": "services/identity/internal/http/routes.go:54"
+    },
     "http.Deps": {
       "kind": "type",
       "at": "services/reporting/internal/http/routes.go:23"
     },
+    "http.Handler": {
+      "kind": "type",
+      "at": "services/identity/internal/http/handler.go:18"
+    },
+    "http.NewHandler": {
+      "kind": "func",
+      "at": "services/identity/internal/http/handler.go:22"
+    },
+    "http.PhienDoc": {
+      "kind": "type",
+      "at": "services/identity/internal/http/routes.go:38"
+    },
+    "http.PhienHienTai": {
+      "kind": "type",
+      "at": "services/identity/internal/http/middleware.go:22"
+    },
+    "http.PhienTu": {
+      "kind": "func",
+      "at": "services/identity/internal/http/middleware.go:35"
+    },
     "http.Register": {
       "kind": "func",
       "at": "services/reporting/internal/http/routes.go:32"
+    },
+    "http.XacThuc": {
+      "kind": "func",
+      "at": "services/identity/internal/http/middleware.go:54"
     },
     "httpx.Error": {
       "kind": "type",
@@ -461,6 +537,30 @@
     "tenant.Valid": {
       "kind": "func",
       "at": "pkg/tenant/tenant.go:27"
+    },
+    "token.Claims": {
+      "kind": "type",
+      "at": "pkg/token/token.go:70"
+    },
+    "token.Giai": {
+      "kind": "func",
+      "at": "pkg/token/token.go:160"
+    },
+    "token.Ky": {
+      "kind": "func",
+      "at": "pkg/token/token.go:133"
+    },
+    "token.NewSigner": {
+      "kind": "func",
+      "at": "pkg/token/token.go:108"
+    },
+    "token.Signer": {
+      "kind": "type",
+      "at": "pkg/token/token.go:99"
+    },
+    "token.SoKhoa": {
+      "kind": "func",
+      "at": "pkg/token/token.go:127"
     }
   }
 }

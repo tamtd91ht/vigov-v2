@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +14,10 @@ const dsnGia = "postgres://vigov:khong-phai-mat-khau-that@localhost:5432/vigov_t
 
 // redisGia is the same fake credential on the cache DSN.
 const redisGia = "redis://vigov:khong-phai-mat-khau-that@localhost:6379/0"
+
+// khoaGia is fake signing key material. The text says so on purpose: a scanner and a reviewer
+// must both be able to tell at a glance that this is not a real key (rule 8, forbidden #1).
+const khoaGia = "khoa-ky-gia-KHONG-PHAI-KHOA-THAT-cho-test"
 
 func datMoiTruong(t *testing.T, cap map[string]string) {
 	t.Helper()
@@ -82,6 +88,7 @@ func TestCoNguyHiemBiChanOProd(t *testing.T) {
 	datMoiTruong(t, map[string]string{
 		"DATABASE_DSN":          dsnGia,
 		"ENV":                   EnvProd,
+		"SESSION_SIGNING_KEYS":  khoaGia,
 		"DANGEROUS_AUTH_BYPASS": "true",
 	})
 
@@ -150,7 +157,11 @@ func TestRedactedKhiKhongCoThongTinDangNhap(t *testing.T) {
 func TestRedisDSNTuyChon(t *testing.T) {
 	// Empty is a valid deployment: local development with no cache. A service must not fail to
 	// start because a cache is absent — the route's own idem declaration decides what happens.
-	datMoiTruong(t, map[string]string{"DATABASE_DSN": dsnGia, "ENV": EnvDev})
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":         dsnGia,
+		"ENV":                  EnvDev,
+		"SESSION_SIGNING_KEYS": khoaGia,
+	})
 	t.Setenv("REDIS_DSN", "")
 
 	cfg, err := Load("petitions")
@@ -166,7 +177,11 @@ func TestRedisDSNTuyChon(t *testing.T) {
 
 	// Outside dev it must never be silent: no Redis means no duplicate protection, and a
 	// duplicated petition cannot be deleted afterwards (rule 7).
-	datMoiTruong(t, map[string]string{"DATABASE_DSN": dsnGia, "ENV": EnvStaging})
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":         dsnGia,
+		"ENV":                  EnvStaging,
+		"SESSION_SIGNING_KEYS": khoaGia,
+	})
 	cfg, err = Load("petitions")
 	if err != nil {
 		t.Fatal(err)
@@ -195,6 +210,108 @@ func TestRedisDSNCungBiCheMatKhau(t *testing.T) {
 	}
 	if !strings.Contains(an, "localhost:6379") {
 		t.Errorf("che quá tay, mất thông tin chẩn đoán: %q", an)
+	}
+}
+
+func TestKhoaKyThieuThiChanKhoiDongNgoaiDev(t *testing.T) {
+	// Fail closed. A service with no signing key cannot tell a real token from a forged one,
+	// and one forged token is a staff account in somebody else's commune (rule 1, invariant 8).
+	for _, env := range []string{EnvStaging, EnvProd} {
+		t.Run(env, func(t *testing.T) {
+			datMoiTruong(t, map[string]string{"DATABASE_DSN": dsnGia, "ENV": env})
+			t.Setenv("SESSION_SIGNING_KEYS", "")
+
+			_, err := Load("identity")
+			if !errors.Is(err, ErrThieuBienMoiTruong) {
+				t.Fatalf("muốn ErrThieuBienMoiTruong, nhận %v", err)
+			}
+			if !strings.Contains(err.Error(), "SESSION_SIGNING_KEYS") {
+				t.Errorf("thông báo phải nói rõ thiếu biến nào: %v", err)
+			}
+		})
+	}
+}
+
+func TestKhoaKyThieuODevThiChayNhungCoCanhBao(t *testing.T) {
+	datMoiTruong(t, map[string]string{"DATABASE_DSN": dsnGia, "ENV": EnvDev})
+	t.Setenv("SESSION_SIGNING_KEYS", "")
+
+	cfg, err := Load("identity")
+	if err != nil {
+		t.Fatalf("dev phải khởi động được: %v", err)
+	}
+	if len(cfg.CanhBao()) == 0 {
+		t.Error("không có khoá ký mà không cảnh báo — đăng nhập sẽ hỏng mà không ai biết vì sao")
+	}
+}
+
+func TestKhoaKyDocTheoThuTu(t *testing.T) {
+	// Order is the whole rotation procedure: the FIRST key signs, every key verifies. Reordering
+	// silently would sign with a key being retired.
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":         dsnGia,
+		"ENV":                  EnvProd,
+		"SESSION_SIGNING_KEYS": khoaGia + "-moi , " + khoaGia + "-cu ,,",
+	})
+
+	cfg, err := Load("identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := cfg.KhoaKyBytes()
+	if len(got) != 2 {
+		t.Fatalf("đọc được %d khoá, muốn 2 (bỏ phần tử rỗng)", len(got))
+	}
+	if string(got[0]) != khoaGia+"-moi" || string(got[1]) != khoaGia+"-cu" {
+		t.Errorf("sai thứ tự hoặc còn khoảng trắng: %q", got)
+	}
+	// One key in prod is legal but must be said out loud: rotating it signs everybody out.
+	datMoiTruong(t, map[string]string{"SESSION_SIGNING_KEYS": khoaGia})
+	cfg, err = Load("identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.CanhBao()) == 0 {
+		t.Error("một khoá duy nhất ở prod phải được cảnh báo")
+	}
+}
+
+func TestKhoaKyKhongTuHienRaKhiGhiLog(t *testing.T) {
+	// A leaked signing key cannot be recalled from centralised logging, backups or third-party
+	// monitoring, and it affects EVERY commune at once. Redacted() only protects the call sites
+	// that remember it; the type has to protect the ones that do not.
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":         dsnGia,
+		"ENV":                  EnvProd,
+		"SESSION_SIGNING_KEYS": khoaGia,
+	})
+
+	cfg, err := Load("identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tho, err := json.Marshal(cfg.SessionSigningKeys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renders := []string{
+		fmt.Sprintf("%v", cfg.SessionSigningKeys),
+		fmt.Sprintf("%s", cfg.SessionSigningKeys),
+		fmt.Sprintf("%+v", cfg),
+		fmt.Sprintf("%#v", cfg.SessionSigningKeys),
+		fmt.Sprintf("%v", cfg.Redacted()),
+		string(tho),
+	}
+	for _, r := range renders {
+		if strings.Contains(r, khoaGia) {
+			t.Errorf("khoá ký lọt ra khi in: %q", r)
+		}
+	}
+
+	// ...but the key itself must still be reachable for pkg/token.
+	if string(cfg.KhoaKyBytes()[0]) != khoaGia {
+		t.Error("KhoaKyBytes không trả về khoá thật")
 	}
 }
 

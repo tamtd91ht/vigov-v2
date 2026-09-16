@@ -31,7 +31,26 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	svchttp.Register(mux, svchttp.Deps{})
+	// TODO(next): NOT RUNNABLE YET, and deliberately left that way.
+	//
+	// The session routes and the XacThuc middleware are written and tested
+	// (services/identity/internal/http), but mounting them for real needs a tenant.Directory,
+	// and the only legitimate source of one is a gRPC call to the platform service
+	// (proto/vigov/platform/v1/platform.proto, ResolveHost) — which does not serve gRPC yet.
+	//
+	// Wiring it against anything else would mean inventing a second way to resolve a commune,
+	// and a second way to resolve a commune is how one commune ends up serving another's data.
+	// What is still missing, in order:
+	//   a. platform serves ResolveHost over gRPC
+	//   b. a cached tenant.Directory client here (short TTL — this is on every request)
+	//   c. cfg.KhoaKyBytes() -> token.NewSigner; refuses to start with no key outside dev
+	//   d. svchttp.Deps{Checker, Signer, Phien, CanBo, DangNhap, DangXuat, Log}
+	//   e. h = svchttp.XacThuc(deps)(mux), INSIDE httpx.TenantMiddleware — never outside it
+	//
+	// svchttp.Register is NOT called here on purpose: it refuses incomplete Deps, and mounting
+	// a sign-in route with no signing key and no session store would answer requests it cannot
+	// honour. Until (a)–(e) are done this binary serves /healthz and nothing else.
+	_ = svchttp.Deps{}
 
 	// The edge chain. Order matters and is not negotiable:
 	//   StripTenantHeaders  a client naming its own commune is a client granting itself access

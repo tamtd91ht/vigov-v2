@@ -17,6 +17,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -87,11 +88,11 @@ const (
 // protection that does not depend on anybody remembering.
 type Khoa []byte
 
-func (k Khoa) String() string                { return "***" }
-func (k Khoa) GoString() string              { return "***" }
-func (k Khoa) MarshalJSON() ([]byte, error)  { return []byte(`"***"`), nil }
-func (k Khoa) MarshalText() ([]byte, error)  { return []byte("***"), nil }
-func (k Khoa) LogValue() slog.Value          { return slog.StringValue("***") }
+func (k Khoa) String() string               { return "***" }
+func (k Khoa) GoString() string             { return "***" }
+func (k Khoa) MarshalJSON() ([]byte, error) { return []byte(`"***"`), nil }
+func (k Khoa) MarshalText() ([]byte, error) { return []byte("***"), nil }
+func (k Khoa) LogValue() slog.Value         { return slog.StringValue("***") }
 
 // Bytes hands the raw material to pkg/token. The one explicit way out, so every use is
 // greppable.
@@ -125,8 +126,12 @@ func Load(serviceName string) (Config, error) {
 	// cannot issue or read a session. Outside dev the alternative would be a service that
 	// accepts forged tokens, or one that invents a key per replica and signs everybody out on
 	// every restart — both fail silently, which is the one thing not allowed here.
+	//
+	// Named environments only, so an ENV nobody recognises still fails as ErrEnvKhongHopLe
+	// below — reporting "missing key" for a typo in ENV would send the reader to the wrong
+	// variable.
 	khoa := khoaKy(os.Getenv("SESSION_SIGNING_KEYS"))
-	if len(khoa) == 0 && env != EnvDev && env != "" {
+	if len(khoa) == 0 && (env == EnvStaging || env == EnvProd) {
 		thieu = append(thieu, "SESSION_SIGNING_KEYS")
 	}
 
@@ -178,6 +183,15 @@ func (c Config) CanhBao() []string {
 		ra = append(ra, "REDIS_DSN trống — chống trùng request không hoạt động, "+
 			"route khai idem.DongKhiHong sẽ trả 503")
 	}
+	// Only reachable in dev — Load refuses to start anywhere else.
+	if len(c.SessionSigningKeys) == 0 {
+		ra = append(ra, "SESSION_SIGNING_KEYS trống — không ký và không đọc được phiên đăng nhập")
+	}
+	// One key means the key can never be rotated without signing out every cán bộ of every xã
+	// at once (rule 8, invariant 6). Not an error, but somebody has to know before it is needed.
+	if len(c.SessionSigningKeys) == 1 && c.Env == EnvProd {
+		ra = append(ra, "SESSION_SIGNING_KEYS chỉ có một khoá — xoay khoá sẽ đăng xuất toàn bộ cán bộ")
+	}
 	return ra
 }
 
@@ -186,6 +200,9 @@ func (c Config) CanhBao() []string {
 // A DSN carries a password. Logging it sends one credential into centralised logging,
 // backups and third-party monitoring at once, and it cannot be recalled from any of them
 // (rule 8). Every DSN field added to Config must be redacted here as well.
+//
+// SessionSigningKeys needs no line here: the Khoa type refuses to render itself, which also
+// covers the call sites that forget to call this function at all.
 func (c Config) Redacted() Config {
 	c.DatabaseDSN = redactDSN(c.DatabaseDSN)
 	if c.RedisDSN != "" {
@@ -231,6 +248,31 @@ func duration(s string, mac time.Duration) time.Duration {
 		return mac
 	}
 	return d
+}
+
+// khoaKy splits the comma-separated key list. The FIRST entry is the one that signs.
+//
+// Length and strength are NOT checked here: pkg/token.NewSigner owns that, and one owner for
+// one rule is what keeps the two from drifting apart (rule 9). This function only answers
+// "which strings were configured".
+func khoaKy(raw string) []Khoa {
+	var ra []Khoa
+	for _, phan := range strings.Split(raw, ",") {
+		phan = strings.TrimSpace(phan)
+		if phan != "" {
+			ra = append(ra, Khoa(phan))
+		}
+	}
+	return ra
+}
+
+// KhoaKyBytes hands the signing keys to pkg/token, in order.
+func (c Config) KhoaKyBytes() [][]byte {
+	ra := make([][]byte, 0, len(c.SessionSigningKeys))
+	for _, k := range c.SessionSigningKeys {
+		ra = append(ra, k.Bytes())
+	}
+	return ra
 }
 
 func boolean(s string) bool {
