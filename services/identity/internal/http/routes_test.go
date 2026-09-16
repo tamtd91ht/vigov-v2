@@ -126,10 +126,14 @@ func (c checkerGia) Allows(ctx context.Context, p authz.Principal, perm authz.Pe
 	return c.quyen[tenant.MustFrom(ctx)][p.ID][perm]
 }
 
+// dangNhapGia returns the SIGNED TOKEN as well as the sid: the use case signs inside its own
+// transaction now, so the handler receives a token rather than producing one. A handler that went
+// back to signing for itself would sign after the commit — the failure this moved away from.
 type dangNhapGia struct {
 	goi     int
 	lanCuoi app.YeuCauDangNhap
 	sid     string
+	tok     string
 	hetHan  time.Time
 	loi     error
 }
@@ -145,6 +149,7 @@ func (u *dangNhapGia) Chay(_ context.Context, yc app.YeuCauDangNhap) (app.KetQua
 	}
 	return app.KetQuaDangNhap{
 		Sid:       u.sid,
+		Token:     u.tok,
 		Refresh:   "refresh-gia-khong-dung-den",
 		HetHanLuc: u.hetHan,
 		CanBo:     canBoMau(),
@@ -204,10 +209,16 @@ func dungMayChu(t *testing.T) *mayChu {
 			xaA: {idNoiBo: {quyenThu: true}},
 			xaB: {},
 		}},
-		Signer:   signer,
-		Phien:    phien,
-		CanBo:    canBo,
-		DangNhap: &dangNhapGia{sid: sidA, hetHan: hetHan},
+		Signer: signer,
+		Phien:  phien,
+		CanBo:  canBo,
+		DangNhap: &dangNhapGia{
+			sid: sidA,
+			// A token signed the way the use case signs it, so the cookie carries something the
+			// middleware can actually read back.
+			tok:    kyThu(t, signer, xaA, sidA, hetHan),
+			hetHan: hetHan,
+		},
 		DangXuat: &dangXuatGia{},
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
@@ -245,11 +256,12 @@ func dungMayChu(t *testing.T) *mayChu {
 
 func (m *mayChu) tokenCho(t *testing.T, xa tenant.ID, sid string) string {
 	t.Helper()
-	tok, err := m.signer.Ky(token.Claims{
-		TenantID:  xa,
-		Sid:       sid,
-		ExpiresAt: time.Now().UTC().Add(time.Hour),
-	})
+	return kyThu(t, m.signer, xa, sid, time.Now().UTC().Add(time.Hour))
+}
+
+func kyThu(t *testing.T, s *token.Signer, xa tenant.ID, sid string, hetHan time.Time) string {
+	t.Helper()
+	tok, err := s.Ky(token.Claims{TenantID: xa, Sid: sid, ExpiresAt: hetHan})
 	if err != nil {
 		t.Fatalf("ký token: %v", err)
 	}

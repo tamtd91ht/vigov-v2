@@ -79,6 +79,20 @@ func (s *Scoped) Tx(ctx context.Context, fn func(*ScopedTx) error) error {
 	if err != nil {
 		return fmt.Errorf("store: begin: %w", err)
 	}
+	// A PANIC INSIDE fn MUST NOT LEAVE THE TRANSACTION OPEN. Without this, neither Commit nor
+	// Rollback is ever reached: the transaction stays open, holding its row locks, until the
+	// request's context is cancelled and the driver finally kills the connection. Under load
+	// that is a pile of half-written administrative records holding locks nobody can see.
+	//
+	// The panic KEEPS PROPAGATING to httpx.Recover, which turns it into a traceable 500. Turning
+	// it into an error here would swallow a defect the operator has to know about.
+	defer func() {
+		if r := recover(); r != nil {
+			_ = tx.Rollback()
+			panic(r)
+		}
+	}()
+
 	stx := &ScopedTx{tx: tx, tid: s.tid}
 	if err := fn(stx); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {

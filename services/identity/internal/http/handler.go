@@ -9,7 +9,6 @@ import (
 
 	"github.com/vihat/vigov/pkg/httpx"
 	"github.com/vihat/vigov/pkg/tenant"
-	"github.com/vihat/vigov/pkg/token"
 	"github.com/vihat/vigov/services/identity/internal/app"
 )
 
@@ -100,34 +99,27 @@ func (h *Handler) DangNhap(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// The wrapped error carries store failures, never the password and never the body.
-		h.d.Log.Error("đăng nhập: lỗi hệ thống", "err", err)
+		h.d.Log.Error("đăng nhập: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal",
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
 	}
 
+	// THE TOKEN IS SIGNED BY THE USE CASE, INSIDE ITS TRANSACTION — not here.
+	//
+	// It used to be signed here, after the commit. A signing failure then left the session row
+	// and its audit entry committed: the archive of a public authority asserting a sign-in that
+	// never happened, in an entry that is append-only and cannot be corrected (rule 6). Moving
+	// the signature inside the transaction makes the three facts agree — token, session, trail
+	// all exist, or none does.
+	//
 	// kq.Refresh is DROPPED ON PURPOSE. skills/session-and-token required #4 asks for rotating
 	// refresh tokens whose replay revokes the chain; that chain is not built yet. Handing out a
 	// refresh token without it would look like protection and be none — a leaked refresh token
 	// would be replayable for its whole lifetime with nothing detecting the reuse. Until the
 	// rotation is built, the access token simply lives exactly as long as the session
 	// (idstore.ThoiHanPhien, 12h) and is revocable through the registry. STATED GAP.
-	tok, err := h.d.Signer.Ky(token.Claims{
-		TenantID:  tenant.MustFrom(ctx),
-		Sid:       kq.Sid,
-		ExpiresAt: kq.HetHanLuc,
-	})
-	if err != nil {
-		// The session row and its audit entry are already committed. Nothing is rolled back
-		// here on purpose: an audit entry is append-only (rule 6, invariant 4), and the orphan
-		// session is harmless — no cookie was issued, and it expires on its own.
-		h.d.Log.Error("đăng nhập: không ký được token", "err", err)
-		httpx.WriteError(w, http.StatusInternalServerError, "internal",
-			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
-		return
-	}
-
-	datCookiePhien(w, tok, kq.HetHanLuc)
+	datCookiePhien(w, kq.Token, kq.HetHanLuc)
 	vietJSON(w, http.StatusCreated, phanHoiDangNhap{
 		Sid:       kq.Sid,
 		ExpiresAt: kq.HetHanLuc,
@@ -169,7 +161,8 @@ func (h *Handler) DangXuat(w http.ResponseWriter, r *http.Request) {
 	// The use case revokes the session and writes the audit entry in ONE transaction (rule 6,
 	// invariant 3). MaCanBo, not the internal id: the trail records a business code.
 	if err := h.d.DangXuat.Chay(ctx, ph.Sid, ph.MaCanBo, ipTu(r)); err != nil {
-		h.d.Log.Error("đăng xuất: lỗi hệ thống", "can_bo", ph.MaCanBo, "err", err)
+		h.d.Log.Error("đăng xuất: lỗi hệ thống",
+			"can_bo", ph.MaCanBo, "xa", string(tenant.MustFrom(ctx)), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal",
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return

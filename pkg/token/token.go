@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -125,6 +126,26 @@ func NewSigner(khoa [][]byte) (*Signer, error) {
 // SoKhoa reports how many keys are accepted, for a startup log line. The keys themselves are
 // never exposed and never logged (rule 8).
 func (s *Signer) SoKhoa() int { return len(s.khoa) }
+
+// String, GoString and LogValue REFUSE TO PRINT THE KEYS. Together they close every route by
+// which fmt or slog reaches an unexported field through reflection: the verbs v, +v and s go
+// through String, the verb #v goes through GoString, and slog attributes go through LogValue.
+//
+// WHY THIS IS NOT PARANOIA: without them, one debugging line prints the WHOLE PLATFORM'S session
+// signing keys as raw bytes into centralised logging, into backups and into a third-party
+// monitoring vendor — from where a secret cannot be recalled (rule 8, invariant 1). One leaked
+// signing key forges a session in EVERY commune, not one.
+//
+// pkg/config guards the key on its way in; KhoaKyBytes() hands over a bare [][]byte, so the
+// protection has to be re-established here or it ends at this package boundary.
+//
+// THE RECEIVER IS A VALUE, NOT A POINTER, ON PURPOSE: a value receiver puts these methods in the
+// method set of BOTH Signer and *Signer, so a dereferenced copy is covered too.
+func (s Signer) String() string { return fmt.Sprintf("token.Signer(%d khoá)", len(s.khoa)) }
+
+func (s Signer) GoString() string { return s.String() }
+
+func (s Signer) LogValue() slog.Value { return slog.StringValue(s.String()) }
 
 // Ky signs the claims and returns the cookie value.
 //

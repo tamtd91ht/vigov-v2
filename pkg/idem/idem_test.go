@@ -110,10 +110,17 @@ func logIm() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 }
 
-// goi sends one request with no principal — the actor resolves to "anon".
+// chuTheMacDinh is the actor component of the key for every request `goi` sends.
+const chuTheMacDinh = "staff:" + canBo1
+
+// goi sends one request from the DEFAULT CLERK of the commune.
+//
+// It is not anonymous, and cannot be: Required refuses a request with no principal, because one
+// shared actor is one shared key space for every anonymous sender of a commune. The anonymous
+// case has its own file — an_danh_test.go — where the refusal is the property under test.
 func goi(t *testing.T, h http.Handler, s Store, tid, khoa string) *httptest.ResponseRecorder {
 	t.Helper()
-	return goiNhu(t, h, s, tid, khoa, nil)
+	return goiNhu(t, h, s, tid, khoa, canBo(tid, canBo1))
 }
 
 // goiNhu sends one request through the middleware chain, with the commune already resolved and
@@ -199,7 +206,7 @@ func TestKhongLuuThanPhanHoi(t *testing.T) {
 	s := newStoreGia()
 	goi(t, h, s, xaA, khoaKhachHang)
 
-	giaTri := s.doc(keyGia(xaA, "anon"))
+	giaTri := s.doc(keyGia(xaA, chuTheMacDinh))
 	if giaTri != "2:201:PA-7F3K9Q" {
 		t.Fatalf("giá trị lưu = %q, muốn đúng \"2:<status>:<mã>\"", giaTri)
 	}
@@ -232,8 +239,8 @@ func TestHaiXaCungMotKhoaKhachHangKhongDungNhau(t *testing.T) {
 	if s.soKhoa() != 2 {
 		t.Fatalf("có %d khoá, muốn 2 — mỗi xã một khoá riêng", s.soKhoa())
 	}
-	if s.doc(keyGia(xaA, "anon")) ==
-		s.doc(keyGia(xaB, "anon")) {
+	if s.doc(keyGia(xaA, chuTheMacDinh)) ==
+		s.doc(keyGia(xaB, chuTheMacDinh)) {
 		t.Fatal("hai xã chia sẻ một giá trị")
 	}
 
@@ -288,8 +295,8 @@ func TestHaiCanBoCungXaCungMotKhoaKhachHangKhongDungNhau(t *testing.T) {
 }
 
 func TestChuThe(t *testing.T) {
-	if got := ChuThe(context.Background()); got != "anon" {
-		t.Errorf("không có Principal: ChuThe = %q, muốn anon", got)
+	if got := ChuThe(context.Background()); got != ChuTheAnDanh {
+		t.Errorf("không có Principal: ChuThe = %q, muốn %q", got, ChuTheAnDanh)
 	}
 	ctx := authz.Into(context.Background(), authz.Principal{ID: canBo1, Kind: "staff"})
 	if got := ChuThe(ctx); got != "staff:"+canBo1 {
@@ -303,7 +310,7 @@ func TestChuThe(t *testing.T) {
 }
 
 func TestKeyMangTienToXa(t *testing.T) {
-	k := keyGia(xaA, "anon")
+	k := keyGia(xaA, chuTheMacDinh)
 	if !strings.HasPrefix(k, "t:"+xaA+":idem:") {
 		t.Fatalf("key = %q, thiếu tiền tố t:<tenant_id>:idem:", k)
 	}
@@ -311,10 +318,10 @@ func TestKeyMangTienToXa(t *testing.T) {
 		t.Error("khoá do client sinh nằm nguyên trong key — phải băm")
 	}
 	// A key reused on another route must not replay the wrong result.
-	if k == Key(tenant.ID(xaA), "anon", http.MethodPost, "/api/v1/disbursements", khoaKhachHang) {
+	if k == Key(tenant.ID(xaA), chuTheMacDinh, http.MethodPost, "/api/v1/disbursements", khoaKhachHang) {
 		t.Error("hai path khác nhau cho ra cùng một key")
 	}
-	if k == Key(tenant.ID(xaA), "anon", http.MethodPut, "/api/v1/citizen-reports", khoaKhachHang) {
+	if k == Key(tenant.ID(xaA), chuTheMacDinh, http.MethodPut, "/api/v1/citizen-reports", khoaKhachHang) {
 		t.Error("hai method khác nhau cho ra cùng một key")
 	}
 	// Same commune, same route, same client key, two different people.
@@ -330,7 +337,7 @@ func TestKeyMangTienToXa(t *testing.T) {
 func TestDangChayThiTraVe409(t *testing.T) {
 	s := newStoreGia()
 	// A claim left by a request still in flight.
-	key := keyGia(xaA, "anon")
+	key := keyGia(xaA, chuTheMacDinh)
 	s.data[key] = dauDangChay
 
 	var chay int
@@ -420,7 +427,7 @@ func TestMaLoiTiengAnhThongBaoTiengViet(t *testing.T) {
 
 	// đang chạy dở
 	s := newStoreGia()
-	s.data[keyGia(xaA, "anon")] = dauDangChay
+	s.data[keyGia(xaA, chuTheMacDinh)] = dauDangChay
 	if code, _ = docLoi(goi(t, h, s, xaA, khoaKhachHang)); code != "request_in_progress" {
 		t.Errorf("code = %q", code)
 	}
@@ -587,7 +594,7 @@ func TestKhoaBienMatGiuaChungThiChiemLai(t *testing.T) {
 	if s.soLanClaim != 2 {
 		t.Errorf("Claim gọi %d lần, muốn 2 (lần đầu thua, đọc thấy trống, chiếm lại)", s.soLanClaim)
 	}
-	if got := s.doc(keyGia(xaA, "anon")); got != "2:201:PA-7F3K9Q" {
+	if got := s.doc(keyGia(xaA, chuTheMacDinh)); got != "2:201:PA-7F3K9Q" {
 		t.Errorf("giá trị = %q", got)
 	}
 }
@@ -624,7 +631,7 @@ func TestRecordCodeLocKyTu(t *testing.T) {
 	}))
 	goi(t, h, s, xaA, khoaKhachHang)
 
-	giaTri := s.doc(keyGia(xaA, "anon"))
+	giaTri := s.doc(keyGia(xaA, chuTheMacDinh))
 	if giaTri != "2:201:PA7F3K9Q" {
 		t.Fatalf("giá trị = %q, muốn mã đã lọc", giaTri)
 	}
@@ -660,7 +667,10 @@ func TestMiddlewareGanStoreVaoContext(t *testing.T) {
 
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/citizen-reports", nil)
 	r.Header.Set(Header, khoaKhachHang)
-	r = r.WithContext(tenant.Into(r.Context(), tenant.ID(xaA)))
+	ctx := tenant.Into(r.Context(), tenant.ID(xaA))
+	// A principal, because authz wraps outside idem and Required refuses a request without one.
+	ctx = authz.Into(ctx, *canBo(xaA, canBo1))
+	r = r.WithContext(ctx)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 

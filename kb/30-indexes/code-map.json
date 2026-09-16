@@ -4,31 +4,35 @@
   "symbols": {
     "app.Chay": {
       "kind": "func",
-      "at": "services/identity/internal/app/dang_nhap.go:143"
+      "at": "services/identity/internal/app/dang_nhap.go:220"
     },
     "app.DangNhap": {
       "kind": "type",
-      "at": "services/identity/internal/app/dang_nhap.go:19"
+      "at": "services/identity/internal/app/dang_nhap.go:32"
     },
     "app.DangXuat": {
       "kind": "type",
-      "at": "services/identity/internal/app/dang_nhap.go:134"
+      "at": "services/identity/internal/app/dang_nhap.go:211"
     },
     "app.KetQuaDangNhap": {
       "kind": "type",
-      "at": "services/identity/internal/app/dang_nhap.go:39"
+      "at": "services/identity/internal/app/dang_nhap.go:55"
+    },
+    "app.KyToken": {
+      "kind": "type",
+      "at": "services/identity/internal/app/dang_nhap.go:27"
     },
     "app.NewDangNhap": {
       "kind": "func",
-      "at": "services/identity/internal/app/dang_nhap.go:26"
+      "at": "services/identity/internal/app/dang_nhap.go:40"
     },
     "app.NewDangXuat": {
       "kind": "func",
-      "at": "services/identity/internal/app/dang_nhap.go:139"
+      "at": "services/identity/internal/app/dang_nhap.go:216"
     },
     "app.YeuCauDangNhap": {
       "kind": "type",
-      "at": "services/identity/internal/app/dang_nhap.go:31"
+      "at": "services/identity/internal/app/dang_nhap.go:46"
     },
     "audit.Actor": {
       "kind": "type",
@@ -44,7 +48,7 @@
     },
     "authz.AnyAuthenticated": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:116"
+      "at": "pkg/authz/authz.go:153"
     },
     "authz.Checker": {
       "kind": "type",
@@ -52,7 +56,7 @@
     },
     "authz.CitizenOnly": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:100"
+      "at": "pkg/authz/authz.go:133"
     },
     "authz.From": {
       "kind": "func",
@@ -76,11 +80,11 @@
     },
     "authz.Public": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:132"
+      "at": "pkg/authz/authz.go:175"
     },
     "authz.RequirePermission": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:73"
+      "at": "pkg/authz/authz.go:90"
     },
     "authz.String": {
       "kind": "func",
@@ -88,11 +92,11 @@
     },
     "config.Bytes": {
       "kind": "func",
-      "at": "pkg/config/config.go:99"
+      "at": "pkg/config/config.go:112"
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "pkg/config/config.go:171"
+      "at": "pkg/config/config.go:185"
     },
     "config.Config": {
       "kind": "type",
@@ -100,39 +104,39 @@
     },
     "config.GoString": {
       "kind": "func",
-      "at": "pkg/config/config.go:92"
+      "at": "pkg/config/config.go:105"
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "pkg/config/config.go:89"
+      "at": "pkg/config/config.go:102"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "pkg/config/config.go:270"
+      "at": "pkg/config/config.go:284"
     },
     "config.Load": {
       "kind": "func",
-      "at": "pkg/config/config.go:112"
+      "at": "pkg/config/config.go:125"
     },
     "config.LogValue": {
       "kind": "func",
-      "at": "pkg/config/config.go:95"
+      "at": "pkg/config/config.go:108"
     },
     "config.MarshalJSON": {
       "kind": "func",
-      "at": "pkg/config/config.go:93"
+      "at": "pkg/config/config.go:106"
     },
     "config.MarshalText": {
       "kind": "func",
-      "at": "pkg/config/config.go:94"
+      "at": "pkg/config/config.go:107"
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "pkg/config/config.go:206"
+      "at": "pkg/config/config.go:220"
     },
     "config.String": {
       "kind": "func",
-      "at": "pkg/config/config.go:91"
+      "at": "pkg/config/config.go:104"
     },
     "domain.CanBo": {
       "kind": "type",
@@ -170,13 +174,45 @@
       "kind": "type",
       "at": "pkg/events/events.go:33"
     },
+    "grpc.Directory": {
+      "kind": "type",
+      "at": "services/platform/internal/grpc/server.go:38"
+    },
+    "grpc.GetTenant": {
+      "kind": "func",
+      "at": "services/platform/internal/grpc/server.go:80"
+    },
+    "grpc.NewServer": {
+      "kind": "func",
+      "at": "services/platform/internal/grpc/server.go:51"
+    },
+    "grpc.ResolveHost": {
+      "kind": "func",
+      "at": "services/platform/internal/grpc/server.go:60"
+    },
+    "grpc.Server": {
+      "kind": "type",
+      "at": "services/platform/internal/grpc/server.go:44"
+    },
+    "grpcx.ExemptFromTenant": {
+      "kind": "func",
+      "at": "pkg/grpcx/grpcx.go:76"
+    },
+    "grpcx.UnaryClientInterceptor": {
+      "kind": "func",
+      "at": "pkg/grpcx/grpcx.go:92"
+    },
+    "grpcx.UnaryServerInterceptor": {
+      "kind": "func",
+      "at": "pkg/grpcx/grpcx.go:125"
+    },
     "http.CanBoDoc": {
       "kind": "type",
       "at": "services/identity/internal/http/routes.go:44"
     },
     "http.DangNhap": {
       "kind": "func",
-      "at": "services/identity/internal/http/handler.go:70"
+      "at": "services/identity/internal/http/handler.go:69"
     },
     "http.DangNhapUC": {
       "kind": "type",
@@ -184,7 +220,7 @@
     },
     "http.DangXuat": {
       "kind": "func",
-      "at": "services/identity/internal/http/handler.go:148"
+      "at": "services/identity/internal/http/handler.go:140"
     },
     "http.DangXuatUC": {
       "kind": "type",
@@ -196,11 +232,11 @@
     },
     "http.Handler": {
       "kind": "type",
-      "at": "services/identity/internal/http/handler.go:18"
+      "at": "services/identity/internal/http/handler.go:17"
     },
     "http.NewHandler": {
       "kind": "func",
-      "at": "services/identity/internal/http/handler.go:22"
+      "at": "services/identity/internal/http/handler.go:21"
     },
     "http.PhienDoc": {
       "kind": "type",
@@ -244,11 +280,11 @@
     },
     "idem.CheDoHong": {
       "kind": "type",
-      "at": "pkg/idem/idem.go:97"
+      "at": "pkg/idem/idem.go:122"
     },
     "idem.ChuThe": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:437"
+      "at": "pkg/idem/idem.go:501"
     },
     "idem.Claim": {
       "kind": "func",
@@ -268,19 +304,19 @@
     },
     "idem.Into": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:153"
+      "at": "pkg/idem/idem.go:178"
     },
     "idem.Key": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:425"
+      "at": "pkg/idem/idem.go:480"
     },
     "idem.KhongCan": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:215"
+      "at": "pkg/idem/idem.go:240"
     },
     "idem.Middleware": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:141"
+      "at": "pkg/idem/idem.go:166"
     },
     "idem.NewRedisStore": {
       "kind": "func",
@@ -292,11 +328,11 @@
     },
     "idem.PhatLai": {
       "kind": "type",
-      "at": "pkg/idem/idem.go:368"
+      "at": "pkg/idem/idem.go:423"
     },
     "idem.RecordCode": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:182"
+      "at": "pkg/idem/idem.go:207"
     },
     "idem.RedisStore": {
       "kind": "type",
@@ -308,31 +344,31 @@
     },
     "idem.Required": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:226"
+      "at": "pkg/idem/idem.go:251"
     },
     "idem.Store": {
       "kind": "type",
-      "at": "pkg/idem/idem.go:81"
+      "at": "pkg/idem/idem.go:106"
     },
     "idem.String": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:109"
+      "at": "pkg/idem/idem.go:134"
     },
     "idem.TachGiaTri": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:477"
+      "at": "pkg/idem/idem.go:541"
     },
     "idem.Unwrap": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:513"
+      "at": "pkg/idem/idem.go:577"
     },
     "idem.Write": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:505"
+      "at": "pkg/idem/idem.go:569"
     },
     "idem.WriteHeader": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:498"
+      "at": "pkg/idem/idem.go:562"
     },
     "password.Bam": {
       "kind": "func",
@@ -364,7 +400,7 @@
     },
     "store.AllowsNhieu": {
       "kind": "func",
-      "at": "services/identity/internal/store/checker.go:68"
+      "at": "services/identity/internal/store/checker.go:73"
     },
     "store.ByHost": {
       "kind": "func",
@@ -373,6 +409,10 @@
     "store.ByHostErr": {
       "kind": "func",
       "at": "services/platform/internal/store/directory.go:81"
+    },
+    "store.ByID": {
+      "kind": "func",
+      "at": "services/platform/internal/store/directory.go:120"
     },
     "store.CachedDirectory": {
       "kind": "type",
@@ -400,7 +440,7 @@
     },
     "store.Exec": {
       "kind": "func",
-      "at": "pkg/store/scoped.go:105"
+      "at": "pkg/store/scoped.go:119"
     },
     "store.For": {
       "kind": "func",
@@ -472,7 +512,7 @@
     },
     "store.ScopedTx": {
       "kind": "type",
-      "at": "pkg/store/scoped.go:96"
+      "at": "pkg/store/scoped.go:110"
     },
     "store.Tao": {
       "kind": "func",
@@ -480,7 +520,7 @@
     },
     "store.TenantID": {
       "kind": "func",
-      "at": "pkg/store/scoped.go:101"
+      "at": "pkg/store/scoped.go:115"
     },
     "store.TheoEmail": {
       "kind": "func",
@@ -504,7 +544,7 @@
     },
     "store.Underlying": {
       "kind": "func",
-      "at": "pkg/store/scoped.go:102"
+      "at": "pkg/store/scoped.go:116"
     },
     "tenant.Directory": {
       "kind": "type",
@@ -540,27 +580,39 @@
     },
     "token.Claims": {
       "kind": "type",
-      "at": "pkg/token/token.go:70"
+      "at": "pkg/token/token.go:71"
     },
     "token.Giai": {
       "kind": "func",
-      "at": "pkg/token/token.go:160"
+      "at": "pkg/token/token.go:181"
+    },
+    "token.GoString": {
+      "kind": "func",
+      "at": "pkg/token/token.go:146"
     },
     "token.Ky": {
       "kind": "func",
-      "at": "pkg/token/token.go:133"
+      "at": "pkg/token/token.go:154"
+    },
+    "token.LogValue": {
+      "kind": "func",
+      "at": "pkg/token/token.go:148"
     },
     "token.NewSigner": {
       "kind": "func",
-      "at": "pkg/token/token.go:108"
+      "at": "pkg/token/token.go:109"
     },
     "token.Signer": {
       "kind": "type",
-      "at": "pkg/token/token.go:99"
+      "at": "pkg/token/token.go:100"
     },
     "token.SoKhoa": {
       "kind": "func",
-      "at": "pkg/token/token.go:127"
+      "at": "pkg/token/token.go:128"
+    },
+    "token.String": {
+      "kind": "func",
+      "at": "pkg/token/token.go:144"
     }
   }
 }

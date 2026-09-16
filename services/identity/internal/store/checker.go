@@ -48,9 +48,14 @@ WHERE nd.tenant_id = $1
 func (c *Checker) Allows(ctx context.Context, p authz.Principal, perm authz.Perm) bool {
 	ra, err := c.AllowsNhieu(ctx, p, []authz.Perm{perm})
 	if err != nil {
-		// Logged with the permission and the staff code — never with personal data (rule 3).
+		// Logged with the permission, the staff id and THE COMMUNE — never with personal data
+		// (rule 3). The commune is not decoration here: this line says a staff member was
+		// REFUSED because a permission could not be read. One process serves 200+ communes into
+		// one log stream, and "somebody somewhere was refused" is not something an operator can
+		// act on. p.TenantID is the commune the principal was issued for, which is the commune
+		// the query ran in (authz.xacNhanXa has already compared it with the one from Host).
 		c.log.Error("authz: không kiểm được quyền, từ chối",
-			"quyen", string(perm), "can_bo", p.ID, "err", err)
+			"quyen", string(perm), "can_bo", p.ID, "xa", string(p.TenantID), "err", err)
 		return false
 	}
 	return ra[perm]

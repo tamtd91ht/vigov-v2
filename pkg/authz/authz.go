@@ -69,6 +69,23 @@ type Checker interface {
 	Allows(ctx context.Context, p Principal, perm Perm) bool
 }
 
+// xacNhanXa reports whether the principal was issued for the commune this request arrived at.
+//
+// ONE FUNCTION, NOT A LINE REPEATED PER GUARD: the same invariant asserted in two places drifts,
+// and the copy that gets forgotten is the one nobody notices — a missing commune check is
+// cross-commune privilege escalation that no test of a single commune can produce (rule 5,
+// invariant 3).
+//
+// A browser does not send a cookie across hosts, so a mismatch is never an ordinary user error:
+// it is a deliberate probe or a stolen token.
+//
+// tenant.MustFrom panics when there is no commune, which is deliberate: a guard that ran without
+// one would compare against nothing and let every commune through. It is a precondition of being
+// mounted inside httpx.TenantMiddleware, not a case to handle.
+func xacNhanXa(ctx context.Context, p Principal) bool {
+	return p.TenantID == tenant.MustFrom(ctx)
+}
+
 // RequirePermission guards a route. This is the normal case.
 func RequirePermission(c Checker, perm Perm) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -79,10 +96,9 @@ func RequirePermission(c Checker, perm Perm) func(http.Handler) http.Handler {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
-			// The commune in the token must match the commune resolved from Host. A mismatch
-			// is not an ordinary user error: browsers do not send cookies across hosts, so
-			// seeing this means a deliberate probe or a stolen token.
-			if p.TenantID != tenant.MustFrom(ctx) {
+			// The commune in the token must match the commune resolved from Host — see
+			// xacNhanXa.
+			if !xacNhanXa(ctx, p) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -97,6 +113,23 @@ func RequirePermission(c Checker, perm Perm) func(http.Handler) http.Handler {
 
 // CitizenOnly guards a citizen route. Citizens have no roles; they are isolated by identity
 // (rule 4), not by RBAC.
+//
+// TODO(stop-condition): THIS GUARD DOES NOT COMPARE THE COMMUNE, and that is not an oversight
+// left for the next person to close.
+//
+// The citizen channel is the Zalo Mini App, which has NO DOMAIN (see CLAUDE.md, STACK). There is
+// no Host to derive a commune from, so tenant.MustFrom would PANIC the moment this guard is
+// mounted on that channel — turning a missing decision into a 500 on the citizen path. Adding
+// the comparison and adding a fallback are both wrong: a fallback on the isolation path is
+// rule 1, forbidden #1.
+//
+// What has to be decided first, by the customer, not here:
+//   - how the Mini App resolves the commune (rule 1, stop condition #4 — skills/zalo-miniapp-
+//     multi-tenant)
+//   - what happens to a citizen acting with more than one commune (rule 4, stop condition #3)
+//
+// Until then this guard checks IDENTITY ONLY, and no citizen route may be mounted on a chain
+// without a commune resolved ahead of it.
 func CitizenOnly() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -113,13 +146,23 @@ func CitizenOnly() func(http.Handler) http.Handler {
 // AnyAuthenticated opens a route to every signed-in account. The reason is mandatory and is
 // kept in the binary so it can be audited: six months on, nobody dares remove an unexplained
 // exemption.
+//
+// "Every signed-in account" means every account OF THIS COMMUNE. Dropping the permission check
+// does not drop the commune check: waiving what a person may do never waives where they may do
+// it (rule 5, invariant 3).
 func AnyAuthenticated(reason string) func(http.Handler) http.Handler {
 	if reason == "" {
 		panic("authz: AnyAuthenticated requires a reason")
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if _, ok := From(r.Context()); !ok {
+			ctx := r.Context()
+			p, ok := From(ctx)
+			if !ok {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if !xacNhanXa(ctx, p) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}

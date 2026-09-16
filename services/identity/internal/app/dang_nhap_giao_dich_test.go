@@ -15,6 +15,7 @@ import (
 	"github.com/vihat/vigov/pkg/password"
 	"github.com/vihat/vigov/pkg/store"
 	"github.com/vihat/vigov/pkg/tenant"
+	"github.com/vihat/vigov/pkg/token"
 	idstore "github.com/vihat/vigov/services/identity/internal/store"
 )
 
@@ -123,6 +124,20 @@ func (g *ghiChep) soGiaoDich() int {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.soTx
+}
+
+// giaoDichDangMo reports the transaction that is open right now — the newest one the driver has
+// begun and not yet ended. 0 means none, which is what "this ran outside any transaction" looks
+// like.
+func (g *ghiChep) giaoDichDangMo() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for i := g.soTx; i >= 1; i-- {
+		if _, xong := g.ketThuc[i]; !xong {
+			return i
+		}
+	}
+	return 0
 }
 
 // moiThamSo walks every argument of every statement, so an assertion can state that a value
@@ -251,7 +266,26 @@ type banThu struct {
 	dangNhap *DangNhap
 	dangXuat *DangXuat
 	ghi      *ghiChep
+	ky       *kyGia
 	log      *bytes.Buffer
+}
+
+// kyGia stands in for token.Signer. It is a pure function in the real implementation too, which
+// is what makes it safe to call inside a transaction.
+type kyGia struct {
+	loi error
+	goi int
+	tx  int // the transaction open at the moment it was called, recorded by the driver
+	g   *ghiChep
+}
+
+func (k *kyGia) Ky(c token.Claims) (string, error) {
+	k.goi++
+	k.tx = k.g.giaoDichDangMo()
+	if k.loi != nil {
+		return "", k.loi
+	}
+	return "token-gia." + string(c.TenantID) + "." + c.Sid, nil
 }
 
 func dungBanThu(t *testing.T) *banThu {
@@ -261,10 +295,12 @@ func dungBanThu(t *testing.T) *banThu {
 	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	canBo := idstore.NewCanBoStore(db)
 	phien := idstore.NewPhienStore(db)
+	ky := &kyGia{g: g}
 	return &banThu{
-		dangNhap: NewDangNhap(db, canBo, phien, log),
+		dangNhap: NewDangNhap(db, canBo, phien, ky, log),
 		dangXuat: NewDangXuat(db, phien),
 		ghi:      g,
+		ky:       ky,
 		log:      &buf,
 	}
 }

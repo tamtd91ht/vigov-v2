@@ -44,7 +44,11 @@ func main() {
 	//   a. platform serves ResolveHost over gRPC
 	//   b. a cached tenant.Directory client here (short TTL — this is on every request)
 	//   c. cfg.KhoaKyBytes() -> token.NewSigner; refuses to start with no key outside dev
-	//   d. svchttp.Deps{Checker, Signer, Phien, CanBo, DangNhap, DangXuat, Log}
+	//   d. THE SAME signer goes to app.NewDangNhap as well as to svchttp.Deps: the use case signs
+	//      the session token INSIDE its transaction (a signing failure must roll the session and
+	//      its audit entry back), while Deps.Signer is what XacThuc verifies incoming tokens with.
+	//      Two different signers would issue tokens the very next request cannot verify.
+	//      svchttp.Deps{Checker, Signer, Phien, CanBo, DangNhap, DangXuat, Log}
 	//   e. h = svchttp.XacThuc(deps)(mux), INSIDE httpx.TenantMiddleware — never outside it
 	//
 	// svchttp.Register is NOT called here on purpose: it refuses incomplete Deps, and mounting

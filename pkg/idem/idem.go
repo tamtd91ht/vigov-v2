@@ -20,6 +20,31 @@
 // idempotency key, and the key is scoped to the principal, which therefore has to be in the
 // context before this middleware runs.
 //
+// WHY `Required` ANSWERS 500 WHEN THERE IS NO PRINCIPAL — read this before "fixing" it:
+//
+// The key is client-supplied and is scoped to (commune, actor, method, path). With no principal
+// the actor component collapses to one shared value, so EVERY anonymous sender of one commune
+// shares one key space. A route declared `authz.Public(...)` + `idem.Required(...)` — which is
+// a perfectly reasonable-looking pair for citizen intake from the Mini App — then does this:
+//
+//	citizen A sends Idempotency-Key aaaaaaaa  -> petition created, lookup code PA-2026-0001
+//	citizen B sends the SAME key              -> same key, replayed: B is handed A's code
+//
+// B can look up A's petition (rule 4, invariant 1), and B's own petition was never created
+// while B believes it was (rule 10, invariant 1). Two failures at once, both silent. The lower
+// bound on key length does not help: a client deriving its key from the form contents or from a
+// device id collides deterministically, not by chance.
+//
+// So this refuses, loudly, at request time, the same way the package refuses a bare `Required()`:
+// the failure mode is a decision nobody may forget into a default, and the identity the key is
+// scoped to is the same kind of decision. The 500 says the ROUTE is wired wrong, because it is —
+// the sender did nothing wrong and is told so.
+//
+// THERE IS DELIBERATELY NO `RequiredAnDanh` ESCAPE HATCH. No route needs one today, and an exit
+// nobody has needed yet is an exit nobody has thought through. When a genuinely anonymous route
+// needs duplicate protection, the identity it is scoped to gets designed then — with the person
+// who owns the business rule.
+//
 // → .claude/skills/rest-api-design/SKILL.md §4 owns this convention.
 package idem
 
@@ -240,6 +265,30 @@ func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo Che
 	ctx := r.Context()
 	rt := runtimeFrom(ctx)
 
+	// Commune AND principal both come from the CONTEXT, never from a parameter or a client
+	// header (rule 1, invariant 4).
+	//
+	// BOTH ARE CHECKED BEFORE THE HEADER, and the order is deliberate: what the route got wrong
+	// outranks what the client got wrong. Answering "your header is missing" to a request that
+	// this route could not have protected anyway sends the integrator to fix something that is
+	// not broken, and hides the defect that is.
+	xa := tenant.MustFrom(ctx)
+
+	// NO PRINCIPAL, NO DUPLICATE PROTECTION — see the package comment. Every anonymous sender of
+	// this commune would otherwise share one key space, and the second one would be handed the
+	// first one's lookup code. Refusing is the only answer that does not quietly hand one
+	// citizen another citizen's record.
+	chuThe := ChuThe(ctx)
+	if chuThe == ChuTheAnDanh {
+		rt.log.Error("idem: route khai Required nhưng yêu cầu không có chủ thể — SAI CẤU HÌNH ROUTE",
+			"method", r.Method, "path", r.URL.Path, "xa", xa.String(), "che_do", cheDo.String())
+		loi(w, http.StatusInternalServerError, "idempotency_misconfigured",
+			"Hệ thống chưa xác định được người gửi nên không bảo đảm được việc chống trùng thao tác. "+
+				"Đây là lỗi cấu hình của hệ thống, không phải do bạn: yêu cầu CHƯA được xử lý. "+
+				"Vui lòng báo cơ quan quản trị hệ thống.")
+		return
+	}
+
 	khoa := r.Header.Get(Header)
 	if khoa == "" {
 		loi(w, http.StatusBadRequest, "missing_idempotency_key",
@@ -254,27 +303,25 @@ func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo Che
 		return
 	}
 
-	// Commune AND principal both come from the CONTEXT, never from a parameter or a client
-	// header (rule 1, invariant 4).
-	key := Key(tenant.MustFrom(ctx), ChuThe(ctx), r.Method, r.URL.Path, khoa)
+	key := Key(xa, chuThe, r.Method, r.URL.Path, khoa)
 
 	if rt.store == nil {
 		// No Redis configured. Same handling as an unreachable one: the route already declared
 		// what to do, and local development must still run.
-		hong(w, r, next, cheDo, rt, errors.New("idem: chưa cấu hình Store"))
+		hong(w, r, next, cheDo, rt, xa, errors.New("idem: chưa cấu hình Store"))
 		return
 	}
 
 	chiemDuoc, err := rt.store.Claim(ctx, key, TTLDangChay)
 	if err != nil {
-		hong(w, r, next, cheDo, rt, err)
+		hong(w, r, next, cheDo, rt, xa, err)
 		return
 	}
 
 	if !chiemDuoc {
 		giaTri, err := rt.store.Get(ctx, key)
 		if err != nil {
-			hong(w, r, next, cheDo, rt, err)
+			hong(w, r, next, cheDo, rt, xa, err)
 			return
 		}
 		switch {
@@ -284,7 +331,7 @@ func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo Che
 			// request that nothing is actually protecting against.
 			chiemDuoc, err = rt.store.Claim(ctx, key, TTLDangChay)
 			if err != nil {
-				hong(w, r, next, cheDo, rt, err)
+				hong(w, r, next, cheDo, rt, xa, err)
 				return
 			}
 			if !chiemDuoc {
@@ -295,11 +342,12 @@ func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo Che
 			dangChay(w)
 			return
 		case strings.HasPrefix(giaTri, dauDaXong+":"):
-			phatLai(w, giaTri, rt)
+			phatLai(w, giaTri, rt, xa)
 			return
 		default:
 			// An unrecognised value is not a reason to run the handler twice.
-			rt.log.Warn("idem: giá trị khoá không đọc được", "method", r.Method, "path", r.URL.Path)
+			rt.log.Warn("idem: giá trị khoá không đọc được",
+				"method", r.Method, "path", r.URL.Path, "xa", xa.String())
 			dangChay(w)
 			return
 		}
@@ -323,7 +371,7 @@ func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo Che
 				// The response is already on the wire; the request itself succeeded. All that
 				// is lost is the ability to replay it, so this is a warning, not a failure.
 				rt.log.Warn("idem: không ghi được kết quả", "method", r.Method,
-					"path", r.URL.Path, "err", err)
+					"path", r.URL.Path, "xa", xa.String(), "err", err)
 			}
 			return
 		}
@@ -331,7 +379,7 @@ func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo Che
 		// to correct the request and send it again with the same key.
 		if err := rt.store.Release(bg, key); err != nil {
 			rt.log.Warn("idem: không nhả được khoá", "method", r.Method,
-				"path", r.URL.Path, "err", err)
+				"path", r.URL.Path, "xa", xa.String(), "err", err)
 		}
 	}()
 
@@ -339,18 +387,25 @@ func phucVu(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo Che
 }
 
 // hong applies the failure mode the route declared.
+//
+// THE COMMUNE IS ON EVERY LINE, and the MoKhiHong one is the reason: it says duplicate
+// protection was skipped. One process serves 200+ communes into one log stream, so a line
+// without the commune tells an operator that something was let through unprotected somewhere —
+// which is not something they can act on. It is not personal data (rule 3): it is an opaque id.
 func hong(w http.ResponseWriter, r *http.Request, next http.Handler, cheDo CheDoHong,
-	rt runtime, err error) {
+	rt runtime, xa tenant.ID, err error) {
 	switch cheDo {
 	case MoKhiHong:
 		// No key, no personal data: method and path only. The path may not carry personal data
 		// either (rule 3, forbidden #4).
 		rt.log.Warn("idem: bỏ qua chống trùng vì Store không dùng được",
-			"method", r.Method, "path", r.URL.Path, "che_do", cheDo.String(), "err", err)
+			"method", r.Method, "path", r.URL.Path, "xa", xa.String(),
+			"che_do", cheDo.String(), "err", err)
 		next.ServeHTTP(w, r)
 	default:
 		rt.log.Error("idem: từ chối vì Store không dùng được",
-			"method", r.Method, "path", r.URL.Path, "che_do", cheDo.String(), "err", err)
+			"method", r.Method, "path", r.URL.Path, "xa", xa.String(),
+			"che_do", cheDo.String(), "err", err)
 		w.Header().Set("Retry-After", "1")
 		loi(w, http.StatusServiceUnavailable, "idempotency_unavailable",
 			"Hệ thống tạm thời không bảo đảm được việc chống trùng thao tác. Vui lòng thử lại.")
@@ -374,10 +429,10 @@ type PhatLai struct {
 // first one without parsing the body.
 const HeaderPhatLai = "Idempotent-Replay"
 
-func phatLai(w http.ResponseWriter, giaTri string, rt runtime) {
+func phatLai(w http.ResponseWriter, giaTri string, rt runtime, xa tenant.ID) {
 	status, ma, ok := TachGiaTri(giaTri)
 	if !ok {
-		rt.log.Warn("idem: giá trị đã xong không đọc được")
+		rt.log.Warn("idem: giá trị đã xong không đọc được", "xa", xa.String())
 		dangChay(w)
 		return
 	}
@@ -428,16 +483,25 @@ func Key(tid tenant.ID, actor, method, path, khoa string) string {
 	return "t:" + tid.String() + ":idem:" + hex.EncodeToString(sum[:])
 }
 
-// ChuThe returns the actor component of the key: "<Kind>:<ID>", or "anon" when the request
+// ChuTheAnDanh is what ChuThe reports when the request carries no principal.
+//
+// IT IS NOT A USABLE ACTOR. Required refuses to serve a request that resolves to it (see the
+// package comment): one shared actor means one shared key space for every anonymous sender of a
+// commune. The value exists so the refusal has something to compare against, and so a caller
+// reading ChuThe cannot mistake it for an identity.
+const ChuTheAnDanh = "anon"
+
+// ChuThe returns the actor component of the key: "<Kind>:<ID>", or ChuTheAnDanh when the request
 // carries no principal.
 //
 // `authz` wraps OUTSIDE `idem` (rest-api-design §4), so by the time Required runs the principal
-// is already in the context. A route declared Public — sign-in — resolves to "anon", which is
-// acceptable precisely because such a route declares KhongCan: it has no key to share.
+// is already in the context. A route declared Public — sign-in — resolves to ChuTheAnDanh, which
+// is fine only because such a route declares KhongCan: it has no key to share. A Public route
+// that declares Required is refused at request time rather than trusted to that convention.
 func ChuThe(ctx context.Context) string {
 	p, ok := authz.From(ctx)
 	if !ok || p.ID == "" {
-		return "anon"
+		return ChuTheAnDanh
 	}
 	return p.Kind + ":" + p.ID
 }
