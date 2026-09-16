@@ -3,7 +3,7 @@ id: 2026-09-16-ban-giao-phien
 tier: T5
 source: CURATED
 owner: architecture
-derived_from_commit: 039aa6d
+derived_from_commit: 5887496
 expires: 2026-12-16
 owns_facts:
   - "trạng thái thi công tại 2026-09-16 và việc kế tiếp phải làm"
@@ -45,6 +45,8 @@ Hết hạn **2026-12-16**. Sau ngày đó tin `git log` chứ đừng tin tệp
 | 6 | `MODULUS 32` cho mọi `PARTITION BY HASH` | ADR 0010 |
 | 7 | Quyền là **một khoá phẳng** `"task.extend"` | luật 5, bất biến 3b |
 | 8 | Admin tổng chỉ siêu dữ liệu — khớp ADR 0003 sẵn có, không cần ADR mới | — |
+| 9 | **URL path tiếng Anh, giá trị enum giữ tiếng Việt không dấu**, tiền tố `/api/v1/` | ADR 0011 |
+| 10 | Tên sự kiện chốt dạng `petitions.received.v1` — chưa publish nên đổi giá 0 | ADR 0011 |
 
 ### Trạng thái mã
 
@@ -67,26 +69,39 @@ Hết hạn **2026-12-16**. Sau ngày đó tin `git log` chứ đừng tin tệp
 
 ## 2. Việc kế tiếp — theo đúng thứ tự
 
+**Trước khi viết route đầu tiên: đọc `.claude/skills/rest-api-design/SKILL.md` và ADR 0011.**
+Route đầu tiên đặt khuôn cho toàn bộ phần còn lại, và đường dẫn là thứ không sửa lại được sau
+khi một xã chạy thật.
+
 ### (b) Route đăng nhập + middleware dựng `Principal` ← **BẮT ĐẦU TỪ ĐÂY**
 
 Đây là mảnh cuối để lát cắt dọc chạm được từ HTTP.
 
 | Việc | Ghi chú |
 |---|---|
-| `POST /dang-nhap` trong `identity/internal/http/routes.go` | Khai `authz.Public("màn hình đăng nhập, chưa có phiên")` |
+| `POST /api/v1/sessions` trong `identity/internal/http/routes.go` | Khai `authz.Public("màn hình đăng nhập, chưa có phiên")` |
 | Middleware đọc cookie → `phien.KiemTra` → dựng `authz.Principal` | Chạy MỌI request (skill `session-and-token` #3) |
 | Cookie đặt đúng host từng xã | **Cấm** `domain=.vigov.vn` (luật 1, cấm #3) |
 | So `tenant_id` trong phiên với xã từ `Host`; lệch = 401 **+ cảnh báo** | Skill #2 |
-| `POST /dang-xuat` | Use case `DangXuat` đã có |
+| `DELETE /api/v1/sessions/{sid}` | Use case `DangXuat` đã có |
+| Mỗi route khai lớp chống trùng | `idem.Required(...)` hoặc `idem.KhongCan("<lý do>")` — skill `rest-api-design` §4 |
 | 4 test luật 5 cho mỗi route | 401 · 403 · 403 sai xã · 200 |
+
+**Đổi so với bản bàn giao đầu:** hai đường dẫn trên trước ghi là `POST /dang-nhap` và
+`POST /dang-xuat`. ADR 0011 bác tiếng Việt trên path; `.claude/hooks/rest_api_guard.py` nay
+chặn thẳng, nên viết theo bản cũ sẽ bị hook từ chối.
 
 Khung đã sẵn: `apps/commune-admin/src/lib/session.ts` có `SESSION_COOKIE` và
 `cookieOptions(host)`.
 
-### (c) Route `/cau-hinh/nguoi-dung` — CRUD cán bộ đầu tiên
+### (c) CRUD cán bộ đầu tiên
 
 Quyền `admin.user`. Đổi vai trò hoặc khoá tài khoản **phải gọi**
 `PhienStore.ThuHoiCuaCanBo` trong cùng giao dịch (skill #7).
+
+Đường dẫn cũ `/cau-hinh/nguoi-dung` **không dùng nữa** (ADR 0011). Danh từ tài nguyên tiếng
+Anh cho khái niệm "cán bộ" **chưa có trong bảng ánh xạ** của
+`kb/00-foundation/ubiquitous-language.md` — **hỏi trước khi đặt**, đừng tự dịch.
 
 ### (d) Còn lại của `identity`
 
@@ -101,18 +116,24 @@ Mọi service đọc qua gRPC, cache cục bộ. Xem `docs/ui-ux/14-cau-hinh.md`
 **Chỉ bắt đầu sau khi có `lich_lam_viec` + `ngay_nghi_le`** — ADR 0007 nêu 5 lỗ hổng
 đặc tả chưa lấp (giờ hành chính mấy giờ, nghỉ trưa có trừ không…).
 
+Tài nguyên là `/api/v1/citizen-reports`, **không phải** `feedback` — nhưng khoá quyền vẫn là
+`feedback.*`. Lệch đó là cố ý và đã giải thích một lần ở
+`kb/00-foundation/ubiquitous-language.md`; đừng "thống nhất lại" cho gọn.
+
 ---
 
 ## 3. Tài liệu phải đọc, theo thứ tự
 
 1. `kb/INDEX.yaml` → tầng `always_load` (3 tệp T0)
-2. **ADR 0007–0010** — bốn quyết định mới nhất, chưa vào bộ nhớ ai
+2. **ADR 0007–0011** — năm quyết định mới nhất, chưa vào bộ nhớ ai
 3. `kb/00-foundation/open-questions.json` — còn **2 câu OPEN**: #1 sáp nhập xã, #4 báo cáo cấp huyện
 4. `docs/ui-ux/00-tong-quan-he-thong.md` + tệp module đang làm
-5. Skill: `session-and-token` · `go-tenant-context` · `load-data-once` · `audit-trail`
+5. Skill: `rest-api-design` (trước route đầu tiên) · `session-and-token` · `go-tenant-context` ·
+   `load-data-once` · `audit-trail`
 
 **Lưu ý về `docs/ui-ux/`:** đó là đặc tả giao diện chép từ prototype **một xã**, đề xuất
-stack Next+Prisma. Lấy nghiệp vụ và chuỗi tiếng Việt; **bỏ** §7 phần backend.
+stack Next+Prisma. Lấy nghiệp vụ và chuỗi tiếng Việt; **bỏ** §7 phần backend. Đường dẫn API
+trong đó là tiếng Việt và **đã lỗi thời** theo ADR 0011.
 
 ---
 
@@ -153,6 +174,9 @@ mỗi lượt chạy tự tạo schema riêng theo mốc thời gian rồi tự 
 | `go vet` · `go build` · `gofmt` | Sạch |
 | `go test ./...` | 10 gói xanh, gồm **19 test tích hợp** trên PostgreSQL 17.6 |
 
+Sau mốc đó có thêm `.claude/hooks/rest_api_guard.py`, nên số ca của `test_hooks.py` đã tăng —
+chạy lại để lấy con số thật, đừng tin bảng này.
+
 ---
 
 ## 7. Hai việc treo
@@ -161,3 +185,4 @@ mỗi lượt chạy tự tạo schema riêng theo mốc thời gian rồi tự 
 |---|---|---|
 | 1 | **`make check` không kiểm frontend** | Mã TS hỏng vẫn qua cổng. Cần thêm target gọi `npm run build` |
 | 2 | **Đặc tả ghi 43 quyền nhưng chỉ liệt kê 33** | Đã nạp 33 vào `quyen`. Mười khoá còn lại là câu hỏi cho khách, **đừng bịa** |
+| 3 | **Bảng ánh xạ tên tài nguyên URL mới phủ một phần** | `kb/00-foundation/ubiquitous-language.md` — gặp khái niệm chưa có dòng thì hỏi, đừng tự dịch |

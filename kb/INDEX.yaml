@@ -8,12 +8,12 @@
 # Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
 
 version: 1
-generated_at: 2026-09-16T03:17:57Z   # `make kb` điền
-from_commit: 3badc21   # `make kb` điền
+generated_at: 2026-09-16T14:24:16Z   # `make kb` điền
+from_commit: 5887496   # `make kb` điền
 
 budget:
   always_load_max: 25000  # token — trần do người dùng chốt 16/09/2026 (trước là 20000)
-  in_use: 2827   # `make kb` đo
+  in_use: 2870   # `make kb` đo
 
 always_load:                 # T0 — nạp mọi phiên, không hỏi
   - kb/00-foundation/domain-boundaries.md
@@ -25,7 +25,7 @@ load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾ
     file: kb/00-foundation/ubiquitous-language.md
     tier: T0
     source: CURATED
-    load_when: "gặp thuật ngữ hành chính, đặt tên trường, dịch nghiệp vụ sang mã"
+    load_when: "gặp thuật ngữ hành chính, đặt tên trường, dịch nghiệp vụ sang mã, ĐẶT TÊN TÀI NGUYÊN URL"
 
   - id: cau-hoi-mo
     file: kb/00-foundation/open-questions.json
@@ -72,6 +72,7 @@ faq_routes:       # định tuyến thẳng — tiết kiệm nhiều token nh�
   "ai sở hữu thực thể X":     kb/30-indexes/data-ownership.json
   "đổi cái này thì ai vỡ":    kb/30-indexes/event-flows.json
   "hợp đồng API ra sao":      proto/            # .proto LÀ nguồn chuẩn; kb/20-contracts/ CHƯA tồn tại
+  "đặt tên tài nguyên URL":   kb/00-foundation/ubiquitous-language.md   # vì sao: ADR 0011
   "vì sao làm thế này":       kb/10-decisions/
   "khách đã chốt chưa":       kb/00-foundation/open-questions.json
   # "đang cháy, làm gì" → kb/40-runbooks/ CHƯA tồn tại: chưa có sự cố vận hành nào.
@@ -83,3 +84,4 @@ not_here:           # nói rõ điều KHÔNG biết — chặn agent đi tìm v
   - "Lịch sử đã làm gì → `git log`. kb/ không kể lại quá trình."
   - "Trạng thái công việc → công cụ quản lý việc, không phải kb/."
   - "Hướng dẫn dùng thư viện bên thứ ba → tài liệu của họ."
+  - "Tên tài nguyên URL cho khái niệm chưa có trong bảng ánh xạ → HỎI, đừng tự dịch (ADR 0011)."

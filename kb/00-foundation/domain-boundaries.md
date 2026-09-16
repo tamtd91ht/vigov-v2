@@ -3,12 +3,13 @@ id: domain-boundaries
 tier: T0
 source: CURATED
 owner: architecture
-derived_from_commit: null
+derived_from_commit: 5887496
 expires: null
 owns_facts:
   - "ranh giới giữa các service và lý do cắt ở đó"
   - "service nào được gọi thẳng service nào"
   - "quy tắc đặt tên service"
+  - "dạng tên sự kiện: petitions.received.v1"
 ---
 
 # Miền nghiệp vụ và ranh giới service
@@ -49,15 +50,18 @@ thống sẽ kẹt khi một service chậm.
 
 ## Đặt tên
 
-- **Định danh máy đọc dùng tiếng Anh** — tên service, proto package, import path, tên trường.
-  Văn xuôi tài liệu (`kb/*.md`) giữ tiếng Việt.
+- **Định danh máy đọc dùng tiếng Anh** — tên service, proto package, import path, tên trường,
+  và **đoạn đường dẫn URL**. Văn xuôi tài liệu (`kb/*.md`) giữ tiếng Việt.
 - Service theo **miền nghiệp vụ**, không theo màn hình: `documents`, `petitions`, `dossiers`,
   `finance`. Không có `admin-service` — "admin" là giao diện, không phải miền.
-- Sự kiện: `<miền>.<việc đã xảy ra>.<phiên bản>` — `petitions.received.v1`
+- Sự kiện: `<miền số nhiều>.<việc đã xảy ra, tiếng Anh>.<phiên bản>` — `petitions.received.v1`
 - Tên ở **thì quá khứ**: sự kiện mô tả việc **đã xảy ra**, không phải lệnh
 - **Ngoại lệ có chủ đích:** khi thuật ngữ hành chính không có bản dịch đúng, giữ nguyên khái
   niệm và chú thích. `PhanAnh` / `KhieuNai` / `ToCao` là **ba thứ khác nhau về pháp lý**;
   gộp cả ba thành `complaint` là làm mất phân biệt đó. → `kb/00-foundation/ubiquitous-language.md`
+
+Ranh giới ngôn ngữ đầy đủ — vì sao đường dẫn tiếng Anh nhưng **giá trị enum giữ tiếng Việt**,
+và vì sao tên sự kiện là dạng trên: `kb/10-decisions/0011-contract-surface-language.md`.
 
 ## Tám service
 
@@ -78,6 +82,6 @@ Cắt theo **bộ phận chịu trách nhiệm trong một UBND xã** — xem l�
 **Hai thứ cố ý KHÔNG phải service:** nhật ký thao tác (`pkg/audit`) và lưu trữ tệp
 (`pkg/storage`). Lý do ở ADR 0001.
 
-→ Thuật ngữ nghiệp vụ: `kb/00-foundation/ubiquitous-language.md`
+→ Thuật ngữ nghiệp vụ và ánh xạ tên tài nguyên URL: `kb/00-foundation/ubiquitous-language.md`
 → Ai sở hữu thực thể nào: `kb/30-indexes/data-ownership.json` (GENERATED)
 → Luật 2: `.claude/rules/critical/2-service-boundary.md`

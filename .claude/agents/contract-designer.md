@@ -43,7 +43,7 @@ moment it appears the system has stopped being microservices.
 | 1 | `.proto` is the source of truth. Generated files are never hand-edited |
 | 2 | Field numbers are never reused; removed fields become `reserved` |
 | 3 | New fields are always optional with a safe default |
-| 4 | Events carry the version in the name (`petition.received.v1`) |
+| 4 | Events carry the version in the name (`petitions.received.v1`) |
 | 5 | Changing an event with live consumers means publishing `.v2` alongside, never editing in place |
 | 6 | `tenant_id` travels in metadata, never in the message body — the body is caller-declared data |
 | 7 | Every multi-step flow records its consistency level **and the `why`** |

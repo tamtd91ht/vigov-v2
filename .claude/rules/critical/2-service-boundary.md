@@ -11,7 +11,7 @@ features working, it is just that nothing can be changed any more.
 | 1 | Every entity has **exactly one owning service**, declared in `kb/30-indexes/data-ownership.json` |
 | 2 | A service **never** opens a connection to another service's database |
 | 3 | Reading another service's data: **gRPC** (sync) or **events** (async). There is no third path |
-| 4 | Events carry the **version in the name** (`petition.received.v1`); two versions run side by side during a migration |
+| 4 | Events carry the **version in the name** (`petitions.received.v1`); two versions run side by side during a migration |
 | 5 | Consumers are **idempotent** — queues deliver at least once |
 | 6 | Every business flow declares its **consistency level** and **compensation** in `kb/30-indexes/transaction-boundaries.json` |
 | 7 | `.proto` is the **source of truth** for contracts. Code is generated from it, never written by hand |

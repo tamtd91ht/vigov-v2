@@ -17,7 +17,7 @@ documentation is documentation nobody writes**.
 | 2 | `buf lint` and `buf breaking` run inside `make check` |
 | 3 | Field numbers are **never reused**; removed fields become `reserved` |
 | 4 | New fields are always **optional**, with a safe default |
-| 5 | Events carry the version **in the name**: `petition.received.v1` |
+| 5 | Events carry the version **in the name**: `petitions.received.v1` |
 | 6 | Two event versions **run side by side** during a migration; removing the old one is separate, later work |
 | 7 | Every RPC carries `tenant_id` in metadata, never in the message body |
 
