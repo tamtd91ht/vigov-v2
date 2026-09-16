@@ -17,7 +17,7 @@ service PlatformService {
   rpc ResolveHost(ResolveHostRequest) returns (ResolveHostResponse);
 
   // GetTenant returns metadata only: name, status, quota. Never business data.
-  rpc GetTenant(GetTenantRequest) returns (Tenant);
+  rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
 }
 
 message Tenant {
@@ -33,3 +33,6 @@ message Tenant {
 message ResolveHostRequest { string host = 1; }
 message ResolveHostResponse { Tenant tenant = 1; }
 message GetTenantRequest { string id = 1; }
+// Wrapped, not a bare Tenant: adding a field later must not change the RPC signature.
+// Still metadata only — see the service comment and ADR 0003.
+message GetTenantResponse { Tenant tenant = 1; }

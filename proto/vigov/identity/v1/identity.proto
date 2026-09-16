@@ -10,7 +10,7 @@ package vigov.identity.v1;
 // See kb/10-decisions/0002-citizen-identity-platform-level.md.
 
 service IdentityService {
-  rpc GetStaff(GetStaffRequest) returns (Staff);
+  rpc GetStaff(GetStaffRequest) returns (GetStaffResponse);
   rpc ListCitizenCommunes(ListCitizenCommunesRequest) returns (ListCitizenCommunesResponse);
 }
 
@@ -36,12 +36,14 @@ message CitizenCommune {
   Capacity capacity = 3;
   enum Capacity {
     CAPACITY_UNSPECIFIED = 0;
-    PERMANENT_RESIDENT = 1;   // thường trú
-    TEMPORARY_RESIDENT = 2;   // tạm trú
-    TRANSIENT = 3;            // vãng lai — reporting an issue seen while passing through
+    CAPACITY_PERMANENT_RESIDENT = 1;   // thường trú
+    CAPACITY_TEMPORARY_RESIDENT = 2;   // tạm trú
+    CAPACITY_TRANSIENT = 3;            // vãng lai — reporting an issue seen while passing through
   }
 }
 
 message GetStaffRequest { string id = 1; }
+// Wrapped, not a bare Staff: adding a field later must not change the RPC signature.
+message GetStaffResponse { Staff staff = 1; }
 message ListCitizenCommunesRequest { string citizen_id = 1; }
 message ListCitizenCommunesResponse { repeated CitizenCommune items = 1; }

@@ -70,11 +70,15 @@ nguồn gốc không xác định. Người đang đứng tại trụ sở xã k
 | Thao tác | Căn cứ |
 |---|---|
 | **Đọc** bản ghi của mình | Danh tính từ phiên **và** quan hệ đã có |
-| **Gửi mới** | Mọi xã **đang hoạt động** đều hợp lệ; hành vi gửi tạo quan hệ `TRANSIENT` |
+| **Gửi mới** | Mọi xã **đang hoạt động** đều hợp lệ; hành vi gửi tạo quan hệ `CAPACITY_TRANSIENT` |
 | **Đổi xã** | Hành động tường minh, phát hành lại phiên, **ghi vết** |
 
 Gửi phản ánh tới xã mình không có quan hệ là **hợp lệ** — người dân báo ổ gà nhìn thấy khi đi
-ngang. Đó chính là lý do `TRANSIENT` tồn tại trong ADR 0002.
+ngang. Đó chính là lý do `CAPACITY_TRANSIENT` tồn tại trong ADR 0002.
+
+*Tên hằng đổi ngày 2026-09-16 khi `buf lint` yêu cầu tiền tố enum: giá trị enum trong protobuf
+dùng chung phạm vi với enum cha, nên `TRANSIENT` trần sẽ đụng bất kỳ enum nào khác trong cùng
+package. Quyết định không đổi, chỉ tên hằng đổi.*
 
 ## Yêu cầu phát sinh cho service `platform`
 

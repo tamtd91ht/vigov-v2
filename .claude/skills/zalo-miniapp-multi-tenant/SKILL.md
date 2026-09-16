@@ -40,11 +40,11 @@ client — so the parameter drives the UI, and the server decides what it means:
 | Operation | How the commune is authorised |
 |---|---|
 | **Read** own records | Citizen identity from session **and** an existing relationship |
-| **Submit** something new | Any **active** commune is allowed; the submission itself creates a `TRANSIENT` relationship |
+| **Submit** something new | Any **active** commune is allowed; the submission itself creates a `CAPACITY_TRANSIENT` relationship |
 | **Switch** commune | Explicit action, re-issues the session, **audited** |
 
 Submitting to a commune the citizen has no prior link to is legitimate — someone reports a
-pothole they saw while passing through. That is exactly what the `TRANSIENT` capacity in
+pothole they saw while passing through. That is exactly what the `CAPACITY_TRANSIENT` capacity in
 ADR 0002 is for.
 
 ---
