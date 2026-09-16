@@ -45,15 +45,22 @@ apply it.
 |---|---|---|
 | Path segment | **English** | `/api/v1/citizen-letters` |
 | Query parameter name | **English** | `?type=`, `?status=`, `?cursor=` |
-| **Enum value** | **Vietnamese, no diacritics** | `?type=khieu-nai`, `?status=dang-xu-ly` |
+| **Business enum value** | **Vietnamese, no diacritics** | `?type=khieu-nai`, `?status=dang-xu-ly` |
 | Permission key | English, singular group | `petition.read` — `services/identity/migrations/0001_init.sql` |
 | JSON field name | English | `lookup_code`, `created_at` |
-| Any string a person reads | **Vietnamese with diacritics** | `"Không có nhiệm vụ"` |
+| Error `code` | English, snake_case | `missing_idempotency_key` — matches `httpx.Error` |
+| Any string a person reads, incl. error `message` | **Vietnamese with diacritics** | `"Không có nhiệm vụ"` |
 
 **Row 3 is the one that gets lost.** Translating a path is a naming choice. Translating a
 *value* is a business claim: it asserts that the Vietnamese concept and the English word mean
 the same thing. For `kien-nghi` / `phan-anh` / `khieu-nai` / `to-cao` / `de-nghi` they do not,
 and the difference decides which statute applies and how long the authority has to answer.
+
+**It applies to BUSINESS concepts only.** A technical error code carries no administrative
+meaning, so it follows the machine-readable rule and stays English. `pkg/httpx/edge.go`
+declares one error shape for the whole system and fills `Code: "internal"`; a second
+convention inside that same shape is the drift rule 9 exists to stop. The split to hold onto:
+**`code` is an identifier, `message` is a sentence someone reads.**
 
 → `.claude/skills/administrative-language/SKILL.md` before naming any business concept.
 
@@ -143,7 +150,8 @@ mux.Handle("DELETE /api/v1/sessions/{sid}",
 | `idem.Required(idem.DongKhiHong)` | **503** | Legal consequence: money, document numbers, issuance, closure, privilege changes |
 | `idem.KhongCan("<reason>")` | n/a | Naturally idempotent. **Reason mandatory** — same discipline as `authz.Public(reason)` |
 
-`authz` wraps **outside** `idem`: an unauthorised request must not consume an idempotency key.
+`authz` wraps **outside** `idem`, for two reasons: an unauthorised request must not consume an
+idempotency key, and the key needs the principal already in the context.
 
 ### One Redis key, holding a small value
 
@@ -152,7 +160,8 @@ ADR 0010 allows Redis for cache and rate limiting and **forbids it as durable st
 the PostgreSQL row, the key is a 24-hour guard.
 
 ```
-key   t:<tenant_id>:idem:<sha256(method + path + Idempotency-Key)>
+key   t:<tenant_id>:idem:<sha256(actor + method + path + Idempotency-Key)>
+        actor = "<kind>:<id>" from the session, or "anon" when there is none
 value "1"                       in flight          TTL 60s
       "2:<status>:<code>"       done               TTL 24h
 ```
@@ -169,6 +178,7 @@ Three details, each of which has a specific failure behind it:
 | # | Detail | What breaks without it |
 |---|---|---|
 | 1 | **`t:<tenant_id>` prefix** (rule 1, invariant 7) | Two communes whose clients generate the same key collide, and commune B is served commune A's response. A data breach between two authorities, through a cache key |
+| 1b | **The actor in the hash** | The prefix stops nothing *inside* one commune. The key is client-generated, so two staff members can present the same one — and the second is handed a business code for work they did not do, while their own record was never created. Take `kind` as well as `id`: staff ids and citizen ids come from different tables |
 | 2 | **Short TTL while in flight, long TTL after success** | A handler that dies mid-request leaves `"1"` for 24 hours: every retry is refused although the petition was never created |
 | 3 | **Store `status:code` only, never the response body** | The body holds names, phone numbers, petition text. Putting it in Redis builds a personal-data store outside PostgreSQL — no audit trail, no soft delete, rule 3 |
 

@@ -33,9 +33,34 @@ type Config struct {
 	// in this struct is the first symptom of a distributed monolith.
 	DatabaseDSN string
 
+	// RedisDSN is the cache used for duplicate-request protection and rate limiting.
+	//
+	// It is a PLATFORM-WIDE constant, not a per-commune value: one Redis serves every commune
+	// on this deployment, and the keys carry the commune in their prefix (rule 1, invariant 7).
+	//
+	// Empty is allowed, and only means local development with no cache: every route then
+	// behaves per the CheDoHong it declared — idem.MoKhiHong passes, idem.DongKhiHong answers
+	// 503. A service must not fail to start because a cache is absent.
+	RedisDSN string
+
 	// TenantCacheTTL bounds how long a deactivated commune keeps being served, and how long a
 	// reassigned domain keeps resolving to the old commune (ADR 0004, decision 5).
 	TenantCacheTTL time.Duration
+
+	// SessionSigningKeys signs and verifies the session cookie. FIRST ENTRY SIGNS, EVERY ENTRY
+	// VERIFIES — see pkg/token.
+	//
+	// It is a LIST because rule 8, invariant 6 requires a rotation procedure, and with a single
+	// key rotating it signs out every member of staff of every commune on this deployment at
+	// once. A rotation nobody can afford to perform is a rotation that never happens.
+	//
+	// It is a PLATFORM-WIDE constant, not a per-commune value: the commune is a claim INSIDE the
+	// token (rule 1, invariant 8), not a property of the key. Per-commune keys would mean the
+	// key material has to be resolved before the token can be read, which is the wrong order.
+	//
+	// Empty is refused outside dev by Load: a service with no signing key cannot tell a real
+	// token from a forged one, and silence is the one response that is not allowed.
+	SessionSigningKeys []Khoa
 
 	// Env is "dev" | "staging" | "prod". It decides nothing about business behaviour; it is
 	// used for log verbosity and for refusing dangerous flags in production.
@@ -51,6 +76,26 @@ const (
 	EnvStaging = "staging"
 	EnvProd    = "prod"
 )
+
+// Khoa is secret key material that refuses to print itself.
+//
+// WHY A TYPE AND NOT A PLAIN []byte: Redacted() below is the deliberate place to strip
+// credentials before a config is logged, but it only protects the call sites that remember to
+// use it. A key reaches centralised logging, backups and third-party monitoring through one
+// forgotten `slog.Info("cfg", "cfg", cfg)` — and a leaked signing key cannot be recalled from
+// any of them, while affecting EVERY commune at once (rule 8). Refusing to render is the only
+// protection that does not depend on anybody remembering.
+type Khoa []byte
+
+func (k Khoa) String() string                { return "***" }
+func (k Khoa) GoString() string              { return "***" }
+func (k Khoa) MarshalJSON() ([]byte, error)  { return []byte(`"***"`), nil }
+func (k Khoa) MarshalText() ([]byte, error)  { return []byte("***"), nil }
+func (k Khoa) LogValue() slog.Value          { return slog.StringValue("***") }
+
+// Bytes hands the raw material to pkg/token. The one explicit way out, so every use is
+// greppable.
+func (k Khoa) Bytes() []byte { return []byte(k) }
 
 var (
 	ErrThieuBienMoiTruong = errors.New("config: thiếu biến môi trường bắt buộc")
@@ -76,6 +121,15 @@ func Load(serviceName string) (Config, error) {
 		thieu = append(thieu, "ENV")
 	}
 
+	// A missing signing key is fatal everywhere except dev, where it only means this process
+	// cannot issue or read a session. Outside dev the alternative would be a service that
+	// accepts forged tokens, or one that invents a key per replica and signs everybody out on
+	// every restart — both fail silently, which is the one thing not allowed here.
+	khoa := khoaKy(os.Getenv("SESSION_SIGNING_KEYS"))
+	if len(khoa) == 0 && env != EnvDev && env != "" {
+		thieu = append(thieu, "SESSION_SIGNING_KEYS")
+	}
+
 	if len(thieu) > 0 {
 		return Config{}, fmt.Errorf("%w: %s (service %s)",
 			ErrThieuBienMoiTruong, strings.Join(thieu, ", "), serviceName)
@@ -90,7 +144,9 @@ func Load(serviceName string) (Config, error) {
 	cfg := Config{
 		ListenAddr:          firstNonEmpty(os.Getenv("LISTEN_ADDR"), ":8080"),
 		DatabaseDSN:         dsn,
+		RedisDSN:            strings.TrimSpace(os.Getenv("REDIS_DSN")),
 		TenantCacheTTL:      duration(os.Getenv("TENANT_CACHE_TTL"), 30*time.Second),
+		SessionSigningKeys:  khoa,
 		Env:                 env,
 		DangerousAuthBypass: boolean(os.Getenv("DANGEROUS_AUTH_BYPASS")),
 	}
@@ -115,16 +171,26 @@ func (c Config) CanhBao() []string {
 	if c.Env != EnvProd && c.TenantCacheTTL > time.Minute {
 		ra = append(ra, "TENANT_CACHE_TTL dài hơn 1 phút — thay đổi tên miền sẽ chậm có hiệu lực")
 	}
+	// Without Redis there is no duplicate protection: a double-submitted POST creates a second
+	// petition with a second lookup code already shown to the citizen, and rule 7 forbids
+	// deleting it. Tolerable while developing, never silently in a real environment.
+	if c.Env != EnvDev && c.RedisDSN == "" {
+		ra = append(ra, "REDIS_DSN trống — chống trùng request không hoạt động, "+
+			"route khai idem.DongKhiHong sẽ trả 503")
+	}
 	return ra
 }
 
-// Redacted returns the config with the DSN's credentials removed, so it can be logged.
+// Redacted returns the config with every DSN's credentials removed, so it can be logged.
 //
-// The DSN carries a password. Logging it sends one credential into centralised logging,
+// A DSN carries a password. Logging it sends one credential into centralised logging,
 // backups and third-party monitoring at once, and it cannot be recalled from any of them
-// (rule 8).
+// (rule 8). Every DSN field added to Config must be redacted here as well.
 func (c Config) Redacted() Config {
 	c.DatabaseDSN = redactDSN(c.DatabaseDSN)
+	if c.RedisDSN != "" {
+		c.RedisDSN = redactDSN(c.RedisDSN)
+	}
 	return c
 }
 

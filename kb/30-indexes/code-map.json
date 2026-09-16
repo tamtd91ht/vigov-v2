@@ -88,7 +88,7 @@
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "pkg/config/config.go:110"
+      "at": "pkg/config/config.go:121"
     },
     "config.Config": {
       "kind": "type",
@@ -96,11 +96,11 @@
     },
     "config.Load": {
       "kind": "func",
-      "at": "pkg/config/config.go:66"
+      "at": "pkg/config/config.go:76"
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "pkg/config/config.go:126"
+      "at": "pkg/config/config.go:144"
     },
     "domain.CanBo": {
       "kind": "type",
@@ -165,6 +165,98 @@
     "httpx.WriteError": {
       "kind": "func",
       "at": "pkg/httpx/edge.go:69"
+    },
+    "idem.CheDoHong": {
+      "kind": "type",
+      "at": "pkg/idem/idem.go:97"
+    },
+    "idem.ChuThe": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:437"
+    },
+    "idem.Claim": {
+      "kind": "func",
+      "at": "pkg/idem/redis.go:43"
+    },
+    "idem.Close": {
+      "kind": "func",
+      "at": "pkg/idem/redis.go:77"
+    },
+    "idem.Complete": {
+      "kind": "func",
+      "at": "pkg/idem/redis.go:62"
+    },
+    "idem.Get": {
+      "kind": "func",
+      "at": "pkg/idem/redis.go:51"
+    },
+    "idem.Into": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:153"
+    },
+    "idem.Key": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:425"
+    },
+    "idem.KhongCan": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:215"
+    },
+    "idem.Middleware": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:141"
+    },
+    "idem.NewRedisStore": {
+      "kind": "func",
+      "at": "pkg/idem/redis.go:27"
+    },
+    "idem.NewRedisStoreWith": {
+      "kind": "func",
+      "at": "pkg/idem/redis.go:41"
+    },
+    "idem.PhatLai": {
+      "kind": "type",
+      "at": "pkg/idem/idem.go:368"
+    },
+    "idem.RecordCode": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:182"
+    },
+    "idem.RedisStore": {
+      "kind": "type",
+      "at": "pkg/idem/redis.go:18"
+    },
+    "idem.Release": {
+      "kind": "func",
+      "at": "pkg/idem/redis.go:69"
+    },
+    "idem.Required": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:226"
+    },
+    "idem.Store": {
+      "kind": "type",
+      "at": "pkg/idem/idem.go:81"
+    },
+    "idem.String": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:109"
+    },
+    "idem.TachGiaTri": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:477"
+    },
+    "idem.Unwrap": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:513"
+    },
+    "idem.Write": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:505"
+    },
+    "idem.WriteHeader": {
+      "kind": "func",
+      "at": "pkg/idem/idem.go:498"
     },
     "password.Bam": {
       "kind": "func",

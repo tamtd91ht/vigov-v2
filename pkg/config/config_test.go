@@ -10,6 +10,9 @@ import (
 // dsnGia is a fake DSN. Never a real credential in source (rule 8, forbidden #1).
 const dsnGia = "postgres://vigov:khong-phai-mat-khau-that@localhost:5432/vigov_test"
 
+// redisGia is the same fake credential on the cache DSN.
+const redisGia = "redis://vigov:khong-phai-mat-khau-that@localhost:6379/0"
+
 func datMoiTruong(t *testing.T, cap map[string]string) {
 	t.Helper()
 	for k, v := range cap {
@@ -141,6 +144,57 @@ func TestRedactedKhiKhongCoThongTinDangNhap(t *testing.T) {
 				t.Errorf("rò rỉ: %q", got)
 			}
 		})
+	}
+}
+
+func TestRedisDSNTuyChon(t *testing.T) {
+	// Empty is a valid deployment: local development with no cache. A service must not fail to
+	// start because a cache is absent — the route's own idem declaration decides what happens.
+	datMoiTruong(t, map[string]string{"DATABASE_DSN": dsnGia, "ENV": EnvDev})
+	t.Setenv("REDIS_DSN", "")
+
+	cfg, err := Load("petitions")
+	if err != nil {
+		t.Fatalf("REDIS_DSN trống phải khởi động được: %v", err)
+	}
+	if cfg.RedisDSN != "" {
+		t.Errorf("RedisDSN = %q, muốn rỗng", cfg.RedisDSN)
+	}
+	if len(cfg.CanhBao()) != 0 {
+		t.Errorf("ở dev, thiếu Redis chưa cần cảnh báo: %v", cfg.CanhBao())
+	}
+
+	// Outside dev it must never be silent: no Redis means no duplicate protection, and a
+	// duplicated petition cannot be deleted afterwards (rule 7).
+	datMoiTruong(t, map[string]string{"DATABASE_DSN": dsnGia, "ENV": EnvStaging})
+	cfg, err = Load("petitions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.CanhBao()) == 0 {
+		t.Error("thiếu REDIS_DSN ngoài dev phải được cảnh báo")
+	}
+}
+
+func TestRedisDSNCungBiCheMatKhau(t *testing.T) {
+	// Every DSN in Config carries a credential. One of them logged is one credential in
+	// centralised logging, backups and third-party monitoring at once (rule 8).
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN": dsnGia,
+		"ENV":          EnvDev,
+		"REDIS_DSN":    redisGia,
+	})
+
+	cfg, err := Load("petitions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	an := cfg.Redacted().RedisDSN
+	if strings.Contains(an, "khong-phai-mat-khau-that") {
+		t.Errorf("mật khẩu Redis lọt ra sau khi che: %q", an)
+	}
+	if !strings.Contains(an, "localhost:6379") {
+		t.Errorf("che quá tay, mất thông tin chẩn đoán: %q", an)
 	}
 }
 
