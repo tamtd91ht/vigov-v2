@@ -23,6 +23,7 @@
           { "type": "command", "command": "python .claude/hooks/service_boundary_guard.py" },
           { "type": "command", "command": "python .claude/hooks/citizen_scope_guard.py" },
           { "type": "command", "command": "python .claude/hooks/citizen_commitment_guard.py" },
+          { "type": "command", "command": "python .claude/hooks/rest_api_guard.py" },
           { "type": "command", "command": "python .claude/hooks/doc_guard.py" }
         ]
       },
@@ -40,6 +41,7 @@
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
           { "type": "command", "command": "python .claude/hooks/rbac_guard.py" },
+          { "type": "command", "command": "python .claude/hooks/rest_api_guard.py" },
           { "type": "command", "command": "python .claude/hooks/audit_guard.py" }
         ]
       }

@@ -22,7 +22,12 @@ import _common as c  # noqa: E402
 
 HOOK = "rbac_guard"
 
-ROUTE = re.compile(r"""\.\s*(Get|Post|Put|Patch|Delete|Head|Options|Handle|Method)\s*\(\s*["'`]""")
+# HandleFunc comes BEFORE Handle: with `Handle` first the engine matches it against
+# "HandleFunc(", then needs `\s*\(` and finds "Func(" instead. It does backtrack into the
+# next alternative, but relying on that is how the case got missed in the first place —
+# mux.HandleFunc("POST /...") registered a real route that this guard never saw.
+ROUTE = re.compile(
+    r"""\.\s*(HandleFunc|Handle|Get|Post|Put|Patch|Delete|Head|Options|Method)\s*\(\s*["'`]""")
 
 AUTH_DECL = re.compile(
     r"(RequirePermission\s*\(|RequireRole\s*\(|Public\s*\(|AnyAuthenticated\s*\(|"

@@ -38,6 +38,15 @@ def b(cmd: str) -> dict:
     return {"tool_name": "Bash", "tool_input": {"command": cmd}}
 
 
+def wpost(path: str, content: str) -> dict:
+    """A Write seen at PostToolUse. rest_api_guard blocks a bad PATH before the write, but
+    only advises on a missing declaration after it — a route assembled over several edits
+    must not be blocked half-written (the lesson rule 5 already took with rbac_guard)."""
+    d = w(path, content)
+    d["hook_event_name"] = "PostToolUse"
+    return d
+
+
 # (hook, case label, expected exit code, payload)
 CASES = [
     # ---- rule 1 · tenant isolation -------------------------------------------
@@ -106,6 +115,56 @@ CASES = [
     ("rbac_guard", "Public() with no reason", BLOCK,
      w("services/donthu/internal/http/router.go",
        'r.With(auth.Public()).Get("/tra-cuu", h.Lookup)')),
+    ("rbac_guard", "HandleFunc route with no permission", BLOCK,
+     w("services/petitions/internal/http/routes.go",
+       'mux.HandleFunc("POST /api/v1/citizen-reports", h.Create)')),
+    ("rbac_guard", "HandleFunc route with a permission", PASS,
+     w("services/petitions/internal/http/routes.go",
+       'mux.Handle("POST /api/v1/citizen-reports",\n'
+       '\tauthz.RequirePermission(d.Checker, "feedback.create")(http.HandlerFunc(h.Create)))')),
+
+    # ---- REST surface · path language + duplicate requests --------------------
+    ("rest_api_guard", "Vietnamese path segment, transliterated", BLOCK,
+     w("services/identity/internal/http/routes.go",
+       'mux.Handle("POST /dang-nhap", authz.Public("man hinh dang nhap")(h.Login))')),
+    ("rest_api_guard", "Vietnamese path segment with diacritics", BLOCK,
+     w("services/petitions/internal/http/routes.go",
+       'mux.Handle("GET /api/v1/phản-ánh/{code}", authz.CitizenOnly()(h.Get))')),
+    ("rest_api_guard", "Vietnamese segment under a versioned prefix", BLOCK,
+     w("services/petitions/internal/http/routes.go",
+       'mux.Handle("GET /api/v1/phan-anh/{ma}", authz.CitizenOnly()(h.Get))')),
+    ("rest_api_guard", "English path, versioned, with idempotency", PASS,
+     w("services/petitions/internal/http/routes.go",
+       'mux.Handle("POST /api/v1/citizen-reports",\n'
+       '\tauthz.RequirePermission(d.Checker, "feedback.create")(\n'
+       '\t\tidem.Required(idem.MoKhiHong)(http.HandlerFunc(h.Create))))')),
+    ("rest_api_guard", "healthz stays outside /api/v1", PASS,
+     wpost("services/platform/cmd/server/main.go",
+           'mux.HandleFunc("GET /healthz", ok)')),
+    ("rest_api_guard", "state-changing route, no duplicate declaration", BLOCK,
+     wpost("services/petitions/internal/http/routes.go",
+           'mux.Handle("POST /api/v1/citizen-reports",\n'
+           '\tauthz.RequirePermission(d.Checker, "feedback.create")(http.HandlerFunc(h.Create)))')),
+    ("rest_api_guard", "idem.KhongCan() states no reason", BLOCK,
+     wpost("services/identity/internal/http/routes.go",
+           'mux.Handle("DELETE /api/v1/sessions/{sid}",\n'
+           '\tauthz.AnyAuthenticated("ends its own session")(\n'
+           '\t\tidem.KhongCan()(http.HandlerFunc(h.Revoke))))')),
+    ("rest_api_guard", "verb used as a path segment", BLOCK,
+     wpost("services/petitions/internal/http/routes.go",
+           'mux.Handle("POST /api/v1/citizen-reports/{code}/close",\n'
+           '\tauthz.RequirePermission(d.Checker, "feedback.resolve")(\n'
+           '\t\tidem.Required(idem.DongKhiHong)(http.HandlerFunc(h.Close))))')),
+    ("rest_api_guard", "a route inside a comment is not a route", PASS,
+     wpost("services/comms/internal/http/routes.go",
+           '// Example of the shape every real route must take:\n'
+           '//\tmux.Handle("POST /dang-nhap", authz.Public("x")(h.Login))\n'
+           'func Register(mux *http.ServeMux, d Deps) { _ = d }')),
+    ("rest_api_guard", "nominalised action with a failure mode", PASS,
+     wpost("services/petitions/internal/http/routes.go",
+           'mux.Handle("POST /api/v1/citizen-reports/{code}/closure",\n'
+           '\tauthz.RequirePermission(d.Checker, "feedback.resolve")(\n'
+           '\t\tidem.Required(idem.DongKhiHong)(http.HandlerFunc(h.Close))))')),
 
     # ---- rule 6 · audit trail -------------------------------------------------
     ("audit_guard", "write with no audit entry", BLOCK,

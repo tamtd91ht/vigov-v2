@@ -31,7 +31,7 @@ That test already removed two things from the rule tier:
 | `administrative-language` | Important, but a machine cannot judge "feedback ≠ complaint ≠ denunciation" in context. Keeping it in the rule tier only spends always-loaded budget with no deterrent |
 | `no-hardcoding` | Under multi-tenancy it is no longer an independent rule — it is a **consequence** of rule 1. Two copies of one rule are two copies that will drift |
 
-## Four cross-cutting hooks
+## Five cross-cutting hooks
 
 | Hook | Event | Job |
 |---|---|---|
@@ -39,6 +39,24 @@ That test already removed two things from the rule tier:
 | `bash_content_guard` | PreToolUse Bash | **Closes the shell-write detour** — see below |
 | `stop_verify_guard` | **Stop** | Code changed but never verified → block the session from ending |
 | `drift_guard` | SessionStart | Detect the code **silently deciding a customer's open question** |
+| `rest_api_guard` | PreToolUse **and** PostToolUse | Vietnamese in a URL path (BLOCK) · missing duplicate-request declaration, verb as a path segment (advisory) |
+
+### A hook may enforce a SKILL, not only a rule
+
+`rest_api_guard` is the first of these. Every rule must name a hook; the reverse was never
+required, and `check_brain` invariant 1 only asks that each hook be **registered** and each
+rule point at one that exists.
+
+The split matters. "Use RESTful conventions" is a **solution**, and the `no-hardcoding`
+post-mortem below is what happens when a solution is enforced as a rule. But *"a Vietnamese
+word in a path"* is one deterministic, machine-decidable fact, and a path is the one name in
+this system that cannot be renamed after a commune goes live. So the guidance lives in
+`skills/rest-api-design`, and only the decidable part of it is enforced.
+
+It registers on **two events on purpose**: a path is decided inside one string literal, so
+blocking it before the write means a wrong path never reaches disk. A duplicate-request
+declaration is assembled over several edits, so it only advises afterwards — the same lesson
+rule 5 took with `rbac_guard`.
 
 ### `bash_content_guard` — the hole v1 left open
 
@@ -101,7 +119,7 @@ files on disk still describe the same set.
 
 | Command | What it checks |
 |---|---|
-| `make hooks` / `/check-hooks` | **53 cases**: every hook gets a must-block case and a must-pass case |
+| `make hooks` / `/check-hooks` | **67 cases**: every hook gets a must-block case and a must-pass case |
 | `/check-brain` | 7 structural invariants (below) |
 | `/knowledge-health` | Dead links · orphans · expired · budget |
 | `/review-isolation` | All three isolation dimensions across the source |
@@ -114,7 +132,7 @@ protection is off in silence: everything still looks normal, it just stops block
 
 | # | Invariant | Threshold |
 |---|---|---|
-| 1 | Every rule names an enforcing hook; every hook is registered | 10 rules · 14 hooks |
+| 1 | Every rule names an enforcing hook; every hook is registered | 10 rules · 15 hooks |
 | 2 | Every hook has at least one block case and one pass case | 0 missing |
 | 3 | Every path and `/<command>` referenced under `.claude/**` exists | 0 dead |
 | 4 | Every file in `skills/`, `commands/`, `agents/` has valid frontmatter | 0 missing |
