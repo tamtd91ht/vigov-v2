@@ -8,7 +8,7 @@ package http
 //
 // Four declarations are available, and there is no fifth:
 //
-//	authz.RequirePermission(checker, "documents.read")   // the normal case
+//	authz.RequirePermission(checker, "document.read")   // the normal case
 //	authz.CitizenOnly()                                     // citizen paths, isolated by identity
 //	authz.AnyAuthenticated("<why any account needs this>")  // reason mandatory
 //	authz.Public("<why this is public>")                    // reason mandatory
@@ -34,6 +34,11 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// Example of the shape every real route must take:
 	//
-	//	mux.Handle("GET /documents", authz.RequirePermission(d.Checker, "documents.read")(
+	//	mux.Handle("GET /api/v1/incoming-documents", authz.RequirePermission(d.Checker, "document.read")(
 	//		http.HandlerFunc(h.list)))
+	//
+	// Paths are English, plural, versioned. A state-changing route declares duplicate
+	// protection in the SAME statement, and a non-CRUD action is a nominalised
+	// sub-resource (.../closure), never a verb.
+	// -> .claude/skills/rest-api-design/SKILL.md
 }

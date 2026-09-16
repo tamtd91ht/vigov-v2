@@ -8,7 +8,7 @@ package http
 //
 // Four declarations are available, and there is no fifth:
 //
-//	authz.RequirePermission(checker, "platform.read")   // the normal case
+//	authz.RequirePermission(checker, "<not agreed yet>")   // the normal case
 //	authz.CitizenOnly()                                     // citizen paths, isolated by identity
 //	authz.AnyAuthenticated("<why any account needs this>")  // reason mandatory
 //	authz.Public("<why this is public>")                    // reason mandatory
@@ -34,6 +34,16 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// Example of the shape every real route must take:
 	//
-	//	mux.Handle("GET /platform", authz.RequirePermission(d.Checker, "platform.read")(
+	// The platform console is the VENDOR's, not a commune's. Its permissions do not live
+	// in a commune's `quyen` table, and ADR 0003 limits this service to metadata — there
+	// is deliberately no path to a commune's business data. Do not reach for a commune
+	// permission key here; the vendor-side model has to be agreed first.
+	//
+	//	mux.Handle("GET /api/v1/communes", authz.RequirePermission(d.Checker, "<not agreed yet>")(
 	//		http.HandlerFunc(h.list)))
+	//
+	// Paths are English, plural, versioned. A state-changing route declares duplicate
+	// protection in the SAME statement, and a non-CRUD action is a nominalised
+	// sub-resource (.../closure), never a verb.
+	// -> .claude/skills/rest-api-design/SKILL.md
 }

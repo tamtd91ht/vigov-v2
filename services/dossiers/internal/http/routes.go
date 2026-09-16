@@ -8,7 +8,7 @@ package http
 //
 // Four declarations are available, and there is no fifth:
 //
-//	authz.RequirePermission(checker, "dossiers.read")   // the normal case
+//	authz.RequirePermission(checker, "<not agreed yet>")   // the normal case
 //	authz.CitizenOnly()                                     // citizen paths, isolated by identity
 //	authz.AnyAuthenticated("<why any account needs this>")  // reason mandatory
 //	authz.Public("<why this is public>")                    // reason mandatory
@@ -34,6 +34,16 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// Example of the shape every real route must take:
 	//
-	//	mux.Handle("GET /dossiers", authz.RequirePermission(d.Checker, "dossiers.read")(
+	// NO permission key exists for the one-stop-shop subsystem yet. `quyen` is seeded
+	// with 33 keys and the spec calls for 43; none of the 33 covers a dossier. Agree the
+	// key with the customer BEFORE the first route — inventing one here declares a
+	// permission that nothing grants, which denies every caller (rule 5, invariant 2).
+	//
+	//	mux.Handle("GET /api/v1/dossiers", authz.RequirePermission(d.Checker, "<not agreed yet>")(
 	//		http.HandlerFunc(h.list)))
+	//
+	// Paths are English, plural, versioned. A state-changing route declares duplicate
+	// protection in the SAME statement, and a non-CRUD action is a nominalised
+	// sub-resource (.../closure), never a verb.
+	// -> .claude/skills/rest-api-design/SKILL.md
 }
