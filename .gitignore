@@ -31,3 +31,6 @@ web/build/
 
 # Cấu hình MCP là của từng máy, không phải của dự án
 .mcp.json
+
+# Bản nén trùng nội dung với docs/ui-ux/*.md
+docs/ui-ux/*.zip

@@ -57,7 +57,8 @@ Vòng đời đầy đủ ở `skills/petition-lifecycle`; bảng này chỉ ch�
 | Phân công | `phan_cong` | Giao cán bộ/đơn vị xử lý |
 | Nghiệm thu | `nghiem_thu` | Xác nhận đã xử lý trên thực địa, thường kèm ảnh |
 | Đóng phiếu | `dong_phieu` | Kết thúc — **bắt buộc có kết quả dân đọc được** |
-| Hạn xử lý | `sla_deadline` | Lưu **một lần** lúc tiếp nhận, tính bằng **ngày làm việc** |
+| Hạn xử lý | `sla_deadline` | Lưu **một lần** lúc tiếp nhận, tính bằng **giờ làm việc** |
+| Giờ làm việc | `gio_lam_viec` | Theo `lich_lam_viec` + `ngay_nghi_le` của xã — ADR 0007 |
 | Quá hạn | — | **Suy ra**, không có cột. Xem luật 10 |
 
 ## Vai trò cán bộ
@@ -74,10 +75,14 @@ Vòng đời đầy đủ ở `skills/petition-lifecycle`; bảng này chỉ ch�
 
 | Loại | Quy ước | Ví dụ |
 |---|---|---|
-| Bảng, cột | `snake_case` không dấu, theo nghiệp vụ | `don_thu`, `ngay_tiep_nhan` |
+| Bảng, cột | `snake_case` **tiếng Việt** không dấu, theo nghiệp vụ | `don_thu`, `ngay_tiep_nhan` |
 | Kiểu Go | `PascalCase`, tiếng Anh nếu là khái niệm kỹ thuật | `DonThu`, `TenantID` |
-| Sự kiện | `<miền>.<việc đã xảy ra>.<phiên bản>` | `donthu.da_tiep_nhan.v1` |
-| Service | tiếng Việt không dấu, theo nghiệp vụ | `donthu`, `vanban` |
+| Sự kiện | `<miền>.<việc đã xảy ra>.<phiên bản>` | `petitions.da_tiep_nhan.v1` |
+| Service, proto package, import path | **tiếng Anh** | `petitions`, `vigov.identity.v1` |
+
+**Tên service dùng tiếng Anh, tên bảng dùng tiếng Việt** — chốt 2026-09-16, ADR 0001.
+Hai tầng khác nhau: service là khái niệm kỹ thuật và là đường dẫn import, còn bảng và cột
+mang khái niệm nghiệp vụ hành chính.
 
 **Không trộn tiếng Anh vào khái niệm nghiệp vụ.** `feedback` không phải `phan_anh`:
 "feedback" gợi ý góp ý sản phẩm, "phản ánh" là một loại đơn có quy trình hành chính.

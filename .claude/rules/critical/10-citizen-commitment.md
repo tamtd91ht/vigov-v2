@@ -16,7 +16,7 @@ produces a figure reported to leadership that is simply false — and the citize
 | 1 | Every petition gets a **lookup code** returned to the citizen the moment it is received |
 | 2 | `sla_deadline` is computed **once, at intake**, and stored. Never recomputed on read |
 | 3 | **Overdue is DERIVED** from `sla_deadline` vs now — never a hand-set column or flag |
-| 4 | Deadlines count **working days**, from **per-commune** configuration (rule 1, invariant 10) |
+| 4 | Deadlines count **working hours**, from **per-commune** configuration (rule 1, invariant 10) — see ADR 0007 |
 | 5 | Every status transition **notifies the citizen** and leaves an audit entry (rule 6) |
 | 6 | Closing a petition records a **result the citizen can read**. Never close silently |
 | 7 | The citizen sees their **own** petition's progress only — staff notes and routing history stay internal (rule 4) |
@@ -40,7 +40,7 @@ and a channel nobody trusts stops receiving the reports the commune actually nee
 | # | Forbidden | Why |
 |---|---|---|
 | 1 | An `is_overdue` / `overdue` column or struct field that is written to | Duplicates a derivable fact (invariant 3) |
-| 2 | Counting a deadline in calendar days (`AddDate(0, 0, n)`, `24 * time.Hour * n`) | Weekends and public holidays are not working days |
+| 2 | Counting a deadline in wall-clock time (`AddDate(0, 0, n)`, `n * time.Hour`) | Nights, weekends and public holidays are not working hours. Use the commune's `lich_lam_viec` + `ngay_nghi_le` (ADR 0007) |
 | 3 | A commune's SLA figures hardcoded in source | One codebase serves many communes (rule 1) |
 | 4 | Changing status without notifying the citizen | The commitment is the notification |
 | 5 | A lookup code that is sequential or short enough to enumerate | Rule 4, invariant 4 |

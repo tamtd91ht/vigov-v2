@@ -8,11 +8,12 @@ expires: null
 owns_facts:
   - "danh sách 8 service và bộ phận hành chính tương ứng"
   - "vì sao audit và storage là thư viện chứ không phải service"
+  - "ngôn ngữ đặt tên service"
 ---
 
 # 0001. Cắt 8 service theo bộ phận hành chính
 
-**Trạng thái:** đã chốt · **Ngày:** 2026-09-15
+**Trạng thái:** đã chốt · **Ngày:** 2026-09-15 · **Sửa bảng tên service:** 2026-09-16
 
 ## Bối cảnh
 
@@ -47,16 +48,37 @@ Tám service, cắt theo bộ phận chịu trách nhiệm trong một UBND xã:
 
 | Service | Bộ phận ngoài đời |
 |---|---|
-| `nentang` | Nền tảng (nhà cung cấp vận hành) |
-| `danhtinh` | Tổ chức – cán bộ |
-| `vanban` | Văn thư |
-| `donthu` | Tiếp dân, xử lý đơn thư |
-| `hoso` | Một cửa |
-| `taichinh` | Tài chính – kế toán |
-| `truyenthong` | Thông tin – truyền thông |
-| `baocao` | Read model — **không sở hữu dữ liệu gốc nào** |
+| `platform` | Nền tảng (nhà cung cấp vận hành) |
+| `identity` | Tổ chức – cán bộ |
+| `documents` | Văn thư |
+| `petitions` | Tiếp dân, xử lý đơn thư |
+| `dossiers` | Một cửa |
+| `finance` | Tài chính – kế toán |
+| `comms` | Thông tin – truyền thông |
+| `reporting` | Read model — **không sở hữu dữ liệu gốc nào** |
 
 **`admin-service` và `contract-service` không tồn tại.**
+
+## Ngôn ngữ đặt tên service — sửa ngày 2026-09-16
+
+Bản ADR đầu tiên ghi tên service bằng tiếng Việt (`nentang`, `danhtinh`, `vanban`, `donthu`,
+`hoso`, `taichinh`, `truyenthong`, `baocao`). Nhưng mã đã dựng theo tên **tiếng Anh**: 8 thư
+mục `services/`, 9 tệp `.proto`, và `go_package_prefix` trong `buf.gen.yaml`.
+
+Ba nguồn cùng mô tả một fact mà kết luận khác nhau là đúng thứ luật 9 cấm. Chốt **tiếng Anh**
+vì đó là thứ mã đang chạy, và đổi mã thì phải sửa 8 thư mục + 9 `.proto` + đường dẫn import
+để đổi lấy đúng một thứ: sự nhất quán với một bảng trong tài liệu.
+
+Ranh giới ngôn ngữ sau khi chốt:
+
+| Loại | Ngôn ngữ | Ví dụ |
+|---|---|---|
+| Tên service, proto package, import path | **Tiếng Anh** | `petitions`, `vigov.identity.v1` |
+| Tên bảng, tên cột | **Tiếng Việt** không dấu | `don_thu`, `ngay_tiep_nhan` |
+| Văn xuôi tài liệu `kb/` | **Tiếng Việt** | tệp này |
+| Chuỗi giao diện | **Tiếng Việt** | `Giao việc mới` |
+
+→ Bảng ánh xạ thuật ngữ: `kb/00-foundation/ubiquitous-language.md`
 
 ## Hai thứ CỐ Ý không phải service
 
@@ -68,7 +90,7 @@ Tám service, cắt theo bộ phận chịu trách nhiệm trong một UBND xã:
 ## Hệ quả
 
 - **Dễ hơn:** một thay đổi nghiệp vụ chạm đúng một service; ranh giới khớp cách cơ quan vận hành
-- **Khó hơn:** `baocao` phải dựng read model từ sự kiện, không được đọc CSDL ai. Tốn hơn lúc đầu, nhưng đây chính là thứ ngăn hệ thống thành monolith phân tán
+- **Khó hơn:** `reporting` phải dựng read model từ sự kiện, không được đọc CSDL ai. Tốn hơn lúc đầu, nhưng đây chính là thứ ngăn hệ thống thành monolith phân tán
 - **Phải trả sau:** nếu một bộ phận tách đôi ngoài đời (ví dụ tiếp dân tách khỏi xử lý đơn thư), service tương ứng cũng phải tách — và lúc đó là việc thật, không phải refactor
 
 → Nguyên tắc cắt: `kb/00-foundation/domain-boundaries.md`
