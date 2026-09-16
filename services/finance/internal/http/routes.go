@@ -8,7 +8,7 @@ package http
 //
 // Four declarations are available, and there is no fifth:
 //
-//	authz.RequirePermission(checker, "finance", authz.View)   // the normal case
+//	authz.RequirePermission(checker, "finance.read")   // the normal case
 //	authz.CitizenOnly()                                     // citizen paths, isolated by identity
 //	authz.AnyAuthenticated("<why any account needs this>")  // reason mandatory
 //	authz.Public("<why this is public>")                    // reason mandatory
@@ -34,6 +34,6 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// Example of the shape every real route must take:
 	//
-	//	mux.Handle("GET /finance", authz.RequirePermission(d.Checker, "finance", authz.View)(
+	//	mux.Handle("GET /finance", authz.RequirePermission(d.Checker, "finance.read")(
 	//		http.HandlerFunc(h.list)))
 }

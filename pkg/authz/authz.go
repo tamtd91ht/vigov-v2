@@ -12,18 +12,35 @@ package authz
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/vihat/vigov/pkg/tenant"
 )
 
-type Action string
+// Perm is a permission key: "<nhóm>.<việc>", for example "task.extend".
+//
+// WHY A FLAT STRING AND NOT (subsystem, action): the administrative permissions this system
+// grants are not a Cartesian product. "task.approve" (duyệt hoàn thành) and "task.extend"
+// (duyệt gia hạn) are both approvals and are deliberately separate rights — one closes a
+// commitment to a citizen, the other moves its deadline. A fixed action set collapses them,
+// and a role holding one would silently hold the other.
+//
+// The keys are the ones the Phân quyền screen shows, so a permission in code, a row in
+// `quyen`, and a tick box a commune administrator sees are all the same string. A translation
+// layer in between is a place for them to drift.
+type Perm string
 
-const (
-	View    Action = "view"
-	Edit    Action = "edit"
-	Approve Action = "approve"
-	Admin   Action = "admin"
-)
+func (p Perm) String() string { return string(p) }
+
+// Nhom returns the part before the dot: "task.extend" -> "task". Used for grouping on the
+// permission matrix, never for deciding access — access is decided by the whole key.
+func Nhom(p Perm) string {
+	s := string(p)
+	if i := strings.IndexByte(s, '.'); i > 0 {
+		return s[:i]
+	}
+	return s
+}
 
 // Principal is whoever is making the request.
 type Principal struct {
@@ -44,13 +61,16 @@ func From(ctx context.Context) (Principal, bool) {
 	return p, ok
 }
 
-// Checker answers whether a principal may perform an action in a subsystem.
+// Checker answers whether a principal holds a permission.
+//
+// The commune is not a parameter: it rides in the context, and an implementation that ignores
+// it grants one commune's roles inside another commune (rule 1, invariant 3).
 type Checker interface {
-	Allows(ctx context.Context, p Principal, subsystem string, a Action) bool
+	Allows(ctx context.Context, p Principal, perm Perm) bool
 }
 
 // RequirePermission guards a route. This is the normal case.
-func RequirePermission(c Checker, subsystem string, a Action) func(http.Handler) http.Handler {
+func RequirePermission(c Checker, perm Perm) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -66,7 +86,7 @@ func RequirePermission(c Checker, subsystem string, a Action) func(http.Handler)
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
-			if !c.Allows(ctx, p, subsystem, a) {
+			if !c.Allows(ctx, p, perm) {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
