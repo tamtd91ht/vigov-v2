@@ -10,6 +10,29 @@ package vigov.platform.v1;
 // and writing one would be caught in review.
 //
 // See kb/10-decisions/0003-platform-admin-metadata-only.md.
+//
+// CONTRACT RULE — the commune travels in gRPC METADATA, never in a message body.
+//
+//   metadata key: "x-tenant-id"  (lowercase — gRPC lowercases every key)
+//
+//   * A body is data the CALLER declares, and a caller naming its own commune is a caller
+//     granting itself access (rule 1, forbidden #2). The key is set by the client
+//     interceptor out of context.Context, never passed as a business argument.
+//   * A receiver that finds no "x-tenant-id" REFUSES the call with INVALID_ARGUMENT. It
+//     never falls back to a default commune and never infers one from the payload.
+//   * The key sits inside the "x-tenant" prefix that pkg/httpx.StripTenantHeaders already
+//     deletes from client-supplied requests.
+//
+// THIS SERVICE IS THE ONE EXCEPTION, and only because it is the registry that ANSWERS the
+// question "which commune". ResolveHost runs BEFORE any commune is known, so it carries no
+// "x-tenant-id" and takes the Host in the body; GetTenant names a commune in the body for
+// the same reason — the id is the SUBJECT being looked up, not a claim about the caller.
+// That is exactly why ADR 0003 holds this service to metadata-only answers: a request here
+// naming any commune must never be able to reach that commune's business content. No other
+// service may copy this shape.
+//
+// NOT the same thing: `Tenant.id` below is the identifier of the record being described, not
+// an assertion by the caller about who it is.
 
 service PlatformService {
   // ResolveHost maps an incoming Host to a commune. Called by every service edge, so it must

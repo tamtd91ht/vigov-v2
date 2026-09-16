@@ -8,9 +8,39 @@ package vigov.identity.v1;
 // Citizens are PLATFORM-WIDE with a many-to-many relationship to communes, because a person
 // registered in one commune may live, work, or report an issue in another.
 // See kb/10-decisions/0002-citizen-identity-platform-level.md.
+//
+// CONTRACT RULE — the commune travels in gRPC METADATA, never in a message body.
+//
+//   metadata key: "x-tenant-id"  (lowercase — gRPC lowercases every key)
+//
+//   * A body is data the CALLER declares, and a caller naming its own commune is a caller
+//     granting itself access (rule 1, forbidden #2). The key is set by the client
+//     interceptor out of context.Context, never passed as a business argument.
+//   * A receiver that finds no "x-tenant-id" REFUSES the call with INVALID_ARGUMENT. It
+//     never falls back to a default commune and never infers one from the payload — a
+//     default on the isolation path collapses isolation silently, with tests still green.
+//   * The key sits inside the "x-tenant" prefix that pkg/httpx.StripTenantHeaders already
+//     deletes from client-supplied requests, so a client that tries to inject it at the
+//     public edge loses it before any handler runs. Picking a key outside that prefix would
+//     have created a header nothing strips.
+//
+// NOT the same thing: the `tenant_id` FIELD on Staff below is an attribute of the stored
+// record — which commune that row belongs to. It is an answer the server returns, never an
+// input, and it is never read to decide what the caller may see.
+//
+// Field numbers are never reused; a removed field becomes `reserved`. New fields are always
+// optional with a safe default.
 
 service IdentityService {
-  rpc GetStaff(GetStaffRequest) returns (GetStaffResponse);
+  // BatchGetStaff resolves staff by id — plural by design, there is no singular form.
+  //
+  // WHY BATCHED AND NOT GetStaff(id): the caller is always a list screen decorating rows
+  // with a handler's name. A singular RPC means one network round trip PER ROW, a cost that
+  // grows with the data and is invisible in tests — 20 rows, 20 calls; 3.000 rows, 3.000
+  // calls and the page stops loading.
+  // See .claude/skills/load-data-once/SKILL.md, REQUIRED #4.
+  rpc BatchGetStaff(BatchGetStaffRequest) returns (BatchGetStaffResponse);
+
   rpc ListCitizenCommunes(ListCitizenCommunesRequest) returns (ListCitizenCommunesResponse);
 }
 
@@ -42,8 +72,35 @@ message CitizenCommune {
   }
 }
 
-message GetStaffRequest { string id = 1; }
-// Wrapped, not a bare Staff: adding a field later must not change the RPC signature.
-message GetStaffResponse { Staff staff = 1; }
+message BatchGetStaffRequest {
+  // Duplicates are collapsed by the server. Order carries no meaning.
+  //
+  // AT MOST 200 ids per call. More than that is INVALID_ARGUMENT, never a silent truncation:
+  // a truncated batch makes the caller render blank names for real rows and nothing reports
+  // it. (This is deliberately unlike list pagination, where clamping `limit` to the maximum
+  // is safe because the cursor carries on from there — here there is no cursor to carry on.)
+  //
+  // 200 is derived from the caller, not guessed: a list page is 20 rows by default
+  // (.claude/skills/rest-api-design, §5) and one page can never need more distinct staff
+  // than it has rows, so 200 leaves an order of magnitude of headroom and still covers the
+  // ENTIRE staff roster of a commune-level unit in one call. An unbounded id list from the
+  // caller is an unbounded query on the receiver.
+  repeated string ids = 1;
+}
+
+// Wrapped, not a bare repeated Staff: adding a field later must not change the RPC signature.
+message BatchGetStaffResponse {
+  // FEWER ITEMS THAN IDS REQUESTED IS A VALID RESPONSE, and the order is NOT the order of
+  // `ids`. The caller MUST map by Staff.id. Assuming index alignment, or assuming
+  // len(items) == len(ids), is wrong silently — it attaches one person's name to another
+  // person's record, which in an administrative file is a falsified record.
+  //
+  // An id is absent when: it does not exist, it is soft deleted, or it belongs to ANOTHER
+  // commune than the one in the "x-tenant-id" metadata. The three are deliberately
+  // indistinguishable in the response — telling them apart would leak that a record exists
+  // in a commune the caller may not read.
+  repeated Staff items = 1;
+}
+
 message ListCitizenCommunesRequest { string citizen_id = 1; }
 message ListCitizenCommunesResponse { repeated CitizenCommune items = 1; }

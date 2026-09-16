@@ -63,7 +63,7 @@ Fetch once at the edge of the use case, pass it down. A function that needs the 
 | 1 | **No repository call inside a loop.** Collect the ids, make one batched call |
 | 2 | Every repository that returns a list has a `...ByIDs(ctx, ids []string)` sibling |
 | 3 | Data resolved once per request travels **down as a parameter**, never re-fetched |
-| 4 | A gRPC call to another service is **batched by default** — `GetStaff` takes ids, plural |
+| 4 | A gRPC call to another service is **batched by default** — `BatchGetStaff` takes ids, plural |
 | 5 | Joins that belong to ONE service's schema are done **in SQL**, not in Go |
 | 6 | Before adding a lookup, ask: *does the caller already hold this?* If yes, pass it in |
 
