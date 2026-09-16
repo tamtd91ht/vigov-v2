@@ -29,7 +29,7 @@ The hand-written copy is wrong by the next day.
 | `kb/30-indexes/` T3 | Per commit | **GENERATED** — never hand-edited |
 | _`kb/20-contracts/` T2_ | Per API version | **Not created yet** — `proto/` is the contract source today |
 | _`kb/40-runbooks/` T4_ | Per incident | **Not created yet** — create on the first real incident |
-| _`kb/90-ephemeral/` T5_ | Days–weeks | **Not created yet** — `expires` required when it is |
+| `kb/90-ephemeral/` T5 | Days–weeks | Session handovers. **`expires` is mandatory** — a handover with no expiry is read as fact six months on |
 
 A tier in italics does not exist on disk. Create it when there is a real first occupant —
 **never an empty directory just to complete the set** (that is inflation, invariant 7).
