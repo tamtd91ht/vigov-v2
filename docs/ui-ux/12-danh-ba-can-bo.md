@@ -100,7 +100,7 @@ Dùng chung bảng **`nguoi_dung`** (xem `00-tong-quan-he-thong.md`), bổ sung 
 | `hien_tren_mini_app` | bool | |
 | `thu_tu_danh_ba` | int | |
 
-> **Lưu ý nhất quán dữ liệu:** trong prototype, `/danh-ba` có 26 cán bộ với tên thật (Nguyễn Xuân Tiến, Võ Thị Đoan Trang…) và email `@danang.gov.vn`, còn `Cấu hình → Người dùng` có 12 tài khoản demo (`Huỳnh Văn 1`… `demo1@thangbinh.demo.vigov.vn`). Đây là hai tập dữ liệu seed khác nhau. **Khi dựng lại phải hợp nhất về một bảng `nguoi_dung`**, trong đó `tai_khoan_hoat_dong = true` cho những người có thể đăng nhập.
+> **Lưu ý nhất quán dữ liệu:** trong prototype, `/danh-ba` có 26 cán bộ với **tên thật và email công vụ thật** (đã thay bằng dữ liệu giả trong tệp này — luật 3, cấm #5), còn `Cấu hình → Người dùng` có 12 tài khoản demo (`Huỳnh Văn 1`… `demo1@thangbinh.demo.vigov.vn`). Đây là hai tập dữ liệu seed khác nhau. **Khi dựng lại phải hợp nhất về một bảng `nguoi_dung`**, trong đó `tai_khoan_hoat_dong = true` cho những người có thể đăng nhập.
 
 ---
 
@@ -132,13 +132,19 @@ Dùng chung bảng **`nguoi_dung`** (xem `00-tong-quan-he-thong.md`), bổ sung 
 
 26 cán bộ, 26 đang hiện, 5 khối. Trích:
 
+> **Dữ liệu đã thay bằng dữ liệu giả — luật 3, cấm #5.**
+> Bản gốc mang **họ tên thật và số di động cá nhân thật** của lãnh đạo xã, những người
+> xác định được đích danh qua chức vụ. Chức vụ và tên khối là thông tin công khai nên giữ
+> nguyên; tên người và số máy thì không. Số giả dùng dải đã thống nhất `0900000xxx`
+> (luật 3, bất biến 5), khớp với `14-cau-hinh.md`.
+
 | Họ và tên | Chức vụ | Khối / đơn vị | Di động |
 |---|---|---|---|
-| Nguyễn Xuân Tiến | Bí thư Đảng ủy | THƯỜNG TRỰC ĐẢNG UỶ | 0913424446 (Có Zalo) |
-| Võ Thị Đoan Trang | Phó Bí thư Thường trực, Chủ tịch HĐND | THƯỜNG TRỰC ĐẢNG UỶ | 0983028085 |
-| Đoàn Thanh Khiết | Phó Bí thư, Chủ tịch UBND xã | THƯỜNG TRỰC ĐẢNG UỶ | 0905766369 |
-| Nguyễn Thọ | Phó Chủ tịch HĐND | THƯỜNG TRỰC HỘI ĐỒNG NHÂN DÂN | 0935765136 |
-| Nguyễn Thị Đông Anh | Trưởng Ban Văn hoá – Xã hội | THƯỜNG TRỰC HỘI ĐỒNG NHÂN DÂN | 0978819054 |
-| Nguyễn Thị Thu Hiền | Trưởng Ban Kinh tế – Ngân sách | THƯỜNG TRỰC HỘI ĐỒNG NHÂN DÂN | 0978735279 |
-| Trần Thế Vinh | PCT. UBND xã | LÃNH ĐẠO ỦY BAN NHÂN DÂN XÃ | 0935300545 |
-| Trương Hồng Quang | … | … | … |
+| Nguyễn Văn A | Bí thư Đảng ủy | THƯỜNG TRỰC ĐẢNG UỶ | 0900000001 (Có Zalo) |
+| Trần Thị B | Phó Bí thư Thường trực, Chủ tịch HĐND | THƯỜNG TRỰC ĐẢNG UỶ | 0900000002 |
+| Lê Văn C | Phó Bí thư, Chủ tịch UBND xã | THƯỜNG TRỰC ĐẢNG UỶ | 0900000003 |
+| Phạm Văn D | Phó Chủ tịch HĐND | THƯỜNG TRỰC HỘI ĐỒNG NHÂN DÂN | 0900000004 |
+| Hoàng Thị E | Trưởng Ban Văn hoá – Xã hội | THƯỜNG TRỰC HỘI ĐỒNG NHÂN DÂN | 0900000005 |
+| Vũ Thị G | Trưởng Ban Kinh tế – Ngân sách | THƯỜNG TRỰC HỘI ĐỒNG NHÂN DÂN | 0900000006 |
+| Đặng Văn H | PCT. UBND xã | LÃNH ĐẠO ỦY BAN NHÂN DÂN XÃ | 0900000007 |
+| Bùi Văn K | … | … | … |

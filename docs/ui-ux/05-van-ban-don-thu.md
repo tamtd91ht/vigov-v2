@@ -280,7 +280,7 @@ Biểu đồ cột nhóm, trục X = `T1`…`T12`, hai chuỗi có chú giải: 
 |---|---|---|---|---|---|---|
 | 7 | 9/9/2026 | Lê Văn Tám · 12392312313 | Kiến nghị, phản ánh | sdfsaf ấdf | — | Mới vào sổ |
 | 6 | 9/9/2026 | Đinh Văn Linh | Kiến nghị, phản ánh | Quá bực mình | — | Mới vào sổ |
-| 5 | 9/9/2026 | Nguyễn Văn Linh · 0909123213 | Kiến nghị, phản ánh | Quá khó chịu vì tiếng ồn | — | Đã giải quyết |
+| 5 | 9/9/2026 | Người dân demo 5 · 0900 111 005 | Kiến nghị, phản ánh | Quá khó chịu vì tiếng ồn | — | Đã giải quyết |
 | 4 | 8/8/2026 | Người dân demo 4 · 0900 111 004 | Tố cáo | Tố cáo hành vi đổ trộm chất thải xây dựng ra khu đất công ven kênh vào ban đêm | VĂN PHÒNG ĐẢNG ỦY | Đã giải quyết |
 | 3 | 15/8/2026 | Người dân demo 3 · 0900 111 003 | Khiếu nại | Khiếu nại về mốc giới thửa đất giáp ranh sau khi đo đạc lại | VĂN PHÒNG ĐẢNG ỦY | Đã phân công |
 | 2 | 19/8/2026 | Người dân demo 2 · 0900 111 002 | Đề nghị | Đề nghị cấp lại giấy chứng nhận QSDĐ do bị mất trong đợt lụt năm 2025 | VĂN PHÒNG ĐẢNG ỦY | Đã phân công |

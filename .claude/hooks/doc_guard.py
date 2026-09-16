@@ -35,6 +35,21 @@ ALLOWED = (
     re.compile(r"(^|/)(README|CLAUDE|Makefile)\.md$"),
 )
 
+# docs/ui-ux/ — EDITING an existing file only, never creating a new one.
+#
+# tools/check_brain.py invariant 6 already names this directory as an exception: it holds the
+# UI specification transcribed from an external running prototype, answering "what does the
+# screen look like", which kb/ deliberately does not own. This hook did not know that, so the
+# two halves of the brain disagreed — check_brain passed the directory while doc_guard refused
+# every edit to it. A guard that contradicts the checker is the drift both exist to prevent.
+#
+# Narrower than check_brain on purpose, and the reason is in check_brain's own words: "a NAMED
+# exception, not an open door". Editing the transcribed spec — correcting a stale field name,
+# or REDACTING the real names and mobile numbers it arrived with (rule 3, forbidden #5) — is
+# maintenance of a file that already exists. Creating a NEW .md there is how documentation
+# starts scattering again, so that stays blocked.
+SUA_DUOC = re.compile(r"(^|/)docs/ui-ux/[^/]+\.md$")
+
 # GENERATED tiers — hand edits are silently lost on the next generate
 GENERATED_TIERS = (re.compile(r"/kb/20-contracts/"), re.compile(r"/kb/30-indexes/"))
 
@@ -120,7 +135,12 @@ def main() -> None:
                 tool=tool, path=path)
 
     # RULE 1 — the right place
-    if not any(p.search("/" + rel) for p in ALLOWED):
+    #
+    # The docs/ui-ux/ exception applies only to a file that ALREADY EXISTS: maintaining the
+    # transcribed spec is allowed, starting a new one there is not.
+    da_co = SUA_DUOC.search("/" + rel) and os.path.exists(
+        os.path.join(c.project_root(), rel.replace("/", os.sep)))
+    if not da_co and not any(p.search("/" + rel) for p in ALLOWED):
         c.block(HOOK, f"documentation in the wrong place — {rel}",
                 [".md files belong in kb/, services/<name>/README.md, or .claude/"],
                 ["  Scattered documentation is documentation nobody reads. Pick the tier by the",

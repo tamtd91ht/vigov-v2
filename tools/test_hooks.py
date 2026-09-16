@@ -201,6 +201,18 @@ CASES = [
            '\tauthz.RequirePermission(d.Checker, "feedback.resolve")(\n'
            '\t\tidem.Required(idem.DongKhiHong)(http.HandlerFunc(h.Close))))')),
 
+    # check_brain invariant 6 names docs/ui-ux/ as an exception; doc_guard did not know, so the
+    # checker passed the directory while the guard refused every edit to it. The file that
+    # exposed it held real staff names and real mobile numbers — rule 3, forbidden #5 — and the
+    # redaction was the thing being blocked.
+    ("doc_guard", "editing the transcribed UI spec", PASS,
+     w("docs/ui-ux/12-danh-ba-can-bo.md", "| Nguyễn Văn A | Bí thư | 0900000001 |")),
+    # Narrower than check_brain on purpose: "a NAMED exception, not an open door".
+    ("doc_guard", "a NEW .md under docs/", BLOCK,
+     w("docs/ui-ux/99-ghi-chu-moi.md", "# Ghi chú")),
+    ("doc_guard", "a new .md outside every allowed place", BLOCK,
+     w("notes/ke-hoach.md", "# Kế hoạch")),
+
     # ---- rule 6 · audit trail -------------------------------------------------
     ("audit_guard", "write with no audit entry", BLOCK,
      w("services/donthu/internal/app/update.go",
