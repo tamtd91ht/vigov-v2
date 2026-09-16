@@ -25,6 +25,21 @@ CREATE TABLE IF NOT EXISTS audit_log (
     PRIMARY KEY (tenant_id, id)
 ) PARTITION BY HASH (tenant_id);
 
+-- A partitioned table with no partitions accepts no rows: every insert fails with "no
+-- partition of relation found". The parent declaration above is only half the statement.
+--
+-- THIS BLOCK WAS MISSING HERE while identity and platform had it, so audit_log rejected every
+-- entry. Because the entry is written inside the business transaction (rule 6, invariant 3),
+-- that is not a missing trail — it is the first business write in this service rolling back in
+-- full, with nothing in the schema looking wrong.
+DO $$ BEGIN
+    FOR i IN 0..31 LOOP
+        EXECUTE format(
+            'CREATE TABLE IF NOT EXISTS audit_log_p%s PARTITION OF audit_log '
+            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+    END LOOP;
+END $$;
+
 CREATE INDEX IF NOT EXISTS audit_log_lookup
     ON audit_log (tenant_id, subject, at DESC);
 
@@ -43,6 +58,19 @@ CREATE INDEX IF NOT EXISTS audit_log_lookup
 --       PRIMARY KEY (tenant_id, id),
 --       UNIQUE (tenant_id, code)             -- COMPOSITE, always
 --   ) PARTITION BY HASH (tenant_id);
+--
+--   -- AND, IN THE SAME MIGRATION, the partitions. This half is not optional decoration:
+--   -- PARTITION BY on its own yields a table that REJECTS EVERY INSERT. The template used to
+--   -- stop at the line above, which is exactly how audit_log ended up partitioned with no
+--   -- partitions in this service — a table copied from a template inherits the template's
+--   -- omissions, silently, in every table written after it.
+--   DO $$ BEGIN
+--       FOR i IN 0..31 LOOP
+--           EXECUTE format(
+--               'CREATE TABLE IF NOT EXISTS example_p%s PARTITION OF example '
+--               'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+--       END LOOP;
+--   END $$;
 --
 -- Read paths filter deleted rows with  deleted_at IS NULL  in EVERY query — lists,
 -- statistics, search, reports and background jobs alike.

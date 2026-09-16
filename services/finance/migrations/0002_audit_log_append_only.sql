@@ -158,3 +158,46 @@ END $$;
 -- doing it. Making that second case impossible is a database-permissions and backup question,
 -- not a schema question.
 -- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- BACKSTOP: every partitioned table in this schema must actually have partitions.
+--
+-- WHY THIS EXISTS: `PARTITION BY HASH` without a partition-creation loop produces a table that
+-- REJECTS EVERY INSERT ("no partition of relation ... found for row"). The fault is SILENT --
+-- the migration succeeds, the schema looks correct, the table is listed -- and it surfaces at
+-- the first INSERT. In a business service the first INSERT is a staff member receiving a
+-- citizen's report, so the fault reaches a counter before it reaches a developer.
+--
+-- Not hypothetical: audit_log in comms, documents, dossiers, finance, petitions and reporting
+-- was declared partitioned and given no partitions, and the handover note had already named
+-- this exact trap. A trap the project already knows about and still falls into needs something
+-- that CHECKS, not something that reminds.
+--
+-- SCOPED TO current_schema() ON PURPOSE: the integration suites create one schema per run in a
+-- shared database, so a database-wide check would see another suite's half-built schema and
+-- fail for reasons having nothing to do with this migration.
+--
+-- WHAT IT DOES NOT COVER, said plainly: it verifies the state after the NEWEST migration that
+-- carries the block. A future 0003 that declares a partitioned table and forgets its partitions
+-- is only caught if 0003 ends with this block too. That convention is unenforced by SQL; the
+-- durable form of this check belongs in the repository's own verification layer.
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE missing_partitions text;
+BEGIN
+    SELECT string_agg(c.relname, ', ' ORDER BY c.relname) INTO missing_partitions
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relkind = 'p'
+      AND n.nspname = current_schema()
+      AND NOT EXISTS (SELECT 1 FROM pg_inherits WHERE inhparent = c.oid);
+
+    IF missing_partitions IS NOT NULL THEN
+        RAISE EXCEPTION
+            'partitioned table(s) with no partitions in schema %: %',
+            current_schema(), missing_partitions
+            USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
+                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'declares PARTITION BY.';
+    END IF;
+END $$;
