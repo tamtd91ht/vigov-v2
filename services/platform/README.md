@@ -39,3 +39,4 @@ migrations/      per-commune, resumable, reversible
 - Every business write shares a transaction with its `audit.Write` (rule 6)
 - Every unique key is composite with `tenant_id`; every index starts with it (ADR 0004)
 - Every route declares a permission explicitly (rule 5)
+- No repository or gRPC call inside a loop; data fetched once travels down as a parameter (`skills/load-data-once`)
