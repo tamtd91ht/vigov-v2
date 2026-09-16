@@ -127,6 +127,14 @@ CASES = [
     ("data_safety_guard", "an ordinary read command", PASS, b("go test ./...")),
     ("data_safety_guard", "DELETE FROM on business data", BLOCK,
      w("services/donthu/internal/store/q.go", 'const q = "DELETE FROM don_thu WHERE id=$1"')),
+    ("data_safety_guard", "DELETE with no WHERE", BLOCK,
+     w("services/donthu/internal/store/q.go", 'const q = "DELETE FROM don_thu"')),
+    ("data_safety_guard", "UPDATE with no WHERE", BLOCK,
+     w("services/donthu/internal/store/q.go", 'const q = "UPDATE don_thu SET trang_thai = 1"')),
+    # Go's built-in delete() removes one key from an in-memory map. Blocking it made every Go
+    # file holding a map unwritable, and a guard that cries wolf gets switched off.
+    ("data_safety_guard", "Go built-in delete on a map", PASS,
+     w("services/nentang/internal/store/cache.go", "delete(c.entries, host)")),
 
     # ---- rule 8 · secrets --------------------------------------------------
     ("secret_scan", "hardcoded secret", BLOCK,

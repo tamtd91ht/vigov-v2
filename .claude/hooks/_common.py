@@ -85,6 +85,10 @@ SKIP_FRAGMENTS = (
     "/test/", "/tests/", "/testdata/", "/fixtures/", "/mocks/", "/__mocks__/",
     "/node_modules/", "/vendor/", "/dist/", "/build/", "/.git/", "/.claude/",
     "/kb/90-ephemeral/", "_test.go", ".spec.", ".test.",
+    # The hooks' own self-test. It must CONTAIN the dangerous patterns — that is what it
+    # tests. Without this exemption a guard blocks the very case that proves it works, and
+    # the block case can never be written down.
+    "tools/test_hooks.py",
 )
 
 # Paths that are genuinely produced by a generator. This is a PATH list on purpose.

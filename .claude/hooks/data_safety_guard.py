@@ -60,8 +60,20 @@ HARD_DELETE = [
     (r"\bdb\.Migrator\(\)\.DropTable|\bDropColumn\b", "dropping a table / column"),
 ]
 
+# An UPDATE or DELETE with no WHERE touches every row of the table.
+#
+# CASE-SENSITIVE on purpose, and requiring the SQL keyword that must follow. Measured cost of
+# getting this wrong: the earlier case-insensitive form matched Go's built-in `delete(m, k)`,
+# which removes one key from an in-memory map and has nothing to do with the database. Every
+# Go file holding a map was blocked, and a guard that cries wolf is a guard someone switches
+# off — which costs more than the rule it was protecting.
+#
+# SQL keywords are written upper-case throughout this codebase, so requiring upper case here
+# loses no real coverage. The ORM forms below stay case-sensitive for the same reason.
 EMPTY_FILTER = re.compile(
-    r"\b(UPDATE|DELETE)\b(?![^\n;]*\bWHERE\b)|\.\s*(Updates?|Delete)\s*\(\s*\)", re.I)
+    r"\bDELETE\s+FROM\b(?![^\n;]*\bWHERE\b)"
+    r"|\bUPDATE\s+\w+\s+SET\b(?![^\n;]*\bWHERE\b)"
+    r"|\.\s*(Updates?|Delete)\s*\(\s*\)")
 
 BUSINESS = re.compile(
     r"(don_?thu|van_?ban|phan_?anh|nhiem_?vu|giai_?ngan|ho_?so|cong_?dan|can_?bo|"
