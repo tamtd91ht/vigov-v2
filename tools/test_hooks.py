@@ -184,6 +184,20 @@ CASES = [
     ("data_safety_guard", "--force-with-lease is allowed", PASS,
      b("git push origin main --force-with-lease")),
     ("data_safety_guard", "an ordinary read command", PASS, b("go test ./...")),
+    # THIRD false positive of this guard. A commit message explaining a migration used the
+    # words TRUNCATE and DROP, and the heredoc body was scanned as if it were a command. The
+    # body of `git commit -F -` is prose that never executes; blocking it teaches the next
+    # agent to describe destructive SQL vaguely, which is the opposite of the point.
+    ("data_safety_guard", "commit message that mentions TRUNCATE", PASS,
+     b("git commit -F - <<'MSG'\nfeat(db): chan TRUNCATE va DROP TABLE tren audit_log\nMSG")),
+    # But a heredoc fed to a database client IS the command.
+    ("data_safety_guard", "heredoc piped into psql", BLOCK,
+     b("psql \"$DSN\" <<'SQL'\nTRUNCATE audit_log;\nSQL")),
+    # The interpreter must be looked for in the COMMAND part, not in the body. Checking the
+    # whole string reopened the bug: a commit message that NAMES psql while explaining this
+    # rule kept the body and fired again.
+    ("data_safety_guard", "commit message naming psql and TRUNCATE", PASS,
+     b("git commit -F - <<'MSG'\nvi sao heredoc vao psql van bi chan: TRUNCATE la lenh that\nMSG")),
     ("data_safety_guard", "DELETE FROM on business data", BLOCK,
      w("services/donthu/internal/store/q.go", 'const q = "DELETE FROM don_thu WHERE id=$1"')),
     ("data_safety_guard", "DELETE with no WHERE", BLOCK,

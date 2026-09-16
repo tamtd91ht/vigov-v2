@@ -85,7 +85,45 @@ BUSINESS = re.compile(
     r"audit|nhat_?ky|document|dossier|petition|feedback|task|citizen|staff)", re.I)
 
 
+# Commands that EXECUTE what a heredoc feeds them. For anything else — `git commit -F -`,
+# `cat > file` — the heredoc body is DATA and will never run.
+THUC_THI_HEREDOC = re.compile(
+    r"\b(psql|mysql|mongosh?|sqlite3|sh|bash|zsh|python[\d.]*|node|docker\s+exec)\b", re.I)
+
+HEREDOC = re.compile(r"<<-?\s*'?\"?(\w+)'?\"?\n(.*?)^\1\b", re.S | re.M)
+
+
+def bo_than_heredoc(cmd: str) -> str:
+    """Drop heredoc bodies that are data rather than commands.
+
+    THIRD FALSE POSITIVE OF THIS GUARD, and the handover said plainly: fix the hook, add a
+    case, do not route around it. The first two were Go's `delete()` on a map and a multi-line
+    UPDATE; this one is a COMMIT MESSAGE. Writing `git commit -F - <<'MSG' ... TRUNCATE ...`
+    to explain a migration tripped the DROP/TRUNCATE rule — the word appeared in prose that
+    will never be executed.
+
+    The split is the principled one, and it is the split the brain already makes: this guard
+    inspects COMMANDS, while `bash_content_guard` inspects CONTENT about to be written. A
+    heredoc going to `git commit` is content, and it is content that is not even written to a
+    file. Leaving the rule as it was would teach the next agent to describe destructive SQL in
+    vaguer words, which is the opposite of what a commit message is for.
+
+    A heredoc fed to psql, bash or python is a different thing entirely: there the body IS the
+    command, so it is kept and scanned.
+
+    The interpreter is looked for in the COMMAND part only, never in the body. Checking the
+    whole string re-opened the bug on the first try: this very commit message names `psql`
+    while explaining the rule, and that word inside the prose was enough to make the guard
+    keep the body and fire again.
+    """
+    ngoai = HEREDOC.sub(lambda m: f"<<{m.group(1)}\n{m.group(1)}", cmd)
+    if THUC_THI_HEREDOC.search(ngoai):
+        return cmd  # the body is the command — scan it
+    return ngoai
+
+
 def check_bash(cmd: str) -> None:
+    cmd = bo_than_heredoc(cmd)
     for pattern, name, why in DANGEROUS_BASH:
         if re.search(pattern, cmd, re.I):
             c.block(HOOK, f"command that can destroy data: {name}",
