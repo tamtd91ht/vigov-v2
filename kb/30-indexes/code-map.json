@@ -354,6 +354,114 @@
       "kind": "type",
       "at": "pkg/migrate/migrate.go:88"
     },
+    "page.After": {
+      "kind": "func",
+      "at": "pkg/page/page.go:299"
+    },
+    "page.Allowlist": {
+      "kind": "type",
+      "at": "pkg/page/page.go:163"
+    },
+    "page.Anchor": {
+      "kind": "type",
+      "at": "pkg/page/page.go:277"
+    },
+    "page.Col": {
+      "kind": "func",
+      "at": "pkg/page/page.go:147"
+    },
+    "page.Column": {
+      "kind": "func",
+      "at": "pkg/page/page.go:294"
+    },
+    "page.Decode": {
+      "kind": "func",
+      "at": "pkg/page/page.go:430"
+    },
+    "page.Dir": {
+      "kind": "func",
+      "at": "pkg/page/page.go:295"
+    },
+    "page.Encode": {
+      "kind": "func",
+      "at": "pkg/page/page.go:405"
+    },
+    "page.Equal": {
+      "kind": "func",
+      "at": "pkg/page/page.go:222"
+    },
+    "page.HTTPError": {
+      "kind": "func",
+      "at": "pkg/page/page.go:109"
+    },
+    "page.Int": {
+      "kind": "func",
+      "at": "pkg/page/page.go:220"
+    },
+    "page.IntKey": {
+      "kind": "func",
+      "at": "pkg/page/page.go:216"
+    },
+    "page.Key": {
+      "kind": "type",
+      "at": "pkg/page/page.go:207"
+    },
+    "page.Kind": {
+      "kind": "func",
+      "at": "pkg/page/page.go:217"
+    },
+    "page.Limit": {
+      "kind": "func",
+      "at": "pkg/page/page.go:296"
+    },
+    "page.New": {
+      "kind": "func",
+      "at": "pkg/page/page.go:318"
+    },
+    "page.NewAllowlist": {
+      "kind": "func",
+      "at": "pkg/page/page.go:173"
+    },
+    "page.NewResult": {
+      "kind": "func",
+      "at": "pkg/page/page.go:475"
+    },
+    "page.Parse": {
+      "kind": "func",
+      "at": "pkg/page/page.go:309"
+    },
+    "page.Request": {
+      "kind": "type",
+      "at": "pkg/page/page.go:287"
+    },
+    "page.Result": {
+      "kind": "type",
+      "at": "pkg/page/page.go:468"
+    },
+    "page.String": {
+      "kind": "func",
+      "at": "pkg/page/page.go:221"
+    },
+    "page.Text": {
+      "kind": "func",
+      "at": "pkg/page/page.go:219"
+    },
+    "page.TextKey": {
+      "kind": "func",
+      "at": "pkg/page/page.go:215"
+    },
+    "page.Time": {
+      "kind": "func",
+      "at": "pkg/page/page.go:218"
+    },
+    "page.TimeKey": {
+      "kind": "func",
+      "at": "pkg/page/page.go:214"
+    },
+    "page.Value": {
+      "kind": "func",
+      "at": "pkg/page/page.go:226"
+    },
     "password.Bam": {
       "kind": "func",
       "at": "pkg/password/password.go:48"
@@ -518,6 +626,10 @@
       "kind": "func",
       "at": "services/identity/internal/store/phien.go:41"
     },
+    "store.PageSpec": {
+      "kind": "type",
+      "at": "pkg/store/page.go:18"
+    },
     "store.Phien": {
       "kind": "type",
       "at": "services/identity/internal/store/phien.go:44"
@@ -533,6 +645,10 @@
     "store.QueryJoin": {
       "kind": "func",
       "at": "pkg/store/scoped.go:67"
+    },
+    "store.QueryPage": {
+      "kind": "func",
+      "at": "pkg/store/page.go:60"
     },
     "store.Scoped": {
       "kind": "type",
