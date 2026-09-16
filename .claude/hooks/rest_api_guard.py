@@ -43,6 +43,16 @@ CHANGES_STATE = {"POST", "PUT", "PATCH", "DELETE"}
 
 # Declared in the SAME statement as the route, exactly like the permission declaration.
 IDEM_DECL = re.compile(r"idem\.(?:Required|KhongCan)\s*\(")
+
+# `idem.Required` keys on the principal. On a route declared Public there is no principal, so
+# every anonymous caller in one commune would share one key space — citizen B replaying
+# citizen A's lookup code while B's own record was never created (rule 4 + rule 10).
+#
+# pkg/idem refuses this AT RUNTIME. It cannot refuse at wiring time, because authz wraps
+# outside idem and idem never sees the Public declaration. This catches it at the moment of
+# typing instead — the only place where the two declarations are visible together.
+PUBLIC_DECL = re.compile(r"authz\.Public\s*\(")
+IDEM_REQUIRED = re.compile(r"idem\.Required\s*\(")
 IDEM_NO_REASON = re.compile(r"idem\.KhongCan\s*\(\s*\)")
 IDEM_NO_MODE = re.compile(r"idem\.Required\s*\(\s*\)")
 
@@ -207,11 +217,17 @@ def main() -> None:
 
     base = os.path.basename(path)
     vn_hits: list[str] = []
+    mix_hits: list[str] = []
     other: list[str] = []
 
     for lineno, stmt in statements(strip_comments(content)):
         for method, route in routes(stmt):
             segs = segments(route)
+
+            # ---- Public + Required in one statement (PreToolUse, BLOCK) --------
+            if PUBLIC_DECL.search(stmt) and IDEM_REQUIRED.search(stmt):
+                mix_hits.append(
+                    f"line {lineno}: {method} {route} — authz.Public with idem.Required")
 
             # ---- language of the path (PreToolUse, BLOCK) ----------------------
             for s in segs:
@@ -243,6 +259,31 @@ def main() -> None:
 
             if not route.startswith("/api/v"):
                 other.append(f"line {lineno}: {method} {route} — not under /api/v1/")
+
+    if mix_hits:
+        c.block(HOOK, f"Public route with idem.Required — {base}", mix_hits,
+                ["  idem.Required keys on the PRINCIPAL. A Public route has none, so every",
+                 "  anonymous caller in one commune shares one key space.",
+                 "",
+                 "  What that costs, concretely: citizen A submits a petition with",
+                 "  Idempotency-Key aaaaaaaa and gets PA-2026-0001. Citizen B, same commune,",
+                 "  sends the same key — the key is identical, so B is REPLAYED A's lookup",
+                 "  code and can read A's petition (rule 4), while B's own petition was never",
+                 "  created although B was told it was (rule 10). Two failures at once, silent.",
+                 "",
+                 "  A minimum key length does not help: a client that derives its key (a form",
+                 "  hash, a device id) collides every time, not by chance.",
+                 "",
+                 "  Choose one:",
+                 "    - the route is genuinely public -> idem.KhongCan(\"<why it is safe>\")",
+                 "    - it needs duplicate protection -> it needs an identity. Put it behind",
+                 "      authz.CitizenOnly() or RequirePermission, then idem.Required(...)",
+                 "",
+                 "  pkg/idem refuses this at RUNTIME too (500). This block is the earlier,",
+                 "  cheaper copy of that refusal.",
+                 "",
+                 "  → .claude/skills/rest-api-design/SKILL.md §4"],
+                tool=tool, path=path)
 
     if vn_hits:
         c.block(HOOK, f"Vietnamese in a URL path — {base}", vn_hits,

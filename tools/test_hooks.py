@@ -155,6 +155,19 @@ CASES = [
            'mux.Handle("POST /api/v1/citizen-reports/{code}/close",\n'
            '\tauthz.RequirePermission(d.Checker, "feedback.resolve")(\n'
            '\t\tidem.Required(idem.DongKhiHong)(http.HandlerFunc(h.Close))))')),
+    # pkg/idem refuses this at runtime, but it cannot refuse at wiring time: authz wraps
+    # outside idem, so idem never sees the Public declaration. The route statement is the one
+    # place both are visible together.
+    ("rest_api_guard", "Public route with idem.Required", BLOCK,
+     w("services/petitions/internal/http/routes.go",
+       'mux.Handle("POST /api/v1/citizen-reports",\n'
+       '\tauthz.Public("công dân gửi phản ánh qua Mini App")(\n'
+       '\t\tidem.Required(idem.MoKhiHong)(http.HandlerFunc(h.Create))))')),
+    ("rest_api_guard", "Public route with idem.KhongCan", PASS,
+     w("services/identity/internal/http/routes.go",
+       'mux.Handle("POST /api/v1/sessions",\n'
+       '\tauthz.Public("màn hình đăng nhập")(\n'
+       '\t\tidem.KhongCan("đăng nhập lần hai mở một phiên thứ hai")(h.DangNhap)))')),
     ("rest_api_guard", "a route inside a comment is not a route", PASS,
      wpost("services/comms/internal/http/routes.go",
            '// Example of the shape every real route must take:\n'
