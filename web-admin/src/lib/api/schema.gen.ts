@@ -76,7 +76,6 @@ export type identity_get_commune = {
   than: never;
   phanHoi: {
     200: identity_thongTinXa;
-    503: httpx_Error;
   };
 };
 

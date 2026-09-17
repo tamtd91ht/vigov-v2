@@ -2,9 +2,7 @@ package http
 
 import (
 	"net/http"
-	"strings"
 
-	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
 )
 
@@ -66,58 +64,17 @@ type thongTinXa struct {
 // the two cases rule 6, invariant 7 asks for. An entry per hit on the sign-in screen would bury
 // the entries that carry legal weight under noise from unauthenticated traffic.
 func (h *Handler) ThongTinXa(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	xa := tenant.MustFrom(ctx)
-
-	// A SECOND LOOKUP, AGAINST THE SAME DIRECTORY THE EDGE USED — deliberately the same value
-	// (identity/cmd/server/main.go), never a second source. The edge puts only the
-	// commune's ID into the context, and this route needs its name; asking the platform registry
-	// is the only way to learn one (rule 2: this service does not read the registry's tables).
-	t, ok := h.d.Xa.ByHost(ctx, hostYeuCau(r))
-	switch {
-	case !ok:
-		// The edge resolved this Host moments ago, so reaching here means the platform service
-		// became unreachable in between, or the cache entry expired into an outage. FAIL CLOSED:
-		// no name is served rather than a stale or guessed one.
-		h.d.Log.Error("cấu hình xã: không đọc được tên xã cho host này — dịch vụ nền tảng có vấn đề",
-			"xa", string(xa), "host", hostYeuCau(r))
-
-	case t.ID != xa:
-		// One Host answering with two different communes inside one request. A domain reassigned
-		// between two lookups microseconds apart is the innocent reading and it is vanishingly
-		// rare; either way the only safe answer is to serve neither name. Printing commune B's
-		// name on commune A's domain is a breach between two authorities, on a public route.
-		h.d.Log.Warn("CẢNH BÁO: cùng một Host phân giải ra hai xã khác nhau trong cùng một yêu cầu",
-			"xa_theo_bien", string(xa), "xa_theo_tra_lai", string(t.ID), "host", hostYeuCau(r))
-
-	default:
-		vietJSON(w, http.StatusOK, thongTinXa{Name: t.Name, Host: t.Host})
-		return
-	}
-
-	// 503 AND NOT 500: this service is healthy and the request was well formed — what failed is
-	// a dependency, and the sign-in screen should retry rather than send somebody to read
-	// identity's logs. Not 404 either: the edge has just established that this commune exists, so
-	// saying it does not would be a lie a client caches.
-	httpx.WriteError(w, http.StatusServiceUnavailable, "tenant_unavailable",
-		"Chưa đọc được thông tin xã. Vui lòng thử lại.", "")
-}
-
-// hostYeuCau normalises `Host` exactly the way the edge does — lower-cased, port removed
-// (pkg/httpx/edge.go:22).
-//
-// IT IS A COPY OF A NORMALISATION RULE, which is normally how two places drift apart. What makes
-// it safe here is the comparison in ThongTinXa above: a Host normalised differently resolves to
-// a different commune, or to none, and both of those are refused. Drift can therefore only ever
-// produce a 503 — never one commune's name served on another commune's domain.
-//
-// THE CLEAN FIX IS ONE RESOLUTION, NOT TWO: the edge carrying the whole tenant.Tenant in the
-// context instead of only its id, so no handler ever resolves anything. That is a change inside
-// pkg/httpx, which all eight services share — outside this service, and stated rather than done.
-func hostYeuCau(r *http.Request) string {
-	host := r.Host
-	if i := strings.IndexByte(host, ':'); i >= 0 {
-		host = host[:i]
-	}
-	return strings.ToLower(host)
+	// MỘT LẦN PHÂN GIẢI, VÀ NÓ ĐÃ XẢY RA Ở BIÊN.
+	//
+	// Bản trước của hàm này hỏi thư mục xã lần thứ hai, vì context chỉ mang `tenant_id` còn
+	// tuyến này cần TÊN xã. Nó phải chép lại phép chuẩn hoá Host của biên, rồi phải so hai
+	// kết quả và trả 503 khi chúng lệch — ba thứ chỉ tồn tại để rào một câu hỏi lẽ ra không
+	// nên được hỏi hai lần. Biên nay mang cả tenant.Tenant (core/httpx/edge.go), nên cả ba
+	// biến mất cùng lúc: không còn bản sao quy tắc, không còn hai câu trả lời để lệch nhau,
+	// và không còn một nhánh 503 mà không bài test nào chạm tới trong đời thật.
+	//
+	// MustCurrent panic khi thiếu, và đó là chủ ý: nếu handler này chạy ngoài biên HTTP thì
+	// nó sẽ hiển thị tên rỗng — một cơ quan nhà nước hiện sai tên mình, không có gì đỏ.
+	xa := tenant.MustCurrent(r.Context())
+	vietJSON(w, http.StatusOK, thongTinXa{Name: xa.Name, Host: xa.Host})
 }

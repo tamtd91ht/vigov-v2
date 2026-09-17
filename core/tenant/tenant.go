@@ -41,6 +41,48 @@ func From(ctx context.Context) (ID, bool) {
 	return id, ok && id.Valid()
 }
 
+// ctxKeyDay carries the WHOLE Tenant, not just the id.
+//
+// HAI KHOÁ, KHÔNG PHẢI MỘT, và lý do đáng nêu: `tenant_id` đến được bằng nhiều đường, còn
+// tên xã thì không. Biên HTTP phân giải `Host` nên nó biết cả tên; biên gRPC chỉ nhận
+// `tenant_id` trong metadata, và một consumer sự kiện cũng vậy. Nếu ép một khoá duy nhất
+// mang cả Tenant thì hai đường sau phải BỊA ra một Tenant rỗng tên — và một tên rỗng đi tới
+// màn hình của một cơ quan nhà nước thì tệ hơn hẳn một lỗi.
+//
+// Nên: `From`/`MustFrom` luôn có (mọi đường đều đặt id), còn `Current` chỉ có sau biên HTTP.
+// Chỗ nào cần tên xã thì tự khắc phải chạy sau biên ấy, và trình biên dịch không nói hộ được
+// điều đó — `MustCurrent` nói, bằng cách panic.
+type ctxKeyDay struct{}
+
+// IntoFull returns a context carrying the whole commune. Called exactly once, at the HTTP edge.
+//
+// Nó đặt CẢ hai khoá: mọi thứ đọc `From` vẫn chạy y nguyên.
+func IntoFull(ctx context.Context, t Tenant) context.Context {
+	return context.WithValue(Into(ctx, t.ID), ctxKeyDay{}, t)
+}
+
+// Current reports the whole commune, if the HTTP edge put it there.
+//
+// `false` KHÔNG phải lỗi: trên đường gRPC và trên đường sự kiện, chỉ có `tenant_id` được
+// truyền đi, nên ở đó câu trả lời đúng là "không biết tên xã" chứ không phải một tên bịa.
+func Current(ctx context.Context) (Tenant, bool) {
+	t, ok := ctx.Value(ctxKeyDay{}).(Tenant)
+	return t, ok && t.ID.Valid()
+}
+
+// MustCurrent returns the whole commune or panics.
+//
+// Cùng lý do với MustFrom: một handler cần TÊN xã mà không có nó thì hoặc hiện tên rỗng,
+// hoặc hiện tên của xã trước đó còn sót trong một biến nào đó. Cả hai đều là một cơ quan nhà
+// nước hiển thị sai tên mình, và cả hai đều không có gì đỏ. Dừng lại to tiếng rẻ hơn nhiều.
+func MustCurrent(ctx context.Context) Tenant {
+	t, ok := Current(ctx)
+	if !ok {
+		panic("tenant: không có thông tin xã trong context — handler này chạy ngoài biên HTTP")
+	}
+	return t
+}
+
 // MustFrom returns the commune or panics.
 //
 // Panicking is the point. A query without a commune returns rows from EVERY commune and

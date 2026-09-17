@@ -15,8 +15,7 @@
       "permission_reason": "màn hình đăng nhập phải hiện tên xã TRƯỚC khi có phiên nào để kiểm quyền",
       "idempotency": "",
       "reply_schemas": {
-        "200": "identity.thongTinXa",
-        "503": "httpx.Error"
+        "200": "identity.thongTinXa"
       },
       "declared_in": "service-identity/internal/http/routes.go"
     },

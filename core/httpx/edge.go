@@ -23,10 +23,27 @@ func TenantMiddleware(dir tenant.Directory) func(http.Handler) http.Handler {
 			host := strings.ToLower(hostOnly(r.Host))
 			t, ok := dir.ByHost(r.Context(), host)
 			if !ok || !t.Active {
-				http.NotFound(w, r)
+				// MỘT câu trả lời cho CẢ HAI trường hợp — không tồn tại, và đã ngừng hoạt
+				// động — với cùng một mã lỗi.
+				//
+				// Trả mã khác nhau nghe có vẻ tử tế hơn với một xã đã sáp nhập, nhưng nó
+				// chính là chỗ rò: người gõ thử một tên miền sẽ phân biệt được "xã này chưa
+				// bao giờ có" với "xã này từng có", tức là dò ra được danh sách xã trên nền
+				// tảng. Một trang chào cho tên miền cũ của xã sáp nhập là việc của cấu hình
+				// tên miền, không phải của tầng này.
+				//
+				// Hình dạng là httpx.Error chứ không phải http.NotFound: hợp đồng REST khai
+				// httpx.Error cho mọi lỗi, và một 404 trả text/plain buộc mọi máy khách phải
+				// có thêm một nhánh cho riêng nó.
+				WriteError(w, http.StatusNotFound, "tenant_not_found",
+					"Không tìm thấy trang cho tên miền này.", "")
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(tenant.Into(r.Context(), t.ID)))
+			// CẢ Tenant vào context, không chỉ id: nếu chỉ có id thì handler nào cần tên xã
+			// phải tự phân giải `Host` lần thứ hai, và khi đó nó cũng phải chép lại phép
+			// chuẩn hoá Host ở ngay trên. Hai lần phân giải là hai câu trả lời có thể lệch
+			// nhau, và cái lệch ấy hiện ra dưới dạng tên xã khác trên màn hình.
+			next.ServeHTTP(w, r.WithContext(tenant.IntoFull(r.Context(), t)))
 		})
 	}
 }

@@ -285,8 +285,6 @@ func dungMayChu(t *testing.T) *mayChu {
 		DanhBa: danhBa,
 		// The harness gives Deps.Xa its OWN directory value, not the one the edge is built with
 		// below, although both start from the same map. Two values is what lets a test make the
-		// handler's lookup fail while the edge still resolves — the 503 cases in xa_test.go.
-		Xa: thuMucMau(),
 		DangNhap: &dangNhapGia{
 			sid: sidA,
 			// A token signed the way the use case signs it, so the cookie carries something the

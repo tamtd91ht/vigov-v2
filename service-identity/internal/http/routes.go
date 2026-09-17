@@ -34,7 +34,6 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/page"
-	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/token"
 	"github.com/vihat/vigov/service-identity/internal/app"
 	"github.com/vihat/vigov/service-identity/internal/domain"
@@ -107,12 +106,6 @@ type Deps struct {
 	DangNhap DangNhapUC
 	DangXuat DangXuatUC
 
-	// Xa is the SAME tenant.Directory the edge resolves Host with — see the note at the
-	// GET /api/v1/commune route. tenant.Directory rather than a local interface because it is
-	// already an interface, already owned by pkg/tenant, and a second declaration of it here
-	// would be a second place for "which commune is this Host" to be answered.
-	Xa tenant.Directory
-
 	Log *slog.Logger
 }
 
@@ -138,8 +131,6 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu authz.Checker — mọi route có quyền sẽ không kiểm được")
 	case d.Quyen == nil:
 		panic("identity/http: thiếu kho quyền — GET /api/v1/sessions/current sẽ panic khi có người gọi")
-	case d.Xa == nil:
-		panic("identity/http: thiếu thư mục xã — màn hình đăng nhập sẽ không có tên xã để hiển thị")
 	}
 
 	h := NewHandler(d)
@@ -243,8 +234,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// @summary  Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập
 	// @screen   15-phu-luc-giao-dien-chung §1
+	// MỘT mã trả lời duy nhất, và đó là hệ quả trực tiếp của việc biên mang cả tenant.Tenant:
+	// handler không còn phân giải gì nữa nên không còn thất bại nào để khai. Tên miền không
+	// thuộc xã nào thì bị biên từ chối bằng 404 TRƯỚC khi tới đây, nên 404 không phải kết quả
+	// của tuyến này mà của chuỗi trước nó.
+	//
 	// @reply    200 thongTinXa
-	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/commune",
 		authz.Public("màn hình đăng nhập phải hiện tên xã TRƯỚC khi có phiên nào để kiểm quyền")(
 			http.HandlerFunc(h.ThongTinXa)))

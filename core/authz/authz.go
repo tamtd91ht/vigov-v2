@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
 )
 
@@ -93,17 +94,20 @@ func RequirePermission(c Checker, perm Perm) func(http.Handler) http.Handler {
 			ctx := r.Context()
 			p, ok := From(ctx)
 			if !ok {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				httpx.WriteError(w, http.StatusUnauthorized, "unauthorized",
+					"Phiên làm việc không hợp lệ hoặc đã kết thúc. Vui lòng đăng nhập lại.", "")
 				return
 			}
 			// The commune in the token must match the commune resolved from Host — see
 			// xacNhanXa.
 			if !xacNhanXa(ctx, p) {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				httpx.WriteError(w, http.StatusUnauthorized, "unauthorized",
+					"Phiên làm việc không hợp lệ hoặc đã kết thúc. Vui lòng đăng nhập lại.", "")
 				return
 			}
 			if !c.Allows(ctx, p, perm) {
-				http.Error(w, "forbidden", http.StatusForbidden)
+				httpx.WriteError(w, http.StatusForbidden, "forbidden",
+					"Tài khoản của bạn không có quyền thực hiện thao tác này.", "")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -135,7 +139,8 @@ func CitizenOnly() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			p, ok := From(r.Context())
 			if !ok || p.Kind != "citizen" {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				httpx.WriteError(w, http.StatusUnauthorized, "unauthorized",
+					"Phiên làm việc không hợp lệ hoặc đã kết thúc. Vui lòng đăng nhập lại.", "")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -159,11 +164,13 @@ func AnyAuthenticated(reason string) func(http.Handler) http.Handler {
 			ctx := r.Context()
 			p, ok := From(ctx)
 			if !ok {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				httpx.WriteError(w, http.StatusUnauthorized, "unauthorized",
+					"Phiên làm việc không hợp lệ hoặc đã kết thúc. Vui lòng đăng nhập lại.", "")
 				return
 			}
 			if !xacNhanXa(ctx, p) {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				httpx.WriteError(w, http.StatusUnauthorized, "unauthorized",
+					"Phiên làm việc không hợp lệ hoặc đã kết thúc. Vui lòng đăng nhập lại.", "")
 				return
 			}
 			next.ServeHTTP(w, r)

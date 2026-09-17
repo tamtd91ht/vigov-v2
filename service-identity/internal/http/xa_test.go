@@ -139,43 +139,50 @@ func TestThongTinXaHostKhongThuocXaNaoTra404(t *testing.T) {
 		http.StatusNotFound)
 }
 
-// --- failing closed ---------------------------------------------------------------------------
+// --- một nguồn phân giải ------------------------------------------------------------------
 
-func TestThongTinXaKhongDocDuocThi503(t *testing.T) {
-	// The platform service has gone away between the edge's lookup and the handler's. There is no
-	// cached name to fall back on and no name may be guessed, so nothing is served.
+// TestThongTinXaLayTenTuChinhBienPhanGiai thay cho hai bài đã xoá cùng cơ chế chúng kiểm.
+//
+// HAI BÀI CŨ KIỂM GÌ: handler phân giải `Host` LẦN THỨ HAI, nên hai lần có thể lệch nhau —
+// một bài dựng ca "không đọc được lần hai" (503), một bài dựng ca "lần hai ra xã khác" và
+// khẳng định tên xã B không lọt lên tên miền xã A.
+//
+// VÌ SAO CHÚNG BIẾN MẤT: biên nay mang cả `tenant.Tenant` vào context, nên chỉ còn MỘT lần
+// phân giải. Hai ca kia không còn dựng được — không phải vì đã sửa cho chúng không xảy ra,
+// mà vì cái sinh ra chúng không còn tồn tại. Giữ lại hai bài đó sẽ là giữ hai bài xanh vĩnh
+// viễn mà không kiểm gì, đúng thứ tệ hơn không có test.
+//
+// CÁI CÒN PHẢI GIỮ là kết luận của chúng: tên phục vụ ra PHẢI là tên của xã mà biên đã phân
+// giải, không bao giờ của xã khác. Bài này ghim đúng câu đó, và nó đỏ nếu ai đó lại thêm một
+// nguồn phân giải thứ hai vào handler.
+func TestThongTinXaLayTenTuChinhBienPhanGiai(t *testing.T) {
 	m := dungMayChu(t)
-	m.dungLai(t, func(d *Deps) { d.Xa = thuMucGia{} })
 
-	w := m.goi(t, "GET", hostA, "/api/v1/commune", "", "")
-	doiMa(t, w, http.StatusServiceUnavailable)
-	if got := loiTra(t, w).Code; got != "tenant_unavailable" {
-		t.Errorf("code = %q, muốn tenant_unavailable", got)
-	}
-}
+	for _, tr := range []struct {
+		host, ten string
+	}{
+		{hostA, m.thuMuc[hostA].Name},
+		{hostB, m.thuMuc[hostB].Name},
+	} {
+		w := m.goi(t, "GET", tr.host, "/api/v1/commune", "", "")
+		doiMa(t, w, http.StatusOK)
 
-func TestThongTinXaPhanGiaiRaXaKhacThiTuChoi(t *testing.T) {
-	// THE CASE WORTH THE WHOLE MECHANISM. The handler resolves Host a second time, so the two
-	// lookups could in principle disagree — a domain reassigned between them, or a normalisation
-	// that drifted away from the edge's. Serving the name that came back would print commune B's
-	// name on commune A's domain: a breach between two authorities, on a public page.
-	m := dungMayChu(t)
-	m.dungLai(t, func(d *Deps) {
-		d.Xa = thuMucGia{hostA: {ID: xaB, Host: hostB, Name: "Xã Bình Dương", Active: true}}
-	})
-
-	w := m.goi(t, "GET", hostA, "/api/v1/commune", "", "")
-	doiMa(t, w, http.StatusServiceUnavailable)
-	if strings.Contains(w.Body.String(), "Bình Dương") {
-		t.Fatalf("RÒ RỈ: trả tên xã khác trên tên miền của xã này: %s", w.Body.String())
+		var ra thongTinXa
+		if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+			t.Fatalf("%s: %v", tr.host, err)
+		}
+		if ra.Name != tr.ten {
+			t.Errorf("%s: name = %q, muốn %q — tên phải đến từ chính lần phân giải của biên",
+				tr.host, ra.Name, tr.ten)
+		}
 	}
 }
 
 func TestThongTinXaChuanHoaHostGiongBien(t *testing.T) {
-	// httptest sends a Host with no port, so this is the case the normalisation copy exists for:
-	// an upper-cased Host with a port must reach the same commune at the edge AND in the handler.
-	// If the two ever normalise differently the answer is 503, never another commune's name — but
-	// a 503 on an ordinary request is still a broken sign-in screen.
+	// Phép chuẩn hoá Host nay chỉ còn MỘT bản, ở biên (core/httpx/edge.go). Bài này vì thế
+	// không còn kiểm "hai bản có khớp nhau không" mà kiểm chính bản duy nhất ấy: một Host viết
+	// hoa kèm cổng vẫn phải tới đúng xã. Nếu biên thôi chuẩn hoá, mọi người gõ tên miền viết
+	// hoa sẽ nhận 404 — một màn hình đăng nhập hỏng mà không có gì đỏ.
 	m := dungMayChu(t)
 
 	r := httptest.NewRequest("GET", "https://"+hostA+"/api/v1/commune", nil)

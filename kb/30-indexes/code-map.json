@@ -48,47 +48,47 @@
     },
     "authz.AnyAuthenticated": {
       "kind": "func",
-      "at": "core/authz/authz.go:153"
+      "at": "core/authz/authz.go:158"
     },
     "authz.Checker": {
       "kind": "type",
-      "at": "core/authz/authz.go:68"
+      "at": "core/authz/authz.go:69"
     },
     "authz.CitizenOnly": {
       "kind": "func",
-      "at": "core/authz/authz.go:133"
+      "at": "core/authz/authz.go:137"
     },
     "authz.From": {
       "kind": "func",
-      "at": "core/authz/authz.go:59"
+      "at": "core/authz/authz.go:60"
     },
     "authz.Into": {
       "kind": "func",
-      "at": "core/authz/authz.go:55"
+      "at": "core/authz/authz.go:56"
     },
     "authz.Nhom": {
       "kind": "func",
-      "at": "core/authz/authz.go:37"
+      "at": "core/authz/authz.go:38"
     },
     "authz.Perm": {
       "kind": "type",
-      "at": "core/authz/authz.go:31"
+      "at": "core/authz/authz.go:32"
     },
     "authz.Principal": {
       "kind": "type",
-      "at": "core/authz/authz.go:46"
+      "at": "core/authz/authz.go:47"
     },
     "authz.Public": {
       "kind": "func",
-      "at": "core/authz/authz.go:175"
+      "at": "core/authz/authz.go:182"
     },
     "authz.RequirePermission": {
       "kind": "func",
-      "at": "core/authz/authz.go:90"
+      "at": "core/authz/authz.go:91"
     },
     "authz.String": {
       "kind": "func",
-      "at": "core/authz/authz.go:33"
+      "at": "core/authz/authz.go:34"
     },
     "config.CanhBao": {
       "kind": "func",
@@ -188,11 +188,11 @@
     },
     "http.CanBoDanhBa": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:71"
+      "at": "service-identity/internal/http/routes.go:70"
     },
     "http.CanBoDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:59"
+      "at": "service-identity/internal/http/routes.go:58"
     },
     "http.ChiTietCanBo": {
       "kind": "func",
@@ -204,7 +204,7 @@
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:90"
+      "at": "service-identity/internal/http/routes.go:89"
     },
     "http.DangXuat": {
       "kind": "func",
@@ -212,7 +212,7 @@
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:94"
+      "at": "service-identity/internal/http/routes.go:93"
     },
     "http.DanhSachCanBo": {
       "kind": "func",
@@ -232,7 +232,7 @@
     },
     "http.PhienDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:53"
+      "at": "service-identity/internal/http/routes.go:52"
     },
     "http.PhienHienTai": {
       "kind": "type",
@@ -244,7 +244,7 @@
     },
     "http.QuyenDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:84"
+      "at": "service-identity/internal/http/routes.go:83"
     },
     "http.Register": {
       "kind": "func",
@@ -252,7 +252,7 @@
     },
     "http.ThongTinXa": {
       "kind": "func",
-      "at": "service-identity/internal/http/xa.go:68"
+      "at": "service-identity/internal/http/xa.go:66"
     },
     "http.XacThuc": {
       "kind": "func",
@@ -264,15 +264,15 @@
     },
     "httpx.Error": {
       "kind": "type",
-      "at": "core/httpx/edge.go:63"
+      "at": "core/httpx/edge.go:80"
     },
     "httpx.Recover": {
       "kind": "func",
-      "at": "core/httpx/edge.go:79"
+      "at": "core/httpx/edge.go:96"
     },
     "httpx.StripTenantHeaders": {
       "kind": "func",
-      "at": "core/httpx/edge.go:39"
+      "at": "core/httpx/edge.go:56"
     },
     "httpx.TenantMiddleware": {
       "kind": "func",
@@ -280,7 +280,7 @@
     },
     "httpx.WriteError": {
       "kind": "func",
-      "at": "core/httpx/edge.go:69"
+      "at": "core/httpx/edge.go:86"
     },
     "idem.CheDoHong": {
       "kind": "type",
@@ -742,9 +742,13 @@
       "kind": "type",
       "at": "core/tenant/cache.go:35"
     },
+    "tenant.Current": {
+      "kind": "func",
+      "at": "core/tenant/tenant.go:68"
+    },
     "tenant.Directory": {
       "kind": "type",
-      "at": "core/tenant/tenant.go:62"
+      "at": "core/tenant/tenant.go:104"
     },
     "tenant.Forget": {
       "kind": "func",
@@ -766,9 +770,17 @@
       "kind": "func",
       "at": "core/tenant/tenant.go:34"
     },
+    "tenant.IntoFull": {
+      "kind": "func",
+      "at": "core/tenant/tenant.go:60"
+    },
+    "tenant.MustCurrent": {
+      "kind": "func",
+      "at": "core/tenant/tenant.go:78"
+    },
     "tenant.MustFrom": {
       "kind": "func",
-      "at": "core/tenant/tenant.go:49"
+      "at": "core/tenant/tenant.go:91"
     },
     "tenant.NewCachedDirectory": {
       "kind": "func",
@@ -780,7 +792,7 @@
     },
     "tenant.Tenant": {
       "kind": "type",
-      "at": "core/tenant/tenant.go:70"
+      "at": "core/tenant/tenant.go:112"
     },
     "tenant.Valid": {
       "kind": "func",

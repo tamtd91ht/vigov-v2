@@ -101,7 +101,6 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		Quyen:    quyenMau(),
 		CanBo:    &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
 		DanhBa:   danhBaMau(),
-		Xa:       thuMucMau(),
 		DangNhap: &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
 		DangXuat: &dangXuatGia{},
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
