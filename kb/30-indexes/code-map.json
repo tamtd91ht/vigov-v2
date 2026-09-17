@@ -48,7 +48,7 @@
     },
     "authz.AnyAuthenticated": {
       "kind": "func",
-      "at": "core/authz/authz.go:158"
+      "at": "core/authz/authz.go:187"
     },
     "authz.Checker": {
       "kind": "type",
@@ -56,7 +56,11 @@
     },
     "authz.CitizenOnly": {
       "kind": "func",
-      "at": "core/authz/authz.go:137"
+      "at": "core/authz/authz.go:138"
+    },
+    "authz.CitizenPrincipal": {
+      "kind": "func",
+      "at": "core/authz/authz.go:163"
     },
     "authz.From": {
       "kind": "func",
@@ -80,7 +84,7 @@
     },
     "authz.Public": {
       "kind": "func",
-      "at": "core/authz/authz.go:182"
+      "at": "core/authz/authz.go:211"
     },
     "authz.RequirePermission": {
       "kind": "func",
@@ -184,15 +188,15 @@
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:76"
+      "at": "core/grpcx/grpcx.go:94"
     },
     "grpcx.UnaryClientInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:92"
+      "at": "core/grpcx/grpcx.go:110"
     },
     "grpcx.UnaryServerInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:125"
+      "at": "core/grpcx/grpcx.go:143"
     },
     "http.BoPhanDanhMuc": {
       "kind": "type",
@@ -290,13 +294,33 @@
       "kind": "func",
       "at": "service-identity/internal/http/phien_hien_tai.go:114"
     },
+    "httpx.CitizenEdge": {
+      "kind": "func",
+      "at": "core/httpx/citizen.go:102"
+    },
+    "httpx.CitizenSession": {
+      "kind": "type",
+      "at": "core/httpx/citizen.go:42"
+    },
+    "httpx.CitizenSessionFrom": {
+      "kind": "func",
+      "at": "core/httpx/citizen.go:139"
+    },
+    "httpx.CitizenSessions": {
+      "kind": "type",
+      "at": "core/httpx/citizen.go:75"
+    },
     "httpx.Error": {
       "kind": "type",
-      "at": "core/httpx/edge.go:80"
+      "at": "core/httpx/edge.go:87"
+    },
+    "httpx.KhongThuocXa": {
+      "kind": "func",
+      "at": "core/httpx/citizen.go:193"
     },
     "httpx.Recover": {
       "kind": "func",
-      "at": "core/httpx/edge.go:96"
+      "at": "core/httpx/edge.go:103"
     },
     "httpx.StripTenantHeaders": {
       "kind": "func",
@@ -306,9 +330,21 @@
       "kind": "func",
       "at": "core/httpx/edge.go:20"
     },
+    "httpx.Write": {
+      "kind": "func",
+      "at": "core/httpx/citizen.go:252"
+    },
     "httpx.WriteError": {
       "kind": "func",
-      "at": "core/httpx/edge.go:86"
+      "at": "core/httpx/edge.go:93"
+    },
+    "httpx.WriteHeader": {
+      "kind": "func",
+      "at": "core/httpx/citizen.go:240"
+    },
+    "httpx.XaTuPhien": {
+      "kind": "func",
+      "at": "core/httpx/citizen.go:148"
     },
     "idem.CheDoHong": {
       "kind": "type",
@@ -812,11 +848,11 @@
     },
     "tenant.Forget": {
       "kind": "func",
-      "at": "core/tenant/cache.go:97"
+      "at": "core/tenant/cache.go:146"
     },
     "tenant.ForgetAll": {
       "kind": "func",
-      "at": "core/tenant/cache.go:105"
+      "at": "core/tenant/cache.go:154"
     },
     "tenant.From": {
       "kind": "func",
