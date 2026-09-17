@@ -55,7 +55,16 @@ with a name**, and the single most valuable thing this file carries.
 If other sessions are running, list them and record **which paths each one holds**. Two
 sessions writing one directory is the failure this file exists to prevent.
 
-### 2. Verify every claim you are about to make
+### 2. Verify every claim you are about to make — **carried-forward ones first**
+
+The riskiest lines in the file are not the new ones. They are the rows you keep from the
+previous handover: they read as verified because they were, once, and nothing in the file says
+when. A trap that has been fixed, a component recorded as missing that now exists, a blocker
+the customer settled last week — each survives a rewrite unless it is checked against disk.
+
+**Open the previous version, and for every row you intend to keep, check it on disk before
+keeping it.** A row you cannot check goes out, or says plainly that it is unchecked.
+
 
 A handover that says "green" when it is not is worse than no handover: the next session builds
 on it. Run `make check` and record **its actual result**, including what it did NOT cover
