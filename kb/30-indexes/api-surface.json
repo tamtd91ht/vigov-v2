@@ -6,9 +6,9 @@
     {
       "service": "identity",
       "method": "GET",
-      "path": "/api/v1/commune",
-      "operation_id": "identity_get_commune",
-      "task_id": "53f859654452",
+      "path": "/api/v1/communes/current",
+      "operation_id": "identity_get_communes_current",
+      "task_id": "00a7011e20d0",
       "summary": "Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập",
       "screen": "15-phu-luc-giao-dien-chung §1",
       "permission_kind": "public",

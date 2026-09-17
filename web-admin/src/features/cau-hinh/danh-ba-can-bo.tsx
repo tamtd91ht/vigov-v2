@@ -79,8 +79,8 @@ export function DanhBaCanBo() {
    * VÌ SAO ĐỌC Ở TRÌNH DUYỆT CHỨ KHÔNG Ở MÁY CHỦ: hai tuyến này đòi đã đăng nhập, nên gọi phía
    * máy chủ thì phải tự chuyển tiếp cookie phiên — thêm một chỗ cầm cookie, và là đúng chỗ dễ
    * chuyển tiếp sang sai host. Ở đây đường dẫn tương đối trên chính host của xã, trình duyệt
-   * tự gửi cookie host-only (`lib/api/goi.ts`). Khác hẳn `GET /api/v1/commune`: tuyến ấy công
-   * khai nên đọc được ở máy chủ (`lib/tenant-config.ts`).
+   * tự gửi cookie host-only (`lib/api/goi.ts`). Khác hẳn `GET /api/v1/communes/current`: tuyến
+   * ấy công khai nên đọc được ở máy chủ (`lib/tenant-config.ts`).
    *
    * KHÔNG CÓ BỘ ĐỆM NÀO SỐNG QUA LẦN MỞ MÀN HÌNH: bảng tra nằm trong state của component, chết
    * cùng component. Một biến ở mức module giữ danh mục lại là đúng hình dạng của một lần danh

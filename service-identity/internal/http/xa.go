@@ -6,7 +6,7 @@ import (
 	"github.com/vihat/vigov/core/tenant"
 )
 
-// The read route behind the sign-in screen. GET /api/v1/commune
+// The read route behind the sign-in screen. GET /api/v1/communes/current
 //
 // It is the ONE public route in this service that returns data, and every decision below exists
 // because of that. Anything it returns is readable by anybody who can reach the domain.
@@ -79,7 +79,7 @@ type thongTinXa struct {
 	Province string `json:"province"`
 }
 
-// ThongTinXa serves the commune this request's Host resolves to. GET /api/v1/commune
+// ThongTinXa serves the commune this request's Host resolves to. GET /api/v1/communes/current
 //
 // THE COMMUNE IS NEVER TAKEN FROM THE REQUEST. It is the one the EDGE resolved from `Host` and
 // put in the context; the query string, the body and any client header are not read here at all,

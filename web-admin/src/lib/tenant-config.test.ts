@@ -49,7 +49,7 @@ describe("resolveTenant — hình dạng lời gọi", () => {
     );
     await resolveTenant(XA_A);
 
-    expect(loiGoi(gia).dich).toBe(`https://${XA_A}/api/v1/commune`);
+    expect(loiGoi(gia).dich).toBe(`https://${XA_A}/api/v1/communes/current`);
   });
 
   it("không có `tenant_id` ở bất kỳ đâu — đường dẫn, truy vấn hay header", async () => {
@@ -79,7 +79,7 @@ describe("resolveTenant — hình dạng lời gọi", () => {
     const gia = batFetch(thongTinXa({ name: "UBND xã Tân Phú", host: XA_A, province: "" }));
     await resolveTenant("TanPhu.Example.Gov.VN");
 
-    expect(loiGoi(gia).dich).toBe(`https://${XA_A}/api/v1/commune`);
+    expect(loiGoi(gia).dich).toBe(`https://${XA_A}/api/v1/communes/current`);
   });
 });
 

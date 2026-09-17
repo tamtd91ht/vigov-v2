@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// WHAT THIS FILE IS FOR: GET /api/v1/commune is the only PUBLIC route in this service that
+// WHAT THIS FILE IS FOR: GET /api/v1/communes/current is the only PUBLIC route in this service that
 // returns data. Three things have to hold, and each of them fails silently if it stops holding:
 //
 //  1. it works with NO token — otherwise the sign-in screen cannot print the name of the
@@ -24,7 +24,7 @@ import (
 func TestThongTinXaKhongCanToken(t *testing.T) {
 	m := dungMayChu(t)
 
-	w := m.goi(t, "GET", hostA, "/api/v1/commune", "", "")
+	w := m.goi(t, "GET", hostA, "/api/v1/communes/current", "", "")
 	doiMa(t, w, http.StatusOK)
 
 	var ra thongTinXa
@@ -52,7 +52,7 @@ func TestThongTinXaChuaKhaiTinhThanhTraChuoiRongChuKhongBiaMotTinh(t *testing.T)
 	// only sometimes has to handle two shapes, and it will handle one of them wrong.
 	m := dungMayChu(t)
 
-	w := m.goi(t, "GET", hostB, "/api/v1/commune", "", "")
+	w := m.goi(t, "GET", hostB, "/api/v1/communes/current", "", "")
 	doiMa(t, w, http.StatusOK)
 
 	var tho map[string]any
@@ -75,7 +75,7 @@ func TestThongTinXaTokenHongVanPhucVu(t *testing.T) {
 	// back in: the page that would let them sign in again refuses to load.
 	m := dungMayChu(t)
 
-	w := m.goi(t, "GET", hostA, "/api/v1/commune", "", "token-hong-khong-giai-duoc")
+	w := m.goi(t, "GET", hostA, "/api/v1/communes/current", "", "token-hong-khong-giai-duoc")
 	doiMa(t, w, http.StatusOK)
 }
 
@@ -89,7 +89,7 @@ func TestThongTinXaKhongTraTenantID(t *testing.T) {
 	// every cache key, queue message and file path (rule 1, invariant 7) to anybody with curl.
 	m := dungMayChu(t)
 
-	w := m.goi(t, "GET", hostA, "/api/v1/commune", "", "")
+	w := m.goi(t, "GET", hostA, "/api/v1/communes/current", "", "")
 	doiMa(t, w, http.StatusOK)
 
 	than := w.Body.String()
@@ -127,7 +127,7 @@ func TestThongTinXaLayTheoHostChuKhongTheoThamSo(t *testing.T) {
 	// ThongTinXa reads the query at all — this asserts both at once.
 	m := dungMayChu(t)
 
-	r := httptest.NewRequest("GET", "https://"+hostA+"/api/v1/commune?tenant_id="+string(xaB)+"&host="+hostB, nil)
+	r := httptest.NewRequest("GET", "https://"+hostA+"/api/v1/communes/current?tenant_id="+string(xaB)+"&host="+hostB, nil)
 	r.Host = hostA
 	r.Header.Set("X-Tenant-Id", string(xaB))
 	w := m.chay(r)
@@ -149,7 +149,7 @@ func TestThongTinXaMoiHostTraXaCuaChinhNo(t *testing.T) {
 		hostA: "Xã Thăng Bình",
 		hostB: "Xã Bình Dương",
 	} {
-		w := m.goi(t, "GET", host, "/api/v1/commune", "", "")
+		w := m.goi(t, "GET", host, "/api/v1/communes/current", "", "")
 		doiMa(t, w, http.StatusOK)
 		var ra thongTinXa
 		if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
@@ -167,7 +167,7 @@ func TestThongTinXaHostKhongThuocXaNaoTra404(t *testing.T) {
 	// prober reaches, and a 400 or a 500 here would answer questions a 404 does not.
 	m := dungMayChu(t)
 
-	doiMa(t, m.goi(t, "GET", "khong-ai-biet.example.gov.vn", "/api/v1/commune", "", ""),
+	doiMa(t, m.goi(t, "GET", "khong-ai-biet.example.gov.vn", "/api/v1/communes/current", "", ""),
 		http.StatusNotFound)
 }
 
@@ -196,7 +196,7 @@ func TestThongTinXaLayTenTuChinhBienPhanGiai(t *testing.T) {
 		{hostA, m.thuMuc[hostA].Name},
 		{hostB, m.thuMuc[hostB].Name},
 	} {
-		w := m.goi(t, "GET", tr.host, "/api/v1/commune", "", "")
+		w := m.goi(t, "GET", tr.host, "/api/v1/communes/current", "", "")
 		doiMa(t, w, http.StatusOK)
 
 		var ra thongTinXa
@@ -217,7 +217,7 @@ func TestThongTinXaChuanHoaHostGiongBien(t *testing.T) {
 	// hoa sẽ nhận 404 — một màn hình đăng nhập hỏng mà không có gì đỏ.
 	m := dungMayChu(t)
 
-	r := httptest.NewRequest("GET", "https://"+hostA+"/api/v1/commune", nil)
+	r := httptest.NewRequest("GET", "https://"+hostA+"/api/v1/communes/current", nil)
 	r.Host = strings.ToUpper(hostA) + ":8443"
 	w := m.chay(r)
 

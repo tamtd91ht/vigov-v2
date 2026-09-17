@@ -8,10 +8,10 @@
   },
   "x-vigov-source": "*/internal/ — chú thích @summary/@screen/@request/@reply ngay trên câu lệnh đăng ký route",
   "paths": {
-    "/api/v1/commune": {
+    "/api/v1/communes/current": {
       "get": {
         "summary": "Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập",
-        "operationId": "identity_get_commune",
+        "operationId": "identity_get_communes_current",
         "tags": [
           "identity"
         ],
@@ -20,7 +20,7 @@
           "kind": "public",
           "reason": "màn hình đăng nhập phải hiện tên xã TRƯỚC khi có phiên nào để kiểm quyền"
         },
-        "x-vigov-task": "53f859654452",
+        "x-vigov-task": "00a7011e20d0",
         "responses": {
           "200": {
             "description": "OK",

@@ -270,11 +270,25 @@ func Register(mux *http.ServeMux, d Deps) {
 	// describes the commune's internal operation — see thongTinXa, which is where the absent
 	// fields are argued.
 	//
-	// `commune` HAS NO ROW YET in kb/00-foundation/ubiquitous-language.md's URL-resource table;
-	// the path was named in the request for this work, not translated here (ADR 0011 forbids
-	// translating on the spot). SINGULAR, against the general plural rule, and deliberately: a
-	// caller can never see more than one, because which one it gets is decided by the Host it
-	// arrived on. `/communes` would promise a collection this route must never have.
+	// `/communes/current` — PLURAL SEGMENT, SINGULAR SUB-RESOURCE, and this replaces an earlier
+	// `/api/v1/commune` that argued itself an exception to the plural rule.
+	//
+	// The old argument was that a caller can never see more than one, so a plural segment would
+	// promise a collection this route must never have. That reasoning ignored what the plural
+	// segment actually names: the RESOURCE TYPE, not the size of one answer. `skills/
+	// rest-api-design` REQUIRED #1 has no exception, and an endpoint granting itself one is the
+	// shape rule 9 calls drift.
+	//
+	// WHAT MADE IT WORTH CHANGING rather than leaving as a style point: the citizen Mini App is
+	// getting `GET /api/v1/communes` — the list of communes a citizen picks from when they belong
+	// to none yet. Two paths one letter `s` apart, answering two different questions, serving two
+	// classes of user with very different trust levels (rule 4). Neither leaks — `thongTinXa`
+	// carries no id and the platform summary carries no host — so this is a confusion risk, not a
+	// leak. It is also the kind nobody untangles six months later.
+	//
+	// `/current` is not invented here: `GET /api/v1/sessions/current` above is the same shape,
+	// answering the same kind of question — "which one is THIS request's", derived from the
+	// request itself and never from a parameter.
 	//
 	// NO idem.* DECLARATION: GET, changes no state.
 	//
@@ -286,7 +300,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// của tuyến này mà của chuỗi trước nó.
 	//
 	// @reply    200 thongTinXa
-	mux.Handle("GET /api/v1/commune",
+	mux.Handle("GET /api/v1/communes/current",
 		authz.Public("màn hình đăng nhập phải hiện tên xã TRƯỚC khi có phiên nào để kiểm quyền")(
 			http.HandlerFunc(h.ThongTinXa)))
 

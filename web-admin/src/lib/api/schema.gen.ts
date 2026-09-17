@@ -103,9 +103,9 @@ export type page_Result_identity_canBoTomTat = {
   "has_more": boolean;
 };
 
-/** GET /api/v1/commune — Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập */
-export type identity_get_commune = {
-  duongDan: "/api/v1/commune";
+/** GET /api/v1/communes/current — Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập */
+export type identity_get_communes_current = {
+  duongDan: "/api/v1/communes/current";
   phuongThuc: "GET";
   thamSo: {
   };

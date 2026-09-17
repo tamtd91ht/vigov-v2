@@ -13,7 +13,7 @@
  * | logo, map centre, SLA, catalogues  | from the platform service     |
  */
 
-import type { identity_get_commune, identity_thongTinXa } from "./api/schema.gen";
+import type { identity_get_communes_current, identity_thongTinXa } from "./api/schema.gen";
 
 export type TenantConfig = {
   /**
@@ -59,12 +59,12 @@ export type TenantConfig = {
  *
  * THERE IS NO `active` FIELD EITHER, and for a different reason: here it could only ever be
  * `true`. The edge answers 404 for a deactivated commune BEFORE any handler runs
- * (`core/httpx/edge.go:25`), so `GET /api/v1/commune` cannot reply 200 for one. A field that
- * is constant by construction invites a "this commune has merged" branch that never executes,
- * and a branch that never executes is a branch nobody notices going wrong. A merged commune is
- * a real state (rule 1, invariant 6) and answering it properly means the edge saying something
- * other than a bare 404 — a change in `core/httpx` that every service shares. STATED, not
- * half-built on this side.
+ * (`core/httpx/edge.go:25`), so `GET /api/v1/communes/current` cannot reply 200 for one. A
+ * field that is constant by construction invites a "this commune has merged" branch that never
+ * executes, and a branch that never executes is a branch nobody notices going wrong. A merged
+ * commune is a real state (rule 1, invariant 6) and answering it properly means the edge saying
+ * something other than a bare 404 — a change in `core/httpx` that every service shares. STATED,
+ * not half-built on this side.
  */
 
 /**
@@ -117,7 +117,7 @@ export async function resolveTenant(host: string): Promise<TenantConfig | null> 
   // (`kb/00-foundation/multi-tenant-model.md`, §Ranh giới tin cậy).
   if (goc === null) return null;
 
-  const duongDan: identity_get_commune["duongDan"] = "/api/v1/commune";
+  const duongDan: identity_get_communes_current["duongDan"] = "/api/v1/communes/current";
   const phanHoi = await fetch(new URL(duongDan, goc), {
     method: "GET",
     // No credentials and no headers of any kind. The route is public, so there is nothing to

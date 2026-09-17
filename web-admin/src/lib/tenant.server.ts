@@ -19,7 +19,7 @@ import { resolveTenant, type TenantConfig } from "./tenant-config";
  * lộ xã nào tồn tại (luật 1, bất biến 3; `kb/00-foundation/multi-tenant-model.md` §Ranh giới
  * tin cậy).
  *
- * TUYẾN ĐỌC CẤU HÌNH XÃ NAY ĐÃ CÓ: `GET /api/v1/commune` (`kb/20-contracts/openapi.json`),
+ * TUYẾN ĐỌC CẤU HÌNH XÃ NAY ĐÃ CÓ: `GET /api/v1/communes/current` (`kb/20-contracts/openapi.json`),
  * công khai, trả tên xã và tỉnh/thành ứng với `Host`. `resolveTenant` gọi đúng tuyến ấy —
  * vẫn không có danh bạ xã nào nằm trong mã web, và vẫn không có xã mặc định nào.
  */
