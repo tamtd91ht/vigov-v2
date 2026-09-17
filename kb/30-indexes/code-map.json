@@ -184,7 +184,7 @@
     },
     "http.CanBoDoc": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:44"
+      "at": "services/identity/internal/http/routes.go:57"
     },
     "http.DangNhap": {
       "kind": "func",
@@ -192,7 +192,7 @@
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:50"
+      "at": "services/identity/internal/http/routes.go:63"
     },
     "http.DangXuat": {
       "kind": "func",
@@ -200,7 +200,7 @@
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:54"
+      "at": "services/identity/internal/http/routes.go:67"
     },
     "http.Deps": {
       "kind": "type",
@@ -216,7 +216,7 @@
     },
     "http.PhienDoc": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:38"
+      "at": "services/identity/internal/http/routes.go:51"
     },
     "http.PhienHienTai": {
       "kind": "type",
@@ -345,6 +345,10 @@
     "idem.WriteHeader": {
       "kind": "func",
       "at": "pkg/idem/idem.go:562"
+    },
+    "main.MarshalJSON": {
+      "kind": "func",
+      "at": "tools/apidoc/openapi.go:41"
     },
     "migrate.Chay": {
       "kind": "func",

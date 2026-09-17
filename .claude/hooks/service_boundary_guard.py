@@ -134,7 +134,7 @@ def main() -> None:
             "  monolith: full microservice cost, and nothing can be changed any more.",
             "",
             "  Correct approach:",
-            "    - need it now        → call gRPC via the contract in kb/20-contracts/grpc/",
+            "    - need it now        → call gRPC via the contract in proto/",
             "    - can tolerate lag   → consume events, keep your own read model",
             "    - contract missing   → STOP CONDITION, ask the user",
             "",

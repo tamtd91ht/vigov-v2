@@ -27,7 +27,7 @@ The hand-written copy is wrong by the next day.
 | `kb/00-foundation/` T0 | Years | Domain, boundaries, invariants, **why the cut is there** |
 | `kb/10-decisions/` T1 | Permanent | ADRs — never edited, never deleted |
 | `kb/30-indexes/` T3 | Per commit | **GENERATED** — never hand-edited |
-| _`kb/20-contracts/` T2_ | Per API version | **Not created yet** — `proto/` is the contract source today |
+| `kb/20-contracts/` T2 | Per API version | **GENERATED** — `openapi.json` from `tools/apidoc`. The REST surface only; `proto/` owns the contract between services |
 | _`kb/40-runbooks/` T4_ | Per incident | **Not created yet** — create on the first real incident |
 | `kb/90-ephemeral/` T5 | Days–weeks | Session handovers. **`expires` is mandatory** — a handover with no expiry is read as fact six months on |
 
