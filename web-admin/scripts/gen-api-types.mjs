@@ -34,13 +34,14 @@ const thuMuc = dirname(fileURLToPath(import.meta.url));
 function timGocKho(batDau) {
   let d = batDau;
   for (let i = 0; i < 8; i++) {
-    if (existsSync(resolve(d, "go.mod"))) return d;
+    if (existsSync(resolve(d, "go.work"))) return d;
     const cha = dirname(d);
     if (cha === d) break;
     d = cha;
   }
   throw new Error(
-    "gen-api-types: không tìm thấy gốc kho (không thấy go.mod ở thư mục cha nào)."
+    "gen-api-types: không tìm thấy gốc kho (không thấy go.work ở thư mục cha nào).\n" +
+      "Dấu hiệu là go.work chứ không phải go.mod: mỗi đơn vị triển khai có go.mod riêng."
   );
 }
 

@@ -111,7 +111,17 @@ def in_scope(path: str) -> bool:
         return False
     if any(p in path for p in PLATFORM):
         return False
-    return c.dich_vu_cua(path) is not None or "/internal/" in path
+    # Dịch vụ `platform` giữ sổ đăng ký xã — dữ liệu của NỀN TẢNG, không phải dữ liệu nghiệp
+    # vụ của một xã, nên nó không có `tenant_id` để phạm vi hoá (ADR 0003).
+    #
+    # So bằng TÊN NGHIỆP VỤ chứ không bằng tên thư mục: thư mục nay là `service-platform`, và
+    # loại trừ này từng được viết là `/services/platform/` — một chuỗi nay không còn tồn tại.
+    # Guard vẫn chạy, chỉ là mất đúng cái loại trừ nó cần, và hậu quả là nó kêu trên mọi tệp
+    # của platform cho tới khi ai đó tắt nó đi.
+    dv = c.dich_vu_cua(path)
+    if dv is not None and c.ten_nghiep_vu(dv) == "platform":
+        return False
+    return dv is not None or "/internal/" in path
 
 
 def scan(content: str) -> list[str]:

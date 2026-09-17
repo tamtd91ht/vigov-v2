@@ -7,7 +7,6 @@ expires: null
 owns_facts:
   - "vì sao mỗi đơn vị triển khai nằm ở cấp một của kho"
   - "vì sao core/ là một thư mục cấp một chứ không phải pkg/ nằm dưới gốc chung"
-  - "vì sao vẫn còn MỘT go.mod dù cây thư mục đã phẳng"
 ---
 
 # ADR 0015 — Mỗi đơn vị triển khai nằm ở cấp một
@@ -60,7 +59,12 @@ các xã bị phá.
 - Cùng lý do, `tools/kb` suýt công bố `kb/`, `docs/`, `tools/` là dịch vụ. Một index sai tệ
   hơn không có index: nó **được tin**.
 
-## Vẫn CHỈ MỘT `go.mod` — có chủ ý, chưa phải là điểm dừng
+## Vẫn CHỈ MỘT `go.mod` — ĐÃ ĐƯỢC THAY THẾ bởi [ADR 0016](0016-module-per-deployable-unit.md)
+
+> Phần dưới đây mô tả trạng thái ngày 2026-09-17 **trước** khi tách module, và lập luận của
+> nó vẫn đúng: phần đắt là biến `core/` thành ranh giới phiên bản. Cái nó bỏ sót là tách
+> module **không bắt buộc** kéo theo ghim phiên bản — xem ADR 0016. Giữ nguyên văn ở đây
+> chứ không sửa, vì một ADR ghi lại điều đã quyết tại thời điểm đó.
 
 Cây thư mục phẳng **không** kéo theo tách module. Hôm nay vẫn một `go.mod`, và `core/` vẫn được
 import trực tiếp chứ không qua phiên bản.

@@ -23,7 +23,10 @@ func moduleGia(t *testing.T, api, chung string) (*giaiMa, string) {
 			t.Fatal(err)
 		}
 	}
-	viet("go.mod", "module vd.test\n\ngo 1.26.0\n")
+	// Mỗi đơn vị triển khai là một module riêng, và gốc kho KHÔNG có go.mod.
+	// Fixture phải dựng đúng hình dạng ấy, nếu không nó kiểm một bố cục không tồn tại.
+	viet("thu/go.mod", "module vd.test/thu\n\ngo 1.26.0\n")
+	viet("core/go.mod", "module vd.test/core\n\ngo 1.26.0\n")
 	viet("core/chung/chung.go", chung)
 	viet("thu/cmd/server/main.go", "package main\n")
 	viet("thu/internal/http/api.go", api)
@@ -271,7 +274,10 @@ type Cha struct {
 }
 `
 	_, err := sinhSchema(t, api, "Cha", true)
-	if err == nil || !strings.Contains(err.Error(), "ngoài module") {
+	// "ngoài mọi module": kho nay có mười module, nên câu từ chối phải nói rõ là kiểu này
+	// không thuộc module NÀO — chứ không phải "không thuộc module này", vốn là câu đúng hồi
+	// còn một module duy nhất.
+	if err == nil || !strings.Contains(err.Error(), "ngoài mọi module") {
 		t.Fatalf("mong từ chối kiểu ngoài module, được: %v", err)
 	}
 }

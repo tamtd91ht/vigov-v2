@@ -1,0 +1,25 @@
+// Khong gian lam viec Go — muoi module trong mot kho.
+//
+// VI SAO CO TEP NAY: moi don vi trien khai la mot module rieng, nhung trong luc phat trien
+// thi mot sua doi o `core/` phai thay duoc ngay o ca tam dich vu. Khong co go.work, moi lan
+// dung `core` la mot vong phat hanh phien ban roi tam lan `go get` — chi phi phoi hop du lon
+// de nguoi ta bat dau tranh sua `core`, va ma dung chung khong ai dam sua la ma se bi chep.
+//
+// go.work CHI danh cho may tram va may chu build. No KHONG di vao anh Docker: moi Dockerfile
+// chep dung `core/` + module cua dich vu va dua vao `replace` trong go.mod cua dich vu ay —
+// tuc anh chung minh duoc dich vu build duoc ma khong can ca kho.
+
+go 1.26.0
+
+use (
+	./core
+	./service-comms
+	./service-documents
+	./service-dossiers
+	./service-finance
+	./service-identity
+	./service-petitions
+	./service-platform
+	./service-reporting
+	./tools
+)

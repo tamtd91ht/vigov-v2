@@ -4,35 +4,35 @@
   "symbols": {
     "app.Chay": {
       "kind": "func",
-      "at": "identity/internal/app/dang_nhap.go:220"
+      "at": "service-identity/internal/app/dang_nhap.go:220"
     },
     "app.DangNhap": {
       "kind": "type",
-      "at": "identity/internal/app/dang_nhap.go:32"
+      "at": "service-identity/internal/app/dang_nhap.go:32"
     },
     "app.DangXuat": {
       "kind": "type",
-      "at": "identity/internal/app/dang_nhap.go:211"
+      "at": "service-identity/internal/app/dang_nhap.go:211"
     },
     "app.KetQuaDangNhap": {
       "kind": "type",
-      "at": "identity/internal/app/dang_nhap.go:55"
+      "at": "service-identity/internal/app/dang_nhap.go:55"
     },
     "app.KyToken": {
       "kind": "type",
-      "at": "identity/internal/app/dang_nhap.go:27"
+      "at": "service-identity/internal/app/dang_nhap.go:27"
     },
     "app.NewDangNhap": {
       "kind": "func",
-      "at": "identity/internal/app/dang_nhap.go:40"
+      "at": "service-identity/internal/app/dang_nhap.go:40"
     },
     "app.NewDangXuat": {
       "kind": "func",
-      "at": "identity/internal/app/dang_nhap.go:216"
+      "at": "service-identity/internal/app/dang_nhap.go:216"
     },
     "app.YeuCauDangNhap": {
       "kind": "type",
-      "at": "identity/internal/app/dang_nhap.go:46"
+      "at": "service-identity/internal/app/dang_nhap.go:46"
     },
     "audit.Actor": {
       "kind": "type",
@@ -116,27 +116,27 @@
     },
     "domain.CanBo": {
       "kind": "type",
-      "at": "identity/internal/domain/can_bo.go:10"
+      "at": "service-identity/internal/domain/can_bo.go:10"
     },
     "domain.CanBoTomTat": {
       "kind": "type",
-      "at": "identity/internal/domain/can_bo.go:53"
+      "at": "service-identity/internal/domain/can_bo.go:53"
     },
     "domain.Domain": {
       "kind": "type",
-      "at": "platform/internal/domain/tenant.go:21"
+      "at": "service-platform/internal/domain/tenant.go:21"
     },
     "domain.NormaliseHost": {
       "kind": "func",
-      "at": "platform/internal/domain/tenant.go:54"
+      "at": "service-platform/internal/domain/tenant.go:54"
     },
     "domain.Tenant": {
       "kind": "type",
-      "at": "platform/internal/domain/tenant.go:12"
+      "at": "service-platform/internal/domain/tenant.go:12"
     },
     "domain.Validate": {
       "kind": "func",
-      "at": "platform/internal/domain/tenant.go:38"
+      "at": "service-platform/internal/domain/tenant.go:38"
     },
     "events.Dispatch": {
       "kind": "func",
@@ -156,23 +156,23 @@
     },
     "grpc.Directory": {
       "kind": "type",
-      "at": "platform/internal/grpc/server.go:38"
+      "at": "service-platform/internal/grpc/server.go:38"
     },
     "grpc.GetTenant": {
       "kind": "func",
-      "at": "platform/internal/grpc/server.go:80"
+      "at": "service-platform/internal/grpc/server.go:80"
     },
     "grpc.NewServer": {
       "kind": "func",
-      "at": "platform/internal/grpc/server.go:51"
+      "at": "service-platform/internal/grpc/server.go:51"
     },
     "grpc.ResolveHost": {
       "kind": "func",
-      "at": "platform/internal/grpc/server.go:60"
+      "at": "service-platform/internal/grpc/server.go:60"
     },
     "grpc.Server": {
       "kind": "type",
-      "at": "platform/internal/grpc/server.go:44"
+      "at": "service-platform/internal/grpc/server.go:44"
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
@@ -188,79 +188,79 @@
     },
     "http.CanBoDanhBa": {
       "kind": "type",
-      "at": "identity/internal/http/routes.go:71"
+      "at": "service-identity/internal/http/routes.go:71"
     },
     "http.CanBoDoc": {
       "kind": "type",
-      "at": "identity/internal/http/routes.go:59"
+      "at": "service-identity/internal/http/routes.go:59"
     },
     "http.ChiTietCanBo": {
       "kind": "func",
-      "at": "identity/internal/http/can_bo.go:179"
+      "at": "service-identity/internal/http/can_bo.go:179"
     },
     "http.DangNhap": {
       "kind": "func",
-      "at": "identity/internal/http/handler.go:69"
+      "at": "service-identity/internal/http/handler.go:69"
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "identity/internal/http/routes.go:90"
+      "at": "service-identity/internal/http/routes.go:90"
     },
     "http.DangXuat": {
       "kind": "func",
-      "at": "identity/internal/http/handler.go:140"
+      "at": "service-identity/internal/http/handler.go:140"
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "identity/internal/http/routes.go:94"
+      "at": "service-identity/internal/http/routes.go:94"
     },
     "http.DanhSachCanBo": {
       "kind": "func",
-      "at": "identity/internal/http/can_bo.go:128"
+      "at": "service-identity/internal/http/can_bo.go:128"
     },
     "http.Deps": {
       "kind": "type",
-      "at": "reporting/internal/http/routes.go:23"
+      "at": "service-reporting/internal/http/routes.go:23"
     },
     "http.Handler": {
       "kind": "type",
-      "at": "identity/internal/http/handler.go:17"
+      "at": "service-identity/internal/http/handler.go:17"
     },
     "http.NewHandler": {
       "kind": "func",
-      "at": "identity/internal/http/handler.go:21"
+      "at": "service-identity/internal/http/handler.go:21"
     },
     "http.PhienDoc": {
       "kind": "type",
-      "at": "identity/internal/http/routes.go:53"
+      "at": "service-identity/internal/http/routes.go:53"
     },
     "http.PhienHienTai": {
       "kind": "type",
-      "at": "identity/internal/http/middleware.go:23"
+      "at": "service-identity/internal/http/middleware.go:23"
     },
     "http.PhienTu": {
       "kind": "func",
-      "at": "identity/internal/http/middleware.go:52"
+      "at": "service-identity/internal/http/middleware.go:52"
     },
     "http.QuyenDoc": {
       "kind": "type",
-      "at": "identity/internal/http/routes.go:84"
+      "at": "service-identity/internal/http/routes.go:84"
     },
     "http.Register": {
       "kind": "func",
-      "at": "reporting/internal/http/routes.go:32"
+      "at": "service-reporting/internal/http/routes.go:32"
     },
     "http.ThongTinXa": {
       "kind": "func",
-      "at": "identity/internal/http/xa.go:68"
+      "at": "service-identity/internal/http/xa.go:68"
     },
     "http.XacThuc": {
       "kind": "func",
-      "at": "identity/internal/http/middleware.go:71"
+      "at": "service-identity/internal/http/middleware.go:71"
     },
     "http.XemPhienHienTai": {
       "kind": "func",
-      "at": "identity/internal/http/phien_hien_tai.go:73"
+      "at": "service-identity/internal/http/phien_hien_tai.go:73"
     },
     "httpx.Error": {
       "kind": "type",
@@ -580,35 +580,35 @@
     },
     "store.Allows": {
       "kind": "func",
-      "at": "identity/internal/store/checker.go:74"
+      "at": "service-identity/internal/store/checker.go:74"
     },
     "store.AllowsNhieu": {
       "kind": "func",
-      "at": "identity/internal/store/checker.go:99"
+      "at": "service-identity/internal/store/checker.go:99"
     },
     "store.ByHost": {
       "kind": "func",
-      "at": "platform/internal/store/directory.go:39"
+      "at": "service-platform/internal/store/directory.go:39"
     },
     "store.ByHostErr": {
       "kind": "func",
-      "at": "platform/internal/store/directory.go:81"
+      "at": "service-platform/internal/store/directory.go:81"
     },
     "store.ByID": {
       "kind": "func",
-      "at": "platform/internal/store/directory.go:120"
+      "at": "service-platform/internal/store/directory.go:120"
     },
     "store.CanBoStore": {
       "kind": "type",
-      "at": "identity/internal/store/can_bo.go:17"
+      "at": "service-identity/internal/store/can_bo.go:17"
     },
     "store.Checker": {
       "kind": "type",
-      "at": "identity/internal/store/checker.go:20"
+      "at": "service-identity/internal/store/checker.go:20"
     },
     "store.ChiTiet": {
       "kind": "func",
-      "at": "identity/internal/store/can_bo_danh_sach.go:113"
+      "at": "service-identity/internal/store/can_bo_danh_sach.go:113"
     },
     "store.DB": {
       "kind": "type",
@@ -616,15 +616,15 @@
     },
     "store.DanhSach": {
       "kind": "func",
-      "at": "identity/internal/store/can_bo_danh_sach.go:82"
+      "at": "service-identity/internal/store/can_bo_danh_sach.go:82"
     },
     "store.DatMatKhauHash": {
       "kind": "func",
-      "at": "identity/internal/store/can_bo.go:101"
+      "at": "service-identity/internal/store/can_bo.go:101"
     },
     "store.Directory": {
       "kind": "type",
-      "at": "platform/internal/store/directory.go:26"
+      "at": "service-platform/internal/store/directory.go:26"
     },
     "store.Exec": {
       "kind": "func",
@@ -636,15 +636,15 @@
     },
     "store.GhiNhanDangNhap": {
       "kind": "func",
-      "at": "identity/internal/store/can_bo.go:84"
+      "at": "service-identity/internal/store/can_bo.go:84"
     },
     "store.GhiNhanDung": {
       "kind": "func",
-      "at": "identity/internal/store/phien.go:154"
+      "at": "service-identity/internal/store/phien.go:154"
     },
     "store.KiemTra": {
       "kind": "func",
-      "at": "identity/internal/store/phien.go:98"
+      "at": "service-identity/internal/store/phien.go:98"
     },
     "store.New": {
       "kind": "func",
@@ -652,19 +652,19 @@
     },
     "store.NewCanBoStore": {
       "kind": "func",
-      "at": "identity/internal/store/can_bo.go:21"
+      "at": "service-identity/internal/store/can_bo.go:21"
     },
     "store.NewChecker": {
       "kind": "func",
-      "at": "identity/internal/store/checker.go:25"
+      "at": "service-identity/internal/store/checker.go:25"
     },
     "store.NewDirectory": {
       "kind": "func",
-      "at": "platform/internal/store/directory.go:32"
+      "at": "service-platform/internal/store/directory.go:32"
     },
     "store.NewPhienStore": {
       "kind": "func",
-      "at": "identity/internal/store/phien.go:41"
+      "at": "service-identity/internal/store/phien.go:41"
     },
     "store.PageSpec": {
       "kind": "type",
@@ -672,11 +672,11 @@
     },
     "store.Phien": {
       "kind": "type",
-      "at": "identity/internal/store/phien.go:44"
+      "at": "service-identity/internal/store/phien.go:44"
     },
     "store.PhienStore": {
       "kind": "type",
-      "at": "identity/internal/store/phien.go:37"
+      "at": "service-identity/internal/store/phien.go:37"
     },
     "store.Query": {
       "kind": "func",
@@ -692,7 +692,7 @@
     },
     "store.QuyenCua": {
       "kind": "func",
-      "at": "identity/internal/store/checker.go:160"
+      "at": "service-identity/internal/store/checker.go:160"
     },
     "store.Scoped": {
       "kind": "type",
@@ -704,7 +704,7 @@
     },
     "store.Tao": {
       "kind": "func",
-      "at": "identity/internal/store/phien.go:66"
+      "at": "service-identity/internal/store/phien.go:66"
     },
     "store.TenantID": {
       "kind": "func",
@@ -712,19 +712,19 @@
     },
     "store.TheoEmail": {
       "kind": "func",
-      "at": "identity/internal/store/can_bo.go:55"
+      "at": "service-identity/internal/store/can_bo.go:55"
     },
     "store.TheoID": {
       "kind": "func",
-      "at": "identity/internal/store/can_bo.go:73"
+      "at": "service-identity/internal/store/can_bo.go:73"
     },
     "store.ThuHoi": {
       "kind": "func",
-      "at": "identity/internal/store/phien.go:128"
+      "at": "service-identity/internal/store/phien.go:128"
     },
     "store.ThuHoiCuaCanBo": {
       "kind": "func",
-      "at": "identity/internal/store/phien.go:141"
+      "at": "service-identity/internal/store/phien.go:141"
     },
     "store.Tx": {
       "kind": "func",

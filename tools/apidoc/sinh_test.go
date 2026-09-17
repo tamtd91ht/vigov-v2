@@ -71,7 +71,10 @@ func TestLoiPhanTichThiKhongDoiGiHet(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	viet("go.mod", "module vd.test\n\ngo 1.26.0\n")
+	// Mỗi đơn vị triển khai là một module riêng, và gốc kho KHÔNG có go.mod.
+	// Fixture phải dựng đúng hình dạng ấy, nếu không nó kiểm một bố cục không tồn tại.
+	viet("thu/go.mod", "module vd.test/thu\n\ngo 1.26.0\n")
+	viet("core/go.mod", "module vd.test/core\n\ngo 1.26.0\n")
 	viet("thu/cmd/server/main.go", "package main\n")
 	viet("thu/internal/http/routes.go", `package http
 

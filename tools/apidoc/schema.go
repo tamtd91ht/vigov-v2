@@ -37,27 +37,65 @@ type goiGo struct {
 }
 
 type giaiMa struct {
-	root   string
-	module string
+	root string
+	// đường module -> thư mục của module đó. NHIỀU module, không còn một.
+	module map[string]string
 	goi    map[string]*goiGo
 }
 
+// moGiaiMa đọc go.mod của MỌI module cấp một.
+//
+// Trước 2026-09-17 kho có đúng một module, nên hàm này đọc một `go.mod` ở gốc và cắt tiền tố
+// ấy khỏi mọi đường import để ra đường thư mục. Nay mỗi đơn vị triển khai là một module riêng
+// và gốc kho KHÔNG có go.mod nào cả.
+//
+// Nếu để nguyên, hỏng không nằm ở chỗ nó báo lỗi — nó sẽ đơn giản không giải được những kiểu
+// nằm ngoài module nó đoán, rồi bỏ qua, và hợp đồng REST công bố thiếu đúng các kiểu ấy.
 func moGiaiMa(root string) (*giaiMa, error) {
-	b, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	ents, err := os.ReadDir(root)
 	if err != nil {
-		return nil, fmt.Errorf("apidoc: đọc go.mod: %w", err)
+		return nil, fmt.Errorf("apidoc: đọc gốc kho: %w", err)
 	}
-	mod := ""
-	for _, ln := range strings.Split(string(b), "\n") {
-		if ln = strings.TrimSpace(ln); strings.HasPrefix(ln, "module ") {
-			mod = strings.TrimSpace(strings.TrimPrefix(ln, "module "))
-			break
+	mods := map[string]string{}
+	for _, e := range ents {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(root, e.Name(), "go.mod"))
+		if err != nil {
+			continue
+		}
+		for _, ln := range strings.Split(string(b), "\n") {
+			if ln = strings.TrimSpace(ln); strings.HasPrefix(ln, "module ") {
+				mods[strings.TrimSpace(strings.TrimPrefix(ln, "module "))] = e.Name()
+				break
+			}
 		}
 	}
-	if mod == "" {
-		return nil, fmt.Errorf("apidoc: go.mod không khai module")
+	if len(mods) == 0 {
+		return nil, fmt.Errorf("apidoc: không thấy module nào dưới gốc kho (thiếu go.mod?)")
 	}
-	return &giaiMa{root: root, module: mod, goi: map[string]*goiGo{}}, nil
+	return &giaiMa{root: root, module: mods, goi: map[string]*goiGo{}}, nil
+}
+
+// thuMucCuaImport đổi một đường import thành thư mục trên đĩa, hoặc "" nếu nó nằm ngoài kho.
+//
+// Khớp theo tiền tố DÀI NHẤT: `.../core/gen/vigov/platform/v1` phải khớp module `.../core`,
+// không phải một module ngắn hơn tình cờ cũng là tiền tố.
+func (g *giaiMa) thuMucCuaImport(duong string) string {
+	tot, totDir := "", ""
+	for mod, dir := range g.module {
+		if duong == mod || strings.HasPrefix(duong, mod+"/") {
+			if len(mod) > len(tot) {
+				tot, totDir = mod, dir
+			}
+		}
+	}
+	if tot == "" {
+		return ""
+	}
+	con := strings.TrimPrefix(strings.TrimPrefix(duong, tot), "/")
+	return filepath.Join(g.root, totDir, filepath.FromSlash(con))
 }
 
 func (g *giaiMa) nap(pkgDir string) (*goiGo, error) {
@@ -141,10 +179,10 @@ func (g *giaiMa) timKieu(pkgDir, ten string) (kieuGo, error) {
 		if duong == "time" && n == "Time" {
 			return thoiGian, nil
 		}
-		if !strings.HasPrefix(duong, g.module+"/") {
-			return kieuGo{}, fmt.Errorf("%s nằm ngoài module (%s) — apidoc không đoán hình dạng kiểu ngoài", ten, duong)
+		dir := g.thuMucCuaImport(duong)
+		if dir == "" {
+			return kieuGo{}, fmt.Errorf("%s nằm ngoài mọi module của kho (%s) — apidoc không đoán hình dạng kiểu ngoài", ten, duong)
 		}
-		dir := filepath.Join(g.root, filepath.FromSlash(strings.TrimPrefix(duong, g.module+"/")))
 		return g.timTrongGoi(dir, n, ten)
 	}
 	return g.timTrongGoi(pkgDir, ten, ten)
@@ -294,7 +332,7 @@ func tenThanhPhan(k kieuGo) string {
 	if i := strings.Index(dir, "/internal/"); i >= 0 {
 		truoc := dir[:i]
 		if j := strings.LastIndex(truoc, "/"); j >= 0 {
-			if ten := truoc[j+1:]; ten != "" && ten != "core" {
+			if ten := tenNghiepVu(truoc[j+1:]); ten != "" && ten != "core" {
 				return ten + "." + k.spec.Name.Name
 			}
 		}
@@ -483,11 +521,6 @@ func (b *boSchema) structSchema(st *ast.StructType, ngucanh kieuGo, nghiem bool)
 	}
 	out.set("additionalProperties", false)
 	return out, nil
-}
-
-func laConTro(e ast.Expr) bool {
-	_, ok := e.(*ast.StarExpr)
-	return ok
 }
 
 // theJSON reads the `json` struct tag. coThe is false when there is no json tag at all — the

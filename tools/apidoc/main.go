@@ -191,14 +191,19 @@ func chay(c cauHinh) (int, ketQuaViec, error) {
 	return len(tuyens), kq, nil
 }
 
-// timGoc walks up to the directory holding go.mod.
+// DẤU HIỆU GỐC KHO LÀ `go.work`, KHÔNG PHẢI `go.mod`.
+//
+// Từ 2026-09-17 mỗi đơn vị triển khai là một module riêng, nên `go.mod` có ở khắp nơi —
+// `tools/go.mod` là cái đầu tiên một hàm đi ngược lên gặp phải, và khi đó nó kết luận `tools/`
+// là gốc kho. Không có lỗi nào được báo: bộ sinh chỉ đơn giản không tìm thấy dịch vụ nào, rồi
+// công bố một hợp đồng rỗng. `go.work` chỉ có đúng một bản, ở đúng gốc.
 func timGoc() (string, error) {
 	d, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 	for i := 0; i < 8; i++ {
-		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+		if _, err := os.Stat(filepath.Join(d, "go.work")); err == nil {
 			return d, nil
 		}
 		parent := filepath.Dir(d)
@@ -207,5 +212,5 @@ func timGoc() (string, error) {
 		}
 		d = parent
 	}
-	return "", fmt.Errorf("không tìm thấy go.mod — chạy từ bên trong repository")
+	return "", fmt.Errorf("không tìm thấy go.work — chạy từ bên trong repository")
 }

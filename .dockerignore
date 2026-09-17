@@ -44,6 +44,14 @@ bin
 dist
 **/tsconfig.tsbuildinfo
 
+# ---- go.work: CỐ Ý loại trừ, và đây là dòng quan trọng nhất tệp này ------------------
+#
+# go.work làm mọi module thấy nhau qua thư mục, nên nó CHE mất một `require` bị thiếu trong
+# go.mod. Ảnh Docker không có nó, nên mỗi lượt đóng ảnh CHỨNG MINH dịch vụ dựng được chỉ với
+# `core/` và chính nó. Chép nó vào là mất đúng phép kiểm ấy, mà build vẫn xanh.
+go.work
+go.work.sum
+
 # ---- thứ chỉ dùng lúc phát triển ----------------------------------------------------
 Makefile
 Jenkinsfile
@@ -52,6 +60,6 @@ __pycache__
 **/__pycache__
 *.pyc
 
-# LƯU Ý: `gen/` CỐ Ý KHÔNG nằm trong danh sách này, dù nó nằm trong .gitignore.
-# Mã nguồn import gen/, và nó được sinh bằng plugin từ xa nên không sinh được bên trong ảnh.
-# `make proto` chạy ở máy chủ build, rồi gen/ đi theo ngữ cảnh — xem services/*/Dockerfile.
+# LƯU Ý: `core/gen/` CỐ Ý KHÔNG nằm trong danh sách này, dù nó nằm trong .gitignore.
+# Mã nguồn import core/gen/, và nó được sinh bằng plugin từ xa nên không sinh được trong ảnh.
+# `make proto` chạy ở máy chủ build, rồi gen/ đi theo ngữ cảnh — xem service-*/Dockerfile.

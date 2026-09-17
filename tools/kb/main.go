@@ -181,13 +181,19 @@ func alwaysLoadTokens(root, index string) int {
 	return total
 }
 
+// DẤU HIỆU GỐC KHO LÀ `go.work`, KHÔNG PHẢI `go.mod`.
+//
+// Từ 2026-09-17 mỗi đơn vị triển khai là một module riêng, nên `go.mod` có ở khắp nơi —
+// `tools/go.mod` là cái đầu tiên một hàm đi ngược lên gặp phải, và khi đó nó kết luận `tools/`
+// là gốc kho. Không có lỗi nào được báo: bộ sinh chỉ đơn giản không tìm thấy dịch vụ nào, rồi
+// công bố một hợp đồng rỗng. `go.work` chỉ có đúng một bản, ở đúng gốc.
 func findRoot() (string, error) {
 	d, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 	for i := 0; i < 6; i++ {
-		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+		if _, err := os.Stat(filepath.Join(d, "go.work")); err == nil {
 			return d, nil
 		}
 		parent := filepath.Dir(d)
@@ -196,7 +202,7 @@ func findRoot() (string, error) {
 		}
 		d = parent
 	}
-	return "", fmt.Errorf("go.mod not found — run from inside the repository")
+	return "", fmt.Errorf("go.work not found — run from inside the repository")
 }
 
 func scanServices(root string) ([]serviceEntry, error) {
@@ -231,7 +237,11 @@ func scanServices(root string) ([]serviceEntry, error) {
 			}
 		}
 		out = append(out, serviceEntry{
-			Name:    name,
+			// Name is the BUSINESS name (`identity`), Path is the directory (`service-identity`).
+			// The `service-` prefix marks backend-vs-web for a reader of the tree; it is not part
+			// of what the service is called, and an index that conflates the two teaches every
+			// reader to strip a prefix.
+			Name:    strings.TrimPrefix(name, "service-"),
 			Path:    name,
 			HasMain: mainErr == nil,
 			Summary: readmeSummary(filepath.Join(dir, name, "README.md")),

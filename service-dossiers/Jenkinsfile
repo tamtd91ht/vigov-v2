@@ -1,0 +1,131 @@
+// Pipeline của dịch vụ `dossiers`. Tệp này thuộc về DỊCH VỤ NÀY.
+//
+//   · build CÁI GÌ    — đúng một ảnh, vigov-service-dossiers
+//   · build KHI NÀO   — xem `duongKichHoat()` ở cuối tệp
+//   · đẩy ĐI ĐÂU      — tham số registry của riêng lượt chạy này
+//
+// PHẠM VI DỪNG Ở ẢNH. Không `kubectl apply`, không đụng cụm k8s — đó là việc của devops.
+//
+// Bất biến TOÀN KHO (bất biến bộ não · tự kiểm hook · buf lint · gofmt cả kho · web) KHÔNG
+// chạy ở đây: chúng không thuộc về dịch vụ nào cả, nên chúng ở `Jenkinsfile` tại gốc.
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    timeout(time: 30, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    disableConcurrentBuilds()
+  }
+
+  parameters {
+    string(name: 'REGISTRY', defaultValue: 'registry.vihat.vn',
+           description: 'Máy chủ Harbor, không kèm https://')
+    string(name: 'PROJECT', defaultValue: 'vigov',
+           description: 'Project trong Harbor — ảnh là <REGISTRY>/<PROJECT>/vigov-service-dossiers')
+    string(name: 'REGISTRY_CRED', defaultValue: 'harbor-vigov',
+           description: 'ID credentials trong Jenkins. CHỈ LÀ ID, không bao giờ là giá trị thật.')
+  }
+
+  environment {
+    DOCKER_BUILDKIT = '1'
+    // Tên THƯ MỤC, cũng là tên module và tên ảnh. Tên NGHIỆP VỤ là `dossiers` — tiền tố
+    // `service-` là dấu hiệu hạ tầng phân biệt backend với web, không phải một phần tên gọi.
+    THU_MUC = 'service-dossiers'
+  }
+
+  stages {
+
+    stage('Chuẩn bị') {
+      steps {
+        sh 'command -v go && command -v buf && command -v docker'
+        script {
+          env.TAG = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
+          if (!env.TAG) { error('Không lấy được commit hiện tại — không có thẻ ảnh nào để đặt.') }
+          env.CAN_DUNG = canDungLai() ? 'co' : 'khong'
+          echo "dịch vụ dossiers (${env.THU_MUC}) · commit ${env.TAG} · cần dựng lại: ${env.CAN_DUNG}"
+        }
+      }
+    }
+
+    stage('Sinh mã từ .proto') {
+      steps {
+        sh 'buf generate'
+        sh 'test -d core/gen'
+      }
+    }
+
+    stage('Cổng kiểm của dịch vụ') {
+      steps {
+        sh 'test -z "$(gofmt -l ./${THU_MUC})"'
+        sh 'go vet ./${THU_MUC}/... ./core/...'
+        sh 'go test -race -count=1 ./${THU_MUC}/... ./core/...'
+        sh 'cd ${THU_MUC} && GOWORK=off go build ./...'
+      }
+    }
+
+    stage('Đóng ảnh') {
+      when { environment name: 'CAN_DUNG', value: 'co' }
+      steps {
+        script {
+          def ten = "${params.REGISTRY}/${params.PROJECT}/vigov-${env.THU_MUC}"
+          docker.withRegistry("https://${params.REGISTRY}", params.REGISTRY_CRED) {
+            def anh = docker.build("${ten}:${env.TAG}",
+                                   "--build-arg VERSION=${env.TAG} " +
+                                   "-f ${env.THU_MUC}/Dockerfile .")
+            anh.push()
+          }
+          echo "DA DAY  ${ten}:${env.TAG}"
+        }
+      }
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// KHI NÀO DỊCH VỤ NÀY PHẢI DỰNG LẠI — và vì sao danh sách KHÔNG chỉ có thư mục của nó.
+//
+// `core` được `replace` bằng đường dẫn `../core`, tức tám dịch vụ dùng CHUNG MỘT bản core.
+// Nếu chỉ kích hoạt theo `service-dossiers/**` thì một bản vá an ninh trong `core/authz` sẽ không kích
+// hoạt dịch vụ NÀO CẢ — mọi pipeline vẫn xanh, không cái nào chạy, và bản vá nằm yên trong
+// kho mã trong khi tám ảnh đang chạy vẫn mang mã cũ. Không có gì đỏ để ai nhìn thấy.
+//
+// `core/**` bao luôn `core/go.mod`. `go.work` có mặt vì thêm/bớt một module là đổi thứ mà
+// cổng kiểm chạy trên. `core/gen` KHÔNG có mặt vì nó nằm trong .gitignore và không bao giờ
+// xuất hiện trong changeset — `proto/**` mới là tín hiệu đúng.
+//
+// `tools/check_build.py` đỏ nếu một dịch vụ đánh rơi chúng.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+// #[dung-chung] Khai ở ĐÚNG MỘT CHỖ, dưới dạng HÀM chứ không phải biến mức script:
+// một biến mức script trong Jenkinsfile cần chú giải @Field kèm import của nó, và một import
+// bị quên là một lỗi lúc CHẠY chứ không phải lúc đọc.
+List<String> duongKichHoat() {
+  return ['service-dossiers/**', 'core/**', 'proto/**', 'go.work']
+}
+
+boolean canDungLai() {
+  // Lượt build đầu tiên chưa có gì để so. `changeset` khi ấy trả false, nên nếu không xử ca
+  // này thì lần chạy đầu sẽ không đóng ảnh nào và trông y hệt một pipeline hỏng.
+  if (currentBuild.previousSuccessfulBuild == null) { return true }
+  for (String mau : duongKichHoat()) {
+    if (coTrongChangeset(mau)) { return true }
+  }
+  return false
+}
+
+boolean coTrongChangeset(String mau) {
+  // So khớp thủ công thay vì `when { changeset }` để danh sách mẫu chỉ khai ở MỘT chỗ.
+  // Hai nơi khai cùng một danh sách là hai nơi sẽ lệch, và bản lỏng hơn là bản được chạy.
+  String bo = mau.endsWith('/**') ? mau.substring(0, mau.length() - 3) : null
+  for (cs in currentBuild.changeSets) {
+    for (c in cs.items) {
+      for (f in c.affectedFiles) {
+        String duong = f.path
+        if (bo != null ? duong.startsWith(bo) : duong == mau) { return true }
+      }
+    }
+  }
+  return false
+}

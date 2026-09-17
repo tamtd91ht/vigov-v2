@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // VÌ SAO TỆP NÀY VẪN TỒN TẠI KHI MỖI DỊCH VỤ ĐÃ CÓ PIPELINE RIÊNG
 //
-// Mỗi dịch vụ tự quyết build cái gì và khi nào: `<tên>/Jenkinsfile`. Web cũng vậy:
+// Mỗi dịch vụ tự quyết build cái gì và khi nào: `service-<tên>/Jenkinsfile`. Web cũng vậy:
 // `web-admin/Jenkinsfile`. Một thay đổi ở `comms` không còn bắt `finance` sinh ảnh
 // mới rồi triển khai lại.
 //
@@ -64,7 +64,7 @@ pipeline {
         // nên bước này cần mạng ra buf.build — lý do nó ở máy chủ build chứ không ở trong
         // Dockerfile, nơi mạng thường bị chặn và cũng nên bị chặn.
         sh 'make proto'
-        sh 'test -d gen || { echo "make proto chạy xong mà không có gen/"; exit 1; }'
+        sh 'test -d core/gen || { echo "make proto chạy xong mà không có core/gen/"; exit 1; }'
       }
     }
 
@@ -93,7 +93,7 @@ pipeline {
   post {
     success {
       echo 'Bất biến toàn kho: xanh. Ảnh do pipeline của TỪNG dịch vụ đóng — xem ' +
-           '<tên>/Jenkinsfile và web-admin/Jenkinsfile.'
+           'service-<tên>/Jenkinsfile và web-admin/Jenkinsfile.'
     }
   }
 }
@@ -112,7 +112,7 @@ pipeline {
 // Vì mỗi dịch vụ nay dựng độc lập, HAI DỊCH VỤ Ở HAI COMMIT KHÁC NHAU LÀ BÌNH THƯỜNG — đó
 // chính là điểm của việc tách. Nhưng vì tám dịch vụ dùng chung `core/`, một dịch vụ không
 // được dựng lại là một dịch vụ đang chạy `core/` cũ. Đó là lý do danh sách đường kích hoạt
-// trong mỗi pipeline dịch vụ PHẢI có `core/**`, `proto/**`, `go.mod`, `go.sum`.
+// trong mỗi pipeline dịch vụ PHẢI có `core/**`, `proto/**`, `go.work`.
 //
 // Cái giá là manifest phải sửa thẻ mỗi lần triển khai. Đó chính là điều mong muốn: một lần
 // triển khai phải là một thay đổi ai đó nhìn thấy được.

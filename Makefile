@@ -3,9 +3,20 @@
 # `make check` is what stop_verify_guard looks for in the session transcript. The agent must
 # not report "done" before it has run.
 
-.PHONY: check brain hooks buildfiles lint build test web kb proto tidy
+.PHONY: check brain hooks buildfiles lint build standalone test web kb proto tidy
 
-check: brain hooks buildfiles lint build test web   ## Full verification — run before saying it is done
+# Danh sách module, HỎI CHÍNH GO — không gõ tay, và không bóc tách văn bản go.work.
+#
+# Từ khi mỗi đơn vị triển khai là một module riêng, `go build ./...` ở gốc kho KHÔNG còn bao
+# được cả kho: gốc không thuộc module nào. Go từ chối TO tiếng ("directory prefix . does not
+# contain modules listed in go.work"), nên chuyện đó không âm thầm. Nhưng nếu ai "sửa" bằng
+# cách liệt kê tay vài module thì module thứ mười một sẽ không được kiểm — và CHUYỆN ĐÓ mới
+# âm thầm. `go list -m` luôn trả đúng những gì go.work đang nạp.
+MOD_DIRS := $(shell go list -m -f '{{.Dir}}')
+MODULES  := $(addsuffix /...,$(MOD_DIRS))
+
+
+check: brain hooks buildfiles lint build standalone test web   ## Full verification — run before saying it is done
 
 brain:                          ## 7 structural invariants of the brain — anti-drift
 	python tools/check_brain.py
@@ -24,28 +35,39 @@ lint:
 	@# gofmt -l PRINTS unformatted files and still EXITS 0, so for as long as this target
 	@# simply called it, unformatted code walked straight through the gate while the file
 	@# names scrolled past. A gate that reports and passes is not a gate.
-	@# gen/ is excluded because it is produced by `make proto`, not written here.
-	@out=$$(gofmt -l . | grep -v '^gen/' || true); \
+	@# core/gen/ is excluded because it is produced by `make proto`, not written here.
+	@out=$$(gofmt -l . | grep -v '^core/gen/' || true); \
 	if [ -n "$$out" ]; then \
 		echo "gofmt: chưa định dạng, chạy gofmt -w:"; echo "$$out"; exit 1; fi
-	go vet ./...
-	-golangci-lint run ./...
+	go vet $(MODULES)
+	-golangci-lint run $(MODULES)
 	@# buf lint is NO LONGER prefixed with `-`. It was ignored while it was failing; it has
 	@# been clean since the contract fixes, so ignoring it now only hides the next regression.
 	buf lint
 
 build:
-	go build ./...
+	go build $(MODULES)
+
+standalone:                     ## Mỗi module build được KHI KHÔNG CÓ go.work — đúng điều Docker làm
+	@# go.work làm mọi module thấy nhau qua thư mục, nên nó CHE mất một `require` bị thiếu.
+	@# Ảnh Docker không có go.work: nó chép core/ + module của dịch vụ và dựa vào `replace`
+	@# trong go.mod của dịch vụ ấy. Không có mục này, một go.mod thiếu require vẫn xanh suốt
+	@# ở máy trạm rồi đổ ở CI lúc đóng ảnh — xa nhất có thể khỏi chỗ gây ra lỗi.
+	@for m in $(MOD_DIRS); do \
+		( cd "$$m" && GOWORK=off go build ./... ) \
+			|| { echo "ĐỎ: $$m không build được khi thiếu go.work"; exit 1; }; \
+		echo "  OK   $$m"; \
+	done
 
 test:
 	@# -race is not optional here. One process serves 200+ communes, so a data race is a race
 	@# BETWEEN COMMUNES, and that is the class of defect that stays invisible until two
 	@# communes are live. It needs a C toolchain; if this fails to start, fix the toolchain
 	@# rather than dropping the flag.
-	go test -race -count=1 ./...
+	go test -race -count=1 $(MODULES)
 
 web:                            ## Typecheck + test the Next.js apps — skips LOUDLY when deps are absent
-	@# Deliberately not `next build`: a production build is the CI image's job (build/web.Dockerfile),
+	@# Deliberately not `next build`: a production build is the CI image's job (web-admin/Dockerfile),
 	@# and doing it here would make the local gate several times slower for no extra signal.
 	@#
 	@# And deliberately not a silent skip. A gate that quietly does nothing is the failure this
@@ -83,4 +105,9 @@ proto:                          ## Regenerate Go code from .proto (requires buf)
 	buf generate
 
 tidy:
-	go mod tidy
+	@# Không còn `go mod tidy` ở gốc: gốc kho không thuộc module nào. Mỗi module tự tidy,
+	@# và GOWORK=off là cố ý — tidy trong chế độ workspace không ghi lại require cho
+	@# những gì go.work đang che, nên nó để lại một go.mod chỉ build được khi có go.work.
+	@for m in $(MOD_DIRS); do \
+		echo "tidy $$m"; ( cd "$$m" && GOWORK=off go mod tidy ) || exit 1; \
+	done

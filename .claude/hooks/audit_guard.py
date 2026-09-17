@@ -57,7 +57,10 @@ def main() -> None:
         sys.exit(0)
     norm = "/" + path.lstrip("/")
     dv = c.dich_vu_cua(norm)
-    if dv is None or dv == "platform" or "/platform/" in norm:
+    # So bằng TÊN NGHIỆP VỤ, không bằng tên thư mục: thư mục là `service-platform`, và một
+    # phép so `dv == "platform"` sẽ lặng lẽ không khớp nữa — guard vẫn chạy, chỉ là mất đúng
+    # cái loại trừ nó cần. Đây là cách một tiền tố thư mục phá một quy tắc mà không ai thấy.
+    if dv is None or c.ten_nghiep_vu(dv) == "platform" or "/platform/" in norm:
         sys.exit(0)
 
     content = c.new_content(ti)

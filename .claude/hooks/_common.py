@@ -133,6 +133,10 @@ KHONG_PHAI_DICH_VU = {
     "web-admin", "platform-admin", "citizen-app", "node_modules", "vendor",
 }
 
+# Tiền tố thư mục của một dịch vụ backend. `service-identity/` là TÊN THƯ MỤC; tên nghiệp vụ
+# của nó vẫn là `identity` — xem ten_nghiep_vu().
+TIEN_TO_DICH_VU = "service-"
+
 # Thư mục con cho biết đoạn đứng trước nó là một dịch vụ.
 DAU_HIEU_DICH_VU = ("internal", "cmd", "migrations")
 
@@ -156,7 +160,25 @@ def dich_vu_cua(path: str) -> str | None:
     for seg in segs:
         if seg in tren_dia:
             return seg
+    # Tiền tố `service-` tự nó đã là một lời khai: thư mục này là một dịch vụ backend. Nhận nó
+    # kể cả khi dịch vụ chưa có cmd/server và chưa có internal/ — tức từ commit đầu tiên.
+    for seg in segs:
+        if seg.startswith(TIEN_TO_DICH_VU) and len(seg) > len(TIEN_TO_DICH_VU):
+            return seg
     return None
+
+
+def ten_nghiep_vu(ten_thu_muc: str) -> str:
+    """Tên NGHIỆP VỤ của một dịch vụ, bỏ tiền tố thư mục.
+
+    `service-identity` (thư mục, và cũng là đường module) -> `identity` (cái mà hợp đồng REST,
+    chỉ mục kb và hàng đợi việc web gọi nó). Tiền tố là dấu hiệu hạ tầng để phân biệt backend
+    với web; nó không phải một phần của tên nghiệp vụ, và để nó lọt vào hợp đồng thì mọi bên
+    đọc hợp đồng đều phải học cách bỏ nó đi.
+    """
+    if ten_thu_muc.startswith(TIEN_TO_DICH_VU):
+        return ten_thu_muc[len(TIEN_TO_DICH_VU):]
+    return ten_thu_muc
 
 
 def path_of(tool_input: dict) -> str:

@@ -64,6 +64,18 @@ var phuongThuc = map[string]bool{
 // of the service handler — infrastructure that sits outside /api/v1 and outside the tenant
 // edge, which no admin screen calls. Including them would put a route in the contract that
 // carries no commune and no permission, and every consumer would have to learn to skip it.
+// TienToDichVu is the directory prefix that marks a backend service (`service-identity/`).
+//
+// tenNghiepVu strips it. The prefix tells a reader which top-level directories are backend and
+// which are web; it is NOT part of the service's business name. Letting it into the generated
+// contract would mean every consumer of `openapi.json` has to learn to strip it — and the one
+// that forgets produces `service-identity.canBoTomTat` in a screen label.
+const TienToDichVu = "service-"
+
+func tenNghiepVu(thuMuc string) string {
+	return strings.TrimPrefix(thuMuc, TienToDichVu)
+}
+
 func quetTuyen(root string) ([]tuyen, error) {
 	// Bố cục phẳng: mỗi dịch vụ là một thư mục CẤP MỘT, ngang cấp với core/ và web-admin/.
 	// Không còn thư mục `services/` để quét, nên dấu hiệu nhận biết là `<tên>/cmd/server`.
@@ -178,7 +190,7 @@ func quetFile(fset *token.FileSet, duongDan, service, root string) ([]tuyen, []e
 		}
 
 		dong := fset.Position(st.Pos()).Line
-		t := tuyen{Service: service, Method: method, Path: p, File: rel, pkgDir: pkgDir}
+		t := tuyen{Service: tenNghiepVu(service), Method: method, Path: p, File: rel, pkgDir: pkgDir}
 
 		if err := phanTichChuThich(chuThichTren(f, fset, dong), &t); err != nil {
 			loi = append(loi, fmt.Errorf("apidoc: %s:%d: %s %s: %w", rel, dong, method, p, err))

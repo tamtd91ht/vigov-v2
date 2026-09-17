@@ -66,9 +66,9 @@ BAT_BIEN = [
         "Không có nó, stack trace in ra đường dẫn tuyệt đối của máy chủ build.",
     ),
     (
-        "kiểm gen/ trước khi biên dịch",
-        re.compile(r"test\s+-d\s+gen"),
-        "gen/ nằm trong .gitignore và mã nguồn import nó. Thiếu phép kiểm này, một bản "
+        "kiểm core/gen trước khi biên dịch",
+        re.compile(r"test\s+-d\s+core/gen"),
+        "core/gen nằm trong .gitignore và mã nguồn import nó. Thiếu phép kiểm này, một bản "
         "checkout sạch đổ ở lỗi 'package not found' không chỉ ra được nguyên nhân.",
     ),
 ]
@@ -90,7 +90,7 @@ def dich_vu() -> list[str]:
 #
 # `gen/` cố ý KHÔNG có mặt: nó nằm trong .gitignore nên không bao giờ xuất hiện trong
 # changeset. `proto/**` là thứ sinh ra nó, nên proto/ mới là tín hiệu đúng.
-DUONG_DUNG_CHUNG = ["core/**", "proto/**", "go.mod", "go.sum"]
+DUONG_DUNG_CHUNG = ["core/**", "proto/**", "go.work"]
 
 
 def tuong_doi(duong: str) -> str:
@@ -184,9 +184,13 @@ def main() -> int:
         # Dịch vụ phải biên dịch CHÍNH NÓ. Một tệp chép từ dịch vụ khác mà quên sửa đường
         # dẫn sẽ đóng gói nhị phân của dịch vụ kia dưới cái tên của dịch vụ này — ảnh chạy
         # được, healthz xanh, và nó phục vụ sai toàn bộ.
-        if f"./{svc}/cmd/server" not in noi_dung:
+        # Dockerfile đặt WORKDIR vào module của dịch vụ rồi build `./cmd/server`. Phép kiểm
+        # phải bám vào WORKDIR, vì đó là dòng duy nhất còn mang tên dịch vụ — chép tệp từ
+        # dịch vụ khác mà quên sửa nó thì ảnh đóng gói nhị phân của dịch vụ kia dưới cái tên
+        # của dịch vụ này: ảnh chạy được, healthz xanh, và nó phục vụ sai toàn bộ.
+        if f"WORKDIR /src/{svc}" not in noi_dung:
             loi.append(
-                f"{svc}/Dockerfile không biên dịch ./{svc}/cmd/server "
+                f"{svc}/Dockerfile không đặt WORKDIR /src/{svc} trước khi biên dịch "
                 f"— nhiều khả năng chép từ dịch vụ khác mà quên sửa đường dẫn."
             )
 

@@ -17,8 +17,10 @@ __pycache__/
 /dist/
 vendor/
 
-# Generated from .proto — run `make proto`
-gen/
+# Generated from .proto — run `make proto`.
+# Nằm trong core/ vì mã sinh từ proto là HỢP ĐỒNG dùng chung, cùng tầng với core;
+# một module riêng cho nó sẽ cần một go.mod mà chính dòng ignore này nuốt mất.
+core/gen/
 
 # Node / Next.js
 node_modules/

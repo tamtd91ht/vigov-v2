@@ -27,9 +27,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
+	platformv1 "github.com/vihat/vigov/core/gen/vigov/platform/v1"
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/tenant"
-	platformv1 "github.com/vihat/vigov/gen/vigov/platform/v1"
 )
 
 // HanGoi bounds one Host resolution.
