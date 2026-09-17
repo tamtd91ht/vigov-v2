@@ -168,6 +168,37 @@ func vaiTroMau() *vaiTroGia {
 	}}
 }
 
+// vaiTroMucGia is the role catalogue, KEYED BY COMMUNE, reading the commune from the context the
+// same way *store.Scoped does. Keyed any other way, the isolation case in vai_tro_test.go would
+// pass while proving nothing.
+type vaiTroMucGia struct {
+	theo map[tenant.ID][]domain.VaiTro
+	loi  error
+	goi  int
+}
+
+func (v *vaiTroMucGia) DanhSach(ctx context.Context) ([]domain.VaiTro, error) {
+	v.goi++
+	if v.loi != nil {
+		return nil, v.loi
+	}
+	return v.theo[tenant.MustFrom(ctx)], nil
+}
+
+// vaiTroMucMau gives commune A two roles — one leader, one not — and commune B a role with a
+// DIFFERENT name. Two communes whose roles were named the same could not show a leak.
+func vaiTroMucMau() *vaiTroMucGia {
+	return &vaiTroMucGia{theo: map[tenant.ID][]domain.VaiTro{
+		xaA: {
+			{ID: "vt-001", Ma: "chu-tich-ubnd", Ten: "Chủ tịch UBND", LaLanhDao: true},
+			{ID: "vt-002", Ma: "can-bo-mot-cua", Ten: "Cán bộ một cửa"},
+		},
+		xaB: {
+			{ID: "vt-101", Ma: "ke-toan", Ten: "Kế toán xã B"},
+		},
+	}}
+}
+
 // boPhanGia is the org chart, KEYED BY COMMUNE, reading the commune from the context the same way
 // *store.Scoped does. Keyed any other way, the isolation case in bo_phan_test.go would pass while
 // proving nothing.
@@ -300,16 +331,17 @@ func (u *dangXuatGia) Chay(_ context.Context, sid, ma, ip string) error {
 // --- harness ----------------------------------------------------------------------------
 
 type mayChu struct {
-	h      http.Handler
-	d      Deps // kept so a test can rebuild the chain with ONE dependency swapped — see dungLai
-	thuMuc thuMucGia
-	signer *token.Signer
-	phien  *phienGia
-	canBo  *canBoGia
-	danhBa *danhBaGia
-	quyen  *quyenGia
-	vaiTro *vaiTroGia
-	boPhan *boPhanGia
+	h         http.Handler
+	d         Deps // kept so a test can rebuild the chain with ONE dependency swapped — see dungLai
+	thuMuc    thuMucGia
+	signer    *token.Signer
+	phien     *phienGia
+	canBo     *canBoGia
+	danhBa    *danhBaGia
+	quyen     *quyenGia
+	vaiTro    *vaiTroGia
+	boPhan    *boPhanGia
+	vaiTroMuc *vaiTroMucGia
 	// dangNhap and dangXuat are the same values as d.DangNhap / d.DangXuat, typed.
 	dangNhap *dangNhapGia
 	dangXuat *dangXuatGia
@@ -343,6 +375,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	quyen := quyenMau()
 	vaiTro := vaiTroMau()
 	boPhan := boPhanMau()
+	vaiTroMuc := vaiTroMucMau()
 
 	d := Deps{
 		// Commune A grants the permission; commune B has the same account and grants nothing.
@@ -351,13 +384,14 @@ func dungMayChu(t *testing.T) *mayChu {
 			xaA: {idNoiBo: {quyenThu: true}},
 			xaB: {},
 		}},
-		Quyen:  quyen,
-		VaiTro: vaiTro,
-		BoPhan: boPhan,
-		Signer: signer,
-		Phien:  phien,
-		CanBo:  canBo,
-		DanhBa: danhBa,
+		Quyen:     quyen,
+		VaiTro:    vaiTro,
+		BoPhan:    boPhan,
+		VaiTroMuc: vaiTroMuc,
+		Signer:    signer,
+		Phien:     phien,
+		CanBo:     canBo,
+		DanhBa:    danhBa,
 		// The harness gives Deps.Xa its OWN directory value, not the one the edge is built with
 		// below, although both start from the same map. Two values is what lets a test make the
 		DangNhap: &dangNhapGia{
@@ -376,17 +410,18 @@ func dungMayChu(t *testing.T) *mayChu {
 	// here, because the service had no guarded route of its own; a stand-in can only prove that
 	// authz works, never that the route being shipped declared it.
 	m := &mayChu{
-		d:        d,
-		thuMuc:   thuMucMau(),
-		signer:   signer,
-		phien:    phien,
-		canBo:    canBo,
-		danhBa:   danhBa,
-		quyen:    quyen,
-		vaiTro:   vaiTro,
-		boPhan:   boPhan,
-		dangNhap: d.DangNhap.(*dangNhapGia),
-		dangXuat: d.DangXuat.(*dangXuatGia),
+		d:         d,
+		thuMuc:    thuMucMau(),
+		signer:    signer,
+		phien:     phien,
+		canBo:     canBo,
+		danhBa:    danhBa,
+		quyen:     quyen,
+		vaiTro:    vaiTro,
+		boPhan:    boPhan,
+		vaiTroMuc: vaiTroMuc,
+		dangNhap:  d.DangNhap.(*dangNhapGia),
+		dangXuat:  d.DangXuat.(*dangXuatGia),
 	}
 	m.dungLai(t, nil)
 	return m

@@ -50,6 +50,10 @@ export type identity_danhSachBoPhanRa = {
   "items": Array<identity_boPhanRa>;
 };
 
+export type identity_danhSachVaiTroRa = {
+  "items": Array<identity_vaiTroMucRa>;
+};
+
 export type identity_phanHoiDangNhap = {
   "sid": string;
   "expires_at": string;
@@ -79,6 +83,15 @@ export type identity_vaiTroGon = {
   /** vai_tro.ma — the stable slug a client keys on */
   "code": string;
   /** vai_tro.ten — what a person reads */
+  "name": string;
+  "is_leader": boolean;
+};
+
+export type identity_vaiTroMucRa = {
+  /** ULID — what nguoi_dung.vai_tro_id references */
+  "id": string;
+  /** slug */
+  "code": string;
   "name": string;
   "is_leader": boolean;
 };
@@ -115,6 +128,22 @@ export type identity_get_org_units = {
   than: never;
   phanHoi: {
     200: identity_danhSachBoPhanRa;
+    401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/roles — Danh mục vai trò của xã — dùng cho ô chọn vai trò, cột danh bạ và ma trận phân quyền */
+export type identity_get_roles = {
+  duongDan: "/api/v1/roles";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_danhSachVaiTroRa;
     401: httpx_Error;
     500: httpx_Error;
   };

@@ -12,6 +12,15 @@ package domain
 // rather than when the session ends (skills/session-and-token). What this type describes is the
 // role's IDENTITY: what it is called, and one flag about how the app opens.
 type VaiTro struct {
+	// ID is the ULID other records reference — `nguoi_dung.vai_tro_id` holds exactly this.
+	//
+	// IT IS ALWAYS POPULATED, on both read paths, and that is deliberate. The session surface
+	// exposes only `Ma` (a slug is what a client keys on), so it would be tempting to leave ID
+	// empty there and fill it only in the catalogue. A field that is empty on one path and full on
+	// another is a field that can only be wrong in one direction: the day somebody reads it on the
+	// wrong path they get "", which compares equal to nothing and matches no row — silently.
+	ID string
+
 	Ma  string // slug: "chu-tich-ubnd" — stable, what a client keys a lookup on
 	Ten string // "Chủ tịch UBND" — what a person reads
 

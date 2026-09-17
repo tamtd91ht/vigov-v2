@@ -139,7 +139,9 @@ A commune's standing with its own residents is part of what the platform exists 
 | 4 | Sending is eventually consistent with the business write: a petition must **never** fail to be accepted because a notification could not be sent |
 | 5 | Notification payloads carry a **business code**, never personal data — queues are persisted and backed up |
 
-→ ADR `kb/10-decisions/0006-per-commune-zalo-oa.md`
+→ ADR `kb/10-decisions/0006-per-commune-zalo-oa.md` — **superseded by**
+`kb/10-decisions/0018-oa-xac-thuc-tach-khoi-oa-thong-bao.md` (Zalo binds ONE Mini App to ONE
+verifying OA; read 0018 before touching this section)
 
 ---
 
@@ -171,4 +173,6 @@ for nothing and then loses trust.
    documentation, do not assume**
 
 → Rule 1 · Rule 4 · `skills/accessibility-elderly` · `skills/citizen-identity-multi-tenant`
-→ `kb/00-foundation/multi-tenant-model.md` · ADR 0005 · ADR 0006
+→ `kb/00-foundation/multi-tenant-model.md` · ADR 0005 · ADR 0006 (superseded by 0018) · ADR 0018
+  (one verifying OA, per-commune notification OA) · ADR 0019 (QR session pairing) · ADR 0020
+  (citizen phone verification via `getPhoneNumber`)

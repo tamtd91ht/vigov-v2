@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/vihat/vigov/core/store"
@@ -46,7 +47,7 @@ func NewVaiTroStore(db *store.DB) *VaiTroStore { return &VaiTroStore{db: db} }
 // Repeating them here would add a predicate that can only be wrong in one direction: dropped from
 // the middleware and left here, it looks like the check still happens.
 const truyVanVaiTroCuaCanBo = `
-SELECT vt.ma, vt.ten, vt.la_lanh_dao
+SELECT vt.id, vt.ma, vt.ten, vt.la_lanh_dao
 FROM nguoi_dung nd
 LEFT JOIN vai_tro vt
        ON vt.tenant_id  = nd.tenant_id
@@ -102,9 +103,9 @@ func (s *VaiTroStore) VaiTroCuaCanBo(ctx context.Context, canBoID string) (domai
 	// NULLABLE TARGETS, because the left join produces NULLs for a person with no role. A plain
 	// string target turns that ordinary state into a scan error, which the caller would then have
 	// to report as "could not read" — exactly the collapse this function exists to avoid.
-	var ma, ten sql.NullString
+	var id, ma, ten sql.NullString
 	var laLanhDao sql.NullBool
-	if err := rows.Scan(&ma, &ten, &laLanhDao); err != nil {
+	if err := rows.Scan(&id, &ma, &ten, &laLanhDao); err != nil {
 		return domain.VaiTro{}, false, fmt.Errorf("vai_tro: đọc dòng: %w", err)
 	}
 	if err := rows.Err(); err != nil {
@@ -113,5 +114,74 @@ func (s *VaiTroStore) VaiTroCuaCanBo(ctx context.Context, canBoID string) (domai
 	if !ma.Valid {
 		return domain.VaiTro{}, false, nil
 	}
-	return domain.VaiTro{Ma: ma.String, Ten: ten.String, LaLanhDao: laLanhDao.Bool}, true, nil
+	return domain.VaiTro{
+		ID: id.String, Ma: ma.String, Ten: ten.String, LaLanhDao: laLanhDao.Bool,
+	}, true, nil
+}
+
+// TranDanhMucVaiTro is the hard upper bound on one commune's role catalogue.
+//
+// Same argument as TranDanhMucBoPhan, and deliberately a SMALLER number. The Phân quyền screen
+// (docs/ui-ux/14-cau-hinh.md §4.1) shows eight roles, and the permission matrix renders one COLUMN
+// per role — a hundred roles is not a large commune, it is a matrix nobody can read and almost
+// certainly an import run twice. The ceiling is the point past which the data has stopped being a
+// role catalogue, not an estimate of how many a commune might legitimately have.
+const TranDanhMucVaiTro = 100
+
+// ErrQuaNhieuVaiTro says the ceiling was reached. The caller answers 500 and refuses.
+//
+// REFUSE RATHER THAN TRUNCATE, for a reason one step worse than the org chart's: this list fills
+// the role picker on the staff form. A silently short list is a role that has disappeared from the
+// picker, so the next person created gets the wrong role — and a wrong role is a wrong set of
+// permissions, which nothing on the screen shows and no test turns red on.
+var ErrQuaNhieuVaiTro = errors.New("vai_tro: vượt trần danh mục")
+
+// cotVaiTroMuc IS READ BY POSITION in DanhSach. `ma` and `ten` are adjacent TEXT columns: swapping
+// them — here or in the Scan — produces no error at all, and the screen shows slugs where names
+// belong.
+const cotVaiTroMuc = `id, ma, ten, la_lanh_dao`
+
+// DanhSach reads the commune's whole role catalogue, ordered.
+//
+// NOT PAGINATED, same decision and same reasons as BoPhanStore.DanhSach: a closed reference list of
+// about eight rows whose consumers need it whole, not a register that grows with use. The bound
+// pagination would have given is TranDanhMucVaiTro, enforced in SQL.
+//
+// IT RETURNS la_lanh_dao, AND THAT IS A DISPLAY FIELD ONLY. domain.VaiTro.LaLanhDao states the
+// whole argument: the flag chooses which screen the app opens on and must never decide whether an
+// operation is allowed. A catalogue is where that line is easiest to cross, because a client with
+// the whole list in hand can branch on any field in it.
+//
+// THE COMMUNE IS NOT A PARAMETER AND CANNOT BE ONE: Scoped.Query binds it to $1 from the context,
+// so this can only ever read the roles of the commune the request arrived in (rule 1).
+func (s *VaiTroStore) DanhSach(ctx context.Context) ([]domain.VaiTro, error) {
+	// Ceiling PLUS ONE — a full page of exactly the ceiling is indistinguishable from a complete
+	// list of that size, which is the truncation this refuses to perform.
+	rows, err := s.db.For(ctx).Query(ctx, cotVaiTroMuc, "vai_tro",
+		`AND deleted_at IS NULL ORDER BY thu_tu, ten LIMIT $2`, TranDanhMucVaiTro+1)
+	if err != nil {
+		return nil, fmt.Errorf("vai_tro: đọc danh mục: %w", err)
+	}
+	defer rows.Close()
+
+	ra := make([]domain.VaiTro, 0, 16)
+	for rows.Next() {
+		var vt domain.VaiTro
+		// POSITIONAL — in lockstep with cotVaiTroMuc. See the note there on the two adjacent TEXT
+		// columns.
+		if err := rows.Scan(&vt.ID, &vt.Ma, &vt.Ten, &vt.LaLanhDao); err != nil {
+			return nil, fmt.Errorf("vai_tro: đọc dòng: %w", err)
+		}
+		ra = append(ra, vt)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("vai_tro: duyệt kết quả: %w", err)
+	}
+	if len(ra) > TranDanhMucVaiTro {
+		// Rows already read are DROPPED rather than trimmed and returned: handing back a list the
+		// caller might render anyway is how a refusal turns back into a silent truncation, one
+		// careless `if err != nil { log }` later.
+		return nil, ErrQuaNhieuVaiTro
+	}
+	return ra, nil
 }

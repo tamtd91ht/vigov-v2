@@ -216,7 +216,7 @@
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:115"
+      "at": "service-identity/internal/http/routes.go:126"
     },
     "http.DangXuat": {
       "kind": "func",
@@ -224,7 +224,7 @@
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:119"
+      "at": "service-identity/internal/http/routes.go:130"
     },
     "http.DanhSachBoPhan": {
       "kind": "func",
@@ -233,6 +233,10 @@
     "http.DanhSachCanBo": {
       "kind": "func",
       "at": "service-identity/internal/http/can_bo.go:112"
+    },
+    "http.DanhSachVaiTro": {
+      "kind": "func",
+      "at": "service-identity/internal/http/vai_tro.go:63"
     },
     "http.Deps": {
       "kind": "type",
@@ -269,6 +273,10 @@
     "http.ThongTinXa": {
       "kind": "func",
       "at": "service-identity/internal/http/xa.go:91"
+    },
+    "http.VaiTroDanhMuc": {
+      "kind": "type",
+      "at": "service-identity/internal/http/routes.go:120"
     },
     "http.VaiTroDoc": {
       "kind": "type",
@@ -644,7 +652,7 @@
     },
     "store.DanhSach": {
       "kind": "func",
-      "at": "service-identity/internal/store/can_bo_danh_sach.go:82"
+      "at": "service-identity/internal/store/vai_tro.go:157"
     },
     "store.DatMatKhauHash": {
       "kind": "func",
@@ -708,7 +716,7 @@
     },
     "store.NewVaiTroStore": {
       "kind": "func",
-      "at": "service-identity/internal/store/vai_tro.go:22"
+      "at": "service-identity/internal/store/vai_tro.go:23"
     },
     "store.PageSpec": {
       "kind": "type",
@@ -780,11 +788,11 @@
     },
     "store.VaiTroCuaCanBo": {
       "kind": "func",
-      "at": "service-identity/internal/store/vai_tro.go:82"
+      "at": "service-identity/internal/store/vai_tro.go:83"
     },
     "store.VaiTroStore": {
       "kind": "type",
-      "at": "service-identity/internal/store/vai_tro.go:18"
+      "at": "service-identity/internal/store/vai_tro.go:19"
     },
     "tenant.ByHost": {
       "kind": "func",

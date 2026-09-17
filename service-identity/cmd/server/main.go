@@ -184,9 +184,12 @@ func run(log *slog.Logger) error {
 		// description (rule 5, forbidden #3).
 		VaiTro: vaiTro,
 		BoPhan: boPhan,
-		Signer: signer, // the SAME pointer app.NewDangNhap was given above
-		Phien:  phien,
-		CanBo:  canBo,
+		// Cùng một *VaiTroStore, hai trường: một trả lời "vai trò của người gọi", một trả
+		// lời "xã này có những vai trò nào". Hai câu hỏi, hai interface hẹp.
+		VaiTroMuc: vaiTro,
+		Signer:    signer, // the SAME pointer app.NewDangNhap was given above
+		Phien:     phien,
+		CanBo:     canBo,
 		// The SAME store behind two fields, and two fields on purpose: CanBoDoc is the
 		// three-condition read the session middleware runs on every request, CanBoDanhBa is the
 		// register the Cấu hình → Người dùng screen pages through. See the note on CanBoDanhBa.

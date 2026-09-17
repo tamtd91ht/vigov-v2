@@ -82,6 +82,53 @@
         }
       }
     },
+    "/api/v1/roles": {
+      "get": {
+        "summary": "Danh mục vai trò của xã — dùng cho ô chọn vai trò, cột danh bạ và ma trận phân quyền",
+        "operationId": "identity_get_roles",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §4",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "tên vai trò xuất hiện ở ô chọn vai trò trên form cán bộ, cột Vai trò của danh bạ và tiêu đề cột của ma trận phân quyền — đòi một quyền cấu hình sẽ cần ba quyền để dựng một màn hình; đánh đổi đã chấp nhận: tên các vai trò lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, còn quyền của từng vai trò thì không tuyến nào phơi ra"
+        },
+        "x-vigov-task": "c220974e9969",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.danhSachVaiTroRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/sessions": {
       "post": {
         "summary": "Đăng nhập bằng email và mật khẩu, mở một phiên làm việc",
@@ -600,6 +647,21 @@
         ],
         "additionalProperties": false
       },
+      "identity.danhSachVaiTroRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.vaiTroMucRa"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
       "identity.phanHoiDangNhap": {
         "type": "object",
         "properties": {
@@ -714,6 +776,32 @@
         },
         "required": [
           "code",
+          "is_leader",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "identity.vaiTroMucRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID — what nguoi_dung.vai_tro_id references"
+          },
+          "code": {
+            "type": "string",
+            "description": "slug"
+          },
+          "name": {
+            "type": "string"
+          },
+          "is_leader": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "id",
           "is_leader",
           "name"
         ],

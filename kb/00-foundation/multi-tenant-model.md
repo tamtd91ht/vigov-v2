@@ -43,7 +43,7 @@ GPS **gợi ý**, không **quyết định**. Đã chọn xã thì tên xã hi�
 nhận lại ở bước cuối trước khi gửi — gửi nhầm xã là sự cố nghiệp vụ thật.
 
 → Chi tiết khuôn deep link, mức tin theo nguồn, màn hình chọn xã, và OA theo xã:
-ADR 0005 · ADR 0006 · `skills/zalo-miniapp-multi-tenant`
+ADR 0005 · ADR 0006 → **thay thế bởi ADR 0018** · ADR 0019 · `skills/zalo-miniapp-multi-tenant`
 
 ## Ranh giới tin cậy: `Host`
 

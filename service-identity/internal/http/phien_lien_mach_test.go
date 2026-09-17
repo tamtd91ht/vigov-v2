@@ -98,14 +98,15 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 			phien:  map[string]idstore.Phien{sidA: {ID: sidA, NguoiDungID: idNoiBo, HetHanLuc: hetHan}},
 			thuHoi: map[string]bool{},
 		},
-		Quyen:    quyenMau(),
-		VaiTro:   vaiTroMau(),
-		BoPhan:   boPhanMau(),
-		CanBo:    &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
-		DanhBa:   danhBaMau(),
-		DangNhap: &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
-		DangXuat: &dangXuatGia{},
-		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Quyen:     quyenMau(),
+		VaiTro:    vaiTroMau(),
+		BoPhan:    boPhanMau(),
+		VaiTroMuc: vaiTroMucMau(),
+		CanBo:     &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
+		DanhBa:    danhBaMau(),
+		DangNhap:  &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
+		DangXuat:  &dangXuatGia{},
+		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	mux := http.NewServeMux()

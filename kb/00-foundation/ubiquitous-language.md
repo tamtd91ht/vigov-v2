@@ -93,6 +93,7 @@ khác nhau đặt hai tên khác nhau cho cùng một thứ.
 | Giải ngân | `giai_ngan` | `disbursements` | |
 | Phiên đăng nhập | `phien` | `sessions` | |
 | Bộ phận | `bo_phan` | `org-units` | Cây này chứa Đảng uỷ, HĐND, UBMTTQ — **không phải** phòng ban của UBND, nên không gọi `departments` |
+| Vai trò | `vai_tro` | `roles` | Từ dễ đoán và lần này **đúng** — nhưng vẫn phải tra: `role` là chính từ luật 5 bất biến 3 dùng trong `(tenant_id, role, permission)`, nên hợp đồng và mô hình phân quyền nói cùng một từ cho cùng một thứ. `org-units` ngay trên là ví dụ từ dễ đoán sai |
 | Thông báo | `thong_bao` | `announcements` · `public-notices` · `notifications` | **Một từ tiếng Việt, ba thứ khác nhau, ba nhóm người đọc.** Gộp một danh từ thì thông báo nội bộ chạy sang kênh công dân |
 | Tiếp nhận | `tiep_nhan` | `receipt` | |
 | Thụ lý | `thu_ly` | `admission` | Thụ lý **bắt đầu đồng hồ luật định**; tiếp nhận thì không. Gọi cả hai là `accept` là xoá mất ranh giới đó |

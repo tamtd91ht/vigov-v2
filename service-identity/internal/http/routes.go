@@ -110,6 +110,17 @@ type (
 		DanhSach(ctx context.Context) ([]domain.BoPhan, error)
 	}
 
+	// VaiTroDanhMuc is the commune's role catalogue, for GET /api/v1/roles.
+	//
+	// SEPARATE FROM VaiTroDoc ON PURPOSE, even though one store implements both. That one answers
+	// "what is the CALLER's role" for GET /api/v1/sessions/current; this one answers "what roles
+	// does this commune have". Merging them would hand a handler the whole catalogue where it only
+	// ever needed the caller's own row — and a dependency wider than the work requires is how the
+	// next person justifies using it.
+	VaiTroDanhMuc interface {
+		DanhSach(ctx context.Context) ([]domain.VaiTro, error)
+	}
+
 	// DangNhapUC and DangXuatUC are the use cases. The handlers only translate HTTP; the
 	// business write and its audit entry share one transaction inside these.
 	DangNhapUC interface {
@@ -123,16 +134,17 @@ type (
 
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
 type Deps struct {
-	Checker  authz.Checker
-	Quyen    QuyenDoc
-	VaiTro   VaiTroDoc
-	BoPhan   BoPhanDanhMuc
-	Signer   *token.Signer
-	Phien    PhienDoc
-	CanBo    CanBoDoc
-	DanhBa   CanBoDanhBa
-	DangNhap DangNhapUC
-	DangXuat DangXuatUC
+	Checker   authz.Checker
+	Quyen     QuyenDoc
+	VaiTro    VaiTroDoc
+	BoPhan    BoPhanDanhMuc
+	VaiTroMuc VaiTroDanhMuc
+	Signer    *token.Signer
+	Phien     PhienDoc
+	CanBo     CanBoDoc
+	DanhBa    CanBoDanhBa
+	DangNhap  DangNhapUC
+	DangXuat  DangXuatUC
 
 	Log *slog.Logger
 }
@@ -163,6 +175,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho vai trò — GET /api/v1/sessions/current sẽ panic khi có người gọi")
 	case d.BoPhan == nil:
 		panic("identity/http: thiếu kho bộ phận — GET /api/v1/org-units sẽ panic khi có người gọi")
+	case d.VaiTroMuc == nil:
+		panic("identity/http: thiếu kho danh mục vai trò — GET /api/v1/roles sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -360,4 +374,34 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/org-units",
 		authz.AnyAuthenticated("tên bộ phận xuất hiện ở ô phân công nhiệm vụ, luồng văn bản, danh bạ và mọi bộ lọc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: sơ đồ tổ chức lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachBoPhan)))
+
+	// The commune's role catalogue. GET /api/v1/roles
+	//
+	// `roles` — the URL-resource table settles this row (kb/00-foundation/ubiquitous-language.md).
+	// It was ASKED rather than translated on the spot: `org-units` one route up is what happens when
+	// the obvious English word (`departments`) asserts something false, so the obvious word gets
+	// looked up here too even when it turns out to be right. `role` is already the term rule 5
+	// invariant 3 uses — `(tenant_id, role, permission)` — so the contract surface and the
+	// authorisation model now say the same word for the same thing.
+	//
+	// AnyAuthenticated, SAME REASON AS org-units: role names fill the picker on the staff form, the
+	// column on the staff directory and the header of the Phân quyền matrix. Gating them behind a
+	// configuration permission would break the screen for whoever holds `admin.role` but not
+	// `admin.user`, and vice versa — three permissions to render one screen.
+	//
+	// THE TRADE-OFF, STATED: every signed-in account OF THIS COMMUNE can read what the commune's
+	// roles are called. Not across communes, and it cannot be — Scoped.Query binds `tenant_id` from
+	// the context (rule 1, invariant 5). What is NOT readable here is what each role may DO: the
+	// permission grants live in `vai_tro_quyen` and no route exposes them.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Danh mục vai trò của xã — dùng cho ô chọn vai trò, cột danh bạ và ma trận phân quyền
+	// @screen   14-cau-hinh §4
+	// @reply    200 danhSachVaiTroRa
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/roles",
+		authz.AnyAuthenticated("tên vai trò xuất hiện ở ô chọn vai trò trên form cán bộ, cột Vai trò của danh bạ và tiêu đề cột của ma trận phân quyền — đòi một quyền cấu hình sẽ cần ba quyền để dựng một màn hình; đánh đổi đã chấp nhận: tên các vai trò lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, còn quyền của từng vai trò thì không tuyến nào phơi ra")(
+			http.HandlerFunc(h.DanhSachVaiTro)))
 }
