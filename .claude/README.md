@@ -186,6 +186,14 @@ unbraced `$CLAUDE_PROJECT_DIR` is not expanded by a `cmd.exe` hook shell on Wind
 
 `make brain` invariant 1 now fails on any relative hook path.
 
+And match on the **tool that runs the command, not the tool you had in mind**. A guard that
+inspects a shell command must cover every tool that hands one to a shell — the list lives in
+`hooks/_common.py` as `VO_SHELL`, and the matcher must name all of them. `Monitor` was outside
+both for a while: same shell, different tool name, so neither the `Bash` matcher nor the
+`permissions.deny` entries (also keyed on the tool name) applied to it. Widening the matcher
+alone is not enough — each guard's own `tool == "Bash"` test has to go through `la_vo_shell`
+too, or the hook runs and exits immediately.
+
 ### Adding a SKILL
 
 `skills/<name>/SKILL.md` with `name` + `description` frontmatter. The *"Triggers on"* part of

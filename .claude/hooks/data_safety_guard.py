@@ -122,7 +122,7 @@ def bo_than_heredoc(cmd: str) -> str:
     return ngoai
 
 
-def check_bash(cmd: str) -> None:
+def check_bash(cmd: str, tool: str) -> None:
     cmd = bo_than_heredoc(cmd)
     for pattern, name, why in DANGEROUS_BASH:
         if re.search(pattern, cmd, re.I):
@@ -133,7 +133,7 @@ def check_bash(cmd: str) -> None:
                      "  what it will affect and wait for explicit confirmation.",
                      "",
                      "  → Rule 7: .claude/rules/critical/7-data-preservation.md"],
-                    tool="Bash", path="")
+                    tool=tool, path="")
 
 
 def check_code(content: str, path: str, tool: str) -> None:
@@ -170,10 +170,10 @@ def main() -> None:
     tool = c.tool_of(data)
     ti = c.input_of(data)
 
-    if tool == "Bash":
+    if c.la_vo_shell(tool):
         cmd = ti.get("command") or ""
         if cmd:
-            check_bash(cmd)
+            check_bash(cmd, tool)
         sys.exit(0)
 
     if tool in ("Edit", "Write", "MultiEdit"):

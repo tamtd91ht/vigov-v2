@@ -5,7 +5,8 @@ not import each other. The result: `_utf8_streams()` copied 7 times, `read_input
 the PII pattern twice. Fixing one pattern meant remembering every copy, and missing one was
 invisible.
 
-v2 invokes hooks directly (`python .claude/hooks/<name>.py`), so imports work. Every shared
+v2 invokes hooks directly (`python "${CLAUDE_PROJECT_DIR}/.claude/hooks/<name>.py"`), so
+imports work. Every shared
 pattern lives here — one place to fix.
 
 Constraints: standard library only. A broken hook must NEVER block work — wrap everything.
@@ -56,6 +57,29 @@ def read_input() -> dict:
 
 def tool_of(data: dict) -> str:
     return data.get("tool_name") or data.get("tool") or ""
+
+
+# Tools that hand a shell command straight to the system.
+#
+# `Monitor` belongs here for exactly one reason: its `command` runs in the same shell as
+# `Bash`, but it arrives under a DIFFERENT TOOL NAME. A PreToolUse matcher of "Bash" never
+# sees it, and neither does the `permissions.deny` list -- which is also keyed on the tool
+# name, so every deny entry written as `Bash(...)` (recursive deletion, hard reset, force
+# push, a direct database client) was reachable through `Monitor` while the settings file
+# looked fully locked down.
+#
+# That is the shape this project keeps finding: something that looks like a control and is
+# not one. Measured 2026-09-17.
+#
+# Every guard that inspects a shell command gates on THIS, never on a bare == "Bash". One
+# list, one place: a second tool that runs shell commands gets added here and every guard
+# picks it up at once.
+VO_SHELL = ("Bash", "Monitor")
+
+
+def la_vo_shell(tool: str) -> bool:
+    """True when this tool hands `tool_input["command"]` to a shell."""
+    return tool in VO_SHELL
 
 
 def input_of(data: dict) -> dict:

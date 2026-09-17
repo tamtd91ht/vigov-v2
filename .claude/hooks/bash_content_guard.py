@@ -91,7 +91,7 @@ def scan(cmd: str) -> list[str]:
 def main() -> None:
     c.utf8_streams()
     data = c.read_input()
-    if c.tool_of(data) != "Bash":
+    if not c.la_vo_shell(c.tool_of(data)):
         sys.exit(0)
 
     cmd = (c.input_of(data).get("command") or "")
@@ -122,7 +122,7 @@ def main() -> None:
             "  → Rule 3: .claude/rules/critical/3-personal-data.md",
             "  → Rule 8: .claude/rules/critical/8-secrets-config.md",
         ],
-        tool="Bash",
+        tool=c.tool_of(data),
         path="",
     )
 

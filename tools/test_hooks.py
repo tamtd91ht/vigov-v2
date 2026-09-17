@@ -38,6 +38,16 @@ def b(cmd: str) -> dict:
     return {"tool_name": "Bash", "tool_input": {"command": cmd}}
 
 
+def mon(cmd: str) -> dict:
+    """The SAME command arriving as `Monitor` instead of `Bash`.
+
+    Monitor hands its `command` to the same shell as Bash, but under a different tool name.
+    A PreToolUse matcher of "Bash" therefore never saw it — and neither did `permissions.deny`,
+    which is keyed on the tool name too, so every deny entry written as `Bash(...)` had a door
+    beside it. These cases are what keeps the two paths from drifting apart again."""
+    return {"tool_name": "Monitor", "tool_input": {"command": cmd}}
+
+
 def wpost(path: str, content: str) -> dict:
     """A Write seen at PostToolUse. rest_api_guard blocks a bad PATH before the write, but
     only advises on a missing declaration after it — a route assembled over several edits
@@ -288,6 +298,13 @@ CASES = [
     ("data_safety_guard", "--force-with-lease is allowed", PASS,
      b("git push origin main --force-with-lease")),
     ("data_safety_guard", "an ordinary read command", PASS, b("go test ./...")),
+    # The same commands arriving as Monitor. They reach the same shell, so they must meet the
+    # same guard; the tool name is the only thing that differs and it is not a safety property.
+    ("data_safety_guard", "destructive command arriving as Monitor", BLOCK, mon("rm -rf ./tmp")),
+    ("data_safety_guard", "harmless command arriving as Monitor", PASS, mon("go test ./...")),
+    ("bash_content_guard", "secret written to a file via Monitor", BLOCK,
+     mon("echo 'aws_secret_access_key = AKIAIOSFODNN7EXAMPLE' > .env")),
+    ("bash_content_guard", "ordinary command arriving as Monitor", PASS, mon("ls -la services/")),
     # THIRD false positive of this guard. A commit message explaining a migration used the
     # words TRUNCATE and DROP, and the heredoc body was scanned as if it were a command. The
     # body of `git commit -F -` is prose that never executes; blocking it teaches the next
