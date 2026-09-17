@@ -422,10 +422,49 @@ IS_CODE_CASES = [
 ]
 
 
+# ---- pure-function cases: what drift_guard READS, and when it speaks -----------------------
+#
+# Same exemption, same trap, second hook. drift_guard is the only mechanism watching for the
+# code silently deciding a customer's open question — the failure that cost v1 20-28 days — and
+# it shipped with a WHITELIST of seven root directories. After the flat layout exactly one of
+# them existed, so it read almost nothing and said nothing, session after session, while
+# check_brain stayed green: that invariant checks a rule NAMES a hook, never that the hook can
+# SEE anything.
+#
+# What gets read is the whole hook. These cases name one real path per shape a deployable unit
+# takes, so reverting to a whitelist goes red on the spot.
+DUOC_QUET_CASES = [
+    ("service-identity/internal/http/routes.go", True, "mã dịch vụ — ca từng thủng"),
+    ("service-identity/migrations/0004_x.sql", True, "migration của dịch vụ — ca từng thủng"),
+    ("core/httpx/citizen.go", True, "mã dùng chung — ca từng thủng"),
+    ("web-admin/src/lib/api/can-bo.ts", True, "mã web — ca từng thủng"),
+    ("citizen-app/src/content/company-profile.ts", True, "Mini App — đơn vị triển khai mới nhất"),
+    ("proto/vigov/platform/v1/platform.proto", True, "hợp đồng — thư mục DUY NHẤT từng được quét"),
+    ("core/gen/vigov/platform/v1/platform.pb.go", False, "mã SINH — không quyết định gì"),
+    ("core/httpx/citizen_test.go", False, "tệp test"),
+    ("kb/10-decisions/0023-thuat-ngu.md", False, "tài liệu — phát biểu VỀ quyết định"),
+    ("docs/ui-ux/11-noi-dung-mini-app.md", False, "đặc tả giao diện"),
+    ("web-admin/node_modules/react/index.js", False, "phụ thuộc bên thứ ba"),
+]
+
+# Ngưỡng của TỪNG tín hiệu phải được dùng thật. Luật cũ dùng `top_n < 3` cứng, nên mọi
+# "threshold": 1 trong open-questions.json là chữ chết — mà 1 đúng là ngưỡng các câu ĐẮT NHẤT
+# khai báo, vì với chúng một lần xuất hiện đã là quyết định.
+NEN_CANH_BAO_CASES = [
+    ({"A": 1}, {"A": 1}, True, "ngưỡng 1 và có 1 — phải bắn (ca từng chết)"),
+    ({"A": 2}, {}, False, "không khai ngưỡng, mặc định 3, mới có 2 — im"),
+    ({"A": 5}, {}, True, "mặc định 3, có 5, một chiều — bắn"),
+    ({"A": 5, "B": 4}, {}, False, "hai chiều ngang nhau — mã chưa nhất quán, không phải đã quyết"),
+    ({"A": 9, "B": 1}, {}, True, "một chiều áp đảo — bắn"),
+    ({}, {}, False, "không tín hiệu nào"),
+]
+
+
 def chay_thuan() -> list[tuple[str, str, bool, bool]]:
-    """Trả về các ca SAI của is_code. Import tại chỗ: hook thêm thư mục của nó vào sys.path."""
+    """Trả về các ca SAI của phần THUẦN. Import tại chỗ: hook tự thêm thư mục của nó vào sys.path."""
     sys.path.insert(0, HOOKS)
     import stop_verify_guard as svg  # noqa: E402
+    import drift_guard as dg  # noqa: E402
 
     sai = []
     for duong, mong, nhan in IS_CODE_CASES:
@@ -436,6 +475,25 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         print(f"{mark} [{want}] {'stop_verify_guard.is_code':24s} {nhan}")
         if not ok:
             sai.append((duong, nhan, mong, duoc))
+
+    for duong, mong, nhan in DUOC_QUET_CASES:
+        duoc = dg.duoc_quet(duong)
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        want = "ĐỌC " if mong else "BỎ QUA"
+        print(f"{mark} [{want}] {'drift_guard.duoc_quet':24s} {nhan}")
+        if not ok:
+            sai.append((duong, nhan, mong, duoc))
+
+    for counts, nguong, mong, nhan in NEN_CANH_BAO_CASES:
+        duoc = dg.nen_canh_bao(counts, nguong) is not None
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        want = "BẮN " if mong else "IM   "
+        print(f"{mark} [{want}] {'drift_guard.nen_canh_bao':24s} {nhan}")
+        if not ok:
+            sai.append((str(counts), nhan, mong, duoc))
+
     return sai
 
 
@@ -459,7 +517,7 @@ if __name__ == "__main__":
 
     sai_thuan = chay_thuan()
 
-    tong = len(CASES) + len(IS_CODE_CASES)
+    tong = len(CASES) + len(IS_CODE_CASES) + len(DUOC_QUET_CASES) + len(NEN_CANH_BAO_CASES)
     hong = len(fails) + len(sai_thuan)
     print()
     print(f"Total: {tong} cases · passed: {tong-hong} · failed: {hong}")

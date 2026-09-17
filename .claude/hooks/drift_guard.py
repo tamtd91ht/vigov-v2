@@ -57,6 +57,45 @@ SKIP_DIRS = frozenset((
 MAX_FILES = 4000          # safety cap — this hook must not slow session start
 
 
+def duoc_quet(duong_dan: str) -> bool:
+    """Would this path be read? A PURE function of the path — no filesystem, no environment.
+
+    It exists so the rule can be asserted. `iter_files` needs a real tree to run, which is why
+    this hook sits among the three exempt from the payload cases — and that exemption was read
+    as "exempt from tests" until the whitelist above had been silently matching nothing for as
+    long as the flat layout had existed. The decision of WHAT GETS READ is the whole hook: get
+    it wrong and every other line here is correct about nothing.
+
+    `iter_files` prunes directories with SKIP_DIRS for speed, but this function is the
+    authority — pruning is an optimisation, not a second copy of the rule.
+    """
+    phan = duong_dan.replace("\\", "/").split("/")
+    if any(p in SKIP_DIRS for p in phan[:-1]):
+        return False
+    ten = phan[-1]
+    if not ten.endswith(SCAN_EXT):
+        return False
+    return not (ten.endswith("_test.go") or ten.endswith(".pb.go"))
+
+
+def nen_canh_bao(counts: dict, nguong_theo_means: dict) -> tuple | None:
+    """Decide whether one direction dominates enough to warn. PURE — counts in, verdict out.
+
+    Two rules, and they fail in opposite directions on purpose:
+      * below the signal's own threshold -> silence, because one stray match is not a decision;
+      * two directions in comparable numbers -> silence, because that is code that is
+        INCONSISTENT, not code that has decided, and warning there cries wolf every session.
+    """
+    if not counts:
+        return None
+    ranked = sorted(counts.items(), key=lambda kv: -kv[1])
+    top, top_n = ranked[0]
+    rest = sum(v for _, v in ranked[1:])
+    if top_n < nguong_theo_means.get(top, 3) or rest * 3 > top_n:
+        return None
+    return top, top_n, ranked
+
+
 def iter_files(root: str):
     """Yield source files, and report whether the cap truncated the walk.
 
@@ -68,9 +107,7 @@ def iter_files(root: str):
     for dp, dn, fn in os.walk(root):
         dn[:] = [x for x in dn if x not in SKIP_DIRS]
         for f in fn:
-            if not f.endswith(SCAN_EXT):
-                continue
-            if f.endswith("_test.go") or f.endswith(".pb.go"):
+            if not duoc_quet(f):
                 continue
             yield os.path.join(dp, f)
             n += 1
@@ -142,17 +179,10 @@ def main() -> None:
         counts = tally.get(qi)
         if not counts:
             continue
-        # Report only when ONE direction dominates and the other is nearly absent.
-        #
-        # The dominance test stays: two directions present in comparable numbers means the code
-        # is inconsistent, not decided, and a warning there would cry wolf on every session.
-        # What changed is the count it is measured against — the signal's own threshold rather
-        # than a flat 3.
-        ranked = sorted(counts.items(), key=lambda kv: -kv[1])
-        top, top_n = ranked[0]
-        rest = sum(v for _, v in ranked[1:])
-        if top_n < nguong.get(qi, {}).get(top, 3) or rest * 3 > top_n:
+        phan_dinh = nen_canh_bao(counts, nguong.get(qi, {}))
+        if phan_dinh is None:
             continue
+        top, _top_n, ranked = phan_dinh
         detail = " · ".join(f"{k}: {v} places" for k, v in ranked)
         lines += [
             f"[ViGov] WARNING: open question #{q.get('id','?')} \"{q.get('question','')}\" "
