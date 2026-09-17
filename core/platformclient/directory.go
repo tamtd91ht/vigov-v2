@@ -168,5 +168,11 @@ func (d *Directory) ByHost(ctx context.Context, host string) (tenant.Tenant, boo
 		Host:   t.GetHost(),
 		Name:   t.GetDisplayName(),
 		Active: t.GetActive(),
+		// GetProvince() answers "" for an old platform service that does not send field 6 at all,
+		// and "" for a commune that has not declared a province. THE TWO ARE DELIBERATELY NOT TOLD
+		// APART: the contract says "" is a valid answer every consumer renders as nothing, so the
+		// only behaviour that could distinguish them is guessing a province — which is the one
+		// thing no consumer may do (rule 1; the field comment in platform.proto).
+		Province: t.GetProvince(),
 	}, true
 }

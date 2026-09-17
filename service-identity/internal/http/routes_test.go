@@ -98,7 +98,10 @@ func (m thuMucGia) ByHost(_ context.Context, host string) (tenant.Tenant, bool) 
 // communes are called the same thing cannot show a route serving the wrong one.
 func thuMucMau() thuMucGia {
 	return thuMucGia{
-		hostA: {ID: xaA, Host: hostA, Name: "Xã Thăng Bình", Active: true},
+		// Commune A declares a province, commune B does not. A fixture where both declare one
+		// cannot tell "the field is carried through" from "every commune happens to have one", and
+		// "" is an answer the contract says every consumer must handle.
+		hostA: {ID: xaA, Host: hostA, Name: "Xã Thăng Bình", Province: "Thành phố Đà Nẵng", Active: true},
 		hostB: {ID: xaB, Host: hostB, Name: "Xã Bình Dương", Active: true},
 	}
 }
@@ -130,6 +133,72 @@ func quyenMau() *quyenGia {
 	return &quyenGia{quyen: map[tenant.ID]map[string][]authz.Perm{
 		xaA: {idNoiBo: {quyenThu, "task.read"}},
 		xaB: {},
+	}}
+}
+
+// vaiTroGia is the role register, KEYED BY COMMUNE and by staff id, reading the commune from the
+// context exactly as *store.Scoped does. Keyed any other way, the isolation case in
+// phien_hien_tai_test.go would pass while proving nothing.
+//
+// It returns the THREE outcomes the real store returns — a role, no role, or a failure — because
+// the whole point of the response shape is that a client can tell those apart.
+type vaiTroGia struct {
+	vai map[tenant.ID]map[string]domain.VaiTro
+	loi error
+	goi int
+}
+
+func (v *vaiTroGia) VaiTroCuaCanBo(ctx context.Context, canBoID string) (domain.VaiTro, bool, error) {
+	v.goi++
+	if v.loi != nil {
+		return domain.VaiTro{}, false, v.loi
+	}
+	vt, ok := v.vai[tenant.MustFrom(ctx)][canBoID]
+	return vt, ok, nil
+}
+
+// vaiTroMau mirrors quyenMau: in commune A the account holds a LEADER role, in commune B the same
+// account holds none at all. The second half is not padding — it is the person who is in the
+// directory before anybody decided what they do, which is the state `role: null` exists for, and
+// it is also what makes "commune A's role does not travel to commune B" a real case.
+func vaiTroMau() *vaiTroGia {
+	return &vaiTroGia{vai: map[tenant.ID]map[string]domain.VaiTro{
+		xaA: {idNoiBo: {Ma: "chu-tich-ubnd", Ten: "Chủ tịch UBND", LaLanhDao: true}},
+		xaB: {},
+	}}
+}
+
+// boPhanGia is the org chart, KEYED BY COMMUNE, reading the commune from the context the same way
+// *store.Scoped does. Keyed any other way, the isolation case in bo_phan_test.go would pass while
+// proving nothing.
+type boPhanGia struct {
+	theo map[tenant.ID][]domain.BoPhan
+	loi  error
+	goi  int
+}
+
+func (b *boPhanGia) DanhSach(ctx context.Context) ([]domain.BoPhan, error) {
+	b.goi++
+	if b.loi != nil {
+		return nil, b.loi
+	}
+	return b.theo[tenant.MustFrom(ctx)], nil
+}
+
+// boPhanMau gives commune A a two-level chart and commune B a single unit with a DIFFERENT name.
+// Two communes whose units were named the same could not show a leak.
+//
+// The order is the one the store returns (ORDER BY thu_tu, ten) — the handler must not touch it,
+// and a fixture in a different order from the assertion is what proves that.
+func boPhanMau() *boPhanGia {
+	return &boPhanGia{theo: map[tenant.ID][]domain.BoPhan{
+		xaA: {
+			{ID: "bp-001", Ma: "van-phong-dang-uy", Ten: "VĂN PHÒNG ĐẢNG ỦY"},
+			{ID: "bp-002", Ma: "to-mot-cua", Ten: "TỔ MỘT CỬA", ChaID: "bp-001"},
+		},
+		xaB: {
+			{ID: "bp-b-001", Ma: "van-phong-hdnd", Ten: "VĂN PHÒNG HĐND XÃ B"},
+		},
 	}}
 }
 
@@ -239,6 +308,8 @@ type mayChu struct {
 	canBo  *canBoGia
 	danhBa *danhBaGia
 	quyen  *quyenGia
+	vaiTro *vaiTroGia
+	boPhan *boPhanGia
 	// dangNhap and dangXuat are the same values as d.DangNhap / d.DangXuat, typed.
 	dangNhap *dangNhapGia
 	dangXuat *dangXuatGia
@@ -270,6 +341,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	canBo := &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}}
 	danhBa := danhBaMau()
 	quyen := quyenMau()
+	vaiTro := vaiTroMau()
+	boPhan := boPhanMau()
 
 	d := Deps{
 		// Commune A grants the permission; commune B has the same account and grants nothing.
@@ -279,6 +352,8 @@ func dungMayChu(t *testing.T) *mayChu {
 			xaB: {},
 		}},
 		Quyen:  quyen,
+		VaiTro: vaiTro,
+		BoPhan: boPhan,
 		Signer: signer,
 		Phien:  phien,
 		CanBo:  canBo,
@@ -308,6 +383,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		canBo:    canBo,
 		danhBa:   danhBa,
 		quyen:    quyen,
+		vaiTro:   vaiTro,
+		boPhan:   boPhan,
 		dangNhap: d.DangNhap.(*dangNhapGia),
 		dangXuat: d.DangXuat.(*dangXuatGia),
 	}

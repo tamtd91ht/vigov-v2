@@ -37,6 +37,35 @@ func TestThongTinXaKhongCanToken(t *testing.T) {
 	if ra.Host != hostA {
 		t.Errorf("host = %q, muốn %q", ra.Host, hostA)
 	}
+	if ra.Province != "Thành phố Đà Nẵng" {
+		t.Errorf("province = %q, muốn %q", ra.Province, "Thành phố Đà Nẵng")
+	}
+}
+
+func TestThongTinXaChuaKhaiTinhThanhTraChuoiRongChuKhongBiaMotTinh(t *testing.T) {
+	// THE DECISION THIS PINS: a commune that has not declared a province gets "", and the screen
+	// renders nothing on that line. What must never happen is a default appearing here — the
+	// registry's answer for commune A is one line above in the same fixture, and a handler that
+	// fell back to "some province" would make both communes print the same one.
+	//
+	// The key must still be PRESENT in the JSON, not omitted: a client that receives the field
+	// only sometimes has to handle two shapes, and it will handle one of them wrong.
+	m := dungMayChu(t)
+
+	w := m.goi(t, "GET", hostB, "/api/v1/commune", "", "")
+	doiMa(t, w, http.StatusOK)
+
+	var tho map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &tho); err != nil {
+		t.Fatalf("thân không phải JSON: %q", w.Body.String())
+	}
+	got, co := tho["province"]
+	if !co {
+		t.Fatal("thiếu hẳn khoá province — client phải xử lý hai hình dạng phản hồi")
+	}
+	if got != "" {
+		t.Fatalf("province = %v, muốn chuỗi rỗng — không được bịa một tỉnh mặc định", got)
+	}
 }
 
 func TestThongTinXaTokenHongVanPhucVu(t *testing.T) {
@@ -79,7 +108,10 @@ func TestThongTinXaKhongTraTenantID(t *testing.T) {
 		khoa = append(khoa, k)
 	}
 	sort.Strings(khoa)
-	muon := []string{"host", "name"}
+	// `province` was added deliberately and passed the question this assertion asks of every
+	// field: it is not personal data, it is not an identifier anything is keyed by, and it says
+	// nothing about the commune's internal operation. `id` is still absent and still the point.
+	muon := []string{"host", "name", "province"}
 	if strings.Join(khoa, ",") != strings.Join(muon, ",") {
 		t.Fatalf("trường trả về = %v, muốn đúng %v — mỗi trường thêm vào một tuyến CÔNG KHAI "+
 			"phải được cân nhắc lại từ đầu", khoa, muon)

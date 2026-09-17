@@ -71,7 +71,31 @@ function dichKieu(schema, duong) {
     if (!schema.$ref.startsWith(tien)) tuChoi(duong, `$ref ngoài components/schemas: ${schema.$ref}`);
     return tenKieu(schema.$ref.slice(tien.length));
   }
-  for (const cam of ["allOf", "oneOf", "anyOf", "not", "const"]) {
+  // `anyOf: [{$ref}, {type:"null"}]` — thành ngữ OpenAPI 3.1 cho một THAM CHIẾU có thể rỗng.
+  //
+  // Vì sao không dùng `type: [T, "null"]` như các trường vô hướng: `$ref` không nhận thêm
+  // khoá nào bên cạnh, nên một tham chiếu có thể rỗng chỉ diễn đạt được bằng `anyOf`. Đây
+  // đúng là hình dạng `tools/apidoc` phát ra cho `phienHienTaiRa.role` — một cán bộ có thể
+  // CHƯA ĐƯỢC GÁN VAI TRÒ, và trường vẫn nằm trong `required`: luôn có mặt, giá trị `null`.
+  //
+  // Dịch thành `T | null`, cùng lý do với nhánh `type: [T,"null"]` phía dưới: `null` là câu
+  // trả lời máy chủ KHẲNG ĐỊNH ("chưa gán vai trò"), khác hẳn trường vắng mặt ("máy chủ
+  // không nói gì"). Gộp hai cái thì màn hình không phân biệt được "chưa gán" với "chưa đọc
+  // được", và nó sẽ hiển thị cùng một dấu gạch ngang cho cả hai.
+  //
+  // CHỈ nhận đúng dạng hai nhánh có một `{type:"null"}`. Một liên hợp thật sự giữa hai kiểu
+  // khác nhau là chuyện khác và phải được cân nhắc riêng, nên nó vẫn rơi xuống nhánh từ chối.
+  if ("anyOf" in schema) {
+    const ds = schema.anyOf;
+    const laNull = (x) => x && typeof x === "object" && x.type === "null" && !x.$ref;
+    const khongNull = Array.isArray(ds) ? ds.filter((x) => !laNull(x)) : [];
+    if (!Array.isArray(ds) || ds.length !== 2 || khongNull.length !== 1) {
+      tuChoi(duong, "anyOf không phải dạng <kiểu> | null — chưa hỗ trợ");
+    }
+    return `${dichKieu(khongNull[0], duong)} | null`;
+  }
+
+  for (const cam of ["allOf", "oneOf", "not", "const"]) {
     if (cam in schema) tuChoi(duong, `chưa hỗ trợ '${cam}'`);
   }
 

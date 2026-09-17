@@ -8,8 +8,8 @@
 # Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
 
 version: 1
-generated_at: 2026-09-17T10:04:46Z   # `make kb` điền
-from_commit: 380490e   # `make kb` điền
+generated_at: 2026-09-17T13:20:44Z   # `make kb` điền
+from_commit: 0f96676   # `make kb` điền
 
 budget:
   always_load_max: 25000  # token — trần do người dùng chốt 16/09/2026 (trước là 20000)

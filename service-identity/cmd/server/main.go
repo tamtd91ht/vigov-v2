@@ -125,6 +125,8 @@ func run(log *slog.Logger) error {
 	checker := idstore.NewChecker(kho, log)
 	canBo := idstore.NewCanBoStore(kho)
 	phien := idstore.NewPhienStore(kho)
+	vaiTro := idstore.NewVaiTroStore(kho)
+	boPhan := idstore.NewBoPhanStore(kho)
 
 	// 5. ONE signer, and the variable is used twice on purpose.
 	//
@@ -175,7 +177,13 @@ func run(log *slog.Logger) error {
 		// The SAME *idstore.Checker behind two fields, and two fields on purpose: Checker DECIDES
 		// one permission at a time and guards every route; Quyen only LISTS what the caller already
 		// holds, so the admin web can avoid drawing what the server would refuse. See QuyenDoc.
-		Quyen:  checker,
+		Quyen: checker,
+		// A store of its own, not the Checker: Checker reads GRANTS and decides access, VaiTroStore
+		// reads what the role is CALLED and decides nothing. Putting a display read behind the
+		// interface that guards every route is how the first caller comes to decide access from a
+		// description (rule 5, forbidden #3).
+		VaiTro: vaiTro,
+		BoPhan: boPhan,
 		Signer: signer, // the SAME pointer app.NewDangNhap was given above
 		Phien:  phien,
 		CanBo:  canBo,

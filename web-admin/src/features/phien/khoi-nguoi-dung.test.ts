@@ -18,6 +18,7 @@ const doc: PhienDaDoc = {
     sid: "01J000000000000000000000SD",
     expires_at: "2026-09-18T03:00:00Z",
     staff: { code: "CB-001", full_name: "Huỳnh Văn 1", position: "Chủ tịch UBND xã" },
+    role: { code: "chu-tich-ubnd", name: "Chủ tịch UBND", is_leader: true },
     permissions: ["admin.user"],
   },
 };
@@ -50,6 +51,22 @@ describe("khoiNguoiDung", () => {
     const a = khoiNguoiDung(dangDoc);
     const b = khoiNguoiDung(hong);
     expect(a).not.toEqual(b);
+  });
+
+  // `role` có thể là `null` — một người trong danh bạ chưa được gán vai trò. Khối người dùng
+  // trên đầu trang KHÔNG đọc vai trò (nó in chức vụ, một trường khác), nên ca này phải vẫn
+  // hiện tên bình thường. Bài này ghim điều đó: ngày ai đó thêm vai trò vào đầu trang mà quên
+  // ca `null`, người chưa được gán vai trò sẽ mất luôn cả tên mình trên đầu trang.
+  it("chưa gán vai trò thì vẫn hiện họ tên và chức vụ", () => {
+    const chuaGan: PhienDaDoc = {
+      ok: true,
+      duLieu: { ...doc.ok ? doc.duLieu : (() => { throw new Error("fixture sai") })(), role: null },
+    };
+    expect(khoiNguoiDung(chuaGan)).toEqual({
+      hien: true,
+      hoTen: "Huỳnh Văn 1",
+      chucVu: "Chủ tịch UBND xã",
+    });
   });
 
   // `canBoGon` cố ý không có thư điện tử — địa chỉ thư công vụ là dữ liệu cá nhân (luật 3), và

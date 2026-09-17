@@ -247,6 +247,129 @@ func TestPhienHienTaiDocQuyenTheoPrincipalIDNoiBo(t *testing.T) {
 	}
 }
 
+// --- (5) the caller's role --------------------------------------------------------------------
+//
+// The role is on this reply for ONE reason — the header prints it, and `is_leader` chooses which
+// screen the app opens on (docs/ui-ux/15-phu-luc-giao-dien-chung.md §1). Everything asserted below
+// is about keeping it that and nothing more.
+
+func TestPhienHienTaiTraVaiTroCuaChinhNguoiGoi(t *testing.T) {
+	m := dungMayChu(t)
+
+	w := m.goi(t, "GET", hostA, duongPhienHienTai, "", m.tokenCho(t, xaA, sidA))
+	doiMa(t, w, http.StatusOK)
+
+	ra := docPhien(t, w.Body.Bytes())
+	if ra.Role == nil {
+		t.Fatal("thiếu vai trò — tài khoản này CÓ vai trò ở xã A")
+	}
+	if ra.Role.Code != "chu-tich-ubnd" || ra.Role.Name != "Chủ tịch UBND" {
+		t.Errorf("vai trò sai: %+v", *ra.Role)
+	}
+	if !ra.Role.IsLeader {
+		t.Error("is_leader = false với vai trò lãnh đạo — màn hình mặc định sẽ mở sai")
+	}
+}
+
+func TestPhienHienTaiCoVaiTroThiDocTrongHandlerChuKhongPhaiONhungTuyenKhac(t *testing.T) {
+	// THE DECISION THIS PINS: the role is read by ONE route, not by the edge.
+	//
+	// XacThuc runs on every request of every route and already holds this person's row, so carrying
+	// the role along there looks free. It is not: the role is a second table, therefore a join, and
+	// the edge would pay it on every request of every screen to save one query on one route.
+	//
+	// Asserted by counting: a request to a DIFFERENT route must not read the role register at all.
+	m := dungMayChu(t)
+	tok := m.tokenCho(t, xaA, sidA)
+
+	doiMa(t, m.goi(t, "GET", hostA, "/api/v1/staff", "", tok), http.StatusOK)
+	if m.vaiTro.goi != 0 {
+		t.Fatalf("đọc vai trò %d lần trên một tuyến KHÔNG cần vai trò — phép đọc đã trôi vào biên",
+			m.vaiTro.goi)
+	}
+
+	doiMa(t, m.goi(t, "GET", hostA, duongPhienHienTai, "", tok), http.StatusOK)
+	if m.vaiTro.goi != 1 {
+		t.Errorf("đọc vai trò %d lần cho một lần gọi, muốn đúng 1", m.vaiTro.goi)
+	}
+}
+
+func TestPhienHienTaiChuaGanVaiTroThiTraNull(t *testing.T) {
+	// "CHƯA GÁN VAI TRÒ" IS A REAL STATE, not an error: `nguoi_dung.vai_tro_id` is nullable and a
+	// person can sit in the commune's directory before anybody decides what they do.
+	//
+	// null AND NOT AN EMPTY OBJECT. `{"code":"","name":"","is_leader":false}` reads as a role that
+	// exists and is nameless, and the `is_leader:false` inside it is an assertion nobody made — a
+	// client that renders a role name would print an empty chip in the header.
+	m := dungMayChu(t)
+
+	w := m.goi(t, "GET", hostB, duongPhienHienTai, "", m.tokenCho(t, xaB, sidB))
+	doiMa(t, w, http.StatusOK)
+
+	if ra := docPhien(t, w.Body.Bytes()); ra.Role != nil {
+		t.Fatalf("chưa gán vai trò mà trả về %+v", *ra.Role)
+	}
+	// Asserted on the raw JSON as well: the typed struct cannot tell null from an absent key, and
+	// an absent key is a second response shape for the client to get wrong.
+	if !strings.Contains(w.Body.String(), `"role":null`) {
+		t.Errorf(`phải tuần tự hoá thành "role":null, nhận: %s`, w.Body.String())
+	}
+}
+
+func TestPhienHienTaiVaiTroKhongVuotSangXaKhac(t *testing.T) {
+	// The SAME account, signed in properly at commune B, where it has been given no role. Commune
+	// A's role — a LEADER role — must not travel with the person. Nothing about the request is
+	// malformed; this is the shape a leak actually takes (rule 1, invariant 4).
+	m := dungMayChu(t)
+
+	w := m.goi(t, "GET", hostB, duongPhienHienTai, "", m.tokenCho(t, xaB, sidB))
+	doiMa(t, w, http.StatusOK)
+
+	than := w.Body.String()
+	if strings.Contains(than, "chu-tich-ubnd") || strings.Contains(than, "Chủ tịch UBND") {
+		t.Fatalf("RÒ RỈ: ở xã B nhận được vai trò của xã A: %s", than)
+	}
+	if strings.Contains(than, `"is_leader":true`) {
+		t.Fatalf("RÒ RỈ: cờ lãnh đạo của xã A theo người sang xã B: %s", than)
+	}
+}
+
+func TestPhienHienTaiKhongDocDuocVaiTroTra500ChuKhongPhaiNull(t *testing.T) {
+	// THE DISTINCTION THE RESPONSE SHAPE EXISTS FOR. null already means "no role assigned", so
+	// answering null on a failure makes the two indistinguishable — and the screen would tell a
+	// member of staff they hold no role when the truth is that nobody could find out. Refusing
+	// widens nothing: this value decides no access.
+	m := dungMayChu(t)
+	m.vaiTro.loi = errors.New("cơ sở dữ liệu không phản hồi")
+
+	w := m.goi(t, "GET", hostA, duongPhienHienTai, "", m.tokenCho(t, xaA, sidA))
+	doiMa(t, w, http.StatusInternalServerError)
+
+	e := loiTra(t, w)
+	if e.Code != "internal" {
+		t.Errorf("code = %q, muốn internal", e.Code)
+	}
+	if strings.Contains(e.Message, "cơ sở dữ liệu không phản hồi") {
+		t.Errorf("lỗi nội bộ lọt ra ngoài: %q", e.Message)
+	}
+}
+
+func TestPhienHienTaiDocVaiTroTheoIDNoiBoChuKhongPhaiMaCanBo(t *testing.T) {
+	// The same trap as the permission list: the real query matches `nd.id = $2`. Asking with the
+	// business code matches no row, and the person is then reported as having no role — a wrong
+	// answer that looks exactly like a legitimate one.
+	//
+	// vaiTroGia is keyed by the internal id, so a swap makes this red rather than silently null.
+	m := dungMayChu(t)
+
+	w := m.goi(t, "GET", hostA, duongPhienHienTai, "", m.tokenCho(t, xaA, sidA))
+	doiMa(t, w, http.StatusOK)
+
+	if ra := docPhien(t, w.Body.Bytes()); ra.Role == nil {
+		t.Fatal("vai trò rỗng — handler nhiều khả năng đang hỏi bằng mã cán bộ chứ không phải id nội bộ")
+	}
+}
+
 // quyenGhiNhan records the principal the handler asked with, then delegates.
 type quyenGhiNhan struct {
 	trong *quyenGia

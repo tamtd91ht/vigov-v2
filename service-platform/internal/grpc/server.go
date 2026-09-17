@@ -141,5 +141,9 @@ func sangProto(t tenant.Tenant) *platformv1.Tenant {
 		Host:        t.Host,
 		DisplayName: t.Name,
 		Active:      t.Active,
+		// "" travels as "" and means "this commune has not declared a province" — a valid answer
+		// the contract declares, never an error and never a default to be filled in here. See the
+		// field comment in proto/vigov/platform/v1/platform.proto.
+		Province: t.Province,
 	}
 }

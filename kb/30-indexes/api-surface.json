@@ -21,6 +21,24 @@
     },
     {
       "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/org-units",
+      "operation_id": "identity_get_org_units",
+      "task_id": "04cee977078e",
+      "summary": "Danh mục bộ phận của xã — cây tổ chức, dùng cho ô phân công, luồng văn bản và bộ lọc",
+      "screen": "14-cau-hinh §3",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "tên bộ phận xuất hiện ở ô phân công nhiệm vụ, luồng văn bản, danh bạ và mọi bộ lọc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: sơ đồ tổ chức lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.danhSachBoPhanRa",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
       "method": "POST",
       "path": "/api/v1/sessions",
       "operation_id": "identity_post_sessions",
@@ -46,7 +64,7 @@
       "path": "/api/v1/sessions/current",
       "operation_id": "identity_get_sessions_current",
       "task_id": "4141103d6d0a",
-      "summary": "Phiên làm việc hiện tại của chính người gọi, kèm danh sách quyền để ẩn/hiện menu",
+      "summary": "Phiên làm việc hiện tại của chính người gọi, kèm vai trò và danh sách quyền để ẩn/hiện menu",
       "screen": "15-phu-luc-giao-dien-chung §1",
       "permission_kind": "any-authenticated",
       "permission_reason": "mọi tài khoản đã đăng nhập đều được hỏi 'tôi là ai' — kể cả tài khoản vừa bị gỡ hết vai trò, vốn không còn quyền nào để đòi",

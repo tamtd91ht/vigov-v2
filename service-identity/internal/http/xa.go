@@ -34,15 +34,36 @@ import (
 // Answering it properly means the edge saying something other than a bare 404, which is a change
 // in pkg/httpx that every service shares. STATED, not silently half-done here.
 //
-// THERE IS NO `parent_authority` FIELD, although the admin web already asks for one
-// (web-admin/src/components/cau-hinh-xa.tsx reads `parentAuthority` — "Thành phố Đà
-// Nẵng" under the commune name, docs/ui-ux/15 §3). THE DATA DOES NOT EXIST: pkg/tenant.Tenant is
-// {ID, Host, Name, Active} and `message Tenant` in proto/vigov/platform/v1 is {id, host,
-// display_name}. Adding it is a change to the contract BETWEEN services, which is the
-// contract-designer's surface and is generated from .proto, never written by hand (rule 2,
-// invariant 7). Returning "" would be worse than returning nothing: the screen would print an
-// empty line under the commune name and nobody would know whether the authority has no parent or
-// the field was never filled in.
+// THERE IS A `province` FIELD, AND THE PARAGRAPH THAT USED TO STAND HERE ARGUING AGAINST ONE IS
+// GONE BECAUSE IT BECAME UNTRUE, not because anybody overruled it. It read "THE DATA DOES NOT
+// EXIST": tenant.Tenant was {ID, Host, Name, Active} and `message Tenant` was {id, host,
+// display_name}. Both now carry the province — `tenant.tinh_thanh` in the registry (service-
+// platform/migrations/0001_init.sql:66), `Tenant.province` on the wire. A comment that describes a
+// shape the code no longer has is worse than no comment: it is read as current and is believed.
+//
+// THE NAME IS THE DATA'S, NOT THE SCREEN'S. The admin header prints this value on the line the
+// design calls "cơ quan cấp trên" and the web names its own field `parentAuthority`
+// (docs/ui-ux/15 §3). The two coincide today and are not the same concept: a province is an
+// administrative FACT about where the commune is; a superior authority is a claim about WHO it
+// answers to. Vietnam reorganises commune-level units periodically, and the day those diverge, a
+// field named after the screen label would be carrying something it no longer means. The argument
+// is made in full in proto/vigov/platform/v1/platform.proto, which owns it — this is a pointer,
+// not a second copy (rule 9).
+//
+// "" IS RETURNED FOR A COMMUNE THAT HAS NOT DECLARED A PROVINCE, and the old reasoning against
+// that is replaced too. It said "" would be worse than nothing, because a reader could not tell
+// "no parent" from "never filled in". That held while the field was ABSENT FROM THE CONTRACT; it
+// does not hold now that the contract DECLARES "" with exactly one meaning — not declared. So the
+// three ends agree and none of them improvises: the registry stores "", the server returns "", the
+// screen renders NOTHING on that line. What no end may do is substitute a default province or
+// guess one from the host — a guessed province printed under the name of a public authority is
+// that authority stating something untrue about itself.
+//
+// IT IS SAFE ON A PUBLIC ROUTE, which on this route is a question that gets asked field by field.
+// A commune's province is not personal data (rule 3), it is not an identifier anything is keyed by
+// (rule 1, invariant 2 — only `id` is, and `id` is the field above that stays out), and it
+// describes nothing about the commune's internal operation. It is also already implied by the
+// domain the caller had to know to reach this route at all.
 type thongTinXa struct {
 	// Name is the display name AT THIS MOMENT, not an identifier — a commune can be renamed by
 	// an administrative reorganisation while its tenant_id stays put, which is the whole point of
@@ -52,6 +73,10 @@ type thongTinXa struct {
 	// Host is the commune's canonical domain as the registry holds it. It is what the caller
 	// should be on; it is not necessarily the string the caller typed.
 	Host string `json:"host"`
+
+	// Province is the province or centrally-governed city the commune sits in. "" means the
+	// commune has not declared one — render nothing, never a placeholder, never a guess.
+	Province string `json:"province"`
 }
 
 // ThongTinXa serves the commune this request's Host resolves to. GET /api/v1/commune
@@ -76,5 +101,5 @@ func (h *Handler) ThongTinXa(w http.ResponseWriter, r *http.Request) {
 	// MustCurrent panic khi thiếu, và đó là chủ ý: nếu handler này chạy ngoài biên HTTP thì
 	// nó sẽ hiển thị tên rỗng — một cơ quan nhà nước hiện sai tên mình, không có gì đỏ.
 	xa := tenant.MustCurrent(r.Context())
-	vietJSON(w, http.StatusOK, thongTinXa{Name: xa.Name, Host: xa.Host})
+	vietJSON(w, http.StatusOK, thongTinXa{Name: xa.Name, Host: xa.Host, Province: xa.Province})
 }

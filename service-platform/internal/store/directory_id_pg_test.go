@@ -39,6 +39,12 @@ func TestPgByIDTraVeHostChinh(t *testing.T) {
 	if !got.Active {
 		t.Error("Active = false với xã đang hoạt động")
 	}
+	// THE THIRD RESOLUTION PATH, asserted here for the same reason as on the other two: this is
+	// the one that renders a commune attached to an archival record, and a province that is right
+	// on two paths and empty on the third is the failure nothing reports.
+	if got.Province != "Thành phố Đà Nẵng" {
+		t.Errorf("Province = %q, muốn %q", got.Province, "Thành phố Đà Nẵng")
+	}
 }
 
 // A merged commune keeps its data and its codes (rule 7), so it must stay describable — an

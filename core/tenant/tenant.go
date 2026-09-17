@@ -114,4 +114,18 @@ type Tenant struct {
 	Host   string
 	Name   string // display name at this moment in time, not an identifier
 	Active bool
+
+	// Province is the province or centrally-governed city the commune sits in — `tenant.tinh_thanh`
+	// in the registry, `Tenant.province` on the wire.
+	//
+	// DISPLAY ONLY. Nothing routes on it, nothing is keyed by it, and it is not an identifier: only
+	// ID is (rule 1, invariant 2). A commune-level reorganisation may move a commune from one
+	// province to another, and that must change a displayed string and nothing else.
+	//
+	// "" IS A VALID ANSWER, NOT A MISSING ONE. The column is NOT NULL with an empty default, so a
+	// commune that has not declared its province yields "". Every consumer renders NOTHING for it:
+	// it never substitutes a default, never guesses one from the host or the display name, and
+	// never treats "" as an error. A guessed province printed under the name of a public authority
+	// is that authority stating something untrue about itself.
+	Province string
 }

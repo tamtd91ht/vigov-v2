@@ -51,6 +51,36 @@ message Tenant {
   string display_name = 3;   // point-in-time attribute, not an identifier
   bool active = 4;
   reserved 5;                // was 'admin_code' — removed, never reuse the number
+
+  // The province or centrally-governed city the commune sits in. Display only — it is not an
+  // identifier and nothing routes on it.
+  //
+  // NAMED AFTER THE DATA, NOT AFTER THE SCREEN. The spec itself prints a province here
+  // (docs/ui-ux/15-phu-luc-giao-dien-chung.md §3: `Thành phố Đà Nẵng` under the commune name)
+  // and never calls it a superior authority — that phrase appears nowhere in that file. It is
+  // the WEB that named its own field `parentAuthority`.
+  //
+  // The two coincide TODAY; they are not the same concept. "Province" is an administrative FACT
+  // about where the commune is — it is literally what the store holds (`tenant.tinh_thanh`,
+  // service-platform/migrations/0001_init.sql:66).
+  // "Superior authority" is a claim about WHO the commune answers to, and Vietnam reorganises
+  // commune-level units periodically: the day those two diverge, a field named
+  // `parent_authority` would be carrying a value that is no longer that. ADR 0011 refuses to
+  // translate a value when the translation would assert a business equivalence; naming a
+  // contract field after a screen label makes exactly that assertion, in the surface that is
+  // hardest to take back — `reserved 5` one line up is what removing a field costs, forever.
+  // The contract says what the value IS; which line of which screen shows it is the screen's
+  // decision, and the screen can change its mind without touching this file.
+  //
+  // OPTIONAL, AND "" IS A VALID ANSWER EVERY CONSUMER MUST HANDLE. The column is NOT NULL with
+  // an empty-string default, so a commune that has not declared its province yields the empty
+  // string. A consumer renders NOTHING for "" — it never substitutes a default province, never
+  // guesses one from the host or the display name, and never treats "" as an error.
+  //
+  // Deliberately NOT proto3 `optional`: explicit presence would offer a distinction the store
+  // cannot make. There is no NULL behind this column, so `has_province()` would be true for
+  // every commune and any branch on it would be code that never runs.
+  string province = 6;
 }
 
 message ResolveHostRequest { string host = 1; }

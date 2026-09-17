@@ -75,7 +75,13 @@ func (d *danhBaGia) ByID(_ context.Context, id tenant.ID) (tenant.Tenant, error)
 }
 
 func danhBaMau() *danhBaGia {
-	tanPhu := tenant.Tenant{ID: xaTanPhu, Host: "tanphu.vigov.vn", Name: "Phường Tân Phú", Active: true}
+	// tanPhu HAS a province and cu HAS NONE, deliberately. A fixture where every commune declares
+	// one cannot tell "the field is carried" from "the field happens to be filled in everywhere",
+	// and "" is the answer the contract says every consumer must handle.
+	tanPhu := tenant.Tenant{
+		ID: xaTanPhu, Host: "tanphu.vigov.vn", Name: "Phường Tân Phú",
+		Province: "Thành phố Đà Nẵng", Active: true,
+	}
 	cu := tenant.Tenant{ID: xaDaSapNhap, Host: "xacu.vigov.vn", Name: "Xã Cũ", Active: false}
 	return &danhBaGia{
 		theoHost: map[string]tenant.Tenant{tanPhu.Host: tanPhu, cu.Host: cu},
@@ -139,6 +145,13 @@ func TestResolveHostChayDuocKhiKhongCoXaTrongContext(t *testing.T) {
 	}
 	if res.GetTenant().GetDisplayName() != "Phường Tân Phú" || !res.GetTenant().GetActive() {
 		t.Fatalf("siêu dữ liệu sai: %+v", res.GetTenant())
+	}
+	// sangProto maps FIELD BY FIELD on purpose (ADR 0003) — no reflection, no generic mapper — so
+	// every field is one hand-written line and a forgotten line is silent: the commune resolves,
+	// nothing errors, and the province is simply "" for every commune in the country.
+	if got := res.GetTenant().GetProvince(); got != "Thành phố Đà Nẵng" {
+		t.Fatalf("province = %q, muốn %q — sangProto đánh rơi một trường",
+			got, "Thành phố Đà Nẵng")
 	}
 }
 
@@ -238,6 +251,11 @@ func TestGetTenantTraSieuDuLieu(t *testing.T) {
 		got.GetDisplayName() != "Phường Tân Phú" || !got.GetActive() {
 		t.Fatalf("siêu dữ liệu sai: %+v", got)
 	}
+	// BOTH RPCs go through sangProto, and both are asserted: they are two call sites of one
+	// mapper, and a mapper that maps field by field (ADR 0003) has one line per field to forget.
+	if got.GetProvince() != "Thành phố Đà Nẵng" {
+		t.Fatalf("province = %q, muốn %q", got.GetProvince(), "Thành phố Đà Nẵng")
+	}
 }
 
 // A merged commune must stay describable: rule 7 keeps its data and its codes, and an archival
@@ -255,6 +273,12 @@ func TestGetTenantXaNgungHoatDongVanTraVeVoiActiveFalse(t *testing.T) {
 	}
 	if res.GetTenant().GetActive() {
 		t.Fatal("xã đã ngừng hoạt động lại báo Active=true")
+	}
+	// A commune that never declared a province travels as "", which the contract calls a valid
+	// answer — not an error, and not something for the server to fill in. This fixture is the one
+	// with no province precisely so that case is asserted somewhere.
+	if got := res.GetTenant().GetProvince(); got != "" {
+		t.Fatalf("province = %q, muốn chuỗi rỗng cho xã chưa khai tỉnh/thành", got)
 	}
 }
 

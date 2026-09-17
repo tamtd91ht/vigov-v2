@@ -48,6 +48,7 @@ func TestPhanGiaiDuocThiTraVeXa(t *testing.T) {
 	d, _ := dungThu(t, &nenTangGia{ra: &platformv1.ResolveHostResponse{
 		Tenant: &platformv1.Tenant{
 			Id: ulidThu, Host: hostThu, DisplayName: "Xã Thăng Bình", Active: true,
+			Province: "Thành phố Đà Nẵng",
 		},
 	}})
 
@@ -57,6 +58,35 @@ func TestPhanGiaiDuocThiTraVeXa(t *testing.T) {
 	}
 	if got.ID != tenant.ID(ulidThu) || got.Host != hostThu || !got.Active {
 		t.Errorf("xã trả về sai: %+v", got)
+	}
+	// THIS IS THE HOP WHERE A FIELD GOES MISSING WITHOUT A TRACE. The wire type and tenant.Tenant
+	// are mapped by hand, field by field, in both directions; a line forgotten here leaves every
+	// commune in the country with an empty province and nothing to show why — the registry has the
+	// value, the RPC carries it, and the seven services that read the registry over gRPC drop it.
+	if got.Province != "Thành phố Đà Nẵng" {
+		t.Errorf("Province = %q, muốn %q — ánh xạ ngược từ proto đánh rơi một trường",
+			got.Province, "Thành phố Đà Nẵng")
+	}
+}
+
+func TestNenTangKhongGuiTinhThanhThiLaChuoiRongChuKhongPhaiLoi(t *testing.T) {
+	// "" IS A VALID ANSWER, and it arrives two ways that are deliberately NOT told apart: a
+	// commune that has not declared a province, and a platform service old enough not to send
+	// field 6 at all. The only behaviour that could distinguish them is guessing a province, which
+	// is the one thing no consumer may do — so both must resolve normally and both yield "".
+	d, _ := dungThu(t, &nenTangGia{ra: &platformv1.ResolveHostResponse{
+		Tenant: &platformv1.Tenant{
+			Id: ulidThu, Host: hostThu, DisplayName: "Xã Thăng Bình", Active: true,
+		},
+	}})
+
+	got, ok := d.ByHost(context.Background(), hostThu)
+	if !ok {
+		t.Fatal("thiếu tỉnh/thành mà không phân giải được — một trường hiển thị không được phép " +
+			"làm hỏng phép phân giải xã")
+	}
+	if got.Province != "" {
+		t.Errorf("Province = %q, muốn chuỗi rỗng", got.Province)
 	}
 }
 

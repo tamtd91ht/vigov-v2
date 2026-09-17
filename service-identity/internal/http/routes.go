@@ -84,6 +84,32 @@ type (
 		QuyenCua(ctx context.Context, p authz.Principal) ([]authz.Perm, error)
 	}
 
+	// VaiTroDoc reads the CALLER'S OWN role, for GET /api/v1/sessions/current.
+	//
+	// READ IN THE HANDLER, NOT AT THE EDGE, AND THIS IS THE DECISION MOST LIKELY TO BE UNDONE BY
+	// SOMEBODY BEING HELPFUL. XacThuc already reads the account at step 5 and copies HoTen and
+	// ChucVu onto PhienHienTai, with a comment saying it does so "so the route costs no second
+	// query on a call that happens on every page load". Adding the role there looks like the same
+	// move and is not: those two fields are already on the row the middleware HAS to read, while
+	// the role is a second table and therefore a JOIN. The middleware runs on EVERY request of
+	// EVERY route in this service; the role is wanted by ONE route. Paying a join on every request
+	// of every screen to save one query on one route is the wrong side of that trade by three
+	// orders of magnitude.
+	//
+	// The bool is the second outcome and is not optional to handle — see VaiTroCuaCanBo.
+	VaiTroDoc interface {
+		VaiTroCuaCanBo(ctx context.Context, canBoID string) (domain.VaiTro, bool, error)
+	}
+
+	// BoPhanDanhMuc is the commune's org chart, for GET /api/v1/org-units.
+	//
+	// NO page.Request PARAMETER, unlike CanBoDanhBa: this route returns the whole list on purpose.
+	// The reason is on idstore.BoPhanStore.DanhSach, and the bound that replaces the missing `limit`
+	// is idstore.TranDanhMucBoPhan.
+	BoPhanDanhMuc interface {
+		DanhSach(ctx context.Context) ([]domain.BoPhan, error)
+	}
+
 	// DangNhapUC and DangXuatUC are the use cases. The handlers only translate HTTP; the
 	// business write and its audit entry share one transaction inside these.
 	DangNhapUC interface {
@@ -99,6 +125,8 @@ type (
 type Deps struct {
 	Checker  authz.Checker
 	Quyen    QuyenDoc
+	VaiTro   VaiTroDoc
+	BoPhan   BoPhanDanhMuc
 	Signer   *token.Signer
 	Phien    PhienDoc
 	CanBo    CanBoDoc
@@ -131,6 +159,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu authz.Checker — mọi route có quyền sẽ không kiểm được")
 	case d.Quyen == nil:
 		panic("identity/http: thiếu kho quyền — GET /api/v1/sessions/current sẽ panic khi có người gọi")
+	case d.VaiTro == nil:
+		panic("identity/http: thiếu kho vai trò — GET /api/v1/sessions/current sẽ panic khi có người gọi")
+	case d.BoPhan == nil:
+		panic("identity/http: thiếu kho bộ phận — GET /api/v1/org-units sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -189,7 +221,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// NO idem.* DECLARATION: a GET changes no state, and declaring a duplicate-request protection
 	// here would claim a protection with nothing to protect.
 	//
-	// @summary  Phiên làm việc hiện tại của chính người gọi, kèm danh sách quyền để ẩn/hiện menu
+	// @summary  Phiên làm việc hiện tại của chính người gọi, kèm vai trò và danh sách quyền để ẩn/hiện menu
 	// @screen   15-phu-luc-giao-dien-chung §1
 	// @reply    200 phienHienTaiRa
 	// @reply    401 httpx.Error
@@ -290,4 +322,42 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/staff/{id}",
 		authz.RequirePermission(d.Checker, "admin.user")(
 			http.HandlerFunc(h.ChiTietCanBo)))
+
+	// --- the commune's organisational chart ----------------------------------------------------
+	//
+	// `org-units` AND NOT `departments`, AND THE NAME WAS LOOKED UP RATHER THAN TRANSLATED.
+	// kb/00-foundation/ubiquitous-language.md owns the URL-resource mapping (ADR 0011) and settles
+	// this row: the tree holds Đảng uỷ, HĐND and UBMTTQ as well as the UBND's own units, so
+	// `departments` would assert that every node is a department of the People's Committee. Most of
+	// them are not. A path cannot be taken back once a commune is live, which is why the table
+	// exists and why nothing here translates on the spot.
+	//
+	// AnyAuthenticated, AND THE REASON IS THE SHAPE OF THE DATA'S USE. Unit names appear on nearly
+	// every screen — the assignment box on a task, document routing, the staff directory, the
+	// filter dropdowns — so requiring a configuration permission would not protect anything, it
+	// would break every one of those screens for everybody who is not an administrator. The
+	// alternative that actually protects something does not exist here: there is nothing sensitive
+	// in a list of the authority's own units.
+	//
+	// THE TRADE-OFF, STATED RATHER THAN GLOSSED: a commune's org chart is readable by every signed-in
+	// account OF THAT COMMUNE. It is not readable across communes and cannot be — Scoped.Query binds
+	// `tenant_id` from the context (rule 1, invariant 5), so the same request against another
+	// commune's domain is refused at the token layer before any query runs. What is accepted is that
+	// a member of staff with no configuration rights can see how their own authority is organised,
+	// which is information they can also read off the noticeboard in the lobby.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Danh mục bộ phận của xã — cây tổ chức, dùng cho ô phân công, luồng văn bản và bộ lọc
+	// @screen   14-cau-hinh §3
+	// 500 covers two different causes and says so honestly: an ordinary store failure, and the
+	// commune's org chart exceeding idstore.TranDanhMucBoPhan — which this route REFUSES rather
+	// than truncating, because a silently short list is a unit missing from an assignment box.
+	//
+	// @reply    200 danhSachBoPhanRa
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/org-units",
+		authz.AnyAuthenticated("tên bộ phận xuất hiện ở ô phân công nhiệm vụ, luồng văn bản, danh bạ và mọi bộ lọc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: sơ đồ tổ chức lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
+			http.HandlerFunc(h.DanhSachBoPhan)))
 }

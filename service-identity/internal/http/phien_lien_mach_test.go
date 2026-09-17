@@ -99,6 +99,8 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 			thuHoi: map[string]bool{},
 		},
 		Quyen:    quyenMau(),
+		VaiTro:   vaiTroMau(),
+		BoPhan:   boPhanMau(),
 		CanBo:    &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
 		DanhBa:   danhBaMau(),
 		DangNhap: &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},

@@ -114,6 +114,10 @@
       "kind": "func",
       "at": "core/config/config.go:238"
     },
+    "domain.BoPhan": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/bo_phan.go:10"
+    },
     "domain.CanBo": {
       "kind": "type",
       "at": "service-identity/internal/domain/can_bo.go:10"
@@ -133,6 +137,10 @@
     "domain.Tenant": {
       "kind": "type",
       "at": "service-platform/internal/domain/tenant.go:12"
+    },
+    "domain.VaiTro": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/vai_tro.go:14"
     },
     "domain.Validate": {
       "kind": "func",
@@ -186,6 +194,10 @@
       "kind": "func",
       "at": "core/grpcx/grpcx.go:125"
     },
+    "http.BoPhanDanhMuc": {
+      "kind": "type",
+      "at": "service-identity/internal/http/routes.go:109"
+    },
     "http.CanBoDanhBa": {
       "kind": "type",
       "at": "service-identity/internal/http/routes.go:70"
@@ -204,7 +216,7 @@
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:89"
+      "at": "service-identity/internal/http/routes.go:115"
     },
     "http.DangXuat": {
       "kind": "func",
@@ -212,7 +224,11 @@
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:93"
+      "at": "service-identity/internal/http/routes.go:119"
+    },
+    "http.DanhSachBoPhan": {
+      "kind": "func",
+      "at": "service-identity/internal/http/bo_phan.go:60"
     },
     "http.DanhSachCanBo": {
       "kind": "func",
@@ -252,7 +268,11 @@
     },
     "http.ThongTinXa": {
       "kind": "func",
-      "at": "service-identity/internal/http/xa.go:66"
+      "at": "service-identity/internal/http/xa.go:91"
+    },
+    "http.VaiTroDoc": {
+      "kind": "type",
+      "at": "service-identity/internal/http/routes.go:100"
     },
     "http.XacThuc": {
       "kind": "func",
@@ -260,7 +280,7 @@
     },
     "http.XemPhienHienTai": {
       "kind": "func",
-      "at": "service-identity/internal/http/phien_hien_tai.go:73"
+      "at": "service-identity/internal/http/phien_hien_tai.go:114"
     },
     "httpx.Error": {
       "kind": "type",
@@ -590,17 +610,21 @@
       "kind": "func",
       "at": "service-identity/internal/store/checker.go:99"
     },
+    "store.BoPhanStore": {
+      "kind": "type",
+      "at": "service-identity/internal/store/bo_phan.go:13"
+    },
     "store.ByHost": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:39"
+      "at": "service-platform/internal/store/directory.go:95"
     },
     "store.ByHostErr": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:81"
+      "at": "service-platform/internal/store/directory.go:128"
     },
     "store.ByID": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:120"
+      "at": "service-platform/internal/store/directory.go:158"
     },
     "store.CanBoStore": {
       "kind": "type",
@@ -658,6 +682,10 @@
       "kind": "func",
       "at": "core/store/scoped.go:22"
     },
+    "store.NewBoPhanStore": {
+      "kind": "func",
+      "at": "service-identity/internal/store/bo_phan.go:17"
+    },
     "store.NewCanBoStore": {
       "kind": "func",
       "at": "service-identity/internal/store/can_bo.go:21"
@@ -677,6 +705,10 @@
     "store.NewPhienStore": {
       "kind": "func",
       "at": "service-identity/internal/store/phien.go:41"
+    },
+    "store.NewVaiTroStore": {
+      "kind": "func",
+      "at": "service-identity/internal/store/vai_tro.go:22"
     },
     "store.PageSpec": {
       "kind": "type",
@@ -745,6 +777,14 @@
     "store.Underlying": {
       "kind": "func",
       "at": "core/store/scoped.go:116"
+    },
+    "store.VaiTroCuaCanBo": {
+      "kind": "func",
+      "at": "service-identity/internal/store/vai_tro.go:82"
+    },
+    "store.VaiTroStore": {
+      "kind": "type",
+      "at": "service-identity/internal/store/vai_tro.go:18"
     },
     "tenant.ByHost": {
       "kind": "func",

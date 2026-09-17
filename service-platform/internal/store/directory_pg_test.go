@@ -140,6 +140,34 @@ func TestPgPhanGiaiHost(t *testing.T) {
 	if got.Name != "Xã Thăng Bình" {
 		t.Errorf("Name = %q", got.Name)
 	}
+	// The province travels on the HOT path too, not only on the admin ones. This is the lookup
+	// every request of every commune goes through, so it is the one that feeds the header.
+	if got.Province != "Thành phố Đà Nẵng" {
+		t.Errorf("Province = %q, muốn %q — cột tinh_thanh không tới được biên",
+			got.Province, "Thành phố Đà Nẵng")
+	}
+}
+
+func TestPgXaChuaKhaiTinhThanhTraChuoiRong(t *testing.T) {
+	// "" IS A VALID ANSWER, NOT AN ERROR. The column is NOT NULL with an empty default, so a
+	// commune onboarded without a province resolves normally and yields "". The consumer renders
+	// nothing; what it must never do is fail, or substitute a default province.
+	db, _ := moKetNoi(t)
+	chayMigration(t, db)
+
+	if _, err := db.Exec(`INSERT INTO tenant (id, ten) VALUES ($1,$2)`, ulidA, "Xã Chưa Khai"); err != nil {
+		t.Fatalf("thêm xã: %v", err)
+	}
+	themHost(t, db, "chuakhai.vigov.vn", ulidA, true)
+
+	got, ok := NewDirectory(db).ByHost(context.Background(), "chuakhai.vigov.vn")
+	if !ok {
+		t.Fatal("xã chưa khai tỉnh/thành mà không phân giải được — thiếu một trường hiển thị " +
+			"không được phép làm hỏng phép phân giải")
+	}
+	if got.Province != "" {
+		t.Errorf("Province = %q, muốn chuỗi rỗng", got.Province)
+	}
 }
 
 func TestPgHostChuanHoa(t *testing.T) {

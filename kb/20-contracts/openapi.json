@@ -35,6 +35,53 @@
         }
       }
     },
+    "/api/v1/org-units": {
+      "get": {
+        "summary": "Danh mục bộ phận của xã — cây tổ chức, dùng cho ô phân công, luồng văn bản và bộ lọc",
+        "operationId": "identity_get_org_units",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §3",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "tên bộ phận xuất hiện ở ô phân công nhiệm vụ, luồng văn bản, danh bạ và mọi bộ lọc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: sơ đồ tổ chức lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id"
+        },
+        "x-vigov-task": "04cee977078e",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.danhSachBoPhanRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/sessions": {
       "post": {
         "summary": "Đăng nhập bằng email và mật khẩu, mở một phiên làm việc",
@@ -104,7 +151,7 @@
     },
     "/api/v1/sessions/current": {
       "get": {
-        "summary": "Phiên làm việc hiện tại của chính người gọi, kèm danh sách quyền để ẩn/hiện menu",
+        "summary": "Phiên làm việc hiện tại của chính người gọi, kèm vai trò và danh sách quyền để ẩn/hiện menu",
         "operationId": "identity_get_sessions_current",
         "tags": [
           "identity"
@@ -427,6 +474,32 @@
         ],
         "additionalProperties": false
       },
+      "identity.boPhanRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID — what other records reference"
+          },
+          "code": {
+            "type": "string",
+            "description": "slug"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "id",
+          "name",
+          "parent_id"
+        ],
+        "additionalProperties": false
+      },
       "identity.canBoGon": {
         "type": "object",
         "properties": {
@@ -512,6 +585,21 @@
         ],
         "additionalProperties": false
       },
+      "identity.danhSachBoPhanRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.boPhanRa"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
       "identity.phanHoiDangNhap": {
         "type": "object",
         "properties": {
@@ -546,6 +634,16 @@
           "staff": {
             "$ref": "#/components/schemas/identity.canBoGon"
           },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/identity.vaiTroGon"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "permissions": {
             "type": "array",
             "items": {
@@ -556,6 +654,7 @@
         "required": [
           "expires_at",
           "permissions",
+          "role",
           "sid",
           "staff"
         ],
@@ -586,10 +685,36 @@
           },
           "host": {
             "type": "string"
+          },
+          "province": {
+            "type": "string"
           }
         },
         "required": [
           "host",
+          "name",
+          "province"
+        ],
+        "additionalProperties": false
+      },
+      "identity.vaiTroGon": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "vai_tro.ma — the stable slug a client keys on"
+          },
+          "name": {
+            "type": "string",
+            "description": "vai_tro.ten — what a person reads"
+          },
+          "is_leader": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "is_leader",
           "name"
         ],
         "additionalProperties": false

@@ -12,6 +12,15 @@ export type httpx_Error = {
   "trace_id": string;
 };
 
+export type identity_boPhanRa = {
+  /** ULID — what other records reference */
+  "id": string;
+  /** slug */
+  "code": string;
+  "name": string;
+  "parent_id": string;
+};
+
 export type identity_canBoGon = {
   /** cb.Ma — the business code, the one the audit trail shows */
   "code": string;
@@ -37,6 +46,10 @@ export type identity_canBoTomTat = {
   "created_at": string;
 };
 
+export type identity_danhSachBoPhanRa = {
+  "items": Array<identity_boPhanRa>;
+};
+
 export type identity_phanHoiDangNhap = {
   "sid": string;
   "expires_at": string;
@@ -47,6 +60,7 @@ export type identity_phienHienTaiRa = {
   "sid": string;
   "expires_at": string;
   "staff": identity_canBoGon;
+  "role": identity_vaiTroGon | null;
   "permissions": Array<string>;
 };
 
@@ -58,6 +72,15 @@ export type identity_thanDangNhap = {
 export type identity_thongTinXa = {
   "name": string;
   "host": string;
+  "province": string;
+};
+
+export type identity_vaiTroGon = {
+  /** vai_tro.ma — the stable slug a client keys on */
+  "code": string;
+  /** vai_tro.ten — what a person reads */
+  "name": string;
+  "is_leader": boolean;
 };
 
 export type page_Result_identity_canBoTomTat = {
@@ -81,6 +104,22 @@ export type identity_get_commune = {
   };
 };
 
+/** GET /api/v1/org-units — Danh mục bộ phận của xã — cây tổ chức, dùng cho ô phân công, luồng văn bản và bộ lọc */
+export type identity_get_org_units = {
+  duongDan: "/api/v1/org-units";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_danhSachBoPhanRa;
+    401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** POST /api/v1/sessions — Đăng nhập bằng email và mật khẩu, mở một phiên làm việc */
 export type identity_post_sessions = {
   duongDan: "/api/v1/sessions";
@@ -98,7 +137,7 @@ export type identity_post_sessions = {
   };
 };
 
-/** GET /api/v1/sessions/current — Phiên làm việc hiện tại của chính người gọi, kèm danh sách quyền để ẩn/hiện menu */
+/** GET /api/v1/sessions/current — Phiên làm việc hiện tại của chính người gọi, kèm vai trò và danh sách quyền để ẩn/hiện menu */
 export type identity_get_sessions_current = {
   duongDan: "/api/v1/sessions/current";
   phuongThuc: "GET";
