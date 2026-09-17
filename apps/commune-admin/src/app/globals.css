@@ -1,0 +1,248 @@
+/*
+ * Kiểu trình bày dùng chung.
+ *
+ * Bề rộng nhỏ nhất được hỗ trợ là 320px (`15-phu-luc §7`: dưới 768px là bố cục một cột). Màn
+ * đăng nhập vì vậy mặc định XẾP DỌC, và chỉ tách hai cột từ 768px trở lên — viết theo chiều
+ * "nhỏ trước" để bề rộng nhỏ nhất là ca được thử đầu tiên, không phải ca bị bỏ quên.
+ *
+ * Tương phản chữ nhỏ ≥ 4.5:1 và vòng focus rõ là yêu cầu a11y ở §8, không phải tuỳ chọn: cán
+ * bộ dùng hệ thống này cả ngày, trên đủ loại màn hình.
+ */
+
+:root {
+  --navy: #0d1b34;
+  --navy-nhat: #1c2f52;
+  --xanh: #1d4ed8;
+  --xam-chu: #4b5563;
+  --xam-vien: #d1d5db;
+  --do-loi: #b42318;
+  --nen: #f5f6f8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--nen);
+  color: #111827;
+  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 3px solid var(--xanh);
+  outline-offset: 2px;
+}
+
+/* ---- màn đăng nhập ---------------------------------------------------------------------- */
+
+.trang-dang-nhap {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.cot-thuong-hieu {
+  background: var(--navy);
+  color: #e5e7eb;
+  padding: 2rem 1.5rem;
+}
+
+.logo-vigov {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  background: var(--navy-nhat);
+  color: #fff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ten-san-pham {
+  margin: 1rem 0 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.phu-de-san-pham {
+  margin: 0.25rem 0 0;
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  color: #9ca3af;
+}
+
+.gach-ngang {
+  border: 0;
+  border-top: 1px solid #334155;
+  margin: 1.5rem 0;
+}
+
+/* Chữ hoa là cách TRÌNH BÀY. Dữ liệu giữ nguyên tên đúng của đơn vị hành chính. */
+.ten-xa {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.co-quan-cap-tren {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.cot-form {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+}
+
+.form-dang-nhap {
+  width: 100%;
+  max-width: 24rem;
+  background: #fff;
+  border: 1px solid var(--xam-vien);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+
+.tieu-de-form {
+  margin: 0 0 1.25rem;
+  font-size: 1.25rem;
+}
+
+.o-nhap {
+  margin-bottom: 1rem;
+}
+
+.o-nhap label {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.o-nhap input {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #9ca3af;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.o-nhap input:disabled {
+  background: #f3f4f6;
+}
+
+/*
+ * Vùng thông báo luôn có mặt trong DOM, kể cả khi rỗng: thêm/bớt một phần tử làm cả biểu mẫu
+ * nhảy chỗ, và vùng aria-live thêm vào sau không phải trình đọc màn hình nào cũng đọc.
+ */
+.thong-bao-loi {
+  margin: 0 0 0.75rem;
+  min-height: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--do-loi);
+}
+
+.nut-chinh {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--xanh);
+  color: #fff;
+  font-size: 1rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nut-chinh:disabled {
+  background: #6b7280;
+  cursor: progress;
+}
+
+@media (min-width: 768px) {
+  .trang-dang-nhap {
+    flex-direction: row;
+  }
+
+  .cot-thuong-hieu {
+    width: 40%;
+    max-width: 26rem;
+    padding: 3rem 2.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .cot-form {
+    width: 60%;
+  }
+}
+
+/* ---- khung đã đăng nhập ----------------------------------------------------------------- */
+
+.dau-trang {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid var(--xam-vien);
+}
+
+.ten-co-quan {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.khoi-co-quan .co-quan-cap-tren {
+  color: var(--xam-chu);
+  font-size: 0.75rem;
+}
+
+.khoi-dang-xuat {
+  text-align: right;
+}
+
+.nut-phu {
+  display: inline-block;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid var(--xam-vien);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #111827;
+  font-size: 0.875rem;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ghi-chu {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--xam-chu);
+}
+
+.than-trang,
+.trang-404 {
+  padding: 1.5rem 1rem;
+}

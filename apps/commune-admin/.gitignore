@@ -1,0 +1,3 @@
+# Bộ nhớ đệm của tsc --incremental. Là dấu vết của máy đang chạy, không phải của dự án:
+# nó đổi sau mỗi lần kiểm kiểu và không nói lên điều gì về mã nguồn.
+tsconfig.tsbuildinfo
