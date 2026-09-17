@@ -20,6 +20,7 @@ import io
 import os
 import re
 import sys
+import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _common as c  # noqa: E402
@@ -62,18 +63,52 @@ OWNS = re.compile(r"^\s*-\s+(.+?)\s*$", re.M)
 
 
 def norm(s: str) -> str:
-    """Fold Vietnamese diacritics so fact matching is robust — kb prose stays Vietnamese."""
-    s = s.lower().strip()
-    for a, b in (("à", "a"), ("á", "a"), ("ả", "a"), ("ã", "a"), ("ạ", "a"),
-                 ("ă", "a"), ("â", "a"), ("đ", "d"), ("ê", "e"), ("ô", "o"),
-                 ("ơ", "o"), ("ư", "u"), ("é", "e"), ("è", "e"), ("ị", "i"),
-                 ("ớ", "o"), ("ữ", "u"), ("ộ", "o"), ("ệ", "e")):
-        s = s.replace(a, b)
+    """Fold Vietnamese diacritics so fact matching is robust — kb prose stays Vietnamese.
+
+    DECOMPOSE, do not enumerate. The previous version listed 19 characters by hand and
+    Vietnamese has well over a hundred: every letter it missed fell through to the final
+    `[^a-z0-9 ]` filter and became a SPACE. So a real fact folded to
+    "v  sao platform khong toi du c th  m i host ..." — gaps where ì, ợ, ỗ used to be.
+    It still matched itself, which is why nothing looked broken, but it could not reliably
+    match the same sentence written anywhere else. The rule this function serves — one fact,
+    one owner — was partially blind the whole time, and blind in a way that only ever produced
+    silence.
+
+    NFD splits a letter into base + combining mark; dropping category Mn leaves the base. `đ`
+    is not a composition of anything, so it stays a table of one.
+    """
+    s = unicodedata.normalize("NFD", s.lower().strip())
+    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+    s = s.replace("đ", "d")
     return re.sub(r"[^a-z0-9 ]+", " ", s).strip()
 
 
+def tach_facts(fm: str) -> list:
+    """Facts declared under owns_facts: in one frontmatter block.
+
+    ONE parser for both callers on purpose. They used to differ by a single `.strip('"')`:
+    owned_facts() stripped the quotes and the caller in main() did not, so the two sets could
+    never match and the exemption they were meant to agree on was dead code. A rule split
+    across two near-identical parsers is a rule that silently stops applying.
+    """
+    if "owns_facts:" not in fm:
+        return []
+    block = re.split(r"\n\w+:", fm.split("owns_facts:", 1)[1])[0]
+    out = []
+    for fact in OWNS.findall(block):
+        fact = fact.strip().strip('"').strip("'")
+        if len(fact) >= 12:
+            out.append(fact)
+    return out
+
+
 def owned_facts(root: str) -> dict:
-    """{normalised fact: owning file} — scans owns_facts frontmatter across kb/."""
+    """{normalised fact: owning file} — scans owns_facts frontmatter across kb/.
+
+    NOTE the shape: one owner per fact, last writer wins. That is deliberate here, and it is
+    also why the SECOND check in main() exists — this map alone cannot tell you that two files
+    both claimed a fact, it can only tell you who claimed it most recently.
+    """
     out = {}
     kb = os.path.join(root, "kb")
     if not os.path.isdir(kb):
@@ -88,14 +123,10 @@ def owned_facts(root: str) -> dict:
             except Exception:
                 continue
             m = FM_BLOCK.search(head)
-            if not m or "owns_facts:" not in m.group(1):
+            if not m:
                 continue
-            block = m.group(1).split("owns_facts:", 1)[1]
-            block = re.split(r"\n\w+:", block)[0]
-            for fact in OWNS.findall(block):
-                fact = fact.strip().strip('"').strip("'")
-                if len(fact) >= 12:
-                    out[norm(fact)] = os.path.relpath(p, root).replace("\\", "/")
+            for fact in tach_facts(m.group(1)):
+                out[norm(fact)] = os.path.relpath(p, root).replace("\\", "/")
     return out
 
 
@@ -200,7 +231,43 @@ def main() -> None:
     # RULE 5 — do not copy a fact that already has an owner
     facts = owned_facts(c.project_root())
     body_n = norm(content)
-    mine = {norm(f) for f in OWNS.findall(m.group(1))} if "owns_facts:" in m.group(1) else set()
+    mine = {norm(f) for f in tach_facts(m.group(1))}
+
+    # RULE 4 — TWO FILES CLAIMING ONE FACT. Rule 9 names this as a STOP CONDITION in so many
+    # words ("Two files both claiming ownership of one fact") and until now nothing checked it:
+    # owned_facts() assigns into a dict, so the second claimant silently overwrote the first and
+    # the map looked healthy.
+    #
+    # It bites hardest on ADRs, because an ADR is never edited. Two of them owning one decision
+    # cannot be merged later — one has to be superseded, and by then both have been cited. This
+    # session came within one instruction of writing a second `0012`.
+    #
+    # Checked BEFORE the copy rule below: a file declaring a fact it does not own would otherwise
+    # be reported as "copying", which points at the wrong fix.
+    tranh = [f"\"{f[:50]}\" — đã thuộc: {facts[f]}"
+             for f in sorted(mine)
+             if f in facts and facts[f].lower() != rel.lower()]
+    if tranh:
+        c.block(HOOK, f"two files claiming one fact — {rel}", tranh,
+                ["  Rule 9 calls this a STOP CONDITION, not a style problem. Two owners means two",
+                 "  copies that drift, and once they drift BOTH lose credibility — the agent stops",
+                 "  trusting documentation and goes back to scanning source.",
+                 "",
+                 "  It is worst for an ADR, because an ADR is never edited. Two ADRs owning one",
+                 "  decision cannot be merged afterwards: one must be superseded, and by then both",
+                 "  have been cited somewhere.",
+                 "",
+                 "  Pick one:",
+                 "    - this file owns it  -> remove the fact from owns_facts in the other file",
+                 "    - the other owns it  -> drop it here and LINK instead",
+                 "    - the two facts only LOOK alike -> word them so a reader can tell them apart;",
+                 "      if you cannot, they are the same fact",
+                 "",
+                 "  Genuinely unsure which file should own it -> ask the user. Do not pick.",
+                 "",
+                 "  → Rule 9: .claude/rules/critical/9-knowledge-single-source.md"],
+                tool=tool, path=path)
+
     dup = []
     for fact_n, owner in facts.items():
         if owner.lower() == rel.lower() or fact_n in mine:

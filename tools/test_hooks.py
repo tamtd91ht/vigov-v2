@@ -205,6 +205,29 @@ CASES = [
     # checker passed the directory while the guard refused every edit to it. The file that
     # exposed it held real staff names and real mobile numbers — rule 3, forbidden #5 — and the
     # redaction was the thing being blocked.
+    # Rule 9 names "two files both claiming ownership of one fact" as a STOP CONDITION, and
+    # until now nothing checked it: owned_facts() assigns into a dict, so the second claimant
+    # silently overwrote the first and the map looked healthy. Worst on ADRs, which are never
+    # edited — two owning one decision cannot be merged afterwards.
+    #
+    # THIS CASE ALSO GUARDS THE STDIN ENCODING. The fact below is Vietnamese, so it only
+    # matches the copy on disk when the payload is decoded as UTF-8. `_common.utf8_streams`
+    # used to reconfigure stdout and stderr but not stdin; on Windows cp1252 decoded the bytes
+    # without raising and every Vietnamese character arrived as mojibake. If someone drops
+    # stdin from that list, this case goes red — which is the only visible symptom that bug
+    # ever had.
+    ("doc_guard", "a second file claiming ADR 0012's fact", BLOCK,
+     w("kb/10-decisions/0099-thu-nghiem.md",
+       "---\nid: 0099-thu-nghiem\ntier: T1\nsource: CURATED\nowner: architecture\n"
+       "derived_from_commit: null\nexpires: null\nowns_facts:\n"
+       "  - \"vì sao platform không tới được thì mọi Host thành 404 chứ không 503\"\n"
+       "---\n\n# 0099\n")),
+    ("doc_guard", "an ADR claiming a fact nobody owns", PASS,
+     w("kb/10-decisions/0099-thu-nghiem.md",
+       "---\nid: 0099-thu-nghiem\ntier: T1\nsource: CURATED\nowner: architecture\n"
+       "derived_from_commit: null\nexpires: null\nowns_facts:\n"
+       "  - \"vì sao hàng đợi việc cho web dùng thư mục làm trạng thái\"\n"
+       "---\n\n# 0099\n")),
     ("doc_guard", "editing the transcribed UI spec", PASS,
      w("docs/ui-ux/12-danh-ba-can-bo.md", "| Nguyễn Văn A | Bí thư | 0900000001 |")),
     # Narrower than check_brain on purpose: "a NAMED exception, not an open door".

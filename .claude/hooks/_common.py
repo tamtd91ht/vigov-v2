@@ -24,9 +24,23 @@ import sys
 # --------------------------------------------------------------------------
 
 def utf8_streams() -> None:
-    """Windows terminals default to cp1252 and cannot print Vietnamese, which kills the
-    hook with UnicodeEncodeError. Call this first in every main()."""
-    for stream in (sys.stdout, sys.stderr):
+    """Force UTF-8 on all three standard streams. Call this first in every main().
+
+    stdout/stderr: Windows terminals default to cp1252 and cannot PRINT Vietnamese, which
+    kills a hook with UnicodeEncodeError.
+
+    stdin: the more dangerous one, and it was missing until 2026-09-17. The payload arrives as
+    UTF-8 bytes; cp1252 decodes almost all of them WITHOUT raising, so `json.load` succeeds and
+    hands back content where every Vietnamese character has become mojibake. No error, no
+    warning — just different text. Every hook rule that matches Vietnamese was therefore
+    partially blind on the platform this project is developed on, and blind in the way that
+    only ever produces silence: the guard reads a string that never matches and passes.
+
+    Found through doc_guard: a second file claiming an existing `owns_facts` entry was not
+    detected, because the fact arriving over stdin no longer equalled the fact read from disk
+    with an explicit encoding.
+    """
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
