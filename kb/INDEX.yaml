@@ -8,12 +8,12 @@
 # Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
 
 version: 1
-generated_at: 2026-09-17T06:45:02Z   # `make kb` điền
-from_commit: ac0fd28   # `make kb` điền
+generated_at: 2026-09-17T06:51:03Z   # `make kb` điền
+from_commit: a8ff401   # `make kb` điền
 
 budget:
   always_load_max: 25000  # token — trần do người dùng chốt 16/09/2026 (trước là 20000)
-  in_use: 20460   # `make kb` đo
+  in_use: 20536   # `make kb` đo
 
 always_load:                 # T0 — nạp mọi phiên, không hỏi
   - kb/00-foundation/domain-boundaries.md
@@ -85,6 +85,8 @@ not_here:           # nói rõ điều KHÔNG biết — chặn agent đi tìm v
   - "Chi tiết cài đặt bên trong service → ĐỌC MÃ. kb/ không mô tả lại mã."
   - "Lịch sử đã làm gì → `git log`. kb/ không kể lại quá trình."
   - "Trạng thái công việc → công cụ quản lý việc, không phải kb/. Hàng đợi việc cho web nằm ở
-    `tasks/web/{open,claimed,done}/` — thư mục LÀ trạng thái, nhận việc là đổi tên (ADR 0014)."
+    `tasks/web/{open,claimed,done,stale}/` — thư mục LÀ trạng thái, nhận việc là đổi tên.
+    BỐN thư mục, không phải ba: `stale/` giữ việc có route đã biến mất khỏi mã nguồn — chuyển
+    chứ không xoá, vì 'vì sao nó biến mất' là câu sẽ có người hỏi (ADR 0014)."
   - "Hướng dẫn dùng thư viện bên thứ ba → tài liệu của họ."
   - "Tên tài nguyên URL cho khái niệm chưa có trong bảng ánh xạ → HỎI, đừng tự dịch (ADR 0011)."

@@ -1,77 +1,36 @@
 /**
- * Gọi hai route phiên làm việc của dịch vụ identity.
+ * Gọi các route phiên làm việc của dịch vụ identity.
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: mọi hình dạng dưới đây đến từ `schema.gen.ts`, sinh ra
  * từ kb/20-contracts/openapi.json. Không có một `type` nào mô tả lại thân yêu cầu hay thân
  * phản hồi ở tệp này — đó là điều kiện để bản sao thứ hai không tồn tại.
  *
- * VÌ SAO ĐƯỜNG DẪN TƯƠNG ĐỐI, KHÔNG PHẢI MỘT `NEXT_PUBLIC_API_BASE_URL`:
- *
- *   Hai bất biến ràng buộc nhau. (a) Xã được suy từ `Host` ở rìa ngoài cùng, nên yêu cầu phải
- *   mang đúng Host của xã. (b) Cookie phiên là host-only theo đúng host ấy (luật 1, cấm #3).
- *   Chỉ còn một hình trạng thoả cả hai: API phục vụ trên chính host của xã
- *   (`thangbinh.vigov.vn/api/v1/...`). Đường dẫn tương đối là cách duy nhất không nung một
- *   host nào vào bundle — và cũng khiến không ai *có thể* trỏ nhầm sang host của xã khác.
- *
- * KHÔNG CÓ `tenant_id` Ở BẤT KỲ ĐÂU trong tệp này — không trong thân, không trong query,
- * không trong header. Client tự khai xã là client tự cấp quyền (luật 1, cấm #2).
- *
- * KHÔNG ĐỤNG COOKIE. Cookie phiên do dịch vụ identity đặt bằng Set-Cookie (httpOnly, secure,
- * SameSite=Lax, KHÔNG có thuộc tính Domain). Trình duyệt tự giữ. Mã ở đây chỉ bật
- * `credentials` để nó được gửi kèm; không đọc, không ghi, không xoá.
+ * VÌ SAO ĐƯỜNG DẪN TƯƠNG ĐỐI, VÌ SAO KHÔNG ĐỤNG COOKIE, VÌ SAO KHÔNG CÓ `tenant_id`: ba quy
+ * tắc ấy đúng cho MỌI tuyến, nên chúng được nói một lần ở `goi.ts` và dùng lại ở đây. Đọc tệp
+ * ấy trước khi sửa bất kỳ lời gọi nào trong tệp này.
  */
 
+import { CHUNG, LOI_KHONG_RO, docJSON, thongBaoLoi, type KetQua } from "./goi";
 import type {
-  httpx_Error,
   identity_delete_sessions_by_sid,
+  identity_get_sessions_current,
   identity_phanHoiDangNhap,
+  identity_phienHienTaiRa,
   identity_post_sessions,
   identity_thanDangNhap,
 } from "./schema.gen";
-
-/**
- * Kết quả một lời gọi: hoặc dữ liệu, hoặc **một** thông báo cho người dùng đọc.
- *
- * Cố ý KHÔNG mang theo mã lỗi ra tới giao diện. Giao diện chỉ có đúng một chuỗi để hiển thị,
- * nên không có chỗ nào để rẽ nhánh "email sai" so với "mật khẩu sai" — xem `thongBaoLoi`.
- */
-export type KetQua<T> = { ok: true; duLieu: T } | { ok: false; thongBao: string };
-
-/** Câu trả lời khi không đọc nổi thân lỗi của máy chủ. Không bao giờ lộ chi tiết kỹ thuật. */
-const LOI_KHONG_RO = "Không kết nối được máy chủ. Vui lòng thử lại.";
-
-/**
- * Lấy câu thông báo do máy chủ viết, nguyên văn.
- *
- * ĐÂY LÀ CHỖ DỄ LÀM HỎNG NHẤT MÀN ĐĂNG NHẬP: dịch vụ identity cố ý trả **cùng một** `code` và
- * **cùng một** `message` cho email sai, mật khẩu sai và trường bỏ trống. Phân biệt chúng ở
- * giao diện là dựng lại đúng thứ máy chủ vừa giấu đi — tức là để người ngoài dò ra địa chỉ thư
- * công vụ nào có thật trên tên miền của xã, và danh bạ cán bộ của một cơ quan nhà nước không
- * phải thứ cho không. Vì vậy hàm này chỉ lấy `message` và không bao giờ đọc `code` để đổi chữ.
- */
-async function thongBaoLoi(phanHoi: Response): Promise<string> {
-  try {
-    const than = (await phanHoi.json()) as httpx_Error;
-    return typeof than?.message === "string" && than.message !== "" ? than.message : LOI_KHONG_RO;
-  } catch {
-    return LOI_KHONG_RO;
-  }
-}
-
-const CHUNG: RequestInit = {
-  // same-origin: cookie phiên đi kèm vì API nằm trên chính host của xã. Không dùng "include" —
-  // "include" chỉ cần thiết khi gửi sang origin khác, mà gửi phiên sang origin khác là đúng
-  // điều không được phép xảy ra ở đây.
-  credentials: "same-origin",
-  // Không cache một lời gọi phiên làm việc, ở bất kỳ tầng nào.
-  cache: "no-store",
-};
 
 /**
  * POST /api/v1/sessions — mở một phiên.
  *
  * Trả về `sid` để về sau tự kết thúc phiên của mình, `expires_at`, và khối cán bộ rút gọn.
  * Token KHÔNG nằm trong phản hồi: nó ở trong cookie httpOnly, nơi JavaScript không với tới.
+ *
+ * ĐÂY LÀ CHỖ DỄ LÀM HỎNG NHẤT MÀN ĐĂNG NHẬP: dịch vụ identity cố ý trả **cùng một** `code` và
+ * **cùng một** `message` cho email sai, mật khẩu sai và trường bỏ trống. Phân biệt chúng ở giao
+ * diện là dựng lại đúng thứ máy chủ vừa giấu đi — tức là để người ngoài dò ra địa chỉ thư công
+ * vụ nào có thật trên tên miền của xã, và danh bạ cán bộ của một cơ quan nhà nước không phải
+ * thứ cho không. `thongBaoLoi` vì vậy chỉ đọc `message`, không bao giờ đọc `code` để đổi chữ.
  */
 export async function dangNhap(
   than: identity_thanDangNhap,
@@ -97,6 +56,27 @@ export async function dangNhap(
     return { ok: true, duLieu };
   }
   return { ok: false, thongBao: await thongBaoLoi(phanHoi) };
+}
+
+/**
+ * GET /api/v1/sessions/current — phiên hiện tại là của ai, và mang những quyền nào.
+ *
+ * DÙNG ĐỂ ẨN/HIỆN, KHÔNG PHẢI ĐỂ CHO PHÉP. Danh sách `permissions` trả về đây chỉ quyết định
+ * cán bộ có **thấy** một tab hay không. Việc **được làm** thì do dịch vụ kiểm trên từng yêu cầu
+ * thật: `GET /api/v1/staff` đòi `admin.user` ở phía máy chủ và trả 403 cho ai không có, bất kể
+ * trình duyệt đã hiện gì (luật 5, cấm #1 — kiểm quyền ở giao diện thay cho tầng dịch vụ là
+ * không kiểm gì cả, vì mã client sửa được).
+ *
+ * Tuyến này là `any-authenticated` chứ không đòi quyền nào: một tài khoản vừa bị gỡ hết vai trò
+ * vẫn phải hỏi được "tôi là ai", nếu không thì nó không còn đường nào biết mình mất quyền.
+ *
+ * PHẠM VI: hàm này mới chỉ phục vụ việc ẩn/hiện. Phần còn lại của tuyến — hiện họ tên và chức
+ * vụ trên đầu trang, rẽ trang chủ theo vai trò (`15-phu-luc-giao-dien-chung §1`) — vẫn là việc
+ * `tasks/web/open/4141103d6d0a.json`, chưa ai nhận.
+ */
+export async function layPhienHienTai(): Promise<KetQua<identity_phienHienTaiRa>> {
+  const duongDan: identity_get_sessions_current["duongDan"] = "/api/v1/sessions/current";
+  return docJSON<identity_phienHienTaiRa>(duongDan);
 }
 
 /**

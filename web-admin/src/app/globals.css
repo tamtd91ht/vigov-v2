@@ -246,3 +246,193 @@ body {
 .trang-404 {
   padding: 1.5rem 1rem;
 }
+
+/* ---- màn cấu hình · tab Người dùng ------------------------------------------------------ */
+
+.mo-ta-trang {
+  margin: 0.25rem 0 1.5rem;
+  color: var(--xam-chu);
+}
+
+/* Chỉ hiện với trình đọc màn hình. Dùng cho `<caption>` của bảng và tiêu đề cột hành động: chữ
+ * ấy cần cho người dùng trình đọc, còn người xem mắt đã có tiêu đề trang ngay trên đó. */
+.an-thi-giac {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.thanh-sap-xep {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.nhan-sap-xep {
+  font-size: 0.8125rem;
+  color: var(--xam-chu);
+}
+
+.thanh-sap-xep .nut-phu[aria-pressed="true"] {
+  border-color: var(--xanh);
+  color: var(--xanh);
+  font-weight: 600;
+}
+
+/* Bảng CUỘN NGANG ở bề rộng nhỏ, không đổi thành thẻ.
+ *
+ * Bề rộng nhỏ nhất được hỗ trợ là 320px (`15-phu-luc §7`) và bảng này có chín cột, nên ở đó nó
+ * không vừa. Cách vá thường thấy là cho các phần tử bảng `display: block` để mỗi dòng thành một
+ * thẻ — nhưng đổi `display` của `table`/`tr`/`td` làm mất ngữ nghĩa bảng với trình đọc màn hình,
+ * và đây đúng là dữ liệu dạng bảng. Nên vùng bảng cuộn ngang, và vùng cuộn ấy tới được bằng bàn
+ * phím (`tabindex` + `role="region"` trong danh-ba-can-bo.tsx). */
+.bang-cuon {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid var(--xam-vien);
+  border-radius: 0.5rem;
+}
+
+.bang-can-bo {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.bang-can-bo th,
+.bang-can-bo td {
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--xam-vien);
+}
+
+.bang-can-bo thead th {
+  background: var(--nen);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--xam-chu);
+}
+
+.bang-can-bo tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.nut-sap-xep {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.ten-can-bo {
+  display: block;
+  font-weight: 600;
+}
+
+.dong-phu {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--xam-chu);
+}
+
+.chip {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.chip-hoat-dong {
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.chip-ngung {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.trang-thai-rong {
+  margin: 1rem 0;
+  padding: 1.25rem 1rem;
+  background: #fff;
+  border: 1px dashed var(--xam-vien);
+  border-radius: 0.5rem;
+  color: var(--xam-chu);
+}
+
+.dieu-huong-trang {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.dieu-huong-trang .nut-phu:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.khoi-chi-tiet {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid var(--xam-vien);
+  border-radius: 0.5rem;
+}
+
+.dau-khoi-chi-tiet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dau-khoi-chi-tiet h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.danh-sach-truong {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0 1rem;
+  margin: 0.75rem 0 0;
+}
+
+.danh-sach-truong dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--xam-chu);
+}
+
+.danh-sach-truong dd {
+  margin: 0 0 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .danh-sach-truong {
+    grid-template-columns: 12rem 1fr;
+  }
+
+  .danh-sach-truong dt {
+    padding-top: 0.125rem;
+  }
+}
