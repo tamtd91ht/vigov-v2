@@ -172,16 +172,25 @@ func run(log *slog.Logger) error {
 	//    accept requests it cannot honour.
 	deps := svchttp.Deps{
 		Checker: checker,
-		Signer:  signer, // the SAME pointer app.NewDangNhap was given above
-		Phien:   phien,
-		CanBo:   canBo,
+		// The SAME *idstore.Checker behind two fields, and two fields on purpose: Checker DECIDES
+		// one permission at a time and guards every route; Quyen only LISTS what the caller already
+		// holds, so the admin web can avoid drawing what the server would refuse. See QuyenDoc.
+		Quyen:  checker,
+		Signer: signer, // the SAME pointer app.NewDangNhap was given above
+		Phien:  phien,
+		CanBo:  canBo,
 		// The SAME store behind two fields, and two fields on purpose: CanBoDoc is the
 		// three-condition read the session middleware runs on every request, CanBoDanhBa is the
 		// register the Cấu hình → Người dùng screen pages through. See the note on CanBoDanhBa.
 		DanhBa:   canBo,
 		DangNhap: dangNhap,
 		DangXuat: dangXuat,
-		Log:      log,
+		// THE SAME directory the edge below resolves Host with, deliberately not a second one.
+		// GET /api/v1/commune has to turn the commune already in the context back into a name, and
+		// two ways to answer "which commune is this Host" is how one commune ends up described
+		// with another's name (see step 3 above: there is no second way to resolve a commune).
+		Xa:  directory,
+		Log: log,
 	}
 
 	mux := http.NewServeMux()

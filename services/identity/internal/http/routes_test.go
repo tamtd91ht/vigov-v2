@@ -90,6 +90,49 @@ func (m thuMucGia) ByHost(_ context.Context, host string) (tenant.Tenant, bool) 
 	return t, ok
 }
 
+// thuMucMau is the platform registry for the two test communes. A NEW MAP PER CALL, so a test
+// that empties or rewrites one copy cannot change the other — which is exactly what the 503 cases
+// in xa_test.go do.
+//
+// The display names are different enough to tell apart in an assertion: a fixture where both
+// communes are called the same thing cannot show a route serving the wrong one.
+func thuMucMau() thuMucGia {
+	return thuMucGia{
+		hostA: {ID: xaA, Host: hostA, Name: "Xã Thăng Bình", Active: true},
+		hostB: {ID: xaB, Host: hostB, Name: "Xã Bình Dương", Active: true},
+	}
+}
+
+// quyenGia lists permissions PER COMMUNE and per staff id, reading the commune from the context
+// exactly as the real query reads it from *store.Scoped. Keyed any other way, the isolation case
+// in phien_hien_tai_test.go would pass while proving nothing.
+type quyenGia struct {
+	quyen map[tenant.ID]map[string][]authz.Perm
+	loi   error
+	goi   int
+}
+
+func (q *quyenGia) QuyenCua(ctx context.Context, p authz.Principal) ([]authz.Perm, error) {
+	q.goi++
+	if q.loi != nil {
+		return nil, q.loi
+	}
+	if p.Kind != "staff" || p.ID == "" {
+		return nil, nil
+	}
+	return q.quyen[tenant.MustFrom(ctx)][p.ID], nil
+}
+
+// quyenMau mirrors checkerGia: commune A grants this account admin.user, commune B grants it
+// nothing at all. The empty side is not padding — it is the account whose roles were withdrawn,
+// which is the case GET /api/v1/sessions/current names in its AnyAuthenticated reason.
+func quyenMau() *quyenGia {
+	return &quyenGia{quyen: map[tenant.ID]map[string][]authz.Perm{
+		xaA: {idNoiBo: {quyenThu, "task.read"}},
+		xaB: {},
+	}}
+}
+
 // phienGia counts its reads. The count is what proves the commune check happens BEFORE any
 // database access.
 type phienGia struct {
@@ -188,13 +231,21 @@ func (u *dangXuatGia) Chay(_ context.Context, sid, ma, ip string) error {
 // --- harness ----------------------------------------------------------------------------
 
 type mayChu struct {
-	h        http.Handler
-	signer   *token.Signer
-	phien    *phienGia
-	canBo    *canBoGia
-	danhBa   *danhBaGia
+	h      http.Handler
+	d      Deps // kept so a test can rebuild the chain with ONE dependency swapped — see dungLai
+	thuMuc thuMucGia
+	signer *token.Signer
+	phien  *phienGia
+	canBo  *canBoGia
+	danhBa *danhBaGia
+	quyen  *quyenGia
+	// dangNhap and dangXuat are the same values as d.DangNhap / d.DangXuat, typed.
 	dangNhap *dangNhapGia
 	dangXuat *dangXuatGia
+
+	// them mounts harness-only routes after the real ones. One test needs to see the PRINCIPAL the
+	// edge built, and no shipped route returns it — see duongThu.
+	them func(mux *http.ServeMux, d Deps)
 }
 
 // dungMayChu builds the real edge chain, in the real order. Nothing here is a PostgreSQL or a
@@ -218,6 +269,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	}
 	canBo := &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}}
 	danhBa := danhBaMau()
+	quyen := quyenMau()
 
 	d := Deps{
 		// Commune A grants the permission; commune B has the same account and grants nothing.
@@ -226,10 +278,15 @@ func dungMayChu(t *testing.T) *mayChu {
 			xaA: {idNoiBo: {quyenThu: true}},
 			xaB: {},
 		}},
+		Quyen:  quyen,
 		Signer: signer,
 		Phien:  phien,
 		CanBo:  canBo,
 		DanhBa: danhBa,
+		// The harness gives Deps.Xa its OWN directory value, not the one the edge is built with
+		// below, although both start from the same map. Two values is what lets a test make the
+		// handler's lookup fail while the edge still resolves — the 503 cases in xa_test.go.
+		Xa: thuMucMau(),
 		DangNhap: &dangNhapGia{
 			sid: sidA,
 			// A token signed the way the use case signs it, so the cookie carries something the
@@ -245,27 +302,45 @@ func dungMayChu(t *testing.T) *mayChu {
 	// GET /api/v1/staff, mounted by Register with `admin.user`. It used to be a stand-in declared
 	// here, because the service had no guarded route of its own; a stand-in can only prove that
 	// authz works, never that the route being shipped declared it.
-	mux := http.NewServeMux()
-	Register(mux, d)
-
-	var h http.Handler = mux
-	h = XacThuc(d)(h)
-	h = httpx.TenantMiddleware(thuMucGia{
-		hostA: {ID: xaA, Host: hostA, Active: true},
-		hostB: {ID: xaB, Host: hostB, Active: true},
-	})(h)
-	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
-	h = httpx.StripTenantHeaders(h)
-
-	return &mayChu{
-		h:        h,
+	m := &mayChu{
+		d:        d,
+		thuMuc:   thuMucMau(),
 		signer:   signer,
 		phien:    phien,
 		canBo:    canBo,
 		danhBa:   danhBa,
+		quyen:    quyen,
 		dangNhap: d.DangNhap.(*dangNhapGia),
 		dangXuat: d.DangXuat.(*dangXuatGia),
 	}
+	m.dungLai(t, nil)
+	return m
+}
+
+// dungLai rebuilds the real edge chain, optionally with one dependency swapped first.
+//
+// WHY IT EXISTS: three cases below need the chain built with a different Deps — a checker that
+// grants another permission, a commune directory that cannot answer. Rebuilding by hand in each
+// test means each copy can drift out of the real order, and the order IS the property most of
+// these tests are about.
+func (m *mayChu) dungLai(t *testing.T, sua func(d *Deps)) {
+	t.Helper()
+	if sua != nil {
+		sua(&m.d)
+	}
+
+	mux := http.NewServeMux()
+	Register(mux, m.d)
+	if m.them != nil {
+		m.them(mux, m.d)
+	}
+
+	var h http.Handler = mux
+	h = XacThuc(m.d)(h)
+	h = httpx.TenantMiddleware(m.thuMuc)(h)
+	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
+	h = httpx.StripTenantHeaders(h)
+	m.h = h
 }
 
 func (m *mayChu) tokenCho(t *testing.T, xa tenant.ID, sid string) string {
@@ -294,6 +369,12 @@ func (m *mayChu) goi(t *testing.T, method, host, path, than, tok string) *httpte
 	if tok != "" {
 		r.AddCookie(&http.Cookie{Name: CookiePhien, Value: tok})
 	}
+	return m.chay(r)
+}
+
+// chay runs a request the caller built itself — for the cases that need a Host with a port, or a
+// header the harness would never send.
+func (m *mayChu) chay(r *http.Request) *httptest.ResponseRecorder {
 	w := httptest.NewRecorder()
 	m.h.ServeHTTP(w, r)
 	return w
@@ -539,22 +620,9 @@ func TestRouteCoQuyen_403SaiQuyen(t *testing.T) {
 	// The REAL routes, behind a checker that grants a different permission. Building this from
 	// Register rather than from a stand-in route is what makes the case prove something about
 	// what ships: it fails if a route is ever mounted without a declaration.
-	d := Deps{
-		Checker:  checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{xaA: {idNoiBo: {"task.read": true}}}},
-		Signer:   m.signer,
-		Phien:    m.phien,
-		CanBo:    m.canBo,
-		DanhBa:   m.danhBa,
-		DangNhap: m.dangNhap,
-		DangXuat: m.dangXuat,
-		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
-	}
-	mux := http.NewServeMux()
-	Register(mux, d)
-	var h http.Handler = mux
-	h = XacThuc(d)(h)
-	h = httpx.TenantMiddleware(thuMucGia{hostA: {ID: xaA, Host: hostA, Active: true}})(h)
-	m.h = h
+	m.dungLai(t, func(d *Deps) {
+		d.Checker = checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{xaA: {idNoiBo: {"task.read": true}}}}
+	})
 
 	for _, duong := range duongCanBo {
 		doiMa(t, m.goi(t, "GET", hostA, duong, "", m.tokenCho(t, xaA, sidA)), http.StatusForbidden)

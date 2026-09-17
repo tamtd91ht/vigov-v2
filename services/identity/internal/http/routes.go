@@ -34,6 +34,7 @@ import (
 	"github.com/vihat/vigov/pkg/authz"
 	"github.com/vihat/vigov/pkg/idem"
 	"github.com/vihat/vigov/pkg/page"
+	"github.com/vihat/vigov/pkg/tenant"
 	"github.com/vihat/vigov/pkg/token"
 	"github.com/vihat/vigov/services/identity/internal/app"
 	"github.com/vihat/vigov/services/identity/internal/domain"
@@ -72,6 +73,18 @@ type (
 		ChiTiet(ctx context.Context, id string) (domain.CanBoTomTat, error)
 	}
 
+	// QuyenDoc lists the caller's OWN permission keys, for GET /api/v1/sessions/current.
+	//
+	// SEPARATE FROM authz.Checker ON PURPOSE, although *idstore.Checker satisfies both and the
+	// same value is wired into each. Checker DECIDES access, one key at a time, and every route in
+	// all eight services depends on it; this one only DESCRIBES what the caller already holds, so
+	// the web can avoid drawing what the server would refuse. Widening authz.Checker with a list
+	// method would put a shape whose only job is drawing menus onto the interface that guards
+	// every route — and the first caller to decide access from a list is the accident that costs.
+	QuyenDoc interface {
+		QuyenCua(ctx context.Context, p authz.Principal) ([]authz.Perm, error)
+	}
+
 	// DangNhapUC and DangXuatUC are the use cases. The handlers only translate HTTP; the
 	// business write and its audit entry share one transaction inside these.
 	DangNhapUC interface {
@@ -86,13 +99,21 @@ type (
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
 type Deps struct {
 	Checker  authz.Checker
+	Quyen    QuyenDoc
 	Signer   *token.Signer
 	Phien    PhienDoc
 	CanBo    CanBoDoc
 	DanhBa   CanBoDanhBa
 	DangNhap DangNhapUC
 	DangXuat DangXuatUC
-	Log      *slog.Logger
+
+	// Xa is the SAME tenant.Directory the edge resolves Host with — see the note at the
+	// GET /api/v1/commune route. tenant.Directory rather than a local interface because it is
+	// already an interface, already owned by pkg/tenant, and a second declaration of it here
+	// would be a second place for "which commune is this Host" to be answered.
+	Xa tenant.Directory
+
+	Log *slog.Logger
 }
 
 // Register mounts the identity routes.
@@ -115,6 +136,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu use case đăng nhập/đăng xuất")
 	case d.Checker == nil:
 		panic("identity/http: thiếu authz.Checker — mọi route có quyền sẽ không kiểm được")
+	case d.Quyen == nil:
+		panic("identity/http: thiếu kho quyền — GET /api/v1/sessions/current sẽ panic khi có người gọi")
+	case d.Xa == nil:
+		panic("identity/http: thiếu thư mục xã — màn hình đăng nhập sẽ không có tên xã để hiển thị")
 	}
 
 	h := NewHandler(d)
@@ -158,6 +183,71 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.AnyAuthenticated("mọi tài khoản đã đăng nhập đều được kết thúc phiên của chính mình")(
 			idem.KhongCan("thu hồi một phiên đã thu hồi cho cùng một kết quả")(
 				http.HandlerFunc(h.DangXuat))))
+
+	// Reading one's own session. AnyAuthenticated and not a permission, for a reason close to the
+	// one above: this is the route that answers "who am I and what may I do", and an account that
+	// has just had every role withdrawn holds no permission with which to ask. Requiring one would
+	// mean the person whose rights changed is exactly the person who can no longer load the
+	// screen that would tell them.
+	//
+	// The literal `current` cannot shadow the wildcard route above: that one is DELETE, this one
+	// is GET, and net/http matches method first. It could only collide if a session id were
+	// literally "current", and a sid is a random value the server generates, never a string a
+	// client chooses (idstore.PhienStore.Tao).
+	//
+	// NO idem.* DECLARATION: a GET changes no state, and declaring a duplicate-request protection
+	// here would claim a protection with nothing to protect.
+	//
+	// @summary  Phiên làm việc hiện tại của chính người gọi, kèm danh sách quyền để ẩn/hiện menu
+	// @screen   15-phu-luc-giao-dien-chung §1
+	// @reply    200 phienHienTaiRa
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/sessions/current",
+		authz.AnyAuthenticated("mọi tài khoản đã đăng nhập đều được hỏi 'tôi là ai' — kể cả tài khoản vừa bị gỡ hết vai trò, vốn không còn quyền nào để đòi")(
+			http.HandlerFunc(h.XemPhienHienTai)))
+
+	// --- the commune behind this Host ---------------------------------------------------------
+	//
+	// WHICH SERVICE THIS ROUTE BELONGS TO IS NOT SETTLED, AND THIS COMMENT IS NOT A DECISION.
+	// It is built here because that is what was asked for this turn; the question is rule 2, stop
+	// conditions #1 and #2 and is going to the customer. The two readings, stated so the next
+	// reader does not have to reconstruct them:
+	//
+	//	platform owns it   the commune registry — domains, display name, lifecycle — is the
+	//	                   platform service's data (kb/30-indexes/services.json). Identity reads it
+	//	                   over gRPC and owns none of it. services/platform/internal/http/
+	//	                   routes.go:42 already sketches a GET /api/v1/communes there — the
+	//	                   vendor's list of all communes, not this route, but it is the same data
+	//	                   and it is held up on an undecided vendor-side permission model. And a
+	//	                   commune's name is needed by EVERY screen, not only the sign-in one.
+	//	identity owns it   identity is the service the browser already talks to before a session
+	//	                   exists, it resolves the commune at its own edge on every request anyway,
+	//	                   and one more public surface on the platform service is one more thing to
+	//	                   expose to the internet.
+	//
+	// PUBLIC, AND THE REASON IS THE SCREEN ITSELF: the sign-in form prints the name of the
+	// authority a person is about to sign in to, and at that moment there is no session, therefore
+	// no principal, therefore nothing to check a permission against. Same reading as POST
+	// /api/v1/sessions above. Nothing in the reply is personal data, nothing counts staff, nothing
+	// describes the commune's internal operation — see thongTinXa, which is where the absent
+	// fields are argued.
+	//
+	// `commune` HAS NO ROW YET in kb/00-foundation/ubiquitous-language.md's URL-resource table;
+	// the path was named in the request for this work, not translated here (ADR 0011 forbids
+	// translating on the spot). SINGULAR, against the general plural rule, and deliberately: a
+	// caller can never see more than one, because which one it gets is decided by the Host it
+	// arrived on. `/communes` would promise a collection this route must never have.
+	//
+	// NO idem.* DECLARATION: GET, changes no state.
+	//
+	// @summary  Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập
+	// @screen   15-phu-luc-giao-dien-chung §1
+	// @reply    200 thongTinXa
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/commune",
+		authz.Public("màn hình đăng nhập phải hiện tên xã TRƯỚC khi có phiên nào để kiểm quyền")(
+			http.HandlerFunc(h.ThongTinXa)))
 
 	// --- the staff register. TWO READ ROUTES, AND DELIBERATELY NO WRITE ROUTE -----------------
 	//

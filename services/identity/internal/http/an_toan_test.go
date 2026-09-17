@@ -39,41 +39,23 @@ func mayChuLog(t *testing.T) (*mayChu, *bytes.Buffer) {
 	m := dungMayChu(t)
 
 	var buf bytes.Buffer
-	d := Deps{
-		Checker: checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{
-			xaA: {idNoiBo: {quyenThu: true}},
-			xaB: {},
-		}},
-		Signer:   m.signer,
-		Phien:    m.phien,
-		CanBo:    m.canBo,
-		DanhBa:   m.danhBa,
-		DangNhap: m.dangNhap,
-		DangXuat: m.dangXuat,
-		Log:      slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
+	m.them = func(mux *http.ServeMux, d Deps) {
+		mux.Handle("GET "+duongThu,
+			authz.RequirePermission(d.Checker, quyenThu)(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					p, _ := authz.From(r.Context())
+					vietJSON(w, http.StatusOK, map[string]string{
+						"principal_id": p.ID,
+						"tenant_id":    string(p.TenantID),
+					})
+				})))
 	}
-
-	mux := http.NewServeMux()
-	Register(mux, d)
-	mux.Handle("GET "+duongThu,
-		authz.RequirePermission(d.Checker, quyenThu)(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				p, _ := authz.From(r.Context())
-				vietJSON(w, http.StatusOK, map[string]string{
-					"principal_id": p.ID,
-					"tenant_id":    string(p.TenantID),
-				})
-			})))
-
-	var h http.Handler = mux
-	h = XacThuc(d)(h)
-	h = httpx.TenantMiddleware(thuMucGia{
-		hostA: {ID: xaA, Host: hostA, Active: true},
-		hostB: {ID: xaB, Host: hostB, Active: true},
-	})(h)
-	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
-	h = httpx.StripTenantHeaders(h)
-	m.h = h
+	// The REAL chain, rebuilt in the real order with only the logger swapped — see dungLai. Built
+	// by hand here until now, which meant this copy had to be kept in step with the other two by
+	// hand as well.
+	m.dungLai(t, func(d *Deps) {
+		d.Log = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	})
 	return m, &buf
 }
 

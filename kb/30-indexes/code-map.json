@@ -188,11 +188,11 @@
     },
     "http.CanBoDanhBa": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:70"
+      "at": "services/identity/internal/http/routes.go:71"
     },
     "http.CanBoDoc": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:58"
+      "at": "services/identity/internal/http/routes.go:59"
     },
     "http.ChiTietCanBo": {
       "kind": "func",
@@ -204,7 +204,7 @@
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:77"
+      "at": "services/identity/internal/http/routes.go:90"
     },
     "http.DangXuat": {
       "kind": "func",
@@ -212,7 +212,7 @@
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:81"
+      "at": "services/identity/internal/http/routes.go:94"
     },
     "http.DanhSachCanBo": {
       "kind": "func",
@@ -232,23 +232,35 @@
     },
     "http.PhienDoc": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:52"
+      "at": "services/identity/internal/http/routes.go:53"
     },
     "http.PhienHienTai": {
       "kind": "type",
-      "at": "services/identity/internal/http/middleware.go:22"
+      "at": "services/identity/internal/http/middleware.go:23"
     },
     "http.PhienTu": {
       "kind": "func",
-      "at": "services/identity/internal/http/middleware.go:35"
+      "at": "services/identity/internal/http/middleware.go:52"
+    },
+    "http.QuyenDoc": {
+      "kind": "type",
+      "at": "services/identity/internal/http/routes.go:84"
     },
     "http.Register": {
       "kind": "func",
       "at": "services/reporting/internal/http/routes.go:32"
     },
+    "http.ThongTinXa": {
+      "kind": "func",
+      "at": "services/identity/internal/http/xa.go:68"
+    },
     "http.XacThuc": {
       "kind": "func",
-      "at": "services/identity/internal/http/middleware.go:54"
+      "at": "services/identity/internal/http/middleware.go:71"
+    },
+    "http.XemPhienHienTai": {
+      "kind": "func",
+      "at": "services/identity/internal/http/phien_hien_tai.go:73"
     },
     "httpx.Error": {
       "kind": "type",
@@ -568,11 +580,11 @@
     },
     "store.Allows": {
       "kind": "func",
-      "at": "services/identity/internal/store/checker.go:57"
+      "at": "services/identity/internal/store/checker.go:74"
     },
     "store.AllowsNhieu": {
       "kind": "func",
-      "at": "services/identity/internal/store/checker.go:82"
+      "at": "services/identity/internal/store/checker.go:99"
     },
     "store.ByHost": {
       "kind": "func",
@@ -677,6 +689,10 @@
     "store.QueryPage": {
       "kind": "func",
       "at": "pkg/store/page.go:60"
+    },
+    "store.QuyenCua": {
+      "kind": "func",
+      "at": "services/identity/internal/store/checker.go:160"
     },
     "store.Scoped": {
       "kind": "type",

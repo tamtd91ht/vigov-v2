@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/vihat/vigov/pkg/authz"
 	"github.com/vihat/vigov/pkg/httpx"
@@ -27,6 +28,22 @@ type PhienHienTai struct {
 	// MaCanBo is the BUSINESS code, the one the audit trail records (rule 6, invariant 3).
 	// Deliberately not the same value as authz.Principal.ID — see the comment there.
 	MaCanBo string
+
+	// HetHanLuc is when this session expires, as the REGISTRY has it — not as the token claims
+	// it. The registry is what revocation and expiry are decided on, so it is also what
+	// GET /api/v1/sessions/current must report; a client told the token's own expiry would show
+	// a session that was revoked an hour ago as still running.
+	HetHanLuc time.Time
+
+	// HoTen and ChucVu are the two display fields the header and GET /api/v1/sessions/current
+	// show. They are copied here at step 5 below, where the account has just been read, so the
+	// route costs no second query on a call that happens on every page load.
+	//
+	// THE WHOLE domain.CanBo IS DELIBERATELY NOT CARRIED. It holds MatKhauHash, and a credential
+	// sitting in the request context is one `%+v` away from a log line that cannot be recalled
+	// (rule 3, forbidden #1; rule 8). Two strings can leak nothing a response already shows.
+	HoTen  string
+	ChucVu string
 }
 
 type ctxKeyPhien struct{}
@@ -142,6 +159,11 @@ func XacThuc(d Deps) func(http.Handler) http.Handler {
 			ctx = context.WithValue(ctx, ctxKeyPhien{}, PhienHienTai{
 				Sid:     claims.Sid,
 				MaCanBo: cb.Ma,
+				// ph.HetHanLuc, not claims.ExpiresAt: the registry is what expiry and revocation
+				// are decided on, and the two can differ.
+				HetHanLuc: ph.HetHanLuc,
+				HoTen:     cb.HoTen,
+				ChucVu:    cb.ChucVu,
 			})
 
 			// 7. Last-seen stamp. Deliberately outside any transaction and its failure ignored:

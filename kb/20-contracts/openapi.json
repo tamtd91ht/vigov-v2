@@ -8,6 +8,43 @@
   },
   "x-vigov-source": "services/*/internal/ — chú thích @summary/@screen/@request/@reply ngay trên câu lệnh đăng ký route",
   "paths": {
+    "/api/v1/commune": {
+      "get": {
+        "summary": "Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập",
+        "operationId": "identity_get_commune",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "15-phu-luc-giao-dien-chung §1",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "màn hình đăng nhập phải hiện tên xã TRƯỚC khi có phiên nào để kiểm quyền"
+        },
+        "x-vigov-task": "53f859654452",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.thongTinXa"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/sessions": {
       "post": {
         "summary": "Đăng nhập bằng email và mật khẩu, mở một phiên làm việc",
@@ -48,6 +85,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/current": {
+      "get": {
+        "summary": "Phiên làm việc hiện tại của chính người gọi, kèm danh sách quyền để ẩn/hiện menu",
+        "operationId": "identity_get_sessions_current",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "15-phu-luc-giao-dien-chung §1",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "mọi tài khoản đã đăng nhập đều được hỏi 'tôi là ai' — kể cả tài khoản vừa bị gỡ hết vai trò, vốn không còn quyền nào để đòi"
+        },
+        "x-vigov-task": "4141103d6d0a",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.phienHienTaiRa"
                 }
               }
             }
@@ -409,6 +493,34 @@
         ],
         "additionalProperties": false
       },
+      "identity.phienHienTaiRa": {
+        "type": "object",
+        "properties": {
+          "sid": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "staff": {
+            "$ref": "#/components/schemas/identity.canBoGon"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "expires_at",
+          "permissions",
+          "sid",
+          "staff"
+        ],
+        "additionalProperties": false
+      },
       "identity.thanDangNhap": {
         "type": "object",
         "properties": {
@@ -423,6 +535,22 @@
         "required": [
           "email",
           "password"
+        ],
+        "additionalProperties": false
+      },
+      "identity.thongTinXa": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "name"
         ],
         "additionalProperties": false
       },

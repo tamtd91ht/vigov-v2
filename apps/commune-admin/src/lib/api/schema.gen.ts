@@ -43,9 +43,21 @@ export type identity_phanHoiDangNhap = {
   "staff": identity_canBoGon;
 };
 
+export type identity_phienHienTaiRa = {
+  "sid": string;
+  "expires_at": string;
+  "staff": identity_canBoGon;
+  "permissions": Array<string>;
+};
+
 export type identity_thanDangNhap = {
   "email": string;
   "password": string;
+};
+
+export type identity_thongTinXa = {
+  "name": string;
+  "host": string;
 };
 
 export type identity_trangCanBo = {
@@ -53,6 +65,19 @@ export type identity_trangCanBo = {
   /** empty when has_more is false */
   "next_cursor": string;
   "has_more": boolean;
+};
+
+/** GET /api/v1/commune — Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập */
+export type identity_get_commune = {
+  duongDan: "/api/v1/commune";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_thongTinXa;
+    503: httpx_Error;
+  };
 };
 
 /** POST /api/v1/sessions — Đăng nhập bằng email và mật khẩu, mở một phiên làm việc */
@@ -65,6 +90,20 @@ export type identity_post_sessions = {
   phanHoi: {
     201: identity_phanHoiDangNhap;
     400: httpx_Error;
+    401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/sessions/current — Phiên làm việc hiện tại của chính người gọi, kèm danh sách quyền để ẩn/hiện menu */
+export type identity_get_sessions_current = {
+  duongDan: "/api/v1/sessions/current";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_phienHienTaiRa;
     401: httpx_Error;
     500: httpx_Error;
   };

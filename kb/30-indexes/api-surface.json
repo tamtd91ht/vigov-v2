@@ -5,6 +5,23 @@
   "routes": [
     {
       "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/commune",
+      "operation_id": "identity_get_commune",
+      "task_id": "53f859654452",
+      "summary": "Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập",
+      "screen": "15-phu-luc-giao-dien-chung §1",
+      "permission_kind": "public",
+      "permission_reason": "màn hình đăng nhập phải hiện tên xã TRƯỚC khi có phiên nào để kiểm quyền",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.thongTinXa",
+        "503": "httpx.Error"
+      },
+      "declared_in": "services/identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
       "method": "POST",
       "path": "/api/v1/sessions",
       "operation_id": "identity_post_sessions",
@@ -19,6 +36,24 @@
       "reply_schemas": {
         "201": "identity.phanHoiDangNhap",
         "400": "httpx.Error",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "services/identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/sessions/current",
+      "operation_id": "identity_get_sessions_current",
+      "task_id": "4141103d6d0a",
+      "summary": "Phiên làm việc hiện tại của chính người gọi, kèm danh sách quyền để ẩn/hiện menu",
+      "screen": "15-phu-luc-giao-dien-chung §1",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "mọi tài khoản đã đăng nhập đều được hỏi 'tôi là ai' — kể cả tài khoản vừa bị gỡ hết vai trò, vốn không còn quyền nào để đòi",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.phienHienTaiRa",
         "401": "httpx.Error",
         "500": "httpx.Error"
       },
