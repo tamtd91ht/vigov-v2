@@ -43,6 +43,46 @@
         "500": "httpx.Error"
       },
       "declared_in": "services/identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/staff",
+      "operation_id": "identity_get_staff",
+      "task_id": "433e7de6d4c2",
+      "summary": "Danh sách cán bộ của xã — gồm cả người có tài khoản đăng nhập và người chỉ có trong danh bạ",
+      "screen": "14-cau-hinh §3",
+      "permission_kind": "permission",
+      "permission": "admin.user",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.trangCanBo",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "services/identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/staff/{id}",
+      "operation_id": "identity_get_staff_by_id",
+      "task_id": "8760b5378674",
+      "summary": "Chi tiết một cán bộ trong xã",
+      "screen": "14-cau-hinh §3",
+      "permission_kind": "permission",
+      "permission": "admin.user",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.canBoTomTat",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "services/identity/internal/http/routes.go"
     }
   ]
 }

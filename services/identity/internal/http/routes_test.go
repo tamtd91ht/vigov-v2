@@ -45,6 +45,16 @@ const (
 	khoaGia = "khoa-ky-gia-KHONG-PHAI-KHOA-THAT-cho-test"
 
 	quyenThu = authz.Perm("admin.user")
+
+	// duongThu is a HARNESS-ONLY route. Two tests need to see the PRINCIPAL the edge built —
+	// its id and its commune — and no shipped route returns either: a route that echoed the
+	// caller's own commune back would be a route telling a prober which commune it reached.
+	//
+	// It used to sit at /api/v1/staff, which was free then. That path now belongs to a real
+	// route mounted by Register, and mounting both on one ServeMux panics — so the stand-in
+	// moved rather than the real one. It is registered in test files only (hooks skip
+	// _test.go) and reaches no binary.
+	duongThu = "/api/v1/test-probe"
 )
 
 var (
@@ -182,6 +192,7 @@ type mayChu struct {
 	signer   *token.Signer
 	phien    *phienGia
 	canBo    *canBoGia
+	danhBa   *danhBaGia
 	dangNhap *dangNhapGia
 	dangXuat *dangXuatGia
 }
@@ -206,6 +217,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		thuHoi: map[string]bool{},
 	}
 	canBo := &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}}
+	danhBa := danhBaMau()
 
 	d := Deps{
 		// Commune A grants the permission; commune B has the same account and grants nothing.
@@ -217,6 +229,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		Signer: signer,
 		Phien:  phien,
 		CanBo:  canBo,
+		DanhBa: danhBa,
 		DangNhap: &dangNhapGia{
 			sid: sidA,
 			// A token signed the way the use case signs it, so the cookie carries something the
@@ -228,17 +241,12 @@ func dungMayChu(t *testing.T) *mayChu {
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
+	// The guarded route used by the four cases of rule 5, invariant 7 is now a REAL one —
+	// GET /api/v1/staff, mounted by Register with `admin.user`. It used to be a stand-in declared
+	// here, because the service had no guarded route of its own; a stand-in can only prove that
+	// authz works, never that the route being shipped declared it.
 	mux := http.NewServeMux()
 	Register(mux, d)
-
-	// A guarded route exists only in this test file: the identity service has no permission-
-	// guarded route of its own yet, and the four cases rule 5 invariant 7 asks for need one.
-	mux.Handle("GET /api/v1/staff",
-		authz.RequirePermission(d.Checker, quyenThu)(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				p, _ := authz.From(r.Context())
-				vietJSON(w, http.StatusOK, map[string]string{"principal_id": p.ID})
-			})))
 
 	var h http.Handler = mux
 	h = XacThuc(d)(h)
@@ -254,6 +262,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		signer:   signer,
 		phien:    phien,
 		canBo:    canBo,
+		danhBa:   danhBa,
 		dangNhap: d.DangNhap.(*dangNhapGia),
 		dangXuat: d.DangXuat.(*dangXuatGia),
 	}
@@ -527,24 +536,32 @@ func TestRouteCoQuyen_401KhongToken(t *testing.T) {
 func TestRouteCoQuyen_403SaiQuyen(t *testing.T) {
 	// The account is signed in and its commune matches; it simply does not hold this permission.
 	m := dungMayChu(t)
+	// The REAL routes, behind a checker that grants a different permission. Building this from
+	// Register rather than from a stand-in route is what makes the case prove something about
+	// what ships: it fails if a route is ever mounted without a declaration.
 	d := Deps{
 		Checker:  checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{xaA: {idNoiBo: {"task.read": true}}}},
 		Signer:   m.signer,
 		Phien:    m.phien,
 		CanBo:    m.canBo,
+		DanhBa:   m.danhBa,
 		DangNhap: m.dangNhap,
 		DangXuat: m.dangXuat,
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 	mux := http.NewServeMux()
-	mux.Handle("GET /api/v1/staff", authz.RequirePermission(d.Checker, quyenThu)(
-		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })))
+	Register(mux, d)
 	var h http.Handler = mux
 	h = XacThuc(d)(h)
 	h = httpx.TenantMiddleware(thuMucGia{hostA: {ID: xaA, Host: hostA, Active: true}})(h)
 	m.h = h
 
-	doiMa(t, m.goi(t, "GET", hostA, "/api/v1/staff", "", m.tokenCho(t, xaA, sidA)), http.StatusForbidden)
+	for _, duong := range duongCanBo {
+		doiMa(t, m.goi(t, "GET", hostA, duong, "", m.tokenCho(t, xaA, sidA)), http.StatusForbidden)
+	}
+	if m.danhBa.soLanGoi != 0 {
+		t.Errorf("thiếu quyền mà đã đọc danh bạ %d lần", m.danhBa.soLanGoi)
+	}
 }
 
 func TestRouteCoQuyen_403DungQuyenSaiXa(t *testing.T) {
@@ -576,14 +593,12 @@ func TestPrincipalIDLaIDNoiBoChuKhongPhaiMaCanBo(t *testing.T) {
 	w := m.goi(t, "GET", hostA, "/api/v1/staff", "", m.tokenCho(t, xaA, sidA))
 	doiMa(t, w, http.StatusOK)
 
-	var ra map[string]string
-	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
-		t.Fatal(err)
+	// The principal is read out of the context BY THE STORE the handler called, which is where a
+	// real store would be matching `nd.id = $2` against it.
+	if m.danhBa.principalCuoi != idNoiBo {
+		t.Fatalf("Principal.ID = %q, muốn id nội bộ %q", m.danhBa.principalCuoi, idNoiBo)
 	}
-	if ra["principal_id"] != idNoiBo {
-		t.Fatalf("Principal.ID = %q, muốn id nội bộ %q", ra["principal_id"], idNoiBo)
-	}
-	if ra["principal_id"] == maCanBo {
+	if m.danhBa.principalCuoi == maCanBo {
 		t.Fatal("Principal.ID đang là mã cán bộ — Checker sẽ không khớp dòng nào")
 	}
 }

@@ -33,6 +33,7 @@ import (
 
 	"github.com/vihat/vigov/pkg/authz"
 	"github.com/vihat/vigov/pkg/idem"
+	"github.com/vihat/vigov/pkg/page"
 	"github.com/vihat/vigov/pkg/token"
 	"github.com/vihat/vigov/services/identity/internal/app"
 	"github.com/vihat/vigov/services/identity/internal/domain"
@@ -58,6 +59,19 @@ type (
 		TheoID(ctx context.Context, id string) (domain.CanBo, error)
 	}
 
+	// CanBoDanhBa reads the commune's staff register for the two routes below.
+	//
+	// SEPARATE FROM CanBoDoc ON PURPOSE, although *idstore.CanBoStore satisfies both and the same
+	// value is wired into each. CanBoDoc runs on EVERY request that carries a session, and its
+	// query filters three conditions so a locked or withdrawn account stops working at once;
+	// this one runs on one screen and filters only `deleted_at IS NULL`, because the register
+	// must show the people who have no account at all. Widening CanBoDoc to carry both would put
+	// the register's looser predicate one careless edit away from the authentication path.
+	CanBoDanhBa interface {
+		DanhSach(ctx context.Context, yc page.Request) (page.Result[domain.CanBoTomTat], error)
+		ChiTiet(ctx context.Context, id string) (domain.CanBoTomTat, error)
+	}
+
 	// DangNhapUC and DangXuatUC are the use cases. The handlers only translate HTTP; the
 	// business write and its audit entry share one transaction inside these.
 	DangNhapUC interface {
@@ -75,6 +89,7 @@ type Deps struct {
 	Signer   *token.Signer
 	Phien    PhienDoc
 	CanBo    CanBoDoc
+	DanhBa   CanBoDanhBa
 	DangNhap DangNhapUC
 	DangXuat DangXuatUC
 	Log      *slog.Logger
@@ -94,6 +109,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu token.Signer — không ký được phiên")
 	case d.Phien == nil || d.CanBo == nil:
 		panic("identity/http: thiếu kho phiên hoặc kho cán bộ — không dựng được Principal")
+	case d.DanhBa == nil:
+		panic("identity/http: thiếu kho danh bạ cán bộ — hai tuyến đọc cán bộ sẽ panic khi có người gọi")
 	case d.DangNhap == nil || d.DangXuat == nil:
 		panic("identity/http: thiếu use case đăng nhập/đăng xuất")
 	case d.Checker == nil:
@@ -141,4 +158,50 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.AnyAuthenticated("mọi tài khoản đã đăng nhập đều được kết thúc phiên của chính mình")(
 			idem.KhongCan("thu hồi một phiên đã thu hồi cho cùng một kết quả")(
 				http.HandlerFunc(h.DangXuat))))
+
+	// --- the staff register. TWO READ ROUTES, AND DELIBERATELY NO WRITE ROUTE -----------------
+	//
+	// `staff` is the resource noun, and it is the SAME word as `message Staff` in the proto. One
+	// concept was already carrying four names — nguoi_dung (table), can_bo (Go), CanBo (type),
+	// Staff (contract); picking `staff` adds no fifth. See kb/00-foundation/ubiquitous-language.md.
+	//
+	// admin.user — "Quản lý người dùng" — is the permission the Cấu hình → Người dùng tab is
+	// declared with (docs/ui-ux/14-cau-hinh.md §12.8). No route here is AnyAuthenticated: a
+	// commune's staff register is not something every role has business reading.
+	//
+	// NO idem.* DECLARATION: these are GET routes and change no state. rest_api_guard only asks
+	// for one on POST/PUT/PATCH/DELETE, and declaring one here would claim a protection that has
+	// nothing to protect.
+	//
+	// ONE HONEST NOTE ON THE 401/403 LINES BELOW. Those two statuses are produced by
+	// authz.RequirePermission, which today answers with http.Error — a plain-text body, not the
+	// httpx.Error JSON the contract declares. The declaration states the shape the whole system
+	// has agreed on (pkg/httpx/edge.go) and the one every other route here returns; closing the
+	// gap is a change inside pkg/authz, outside this service.
+
+	// @summary  Danh sách cán bộ của xã — gồm cả người có tài khoản đăng nhập và người chỉ có trong danh bạ
+	// @screen   14-cau-hinh §3
+	// @reply    200 trangCanBo
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/staff",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			http.HandlerFunc(h.DanhSachCanBo)))
+
+	// 404 and not 403 for an id belonging to another commune: the existence of another
+	// authority's record is itself information (rule 4, forbidden #2). Same reading as the sid on
+	// DELETE /api/v1/sessions/{sid} above.
+	//
+	// @summary  Chi tiết một cán bộ trong xã
+	// @screen   14-cau-hinh §3
+	// @reply    200 canBoTomTat
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/staff/{id}",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			http.HandlerFunc(h.ChiTietCanBo)))
 }

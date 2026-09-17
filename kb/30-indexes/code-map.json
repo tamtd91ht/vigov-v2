@@ -116,7 +116,11 @@
     },
     "domain.CanBo": {
       "kind": "type",
-      "at": "services/identity/internal/domain/can_bo.go:8"
+      "at": "services/identity/internal/domain/can_bo.go:10"
+    },
+    "domain.CanBoTomTat": {
+      "kind": "type",
+      "at": "services/identity/internal/domain/can_bo.go:53"
     },
     "domain.Domain": {
       "kind": "type",
@@ -182,9 +186,17 @@
       "kind": "func",
       "at": "pkg/grpcx/grpcx.go:125"
     },
+    "http.CanBoDanhBa": {
+      "kind": "type",
+      "at": "services/identity/internal/http/routes.go:70"
+    },
     "http.CanBoDoc": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:57"
+      "at": "services/identity/internal/http/routes.go:58"
+    },
+    "http.ChiTietCanBo": {
+      "kind": "func",
+      "at": "services/identity/internal/http/can_bo.go:179"
     },
     "http.DangNhap": {
       "kind": "func",
@@ -192,7 +204,7 @@
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:63"
+      "at": "services/identity/internal/http/routes.go:77"
     },
     "http.DangXuat": {
       "kind": "func",
@@ -200,7 +212,11 @@
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:67"
+      "at": "services/identity/internal/http/routes.go:81"
+    },
+    "http.DanhSachCanBo": {
+      "kind": "func",
+      "at": "services/identity/internal/http/can_bo.go:128"
     },
     "http.Deps": {
       "kind": "type",
@@ -216,7 +232,7 @@
     },
     "http.PhienDoc": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:51"
+      "at": "services/identity/internal/http/routes.go:52"
     },
     "http.PhienHienTai": {
       "kind": "type",
@@ -578,9 +594,17 @@
       "kind": "type",
       "at": "services/identity/internal/store/checker.go:20"
     },
+    "store.ChiTiet": {
+      "kind": "func",
+      "at": "services/identity/internal/store/can_bo_danh_sach.go:113"
+    },
     "store.DB": {
       "kind": "type",
       "at": "pkg/store/scoped.go:20"
+    },
+    "store.DanhSach": {
+      "kind": "func",
+      "at": "services/identity/internal/store/can_bo_danh_sach.go:82"
     },
     "store.DatMatKhauHash": {
       "kind": "func",

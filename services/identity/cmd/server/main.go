@@ -171,10 +171,14 @@ func run(log *slog.Logger) error {
 	//    sign-in route mounted without a signing key or without the session registry would
 	//    accept requests it cannot honour.
 	deps := svchttp.Deps{
-		Checker:  checker,
-		Signer:   signer, // the SAME pointer app.NewDangNhap was given above
-		Phien:    phien,
-		CanBo:    canBo,
+		Checker: checker,
+		Signer:  signer, // the SAME pointer app.NewDangNhap was given above
+		Phien:   phien,
+		CanBo:   canBo,
+		// The SAME store behind two fields, and two fields on purpose: CanBoDoc is the
+		// three-condition read the session middleware runs on every request, CanBoDanhBa is the
+		// register the Cấu hình → Người dùng screen pages through. See the note on CanBoDanhBa.
+		DanhBa:   canBo,
 		DangNhap: dangNhap,
 		DangXuat: dangXuat,
 		Log:      log,

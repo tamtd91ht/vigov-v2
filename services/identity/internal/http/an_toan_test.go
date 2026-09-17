@@ -47,6 +47,7 @@ func mayChuLog(t *testing.T) (*mayChu, *bytes.Buffer) {
 		Signer:   m.signer,
 		Phien:    m.phien,
 		CanBo:    m.canBo,
+		DanhBa:   m.danhBa,
 		DangNhap: m.dangNhap,
 		DangXuat: m.dangXuat,
 		Log:      slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
@@ -54,7 +55,7 @@ func mayChuLog(t *testing.T) (*mayChu, *bytes.Buffer) {
 
 	mux := http.NewServeMux()
 	Register(mux, d)
-	mux.Handle("GET /api/v1/staff",
+	mux.Handle("GET "+duongThu,
 		authz.RequirePermission(d.Checker, quyenThu)(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				p, _ := authz.From(r.Context())
@@ -160,7 +161,9 @@ func TestHeaderXaDoKhachTuGuiBiBoQua(t *testing.T) {
 	// handler can read it, and the request must still resolve to the Host's commune.
 	m, _ := mayChuLog(t)
 
-	r := httptest.NewRequest("GET", "https://"+hostA+"/api/v1/staff", nil)
+	// duongThu, not the staff route: this case has to READ the commune the edge resolved, and
+	// only the harness route echoes it.
+	r := httptest.NewRequest("GET", "https://"+hostA+duongThu, nil)
 	r.Host = hostA
 	r.RemoteAddr = "10.0.0.7:51000"
 	r.Header.Set("X-Tenant-Id", string(xaB))

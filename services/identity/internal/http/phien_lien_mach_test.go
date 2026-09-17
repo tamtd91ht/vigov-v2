@@ -99,6 +99,7 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 			thuHoi: map[string]bool{},
 		},
 		CanBo:    &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
+		DanhBa:   danhBaMau(),
 		DangNhap: &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
 		DangXuat: &dangXuatGia{},
 		Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -106,7 +107,7 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 
 	mux := http.NewServeMux()
 	Register(mux, d)
-	mux.Handle("GET /api/v1/staff",
+	mux.Handle("GET "+duongThu,
 		authz.RequirePermission(d.Checker, quyenThu)(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				p, _ := authz.From(r.Context())
@@ -145,7 +146,7 @@ func dangNhapLay(t *testing.T, h http.Handler) *http.Cookie {
 func goiVoiCookie(t *testing.T, h http.Handler, c *http.Cookie) *httptest.ResponseRecorder {
 	t.Helper()
 
-	r := httptest.NewRequest("GET", "https://"+hostA+"/api/v1/staff", nil)
+	r := httptest.NewRequest("GET", "https://"+hostA+duongThu, nil)
 	r.Host = hostA
 	r.RemoteAddr = "10.0.0.7:51000"
 	r.AddCookie(&http.Cookie{Name: CookiePhien, Value: c.Value})

@@ -134,6 +134,150 @@
           }
         }
       }
+    },
+    "/api/v1/staff": {
+      "get": {
+        "summary": "Danh sách cán bộ của xã — gồm cả người có tài khoản đăng nhập và người chỉ có trong danh bạ",
+        "operationId": "identity_get_staff",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user"
+        },
+        "x-vigov-task": "433e7de6d4c2",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.trangCanBo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/staff/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Chi tiết một cán bộ trong xã",
+        "operationId": "identity_get_staff_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user"
+        },
+        "x-vigov-task": "8760b5378674",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.canBoTomTat"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -181,6 +325,69 @@
         ],
         "additionalProperties": false
       },
+      "identity.canBoTomTat": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID — what GET /api/v1/staff/{id} takes"
+          },
+          "code": {
+            "type": "string",
+            "description": "cb.Ma — the code the audit trail quotes"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "department_id": {
+            "type": "string"
+          },
+          "role_id": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "has_account": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "last_login_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "active",
+          "code",
+          "created_at",
+          "department_id",
+          "email",
+          "full_name",
+          "has_account",
+          "id",
+          "last_login_at",
+          "phone",
+          "position",
+          "role_id"
+        ],
+        "additionalProperties": false
+      },
       "identity.phanHoiDangNhap": {
         "type": "object",
         "properties": {
@@ -216,6 +423,30 @@
         "required": [
           "email",
           "password"
+        ],
+        "additionalProperties": false
+      },
+      "identity.trangCanBo": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.canBoTomTat"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
         ],
         "additionalProperties": false
       }
