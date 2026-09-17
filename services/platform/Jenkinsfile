@@ -1,0 +1,148 @@
+// Pipeline của dịch vụ `platform`. Tệp này thuộc về DỊCH VỤ NÀY.
+//
+// Nó quyết định BA điều, và cả ba đều là việc của dịch vụ chứ không của kho:
+//   · build CÁI GÌ    — đúng một ảnh, vigov-platform
+//   · build KHI NÀO   — xem `canDungLai()` ở cuối tệp
+//   · đẩy ĐI ĐÂU      — tham số registry của riêng lượt chạy này
+//
+// PHẠM VI DỪNG Ở ẢNH. Không `kubectl apply`, không đụng cụm k8s — đó là việc của devops.
+// Thứ bàn giao là một thẻ ảnh bất biến.
+//
+// Bất biến TOÀN KHO (7 bất biến bộ não · 90 ca tự kiểm hook · buf lint · gofmt cả kho · web)
+// KHÔNG chạy ở đây: chúng không thuộc về dịch vụ nào cả, nên chúng ở `Jenkinsfile` tại gốc.
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    timeout(time: 30, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    disableConcurrentBuilds()
+  }
+
+  parameters {
+    string(name: 'REGISTRY', defaultValue: 'registry.vihat.vn',
+           description: 'Máy chủ Harbor, không kèm https://')
+    string(name: 'PROJECT', defaultValue: 'vigov',
+           description: 'Project trong Harbor — ảnh là <REGISTRY>/<PROJECT>/vigov-platform')
+    string(name: 'REGISTRY_CRED', defaultValue: 'harbor-vigov',
+           description: 'ID credentials trong Jenkins. CHỈ LÀ ID, không bao giờ là giá trị thật.')
+  }
+
+  environment {
+    DOCKER_BUILDKIT = '1'
+    DICH_VU = 'platform'
+  }
+
+  stages {
+
+    stage('Chuẩn bị') {
+      steps {
+        sh 'command -v go && command -v buf && command -v docker'
+        script {
+          env.TAG = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
+          if (!env.TAG) { error('Không lấy được commit hiện tại — không có thẻ ảnh nào để đặt.') }
+          env.CAN_DUNG = canDungLai() ? 'co' : 'khong'
+          echo "dịch vụ platform · commit ${env.TAG} · cần dựng lại: ${env.CAN_DUNG}"
+        }
+      }
+    }
+
+    stage('Sinh mã từ .proto') {
+      // gen/ nằm trong .gitignore và mã nguồn import nó; buf.gen.yaml dùng plugin TỪ XA nên
+      // bước này cần mạng — lý do nó ở máy chủ build chứ không ở trong Dockerfile.
+      steps {
+        sh 'buf generate'
+        sh 'test -d gen'
+      }
+    }
+
+    stage('Cổng kiểm của dịch vụ') {
+      steps {
+        // pkg/ chạy CÙNG, có chủ ý: dịch vụ này liên kết tĩnh với pkg/, nên một hồi quy ở
+        // pkg/ LÀ một hồi quy của ảnh này. Tám pipeline cùng chạy lại pkg/ khi pkg/ đổi là
+        // lặp việc — nhưng cái lặp ấy rẻ hơn nhiều so với một dịch vụ đóng ảnh từ một pkg/
+        // chưa ai kiểm.
+        //
+        // -race không bỏ được: một tiến trình phục vụ 200+ xã, nên một data race là một cuộc
+        // đua GIỮA CÁC XÃ. Nó cần trình biên dịch C trên máy chủ build.
+        sh 'test -z "$(gofmt -l ./services/${DICH_VU})"'
+        sh 'go vet ./services/${DICH_VU}/... ./pkg/...'
+        sh 'go build ./services/${DICH_VU}/...'
+        sh 'go test -race -count=1 ./services/${DICH_VU}/... ./pkg/...'
+      }
+    }
+
+    stage('Đóng ảnh') {
+      when { environment name: 'CAN_DUNG', value: 'co' }
+      steps {
+        script {
+          def ten = "${params.REGISTRY}/${params.PROJECT}/vigov-${env.DICH_VU}"
+          docker.withRegistry("https://${params.REGISTRY}", params.REGISTRY_CRED) {
+            // Ngữ cảnh là GỐC KHO, không phải thư mục dịch vụ: tám dịch vụ dùng chung
+            // go.mod, pkg/ và gen/.
+            def anh = docker.build("${ten}:${env.TAG}",
+                                   "--build-arg VERSION=${env.TAG} " +
+                                   "-f services/${env.DICH_VU}/Dockerfile .")
+            anh.push()
+          }
+          echo "ĐÃ ĐẨY  ${ten}:${env.TAG}\n" +
+               "  Probe httpGet /healthz:8080 — ảnh không có shell, exec probe không chạy được.\n" +
+               "  Cổng 9090 là gRPC nội bộ: giữ trong cụm, đừng đưa ra Ingress.\n" +
+               "  Chạy UID 65532 — đặt runAsNonRoot: true.\n" +
+               "  Migration tự chạy lúc khởi động trong pg_advisory_lock và dịch vụ TỪ CHỐI\n" +
+               "  khởi động nếu migration lỗi: không cần Job riêng, nhưng đừng đặt\n" +
+               "  initialDelaySeconds của liveness quá ngắn ở lần triển khai đầu."
+        }
+      }
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// KHI NÀO DỊCH VỤ NÀY PHẢI DỰNG LẠI — và vì sao danh sách KHÔNG chỉ có thư mục của nó.
+//
+// Tám dịch vụ dùng chung MỘT `go.mod` và một `pkg/`. Nếu chỉ kích hoạt theo
+// `services/platform/**` thì một bản vá an ninh trong `pkg/authz` sẽ không kích hoạt dịch vụ
+// NÀO CẢ — mọi pipeline vẫn xanh, không cái nào chạy, và bản vá nằm yên trong kho mã trong
+// khi tám ảnh đang chạy vẫn mang mã cũ. Không có gì đỏ để ai đó nhìn thấy.
+//
+// Nên mã dùng chung nằm trong danh sách này. `tools/check_build.py` đỏ nếu một dịch vụ nào
+// đánh rơi chúng.
+//
+// gen/ KHÔNG có mặt vì nó nằm trong .gitignore — nó không bao giờ xuất hiện trong changeset.
+// `proto/**` là thứ sinh ra nó, nên proto/ mới là tín hiệu đúng.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+// #[dung-chung] Khai ở ĐÚNG MỘT CHỖ, dưới dạng HÀM chứ không phải biến mức script:
+// một biến mức script trong Jenkinsfile cần chú giải @Field kèm import của nó, và một import
+// bị quên là một lỗi lúc CHẠY chứ không phải lúc đọc.
+List<String> duongKichHoat() {
+  return ['services/platform/**', 'pkg/**', 'proto/**', 'go.mod', 'go.sum']
+}
+
+boolean canDungLai() {
+  // Lượt build đầu tiên chưa có gì để so. `changeset` khi ấy trả false, nên nếu không xử ca
+  // này thì lần chạy đầu sẽ không đóng ảnh nào và trông y hệt một pipeline hỏng.
+  if (currentBuild.previousSuccessfulBuild == null) { return true }
+  for (String mau : duongKichHoat()) {
+    if (coTrongChangeset(mau)) { return true }
+  }
+  return false
+}
+
+boolean coTrongChangeset(String mau) {
+  // So khớp thủ công thay vì `when { changeset }` để danh sách mẫu chỉ khai ở MỘT chỗ.
+  // Hai nơi khai cùng một danh sách là hai nơi sẽ lệch, và bản lỏng hơn là bản được chạy.
+  String bo = mau.endsWith('/**') ? mau.substring(0, mau.length() - 3) : null
+  for (cs in currentBuild.changeSets) {
+    for (c in cs.items) {
+      for (f in c.affectedFiles) {
+        String duong = f.path
+        if (bo != null ? duong.startsWith(bo) : duong == mau) { return true }
+      }
+    }
+  }
+  return false
+}

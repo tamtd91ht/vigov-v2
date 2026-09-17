@@ -1,4 +1,4 @@
-"""Mỗi dịch vụ có Dockerfile riêng, và không dịch vụ nào đánh rơi bất biến an toàn.
+"""Mỗi dịch vụ tự dựng và tự đóng gói — và không dịch vụ nào đánh rơi bất biến an toàn.
 
 VÌ SAO TỆP NÀY TỒN TẠI
 
@@ -14,6 +14,12 @@ Dockerfile để so.
 
 Nên phần CHUNG không được giữ bằng một tệp nữa, mà bằng một phép kiểm. Tách tệp là để dịch
 vụ tự quyết phần RIÊNG của nó, không phải để lặng lẽ bỏ phần chung.
+
+CÙNG MỘT LẬP LUẬN ÁP CHO Jenkinsfile. Mỗi dịch vụ tự quyết build cái gì và khi nào. Phần
+dễ đánh rơi nhất ở đó KHÔNG phải thư mục của chính nó mà là MÃ DÙNG CHUNG: tám dịch vụ chung
+một `go.mod` và một `pkg/`, nên một pipeline chỉ kích hoạt theo `services/<tên>/**` sẽ ngồi im
+khi `pkg/authz` được vá. Mọi pipeline vẫn xanh, không cái nào chạy, và bản vá nằm yên trong
+kho mã trong khi tám ảnh đang chạy vẫn mang mã cũ.
 
 Chạy trong `make check`. Trả về 1 khi có vi phạm.
 """
@@ -79,6 +85,70 @@ def dich_vu() -> list[str]:
     )
 
 
+# Đường dẫn mà MỌI pipeline dịch vụ phải coi là tín hiệu dựng lại.
+#
+# `gen/` cố ý KHÔNG có mặt: nó nằm trong .gitignore nên không bao giờ xuất hiện trong
+# changeset. `proto/**` là thứ sinh ra nó, nên proto/ mới là tín hiệu đúng.
+DUONG_DUNG_CHUNG = ["pkg/**", "proto/**", "go.mod", "go.sum"]
+
+
+def tuong_doi(duong: str) -> str:
+    """Đường dẫn theo gốc kho. Báo cáo đi vào log CI; đường tuyệt đối của máy chủ build
+    chỉ là nhiễu, và là nhiễu khác nhau trên mỗi máy."""
+    return os.path.relpath(duong, GOC).replace("\\", "/")
+
+
+def kiem_pipeline(duong: str, ten_rieng: str, loi: list[str]) -> None:
+    """Một pipeline phải kích hoạt theo mã dùng chung, và không được đẩy thẻ di động."""
+    if not os.path.isfile(duong):
+        loi.append(
+            f"{tuong_doi(duong)} KHÔNG TỒN TẠI — thành phần này không có pipeline, nên nó sẽ không bao "
+            f"giờ được dựng lại và cũng không có gì đỏ để báo."
+        )
+        return
+
+    with open(duong, encoding="utf-8") as f:
+        noi_dung = f.read()
+
+    # CHỈ ĐỌC THÂN `duongKichHoat()`, không quét cả tệp.
+    #
+    # Quét cả tệp là phép kiểm tự vô hiệu hoá mình: khối chú thích ở cuối mỗi pipeline có
+    # NHẮC TỚI `services/<tên>/**` và `pkg/**` để giải thích vì sao chúng phải có mặt — nên
+    # một tệp đã gỡ chúng khỏi danh sách thật vẫn "chứa" đủ chuỗi và vẫn xanh. Đo được điều
+    # này bằng một lượt đột biến, không phải bằng đọc lại.
+    than = re.search(r"List<String>\s+duongKichHoat\(\)\s*\{(.*?)\}", noi_dung, re.S)
+    if than is None:
+        loi.append(
+            f"{tuong_doi(duong)} không khai `duongKichHoat()` — không xác định được nó dựng lại khi nào."
+        )
+        return
+    danh_sach = than.group(1)
+
+    if ten_rieng not in danh_sach:
+        loi.append(
+            f"{tuong_doi(duong)} không kích hoạt theo '{ten_rieng}' — nhiều khả năng chép từ thành phần "
+            f"khác mà quên sửa, tức nó đang dựng lại theo nhịp của một thành phần khác."
+        )
+
+    for mau in DUONG_DUNG_CHUNG:
+        if mau not in danh_sach:
+            loi.append(
+                f"{tuong_doi(duong)} thiếu đường kích hoạt '{mau}'\n"
+                f"        → Tám dịch vụ dùng chung một go.mod và một pkg/. Thiếu mẫu này thì "
+                f"một bản vá trong mã dùng chung KHÔNG kích hoạt dịch vụ này: pipeline vẫn "
+                f"xanh, không chạy, và ảnh đang chạy vẫn mang mã cũ."
+            )
+
+    # Thẻ di động. Quy ước nêu ở cuối Jenkinsfile gốc; giữ cho chín tệp kia không ai phá.
+    if re.search(r":latest\b", noi_dung):
+        loi.append(
+            f"{tuong_doi(duong)} đẩy thẻ di động `latest`\n"
+            f"        → Hai pod cùng một manifest có thể chạy hai đoạn mã khác nhau tuỳ lúc "
+            f"kéo ảnh. Với hồ sơ hành chính có giá trị pháp lý, câu 'bản nào đang chạy lúc "
+            f"đó' phải trả lời được bằng mã commit."
+        )
+
+
 def main() -> int:
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -119,6 +189,9 @@ def main() -> int:
                 f"— nhiều khả năng chép từ dịch vụ khác mà quên sửa đường dẫn."
             )
 
+        kiem_pipeline(os.path.join(GOC, "services", svc, "Jenkinsfile"),
+                      f"services/{svc}/**", loi)
+
     web = os.path.join(GOC, "apps", "commune-admin", "Dockerfile")
     if not os.path.isfile(web):
         loi.append("apps/commune-admin/Dockerfile KHÔNG TỒN TẠI")
@@ -137,13 +210,33 @@ def main() -> int:
         if re.search(r"^\s*USER\s+(?!root\b|0\b)\S+", noi_dung, re.M) is None:
             loi.append("apps/commune-admin/Dockerfile không khai USER không phải root")
 
+    # Web có danh sách kích hoạt riêng (hợp đồng REST, không phải pkg/), nên nó không đi
+    # qua kiem_pipeline — chỉ kiểm hai điều thật sự bắt buộc với nó.
+    wj = os.path.join(GOC, "apps", "commune-admin", "Jenkinsfile")
+    if not os.path.isfile(wj):
+        loi.append("apps/commune-admin/Jenkinsfile KHÔNG TỒN TẠI")
+    else:
+        with open(wj, encoding="utf-8") as f:
+            nd = f.read()
+        than_web = re.search(r"List<String>\s+duongKichHoat\(\)\s*\{(.*?)\}", nd, re.S)
+        ds_web = than_web.group(1) if than_web else ""
+        if "kb/20-contracts/**" not in ds_web:
+            loi.append(
+                "apps/commune-admin/Jenkinsfile không kích hoạt theo 'kb/20-contracts/**'\n"
+                "        → Hợp đồng REST đổi mà web không dựng lại thì nó vẫn gọi hình dạng "
+                "cũ, và TypeScript vẫn xanh vì đang tin vào schema.gen.ts cũ."
+            )
+        if re.search(r":latest\b", nd):
+            loi.append("apps/commune-admin/Jenkinsfile đẩy thẻ di động `latest`")
+
     if loi:
-        print(f"[FAIL] Dockerfile — {len(loi)} vấn đề trên {len(svcs)} dịch vụ + web")
+        print(f"[FAIL] hồ sơ dựng — {len(loi)} vấn đề trên {len(svcs)} dịch vụ + web")
         for l in loi:
             print(f"      - {l}")
         return 1
 
-    print(f"[PASS] Dockerfile — {len(svcs)} dịch vụ + web · "
+    print(f"[PASS] hồ sơ dựng — {len(svcs)} dịch vụ + web · "
+          f"{len(svcs) + 1} Dockerfile · {len(svcs) + 1} Jenkinsfile · "
           f"{len(BAT_BIEN)} bất biến an toàn · 0 vi phạm")
     return 0
 
