@@ -1,5 +1,5 @@
 ---
-id: 2026-09-16-ban-giao-phien
+id: ban-giao-phien
 tier: T5
 source: CURATED
 owner: architecture

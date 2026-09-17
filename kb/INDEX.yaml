@@ -8,8 +8,8 @@
 # Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
 
 version: 1
-generated_at: 2026-09-17T14:14:24Z   # `make kb` điền
-from_commit: 8d410d4   # `make kb` điền
+generated_at: 2026-09-17T15:40:30Z   # `make kb` điền
+from_commit: 5621443   # `make kb` điền
 
 budget:
   always_load_max: 25000  # token — trần do người dùng chốt 16/09/2026 (trước là 20000)
@@ -59,8 +59,12 @@ load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾ
     source: CURATED + kiểm bằng GENERATED
     load_when: "luồng nghiệp vụ nhiều bước — nhất quán mạnh hay cuối cùng, bù trừ ra sao"
 
+  # TÊN TỆP KHÔNG MANG NGÀY, CÓ CHỦ Ý. Trước đây nó là `2026-09-16-ban-giao-phien.md`, và một
+  # tên mang ngày mời gọi đúng một thứ: tệp bàn giao THỨ HAI. Hai tệp bàn giao là hai tệp mâu
+  # thuẫn nhau, và người đọc không phân biệt được cái nào còn đúng. MỘT tệp, ghi đè trọn vẹn
+  # mỗi lần, ngày nằm BÊN TRONG. Viết bằng `/handover`.
   - id: ban-giao-phien
-    file: kb/90-ephemeral/2026-09-16-ban-giao-phien.md
+    file: kb/90-ephemeral/ban-giao-phien.md
     tier: T5
     source: CURATED
     expires: 2026-12-16
