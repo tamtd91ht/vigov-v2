@@ -37,17 +37,26 @@ test:
 	@# rather than dropping the flag.
 	go test -race -count=1 ./...
 
-web:                            ## Typecheck the Next.js apps — skips LOUDLY when deps are absent
-	@# Deliberately not `next build`: src/app/ holds only .gitkeep today, so a build would fail
-	@# for having no pages — a red gate that says nothing about code quality.
+web:                            ## Typecheck + test the Next.js apps — skips LOUDLY when deps are absent
+	@# Deliberately not `next build`: a production build is the CI image's job (build/web.Dockerfile),
+	@# and doing it here would make the local gate several times slower for no extra signal.
 	@#
 	@# And deliberately not a silent skip. A gate that quietly does nothing is the failure this
 	@# project keeps finding elsewhere; this one says out loud that it checked nothing and why.
+	@#
+	@# check:api is part of THIS target on purpose. It re-derives src/lib/api/schema.gen.ts from
+	@# kb/20-contracts/openapi.json and fails when they differ — the one check that catches a
+	@# REST contract change the web has not been regenerated for. Listing it only in Jenkinsfile
+	@# would give the project two definitions of "verified", and the looser one always wins.
 	@for app in apps/*/; do \
 		if [ -f "$$app/package.json" ]; then \
 			if [ -d "$$app/node_modules" ]; then \
 				echo "typecheck $$app"; \
 				(cd "$$app" && npx --no-install tsc --noEmit) || exit 1; \
+				echo "test $$app"; \
+				(cd "$$app" && npm test --silent) || exit 1; \
+				echo "check:api $$app"; \
+				(cd "$$app" && npm run --silent check:api) || exit 1; \
 			else \
 				echo "BỎ QUA $$app — chưa có node_modules. Mã TypeScript KHÔNG được kiểm."; \
 				echo "         chạy: (cd $$app && npm install)"; \

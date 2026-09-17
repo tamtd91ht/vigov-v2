@@ -1,0 +1,53 @@
+# Những gì KHÔNG được gửi sang trình đóng ảnh.
+#
+# Một tệp lọt vào ngữ cảnh build là một tệp có thể lọt vào ảnh, và một ảnh đi tới registry
+# thì không gọi về được nữa. Nên danh sách này không chỉ để build nhanh — nó là một rào
+# chắn (luật 8).
+
+# ---- bí mật: tuyệt đối không bao giờ ------------------------------------------------
+# .env.example ĐƯỢC PHÉP đi theo (chỉ có chỗ giữ chỗ), nhưng .env thật thì không.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!*.pub
+
+# ---- lịch sử và cấu hình của máy ----------------------------------------------------
+# .git mang TOÀN BỘ lịch sử kho — gồm cả những gì đã từng bị xoá khỏi bản làm việc.
+.git
+.gitignore
+.gitattributes
+.idea
+.vscode
+*.swp
+
+# ---- bộ não và tri thức: không có phần nào chạy trong runtime -----------------------
+.claude
+kb
+docs
+tasks
+
+# ---- kết quả build của máy dev, phải sinh lại trong ảnh -----------------------------
+node_modules
+**/node_modules
+.next
+**/.next
+out
+**/out
+bin
+dist
+**/tsconfig.tsbuildinfo
+
+# ---- thứ chỉ dùng lúc phát triển ----------------------------------------------------
+Makefile
+Jenkinsfile
+build
+tools
+__pycache__
+**/__pycache__
+*.pyc
+
+# LƯU Ý: `gen/` CỐ Ý KHÔNG nằm trong danh sách này, dù nó nằm trong .gitignore.
+# Mã nguồn import gen/, và nó được sinh bằng plugin từ xa nên không sinh được bên trong
+# ảnh. `make proto` chạy ở máy chủ build, rồi gen/ đi theo ngữ cảnh — xem build/go.Dockerfile.
