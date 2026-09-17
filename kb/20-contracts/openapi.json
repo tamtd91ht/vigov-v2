@@ -228,7 +228,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/identity.trangCanBo"
+                  "$ref": "#/components/schemas/page.Result_identity.canBoTomTat"
                 }
               }
             }
@@ -544,7 +544,7 @@
         ],
         "additionalProperties": false
       },
-      "identity.trangCanBo": {
+      "page.Result_identity.canBoTomTat": {
         "type": "object",
         "properties": {
           "items": {

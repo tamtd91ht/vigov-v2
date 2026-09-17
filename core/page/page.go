@@ -188,6 +188,18 @@ func NewAllowlist(defDir Dir, def Column, rest ...Column) Allowlist {
 	return Allowlist{def: def, defDir: defDir, cols: cols}
 }
 
+// Columns returns the allowlisted columns, default first.
+//
+// Nó tồn tại để một gói khác BUỘC được danh sách trắng với cách đọc mốc của từng cột, và kiểm
+// sự khớp ấy lúc dựng — xem store.NewMoc. Không có nó, hai thứ ấy là hai khai báo rời nhau và
+// sẽ lệch: một cột được phép sắp xếp mà không ai biết đọc mốc của nó thì con trỏ đi sai thứ
+// tự, lặng lẽ.
+func (a Allowlist) Columns() []Column {
+	ra := make([]Column, len(a.cols))
+	copy(ra, a.cols)
+	return ra
+}
+
 func (a Allowlist) lookup(param string) (Column, bool) {
 	for _, c := range a.cols {
 		if c.Param == param {

@@ -182,8 +182,13 @@ func TestDanhSachDiHetCacTrangKhongLapKhongSot(t *testing.T) {
 	// boundary. Without `, id` in the ORDER BY, PostgreSQL may return them in either order between
 	// the two queries, and one of the two is then either handed out twice or never at all.
 	//
-	// MUTATION THAT MUST TURN THIS RED: in mocCanBo, return page.TextKey(cb.Ma) for the tao_luc
-	// column as well. The `code` sort keeps working and only the `created_at` walk breaks.
+	// ĐỘT BIẾN PHẢI LÀM BÀI NÀY ĐỎ: trong mocCanBo, đổi hàm đọc mốc của `created_at` thành
+	// `page.TextKey(cb.Ma)`. Sắp xếp theo `code` vẫn chạy; chỉ lượt đi theo `created_at` hỏng.
+	//
+	// Đáng nêu: phép so KIỂU trong store.QueryPage nay bắt được chính đột biến này (text trên
+	// một cột time), kể cả khi danh sách chỉ vừa một trang. Bài này vẫn giữ vì nó kiểm thứ
+	// khác — đi hết danh sách mà không lặp không sót — và hai cột CÙNG kiểu thì phép so kiểu
+	// không nói được gì.
 	b := moBanThuDS(t)
 
 	for _, truyVan := range []string{
@@ -403,34 +408,54 @@ func TestChuaDangNhapBaoGioThiDangNhapGanNhatLaNil(t *testing.T) {
 
 // --- the anchor -----------------------------------------------------------------------------------
 
-func TestMocCanBoKhopKieuVoiCotSapXep(t *testing.T) {
-	// store.QueryPage compares the anchor's KIND against the column's, so a text anchor on a time
-	// column is caught. A same-kind mismatch is NOT caught, and on a list short enough to fit one
-	// page nothing is checked at all — which is why the default branch below is an error rather
-	// than a fallback.
-	cb := domain.CanBoTomTat{Ma: "CB-001", TaoLuc: dsMoc}
-
-	for _, c := range []struct {
-		cot  page.Column
-		kieu page.Kind
-	}{
-		{page.Col("code", "ma", page.KindText), page.KindText},
-		{page.Col("created_at", "tao_luc", page.KindTime), page.KindTime},
-	} {
-		k, err := mocCanBo(c.cot, cb)
-		if err != nil {
-			t.Fatalf("cột %q: %v", c.cot.SQL, err)
-		}
-		if k.Kind() != c.kieu {
-			t.Errorf("cột %q cho mốc kiểu %q, muốn %q", c.cot.SQL, k.Kind(), c.kieu)
+// TestMocCanBoBuocDungDanhSachTrang kiểm HỢP ĐỒNG BUỘC, không kiểm từng nhánh switch nữa.
+//
+// Bài cũ gọi `mocCanBo(cot, cb)` và khẳng định nhánh `default` trả lỗi cho một cột lạ. Nó
+// kiểm đúng thứ đáng kiểm, nhưng ở sai thời điểm: lỗi ấy chỉ nổ khi có người GỌI tuyến với
+// cột đó, tức sau khi đã phát hành. `store.NewMoc` đối chiếu hai danh sách lúc DỰNG, nên cùng
+// sai sót ấy nay là một panic lúc khởi động — và đó mới là thứ cần được ghim.
+func TestMocCanBoBuocDungDanhSachTrang(t *testing.T) {
+	lay := func() map[string]func(domain.CanBoTomTat) page.Key {
+		return map[string]func(domain.CanBoTomTat) page.Key{
+			"code":       func(cb domain.CanBoTomTat) page.Key { return page.TextKey(cb.Ma) },
+			"created_at": func(cb domain.CanBoTomTat) page.Key { return page.TimeKey(cb.TaoLuc) },
 		}
 	}
 
-	// A sort added to SapXepCanBo and forgotten here must fail loudly on the first request, not
-	// quietly reorder a register.
-	if _, err := mocCanBo(page.Col("email", "email", page.KindText), cb); err == nil {
-		t.Error("cột lạ vẫn được cấp mốc — SapXepCanBo và mocCanBo có thể lệch nhau mà không ai biết")
-	}
+	t.Run("khớp đủ thì dựng được", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("panic dù hai danh sách khớp: %v", r)
+			}
+		}()
+		_ = pkgstore.NewMoc[domain.CanBoTomTat](SapXepCanBo, lay())
+	})
+
+	t.Run("thiếu một cột thì panic lúc dựng", func(t *testing.T) {
+		// Đây là ca đắt nhất: thêm một cột vào SapXepCanBo mà quên khai cách đọc mốc. Con trỏ
+		// khi đó đi theo một thứ tự không ai đặt hàng, và trang sau vừa lặp vừa sót.
+		m := lay()
+		delete(m, "created_at")
+		defer func() {
+			if recover() == nil {
+				t.Fatal("KHÔNG panic: một cột sắp xếp được mà không ai biết đọc mốc của nó")
+			}
+		}()
+		_ = pkgstore.NewMoc[domain.CanBoTomTat](SapXepCanBo, m)
+	})
+
+	t.Run("thừa một cột thì panic lúc dựng", func(t *testing.T) {
+		// Gõ nhầm tên tham số, hoặc một cột đã bị gỡ khỏi danh sách trắng mà hàm đọc còn ở lại.
+		// Cả hai đều là mã chết trông y hệt mã đang chạy.
+		m := lay()
+		m["email"] = func(cb domain.CanBoTomTat) page.Key { return page.TextKey(cb.Email) }
+		defer func() {
+			if recover() == nil {
+				t.Fatal("KHÔNG panic: khai cách đọc mốc cho một cột không có trong danh sách trắng")
+			}
+		}()
+		_ = pkgstore.NewMoc[domain.CanBoTomTat](SapXepCanBo, m)
+	})
 }
 
 // --- fake driver: a small, honest keyset engine ---------------------------------------------------

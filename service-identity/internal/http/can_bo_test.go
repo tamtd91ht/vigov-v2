@@ -331,7 +331,7 @@ func TestCanBoChiTraDuLieuCuaXaDangGoi(t *testing.T) {
 	w := m.goi(t, "GET", hostA, "/api/v1/staff", "", m.tokenCho(t, xaA, sidA))
 	doiMa(t, w, http.StatusOK)
 
-	var ra trangCanBo
+	var ra page.Result[canBoTomTat]
 	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
 		t.Fatal(err)
 	}
@@ -353,7 +353,7 @@ func TestCanBoTraCaTaiKhoanLanNguoiChiCoTrongDanhBa(t *testing.T) {
 	w := m.goi(t, "GET", hostA, "/api/v1/staff", "", m.tokenCho(t, xaA, sidA))
 	doiMa(t, w, http.StatusOK)
 
-	var ra trangCanBo
+	var ra page.Result[canBoTomTat]
 	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestCanBoPhanTrangNoiDungChoKhongLapKhongSot(t *testing.T) {
 		w := m.goi(t, "GET", hostA, duong, "", tok)
 		doiMa(t, w, http.StatusOK)
 
-		var trang trangCanBo
+		var trang page.Result[canBoTomTat]
 		if err := json.Unmarshal(w.Body.Bytes(), &trang); err != nil {
 			t.Fatal(err)
 		}
@@ -500,34 +500,6 @@ func TestCanBoLoiKhoTra500KhongLoDuLieu(t *testing.T) {
 }
 
 // --- the shape published in the contract --------------------------------------------------------
-
-func TestTrangCanBoTrungHinhDangVoiPage(t *testing.T) {
-	// trangCanBo restates page.Result because tools/apidoc cannot describe a generic
-	// instantiation, and a reply type it cannot describe is a route silently missing from
-	// kb/20-contracts/openapi.json. A copy is allowed only while something pins it to the
-	// original — rule 9, forbidden #2 is about copies that DRIFT.
-	//
-	// MUTATION THAT MUST TURN THIS RED: rename `next_cursor` to `cursor` on either side.
-	goc := reflect.TypeOf(page.Result[canBoTomTat]{})
-	sao := reflect.TypeOf(trangCanBo{})
-
-	if goc.NumField() != sao.NumField() {
-		t.Fatalf("page.Result có %d trường, trangCanBo có %d", goc.NumField(), sao.NumField())
-	}
-	for i := 0; i < goc.NumField(); i++ {
-		a, b := goc.Field(i), sao.Field(i)
-		if a.Name != b.Name {
-			t.Errorf("trường %d: page.Result gọi là %q, trangCanBo gọi là %q", i, a.Name, b.Name)
-		}
-		if a.Tag.Get("json") != b.Tag.Get("json") {
-			t.Errorf("trường %q: thẻ json %q vs %q", a.Name, a.Tag.Get("json"), b.Tag.Get("json"))
-		}
-		if a.Type.Kind() != b.Type.Kind() {
-			t.Errorf("trường %q: kiểu %v vs %v", a.Name, a.Type, b.Type)
-		}
-	}
-}
-
 func TestSapXepCanBoKhongMoCotDuLieuCaNhanVaKhongMoCotNULL(t *testing.T) {
 	// The allowlist is what decides which column names may appear in a URL. Two kinds must never
 	// be on it, and neither failure is visible from a passing screen:

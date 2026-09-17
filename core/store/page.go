@@ -22,6 +22,68 @@ type PageSpec struct {
 	Args    []any  // the values for the caller's own placeholders, in order
 }
 
+// Moc binds each allowlisted sort column to the function that reads that column's value out of
+// one scanned row.
+//
+// VÌ SAO NÓ TỒN TẠI. Trước đây `scan` phải tự khai mốc: nó trả về `(item, page.Anchor, error)`,
+// và mỗi bên gọi tự viết một `switch` trên cột đang sắp xếp. Hai vấn đề, cả hai đều im lặng:
+//
+//   - `scan` KHÔNG BIẾT cột nào đang được sắp xếp trừ khi bên gọi tự truyền vào và tự phân
+//     nhánh đúng. Hai cột cùng kiểu (`tao_luc` và `cap_nhat_luc`, cùng KindTime) lẫn nhau thì
+//     không gì bắt được: phép kiểm duy nhất là so KIỂU, mà hai cột ấy cùng kiểu. Con trỏ khi
+//     đó đi theo một thứ tự không ai đặt hàng, và trang sau vừa lặp vừa sót.
+//   - Danh sách trắng và cách lấy mốc là HAI khai báo ở hai chỗ. Thêm một cột vào danh sách
+//     trắng mà quên thêm nhánh `switch` thì cột ấy sắp xếp được nhưng mốc sai.
+//
+// Nay hàm đọc mốc được CHỌN THEO CHÍNH CỘT ĐANG SẮP XẾP, nên lẫn cột là chuyện không dựng
+// được nữa. Và `NewMoc` đối chiếu hai danh sách lúc dựng, nên thiếu hay thừa một cột là panic
+// lúc khởi động — chỗ rẻ nhất để phát hiện.
+type Moc[T any] struct {
+	lay map[string]func(T) page.Key
+}
+
+// NewMoc binds an allowlist to its anchor readers, and panics when the two do not match.
+//
+// PANIC CHỨ KHÔNG TRẢ LỖI, cùng lý do với page.Col: hàm này chạy lúc dựng, từ hằng số trong mã
+// nguồn. Một lệch ở đây không phải dữ liệu xấu từ người dùng mà là mã sai, và nó phải chết ở
+// lần khởi động đầu tiên chứ không phải ở trang thứ hai của một danh sách nào đó, sáu tháng sau.
+func NewMoc[T any](ds page.Allowlist, lay map[string]func(T) page.Key) Moc[T] {
+	cols := ds.Columns()
+	co := make(map[string]bool, len(cols))
+	for _, c := range cols {
+		co[c.Param] = true
+		if lay[c.Param] == nil {
+			panic(fmt.Sprintf("store: cột %q được phép sắp xếp nhưng không khai cách đọc mốc "+
+				"của nó — con trỏ sẽ đi sai thứ tự mà không báo lỗi", c.Param))
+		}
+	}
+	for param := range lay {
+		if !co[param] {
+			panic(fmt.Sprintf("store: khai cách đọc mốc cho cột %q không có trong danh sách "+
+				"trắng — hoặc gõ nhầm tên, hoặc cột đã bị gỡ", param))
+		}
+	}
+	ra := make(map[string]func(T) page.Key, len(lay))
+	for k, v := range lay {
+		ra[k] = v
+	}
+	return Moc[T]{lay: ra}
+}
+
+// khoa reads the anchor value of `item` for the column currently being sorted on.
+func (m Moc[T]) khoa(col page.Column, item T) (page.Key, error) {
+	f, ok := m.lay[col.Param]
+	if !ok || f == nil {
+		return page.Key{}, fmt.Errorf("store: không có cách đọc mốc cho cột %q", col.Param)
+	}
+	k := f(item)
+	if k.Kind() != col.Kind {
+		return page.Key{}, fmt.Errorf("store: mốc đọc được kiểu %q, cột %q kiểu %q",
+			k.Kind(), col.SQL, col.Kind)
+	}
+	return k, nil
+}
+
 // QueryPage runs ONE page of a cursor-paginated read, through Scoped.Query and nowhere else.
 //
 // WHY IT IS A FUNCTION AND NOT A SECOND ROUTE TO THE DATABASE: rule 1, invariant 5 — every query
@@ -53,16 +115,16 @@ type PageSpec struct {
 // makes the ordering safe. The tie-break column is `id`, and the sort column must be NOT NULL:
 // `(col, id) > (…)` is NULL for a NULL col, so those rows vanish from every page after the first.
 //
-// scan converts one row into an item AND states that row's anchor. Stating it is the caller's job
-// because only the caller knows which scanned field is the sort key — and an anchor built from the
-// wrong field is a cursor that walks the list in an order nobody asked for. The kind is checked
-// against the column, so a mismatch is an error at the first page, not a corrupt cursor later.
+// scan converts one row into an item and its `id`. It does NOT state the anchor any more: the
+// anchor is read by `moc`, which is bound to the allowlist at wiring time, so the reader used is
+// always the one belonging to the column actually being sorted on. See Moc for what that removes.
 func QueryPage[T any](
 	ctx context.Context,
 	s *Scoped,
 	spec PageSpec,
 	req page.Request,
-	scan func(*sql.Rows) (T, page.Anchor, error),
+	moc Moc[T],
+	scan func(*sql.Rows) (T, string, error),
 ) (page.Result[T], error) {
 	out := page.NewResult[T]()
 
@@ -126,25 +188,32 @@ func QueryPage[T any](
 			out.HasMore = true
 			break
 		}
-		item, moc, err := scan(rows)
+		item, id, err := scan(rows)
 		if err != nil {
 			return page.NewResult[T](), fmt.Errorf("store: quét dòng %s: %w", spec.Table, err)
 		}
+		khoa, err := moc.khoa(col, item)
+		if err != nil {
+			return page.NewResult[T](), fmt.Errorf("store: trang %s: %w", spec.Table, err)
+		}
+		if id == "" {
+			return page.NewResult[T](), fmt.Errorf(
+				"store: quét dòng %s không trả id — con trỏ kế tiếp sẽ sai", spec.Table)
+		}
 		out.Items = append(out.Items, item)
-		cuoi = moc
+		cuoi = page.Anchor{Key: khoa, ID: id}
 	}
 	if err := rows.Err(); err != nil {
 		return page.NewResult[T](), fmt.Errorf("store: đọc trang %s: %w", spec.Table, err)
 	}
 
+	// KIỂM MỐC NAY CHẠY TRÊN MỌI TRANG, không chỉ khi còn trang sau.
+	//
+	// Trước đây cả hai phép kiểm nằm trong nhánh `if out.HasMore`, nên một danh sách vừa đúng
+	// một trang KHÔNG được kiểm gì cả. Mốc sai ở đó không gây ra triệu chứng nào — cho tới
+	// ngày dữ liệu vượt một trang, và khi ấy nó là một lỗi phân trang ở một hệ thống đang
+	// chạy thật, xa hẳn thay đổi đã gây ra nó. Nay `moc.khoa` kiểm ngay tại vòng quét ở trên.
 	if out.HasMore {
-		if cuoi.ID == "" {
-			return page.NewResult[T](), fmt.Errorf("store: quét không trả mốc cho %s — con trỏ kế tiếp sẽ sai", spec.Table)
-		}
-		if cuoi.Key.Kind() != col.Kind {
-			return page.NewResult[T](), fmt.Errorf("store: mốc quét được kiểu %q, cột %q kiểu %q",
-				cuoi.Key.Kind(), col.SQL, col.Kind)
-		}
 		out.NextCursor = page.Encode(col, req.Dir(), cuoi)
 	}
 	return out, nil

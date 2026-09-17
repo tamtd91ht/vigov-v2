@@ -266,7 +266,7 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// @summary  Danh sách cán bộ của xã — gồm cả người có tài khoản đăng nhập và người chỉ có trong danh bạ
 	// @screen   14-cau-hinh §3
-	// @reply    200 trangCanBo
+	// @reply    200 page.Result[canBoTomTat]
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error

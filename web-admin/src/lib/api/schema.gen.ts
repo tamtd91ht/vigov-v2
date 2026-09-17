@@ -60,7 +60,7 @@ export type identity_thongTinXa = {
   "host": string;
 };
 
-export type identity_trangCanBo = {
+export type page_Result_identity_canBoTomTat = {
   "items": Array<identity_canBoTomTat>;
   /** empty when has_more is false */
   "next_cursor": string;
@@ -132,7 +132,7 @@ export type identity_get_staff = {
   };
   than: never;
   phanHoi: {
-    200: identity_trangCanBo;
+    200: page_Result_identity_canBoTomTat;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;

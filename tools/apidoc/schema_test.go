@@ -281,3 +281,94 @@ type Cha struct {
 		t.Fatalf("mong từ chối kiểu ngoài module, được: %v", err)
 	}
 }
+
+// --- kiểu generic ---------------------------------------------------------------------------
+
+// `page.Result[T]` là hình dạng của MỌI tuyến danh sách trong hệ thống này. Không mô tả được
+// nó, mỗi tuyến danh sách phải khai lại bằng tay một struct trùng khít — và bản sao ấy trôi.
+// Đã có đúng một bản sao như thế (`trangCanBo`) cùng một bài test dùng reflection chỉ để ghim
+// nó; cả hai biến mất khi apidoc học được nhánh này, nên hai bài dưới đây là thứ duy nhất còn
+// giữ khả năng ấy khỏi lặng lẽ mất đi.
+const chungTongQuat = "package chung\n\n" +
+	"type Trang[T any] struct {\n" +
+	"\tItems   []T    `json:\"items\"`\n" +
+	"\tConTiep string `json:\"con_tiep\"`\n" +
+	"}\n"
+
+func TestKieuTongQuatDuocMoTa(t *testing.T) {
+	api := "package http\n\n" +
+		"import \"vd.test/core/chung\"\n\n" +
+		"type Con struct {\n\tTen string `json:\"ten\"`\n}\n\n" +
+		"var _ = chung.Trang[Con]{}\n"
+
+	gm, dir := moduleGia(t, api, chungTongQuat)
+	bs := moBoSchema(gm)
+
+	comp, err := bs.refTheoTen(dir, "chung.Trang[Con]", true)
+	if err != nil {
+		t.Fatalf("không mô tả được kiểu generic: %v", err)
+	}
+	// Tên thành phần OpenAPI chỉ nhận chữ, số, `.`, `-`, `_` — nên `[` `]` không dùng được, và
+	// `chung.Trang_thu.Con` là dạng gần nhất còn đọc được.
+	if comp != "chung.Trang_thu.Con" {
+		t.Errorf("tên thành phần = %q, muốn chung.Trang_thu.Con", comp)
+	}
+
+	b, err := json.Marshal(bs.comps[comp])
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	for _, muon := range []string{
+		`"items":{"type":"array","items":{"$ref":"#/components/schemas/thu.Con"}}`,
+		`"con_tiep":{"type":"string"}`,
+	} {
+		if !strings.Contains(got, muon) {
+			t.Errorf("thiếu %s trong:\n%s", muon, got)
+		}
+	}
+}
+
+// Hai lần hiện thực hoá cùng một generic là HAI thành phần khác nhau. Gộp chúng lại thì hợp
+// đồng công bố một danh sách cán bộ có phần tử là phiếu phản ánh — một tài liệu sai mà trông
+// vẫn đúng, và web dựng màn hình lên trên nó.
+func TestHaiLanHienThucHoaLaHaiThanhPhan(t *testing.T) {
+	api := "package http\n\n" +
+		"import \"vd.test/core/chung\"\n\n" +
+		"type Con struct {\n\tTen string `json:\"ten\"`\n}\n\n" +
+		"type Khac struct {\n\tMa string `json:\"ma\"`\n}\n\n" +
+		"var _ = chung.Trang[Con]{}\n"
+
+	gm, dir := moduleGia(t, api, chungTongQuat)
+	bs := moBoSchema(gm)
+
+	a, err := bs.refTheoTen(dir, "chung.Trang[Con]", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := bs.refTheoTen(dir, "chung.Trang[Khac]", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a == b {
+		t.Fatalf("hai lần hiện thực hoá dùng chung một thành phần %q", a)
+	}
+	ja, _ := json.Marshal(bs.comps[a])
+	if !strings.Contains(string(ja), "thu.Con") || strings.Contains(string(ja), "thu.Khac") {
+		t.Errorf("thành phần %q mang sai phần tử:\n%s", a, ja)
+	}
+}
+
+// Một kiểu KHÔNG generic mà bị dùng với [...] là mã sai, không phải chỗ để đoán.
+func TestKhongPhaiGenericMaDungNgoacVuongThiTuChoi(t *testing.T) {
+	api := "package http\n\n" +
+		"type Con struct {\n\tTen string `json:\"ten\"`\n}\n\n" +
+		"type Thuong struct {\n\tA string `json:\"a\"`\n}\n"
+
+	gm, dir := moduleGia(t, api, chungTongQuat)
+	bs := moBoSchema(gm)
+
+	if _, err := bs.refTheoTen(dir, "Thuong[Con]", true); err == nil {
+		t.Error("nhận [...] trên một kiểu không generic — apidoc đang đoán")
+	}
+}

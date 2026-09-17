@@ -196,7 +196,7 @@
     },
     "http.ChiTietCanBo": {
       "kind": "func",
-      "at": "service-identity/internal/http/can_bo.go:179"
+      "at": "service-identity/internal/http/can_bo.go:169"
     },
     "http.DangNhap": {
       "kind": "func",
@@ -216,7 +216,7 @@
     },
     "http.DanhSachCanBo": {
       "kind": "func",
-      "at": "service-identity/internal/http/can_bo.go:128"
+      "at": "service-identity/internal/http/can_bo.go:112"
     },
     "http.Deps": {
       "kind": "type",
@@ -376,7 +376,7 @@
     },
     "main.MarshalJSON": {
       "kind": "func",
-      "at": "tools/apidoc/openapi.go:41"
+      "at": "tools/apidoc/openapi.go:43"
     },
     "migrate.Chay": {
       "kind": "func",
@@ -388,7 +388,7 @@
     },
     "page.After": {
       "kind": "func",
-      "at": "core/page/page.go:299"
+      "at": "core/page/page.go:311"
     },
     "page.Allowlist": {
       "kind": "type",
@@ -396,7 +396,7 @@
     },
     "page.Anchor": {
       "kind": "type",
-      "at": "core/page/page.go:277"
+      "at": "core/page/page.go:289"
     },
     "page.Col": {
       "kind": "func",
@@ -404,23 +404,27 @@
     },
     "page.Column": {
       "kind": "func",
-      "at": "core/page/page.go:294"
+      "at": "core/page/page.go:306"
+    },
+    "page.Columns": {
+      "kind": "func",
+      "at": "core/page/page.go:197"
     },
     "page.Decode": {
       "kind": "func",
-      "at": "core/page/page.go:430"
+      "at": "core/page/page.go:442"
     },
     "page.Dir": {
       "kind": "func",
-      "at": "core/page/page.go:295"
+      "at": "core/page/page.go:307"
     },
     "page.Encode": {
       "kind": "func",
-      "at": "core/page/page.go:405"
+      "at": "core/page/page.go:417"
     },
     "page.Equal": {
       "kind": "func",
-      "at": "core/page/page.go:222"
+      "at": "core/page/page.go:234"
     },
     "page.HTTPError": {
       "kind": "func",
@@ -428,27 +432,27 @@
     },
     "page.Int": {
       "kind": "func",
-      "at": "core/page/page.go:220"
+      "at": "core/page/page.go:232"
     },
     "page.IntKey": {
       "kind": "func",
-      "at": "core/page/page.go:216"
+      "at": "core/page/page.go:228"
     },
     "page.Key": {
       "kind": "type",
-      "at": "core/page/page.go:207"
+      "at": "core/page/page.go:219"
     },
     "page.Kind": {
       "kind": "func",
-      "at": "core/page/page.go:217"
+      "at": "core/page/page.go:229"
     },
     "page.Limit": {
       "kind": "func",
-      "at": "core/page/page.go:296"
+      "at": "core/page/page.go:308"
     },
     "page.New": {
       "kind": "func",
-      "at": "core/page/page.go:318"
+      "at": "core/page/page.go:330"
     },
     "page.NewAllowlist": {
       "kind": "func",
@@ -456,43 +460,43 @@
     },
     "page.NewResult": {
       "kind": "func",
-      "at": "core/page/page.go:475"
+      "at": "core/page/page.go:487"
     },
     "page.Parse": {
       "kind": "func",
-      "at": "core/page/page.go:309"
+      "at": "core/page/page.go:321"
     },
     "page.Request": {
       "kind": "type",
-      "at": "core/page/page.go:287"
+      "at": "core/page/page.go:299"
     },
     "page.Result": {
       "kind": "type",
-      "at": "core/page/page.go:468"
+      "at": "core/page/page.go:480"
     },
     "page.String": {
       "kind": "func",
-      "at": "core/page/page.go:221"
+      "at": "core/page/page.go:233"
     },
     "page.Text": {
       "kind": "func",
-      "at": "core/page/page.go:219"
+      "at": "core/page/page.go:231"
     },
     "page.TextKey": {
       "kind": "func",
-      "at": "core/page/page.go:215"
+      "at": "core/page/page.go:227"
     },
     "page.Time": {
       "kind": "func",
-      "at": "core/page/page.go:218"
+      "at": "core/page/page.go:230"
     },
     "page.TimeKey": {
       "kind": "func",
-      "at": "core/page/page.go:214"
+      "at": "core/page/page.go:226"
     },
     "page.Value": {
       "kind": "func",
-      "at": "core/page/page.go:226"
+      "at": "core/page/page.go:238"
     },
     "password.Bam": {
       "kind": "func",
@@ -608,7 +612,7 @@
     },
     "store.ChiTiet": {
       "kind": "func",
-      "at": "service-identity/internal/store/can_bo_danh_sach.go:113"
+      "at": "service-identity/internal/store/can_bo_danh_sach.go:108"
     },
     "store.DB": {
       "kind": "type",
@@ -646,6 +650,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/phien.go:98"
     },
+    "store.Moc": {
+      "kind": "type",
+      "at": "core/store/page.go:41"
+    },
     "store.New": {
       "kind": "func",
       "at": "core/store/scoped.go:22"
@@ -661,6 +669,10 @@
     "store.NewDirectory": {
       "kind": "func",
       "at": "service-platform/internal/store/directory.go:32"
+    },
+    "store.NewMoc": {
+      "kind": "func",
+      "at": "core/store/page.go:50"
     },
     "store.NewPhienStore": {
       "kind": "func",
@@ -688,7 +700,7 @@
     },
     "store.QueryPage": {
       "kind": "func",
-      "at": "core/store/page.go:60"
+      "at": "core/store/page.go:121"
     },
     "store.QuyenCua": {
       "kind": "func",

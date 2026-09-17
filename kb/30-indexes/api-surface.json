@@ -90,7 +90,7 @@
       "permission": "admin.user",
       "idempotency": "",
       "reply_schemas": {
-        "200": "identity.trangCanBo",
+        "200": "page.Result_identity.canBoTomTat",
         "400": "httpx.Error",
         "401": "httpx.Error",
         "403": "httpx.Error",

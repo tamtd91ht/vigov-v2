@@ -80,26 +80,21 @@ const locTomTat = `AND deleted_at IS NULL`
 // `co_tai_khoan` is returned as a FIELD so each screen decides for itself. Filtering here would
 // answer, on behalf of one screen, a question the customer has not been asked.
 func (s *CanBoStore) DanhSach(ctx context.Context, yc page.Request) (page.Result[domain.CanBoTomTat], error) {
-	// The sort column is read ONCE, outside the scan callback: the callback runs per row and the
-	// column cannot change between rows.
-	col := yc.Column()
-
+	// Cột sắp xếp KHÔNG còn được đọc ở đây. `mocCanBo` đã buộc sẵn mỗi cột với cách đọc mốc
+	// của nó, và QueryPage chọn hàm đúng theo cột nó đang sắp xếp — nên callback quét không
+	// cần biết gì về cột nữa, và cũng không còn cách nào chọn nhầm.
 	return store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
 		Columns: cotTomTat,
 		Table:   "nguoi_dung",
 		Filter:  locTomTat,
-	}, yc, func(rows *sql.Rows) (domain.CanBoTomTat, page.Anchor, error) {
+	}, yc, mocCanBo, func(rows *sql.Rows) (domain.CanBoTomTat, string, error) {
 		// quetTomTat, NOT motTomTat: QueryPage has already advanced the cursor to this row, and a
 		// second Next() here would hand back every other row and drop the ones in between.
 		cb, err := quetTomTat(rows)
 		if err != nil {
-			return domain.CanBoTomTat{}, page.Anchor{}, err
+			return domain.CanBoTomTat{}, "", err
 		}
-		moc, err := mocCanBo(col, cb)
-		if err != nil {
-			return domain.CanBoTomTat{}, page.Anchor{}, err
-		}
-		return cb, page.Anchor{Key: moc, ID: cb.ID}, nil
+		return cb, cb.ID, nil
 	})
 }
 
@@ -119,28 +114,21 @@ func (s *CanBoStore) ChiTiet(ctx context.Context, id string) (domain.CanBoTomTat
 	return motTomTat(rows)
 }
 
-// mocCanBo maps the sort column back onto the field that was sorted on.
+// mocCanBo BUỘC từng cột trong SapXepCanBo với cách đọc mốc của cột ấy.
 //
-// WHY THIS SWITCH EXISTS AND WHY IT MUST STAY IN STEP WITH SapXepCanBo: store.QueryPage asks the
-// caller to state each row's anchor, because only the caller knows which scanned field the sort
-// key is. An anchor built from the wrong field yields a cursor that walks the list in an order
-// nobody asked for — the next page repeats records and skips others, with no error.
+// Bản trước là một `switch` trên `col.SQL` mà bên gọi tự phân nhánh, kèm một nhánh `default`
+// trả lỗi để phòng trường hợp danh sách trắng và switch lệch nhau. Nó phòng được đúng một
+// nửa: thêm một cột vào SapXepCanBo mà quên thêm nhánh thì lỗi nổ ở YÊU CẦU ĐẦU TIÊN dùng cột
+// đó — nghĩa là sau khi đã phát hành.
 //
-// QueryPage catches a KIND mismatch (text anchor against a time column). It cannot catch a
-// same-kind mismatch, and it checks nothing at all on a list short enough to fit one page. So the
-// default branch is an error rather than a fallback: a sort added to the allowlist and forgotten
-// here fails loudly on the first request instead of quietly reordering a register.
-func mocCanBo(col page.Column, cb domain.CanBoTomTat) (page.Key, error) {
-	switch col.SQL {
-	case "ma":
-		return page.TextKey(cb.Ma), nil
-	case "tao_luc":
-		return page.TimeKey(cb.TaoLuc), nil
-	default:
-		return page.Key{}, fmt.Errorf(
-			"can_bo: cột sắp xếp %q không có mốc tương ứng — SapXepCanBo và mocCanBo lệch nhau", col.SQL)
-	}
-}
+// `store.NewMoc` đối chiếu hai danh sách ngay lúc dựng, nên cùng sai sót ấy nay là một panic
+// lúc khởi động. Và vì hàm đọc mốc được chọn THEO CHÍNH cột đang sắp xếp, việc lẫn hai cột
+// cùng kiểu — thứ không phép kiểm nào bắt được trước đây — không còn dựng được nữa.
+var mocCanBo = store.NewMoc[domain.CanBoTomTat](SapXepCanBo,
+	map[string]func(domain.CanBoTomTat) page.Key{
+		"code":       func(cb domain.CanBoTomTat) page.Key { return page.TextKey(cb.Ma) },
+		"created_at": func(cb domain.CanBoTomTat) page.Key { return page.TimeKey(cb.TaoLuc) },
+	})
 
 // motTomTat reads the FIRST row of a single-row read, or reports that there is none.
 func motTomTat(rows quetDuoc) (domain.CanBoTomTat, error) {

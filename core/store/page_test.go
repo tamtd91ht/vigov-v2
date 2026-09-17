@@ -78,13 +78,25 @@ type phanAnh struct {
 	NgayTao time.Time
 }
 
-func quet(rows *sql.Rows) (phanAnh, page.Anchor, error) {
+func quet(rows *sql.Rows) (phanAnh, string, error) {
 	var p phanAnh
 	if err := rows.Scan(&p.ID, &p.Ma, &p.NgayTao); err != nil {
-		return phanAnh{}, page.Anchor{}, err
+		return phanAnh{}, "", err
 	}
-	return p, page.Anchor{Key: page.TimeKey(p.NgayTao), ID: p.ID}, nil
+	return p, p.ID, nil
 }
+
+// mocPhanAnh BUỘC danh sách trắng với cách đọc mốc của từng cột.
+//
+// BẢN TRƯỚC CỦA TỆP NÀY LÀ CHÍNH CÁI LỖI Moc SINH RA ĐỂ CHẶN: `quet` luôn trả
+// `page.TimeKey(p.NgayTao)`, kể cả khi đang sắp xếp theo `cotMa` — một cột KindText. Bộ test
+// của gói vẫn xanh, vì phép kiểm kiểu ngày ấy chỉ chạy khi còn trang sau, và không bài nào
+// đi hết một danh sách dài theo `code`. Nay hàm đọc được chọn theo chính cột đang sắp xếp,
+// nên viết sai như thế không còn là một khả năng.
+var mocPhanAnh = store.NewMoc[phanAnh](danhSach, map[string]func(phanAnh) page.Key{
+	"created_at": func(p phanAnh) page.Key { return page.TimeKey(p.NgayTao) },
+	"code":       func(p phanAnh) page.Key { return page.TextKey(p.Ma) },
+})
 
 func spec() store.PageSpec {
 	return store.PageSpec{Columns: "id, ma, ngay_tao", Table: "phan_anh", Filter: "AND deleted_at IS NULL"}
@@ -118,7 +130,7 @@ func (b *banThu) trang(t *testing.T, xa tenant.ID, truyVan string) (page.Result[
 		// The handler's own shape: a rejected request runs no statement at all.
 		return page.NewResult[phanAnh](), err
 	}
-	return store.QueryPage(ctx, b.db.For(ctx), spec(), yc, quet)
+	return store.QueryPage(ctx, b.db.For(ctx), spec(), yc, mocPhanAnh, quet)
 }
 
 // duyetHet walks every page and returns the ids in the order they were handed out, plus the number
@@ -213,6 +225,39 @@ func TestDuyetHetKhongLapKhongSot(t *testing.T) {
 	}
 	if len(trang) != 3 {
 		t.Errorf("chia thành %d trang, muốn 3 (3+3+1): %v", len(trang), trang)
+	}
+}
+
+// TestMoiCotTrongDanhSachTrangDeuDuyetDuoc đi hết danh sách theo TỪNG cột được phép sắp xếp.
+//
+// VÌ SAO BÀI NÀY PHẢI CÓ, và vì sao việc nó vắng mặt là một lỗ chứ không phải một thiếu sót
+// nhỏ: cho tới 2026-09-17 tệp này khai `cotMa` trong danh sách trắng nhưng hàm quét LUÔN trả
+// `page.TimeKey(p.NgayTao)` — một mốc kiểu time cho một cột kiểu text. Bộ test vẫn xanh suốt,
+// vì không bài nào sắp xếp theo `code`. Một phép kiểm không bài nào chạm tới thì không phải
+// một phép kiểm.
+//
+// Bài này đóng lỗ ấy theo cách không cần ai nhớ: nó lấy danh sách cột TỪ CHÍNH danh sách
+// trắng, nên thêm một cột thứ ba vào `danhSach` là tự động có một lượt đi hết cho nó.
+func TestMoiCotTrongDanhSachTrangDeuDuyetDuoc(t *testing.T) {
+	b := dungBanThu(t)
+
+	for _, c := range danhSach.Columns() {
+		for _, chieu := range []string{"asc", "desc"} {
+			t.Run(c.Param+"/"+chieu, func(t *testing.T) {
+				ids, _ := b.duyetHet(t, xaA, "limit=1&sort="+c.Param+"&order="+chieu)
+				if len(ids) != len(idCuaA) {
+					t.Fatalf("đi hết được %v (%d bản ghi), muốn %d — lặp hoặc sót",
+						ids, len(ids), len(idCuaA))
+				}
+				thay := map[string]bool{}
+				for _, id := range ids {
+					if thay[id] {
+						t.Fatalf("id %q xuất hiện hai lần: %v", id, ids)
+					}
+					thay[id] = true
+				}
+			})
+		}
 	}
 }
 
@@ -387,7 +432,7 @@ func TestFilterTuMangThuTuHoacGioiHanThiTuChoi(t *testing.T) {
 	} {
 		s := spec()
 		s.Filter = loc
-		if _, err := store.QueryPage(ctx, b.db.For(ctx), s, yc, quet); err == nil {
+		if _, err := store.QueryPage(ctx, b.db.For(ctx), s, yc, mocPhanAnh, quet); err == nil {
 			t.Errorf("Filter %q được chấp nhận", loc)
 		}
 	}
@@ -414,7 +459,7 @@ func TestThamSoMotVanLaXaSauKhiThemMenhDeConTro(t *testing.T) {
 	s.Filter = "AND deleted_at IS NULL AND trang_thai = $2"
 	s.Args = []any{"dang-xu-ly"}
 
-	if _, err := store.QueryPage(ctx, b.db.For(ctx), s, yc, quet); err != nil {
+	if _, err := store.QueryPage(ctx, b.db.For(ctx), s, yc, mocPhanAnh, quet); err != nil {
 		t.Fatal(err)
 	}
 
@@ -506,7 +551,7 @@ func TestKhongCoXaThiPanicChuKhongDocMoXa(t *testing.T) {
 		}
 	}()
 	ctx := context.Background()
-	_, _ = store.QueryPage(ctx, b.db.For(ctx), spec(), yc, quet)
+	_, _ = store.QueryPage(ctx, b.db.For(ctx), spec(), yc, mocPhanAnh, quet)
 }
 
 // --- fake driver: a small, honest keyset engine -----------------------------------------------

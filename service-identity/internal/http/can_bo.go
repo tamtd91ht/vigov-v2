@@ -57,22 +57,6 @@ type canBoTomTat struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// trangCanBo is one page of the register.
-//
-// WHY THE SHAPE IS RESTATED HERE INSTEAD OF RETURNING page.Result[canBoTomTat] DIRECTLY: it is
-// the same three fields, and it is a copy, which rule 9 would normally forbid. tools/apidoc
-// resolves reply types through the AST and has no case for a generic instantiation
-// (tools/apidoc/schema.go:303 — "kiểu %T chưa hỗ trợ"), so a generic reply type would drop this
-// route out of kb/20-contracts/openapi.json in silence, and the admin web would then type the
-// screen by guessing. The copy is pinned to its original by TestTrangCanBoTrungHinhDangVoiPage,
-// which compares the two field by field with reflection — so the two cannot drift apart, which is
-// the only thing rule 9 actually cares about.
-type trangCanBo struct {
-	Items      []canBoTomTat `json:"items"`
-	NextCursor string        `json:"next_cursor"` // empty when has_more is false
-	HasMore    bool          `json:"has_more"`
-}
-
 // maskDienThoai decides what a staff phone number looks like on the way out.
 //
 // IT IS MASKED, ALWAYS, FOR EVERY CALLER — and this is a FAIL-CLOSED DEFAULT, not a business
@@ -158,7 +142,13 @@ func (h *Handler) DanhSachCanBo(w http.ResponseWriter, r *http.Request) {
 	// make(..., 0, ...) and not a nil slice: `items` must marshal as [] on an empty commune, never
 	// as null. A newly onboarded commune has an empty register, and a client that has to handle
 	// both shapes handles one of them wrong.
-	ra := trangCanBo{
+	// page.Result[canBoTomTat] TRỰC TIẾP, không còn một struct ba trường chép lại nó.
+	//
+	// Bản sao ấy tồn tại vì tools/apidoc chưa có nhánh cho generic, nên một kiểu trả lời dạng
+	// generic sẽ làm tuyến này rơi khỏi hợp đồng REST TRONG IM LẶNG — và web khi ấy gõ tay
+	// hình dạng màn hình bằng cách đoán. Nay apidoc hiểu `page.Result[T]`, nên cả bản sao lẫn
+	// bài test dùng reflection để ghim nó khỏi trôi đều không còn lý do tồn tại.
+	ra := page.Result[canBoTomTat]{
 		Items:      make([]canBoTomTat, 0, len(kq.Items)),
 		NextCursor: kq.NextCursor,
 		HasMore:    kq.HasMore,

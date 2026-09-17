@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -261,6 +263,31 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 
 // refTheoTen resolves an annotated type name and emits its component.
 func (b *boSchema) refTheoTen(pkgDir, ten string, nghiem bool) (string, error) {
+	// PHÂN TÍCH tên kiểu chứ không cắt chuỗi. `@reply 200 page.Result[canBoTomTat]` là một
+	// token không có khoảng trắng, nên bộ đọc chú thích trả nó về nguyên vẹn — nhưng cắt nó
+	// tại dấu `.` cho ra `Result[canBoTomTat]`, một cái tên không có thật ở bất kỳ gói nào.
+	// parser.ParseExpr đọc được cả ba dạng đang dùng: `canBoTomTat`, `httpx.Error`, và dạng
+	// generic — bằng cùng một đường, nên không có dạng thứ tư nào bị xử lý riêng rồi trôi.
+	e, err := parser.ParseExpr(ten)
+	if err != nil {
+		return "", fmt.Errorf("tên kiểu %q không đọc được: %w", ten, err)
+	}
+
+	switch t := e.(type) {
+	case *ast.IndexExpr:
+		k, err := b.kieuTongQuat(t.X, []ast.Expr{t.Index}, kieuGo{pkgDir: pkgDir})
+		if err != nil {
+			return "", err
+		}
+		return b.refCua(k, nghiem)
+	case *ast.IndexListExpr:
+		k, err := b.kieuTongQuat(t.X, t.Indices, kieuGo{pkgDir: pkgDir})
+		if err != nil {
+			return "", err
+		}
+		return b.refCua(k, nghiem)
+	}
+
 	k, err := b.gm.timKieu(pkgDir, ten)
 	if err != nil {
 		return "", err

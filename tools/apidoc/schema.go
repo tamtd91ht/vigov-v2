@@ -21,6 +21,23 @@ type kieuGo struct {
 	spec    *ast.TypeSpec
 	pkgDir  string
 	pkgName string
+
+	// targ binds this type's parameters to concrete types, for a generic instantiated at a
+	// use site: `page.Result[canBoTomTat]` binds T. Empty for an ordinary type.
+	targ map[string]buocKieu
+	// hauTo distinguishes two instantiations of one generic in the components map.
+	hauTo string
+}
+
+// buocKieu is one type parameter bound to a concrete type expression, together with the
+// package that expression must be resolved in.
+//
+// HAI TRƯỜNG, KHÔNG PHẢI MỘT: `page.Result[canBoTomTat]` được viết ở gói `http` của identity,
+// nên `canBoTomTat` chỉ giải được trong gói ẤY — trong khi thân của `Result` lại phải giải
+// trong gói `page`. Nhớ mình biểu thức là đủ để giải nhầm sang một kiểu trùng tên ở gói khác.
+type buocKieu struct {
+	expr ast.Expr
+	ctx  kieuGo
 }
 
 // goiGo is one parsed package directory.
@@ -292,7 +309,8 @@ func moBoSchema(gm *giaiMa) *boSchema {
 
 // refCua emits the component for a named type and returns its $ref target name.
 func (b *boSchema) refCua(k kieuGo, nghiem bool) (string, error) {
-	khoa := k.pkgDir + "\x00" + k.spec.Name.Name
+	// Khoá mang cả hậu tố: hai lần hiện thực hoá của cùng một generic là HAI thành phần.
+	khoa := k.pkgDir + "\x00" + k.spec.Name.Name + k.hauTo
 	if ten, co := b.tenComp[khoa]; co {
 		if nghiem && !b.nghiem[ten] {
 			// Reached from a reply after having been emitted as request-only. Replies are
@@ -333,11 +351,104 @@ func tenThanhPhan(k kieuGo) string {
 		truoc := dir[:i]
 		if j := strings.LastIndex(truoc, "/"); j >= 0 {
 			if ten := tenNghiepVu(truoc[j+1:]); ten != "" && ten != "core" {
-				return ten + "." + k.spec.Name.Name
+				return ten + "." + k.spec.Name.Name + k.hauTo
 			}
 		}
 	}
-	return k.pkgName + "." + k.spec.Name.Name
+	return k.pkgName + "." + k.spec.Name.Name + k.hauTo
+}
+
+// kieuTongQuat instantiates a generic type at a use site.
+//
+// VÌ SAO NÓ CẦN THIẾT, và cái giá của việc không có nó: `page.Result[T]` là hình dạng của MỌI
+// tuyến danh sách trong hệ thống này. Không hiểu được nó, mỗi tuyến danh sách phải khai lại
+// bằng tay một struct ba trường trùng khít với `page.Result` — và bản sao ấy trôi. Đã có đúng
+// một bản sao như thế (`trangCanBo`) cùng một bài test dùng reflection chỉ để ghim nó khỏi
+// trôi; cả hai tồn tại vì thiếu ba chục dòng dưới đây.
+//
+// MỘT THAM SỐ KIỂU hay nhiều đều nhận, nhưng SỐ LƯỢNG phải khớp: thiếu hay thừa là một lỗi,
+// không phải một chỗ để đoán.
+func (b *boSchema) kieuTongQuat(x ast.Expr, doiSo []ast.Expr, ngucanh kieuGo) (kieuGo, error) {
+	var ten string
+	switch g := x.(type) {
+	case *ast.Ident:
+		ten = g.Name
+	case *ast.SelectorExpr:
+		id, ok := g.X.(*ast.Ident)
+		if !ok {
+			return kieuGo{}, fmt.Errorf("biểu thức kiểu generic không hiểu được")
+		}
+		ten = id.Name + "." + g.Sel.Name
+	default:
+		return kieuGo{}, fmt.Errorf("biểu thức kiểu generic không hiểu được")
+	}
+
+	k, err := b.gm.timKieu(ngucanh.pkgDir, ten)
+	if err != nil {
+		return kieuGo{}, err
+	}
+	if k.spec == nil || k.spec.TypeParams == nil {
+		return kieuGo{}, fmt.Errorf("%s không phải kiểu generic nhưng được dùng với [...]", ten)
+	}
+
+	var thamSo []string
+	for _, f := range k.spec.TypeParams.List {
+		for _, n := range f.Names {
+			thamSo = append(thamSo, n.Name)
+		}
+	}
+	if len(thamSo) != len(doiSo) {
+		return kieuGo{}, fmt.Errorf("%s cần %d tham số kiểu, được cho %d",
+			ten, len(thamSo), len(doiSo))
+	}
+
+	k.targ = make(map[string]buocKieu, len(thamSo))
+	var hau string
+	for i, n := range thamSo {
+		k.targ[n] = buocKieu{expr: doiSo[i], ctx: ngucanh}
+		td, err := b.tenDoiSo(doiSo[i], ngucanh)
+		if err != nil {
+			return kieuGo{}, fmt.Errorf("%s: tham số kiểu thứ %d: %w", ten, i+1, err)
+		}
+		hau += "_" + td
+	}
+	k.hauTo = hau
+	return k, nil
+}
+
+// tenDoiSo names one type argument, for the component name of an instantiation.
+//
+// Tên thành phần trong OpenAPI chỉ được dùng chữ, số, `.`, `-`, `_` — nên `[` và `]` không
+// dùng được, và `page.Result_identity.canBoTomTat` là dạng gần nhất còn đọc được.
+func (b *boSchema) tenDoiSo(e ast.Expr, ngucanh kieuGo) (string, error) {
+	switch t := e.(type) {
+	case *ast.Ident:
+		if _, ok := coBan[t.Name]; ok {
+			return t.Name, nil
+		}
+		if bd, co := ngucanh.targ[t.Name]; co {
+			return b.tenDoiSo(bd.expr, bd.ctx)
+		}
+		k, err := b.gm.timKieu(ngucanh.pkgDir, t.Name)
+		if err != nil {
+			return "", err
+		}
+		return tenThanhPhan(k), nil
+	case *ast.SelectorExpr:
+		id, ok := t.X.(*ast.Ident)
+		if !ok {
+			return "", fmt.Errorf("tham số kiểu không hiểu được")
+		}
+		k, err := b.gm.timKieu(ngucanh.pkgDir, id.Name+"."+t.Sel.Name)
+		if err != nil {
+			return "", err
+		}
+		if k.spec == nil {
+			return "time.Time", nil
+		}
+		return tenThanhPhan(k), nil
+	}
+	return "", fmt.Errorf("tham số kiểu %T chưa hỗ trợ — bổ sung tools/apidoc thay vì đoán", e)
 }
 
 // schemaCua maps one type expression. Anything it does not understand is an error: a shape
@@ -355,7 +466,28 @@ func (b *boSchema) schemaCua(e ast.Expr, ngucanh kieuGo, nghiem bool) (*om, erro
 		if t.Name == "any" {
 			return newOM(), nil
 		}
+		// Một tham số kiểu (`T`) không phải kiểu có thật trong gói này: nó là chỗ trống mà
+		// nơi dùng đã điền. Giải nó trong NGỮ CẢNH CỦA NƠI ĐIỀN, không phải ngữ cảnh của gói
+		// khai generic.
+		if bd, co := ngucanh.targ[t.Name]; co {
+			return b.schemaCua(bd.expr, bd.ctx, nghiem)
+		}
 		k, err := b.gm.timKieu(ngucanh.pkgDir, t.Name)
+		if err != nil {
+			return nil, err
+		}
+		return b.refHoacThoiGian(k, nghiem)
+
+	// Generic được hiện thực hoá tại nơi dùng: `page.Result[canBoTomTat]`.
+	case *ast.IndexExpr:
+		k, err := b.kieuTongQuat(t.X, []ast.Expr{t.Index}, ngucanh)
+		if err != nil {
+			return nil, err
+		}
+		return b.refHoacThoiGian(k, nghiem)
+
+	case *ast.IndexListExpr:
+		k, err := b.kieuTongQuat(t.X, t.Indices, ngucanh)
 		if err != nil {
 			return nil, err
 		}
