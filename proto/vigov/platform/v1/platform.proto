@@ -31,6 +31,15 @@ package vigov.platform.v1;
 // naming any commune must never be able to reach that commune's business content. No other
 // service may copy this shape.
 //
+// ListTenants and ResolveTenantAlias sit in that same category and NOT in a wider one. They
+// carry no "x-tenant-id" because on the citizen channel there is no commune yet: a Mini App
+// has no domain, it reaches ONE API host, and picking a commune is what the caller is trying
+// to do (ADR 0005). Both answer only out of the registry. The thing that keeps this from
+// becoming a general cross-commune read is not a permission — it is that the ONLY message
+// these RPCs can return is TenantSummary, which holds a commune's name and province and has
+// no field that could carry business content, and no way to grow one without this comment
+// being edited.
+//
 // NOT the same thing: `Tenant.id` below is the identifier of the record being described, not
 // an assertion by the caller about who it is.
 
@@ -41,6 +50,36 @@ service PlatformService {
 
   // GetTenant returns metadata only: name, status, quota. Never business data.
   rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
+
+  // ListTenants is the commune directory the Mini App's picker reads: browse, and search by
+  // name including names that are no longer official.
+  //
+  // @cross-tenant: the citizen channel has no domain to derive a commune from, so a citizen
+  // has to be shown communes BEFORE any commune is known — that is the entire purpose of the
+  // call, not an optimisation. Rule 1 forbids taking the commune from the client (forbidden
+  // #2) and ADR 0005 forbids per-commune API hosts, which leaves the server-side registry as
+  // the only place the picker can be filled from. The read stays inside the registry: it
+  // returns names and provinces of ACTIVE communes, which are public administrative facts, and
+  // it cannot reach any commune's business data because TenantSummary has no field for it.
+  //
+  // ONLY ACTIVE COMMUNES, AND THERE IS DELIBERATELY NO FLAG TO ASK FOR MORE. A flag would
+  // default to something, and on this path the wrong default puts a dissolved commune in front
+  // of a citizen who then submits work to an authority that no longer exists (rule 1,
+  // forbidden #1 — a default on the isolation path). A commune that has been reorganised is
+  // reached through ResolveTenantAlias, which answers with its successor, never by listing the
+  // dead unit as though it could still receive anything.
+  rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
+
+  // ResolveTenantAlias answers the question a printed QR asks years after it was printed:
+  // this identifier names a unit — where does it lead today.
+  //
+  // @cross-tenant: the identifier presented belongs to a commune that may no longer exist,
+  // and the answer is a DIFFERENT commune. Resolving it therefore crosses the boundary by
+  // definition; a same-commune read cannot answer it. Without this path every QR printed
+  // before a reorganisation becomes waste (ADR 0005), and reorganisation of commune-level
+  // units in Vietnam is certain rather than hypothetical. Same confinement as ListTenants:
+  // registry only, TenantSummary only.
+  rpc ResolveTenantAlias(ResolveTenantAliasRequest) returns (ResolveTenantAliasResponse);
 }
 
 message Tenant {
@@ -89,3 +128,154 @@ message GetTenantRequest { string id = 1; }
 // Wrapped, not a bare Tenant: adding a field later must not change the RPC signature.
 // Still metadata only — see the service comment and ADR 0003.
 message GetTenantResponse { Tenant tenant = 1; }
+
+// TenantSummary is one entry of the commune directory a citizen chooses from.
+//
+// A NARROWER MESSAGE THAN Tenant, AND THE OMISSION IS THE POINT: there is no `host`.
+//
+//   * The Mini App never builds a per-commune URL — it calls one API host (ADR 0005), so a
+//     host here would be a field no consumer on this path has a use for.
+//   * A single call would otherwise hand back the platform's whole domain map. The HTTP edge
+//     already refuses to leak that one host at a time: an unknown Host and a deactivated
+//     commune both answer 404 with the same body, specifically so that probing cannot
+//     enumerate which communes exist (core/httpx/edge.go, TenantMiddleware). A list RPC
+//     returning `host` would hand over in one response what that 404 exists to withhold.
+//
+// There is no `active` either, because every TenantSummary this service returns is an ACTIVE
+// commune — on both RPCs, without exception. A field that is true in every message is a field
+// every consumer eventually stops checking, and the one day it is false is the day it matters.
+//
+// NOTHING BUSINESS-FACING MAY BE ADDED HERE. This message is the whole reason the two
+// directory RPCs are allowed to answer without a commune in metadata; widening it silently
+// widens that exemption (ADR 0003).
+message TenantSummary {
+  // The opaque ULID — the same identifier a deep link carries as `t=` (ADR 0005).
+  string id = 1;
+  string display_name = 2;   // point-in-time attribute, not an identifier
+
+  // Same field, same source and the same "" semantics as Tenant.province — read the comment
+  // there, it is not repeated here. What matters on THIS path: a picker showing two communes
+  // with the same name distinguishes them by province, so "" means those two rows are
+  // genuinely indistinguishable on screen and the citizen is the one who pays for it. Render
+  // nothing; never guess a province to fill the gap.
+  string province = 3;
+}
+
+// TenantMatch is one row of a ListTenants answer: the commune, plus WHY it is in the answer
+// when the reason is not obvious.
+//
+// Wrapped rather than putting the extra field on TenantSummary, because `matched_former_name`
+// is a property of THIS SEARCH, not of the commune. On ResolveTenantAlias the same commune is
+// returned with no such field, and a field that is meaningful in one RPC and dead in another
+// is a field readers learn to ignore in both.
+message TenantMatch {
+  TenantSummary tenant = 1;
+
+  // The former name of an administrative unit that the query matched, when the query did NOT
+  // match the commune's current name. "" is the normal case and means the match was on the
+  // current name.
+  //
+  // WHY IT HAS TO BE IN THE CONTRACT AND NOT LEFT TO THE SCREEN: a citizen searching the name
+  // they know — the name on the sign, the name on last year's paperwork — gets back a commune
+  // called something else. Without this field the picker can only show the new name, and the
+  // citizen concludes the search is broken and their commune is missing. With it the screen
+  // can say which former name was matched, which is the whole point of the alias table
+  // (ADR 0005). The client cannot derive this: it does not hold the alias table.
+  //
+  // The message a citizen reads is the screen's to compose, in Vietnamese. This field carries
+  // the name only, never a sentence — a sentence in a contract is a sentence that cannot be
+  // reworded without a contract change.
+  string matched_former_name = 2;
+}
+
+message ListTenantsRequest {
+  // What the citizen typed, VERBATIM — diacritics, case and spacing exactly as entered.
+  //
+  // THE SERVER FOLDS, THE CLIENT MUST NOT. Matching is diacritic-insensitive and
+  // case-insensitive, over the current display name AND the former names in the alias table.
+  // A client that strips diacritics first has already decided what "the same name" means, and
+  // it decides it differently from the server the first time the two normalisations disagree —
+  // `Đ` and `D` in particular are one substitution in one implementation and not in the other.
+  // Sending the raw text also leaves the server able to rank an exact match above a folded one;
+  // once the client has folded, that information is gone and cannot be recovered.
+  //
+  // "" MEANS NO TEXT FILTER — that is the browse path, not an error. It is the common path:
+  // a citizen who did not arrive through a QR opens the picker with nothing typed.
+  string query = 1;
+
+  // Exact match against TenantSummary.province. "" means no filter.
+  //
+  // THE VALUE MUST BE ONE THAT CAME BACK FROM THIS SERVICE, never free text a citizen typed:
+  // the underlying column is a display string, so "Đà Nẵng" and "Thành phố Đà Nẵng" are two
+  // different values and a typed one silently matches nothing — an empty list that looks like
+  // "there are no communes there" rather than "that is not how it is written".
+  string province = 2;
+
+  // Bounded like every list in the system: default 20, server-side maximum 100, matching
+  // core/page (DefaultLimit, MaxLimit). 0 means "use the default".
+  //
+  // ABOVE THE MAXIMUM IS CAPPED, NOT REFUSED — the caller gets the maximum plus a cursor to
+  // carry on with, so nothing is lost by asking for too much. That is deliberately the
+  // opposite of BatchGetStaff in vigov/identity/v1, where a silent clamp WOULD lose rows
+  // because there is no cursor to continue from. The rule is the same in both: never drop
+  // data silently; here continuing is possible, there it is not.
+  int32 limit = 3;
+
+  // Opaque. Comes from ListTenantsResponse.next_cursor and is never constructed by a client.
+  // It carries no tenant_id — a cursor naming its own commune is a client naming its own
+  // commune (core/page, package comment).
+  string cursor = 4;
+}
+
+message ListTenantsResponse {
+  repeated TenantMatch items = 1;
+  string next_cursor = 2;   // "" when has_more is false
+  bool has_more = 3;
+
+  // NO `total`. A keyset read does not know one without counting the whole registry on every
+  // keystroke of a search, and a number that was not computed is a number that is wrong.
+}
+
+message ResolveTenantAliasRequest {
+  // The identifier read from a deep link or QR — the `t=` parameter of ADR 0005's format.
+  //
+  // It is a ULID that was valid WHEN THE QR WAS PRINTED. It may name a commune that still
+  // exists, or one that has since been reorganised out of existence. Both are ordinary
+  // answers, not errors.
+  string id = 1;
+}
+
+message ResolveTenantAliasResponse {
+  // The ACTIVE commune or communes this identifier leads to today: the unit itself when it
+  // still exists, its successor(s) when it was reorganised.
+  //
+  // REPEATED, NOT A SINGLE FIELD, AND THIS IS NOT SPECULATIVE GENERALITY. A singular field
+  // would assert that a reorganised unit has exactly one successor, and a SPLIT has more than
+  // one — splitting is listed beside merging in .claude/skills/admin-unit-merge/SKILL.md as
+  // something this platform will meet, not something it might. Making the field singular now
+  // and repeated later is a breaking change to a contract the citizen channel depends on;
+  // making it repeated now costs one loop in a client that usually runs it once.
+  //
+  // EMPTY IS A VALID ANSWER and means the identifier leads nowhere that can still receive
+  // work — unknown, or a chain of successors that ends at nothing active. The two are
+  // deliberately indistinguishable, for the same reason the HTTP edge answers 404 to both an
+  // unknown host and a deactivated commune: telling them apart lets a caller enumerate which
+  // communes have existed.
+  //
+  // WHAT THE CLIENT DOES WITH MORE THAN ONE IS NOT DECIDED HERE — it is downstream of open
+  // question #1 (`kb/00-foundation/open-questions.json`), which the customer has not answered.
+  repeated TenantSummary tenants = 1;
+
+  // The display name the identifier named, when that unit no longer exists. "" when the
+  // identifier is still a live commune, which is the common case.
+  //
+  // This is what lets the app say "xã này đã sáp nhập vào X" instead of silently landing the
+  // citizen somewhere with a different name on the header (ADR 0005). Its presence, not a
+  // separate flag, IS the signal that a reorganisation happened: one fact, one field, so the
+  // two cannot disagree.
+  //
+  // A RENAME DOES NOT PRODUCE A VALUE HERE. A renamed commune keeps its ULID — that is what
+  // ADR 0004 bought — so the identifier still resolves to itself and only display_name
+  // changed. This field fires only when the UNIT is gone, not when its name is.
+  string former_display_name = 2;
+}
