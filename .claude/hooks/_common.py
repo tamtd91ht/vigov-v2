@@ -198,6 +198,52 @@ def new_content(tool_input: dict) -> str:
     return "\n".join(parts)
 
 
+def noi_dung_sau_sua(tool_input: dict) -> str:
+    """The document AS IT WILL BE — disk content with the edits applied.
+
+    WHY THIS EXISTS BESIDE new_content(), AND WHY THE TWO MUST NOT BE MERGED.
+
+    `new_content` answers *"what text is being introduced"* — the right question for
+    secret_scan and pii_guard, which must flag what this edit ADDS and must not accuse a file
+    of material that was already there.
+
+    This one answers *"what will this file contain"* — the right question for any rule that is
+    a property of the FILE. doc_guard's frontmatter rule is exactly that: `tier`, `source`,
+    `owner` live at the top of the document and an Edit three lines down never carries them,
+    so judging an Edit by its diff reported EVERY edit to kb/ as "missing frontmatter".
+
+    That misfire was not merely noisy. Its only workaround was rewriting the whole file, so a
+    guard meant to protect the knowledge layer was pushing every author toward the one
+    operation that can destroy it — and on 2026-09-17 it nearly did: a whole-file rewrite
+    composed from a stale read was seconds away from erasing six edits another session had just
+    made to the same file.
+
+    Missing file -> fall back to the introduced text, which is what creating a file means.
+    """
+    if "content" in tool_input:
+        return tool_input.get("content") or ""
+
+    duong = path_of(tool_input)
+    try:
+        with open(duong, encoding="utf-8") as f:
+            goc = f.read()
+    except Exception:
+        return new_content(tool_input)
+
+    sua = []
+    if tool_input.get("old_string") is not None:
+        sua.append((tool_input.get("old_string") or "", tool_input.get("new_string") or "",
+                    bool(tool_input.get("replace_all"))))
+    for e in tool_input.get("edits") or []:
+        sua.append((e.get("old_string") or "", e.get("new_string") or "",
+                    bool(e.get("replace_all"))))
+
+    for cu, moi, tat_ca in sua:
+        if cu and cu in goc:
+            goc = goc.replace(cu, moi) if tat_ca else goc.replace(cu, moi, 1)
+    return goc
+
+
 def project_root(start: str | None = None) -> str:
     d = os.path.abspath(start or os.getcwd())
     for _ in range(6):

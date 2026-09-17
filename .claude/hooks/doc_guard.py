@@ -153,6 +153,18 @@ def main() -> None:
     if not content:
         sys.exit(0)
 
+    # HAI ĐẦU VÀO, HAI CÂU HỎI KHÁC NHAU — và gộp chúng là sai theo cả hai chiều.
+    #
+    #   content   = văn bản lần sửa này ĐƯA VÀO   -> đúng cho luật "chép lại sự thật của người
+    #               khác", vì chép là hành vi của lần sửa.
+    #   tai_lieu  = tệp SAU KHI sửa               -> đúng cho frontmatter và hạn T5, vì chúng là
+    #               tính chất của TỆP. Một `Edit` ba dòng ở giữa tệp không bao giờ mang theo
+    #               frontmatter, nên chấm nó bằng diff là chặn MỌI lần sửa vào kb/.
+    #
+    # Đường vòng duy nhất còn lại khi ấy là ghi đè toàn tệp — tức một rào dựng để bảo vệ tầng
+    # tri thức lại đẩy mọi người viết về đúng thao tác có thể xoá sạch nó.
+    tai_lieu = c.noi_dung_sau_sua(ti)
+
     # RULE 3 — GENERATED tier, never hand-edited
     if any(p.search("/" + rel) for p in GENERATED_TIERS):
         c.block(HOOK, f"hand-editing a GENERATED tier — {rel}",
@@ -194,7 +206,7 @@ def main() -> None:
         sys.exit(0)
 
     # RULE 2 — frontmatter required
-    m = FM_BLOCK.search(content)
+    m = FM_BLOCK.search(tai_lieu)
     missing = [] if m else list(FM_REQUIRED)
     if m:
         missing = [k for k in FM_REQUIRED if not re.search(rf"^{k}:", m.group(1), re.M)]

@@ -34,6 +34,18 @@ def w(path: str, content: str) -> dict:
     return {"tool_name": "Write", "tool_input": {"file_path": path, "content": content}}
 
 
+def e(path: str, cu: str, moi: str) -> dict:
+    """Một `Edit` vào tệp ĐANG CÓ trên đĩa — không phải một lần ghi mới.
+
+    Ca này tồn tại vì `doc_guard` từng chặn MỌI `Edit` vào `kb/`: nó chấm lần sửa bằng
+    `new_string`, mà một lần sửa ba dòng ở giữa tệp không bao giờ mang theo frontmatter. Đường
+    vòng duy nhất còn lại là ghi đè toàn tệp — tức một rào dựng để bảo vệ tầng tri thức lại đẩy
+    mọi người viết về đúng thao tác có thể xoá sạch nó, và ngày 17/09/2026 nó suýt xoá thật.
+    """
+    return {"tool_name": "Edit",
+            "tool_input": {"file_path": path, "old_string": cu, "new_string": moi}}
+
+
 def b(cmd: str) -> dict:
     return {"tool_name": "Bash", "tool_input": {"command": cmd}}
 
@@ -279,6 +291,18 @@ CASES = [
      w("docs/ui-ux/99-ghi-chu-moi.md", "# Ghi chú")),
     ("doc_guard", "a new .md outside every allowed place", BLOCK,
      w("notes/ke-hoach.md", "# Kế hoạch")),
+    # Ca vá ngày 17/09/2026. Sửa ba dòng ở GIỮA một tệp kb/ đang có frontmatter hợp lệ phải
+    # PASS: frontmatter là tính chất của TỆP, không phải của lần sửa. Chấm bằng diff thì mọi
+    # Edit vào kb/ đều bị chặn, và đường vòng duy nhất còn lại — ghi đè toàn tệp — là đúng thao
+    # tác có thể xoá mất việc của người khác. Dùng một tệp THẬT trên đĩa, vì cái đang được kiểm
+    # chính là "hook có chịu đọc đĩa không".
+    ("doc_guard", "sửa ba dòng giữa một tệp kb/ đã có frontmatter", PASS,
+     e("kb/00-foundation/multi-tenant-model.md",
+       "## Cấu hình theo xã", "## Cấu hình theo xã (ghi chú)")),
+    # Chiều ngược lại vẫn phải chặn: tạo MỚI một tệp kb/ không frontmatter thì không có gì trên
+    # đĩa để đọc, và fallback về văn bản đưa vào — đúng như tạo tệp mới nghĩa là vậy.
+    ("doc_guard", "tạo tệp kb/ mới không frontmatter qua Edit", BLOCK,
+     e("kb/00-foundation/khong-ton-tai-abc.md", "", "# Không có frontmatter")),
 
     # ---- rule 6 · audit trail -------------------------------------------------
     ("audit_guard", "write with no audit entry", BLOCK,
