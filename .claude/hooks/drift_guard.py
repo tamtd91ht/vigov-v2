@@ -78,6 +78,60 @@ def duoc_quet(duong_dan: str) -> bool:
     return not (ten.endswith("_test.go") or ten.endswith(".pb.go"))
 
 
+RE_KHOI = re.compile(r"/\*.*?\*/", re.S)
+RE_DONG_SQL = re.compile(r"--.*?$", re.M)
+RE_DONG_C = re.compile(r"(?<!:)//.*?$", re.M)
+
+# An ANNOTATION is not prose. `// @cross-tenant: <reason>`, `-- @entity:`, `-- @scope:` are
+# declarations the rules REQUIRE (rule 1, forbidden #6) and the generators read — they merely
+# happen to live in comments because Go and SQL have nowhere else to put them.
+#
+# Stripping them along with the prose would silently kill the signal for open question #4,
+# whose whole pattern IS `@cross-tenant`: the hook would then be structurally incapable of ever
+# reporting that question, while looking like it was watching. That is the same failure this
+# file was repaired for, one level down.
+RE_DAU = re.compile(r"@[a-z][a-z0-9-]*")
+
+
+def _giu_dau(m: re.Match) -> str:
+    """Replace a comment with only the annotations inside it."""
+    giu = RE_DAU.findall(m.group(0))
+    return (" " + " ".join(giu) + " ") if giu else " "
+
+
+def bo_chu_thich(text: str, ten_tep: str) -> str:
+    """Strip comments before counting signals. PURE.
+
+    WHY THIS EXISTS — the first warning this hook fired after being repaired was a FALSE
+    POSITIVE, and on the worst possible file: it matched
+
+        --          CHECK (NOT co_tai_khoan OR mat_khau_hash <> '');
+
+    inside `0003_nguoi_dung_co_tai_khoan.sql`, in a block headed *"NO CHECK CONSTRAINT.
+    Decided, not overlooked"* whose own text says writing that constraint now would decide an
+    open question the customer has not settled. The migration did exactly what rule 9 asks, and
+    the guard punished it FOR EXPLAINING ITSELF.
+
+    That is not a nuisance, it is fatal: a guard whose first word after weeks of silence is an
+    accusation against the most carefully reasoned file in the repository is a guard nobody
+    reads again — and this repository already wrote that lesson down, in the trap table, as
+    "hook nhiễu là hook bị tắt".
+
+    The project also already knew the shape: tools/test_hooks.py carries a tenant_scope_guard
+    case "declaration inside a SQL comment -> PASS", with the reason stated there — *"Flagging
+    the very comment that teaches the shape would be a guard nobody keeps."* drift_guard simply
+    had no such layer.
+
+    `(?<!:)` on the `//` rule keeps `https://…` inside a string from truncating the rest of the
+    line. Crude, and deliberately so: over-stripping here costs a missed signal, which the next
+    session still catches, while under-stripping costs the hook's credibility once.
+    """
+    text = RE_KHOI.sub(_giu_dau, text)
+    if ten_tep.endswith(".sql"):
+        return RE_DONG_SQL.sub(_giu_dau, text)
+    return RE_DONG_C.sub(_giu_dau, text)
+
+
 def nen_canh_bao(counts: dict, nguong_theo_means: dict) -> tuple | None:
     """Decide whether one direction dominates enough to warn. PURE — counts in, verdict out.
 
@@ -165,7 +219,7 @@ def main() -> None:
     for path in iter_files(root):
         try:
             with open(path, encoding="utf-8", errors="ignore") as f:
-                text = f.read()
+                text = bo_chu_thich(f.read(), path)
         except Exception:
             continue
         for qi, pat, means, _thr in probes:

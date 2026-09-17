@@ -3,7 +3,7 @@ id: ban-giao-phien
 tier: T5
 source: CURATED
 owner: architecture
-derived_from_commit: d427899
+derived_from_commit: f9a2f45
 expires: 2026-12-16
 owns_facts:
   - "trạng thái thi công tại 2026-09-17 và việc kế tiếp phải làm"
@@ -107,7 +107,21 @@ phải đúng ngay từ bản đầu, vì sửa sau là sửa chữ trên màn h
    buộc**, không phải một textarea tuỳ chọn. Một ô tuỳ chọn thì thực tế sẽ rỗng, và công dân
    nhận về một "bị từ chối" không lý do, tức đúng cái im lặng luật 10 cấm.
 
-### 2.5 `petitions`
+### 2.5 Nộp Mini App cho Zalo duyệt — **chặn bởi thứ không nằm trong kho mã**
+
+`citizen-app/` giai đoạn 1 (giới thiệu ViHAT Software) đã xong và xanh. Nó là thứ duy nhất
+trong kho **sẵn sàng giao ra ngoài**, nhưng chưa nộp được, và hai thứ còn thiếu đều không phải mã:
+
+1. **Logo/icon, ảnh chụp màn hình, mô tả store.** Zalo bắt buộc. Kho chưa có tệp ảnh nào.
+2. **`citizen-app/app-config.json` phải đối chiếu Developer Console.** Tên khoá viết từ **nguồn
+   thứ cấp** — tài liệu Zalo render bằng JS nên không đọc trực tiếp được. Thư mục build đang là
+   `dist/` (mặc định Vite) trong khi `zmp-cli` thường dùng `www/`. Sai khoá là hồ sơ bị trả về.
+
+Ba câu nên hỏi Zalo **cùng lúc lúc nộp**, vì cả ba đang là giả định: ràng buộc **1 Mini App ↔ 1
+OA** (cả ADR 0018 đứng trên nguồn thứ cấp) · app duyệt dạng hồ sơ doanh nghiệp sau này gắn dịch
+vụ công có phải xác thực lại không · tham số deep link có tới app khi app đang chạy nền không.
+
+### 2.6 `petitions`
 
 **Chỉ bắt đầu sau khi có `lich_lam_viec` + `ngay_nghi_le` theo xã** — ADR 0007. Đếm hạn bằng
 giờ hành chính mà thiếu lịch của xã thì mọi con số hạn đều sai, và sai theo hướng không ai
@@ -130,6 +144,8 @@ và thứ chúng chặn — không chép lại nội dung câu hỏi.
 | **Khách** | #1 #4 | Sáp nhập/chia tách xã · cấp huyện-tỉnh xem tổng hợp tới mức nào |
 | **Chủ dự án** | — | Mật khẩu máy chủ test, **nếu** muốn chạy trên máy ấy thay vì Postgres cục bộ. Không nằm trong kho mã (luật 8) |
 | **Chủ dự án** | — | Ba câu **mã hoá khi lưu** vẫn chưa có đáp: khoá nằm ở biến môi trường hay nguồn khác · khoá có phải một danh sách xoay vòng được không · có mã hoá `ho_ten` không (mã hoá thì **mất khả năng sắp xếp theo tên ở mọi màn hình**) |
+| **Khách** | — | **34 tên tỉnh/thành ở dạng viết chính thức.** Người dùng đã chốt nhà cung cấp seed sẵn, xã chỉ được chọn — nhưng bảng `tinh_thanh` ship **RỖNG có chủ đích**: cơ cấu 6 thành phố + 28 tỉnh thì chắc, *dạng viết* từng tên thì không (`Đà Nẵng` hay `Thành phố Đà Nẵng`). Cột này in thẳng ra màn hình công dân nên dạng viết **là** nội dung. Đã thử ba nguồn chính phủ, cả ba render phía client |
+| **Chủ dự án / kiến trúc** | — | **Chính sách mã hoá cho vùng xuyên xã.** ADR 0009 là envelope encryption **theo xã**; `dinh_danh_cong_dan` không thuộc xã nào nên **không có DEK nào bọc nó**. Đây là chính sách KHÔNG ÁP DỤNG, không phải chưa cài. Người dùng đã chốt: ghi thành khoảng hở có tên, chưa thiết kế gì. Thứ đang bảo vệ nó là luật 3 + phân quyền CSDL |
 | **Hạ tầng** | — | Chạy 10 Jenkinsfile trên Jenkins thật |
 | **Hạ tầng** | — | **Đã chứng minh, không còn là suy đoán:** tiến trình Next.js gọi `https://<Host>/api/v1/communes/current` bằng **tên miền công khai**. Trong cụm có split-horizon DNS hoặc chặn egress thì **mọi yêu cầu 500**. Cần đội devops xác nhận; nếu chặn thì phải có biến môi trường gốc API nội bộ, và `web-admin` hiện **không có tệp mẫu env** nào để thêm vào |
 
@@ -169,7 +185,9 @@ quét thiếu.
 
 | Vấn đề | Cách xử |
 |---|---|
-| **`drift_guard` mù hẳn mà cổng kiểm vẫn 7/7** | Hook DUY NHẤT canh chuyện "mã đang lặng lẽ quyết hộ khách một câu hỏi mở" — đúng lớp lỗi CLAUDE.md nói đã làm dự án trước mất 20–28 ngày. Từ ADR 0015 nó không đọc một dòng service, `core/`, web hay migration nào. **`check_brain` vẫn xanh vì nó kiểm "mỗi luật có NÊU TÊN một hook", không kiểm "hook ấy có NHÌN THẤY gì không"** — xem §6 |
+| **`drift_guard` mù hẳn mà cổng kiểm vẫn 7/7** — **ĐÃ VÁ (`bbaad10`, `f9a2f45`)** | Hook DUY NHẤT canh chuyện "mã đang lặng lẽ quyết hộ khách một câu hỏi mở" — đúng lớp lỗi CLAUDE.md nói đã làm dự án trước mất 20–28 ngày. Từ ADR 0015 nó không đọc một dòng service, `core/`, web hay migration nào. **`check_brain` vẫn xanh vì nó kiểm "mỗi luật có NÊU TÊN một hook", không kiểm "hook ấy có NHÌN THẤY gì không"** — xem §6. Nay đổi sang **danh sách loại trừ**, và phần thuần (`duoc_quet`, `nen_canh_bao`) có ca test. **Giá trị còn lại của dòng này không nằm ở bản vá mà ở chỗ: nó câm hàng tháng trời và không ai nghe thấy gì.** |
+| **Guard vừa sống dậy bắn ngay một ÂM TÍNH GIẢ — và trúng tệp lập luận cẩn thận nhất kho** | Bản vá đầu đếm cả tín hiệu nằm trong **chú thích**, nên nó khớp dòng `--   CHECK (NOT co_tai_khoan OR ...)` trong `0003_nguoi_dung_co_tai_khoan.sql` — một **mẫu đã bị chú thích**, nằm trong khối *"NO CHECK CONSTRAINT. Decided, not overlooked"* mà chính nó giải thích rằng viết ràng buộc ấy bây giờ là quyết hộ khách. Migration làm **đúng** điều luật 9 đòi và bị guard phạt **vì đã giải thích lý do**. Bảng này đã ghi hệ quả ở dòng khác: **hook nhiễu là hook bị tắt** — và không gì làm người ta tắt nhanh bằng một guard câm hàng tháng rồi mở miệng ra là buộc tội nhầm. Đã vá: bỏ chú thích trước khi đếm, **nhưng GIỮ dấu khai báo** (`@cross-tenant`, `@entity`, `@scope`) — chúng là khai báo luật bắt buộc phải có, chỉ tình cờ sống trong chú thích, và bỏ luôn chúng thì tín hiệu của câu #4 vĩnh viễn không bắn được trong khi hook vẫn trông như đang canh |
+| **Hai cảnh báo còn lại là việc thật — xử bằng cách trả lời câu hỏi, không phải nới ngưỡng** | Câu mở **#4**: đã có đường đọc chéo xã trong mã trong khi khách chưa chốt cấp tỉnh xem tổng hợp tới mức nào. Câu mở **#19**: bảng quan hệ công dân↔xã vừa ra đời trong khi câu "công dân sửa lời khai đã xác thực thì sao" còn mở |
 | **Test tích hợp SKIP nhưng cả gói vẫn báo `ok`** | Dạng nặng nhất. Đã kiểm chứng: đột biến một dòng vào **mã sản phẩm** (`AND nd.co_tai_khoan`) mà không có gì đỏ. Trước khi tin "có test canh chỗ này", **gỡ thử dòng đó ra và xem có đỏ không** |
 | **Kết quả grep âm tính KHÔNG phải bằng chứng vắng mặt** | Một agent báo "grep không có kết quả nào" ⇒ kết luận web không gọi tuyến ấy ⇒ **bảng thuật ngữ bị sửa yếu đi theo**. Thực tế có gọi: một chỗ là template literal có nội suy, một chỗ gán qua biến có kiểu sinh chứ không nằm trong lời gọi `fetch`. Loại sai này không ai soi ra **vì nó trông như thận trọng** |
 | **`--build-arg` cho một `ARG` không khai bị Docker bỏ qua lặng lẽ** | Một lượt "đột biến" để thử rào chắn sẽ **xanh** và trông như rào đã bắn. Muốn thử thật thì sửa `ENV` trong chính Dockerfile. Áp cho mọi phép thử rào chắn trong ảnh |
@@ -212,7 +230,7 @@ commit, và một con số sai trông y hệt một con số đúng.
 | **`golangci-lint`** | Không có trên máy này; mục `lint` bỏ qua nó bằng tiền tố `-`. Chưa từng chạy ở đây |
 | **`platform-admin/`** | In dòng BỎ QUA vì thiếu `node_modules`. Mã TypeScript của nó **không được kiểm** |
 | **10 Jenkinsfile** | Chưa từng chạy trên Jenkins thật |
-| **Việc một hook có NHÌN THẤY gì không** | `check_brain` bất biến 1 kiểm mỗi luật có **nêu tên** một hook và mọi đường dẫn hook có neo — **không** kiểm hook ấy đọc được tệp nào. `drift_guard` mù suốt từ ADR 0015 mà cổng vẫn 7/7. Phép kiểm duy nhất đáng tin cho một hook là **đột biến**: sửa một dòng mà nó đáng lẽ phải chặn, rồi xem nó có chặn không. Đã bịt một phần: `tools/test_hooks.py` nay có ca cho `stop_verify_guard.is_code` — phần THUẦN của một hook được miễn ca payload vẫn kiểm được, và miễn ca payload không có nghĩa là miễn test |
+| **Việc một hook có NHÌN THẤY gì không** | `check_brain` bất biến 1 kiểm mỗi luật có **nêu tên** một hook và mọi đường dẫn hook có neo — **không** kiểm hook ấy đọc được tệp nào. `drift_guard` mù suốt từ ADR 0015 mà cổng vẫn 7/7. Phép kiểm duy nhất đáng tin cho một hook là **đột biến**: sửa một dòng mà nó đáng lẽ phải chặn, rồi xem nó có chặn không. Đã bịt một phần: `tools/test_hooks.py` nay có ca thuần cho **hai** hook — `stop_verify_guard.is_code` (thứ gì được tính là mã) và `drift_guard.duoc_quet` + `nen_canh_bao` (đọc tệp nào, khi nào lên tiếng). Mỗi ca `duoc_quet` là một **hình dạng đơn vị triển khai**, nên quay về danh sách trắng là đỏ tại chỗ. Bài học ghi thẳng vào chỗ khai miễn trừ: **miễn ca payload không phải miễn test; phần thuần của một hook luôn kiểm được** |
 
 **Đã kiểm trong phiên này, không còn là văn bản Dockerfile:** cả 9 ảnh dựng được và dựng
 **không có `go.work`** (nên `go.mod` từng dịch vụ thật sự đủ) · nhị phân liên kết tĩnh, đã

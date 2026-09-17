@@ -450,6 +450,31 @@ DUOC_QUET_CASES = [
 # Ngưỡng của TỪNG tín hiệu phải được dùng thật. Luật cũ dùng `top_n < 3` cứng, nên mọi
 # "threshold": 1 trong open-questions.json là chữ chết — mà 1 đúng là ngưỡng các câu ĐẮT NHẤT
 # khai báo, vì với chúng một lần xuất hiện đã là quyết định.
+# Tín hiệu nằm trong CHÚ THÍCH không phải là quyết định. Ca đầu là ca thật, lấy nguyên văn từ
+# 0003_nguoi_dung_co_tai_khoan.sql: một khối giải thích VÌ SAO CỐ Ý KHÔNG đặt ràng buộc, kèm
+# mẫu ALTER TABLE đã bị chú thích cho sau này. Bản vá drift_guard đầu tiên đếm cả dòng ấy và
+# bắn cảnh báo — tức phạt đúng tệp lập luận cẩn thận nhất kho, vì nó đã giải thích lý do.
+# Kho này đã biết hình dạng đó: tenant_scope_guard có ca "khai báo trong chú thích SQL → PASS".
+BO_CHU_THICH_CASES = [
+    ("x.sql", "--          CHECK (NOT co_tai_khoan OR mat_khau_hash <> '');",
+     "CHECK", False, "mẫu ràng buộc ĐÃ BỊ CHÚ THÍCH — ca âm tính giả thật"),
+    ("x.sql", "ALTER TABLE nguoi_dung ADD CONSTRAINT x CHECK (a);",
+     "CHECK", True, "ràng buộc THẬT — vẫn phải đếm"),
+    ("x.go", "// tenantID := \"xa-tan-phu\"", "xa-tan-phu", False, "mã Go đã chú thích"),
+    ("x.go", "tenantID := \"xa-tan-phu\"", "xa-tan-phu", True, "mã Go thật"),
+    ("x.go", "/* nhiều dòng\n tenantID = \"xa-tan-phu\"\n */", "xa-tan-phu", False, "chú thích khối"),
+    ("x.ts", "const u = \"https://vigov.vn/api\"; // ghi chú", "vigov.vn", True,
+     "https:// trong chuỗi KHÔNG được cắt mất phần trước nó"),
+    # DẤU KHAI BÁO không phải văn xuôi. `@cross-tenant` bắt buộc phải nằm trong chú thích
+    # (luật 1 cấm #6) và là mẫu tín hiệu DUY NHẤT của câu mở #4 — bỏ nó đi cùng văn xuôi là
+    # làm hook vĩnh viễn không báo được câu ấy, trong khi vẫn trông như đang canh.
+    ("x.go", "// @cross-tenant: picker phải hiện xã TRƯỚC khi biết xã", "@cross-tenant", True,
+     "DẤU khai báo trong chú thích — phải GIỮ"),
+    ("x.sql", "-- @entity: CitizenIdentity", "@entity", True, "dấu @entity trong SQL — phải giữ"),
+    ("x.go", "// giải thích dài dòng, không có dấu nào", "giải thích", False,
+     "văn xuôi thuần trong cùng loại chú thích — vẫn bỏ"),
+]
+
 NEN_CANH_BAO_CASES = [
     ({"A": 1}, {"A": 1}, True, "ngưỡng 1 và có 1 — phải bắn (ca từng chết)"),
     ({"A": 2}, {}, False, "không khai ngưỡng, mặc định 3, mới có 2 — im"),
@@ -485,6 +510,15 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         if not ok:
             sai.append((duong, nhan, mong, duoc))
 
+    for ten, noi_dung, mau, mong, nhan in BO_CHU_THICH_CASES:
+        duoc = mau in dg.bo_chu_thich(noi_dung, ten)
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        want = "ĐẾM " if mong else "BỎ QUA"
+        print(f"{mark} [{want}] {'drift_guard.bo_chu_thich':24s} {nhan}")
+        if not ok:
+            sai.append((noi_dung[:40], nhan, mong, duoc))
+
     for counts, nguong, mong, nhan in NEN_CANH_BAO_CASES:
         duoc = dg.nen_canh_bao(counts, nguong) is not None
         ok = duoc == mong
@@ -517,7 +551,8 @@ if __name__ == "__main__":
 
     sai_thuan = chay_thuan()
 
-    tong = len(CASES) + len(IS_CODE_CASES) + len(DUOC_QUET_CASES) + len(NEN_CANH_BAO_CASES)
+    tong = (len(CASES) + len(IS_CODE_CASES) + len(DUOC_QUET_CASES)
+            + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES))
     hong = len(fails) + len(sai_thuan)
     print()
     print(f"Total: {tong} cases · passed: {tong-hong} · failed: {hong}")
