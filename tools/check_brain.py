@@ -109,7 +109,14 @@ tally: dict[str, dict[str, int]] = {}
 for hook, kind in cases:
     tally.setdefault(hook, {"BLOCK": 0, "PASS": 0})[kind] += 1
 
-# session_start / drift_guard / stop_verify_guard need a real environment — smoke-tested instead
+# session_start / drift_guard / stop_verify_guard need a real session transcript, so they have no
+# PAYLOAD case here.
+#
+# THE EXEMPTION IS ABOUT THE PAYLOAD, NOT ABOUT THE HOOK, and reading it the wider way cost
+# something real: `stop_verify_guard.is_code()` is a pure function of a path deciding what counts
+# as code at all, it needs no environment whatever — and it went untested until a missing
+# `/tools/` made every edit to the contract generator invisible to the gate. Whatever part of an
+# exempt hook is pure is testable, and `tools/test_hooks.py` now carries those cases separately.
 EXEMPT = {"session_start", "drift_guard", "stop_verify_guard"}
 gaps = []
 for h in sorted(on_disk - EXEMPT):
@@ -120,7 +127,8 @@ for h in sorted(on_disk - EXEMPT):
         gaps.append(f"{h}: no PASS case")
 
 report(not gaps, "2. Every hook has a block case and a pass case",
-    f"{len(cases)} cases across {len(tally)} hooks ({len(EXEMPT)} exempt: need a real environment)",
+    f"{len(cases)} payload cases across {len(tally)} hooks "
+    f"({len(EXEMPT)} exempt from payload cases; their pure parts are tested separately)",
     gaps)
 
 

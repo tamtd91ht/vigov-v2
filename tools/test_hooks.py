@@ -397,6 +397,48 @@ CASES = [
 ]
 
 
+# ---- pure-function cases: what stop_verify_guard COUNTS AS CODE ---------------------------
+#
+# WHY THESE SIT APART FROM THE CASES ABOVE. Three hooks are exempt from the payload cases
+# because they need a real session transcript. That exemption was read too widely:
+# `stop_verify_guard.is_code()` decides **what counts as code at all**, it is a pure function of
+# a path, it needs no environment — and it had no test. So on the day `/tools/` was missing from
+# its directory list, edits to the contract GENERATOR were invisible to the gate: change
+# tools/apidoc, say "done", and nothing had to run.
+#
+# A whitelist of directory segments is exactly the kind of list that stops matching in silence —
+# the flat layout (ADR 0015) emptied four of them at once and nothing went red. The only thing
+# that catches it is an assertion naming one real path per shape a deployable unit can take.
+IS_CODE_CASES = [
+    ("service-identity/internal/http/routes.go", True, "mã dịch vụ"),
+    ("service-identity/migrations/0004_x.sql", True, "migration của dịch vụ"),
+    ("core/httpx/edge.go", True, "mã dùng chung"),
+    ("web-admin/src/lib/api/can-bo.ts", True, "mã web"),
+    ("proto/vigov/identity/v1/identity.proto", True, "hợp đồng giữa service"),
+    ("tools/apidoc/route.go", True, "TRÌNH SINH hợp đồng REST — ca từng thủng"),
+    ("tools/kb/main.go", True, "trình sinh các chỉ mục kb/"),
+    ("kb/INDEX.yaml", False, "tài liệu, không phải mã"),
+    ("docs/ui-ux/15-phu-luc.md", False, "đặc tả giao diện, không phải mã"),
+]
+
+
+def chay_thuan() -> list[tuple[str, str, bool, bool]]:
+    """Trả về các ca SAI của is_code. Import tại chỗ: hook thêm thư mục của nó vào sys.path."""
+    sys.path.insert(0, HOOKS)
+    import stop_verify_guard as svg  # noqa: E402
+
+    sai = []
+    for duong, mong, nhan in IS_CODE_CASES:
+        duoc = svg.is_code(duong)
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        want = "CODE " if mong else "BỎ QUA"
+        print(f"{mark} [{want}] {'stop_verify_guard.is_code':24s} {nhan}")
+        if not ok:
+            sai.append((duong, nhan, mong, duoc))
+    return sai
+
+
 def run(hook: str, payload: dict) -> int:
     p = os.path.join(HOOKS, hook + ".py")
     r = subprocess.run([sys.executable, p], input=json.dumps(payload, ensure_ascii=False),
@@ -415,10 +457,18 @@ if __name__ == "__main__":
         if not ok:
             fails.append((hook, label, expect, got))
 
+    sai_thuan = chay_thuan()
+
+    tong = len(CASES) + len(IS_CODE_CASES)
+    hong = len(fails) + len(sai_thuan)
     print()
-    print(f"Total: {len(CASES)} cases · passed: {len(CASES)-len(fails)} · failed: {len(fails)}")
+    print(f"Total: {tong} cases · passed: {tong-hong} · failed: {hong}")
     if fails:
         print("\nCa sai:")
         for hook, label, expect, got in fails:
             print(f"  {hook} — {label}: expected exit={expect}, got exit={got}")
-    sys.exit(1 if fails else 0)
+    if sai_thuan:
+        print("\nCa sai (hàm thuần):")
+        for duong, nhan, mong, duoc in sai_thuan:
+            print(f"  is_code({duong!r}) — {nhan}: muốn {mong}, nhận {duoc}")
+    sys.exit(1 if hong else 0)

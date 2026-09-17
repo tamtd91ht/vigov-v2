@@ -3,7 +3,7 @@ id: ban-giao-phien
 tier: T5
 source: CURATED
 owner: architecture
-derived_from_commit: 151b4fd
+derived_from_commit: d427899
 expires: 2026-12-16
 owns_facts:
   - "trạng thái thi công tại 2026-09-17 và việc kế tiếp phải làm"
@@ -139,7 +139,7 @@ và thứ chúng chặn — không chép lại nội dung câu hỏi.
 
 **`vigov-v2-92`** đang chạy cùng kho, giữ: `proto/` · `core/` · `tools/apidoc/` ·
 `service-platform/` · `service-identity/migrations/` · `citizen-app/` · `kb/10-decisions/0018`–
-`0023` · `kb/00-foundation/{ubiquitous-language,open-questions}`.
+`0023` · `kb/00-foundation/{ubiquitous-language,open-questions}` · `.claude/hooks/drift_guard.py`.
 
 Phiên viết tệp này giữ: `service-identity/internal/**` · `web-admin/**` ·
 `tools/check_build.py` · `makefile` · `.dockerignore` · `*/Dockerfile` · `*/Jenkinsfile` ·
@@ -158,8 +158,18 @@ store/` sẽ cần kho đọc cho chúng — và đó là vùng của phiên nà
 Một nửa bảng này có chung một hình dạng: **thứ trông như biện pháp mà không phải biện pháp.**
 Gặp cái tiếp theo cùng dạng thì đừng vá riêng nó — hỏi cả lớp đó còn ở đâu nữa.
 
+**Riêng bố cục phẳng (ADR 0015/0016) sinh ra cả một mẻ, và không cái nào kêu.** Mọi cơ chế
+nhận diện mã theo **tên thư mục** câm đi cùng lúc: sáu hook khớp theo đoạn `/services/` ·
+`drift_guard` quét danh sách trắng bảy thư mục mà sau đó chỉ còn **một** tồn tại ·
+`.dockerignore` loại trừ `apps` · `check_brain` đếm tên hook thay vì đường dẫn. Bài học chung,
+đắt hơn từng ca riêng lẻ: **danh sách trắng tên thư mục là hình dạng sai cho kho này.** Đơn vị
+triển khai tiếp theo thêm vào sẽ lại không được quét, và không có gì đỏ vào ngày ấy. Dùng
+**danh sách loại trừ** — nó hỏng theo chiều ngược lại, tức quét thừa vài mili giây thay vì
+quét thiếu.
+
 | Vấn đề | Cách xử |
 |---|---|
+| **`drift_guard` mù hẳn mà cổng kiểm vẫn 7/7** | Hook DUY NHẤT canh chuyện "mã đang lặng lẽ quyết hộ khách một câu hỏi mở" — đúng lớp lỗi CLAUDE.md nói đã làm dự án trước mất 20–28 ngày. Từ ADR 0015 nó không đọc một dòng service, `core/`, web hay migration nào. **`check_brain` vẫn xanh vì nó kiểm "mỗi luật có NÊU TÊN một hook", không kiểm "hook ấy có NHÌN THẤY gì không"** — xem §6 |
 | **Test tích hợp SKIP nhưng cả gói vẫn báo `ok`** | Dạng nặng nhất. Đã kiểm chứng: đột biến một dòng vào **mã sản phẩm** (`AND nd.co_tai_khoan`) mà không có gì đỏ. Trước khi tin "có test canh chỗ này", **gỡ thử dòng đó ra và xem có đỏ không** |
 | **Kết quả grep âm tính KHÔNG phải bằng chứng vắng mặt** | Một agent báo "grep không có kết quả nào" ⇒ kết luận web không gọi tuyến ấy ⇒ **bảng thuật ngữ bị sửa yếu đi theo**. Thực tế có gọi: một chỗ là template literal có nội suy, một chỗ gán qua biến có kiểu sinh chứ không nằm trong lời gọi `fetch`. Loại sai này không ai soi ra **vì nó trông như thận trọng** |
 | **`--build-arg` cho một `ARG` không khai bị Docker bỏ qua lặng lẽ** | Một lượt "đột biến" để thử rào chắn sẽ **xanh** và trông như rào đã bắn. Muốn thử thật thì sửa `ENV` trong chính Dockerfile. Áp cho mọi phép thử rào chắn trong ảnh |
@@ -202,6 +212,7 @@ commit, và một con số sai trông y hệt một con số đúng.
 | **`golangci-lint`** | Không có trên máy này; mục `lint` bỏ qua nó bằng tiền tố `-`. Chưa từng chạy ở đây |
 | **`platform-admin/`** | In dòng BỎ QUA vì thiếu `node_modules`. Mã TypeScript của nó **không được kiểm** |
 | **10 Jenkinsfile** | Chưa từng chạy trên Jenkins thật |
+| **Việc một hook có NHÌN THẤY gì không** | `check_brain` bất biến 1 kiểm mỗi luật có **nêu tên** một hook và mọi đường dẫn hook có neo — **không** kiểm hook ấy đọc được tệp nào. `drift_guard` mù suốt từ ADR 0015 mà cổng vẫn 7/7. Phép kiểm duy nhất đáng tin cho một hook là **đột biến**: sửa một dòng mà nó đáng lẽ phải chặn, rồi xem nó có chặn không. Đã bịt một phần: `tools/test_hooks.py` nay có ca cho `stop_verify_guard.is_code` — phần THUẦN của một hook được miễn ca payload vẫn kiểm được, và miễn ca payload không có nghĩa là miễn test |
 
 **Đã kiểm trong phiên này, không còn là văn bản Dockerfile:** cả 9 ảnh dựng được và dựng
 **không có `go.work`** (nên `go.mod` từng dịch vụ thật sự đủ) · nhị phân liên kết tĩnh, đã
@@ -224,6 +235,7 @@ hay đường dẫn nội bộ.
 | 6 | **`Staff` không có trường họ tên** | `BatchGetStaff` chưa phục vụ được mục đích nó tự khai. Thêm trường là sửa hợp đồng — cùng lúc phải trả lời câu che/không che (#11) |
 | 7 | **Bàn giao việc đang xử lý khi khoá tài khoản** | Cố ý **chưa** ghi thành câu hỏi mở: chưa có bảng giao việc nào tồn tại để nói "việc đang giữ" nghĩa là gì, nên hỏi bây giờ là hỏi một câu trừu tượng. Hỏi khi dựng bảng nghiệp vụ đầu tiên có người phụ trách — và nhớ câu trả lời nhiều khả năng là "tuỳ xã" |
 | 8 | **Cán bộ không có vai trò nào thì vào `/` thấy gì** | Đặc tả §1 chỉ chia "Lãnh đạo" / "vai trò khác". Chưa ghi thành câu hỏi mở vì chưa biết trạng thái ấy có tồn tại thật trên dữ liệu xã hay không |
+| 9 | **Rà cả lớp "cơ chế nhận diện mã theo tên thư mục"** | Đã soát `.claude/hooks/` và `tools/` và tìm được **ca thứ năm**: `stop_verify_guard.CODE_DIR` thiếu `/tools/`, nên sửa trình sinh hợp đồng rồi nói "xong" thì cổng không thấy gì. Đã vá + thêm ca test + đột biến để chắc nó bắn. **Chưa soát:** không có `.github/` nên chưa có cấu hình CI nào để soát, nhưng ngày dựng CI thì đây là thứ phải soát lại đầu tiên |
 
 ---
 

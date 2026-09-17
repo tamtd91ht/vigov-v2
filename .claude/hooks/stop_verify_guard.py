@@ -29,8 +29,16 @@ import _common as c  # noqa: E402
 HOOK = "stop_verify_guard"
 
 CODE_EXT = (".go", ".ts", ".tsx", ".js", ".jsx", ".proto", ".sql")
-CODE_DIR = ("/internal/", "/core/", "/cmd/", "/proto/", "/migrations/", "/src/",
-            "/migrations/")
+
+# `/tools/` IS CODE, and leaving it out was a hole with a specific shape. tools/apidoc GENERATES
+# kb/20-contracts/openapi.json, which web-admin's types are generated from in turn; tools/kb
+# generates the indexes the agent navigates by. A change there alters what every screen is typed
+# against, and until this entry existed the gate could not see it: an edit to the contract
+# generator followed by "done" passed with nothing run.
+#
+# The list was also carrying "/migrations/" twice. Harmless, but it is what a list edited
+# without reading looks like — and this is the list deciding what counts as code at all.
+CODE_DIR = ("/internal/", "/core/", "/cmd/", "/proto/", "/migrations/", "/src/", "/tools/")
 
 # Signals that a verification run FAILED. Matching the command alone let a red `go test`
 # satisfy the gate -- the exact failure this hook exists to stop.
@@ -47,8 +55,8 @@ VERIFY_CMD = re.compile(
 
 
 def is_code(path: str) -> bool:
-    # Normalise to a leading slash: transcripts record RELATIVE paths ("apps/x/y.tsx"),
-    # while CODE_DIR entries are written "/apps/". Without this, a relative top-level dir
+    # Normalise to a leading slash: transcripts record RELATIVE paths ("core/httpx/edge.go"),
+    # while CODE_DIR entries are written "/core/". Without this, a relative top-level dir
     # never matched and edits there were invisible to the gate.
     p = (path or "").replace("\\", "/")
     if not p.endswith(CODE_EXT) or c.should_skip(p):
