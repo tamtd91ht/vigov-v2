@@ -53,6 +53,19 @@ IDEM_DECL = re.compile(r"idem\.(?:Required|KhongCan)\s*\(")
 # typing instead — the only place where the two declarations are visible together.
 PUBLIC_DECL = re.compile(r"authz\.Public\s*\(")
 IDEM_REQUIRED = re.compile(r"idem\.Required\s*\(")
+
+# A route with no @summary / @reply block is a route missing from kb/20-contracts/openapi.json,
+# and a route missing from the contract is a screen the web side builds by guessing the shape —
+# the v1 failure ROUTING.md:229 recorded, where the type source of truth ended up in the
+# frontend in three hand-kept copies.
+#
+# The block must sit IMMEDIATELY above the statement, no blank line, because that is the rule
+# tools/apidoc enforces when it reads them. A guard that accepted a looser shape than the
+# generator would pass routes the generator then silently drops.
+TAG_SUMMARY = re.compile(r"^\s*//\s*@summary\s+\S", re.M)
+TAG_REPLY = re.compile(r"^\s*//\s*@reply\s+\d{3}\s+\S", re.M)
+TAG_ANY = re.compile(r"^\s*//\s*@(\w+)", re.M)
+TAG_KNOWN = {"summary", "screen", "request", "reply"}
 IDEM_NO_REASON = re.compile(r"idem\.KhongCan\s*\(\s*\)")
 IDEM_NO_MODE = re.compile(r"idem\.Required\s*\(\s*\)")
 
@@ -170,6 +183,24 @@ def statements(content: str) -> list[tuple[int, str]]:
     return out
 
 
+def chu_thich_tren(lines: list[str], lineno: int) -> str:
+    """The comment block directly above line `lineno`, stopping at the first blank or code line.
+
+    Same rule as tools/apidoc: IMMEDIATELY above, no blank line between. Accepting a looser
+    shape here would pass routes that the generator then drops without saying so.
+    """
+    out = []
+    i = lineno - 2  # lineno is 1-based and points AT the statement
+    while i >= 0:
+        s = lines[i].strip()
+        if s.startswith("//"):
+            out.append(lines[i])
+            i -= 1
+            continue
+        break
+    return "\n".join(reversed(out))
+
+
 def routes(stmt: str) -> list[tuple[str, str]]:
     found = [(m.group(1).upper(), m.group(2)) for m in MUX.finditer(stmt)]
     found += [(m.group(1).upper(), m.group(2)) for m in CHI.finditer(stmt)]
@@ -220,6 +251,7 @@ def main() -> None:
     mix_hits: list[str] = []
     other: list[str] = []
 
+    raw_lines = content.splitlines()
     for lineno, stmt in statements(strip_comments(content)):
         for method, route in routes(stmt):
             segs = segments(route)
@@ -242,6 +274,17 @@ def main() -> None:
             # ---- everything below is advisory (PostToolUse) --------------------
             if is_infra(route):
                 continue
+
+            khoi = chu_thich_tren(raw_lines, lineno)
+            if not TAG_SUMMARY.search(khoi):
+                other.append(f"line {lineno}: {method} {route} — NO @summary/@reply block, so "
+                             f"it will not appear in kb/20-contracts/openapi.json")
+            elif not TAG_REPLY.search(khoi):
+                other.append(f"line {lineno}: {method} {route} — has @summary but no @reply")
+            for m in TAG_ANY.finditer(khoi):
+                if m.group(1) not in TAG_KNOWN:
+                    other.append(f"line {lineno}: unknown tag @{m.group(1)} — a typo here drops "
+                                 f"a shape from the contract in silence")
 
             if method in CHANGES_STATE and not IDEM_DECL.search(stmt):
                 other.append(
@@ -325,6 +368,22 @@ def main() -> None:
                 "                http.HandlerFunc(h.confirm))))",
                 "",
                 '    idem.KhongCan("<why this route is naturally idempotent>")',
+                "",
+                "  And the contract block, IMMEDIATELY above the statement with no blank line —",
+                "  that is the shape tools/apidoc reads, and a route without it is simply absent",
+                "  from kb/20-contracts/openapi.json:",
+                "",
+                "    // @summary  Đăng nhập bằng email và mật khẩu, mở một phiên làm việc",
+                "    // @screen   15-phu-luc-giao-dien-chung §1",
+                "    // @request  thanDangNhap",
+                "    // @reply    201 phanHoiDangNhap",
+                "    // @reply    401 httpx.Error",
+                "",
+                "  Absent from the contract means the web side builds that screen by guessing the",
+                "  response shape — the v1 failure where the type source of truth moved into the",
+                "  frontend as three hand-kept copies.",
+                "  Permission and idempotency are NOT declared here: they are read from the",
+                "  authz./idem. calls, so there is no second copy to drift.",
                 "",
                 "  MoKhiHong for intake paths — refusing a citizen because a cache is down is",
                 "  worse than a rare duplicate. DongKhiHong where the consequence is legal:",

@@ -190,6 +190,36 @@ CASES = [
        'mux.Handle("POST /api/v1/sessions",\n'
        '\tauthz.Public("màn hình đăng nhập")(\n'
        '\t\tidem.KhongCan("đăng nhập lần hai mở một phiên thứ hai")(h.DangNhap)))')),
+    # A route with no @summary/@reply block never reaches kb/20-contracts/openapi.json, and a
+    # route absent from the contract is a screen the web side builds by guessing the response
+    # shape — the v1 failure where the type source of truth moved into the frontend.
+    ("rest_api_guard", "route with no contract block", BLOCK,
+     wpost("services/petitions/internal/http/routes.go",
+           'mux.Handle("GET /api/v1/citizen-reports",\n'
+           '\tauthz.RequirePermission(d.Checker, "feedback.read")(http.HandlerFunc(h.List)))')),
+    # The block must sit IMMEDIATELY above — that is the rule tools/apidoc applies, and a guard
+    # accepting a looser shape would pass routes the generator then silently drops.
+    ("rest_api_guard", "contract block separated by a blank line", BLOCK,
+     wpost("services/petitions/internal/http/routes.go",
+           '// @summary  Danh sách phản ánh\n'
+           '// @reply    200 danhSachPhanAnh\n'
+           '\n'
+           'mux.Handle("GET /api/v1/citizen-reports",\n'
+           '\tauthz.RequirePermission(d.Checker, "feedback.read")(http.HandlerFunc(h.List)))')),
+    ("rest_api_guard", "a typo in a contract tag", BLOCK,
+     wpost("services/petitions/internal/http/routes.go",
+           '// @summary  Danh sách phản ánh\n'
+           '// @replies  200 danhSachPhanAnh\n'
+           'mux.Handle("GET /api/v1/citizen-reports",\n'
+           '\tauthz.RequirePermission(d.Checker, "feedback.read")(http.HandlerFunc(h.List)))')),
+    ("rest_api_guard", "route with a complete contract block", PASS,
+     wpost("services/petitions/internal/http/routes.go",
+           '// @summary  Danh sách phản ánh của xã\n'
+           '// @screen   09-phan-anh-nguoi-dan §4\n'
+           '// @reply    200 danhSachPhanAnh\n'
+           '// @reply    403 httpx.Error\n'
+           'mux.Handle("GET /api/v1/citizen-reports",\n'
+           '\tauthz.RequirePermission(d.Checker, "feedback.read")(http.HandlerFunc(h.List)))')),
     ("rest_api_guard", "a route inside a comment is not a route", PASS,
      wpost("services/comms/internal/http/routes.go",
            '// Example of the shape every real route must take:\n'
@@ -197,6 +227,10 @@ CASES = [
            'func Register(mux *http.ServeMux, d Deps) { _ = d }')),
     ("rest_api_guard", "nominalised action with a failure mode", PASS,
      wpost("services/petitions/internal/http/routes.go",
+           '// @summary  Đóng phiếu phản ánh và trả kết quả cho công dân\n'
+           '// @screen   09-phan-anh-nguoi-dan §14\n'
+           '// @reply    200 phanHoiDongPhieu\n'
+           '// @reply    409 httpx.Error\n'
            'mux.Handle("POST /api/v1/citizen-reports/{code}/closure",\n'
            '\tauthz.RequirePermission(d.Checker, "feedback.resolve")(\n'
            '\t\tidem.Required(idem.DongKhiHong)(http.HandlerFunc(h.Close))))')),
