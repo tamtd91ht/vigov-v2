@@ -7,8 +7,9 @@
 #     --build-arg VERSION=$(git rev-parse --short=12 HEAD) \
 #     -t <registry>/<project>/vigov-web-admin:<sha> web-admin
 #
-# Các dịch vụ Go phải lấy ngữ cảnh ở gốc kho vì chúng dùng chung `go.mod`, `core/` và `gen/`.
-# Ứng dụng này không dùng chung gì cả — nó có `package.json` và `package-lock.json` riêng —
+# Các dịch vụ Go phải lấy ngữ cảnh ở gốc kho vì go.mod của chúng `replace` module core bằng
+# đường dẫn `../core` (ADR 0016) — mỗi dịch vụ có go.mod RIÊNG, thứ dùng chung là `core/` và
+# `core/gen/`. Ứng dụng này không dùng chung gì cả — `package.json` và lock riêng của nó —
 # nên ngữ cảnh của nó là thư mục của nó. Ít thứ gửi sang trình đóng ảnh cũng là ít thứ có
 # thể lọt vào ảnh. Loại trừ: `.dockerignore` ngay cạnh tệp này.
 
@@ -44,6 +45,14 @@ COPY . .
 #
 # Nếu về sau thật sự cần một hằng số công khai TOÀN NỀN TẢNG (không thuộc xã nào), hãy gỡ
 # rào này một cách tường minh và ghi lý do — đừng lách nó bằng một tên biến khác.
+# PHÉP KIỂM NẰM CÙNG MỘT `RUN` VỚI `npm run build`, CÓ CHỦ Ý — và đây là điều dễ vô hiệu hoá
+# nhất ở cả tệp. Khi nó đứng thành một `RUN` riêng phía trên, nó chỉ đo môi trường TẠI THỜI
+# ĐIỂM ẤY: một dòng `ENV NEXT_PUBLIC_...` thêm vào giữa nó và `npm run build` không bị nó
+# nhìn thấy — mà đó đúng là chỗ người ta sẽ thêm, ngay cạnh các ENV khác, ngay cạnh dòng
+# build. Đo được bằng một lượt đột biến: rào cũ vẫn xanh trước đúng ca ấy.
+#
+# Cùng một shell với `npm run build` thì không còn khe nào để chen vào.
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN if env | grep -q '^NEXT_PUBLIC_'; then \
       echo ""; \
       echo "TỪ CHỐI BUILD: có biến NEXT_PUBLIC_* trong môi trường build."; \
@@ -53,11 +62,8 @@ RUN if env | grep -q '^NEXT_PUBLIC_'; then \
       echo "được đọc LÚC CHẠY từ Host — xem src/lib/tenant.server.ts."; \
       echo ""; \
       exit 1; \
-    fi
+    fi && npm run build
 # ─────────────────────────────────────────────────────────────────────────────────────────
-
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
 
 # ---------------------------------------------------------------------------------------
 FROM node:${NODE_VERSION}-alpine AS runtime

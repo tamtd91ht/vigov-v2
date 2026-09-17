@@ -12,7 +12,13 @@
 # contain modules listed in go.work"), nên chuyện đó không âm thầm. Nhưng nếu ai "sửa" bằng
 # cách liệt kê tay vài module thì module thứ mười một sẽ không được kiểm — và CHUYỆN ĐÓ mới
 # âm thầm. `go list -m` luôn trả đúng những gì go.work đang nạp.
-MOD_DIRS := $(shell go list -m -f '{{.Dir}}')
+#
+# `tr '\134' '/'` ĐỔI DẤU GẠCH NGƯỢC THÀNH GẠCH XUÔI, và nó không thừa. Trên Windows `go list`
+# trả `D:\works\...`; make chuyển chuỗi ấy cho `sh`, và `sh` nuốt mọi dấu `\` như ký tự thoát —
+# `cd "D:\works\..."` thành `cd "D:worksvihat..."`. Mục `standalone` đổ với một thông báo trỏ
+# vào một đường dẫn không ai gõ bao giờ, còn `go vet`/`go build` thì nhận đường dẫn hỏng.
+# Trên Linux chuỗi không có dấu gạch ngược nào nên đây là phép biến đổi rỗng.
+MOD_DIRS := $(shell go list -m -f '{{.Dir}}' | tr '\134' '/')
 MODULES  := $(addsuffix /...,$(MOD_DIRS))
 
 

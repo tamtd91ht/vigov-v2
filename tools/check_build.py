@@ -93,6 +93,59 @@ def dich_vu() -> list[str]:
 DUONG_DUNG_CHUNG = ["core/**", "proto/**", "go.work"]
 
 
+# Thư mục cấp một ĐƯỢC PHÉP đi theo ngữ cảnh build của dịch vụ Go, ngoài chính tám dịch vụ.
+#
+# `core/` vì mọi go.mod `replace` nó bằng `../core`, và `proto/` vì `core/gen` sinh ra từ đó.
+# Không có mục thứ ba: mọi thứ khác ở cấp một là mã không chạy trong runtime của dịch vụ Go.
+DUOC_DI_THEO = {"core", "proto"}
+
+
+def kiem_dockerignore(svcs: list[str], loi: list[str]) -> None:
+    """Mọi thư mục cấp một hoặc là mã của dịch vụ Go, hoặc bị loại khỏi ngữ cảnh build.
+
+    VÌ SAO PHÉP KIỂM NÀY TỒN TẠI — nó ra đời từ một lần hỏng thật. Bố cục cũ gom ba ứng dụng
+    web dưới `apps/`, và .dockerignore loại trừ đúng một dòng `apps`. Bố cục phẳng (ADR 0015)
+    bỏ tầng đó đi; dòng `apps` ở lại, trỏ vào một thư mục không còn tồn tại. Nó không loại trừ
+    gì nữa, mà vẫn nằm đó trông y hệt một biện pháp — và ba cây nguồn web lặng lẽ đi theo ngữ
+    cảnh build của cả tám dịch vụ Go. Không có gì đỏ: build vẫn chạy, ảnh vẫn đúng.
+
+    Nên điều được kiểm KHÔNG phải "dòng `apps` còn không" — một phép kiểm như thế mục ruỗng
+    cùng nhịp với thứ nó canh. Kiểm chiều ngược lại: mọi thư mục cấp một phải được kể tới ở
+    một trong ba chỗ, nên một thư mục MỚI sinh ra cũng đỏ chứ không chỉ một dòng cũ chết đi.
+    """
+    duong = os.path.join(GOC, ".dockerignore")
+    if not os.path.isfile(duong):
+        loi.append(
+            ".dockerignore KHÔNG TỒN TẠI — toàn bộ kho, gồm .git với đầy đủ lịch sử, đi theo "
+            "ngữ cảnh build của tám dịch vụ."
+        )
+        return
+
+    with open(duong, encoding="utf-8") as f:
+        # Chỉ lấy mẫu là TÊN THƯ MỤC TRẦN. `**/node_modules`, `*.pem`, `!.env.example` là mẫu
+        # tệp — chúng không trả lời được câu hỏi "thư mục cấp một này có bị loại không".
+        loai = {
+            d.strip() for d in f
+            if d.strip() and not d.startswith("#")
+            and not any(c in d for c in "*!/")
+        }
+
+    for ten in sorted(os.listdir(GOC)):
+        if ten.startswith(".") or not os.path.isdir(os.path.join(GOC, ten)):
+            continue
+        if ten in svcs or ten in DUOC_DI_THEO or ten in loai:
+            continue
+        loi.append(
+            f"thư mục cấp một '{ten}/' không bị .dockerignore loại, và cũng không phải mã của "
+            f"dịch vụ Go"
+            f"\n        → Nó đi theo ngữ cảnh build của CẢ TÁM dịch vụ. Không có gì đỏ vì việc "
+            f"này không làm hỏng ảnh — nó chỉ đưa mã không thuộc dịch vụ vào tầm với của mọi "
+            f"lệnh COPY, và một tệp đã vào ảnh rồi tới registry thì không gọi về được (luật 8)."
+            f"\n        → Thêm '{ten}' vào .dockerignore, hoặc vào DUOC_DI_THEO nếu ảnh Go thật "
+            f"sự cần nó."
+        )
+
+
 def tuong_doi(duong: str) -> str:
     """Đường dẫn theo gốc kho. Báo cáo đi vào log CI; đường tuyệt đối của máy chủ build
     chỉ là nhiễu, và là nhiễu khác nhau trên mỗi máy."""
@@ -197,6 +250,8 @@ def main() -> int:
         kiem_pipeline(os.path.join(GOC, svc, "Jenkinsfile"),
                       f"{svc}/**", loi)
 
+    kiem_dockerignore(svcs, loi)
+
     web = os.path.join(GOC, "web-admin", "Dockerfile")
     if not os.path.isfile(web):
         loi.append("web-admin/Dockerfile KHÔNG TỒN TẠI")
@@ -242,7 +297,7 @@ def main() -> int:
 
     print(f"[PASS] hồ sơ dựng — {len(svcs)} dịch vụ + web · "
           f"{len(svcs) + 1} Dockerfile · {len(svcs) + 1} Jenkinsfile · "
-          f"{len(BAT_BIEN)} bất biến an toàn · 0 vi phạm")
+          f"{len(BAT_BIEN)} bất biến an toàn · ngữ cảnh build kín · 0 vi phạm")
     return 0
 
 

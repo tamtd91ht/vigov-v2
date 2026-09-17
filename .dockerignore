@@ -1,8 +1,11 @@
 # Những gì KHÔNG được gửi sang trình đóng ảnh, cho TÁM DỊCH VỤ GO.
 #
-# Tám dịch vụ lấy ngữ cảnh ở gốc kho vì chúng dùng chung `go.mod`, `pkg/` và `gen/`. Web
-# quản trị xã thì không dùng chung gì, nên nó có ngữ cảnh riêng và danh sách loại trừ riêng:
-# `apps/commune-admin/.dockerignore`.
+# Tám dịch vụ lấy ngữ cảnh ở GỐC KHO — không phải vì chúng dùng chung go.mod (mỗi dịch vụ có
+# go.mod riêng), mà vì mỗi go.mod `replace` module core bằng đường dẫn `../core`. Một ngữ
+# cảnh đặt ở thư mục dịch vụ sẽ không với tới core/.
+#
+# Ba ứng dụng web không dự phần vào đó: chúng có ngữ cảnh riêng và danh sách loại trừ riêng
+# (`web-admin/.dockerignore`).
 #
 # Danh sách này không chỉ để build nhanh — một tệp lọt vào ngữ cảnh là một tệp có thể lọt
 # vào ảnh, và một ảnh đã tới registry thì không gọi về được nữa (luật 8).
@@ -32,7 +35,14 @@ docs
 tasks
 
 # ---- ứng dụng web: có ngữ cảnh build riêng, không thuộc ảnh dịch vụ Go --------------
-apps
+#
+# LIỆT KÊ TỪNG THƯ MỤC, không một dòng `apps` gói chung — bố cục phẳng đã bỏ tầng `apps/`
+# (ADR 0015), và một dòng loại trừ trỏ vào thư mục không còn tồn tại thì không loại trừ gì:
+# nó vẫn nằm đó trông như một biện pháp. `tools/check_build.py` đỏ nếu một thư mục cấp một
+# mới không được kể tới ở đây.
+web-admin
+platform-admin
+citizen-app
 
 # ---- kết quả build của máy dev, phải sinh lại trong ảnh -----------------------------
 node_modules
