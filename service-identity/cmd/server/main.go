@@ -196,10 +196,7 @@ func run(log *slog.Logger) error {
 		DanhBa:   canBo,
 		DangNhap: dangNhap,
 		DangXuat: dangXuat,
-		// THE SAME directory the edge below resolves Host with, deliberately not a second one.
-		// GET /api/v1/commune has to turn the commune already in the context back into a name, and
-		// two ways to answer "which commune is this Host" is how one commune ends up described
-		Log: log,
+		Log:      log,
 	}
 
 	mux := http.NewServeMux()

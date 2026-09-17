@@ -2,6 +2,7 @@ package tenant
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -145,4 +146,91 @@ func TestCacheAnToanKhiChayDongThoi(t *testing.T) {
 		})
 	}
 	wg.Wait()
+}
+
+// --- trần số mục ------------------------------------------------------------------------------
+
+// BÀI QUAN TRỌNG NHẤT TỆP NÀY. `TenantMiddleware` tra thư mục cho MỌI `Host`, trước mọi xác
+// thực, và khoá của map là chuỗi kẻ gọi đặt. Không trần thì `curl -H 'Host: <ngẫu nhiên>'` lặp
+// lại là một mục thường trú mỗi lần — không token, không cần biết xã nào tồn tại — và tiến
+// trình hết bộ nhớ là 200+ xã cùng chết.
+func TestCacheKhongPhinhVoHanKhiBiQuetHost(t *testing.T) {
+	d := dirMau()
+	c := NewCachedDirectory(d, time.Minute)
+
+	for i := 0; i < TranMuc+500; i++ {
+		c.ByHost(context.Background(), fmt.Sprintf("rac-%d.example.gov.vn", i))
+	}
+
+	c.mu.RLock()
+	n := len(c.entries)
+	c.mu.RUnlock()
+
+	if n > TranMuc {
+		t.Fatalf("bộ đệm giữ %d mục, vượt trần %d — một kẻ quét đặt được nhịp cấp phát bộ nhớ", n, TranMuc)
+	}
+}
+
+// Khi đầy, bộ đệm TỪ CHỐI nhớ host mới thay vì đuổi một mục đang còn hạn.
+//
+// Đuổi để lấy chỗ sẽ đổi một đòn bộ nhớ thành một đòn thrash: mỗi host rác đẩy một XÃ CÓ THẬT
+// ra, mọi yêu cầu thật quay lại gọi sang dịch vụ nền tảng, và thứ vừa được bảo vệ lại là thứ
+// chịu thiệt.
+//
+// BÀI NÀY TẤT ĐỊNH, và bản đầu của nó thì không: nó khẳng định một khoá cụ thể sống sót qua
+// ~500 lần đuổi ngẫu nhiên, tức đúng khoảng 88% số lần chạy. Một bài test chập chờn tệ hơn
+// không có bài nào — nó xanh ở máy mình rồi đỏ trong CI vào một buổi chẳng liên quan. Nên chỗ
+// cần ghim là CHÍNH PHÉP TỪ CHỐI: điền đầy đúng trần bằng mục còn hạn, ghi thêm một host, rồi
+// đòi rằng host ấy KHÔNG được nhớ.
+func TestCacheDayThiTuChoiNhoThemChuKhongDuoiMucConHan(t *testing.T) {
+	d := dirMau()
+	c := NewCachedDirectory(d, time.Minute)
+	moc := time.Now()
+	c.now = func() time.Time { return moc }
+
+	for i := 0; i < TranMuc; i++ {
+		c.ByHost(context.Background(), fmt.Sprintf("rac-%d.example.gov.vn", i))
+	}
+
+	const moi = "host-moi.example.gov.vn"
+	c.ByHost(context.Background(), moi)
+	truoc := d.soLan
+
+	// Hỏi lại ngay: nếu nó ĐÃ được nhớ thì thư mục không bị hỏi thêm. Phải bị hỏi lại.
+	c.ByHost(context.Background(), moi)
+	if d.soLan == truoc {
+		t.Fatal("bộ đệm đầy vẫn nhớ host mới — tức nó đã đuổi một mục còn hạn để lấy chỗ")
+	}
+
+	c.mu.RLock()
+	n := len(c.entries)
+	c.mu.RUnlock()
+	if n != TranMuc {
+		t.Errorf("số mục = %d, muốn đúng %d — không mục còn hạn nào được phép bị đuổi", n, TranMuc)
+	}
+}
+
+// Trần không được biến bộ đệm thành thứ chỉ điền một lần rồi đóng băng: mục hết hạn phải được
+// dọn, nếu không một lượt quét sẽ khoá vĩnh viễn mọi xã onboard sau đó ra ngoài bộ đệm.
+func TestCacheDayRoiVanNhoDuocHostMoiSauKhiHetHan(t *testing.T) {
+	d := dirMau()
+	c := NewCachedDirectory(d, time.Minute)
+	moc := time.Now()
+	c.now = func() time.Time { return moc }
+
+	for i := 0; i < TranMuc+10; i++ {
+		c.ByHost(context.Background(), fmt.Sprintf("rac-%d.example.gov.vn", i))
+	}
+
+	// Toàn bộ mục rác hết hạn.
+	moc = moc.Add(2 * time.Minute)
+
+	c.ByHost(context.Background(), "thangbinh.vigov.vn")
+	truoc := d.soLan
+	if _, ok := c.ByHost(context.Background(), "thangbinh.vigov.vn"); !ok {
+		t.Fatal("không phân giải được xã thật")
+	}
+	if d.soLan != truoc {
+		t.Error("xã mới KHÔNG được nhớ dù các mục cũ đã hết hạn — bộ đệm bị đóng băng sau một lượt quét")
+	}
 }

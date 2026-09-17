@@ -304,11 +304,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// for one on POST/PUT/PATCH/DELETE, and declaring one here would claim a protection that has
 	// nothing to protect.
 	//
-	// ONE HONEST NOTE ON THE 401/403 LINES BELOW. Those two statuses are produced by
-	// authz.RequirePermission, which today answers with http.Error — a plain-text body, not the
-	// httpx.Error JSON the contract declares. The declaration states the shape the whole system
-	// has agreed on (pkg/httpx/edge.go) and the one every other route here returns; closing the
-	// gap is a change inside pkg/authz, outside this service.
+	// 401 AND 403 REALLY ARE httpx.Error. They come from authz.RequirePermission, which used to
+	// answer with http.Error — a plain-text body while the contract declared JSON. That gap was
+	// closed in core/authz; this note stays so nobody "fixes" it a second time.
 
 	// @summary  Danh sách cán bộ của xã — gồm cả người có tài khoản đăng nhập và người chỉ có trong danh bạ
 	// @screen   14-cau-hinh §3
