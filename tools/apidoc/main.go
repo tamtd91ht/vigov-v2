@@ -67,11 +67,17 @@
 //	tasks/web/open/<id>.json      generated here, never typed by hand
 //	tasks/web/claimed/<id>.json
 //	tasks/web/done/<id>.json
+//	tasks/web/stale/<id>.json     route gone from the source while nobody had started
 //
 // <id> is a deterministic short hash of `service|METHOD|path`. The same route keeps the same
-// id forever, and a task is created only when the id is absent from ALL THREE directories —
+// id forever, and a task is created only when the id is absent from ALL FOUR directories —
 // so rerunning this generator never resurrects finished work, and "already done" is visible
 // from the filesystem without a second ledger to keep in sync.
+//
+// When a route DISAPPEARS the answer depends on where its task sits, and dongBoViec documents
+// why the four cases cannot be treated alike. The short version: open/ is moved to stale/
+// (moved, never deleted), claimed/ is left alone and shouted about, done/ is left in peace, and
+// a route that comes back moves its own file from stale/ straight back to open/.
 //
 // CLAIMING A TASK IS `os.Rename` BETWEEN TWO DIRECTORIES, AND NOTHING ELSE. The operating
 // system is the lock: two agents renaming the same file, one succeeds and the other gets
@@ -126,44 +132,63 @@ func main() {
 		Surface:  filepath.Join(root, "kb", "30-indexes", "api-surface.json"),
 		TasksDir: filepath.Join(root, "tasks", "web"),
 	}
-	n, moi, err := chay(c)
+	n, kq, err := chay(c)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "apidoc:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("apidoc: %d route, %d việc mới trong tasks/web/open\n", n, moi)
+
+	// THE LINE A PERSON ACTUALLY NEEDS. A colleague is building a screen against a contract
+	// that no longer exists, and the only way they find out is somebody reading this and going
+	// to look for them. It gets the route, not just a hash.
+	for _, m := range kq.MoCoi {
+		fmt.Fprintf(os.Stderr,
+			"apidoc: MỒ CÔI ĐANG LÀM DỞ — việc %s (%s %s) đã được nhận ở tasks/web/claimed/ "+
+				"nhưng route đó KHÔNG CÒN trong mã nguồn. Tìm người đang dựng màn hình này.\n",
+			m.ID, m.Method, m.Path)
+	}
+
+	fmt.Printf("apidoc: %d route · %d việc mới · %d chuyển sang stale · %d hồi sinh · %d mồ côi đang ở claimed\n",
+		n, kq.Moi, kq.Stale, kq.HoiSinh, len(kq.MoCoi))
 }
 
-// chay is the whole command. Returns the number of routes documented and the number of new
-// tasks created.
-func chay(c cauHinh) (int, int, error) {
+// chay is the whole command. Returns the number of routes documented and what the queue did.
+//
+// SAFETY NET 1 — NOTHING IS WRITTEN ON A FAILED RUN. Every error path below returns before the
+// first vietJSON, and quetTuyen joins the errors from ALL files rather than reporting the
+// first: a file that fails to parse must never be read as "that file declares no routes", or a
+// half-written tree would look like a batch of routes that had disappeared, and the queue would
+// sweep live work into stale/.
+func chay(c cauHinh) (int, ketQuaViec, error) {
+	var kq ketQuaViec
+
 	tuyens, err := quetTuyen(c.Root)
 	if err != nil {
-		return 0, 0, err
+		return 0, kq, err
 	}
 
 	gm, err := moGiaiMa(c.Root)
 	if err != nil {
-		return 0, 0, err
+		return 0, kq, err
 	}
 
 	doc, surface, err := dungTaiLieu(tuyens, gm)
 	if err != nil {
-		return 0, 0, err
+		return 0, kq, err
 	}
 
 	if err := vietJSON(c.OpenAPI, doc); err != nil {
-		return 0, 0, err
+		return 0, kq, err
 	}
 	if err := vietJSON(c.Surface, surface); err != nil {
-		return 0, 0, err
+		return 0, kq, err
 	}
 
-	moi, err := sinhViec(c.TasksDir, tuyens)
+	kq, err = dongBoViec(c.TasksDir, tuyens)
 	if err != nil {
-		return 0, 0, err
+		return 0, kq, err
 	}
-	return len(tuyens), moi, nil
+	return len(tuyens), kq, nil
 }
 
 // timGoc walks up to the directory holding go.mod.

@@ -53,6 +53,74 @@ func TestDauRaTatDinh(t *testing.T) {
 	}
 }
 
+// SAFETY NET 1 — a run that cannot read the source must change NOTHING.
+//
+// This is the failure that would hurt most, because it is silent and plausible: one file fails
+// to parse mid-edit, the scan comes back with a smaller set of routes, and every task for the
+// routes it could not see gets swept into stale/. The next run sweeps them back. Nobody trusts
+// the queue after that. quetTuyen therefore joins the errors from ALL files and chay returns
+// before the first write.
+func TestLoiPhanTichThiKhongDoiGiHet(t *testing.T) {
+	goc := t.TempDir()
+	viet := func(rel, noiDung string) {
+		p := filepath.Join(goc, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(noiDung), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	viet("go.mod", "module vd.test\n\ngo 1.26.0\n")
+	viet("services/thu/internal/http/routes.go", `package http
+
+import (
+	"net/http"
+
+	"vd.test/pkg/authz"
+)
+
+func Register(mux *http.ServeMux) {
+	// @summary  Lành lặn
+	// @reply    200 -
+	mux.Handle("GET /api/v1/ok", authz.Public("lý do")(http.HandlerFunc(nil)))
+
+	// @summary  Hỏng
+	// @replyy   200 -
+	mux.Handle("GET /api/v1/hong", authz.Public("lý do")(http.HandlerFunc(nil)))
+}
+`)
+
+	// A task nobody has started, for a route that is NOT in the file above. A run that ignored
+	// the parse error would see it as an orphan and move it.
+	viecCu := filepath.Join(goc, "tasks", "web", "open", "deadbeef1234.json")
+	if err := os.MkdirAll(filepath.Dir(viecCu), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(viecCu, []byte(`{"id":"deadbeef1234"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := cauHinh{
+		Root:     goc,
+		OpenAPI:  filepath.Join(goc, "out", "openapi.json"),
+		Surface:  filepath.Join(goc, "out", "api-surface.json"),
+		TasksDir: filepath.Join(goc, "tasks", "web"),
+	}
+	if _, _, err := chay(c); err == nil {
+		t.Fatal("một tệp không phân tích được phải làm cả lượt chạy dừng")
+	}
+	if _, err := os.Stat(c.OpenAPI); err == nil {
+		t.Error("lượt chạy hỏng vẫn ghi ra openapi.json")
+	}
+	if _, err := os.Stat(viecCu); err != nil {
+		t.Errorf("lượt chạy hỏng đã đụng vào hàng đợi: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(goc, "tasks", "web", "stale")); err == nil {
+		t.Error("lượt chạy hỏng đã tạo/dùng stale/")
+	}
+}
+
 // The warning has to be the FIRST thing in the file. A generated file whose first line is not
 // its warning is a generated file somebody edits by hand, and the edit is lost silently on the
 // next `make kb` (rule 9, invariant 8).

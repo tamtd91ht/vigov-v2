@@ -100,11 +100,11 @@ is the compensation?** Undecided → `contract-designer`, and if it is a busines
 | Citizen app | `citizen-app-builder` | `apps/citizen-app/**` |
 | Knowledge | `knowledge-keeper` | `kb/` curated tiers, `services/*/README.md` |
 | Tests | `test-designer` | test files anywhere |
-| Web work queue | `admin-web-builder` | `tasks/web/claimed/**`, `tasks/web/done/**` — **never `open/`** |
+| Web work queue | `admin-web-builder` | `tasks/web/claimed/**`, `tasks/web/done/**` — **never `open/` or `stale/`** |
 
-**Generated paths (`kb/20-contracts/**`, `kb/30-indexes/**`, `tasks/web/open/**`, `*.pb.go`)
-have no owner** — they are produced by `make kb` and `buf generate`. Any agent editing them is
-a bug.
+**Generated paths (`kb/20-contracts/**`, `kb/30-indexes/**`, `tasks/web/{open,stale}/**`,
+`*.pb.go`) have no owner** — they are produced by `make kb` and `buf generate`. Any agent
+editing them is a bug.
 
 ### The web queue, and why it cannot be fought over
 
@@ -121,6 +121,16 @@ tasks/web/open/<id>.json   →   claimed/<id>.json   →   done/<id>.json
   same task: one rename succeeds, the other gets `ENOENT` and knows to pick another. The
   filesystem is the lock — do not add a second one, and above all do not replace this with a
   single shared `pending.json`, where the later write silently erases the earlier one.
+- **A route that disappears leaves an orphan, and the three directories are treated
+  differently** — because they mean three different things. A task in `open/` moves to
+  `stale/`: nobody had started it, and moving beats deleting because *"why did this vanish"*
+  is a question somebody will ask, and a file that moved can answer it. A task in `claimed/` is
+  **not touched** — someone is building a screen against a contract that just stopped existing,
+  which is the case that matters most and therefore gets reported loudly rather than quietly
+  tidied out from under them. A task in `done/` is left alone and not even reported: it is a
+  true record of a screen that was built for a route that later changed.
+- If the route comes back with the same id, `stale/` moves **back** to `open/` rather than a
+  new file appearing — unless it is already in `done/`, which means it was built.
 - `<id>` is a deterministic hash of `service|METHOD|path`, and a task is emitted only when that
   id is absent from **all three** directories. So "already done" is visible without a ledger.
 
