@@ -3,7 +3,7 @@ id: ban-giao-phien
 tier: T5
 source: CURATED
 owner: architecture
-derived_from_commit: 9307362
+derived_from_commit: b22684a
 expires: 2026-12-16
 owns_facts:
   - "trạng thái thi công tại 2026-09-17 và việc kế tiếp phải làm"
@@ -232,10 +232,25 @@ nó hỏng theo chiều ngược lại, tức quét thừa vài mili giây thay 
 | **Hai cột `bool` cạnh nhau, đọc theo vị trí trong `Scan`** | Hoán đổi hai con trỏ là **lỗi im lặng đối xứng**: biên dịch được, test thường vẫn xanh, chỉ sai nghĩa. Ca duy nhất bắt được là `(false, true)` |
 | **Lọc ở Go thay vì lọc trong SQL** | Hai nhánh tốn thời gian khác nhau ⇒ **kênh biên thời gian** cho biết một email có tồn tại hay không. Điều kiện phân biệt người dùng phải nằm trong `WHERE` |
 | `fmt` **không gọi `String()`** cho `%d %c %U %b %o` | Phải cài `fmt.Formatter`, không phải `Stringer`. → `core/secret` |
-| `doc_guard` chặn mọi `Edit` vào `kb/` | Hook chỉ đọc `new_string`, không thấy frontmatter. **Dùng `Write` toàn tệp** — và xem §7 mục 10: buộc ghi đè toàn tệp có cái giá của nó |
+| **`doc_guard` chặn mọi `Edit` vào `kb/`** — **ĐÃ VÁ (`b22684a`)** | Hook chỉ đọc `new_string` nên không thấy frontmatter đang nằm trên đĩa, và buộc mọi sửa ba dòng thành **ghi đè toàn tệp**. Cái giá không phải bất tiện: ngày 17/09 việc ấy **suýt xoá sạch sáu chỗ sửa của phiên song song**, bắt được chỉ vì công cụ báo *"file has been modified since read"*. **Một rào bảo vệ tri thức mà đẩy người ta đi ghi đè tri thức là rào đang làm ngược việc của nó.** Nay hook phân biệt hai đầu vào: văn bản lần sửa **đưa vào** (cho `secret_scan`/`pii_guard` — phải tố cáo thứ lần sửa THÊM) và **tệp sau khi sửa**, đọc từ đĩa (cho luật frontmatter và hạn T5 — chúng là tính chất của TỆP) |
 | Hook báo nhầm | Đã vá năm lần. Nếu gặp lần nữa: **sửa hook + thêm ca test, đừng đi vòng** — hook nhiễu là hook bị tắt |
 | `PARTITION BY HASH` mà quên tạo mảnh | INSERT lỗi, và vì vết đi cùng giao dịch nên **bản ghi nghiệp vụ rollback toàn bộ**. Nay `tenant_scope_guard` chặn ngay lúc gõ `.sql` |
 | `buf lint STANDARD` ép tên message theo tên RPC | Kiểu trả về phải **bọc**, không trả thẳng message nghiệp vụ |
+
+### Thứ đã bắt được ba lỗi trên — và phiên sau sẽ không có nó
+
+Ba dòng đầu bảng này là một chuỗi: vá `drift_guard` mù → bản vá đếm cả chú thích → vá chuyện
+đếm chú thích thì suýt giết tín hiệu duy nhất của câu #4. **Bản vá cho lỗi X rất dễ chính là
+một thể hiện mới của X**, vì nó được viết bởi người vừa nhìn X từ một góc duy nhất.
+
+Điều đáng nói: **không lần nào cổng kiểm bắt được.** Cả ba lần đều xanh. Thứ bắt được là một
+người khác đọc **kết quả đầu tiên** của bản vá và hỏi *"cái này có đúng không"* — hai phiên
+chạy song song, mỗi phiên soi kết quả của phiên kia.
+
+Phiên sau nhiều khả năng chỉ có một mình. Nên thay cơ chế ấy bằng một thói quen, và đây là
+thói quen: **sau khi vá một hook, chạy nó trên kho thật và đọc từng cảnh báo nó bắn** — không
+phải đếm số cảnh báo, mà mở đúng tệp nó tố cáo và xem lời tố cáo có đứng vững không. Cổng kiểm
+nói hook chạy được; chỉ việc ấy mới nói hook nói đúng.
 
 ---
 
@@ -283,7 +298,7 @@ hay đường dẫn nội bộ.
 | 7 | **Bàn giao việc đang xử lý khi khoá tài khoản** | Cố ý **chưa** ghi thành câu hỏi mở: chưa có bảng giao việc nào tồn tại để nói "việc đang giữ" nghĩa là gì, nên hỏi bây giờ là hỏi một câu trừu tượng. Hỏi khi dựng bảng nghiệp vụ đầu tiên có người phụ trách — và nhớ câu trả lời nhiều khả năng là "tuỳ xã" |
 | 8 | **Cán bộ không có vai trò nào thì vào `/` thấy gì** | Đặc tả §1 chỉ chia "Lãnh đạo" / "vai trò khác". Chưa ghi thành câu hỏi mở vì chưa biết trạng thái ấy có tồn tại thật trên dữ liệu xã hay không |
 | 9 | **Rà cả lớp "cơ chế nhận diện mã theo tên thư mục"** | Đã soát `.claude/hooks/` và `tools/` và tìm được **ca thứ năm**: `stop_verify_guard.CODE_DIR` thiếu `/tools/`, nên sửa trình sinh hợp đồng rồi nói "xong" thì cổng không thấy gì. Đã vá + thêm ca test + đột biến để chắc nó bắn. **Chưa soát:** không có `.github/` nên chưa có cấu hình CI nào để soát, nhưng ngày dựng CI thì đây là thứ phải soát lại đầu tiên |
-| 10 | **`doc_guard` chặn mọi `Edit` vào `kb/`, nên mọi sửa đổi nhỏ đều thành ghi đè toàn tệp** | Hook chỉ đọc `new_string` nên không thấy frontmatter đang nằm trên đĩa. Hệ quả **không** chỉ là bất tiện: ngày 17/09 hai phiên cùng sửa tệp bàn giao, và việc buộc ghi đè toàn tệp suýt xoá sạch sáu chỗ sửa của phiên kia — bắt được chỉ vì công cụ báo "file has been modified since read". Sửa đúng là cho hook **đọc tệp trên đĩa** khi thao tác là `Edit`, giữ nguyên đường chặn khi là `Write`. Kèm ca test: một `Edit` vào tệp `kb/` có frontmatter hợp lệ phải **PASS** |
+| 10 | **Rà nốt các hook khác xem chúng hỏi ĐÚNG CÂU chưa** | `doc_guard` vừa lộ ra rằng một hook có thể dùng **sai đầu vào** cho câu nó đang hỏi: luật frontmatter là tính chất của **TỆP** nhưng nó lại chấm **lần sửa**. Đó là một trục hỏng khác hẳn trục "quét sót thư mục" ở mục 9, và chưa ai soát 15 hook theo trục này. Câu để soát từng hook: *thứ nó đang đọc có trả lời đúng câu nó đang hỏi không* — và cả hai chiều đều hỏng được, như `secret_scan` mà đi chấm cả tệp thì sẽ tố cáo một lần sửa vô can vì một bí mật có sẵn từ trước |
 
 ---
 
