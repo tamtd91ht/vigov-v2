@@ -14,13 +14,13 @@ phases instead of two apps.
 
 | Phase | What ships | Why |
 |---|---|---|
-| **1 — now** | A static introduction to **ViHAT Software**, the company that publishes the app | This is the submission Zalo reviews, so the OA `VihatSoftware` can verify the App ID |
+| **1 — now** | A static introduction to **VihatSoftware**, the company that publishes the app | This is the submission Zalo reviews, so the OA `VihatSoftware` can verify the App ID |
 | **2 — next** | The commune / citizen surface | It lands on the **same App ID**, already verified |
 
 **Nothing of phase 2 gets deleted to make room for phase 1.** `src/lib/commune-resolution.ts`
 is the foundation phase 2 builds on and stays untouched.
 
-Why the verifying OA is ViHAT Software and not a commune, and why the notification OA is a
+Why the verifying OA is VihatSoftware and not a commune, and why the notification OA is a
 different OA per commune: `kb/10-decisions/0018-oa-xac-thuc-tach-khoi-oa-thong-bao.md`. How the
 commune gets resolved at runtime with no domain to key off:
 `kb/10-decisions/0005-miniapp-tenant-resolution.md`. Both are read there, not repeated here.

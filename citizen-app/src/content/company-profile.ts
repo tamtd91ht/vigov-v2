@@ -1,5 +1,5 @@
 /**
- * PHASE 1 CONTENT — the ViHAT Software company introduction.
+ * PHASE 1 CONTENT — the VihatSoftware company introduction.
  *
  * WHY EVERY STRING LIVES HERE AND NOWHERE ELSE:
  *
@@ -19,7 +19,7 @@
  * WHY THE GROUP FIGURES CARRY AN EXPLICIT OWNER LABEL:
  *
  *   12 years, 100K+ customers, 500+ partners, 300+ staff and 100+ countries are figures of
- *   ViHAT GROUP, the parent. ViHAT Software is one member unit of six. Printing them without
+ *   ViHAT GROUP, the parent. VihatSoftware is one member unit of six. Printing them without
  *   saying whose they are would attribute the parent's scale to the subsidiary — the kind of
  *   overstatement a reviewer is right to reject.
  */
@@ -60,8 +60,15 @@ export type Certificate = {
 export const BRAND_NAVY = "#1e3150";
 
 export const COMPANY = {
-  /** Display name. The website writes it `VihatSoftware`; the group site writes `ViHAT Software`. */
-  name: "ViHAT Software",
+  /**
+   * Display name, settled 2026-09-17: `VihatSoftware`, one spelling everywhere.
+   *
+   * The sources disagree — vihatsoftware.com writes `VihatSoftware`, vihatgroup.com writes it
+   * with a space. The verifying Official Account is named `VihatSoftware` (ADR 0018), and an app
+   * whose own name is spelled one way on screen and another way on the account that vouches for
+   * it gives a reviewer a discrepancy to ask about. One spelling, and it is the account's.
+   */
+  name: "VihatSoftware",
   /** Verbatim English positioning line from vihatsoftware.com. Not translated on purpose. */
   positioning: "Outsourcing Software Development Company",
   /** Verbatim Vietnamese description from vihatgroup.com. */
@@ -73,7 +80,7 @@ export const COMPANY = {
 export const GROUP = {
   name: "ViHAT Group",
   /** Every screen that shows a GROUP figure prints this line next to it. */
-  figuresOwnerNote: "Số liệu dưới đây là của Tập đoàn ViHAT Group, công ty mẹ của ViHAT Software.",
+  figuresOwnerNote: "Số liệu dưới đây là của Tập đoàn ViHAT Group, công ty mẹ của VihatSoftware.",
 } as const;
 
 export const GROUP_STATS: readonly Stat[] = [
@@ -86,7 +93,7 @@ export const GROUP_STATS: readonly Stat[] = [
 
 export const MEMBER_UNITS: readonly MemberUnit[] = [
   { name: "ViHAT Solutions", ownsThisApp: false },
-  { name: "ViHAT Software", ownsThisApp: true },
+  { name: "VihatSoftware", ownsThisApp: true },
   { name: "ViHAT Global", ownsThisApp: false },
   { name: "ViHAT Cambodia", ownsThisApp: false },
   { name: "OMI JSC", ownsThisApp: false },
@@ -133,7 +140,7 @@ export const OFFICES: readonly Office[] = [
  * Corporate contact points of ViHAT GROUP, published on the group website.
  *
  * These are business contact details, NOT personal data under Decree 13/2023 — no individual
- * is identified by them. No individual's number belongs in this app, and ViHAT Software has
+ * is identified by them. No individual's number belongs in this app, and VihatSoftware has
  * no separate published hotline, so none is invented here.
  */
 export const CONTACT = {

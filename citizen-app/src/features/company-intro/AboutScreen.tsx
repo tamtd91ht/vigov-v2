@@ -12,7 +12,7 @@ export function AboutScreen() {
     <>
       <h1 className="screen-heading">Về {GROUP.name}</h1>
       <p className="screen-lead">
-        Những nội dung dưới đây là của Tập đoàn {GROUP.name}, công ty mẹ của ViHAT Software.
+        Những nội dung dưới đây là của Tập đoàn {GROUP.name}, công ty mẹ của VihatSoftware.
       </p>
 
       {BRAND_STATEMENTS.map((statement) => (

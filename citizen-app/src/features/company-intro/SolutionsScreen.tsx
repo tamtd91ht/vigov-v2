@@ -1,7 +1,7 @@
 import { COMPANY, GROUP, MEMBER_UNITS } from "../../content/company-profile";
 
 /**
- * Screen 2 — what ViHAT Software does, and where it sits inside the group.
+ * Screen 2 — what VihatSoftware does, and where it sits inside the group.
  *
  * No product list, no customer names, no case studies: none of that was sourced on
  * 2026-09-17, and this app carries a real legal entity's name. It says exactly what the
