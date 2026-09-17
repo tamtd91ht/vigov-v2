@@ -1,0 +1,14 @@
+{
+  "app": {
+    "title": "ViHAT Software",
+    "headerColor": "#1e3150",
+    "textColor": "white",
+    "leftButton": "back",
+    "statusBar": "normal",
+    "hideIOSSafeAreaBottom": false,
+    "hideAndroidBottomNavigationBar": false
+  },
+  "listCSS": [],
+  "listSyncJS": [],
+  "listAsyncJS": []
+}

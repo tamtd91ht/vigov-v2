@@ -1,0 +1,4 @@
+# The Vite build output. The repository root ignores `/dist/` only at the root, so without
+# this line the whole bundle — 226 kB of generated JavaScript — lands in a commit and every
+# rebuild shows as a diff on a file nobody wrote.
+dist/

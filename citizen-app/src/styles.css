@@ -1,0 +1,262 @@
+/*
+ * Baseline styles for the citizen channel.
+ *
+ * The thresholds here are the SAME ones the commune surface will need in phase 2
+ * (.claude/skills/accessibility-elderly): body text >= 16px, touch targets >= 44x44px,
+ * text/background contrast >= 4.5:1, status never signalled by colour alone. Holding one
+ * standard for the whole repository is cheaper than holding two, and phase 2 inherits this
+ * file rather than rediscovering it.
+ *
+ * Contrast of the palette below, measured against its own background:
+ *   --ink (#1a2233) on white ............ ~14.5:1
+ *   --ink-muted (#4a5568) on white ...... ~7.4:1
+ *   white on --navy (#1e3150) ........... ~12.6:1
+ * Every pair clears 4.5:1 with room to spare, which is what keeps the app readable in
+ * sunlight and for an ageing eye.
+ */
+
+:root {
+  --navy: #1e3150;
+  --navy-deep: #16253d;
+  --ink: #1a2233;
+  --ink-muted: #4a5568;
+  --surface: #ffffff;
+  --surface-alt: #f2f5f9;
+  --hairline: #d5dce6;
+
+  /* Never below 16px. 17px gives a little headroom without reflowing on a 320px screen. */
+  --text-body: 17px;
+  --text-small: 16px;
+  --tap-min: 44px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--surface-alt);
+  color: var(--ink);
+  font-family: "Inter", "Roboto", "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  /* Zoom is never disabled: -webkit-text-size-adjust stays untouched on purpose. */
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ---------- header ---------- */
+
+.app-header {
+  background: var(--navy);
+  color: #ffffff;
+  padding: 14px 16px;
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
+  flex: 0 0 auto;
+}
+
+.app-header__owner {
+  font-size: var(--text-small);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+
+.app-header__screen {
+  font-size: var(--text-small);
+  margin: 2px 0 0;
+  opacity: 0.95;
+}
+
+/* ---------- scrolling content ---------- */
+
+.app-main {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 16px 24px;
+}
+
+.screen-heading {
+  font-size: 24px;
+  line-height: 1.35;
+  margin: 0 0 4px;
+  color: var(--ink);
+}
+
+.screen-lead {
+  font-size: var(--text-body);
+  color: var(--ink-muted);
+  margin: 0 0 16px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 0 0 12px;
+}
+
+.card__title {
+  font-size: 19px;
+  margin: 0 0 6px;
+  color: var(--navy);
+}
+
+.card__body {
+  font-size: var(--text-body);
+  margin: 0;
+  color: var(--ink);
+}
+
+.note {
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+  background: var(--surface);
+  border-left: 4px solid var(--navy);
+  border-radius: 0 8px 8px 0;
+  padding: 12px 14px;
+  margin: 0 0 12px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.stat__value {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.stat__label {
+  display: block;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list__item {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 0 0 10px;
+  font-size: var(--text-body);
+}
+
+.badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--navy);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  /* The badge carries its own words. Meaning never rests on the colour alone. */
+}
+
+/* ---------- actions ---------- */
+
+.action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap-min);
+  padding: 12px 16px;
+  margin: 0 0 10px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.action--primary {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #ffffff;
+}
+
+.action__label {
+  display: block;
+  font-size: var(--text-small);
+  opacity: 0.95;
+}
+
+.action__value {
+  display: block;
+  font-size: 19px;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+/* ---------- tab bar ---------- */
+
+.tabbar {
+  flex: 0 0 auto;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--hairline);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.tabbar__item {
+  flex: 1 1 0;
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  padding: 10px 4px;
+  border: none;
+  border-top: 3px solid transparent;
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: inherit;
+  font-size: var(--text-small);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* The active tab is marked three ways at once — weight, a top rule and aria-current —
+   so it never depends on colour to be readable. */
+.tabbar__item[aria-current="page"] {
+  color: var(--navy);
+  font-weight: 700;
+  border-top-color: var(--navy);
+}
+
+.tabbar__item:focus-visible {
+  outline: 3px solid var(--navy-deep);
+  outline-offset: -3px;
+}
