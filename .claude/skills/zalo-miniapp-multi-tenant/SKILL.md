@@ -40,12 +40,14 @@ client — so the parameter drives the UI, and the server decides what it means:
 | Operation | How the commune is authorised |
 |---|---|
 | **Read** own records | Citizen identity from session **and** an existing relationship |
-| **Submit** something new | Any **active** commune is allowed; the submission itself creates a `CAPACITY_TRANSIENT` relationship |
+| **Submit** something new | Any **active** commune is allowed; the submission itself creates a `chua_khai` relationship — no residence declaration for this (citizen, commune) pair |
 | **Switch** commune | Explicit action, re-issues the session, **audited** |
 
 Submitting to a commune the citizen has no prior link to is legitimate — someone reports a
-pothole they saw while passing through. That is exactly what the `CAPACITY_TRANSIENT` capacity in
-ADR 0002 is for.
+pothole they saw while passing through. That is what the third capacity value exists for. It is
+**not** named "transient": the sender may be sitting in another province entirely, and the system
+has no way to know where they are. `chua_khai` states only what is actually known — no residence
+declaration yet. → ADR 0023.
 
 ---
 
@@ -119,7 +121,10 @@ Ordered for the citizen, not for the data model:
 2. **GPS suggestion** — labelled as a suggestion, one tap to accept, **never auto-selected**
 3. **Search by name** — diacritic-insensitive, and **matching former names** (mergers mean the
    name a citizen knows may no longer be the official one)
-4. **Browse by province/district** — the fallback, not the main route
+4. **Browse by province** — the fallback, not the main route. **Two levels, not three**: since
+   01/07/2025 local government is province → commune and the district level has ceased to exist.
+   That is exactly why browsing comes last: one province expands into a flat list of a hundred
+   rows. Never re-introduce districts as a grouping tier, not even from historical data (ADR 0023)
 
 GPS suggests and never decides: locations are spoofable, and urban boundaries run down the
 middle of streets. Someone on the wrong side of a road is not in another commune.
@@ -168,11 +173,13 @@ for nothing and then loses trust.
 1. A flow that would need the client to pick which backend to call
 2. A link that would grant access to a record rather than name a commune
 3. A commune that has merged — what a QR printed for the old one should do
-   (→ the platform service's alias table; ADR 0005)
+   (→ the platform service's **succession** table, `TenantSuccession`; ADR 0005, named in
+   ADR 0023. Not "alias": commune A does not *become* commune B)
 4. Anything depending on a Zalo platform behaviour nobody has verified — **check the vendor
    documentation, do not assume**
 
 → Rule 1 · Rule 4 · `skills/accessibility-elderly` · `skills/citizen-identity-multi-tenant`
 → `kb/00-foundation/multi-tenant-model.md` · ADR 0005 · ADR 0006 (superseded by 0018) · ADR 0018
   (one verifying OA, per-commune notification OA) · ADR 0019 (QR session pairing) · ADR 0020
-  (citizen phone verification via `getPhoneNumber`)
+  (citizen phone verification via `getPhoneNumber`) · ADR 0023 (entity, table and URL-resource
+  names for this channel; two-level local government)

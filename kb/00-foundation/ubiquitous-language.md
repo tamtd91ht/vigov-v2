@@ -3,7 +3,7 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: 96574b4
+derived_from_commit: d2d2aa6
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
@@ -46,7 +46,7 @@ Ba từ này là **giá trị enum**, và giá trị enum **không dịch sang t
 | Nhiệm vụ | `nhiem_vu` | Việc giao cho cán bộ |
 | Cán bộ, công chức | `can_bo` | Người dùng nội bộ — **bảng lại tên là `nguoi_dung`**, xem mục "Một khái niệm, bốn cái tên" |
 | Công dân | `cong_dan` | Người dân — **không** gọi là "khách hàng", "user" |
-| Đơn vị hành chính | `don_vi_hanh_chinh` | Xã / phường / thị trấn |
+| Đơn vị hành chính | `don_vi_hanh_chinh` | Cấp xã gồm **ba** loại: xã / phường / **đặc khu**. Từ 01/7/2025 **không còn cấp huyện** — ADR 0023 |
 
 ## Phản ánh và SLA
 
@@ -83,6 +83,10 @@ Nghĩa là một khái niệm mang **hai từ vựng** — tên trong CSDL và d
 Bảng dưới là **chỗ duy nhất** giữ ánh xạ đó. Tự dịch tại chỗ khi viết route là cách hai phiên
 khác nhau đặt hai tên khác nhau cho cùng một thứ.
 
+Cột **Tài nguyên URL** ghi danh từ đã chốt; đường dẫn đầy đủ **đang chạy** thì tra
+`kb/20-contracts/openapi.json` — nó sinh từ mã (ADR 0014), nên nó không trôi, còn bảng này thì
+có thể.
+
 | Khái niệm | Tên trong mã | Tài nguyên URL | Vì sao không phải từ dễ đoán |
 |---|---|---|---|
 | Phản ánh | `phan_anh` | `citizen-reports` | "feedback" nghĩa là góp ý sản phẩm; phản ánh là **một loại đơn có thủ tục hành chính** |
@@ -91,20 +95,50 @@ khác nhau đặt hai tên khác nhau cho cùng một thứ.
 | Văn bản đi | `van_ban_di` | `outgoing-documents` | |
 | Nhiệm vụ | `nhiem_vu` | `tasks` | |
 | Giải ngân | `giai_ngan` | `disbursements` | |
-| Phiên đăng nhập | `phien` | `sessions` | |
-| Bộ phận | `bo_phan` | `org-units` | Cây này chứa Đảng uỷ, HĐND, UBMTTQ — **không phải** phòng ban của UBND, nên không gọi `departments` |
-| Vai trò | `vai_tro` | `roles` | Từ dễ đoán và lần này **đúng** — nhưng vẫn phải tra: `role` là chính từ luật 5 bất biến 3 dùng trong `(tenant_id, role, permission)`, nên hợp đồng và mô hình phân quyền nói cùng một từ cho cùng một thứ. `org-units` ngay trên là ví dụ từ dễ đoán sai |
+| Phiên đăng nhập | `phien` | `sessions` — `POST /api/v1/sessions` · `GET …/current` · `DELETE …/{sid}` | Phiên **cán bộ**. Đăng nhập là **tạo một phiên**, không phải `POST /login`: động từ không thành đường dẫn (`rest-api-design` REQUIRED #8). Phiên công dân là khái niệm khác, bảng khác — xem bảng kênh công dân |
+| Bộ phận | `bo_phan` | `org-units` — `GET /api/v1/org-units`, `AnyAuthenticated` | Cây này chứa Đảng uỷ, HĐND, UBMTTQ — **không phải** phòng ban của UBND, nên không gọi `departments` |
+| Vai trò | `vai_tro` | `roles` — `GET /api/v1/roles`, `AnyAuthenticated` | Từ dễ đoán và lần này **đúng** — nhưng vẫn phải tra: `role` là chính từ luật 5 bất biến 3 dùng trong `(tenant_id, role, permission)`, nên hợp đồng và mô hình phân quyền nói cùng một từ cho cùng một thứ. `org-units` ngay trên là ví dụ từ dễ đoán sai |
 | Thông báo | `thong_bao` | `announcements` · `public-notices` · `notifications` | **Một từ tiếng Việt, ba thứ khác nhau, ba nhóm người đọc.** Gộp một danh từ thì thông báo nội bộ chạy sang kênh công dân |
 | Tiếp nhận | `tiep_nhan` | `receipt` | |
 | Thụ lý | `thu_ly` | `admission` | Thụ lý **bắt đầu đồng hồ luật định**; tiếp nhận thì không. Gọi cả hai là `accept` là xoá mất ranh giới đó |
 | Nghiệm thu | `nghiem_thu` | `verification` | Với phiếu phản ánh đây là kiểm tra thực địa kèm ảnh, không phải nghiệm thu công trình có hội đồng (`acceptance`) |
 | Đóng phiếu | `dong_phieu` | `closure` | |
 | Cấp số văn bản | `so_di` | `number` | |
-| **Cán bộ** | `nguoi_dung` (bảng) · `can_bo` (nghiệp vụ) | **CHƯA CHỐT — HỎI KHÁCH** | Không phải chưa ai nghĩ tới: đây là **câu hỏi đang chờ khách**, và là khái niệm của màn hình kế tiếp (CRUD cán bộ). Xem mục ngay dưới |
+| **Cán bộ** | `nguoi_dung` (bảng) · `can_bo` (nghiệp vụ) | `staff` — `GET /api/v1/staff` · `GET …/{id}`, quyền `admin.user`. **`web-admin` đã gọi cả hai tuyến** — `web-admin/src/lib/api/can-bo.ts` | `user` thì trùng với công dân — hai lớp tin cậy khác hẳn nhau (luật 4). Xem mục dưới: khái niệm này mang **bốn** cái tên |
+| **Xã của yêu cầu này** | `tenant` (bảng, service `platform`) | `communes/current` — `GET /api/v1/communes/current`, công khai | Cho **cán bộ**, suy từ `Host` ở rìa (luật 1 bất biến 3), trả `thongTinXa` cho màn đăng nhập. Số nhiều **dù chỉ trả về một xã** — xem ngay dưới |
 
-**Bảng này còn thiếu.** Nó mới phủ các khái niệm đã xuất hiện trong mã hoặc trong
-`.claude/skills/rest-api-design/SKILL.md`. Gặp khái niệm chưa có dòng ở đây: **dừng lại và
-hỏi**, đừng tự dịch rồi viết route — đường dẫn không sửa lại được sau khi một xã chạy thật.
+### Hai đường dẫn `communes`, hai lớp người dùng — đọc trước khi động vào một trong hai
+
+| Đường dẫn | Trả lời câu | Cho ai | Xã đến từ |
+|---|---|---|---|
+| `GET /api/v1/communes/current` | *"Yêu cầu này thuộc xã nào"* | **Cán bộ**, trước khi có phiên | `Host` (ADR 0022, đường cán bộ) |
+| `GET /api/v1/communes` | *"Có những xã nào để chọn"* | **Công dân** trong Mini App, khi **chưa** có xã nào | không có — lớp `KhongThuocXa` (ADR 0022) |
+
+Hai lớp người dùng có mức tin khác hẳn nhau (luật 4), và **trước 2026-09-17 hai đường dẫn cách
+nhau đúng một chữ `s`**: tuyến cán bộ từng là `/api/v1/commune` số ít. Đổi tại `d2d2aa6`, lý do
+ở ADR 0023 §B.
+
+**Lập luận đã bị bác, ghi lại để không ai lập luận lại vòng đó:** *"người gọi không bao giờ
+thấy quá một xã, nên số ít mới đúng"* — **nhầm chỗ**. Quy tắc số nhiều (`rest-api-design`
+REQUIRED #1) đặt tên cho **loại tài nguyên**, không đo kích thước một câu trả lời. `current` là
+một **bộ chọn** trên loại ấy, đúng hình dạng `sessions/current` ngay trong bảng trên.
+
+### Kênh công dân — ADR 0023
+
+Sáu khái niệm, chốt cùng một lượt. **Lý do đầy đủ nằm ở ADR 0023**, không chép lại ở đây.
+
+| Khái niệm | Thực thể (`@entity`) | Bảng | Tài nguyên URL | Vì sao không phải từ dễ đoán |
+|---|---|---|---|---|
+| Danh mục xã cho Mini App | — (đọc `Tenant`) | — | `communes` | `commune` ở đây phủ **cả ba** loại đơn vị cấp xã. Đừng thêm `/wards`: danh mục bị tách đôi trong khi dữ liệu là một. Văn xuôi tiếng Việt gọi là **danh mục xã**, không phải "danh bạ" (danh bạ là danh sách liên hệ) |
+| Phiên đăng nhập của **công dân** | `CitizenSession` | `phien_cong_dan` | `citizen-sessions` | `phien` đã là phiên cán bộ (khoá ngoại tới `nguoi_dung`). Một tên chung cho hai lớp tin cậy khác nhau là chỗ luật 4 vỡ mà không ai thấy |
+| Mã ghép phiên | `SessionPairing` | `ghep_phien` | `session-pairings` | **Việc ghép**, không phải *một loại phiên* — phiên màn hình cầm chỉ là `CitizenSession` có `nguon = 'ghep'`. `qr_login` sai vì ADR 0019 bất biến 3: quét QR **không** tạo ra danh tính; `kiosk_*` sai vì màn hình là gì thì khách chưa trả lời |
+| Quan hệ công dân ↔ xã | `CitizenCommune` | `quan_he_cong_dan_xa` | *(không có tài nguyên riêng)* | Giá trị: `thuong_tru` · `tam_tru` · **`chua_khai`**. Không dùng `vang_lai`: người gửi phản ánh có thể đang ngồi ở tỉnh khác, hệ thống không biết họ ở đâu. Hai sự thật tách riêng — **công dân khai gì** và **xã đã xác thực chưa** |
+| Đơn vị cũ → đơn vị kế thừa | `TenantSuccession` | `tenant_succession` | *(không bao giờ là tài nguyên)* | **Không** gọi `alias`: hai xã là hai pháp nhân, và một cái tên nói chúng là một sẽ mời người sau viết `UPDATE tenant_id` trên hồ sơ lưu trữ — `admin-unit-merge` bất biến 2 cấm |
+| Định danh công dân | `CitizenIdentity` | `dinh_danh_cong_dan` | *(không bao giờ có danh sách)* | **Không** gọi `cong_dan`: bảng này nằm ở vùng xuyên xã, không có `tenant_id` che chắn. Một cái tên rộng là lời mời thêm `so_cccd`, `ho_ten` vào đúng chỗ Nghị định 13/2023 nặng nhất |
+
+**Bảng này còn thiếu.** Nó mới phủ các khái niệm đã xuất hiện trong mã, trong một ADR đã chốt,
+hoặc trong `.claude/skills/rest-api-design/SKILL.md`. Gặp khái niệm chưa có dòng ở đây: **dừng
+lại và hỏi**, đừng tự dịch rồi viết route — đường dẫn không sửa lại được sau khi một xã chạy thật.
 
 ### Một khái niệm, bốn cái tên: `nguoi_dung` · `can_bo` · `CanBo` · `Staff`
 
@@ -116,14 +150,13 @@ mình gặp hai khái niệm. Chỉ có **một** khái niệm: con người là
 | Bảng CSDL | `nguoi_dung` | `identity/migrations/0001_init.sql`. Bảng gộp **hai tập**: 26 người của danh bạ công khai và những người có tài khoản đăng nhập — phân biệt bằng cột `co_tai_khoan` (migration `0003`) |
 | Ngôn ngữ nghiệp vụ | `can_bo` | Từ hành chính đúng cho con người; "người dùng" là từ của phần mềm, không phải của xã |
 | Kiểu Go | `domain.CanBo`, `store.CanBoStore` | Tầng nghiệp vụ nói tiếng nghiệp vụ |
-| Hợp đồng gRPC | `Staff`, `BatchGetStaff` | Bề mặt hợp đồng dùng **tiếng Anh** (ADR 0011). `User` thì trùng với công dân — hai lớp tin cậy hoàn toàn khác nhau (luật 4) |
-| Đường dẫn URL | **chưa có** | Câu hỏi chờ khách. Đường dẫn cũ `/cau-hinh/nguoi-dung` của đặc tả **không dùng nữa** (ADR 0011) |
+| Hợp đồng gRPC · REST | `Staff`, `BatchGetStaff` · `/api/v1/staff` | Bề mặt hợp đồng dùng **tiếng Anh** (ADR 0011). Hai tuyến đọc đã chạy, quyền `admin.user`, và **`web-admin` đã gọi cả hai** — `web-admin/src/lib/api/can-bo.ts` |
 
 **Vì sao không thống nhất lại thành một từ** — cùng dạng lập luận với `feedback.*` ở mục dưới:
 giá đổi tên khác nhau ở từng bề mặt. Tên bảng đã có migration đã áp và có hồ sơ lưu trữ trỏ
-vào; kiểu Go đổi rẻ nhưng đổi thì lệch với bảng; tên trong proto là bề mặt bên ngoài đọc và
-`Staff` đã là lựa chọn có lý do. Chỉ **một** bề mặt còn miễn phí: đường dẫn URL, vì chưa có
-route nào. Đó cũng chính là bề mặt **không được tự quyết**.
+vào; kiểu Go đổi rẻ nhưng đổi thì lệch với bảng; `Staff` là bề mặt bên ngoài đọc và đã là lựa
+chọn có lý do. Bề mặt URL **từng là bề mặt duy nhất còn miễn phí** — nay không còn: route đã
+chạy **và đã có bên gọi**, nên `staff` là thứ phải giữ, không phải thứ còn cân nhắc.
 
 **Điều KHÔNG được suy ra từ mục này:** rằng bốn tên cho một khái niệm là chuyện bình thường
 nên cái thứ năm cũng được. Bốn cái tên này là **giá đã trả rồi**, không phải giấy phép. Khái
@@ -176,3 +209,4 @@ vài chữ cái mà nghĩa khác hẳn.
 
 → Kỹ năng: `skills/administrative-language` · `.claude/skills/rest-api-design/SKILL.md`
 → Ranh giới ngôn ngữ của hợp đồng: `kb/10-decisions/0011-contract-surface-language.md`
+→ Lý do của sáu dòng kênh công dân và của `communes/current`: `kb/10-decisions/0023-thuat-ngu-kenh-cong-dan.md`

@@ -371,5 +371,43 @@
       "cài ô Ghi nhớ đăng nhập",
       "đặt thời hạn sống cho phiên hoặc cookie phiên"
     ]
+  },
+  {
+    "id": 19,
+    "question": "Công dân SỬA lời khai cư trú đã được cán bộ xác thực thì sao — mất hiệu lực xác thực cũ, hay phải đi qua một quy trình?",
+    "status": "OPEN",
+    "why_it_matters": "ADR 0023 §A chốt quan hệ công dân↔xã mang HAI sự thật tách rời: công dân khai gì, và xã đã xác thực chưa. Câu này quyết định bản ghi có LỊCH SỬ PHIÊN BẢN hay không — và lịch sử phiên bản là thứ không thêm được sau khi đã có dữ liệu thật, vì các phiên bản trước đó đã không được lưu và không dựng lại được. Nếu sửa là ghi đè lặng lẽ thì một lời khai đã xác thực có thể bị thay bằng nội dung khác mà vẫn mang dấu 'đã xác thực' — tức việc xác thực của cán bộ được gán cho một nội dung cán bộ chưa từng đọc. Đó là hỏng nặng hơn hẳn việc mất dữ liệu: nó tạo ra một xác nhận của cơ quan nhà nước cho một nội dung không ai xác nhận.",
+    "code_signals": [
+      {
+        "pattern": "quan_he_cong_dan_xa|CitizenCommune",
+        "means": "bảng quan hệ công dân↔xã đã ra đời — phải trả lời câu này TRƯỚC khi có màn sửa lời khai",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Cao và một chiều. Thêm lịch sử phiên bản về sau chỉ ghi được từ thời điểm thêm trở đi; những lần sửa đã xảy ra là mất vĩnh viễn.",
+    "ask_before": [
+      "viết migration cho bảng quan hệ công dân↔xã",
+      "viết màn hình cho công dân sửa lời khai cư trú"
+    ],
+    "adr": "kb/10-decisions/0023-thuat-ngu-kenh-cong-dan.md"
+  },
+  {
+    "id": 20,
+    "question": "Khoá quyền cho việc cán bộ xác thực lời khai cư trú tên là gì?",
+    "status": "OPEN",
+    "why_it_matters": "CHẶN VIỆC VIẾT ROUTE, không chỉ là một câu hỏi đặt tên. Luật 5 bất biến 1 bắt mọi endpoint khai quyền tường minh, và bất biến 3b bắt khoá quyền là MỘT chuỗi phẳng đúng bằng chuỗi màn Phân quyền hiện ra và bảng `quyen` lưu — nên đặt tên sai là một migration trên dữ liệu phân quyền đang chạy, không phải một lần đổi tên biến. Khoá này CHƯA TỒN TẠI trong bảng `quyen` (migration 0001 của identity mới có nhóm `feedback.*`, `admin.*`…), và ADR 0011 cấm tự dịch một khái niệm chưa có dòng trong bảng ánh xạ. Tự đặt rồi sửa sau là đúng cái giá mà mục `feedback.*` trong ubiquitous-language.md đang phải trả.",
+    "code_signals": [
+      {
+        "pattern": "RequirePermission\\(\"[a-z_]+\\.(xac_?thuc|verify|duyet)",
+        "means": "đã có người tự đặt khoá quyền cho việc xác thực — kiểm xem khách đã chốt chưa",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Trung bình, và tăng theo thời gian: sau khi khoá đã nạp vào bảng `quyen` của một xã chạy thật thì đổi tên là migration trên dữ liệu phân quyền.",
+    "ask_before": [
+      "khai route cho màn xác thực lời khai cư trú",
+      "thêm bất kỳ khoá quyền mới nào vào migration"
+    ],
+    "adr": "kb/10-decisions/0023-thuat-ngu-kenh-cong-dan.md"
   }
 ]
