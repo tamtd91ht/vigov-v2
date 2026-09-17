@@ -330,5 +330,46 @@
       "viết migration thêm cột cho danh bạ cán bộ",
       "viết route danh sách cán bộ"
     ]
+  },
+  {
+    "id": 17,
+    "question": "Cán bộ TỰ đặt lại mật khẩu được không, và nếu được thì liên kết đặt lại sống bao lâu, dùng được mấy lần? (a) có tự phục vụ qua thư điện tử · (b) không, phải nhờ quản trị viên xã đặt lại hộ · (c) cả hai, tuỳ xã cấu hình",
+    "status": "OPEN",
+    "why_it_matters": "docs/ui-ux/15-phu-luc-giao-dien-chung.md §1 đã vẽ sẵn hai route `/quen-mat-khau` và `/dat-lai-mat-khau/:token`, nên nhìn qua tưởng đã chốt là (a). Nhưng nó thừa hưởng NGUYÊN VẸN vòng lặp chết của câu hỏi #9: máy chủ thư là cấu hình THEO XÃ và có thể chưa khai (docs/ui-ux/14-cau-hinh.md §10), nên đúng lúc người ta cần nó nhất — không đăng nhập được — thì nó lại là thứ duy nhất không dùng được. Một luồng đặt lại mật khẩu chỉ chạy khi xã đã khai máy chủ thư là một luồng bỏ rơi đúng xã mới onboard. Ngoài ra, thời hạn và tính dùng-một-lần của token KHÔNG phải chi tiết kỹ thuật: một liên kết đặt lại còn hiệu lực là một đường vào tài khoản cán bộ của một hệ thống nhà nước, nằm trong hộp thư mà hệ thống này không kiểm soát. Chọn 24 giờ hay 15 phút là chọn mức rủi ro, và đó là việc của khách chứ không phải của người viết mã. Câu này phải hỏi CÙNG LÚC với #9 — hai câu cùng một luồng, trả lời rời nhau sẽ ra hai thiết kế không khớp.",
+    "code_signals": [
+      {
+        "pattern": "reset_?token|token_?dat_?lai|dat_lai_mat_khau|password_?reset",
+        "means": "đã có người dựng luồng đặt lại mật khẩu — tức đã ngầm chọn (a)",
+        "threshold": 1
+      },
+      {
+        "pattern": "quen-mat-khau|quen_mat_khau|forgot-password",
+        "means": "route quên mật khẩu đã tồn tại; kiểm xem thời hạn token do ai quyết",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Cao và bất đối xứng. Bảng token đặt lại thì thêm lúc nào cũng được, nhưng một khi luồng tự phục vụ đã phát ra ngoài thì rút lại là lấy đi một thứ cán bộ đã quen dùng, và mọi liên kết đã gửi đi vẫn còn nằm trong các hộp thư. Đổi thời hạn về sau thì rẻ; đổi MÔ HÌNH (a↔b) về sau thì không.",
+    "ask_before": [
+      "viết route quên mật khẩu / đặt lại mật khẩu",
+      "thêm bảng hoặc cột token đặt lại mật khẩu"
+    ]
+  },
+  {
+    "id": 18,
+    "question": "`Ghi nhớ đăng nhập` giữ phiên bao lâu, và có được bật trên máy dùng chung ở trụ sở xã không?",
+    "status": "OPEN",
+    "why_it_matters": "Ô `Ghi nhớ đăng nhập` đã nằm trên form đăng nhập trong docs/ui-ux/15-phu-luc-giao-dien-chung.md §1, nhưng không có con số nào đi kèm. Đây không phải tham số cấu hình mà là một đánh đổi an toàn cụ thể của môi trường này: máy tính ở bộ phận một cửa là máy DÙNG CHUNG, nhiều người ngồi trong ngày. Một phiên 30 ngày trên máy đó nghĩa là người ngồi sau thao tác dưới danh nghĩa người ngồi trước — và luật 6 bất biến 2 bắt mọi vết kiểm toán ghi 'ai làm', nên vết sẽ ghi SAI TÊN một cách hoàn toàn thuyết phục. Đó là hỏng nặng hơn nhiều so với việc bắt đăng nhập lại. Cần khách trả lời: thời hạn bao nhiêu, và có phân biệt máy cá nhân với máy dùng chung không (nếu có thì phân biệt bằng gì — hệ thống không tự biết được).",
+    "code_signals": [
+      {
+        "pattern": "ghi_?nho_?dang_?nhap|remember_?me|rememberMe|nhoDangNhap",
+        "means": "đã có người cài ghi nhớ đăng nhập — kiểm xem thời hạn lấy từ đâu và ai quyết",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Thấp về mã, cao về niềm tin. Đổi thời hạn là đổi một hằng số, nhưng rút ngắn nó về sau là đột ngột bắt toàn bộ cán bộ đang quen được nhớ phải đăng nhập lại, và việc đó luôn rơi đúng vào một buổi sáng có việc gấp.",
+    "ask_before": [
+      "cài ô Ghi nhớ đăng nhập",
+      "đặt thời hạn sống cho phiên hoặc cookie phiên"
+    ]
   }
 ]
