@@ -34,3 +34,10 @@ web/build/
 
 # Bản nén trùng nội dung với docs/ui-ux/*.md
 docs/ui-ux/*.zip
+
+# Thư mục của IDE — của từng máy, không phải của dự án.
+# Chưa có dòng nào cho chúng cho tới 2026-09-17, nên một lần `git add -A` là .idea/ lọt vào
+# kho mã: đường dẫn tuyệt đối, tên người dùng, đôi khi cả chuỗi kết nối trong cấu hình data source.
+.idea/
+.vscode/
+*.swp

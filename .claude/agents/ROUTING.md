@@ -100,9 +100,35 @@ is the compensation?** Undecided → `contract-designer`, and if it is a busines
 | Citizen app | `citizen-app-builder` | `apps/citizen-app/**` |
 | Knowledge | `knowledge-keeper` | `kb/` curated tiers, `services/*/README.md` |
 | Tests | `test-designer` | test files anywhere |
+| Web work queue | `admin-web-builder` | `tasks/web/claimed/**`, `tasks/web/done/**` — **never `open/`** |
 
-**Generated paths (`kb/20-contracts/**`, `kb/30-indexes/**`, `*.pb.go`) have no owner** — they
-are produced by `make kb` and `buf generate`. Any agent editing them is a bug.
+**Generated paths (`kb/20-contracts/**`, `kb/30-indexes/**`, `tasks/web/open/**`, `*.pb.go`)
+have no owner** — they are produced by `make kb` and `buf generate`. Any agent editing them is
+a bug.
+
+### The web queue, and why it cannot be fought over
+
+`tasks/web/` exists so the Next.js admin apps can be built **at the same time** as the backend
+rather than after it. The three directories ARE the status:
+
+```
+tasks/web/open/<id>.json   →   claimed/<id>.json   →   done/<id>.json
+```
+
+- **`open/` is generated.** One file appears per route the backend has actually registered. A
+  new file never collides with anything, so the backend side can emit freely.
+- **Claiming is `rename`, and that is the whole locking story.** Two agents reaching for the
+  same task: one rename succeeds, the other gets `ENOENT` and knows to pick another. The
+  filesystem is the lock — do not add a second one, and above all do not replace this with a
+  single shared `pending.json`, where the later write silently erases the earlier one.
+- `<id>` is a deterministic hash of `service|METHOD|path`, and a task is emitted only when that
+  id is absent from **all three** directories. So "already done" is visible without a ledger.
+
+The queue is **informational**. It blocks nothing and gates nothing.
+
+Zalo Mini App work is deliberately **not** in here — `citizen-app-builder` follows different
+rules (no domain, weak identity), and one queue holding both is an invitation to pick up the
+wrong task. It gets its own when it is needed.
 
 ### Which pairs may run at the same time
 
