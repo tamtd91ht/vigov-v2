@@ -219,6 +219,28 @@ body {
   font-size: 0.75rem;
 }
 
+/* Khối người dùng — `15-phu-luc-giao-dien-chung §3`, vùng Phải.
+   Khi không đọc được phiên thì khối này rỗng và chỉ còn nút đăng xuất: cố ý KHÔNG chừa một
+   ô xám giữ chỗ, vì một ô giữ chỗ tồn tại mãi trông y hệt một trang đang tải mãi. */
+.khoi-nguoi-dung {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.khoi-nguoi-dung .ho-ten {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.khoi-nguoi-dung .chuc-vu {
+  color: var(--xam-chu);
+  font-size: 0.75rem;
+}
+
 .khoi-dang-xuat {
   text-align: right;
 }

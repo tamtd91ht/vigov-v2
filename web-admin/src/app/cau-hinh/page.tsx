@@ -1,5 +1,6 @@
 import { CauHinhXaProvider, phanHienThi } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
+import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { TabNguoiDung } from "@/features/cau-hinh/tab-nguoi-dung";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
@@ -34,14 +35,16 @@ export default async function TrangCauHinh() {
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
-      <DauTrang />
-      <main className="than-trang">
-        <h1>Cấu hình hệ thống</h1>
-        <p className="mo-ta-trang">
-          Tổ chức, phân quyền, danh mục nghiệp vụ và thời hạn xử lý của đơn vị.
-        </p>
-        <TabNguoiDung />
-      </main>
+      <PhienProvider>
+        <DauTrang />
+        <main className="than-trang">
+          <h1>Cấu hình hệ thống</h1>
+          <p className="mo-ta-trang">
+            Tổ chức, phân quyền, danh mục nghiệp vụ và thời hạn xử lý của đơn vị.
+          </p>
+          <TabNguoiDung />
+        </main>
+      </PhienProvider>
     </CauHinhXaProvider>
   );
 }

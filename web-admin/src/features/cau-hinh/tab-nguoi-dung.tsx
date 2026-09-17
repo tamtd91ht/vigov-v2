@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { layPhienHienTai } from "@/lib/api/phien";
+import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { DanhBaCanBo } from "./danh-ba-can-bo";
 import { quyetDinhTabNguoiDung, type QuyetDinhTab } from "./quyen-tab";
@@ -34,19 +32,14 @@ import { quyetDinhTabNguoiDung, type QuyetDinhTab } from "./quyen-tab";
  */
 
 export function TabNguoiDung() {
-  // `null` là "chưa đọc xong", không phải "không có quyền". Ba trạng thái, không hai.
-  const [quyetDinh, datQuyetDinh] = useState<QuyetDinhTab | null>(null);
+  // Phiên đọc MỘT LẦN cho cả trang, ở `PhienProvider`. Trước đây component này tự gọi, nên
+  // mở một màn hình là hai lời gọi cùng một tuyến — và tệ hơn: hai câu trả lời có thể khác
+  // nhau, cho ra một màn hình vừa hiện tên cán bộ trên đầu trang vừa báo phiên đã hết hạn ở
+  // thân trang.
+  const phien = usePhien();
 
-  useEffect(() => {
-    let bo = false;
-    layPhienHienTai().then((ketQua) => {
-      if (bo) return;
-      datQuyetDinh(quyetDinhTabNguoiDung(ketQua));
-    });
-    return () => {
-      bo = true;
-    };
-  }, []);
+  // `null` là "chưa đọc xong", không phải "không có quyền". Ba trạng thái, không hai.
+  const quyetDinh: QuyetDinhTab | null = phien === null ? null : quyetDinhTabNguoiDung(phien);
 
   if (quyetDinh === null) return <p role="status">Đang kiểm tra quyền truy cập…</p>;
 
