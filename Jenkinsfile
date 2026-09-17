@@ -47,9 +47,9 @@ pipeline {
   }
 
   environment {
-    // BuildKit khai tường minh chứ không trông vào mặc định của máy chủ: hai Dockerfile đều
-    // dùng `RUN --mount=type=cache`, và nếu BuildKit tắt thì chúng đổ ở một lỗi cú pháp khó
-    // hiểu thay vì chạy chậm.
+    // BuildKit khai tường minh chứ không trông vào mặc định của máy chủ: cả chín Dockerfile
+    // đều dùng `RUN --mount=type=cache`, và nếu BuildKit tắt thì chúng đổ ở một lỗi cú pháp
+    // khó hiểu thay vì chạy chậm.
     DOCKER_BUILDKIT = '1'
     // TAG (thẻ ảnh = commit) KHÔNG đặt ở đây mà đặt trong giai đoạn đầu bằng `git rev-parse`.
     // `env.GIT_COMMIT` do plugin git gán, và thời điểm gán phụ thuộc kiểu job — đọc nó trong
@@ -133,8 +133,9 @@ pipeline {
         // lại từng bước ở đây — hai danh sách sẽ lệch, và bản lỏng hơn là bản sẽ chạy trên CI
         // trong khi mọi người tin vào bản chặt hơn (luật 9).
         //
-        // Gồm: 7 bất biến bộ não · 90 ca tự kiểm hook · gofmt · go vet · buf lint · go build ·
-        // go test -race · typecheck + test + đối chiếu hợp đồng của web.
+        // Gồm: 7 bất biến bộ não · 90 ca tự kiểm hook · bất biến an toàn của 9 Dockerfile ·
+        // gofmt · go vet · buf lint · go build · go test -race · typecheck + test + đối chiếu
+        // hợp đồng của web.
         sh 'make check'
       }
     }
@@ -155,8 +156,8 @@ pipeline {
               def ten = "${params.REGISTRY}/${params.PROJECT}/vigov-${svc}"
               def anh = docker.build(
                 "${ten}:${env.TAG}",
-                "--build-arg SERVICE=${svc} --build-arg VERSION=${env.TAG} " +
-                "-f build/go.Dockerfile .")
+                "--build-arg VERSION=${env.TAG} " +
+                "-f services/${svc}/Dockerfile .")
               anh.push()
               echo "đã đẩy ${ten}:${env.TAG}"
             }
@@ -164,7 +165,7 @@ pipeline {
             def tenWeb = "${params.REGISTRY}/${params.PROJECT}/vigov-commune-admin"
             def anhWeb = docker.build(
               "${tenWeb}:${env.TAG}",
-              "--build-arg VERSION=${env.TAG} -f build/web.Dockerfile .")
+              "--build-arg VERSION=${env.TAG} -f apps/commune-admin/Dockerfile apps/commune-admin")
             anhWeb.push()
             echo "đã đẩy ${tenWeb}:${env.TAG}"
           }

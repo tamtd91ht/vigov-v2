@@ -3,15 +3,21 @@
 # `make check` is what stop_verify_guard looks for in the session transcript. The agent must
 # not report "done" before it has run.
 
-.PHONY: check brain hooks lint build test web kb proto tidy
+.PHONY: check brain hooks images lint build test web kb proto tidy
 
-check: brain hooks lint build test web   ## Full verification — run before saying it is done
+check: brain hooks images lint build test web   ## Full verification — run before saying it is done
 
 brain:                          ## 7 structural invariants of the brain — anti-drift
 	python tools/check_brain.py
 
 hooks:                          ## Hook self-test: one block case + one pass case each
 	python tools/test_hooks.py
+
+images:                         ## Mỗi dịch vụ có Dockerfile riêng, và không ai đánh rơi bất biến an toàn
+	@# Dockerfile nằm trong từng dịch vụ vì cách đóng gói là một phần hợp đồng của dịch vụ
+	@# với nền tảng. Cái giá là tám bản sao sẽ trôi — và phần trôi trước tiên luôn là phần
+	@# KHÔNG gây lỗi ngay: chạy bằng root, thiếu zoneinfo. Phép kiểm này giữ phần chung.
+	python tools/check_images.py
 
 lint:
 	@# gofmt -l PRINTS unformatted files and still EXITS 0, so for as long as this target

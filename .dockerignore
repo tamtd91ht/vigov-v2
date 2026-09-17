@@ -1,8 +1,11 @@
-# Những gì KHÔNG được gửi sang trình đóng ảnh.
+# Những gì KHÔNG được gửi sang trình đóng ảnh, cho TÁM DỊCH VỤ GO.
 #
-# Một tệp lọt vào ngữ cảnh build là một tệp có thể lọt vào ảnh, và một ảnh đi tới registry
-# thì không gọi về được nữa. Nên danh sách này không chỉ để build nhanh — nó là một rào
-# chắn (luật 8).
+# Tám dịch vụ lấy ngữ cảnh ở gốc kho vì chúng dùng chung `go.mod`, `pkg/` và `gen/`. Web
+# quản trị xã thì không dùng chung gì, nên nó có ngữ cảnh riêng và danh sách loại trừ riêng:
+# `apps/commune-admin/.dockerignore`.
+#
+# Danh sách này không chỉ để build nhanh — một tệp lọt vào ngữ cảnh là một tệp có thể lọt
+# vào ảnh, và một ảnh đã tới registry thì không gọi về được nữa (luật 8).
 
 # ---- bí mật: tuyệt đối không bao giờ ------------------------------------------------
 # .env.example ĐƯỢC PHÉP đi theo (chỉ có chỗ giữ chỗ), nhưng .env thật thì không.
@@ -28,13 +31,15 @@ kb
 docs
 tasks
 
+# ---- ứng dụng web: có ngữ cảnh build riêng, không thuộc ảnh dịch vụ Go --------------
+apps
+
 # ---- kết quả build của máy dev, phải sinh lại trong ảnh -----------------------------
 node_modules
 **/node_modules
 .next
 **/.next
 out
-**/out
 bin
 dist
 **/tsconfig.tsbuildinfo
@@ -42,12 +47,11 @@ dist
 # ---- thứ chỉ dùng lúc phát triển ----------------------------------------------------
 Makefile
 Jenkinsfile
-build
 tools
 __pycache__
 **/__pycache__
 *.pyc
 
 # LƯU Ý: `gen/` CỐ Ý KHÔNG nằm trong danh sách này, dù nó nằm trong .gitignore.
-# Mã nguồn import gen/, và nó được sinh bằng plugin từ xa nên không sinh được bên trong
-# ảnh. `make proto` chạy ở máy chủ build, rồi gen/ đi theo ngữ cảnh — xem build/go.Dockerfile.
+# Mã nguồn import gen/, và nó được sinh bằng plugin từ xa nên không sinh được bên trong ảnh.
+# `make proto` chạy ở máy chủ build, rồi gen/ đi theo ngữ cảnh — xem services/*/Dockerfile.
