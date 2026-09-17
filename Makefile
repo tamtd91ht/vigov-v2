@@ -16,7 +16,7 @@ hooks:                          ## Hook self-test: one block case + one pass cas
 buildfiles:                     ## Dockerfile + Jenkinsfile của từng dịch vụ, và phần chung không ai đánh rơi
 	@# Mỗi dịch vụ tự dựng và tự đóng gói: nó quyết build cái gì, khi nào, ra ảnh nào.
 	@# Cái giá là chín bản sao sẽ trôi — và phần trôi trước tiên luôn là phần KHÔNG gây lỗi
-	@# ngay: chạy bằng root, thiếu zoneinfo, hoặc đánh rơi `pkg/**` khỏi đường kích hoạt để
+	@# ngay: chạy bằng root, thiếu zoneinfo, hoặc đánh rơi `core/**` khỏi đường kích hoạt để
 	@# rồi một bản vá trong mã dùng chung không kích hoạt dịch vụ nào cả.
 	python tools/check_build.py
 
@@ -55,7 +55,7 @@ web:                            ## Typecheck + test the Next.js apps — skips L
 	@# kb/20-contracts/openapi.json and fails when they differ — the one check that catches a
 	@# REST contract change the web has not been regenerated for. Listing it only in Jenkinsfile
 	@# would give the project two definitions of "verified", and the looser one always wins.
-	@for app in apps/*/; do \
+	@for app in */; do \
 		if [ -f "$$app/package.json" ]; then \
 			if [ -d "$$app/node_modules" ]; then \
 				echo "typecheck $$app"; \

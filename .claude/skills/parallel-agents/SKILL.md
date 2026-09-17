@@ -51,7 +51,7 @@ turn; the answer and the report arrive independently.
 ## SHARED STATE THAT PATHS DO NOT SHOW
 
 Path disjointness is **necessary but not sufficient**. Two `go-service-builder` runs on
-`services/identity/**` and `services/petitions/**` look independent and are not: both may add
+`identity/**` and `petitions/**` look independent and are not: both may add
 a dependency, and both then write the same two files.
 
 | Shared thing | Written by | Consequence |
@@ -97,8 +97,8 @@ A single agent on a well-scoped task beats three agents on a vague one.
 | Situation | Call | Why |
 |---|---|---|
 | Naming resources, while the user is still choosing a design | `domain-expert` parallel with the question | Read-only; its answer is needed either way |
-| Fixing `kb/` contradictions while fixing route examples in `services/` | `knowledge-keeper` parallel with main-session edits | `kb/` and `services/*/internal/**` are disjoint — and it still handed back two items that were in the main session's scope |
-| `pkg/idem` then the login route, both `go-service-builder` | **Sequential** | Different files, but both need `pkg/config` and both would run `go mod tidy`. Question 3 fails |
+| Fixing `kb/` contradictions while fixing route examples in the service directories | `knowledge-keeper` parallel with main-session edits | `kb/` and `*/internal/**` are disjoint — and it still handed back two items that were in the main session's scope |
+| `core/idem` then the login route, both `go-service-builder` | **Sequential** | Different files, but both need `core/config` and both would run `go mod tidy`. Question 3 fails |
 | Review after a change touching data, permissions and files | `isolation-reviewer` parallel with `domain-expert` | Neither writes anything |
 
 ## CHECKLIST

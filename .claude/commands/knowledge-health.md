@@ -23,7 +23,7 @@ What is not measured cannot be managed.
 Plus two quick checks:
 
 - T5 files past their `expires` date, not yet removed → **0**
-- `.md` files outside `kb/`, `services/*/README.md`, `.claude/` → **0**
+- `.md` files outside `kb/`, `*/README.md`, `.claude/` → **0**
 
 ## Report
 

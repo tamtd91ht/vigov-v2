@@ -56,7 +56,8 @@ def main() -> None:
     if not path.endswith(".go") or c.should_skip(path):
         sys.exit(0)
     norm = "/" + path.lstrip("/")
-    if "/services/" not in norm or "/platform/" in norm:
+    dv = c.dich_vu_cua(norm)
+    if dv is None or dv == "platform" or "/platform/" in norm:
         sys.exit(0)
 
     content = c.new_content(ti)

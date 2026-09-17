@@ -94,11 +94,11 @@ is the compensation?** Undecided → `contract-designer`, and if it is a busines
 | Layer | Owner agent | Write boundary |
 |---|---|---|
 | Contracts between services | `contract-designer` | `proto/**`, `kb/30-indexes/transaction-boundaries.json` |
-| Inside one Go service | `go-service-builder` | `services/<name>/**`, `pkg/**` |
-| Schema and data | `data-migration-builder` | `services/*/migrations/**`, backfills |
-| Staff web + platform console | `admin-web-builder` | `apps/commune-admin/**`, `apps/platform-admin/**` |
-| Citizen app | `citizen-app-builder` | `apps/citizen-app/**` |
-| Knowledge | `knowledge-keeper` | `kb/` curated tiers, `services/*/README.md` |
+| Inside one Go service | `go-service-builder` | `<name>/**`, `core/**` |
+| Schema and data | `data-migration-builder` | `*/migrations/**`, backfills |
+| Staff web + platform console | `admin-web-builder` | `web-admin/**`, `platform-admin/**` |
+| Citizen app | `citizen-app-builder` | `citizen-app/**` |
+| Knowledge | `knowledge-keeper` | `kb/` curated tiers, `*/README.md` |
 | Tests | `test-designer` | test files anywhere |
 | Web work queue | `admin-web-builder` | `tasks/web/claimed/**`, `tasks/web/done/**` — **never `open/` or `stale/`** |
 
@@ -157,8 +157,8 @@ Where each conflict comes from:
 
 | Pair | Overlapping path |
 |---|---|
-| go-service ∩ migration | `services/*/migrations/**` sits inside `services/<name>/**` |
-| go-service ∩ knowledge | `services/*/README.md` sits inside `services/<name>/**` |
+| go-service ∩ migration | `*/migrations/**` sits inside `<name>/**` |
+| go-service ∩ knowledge | `*/README.md` sits inside `<name>/**` |
 | contract ∩ knowledge | both write under `kb/` |
 | **test-designer ∩ every writer** | see below — the reason is not the paths |
 
@@ -173,9 +173,9 @@ that does not exist. The same applies in reverse to anything that runs `make kb`
 So the pair is sequential, but knowing *why* tells you the exception: an agent that touches no
 Go and runs no repo-wide command can still go alongside it.
 
-**Two `go-service-builder` runs on different services** are the trap: `services/identity/**`
-and `services/petitions/**` are disjoint, but both may write `go.mod` and `go.sum`. Parallel
-only when neither touches `pkg/**` or adds a dependency.
+**Two `go-service-builder` runs on different services** are the trap: `identity/**`
+and `petitions/**` are disjoint, but both may write `go.mod` and `go.sum`. Parallel
+only when neither touches `core/**` or adds a dependency.
 
 The two **read-only** agents (`isolation-reviewer`, `domain-expert`) hold no write tool and
 conflict with nothing — they run alongside anything, including each other.

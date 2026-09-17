@@ -24,14 +24,15 @@ func moduleGia(t *testing.T, api, chung string) (*giaiMa, string) {
 		}
 	}
 	viet("go.mod", "module vd.test\n\ngo 1.26.0\n")
-	viet("pkg/chung/chung.go", chung)
-	viet("services/thu/internal/http/api.go", api)
+	viet("core/chung/chung.go", chung)
+	viet("thu/cmd/server/main.go", "package main\n")
+	viet("thu/internal/http/api.go", api)
 
 	gm, err := moGiaiMa(goc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return gm, filepath.Join(goc, "services", "thu", "internal", "http")
+	return gm, filepath.Join(goc, "thu", "internal", "http")
 }
 
 const chungMacDinh = `package chung
@@ -63,7 +64,7 @@ func TestTheJsonOmitemptyBoQuaLongNhauSliceThoiGian(t *testing.T) {
 import (
 	"time"
 
-	"vd.test/pkg/chung"
+	"vd.test/core/chung"
 )
 
 type Con struct {

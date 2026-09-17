@@ -116,8 +116,8 @@ sự cố thật.
 
 ## Tên sự kiện: chốt `petitions.received.v1`
 
-Ba nguồn tài liệu ghi ba kiểu, nhưng **mã đã chạy chỉ ghi một kiểu**: `pkg/events/events.go`,
-`pkg/events/events_test.go` và `proto/vigov/events/v1/events.proto` đều dùng
+Ba nguồn tài liệu ghi ba kiểu, nhưng **mã đã chạy chỉ ghi một kiểu**: `core/events/events.go`,
+`core/events/events_test.go` và `proto/vigov/events/v1/events.proto` đều dùng
 `petitions.received.v1`. Theo luật 9, câu *"tên nó là gì"* thuộc về mã — tài liệu nào khác
 thì tài liệu đó sai.
 

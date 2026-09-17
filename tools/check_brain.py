@@ -244,7 +244,7 @@ report(total <= TOKEN_BUDGET, "5. Always-loaded budget",
     ["over budget — REMOVE something; never raise the ceiling"])
 
 
-# ---- 6. No .md outside kb/, services/*/README.md, .claude/ ---------------
+# ---- 6. No .md outside kb/, */README.md, .claude/ ---------------
 # docs/ui-ux/ is a NAMED exception, not an open door: it holds the UI specification
 # transcribed from an external running prototype. It answers "what does the screen look
 # like", which kb/ deliberately does not own — so it competes with no owning file (rule 9 #2).
@@ -253,8 +253,10 @@ report(total <= TOKEN_BUDGET, "5. Always-loaded budget",
 # to prevent.
 ALLOWED = (
     re.compile(r"^kb[/\\]"), re.compile(r"^\.claude[/\\]"),
-    re.compile(r"^services[/\\][a-z0-9_\-]+[/\\]README\.md$"),
-    re.compile(r"^apps[/\\][a-z0-9_\-]+[/\\]README\.md$"),
+    # Bố cục phẳng: mỗi đơn vị triển khai nằm ở cấp một (`identity/`, `web-admin/`), nên
+    # README của nó là `<đơn vị>/README.md`. Vẫn CHỈ một tệp ở đúng cấp ấy — không mở cửa
+    # cho .md rải rác bên trong (luật 9, cấm #1).
+    re.compile(r"^[a-z0-9_\-]+[/\\]README\.md$"),
     re.compile(r"^docs[/\\]ui-ux[/\\][^/\\]+\.md$"),
     re.compile(r"^(README|CLAUDE)\.md$"),
 )

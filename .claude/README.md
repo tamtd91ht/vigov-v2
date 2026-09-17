@@ -137,7 +137,7 @@ protection is off in silence: everything still looks normal, it just stops block
 | 3 | Every path and `/<command>` referenced under `.claude/**` exists | 0 dead |
 | 4 | Every file in `skills/`, `commands/`, `agents/` has valid frontmatter | 0 missing |
 | 5 | Always-loaded budget | ≤ 25,000 tokens |
-| 6 | No `.md` outside `kb/`, `services/*/README.md`, `.claude/` | 0 |
+| 6 | No `.md` outside `kb/`, `*/README.md`, `.claude/` | 0 |
 | 7 | `ROUTING.md` and the agent files describe the same set | 0 drift |
 
 Invariant 3 is the anti-drift mechanism. Brain v1 once had a dedicated commit cleaning up

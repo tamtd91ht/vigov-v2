@@ -1,0 +1,127 @@
+// Pipeline của web quản trị xã. Tệp này thuộc về ỨNG DỤNG NÀY.
+//
+//   · build CÁI GÌ    — đúng một ảnh, vigov-web-admin
+//   · build KHI NÀO   — xem `canDungLai()` ở cuối tệp
+//   · đẩy ĐI ĐÂU      — tham số registry của riêng lượt chạy này
+//
+// PHẠM VI DỪNG Ở ẢNH. Việc triển khai lên k8s là của devops.
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    timeout(time: 30, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '30'))
+    disableConcurrentBuilds()
+  }
+
+  parameters {
+    string(name: 'REGISTRY', defaultValue: 'registry.vihat.vn',
+           description: 'Máy chủ Harbor, không kèm https://')
+    string(name: 'PROJECT', defaultValue: 'vigov',
+           description: 'Project trong Harbor — ảnh là <REGISTRY>/<PROJECT>/vigov-web-admin')
+    string(name: 'REGISTRY_CRED', defaultValue: 'harbor-vigov',
+           description: 'ID credentials trong Jenkins. CHỈ LÀ ID, không bao giờ là giá trị thật.')
+  }
+
+  environment {
+    DOCKER_BUILDKIT = '1'
+    UNG_DUNG = 'web-admin'
+  }
+
+  stages {
+
+    stage('Chuẩn bị') {
+      steps {
+        sh 'command -v node && command -v npm && command -v docker'
+        script {
+          env.TAG = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
+          if (!env.TAG) { error('Không lấy được commit hiện tại — không có thẻ ảnh nào để đặt.') }
+          env.CAN_DUNG = canDungLai() ? 'co' : 'khong'
+          echo "web ${env.UNG_DUNG} · commit ${env.TAG} · cần dựng lại: ${env.CAN_DUNG}"
+        }
+      }
+    }
+
+    stage('Cổng kiểm của ứng dụng') {
+      steps {
+        dir('web-admin') {
+          // `npm ci` chứ không `npm install`: ci cài ĐÚNG những gì lock ghi và đổ nếu lock
+          // lệch package.json.
+          sh 'npm ci'
+          sh 'npm run lint'
+          sh 'npm run typecheck'
+          sh 'npm test'
+          // check:api sinh lại src/lib/api/schema.gen.ts từ kb/20-contracts/openapi.json và
+          // đỏ khi hai bên lệch. Đây là phép kiểm DUY NHẤT bắt được một thay đổi hợp đồng
+          // REST mà web chưa sinh lại kiểu — nghĩa là web gọi một hình dạng máy chủ không
+          // còn trả nữa, và TypeScript vẫn xanh vì nó đang tin vào bản sinh cũ.
+          sh 'npm run check:api'
+        }
+      }
+    }
+
+    stage('Đóng ảnh') {
+      when { environment name: 'CAN_DUNG', value: 'co' }
+      steps {
+        script {
+          def ten = "${params.REGISTRY}/${params.PROJECT}/vigov-${env.UNG_DUNG}"
+          docker.withRegistry("https://${params.REGISTRY}", params.REGISTRY_CRED) {
+            // Ngữ cảnh là THƯ MỤC NÀY, khác với tám dịch vụ Go: ứng dụng này không dùng
+            // chung go.mod/core/gen với ai cả.
+            def anh = docker.build("${ten}:${env.TAG}",
+                                   "--build-arg VERSION=${env.TAG} " +
+                                   "-f web-admin/Dockerfile web-admin")
+            anh.push()
+          }
+          echo "ĐÃ ĐẨY  ${ten}:${env.TAG}\n" +
+               "  Nghe cổng 3000, chạy dưới UID 1000 — đặt runAsNonRoot: true.\n" +
+               "  KHÔNG có biến môi trường nào mang giá trị riêng của xã: tên xã, cơ quan cấp\n" +
+               "  trên và mọi cấu hình khác đều đọc LÚC CHẠY theo Host. Cùng một ảnh phục vụ\n" +
+               "  mọi xã, và đó là điều kiện để cách ly giữa các xã còn đúng."
+        }
+      }
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// KHI NÀO WEB PHẢI DỰNG LẠI.
+//
+// `kb/20-contracts/**` nằm trong danh sách và đó là phần dễ bị bỏ sót nhất: hợp đồng REST
+// đổi thì `schema.gen.ts` phải sinh lại, và nếu web không dựng lại thì nó vẫn gọi hình dạng
+// cũ. Phép kiểm `check:api` bắt được điều đó — nhưng chỉ khi pipeline này có chạy.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+
+// #[dung-chung] Khai ở ĐÚNG MỘT CHỖ, dưới dạng HÀM chứ không phải biến mức script:
+// một biến mức script trong Jenkinsfile cần chú giải @Field kèm import của nó, và một import
+// bị quên là một lỗi lúc CHẠY chứ không phải lúc đọc.
+List<String> duongKichHoat() {
+  return ['web-admin/**', 'kb/20-contracts/**']
+}
+
+boolean canDungLai() {
+  // Lượt build đầu tiên chưa có gì để so. `changeset` khi ấy trả false, nên nếu không xử ca
+  // này thì lần chạy đầu sẽ không đóng ảnh nào và trông y hệt một pipeline hỏng.
+  if (currentBuild.previousSuccessfulBuild == null) { return true }
+  for (String mau : duongKichHoat()) {
+    if (coTrongChangeset(mau)) { return true }
+  }
+  return false
+}
+
+boolean coTrongChangeset(String mau) {
+  // So khớp thủ công thay vì `when { changeset }` để danh sách mẫu chỉ khai ở MỘT chỗ.
+  // Hai nơi khai cùng một danh sách là hai nơi sẽ lệch, và bản lỏng hơn là bản được chạy.
+  String bo = mau.endsWith('/**') ? mau.substring(0, mau.length() - 3) : null
+  for (cs in currentBuild.changeSets) {
+    for (c in cs.items) {
+      for (f in c.affectedFiles) {
+        String duong = f.path
+        if (bo != null ? duong.startsWith(bo) : duong == mau) { return true }
+      }
+    }
+  }
+  return false
+}

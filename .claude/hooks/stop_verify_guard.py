@@ -29,7 +29,7 @@ import _common as c  # noqa: E402
 HOOK = "stop_verify_guard"
 
 CODE_EXT = (".go", ".ts", ".tsx", ".js", ".jsx", ".proto", ".sql")
-CODE_DIR = ("/services/", "/apps/", "/web/", "/internal/", "/pkg/", "/cmd/", "/proto/",
+CODE_DIR = ("/internal/", "/core/", "/cmd/", "/proto/", "/migrations/", "/src/",
             "/migrations/")
 
 # Signals that a verification run FAILED. Matching the command alone let a red `go test`

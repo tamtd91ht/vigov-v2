@@ -18,7 +18,7 @@ One agent owns the seams so they have an owner.
 
 | May write | May NOT write |
 |---|---|
-| `proto/**` — the source of truth | Any `services/*/internal/**` (go-service-builder) |
+| `proto/**` — the source of truth | Any `*/internal/**` (go-service-builder) |
 | `kb/30-indexes/transaction-boundaries.json` — the one hand-curated index | Generated files (`*.pb.go`) — regenerate instead |
 | `kb/10-decisions/**` — ADRs for contract decisions | Any service's business logic |
 

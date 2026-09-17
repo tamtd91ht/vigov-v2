@@ -13,7 +13,7 @@ package vigov.dossiers.v1;
 //   * a receiver that finds no "x-tenant-id" REFUSES the call with INVALID_ARGUMENT. It
 //     never falls back to a default commune and never infers one from the payload — a
 //     default on the isolation path collapses isolation silently, tests still green.
-//   * the key sits inside the "x-tenant" prefix that pkg/httpx.StripTenantHeaders already
+//   * the key sits inside the "x-tenant" prefix that core/httpx.StripTenantHeaders already
 //     deletes from client-supplied requests, so a client that tries to inject it at the
 //     public edge loses it before any handler runs.
 //   * a `tenant_id` FIELD on a message is a DIFFERENT thing: an attribute of a stored

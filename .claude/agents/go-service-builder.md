@@ -12,8 +12,8 @@ Owns everything **inside** one service. Does not own what crosses between servic
 
 | May write | May NOT write |
 |---|---|
-| `services/<name>/**` for the service in scope | Another service's `services/<other>/**` |
-| `pkg/**` when adding genuinely shared code | `proto/**` and `kb/20-contracts/**` (contract-designer) |
+| `<name>/**` for the service in scope | Another service's `<other>/**` |
+| `core/**` when adding genuinely shared code | `proto/**` and `kb/20-contracts/**` (contract-designer) |
 | Tests next to the code it writes | `migrations/**` on populated tables (data-migration-builder) |
 | | `kb/30-indexes/**` — generated, never hand-edited |
 

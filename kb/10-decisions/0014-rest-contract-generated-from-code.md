@@ -46,7 +46,7 @@ mâu thuẫn với một luật critical, nên phải giải quyết tường mi
 | | Bề mặt **giữa các service** | Bề mặt **service → trình duyệt** |
 |---|---|---|
 | Ai gọi | Service khác, trong mạng nội bộ | Web quản trị, qua Internet |
-| Ai chốt | `proto/` — luật 2, ADR 0012 | Khai báo route trong `services/*/internal/` |
+| Ai chốt | `proto/` — luật 2, ADR 0012 | Khai báo route trong `*/internal/` |
 | Hình dạng lời gọi | Theo lô, mang xã trong metadata (ADR 0012) | Theo màn hình, xã suy từ `Host` ở rìa (luật 1 #3) |
 | Mang gì mà bên kia không có | — | Đường dẫn URL, mã trạng thái HTTP, cookie phiên, quyền, chế độ chống lặp |
 
@@ -193,7 +193,7 @@ nó chưa thiết kế; một thư mục `tasks/citizen/` rỗng là một lời
 |---|---|
 | 1 | Hợp đồng hiện mô tả **đúng hai route** (`POST /api/v1/sessions`, `DELETE /api/v1/sessions/{sid}`). Đây **không** phải đặc tả API đầy đủ, và không được đọc như bản kê những gì hệ thống sẽ có |
 | 2 | Nó chỉ đúng **chừng nào mọi route mới đều mang khối chú thích**. Thứ canh việc đó — `rest_api_guard` — chạy PostToolUse và **chỉ cảnh báo**, không chặn. Một route quên khối chú thích vẫn vào được `main`, và cách nó hỏng là **vắng mặt lặng lẽ** khỏi hợp đồng |
-| 3 | Chỉ quét `services/*/internal/**`. `/healthz` và mount `"/"` ở `cmd/server` nằm ngoài `/api/v1`, ngoài rìa xã, không mang quyền — cố ý bỏ ra |
+| 3 | Chỉ quét `*/internal/**`. `/healthz` và mount `"/"` ở `cmd/server` nằm ngoài `/api/v1`, ngoài rìa xã, không mang quyền — cố ý bỏ ra |
 
 **Vì sao (2) chỉ advisory, dù đó là mắt xích yếu nhất:** một route được viết qua nhiều lần
 sửa, và chặn giữa chừng dạy agent đi viết route ở chỗ hook không nhìn thấy — bài học luật 5 đã
@@ -225,7 +225,7 @@ Chưa có cơ chế đối soát `open/` với hợp đồng hiện hành; khi c
 → ADR 0012 (ranh giới liên service — nơi `.proto` là nguồn chuẩn): `kb/10-decisions/0012-grpc-boundary-contract.md`
 → Bản sinh: `kb/20-contracts/openapi.json` · `kb/30-indexes/api-surface.json` — **không sửa tay**
 → Bộ sinh và toàn văn lập luận trong mã: `tools/apidoc/main.go`
-→ Khai báo route mẫu: `services/identity/internal/http/routes.go`
+→ Khai báo route mẫu: `identity/internal/http/routes.go`
 → Luật 2 (ranh giới service): `.claude/rules/critical/2-service-boundary.md`
 → Luật 9 (một fact một nguồn): `.claude/rules/critical/9-knowledge-single-source.md`
 → Cưỡng chế: `.claude/hooks/rest_api_guard.py` (advisory) · `.claude/hooks/doc_guard.py` (chặn sửa tay tầng sinh)

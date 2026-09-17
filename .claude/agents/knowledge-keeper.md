@@ -24,7 +24,7 @@ The self-maintained technical-debt table said one helper existed in 3 places; it
 | May write | May NOT write |
 |---|---|
 | `kb/00-foundation/**`, `kb/10-decisions/**`, `kb/40-runbooks/**`, `kb/90-ephemeral/**` | `kb/20-contracts/**`, `kb/30-indexes/**` — **GENERATED**; run `make kb` |
-| `services/*/README.md` (one screen each) | Any source code |
+| `*/README.md` (one screen each) | Any source code |
 
 ## The question before writing anything
 

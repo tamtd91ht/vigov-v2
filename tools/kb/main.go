@@ -200,7 +200,7 @@ func findRoot() (string, error) {
 }
 
 func scanServices(root string) ([]serviceEntry, error) {
-	dir := filepath.Join(root, "services")
+	dir := root
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -214,11 +214,25 @@ func scanServices(root string) ([]serviceEntry, error) {
 			continue
 		}
 		name := e.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		// Bố cục phẳng: a service is a TOP-LEVEL directory, sitting beside core/, kb/ and
+		// web-admin/. `cmd/server/main.go` is what tells them apart — without this filter the
+		// generated index called kb/, docs/ and tools/ services, and the index is the file the
+		// next session trusts INSTEAD of reading the tree (rule 9). A wrong index is worse than
+		// no index: it is believed.
 		main := filepath.Join(dir, name, "cmd", "server", "main.go")
-		_, mainErr := os.Stat(main)
+		mainErr := error(nil)
+		if _, err := os.Stat(main); err != nil {
+			mainErr = err
+			if _, err := os.Stat(filepath.Join(dir, name, "internal")); err != nil {
+				continue // neither an entrypoint nor service-shaped — not a service
+			}
+		}
 		out = append(out, serviceEntry{
 			Name:    name,
-			Path:    "services/" + name,
+			Path:    name,
 			HasMain: mainErr == nil,
 			Summary: readmeSummary(filepath.Join(dir, name, "README.md")),
 		})

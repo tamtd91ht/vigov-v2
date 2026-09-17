@@ -1,6 +1,6 @@
 """PreToolUse — BLOCK queries without tenant scope, and single-column unique keys.  [RULE 1]
 
-Scope: *.go under services/ (excluding tests, generated code, the platform layer)
+Scope: *.go inside a service (excluding tests, generated code, the platform layer)
 
 WHY BLOCK RATHER THAN ADVISE: ViGov runs ONE system for MANY communes. A query missing
 tenant_id raises no error, turns no test red, and returns rows from EVERY commune. A clerk
@@ -11,7 +11,7 @@ Escape hatches — all EXPLICIT, none implicit:
   - go through a scoped repository:  s.scoped(ctx) · repo.For(ctx) · WithTenant(ctx)
   - the filter itself carries tenant_id
   - the line above declares:  // @cross-tenant: <business reason>
-  - the file lives in services/platform/ (platform admin, not commune business)
+  - the file belongs to the `platform` service (platform admin, not commune business)
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ TENANT_FROM_CLIENT = re.compile(
 )
 
 WATCH_EXT = (".go",)
-PLATFORM = ("/services/platform/", "/internal/platform/")
+PLATFORM = ("/internal/platform/",)
 
 # A table declared PARTITION BY and given no partitions REJECTS EVERY INSERT. Because the
 # audit entry shares the business transaction (rule 6, invariant 3), the first real business
@@ -111,7 +111,7 @@ def in_scope(path: str) -> bool:
         return False
     if any(p in path for p in PLATFORM):
         return False
-    return "/services/" in path or "/internal/" in path
+    return c.dich_vu_cua(path) is not None or "/internal/" in path
 
 
 def scan(content: str) -> list[str]:

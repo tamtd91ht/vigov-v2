@@ -82,8 +82,8 @@ Cắt theo **bộ phận chịu trách nhiệm trong một UBND xã** — xem l�
 | `comms` | Thông tin – truyền thông — tin bài, truyền thanh, bản đồ, thông báo |
 | `reporting` | Read model — **không sở hữu dữ liệu gốc nào** |
 
-**Hai thứ cố ý KHÔNG phải service:** nhật ký thao tác (`pkg/audit`) và lưu trữ tệp
-(`pkg/storage`). Lý do ở ADR 0001.
+**Hai thứ cố ý KHÔNG phải service:** nhật ký thao tác (`core/audit`) và lưu trữ tệp
+(`core/storage`). Lý do ở ADR 0001.
 
 → Thuật ngữ nghiệp vụ và ánh xạ tên tài nguyên URL: `kb/00-foundation/ubiquitous-language.md`
 → Ai sở hữu thực thể nào: `kb/30-indexes/data-ownership.json` (GENERATED)

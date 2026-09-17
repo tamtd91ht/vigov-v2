@@ -30,8 +30,8 @@ const dauFile = `package http
 import (
 	"net/http"
 
-	"github.com/vihat/vigov/pkg/authz"
-	"github.com/vihat/vigov/pkg/idem"
+	"github.com/vihat/vigov/core/authz"
+	"github.com/vihat/vigov/core/idem"
 )
 
 func Register(mux *http.ServeMux) {

@@ -19,7 +19,7 @@ package vigov.identity.v1;
 //   * A receiver that finds no "x-tenant-id" REFUSES the call with INVALID_ARGUMENT. It
 //     never falls back to a default commune and never infers one from the payload — a
 //     default on the isolation path collapses isolation silently, with tests still green.
-//   * The key sits inside the "x-tenant" prefix that pkg/httpx.StripTenantHeaders already
+//   * The key sits inside the "x-tenant" prefix that core/httpx.StripTenantHeaders already
 //     deletes from client-supplied requests, so a client that tries to inject it at the
 //     public edge loses it before any handler runs. Picking a key outside that prefix would
 //     have created a header nothing strips.
@@ -49,7 +49,7 @@ message Staff {
   string tenant_id = 2;       // staff belong to exactly one commune
 
   // Field 3 WAS `username`, and there has never been such a column. Sign-in is by `email`
-  // (services/identity/internal/store/can_bo.go, TheoEmail), and the only per-commune unique
+  // (identity/internal/store/can_bo.go, TheoEmail), and the only per-commune unique
   // keys on `nguoi_dung` are UNIQUE (tenant_id, ma) and UNIQUE (tenant_id, email). The field
   // therefore also asserted a constraint that exists nowhere — worse than a spare field,
   // because whoever implements this service would have had to choose between inventing a

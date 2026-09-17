@@ -112,7 +112,7 @@ mình gặp hai khái niệm. Chỉ có **một** khái niệm: con người là
 
 | Bề mặt | Tên đang dùng | Vì sao là tên đó |
 |---|---|---|
-| Bảng CSDL | `nguoi_dung` | `services/identity/migrations/0001_init.sql`. Bảng gộp **hai tập**: 26 người của danh bạ công khai và những người có tài khoản đăng nhập — phân biệt bằng cột `co_tai_khoan` (migration `0003`) |
+| Bảng CSDL | `nguoi_dung` | `identity/migrations/0001_init.sql`. Bảng gộp **hai tập**: 26 người của danh bạ công khai và những người có tài khoản đăng nhập — phân biệt bằng cột `co_tai_khoan` (migration `0003`) |
 | Ngôn ngữ nghiệp vụ | `can_bo` | Từ hành chính đúng cho con người; "người dùng" là từ của phần mềm, không phải của xã |
 | Kiểu Go | `domain.CanBo`, `store.CanBoStore` | Tầng nghiệp vụ nói tiếng nghiệp vụ |
 | Hợp đồng gRPC | `Staff`, `BatchGetStaff` | Bề mặt hợp đồng dùng **tiếng Anh** (ADR 0011). `User` thì trùng với công dân — hai lớp tin cậy hoàn toàn khác nhau (luật 4) |
@@ -134,7 +134,7 @@ niệm mới thì đặt **một** tên và giữ nguyên qua các tầng.
 
 | Bề mặt | Dùng | Trạng thái |
 |---|---|---|
-| Khoá quyền | `feedback.assign` `feedback.create` `feedback.read` `feedback.resolve` `feedback.restricted` | `services/identity/migrations/0001_init.sql` đã nạp; ADR 0008 đã chốt `feedback.resolve` quyết định ai đóng phiếu |
+| Khoá quyền | `feedback.assign` `feedback.create` `feedback.read` `feedback.resolve` `feedback.restricted` | `identity/migrations/0001_init.sql` đã nạp; ADR 0008 đã chốt `feedback.resolve` quyết định ai đóng phiếu |
 | Tài nguyên URL | `citizen-reports` | ADR 0011 |
 
 **Vì sao không thống nhất lại thành một từ:** hai bề mặt này có **giá đổi tên khác hẳn nhau**.

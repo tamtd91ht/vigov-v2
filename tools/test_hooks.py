@@ -61,30 +61,30 @@ def wpost(path: str, content: str) -> dict:
 CASES = [
     # ---- rule 1 · tenant isolation -------------------------------------------
     ("tenant_scope_guard", "query without tenant scope", BLOCK,
-     w("services/donthu/internal/app/list.go",
+     w("donthu/internal/app/list.go",
        "func (s *Svc) List(ctx context.Context) {\n\trows, err := s.db.Find(ctx, filter)\n}")),
     ("tenant_scope_guard", "goes through a scoped repository", PASS,
-     w("services/donthu/internal/app/list.go",
+     w("donthu/internal/app/list.go",
        "func (s *Svc) List(ctx context.Context) {\n\trepo := s.scoped(ctx)\n\trows, err := repo.Find(ctx, filter)\n}")),
     ("tenant_scope_guard", "single-column unique key", BLOCK,
-     w("services/donthu/internal/store/schema.go",
+     w("donthu/internal/store/schema.go",
        "// UNIQUE (code)\nconst ddl = `CREATE TABLE don_thu (code text, UNIQUE (code))`")),
     ("tenant_scope_guard", "composite unique key", PASS,
-     w("services/donthu/internal/store/schema.go",
+     w("donthu/internal/store/schema.go",
        "const ddl = `CREATE TABLE don_thu (tenant_id text, code text, UNIQUE (tenant_id, code))`")),
     ("tenant_scope_guard", "tenant taken from the client", BLOCK,
-     w("services/donthu/internal/http/h.go",
+     w("donthu/internal/http/h.go",
        'func h(w http.ResponseWriter, r *http.Request) {\n\ttid := r.URL.Query().Get("tenant_id")\n}')),
     # Six of eight services shipped a partitioned audit_log with ZERO partitions, and no hook
     # saw it because this guard watched only .go. A partitioned table with no partitions
     # rejects every INSERT, and the audit entry shares the business transaction — so the first
     # real business write rolls back entirely.
     ("tenant_scope_guard", "partitioned table with no partitions", BLOCK,
-     w("services/petitions/migrations/0001_init.sql",
+     w("petitions/migrations/0001_init.sql",
        "CREATE TABLE IF NOT EXISTS audit_log (\n"
        "  tenant_id text NOT NULL,\n  id BIGSERIAL\n) PARTITION BY HASH (tenant_id);")),
     ("tenant_scope_guard", "partitioned table with its partitions", PASS,
-     w("services/petitions/migrations/0001_init.sql",
+     w("petitions/migrations/0001_init.sql",
        "CREATE TABLE IF NOT EXISTS audit_log (\n"
        "  tenant_id text NOT NULL,\n  id BIGSERIAL\n) PARTITION BY HASH (tenant_id);\n"
        "DO $$ BEGIN FOR i IN 0..31 LOOP EXECUTE format(\n"
@@ -94,109 +94,109 @@ CASES = [
     # The skeleton template shows the declaration in a comment. Flagging the very comment that
     # teaches the shape would be a guard nobody keeps.
     ("tenant_scope_guard", "declaration inside a SQL comment", PASS,
-     w("services/comms/migrations/0001_init.sql",
+     w("comms/migrations/0001_init.sql",
        "-- CREATE TABLE bai_viet (\n--   tenant_id text NOT NULL\n"
        "-- ) PARTITION BY HASH (tenant_id);\n")),
     ("tenant_scope_guard", "explicit @cross-tenant escape", PASS,
-     w("services/baocao/internal/app/huyen.go",
+     w("baocao/internal/app/huyen.go",
        "// @cross-tenant: tổng hợp phản ánh cấp huyện, chỉ số liệu, đã ghi nhật ký\n\trows, _ := s.db.Find(ctx, f)")),
 
     # ---- rule 2 · service boundary ---------------------------------------
     ("service_boundary_guard", "imports another service's internal", BLOCK,
-     w("services/baocao/internal/app/a.go",
-       'import (\n\t"vigov/services/donthu/internal/store"\n)')),
+     w("baocao/internal/app/a.go",
+       'import (\n\t"vigov/donthu/internal/store"\n)')),
     ("service_boundary_guard", "imports a shared package", PASS,
-     w("services/baocao/internal/app/a.go",
-       'import (\n\t"vigov/pkg/tenant"\n)')),
+     w("baocao/internal/app/a.go",
+       'import (\n\t"vigov/core/tenant"\n)')),
     ("service_boundary_guard", "hand-edits a proto-generated file", BLOCK,
      w("kb/20-contracts/grpc/donthu.pb.go", "package pb\n// sửa tay")),
 
     # ---- rule 3 · personal data -----------------------------------------
     ("pii_guard", "logs a phone number", BLOCK,
-     w("services/congdan/internal/app/otp.go", "log.Info(citizenPhone)")),
+     w("congdan/internal/app/otp.go", "log.Info(citizenPhone)")),
     ("pii_guard", "logs a business code", PASS,
-     w("services/congdan/internal/app/otp.go", 'log.Info("da gui otp", "code", dt.Code)')),
+     w("congdan/internal/app/otp.go", 'log.Info("da gui otp", "code", dt.Code)')),
     ("pii_guard", "prints a whole struct", BLOCK,
-     w("services/congdan/internal/app/otp.go", 'fmt.Printf("%+v", user)')),
+     w("congdan/internal/app/otp.go", 'fmt.Printf("%+v", user)')),
     ("pii_guard", "hardcoded real phone number", BLOCK,
-     w("services/congdan/internal/app/seed.go", 'phone := "0912345678"')),
+     w("congdan/internal/app/seed.go", 'phone := "0912345678"')),
     ("pii_guard", "agreed fake number", PASS,
-     w("services/congdan/internal/app/seed.go", 'phone := "0900000000"')),
+     w("congdan/internal/app/seed.go", 'phone := "0900000000"')),
     ("pii_guard", "personal data in .json", BLOCK,
-     w("services/congdan/seed/cd.json", '[{"phone":"0912345678","cccd":"079123456789"}]')),
+     w("congdan/seed/cd.json", '[{"phone":"0912345678","cccd":"079123456789"}]')),
 
     # ---- rule 4 · citizen isolation ----------------------------------------
     ("citizen_scope_guard", "identity from the query string", BLOCK,
-     w("services/congdan/internal/http/citizen.go",
+     w("congdan/internal/http/citizen.go",
        'phone := r.URL.Query().Get("phone")')),
     ("citizen_scope_guard", "identity from the session", PASS,
-     w("services/congdan/internal/http/citizen.go",
+     w("congdan/internal/http/citizen.go",
        "cit := auth.CitizenFrom(ctx)")),
 
     # ---- rule 5 · authorisation ----------------------------------------------
     ("rbac_guard", "route with no permission", BLOCK,
-     w("services/donthu/internal/http/router.go",
+     w("donthu/internal/http/router.go",
        'r.Get("/don-thu", h.List)')),
     ("rbac_guard", "route with a permission", PASS,
-     w("services/donthu/internal/http/router.go",
+     w("donthu/internal/http/router.go",
        'r.With(auth.RequirePermission("donthu", "view")).Get("/don-thu", h.List)')),
     ("rbac_guard", "adjacent routes, second one unguarded", BLOCK,
-     w("services/donthu/internal/http/router.go",
+     w("donthu/internal/http/router.go",
        'r.With(auth.RequirePermission("donthu", "view")).Get("/don-thu", h.List)\n'
        'r.Delete("/don-thu/{id}", h.Remove)')),
     ("rbac_guard", "Public() with no reason", BLOCK,
-     w("services/donthu/internal/http/router.go",
+     w("donthu/internal/http/router.go",
        'r.With(auth.Public()).Get("/tra-cuu", h.Lookup)')),
     ("rbac_guard", "HandleFunc route with no permission", BLOCK,
-     w("services/petitions/internal/http/routes.go",
+     w("petitions/internal/http/routes.go",
        'mux.HandleFunc("POST /api/v1/citizen-reports", h.Create)')),
     ("rbac_guard", "HandleFunc route with a permission", PASS,
-     w("services/petitions/internal/http/routes.go",
+     w("petitions/internal/http/routes.go",
        'mux.Handle("POST /api/v1/citizen-reports",\n'
        '\tauthz.RequirePermission(d.Checker, "feedback.create")(http.HandlerFunc(h.Create)))')),
 
     # ---- REST surface · path language + duplicate requests --------------------
     ("rest_api_guard", "Vietnamese path segment, transliterated", BLOCK,
-     w("services/identity/internal/http/routes.go",
+     w("identity/internal/http/routes.go",
        'mux.Handle("POST /dang-nhap", authz.Public("man hinh dang nhap")(h.Login))')),
     ("rest_api_guard", "Vietnamese path segment with diacritics", BLOCK,
-     w("services/petitions/internal/http/routes.go",
+     w("petitions/internal/http/routes.go",
        'mux.Handle("GET /api/v1/phản-ánh/{code}", authz.CitizenOnly()(h.Get))')),
     ("rest_api_guard", "Vietnamese segment under a versioned prefix", BLOCK,
-     w("services/petitions/internal/http/routes.go",
+     w("petitions/internal/http/routes.go",
        'mux.Handle("GET /api/v1/phan-anh/{ma}", authz.CitizenOnly()(h.Get))')),
     ("rest_api_guard", "English path, versioned, with idempotency", PASS,
-     w("services/petitions/internal/http/routes.go",
+     w("petitions/internal/http/routes.go",
        'mux.Handle("POST /api/v1/citizen-reports",\n'
        '\tauthz.RequirePermission(d.Checker, "feedback.create")(\n'
        '\t\tidem.Required(idem.MoKhiHong)(http.HandlerFunc(h.Create))))')),
     ("rest_api_guard", "healthz stays outside /api/v1", PASS,
-     wpost("services/platform/cmd/server/main.go",
+     wpost("platform/cmd/server/main.go",
            'mux.HandleFunc("GET /healthz", ok)')),
     ("rest_api_guard", "state-changing route, no duplicate declaration", BLOCK,
-     wpost("services/petitions/internal/http/routes.go",
+     wpost("petitions/internal/http/routes.go",
            'mux.Handle("POST /api/v1/citizen-reports",\n'
            '\tauthz.RequirePermission(d.Checker, "feedback.create")(http.HandlerFunc(h.Create)))')),
     ("rest_api_guard", "idem.KhongCan() states no reason", BLOCK,
-     wpost("services/identity/internal/http/routes.go",
+     wpost("identity/internal/http/routes.go",
            'mux.Handle("DELETE /api/v1/sessions/{sid}",\n'
            '\tauthz.AnyAuthenticated("ends its own session")(\n'
            '\t\tidem.KhongCan()(http.HandlerFunc(h.Revoke))))')),
     ("rest_api_guard", "verb used as a path segment", BLOCK,
-     wpost("services/petitions/internal/http/routes.go",
+     wpost("petitions/internal/http/routes.go",
            'mux.Handle("POST /api/v1/citizen-reports/{code}/close",\n'
            '\tauthz.RequirePermission(d.Checker, "feedback.resolve")(\n'
            '\t\tidem.Required(idem.DongKhiHong)(http.HandlerFunc(h.Close))))')),
-    # pkg/idem refuses this at runtime, but it cannot refuse at wiring time: authz wraps
+    # core/idem refuses this at runtime, but it cannot refuse at wiring time: authz wraps
     # outside idem, so idem never sees the Public declaration. The route statement is the one
     # place both are visible together.
     ("rest_api_guard", "Public route with idem.Required", BLOCK,
-     w("services/petitions/internal/http/routes.go",
+     w("petitions/internal/http/routes.go",
        'mux.Handle("POST /api/v1/citizen-reports",\n'
        '\tauthz.Public("công dân gửi phản ánh qua Mini App")(\n'
        '\t\tidem.Required(idem.MoKhiHong)(http.HandlerFunc(h.Create))))')),
     ("rest_api_guard", "Public route with idem.KhongCan", PASS,
-     w("services/identity/internal/http/routes.go",
+     w("identity/internal/http/routes.go",
        'mux.Handle("POST /api/v1/sessions",\n'
        '\tauthz.Public("màn hình đăng nhập")(\n'
        '\t\tidem.KhongCan("đăng nhập lần hai mở một phiên thứ hai")(h.DangNhap)))')),
@@ -204,26 +204,26 @@ CASES = [
     # route absent from the contract is a screen the web side builds by guessing the response
     # shape — the v1 failure where the type source of truth moved into the frontend.
     ("rest_api_guard", "route with no contract block", BLOCK,
-     wpost("services/petitions/internal/http/routes.go",
+     wpost("petitions/internal/http/routes.go",
            'mux.Handle("GET /api/v1/citizen-reports",\n'
            '\tauthz.RequirePermission(d.Checker, "feedback.read")(http.HandlerFunc(h.List)))')),
     # The block must sit IMMEDIATELY above — that is the rule tools/apidoc applies, and a guard
     # accepting a looser shape would pass routes the generator then silently drops.
     ("rest_api_guard", "contract block separated by a blank line", BLOCK,
-     wpost("services/petitions/internal/http/routes.go",
+     wpost("petitions/internal/http/routes.go",
            '// @summary  Danh sách phản ánh\n'
            '// @reply    200 danhSachPhanAnh\n'
            '\n'
            'mux.Handle("GET /api/v1/citizen-reports",\n'
            '\tauthz.RequirePermission(d.Checker, "feedback.read")(http.HandlerFunc(h.List)))')),
     ("rest_api_guard", "a typo in a contract tag", BLOCK,
-     wpost("services/petitions/internal/http/routes.go",
+     wpost("petitions/internal/http/routes.go",
            '// @summary  Danh sách phản ánh\n'
            '// @replies  200 danhSachPhanAnh\n'
            'mux.Handle("GET /api/v1/citizen-reports",\n'
            '\tauthz.RequirePermission(d.Checker, "feedback.read")(http.HandlerFunc(h.List)))')),
     ("rest_api_guard", "route with a complete contract block", PASS,
-     wpost("services/petitions/internal/http/routes.go",
+     wpost("petitions/internal/http/routes.go",
            '// @summary  Danh sách phản ánh của xã\n'
            '// @screen   09-phan-anh-nguoi-dan §4\n'
            '// @reply    200 danhSachPhanAnh\n'
@@ -231,12 +231,12 @@ CASES = [
            'mux.Handle("GET /api/v1/citizen-reports",\n'
            '\tauthz.RequirePermission(d.Checker, "feedback.read")(http.HandlerFunc(h.List)))')),
     ("rest_api_guard", "a route inside a comment is not a route", PASS,
-     wpost("services/comms/internal/http/routes.go",
+     wpost("comms/internal/http/routes.go",
            '// Example of the shape every real route must take:\n'
            '//\tmux.Handle("POST /dang-nhap", authz.Public("x")(h.Login))\n'
            'func Register(mux *http.ServeMux, d Deps) { _ = d }')),
     ("rest_api_guard", "nominalised action with a failure mode", PASS,
-     wpost("services/petitions/internal/http/routes.go",
+     wpost("petitions/internal/http/routes.go",
            '// @summary  Đóng phiếu phản ánh và trả kết quả cho công dân\n'
            '// @screen   09-phan-anh-nguoi-dan §14\n'
            '// @reply    200 phanHoiDongPhieu\n'
@@ -282,10 +282,10 @@ CASES = [
 
     # ---- rule 6 · audit trail -------------------------------------------------
     ("audit_guard", "write with no audit entry", BLOCK,
-     w("services/donthu/internal/app/update.go",
+     w("donthu/internal/app/update.go",
        "func (s *Svc) Update(ctx context.Context) error {\n\treturn s.repo.Save(ctx, dt)\n}")),
     ("audit_guard", "write with an audit entry", PASS,
-     w("services/donthu/internal/app/update.go",
+     w("donthu/internal/app/update.go",
        "func (s *Svc) Update(ctx context.Context) error {\n\ts.repo.Save(ctx, dt)\n\treturn audit.Write(ctx, e)\n}")),
 
     # ---- rule 7 · data preservation ----------------------------------------
@@ -304,7 +304,7 @@ CASES = [
     ("data_safety_guard", "harmless command arriving as Monitor", PASS, mon("go test ./...")),
     ("bash_content_guard", "secret written to a file via Monitor", BLOCK,
      mon("echo 'aws_secret_access_key = AKIAIOSFODNN7EXAMPLE' > .env")),
-    ("bash_content_guard", "ordinary command arriving as Monitor", PASS, mon("ls -la services/")),
+    ("bash_content_guard", "ordinary command arriving as Monitor", PASS, mon("ls -la ")),
     # THIRD false positive of this guard. A commit message explaining a migration used the
     # words TRUNCATE and DROP, and the heredoc body was scanned as if it were a command. The
     # body of `git commit -F -` is prose that never executes; blocking it teaches the next
@@ -320,25 +320,25 @@ CASES = [
     ("data_safety_guard", "commit message naming psql and TRUNCATE", PASS,
      b("git commit -F - <<'MSG'\nvi sao heredoc vao psql van bi chan: TRUNCATE la lenh that\nMSG")),
     ("data_safety_guard", "DELETE FROM on business data", BLOCK,
-     w("services/donthu/internal/store/q.go", 'const q = "DELETE FROM don_thu WHERE id=$1"')),
+     w("donthu/internal/store/q.go", 'const q = "DELETE FROM don_thu WHERE id=$1"')),
     ("data_safety_guard", "DELETE with no WHERE", BLOCK,
-     w("services/donthu/internal/store/q.go", 'const q = "DELETE FROM don_thu"')),
+     w("donthu/internal/store/q.go", 'const q = "DELETE FROM don_thu"')),
     ("data_safety_guard", "UPDATE with no WHERE", BLOCK,
-     w("services/donthu/internal/store/q.go", 'const q = "UPDATE don_thu SET trang_thai = 1"')),
+     w("donthu/internal/store/q.go", 'const q = "UPDATE don_thu SET trang_thai = 1"')),
     # Go's built-in delete() removes one key from an in-memory map. Blocking it made every Go
     # file holding a map unwritable, and a guard that cries wolf gets switched off.
     ("data_safety_guard", "Go built-in delete on a map", PASS,
-     w("services/nentang/internal/store/cache.go", "delete(c.entries, host)")),
+     w("nentang/internal/store/cache.go", "delete(c.entries, host)")),
     # A readable UPDATE puts its WHERE on the next line. A line-bounded check flagged every one.
     ("data_safety_guard", "UPDATE with WHERE on the next line", PASS,
-     w("services/donthu/internal/store/q.go",
+     w("donthu/internal/store/q.go",
        'const q = `UPDATE don_thu SET trang_thai = $3\n\t WHERE tenant_id = $1 AND id = $2`')),
 
     # ---- rule 8 · secrets --------------------------------------------------
     ("secret_scan", "hardcoded secret", BLOCK,
-     w("services/donthu/internal/cfg.go", 'const jwtSecret = "sieu-bi-mat-1234567"')),
+     w("donthu/internal/cfg.go", 'const jwtSecret = "sieu-bi-mat-1234567"')),
     ("secret_scan", "read from an environment variable", PASS,
-     w("services/donthu/internal/cfg.go", 'jwtSecret := os.Getenv("JWT_SECRET")')),
+     w("donthu/internal/cfg.go", 'jwtSecret := os.Getenv("JWT_SECRET")')),
     ("secret_scan", "real connection string in documentation", BLOCK,
      w("kb/40-runbooks/khoi-phuc.md",
        "dsn: postgres://admin:P4ssw0rd-that-is-real@10.0.0.5:5432/vigov")),
@@ -349,12 +349,12 @@ CASES = [
 
     # ---- bash_content_guard · closing the detour ------------------------------
     ("bash_content_guard", "secret written via heredoc", BLOCK,
-     b('cat > services/a/cfg.go <<EOF\nconst api_key = "sk-live-abcdefghijk"\nEOF')),
+     b('cat > a/cfg.go <<EOF\nconst api_key = "sk-live-abcdefghijk"\nEOF')),
     ("bash_content_guard", "personal-data log written via redirect", BLOCK,
-     b('echo "log.Info(citizenPhone)" >> services/a/x.go')),
+     b('echo "log.Info(citizenPhone)" >> a/x.go')),
     ("bash_content_guard", "writes harmless content", PASS,
-     b('echo "package main" > services/a/x.go')),
-    ("bash_content_guard", "a read command", PASS, b("cat services/a/x.go")),
+     b('echo "package main" > a/x.go')),
+    ("bash_content_guard", "a read command", PASS, b("cat a/x.go")),
 
     # ---- rule 9 · knowledge ------------------------------------------------
     ("doc_guard", "documentation in the wrong place", BLOCK,
@@ -370,28 +370,28 @@ CASES = [
      w("kb/90-ephemeral/plan.md",
        "---\nid: plan\ntier: T5\nsource: CURATED\nowner: ai\nexpires: 2026-10-15\n---\n# plan")),
     ("doc_guard", "a service README", PASS,
-     w("services/donthu/README.md", "# Service Đơn thư")),
+     w("donthu/README.md", "# Service Đơn thư")),
 
     # --- rule 10 — the commitment made to the citizen ---
     ("citizen_commitment_guard", "overdue stored as a struct field", BLOCK,
-     w("services/petitions/internal/domain/p.go",
+     w("petitions/internal/domain/p.go",
        "type Petition struct {\n\tCode string\n\tIsOverdue bool\n}")),
     ("citizen_commitment_guard", "overdue added as a column", BLOCK,
-     w("services/petitions/migrations/0002_overdue.sql",
+     w("petitions/migrations/0002_overdue.sql",
        "ALTER TABLE petitions ADD COLUMN is_overdue BOOLEAN DEFAULT false;")),
     ("citizen_commitment_guard", "deadline counted in calendar days", BLOCK,
-     w("services/petitions/internal/app/sla.go",
+     w("petitions/internal/app/sla.go",
        "func deadline(t time.Time) time.Time { return t.AddDate(0, 0, slaDays) }")),
     ("citizen_commitment_guard", "overdue DERIVED by a method", PASS,
-     w("services/petitions/internal/domain/p.go",
+     w("petitions/internal/domain/p.go",
        "func (p Petition) IsOverdue(now time.Time) bool {\n"
        "\treturn p.ClosedAt.IsZero() && now.After(p.SLADeadline)\n}")),
     ("citizen_commitment_guard", "deadline in working days", PASS,
-     w("services/petitions/internal/app/sla.go",
+     w("petitions/internal/app/sla.go",
        "func deadline(ctx context.Context, from time.Time) time.Time {\n"
        "\treturn sla.WorkingDays(ctx, from, n)\n}")),
     ("citizen_commitment_guard", "statutory calendar days, declared", PASS,
-     w("services/petitions/internal/app/khieunai.go",
+     w("petitions/internal/app/khieunai.go",
        "// @sla-ok: Law on Complaints art. 28 counts calendar days\n"
        "func due(t time.Time) time.Time { return t.AddDate(0, 0, 30) } // sla")),
 ]

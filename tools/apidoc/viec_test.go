@@ -18,7 +18,7 @@ func tuyenGia(method, path string) tuyen {
 		Quyen:   quyenDecl{Kind: "public", LyDo: "thử"},
 		Idem:    idemDecl{Kind: "khong-can", LyDo: "thử"},
 		Replies: []traLoi{{Status: 200}},
-		File:    "services/identity/internal/http/routes.go",
+		File:    "identity/internal/http/routes.go",
 	}
 }
 

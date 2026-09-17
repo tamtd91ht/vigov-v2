@@ -45,7 +45,7 @@ khoảng hở đó tồn tại hợp lệ cho tới đây.
 | 5 | Migration **nhúng vào binary** (`go:embed`), áp **một lần lúc khởi động**, mỗi tệp một giao dịch, hỏng thì **service không khởi động** |
 
 Toàn văn lập luận của (1)–(3) nằm trong chính tệp migration —
-`services/identity/migrations/0002_audit_log_append_only.sql`, bản giống nhau ở cả 8 service.
+`identity/migrations/0002_audit_log_append_only.sql`, bản giống nhau ở cả 8 service.
 Dưới đây chỉ giữ phần một người đọc **sáu tháng sau** cần để khỏi "sửa lại cho đúng".
 
 ## Vì sao trigger chứ không REVOKE
@@ -126,7 +126,7 @@ Cưỡng chế ở **hai lớp**, cố ý:
 ## Giới hạn — đọc trước khi coi luật 7 bất biến 5 là đã xong
 
 Luật 7 bất biến 5 đòi migration chạy **"theo từng xã, nối lại được, ghi tiến độ"**.
-`pkg/migrate` làm **hai vế sau, cho DDL**, và **không làm gì cho vế đầu**.
+`core/migrate` làm **hai vế sau, cho DDL**, và **không làm gì cho vế đầu**.
 
 Không phải thiếu sót của gói: **"theo từng xã" không áp cho DDL.** Schema là chung cho cả CSDL
 của một service — một bộ bảng, phân mảnh theo `tenant_id` (ADR 0010), **không phải** một bộ
@@ -139,7 +139,7 @@ giữa chừng, để một lượt backfill đứt sau xã 40/200 đi tiếp t�
 **Cơ chế đó chưa tồn tại.** Nó khác hình dạng: cần bảng tiến độ theo xã, cỡ lô, và cách dừng
 rồi chạy tiếp — không thứ nào một trình chạy DDL dùng đến.
 
-> **Sự có mặt của `pkg/migrate` KHÔNG có nghĩa là luật 7 bất biến 5 đã đạt.** Nửa backfill
+> **Sự có mặt của `core/migrate` KHÔNG có nghĩa là luật 7 bất biến 5 đã đạt.** Nửa backfill
 > vẫn đang mở. Ghi ở đây để không ai phải suy ra điều đó từ mã.
 
 ## Hệ quả
@@ -160,5 +160,5 @@ thật đầu tiên có thể làm CI đỏ; đọc thông báo trước khi s�
 → ADR 0004 (shard key): `kb/10-decisions/0004-shard-by-tenant.md`
 → Luật 6 (sổ không sửa được): `.claude/rules/critical/6-audit-log.md`
 → Luật 7 (giữ dữ liệu, migration): `.claude/rules/critical/7-data-preservation.md`
-→ Toàn văn lập luận trong mã: `services/identity/migrations/0002_audit_log_append_only.sql` ·
-  `pkg/migrate/migrate.go`
+→ Toàn văn lập luận trong mã: `identity/migrations/0002_audit_log_append_only.sql` ·
+  `core/migrate/migrate.go`

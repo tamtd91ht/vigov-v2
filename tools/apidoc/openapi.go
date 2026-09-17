@@ -247,12 +247,12 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 		set("title", "ViGov — REST API cho web quản trị").
 		set("version", "v1").
 		set("description", strings.Join([]string{
-			"Bề mặt HTTP mà web quản trị gọi, trích từ khai báo route trong services/*/internal/.",
+			"Bề mặt HTTP mà web quản trị gọi, trích từ khai báo route trong */internal/.",
 			"Xã được suy ra từ Host ở rìa ngoài cùng, nên KHÔNG có tenant_id trong đường dẫn hay query (luật 1).",
 			"Mỗi operation khai quyền ở x-vigov-permission; thiếu khai báo là từ chối, không phải cho qua (luật 5).",
 			"Phiên đi bằng cookie httpOnly do máy chủ đặt; client không tự gắn Authorization.",
 		}, " ")))
-	doc.set("x-vigov-source", "services/*/internal/ — chú thích @summary/@screen/@request/@reply ngay trên câu lệnh đăng ký route")
+	doc.set("x-vigov-source", "*/internal/ — chú thích @summary/@screen/@request/@reply ngay trên câu lệnh đăng ký route")
 	doc.set("paths", paths)
 	doc.set("components", newOM().set("schemas", schemas))
 

@@ -4,375 +4,375 @@
   "symbols": {
     "app.Chay": {
       "kind": "func",
-      "at": "services/identity/internal/app/dang_nhap.go:220"
+      "at": "identity/internal/app/dang_nhap.go:220"
     },
     "app.DangNhap": {
       "kind": "type",
-      "at": "services/identity/internal/app/dang_nhap.go:32"
+      "at": "identity/internal/app/dang_nhap.go:32"
     },
     "app.DangXuat": {
       "kind": "type",
-      "at": "services/identity/internal/app/dang_nhap.go:211"
+      "at": "identity/internal/app/dang_nhap.go:211"
     },
     "app.KetQuaDangNhap": {
       "kind": "type",
-      "at": "services/identity/internal/app/dang_nhap.go:55"
+      "at": "identity/internal/app/dang_nhap.go:55"
     },
     "app.KyToken": {
       "kind": "type",
-      "at": "services/identity/internal/app/dang_nhap.go:27"
+      "at": "identity/internal/app/dang_nhap.go:27"
     },
     "app.NewDangNhap": {
       "kind": "func",
-      "at": "services/identity/internal/app/dang_nhap.go:40"
+      "at": "identity/internal/app/dang_nhap.go:40"
     },
     "app.NewDangXuat": {
       "kind": "func",
-      "at": "services/identity/internal/app/dang_nhap.go:216"
+      "at": "identity/internal/app/dang_nhap.go:216"
     },
     "app.YeuCauDangNhap": {
       "kind": "type",
-      "at": "services/identity/internal/app/dang_nhap.go:46"
+      "at": "identity/internal/app/dang_nhap.go:46"
     },
     "audit.Actor": {
       "kind": "type",
-      "at": "pkg/audit/audit.go:29"
+      "at": "core/audit/audit.go:29"
     },
     "audit.Entry": {
       "kind": "type",
-      "at": "pkg/audit/audit.go:40"
+      "at": "core/audit/audit.go:40"
     },
     "audit.Write": {
       "kind": "func",
-      "at": "pkg/audit/audit.go:68"
+      "at": "core/audit/audit.go:68"
     },
     "authz.AnyAuthenticated": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:153"
+      "at": "core/authz/authz.go:153"
     },
     "authz.Checker": {
       "kind": "type",
-      "at": "pkg/authz/authz.go:68"
+      "at": "core/authz/authz.go:68"
     },
     "authz.CitizenOnly": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:133"
+      "at": "core/authz/authz.go:133"
     },
     "authz.From": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:59"
+      "at": "core/authz/authz.go:59"
     },
     "authz.Into": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:55"
+      "at": "core/authz/authz.go:55"
     },
     "authz.Nhom": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:37"
+      "at": "core/authz/authz.go:37"
     },
     "authz.Perm": {
       "kind": "type",
-      "at": "pkg/authz/authz.go:31"
+      "at": "core/authz/authz.go:31"
     },
     "authz.Principal": {
       "kind": "type",
-      "at": "pkg/authz/authz.go:46"
+      "at": "core/authz/authz.go:46"
     },
     "authz.Public": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:175"
+      "at": "core/authz/authz.go:175"
     },
     "authz.RequirePermission": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:90"
+      "at": "core/authz/authz.go:90"
     },
     "authz.String": {
       "kind": "func",
-      "at": "pkg/authz/authz.go:33"
+      "at": "core/authz/authz.go:33"
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "pkg/config/config.go:203"
+      "at": "core/config/config.go:203"
     },
     "config.Config": {
       "kind": "type",
-      "at": "pkg/config/config.go:29"
+      "at": "core/config/config.go:29"
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "pkg/config/config.go:129"
+      "at": "core/config/config.go:129"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "pkg/config/config.go:286"
+      "at": "core/config/config.go:286"
     },
     "config.Load": {
       "kind": "func",
-      "at": "pkg/config/config.go:142"
+      "at": "core/config/config.go:142"
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "pkg/config/config.go:238"
+      "at": "core/config/config.go:238"
     },
     "domain.CanBo": {
       "kind": "type",
-      "at": "services/identity/internal/domain/can_bo.go:10"
+      "at": "identity/internal/domain/can_bo.go:10"
     },
     "domain.CanBoTomTat": {
       "kind": "type",
-      "at": "services/identity/internal/domain/can_bo.go:53"
+      "at": "identity/internal/domain/can_bo.go:53"
     },
     "domain.Domain": {
       "kind": "type",
-      "at": "services/platform/internal/domain/tenant.go:21"
+      "at": "platform/internal/domain/tenant.go:21"
     },
     "domain.NormaliseHost": {
       "kind": "func",
-      "at": "services/platform/internal/domain/tenant.go:54"
+      "at": "platform/internal/domain/tenant.go:54"
     },
     "domain.Tenant": {
       "kind": "type",
-      "at": "services/platform/internal/domain/tenant.go:12"
+      "at": "platform/internal/domain/tenant.go:12"
     },
     "domain.Validate": {
       "kind": "func",
-      "at": "services/platform/internal/domain/tenant.go:38"
+      "at": "platform/internal/domain/tenant.go:38"
     },
     "events.Dispatch": {
       "kind": "func",
-      "at": "pkg/events/events.go:45"
+      "at": "core/events/events.go:45"
     },
     "events.Envelope": {
       "kind": "type",
-      "at": "pkg/events/events.go:25"
+      "at": "core/events/events.go:25"
     },
     "events.Handler": {
       "kind": "type",
-      "at": "pkg/events/events.go:39"
+      "at": "core/events/events.go:39"
     },
     "events.Publisher": {
       "kind": "type",
-      "at": "pkg/events/events.go:33"
+      "at": "core/events/events.go:33"
     },
     "grpc.Directory": {
       "kind": "type",
-      "at": "services/platform/internal/grpc/server.go:38"
+      "at": "platform/internal/grpc/server.go:38"
     },
     "grpc.GetTenant": {
       "kind": "func",
-      "at": "services/platform/internal/grpc/server.go:80"
+      "at": "platform/internal/grpc/server.go:80"
     },
     "grpc.NewServer": {
       "kind": "func",
-      "at": "services/platform/internal/grpc/server.go:51"
+      "at": "platform/internal/grpc/server.go:51"
     },
     "grpc.ResolveHost": {
       "kind": "func",
-      "at": "services/platform/internal/grpc/server.go:60"
+      "at": "platform/internal/grpc/server.go:60"
     },
     "grpc.Server": {
       "kind": "type",
-      "at": "services/platform/internal/grpc/server.go:44"
+      "at": "platform/internal/grpc/server.go:44"
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
-      "at": "pkg/grpcx/grpcx.go:76"
+      "at": "core/grpcx/grpcx.go:76"
     },
     "grpcx.UnaryClientInterceptor": {
       "kind": "func",
-      "at": "pkg/grpcx/grpcx.go:92"
+      "at": "core/grpcx/grpcx.go:92"
     },
     "grpcx.UnaryServerInterceptor": {
       "kind": "func",
-      "at": "pkg/grpcx/grpcx.go:125"
+      "at": "core/grpcx/grpcx.go:125"
     },
     "http.CanBoDanhBa": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:71"
+      "at": "identity/internal/http/routes.go:71"
     },
     "http.CanBoDoc": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:59"
+      "at": "identity/internal/http/routes.go:59"
     },
     "http.ChiTietCanBo": {
       "kind": "func",
-      "at": "services/identity/internal/http/can_bo.go:179"
+      "at": "identity/internal/http/can_bo.go:179"
     },
     "http.DangNhap": {
       "kind": "func",
-      "at": "services/identity/internal/http/handler.go:69"
+      "at": "identity/internal/http/handler.go:69"
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:90"
+      "at": "identity/internal/http/routes.go:90"
     },
     "http.DangXuat": {
       "kind": "func",
-      "at": "services/identity/internal/http/handler.go:140"
+      "at": "identity/internal/http/handler.go:140"
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:94"
+      "at": "identity/internal/http/routes.go:94"
     },
     "http.DanhSachCanBo": {
       "kind": "func",
-      "at": "services/identity/internal/http/can_bo.go:128"
+      "at": "identity/internal/http/can_bo.go:128"
     },
     "http.Deps": {
       "kind": "type",
-      "at": "services/reporting/internal/http/routes.go:23"
+      "at": "reporting/internal/http/routes.go:23"
     },
     "http.Handler": {
       "kind": "type",
-      "at": "services/identity/internal/http/handler.go:17"
+      "at": "identity/internal/http/handler.go:17"
     },
     "http.NewHandler": {
       "kind": "func",
-      "at": "services/identity/internal/http/handler.go:21"
+      "at": "identity/internal/http/handler.go:21"
     },
     "http.PhienDoc": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:53"
+      "at": "identity/internal/http/routes.go:53"
     },
     "http.PhienHienTai": {
       "kind": "type",
-      "at": "services/identity/internal/http/middleware.go:23"
+      "at": "identity/internal/http/middleware.go:23"
     },
     "http.PhienTu": {
       "kind": "func",
-      "at": "services/identity/internal/http/middleware.go:52"
+      "at": "identity/internal/http/middleware.go:52"
     },
     "http.QuyenDoc": {
       "kind": "type",
-      "at": "services/identity/internal/http/routes.go:84"
+      "at": "identity/internal/http/routes.go:84"
     },
     "http.Register": {
       "kind": "func",
-      "at": "services/reporting/internal/http/routes.go:32"
+      "at": "reporting/internal/http/routes.go:32"
     },
     "http.ThongTinXa": {
       "kind": "func",
-      "at": "services/identity/internal/http/xa.go:68"
+      "at": "identity/internal/http/xa.go:68"
     },
     "http.XacThuc": {
       "kind": "func",
-      "at": "services/identity/internal/http/middleware.go:71"
+      "at": "identity/internal/http/middleware.go:71"
     },
     "http.XemPhienHienTai": {
       "kind": "func",
-      "at": "services/identity/internal/http/phien_hien_tai.go:73"
+      "at": "identity/internal/http/phien_hien_tai.go:73"
     },
     "httpx.Error": {
       "kind": "type",
-      "at": "pkg/httpx/edge.go:63"
+      "at": "core/httpx/edge.go:63"
     },
     "httpx.Recover": {
       "kind": "func",
-      "at": "pkg/httpx/edge.go:79"
+      "at": "core/httpx/edge.go:79"
     },
     "httpx.StripTenantHeaders": {
       "kind": "func",
-      "at": "pkg/httpx/edge.go:39"
+      "at": "core/httpx/edge.go:39"
     },
     "httpx.TenantMiddleware": {
       "kind": "func",
-      "at": "pkg/httpx/edge.go:20"
+      "at": "core/httpx/edge.go:20"
     },
     "httpx.WriteError": {
       "kind": "func",
-      "at": "pkg/httpx/edge.go:69"
+      "at": "core/httpx/edge.go:69"
     },
     "idem.CheDoHong": {
       "kind": "type",
-      "at": "pkg/idem/idem.go:122"
+      "at": "core/idem/idem.go:122"
     },
     "idem.ChuThe": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:501"
+      "at": "core/idem/idem.go:501"
     },
     "idem.Claim": {
       "kind": "func",
-      "at": "pkg/idem/redis.go:43"
+      "at": "core/idem/redis.go:43"
     },
     "idem.Close": {
       "kind": "func",
-      "at": "pkg/idem/redis.go:77"
+      "at": "core/idem/redis.go:77"
     },
     "idem.Complete": {
       "kind": "func",
-      "at": "pkg/idem/redis.go:62"
+      "at": "core/idem/redis.go:62"
     },
     "idem.Get": {
       "kind": "func",
-      "at": "pkg/idem/redis.go:51"
+      "at": "core/idem/redis.go:51"
     },
     "idem.Into": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:178"
+      "at": "core/idem/idem.go:178"
     },
     "idem.Key": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:480"
+      "at": "core/idem/idem.go:480"
     },
     "idem.KhongCan": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:240"
+      "at": "core/idem/idem.go:240"
     },
     "idem.Middleware": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:166"
+      "at": "core/idem/idem.go:166"
     },
     "idem.NewRedisStore": {
       "kind": "func",
-      "at": "pkg/idem/redis.go:27"
+      "at": "core/idem/redis.go:27"
     },
     "idem.NewRedisStoreWith": {
       "kind": "func",
-      "at": "pkg/idem/redis.go:41"
+      "at": "core/idem/redis.go:41"
     },
     "idem.PhatLai": {
       "kind": "type",
-      "at": "pkg/idem/idem.go:423"
+      "at": "core/idem/idem.go:423"
     },
     "idem.RecordCode": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:207"
+      "at": "core/idem/idem.go:207"
     },
     "idem.RedisStore": {
       "kind": "type",
-      "at": "pkg/idem/redis.go:18"
+      "at": "core/idem/redis.go:18"
     },
     "idem.Release": {
       "kind": "func",
-      "at": "pkg/idem/redis.go:69"
+      "at": "core/idem/redis.go:69"
     },
     "idem.Required": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:251"
+      "at": "core/idem/idem.go:251"
     },
     "idem.Store": {
       "kind": "type",
-      "at": "pkg/idem/idem.go:106"
+      "at": "core/idem/idem.go:106"
     },
     "idem.String": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:134"
+      "at": "core/idem/idem.go:134"
     },
     "idem.TachGiaTri": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:541"
+      "at": "core/idem/idem.go:541"
     },
     "idem.Unwrap": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:577"
+      "at": "core/idem/idem.go:577"
     },
     "idem.Write": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:569"
+      "at": "core/idem/idem.go:569"
     },
     "idem.WriteHeader": {
       "kind": "func",
-      "at": "pkg/idem/idem.go:562"
+      "at": "core/idem/idem.go:562"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -380,447 +380,447 @@
     },
     "migrate.Chay": {
       "kind": "func",
-      "at": "pkg/migrate/migrate.go:109"
+      "at": "core/migrate/migrate.go:109"
     },
     "migrate.KetQua": {
       "kind": "type",
-      "at": "pkg/migrate/migrate.go:88"
+      "at": "core/migrate/migrate.go:88"
     },
     "page.After": {
       "kind": "func",
-      "at": "pkg/page/page.go:299"
+      "at": "core/page/page.go:299"
     },
     "page.Allowlist": {
       "kind": "type",
-      "at": "pkg/page/page.go:163"
+      "at": "core/page/page.go:163"
     },
     "page.Anchor": {
       "kind": "type",
-      "at": "pkg/page/page.go:277"
+      "at": "core/page/page.go:277"
     },
     "page.Col": {
       "kind": "func",
-      "at": "pkg/page/page.go:147"
+      "at": "core/page/page.go:147"
     },
     "page.Column": {
       "kind": "func",
-      "at": "pkg/page/page.go:294"
+      "at": "core/page/page.go:294"
     },
     "page.Decode": {
       "kind": "func",
-      "at": "pkg/page/page.go:430"
+      "at": "core/page/page.go:430"
     },
     "page.Dir": {
       "kind": "func",
-      "at": "pkg/page/page.go:295"
+      "at": "core/page/page.go:295"
     },
     "page.Encode": {
       "kind": "func",
-      "at": "pkg/page/page.go:405"
+      "at": "core/page/page.go:405"
     },
     "page.Equal": {
       "kind": "func",
-      "at": "pkg/page/page.go:222"
+      "at": "core/page/page.go:222"
     },
     "page.HTTPError": {
       "kind": "func",
-      "at": "pkg/page/page.go:109"
+      "at": "core/page/page.go:109"
     },
     "page.Int": {
       "kind": "func",
-      "at": "pkg/page/page.go:220"
+      "at": "core/page/page.go:220"
     },
     "page.IntKey": {
       "kind": "func",
-      "at": "pkg/page/page.go:216"
+      "at": "core/page/page.go:216"
     },
     "page.Key": {
       "kind": "type",
-      "at": "pkg/page/page.go:207"
+      "at": "core/page/page.go:207"
     },
     "page.Kind": {
       "kind": "func",
-      "at": "pkg/page/page.go:217"
+      "at": "core/page/page.go:217"
     },
     "page.Limit": {
       "kind": "func",
-      "at": "pkg/page/page.go:296"
+      "at": "core/page/page.go:296"
     },
     "page.New": {
       "kind": "func",
-      "at": "pkg/page/page.go:318"
+      "at": "core/page/page.go:318"
     },
     "page.NewAllowlist": {
       "kind": "func",
-      "at": "pkg/page/page.go:173"
+      "at": "core/page/page.go:173"
     },
     "page.NewResult": {
       "kind": "func",
-      "at": "pkg/page/page.go:475"
+      "at": "core/page/page.go:475"
     },
     "page.Parse": {
       "kind": "func",
-      "at": "pkg/page/page.go:309"
+      "at": "core/page/page.go:309"
     },
     "page.Request": {
       "kind": "type",
-      "at": "pkg/page/page.go:287"
+      "at": "core/page/page.go:287"
     },
     "page.Result": {
       "kind": "type",
-      "at": "pkg/page/page.go:468"
+      "at": "core/page/page.go:468"
     },
     "page.String": {
       "kind": "func",
-      "at": "pkg/page/page.go:221"
+      "at": "core/page/page.go:221"
     },
     "page.Text": {
       "kind": "func",
-      "at": "pkg/page/page.go:219"
+      "at": "core/page/page.go:219"
     },
     "page.TextKey": {
       "kind": "func",
-      "at": "pkg/page/page.go:215"
+      "at": "core/page/page.go:215"
     },
     "page.Time": {
       "kind": "func",
-      "at": "pkg/page/page.go:218"
+      "at": "core/page/page.go:218"
     },
     "page.TimeKey": {
       "kind": "func",
-      "at": "pkg/page/page.go:214"
+      "at": "core/page/page.go:214"
     },
     "page.Value": {
       "kind": "func",
-      "at": "pkg/page/page.go:226"
+      "at": "core/page/page.go:226"
     },
     "password.Bam": {
       "kind": "func",
-      "at": "pkg/password/password.go:48"
+      "at": "core/password/password.go:48"
     },
     "password.CanBamLai": {
       "kind": "func",
-      "at": "pkg/password/password.go:90"
+      "at": "core/password/password.go:90"
     },
     "password.KiemTra": {
       "kind": "func",
-      "at": "pkg/password/password.go:70"
+      "at": "core/password/password.go:70"
     },
     "platformclient.ByHost": {
       "kind": "func",
-      "at": "pkg/platformclient/directory.go:121"
+      "at": "core/platformclient/directory.go:121"
     },
     "platformclient.Close": {
       "kind": "func",
-      "at": "pkg/platformclient/directory.go:101"
+      "at": "core/platformclient/directory.go:101"
     },
     "platformclient.Dial": {
       "kind": "func",
-      "at": "pkg/platformclient/directory.go:65"
+      "at": "core/platformclient/directory.go:65"
     },
     "platformclient.Directory": {
       "kind": "type",
-      "at": "pkg/platformclient/directory.go:48"
+      "at": "core/platformclient/directory.go:48"
     },
     "platformclient.NewDirectory": {
       "kind": "func",
-      "at": "pkg/platformclient/directory.go:88"
+      "at": "core/platformclient/directory.go:88"
     },
     "privacy.MaskCccd": {
       "kind": "func",
-      "at": "pkg/privacy/mask.go:21"
+      "at": "core/privacy/mask.go:21"
     },
     "privacy.MaskName": {
       "kind": "func",
-      "at": "pkg/privacy/mask.go:33"
+      "at": "core/privacy/mask.go:33"
     },
     "privacy.MaskPhone": {
       "kind": "func",
-      "at": "pkg/privacy/mask.go:12"
+      "at": "core/privacy/mask.go:12"
     },
     "secret.DSN": {
       "kind": "type",
-      "at": "pkg/secret/secret.go:97"
+      "at": "core/secret/secret.go:97"
     },
     "secret.Format": {
       "kind": "func",
-      "at": "pkg/secret/secret.go:99"
+      "at": "core/secret/secret.go:99"
     },
     "secret.GoString": {
       "kind": "func",
-      "at": "pkg/secret/secret.go:105"
+      "at": "core/secret/secret.go:105"
     },
     "secret.Lo": {
       "kind": "func",
-      "at": "pkg/secret/secret.go:115"
+      "at": "core/secret/secret.go:115"
     },
     "secret.LogValue": {
       "kind": "func",
-      "at": "pkg/secret/secret.go:111"
+      "at": "core/secret/secret.go:111"
     },
     "secret.MarshalJSON": {
       "kind": "func",
-      "at": "pkg/secret/secret.go:107"
+      "at": "core/secret/secret.go:107"
     },
     "secret.MarshalText": {
       "kind": "func",
-      "at": "pkg/secret/secret.go:109"
+      "at": "core/secret/secret.go:109"
     },
     "secret.Rong": {
       "kind": "func",
-      "at": "pkg/secret/secret.go:86"
+      "at": "core/secret/secret.go:86"
     },
     "secret.Secret": {
       "kind": "type",
-      "at": "pkg/secret/secret.go:57"
+      "at": "core/secret/secret.go:57"
     },
     "secret.String": {
       "kind": "func",
-      "at": "pkg/secret/secret.go:103"
+      "at": "core/secret/secret.go:103"
     },
     "store.Allows": {
       "kind": "func",
-      "at": "services/identity/internal/store/checker.go:74"
+      "at": "identity/internal/store/checker.go:74"
     },
     "store.AllowsNhieu": {
       "kind": "func",
-      "at": "services/identity/internal/store/checker.go:99"
+      "at": "identity/internal/store/checker.go:99"
     },
     "store.ByHost": {
       "kind": "func",
-      "at": "services/platform/internal/store/directory.go:39"
+      "at": "platform/internal/store/directory.go:39"
     },
     "store.ByHostErr": {
       "kind": "func",
-      "at": "services/platform/internal/store/directory.go:81"
+      "at": "platform/internal/store/directory.go:81"
     },
     "store.ByID": {
       "kind": "func",
-      "at": "services/platform/internal/store/directory.go:120"
+      "at": "platform/internal/store/directory.go:120"
     },
     "store.CanBoStore": {
       "kind": "type",
-      "at": "services/identity/internal/store/can_bo.go:17"
+      "at": "identity/internal/store/can_bo.go:17"
     },
     "store.Checker": {
       "kind": "type",
-      "at": "services/identity/internal/store/checker.go:20"
+      "at": "identity/internal/store/checker.go:20"
     },
     "store.ChiTiet": {
       "kind": "func",
-      "at": "services/identity/internal/store/can_bo_danh_sach.go:113"
+      "at": "identity/internal/store/can_bo_danh_sach.go:113"
     },
     "store.DB": {
       "kind": "type",
-      "at": "pkg/store/scoped.go:20"
+      "at": "core/store/scoped.go:20"
     },
     "store.DanhSach": {
       "kind": "func",
-      "at": "services/identity/internal/store/can_bo_danh_sach.go:82"
+      "at": "identity/internal/store/can_bo_danh_sach.go:82"
     },
     "store.DatMatKhauHash": {
       "kind": "func",
-      "at": "services/identity/internal/store/can_bo.go:101"
+      "at": "identity/internal/store/can_bo.go:101"
     },
     "store.Directory": {
       "kind": "type",
-      "at": "services/platform/internal/store/directory.go:26"
+      "at": "platform/internal/store/directory.go:26"
     },
     "store.Exec": {
       "kind": "func",
-      "at": "pkg/store/scoped.go:119"
+      "at": "core/store/scoped.go:119"
     },
     "store.For": {
       "kind": "func",
-      "at": "pkg/store/scoped.go:32"
+      "at": "core/store/scoped.go:32"
     },
     "store.GhiNhanDangNhap": {
       "kind": "func",
-      "at": "services/identity/internal/store/can_bo.go:84"
+      "at": "identity/internal/store/can_bo.go:84"
     },
     "store.GhiNhanDung": {
       "kind": "func",
-      "at": "services/identity/internal/store/phien.go:154"
+      "at": "identity/internal/store/phien.go:154"
     },
     "store.KiemTra": {
       "kind": "func",
-      "at": "services/identity/internal/store/phien.go:98"
+      "at": "identity/internal/store/phien.go:98"
     },
     "store.New": {
       "kind": "func",
-      "at": "pkg/store/scoped.go:22"
+      "at": "core/store/scoped.go:22"
     },
     "store.NewCanBoStore": {
       "kind": "func",
-      "at": "services/identity/internal/store/can_bo.go:21"
+      "at": "identity/internal/store/can_bo.go:21"
     },
     "store.NewChecker": {
       "kind": "func",
-      "at": "services/identity/internal/store/checker.go:25"
+      "at": "identity/internal/store/checker.go:25"
     },
     "store.NewDirectory": {
       "kind": "func",
-      "at": "services/platform/internal/store/directory.go:32"
+      "at": "platform/internal/store/directory.go:32"
     },
     "store.NewPhienStore": {
       "kind": "func",
-      "at": "services/identity/internal/store/phien.go:41"
+      "at": "identity/internal/store/phien.go:41"
     },
     "store.PageSpec": {
       "kind": "type",
-      "at": "pkg/store/page.go:18"
+      "at": "core/store/page.go:18"
     },
     "store.Phien": {
       "kind": "type",
-      "at": "services/identity/internal/store/phien.go:44"
+      "at": "identity/internal/store/phien.go:44"
     },
     "store.PhienStore": {
       "kind": "type",
-      "at": "services/identity/internal/store/phien.go:37"
+      "at": "identity/internal/store/phien.go:37"
     },
     "store.Query": {
       "kind": "func",
-      "at": "pkg/store/scoped.go:48"
+      "at": "core/store/scoped.go:48"
     },
     "store.QueryJoin": {
       "kind": "func",
-      "at": "pkg/store/scoped.go:67"
+      "at": "core/store/scoped.go:67"
     },
     "store.QueryPage": {
       "kind": "func",
-      "at": "pkg/store/page.go:60"
+      "at": "core/store/page.go:60"
     },
     "store.QuyenCua": {
       "kind": "func",
-      "at": "services/identity/internal/store/checker.go:160"
+      "at": "identity/internal/store/checker.go:160"
     },
     "store.Scoped": {
       "kind": "type",
-      "at": "pkg/store/scoped.go:25"
+      "at": "core/store/scoped.go:25"
     },
     "store.ScopedTx": {
       "kind": "type",
-      "at": "pkg/store/scoped.go:110"
+      "at": "core/store/scoped.go:110"
     },
     "store.Tao": {
       "kind": "func",
-      "at": "services/identity/internal/store/phien.go:66"
+      "at": "identity/internal/store/phien.go:66"
     },
     "store.TenantID": {
       "kind": "func",
-      "at": "pkg/store/scoped.go:115"
+      "at": "core/store/scoped.go:115"
     },
     "store.TheoEmail": {
       "kind": "func",
-      "at": "services/identity/internal/store/can_bo.go:55"
+      "at": "identity/internal/store/can_bo.go:55"
     },
     "store.TheoID": {
       "kind": "func",
-      "at": "services/identity/internal/store/can_bo.go:73"
+      "at": "identity/internal/store/can_bo.go:73"
     },
     "store.ThuHoi": {
       "kind": "func",
-      "at": "services/identity/internal/store/phien.go:128"
+      "at": "identity/internal/store/phien.go:128"
     },
     "store.ThuHoiCuaCanBo": {
       "kind": "func",
-      "at": "services/identity/internal/store/phien.go:141"
+      "at": "identity/internal/store/phien.go:141"
     },
     "store.Tx": {
       "kind": "func",
-      "at": "pkg/store/scoped.go:77"
+      "at": "core/store/scoped.go:77"
     },
     "store.Underlying": {
       "kind": "func",
-      "at": "pkg/store/scoped.go:116"
+      "at": "core/store/scoped.go:116"
     },
     "tenant.ByHost": {
       "kind": "func",
-      "at": "pkg/tenant/cache.go:72"
+      "at": "core/tenant/cache.go:72"
     },
     "tenant.CachedDirectory": {
       "kind": "type",
-      "at": "pkg/tenant/cache.go:35"
+      "at": "core/tenant/cache.go:35"
     },
     "tenant.Directory": {
       "kind": "type",
-      "at": "pkg/tenant/tenant.go:62"
+      "at": "core/tenant/tenant.go:62"
     },
     "tenant.Forget": {
       "kind": "func",
-      "at": "pkg/tenant/cache.go:97"
+      "at": "core/tenant/cache.go:97"
     },
     "tenant.ForgetAll": {
       "kind": "func",
-      "at": "pkg/tenant/cache.go:105"
+      "at": "core/tenant/cache.go:105"
     },
     "tenant.From": {
       "kind": "func",
-      "at": "pkg/tenant/tenant.go:39"
+      "at": "core/tenant/tenant.go:39"
     },
     "tenant.ID": {
       "kind": "type",
-      "at": "pkg/tenant/tenant.go:24"
+      "at": "core/tenant/tenant.go:24"
     },
     "tenant.Into": {
       "kind": "func",
-      "at": "pkg/tenant/tenant.go:34"
+      "at": "core/tenant/tenant.go:34"
     },
     "tenant.MustFrom": {
       "kind": "func",
-      "at": "pkg/tenant/tenant.go:49"
+      "at": "core/tenant/tenant.go:49"
     },
     "tenant.NewCachedDirectory": {
       "kind": "func",
-      "at": "pkg/tenant/cache.go:63"
+      "at": "core/tenant/cache.go:63"
     },
     "tenant.String": {
       "kind": "func",
-      "at": "pkg/tenant/tenant.go:26"
+      "at": "core/tenant/tenant.go:26"
     },
     "tenant.Tenant": {
       "kind": "type",
-      "at": "pkg/tenant/tenant.go:70"
+      "at": "core/tenant/tenant.go:70"
     },
     "tenant.Valid": {
       "kind": "func",
-      "at": "pkg/tenant/tenant.go:27"
+      "at": "core/tenant/tenant.go:27"
     },
     "token.Claims": {
       "kind": "type",
-      "at": "pkg/token/token.go:72"
+      "at": "core/token/token.go:72"
     },
     "token.Giai": {
       "kind": "func",
-      "at": "pkg/token/token.go:193"
+      "at": "core/token/token.go:193"
     },
     "token.GoString": {
       "kind": "func",
-      "at": "pkg/token/token.go:158"
+      "at": "core/token/token.go:158"
     },
     "token.Ky": {
       "kind": "func",
-      "at": "pkg/token/token.go:166"
+      "at": "core/token/token.go:166"
     },
     "token.LogValue": {
       "kind": "func",
-      "at": "pkg/token/token.go:160"
+      "at": "core/token/token.go:160"
     },
     "token.NewSigner": {
       "kind": "func",
-      "at": "pkg/token/token.go:119"
+      "at": "core/token/token.go:119"
     },
     "token.Signer": {
       "kind": "type",
-      "at": "pkg/token/token.go:101"
+      "at": "core/token/token.go:101"
     },
     "token.SoKhoa": {
       "kind": "func",
-      "at": "pkg/token/token.go:138"
+      "at": "core/token/token.go:138"
     },
     "token.String": {
       "kind": "func",
-      "at": "pkg/token/token.go:156"
+      "at": "core/token/token.go:156"
     }
   }
 }

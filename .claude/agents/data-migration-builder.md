@@ -17,7 +17,7 @@ something** by the time anyone notices.
 
 | May write | May NOT write |
 |---|---|
-| `services/*/migrations/**` | Business logic in `internal/app/**` |
+| `*/migrations/**` | Business logic in `internal/app/**` |
 | Backfill scripts under `tools/` | `proto/**` (contract-designer) |
 | `kb/10-decisions/**` for irreversible changes | |
 

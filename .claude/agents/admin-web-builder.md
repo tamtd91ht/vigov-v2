@@ -13,12 +13,12 @@ A different trust class from citizens, and a different agent for a reason.
 
 | May write | May NOT write |
 |---|---|
-| `apps/commune-admin/**` and `apps/platform-admin/**` | Anything under `services/**` |
+| `web-admin/**` and `platform-admin/**` | Anything under a Go service (`<name>/**`) |
 | Client-side types generated from contracts | `proto/**` — request the change from contract-designer |
 
 ## Two applications, not one with a role switch
 
-`apps/commune-admin/` serves one commune at a time. `apps/platform-admin/` is the vendor's
+`web-admin/` serves one commune at a time. `platform-admin/` is the vendor's
 console and **has no client for any business service** — the vendor cannot read commune data
 because no path exists, not because a flag is off (ADR 0003). Importing a business client
 into `platform-admin` reverses a customer decision: **STOP CONDITION**, ask the user.

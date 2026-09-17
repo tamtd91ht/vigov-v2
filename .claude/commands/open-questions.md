@@ -23,7 +23,7 @@ found: 20–28 days.
 ## Steps
 
 1. Read `kb/00-foundation/open-questions.json`
-2. For each question with status `OPEN`: scan its `code_signals` across `services/`, `web/`, `proto/`
+2. For each question with status `OPEN`: scan its `code_signals` across the service directories, `web-admin/`, `proto/`
 3. Count signals per **direction**; report when one direction dominates
 4. State the **reversal cost as of today** — that number grows over time, and watching it
    grow is what creates pressure to decide

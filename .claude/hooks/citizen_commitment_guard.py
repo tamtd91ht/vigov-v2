@@ -9,7 +9,7 @@ report that goes to leadership:
   2. Deadlines counted in calendar days. A 3-day SLA taken on Friday is then due Monday,
      which is one working day, not three. The commune is reported as on-time when it is late.
 
-CALIBRATION: services/ is still a skeleton, so there is no real code to measure against. This
+CALIBRATION: most services are still skeletons, so there is no real code to measure against. This
 hook is therefore deliberately NARROW and conservative — it only fires on patterns that
 cannot be right, and prefers a miss over a false positive. A noisy hook is a disabled hook,
 and then the whole layer is gone. RE-MEASURE once real business code exists.

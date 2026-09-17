@@ -39,7 +39,7 @@ Thân message là **dữ liệu bên gọi khai**. Một bên gọi tự khai m�
 gọi tự cấp quyền cho mình — đúng điều luật 1 cấm #2 cấm ở tầng HTTP, và không có lý do gì nó
 trở nên an toàn hơn khi đi qua gRPC. Metadata được **interceptor phía client lấy từ
 `context.Context`** đặt vào, không bao giờ do mã nghiệp vụ truyền như một tham số. Đây là
-cùng một lập luận đã làm cho `pkg/tenant` giữ xã trong context thay vì trong chữ ký hàm: một
+cùng một lập luận đã làm cho `core/tenant` giữ xã trong context thay vì trong chữ ký hàm: một
 thứ truyền được như tham số là một thứ sẽ có ngày bị truyền sai.
 
 Hệ quả bắt buộc ở đầu nhận: **không thấy `x-tenant-id` thì từ chối** bằng `INVALID_ARGUMENT`.
@@ -47,7 +47,7 @@ Không suy ra xã từ payload, không có xã mặc định. Hỏng thì đóng
 
 ### Vì sao đúng tên `x-tenant-id` — điểm chịu lực của quyết định này
 
-Tên khoá không phải chuyện thẩm mỹ. `pkg/httpx/edge.go:39` — `StripTenantHeaders` — **xoá
+Tên khoá không phải chuyện thẩm mỹ. `core/httpx/edge.go:39` — `StripTenantHeaders` — **xoá
 mọi header từ ngoài vào có tiền tố `x-tenant`**, không liệt kê từng tên mà quét theo tiền tố.
 Đặt khoá metadata trong đúng tiền tố đó nghĩa là: nếu có ngày một header client cung cấp lọt
 được tới tầng trong, nó đã bị lớp phòng thủ **hiện có** xoá trước.
@@ -211,7 +211,7 @@ Ba lý do, lý do thứ ba là lý do thật:
 
 ## Quyết định 4 — `platform` sập thì mọi Host thành 404
 
-`pkg/tenant.Directory.ByHost` trả `(Tenant, bool)` — **không có lỗi**. Nên khi `platform`
+`core/tenant.Directory.ByHost` trả `(Tenant, bool)` — **không có lỗi**. Nên khi `platform`
 không tới được, mọi Host đều rơi vào nhánh "không khớp", và cán bộ của mọi xã thấy đúng cái
 màn hình mà một tên miền không tồn tại sẽ cho: như thể xã mình không có trên hệ thống.
 
@@ -239,7 +239,7 @@ bộ trên đường đi của **mọi** request; đó là cái giá của việ
 và cái giá ngược lại — mỗi service tự giữ bản đồ xã — đắt hơn nhiều vì nó tạo ra nhiều nguồn
 cho một fact ngay trên đường cách ly.
 
-**Nếu sau này muốn phân biệt 404 với 503:** đó là đổi `pkg/tenant.Directory` — một giao diện
+**Nếu sau này muốn phân biệt 404 với 503:** đó là đổi `core/tenant.Directory` — một giao diện
 nằm trên đường đi của mọi request — và vì vậy là **một ADR mới**, không phải một quyết định
 ứng biến trong lúc viết mã.
 

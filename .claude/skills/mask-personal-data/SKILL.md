@@ -7,7 +7,7 @@ description: Use when returning personal data from an API, displaying phone numb
 
 ## One implementation only
 
-The masking helpers live in `pkg/privacy`. **No service reimplements them.** Three copies of
+The masking helpers live in `core/privacy`. **No service reimplements them.** Three copies of
 one masking function are three behaviours that will drift — and nobody will know which way.
 
 ```go

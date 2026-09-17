@@ -52,7 +52,7 @@ hành, giám sát và vá — với 200+ xã thì chi phí đó là thật.
 | 4 | Thuật toán AES-256-GCM (có xác thực, chống sửa ciphertext) |
 | 5 | Xoay KEK chỉ cần bọc lại DEK — không phải giải mã rồi mã hoá lại toàn bộ dữ liệu |
 | 6 | Giá trị bí mật **không bao giờ** trả về client; giao diện chỉ hiện dạng che (`****654bf`) |
-| 7 | Cần `pkg/crypto` — chưa tồn tại |
+| 7 | Cần `core/crypto` — chưa tồn tại |
 
 ## Vì sao đây KHÔNG vi phạm luật 8
 

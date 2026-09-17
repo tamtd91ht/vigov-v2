@@ -84,8 +84,8 @@ Ranh giới ngôn ngữ sau khi chốt:
 
 | Thứ | Là gì | Vì sao không tách |
 |---|---|---|
-| Nhật ký thao tác | Thư viện `pkg/audit` + bảng audit trong từng service | Luật 6 bắt ghi vết **cùng giao dịch** với ghi nghiệp vụ. Service riêng thì không chia được giao dịch — tách ra là **khoá cứng** vào kiến trúc đúng lỗi đã đo ở v1 (0 giao dịch trên toàn backend) |
-| Lưu trữ tệp | Thư viện `pkg/storage` + metadata do từng miền sở hữu | Tách thành service thì mọi luồng đính kèm thành 2 lời gọi mạng cho một thao tác. Vi phạm phép thử "cần nhất quán mạnh thì đừng tách" |
+| Nhật ký thao tác | Thư viện `core/audit` + bảng audit trong từng service | Luật 6 bắt ghi vết **cùng giao dịch** với ghi nghiệp vụ. Service riêng thì không chia được giao dịch — tách ra là **khoá cứng** vào kiến trúc đúng lỗi đã đo ở v1 (0 giao dịch trên toàn backend) |
+| Lưu trữ tệp | Thư viện `core/storage` + metadata do từng miền sở hữu | Tách thành service thì mọi luồng đính kèm thành 2 lời gọi mạng cho một thao tác. Vi phạm phép thử "cần nhất quán mạnh thì đừng tách" |
 
 ## Hệ quả
 

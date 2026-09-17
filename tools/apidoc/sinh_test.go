@@ -72,12 +72,13 @@ func TestLoiPhanTichThiKhongDoiGiHet(t *testing.T) {
 		}
 	}
 	viet("go.mod", "module vd.test\n\ngo 1.26.0\n")
-	viet("services/thu/internal/http/routes.go", `package http
+	viet("thu/cmd/server/main.go", "package main\n")
+	viet("thu/internal/http/routes.go", `package http
 
 import (
 	"net/http"
 
-	"vd.test/pkg/authz"
+	"vd.test/core/authz"
 )
 
 func Register(mux *http.ServeMux) {

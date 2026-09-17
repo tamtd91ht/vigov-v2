@@ -86,6 +86,79 @@ def input_of(data: dict) -> dict:
     return data.get("tool_input") or data.get("input") or {}
 
 
+# --------------------------------------------------------------------------
+# Đơn vị triển khai — đọc TỪ ĐĨA, không suy từ chuỗi đường dẫn
+# --------------------------------------------------------------------------
+#
+# Trước 2026-09-17 mọi hook nhận ra một dịch vụ bằng cách tìm đoạn `/services/` trong đường
+# dẫn. Bố cục nay phẳng — `identity/`, `comms/`, `web-admin/` ngang cấp với `.claude/` — nên
+# đoạn ấy không còn tồn tại.
+#
+# Đây là kiểu thay đổi nguy hiểm nhất với một lớp thực thi: hook vẫn chạy, vẫn thoát 0, và
+# không còn khớp gì nữa. Không có gì đỏ. Một quy tắc không bao giờ khớp trông y hệt một quy
+# tắc chưa bị ai vi phạm.
+#
+# Nên câu hỏi "đây có phải mã của một dịch vụ không" nay hỏi ĐĨA: một thư mục cấp một là một
+# dịch vụ Go khi nó có `<tên>/cmd/server`. Thêm dịch vụ thứ chín thì mọi hook nhận ra nó ngay,
+# không ai phải sửa danh sách.
+
+_DICH_VU_CACHE: tuple[str, ...] | None = None
+
+
+def dich_vu_tren_dia(root: str | None = None) -> tuple[str, ...]:
+    """Tên các dịch vụ Go: thư mục cấp một có `<tên>/cmd/server`."""
+    global _DICH_VU_CACHE
+    if _DICH_VU_CACHE is not None and root is None:
+        return _DICH_VU_CACHE
+    goc = root or project_root()
+    ra: list[str] = []
+    try:
+        for ten in sorted(os.listdir(goc)):
+            if ten.startswith(".") or not os.path.isdir(os.path.join(goc, ten)):
+                continue
+            if os.path.isdir(os.path.join(goc, ten, "cmd", "server")):
+                ra.append(ten)
+    except Exception:
+        return _DICH_VU_CACHE or ()
+    kq = tuple(ra)
+    if root is None:
+        _DICH_VU_CACHE = kq
+    return kq
+
+
+# Thư mục cấp một KHÔNG BAO GIỜ là một dịch vụ Go. Khai tường minh vì `dich_vu_cua` dưới đây
+# nhận diện theo HÌNH DẠNG đường dẫn, và `core/internal/...` thì không phải vi phạm ranh giới.
+KHONG_PHAI_DICH_VU = {
+    "core", "tools", "kb", "docs", "proto", "gen", "tasks", "build",
+    "web-admin", "platform-admin", "citizen-app", "node_modules", "vendor",
+}
+
+# Thư mục con cho biết đoạn đứng trước nó là một dịch vụ.
+DAU_HIEU_DICH_VU = ("internal", "cmd", "migrations")
+
+
+def dich_vu_cua(path: str) -> str | None:
+    """Dịch vụ sở hữu đường dẫn này, hoặc None.
+
+    NHẬN DIỆN THEO HÌNH DẠNG, KHÔNG CHỈ THEO ĐĨA, và lý do đáng nêu: một dịch vụ mới đang
+    được viết chưa có `cmd/server`, nên nếu chỉ tra danh sách trên đĩa thì đúng lúc mã của nó
+    còn non nhất — chưa ai đọc lại, chưa có test — nó lại nằm ngoài tầm mọi guard.
+
+    `<đoạn>/internal/...`, `<đoạn>/cmd/...`, `<đoạn>/migrations/...` là hình dạng của một dịch
+    vụ. `core/`, `tools/`, `kb/` bị loại tường minh qua KHONG_PHAI_DICH_VU.
+    """
+    norm = (path or "").replace("\\", "/").strip("/")
+    segs = [x for x in norm.split("/") if x not in ("", ".")]
+    for i in range(len(segs) - 1):
+        if segs[i + 1] in DAU_HIEU_DICH_VU and segs[i] not in KHONG_PHAI_DICH_VU:
+            return segs[i]
+    tren_dia = dich_vu_tren_dia()
+    for seg in segs:
+        if seg in tren_dia:
+            return seg
+    return None
+
+
 def path_of(tool_input: dict) -> str:
     p = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
     return p.replace("\\", "/")

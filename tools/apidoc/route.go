@@ -65,7 +65,12 @@ var phuongThuc = map[string]bool{
 // edge, which no admin screen calls. Including them would put a route in the contract that
 // carries no commune and no permission, and every consumer would have to learn to skip it.
 func quetTuyen(root string) ([]tuyen, error) {
-	base := filepath.Join(root, "services")
+	// Bố cục phẳng: mỗi dịch vụ là một thư mục CẤP MỘT, ngang cấp với core/ và web-admin/.
+	// Không còn thư mục `services/` để quét, nên dấu hiệu nhận biết là `<tên>/cmd/server`.
+	// Đọc từ đĩa chứ không gõ danh sách: dịch vụ thứ chín được nhận ra ngay, và quan trọng
+	// hơn, một danh sách gõ tay thiếu một dịch vụ thì hợp đồng REST lặng lẽ thiếu tuyến của
+	// dịch vụ ấy — không có gì đỏ, chỉ là web không bao giờ biết tuyến đó tồn tại.
+	base := root
 	dichVu, err := os.ReadDir(base)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -84,6 +89,12 @@ func quetTuyen(root string) ([]tuyen, error) {
 			continue
 		}
 		ten := d.Name()
+		if strings.HasPrefix(ten, ".") {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(base, ten, "cmd", "server")); err != nil {
+			continue // không phải một dịch vụ Go
+		}
 		trong := filepath.Join(base, ten, "internal")
 		if _, err := os.Stat(trong); err != nil {
 			continue

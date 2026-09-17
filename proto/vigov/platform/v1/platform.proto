@@ -20,7 +20,7 @@ package vigov.platform.v1;
 //     interceptor out of context.Context, never passed as a business argument.
 //   * A receiver that finds no "x-tenant-id" REFUSES the call with INVALID_ARGUMENT. It
 //     never falls back to a default commune and never infers one from the payload.
-//   * The key sits inside the "x-tenant" prefix that pkg/httpx.StripTenantHeaders already
+//   * The key sits inside the "x-tenant" prefix that core/httpx.StripTenantHeaders already
 //     deletes from client-supplied requests.
 //
 // THIS SERVICE IS THE ONE EXCEPTION, and only because it is the registry that ANSWERS the

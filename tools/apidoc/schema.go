@@ -288,11 +288,15 @@ func (b *boSchema) refCua(k kieuGo, nghiem bool) (string, error) {
 // rather than its Go package name: half the packages here are called `http`, and `http.Error`
 // next to `httpx.Error` in one components map is a name nobody can read.
 func tenThanhPhan(k kieuGo) string {
+	// Bố cục phẳng: không còn đoạn `/services/` để neo. Tên dịch vụ là đoạn đứng NGAY TRƯỚC
+	// `/internal/` — cùng quy tắc mà .claude/hooks/_common.dich_vu_cua dùng.
 	dir := filepath.ToSlash(k.pkgDir)
-	if i := strings.Index(dir, "/services/"); i >= 0 {
-		con := dir[i+len("/services/"):]
-		if j := strings.Index(con, "/"); j > 0 {
-			return con[:j] + "." + k.spec.Name.Name
+	if i := strings.Index(dir, "/internal/"); i >= 0 {
+		truoc := dir[:i]
+		if j := strings.LastIndex(truoc, "/"); j >= 0 {
+			if ten := truoc[j+1:]; ten != "" && ten != "core" {
+				return ten + "." + k.spec.Name.Name
+			}
 		}
 	}
 	return k.pkgName + "." + k.spec.Name.Name

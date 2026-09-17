@@ -8,7 +8,7 @@ description: Use when adding or changing a Go service — directory layout, laye
 ## Directory shape
 
 ```
-services/<name>/
+<name>/
 ├── cmd/server/main.go        wiring only, no business logic
 ├── internal/
 │   ├── domain/               business types and pure rules — imports NO infrastructure

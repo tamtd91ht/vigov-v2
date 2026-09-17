@@ -3,8 +3,8 @@
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // VÌ SAO TỆP NÀY VẪN TỒN TẠI KHI MỖI DỊCH VỤ ĐÃ CÓ PIPELINE RIÊNG
 //
-// Mỗi dịch vụ tự quyết build cái gì và khi nào: `services/<tên>/Jenkinsfile`. Web cũng vậy:
-// `apps/commune-admin/Jenkinsfile`. Một thay đổi ở `comms` không còn bắt `finance` sinh ảnh
+// Mỗi dịch vụ tự quyết build cái gì và khi nào: `<tên>/Jenkinsfile`. Web cũng vậy:
+// `web-admin/Jenkinsfile`. Một thay đổi ở `comms` không còn bắt `finance` sinh ảnh
 // mới rồi triển khai lại.
 //
 // Nhưng có một nhóm bất biến KHÔNG THUỘC VỀ DỊCH VỤ NÀO CẢ:
@@ -13,7 +13,7 @@
 //   · 90 ca tự kiểm hook — bằng chứng lớp thực thi còn chạy
 //   · bất biến an toàn của 9 Dockerfile + 9 Jenkinsfile (tools/check_build.py)
 //   · `buf lint` trên proto/ — hợp đồng GIỮA các dịch vụ, không của bên nào
-//   · `gofmt`, `go vet`, `go build`, `go test -race` trên TOÀN kho, gồm pkg/ và tools/
+//   · `gofmt`, `go vet`, `go build`, `go test -race` trên TOÀN kho, gồm core/ và tools/
 //
 // Nhét chúng vào tám pipeline dịch vụ nghĩa là chạy tám lần một việc. Và tệ hơn: nếu chúng
 // CHỈ chạy ở pipeline dịch vụ, thì một thay đổi chỉ đụng `.claude/` hoặc `tools/` sẽ không
@@ -74,7 +74,7 @@ pipeline {
         // TypeScript khi không có node_modules — nó báo to, nhưng vẫn là bỏ qua, và một cổng
         // kiểm có thể bỏ qua chính là thứ dự án này liên tục gặp: thứ trông như biện pháp mà
         // không phải biện pháp. Cài trước thì nó không còn đường bỏ qua.
-        dir('apps/commune-admin') {
+        dir('web-admin') {
           sh 'npm ci'
         }
       }
@@ -93,7 +93,7 @@ pipeline {
   post {
     success {
       echo 'Bất biến toàn kho: xanh. Ảnh do pipeline của TỪNG dịch vụ đóng — xem ' +
-           'services/<tên>/Jenkinsfile và apps/commune-admin/Jenkinsfile.'
+           '<tên>/Jenkinsfile và web-admin/Jenkinsfile.'
     }
   }
 }
@@ -110,9 +110,9 @@ pipeline {
 // commit, không phải bằng suy đoán từ thời điểm kéo ảnh.
 //
 // Vì mỗi dịch vụ nay dựng độc lập, HAI DỊCH VỤ Ở HAI COMMIT KHÁC NHAU LÀ BÌNH THƯỜNG — đó
-// chính là điểm của việc tách. Nhưng vì tám dịch vụ dùng chung `pkg/`, một dịch vụ không
-// được dựng lại là một dịch vụ đang chạy `pkg/` cũ. Đó là lý do danh sách đường kích hoạt
-// trong mỗi pipeline dịch vụ PHẢI có `pkg/**`, `proto/**`, `go.mod`, `go.sum`.
+// chính là điểm của việc tách. Nhưng vì tám dịch vụ dùng chung `core/`, một dịch vụ không
+// được dựng lại là một dịch vụ đang chạy `core/` cũ. Đó là lý do danh sách đường kích hoạt
+// trong mỗi pipeline dịch vụ PHẢI có `core/**`, `proto/**`, `go.mod`, `go.sum`.
 //
 // Cái giá là manifest phải sửa thẻ mỗi lần triển khai. Đó chính là điều mong muốn: một lần
 // triển khai phải là một thay đổi ai đó nhìn thấy được.

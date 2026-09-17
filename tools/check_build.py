@@ -17,8 +17,8 @@ vụ tự quyết phần RIÊNG của nó, không phải để lặng lẽ bỏ 
 
 CÙNG MỘT LẬP LUẬN ÁP CHO Jenkinsfile. Mỗi dịch vụ tự quyết build cái gì và khi nào. Phần
 dễ đánh rơi nhất ở đó KHÔNG phải thư mục của chính nó mà là MÃ DÙNG CHUNG: tám dịch vụ chung
-một `go.mod` và một `pkg/`, nên một pipeline chỉ kích hoạt theo `services/<tên>/**` sẽ ngồi im
-khi `pkg/authz` được vá. Mọi pipeline vẫn xanh, không cái nào chạy, và bản vá nằm yên trong
+một `go.mod` và một `core/`, nên một pipeline chỉ kích hoạt theo `<tên>/**` sẽ ngồi im
+khi `core/authz` được vá. Mọi pipeline vẫn xanh, không cái nào chạy, và bản vá nằm yên trong
 kho mã trong khi tám ảnh đang chạy vẫn mang mã cũ.
 
 Chạy trong `make check`. Trả về 1 khi có vi phạm.
@@ -76,12 +76,13 @@ BAT_BIEN = [
 
 def dich_vu() -> list[str]:
     """Danh sách dịch vụ đọc TỪ ĐĨA, không chép tay — cùng lý do với Jenkinsfile."""
-    thu_muc = os.path.join(GOC, "services")
-    if not os.path.isdir(thu_muc):
-        return []
+    # Bố cục phẳng: mỗi dịch vụ là một thư mục CẤP MỘT, ngang cấp với core/ và web-admin/.
+    # Dấu hiệu nhận biết là `<tên>/cmd/server` — không phải một danh sách gõ tay, và cũng
+    # không phải vị trí trong cây thư mục.
     return sorted(
-        d for d in os.listdir(thu_muc)
-        if os.path.isdir(os.path.join(thu_muc, d, "cmd", "server"))
+        d for d in os.listdir(GOC)
+        if not d.startswith(".")
+        and os.path.isdir(os.path.join(GOC, d, "cmd", "server"))
     )
 
 
@@ -89,7 +90,7 @@ def dich_vu() -> list[str]:
 #
 # `gen/` cố ý KHÔNG có mặt: nó nằm trong .gitignore nên không bao giờ xuất hiện trong
 # changeset. `proto/**` là thứ sinh ra nó, nên proto/ mới là tín hiệu đúng.
-DUONG_DUNG_CHUNG = ["pkg/**", "proto/**", "go.mod", "go.sum"]
+DUONG_DUNG_CHUNG = ["core/**", "proto/**", "go.mod", "go.sum"]
 
 
 def tuong_doi(duong: str) -> str:
@@ -113,7 +114,7 @@ def kiem_pipeline(duong: str, ten_rieng: str, loi: list[str]) -> None:
     # CHỈ ĐỌC THÂN `duongKichHoat()`, không quét cả tệp.
     #
     # Quét cả tệp là phép kiểm tự vô hiệu hoá mình: khối chú thích ở cuối mỗi pipeline có
-    # NHẮC TỚI `services/<tên>/**` và `pkg/**` để giải thích vì sao chúng phải có mặt — nên
+    # NHẮC TỚI `<tên>/**` và `core/**` để giải thích vì sao chúng phải có mặt — nên
     # một tệp đã gỡ chúng khỏi danh sách thật vẫn "chứa" đủ chuỗi và vẫn xanh. Đo được điều
     # này bằng một lượt đột biến, không phải bằng đọc lại.
     than = re.search(r"List<String>\s+duongKichHoat\(\)\s*\{(.*?)\}", noi_dung, re.S)
@@ -134,7 +135,7 @@ def kiem_pipeline(duong: str, ten_rieng: str, loi: list[str]) -> None:
         if mau not in danh_sach:
             loi.append(
                 f"{tuong_doi(duong)} thiếu đường kích hoạt '{mau}'\n"
-                f"        → Tám dịch vụ dùng chung một go.mod và một pkg/. Thiếu mẫu này thì "
+                f"        → Tám dịch vụ dùng chung một go.mod và một core/. Thiếu mẫu này thì "
                 f"một bản vá trong mã dùng chung KHÔNG kích hoạt dịch vụ này: pipeline vẫn "
                 f"xanh, không chạy, và ảnh đang chạy vẫn mang mã cũ."
             )
@@ -158,16 +159,16 @@ def main() -> int:
 
     svcs = dich_vu()
     if not svcs:
-        print("[FAIL] không thấy dịch vụ nào dưới services/*/cmd/server")
+        print("[FAIL] không thấy dịch vụ nào dưới */cmd/server")
         return 1
 
     loi: list[str] = []
 
     for svc in svcs:
-        duong = os.path.join(GOC, "services", svc, "Dockerfile")
+        duong = os.path.join(GOC, svc, "Dockerfile")
         if not os.path.isfile(duong):
             loi.append(
-                f"services/{svc}/Dockerfile KHÔNG TỒN TẠI — dịch vụ này sẽ không có ảnh, "
+                f"{svc}/Dockerfile KHÔNG TỒN TẠI — dịch vụ này sẽ không có ảnh, "
                 f"và pipeline vẫn xanh vì nó đọc danh sách dịch vụ từ đĩa chứ không biết "
                 f"dịch vụ nào đáng lẽ phải đóng gói được."
             )
@@ -178,23 +179,23 @@ def main() -> int:
 
         for ten, mau, vi_sao in BAT_BIEN:
             if not mau.search(noi_dung):
-                loi.append(f"services/{svc}/Dockerfile thiếu: {ten}\n        → {vi_sao}")
+                loi.append(f"{svc}/Dockerfile thiếu: {ten}\n        → {vi_sao}")
 
         # Dịch vụ phải biên dịch CHÍNH NÓ. Một tệp chép từ dịch vụ khác mà quên sửa đường
         # dẫn sẽ đóng gói nhị phân của dịch vụ kia dưới cái tên của dịch vụ này — ảnh chạy
         # được, healthz xanh, và nó phục vụ sai toàn bộ.
-        if f"./services/{svc}/cmd/server" not in noi_dung:
+        if f"./{svc}/cmd/server" not in noi_dung:
             loi.append(
-                f"services/{svc}/Dockerfile không biên dịch ./services/{svc}/cmd/server "
+                f"{svc}/Dockerfile không biên dịch ./{svc}/cmd/server "
                 f"— nhiều khả năng chép từ dịch vụ khác mà quên sửa đường dẫn."
             )
 
-        kiem_pipeline(os.path.join(GOC, "services", svc, "Jenkinsfile"),
-                      f"services/{svc}/**", loi)
+        kiem_pipeline(os.path.join(GOC, svc, "Jenkinsfile"),
+                      f"{svc}/**", loi)
 
-    web = os.path.join(GOC, "apps", "commune-admin", "Dockerfile")
+    web = os.path.join(GOC, "web-admin", "Dockerfile")
     if not os.path.isfile(web):
-        loi.append("apps/commune-admin/Dockerfile KHÔNG TỒN TẠI")
+        loi.append("web-admin/Dockerfile KHÔNG TỒN TẠI")
     else:
         with open(web, encoding="utf-8") as f:
             noi_dung = f.read()
@@ -202,19 +203,19 @@ def main() -> int:
         # rồi đem chạy cho mọi xã (luật 1 bất biến 10, luật 8 bất biến 4).
         if "NEXT_PUBLIC_" not in noi_dung:
             loi.append(
-                "apps/commune-admin/Dockerfile mất rào chắn NEXT_PUBLIC_*\n"
+                "web-admin/Dockerfile mất rào chắn NEXT_PUBLIC_*\n"
                 "        → Biến đó bị nung vào bundle trình duyệt. Hỏng không lộ ở xã đầu "
                 "tiên mà ở xã THỨ HAI, dưới dạng tên xã khác hiện trên màn hình một cơ quan "
                 "nhà nước, khi ảnh đã chạy ở mọi nơi."
             )
         if re.search(r"^\s*USER\s+(?!root\b|0\b)\S+", noi_dung, re.M) is None:
-            loi.append("apps/commune-admin/Dockerfile không khai USER không phải root")
+            loi.append("web-admin/Dockerfile không khai USER không phải root")
 
-    # Web có danh sách kích hoạt riêng (hợp đồng REST, không phải pkg/), nên nó không đi
+    # Web có danh sách kích hoạt riêng (hợp đồng REST, không phải core/), nên nó không đi
     # qua kiem_pipeline — chỉ kiểm hai điều thật sự bắt buộc với nó.
-    wj = os.path.join(GOC, "apps", "commune-admin", "Jenkinsfile")
+    wj = os.path.join(GOC, "web-admin", "Jenkinsfile")
     if not os.path.isfile(wj):
-        loi.append("apps/commune-admin/Jenkinsfile KHÔNG TỒN TẠI")
+        loi.append("web-admin/Jenkinsfile KHÔNG TỒN TẠI")
     else:
         with open(wj, encoding="utf-8") as f:
             nd = f.read()
@@ -222,12 +223,12 @@ def main() -> int:
         ds_web = than_web.group(1) if than_web else ""
         if "kb/20-contracts/**" not in ds_web:
             loi.append(
-                "apps/commune-admin/Jenkinsfile không kích hoạt theo 'kb/20-contracts/**'\n"
+                "web-admin/Jenkinsfile không kích hoạt theo 'kb/20-contracts/**'\n"
                 "        → Hợp đồng REST đổi mà web không dựng lại thì nó vẫn gọi hình dạng "
                 "cũ, và TypeScript vẫn xanh vì đang tin vào schema.gen.ts cũ."
             )
         if re.search(r":latest\b", nd):
-            loi.append("apps/commune-admin/Jenkinsfile đẩy thẻ di động `latest`")
+            loi.append("web-admin/Jenkinsfile đẩy thẻ di động `latest`")
 
     if loi:
         print(f"[FAIL] hồ sơ dựng — {len(loi)} vấn đề trên {len(svcs)} dịch vụ + web")

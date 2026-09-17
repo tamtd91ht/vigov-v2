@@ -30,8 +30,10 @@ HOOK = "doc_guard"
 # Where documentation is ALLOWED
 ALLOWED = (
     re.compile(r"(^|/)kb/"),
-    re.compile(r"(^|/)services/[a-z0-9_\-]+/README\.md$"),
-    re.compile(r"(^|/)apps/[a-z0-9_\-]+/README\.md$"),
+    # Bố cục phẳng: mỗi đơn vị triển khai nằm ở cấp một (`identity/`, `web-admin/`), nên
+    # README của nó là `<đơn vị>/README.md`. Vẫn CHỈ một tệp README ở đúng cấp ấy — không mở
+    # cửa cho .md rải rác bên trong (luật 9, cấm #1).
+    re.compile(r"(^|/)[a-z0-9_\-]+/README\.md$"),
     re.compile(r"(^|/)\.claude/"),
     re.compile(r"(^|/)(README|CLAUDE|Makefile)\.md$"),
 )
@@ -173,7 +175,7 @@ def main() -> None:
         os.path.join(c.project_root(), rel.replace("/", os.sep)))
     if not da_co and not any(p.search("/" + rel) for p in ALLOWED):
         c.block(HOOK, f"documentation in the wrong place — {rel}",
-                [".md files belong in kb/, services/<name>/README.md, or .claude/"],
+                [".md files belong in kb/, <đơn vị>/README.md, or .claude/"],
                 ["  Scattered documentation is documentation nobody reads. Pick the tier by the",
                  "  LIFETIME of the fact, not by topic:",
                  "",

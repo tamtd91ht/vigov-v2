@@ -39,10 +39,10 @@ hạ tầng dữ liệu, vì đổi về sau là di trú trên hồ sơ lưu tr�
 
 | # | Lý do |
 |---|---|
-| 1 | **Luật 6 #3 đòi audit ghi cùng giao dịch với nghiệp vụ.** `pkg/audit.Write` có chữ ký bắt buộc nhận `*store.ScopedTx`. Nghiệp vụ ở Mongo còn audit ở Postgres thì không có giao dịch chung — đúng mô hình ADR 0001 đã bác khi từ chối tách audit thành service riêng |
+| 1 | **Luật 6 #3 đòi audit ghi cùng giao dịch với nghiệp vụ.** `core/audit.Write` có chữ ký bắt buộc nhận `*store.ScopedTx`. Nghiệp vụ ở Mongo còn audit ở Postgres thì không có giao dịch chung — đúng mô hình ADR 0001 đã bác khi từ chối tách audit thành service riêng |
 | 2 | **Dữ liệu ở đây là quan hệ.** Phiếu trỏ tới bộ phận, cán bộ, thôn, lĩnh vực, SLA; nhiệm vụ trỏ tới nguồn giao đa hình; kết luận họp join ngược nhiệm vụ để đếm tiến độ |
 | 3 | **Hồ sơ hành chính cần ràng buộc ở tầng CSDL.** Khoá ngoại, `UNIQUE (tenant_id, code)`, `CHECK`. Mất ràng buộc trên tài liệu lưu trữ là thứ không sửa lại được |
-| 4 | **Migration đã viết bằng PostgreSQL.** `services/*/migrations/0001_init.sql` dùng `BIGSERIAL`, `JSONB`, `TIMESTAMPTZ`, `PARTITION BY HASH` — là hiện thân của ADR 0004 |
+| 4 | **Migration đã viết bằng PostgreSQL.** `*/migrations/0001_init.sql` dùng `BIGSERIAL`, `JSONB`, `TIMESTAMPTZ`, `PARTITION BY HASH` — là hiện thân của ADR 0004 |
 
 Chỗ Mongo thường thắng, ở đây đã có lời giải:
 
@@ -82,7 +82,7 @@ Không trùng lặp — hai thứ khác nhau:
 | Dùng ở đây | Sự kiện giữa service; `reporting` dựng lại read model bằng replay | Nhắc hạn, leo thang, 5 job của `docs/ui-ux/14 §9` |
 | Tính năng quyết định | Giữ lịch sử để dựng lại projection | **Delayed message plugin** — Kafka không có |
 
-`pkg/events.Publisher` là interface thuần, chưa gắn hạ tầng nào, nên cắm Kafka vào là chuyện
+`core/events.Publisher` là interface thuần, chưa gắn hạ tầng nào, nên cắm Kafka vào là chuyện
 triển khai chứ không phải sửa kiến trúc.
 
 ## Phân mảnh vật lý theo tenant

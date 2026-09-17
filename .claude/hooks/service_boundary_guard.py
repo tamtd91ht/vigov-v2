@@ -1,6 +1,6 @@
 """PreToolUse — BLOCK crossing a service boundary.  [RULE 2]
 
-Scope: *.go under services/
+Scope: *.go inside a service (a top-level dir holding cmd/server)
 
 WHY BLOCK: without boundaries the system becomes a DISTRIBUTED MONOLITH — full cost of
 microservices, none of the benefit. This decay has NO SYMPTOMS: tests green, features work,
@@ -26,8 +26,11 @@ import _common as c  # noqa: E402
 
 HOOK = "service_boundary_guard"
 
+# Đường import nay là `github.com/vihat/vigov/<dịch vụ>/internal/...` — không còn đoạn
+# `/services/` để neo vào. Bắt tên ngay trước `/internal/`, rồi ĐỐI CHIẾU với danh sách dịch
+# vụ đọc từ đĩa: `core/internal/...` hay `tools/internal/...` không phải vi phạm ranh giới.
 IMPORT_INTERNAL = re.compile(
-    r"[\"']([a-z0-9_.\-/]*?/services/([a-z0-9_\-]+)/internal/[a-z0-9_/\-]+)[\"']"
+    r"[\"']([a-z0-9_.\-/]*?/([a-z0-9_\-]+)/internal/[a-z0-9_/\-]+)[\"']"
 )
 
 DB_CONNECT = re.compile(
@@ -42,9 +45,8 @@ PROTO_GEN = (".pb.go", "_grpc.pb.go", ".pb.gw.go", "_pb2.py", ".connect.go")
 
 
 def service_of(path: str) -> str | None:
-    # Normalise: a relative path ("services/x/...") has no leading slash
-    m = re.search(r"/services/([a-z0-9_\-]+)/", "/" + path.lstrip("/"))
-    return m.group(1) if m else None
+    """Which service owns this path. Derived from disk — see _common.dich_vu_cua."""
+    return c.dich_vu_cua(path)
 
 
 def owner_map(root: str) -> dict:
@@ -64,7 +66,11 @@ def scan(content: str, path: str) -> list[str]:
 
     for i, line in enumerate(lines):
         m = IMPORT_INTERNAL.search(line)
-        if m and me and m.group(2) != me:
+        # Loại trừ theo DANH SÁCH KHÔNG-PHẢI-DỊCH-VỤ chứ không đòi tên phải có sẵn trên đĩa.
+        # Đòi có trên đĩa nghe chặt hơn nhưng lỏng hơn thật: một dịch vụ đang được viết,
+        # chưa có cmd/server, sẽ không bị tính — tức đúng lúc mã của nó còn non nhất thì
+        # ranh giới lại không được canh.
+        if m and me and m.group(2) != me and m.group(2) not in c.KHONG_PHAI_DICH_VU:
             hits.append(f"line {i+1}: imports internal/ of service '{m.group(2)}' (we are '{me}')")
 
         if DB_CONNECT.search(line):
@@ -111,7 +117,7 @@ def main() -> None:
 
     if not path.endswith(".go") or c.should_skip(path):
         sys.exit(0)
-    if "/services/" not in ("/" + path.lstrip("/")):
+    if service_of(path) is None:
         sys.exit(0)
 
     content = c.new_content(ti)

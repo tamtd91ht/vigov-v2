@@ -4,49 +4,49 @@
   "services": [
     {
       "name": "comms",
-      "path": "services/comms",
+      "path": "comms",
       "has_main": true,
       "summary": "Thông tin – truyền thông — Articles, radio bulletins, video, map layers, the public directory, and notifications to citizens and staff."
     },
     {
       "name": "documents",
-      "path": "services/documents",
+      "path": "documents",
       "has_main": true,
       "summary": "Văn thư — Incoming and outgoing documents, per-authority numbering, routing between units."
     },
     {
       "name": "dossiers",
-      "path": "services/dossiers",
+      "path": "dossiers",
       "has_main": true,
       "summary": "Một cửa — Administrative procedure files submitted at the one-stop shop, and their processing steps."
     },
     {
       "name": "finance",
-      "path": "services/finance",
+      "path": "finance",
       "has_main": true,
       "summary": "Tài chính – kế toán — Budget lines, commitments and disbursement decisions."
     },
     {
       "name": "identity",
-      "path": "services/identity",
+      "path": "identity",
       "has_main": true,
       "summary": "Tổ chức – cán bộ — Staff accounts and RBAC (per commune); citizen identity (platform-wide) and the citizen↔commune relationship; sessions and OTP."
     },
     {
       "name": "petitions",
-      "path": "services/petitions",
+      "path": "petitions",
       "has_main": true,
       "summary": "Tiếp dân — Feedback, complaints and denunciations — three legally distinct things — plus the tasks that arise from handling them, and their SLA."
     },
     {
       "name": "platform",
-      "path": "services/platform",
+      "path": "platform",
       "has_main": true,
       "summary": "Nền tảng — Commune registry, domains, quotas, commune lifecycle. Cross-tenant BY DESIGN; the only service besides identity with a legitimate cross-commune data area."
     },
     {
       "name": "reporting",
-      "path": "services/reporting",
+      "path": "reporting",
       "has_main": true,
       "summary": "Read model — Statistics, rollups and cross-domain search. Owns NO source data — every row is a projection built from events."
     }

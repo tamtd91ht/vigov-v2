@@ -36,7 +36,7 @@ ignores documentation and goes back to scanning source — and documentation bec
 
 | # | Forbidden | Why |
 |---|---|---|
-| 1 | Creating `.md` outside `kb/`, `services/*/README.md`, `.claude/` | Scattered documentation is documentation nobody reads |
+| 1 | Creating `.md` outside `kb/`, `*/README.md`, `.claude/` | Scattered documentation is documentation nobody reads |
 | 2 | Copying content that already has an owning file | Two copies are two copies that will drift |
 | 3 | Writing documentation as a **session log** | Worthless after a day, yet never deleted |
 | 4 | Hand-editing the generated tier | Silently lost on the next generate |

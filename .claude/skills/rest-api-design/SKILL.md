@@ -46,7 +46,7 @@ apply it.
 | Path segment | **English** | `/api/v1/citizen-letters` |
 | Query parameter name | **English** | `?type=`, `?status=`, `?cursor=` |
 | **Business enum value** | **Vietnamese, no diacritics** | `?type=khieu-nai`, `?status=dang-xu-ly` |
-| Permission key | English, singular group | `petition.read` — `services/identity/migrations/0001_init.sql` |
+| Permission key | English, singular group | `petition.read` — `identity/migrations/0001_init.sql` |
 | JSON field name | English | `lookup_code`, `created_at` |
 | Error `code` | English, snake_case | `missing_idempotency_key` — matches `httpx.Error` |
 | Any string a person reads, incl. error `message` | **Vietnamese with diacritics** | `"Không có nhiệm vụ"` |
@@ -57,7 +57,7 @@ the same thing. For `kien-nghi` / `phan-anh` / `khieu-nai` / `to-cao` / `de-nghi
 and the difference decides which statute applies and how long the authority has to answer.
 
 **It applies to BUSINESS concepts only.** A technical error code carries no administrative
-meaning, so it follows the machine-readable rule and stays English. `pkg/httpx/edge.go`
+meaning, so it follows the machine-readable rule and stays English. `core/httpx/edge.go`
 declares one error shape for the whole system and fills `Code: "internal"`; a second
 convention inside that same shape is the drift rule 9 exists to stop. The split to hold onto:
 **`code` is an identifier, `message` is a sentence someone reads.**

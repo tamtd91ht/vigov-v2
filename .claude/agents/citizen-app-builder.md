@@ -14,7 +14,7 @@ public service. That makes accessibility a rights question, not a UX preference.
 
 | May write | May NOT write |
 |---|---|
-| `apps/citizen-app/**` | `services/**`, `apps/commune-admin/**`, `apps/platform-admin/**` |
+| `citizen-app/**` | any Go service (`<name>/**`), `web-admin/**`, `platform-admin/**` |
 | | `proto/**` — request from contract-designer |
 
 ## The contradiction to internalise first
