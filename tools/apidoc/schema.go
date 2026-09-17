@@ -453,7 +453,20 @@ func (b *boSchema) structSchema(st *ast.StructType, ngucanh kieuGo, nghiem bool)
 				s.set("description", c)
 			}
 			props.set(ten, s)
-			if !boQuaKhiRong && !laConTro(fld.Type) {
+			// CÓ MẶT và CÓ THỂ RỖNG là hai sự thật khác nhau, và chỉ `omitempty` quyết định
+			// cái thứ nhất.
+			//
+			// `encoding/json` bỏ một trường đi khi và chỉ khi nó mang `omitempty`. Một con trỏ
+			// KHÔNG có `omitempty` vẫn luôn được phát ra, chỉ là phát ra `null`. Nên
+			// `LastLoginAt *time.Time `json:"last_login_at"`` là một trường BẮT BUỘC có mặt,
+			// giá trị có thể là null — và tính null đã được ghi riêng ở `type: [T, "null"]`.
+			//
+			// Trước đây điều kiện này còn `&& !laConTro(...)`, tức mọi con trỏ đều bị khai là
+			// không bắt buộc. Hậu quả nằm ở phía đọc hợp đồng: máy khách không còn phân biệt
+			// được "máy chủ nói: chưa đăng nhập bao giờ" (null) với "máy chủ không nói gì"
+			// (vắng mặt), và phải viết một nhánh không bao giờ chạy tới. Hợp đồng mô tả sai
+			// một thứ máy chủ vẫn luôn làm đúng là hợp đồng dạy người ta phòng nhầm chỗ.
+			if !boQuaKhiRong {
 				batBuoc = append(batBuoc, ten)
 			}
 		}

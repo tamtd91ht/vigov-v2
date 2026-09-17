@@ -109,8 +109,14 @@ type Cha struct {
 		t.Errorf("trường không được ra ngoài lại xuất hiện:\n%s", got)
 	}
 
-	// omitempty and a pointer both mean "may be absent", so neither is required.
-	if !strings.Contains(got, `"required":["con","danh_sach","loi","ma","so_luong","tao_luc"]`) {
+	// ONLY omitempty decides presence. A pointer decides NULLABILITY, which is a different
+	// fact and is already written at `type: [T, "null"]` - see `tuy_chon` above.
+	//
+	// So `tuy_chon` IS required: encoding/json emits it on every response, as `null` when the
+	// pointer is nil. It is `ghi_chu`, carrying omitempty, that may genuinely be absent.
+	// Publishing a pointer as optional makes a client unable to tell "the server said: nothing
+	// here" from "the server did not say", and makes it write a branch that never runs.
+	if !strings.Contains(got, `"required":["con","danh_sach","loi","ma","so_luong","tao_luc","tuy_chon"]`) {
 		t.Errorf("danh sách required sai:\n%s", got)
 	}
 }
