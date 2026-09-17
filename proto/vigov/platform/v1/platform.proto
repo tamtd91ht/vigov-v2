@@ -31,14 +31,27 @@ package vigov.platform.v1;
 // naming any commune must never be able to reach that commune's business content. No other
 // service may copy this shape.
 //
-// ListTenants and ResolveTenantAlias sit in that same category and NOT in a wider one. They
-// carry no "x-tenant-id" because on the citizen channel there is no commune yet: a Mini App
-// has no domain, it reaches ONE API host, and picking a commune is what the caller is trying
-// to do (ADR 0005). Both answer only out of the registry. The thing that keeps this from
-// becoming a general cross-commune read is not a permission — it is that the ONLY message
-// these RPCs can return is TenantSummary, which holds a commune's name and province and has
-// no field that could carry business content, and no way to grow one without this comment
-// being edited.
+// ListTenants and ResolveTenantAlias sit in that same category and NOT in a wider one. On the
+// citizen channel there is no commune yet: a Mini App has no domain, it reaches ONE API host,
+// and picking a commune is what the caller is trying to do (ADR 0005). Both answer only out of
+// the registry. The thing that keeps this from becoming a general cross-commune read is not a
+// permission — it is that the ONLY message these RPCs can return is TenantSummary, which holds
+// a commune's name and province and has no field that could carry business content, and no way
+// to grow one without this comment being edited.
+//
+// BUT THEY ARE NOT EXEMPT FROM "x-tenant-id" YET, and this paragraph exists because an earlier
+// draft of it said they were. The exemption is granted in exactly one place —
+// core/grpcx.methodsWithoutTenant — and that list holds ResolveHost alone. A contract that
+// announces an exemption its enforcement point does not grant is worse than one that announces
+// nothing: the next person implements these RPCs, meets InvalidArgument, reads this comment,
+// and adds two names to that list on its authority.
+//
+// The exemption is CONDITIONAL on caller authentication existing on the gRPC port. ResolveHost
+// answers about one commune the caller already names; ListTenants answers about all of them at
+// once, and today that port has no mTLS, no service token and no caller identity
+// (service-platform/cmd/server/main.go). Order: authentication first, exemption second. Until
+// then these two RPCs are refused with INVALID_ARGUMENT, which is the right answer for an RPC
+// whose safety precondition has not been built.
 //
 // NOT the same thing: `Tenant.id` below is the identifier of the record being described, not
 // an assertion by the caller about who it is.

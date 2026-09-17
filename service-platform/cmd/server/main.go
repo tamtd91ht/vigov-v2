@@ -164,10 +164,20 @@ func run(log *slog.Logger) error {
 	//	Why that is tolerable for THIS service and no other: ADR 0003 means no business data
 	//	crosses this boundary at all. ResolveHost returns a ULID that is already public — it
 	//	travels in the QR deep link every citizen scans (ADR 0005) — and GetTenant returns
-	//	registry metadata: name, host, active. An unauthenticated caller here learns which
-	//	communes exist, and nothing about any of them.
+	//	registry metadata: name, host, active. Both answer about ONE commune the caller already
+	//	names, so an unauthenticated caller here learns about a commune it could already name,
+	//	and nothing about any other.
 	//
-	//	REQUIRED BEFORE A REAL DEPLOYMENT, and required BEFORE any other service exposes gRPC:
+	//	THAT SENTENCE STOPS BEING TRUE THE DAY ListTenants IS IMPLEMENTED. It answers about
+	//	every commune at once, so one call is the whole registry rather than one row of it —
+	//	and the ULIDs in it are the prefix of every cache key, queue, realtime room and file
+	//	path in the system (rule 1, invariant 7). That is why the RPC is declared in the
+	//	contract but NOT on core/grpcx.methodsWithoutTenant: step 1 below is its precondition,
+	//	not a task that runs alongside it. Implementing ListTenants before step 1 turns "any
+	//	process that can open a TCP connection" into "any process can enumerate every commune".
+	//
+	//	REQUIRED BEFORE A REAL DEPLOYMENT, required BEFORE ListTenants is implemented, and
+	//	required BEFORE any other service exposes gRPC:
 	//	  1. mTLS between services, or a signed service token verified by a server interceptor
 	//	  2. the caller's identity recorded on the call, so a cross-service read is attributable
 	//	  3. this port bound to the internal interface only, never 0.0.0.0 on a public host

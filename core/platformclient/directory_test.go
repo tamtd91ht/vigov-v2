@@ -222,3 +222,18 @@ func (k kiemHan) GetTenant(context.Context, *platformv1.GetTenantRequest,
 	...grpc.CallOption) (*platformv1.GetTenantResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
 }
+
+// Hai phương thức dưới đây có mặt để kiemHan còn thoả PlatformServiceClient, không vì test nào
+// gọi tới. `platformclient` là kho ĐỌC THEO HOST của mọi service — nó phân giải một xã mỗi lần
+// và không có lý do nào để đọc cả sổ đăng ký. Ngày nó có, đó phải là một thay đổi người ta thấy
+// được ở đây chứ không phải một phương thức lặng lẽ có sẵn.
+
+func (k kiemHan) ListTenants(context.Context, *platformv1.ListTenantsRequest,
+	...grpc.CallOption) (*platformv1.ListTenantsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
+}
+
+func (k kiemHan) ResolveTenantAlias(context.Context, *platformv1.ResolveTenantAliasRequest,
+	...grpc.CallOption) (*platformv1.ResolveTenantAliasResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
+}

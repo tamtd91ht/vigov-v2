@@ -65,6 +65,24 @@ const MethodResolveHost = "/vigov.platform.v1.PlatformService/ResolveHost"
 // commune. The platform contract declares this exception explicitly
 // (proto/vigov/platform/v1/platform.proto) and ADR 0003 is what keeps it harmless — that
 // service has no path to business content at all.
+//
+// DELIBERATELY ABSENT: ListTenants and ResolveTenantAlias. Both belong here eventually — the
+// citizen channel has no domain, so both are asked before any commune is known, exactly like
+// ResolveHost (ADR 0005, ADR 0022). They are not here YET, and the order matters more than the
+// destination:
+//
+//	ResolveHost answers about ONE commune the caller already names. ListTenants answers about
+//	ALL of them, in a few calls, and the gRPC port has no caller authentication at all today —
+//	service-platform/cmd/server/main.go says so in its own words. Adding these two names now
+//	would turn "any process that can open a TCP connection" into "any process can read the
+//	whole registry", and the ULIDs it returns are the prefix of every cache key, queue, realtime
+//	room and file path in the system (rule 1, invariant 7). service-identity deliberately does
+//	not return that ULID on its public route for the same reason.
+//
+// So: caller authentication on the gRPC port FIRST, these two names SECOND. Until then the
+// interceptor refuses them with InvalidArgument, which is the correct answer to an RPC whose
+// safety precondition has not been built. grpcx_test.go pins their absence so that removing
+// this comment is not enough to undo the decision.
 var methodsWithoutTenant = map[string]struct{}{
 	MethodResolveHost: {},
 }
