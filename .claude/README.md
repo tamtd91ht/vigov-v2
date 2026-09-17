@@ -173,7 +173,18 @@ the hook, the faster you go the wrong way.**
 3. **Measure on real code before enabling.** A noisy hook is a disabled hook, and then the
    whole layer is gone — worse than having no hook
 4. Add cases to `tools/test_hooks.py`, run `make hooks`
-5. Register it in `settings.json`
+5. Register it in `settings.json`, and write the path as
+   `python "${CLAUDE_PROJECT_DIR}/.claude/hooks/<name>.py"` — **anchored, never relative**
+
+A relative path (`python .claude/hooks/<name>.py`) resolves against the **working directory**,
+not the repo root. It works right up until a session `cd`s into a subdirectory, and then every
+hook fails to open its own file and **the whole enforcement layer stops running at once**.
+It fails closed, which sounds safe — but the way it announces itself is by deadlocking the
+session: every `Bash`, `Edit` and `Write` is blocked, including the ones needed to fix
+`settings.json` itself. Happened on 2026-09-17. The braced form `${...}` is deliberate: an
+unbraced `$CLAUDE_PROJECT_DIR` is not expanded by a `cmd.exe` hook shell on Windows.
+
+`make brain` invariant 1 now fails on any relative hook path.
 
 ### Adding a SKILL
 

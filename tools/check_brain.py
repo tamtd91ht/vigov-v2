@@ -56,12 +56,24 @@ rules = sorted(f for f in os.listdir(os.path.join(CLAUDE, "rules", "critical"))
                if f.endswith(".md"))
 settings = json.loads(rd(os.path.join(CLAUDE, "settings.json")))
 registered = set()
+duong_tuong_doi = []
 for ev in settings.get("hooks", {}).values():
     for grp in ev:
         for h in grp.get("hooks", []):
-            m = re.search(r"hooks/([a-z_]+)\.py", h.get("command", ""))
+            cmd = h.get("command", "")
+            m = re.search(r"hooks/([a-z_]+)\.py", cmd)
             if m:
                 registered.add(m.group(1))
+                # The path must be anchored at the project root. A RELATIVE path
+                # ("python .claude/hooks/x.py") resolves against the working directory,
+                # so the moment the session cd's into a subdirectory EVERY hook fails to
+                # open its own file and the entire enforcement layer stops running.
+                # It fails closed, so it announces itself — but it announces itself by
+                # deadlocking the session, and the only way out is editing the very file
+                # being blocked. Measured on 2026-09-17; this check is what would have
+                # caught it before the commit.
+                if "${CLAUDE_PROJECT_DIR}" not in cmd:
+                    duong_tuong_doi.append(f"{m.group(1)}: {cmd}")
 
 on_disk = {f[:-3] for f in os.listdir(os.path.join(CLAUDE, "hooks"))
             if f.endswith(".py") and not f.startswith("_")}
@@ -80,11 +92,14 @@ for r in rules:
         if h not in on_disk:
             rule_hook_gaps.append(f"{r}: points at a hook that does not exist: '{h}'")
 
-report(len(rules) >= 9 and not unregistered and not missing_file and not rule_hook_gaps,
+report(len(rules) >= 9 and not unregistered and not missing_file and not rule_hook_gaps
+    and not duong_tuong_doi,
     "1. Rules <-> hooks, one to one",
-    f"{len(rules)} rules · {len(on_disk)} hooks on disk · {len(registered)} registered",
+    f"{len(rules)} rules · {len(on_disk)} hooks on disk · {len(registered)} registered"
+    + (" · all paths anchored" if registered and not duong_tuong_doi else ""),
     rule_hook_gaps + [f"hook not registered: {x}" for x in unregistered]
-    + [f"dang ky nhung khong co file: {x}" for x in missing_file])
+    + [f"dang ky nhung khong co file: {x}" for x in missing_file]
+    + [f"relative hook path — breaks outside the repo root: {x}" for x in duong_tuong_doi])
 
 
 # ---- 2. Every hook has >=1 block case and >=1 pass case ------------------

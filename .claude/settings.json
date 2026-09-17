@@ -6,8 +6,8 @@
       {
         "matcher": "",
         "hooks": [
-          { "type": "command", "command": "python .claude/hooks/session_start.py" },
-          { "type": "command", "command": "python .claude/hooks/drift_guard.py" }
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session_start.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/drift_guard.py\"" }
         ]
       }
     ],
@@ -16,22 +16,22 @@
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
-          { "type": "command", "command": "python .claude/hooks/secret_scan.py" },
-          { "type": "command", "command": "python .claude/hooks/pii_guard.py" },
-          { "type": "command", "command": "python .claude/hooks/data_safety_guard.py" },
-          { "type": "command", "command": "python .claude/hooks/tenant_scope_guard.py" },
-          { "type": "command", "command": "python .claude/hooks/service_boundary_guard.py" },
-          { "type": "command", "command": "python .claude/hooks/citizen_scope_guard.py" },
-          { "type": "command", "command": "python .claude/hooks/citizen_commitment_guard.py" },
-          { "type": "command", "command": "python .claude/hooks/rest_api_guard.py" },
-          { "type": "command", "command": "python .claude/hooks/doc_guard.py" }
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/secret_scan.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pii_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/data_safety_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/tenant_scope_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/service_boundary_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/citizen_scope_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/citizen_commitment_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/rest_api_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/doc_guard.py\"" }
         ]
       },
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "python .claude/hooks/data_safety_guard.py" },
-          { "type": "command", "command": "python .claude/hooks/bash_content_guard.py" }
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/data_safety_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/bash_content_guard.py\"" }
         ]
       }
     ],
@@ -40,9 +40,9 @@
       {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "python .claude/hooks/rbac_guard.py" },
-          { "type": "command", "command": "python .claude/hooks/rest_api_guard.py" },
-          { "type": "command", "command": "python .claude/hooks/audit_guard.py" }
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/rbac_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/rest_api_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/audit_guard.py\"" }
         ]
       }
     ],
@@ -51,7 +51,7 @@
       {
         "matcher": "",
         "hooks": [
-          { "type": "command", "command": "python .claude/hooks/stop_verify_guard.py" }
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stop_verify_guard.py\"" }
         ]
       }
     ]
