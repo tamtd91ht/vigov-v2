@@ -118,22 +118,23 @@ func RequirePermission(c Checker, perm Perm) func(http.Handler) http.Handler {
 // CitizenOnly guards a citizen route. Citizens have no roles; they are isolated by identity
 // (rule 4), not by RBAC.
 //
-// TODO(stop-condition): THIS GUARD DOES NOT COMPARE THE COMMUNE, and that is not an oversight
-// left for the next person to close.
+// THIS GUARD DOES NOT COMPARE THE COMMUNE, and ADR 0022 is why — it is not an oversight left
+// for the next person to close.
 //
 // The citizen channel is the Zalo Mini App, which has NO DOMAIN (see CLAUDE.md, STACK). There is
-// no Host to derive a commune from, so tenant.MustFrom would PANIC the moment this guard is
-// mounted on that channel — turning a missing decision into a 500 on the citizen path. Adding
-// the comparison and adding a fallback are both wrong: a fallback on the isolation path is
-// rule 1, forbidden #1.
+// no Host to derive a commune from, so there is nothing to compare the session against: the
+// session IS the only source of the commune (httpx.CitizenEdge), and a single source cannot be
+// reconciled with itself. Comparing it with anything the client sends would rebuild the door
+// rule 1, forbidden #2 closed, in the shape of a check that looks stricter. The equivalent
+// comparison lives IN THE FLOW, not at the edge: ADR 0019, invariant 8.
 //
-// What has to be decided first, by the customer, not here:
-//   - how the Mini App resolves the commune (rule 1, stop condition #4 — skills/zalo-miniapp-
-//     multi-tenant)
-//   - what happens to a citizen acting with more than one commune (rule 4, stop condition #3)
+// So this guard answers ONE axis — WHO. The commune axis is answered by the class declaration
+// on the route, httpx.XaTuPhien() or httpx.KhongThuocXa(reason), and a citizen route declares
+// both or apidoc refuses it. A citizen route mounted WITHOUT a commune resolved ahead of it is
+// therefore normal and intended for the KhongThuocXa class (the commune picker), not a gap.
 //
-// Until then this guard checks IDENTITY ONLY, and no citizen route may be mounted on a chain
-// without a commune resolved ahead of it.
+// Still open, and still the customer's to answer: what happens to a citizen acting with more
+// than one commune (rule 4, stop condition #3).
 func CitizenOnly() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -144,6 +145,34 @@ func CitizenOnly() func(http.Handler) http.Handler {
 				return
 			}
 			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// CitizenPrincipal turns the session httpx.CitizenEdge resolved into a Principal.
+//
+// MỘT LẦN TRA PHIÊN CHO CẢ HAI TRỤC. Rìa công dân đã tra sổ phiên một lần để biết xã; tra lại
+// ở đây để biết danh tính là hai lần chạm sổ trên đường nóng của mọi yêu cầu công dân, và hai
+// câu trả lời có thể lệch nhau nếu phiên bị thu hồi ở giữa. Một lần tra, hai trục đọc chung.
+//
+// Nó KHÔNG từ chối khi không có phiên: từ chối là việc của CitizenOnly, và một guard thứ hai
+// trả cùng một lỗi ở cùng một chuỗi là hai chỗ để câu trả lời lệch nhau.
+//
+// Principal ở đây chỉ mang định danh mờ — không số điện thoại, không tên (luật 3). Xem
+// httpx.CitizenSession.
+func CitizenPrincipal() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p, ok := httpx.CitizenSessionFrom(r.Context())
+			if !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(Into(r.Context(), Principal{
+				ID:       p.CitizenID,
+				Kind:     "citizen",
+				TenantID: p.TenantID,
+			})))
 		})
 	}
 }

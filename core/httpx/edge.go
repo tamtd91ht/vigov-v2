@@ -55,13 +55,20 @@ func TenantMiddleware(dir tenant.Directory) func(http.Handler) http.Handler {
 // isolation is lost.
 func StripTenantHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		for h := range r.Header {
-			if strings.HasPrefix(strings.ToLower(h), "x-tenant") {
-				r.Header.Del(h)
-			}
-		}
+		goHeaderXa(r)
 		next.ServeHTTP(w, r)
 	})
+}
+
+// goHeaderXa is the one implementation both edges use. The citizen edge calls it directly
+// (citizen.go) rather than relying on this middleware being mounted: two copies of a strip
+// list is one copy that gets a prefix added and one that does not.
+func goHeaderXa(r *http.Request) {
+	for h := range r.Header {
+		if strings.HasPrefix(strings.ToLower(h), "x-tenant") {
+			r.Header.Del(h)
+		}
+	}
 }
 
 func hostOnly(h string) string {

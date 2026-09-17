@@ -33,6 +33,7 @@ type tuyen struct {
 	Replies []traLoi // sorted by status
 	Quyen   quyenDecl
 	Idem    idemDecl
+	Xa      xaDecl
 	File    string // repo-relative, no line number: see the determinism note in main.go
 
 	pkgDir string // where the annotated type names are resolved
@@ -57,6 +58,18 @@ type idemDecl struct {
 	Kind string // required | khong-can
 	Mode string // MoKhiHong | DongKhiHong, for Kind == "required"
 	LyDo string // the mandatory reason for khong-can
+}
+
+// xaDecl is the commune class of a CITIZEN route — ADR 0022. There are two, and there is no
+// third: either the commune comes from the citizen session, or the route belongs to no commune
+// at all and may only serve the commune-resolution path.
+//
+// Kind is empty when a route declares nothing, which kiemTuyen refuses on a citizen route: an
+// undeclared class is deny, not allow (rule 5, invariant 2). The staff path has no class at
+// all — its commune comes from Host, at httpx.TenantMiddleware.
+type xaDecl struct {
+	Kind string // tu-phien | khong-thuoc-xa
+	LyDo string // the mandatory, specific reason for khong-thuoc-xa
 }
 
 var phuongThuc = map[string]bool{
@@ -202,12 +215,12 @@ func quetFile(fset *token.FileSet, duongDan, service, root string) ([]tuyen, []e
 			loi = append(loi, fmt.Errorf("apidoc: %s:%d: %s %s: %w", rel, dong, method, p, err))
 			return true
 		}
-		q, id, err := khaiBaoTrong(call)
+		q, id, xa, err := khaiBaoTrong(call)
 		if err != nil {
 			loi = append(loi, fmt.Errorf("apidoc: %s:%d: %s %s: %w", rel, dong, method, p, err))
 			return true
 		}
-		t.Quyen, t.Idem = q, id
+		t.Quyen, t.Idem, t.Xa = q, id, xa
 
 		if err := kiemTuyen(&t); err != nil {
 			loi = append(loi, fmt.Errorf("apidoc: %s:%d: %s %s: %w", rel, dong, method, p, err))
@@ -320,6 +333,24 @@ func kiemTuyen(t *tuyen) error {
 		return fmt.Errorf("không có khai báo quyền trong cùng câu lệnh — " +
 			"cần authz.RequirePermission / Public / AnyAuthenticated / CitizenOnly (luật 5)")
 	}
+	// --- LỚP XÃ CỦA TUYẾN CÔNG DÂN — ADR 0022 ----------------------------------------------
+	//
+	// Hai trục vuông góc: `authz.*` trả lời AI, lớp xã trả lời XÃ NÀO. Cả hai đều là khai báo
+	// nằm trong cùng câu lệnh route, và cả hai đều mặc định TỪ CHỐI khi thiếu.
+	if t.Quyen.Kind == "citizen-only" && t.Xa.Kind == "" {
+		return fmt.Errorf("tuyến công dân không khai lớp xã — cần httpx.XaTuPhien() cho tuyến " +
+			"nghiệp vụ, hoặc httpx.KhongThuocXa(\"<lý do>\") cho đường phân giải xã (ADR 0022). " +
+			"Thiếu khai là từ chối, không phải cho qua")
+	}
+	// Chiều ngược lại: lớp xã trên một tuyến KHÔNG phải công dân. `XaTuPhien` ở đó nghĩa là một
+	// tuyến cán bộ lấy xã từ phiên công dân, và `KhongThuocXa` ở đó nghĩa là một tuyến cán bộ
+	// mượn lối miễn trừ của kênh công dân — ADR 0022 loại thẳng cả hai. Xã của đường cán bộ đến
+	// từ `Host`, ở httpx.TenantMiddleware, và không có khai báo nào đổi được điều đó.
+	if t.Xa.Kind != "" && t.Quyen.Kind != "citizen-only" {
+		return fmt.Errorf("lớp xã (%s) khai trên tuyến %s — lớp xã CHỈ thuộc tuyến công dân "+
+			"authz.CitizenOnly(); xã của tuyến cán bộ đến từ Host (ADR 0022)",
+			t.Xa.Kind, t.Quyen.Kind)
+	}
 	if t.Screen == "" {
 		fmt.Fprintf(os.Stderr, "apidoc: LƯU Ý %s %s không có @screen — web không biết màn hình nào dùng nó\n",
 			t.Method, t.Path)
@@ -331,9 +362,10 @@ func kiemTuyen(t *tuyen) error {
 //
 // They are read, never annotated: they already exist in the code, and a hand-written copy in a
 // comment is a second source for one fact — the copy that drifts is the one a reader trusts.
-func khaiBaoTrong(call *ast.CallExpr) (quyenDecl, idemDecl, error) {
+func khaiBaoTrong(call *ast.CallExpr) (quyenDecl, idemDecl, xaDecl, error) {
 	var q quyenDecl
 	var id idemDecl
+	var xa xaDecl
 	var loi error
 
 	ast.Inspect(call, func(n ast.Node) bool {
@@ -386,10 +418,24 @@ func khaiBaoTrong(call *ast.CallExpr) (quyenDecl, idemDecl, error) {
 		case "idem.KhongCan":
 			ly, _ := chuoiLit(argDau(c))
 			id = idemDecl{Kind: "khong-can", LyDo: ly}
+		case "httpx.XaTuPhien":
+			xa = xaDecl{Kind: "tu-phien"}
+		case "httpx.KhongThuocXa":
+			ly, _ := chuoiLit(argDau(c))
+			// Lý do đọc được THÀNH HẰNG CHUỖI mới ghi được vào hợp đồng. Một lý do lấy từ biến
+			// thì người rà soát mở `openapi.json` ra thấy một miễn trừ không kèm lý do — đúng
+			// thứ luật 5 cấm #4 nói tới, chỉ là muộn hơn sáu tháng.
+			if strings.TrimSpace(ly) == "" {
+				loi = errors.Join(loi, fmt.Errorf(
+					"httpx.KhongThuocXa: thiếu lý do cụ thể dạng hằng chuỗi — một miễn trừ "+
+						"không có lý do là thứ không ai dám gỡ về sau (luật 5 cấm #4)"))
+				return true
+			}
+			xa = xaDecl{Kind: "khong-thuoc-xa", LyDo: ly}
 		}
 		return true
 	})
-	return q, id, loi
+	return q, id, xa, loi
 }
 
 func argDau(c *ast.CallExpr) ast.Expr {

@@ -98,6 +98,8 @@ type dongBeMat struct {
 	QuyenKieu   string            `json:"permission_kind"`
 	Quyen       string            `json:"permission,omitempty"`
 	QuyenLyDo   string            `json:"permission_reason,omitempty"`
+	XaLop       string            `json:"tenant_class,omitempty"`
+	XaLyDo      string            `json:"tenant_class_reason,omitempty"`
 	Idem        string            `json:"idempotency"`
 	IdemMode    string            `json:"idempotency_on_store_failure,omitempty"`
 	IdemLyDo    string            `json:"idempotency_reason,omitempty"`
@@ -176,6 +178,15 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 			op.set("x-vigov-screen", t.Screen)
 		}
 		op.set("x-vigov-permission", quyenJSON(t.Quyen))
+		// Lớp xã CHỈ hiện trên tuyến công dân (ADR 0022). Trên tuyến cán bộ nó không tồn tại —
+		// xã ở đó đến từ Host — nên không phát ra một khoá rỗng để người đọc phải đoán nghĩa.
+		//
+		// ĐÂY LÀ DANH SÁCH `KhongThuocXa` MÀ ADR 0022 YÊU CẦU LIỆT KÊ ĐƯỢC: nó SINH ra kèm lý
+		// do, không ai giữ tay (luật 9). Người rà soát lọc `tenant_class` trong tệp này là thấy
+		// hết, và cái thấy được không trôi khỏi mã nguồn.
+		if t.Xa.Kind != "" {
+			op.set("x-vigov-tenant-class", xaJSON(t.Xa))
+		}
 		op.set("x-vigov-task", maViec(t.Service, t.Method, t.Path))
 		// MỘT danh sách `parameters` duy nhất, gom cả hai nguồn.
 		//
@@ -238,6 +249,8 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 			QuyenKieu:   t.Quyen.Kind,
 			Quyen:       t.Quyen.Key,
 			QuyenLyDo:   t.Quyen.LyDo,
+			XaLop:       t.Xa.Kind,
+			XaLyDo:      t.Xa.LyDo,
 			Idem:        t.Idem.Kind,
 			IdemMode:    t.Idem.Mode,
 			IdemLyDo:    t.Idem.LyDo,
@@ -321,6 +334,22 @@ func quyenJSON(q quyenDecl) *om {
 	if q.LyDo != "" {
 		o.set("reason", q.LyDo)
 	}
+	return o
+}
+
+// xaJSON mô tả lớp xã bằng đúng từ ngữ của ADR 0022, kèm hệ quả — người rà soát đọc một chỗ
+// thấy cả "khai gì" lẫn "điều đó nghĩa là gì trong context".
+func xaJSON(x xaDecl) *om {
+	o := newOM().set("kind", x.Kind)
+	if x.Kind == "khong-thuoc-xa" {
+		o.set("tenant_in_context", false)
+		o.set("reason", x.LyDo)
+		o.set("note", "Chỉ đường phân giải xã. Không có xã trong context nên không chạm được "+
+			"dữ liệu nghiệp vụ (ADR 0022).")
+		return o
+	}
+	o.set("tenant_in_context", true)
+	o.set("source", "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)")
 	return o
 }
 
