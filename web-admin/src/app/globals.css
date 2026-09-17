@@ -311,7 +311,7 @@ body {
 
 /* Bảng CUỘN NGANG ở bề rộng nhỏ, không đổi thành thẻ.
  *
- * Bề rộng nhỏ nhất được hỗ trợ là 320px (`15-phu-luc §7`) và bảng này có chín cột, nên ở đó nó
+ * Bề rộng nhỏ nhất được hỗ trợ là 320px (`15-phu-luc §7`) và bảng này có mười một cột, nên ở đó nó
  * không vừa. Cách vá thường thấy là cho các phần tử bảng `display: block` để mỗi dòng thành một
  * thẻ — nhưng đổi `display` của `table`/`tr`/`td` làm mất ngữ nghĩa bảng với trình đọc màn hình,
  * và đây đúng là dữ liệu dạng bảng. Nên vùng bảng cuộn ngang, và vùng cuộn ấy tới được bằng bàn
@@ -370,6 +370,21 @@ body {
   display: block;
   font-size: 0.75rem;
   color: var(--xam-chu);
+}
+
+/* Hai lớp cho ô tra danh mục (cột Bộ phận, cột Vai trò). Chúng phải TRÔNG KHÁC NHAU: "Chưa phân
+ * bộ phận" là việc của người quản lý nhân sự, còn "Không tra được trong danh mục" là một dòng dữ
+ * liệu lệch mà chỉ người quản trị sửa được. Hai việc khác nhau thì không được nhìn giống nhau.
+ *
+ * Màu KHÔNG phải tín hiệu duy nhất: câu chữ trong ô đã nói rõ ca nào là ca nào, nên người không
+ * phân biệt được màu vẫn đọc ra (a11y, `15-phu-luc §8`). */
+.nhan-trong {
+  color: var(--xam-chu);
+  font-style: italic;
+}
+
+.nhan-lech {
+  color: var(--do-loi);
 }
 
 .chip {

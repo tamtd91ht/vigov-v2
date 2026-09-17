@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   KHOA_SAP_XEP,
@@ -9,6 +9,7 @@ import {
   type ChieuSapXep,
   type KhoaSapXep,
 } from "@/lib/api/can-bo";
+import { docDanhMucDanhBa, type DanhMucDanhBa } from "@/lib/api/danh-muc";
 import type { identity_canBoTomTat, page_Result_identity_canBoTomTat } from "@/lib/api/schema.gen";
 
 import {
@@ -19,19 +20,24 @@ import {
   type NganXepConTro,
 } from "./ngan-xep-con-tro";
 import {
+  nhanBoPhan,
   nhanDangNhapGanNhat,
   nhanNgayTao,
   nhanTaiKhoan,
   nhanTrangThai,
+  nhanVaiTro,
 } from "./nhan-can-bo";
+import { bangTraTuKetQua, traTen, type BangTraDanhMuc, type KetTra } from "./tra-danh-muc";
 
 /**
  * Bảng danh bạ cán bộ — `docs/ui-ux/14-cau-hinh.md §3`, tab "Người dùng".
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * MÀN HÌNH NÀY ÍT HƠN ĐẶC TẢ, VÀ ĐÓ LÀ CHỦ Ý. Hợp đồng REST hiện có đúng HAI tuyến đọc:
- * `GET /api/v1/staff` và `GET /api/v1/staff/{id}`. Mỗi thứ đặc tả vẽ mà ở đây không có đều
- * mang một chú thích ngay tại chỗ nói vì sao nó vắng và cái gì mở khoá nó.
+ * MÀN HÌNH NÀY ÍT HƠN ĐẶC TẢ, VÀ ĐÓ LÀ CHỦ Ý. Hợp đồng REST hiện có BỐN tuyến đọc phục vụ màn
+ * hình này: `GET /api/v1/staff`, `GET /api/v1/staff/{id}`, và hai danh mục của xã —
+ * `GET /api/v1/org-units`, `GET /api/v1/roles` — dùng để tra `department_id` và `role_id` ra
+ * tên. KHÔNG có tuyến ghi nào. Mỗi thứ đặc tả vẽ mà ở đây không có đều mang một chú thích ngay
+ * tại chỗ nói vì sao nó vắng và cái gì mở khoá nó.
  *
  * Vẽ ra một điều khiển không chạy được tệ hơn hẳn không vẽ: một ô tìm kiếm gõ vào không có gì
  * xảy ra khiến cán bộ gõ tên một người, thấy danh sách không đổi, và kết luận người đó không
@@ -56,8 +62,49 @@ export function DanhBaCanBo() {
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
   const [trangThai, datTrangThai] = useState<TrangThaiTrang>({ pha: "dangTai" });
   const [chiTiet, datChiTiet] = useState<TrangThaiChiTiet | null>(null);
+  /** `null` là chưa đọc xong. Hai danh mục của xã, đọc MỘT lần cho cả màn hình — xem dưới. */
+  const [danhMuc, datDanhMuc] = useState<DanhMucDanhBa | null>(null);
   /** Id của lần bấm "Chi tiết" mới nhất — xem `moChiTiet`. */
   const idDangDoi = useRef<string | null>(null);
+
+  /**
+   * HAI DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT KHI MỞ MÀN HÌNH — `[]` ở cuối effect là phần quan trọng
+   * nhất của khối này.
+   *
+   * Không đọc lại khi đổi trang, đổi sắp xếp hay mở khối chi tiết: danh mục bộ phận và vai trò
+   * của một xã không đổi giữa hai lần bấm "Trang sau". Và tuyệt đối không đọc theo từng dòng —
+   * ở đây mỗi trang hai mươi dòng, nên một lời gọi mỗi dòng là bốn mươi lời gọi thay vì hai,
+   * và con số ấy đi lên theo dữ liệu chứ không đứng yên (`skills/load-data-once`, dạng 1).
+   *
+   * VÌ SAO ĐỌC Ở TRÌNH DUYỆT CHỨ KHÔNG Ở MÁY CHỦ: hai tuyến này đòi đã đăng nhập, nên gọi phía
+   * máy chủ thì phải tự chuyển tiếp cookie phiên — thêm một chỗ cầm cookie, và là đúng chỗ dễ
+   * chuyển tiếp sang sai host. Ở đây đường dẫn tương đối trên chính host của xã, trình duyệt
+   * tự gửi cookie host-only (`lib/api/goi.ts`). Khác hẳn `GET /api/v1/commune`: tuyến ấy công
+   * khai nên đọc được ở máy chủ (`lib/tenant-config.ts`).
+   *
+   * KHÔNG CÓ BỘ ĐỆM NÀO SỐNG QUA LẦN MỞ MÀN HÌNH: bảng tra nằm trong state của component, chết
+   * cùng component. Một biến ở mức module giữ danh mục lại là đúng hình dạng của một lần danh
+   * mục xã này hiện trên màn hình xã khác (`lib/api/danh-muc.ts`).
+   */
+  useEffect(() => {
+    let bo = false;
+    docDanhMucDanhBa().then((dm) => {
+      if (!bo) datDanhMuc(dm);
+    });
+    return () => {
+      bo = true;
+    };
+  }, []);
+
+  // Dựng bảng tra một lần cho mỗi lần danh mục đổi, không dựng lại ở mỗi dòng.
+  const traBoPhan = useMemo<BangTraDanhMuc>(
+    () => bangTraTuKetQua(danhMuc === null ? null : danhMuc.boPhan),
+    [danhMuc],
+  );
+  const traVaiTro = useMemo<BangTraDanhMuc>(
+    () => bangTraTuKetQua(danhMuc === null ? null : danhMuc.vaiTro),
+    [danhMuc],
+  );
 
   useEffect(() => {
     // `bo` chặn một phản hồi đến muộn của lần đọc trước ghi đè lên lần đọc sau. Không có nó thì
@@ -188,6 +235,19 @@ export function DanhBaCanBo() {
 
       {trangThai.pha === "xong" && trangThai.trang.items.length > 0 && (
         <>
+          {/*
+            DANH MỤC HỎNG THÌ NÓI RA MỘT LẦN Ở ĐÂY, chứ không để hai mươi ô cùng báo lỗi. Hiện
+            đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`
+            (`lib/api/goi.ts`). Mỗi danh mục một dòng: hỏng một tuyến không được nói thành hỏng
+            cả hai.
+
+            ĐẶT CẠNH BẢNG, KHÔNG ĐẶT TRÊN ĐẦU MÀN HÌNH: khi chính danh sách cán bộ cũng hỏng
+            (phiên hết hạn chẳng hạn) thì cả ba tuyến cùng trả một câu, và ba dòng giống hệt
+            nhau chồng lên nhau không nói thêm được gì. Ở đây hai dòng này chỉ hiện khi có bảng
+            để mà thiếu cột — đúng lúc câu ấy giải thích được một thứ người dùng đang nhìn.
+          */}
+          <BaoLoiDanhMuc nhan="Danh mục bộ phận" bang={traBoPhan} />
+          <BaoLoiDanhMuc nhan="Danh mục vai trò" bang={traVaiTro} />
           <BangCanBo
             danhSach={trangThai.trang.items}
             khoa={khoaSapXep}
@@ -195,6 +255,8 @@ export function DanhBaCanBo() {
             doiSapXep={doiSapXep}
             moChiTiet={moChiTiet}
             idDangMo={chiTiet?.id ?? null}
+            traBoPhan={traBoPhan}
+            traVaiTro={traVaiTro}
           />
           <p className="ghi-chu">
             Số điện thoại hiển thị dạng che theo quy định về bảo vệ dữ liệu cá nhân.
@@ -208,9 +270,53 @@ export function DanhBaCanBo() {
         </>
       )}
 
-      {chiTiet !== null && <KhoiChiTiet chiTiet={chiTiet} dong={dongChiTiet} />}
+      {chiTiet !== null && (
+        <KhoiChiTiet
+          chiTiet={chiTiet}
+          dong={dongChiTiet}
+          traBoPhan={traBoPhan}
+          traVaiTro={traVaiTro}
+        />
+      )}
     </section>
   );
+}
+
+/**
+ * Một dòng báo khi không đọc được một danh mục.
+ *
+ * KHÔNG dựng gì khi danh mục đang đọc hoặc đã đọc xong: một chỗ trống dành sẵn cho thông báo
+ * lỗi là một chỗ trống nhảy chữ vào giữa lúc người dùng đang đọc bảng.
+ */
+function BaoLoiDanhMuc({ nhan, bang }: { nhan: string; bang: BangTraDanhMuc }) {
+  if (bang.pha !== "loi") return null;
+  return (
+    <p className="thong-bao-loi" role="alert">
+      {nhan}: {bang.thongBao}
+    </p>
+  );
+}
+
+/**
+ * Một ô tra danh mục — cột Bộ phận và cột Vai trò dùng chung.
+ *
+ * KHÔNG BAO GIỜ DỰNG RA MỘT Ô TRỐNG: `nhan` luôn trả một câu, kể cả khi không tra được. Lớp CSS
+ * đi theo LOẠI kết quả chứ không theo câu chữ, để "chưa gán" (một trạng thái bình thường) và
+ * "không tra được" (một dòng dữ liệu lệch) không trông giống nhau.
+ */
+function ODanhMuc({ ket, nhan }: { ket: KetTra; nhan: (ket: KetTra) => string }) {
+  return <span className={lopNhanDanhMuc(ket)}>{nhan(ket)}</span>;
+}
+
+function lopNhanDanhMuc(ket: KetTra): string | undefined {
+  switch (ket.loai) {
+    case "coTen":
+      return undefined;
+    case "khongTraDuoc":
+      return "nhan-lech";
+    default:
+      return "nhan-trong";
+  }
 }
 
 /**
@@ -260,6 +366,8 @@ function BangCanBo({
   doiSapXep,
   moChiTiet,
   idDangMo,
+  traBoPhan,
+  traVaiTro,
 }: {
   danhSach: readonly identity_canBoTomTat[];
   khoa: KhoaSapXep;
@@ -267,6 +375,9 @@ function BangCanBo({
   doiSapXep: (khoa: KhoaSapXep) => void;
   moChiTiet: (id: string) => void;
   idDangMo: string | null;
+  /** Bảng tra đã dựng sẵn, đi XUỐNG như tham số. Không dòng nào tự đi hỏi máy chủ. */
+  traBoPhan: BangTraDanhMuc;
+  traVaiTro: BangTraDanhMuc;
 }) {
   return (
     // `role="region"` + `tabIndex` để vùng cuộn ngang tới được bằng bàn phím. Ở dưới 768px bảng
@@ -284,12 +395,18 @@ function BangCanBo({
             <th scope="col">Họ và tên</th>
             <th scope="col">Chức danh</th>
             {/*
-              CỘT `Bộ phận` CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY. Hợp đồng chỉ trả `department_id` và
-              `role_id` — chưa tuyến nào dịch id ra tên bộ phận hay tên vai trò. Hiện một ULID
-              thô cho cán bộ là hiện một chuỗi vô nghĩa với họ; bịa tên thì tệ hơn nữa. Mở khoá
-              bằng một tuyến trả danh mục bộ phận / vai trò của xã, hoặc bằng việc tuyến danh
-              sách trả kèm tên — cả hai đều là thay đổi hợp đồng.
+              HAI CỘT NÀY TRA TỪ DANH MỤC, KHÔNG HIỆN ID. Hợp đồng trả `department_id` và
+              `role_id` là ULID; một ULID trên màn hình là một chuỗi vô nghĩa với cán bộ. Tên
+              lấy từ `GET /api/v1/org-units` và `GET /api/v1/roles`, đọc một lần cho cả màn
+              hình, và mọi ca không tra được đều có câu chữ riêng (`tra-danh-muc.ts`).
+
+              Cột `Vai trò` không nằm trong bảng cột của đặc tả §3 — §3 chỉ liệt `Bộ phận` — mà
+              đến từ ô `Vai trò` của form người dùng ngay dưới đó và từ lý do phân quyền của
+              chính tuyến `GET /api/v1/roles` ("cột Vai trò của danh bạ"). Nêu ra vì đây là chỗ
+              màn hình NHIỀU hơn bảng cột của đặc tả, ngược với phần còn lại của tệp này.
             */}
+            <th scope="col">Bộ phận</th>
+            <th scope="col">Vai trò</th>
             <th scope="col">Điện thoại</th>
             <th scope="col">Đăng nhập gần nhất</th>
             <th scope="col">Trạng thái</th>
@@ -314,6 +431,12 @@ function BangCanBo({
                 <span className="dong-phu">{cb.email}</span>
               </td>
               <td>{cb.position}</td>
+              <td>
+                <ODanhMuc ket={traTen(traBoPhan, cb.department_id)} nhan={nhanBoPhan} />
+              </td>
+              <td>
+                <ODanhMuc ket={traTen(traVaiTro, cb.role_id)} nhan={nhanVaiTro} />
+              </td>
               {/* `phone` LUÔN về đây đã che (`09****0000`) — hiện đúng thứ máy chủ trả, không
                   ghép lại, không định dạng lại thành `0900 000 001` như ví dụ trong đặc tả: một
                   số đã che mà định dạng như số thật là mời người đọc tin đó là số thật. */}
@@ -423,9 +546,21 @@ function DieuHuongTrang({
  * không dùng nữa). Một đường dẫn đã chạy thật thì không sửa lại được, nên ở đây không đặt ra
  * đoạn đường dẫn nào cả; khối chi tiết mở ngay trong trang.
  *
- * VÌ SAO KHÔNG HIỆN `department_id` VÀ `role_id`: xem chú thích ở cột "Bộ phận".
+ * BỘ PHẬN VÀ VAI TRÒ HIỆN Ở ĐÂY BẰNG CHÍNH BẢNG TRA CỦA BẢNG DANH SÁCH, không đọc lại danh mục
+ * khi mở khối này: dữ liệu đã nằm trong tay màn hình rồi, và một lời gọi nữa ở đây chỉ thêm một
+ * câu trả lời thứ hai có thể lệch với câu đang hiện trên dòng ngay phía trên.
  */
-function KhoiChiTiet({ chiTiet, dong }: { chiTiet: TrangThaiChiTiet; dong: () => void }) {
+function KhoiChiTiet({
+  chiTiet,
+  dong,
+  traBoPhan,
+  traVaiTro,
+}: {
+  chiTiet: TrangThaiChiTiet;
+  dong: () => void;
+  traBoPhan: BangTraDanhMuc;
+  traVaiTro: BangTraDanhMuc;
+}) {
   return (
     <aside className="khoi-chi-tiet" aria-label="Chi tiết cán bộ">
       <div className="dau-khoi-chi-tiet">
@@ -453,6 +588,14 @@ function KhoiChiTiet({ chiTiet, dong }: { chiTiet: TrangThaiChiTiet; dong: () =>
           <dd>{chiTiet.canBo.email}</dd>
           <dt>Chức danh</dt>
           <dd>{chiTiet.canBo.position}</dd>
+          <dt>Bộ phận</dt>
+          <dd>
+            <ODanhMuc ket={traTen(traBoPhan, chiTiet.canBo.department_id)} nhan={nhanBoPhan} />
+          </dd>
+          <dt>Vai trò</dt>
+          <dd>
+            <ODanhMuc ket={traTen(traVaiTro, chiTiet.canBo.role_id)} nhan={nhanVaiTro} />
+          </dd>
           <dt>Điện thoại</dt>
           <dd>{chiTiet.canBo.phone}</dd>
           <dt>Đăng nhập gần nhất</dt>

@@ -19,9 +19,9 @@ const cauHinh = [
   ...nextTypescript,
   {
     rules: {
-      // Tham số mở đầu bằng `_` là tham số cố ý chưa dùng — quy ước sẵn có trong kho này
-      // (`lib/tenant-config.ts` dùng `_host` ở phần khung chưa nối). Không có dòng này, quy ước
-      // ấy sinh ra cảnh báo không sửa được, và cảnh báo không sửa được thì người ta tắt cả lint.
+      // Tham số mở đầu bằng `_` là tham số CỐ Ý chưa dùng — một chữ ký đã đúng trong khi thân
+      // hàm chưa cần tới tham số ấy. Không có dòng này, quy ước ấy sinh ra cảnh báo không sửa
+      // được, và cảnh báo không sửa được thì người ta tắt cả lint.
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },
   },

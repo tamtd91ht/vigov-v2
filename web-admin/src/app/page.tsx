@@ -13,21 +13,25 @@ import { PhienProvider } from "@/features/phien/phien-hien-tai";
  * HỌ TÊN VÀ CHỨC VỤ NAY ĐÃ CÓ trên đầu trang: `GET /api/v1/sessions/current` tồn tại, và
  * `PhienProvider` đọc nó một lần cho cả trang.
  *
- * RẼ TRANG CHỦ THEO VAI TRÒ THÌ CHƯA — và không phải vì chưa làm, mà vì chưa làm được.
+ * RẼ TRANG CHỦ THEO VAI TRÒ THÌ VẪN CHƯA — nhưng KHÔNG CÒN vì lý do khối chú thích này từng
+ * ghi, và đây là lần thứ hai nó được sửa. Lý do cũ đọc là "Hợp đồng hiện trả `staff.position`
+ * … Không có vai trò, không có cờ lãnh đạo". Câu ấy NAY SAI:
+ * `GET /api/v1/sessions/current` trả `role` kèm `role.is_leader` — đúng cờ cần tìm, đặt đúng
+ * chỗ, không phải suy từ chuỗi chức vụ hay từ danh sách quyền.
  *
  *   §1 nói: vai trò **Lãnh đạo** → `/nhiem-vu/so-tay`, vai trò khác → `/tong-quan`.
  *
- *   "Lãnh đạo" là một NHÃN CỦA VAI TRÒ: `14-cau-hinh.md §4.1` liệt tám vai trò và gắn nhãn ấy
- *   cho đúng hai. Hợp đồng hiện trả `staff.position` — một chuỗi tự do như "Chủ tịch UBND xã" —
- *   và `permissions`. Không có vai trò, không có cờ lãnh đạo.
+ * LÝ DO CÒN LẠI LÀ HAI MÀN HÌNH ĐÍCH KHÔNG TỒN TẠI. Ứng dụng này có đúng ba đường: `/`,
+ * `/cau-hinh` và `/dang-nhap`. Rẽ một lãnh đạo sang `/nhiem-vu/so-tay` là đưa họ tới 404 ngay
+ * sau khi đăng nhập — tệ hơn hẳn trang chủ tạm hiện nay, và tệ theo kiểu người dùng tưởng tài
+ * khoản mình hỏng. Nên phép rẽ mở khoá bằng việc DỰNG hai màn hình ấy, không phải bằng một
+ * thay đổi hợp đồng nào nữa.
  *
- *   Suy "Lãnh đạo" từ chuỗi chức vụ là ĐOÁN, và đoán sai ở đây không hỏng to: nó chỉ đưa một
- *   người tới sai màn hình mặc định, mỗi ngày, mà không ai báo. Suy từ `permissions` cũng là
- *   đoán — một quyền không phải một vai trò, và hai vai trò lãnh đạo không được định nghĩa
- *   bằng việc chúng có quyền nào (luật 5, bất biến 3b).
- *
- *   Nên `/` chưa rẽ, và cái thiếu là một trường trong hợp đồng chứ không phải mã ở đây. Hai
- *   màn hình đích (`/tong-quan`, `/nhiem-vu/so-tay`) cũng chưa được dựng.
+ * VÀ CÒN MỘT CÂU CHƯA CÓ AI TRẢ LỜI, phải chốt cùng lúc với phép rẽ: `role` trong hợp đồng là
+ * `identity_vaiTroGon | null`, và `null` — cán bộ chưa được gán vai trò — là một trạng thái có
+ * thật (xem cột Vai trò của danh bạ). Đặc tả §1 chỉ chia hai nhánh "Lãnh đạo" và "vai trò
+ * khác"; nó không nói người chưa có vai trò nào thì về đâu. Chọn thầm một nhánh cho họ là quyết
+ * định thay đơn vị — HỎI trước khi dựng phép rẽ, đừng để nó rơi vào nhánh `else`.
  */
 export const dynamic = "force-dynamic";
 

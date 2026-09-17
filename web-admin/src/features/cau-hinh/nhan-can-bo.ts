@@ -6,6 +6,8 @@
  * quan nhà nước là thứ có người phải trả lời, không phải chỗ để diễn đạt cho gọn.
  */
 
+import type { KetTra } from "./tra-danh-muc";
+
 /**
  * Múi giờ của toàn hệ thống: `Asia/Ho_Chi_Minh`
  * (`docs/ui-ux/00-tong-quan-he-thong.md:270`).
@@ -77,4 +79,57 @@ export function nhanTrangThai(active: boolean): string {
 /** Nhãn cột "Tài khoản" — `has_account`. Xem chú thích của `nhanTrangThai`. */
 export function nhanTaiKhoan(coTaiKhoan: boolean): string {
   return coTaiKhoan ? "Có tài khoản" : "Chỉ trong danh bạ";
+}
+
+/**
+ * Nhãn cột "Bộ phận" — tra `department_id` trong danh mục bộ phận của xã.
+ *
+ * NĂM CA, NĂM CÂU KHÁC NHAU, và không câu nào là ô trống. Đây là chỗ dễ nói sai nhất trên màn
+ * hình này: "chưa phân bộ phận" và "id không tra được" cùng cho ra một ô trống nếu không ai
+ * phân biệt, trong khi ca đầu là việc của người quản lý nhân sự (phân bộ phận cho cán bộ) và ca
+ * sau là một dòng dữ liệu lệch không ai biết mà sửa. Xem `tra-danh-muc.ts` để biết năm ca ấy
+ * đến từ đâu.
+ *
+ * "Bộ phận" là từ của `kb/00-foundation/ubiquitous-language.md` — cây này chứa cả Đảng uỷ,
+ * HĐND và UBMTTQ, nên không gọi là "phòng ban".
+ */
+export function nhanBoPhan(ket: KetTra): string {
+  switch (ket.loai) {
+    case "dangDoc":
+      return "Đang tải…";
+    case "chuaGan":
+      return "Chưa phân bộ phận";
+    case "coTen":
+      return ket.ten;
+    case "khongTraDuoc":
+      return "Không tra được trong danh mục";
+    case "khongCoDanhMuc":
+      return "Chưa đọc được danh mục bộ phận";
+  }
+}
+
+/**
+ * Nhãn cột "Vai trò" — tra `role_id` trong danh mục vai trò của xã.
+ *
+ * Cùng năm ca với cột Bộ phận nhưng KHÔNG dùng chung câu chữ: "Chưa gán vai trò" là một trạng
+ * thái có hệ quả riêng — tài khoản ấy đăng nhập được nhưng không có quyền nào, và đó đúng là
+ * dòng người quản trị đi tìm. Gộp hai cột vào một câu chung ("Chưa có") là xoá mất hệ quả ấy.
+ *
+ * MÀN HÌNH NÀY KHÔNG HIỆN QUYỀN CỦA VAI TRÒ, chỉ hiện tên: không tuyến nào trong hợp đồng phơi
+ * ra danh sách quyền của từng vai trò, và đó là chủ ý đã ghi trong lý do phân quyền của tuyến
+ * `GET /api/v1/roles`.
+ */
+export function nhanVaiTro(ket: KetTra): string {
+  switch (ket.loai) {
+    case "dangDoc":
+      return "Đang tải…";
+    case "chuaGan":
+      return "Chưa gán vai trò";
+    case "coTen":
+      return ket.ten;
+    case "khongTraDuoc":
+      return "Không tra được trong danh mục";
+    case "khongCoDanhMuc":
+      return "Chưa đọc được danh mục vai trò";
+  }
 }
