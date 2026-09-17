@@ -12,6 +12,19 @@ package http
 //	authz.CitizenOnly()                                     // citizen paths, isolated by identity
 //	authz.AnyAuthenticated("<why any account needs this>")  // reason mandatory
 //	authz.Public("<why this is public>")                    // reason mandatory
+//
+// EVERY route also carries an @-annotation block IMMEDIATELY above the statement — no blank
+// line between. `tools/apidoc` reads it and generates kb/20-contracts/openapi.json, which is
+// the type contract the admin web builds against. Without it the web types every response by
+// hand, which is how v1 ended up with three hand-copied versions of one shape.
+//
+//	// @summary  <one line, Vietnamese — a person reads it>
+//	// @screen   <file in docs/ui-ux/ §section>   design intent, the one part no tool can derive
+//	// @request  <Go type>                        omit when the route takes no body
+//	// @reply    <status> <Go type|->             one line per status the handler REALLY returns
+//
+// The permission and the idempotency mode are NOT annotated: apidoc reads them from the
+// authz.* / idem.* calls below, so there is no second copy to drift (rule 9).
 
 import (
 	"context"
@@ -97,6 +110,14 @@ func Register(mux *http.ServeMux, d Deps) {
 	// would make permanent. Password guessing is a different problem with a different answer
 	// (rate limiting), and pretending an idempotency key addresses it would be the more
 	// dangerous mistake.
+	//
+	// @summary  Đăng nhập bằng email và mật khẩu, mở một phiên làm việc
+	// @screen   15-phu-luc-giao-dien-chung §1
+	// @request  thanDangNhap
+	// @reply    201 phanHoiDangNhap
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/sessions",
 		authz.Public("màn hình đăng nhập — chưa có phiên nên chưa có gì để kiểm quyền")(
 			idem.KhongCan("đăng nhập lần hai mở một phiên thứ hai, thu hồi được, không sinh hồ sơ lưu trữ; chống dò mật khẩu là việc của rate limit")(
@@ -106,6 +127,16 @@ func Register(mux *http.ServeMux, d Deps) {
 	// sign itself out, and requiring a permission for it would leave an account whose role was
 	// stripped unable to close its own session. The handler enforces the real limit — the sid
 	// must be this request's own.
+	//
+	// 404 and not 403 on somebody else's sid is deliberate and is part of the contract: the
+	// existence of another person's session is itself information (rule 4, forbidden #2).
+	//
+	// @summary  Kết thúc phiên làm việc của chính mình
+	// @screen   15-phu-luc-giao-dien-chung §3.3
+	// @reply    204 -
+	// @reply    401 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
 	mux.Handle("DELETE /api/v1/sessions/{sid}",
 		authz.AnyAuthenticated("mọi tài khoản đã đăng nhập đều được kết thúc phiên của chính mình")(
 			idem.KhongCan("thu hồi một phiên đã thu hồi cho cùng một kết quả")(

@@ -57,6 +57,11 @@ web:                            ## Typecheck the Next.js apps — skips LOUDLY w
 
 kb:                             ## Regenerate the GENERATED tiers of kb/ from source
 	go run ./tools/kb
+	@# ONE command regenerates everything derived from the code. Two targets would mean two
+	@# things to remember, and the one nobody remembers is the one that goes stale — which for
+	@# kb/20-contracts/openapi.json means the web builds a screen against a shape the server
+	@# stopped sending.
+	go run ./tools/apidoc
 
 proto:                          ## Regenerate Go code from .proto (requires buf)
 	buf generate
