@@ -51,6 +51,9 @@ type goiGo struct {
 	kieu    map[string]kieuGo
 	imports map[string]string // alias -> import path
 	xungDot map[string]bool   // aliases two files bind differently — refuse rather than pick
+	// bien holds package-level `var` and `const` declarations, for `@page` to resolve the
+	// sort allowlist without the tool ever copying what that allowlist says.
+	bien map[string]*ast.ValueSpec
 }
 
 type giaiMa struct {
@@ -123,7 +126,8 @@ func (g *giaiMa) nap(pkgDir string) (*goiGo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("apidoc: đọc gói %s: %w", pkgDir, err)
 	}
-	p := &goiGo{kieu: map[string]kieuGo{}, imports: map[string]string{}, xungDot: map[string]bool{}}
+	p := &goiGo{kieu: map[string]kieuGo{}, imports: map[string]string{}, xungDot: map[string]bool{},
+		bien: map[string]*ast.ValueSpec{}}
 	fset := token.NewFileSet()
 
 	ten := make([]string, 0, len(ents))
@@ -156,15 +160,28 @@ func (g *giaiMa) nap(pkgDir string) (*goiGo, error) {
 		}
 		for _, d := range f.Decls {
 			gd, ok := d.(*ast.GenDecl)
-			if !ok || gd.Tok != token.TYPE {
+			if !ok {
 				continue
 			}
-			for _, s := range gd.Specs {
-				ts, ok := s.(*ast.TypeSpec)
-				if !ok {
-					continue
+			switch gd.Tok {
+			case token.TYPE:
+				for _, s := range gd.Specs {
+					ts, ok := s.(*ast.TypeSpec)
+					if !ok {
+						continue
+					}
+					p.kieu[ts.Name.Name] = kieuGo{spec: ts, pkgDir: pkgDir}
 				}
-				p.kieu[ts.Name.Name] = kieuGo{spec: ts, pkgDir: pkgDir}
+			case token.VAR, token.CONST:
+				for _, s := range gd.Specs {
+					vs, ok := s.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+					for _, n := range vs.Names {
+						p.bien[n.Name] = vs
+					}
+				}
 			}
 		}
 	}

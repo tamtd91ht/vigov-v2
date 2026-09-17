@@ -73,6 +73,8 @@ export type identity_get_commune = {
   phuongThuc: "GET";
   thamSo: {
   };
+  truyVan: {
+  };
   than: never;
   phanHoi: {
     200: identity_thongTinXa;
@@ -84,6 +86,8 @@ export type identity_post_sessions = {
   duongDan: "/api/v1/sessions";
   phuongThuc: "POST";
   thamSo: {
+  };
+  truyVan: {
   };
   than: identity_thanDangNhap;
   phanHoi: {
@@ -100,6 +104,8 @@ export type identity_get_sessions_current = {
   phuongThuc: "GET";
   thamSo: {
   };
+  truyVan: {
+  };
   than: never;
   phanHoi: {
     200: identity_phienHienTaiRa;
@@ -115,6 +121,8 @@ export type identity_delete_sessions_by_sid = {
   thamSo: {
     "sid": string;
   };
+  truyVan: {
+  };
   than: never;
   phanHoi: {
     204: void;
@@ -129,6 +137,12 @@ export type identity_get_staff = {
   duongDan: "/api/v1/staff";
   phuongThuc: "GET";
   thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "code" | "created_at";
+    "order"?: "asc" | "desc";
   };
   than: never;
   phanHoi: {
@@ -146,6 +160,8 @@ export type identity_get_staff_by_id = {
   phuongThuc: "GET";
   thamSo: {
     "id": string;
+  };
+  truyVan: {
   };
   than: never;
   phanHoi: {

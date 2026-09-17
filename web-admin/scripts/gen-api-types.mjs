@@ -71,8 +71,30 @@ function dichKieu(schema, duong) {
     if (!schema.$ref.startsWith(tien)) tuChoi(duong, `$ref ngoài components/schemas: ${schema.$ref}`);
     return tenKieu(schema.$ref.slice(tien.length));
   }
-  for (const cam of ["allOf", "oneOf", "anyOf", "not", "enum", "const"]) {
+  for (const cam of ["allOf", "oneOf", "anyOf", "not", "const"]) {
     if (cam in schema) tuChoi(duong, `chưa hỗ trợ '${cam}'`);
+  }
+
+  // `enum` → hợp của các chuỗi hằng, KHÔNG phải `string`.
+  //
+  // ĐÂY LÀ CHỖ ĐẮT NHẤT CỦA TỆP NÀY. `sort` có danh sách đóng do máy chủ khai, và hợp đồng nay
+  // mang chính danh sách ấy (tools/apidoc đọc `page.NewAllowlist` trong mã Go). Dịch nó thành
+  // `string` là ném đi đúng thứ vừa được sinh ra để mang sang: khi ấy web gõ tay lại danh sách
+  // cột ở một hằng số của riêng nó, và hằng số đó trôi mà không bài test nào đỏ — thêm một cột
+  // sắp xếp ở máy chủ thì web không biết, gỡ một cột đi thì web vẫn gửi và nhận 400.
+  //
+  // Chỉ nhận enum CHUỖI. Một enum số hay enum trộn kiểu là chuyện khác và phải được cân nhắc
+  // riêng, nên nó vẫn rơi xuống nhánh từ chối.
+  if ("enum" in schema) {
+    const ds = schema.enum;
+    if (!Array.isArray(ds) || ds.length === 0) tuChoi(duong, "enum rỗng hoặc không phải mảng");
+    if (!ds.every((v) => typeof v === "string")) {
+      tuChoi(duong, "enum không phải toàn chuỗi — chưa hỗ trợ");
+    }
+    if (schema.type !== undefined && schema.type !== "string") {
+      tuChoi(duong, `enum chuỗi nhưng type là '${schema.type}'`);
+    }
+    return ds.map((v) => JSON.stringify(v)).join(" | ");
   }
 
   // `"type": ["string", "null"]` — cách OpenAPI 3.1 khai một trường CÓ THỂ RỖNG.
@@ -157,6 +179,22 @@ function sinh(hopDong) {
         (p) => `    ${JSON.stringify(p.name)}: ${dichKieu(p.schema, `${duongDan}.${p.name}`)};`,
       );
 
+      // THAM SỐ TRUY VẤN, và vì sao chúng phải có mặt ở đây.
+      //
+      // Cho tới 2026-09-17 bộ sinh chỉ lấy tham số ĐƯỜNG DẪN, nên `limit/cursor/sort/order`
+      // không tới được TypeScript. Web vì thế gõ tay danh sách cột sắp xếp trong một hằng số
+      // của riêng nó — chỗ DUY NHẤT trong cả ứng dụng chép một phần hợp đồng, với nguồn sự
+      // thật nằm cách đó hai module trong một tệp Go. Bản chép ấy không làm đỏ bài test nào
+      // lúc nó trôi.
+      //
+      // `?` cho mọi tham số truy vấn: chúng đều có mặc định ở máy chủ, nên không gửi là hợp lệ.
+      const thamSoTruyVan = thamSo.filter((p) => p.in === "query");
+      const dongTruyVan = thamSoTruyVan.map(
+        (p) =>
+          `    ${JSON.stringify(p.name)}${p.required ? "" : "?"}: ` +
+          `${dichKieu(p.schema, `${duongDan}.?${p.name}`)};`,
+      );
+
       const noiDung = op.requestBody?.content?.["application/json"]?.schema;
       const kieuThan = noiDung ? dichKieu(noiDung, `${duongDan}.requestBody`) : "never";
 
@@ -171,6 +209,7 @@ function sinh(hopDong) {
       ra.push(`  duongDan: ${JSON.stringify(duongDan)};`);
       ra.push(`  phuongThuc: ${JSON.stringify(phuongThuc.toUpperCase())};`);
       ra.push(`  thamSo: {\n${dongThamSo.join("\n")}${dongThamSo.length ? "\n" : ""}  };`);
+      ra.push(`  truyVan: {\n${dongTruyVan.join("\n")}${dongTruyVan.length ? "\n" : ""}  };`);
       ra.push(`  than: ${kieuThan};`);
       ra.push(`  phanHoi: {\n${dongPhanHoi.join("\n")}\n  };`);
       ra.push("};");

@@ -22,29 +22,54 @@ import type {
 } from "./schema.gen";
 
 /**
- * Hai khoá sắp xếp mà tuyến danh sách nhận, và **chỉ hai**.
+ * Khoá sắp xếp và chiều — **suy từ hợp đồng, không gõ tay**.
  *
- * ĐÂY LÀ CHỖ DUY NHẤT TRONG ỨNG DỤNG GÕ TAY MỘT PHẦN CỦA HỢP ĐỒNG, và nó là một lỗ hổng của bộ
- * sinh, không phải một lựa chọn: `tools/apidoc` chưa phát ra `parameters` cho tham số truy vấn,
- * nên `identity_get_staff["thamSo"]` trong `schema.gen.ts` là một đối tượng rỗng — hợp đồng
- * REST hiện KHÔNG khai limit/cursor/sort/order ở bất kỳ đâu. Đã nêu trong báo cáo; khi bộ sinh
- * phát ra tham số truy vấn thì hai hằng dưới đây phải biến mất và lấy từ kiểu sinh ra.
+ * Trước 2026-09-17 đây là một hằng `["code", "created_at"] as const` gõ tay, và là chỗ DUY
+ * NHẤT trong cả ứng dụng chép một phần hợp đồng. Nguồn sự thật nằm cách đó hai module: danh
+ * sách trắng `page.NewAllowlist` trong `service-identity/internal/store/can_bo_danh_sach.go`.
+ * Một bản chép như thế không làm đỏ bài test nào lúc nó trôi — thêm một cột sắp xếp ở máy chủ
+ * thì màn hình này không biết, gỡ một cột đi thì nó vẫn gửi và nhận 400, mà cán bộ chỉ thấy
+ * "không tải được danh sách".
  *
- * Nguồn sự thật đang là danh sách trắng trong mã Go:
- * `service-identity/internal/store/can_bo_danh_sach.go:51` — `code` (mặc định, tăng dần) và
- * `created_at`. Sáu cột khác mà đặc tả vẽ mũi tên ⇅ lên (`docs/ui-ux/14-cau-hinh.md §3`) CỐ Ý
- * không sắp xếp được, mỗi cột một lý do khác nhau đã ghi ngay trên danh sách trắng ấy: họ tên
- * và điện thoại là dữ liệu cá nhân mà khoá sắp xếp thì đi vào URL, log truy cập và lịch sử
- * trình duyệt (luật 3, cấm #4); `dang_nhap_gan_nhat` cho phép NULL nên mọi người chưa từng đăng
- * nhập sẽ rơi khỏi mọi trang sau trang đầu — lặng lẽ.
+ * Nay `tools/apidoc` đọc chính biến Go ấy (chú thích `@page idstore.SapXepCanBo`) và phát
+ * `sort` kèm enum vào `openapi.json`, nên hai kiểu dưới đây lấy thẳng từ kiểu đã sinh. Thêm
+ * hoặc bớt một cột ở máy chủ là `KhoaSapXep` đổi theo, và mọi chỗ dùng sai sẽ đỏ ở `tsc`.
  *
- * Gắn một mũi tên ⇅ lên cột thứ ba là gắn một điều khiển bấm vào thì máy chủ trả 400.
+ * Sáu cột khác mà đặc tả vẽ mũi tên ⇅ lên (`docs/ui-ux/14-cau-hinh.md §3`) CỐ Ý không sắp xếp
+ * được, mỗi cột một lý do đã ghi ngay trên danh sách trắng: họ tên và điện thoại là dữ liệu cá
+ * nhân mà khoá sắp xếp thì đi vào URL, log truy cập và lịch sử trình duyệt (luật 3, cấm #4);
+ * `dang_nhap_gan_nhat` cho phép NULL nên mọi người chưa từng đăng nhập sẽ rơi khỏi mọi trang
+ * sau trang đầu — lặng lẽ.
  */
-export const KHOA_SAP_XEP = ["code", "created_at"] as const;
-export type KhoaSapXep = (typeof KHOA_SAP_XEP)[number];
+type TruyVanDanhSach = identity_get_staff["truyVan"];
+
+/** Khoá sắp xếp máy chủ nhận. `NonNullable` vì tham số là tuỳ chọn trong hợp đồng. */
+export type KhoaSapXep = NonNullable<TruyVanDanhSach["sort"]>;
 
 /** Chiều sắp xếp. Máy chủ mặc định `asc` khi không gửi. */
-export type ChieuSapXep = "asc" | "desc";
+export type ChieuSapXep = NonNullable<TruyVanDanhSach["order"]>;
+
+/**
+ * Danh sách khoá để dựng điều khiển sắp xếp trên giao diện.
+ *
+ * TypeScript xoá kiểu lúc chạy, nên một hợp của chuỗi hằng không tự liệt kê ra được — mảng này
+ * là bản liệt kê ấy. Nó KHÔNG phải nguồn sự thật thứ hai, và HAI phép kiểm dưới đây giữ đúng
+ * điều đó, mỗi phép bắt một chiều:
+ *
+ *   `satisfies` bắt khoá THỪA — một khoá máy chủ không nhận lọt vào mảng.
+ *   `_duKhoa`  bắt khoá THIẾU — máy chủ thêm một cột mà mảng không có.
+ *
+ * Chỉ một trong hai là nửa vời, và nửa bị bỏ lại chính là nửa im lặng: một khoá thừa hỏng ngay
+ * khi người dùng bấm (400), còn một khoá thiếu thì không ai thấy — cột ấy đơn giản không có
+ * mũi tên, và không ai biết nó lẽ ra phải có.
+ */
+export const KHOA_SAP_XEP = ["code", "created_at"] as const satisfies readonly KhoaSapXep[];
+
+/** Mọi khoá trong hợp đồng đều phải có mặt ở KHOA_SAP_XEP. Thiếu một khoá → `tsc` đỏ tại đây. */
+type DuKhoaSapXep =
+  Exclude<KhoaSapXep, (typeof KHOA_SAP_XEP)[number]> extends never ? true : never;
+const _duKhoaSapXep: DuKhoaSapXep = true;
+void _duKhoaSapXep;
 
 /**
  * Một yêu cầu trang.

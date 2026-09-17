@@ -23,7 +23,13 @@ type tuyen struct {
 	Path    string
 	Summary string
 	Screen  string
-	Request string   // Go type name, "" when the route takes no body
+	Request string // Go type name, "" when the route takes no body
+	// Page names the page.Allowlist variable this route pages with — `@page store.SapXepCanBo`.
+	//
+	// NÓ LÀ MỘT CON TRỎ, KHÔNG PHẢI MỘT BẢN SAO. Danh sách cột được phép sắp xếp vẫn nằm đúng
+	// một chỗ: biến Go ấy. Chú thích chỉ nói TÌM Ở ĐÂU, nên nó không thể lệch với sự thật —
+	// lệch thì apidoc không giải được biến và dừng, chứ không công bố một danh sách cũ.
+	Page    string
 	Replies []traLoi // sorted by status
 	Quyen   quyenDecl
 	Idem    idemDecl
@@ -265,6 +271,11 @@ func phanTichChuThich(text string, t *tuyen) error {
 				return fmt.Errorf("@screen khai hai lần")
 			}
 			t.Screen = phanCon
+		case "@page":
+			if t.Page != "" {
+				return fmt.Errorf("@page khai hai lần")
+			}
+			t.Page = phanCon
 		case "@request":
 			if t.Request != "" {
 				return fmt.Errorf("@request khai hai lần")
@@ -289,7 +300,7 @@ func phanTichChuThich(text string, t *tuyen) error {
 			}
 			t.Replies = append(t.Replies, traLoi{Status: ma, Kieu: kieu})
 		default:
-			return fmt.Errorf("thẻ chú thích không biết: %s — chỉ có @summary, @screen, @request, @reply", the)
+			return fmt.Errorf("thẻ chú thích không biết: %s — chỉ có @summary, @screen, @page, @request, @reply", the)
 		}
 	}
 	sort.Slice(t.Replies, func(i, j int) bool { return t.Replies[i].Status < t.Replies[j].Status })

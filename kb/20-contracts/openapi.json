@@ -222,6 +222,56 @@
           "key": "admin.user"
         },
         "x-vigov-task": "433e7de6d4c2",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Số bản ghi mỗi trang. Vượt trần thì máy chủ TRẢ VỀ trần kèm con trỏ để đọc tiếp, không báo lỗi.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Con trỏ MỜ ĐỤC do máy chủ phát ra ở `next_cursor`, chuyền lại nguyên văn. Không phải số thứ tự trang; không có `offset`, và không có tổng số bản ghi.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Cột sắp xếp. Danh sách đóng — giá trị ngoài danh sách bị từ chối.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "code",
+                "created_at"
+              ],
+              "default": "code"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",

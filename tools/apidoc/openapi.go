@@ -177,14 +177,29 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 		}
 		op.set("x-vigov-permission", quyenJSON(t.Quyen))
 		op.set("x-vigov-task", maViec(t.Service, t.Method, t.Path))
+		// MỘT danh sách `parameters` duy nhất, gom cả hai nguồn.
+		//
+		// Bản trước `op.set("parameters", ...)` cho Idempotency-Key, nên một tuyến vừa chống
+		// lặp vừa phân trang sẽ mất một bên TRONG IM LẶNG — `om.set` ghi đè khoá cũ. Hôm nay
+		// chưa tuyến nào có cả hai (chống lặp ở tuyến ghi, phân trang ở tuyến đọc), nên lỗi
+		// này chưa có triệu chứng; nó chờ đúng tuyến đầu tiên có cả hai.
+		var thamSo []any
 		if t.Idem.Kind == "required" {
-			op.set("parameters", []any{
-				newOM().set("name", "Idempotency-Key").
-					set("in", "header").
-					set("required", true).
-					set("schema", newOM().set("type", "string")),
-			})
+			thamSo = append(thamSo, newOM().set("name", "Idempotency-Key").
+				set("in", "header").
+				set("required", true).
+				set("schema", newOM().set("type", "string")))
 			op.set("x-vigov-idempotency", idemJSON(t.Idem))
+		}
+		if t.Page != "" {
+			pt, err := gm.docPhanTrang(t.pkgDir, t.Page)
+			if err != nil {
+				return nil, nil, fmt.Errorf("apidoc: %s: %s %s: %w", t.File, t.Method, t.Path, err)
+			}
+			thamSo = append(thamSo, thamSoPhanTrang(pt)...)
+		}
+		if len(thamSo) > 0 {
+			op.set("parameters", thamSo)
 		}
 		if t.Request != "" {
 			op.set("requestBody", newOM().
