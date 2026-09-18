@@ -114,3 +114,18 @@ function theoUrl(): Record<string, string> {
 export function batChanDoan(_ket_qua: KetQuaDo): boolean {
   return true;
 }
+
+/**
+ * Gộp hai nguồn thành một bảng tham số để dùng.
+ *
+ * URL TRƯỚC, SDK SAU — và thứ tự ấy có lý do đo được: đo ngày 18/09/2026 trên bản thử nghiệm
+ * Version 6 cho thấy `location.search` mang **đúng** những gì `getRouteParams()` mang. Nếu điều
+ * đó đứng vững thì `zmp-sdk` bỏ được, và app nhẹ đi **256 kB thô / 64 kB gzip** — gần một nửa.
+ * Đặt URL lên trước là bước đầu của việc gỡ ấy: mã đọc sẽ chạy đúng kể cả khi SDK biến mất.
+ *
+ * SDK giữ làm dự phòng cho tới khi có đủ lần đo trên nhiều đường mở (mở nguội, quay lại từ
+ * nền, mở từ app ghim). Gỡ sớm hơn là đổi một sự thật đã đo một lần thành một giả định.
+ */
+export function thamSo(ket_qua: KetQuaDo): Record<string, string> {
+  return { ...ket_qua.sdk, ...ket_qua.url };
+}

@@ -4,7 +4,8 @@ import { TabBar } from "./components/TabBar";
 import { COMPANY } from "./content/company-profile";
 import { DEFAULT_SCREEN_ID, findScreen, type ScreenId } from "./features/company-intro/screens";
 import { LaunchParamsPanel } from "./features/diagnostics/LaunchParamsPanel";
-import { batChanDoan, type KetQuaDo, thamSoMoApp } from "./lib/launch-params";
+import { GoiYXaScreen } from "./features/kham-pha/GoiYXaScreen";
+import { batChanDoan, type KetQuaDo, thamSo as thamSoLaunch, thamSoMoApp } from "./lib/launch-params";
 
 /**
  * Phase 1 shell: four static screens, no navigation library, no state beyond the current tab.
@@ -31,6 +32,11 @@ export function App() {
   // lib/launch-params.ts), nên bảng chẩn đoán xuất hiện ở lượt vẽ thứ hai — không sao, nó là
   // công cụ đo chứ không phải nội dung người dân đọc.
   const [thamSo, setThamSo] = useState<KetQuaDo | null>(null);
+  const [boQuaGoiY, setBoQuaGoiY] = useState(false);
+
+  // `t` có mặt ⇒ liên kết mang một GỢI Ý về xã. Không phải một lựa chọn — xem GoiYXaScreen.
+  const p = thamSo ? thamSoLaunch(thamSo) : {};
+  const goiYXa = !boQuaGoiY && p["t"] ? { maXa: p["t"], nguon: p["src"] ?? "" } : null;
   useEffect(() => {
     let conSong = true;
     void thamSoMoApp().then((t) => {
@@ -49,9 +55,23 @@ export function App() {
       </header>
 
       <main className="app-main" id="main">
-        {/* Chỉ hiện khi mở kèm `debug`. Xem lý do ở lib/launch-params.ts. */}
+        {/* Bản đo: luôn hiện. Xem lý do và cách đóng cổng lại ở lib/launch-params.ts. */}
         {thamSo && batChanDoan(thamSo) && <LaunchParamsPanel thamSo={thamSo} />}
-        <Screen />
+
+        {/* LỚP KHÁM PHÁ (ADR 0005). Tham số `t` chỉ DẪN GIAO DIỆN — nó không chọn xã, không
+            mở một app khác, và không được phép làm hai việc đó. Xã chỉ thành thật khi server
+            ghi nó vào phiên sau một xác nhận tường minh. Đây là lý do màn gợi ý thay thế nội
+            dung công ty chứ không "redirect": không có nơi nào để redirect tới cho tới khi
+            tuyến công dân phía máy chủ tồn tại. */}
+        {goiYXa ? (
+          <GoiYXaScreen
+            maXa={goiYXa.maXa}
+            nguon={goiYXa.nguon}
+            onBoQua={() => setBoQuaGoiY(true)}
+          />
+        ) : (
+          <Screen />
+        )}
       </main>
 
       <TabBar current={currentId} onSelect={setCurrentId} />

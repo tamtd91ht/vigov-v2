@@ -874,3 +874,82 @@ body {
   color: var(--ink);
   word-break: break-all;
 }
+
+/* ---------- màn gợi ý xã (lớp khám phá, ADR 0005) ---------- */
+.goi-y {
+  padding: 4px 0 8px;
+}
+
+.goi-y__nhan {
+  margin: 0 0 4px;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+.goi-y__tieu-de {
+  margin: 0 0 14px;
+  font-size: 24px;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.goi-y__bang {
+  margin: 0 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.goi-y__dong {
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+.goi-y__dong:first-child {
+  border-top: 0;
+}
+
+.goi-y__dong dt {
+  min-width: 80px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.goi-y__dong dd {
+  margin: 0;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+/* Cảnh báo dùng VIỀN TRÁI + chữ, không chỉ dùng màu: trạng thái không bao giờ được báo bằng
+   màu đơn thuần (README §Non-negotiables #6). */
+.goi-y__canh-bao {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--brand-blue, #00aef4);
+  background: var(--surface-alt);
+  font-size: var(--text-small);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.goi-y__tiep {
+  margin: 0 0 16px;
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+.goi-y__nut {
+  min-height: var(--tap-min);
+  width: 100%;
+  padding: 0 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+}
