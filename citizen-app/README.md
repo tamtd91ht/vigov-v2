@@ -115,11 +115,15 @@ Phiên bản ghim cứng để lần chạy sau ra đúng kết quả lần ch�
 |---|---|
 | Thư mục nộp là `dist/`, không phải `www/` | `zmp deploy --help` ghi *"Default www"*, nên `-o dist` là bắt buộc và đã nằm trong `zmp:deploy` |
 | Thẻ script phải **cổ điển**, không `type="module"` | Chạy `sync-config` trên hai bản HTML khác nhau đúng một chỗ: bản module cho `listSyncJS: ["inline.js"]` — **thiếu chính bundle của app**; bản cổ điển cho thêm `"./assets/app.js"`. Không có lỗi nào báo ra. `vite.config.ts` sửa thẻ ở bước phát HTML, và `src/bundle-for-zalo.test.ts` ghim lại |
+| Khuôn link mở **bản thử nghiệm**, và tham số riêng **đi tới được app** | `https://zalo.me/s/<APP_ID>/?env=TESTING&version=<n>` — và nối thêm `t`, `src`, `debug` thì chúng tới nơi, đứng cạnh `env`/`version`. Đo 18/09/2026 trên Version 6–7. Đường công khai **không kèm `env`/`version`** chỉ phục vụ bản đã phát hành: mở khi chưa phát hành thì Zalo trả *"ứng dụng đang trong giai đoạn phát triển"* **trước khi** mã của ta chạy — đó là rào nền tảng, không phải app trắng |
+| `h5.zdn.vn/zapps/…` là host **nội bộ**, không quét được | Đó là thứ webview nạp **sau khi** Zalo phân giải deep link. Quét thẳng nó thì Zalo báo *"liên kết không được hỗ trợ"*; mở trong trình duyệt thường thì báo *"vui lòng truy cập trên ứng dụng Zalo"*. Nó chỉ hữu ích như một phép đo: `location.href` in ra nó là cách rẻ nhất để biết khuôn link |
+| `location.search` mang **đúng** những gì `getRouteParams()` mang | Đo trên Version 6, mở nguội qua deep link. Nghĩa là `zmp-sdk` **bỏ được** — nó tốn **256 kB thô / 64 kB gzip**, gần một nửa bundle (247,83 kB khi không có, 504,34 kB khi có). **CHƯA GỠ, có lý do:** ADR 0020 chốt `getPhoneNumber` là đường đăng nhập của giai đoạn 2, nên SDK sẽ quay lại; và mới đo **một** đường mở — chưa đo lúc quay lại từ nền và lúc mở từ app ghim. Gỡ dựa trên một phép đo là đổi nó thành một giả định |
 
 ### Còn thiếu
 
 | # | Cái gì | Ghi chú |
 |---|---|---|
+| 0 | **Đóng cổng bảng chẩn đoán** — `batChanDoan()` trong `src/lib/launch-params.ts` đang trả `true` | Bản đo để **luôn hiện**, vì link mở bản thử nghiệm không mang tham số nào nên cổng `debug` giấu bảng đúng lúc cần nó. Chấp nhận được với bản thử nghiệm; **không** được đi theo bản phát hành — một bảng kỹ thuật trong app của đơn vị đang xin duyệt là thứ người duyệt sẽ hỏi. Gỡ bảng cũng gỡ luôn `zmp-sdk` và **64 kB gzip**, nên hai việc là một |
 | 1 | Ảnh chụp màn hình và mô tả trên store | Bắt buộc để duyệt. Icon thì đã có — `tools/logo.py` dựng từ `brand/lg_vhs_full.svg` |
 | 2 | Các khoá còn lại trong `app-config.json` | `app.*` viết từ nguồn thứ cấp và **chưa đối chiếu** với Developer Console. Ba khoá `list*` thì đã do `sync-config` sinh, không phải đoán |
 
