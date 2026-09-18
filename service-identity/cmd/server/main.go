@@ -127,6 +127,10 @@ func run(log *slog.Logger) error {
 	phien := idstore.NewPhienStore(kho)
 	vaiTro := idstore.NewVaiTroStore(kho)
 	boPhan := idstore.NewBoPhanStore(kho)
+	// A store of its own and NOT the Checker, although both read `vai_tro_quyen`: Checker decides
+	// access one key at a time for the caller, this one describes every role's grants for one
+	// administration screen. See MaTranQuyenDoc for why the three grant readers stay apart.
+	maTranQuyen := idstore.NewQuyenStore(kho)
 
 	// 5. ONE signer, and the variable is used twice on purpose.
 	//
@@ -187,9 +191,12 @@ func run(log *slog.Logger) error {
 		// Cùng một *VaiTroStore, hai trường: một trả lời "vai trò của người gọi", một trả
 		// lời "xã này có những vai trò nào". Hai câu hỏi, hai interface hẹp.
 		VaiTroMuc: vaiTro,
-		Signer:    signer, // the SAME pointer app.NewDangNhap was given above
-		Phien:     phien,
-		CanBo:     canBo,
+		// Ma trận phân quyền — chỉ ĐỌC. Không có tuyến ghi nào, và lý do nằm ở đầu tệp
+		// internal/http/quyen.go: lưu một cột vai trò chạm đúng câu hỏi mở #13 và #14.
+		MaTran: maTranQuyen,
+		Signer: signer, // the SAME pointer app.NewDangNhap was given above
+		Phien:  phien,
+		CanBo:  canBo,
 		// The SAME store behind two fields, and two fields on purpose: CanBoDoc is the
 		// three-condition read the session middleware runs on every request, CanBoDanhBa is the
 		// register the Cấu hình → Người dùng screen pages through. See the note on CanBoDanhBa.

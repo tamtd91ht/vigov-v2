@@ -199,6 +199,73 @@ func vaiTroMucMau() *vaiTroMucGia {
 	}}
 }
 
+// maTranGia is the Phân quyền matrix, KEYED BY COMMUNE, reading the commune from the context the
+// same way *store.Scoped does. Keyed any other way, the isolation case in quyen_test.go would pass
+// while proving nothing.
+//
+// THE CATALOGUE IS NOT KEYED BY COMMUNE, and that asymmetry is the fixture's whole point: `quyen`
+// has no `tenant_id` (migration 0001_init.sql:44), so every commune sees the same keys while the
+// roles and the grants differ. A fixture that keyed the catalogue too would quietly assert the
+// opposite of what the schema says.
+type maTranGia struct {
+	danhMuc []domain.Quyen
+	theo    map[tenant.ID]domain.MaTranQuyen
+	loi     error
+	goi     int
+}
+
+func (q *maTranGia) MaTran(ctx context.Context) (domain.MaTranQuyen, error) {
+	q.goi++
+	if q.loi != nil {
+		return domain.MaTranQuyen{}, q.loi
+	}
+	mt := q.theo[tenant.MustFrom(ctx)]
+	mt.DanhMuc = q.danhMuc
+	return mt, nil
+}
+
+// maTranMau gives commune A two roles with different grants and commune B a role with a DIFFERENT
+// name and a DIFFERENT grant. Two communes whose matrices looked alike could not show a leak.
+//
+// The catalogue is deliberately NOT in alphabetical order and its groups are interleaved
+// (QUẢN TRỊ, NHIỆM VỤ, QUẢN TRỊ again): that is what proves the handler groups by first appearance
+// and never re-sorts, and it is the shape a key added later with a `thu_tu` in the wrong band would
+// produce.
+func maTranMau() *maTranGia {
+	return &maTranGia{
+		danhMuc: []domain.Quyen{
+			{Ma: "admin.role", Nhom: "QUẢN TRỊ", Nhan: "Phân quyền"},
+			{Ma: "task.extend", Nhom: "NHIỆM VỤ", Nhan: "Duyệt gia hạn"},
+			{Ma: "admin.user", Nhom: "QUẢN TRỊ", Nhan: "Quản lý người dùng"},
+		},
+		theo: map[tenant.ID]domain.MaTranQuyen{
+			xaA: {
+				// THE TWO COUNTS DIFFER ON BOTH ROLES, AND DIFFER DIFFERENTLY. vt-001 is 1·1 (every
+				// holder can sign in) and vt-002 is 3·0 — three people hold it and the grants on it
+				// reach nobody. A fixture where the two numbers were equal could not tell "the
+				// second count is read" from "the second count is a copy of the first".
+				Cot: []domain.VaiTroCot{
+					{VaiTro: domain.VaiTro{ID: "vt-001", Ma: "chu-tich-ubnd", Ten: "Chủ tịch UBND", LaLanhDao: true},
+						SoCanBo: 1, SoTaiKhoanDangHoatDong: 1},
+					{VaiTro: domain.VaiTro{ID: "vt-002", Ma: "can-bo-mot-cua", Ten: "Cán bộ một cửa"},
+						SoCanBo: 3, SoTaiKhoanDangHoatDong: 0},
+				},
+				DaCap: []domain.CapQuyen{
+					{VaiTroID: "vt-001", QuyenMa: "admin.role"},
+					{VaiTroID: "vt-001", QuyenMa: "task.extend"},
+				},
+			},
+			xaB: {
+				Cot: []domain.VaiTroCot{
+					{VaiTro: domain.VaiTro{ID: "vt-101", Ma: "ke-toan", Ten: "Kế toán xã B"},
+						SoCanBo: 2, SoTaiKhoanDangHoatDong: 2},
+				},
+				DaCap: []domain.CapQuyen{{VaiTroID: "vt-101", QuyenMa: "admin.user"}},
+			},
+		},
+	}
+}
+
 // boPhanGia is the org chart, KEYED BY COMMUNE, reading the commune from the context the same way
 // *store.Scoped does. Keyed any other way, the isolation case in bo_phan_test.go would pass while
 // proving nothing.
@@ -342,6 +409,7 @@ type mayChu struct {
 	vaiTro    *vaiTroGia
 	boPhan    *boPhanGia
 	vaiTroMuc *vaiTroMucGia
+	maTran    *maTranGia
 	// dangNhap and dangXuat are the same values as d.DangNhap / d.DangXuat, typed.
 	dangNhap *dangNhapGia
 	dangXuat *dangXuatGia
@@ -376,6 +444,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	vaiTro := vaiTroMau()
 	boPhan := boPhanMau()
 	vaiTroMuc := vaiTroMucMau()
+	maTran := maTranMau()
 
 	d := Deps{
 		// Commune A grants the permission; commune B has the same account and grants nothing.
@@ -388,6 +457,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		VaiTro:    vaiTro,
 		BoPhan:    boPhan,
 		VaiTroMuc: vaiTroMuc,
+		MaTran:    maTran,
 		Signer:    signer,
 		Phien:     phien,
 		CanBo:     canBo,
@@ -420,6 +490,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		vaiTro:    vaiTro,
 		boPhan:    boPhan,
 		vaiTroMuc: vaiTroMuc,
+		maTran:    maTran,
 		dangNhap:  d.DangNhap.(*dangNhapGia),
 		dangXuat:  d.DangXuat.(*dangXuatGia),
 	}

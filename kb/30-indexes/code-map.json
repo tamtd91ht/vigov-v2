@@ -130,13 +130,25 @@
       "kind": "type",
       "at": "service-identity/internal/domain/can_bo.go:53"
     },
+    "domain.CapQuyen": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/quyen.go:74"
+    },
     "domain.Domain": {
       "kind": "type",
       "at": "service-platform/internal/domain/tenant.go:21"
     },
+    "domain.MaTranQuyen": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/quyen.go:86"
+    },
     "domain.NormaliseHost": {
       "kind": "func",
       "at": "service-platform/internal/domain/tenant.go:54"
+    },
+    "domain.Quyen": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/quyen.go:26"
     },
     "domain.Tenant": {
       "kind": "type",
@@ -145,6 +157,10 @@
     "domain.VaiTro": {
       "kind": "type",
       "at": "service-identity/internal/domain/vai_tro.go:14"
+    },
+    "domain.VaiTroCot": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/quyen.go:43"
     },
     "domain.Validate": {
       "kind": "func",
@@ -220,7 +236,7 @@
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:126"
+      "at": "service-identity/internal/http/routes.go:147"
     },
     "http.DangXuat": {
       "kind": "func",
@@ -228,7 +244,7 @@
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:130"
+      "at": "service-identity/internal/http/routes.go:151"
     },
     "http.DanhSachBoPhan": {
       "kind": "func",
@@ -249,6 +265,14 @@
     "http.Handler": {
       "kind": "type",
       "at": "service-identity/internal/http/handler.go:17"
+    },
+    "http.MaTranQuyen": {
+      "kind": "func",
+      "at": "service-identity/internal/http/quyen.go:179"
+    },
+    "http.MaTranQuyenDoc": {
+      "kind": "type",
+      "at": "service-identity/internal/http/routes.go:141"
     },
     "http.NewHandler": {
       "kind": "func",
@@ -718,6 +742,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/phien.go:98"
     },
+    "store.MaTran": {
+      "kind": "func",
+      "at": "service-identity/internal/store/quyen.go:188"
+    },
     "store.Moc": {
       "kind": "type",
       "at": "core/store/page.go:41"
@@ -750,6 +778,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/phien.go:41"
     },
+    "store.NewQuyenStore": {
+      "kind": "func",
+      "at": "service-identity/internal/store/quyen.go:25"
+    },
     "store.NewVaiTroStore": {
       "kind": "func",
       "at": "service-identity/internal/store/vai_tro.go:23"
@@ -781,6 +813,10 @@
     "store.QuyenCua": {
       "kind": "func",
       "at": "service-identity/internal/store/checker.go:160"
+    },
+    "store.QuyenStore": {
+      "kind": "type",
+      "at": "service-identity/internal/store/quyen.go:21"
     },
     "store.Scoped": {
       "kind": "type",

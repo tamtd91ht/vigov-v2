@@ -40,6 +40,25 @@
     {
       "service": "identity",
       "method": "GET",
+      "path": "/api/v1/role-permissions",
+      "operation_id": "identity_get_role_permissions",
+      "task_id": "85326ed899f6",
+      "summary": "Ma trận phân quyền của xã — nhóm quyền, vai trò kèm số cán bộ, và các ô đã cấp",
+      "screen": "14-cau-hinh §4",
+      "permission_kind": "permission",
+      "permission": "admin.role",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.maTranQuyenRa",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
       "path": "/api/v1/roles",
       "operation_id": "identity_get_roles",
       "task_id": "c220974e9969",

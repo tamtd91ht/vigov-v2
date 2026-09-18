@@ -121,6 +121,27 @@ type (
 		DanhSach(ctx context.Context) ([]domain.VaiTro, error)
 	}
 
+	// MaTranQuyenDoc is the Phân quyền matrix, for GET /api/v1/role-permissions.
+	//
+	// SEPARATE FROM authz.Checker AND FROM QuyenDoc, although all three read grants and two of them
+	// are satisfied by the same *idstore.Checker. The three answer three different questions, for
+	// three different callers, and merging any pair of them moves a decision onto a description:
+	//
+	//	authz.Checker   "may THIS caller do THIS one thing"  — decides access, on every request
+	//	QuyenDoc        "what may THIS caller do"            — draws the caller's own menu
+	//	MaTranQuyenDoc  "what may EVERY ROLE do"             — one administration screen
+	//
+	// This one returns the grants of OTHER roles, which is precisely why it is the only one of the
+	// three behind a permission (`admin.role`). Widening authz.Checker to carry it would put the
+	// whole commune's grant table behind the interface that guards every route in all eight
+	// services — and the first caller to decide access from it is the accident that costs.
+	//
+	// ONE METHOD RETURNING ALL THREE LISTS, not three methods: the matrix is only correct if rows,
+	// columns and cells were read from the same instant. See maTranQuyenRa.
+	MaTranQuyenDoc interface {
+		MaTran(ctx context.Context) (domain.MaTranQuyen, error)
+	}
+
 	// DangNhapUC and DangXuatUC are the use cases. The handlers only translate HTTP; the
 	// business write and its audit entry share one transaction inside these.
 	DangNhapUC interface {
@@ -139,6 +160,7 @@ type Deps struct {
 	VaiTro    VaiTroDoc
 	BoPhan    BoPhanDanhMuc
 	VaiTroMuc VaiTroDanhMuc
+	MaTran    MaTranQuyenDoc
 	Signer    *token.Signer
 	Phien     PhienDoc
 	CanBo     CanBoDoc
@@ -177,6 +199,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho bộ phận — GET /api/v1/org-units sẽ panic khi có người gọi")
 	case d.VaiTroMuc == nil:
 		panic("identity/http: thiếu kho danh mục vai trò — GET /api/v1/roles sẽ panic khi có người gọi")
+	case d.MaTran == nil:
+		panic("identity/http: thiếu kho ma trận phân quyền — GET /api/v1/role-permissions sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -416,4 +440,58 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/roles",
 		authz.AnyAuthenticated("tên vai trò xuất hiện ở ô chọn vai trò trên form cán bộ, cột Vai trò của danh bạ và tiêu đề cột của ma trận phân quyền — đòi một quyền cấu hình sẽ cần ba quyền để dựng một màn hình; đánh đổi đã chấp nhận: tên các vai trò lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, còn quyền của từng vai trò thì không tuyến nào phơi ra")(
 			http.HandlerFunc(h.DanhSachVaiTro)))
+
+	// --- the Phân quyền matrix. ONE READ ROUTE, AND DELIBERATELY NO WRITE ROUTE ----------------
+	//
+	// `role-permissions` — THE RESOURCE IS THE RELATION, and the name says what the data IS rather
+	// than what one part of it is called (ADR 0017, the same rule that settled `province`).
+	//
+	// It was `permissions` first, and that was rejected for two reasons worth keeping, because the
+	// obvious word is the one somebody will propose again:
+	//
+	//	it under-describes    the response is `groups` + `roles` + `grants`. Two thirds of it is
+	//	                      about ROLES, and the third that names keys exists only so the matrix
+	//	                      has rows. A caller reading `/permissions` expects a list of keys;
+	//	                      what arrives is a commune's authorisation model.
+	//	it squats             a plain catalogue of permission keys — no commune, no roles — is a
+	//	                      route this system may well want, and `permissions` is its name. Taking
+	//	                      it here would leave that one with no honest path, and a path cannot be
+	//	                      taken back once a commune is live.
+	//
+	// The specification's own suggestion (§11, `GET /api/cau-hinh/quyen`) is a Vietnamese segment
+	// under a screen-shaped prefix, which rest-api-design forbids on both counts (FORBIDDEN #1,
+	// REQUIRED #1) — `cau-hinh` names the screen, and screens get rearranged.
+	//
+	// STATED GAP: kb/00-foundation/ubiquitous-language.md has no row for this concept yet; one is
+	// being added by whoever owns that table. This path has no external caller.
+	//
+	// RequirePermission("admin.role") — "Phân quyền" — AND NOT AnyAuthenticated, which is the
+	// opposite of the call made one route up for `roles`, deliberately. `roles` exposes what the
+	// commune's roles are CALLED, which fills pickers on half the screens in the system. This route
+	// exposes what every role may DO — the commune's authorisation model in one response. That is
+	// the map of where authority sits in an authority, and reading it is the reconnaissance step
+	// before an escalation: it names which role to get into and which cell to have ticked. Spec
+	// §12.8 declares the tab with this key; the route declares the same key, so the tab and the data
+	// behind it cannot drift apart.
+	//
+	// THE MATRIX IS READ, NEVER WRITTEN, BY THIS SERVICE'S HTTP SURFACE. The write side — the
+	// spec's `Lưu` button per column (§12.5) — is missing on purpose; open questions #13 and #14 sit
+	// underneath it, and the full argument is at the top of internal/http/quyen.go, which is where
+	// the next person will be standing when they add it.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Ma trận phân quyền của xã — nhóm quyền, vai trò kèm số cán bộ, và các ô đã cấp
+	// @screen   14-cau-hinh §4
+	// 500 covers an ordinary store failure and any of the three ceilings in idstore being reached —
+	// which this route REFUSES rather than truncating, because a matrix missing a row reads exactly
+	// like a role that does not hold the right.
+	//
+	// @reply    200 maTranQuyenRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/role-permissions",
+		authz.RequirePermission(d.Checker, "admin.role")(
+			http.HandlerFunc(h.MaTranQuyen)))
 }

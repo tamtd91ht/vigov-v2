@@ -82,6 +82,63 @@
         }
       }
     },
+    "/api/v1/role-permissions": {
+      "get": {
+        "summary": "Ma trận phân quyền của xã — nhóm quyền, vai trò kèm số cán bộ, và các ô đã cấp",
+        "operationId": "identity_get_role_permissions",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.role"
+        },
+        "x-vigov-task": "85326ed899f6",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.maTranQuyenRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/roles": {
       "get": {
         "summary": "Danh mục vai trò của xã — dùng cho ô chọn vai trò, cột danh bạ và ma trận phân quyền",
@@ -632,6 +689,23 @@
         ],
         "additionalProperties": false
       },
+      "identity.capQuyenRa": {
+        "type": "object",
+        "properties": {
+          "role_id": {
+            "type": "string",
+            "description": "vaiTroCotRa.ID — a role OF THIS COMMUNE"
+          },
+          "permission": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "permission",
+          "role_id"
+        ],
+        "additionalProperties": false
+      },
       "identity.danhSachBoPhanRa": {
         "type": "object",
         "properties": {
@@ -659,6 +733,54 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "identity.maTranQuyenRa": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.nhomQuyenRa"
+            }
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.vaiTroCotRa"
+            }
+          },
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.capQuyenRa"
+            }
+          }
+        },
+        "required": [
+          "grants",
+          "groups",
+          "roles"
+        ],
+        "additionalProperties": false
+      },
+      "identity.nhomQuyenRa": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.quyenMucRa"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "permissions"
         ],
         "additionalProperties": false
       },
@@ -722,6 +844,24 @@
         ],
         "additionalProperties": false
       },
+      "identity.quyenMucRa": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "\"task.extend\""
+          },
+          "label": {
+            "type": "string",
+            "description": "\"Duyệt gia hạn\""
+          }
+        },
+        "required": [
+          "code",
+          "label"
+        ],
+        "additionalProperties": false
+      },
       "identity.thanDangNhap": {
         "type": "object",
         "properties": {
@@ -756,6 +896,41 @@
           "host",
           "name",
           "province"
+        ],
+        "additionalProperties": false
+      },
+      "identity.vaiTroCotRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID — what `grants` and `staff.role_id` reference"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "is_leader": {
+            "type": "boolean"
+          },
+          "staff_count": {
+            "type": "integer",
+            "description": "mọi cán bộ giữ vai trò này — đúng con số tab Người dùng hiện"
+          },
+          "active_account_count": {
+            "type": "integer",
+            "description": "trong số đó, ai có tài khoản và đang mở: bật/tắt một ô chỉ đổi quyền của những người này"
+          }
+        },
+        "required": [
+          "active_account_count",
+          "code",
+          "id",
+          "is_leader",
+          "name",
+          "staff_count"
         ],
         "additionalProperties": false
       },

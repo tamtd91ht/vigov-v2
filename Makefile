@@ -50,6 +50,19 @@ lint:
 	@# buf lint is NO LONGER prefixed with `-`. It was ignored while it was failing; it has
 	@# been clean since the contract fixes, so ignoring it now only hides the next regression.
 	buf lint
+	@# `buf.yaml` KHAI HẠNG `FILE` — một lời hứa tương thích ở mức MÃ NGUỒN, không chỉ mức dây.
+	@# Cho tới hôm nay không cổng nào kiểm lời hứa ấy: `buf breaking` chưa từng chạy trong
+	@# `make check`, nên một lần đổi tên RPC đi qua hoàn toàn im lặng và cổng vẫn xanh. Đó đúng
+	@# hình dạng "biện pháp không phải biện pháp" mà tuần này đã dọn năm lần.
+	@#
+	@# SO VỚI COMMIT LIỀN TRƯỚC, không phải một mốc cố định. Mốc cố định trả lời câu "đã trôi
+	@# bao xa từ một ngày nào đó" — câu ấy càng ngày càng ít ai đọc, rồi thành một cổng luôn đỏ
+	@# vì chuyện cũ và bị gỡ ra. `HEAD` hỏi đúng câu đáng hỏi, "thay đổi ĐANG LÀM có phá hợp
+	@# đồng không", vào đúng lúc sửa còn rẻ, và không có con số nào phải nhớ cập nhật.
+	@#
+	@# KHÔNG có tiền tố `-`. Nuốt lỗi ở đây là dựng lại đúng cái vừa gỡ. Ngày cần phá vỡ có chủ
+	@# ý thì cổng đỏ CHÍNH LÀ tính năng: nó buộc người làm nói ra lý do thay vì đi qua im lặng.
+	buf breaking --against '.git#ref=HEAD'
 
 build:
 	go build $(MODULES)

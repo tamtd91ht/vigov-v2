@@ -102,6 +102,7 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		VaiTro:    vaiTroMau(),
 		BoPhan:    boPhanMau(),
 		VaiTroMuc: vaiTroMucMau(),
+		MaTran:    maTranMau(),
 		CanBo:     &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
 		DanhBa:    danhBaMau(),
 		DangNhap:  &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
