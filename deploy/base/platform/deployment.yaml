@@ -1,0 +1,111 @@
+# Dịch vụ `platform` — sổ đăng ký xã, tên miền, vòng đời xã.
+#
+# NÓ LÊN TRƯỚC MỌI DỊCH VỤ KHÁC. Bảy dịch vụ còn lại quay số tới cổng 9090 của nó để phân
+# giải `Host` → xã (`core/platformclient/directory.go:65`). Platform chết thì `Host` không
+# phân giải được, và luật 1 bất biến 3 bắt trả 404 chứ không được mặc định — nghĩa là toàn
+# hệ thống trả 404 cho mọi xã. Đó là lý do nó có replica cao hơn và PDB chặt hơn.
+#
+# Chính nó KHÔNG cần PLATFORM_GRPC_ADDR: nó đọc danh bạ thẳng từ CSDL của mình
+# (`service-platform/cmd/server/main.go:107`), không quay số tới ai.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform
+  labels:
+    app.kubernetes.io/name: platform
+    app.kubernetes.io/part-of: vigov
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: { app.kubernetes.io/name: platform }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: platform
+        app.kubernetes.io/part-of: vigov
+        vigov.vn/be-mat: rest    # NetworkPolicy: nhận 8080 từ ingress
+        vigov.vn/grpc: "co"      # NetworkPolicy: nhận 9090 từ pod cùng namespace
+    spec:
+      # Trải đều trên 3 node. Không có dòng này, scheduler được phép xếp cả 3 replica lên
+      # một node, và rút node đó là mất toàn bộ phân giải xã.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels: { app.kubernetes.io/name: platform }
+
+      # Tiến trình đóng HTTP với ngữ cảnh 20 giây rồi mới GracefulStop gRPC
+      # (`service-platform/cmd/server/main.go:249`). Mặc định 30 giây của k8s cắt ngang
+      # đoạn ấy — và một request bị cắt giữa chừng là một bản ghi nghiệp vụ dở dang.
+      terminationGracePeriodSeconds: 45
+
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532          # distroless:nonroot — khai lại để đọc được từ đây
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+
+      containers:
+        - name: server
+          # Thẻ CỐ Ý không dùng được. Chỉ `overlays/<mt>/kustomization.yaml` ghim thẻ thật;
+          # áp thẳng base là một nhầm lẫn, và nó phải đổ chứ không được kéo nhầm ảnh.
+          image: registry.vihat.vn/vigov/vigov-service-platform:CHUA-GHIM-THE
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - { name: rest, containerPort: 8080 }
+            - { name: grpc, containerPort: 9090 }
+
+          envFrom:
+            - configMapRef: { name: cau-hinh-chung }
+            - secretRef:    { name: bi-mat-platform }   # DATABASE_DSN · REDIS_DSN · SESSION_SIGNING_KEYS
+
+          # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý
+          # (`service-platform/cmd/server/main.go:138`). Nó trả lời "tiến trình này còn sống",
+          # đúng hay sai không phụ thuộc xã nào đang hỏi — nên probe không cần gửi Host.
+          #
+          # HỆ QUẢ PHẢI BIẾT: /healthz vẫn xanh khi CSDL hỏng. Readiness KHÔNG bắt được
+          # "phân giải xã đang gãy" — giám sát mới bắt, bằng tỉ lệ 404 từ TenantMiddleware.
+          startupProbe:
+            httpGet: { path: /healthz, port: rest }
+            periodSeconds: 5
+            failureThreshold: 60          # 5 phút — di trú CSDL chạy TRONG tiến trình lúc
+                                          # khởi động và ôm advisory lock (core/migrate),
+                                          # nên replica thứ 2 ĐỢI replica thứ 1 xong.
+                                          # Probe chặt ở đây là vòng lặp khởi động lại.
+          readinessProbe:
+            httpGet: { path: /healthz, port: rest }
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /healthz, port: rest }
+            periodSeconds: 20
+            failureThreshold: 5
+
+          resources:
+            requests: { cpu: 100m, memory: 96Mi }
+            # CHỈ giới hạn bộ nhớ, không giới hạn CPU: nhị phân Go tĩnh, và một CPU limit
+            # trên cụm 3 node chỉ tạo throttling đúng lúc tải cao nhất.
+            limits:   { memory: 384Mi }
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }
+
+      imagePullSecrets:
+        - name: harbor-vigov

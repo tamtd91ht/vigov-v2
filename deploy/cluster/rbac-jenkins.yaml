@@ -1,0 +1,93 @@
+# Quyền của Jenkins trên cụm — hẹp nhất có thể để job triển khai làm được việc của nó.
+#
+# KHÔNG cluster-admin. Một kubeconfig cluster-admin nằm trong credential store của Jenkins
+# nghĩa là bất kỳ ai sửa được một Jenkinsfile đều điều khiển được toàn cụm — và Jenkinsfile
+# nằm trong kho mã, nơi việc sửa là chuyện thường ngày.
+#
+# Không có quyền trên `secrets`: job triển khai không bao giờ đọc hay ghi bí mật (luật 8).
+# Bí mật vào cụm bằng đường khác — xem deploy/README.md.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-trien-khai
+  namespace: vigov-prod
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: trien-khai
+  namespace: vigov-prod
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/status", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events"]
+    verbs: ["get", "list", "watch"]            # chỉ đọc — để chẩn đoán khi rollout đỏ
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-trien-khai
+  namespace: vigov-prod
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-trien-khai
+    namespace: vigov-prod
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: trien-khai
+---
+# Bản sao cho staging. Hai namespace, hai RoleBinding — KHÔNG một ClusterRoleBinding:
+# một ràng buộc cấp cụm là một quyền không ai đọc được giới hạn từ chỗ nó được cấp.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-trien-khai
+  namespace: vigov-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: trien-khai
+  namespace: vigov-staging
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/status", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-trien-khai
+  namespace: vigov-staging
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-trien-khai
+    namespace: vigov-staging
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: trien-khai

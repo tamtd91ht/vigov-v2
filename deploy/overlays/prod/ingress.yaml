@@ -1,0 +1,54 @@
+# ════════════════════════════════════════════════════════════════════════════════════════
+# ⚠ TỆP NÀY CHỨA MỘT QUYẾT ĐỊNH CHƯA ĐƯỢC CHỐT — đọc trước khi dịch vụ thứ hai có route.
+#
+# Hệ thống KHÔNG có API gateway. Bề mặt REST là `/api/v1/<tài nguyên>`, đặt tên theo TÀI
+# NGUYÊN chứ không theo dịch vụ (ADR 0011, ADR 0014). Hôm nay chuyện đó chưa thành vấn đề:
+# `kb/20-contracts/openapi.json` cho thấy CẢ SÁU nhóm tài nguyên đang có đều thuộc
+# `identity`, nên một dòng `/api/v1` → identity là đúng 100%.
+#
+# NGÀY `petitions` CÓ ROUTE ĐẦU TIÊN, dòng đó thành SAI: `/api/v1/phan-anh` sẽ đi tới
+# identity và trả 404. Ba đường ra, và đây là câu hỏi cho chủ dự án, không phải cho agent:
+#
+#   (a) Liệt kê từng tài nguyên ở Ingress   — chính xác, nhưng sửa tay mỗi endpoint mới
+#   (b) SINH Ingress từ openapi.json        — một nguồn chuẩn duy nhất (luật 9), thêm việc cho tools/
+#   (c) Thêm một dịch vụ gateway            — thêm một chặng mạng và một nơi nữa để kiểm quyền
+#
+# Chưa chốt thì ĐỪNG thêm route REST cho dịch vụ thứ hai.
+# ════════════════════════════════════════════════════════════════════════════════════════
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vigov
+  annotations:
+    # Bắt buộc HTTPS. Số điện thoại và nội dung phản ánh của công dân đi qua đây
+    # (Nghị định 13/2023/NĐ-CP).
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["*.vigov.vn"]
+      secretName: vigov-wildcard-tls     # tạo ngoài kho này — KHÔNG BAO GIỜ commit khoá
+  rules:
+    # MỘT quy tắc ký tự đại diện cho MỌI xã. `Host` thật đi nguyên vẹn tới pod —
+    # ingress-nginx giữ nguyên Host mặc định — và `httpx.TenantMiddleware` phân giải nó
+    # thành xã ở rìa ngoài cùng. Host không khớp xã nào ⇒ 404, không bao giờ một xã
+    # mặc định (luật 1, bất biến 3).
+    #
+    # Thêm một xã = thêm một bản ghi DNS + một hàng trong sổ đăng ký của `platform`.
+    # KHÔNG phải sửa tệp này. Đó là lý do nó là ký tự đại diện chứ không phải 200 dòng host.
+    - host: "*.vigov.vn"
+      http:
+        paths:
+          - path: /api/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-admin
+                port: { name: http }

@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vigov-staging
+
+resources:
+  - ../../base
+  - ingress.yaml
+
+commonLabels:
+  vigov.vn/mt: staging
+
+configMapGenerator:
+  - name: cau-hinh-chung
+    literals:
+      - ENV=staging
+      - TENANT_CACHE_TTL=10s     # ngắn hơn prod: onboard xã thử nghiệm phải thấy ngay
+
+# Cùng 3 node với prod, nên staging chạy 1 replica mỗi thứ. Đây là đánh đổi có ý thức:
+# staging KHÔNG chứng minh được hành vi rolling update maxUnavailable:0. Muốn chứng minh
+# điều đó thì phải nâng lên 2 — và chấp nhận staging ăn tài nguyên của prod.
+replicas:
+  - { name: platform,  count: 1 }
+  - { name: identity,  count: 1 }
+  - { name: web-admin, count: 1 }
+
+# PDB minAvailable:2 của platform là KHÔNG THOẢ ĐƯỢC khi chỉ có 1 replica — nó sẽ chặn mọi
+# lần rút node. Hạ xuống 1 ở staging.
+patches:
+  - target: { kind: PodDisruptionBudget, name: platform }
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 1
+
+images:
+  - name: registry.vihat.vn/vigov/vigov-service-platform
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: registry.vihat.vn/vigov/vigov-service-identity
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: registry.vihat.vn/vigov/vigov-web-admin
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO

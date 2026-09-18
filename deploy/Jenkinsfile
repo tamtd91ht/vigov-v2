@@ -1,0 +1,171 @@
+// Job TRIỂN KHAI. Tệp này là nơi DUY NHẤT chạm vào cụm k8s.
+//
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// VÌ SAO NÓ TÁCH KHỎI CHÍN JOB ĐÓNG ẢNH, VÀ VÌ SAO NÓ KHÔNG TỰ CHẠY
+//
+// Chín job kia đóng ảnh tự động, thoải mái — một ảnh nằm trong Harbor không làm gì cả.
+// Đưa một ảnh lên cụm thì khác: nó thay mã đang phục vụ hồ sơ hành chính của 200+ xã.
+//
+// Nên job này chỉ chạy khi có người bấm, với ba tham số người ấy phải tự điền, và nó để
+// lại một commit mang tên người ấy trong `deploy/overlays/<mt>/kustomization.yaml`.
+// Commit đó LÀ nhật ký triển khai: "lúc đó bản nào đang chạy" trả lời được bằng `git log`,
+// không phải bằng suy đoán từ thời điểm kéo ảnh.
+//
+// PHẠM VI: đúng MỘT dịch vụ mỗi lượt. Đó là toàn bộ cơ chế "deploy A mà B đứng yên" —
+// dịch vụ khác không có diff nên `kubectl apply` không sinh generation mới cho chúng.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+//
+// MÁY CHỦ BUILD CẦN: git, kubectl, kustomize (hoặc kubectl >= 1.27 có -k sẵn), skopeo hoặc crane.
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    timeout(time: 20, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '200'))   // giữ lâu hơn job build: đây là hồ sơ
+    disableConcurrentBuilds()
+  }
+
+  parameters {
+    choice(name: 'DICH_VU', choices: ['platform', 'identity', 'web-admin'],
+           description: 'Đúng MỘT dịch vụ. Muốn đưa hai cái lên thì chạy hai lượt — ' +
+                        'để mỗi lượt là một dòng riêng trong nhật ký.')
+    string(name: 'THE', defaultValue: '',
+           description: 'Thẻ ảnh = commit 12 ký tự đã sinh ra nó. Lấy từ log job đóng ảnh.')
+    choice(name: 'MT', choices: ['staging', 'prod'],
+           description: 'staging đứng TRƯỚC prod trong danh sách, có chủ ý.')
+    string(name: 'REGISTRY', defaultValue: 'registry.vihat.vn')
+    string(name: 'PROJECT', defaultValue: 'vigov')
+    string(name: 'KUBE_CRED', defaultValue: 'kubeconfig-vigov',
+           description: 'ID credentials trong Jenkins. CHỈ LÀ ID, không bao giờ là giá trị thật.')
+    string(name: 'GIT_CRED', defaultValue: 'git-vigov',
+           description: 'ID credentials để đẩy commit ghim thẻ.')
+  }
+
+  environment {
+    // Tên ẢNH mang tiền tố `vigov-service-` cho dịch vụ Go, `vigov-` cho web.
+    // Tên TÀI NGUYÊN k8s là tên NGHIỆP VỤ trần (`platform`, `identity`) — ADR 0016 §2:
+    // tiền tố `service-` là dấu hiệu hạ tầng, nó không được lọt vào bề mặt người khác đọc.
+    NS = "vigov-${params.MT}"
+  }
+
+  stages {
+
+    stage('Kiểm tham số') {
+      steps {
+        script {
+          if (!(params.THE ==~ /^[0-9a-f]{12}$/)) {
+            error("THE phải là 12 ký tự hex — commit đã sinh ra ảnh. Nhận được: '${params.THE}'\n" +
+                  "Thẻ di động (latest, main, prod) bị cấm: hai pod cùng manifest có thể chạy " +
+                  "hai đoạn mã khác nhau, và câu 'bản nào đang chạy lúc đó' mất lời giải.")
+          }
+          env.ANH = (params.DICH_VU == 'web-admin')
+                  ? "${params.REGISTRY}/${params.PROJECT}/vigov-web-admin"
+                  : "${params.REGISTRY}/${params.PROJECT}/vigov-service-${params.DICH_VU}"
+          echo "sẽ đưa ${env.ANH}:${params.THE} lên ${env.NS}"
+        }
+      }
+    }
+
+    stage('Ảnh có thật trong registry chưa') {
+      steps {
+        // KIỂM TRƯỚC KHI COMMIT. Ghim một thẻ không tồn tại rồi mới phát hiện nghĩa là
+        // Deployment ngồi ImagePullBackOff, nhật ký triển khai có một dòng nói dối, và
+        // người sửa phải làm thêm một commit nữa để rút lại.
+        withCredentials([usernamePassword(credentialsId: 'harbor-vigov',
+                                          usernameVariable: 'U', passwordVariable: 'P')]) {
+          sh '''
+            set -eu
+            skopeo inspect --creds "$U:$P" "docker://${ANH}:${THE}" >/dev/null \
+              || { echo ""; echo "KHÔNG TÌM THẤY ${ANH}:${THE} trong registry."; \
+                   echo "Job đóng ảnh của dịch vụ này đã chạy xong cho commit đó chưa?"; \
+                   echo ""; exit 1; }
+          '''
+        }
+      }
+    }
+
+    stage('Ghim thẻ và commit') {
+      steps {
+        sh '''
+          set -eu
+          cd deploy/overlays/${MT}
+          kustomize edit set image ${ANH}=${ANH}:${THE}
+          git --no-pager diff -- kustomization.yaml
+        '''
+        script {
+          // Không có diff nghĩa là thẻ ấy ĐANG chạy. Dừng lại chứ không apply lại: một lượt
+          // rollout không thay đổi gì vẫn là một lượt khởi động lại pod, và một dòng trong
+          // nhật ký không tương ứng với thay đổi nào.
+          def doi = sh(script: 'git diff --quiet -- deploy/overlays/${MT}/kustomization.yaml || echo doi',
+                       returnStdout: true).trim()
+          if (doi != 'doi') {
+            error("${params.DICH_VU} ở ${params.MT} đã đang chạy thẻ ${params.THE}. Không có gì để làm.")
+          }
+        }
+        withCredentials([gitUsernamePassword(credentialsId: params.GIT_CRED)]) {
+          sh '''
+            set -eu
+            git config user.email "jenkins@vihat.vn"
+            git config user.name  "Jenkins"
+            git add deploy/overlays/${MT}/kustomization.yaml
+            git commit -m "deploy(${MT}): ${DICH_VU} -> ${THE}
+
+Bấm bởi: ${BUILD_USER_ID:-khong-ro}
+Job: ${BUILD_URL}"
+            git push origin HEAD:main
+          '''
+        }
+      }
+    }
+
+    stage('Áp lên cụm') {
+      steps {
+        withKubeConfig(credentialsId: params.KUBE_CRED) {
+          sh '''
+            set -eu
+            # Không `--prune`. Xoá một tài nguyên là một hành động riêng, có người quyết —
+            # không phải hệ quả phụ của một lượt deploy.
+            kubectl apply -k deploy/overlays/${MT}
+          '''
+        }
+      }
+    }
+
+    stage('Đợi rollout') {
+      steps {
+        withKubeConfig(credentialsId: params.KUBE_CRED) {
+          // 6 phút: startupProbe cho phép tới 5 phút vì di trú CSDL chạy TRONG tiến trình
+          // lúc khởi động và ôm advisory lock (core/migrate.Chay) — replica thứ hai đợi
+          // replica thứ nhất. Timeout chặt hơn sẽ "thất bại" trong lúc mọi thứ vẫn đúng.
+          sh '''
+            set -eu
+            kubectl -n ${NS} rollout status deploy/${DICH_VU} --timeout=6m
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    failure {
+      // Quay lại bản trước Ở CỤM ngay. Commit ghim thẻ thì GIỮ NGUYÊN, không revert tự động:
+      // nhật ký phải ghi cả lần thất bại. Rút lại nó là việc của người, ở lượt chạy sau.
+      withKubeConfig(credentialsId: params.KUBE_CRED) {
+        sh '''
+          set +e
+          echo "THẤT BẠI — quay lại bản trước ở cụm"
+          kubectl -n ${NS} rollout undo deploy/${DICH_VU}
+          kubectl -n ${NS} rollout status deploy/${DICH_VU} --timeout=5m
+          echo ""
+          echo "Cụm đã về bản cũ. Commit ghim thẻ VẪN CÒN trong deploy/overlays/${MT}/ —"
+          echo "chạy lại job này với thẻ cũ để nhật ký khớp với thực tế."
+        '''
+      }
+    }
+    success {
+      echo "XONG  ${env.ANH}:${params.THE} đang chạy ở ${env.NS}"
+    }
+  }
+}

@@ -1,0 +1,80 @@
+# BIÊN MẠNG. Đây là biên DUY NHẤT bảo vệ cổng 9090.
+#
+# `core/platformclient/directory.go:73` quay số bằng `insecure.NewCredentials()`: gRPC giữa
+# các dịch vụ KHÔNG có TLS và KHÔNG đi qua lớp kiểm quyền của bề mặt REST. `EXPOSE 9090`
+# trong Dockerfile chỉ là tài liệu. Nếu tệp này không được áp, mọi thứ vẫn chạy và trông
+# bình thường — chỉ là danh bạ xã của toàn hệ thống mở cho bất kỳ pod nào trong cụm.
+
+# 1. Từ chối tất cả, cả vào lẫn ra. Mọi cho phép bên dưới là NGOẠI LỆ có tên.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tu-choi-tat-ca
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# 2. REST 8080: chỉ từ ingress controller.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cho-phep-rest-tu-ingress
+spec:
+  podSelector:
+    matchLabels: { vigov.vn/be-mat: rest }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+      ports:
+        - { port: 8080, protocol: TCP }
+        - { port: 3000, protocol: TCP }
+---
+# 3. gRPC 9090: CHỈ từ pod trong cùng namespace. Không từ ingress, không từ namespace khác.
+#
+# `from` rỗng thì mặc định là "mọi pod trong namespace của chính policy này" — đó chính là
+# điều mong muốn, và nó được viết ra tường minh ở đây để không ai đọc nhầm thành "mọi nơi".
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cho-phep-grpc-noi-bo
+spec:
+  podSelector:
+    matchLabels: { vigov.vn/grpc: "co" }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - { port: 9090, protocol: TCP }
+---
+# 4. Đường RA: DNS, gRPC nội bộ, và hạ tầng dữ liệu NGOÀI cụm.
+#
+# `ipBlock` chứ không phải `0.0.0.0/0`: một dịch vụ hồ sơ hành chính không có lý do gì để
+# mở kết nối ra Internet. Dải dưới đây là chỗ bạn điền mạng đặt PostgreSQL / Redis / Kafka.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cho-phep-duong-ra
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:
+        - podSelector: {}
+      ports:
+        - { port: 9090, protocol: TCP }
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/8      # ← SỬA: dải mạng của PostgreSQL / Redis / Kafka
+      ports:
+        - { port: 5432, protocol: TCP }
+        - { port: 6379, protocol: TCP }
+        - { port: 9092, protocol: TCP }

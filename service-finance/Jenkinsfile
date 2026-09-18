@@ -75,6 +75,9 @@ pipeline {
                                    "--build-arg VERSION=${env.TAG} " +
                                    "-f ${env.THU_MUC}/Dockerfile .")
             anh.push()
+            // Ghi mốc NGAY SAU khi push thành công. Lượt build sau so với commit này,
+            // không so với "lượt build liền trước" — xem `mocDaDongAnh()` ở cuối tệp.
+            currentBuild.description = "${nhanAnh()}${env.TAG}"
           }
           echo "DA DAY  ${ten}:${env.TAG}"
         }
@@ -93,7 +96,7 @@ pipeline {
 //
 // `core/**` bao luôn `core/go.mod`. `go.work` có mặt vì thêm/bớt một module là đổi thứ mà
 // cổng kiểm chạy trên. `core/gen` KHÔNG có mặt vì nó nằm trong .gitignore và không bao giờ
-// xuất hiện trong changeset — `proto/**` mới là tín hiệu đúng.
+// xuất hiện trong diff — `proto/**` mới là tín hiệu đúng.
 //
 // `tools/check_build.py` đỏ nếu một dịch vụ đánh rơi chúng.
 // ─────────────────────────────────────────────────────────────────────────────────────────
@@ -106,26 +109,67 @@ List<String> duongKichHoat() {
 }
 
 boolean canDungLai() {
-  // Lượt build đầu tiên chưa có gì để so. `changeset` khi ấy trả false, nên nếu không xử ca
-  // này thì lần chạy đầu sẽ không đóng ảnh nào và trông y hệt một pipeline hỏng.
-  if (currentBuild.previousSuccessfulBuild == null) { return true }
-  for (String mau : duongKichHoat()) {
-    if (coTrongChangeset(mau)) { return true }
-  }
-  return false
-}
+  String moc = mocDaDongAnh()
 
-boolean coTrongChangeset(String mau) {
-  // So khớp thủ công thay vì `when { changeset }` để danh sách mẫu chỉ khai ở MỘT chỗ.
-  // Hai nơi khai cùng một danh sách là hai nơi sẽ lệch, và bản lỏng hơn là bản được chạy.
-  String bo = mau.endsWith('/**') ? mau.substring(0, mau.length() - 3) : null
-  for (cs in currentBuild.changeSets) {
-    for (c in cs.items) {
-      for (f in c.affectedFiles) {
-        String duong = f.path
-        if (bo != null ? duong.startsWith(bo) : duong == mau) { return true }
+  // Chưa lượt nào ghi mốc: lượt build đầu tiên, hoặc `buildDiscarder` đã dọn lịch sử qua
+  // mốc. Cả hai đều DỰNG. Sai về phía dựng thừa tốn vài phút máy chủ; sai về phía bỏ qua là
+  // một bản vá nằm lại trong kho mã trong khi ảnh đang chạy vẫn mang mã cũ.
+  if (moc == null) {
+    echo 'Chưa lượt build nào ghi mốc đã đóng ảnh — dựng.'
+    return true
+  }
+
+  // Mốc phải có thật trong bản sao này. Clone nông, force-push, hoặc lịch sử đã bị dọn đều
+  // làm nó biến mất — và khi KHÔNG SO ĐƯỢC thì dựng, không phải bỏ qua.
+  if (sh(script: "git cat-file -e '${moc}^{commit}' 2>/dev/null", returnStatus: true) != 0) {
+    echo "Không thấy mốc ${moc} trong bản sao này (clone nông? force-push?) — dựng cho chắc."
+    return true
+  }
+
+  String ketQua = sh(script: "git diff --name-only ${moc}..HEAD", returnStdout: true).trim()
+  if (!ketQua) { return false }
+
+  for (String duong : ketQua.split('\n')) {
+    for (String mau : duongKichHoat()) {
+      String bo = mau.endsWith('/**') ? mau.substring(0, mau.length() - 3) : null
+      if (bo != null ? duong.startsWith(bo) : duong == mau) {
+        echo "kích hoạt bởi: ${duong}   (so với mốc ${moc})"
+        return true
       }
     }
   }
   return false
 }
+
+// Commit mà lượt build gần nhất ĐÃ ĐÓNG THÀNH ẢNH. Đây là mốc để so, và nó thay cho
+// `currentBuild.changeSets`.
+//
+// VÌ SAO KHÔNG DÙNG `changeSets`: nó liệt kê thay đổi kể từ lượt build TRƯỚC — bất kể lượt
+// ấy xanh hay đỏ. Nên MỘT LƯỢT ĐỎ NUỐT MẤT CHANGESET CỦA NÓ:
+//
+//     commit #1 đụng core/authz   → build chạy → ĐỎ ở cổng kiểm       → chưa có ảnh
+//     commit #2 chỉ đụng kb/      → build chạy → XANH, changeSets chỉ có kb/ → BỎ QUA đóng ảnh
+//
+// Kết cục: bản vá trong `core/authz` không bao giờ thành ảnh. Pipeline xanh, Harbor thiếu
+// ảnh, KHÔNG CÓ GÌ ĐỎ để ai nhìn thấy — đúng dạng hỏng mà `core/**` trong `duongKichHoat()`
+// sinh ra để chặn. `previousSuccessfulBuild == null` chỉ xử được lượt đầu tiên, không xử
+// được ca này.
+//
+// Mốc đúng là "commit đã thành ảnh", và nơi duy nhất biết điều đó là lượt build đã đẩy nó —
+// nên lượt ấy tự ghi lại vào `description` của chính mình, ngay sau khi push thành công.
+String mocDaDongAnh() {
+  def b = currentBuild.previousBuild
+  while (b != null) {
+    String moTa = b.description
+    if (moTa != null && moTa.startsWith(nhanAnh())) {
+      return moTa.substring(nhanAnh().length()).trim()
+    }
+    b = b.previousBuild
+  }
+  return null
+}
+
+// #[dung-chung] Tiền tố của mốc. Một HÀM chứ không phải biến mức script, cùng lý do với
+// `duongKichHoat()`: một biến mức script cần @Field kèm import, và một import bị quên là lỗi
+// lúc CHẠY chứ không phải lúc đọc.
+String nhanAnh() { return 'anh-tu-commit:' }

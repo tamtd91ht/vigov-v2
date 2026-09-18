@@ -1,0 +1,39 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vigov-prod
+
+resources:
+  - ../../base
+  - ingress.yaml
+
+commonLabels:
+  # Nhãn để CHỌN, không phải để xoá. Job triển khai cố ý KHÔNG dùng `kubectl apply --prune`:
+  # xoá một tài nguyên phải là hành động có người quyết, không phải hệ quả phụ của deploy.
+  vigov.vn/mt: prod
+
+configMapGenerator:
+  - name: cau-hinh-chung
+    literals:
+      - ENV=prod
+      # Thời gian một thay đổi tên miền cần để có hiệu lực trên mọi pod. Dài hơn 1 phút thì
+      # `config.CanhBao()` kêu — onboard một xã mới sẽ chờ lâu không giải thích được.
+      - TENANT_CACHE_TTL=30s
+      # DANGEROUS_AUTH_BYPASS KHÔNG xuất hiện ở đây, có chủ ý: `config.Load` TỪ CHỐI khởi
+      # động nếu nó bật ở ENV=prod (luật 8 bất biến 7). Không khai là cách chắc chắn nhất.
+
+# ════════════════════════════════════════════════════════════════════════════════════════
+# THẺ ẢNH — ĐÂY LÀ TOÀN BỘ "DEPLOY A MÀ B ĐỨNG YÊN".
+#
+# Job `vigov-deploy` sửa ĐÚNG MỘT dòng `newTag` trong khối này rồi commit. Dịch vụ khác
+# không có diff → `kubectl apply` không sinh generation mới → pod của nó không khởi động lại.
+#
+# `git log -p deploy/overlays/prod/kustomization.yaml` là NHẬT KÝ TRIỂN KHAI của hệ thống:
+# ai, đưa bản nào, lúc nào. Không có sổ nào khác.
+# ════════════════════════════════════════════════════════════════════════════════════════
+images:
+  - name: registry.vihat.vn/vigov/vigov-service-platform
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: registry.vihat.vn/vigov/vigov-service-identity
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: registry.vihat.vn/vigov/vigov-web-admin
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO

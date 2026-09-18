@@ -1,0 +1,18 @@
+# Hai namespace, một cụm. KHÔNG phải một namespace cho mỗi xã.
+#
+# Xã được phân giải TỪ `Host` bên trong từng request (luật 1, bất biến 3) — cùng một pod
+# phục vụ mọi xã. Một namespace cho mỗi xã nghĩa là 200+ bản sao của mọi thứ, và nó còn phá
+# `platform`: dịch vụ ấy đọc chéo xã CÓ CHỦ Ý, nên nó không thuộc namespace của xã nào cả.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vigov-prod
+  labels:
+    vigov.vn/mt: prod
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vigov-staging
+  labels:
+    vigov.vn/mt: staging

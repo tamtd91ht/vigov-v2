@@ -34,6 +34,9 @@ kb
 docs
 tasks
 
+# ---- manifest k8s: mô tả CÁCH CHẠY ảnh, nên nó không thể nằm TRONG ảnh --------------
+deploy
+
 # ---- ứng dụng web: có ngữ cảnh build riêng, không thuộc ảnh dịch vụ Go --------------
 #
 # LIỆT KÊ TỪNG THƯ MỤC, không một dòng `apps` gói chung — bố cục phẳng đã bỏ tầng `apps/`
