@@ -73,6 +73,13 @@ describe("text and targets stay usable for an ageing eye", () => {
     // are the only tappable things in phase 1.
     expect(styles).toMatch(/\.tabbar__item\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
     expect(styles).toMatch(/\.action\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+
+    // Lớp khám phá (ADR 0005): nút xác nhận xã, từng dòng trong danh mục xã, và nút đổi xã trên
+    // header. Đây là những nút một người lớn tuổi bấm khi đang đứng ở trụ sở xã, một tay cầm
+    // điện thoại — và bấm trượt ở đây nghĩa là gửi hồ sơ cho một xã khác.
+    expect(styles).toMatch(/\.goi-y__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+    expect(styles).toMatch(/\.chon-xa__dong\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+    expect(styles).toMatch(/\.app-header__doi-xa\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
   });
 
   it("animates nothing outside a reduced-motion guard", () => {
@@ -167,6 +174,23 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     // Brand surfaces. The glyph is dark BECAUSE the brand colours are light.
     ["the glyph on the blue end of a tile", token("tile-glyph"), token("brand-blue")],
     ["the glyph on the green end of a tile", token("tile-glyph"), token("brand-green")],
+
+    // LỚP KHÁM PHÁ (ADR 0005). Đây là những chữ quyết định công dân gửi hồ sơ cho xã nào, và
+    // chúng được đọc ở ngoài trời, trước cổng trụ sở xã, bởi một người đang cầm điện thoại xa
+    // mắt. Chúng dùng lại đúng bảng màu đã đo ở trên — nhưng liệt kê riêng, vì một cặp màu chỉ
+    // được bảo vệ khi có tên nó trong danh sách này: đổi `.xa-the__ten` sang --brand-blue thì
+    // không có dòng nào ở trên đỏ lên.
+    ["the commune name on the confirm card", token("navy"), token("surface")],
+    ["the province line under the commune name", token("ink-muted"), token("surface")],
+    ["the confirm button label", "#ffffff", token("navy")],
+    ["the confirm button label at its blue glow", "#ffffff", token("panel-glow-blue")],
+    ["the reason line above the commune list", token("ink"), token("surface")],
+    ["a commune row in the picker", token("navy"), token("surface")],
+    ["the province of a commune row", token("ink-muted"), token("surface")],
+    ["the demo-data footnote", token("ink-muted"), token("surface-alt")],
+    ["the demo-data footnote on the blue wash", token("ink-muted"), token("surface-tint")],
+    ["the change-commune control in the header", "#ffffff", token("navy-deep")],
+    ["the change-commune control at the header glow", "#ffffff", token("navy")],
   ];
 
   for (const [what, foreground, background] of pairs) {
