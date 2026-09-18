@@ -114,6 +114,11 @@ Hệ quả cụ thể của việc mang `tenant_id`, không được bỏ dòng 
 
 ## Cái giá của dòng `Khối nhiệm vụ`, nói thẳng
 
+> Quy tắc chung đứng sau dòng này — **tên đi theo khái niệm, quyền sở hữu đi theo nhịp đổi**,
+> và khi hai thứ ấy lệch nhau thì bảng ánh xạ **bắt buộc** phải khai chỗ lệch — nằm ở
+> `kb/00-foundation/ubiquitous-language.md` §Quy ước đặt tên. Không chép sang đây: hai bản của
+> một quy tắc là hai bản sẽ lệch, và bản lệch nằm trong ADR là bản người ta tin (luật 9 #2).
+
 `Khối nhiệm vụ` thuộc `identity` nhưng thứ dùng nó — bản ghi nhiệm vụ — nằm ở `petitions`.
 Đây là một **tham chiếu xuyên service**, và nó phải được đọc đúng ngay từ lượt migration đầu:
 
