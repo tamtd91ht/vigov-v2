@@ -91,7 +91,19 @@ npm run zmp:deploy    # build -> sync-config -> deploy bản thử nghiệm
 và `zmp-cli sync-config` là thứ điền danh sách ấy từ trang đã dựng. Dựng xong mà quên đồng bộ
 thì `app-config.json` trỏ vào bản dựng của lần trước.
 
-`-t` là **bản thử nghiệm**. Bỏ `-t` là đẩy bản phát hành.
+**Không hỏi câu nào.** CLI vốn dừng ba lần — *"This is not a ZMP Project?"*, *"where is your
+dist folder"*, *"description"* — và cả ba đã tắt bằng `-e`, `-o dist`, `-m`, cộng `-p`.
+
+Mô tả phiên bản **sinh theo từng lần đẩy**, không cố định: `<sha ngắn> · <ngày giờ>`, cộng
+`dirty` khi cây làm việc còn thay đổi chưa commit. Một nhãn cố định thì mọi bản trong console
+Zalo trông như nhau và lúc cần biết *"bản đang chạy là bản nào"* thì không còn gì để tra; còn
+`dirty` nói ra rằng bản ấy **không ứng với commit nào** — không ai dựng lại được nó, kể cả
+người vừa đẩy. Tính trong `scripts/deploy.mjs` chứ không trong `package.json`, vì trên Windows
+`npm run` chạy qua `cmd`, nơi `$(git rev-parse …)` chỉ là một chuỗi ký tự.
+
+`-t` là **bản thử nghiệm**. Bỏ `-t` là đẩy bản phát hành — và nó cố ý **không** có cờ trong
+script: đẩy bản phát hành phải là một quyết định có người gõ ra, không phải mặc định của một
+lệnh chạy tự động.
 
 CLI gọi qua `npx --yes zmp-cli@4.0.3`, không phải devDependency: nó kéo theo hơn hai trăm gói,
 nhiều gói đã ngừng hỗ trợ, và không có lý do gì để chúng nằm trong một kho sắp gửi ra ngoài.

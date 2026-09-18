@@ -11,7 +11,7 @@
     "test": "vitest run",
     "zmp:login": "npx --yes zmp-cli@4.0.3 login",
     "zmp:sync": "npm run build && npx --yes zmp-cli@4.0.3 sync-config dist/index.html",
-    "zmp:deploy": "npm run zmp:sync && npx --yes zmp-cli@4.0.3 deploy -o dist -t",
+    "zmp:deploy": "npm run zmp:sync && node scripts/deploy.mjs",
     "check:api": "node -e \"console.log('citizen-app: no generated REST types in phase 1 — the introduction app calls no backend. Phase 2 replaces this script.')\""
   },
   "dependencies": {
