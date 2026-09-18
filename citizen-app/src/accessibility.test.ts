@@ -80,6 +80,10 @@ describe("text and targets stay usable for an ageing eye", () => {
     expect(styles).toMatch(/\.goi-y__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
     expect(styles).toMatch(/\.chon-xa__dong\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
     expect(styles).toMatch(/\.app-header__doi-xa\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+
+    // Trang xã: mỗi mục dịch vụ là một nút. Chúng là những nút duy nhất trên màn ấy, và người
+    // bấm chúng là người vừa đứng dậy khỏi ghế chờ ở trụ sở xã.
+    expect(styles).toMatch(/\.dich-vu__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
   });
 
   it("animates nothing outside a reduced-motion guard", () => {
@@ -191,6 +195,26 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["the demo-data footnote on the blue wash", token("ink-muted"), token("surface-tint")],
     ["the change-commune control in the header", "#ffffff", token("navy-deep")],
     ["the change-commune control at the header glow", "#ffffff", token("navy")],
+
+    // TRANG XÃ. Cùng bảng màu, liệt kê riêng vì cùng một lý do như trên: đổi `.trang-xa__so`
+    // sang --brand-green thì không dòng nào ở trên đỏ lên, và số điện thoại trực — thứ người
+    // dân đọc rồi bấm sang máy — là chữ mất trước nhất khi ra nắng.
+    ["the commune name on its own page", token("navy"), token("surface-alt")],
+    ["the commune name on its own page, over the blue wash", token("navy"), token("surface-tint")],
+    [
+      "the commune name on its own page, over the green wash",
+      token("navy"),
+      token("surface-tint-green"),
+    ],
+    ["the province line on the commune page", token("ink-muted"), token("surface-alt")],
+    ["the one-line introduction of the commune", token("ink"), token("surface-alt")],
+    ["the duty-phone label", token("ink-muted"), token("surface")],
+    ["the duty-phone number", token("navy"), token("surface")],
+    ["the working hours under it", token("ink-muted"), token("surface")],
+    ["a service name on the commune page", token("navy"), token("surface")],
+    ["the 'not open yet' wording under a service", token("ink-muted"), token("surface")],
+    ["the under-construction note a tapped service opens", token("ink"), token("surface")],
+    ["the demo-data footnote on the commune page", token("ink-muted"), token("surface-alt")],
   ];
 
   for (const [what, foreground, background] of pairs) {

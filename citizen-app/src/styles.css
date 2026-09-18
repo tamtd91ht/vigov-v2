@@ -1091,3 +1091,133 @@ body {
   font-size: var(--text-small);
   color: var(--ink-muted);
 }
+
+/* ---------- trang xã (mỗi xã một nội dung) ---------- */
+
+.trang-xa {
+  padding: 4px 0 8px;
+}
+
+/* Tên xã to và đứng đầu trang, ngoài header: header cuộn khỏi tầm mắt trên màn hình nhỏ, còn
+   câu trả lời cho "tôi đang ở xã nào" thì không được phép cuộn mất (bất di dịch #2). */
+.trang-xa__ten {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.25;
+  color: var(--navy);
+}
+
+.trang-xa__tinh {
+  margin: 2px 0 0;
+  font-size: var(--text-body);
+  color: var(--ink-muted);
+}
+
+.trang-xa__gioi-thieu {
+  margin: 10px 0 16px;
+  font-size: var(--text-body);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+/* Khối số trực: viền trái + nhãn bằng chữ, không phân biệt bằng riêng màu. */
+.trang-xa__truc {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 6px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-left: 4px solid var(--brand-green);
+  border-radius: 14px;
+}
+
+.trang-xa__truc-chu {
+  display: block;
+  min-width: 0;
+}
+
+.trang-xa__nhan {
+  display: block;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+/* Số điện thoại to hơn cả tiêu đề mục: đây là thứ người lớn tuổi đọc rồi bấm sang máy điện
+   thoại, thường là đọc một lần rồi nhớ từng cụm. */
+.trang-xa__so {
+  display: block;
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--navy);
+}
+
+.trang-xa__gio {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--text-small);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.dich-vu {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.dich-vu__nut {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap-min);
+  margin: 0 0 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface);
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+}
+
+.dich-vu__nut:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.dich-vu__chu {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dich-vu__ten {
+  display: block;
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+/* "Chưa mở" — trạng thái nói bằng CHỮ. Một chấm màu ở đây là một trạng thái mà người mù màu và
+   người dùng trình đọc màn hình không đọc được (README §Non-negotiables #6). */
+.dich-vu__trang-thai {
+  display: block;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+.dich-vu__dang-lam {
+  margin: -4px 0 12px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--brand-blue);
+  border-radius: 0 10px 10px 0;
+  background: var(--surface);
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink);
+}

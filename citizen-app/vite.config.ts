@@ -1,4 +1,72 @@
+import { fileURLToPath } from "node:url";
+
 import { defineConfig } from "vite";
+
+/**
+ * HAI BIẾN THỂ BẢN DỰNG — `VIGOV_BIEN_THE`.
+ *
+ * | Biến thể | Nội dung | Dùng để |
+ * |---|---|---|
+ * | `goc` | **Chỉ** app giới thiệu bốn màn | Gửi Zalo duyệt |
+ * | `day-du` (mặc định) | Thêm lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Thử nghiệm, demo |
+ *
+ * VÌ SAO TÁCH Ở TẦNG DỰNG CHỨ KHÔNG PHẢI MỘT CỜ LÚC CHẠY:
+ *
+ *   Một cờ lúc chạy để **tám tên đơn vị hành chính đặt ra** và số điện thoại mẫu nằm nguyên
+ *   trong bundle gửi duyệt — chỉ là không vẽ ra. Tách ở tầng dựng thì bản `goc` **thật sự không
+ *   chứa** chúng, và điều đó **kiểm được**: `grep` trên `dist/assets/app.js`, và một ca trong
+ *   `src/bundle-for-zalo.test.ts` dựng thật rồi đọc bundle. Lời hứa thành sự thật đo được.
+ *
+ *   Đó cũng là điều làm việc này trung thực: bản nộp duyệt đúng bằng thứ người duyệt đọc. Không
+ *   có gì bị giấu — chỉ là chọn nộp cái gì.
+ *
+ * VÌ SAO LÀ `resolve.alias` CHỨ KHÔNG PHẢI TREE-SHAKING: tree-shaking **không** loại được một
+ * `import` tĩnh có mặt trong mã. Alias thì thay hẳn mô-đun ở bước phân giải, nên mã thật không
+ * có đường nào đi vào bundle.
+ *
+ * VÌ SAO TÊN LÀ `VIGOV_BIEN_THE` CHỨ KHÔNG PHẢI `VIGOV_KHAM_PHA`: cờ này tắt **hai** thứ — lớp
+ * khám phá và bảng chẩn đoán — nên một cái tên nói về riêng lớp khám phá là một cái tên nói
+ * thiếu, và người sau sẽ thêm thứ thứ ba vào sau một cái tên không mô tả nó.
+ */
+const BIEN_THE_HOP_LE = ["goc", "day-du"] as const;
+type BienThe = (typeof BIEN_THE_HOP_LE)[number];
+
+/**
+ * ĐỌC LÚC GỌI, KHÔNG PHẢI LÚC NẠP MÔ-ĐUN — `defineConfig` nhận một hàm chính vì việc này: một
+ * tiến trình dựng hai biến thể liên tiếp (chính là `bundle-for-zalo.test.ts`) phải thấy giá trị
+ * mới, chứ không thấy giá trị đã đóng băng lúc tệp cấu hình được nạp lần đầu.
+ *
+ * SAI TÊN THÌ DỪNG, KHÔNG ĐOÁN. `VIGOV_BIEN_THE=gôc` mà vẫn dựng tiếp nghĩa là dựng bản ĐẦY ĐỦ
+ * rồi đem nộp duyệt dưới nhãn "bản gốc" — hỏng trong im lặng, và hỏng đúng ở chỗ đắt nhất.
+ */
+function docBienThe(): BienThe {
+  const dat = (process.env.VIGOV_BIEN_THE ?? "day-du").trim();
+  if (!(BIEN_THE_HOP_LE as readonly string[]).includes(dat)) {
+    throw new Error(
+      `VIGOV_BIEN_THE="${dat}" không phải biến thể nào cả. Chỉ nhận: ${BIEN_THE_HOP_LE.join(" · ")}.`,
+    );
+  }
+  return dat as BienThe;
+}
+
+const duongDan = (tuong_doi: string) => fileURLToPath(new URL(tuong_doi, import.meta.url));
+
+/**
+ * Hai cái tên này là hai cửa duy nhất vào hai phần bị gỡ ở bản `goc`. `App.tsx` chỉ được nhập
+ * qua chúng — nhập thẳng một tệp bên trong là đi vòng qua alias, và bản `goc` khi ấy vẫn dựng
+ * xanh trong khi mang theo đúng thứ đáng lẽ không có.
+ */
+function aliasTheoBienThe(): Record<string, string> {
+  const goc = docBienThe() === "goc";
+  return {
+    "bien-the/kham-pha": duongDan(
+      goc ? "./src/features/kham-pha/index.rong.ts" : "./src/features/kham-pha/index.ts",
+    ),
+    "bien-the/chan-doan": duongDan(
+      goc ? "./src/features/diagnostics/index.rong.ts" : "./src/features/diagnostics/index.ts",
+    ),
+  };
+}
 
 /**
  * Build configuration for the Zalo Mini App bundle.
@@ -37,9 +105,11 @@ const thePlainScript = {
   },
 };
 
-export default defineConfig({
+// Hàm, không phải hằng: xem `docBienThe` — biến môi trường phải được đọc mỗi lần dựng.
+export default defineConfig(() => ({
   base: "./",
   plugins: [thePlainScript],
+  resolve: { alias: aliasTheoBienThe() },
   build: {
     outDir: "dist",
     // Zalo reviews and hosts a static bundle. Keeping sourcemaps out keeps the uploaded
@@ -76,4 +146,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

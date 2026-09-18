@@ -6,9 +6,18 @@ import { KhungApp } from "../../App";
 import { COMPANY } from "../../content/company-profile";
 import { SCREENS } from "../company-intro/screens";
 import { ChonXaScreen } from "./ChonXaScreen";
-import { DEMO_DANH_MUC_XA, DEMO_GHI_CHU, DEMO_timTheoMa } from "./demo-danh-muc-xa";
+import * as danhMuc from "./demo-danh-muc-xa";
+import {
+  DEMO_DANH_MUC_XA,
+  DEMO_GHI_CHU,
+  DEMO_GHI_CHU_TRANG_XA,
+  DEMO_TEN_DICH_VU,
+  DEMO_timTheoMa,
+  type LoaiDichVu,
+} from "./demo-danh-muc-xa";
 import { GoiYXaScreen } from "./GoiYXaScreen";
 import { LOI_NHAN, nhanNguon, phanGiaiGoiY } from "./goi-y";
+import { DichVuDong, LOI_NHAN_DANG_LAM, TrangXaScreen } from "./TrangXaScreen";
 
 /**
  * VÌ SAO LỚP KHÁM PHÁ ĐƯỢC KIỂM, TRONG KHI KÊNH CÔNG DÂN CHƯA CÓ MÁY CHỦ NÀO:
@@ -67,6 +76,108 @@ describe("danh mục xã của bản trình diễn", () => {
     expect(DEMO_timTheoMa("01JKHONGCOTHATKHONGCOTHAT0")).toBeNull();
     expect(DEMO_timTheoMa("")).toBeNull();
     expect(DEMO_timTheoMa(XA_MOT.id)).toEqual(XA_MOT);
+  });
+
+  it("mỗi xã có nội dung RIÊNG, không phải một trang dùng chung", () => {
+    // Một trang xã giống hệt trang xã bên cạnh thì tên xã ở header là bằng chứng duy nhất rằng
+    // công dân vào đúng chỗ — và một bằng chứng duy nhất, đọc lướt, thì không ai đọc.
+    const rieng = (lay: (xa: (typeof DEMO_DANH_MUC_XA)[number]) => string) =>
+      new Set(DEMO_DANH_MUC_XA.map(lay)).size;
+    expect(rieng((xa) => xa.gioi_thieu)).toBe(DEMO_DANH_MUC_XA.length);
+    expect(rieng((xa) => xa.dien_thoai_truc)).toBe(DEMO_DANH_MUC_XA.length);
+    expect(rieng((xa) => xa.dich_vu.join("|"))).toBeGreaterThan(1);
+    expect(rieng((xa) => xa.gio_lam_viec)).toBeGreaterThan(1);
+  });
+
+  it("mỗi xã mở 3–5 dịch vụ, không trùng, và đều là dịch vụ có tên", () => {
+    for (const xa of DEMO_DANH_MUC_XA) {
+      expect(xa.dich_vu.length, `${xa.ten}: số dịch vụ`).toBeGreaterThanOrEqual(3);
+      expect(xa.dich_vu.length, `${xa.ten}: số dịch vụ`).toBeLessThanOrEqual(5);
+      expect(new Set(xa.dich_vu).size, `${xa.ten}: có dịch vụ lặp`).toBe(xa.dich_vu.length);
+      for (const loai of xa.dich_vu) {
+        // Một mục không có tên là một nút trống trên màn hình của người dân.
+        expect(DEMO_TEN_DICH_VU[loai]?.trim(), `${xa.ten}: dịch vụ ${loai} không có tên`).toBeTruthy();
+      }
+    }
+  });
+
+  it("mỗi xã có một dòng giới thiệu và một khung giờ làm việc đọc được", () => {
+    for (const xa of DEMO_DANH_MUC_XA) {
+      expect(xa.gioi_thieu.trim().length, `${xa.ten}: thiếu câu giới thiệu`).toBeGreaterThan(20);
+      expect(xa.gio_lam_viec, `${xa.ten}: giờ làm việc không có giờ nào`).toMatch(/\d/);
+    }
+  });
+});
+
+/**
+ * ⚠ DỮ LIỆU CÁ NHÂN TRONG DANH MỤC MẪU — luật 3.
+ *
+ * Danh mục này in ra một SỐ ĐIỆN THOẠI trên màn hình của một ứng dụng đã xuất bản. Một số thật
+ * lọt vào đây là dữ liệu cá nhân đã phát tán, không thu hồi được: bundle đã tải về máy người
+ * dùng, và nếu là số máy của một cán bộ thì đó là số cá nhân bị công bố dưới tên một cơ quan
+ * nhà nước.
+ *
+ * VÌ SAO PHÉP QUÉT NẰM Ở ĐÂY CHỨ KHÔNG PHẢI TRONG `company-profile.test.ts`:
+ *
+ *   Phép quét ở đó đọc `collectStrings(profile)` — mọi chuỗi của **mô-đun nội dung công ty**, và
+ *   không thấy tệp này. Kéo danh mục xã sang đó thì tệp test nội dung công ty phụ thuộc vào dữ
+ *   liệu trình diễn, và nó sẽ đỏ đúng vào hôm có người xoá danh mục ấy đi (README §Còn thiếu #0)
+ *   — một phép kiểm đỏ vì một lý do không liên quan là một phép kiểm sắp bị tắt. Nên cùng một
+ *   phép quét, cùng cách tự bảo trì, đặt cạnh dữ liệu mà nó canh.
+ *
+ *   `phase1-collects-nothing.test.ts` quét toàn cây mã như một lưới cuối; ca dưới đây là lưới
+ *   đầu, và nó nói ra được tên xã nào đang mang số sai.
+ */
+describe("danh mục mẫu không mang dữ liệu cá nhân", () => {
+  /** Mọi chuỗi mô-đun này xuất ra — gom từ chính đối tượng mô-đun, không gõ tay. */
+  function gomChuoi(gia_tri: unknown, vao: string[] = []): string[] {
+    if (typeof gia_tri === "string") vao.push(gia_tri);
+    else if (Array.isArray(gia_tri)) for (const mot of gia_tri) gomChuoi(mot, vao);
+    else if (gia_tri && typeof gia_tri === "object")
+      for (const mot of Object.values(gia_tri)) gomChuoi(mot, vao);
+    return vao;
+  }
+
+  /**
+   * Gom từ ĐỐI TƯỢNG MÔ-ĐUN, không từ một danh sách gõ tay — đó là thứ làm phép quét tự bảo trì.
+   * Thêm một trường vào `XaDemo` (email, địa chỉ trụ sở, tên người trực) mà danh sách gõ tay
+   * không được cập nhật thì trường ấy xuất bản mà chưa từng đi qua phép quét nào, và không có gì
+   * nói ra điều đó. Hàm không phải chuỗi nên `DEMO_timTheoMa` tự rơi ra ngoài.
+   */
+  const MOI_CHUOI = gomChuoi(danhMuc);
+
+  it("dùng ĐÚNG dải số giả đã thoả thuận cho mọi số trực", () => {
+    // Luật 3, bất biến 5: ví dụ và dữ liệu mẫu dùng `0900000000`, ở đây là biến thể `090000000x`
+    // để tám xã khác số nhau. Chỉ chữ số — dấu cách để đọc do màn hình thêm vào.
+    for (const xa of DEMO_DANH_MUC_XA) {
+      expect(xa.dien_thoai_truc, `${xa.ten}: số trực ngoài dải giả đã thoả thuận`).toMatch(
+        /^090000000\d$/,
+      );
+    }
+  });
+
+  it("không chuỗi nào là một số di động Việt Nam ngoài dải giả ấy", () => {
+    for (const chuoi of MOI_CHUOI) {
+      const so = chuoi.replace(/[\s.\-()]/g, "").replace(/090000000\d/g, "SO-GIA");
+      expect(so, `số trông như số thật trong: ${chuoi}`).not.toMatch(/(^|\D)0[35789]\d{8}(\D|$)/);
+    }
+  });
+
+  it("không chuỗi nào chứa một số định danh cá nhân 12 chữ số", () => {
+    for (const chuoi of MOI_CHUOI) {
+      expect(chuoi.replace(/\s/g, ""), `dãy 12 chữ số trong: ${chuoi}`).not.toMatch(
+        /(^|\D)\d{12}(\D|$)/,
+      );
+    }
+  });
+
+  it("lưu tiếng Việt ở dạng dựng sẵn (NFC), không dạng tách dấu", () => {
+    // "ế" dán từ một số trình soạn thảo về dưới dạng "ê" + dấu sắc rời: nhìn y hệt trong diff,
+    // vẽ lệch dấu trên một số phông Android, và làm mọi phép so chuỗi hỏng vì một lý do không
+    // nhìn thấy được.
+    for (const chuoi of MOI_CHUOI) {
+      expect(chuoi.normalize("NFC"), `tiếng Việt tách dấu trong: ${chuoi}`).toBe(chuoi);
+    }
   });
 });
 
@@ -278,6 +389,103 @@ describe("màn chọn xã", () => {
     for (const svg of markup.match(/<svg[\s>][^>]*>/g) ?? []) {
       expect(svg).toContain('aria-hidden="true"');
     }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+
+describe("trang xã — mỗi xã một nội dung riêng", () => {
+  const markup = render(<TrangXaScreen xa={XA_MOT} />);
+
+  it("in tên, tỉnh/thành, câu giới thiệu, số trực và giờ làm việc của ĐÚNG xã ấy", () => {
+    const chu = textOf(markup);
+    expect(chu).toContain(XA_MOT.ten);
+    expect(chu).toContain(XA_MOT.tinh);
+    expect(chu).toContain(XA_MOT.gioi_thieu);
+    expect(chu).toContain(XA_MOT.gio_lam_viec);
+    // Số hiện ra có dấu cách cho dễ đọc; kho chỉ giữ chữ số. Bỏ khoảng trắng rồi mới so.
+    expect(chu.replace(/\s/g, "")).toContain(XA_MOT.dien_thoai_truc);
+  });
+
+  it("KHÔNG mang nội dung của xã khác", () => {
+    // Đây là chế độ hỏng đắt nhất của màn này: công dân đọc tên xã mình rồi đọc tiếp số điện
+    // thoại của xã bên cạnh, và gọi vào đó.
+    const chu = textOf(markup).replace(/\s/g, "");
+    for (const xa of DEMO_DANH_MUC_XA) {
+      if (xa.id === XA_MOT.id) continue;
+      expect(chu, `lẫn số trực của ${xa.ten}`).not.toContain(xa.dien_thoai_truc);
+      expect(textOf(markup), `lẫn giới thiệu của ${xa.ten}`).not.toContain(xa.gioi_thieu);
+    }
+  });
+
+  it("dựng được cho từng xã một, và xã nào ra dịch vụ của xã ấy", () => {
+    const MOI_LOAI = Object.keys(DEMO_TEN_DICH_VU) as LoaiDichVu[];
+    for (const xa of DEMO_DANH_MUC_XA) {
+      const chu = textOf(render(<TrangXaScreen xa={xa} />));
+      for (const loai of MOI_LOAI) {
+        const co = xa.dich_vu.includes(loai);
+        expect(chu.includes(DEMO_TEN_DICH_VU[loai]), `${xa.ten} · ${loai}`).toBe(co);
+      }
+    }
+  });
+
+  it("mỗi dịch vụ là một nút bấm được, và không có nút nào khác trên màn", () => {
+    expect((markup.match(/<button\b/g) ?? []).length).toBe(XA_MOT.dich_vu.length);
+  });
+
+  it("nói TRẠNG THÁI bằng chữ trên từng mục, không bằng riêng màu", () => {
+    expect((markup.match(/Chưa mở/g) ?? []).length).toBe(XA_MOT.dich_vu.length);
+  });
+
+  it("không dựng màn giả: không một liên kết nào dẫn đi đâu", () => {
+    // Các mục chưa có màn nào phía sau. Một `<a>` ở đây là một lời hứa app chưa giữ được — và
+    // số điện thoại thì là số GIẢ của bản trình diễn, nên một `tel:` là một cuộc gọi mất không.
+    expect(markup).not.toMatch(/<a[\s>]/);
+    expect(markup).not.toContain("tel:");
+  });
+
+  it("nói rõ liên hệ, giờ và dịch vụ đều là dữ liệu mẫu", () => {
+    // "Danh mục mẫu" chỉ nói về danh sách xã. Người đọc trang này có quyền hiểu rằng số điện
+    // thoại thì thật — nên câu ở đây phải gọi tên cả ba thứ.
+    expect(textOf(markup)).toContain(DEMO_GHI_CHU_TRANG_XA);
+  });
+
+  it("mở không một ô nhập liệu nào", () => {
+    expect(markup).not.toMatch(/<(form|input|textarea|select)\b/);
+  });
+
+  it("cho đúng một tiêu đề cấp một, và giấu mọi hình vẽ khỏi trình đọc màn hình", () => {
+    expect((markup.match(/<h1\b/g) ?? []).length).toBe(1);
+    for (const svg of markup.match(/<svg[\s>][^>]*>/g) ?? []) {
+      expect(svg).toContain('aria-hidden="true"');
+    }
+  });
+});
+
+describe("một mục dịch vụ chưa mở thì nói ra, chứ không im lặng", () => {
+  const dong = (mo: boolean) =>
+    render(<DichVuDong loai={XA_MOT.dich_vu[0]!} mo={mo} onBam={() => {}} />);
+
+  it("chưa bấm thì chưa có lời nhắn nào, và nút khai đang đóng", () => {
+    expect(textOf(dong(false))).not.toContain(LOI_NHAN_DANG_LAM);
+    expect(dong(false)).toContain('aria-expanded="false"');
+  });
+
+  it("bấm rồi thì hiện lời nhắn, và trình đọc màn hình đọc được nó", () => {
+    // Bấm một nút mà không có gì xảy ra là cách nhanh nhất để một người lớn tuổi kết luận rằng
+    // app hỏng (`skills/accessibility-elderly`). `role="status"` để người không nhìn màn hình
+    // cũng nhận được câu trả lời ấy.
+    const mo = dong(true);
+    expect(textOf(mo)).toContain(LOI_NHAN_DANG_LAM);
+    expect(mo).toContain('role="status"');
+    expect(mo).toContain('aria-expanded="true"');
+  });
+
+  it("lời nhắn nói việc cần làm bây giờ, không nói mã lỗi", () => {
+    // README §Error message shape. "Sắp ra mắt" là một câu không chỉ ai đi đâu cả; người dân bấm
+    // vào "phản ánh hiện trường" là người dân đang có việc cần báo hôm nay.
+    expect(LOI_NHAN_DANG_LAM).toMatch(/gọi số điện thoại trực/);
+    expect(LOI_NHAN_DANG_LAM).not.toMatch(/\b(error|lỗi|code|404|500)\b/i);
   });
 });
 

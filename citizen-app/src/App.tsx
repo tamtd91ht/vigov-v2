@@ -1,13 +1,18 @@
 import { type ReactNode, useState } from "react";
 
+import { LaunchParamsPanel } from "bien-the/chan-doan";
+import {
+  ChonXaScreen,
+  CO_LOP_KHAM_PHA,
+  GoiYXaScreen,
+  phanGiaiGoiY,
+  TrangXaScreen,
+  type XaDemo,
+} from "bien-the/kham-pha";
+
 import { TabBar } from "./components/TabBar";
 import { COMPANY } from "./content/company-profile";
 import { DEFAULT_SCREEN_ID, findScreen, type ScreenId } from "./features/company-intro/screens";
-import { LaunchParamsPanel } from "./features/diagnostics/LaunchParamsPanel";
-import { ChonXaScreen } from "./features/kham-pha/ChonXaScreen";
-import type { XaDemo } from "./features/kham-pha/demo-danh-muc-xa";
-import { phanGiaiGoiY } from "./features/kham-pha/goi-y";
-import { GoiYXaScreen } from "./features/kham-pha/GoiYXaScreen";
 import { batChanDoan, type KetQuaDo, thamSo as thamSoLaunch, thamSoMoApp } from "./lib/launch-params";
 
 /**
@@ -119,7 +124,14 @@ export function App() {
    * chủ tồn tại, và một Mini App chỉ có MỘT App ID cho mọi xã.
    */
   const goiY = phanGiaiGoiY(p["t"] ?? "", p["src"] ?? "");
-  const dangKhamPha = !xaDaChon && !boQuaKhamPha && Boolean(p["t"]);
+
+  /**
+   * `CO_LOP_KHAM_PHA` đứng ĐẦU điều kiện, và nó không phải một cờ tính năng lúc chạy: ở biến thể
+   * `goc` nó là hằng `false` và các màn khám phá đã bị thay bằng bản rỗng (`vite.config.ts`).
+   * Thiếu nó thì một đường liên kết có `t` mở ra một màn hình trắng — thứ người duyệt của Zalo
+   * thấy trước tiên.
+   */
+  const dangKhamPha = CO_LOP_KHAM_PHA && !xaDaChon && !boQuaKhamPha && Boolean(p["t"]);
 
   let noiDung: ReactNode = <Screen />;
   if (dangChonXa) {
@@ -153,6 +165,19 @@ export function App() {
           onXemGioiThieu={() => setBoQuaKhamPha(true)}
         />
       );
+  } else if (xaDaChon && currentId === DEFAULT_SCREEN_ID) {
+    /**
+     * ĐÃ CHỌN XÃ THÌ TAB ĐẦU LÀ TRANG CỦA XÃ ẤY — không phải một tab thứ năm, và không phải một
+     * màn hình che mất thanh tab.
+     *
+     *   Thêm tab thì sổ màn hình có hai loại màn khác hẳn nhau trong một danh sách, và tab ấy
+     *   dẫn đi đâu khi chưa chọn xã là một câu không có câu trả lời đúng. Che thanh tab thì phần
+     *   giới thiệu — thứ Zalo đã duyệt — không còn đường tới.
+     *
+     *   Cách này giữ đúng một đường: bấm tab đầu là về trang xã, luôn luôn, kể cả sau khi công
+     *   dân đi xem phần giới thiệu. Không có ngõ cụt nào mở ra.
+     */
+    noiDung = <TrangXaScreen xa={xaDaChon} />;
   }
 
   return (

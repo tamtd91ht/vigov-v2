@@ -42,6 +42,34 @@
  *   diễn chứ không phải một xã thật.
  */
 
+/**
+ * Loại dịch vụ một xã mở trên kênh công dân.
+ *
+ * ⚠ DANH SÁCH DỊCH VỤ KHÁC NHAU GIỮA CÁC XÃ, VÀ ĐÓ LÀ NGHIỆP VỤ CHỨ KHÔNG PHẢI GIAO DIỆN.
+ *
+ *   Mỗi xã bật những dịch vụ mình thực sự tiếp nhận: một xã chưa có bộ phận một cửa điện tử thì
+ *   không được hiện "Tra cứu hồ sơ một cửa", vì công dân bấm vào rồi chờ một thứ không tồn tại.
+ *   Nên ở giai đoạn 2 danh sách này đọc **lúc chạy** từ cấu hình của từng xã (luật 1, bất biến
+ *   10) — **không bao giờ** là hằng số trong mã, vì một mã nguồn phục vụ nhiều xã.
+ *
+ *   Ở đây nó là hằng số **chỉ vì đây là dữ liệu trình diễn**, và nó biến mất cùng tệp này.
+ */
+export type LoaiDichVu = "phan-anh" | "ho-so" | "tiep-cong-dan" | "thong-bao" | "chung-thuc";
+
+/**
+ * Tên dịch vụ, viết MỘT LẦN cho cả tám xã.
+ *
+ * Tám xã chép lại cùng một chuỗi là tám chỗ để một lần sửa bỏ sót — và cái sót lại là hai cái
+ * tên khác nhau cho cùng một việc, trên hai trang của cùng một hệ thống.
+ */
+export const DEMO_TEN_DICH_VU: Readonly<Record<LoaiDichVu, string>> = {
+  "phan-anh": "Phản ánh hiện trường",
+  "ho-so": "Tra cứu hồ sơ một cửa",
+  "tiep-cong-dan": "Lịch tiếp công dân",
+  "thong-bao": "Thông báo của xã",
+  "chung-thuc": "Chứng thực bản sao",
+};
+
 export type XaDemo = {
   /** ULID. Mờ và bất biến — không phải mã hành chính, không phải tên miền (luật 1, bất biến 2). */
   id: string;
@@ -49,21 +77,108 @@ export type XaDemo = {
   ten: string;
   /** Tỉnh/thành. Cột này tồn tại vì hai xã trùng tên ở hai tỉnh là chuyện bình thường. */
   tinh: string;
+  /** Một dòng giới thiệu. Một dòng, vì màn này là nơi công dân đi TIẾP, không phải nơi đọc. */
+  gioi_thieu: string;
+  /**
+   * ⚠ SỐ TRỰC — **DẢI GIẢ ĐÃ THOẢ THUẬN `090000000x`**, luật 3 bất biến 5. KHÔNG BAO GIỜ MỘT SỐ
+   * THẬT.
+   *
+   *   Tệp này đi vào một bundle được tải về máy người dùng và được một người ngoài tổ chức đọc
+   *   khi duyệt ứng dụng. Một số điện thoại thật ở đây là dữ liệu cá nhân đã xuất bản, không thu
+   *   hồi được — và nếu là số của một cán bộ thì đó là số máy cá nhân bị công bố dưới tên một cơ
+   *   quan nhà nước.
+   *
+   *   Chỉ chứa chữ số: dấu cách để đọc do màn hình thêm vào lúc hiển thị. Hai cách viết cho một
+   *   số là hai cách viết sẽ lệch nhau.
+   */
+  dien_thoai_truc: string;
+  /** Giờ làm việc, viết ra thành câu người dân đọc được — không phải một cấu trúc lịch. */
+  gio_lam_viec: string;
+  /** Dịch vụ xã này mở. 3–5 mục: xem ghi chú ở `LoaiDichVu` về vì sao chúng khác nhau. */
+  dich_vu: readonly LoaiDichVu[];
 };
 
 /**
  * Danh mục mẫu. Tám dòng — đủ để màn chọn xã trông như một danh mục thật, đủ ngắn để không cần
  * ô tìm kiếm (giai đoạn 1 không có thẻ nhập liệu nào, xem `phase1-collects-nothing.test.ts`).
+ *
+ * Mỗi xã có nội dung RIÊNG — dịch vụ, giờ làm việc, số trực, câu giới thiệu — vì một trang xã
+ * giống hệt trang xã bên cạnh thì công dân không có cách nào biết mình vào đúng chỗ, và đó đúng
+ * là chế độ hỏng mà bất di dịch #2 dựng ra để chặn.
  */
 export const DEMO_DANH_MUC_XA: readonly XaDemo[] = [
-  { id: "01JDEMXA00000000000000000A", ten: "Xã An Thịnh", tinh: "Tỉnh Đông Hải" },
-  { id: "01JDEMXA00000000000000000B", ten: "Xã Bình Khê", tinh: "Tỉnh Đông Hải" },
-  { id: "01JDEMXA00000000000000000C", ten: "Đặc khu Hòn Mây", tinh: "Tỉnh Đông Hải" },
-  { id: "01JDEMXA00000000000000000D", ten: "Phường Tân Lộc", tinh: "Thành phố Nam Giang" },
-  { id: "01JDEMXA00000000000000000E", ten: "Phường Hoà Mỹ", tinh: "Thành phố Nam Giang" },
-  { id: "01JDEMXA00000000000000000F", ten: "Phường Trung Chánh", tinh: "Thành phố Nam Giang" },
-  { id: "01JDEMXA00000000000000000G", ten: "Xã Cẩm Sơn", tinh: "Tỉnh Tây Hoà" },
-  { id: "01JDEMXA00000000000000000H", ten: "Xã Long Phú", tinh: "Tỉnh Tây Hoà" },
+  {
+    id: "01JDEMXA00000000000000000A",
+    ten: "Xã An Thịnh",
+    tinh: "Tỉnh Đông Hải",
+    gioi_thieu: "Địa bàn ven biển, dân cư sống chủ yếu bằng nghề nuôi trồng thuỷ sản.",
+    dien_thoai_truc: "0900000001",
+    gio_lam_viec: "Thứ Hai đến Thứ Sáu · Sáng 7:30–11:30 · Chiều 13:30–17:00",
+    dich_vu: ["phan-anh", "ho-so", "thong-bao"],
+  },
+  {
+    id: "01JDEMXA00000000000000000B",
+    ten: "Xã Bình Khê",
+    tinh: "Tỉnh Đông Hải",
+    gioi_thieu: "Địa bàn trung du, có ba thôn nằm cách trụ sở xã hơn mười cây số.",
+    dien_thoai_truc: "0900000002",
+    gio_lam_viec: "Thứ Hai đến Thứ Sáu · Sáng 7:00–11:30 · Chiều 13:00–17:00",
+    dich_vu: ["phan-anh", "tiep-cong-dan", "thong-bao", "chung-thuc"],
+  },
+  {
+    id: "01JDEMXA00000000000000000C",
+    ten: "Đặc khu Hòn Mây",
+    tinh: "Tỉnh Đông Hải",
+    gioi_thieu: "Đảo, đi lại bằng tàu khách; hồ sơ gửi qua kênh trực tuyến được ưu tiên.",
+    dien_thoai_truc: "0900000003",
+    gio_lam_viec: "Thứ Hai đến Thứ Bảy · Sáng 7:30–11:30 · Chiều 13:30–16:30",
+    dich_vu: ["phan-anh", "ho-so", "tiep-cong-dan", "thong-bao", "chung-thuc"],
+  },
+  {
+    id: "01JDEMXA00000000000000000D",
+    ten: "Phường Tân Lộc",
+    tinh: "Thành phố Nam Giang",
+    gioi_thieu: "Địa bàn đô thị, nhiều khu dân cư mới và hai chợ dân sinh.",
+    dien_thoai_truc: "0900000004",
+    gio_lam_viec: "Thứ Hai đến Thứ Sáu · Sáng 7:30–11:30 · Chiều 13:30–17:00",
+    dich_vu: ["phan-anh", "ho-so", "chung-thuc"],
+  },
+  {
+    id: "01JDEMXA00000000000000000E",
+    ten: "Phường Hoà Mỹ",
+    tinh: "Thành phố Nam Giang",
+    gioi_thieu: "Địa bàn đô thị trung tâm, tiếp nhận nhiều hồ sơ hộ tịch và chứng thực.",
+    dien_thoai_truc: "0900000005",
+    gio_lam_viec: "Thứ Hai đến Thứ Sáu · Sáng 7:30–11:30 · Chiều 13:30–17:30",
+    dich_vu: ["ho-so", "chung-thuc", "thong-bao"],
+  },
+  {
+    id: "01JDEMXA00000000000000000F",
+    ten: "Phường Trung Chánh",
+    tinh: "Thành phố Nam Giang",
+    gioi_thieu: "Địa bàn giáp ranh, có khu công nghiệp và đông người tạm trú.",
+    dien_thoai_truc: "0900000006",
+    gio_lam_viec: "Thứ Hai đến Thứ Sáu · Sáng 7:00–11:00 · Chiều 13:00–17:00",
+    dich_vu: ["phan-anh", "ho-so", "tiep-cong-dan", "thong-bao"],
+  },
+  {
+    id: "01JDEMXA00000000000000000G",
+    ten: "Xã Cẩm Sơn",
+    tinh: "Tỉnh Tây Hoà",
+    gioi_thieu: "Địa bàn miền núi, phần lớn thủ tục còn tiếp nhận trực tiếp tại trụ sở.",
+    dien_thoai_truc: "0900000007",
+    gio_lam_viec: "Thứ Hai đến Thứ Sáu · Sáng 7:00–11:00 · Chiều 13:30–16:30",
+    dich_vu: ["phan-anh", "tiep-cong-dan", "thong-bao"],
+  },
+  {
+    id: "01JDEMXA00000000000000000H",
+    ten: "Xã Long Phú",
+    tinh: "Tỉnh Tây Hoà",
+    gioi_thieu: "Địa bàn đồng bằng, có tuyến quốc lộ chạy qua và hai cụm dân cư lớn.",
+    dien_thoai_truc: "0900000008",
+    gio_lam_viec: "Thứ Hai đến Thứ Sáu · Sáng 7:30–11:30 · Chiều 13:30–17:00",
+    dich_vu: ["phan-anh", "ho-so", "tiep-cong-dan", "chung-thuc"],
+  },
 ];
 
 /**
@@ -72,6 +187,17 @@ export const DEMO_DANH_MUC_XA: readonly XaDemo[] = [
  * mục không còn tồn tại.
  */
 export const DEMO_GHI_CHU = "Danh mục mẫu dùng cho bản trình diễn.";
+
+/**
+ * Câu chữ hiện trên TRANG XÃ, và nó phải nói rộng hơn câu trên.
+ *
+ * Trang xã in ra một số điện thoại, một khung giờ làm việc và một danh sách dịch vụ. "Danh mục
+ * mẫu" chỉ nói về cái danh sách xã; một người đọc trang xã có quyền hiểu rằng **số điện thoại
+ * thì thật**. Một người dân gọi vào số ấy là một người dân bị hệ thống của cơ quan nhà nước chỉ
+ * sai đường, nên câu ở đây gọi đúng tên tất cả những gì đang là dữ liệu mẫu.
+ */
+export const DEMO_GHI_CHU_TRANG_XA =
+  "Thông tin liên hệ, giờ làm việc và dịch vụ trên trang này là dữ liệu mẫu dùng cho bản trình diễn.";
 
 /**
  * Tra một mã sang xã. **Không tìm thấy thì trả `null`, không đoán** — luật 1 cấm mặc định trên

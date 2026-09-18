@@ -42,6 +42,26 @@ const PRODUCTION_SOURCES = Object.entries(RAW_SOURCES)
   .filter(([path]) => !path.includes(".test."))
   .map(([path, source]) => ({ path, code: withoutComments(source) }));
 
+/** Hình dạng một số di động Việt Nam sau khi đã bỏ dấu cách và dấu ngăn. */
+const SO_DI_DONG = /(^|\D)0[35789]\d{8}(\D|$)/;
+
+/**
+ * DẢI SỐ GIẢ ĐÃ THOẢ THUẬN — luật 3, bất biến 5: ví dụ và dữ liệu mẫu dùng `0900000000`.
+ *
+ * Đây là NGOẠI LỆ DUY NHẤT của phép quét dưới, và nó hẹp có chủ đích: đúng `090000000` cộng một
+ * chữ số. Danh mục xã của bản trình diễn cần tám số khác nhau (`demo-danh-muc-xa.ts`), nên biến
+ * thể `090000000x` được mở; mọi hình dạng khác vẫn là một số thật cho tới khi chứng minh ngược
+ * lại, và một số thật lọt vào một ứng dụng đã xuất bản là sự cố không thu hồi được.
+ *
+ * Mở rộng dải này là một quyết định về dữ liệu cá nhân, không phải một chỉnh sửa test.
+ */
+const DAI_SO_GIA = /090000000\d/g;
+
+/** Bỏ dấu cách/dấu ngăn rồi bỏ dải số giả, còn lại là những chữ số phải giải trình. */
+function chiSoConLai(ma: string): string {
+  return ma.replace(/[\s.\-()]/g, "").replace(DAI_SO_GIA, "SO-GIA");
+}
+
 type Tripwire = {
   /** What a reader of a failure needs to know: what was found and what to do about it. */
   what: string;
@@ -159,13 +179,26 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // company-profile.test.ts sweeps the exported strings. A number typed into a component, a
     // comment or a fixture is outside that sweep and inside the shipped bundle.
     for (const file of PRODUCTION_SOURCES) {
-      const digits = file.code.replace(/[\s.\-()]/g, "");
-      expect(digits, `${file.path} contains a Vietnamese mobile number`).not.toMatch(
-        /(^|\D)0[35789]\d{8}(\D|$)/,
-      );
+      const digits = chiSoConLai(file.code);
+      expect(digits, `${file.path} contains a Vietnamese mobile number`).not.toMatch(SO_DI_DONG);
       expect(digits, `${file.path} contains a 12-digit identity number`).not.toMatch(
         /(^|\D)\d{12}(\D|$)/,
       );
+    }
+  });
+
+  it("miễn ĐÚNG dải số giả đã thoả thuận, và không miễn gì thêm", () => {
+    // MỘT PHÉP KIỂM VỀ CHÍNH CÁI NGOẠI LỆ VỪA MỞ. Một ngoại lệ không có phép kiểm là một ngoại lệ
+    // sẽ được nới rộng bởi người sau — và lần nới ấy đưa một số thật vào một ứng dụng đã xuất
+    // bản, tức một sự cố dữ liệu cá nhân không thu hồi được.
+    expect(chiSoConLai('const so = "0900000000";')).not.toMatch(SO_DI_DONG);
+    expect(chiSoConLai('const so = "0900000007";')).not.toMatch(SO_DI_DONG);
+    // Dấu cách để đọc cũng nằm trong dải ấy: phép quét bỏ khoảng trắng trước khi so.
+    expect(chiSoConLai('const so = "0900 000 003";')).not.toMatch(SO_DI_DONG);
+
+    // Còn lại thì vẫn bị bắt, kể cả những số chỉ lệch dải giả một chữ số.
+    for (const that of ["0901000000", "0912345678", "0387654321", "0777123456", "0900000012"]) {
+      expect(chiSoConLai(`const so = "${that}";`), `lọt số ${that}`).toMatch(SO_DI_DONG);
     }
   });
 });
