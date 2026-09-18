@@ -66,12 +66,53 @@ type Tripwire = {
   /** What a reader of a failure needs to know: what was found and what to do about it. */
   what: string;
   pattern: RegExp;
+  /**
+   * THƯ MỤC DUY NHẤT được phép chứa thứ này. Không khai thì cấm ở mọi tệp.
+   *
+   * ⚠ ĐÂY LÀ THU HẸP PHẠM VI, KHÔNG PHẢI GỠ LỆNH CẤM — và khác biệt ấy là toàn bộ vấn đề.
+   *
+   *   Biến thể `quyen` là bản nộp XIN QUYỀN: Zalo chỉ cấp `getPhoneNumber` · `getLocation` ·
+   *   `scanQRCode` khi bản nộp có chỗ dùng chúng nhìn thấy được. Nên ranh giới giai đoạn 1 ở
+   *   đúng ba lời gọi ấy được bước qua **có chủ đích**, và bước qua ở **đúng một thư mục**.
+   *
+   *   Xoá hẳn lệnh cấm thì một `getPhoneNumber` xuất hiện trong `App.tsx` sáu tuần nữa sẽ không
+   *   có gì đỏ lên. Một lệnh cấm bị xoá là một lệnh cấm không ai biết là đã mất — nên nó ở lại,
+   *   hẹp đi, và có ca kiểm ở cuối tệp chứng minh nó vẫn bắt được ở ngoài thư mục ấy.
+   */
+  chi_trong?: string;
 };
+
+/** Thư mục của ba màn quyền. Một hằng, vì cả lệnh cấm lẫn ca kiểm về lệnh cấm đều đọc nó. */
+const THU_MUC_QUYEN = "./features/quyen/";
+
+/** Tệp vi phạm một dây bẫy: khớp mẫu, và KHÔNG nằm trong thư mục được miễn. */
+function viPham(
+  day: Tripwire,
+  tep: readonly { path: string; code: string }[],
+): string[] {
+  return tep
+    .filter((f) => day.pattern.test(f.code))
+    .filter((f) => !(day.chi_trong !== undefined && f.path.startsWith(day.chi_trong)))
+    .map((f) => f.path);
+}
 
 const TRIPWIRES: readonly Tripwire[] = [
   {
-    what: "a Zalo SDK call that asks the platform for citizen data (phone, profile, location, token)",
-    pattern: /\b(getPhoneNumber|getUserInfo|getAccessToken|getLocation|getSetting|authorize)\s*\(/,
+    what: "a Zalo SDK call that asks the platform for citizen data (profile, token, permission state)",
+    pattern: /\b(getUserInfo|getAccessToken|getSetting|authorize)\s*\(/,
+  },
+  {
+    // BA LỜI GỌI CỦA BIẾN THỂ `quyen`, và chỉ trong `src/features/quyen/`. Ở mọi tệp khác chúng
+    // vẫn bị cấm y như trước: một `getPhoneNumber` trong `App.tsx` là thu thập dữ liệu ngoài
+    // phạm vi đã nộp, và nó sẽ đi vào CẢ bản `goc` vì `App.tsx` không nằm sau alias.
+    //
+    // `scanQRCode` được THÊM VÀO lệnh cấm ở lần này — trước đây không tên nào canh nó, nên một
+    // lời gọi máy ảnh lọt vào bất kỳ tệp nào mà không có gì đỏ lên.
+    what:
+      'a phone / location / QR call outside "src/features/quyen/" — those three are the ONLY ' +
+      "platform permissions this app asks for, and they live in exactly one directory",
+    pattern: /\b(getPhoneNumber|getLocation|scanQRCode)\s*\(/,
+    chi_trong: THU_MUC_QUYEN,
   },
   {
     // LỆNH CẤM CẢ GÓI, VÀ NÓ CẤM **CHUỖI TÊN MÔ-ĐUN**, KHÔNG CẤM CÚ PHÁP NHẬP.
@@ -88,6 +129,12 @@ const TRIPWIRES: readonly Tripwire[] = [
     //   18/09  **Phép đo đã xong.** Cả hai câu đều có đáp (README §"Hai thứ đã kiểm bằng cách
     //          chạy thật"), lớp khám phá đã dựng và demo được ở commit 25591e8, rồi được gỡ
     //          khỏi bản nộp. Lý do mở khe đã hết, nên khe đóng lại.
+    //   18/09  Biến thể `quyen` — bản nộp XIN QUYỀN. Zalo chỉ cấp ba quyền khi bản nộp có chỗ
+    //          dùng chúng nhìn thấy được, nên lệnh cấm chuyển thành **có phạm vi**: `zmp-sdk`
+    //          chỉ được nhắc trong `src/features/quyen/`, mọi tệp khác vẫn bị cấm như cũ. Khác
+    //          lần 18/09 ở trên ở chỗ: lần ấy nới theo TÊN HÀM (một danh sách trắng đi cùng cú
+    //          pháp, và nó đã chết trong im lặng); lần này thu hẹp theo THƯ MỤC, và có ca kiểm
+    //          cho nó ăn một vi phạm đặt NGOÀI thư mục ấy.
     //
     // MỘT CHUỖI, KHÔNG PHẢI HAI CÚ PHÁP — và đây là bài học đắt nhất của lần trước. Bản danh
     // sách trắng đầu tiên chỉ khớp `import { X } from "zmp-sdk"`. Ngay sau đó chính mã sản phẩm
@@ -104,6 +151,7 @@ const TRIPWIRES: readonly Tripwire[] = [
       'a reference to the "zmp-sdk" module — importing it costs 256 kB raw / 64 kB gzip and is ' +
       "the doorway to every citizen-data API the platform offers",
     pattern: /["'`]zmp-sdk(\/[^"'`]*)?["'`]/,
+    chi_trong: THU_MUC_QUYEN,
   },
   {
     what: "an outbound request — phase 1 talks to no backend, so nothing about a citizen can leave the device",
@@ -130,16 +178,23 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     expect(paths).toContain("./main.tsx");
     expect(paths).toContain("./content/company-profile.ts");
     expect(paths.length).toBeGreaterThanOrEqual(8);
+
+    // THƯ MỤC ĐƯỢC MIỄN PHẢI NẰM TRONG LƯỢT QUÉT. Một ngoại lệ trỏ vào một thư mục không được
+    // quét thì không miễn gì cả — và ngày thư mục ấy đổi tên, lệnh cấm có phạm vi trở thành lệnh
+    // cấm toàn phần mà không ai biết, hoặc ngược lại.
+    expect(paths).toContain(`${THU_MUC_QUYEN}zalo-api.ts`);
   });
 
   for (const tripwire of TRIPWIRES) {
     it(`finds no ${tripwire.what.split(" — ")[0]}`, () => {
-      const offenders = PRODUCTION_SOURCES.filter((file) => tripwire.pattern.test(file.code)).map(
-        (file) => file.path,
-      );
+      const offenders = viPham(tripwire, PRODUCTION_SOURCES);
       expect(
         offenders,
-        `${tripwire.what}.\nPhase 1 was reviewed by Zalo as an app that collects nothing (README §"Phase 1 collects no personal data"). Adding collection changes what was submitted — raise it before writing it, do not relax this test.`,
+        `${tripwire.what}.\nPhase 1 was reviewed by Zalo as an app that collects nothing (README §"Phase 1 collects no personal data"). Adding collection changes what was submitted — raise it before writing it, do not relax this test.${
+          tripwire.chi_trong === undefined
+            ? ""
+            : `\nBa lời gọi quyền chỉ sống trong "src${tripwire.chi_trong.slice(1)}", và ba màn ở đó chỉ HIỆN kết quả lên màn hình: các lệnh cấm fetch/XHR/WebSocket và localStorage/cookie/indexedDB KHÔNG được nới theo — chúng là thứ biến "không gửi đi đâu" thành một ràng buộc kiểm được.`
+        }`,
       ).toEqual([]);
     });
   }
@@ -172,6 +227,43 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // Và nó KHÔNG được kêu oan: một dây bẫy kêu sai chỗ bị tắt nhanh y như một dây bẫy câm.
     for (const dong of ['import { useState } from "react";', "// zmp-sdk sẽ quay lại ở giai đoạn 2"]) {
       expect(cam.test(dong), `lệnh cấm zmp-sdk kêu oan ở: ${dong}`).toBe(false);
+    }
+  });
+
+  it("lệnh cấm CÓ PHẠM VI vẫn bắt được vi phạm đặt NGOÀI src/features/quyen/", () => {
+    // CA KIỂM VỀ CHÍNH CÁI NGOẠI LỆ VỪA MỞ — cùng lý do với ca "miễn ĐÚNG dải số giả" bên dưới.
+    //
+    // Thu hẹp phạm vi một lệnh cấm trông y hệt gỡ nó: cả hai đều làm lượt quét xanh trở lại. Thứ
+    // phân biệt hai việc ấy là một ca cho lệnh cấm ăn một vi phạm đặt ở NGOÀI thư mục được miễn
+    // và khẳng định nó vẫn bắt. Không có ca này thì sáu tuần nữa `chi_trong` có thể bị sửa thành
+    // `"./"` và không có gì đỏ lên.
+    const co_pham_vi = TRIPWIRES.filter((t) => t.chi_trong !== undefined);
+    expect(co_pham_vi.length, "không còn lệnh cấm có phạm vi nào để kiểm").toBe(2);
+
+    const VI_PHAM = [
+      { path: "./App.tsx", code: 'const { token } = await getPhoneNumber();' },
+      { path: "./App.tsx", code: 'await getLocation();' },
+      { path: "./lib/launch-params.ts", code: "await scanQRCode();" },
+      { path: "./components/TabBar.tsx", code: 'const sdk = await import("zmp-sdk");' },
+      // Sát bên thư mục được miễn, nhưng không nằm trong nó: tiền tố phải khớp cả dấu `/`.
+      { path: "./features/quyen-cu.ts", code: "await getPhoneNumber();" },
+    ];
+    for (const tep of VI_PHAM) {
+      const bat = co_pham_vi.some((day) => viPham(day, [tep]).length === 1);
+      expect(bat, `lệnh cấm có phạm vi không bắt được: ${tep.path} — ${tep.code}`).toBe(true);
+    }
+
+    // Và trong thư mục ấy thì đúng là được phép — nếu không thì biến thể `quyen` không dựng nổi.
+    const TRONG = [
+      { path: `${THU_MUC_QUYEN}zalo-api.ts`, code: 'await (await import("zmp-sdk")).getPhoneNumber();' },
+      { path: `${THU_MUC_QUYEN}zalo-api.ts`, code: "await scanQRCode();" },
+    ];
+    for (const tep of TRONG) {
+      for (const day of co_pham_vi) {
+        expect(viPham(day, [tep]), `miễn không ăn trong chính thư mục của nó: ${tep.code}`).toEqual(
+          [],
+        );
+      }
     }
   });
 

@@ -1,8 +1,10 @@
 # citizen-app
 
-The citizen-facing **Zalo Mini App**. React + Vite. **`zmp-sdk` is a dependency nothing imports**
-— see §"Hai thứ đã kiểm bằng cách chạy thật", and the tripwire in
-`src/phase1-collects-nothing.test.ts` that keeps it that way.
+The citizen-facing **Zalo Mini App**. React + Vite. **`zmp-sdk` is imported from exactly one
+directory** — `src/features/quyen/`, the three permission screens — and from nowhere else. The
+tripwire in `src/phase1-collects-nothing.test.ts` is what keeps that true: it was not removed when
+those screens landed, it was **narrowed to one directory**, and it has a case proving it still
+fires everywhere outside it.
 
 Citizens are identified by phone plus OTP — a **weak identity**, not to be trusted. And they
 **do not choose** this software: being unable to use it means being unable to reach a public
@@ -17,17 +19,18 @@ phases instead of two apps.
 | Phase | What ships | Why |
 |---|---|---|
 | **1 — now** | A static introduction to **VihatSoftware**, the company that publishes the app. The **discovery layer** — commune suggestion, commune picker, commune page — is built, and ships only in the `day-du` build | This is the submission Zalo reviews, so the OA `VihatSoftware` can verify the App ID |
+| **1b — now** | The same introduction **plus three permission screens** (phone · location · QR), in the `quyen` build | Zalo grants `getPhoneNumber` / `getLocation` / `scanQRCode` only when the submission **visibly uses** them. Phase 2 needs all three, and they must be granted on **this** App ID before that surface can be built |
 | **2 — next** | The commune / citizen surface behind a real session | It lands on the **same App ID**, already verified |
 
 **The discovery layer is a secondary view of the SAME app, never a second app.** A second App ID
 would need its own review, so "hiding the real app behind another App ID" buys nothing and costs
 a second approval.
 
-**Which build carries it is a choice made at deploy time** — see §"Hai biến thể bản dựng". The
-`goc` build, the one sent for review, does **not contain** the discovery layer at all: not the
-code, not the eight invented administrative names, not the sample phone numbers. That is checked
-by building both variants and reading the bundle, not asserted. The `day-du` build carries it
-for demos and internal testing.
+**Which build carries it is a choice made at deploy time** — see §"Ba biến thể bản dựng". The
+`goc` and `quyen` builds — the two that get submitted — do **not contain** the discovery layer at
+all: not the code, not the eight invented administrative names, not the sample phone numbers, not
+the diagnostics panel. That is checked by building all three variants and reading the bundle, not
+asserted. The `day-du` build carries it for demos and internal testing.
 
 **Nothing of phase 2 gets deleted to make room for phase 1.** `src/lib/commune-resolution.ts`
 is the foundation phase 2 builds on and stays untouched.
@@ -39,11 +42,17 @@ commune gets resolved at runtime with no domain to key off:
 
 ### Phase 1 collects no personal data — keep it that way
 
-No sign-in, no `getPhoneNumber`, no OTP, no form, no input control of any kind, no backend call,
-no device storage, no geolocation. The only outbound links are `tel:`, `mailto:` and the company
-website.
+No sign-in, no OTP, no form, no input control of any kind, **no backend call, no device storage**.
+The only outbound links are `tel:`, `mailto:` and the company website.
 
-**The discovery layer changes none of that**, in either build. It reads a parameter the platform
+**Kể từ biến thể `quyen`, câu ấy có một ngoại lệ có phạm vi, và nó phải được đọc nguyên văn:**
+bản dựng `quyen` — và chỉ bản ấy — có ba màn gọi `getPhoneNumber` · `getLocation` · `scanQRCode`.
+Ba màn ấy **lấy dữ liệu rồi hiện lên màn hình, hết**: không `fetch`, không `localStorage`, không
+`console.log`, không gửi đi đâu. Hai lệnh cấm ấy trong `phase1-collects-nothing.test.ts` **không
+được nới một dòng nào** — chúng là thứ biến "không gửi đi đâu" từ lời hứa thành ràng buộc kiểm
+được. §"Ba màn quyền" nói rõ vì sao màn hình ấy **không có dữ liệu cá nhân ngay từ đầu**.
+
+**The discovery layer changes none of that**, in any build. It reads a parameter the platform
 already put in the URL before our code ran, it holds the confirmed commune in `useState` — lost
 when the app closes, never written to the device, never sent anywhere — and its commune list,
 including the commune page and its duty numbers, is a constant in the bundle. Nothing about a
@@ -56,9 +65,15 @@ the exemption is that narrow: a real mobile number published in a reviewed app i
 incident that cannot be recalled.
 
 That is a deliberate design choice, not an accident of scope. It makes rule 3 (personal data)
-hold **by construction** rather than by argument, and it gives the Zalo review nothing to
-weigh: an app that asks for nothing has no permission to justify. Adding any collection to
-phase 1 changes what was submitted for review — raise it before writing it.
+hold **by construction** rather than by argument. In the `goc` build it also gives the Zalo review
+nothing to weigh: an app that asks for nothing has no permission to justify.
+
+**The `quyen` build deliberately gives up that second property, and only that one.** It asks for
+three permissions, so it has three things to justify — and it justifies each of them on screen, in
+Vietnamese, next to the button that asks (§"Ba màn quyền"). What it does **not** give up is the
+first property: nothing is stored, nothing is sent, so there is still no personal data anywhere in
+this app. Adding collection **beyond** those three screens changes what was submitted for review —
+raise it before writing it.
 
 The hotline and email on the contact screen are **ViHAT Group corporate contact points**
 published on its website. They identify no individual, so they are business data, not personal
@@ -103,21 +118,34 @@ confirmed commune is client-side UI state, **not a session**; read the block at 
 Every user-visible string of the company introduction sits in `src/content/company-profile.ts`.
 One file, because phase 2 replaces this content wholesale and the edit should land in one place.
 The discovery layer (`src/features/kham-pha/`) keeps its own strings next to the rules they
-belong to, and every commune name it shows in **exactly one file** — see §Còn thiếu #0.
+belong to, and every commune name it shows in **exactly one file** — see §Còn thiếu #0. The three
+permission screens keep theirs in `src/features/quyen/noi-dung.ts`, for a third reason: those are
+the exact sentences the Zalo reviewer reads when deciding whether to grant the permissions, and a
+justification scattered through JSX is one nobody re-reads before submitting.
 
 **Nothing may be added to that file without a source.** The app carries the name of a real
 legal entity: an unsourced founding year, customer name or award is a false statement
 published under that name. Facts that are missing are left out, never filled in.
 
-## Hai biến thể bản dựng
+## Ba biến thể bản dựng
 
 Người chạy lệnh chọn **đẩy bản nào**. Biến thể quyết định ở **tầng dựng**, qua biến môi trường
 `VIGOV_BIEN_THE` (`vite.config.ts`).
 
-| Biến thể | Nội dung | Dùng để |
-|---|---|---|
-| **`goc`** | **Chỉ** app giới thiệu bốn màn | **Gửi Zalo duyệt** |
-| **`day-du`** (mặc định) | Thêm lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo |
+| Biến thể | Nội dung | Dùng để | `dist/assets/app.js` |
+|---|---|---|---|
+| **`goc`** | **Chỉ** app giới thiệu bốn màn | Bản nộp **tối thiểu** | **254,39 kB** thô · 77,11 kB gzip |
+| **`quyen`** | `goc` + ba màn quyền (`zmp-sdk`) | **BẢN NỘP XIN QUYỀN** | **518,50 kB** thô · 143,34 kB gzip |
+| **`day-du`** (mặc định) | `quyen` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **530,02 kB** thô · 146,77 kB gzip |
+
+Ba con số ấy **đo ngày 18/09/2026**, bằng `npm run build:goc` · `build:quyen` · `build`, đọc từ
+chính dòng Vite in ra. Chênh lệch `goc` → `quyen` đúng bằng cái giá của `zmp-sdk`: **+264,11 kB
+thô / +66,23 kB gzip**, tức app **hơn gấp đôi**. Đó là lý do SDK không nằm trong bản `goc`, và
+cũng là lý do `lib/launch-params.ts` đọc tham số bằng `URLSearchParams` chứ không bằng SDK.
+
+(Bản `goc` trước đây là 252,16 kB; nay 254,39 kB. Phần chênh là `screens.ts` đọc cờ
+`CO_MAN_QUYEN` qua alias, cộng **≈2,2 kB các lớp CSS của ba màn quyền** — xem §"Thứ bản `goc`
+VẪN mang" ngay dưới.)
 
 **Vì sao tách bằng BUILD chứ không bằng một cờ lúc chạy.** Một cờ lúc chạy để tám tên đơn vị
 hành chính **đặt ra**, tám số điện thoại mẫu và bảng chẩn đoán nằm nguyên trong bundle gửi
@@ -125,38 +153,112 @@ duyệt — chỉ là không vẽ ra. Tách ở tầng dựng thì bản `goc` *
 điều đó **kiểm được bằng `grep` trên `dist/assets/app.js`**, không phải bằng lời hứa. Đó cũng
 là điều làm việc này trung thực: bản nộp duyệt đúng bằng thứ người duyệt đọc.
 
-**Ranh giới là DỮ LIỆU, không phải từ vựng.** Bản `goc` vẫn mang hai nhãn `Chọn xã` và
-`Đổi xã` trong `App.tsx` — vỏ không nằm sau alias, và ở bản gốc nhánh ấy không bao giờ chạy.
-Chúng là từ ngữ hành chính thông thường, không phải đơn vị hành chính đặt ra. Một ca trong
-`src/bundle-for-zalo.test.ts` **khẳng định chúng có mặt**, để lần sau ai `grep` thấy thì đọc
-được ngay lý do thay vì tưởng alias đã thủng.
+### Thứ bản `goc` VẪN mang — nói ra, không giấu
+
+**Ranh giới là DỮ LIỆU, không phải từ vựng.**
+
+| Còn lại trong bản `goc` | Vì sao để nguyên |
+|---|---|
+| Hai nhãn `Chọn xã` · `Đổi xã` (`App.tsx`) | Vỏ không nằm sau alias, nhánh ấy không bao giờ chạy. Từ ngữ hành chính thông thường, không phải đơn vị hành chính đặt ra |
+| **≈2,2 kB các lớp CSS của ba màn quyền** (`.quyen__*`, `.quyen-khu__*`) | `src/styles.css` là **một** tệp, `main.tsx` nạp trọn, và `main.tsx` không nằm sau alias. Tách biểu mẫu kiểu theo biến thể là dựng **cơ chế thứ hai** cạnh `resolve.alias` cho 2,2 kB — đắt hơn thứ nó mua. Trong 2,2 kB ấy không có một câu chữ nào: chỉ tên lớp và thuộc tính, và không màn nào ở bản `goc` mang các lớp ấy |
+
+Cả hai đều có **một ca trong `src/bundle-for-zalo.test.ts` khẳng định chúng CÓ mặt**, để lần sau
+ai `grep` thấy thì đọc được ngay lý do thay vì tưởng alias đã thủng. Ngược lại, bản `goc` **không**
+chứa `zmp-sdk`, `getPhoneNumber` hay `scanQRCode` — cũng là một ca kiểm, dựng thật rồi đọc bundle.
 
 Cơ chế là `resolve.alias`, không phải tree-shaking — tree-shaking **không** loại được một
-`import` tĩnh đã có mặt trong mã. Hai cái tên `bien-the/kham-pha` và `bien-the/chan-doan` là
-**hai cửa duy nhất** vào hai phần bị gỡ; ở bản `goc` chúng trỏ sang `index.rong.ts`.
+`import` tĩnh đã có mặt trong mã. Ba cái tên `bien-the/kham-pha`, `bien-the/chan-doan` và
+`bien-the/quyen` là **ba cửa duy nhất** vào ba phần gỡ được; biến thể nào không có phần ấy thì
+cửa trỏ sang `index.rong.ts`.
 
 | Tệp | Việc nó làm |
 |---|---|
 | `src/features/kham-pha/index.ts` · `index.rong.ts` | Bề mặt lớp khám phá, và bản rỗng của nó |
 | `src/features/diagnostics/index.ts` · `index.rong.ts` | Như trên, cho bảng chẩn đoán |
-| `src/features/kham-pha/bien-the.test.ts` | Hai bản khai cùng bề mặt · **không tệp nào nhập thẳng vòng qua alias** |
-| `src/bundle-for-zalo.test.ts` | Dựng thật **cả hai** biến thể rồi đọc bundle — bằng chứng cuối cùng |
+| `src/features/quyen/index.ts` · `index.rong.ts` | Như trên, cho ba màn quyền — cửa chỉ có **hai** cái tên: `CO_MAN_QUYEN` và `MAN_QUYEN` |
+| `src/features/kham-pha/bien-the.test.ts` | Ba bản rỗng khai đúng bề mặt · **không tệp nào nhập thẳng vòng qua alias** · danh sách biến thể ở `vite.config.ts` và `scripts/dung.mjs` **không lệch nhau** |
+| `src/bundle-for-zalo.test.ts` | Dựng thật **cả ba** biến thể rồi đọc bundle — bằng chứng cuối cùng |
 
 `tsc` luôn nhìn bản **đầy đủ** (`tsconfig.json` → `paths`); bản rỗng khai kiểu bằng `typeof`
 của bản thật, nên thiếu một export là `tsc --noEmit` đỏ chứ không phải bản `goc` vỡ lúc dựng.
+
+## Ba màn quyền — biến thể `quyen`, bản nộp xin quyền
+
+Zalo **chỉ cấp** `getPhoneNumber` · `getLocation` · `scanQRCode` khi bản nộp **có chỗ dùng chúng
+nhìn thấy được**, và chính sách Mini App điều 3.3.4 (trích ngay trên `getPhoneNumber` trong
+`node_modules/zmp-sdk/index.d.ts`) nói thẳng: *"chúng tôi sẽ từ chối xét duyệt cho những Mini App
+có luồng xin cấp quyền chưa rõ ràng, không nêu được mục đích xin quyền đến người dùng"*. Nên mỗi
+màn có **một nút, một lời giải thích vì sao app cần quyền ấy, và một chỗ hiện kết quả**.
+
+| Màn | API | Lời giải thích trên màn | Kết quả hiện ra |
+|---|---|---|---|
+| Số điện thoại | `getPhoneNumber` | Xác thực người dùng khi gửi yêu cầu hỗ trợ | Đã nhận **token** · độ dài · vài ký tự đầu (đã che) |
+| Vị trí | `getLocation` | Gợi ý điểm hỗ trợ gần nhất | Như trên |
+| Quét QR | `scanQRCode` | Quét mã tra cứu thay cho gõ tay | **Nội dung quét được**, nguyên văn |
+
+### SỰ THẬT ĐÃ ĐO TỪ `zmp-sdk` 2.53.0 — đừng tra lại tài liệu web
+
+```
+GetPhoneNumberReturns = { number?: @deprecated; token?: string }
+GetLocationReturns    = { latitude?/longitude?/timestamp?/provider?: @deprecated; token?: string }
+ScanQRCodeReturns     = { content: string }
+```
+
+Token của cả hai: **dùng được một lần, hết hạn sau 2 phút**, và chỉ đổi được ở **máy chủ** bằng
+app secret.
+
+**Hệ quả thiết kế, và đây là điều quan trọng nhất của cả lớp này: số điện thoại và toạ độ KHÔNG
+BAO GIỜ tới thiết bị.** Chỉ có token. Màn hình không có gì để che vì nó **không có dữ liệu cá
+nhân ngay từ đầu** — và màn hình **nói ra điều đó bằng tiếng Việt**, vì đó là lý do đáng tin nhất
+để một người dân bấm đồng ý. `number` / `latitude` / `longitude` đều `@deprecated`: đọc chúng là
+tự rước dữ liệu cá nhân về máy đúng lúc nền tảng vừa bỏ đường ấy đi.
+
+`scanQRCode` là API **duy nhất** ở đây trả về dữ liệu thật. Nội dung ấy có thể là bất cứ thứ gì,
+kể cả dữ liệu cá nhân. **Hiện lên màn hình được; `console.log` thì không**, và không chỗ lưu nào.
+
+### Giới hạn cứng của ba màn này
+
+Ba màn **lấy được dữ liệu và hiện ra màn hình, rồi thôi. Không gửi đi đâu cả.** Các dây bẫy cấm
+`fetch`/XHR/WebSocket/EventSource/axios và `localStorage`/`sessionStorage`/`document.cookie`/
+`indexedDB` trong `src/phase1-collects-nothing.test.ts` **giữ nguyên, không nới một dòng**. Nếu
+một thay đổi cần nới một trong hai, **dừng lại và nói ra** — nghĩa là thiết kế đã lệch.
+
+Lệnh cấm `zmp-sdk` và cấm ba tên hàm ấy thì **đổi**, vì đó chính là ranh giới giai đoạn đang được
+cố ý bước qua. Cách đổi: **không xoá, mà thu hẹp phạm vi** — chỉ `src/features/quyen/` được nhắc
+tới chúng; mọi tệp khác vẫn bị cấm như cũ, và có một ca cho lệnh cấm ăn một chuỗi vi phạm **đặt ở
+ngoài thư mục ấy** để chứng minh nó còn sống. Một lệnh cấm bị xoá là một lệnh cấm không ai biết là
+đã mất.
+
+### Ràng buộc kỹ thuật đã trả giá để biết
+
+| Điều | Hệ quả trong mã |
+|---|---|
+| `zmp-sdk` **đụng `window` ngay lúc nạp mô-đun** | Không `import` tĩnh ở cấp cao nhất — nó làm sập mọi test chạy dưới Node. Phải `await import("zmp-sdk")` **bên trong hàm**, trong `try/catch` |
+| Ngoài Zalo thì lời nhập ấy hỏng | Màn hình **nói ra bằng tiếng Việt**, không trắng trơn. `catch {}` im lặng ở đây là một màn trống trên máy người duyệt |
+| Người dùng **từ chối** (`code === -201`, lấy từ ví dụ trong chính `index.d.ts`) | Là **đường đi bình thường**, không phải lỗi: một câu tiếng Việt nói họ bấm lại được, không mã lỗi, không màu đỏ |
+| Ở môi trường phát triển, hai API token **luôn thành công và trả token rỗng** | Màn hình nói ra đúng như vậy thay vì hiện một ô trống |
+
+| Tệp | Việc nó làm |
+|---|---|
+| `src/features/quyen/zalo-api.ts` | **Nơi duy nhất** nhắc `zmp-sdk`. Ba lời gọi, quy mọi đường về bốn nhánh: `xong` · `tu-choi` · `ngoai-zalo` · `khong-lay-duoc` |
+| `src/features/quyen/noi-dung.ts` | Mọi chữ người dùng đọc trên ba màn — `bundle-for-zalo.test.ts` dùng lại đúng danh sách này |
+| `src/features/quyen/ManQuyen.tsx` | Ba màn + khu vực chọn màn. `ManQuyenThuan` là bản **thuần** để bốn nhánh kết quả kiểm được mà không cần Zalo |
+| `src/features/quyen/quyen.test.tsx` | 29 ca: từ chối · ngoài Zalo · token không hiện trọn · câu "dữ liệu thật không tới thiết bị" · một `<h1>` mỗi màn |
 
 ## Nộp lên Zalo
 
 ### Chuỗi lệnh
 
 ```bash
-npm run zmp:login           # một lần, cần App ID
-npm run zmp:deploy          # bản ĐẦY ĐỦ, bản thử nghiệm (-t)
-npm run zmp:deploy:goc      # bản GỐC,    bản thử nghiệm (-t)
-npm run zmp:phat-hanh:goc   # bản GỐC,    BẢN PHÁT HÀNH (bỏ -t) — đây là bản gửi duyệt
+npm run zmp:login             # một lần, cần App ID
+npm run zmp:deploy            # bản ĐẦY ĐỦ, bản thử nghiệm (-t)
+npm run zmp:deploy:goc        # bản GỐC,    bản thử nghiệm (-t)
+npm run zmp:deploy:quyen      # bản QUYỀN,  bản thử nghiệm (-t)
+npm run zmp:phat-hanh:goc     # bản GỐC,    BẢN PHÁT HÀNH (bỏ -t)
+npm run zmp:phat-hanh:quyen   # bản QUYỀN,  BẢN PHÁT HÀNH (bỏ -t) — đây là bản gửi XIN QUYỀN
 ```
 
-Cả ba đi qua `scripts/deploy.mjs`: dựng đúng biến thể → `sync-config` → `deploy`. Dựng nằm
+Cả sáu đi qua `scripts/deploy.mjs`: dựng đúng biến thể → `sync-config` → `deploy`. Dựng nằm
 **trong** script vì biến thể quyết định lúc dựng — dựng ngoài rồi đẩy trong là hai lệnh có thể
 lệch nhau, và lần lệch ấy nộp bản `day-du` dưới nhãn `goc`.
 
@@ -178,7 +280,7 @@ người vừa đẩy. Tính trong `scripts/deploy.mjs` chứ không trong `pack
 `npm run` chạy qua `cmd`, nơi `$(git rev-parse …)` chỉ là một chuỗi ký tự.
 
 `-t` là **bản thử nghiệm**. Bỏ `-t` là đẩy **bản phát hành**, và đường ấy nay có trong script
-(`zmp:phat-hanh:goc`). Trước đây nó cố ý không có, để việc phát hành phải là một quyết định có
+(`zmp:phat-hanh:goc` · `zmp:phat-hanh:quyen`). Trước đây nó cố ý không có, để việc phát hành phải là một quyết định có
 người gõ tay ra; nay người dùng cần đường ấy, nên **ma sát chuyển chỗ chứ không biến mất**: từ
 *"không có lệnh"* sang *"lệnh nói rõ nó đang làm gì"*. Script **in ra biến thể, loại bản và
 nhãn phiên bản trước khi làm gì**, rồi đường phát hành **dừng 5 giây** để người chạy kịp
@@ -200,7 +302,7 @@ Phiên bản ghim cứng để lần chạy sau ra đúng kết quả lần ch�
 | Thẻ script phải **cổ điển**, không `type="module"` | Chạy `sync-config` trên hai bản HTML khác nhau đúng một chỗ: bản module cho `listSyncJS: ["inline.js"]` — **thiếu chính bundle của app**; bản cổ điển cho thêm `"./assets/app.js"`. Không có lỗi nào báo ra. `vite.config.ts` sửa thẻ ở bước phát HTML, và `src/bundle-for-zalo.test.ts` ghim lại |
 | Khuôn link mở **bản thử nghiệm**, và tham số riêng **đi tới được app** | `https://zalo.me/s/<APP_ID>/?env=TESTING&version=<n>` — và nối thêm `t`, `src`, `debug` thì chúng tới nơi, đứng cạnh `env`/`version`. Đo 18/09/2026 trên Version 6–7. Đường công khai **không kèm `env`/`version`** chỉ phục vụ bản đã phát hành: mở khi chưa phát hành thì Zalo trả *"ứng dụng đang trong giai đoạn phát triển"* **trước khi** mã của ta chạy — đó là rào nền tảng, không phải app trắng |
 | `h5.zdn.vn/zapps/…` là host **nội bộ**, không quét được | Đó là thứ webview nạp **sau khi** Zalo phân giải deep link. Quét thẳng nó thì Zalo báo *"liên kết không được hỗ trợ"*; mở trong trình duyệt thường thì báo *"vui lòng truy cập trên ứng dụng Zalo"*. Nó chỉ hữu ích như một phép đo: `location.href` in ra nó là cách rẻ nhất để biết khuôn link |
-| `location.search` mang **đúng** những gì `getRouteParams()` mang | Đo 18/09/2026 trên Version 6, mở nguội qua deep link: cả tham số nền tảng (`env`, `version`) lẫn tham số riêng (`t`, `src`, `debug`) đều có mặt. Nên lớp khám phá đọc tham số **chỉ từ `location.search`**, và `zmp-sdk` **không còn tệp nào nhập**: bản `goc` dựng ra **252,16 kB thô / 76,84 kB gzip**, bản `day-du` **263,69 / 79,83**, so với **513,20 / 142,51** khi còn nhập SDK — gần một nửa. (Đo 18/09/2026, `npm run build:goc` và `npm run build`.) Chế độ hỏng nếu phép đo sai ở một đường mở nào đó là chế độ hỏng **lành**: không có tham số ⇒ app giới thiệu bình thường ⇒ công dân tự chọn xã, đúng đường ADR 0005 bắt buộc phải chạy được. Gói vẫn nằm trong `package.json` vì ADR 0020 chốt `getPhoneNumber` là đường đăng nhập của giai đoạn 2 — một phụ thuộc **không được nhập** thì không vào bundle và không tốn gì, và `phase1-collects-nothing.test.ts` là thứ giữ cho nó không được nhập |
+| `location.search` mang **đúng** những gì `getRouteParams()` mang | Đo 18/09/2026 trên Version 6, mở nguội qua deep link: cả tham số nền tảng (`env`, `version`) lẫn tham số riêng (`t`, `src`, `debug`) đều có mặt. Nên lớp khám phá đọc tham số **chỉ từ `location.search`**, không qua SDK. Cái giá của SDK đo lại ngày 18/09/2026 sau khi có biến thể `quyen`: `goc` **254,39 kB thô / 77,11 kB gzip** ↔ `quyen` **518,50 / 143,34** — **hơn gấp đôi**, và gần trọn phần chênh là `zmp-sdk` (§"Ba biến thể bản dựng"); ba màn quyền tự thân chỉ vài kB. Chế độ hỏng nếu phép đo sai ở một đường mở nào đó là chế độ hỏng **lành**: không có tham số ⇒ app giới thiệu bình thường ⇒ công dân tự chọn xã, đúng đường ADR 0005 bắt buộc phải chạy được. Nhập SDK **chỉ để đọc tham số** là bắt mọi người dùng trả hơn 66 kB gzip trong mọi lần mở, cho một việc `URLSearchParams` làm không tốn gì — nên ngay cả khi SDK đã có mặt ở biến thể `quyen`, `launch-params.ts` vẫn không dùng nó |
 
 ### Còn thiếu
 
@@ -281,12 +383,15 @@ nay mới có đường 1 và đường 4.
 |---|---|
 | `npm run dev` | Máy chủ phát triển Vite (biến thể **đầy đủ**) |
 | `npm run build` | Gói tĩnh vào `dist/` — biến thể **đầy đủ** |
-| `npm run build:goc` | Như trên, biến thể **gốc** (bản gửi duyệt) |
+| `npm run build:goc` | Như trên, biến thể **gốc** (bản nộp tối thiểu) |
+| `npm run build:quyen` | Như trên, biến thể **quyền** (bản nộp xin quyền) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest — sự thật đã công bố, hình dạng bundle, sổ màn hình, **và bản gốc sạch** |
+| `npm test` | Vitest — sự thật đã công bố, hình dạng bundle, sổ màn hình, ba màn quyền, **và ba biến thể đúng bằng thứ người duyệt đọc** |
 | `npm run zmp:sync` | Dựng (đầy đủ) rồi đồng bộ `app-config.json` theo trang đã dựng |
 | `npm run zmp:deploy` | Đầy đủ → bản thử nghiệm |
 | `npm run zmp:deploy:goc` | Gốc → bản thử nghiệm |
+| `npm run zmp:deploy:quyen` | Quyền → bản thử nghiệm |
 | `npm run zmp:phat-hanh:goc` | Gốc → **bản phát hành**, có in ra và đếm ngược 5 giây |
+| `npm run zmp:phat-hanh:quyen` | Quyền → **bản phát hành**, có in ra và đếm ngược 5 giây |
 
 → Skills: `.claude/skills/zalo-miniapp-multi-tenant` · `.claude/skills/accessibility-elderly`

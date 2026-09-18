@@ -3,12 +3,18 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 /**
- * HAI BIẾN THỂ BẢN DỰNG — `VIGOV_BIEN_THE`.
+ * BA BIẾN THỂ BẢN DỰNG — `VIGOV_BIEN_THE`.
  *
  * | Biến thể | Nội dung | Dùng để |
  * |---|---|---|
- * | `goc` | **Chỉ** app giới thiệu bốn màn | Gửi Zalo duyệt |
+ * | `goc` | **Chỉ** app giới thiệu bốn màn | Bản nộp tối thiểu |
+ * | `quyen` | Thêm ba màn quyền (`zmp-sdk`) | **Bản nộp XIN QUYỀN** |
  * | `day-du` (mặc định) | Thêm lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Thử nghiệm, demo |
+ *
+ * VÌ SAO BIẾN THỂ `quyen` TỒN TẠI: Zalo chỉ cấp `getPhoneNumber` · `getLocation` · `scanQRCode`
+ * khi bản nộp CÓ chỗ dùng chúng nhìn thấy được. Nhưng bản nộp ấy vẫn không được mang theo tám
+ * tên đơn vị hành chính đặt ra, số điện thoại mẫu hay bảng chẩn đoán — nên nó là một biến thể
+ * riêng, không phải `day-du`.
  *
  * VÌ SAO TÁCH Ở TẦNG DỰNG CHỨ KHÔNG PHẢI MỘT CỜ LÚC CHẠY:
  *
@@ -28,7 +34,7 @@ import { defineConfig } from "vite";
  * khám phá và bảng chẩn đoán — nên một cái tên nói về riêng lớp khám phá là một cái tên nói
  * thiếu, và người sau sẽ thêm thứ thứ ba vào sau một cái tên không mô tả nó.
  */
-const BIEN_THE_HOP_LE = ["goc", "day-du"] as const;
+const BIEN_THE_HOP_LE = ["goc", "quyen", "day-du"] as const;
 type BienThe = (typeof BIEN_THE_HOP_LE)[number];
 
 /**
@@ -52,18 +58,28 @@ function docBienThe(): BienThe {
 const duongDan = (tuong_doi: string) => fileURLToPath(new URL(tuong_doi, import.meta.url));
 
 /**
- * Hai cái tên này là hai cửa duy nhất vào hai phần bị gỡ ở bản `goc`. `App.tsx` chỉ được nhập
- * qua chúng — nhập thẳng một tệp bên trong là đi vòng qua alias, và bản `goc` khi ấy vẫn dựng
- * xanh trong khi mang theo đúng thứ đáng lẽ không có.
+ * Ba cái tên này là ba cửa duy nhất vào ba phần gỡ được. Tệp ngoài chỉ được nhập qua chúng —
+ * nhập thẳng một tệp bên trong là đi vòng qua alias, và bản rút gọn khi ấy vẫn dựng xanh trong
+ * khi mang theo đúng thứ đáng lẽ không có. `bien-the.test.ts` là thứ canh điều đó.
+ *
+ * HAI NGƯỠNG KHÁC NHAU, KHÔNG PHẢI MỘT:
+ *
+ *   `quyen` là một bản NỘP, nên nó dừng ở đúng ba màn quyền: không tên đơn vị hành chính đặt ra,
+ *   không số điện thoại mẫu, không bảng chẩn đoán. `day-du` là bản demo nội bộ và có tất cả.
  */
 function aliasTheoBienThe(): Record<string, string> {
-  const goc = docBienThe() === "goc";
+  const bien_the = docBienThe();
+  const co_kham_pha = bien_the === "day-du";
+  const co_quyen = bien_the !== "goc";
   return {
     "bien-the/kham-pha": duongDan(
-      goc ? "./src/features/kham-pha/index.rong.ts" : "./src/features/kham-pha/index.ts",
+      co_kham_pha ? "./src/features/kham-pha/index.ts" : "./src/features/kham-pha/index.rong.ts",
     ),
     "bien-the/chan-doan": duongDan(
-      goc ? "./src/features/diagnostics/index.rong.ts" : "./src/features/diagnostics/index.ts",
+      co_kham_pha ? "./src/features/diagnostics/index.ts" : "./src/features/diagnostics/index.rong.ts",
+    ),
+    "bien-the/quyen": duongDan(
+      co_quyen ? "./src/features/quyen/index.ts" : "./src/features/quyen/index.rong.ts",
     ),
   };
 }

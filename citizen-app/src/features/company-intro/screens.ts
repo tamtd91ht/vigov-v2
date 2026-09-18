@@ -1,5 +1,7 @@
 import type { ComponentType } from "react";
 
+import { CO_MAN_QUYEN, MAN_QUYEN } from "bien-the/quyen";
+
 import { AboutScreen } from "./AboutScreen";
 import { ContactScreen } from "./ContactScreen";
 import { HomeScreen } from "./HomeScreen";
@@ -13,7 +15,7 @@ import { SolutionsScreen } from "./SolutionsScreen";
  * that drift is a tab that leads nowhere.
  */
 
-export type ScreenId = "home" | "solutions" | "about" | "contact";
+export type ScreenId = "home" | "solutions" | "about" | "contact" | "quyen";
 
 export type ScreenDefinition = {
   id: ScreenId;
@@ -24,12 +26,27 @@ export type ScreenDefinition = {
   component: ComponentType;
 };
 
-export const SCREENS: readonly ScreenDefinition[] = [
+/** Bốn màn giới thiệu công ty — phần có mặt trong MỌI biến thể bản dựng. */
+export const MAN_GIOI_THIEU: readonly ScreenDefinition[] = [
   { id: "home", tabLabel: "Trang chủ", headerTitle: "Trang chủ", component: HomeScreen },
   { id: "solutions", tabLabel: "Giải pháp", headerTitle: "Giải pháp", component: SolutionsScreen },
   { id: "about", tabLabel: "Về ViHAT", headerTitle: "Về ViHAT", component: AboutScreen },
   { id: "contact", tabLabel: "Liên hệ", headerTitle: "Liên hệ", component: ContactScreen },
 ];
+
+/**
+ * Sổ màn hình của BẢN DỰNG NÀY.
+ *
+ * Ba màn quyền vào app qua đúng một dòng: một tab nữa, lấy từ `bien-the/quyen`. Ở biến thể `goc`
+ * cờ `CO_MAN_QUYEN` là `false` và tab ấy không tồn tại — không phải bị ẩn, mà là không có trong
+ * danh sách, nên thanh tab, tiêu đề header và nhánh vẽ màn đều không biết tới nó.
+ *
+ * VÌ SAO KHÔNG VIẾT NHÃN TAB Ở ĐÂY: tệp này không nằm sau alias, nên mọi chữ trong nó đi vào cả
+ * bản `goc`. Nhãn nằm trong `features/quyen/index.ts`, sau cửa alias — xem chú thích ở đó.
+ */
+export const SCREENS: readonly ScreenDefinition[] = CO_MAN_QUYEN
+  ? [...MAN_GIOI_THIEU, MAN_QUYEN]
+  : MAN_GIOI_THIEU;
 
 export const DEFAULT_SCREEN_ID: ScreenId = "home";
 

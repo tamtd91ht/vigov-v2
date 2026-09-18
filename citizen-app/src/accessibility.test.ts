@@ -84,6 +84,11 @@ describe("text and targets stay usable for an ageing eye", () => {
     // Trang xã: mỗi mục dịch vụ là một nút. Chúng là những nút duy nhất trên màn ấy, và người
     // bấm chúng là người vừa đứng dậy khỏi ghế chờ ở trụ sở xã.
     expect(styles).toMatch(/\.dich-vu__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+
+    // Ba màn quyền: nút xin quyền, và ba nút chọn màn. Bấm trượt ở đây thì hoặc mở nhầm máy ảnh,
+    // hoặc — tệ hơn — bấm vào một nút xin dữ liệu mà người dùng không định bấm.
+    expect(styles).toMatch(/\.quyen__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+    expect(styles).toMatch(/\.quyen-khu__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
   });
 
   it("animates nothing outside a reduced-motion guard", () => {
@@ -215,6 +220,27 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["the 'not open yet' wording under a service", token("ink-muted"), token("surface")],
     ["the under-construction note a tapped service opens", token("ink"), token("surface")],
     ["the demo-data footnote on the commune page", token("ink-muted"), token("surface-alt")],
+
+    // BA MÀN QUYỀN (biến thể `quyen` — bản nộp xin quyền). Liệt kê riêng vì cùng lý do như trên:
+    // một cặp màu chỉ được bảo vệ khi có tên nó trong danh sách này. Đây là chữ người dân đọc
+    // TRƯỚC KHI quyết định có chia sẻ số điện thoại hay vị trí của mình hay không — đọc không ra
+    // thì họ hoặc bấm bừa, hoặc bỏ đi; cả hai đều tệ hơn một chữ to.
+    ["the permission screen title", token("navy"), token("surface-alt")],
+    ["the permission screen title over the blue wash", token("navy"), token("surface-tint")],
+    ["the reason the app needs this permission", token("ink"), token("surface-alt")],
+    ["the reason, over the blue wash", token("ink"), token("surface-tint")],
+    ["the permission button label", "#ffffff", token("navy")],
+    ["the permission button label at its blue glow", "#ffffff", token("panel-glow-blue")],
+    ["the permission button label while waiting", "#ffffff", token("navy-deep")],
+    ["a permission picker button at rest", token("ink"), token("surface")],
+    ["the permission picker button being viewed", "#ffffff", token("navy")],
+    ["the 'token received' line", token("navy"), token("surface")],
+    ["the measured token figures", token("ink"), token("surface-alt")],
+    ["the note saying the real data never reaches the device", token("ink"), token("surface")],
+    ["the sentence shown when the citizen declines", token("ink"), token("surface")],
+    ["the scanned QR content", token("ink"), token("surface")],
+    ["the promise that nothing leaves this screen", token("ink-muted"), token("surface-alt")],
+    ["the promise, over the blue wash", token("ink-muted"), token("surface-tint")],
   ];
 
   for (const [what, foreground, background] of pairs) {

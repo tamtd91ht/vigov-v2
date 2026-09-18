@@ -15,7 +15,14 @@ import {
   SOLUTIONS,
   TECH_KEYWORDS,
 } from "./company-profile";
-import { DEFAULT_SCREEN_ID, findScreen, SCREENS } from "../features/company-intro/screens";
+import { CO_MAN_QUYEN } from "bien-the/quyen";
+
+import {
+  DEFAULT_SCREEN_ID,
+  findScreen,
+  MAN_GIOI_THIEU,
+  SCREENS,
+} from "../features/company-intro/screens";
 
 /**
  * WHY A STATIC INTRODUCTION SCREEN IS WORTH TESTING AT ALL:
@@ -265,10 +272,21 @@ describe("phase 1 publishes no personal data", () => {
 });
 
 describe("screen registry", () => {
-  it("declares four screens with unique ids", () => {
-    const ids = SCREENS.map((screen) => screen.id);
+  it("declares four introduction screens with unique ids", () => {
+    const ids = MAN_GIOI_THIEU.map((screen) => screen.id);
     expect(ids).toHaveLength(4);
     expect(new Set(ids).size).toBe(4);
+  });
+
+  it("sổ màn hình của bản dựng = bốn màn ấy, cộng tab quyền đúng khi biến thể có nó", () => {
+    // Sổ màn hình PHỤ THUỘC BIẾN THỂ (`screens.ts` đọc `bien-the/quyen`), nên ca này ghim quan
+    // hệ chứ không ghim một con số: ở bản `goc` là bốn, ở `quyen`/`day-du` là năm. Ghim cứng "4"
+    // thì hoặc test đỏ ở bản đầy đủ, hoặc — nếu ai đó sửa cho nó xanh — không còn gì nói rằng
+    // bản `goc` phải KHÔNG có tab thứ năm.
+    const ids = SCREENS.map((screen) => screen.id);
+    expect(new Set(ids).size, "hai màn trùng id — một tab sẽ dẫn sang màn kia").toBe(ids.length);
+    expect(ids.slice(0, 4)).toEqual(MAN_GIOI_THIEU.map((screen) => screen.id));
+    expect(SCREENS).toHaveLength(CO_MAN_QUYEN ? 5 : 4);
   });
 
   it("resolves every declared screen — a tab must never lead nowhere", () => {

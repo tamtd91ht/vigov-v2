@@ -1221,3 +1221,155 @@ body {
   line-height: 1.55;
   color: var(--ink);
 }
+
+/* ---------- ba màn quyền (biến thể `quyen` — bản nộp xin quyền) ---------- */
+
+.quyen-khu__dan {
+  margin: 0 0 14px;
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+/* Hàng chọn màn: ba nút ngang hàng, mỗi nút vẫn đủ 44px chiều cao. Chúng bọc xuống dòng trên máy
+   hẹp thay vì co lại — một nút co dưới 44px là một nút bấm trượt. */
+.quyen-khu__chon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.quyen-khu__nut {
+  flex: 1 1 auto;
+  min-height: var(--tap-min);
+  padding: 8px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Màn đang xem: nền đặc + chữ trắng, VÀ `aria-pressed` trong mã. Hai đường, vì màu nền một mình
+   thì người mù màu và người dùng trình đọc màn hình không đọc được (README §Non-negotiables #6). */
+.quyen-khu__nut[aria-pressed="true"] {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #ffffff;
+}
+
+.quyen-khu__nut:focus-visible,
+.quyen__nut:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.quyen__tieu-de {
+  margin: 0 0 10px;
+  font-size: 24px;
+  line-height: 1.3;
+  color: var(--navy);
+}
+
+/* Câu TRẢ LỜI VÌ SAO app cần quyền này. Nó là chữ người duyệt của Zalo đọc, và là chữ người dân
+   đọc trước khi bấm đồng ý — nên cỡ thân bài, không phải cỡ chú thích. */
+.quyen__vi-sao {
+  margin: 0 0 16px;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.quyen__nut {
+  display: block;
+  width: 100%;
+  min-height: var(--tap-min);
+  margin: 0 0 14px;
+  padding: 10px 16px;
+  border: 1px solid var(--navy);
+  border-radius: 12px;
+  background-color: var(--navy);
+  background-image: radial-gradient(90% 200% at 110% 50%, var(--panel-glow-blue) 0%, var(--navy) 70%);
+  font: inherit;
+  font-size: 19px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+/* ĐANG CHỜ: đổi nền sang navy đậm hơn, KHÔNG giảm độ mờ. `opacity` kéo tương phản chữ xuống dưới
+   ngưỡng 4,5:1 đúng lúc màn hình đang nói một điều người dùng cần đọc. Trạng thái nói bằng CHỮ
+   trên chính nút ("Đang chờ bạn trả lời trên Zalo…"). */
+.quyen__nut:disabled {
+  background-color: var(--navy-deep);
+  background-image: none;
+  border-color: var(--navy-deep);
+}
+
+.quyen__ket-qua:empty {
+  display: none;
+}
+
+.quyen__xong {
+  margin: 0 0 8px;
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.quyen__do {
+  margin: 0 0 10px;
+  padding-left: 22px;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+/* Câu nói ra rằng số điện thoại / toạ độ KHÔNG tới thiết bị. Viền trái + chữ, không riêng màu. */
+.quyen__giai-thich {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 4px solid var(--brand-green);
+  border-radius: 0 10px 10px 0;
+  background: var(--surface);
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+/* Từ chối / ngoài Zalo / chưa lấy được. Cùng một khuôn: đây không phải báo lỗi, và không có màu
+   đỏ nào ở đây — từ chối là quyền của người dân, không phải một sự cố. */
+.quyen__loi {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 4px solid var(--brand-blue);
+  border-radius: 0 10px 10px 0;
+  background: var(--surface);
+  font-size: var(--text-body);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+/* Nội dung mã QR: dữ liệu THẬT, dài tuỳ ý, có thể không có khoảng trắng. Ngắt ở mọi ký tự để nó
+   không tràn ra ngoài màn hình. */
+.quyen__qr {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: var(--text-body);
+  line-height: 1.55;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.quyen__loi-hua {
+  margin: 16px 0 0;
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
