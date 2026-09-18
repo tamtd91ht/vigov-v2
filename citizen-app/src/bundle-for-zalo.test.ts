@@ -23,7 +23,7 @@ import { BRAND_NAVY, COMPANY } from "./content/company-profile";
  * picked up from the package root the way `npm run build` picks it up.
  */
 
-type EmittedFile = { type: string; fileName: string; source?: unknown };
+type EmittedFile = { type: string; fileName: string; source?: unknown; code?: unknown };
 
 let emitted: EmittedFile[] = [];
 
@@ -67,6 +67,28 @@ describe("the bundle that gets uploaded to Zalo", () => {
     expect(builtHtml()).toContain('lang="vi"');
     expect(builtHtml()).toContain('id="app"');
   });
+
+  it("loads the app through a CLASSIC script — a module tag is dropped in silence", () => {
+    // ĐÃ THỬ, KHÔNG SUY ĐOÁN. `zmp-cli sync-config` đọc trang này để điền app-config.json, và
+    // Zalo chỉ nạp những tệp khai trong đó. Chạy trên hai bản HTML khác nhau đúng một chỗ:
+    //
+    //   <script type="module" crossorigin src=…>  ->  listSyncJS: ["inline.js"]
+    //   <script src=…>                            ->  listSyncJS: ["inline.js", "./assets/app.js"]
+    //
+    // Bản trên thiếu chính bundle của ứng dụng. Không có lỗi nào: sync-config báo thành công,
+    // `vite preview` chạy hoàn hảo, và app trắng trơn trên máy thật.
+    expect(builtHtml()).not.toContain('type="module"');
+    expect(builtHtml()).toMatch(/<script\s+src="\.\/assets\/app\.js"><\/script>/);
+  });
+
+  it("emits stable file names — a content hash makes the committed config wrong", () => {
+    // app-config.json được COMMIT và liệt kê đường dẫn bundle. Nếu tên tệp mang mã băm thì tệp
+    // ấy sai ngay lần dựng kế tiếp, và sai theo kiểu không có gì báo — app vẫn dựng xanh, chỉ là
+    // Zalo đi nạp một tệp không còn tồn tại.
+    const ten = emitted.map((f) => f.fileName).filter((n) => n.endsWith(".js"));
+    expect(ten).toContain("assets/app.js");
+    for (const n of ten) expect(n).not.toMatch(/-[A-Za-z0-9_-]{8}\.js$/);
+  });
 });
 
 describe("what the submission says the app is called", () => {
@@ -93,9 +115,13 @@ describe("what the submission says the app is called", () => {
     expect(appConfig().app?.headerColor?.toLowerCase()).toBe(BRAND_NAVY);
     expect(indexHtml).toContain(`content="${BRAND_NAVY}"`);
 
-    const css = emitted.find((file) => file.fileName.endsWith(".css"));
-    expect(css, "the build emitted no stylesheet").toBeDefined();
-    const navy = /--navy:\s*([^;}]+)/.exec(String(css?.source))?.[1]?.trim().toLowerCase();
-    expect(navy).toBe(BRAND_NAVY);
+    // Tìm trong MỌI tệp phát ra, không riêng tệp `.css`: từ khi bundle chuyển sang một tệp
+    // `iife` duy nhất (xem vite.config.ts), Vite nhét CSS thẳng vào JS và không còn tệp `.css`
+    // nào cả. Ghim vào đuôi tệp thì test đỏ mỗi lần đổi hình dạng bundle vì một lý do chẳng liên
+    // quan gì tới màu — và một test đỏ sai lý do là một test sắp bị ai đó xoá.
+    // Rollup để nội dung của một chunk JS ở `code`; chỉ asset mới dùng `source`.
+    const noi_dung = emitted.map((file) => String(file.code ?? file.source ?? "")).join("\n");
+    const navy = /--navy:\s*([^;}]+)/.exec(noi_dung)?.[1]?.trim().toLowerCase();
+    expect(navy, "bản dựng không chứa biến --navy ở đâu cả").toBe(BRAND_NAVY);
   });
 });

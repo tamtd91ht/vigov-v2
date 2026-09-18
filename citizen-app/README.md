@@ -77,20 +77,49 @@ because phase 2 replaces this content wholesale and the edit should land in one 
 legal entity: an unsourced founding year, customer name or award is a false statement
 published under that name. Facts that are missing are left out, never filled in.
 
-## Before submitting to Zalo — two things still to confirm
+## Nộp lên Zalo
 
-| # | What | Why it is not settled here |
-|---|---|---|
-| 1 | `app-config.json` key names and the expected upload folder | Written from secondary sources; Zalo's own documentation renders through JavaScript and could not be read directly. A wrong key is a submission sent back. Confirm against the developer console before uploading |
-| 2 | App icon, screenshots and the store description | Not produced yet, and required by the review |
+### Chuỗi lệnh
 
-## Commands
+```bash
+npm run zmp:login     # một lần, cần App ID
+npm run zmp:deploy    # build -> sync-config -> deploy bản thử nghiệm
+```
 
-| Command | What it does |
+`zmp:deploy` gộp ba bước vì **bỏ sót bước giữa là nộp một app trắng trơn**. Zalo không dùng
+`index.html` của chúng ta: nó tự dựng vỏ rồi nạp đúng những tệp khai trong `app-config.json`,
+và `zmp-cli sync-config` là thứ điền danh sách ấy từ trang đã dựng. Dựng xong mà quên đồng bộ
+thì `app-config.json` trỏ vào bản dựng của lần trước.
+
+`-t` là **bản thử nghiệm**. Bỏ `-t` là đẩy bản phát hành.
+
+CLI gọi qua `npx --yes zmp-cli@4.0.3`, không phải devDependency: nó kéo theo hơn hai trăm gói,
+nhiều gói đã ngừng hỗ trợ, và không có lý do gì để chúng nằm trong một kho sắp gửi ra ngoài.
+Phiên bản ghim cứng để lần chạy sau ra đúng kết quả lần chạy trước.
+
+### Hai thứ đã kiểm bằng cách chạy thật, đừng đi kiểm lại
+
+| Đã biết | Bằng chứng |
 |---|---|
-| `npm run dev` | Vite dev server |
-| `npm run build` | Static bundle into `dist/` |
+| Thư mục nộp là `dist/`, không phải `www/` | `zmp deploy --help` ghi *"Default www"*, nên `-o dist` là bắt buộc và đã nằm trong `zmp:deploy` |
+| Thẻ script phải **cổ điển**, không `type="module"` | Chạy `sync-config` trên hai bản HTML khác nhau đúng một chỗ: bản module cho `listSyncJS: ["inline.js"]` — **thiếu chính bundle của app**; bản cổ điển cho thêm `"./assets/app.js"`. Không có lỗi nào báo ra. `vite.config.ts` sửa thẻ ở bước phát HTML, và `src/bundle-for-zalo.test.ts` ghim lại |
+
+### Còn thiếu
+
+| # | Cái gì | Ghi chú |
+|---|---|---|
+| 1 | Ảnh chụp màn hình và mô tả trên store | Bắt buộc để duyệt. Icon thì đã có — `tools/logo.py` dựng từ `brand/lg_vhs_full.svg` |
+| 2 | Các khoá còn lại trong `app-config.json` | `app.*` viết từ nguồn thứ cấp và **chưa đối chiếu** với Developer Console. Ba khoá `list*` thì đã do `sync-config` sinh, không phải đoán |
+
+## Lệnh
+
+| Lệnh | Việc |
+|---|---|
+| `npm run dev` | Máy chủ phát triển Vite |
+| `npm run build` | Gói tĩnh vào `dist/` |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest — pins the published facts and the screen registry |
+| `npm test` | Vitest — ghim các sự thật đã công bố, hình dạng bundle và sổ màn hình |
+| `npm run zmp:sync` | Dựng rồi đồng bộ `app-config.json` theo trang đã dựng |
+| `npm run zmp:deploy` | Như trên, rồi đẩy bản thử nghiệm |
 
 → Skills: `.claude/skills/zalo-miniapp-multi-tenant` · `.claude/skills/accessibility-elderly`

@@ -9,6 +9,9 @@
     "hideAndroidBottomNavigationBar": false
   },
   "listCSS": [],
-  "listSyncJS": [],
+  "listSyncJS": [
+    "inline.js",
+    "./assets/app.js"
+  ],
   "listAsyncJS": []
 }
