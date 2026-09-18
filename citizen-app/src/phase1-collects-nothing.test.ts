@@ -53,10 +53,8 @@ const TRIPWIRES: readonly Tripwire[] = [
     what: "a Zalo SDK call that asks the platform for citizen data (phone, profile, location, token)",
     pattern: /\b(getPhoneNumber|getUserInfo|getAccessToken|getLocation|getSetting|authorize)\s*\(/,
   },
-  {
-    what: "an import of zmp-sdk — phase 1 asks the platform for nothing, so it calls nothing",
-    pattern: /from\s*["']zmp-sdk/,
-  },
+  // (Lệnh cấm nhập `zmp-sdk` chuyển xuống một phép kiểm riêng ở cuối tệp: nó không còn là
+  //  "có hay không" mà là "được nhập đúng những gì" — xem §DANH SÁCH TRẮNG.)
   {
     what: "an outbound request — phase 1 talks to no backend, so nothing about a citizen can leave the device",
     pattern: /\bfetch\s*\(|XMLHttpRequest|sendBeacon|new\s+WebSocket|new\s+EventSource|\baxios\b/,
@@ -95,6 +93,57 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
       ).toEqual([]);
     });
   }
+
+  it("nhập từ zmp-sdk đúng những gì nằm trong DANH SÁCH TRẮNG, không hơn", () => {
+    // §DANH SÁCH TRẮNG — nới đúng một khe, ngày 18/09/2026, và khe này CHẶT HƠN lệnh cấm cũ.
+    //
+    // Trước đây tệp này cấm thẳng `from "zmp-sdk"`, không ngoại lệ. Nhưng MỤC ĐÍCH của nó là
+    // "giai đoạn 1 không thu thập dữ liệu cá nhân", mà `getRouteParams` không thu thập gì của
+    // ai: nó đọc tham số chính nền tảng đưa vào lúc mở app — thứ đã nằm trong đường liên kết
+    // trước khi app kịp chạy. Giữ lệnh cấm cũ thì phép đo mà ADR 0018 còn treo (tham số deep
+    // link có tới app không, có giữ khi app chạy nền không) không làm được, trong khi rủi ro
+    // nó chặn bằng không.
+    //
+    // Một rào đỏ vì thứ KHÔNG vi phạm mục đích của chính nó là rào sắp bị ai đó tắt — bài học
+    // đã trả giá hai lần trong ngày 17/09 với `drift_guard`.
+    //
+    // Vì sao danh sách trắng chặt hơn lệnh cấm cũ: lệnh cấm cũ trả lời "có nhập hay không",
+    // danh sách trắng trả lời "nhập đúng cái gì". Thêm `getPhoneNumber` vào cùng dòng import
+    // đó thì lệnh cấm cũ vẫn chỉ báo một lỗi chung; danh sách trắng gọi đích danh tên vừa lọt.
+    const CHO_PHEP = new Set(["getRouteParams"]);
+    const viPham: string[] = [];
+    for (const file of PRODUCTION_SOURCES) {
+      // Nhập sâu (`zmp-sdk/apis/...`) đi vòng qua phép kiểm tên — chặn thẳng.
+      if (/from\s*["']zmp-sdk\/[^"']+["']/.test(file.code)) {
+        viPham.push(`${file.path}: nhập sâu vào zmp-sdk`);
+      }
+      // HAI HÌNH THỨC NHẬP, và bỏ sót hình thức thứ hai là để dây bẫy thành vô hại.
+      //
+      // Bản đầu của phép kiểm này chỉ khớp `import { X } from "zmp-sdk"`. Ngay sau đó chính
+      // tôi phải đổi sang `const { X } = await import("zmp-sdk")` — vì zmp-sdk đụng `window`
+      // lúc nhập module và làm sập test chạy trong Node — và phép kiểm im lặng khớp KHÔNG GÌ
+      // CẢ. Nó vẫn xanh, vẫn trông như đang canh, và không còn canh gì.
+      //
+      // Đây là lần thứ ba trong hai ngày một bản vá tự tạo ra một thể hiện mới của đúng cái
+      // lỗi nó đang vá. Ghi ra để người sau thêm hình thức nhập thứ ba thì nhớ quay lại đây.
+      const nhap = [
+        // `[^{}]*` chứ không phải `[^}]*`: bản đầu nuốt cả dấu `{` của `try {` đứng trước và
+        // báo vi phạm ở một chỗ không có vi phạm nào. Một dây bẫy kêu sai chỗ cũng bị tắt
+        // nhanh y như một dây bẫy câm.
+        ...file.code.matchAll(/import\s*\{([^{}]*)\}\s*from\s*["']zmp-sdk["']/g),
+        ...file.code.matchAll(/\{([^{}]*)\}\s*=\s*await\s+import\(\s*["']zmp-sdk["']\s*\)/g),
+      ];
+      for (const m of nhap) {
+        for (const ten of m[1]!.split(",").map((s) => s.trim().split(/\s+as\s+/)[0]!.trim())) {
+          if (ten && !CHO_PHEP.has(ten)) viPham.push(`${file.path}: ${ten}`);
+        }
+      }
+    }
+    expect(
+      viPham,
+      "một API zmp-sdk ngoài danh sách trắng đã lọt vào mã sản phẩm.\nGiai đoạn 1 được Zalo duyệt như một app KHÔNG thu thập gì. Thêm thu thập là đổi thứ đã nộp — nêu ra trước khi viết, đừng nới test này.",
+    ).toEqual([]);
+  });
 
   it("keeps personal data out of the source itself, not only out of the content file", () => {
     // company-profile.test.ts sweeps the exported strings. A number typed into a component, a

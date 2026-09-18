@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { TabBar } from "./components/TabBar";
 import { COMPANY } from "./content/company-profile";
 import { DEFAULT_SCREEN_ID, findScreen, type ScreenId } from "./features/company-intro/screens";
+import { LaunchParamsPanel } from "./features/diagnostics/LaunchParamsPanel";
+import { batChanDoan, thamSoMoApp } from "./lib/launch-params";
 
 /**
  * Phase 1 shell: four static screens, no navigation library, no state beyond the current tab.
@@ -25,6 +27,20 @@ export function App() {
   const screen = findScreen(currentId);
   const Screen = screen.component;
 
+  // Đọc MỘT LẦN sau khi dựng. Bất đồng bộ vì `zmp-sdk` chỉ nhập được trong trình duyệt (xem
+  // lib/launch-params.ts), nên bảng chẩn đoán xuất hiện ở lượt vẽ thứ hai — không sao, nó là
+  // công cụ đo chứ không phải nội dung người dân đọc.
+  const [thamSo, setThamSo] = useState<Record<string, string> | null>(null);
+  useEffect(() => {
+    let conSong = true;
+    void thamSoMoApp().then((t) => {
+      if (conSong) setThamSo(t);
+    });
+    return () => {
+      conSong = false;
+    };
+  }, []);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -33,6 +49,8 @@ export function App() {
       </header>
 
       <main className="app-main" id="main">
+        {/* Chỉ hiện khi mở kèm `debug`. Xem lý do ở lib/launch-params.ts. */}
+        {thamSo && batChanDoan(thamSo) && <LaunchParamsPanel thamSo={thamSo} />}
         <Screen />
       </main>
 

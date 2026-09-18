@@ -260,3 +260,57 @@ body {
   outline: 3px solid var(--navy-deep);
   outline-offset: -3px;
 }
+
+/* ---------- bảng chẩn đoán ----------
+ *
+ * KHÔNG phải giao diện sản phẩm. Nó chỉ hiện khi app được mở kèm tham số `debug`, và tồn tại để
+ * đo một câu ADR 0018 còn treo: tham số deep link có tới app trong mọi đường mở không.
+ *
+ * Trông có chủ đích như một công cụ đo — viền đứt, nền khác hẳn — để không ai nhìn nhầm nó
+ * thành một phần của app và tưởng người dân đang thấy thứ này.
+ */
+.chan-doan {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 2px dashed var(--hairline);
+  border-radius: 10px;
+  background: var(--surface-alt);
+}
+
+.chan-doan__nhan {
+  margin: 0 0 8px;
+  font-size: var(--text-small);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.chan-doan__trong,
+.chan-doan__do {
+  margin: 8px 0 0;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+.chan-doan__bang {
+  margin: 0;
+}
+
+.chan-doan__dong {
+  display: flex;
+  gap: 10px;
+  padding: 4px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.chan-doan__dong dt {
+  min-width: 72px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.chan-doan__dong dd {
+  margin: 0;
+  /* Giá trị tham số có thể dài và không có khoảng trắng — để tràn ra thì bảng vỡ khung. */
+  word-break: break-all;
+  color: var(--ink);
+}
