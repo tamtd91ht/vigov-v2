@@ -291,7 +291,7 @@ hay đường dẫn nội bộ.
 |---|---|---|
 | 1 | **Backfill dữ liệu theo từng xã chưa tồn tại** | `core/migrate` chỉ lo DDL ⇒ **luật 7 bất biến 5 mới đạt một nửa**. Ngưỡng cần cơ chế thật là khi thời gian giữ khoá thành đáng kể. → ADR 0013, mục Giới hạn |
 | 2 | **`REVOKE` trên `audit_log` thuộc khâu cấp phát CSDL** | Câu đúng giữ trong comment tệp `0002`. **Không nằm trong tay mã nguồn**: khâu cấp phát không làm thì lớp quyền vẫn hở dù trigger vẫn đúng |
-| 3 | **Đặc tả ghi 43 quyền nhưng chỉ liệt kê 33** | Đã nạp 33 vào `quyen`. Mười khoá còn lại là câu hỏi cho khách, **đừng bịa** |
+| 3 | **Một con số trong TIÊU ĐỀ đặc tả không khớp bảng ngay dưới nó** | `docs/ui-ux/14-cau-hinh.md` §4.2 đặt tiêu đề *"Bốn mươi ba quyền, gom theo 11 nhóm"*, nhưng bảng liệt kê ngay bên dưới có **33 khoá duy nhất / 10 nhóm** — đã đếm lại trên chính tệp ấy 18/09. Migration khớp **bảng**, không khớp tiêu đề. Cách diễn đạt cũ ở dòng này — *"mười khoá còn lại là câu hỏi cho khách"* — **nặng hơn sự thật**: nó dựng ra hình ảnh mười khoá đã tồn tại ở đâu đó mà ta chưa nạp, trong khi không có khoá nào bị thiếu; chỉ có một con số viết sai. Hỏi khách để xác nhận tiêu đề là chỗ sai (rất nhiều khả năng), **đừng bịa mười khoá** và cũng đừng đi tìm chúng |
 | 4 | **Dữ liệu cá nhân thật vẫn còn trong LỊCH SỬ GIT** | Cây làm việc đã dọn. Gỡ khỏi lịch sử là **viết lại lịch sử** trên `main` — cần quyết định của chủ dự án, không phải việc agent tự làm |
 | 5 | **Xác thực service↔service chưa có** | Rủi ro đã chấp nhận có chủ ý, kèm điều kiện gỡ: ADR 0012, quyết định 3. **Không** dựng cơ chế bí mật chia sẻ tạm |
 | 6 | **`Staff` không có trường họ tên** | `BatchGetStaff` chưa phục vụ được mục đích nó tự khai. Thêm trường là sửa hợp đồng — cùng lúc phải trả lời câu che/không che (#11) |

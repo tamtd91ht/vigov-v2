@@ -247,7 +247,7 @@
     "id": 13,
     "question": "Có chặn thao tác làm xã mất người quản trị CUỐI CÙNG không (khoá · xoá · hạ vai trò)?",
     "status": "OPEN",
-    "why_it_matters": "Nếu xã tự khoá, xoá, hoặc hạ vai trò nốt người cuối cùng còn quyền admin.user thì KHÔNG AI TRONG XÃ MỞ LẠI ĐƯỢC, và nhà cung cấp cũng không được phép chạm vào: ADR 0003 và câu #3 (đã DECIDED) chốt VIHAT chỉ thao tác siêu dữ liệu. Đây không phải sự cố kỹ thuật có đường vá nóng — là BẾ TẮC THỦ TỤC, và xã sẽ gọi điện chứ không mở được ticket trong hệ thống. Đặc tả không nói gì, schema không chặn gì. Nếu khách chốt là PHẢI chặn thì phép kiểm không tầm thường và phải nói trước: quyền không nằm trên người mà đến từ vai_tro_quyen, nên phải đếm số cán bộ ĐANG HOẠT ĐỘNG, CHƯA XOÁ, CÓ TÀI KHOẢN, thuộc một vai trò có admin.user — và đếm TRONG CÙNG GIAO DỊCH với thao tác, nếu không hai quản trị viên khoá nhau cùng lúc sẽ cùng qua cửa. Ba đường dẫn tới cùng một rủi ro: khoá, xoá, hạ vai trò. Chặn mỗi đường đầu là chặn hụt, và chặn hụt ở đây trông y hệt chặn đủ cho tới ngày nó xảy ra.",
+    "why_it_matters": "Nếu xã tự khoá, xoá, hoặc hạ vai trò nốt người cuối cùng còn quyền admin.user thì KHÔNG AI TRONG XÃ MỞ LẠI ĐƯỢC, và nhà cung cấp cũng không được phép chạm vào: ADR 0003 và câu #3 (đã DECIDED) chốt VIHAT chỉ thao tác siêu dữ liệu. Đây không phải sự cố kỹ thuật có đường vá nóng — là BẾ TẮC THỦ TỤC, và xã sẽ gọi điện chứ không mở được ticket trong hệ thống. Đặc tả không nói gì, schema không chặn gì. Nếu khách chốt là PHẢI chặn thì phép kiểm không tầm thường và phải nói trước: quyền không nằm trên người mà đến từ vai_tro_quyen, nên phải đếm số cán bộ ĐANG HOẠT ĐỘNG, CHƯA XOÁ, CÓ TÀI KHOẢN, thuộc một vai trò có admin.user — và đếm TRONG CÙNG GIAO DỊCH với thao tác, nếu không hai quản trị viên khoá nhau cùng lúc sẽ cùng qua cửa. Ba đường dẫn tới cùng một rủi ro: khoá, xoá, hạ vai trò. Chặn mỗi đường đầu là chặn hụt, và chặn hụt ở đây trông y hệt chặn đủ cho tới ngày nó xảy ra. ĐƯỜNG THỨ TƯ, tìm ra 18/09/2026 khi dựng tab Phân quyền và KHÔNG nằm trong ba đường ở tiêu đề: gỡ quyền admin.user khỏi VAI TRÒ cuối cùng còn giữ nó. Không ai bị khoá, không ai bị xoá, không ai bị đổi vai trò — chỉ một ô trong ma trận phân quyền bị bỏ tick, và xã rơi vào đúng bế tắc ấy. Ba đường kia thao tác trên NGƯỜI nên màn hình có chỗ tự nhiên để cảnh báo; đường này thao tác trên QUAN HỆ vai trò↔quyền, ở một màn hình khác, do một người đang nghĩ về phân quyền chứ không nghĩ về nhân sự. Đó là lý do nó dễ lọt nhất.",
     "code_signals": [
       {
         "pattern": "quan_tri_cuoi|last_?admin|ChanKhoaQuanTri",
@@ -264,7 +264,8 @@
     "ask_before": [
       "viết route khoá tài khoản",
       "viết route đổi vai trò",
-      "viết route xoá cán bộ"
+      "viết route xoá cán bộ",
+      "viết route sửa ma trận phân quyền"
     ]
   },
   {
