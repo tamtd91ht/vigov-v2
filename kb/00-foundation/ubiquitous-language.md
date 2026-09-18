@@ -14,6 +14,7 @@ owns_facts:
   - "tên gọi các bước trong vòng đời phiếu phản ánh"
   - "tên gọi vai trò cán bộ cấp xã"
   - "tên thực thể tiếng Anh của tám danh mục tham chiếu"
+  - "quy tắc: tên theo khái niệm, quyền sở hữu theo nhịp đổi"
 ---
 
 # Ngôn ngữ chung
@@ -232,6 +233,21 @@ mang khái niệm nghiệp vụ hành chính.
 **Không trộn tiếng Anh vào khái niệm nghiệp vụ.** `feedback` không phải `phan_anh`:
 "feedback" gợi ý góp ý sản phẩm, "phản ánh" là một loại đơn có quy trình hành chính. Ngoại lệ
 duy nhất đã biết là khoá quyền `feedback.*` — xem mục trên, và đừng mở rộng nó.
+
+**TÊN đi theo KHÁI NIỆM, QUYỀN SỞ HỮU đi theo NHỊP ĐỔI. Hai thứ ấy được phép khác nhau.**
+
+Một thực thể được đặt tên theo **thứ nó là**, đọc từ chỗ khái niệm xuất hiện trong nghiệp vụ.
+Service giữ nó thì chọn theo **thứ gì làm nó đổi** — cái gì đổi cùng nhịp thì ở cùng chỗ. Hai
+câu hỏi ấy có hai câu trả lời, và ép chúng trùng nhau làm hỏng một trong hai.
+
+Ca đã gặp: `TaskBloc` nằm ở `identity`. Tên mang chữ `Task` vì đặc tả chỉ cho khối xuất hiện
+như thuộc tính của nhiệm vụ; service là `identity` vì khối đổi cùng sơ đồ tổ chức, không cùng
+nhiệm vụ (ADR 0024 §65). Đổi tên cho khớp service thì tên nói sai khái niệm; kéo bảng cho khớp
+tên thì dựng lại đúng vòng phụ thuộc hai đỉnh mà ADR 0024 §130 đã cấm.
+
+**Hệ quả bắt buộc:** khi hai thứ lệch nhau, dòng bảng ánh xạ phải **nói ra chỗ lệch và lý do**.
+Người sau mở migration thấy một cái tên lạc chỗ sẽ sửa một trong hai cho khớp cái kia — điều
+quyết định là lúc ấy họ đọc được lý do, hay chỉ thấy một cái tên trông như lỗi.
 
 **Tên cột trong `docs/ui-ux/` không phải cam kết.** Đó là sản phẩm của prototype một xã. Khi
 tên của đặc tả gây nhầm lẫn thì đổi được, nhưng phải ghi lý do ngay tại migration — ví dụ
