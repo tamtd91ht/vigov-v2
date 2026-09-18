@@ -863,3 +863,14 @@ body {
   font-weight: 700;
   color: var(--ink-muted);
 }
+
+/* URL đầy đủ: dài, không có khoảng trắng, và là thứ cần ĐỌC ĐƯỢC BẰNG MẮT rồi gõ lại tay —
+   nên chữ to hơn mặc định của bảng chẩn đoán và ngắt dòng ở mọi ký tự. */
+.chan-doan__href {
+  margin: 0;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: var(--text-small);
+  line-height: 1.5;
+  color: var(--ink);
+  word-break: break-all;
+}

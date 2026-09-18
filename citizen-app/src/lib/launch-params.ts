@@ -36,6 +36,19 @@ export type KetQuaDo = {
   sdk: Record<string, string>;
   /** Theo `location.search` của chính trang. */
   url: Record<string, string>;
+  /**
+   * URL ĐẦY ĐỦ mà nền tảng dùng để mở app.
+   *
+   * Thêm 18/09/2026 vì một câu không tra được từ bên ngoài: **bản THỬ NGHIỆM mở bằng đường
+   * nào?** Đường công khai `https://zalo.me/s/<APP_ID>/` chỉ phục vụ bản đã phát hành — mở nó
+   * khi chưa phát hành thì Zalo trả "ứng dụng đang trong giai đoạn phát triển" trước khi mã
+   * của ta kịp chạy. Bản thử nghiệm mở được bằng QR do `zmp deploy` in ra, nhưng QR là ảnh:
+   * không đọc được khuôn link để mà nối tham số vào.
+   *
+   * Cách rẻ nhất để biết khuôn ấy là hỏi chính app lúc nó đang chạy. Tài liệu Zalo render bằng
+   * JavaScript nên không tra trực tiếp được — đã thử ba lần.
+   */
+  href: string;
 };
 
 /**
@@ -50,7 +63,15 @@ export type KetQuaDo = {
  * ở xã. Chưa ai biết, vì chưa ai đo. Nên bảng chẩn đoán in **cả hai** và để máy thật trả lời.
  */
 export async function thamSoMoApp(): Promise<KetQuaDo> {
-  return { sdk: await theoSdk(), url: theoUrl() };
+  return { sdk: await theoSdk(), url: theoUrl(), href: duongDay() };
+}
+
+function duongDay(): string {
+  try {
+    return window.location.href;
+  } catch {
+    return "";
+  }
 }
 
 async function theoSdk(): Promise<Record<string, string>> {
@@ -77,6 +98,19 @@ function theoUrl(): Record<string, string> {
  * thuật hiện ra trong app của một đơn vị đang xin duyệt là thứ người duyệt sẽ hỏi, và câu trả
  * lời "đó là công cụ nội bộ" không giúp được gì ở vòng đó.
  */
-export function batChanDoan(ket_qua: KetQuaDo): boolean {
-  return "debug" in ket_qua.sdk || "debug" in ket_qua.url;
+/**
+ * ⚠ BẢN ĐO — LUÔN HIỆN BẢNG CHẨN ĐOÁN, và phải đóng cổng lại trước khi nộp bản phát hành.
+ *
+ * Bản trước chỉ hiện khi có `debug`, và đó là một lỗi thiết kế của chính tôi: **link mở bản
+ * thử nghiệm không mang tham số nào**, nên cái cổng ấy giấu bảng đúng lúc cần nó nhất. Một
+ * công cụ đo chỉ bật được bằng thứ ta đang cần đo là công cụ vô dụng.
+ *
+ * Mở luôn là chấp nhận được HÔM NAY vì ta chỉ đang đẩy **bản thử nghiệm** cho chính mình —
+ * người dân không tới được, người duyệt Zalo cũng chưa. Nhưng nó KHÔNG được đi theo bản nộp:
+ * một bảng kỹ thuật trong app của một đơn vị đang xin duyệt là thứ người duyệt sẽ hỏi.
+ *
+ * Đóng lại bằng cách trả về dòng cũ:  return "debug" in ket_qua.sdk || "debug" in ket_qua.url;
+ */
+export function batChanDoan(_ket_qua: KetQuaDo): boolean {
+  return true;
 }

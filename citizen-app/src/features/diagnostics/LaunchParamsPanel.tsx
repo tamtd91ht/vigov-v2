@@ -73,6 +73,14 @@ export function LaunchParamsPanel({ thamSo }: Props) {
       <Nguon nhan="Theo SDK (getRouteParams)" cap={capSdk} />
       <Nguon nhan="Theo URL (location.search)" cap={capUrl} />
 
+      {/* URL ĐẦY ĐỦ — thứ không tra được từ bên ngoài. Bản thử nghiệm mở bằng QR do `zmp deploy`
+          in ra, mà QR là ảnh: không đọc được khuôn link để nối tham số vào. Hỏi chính app lúc
+          nó đang chạy là cách rẻ nhất. Xem lib/launch-params.ts. */}
+      <div className="chan-doan__nguon">
+        <p className="chan-doan__nhan-nguon">URL Zalo dùng để mở app</p>
+        <p className="chan-doan__href">{thamSo.href || "(không đọc được)"}</p>
+      </div>
+
       <p className="chan-doan__do">
         Vẽ lần {soLanVe.current} · lúc {luc} · quay lại {quayLai} lần
       </p>
