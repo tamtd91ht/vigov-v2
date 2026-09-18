@@ -92,27 +92,21 @@ function theoUrl(): Record<string, string> {
 }
 
 /**
- * Màn chẩn đoán chỉ bật khi mở kèm `debug`.
+ * Bảng chẩn đoán chỉ bật khi app được mở kèm `debug`.
  *
- * Cổng này có chủ đích: người dân và người duyệt của Zalo KHÔNG bao giờ thấy nó. Một bảng kỹ
- * thuật hiện ra trong app của một đơn vị đang xin duyệt là thứ người duyệt sẽ hỏi, và câu trả
- * lời "đó là công cụ nội bộ" không giúp được gì ở vòng đó.
+ * CỔNG ĐÃ ĐÓNG LẠI, ngày 18/09/2026 — và lý do mở nó đã hết hẳn chứ không phải tạm gác.
+ *
+ * Bản đo trước để bảng LUÔN hiện, vì lúc ấy chưa ai biết khuôn link mở bản thử nghiệm và một
+ * công cụ đo chỉ bật được bằng chính thứ đang cần đo là công cụ vô dụng. Nay đã đo được:
+ * `https://zalo.me/s/<APP_ID>/?env=TESTING&version=<n>` mở được bản thử nghiệm, và **tham số
+ * riêng đi tới app** — nối thêm `&debug=1` là thấy bảng. Cổng không còn giấu gì nữa.
+ *
+ * Và nó phải đóng: một bảng kỹ thuật hiện giữa một buổi trình diễn với lãnh đạo, hay trong app
+ * của một đơn vị đang xin Zalo duyệt, là thứ người xem sẽ hỏi — và câu trả lời "đó là công cụ
+ * nội bộ" không giúp được gì ở cả hai chỗ.
  */
-/**
- * ⚠ BẢN ĐO — LUÔN HIỆN BẢNG CHẨN ĐOÁN, và phải đóng cổng lại trước khi nộp bản phát hành.
- *
- * Bản trước chỉ hiện khi có `debug`, và đó là một lỗi thiết kế của chính tôi: **link mở bản
- * thử nghiệm không mang tham số nào**, nên cái cổng ấy giấu bảng đúng lúc cần nó nhất. Một
- * công cụ đo chỉ bật được bằng thứ ta đang cần đo là công cụ vô dụng.
- *
- * Mở luôn là chấp nhận được HÔM NAY vì ta chỉ đang đẩy **bản thử nghiệm** cho chính mình —
- * người dân không tới được, người duyệt Zalo cũng chưa. Nhưng nó KHÔNG được đi theo bản nộp:
- * một bảng kỹ thuật trong app của một đơn vị đang xin duyệt là thứ người duyệt sẽ hỏi.
- *
- * Đóng lại bằng cách trả về dòng cũ:  return "debug" in ket_qua.sdk || "debug" in ket_qua.url;
- */
-export function batChanDoan(_ket_qua: KetQuaDo): boolean {
-  return true;
+export function batChanDoan(ket_qua: KetQuaDo): boolean {
+  return "debug" in ket_qua.sdk || "debug" in ket_qua.url;
 }
 
 /**

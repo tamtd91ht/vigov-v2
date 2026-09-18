@@ -124,11 +124,48 @@ body {
   background: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-green) 100%);
 }
 
+/* Tên chủ sở hữu bên trái, nút đổi xã bên phải. Nút KHÔNG co lại: tên xã dài thì tên xuống
+   dòng, chứ một nút hẹp hơn 44px là một nút bấm trượt. */
+.app-header__hang {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.app-header__ten {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .app-header__owner {
-  font-size: var(--text-small);
+  /* To hơn dòng màn hình bên dưới vì từ giai đoạn 2 đây là TÊN XÃ — thứ công dân phải đọc được
+     ở mọi màn hình mà không cần tìm (README §Non-negotiables #2). */
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: 0.01em;
+  line-height: 1.3;
   margin: 0;
+}
+
+/* Đổi xã là hành động tường minh (ADR 0005), nên nó là một nút thật, cao đủ 44px, có chữ —
+   không phải một biểu tượng bút chì mà người dùng phải đoán. */
+.app-header__doi-xa {
+  flex: 0 0 auto;
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  padding: 0 14px;
+  border: 1px solid var(--on-panel);
+  border-radius: 10px;
+  background: transparent;
+  color: #ffffff;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.app-header__doi-xa:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
 }
 
 .app-header__screen {
@@ -893,63 +930,164 @@ body {
   color: var(--ink);
 }
 
-.goi-y__bang {
-  margin: 0 0 14px;
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.goi-y__dong {
+/*
+ * THẺ XÃ — tên xã đứng một mình, to, trên nền trắng.
+ *
+ * Đây là thứ công dân đọc rồi mới bấm xác nhận. Nó không phải một hàng trong bảng: một cái tên
+ * xếp cạnh nhãn "Mã xã" và "Nguồn" là một cái tên người ta lướt qua, và lướt qua ở bước này
+ * nghĩa là gửi hồ sơ sang một cơ quan khác.
+ */
+.xa-the {
   display: flex;
-  gap: 12px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--hairline);
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-left: 4px solid var(--brand-blue);
+  border-radius: 14px;
 }
 
-.goi-y__dong:first-child {
-  border-top: 0;
+.xa-the__dau {
+  /* Dùng lại `.tile`: 44x44, chữ/nét là --tile-glyph trên nền thương hiệu (6,1:1 và 6,7:1). */
+  border-radius: 13px;
 }
 
-.goi-y__dong dt {
-  min-width: 80px;
+.xa-the__chu {
+  display: block;
+  min-width: 0;
+}
+
+.xa-the__ten {
+  display: block;
+  font-size: 24px;
+  line-height: 1.25;
   font-weight: 700;
+  color: var(--navy);
+}
+
+.xa-the__tinh {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-body);
   color: var(--ink-muted);
 }
 
-.goi-y__dong dd {
-  margin: 0;
-  color: var(--ink);
-  word-break: break-all;
-}
-
-/* Cảnh báo dùng VIỀN TRÁI + chữ, không chỉ dùng màu: trạng thái không bao giờ được báo bằng
-   màu đơn thuần (README §Non-negotiables #6). */
-.goi-y__canh-bao {
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border-left: 4px solid var(--brand-blue, #00aef4);
-  background: var(--surface-alt);
-  font-size: var(--text-small);
-  line-height: 1.5;
-  color: var(--ink);
-}
-
 .goi-y__tiep {
-  margin: 0 0 16px;
+  margin: 14px 0 0;
   font-size: var(--text-small);
   line-height: 1.55;
   color: var(--ink-muted);
 }
 
 .goi-y__nut {
+  display: block;
   min-height: var(--tap-min);
   width: 100%;
-  padding: 0 16px;
+  margin: 0 0 10px;
+  padding: 10px 16px;
   border: 1px solid var(--hairline);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface);
   font: inherit;
   font-size: var(--text-body);
+  font-weight: 600;
   color: var(--ink);
+}
+
+/* Hành động chính: nền navy đặc, chữ trắng (13,0:1). Nó là nút DUY NHẤT được nhấn mạnh trên
+   màn — hai nút cùng nổi bật là hai nút không nút nào nổi bật. */
+.goi-y__nut--chinh {
+  background-color: var(--navy);
+  background-image: radial-gradient(90% 200% at 110% 50%, var(--panel-glow-blue) 0%, var(--navy) 70%);
+  border-color: var(--navy);
+  color: #ffffff;
+  font-size: 19px;
+}
+
+/* Đường thoát về phần giới thiệu công ty. Nhạt hơn vì nó không phải việc công dân tới để làm. */
+.goi-y__nut--nhat {
+  background: transparent;
+  border-color: transparent;
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.goi-y__nut:focus-visible,
+.chon-xa__dong:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+/* ---------- màn chọn xã ---------- */
+
+.chon-xa__li-do {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  /* Viền trái + chữ, không chỉ màu: trạng thái không bao giờ báo bằng màu đơn thuần
+     (README §Non-negotiables #6). */
+  border-left: 4px solid var(--brand-green);
+  border-radius: 0 10px 10px 0;
+  background: var(--surface);
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.chon-xa__ds {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.chon-xa__dong {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap-min);
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface);
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+}
+
+.chon-xa__chu {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chon-xa__ten {
+  display: block;
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.chon-xa__tinh {
+  display: block;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+.chon-xa__tiep {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  color: var(--navy);
+}
+
+/* Dòng nói đây là dữ liệu mẫu. Nhỏ nhưng ở cỡ chữ tối thiểu của app — một lời cảnh báo không
+   đọc được là một lời cảnh báo không được nói ra. */
+.demo-ghi-chu {
+  margin: 0 0 14px;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
 }

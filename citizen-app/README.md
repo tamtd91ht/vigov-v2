@@ -58,8 +58,12 @@ domain" strategy does not apply here. The commune is resolved at runtime — see
 | 7 | Error messages say what to do next, never an error code |
 | 8 | Nothing personal in logs, URLs, or file names |
 
-Rules 6, 7 and 8 already bind phase 1. Rules 1–5 bind phase 2; rule 2 is why the header in
-`src/App.tsx` reserves the slot that will hold the commune name.
+Rules 6, 7 and 8 already bind phase 1. Rules 1–5 bind phase 2 — and rules 1, 2 and 3 are already
+**running**, on demo data, in `src/features/kham-pha/`: the deep-link parameter only ever
+suggests a commune, the header slot in `src/App.tsx` holds the commune name on every screen once
+one is confirmed, and switching commune is a button nobody presses on the citizen's behalf.
+Rules 4 and 5 wait for a server: the confirmed commune is client-side UI state, **not a session**
+(see the note at the top of `GoiYXaScreen.tsx`).
 
 ## Error message shape
 
@@ -70,8 +74,10 @@ Rules 6, 7 and 8 already bind phase 1. Rules 1–5 bind phase 2; rule 2 is why t
 
 ## Where the content lives
 
-Every user-visible string of phase 1 sits in `src/content/company-profile.ts`. One file,
-because phase 2 replaces this content wholesale and the edit should land in one place.
+Every user-visible string of the company introduction sits in `src/content/company-profile.ts`.
+One file, because phase 2 replaces this content wholesale and the edit should land in one place.
+The discovery layer (`src/features/kham-pha/`) keeps its own strings next to the rules they
+belong to, and its demo commune names in exactly one file — see §Còn thiếu #0.
 
 **Nothing may be added to that file without a source.** The app carries the name of a real
 legal entity: an unsourced founding year, customer name or award is a false statement
@@ -123,7 +129,7 @@ Phiên bản ghim cứng để lần chạy sau ra đúng kết quả lần ch�
 
 | # | Cái gì | Ghi chú |
 |---|---|---|
-| 0 | **Đóng cổng bảng chẩn đoán** — `batChanDoan()` trong `src/lib/launch-params.ts` đang trả `true` | Bản đo để **luôn hiện**, vì link mở bản thử nghiệm không mang tham số nào nên cổng `debug` giấu bảng đúng lúc cần nó. Chấp nhận được với bản thử nghiệm; **không** được đi theo bản phát hành — một bảng kỹ thuật trong app của đơn vị đang xin duyệt là thứ người duyệt sẽ hỏi. Gỡ bảng cũng gỡ luôn `zmp-sdk` và **64 kB gzip**, nên hai việc là một |
+| 0 | **Xoá danh mục xã mẫu** — `src/features/kham-pha/demo-danh-muc-xa.ts` | Tám dòng tên xã **đặt ra** cho buổi trình diễn, kèm một dòng chữ nói rõ điều đó trên màn hình. Nguồn thật là `ListTenants` của service `platform`: đã khai trong proto, **chưa có cài đặt**, và còn chờ xác thực người gọi trên cổng gRPC. Một danh mục xã đặt ra mà đi vào bản phục vụ người thật là một cơ quan nhà nước hiển thị đơn vị hành chính không tồn tại. `kham-pha.test.tsx` ghim rằng đây là nơi **duy nhất** có tên xã, để xoá một tệp là xoá sạch |
 | 1 | Ảnh chụp màn hình và mô tả trên store | Bắt buộc để duyệt. Icon thì đã có — `tools/logo.py` dựng từ `brand/lg_vhs_full.svg` |
 | 2 | Các khoá còn lại trong `app-config.json` | `app.*` viết từ nguồn thứ cấp và **chưa đối chiếu** với Developer Console. Ba khoá `list*` thì đã do `sync-config` sinh, không phải đoán |
 

@@ -1,86 +1,82 @@
 /**
- * Màn GỢI Ý XÃ — thứ hiện ra khi app được mở kèm tham số `t` (ADR 0005, lớp KHÁM PHÁ).
+ * Màn XÁC NHẬN XÃ — thứ hiện ra khi đường liên kết đủ tin để chọn sẵn một xã (`src=qr`, `src=zns`).
  *
  * ĐÂY KHÔNG PHẢI "ĐÃ CHỌN XÃ", VÀ KHÁC BIỆT ẤY LÀ TOÀN BỘ LÝ DO MÀN NÀY TỒN TẠI.
+ * Quy tắc đọc tham số nằm trong `goi-y.ts` cùng thư mục, kèm bảng ba lớp của ADR 0005.
  *
- * ADR 0005 tách ba lớp và cấm gộp:
+ * ⚠ XÁC NHẬN Ở ĐÂY **CHƯA PHẢI MỘT PHIÊN**, VÀ NGƯỜI ĐỌC SAU PHẢI BIẾT ĐIỀU ĐÓ:
  *
- *   Khám phá  — công dân MUỐN làm việc với xã nào.  QR · deep link · GPS · picker.  KHÔNG tin được.
- *   Phiên     — phiên này ĐANG thao tác ở xã nào.   Server ghi sau khi công dân xác nhận.  Tin được.
- *   Uỷ quyền  — công dân này được đọc/ghi gì ở đó.  Quan hệ công dân↔xã + luật 4.  Tin được.
+ *   Bấm nút dưới đây chỉ ghi xã vào **trạng thái giao diện phía client** (`useState` trong
+ *   `App.tsx`). Không có lệnh gọi máy chủ, không có phiên nào được cấp, không có gì được lưu lại
+ *   trên máy. Kênh công dân phía máy chủ chưa tồn tại: `service-identity` mới có phía cán bộ, và
+ *   `ListTenants` của service `platform` còn chưa có cài đặt.
  *
- * Tham số trên QR là **dữ liệu client cung cấp**. Luật 1 cấm #2 cấm nhận xã từ client: một
- * client tự khai xã là một client tự cấp quyền cho mình. Nên màn này **dẫn giao diện**, và
- * không hơn — nó nói "có vẻ bạn muốn làm việc với xã này", chờ một chạm xác nhận, và việc ghi
- * xã vào phiên là của server.
- *
- * VÌ SAO NÓ CHƯA GỌI ĐƯỢC SERVER: chưa có server. `service-identity` mới có phía cán bộ; sáu
- * bảng kênh công dân đã có schema nhưng chưa chạy trên CSDL thật nào, chưa có route, chưa có
- * kho đọc. Nên nút xác nhận ở đây **cố ý không làm gì** ngoài việc nói ra bước kế tiếp là gì.
- * Một nút giả vờ đã chọn xã sẽ là đúng cái lỗi ADR 0005 dựng ba lớp để chặn.
- *
- * MỨC TIN THEO NGUỒN (ADR 0005): `qr` và `zns` thì chọn sẵn, một chạm xác nhận — người đang
- * đứng ở trụ sở xã không nên bị bắt đi tìm lại chính xã đó. `share` thì LUÔN bắt chọn tường
- * minh, vì nguồn gốc không xác định: một liên kết chuyển tay không nói lên ý định của người
- * nhận.
+ *   Khi tuyến ấy sống, câu lệnh đúng là: gửi mã xã + xác nhận của công dân lên máy chủ, máy chủ
+ *   ghi xã vào PHIÊN và trả về phiên đó. Xã của phiên do máy chủ nói, không do màn hình này nhớ.
+ *   Ai đó đọc tệp này mà tưởng phiên đã được cấp sẽ dựng tiếp tính năng lên trên một nền không
+ *   có — đúng cái lỗi mà ba lớp của ADR 0005 dựng ra để chặn.
  */
+import { nhanNguon } from "./goi-y";
+import type { XaDemo } from "./demo-danh-muc-xa";
 
 type Props = {
-  /** Mã xã do deep link mang tới. KHÔNG phải xã đã chọn — chỉ là gợi ý. */
-  maXa: string;
-  /** `qr` · `zns` · `share` · rỗng nếu không khai. Quyết định mức tin, xem chú thích đầu tệp. */
+  /** Xã do đường liên kết gợi ý. Đã tra được tên — màn này không bao giờ hiện một mã trần. */
+  xa: XaDemo;
+  /** `qr` · `zns`. Chỉ dùng để nói ra bằng chữ vì sao xã này được chọn sẵn. */
   nguon: string;
-  onBoQua: () => void;
+  onXacNhan: () => void;
+  onChonXaKhac: () => void;
 };
 
-const TIN_DUOC_CHON_SAN = new Set(["qr", "zns"]);
+/** Trụ sở uỷ ban. Trang trí — câu chữ bên cạnh mới là nội dung, nên `aria-hidden`. */
+function GlyphTruSo({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <path d="M3 10.5 12 4l9 6.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 10.5V20h14v-9.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9.5 20v-5h5v5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
-export function GoiYXaScreen({ maXa, nguon, onBoQua }: Props) {
-  const chonSan = TIN_DUOC_CHON_SAN.has(nguon);
-
+export function GoiYXaScreen({ xa, nguon, onXacNhan, onChonXaKhac }: Props) {
   return (
     <section className="goi-y" aria-labelledby="goi-y-tieu-de">
-      <p className="goi-y__nhan">Liên kết bạn vừa mở</p>
+      <p className="goi-y__nhan">{nhanNguon(nguon)}</p>
       <h1 className="goi-y__tieu-de" id="goi-y-tieu-de">
-        {chonSan ? "Bạn muốn làm việc với xã này?" : "Chọn xã để tiếp tục"}
+        Bạn cần liên hệ với xã này?
       </h1>
 
-      <dl className="goi-y__bang">
-        <div className="goi-y__dong">
-          <dt>Mã xã</dt>
-          <dd>{maXa}</dd>
-        </div>
-        <div className="goi-y__dong">
-          <dt>Nguồn</dt>
-          <dd>{nguon || "(không khai)"}</dd>
-        </div>
-      </dl>
+      {/* Tên xã to và đứng một mình. Công dân xác nhận theo TÊN — mã ULID không đọc được, và một
+          màn xác nhận hiện mã là một màn xác nhận không ai xác nhận được. */}
+      <div className="xa-the">
+        <span className="tile xa-the__dau" aria-hidden="true">
+          <GlyphTruSo className="tile__glyph" />
+        </span>
+        <span className="xa-the__chu">
+          <strong className="xa-the__ten">{xa.ten}</strong>
+          <span className="xa-the__tinh">{xa.tinh}</span>
+        </span>
+      </div>
 
-      {/* TÊN XÃ CHƯA HIỆN ĐƯỢC, và nói thẳng ra thay vì để trống.
-          Đổi mã sang tên là việc của sổ đăng ký phía server (ListTenants), và nó chưa có cài
-          đặt. Hiện một cái tên bịa ra ở đây tệ hơn nhiều so với thừa nhận chưa tra được: công
-          dân xác nhận theo TÊN xã, không theo một chuỗi ULID không đọc được. */}
-      <p className="goi-y__canh-bao">
-        Chưa tra được tên xã từ mã này — sổ đăng ký phía máy chủ chưa hoạt động. Công dân phải
-        thấy <strong>tên xã</strong> trước khi xác nhận, nên bước này chưa hoàn chỉnh.
-      </p>
-
-      {!chonSan && (
-        <p className="goi-y__canh-bao">
-          Nguồn <code>{nguon || "không khai"}</code> không đủ tin để chọn sẵn. Liên kết chuyển
-          tay không nói lên ý định của người nhận, nên xã phải được chọn tường minh.
-        </p>
-      )}
-
-      <p className="goi-y__tiep">
-        Bước kế tiếp thuộc về máy chủ: xác nhận ở đây sẽ yêu cầu máy chủ ghi xã vào phiên, và
-        chính phiên đó — không phải liên kết này — mới là thứ quyết định bạn đang thao tác ở xã
-        nào.
-      </p>
-
-      <button type="button" className="goi-y__nut" onClick={onBoQua}>
-        Bỏ qua, xem giới thiệu công ty
+      <button type="button" className="goi-y__nut goi-y__nut--chinh" onClick={onXacNhan}>
+        Đúng, tiếp tục
       </button>
+      <button type="button" className="goi-y__nut" onClick={onChonXaKhac}>
+        Chọn xã khác
+      </button>
+
+      {/* Lời hứa bất di dịch #2, nói ra trước khi công dân bấm: tên xã sẽ theo suốt mọi màn hình. */}
+      <p className="goi-y__tiep">
+        Tên xã sẽ hiện ở đầu mỗi màn hình cho tới khi bạn đổi sang xã khác.
+      </p>
     </section>
   );
 }
