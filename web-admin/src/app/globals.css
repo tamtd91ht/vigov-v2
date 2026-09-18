@@ -473,3 +473,137 @@ body {
     padding-top: 0.125rem;
   }
 }
+
+/* ---- màn cấu hình · tab Phân quyền ------------------------------------------------------ */
+
+.tab-phan-quyen {
+  margin-top: 2.5rem;
+}
+
+/* MA TRẬN 33 HÀNG × 8 CỘT TRÊN MÀN 320px.
+ *
+ * Ba thứ giữ cho nó còn đọc được, và cả ba là điều kiện để một dấu tích được đọc đúng hàng, đúng
+ * cột — đọc lệch một cột ở đây là hiểu sai một vai trò đang giữ quyền gì:
+ *
+ *   1. `.cot-quyen` GHIM TRÁI: cuộn ngang tới cột vai trò thứ tư thì tên quyền vẫn còn trên màn.
+ *   2. `thead th` GHIM TRÊN: cuộn dọc qua nhóm thứ hai thì tên vai trò và hai số đếm vẫn còn.
+ *   3. Ô góc trên–trái ghim cả hai chiều, nên nó không bị chính hai lớp ghim kia chồng lên.
+ *
+ * `border-collapse: separate` chứ không `collapse`: với `collapse`, viền của ô ghim bị vẽ theo
+ * bảng chứ không theo ô, nên cột ghim mất viền lúc cuộn. Viền vẽ bằng `box-shadow` inset ở dưới. */
+/* VÙNG CUỘN CÓ TRẦN CHIỀU CAO, và đó là điều kiện để hàng tiêu đề ghim được: `position: sticky`
+ * ghim so với vùng cuộn gần nhất, nên một vùng cao vô hạn thì không có gì để ghim vào — hàng tiêu
+ * đề vẫn trôi khỏi màn hình y như không đặt sticky. Với 33 hàng thì tên vai trò biến mất ngay ở
+ * nhóm thứ hai, và từ đó trở đi mỗi dấu tích là một dấu tích không biết thuộc cột nào. */
+.bang-cuon-ma-tran {
+  max-height: 75vh;
+  overflow: auto;
+}
+
+.bang-phan-quyen {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+}
+
+.bang-phan-quyen th,
+.bang-phan-quyen td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  background: #fff;
+  box-shadow: inset 0 -1px 0 var(--xam-vien);
+}
+
+.bang-phan-quyen thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--nen);
+  font-size: 0.75rem;
+  color: var(--xam-chu);
+}
+
+/* Cột tên quyền: ghim trái, và đủ hẹp để ở 320px vẫn còn chỗ cho một cột vai trò bên cạnh. */
+.bang-phan-quyen .cot-quyen {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 11rem;
+  min-width: 11rem;
+  /* Viền phải của cột ghim vẽ luôn ở đây: nó là mép giữa phần đứng yên và phần đang trôi. */
+  box-shadow:
+    inset -1px 0 0 var(--xam-vien),
+    inset 0 -1px 0 var(--xam-vien);
+}
+
+.bang-phan-quyen thead .cot-quyen {
+  z-index: 3; /* ô góc: nằm trên cả hàng ghim trên lẫn cột ghim trái */
+}
+
+.nhan-quyen {
+  display: block;
+  font-weight: 600;
+}
+
+.cot-vai-tro {
+  min-width: 9rem;
+}
+
+.ten-vai-tro {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+/* Nhãn phụ của vai trò lãnh đạo. CHỈ là nhãn — không có hành vi nào đi theo nó (luật 5, cấm #2). */
+.chip-lanh-dao {
+  margin: 0.25rem 0;
+  background: #e0e7ff;
+  color: #1e3a8a;
+}
+
+/* Dải tiêu đề nhóm quyền, chạy ngang cả bảng: hàng nào cũng biết mình thuộc nhóm nào mà không
+ * phải cuộn ngược lên đầu bảng. */
+.dai-nhom th {
+  background: #eef2f7;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: var(--navy);
+}
+
+/* Chữ của dải nhóm ghim trái — không phải cả dải: dải rộng bằng bảng nên nó đứng yên sẵn, còn thứ
+ * trôi khỏi khung nhìn khi cuộn ngang là chữ bên trong nó. */
+.dai-nhom .nhan-nhom {
+  position: sticky;
+  left: 0.75rem;
+  display: inline-block;
+  font-weight: 700;
+}
+
+/* HAI Ô TRẠNG THÁI — VÀ KHÔNG Ô NÀO MỜI BẤM.
+ *
+ * Không `cursor: pointer`, không hiệu ứng rê chuột, không viền hội tụ: màn hình này chỉ đọc, và
+ * một ô trông như bấm được mà không lưu được là một lời hứa suông (`ma-tran-phan-quyen.tsx`).
+ *
+ * Màu KHÔNG phải tín hiệu duy nhất: dấu `✓` và `–` khác nhau về hình dạng, và mỗi ô mang một câu
+ * đầy đủ cho trình đọc màn hình ("Đã cấp" / "Chưa cấp"). */
+.bang-phan-quyen .o-da-cap,
+.bang-phan-quyen .o-chua-cap {
+  text-align: center;
+  font-size: 1rem;
+  user-select: none;
+}
+
+.bang-phan-quyen .o-da-cap {
+  color: #14532d;
+  font-weight: 700;
+}
+
+/* Dấu `–` dùng xám ĐẬM chứ không xám nhạt: nó là nội dung, không phải đường kẻ, nên vẫn phải đạt
+ * tương phản 4.5:1 (`skills/accessibility-elderly`, ngưỡng 3). */
+.bang-phan-quyen .o-chua-cap {
+  color: var(--xam-chu);
+}

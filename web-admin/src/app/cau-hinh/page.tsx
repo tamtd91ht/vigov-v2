@@ -2,6 +2,7 @@ import { CauHinhXaProvider, phanHienThi } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { TabNguoiDung } from "@/features/cau-hinh/tab-nguoi-dung";
+import { TabPhanQuyen } from "@/features/cau-hinh/tab-phan-quyen";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -13,10 +14,17 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  * đoạn đường dẫn đã chạy thật ở một xã thì không có lần sửa nào rẻ nữa. Nên tab mở ngay trong
  * trang này; đặt tên đoạn đường dẫn là việc của khách, không phải của lượt này.
  *
- * MƯỜI TAB CỦA §0, Ở ĐÂY CÓ MỘT. Chín tab còn lại — Sơ đồ tổ chức, Thôn/Tổ dân phố, Phân quyền,
- * Danh mục, Trường bản đồ, Lời hệ thống, Thời hạn xử lý, Tự động hoá, Máy chủ thư — chưa có
- * tuyến nào trong hợp đồng REST. Một thanh mười tab mà chín tab bấm vào không ra gì là chín lần
- * hứa hẹn suông, nên thanh tab chỉ mọc thêm khi tuyến mọc thêm.
+ * MƯỜI TAB CỦA §0, Ở ĐÂY CÓ HAI. Tám tab còn lại — Sơ đồ tổ chức, Thôn/Tổ dân phố, Danh mục,
+ * Trường bản đồ, Lời hệ thống, Thời hạn xử lý, Tự động hoá, Máy chủ thư — chưa có tuyến nào trong
+ * hợp đồng REST. Một thanh mười tab mà tám tab bấm vào không ra gì là tám lần hứa hẹn suông, nên
+ * thanh tab chỉ mọc thêm khi tuyến mọc thêm.
+ *
+ * VÀ Ở ĐÂY CHƯA CÓ THANH TAB NÀO: hai phần dựng nối tiếp trong trang, mỗi phần TỰ ẩn/hiện theo
+ * khoá quyền của nó (`admin.user` · `admin.role`). Chưa dựng thanh chuyển tab vì nó đặt ra một
+ * câu chưa ai trả lời: tài khoản chỉ mở được MỘT tab thì thanh ấy hiện một nút đứng trơ, hay
+ * không hiện? Đó là quyết định về giao diện của khách, và đoán hộ thì phải đoán lại khi tab thứ
+ * ba mọc lên. Dựng nối tiếp không mất gì: mỗi phần vẫn đọc dữ liệu của riêng nó, và phần nào
+ * thiếu quyền thì không gọi tuyến nào.
  *
  * BẢO VỆ ĐƯỜNG: `src/proxy.ts` chặn ở phía máy chủ trước khi trang này được dựng — chưa có
  * cookie phiên thì chuyển sang `/dang-nhap`. Nó cố ý KHÔNG kiểm quyền: quyền do dịch vụ kiểm
@@ -43,6 +51,7 @@ export default async function TrangCauHinh() {
             Tổ chức, phân quyền, danh mục nghiệp vụ và thời hạn xử lý của đơn vị.
           </p>
           <TabNguoiDung />
+          <TabPhanQuyen />
         </main>
       </PhienProvider>
     </CauHinhXaProvider>

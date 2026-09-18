@@ -64,15 +64,22 @@ type nhomQuyenRa struct {
 
 // vaiTroCotRa is one COLUMN of the matrix: a role of this commune and TWO counts of its holders.
 //
-// BOTH ARE COUNTS AND CARRY NO NAMES. The header reads "3 cán bộ · 1 đang hiệu lực" (spec §4.1 plus
-// the customer's decision); a list of the people in a role would be personal data on a screen that
-// exists to edit permissions (rule 3). What each count includes is argued on domain.VaiTroCot.
+// BOTH ARE COUNTS AND CARRY NO NAMES. A list of the people in a role would be personal data on a
+// screen that exists to edit permissions (rule 3). What each count includes is argued on
+// domain.VaiTroCot.
 //
-// `active_account_count` NAMES THE ACCOUNT FACT, NOT THE HEADER'S WORDS (ADR 0017). The screen
-// prints "đang hiệu lực"; a field called `effective_count` would assert that an open account and an
-// effective permission are one concept, and they are not — the permission is effective only if the
-// role also holds the key, which is the `grants` list in this very response. The contract states the
-// fact it holds and lets the screen do the arithmetic.
+// `active_account_count` NAMES THE ACCOUNT FACT, NOT THE SCREEN'S WORDS (ADR 0017). A field called
+// `effective_count` would assert that an open account and an effective permission are one concept,
+// and they are not — the permission is effective only if the role also holds the key, which is the
+// `grants` list in this very response. The contract states the fact it holds and lets the screen do
+// the arithmetic.
+//
+// THE SCREEN'S EXACT WORDING IS DELIBERATELY NOT QUOTED HERE. An earlier version of this comment
+// said the header reads "3 cán bộ · 1 đang hiệu lực" — and by the time the tab was built it read
+// "3 cán bộ · 1 trong số đó có tài khoản đang hoạt động", for the same reason this field is not
+// called `effective_count`. Two copies of one sentence in two languages in two services is two
+// copies that drift, and the stale one is the one a reader trusts. The wording lives in
+// web-admin/src/features/cau-hinh/nhan-ma-tran.ts, which is its single owner (rule 9).
 //
 // `is_leader` CHOOSES THE DEFAULT SCREEN AND NOTHING ELSE — the whole argument is on
 // domain.VaiTro.LaLanhDao. It is repeated here because a matrix is exactly where the line is

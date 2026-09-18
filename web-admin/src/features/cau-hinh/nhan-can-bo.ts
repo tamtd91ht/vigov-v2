@@ -115,9 +115,10 @@ export function nhanBoPhan(ket: KetTra): string {
  * thái có hệ quả riêng — tài khoản ấy đăng nhập được nhưng không có quyền nào, và đó đúng là
  * dòng người quản trị đi tìm. Gộp hai cột vào một câu chung ("Chưa có") là xoá mất hệ quả ấy.
  *
- * MÀN HÌNH NÀY KHÔNG HIỆN QUYỀN CỦA VAI TRÒ, chỉ hiện tên: không tuyến nào trong hợp đồng phơi
- * ra danh sách quyền của từng vai trò, và đó là chủ ý đã ghi trong lý do phân quyền của tuyến
- * `GET /api/v1/roles`.
+ * CỘT NÀY KHÔNG HIỆN QUYỀN CỦA VAI TRÒ, chỉ hiện tên — đúng chủ ý đã ghi trong lý do phân quyền
+ * của tuyến `GET /api/v1/roles`: danh mục vai trò là thứ mọi tài khoản đã đăng nhập đọc được, còn
+ * ai đang giữ khoá nào thì đòi `admin.role`. Muốn xem quyền của từng vai trò thì sang tab Phân
+ * quyền (`ma-tran-phan-quyen.tsx`, `GET /api/v1/role-permissions`) — hai tuyến, hai quyền, cố ý.
  */
 export function nhanVaiTro(ket: KetTra): string {
   switch (ket.loai) {

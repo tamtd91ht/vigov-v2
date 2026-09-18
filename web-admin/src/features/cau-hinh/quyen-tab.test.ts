@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { layDanhSachCanBo } from "@/lib/api/can-bo";
+import { layMaTranQuyen } from "@/lib/api/phan-quyen";
 import { layPhienHienTai } from "@/lib/api/phien";
 
-import { quyetDinhTabNguoiDung } from "./quyen-tab";
+import { quyetDinhTabNguoiDung, quyetDinhTabPhanQuyen } from "./quyen-tab";
 
 /**
  * Kiểm cả đường: phản hồi HTTP của `GET /api/v1/sessions/current` → quyết định ẩn/hiện.
@@ -57,7 +58,11 @@ describe("ẩn/hiện tab Người dùng theo quyền", () => {
 
   it("quyền khác cùng nhóm KHÔNG mở được tab — `admin.audit` không phải `admin.user`", async () => {
     // Nếu có ngày ai đó viết một phép khớp tiền tố `admin.*` thì test này đỏ. Bộ quyền của khách
-    // không phải tích Descartes: 43 khoá được liệt kê từng cái một chính vì chúng khác nhau.
+    // không phải tích Descartes: từng khoá được liệt kê một cái một chính vì chúng khác nhau.
+    //
+    // KHÔNG GHI SỐ LƯỢNG KHOÁ Ở ĐÂY. Dòng này từng ghi "43 khoá" — con số lấy từ tiêu đề mục §4.2
+    // của đặc tả, mà bảng liệt kê ngay dưới tiêu đề ấy chỉ có 33, và CSDL khớp bảng. Một con số
+    // chép vào chú thích không có gì canh nó, nên nó sai lặng lẽ và người đọc vẫn tin.
     batFetch(phanHoiPhien(["admin.audit", "admin.org", "admin.role", "admin.lookup"]));
     expect(quyetDinhTabNguoiDung(await layPhienHienTai())).toEqual({
       hien: false,
@@ -104,6 +109,69 @@ describe("ẩn/hiện tab Người dùng theo quyền", () => {
   });
 });
 
+describe("ẩn/hiện tab Phân quyền theo quyền", () => {
+  it("CÓ `admin.role` thì hiện", async () => {
+    batFetch(phanHoiPhien(["admin.role", "task.read"]));
+    expect(quyetDinhTabPhanQuyen(await layPhienHienTai())).toEqual({ hien: true });
+  });
+
+  it("đọc được quyền nhưng THIẾU `admin.role` thì ẩn — ca bị từ chối, không chỉ ca được phép", async () => {
+    batFetch(phanHoiPhien(["admin.user", "admin.audit", "task.read"]));
+    expect(quyetDinhTabPhanQuyen(await layPhienHienTai())).toEqual({
+      hien: false,
+      vi: "khong-du-quyen",
+    });
+  });
+
+  it("hai tab, hai khoá, KHÔNG suy ra nhau: `admin.user` không mở được tab Phân quyền", async () => {
+    // Nếu có ngày ai đó gộp hai cổng thành một phép hợp "có khoá admin nào cũng được" thì test
+    // này đỏ. Người quản lý danh bạ cán bộ chưa chắc được xem ai đang giữ khoá nào.
+    batFetch(phanHoiPhien(["admin.user"]));
+    const phien = await layPhienHienTai();
+    expect(quyetDinhTabNguoiDung(phien)).toEqual({ hien: true });
+    expect(quyetDinhTabPhanQuyen(phien)).toEqual({ hien: false, vi: "khong-du-quyen" });
+  });
+
+  it("chuỗi gần giống cũng không mở được tab", async () => {
+    batFetch(phanHoiPhien(["admin.roles", "admin.role.read", "ADMIN.ROLE"]));
+    expect(quyetDinhTabPhanQuyen(await layPhienHienTai())).toEqual({
+      hien: false,
+      vi: "khong-du-quyen",
+    });
+  });
+
+  it("phiên hết hạn (401): ẩn, và hiện đúng câu của máy chủ", async () => {
+    batFetch(
+      new Response(
+        JSON.stringify({
+          code: "unauthenticated",
+          message: "Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.",
+          trace_id: "01JTRACE",
+        }),
+        { status: 401, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    expect(quyetDinhTabPhanQuyen(await layPhienHienTai())).toEqual({
+      hien: false,
+      vi: "khong-doc-duoc",
+      thongBao: "Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.",
+    });
+  });
+
+  it("KHÔNG ĐỌC ĐƯỢC QUYỀN thì ẨN, không phải hiện — fail closed", async () => {
+    // Ca này không nhìn thấy bằng mắt và sẽ xảy ra thật (mạng hỏng, máy chủ lỗi). "Chưa rõ có
+    // quyền hay không" phải hành xử như "không có" — trên đường cách ly không có mặc định nào.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("network");
+      }),
+    );
+    expect(quyetDinhTabPhanQuyen(await layPhienHienTai()).hien).toBe(false);
+  });
+});
+
 describe("lớp client chỉ là tiện dụng — máy chủ vẫn chặn", () => {
   it("ẩn tab KHÔNG chặn được lời gọi: gọi thẳng tuyến vẫn nhận 403 của máy chủ", async () => {
     // Đây là bài test viết ra để nói thành lời điều luật 5 cấm #1 nói: ẩn một tab là trải
@@ -122,6 +190,24 @@ describe("lớp client chỉ là tiện dụng — máy chủ vẫn chặn", () 
 
     const ketQua = await layDanhSachCanBo();
     expect(ketQua).toEqual({
+      ok: false,
+      thongBao: "Bạn không có quyền thực hiện thao tác này.",
+    });
+  });
+
+  it("ma trận phân quyền cũng vậy: `admin.role` do máy chủ kiểm, không do cổng ẩn tab", async () => {
+    batFetch(
+      new Response(
+        JSON.stringify({
+          code: "forbidden",
+          message: "Bạn không có quyền thực hiện thao tác này.",
+          trace_id: "01JTRACE",
+        }),
+        { status: 403, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    expect(await layMaTranQuyen()).toEqual({
       ok: false,
       thongBao: "Bạn không có quyền thực hiện thao tác này.",
     });
