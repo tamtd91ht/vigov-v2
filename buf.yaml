@@ -6,6 +6,36 @@ lint:
     - STANDARD
   except:
     - PACKAGE_VERSION_SUFFIX
+# TƯƠNG THÍCH NGƯỢC — và đọc hết đoạn này trước khi tin vào nó.
+#
+# Hạng FILE hứa tương thích ở MỨC MÃ NGUỒN, không chỉ mức dây: nó gồm MESSAGE_NO_DELETE và
+# ENUM_VALUE_SAME_NAME, tức đổi tên một message hay một hằng enum cũng là phá vỡ. Giữ hạng này
+# có chủ đích: ngày 18/09/2026 đã chứng minh tên hằng enum mang nghĩa PHÁP LÝ —
+# `CAPACITY_PERMANENT_RESIDENT` nói một sự thật về nơi ở, còn `thuong_tru` theo Luật Cư trú 2020
+# là trạng thái ĐÃ ĐĂNG KÝ với cơ quan công an. Đọc nhầm hai thứ đó là sai thủ tục hành chính,
+# không phải sai thẩm mỹ (ADR 0011). Một hạng chỉ canh mức dây sẽ để lần đổi tên ấy đi qua im
+# lặng.
+#
+# ⚠ LỜI HỨA NÀY TỪNG KHÔNG CÓ AI KIỂM. `make check` chỉ chạy `buf lint`, không chạy
+# `buf breaking`. Tức tệp này tuyên bố một cam kết tương thích, và không cổng nào đọc tuyên bố
+# ấy — đúng hình dạng "biện pháp trông như biện pháp" mà kho này đã mất cả ngày 17/09 để dọn
+# ở `drift_guard`, `stop_verify_guard`, `.dockerignore` và `go vet`. Hôm nay nó vô hại vì chưa
+# RPC nào có cài đặt; ngày nó có hại thì không ai nhận ra, vì cổng vẫn xanh y như hôm nay.
+#
+# CÁCH CHẠY — so với COMMIT LIỀN TRƯỚC, không phải một mốc cố định:
+#
+#     buf breaking --against '.git#ref=HEAD'
+#
+# Chọn `HEAD` thay vì một thẻ mốc vì nó TỰ BẢO TRÌ: không có con số phải nhớ cập nhật, và nó
+# hỏi đúng câu đáng hỏi — *"thay đổi đang làm có phá hợp đồng không"* — vào đúng lúc sửa còn rẻ.
+# Một mốc cố định trả lời câu khác: *"đã trôi bao xa từ một ngày nào đó"*, và câu đó càng ngày
+# càng ít ai đọc.
+#
+# Đổi vỡ CÓ CHỦ Ý thì cổng sẽ đỏ, và đó là tính năng: nó buộc người làm nói ra lý do thay vì đi
+# qua trong im lặng. Ngày 18/09/2026 phép so này đỏ bảy dòng (đổi tên `Citizen`, ba hằng enum,
+# và `ResolveTenantAlias` → `ResolveTenantSuccession`) — chấp nhận được vì chưa RPC nào có cài
+# đặt, chưa client nào gọi, chưa bảng nào chạy trên CSDL thật. Từ commit ấy trở đi phép so
+# sạch.
 breaking:
   use:
     - FILE
