@@ -53,8 +53,38 @@ const TRIPWIRES: readonly Tripwire[] = [
     what: "a Zalo SDK call that asks the platform for citizen data (phone, profile, location, token)",
     pattern: /\b(getPhoneNumber|getUserInfo|getAccessToken|getLocation|getSetting|authorize)\s*\(/,
   },
-  // (Lệnh cấm nhập `zmp-sdk` chuyển xuống một phép kiểm riêng ở cuối tệp: nó không còn là
-  //  "có hay không" mà là "được nhập đúng những gì" — xem §DANH SÁCH TRẮNG.)
+  {
+    // LỆNH CẤM CẢ GÓI, VÀ NÓ CẤM **CHUỖI TÊN MÔ-ĐUN**, KHÔNG CẤM CÚ PHÁP NHẬP.
+    //
+    // Lịch sử của khe này, ghi lại vì một lệnh cấm không kể lịch sử của mình là một lệnh cấm
+    // người sau sẽ nới lại y hệt — và lần đó có thể không có ai đọc kết quả của phép đo:
+    //
+    //   17/09  Cấm thẳng `from "zmp-sdk"`, không ngoại lệ.
+    //   18/09  Nới thành DANH SÁCH TRẮNG cho `getRouteParams`, để đo một câu ADR 0018 còn treo:
+    //          tham số deep link có tới app không, và `location.search` có mang đủ những gì
+    //          `getRouteParams()` mang không. Lập luận lúc ấy đúng: `getRouteParams` không thu
+    //          thập gì của ai, nó đọc thứ nền tảng đã đặt vào đường liên kết trước khi mã của
+    //          ta chạy.
+    //   18/09  **Phép đo đã xong.** Cả hai câu đều có đáp (README §"Hai thứ đã kiểm bằng cách
+    //          chạy thật"), lớp khám phá đã dựng và demo được ở commit 25591e8, rồi được gỡ
+    //          khỏi bản nộp. Lý do mở khe đã hết, nên khe đóng lại.
+    //
+    // MỘT CHUỖI, KHÔNG PHẢI HAI CÚ PHÁP — và đây là bài học đắt nhất của lần trước. Bản danh
+    // sách trắng đầu tiên chỉ khớp `import { X } from "zmp-sdk"`. Ngay sau đó chính mã sản phẩm
+    // phải đổi sang `const { X } = await import("zmp-sdk")` (vì zmp-sdk đụng `window` lúc nhập
+    // mô-đun và làm sập test chạy trong Node), và phép kiểm im lặng khớp KHÔNG GÌ CẢ: vẫn xanh,
+    // vẫn trông như đang canh, và không còn canh gì. Cấm chuỗi tên mô-đun thì không hình thức
+    // nhập nào đi vòng được — `import`, `await import`, `require`, nhập sâu `zmp-sdk/apis/...`
+    // đều phải gõ đúng cái tên ấy ra.
+    //
+    // VÌ SAO KHÔNG GỠ `zmp-sdk` KHỎI package.json: ADR 0020 chốt `getPhoneNumber` là đường đăng
+    // nhập của giai đoạn 2, nên SDK sẽ quay lại. Một phụ thuộc KHÔNG ĐƯỢC NHẬP thì không vào
+    // bundle và không tốn gì — chính phép kiểm này là thứ giữ cho nó không được nhập.
+    what:
+      'a reference to the "zmp-sdk" module — importing it costs 256 kB raw / 64 kB gzip and is ' +
+      "the doorway to every citizen-data API the platform offers",
+    pattern: /["'`]zmp-sdk(\/[^"'`]*)?["'`]/,
+  },
   {
     what: "an outbound request — phase 1 talks to no backend, so nothing about a citizen can leave the device",
     pattern: /\bfetch\s*\(|XMLHttpRequest|sendBeacon|new\s+WebSocket|new\s+EventSource|\baxios\b/,
@@ -94,55 +124,35 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     });
   }
 
-  it("nhập từ zmp-sdk đúng những gì nằm trong DANH SÁCH TRẮNG, không hơn", () => {
-    // §DANH SÁCH TRẮNG — nới đúng một khe, ngày 18/09/2026, và khe này CHẶT HƠN lệnh cấm cũ.
+  it("lệnh cấm zmp-sdk bắt được MỌI hình thức nhập, không riêng hình thức đang dùng", () => {
+    // MỘT PHÉP KIỂM VỀ CHÍNH DÂY BẪY, và nó tồn tại vì một sự cố đã xảy ra thật.
     //
-    // Trước đây tệp này cấm thẳng `from "zmp-sdk"`, không ngoại lệ. Nhưng MỤC ĐÍCH của nó là
-    // "giai đoạn 1 không thu thập dữ liệu cá nhân", mà `getRouteParams` không thu thập gì của
-    // ai: nó đọc tham số chính nền tảng đưa vào lúc mở app — thứ đã nằm trong đường liên kết
-    // trước khi app kịp chạy. Giữ lệnh cấm cũ thì phép đo mà ADR 0018 còn treo (tham số deep
-    // link có tới app không, có giữ khi app chạy nền không) không làm được, trong khi rủi ro
-    // nó chặn bằng không.
+    // Bản trước của lệnh cấm này khớp theo CÚ PHÁP `import { X } from "zmp-sdk"`. Khi mã sản
+    // phẩm đổi sang `const { X } = await import("zmp-sdk")`, nó im lặng khớp không gì cả: vẫn
+    // xanh, vẫn trông như đang canh, và không còn canh gì. Không có test nào đỏ để báo rằng
+    // một test khác vừa chết.
     //
-    // Một rào đỏ vì thứ KHÔNG vi phạm mục đích của chính nó là rào sắp bị ai đó tắt — bài học
-    // đã trả giá hai lần trong ngày 17/09 với `drift_guard`.
-    //
-    // Vì sao danh sách trắng chặt hơn lệnh cấm cũ: lệnh cấm cũ trả lời "có nhập hay không",
-    // danh sách trắng trả lời "nhập đúng cái gì". Thêm `getPhoneNumber` vào cùng dòng import
-    // đó thì lệnh cấm cũ vẫn chỉ báo một lỗi chung; danh sách trắng gọi đích danh tên vừa lọt.
-    const CHO_PHEP = new Set(["getRouteParams"]);
-    const viPham: string[] = [];
-    for (const file of PRODUCTION_SOURCES) {
-      // Nhập sâu (`zmp-sdk/apis/...`) đi vòng qua phép kiểm tên — chặn thẳng.
-      if (/from\s*["']zmp-sdk\/[^"']+["']/.test(file.code)) {
-        viPham.push(`${file.path}: nhập sâu vào zmp-sdk`);
-      }
-      // HAI HÌNH THỨC NHẬP, và bỏ sót hình thức thứ hai là để dây bẫy thành vô hại.
-      //
-      // Bản đầu của phép kiểm này chỉ khớp `import { X } from "zmp-sdk"`. Ngay sau đó chính
-      // tôi phải đổi sang `const { X } = await import("zmp-sdk")` — vì zmp-sdk đụng `window`
-      // lúc nhập module và làm sập test chạy trong Node — và phép kiểm im lặng khớp KHÔNG GÌ
-      // CẢ. Nó vẫn xanh, vẫn trông như đang canh, và không còn canh gì.
-      //
-      // Đây là lần thứ ba trong hai ngày một bản vá tự tạo ra một thể hiện mới của đúng cái
-      // lỗi nó đang vá. Ghi ra để người sau thêm hình thức nhập thứ ba thì nhớ quay lại đây.
-      const nhap = [
-        // `[^{}]*` chứ không phải `[^}]*`: bản đầu nuốt cả dấu `{` của `try {` đứng trước và
-        // báo vi phạm ở một chỗ không có vi phạm nào. Một dây bẫy kêu sai chỗ cũng bị tắt
-        // nhanh y như một dây bẫy câm.
-        ...file.code.matchAll(/import\s*\{([^{}]*)\}\s*from\s*["']zmp-sdk["']/g),
-        ...file.code.matchAll(/\{([^{}]*)\}\s*=\s*await\s+import\(\s*["']zmp-sdk["']\s*\)/g),
-      ];
-      for (const m of nhap) {
-        for (const ten of m[1]!.split(",").map((s) => s.trim().split(/\s+as\s+/)[0]!.trim())) {
-          if (ten && !CHO_PHEP.has(ten)) viPham.push(`${file.path}: ${ten}`);
-        }
-      }
+    // Nên hôm nay lệnh cấm khớp theo CHUỖI TÊN MÔ-ĐUN, và phép kiểm dưới đây chứng minh điều
+    // đó bằng cách cho nó ăn từng hình thức nhập một. Thêm hình thức thứ tư thì thêm một dòng
+    // ở đây — nếu nó lọt, dòng ấy đỏ ngay, thay vì dây bẫy chết trong im lặng.
+    const cam = TRIPWIRES.find((t) => t.what.includes("zmp-sdk"))!.pattern;
+    const HINH_THUC_NHAP = [
+      'import { getRouteParams } from "zmp-sdk";',
+      "import zmp from 'zmp-sdk';",
+      'const { getRouteParams } = await import("zmp-sdk");',
+      'const sdk = require("zmp-sdk");',
+      'import { getPhoneNumber } from "zmp-sdk/apis";',
+      'import "zmp-sdk/dist/style.css";',
+      "await import(`zmp-sdk`);",
+    ];
+    for (const dong of HINH_THUC_NHAP) {
+      expect(cam.test(dong), `lệnh cấm zmp-sdk không bắt được: ${dong}`).toBe(true);
     }
-    expect(
-      viPham,
-      "một API zmp-sdk ngoài danh sách trắng đã lọt vào mã sản phẩm.\nGiai đoạn 1 được Zalo duyệt như một app KHÔNG thu thập gì. Thêm thu thập là đổi thứ đã nộp — nêu ra trước khi viết, đừng nới test này.",
-    ).toEqual([]);
+
+    // Và nó KHÔNG được kêu oan: một dây bẫy kêu sai chỗ bị tắt nhanh y như một dây bẫy câm.
+    for (const dong of ['import { useState } from "react";', "// zmp-sdk sẽ quay lại ở giai đoạn 2"]) {
+      expect(cam.test(dong), `lệnh cấm zmp-sdk kêu oan ở: ${dong}`).toBe(false);
+    }
   });
 
   it("keeps personal data out of the source itself, not only out of the content file", () => {
