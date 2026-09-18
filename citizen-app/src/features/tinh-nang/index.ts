@@ -17,6 +17,7 @@ import type { ComponentType } from "react";
 import { ManDanhThiep } from "./ManDanhThiep";
 
 export { DangKyTuVan, TimVanPhong } from "./LienHeTinhNang";
+export { KiemTraDuongTruyen } from "./KiemTraDuongTruyen";
 
 /**
  * Tab "Danh thiếp".

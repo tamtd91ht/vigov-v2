@@ -17,9 +17,13 @@ import { MAN_DANH_THIEP } from "./features/tinh-nang/index";
 import {
   CHI_HIEN_LEN_MAN_HINH,
   DANH_THIEP,
+  DUONG_TRUYEN,
+  KIEU_KET_NOI,
   LOI_MO_NGOAI,
   MA_RONG,
   NOI_DUNG_TINH_NANG,
+  SO_HOA_THIEP,
+  THIEP_CUA_CHUNG_TOI,
   TOKEN_KHONG_CHUA_GI,
   TU_VAN,
   VAN_PHONG,
@@ -165,7 +169,7 @@ describe("the bundle that gets uploaded to Zalo", () => {
  *
  * | Biến thể | Nội dung | Dùng để |
  * |---|---|---|
- * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm ba tính năng dùng ba quyền nền tảng | **BẢN NỘP** |
+ * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm sáu tính năng dùng chín quyền nền tảng | **BẢN NỘP** |
  * | `day-du` | Thêm lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Demo nội bộ |
  *
  * Nó dựng THẬT cả hai biến thể rồi đọc bundle, vì không có cách nào khác nói chắc: `resolve.alias`
@@ -193,7 +197,7 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
    * không chép tay. Một danh sách chép tay sẽ lệch khi ai đó sửa một câu, và lúc nó lệch thì ca
    * "bản nộp CÓ chứa" xanh vì **không tìm thấy gì**, chứ không vì bản nộp đúng.
    */
-  const CHUOI_BA_TINH_NANG = () => [
+  const CHUOI_SAU_TINH_NANG = () => [
     MAN_DANH_THIEP.tabLabel,
     MAN_DANH_THIEP.headerTitle,
     CHI_HIEN_LEN_MAN_HINH,
@@ -204,6 +208,13 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     ...Object.values(DANH_THIEP),
     ...Object.values(VAN_PHONG),
     ...Object.values(TU_VAN),
+    // Ba tính năng thêm vào. `KIEU_KET_NOI` là một bản đồ lồng nhau, nên trải phẳng ra tường
+    // minh: `Object.values` trên nó sẽ cho ra những đối tượng, và `toContain` trên một đối
+    // tượng là một phép kiểm xanh vì lý do sai.
+    ...Object.values(DUONG_TRUYEN),
+    ...Object.values(THIEP_CUA_CHUNG_TOI),
+    ...Object.values(SO_HOA_THIEP),
+    ...Object.values(KIEU_KET_NOI).flatMap((mot) => [mot.nhan, mot.y_nghia]),
     ...NOI_DUNG_TINH_NANG.flatMap((nd) => [
       nd.nhan_ngan,
       nd.tieu_de,
@@ -258,12 +269,12 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     NHAN_KHAM_PHA.nut_doi_xa,
   ];
 
-  it("đo đúng thứ cần đo — bản NỘP có đủ chữ của ba tính năng", () => {
+  it("đo đúng thứ cần đo — bản NỘP có đủ chữ của sáu tính năng", () => {
     // CA NÀY QUAN TRỌNG NGANG MỌI CA "KHÔNG CHỨA" DƯỚI ĐÂY. Thiếu nó thì đổi một chữ trong ba
     // tính năng là đủ để mọi ca cấm xanh vĩnh viễn: bản `goc` không chứa câu ấy vì **không bản
     // nào** chứa nó nữa. Một phép kiểm xanh vì không tìm thấy gì là một phép kiểm đã chết trong
     // im lặng.
-    const chuoi = CHUOI_BA_TINH_NANG();
+    const chuoi = CHUOI_SAU_TINH_NANG();
     expect(chuoi.length).toBeGreaterThan(20);
     for (const mot of chuoi) {
       expect(goc, `bản nộp thiếu: ${mot}`).toContain(mot);
@@ -290,8 +301,8 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     for (const chuoi of CHUOI_LOP_KHAM_PHA()) {
       expect(day_du, `bản đầy đủ thiếu: ${chuoi}`).toContain(chuoi);
     }
-    // Và bản đầy đủ là bản gốc CỘNG THÊM, không phải một app khác: ba tính năng vẫn còn nguyên.
-    for (const mot of CHUOI_BA_TINH_NANG()) {
+    // Và bản đầy đủ là bản gốc CỘNG THÊM, không phải một app khác: sáu tính năng vẫn còn nguyên.
+    for (const mot of CHUOI_SAU_TINH_NANG()) {
       expect(day_du, `bản đầy đủ thiếu: ${mot}`).toContain(mot);
     }
   });
@@ -326,15 +337,61 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     expect(goc).not.toContain("URL Zalo dùng để mở app");
   });
 
-  it("bản NỘP MANG `zmp-sdk` — nếu không thì ba tính năng ấy không gọi được nền tảng", () => {
+  it("bản NỘP MANG `zmp-sdk` — nếu không thì sáu tính năng ấy không gọi được nền tảng", () => {
     // Đảo chiều so với trước: `zmp-sdk` từng bị cấm trong bản `goc` vì bản ấy là một app giới
     // thiệu tĩnh không xin quyền nào. Nay ba quyền thuộc về chính ứng dụng sản phẩm, nên SDK
     // PHẢI có mặt — một bản nộp xin ba quyền mà không gọi tới nền tảng là một bản nộp có ba cái
     // nút không làm gì, và vòng duyệt không có gì để cấp quyền cho.
     expect(goc, "bản nộp không mang zmp-sdk").toContain("zmp-sdk");
-    expect(goc).toContain("getPhoneNumber");
-    expect(goc).toContain("getLocation");
-    expect(goc).toContain("scanQRCode");
+    for (const ten of [
+      "getPhoneNumber",
+      "getLocation",
+      "scanQRCode",
+      // Sáu quyền xin thêm. Zalo chỉ cấp khi bản nộp CÓ chỗ dùng chúng nhìn thấy được, và "nhìn
+      // thấy được" bắt đầu từ việc chính lời gọi ấy có mặt trong tệp được nộp.
+      "getNetworkType",
+      "keepScreen",
+      "vibrate",
+      "requestCameraPermission",
+      "openMediaPicker",
+      "downloadFile",
+    ]) {
+      expect(goc, `bản nộp không gọi ${ten}`).toContain(ten);
+    }
+  });
+
+  /**
+   * `serverUploadUrl` — CA NÀY KHÔNG KHẲNG ĐỊNH MỘT SỰ VẮNG MẶT, VÌ SỰ VẮNG MẶT ẤY KHÔNG CÓ THẬT.
+   *
+   * ĐÃ ĐO, 18/09/2026, TRÊN BUNDLE THẬT: chuỗi ấy xuất hiện **2 lần** trong bản `goc`, và cả hai
+   * đều nằm trong mã của chính `zmp-sdk` — lược đồ tham số zod của `openMediaPicker`, và thân
+   * hàm đọc `e.serverUploadUrl` để truyền xuống tầng dưới. Trước khi ba tính năng này tồn tại nó
+   * đã có sẵn 1 lần (chỉ lược đồ); lần thứ hai xuất hiện vì `openMediaPicker` nay thật sự được
+   * gọi, nên thân hàm của nó không còn bị tree-shaking loại đi. Không có cách nào gỡ chuỗi ấy ra
+   * mà vẫn giữ SDK, và giữ SDK là điều kiện để chín quyền kia gọi được.
+   *
+   * NÊN PHÉP KIỂM ĐÚNG KHÔNG PHẢI "ĐẾM SỐ LẦN": một con số ghim cứng sẽ đỏ lên lần đầu Zalo phát
+   * hành một bản SDK khác, vì một lý do ta không sửa được — và một test đỏ vì lý do không sửa
+   * được là một test sắp bị ai đó xoá.
+   *
+   * PHÉP KIỂM ĐÚNG LÀ HÌNH DẠNG CỦA CHÍNH KHUYẾT TẬT: để ảnh rời khỏi máy, mã của ta phải GÁN
+   * MỘT CHUỖI cho tham số ấy. Lược đồ của SDK viết `serverUploadUrl:K().url().optional()`, thân
+   * hàm viết `e.serverUploadUrl` — không dạng nào là một chuỗi được gán. Còn phép bảo đảm mạnh
+   * thì nằm ở tầng mã nguồn: `phase1-collects-nothing.test.ts` cấm chuỗi ấy ở MỌI tệp, kể cả
+   * trong chính thư mục tính năng.
+   */
+  it("không tệp nào GÁN một địa chỉ cho `serverUploadUrl` — ảnh không có đường rời khỏi máy", () => {
+    for (const [ten, ban] of [
+      ["goc", goc],
+      ["day-du", day_du],
+    ] as const) {
+      const gan = ban.match(/serverUploadUrl\s*:\s*["'`]/g) ?? [];
+      expect(
+        gan,
+        `bản ${ten} gán một chuỗi cho serverUploadUrl. Tham số ấy là đường DUY NHẤT ` +
+          "openMediaPicker tải ảnh người dùng lên một máy chủ, và ứng dụng này không có máy chủ nào.",
+      ).toEqual([]);
+    }
   });
 
   it("chính sách quyền riêng tư có mặt trong CẢ HAI bản, đủ mọi mục", () => {
@@ -363,7 +420,7 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
    * chú thích này thay vì sửa xong rồi xoá dấu vết.
    */
   it("chính sách nói ĐỦ mục đích của cả ba quyền, trong cả hai bản", () => {
-    const muc = MUC_CHINH_SACH.find((m) => m.ma === "ba-quyen");
+    const muc = MUC_CHINH_SACH.find((m) => m.ma === "cac-quyen");
     expect(muc, "chính sách không còn mục nào về ba quyền").toBeDefined();
     const manh = muc!.doan.flatMap((doan) => doan.split(" — ")).filter((m) => m.length >= 30);
     expect(manh.length).toBeGreaterThan(3);

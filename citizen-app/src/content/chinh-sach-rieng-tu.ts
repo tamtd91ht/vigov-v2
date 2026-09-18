@@ -14,10 +14,16 @@
  *     "không lưu lại"      <- dây bẫy cấm localStorage / sessionStorage / cookie / indexedDB
  *     "không có máy chủ"   <- hệ quả của cả hai
  *
+ *   Câu thứ tư, thêm ở phiên bản 1.2, cũng vậy:
+ *
+ *     "ảnh không rời khỏi máy" <- dây bẫy cấm `serverUploadUrl` trên toàn cây mã. Tham số ấy là
+ *                                 đường DUY NHẤT `openMediaPicker` tải ảnh lên một máy chủ; cấm
+ *                                 nó thì câu trên là sự thật về cấu trúc, không phải lời hứa.
+ *
  *   Ai nới một trong hai dây bẫy ấy phải sửa tệp này TRƯỚC. Nếu không, chính sách thành sai mà
  *   không có gì đỏ lên.
  *
- * VÌ SAO MỤC VỀ BA QUYỀN NAY NẰM THẲNG TRONG DANH SÁCH NÀY:
+ * VÌ SAO MỤC VỀ CÁC QUYỀN NAY NẰM THẲNG TRONG DANH SÁCH NÀY:
  *
  *   Trước đây nó nằm sau cửa `bien-the/quyen`, vì có một biến thể bản dựng KHÔNG xin quyền nào
  *   và một chính sách nhắc tới số điện thoại trong bản ấy là mô tả sai đúng bản đang được duyệt.
@@ -30,7 +36,10 @@
  * văn bản pháp lý là thứ không sửa lại được sau khi nộp. → README §"Còn thiếu"
  */
 
-import { DOAN_CHINH_SACH_TINH_NANG } from "../features/tinh-nang/noi-dung";
+import {
+  DOAN_CHINH_SACH_TINH_NANG,
+  DOAN_CHINH_SACH_TUNG_QUYEN,
+} from "../features/tinh-nang/noi-dung";
 
 export type MucChinhSach = {
   /** Dùng làm khoá React và làm mỏ neo cho test. Không hiện ra. */
@@ -50,8 +59,21 @@ export type MucChinhSach = {
  * năng của ứng dụng sản phẩm, và mục "Chuyển dữ liệu cho bên thứ ba" nay nói ra việc ứng dụng mở
  * trang bản đồ và trang web của công ty. Hai thay đổi ấy là thay đổi về HÀNH VI, nên số phiên
  * bản phải đổi theo — nếu không thì "phiên bản 1.0" chỉ tên hai văn bản khác nhau.
+ *
+ * LÊN `1.2` VÌ BỀ MẶT QUYỀN RIÊNG TƯ MỞ RỘNG THẬT SỰ — bốn thứ mới, mỗi thứ một dòng phải khai:
+ *
+ *   | Mới | Ứng dụng làm gì | Khai ở mục |
+ *   |---|---|---|
+ *   | **Máy ảnh** | Hỏi quyền để chụp lại một tấm danh thiếp giấy | `cac-quyen` |
+ *   | **Thư viện ảnh** | Mở cửa sổ chọn ảnh của Zalo; ảnh **không rời khỏi máy** | `du-lieu` · `cac-quyen` |
+ *   | **Thông tin mạng** | Chỉ **kiểu** kết nối — không IP, không tên mạng | `cac-quyen` |
+ *   | **Ghi một tệp xuống máy** | Tệp danh thiếp **của chúng tôi**, không phải dữ liệu của người dùng | `ghi-tep` |
+ *
+ * Ba thứ đầu là dữ liệu ĐI VÀO ứng dụng; thứ tư là thứ ứng dụng VIẾT RA, và đó là một loại hành
+ * vi mà bản 1.1 hoàn toàn không có. Giấu nó đi vì "chỉ là tệp của chính mình" là đúng thứ Nghị
+ * định 13 buộc phải nói ra: người dùng có quyền biết ứng dụng ghi gì lên thiết bị của họ.
  */
-export const PHIEN_BAN_CHINH_SACH = "1.1";
+export const PHIEN_BAN_CHINH_SACH = "1.2";
 export const NGAY_HIEU_LUC = "18/09/2026";
 
 export const TIEU_DE_CHINH_SACH = "Chính sách quyền riêng tư";
@@ -85,19 +107,47 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     tieu_de: "Dữ liệu ứng dụng xử lý",
     doan: [
       "Ứng dụng không yêu cầu bạn nhập bất kỳ thông tin nào: không có biểu mẫu, không có ô đăng nhập, không có ô nhập số điện thoại.",
-      "Ứng dụng không đọc danh bạ, không đọc tin nhắn, không đọc thư viện ảnh và không theo dõi hành vi sử dụng của bạn.",
+      "Ứng dụng không đọc danh bạ, không đọc tin nhắn và không theo dõi hành vi sử dụng của bạn.",
+      // CÂU NÀY ĐÃ ĐƯỢC SỬA Ở PHIÊN BẢN 1.2, VÀ VIỆC SỬA NÓ LÀ BẮT BUỘC. Bản 1.1 viết "không
+      // đọc thư viện ảnh"; nay ứng dụng mở cửa sổ chọn ảnh của Zalo, nên câu ấy đã thành SAI.
+      // Một chính sách mô tả sai bản dựng nó nằm trong là thứ Nghị định 13 nhắm tới, và là thứ
+      // không sửa lại được sau khi đã nộp duyệt.
+      "Ứng dụng không tự đọc thư viện ảnh của bạn. Nó chỉ nhận đúng tấm ảnh bạn tự chọn trong cửa sổ chọn ảnh của Zalo, và chỉ khi chính bạn bấm nút chọn ảnh.",
     ],
   },
   {
-    ma: "ba-quyen",
-    tieu_de: "Ba quyền ứng dụng xin, và vì sao",
+    ma: "cac-quyen",
+    tieu_de: "Các quyền ứng dụng xin, và vì sao",
     doan: DOAN_CHINH_SACH_TINH_NANG,
+  },
+  {
+    // MỘT MỤC RIÊNG LIỆT KÊ TỪNG QUYỀN THEO ĐÚNG TÊN API. Mục trên kể theo TÍNH NĂNG — thứ
+    // người dùng hiểu. Mục này kể theo QUYỀN — thứ Developer Console cấp và người duyệt đối
+    // chiếu. Một tính năng dùng hai quyền, nên hai cách kể không thay thế được nhau.
+    ma: "tung-quyen",
+    tieu_de: "Danh sách từng quyền",
+    doan: DOAN_CHINH_SACH_TUNG_QUYEN,
+  },
+  {
+    // HÀNH VI DUY NHẤT ỨNG DỤNG VIẾT LÊN THIẾT BỊ, nên nó có mục riêng thay vì một câu lẫn
+    // trong mục khác. Người đọc chính sách để biết "ứng dụng này làm gì với máy tôi" phải tìm
+    // thấy nó bằng một dòng tiêu đề, không phải bằng cách đọc hết.
+    ma: "ghi-tep",
+    tieu_de: "Tệp ứng dụng ghi xuống máy bạn",
+    doan: [
+      "Ứng dụng ghi đúng MỘT loại tệp xuống máy bạn, và chỉ khi chính bạn bấm nút tải: tệp danh thiếp của VihatSoftware, ở định dạng vCard (.vcf).",
+      "Tệp ấy chứa tên công ty, hotline, email và trang web của chúng tôi. Nó KHÔNG chứa bất kỳ thông tin nào của bạn, vì ứng dụng không có thông tin nào của bạn để đưa vào.",
+      "Nội dung tệp được dựng ngay trên máy bạn và đưa thẳng cho Zalo ghi hộ. Không có một lời gọi mạng nào, không có máy chủ nào tham gia, và Zalo là bên quyết định tệp nằm ở thư mục nào.",
+      "Ngoài tệp ấy, ứng dụng không đọc, không sửa, không xoá và không tạo bất kỳ tệp nào khác trên máy bạn.",
+    ],
   },
   {
     ma: "cach-thuc",
     tieu_de: "Cách xử lý và thời gian lưu",
     doan: [
       "Dữ liệu chỉ tồn tại trong bộ nhớ tạm của phiên làm việc và mất đi khi bạn rời màn hình hoặc đóng ứng dụng.",
+      "Tấm ảnh danh thiếp bạn chọn cũng vậy: ứng dụng chỉ giữ đường dẫn tạm của nó trong bộ nhớ để hiện lên màn hình, và buông ra khi bạn chọn ảnh khác hoặc rời màn hình. Ảnh không được sao chép đi đâu và không được tải lên máy chủ nào.",
+      "Kiểu kết nối mạng đọc được cũng chỉ hiện lên màn hình rồi mất đi. Ứng dụng không ghi lại lịch sử bạn đã kiểm tra những lần nào.",
       "Không có việc lưu trữ, nên không có thời hạn lưu trữ. Không có bản sao lưu nào chứa dữ liệu của bạn.",
     ],
   },
@@ -125,7 +175,8 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     tieu_de: "Rủi ro có thể xảy ra",
     doan: [
       "Vì ứng dụng không lưu và không gửi dữ liệu đi đâu, không có rủi ro rò rỉ dữ liệu từ phía ứng dụng.",
-      "Rủi ro còn lại nằm ở màn hình: nội dung hiển thị sau khi bạn dùng một tính năng có thể bị người đứng cạnh nhìn thấy. Điều này đáng lưu ý nhất khi bạn vừa quét một tấm danh thiếp — thông tin hiện ra là dữ liệu cá nhân của người đã đưa nó cho bạn.",
+      "Rủi ro còn lại nằm ở màn hình: nội dung hiển thị sau khi bạn dùng một tính năng có thể bị người đứng cạnh nhìn thấy. Điều này đáng lưu ý nhất khi bạn vừa quét một tấm danh thiếp, hoặc vừa chọn ảnh một tấm thiếp giấy — thứ hiện ra là dữ liệu cá nhân của người đã đưa nó cho bạn, và bạn là người đang giữ nó.",
+      "Khi bạn bật chế độ giữ màn hình sáng để người khác quét mã, màn hình sẽ không tự tối đi. Ứng dụng tắt chế độ ấy ngay khi bạn rời màn hình danh thiếp, nhưng trong lúc đang bật, những gì trên màn hình nằm trong tầm nhìn của người xung quanh lâu hơn bình thường.",
     ],
   },
   {

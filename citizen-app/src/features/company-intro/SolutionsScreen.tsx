@@ -6,6 +6,8 @@ import {
   SOLUTIONS,
   TECH_KEYWORDS,
 } from "../../content/company-profile";
+import { KiemTraDuongTruyen } from "../tinh-nang/index";
+
 import { BuildingGlyph, KEYWORD_GLYPHS, NetworkBackdrop, SOLUTION_GLYPHS } from "./icons";
 
 /**
@@ -70,6 +72,13 @@ export function SolutionsScreen() {
           );
         })}
       </ul>
+
+      {/* KIỂM TRA ĐƯỜNG TRUYỀN ĐỨNG NGAY DƯỚI DANH SÁCH GIẢI PHÁP, KHÔNG PHẢI Ở MỘT TAB RIÊNG.
+          Người vừa đọc "Tổng đài đa kênh ứng dụng AI" là người đang cân nhắc một tổng đài chạy
+          trên đường mạng của chính họ — và câu hỏi kế tiếp của họ là đường mạng ấy đang là gì.
+          Một tính năng đặt đúng chỗ người ta cần nó là thứ phân biệt một app có việc để làm với
+          một app đi xin quyền. */}
+      <KiemTraDuongTruyen />
 
       <h2 className="section-title">
         <span className="section-title__mark" aria-hidden="true">

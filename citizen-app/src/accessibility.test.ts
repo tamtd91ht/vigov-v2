@@ -93,6 +93,11 @@ describe("text and targets stay usable for an ageing eye", () => {
     expect(styles).toMatch(/\.tn__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
     expect(styles).toMatch(/\.tn__nut-phu\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
     expect(styles).toMatch(/\.tn-hanh-dong\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+
+    // Nút bật/tắt giữ màn hình sáng. Người bấm nó đang đứng đối diện một người khác, một tay
+    // cầm máy chìa mã ra — đúng tư thế bấm trượt nhất — và bấm trượt ở đây là tắt mất thứ đang
+    // giữ màn hình sáng giữa lúc người kia quét.
+    expect(styles).toMatch(/\.tn__nut-giu\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
   });
 
   it("animates nothing outside a reduced-motion guard", () => {
@@ -256,6 +261,32 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["an office name", token("navy"), token("surface")],
     ["an office address", token("ink-muted"), token("surface")],
     ["an office address over the blue wash", token("ink-muted"), token("surface-tint")],
+
+    // BA TÍNH NĂNG THÊM VÀO: kiểm tra đường truyền · danh thiếp của chúng tôi · số hoá thiếp
+    // giấy. Cùng bảng màu, liệt kê riêng vì cùng lý do như trên — một cặp màu chỉ được bảo vệ
+    // khi có tên nó ở đây.
+    ["the network-type answer", token("navy"), token("surface")],
+    ["what that network type means for a call", token("ink"), token("surface-alt")],
+    ["the sentence saying no speed was measured", token("ink"), token("surface-alt")],
+    ["the keep-screen-on toggle label", token("navy"), token("surface")],
+    ["the note shown while the screen is held awake", token("ink"), token("surface-alt")],
+    ["a field label on OUR namecard", token("ink-muted"), token("surface")],
+    ["a field value on OUR namecard", token("ink"), token("surface")],
+    ["the namecard-in-the-code heading", token("navy"), token("surface")],
+    ["the camera-permission answer", token("navy"), token("surface")],
+    ["the sentence shown when camera permission is declined", token("ink"), token("surface-alt")],
+    ["the caption under the chosen photo", token("ink-muted"), token("surface")],
+    ["the sentence saying this build reads no text from the photo", token("ink"), token("surface-alt")],
+
+    /**
+     * MÃ QR — CẶP MÀU DUY NHẤT Ở ĐÂY KHÔNG PHẢI VỀ CHỮ, VÀ LÀ CẶP CÓ HẬU QUẢ RÕ NHẤT.
+     *
+     * Máy quét đọc mã bằng ngưỡng sáng/tối. Một mã vẽ bằng `--navy` trên `--surface-alt` cho
+     * "hợp thương hiệu" vẫn trông hoàn hảo trên màn hình trong nhà và KHÔNG QUÉT ĐƯỢC ngoài
+     * nắng — tính năng hỏng đúng ở chỗ nó được dùng, và người phát hiện ra là khách hàng đang
+     * đứng trước mặt nhân viên kinh doanh. 21:1 là ngưỡng thật sự cần ở đây, không phải 4,5:1.
+     */
+    ["the QR modules against their quiet zone", token("ma-qr-toi"), token("ma-qr-sang")],
   ];
 
   for (const [what, foreground, background] of pairs) {

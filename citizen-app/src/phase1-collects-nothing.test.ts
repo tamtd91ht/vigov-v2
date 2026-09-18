@@ -114,11 +114,43 @@ const TRIPWIRES: readonly Tripwire[] = [
     //
     // `scanQRCode` được THÊM VÀO lệnh cấm ở lần này — trước đây không tên nào canh nó, nên một
     // lời gọi máy ảnh lọt vào bất kỳ tệp nào mà không có gì đỏ lên.
+    //
+    // SÁU TÊN NỮA ĐƯỢC THÊM VÀO ĐÚNG LỆNH CẤM NÀY, KHÔNG PHẢI VÀO MỘT LỆNH CẤM MỚI, và không mở
+    // rộng phạm vi sang thư mục nào khác: `getNetworkType` · `keepScreen` · `vibrate` ·
+    // `requestCameraPermission` · `openMediaPicker` · `downloadFile`. Chín cái tên, MỘT thư mục.
+    // Một `openMediaPicker` xuất hiện trong `App.tsx` là mở cửa sổ chọn ảnh ngoài phạm vi đã
+    // nộp, và nó sẽ đi vào CẢ bản `goc` vì `App.tsx` không nằm sau alias.
     what:
-      'a phone / location / QR call outside "src/features/tinh-nang/" — those three are the ONLY ' +
+      'a platform-permission call outside "src/features/tinh-nang/" — those nine are the ONLY ' +
       "platform permissions this app asks for, and they live in exactly one directory",
-    pattern: /\b(getPhoneNumber|getLocation|scanQRCode)\s*\(/,
+    pattern:
+      /\b(getPhoneNumber|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile)\s*\(/,
     chi_trong: THU_MUC_TINH_NANG,
+  },
+  {
+    /**
+     * `serverUploadUrl` — CẤM Ở MỌI TỆP, KHÔNG MIỄN CHO THƯ MỤC NÀO.
+     *
+     * Đây là lệnh cấm duy nhất trong tệp này gắt hơn cả lệnh cấm `zmp-sdk`, và có lý do:
+     *
+     *   `openMediaPicker` nhận một tham số tuỳ chọn `serverUploadUrl`. Truyền nó vào thì SDK tự
+     *   tải ảnh người dùng vừa chọn LÊN MỘT MÁY CHỦ — không qua `fetch`, không qua `XMLHttpRequest`,
+     *   nên MỌI dây bẫy còn lại trong tệp này đều không thấy gì. Một chữ thêm vào một lời gọi là
+     *   đủ để ảnh một tấm danh thiếp giấy — dữ liệu cá nhân của người thứ ba — rời khỏi máy, và
+     *   không có gì đỏ lên.
+     *
+     *   Bỏ tham số ấy đi thì `index.d.ts` dòng 4721 bảo đảm SDK trả về đường dẫn tạm trên máy và
+     *   KHÔNG tải lên đâu cả. Câu "ảnh không rời khỏi máy" trong chính sách quyền riêng tư đứng
+     *   được là nhờ đúng một dòng này.
+     *
+     * KHÔNG MIỄN CHO `src/features/tinh-nang/` vì thư mục ấy là nơi DUY NHẤT gọi `openMediaPicker`
+     * — tức là nơi duy nhất tham số này có thể lọt vào. Một ngoại lệ ở đúng chỗ ấy là không có
+     * lệnh cấm nào cả.
+     */
+    what:
+      "the `serverUploadUrl` parameter of openMediaPicker — it makes the SDK upload the user's " +
+      "photo to a server, bypassing every other tripwire in this file",
+    pattern: /serverUploadUrl/,
   },
   {
     // LỆNH CẤM CẢ GÓI, VÀ NÓ CẤM **CHUỖI TÊN MÔ-ĐUN**, KHÔNG CẤM CÚ PHÁP NHẬP.
@@ -253,6 +285,14 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
       { path: "./components/TabBar.tsx", code: 'const sdk = await import("zmp-sdk");' },
       // Sát bên thư mục được miễn, nhưng không nằm trong nó: tiền tố phải khớp cả dấu `/`.
       { path: "./features/tinh-nang-cu.ts", code: "await getPhoneNumber();" },
+      // SÁU TÊN THÊM VÀO LẦN NÀY, mỗi tên một dòng. Thiếu một dòng ở đây là một quyền không ai
+      // canh, và lần lọt đầu tiên của nó sẽ là trong một tệp không ai ngờ tới.
+      { path: "./App.tsx", code: "await getNetworkType();" },
+      { path: "./App.tsx", code: "await keepScreen({ keepScreenOn: true });" },
+      { path: "./components/TabBar.tsx", code: "await vibrate();" },
+      { path: "./lib/launch-params.ts", code: "await requestCameraPermission();" },
+      { path: "./App.tsx", code: 'await openMediaPicker({ type: "photo" });' },
+      { path: "./main.tsx", code: 'await downloadFile({ url: "https://vidu.vn/a.pdf" });' },
     ];
     for (const tep of VI_PHAM) {
       const bat = co_pham_vi.some((day) => viPham(day, [tep]).length === 1);
@@ -263,6 +303,8 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     const TRONG = [
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await (await import("zmp-sdk")).getPhoneNumber();' },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "await scanQRCode();" },
+      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await openMediaPicker({ type: "photo" });' },
+      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "await keepScreen({ keepScreenOn: false });" },
     ];
     for (const tep of TRONG) {
       for (const day of co_pham_vi) {
@@ -271,6 +313,33 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
         );
       }
     }
+  });
+
+  it("lệnh cấm `serverUploadUrl` KHÔNG miễn cho thư mục tính năng — đó là chỗ duy nhất nó lọt được", () => {
+    // Ca kiểm về chính lệnh cấm mới. `openMediaPicker` chỉ được gọi trong `features/tinh-nang/`,
+    // nên một ngoại lệ cho đúng thư mục ấy sẽ là không có lệnh cấm nào cả. Ca này cho nó ăn một
+    // vi phạm đặt NGAY TRONG thư mục được miễn của mọi lệnh cấm khác, và khẳng định nó vẫn bắt.
+    const cam = TRIPWIRES.find((t) => t.what.includes("serverUploadUrl"));
+    expect(cam, "lệnh cấm serverUploadUrl đã biến mất").toBeDefined();
+    expect(cam!.chi_trong, "ai đó vừa miễn serverUploadUrl cho một thư mục").toBeUndefined();
+
+    const VI_PHAM = [
+      {
+        path: `${THU_MUC_TINH_NANG}zalo-api.ts`,
+        code: 'await openMediaPicker({ type: "photo", serverUploadUrl: "https://vidu.vn/upload" });',
+      },
+      { path: "./App.tsx", code: "const serverUploadUrl = DIA_CHI;" },
+    ];
+    for (const tep of VI_PHAM) {
+      expect(viPham(cam!, [tep]), `lọt serverUploadUrl ở ${tep.path}`).toEqual([tep.path]);
+    }
+
+    // Và nó không kêu oan ở lời gọi ĐÚNG — lời gọi mà chính mã sản phẩm đang dùng.
+    expect(
+      viPham(cam!, [
+        { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await openMediaPicker({ type: "photo" });' },
+      ]),
+    ).toEqual([]);
   });
 
   it("keeps personal data out of the source itself, not only out of the content file", () => {

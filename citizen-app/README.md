@@ -1,7 +1,7 @@
 # citizen-app
 
 The citizen-facing **Zalo Mini App**. React + Vite. **`zmp-sdk` is imported from exactly one
-directory** — `src/features/tinh-nang/`, the three real features — and from nowhere else. The
+directory** — `src/features/tinh-nang/`, the six real features — and from nowhere else. The
 tripwire in `src/phase1-collects-nothing.test.ts` is what keeps that true: it was not removed when
 those features landed, it was **narrowed to one directory**, and it has a case proving it still
 fires everywhere outside it.
@@ -125,13 +125,20 @@ Người chạy lệnh chọn **đẩy bản nào**. Biến thể quyết địn
 
 | Biến thể | Nội dung | Dùng để | `dist/assets/app.js` |
 |---|---|---|---|
-| **`goc`** | Ứng dụng sản phẩm đầy đủ: bốn màn giới thiệu + tab Danh thiếp + hai tính năng trên màn Liên hệ | **BẢN NỘP** | **536,30 kB** thô · 147,00 kB gzip |
-| **`day-du`** (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **547,85 kB** thô · 150,12 kB gzip |
+| **`goc`** | Ứng dụng sản phẩm đầy đủ: bốn màn giới thiệu + tab Danh thiếp (ba tính năng) + hai tính năng trên màn Liên hệ | **BẢN NỘP** | **566,48 kB** thô · 156,10 kB gzip |
+| **`day-du`** (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **578,03 kB** thô · 159,16 kB gzip |
 
 Hai con số ấy **đo ngày 18/09/2026**, bằng `npm run build:goc` và `npm run build`, đọc từ chính
 tệp phát ra. Gần trọn 536 kB của bản `goc` là **`zmp-sdk`** (≈264 kB thô / ≈66 kB gzip): app không
-có SDK từng nặng 254,39 kB. Đó là cái giá của việc ba quyền nay là ba tính năng thật, và nó được
+có SDK từng nặng 254,39 kB. Đó là cái giá của việc chín quyền nay là sáu tính năng thật, và nó được
 trả một lần cho cả ứng dụng.
+
+**Phần tăng so với bản ba tính năng (536,30 kB): +30,18 kB thô / +8,43 kB gzip.** Trong đó bộ mã
+hoá QR chiếm **10,23 kB thô / 3,74 kB gzip** — đo bằng cách dựng lại bản `goc` với `encode` của
+`uqr` thay bằng một hàm giả trả về ma trận cố định (556,25 kB thô / 152,36 kB gzip), rồi lấy
+hiệu. Phần còn lại (≈19,95 kB thô) là mã của ba tính năng, câu chữ tiếng Việt của chúng, và
+những nhánh của `zmp-sdk` mà sáu lời gọi mới kéo vào — thân hàm `openMediaPicker`,
+`downloadFile`, `keepScreen` trước đây bị tree-shaking loại đi vì không ai gọi tới.
 
 **Biến thể `quyen` không còn.** Nó từng tồn tại vì ba màn quyền là một lớp trình diễn thêm vào một
 app giới thiệu tĩnh — gỡ được, và "bản nộp tối thiểu" thì gỡ nó đi. Nay ba quyền ấy thuộc về chính
@@ -150,6 +157,13 @@ duyệt — chỉ là không vẽ ra. Tách ở tầng dựng thì bản `goc` *
 ```
 cơ quan: 0 · công dân: 0 · chính quyền: 0 · hành chính: 0 · thủ tục: 0 · Chọn xã: 0 · Đổi xã: 0
 xã hội: 1 (câu tầm nhìn đã công bố — phải còn)
+
+chín tên API đều CÓ MẶT: getPhoneNumber 7 · getLocation 7 · scanQRCode 6 · getNetworkType 6 ·
+keepScreen 9 · vibrate 7 · requestCameraPermission 5 · openMediaPicker 6 · downloadFile 6
+
+serverUploadUrl: 2 — CẢ HAI là của chính `zmp-sdk` (lược đồ zod của `openMediaPicker`, và thân
+hàm đọc `e.serverUploadUrl`). Mã của ta đóng góp 0. Phép đo đúng là "không tệp nào GÁN một
+chuỗi cho tham số ấy": 0 lần, ở cả hai biến thể. Xem `bundle-for-zalo.test.ts`.
 ```
 
 Hai nhãn `Chọn xã` · `Đổi xã` từng **nằm lại** trong bản `goc`: `App.tsx` là vỏ chung, không nằm
@@ -171,21 +185,28 @@ Cơ chế là `resolve.alias`, không phải tree-shaking — tree-shaking **kh�
 `tsc` luôn nhìn bản **đầy đủ** (`tsconfig.json` → `paths`); bản rỗng khai kiểu bằng `typeof`
 của bản thật, nên thiếu một export là `tsc --noEmit` đỏ chứ không phải bản `goc` vỡ lúc dựng.
 
-## Ba tính năng thật — và ba quyền chúng cần
+## Sáu tính năng thật — và chín quyền chúng cần
 
-Zalo **chỉ cấp** `getPhoneNumber` · `getLocation` · `scanQRCode` khi bản nộp **có chỗ dùng chúng
-nhìn thấy được**, và chính sách Mini App điều 3.3.4 (trích ngay trên `getPhoneNumber` trong
+Zalo **chỉ cấp** một quyền khi bản nộp **có chỗ dùng nó nhìn thấy được**, và chính sách
+Mini App điều 3.3.4 (trích ngay trên `getPhoneNumber` trong
 `node_modules/zmp-sdk/index.d.ts`) nói thẳng: *"chúng tôi sẽ từ chối xét duyệt cho những Mini App
 có luồng xin cấp quyền chưa rõ ràng, không nêu được mục đích xin quyền đến người dùng"*.
 
-**Ba TÍNH NĂNG, không phải ba màn quyền, và khác biệt ấy là cả vấn đề.** Một tab tên "Quyền" nói
-với người duyệt rằng đây là app đi xin quyền; ba tính năng nói rằng đây là app có việc để làm.
+**TÍNH NĂNG, không phải MÀN QUYỀN, và khác biệt ấy là cả vấn đề.** Một tab tên "Quyền" nói
+với người duyệt rằng đây là app đi xin quyền; sáu tính năng đặt đúng chỗ người ta cần
+chúng nói rằng đây là app có việc để làm. **Sáu tính năng, chín quyền** — hai con số không
+bằng nhau vì một việc người dùng làm có thể cần hai quyền: chìa danh thiếp ra cho người
+khác quét cần cả `keepScreen` lẫn `downloadFile`. Tách chúng thành hai "tính năng" để con số
+đẹp lên là dựng hai cái nút không ai hiểu để làm gì — đúng thứ điều 3.3.4 từ chối.
 
 | Tính năng | Ở đâu | API | Chạy được tới đâu |
 |---|---|---|---|
 | **Quét danh thiếp số** | Tab "Danh thiếp" | `scanQRCode` | **Trọn vẹn.** Quét → bóc tách vCard → thẻ có cấu trúc → nút Gọi (`openPhone`) · Gửi email (`mailto:`) · Mở liên kết (`openWebview`) · Quét mã khác |
 | **Tìm văn phòng gần bạn** | Tab "Liên hệ" | `getLocation` | **Một nửa.** Nhận được token; ba văn phòng thật và nút "Chỉ đường" (`openWebview` → bản đồ) chạy ngay. **Không xếp được theo khoảng cách** — xem ranh giới dưới |
 | **Đăng ký nhận tư vấn** | Tab "Liên hệ" | `getPhoneNumber` | **Một nửa.** Nhận được token; **không có đường gửi nó đi đâu**. Màn hình nói thẳng điều đó rồi đưa ngay hotline và email — hai đường chạy được bây giờ |
+| **Kiểm tra đường truyền** | Tab "Giải pháp" | `getNetworkType` + `vibrate` | **Trọn vẹn.** Tổng đài đám mây chạy trên chính đường mạng của máy, nên một nhà cung cấp VoIP có lý do thật để hỏi. Bốn kiểu kết nối → nhãn tiếng Việt + một câu đúng sự thật. **Không một con số nào** — xem ranh giới dưới |
+| **Danh thiếp số của chúng tôi** | Tab "Danh thiếp" | `keepScreen` + `downloadFile` | **Trọn vẹn.** Mã QR chứa vCard dựng từ `COMPANY`/`CONTACT` → giữ màn sáng khi người khác quét (**tắt lại khi rời màn**) → tải `.vcf` bằng `fileBase64Data`, **không máy chủ nào** |
+| **Số hoá danh thiếp giấy** | Tab "Danh thiếp" | `requestCameraPermission` + `openMediaPicker` | **Một nửa.** Xin quyền → chọn ảnh → hiện ảnh. **Chưa đọc được chữ trên ảnh** (cần OCR ở máy chủ) — màn hình nói thẳng. Ảnh **không rời khỏi máy** |
 
 ### SỰ THẬT ĐÃ ĐO TỪ `zmp-sdk` 2.53.0 — đừng tra lại tài liệu web
 
@@ -195,6 +216,13 @@ GetLocationReturns    = { latitude?/longitude?/timestamp?/provider?: @deprecated
 ScanQRCodeReturns     = { content: string }
 openPhone(args: { phoneNumber: string }): Promise<void>            // index.d.ts:4141, @zaloOnly
 openWebview(args: { url: string; config?: {…} }): Promise<void>    // index.d.ts:4491, @zaloOnly
+
+getNetworkType()               -> { networkType: "none"|"wifi"|"cellular"|"unknown" }  // :1226 · :3232
+vibrate({ type?, milliseconds? })        -> Promise<void>   // :4400–4433  (milliseconds CHỈ Android)
+keepScreen({ keepScreenOn: boolean })    -> Promise<void>   // :4201–4231  (khai void — KHÔNG đọc .success)
+requestCameraPermission()      -> { userAllow: boolean; message: string }              // :1293 · :4002
+openMediaPicker({ type, serverUploadUrl?, … }) -> { data: string[] | string }          // :1403 · :4804
+downloadFile({ url?, fileBase64Data? })  -> Promise<void>   // :6060–6116
 ```
 
 Token của cả hai: **dùng được một lần, hết hạn sau 2 phút**, và chỉ đổi được ở **máy chủ** bằng
@@ -206,6 +234,14 @@ không có gì để che vì chúng **không có dữ liệu cá nhân ngay từ
 / `longitude` đều `@deprecated`: đọc chúng là tự rước dữ liệu cá nhân về máy đúng lúc nền tảng
 vừa bỏ đường ấy đi.
 
+**`serverUploadUrl` BỊ BỎ ĐI, và đó là quyết định quan trọng nhất của ba tính năng thêm vào.**
+`index.d.ts` dòng 4721 ghi rõ: *"Tham số serverUploadUrl không còn bắt buộc. Mặc định nếu không
+truyền, SDK sẽ trả về đường dẫn tạm thời (local cache path) của media mà không tự động upload
+lên server"*. Có nó thì ảnh của người dùng đi lên một máy chủ — **không qua `fetch`, nên mọi
+dây bẫy còn lại đều không thấy gì**. Nên nó có một dây bẫy riêng trong
+`phase1-collects-nothing.test.ts`, cấm ở **mọi tệp**, không miễn cho cả `src/features/tinh-nang/`
+— vì đó là thư mục duy nhất nó lọt được, nên miễn cho nó là không cấm gì cả.
+
 ### RANH GIỚI — nói ra, không giả vờ vượt qua
 
 | Ranh giới | Vì sao không vượt được | Màn hình làm gì thay thế |
@@ -213,6 +249,9 @@ vừa bỏ đường ấy đi.
 | **Không xếp được văn phòng theo khoảng cách** | `getLocation` chỉ trả token; đổi token cần một bước máy chủ có app secret. `navigator.geolocation` thì dây bẫy cấm, và là một quyền khác | Hiện đủ ba văn phòng thật kèm nút "Chỉ đường", và **một câu tiếng Việt nói rõ danh sách chưa sắp theo khoảng cách** |
 | **Không gửi được yêu cầu tư vấn** | Chỉ có token, và dây bẫy cấm `fetch` | Nói thẳng rằng bản này chưa gửi gì, rồi đưa hotline và email **ngay dưới nút** |
 | **`openPhone` / `openWebview` chỉ chạy trong Zalo** | `@zaloOnly` trong chính `index.d.ts` | Một câu tiếng Việt nói mở lại trong Zalo, không mã lỗi |
+| **Không đọc được chữ trên ảnh danh thiếp giấy** | Bóc tách cần OCR, OCR cần một bước máy chủ, và dây bẫy cấm mọi đường gửi ra | Hiện ảnh lên màn hình và **nói thẳng bằng một câu** rằng bản này chưa đọc được chữ. **Không một dòng mã nào giả vờ đang nhận dạng** |
+| **Không đo được tốc độ hay độ trễ đường truyền** | `getNetworkType` trả đúng MỘT chuỗi: kiểu kết nối. SDK không có phép đo nào khác | Nói kiểu kết nối và một câu đúng về bản chất của nó. **Cấm mọi con số ms / Mbps / điểm chất lượng** — có một ca test quét chính những câu ấy |
+| **Không chọn được chỗ lưu và tên tệp `.vcf`** | `downloadFile` không có tham số tên tệp, và `fileBase64Data` **không có một dòng tài liệu nào** trong `index.d.ts` | Một câu nói rằng Zalo là bên quyết định tệp nằm ở đâu. ⚠ **CHƯA THỬ TRÊN MÁY THẬT** — xem §"Còn thiếu" |
 
 Không có một dòng mã nào tính khoảng cách, và không một câu chữ nào hứa một việc bản dựng này
 không làm. Đó là điều kiện để chính sách quyền riêng tư **mô tả đúng bản dựng nó nằm trong**.
@@ -233,17 +272,30 @@ không tác dụng phụ — nên nó không có chỗ nào để rò rỉ, và 
 
 | Tệp | Việc nó làm |
 |---|---|
-| `src/features/tinh-nang/zalo-api.ts` | **Nơi duy nhất** nhắc `zmp-sdk`. Năm lời gọi, quy mọi đường về bốn nhánh: `xong` · `tu-choi` · `ngoai-zalo` · `khong-lay-duoc` |
+| `src/features/tinh-nang/zalo-api.ts` | **Nơi duy nhất** nhắc `zmp-sdk`. Mười một lời gọi, quy mọi đường về bốn nhánh: `xong` · `tu-choi` · `ngoai-zalo` · `khong-lay-duoc` |
+| `src/features/tinh-nang/vcard.ts` | Bộ **sinh** vCard của chính chúng tôi + mã hoá base64 UTF-8. **Thuần** — mặt đối xứng của `danh-thiep.ts` |
+| `src/features/tinh-nang/MaQR.tsx` | Vẽ mã QR bằng SVG nội tuyến từ ma trận `uqr`. Một `<path>`, không phải nghìn `<rect>` |
+| `src/features/tinh-nang/giu-man-sang.ts` | Hợp đồng bật/tắt `keepScreen`, tách ra để kiểm được "**luôn tắt khi rời màn**" mà không cần DOM |
 | `src/features/tinh-nang/danh-thiep.ts` | Bộ bóc tách vCard / liên kết / văn bản. **Thuần**, không tác dụng phụ |
-| `src/features/tinh-nang/noi-dung.ts` | Mọi chữ người dùng đọc trên ba tính năng — `bundle-for-zalo.test.ts` dùng lại đúng danh sách này |
+| `src/features/tinh-nang/noi-dung.ts` | Mọi chữ người dùng đọc trên sáu tính năng, và ánh xạ `networkType` sang nhãn tiếng Việt — `bundle-for-zalo.test.ts` dùng lại đúng danh sách này |
 | `src/features/tinh-nang/khung.tsx` | Khung chung: tiêu đề · lý do · nút · chỗ hiện kết quả. `KhungTinhNang` là bản **thuần** để bốn nhánh kết quả kiểm được mà không cần Zalo |
-| `src/features/tinh-nang/ManDanhThiep.tsx` · `LienHeTinhNang.tsx` | Tab Danh thiếp, và hai khối trên màn Liên hệ |
+| `src/features/tinh-nang/ManDanhThiep.tsx` · `LienHeTinhNang.tsx` · `KiemTraDuongTruyen.tsx` · `ManThiepCuaChungToi.tsx` · `SoHoaThiepGiay.tsx` | Tab Danh thiếp (ba khối), hai khối trên màn Liên hệ, một khối trên màn Giải pháp |
+| `src/features/tinh-nang/vcard.test.ts` · `tinh-nang-them.test.tsx` | 52 ca: bộ **sinh** vCard (đủ trường · thiếu trường · ký tự thoát · tiếng Việt · base64 giải ngược đúng nguyên văn · đọc ngược bằng chính bộ bóc tách), bốn kiểu mạng + một giá trị lạ, `keepScreen` **tắt lại khi rời màn**, ba ranh giới được nói ra |
 | `src/features/tinh-nang/tinh-nang.test.tsx` | 51 ca: **bộ bóc tách vCard trước hết** (đủ trường · thiếu trường · tham số · dòng gập · ký tự thoát · URL · văn bản · rỗng · rác), rồi từ chối · ngoài Zalo · token không hiện trọn · ranh giới được nói ra · từ chối không làm mất tính năng |
 
 ## Phần nhìn — "sống động" làm bằng gì
 
 Thuần **CSS + SVG nội tuyến**. Không thư viện hoạt hoạ, không phông ngoài, không ảnh: bundle tự
 chứa, và một Mini App tải tài nguyên từ bên thứ ba là một câu hỏi ở vòng duyệt.
+
+**MỘT ngoại lệ, và nó không phải về phần nhìn: `uqr`** (MIT, không phụ thuộc gì khác, **nằm
+trong bundle**, không CDN). Sinh mã QR đúng gồm chọn chế độ mã hoá, chọn phiên bản, chèn khối
+sửa lỗi Reed–Solomon rồi chọn mặt nạ. Sai **một bit** là một mã trông hoàn hảo trên màn hình và
+không máy nào quét nổi — mắt không bắt được, và một phép kiểm dựng bằng chính bộ mã hoá sai
+ấy cũng không. Giá: **10,23 kB thô / 3,74 kB gzip**, đo bằng hiệu hai lần dựng — §"Hai biến
+thể bản dựng". Ứng dụng chỉ nhập `encode`; ba hàm vẽ sẵn của thư viện bị tree-shaking loại
+đi, và SVG do `MaQR.tsx` tự dựng để màu đọc từ biến CSS — tức cặp màu của mã QR **đi qua ca
+tương phản** như mọi cặp màu khác.
 
 | Thứ chuyển động | Làm bằng |
 |---|---|
@@ -265,7 +317,7 @@ trượt 4,5:1 thì **đổi màu, không nới ngưỡng**.
 
 ## Chính sách quyền riêng tư
 
-Xin ba quyền mà không có văn bản này thì vòng duyệt trả về. Nội dung nằm ở
+Xin chín quyền mà không có văn bản này thì vòng duyệt trả về. Nội dung nằm ở
 `src/content/chinh-sach-rieng-tu.ts`, vẽ ở **cuối màn Liên hệ** (không phải một tab riêng — năm
 tab đang nói năm việc, và người tìm thông tin pháp lý đã đứng sẵn ở màn ấy).
 
@@ -273,30 +325,58 @@ tab đang nói năm việc, và người tìm thông tin pháp lý đã đứng 
 này công bố dưới tên một pháp nhân có thật — một câu mô tả hành vi mà mã không có là tuyên bố
 sai dưới tên ấy; giấu một hành vi mà mã CÓ là vi phạm chính Nghị định 13/2023/NĐ-CP.
 
+**Phiên bản `1.2`, hiệu lực 18/09/2026.**
+
+**Lên `1.2` vì bề mặt quyền riêng tư MỞ RỘNG THẬT SỰ**, không vì câu chữ — bốn thứ mới:
+
+| Mới | Ứng dụng làm gì | Khai ở mục |
+|---|---|---|
+| **Máy ảnh** | Hỏi quyền để chụp lại một tấm danh thiếp giấy | `cac-quyen` · `tung-quyen` |
+| **Thư viện ảnh** | Mở cửa sổ chọn ảnh của Zalo; ảnh **không rời khỏi máy** | `du-lieu` · `cac-quyen` |
+| **Thông tin mạng** | Chỉ **kiểu** kết nối — không IP, không tên mạng Wi-Fi | `cac-quyen` · `tung-quyen` |
+| **Ghi một tệp xuống máy** | Tệp danh thiếp **của chúng tôi**, không phải dữ liệu của người dùng | `ghi-tep`, mục MỚI |
+
+Ba thứ đầu là dữ liệu ĐI VÀO ứng dụng; thứ tư là thứ ứng dụng VIẾT RA — một loại hành vi
+bản 1.1 hoàn toàn không có. Nó được cho một mục riêng chứ không phải một câu lẫn trong mục
+khác: người đọc để biết "ứng dụng này làm gì với máy tôi" phải tìm thấy nó bằng một dòng
+tiêu đề, không phải bằng cách đọc hết.
+
+**MỘT CÂU CỦA BẢN 1.1 ĐÃ THÀNH SAI VÀ PHẢI SỬA**: *"không đọc thư viện ảnh"*. Nay ứng dụng
+mở cửa sổ chọn ảnh, nên câu ấy được thay bằng *"không **tự** đọc thư viện ảnh; chỉ nhận đúng
+tấm ảnh bạn tự chọn trong cửa sổ của Zalo"*. Một câu đúng ở bản trước mà không ai sửa khi hành
+vi đổi là loại lỗi nặng nhất một văn bản như thế này có thể mắc — và là loại không có gì đỏ
+lên để báo.
+
+**Câu thứ tư được thêm vào danh sách "đúng vì có dây bẫy"**: *"ảnh không rời khỏi máy"* ← dây
+bẫy cấm `serverUploadUrl` trên toàn cây mã, không miễn cho thư mục nào.
+
+#### Lịch sử số phiên bản
+
 **Phiên bản `1.1`, hiệu lực 18/09/2026.** Lên số vì **hành vi** đã đổi, không vì câu chữ: ba
 quyền nay gắn với ba tính năng sản phẩm, và mục "Chuyển dữ liệu cho bên thứ ba" nay nói ra việc
 ứng dụng mở trang bản đồ và trang web khi người dùng bấm. Hai thay đổi ấy phải đi kèm một số
 phiên bản mới, nếu không thì "phiên bản 1.0" chỉ tên hai văn bản khác nhau.
 
-**Mục về ba quyền nay nằm trong danh sách chung**, không còn sau một cửa alias: ba quyền có mặt ở
+**Mục về các quyền nay nằm trong danh sách chung**, không còn sau một cửa alias: ba quyền có mặt ở
 **mọi** biến thể, nên cơ chế `MUC_TRUOC_QUYEN`/`MUC_SAU_QUYEN` đã thành thừa và bị bỏ. Giữ lại một
 cơ chế tách đôi khi không còn gì để tách là giữ lại một cái bẫy.
 
-Ba câu trong chính sách đúng **vì `phase1-collects-nothing.test.ts` cấm điều ngược lại**, không
+Bốn câu trong chính sách đúng **vì `phase1-collects-nothing.test.ts` cấm điều ngược lại**, không
 phải vì ai hứa: "không gửi đi đâu" ← dây bẫy cấm `fetch`/XHR/WebSocket/EventSource/axios ·
-"không lưu lại" ← dây bẫy cấm `localStorage`/`sessionStorage`/`cookie`/`indexedDB`. **Ai nới một
-trong hai dây bẫy ấy phải sửa chính sách TRƯỚC** — nếu không, chính sách thành sai mà không có
-gì đỏ lên.
+"không lưu lại" ← dây bẫy cấm `localStorage`/`sessionStorage`/`cookie`/`indexedDB` · "ảnh không
+rời khỏi máy" ← dây bẫy cấm `serverUploadUrl`. **Ai nới một trong ba dây bẫy ấy phải sửa chính
+sách TRƯỚC** — nếu không, chính sách thành sai mà không có gì đỏ lên.
 
 Số mục **không viết cứng vào tiêu đề**: React đánh số lúc vẽ. Một con số viết cứng sẽ lệch ngay
 lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý, im lặng.
 
-### Còn thiếu, và cả hai là câu hỏi cho khách hàng
+### Còn thiếu — hai câu hỏi cho khách hàng, và một phép thử phải chạy trên máy thật
 
 | Thiếu | Vì sao chưa điền |
 |---|---|
 | **Mã số thuế**, **người đại diện theo pháp luật** | Không có nguồn. `content/company-profile.ts` chỉ chứa thứ đã công bố trên vihatsoftware.com và vihatgroup.com. Bịa hai trường này trong một văn bản pháp lý là thứ không sửa lại được sau khi nộp |
 | **URL trang chính sách** | Developer Console còn một ô URL ngoài bản trong app. Chưa biết đăng ở đâu, nên chưa dựng bộ sinh trang tĩnh — dựng cho một đích chưa biết là đoán. Khi chốt, trang ấy phải sinh ra TỪ `chinh-sach-rieng-tu.ts`, không chép tay, để trang đăng và app không lệch nhau |
+| **Tên và chỗ lưu của tệp `.vcf`** | `downloadFile` không có tham số tên tệp, và `fileBase64Data` **không có một dòng tài liệu nào** trong `index.d.ts` — bảng định dạng được hỗ trợ ở đó chỉ nói về đường `url`, và **không liệt kê `.vcf`**. Chưa thử được trên máy thật trong phiên này. Nút vẫn ghi "(.vcf)" vì **nội dung** đúng là vCard; cái chưa biết là Zalo đặt tên tệp ra sao. **Phải mở bằng Zalo trên một máy thật rồi bấm nút ấy một lần** trước khi nộp |
 
 ## Nộp lên Zalo
 

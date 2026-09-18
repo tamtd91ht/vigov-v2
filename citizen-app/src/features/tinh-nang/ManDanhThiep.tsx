@@ -23,7 +23,9 @@ import { NamecardGlyph } from "../company-intro/icons";
 
 import { type DanhThiep, docMaQR, thiepCoNoiDung } from "./danh-thiep";
 import { KhungTinhNang, type TrangThai } from "./khung";
+import { ManThiepCuaChungToi } from "./ManThiepCuaChungToi";
 import { DANH_THIEP, LOI_MO_NGOAI } from "./noi-dung";
+import { SoHoaThiepGiay } from "./SoHoaThiepGiay";
 import { moCuocGoi, moTrangWeb, quetMaQR } from "./zalo-api";
 
 /** Một dòng thông tin của tấm thiếp: nhãn, giá trị, và (có thể) một nút hành động. */
@@ -170,8 +172,14 @@ export function KetQuaQuet({
   );
 }
 
-/** Màn quét danh thiếp — một tab của ứng dụng. */
-export function ManDanhThiep() {
+/**
+ * Khối quét mã, tách khỏi tab để tab còn chỗ cho hai tính năng danh thiếp còn lại.
+ *
+ * Nó giữ `<h1>` vì nó là việc chính của tab: tab tên "Danh thiếp" và tiêu đề màn là "Quét danh
+ * thiếp". Hai khối kia — thiếp của chính chúng tôi, và số hoá thiếp giấy — dùng `<h2>`, nên tab
+ * này vẫn có ĐÚNG MỘT `<h1>` như mọi màn khác (`screens.test.tsx` đo điều đó).
+ */
+export function QuetDanhThiep() {
   const [trang_thai, datTrangThai] = useState<TrangThai>({ kieu: "chua-goi" });
   const [khong_mo_duoc, datKhongMoDuoc] = useState(false);
 
@@ -208,5 +216,26 @@ export function ManDanhThiep() {
         </>
       )}
     />
+  );
+}
+
+/**
+ * Tab "Danh thiếp" — ba việc quanh MỘT tấm danh thiếp, theo đúng thứ tự người ta gặp chúng.
+ *
+ *   1. **Quét thiếp số của đối tác** — việc chính, giữ `<h1>`.
+ *   2. **Thiếp số của chính chúng tôi** — thứ để chìa lại cho họ.
+ *   3. **Số hoá thiếp giấy** — thứ còn lại trong túi áo sau buổi gặp.
+ *
+ * BA KHỐI, KHÔNG PHẢI BA TAB. Thanh tab đã có năm tab, và trên máy 320px mỗi tab chỉ còn khoảng
+ * 56px chữ — `accessibility.test.ts` đo điều đó. Thêm tab thứ sáu là làm vỡ thanh tab để nói
+ * một điều mà một tab tên "Danh thiếp" đã nói đủ.
+ */
+export function ManDanhThiep() {
+  return (
+    <>
+      <QuetDanhThiep />
+      <ManThiepCuaChungToi />
+      <SoHoaThiepGiay />
+    </>
   );
 }

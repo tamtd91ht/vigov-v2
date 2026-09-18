@@ -1,15 +1,15 @@
 /**
- * MỌI CHỮ NGƯỜI DÙNG ĐỌC TRÊN BA TÍNH NĂNG — một tệp, giống `content/company-profile.ts`.
+ * MỌI CHỮ NGƯỜI DÙNG ĐỌC TRÊN SÁU TÍNH NĂNG — một tệp, giống `content/company-profile.ts`.
  *
  * VÌ SAO TÁCH RA KHỎI COMPONENT:
  *
- *   Người duyệt của Zalo đọc đúng những câu này, và đây là thứ quyết định app có được cấp ba
+ *   Người duyệt của Zalo đọc đúng những câu này, và đây là thứ quyết định app có được cấp các
  *   quyền hay không: chính sách Mini App (điều 3.3.4, trích trong `zmp-sdk/index.d.ts` ngay trên
  *   `getPhoneNumber`) từ chối xét duyệt những app xin quyền mà không nói rõ mục đích. Một câu
  *   giải thích nằm rải trong JSX là một câu không ai đọc lại trước khi nộp.
  *
  *   Tách ra còn để `bundle-for-zalo.test.ts` **dùng lại đúng danh sách này** khi khẳng định bản
- *   dựng nộp CÓ chứa đủ chữ của ba tính năng. Một danh sách chép tay ở phía test sẽ lệch, và khi
+ *   dựng nộp CÓ chứa đủ chữ của sáu tính năng. Một danh sách chép tay ở phía test sẽ lệch, và khi
  *   nó lệch thì phép kiểm xanh vì không tìm thấy gì — chứ không vì bản dựng đúng.
  *
  * ⚠ KHÔNG CÂU NÀO Ở ĐÂY ĐƯỢC HỨA MỘT VIỆC BẢN DỰNG NÀY KHÔNG LÀM. Không có máy chủ nào nhận dữ
@@ -21,9 +21,21 @@
  * pháp tổng đài đám mây, CRM và ứng dụng AI cho doanh nghiệp. Mọi câu ở đây nói với một khách
  * hàng hoặc một đối tác đang tìm hiểu giải pháp.
  */
-
-/** Ba tính năng, và cũng là ba quyền nền tảng ứng dụng xin. Thứ tự này là thứ tự hiện ra. */
-export type MaTinhNang = "danh-thiep" | "van-phong" | "tu-van";
+/**
+ * SÁU TÍNH NĂNG, CHÍN QUYỀN NỀN TẢNG. Thứ tự này là thứ tự hiện ra.
+ *
+ * MỘT TÍNH NĂNG CÓ THỂ CẦN HAI QUYỀN, VÀ ĐÓ LÀ LÝ DO HAI CON SỐ KHÔNG BẰNG NHAU: giữ màn hình
+ * sáng và ghi tệp xuống máy là hai quyền, nhưng chúng phục vụ ĐÚNG MỘT việc người dùng làm —
+ * chìa tấm danh thiếp ra cho người khác. Tách chúng thành hai "tính năng" để con số đẹp lên là
+ * dựng hai cái nút không ai hiểu để làm gì, đúng thứ điều 3.3.4 của chính sách Mini App từ chối.
+ */
+export type MaTinhNang =
+  | "danh-thiep"
+  | "van-phong"
+  | "tu-van"
+  | "duong-truyen"
+  | "thiep-cua-chung-toi"
+  | "so-hoa-thiep";
 
 export type NoiDungTinhNang = {
   ma: MaTinhNang;
@@ -109,6 +121,63 @@ export const NOI_DUNG_TINH_NANG: readonly NoiDungTinhNang[] = [
       "Phần này chỉ chạy được bên trong ứng dụng Zalo. Bạn vẫn gọi hotline hoặc gửi email cho chúng tôi được ngay bên dưới.",
     khong_lay_duoc:
       "Chưa nhận được trả lời từ Zalo. Bạn hãy bấm lại nút bên trên, hoặc gọi hotline ngay bên dưới nếu bạn cần trao đổi luôn.",
+  },
+  {
+    ma: "duong-truyen",
+    nhan_ngan: "Kiểm tra đường truyền",
+    tieu_de: "Kiểm tra đường truyền trước cuộc gọi",
+    vi_sao:
+      "Tổng đài đám mây truyền cuộc gọi qua chính đường mạng của máy bạn, nên biết mình đang đi bằng Wi-Fi hay bằng mạng di động là điều đầu tiên cần biết khi một cuộc gọi nghe không rõ. Ứng dụng xin đọc KIỂU kết nối hiện tại — chỉ kiểu kết nối. Không đọc địa chỉ IP, không đọc tên mạng Wi-Fi, không đo tốc độ.",
+    nut: "Kiểm tra đường truyền",
+    dang_cho: "Đang đọc kiểu kết nối…",
+    tu_choi:
+      "Bạn đã dừng việc kiểm tra. Không sao cả — bạn vẫn dùng được ứng dụng bình thường, và có thể bấm lại nút bên trên bất cứ lúc nào.",
+    ngoai_zalo:
+      "Phần này chỉ chạy được bên trong ứng dụng Zalo trên điện thoại. Bạn hãy mở lại trang này trong Zalo rồi bấm lại.",
+    khong_lay_duoc:
+      "Chưa đọc được kiểu kết nối. Bạn hãy bấm lại nút bên trên sau vài giây; nếu máy vừa chuyển giữa Wi-Fi và mạng di động thì cần một lúc để ổn định.",
+  },
+  {
+    ma: "thiep-cua-chung-toi",
+    nhan_ngan: "Danh thiếp của chúng tôi",
+    // TÊN CÔNG TY VIẾT THẲNG, KHÔNG GHÉP BẰNG `${COMPANY.name}` — đã thử và đã đo:
+    // một chuỗi ghép lúc chạy KHÔNG hề có trong bundle, bundle chỉ chứa hai mảnh rời. Ca
+    // "bản nộp có đủ chữ của sáu tính năng" trong `bundle-for-zalo.test.ts` bắt được đúng điều
+    // đó. Cùng lối viết với `TOKEN_KHONG_CHUA_GI` ngay trên, vì cùng một lý do.
+    tieu_de: "Danh thiếp số của VihatSoftware",
+    vi_sao:
+      "Khi bạn gặp đội kinh doanh của chúng tôi, đây là tấm thiếp để bạn lưu lại. Ứng dụng xin quyền giữ màn hình sáng để mã không tối đi giữa lúc người đối diện đang quét, và xin quyền ghi tệp để bạn tải tấm thiếp về máy rồi thêm thẳng vào danh bạ.",
+    nut: "Tải danh thiếp (.vcf)",
+    dang_cho: "Đang ghi tệp xuống máy…",
+    tu_choi:
+      "Bạn đã dừng việc tải tệp. Không sao cả — mã bên trên vẫn quét được, và mọi thông tin trên tấm thiếp đều nằm ngay dưới mã dưới dạng chữ.",
+    ngoai_zalo:
+      "Việc tải tệp chỉ chạy được bên trong ứng dụng Zalo trên điện thoại. Mã bên trên vẫn quét được, và mọi thông tin đều nằm ngay dưới mã dưới dạng chữ.",
+    khong_lay_duoc:
+      "Chưa ghi được tệp xuống máy. Bạn hãy bấm lại nút bên trên, hoặc lưu thông tin bằng cách quét mã bên trên bằng một máy khác.",
+  },
+  {
+    ma: "so-hoa-thiep",
+    nhan_ngan: "Số hoá thiếp giấy",
+    tieu_de: "Số hoá danh thiếp giấy",
+    vi_sao:
+      "Sau một hội thảo, thứ còn lại trong túi áo thường là một xấp thiếp giấy. Ứng dụng xin quyền dùng máy ảnh và quyền mở cửa sổ chọn ảnh để bạn chụp hoặc chọn ảnh tấm thiếp ngay tại chỗ, thay vì để nó nằm đó tới lúc quên mất người đã đưa.",
+    nut: "Chuẩn bị camera",
+    dang_cho: "Đang hỏi quyền dùng máy ảnh…",
+    tu_choi:
+      // NGUỒN CỦA CÂU VỀ iOS: bảng Quản lý quyền trong Zalo Developer Console, ô ghi chú của
+      // quyền "Yêu cầu thiết bị cấp quyền truy cập camera" — KHÔNG phải `zmp-sdk/index.d.ts`,
+      // nơi `requestCameraPermission` (dòng ~4002) không có một dòng chú thích nào.
+      //
+      // Ghi nguồn ra đây vì một lượt trước đã suýt viết câu này với nguồn sai, và một khẳng
+      // định về hành vi nền tảng đặt trong app của một pháp nhân có thật thì phải truy được.
+      // Đây cũng là thứ người dùng cần biết NHẤT ở đúng khoảnh khắc họ vừa bấm Từ chối: trên
+      // iOS họ sẽ không được hỏi lại, nên nếu không nói bây giờ thì không còn lúc nào để nói.
+      "Bạn đã từ chối quyền dùng máy ảnh. Không sao cả — bạn vẫn chọn được ảnh đã chụp sẵn bằng nút bên dưới. Lưu ý trên iPhone: Zalo chỉ hỏi quyền máy ảnh một lần, nên muốn cấp lại bạn phải vào phần cài đặt của máy.",
+    ngoai_zalo:
+      "Máy ảnh và cửa sổ chọn ảnh chỉ mở được bên trong ứng dụng Zalo trên điện thoại. Bạn hãy mở lại trang này trong Zalo rồi bấm lại.",
+    khong_lay_duoc:
+      "Chưa hỏi được quyền dùng máy ảnh. Bạn hãy bấm lại nút bên trên, hoặc chọn ảnh đã chụp sẵn bằng nút bên dưới.",
   },
 ];
 
@@ -200,8 +269,133 @@ export const TU_VAN = {
   nhac_lien_he: "Cần trao đổi ngay? Hai đường này chạy được ngay bây giờ:",
 } as const;
 
+/** ---------- Kiểm tra đường truyền ---------- */
+
 /**
- * MỤC VỀ BA QUYỀN TRONG CHÍNH SÁCH QUYỀN RIÊNG TƯ — dựng từ chính `NOI_DUNG_TINH_NANG`.
+ * NHÃN VÀ Ý NGHĨA CỦA TỪNG KIỂU KẾT NỐI.
+ *
+ * ⚠ KHÔNG MỘT CON SỐ NÀO Ở ĐÂY, VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH, KHÔNG PHẢI MỘT THIẾU SÓT:
+ *
+ *   `getNetworkType` trả về ĐÚNG MỘT chuỗi — kiểu kết nối. Nó không đo độ trễ, không đo băng
+ *   thông, không nói gì về chất lượng đường truyền tới tổng đài. Viết "Wi-Fi: khoảng 30ms, đủ
+ *   để gọi" là bịa ra một phép đo không hề chạy — và bịa nó trong ứng dụng của một nhà cung cấp
+ *   hạ tầng thoại, tức là bịa đúng chỗ khách hàng của họ sẽ đem ra đối chiếu với máy đo thật.
+ *
+ *   Nên mỗi câu dưới đây chỉ nói một điều ĐÚNG VỀ BẢN CHẤT của kiểu kết nối ấy, thứ không cần
+ *   đo cũng biết, và để người đọc tự kết luận.
+ */
+export const KIEU_KET_NOI = {
+  wifi: {
+    nhan: "Wi-Fi",
+    y_nghia:
+      "Cuộc gọi thoại đang đi qua Wi-Fi. Khi bạn bước ra khỏi vùng phủ của bộ phát, máy chuyển sang mạng di động, và cuộc gọi đang nói có thể bị gián đoạn ở đúng lúc chuyển.",
+  },
+  cellular: {
+    nhan: "Mạng di động",
+    y_nghia:
+      "Cuộc gọi thoại đang đi qua mạng di động. Vùng phủ sóng nơi bạn đứng quyết định đường truyền này, nên chất lượng thay đổi khi bạn di chuyển.",
+  },
+  none: {
+    nhan: "Không có mạng",
+    y_nghia:
+      "Máy đang không có kết nối nào, nên chưa gọi được qua tổng đài đám mây. Bạn hãy bật Wi-Fi hoặc dữ liệu di động rồi bấm kiểm tra lại.",
+  },
+  "khong-xac-dinh": {
+    nhan: "Không xác định",
+    y_nghia:
+      "Máy không cho biết đang dùng kiểu kết nối nào. Đây là câu trả lời bình thường trên một số thiết bị Android, và nó không có nghĩa là mạng đang hỏng.",
+  },
+} as const;
+
+export type KieuKetNoi = keyof typeof KIEU_KET_NOI;
+
+/**
+ * Quy một giá trị `networkType` của nền tảng về một nhãn ứng dụng có.
+ *
+ * ⚠ GIÁ TRỊ LẠ RƠI VỀ "KHÔNG XÁC ĐỊNH", KHÔNG NÉM LỖI VÀ KHÔNG HIỆN CHUỖI THÔ.
+ *
+ *   `NetworkType` hôm nay có bốn giá trị (`node_modules/zmp-sdk/index.d.ts` dòng 7–16). Nền
+ *   tảng được phép thêm giá trị thứ năm ở một bản SDK sau, và lúc ấy ứng dụng này đã nằm trên
+ *   máy người dùng rồi. Hiện thẳng chuỗi thô (`"5g"`, `"ethernet"`) là hiện chữ kỹ thuật tiếng
+ *   Anh giữa một màn hình tiếng Việt; ném lỗi là làm vỡ một tính năng vì nền tảng vừa tốt lên.
+ *   Rơi về nhãn an toàn thì màn hình vẫn đọc được và vẫn không nói sai điều gì.
+ */
+export function kieuKetNoi(tu_nen_tang: string): KieuKetNoi {
+  return tu_nen_tang === "wifi" || tu_nen_tang === "cellular" || tu_nen_tang === "none"
+    ? tu_nen_tang
+    : "khong-xac-dinh";
+}
+
+export const DUONG_TRUYEN = {
+  dan_nhap:
+    "Trước khi gọi thử tổng đài, xem máy bạn đang nối mạng bằng đường nào. Kết quả chỉ cho biết KIỂU kết nối, không phải tốc độ.",
+  nhan_ket_qua: "Kiểu kết nối hiện tại",
+  /** Câu khẳng định ranh giới, hiện cùng mọi kết quả. Cùng khuôn với `VAN_PHONG.chua_xep_duoc`. */
+  khong_do_toc_do:
+    "Ứng dụng không đo tốc độ, không đo độ trễ và không chấm điểm chất lượng cuộc gọi — nền tảng chỉ trả về kiểu kết nối. Muốn biết đường truyền có đủ cho tổng đài của bạn hay không, đội kỹ thuật của chúng tôi đo trực tiếp trên hệ thống thật.",
+} as const;
+
+/** ---------- Danh thiếp số của chúng tôi ---------- */
+
+export const THIEP_CUA_CHUNG_TOI = {
+  dan_nhap:
+    "Chìa mã này ra để người đối diện quét và lưu thẳng vào danh bạ. Mọi thông tin trong mã đều nằm dưới dạng chữ ngay bên dưới.",
+  nhan_ma: "Mã QR danh thiếp",
+  tieu_de_thong_tin: "Thông tin trong mã",
+  nut_giu_sang: "Giữ màn hình sáng",
+  nut_thoi_giu_sang: "Thôi giữ màn hình sáng",
+  dang_giu_sang:
+    "Màn hình đang được giữ sáng để người khác kịp quét. Ứng dụng tự tắt chế độ này khi bạn rời màn hình, để không làm hao pin máy bạn.",
+  da_tai_xong:
+    "Đã ghi tệp danh thiếp xuống máy bạn. Bạn mở tệp ấy ra là thêm được chúng tôi vào danh bạ.",
+  /** Nói ra đúng thứ tệp ấy chứa — và đúng thứ nó KHÔNG chứa. */
+  tep_la_cua_chung_toi:
+    "Tệp này chứa thông tin liên hệ của chúng tôi, không chứa thông tin nào của bạn. Ứng dụng không đọc và không ghi bất kỳ tệp nào khác trên máy.",
+  /** Ranh giới của `downloadFile`: nền tảng quyết định chỗ lưu, ta không chọn được. */
+  zalo_quyet_dinh_cho_luu:
+    "Zalo là bên quyết định tệp được lưu vào thư mục nào của máy; ứng dụng chỉ đưa nội dung tấm thiếp cho Zalo ghi hộ.",
+} as const;
+
+/** ---------- Số hoá danh thiếp giấy ---------- */
+
+export const SO_HOA_THIEP = {
+  dan_nhap:
+    "Có một tấm thiếp giấy trong tay? Chụp hoặc chọn ảnh của nó ở đây để không phải giữ tờ giấy ấy nữa.",
+  nut_chon_anh: "Chọn ảnh danh thiếp",
+  dang_chon_anh: "Đang mở cửa sổ chọn ảnh…",
+  cho_phep: "Bạn đã cho phép dùng máy ảnh. Bấm nút bên dưới để chụp hoặc chọn ảnh tấm thiếp.",
+  /**
+   * TỪ CHỐI QUYỀN LÀ ĐƯỜNG ĐI BÌNH THƯỜNG, VÀ NÓ KHÔNG LÀM MẤT TÍNH NĂNG: cửa sổ chọn ảnh vẫn
+   * mở được từ thư viện. Câu này nói việc cần làm tiếp, không trách móc, và không có mã lỗi.
+   *
+   * Về việc đổi ý sau khi đã từ chối: `zmp-sdk/index.d.ts` ghi ở phần `authorize` rằng *"sau khi
+   * user đồng ý hoặc từ chối cấp quyền, trạng thái cấp quyền sẽ được ghi nhận và đồng bộ cho
+   * những lần sử dụng sau này"*, và ghi ở `openPermissionSetting` rằng có một cửa sổ Quản lý
+   * quyền để người dùng cấp thêm hoặc thu hồi. Câu dưới nói đúng hai điều ấy, không hơn.
+   */
+  tu_choi_quyen:
+    "Bạn đã từ chối quyền dùng máy ảnh. Zalo ghi nhớ câu trả lời này cho những lần sau, nên hộp thoại sẽ không hiện lại; muốn đổi ý, bạn mở phần Quản lý quyền của ứng dụng này trong Zalo và bật lại. Bạn vẫn chọn được ảnh đã chụp sẵn bằng nút bên dưới.",
+  nhan_anh: "Ảnh danh thiếp bạn vừa chọn",
+  khong_hien_duoc_anh:
+    "Chưa hiện được ảnh này lên màn hình. Bạn hãy bấm lại nút chọn ảnh và chọn một tấm khác.",
+  khong_chon_anh:
+    "Bạn chưa chọn tấm ảnh nào. Bấm lại nút bên trên bất cứ lúc nào bạn muốn.",
+  /**
+   * ⚠ RANH GIỚI PHẢI NÓI RA, KHÔNG ĐƯỢC GIẢ VỜ VƯỢT QUA.
+   *
+   *   Bóc chữ khỏi ảnh cần OCR, và OCR cần một bước máy chủ — thứ bản dựng này không có và dây
+   *   bẫy trong `phase1-collects-nothing.test.ts` cấm. Viết một hàm giả vờ đang nhận dạng, hay
+   *   một câu "đang phân tích…", là nói dối bằng giao diện với người vừa đưa ảnh của mình vào.
+   */
+  chua_doc_duoc_chu:
+    "Bản hiện tại chưa đọc được chữ trên ảnh. Việc bóc tên, số điện thoại và email ra khỏi một tấm ảnh cần bước nhận dạng chạy trên máy chủ, và bản này chưa có bước đó — ảnh chỉ được hiện lên màn hình.",
+  /** Luật 3: tấm thiếp giấy là dữ liệu cá nhân của NGƯỜI KHÁC. */
+  anh_khong_roi_may:
+    "Ảnh bạn chọn không rời khỏi máy: ứng dụng không tải nó lên máy chủ nào, không lưu lại và không gửi đi đâu. Nó biến mất khi bạn chọn ảnh khác hoặc rời màn hình. Nếu tấm thiếp là của một người khác, thông tin trên đó là dữ liệu cá nhân của họ.",
+} as const;
+
+/**
+ * MỤC VỀ CÁC QUYỀN TRONG CHÍNH SÁCH QUYỀN RIÊNG TƯ — dựng từ chính `NOI_DUNG_TINH_NANG`.
  *
  * VÌ SAO DỰNG TỪ ĐÓ CHỨ KHÔNG VIẾT LẠI: `vi_sao` là câu nói mục đích của từng quyền, và nó đã
  * có người chủ — chính mảng trên. Chép sang chính sách là tạo bản thứ hai của một sự thật, và
@@ -212,9 +406,33 @@ export const TU_VAN = {
  * là mô tả sai; viết mỗi "chưa làm gì" mà giấu mục đích là không đủ để xét duyệt. Nói cả hai.
  */
 export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
-  "Ứng dụng xin ba quyền của nền tảng Zalo, mỗi quyền cho đúng một tính năng. Mỗi quyền chỉ được hỏi khi bạn tự bấm nút, và bạn có quyền từ chối mà vẫn dùng được ứng dụng.",
+  "Ứng dụng xin các quyền của nền tảng Zalo cho đúng sáu tính năng dưới đây. Mỗi quyền chỉ được hỏi khi bạn tự bấm nút, và bạn có quyền từ chối mà vẫn dùng được ứng dụng.",
   ...NOI_DUNG_TINH_NANG.map((mot) => `${mot.nhan_ngan} — ${mot.vi_sao}`),
   "Với số điện thoại và vị trí, Zalo không trả giá trị thật về máy: ứng dụng chỉ nhận một mã dùng được một lần và hết hạn sau 2 phút. Số điện thoại và toạ độ của bạn không nằm trong mã đó.",
   "Với quét mã QR, nội dung mã hiện lên màn hình và mất đi khi bạn quét mã khác hoặc rời màn hình. Nếu mã là một tấm danh thiếp, nội dung ấy là dữ liệu cá nhân của người đã đưa nó cho bạn, và ứng dụng cũng không lưu lại.",
-  "Các mục đích nêu trên là mục đích ứng dụng sẽ dùng ba quyền này khi có đầy đủ chức năng. Bản hiện tại chỉ hiện kết quả lên màn hình: nó chưa lưu và chưa gửi bất kỳ dữ liệu nào đi đâu.",
+  "Với thông tin mạng, ứng dụng chỉ nhận về KIỂU kết nối: Wi-Fi, mạng di động, không có mạng, hoặc không xác định. Ứng dụng không nhận địa chỉ IP, không nhận tên mạng Wi-Fi, không đo tốc độ và không biết bạn đang ở đâu.",
+  "Với máy ảnh và cửa sổ chọn ảnh, tấm ảnh bạn chọn KHÔNG RỜI KHỎI MÁY: ứng dụng nhận một đường dẫn tạm trên chính thiết bị của bạn, hiện ảnh lên màn hình, và không tải ảnh lên bất kỳ máy chủ nào. Ứng dụng không tự đọc thư viện ảnh — nó chỉ nhận đúng tấm ảnh bạn tự chọn trong cửa sổ của Zalo.",
+  "Với việc giữ màn hình sáng, ứng dụng chỉ bật chế độ ấy khi bạn tự bấm, và tự tắt lại khi bạn rời màn hình danh thiếp. Chế độ này không đọc gì và không gửi gì; nó chỉ ngăn màn hình tối đi trong lúc người khác đang quét mã.",
+  "Với việc tải tệp, ứng dụng GHI MỘT TỆP XUỐNG MÁY BẠN, và đây là hành vi duy nhất ứng dụng viết lên thiết bị. Tệp ấy là danh thiếp của chúng tôi — tên, hotline, email và trang web của công ty — không phải dữ liệu của bạn. Ứng dụng không đọc, không sửa và không xoá bất kỳ tệp nào khác.",
+  "Các mục đích nêu trên là mục đích ứng dụng sẽ dùng các quyền này khi có đầy đủ chức năng. Bản hiện tại chỉ hiện kết quả lên màn hình, ngoài đúng một tệp danh thiếp của chúng tôi nói ở trên: nó chưa lưu và chưa gửi bất kỳ dữ liệu nào của bạn đi đâu.",
+];
+
+/**
+ * TỪNG QUYỀN MỘT, GỌI ĐÚNG TÊN API — mục thứ hai của chính sách về quyền.
+ *
+ * VÌ SAO KHÔNG GỘP VÀO ĐOẠN TRÊN: đoạn trên nói theo TÍNH NĂNG, thứ người dùng hiểu. Bảng này
+ * nói theo QUYỀN, thứ Developer Console cấp và người duyệt đối chiếu. Một tính năng dùng hai
+ * quyền, nên hai cách kể không thay thế nhau được — và người duyệt phải tra được từng quyền họ
+ * sắp bấm nút cấp.
+ */
+export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
+  "Số điện thoại (getPhoneNumber) — để đội kinh doanh gọi lại tư vấn. Ứng dụng chỉ nhận một mã, không nhận số.",
+  "Vị trí (getLocation) — để chỉ ra văn phòng gần bạn. Ứng dụng chỉ nhận một mã, không nhận toạ độ.",
+  "Quét mã QR (scanQRCode) — để đọc danh thiếp số của đối tác.",
+  "Kiểu kết nối mạng (getNetworkType) — để cho bạn biết cuộc gọi sắp tới đi qua Wi-Fi hay mạng di động.",
+  "Rung (vibrate) — để báo bằng một nhịp rung khi một việc bạn vừa bấm đã xong, cho người không nhìn màn hình liên tục.",
+  "Giữ màn hình sáng (keepScreen) — để màn hình không tối đi trong lúc người khác quét mã danh thiếp của chúng tôi.",
+  "Máy ảnh (requestCameraPermission) — để chụp lại một tấm danh thiếp giấy.",
+  "Chọn ảnh (openMediaPicker) — để bạn chọn ảnh tấm danh thiếp từ máy. Ảnh không rời khỏi máy.",
+  "Tải tệp (downloadFile) — để ghi tệp danh thiếp của chúng tôi xuống máy bạn.",
 ];

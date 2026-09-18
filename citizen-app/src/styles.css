@@ -68,6 +68,13 @@
   /* Glyph colour on a brand-gradient tile. Dark on purpose: see the note above. */
   --tile-glyph: #16253d;
 
+  /* Mã QR danh thiếp. ĐEN TUYỀN TRÊN TRẮNG TUYỀN, và đây là một ràng buộc kỹ thuật chứ không
+     phải một lựa chọn thẩm mỹ: máy quét đọc mã bằng ngưỡng sáng/tối, và một mã "navy trên xám
+     nhạt" cho đúng thương hiệu là một mã không quét được dưới nắng — tức một tính năng hỏng ở
+     đúng nơi nó được dùng. `accessibility.test.ts` ghim cặp này như mọi cặp màu khác. */
+  --ma-qr-toi: #000000;
+  --ma-qr-sang: #ffffff;
+
   /* Never below 16px. 17px gives a little headroom without reflowing on a 320px screen. */
   --text-body: 17px;
   --text-small: 16px;
@@ -1678,4 +1685,85 @@ body {
   color: var(--ink-muted);
   font-size: var(--text-small);
   line-height: 1.6;
+}
+
+/* ---------- mã QR danh thiếp của chúng tôi ---------- */
+
+/* Tấm thẻ bao quanh mã. Nền trắng của thẻ chính là phần còn lại của vùng yên tĩnh quanh mã —
+   `MaQR` chỉ vẽ 2 ô lề, phần đệm này là phần bù. Thiếu nó thì mã chạm mép thẻ và máy quét khó
+   tìm ra ba ô định vị. */
+.ma-qr__khung {
+  margin: 0 0 14px;
+  padding: 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface);
+  text-align: center;
+}
+
+/* Cạnh cố định theo bề rộng khả dụng, chặn trên 260px: to hơn thế thì trên một màn 320px cái mã
+   đẩy hết phần chữ xuống dưới màn hình, và phần chữ mới là thứ người khiếm thị đọc được. */
+.ma-qr {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  margin: 0 auto 14px;
+}
+
+.ma-qr__nen {
+  fill: var(--ma-qr-sang);
+}
+
+.ma-qr__o {
+  fill: var(--ma-qr-toi);
+}
+
+/* Nút bật/tắt giữ màn hình sáng. Cùng khuôn nút phụ, nhưng có lớp riêng vì `accessibility.test.ts`
+   ghim từng lớp nút một: một nút không có tên trong danh sách ấy là một nút không ai bảo đảm
+   còn đủ 44px sau lần sửa bố cục kế tiếp. */
+.tn__nut-giu {
+  display: block;
+  width: 100%;
+  min-height: var(--tap-min);
+  margin: 0 0 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--navy);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.tn__nut-giu:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+/* ---------- ảnh danh thiếp giấy vừa chọn ---------- */
+
+.tn__anh {
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+/* `max-height` để một tấm ảnh dọc không đẩy mọi câu giải thích xuống dưới màn hình. `contain`
+   chứ không `cover`: cắt mất một góc tấm thiếp là cắt mất đúng chỗ ghi số điện thoại. */
+.tn__anh-hinh {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--surface-alt);
+}
+
+.tn__anh-chu {
+  margin: 8px 0 0;
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink-muted);
 }

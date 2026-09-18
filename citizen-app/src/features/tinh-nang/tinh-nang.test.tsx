@@ -198,14 +198,18 @@ describe("bóc tách mã QR: một chuỗi vào, một đối tượng ra, khôn
 });
 
 /* ============================================================================================
-   BA TÍNH NĂNG — mỗi cái tự giải thích được cho người duyệt.
+   SÁU TÍNH NĂNG — mỗi cái tự giải thích được cho người duyệt.
    ============================================================================================ */
 
 describe("mỗi tính năng tự giải thích được cho người duyệt", () => {
-  it("có đúng ba tính năng, và không cái nào thiếu một câu nào", () => {
+  it("có đúng sáu tính năng, và không cái nào thiếu một câu nào", () => {
     // Một trường rỗng ở đây là một màn hình có nút mà không có lý do — đúng thứ chính sách Mini
     // App (điều 3.3.4) từ chối xét duyệt.
-    expect(NOI_DUNG_TINH_NANG).toHaveLength(3);
+    //
+    // Con số ghim cứng có chủ đích: thêm một tính năng là thêm một quyền phải xin ở Developer
+    // Console và thêm một đoạn phải khai trong chính sách quyền riêng tư. Ca này đỏ lên để cả
+    // hai việc ấy được nhớ tới, chứ không phải để đếm cho vui.
+    expect(NOI_DUNG_TINH_NANG).toHaveLength(6);
     for (const nd of NOI_DUNG_TINH_NANG) {
       for (const [khoa, gia_tri] of Object.entries(nd)) {
         expect(gia_tri.trim().length, `${nd.ma}: trường "${khoa}" rỗng`).toBeGreaterThan(0);

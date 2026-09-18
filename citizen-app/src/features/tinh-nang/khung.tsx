@@ -56,6 +56,7 @@ export function KhungTinhNang<T>({
   cap_tieu_de = "h1",
   glyph,
   dan_nhap,
+  truoc_nut,
   veKetQua,
   duoi_cung,
 }: {
@@ -67,6 +68,15 @@ export function KhungTinhNang<T>({
   glyph?: ReactNode;
   /** Câu dẫn riêng của tính năng, đứng trên nút. */
   dan_nhap?: string;
+  /**
+   * Phần đứng GIỮA lời giải thích và cái nút.
+   *
+   * Có mặt vì một tính năng có thể đã cho người dùng thứ họ cần TRƯỚC khi bấm gì cả: mã QR danh
+   * thiếp của chúng tôi hiện ngay, không cần quyền nào, và cái nút bên dưới chỉ là đường tải nó
+   * về. Đẩy mã xuống dưới nút thì thứ chính của màn hình nằm sau một lời xin quyền — đúng thứ
+   * tự ngược với mọi màn còn lại của ứng dụng này.
+   */
+  truoc_nut?: ReactNode;
   veKetQua: (du_lieu: T) => ReactNode;
   /** Phần luôn hiện, bất kể người dùng đã bấm hay chưa (danh sách văn phòng, đường liên hệ). */
   duoi_cung?: ReactNode;
@@ -89,6 +99,8 @@ export function KhungTinhNang<T>({
       </div>
       {dan_nhap !== undefined && <p className="tn__dan">{dan_nhap}</p>}
       <p className="tn__vi-sao">{nd.vi_sao}</p>
+
+      {truoc_nut}
 
       <button
         type="button"
@@ -124,6 +136,7 @@ export function TinhNangCoTrangThai<T>({
   cap_tieu_de,
   glyph,
   dan_nhap,
+  truoc_nut,
   veKetQua,
   duoi_cung,
 }: {
@@ -132,6 +145,7 @@ export function TinhNangCoTrangThai<T>({
   cap_tieu_de?: "h1" | "h2";
   glyph?: ReactNode;
   dan_nhap?: string;
+  truoc_nut?: ReactNode;
   veKetQua: (du_lieu: T) => ReactNode;
   duoi_cung?: ReactNode;
 }) {
@@ -152,6 +166,7 @@ export function TinhNangCoTrangThai<T>({
       cap_tieu_de={cap_tieu_de}
       glyph={glyph}
       dan_nhap={dan_nhap}
+      truoc_nut={truoc_nut}
       veKetQua={veKetQua}
       duoi_cung={duoi_cung}
     />

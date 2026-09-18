@@ -126,3 +126,125 @@ export function moTrangWeb(duong_dan: string): Promise<KetQuaXin<void>> {
     await sdk.openWebview({ url: duong_dan, config: { style: "normal" } });
   });
 }
+
+/* ==============================================================================================
+   SÁU QUYỀN XIN THÊM — mỗi lời gọi đã đối chiếu chữ ký trong `node_modules/zmp-sdk/index.d.ts`,
+   không lấy từ tài liệu web và không lấy từ trí nhớ.
+
+     getNetworkType()              -> { networkType: "none"|"wifi"|"cellular"|"unknown" }  :1226, :3232
+     vibrate({ type?, milliseconds? }) -> Promise<void>                                    :4400–4433
+     keepScreen({ keepScreenOn })  -> Promise<void>                                        :4201–4231
+     requestCameraPermission()     -> { userAllow: boolean; message: string }               :1293, :4002
+     openMediaPicker({ type, … })  -> { data: string[] | string }                           :1403, :4804
+     downloadFile({ url?, fileBase64Data? }) -> Promise<void>                               :6060–6116
+
+   Cả sáu đều `@requirePermission` và `@zaloOnly` trong chính `index.d.ts`: chúng cần được cấp
+   quyền cho App ID ở trang Quản lý ứng dụng, và ngoài Zalo thì không chạy. Nhánh `ngoai-zalo`
+   của `xin` là thứ nói ra điều thứ hai bằng tiếng Việt thay vì để một nút im lặng.
+   ============================================================================================ */
+
+/**
+ * Kiểu kết nối mạng hiện tại, dưới dạng chuỗi thô của nền tảng.
+ *
+ * TRẢ VỀ CHUỖI THÔ, KHÔNG PHẢI NHÃN: việc quy chuỗi ấy về một nhãn tiếng Việt thuộc về
+ * `noi-dung.ts` (`kieuKetNoi`), nơi kiểm được mà không cần Zalo — kể cả với một giá trị thứ năm
+ * mà bản SDK hôm nay chưa có. Ép kiểu về `string` ở đây là có chủ đích: `NetworkType` là một
+ * `enum` của SDK, và tin rằng nền tảng sẽ mãi trả đúng bốn giá trị ấy là tin vào một lời hứa
+ * không ai viết ra.
+ */
+export function docKieuKetNoi(): Promise<KetQuaXin<string>> {
+  return xin(async (sdk) => String((await sdk.getNetworkType()).networkType));
+}
+
+/**
+ * Rung một nhịp để báo "xong".
+ *
+ * KHÔNG TRẢ VỀ GÌ VÀ KHÔNG BAO GIỜ HỎNG RA NGOÀI: rung là phản hồi phụ, không phải kết quả.
+ * Một máy không rung được, hoặc một người đã tắt rung trong cài đặt, không được phép làm hỏng
+ * việc họ vừa bấm — nên mọi nhánh của `xin` đều bị nuốt ở đây, có chủ đích.
+ *
+ * Không truyền `milliseconds`: `index.d.ts` ghi tham số ấy CHỈ có tác dụng trên Android, và mặc
+ * định là 500ms. Đặt một con số chỉ chạy trên một nửa số máy là một khác biệt không ai kiểm.
+ */
+export async function rungMotNhip(): Promise<void> {
+  await xin(async (sdk) => {
+    await sdk.vibrate({ type: "oneShot" });
+  });
+}
+
+/**
+ * Bật / tắt chế độ giữ màn hình sáng.
+ *
+ * ⚠ BẬT RỒI PHẢI TẮT. Chế độ này sống ở tầng hệ điều hành, không thuộc về màn hình React nào:
+ * bật xong rồi bỏ đó là để màn hình một người sáng mãi cho tới khi họ đóng app, tức là lấy pin
+ * của họ cho một tính năng họ đã rời khỏi. `hieuUngGiuManSang` trong `giu-man-sang.ts` là thứ
+ * bảo đảm cặp bật/tắt luôn đủ đôi, và nó có phép kiểm riêng.
+ *
+ * `keepScreen` khai trả `Promise<void>` (dòng 4231) dù có kiểu `KeepScreenReturns` trong tệp:
+ * nên ở đây KHÔNG đọc `.success` — đọc một trường không tồn tại rồi hiện nó ra là dựng một
+ * trạng thái giả trên màn hình.
+ */
+export function giuManHinhSang(bat: boolean): Promise<KetQuaXin<boolean>> {
+  return xin(async (sdk) => {
+    await sdk.keepScreen({ keepScreenOn: bat });
+    return bat;
+  });
+}
+
+/**
+ * Hỏi quyền dùng máy ảnh.
+ *
+ * ⚠ `userAllow === false` LÀ MỘT KẾT QUẢ THÀNH CÔNG, KHÔNG PHẢI MỘT LỖI — và khác biệt ấy nằm
+ * ở chỗ API này trả về trạng thái chứ không ném: người dùng bấm "Không cho phép" thì lời gọi
+ * vẫn thành công và mang về `false`. Quy nó vào nhánh `tu-choi` sẽ hiện một câu chung chung;
+ * giữ nguyên `false` thì màn hình nói được đúng việc cần làm tiếp (`SO_HOA_THIEP.tu_choi_quyen`).
+ *
+ * `message` của nền tảng bị bỏ hẳn: đó là chữ kỹ thuật, và README §Error message shape cấm đưa
+ * nó ra cho người dùng.
+ */
+export function xinQuyenMayAnh(): Promise<KetQuaXin<boolean>> {
+  return xin(async (sdk) => (await sdk.requestCameraPermission()).userAllow);
+}
+
+/**
+ * Mở cửa sổ chọn ảnh và nhận về đường dẫn tệp TẠM TRÊN MÁY.
+ *
+ * ⚠ KHÔNG TRUYỀN `serverUploadUrl`, VÀ ĐÓ LÀ TOÀN BỘ VẤN ĐỀ:
+ *
+ *   `index.d.ts` dòng 4721 ghi rõ *"Tham số serverUploadUrl không còn bắt buộc. Mặc định nếu
+ *   không truyền, SDK sẽ trả về đường dẫn tạm thời (local cache path) của media mà không tự
+ *   động upload lên server"*. Truyền nó vào là ảnh của người dùng — rất có thể là danh thiếp
+ *   của một người thứ ba — được tải lên một máy chủ. Ứng dụng này không có máy chủ nào, và dây
+ *   bẫy trong `phase1-collects-nothing.test.ts` cấm mọi đường gửi ra.
+ *
+ *   Bỏ nó đi thì câu "ảnh không rời khỏi máy" trong chính sách quyền riêng tư là một sự thật về
+ *   cấu trúc, không phải một lời hứa. Có một phép kiểm quét toàn bộ mã nguồn để giữ điều đó.
+ *
+ * Chuẩn hoá `string | string[]` về mảng: kiểu trả về khai cả hai vì khi CÓ `serverUploadUrl` thì
+ * `data` là nguyên văn phản hồi của máy chủ. Ta không đi đường ấy, nhưng một `typeof` ở đây rẻ
+ * hơn một `.map` chạy trên một chuỗi rồi hiện ra từng ký tự một.
+ */
+export function chonAnhTuMay(): Promise<KetQuaXin<readonly string[]>> {
+  return xin(async (sdk) => {
+    const { data } = await sdk.openMediaPicker({ type: "photo" });
+    return typeof data === "string" ? [data] : data;
+  });
+}
+
+/**
+ * Ghi một tệp xuống máy người dùng từ dữ liệu base64 có sẵn trong app.
+ *
+ * ⚠ DÙNG `fileBase64Data`, KHÔNG DÙNG `url` (`index.d.ts` dòng 6060–6061, cả hai đều tuỳ chọn).
+ * `url` sẽ cần một địa chỉ `https://` có thật để tải về — tức một máy chủ, thứ ứng dụng này
+ * không có và không được có. `fileBase64Data` thì nội dung đi thẳng từ bộ nhớ của app sang API
+ * ghi tệp của nền tảng, không một lời gọi mạng nào.
+ *
+ * ĐÂY LÀ HÀNH VI DUY NHẤT ỨNG DỤNG VIẾT LÊN THIẾT BỊ, nên nó được khai riêng một đoạn trong
+ * chính sách quyền riêng tư. Thứ được ghi là danh thiếp CỦA CHÚNG TÔI, không phải dữ liệu của
+ * người dùng — xem `vcard.ts`.
+ */
+export function taiTepVeMay(du_lieu_base64: string): Promise<KetQuaXin<void>> {
+  return xin(async (sdk) => {
+    await sdk.downloadFile({ fileBase64Data: du_lieu_base64 });
+  });
+}
