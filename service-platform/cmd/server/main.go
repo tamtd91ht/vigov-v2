@@ -142,6 +142,11 @@ func run(log *slog.Logger) error {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+	// Webhook của Zalo Mini App — CÙNG LÝ DO với /healthz, không phải tiện tay đặt cạnh:
+	// người gọi ở ngoài, Host của họ không thuộc xã nào, nên sau TenantMiddleware thì mọi lần
+	// Zalo gọi đều nhận 404 và Zalo sẽ tắt webhook. Xem `internal/http/webhook_zalo.go`.
+	svchttp.MountWebhookZalo(ngoai)
+
 	ngoai.Handle("/", h)
 
 	srv := &http.Server{
