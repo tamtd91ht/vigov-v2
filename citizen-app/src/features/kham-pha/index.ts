@@ -34,3 +34,20 @@ export type { XaDemo } from "./demo-danh-muc-xa";
  * Kiểu ghi rõ `boolean` chứ không để suy ra `true`: bản rỗng phải gán được vào cùng một kiểu.
  */
 export const CO_LOP_KHAM_PHA: boolean = true;
+
+/**
+ * HAI NHÃN CỦA VỎ ỨNG DỤNG, NẰM SAU CỬA NÀY — và chúng nằm ở đây vì một lý do về BẢN NỘP.
+ *
+ * `App.tsx` là vỏ chung, không nằm sau alias, nên mọi chuỗi viết thẳng trong nó đi vào CẢ bản
+ * `goc`. Trước đây hai nhãn "Chọn xã" và "Đổi xã" được viết thẳng ở đó: nhánh vẽ chúng chết ở
+ * bản `goc` (không có lớp khám phá), nhưng **chuỗi vẫn nằm trong bundle gửi duyệt**.
+ *
+ * Bản `goc` nay là một ứng dụng sản phẩm của một doanh nghiệp công nghệ, và nó không được mang
+ * theo một chữ nào về đơn vị hành chính. Nên hai nhãn chuyển ra sau cửa này, đúng cách nhãn tab
+ * của lớp quyền đã làm trước đây: bản rỗng trả về chuỗi rỗng, và
+ * `bundle-for-zalo.test.ts` dựng thật rồi đọc bundle để chứng minh chúng đã biến mất.
+ */
+export const NHAN_KHAM_PHA: { tieu_de_chon_xa: string; nut_doi_xa: string } = {
+  tieu_de_chon_xa: "Chọn xã",
+  nut_doi_xa: "Đổi xã",
+};

@@ -16,7 +16,7 @@ import { CloudGlyph, CpaasGlyph, NetworkBackdrop } from "./icons";
 export function HomeScreen() {
   return (
     <>
-      <section className="hero">
+      <section className="hero hien-len">
         <NetworkBackdrop className="hero__backdrop" />
         <div className="hero__content">
           <h1 className="hero__title">{COMPANY.name}</h1>
@@ -34,7 +34,7 @@ export function HomeScreen() {
       </h2>
       <p className="note note--brand">{GROUP.figuresOwnerNote}</p>
 
-      <section className="band">
+      <section className="band hien-len hien-len--2">
         <CloudGlyph className="band__backdrop" />
         <ul className="stat-grid">
           {GROUP_STATS.map((stat, index) => (

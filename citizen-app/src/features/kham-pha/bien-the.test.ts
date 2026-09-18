@@ -7,8 +7,6 @@ import viteConfigRaw from "../../../vite.config.ts?raw";
 import dungRaw from "../../../scripts/dung.mjs?raw";
 import * as ChanDoanDayDu from "../diagnostics/index";
 import * as ChanDoanRong from "../diagnostics/index.rong";
-import * as QuyenDayDu from "../quyen/index";
-import * as QuyenRong from "../quyen/index.rong";
 import * as DayDu from "./index";
 import * as Rong from "./index.rong";
 
@@ -34,7 +32,6 @@ describe("bản rỗng khai đúng bề mặt của bản đầy đủ", () => {
     // biến thể của một app.
     expect(Object.keys(Rong).sort()).toEqual(Object.keys(DayDu).sort());
     expect(Object.keys(ChanDoanRong).sort()).toEqual(Object.keys(ChanDoanDayDu).sort());
-    expect(Object.keys(QuyenRong).sort()).toEqual(Object.keys(QuyenDayDu).sort());
   });
 
   it("nói ra rằng lớp khám phá KHÔNG có mặt", () => {
@@ -44,24 +41,15 @@ describe("bản rỗng khai đúng bề mặt của bản đầy đủ", () => {
     expect(Rong.CO_LOP_KHAM_PHA).toBe(false);
   });
 
-  it("nói ra rằng ba màn quyền KHÔNG có mặt, và không mang theo nhãn tab nào", () => {
-    // `screens.ts` đọc cờ này để KHÔNG thêm tab thứ năm. Sai cờ thì bản `goc` có một tab dẫn tới
-    // một màn trống — và bản `goc` là bản nộp.
-    expect(QuyenDayDu.CO_MAN_QUYEN).toBe(true);
-    expect(QuyenRong.CO_MAN_QUYEN).toBe(false);
-
-    // Nhãn rỗng, chứ không phải nhãn thật: chuỗi trong bản rỗng đi thẳng vào bundle bản `goc`.
-    expect(QuyenDayDu.MAN_QUYEN.tabLabel.length).toBeGreaterThan(0);
-    expect(QuyenRong.MAN_QUYEN.tabLabel).toBe("");
-    expect(QuyenRong.MAN_QUYEN.headerTitle).toBe("");
-    // Cùng `id`, vì `ScreenId` là một kiểu chung cho cả ba biến thể.
-    expect(QuyenRong.MAN_QUYEN.id).toBe(QuyenDayDu.MAN_QUYEN.id);
-  });
-
-  it("khu vực quyền ở bản rỗng vẽ ra rỗng", () => {
-    // Bản đầy đủ vẽ ra thứ gì thì `quyen.test.tsx` kiểm; ở đây chỉ cần bản rỗng không vẽ gì —
-    // nếu nó vẽ, bản `goc` có một màn hình không ai định đưa vào bản nộp.
-    expect(renderToStaticMarkup(createElement(QuyenRong.MAN_QUYEN.component, {}))).toBe("");
+  it("hai nhãn của vỏ ứng dụng là CHUỖI RỖNG ở bản gốc", () => {
+    // `App.tsx` là vỏ chung, không nằm sau alias: mọi chuỗi viết thẳng trong nó đi vào cả bản
+    // `goc` — bản nộp — kể cả khi nhánh vẽ nó không bao giờ chạy. Bản nộp là một ứng dụng sản
+    // phẩm của một doanh nghiệp công nghệ và không được mang theo một chữ nào về đơn vị hành
+    // chính, nên hai nhãn ấy đọc từ cửa này.
+    expect(DayDu.NHAN_KHAM_PHA.tieu_de_chon_xa.length).toBeGreaterThan(0);
+    expect(DayDu.NHAN_KHAM_PHA.nut_doi_xa.length).toBeGreaterThan(0);
+    expect(Rong.NHAN_KHAM_PHA.tieu_de_chon_xa).toBe("");
+    expect(Rong.NHAN_KHAM_PHA.nut_doi_xa).toBe("");
   });
 
   it("không gợi ý xã nào, và ba màn đều vẽ ra rỗng", () => {
@@ -98,7 +86,7 @@ describe("bản rỗng khai đúng bề mặt của bản đầy đủ", () => {
   });
 });
 
-describe("alias là cửa DUY NHẤT vào ba phần gỡ được", () => {
+describe("alias là cửa DUY NHẤT vào hai phần gỡ được", () => {
   const RAW = import.meta.glob("../../**/*.{ts,tsx}", {
     query: "?raw",
     import: "default",
@@ -108,11 +96,10 @@ describe("alias là cửa DUY NHẤT vào ba phần gỡ được", () => {
   const khongChuThich = (ma: string) =>
     ma.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(?<!:)\/\/[^\n]*/g, " ");
 
-  /** Tệp NGOÀI ba thư mục gỡ được. Bên trong chúng thì nhập thẳng nhau là chuyện bình thường. */
+  /** Tệp NGOÀI hai thư mục gỡ được. Bên trong chúng thì nhập thẳng nhau là chuyện bình thường. */
   const NGOAI = (duong: string) =>
     !duong.startsWith("./") &&
     !duong.includes("/diagnostics/") &&
-    !duong.includes("/quyen/") &&
     !duong.includes(".test.");
 
   it("quét đúng cây mã thật — một lượt quét rỗng cũng xanh, và xanh sai lý do", () => {
@@ -121,7 +108,7 @@ describe("alias là cửa DUY NHẤT vào ba phần gỡ được", () => {
     expect(duong.length).toBeGreaterThanOrEqual(5);
   });
 
-  it("không tệp nào ngoài ba thư mục ấy nhập thẳng vào trong chúng", () => {
+  it("không tệp nào ngoài hai thư mục ấy nhập thẳng vào trong chúng", () => {
     // Đây là lỗi KHÔNG CÓ TRIỆU CHỨNG: `import { ChonXaScreen } from "./features/kham-pha/…"`
     // đi vòng qua `resolve.alias`, nên bản `goc` vẫn dựng xanh, vẫn chạy, và vẫn mang theo danh
     // mục xã mẫu vào bản gửi duyệt. Cấm theo CHUỖI ĐƯỜNG DẪN nên không cú pháp nhập nào lách
@@ -131,7 +118,7 @@ describe("alias là cửa DUY NHẤT vào ba phần gỡ được", () => {
       if (!NGOAI(duong)) continue;
       for (const khop of khongChuThich(ma).matchAll(/["'`]([^"'`\n]*)["'`]/g)) {
         const chuoi = khop[1] ?? "";
-        if (/features\/(kham-pha|diagnostics|quyen)\//.test(chuoi)) vi_pham.push(`${duong}: ${chuoi}`);
+        if (/features\/(kham-pha|diagnostics)\//.test(chuoi)) vi_pham.push(`${duong}: ${chuoi}`);
       }
     }
     expect(
@@ -166,14 +153,17 @@ describe("danh sách biến thể — một sự thật, hai tệp phải nói g
   const CUA_VITE = () => danhSach(viteConfigRaw, /const BIEN_THE_HOP_LE = \[([^\]]*)\]/);
   const CUA_DUNG = () => danhSach(dungRaw, /export const BIEN_THE = \[([^\]]*)\]/);
 
-  it("cùng ba tên, cùng thứ tự", () => {
-    expect(CUA_VITE()).toEqual(["goc", "quyen", "day-du"]);
+  it("cùng hai tên, cùng thứ tự", () => {
+    expect(CUA_VITE()).toEqual(["goc", "day-du"]);
     expect(CUA_DUNG()).toEqual(CUA_VITE());
   });
 
-  it("`quyen` là một biến thể hợp lệ ở cả hai nơi — đây là bản nộp xin quyền", () => {
-    expect(CUA_VITE()).toContain("quyen");
-    expect(CUA_DUNG()).toContain("quyen");
+  it("biến thể `quyen` đã biến mất khỏi CẢ HAI tệp", () => {
+    // Ba quyền nay thuộc về chính ứng dụng sản phẩm, nên `quyen` trùng hoàn toàn với `goc`. Bỏ ở
+    // một tệp mà quên tệp kia thì `npm run build:quyen` vẫn dựng — và dựng ra một bản không ai
+    // định nghĩa nữa.
+    expect(CUA_VITE()).not.toContain("quyen");
+    expect(CUA_DUNG()).not.toContain("quyen");
   });
 
   it("mỗi biến thể có một dòng mô tả — `zmp deploy` in nó ra trước khi đẩy", () => {

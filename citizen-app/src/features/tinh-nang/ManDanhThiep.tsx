@@ -1,231 +1,212 @@
 /**
- * BA MÀN QUYỀN — mỗi màn tự giải thích được cho người duyệt của Zalo.
+ * TÍNH NĂNG QUÉT DANH THIẾP SỐ — `scanQRCode`.
  *
- * VÌ SAO MỖI MÀN PHẢI NÓI VÌ SAO NÓ CẦN QUYỀN ẤY:
+ * Đây là tính năng CHẠY TRỌN VẸN của bản dựng này, và nó chạy trọn vẹn được vì `scanQRCode` là
+ * API duy nhất của nền tảng trả về **dữ liệu thật** chứ không phải một token phải đổi ở máy chủ
+ * (`zalo-api.ts`). Quét xong là có nội dung, bóc tách xong là có một tấm thiếp đọc được và một
+ * nút gọi bấm được — không cần một dòng máy chủ nào.
  *
- *   Zalo chỉ cấp `getPhoneNumber` · `getLocation` · `scanQRCode` khi bản nộp CÓ chỗ dùng chúng
- *   nhìn thấy được, và chính sách Mini App (điều 3.3.4, trích ngay trên `getPhoneNumber` trong
- *   `zmp-sdk/index.d.ts`) nói thẳng: *"chúng tôi sẽ từ chối xét duyệt cho những Mini App có luồng
- *   xin cấp quyền chưa rõ ràng, không nêu được mục đích xin quyền đến người dùng"*. Một nút trần
- *   không kèm lời giải thích là một vòng duyệt trượt.
+ * ⚠ NỘI DUNG MỘT TẤM THIẾP LÀ DỮ LIỆU CÁ NHÂN CỦA NGƯỜI KHÁC (luật 3, Nghị định 13/2023/NĐ-CP).
+ * Hiện lên màn hình thì được — đó là toàn bộ việc người dùng vừa yêu cầu. Ngoài ra thì không:
+ * không `console.log`, không chỗ lưu nào, không tên tệp, không khoá bộ nhớ đệm. Nó sống trong
+ * `useState` và mất đi khi quét mã khác hoặc rời màn hình.
  *
- *   Và lời giải thích ấy không chỉ để qua vòng duyệt: người bấm "Đồng ý" mà không biết mình đồng
- *   ý cho việc gì là người sẽ gỡ app ngay lần đầu thấy lạ.
- *
- * ⚠ TỪ CHỐI LÀ ĐƯỜNG ĐI BÌNH THƯỜNG, KHÔNG PHẢI LỖI. Ba màn đều có nhánh riêng cho nó, và câu
- * hiện ra nói rõ vẫn dùng được ứng dụng và bấm lại lúc nào cũng được. Người dân có quyền nói
- * không với một cơ quan nhà nước; một màn hình báo đỏ ở đây là một màn hình mắng họ vì điều đó.
- *
- * ⚠ BA MÀN NÀY LẤY DỮ LIỆU RỒI HIỆN LÊN MÀN HÌNH, HẾT. Không `fetch`, không `localStorage`,
- * không `console.log` — các dây bẫy trong `phase1-collects-nothing.test.ts` giữ nguyên, và chúng
- * là thứ biến câu "không gửi đi đâu" thành một ràng buộc kiểm được thay vì một lời hứa.
+ * VỀ THẺ `mailto:` — CÓ CÂN NHẮC, KHÔNG PHẢI QUÊN. Luật 3 cấm dữ liệu cá nhân nằm trong URL, và
+ * điều nó nhắm tới là những URL ĐƯỢC GHI LẠI ở đâu đó: đường gọi mạng, tên tệp, khoá bộ nhớ đệm.
+ * `mailto:` không gọi mạng và không được ghi lại: nó là một ý định cục bộ, giao cho ứng dụng thư
+ * của chính người dùng, đúng bằng việc họ vừa bấm. Số điện thoại thì đi qua `openPhone` của nền
+ * tảng chứ không qua một `tel:` nào.
  */
-import { type ReactElement, type ReactNode, useState } from "react";
+import { useState } from "react";
 
-import {
-  CHI_HIEN_LEN_MAN_HINH,
-  DAN_NHAP_QUYEN,
-  MA_RONG,
-  type MaQuyen,
-  noiDung,
-  NOI_DUNG_QUYEN,
-  QR_RONG,
-  TOKEN_KHONG_CHUA_GI,
-} from "./noi-dung";
-import { type KetQuaXin, quetMaQR, xinTokenSoDienThoai, xinTokenViTri } from "./zalo-api";
+import { NamecardGlyph } from "../company-intro/icons";
 
-/**
- * Che token, chỉ để vài ký tự đầu.
- *
- * Token KHÔNG chứa số điện thoại hay toạ độ (xem `zalo-api.ts`), nên đây không phải chuyện dữ
- * liệu cá nhân — nó là một CHỨNG TỪ đổi được dữ liệu ở máy chủ. Hiện trọn vẹn lên màn hình là
- * mời người đứng cạnh chụp lại trong hai phút nó còn sống. Vài ký tự đầu đủ để người duyệt thấy
- * "đã nhận được một chuỗi thật", và không đủ để dùng lại.
- */
-export function cheToken(token: string): string {
-  return token.length <= 6 ? "…" : `${token.slice(0, 6)}…`;
-}
+import { type DanhThiep, docMaQR, thiepCoNoiDung } from "./danh-thiep";
+import { KhungTinhNang, type TrangThai } from "./khung";
+import { DANH_THIEP, LOI_MO_NGOAI } from "./noi-dung";
+import { moCuocGoi, moTrangWeb, quetMaQR } from "./zalo-api";
 
-export type TrangThai = { kieu: "chua-goi" } | { kieu: "dang-cho" } | KetQuaXin<string>;
-
-/**
- * Một màn quyền, THUẦN — nhận cả trạng thái qua tham số, không giữ gì.
- *
- * Tách ra vì cùng lý do `KhungApp` được tách khỏi `App` và `DichVuDong` khỏi `TrangXaScreen`: bộ
- * test ở đây dựng bằng `react-dom/server` và không có DOM để bấm. Bốn nhánh kết quả — nhất là
- * `tu-choi` và `ngoai-zalo`, hai nhánh người dùng gặp nhiều nhất — chỉ kiểm được khi dựng thẳng
- * được chúng. Một câu nói với người vừa từ chối mà không ai kiểm là một câu sẽ trôi thành "Lỗi".
- */
-export function ManQuyenThuan({
-  ma,
-  trang_thai,
-  onBam,
-  veKetQua,
+/** Một dòng thông tin của tấm thiếp: nhãn, giá trị, và (có thể) một nút hành động. */
+function DongThiep({
+  nhan,
+  gia_tri,
+  hanh_dong,
 }: {
-  ma: MaQuyen;
-  trang_thai: TrangThai;
-  onBam: () => void;
-  veKetQua: (du_lieu: string) => ReactNode;
+  nhan: string;
+  gia_tri: string;
+  hanh_dong?: React.ReactNode;
 }) {
-  const nd = noiDung(ma);
-  const dang_cho = trang_thai.kieu === "dang-cho";
-
   return (
-    <section className="quyen" aria-labelledby={`quyen-${ma}`}>
-      <h1 className="quyen__tieu-de" id={`quyen-${ma}`}>
-        {nd.tieu_de}
-      </h1>
-      <p className="quyen__vi-sao">{nd.vi_sao}</p>
-
-      <button
-        type="button"
-        className="quyen__nut"
-        onClick={onBam}
-        disabled={dang_cho}
-        aria-busy={dang_cho}
-      >
-        {/* Trạng thái "đang chờ" nói bằng CHỮ trên chính cái nút, không bằng riêng màu nền. */}
-        {dang_cho ? nd.dang_cho : nd.nut}
-      </button>
-
-      {/* `role="status"` để trình đọc màn hình đọc kết quả ra khi nó hiện. Không có nó thì người
-          khiếm thị bấm nút xong không biết có gì xảy ra hay không. */}
-      <div className="quyen__ket-qua" role="status">
-        {trang_thai.kieu === "xong" && veKetQua(trang_thai.du_lieu)}
-        {trang_thai.kieu === "tu-choi" && <p className="quyen__loi">{nd.tu_choi}</p>}
-        {trang_thai.kieu === "ngoai-zalo" && <p className="quyen__loi">{nd.ngoai_zalo}</p>}
-        {trang_thai.kieu === "khong-lay-duoc" && <p className="quyen__loi">{nd.khong_lay_duoc}</p>}
-      </div>
-
-      <p className="quyen__loi-hua">{CHI_HIEN_LEN_MAN_HINH}</p>
-    </section>
+    <li className="the-tt__dong">
+      <span className="the-tt__nhan">{nhan}</span>
+      <span className="the-tt__gia-tri">{gia_tri}</span>
+      {hanh_dong}
+    </li>
   );
 }
 
-/** Màn quyền có trạng thái: bấm → chờ → một trong bốn nhánh. Không giữ gì sau khi đóng app. */
-export function ManMotQuyen({
-  ma,
-  xin,
-  veKetQua,
+/**
+ * Tấm thiếp đã bóc tách, THUẦN — nhận cả hai hàm mở ngoài qua tham số.
+ *
+ * Thuần để `tinh-nang.test.tsx` dựng được nó với mọi hình dạng thiếp (đủ trường, thiếu trường,
+ * nhiều số điện thoại) mà không cần một chiếc điện thoại nào.
+ */
+export function TheDanhThiep({
+  thiep,
+  onGoi,
+  onMoLienKet,
 }: {
-  ma: MaQuyen;
-  xin: () => Promise<KetQuaXin<string>>;
-  veKetQua: (du_lieu: string) => ReactNode;
+  thiep: DanhThiep;
+  onGoi: (so: string) => void;
+  onMoLienKet: (duong_dan: string) => void;
 }) {
-  const [trang_thai, datTrangThai] = useState<TrangThai>({ kieu: "chua-goi" });
+  if (!thiepCoNoiDung(thiep)) return <p className="tn__loi">{DANH_THIEP.thiep_rong}</p>;
 
-  async function bam() {
+  return (
+    <article className="the-tt hien-len">
+      <h3 className="the-tt__tieu-de">{DANH_THIEP.tieu_de_ket_qua}</h3>
+      <ul className="the-tt__danh-sach">
+        {thiep.ho_ten !== "" && <DongThiep nhan={DANH_THIEP.nhan_ho_ten} gia_tri={thiep.ho_ten} />}
+        {thiep.chuc_danh !== "" && (
+          <DongThiep nhan={DANH_THIEP.nhan_chuc_danh} gia_tri={thiep.chuc_danh} />
+        )}
+        {thiep.to_chuc !== "" && <DongThiep nhan={DANH_THIEP.nhan_to_chuc} gia_tri={thiep.to_chuc} />}
+
+        {thiep.dien_thoai.map((so) => (
+          <DongThiep
+            key={`tel-${so}`}
+            nhan={DANH_THIEP.nhan_dien_thoai}
+            gia_tri={so}
+            hanh_dong={
+              <button type="button" className="tn-hanh-dong" onClick={() => onGoi(so)}>
+                {DANH_THIEP.nut_goi}
+              </button>
+            }
+          />
+        ))}
+
+        {thiep.email.map((dia_chi) => (
+          <DongThiep
+            key={`mail-${dia_chi}`}
+            nhan={DANH_THIEP.nhan_email}
+            gia_tri={dia_chi}
+            hanh_dong={
+              <a className="tn-hanh-dong" href={`mailto:${dia_chi}`}>
+                {DANH_THIEP.nut_email}
+              </a>
+            }
+          />
+        ))}
+
+        {thiep.trang_web.map((duong_dan) => (
+          <DongThiep
+            key={`url-${duong_dan}`}
+            nhan={DANH_THIEP.nhan_trang_web}
+            gia_tri={duong_dan}
+            hanh_dong={
+              <button
+                type="button"
+                className="tn-hanh-dong"
+                onClick={() => onMoLienKet(duong_dan)}
+              >
+                {DANH_THIEP.nut_mo_lien_ket}
+              </button>
+            }
+          />
+        ))}
+      </ul>
+    </article>
+  );
+}
+
+/**
+ * Kết quả một lần quét, THUẦN: ba nhánh của `docMaQR` cộng nhánh mã rỗng.
+ *
+ * Mã không phải danh thiếp vẫn được hiện NGUYÊN VĂN. Người vừa quét cần biết mã ấy ghi gì —
+ * giấu nó đi vì "không đúng định dạng" là biến một tính năng thành một cánh cửa đóng.
+ */
+export function KetQuaQuet({
+  noi_dung_qr,
+  onGoi,
+  onMoLienKet,
+}: {
+  noi_dung_qr: string;
+  onGoi: (so: string) => void;
+  onMoLienKet: (duong_dan: string) => void;
+}) {
+  const doc = docMaQR(noi_dung_qr);
+
+  if (doc.loai === "rong") return <p className="tn__loi">{DANH_THIEP.ma_rong}</p>;
+
+  if (doc.loai === "danh-thiep")
+    return (
+      <>
+        <TheDanhThiep thiep={doc} onGoi={onGoi} onMoLienKet={onMoLienKet} />
+        <p className="tn__rieng-tu">{DANH_THIEP.rieng_tu}</p>
+      </>
+    );
+
+  if (doc.loai === "lien-ket")
+    return (
+      <article className="the-tt hien-len">
+        <h3 className="the-tt__tieu-de">{DANH_THIEP.tieu_de_lien_ket}</h3>
+        <p className="the-tt__tho">{doc.duong_dan}</p>
+        <button
+          type="button"
+          className="tn-hanh-dong"
+          onClick={() => onMoLienKet(doc.duong_dan)}
+        >
+          {DANH_THIEP.nut_mo_lien_ket}
+        </button>
+      </article>
+    );
+
+  return (
+    <article className="the-tt hien-len">
+      <h3 className="the-tt__tieu-de">{DANH_THIEP.tieu_de_van_ban}</h3>
+      <p className="the-tt__nhan-tho">{DANH_THIEP.nguyen_van}</p>
+      <p className="the-tt__tho">{doc.noi_dung}</p>
+    </article>
+  );
+}
+
+/** Màn quét danh thiếp — một tab của ứng dụng. */
+export function ManDanhThiep() {
+  const [trang_thai, datTrangThai] = useState<TrangThai>({ kieu: "chua-goi" });
+  const [khong_mo_duoc, datKhongMoDuoc] = useState(false);
+
+  async function quet() {
+    datKhongMoDuoc(false);
     datTrangThai({ kieu: "dang-cho" });
-    // `xin` không bao giờ ném — mọi đường đã quy về bốn nhánh trong `zalo-api.ts`. Không có
-    // `catch` ở đây vì một `catch` thừa sẽ che mất lỗi lập trình thật của chính màn này.
-    datTrangThai(await xin());
+    datTrangThai(await quetMaQR());
+  }
+
+  /** Mở ngoài (gọi điện, mở trang) chỉ có hai kết cục đáng nói: được, hoặc chưa được. */
+  async function moNgoai(chay: () => Promise<{ kieu: string }>) {
+    const ket_qua = await chay();
+    datKhongMoDuoc(ket_qua.kieu !== "xong");
   }
 
   return (
-    <ManQuyenThuan ma={ma} trang_thai={trang_thai} onBam={() => void bam()} veKetQua={veKetQua} />
-  );
-}
-
-/** Kết quả của hai màn token: độ dài, vài ký tự đầu, và vì sao màn hình này không có gì để che. */
-export function KetQuaToken({ ma, token }: { ma: "so-dien-thoai" | "vi-tri"; token: string }) {
-  if (token === "") return <p className="quyen__loi">{MA_RONG}</p>;
-  return (
-    <>
-      <p className="quyen__xong">Đã nhận được mã (token) từ Zalo.</p>
-      <ul className="quyen__do">
-        <li>Độ dài mã: {token.length} ký tự</li>
-        <li>Vài ký tự đầu: {cheToken(token)}</li>
-      </ul>
-      <p className="quyen__giai-thich">{TOKEN_KHONG_CHUA_GI[ma]}</p>
-    </>
-  );
-}
-
-/**
- * Kết quả màn quét QR — API DUY NHẤT ở đây trả về dữ liệu THẬT, không phải token.
- *
- * Nội dung ấy có thể là bất cứ thứ gì, kể cả dữ liệu cá nhân của người khác. Hiện lên màn hình
- * là hết: không `console.log`, không lưu, không gửi (xem `zalo-api.ts`).
- */
-export function KetQuaQR({ noi_dung_qr }: { noi_dung_qr: string }) {
-  if (noi_dung_qr === "") return <p className="quyen__loi">{QR_RONG}</p>;
-  return (
-    <>
-      <p className="quyen__xong">Nội dung quét được:</p>
-      <p className="quyen__qr">{noi_dung_qr}</p>
-    </>
-  );
-}
-
-export function ManSoDienThoai() {
-  return (
-    <ManMotQuyen
-      ma="so-dien-thoai"
-      xin={xinTokenSoDienThoai}
-      veKetQua={(token) => <KetQuaToken ma="so-dien-thoai" token={token} />}
-    />
-  );
-}
-
-export function ManViTri() {
-  return (
-    <ManMotQuyen
-      ma="vi-tri"
-      xin={xinTokenViTri}
-      veKetQua={(token) => <KetQuaToken ma="vi-tri" token={token} />}
-    />
-  );
-}
-
-export function ManQuetQR() {
-  return (
-    <ManMotQuyen
-      ma="quet-qr"
-      xin={quetMaQR}
-      veKetQua={(noi_dung_qr) => <KetQuaQR noi_dung_qr={noi_dung_qr} />}
-    />
-  );
-}
-
-const MAN: Readonly<Record<MaQuyen, () => ReactElement>> = {
-  "so-dien-thoai": ManSoDienThoai,
-  "vi-tri": ManViTri,
-  "quet-qr": ManQuetQR,
-};
-
-/**
- * Khu vực ba màn quyền — một tab của app, và MỘT màn hiện tại một thời điểm.
- *
- * Ba màn xếp chồng trên một trang thì người duyệt phải cuộn qua ba khối giống nhau để tìm nút
- * mình cần, và mỗi màn mất đi thứ đắt nhất của nó: một việc, nói rõ một lý do
- * (`skills/accessibility-elderly` #4). Đổi màn thì màn cũ bị gỡ, nên kết quả cũ không nằm lại
- * dưới một tiêu đề mới.
- */
-export function KhuQuyen() {
-  const [dang_xem, datDangXem] = useState<MaQuyen>("so-dien-thoai");
-  const ManDangXem = MAN[dang_xem];
-
-  return (
-    <div className="quyen-khu">
-      <p className="quyen-khu__dan">{DAN_NHAP_QUYEN}</p>
-
-      <nav className="quyen-khu__chon" aria-label="Chọn quyền để xem">
-        {NOI_DUNG_QUYEN.map((mot) => (
-          <button
-            key={mot.ma}
-            type="button"
-            className="quyen-khu__nut"
-            // Trạng thái "đang xem" nói bằng `aria-pressed` chứ không bằng riêng màu nền
-            // (README §Non-negotiables #6).
-            aria-pressed={mot.ma === dang_xem}
-            onClick={() => datDangXem(mot.ma)}
-          >
-            {mot.nhan_chon}
+    <KhungTinhNang
+      ma="danh-thiep"
+      trang_thai={trang_thai}
+      onBam={() => void quet()}
+      glyph={<NamecardGlyph className="tn__glyph" />}
+      dan_nhap={DANH_THIEP.dan_nhap}
+      veKetQua={(noi_dung_qr) => (
+        <>
+          <KetQuaQuet
+            noi_dung_qr={noi_dung_qr}
+            onGoi={(so) => void moNgoai(() => moCuocGoi(so))}
+            onMoLienKet={(duong_dan) => void moNgoai(() => moTrangWeb(duong_dan))}
+          />
+          {khong_mo_duoc && <p className="tn__loi">{LOI_MO_NGOAI}</p>}
+          <button type="button" className="tn__nut-phu" onClick={() => void quet()}>
+            {DANH_THIEP.nut_quet_lai}
           </button>
-        ))}
-      </nav>
-
-      <ManDangXem />
-    </div>
+        </>
+      )}
+    />
   );
 }

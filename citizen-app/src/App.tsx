@@ -5,6 +5,7 @@ import {
   ChonXaScreen,
   CO_LOP_KHAM_PHA,
   GoiYXaScreen,
+  NHAN_KHAM_PHA,
   phanGiaiGoiY,
   TrangXaScreen,
   type XaDemo,
@@ -67,14 +68,20 @@ export function KhungApp(props: {
             {/* MỘT Ô, HAI CHỦ SỞ HỮU. Chưa chọn xã thì đây là đơn vị phát hành ứng dụng — thứ
                 Zalo đã duyệt. Chọn xã rồi thì đây là xã, trên mọi màn hình, không có ngoại lệ. */}
             <p className="app-header__owner">{props.xaDaChon ? props.xaDaChon.ten : COMPANY.name}</p>
-            <p className="app-header__screen">{props.khamPha ? "Chọn xã" : man.headerTitle}</p>
+            {/* HAI NHÃN CỦA LỚP KHÁM PHÁ ĐỌC TỪ `bien-the/kham-pha`, KHÔNG VIẾT THẲNG Ở ĐÂY.
+                `App.tsx` không nằm sau alias, nên một chuỗi viết thẳng trong tệp này đi vào cả
+                bản `goc` — bản nộp — kể cả khi nhánh vẽ nó không bao giờ chạy. Xem chú thích
+                của `NHAN_KHAM_PHA` trong `features/kham-pha/index.ts`. */}
+            <p className="app-header__screen">
+              {props.khamPha ? NHAN_KHAM_PHA.tieu_de_chon_xa : man.headerTitle}
+            </p>
           </div>
 
           {/* ĐỔI XÃ LÀ HÀNH ĐỘNG TƯỜNG MINH, KHÔNG BAO GIỜ TỰ ĐỘNG (ADR 0005). Nút chỉ có mặt
               khi đã có xã để đổi — trước đó nó sẽ là một nút không nói lên điều gì. */}
           {props.xaDaChon && (
             <button type="button" className="app-header__doi-xa" onClick={props.onDoiXa}>
-              Đổi xã
+              {NHAN_KHAM_PHA.nut_doi_xa}
             </button>
           )}
         </div>

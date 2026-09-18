@@ -15,7 +15,6 @@ import {
   SOLUTIONS,
   TECH_KEYWORDS,
 } from "./company-profile";
-import { CO_MAN_QUYEN } from "bien-the/quyen";
 
 import {
   DEFAULT_SCREEN_ID,
@@ -278,15 +277,16 @@ describe("screen registry", () => {
     expect(new Set(ids).size).toBe(4);
   });
 
-  it("sổ màn hình của bản dựng = bốn màn ấy, cộng tab quyền đúng khi biến thể có nó", () => {
-    // Sổ màn hình PHỤ THUỘC BIẾN THỂ (`screens.ts` đọc `bien-the/quyen`), nên ca này ghim quan
-    // hệ chứ không ghim một con số: ở bản `goc` là bốn, ở `quyen`/`day-du` là năm. Ghim cứng "4"
-    // thì hoặc test đỏ ở bản đầy đủ, hoặc — nếu ai đó sửa cho nó xanh — không còn gì nói rằng
-    // bản `goc` phải KHÔNG có tab thứ năm.
+  it("sổ màn hình là bốn màn ấy CỘNG tab tính năng, ở MỌI biến thể", () => {
+    // Không còn phụ thuộc biến thể: ba quyền nay thuộc về chính ứng dụng sản phẩm, nên tab
+    // "Danh thiếp" có mặt ở cả bản nộp lẫn bản demo. Ghim số 5 ở đây là ghim đúng một sự thật,
+    // và nó đỏ lên ngay nếu ai thêm tab thứ sáu mà quên đo lại bề rộng 320px
+    // (`accessibility.test.ts`).
     const ids = SCREENS.map((screen) => screen.id);
     expect(new Set(ids).size, "hai màn trùng id — một tab sẽ dẫn sang màn kia").toBe(ids.length);
-    expect(ids.slice(0, 4)).toEqual(MAN_GIOI_THIEU.map((screen) => screen.id));
-    expect(SCREENS).toHaveLength(CO_MAN_QUYEN ? 5 : 4);
+    expect(SCREENS).toHaveLength(5);
+    expect(ids).toContain("danh-thiep");
+    for (const man of MAN_GIOI_THIEU) expect(ids).toContain(man.id);
   });
 
   it("resolves every declared screen — a tab must never lead nowhere", () => {

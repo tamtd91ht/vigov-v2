@@ -1,72 +1,37 @@
 /**
- * CỬA DUY NHẤT vào ba màn quyền — cùng cơ chế, cùng lý do với `features/kham-pha/index.ts`.
+ * BỀ MẶT CỦA BA TÍNH NĂNG THẬT — quét danh thiếp · tìm văn phòng · đăng ký nhận tư vấn.
  *
- * VÌ SAO LỚP NÀY PHẢI BIẾN MẤT ĐƯỢC:
+ * VÌ SAO Ở ĐÂY KHÔNG CÒN MỘT CỬA `bien-the/…` NÀO:
  *
- *   Ba màn này nhập `zmp-sdk` — 256 kB thô / 64 kB gzip, và là cửa vào mọi API dữ liệu công dân
- *   của nền tảng. Biến thể `goc` (bản nộp tối thiểu) không được mang theo một byte nào của nó:
- *   không phải vì mã sai, mà vì một bản nộp nói *"app này không thu thập gì"* mà trong bundle có
- *   sẵn `getPhoneNumber` là một bản nộp tự mâu thuẫn.
+ *   Trước đây ba màn quyền là một biến thể bản dựng riêng (`quyen`), gỡ được bằng `resolve.alias`
+ *   vì chúng chỉ tồn tại để Zalo nhìn thấy ba lời gọi quyền. Nay ba quyền ấy thuộc về **chính
+ *   ứng dụng sản phẩm**: quét danh thiếp, tìm văn phòng, đăng ký tư vấn là những việc app này
+ *   làm, không phải ba màn trình diễn. Một biến thể để gỡ chúng đi sẽ là một biến thể gỡ mất
+ *   nửa ứng dụng — nên nó không còn, và ba tính năng được nhập thẳng.
  *
- *   Tree-shaking KHÔNG làm được việc đó (một `import` tĩnh có mặt là mô-đun vào bundle). Thứ làm
- *   được là `resolve.alias`: `bien-the/quyen` trỏ sang `index.rong.ts` ở bản `goc`.
- *
- * BA BIẾN THỂ, HAI CÂU TRẢ LỜI CHO CỬA NÀY (xem `vite.config.ts`):
- *
- *   | Biến thể | `bien-the/quyen` | Vì sao |
- *   |---|---|---|
- *   | `goc`    | `index.rong.ts` | Bản nộp tối thiểu — không xin quyền nào |
- *   | `quyen`  | `index.ts`      | **Bản nộp xin quyền** — Zalo phải THẤY chỗ dùng ba quyền |
- *   | `day-du` | `index.ts`      | Demo nội bộ |
- *
- * → README §"Ba biến thể bản dựng"
+ *   Hai cửa còn lại — `bien-the/kham-pha` và `bien-the/chan-doan` — mới là thứ phân biệt bản
+ *   `goc` (bản nộp) với bản `day-du` (demo nội bộ). Xem `vite.config.ts`.
  */
 import type { ComponentType } from "react";
 
-import type { MucChinhSach } from "../../content/chinh-sach-rieng-tu";
+import { ManDanhThiep } from "./ManDanhThiep";
 
-import { KhuQuyen } from "./ManQuyen";
-import { MUC_CHINH_SACH_QUYEN as MUC_QUYEN_MOT } from "./noi-dung";
-
-/**
- * Ba màn quyền có mặt trong bản dựng này hay không.
- *
- * `features/company-intro/screens.ts` đọc cờ này để thêm (hay không thêm) một tab. Bản rỗng trả
- * `false`, và khi ấy app đúng bằng bốn màn giới thiệu — không có tab thứ năm dẫn tới một màn
- * trống. Kiểu ghi rõ `boolean` chứ không để suy ra `true`: bản rỗng phải gán được vào cùng kiểu.
- */
-export const CO_MAN_QUYEN: boolean = true;
+export { DangKyTuVan, TimVanPhong } from "./LienHeTinhNang";
 
 /**
- * Tab của khu vực ba màn quyền.
+ * Tab "Danh thiếp".
  *
- * Nhãn nằm Ở ĐÂY chứ không ở `screens.ts`, và đó là chủ đích: `screens.ts` không nằm sau alias,
- * nên mọi chữ viết trong đó sẽ có mặt trong CẢ bản `goc`. Đặt nhãn sau cửa này thì bản `goc`
- * không mang theo một chữ nào của lớp quyền.
+ * Nhãn ngắn có chủ đích: thanh tab có năm tab, và trên máy rộng 320px mỗi tab chỉ còn khoảng
+ * 56px chữ. `screens.test.tsx` đo điều đó thay vì tin vào mắt.
  */
-export const MAN_QUYEN: {
-  id: "quyen";
+export const MAN_DANH_THIEP: {
+  id: "danh-thiep";
   tabLabel: string;
   headerTitle: string;
   component: ComponentType;
 } = {
-  id: "quyen",
-  tabLabel: "Quyền",
-  headerTitle: "Quyền ứng dụng cần",
-  component: KhuQuyen,
+  id: "danh-thiep",
+  tabLabel: "Danh thiếp",
+  headerTitle: "Quét danh thiếp",
+  component: ManDanhThiep,
 };
-
-/**
- * Mục "Ba quyền ứng dụng xin, và vì sao" của Chính sách quyền riêng tư.
- *
- * MỘT DANH SÁCH CHỨ KHÔNG PHẢI MỘT MỤC, để bản rỗng trả về `[]` — chính sách bản `goc` khi ấy
- * không có mục nào về quyền, thay vì có một mục rỗng đầu đề mà không có nội dung. Chỗ vẽ chỉ
- * việc nối vào giữa hai nửa danh sách chung; nó không cần biết biến thể nào đang dựng.
- */
-export const MUC_CHINH_SACH_QUYEN: readonly MucChinhSach[] = [MUC_QUYEN_MOT];
-
-/**
- * ĐÚNG BA CÁI TÊN ĐI QUA CỬA NÀY, và đó là chủ đích: cửa càng hẹp thì bản rỗng càng khó lệch.
- * Ba màn bên trong nhập thẳng lẫn nhau (cùng thư mục) và bộ test của chúng cũng vậy — chỉ mã
- * NGOÀI `src/features/quyen/` mới bắt buộc đi qua `bien-the/quyen`.
- */

@@ -16,6 +16,7 @@ import {
   SOLUTIONS,
   TECH_KEYWORDS,
 } from "../../content/company-profile";
+import { ManDanhThiep } from "../tinh-nang/ManDanhThiep";
 import { AboutScreen } from "./AboutScreen";
 import { ContactScreen } from "./ContactScreen";
 import { HomeScreen } from "./HomeScreen";
@@ -70,9 +71,16 @@ const listItems = (markup: string) =>
     .slice(1)
     .map((item) => `<li${item}`);
 
+/**
+ * MỌI màn của sổ màn hình, kể cả tab tính năng.
+ *
+ * Tab "Danh thiếp" nằm ở đây chứ không được miễn: những gì mọi màn khác nợ người đọc — một
+ * `<h1>`, glyph không bị đọc ra, không ô nhập, không dữ liệu cá nhân viết cứng — nó cũng nợ.
+ */
 const SCREEN_MARKUP = [
   { id: "home", markup: render(<HomeScreen />) },
   { id: "solutions", markup: render(<SolutionsScreen />) },
+  { id: "danh-thiep", markup: render(<ManDanhThiep />) },
   { id: "about", markup: render(<AboutScreen />) },
   { id: "contact", markup: render(<ContactScreen />) },
 ] as const;

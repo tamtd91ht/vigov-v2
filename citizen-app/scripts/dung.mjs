@@ -3,8 +3,7 @@
  *
  * | Biến thể | Nội dung | Dùng để |
  * |---|---|---|
- * | `goc` | Chỉ app giới thiệu bốn màn | Bản nộp tối thiểu |
- * | `quyen` | Thêm ba màn quyền (số điện thoại · vị trí · quét QR) | Bản nộp XIN QUYỀN |
+ * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm ba tính năng dùng ba quyền nền tảng | BẢN NỘP |
  * | `day-du` | Thêm lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Thử nghiệm, demo |
  *
  * VÌ SAO PHẢI LÀ MỘT TỆP SCRIPT CHỨ KHÔNG PHẢI `VIGOV_BIEN_THE=goc vite build` TRONG package.json:
@@ -20,13 +19,11 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const BIEN_THE = ["goc", "quyen", "day-du"];
+export const BIEN_THE = ["goc", "day-du"];
 
 export const MO_TA_BIEN_THE = {
-  goc: "chỉ app giới thiệu bốn màn — không lớp khám phá, không danh mục xã, không bảng chẩn đoán",
-  quyen:
-    "app giới thiệu + ba màn quyền (số điện thoại · vị trí · quét QR) — BẢN NỘP XIN QUYỀN, không danh mục xã, không bảng chẩn đoán",
-  "day-du": "app giới thiệu + ba màn quyền + lớp khám phá + danh mục xã mẫu + bảng chẩn đoán",
+  goc: "ứng dụng sản phẩm đầy đủ (quét danh thiếp · tìm văn phòng · đăng ký nhận tư vấn) — BẢN NỘP, không lớp khám phá, không danh mục xã, không bảng chẩn đoán",
+  "day-du": "bản gốc + lớp khám phá + danh mục xã mẫu + bảng chẩn đoán",
 };
 
 /**

@@ -1,20 +1,29 @@
-import { COMPANY, CONTACT, OFFICES } from "../../content/company-profile";
+import { COMPANY, CONTACT } from "../../content/company-profile";
+import { DangKyTuVan, TimVanPhong } from "../tinh-nang/index";
+
 import { ChinhSachRiengTu } from "./ChinhSachRiengTu";
-import { GlobeGlyph, MailGlyph, NetworkBackdrop, PhoneGlyph, PinGlyph } from "./icons";
+import { GlobeGlyph, MailGlyph, NetworkBackdrop, PhoneGlyph } from "./icons";
 
 /**
- * Screen 4 — contact points.
+ * Màn Liên hệ — và là nơi hai trong ba tính năng thật của ứng dụng sống.
  *
- * Plain `tel:` / `mailto:` / `https:` anchors, deliberately. Phase 1 collects nothing: there
- * is no form, no `getPhoneNumber`, no OTP, no request to any backend. That is what makes rule
- * 3 (personal data) hold by construction here rather than by argument, and it is what keeps
- * the Zalo review simple — an app that asks for nothing has nothing to justify.
+ * THỨ TỰ TRÊN MÀN LÀ THỨ TỰ CHẠY ĐƯỢC NGAY → CẦN THÊM MỘT BƯỚC:
  *
- * The three anchors keep `.action`, whose `min-height: var(--tap-min)` is pinned by
- * accessibility.test.ts: they are the only tappable things on this screen besides the tab bar,
- * and a target under 44px is one an unsteady hand cannot hit.
+ *   1. Hotline · email · website. Ba thứ này chạy được ngay bây giờ, không cần quyền nào, không
+ *      cần máy chủ nào. Người muốn nói chuyện với công ty phải gặp chúng trước tiên.
+ *   2. Đăng ký nhận tư vấn (`getPhoneNumber`) — nhận được mã, và nói thẳng rằng bản này chưa gửi
+ *      yêu cầu đi đâu, kèm lại hai đường liên hệ chạy được ngay.
+ *   3. Tìm văn phòng gần bạn (`getLocation`) — ba văn phòng và nút chỉ đường luôn hiện, chia sẻ
+ *      vị trí hay không cũng vậy.
  *
- * The hotline is ViHAT Group's published corporate number, not an individual's.
+ *   Đặt hai tính năng cần quyền lên trước ba đường liên hệ chạy được là bắt một khách hàng đang
+ *   cần gọi phải đi qua hai lời xin quyền trước đã. Không ai làm thế với một khách hàng.
+ *
+ * Ba neo đầu giữ lớp `.action`, có `min-height: var(--tap-min)` được `accessibility.test.ts`
+ * ghim: một đích chạm dưới 44px là đích một bàn tay run không bấm trúng.
+ *
+ * Hotline và email là đầu mối doanh nghiệp đã công bố của ViHAT Group, không phải của một cá
+ * nhân nào — nên chúng là dữ liệu doanh nghiệp, không phải dữ liệu cá nhân.
  */
 export function ContactScreen() {
   return (
@@ -27,7 +36,7 @@ export function ContactScreen() {
         </div>
       </section>
 
-      <a className="action action--primary" href={`tel:${CONTACT.hotlineDialable}`}>
+      <a className="action action--primary hien-len" href={`tel:${CONTACT.hotlineDialable}`}>
         <span className="tile" aria-hidden="true">
           <PhoneGlyph className="tile__glyph" />
         </span>
@@ -37,7 +46,7 @@ export function ContactScreen() {
         </span>
       </a>
 
-      <a className="action" href={`mailto:${CONTACT.email}`}>
+      <a className="action hien-len hien-len--2" href={`mailto:${CONTACT.email}`}>
         <span className="tile tile--soft" aria-hidden="true">
           <MailGlyph className="tile__glyph" />
         </span>
@@ -47,7 +56,7 @@ export function ContactScreen() {
         </span>
       </a>
 
-      <a className="action" href={COMPANY.website} target="_blank" rel="noopener noreferrer">
+      <a className="action hien-len hien-len--3" href={COMPANY.website} target="_blank" rel="noopener noreferrer">
         <span className="tile tile--soft" aria-hidden="true">
           <GlobeGlyph className="tile__glyph" />
         </span>
@@ -57,23 +66,8 @@ export function ContactScreen() {
         </span>
       </a>
 
-      <h2 className="section-title">
-        <span className="section-title__mark" aria-hidden="true">
-          <PinGlyph />
-        </span>
-        Địa chỉ văn phòng
-      </h2>
-      <ul className="office-list">
-        {OFFICES.map((office) => (
-          <li className="office" key={office.name}>
-            <PinGlyph className="office__glyph" />
-            <span className="office__text">
-              <strong className="office__name">{office.name}</strong>
-              <span className="office__address">{office.address}</span>
-            </span>
-          </li>
-        ))}
-      </ul>
+      <DangKyTuVan />
+      <TimVanPhong />
 
       {/* Chính sách quyền riêng tư nằm CUỐI màn Liên hệ, không phải một tab riêng: đây là chỗ
           người tìm thông tin pháp lý đã đứng sẵn, và là chỗ người duyệt Zalo tìm nó. */}

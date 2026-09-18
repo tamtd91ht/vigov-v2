@@ -3,18 +3,17 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 /**
- * BA BIẾN THỂ BẢN DỰNG — `VIGOV_BIEN_THE`.
+ * HAI BIẾN THỂ BẢN DỰNG — `VIGOV_BIEN_THE`.
  *
  * | Biến thể | Nội dung | Dùng để |
  * |---|---|---|
- * | `goc` | **Chỉ** app giới thiệu bốn màn | Bản nộp tối thiểu |
- * | `quyen` | Thêm ba màn quyền (`zmp-sdk`) | **Bản nộp XIN QUYỀN** |
- * | `day-du` (mặc định) | Thêm lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Thử nghiệm, demo |
+ * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm ba tính năng dùng ba quyền nền tảng | **BẢN NỘP** |
+ * | `day-du` (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Thử nghiệm, demo |
  *
- * VÌ SAO BIẾN THỂ `quyen` TỒN TẠI: Zalo chỉ cấp `getPhoneNumber` · `getLocation` · `scanQRCode`
- * khi bản nộp CÓ chỗ dùng chúng nhìn thấy được. Nhưng bản nộp ấy vẫn không được mang theo tám
- * tên đơn vị hành chính đặt ra, số điện thoại mẫu hay bảng chẩn đoán — nên nó là một biến thể
- * riêng, không phải `day-du`.
+ * VÌ SAO BIẾN THỂ `quyen` KHÔNG CÒN: nó từng tồn tại vì ba màn quyền là một lớp trình diễn thêm
+ * vào một app giới thiệu tĩnh — gỡ được, và bản nộp tối thiểu thì gỡ nó đi. Nay ba quyền ấy
+ * thuộc về chính ứng dụng sản phẩm (quét danh thiếp · tìm văn phòng · đăng ký nhận tư vấn), nên
+ * `quyen` trùng hoàn toàn với `goc`. Hai biến thể nói cùng một thứ là hai biến thể sẽ lệch nhau.
  *
  * VÌ SAO TÁCH Ở TẦNG DỰNG CHỨ KHÔNG PHẢI MỘT CỜ LÚC CHẠY:
  *
@@ -34,7 +33,7 @@ import { defineConfig } from "vite";
  * khám phá và bảng chẩn đoán — nên một cái tên nói về riêng lớp khám phá là một cái tên nói
  * thiếu, và người sau sẽ thêm thứ thứ ba vào sau một cái tên không mô tả nó.
  */
-const BIEN_THE_HOP_LE = ["goc", "quyen", "day-du"] as const;
+const BIEN_THE_HOP_LE = ["goc", "day-du"] as const;
 type BienThe = (typeof BIEN_THE_HOP_LE)[number];
 
 /**
@@ -58,28 +57,21 @@ function docBienThe(): BienThe {
 const duongDan = (tuong_doi: string) => fileURLToPath(new URL(tuong_doi, import.meta.url));
 
 /**
- * Ba cái tên này là ba cửa duy nhất vào ba phần gỡ được. Tệp ngoài chỉ được nhập qua chúng —
+ * Hai cái tên này là hai cửa duy nhất vào hai phần gỡ được. Tệp ngoài chỉ được nhập qua chúng —
  * nhập thẳng một tệp bên trong là đi vòng qua alias, và bản rút gọn khi ấy vẫn dựng xanh trong
  * khi mang theo đúng thứ đáng lẽ không có. `bien-the.test.ts` là thứ canh điều đó.
  *
- * HAI NGƯỠNG KHÁC NHAU, KHÔNG PHẢI MỘT:
- *
- *   `quyen` là một bản NỘP, nên nó dừng ở đúng ba màn quyền: không tên đơn vị hành chính đặt ra,
- *   không số điện thoại mẫu, không bảng chẩn đoán. `day-du` là bản demo nội bộ và có tất cả.
+ * Bản `goc` là BẢN NỘP: ứng dụng sản phẩm đủ ba tính năng, nhưng không tên đơn vị hành chính đặt
+ * ra, không số điện thoại mẫu, không bảng chẩn đoán. `day-du` là bản demo nội bộ và có tất cả.
  */
 function aliasTheoBienThe(): Record<string, string> {
-  const bien_the = docBienThe();
-  const co_kham_pha = bien_the === "day-du";
-  const co_quyen = bien_the !== "goc";
+  const co_kham_pha = docBienThe() === "day-du";
   return {
     "bien-the/kham-pha": duongDan(
       co_kham_pha ? "./src/features/kham-pha/index.ts" : "./src/features/kham-pha/index.rong.ts",
     ),
     "bien-the/chan-doan": duongDan(
       co_kham_pha ? "./src/features/diagnostics/index.ts" : "./src/features/diagnostics/index.rong.ts",
-    ),
-    "bien-the/quyen": duongDan(
-      co_quyen ? "./src/features/quyen/index.ts" : "./src/features/quyen/index.rong.ts",
     ),
   };
 }

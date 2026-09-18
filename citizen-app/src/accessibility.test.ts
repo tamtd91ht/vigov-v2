@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import indexHtml from "../index.html?raw";
+import { SCREENS } from "./features/company-intro/screens";
 
 /**
  * The stylesheet is read from disk, not imported: vitest resolves a CSS import to an empty
@@ -85,10 +86,13 @@ describe("text and targets stay usable for an ageing eye", () => {
     // bấm chúng là người vừa đứng dậy khỏi ghế chờ ở trụ sở xã.
     expect(styles).toMatch(/\.dich-vu__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
 
-    // Ba màn quyền: nút xin quyền, và ba nút chọn màn. Bấm trượt ở đây thì hoặc mở nhầm máy ảnh,
-    // hoặc — tệ hơn — bấm vào một nút xin dữ liệu mà người dùng không định bấm.
-    expect(styles).toMatch(/\.quyen__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
-    expect(styles).toMatch(/\.quyen-khu__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+    // Ba tính năng: nút xin quyền, nút "Quét mã khác", và nút hành động dùng chung (Gọi · Gửi
+    // email · Mở liên kết · Chỉ đường). Bấm trượt ở đây thì hoặc mở nhầm máy ảnh, hoặc — tệ hơn —
+    // bấm vào một nút xin dữ liệu mà người dùng không định bấm; ở thẻ danh thiếp thì là gọi nhầm
+    // số của một người thật.
+    expect(styles).toMatch(/\.tn__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+    expect(styles).toMatch(/\.tn__nut-phu\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+    expect(styles).toMatch(/\.tn-hanh-dong\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
   });
 
   it("animates nothing outside a reduced-motion guard", () => {
@@ -221,26 +225,37 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["the under-construction note a tapped service opens", token("ink"), token("surface")],
     ["the demo-data footnote on the commune page", token("ink-muted"), token("surface-alt")],
 
-    // BA MÀN QUYỀN (biến thể `quyen` — bản nộp xin quyền). Liệt kê riêng vì cùng lý do như trên:
-    // một cặp màu chỉ được bảo vệ khi có tên nó trong danh sách này. Đây là chữ người dân đọc
-    // TRƯỚC KHI quyết định có chia sẻ số điện thoại hay vị trí của mình hay không — đọc không ra
-    // thì họ hoặc bấm bừa, hoặc bỏ đi; cả hai đều tệ hơn một chữ to.
-    ["the permission screen title", token("navy"), token("surface-alt")],
-    ["the permission screen title over the blue wash", token("navy"), token("surface-tint")],
-    ["the reason the app needs this permission", token("ink"), token("surface-alt")],
-    ["the reason, over the blue wash", token("ink"), token("surface-tint")],
+    // BA TÍNH NĂNG THẬT. Liệt kê riêng vì cùng lý do như trên: một cặp màu chỉ được bảo vệ khi có
+    // tên nó trong danh sách này. Đây là chữ người dùng đọc TRƯỚC KHI quyết định có chia sẻ số
+    // điện thoại hay vị trí của mình hay không — đọc không ra thì họ hoặc bấm bừa, hoặc bỏ đi;
+    // cả hai đều tệ hơn một chữ to.
+    ["the feature title on its card", token("navy"), token("surface")],
+    ["the feature lead line", token("ink-muted"), token("surface")],
+    ["the reason the app needs this permission", token("ink"), token("surface")],
     ["the permission button label", "#ffffff", token("navy")],
     ["the permission button label at its blue glow", "#ffffff", token("panel-glow-blue")],
     ["the permission button label while waiting", "#ffffff", token("navy-deep")],
-    ["a permission picker button at rest", token("ink"), token("surface")],
-    ["the permission picker button being viewed", "#ffffff", token("navy")],
+    ["the scan-again button label", token("navy"), token("surface")],
+    ["a call / mail / directions button label", token("navy"), token("surface")],
     ["the 'token received' line", token("navy"), token("surface")],
-    ["the measured token figures", token("ink"), token("surface-alt")],
-    ["the note saying the real data never reaches the device", token("ink"), token("surface")],
-    ["the sentence shown when the citizen declines", token("ink"), token("surface")],
-    ["the scanned QR content", token("ink"), token("surface")],
-    ["the promise that nothing leaves this screen", token("ink-muted"), token("surface-alt")],
-    ["the promise, over the blue wash", token("ink-muted"), token("surface-tint")],
+    ["the measured token figures", token("ink"), token("surface")],
+    ["the note saying the real data never reaches the device", token("ink"), token("surface-alt")],
+    ["the sentence naming what this build cannot do yet", token("ink"), token("surface-alt")],
+    ["the sentence shown when the user declines", token("ink"), token("surface-alt")],
+    ["the reminder that a scanned card is someone else's data", token("ink-muted"), token("surface")],
+    ["the promise that nothing leaves this screen", token("ink-muted"), token("surface")],
+
+    // THẺ DANH THIẾP quét được. Đây là tên, số điện thoại và email của một người thật, đọc trong
+    // mười giây sau khi bắt tay ở một hội thảo — đọc nhầm một ký tự là gọi nhầm một người.
+    ["the scanned card title", token("navy"), token("surface-alt")],
+    ["a field label on the scanned card", token("ink-muted"), token("surface-alt")],
+    ["a field value on the scanned card", token("ink"), token("surface-alt")],
+    ["the verbatim content of a non-vCard code", token("ink"), token("surface")],
+
+    // BA VĂN PHÒNG. Địa chỉ là thứ người ta đọc rồi gõ vào bản đồ, hoặc đọc cho tài xế nghe.
+    ["an office name", token("navy"), token("surface")],
+    ["an office address", token("ink-muted"), token("surface")],
+    ["an office address over the blue wash", token("ink-muted"), token("surface-tint")],
   ];
 
   for (const [what, foreground, background] of pairs) {
@@ -251,4 +266,67 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
       ).toBeGreaterThanOrEqual(4.5);
     });
   }
+});
+
+/**
+ * THANH TAB TRÊN MÁY HẸP NHẤT CÒN BÁN ĐƯỢC — 320px.
+ *
+ * VÌ SAO ĐÂY LÀ MỘT PHÉP KIỂM CHỨ KHÔNG PHẢI MỘT CHÚ THÍCH:
+ *
+ *   Thanh tab nay có NĂM tab, không còn bốn. Trên một máy 320px mỗi tab chỉ còn khoảng 56px
+ *   chữ, và một nhãn dài hơn thế thì hoặc bị cắt mất đuôi, hoặc đẩy thanh tab vỡ hàng. Người
+ *   gặp chuyện đó là người dùng một chiếc điện thoại cũ — đúng người ít có khả năng báo lại nhất.
+ *
+ *   `screens.ts` vẫn giữ một dòng chú thích về bề rộng 320px từ khi còn bốn tab. Một chú thích
+ *   không đếm được gì: thêm tab thứ năm là đủ làm nó sai mà không có gì đỏ lên. Nên nó thành một
+ *   phép đo.
+ *
+ * ĐO THEO TỪ, KHÔNG THEO CẢ NHÃN — và đó là phép đo đúng, không phải phép đo dễ:
+ *
+ *   `.tabbar__item` không đặt `white-space: nowrap`, nên "Trang chủ" xuống hai dòng một cách
+ *   bình thường và không tràn đi đâu. Thứ KHÔNG xuống dòng được là một TỪ. Nên ngưỡng đặt ở từ
+ *   dài nhất của mỗi nhãn, và có một ca riêng khẳng định `nowrap` chưa bị ai thêm vào.
+ *
+ * HỆ SỐ 0,62em LÀ CẬN TRÊN, CÓ CHỦ ĐÍCH: chữ thường của Inter rộng khoảng 0,5em, chữ hoa khoảng
+ * 0,7em, và tab đang xem còn in đậm. Đo bằng cận trên thì phép kiểm sai về phía AN TOÀN — nó
+ * kêu sớm hơn thực tế, chứ không im lặng cho tới lúc một người nhìn thấy nhãn mất đuôi.
+ */
+describe("thanh tab không tràn trên máy 320px", () => {
+  const BE_RONG_MAY = 320;
+  const RONG_MOI_EM = 0.62;
+
+  /** Đệm ngang của một tab, đọc thẳng từ `.tabbar__item { padding: 10px 4px; }`. */
+  const demNgang = (): number => {
+    const luat = /\.tabbar__item\s*\{([^}]*)\}/.exec(styles);
+    expect(luat, "stylesheet no longer declares .tabbar__item").not.toBeNull();
+    const padding = /padding:\s*([^;]+);/.exec(luat![1]!)?.[1]?.trim().split(/\s+/) ?? [];
+    expect(padding.length, ".tabbar__item no longer declares a two-value padding").toBe(2);
+    return Number.parseFloat(padding[1]!) * 2;
+  };
+
+  it("mỗi từ của mỗi nhãn tab lọt trong phần bề rộng của tab ấy", () => {
+    // Cỡ chữ của tab là `--text-small`, thứ đã được ghim ≥16px ở trên. Đọc lại từ chính CSS chứ
+    // không viết cứng số 16: đổi token mà phép kiểm này vẫn dùng số cũ là một phép kiểm nói dối.
+    expect(styles).toMatch(/\.tabbar__item\s*\{[^}]*font-size:\s*var\(--text-small\)/);
+
+    const co_chu = pixels("text-small");
+    const cho_chu = BE_RONG_MAY / SCREENS.length - demNgang();
+    expect(SCREENS.length, "sổ màn hình rỗng — phép đo này sẽ xanh vì lý do sai").toBeGreaterThan(0);
+
+    for (const man of SCREENS) {
+      for (const tu of man.tabLabel.split(/\s+/)) {
+        const rong = tu.length * co_chu * RONG_MOI_EM;
+        expect(
+          rong,
+          `nhãn tab "${man.tabLabel}": từ "${tu}" cần ~${rong.toFixed(0)}px, tab chỉ còn ` +
+            `${cho_chu.toFixed(0)}px trên máy ${BE_RONG_MAY}px. Rút ngắn nhãn, đừng thu nhỏ chữ.`,
+        ).toBeLessThanOrEqual(cho_chu);
+      }
+    }
+  });
+
+  it("không ai đặt `white-space: nowrap` lên tab — đó là thứ biến xuống dòng thành tràn", () => {
+    const luat = /\.tabbar__item\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
+    expect(luat).not.toMatch(/white-space\s*:\s*nowrap/);
+  });
 });

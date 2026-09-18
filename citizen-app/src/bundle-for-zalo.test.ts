@@ -1,37 +1,36 @@
 /// <reference types="vite/client" />
 import { beforeAll, describe, expect, it } from "vitest";
 
-import {
-  CAU_DAU,
-  MUC_SAU_QUYEN,
-  MUC_TRUOC_QUYEN,
-  TIEU_DE_CHINH_SACH,
-} from "./content/chinh-sach-rieng-tu";
-// Nhập THẲNG bản đầy đủ, không qua `bien-the/quyen`: test phải biết mục ấy TRÔNG NHƯ THẾ NÀO
-// để khẳng định bản `goc` không có nó. Đi qua alias thì lúc chạy test nó là bản rỗng, và ca
-// "bản gốc không chứa" sẽ xanh vì danh sách rỗng — xanh mà không kiểm gì cả.
-import { MUC_CHINH_SACH_QUYEN as MUC_CHINH_SACH_QUYEN_DAY_DU } from "./features/quyen/index";
 import { build } from "vite";
 
 import appConfigRaw from "../app-config.json?raw";
 import indexHtml from "../index.html?raw";
+import {
+  CAU_DAU,
+  MUC_CHINH_SACH,
+  PHIEN_BAN_CHINH_SACH,
+  TIEU_DE_CHINH_SACH,
+} from "./content/chinh-sach-rieng-tu";
 import { BRAND_NAVY, COMPANY } from "./content/company-profile";
 import { MAN_GIOI_THIEU } from "./features/company-intro/screens";
-import { MAN_QUYEN } from "./features/quyen/index";
+import { MAN_DANH_THIEP } from "./features/tinh-nang/index";
 import {
   CHI_HIEN_LEN_MAN_HINH,
-  DAN_NHAP_QUYEN,
+  DANH_THIEP,
+  LOI_MO_NGOAI,
   MA_RONG,
-  NOI_DUNG_QUYEN,
-  QR_RONG,
+  NOI_DUNG_TINH_NANG,
   TOKEN_KHONG_CHUA_GI,
-} from "./features/quyen/noi-dung";
+  TU_VAN,
+  VAN_PHONG,
+} from "./features/tinh-nang/noi-dung";
 import {
   DEMO_DANH_MUC_XA,
   DEMO_GHI_CHU,
   DEMO_GHI_CHU_TRANG_XA,
   DEMO_TEN_DICH_VU,
 } from "./features/kham-pha/demo-danh-muc-xa";
+import { NHAN_KHAM_PHA } from "./features/kham-pha/index";
 import { LOI_NHAN, nhanNguon } from "./features/kham-pha/goi-y";
 import { LOI_NHAN_DANG_LAM } from "./features/kham-pha/TrangXaScreen";
 
@@ -70,7 +69,7 @@ declare const process: { env: Record<string, string | undefined> };
  * một cấu hình riêng dựng ra cho test. Một phép kiểm dựng bằng cấu hình của chính nó thì xanh mà
  * không nói gì về thứ sẽ được đẩy lên Zalo.
  */
-async function dungBienThe(bien_the: "goc" | "quyen" | "day-du"): Promise<EmittedFile[]> {
+async function dungBienThe(bien_the: "goc" | "day-du"): Promise<EmittedFile[]> {
   const truoc = process.env["VIGOV_BIEN_THE"];
   process.env["VIGOV_BIEN_THE"] = bien_the;
   try {
@@ -89,7 +88,7 @@ async function dungBienThe(bien_the: "goc" | "quyen" | "day-du"): Promise<Emitte
  * Toàn văn mọi tệp phát ra, đã giải mã `\uXXXX`.
  *
  * Bộ rút gọn có quyền thoát ký tự ngoài ASCII, và tiếng Việt thì toàn ký tự ngoài ASCII. Không
- * giải mã thì phép tìm "Xã …" trong bundle **không khớp gì cả** và ca kiểm xanh vì lý do sai —
+ * giải mã thì phép tìm "cơ quan" trong bundle **không khớp gì cả** và ca kiểm xanh vì lý do sai —
  * đúng cái chế độ hỏng mà ca kiểm ấy sinh ra để chặn.
  */
 const toanVan = (tep: EmittedFile[]) =>
@@ -161,12 +160,12 @@ describe("the bundle that gets uploaded to Zalo", () => {
 });
 
 /**
- * BA BIẾN THỂ — và đây là ca kiểm duy nhất biến "bản nộp sạch" từ lời hứa thành sự thật đo được.
+ * HAI BIẾN THỂ — và đây là ca kiểm duy nhất biến "bản nộp đúng bằng thứ người duyệt đọc" từ lời
+ * hứa thành sự thật đo được.
  *
  * | Biến thể | Nội dung | Dùng để |
  * |---|---|---|
- * | `goc` | Chỉ app giới thiệu bốn màn | Bản nộp tối thiểu |
- * | `quyen` | Thêm ba màn quyền + `zmp-sdk` | **Bản nộp XIN QUYỀN** |
+ * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm ba tính năng dùng ba quyền nền tảng | **BẢN NỘP** |
  * | `day-du` | Thêm lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Demo nội bộ |
  *
  * Nó dựng THẬT cả hai biến thể rồi đọc bundle, vì không có cách nào khác nói chắc: `resolve.alias`
@@ -180,52 +179,33 @@ describe("the bundle that gets uploaded to Zalo", () => {
  *   không chứa "Xã An Thịnh" vì **không bản nào** chứa nó nữa. Một phép kiểm xanh vì không tìm
  *   thấy gì là một phép kiểm đã chết mà không ai được báo.
  */
-describe("ba biến thể — mỗi bản đúng bằng thứ người duyệt đọc", () => {
+describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt đọc", () => {
   let goc = "";
-  let quyen = "";
   let day_du = "";
 
   beforeAll(async () => {
     goc = toanVan(await dungBienThe("goc"));
-    quyen = toanVan(await dungBienThe("quyen"));
     day_du = toanVan(await dungBienThe("day-du"));
   }, 360_000);
 
   /**
-   * Chuỗi của BA MÀN QUYỀN — dùng lại đúng nguồn mà màn hình đọc (`features/quyen/noi-dung.ts`),
-   * không chép tay. Một danh sách chép tay sẽ lệch khi ai đó sửa một câu, và lúc nó lệch thì mọi
-   * ca "bản goc không chứa" xanh vì **không tìm thấy gì**, chứ không vì bản `goc` sạch.
+   * CHỮ CỦA BA TÍNH NĂNG — dùng lại đúng nguồn mà màn hình đọc (`features/tinh-nang/noi-dung.ts`),
+   * không chép tay. Một danh sách chép tay sẽ lệch khi ai đó sửa một câu, và lúc nó lệch thì ca
+   * "bản nộp CÓ chứa" xanh vì **không tìm thấy gì**, chứ không vì bản nộp đúng.
    */
-  /**
-   * NGƯỠNG ĐỘ DÀI, thêm 18/09 sau khi lượt quét này ĐỎ VÌ LÝ DO SAI.
-   *
-   *   Nhãn tab của lớp quyền là "Quyền" — 5 ký tự, một từ thông dụng. Chính sách quyền riêng tư
-   *   có mục "Quyền của bạn theo Nghị định 13/2023/NĐ-CP", và mục ấy có mặt trong MỌI biến thể
-   *   vì nó là quyền của người dùng theo luật, không phải quyền nền tảng. Lượt quét vì thế báo
-   *   "bản gốc vẫn chứa Quyền" — đúng chữ, sai việc.
-   *
-   *   Một phép kiểm đỏ vì lý do sai hỏng ngang một phép kiểm xanh vì lý do sai: cái giá của nó
-   *   là người sau sẽ sửa chính sách cho vừa phép kiểm, tức là sửa một văn bản pháp lý cho vừa
-   *   một cái test. Nên ngưỡng nằm ở đây, kèm lý do.
-   *
-   * ĐIỀU BẢO ĐẢM KHÔNG MẤT, NÓ CHUYỂN CHỖ: nhãn tab rỗng ở bản `goc` được khẳng định theo CẤU
-   * TRÚC tại `features/kham-pha/bien-the.test.ts` (`MAN_QUYEN.tabLabel` phải là `""`) — chắc
-   * chắn hơn tìm chuỗi, vì nó không phụ thuộc vào việc chữ ấy có trùng ở đâu khác hay không.
-   */
-  const DU_DAI_DE_LA_DAU_VET = (chuoi: string) => chuoi.length >= 12;
-
-  const CHUOI_MAN_QUYEN = () => [
-    MAN_QUYEN.headerTitle,
-    DAN_NHAP_QUYEN,
+  const CHUOI_BA_TINH_NANG = () => [
+    MAN_DANH_THIEP.tabLabel,
+    MAN_DANH_THIEP.headerTitle,
     CHI_HIEN_LEN_MAN_HINH,
     MA_RONG,
-    QR_RONG,
-    TOKEN_KHONG_CHUA_GI["so-dien-thoai"],
-    TOKEN_KHONG_CHUA_GI["vi-tri"],
-    "Đã nhận được mã (token) từ Zalo.",
-    "Nội dung quét được:",
-    ...NOI_DUNG_QUYEN.flatMap((nd) => [
-      nd.nhan_chon,
+    LOI_MO_NGOAI,
+    TOKEN_KHONG_CHUA_GI["tu-van"],
+    TOKEN_KHONG_CHUA_GI["van-phong"],
+    ...Object.values(DANH_THIEP),
+    ...Object.values(VAN_PHONG),
+    ...Object.values(TU_VAN),
+    ...NOI_DUNG_TINH_NANG.flatMap((nd) => [
+      nd.nhan_ngan,
       nd.tieu_de,
       nd.vi_sao,
       nd.nut,
@@ -244,6 +224,8 @@ describe("ba biến thể — mỗi bản đúng bằng thứ người duyệt �
     LOI_NHAN["khong-tra-duoc"],
     nhanNguon("qr"),
     nhanNguon("zns"),
+    NHAN_KHAM_PHA.tieu_de_chon_xa,
+    NHAN_KHAM_PHA.nut_doi_xa,
     "Chọn xã để tiếp tục",
     "Bạn cần liên hệ với xã này?",
     "Chọn xã khác",
@@ -252,130 +234,120 @@ describe("ba biến thể — mỗi bản đúng bằng thứ người duyệt �
     ...Object.values(DEMO_TEN_DICH_VU),
   ];
 
-  it("đo đúng thứ cần đo — bản ĐẦY ĐỦ có chứa tất cả những thứ ấy", () => {
+  /**
+   * DANH SÁCH TỪ CẤM — yêu cầu trực tiếp của người dùng, nên nó có một phép kiểm chứ không phải
+   * một lời hứa.
+   *
+   *   Bản nộp là một **ứng dụng sản phẩm của VihatSoftware**, một doanh nghiệp công nghệ. Không
+   *   một chi tiết nào trong nó được dính tới một cơ quan nhà nước: người đọc nó là khách hàng
+   *   doanh nghiệp và người duyệt của Zalo, và một app của một công ty phần mềm mà nói chuyện
+   *   "thủ tục" với "công dân" là một app không ai hiểu nổi nó bán gì.
+   *
+   * ⚠ MỘT CÁI BẪY ĐÃ TRÁNH, GHI LẠI ĐỂ KHÔNG AI ĐẶT LẠI: **không được cấm chuỗi "xã" trần**.
+   * "xã hội" là một từ thường và nằm trong câu tầm nhìn thương hiệu của ViHAT Group
+   * (`company-profile.ts`) — một câu đã công bố, không được sửa cho vừa một cái test. Nên danh
+   * sách dưới chỉ có những cụm từ chỉ mang nghĩa hành chính công.
+   */
+  const TU_CAM = [
+    "cơ quan",
+    "công dân",
+    "chính quyền",
+    "hành chính",
+    "thủ tục",
+    NHAN_KHAM_PHA.tieu_de_chon_xa,
+    NHAN_KHAM_PHA.nut_doi_xa,
+  ];
+
+  it("đo đúng thứ cần đo — bản NỘP có đủ chữ của ba tính năng", () => {
+    // CA NÀY QUAN TRỌNG NGANG MỌI CA "KHÔNG CHỨA" DƯỚI ĐÂY. Thiếu nó thì đổi một chữ trong ba
+    // tính năng là đủ để mọi ca cấm xanh vĩnh viễn: bản `goc` không chứa câu ấy vì **không bản
+    // nào** chứa nó nữa. Một phép kiểm xanh vì không tìm thấy gì là một phép kiểm đã chết trong
+    // im lặng.
+    const chuoi = CHUOI_BA_TINH_NANG();
+    expect(chuoi.length).toBeGreaterThan(20);
+    for (const mot of chuoi) {
+      expect(goc, `bản nộp thiếu: ${mot}`).toContain(mot);
+    }
+  });
+
+  it("bản NỘP không chứa MỘT từ nào của ngữ cảnh cơ quan nhà nước", () => {
+    for (const tu of TU_CAM) {
+      const so_lan = goc.split(tu).length - 1;
+      expect(so_lan, `bản nộp còn ${so_lan} lần "${tu}"`).toBe(0);
+    }
+  });
+
+  it('nhưng "xã hội" — một từ thường trong câu tầm nhìn đã công bố — vẫn còn nguyên', () => {
+    // Mặt kia của ca trên, và là thứ ngăn người sau "dọn sạch" bằng cách cấm chuỗi `xã`: câu tầm
+    // nhìn của ViHAT Group là văn bản đã công bố dưới tên một pháp nhân, không phải chữ của ta.
+    expect(goc, "câu tầm nhìn đã công bố bị sửa để vừa một phép kiểm").toContain("xã hội");
+  });
+
+  it("đo đúng thứ cần đo — bản ĐẦY ĐỦ có chứa cả lớp khám phá", () => {
     for (const xa of DEMO_DANH_MUC_XA) {
       expect(day_du, `bản đầy đủ thiếu ${xa.ten}`).toContain(xa.ten);
     }
     for (const chuoi of CHUOI_LOP_KHAM_PHA()) {
       expect(day_du, `bản đầy đủ thiếu: ${chuoi}`).toContain(chuoi);
     }
-  });
-
-  it("đo đúng thứ cần đo — bản QUYỀN có chứa đủ chữ của ba màn quyền", () => {
-    // CA NÀY QUAN TRỌNG NGANG CA "BẢN GỐC KHÔNG CHỨA". Thiếu nó thì đổi một chữ trong ba màn
-    // quyền là đủ để mọi ca dưới xanh vĩnh viễn: bản `goc` không chứa câu ấy vì **không bản nào**
-    // chứa nó nữa. Một phép kiểm xanh vì không tìm thấy gì là một phép kiểm đã chết trong im lặng.
-    for (const chuoi of CHUOI_MAN_QUYEN()) {
-      expect(quyen, `bản quyền thiếu: ${chuoi}`).toContain(chuoi);
+    // Và bản đầy đủ là bản gốc CỘNG THÊM, không phải một app khác: ba tính năng vẫn còn nguyên.
+    for (const mot of CHUOI_BA_TINH_NANG()) {
+      expect(day_du, `bản đầy đủ thiếu: ${mot}`).toContain(mot);
     }
   });
 
-  it("không chứa MỘT tên đơn vị hành chính nào của danh mục mẫu", () => {
-    // Tám tên này là tên ĐẶT RA. Một cơ quan nhà nước hiển thị đơn vị hành chính không tồn tại
-    // là một sự cố, không phải một lỗi giao diện — và bản này là bản người duyệt đọc.
+  it("bản NỘP không chứa MỘT tên đơn vị hành chính nào của danh mục mẫu", () => {
+    // Tám tên này là tên ĐẶT RA. Một ứng dụng công bố dưới tên một pháp nhân có thật mà hiển thị
+    // những đơn vị không tồn tại là một sự cố, không phải một lỗi giao diện — và bản này là bản
+    // người duyệt đọc.
     for (const xa of DEMO_DANH_MUC_XA) {
-      expect(goc, `bản gốc vẫn chứa ${xa.ten}`).not.toContain(xa.ten);
-      expect(goc, `bản gốc vẫn chứa tỉnh/thành đặt ra: ${xa.tinh}`).not.toContain(xa.tinh);
-      expect(goc, `bản gốc vẫn chứa mã xã ${xa.id}`).not.toContain(xa.id);
-      expect(goc.replace(/\s/g, ""), `bản gốc vẫn chứa số trực mẫu`).not.toContain(
+      expect(goc, `bản nộp vẫn chứa ${xa.ten}`).not.toContain(xa.ten);
+      expect(goc, `bản nộp vẫn chứa tỉnh/thành đặt ra: ${xa.tinh}`).not.toContain(xa.tinh);
+      expect(goc, `bản nộp vẫn chứa mã xã ${xa.id}`).not.toContain(xa.id);
+      expect(goc.replace(/\s/g, ""), "bản nộp vẫn chứa số trực mẫu").not.toContain(
         xa.dien_thoai_truc,
       );
     }
   });
 
-  it("không chứa chuỗi nào của màn chọn xã, màn xác nhận xã hay trang xã", () => {
+  it("bản NỘP không chứa chuỗi nào của lớp khám phá, kể cả hai nhãn của vỏ", () => {
     for (const chuoi of CHUOI_LOP_KHAM_PHA()) {
-      expect(goc, `bản gốc vẫn chứa: ${chuoi}`).not.toContain(chuoi);
+      // Bản rỗng trả chuỗi rỗng cho hai nhãn của vỏ; `""` thì `toContain` nào cũng đúng, nên
+      // chúng được kiểm bằng danh sách từ cấm ở trên chứ không ở đây.
+      if (chuoi === "") continue;
+      expect(goc, `bản nộp vẫn chứa: ${chuoi}`).not.toContain(chuoi);
     }
   });
 
-  it("không chứa chữ nào của ba màn quyền, và không chứa `zmp-sdk`", () => {
-    // Bản `goc` là bản nộp TỐI THIỂU: một app không xin quyền nào. Có sẵn `getPhoneNumber` trong
-    // bundle của một bản nộp như thế là một bản nộp tự mâu thuẫn — và 256 kB trả cho một thứ
-    // không màn nào gọi tới.
-    for (const chuoi of CHUOI_MAN_QUYEN().filter(DU_DAI_DE_LA_DAU_VET)) {
-      expect(goc, `bản gốc vẫn chứa: ${chuoi}`).not.toContain(chuoi);
-    }
-    expect(goc, "bản gốc vẫn kéo theo zmp-sdk").not.toContain("zmp-sdk");
-    expect(goc).not.toContain("getPhoneNumber");
-    expect(goc).not.toContain("scanQRCode");
-  });
-
-  it("bản QUYỀN thật sự mang `zmp-sdk` — nếu không thì ba màn ấy không xin được gì", () => {
-    // Mặt kia của ca trên. Ba màn quyền không nhập SDK thì bản nộp xin quyền là một bản nộp có
-    // ba cái nút không gọi tới nền tảng, và vòng duyệt không có gì để cấp quyền cho.
-    expect(quyen, "bản quyền không mang zmp-sdk").toContain("zmp-sdk");
-    expect(quyen).toContain("getPhoneNumber");
-    expect(quyen).toContain("scanQRCode");
-  });
-
-  it("bản QUYỀN là một bản NỘP: không xã mẫu, không số trực mẫu, không bảng chẩn đoán", () => {
-    // Đây là toàn bộ lý do `quyen` là một biến thể riêng chứ không phải `day-du`. Nếu nó mang
-    // theo tám tên đơn vị hành chính ĐẶT RA thì bản nộp xin quyền lại thành bản nộp có dữ liệu
-    // bịa dưới tên một cơ quan nhà nước.
-    for (const xa of DEMO_DANH_MUC_XA) {
-      expect(quyen, `bản quyền vẫn chứa ${xa.ten}`).not.toContain(xa.ten);
-      expect(quyen, `bản quyền vẫn chứa tỉnh/thành đặt ra: ${xa.tinh}`).not.toContain(xa.tinh);
-      expect(quyen, `bản quyền vẫn chứa mã xã ${xa.id}`).not.toContain(xa.id);
-      expect(quyen.replace(/\s/g, ""), "bản quyền vẫn chứa số trực mẫu").not.toContain(
-        xa.dien_thoai_truc,
-      );
-    }
-    for (const chuoi of CHUOI_LOP_KHAM_PHA()) {
-      expect(quyen, `bản quyền vẫn chứa: ${chuoi}`).not.toContain(chuoi);
-    }
-    expect(quyen).not.toContain("Chẩn đoán tham số mở app");
-    expect(quyen).not.toContain("URL Zalo dùng để mở app");
-  });
-
-  it("không chứa bảng chẩn đoán", () => {
+  it("bản NỘP không chứa bảng chẩn đoán", () => {
     // Một bảng in tham số nội bộ nằm trong bundle của một đơn vị đang xin duyệt là một câu hỏi
     // phải trả lời ở vòng duyệt, và "đó là công cụ nội bộ" không giúp được gì ở vòng đó.
     expect(goc).not.toContain("Chẩn đoán tham số mở app");
     expect(goc).not.toContain("URL Zalo dùng để mở app");
   });
 
-  it("nói ra thứ bản gốc VẪN mang: hai nhãn của vỏ, ở nhánh không bao giờ chạy", () => {
-    // KHÔNG phải một ngoại lệ được tha — là một phép đo được ghi lại, để lần sau `grep` thấy
-    // "Chọn xã" trong bản gốc thì đọc được ngay tại sao, thay vì tưởng alias đã thủng.
-    //
-    // `App.tsx` là VỎ, không nằm sau alias: nó giữ nhánh `props.khamPha ? "Chọn xã" : …` và nút
-    // "Đổi xã". Ở bản gốc, mô-đun khám phá rỗng nên `khamPha` luôn false — nhánh chết, nhãn còn.
-    //
-    // Vì sao để nguyên: hai nhãn ấy là từ ngữ hành chính thông thường, không phải đơn vị hành
-    // chính ĐẶT RA, không phải dữ liệu cá nhân, không vẽ ra màn nào. Tách `App.tsx` thành hai
-    // biến thể để gỡ chúng là thêm một đường rẽ nữa vào đúng tệp mà cả hai bản cùng đi qua —
-    // đắt hơn thứ nó mua. Ranh giới là DỮ LIỆU, không phải từ vựng.
-    expect(goc).toContain("Chọn xã");
-    expect(goc).toContain("Đổi xã");
-
-    // VÀ THỨ THỨ BA, ĐO ĐƯỢC: các LỚP CSS của ba màn quyền — khoảng 2,2 kB sau khi rút gọn.
-    //
-    // `src/styles.css` là MỘT tệp, `main.tsx` nạp trọn, và `main.tsx` không nằm sau alias. Tách
-    // biểu mẫu kiểu theo biến thể là dựng **cơ chế thứ hai** cạnh `resolve.alias` cho 2,2 kB —
-    // đắt hơn thứ nó mua, và một cơ chế thứ hai là chỗ lần sau người ta quên đồng bộ.
-    //
-    // Vì sao để nguyên là đúng: ranh giới là DỮ LIỆU, không phải từ vựng. Trong 2,2 kB ấy không
-    // có một câu giải thích nào, không tên đơn vị hành chính, không số điện thoại — chỉ tên lớp
-    // và thuộc tính. Chúng không vẽ ra gì cả, vì không màn nào ở bản `goc` mang các lớp ấy.
-    expect(goc, "các lớp CSS của màn quyền đã biến mất — đọc lại chú thích này").toContain(
-      ".quyen__nut",
-    );
-    expect(goc).toContain(".quyen-khu__nut");
+  it("bản NỘP MANG `zmp-sdk` — nếu không thì ba tính năng ấy không gọi được nền tảng", () => {
+    // Đảo chiều so với trước: `zmp-sdk` từng bị cấm trong bản `goc` vì bản ấy là một app giới
+    // thiệu tĩnh không xin quyền nào. Nay ba quyền thuộc về chính ứng dụng sản phẩm, nên SDK
+    // PHẢI có mặt — một bản nộp xin ba quyền mà không gọi tới nền tảng là một bản nộp có ba cái
+    // nút không làm gì, và vòng duyệt không có gì để cấp quyền cho.
+    expect(goc, "bản nộp không mang zmp-sdk").toContain("zmp-sdk");
+    expect(goc).toContain("getPhoneNumber");
+    expect(goc).toContain("getLocation");
+    expect(goc).toContain("scanQRCode");
   });
 
-  it("chính sách quyền riêng tư có mặt trong CẢ BA bản — thiếu nó là nộp bị trả về", () => {
-    // Xin ba quyền mà không có chính sách thì vòng duyệt trả về. Nhưng bản `goc` cũng phải có
-    // nó: một app công bố dưới tên pháp nhân thật thì luôn phải nói được nó xử lý dữ liệu gì,
-    // kể cả khi câu trả lời là "không gì cả".
+  it("chính sách quyền riêng tư có mặt trong CẢ HAI bản, đủ mọi mục", () => {
+    // Xin ba quyền mà không có chính sách thì vòng duyệt trả về. Mục về ba quyền nay nằm trong
+    // danh sách chung, vì ba quyền có mặt ở MỌI bản dựng — không còn gì để tách.
     for (const [ten, ban] of [
       ["goc", goc],
-      ["quyen", quyen],
       ["day-du", day_du],
     ] as const) {
       expect(ban, `bản ${ten} thiếu tiêu đề chính sách`).toContain(TIEU_DE_CHINH_SACH);
       expect(ban, `bản ${ten} thiếu câu mở đầu chính sách`).toContain(CAU_DAU);
-      for (const m of [...MUC_TRUOC_QUYEN, ...MUC_SAU_QUYEN]) {
+      expect(ban, `bản ${ten} ghi sai phiên bản chính sách`).toContain(PHIEN_BAN_CHINH_SACH);
+      for (const m of MUC_CHINH_SACH) {
         expect(ban, `bản ${ten} thiếu mục "${m.tieu_de}"`).toContain(m.tieu_de);
       }
     }
@@ -384,70 +356,47 @@ describe("ba biến thể — mỗi bản đúng bằng thứ người duyệt �
   /**
    * MẢNH CHỮ CÓ THẬT TRONG BUNDLE của mục chính sách về ba quyền.
    *
-   * VÌ SAO KHÔNG KIỂM THẲNG TỪNG `doan`: một số đoạn được GHÉP LÚC CHẠY từ `NOI_DUNG_QUYEN`
-   * (`${nhan_chon} — ${vi_sao}`), nên chuỗi ghép ấy KHÔNG hề có trong bundle — bundle chỉ chứa
-   * hai mảnh rời. Kiểm chuỗi ghép thì ca "bản gốc không chứa" xanh vì **không bản nào** chứa nó,
-   * chứ không vì bản gốc sạch. Đó đúng là kiểu hỏng tệp này sinh ra để bắt, và nó đã bắt được
-   * chính mình một lần vào 18/09 — giữ lại chú thích này thay vì sửa xong rồi xoá dấu vết.
-   *
-   * Cắt ở " — " để lấy lại đúng những mảnh có thật, rồi BỎ mảnh ngắn: `nhan_chon` kiểu "Vị trí"
-   * là từ thông dụng, có thể trùng ở chỗ khác trong bản gốc và làm phép kiểm đỏ vì lý do sai.
-   * Ngưỡng 30 ký tự giữ lại các câu `vi_sao` — thứ dài, đặc trưng, và là thứ thật sự nói về quyền.
+   * VÌ SAO KHÔNG KIỂM THẲNG TỪNG `doan`: một số đoạn được GHÉP LÚC CHẠY từ `NOI_DUNG_TINH_NANG`
+   * (`${nhan_ngan} — ${vi_sao}`), nên chuỗi ghép ấy KHÔNG hề có trong bundle — bundle chỉ chứa
+   * hai mảnh rời. Kiểm chuỗi ghép thì phép kiểm xanh vì **không bản nào** chứa nó. Đó đúng là
+   * kiểu hỏng tệp này sinh ra để bắt, và nó đã bắt được chính mình một lần vào 18/09 — giữ lại
+   * chú thích này thay vì sửa xong rồi xoá dấu vết.
    */
-  const MANH_CHINH_SACH_QUYEN = () =>
-    MUC_CHINH_SACH_QUYEN_DAY_DU.flatMap((m) => [
-      m.tieu_de,
-      ...m.doan.flatMap((doan) => doan.split(" — ")).filter((manh) => manh.length >= 30),
-    ]);
-
-  it("chính sách của bản GỐC không nói một chữ nào về ba quyền", () => {
-    // CA QUAN TRỌNG NHẤT của phần chính sách, và lý do nó tồn tại đắt hơn vẻ ngoài của nó:
-    //
-    //   Bản `goc` không xin quyền nào. Một chính sách trong bản ấy mà nhắc tới số điện thoại hay
-    //   vị trí là một TUYÊN BỐ SAI công bố dưới tên một pháp nhân có thật — và người duyệt đọc
-    //   nó ngay cạnh một app không hề xin quyền. Đó không phải lỗi giao diện, đó là thứ phải
-    //   trả lời ở vòng duyệt.
-    for (const manh of MANH_CHINH_SACH_QUYEN()) {
-      expect(goc, `chính sách bản gốc vẫn có: ${manh.slice(0, 50)}…`).not.toContain(manh);
-    }
-  });
-
-  it("đo đúng thứ cần đo — chính sách bản QUYỀN CÓ đủ mục về ba quyền", () => {
-    // Không có ca này, đổi một chữ trong mục ấy là đủ để ca trên xanh vĩnh viễn: bản `goc` không
-    // chứa chuỗi ấy vì KHÔNG BẢN NÀO còn chứa nó nữa.
-    const manh = MANH_CHINH_SACH_QUYEN();
+  it("chính sách nói ĐỦ mục đích của cả ba quyền, trong cả hai bản", () => {
+    const muc = MUC_CHINH_SACH.find((m) => m.ma === "ba-quyen");
+    expect(muc, "chính sách không còn mục nào về ba quyền").toBeDefined();
+    const manh = muc!.doan.flatMap((doan) => doan.split(" — ")).filter((m) => m.length >= 30);
     expect(manh.length).toBeGreaterThan(3);
     for (const m of manh) {
-      expect(quyen, `chính sách bản quyền thiếu: ${m.slice(0, 50)}…`).toContain(m);
+      expect(goc, `chính sách bản nộp thiếu: ${m.slice(0, 50)}…`).toContain(m);
+      expect(day_du, `chính sách bản đầy đủ thiếu: ${m.slice(0, 50)}…`).toContain(m);
     }
   });
 
-  it("vẫn ĐÚNG BẰNG app giới thiệu bốn màn — không phải một bản rỗng", () => {
-    // Gỡ nhầm tay thì bản gốc cũng "không chứa tên xã nào", và mọi ca trên vẫn xanh. Ca này là
+  it("vẫn ĐÚNG BẰNG một ứng dụng có nội dung — không phải một bản rỗng", () => {
+    // Gỡ nhầm tay thì bản nộp cũng "không chứa tên xã nào", và mọi ca trên vẫn xanh. Ca này là
     // thứ phân biệt "đã gỡ đúng phần thừa" với "đã gỡ mất app".
     expect(goc).toContain(COMPANY.name);
-    // `MAN_GIOI_THIEU`, không phải `SCREENS`: `SCREENS` của tiến trình test là sổ màn hình của
-    // biến thể ĐẦY ĐỦ, nên nó có thêm tab quyền — và tab ấy đúng là không được có trong bản gốc.
     for (const man of MAN_GIOI_THIEU) {
-      expect(goc, `bản gốc thiếu màn ${man.id}`).toContain(man.tabLabel);
+      expect(goc, `bản nộp thiếu màn ${man.id}`).toContain(man.tabLabel);
     }
-    // Bốn màn ấy cũng phải còn nguyên trong bản NỘP XIN QUYỀN: ba màn quyền là phần THÊM, không
-    // phải phần thay thế. Một app chỉ có ba nút xin quyền là một app không có nội dung để duyệt.
-    expect(quyen).toContain(COMPANY.name);
-    for (const man of MAN_GIOI_THIEU) {
-      expect(quyen, `bản quyền thiếu màn ${man.id}`).toContain(man.tabLabel);
-    }
+    expect(goc, "bản nộp thiếu tab Danh thiếp").toContain(MAN_DANH_THIEP.tabLabel);
   });
 
-  it("nhẹ hơn hai bản kia — bằng chứng rằng mã thật sự biến mất, không chỉ bị giấu", () => {
-    expect(goc.length).toBeLessThan(quyen.length);
-    expect(quyen.length).toBeLessThan(day_du.length);
+  it("nhẹ hơn bản đầy đủ — bằng chứng rằng mã thật sự biến mất, không chỉ bị giấu", () => {
+    expect(goc.length).toBeLessThan(day_du.length);
   });
 
   it("tên biến thể sai thì DỪNG, không dựng bằng mặc định", () => {
     // Một cái tên gõ nhầm mà vẫn dựng tiếp nghĩa là dựng bản ĐẦY ĐỦ rồi đem nộp dưới nhãn khác —
     // hỏng trong im lặng, đúng chỗ đắt nhất. Ca này gọi thẳng `vite build` với một tên sai.
     return expect(dungBienThe("gôc" as "goc")).rejects.toThrow(/VIGOV_BIEN_THE/);
+  });
+
+  it("tên biến thể `quyen` nay cũng là một tên SAI", () => {
+    // Biến thể ấy đã bị gộp vào `goc`. Nếu nó vẫn dựng được thì ai đó đang đẩy lên Zalo một bản
+    // không tệp nào còn định nghĩa.
+    return expect(dungBienThe("quyen" as "goc")).rejects.toThrow(/VIGOV_BIEN_THE/);
   });
 });
 

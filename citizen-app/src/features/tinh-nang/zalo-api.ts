@@ -1,17 +1,17 @@
 /**
- * LỚP DUY NHẤT CHẠM VÀO `zmp-sdk` — và nó cố tình nhỏ đúng bằng ba lời gọi.
+ * LỚP DUY NHẤT CHẠM VÀO `zmp-sdk` — và nó cố tình nhỏ đúng bằng những lời gọi ba tính năng cần.
  *
  * Tệp này là chỗ duy nhất trong cả kho được phép nhắc tên mô-đun `zmp-sdk` và tên ba hàm
  * `getPhoneNumber` · `getLocation` · `scanQRCode`. `phase1-collects-nothing.test.ts` cấm chúng ở
  * MỌI tệp khác — lệnh cấm không bị xoá, nó được thu hẹp phạm vi, và có một ca chứng minh rằng
- * ngoài `src/features/quyen/` thì nó vẫn bắt.
+ * ngoài `src/features/tinh-nang/` thì nó vẫn bắt.
  *
  * ⚠ NHẬP ĐỘNG, TRONG HÀM, BỌC TRY/CATCH — BA ĐIỀU KIỆN, KHÔNG PHẢI KHẨU VỊ:
  *
  *   `zmp-sdk` chạm `window` NGAY LÚC NẠP MÔ-ĐUN. Một `import` tĩnh ở đầu tệp làm sập mọi test
  *   chạy dưới Node (không có `window`) trước khi một phép kiểm nào kịp chạy, và làm sập ngay cả
- *   những test không liên quan gì tới ba màn này. Nhập động bên trong hàm thì mô-đun chỉ được nạp
- *   khi công dân đã bấm nút.
+ *   những test không liên quan gì tới ba tính năng này. Nhập động bên trong hàm thì mô-đun chỉ
+ *   được nạp khi người dùng đã bấm nút.
  *
  *   Ngoài Zalo, lời nhập ấy hỏng. Đó KHÔNG phải một sự cố cần giấu: hàm trả về `ngoai-zalo` và
  *   màn hình nói ra bằng tiếng Việt. Một `catch {}` im lặng ở đây là một màn hình trắng trên máy
@@ -29,14 +29,19 @@
  *   rước dữ liệu cá nhân về máy đúng lúc nó đã hết cần thiết — và dữ liệu cá nhân nằm trên thiết
  *   bị là thứ luật 3 nói tới, không phải một chi tiết kỹ thuật.
  *
+ *   HỆ QUẢ THẲNG THẮN, VÀ MÃ NÀY KHÔNG GIẢ VỜ VƯỢT QUA NÓ: chỉ có token nghĩa là **không thể xếp
+ *   văn phòng theo khoảng cách ngay trên máy**. Đổi token thành toạ độ là một bước ở máy chủ, có
+ *   app secret. Nên ở đây không có một dòng nào tính khoảng cách, và màn hình nói ra điều đó
+ *   bằng tiếng Việt thay vì vẽ một danh sách đã "sắp xếp" mà thật ra không sắp xếp gì.
+ *
  * ⚠ KHÔNG `console.log`, KHÔNG `fetch`, KHÔNG CHỖ LƯU NÀO. Nội dung mã QR có thể là bất cứ thứ
- * gì, kể cả dữ liệu cá nhân của người khác. Hiện lên màn hình rồi thôi; ghi nó ra log là đưa nó
- * vào một nơi không ai gỡ lại được.
+ * gì, kể cả dữ liệu cá nhân của NGƯỜI KHÁC (một tấm danh thiếp là dữ liệu cá nhân của chủ nhân
+ * nó). Hiện lên màn hình rồi thôi; ghi nó ra log là đưa nó vào một nơi không ai gỡ lại được.
  */
 
 /**
- * Kết quả một lần xin quyền. TỪ CHỐI LÀ MỘT NHÁNH RIÊNG, NGANG HÀNG VỚI THÀNH CÔNG — không phải
- * một lỗi: người dân có quyền nói không, và một app coi đó là lỗi sẽ hiện một câu trách móc.
+ * Kết quả một lần gọi nền tảng. TỪ CHỐI LÀ MỘT NHÁNH RIÊNG, NGANG HÀNG VỚI THÀNH CÔNG — không
+ * phải một lỗi: người dùng có quyền nói không, và một app coi đó là lỗi sẽ hiện một câu trách móc.
  */
 export type KetQuaXin<T> =
   | { kieu: "xong"; du_lieu: T }
@@ -95,4 +100,29 @@ export function xinTokenViTri(): Promise<KetQuaXin<string>> {
 /** Nội dung mã QR — API DUY NHẤT ở đây trả về dữ liệu thật, không phải token. */
 export function quetMaQR(): Promise<KetQuaXin<string>> {
   return xin(async (sdk) => (await sdk.scanQRCode()).content);
+}
+
+/**
+ * Mở màn hình gọi với một số điện thoại — `openPhone`, đã đối chiếu `zmp-sdk/index.d.ts` dòng
+ * 4141: `openPhone(args: … & { phoneNumber: string }): Promise<void>`, `@zaloOnly`.
+ *
+ * Số truyền vào là số vừa quét được từ danh thiếp của NGƯỜI KHÁC. Nó đi từ màn hình sang màn
+ * quay số của hệ điều hành và không đi đâu khác: không log, không lưu, không gửi.
+ */
+export function moCuocGoi(so: string): Promise<KetQuaXin<void>> {
+  return xin(async (sdk) => sdk.openPhone({ phoneNumber: so }));
+}
+
+/**
+ * Mở một trang web trong webview của Zalo — `openWebview`, `zmp-sdk/index.d.ts` dòng 4491,
+ * `@zaloOnly`, tối thiểu 2.11.0.
+ *
+ * VÌ SAO KHÔNG PHẢI MỘT THẺ `<a target="_blank">`: bên trong Zalo, một liên kết ngoài mở ra
+ * không có thanh điều hướng và không có đường quay lại app. `openWebview` là API nền tảng dựng
+ * ra đúng cho việc này, và nó trả người dùng về đúng chỗ họ đang đứng.
+ */
+export function moTrangWeb(duong_dan: string): Promise<KetQuaXin<void>> {
+  return xin(async (sdk) => {
+    await sdk.openWebview({ url: duong_dan, config: { style: "normal" } });
+  });
 }

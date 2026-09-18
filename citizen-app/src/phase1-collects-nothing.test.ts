@@ -82,8 +82,14 @@ type Tripwire = {
   chi_trong?: string;
 };
 
-/** Thư mục của ba màn quyền. Một hằng, vì cả lệnh cấm lẫn ca kiểm về lệnh cấm đều đọc nó. */
-const THU_MUC_QUYEN = "./features/quyen/";
+/**
+ * Thư mục của ba tính năng. Một hằng, vì cả lệnh cấm lẫn ca kiểm về lệnh cấm đều đọc nó.
+ *
+ * ĐỔI TÊN, KHÔNG MỞ RỘNG. `features/quyen/` đổi tên thành `features/tinh-nang/` khi ba màn quyền
+ * trở thành ba TÍNH NĂNG thật của ứng dụng sản phẩm. Phạm vi miễn vẫn đúng bằng MỘT thư mục, và
+ * ca kiểm ở cuối tệp vẫn cho lệnh cấm ăn một vi phạm đặt ngoài nó.
+ */
+const THU_MUC_TINH_NANG = "./features/tinh-nang/";
 
 /** Tệp vi phạm một dây bẫy: khớp mẫu, và KHÔNG nằm trong thư mục được miễn. */
 function viPham(
@@ -102,17 +108,17 @@ const TRIPWIRES: readonly Tripwire[] = [
     pattern: /\b(getUserInfo|getAccessToken|getSetting|authorize)\s*\(/,
   },
   {
-    // BA LỜI GỌI CỦA BIẾN THỂ `quyen`, và chỉ trong `src/features/quyen/`. Ở mọi tệp khác chúng
+    // BA LỜI GỌI CỦA BA TÍNH NĂNG, và chỉ trong `src/features/tinh-nang/`. Ở mọi tệp khác chúng
     // vẫn bị cấm y như trước: một `getPhoneNumber` trong `App.tsx` là thu thập dữ liệu ngoài
     // phạm vi đã nộp, và nó sẽ đi vào CẢ bản `goc` vì `App.tsx` không nằm sau alias.
     //
     // `scanQRCode` được THÊM VÀO lệnh cấm ở lần này — trước đây không tên nào canh nó, nên một
     // lời gọi máy ảnh lọt vào bất kỳ tệp nào mà không có gì đỏ lên.
     what:
-      'a phone / location / QR call outside "src/features/quyen/" — those three are the ONLY ' +
+      'a phone / location / QR call outside "src/features/tinh-nang/" — those three are the ONLY ' +
       "platform permissions this app asks for, and they live in exactly one directory",
     pattern: /\b(getPhoneNumber|getLocation|scanQRCode)\s*\(/,
-    chi_trong: THU_MUC_QUYEN,
+    chi_trong: THU_MUC_TINH_NANG,
   },
   {
     // LỆNH CẤM CẢ GÓI, VÀ NÓ CẤM **CHUỖI TÊN MÔ-ĐUN**, KHÔNG CẤM CÚ PHÁP NHẬP.
@@ -131,7 +137,7 @@ const TRIPWIRES: readonly Tripwire[] = [
     //          khỏi bản nộp. Lý do mở khe đã hết, nên khe đóng lại.
     //   18/09  Biến thể `quyen` — bản nộp XIN QUYỀN. Zalo chỉ cấp ba quyền khi bản nộp có chỗ
     //          dùng chúng nhìn thấy được, nên lệnh cấm chuyển thành **có phạm vi**: `zmp-sdk`
-    //          chỉ được nhắc trong `src/features/quyen/`, mọi tệp khác vẫn bị cấm như cũ. Khác
+    //          chỉ được nhắc trong `src/features/tinh-nang/`, mọi tệp khác vẫn bị cấm như cũ. Khác
     //          lần 18/09 ở trên ở chỗ: lần ấy nới theo TÊN HÀM (một danh sách trắng đi cùng cú
     //          pháp, và nó đã chết trong im lặng); lần này thu hẹp theo THƯ MỤC, và có ca kiểm
     //          cho nó ăn một vi phạm đặt NGOÀI thư mục ấy.
@@ -151,7 +157,7 @@ const TRIPWIRES: readonly Tripwire[] = [
       'a reference to the "zmp-sdk" module — importing it costs 256 kB raw / 64 kB gzip and is ' +
       "the doorway to every citizen-data API the platform offers",
     pattern: /["'`]zmp-sdk(\/[^"'`]*)?["'`]/,
-    chi_trong: THU_MUC_QUYEN,
+    chi_trong: THU_MUC_TINH_NANG,
   },
   {
     what: "an outbound request — phase 1 talks to no backend, so nothing about a citizen can leave the device",
@@ -182,7 +188,7 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // THƯ MỤC ĐƯỢC MIỄN PHẢI NẰM TRONG LƯỢT QUÉT. Một ngoại lệ trỏ vào một thư mục không được
     // quét thì không miễn gì cả — và ngày thư mục ấy đổi tên, lệnh cấm có phạm vi trở thành lệnh
     // cấm toàn phần mà không ai biết, hoặc ngược lại.
-    expect(paths).toContain(`${THU_MUC_QUYEN}zalo-api.ts`);
+    expect(paths).toContain(`${THU_MUC_TINH_NANG}zalo-api.ts`);
   });
 
   for (const tripwire of TRIPWIRES) {
@@ -230,7 +236,7 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     }
   });
 
-  it("lệnh cấm CÓ PHẠM VI vẫn bắt được vi phạm đặt NGOÀI src/features/quyen/", () => {
+  it("lệnh cấm CÓ PHẠM VI vẫn bắt được vi phạm đặt NGOÀI src/features/tinh-nang/", () => {
     // CA KIỂM VỀ CHÍNH CÁI NGOẠI LỆ VỪA MỞ — cùng lý do với ca "miễn ĐÚNG dải số giả" bên dưới.
     //
     // Thu hẹp phạm vi một lệnh cấm trông y hệt gỡ nó: cả hai đều làm lượt quét xanh trở lại. Thứ
@@ -246,7 +252,7 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
       { path: "./lib/launch-params.ts", code: "await scanQRCode();" },
       { path: "./components/TabBar.tsx", code: 'const sdk = await import("zmp-sdk");' },
       // Sát bên thư mục được miễn, nhưng không nằm trong nó: tiền tố phải khớp cả dấu `/`.
-      { path: "./features/quyen-cu.ts", code: "await getPhoneNumber();" },
+      { path: "./features/tinh-nang-cu.ts", code: "await getPhoneNumber();" },
     ];
     for (const tep of VI_PHAM) {
       const bat = co_pham_vi.some((day) => viPham(day, [tep]).length === 1);
@@ -255,8 +261,8 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
 
     // Và trong thư mục ấy thì đúng là được phép — nếu không thì biến thể `quyen` không dựng nổi.
     const TRONG = [
-      { path: `${THU_MUC_QUYEN}zalo-api.ts`, code: 'await (await import("zmp-sdk")).getPhoneNumber();' },
-      { path: `${THU_MUC_QUYEN}zalo-api.ts`, code: "await scanQRCode();" },
+      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await (await import("zmp-sdk")).getPhoneNumber();' },
+      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "await scanQRCode();" },
     ];
     for (const tep of TRONG) {
       for (const day of co_pham_vi) {

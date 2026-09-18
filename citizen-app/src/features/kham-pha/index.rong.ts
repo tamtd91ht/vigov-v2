@@ -32,3 +32,14 @@ export const phanGiaiGoiY: typeof DayDu.phanGiaiGoiY = () => ({
 export const ChonXaScreen: ComponentType<ComponentProps<typeof DayDu.ChonXaScreen>> = () => null;
 export const GoiYXaScreen: ComponentType<ComponentProps<typeof DayDu.GoiYXaScreen>> = () => null;
 export const TrangXaScreen: ComponentType<ComponentProps<typeof DayDu.TrangXaScreen>> = () => null;
+
+/**
+ * CHUỖI RỖNG, KHÔNG PHẢI NHÃN THẬT — cùng lý do với `MAN_QUYEN.tabLabel` rỗng trước đây: chuỗi
+ * viết ở đây đi thẳng vào bundle bản `goc`, và bản `goc` là bản nộp. Nhánh vẽ chúng không bao
+ * giờ chạy khi `CO_LOP_KHAM_PHA` là `false`, nên không ai đọc hai chuỗi này; một chữ không có
+ * người đọc mà vẫn nằm trong bản gửi duyệt là một chữ không nên có ở đó.
+ */
+export const NHAN_KHAM_PHA: typeof DayDu.NHAN_KHAM_PHA = {
+  tieu_de_chon_xa: "",
+  nut_doi_xa: "",
+};

@@ -1,9 +1,6 @@
-import { MUC_CHINH_SACH_QUYEN } from "bien-the/quyen";
-
 import {
   CAU_DAU,
-  MUC_SAU_QUYEN,
-  MUC_TRUOC_QUYEN,
+  MUC_CHINH_SACH,
   NGAY_HIEU_LUC,
   PHIEN_BAN_CHINH_SACH,
   TIEU_DE_CHINH_SACH,
@@ -21,19 +18,19 @@ import {
  * không cần thêm trạng thái vào vỏ app. Tiêu đề và câu quan trọng nhất nằm NGOÀI `<details>`, vì
  * một chính sách phải đọc được mà không cần bấm gì: người duyệt cuộn tới là thấy.
  *
- * VÌ SAO ĐÁNH SỐ Ở ĐÂY CHỨ KHÔNG VIẾT VÀO TIÊU ĐỀ: bản `goc` có 7 mục, bản `quyen` có 8 vì mục
- * ba quyền chèn vào giữa. Một con số viết cứng sẽ đúng ở một bản và sai ở bản kia — sai trong
- * một văn bản pháp lý, và không có gì đỏ lên. Xem `content/chinh-sach-rieng-tu.ts`.
+ * VÌ SAO ĐÁNH SỐ Ở ĐÂY CHỨ KHÔNG VIẾT VÀO TIÊU ĐỀ: một con số viết cứng trong tiêu đề sẽ lệch
+ * ngay lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý, và không có gì đỏ lên. Xem
+ * `content/chinh-sach-rieng-tu.ts`.
  */
 export function ChinhSachRiengTu() {
-  const muc = [...MUC_TRUOC_QUYEN, ...MUC_CHINH_SACH_QUYEN, ...MUC_SAU_QUYEN];
+  const muc = MUC_CHINH_SACH;
 
   return (
     <section className="chinh-sach" id="chinh-sach-rieng-tu">
       <h2 className="section-title">{TIEU_DE_CHINH_SACH}</h2>
 
       {/* Câu này đứng ngoài mọi `<details>` có chủ đích: nó là điều quan trọng nhất văn bản
-          phải nói, và nó đúng với cả ba biến thể bản dựng. */}
+          phải nói, và nó đúng với cả hai biến thể bản dựng. */}
       <p className="chinh-sach__cau-dau">{CAU_DAU}</p>
 
       <p className="chinh-sach__hieu-luc">

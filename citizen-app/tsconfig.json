@@ -23,9 +23,6 @@
       ],
       "bien-the/chan-doan": [
         "./src/features/diagnostics/index.ts"
-      ],
-      "bien-the/quyen": [
-        "./src/features/quyen/index.ts"
       ]
     }
   },

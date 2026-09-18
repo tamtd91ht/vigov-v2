@@ -7,7 +7,6 @@
     "dev": "vite",
     "build": "node scripts/dung.mjs day-du",
     "build:goc": "node scripts/dung.mjs goc",
-    "build:quyen": "node scripts/dung.mjs quyen",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -15,9 +14,7 @@
     "zmp:sync": "npm run build && npx --yes zmp-cli@4.0.3 sync-config dist/index.html",
     "zmp:deploy": "node scripts/deploy.mjs --bien-the=day-du",
     "zmp:deploy:goc": "node scripts/deploy.mjs --bien-the=goc",
-    "zmp:deploy:quyen": "node scripts/deploy.mjs --bien-the=quyen",
     "zmp:phat-hanh:goc": "node scripts/deploy.mjs --bien-the=goc --phat-hanh",
-    "zmp:phat-hanh:quyen": "node scripts/deploy.mjs --bien-the=quyen --phat-hanh",
     "check:api": "node -e \"console.log('citizen-app: no generated REST types in phase 1 — the introduction app calls no backend. Phase 2 replaces this script.')\""
   },
   "dependencies": {

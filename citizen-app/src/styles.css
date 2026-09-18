@@ -825,6 +825,34 @@ body {
   .banner__backdrop {
     animation: drift 24s ease-in-out infinite alternate;
   }
+
+  /* HAI THỨ VÀ CHỈ HAI THỨ: `transform` và `opacity`. Cả hai chạy trên trình tổng hợp, nên một
+     máy Android yếu không phải vẽ lại cả trang mỗi khung hình. Bất cứ thứ gì làm trang phải bố
+     cục lại (`height`, `top`, `margin`) đều không được phép ở đây. */
+  .hien-len {
+    animation: hien-len 420ms ease-out both;
+  }
+
+  /* So le, để mắt đi theo thứ tự đọc thay vì thấy cả màn nảy lên một lúc. Bốn bậc là đủ: nhiều
+     hơn thì khối cuối cùng đợi lâu tới mức trông như trang bị kẹt. */
+  .hien-len--2 {
+    animation-delay: 70ms;
+  }
+
+  .hien-len--3 {
+    animation-delay: 140ms;
+  }
+
+  .hien-len--4 {
+    animation-delay: 210ms;
+  }
+
+  /* Huy hiệu tròn của ba tính năng: dải màu thương hiệu trôi chậm. Không đổi độ sáng của glyph,
+     vì glyph dùng `--tile-glyph` đã đo tương phản với CẢ HAI đầu dải. */
+  .tn__huy-hieu {
+    background-size: 220% 220%;
+    animation: troi-mau 18s ease-in-out infinite alternate;
+  }
 }
 
 @keyframes drift {
@@ -833,6 +861,28 @@ body {
   }
   to {
     transform: translate3d(-10px, 6px, 0);
+  }
+}
+
+/* `both` ở chỗ dùng, nên khung đầu tiên cũng là trạng thái nghỉ: không có nhịp nhấp nháy trước
+   khi hiệu ứng bắt đầu. Dịch 10px, không hơn — một khối bay từ xa vào là thứ gây chóng mặt. */
+@keyframes hien-len {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes troi-mau {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
   }
 }
 
@@ -1222,68 +1272,75 @@ body {
   color: var(--ink);
 }
 
-/* ---------- ba màn quyền (biến thể `quyen` — bản nộp xin quyền) ---------- */
+/* ---------------------------------------------------------------------------------------------
+   BA TÍNH NĂNG THẬT — quét danh thiếp · tìm văn phòng · đăng ký nhận tư vấn.
 
-.quyen-khu__dan {
-  margin: 0 0 14px;
-  font-size: var(--text-small);
-  line-height: 1.55;
-  color: var(--ink-muted);
-}
+   Mỗi tính năng là một THẺ trên nền trang: tiêu đề có huy hiệu, một câu nói vì sao app cần
+   quyền ấy, một nút, một chỗ hiện kết quả. Người duyệt của Zalo đọc đúng khối này khi quyết
+   định có cấp ba quyền hay không, nên nó phải đọc được trước cả khi bấm gì.
 
-/* Hàng chọn màn: ba nút ngang hàng, mỗi nút vẫn đủ 44px chiều cao. Chúng bọc xuống dòng trên máy
-   hẹp thay vì co lại — một nút co dưới 44px là một nút bấm trượt. */
-.quyen-khu__chon {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+   MỌI CẶP MÀU DƯỚI ĐÂY CÓ TÊN TRONG `accessibility.test.ts`. Một màu đẹp mà trượt 4,5:1 thì
+   đổi màu, không nới ngưỡng — chữ mờ là thứ người ít có khả năng phàn nàn nhất phải chịu.
+   --------------------------------------------------------------------------------------------- */
+.tn {
   margin: 0 0 18px;
-}
-
-.quyen-khu__nut {
-  flex: 1 1 auto;
-  min-height: var(--tap-min);
-  padding: 8px 14px;
+  padding: 18px 16px 16px;
   border: 1px solid var(--hairline);
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--surface);
-  font: inherit;
-  font-size: var(--text-small);
-  font-weight: 600;
-  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(22, 37, 61, 0.06);
 }
 
-/* Màn đang xem: nền đặc + chữ trắng, VÀ `aria-pressed` trong mã. Hai đường, vì màu nền một mình
-   thì người mù màu và người dùng trình đọc màn hình không đọc được (README §Non-negotiables #6). */
-.quyen-khu__nut[aria-pressed="true"] {
-  background: var(--navy);
-  border-color: var(--navy);
-  color: #ffffff;
-}
-
-.quyen-khu__nut:focus-visible,
-.quyen__nut:focus-visible {
-  outline: 3px solid var(--navy);
-  outline-offset: 2px;
-}
-
-.quyen__tieu-de {
+.tn__dau {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 0 0 10px;
+}
+
+/* Huy hiệu tròn mang dải màu thương hiệu. Glyph bên trong dùng `--tile-glyph` — tối, vì hai màu
+   thương hiệu đều SÁNG; chữ trắng trên chúng chỉ đạt 2,3:1. */
+.tn__huy-hieu {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-green) 100%);
+  color: var(--tile-glyph);
+}
+
+.tn__glyph {
+  width: 24px;
+  height: 24px;
+}
+
+.tn__tieu-de {
+  margin: 0;
   font-size: 24px;
   line-height: 1.3;
   color: var(--navy);
 }
 
-/* Câu TRẢ LỜI VÌ SAO app cần quyền này. Nó là chữ người duyệt của Zalo đọc, và là chữ người dân
+.tn__dan {
+  margin: 0 0 12px;
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+/* Câu TRẢ LỜI VÌ SAO app cần quyền này. Nó là chữ người duyệt của Zalo đọc, và là chữ người dùng
    đọc trước khi bấm đồng ý — nên cỡ thân bài, không phải cỡ chú thích. */
-.quyen__vi-sao {
+.tn__vi-sao {
   margin: 0 0 16px;
   font-size: var(--text-body);
   line-height: 1.6;
   color: var(--ink);
 }
 
-.quyen__nut {
+.tn__nut {
   display: block;
   width: 100%;
   min-height: var(--tap-min);
@@ -1302,24 +1359,47 @@ body {
 /* ĐANG CHỜ: đổi nền sang navy đậm hơn, KHÔNG giảm độ mờ. `opacity` kéo tương phản chữ xuống dưới
    ngưỡng 4,5:1 đúng lúc màn hình đang nói một điều người dùng cần đọc. Trạng thái nói bằng CHỮ
    trên chính nút ("Đang chờ bạn trả lời trên Zalo…"). */
-.quyen__nut:disabled {
+.tn__nut:disabled {
   background-color: var(--navy-deep);
   background-image: none;
   border-color: var(--navy-deep);
 }
 
-.quyen__ket-qua:empty {
+/* Nút phụ: "Quét mã khác". Viền, không nền đặc — nó không được cạnh tranh với nút chính. */
+.tn__nut-phu {
+  display: block;
+  width: 100%;
+  min-height: var(--tap-min);
+  margin: 14px 0 0;
+  padding: 10px 16px;
+  border: 1px solid var(--navy);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.tn__nut:focus-visible,
+.tn__nut-phu:focus-visible,
+.tn-hanh-dong:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.tn__ket-qua:empty {
   display: none;
 }
 
-.quyen__xong {
+.tn__xong {
   margin: 0 0 8px;
   font-size: var(--text-body);
   font-weight: 700;
   color: var(--navy);
 }
 
-.quyen__do {
+.tn__do {
   margin: 0 0 10px;
   padding-left: 22px;
   font-size: var(--text-body);
@@ -1328,34 +1408,159 @@ body {
 }
 
 /* Câu nói ra rằng số điện thoại / toạ độ KHÔNG tới thiết bị. Viền trái + chữ, không riêng màu. */
-.quyen__giai-thich {
-  margin: 0;
+.tn__giai-thich {
+  margin: 0 0 10px;
   padding: 12px 14px;
   border-left: 4px solid var(--brand-green);
   border-radius: 0 10px 10px 0;
-  background: var(--surface);
+  background: var(--surface-alt);
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+/* Câu nói ra thứ bản dựng này CHƯA làm được (chưa xếp theo khoảng cách, chưa gửi yêu cầu đi).
+   Cùng khuôn với câu trên nhưng viền đứt, và KHÔNG có màu đỏ: đây không phải một lỗi, đây là một
+   ranh giới được nói ra. */
+.tn__ranh-gioi {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 4px dashed var(--brand-blue);
+  border-radius: 0 10px 10px 0;
+  background: var(--surface-alt);
   font-size: var(--text-small);
   line-height: 1.55;
   color: var(--ink);
 }
 
 /* Từ chối / ngoài Zalo / chưa lấy được. Cùng một khuôn: đây không phải báo lỗi, và không có màu
-   đỏ nào ở đây — từ chối là quyền của người dân, không phải một sự cố. */
-.quyen__loi {
+   đỏ nào ở đây — từ chối là quyền của người dùng, không phải một sự cố. */
+.tn__loi {
   margin: 0;
   padding: 12px 14px;
   border-left: 4px solid var(--brand-blue);
   border-radius: 0 10px 10px 0;
-  background: var(--surface);
+  background: var(--surface-alt);
   font-size: var(--text-body);
   line-height: 1.55;
   color: var(--ink);
 }
 
-/* Nội dung mã QR: dữ liệu THẬT, dài tuỳ ý, có thể không có khoảng trắng. Ngắt ở mọi ký tự để nó
-   không tràn ra ngoài màn hình. */
-.quyen__qr {
+.tn__rieng-tu {
+  margin: 10px 0 0;
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+.tn__nhac {
+  margin: 14px 0 10px;
+  font-size: var(--text-body);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.tn__doi-nut {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tn__loi-hua {
+  margin: 16px 0 0;
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+/* Nút hành động dùng chung: gọi, gửi email, mở liên kết, chỉ đường. Đích chạm đủ 44px, chữ navy
+   trên nền thẻ — cặp ấy có tên trong `accessibility.test.ts`. */
+.tn-hanh-dong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap-min);
+  padding: 8px 14px;
+  border: 1px solid var(--navy);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--navy);
+  text-decoration: none;
+}
+
+.tn-hanh-dong--rong {
+  flex: 1 1 200px;
+}
+
+.tn-hanh-dong__glyph {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- tấm thiếp đã bóc tách ---------- */
+
+.the-tt {
   margin: 0;
+  padding: 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface-alt);
+}
+
+.the-tt__tieu-de {
+  margin: 0 0 10px;
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.the-tt__danh-sach {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.the-tt__dong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.the-tt__dong:first-child {
+  border-top: none;
+}
+
+.the-tt__nhan {
+  flex: 0 0 96px;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+.the-tt__gia-tri {
+  flex: 1 1 140px;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.the-tt__nhan-tho {
+  margin: 0 0 6px;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+/* Nội dung mã quét được: dữ liệu THẬT, dài tuỳ ý, có thể không có khoảng trắng. Ngắt ở mọi ký tự
+   để nó không tràn ra ngoài màn hình. */
+.the-tt__tho {
+  margin: 0 0 10px;
   padding: 12px 14px;
   border: 1px solid var(--hairline);
   border-radius: 12px;
@@ -1367,10 +1572,46 @@ body {
   word-break: break-all;
 }
 
-.quyen__loi-hua {
-  margin: 16px 0 0;
+/* ---------- ba văn phòng ---------- */
+
+.van-phong {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.van-phong__mot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.van-phong__glyph {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  color: var(--brand-blue);
+}
+
+.van-phong__chu {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.van-phong__ten {
+  display: block;
+  font-size: var(--text-body);
+  color: var(--navy);
+}
+
+.van-phong__dia-chi {
+  display: block;
   font-size: var(--text-small);
-  line-height: 1.55;
+  line-height: 1.5;
   color: var(--ink-muted);
 }
 
@@ -1381,10 +1622,10 @@ body {
    một văn bản pháp lý mà tay run không mở nổi là một văn bản không đọc được. `accessibility.
    test.ts` ghim ngưỡng ấy.
 
-   `list-style: none` trên `ol` mà VẪN dùng thẻ `ol`: số mục do React in ra (bản `goc` 7 mục, bản
-   `quyen` 8 — xem ChinhSachRiengTu.tsx), nhưng cấu trúc phải là danh sách có thứ tự để trình đọc
-   màn hình đọc đúng "mục 3 trên 8". Để trình duyệt tự đánh số thì số của nó và số trong tiêu đề
-   sẽ hiện ra hai lần cạnh nhau.
+   `list-style: none` trên `ol` mà VẪN dùng thẻ `ol`: số mục do React in ra lúc vẽ (xem
+   ChinhSachRiengTu.tsx — không viết cứng vào tiêu đề), nhưng cấu trúc phải là danh sách có thứ
+   tự để trình đọc màn hình đọc đúng "mục 3 trên 9". Để trình duyệt tự đánh số thì số của nó và
+   số trong tiêu đề sẽ hiện ra hai lần cạnh nhau.
    --------------------------------------------------------------------------------------------- */
 .chinh-sach {
   margin-top: 28px;

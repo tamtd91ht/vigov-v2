@@ -17,23 +17,26 @@
  *   Ai nới một trong hai dây bẫy ấy phải sửa tệp này TRƯỚC. Nếu không, chính sách thành sai mà
  *   không có gì đỏ lên.
  *
- * VÌ SAO PHẦN BA QUYỀN KHÔNG NẰM Ở ĐÂY MÀ SAU `bien-the/quyen`:
+ * VÌ SAO MỤC VỀ BA QUYỀN NAY NẰM THẲNG TRONG DANH SÁCH NÀY:
  *
- *   Bản `goc` không xin quyền nào cả. Một chính sách trong bản `goc` mà nhắc tới số điện thoại
- *   hay vị trí là mô tả sai đúng bản dựng đang được duyệt — và người duyệt đọc chính sách ấy
- *   cạnh một app không hề xin quyền. Xem `features/quyen/index.ts`.
+ *   Trước đây nó nằm sau cửa `bien-the/quyen`, vì có một biến thể bản dựng KHÔNG xin quyền nào
+ *   và một chính sách nhắc tới số điện thoại trong bản ấy là mô tả sai đúng bản đang được duyệt.
+ *   Biến thể ấy không còn: ba quyền nay thuộc về chính ứng dụng sản phẩm, có mặt trong MỌI bản
+ *   dựng. Giữ lại cơ chế tách đôi danh sách khi không còn gì để tách là giữ lại một cái bẫy —
+ *   người sau sẽ thêm một mục vào nửa sai và không hiểu vì sao thứ tự đọc ra lộn xộn.
  *
  * VÌ SAO THIẾU MÃ SỐ THUẾ VÀ NGƯỜI ĐẠI DIỆN: không có nguồn. `content/company-profile.ts` chỉ
  * có những gì đã công bố trên vihatsoftware.com và vihatgroup.com. Bịa hai trường ấy trong một
- * văn bản pháp lý là thứ không sửa lại được sau khi nộp. → README §"Open content questions"
+ * văn bản pháp lý là thứ không sửa lại được sau khi nộp. → README §"Còn thiếu"
  */
+
+import { DOAN_CHINH_SACH_TINH_NANG } from "../features/tinh-nang/noi-dung";
 
 export type MucChinhSach = {
   /** Dùng làm khoá React và làm mỏ neo cho test. Không hiện ra. */
   ma: string;
   tieu_de: string;
-  /** Mỗi phần tử là một đoạn. Danh sách, không phải một chuỗi có `
-` — JSX vẽ từng đoạn. */
+  /** Mỗi phần tử là một đoạn. Danh sách, không phải một chuỗi có `\n` — JSX vẽ từng đoạn. */
   doan: readonly string[];
 };
 
@@ -41,16 +44,20 @@ export type MucChinhSach = {
  * Phiên bản và ngày hiệu lực — HẰNG CÓ TÊN, không rải chuỗi trong component.
  *
  * Một chính sách không ghi phiên bản là một chính sách không chứng minh được nó đã nói gì vào
- * lúc người dùng bấm đồng ý. Khi giai đoạn 2 có đường máy chủ đổi token, tệp này phải lên `1.1`
- * TRƯỚC khi đường ấy chạy — xem mục `cam-ket-cap-nhat`.
+ * lúc người dùng bấm đồng ý.
+ *
+ * LÊN `1.1` VÌ NỘI DUNG ĐÃ ĐỔI, KHÔNG PHẢI VÌ ĐỔI CÂU CHỮ CHO ĐẸP: ba quyền nay gắn với ba tính
+ * năng của ứng dụng sản phẩm, và mục "Chuyển dữ liệu cho bên thứ ba" nay nói ra việc ứng dụng mở
+ * trang bản đồ và trang web của công ty. Hai thay đổi ấy là thay đổi về HÀNH VI, nên số phiên
+ * bản phải đổi theo — nếu không thì "phiên bản 1.0" chỉ tên hai văn bản khác nhau.
  */
-export const PHIEN_BAN_CHINH_SACH = "1.0";
+export const PHIEN_BAN_CHINH_SACH = "1.1";
 export const NGAY_HIEU_LUC = "18/09/2026";
 
 export const TIEU_DE_CHINH_SACH = "Chính sách quyền riêng tư";
 
 /**
- * CÂU ĐỨNG ĐẦU, và nó đúng với CẢ BA biến thể bản dựng.
+ * CÂU ĐỨNG ĐẦU, và nó đúng với CẢ HAI biến thể bản dựng.
  *
  * Cố ý không viết "chúng tôi có thể thu thập…" — lối viết phòng thủ ấy sẽ là một câu SAI ở đây,
  * và nó vứt đi điều mạnh nhất app này có để nói.
@@ -58,17 +65,13 @@ export const TIEU_DE_CHINH_SACH = "Chính sách quyền riêng tư";
 export const CAU_DAU = "Ứng dụng này không lưu trữ và không gửi đi bất kỳ dữ liệu nào của bạn.";
 
 /**
- * DANH SÁCH TÁCH LÀM HAI, và đó là lý do kỹ thuật chứ không phải cách xếp cho đẹp.
+ * MỘT DANH SÁCH PHẲNG, ĐỌC TỪ TRÊN XUỐNG.
  *
- * Mục về ba quyền đến từ `bien-the/quyen` và phải nằm NGAY SAU "Dữ liệu ứng dụng xử lý" — đọc
- * "ứng dụng xử lý gì" rồi mới tới "ba quyền ấy là gì" mới thành một mạch. Một danh sách phẳng
- * duy nhất thì chỉ nối được vào đầu hoặc cuối.
- *
- * ĐÁNH SỐ DO LÚC VẼ QUYẾT ĐỊNH, KHÔNG VIẾT CỨNG VÀO TIÊU ĐỀ: bản `goc` có 7 mục, bản `quyen` có
- * 8, và một con số viết cứng sẽ lệch ở đúng một trong hai bản — lệch trong một văn bản pháp lý,
- * mà không có gì đỏ lên. Cũng vì thế không câu nào trong tệp này tham chiếu tới "mục số N".
+ * ĐÁNH SỐ DO LÚC VẼ QUYẾT ĐỊNH, KHÔNG VIẾT CỨNG VÀO TIÊU ĐỀ: một con số viết cứng sẽ lệch ngay
+ * lần thêm hoặc bớt mục kế tiếp — lệch trong một văn bản pháp lý, mà không có gì đỏ lên. Cũng vì
+ * thế không câu nào trong tệp này tham chiếu tới "mục số N".
  */
-export const MUC_TRUOC_QUYEN: readonly MucChinhSach[] = [
+export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
   {
     ma: "ben-xu-ly",
     tieu_de: "Bên xử lý dữ liệu",
@@ -85,10 +88,11 @@ export const MUC_TRUOC_QUYEN: readonly MucChinhSach[] = [
       "Ứng dụng không đọc danh bạ, không đọc tin nhắn, không đọc thư viện ảnh và không theo dõi hành vi sử dụng của bạn.",
     ],
   },
-];
-
-/** Phần sau mục quyền. Xem chú thích của `MUC_TRUOC_QUYEN` về việc vì sao tách. */
-export const MUC_SAU_QUYEN: readonly MucChinhSach[] = [
+  {
+    ma: "ba-quyen",
+    tieu_de: "Ba quyền ứng dụng xin, và vì sao",
+    doan: DOAN_CHINH_SACH_TINH_NANG,
+  },
   {
     ma: "cach-thuc",
     tieu_de: "Cách xử lý và thời gian lưu",
@@ -101,7 +105,9 @@ export const MUC_SAU_QUYEN: readonly MucChinhSach[] = [
     ma: "ben-thu-ba",
     tieu_de: "Chuyển dữ liệu cho bên thứ ba",
     doan: [
-      "Không có bên thứ ba nào nhận dữ liệu từ ứng dụng này, trong nước hay ngoài nước.",
+      "Ứng dụng không gửi dữ liệu của bạn cho bất kỳ bên thứ ba nào, trong nước hay ngoài nước. Nó không có đường gửi dữ liệu đi đâu cả.",
+      "Có ba chỗ ứng dụng mở một trang bên ngoài, và cả ba đều chỉ mở khi chính bạn bấm: trang web của công ty, trang bản đồ để chỉ đường tới một văn phòng, và trang web ghi trên mã QR bạn vừa quét. Ứng dụng không gửi kèm thông tin nào của bạn khi mở chúng; từ lúc trang mở ra, việc bạn dùng trang ấy chịu sự điều chỉnh của chính sách bên sở hữu nó.",
+      "Nút chỉ đường chỉ mang theo ĐỊA CHỈ VĂN PHÒNG của chúng tôi — không mang theo vị trí của bạn, vì ứng dụng không hề có vị trí của bạn.",
       "Zalo là nền tảng ứng dụng chạy trên đó. Việc bạn dùng Zalo chịu sự điều chỉnh của chính sách quyền riêng tư của Zalo, nằm ngoài phạm vi văn bản này.",
     ],
   },
@@ -119,7 +125,7 @@ export const MUC_SAU_QUYEN: readonly MucChinhSach[] = [
     tieu_de: "Rủi ro có thể xảy ra",
     doan: [
       "Vì ứng dụng không lưu và không gửi dữ liệu đi đâu, không có rủi ro rò rỉ dữ liệu từ phía ứng dụng.",
-      "Rủi ro còn lại nằm ở màn hình: nội dung hiển thị sau khi bạn dùng một tính năng có thể bị người đứng cạnh nhìn thấy. Hãy dùng ở nơi bạn thấy yên tâm.",
+      "Rủi ro còn lại nằm ở màn hình: nội dung hiển thị sau khi bạn dùng một tính năng có thể bị người đứng cạnh nhìn thấy. Điều này đáng lưu ý nhất khi bạn vừa quét một tấm danh thiếp — thông tin hiện ra là dữ liệu cá nhân của người đã đưa nó cho bạn.",
     ],
   },
   {
