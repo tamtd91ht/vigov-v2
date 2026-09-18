@@ -74,7 +74,7 @@ Cắt theo **bộ phận chịu trách nhiệm trong một UBND xã** — xem l�
 | Service | Bộ phận ngoài đời |
 |---|---|
 | `platform` | Nền tảng — nhà cung cấp vận hành, **chỉ siêu dữ liệu** |
-| `identity` | Tổ chức – cán bộ, và định danh công dân toàn nền tảng |
+| `identity` | Tổ chức – cán bộ, định danh công dân toàn nền tảng, và **đơn vị dân cư** (thôn / tổ dân phố) |
 | `documents` | Văn thư — văn bản đến/đi |
 | `petitions` | Tiếp dân — phản ánh, khiếu nại, tố cáo, và nhiệm vụ phát sinh |
 | `dossiers` | Một cửa — hồ sơ thủ tục hành chính |
@@ -84,6 +84,19 @@ Cắt theo **bộ phận chịu trách nhiệm trong một UBND xã** — xem l�
 
 **Hai thứ cố ý KHÔNG phải service:** nhật ký thao tác (`core/audit`) và lưu trữ tệp
 (`core/storage`). Lý do ở ADR 0001.
+
+**`identity` giữ thêm đơn vị dân cư — mở rộng công khai, không phải lệ.** Thôn / tổ dân phố là
+đơn vị **trong bộ máy xã**, đổi cùng nhịp với sơ đồ tổ chức, nên nằm cạnh nó. Kèm theo là hai
+danh mục treo vào bộ máy ấy: `Loại đơn vị dân cư` và `Khối nhiệm vụ`. Ghi ở đây vì một ranh
+giới nới ra trong im lặng là ranh giới không còn ai kiểm được — vì sao và cái giá phải trả:
+`kb/10-decisions/0024-so-huu-danh-muc-tham-chieu.md`.
+
+## Danh mục tham chiếu thuộc về ai
+
+Màn hình `Cấu hình → Danh mục` gom mười nhóm vào một chỗ vì **người quản trị** muốn sửa chúng ở
+một chỗ. Đó là sự thật về giao diện. Ở tầng dữ liệu, mỗi nhóm đi theo miền dùng nó, và service
+của miền ấy sở hữu — chủ sở hữu từng nhóm, ba nhóm còn đang chờ khách, và phép thử để biết một
+thứ có phải danh mục hay không: **ADR 0024**.
 
 → Thuật ngữ nghiệp vụ và ánh xạ tên tài nguyên URL: `kb/00-foundation/ubiquitous-language.md`
 → Ai sở hữu thực thể nào: `kb/30-indexes/data-ownership.json` (GENERATED)

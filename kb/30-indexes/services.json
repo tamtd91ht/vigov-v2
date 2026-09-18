@@ -30,7 +30,7 @@
       "name": "identity",
       "path": "service-identity",
       "has_main": true,
-      "summary": "Tổ chức – cán bộ — Staff accounts and RBAC (per commune); citizen identity (platform-wide) and the citizen↔commune relationship; sessions and OTP."
+      "summary": "Tổ chức – cán bộ — Staff accounts and RBAC (per commune); the org chart and the residential units (thôn / tổ dân phố) under it; citizen identity (platform-wide) and the citizen↔commune relationship; sessions and OTP."
     },
     {
       "name": "petitions",

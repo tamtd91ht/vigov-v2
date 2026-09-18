@@ -268,7 +268,7 @@
     },
     "http.MaTranQuyen": {
       "kind": "func",
-      "at": "service-identity/internal/http/quyen.go:179"
+      "at": "service-identity/internal/http/quyen.go:186"
     },
     "http.MaTranQuyenDoc": {
       "kind": "type",

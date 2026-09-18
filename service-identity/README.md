@@ -1,10 +1,16 @@
 # identity
 
-**Tổ chức – cán bộ** — Staff accounts and RBAC (per commune); citizen identity (platform-wide) and the citizen↔commune relationship; sessions and OTP.
+**Tổ chức – cán bộ** — Staff accounts and RBAC (per commune); the org chart and the residential units (thôn / tổ dân phố) under it; citizen identity (platform-wide) and the citizen↔commune relationship; sessions and OTP.
 
 ## Owns
 
 Staff · Role · Permission · OrgNode · Citizen · CitizenCommune · Session · OtpCode
+
+**Decided, not yet built** — no table, so deliberately absent from the list above and from the
+generated index (ADR 0021, generator rule 4): the residential units (thôn / tổ dân phố) and the
+two reference catalogues that hang off the org side, `Loại đơn vị dân cư` and `Khối nhiệm vụ`.
+They are owned here rather than by the services that read them because they change with the org
+chart, not with the task lifecycle. Reasoning, and what it costs `petitions`: ADR 0024.
 
 Ownership is authoritative in `kb/30-indexes/data-ownership.json` (GENERATED — run `make kb`).
 No other service may open this service's schema; they read through gRPC or events (rule 2).
