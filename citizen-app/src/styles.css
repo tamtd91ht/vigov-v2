@@ -7,12 +7,29 @@
  * standard for the whole repository is cheaper than holding two, and phase 2 inherits this
  * file rather than rediscovering it.
  *
- * Contrast of the palette below, measured against its own background:
- *   --ink (#1a2233) on white ............ ~14.5:1
- *   --ink-muted (#4a5568) on white ...... ~7.4:1
- *   white on --navy (#1e3150) ........... ~12.6:1
- * Every pair clears 4.5:1 with room to spare, which is what keeps the app readable in
- * sunlight and for an ageing eye.
+ * THE TWO BRAND COLOURS AND WHERE THEY MAY NOT GO:
+ *
+ *   --brand-blue (#00aef4) and --brand-green (#78bd1a) are counted out of the logo file
+ *   brand/lg_vhs_full.svg — they are the real marks, not an approximation. Both are LIGHT:
+ *   #00aef4 on white is 2.5:1 and #78bd1a on white is 2.3:1, far under the 4.5:1 this app
+ *   committed to. So neither is ever a text colour and neither ever carries white text. They
+ *   are surfaces and decoration; text on them is --tile-glyph (6.1:1 and 6.7:1).
+ *
+ *   --navy (#1e3150) is NOT a brand colour. It is the website's frame colour and the
+ *   `headerColor` of app-config.json, and bundle-for-zalo.test.ts pins those three places to one
+ *   value. Changing it here without changing app-config.json and index.html gives the reviewer a
+ *   two-tone bar where the platform header meets ours.
+ *
+ * Contrast of the palette below, measured against its own background (WCAG 2.1, recomputed from
+ * the hex values by accessibility.test.ts — these numbers are a summary, that test is the check):
+ *   --ink on white ....................... 14.5:1     --ink on --surface-tint ......... 13.0:1
+ *   --ink-muted on white ................. 7.4:1      --ink-muted on --surface-tint ... 6.2:1
+ *   white on --navy ...................... 13.0:1     --ink-muted on --grid-line ...... 6.2:1
+ *   white on --panel-glow-blue ........... 9.3:1      --on-panel on --panel-glow-blue . 7.1:1
+ *   white on --panel-line-blue ........... 6.8:1      --on-panel on --panel-line-blue . 5.2:1
+ *   --tile-glyph on --brand-blue ......... 6.1:1      --tile-glyph on --brand-green ... 6.7:1
+ * The gradients are built from these stops and no others, so the lightest point any text sits
+ * on is one of the values above — that is why a gradient can be checked at all.
  */
 
 :root {
@@ -23,6 +40,33 @@
   --surface: #ffffff;
   --surface-alt: #f2f5f9;
   --hairline: #d5dce6;
+
+  /* Brand, counted from brand/lg_vhs_full.svg. Decoration and surfaces only — never text. */
+  --brand-blue: #00aef4;
+  --brand-green: #78bd1a;
+
+  /* The two lightest points of the dark panels: brand glow blended into navy at the strength
+     used below. Declared as solid stops so the gradients contain no colour nobody measured. */
+  --panel-glow-blue: #184a71;
+  --panel-glow-green: #2a4336;
+  /* Secondary text on a dark panel. 10.0:1 on --navy, 7.1:1 at the lightest point of the glow,
+     and 5.2:1 where it crosses a node line of the drawn backdrop — the worst case, and the
+     reason this value is lighter than the grey that reads well on white. */
+  --on-panel: #d8e2f0;
+
+  /* The colour a 1px node line of the backdrop actually becomes: the brand stroke at the
+     opacity used below, over the LIGHTEST point of the panel. Text does cross those lines, so
+     they are stops like any other and accessibility.test.ts measures them. */
+  --panel-line-blue: #13608e;
+  --panel-line-green: #2d635e;
+
+  /* The two washes of the page background, and the graph-paper rule drawn over them. */
+  --surface-tint: #d5ecf8;
+  --surface-tint-green: #e3eede;
+  --grid-line: #e3e9f1;
+
+  /* Glyph colour on a brand-gradient tile. Dark on purpose: see the note above. */
+  --tile-glyph: #16253d;
 
   /* Never below 16px. 17px gives a little headroom without reflowing on a 320px screen. */
   --text-body: 17px;
@@ -60,11 +104,24 @@ body {
 /* ---------- header ---------- */
 
 .app-header {
-  background: var(--navy);
+  position: relative;
+  background: linear-gradient(120deg, var(--navy-deep) 0%, var(--navy) 100%);
   color: #ffffff;
-  padding: 14px 16px;
+  padding: 14px 16px 16px;
   padding-top: calc(14px + env(safe-area-inset-top, 0px));
   flex: 0 0 auto;
+}
+
+/* The seam with the platform's own header. A brand rule here reads as intent; without it the
+   two navy bars look like one bar that failed to render. Decoration only — no text sits on it. */
+.app-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-green) 100%);
 }
 
 .app-header__owner {
@@ -77,23 +134,42 @@ body {
 .app-header__screen {
   font-size: var(--text-small);
   margin: 2px 0 0;
-  opacity: 0.95;
+  color: var(--on-panel);
 }
 
 /* ---------- scrolling content ---------- */
 
+/*
+ * The page itself carries the technology motif: two soft brand washes and a faint graph-paper
+ * rule. Every stop is a SOLID colour — no `transparent`, no alpha — so the darkest background
+ * any body text can land on is --grid-line, which is measured (6.2:1 for secondary text).
+ * A gradient fading to `transparent` would blend through unmeasured colours and, in older
+ * WebViews, fringe grey.
+ */
 .app-main {
   flex: 1 1 auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 16px 16px 24px;
+  padding: 16px 16px 28px;
+  background-color: var(--surface-alt);
+  background-image:
+    linear-gradient(var(--grid-line) 1px, rgba(255, 255, 255, 0) 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, rgba(255, 255, 255, 0) 1px),
+    linear-gradient(
+      165deg,
+      var(--surface-tint) 0%,
+      var(--surface-alt) 46%,
+      var(--surface-tint-green) 100%
+    );
+  background-size: 34px 34px, 34px 34px, 100% 100%;
+  background-attachment: local, local, local;
 }
 
 .screen-heading {
-  font-size: 24px;
-  line-height: 1.35;
-  margin: 0 0 4px;
-  color: var(--ink);
+  font-size: 26px;
+  line-height: 1.3;
+  margin: 4px 0 4px;
+  color: var(--navy);
 }
 
 .screen-lead {
@@ -102,12 +178,200 @@ body {
   margin: 0 0 16px;
 }
 
+/* ---------- dark panels: hero, banner, stat band ---------- */
+
+/*
+ * One construction, three uses. The dark panel is what gives the app a spine: a citizen
+ * scrolling four screens should be able to tell them apart without reading, and the panel is
+ * the landmark each screen opens with.
+ */
+.hero,
+.banner,
+.band {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  color: #ffffff;
+  background-color: var(--navy);
+  /*
+   * ONE glow per panel, not two stacked. A second opaque gradient layer simply hides the first,
+   * and the only way to see both would be an alpha layer — which puts text over a blend nobody
+   * declared and nobody measured. Each screen gets its own single glow instead; that is where
+   * the rhythm between the four screens comes from.
+   */
+  background-image: radial-gradient(
+    78% 130% at 108% -20%,
+    var(--panel-glow-blue) 0%,
+    var(--navy-deep) 68%
+  );
+}
+
+.hero {
+  padding: 22px 20px 24px;
+  margin: 0 0 18px;
+}
+
+.banner {
+  padding: 20px;
+  margin: 0 0 16px;
+}
+
+/* Rhythm between screens: the same panel, lit from the other side. */
+.banner--contact {
+  background-image: radial-gradient(
+    76% 130% at -8% -20%,
+    var(--panel-glow-green) 0%,
+    var(--navy) 70%
+  );
+}
+
+/* The statistics band is lit from below, so the home screen reads as two different surfaces
+   rather than one long dark block. */
+.band {
+  background-image: radial-gradient(
+    80% 140% at 50% 130%,
+    var(--panel-glow-green) 0%,
+    var(--navy-deep) 72%
+  );
+}
+
+/*
+ * The drawn backdrop sits BEHIND the words, so its opacity is not a taste decision: at 0.22 the
+ * lightest line a letter can cross is --panel-line-blue / --panel-line-green, and secondary text
+ * still clears 4.5:1 there. Raising it is how a panel becomes beautiful and unreadable at once.
+ */
+.hero__backdrop,
+.banner__backdrop,
+.band__backdrop {
+  position: absolute;
+  pointer-events: none;
+  color: var(--brand-blue);
+  opacity: 0.22;
+}
+
+.hero__backdrop {
+  top: -6%;
+  right: -4%;
+  width: 78%;
+  height: 112%;
+}
+
+.banner__backdrop {
+  top: 0;
+  right: -6%;
+  width: 62%;
+  height: 130%;
+}
+
+.band__backdrop {
+  top: -18px;
+  right: -14px;
+  width: 132px;
+  height: 132px;
+  color: var(--brand-green);
+  opacity: 0.22;
+}
+
+.hero__content,
+.banner__content {
+  position: relative;
+}
+
+.hero__title {
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0;
+  color: #ffffff;
+}
+
+.banner__title {
+  font-size: 26px;
+  line-height: 1.25;
+  margin: 0;
+  color: #ffffff;
+}
+
+.hero__lead,
+.banner__lead {
+  font-size: var(--text-body);
+  margin: 6px 0 0;
+  color: var(--on-panel);
+}
+
+.hero__body {
+  font-size: var(--text-body);
+  margin: 14px 0 0;
+  color: #ffffff;
+}
+
+.hero__rule {
+  display: block;
+  width: 88px;
+  height: 4px;
+  border-radius: 2px;
+  margin: 18px 0 0;
+  background: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-green) 100%);
+}
+
+/* ---------- section titles ---------- */
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  line-height: 1.3;
+  margin: 22px 0 10px;
+  color: var(--navy);
+}
+
+.section-title__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-tint);
+  color: var(--navy);
+}
+
+.section-title__mark svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* The constellation used as a section mark fills its tile instead of sitting inside it. */
+.section-title__net {
+  width: 100%;
+  height: 100%;
+  color: var(--navy);
+}
+
+/* ---------- cards ---------- */
+
 .card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 16px;
   margin: 0 0 12px;
+}
+
+/* A brand edge instead of a brand headline: the colour carries no meaning, so it may be light. */
+.card--accent {
+  border-left: 4px solid var(--brand-blue);
+}
+
+.card--statement {
+  padding-top: 18px;
+}
+
+.card--statement .tile {
+  margin: 0 0 10px;
 }
 
 .card__title {
@@ -127,65 +391,310 @@ body {
   color: var(--ink-muted);
   background: var(--surface);
   border-left: 4px solid var(--navy);
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 10px 10px 0;
   padding: 12px 14px;
   margin: 0 0 12px;
 }
 
+/* The attribution notes are the sentences a reviewer must not miss. The brand edge makes them
+   look deliberate rather than like a disclaimer somebody squeezed in. */
+.note--brand {
+  border-left-color: var(--brand-green);
+}
+
+/* ---------- icon tiles ---------- */
+
+/*
+ * 44x44 — the same minimum a tap target has, so a tile next to a link never makes the row
+ * shorter than a thumb needs. The glyph is --tile-glyph on the brand gradient: 6.1:1 at the
+ * blue end and 6.7:1 at the green end. A white glyph there would be 2.5:1.
+ */
+.tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border-radius: 13px;
+  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-green) 100%);
+  color: var(--tile-glyph);
+}
+
+.tile--soft {
+  background: var(--surface-tint);
+  color: var(--navy);
+}
+
+.tile__glyph {
+  width: 24px;
+  height: 24px;
+}
+
+/* ---------- statistics band ---------- */
+
+.band {
+  padding: 6px;
+  margin: 0 0 16px;
+}
+
 .stat-grid {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin: 0 0 12px;
+  gap: 1px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .stat {
-  background: var(--surface);
-  border: 1px solid var(--hairline);
+  padding: 14px 12px;
   border-radius: 12px;
-  padding: 14px;
+}
+
+/* The lead figure gets the full width: five cells in a two-column grid otherwise leave a hole,
+   and a hole reads as a figure that failed to load. */
+.stat--wide {
+  grid-column: 1 / -1;
+}
+
+/* Hairline separators instead of cell backgrounds: a lighter cell would be a background colour
+   nobody measured sitting under white text. A border carries no text. */
+.stat + .stat {
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.stat:nth-child(odd):not(:first-child) {
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
 }
 
 .stat__value {
   display: block;
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 700;
-  color: var(--navy);
+  line-height: 1.2;
+  color: #ffffff;
+}
+
+.stat--wide .stat__value {
+  font-size: 30px;
 }
 
 .stat__label {
   display: block;
   font-size: var(--text-small);
-  color: var(--ink-muted);
+  color: var(--on-panel);
 }
 
-.list {
+/* ---------- keyword chips ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px 8px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-tint);
+  color: var(--ink);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.chip__glyph {
+  width: 19px;
+  height: 19px;
+  color: var(--navy);
+}
+
+/* ---------- solution cards ---------- */
+
+.solutions {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.list__item {
+.solution {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: 14px;
+  padding: 14px;
   margin: 0 0 10px;
+}
+
+.solution__text {
+  display: block;
+}
+
+.solution__product {
+  display: block;
+  font-size: 19px;
+  color: var(--navy);
+}
+
+.solution__headline {
+  display: block;
   font-size: var(--text-body);
+  color: var(--ink);
+}
+
+.solution__note {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+/* ---------- member units ---------- */
+
+.unit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.unit {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  padding: 14px;
+  font-size: var(--text-body);
+}
+
+/*
+ * The publishing unit is set apart by a tinted surface, a brand border AND the badge's words.
+ * Never by colour alone — a coloured square says nothing to a screen reader or to a colour-blind
+ * eye, and which of six units published this app is the one thing this list has to answer.
+ *
+ * It deliberately does NOT get a bigger cell: six equal cards say six sister companies, and a
+ * layout that promotes one of them makes a claim about the group that nobody sourced.
+ */
+.unit--owner {
+  background: var(--surface-tint);
+  border-color: var(--brand-blue);
+}
+
+.unit__name {
+  display: block;
+  font-weight: 700;
+  color: var(--navy);
 }
 
 .badge {
   display: inline-block;
-  margin-left: 8px;
-  padding: 2px 8px;
+  margin-top: 6px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: var(--navy);
   color: #ffffff;
-  font-size: 14px;
+  font-size: var(--text-small);
   font-weight: 600;
-  /* The badge carries its own words. Meaning never rests on the colour alone. */
+  line-height: 1.35;
+  /* The badge carries its own words, at full body size: it is the sentence that says which of
+     six companies published this app, not a decoration. Meaning never rests on the colour. */
+}
+
+/* ---------- certificates ---------- */
+
+.cert-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cert {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+/* Three certificates in a two-column grid: the last one takes the full row rather than
+   leaving a gap that reads as a missing card. */
+.cert:last-child {
+  grid-column: 1 / -1;
+}
+
+.cert__glyph {
+  display: block;
+  width: 24px;
+  height: 24px;
+  margin: 0 0 8px;
+  color: var(--navy);
+}
+
+.cert__name {
+  display: block;
+  font-size: var(--text-body);
+  color: var(--ink);
+}
+
+.cert__scope {
+  display: block;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+/* ---------- offices ---------- */
+
+.office-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.office {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  padding: 14px;
+  margin: 0 0 10px;
+}
+
+.office__glyph {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+  color: var(--navy);
+}
+
+.office__text {
+  display: block;
+}
+
+.office__name {
+  display: block;
+  color: var(--navy);
+}
+
+.office__address {
+  display: block;
+  font-size: var(--text-body);
+  color: var(--ink);
 }
 
 /* ---------- actions ---------- */
@@ -195,25 +704,30 @@ body {
   align-items: center;
   gap: 12px;
   min-height: var(--tap-min);
-  padding: 12px 16px;
+  padding: 12px 14px;
   margin: 0 0 10px;
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 12px;
+  border-radius: 14px;
   color: var(--ink);
   text-decoration: none;
 }
 
 .action--primary {
-  background: var(--navy);
+  background-color: var(--navy);
+  background-image: radial-gradient(90% 200% at 110% 50%, var(--panel-glow-blue) 0%, var(--navy) 70%);
   border-color: var(--navy);
   color: #ffffff;
+}
+
+.action--primary .action__label {
+  color: var(--on-panel);
 }
 
 .action__label {
   display: block;
   font-size: var(--text-small);
-  opacity: 0.95;
+  color: var(--ink-muted);
 }
 
 .action__value {
@@ -261,6 +775,30 @@ body {
   outline-offset: -3px;
 }
 
+/* ---------- motion ---------- */
+
+/*
+ * The one moving thing in the app, and it is decoration behind a dark panel: the node
+ * constellation drifts a few pixels. It runs ONLY under `no-preference`, so a citizen who has
+ * asked their phone for less motion — vestibular disorder, migraine, or simply an older device —
+ * gets a completely static app rather than an app that stops animating some of the time.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .hero__backdrop,
+  .banner__backdrop {
+    animation: drift 24s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-10px, 6px, 0);
+  }
+}
+
 /* ---------- bảng chẩn đoán ----------
  *
  * KHÔNG phải giao diện sản phẩm. Nó chỉ hiện khi app được mở kèm tham số `debug`, và tồn tại để
@@ -274,7 +812,7 @@ body {
   padding: 12px 14px;
   border: 2px dashed var(--hairline);
   border-radius: 10px;
-  background: var(--surface-alt);
+  background: var(--surface);
 }
 
 .chan-doan__nhan {
@@ -313,4 +851,15 @@ body {
   /* Giá trị tham số có thể dài và không có khoảng trắng — để tràn ra thì bảng vỡ khung. */
   word-break: break-all;
   color: var(--ink);
+}
+
+.chan-doan__nguon {
+  margin-top: 10px;
+}
+
+.chan-doan__nhan-nguon {
+  margin: 0 0 4px;
+  font-size: var(--text-small);
+  font-weight: 700;
+  color: var(--ink-muted);
 }

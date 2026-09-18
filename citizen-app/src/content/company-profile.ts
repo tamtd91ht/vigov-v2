@@ -40,6 +40,34 @@ export type Office = {
   address: string;
 };
 
+/**
+ * A technology line of the ViHAT Group ecosystem, shown as one card.
+ *
+ * WHY `product` IS OPTIONAL: the published source names the product on some lines and not on
+ * others. A card whose product name was inferred ("this must be Vboss") would attribute a
+ * product to a company on nothing but a guess, under the name of a real legal entity.
+ */
+export type Solution = {
+  /** Picks the decorative glyph in SolutionsScreen. Never rendered as text. */
+  id: SolutionId;
+  /** Only filled where the source names the product. Left out otherwise, never inferred. */
+  product?: string;
+  /** Verbatim line as published. */
+  headline: string;
+  /** Second verbatim line, where the source publishes one for the same product. */
+  note?: string;
+};
+
+export type SolutionId = "messaging" | "voice-ai" | "crm" | "namecard";
+
+/** Picks the decorative glyph on a keyword chip. Never rendered as text. */
+export type KeywordId = "cloud" | "cpaas" | "ai" | "crm" | "messaging";
+
+export type Keyword = {
+  id: KeywordId;
+  label: string;
+};
+
 export type MemberUnit = {
   name: string;
   /** True for the single unit that owns this app. Drives a text badge, never colour alone. */
@@ -89,6 +117,55 @@ export const GROUP_STATS: readonly Stat[] = [
   { value: "500+", label: "Đối tác" },
   { value: "300+", label: "Nhân sự" },
   { value: "Hơn 100", label: "Quốc gia kết nối" },
+];
+
+/**
+ * THE ECOSYSTEM SOLUTIONS BELONG TO THE GROUP, NOT TO VihatSoftware.
+ *
+ * eSMS, OMICall and the rest are published on vihatgroup.com as the PARENT's ecosystem.
+ * VihatSoftware is one member unit of six (MEMBER_UNITS). Printing these lines without the
+ * note below would read as the subsidiary's own product line — the same overstatement the
+ * group figures carry a note for.
+ */
+export const ECOSYSTEM = {
+  ownerNote:
+    "Các giải pháp dưới đây thuộc hệ sinh thái của Tập đoàn ViHAT Group, công ty mẹ của VihatSoftware.",
+} as const;
+
+export const SOLUTIONS: readonly Solution[] = [
+  {
+    id: "messaging",
+    product: "eSMS",
+    headline: "Giải pháp CPaaS toàn cầu: Messaging & Voice",
+    note: "Hệ sinh thái giải pháp nâng cao trải nghiệm khách hàng đa kênh",
+  },
+  {
+    id: "voice-ai",
+    product: "OMICall",
+    headline: "Tổng đài đa kênh ứng dụng AI hàng đầu Việt Nam",
+  },
+  // No product name on these two: the published description states the capability without
+  // naming which member unit ships it, and naming one here would be an invention.
+  { id: "crm", headline: "Contact Center tích hợp CRM" },
+  {
+    id: "namecard",
+    headline: "Giải pháp networking và quản lý danh thiếp số cho cá nhân và doanh nghiệp",
+  },
+];
+
+/**
+ * Sourced technology terms, shown as chips. Every label is a term taken from the published
+ * ecosystem description — none of them is a claim this file invents.
+ *
+ * "Tổng đài ảo" is the one label whose typography differs from the source: the source uses the
+ * phrase mid-sentence in lower case, and a chip starts a line. The words are unchanged.
+ */
+export const TECH_KEYWORDS: readonly Keyword[] = [
+  { id: "cpaas", label: "CPaaS" },
+  { id: "messaging", label: "Messaging & Voice" },
+  { id: "cloud", label: "Tổng đài ảo" },
+  { id: "ai", label: "AI" },
+  { id: "crm", label: "CRM" },
 ];
 
 export const MEMBER_UNITS: readonly MemberUnit[] = [

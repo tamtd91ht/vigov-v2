@@ -31,10 +31,40 @@
  * GIỚI HẠN ĐÃ BIẾT: `@minimumVersion 2.11.0`. Máy có Zalo cũ hơn không có hàm này, và nhánh
  * catch là thứ giữ cho app vẫn chạy ở đó.
  */
-export async function thamSoMoApp(): Promise<Record<string, string>> {
+export type KetQuaDo = {
+  /** Theo SDK của Zalo. */
+  sdk: Record<string, string>;
+  /** Theo `location.search` của chính trang. */
+  url: Record<string, string>;
+};
+
+/**
+ * ĐO HAI NGUỒN, KHÔNG MỘT — và câu hỏi thứ hai đáng tiền hơn câu thứ nhất.
+ *
+ * `zmp-sdk` tốn **256 kB thô / 64 kB gzip** trong bundle vì nó kéo theo `zod`; đo được bằng cách
+ * dựng hai lần, có và không có nó: 247,83 kB so với 504,34 kB. Tức nhập SDK chỉ để đọc tham số
+ * làm app **tăng gấp đôi**.
+ *
+ * Nếu `location.search` mang đúng những tham số ấy thì cả lớp khám phá của ADR 0005 chạy được
+ * mà không cần SDK, và 64 kB kia là tiền không phải trả — trên mạng di động của một người dùng
+ * ở xã. Chưa ai biết, vì chưa ai đo. Nên bảng chẩn đoán in **cả hai** và để máy thật trả lời.
+ */
+export async function thamSoMoApp(): Promise<KetQuaDo> {
+  return { sdk: await theoSdk(), url: theoUrl() };
+}
+
+async function theoSdk(): Promise<Record<string, string>> {
   try {
     const { getRouteParams } = await import("zmp-sdk");
     return getRouteParams() ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function theoUrl(): Record<string, string> {
+  try {
+    return Object.fromEntries(new URLSearchParams(window.location.search));
   } catch {
     return {};
   }
@@ -47,6 +77,6 @@ export async function thamSoMoApp(): Promise<Record<string, string>> {
  * thuật hiện ra trong app của một đơn vị đang xin duyệt là thứ người duyệt sẽ hỏi, và câu trả
  * lời "đó là công cụ nội bộ" không giúp được gì ở vòng đó.
  */
-export function batChanDoan(tham_so: Record<string, string>): boolean {
-  return "debug" in tham_so;
+export function batChanDoan(ket_qua: KetQuaDo): boolean {
+  return "debug" in ket_qua.sdk || "debug" in ket_qua.url;
 }

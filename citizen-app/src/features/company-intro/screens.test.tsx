@@ -8,10 +8,13 @@ import {
   CERTIFICATES,
   COMPANY,
   CONTACT,
+  ECOSYSTEM,
   GROUP,
   GROUP_STATS,
   MEMBER_UNITS,
   OFFICES,
+  SOLUTIONS,
+  TECH_KEYWORDS,
 } from "../../content/company-profile";
 import { AboutScreen } from "./AboutScreen";
 import { ContactScreen } from "./ContactScreen";
@@ -39,7 +42,26 @@ const render = (element: Parameters<typeof renderToStaticMarkup>[0]) =>
   renderToStaticMarkup(element);
 
 /** Text content only — assertions are about what a citizen reads, not about markup. */
-const textOf = (markup: string) => markup.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+const ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#x27;": "'",
+  "&#39;": "'",
+};
+
+/**
+ * Entities are decoded because the assertions are about what a CITIZEN reads. "Messaging &
+ * Voice" leaves the renderer as `Messaging &amp; Voice`; comparing that against the published
+ * sentence fails for a reason that has nothing to do with the sentence, and a test that is red
+ * for a false reason is a test somebody relaxes.
+ */
+const textOf = (markup: string) =>
+  markup
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&(?:amp|lt|gt|quot|#x27|#39);/g, (entity) => ENTITIES[entity] ?? entity)
+    .replace(/\s+/g, " ");
 
 /** The `<li>` elements of a rendered screen, each still a complete element. */
 const listItems = (markup: string) =>
@@ -101,6 +123,38 @@ describe("the attribution reaches the screen, not just the content file", () => 
     const text = textOf(render(<SolutionsScreen />));
     for (const unit of MEMBER_UNITS) {
       expect(text, `member unit missing: ${unit.name}`).toContain(unit.name);
+    }
+  });
+
+  it("prints every ecosystem line, with the product name the source gives it", () => {
+    const text = textOf(render(<SolutionsScreen />));
+    for (const solution of SOLUTIONS) {
+      expect(text, `solution line missing: ${solution.id}`).toContain(solution.headline);
+      if (solution.product) expect(text).toContain(solution.product);
+      if (solution.note) expect(text).toContain(solution.note);
+    }
+  });
+
+  it("puts the ecosystem owner note ABOVE the first solution line", () => {
+    // Same reason as the figures on the home screen: these are the PARENT's products. A note
+    // read after the product list is a note read once the subsidiary already appeared to own it.
+    const text = textOf(render(<SolutionsScreen />));
+    const noteAt = text.indexOf(ECOSYSTEM.ownerNote);
+    const firstLineAt = text.indexOf(SOLUTIONS[0]!.headline);
+    expect(noteAt).toBeGreaterThanOrEqual(0);
+    expect(firstLineAt).toBeGreaterThanOrEqual(0);
+    expect(noteAt, "the group's products are listed before anyone is told whose they are").toBeLessThan(
+      firstLineAt,
+    );
+  });
+
+  it("prints every technology chip as WORDS", () => {
+    // The chips exist to say "cloud, AI, CRM" at a glance. A glyph carries none of that to a
+    // screen reader — the glyphs are aria-hidden precisely because the word next to them is the
+    // content, and a chip reduced to its icon would be an empty pill.
+    const text = textOf(render(<SolutionsScreen />));
+    for (const keyword of TECH_KEYWORDS) {
+      expect(text, `keyword chip missing: ${keyword.id}`).toContain(keyword.label);
     }
   });
 
@@ -175,6 +229,23 @@ describe("what every screen owes the reader", () => {
       expect(headings.length, `${id} has ${headings.length} <h1> — a screen reader needs one`).toBe(
         1,
       );
+    }
+  });
+
+  it("hides every decorative glyph from the screen reader", () => {
+    // A drawn icon that is announced is noise for the citizen who depends on the announcement
+    // most, and an icon that is NOT decoration would mean information carried by a picture alone
+    // (README §Non-negotiables #6). Either way the answer is the same: the words carry it.
+    for (const { id, markup } of SCREEN_MARKUP) {
+      const svgs = markup.match(/<svg[\s>][^>]*>/g) ?? [];
+      expect(svgs.length, `${id} renders no glyph at all`).toBeGreaterThan(0);
+      for (const svg of svgs) {
+        expect(svg, `${id} renders an <svg> a screen reader will announce`).toContain(
+          'aria-hidden="true"',
+        );
+      }
+      // No <title>/<desc> either: both are announced, and neither is content this app owns.
+      expect(markup, `${id} puts text inside a decorative glyph`).not.toMatch(/<(title|desc)[\s>]/);
     }
   });
 

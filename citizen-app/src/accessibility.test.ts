@@ -75,6 +75,35 @@ describe("text and targets stay usable for an ageing eye", () => {
     expect(styles).toMatch(/\.action\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
   });
 
+  it("animates nothing outside a reduced-motion guard", () => {
+    // Motion is decoration here — a drifting constellation behind a dark panel. For a citizen
+    // with a vestibular disorder or a migraine it is not decoration, and the phone already
+    // carries their answer. An `animation:` declared outside the guard ignores that answer, and
+    // it is invisible to every other check in this package.
+    const opener = "@media (prefers-reduced-motion: no-preference) {";
+    const start = styles.indexOf(opener);
+    let end = styles.length;
+    if (start >= 0) {
+      let depth = 0;
+      for (let at = start + opener.length - 1; at < styles.length; at += 1) {
+        if (styles[at] === "{") depth += 1;
+        if (styles[at] === "}") {
+          depth -= 1;
+          if (depth === 0) {
+            end = at;
+            break;
+          }
+        }
+      }
+    }
+    for (const match of styles.matchAll(/animation(?:-name)?\s*:/g)) {
+      expect(
+        match.index! > start && match.index! < end && start >= 0,
+        `an animation is declared outside @media (prefers-reduced-motion: no-preference) at offset ${match.index}`,
+      ).toBe(true);
+    }
+  });
+
   it("keeps pinch-zoom available", () => {
     // Disabling zoom is the single most common way a mobile page becomes unusable, and it is
     // usually added to protect a layout, by someone who can read the page fine.
@@ -83,6 +112,21 @@ describe("text and targets stay usable for an ageing eye", () => {
   });
 });
 
+/**
+ * WHY A GRADIENT CAN BE CHECKED AT ALL:
+ *
+ *   A ratio can only be computed against a colour that is written down. The dark panels and the
+ *   page wash are therefore built from SOLID stops declared as tokens — `--panel-glow-blue` and
+ *   `--panel-glow-green` are the lightest points of the panel gradients, `--surface-tint`,
+ *   `--surface-tint-green` and `--grid-line` are the extremes of the page background. Every pair
+ *   below is text that actually lands on one of them. A gradient fading to `transparent` would
+ *   pass through colours nobody measured, and this file could say nothing about it.
+ *
+ *   The brand pair is here for the opposite reason: #00aef4 and #78bd1a are LIGHT (2.5:1 and
+ *   2.3:1 against white), so the two cases pinned are the dark glyph that is allowed to sit on
+ *   them. If someone ever puts white text on a brand tile, nothing renders wrong — it just
+ *   becomes unreadable outdoors, for the person least able to report it.
+ */
 describe("every colour pair the app actually renders clears 4.5:1", () => {
   const pairs: ReadonlyArray<[string, string, string]> = [
     ["body text on the page", token("ink"), token("surface-alt")],
@@ -91,6 +135,38 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["secondary text on a card", token("ink-muted"), token("surface")],
     ["header and primary action text", "#ffffff", token("navy")],
     ["card titles and figures", token("navy"), token("surface")],
+
+    // Page background: the blue wash, the green wash and the graph-paper rule drawn over both.
+    ["body text on the blue wash", token("ink"), token("surface-tint")],
+    ["secondary text on the blue wash", token("ink-muted"), token("surface-tint")],
+    ["chip text on its tinted pill", token("ink"), token("surface-tint")],
+    ["body text on the green wash", token("ink"), token("surface-tint-green")],
+    ["secondary text on the green wash", token("ink-muted"), token("surface-tint-green")],
+    ["secondary text crossing a grid line", token("ink-muted"), token("grid-line")],
+    ["section titles on the washes", token("navy"), token("surface-tint")],
+
+    // Dark panels: hero, banner, statistics band, primary action. Checked at BOTH ends of each
+    // gradient, because "the darkest end is fine" is exactly the half-check that ships.
+    ["panel text at the navy end", "#ffffff", token("navy")],
+    ["panel text at the deep end", "#ffffff", token("navy-deep")],
+    ["panel text at the blue glow", "#ffffff", token("panel-glow-blue")],
+    ["panel text at the green glow", "#ffffff", token("panel-glow-green")],
+    ["figure labels on the navy panel", token("on-panel"), token("navy")],
+    ["figure labels at the blue glow", token("on-panel"), token("panel-glow-blue")],
+    ["figure labels at the green glow", token("on-panel"), token("panel-glow-green")],
+
+    // The drawn constellation passes BEHIND the words. A 1px node line is thin, and a thin light
+    // line under a letter is exactly what an ageing eye loses the letter in, so the line is a
+    // background colour like any other: these two are the stroke at the opacity it is drawn with,
+    // over the lightest point of the panel.
+    ["panel text crossing a blue node line", "#ffffff", token("panel-line-blue")],
+    ["panel text crossing a green node line", "#ffffff", token("panel-line-green")],
+    ["figure labels crossing a blue node line", token("on-panel"), token("panel-line-blue")],
+    ["figure labels crossing a green node line", token("on-panel"), token("panel-line-green")],
+
+    // Brand surfaces. The glyph is dark BECAUSE the brand colours are light.
+    ["the glyph on the blue end of a tile", token("tile-glyph"), token("brand-blue")],
+    ["the glyph on the green end of a tile", token("tile-glyph"), token("brand-green")],
   ];
 
   for (const [what, foreground, background] of pairs) {

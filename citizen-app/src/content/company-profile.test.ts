@@ -7,10 +7,13 @@ import {
   CERTIFICATES,
   COMPANY,
   CONTACT,
+  ECOSYSTEM,
   GROUP,
   GROUP_STATS,
   MEMBER_UNITS,
   OFFICES,
+  SOLUTIONS,
+  TECH_KEYWORDS,
 } from "./company-profile";
 import { DEFAULT_SCREEN_ID, findScreen, SCREENS } from "../features/company-intro/screens";
 
@@ -43,6 +46,15 @@ const ALL_CONTENT_STRINGS: string[] = [
   CONTACT.hotlineDialable,
   CONTACT.email,
   CONTACT.ownerNote,
+  ECOSYSTEM.ownerNote,
+  // `id` is swept too: it is an exported string, and the sweep below is deliberately blind to
+  // whether a string was meant to be read by a citizen or by a lookup table.
+  ...SOLUTIONS.flatMap((solution) =>
+    [solution.id, solution.product, solution.headline, solution.note].filter(
+      (value): value is string => typeof value === "string",
+    ),
+  ),
+  ...TECH_KEYWORDS.flatMap((keyword) => [keyword.id, keyword.label]),
   BRAND_NAVY,
 ];
 
@@ -103,6 +115,59 @@ describe("sourced facts stay exactly as published", () => {
       "OMI JSC",
       "Vboss",
     ]);
+  });
+
+  /**
+   * THE ECOSYSTEM LINES ARE QUOTES, NOT DESCRIPTIONS.
+   *
+   *   Each one is published on vihatgroup.com and is printed under the name of a real legal
+   *   entity. "Tidying" one produces a sentence the company never published, and a sentence
+   *   about a product is a claim about what that product does. Pinned whole, like the vision
+   *   and the mission above.
+   */
+  it("quotes each ecosystem line exactly as published", () => {
+    expect(SOLUTIONS.map((solution) => solution.headline)).toEqual([
+      "Giải pháp CPaaS toàn cầu: Messaging & Voice",
+      "Tổng đài đa kênh ứng dụng AI hàng đầu Việt Nam",
+      "Contact Center tích hợp CRM",
+      "Giải pháp networking và quản lý danh thiếp số cho cá nhân và doanh nghiệp",
+    ]);
+    expect(SOLUTIONS.map((solution) => solution.note)).toEqual([
+      "Hệ sinh thái giải pháp nâng cao trải nghiệm khách hàng đa kênh",
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it("names a product only where the source names one", () => {
+    // The source attributes two of these lines to a product and leaves two unattributed. Filling
+    // the blanks with the member unit that seems likeliest would credit a company with a product
+    // on a guess — the same failure as inventing a certificate scope.
+    expect(SOLUTIONS.map((solution) => solution.product)).toEqual([
+      "eSMS",
+      "OMICall",
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it("keeps every technology chip a term taken from the source", () => {
+    expect(TECH_KEYWORDS.map((keyword) => keyword.label)).toEqual([
+      "CPaaS",
+      "Messaging & Voice",
+      "Tổng đài ảo",
+      "AI",
+      "CRM",
+    ]);
+  });
+
+  it("attributes the ecosystem to the parent, in full", () => {
+    // Same failure mode as the figures: `toContain("ViHAT Group")` is satisfied by a sentence
+    // that reverses the ownership, so the sentence is pinned whole.
+    expect(ECOSYSTEM.ownerNote).toBe(
+      "Các giải pháp dưới đây thuộc hệ sinh thái của Tập đoàn ViHAT Group, công ty mẹ của VihatSoftware.",
+    );
   });
 
   it("carries the head office and both branches", () => {

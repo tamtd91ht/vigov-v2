@@ -4,7 +4,7 @@ import { TabBar } from "./components/TabBar";
 import { COMPANY } from "./content/company-profile";
 import { DEFAULT_SCREEN_ID, findScreen, type ScreenId } from "./features/company-intro/screens";
 import { LaunchParamsPanel } from "./features/diagnostics/LaunchParamsPanel";
-import { batChanDoan, thamSoMoApp } from "./lib/launch-params";
+import { batChanDoan, type KetQuaDo, thamSoMoApp } from "./lib/launch-params";
 
 /**
  * Phase 1 shell: four static screens, no navigation library, no state beyond the current tab.
@@ -30,7 +30,7 @@ export function App() {
   // Đọc MỘT LẦN sau khi dựng. Bất đồng bộ vì `zmp-sdk` chỉ nhập được trong trình duyệt (xem
   // lib/launch-params.ts), nên bảng chẩn đoán xuất hiện ở lượt vẽ thứ hai — không sao, nó là
   // công cụ đo chứ không phải nội dung người dân đọc.
-  const [thamSo, setThamSo] = useState<Record<string, string> | null>(null);
+  const [thamSo, setThamSo] = useState<KetQuaDo | null>(null);
   useEffect(() => {
     let conSong = true;
     void thamSoMoApp().then((t) => {
