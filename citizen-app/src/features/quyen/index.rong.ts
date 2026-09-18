@@ -23,3 +23,10 @@ export const MAN_QUYEN: typeof DayDu.MAN_QUYEN = {
   headerTitle: "",
   component: () => null,
 };
+
+/**
+ * RỖNG, và đó là toàn bộ điểm của tệp này: bản `goc` không xin quyền nào, nên chính sách của nó
+ * KHÔNG ĐƯỢC có mục nào nói về quyền. Một mảng rỗng ở đây là thứ làm cho câu ấy đúng ở tầng mã
+ * chứ không phải ở tầng lời hứa — `bundle-for-zalo.test.ts` grep bundle để chứng minh.
+ */
+export const MUC_CHINH_SACH_QUYEN: typeof DayDu.MUC_CHINH_SACH_QUYEN = [];

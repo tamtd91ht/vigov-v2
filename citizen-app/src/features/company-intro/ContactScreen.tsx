@@ -1,4 +1,5 @@
 import { COMPANY, CONTACT, OFFICES } from "../../content/company-profile";
+import { ChinhSachRiengTu } from "./ChinhSachRiengTu";
 import { GlobeGlyph, MailGlyph, NetworkBackdrop, PhoneGlyph, PinGlyph } from "./icons";
 
 /**
@@ -73,6 +74,10 @@ export function ContactScreen() {
           </li>
         ))}
       </ul>
+
+      {/* Chính sách quyền riêng tư nằm CUỐI màn Liên hệ, không phải một tab riêng: đây là chỗ
+          người tìm thông tin pháp lý đã đứng sẵn, và là chỗ người duyệt Zalo tìm nó. */}
+      <ChinhSachRiengTu />
     </>
   );
 }

@@ -245,6 +245,43 @@ ngoài thư mục ấy** để chứng minh nó còn sống. Một lệnh cấm 
 | `src/features/quyen/ManQuyen.tsx` | Ba màn + khu vực chọn màn. `ManQuyenThuan` là bản **thuần** để bốn nhánh kết quả kiểm được mà không cần Zalo |
 | `src/features/quyen/quyen.test.tsx` | 29 ca: từ chối · ngoài Zalo · token không hiện trọn · câu "dữ liệu thật không tới thiết bị" · một `<h1>` mỗi màn |
 
+## Chính sách quyền riêng tư
+
+Xin ba quyền mà không có văn bản này thì vòng duyệt trả về. Nội dung nằm ở
+`src/content/chinh-sach-rieng-tu.ts`, vẽ ở **cuối màn Liên hệ** (không phải tab thứ năm — bốn
+tab đang nói bốn việc, và người tìm thông tin pháp lý đã đứng sẵn ở màn ấy).
+
+**Quy tắc chi phối toàn bộ tệp ấy: chính sách phải mô tả ĐÚNG bản dựng nó nằm trong.** Văn bản
+này công bố dưới tên một pháp nhân có thật — một câu mô tả hành vi mà mã không có là tuyên bố
+sai dưới tên ấy; giấu một hành vi mà mã CÓ là vi phạm chính Nghị định 13/2023/NĐ-CP.
+
+Hệ quả trực tiếp: **mục về ba quyền nằm sau cửa `bien-the/quyen`**, nên nó biến mất ở bản `goc`.
+Bản `goc` không xin quyền nào, và một chính sách trong bản ấy mà nhắc tới số điện thoại hay vị
+trí là mô tả sai đúng bản dựng người duyệt đang cầm. Đo được:
+
+| Chuỗi | `goc` | `quyen` | `day-du` |
+|---|---|---|---|
+| `Chính sách quyền riêng tư` | 1 | 1 | 1 |
+| `Quyền của bạn theo Nghị định` | 1 | 1 | 1 |
+| `Ba quyền ứng dụng xin` | **0** | 1 | 1 |
+
+Ba câu trong chính sách đúng **vì `phase1-collects-nothing.test.ts` cấm điều ngược lại**, không
+phải vì ai hứa: "không gửi đi đâu" ← dây bẫy cấm `fetch`/XHR/WebSocket/EventSource/axios ·
+"không lưu lại" ← dây bẫy cấm `localStorage`/`sessionStorage`/`cookie`/`indexedDB`. **Ai nới một
+trong hai dây bẫy ấy phải sửa chính sách TRƯỚC** — nếu không, chính sách thành sai mà không có
+gì đỏ lên.
+
+Số mục **không viết cứng vào tiêu đề**: bản `goc` có 7 mục, bản `quyen` có 8 vì mục ba quyền
+chèn vào giữa. Một con số viết cứng sẽ đúng ở một bản và sai ở bản kia — sai trong văn bản pháp
+lý, im lặng.
+
+### Còn thiếu, và cả hai là câu hỏi cho khách hàng
+
+| Thiếu | Vì sao chưa điền |
+|---|---|
+| **Mã số thuế**, **người đại diện theo pháp luật** | Không có nguồn. `content/company-profile.ts` chỉ chứa thứ đã công bố trên vihatsoftware.com và vihatgroup.com. Bịa hai trường này trong một văn bản pháp lý là thứ không sửa lại được sau khi nộp |
+| **URL trang chính sách** | Developer Console còn một ô URL ngoài bản trong app. Chưa biết đăng ở đâu, nên chưa dựng bộ sinh trang tĩnh — dựng cho một đích chưa biết là đoán. Khi chốt, trang ấy phải sinh ra TỪ `chinh-sach-rieng-tu.ts`, không chép tay, để trang đăng và app không lệch nhau |
+
 ## Nộp lên Zalo
 
 ### Chuỗi lệnh

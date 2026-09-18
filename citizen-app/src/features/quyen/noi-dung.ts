@@ -17,6 +17,8 @@
  * một ứng dụng đang xin quyền — và mô tả sai cho người duyệt là thứ không sửa lại được sau đó.
  */
 
+import type { MucChinhSach } from "../../content/chinh-sach-rieng-tu";
+
 /** Ba quyền đang xin. Thứ tự này là thứ tự hiện trên màn. */
 export type MaQuyen = "so-dien-thoai" | "vi-tri" | "quet-qr";
 
@@ -129,3 +131,31 @@ export const MA_RONG =
 
 /** Mã QR quét được nhưng không có nội dung. Hiếm, nhưng một ô trống thì không nói được gì. */
 export const QR_RONG = "Mã vừa quét không có nội dung nào.";
+
+/**
+ * MỤC VỀ BA QUYỀN TRONG CHÍNH SÁCH QUYỀN RIÊNG TƯ.
+ *
+ * VÌ SAO NÓ Ở ĐÂY CHỨ KHÔNG Ở `content/chinh-sach-rieng-tu.ts`: bản `goc` không xin quyền nào.
+ * Một chính sách trong bản `goc` mà nhắc tới số điện thoại hay vị trí là mô tả SAI đúng bản dựng
+ * người duyệt đang cầm — và họ đọc nó cạnh một app không hề xin quyền. Tệp này nằm sau cửa
+ * `bien-the/quyen`, nên mục này biến mất cùng ba màn.
+ *
+ * VÌ SAO DỰNG TỪ `NOI_DUNG_QUYEN` CHỨ KHÔNG VIẾT LẠI: `vi_sao` là câu nói mục đích của từng
+ * quyền, và nó đã có người chủ — chính là mảng trên. Chép sang đây là tạo bản thứ hai của một
+ * sự thật, và khi hai bản lệch nhau thì bản sai là bản nằm trong văn bản pháp lý (rule 9).
+ *
+ * ĐOẠN CUỐI NÓI CẢ HAI VẾ, CÓ CHỦ ĐÍCH. Người duyệt cần biết mục đích để cấp quyền; người dùng
+ * cần biết bản họ đang cầm thật sự làm gì. Viết mỗi mục đích mà giấu việc bản này chưa truyền gì
+ * là mô tả sai; viết mỗi "chưa làm gì" mà giấu mục đích là không đủ để xét duyệt. Nói cả hai.
+ */
+export const MUC_CHINH_SACH_QUYEN: MucChinhSach = {
+  ma: "ba-quyen",
+  tieu_de: "Ba quyền ứng dụng xin, và vì sao",
+  doan: [
+    "Bản dựng này xin ba quyền của nền tảng Zalo. Mỗi quyền chỉ được hỏi khi bạn tự bấm nút trong ứng dụng, và bạn có quyền từ chối mà vẫn dùng được ứng dụng.",
+    ...NOI_DUNG_QUYEN.map((q) => `${q.nhan_chon} — ${q.vi_sao}`),
+    "Với số điện thoại và vị trí, Zalo không trả giá trị thật về máy: ứng dụng chỉ nhận một mã dùng được một lần và hết hạn sau 2 phút. Số điện thoại và toạ độ của bạn không nằm trong mã đó.",
+    "Với quét mã QR, nội dung mã hiện lên màn hình và mất đi khi bạn rời màn hình.",
+    "Các mục đích nêu trên là mục đích ứng dụng sẽ dùng ba quyền này khi có đầy đủ chức năng. Bản hiện tại chỉ hiện kết quả lên màn hình để bạn thấy tính năng hoạt động: nó chưa lưu và chưa gửi bất kỳ dữ liệu nào đi đâu.",
+  ],
+};

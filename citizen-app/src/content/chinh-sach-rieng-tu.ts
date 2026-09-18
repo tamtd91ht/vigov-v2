@@ -1,0 +1,140 @@
+/**
+ * CHÍNH SÁCH QUYỀN RIÊNG TƯ — mọi câu chữ, một tệp. Theo Nghị định 13/2023/NĐ-CP.
+ *
+ * ⚠ NGUYÊN TẮC CHI PHỐI TOÀN BỘ TỆP NÀY:
+ *
+ *   Văn bản này công bố dưới tên một PHÁP NHÂN CÓ THẬT. Một câu mô tả hành vi mà mã không có là
+ *   một tuyên bố sai dưới tên ấy, và có người phải trả lời cho nó. Ngược lại, giấu một hành vi
+ *   mà mã CÓ là vi phạm chính Nghị định 13. Nên mỗi câu ở đây phải đối chiếu được với mã.
+ *
+ *   Cụ thể, ba câu dưới đây đúng vì `src/phase1-collects-nothing.test.ts` CẤM điều ngược lại
+ *   trên toàn cây mã — không phải vì ai đó hứa:
+ *
+ *     "không gửi đi đâu"   <- dây bẫy cấm fetch / XHR / WebSocket / EventSource / axios
+ *     "không lưu lại"      <- dây bẫy cấm localStorage / sessionStorage / cookie / indexedDB
+ *     "không có máy chủ"   <- hệ quả của cả hai
+ *
+ *   Ai nới một trong hai dây bẫy ấy phải sửa tệp này TRƯỚC. Nếu không, chính sách thành sai mà
+ *   không có gì đỏ lên.
+ *
+ * VÌ SAO PHẦN BA QUYỀN KHÔNG NẰM Ở ĐÂY MÀ SAU `bien-the/quyen`:
+ *
+ *   Bản `goc` không xin quyền nào cả. Một chính sách trong bản `goc` mà nhắc tới số điện thoại
+ *   hay vị trí là mô tả sai đúng bản dựng đang được duyệt — và người duyệt đọc chính sách ấy
+ *   cạnh một app không hề xin quyền. Xem `features/quyen/index.ts`.
+ *
+ * VÌ SAO THIẾU MÃ SỐ THUẾ VÀ NGƯỜI ĐẠI DIỆN: không có nguồn. `content/company-profile.ts` chỉ
+ * có những gì đã công bố trên vihatsoftware.com và vihatgroup.com. Bịa hai trường ấy trong một
+ * văn bản pháp lý là thứ không sửa lại được sau khi nộp. → README §"Open content questions"
+ */
+
+export type MucChinhSach = {
+  /** Dùng làm khoá React và làm mỏ neo cho test. Không hiện ra. */
+  ma: string;
+  tieu_de: string;
+  /** Mỗi phần tử là một đoạn. Danh sách, không phải một chuỗi có `
+` — JSX vẽ từng đoạn. */
+  doan: readonly string[];
+};
+
+/**
+ * Phiên bản và ngày hiệu lực — HẰNG CÓ TÊN, không rải chuỗi trong component.
+ *
+ * Một chính sách không ghi phiên bản là một chính sách không chứng minh được nó đã nói gì vào
+ * lúc người dùng bấm đồng ý. Khi giai đoạn 2 có đường máy chủ đổi token, tệp này phải lên `1.1`
+ * TRƯỚC khi đường ấy chạy — xem mục `cam-ket-cap-nhat`.
+ */
+export const PHIEN_BAN_CHINH_SACH = "1.0";
+export const NGAY_HIEU_LUC = "18/09/2026";
+
+export const TIEU_DE_CHINH_SACH = "Chính sách quyền riêng tư";
+
+/**
+ * CÂU ĐỨNG ĐẦU, và nó đúng với CẢ BA biến thể bản dựng.
+ *
+ * Cố ý không viết "chúng tôi có thể thu thập…" — lối viết phòng thủ ấy sẽ là một câu SAI ở đây,
+ * và nó vứt đi điều mạnh nhất app này có để nói.
+ */
+export const CAU_DAU = "Ứng dụng này không lưu trữ và không gửi đi bất kỳ dữ liệu nào của bạn.";
+
+/**
+ * DANH SÁCH TÁCH LÀM HAI, và đó là lý do kỹ thuật chứ không phải cách xếp cho đẹp.
+ *
+ * Mục về ba quyền đến từ `bien-the/quyen` và phải nằm NGAY SAU "Dữ liệu ứng dụng xử lý" — đọc
+ * "ứng dụng xử lý gì" rồi mới tới "ba quyền ấy là gì" mới thành một mạch. Một danh sách phẳng
+ * duy nhất thì chỉ nối được vào đầu hoặc cuối.
+ *
+ * ĐÁNH SỐ DO LÚC VẼ QUYẾT ĐỊNH, KHÔNG VIẾT CỨNG VÀO TIÊU ĐỀ: bản `goc` có 7 mục, bản `quyen` có
+ * 8, và một con số viết cứng sẽ lệch ở đúng một trong hai bản — lệch trong một văn bản pháp lý,
+ * mà không có gì đỏ lên. Cũng vì thế không câu nào trong tệp này tham chiếu tới "mục số N".
+ */
+export const MUC_TRUOC_QUYEN: readonly MucChinhSach[] = [
+  {
+    ma: "ben-xu-ly",
+    tieu_de: "Bên xử lý dữ liệu",
+    doan: [
+      "VihatSoftware — đơn vị thành viên của Tập đoàn ViHAT Group — là bên phát hành ứng dụng này và là bên chịu trách nhiệm về chính sách này.",
+      "Địa chỉ trụ sở chính và các đầu mối liên hệ được ghi ở màn Liên hệ của ứng dụng.",
+    ],
+  },
+  {
+    ma: "du-lieu",
+    tieu_de: "Dữ liệu ứng dụng xử lý",
+    doan: [
+      "Ứng dụng không yêu cầu bạn nhập bất kỳ thông tin nào: không có biểu mẫu, không có ô đăng nhập, không có ô nhập số điện thoại.",
+      "Ứng dụng không đọc danh bạ, không đọc tin nhắn, không đọc thư viện ảnh và không theo dõi hành vi sử dụng của bạn.",
+    ],
+  },
+];
+
+/** Phần sau mục quyền. Xem chú thích của `MUC_TRUOC_QUYEN` về việc vì sao tách. */
+export const MUC_SAU_QUYEN: readonly MucChinhSach[] = [
+  {
+    ma: "cach-thuc",
+    tieu_de: "Cách xử lý và thời gian lưu",
+    doan: [
+      "Dữ liệu chỉ tồn tại trong bộ nhớ tạm của phiên làm việc và mất đi khi bạn rời màn hình hoặc đóng ứng dụng.",
+      "Không có việc lưu trữ, nên không có thời hạn lưu trữ. Không có bản sao lưu nào chứa dữ liệu của bạn.",
+    ],
+  },
+  {
+    ma: "ben-thu-ba",
+    tieu_de: "Chuyển dữ liệu cho bên thứ ba",
+    doan: [
+      "Không có bên thứ ba nào nhận dữ liệu từ ứng dụng này, trong nước hay ngoài nước.",
+      "Zalo là nền tảng ứng dụng chạy trên đó. Việc bạn dùng Zalo chịu sự điều chỉnh của chính sách quyền riêng tư của Zalo, nằm ngoài phạm vi văn bản này.",
+    ],
+  },
+  {
+    ma: "quyen-cua-ban",
+    tieu_de: "Quyền của bạn theo Nghị định 13/2023/NĐ-CP",
+    doan: [
+      "Bạn có quyền được biết, quyền đồng ý và rút lại đồng ý, quyền truy cập, chỉnh sửa, xoá và hạn chế việc xử lý dữ liệu cá nhân của mình, quyền phản đối và quyền khiếu nại.",
+      "Trong ứng dụng này, việc thực hiện các quyền ấy rất đơn giản: bạn rút lại đồng ý bằng cách tắt quyền tương ứng trong phần cài đặt của Zalo.",
+      "Không có dữ liệu nào để bạn yêu cầu truy cập hay yêu cầu xoá, vì ứng dụng không lưu dữ liệu nào. Nếu bạn muốn xác nhận điều này, hãy liên hệ với chúng tôi theo các đầu mối ở màn Liên hệ.",
+    ],
+  },
+  {
+    ma: "rui-ro",
+    tieu_de: "Rủi ro có thể xảy ra",
+    doan: [
+      "Vì ứng dụng không lưu và không gửi dữ liệu đi đâu, không có rủi ro rò rỉ dữ liệu từ phía ứng dụng.",
+      "Rủi ro còn lại nằm ở màn hình: nội dung hiển thị sau khi bạn dùng một tính năng có thể bị người đứng cạnh nhìn thấy. Hãy dùng ở nơi bạn thấy yên tâm.",
+    ],
+  },
+  {
+    ma: "lien-he",
+    tieu_de: "Liên hệ về dữ liệu cá nhân",
+    doan: [
+      "Mọi câu hỏi, yêu cầu hoặc khiếu nại liên quan tới dữ liệu cá nhân, xin gửi tới các đầu mối ở màn Liên hệ của ứng dụng.",
+    ],
+  },
+  {
+    ma: "cam-ket-cap-nhat",
+    tieu_de: "Hiệu lực và cam kết cập nhật",
+    doan: [
+      `Chính sách này có hiệu lực từ ngày ${NGAY_HIEU_LUC}, phiên bản ${PHIEN_BAN_CHINH_SACH}.`,
+      "Chúng tôi cam kết cập nhật và công bố chính sách này TRƯỚC khi bắt đầu bất kỳ việc thu thập, lưu trữ hoặc truyền dữ liệu nào mà bản hiện tại chưa có.",
+    ],
+  },
+];

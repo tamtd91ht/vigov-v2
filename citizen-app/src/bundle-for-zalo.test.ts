@@ -1,5 +1,16 @@
 /// <reference types="vite/client" />
 import { beforeAll, describe, expect, it } from "vitest";
+
+import {
+  CAU_DAU,
+  MUC_SAU_QUYEN,
+  MUC_TRUOC_QUYEN,
+  TIEU_DE_CHINH_SACH,
+} from "./content/chinh-sach-rieng-tu";
+// Nhập THẲNG bản đầy đủ, không qua `bien-the/quyen`: test phải biết mục ấy TRÔNG NHƯ THẾ NÀO
+// để khẳng định bản `goc` không có nó. Đi qua alias thì lúc chạy test nó là bản rỗng, và ca
+// "bản gốc không chứa" sẽ xanh vì danh sách rỗng — xanh mà không kiểm gì cả.
+import { MUC_CHINH_SACH_QUYEN as MUC_CHINH_SACH_QUYEN_DAY_DU } from "./features/quyen/index";
 import { build } from "vite";
 
 import appConfigRaw from "../app-config.json?raw";
@@ -185,8 +196,25 @@ describe("ba biến thể — mỗi bản đúng bằng thứ người duyệt �
    * không chép tay. Một danh sách chép tay sẽ lệch khi ai đó sửa một câu, và lúc nó lệch thì mọi
    * ca "bản goc không chứa" xanh vì **không tìm thấy gì**, chứ không vì bản `goc` sạch.
    */
+  /**
+   * NGƯỠNG ĐỘ DÀI, thêm 18/09 sau khi lượt quét này ĐỎ VÌ LÝ DO SAI.
+   *
+   *   Nhãn tab của lớp quyền là "Quyền" — 5 ký tự, một từ thông dụng. Chính sách quyền riêng tư
+   *   có mục "Quyền của bạn theo Nghị định 13/2023/NĐ-CP", và mục ấy có mặt trong MỌI biến thể
+   *   vì nó là quyền của người dùng theo luật, không phải quyền nền tảng. Lượt quét vì thế báo
+   *   "bản gốc vẫn chứa Quyền" — đúng chữ, sai việc.
+   *
+   *   Một phép kiểm đỏ vì lý do sai hỏng ngang một phép kiểm xanh vì lý do sai: cái giá của nó
+   *   là người sau sẽ sửa chính sách cho vừa phép kiểm, tức là sửa một văn bản pháp lý cho vừa
+   *   một cái test. Nên ngưỡng nằm ở đây, kèm lý do.
+   *
+   * ĐIỀU BẢO ĐẢM KHÔNG MẤT, NÓ CHUYỂN CHỖ: nhãn tab rỗng ở bản `goc` được khẳng định theo CẤU
+   * TRÚC tại `features/kham-pha/bien-the.test.ts` (`MAN_QUYEN.tabLabel` phải là `""`) — chắc
+   * chắn hơn tìm chuỗi, vì nó không phụ thuộc vào việc chữ ấy có trùng ở đâu khác hay không.
+   */
+  const DU_DAI_DE_LA_DAU_VET = (chuoi: string) => chuoi.length >= 12;
+
   const CHUOI_MAN_QUYEN = () => [
-    MAN_QUYEN.tabLabel,
     MAN_QUYEN.headerTitle,
     DAN_NHAP_QUYEN,
     CHI_HIEN_LEN_MAN_HINH,
@@ -265,7 +293,7 @@ describe("ba biến thể — mỗi bản đúng bằng thứ người duyệt �
     // Bản `goc` là bản nộp TỐI THIỂU: một app không xin quyền nào. Có sẵn `getPhoneNumber` trong
     // bundle của một bản nộp như thế là một bản nộp tự mâu thuẫn — và 256 kB trả cho một thứ
     // không màn nào gọi tới.
-    for (const chuoi of CHUOI_MAN_QUYEN()) {
+    for (const chuoi of CHUOI_MAN_QUYEN().filter(DU_DAI_DE_LA_DAU_VET)) {
       expect(goc, `bản gốc vẫn chứa: ${chuoi}`).not.toContain(chuoi);
     }
     expect(goc, "bản gốc vẫn kéo theo zmp-sdk").not.toContain("zmp-sdk");
@@ -334,6 +362,64 @@ describe("ba biến thể — mỗi bản đúng bằng thứ người duyệt �
       ".quyen__nut",
     );
     expect(goc).toContain(".quyen-khu__nut");
+  });
+
+  it("chính sách quyền riêng tư có mặt trong CẢ BA bản — thiếu nó là nộp bị trả về", () => {
+    // Xin ba quyền mà không có chính sách thì vòng duyệt trả về. Nhưng bản `goc` cũng phải có
+    // nó: một app công bố dưới tên pháp nhân thật thì luôn phải nói được nó xử lý dữ liệu gì,
+    // kể cả khi câu trả lời là "không gì cả".
+    for (const [ten, ban] of [
+      ["goc", goc],
+      ["quyen", quyen],
+      ["day-du", day_du],
+    ] as const) {
+      expect(ban, `bản ${ten} thiếu tiêu đề chính sách`).toContain(TIEU_DE_CHINH_SACH);
+      expect(ban, `bản ${ten} thiếu câu mở đầu chính sách`).toContain(CAU_DAU);
+      for (const m of [...MUC_TRUOC_QUYEN, ...MUC_SAU_QUYEN]) {
+        expect(ban, `bản ${ten} thiếu mục "${m.tieu_de}"`).toContain(m.tieu_de);
+      }
+    }
+  });
+
+  /**
+   * MẢNH CHỮ CÓ THẬT TRONG BUNDLE của mục chính sách về ba quyền.
+   *
+   * VÌ SAO KHÔNG KIỂM THẲNG TỪNG `doan`: một số đoạn được GHÉP LÚC CHẠY từ `NOI_DUNG_QUYEN`
+   * (`${nhan_chon} — ${vi_sao}`), nên chuỗi ghép ấy KHÔNG hề có trong bundle — bundle chỉ chứa
+   * hai mảnh rời. Kiểm chuỗi ghép thì ca "bản gốc không chứa" xanh vì **không bản nào** chứa nó,
+   * chứ không vì bản gốc sạch. Đó đúng là kiểu hỏng tệp này sinh ra để bắt, và nó đã bắt được
+   * chính mình một lần vào 18/09 — giữ lại chú thích này thay vì sửa xong rồi xoá dấu vết.
+   *
+   * Cắt ở " — " để lấy lại đúng những mảnh có thật, rồi BỎ mảnh ngắn: `nhan_chon` kiểu "Vị trí"
+   * là từ thông dụng, có thể trùng ở chỗ khác trong bản gốc và làm phép kiểm đỏ vì lý do sai.
+   * Ngưỡng 30 ký tự giữ lại các câu `vi_sao` — thứ dài, đặc trưng, và là thứ thật sự nói về quyền.
+   */
+  const MANH_CHINH_SACH_QUYEN = () =>
+    MUC_CHINH_SACH_QUYEN_DAY_DU.flatMap((m) => [
+      m.tieu_de,
+      ...m.doan.flatMap((doan) => doan.split(" — ")).filter((manh) => manh.length >= 30),
+    ]);
+
+  it("chính sách của bản GỐC không nói một chữ nào về ba quyền", () => {
+    // CA QUAN TRỌNG NHẤT của phần chính sách, và lý do nó tồn tại đắt hơn vẻ ngoài của nó:
+    //
+    //   Bản `goc` không xin quyền nào. Một chính sách trong bản ấy mà nhắc tới số điện thoại hay
+    //   vị trí là một TUYÊN BỐ SAI công bố dưới tên một pháp nhân có thật — và người duyệt đọc
+    //   nó ngay cạnh một app không hề xin quyền. Đó không phải lỗi giao diện, đó là thứ phải
+    //   trả lời ở vòng duyệt.
+    for (const manh of MANH_CHINH_SACH_QUYEN()) {
+      expect(goc, `chính sách bản gốc vẫn có: ${manh.slice(0, 50)}…`).not.toContain(manh);
+    }
+  });
+
+  it("đo đúng thứ cần đo — chính sách bản QUYỀN CÓ đủ mục về ba quyền", () => {
+    // Không có ca này, đổi một chữ trong mục ấy là đủ để ca trên xanh vĩnh viễn: bản `goc` không
+    // chứa chuỗi ấy vì KHÔNG BẢN NÀO còn chứa nó nữa.
+    const manh = MANH_CHINH_SACH_QUYEN();
+    expect(manh.length).toBeGreaterThan(3);
+    for (const m of manh) {
+      expect(quyen, `chính sách bản quyền thiếu: ${m.slice(0, 50)}…`).toContain(m);
+    }
   });
 
   it("vẫn ĐÚNG BẰNG app giới thiệu bốn màn — không phải một bản rỗng", () => {

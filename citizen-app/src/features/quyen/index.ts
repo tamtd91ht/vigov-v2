@@ -23,7 +23,10 @@
  */
 import type { ComponentType } from "react";
 
+import type { MucChinhSach } from "../../content/chinh-sach-rieng-tu";
+
 import { KhuQuyen } from "./ManQuyen";
+import { MUC_CHINH_SACH_QUYEN as MUC_QUYEN_MOT } from "./noi-dung";
 
 /**
  * Ba màn quyền có mặt trong bản dựng này hay không.
@@ -54,7 +57,16 @@ export const MAN_QUYEN: {
 };
 
 /**
- * ĐÚNG HAI CÁI TÊN ĐI QUA CỬA NÀY, và đó là chủ đích: cửa càng hẹp thì bản rỗng càng khó lệch.
+ * Mục "Ba quyền ứng dụng xin, và vì sao" của Chính sách quyền riêng tư.
+ *
+ * MỘT DANH SÁCH CHỨ KHÔNG PHẢI MỘT MỤC, để bản rỗng trả về `[]` — chính sách bản `goc` khi ấy
+ * không có mục nào về quyền, thay vì có một mục rỗng đầu đề mà không có nội dung. Chỗ vẽ chỉ
+ * việc nối vào giữa hai nửa danh sách chung; nó không cần biết biến thể nào đang dựng.
+ */
+export const MUC_CHINH_SACH_QUYEN: readonly MucChinhSach[] = [MUC_QUYEN_MOT];
+
+/**
+ * ĐÚNG BA CÁI TÊN ĐI QUA CỬA NÀY, và đó là chủ đích: cửa càng hẹp thì bản rỗng càng khó lệch.
  * Ba màn bên trong nhập thẳng lẫn nhau (cùng thư mục) và bộ test của chúng cũng vậy — chỉ mã
  * NGOÀI `src/features/quyen/` mới bắt buộc đi qua `bien-the/quyen`.
  */
