@@ -3,7 +3,7 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: d2d2aa6
+derived_from_commit: 1b7b276
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
@@ -13,6 +13,7 @@ owns_facts:
   - "phân biệt phản ánh, khiếu nại, tố cáo"
   - "tên gọi các bước trong vòng đời phiếu phản ánh"
   - "tên gọi vai trò cán bộ cấp xã"
+  - "tên thực thể tiếng Anh của tám danh mục tham chiếu"
 ---
 
 # Ngôn ngữ chung
@@ -140,6 +141,35 @@ Sáu khái niệm, chốt cùng một lượt. **Lý do đầy đủ nằm ở A
 **Bảng này còn thiếu.** Nó mới phủ các khái niệm đã xuất hiện trong mã, trong một ADR đã chốt,
 hoặc trong `.claude/skills/rest-api-design/SKILL.md`. Gặp khái niệm chưa có dòng ở đây: **dừng
 lại và hỏi**, đừng tự dịch rồi viết route — đường dẫn không sửa lại được sau khi một xã chạy thật.
+
+### Danh mục tham chiếu — ADR 0024
+
+Tám danh mục sắp có bảng. Tên thực thể chốt **bây giờ** vì ADR 0021 đưa `@entity` vào dấu, và
+dấu thì đã nằm trong chỉ mục — đổi tên về sau là sửa dấu trên khắp các bảng đã tạo.
+
+**Giá trị bên trong các danh mục này giữ tiếng Việt không dấu** (`uy-ban`, `thon`, `doanh-nghiep`)
+— ADR 0011. Chỉ *tên thực thể* là tiếng Anh.
+
+| Khái niệm | Thực thể (`@entity`) | Bảng | Tài nguyên URL | Vì sao không phải từ dễ đoán |
+|---|---|---|---|---|
+| Loại tài nguyên bản đồ | `MapAssetType` | `loai_tai_nguyen_ban_do` | *(chưa chốt)* | **`asset` đã là từ đã dùng, không phải lựa chọn mới**: quyền `asset.read` / `asset.update` chốt tại `docs/ui-ux/10-ban-do-kinh-te-so.md:255`. Chọn `resource` hay `poi` ở đây là để một khái niệm mang hai từ tiếng Anh trên hai bề mặt — đúng cái giá mà mục `feedback.*` đang trả |
+| Hạng mục kế hoạch vốn | `CapitalPlanCategory` | `hang_muc_ke_hoach_von` | *(chưa chốt)* | `Category` chứ không `Item`: một *hạng mục* ở đây phân loại các khoản trong kế hoạch, không phải một dòng tiền cụ thể. `Item` sẽ mời người sau gắn số tiền vào chính bảng danh mục |
+| Loại văn bản | `DocumentType` | `loai_van_ban` | *(chưa chốt)* | Phân loại **văn bản nói chung**, dùng chung cho cả `van_ban_den` và `van_ban_di`. Đừng tách `IncomingDocumentType` — đến/đi là **hướng**, không phải loại |
+| Thôn / Tổ dân phố | `ResidentialUnit` | `thon_to_dan_pho` | *(chưa chốt)* | Một tên phủ **cả hai** loại, vì chúng là cùng một thứ ở hai địa bàn: thôn ở nông thôn, tổ dân phố ở đô thị. Đừng gọi `Hamlet` (chỉ đúng nửa) hay `Village` (sai với phường) |
+| Loại đơn vị dân cư | `ResidentialUnitType` | `loai_don_vi_dan_cu` | *(chưa chốt)* | Đi kèm `ResidentialUnit`, cùng một hậu tố `…Type` với ba danh mục trên. ⚠ **Nếu hai giá trị `thon` / `to-dan-pho` là cố định theo luật thì đây nên là cột enum, không nên là bảng danh mục sửa được** — xem câu hỏi mở #21: một danh mục sửa được là một danh mục xã tắt được |
+| Khối nhiệm vụ | `TaskBloc` | `khoi_nhiem_vu` | *(chưa chốt)* | Giá trị là `Khối Uỷ ban` · `Khối Đảng` · `Khác` (`02-nhiem-vu.md:56, 249`) — tức **tuyến bộ máy**, chính quyền hay Đảng, chứ không phải nhóm công việc. **Không** dùng `TaskBranch`: `branch` là từ tiếng Anh tự nhiên của `bo_phan`, và dùng nó ở đây là đặt hai khái niệm dưới một từ. **Không** dùng `TaskSector`: khối không phải lĩnh vực chuyên môn |
+| Loại nhiệm vụ | `TaskType` | `loai_nhiem_vu` | *(chưa chốt)* | `Type` chứ không `Kind`: bốn danh mục trên đã dùng hậu tố `…Type`, và hai hậu tố cho cùng một vai trò là thứ người sau phải tra mới biết dùng cái nào |
+| Mức ưu tiên nhiệm vụ | `TaskPriority` | `muc_uu_tien_nhiem_vu` | *(chưa chốt)* | Không hậu tố `…Type`: đây là **thang độ** có thứ tự, không phải một phân loại ngang hàng. Thứ tự là thuộc tính có nghĩa của nó |
+
+**Cột tài nguyên URL cố ý để trống.** Chưa danh mục nào có route, và `rest-api-design` chốt đường
+dẫn theo cách người ngoài gọi chứ không theo tên bảng. Điền sẵn bây giờ là đoán một quyết định
+chưa ai cần — mà đường dẫn thì không sửa lại được sau khi một xã chạy thật.
+
+**Hai chỗ đã nêu với người viết migration, không phải việc của tệp này:** (1) `TaskBloc` và
+`TaskType` được xếp cho hai service khác nhau trong khi cả hai đều phân loại `nhiem_vu` — quyền
+sở hữu là việc của `data-ownership.json`, nhưng một khái niệm bị chẻ đôi là thứ đáng hỏi lại;
+(2) `10-ban-do-kinh-te-so.md:53` nói danh mục có **8 mục** trong khi `:37` nói **11 nhóm** — đặc
+tả lệch với chính nó, phải chốt trước khi seed.
 
 ### Một khái niệm, bốn cái tên: `nguoi_dung` · `can_bo` · `CanBo` · `Staff`
 

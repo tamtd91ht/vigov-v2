@@ -410,5 +410,30 @@
       "thêm bất kỳ khoá quyền mới nào vào migration"
     ],
     "adr": "kb/10-decisions/0023-thuat-ngu-kenh-cong-dan.md"
+  },
+  {
+    "id": 21,
+    "question": "Xã sửa được DANH SÁCH MÃ trạng thái nhiệm vụ, hay chỉ sửa được NHÃN và THỨ TỰ?",
+    "status": "OPEN",
+    "why_it_matters": "ĐẶC TẢ TỰ MÂU THUẪN, VÀ CẢ HAI CA HỎNG ĐỀU LÀM ĐƯỢC BẰNG THAO TÁC MÀN HÌNH ĐANG CHO PHÉP — không cần một lỗi phần mềm nào. `docs/ui-ux/02-nhiem-vu.md:214` gọi trạng thái là danh mục \"sửa được ở Cấu hình\", và `docs/ui-ux/14-cau-hinh.md:176` liệt kê đúng danh mục ấy với 7 mục; mỗi dòng danh mục có nút `Tắt` (`14-cau-hinh.md:161`), và `:182` nói mục nguồn hệ thống không xoá được NHƯNG ĐƯỢC TẮT. Trong khi đó `02-nhiem-vu.md:227-231` vẽ một máy trạng thái có hướng đi CỐ ĐỊNH, và `:235` gắn quyền `task.approve` vào đúng bước `cho-duyet -> hoan-thanh`. Hệ quả: (1) xã THÊM một mã thì sinh ra trạng thái không lối vào, không lối ra — nhiệm vụ rơi vào đó nằm lại vĩnh viễn, mà Kanban vẫn vẽ cột ấy như cột bình thường; (2) xã TẮT `hoan-thanh` thì KHÔNG nhiệm vụ nào của cả xã kết thúc được, `task.approve` mất đích đến, và chỉ số báo cáo mất mẫu số. Ca (2) nặng hơn vì nó KHÔNG phải kẽ hở: đặc tả cho phép đúng thao tác làm sập vòng đời. Tiền lệ đã có: luật 10 điều kiện dừng #2 cấm đúng việc này cho vòng đời phiếu phản ánh — vòng đời nhiệm vụ chưa có luật tương ứng, nên hôm nay không gì chặn và không gì đỏ vào ngày một xã bấm `Tắt`.",
+    "code_signals": [
+      {
+        "pattern": "CREATE TABLE[^;]*trang_thai_nhiem_vu",
+        "means": "đang tạo bảng danh mục trạng thái nhiệm vụ — phải biết mã có sửa được không TRƯỚC khi chốt khoá và ràng buộc",
+        "threshold": 1
+      },
+      {
+        "pattern": "\"(hoan-thanh|cho-duyet|moi-giao)\"",
+        "means": "máy chuyển trạng thái đang viết cứng mã trong mã nguồn — tức đã ngầm quyết định xã KHÔNG sửa được mã",
+        "threshold": 3
+      }
+    ],
+    "reversal_cost": "CAO VÀ BẤT ĐỐI XỨNG. Đi từ \"chỉ sửa nhãn\" sang \"sửa được cả mã\" về sau là viết lại máy trạng thái thành dữ liệu — lớn nhưng làm được. Chiều ngược lại thì KHÔNG: sau khi vài xã đã tự thêm mã riêng, thu về một bộ mã chung nghĩa là ánh xạ thủ công trạng thái của những nhiệm vụ ĐÃ ĐÓNG — tức sửa hồ sơ lưu trữ, thứ luật 7 không cho phép.",
+    "ask_before": [
+      "viết migration cho danh mục trạng thái nhiệm vụ",
+      "viết route sửa trạng thái nhiệm vụ",
+      "viết máy chuyển trạng thái nhiệm vụ"
+    ],
+    "adr": "kb/10-decisions/0024-so-huu-danh-muc-tham-chieu.md"
   }
 ]
