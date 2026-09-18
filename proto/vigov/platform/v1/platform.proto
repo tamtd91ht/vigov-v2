@@ -31,7 +31,7 @@ package vigov.platform.v1;
 // naming any commune must never be able to reach that commune's business content. No other
 // service may copy this shape.
 //
-// ListTenants and ResolveTenantAlias sit in that same category and NOT in a wider one. On the
+// ListTenants and ResolveTenantSuccession sit in that same category and NOT in a wider one. On the
 // citizen channel there is no commune yet: a Mini App has no domain, it reaches ONE API host,
 // and picking a commune is what the caller is trying to do (ADR 0005). Both answer only out of
 // the registry. The thing that keeps this from becoming a general cross-commune read is not a
@@ -79,12 +79,25 @@ service PlatformService {
   // default to something, and on this path the wrong default puts a dissolved commune in front
   // of a citizen who then submits work to an authority that no longer exists (rule 1,
   // forbidden #1 — a default on the isolation path). A commune that has been reorganised is
-  // reached through ResolveTenantAlias, which answers with its successor, never by listing the
-  // dead unit as though it could still receive anything.
+  // reached through ResolveTenantSuccession, which answers with its successor, never by
+  // listing the dead unit as though it could still receive anything.
   rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
 
-  // ResolveTenantAlias answers the question a printed QR asks years after it was printed:
+  // ResolveTenantSuccession answers the question a printed QR asks years after it was printed:
   // this identifier names a unit — where does it lead today.
+  //
+  // "SUCCESSION", NOT "ALIAS", AND THE WORD IS THE POINT (ADR 0023). An alias is a second name
+  // for one thing. .claude/skills/admin-unit-merge, invariant 6, says the opposite in plain
+  // words: "The new commune is a new tenant with a 'merged from' mapping — Commune A does not
+  // 'become' commune B". Two legal entities, the old one deactivated and kept, the new one
+  // created. Whoever reads "alias" six months from now writes exactly the query invariant 2
+  // forbids — replacing the old tenant_id with the new one on archival records, "since they
+  // are aliases of each other anyway". Nothing turns red when they do. "Succession" keeps the
+  // thing "alias" erases: there is a BEFORE and an AFTER, and an issued document keeps the
+  // issuing authority it had at issuance.
+  //
+  // Same name as the table it reads — `tenant_succession`,
+  // service-platform/migrations/0003_tenant_succession.sql, marked `@entity: TenantSuccession`.
   //
   // @cross-tenant: the identifier presented belongs to a commune that may no longer exist,
   // and the answer is a DIFFERENT commune. Resolving it therefore crosses the boundary by
@@ -92,7 +105,7 @@ service PlatformService {
   // before a reorganisation becomes waste (ADR 0005), and reorganisation of commune-level
   // units in Vietnam is certain rather than hypothetical. Same confinement as ListTenants:
   // registry only, TenantSummary only.
-  rpc ResolveTenantAlias(ResolveTenantAliasRequest) returns (ResolveTenantAliasResponse);
+  rpc ResolveTenantSuccession(ResolveTenantSuccessionRequest) returns (ResolveTenantSuccessionResponse);
 }
 
 message Tenant {
@@ -178,7 +191,7 @@ message TenantSummary {
 // when the reason is not obvious.
 //
 // Wrapped rather than putting the extra field on TenantSummary, because `matched_former_name`
-// is a property of THIS SEARCH, not of the commune. On ResolveTenantAlias the same commune is
+// is a property of THIS SEARCH, not of the commune. On ResolveTenantSuccession the same commune is
 // returned with no such field, and a field that is meaningful in one RPC and dead in another
 // is a field readers learn to ignore in both.
 message TenantMatch {
@@ -192,8 +205,8 @@ message TenantMatch {
   // they know — the name on the sign, the name on last year's paperwork — gets back a commune
   // called something else. Without this field the picker can only show the new name, and the
   // citizen concludes the search is broken and their commune is missing. With it the screen
-  // can say which former name was matched, which is the whole point of the alias table
-  // (ADR 0005). The client cannot derive this: it does not hold the alias table.
+  // can say which former name was matched, which is the whole point of the succession table
+  // (ADR 0005). The client cannot derive this: it does not hold the succession table.
   //
   // The message a citizen reads is the screen's to compose, in Vietnamese. This field carries
   // the name only, never a sentence — a sentence in a contract is a sentence that cannot be
@@ -205,7 +218,7 @@ message ListTenantsRequest {
   // What the citizen typed, VERBATIM — diacritics, case and spacing exactly as entered.
   //
   // THE SERVER FOLDS, THE CLIENT MUST NOT. Matching is diacritic-insensitive and
-  // case-insensitive, over the current display name AND the former names in the alias table.
+  // case-insensitive, over the current display name AND the former names in the succession table.
   // A client that strips diacritics first has already decided what "the same name" means, and
   // it decides it differently from the server the first time the two normalisations disagree —
   // `Đ` and `D` in particular are one substitution in one implementation and not in the other.
@@ -249,7 +262,7 @@ message ListTenantsResponse {
   // keystroke of a search, and a number that was not computed is a number that is wrong.
 }
 
-message ResolveTenantAliasRequest {
+message ResolveTenantSuccessionRequest {
   // The identifier read from a deep link or QR — the `t=` parameter of ADR 0005's format.
   //
   // It is a ULID that was valid WHEN THE QR WAS PRINTED. It may name a commune that still
@@ -258,7 +271,7 @@ message ResolveTenantAliasRequest {
   string id = 1;
 }
 
-message ResolveTenantAliasResponse {
+message ResolveTenantSuccessionResponse {
   // The ACTIVE commune or communes this identifier leads to today: the unit itself when it
   // still exists, its successor(s) when it was reorganised.
   //

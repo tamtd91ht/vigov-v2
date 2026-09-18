@@ -66,7 +66,7 @@ const MethodResolveHost = "/vigov.platform.v1.PlatformService/ResolveHost"
 // (proto/vigov/platform/v1/platform.proto) and ADR 0003 is what keeps it harmless — that
 // service has no path to business content at all.
 //
-// DELIBERATELY ABSENT: ListTenants and ResolveTenantAlias. Both belong here eventually — the
+// DELIBERATELY ABSENT: ListTenants and ResolveTenantSuccession. Both belong here eventually — the
 // citizen channel has no domain, so both are asked before any commune is known, exactly like
 // ResolveHost (ADR 0005, ADR 0022). They are not here YET, and the order matters more than the
 // destination:

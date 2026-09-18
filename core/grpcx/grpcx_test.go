@@ -61,7 +61,7 @@ func TestDanhSachMienLaTuongMinh(t *testing.T) {
 	// Anything not named on the list is not exempt. This is the half of the rule that decays
 	// first: an exemption that applies by default applies to every RPC written afterwards.
 	//
-	// ListTenants and ResolveTenantAlias are on this list ON PURPOSE, and the reason is worth
+	// ListTenants and ResolveTenantSuccession are on this list ON PURPOSE, and the reason is worth
 	// the two lines. Both answer a question asked BEFORE any commune is known, so both will
 	// eventually need the exemption — and the person who implements them will meet
 	// InvalidArgument and reach for the one-line fix of naming them above. That one line is
@@ -73,7 +73,7 @@ func TestDanhSachMienLaTuongMinh(t *testing.T) {
 	for _, m := range []string{
 		"/vigov.platform.v1.PlatformService/GetTenant",
 		"/vigov.platform.v1.PlatformService/ListTenants",
-		"/vigov.platform.v1.PlatformService/ResolveTenantAlias",
+		"/vigov.platform.v1.PlatformService/ResolveTenantSuccession",
 		"/vigov.identity.v1.IdentityService/BatchGetStaff",
 		"",
 		"/vigov.platform.v1.PlatformService/ResolveHostSomethingElse",

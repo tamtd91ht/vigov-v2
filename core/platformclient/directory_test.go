@@ -233,7 +233,7 @@ func (k kiemHan) ListTenants(context.Context, *platformv1.ListTenantsRequest,
 	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
 }
 
-func (k kiemHan) ResolveTenantAlias(context.Context, *platformv1.ResolveTenantAliasRequest,
-	...grpc.CallOption) (*platformv1.ResolveTenantAliasResponse, error) {
+func (k kiemHan) ResolveTenantSuccession(context.Context, *platformv1.ResolveTenantSuccessionRequest,
+	...grpc.CallOption) (*platformv1.ResolveTenantSuccessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
 }

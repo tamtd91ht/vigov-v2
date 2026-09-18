@@ -78,24 +78,77 @@ message Staff {
   // that crosses a service boundary is a credential in somebody else's logs.
 }
 
-// A citizen exists once for the whole platform.
-message Citizen {
+// CitizenIdentity is one citizen, once for the whole platform (ADR 0002).
+//
+// NAMED AFTER WHAT THE RECORD HOLDS, NOT AFTER THE PERSON — ADR 0023 decided this, and the
+// reason has to travel with the name. The record holds exactly two things: an opaque
+// identifier and a masked phone number. A message called `Citizen` is an open invitation for
+// the next person to add `ho_ten`, `so_cccd`, `ngay_sinh`, and this is the one region of the
+// model with NO tenant_id to contain the damage (ADR 0021, `@scope: cross-tenant`): a single
+// subject holding identifying data for citizens of EVERY commune on the platform, with no
+// commune boundary to limit who a mistaken query returns. Every heaviest obligation of Decree
+// 13/2023 lands here at once.
+//
+// The name stops nobody adding a field. It makes adding one a sentence that has to be said
+// out loud first, and that is the whole of what a name can do.
+//
+// Same name as the table it describes — `dinh_danh_cong_dan`,
+// service-identity/migrations/0004_kenh_cong_dan.sql, marked `@entity: CitizenIdentity`.
+message CitizenIdentity {
   string id = 1;
   // Phone is unique PLATFORM-WIDE. It is never returned unmasked unless the caller holds
   // explicit full-view permission, and every such read is audited.
   string phone_masked = 2;
 }
 
-// The link between a citizen and a commune, with the capacity they act in.
+// The link between a citizen and a commune, with the residence the citizen DECLARED for it.
 message CitizenCommune {
   string citizen_id = 1;
   string tenant_id = 2;
+
+  // WHAT THE CITIZEN DECLARED. It is NOT a legal status and NOT a verified fact — the store
+  // keeps the declaration (`quan_he_cong_dan_xa.khai_cu_tru`) and whether an officer has
+  // checked it (`trang_thai_xac_thuc`) in TWO separate columns, on purpose (ADR 0023 §A).
+  // This contract carries only the first of those two facts today, because nothing reads the
+  // second yet: a contract records what exists, not what is planned (ADR 0021, rule 4).
+  //
+  // A CONSUMER THEREFORE MUST NOT COUNT THIS AS A REGISTRATION. A report saying
+  // "1.200 công dân thường trú" is read as 1.200 people holding a police registration; this
+  // value only says 1.200 people typed that into an app.
   Capacity capacity = 3;
+
+  // THE VALUES STAY IN VIETNAMESE, and that is ADR 0011's rule for enum VALUES, not a lapse
+  // beside the English field names around them. Translating a name is a naming choice;
+  // translating a VALUE asserts that the Vietnamese concept and the English word are the same
+  // thing. Run ADR 0011's test — does reading this word wrongly get the PROCEDURE wrong, or
+  // only the aesthetics?
+  //
+  // Under Luật Cư trú 2020, `thuong_tru` and `tam_tru` are states REGISTERED WITH THE POLICE:
+  // they describe a registration, not where somebody actually lives. English
+  // "permanent resident" describes the living, which is a different fact. A procedure that
+  // requires the applicant to hold a registered `thuong_tru` in the commune is NOT satisfied
+  // by "has lived here for years but never registered". Wrong procedure, not wrong aesthetics
+  // — so the Vietnamese stays, spelled without diacritics.
+  //
+  // These are the same three strings the store CHECKs
+  // (service-identity/migrations/0004_kenh_cong_dan.sql, quan_he_khai_cu_tru_hop_le). One
+  // vocabulary from the column to the contract: translating at the API layer would leave the
+  // API disagreeing with the database, or force migrating values on archival records (rule 7).
   enum Capacity {
     CAPACITY_UNSPECIFIED = 0;
-    CAPACITY_PERMANENT_RESIDENT = 1;   // thường trú
-    CAPACITY_TEMPORARY_RESIDENT = 2;   // tạm trú
-    CAPACITY_TRANSIENT = 3;            // vãng lai — reporting an issue seen while passing through
+
+    CAPACITY_THUONG_TRU = 1;   // đã đăng ký thường trú tại xã này
+    CAPACITY_TAM_TRU = 2;      // đã đăng ký tạm trú tại xã này
+
+    // NO DECLARATION EXISTS for this (citizen, commune) pair — nothing more, nothing less.
+    //
+    // WAS `CAPACITY_TRANSIENT` / "vãng lai", AND THAT WORD ASSERTED A FACT THE DATA DOES NOT
+    // HOLD. "Vãng lai" means the person is physically present in the area without registering.
+    // But this row is created the moment a citizen submits a report to a commune (ADR 0005),
+    // and that includes somebody sitting in Hà Nội reporting a problem to a commune in Đà
+    // Nẵng. The system does not know where the person is and has no way to find out — and a
+    // status the data cannot support is a status somebody eventually counts (ADR 0023 §2).
+    CAPACITY_CHUA_KHAI = 3;
   }
 }
 
