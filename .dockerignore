@@ -44,6 +44,12 @@ web-admin
 platform-admin
 citizen-app
 
+# ---- thư mục nháp: trong .gitignore rồi, nhưng .gitignore KHÔNG chặn ngữ cảnh build --
+#
+# Hai danh sách loại trừ này độc lập nhau. Một thư mục nháp nằm ngoài git vẫn đi trọn vẹn
+# sang trình đóng ảnh, và ảnh chụp màn hình của ai đó vẫn nằm trong tầm với của mọi lệnh COPY.
+tmp
+
 # ---- kết quả build của máy dev, phải sinh lại trong ảnh -----------------------------
 node_modules
 **/node_modules
