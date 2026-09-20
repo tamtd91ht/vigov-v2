@@ -126,8 +126,7 @@ export type identity_khoiNhiemVuRa = {
   "label": string;
   /** the row a form pre-selects; at most one per commune */
   "is_default": boolean;
-  /** false = taken out of use, returned so a picker can filter */
-  "is_active": boolean;
+  "active": boolean;
 };
 
 export type identity_loaiDonViDanCuRa = {
@@ -138,7 +137,7 @@ export type identity_loaiDonViDanCuRa = {
   /** "Thôn" — what a person reads */
   "label": string;
   "is_default": boolean;
-  "is_active": boolean;
+  "active": boolean;
 };
 
 export type identity_maTranQuyenRa = {
@@ -189,7 +188,7 @@ export type identity_thonToDanPhoRa = {
   "type_label": string;
   "household_count": number | null;
   "population_count": number | null;
-  "is_active": boolean;
+  "active": boolean;
 };
 
 export type identity_thongTinXa = {

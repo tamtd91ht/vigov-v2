@@ -1314,15 +1314,14 @@
             "type": "boolean",
             "description": "the row a form pre-selects; at most one per commune"
           },
-          "is_active": {
-            "type": "boolean",
-            "description": "false = taken out of use, returned so a picker can filter"
+          "active": {
+            "type": "boolean"
           }
         },
         "required": [
+          "active",
           "code",
           "id",
-          "is_active",
           "is_default",
           "label"
         ],
@@ -1346,14 +1345,14 @@
           "is_default": {
             "type": "boolean"
           },
-          "is_active": {
+          "active": {
             "type": "boolean"
           }
         },
         "required": [
+          "active",
           "code",
           "id",
-          "is_active",
           "is_default",
           "label"
         ],
@@ -1535,15 +1534,15 @@
               "null"
             ]
           },
-          "is_active": {
+          "active": {
             "type": "boolean"
           }
         },
         "required": [
+          "active",
           "code",
           "household_count",
           "id",
-          "is_active",
           "name",
           "population_count",
           "type_code",

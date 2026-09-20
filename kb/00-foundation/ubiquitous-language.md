@@ -3,7 +3,7 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: 1b7b276
+derived_from_commit: b899f4c
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
@@ -14,6 +14,7 @@ owns_facts:
   - "tên gọi các bước trong vòng đời phiếu phản ánh"
   - "tên gọi vai trò cán bộ cấp xã"
   - "tên thực thể tiếng Anh của tám danh mục tham chiếu"
+  - "vì sao hợp đồng danh mục trả trường label còn thực thể có tên riêng trả name"
   - "quy tắc: tên theo khái niệm, quyền sở hữu theo nhịp đổi"
 ---
 
@@ -145,32 +146,67 @@ lại và hỏi**, đừng tự dịch rồi viết route — đường dẫn kh
 
 ### Danh mục tham chiếu — ADR 0024
 
-Tám danh mục sắp có bảng. Tên thực thể chốt **bây giờ** vì ADR 0021 đưa `@entity` vào dấu, và
-dấu thì đã nằm trong chỉ mục — đổi tên về sau là sửa dấu trên khắp các bảng đã tạo.
+Tám danh mục **đã có bảng và đã có tuyến đọc** (2026-09-20). Tên thực thể chốt từ trước khi có
+bảng, vì ADR 0021 đưa `@entity` vào dấu, và dấu thì đã nằm trong chỉ mục — đổi tên bây giờ là sửa
+dấu trên khắp các bảng đã tạo **và** đổi một đường dẫn đang chạy.
 
 **Giá trị bên trong các danh mục này giữ tiếng Việt không dấu** (`uy-ban`, `thon`, `doanh-nghiep`)
 — ADR 0011. Chỉ *tên thực thể* là tiếng Anh.
 
 | Khái niệm | Thực thể (`@entity`) | Bảng | Tài nguyên URL | Vì sao không phải từ dễ đoán |
 |---|---|---|---|---|
-| Loại tài nguyên bản đồ | `MapAssetType` | `loai_tai_nguyen_ban_do` | *(chưa chốt)* | **`asset` đã là từ đã dùng, không phải lựa chọn mới**: quyền `asset.read` / `asset.update` chốt tại `docs/ui-ux/10-ban-do-kinh-te-so.md:255`. Chọn `resource` hay `poi` ở đây là để một khái niệm mang hai từ tiếng Anh trên hai bề mặt — đúng cái giá mà mục `feedback.*` đang trả |
-| Hạng mục kế hoạch vốn | `CapitalPlanCategory` | `hang_muc_ke_hoach_von` | *(chưa chốt)* | `Category` chứ không `Item`: một *hạng mục* ở đây phân loại các khoản trong kế hoạch, không phải một dòng tiền cụ thể. `Item` sẽ mời người sau gắn số tiền vào chính bảng danh mục |
-| Loại văn bản | `DocumentType` | `loai_van_ban` | *(chưa chốt)* | Phân loại **văn bản nói chung**, dùng chung cho cả `van_ban_den` và `van_ban_di`. Đừng tách `IncomingDocumentType` — đến/đi là **hướng**, không phải loại |
-| Thôn / Tổ dân phố | `ResidentialUnit` | `thon_to_dan_pho` | *(chưa chốt)* | Một tên phủ **cả hai** loại, vì chúng là cùng một thứ ở hai địa bàn: thôn ở nông thôn, tổ dân phố ở đô thị. Đừng gọi `Hamlet` (chỉ đúng nửa) hay `Village` (sai với phường) |
-| Loại đơn vị dân cư | `ResidentialUnitType` | `loai_don_vi_dan_cu` | *(chưa chốt)* | Đi kèm `ResidentialUnit`, cùng một hậu tố `…Type` với ba danh mục trên. ⚠ **Nếu hai giá trị `thon` / `to-dan-pho` là cố định theo luật thì đây nên là cột enum, không nên là bảng danh mục sửa được** — xem câu hỏi mở #21: một danh mục sửa được là một danh mục xã tắt được |
-| Khối nhiệm vụ | `TaskBloc` | `khoi_nhiem_vu` | *(chưa chốt)* | Giá trị là `Khối Uỷ ban` · `Khối Đảng` · `Khác` (`02-nhiem-vu.md:56, 249`) — tức **tuyến bộ máy**, chính quyền hay Đảng, chứ không phải nhóm công việc. **Không** dùng `TaskBranch`: `branch` là từ tiếng Anh tự nhiên của `bo_phan`, và dùng nó ở đây là đặt hai khái niệm dưới một từ. **Không** dùng `TaskSector`: khối không phải lĩnh vực chuyên môn. ⚠ **BẢNG NÀY THUỘC `identity` DÙ TÊN MANG CHỮ `Task` — đừng "sửa cho gọn".** Tên đi theo KHÁI NIỆM (đặc tả chỉ cho khối xuất hiện như thuộc tính của nhiệm vụ: bộ lọc `:56`, trường biểu mẫu `:249`, nhãn dòng `:121`; `bo_phan` không có trường khối — `14-cau-hinh.md:38` và `identity/migrations/0001_init.sql:66`). Quyền sở hữu đi theo NHỊP ĐỔI: khối đổi cùng sơ đồ tổ chức, không cùng nhiệm vụ (ADR 0024:65). Hai thứ ấy được phép khác nhau. Kéo bảng sang `petitions` cho "khớp tên" là dựng lại đúng vòng hai đỉnh mà ADR 0024:130 đã cấm bằng tên |
-| Loại nhiệm vụ | `TaskType` | `loai_nhiem_vu` | *(chưa chốt)* | `Type` chứ không `Kind`: bốn danh mục trên đã dùng hậu tố `…Type`, và hai hậu tố cho cùng một vai trò là thứ người sau phải tra mới biết dùng cái nào |
-| Mức ưu tiên nhiệm vụ | `TaskPriority` | `muc_uu_tien_nhiem_vu` | *(chưa chốt)* | Không hậu tố `…Type`: đây là **thang độ** có thứ tự, không phải một phân loại ngang hàng. Thứ tự là thuộc tính có nghĩa của nó |
+| Loại tài nguyên bản đồ | `MapAssetType` | `loai_tai_nguyen_ban_do` | `map-asset-types` — `GET /api/v1/map-asset-types`, `AnyAuthenticated` (`comms`) | **`asset` đã là từ đã dùng, không phải lựa chọn mới**: quyền `asset.read` / `asset.update` chốt tại `docs/ui-ux/10-ban-do-kinh-te-so.md:255`. Chọn `resource` hay `poi` ở đây là để một khái niệm mang hai từ tiếng Anh trên hai bề mặt — đúng cái giá mà mục `feedback.*` đang trả |
+| Hạng mục kế hoạch vốn | `CapitalPlanCategory` | `hang_muc_ke_hoach_von` | `capital-plan-categories` — `GET /api/v1/capital-plan-categories`, `AnyAuthenticated` (`finance`) | `Category` chứ không `Item`: một *hạng mục* ở đây phân loại các khoản trong kế hoạch, không phải một dòng tiền cụ thể. `Item` sẽ mời người sau gắn số tiền vào chính bảng danh mục |
+| Loại văn bản | `DocumentType` | `loai_van_ban` | `document-types` — `GET /api/v1/document-types`, `AnyAuthenticated` (`documents`) | Phân loại **văn bản nói chung**, dùng chung cho cả `van_ban_den` và `van_ban_di`. Đừng tách `IncomingDocumentType` — đến/đi là **hướng**, không phải loại |
+| Thôn / Tổ dân phố | `ResidentialUnit` | `thon_to_dan_pho` | `residential-units` — `GET /api/v1/residential-units`, `AnyAuthenticated` (`identity`). Trả `name`, **không** `label` — xem ghi chú dưới bảng | Một tên phủ **cả hai** loại, vì chúng là cùng một thứ ở hai địa bàn: thôn ở nông thôn, tổ dân phố ở đô thị. Đừng gọi `Hamlet` (chỉ đúng nửa) hay `Village` (sai với phường) |
+| Loại đơn vị dân cư | `ResidentialUnitType` | `loai_don_vi_dan_cu` | `residential-unit-types` — `GET /api/v1/residential-unit-types`, `AnyAuthenticated` (`identity`) | Đi kèm `ResidentialUnit`, cùng một hậu tố `…Type` với ba danh mục trên. ⚠ **Nếu hai giá trị `thon` / `to-dan-pho` là cố định theo luật thì đây nên là cột enum, không nên là bảng danh mục sửa được** — xem câu hỏi mở #21: một danh mục sửa được là một danh mục xã tắt được |
+| Khối nhiệm vụ | `TaskBloc` | `khoi_nhiem_vu` | `task-blocs` — `GET /api/v1/task-blocs`, `AnyAuthenticated` — **service `identity`**, đúng như ô bên phải | Giá trị là `Khối Uỷ ban` · `Khối Đảng` · `Khác` (`02-nhiem-vu.md:56, 249`) — tức **tuyến bộ máy**, chính quyền hay Đảng, chứ không phải nhóm công việc. **Không** dùng `TaskBranch`: `branch` là từ tiếng Anh tự nhiên của `bo_phan`, và dùng nó ở đây là đặt hai khái niệm dưới một từ. **Không** dùng `TaskSector`: khối không phải lĩnh vực chuyên môn. ⚠ **BẢNG NÀY THUỘC `identity` DÙ TÊN MANG CHỮ `Task` — đừng "sửa cho gọn".** Tên đi theo KHÁI NIỆM (đặc tả chỉ cho khối xuất hiện như thuộc tính của nhiệm vụ: bộ lọc `:56`, trường biểu mẫu `:249`, nhãn dòng `:121`; `bo_phan` không có trường khối — `14-cau-hinh.md:38` và `identity/migrations/0001_init.sql:66`). Quyền sở hữu đi theo NHỊP ĐỔI: khối đổi cùng sơ đồ tổ chức, không cùng nhiệm vụ (ADR 0024:65). Hai thứ ấy được phép khác nhau. Kéo bảng sang `petitions` cho "khớp tên" là dựng lại đúng vòng hai đỉnh mà ADR 0024:130 đã cấm bằng tên |
+| Loại nhiệm vụ | `TaskType` | `loai_nhiem_vu` | `task-types` — `GET /api/v1/task-types`, `AnyAuthenticated` (`petitions`) | `Type` chứ không `Kind`: bốn danh mục trên đã dùng hậu tố `…Type`, và hai hậu tố cho cùng một vai trò là thứ người sau phải tra mới biết dùng cái nào |
+| Mức ưu tiên nhiệm vụ | `TaskPriority` | `muc_uu_tien_nhiem_vu` | `task-priorities` — `GET /api/v1/task-priorities`, `AnyAuthenticated` (`petitions`) | Không hậu tố `…Type`: đây là **thang độ** có thứ tự, không phải một phân loại ngang hàng. Thứ tự là thuộc tính có nghĩa của nó |
 
-**Cột tài nguyên URL cố ý để trống.** Chưa danh mục nào có route, và `rest-api-design` chốt đường
-dẫn theo cách người ngoài gọi chứ không theo tên bảng. Điền sẵn bây giờ là đoán một quyết định
-chưa ai cần — mà đường dẫn thì không sửa lại được sau khi một xã chạy thật.
+**Cột tài nguyên URL đã điền — cả tám tuyến ĐÃ CHẠY** (2026-09-20). Đây là **ghi lại sự thật**,
+không phải đoán trước: mỗi ô đối chiếu với `kb/20-contracts/openapi.json`, tầng SINH ra từ mã
+(ADR 0014). Cả tám đều là một tuyến `GET` đọc, đều khai `AnyAuthenticated` theo đúng lập luận đã
+được chấp nhận cho `GET /api/v1/org-units`: nhãn danh mục xuất hiện ở ô chọn và bộ lọc của hầu
+hết màn hình, nên đòi một quyền cấu hình là làm rỗng những ô ấy cho mọi tài khoản không phải
+quản trị. Danh mục chỉ lộ **trong chính xã đó** — `Scoped` buộc `tenant_id` (luật 1). Luật 5 điều
+kiện dừng #1 đã hỏi và **người dùng đã trả lời**; đừng mở lại vòng đó.
 
-**Hai chỗ đã nêu với người viết migration, không phải việc của tệp này:** (1) `TaskBloc` và
-`TaskType` được xếp cho hai service khác nhau trong khi cả hai đều phân loại `nhiem_vu` — quyền
-sở hữu là việc của `data-ownership.json`, nhưng một khái niệm bị chẻ đôi là thứ đáng hỏi lại;
-(2) `10-ban-do-kinh-te-so.md:53` nói danh mục có **8 mục** trong khi `:37` nói **11 nhóm** — đặc
-tả lệch với chính nó, phải chốt trước khi seed.
+**Phần đúng của lý do cũ vẫn giữ nguyên, vì nó nói về NHỊP chứ không nói về trạng thái:** đường
+dẫn được chốt lúc **có người gọi thật sự cần**, không phải lúc tạo bảng — và **một khi một xã đã
+chạy thật thì đường dẫn không lấy lại được**. Hệ quả cho dòng sau này: khái niệm nào chưa có
+tuyến thì **vẫn để trống**, đừng điền sẵn. Hệ quả cho tám dòng này: chúng không còn "chưa chốt".
+Ai đọc lướt thấy hai chữ ấy rồi **nghĩ ra cái tên thứ chín** cho một thứ đã có đường dẫn đang
+chạy là đúng sự cố mà cột này vừa được điền để chặn.
+
+**Chuỗi người đọc trong hợp đồng là `label`, KHÔNG phải `name` — ranh giới vạch ở SCHEMA, không
+ở tên tuyến.** Bảng danh mục mang cột `nhan`, tức một **NHÃN**: sửa lại chữ là thao tác **duy
+nhất mà cả ba tầng của ADR 0024 đều cho phép** xã làm — ở tầng 3 thì nó là thứ duy nhất còn lại —
+trong khi `ma` vẫn bất biến. Bảng ba tầng ở
+`service-identity/migrations/0005_don_vi_dan_cu_va_danh_muc.sql:79-81`. Vì thế **bảy** danh mục
+trả `label`. `bo_phan` và `vai_tro` mang cột `ten`, tức một **TÊN RIÊNG**, nên `org-units` và
+`roles` trả `name`. `thon_to_dan_pho` cũng mang `ten` — nó là một địa bàn có tên, không phải một
+dòng danh mục — nên `/residential-units` trả `name` trong khi `/residential-unit-types` ngay cạnh
+trả `label`. Hai tuyến cạnh nhau, hai tên trường khác nhau, và đó là **cố ý**. Câu này nằm ở đây
+vì đây là chỗ người viết route tra **trước** khi đặt tên trường: hôm 2026-09-20 bốn service mỗi
+nơi tự nghĩ ra một đáp án, và cái giá là bốn lần đổi tên trên bề mặt hợp đồng.
+
+**Câu đã hỏi, ĐÃ CÓ TRẢ LỜI — ghi lại chứ không xoá, để không ai hỏi lại vòng ba.** `TaskBloc`
+thuộc `identity` còn `TaskType` thuộc `petitions`, dù cả hai đều phân loại `nhiem_vu`. Đây
+**không** phải một khái niệm bị chẻ đôi còn bỏ ngỏ: ADR 0024:57-67 chốt chủ sở hữu cho cả bảy
+nhóm, và dòng `:65` chốt khối thuộc `identity` vì khối đổi **cùng nhịp với sơ đồ tổ chức**, không
+cùng nhịp với nhiệm vụ. Đúng quy tắc ở §Quy ước đặt tên: tên đi theo khái niệm, quyền sở hữu đi
+theo nhịp đổi, và hai thứ ấy **được phép khác nhau**. Lý do đầy đủ ở ô `TaskBloc` trong bảng trên
+và ở ADR 0024 §"Cái giá của dòng `Khối nhiệm vụ`" (`:115-136`) — không chép lại ở đây.
+
+Mã đã đi theo quyết định đó, nên đừng đọc chỗ lệch này như một lỗi: dấu `-- @entity: TaskBloc`
+nằm ở `service-identity/migrations/0005_don_vi_dan_cu_va_danh_muc.sql:295`, và
+`GET /api/v1/task-blocs` chạy từ chính `identity`. **Nếu cái giá của tham chiếu xuyên service hoá
+ra đắt hơn mức chịu được, đường ra KHÔNG phải là kéo bảng sang `petitions` trong im lặng — đó là
+sửa ADR** (ADR 0024:135-136).
+
+**Còn một chỗ chưa chốt, đã nêu với người viết migration:** `10-ban-do-kinh-te-so.md:53` nói danh
+mục có **8 mục** trong khi `:37` nói **11 nhóm** — đặc tả lệch với chính nó, phải chốt trước khi seed.
 
 ### Một khái niệm, bốn cái tên: `nguoi_dung` · `can_bo` · `CanBo` · `Staff`
 

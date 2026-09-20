@@ -308,11 +308,11 @@
     },
     "http.DanhSachKhoiNhiemVu": {
       "kind": "func",
-      "at": "service-identity/internal/http/khoi_nhiem_vu.go:59"
+      "at": "service-identity/internal/http/khoi_nhiem_vu.go:65"
     },
     "http.DanhSachLoaiDonViDanCu": {
       "kind": "func",
-      "at": "service-identity/internal/http/loai_don_vi_dan_cu.go:87"
+      "at": "service-identity/internal/http/loai_don_vi_dan_cu.go:94"
     },
     "http.DanhSachLoaiNhiemVu": {
       "kind": "func",
@@ -332,7 +332,7 @@
     },
     "http.DanhSachThonToDanPho": {
       "kind": "func",
-      "at": "service-identity/internal/http/thon_to_dan_pho.go:108"
+      "at": "service-identity/internal/http/thon_to_dan_pho.go:112"
     },
     "http.DanhSachVaiTro": {
       "kind": "func",
