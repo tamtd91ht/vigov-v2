@@ -29,7 +29,7 @@ import (
 //	                    Two routes to render one list is a cost paid on every load, and the join is
 //	                    written once per client — the admin web, the Mini App, whatever comes next —
 //	                    each with its own idea of what to show when the code matches nothing.
-//	embedded object     `"type": {id, code, label, is_default, is_active}` makes this response
+//	embedded object     `"type": {id, code, label, is_default, active}` makes this response
 //	                    change shape every time the catalogue's own shape changes, and hands a
 //	                    caller fields it has no use for. Worse, it invites the client to believe it
 //	                    now holds the catalogue — and a catalogue assembled from whichever types
@@ -73,9 +73,13 @@ type thonToDanPhoRa struct {
 	HouseholdCount  *int `json:"household_count"`
 	PopulationCount *int `json:"population_count"`
 
-	// IsActive is false for a unit taken out of use. Returned rather than filtered server-side, so
+	// Active is false for a unit taken out of use. Returned rather than filtered server-side, so
 	// the list screen can show it while a picker filters it out — same reading as the catalogues.
-	IsActive bool `json:"is_active"`
+	//
+	// `active` AND NOT `is_active`: it is what five sibling catalogue routes answer and what this
+	// service already ships on a route web-admin consumes (can_bo.go:51). One concept with two
+	// spellings across one contract makes a client branch on which service answered.
+	Active bool `json:"active"`
 }
 
 // danhSachThonToDanPhoRa wraps the list in an OBJECT rather than a bare JSON array — same reasoning
@@ -94,7 +98,7 @@ func thonToDanPhoRaNgoai(t domain.ThonToDanPho) thonToDanPhoRa {
 		TypeLabel:       t.LoaiNhan,
 		HouseholdCount:  t.SoHo,
 		PopulationCount: t.NhanKhau,
-		IsActive:        t.DangDung,
+		Active:          t.DangDung,
 	}
 }
 

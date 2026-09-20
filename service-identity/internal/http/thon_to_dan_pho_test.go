@@ -112,14 +112,14 @@ func TestThonToDanPho_200(t *testing.T) {
 	if mot.PopulationCount == nil || *mot.PopulationCount != 1132 {
 		t.Errorf("nhân khẩu sai: %v", mot.PopulationCount)
 	}
-	if !mot.IsActive {
-		t.Error("is_active = false với đơn vị đang dùng")
+	if !mot.Active {
+		t.Error("active = false với đơn vị đang dùng")
 	}
 	// The unit the commune has taken out of use is RETURNED, with the flag telling a picker to
 	// leave it out. Filtering it away server-side would leave the list screen unable to show what
 	// it manages.
-	if ra.Items[2].IsActive {
-		t.Errorf("is_active = true với đơn vị đã tắt: %+v", ra.Items[2])
+	if ra.Items[2].Active {
+		t.Errorf("active = true với đơn vị đã tắt: %+v", ra.Items[2])
 	}
 }
 
@@ -236,6 +236,67 @@ func TestThonToDanPhoKhongNhapSoLieuKhacVoiSoKhong(t *testing.T) {
 			if mot.HouseholdCount == nil || *mot.HouseholdCount != 0 {
 				t.Errorf("số 0 đã nhập bị mất: %v", mot.HouseholdCount)
 			}
+		}
+	}
+}
+
+func TestThonToDanPhoTraDungNhungTruongCuaHopDong(t *testing.T) {
+	// THE FIELDS THAT ARE ABSENT ARE THE DESIGN, asserted rather than assumed — and this route needs
+	// it more than the two catalogues do, because its shape is a JOIN and a join is where an extra
+	// column arrives without anybody deciding to publish it.
+	//
+	//	tenant_id        never leaves this service — not data, but the dimension every row is
+	//	                 already filtered by (rule 1, invariant 4)
+	//	deleted_at,      a soft-deleted unit never leaves the store, so no reader needs to ask who
+	//	deleted_by,      removed it or why. Those three are the commune's internal record of an
+	//	delete_reason    administrative act, not part of a list of places
+	//	the type's own   `type_code` + `type_label` and NOTHING ELSE of loai_don_vi_dan_cu. No `id`,
+	//	fields           no `is_default`, no `active` of the TYPE: that is the embedded-object shape
+	//	                 argued against on thonToDanPhoRa, and it would make this response change
+	//	                 whenever the catalogue's shape changes
+	//
+	// THE SET IS THIS ROUTE'S OWN AND DELIBERATELY NOT THE CATALOGUES': `name` rather than `label`,
+	// because a unit HAS a name (`ten`) while a catalogue row carries a label put on a code.
+	//
+	// THIS IS A CONTRACT, NOT A SNAPSHOT: when it goes red, the question is whether the ROUTE should
+	// have changed — `make kb` regenerates the OpenAPI contract from these types, and web-admin's
+	// types from that.
+	m := dungMayChu(t)
+
+	w := m.goi(t, "GET", hostA, duongThonToDanPho, "", m.tokenCho(t, xaA, sidA))
+	doiMa(t, w, http.StatusOK)
+
+	var tho struct {
+		Items []map[string]json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &tho); err != nil {
+		t.Fatalf("thân không phải JSON: %q", w.Body.String())
+	}
+	// NON-EMPTY FIRST: on an empty list the loop below runs zero times and passes having checked
+	// nothing — and empty is what every commune answers today (migration 0005 seeds nothing).
+	if len(tho.Items) == 0 {
+		t.Fatal("dữ liệu mẫu rỗng — phép kiểm sẽ xanh mà không kiểm gì")
+	}
+
+	muon := map[string]bool{
+		"id": true, "code": true, "name": true,
+		"type_code": true, "type_label": true,
+		// PRESENT EVEN WHEN null: the two counts are pointers so "not entered" survives as null
+		// rather than as a counted zero, and a key that disappeared when the value was absent would
+		// make a client read "not entered" and "field gone" the same way.
+		"household_count": true, "population_count": true,
+		"active": true,
+	}
+	for _, mot := range tho.Items {
+		for khoa := range mot {
+			if !muon[khoa] {
+				t.Errorf("trường ngoài hợp đồng lọt ra: %q — %s", khoa, w.Body.String())
+			}
+		}
+		// The length check is what catches a REMOVED field: the loop above only sees keys that are
+		// present. It also catches `omitempty` creeping onto the two nullable counts.
+		if len(mot) != len(muon) {
+			t.Errorf("thiếu trường: có %v, muốn %v", mot, muon)
 		}
 	}
 }

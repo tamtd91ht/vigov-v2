@@ -55,11 +55,18 @@ type loaiDonViDanCuRa struct {
 	// the reason it is carried out at all is on domain.LoaiDonViDanCu.LaMacDinh.
 	IsDefault bool `json:"is_default"`
 
-	// IsActive is false for a row the commune has taken out of use. IT IS RETURNED RATHER THAN
+	// Active is false for a row the commune has taken out of use. IT IS RETURNED RATHER THAN
 	// FILTERED SERVER-SIDE so one route can serve both consumers: the catalogue screen, which must
 	// show a disabled row with its "Đã tắt" chip, and a picker, which must not offer it. Dropping
 	// the flag would put a disabled option in a form with nothing on the screen to show it.
-	IsActive bool `json:"is_active"`
+	//
+	// `active` AND NOT `is_active`, BESIDE AN `is_default` — THE ASYMMETRY IS DELIBERATE AND SHARED,
+	// SO DO NOT "FIX" EITHER HALF OF IT. Five sibling catalogue routes answer the same pair
+	// (service-documents/internal/http/loai_van_ban.go:43,48 and four more), and this service already
+	// shipped `active` on a route web-admin consumes (can_bo.go:51). One concept spelled two ways
+	// across one contract forces a client writing a single catalogue reader to branch on which
+	// service answered — the drift that cost four services a rename today.
+	Active bool `json:"active"`
 }
 
 // danhSachLoaiDonViDanCuRa wraps the list in an OBJECT rather than returning a bare JSON array —
@@ -71,7 +78,7 @@ type danhSachLoaiDonViDanCuRa struct {
 
 func loaiDonViDanCuRaNgoai(l domain.LoaiDonViDanCu) loaiDonViDanCuRa {
 	return loaiDonViDanCuRa{
-		ID: l.ID, Code: l.Ma, Label: l.Nhan, IsDefault: l.LaMacDinh, IsActive: l.DangDung,
+		ID: l.ID, Code: l.Ma, Label: l.Nhan, IsDefault: l.LaMacDinh, Active: l.DangDung,
 	}
 }
 

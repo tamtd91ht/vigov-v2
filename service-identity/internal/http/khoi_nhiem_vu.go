@@ -35,7 +35,13 @@ type khoiNhiemVuRa struct {
 	Label string `json:"label"` // "Khối Uỷ ban"
 
 	IsDefault bool `json:"is_default"` // the row a form pre-selects; at most one per commune
-	IsActive  bool `json:"is_active"`  // false = taken out of use, returned so a picker can filter
+
+	// Active is false = taken out of use, returned so a picker can filter. `active` beside an
+	// `is_default` is the pair five sibling catalogue routes already answer, and the pair this
+	// service already ships on can_bo.go:51 — the asymmetry is shared on purpose, so do not tidy
+	// one half of it. Two spellings of `dang_dung` across one contract make a client writing a
+	// single catalogue reader branch on which service answered.
+	Active bool `json:"active"`
 }
 
 // danhSachKhoiNhiemVuRa wraps the list in an OBJECT rather than a bare JSON array — same reasoning
@@ -46,7 +52,7 @@ type danhSachKhoiNhiemVuRa struct {
 
 func khoiNhiemVuRaNgoai(k domain.KhoiNhiemVu) khoiNhiemVuRa {
 	return khoiNhiemVuRa{
-		ID: k.ID, Code: k.Ma, Label: k.Nhan, IsDefault: k.LaMacDinh, IsActive: k.DangDung,
+		ID: k.ID, Code: k.Ma, Label: k.Nhan, IsDefault: k.LaMacDinh, Active: k.DangDung,
 	}
 }
 

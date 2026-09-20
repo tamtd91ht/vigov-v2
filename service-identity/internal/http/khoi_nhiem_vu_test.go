@@ -89,10 +89,10 @@ func TestKhoiNhiemVu_200(t *testing.T) {
 	}
 	// Both flags, differing per row in the fixture — that is what tells "the flag is read" from
 	// "the flag is always false".
-	if !mot.IsDefault || !mot.IsActive {
+	if !mot.IsDefault || !mot.Active {
 		t.Errorf("mục mặc định đang dùng bị báo sai: %+v", mot)
 	}
-	if ra.Items[1].IsDefault || ra.Items[1].IsActive {
+	if ra.Items[1].IsDefault || ra.Items[1].Active {
 		t.Errorf("mục thứ hai phải không mặc định và đã tắt: %+v", ra.Items[1])
 	}
 	// The order is the store's (`thu_tu`, code breaking ties). A handler that re-sorted would
@@ -117,6 +117,95 @@ func TestKhoiNhiemVuKhongVuotSangXaKhac(t *testing.T) {
 	ra := docKhoiNhiemVu(t, w.Body.Bytes())
 	if len(ra.Items) != 1 || ra.Items[0].ID != "knv-b-001" {
 		t.Fatalf("xã B phải nhận đúng danh mục của mình, nhận: %+v", ra.Items)
+	}
+}
+
+// --- the exact field set ------------------------------------------------------------------------
+
+func TestKhoiNhiemVuTraDungNhungTruongCuaHopDong(t *testing.T) {
+	// THE FIELDS THAT ARE ABSENT ARE THE DESIGN, so their absence is asserted rather than assumed.
+	// Decoding into the response struct — which every other test here does — cannot see this: the
+	// handler encodes from that same struct, so the two agree whatever the struct says. A field
+	// added tomorrow ships; a field dropped ships a hole; the suite stays green either way.
+	//
+	//	tenant_id    never leaves this service — it is not data, it is the dimension every row is
+	//	             already filtered by (rule 1, invariant 4)
+	//	thu_tu       the sort key, not data. Exposing it invites a client to re-sort, which is a
+	//	             client overruling the commune on its own catalogue
+	//	nguon,       they answer "what may be DONE to this row" — the three tiers of ADR 0024 §6.
+	//	ma_nguon_    Only a configuration surface asks that, and open question #21 has not settled
+	//	re_nhanh     who may do anything at all. Publishing the tier now would describe buttons
+	//	             nobody has decided to allow
+	//	deleted_at   a soft-deleted row never leaves the store, so no reader needs to ask
+	//
+	// THIS IS A CONTRACT, NOT A SNAPSHOT. When it goes red the question is whether the ROUTE should
+	// have changed, not whether the list needs updating — `make kb` regenerates
+	// kb/20-contracts/openapi.json from these types, and web-admin's types from that.
+	m := dungMayChu(t)
+
+	w := m.goi(t, "GET", hostA, duongKhoiNhiemVu, "", m.tokenCho(t, xaA, sidA))
+	doiMa(t, w, http.StatusOK)
+
+	var tho struct {
+		Items []map[string]json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &tho); err != nil {
+		t.Fatalf("thân không phải JSON: %q", w.Body.String())
+	}
+	// NON-EMPTY FIRST: on an empty list the loop below runs zero times and the test passes having
+	// checked nothing — and an empty list is the answer every commune gets today (migration 0005
+	// seeds nothing), so this is the likely state, not a corner case.
+	if len(tho.Items) == 0 {
+		t.Fatal("dữ liệu mẫu rỗng — phép kiểm sẽ xanh mà không kiểm gì")
+	}
+
+	// `label`, NOT `name` — the field is `nhan`. Every ADR 0024 catalogue in this system answers
+	// `label`; entities with a `ten` column answer `name`. `active` beside `is_default` is the same
+	// pair the four sibling services ship; the asymmetry is deliberate (khoiNhiemVuRa.Active).
+	muon := map[string]bool{"id": true, "code": true, "label": true, "is_default": true, "active": true}
+	for _, mot := range tho.Items {
+		for khoa := range mot {
+			if !muon[khoa] {
+				t.Errorf("trường ngoài hợp đồng lọt ra: %q — %s", khoa, w.Body.String())
+			}
+		}
+		// The length check is what catches a REMOVED field: the loop above only sees keys that are
+		// present.
+		if len(mot) != len(muon) {
+			t.Errorf("thiếu trường: có %v, muốn %v", mot, muon)
+		}
+	}
+}
+
+// --- the wire name of the flag ------------------------------------------------------------------
+
+func TestBaTuyenThamChieuTraActiveChuKhongPhaiIsActive(t *testing.T) {
+	// THE ASSERTION IS ON THE RAW JSON, AND IT EXISTS BECAUSE NOTHING ELSE IN THIS SUITE CHECKS A
+	// WIRE NAME. Every other test here decodes into the SAME struct the handler encodes from, so the
+	// two agree no matter what the tag says: renaming `json:"active"` to anything at all left the
+	// whole package green. That is a test passing for the wrong reason, and the field it hides is
+	// exactly the one that just had to be renamed.
+	//
+	// `active` AND NOT `is_active`: five sibling catalogue routes answer `active`, and this service
+	// already ships it on can_bo.go:51, a route web-admin consumes. `is_default` beside it stays
+	// `is_default` — the asymmetry is shared by all of them and must not be tidied on one side.
+	//
+	// All three routes are checked in one test on purpose: three spellings can only drift apart if
+	// something checks them together.
+	m := dungMayChu(t)
+
+	for _, duong := range []string{duongKhoiNhiemVu, duongLoaiDonViDanCu, duongThonToDanPho} {
+		w := m.goi(t, "GET", hostA, duong, "", m.tokenCho(t, xaA, sidA))
+		doiMa(t, w, http.StatusOK)
+
+		than := w.Body.String()
+		if !strings.Contains(than, `"active":`) {
+			t.Errorf("%s: thiếu trường `active` trên dây: %s", duong, than)
+		}
+		if strings.Contains(than, `"is_active"`) {
+			t.Errorf("%s: vẫn trả `is_active` — một khái niệm hai cách viết trên cùng một hợp đồng: %s",
+				duong, than)
+		}
 	}
 }
 

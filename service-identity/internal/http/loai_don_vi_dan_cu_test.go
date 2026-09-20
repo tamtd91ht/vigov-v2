@@ -15,7 +15,7 @@ import (
 //
 //  1. the four cases of rule 5, invariant 7, read for an AnyAuthenticated route;
 //  2. one commune's catalogue never reaches another commune's caller;
-//  3. the two flags a form depends on — is_default and is_active — really travel;
+//  3. the two flags a form depends on — is_default and active — really travel;
 //  4. the list is returned WHOLE and in the store's order, or refused — never trimmed;
 //  5. an empty commune serialises as [] and not null, which is EVERY commune today because
 //     migration 0005 seeds nothing.
@@ -130,7 +130,7 @@ func TestLoaiDonViDanCuMangCoMacDinhVaDangDung(t *testing.T) {
 	// default per commune (migration 0005:244). If no read path carried it out, that guarantee
 	// would be unreachable and a form would pre-select whichever row sorted first.
 	//
-	// is_active: an out-of-use row is RETURNED, not filtered — the catalogue screen must show it
+	// active: an out-of-use row is RETURNED, not filtered — the catalogue screen must show it
 	// with its "Đã tắt" chip while a picker must not offer it. Drop the flag and a disabled option
 	// lands in a form with nothing on the screen to show it.
 	m := dungMayChu(t)
@@ -139,13 +139,13 @@ func TestLoaiDonViDanCuMangCoMacDinhVaDangDung(t *testing.T) {
 	doiMa(t, w, http.StatusOK)
 
 	ra := docLoaiDonViDanCu(t, w.Body.Bytes())
-	if !ra.Items[0].IsDefault || !ra.Items[0].IsActive {
+	if !ra.Items[0].IsDefault || !ra.Items[0].Active {
 		t.Errorf("mục mặc định đang dùng bị báo sai: %+v", ra.Items[0])
 	}
 	if ra.Items[1].IsDefault {
 		t.Errorf("hai mục cùng là mặc định: %+v", ra.Items[1])
 	}
-	if ra.Items[1].IsActive {
+	if ra.Items[1].Active {
 		t.Errorf("mục đã tắt bị báo là đang dùng: %+v", ra.Items[1])
 	}
 }
@@ -164,6 +164,56 @@ func TestLoaiDonViDanCuKhongPhoiRaNguonVaCoReNhanh(t *testing.T) {
 	for _, cam := range []string{"nguon", "source", "re_nhanh", "ma_nguon", "he-thong", "don-vi"} {
 		if strings.Contains(than, cam) {
 			t.Errorf("phản hồi danh mục chứa %q: %s", cam, than)
+		}
+	}
+}
+
+func TestLoaiDonViDanCuTraDungNhungTruongCuaHopDong(t *testing.T) {
+	// THE FIELDS THAT ARE ABSENT ARE THE DESIGN, asserted rather than assumed. The test one function
+	// up forbids a few substrings; this one pins the WHOLE set, which is what catches a field nobody
+	// thought to forbid — and a field REMOVED, which no substring check can see.
+	//
+	//	tenant_id    never leaves this service — not data, but the dimension every row is already
+	//	             filtered by (rule 1, invariant 4)
+	//	thu_tu       the sort key, not data. `items` already carries the order; the number is only
+	//	             of use to a screen that edits it, and exposing it invites a client to re-sort
+	//	             and overrule the commune on its own catalogue
+	//	nguon,       they answer "what may be DONE to this row" — the three tiers of ADR 0024 §6.
+	//	ma_nguon_    There is no write route (open question #21), so publishing the tier would
+	//	re_nhanh     describe buttons nobody has decided to allow
+	//	deleted_at   a soft-deleted row never leaves the store, so no reader needs to ask
+	//
+	// THIS IS A CONTRACT, NOT A SNAPSHOT: when it goes red, the question is whether the ROUTE should
+	// have changed.
+	m := dungMayChu(t)
+
+	w := m.goi(t, "GET", hostA, duongLoaiDonViDanCu, "", m.tokenCho(t, xaA, sidA))
+	doiMa(t, w, http.StatusOK)
+
+	var tho struct {
+		Items []map[string]json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &tho); err != nil {
+		t.Fatalf("thân không phải JSON: %q", w.Body.String())
+	}
+	// NON-EMPTY FIRST: on an empty list the loop below checks nothing and passes — and empty is what
+	// every commune answers today, because migration 0005 seeds nothing.
+	if len(tho.Items) == 0 {
+		t.Fatal("dữ liệu mẫu rỗng — phép kiểm sẽ xanh mà không kiểm gì")
+	}
+
+	// The same five as the four sibling services' catalogues: `label` not `name` (the column is
+	// `nhan`), and `active` beside `is_default` — the asymmetry is shared on purpose.
+	muon := map[string]bool{"id": true, "code": true, "label": true, "is_default": true, "active": true}
+	for _, mot := range tho.Items {
+		for khoa := range mot {
+			if !muon[khoa] {
+				t.Errorf("trường ngoài hợp đồng lọt ra: %q — %s", khoa, w.Body.String())
+			}
+		}
+		// The length check is what catches a REMOVED field.
+		if len(mot) != len(muon) {
+			t.Errorf("thiếu trường: có %v, muốn %v", mot, muon)
 		}
 	}
 }
