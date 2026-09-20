@@ -15,16 +15,35 @@
 //
 // # WHAT MAY BE ADDED HERE
 //
-// Exactly two shapes, and both need a decision already written down in an ADR before the code
-// is written:
+// Exactly three shapes, and every one of them needs a decision already written down in an ADR
+// before the code is written:
 //
 //  1. A table that has NO tenant_id at all because a decision put it above the commune —
 //     today that is dinh_danh_cong_dan alone (ADR 0002: one phone number is one record for the
-//     whole platform).
+//     whole platform). → dinh_danh_cong_dan.go
 //  2. A lookup that must find a row BEFORE the commune is known, where the commune is then
 //     compared rather than assumed — ADR 0019, invariant 8: redeeming a pairing code has to
 //     find the code first so that a code belonging to another commune produces 401 AND AN
-//     ALERT, not a quiet "not found". That store is NOT here yet; it is the next slice.
+//     ALERT, not a quiet "not found". → ghep_phien.go
+//  3. A read of a table that DOES have tenant_id, keyed on ONE CITIZEN IDENTITY taken from the
+//     session, returning that citizen's own rows across the communes they deal with — ADR 0002
+//     makes a citizen many-to-many with communes and the Mini App has to show them the list.
+//     → quan_he_cong_dan_xa.go
+//
+// SHAPE 3 WAS ADDED ON 2026-09-20, AND THE PARAGRAPH BELOW IS WHY IT IS NOT A LOOSENING. This
+// file used to say "exactly two shapes" while migration 0004 already named this exact query as
+// belonging here (see the comment above index quan_he_cong_dan_xa_theo_cong_dan, which is
+// deliberately not prefixed with tenant_id). One of the two had to give; the migration is the
+// one carrying the argument, so the list grew rather than the query going somewhere quieter.
+//
+// What separates shape 3 from the rollup forbidden below is not how many communes appear in
+// the result — it is what the query is KEYED ON. Shape 3 is keyed on one citizen, from the
+// session, returning that citizen's own rows: it is rule 4, invariant 1 read across the
+// commune boundary ADR 0002 put between a citizen and the communes they deal with. A rollup is
+// keyed on a commune, or on nothing, and returns rows belonging to OTHER PEOPLE. A shape-3
+// store that ever stops being keyed on one citizen — a COUNT, a GROUP BY, a list of everybody
+// — has become the thing this package forbids, and it will not look like a new query when it
+// happens. It will look like one more method on a type that was already here.
 //
 // # WHAT MAY NOT BE ADDED HERE, EVER
 //
