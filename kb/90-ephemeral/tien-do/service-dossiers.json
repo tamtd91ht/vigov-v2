@@ -1,0 +1,15 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "service-dossiers",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "khung-rong-chua-khoi-cong",
+      "viec": "Hồ sơ một cửa — mới có khung service, chưa một dòng nghiệp vụ",
+      "trang_thai": "chua_lam",
+      "bang_chung": "service-dossiers/internal/ chỉ có doc.go ở app, domain, event, store và một routes.go; migrations/ chỉ có 0001_init.sql + 0002_audit_log_append_only.sql. Commit cuối chạm vào phần mã: c199eec (lượt tách module Go) — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Chưa khởi công là ĐÚNG THỨ TỰ, không phải bỏ quên: hồ sơ một cửa là loại bản ghi lưu trữ nặng nhất kho, và nó cần trước hai thứ chưa có — danh mục thủ tục, và lịch làm việc theo xã để đếm hạn (ADR 0007). Dựng trước hai thứ ấy là dựng một quy trình đếm hạn sai mà không ai thấy cho tới lúc báo cáo lên trên"
+    }
+  ]
+}

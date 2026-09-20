@@ -1,0 +1,31 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "deploy",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "manifest-k8s-ba-don-vi",
+      "viec": "Manifest Kubernetes cho platform, identity, web-admin, và lớp mạng",
+      "trang_thai": "xong",
+      "bang_chung": "deploy/base/{identity,platform,web-admin,mang}/, deploy/cluster/{namespace,rbac-jenkins}.yaml, deploy/overlays/{prod,staging}/{ingress,kustomization}.yaml, deploy/Jenkinsfile. Commit 0e54c51 — 32 tệp, 1524 dòng thêm; cũng vá mốc dựng lại của 9 pipeline — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Bố cục có chủ ý: `base/` KHÔNG mang namespace và KHÔNG mang thẻ ảnh; namespace, cấu hình môi trường và thẻ ảnh chỉ nằm ở `overlays/<mt>/`. `deploy/Jenkinsfile` là NƠI DUY NHẤT gọi kubectl — chín job đóng ảnh dừng ở Harbor, không chạm cụm. Thành quả này trước 2026-09-20 không chỗ nào trong sổ ghi là đã có, tức nó là loại kết quả biến mất giữa hai phiên"
+    },
+    {
+      "id": "thieu-manifest-tam-don-vi",
+      "viec": "Tám đơn vị triển khai chưa có manifest nào",
+      "trang_thai": "chua_lam",
+      "bang_chung": "deploy/base/ chỉ có identity, mang, platform, web-admin — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Thiếu: service-comms · service-documents · service-dossiers · service-finance · service-petitions · service-reporting · citizen-app · platform-admin. Bốn service khung nay đã phục vụ được thật (commit 19c6008) nên khoảng cách giữa 'chạy được cục bộ' và 'triển khai được' đang rộng ra, không hẹp lại"
+    },
+    {
+      "id": "cum-chua-chay-that",
+      "viec": "Toàn bộ tầng này chưa từng chạm một cụm thật",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "Đi cùng `_chung/jenkins-chay-that` nhưng KHÁC nó: mục kia nói mười Jenkinsfile chưa chạy, mục này nói manifest chưa ai `kubectl apply`. Một tệp YAML chưa bao giờ được máy chủ đọc là một tệp chưa ai biết có đúng không — phạm vi kho dừng ở đây, cụm do đội devops phụ trách"
+    }
+  ]
+}

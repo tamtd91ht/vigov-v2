@@ -12,6 +12,14 @@
       "tiep_theo": "KHÔNG seed dòng nào, có chủ ý (commit fa10cf1)"
     },
     {
+      "id": "webhook-zalo-mini-app",
+      "viec": "Endpoint nhận webhook Zalo Mini App — nhận được, chưa xử lý gì",
+      "trang_thai": "xong",
+      "bang_chung": "service-platform/internal/http/webhook_zalo.go 66 dòng + webhook_zalo_test.go 93 dòng, nối vào cmd/server/main.go. Commit 1a8ce11 — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "LUÔN TRẢ 200 là chủ ý, không phải chưa làm xong: Zalo thử lại khi nhận mã lỗi, nên một lỗi phía ta sẽ thành bão yêu cầu. Nhưng hệ quả là sự kiện nhận được hiện KHÔNG đi tới đâu — chưa có hàng đợi, chưa có consumer, chưa ai quyết sự kiện nào đáng giữ. Đó là việc còn nợ của mục này"
+    },
+    {
       "id": "loi-he-thong",
       "viec": "Bảng loi_he_thong",
       "trang_thai": "chua_lam",

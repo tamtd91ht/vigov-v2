@@ -1,0 +1,15 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "service-reporting",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "khung-rong-cho-khach-chot",
+      "viec": "Báo cáo tổng hợp — mới có khung service, và câu chặn nằm ở phía khách",
+      "trang_thai": "chua_lam",
+      "bang_chung": "service-reporting/internal/ chỉ có doc.go ở app, domain, event, store và một routes.go; migrations/ chỉ có 0001_init.sql + 0002_audit_log_append_only.sql. Commit cuối chạm vào phần mã: c199eec — kiểm 2026-09-20",
+      "no_confirm": [4],
+      "tiep_theo": "Đây là service sẽ ĐỌC NHIỀU XÃ, nên nó không được viết một dòng nào trước khi khách chốt câu #4 — mức chi tiết cấp huyện/tỉnh được xem. `drift_guard` đang cảnh báo #4 bị lặng lẽ quyết vì đã có 13 chỗ mang đường đọc chéo. Cùng câu ấy chặn `service-identity/store-crosstenant`. Khi khởi công: mọi truy vấn chéo xã phải mang `// @cross-tenant: <lý do>` (luật 1 cấm #6) và bản thân lượt đọc chéo phải để lại vết kiểm (luật 6 bất biến 7)"
+    }
+  ]
+}

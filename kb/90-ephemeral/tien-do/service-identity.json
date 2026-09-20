@@ -7,7 +7,7 @@
       "id": "store-crosstenant",
       "viec": "Gói đọc chéo xã — nơi duy nhất được phép đọc qua ranh giới xã",
       "trang_thai": "dang_lam",
-      "bang_chung": "service-identity/internal/store/crosstenant/{dinh_danh_cong_dan.go,doc.go} + 2 tệp test — kiểm 2026-09-20, CHƯA COMMIT (một phiên song song đang viết vùng này lúc kiểm). ban-giao-phien.md §2.3 ghi \"chưa tồn tại\" là ĐÃ LỖI THỜI",
+      "bang_chung": "service-identity/internal/store/crosstenant/{dinh_danh_cong_dan.go,doc.go} + 2 tệp test, đã vào git ở commit 274b73a — kiểm 2026-09-20. ban-giao-phien.md §2.3 ghi \"chưa tồn tại\" là ĐÃ LỖI THỜI. Dòng này từng ghi \"CHƯA COMMIT\", tức dạy phiên sau rằng vùng ấy chưa vào git và có thể viết đè",
       "no_confirm": [4],
       "tiep_theo": "migration nêu tên ba truy vấn đọc chéo; mới có dinh_danh_cong_dan. Mỗi truy vấn mang `// @cross-tenant: <lý do>` (luật 1 cấm #6) — đó là cách duy nhất khiến đọc chéo thành danh sách ĐẾM ĐƯỢC"
     },
@@ -26,6 +26,30 @@
       "bang_chung": "service-identity/internal/grpc/server.go — ResolveStaffPrincipal + BatchGetStaff, cả hai interceptor trên chuỗi mà cmd/server/dungGRPCServer dựng; server_test.go 14 ca + cmd/server/main_test.go bufconn trên hàm dựng THẬT. Năm đột biến đều đỏ, gồm: gỡ interceptor khoá caller (bên gọi trần trụi nhận OK trên cả hai RPC) và đảo phép đối chiếu xã xuống sau lượt đọc sổ phiên. `make check` rc=0 — kiểm 2026-09-20, commit 5a56a81",
       "no_confirm": [],
       "tiep_theo": "Đã mở khoá sáu tuyến 401 (commit 19c6008). HAI THỨ CÒN LẠI TRÊN CỔNG NÀY, cả hai đã ghi trong tài liệu gói: (1) không có interceptor bắt panic — grpc-go KHÔNG tự phục hồi panic của handler, nên một `tenant.MustFrom` lọt qua sẽ hạ cả tiến trình đang phục vụ 200+ xã; chỗ đúng của nó là core/grpcx. (2) `vanTay` nay có hai bản sao (internal/http và internal/grpc) và PHẢI giữ y hệt nhau — người vận hành đối chiếu cảnh báo tập trung với cảnh báo của XacThuc bằng chính chuỗi ấy, hai bản lệch nhau đẻ ra hai dấu vân tay cho một sid, đọc ra là hai phiên. ListCitizenCommunes vẫn `Unimplemented`, hai chỗ chặn độc lập — xem mục store-crosstenant"
+    },
+    {
+      "id": "sql-chua-chay",
+      "viec": "Chạy migration 0005 + mười bộ pg_test của identity trên PostgreSQL thật",
+      "trang_thai": "chua_lam",
+      "bang_chung": "service-identity/migrations/0005_don_vi_dan_cu_va_danh_muc.sql 501 dòng; mười tệp *_pg_test.go trong internal/store/ (kể cả crosstenant/dinh_danh_cong_dan_pg_test.go) đều phụ thuộc VIGOV_TEST_DSN, thiếu biến thì SKIP mà gói vẫn in `ok` — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Bốn service khung đều đã có mục này, identity thì KHÔNG — tức sổ đang im lặng về việc chưa ai làm, hướng nguy hiểm hơn hẳn nói sai. Đi cùng _chung/chay-migration-that: cùng một cái thiếu, nhưng đây là phần của identity và nó nặng nhất vì 0005 là tệp dài nhất kho"
+    },
+    {
+      "id": "danh-muc-dan-cu-tuyen-doc",
+      "viec": "Ba tuyến ĐỌC danh mục dân cư: residential-units · residential-unit-types · task-blocs",
+      "trang_thai": "xong",
+      "bang_chung": "service-identity/internal/http/routes.go:157,167,177 khai ba kho; :251,253,255 panic ngay lúc dựng nếu thiếu kho — hỏng to tiếng chứ không phục vụ nửa vời. Commit cdc5b5f, tự khai là ba tuyến DUY NHẤT phục vụ được thật lúc ấy; fcea7bd sửa `is_active`->`active` trên dây — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Tuyến GHI chưa có, và chặn bởi cùng câu #21 như ba service kia — xem `danh-muc-nhiem-vu-tuyen-ghi` ở sổ service-petitions"
+    },
+    {
+      "id": "kho-phien-cong-dan",
+      "viec": "Kho phiên công dân — đường nối rìa kênh công dân chờ từ đầu",
+      "trang_thai": "xong",
+      "bang_chung": "service-identity/internal/store/phien_cong_dan.go 482 dòng + phien_cong_dan_test.go + phien_cong_dan_pg_test.go. Commit 274b73a — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Mục này SỞ HỮU tệp ấy. `core/kho-phien-cong-dan-dem` chỉ TRỎ tới nó để nói về phần ĐỆM còn thiếu — hai việc khác nhau, đừng gộp"
     },
     {
       "id": "cap-tai-khoan-can-bo",

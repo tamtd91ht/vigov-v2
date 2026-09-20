@@ -7,7 +7,7 @@
       "id": "bo-sinh-tien-do",
       "viec": "tools/tien_do.py — sinh tệp đọc tien-do.md từ các tệp ghi theo module",
       "trang_thai": "xong",
-      "bang_chung": "tools/tien_do.py:1; `python tools/tien_do.py` chạy thật, sinh ra kb/90-ephemeral/tien-do.md; đã nối vào mục `kb` của Makefile:122. KHÔNG ghi số module/mục ở đây — con số nào chép vào cũng sai trong vài ngày",
+      "bang_chung": "tools/tien_do.py:1; `python tools/tien_do.py` chạy thật, sinh ra kb/90-ephemeral/tien-do.md; đã nối vào mục `kb` của Makefile:125. KHÔNG ghi số module/mục ở đây — con số nào chép vào cũng sai trong vài ngày",
       "no_confirm": [],
       "tiep_theo": "hạn của tệp sinh tính từ `cap_nhat` MỚI NHẤT của các module, không phải ngày sinh — quá hạn nghĩa là 90 ngày không ai cập nhật tiến độ"
     },
@@ -15,7 +15,7 @@
       "id": "check-brain-bo-qua-tmp",
       "viec": "check_brain bất biến 6 đỏ vì một tệp .md nháp trong tmp/ (đã nằm trong .gitignore)",
       "trang_thai": "xong",
-      "bang_chung": "tools/check_brain.py:272 thêm `tmp` vào danh sách loại trừ khi duyệt cây; `python tools/check_brain.py` 7/7",
+      "bang_chung": "tools/check_brain.py:277 thêm `tmp` vào danh sách loại trừ khi duyệt cây; `python tools/check_brain.py` 7/7 — số dòng kiểm lại 2026-09-20 (bản cũ ghi :272, đã lệch)",
       "no_confirm": [],
       "tiep_theo": "phép kiểm đi bằng hệ tệp chứ không đi bằng git. Nếu còn thư mục nào khác trong .gitignore mà sinh .md thì sẽ đỏ lại theo đúng cách này"
     },

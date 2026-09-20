@@ -7,9 +7,9 @@
       "id": "loai-tai-nguyen-ban-do-tuyen-doc",
       "viec": "GET /api/v1/map-asset-types — tuyến ĐỌC danh mục loại tài nguyên bản đồ",
       "trang_thai": "xong",
-      "bang_chung": "service-comms/internal/http/routes.go — tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store service-comms/internal/store/loai_tai_nguyen_ban_do.go. `go test -count=1 ./...` xanh, 21 ca chạy thật (12 tuyến + 9 kho trên driver database/sql giả), 0 skip ngoài bộ pg — kiểm 2026-09-20",
+      "bang_chung": "service-comms/internal/http/routes.go — tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store service-comms/internal/store/loai_tai_nguyen_ban_do.go. `go test -count=1 ./...` xanh — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "tên tài nguyên URL đã chốt với người dùng 2026-09-20 nhưng ubiquitous-language.md:156 vẫn ghi (chưa chốt) — knowledge-keeper phải điền ô đó"
+      "tiep_theo": "Tên tài nguyên URL ĐÃ chốt và ô trong ubiquitous-language.md ĐÃ điền (commit 9388eaf) — `grep -c \"(chưa chốt)\"` trả 0. Dòng này từng giao việc ấy cho knowledge-keeper: việc đã xong trước khi ai đọc tới, tức sổ đang đặt hàng một việc thừa. KHÔNG ghi số ca test ở đây: bản cũ chốt một con số, rồi 19c6008 thêm main_test.go cho cả bốn service và mọi con số thành thấp hơn thực tế — sai theo kiểu trông y hệt số đúng."
     },
     {
       "id": "dac-ta-ban-do-tu-mau-thuan",

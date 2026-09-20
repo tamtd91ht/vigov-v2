@@ -7,16 +7,18 @@
       "id": "loai-van-ban-tuyen-doc",
       "viec": "GET /api/v1/document-types — tuyến ĐỌC danh mục loại văn bản",
       "trang_thai": "xong",
-      "bang_chung": "service-documents/internal/http/routes.go — tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store service-documents/internal/store/loai_van_ban.go. `go test -count=1 ./...` xanh, 21 ca chạy thật (11 tuyến + 10 kho trên driver database/sql giả) — kiểm 2026-09-20",
+      "bang_chung": "service-documents/internal/http/routes.go — tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store service-documents/internal/store/loai_van_ban.go. `go test -count=1 ./...` xanh — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "tên tài nguyên URL đã chốt với người dùng 2026-09-20 nhưng ubiquitous-language.md:158 vẫn ghi (chưa chốt) — knowledge-keeper phải điền ô đó"
+      "tiep_theo": "Tên tài nguyên URL ĐÃ chốt và ô trong ubiquitous-language.md ĐÃ điền (commit 9388eaf). Dòng này từng giao việc ấy cho knowledge-keeper, và việc đã xong trước khi ai đọc tới. KHÔNG ghi số ca test ở đây: bản cũ chốt một con số, rồi 19c6008 thêm main_test.go cho cả bốn service và mọi con số thành thấp hơn thực tế — sai theo kiểu trông y hệt số đúng."
     },
     {
       "id": "loai-van-ban-tuyen-ghi",
       "viec": "Tuyến GHI danh mục loại văn bản (thêm/sửa/tắt)",
       "trang_thai": "chua_lam",
       "bang_chung": "không có tuyến POST/PUT/PATCH/DELETE nào trong service-documents/internal/http/routes.go — kiểm 2026-09-20",
-      "no_confirm": [21],
+      "no_confirm": [
+        21
+      ],
       "tiep_theo": "KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ. Một tuyến ghi viết trước là quyết hộ khách"
     },
     {

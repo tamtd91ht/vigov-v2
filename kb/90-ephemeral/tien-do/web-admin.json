@@ -4,6 +4,22 @@
   "cap_nhat": "2026-09-20",
   "muc": [
     {
+      "id": "tam-viec-web-tu-hop-dong",
+      "viec": "Tám màn hình danh mục đã mở việc trong tasks/web/open/, chưa ai nhận",
+      "trang_thai": "chua_lam",
+      "bang_chung": "tasks/web/open/ có 8 tệp (task-types · map-asset-types · task-priorities · task-blocs · capital-plan-categories · residential-unit-types · document-types · residential-units); claimed 0 · done 10 · stale 1. web-admin/src/lib/api/schema.gen.ts 545 dòng, sinh từ hợp đồng 17 tuyến ở commit b899f4c — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Nhận việc là ĐỔI TÊN tệp sang tasks/web/claimed/ (ROUTING §3) — os.Rename là khoá duy nhất, đừng thêm cờ nào. Mục này tồn tại vì hàng đợi ấy BLOCKS NOTHING (ROUTING.md:137): tám việc có thể nằm đó vô hạn mà không cổng nào kêu, nên chỗ duy nhất làm chúng hiện ra là sổ này"
+    },
+    {
+      "id": "muoi-mot-phan-he-chua-dung",
+      "viec": "Mười một phân hệ trong đặc tả chưa có màn hình nào",
+      "trang_thai": "chua_lam",
+      "bang_chung": "docs/ui-ux/ có 16 chương; web-admin/src/app/ mới có cau-hinh, dang-nhap, page.tsx, layout.tsx, not-found.tsx, globals.css — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Chưa dựng: nhiệm vụ (02) · biên bản họp (04) · văn bản đơn thư (05) · giải ngân (06) · thu chi ngân sách (07) · thông báo (08) · phản ánh (09) · bản đồ kinh tế số (10) · nội dung Mini App (11) · danh bạ cán bộ (12) · báo cáo (13). GIỮ MỘT MỤC chứ không tách mười một: tách ra là mười một dòng cùng nói một câu `chưa bắt đầu`, và sổ phình mà không thêm thông tin. Tách khi một phân hệ thật sự khởi công"
+    },
+    {
       "id": "man-xac-thuc-loi-khai-cu-tru",
       "viec": "Màn hình cán bộ xác thực lời khai cư trú của công dân",
       "trang_thai": "chua_lam",

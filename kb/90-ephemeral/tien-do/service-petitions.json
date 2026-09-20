@@ -23,16 +23,18 @@
       "id": "danh-muc-nhiem-vu-tuyen-doc",
       "viec": "GET /api/v1/task-types + /api/v1/task-priorities — hai tuyến ĐỌC danh mục nhiệm vụ",
       "trang_thai": "xong",
-      "bang_chung": "service-petitions/internal/http/routes.go — hai tuyến, mỗi tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store internal/store/{loai_nhiem_vu,muc_uu_tien_nhiem_vu}.go. `go test -count=1 ./...` xanh, 36 ca chạy thật (20 tuyến + 16 kho trên driver database/sql giả) — kiểm 2026-09-20",
+      "bang_chung": "service-petitions/internal/http/routes.go — hai tuyến, mỗi tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store internal/store/{loai_nhiem_vu,muc_uu_tien_nhiem_vu}.go. `go test -count=1 ./...` xanh — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "0003_danh_muc_nhiem_vu.sql KHÔNG tạo bảng trạng thái nhiệm vụ nào — đã kiểm. Tên tài nguyên URL chốt với người dùng 2026-09-20 nhưng ubiquitous-language.md:162-163 vẫn ghi (chưa chốt)"
+      "tiep_theo": "0003_danh_muc_nhiem_vu.sql KHÔNG tạo bảng trạng thái nhiệm vụ nào — đã kiểm. Tên tài nguyên URL ĐÃ chốt và ô ĐÃ điền (commit 9388eaf); dòng cũ còn trỏ ubiquitous-language.md:162-163, mà hai dòng ấy nay là ResidentialUnitType và TaskBloc — hai danh mục của identity, tức trỏ SAI THỰC THỂ chứ không chỉ lệch dòng. KHÔNG ghi số ca test ở đây: bản cũ chốt một con số, rồi 19c6008 thêm main_test.go cho cả bốn service và mọi con số thành thấp hơn thực tế — sai theo kiểu trông y hệt số đúng."
     },
     {
       "id": "danh-muc-nhiem-vu-tuyen-ghi",
       "viec": "Tuyến GHI hai danh mục nhiệm vụ",
       "trang_thai": "chua_lam",
       "bang_chung": "không có tuyến POST/PUT/PATCH/DELETE nào trong service-petitions/internal/http/routes.go — kiểm 2026-09-20",
-      "no_confirm": [21],
+      "no_confirm": [
+        21
+      ],
       "tiep_theo": "KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ"
     },
     {

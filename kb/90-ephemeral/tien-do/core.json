@@ -15,9 +15,17 @@
       "id": "xac-thuc-ben-goi-grpc",
       "viec": "Xác thực bên gọi trên cổng gRPC — một cặp header, giá trị từ secret k8s",
       "trang_thai": "xong",
-      "bang_chung": "core/grpcx/caller_auth.go + caller_auth_test.go + caller_auth_exempt_test.go; hằng MetadataCallerKey trong core/grpcx/grpcx.go; GRPCCallerKey trong core/config/config.go; service-platform/cmd/server/main_test.go chạy bufconn trên hàm dựng thật. `make check` rc=0 — kiểm 2026-09-20. ADR 0025",
+      "bang_chung": "core/grpcx/caller_auth.go + caller_auth_test.go + caller_auth_exempt_test.go; MetadataCallerKey ở core/grpcx/grpcx.go:110; GRPCCallerKey ở core/config/config.go:128. Phép kiểm đáng tin là ĐỘT BIẾN chứ không phải `make check` xanh: gỡ UnaryServerCallerAuth -> 2 ca đỏ. Mốc e3ed99b — kiểm 2026-09-20. ADR 0025",
       "no_confirm": [],
-      "tiep_theo": "Ba giới hạn ĐÃ BIẾT, không phải thiếu sót: khoá chung không nói service nào gọi nên vết kiểm không quy được trách nhiệm; ai trong cụm cầm khoá đều gọi được mọi thứ, lớp mạng là thứ chặn bán kính; xoay khoá phải đổi đồng loạt. Đường ra cho cả ba là mTLS/mesh, và phải SỬA ADR 0025 chứ không lặng lẽ thêm header thứ hai"
+      "tiep_theo": "Ba giới hạn ĐÃ BIẾT, không phải thiếu sót: khoá chung không nói service nào gọi nên vết kiểm không quy được trách nhiệm; ai trong cụm cầm khoá đều gọi được mọi thứ, lớp mạng là thứ chặn bán kính; xoay khoá phải đổi đồng loạt. Đường ra cho cả ba là mTLS/mesh, và phải SỬA ADR 0025 chứ không lặng lẽ thêm header thứ hai. Bằng chứng cũ của mục này từng viện `make check` rc=0 — e3ed99b đo được lượt xanh ấy xanh vì lý do sai, nên bằng chứng nay là phép đột biến"
+    },
+    {
+      "id": "staffauth-va-identityclient",
+      "viec": "core/staffauth + core/identityclient — một cài đặt xác thực cán bộ dùng chung cho bốn service khung",
+      "trang_thai": "xong",
+      "bang_chung": "core/staffauth/staffauth.go 306 dòng + test, core/identityclient/identityclient.go 226 dòng + test; bốn service-{comms,documents,finance,petitions}/cmd/server/main.go đều import và mắc vào chuỗi. Commit ebc3b0b — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Đây là thứ gỡ 401 cho sáu tuyến (19c6008). Vì một cài đặt phục vụ bốn service nên mọi thay đổi ở đây là thay đổi cho cả bốn: đổi hành vi thì phải chạy main_test.go của cả bốn, không phải của service đang sửa"
     },
     {
       "id": "kho-phien-cong-dan-dem",

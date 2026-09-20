@@ -1,0 +1,23 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "platform-admin",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "ts-chua-tung-duoc-kiem",
+      "viec": "Mã TypeScript của platform-admin chưa từng đi qua cổng kiểm",
+      "trang_thai": "chua_lam",
+      "bang_chung": "`make check` in `BỎ QUA platform-admin/ — chưa có node_modules. Mã TypeScript KHÔNG được kiểm.` rồi tiếp tục và vẫn trả rc=0 — đọc trong log lượt chạy đầy đủ 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Đây là LỖ HỔNG CỦA CỔNG, không phải của app: cổng xanh trong khi một đơn vị triển khai không được kiểm dòng nào. Cùng lớp với `golangci-lint` vắng mặt mà mục `lint` nuốt lỗi bằng tiền tố `-`. Gỡ bằng `(cd platform-admin && npm install)`, nhưng câu đáng hỏi trước là: một đơn vị chưa có mã thì nên BỎ QUA hay nên làm đỏ cổng"
+    },
+    {
+      "id": "chua-dung-man-hinh-nao",
+      "viec": "Console quản trị nền tảng chưa có màn hình nào",
+      "trang_thai": "chua_lam",
+      "bang_chung": "platform-admin/src/{app,components,features}/ đều RỖNG; chỉ có src/lib/api.ts. Commit cuối chạm vào module: 6d1d333 (lượt đưa mỗi đơn vị lên cấp một) — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "ĐỌC ADR 0003 TRƯỚC khi dựng màn đầu tiên: platform chỉ giữ SIÊU DỮ LIỆU, nên console này không được có đường nào đọc dữ liệu nghiệp vụ của một xã. Đó cũng là stop condition #5 của luật 1 — quản trị viên nhà cung cấp chạm dữ liệu nghiệp vụ của xã là câu phải hỏi người dùng, không tự quyết"
+    }
+  ]
+}
