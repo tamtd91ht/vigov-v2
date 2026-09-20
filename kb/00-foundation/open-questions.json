@@ -63,7 +63,9 @@
     ],
     "reversal_cost": "Trung bình",
     "ask_before": [
-      "viết endpoint báo cáo đầu tiên đọc nhiều xã"
+      "viết endpoint báo cáo đầu tiên đọc nhiều xã",
+      "dựng bảng danh mục Lĩnh vực phản ánh, hoặc bất kỳ bảng phiếu nào mang cột linh_vuc",
+      "dựng bảng danh mục Loại đơn thư"
     ]
   },
   {

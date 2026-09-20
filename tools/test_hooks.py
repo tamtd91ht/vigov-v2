@@ -465,10 +465,23 @@ CASES = [
      w("petitions/internal/domain/p.go",
        "func (p Petition) IsOverdue(now time.Time) bool {\n"
        "\treturn p.ClosedAt.IsZero() && now.After(p.SLADeadline)\n}")),
-    ("citizen_commitment_guard", "deadline in working days", PASS,
+    ("citizen_commitment_guard", "deadline asked of identity, which owns the calendar", PASS,
      w("petitions/internal/app/sla.go",
-       "func deadline(ctx context.Context, from time.Time) time.Time {\n"
-       "\treturn sla.WorkingDays(ctx, from, n)\n}")),
+       "func deadline(ctx context.Context, from time.Time) (time.Time, error) {\n"
+       "\treturn sla.TienGioLamViec(ctx, from, gioXuLyXong)\n}")),
+    # THE CASE THE 2026-09-20 RE-CALIBRATION ADDED. `gio * time.Hour` is what an implementer
+    # writes the moment the SLA table is stated in hours, and every earlier pattern let it
+    # through: CALENDAR_DAYS only knew the multiples 24/48/72. A 2-hour commitment counted
+    # this way falls due at 09:30 on a Sunday, and the report says the commune met it.
+    ("citizen_commitment_guard", "deadline built by adding a duration locally", BLOCK,
+     w("petitions/internal/app/sla.go",
+       "func deadline(from time.Time, gio int) time.Time {\n"
+       "\treturn from.Add(time.Duration(gio) * time.Hour) // sla\n}")),
+    # identity OWNS the arithmetic (ADR 0007) — the same line there is the correct code.
+    ("citizen_commitment_guard", "identity itself may add a duration", PASS,
+     w("service-identity/internal/domain/tien_gio_lam_viec.go",
+       "func tien(from time.Time, gio int) time.Time {\n"
+       "\treturn from.Add(time.Duration(gio) * time.Hour) // sla\n}")),
     ("citizen_commitment_guard", "statutory calendar days, declared", PASS,
      w("petitions/internal/app/khieunai.go",
        "// @sla-ok: Law on Complaints art. 28 counts calendar days\n"

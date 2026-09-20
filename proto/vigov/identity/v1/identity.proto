@@ -309,21 +309,23 @@ service IdentityService {
   //
   // # What this contract deliberately does NOT answer, and what is therefore blocked
   //
-  // ADR 0007 §"Lỗ hổng đặc tả" leaves five questions open, and 0006_lich_lam_viec.sql shows
+  // ADR 0007 §"Lỗ hổng đặc tả" left five questions open, and 0006_lich_lam_viec.sql shows
   // where each one lands. FOUR OF THEM ARE ROWS — office hours, the lunch gap, Saturday, local
   // holidays — so no shape here depends on their answers, and every answer stays expressible.
-  // THE FIFTH IS NOT A ROW:
+  // THE FIFTH WAS NOT A ROW, AND IT IS NOW DECIDED:
   //
   //   `count_from` FALLING OUTSIDE EVERY WORKING SESSION — a report submitted at 22:00, on a
-  //   Sunday, during Tết. ADR 0007 PROPOSES counting from the start of the next working session
-  //   and explicitly does not decide it. This contract does not decide it either. The shape
-  //   above holds whichever way it goes, because one rule serves every caller.
+  //   Sunday, during Tết. ADR 0007 DECISION 8 (2026-09-20, user): count from the START OF THE
+  //   NEXT WORKING SESSION. The shape above did not change, because one rule serves every caller.
   //
-  //   THE SERVER SIDE OF THIS RPC THEREFORE CANNOT BE WRITTEN YET. Whoever implements it must
-  //   pick that rule, and picking it inside a function is deciding a commitment to a citizen in
-  //   the one place nobody reviews. Ask the user first. If the answer ever turns out to differ
-  //   per commune or per kind of record, THAT is the single thing that would add a field here,
-  //   and it would be additive.
+  //   THE SERVER SIDE EXISTS: service-identity/internal/domain/tien_gio_lam_viec.go. Decision 8
+  //   is the SHAPE OF THE LOOP there, not a branch — each session contributes only the part at
+  //   or after `count_from` — so a 22:00 Friday receipt and a 07:30 Monday receipt come out with
+  //   the same instant, and no code has to define "outside" at 11:30 exactly. Do not
+  //   re-implement it in a caller: rule 10 forbidden #2 and citizen_commitment_guard block a
+  //   deadline built by adding a duration anywhere but identity. If the answer ever turns out to
+  //   differ per commune or per kind of record, THAT is the single thing that would add a field
+  //   here, and it would be additive.
   //
   // # Times on this boundary are INSTANTS; the calendar is wall clock; they meet in one place
   //

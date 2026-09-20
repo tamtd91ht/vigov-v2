@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: b6ca85b
+derived_from_commit: 0eb5d83
 expires: 2026-12-19
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -26,7 +26,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 2 |
 | chưa làm | 34 |
 | treo | 11 |
-| xong | 28 |
+| xong | 29 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -35,7 +35,7 @@ Nội dung câu hỏi ở `kb/00-foundation/open-questions.json`. Đây chỉ l�
 | Câu | Trạng thái | Đang chặn |
 |---|---|---|
 | #1 | OPEN | _chung/sap-nhap-chia-tach-xa |
-| #4 | OPEN | service-identity/store-crosstenant · service-reporting/khung-rong-cho-khach-chot |
+| #4 | OPEN | service-identity/store-crosstenant · service-petitions/vong-doi-phieu-phan-anh · service-reporting/khung-rong-cho-khach-chot |
 | #9 | OPEN | service-identity/cap-tai-khoan-can-bo · web-admin/moi-tuyen-ghi-cho-can-bo |
 | #10 | OPEN | service-identity/tuyen-ghi-danh-ba-can-bo · web-admin/moi-tuyen-ghi-cho-can-bo |
 | #11 | OPEN | proto/staff-thieu-ho-ten · service-identity/che-so-di-dong-can-bo · web-admin/moi-tuyen-ghi-cho-can-bo |
@@ -162,7 +162,7 @@ Cập nhật 2026-09-20 · 4 mục
 
 ## `service-identity`
 
-Cập nhật 2026-09-20 · 12 mục
+Cập nhật 2026-09-20 · 13 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -178,6 +178,7 @@ Cập nhật 2026-09-20 · 12 mục
 | `danh-muc-dan-cu-tuyen-doc` — Ba tuyến ĐỌC danh mục dân cư: residential-units · residential-unit-types · task-blocs | xong | service-identity/internal/http/routes.go:157,167,177 khai ba kho; :251,253,255 panic ngay lúc dựng nếu thiếu kho — hỏng to tiếng chứ không phục vụ nửa vời. Commit cdc5b5f, tự khai là ba tuyến DUY NHẤT phục vụ được thật lúc ấy; fcea7bd sửa `is_active`->`active` trên dây — kiểm 2026-09-20 | — | Tuyến GHI chưa có, và chặn bởi cùng câu #21 như ba service kia — xem `danh-muc-nhiem-vu-tuyen-ghi` ở sổ service-petitions |
 | `kho-phien-cong-dan` — Kho phiên công dân — đường nối rìa kênh công dân chờ từ đầu | xong | service-identity/internal/store/phien_cong_dan.go 482 dòng + phien_cong_dan_test.go + phien_cong_dan_pg_test.go. Commit 274b73a — kiểm 2026-09-20 | — | Mục này SỞ HỮU tệp ấy. `core/kho-phien-cong-dan-dem` chỉ TRỎ tới nó để nói về phần ĐỆM còn thiếu — hai việc khác nhau, đừng gộp |
 | `lich-lam-viec` — Lịch làm việc của xã — tuần làm việc, ngày nghỉ lễ, ngày làm bù | xong | service-identity/migrations/0006_lich_lam_viec.sql — 3 bảng, cả 3 PARTITION BY kèm vòng MODULUS 32, 0 lệnh INSERT, đếm bằng cây cú pháp của pglast chứ không bằng regex. Bảy rào chắn của kho chạy trên tệp: rc=0. `make check` rc=0 — kiểm 2026-09-20 | — | BA ĐIỀU NGƯỜI VIẾT HÀM ĐẾM HẠN PHẢI BIẾT, cả ba đã ghi trong tệp: (1) lịch RỖNG nghĩa là xã KHÔNG có giờ làm việc nào — phải TỪ CHỐI tính hạn, tuyệt đối không rơi về mặc định 'thứ Hai đến thứ Sáu 8-17', vì một mặc định ở đây là cam kết do phần mềm bịa ra rồi nói với dân; (2) một ngày có mặt ở cả ngay_nghi_le lẫn ngay_lam_bu là lỗi cấu hình, phải từ chối chứ không chọn bên thắng; (3) KHÔNG có ràng buộc chống chồng ca trong lich_lam_viec — cần extension btree_gist, mà migration hỏng vì thiếu extension thì service không khởi động được (ADR 0013), nên đường ghi phải tự kiểm và phải có ca test. Năm câu ADR 0007 để mở vẫn để mở: lược đồ chỉ bảo đảm MỌI đáp án đều diễn đạt được mà không cần migration thứ hai |
+| `ham-dem-han-gio-lam-viec` — Hàm đếm hạn theo giờ làm việc — AdvanceWorkingHours | xong | service-identity/internal/domain/tien_gio_lam_viec.go (phép tính thuần, không đọc CSDL/đồng hồ/môi trường) + internal/grpc/lich_lam_viec.go (tuyến gRPC, ba giao diện lịch hẹp, ánh xạ mã lỗi); 28 ca domain + 22 ca gRPC. `gofmt -l .` rỗng · `go vet ./...` sạch · `go test -count=1 ./...` 9 gói xanh — TÔI tự chạy lại, không lấy theo lời agent, 2026-09-20. Sáu đột biến đều đỏ, đáng kể nhất: `>=` thành `>` ở mốc hết giờ, MuiGio() trả time.Local, và bỏ đoạn cắt của quyết định 8. | — | MỘT ĐỘT BIẾN SỐNG SÓT LẦN ĐẦU và đó là thứ đáng đọc nhất ở đây: đổi MuiGio() thành time.Local mà mọi ca vẫn xanh, vì bản đầu có ghi nhớ múi giờ (lấy một lần rồi giữ) và ca test lại dựng kỳ vọng BẰNG CHÍNH MuiGio() — phép kiểm tự soi vào mình. Nay ghi nhớ đã bỏ (một lần đọc tệp cho mỗi hồ sơ tiếp nhận, không phải mỗi yêu cầu) và kỳ vọng dựng bằng time.FixedZone(+07) khai tại chỗ. BA CHỖ HẸP HƠN HỢP ĐỒNG, cố ý và fail-closed, ghi ra để người sau không tưởng là lỗi: (1) xung đột ngay_nghi_le × ngay_lam_bu từ chối theo CẢ NĂM chứ không theo từng ngày, vì hai kho tự phát hiện xung đột trong SQL của chúng và từ chối cả năm — viết bộ phát hiện thứ hai là chép lại phép nối của kho; đọc lười giữ cho nó không tệ hơn: xung đột ở năm mà phép đếm không chạm tới thì không chặn, có ca test. (2) chồng ca trong tuần từ chối trên TOÀN lịch chứ không chỉ ngày đi qua. (3) ba trần của kho (ErrQuaNhieuCaLamViec + hai trần năm) ánh xạ Internal chứ không FAILED_PRECONDITION — theo đúng chú thích của kho, đổi lại chỉ là một nhánh trong loiLich. CÒN CHƯA KIỂM ĐƯỢC: 83 ca pg_test vẫn SKIP vì thiếu VIGOV_TEST_DSN, trong đó có phép nối hai bảng mà đường FAILED_PRECONDITION dựa vào — go test vẫn in `ok`. NGHĨA LÀ HÔM NAY MỌI XÃ ĐỀU CÓ LỊCH RỖNG (0006 không seed, chưa có onboarding), nên cuộc gọi thật đầu tiên chắc chắn FAILED_PRECONDITION — đó là hợp đồng đang chạy đúng, không phải lỗi để đi vòng. |
 
 ## `service-petitions`
 
@@ -185,7 +186,7 @@ Cập nhật 2026-09-20 · 6 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
-| `vong-doi-phieu-phan-anh` — Nghiệp vụ phản ánh — tiếp nhận, phân loại, phân công, nghiệm thu, đóng phiếu | chưa làm | — | — | CHỈ bắt đầu sau khi có lich_lam_viec + ngay_nghi_le theo xã (ADR 0007). Đếm hạn bằng giờ hành chính mà thiếu lịch của xã thì mọi con số hạn đều sai, và sai theo hướng không ai thấy cho tới lúc báo cáo lên trên |
+| `vong-doi-phieu-phan-anh` — Nghiệp vụ phản ánh — tiếp nhận, phân loại, phân công, nghiệm thu, đóng phiếu | chưa làm | — | #4 | Rào CŨ đã gỡ: ba bảng lịch đã có (service-identity/migrations/0006_lich_lam_viec.sql) và hàm đếm hạn đang dựng. Rào CÒN LẠI là CÂU MỞ #4, và nó chặn đúng cột đầu tiên của bảng phiếu: ADR 0024 mục `BA Ô ĐỂ TRỐNG` §1 CỐ Ý không giao `Lĩnh vực phản ánh` cho service nào, chờ khách trả lời cấp huyện/tỉnh có tổng hợp THEO LĨNH VỰC xuyên 200+ xã không. Trả lời KHÔNG: danh mục theo xã, thuộc petitions. Trả lời CÓ: bộ mã ĐÓNG ở tầng nền tảng + nhãn theo xã đè lên — hai tầng, hai chủ sở hữu, xã không được thêm mã. Dựng theo chiều sai rồi đổi là ánh xạ thủ công 200 bộ mã đã có dữ liệu thật, trên hồ sơ lưu trữ. Ngoài #4 còn ba câu domain-expert nêu 2026-09-20 mà khách chưa được hỏi: danh sách trạng thái (ba tài liệu đang ghi 9 / 7 / 5 — luật 10 dừng #2); phân loại lại lúc sàng lọc thì hạn có dời không (luật 10 dừng #1); và mốc nào khởi động đồng hồ `Tiếp nhận` — lúc dân gửi hay lúc cán bộ nhận |
 | `danh-muc-nhiem-vu-tuyen-ghi` — Tuyến GHI hai danh mục nhiệm vụ | chưa làm | không có tuyến POST/PUT/PATCH/DELETE nào trong service-petitions/internal/http/routes.go — kiểm 2026-09-20 | #21 | KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ |
 | `sql-danh-muc-chua-chay` — Chạy 0003_danh_muc_nhiem_vu.sql trên PostgreSQL thật | chưa làm | 5 ca service-petitions/internal/store/danh_muc_nhiem_vu_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN, gói vẫn in `ok` — kiểm 2026-09-20 | — | Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat (đọc information_schema, kiểm cả thu_tu — với muc_uu_tien_nhiem_vu thì thu_tu CHÍNH LÀ thang, đổi tên nó là phá thang trong im lặng). Nó TỒN TẠI nhưng CHƯA CHẠY. Vẫn chưa gì kiểm được định tuyến phân mảnh, partial index, và sáu phép từ chối của trigger danh_muc_ba_tang |
 | `lich-lam-viec-theo-xa` — Cấu hình lich_lam_viec + ngay_nghi_le theo từng xã | xong | ĐỔI CHỦ SỞ HỮU, người dùng chốt 2026-09-20: ba bảng nằm ở service-identity/migrations/0006_lich_lam_viec.sql, KHÔNG ở petitions. Lý do: ADR 0007 đếm hạn cho cả `Văn bản đến`, nên lịch được hai service đọc và không thuộc service nào trong hai; ADR 0024 chốt sở hữu đi theo NHỊP ĐỔI, mà lịch đổi cùng bộ máy hành chính của xã. Chi tiết ở sổ service-identity/lich-lam-viec — kiểm 2026-09-20 | — | Phần CÒN LẠI của petitions là HÀM ĐẾM HẠN, không phải bảng: đọc ba bảng ấy qua gRPC của identity, và luật 10 cấm #2 cấm đếm bằng giờ treo tường. Một điều hàm ấy PHẢI làm mà lược đồ không cưỡng chế được: gặp một ngày có mặt ở CẢ ngay_nghi_le lẫn ngay_lam_bu thì TỪ CHỐI, đừng chọn bên thắng — một quy tắc ưu tiên lặng lẽ làm một trong hai dòng cấu hình đang hiện trên màn hình trở thành vô nghĩa mà không ai thấy |

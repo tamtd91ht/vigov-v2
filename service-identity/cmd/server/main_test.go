@@ -58,10 +58,13 @@ const (
 // The stores, absent. This test is about the chain in FRONT of the handlers, so the handlers only
 // have to answer something.
 type (
-	phienGia struct{}
-	canBoGia struct{}
-	loGia    struct{}
-	quyenGia struct{}
+	phienGia  struct{}
+	canBoGia  struct{}
+	loGia     struct{}
+	quyenGia  struct{}
+	lichGia   struct{}
+	nghiLeGia struct{}
+	lamBuGia  struct{}
 )
 
 func (phienGia) KiemTra(context.Context, string) (idstore.Phien, error) {
@@ -86,6 +89,19 @@ func (quyenGia) QuyenCua(context.Context, authz.Principal) ([]authz.Perm, error)
 	return []authz.Perm{"admin.user"}, nil
 }
 
+// A minimal working week — Monday 07:30–11:30 — and no closures, no swap days. Enough for
+// AdvanceWorkingHours to answer at all, which is all these wiring tests need: what the arithmetic
+// computes is defended in internal/domain, and which code each fault gets in internal/grpc.
+func (lichGia) DanhSach(context.Context) ([]domain.CaLamViec, error) {
+	return []domain.CaLamViec{{
+		ID: "01JD9BBBBBBBBBBBBBBBBBBBBB", Thu: 1,
+		BatDau: 7*3600 + 30*60, KetThuc: 11*3600 + 30*60,
+	}}, nil
+}
+
+func (nghiLeGia) TheoNam(context.Context, int) ([]domain.NgayNghiLe, error) { return nil, nil }
+func (lamBuGia) TheoNam(context.Context, int) ([]domain.CaLamBu, error)     { return nil, nil }
+
 func noiDayGia(t *testing.T) svcgrpc.Deps {
 	t.Helper()
 	ky, err := token.NewSigner([]secret.Secret{khoaKyGia})
@@ -98,6 +114,9 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		CanBo:  canBoGia{},
 		Lo:     loGia{},
 		Quyen:  quyenGia{},
+		Lich:   lichGia{},
+		NghiLe: nghiLeGia{},
+		LamBu:  lamBuGia{},
 		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 }

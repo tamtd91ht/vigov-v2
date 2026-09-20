@@ -40,7 +40,7 @@ and a channel nobody trusts stops receiving the reports the commune actually nee
 | # | Forbidden | Why |
 |---|---|---|
 | 1 | An `is_overdue` / `overdue` column or struct field that is written to | Duplicates a derivable fact (invariant 3) |
-| 2 | Counting a deadline in wall-clock time (`AddDate(0, 0, n)`, `n * time.Hour`) | Nights, weekends and public holidays are not working hours. Use the commune's `lich_lam_viec` + `ngay_nghi_le` (ADR 0007) |
+| 2 | Counting a deadline in wall-clock time (`AddDate(0, 0, n)`, `n * time.Hour`) — **anywhere but `identity`** | Nights, weekends, `ngay_nghi_le` **and `ngay_lam_bu`** are not working hours. Ask `identity.AdvanceWorkingHours`; it owns all three tables (ADR 0007) |
 | 3 | A commune's SLA figures hardcoded in source | One codebase serves many communes (rule 1) |
 | 4 | Changing status without notifying the citizen | The commitment is the notification |
 | 5 | A lookup code that is sequential or short enough to enumerate | Rule 4, invariant 4 |
@@ -50,8 +50,12 @@ and a channel nobody trusts stops receiving the reports the commune actually nee
 1. Changing how a deadline is calculated, or the SLA for any field
 2. Adding or removing a **status** in the petition lifecycle
 3. Closing a petition **without** notifying the citizen, for any reason
-4. Deciding **who** may close a petition, or whether field acceptance is mandatory
+4. Who owns the `Lĩnh vực phản ánh` catalogue — open **#4**, ADR 0024
+
+**#6, #7 and #8 are DECIDED** (2026-09-16) — and all three were decided as **per-commune
+configuration**, not as constants. Read ADR 0007 and 0008; do not re-ask, and do not write a
+default into a branch.
 
 → Enforcement: `hooks/citizen_commitment_guard.py` (BLOCK)
 → Skill: `skills/petition-lifecycle`
-→ Open questions: `kb/00-foundation/open-questions.json` #6, #7, #8
+→ Decisions: `kb/10-decisions/0007-sla-working-hours.md` · `0008-petition-lifecycle-config.md`

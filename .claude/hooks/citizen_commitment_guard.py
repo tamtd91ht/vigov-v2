@@ -6,13 +6,18 @@ report that goes to leadership:
 
   1. `is_overdue` stored as a column. It is wrong the moment a job is late, the clock skews,
      or a holiday is added — and the stale copy is the one people report upward.
-  2. Deadlines counted in calendar days. A 3-day SLA taken on Friday is then due Monday,
+  2. Deadlines counted in wall-clock time. A 3-day SLA taken on Friday is then due Monday,
      which is one working day, not three. The commune is reported as on-time when it is late.
+  3. A deadline built by adding a DURATION anywhere but identity. ADR 0007 counts in WORKING
+     HOURS against three per-commune tables; a duration added locally is a different answer
+     to the same question, and the two only disagree on nights, weekends and holidays —
+     exactly the moments a citizen notices.
 
-CALIBRATION: most services are still skeletons, so there is no real code to measure against. This
-hook is therefore deliberately NARROW and conservative — it only fires on patterns that
-cannot be right, and prefers a miss over a false positive. A noisy hook is a disabled hook,
-and then the whole layer is gone. RE-MEASURE once real business code exists.
+CALIBRATION, RE-MEASURED 2026-09-20 now that real deadline code exists
+(service-identity/internal/domain/tien_gio_lam_viec.go): 251 files scanned, 0 hits. The
+measurement also found the gap pattern 3 now closes — the hook knew 24/48/72 * time.Hour and
+nothing else, so the 2-hour An ninh trat tu commitment, written the obvious way, passed.
+Still deliberately narrow: a noisy hook is a disabled hook, and then the whole layer is gone.
 """
 
 from __future__ import annotations
@@ -50,6 +55,23 @@ CALENDAR_DAYS = re.compile(
     re.IGNORECASE,
 )
 
+# --- rule 10, forbidden #2, the half the day-patterns above MISS ----------------------
+# A deadline built by adding a DURATION at all. ADR 0007 counts in working hours, so the only
+# correct producer is identity's AdvanceWorkingHours — anything else walks straight through
+# nights, weekends, ngay_nghi_le and ngay_lam_bu while looking like it respects the unit.
+#
+# MEASURED, NOT FEARED: `gio * time.Hour` is exactly what an implementer writes once the SLA
+# table is stated in hours, and CALENDAR_DAYS above only catches the multiples 24/48/72. The
+# 2-hour An ninh trat tu commitment would have passed every pattern in this file.
+DURATION_DEADLINE = re.compile(
+    r"(?:\*\s*time\.(?:Hour|Minute)|time\.(?:Hour|Minute)\s*\*|"
+    r"\.Add\(\s*time\.(?:Duration|Hour|Minute))",
+)
+
+# identity OWNS the arithmetic (ADR 0007). Its calendar code is the one place a duration may
+# legitimately be added to an instant; everywhere else asks it over gRPC.
+CHU_SO_HUU_LICH = "service-identity/internal/"
+
 # The calendar-day check only applies where a DEADLINE is being computed. Without this
 # gate every ordinary date arithmetic in the repo would fire.
 DEADLINE_CONTEXT = re.compile(
@@ -70,10 +92,11 @@ def in_scope(path: str) -> bool:
     return True
 
 
-def scan(content: str) -> list[str]:
+def scan(content: str, path: str = "") -> list[str]:
     hits: list[str] = []
     lines = content.splitlines()
     has_deadline_ctx = bool(DEADLINE_CONTEXT.search(content))
+    la_chu_so_huu = CHU_SO_HUU_LICH in path.replace("\\", "/")
 
     for i, line in enumerate(lines):
         window = "\n".join(lines[max(0, i - 2): i + 2])
@@ -88,7 +111,19 @@ def scan(content: str) -> list[str]:
         # Only inside a file that is actually doing deadline work.
         if has_deadline_ctx and CALENDAR_DAYS.search(line) and DEADLINE_CONTEXT.search(window):
             hits.append(
-                f"line {i+1}: {line.strip()[:70]} — calendar days, not working days"
+                f"line {i+1}: {line.strip()[:70]} — wall-clock days; the unit is WORKING HOURS"
+            )
+            continue
+
+        if (
+            has_deadline_ctx
+            and not la_chu_so_huu
+            and DURATION_DEADLINE.search(line)
+            and DEADLINE_CONTEXT.search(window)
+        ):
+            hits.append(
+                f"line {i+1}: {line.strip()[:70]} — a deadline built by ADDING A DURATION. "
+                "Only identity.AdvanceWorkingHours knows the commune's calendar"
             )
 
     return hits
@@ -109,7 +144,7 @@ def main() -> None:
     if not content or c.is_generated(content, path):
         sys.exit(0)
 
-    hits = scan(content)
+    hits = scan(content, path)
     if not hits:
         sys.exit(0)
 
@@ -121,17 +156,25 @@ def main() -> None:
             "  An SLA deadline is a COMMITMENT to a citizen by a public authority. Both of the",
             "  patterns above fail SILENTLY and end up as a false figure in a report to leadership.",
             "",
-            "  Correct approach:",
-            "    // store the deadline ONCE, at intake",
-            "    p.SLADeadline = sla.Deadline(ctx, receivedAt, p.Field)  // working days, per commune",
+            "  Correct approach — ask identity, it owns the calendar (ADR 0007):",
+            "    // store the deadline ONCE, at intake. WORKING HOURS, not days: the acknowledge",
+            "    // commitment for An ninh trat tu is 2 hours, which no count in days can express.",
+            "    res, err := identity.AdvanceWorkingHours(ctx, &identityv1.AdvanceWorkingHoursRequest{",
+            "        CountFrom: timestamppb.New(receivedAt), WorkingHours: []uint32{gioXuLyXong},",
+            "    })",
+            "    if err != nil { return err }  // NEVER fall back to a wall-clock count",
+            "    p.SLADeadline = res.Items[0].ReachedAt.AsTime()",
             "",
             "    // derive overdue — never store it",
             "    func (p Petition) IsOverdue(now time.Time) bool {",
             "        return p.ClosedAt.IsZero() && now.After(p.SLADeadline)",
             "    }",
             "",
+            "  The calendar is THREE tables, all per commune: lich_lam_viec (one row per SESSION) +",
+            "  ngay_nghi_le + ngay_lam_bu (swap days: open although the week says closed).",
+            "",
             "  Genuinely need calendar days (a statutory period counted in calendar days)?",
-            "    // @sla-ok: Law on Complaints art. 28 counts calendar days, not working days",
+            "    // @sla-ok: Law on Complaints art. 28 counts calendar days, not working hours",
             "",
             "  → Rule 10: .claude/rules/critical/10-citizen-commitment.md",
             "  → Skill: .claude/skills/petition-lifecycle/SKILL.md",

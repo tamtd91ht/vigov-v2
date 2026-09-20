@@ -1,7 +1,8 @@
 package grpc
 
-// What these tests defend: the BRANCHES of the two handlers — which failure becomes "no
-// principal", which becomes an error, and in what ORDER the steps run.
+// What these tests defend: the BRANCHES of the handlers — which failure becomes "no principal",
+// which becomes an error, and in what ORDER the steps run. AdvanceWorkingHours has its own file,
+// lich_lam_viec_test.go, for the same split the source keeps.
 //
 // The wiring is a different question and is defended somewhere else: cmd/server/main_test.go
 // starts the real construction function over a real connection, because nothing in this file can
@@ -113,7 +114,12 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		CanBo: canBoGia{cb: domain.CanBo{ID: idCanBo, Ma: "CB001", CoTaiKhoan: true, DangHoatDong: true}},
 		Lo:    &loGia{},
 		Quyen: quyenGia{quyen: []authz.Perm{"admin.user", "task.extend"}},
-		Log:   slog.New(slog.NewTextHandler(nhatKy, nil)),
+		// The ordinary week, no closures, no swap days — so a test about AdvanceWorkingHours
+		// overrides only the one table it is about. See lich_lam_viec_test.go.
+		Lich:   &lichGia{cas: tuanGia()},
+		NghiLe: &nghiLeGia{},
+		LamBu:  &lamBuGia{},
+		Log:    slog.New(slog.NewTextHandler(nhatKy, nil)),
 	}
 	if sua != nil {
 		sua(&d)
@@ -520,16 +526,26 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 			CanBo:  canBoGia{},
 			Lo:     &loGia{},
 			Quyen:  quyenGia{},
+			Lich:   &lichGia{},
+			NghiLe: &nghiLeGia{},
+			LamBu:  &lamBuGia{},
 			Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 	}
 
 	ca := map[string]func(*Deps){
-		"thiếu signer": func(d *Deps) { d.Signer = nil },
-		"thiếu phiên":  func(d *Deps) { d.Phien = nil },
-		"thiếu cán bộ": func(d *Deps) { d.CanBo = nil },
-		"thiếu lô":     func(d *Deps) { d.Lo = nil },
-		"thiếu quyền":  func(d *Deps) { d.Quyen = nil },
+		"thiếu signer":        func(d *Deps) { d.Signer = nil },
+		"thiếu phiên":         func(d *Deps) { d.Phien = nil },
+		"thiếu cán bộ":        func(d *Deps) { d.CanBo = nil },
+		"thiếu lô":            func(d *Deps) { d.Lo = nil },
+		"thiếu quyền":         func(d *Deps) { d.Quyen = nil },
+		"thiếu lịch làm việc": func(d *Deps) { d.Lich = nil },
+		// A calendar read without its closures counts a deadline THROUGH a day the office was
+		// shut; without its swap days it counts a day the office WAS open as closed. Neither is a
+		// shorter answer — both are wrong, in opposite directions, with nothing on any screen to
+		// show it.
+		"thiếu ngày nghỉ lễ": func(d *Deps) { d.NghiLe = nil },
+		"thiếu ngày làm bù":  func(d *Deps) { d.LamBu = nil },
 	}
 	for ten, sua := range ca {
 		t.Run(ten, func(t *testing.T) {

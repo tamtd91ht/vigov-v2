@@ -29,7 +29,8 @@
 //
 // # Nothing here is audited, and that is a decision rather than an omission
 //
-// Rule 6, invariant 1 covers WRITES to business data. Both RPCs here are reads, and one of them
+// Rule 6, invariant 1 covers WRITES to business data. All three RPCs here are reads — the third,
+// AdvanceWorkingHours, reads a commune's configuration and writes nothing at all — and one of them
 // runs on EVERY staff request of four services. An audit entry per principal resolution would
 // add rows at the rate of page loads — recording nothing anybody would ever look for, and
 // burying the entries that carry legal weight.
@@ -49,9 +50,10 @@
 //
 // core/grpcx.UnaryServerInterceptor lifts "x-tenant-id" out of metadata into context.Context
 // before any handler runs, so every handler below reads it exactly as an HTTP handler does, and
-// none of them touches metadata itself. Neither RPC here is on grpcx.methodsWithoutTenant, and
-// neither may ever be added to it: both are called from a service edge that has ALREADY resolved
-// its commune from Host, so carrying the commune costs the caller nothing.
+// none of them touches metadata itself. No RPC here is on grpcx.methodsWithoutTenant, and none may
+// ever be added to it: every one of them is called from a service edge that has ALREADY resolved
+// its commune from Host, so carrying the commune costs the caller nothing. For AdvanceWorkingHours
+// the exemption is not even expressible — "x-tenant-id" names WHOSE calendar is read.
 package grpc
 
 import (
@@ -134,6 +136,18 @@ type Deps struct {
 	Lo    CanBoLo
 	Quyen QuyenDoc
 
+	// The commune's working calendar, read by AdvanceWorkingHours and by nothing else here. The
+	// three interfaces are declared in lich_lam_viec.go, at the point of use — three tables, three
+	// reads, three different windows.
+	//
+	// ALL THREE OR NONE: a deadline computed from the week without its holidays, or with its
+	// holidays but without its swap days, is not a shorter answer — it is a WRONG one, and wrong
+	// in a direction nothing on any screen shows. Migration 0006 puts the three tables in one
+	// transaction for the same reason.
+	Lich   LichLamViecDoc
+	NghiLe NgayNghiLeDoc
+	LamBu  NgayLamBuDoc
+
 	Log *slog.Logger
 }
 
@@ -168,9 +182,25 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho đọc cán bộ theo lô — BatchGetStaff sẽ panic khi có người gọi")
 	case d.Quyen == nil:
 		panic("identity/grpc: thiếu kho quyền — ResolveStaffPrincipal sẽ trả principal rỗng quyền, không phân biệt được với người thật sự không có quyền")
+	case d.Lich == nil:
+		panic("identity/grpc: thiếu kho lịch làm việc — AdvanceWorkingHours sẽ panic khi có người gọi")
+	case d.NghiLe == nil:
+		panic("identity/grpc: thiếu kho ngày nghỉ lễ — AdvanceWorkingHours sẽ tính hạn xuyên qua ngày cơ quan đóng cửa")
+	case d.LamBu == nil:
+		panic("identity/grpc: thiếu kho ngày làm bù — AdvanceWorkingHours sẽ tính hạn như thể xã nghỉ đúng những ngày nó có làm")
 	}
 	if d.Log == nil {
 		d.Log = slog.Default()
+	}
+
+	// THE ZONE IS RESOLVED AT CONSTRUCTION, where a human is watching a process fail to start —
+	// never at the first intake, where the failure lands on a citizen's deadline. A binary whose
+	// image lost its zone database cannot combine a commune's wall-clock calendar with a date, so
+	// it cannot answer this RPC at all; starting anyway would mean discovering it from a
+	// FAILED_PRECONDITION on the first petition received.
+	if _, err := domain.MuiGio(); err != nil {
+		panic("identity/grpc: " + err.Error() +
+			" — ảnh chạy thiếu cơ sở dữ liệu múi giờ, AdvanceWorkingHours không tính được hạn")
 	}
 	return &Server{d: d}
 }
@@ -411,7 +441,7 @@ func (s *Server) BatchGetStaff(ctx context.Context, req *identityv1.BatchGetStaf
 // handler, so a panic here takes down a process serving 200+ communes because one call arrived
 // misrouted.
 //
-// REACHING THIS BRANCH MEANS core/grpcx.UnaryServerInterceptor IS NOT IN THE CHAIN. Neither RPC
+// REACHING THIS BRANCH MEANS core/grpcx.UnaryServerInterceptor IS NOT IN THE CHAIN. No RPC
 // on this server is exempt from carrying a commune, so with the interceptor installed the call
 // would already have been refused with InvalidArgument. Internal is therefore the honest code:
 // the fault is this deployment's wiring, not the caller's request. It also closes the panic path

@@ -8,8 +8,10 @@
       "viec": "Nghiệp vụ phản ánh — tiếp nhận, phân loại, phân công, nghiệm thu, đóng phiếu",
       "trang_thai": "chua_lam",
       "bang_chung": "",
-      "no_confirm": [],
-      "tiep_theo": "CHỈ bắt đầu sau khi có lich_lam_viec + ngay_nghi_le theo xã (ADR 0007). Đếm hạn bằng giờ hành chính mà thiếu lịch của xã thì mọi con số hạn đều sai, và sai theo hướng không ai thấy cho tới lúc báo cáo lên trên"
+      "no_confirm": [
+        4
+      ],
+      "tiep_theo": "Rào CŨ đã gỡ: ba bảng lịch đã có (service-identity/migrations/0006_lich_lam_viec.sql) và hàm đếm hạn đang dựng. Rào CÒN LẠI là CÂU MỞ #4, và nó chặn đúng cột đầu tiên của bảng phiếu: ADR 0024 mục `BA Ô ĐỂ TRỐNG` §1 CỐ Ý không giao `Lĩnh vực phản ánh` cho service nào, chờ khách trả lời cấp huyện/tỉnh có tổng hợp THEO LĨNH VỰC xuyên 200+ xã không. Trả lời KHÔNG: danh mục theo xã, thuộc petitions. Trả lời CÓ: bộ mã ĐÓNG ở tầng nền tảng + nhãn theo xã đè lên — hai tầng, hai chủ sở hữu, xã không được thêm mã. Dựng theo chiều sai rồi đổi là ánh xạ thủ công 200 bộ mã đã có dữ liệu thật, trên hồ sơ lưu trữ. Ngoài #4 còn ba câu domain-expert nêu 2026-09-20 mà khách chưa được hỏi: danh sách trạng thái (ba tài liệu đang ghi 9 / 7 / 5 — luật 10 dừng #2); phân loại lại lúc sàng lọc thì hạn có dời không (luật 10 dừng #1); và mốc nào khởi động đồng hồ `Tiếp nhận` — lúc dân gửi hay lúc cán bộ nhận"
     },
     {
       "id": "lich-lam-viec-theo-xa",

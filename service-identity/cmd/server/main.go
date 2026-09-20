@@ -336,7 +336,16 @@ func run(log *slog.Logger) error {
 		// grant predicate for the guard and for the principal: a second one would drift, and
 		// drift in either direction is a defect with no error attached.
 		Quyen: checker,
-		Log:   log,
+		// The commune's working calendar, for AdvanceWorkingHours — the only way that calendar
+		// leaves this service. The SAME three read-only stores the HTTP routes were given above:
+		// one read path per table, so a deadline is computed from exactly what the configuration
+		// screen shows. All three are required; NewServer refuses to build without any of them,
+		// because a deadline counted without the holidays is not a shorter answer, it is a wrong
+		// one.
+		Lich:   lichLamViec,
+		NghiLe: ngayNghiLe,
+		LamBu:  ngayLamBu,
+		Log:    log,
 	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)

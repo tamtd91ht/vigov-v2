@@ -214,6 +214,10 @@
       "kind": "func",
       "at": "service-identity/internal/domain/gio_trong_ngay.go:43"
     },
+    "domain.DocLichNam": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/tien_gio_lam_viec.go:99"
+    },
     "domain.Domain": {
       "kind": "type",
       "at": "service-platform/internal/domain/tenant.go:21"
@@ -246,6 +250,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/loai_don_vi_dan_cu.go:22"
     },
+    "domain.LoaiLoiTinhHan": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/tien_gio_lam_viec.go:104"
+    },
     "domain.LoaiNhiemVu": {
       "kind": "type",
       "at": "service-petitions/internal/domain/loai_nhiem_vu.go:18"
@@ -262,6 +270,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/lich_lam_viec.go:44"
     },
+    "domain.LoiKhongTinhDuocHan": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/tien_gio_lam_viec.go:143"
+    },
     "domain.LoiNgayVuaNghiVuaLamBu": {
       "kind": "type",
       "at": "service-identity/internal/domain/xung_dot_lich.go:35"
@@ -270,9 +282,17 @@
       "kind": "type",
       "at": "service-identity/internal/domain/quyen.go:86"
     },
+    "domain.MocDatDuoc": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/tien_gio_lam_viec.go:75"
+    },
     "domain.MucUuTienNhiemVu": {
       "kind": "type",
       "at": "service-petitions/internal/domain/muc_uu_tien_nhiem_vu.go:19"
+    },
+    "domain.MuiGio": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/tien_gio_lam_viec.go:66"
     },
     "domain.NgayNghiLe": {
       "kind": "type",
@@ -301,6 +321,10 @@
     "domain.ThonToDanPho": {
       "kind": "type",
       "at": "service-identity/internal/domain/thon_to_dan_pho.go:14"
+    },
+    "domain.TienGioLamViec": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/tien_gio_lam_viec.go:178"
     },
     "domain.TimChongNhau": {
       "kind": "func",
@@ -358,21 +382,25 @@
       "kind": "type",
       "at": "core/events/events.go:33"
     },
+    "grpc.AdvanceWorkingHours": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/lich_lam_viec.go:105"
+    },
     "grpc.BatchGetStaff": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:351"
+      "at": "service-identity/internal/grpc/server.go:381"
     },
     "grpc.CanBoDoc": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/server.go:101"
+      "at": "service-identity/internal/grpc/server.go:103"
     },
     "grpc.CanBoLo": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/server.go:107"
+      "at": "service-identity/internal/grpc/server.go:109"
     },
     "grpc.Deps": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/server.go:125"
+      "at": "service-identity/internal/grpc/server.go:127"
     },
     "grpc.Directory": {
       "kind": "type",
@@ -382,17 +410,29 @@
       "kind": "func",
       "at": "service-platform/internal/grpc/server.go:80"
     },
+    "grpc.LichLamViecDoc": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/lich_lam_viec.go:54"
+    },
     "grpc.NewServer": {
       "kind": "func",
       "at": "service-platform/internal/grpc/server.go:51"
     },
+    "grpc.NgayLamBuDoc": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/lich_lam_viec.go:66"
+    },
+    "grpc.NgayNghiLeDoc": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/lich_lam_viec.go:60"
+    },
     "grpc.PhienDoc": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/server.go:93"
+      "at": "service-identity/internal/grpc/server.go:95"
     },
     "grpc.QuyenDoc": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/server.go:118"
+      "at": "service-identity/internal/grpc/server.go:120"
     },
     "grpc.ResolveHost": {
       "kind": "func",
@@ -400,7 +440,7 @@
     },
     "grpc.ResolveStaffPrincipal": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:221"
+      "at": "service-identity/internal/grpc/server.go:251"
     },
     "grpc.Server": {
       "kind": "type",
