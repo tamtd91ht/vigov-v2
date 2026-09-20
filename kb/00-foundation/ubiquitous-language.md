@@ -3,7 +3,7 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: b899f4c
+derived_from_commit: 1e5dfe5
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
@@ -14,6 +14,8 @@ owns_facts:
   - "tên gọi các bước trong vòng đời phiếu phản ánh"
   - "tên gọi vai trò cán bộ cấp xã"
   - "tên thực thể tiếng Anh của tám danh mục tham chiếu"
+  - "tên tài nguyên URL của ba bảng lịch làm việc của xã"
+  - "vì sao giữ public-holidays dù closure-days đúng nghĩa hơn"
   - "vì sao hợp đồng danh mục trả trường label còn thực thể có tên riêng trả name"
   - "quy tắc: tên theo khái niệm, quyền sở hữu theo nhịp đổi"
 ---
@@ -66,7 +68,7 @@ Vòng đời đầy đủ ở `skills/petition-lifecycle`; bảng này chỉ ch�
 | Nghiệm thu | `nghiem_thu` | Xác nhận đã xử lý trên thực địa, thường kèm ảnh |
 | Đóng phiếu | `dong_phieu` | Kết thúc — **bắt buộc có kết quả dân đọc được** |
 | Hạn xử lý | `sla_deadline` | Lưu **một lần** lúc tiếp nhận, tính bằng **giờ làm việc** |
-| Giờ làm việc | `gio_lam_viec` | Theo `lich_lam_viec` + `ngay_nghi_le` của xã — ADR 0007 |
+| Giờ làm việc | `gio_lam_viec` | Theo `lich_lam_viec` + `ngay_nghi_le` + `ngay_lam_bu` của xã — **cả BA bảng**, ADR 0007. Thiếu bảng thứ ba là đếm xuyên ngày làm bù như thể xã đóng cửa, và ngày làm bù dồn quanh Tết và Quốc khánh. Tên tài nguyên URL và hình dạng từng dòng: §Lịch làm việc của xã |
 | Quá hạn | — | **Suy ra**, không có cột. Xem luật 10 |
 
 ## Vai trò cán bộ
@@ -207,6 +209,47 @@ sửa ADR** (ADR 0024:135-136).
 
 **Còn một chỗ chưa chốt, đã nêu với người viết migration:** `10-ban-do-kinh-te-so.md:53` nói danh
 mục có **8 mục** trong khi `:37` nói **11 nhóm** — đặc tả lệch với chính nó, phải chốt trước khi seed.
+
+### Lịch làm việc của xã — ADR 0007
+
+Ba khái niệm, **người dùng chốt tên cùng một lượt 2026-09-20**. Cả ba thuộc **`service-identity`**,
+cũng chốt hôm ấy: ADR 0007 đếm hạn cho **`Văn bản đến`** chứ không riêng `Phản ánh`, nên lịch
+được ít nhất hai service đọc và **không thuộc service nào trong hai**; ADR 0024 chốt quyền sở hữu
+đi theo **nhịp đổi**, mà giờ làm việc của xã đổi cùng bộ máy hành chính. Lập luận đầy đủ ở
+`service-identity/migrations/0006_lich_lam_viec.sql:14-20` — không chép lại ở đây.
+
+| Khái niệm | Thực thể (`@entity`) | Bảng | Tài nguyên URL | Vì sao không phải từ dễ đoán |
+|---|---|---|---|---|
+| Tuần làm việc của xã | `WorkingHours` | `lich_lam_viec` | `working-hours` | **Không phải `working-sessions`, dù một dòng đúng LÀ một ca chứ không phải một ngày.** `sessions` đã mang nghĩa phiên đăng nhập **cán bộ** (`/api/v1/sessions`), và `citizen-sessions` đã mang nghĩa lớp tin cậy còn lại (ADR 0023). Một nghĩa thứ ba cách đó **đúng một đoạn đường dẫn** là dựng lại ca `commune`/`communes` mà ADR 0023 §B phải tốn một lần đổi đường dẫn đang chạy mới gỡ xong. Đã bác thêm: `office-hours` (trôi khỏi dấu `@entity: WorkingHours`, tức hợp đồng và migration gọi một thứ bằng hai từ), `working-calendar` và `work-schedule` (số ít — trái quy ước; và chữ "calendar" mời người sau đổ **sự kiện** vào bảng này) |
+| Ngày cơ quan đóng cửa | `PublicHoliday` | `ngay_nghi_le` | `public-holidays` — **đọc hết ô bên phải trước khi định "sửa" cái tên này** | **CẢNH BÁO LÀ MỘT PHẦN CỦA DÒNG, không phải ghi chú thêm.** Bảng còn giữ **lễ hội địa phương và ngày truyền thống** (ADR 0007 quyết định 4), những ngày **không** phải ngày lễ theo nghĩa quốc gia. Điều mọi dòng thật sự khẳng định là *"ngày đó cơ quan đóng cửa"*, nên `closure-days` là danh từ **đúng nghĩa hơn**. Đã nêu **đúng lập luận ấy** với người dùng, và **người dùng giữ `public-holidays`**: nó khớp dấu `-- @entity: PublicHoliday` đã viết sẵn ở `service-identity/migrations/0006_lich_lam_viec.sql:192`, mà đổi tên về sau là **sửa dấu trên một migration ĐÃ ÁP** — `core/migrate` so checksum mỗi lần khởi động, nên sửa tệp đã áp thì service dừng (`ErrChecksumLech`, ghi ở chính tệp ấy `:3-6`). Ghi **cả lập luận lẫn quyết định**: một dòng giấu lập luận là một dòng mời người sau "sửa cho đúng" |
+| Ngày làm bù | `SwapWorkingDay` | `ngay_lam_bu` | `swap-working-days` | **Không** `makeup-days`: thành ngữ Mỹ, người tích hợp không đọc tiếng Anh Mỹ phải đoán. **Không** `compensatory-working-days`: trong tiếng Anh nhân sự nó đọc ra **ngày nghỉ bù**, tức ngược hẳn nghĩa — đây là ngày **LÀM**. **Không** `extra-working-days`: mất luôn lý do bảng tồn tại — ngày làm bù là ngày **trả lại** một đợt nghỉ dài theo **thông báo hằng năm của Thủ tướng**, không phải ngày làm thêm của cơ quan |
+
+**HAI CÁI TÊN NÓI VỀ MỘT NGÀY HOẶC MỘT KHOẢNG GIỜ, TRONG KHI MỘT DÒNG LÀ MỘT CA — trên hai
+trong ba bảng. Chỗ lệch ấy có thật và là cố ý.** `lich_lam_viec` và `ngay_lam_bu` đều lưu **một
+dòng cho một ca làm việc**: nghỉ trưa là **hai dòng có khoảng hở**, ca trực thứ Bảy là **một
+dòng**, ngày không làm việc thì **không có dòng nào**. Migration lập luận dài vì sao hình dạng
+**ca** mới đúng — `service-identity/migrations/0006_lich_lam_viec.sql:83-96` và `:251-252`. Chỉ
+`ngay_nghi_le` mới đúng một dòng một ngày. Tên kế thừa chỗ lệch đó, và câu này nằm ở đây để
+**không ai đọc `working-hours` rồi chờ một dòng cho mỗi thứ trong tuần** — rồi sửa schema cho
+khớp cái tên.
+
+**CẢ BA TUYẾN ĐÃ CHẠY** (2026-09-20), đều là tuyến `GET` đọc và đều khai `AnyAuthenticated` —
+cùng lập luận đã chấp nhận cho `/org-units` và cho tám danh mục ở trên: giờ làm việc và ngày nghỉ
+của xã nằm dưới **mọi hạn xử lý hiện trên màn hình**, nên đòi một quyền cấu hình không bảo vệ
+được gì mà làm rỗng những màn hình ấy cho mọi tài khoản không phải quản trị. Danh mục chỉ lộ
+**trong chính xã đó** — `Scoped` buộc `tenant_id` (luật 1). **Chưa có tuyến GHI nào**: ai được sửa
+lịch của xã thì chưa ai hỏi khách, và một đường ghi viết dở trông như một quyết định đã có người
+ra. Ba ô trên đối chiếu với `kb/20-contracts/openapi.json`, tầng **SINH** ra từ mã (ADR 0014) —
+đó là sự thật, bảng này chỉ giữ **danh từ đã chốt** (đoạn mở đầu §Tên tài nguyên trên URL). Lệch
+một chữ về sau thì **sửa mã**, vì tên là **người dùng chốt** chứ không phải một phiên tự dịch.
+
+Điều đó **không trái** câu *"khái niệm nào chưa có tuyến thì vẫn để trống, đừng điền sẵn"* ở
+§Danh mục tham chiếu: câu ấy cấm **tự nghĩ ra tên khi chưa ai cần gọi**. Ở đây ngược lại — mã
+**dừng lại và hỏi** vì bảng này chưa có dòng (đúng như `kb/INDEX.yaml` `not_here` dặn), người
+dùng trả lời, rồi route mới được viết. Trước lúc đó các phép thử treo tạm ba handler dưới
+`/api/v1/test-probe/...` với những chữ như `working-calendar`, `closure-days` — **khung thử,
+không bao giờ là đề xuất**. Gặp lại những chữ ấy trong mã hay trong `git log`: chúng là **tên đã
+bị bác**, không phải tên đang tranh chấp với ba ô trên.
 
 ### Một khái niệm, bốn cái tên: `nguoi_dung` · `can_bo` · `CanBo` · `Staff`
 

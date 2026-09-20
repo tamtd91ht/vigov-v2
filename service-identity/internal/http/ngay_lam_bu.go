@@ -13,9 +13,8 @@ import (
 // The read route behind the dates the commune works although the week says otherwise — the Prime
 // Minister's annual swap days (migration 0006).
 //
-// ⚠ THE PATH IS NOT REGISTERED YET — see the head of lich_lam_viec.go. The name of this URL
-// resource has no row in kb/00-foundation/ubiquitous-language.md and is being asked, not guessed
-// (ADR 0011).
+// GET /api/v1/swap-working-days?year= — the noun is settled (user, 2026-09-20) and is not decided
+// in this file; kb/00-foundation/ubiquitous-language.md §"Lịch làm việc của xã" owns it (ADR 0011).
 //
 // THERE IS NO WRITE ROUTE: who may edit a commune's calendar has not been asked.
 

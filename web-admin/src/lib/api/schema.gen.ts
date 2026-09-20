@@ -66,6 +66,24 @@ export type identity_boPhanRa = {
   "parent_id": string;
 };
 
+export type identity_caLamBuRa = {
+  /** ULID — what a later edit would reference */
+  "id": string;
+  "date": string;
+  "start": string;
+  "end": string;
+  "name": string;
+};
+
+export type identity_caLamViecRa = {
+  /** ULID — what a later edit would reference */
+  "id": string;
+  "weekday": number;
+  "start": string;
+  "end": string;
+  "note": string;
+};
+
 export type identity_canBoGon = {
   /** cb.Ma — the business code, the one the audit trail shows */
   "code": string;
@@ -101,12 +119,26 @@ export type identity_danhSachBoPhanRa = {
   "items": Array<identity_boPhanRa>;
 };
 
+export type identity_danhSachCaLamBuRa = {
+  "items": Array<identity_caLamBuRa>;
+  "problems": Array<identity_vanDeLamBuRa>;
+};
+
+export type identity_danhSachCaLamViecRa = {
+  "items": Array<identity_caLamViecRa>;
+  "problems": Array<identity_vanDeLichRa>;
+};
+
 export type identity_danhSachKhoiNhiemVuRa = {
   "items": Array<identity_khoiNhiemVuRa>;
 };
 
 export type identity_danhSachLoaiDonViDanCuRa = {
   "items": Array<identity_loaiDonViDanCuRa>;
+};
+
+export type identity_danhSachNgayNghiLeRa = {
+  "items": Array<identity_ngayNghiLeRa>;
 };
 
 export type identity_danhSachThonToDanPhoRa = {
@@ -144,6 +176,13 @@ export type identity_maTranQuyenRa = {
   "groups": Array<identity_nhomQuyenRa>;
   "roles": Array<identity_vaiTroCotRa>;
   "grants": Array<identity_capQuyenRa>;
+};
+
+export type identity_ngayNghiLeRa = {
+  /** ULID — what a later edit would reference */
+  "id": string;
+  "date": string;
+  "name": string;
 };
 
 export type identity_nhomQuyenRa = {
@@ -224,6 +263,20 @@ export type identity_vaiTroMucRa = {
   "code": string;
   "name": string;
   "is_leader": boolean;
+};
+
+export type identity_vanDeLamBuRa = {
+  "kind": string;
+  "date": string;
+  "session_ids": Array<string>;
+  "message": string;
+};
+
+export type identity_vanDeLichRa = {
+  "kind": string;
+  "weekday": number | null;
+  "session_ids": Array<string>;
+  "message": string;
 };
 
 export type page_Result_identity_canBoTomTat = {
@@ -335,6 +388,24 @@ export type identity_get_org_units = {
   phanHoi: {
     200: identity_danhSachBoPhanRa;
     401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/public-holidays — Ngày nghỉ lễ của xã trong một năm — ngày xã KHÔNG làm việc, gồm cả lễ quốc gia lẫn lễ địa phương */
+export type identity_get_public_holidays = {
+  duongDan: "/api/v1/public-holidays";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_danhSachNgayNghiLeRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -496,6 +567,24 @@ export type identity_get_staff_by_id = {
   };
 };
 
+/** GET /api/v1/swap-working-days — Ngày làm bù của xã trong một năm — ngày xã CÓ làm việc dù lịch tuần nói không, kèm giờ làm của chính ngày đó */
+export type identity_get_swap_working_days = {
+  duongDan: "/api/v1/swap-working-days";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_danhSachCaLamBuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/task-blocs — Danh mục khối nhiệm vụ của xã — Khối Uỷ ban / Khối Đảng / Khác, dùng cho ô chọn khối và bộ lọc nhiệm vụ */
 export type identity_get_task_blocs = {
   duongDan: "/api/v1/task-blocs";
@@ -539,6 +628,22 @@ export type petitions_get_task_types = {
   than: never;
   phanHoi: {
     200: petitions_danhSachLoaiNhiemVuRa;
+    401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/working-hours — Lịch làm việc thông thường của xã — mỗi dòng là một CA, nghỉ trưa là khoảng hở giữa hai ca */
+export type identity_get_working_hours = {
+  duongDan: "/api/v1/working-hours";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_danhSachCaLamViecRa;
     401: httpx_Error;
     500: httpx_Error;
   };

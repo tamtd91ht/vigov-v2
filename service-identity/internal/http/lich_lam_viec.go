@@ -10,14 +10,12 @@ import (
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
 
-// The read route behind the commune's ordinary working week (migration 0006).
+// The read route behind the commune's ordinary working week. GET /api/v1/working-hours
 //
-// ⚠ THE PATH IS NOT REGISTERED YET, AND THAT IS DELIBERATE. The URL resource name for this concept
-// has no row in kb/00-foundation/ubiquitous-language.md, ADR 0011 forbids translating one on the
-// spot, and kb/INDEX.yaml's `not_here` says to ASK. A path cannot be taken back once a commune is
-// live. The handler, the response shape and the store are complete; the `mux.Handle` line in
-// routes.go — with its permission declaration and its @-annotation block — lands in the turn after
-// the name is settled.
+// THE NOUN IS SETTLED (user, 2026-09-20) AND IS NOT DECIDED IN THIS FILE. The name and the
+// argument behind it — including what was rejected — are owned by
+// kb/00-foundation/ubiquitous-language.md §"Lịch làm việc của xã" (ADR 0011). Not restated here:
+// a second copy drifts, and then neither copy can be trusted (rule 9, invariant 2).
 //
 // THERE IS NO WRITE ROUTE, and no scaffolding for one is left here. Who may edit a commune's
 // working calendar has not been asked; it is the sibling of open question #21. A working calendar

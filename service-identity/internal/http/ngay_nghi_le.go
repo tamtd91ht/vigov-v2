@@ -12,11 +12,12 @@ import (
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
 
-// The read route behind the dates the commune does not work (migration 0006).
+// The read route behind the dates the commune does not work. GET /api/v1/public-holidays?year=
 //
-// ⚠ THE PATH IS NOT REGISTERED YET — see the head of lich_lam_viec.go. The name of this URL
-// resource has no row in kb/00-foundation/ubiquitous-language.md and is being asked, not guessed
-// (ADR 0011).
+// THE NOUN IS SETTLED (user, 2026-09-20) AND IS NOT DECIDED IN THIS FILE, including the objection
+// that was raised against it and answered. The name and the whole argument behind it are owned by
+// kb/00-foundation/ubiquitous-language.md §"Lịch làm việc của xã" (ADR 0011); nothing of it is
+// restated here, because a second copy drifts and then neither copy can be trusted (rule 9).
 //
 // THERE IS NO WRITE ROUTE: who may edit a commune's calendar has not been asked.
 

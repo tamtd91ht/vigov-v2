@@ -94,6 +94,26 @@
     {
       "service": "identity",
       "method": "GET",
+      "path": "/api/v1/public-holidays",
+      "operation_id": "identity_get_public_holidays",
+      "task_id": "d2c52a80badd",
+      "summary": "Ngày nghỉ lễ của xã trong một năm — ngày xã KHÔNG làm việc, gồm cả lễ quốc gia lẫn lễ địa phương",
+      "screen": "14-cau-hinh §8",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "ngày nghỉ lễ quyết định hạn xử lý hiện trên màn hình nhiệm vụ, phản ánh và văn bản, và mọi ô chọn ngày phải biết ngày nào xã đóng cửa — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: lịch nghỉ lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.danhSachNgayNghiLeRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
       "path": "/api/v1/residential-unit-types",
       "operation_id": "identity_get_residential_unit_types",
       "task_id": "9fa2ec8e2c51",
@@ -266,6 +286,26 @@
     {
       "service": "identity",
       "method": "GET",
+      "path": "/api/v1/swap-working-days",
+      "operation_id": "identity_get_swap_working_days",
+      "task_id": "450688014959",
+      "summary": "Ngày làm bù của xã trong một năm — ngày xã CÓ làm việc dù lịch tuần nói không, kèm giờ làm của chính ngày đó",
+      "screen": "14-cau-hinh §8",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "ngày làm bù theo thông báo hằng năm của Thủ tướng quyết định hạn xử lý đúng vào những ngày tồn đọng nhiều nhất trong năm, và mọi ô chọn ngày phải biết ngày nào xã vẫn làm việc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: lịch làm bù lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.danhSachCaLamBuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
       "path": "/api/v1/task-blocs",
       "operation_id": "identity_get_task_blocs",
       "task_id": "7a1626afaa4c",
@@ -316,6 +356,24 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/working-hours",
+      "operation_id": "identity_get_working_hours",
+      "task_id": "b3033152e6c6",
+      "summary": "Lịch làm việc thông thường của xã — mỗi dòng là một CA, nghỉ trưa là khoảng hở giữa hai ca",
+      "screen": "14-cau-hinh §8",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "giờ làm việc của xã nằm dưới mọi hạn xử lý hiện trên màn hình — ngày đến hạn của nhiệm vụ, chip 'còn mấy ngày' của phản ánh, mọi ô chọn ngày — nên đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: giờ làm việc lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.danhSachCaLamViecRa",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
     }
   ]
 }

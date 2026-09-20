@@ -187,12 +187,11 @@ type (
 	// same discipline as the three reference reads above: an interface is the list of things a
 	// handler CAN do, so the holiday handler must not be able to reach the weekly calendar.
 	//
-	// ⚠ NONE OF THE THREE HAS A ROUTE YET, AND THAT IS THE DECISION, NOT AN OVERSIGHT. The URL
-	// resource names for these concepts have no row in kb/00-foundation/ubiquitous-language.md;
-	// ADR 0011 forbids translating one on the spot and kb/INDEX.yaml's `not_here` says to ASK. A
-	// path cannot be taken back once a commune is live. The handlers, the response shapes and the
-	// stores are complete and wired; what is missing is exactly three `mux.Handle` statements with
-	// their permission declaration and their @-annotation block.
+	// The three nouns — `working-hours`, `public-holidays`, `swap-working-days` — were ASKED and
+	// answered by the user on 2026-09-20 rather than translated on the spot (ADR 0011). What
+	// decided them is the `@entity` marks already in migration 0006; the full argument, including
+	// the `closure-days` objection that was raised and rejected, is on the routes at the bottom of
+	// Register. Do not reopen it here.
 	//
 	// NO WRITE PATH ON ANY OF THE THREE: who may edit a commune's working calendar has not been
 	// asked — it is the sibling of open question #21 — and a half-written write path looks like a
@@ -250,8 +249,8 @@ type Deps struct {
 	ThonToDanPho   ThonToDanPhoDanhSach
 	LoaiDonViDanCu LoaiDonViDanCuDanhMuc
 	KhoiNhiemVu    KhoiNhiemVuDanhMuc
-	// The commune's working calendar (migration 0006). Wired now although no route is mounted
-	// yet — see the three interfaces above for why the paths are being asked rather than guessed.
+	// The commune's working calendar (migration 0006) — GET /api/v1/working-hours,
+	// /api/v1/public-holidays, /api/v1/swap-working-days. Read only; no write route exists.
 	LichLamViec LichLamViecDoc
 	NgayNghiLe  NgayNghiLeDoc
 	NgayLamBu   NgayLamBuDoc
@@ -301,17 +300,12 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho loại đơn vị dân cư — GET /api/v1/residential-unit-types sẽ panic khi có người gọi")
 	case d.KhoiNhiemVu == nil:
 		panic("identity/http: thiếu kho khối nhiệm vụ — GET /api/v1/task-blocs sẽ panic khi có người gọi")
-	// The three calendar stores are refused here ALTHOUGH NO ROUTE IS MOUNTED YET, and that is
-	// deliberate: the turn that adds the three `mux.Handle` statements must not also have to
-	// remember the wiring. Register is called once, at startup, from cmd/server with a full Deps —
-	// so this cannot take a running service down; it can only stop one that was assembled
-	// incompletely, which is the point (same discipline as every case above).
 	case d.LichLamViec == nil:
-		panic("identity/http: thiếu kho lịch làm việc — tuyến đọc lịch (tên tài nguyên URL chưa chốt) sẽ panic khi được gắn")
+		panic("identity/http: thiếu kho lịch làm việc — GET /api/v1/working-hours sẽ panic khi có người gọi")
 	case d.NgayNghiLe == nil:
-		panic("identity/http: thiếu kho ngày nghỉ lễ — tuyến đọc ngày nghỉ (tên tài nguyên URL chưa chốt) sẽ panic khi được gắn")
+		panic("identity/http: thiếu kho ngày nghỉ lễ — GET /api/v1/public-holidays sẽ panic khi có người gọi")
 	case d.NgayLamBu == nil:
-		panic("identity/http: thiếu kho ngày làm bù — tuyến đọc ngày làm bù (tên tài nguyên URL chưa chốt) sẽ panic khi được gắn")
+		panic("identity/http: thiếu kho ngày làm bù — GET /api/v1/swap-working-days sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -680,32 +674,43 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.AnyAuthenticated("nhãn khối nhiệm vụ xuất hiện ở ô chọn khối trên biểu mẫu nhiệm vụ, ở nhãn dòng và ở bộ lọc danh sách nhiệm vụ — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachKhoiNhiemVu)))
 
-	// --- the commune's working calendar. THREE READ ROUTES, NOT MOUNTED, ON PURPOSE -------------
+	// --- the commune's working calendar. THREE READ ROUTES, DELIBERATELY NO WRITE ROUTE --------
 	//
-	// WHAT IS MISSING IS THREE `mux.Handle` STATEMENTS AND NOTHING ELSE. The handlers
-	// (h.DanhSachCaLamViec, h.DanhSachNgayNghiLe, h.DanhSachCaLamBu), the response shapes, the
-	// three stores and the wiring above are all in place and tested.
+	// THE THREE NOUNS ARE SETTLED (user, 2026-09-20) AND ARE NOT REOPENED HERE: `working-hours`,
+	// `public-holidays`, `swap-working-days`. That includes the objection raised against
+	// `public-holidays` — it was put to the user and answered.
 	//
-	// WHY THEY ARE NOT HERE: the URL resource name for each of the three concepts —
-	// `lich_lam_viec` / `ngay_nghi_le` / `ngay_lam_bu` — has NO ROW in
-	// kb/00-foundation/ubiquitous-language.md. ADR 0011 forbids translating one on the spot, and
-	// kb/INDEX.yaml's `not_here` closes with exactly this case: "Tên tài nguyên URL cho khái niệm
-	// chưa có trong bảng ánh xạ → HỎI, đừng tự dịch". A path cannot be taken back once a commune is
-	// live, which is why `org-units` exists rather than `departments`.
+	// WHY EACH NAME, AND WHAT WAS REJECTED → kb/00-foundation/ubiquitous-language.md
+	// §"Lịch làm việc của xã". That file owns the URL-resource mapping (ADR 0011) and the argument
+	// behind every row of it. NOTHING OF IT IS SUMMARISED HERE ON PURPOSE: a summary is a third
+	// copy of one fact, copies drift, and once two disagree a reader cannot tell which is current —
+	// so both lose their authority, including the one that is right (rule 9, invariant 2).
 	//
-	// WHEN THE NAMES ARE SETTLED, each statement takes this shape — the permission is decided and
-	// is NOT the open part:
+	// THE LOCAL CONSEQUENCE, which is the only part that belongs in this file: these three path
+	// strings are compared against that table and against the generated contract. A one-character
+	// divergence is fixed HERE, never in the table — the generated tier is the truth for this
+	// surface (ADR 0014).
 	//
-	//	mux.Handle("GET /api/v1/<tên đã chốt>",
-	//	    authz.AnyAuthenticated("<lý do cụ thể>")(
-	//	        http.HandlerFunc(h.DanhSachCaLamViec)))
+	// AN OVERLAPPING OR EMPTY CALENDAR IS SURFACED ON THE READ, NOT REFUSED — user's decision,
+	// 2026-09-20, and it is the one that looks backwards until the reason is stated: THE
+	// CONFIGURATION SCREEN THAT FIXES AN OVERLAP READS THROUGH THIS SAME ROUTE, so refusing the
+	// read locks away the very thing needed to repair it. Both routes therefore answer 200 with a
+	// derived `problems` list beside the whole `items` list. The REFUSAL belongs where a DEADLINE
+	// is computed, not where a calendar is listed — see domain.VanDeCuaLich, whose non-empty
+	// result is what a computing caller must refuse on (rule 10; migration 0006:56 and :109).
 	//
-	// AnyAuthenticated, SAME CALL AND SAME REASON AS /org-units, /roles AND THE THREE ABOVE, which
-	// the user settled for catalogue reads on 2026-09-20: office hours and public holidays are
-	// shown on nearly every screen that states a deadline — the due date on a task, the "còn mấy
-	// ngày" chip on a petition, any form that offers a date — so requiring a configuration
-	// permission would not protect anything, it would break those screens for everybody who is not
-	// an administrator.
+	// THE ONE THING THAT IS STILL REFUSED IS A CALENDAR THAT CONTRADICTS ITSELF: a date recorded
+	// both as a holiday and as a swap working day. That is not a defect in one list a screen can
+	// show and fix — it is two lists asserting opposite things, and picking a winner would make
+	// one of two VISIBLE configuration rows do nothing with nothing on screen to say which
+	// (migration 0006:254). Both date routes answer 409 and name the dates.
+	//
+	// ALL THREE ARE AnyAuthenticated, SAME CALL AND SAME REASON AS /org-units, /roles AND THE
+	// THREE READS ABOVE, which the user settled for catalogue reads on 2026-09-20: office hours
+	// and public holidays are shown on nearly every screen that states a deadline — the due date
+	// on a task, the "còn mấy ngày" chip on a petition, any form that offers a date — so requiring
+	// a configuration permission would not protect anything, it would break those screens for
+	// everybody who is not an administrator.
 	//
 	// THE TRADE-OFF, STATED RATHER THAN GLOSSED: a commune's working hours, its holidays and its
 	// swap days are readable by every signed-in account OF THAT COMMUNE. They are NOT readable
@@ -715,9 +720,79 @@ func Register(mux *http.ServeMux, d Deps) {
 	// configuration rights can read when their own authority is open, which is information printed
 	// on the door.
 	//
-	// THE @-ANNOTATION BLOCK GOES WITH EACH STATEMENT, no blank line between, or `tools/apidoc`
-	// will not see it and kb/20-contracts/openapi.json will not carry the route. Each block owes
-	// its real statuses — and the two date routes really do answer 400 (year missing or out of
-	// range) and 409 (a date recorded as both a holiday and a swap day, which both routes REFUSE
-	// rather than resolve; see domain.LoiNgayVuaNghiVuaLamBu).
+	// NO WRITE ROUTE ON ANY OF THE THREE. `14-cau-hinh.md §8` NAMES these tables as what "giờ làm
+	// việc" is counted from (line 318) but specifies NO SCREEN that edits them, and ADR 0007 says
+	// the same in its gap list. Who may edit a commune's calendar has not been asked — it is the
+	// sibling of open question #21 — and a half-written write path looks like a decision somebody
+	// made. The consequence is heavier here than on a catalogue: a working calendar is the BASIS
+	// OF AN ISSUED COMMITMENT (migration 0006:41).
+	//
+	// NO idem.* DECLARATION ON ANY OF THE THREE: a GET changes no state, and declaring a
+	// duplicate-request protection would claim a protection with nothing to protect.
+	//
+	// NO 403 IN ANY @reply BLOCK, AND THAT IS NOT AN OMISSION: an AnyAuthenticated route has no
+	// permission to fail, so 403 is a status these handlers never return. A declared status the
+	// handler cannot produce is a contract the admin web writes dead code for.
+	//
+	// ⚠ STATED GAP — `?year=` DOES NOT REACH THE CONTRACT. The two date routes take a MANDATORY
+	// `year` query parameter, and apidoc's vocabulary has no annotation for a query parameter: it
+	// derives path parameters from the template, adds Idempotency-Key from idem.*, and adds
+	// paging from @page (tools/apidoc/openapi.go:168-213). So kb/20-contracts/openapi.json will
+	// describe these two routes WITHOUT the one parameter a caller must send, and a client
+	// generated from it gets 400 until somebody reads this file. The honest fix is a `@query`
+	// annotation in apidoc, which is a change to the contract tooling (ADR 0014) and not
+	// something these routes may decide on their own. Said out loud rather than papered over.
+
+	// @summary  Lịch làm việc thông thường của xã — mỗi dòng là một CA, nghỉ trưa là khoảng hở giữa hai ca
+	// @screen   14-cau-hinh §8
+	// 200 carries `problems` beside `items`: an empty calendar and two overlapping sessions are
+	// both states the database cannot refuse, and both are DERIVED on every read, never stored.
+	// 500 covers an ordinary store failure and the week exceeding idstore.TranLichLamViec — which
+	// this route REFUSES rather than truncating, because a session missing from the calendar makes
+	// every deadline computed afterwards longer than the commitment the commune actually made.
+	//
+	// @reply    200 danhSachCaLamViecRa
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/working-hours",
+		authz.AnyAuthenticated("giờ làm việc của xã nằm dưới mọi hạn xử lý hiện trên màn hình — ngày đến hạn của nhiệm vụ, chip 'còn mấy ngày' của phản ánh, mọi ô chọn ngày — nên đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: giờ làm việc lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
+			http.HandlerFunc(h.DanhSachCaLamViec)))
+
+	// @summary  Ngày nghỉ lễ của xã trong một năm — ngày xã KHÔNG làm việc, gồm cả lễ quốc gia lẫn lễ địa phương
+	// @screen   14-cau-hinh §8
+	// 400 is the mandatory `year`: missing, unreadable, outside 2000–2100, or given TWICE — a
+	// repeated parameter is refused rather than resolved to the first value, which is the same
+	// discipline as the 409 below.
+	// 409 is a date recorded BOTH here and in ngay_lam_bu. Not a failure and not a bad request:
+	// the commune's own configuration contradicts itself, and this route refuses rather than
+	// picking a winner (domain.LoiNgayVuaNghiVuaLamBu).
+	// 500 covers a store failure and the year exceeding idstore.TranNgayNghiLeMotNam.
+	//
+	// @reply    200 danhSachNgayNghiLeRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/public-holidays",
+		authz.AnyAuthenticated("ngày nghỉ lễ quyết định hạn xử lý hiện trên màn hình nhiệm vụ, phản ánh và văn bản, và mọi ô chọn ngày phải biết ngày nào xã đóng cửa — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: lịch nghỉ lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
+			http.HandlerFunc(h.DanhSachNgayNghiLe)))
+
+	// @summary  Ngày làm bù của xã trong một năm — ngày xã CÓ làm việc dù lịch tuần nói không, kèm giờ làm của chính ngày đó
+	// @screen   14-cau-hinh §8
+	// 400 and 409 read exactly as on the route above — the two date routes share one year parser
+	// and one refusal, because a conflict answered on only one side would leave the other screen
+	// looking healthy and the commune would fix nothing.
+	// 200 carries `problems` for two swap-day sessions that overlap on one date: the same double
+	// count as the weekly calendar, on a table whose UNIQUE key also only stops two sessions
+	// STARTING at the same minute.
+	// 500 covers a store failure and the year exceeding idstore.TranNgayLamBuMotNam.
+	//
+	// @reply    200 danhSachCaLamBuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/swap-working-days",
+		authz.AnyAuthenticated("ngày làm bù theo thông báo hằng năm của Thủ tướng quyết định hạn xử lý đúng vào những ngày tồn đọng nhiều nhất trong năm, và mọi ô chọn ngày phải biết ngày nào xã vẫn làm việc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: lịch làm bù lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
+			http.HandlerFunc(h.DanhSachCaLamBu)))
 }

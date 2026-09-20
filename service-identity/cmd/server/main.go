@@ -150,10 +150,9 @@ func run(log *slog.Logger) error {
 	// The commune's working calendar (migration 0006): the ordinary week, the closures, the swap
 	// days. Three stores, three tables, mirroring the three narrow interfaces in internal/http.
 	//
-	// THEY ARE WIRED ALTHOUGH NO ROUTE IS MOUNTED YET. The URL resource names are being asked
-	// rather than guessed (ADR 0011) — see the end of internal/http/routes.go — and Register
-	// refuses an incomplete Deps regardless of which routes it mounts, so the wiring lands with
-	// the stores rather than with the paths.
+	// Read only: GET /api/v1/working-hours, /api/v1/public-holidays, /api/v1/swap-working-days.
+	// There is no write path — who may edit a commune's calendar has not been asked, and a
+	// working calendar is the basis of an issued commitment (migration 0006:41).
 	lichLamViec := idstore.NewLichLamViecStore(kho)
 	ngayNghiLe := idstore.NewNgayNghiLeStore(kho)
 	ngayLamBu := idstore.NewNgayLamBuStore(kho)

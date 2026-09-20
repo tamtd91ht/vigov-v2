@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,49 +13,44 @@ import (
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
 
-// WHAT THIS FILE IS FOR, AND WHAT IT DELIBERATELY CANNOT PROVE YET.
+// WHAT THIS FILE IS FOR: the three calendar routes of migration 0006, read against the REAL edge
+// chain and the REAL route table — Register mounts them, so every case below fails if a statement
+// in routes.go loses its declaration, changes its path or stops being wired.
 //
-// The three calendar handlers are complete and the three stores are wired, but NO ROUTE IS
-// MOUNTED: the URL resource names have no row in kb/00-foundation/ubiquitous-language.md and are
-// being asked rather than guessed (ADR 0011, kb/INDEX.yaml `not_here`). So:
+// THE PATHS ARE THE SHIPPED ONES. They were asked and answered by the user on 2026-09-20 and match
+// the `@entity` marks in migration 0006; there is no stand-in left in this file. An earlier
+// revision mounted these handlers at `/api/v1/test-probe/...` because the nouns were still open —
+// a stand-in can only show that authz works, never that the statement being shipped declared it,
+// which is exactly why it did not survive the names being settled.
 //
-//	PROVED HERE   the handler's own behaviour, against the REAL edge chain — the commune check,
-//	              the response shape, the empty-calendar problem, the overlap problem, the refusal
-//	              of a self-contradicting calendar, the year parameter, the ceiling, the leak case.
-//	NOT PROVED    that the SHIPPED route declares a permission. That is rule 5, invariant 7, and it
-//	              can only be asserted against a `mux.Handle` statement in Register. The four cases
-//	              land in the same turn as the three statements, and this file's stand-ins are
-//	              exactly what they look like: a harness, not a contract.
+// SIX PROPERTIES, each of which fails silently if it stops holding:
 //
-// THE PATHS BELOW ARE HARNESS-ONLY AND ARE NOT PROPOSALS. They carry `test-probe` for the same
-// reason duongThu does — so nobody reads them as a decided name, and so they cannot collide with a
-// real route later.
+//  1. the four cases of rule 5, invariant 7, read for an AnyAuthenticated route — see
+//     TestLichRoute_200KhongCoQuyenNaoVaKhongHoiChecker for what "403 wrong permission" becomes;
+//  2. one commune's calendar never reaches another commune's caller;
+//  3. an EMPTY calendar is answered 200 with a NAMED problem, never as ordinary office hours;
+//  4. two overlapping sessions are SURFACED, and the rows still come back whole;
+//  5. a date recorded as both a holiday and a swap day is REFUSED by BOTH date routes;
+//  6. the mandatory `year` is parsed before any store is touched, and a repeated one is refused.
 
 const (
-	duongThuLichLamViec = "/api/v1/test-probe/working-calendar"
-	duongThuNgayNghiLe  = "/api/v1/test-probe/closure-days"
-	duongThuNgayLamBu   = "/api/v1/test-probe/swap-days"
+	duongThuLichLamViec = "/api/v1/working-hours"
+	duongThuNgayNghiLe  = "/api/v1/public-holidays"
+	duongThuNgayLamBu   = "/api/v1/swap-working-days"
 )
 
-// mayChuLich is the ordinary harness with the three calendar handlers mounted behind the
-// declaration the routes are INTENDED to carry — AnyAuthenticated, the call the user settled for
-// catalogue reads on 2026-09-20.
+// checkerDem is authz.Checker that GRANTS NOTHING AND COUNTS BEING ASKED.
 //
-// MOUNTING THEM HERE PROVES THE HANDLERS, NOT THE ROUTES, and the difference is the whole reason
-// the note above exists: a stand-in can only show that authz works, never that the statement being
-// shipped declared it.
-func mayChuLich(t *testing.T) *mayChu {
-	t.Helper()
-	m := dungMayChu(t)
-	m.them = func(mux *http.ServeMux, d Deps) {
-		h := NewHandler(d)
-		ly := authz.AnyAuthenticated("giờ làm việc và ngày nghỉ của xã hiện trên mọi màn hình có hạn xử lý — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị")
-		mux.Handle("GET "+duongThuLichLamViec, ly(http.HandlerFunc(h.DanhSachCaLamViec)))
-		mux.Handle("GET "+duongThuNgayNghiLe, ly(http.HandlerFunc(h.DanhSachNgayNghiLe)))
-		mux.Handle("GET "+duongThuNgayLamBu, ly(http.HandlerFunc(h.DanhSachCaLamBu)))
-	}
-	m.dungLai(t, nil)
-	return m
+// THE COUNT IS THE ASSERTION, and it is the half of "AnyAuthenticated" that a permissive checker
+// can never show. A route declared RequirePermission with a checker that happened to grant the key
+// would also answer 200; only "the checker was never consulted" tells the two apart. Swap one of
+// the three statements to RequirePermission and this fake turns the test red twice over — once on
+// the status, once on the count.
+type checkerDem struct{ goi int }
+
+func (c *checkerDem) Allows(context.Context, authz.Principal, authz.Perm) bool {
+	c.goi++
+	return false
 }
 
 func docLich(t *testing.T, than []byte) danhSachCaLamViecRa {
@@ -75,51 +71,108 @@ func docLamBu(t *testing.T, than []byte) danhSachCaLamBuRa {
 	return ra
 }
 
-// --- the edge, on all three ---------------------------------------------------------------------
+// --- (1) the four cases of rule 5, invariant 7, on the SHIPPED statements -----------------------
+//
+// All three routes are declared AnyAuthenticated, so the four cases read slightly differently from
+// a guarded route's — and the two that change are the interesting ones:
+//
+//	401 no token                  unchanged
+//	403 WRONG PERMISSION          becomes 200 WITH NO PERMISSION AT ALL, and the checker must never
+//	                              be asked. That is the whole content of the declaration: a route
+//	                              that merely happened to grant the key would also answer 200
+//	403 right permission,         becomes 401 tenant_mismatch, refused at the TOKEN layer before
+//	WRONG COMMUNE                 any store is touched
+//	200 both correct              unchanged
 
-func TestLichLamViec_401KhongToken(t *testing.T) {
-	m := mayChuLich(t)
+func TestLichRoute_401KhongToken(t *testing.T) {
+	m := dungMayChu(t)
 
 	for _, duong := range []string{duongThuLichLamViec,
 		duongThuNgayNghiLe + "?year=2026", duongThuNgayLamBu + "?year=2026"} {
 		doiMa(t, m.goi(t, "GET", hostA, duong, "", ""), http.StatusUnauthorized)
 	}
+	// Not one store was touched. The global guard rejects before any handler runs, and asserting
+	// the count is what proves the order rather than the outcome.
 	if m.lichLamViec.goi != 0 || m.ngayNghiLe.goi != 0 || m.ngayLamBu.goi != 0 {
 		t.Error("chưa đăng nhập mà đã đọc lịch của xã")
 	}
 }
 
-func TestLichLamViec_401XaKhac(t *testing.T) {
-	// THE "RIGHT PERMISSION, WRONG COMMUNE" CASE as it reads on an AnyAuthenticated route: there
-	// is no permission to be right or wrong about, so what remains is a token issued by commune A
-	// presented at commune B's domain. It is refused at the TOKEN layer, before any store is
-	// touched — which is what makes another commune's calendar unreachable rather than merely
-	// unrequested.
-	m := mayChuLich(t)
+func TestLichRoute_200KhongCoQuyenNaoVaKhongHoiChecker(t *testing.T) {
+	// THE "403 WRONG PERMISSION" CASE, AS IT READS ON AN AnyAuthenticated ROUTE — and it is the
+	// decision the three statements were declared with, so it is asserted rather than assumed.
+	//
+	// The account is rebuilt holding NOTHING, behind a checker that refuses everything AND COUNTS
+	// BEING ASKED. All three routes must answer 200, and the count must stay at zero: office hours
+	// and holidays sit under every deadline on every screen, so a configuration permission here
+	// would not protect anything — it would empty those screens for everybody who is not an
+	// administrator.
+	//
+	// If somebody later "tightens" one of these to RequirePermission, this goes red twice: the
+	// status becomes 403 and the counter moves. That is the point.
+	dem := &checkerDem{}
+	m := dungMayChu(t)
+	m.dungLai(t, func(d *Deps) { d.Checker = dem })
 
-	w := m.goi(t, "GET", hostB, duongThuLichLamViec, "", m.tokenCho(t, xaA, sidA))
-	doiMa(t, w, http.StatusUnauthorized)
-	if got := loiTra(t, w).Code; got != "tenant_mismatch" {
-		t.Errorf("code = %q, muốn tenant_mismatch", got)
+	for ten, duong := range map[string]string{
+		"working-hours":     duongThuLichLamViec,
+		"public-holidays":   duongThuNgayNghiLe + "?year=2026",
+		"swap-working-days": duongThuNgayLamBu + "?year=2026",
+	} {
+		t.Run(ten, func(t *testing.T) {
+			w := m.goi(t, "GET", hostA, duong, "", m.tokenCho(t, xaA, sidA))
+			doiMa(t, w, http.StatusOK)
+		})
 	}
-	if m.lichLamViec.goi != 0 {
+	if dem.goi != 0 {
+		t.Errorf("Checker bị hỏi %d lần — ba tuyến này khai AnyAuthenticated, không có quyền nào để kiểm", dem.goi)
+	}
+	// And the body is the real list, not an empty one: "200 with nothing in it" would satisfy the
+	// status assertion while proving the opposite of what this test is for.
+	w := m.goi(t, "GET", hostA, duongThuLichLamViec, "", m.tokenCho(t, xaA, sidA))
+	if len(docLich(t, w.Body.Bytes()).Items) == 0 {
+		t.Error("tài khoản không có quyền nào nhận lịch rỗng — tuyến này phải trả đủ")
+	}
+}
+
+func TestLichRoute_401XaKhac(t *testing.T) {
+	// THE "RIGHT PERMISSION, WRONG COMMUNE" CASE as it reads here: there is no permission to be
+	// right or wrong about, so what remains is a token issued by commune A presented at commune
+	// B's domain. It is refused at the TOKEN layer, BEFORE any store is touched — which is what
+	// makes another commune's calendar unreachable rather than merely unrequested.
+	m := dungMayChu(t)
+
+	for ten, duong := range map[string]string{
+		"working-hours":     duongThuLichLamViec,
+		"public-holidays":   duongThuNgayNghiLe + "?year=2026",
+		"swap-working-days": duongThuNgayLamBu + "?year=2026",
+	} {
+		t.Run(ten, func(t *testing.T) {
+			w := m.goi(t, "GET", hostB, duong, "", m.tokenCho(t, xaA, sidA))
+			doiMa(t, w, http.StatusUnauthorized)
+			if got := loiTra(t, w).Code; got != "tenant_mismatch" {
+				t.Errorf("code = %q, muốn tenant_mismatch", got)
+			}
+		})
+	}
+	if m.lichLamViec.goi != 0 || m.ngayNghiLe.goi != 0 || m.ngayLamBu.goi != 0 {
 		t.Error("token của xã khác mà vẫn đọc lịch của xã này")
 	}
 }
 
-func TestLichLamViec_200KhongCanQuyenCauHinh(t *testing.T) {
-	// THE DECISION THIS PINS: an account holding NOTHING still gets the calendar. Office hours and
-	// holidays are on every screen that states a deadline, so a configuration permission here
-	// would empty those screens for everybody who is not an administrator.
-	m := mayChuLich(t)
-	m.dungLai(t, func(d *Deps) {
-		d.Checker = checkerGia{} // no grants at all, in any commune
-	})
+func TestLichRoute_200DuCaHai(t *testing.T) {
+	// Signed in, at its own commune, holding the ordinary fixture's grants. All three answer 200
+	// and each store is asked exactly once — a route mounted twice, or a handler reading a second
+	// store "to enrich" the answer, moves that count.
+	m := dungMayChu(t)
 
-	w := m.goi(t, "GET", hostA, duongThuLichLamViec, "", m.tokenCho(t, xaA, sidA))
-	doiMa(t, w, http.StatusOK)
-	if len(docLich(t, w.Body.Bytes()).Items) == 0 {
-		t.Error("tài khoản không có quyền nào nhận lịch rỗng — tuyến này phải trả đủ")
+	doiMa(t, m.goi(t, "GET", hostA, duongThuLichLamViec, "", m.tokenCho(t, xaA, sidA)), http.StatusOK)
+	doiMa(t, m.goi(t, "GET", hostA, duongThuNgayNghiLe+"?year=2026", "", m.tokenCho(t, xaA, sidA)), http.StatusOK)
+	doiMa(t, m.goi(t, "GET", hostA, duongThuNgayLamBu+"?year=2026", "", m.tokenCho(t, xaA, sidA)), http.StatusOK)
+
+	if m.lichLamViec.goi != 1 || m.ngayNghiLe.goi != 1 || m.ngayLamBu.goi != 1 {
+		t.Errorf("số lần đọc kho = (%d, %d, %d), muốn (1, 1, 1)",
+			m.lichLamViec.goi, m.ngayNghiLe.goi, m.ngayLamBu.goi)
 	}
 }
 
@@ -127,7 +180,7 @@ func TestLichKhongVuotSangXaKhac(t *testing.T) {
 	// The same account, signed in properly at commune B. Commune A's working hours must not travel
 	// with the person — nothing about the request is malformed, and this is the shape a leak
 	// actually takes.
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostB, duongThuLichLamViec, "", m.tokenCho(t, xaB, sidB))
 	doiMa(t, w, http.StatusOK)
@@ -149,7 +202,7 @@ func TestLichKhongVuotSangXaKhac(t *testing.T) {
 // --- the weekly calendar -------------------------------------------------------------------------
 
 func TestLichLamViec_200TraDungHinhDang(t *testing.T) {
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongThuLichLamViec, "", m.tokenCho(t, xaA, sidA))
 	doiMa(t, w, http.StatusOK)
@@ -188,7 +241,7 @@ func TestLichLamViecXaChuaCauHinhTra200VaNeuTenVanDe(t *testing.T) {
 	//	problems     names `empty_calendar`, so no client can read the empty list as ordinary
 	//	             office hours. A default here — "Mon–Fri 08:00–17:00" — is a commitment
 	//	             invented by software and told to a citizen (rule 10; migration 0006:56).
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 	m.lichLamViec.theo[xaA] = nil
 
 	w := m.goi(t, "GET", hostA, duongThuLichLamViec, "", m.tokenCho(t, xaA, sidA))
@@ -220,7 +273,7 @@ func TestLichLamViecChongCaThiNeuRaChuKhongTinhHaiLan(t *testing.T) {
 	// migration that fails for a missing extension stops the service (ADR 0013), so migration
 	// 0006:109 hands the obligation to the read side. Two sessions of 07:30–11:30 and 09:00–12:00
 	// are rows PostgreSQL accepts and two and a half hours counted twice.
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 	m.lichLamViec.theo[xaA] = []domain.CaLamViec{
 		{ID: "llv-001", Thu: 3, BatDau: 7*3600 + 30*60, KetThuc: 11*3600 + 30*60, GhiChu: "Buổi sáng"},
 		{ID: "llv-002", Thu: 3, BatDau: 9 * 3600, KetThuc: 12 * 3600, GhiChu: "Ca nhập nhầm"},
@@ -251,7 +304,7 @@ func TestLichLamViecVuotTranThiTuChoiChuKhongCatBot(t *testing.T) {
 	// 500 rather than a short week, and it is the same argument as every other ceiling in this
 	// service with a heavier consequence: a session missing from the calendar makes every deadline
 	// computed afterwards longer than the commitment the commune actually made.
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 	m.lichLamViec.loi = idstore.ErrQuaNhieuCaLamViec
 
 	w := m.goi(t, "GET", hostA, duongThuLichLamViec, "", m.tokenCho(t, xaA, sidA))
@@ -265,7 +318,7 @@ func TestLichLamViecVuotTranThiTuChoiChuKhongCatBot(t *testing.T) {
 }
 
 func TestLichLamViecLoiKhoTra500VaKhongLoNoiDungLoi(t *testing.T) {
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 	m.lichLamViec.loi = errors.New("cơ sở dữ liệu không phản hồi")
 
 	w := m.goi(t, "GET", hostA, duongThuLichLamViec, "", m.tokenCho(t, xaA, sidA))
@@ -279,7 +332,7 @@ func TestLichLamViecTraDungNhungTruongCuaHopDong(t *testing.T) {
 	// THE FIELDS THAT ARE ABSENT ARE THE DESIGN, asserted rather than assumed. `tenant_id` never
 	// leaves this service (rule 1, invariant 4); the three soft-delete columns are the commune's
 	// internal record of an administrative act, not part of a timetable.
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongThuLichLamViec, "", m.tokenCho(t, xaA, sidA))
 	doiMa(t, w, http.StatusOK)
@@ -315,7 +368,7 @@ func TestNgayNghiLeThieuNamThiTuChoiTruocKhiChamKho(t *testing.T) {
 	// would silently change window at midnight on 31/12, and nothing in any test would move.
 	//
 	// The store must not be touched: a rejected request runs no statement at all.
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 
 	for ten, duong := range map[string]string{
 		"thiếu hẳn":     duongThuNgayNghiLe,
@@ -343,7 +396,7 @@ func TestNgayNghiLeThieuNamThiTuChoiTruocKhiChamKho(t *testing.T) {
 func TestNgayNghiLeDocDungCuaSoNamNguoiGoiChon(t *testing.T) {
 	// The year reaches the store, and a different year is a different answer. A handler that
 	// dropped the parameter would pass every other test in this file.
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongThuNgayNghiLe+"?year=2026", "", m.tokenCho(t, xaA, sidA))
 	doiMa(t, w, http.StatusOK)
@@ -371,7 +424,7 @@ func TestNgayNghiLeDocDungCuaSoNamNguoiGoiChon(t *testing.T) {
 func TestNgayNghiLeNamChuaNhapTraMangRong(t *testing.T) {
 	// [] AND NOT null, and it is NOT the same statement as an empty weekly calendar: a commune
 	// with no holidays entered still has working hours, so there is no problem to report here.
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongThuNgayNghiLe+"?year=2030", "", m.tokenCho(t, xaA, sidA))
 	doiMa(t, w, http.StatusOK)
@@ -381,7 +434,7 @@ func TestNgayNghiLeNamChuaNhapTraMangRong(t *testing.T) {
 }
 
 func TestNgayNghiLeTraDungNhungTruongCuaHopDong(t *testing.T) {
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongThuNgayNghiLe+"?year=2026", "", m.tokenCho(t, xaA, sidA))
 	doiMa(t, w, http.StatusOK)
@@ -415,7 +468,7 @@ func TestNgayLamBu_200TraCaGioLamViecCuaNgayDo(t *testing.T) {
 	// no session at all — the reason it is a second table rather than a flag on the holidays
 	// (migration 0006:245). Two rows on one date is a swap day with a lunch break, and it is NOT
 	// an overlap.
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongThuNgayLamBu+"?year=2026", "", m.tokenCho(t, xaA, sidA))
 	doiMa(t, w, http.StatusOK)
@@ -439,7 +492,7 @@ func TestNgayLamBu_200TraCaGioLamViecCuaNgayDo(t *testing.T) {
 func TestNgayLamBuChongCaThiNeuRa(t *testing.T) {
 	// The same double count as the weekly calendar, on a table whose UNIQUE key also only stops
 	// two sessions STARTING at the same minute.
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 	m.ngayLamBu.theo[xaA][2026] = []domain.CaLamBu{
 		{ID: "nlb-001", Ngay: "2026-02-21", BatDau: 7*3600 + 30*60, KetThuc: 11*3600 + 30*60, Ten: "Làm bù"},
 		{ID: "nlb-002", Ngay: "2026-02-21", BatDau: 9 * 3600, KetThuc: 12 * 3600, Ten: "Làm bù nhập nhầm"},
@@ -473,7 +526,7 @@ func TestNgayVuaNghiVuaLamBuThiCaHaiTuyenDeuTuChoi(t *testing.T) {
 	// BOTH ROUTES REFUSE. Refusing on one side only would leave the other screen looking healthy,
 	// and the commune would fix nothing.
 	xung := &domain.LoiNgayVuaNghiVuaLamBu{Ngay: []string{"2026-02-21"}}
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 	m.ngayNghiLe.loi = xung
 	m.ngayLamBu.loi = xung
 
@@ -505,7 +558,7 @@ func TestNgayVuaNghiVuaLamBuThiCaHaiTuyenDeuTuChoi(t *testing.T) {
 }
 
 func TestNgayLamBuVuotTranThiTuChoiChuKhongCatBot(t *testing.T) {
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 	m.ngayLamBu.loi = idstore.ErrQuaNhieuNgayLamBu
 
 	w := m.goi(t, "GET", hostA, duongThuNgayLamBu+"?year=2026", "", m.tokenCho(t, xaA, sidA))
@@ -516,7 +569,7 @@ func TestNgayLamBuVuotTranThiTuChoiChuKhongCatBot(t *testing.T) {
 }
 
 func TestNgayNghiLeLoiKhoTra500VaKhongLoNoiDungLoi(t *testing.T) {
-	m := mayChuLich(t)
+	m := dungMayChu(t)
 	m.ngayNghiLe.loi = errors.New("cơ sở dữ liệu không phản hồi")
 
 	w := m.goi(t, "GET", hostA, duongThuNgayNghiLe+"?year=2026", "", m.tokenCho(t, xaA, sidA))

@@ -223,6 +223,73 @@
         }
       }
     },
+    "/api/v1/public-holidays": {
+      "get": {
+        "summary": "Ngày nghỉ lễ của xã trong một năm — ngày xã KHÔNG làm việc, gồm cả lễ quốc gia lẫn lễ địa phương",
+        "operationId": "identity_get_public_holidays",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "ngày nghỉ lễ quyết định hạn xử lý hiện trên màn hình nhiệm vụ, phản ánh và văn bản, và mọi ô chọn ngày phải biết ngày nào xã đóng cửa — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: lịch nghỉ lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id"
+        },
+        "x-vigov-task": "d2c52a80badd",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.danhSachNgayNghiLeRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/residential-unit-types": {
       "get": {
         "summary": "Danh mục loại đơn vị dân cư của xã — thôn / tổ dân phố, dùng cho ô chọn Loại và bộ lọc",
@@ -789,6 +856,73 @@
         }
       }
     },
+    "/api/v1/swap-working-days": {
+      "get": {
+        "summary": "Ngày làm bù của xã trong một năm — ngày xã CÓ làm việc dù lịch tuần nói không, kèm giờ làm của chính ngày đó",
+        "operationId": "identity_get_swap_working_days",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "ngày làm bù theo thông báo hằng năm của Thủ tướng quyết định hạn xử lý đúng vào những ngày tồn đọng nhiều nhất trong năm, và mọi ô chọn ngày phải biết ngày nào xã vẫn làm việc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: lịch làm bù lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id"
+        },
+        "x-vigov-task": "450688014959",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.danhSachCaLamBuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/task-blocs": {
       "get": {
         "summary": "Danh mục khối nhiệm vụ của xã — Khối Uỷ ban / Khối Đảng / Khác, dùng cho ô chọn khối và bộ lọc nhiệm vụ",
@@ -903,6 +1037,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/petitions.danhSachLoaiNhiemVuRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/working-hours": {
+      "get": {
+        "summary": "Lịch làm việc thông thường của xã — mỗi dòng là một CA, nghỉ trưa là khoảng hở giữa hai ca",
+        "operationId": "identity_get_working_hours",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "giờ làm việc của xã nằm dưới mọi hạn xử lý hiện trên màn hình — ngày đến hạn của nhiệm vụ, chip 'còn mấy ngày' của phản ánh, mọi ô chọn ngày — nên đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: giờ làm việc lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id"
+        },
+        "x-vigov-task": "b3033152e6c6",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.danhSachCaLamViecRa"
                 }
               }
             }
@@ -1118,6 +1299,64 @@
         ],
         "additionalProperties": false
       },
+      "identity.caLamBuRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID — what a later edit would reference"
+          },
+          "date": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "end",
+          "id",
+          "name",
+          "start"
+        ],
+        "additionalProperties": false
+      },
+      "identity.caLamViecRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID — what a later edit would reference"
+          },
+          "weekday": {
+            "type": "integer"
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "end",
+          "id",
+          "note",
+          "start",
+          "weekday"
+        ],
+        "additionalProperties": false
+      },
       "identity.canBoGon": {
         "type": "object",
         "properties": {
@@ -1235,6 +1474,50 @@
         ],
         "additionalProperties": false
       },
+      "identity.danhSachCaLamBuRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.caLamBuRa"
+            }
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.vanDeLamBuRa"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "problems"
+        ],
+        "additionalProperties": false
+      },
+      "identity.danhSachCaLamViecRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.caLamViecRa"
+            }
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.vanDeLichRa"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "problems"
+        ],
+        "additionalProperties": false
+      },
       "identity.danhSachKhoiNhiemVuRa": {
         "type": "object",
         "properties": {
@@ -1257,6 +1540,21 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/identity.loaiDonViDanCuRa"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "identity.danhSachNgayNghiLeRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.ngayNghiLeRa"
             }
           }
         },
@@ -1384,6 +1682,27 @@
           "grants",
           "groups",
           "roles"
+        ],
+        "additionalProperties": false
+      },
+      "identity.ngayNghiLeRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID — what a later edit would reference"
+          },
+          "date": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "id",
+          "name"
         ],
         "additionalProperties": false
       },
@@ -1650,6 +1969,63 @@
           "id",
           "is_leader",
           "name"
+        ],
+        "additionalProperties": false
+      },
+      "identity.vanDeLamBuRa": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "session_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "kind",
+          "message",
+          "session_ids"
+        ],
+        "additionalProperties": false
+      },
+      "identity.vanDeLichRa": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "weekday": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "session_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "message",
+          "session_ids",
+          "weekday"
         ],
         "additionalProperties": false
       },

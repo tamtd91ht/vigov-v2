@@ -448,7 +448,7 @@
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:231"
+      "at": "service-identity/internal/http/routes.go:230"
     },
     "http.DangXuat": {
       "kind": "func",
@@ -456,7 +456,7 @@
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:235"
+      "at": "service-identity/internal/http/routes.go:234"
     },
     "http.DanhSachBoPhan": {
       "kind": "func",
@@ -464,11 +464,11 @@
     },
     "http.DanhSachCaLamBu": {
       "kind": "func",
-      "at": "service-identity/internal/http/ngay_lam_bu.go:114"
+      "at": "service-identity/internal/http/ngay_lam_bu.go:113"
     },
     "http.DanhSachCaLamViec": {
       "kind": "func",
-      "at": "service-identity/internal/http/lich_lam_viec.go:182"
+      "at": "service-identity/internal/http/lich_lam_viec.go:180"
     },
     "http.DanhSachCanBo": {
       "kind": "func",
@@ -504,7 +504,7 @@
     },
     "http.DanhSachNgayNghiLe": {
       "kind": "func",
-      "at": "service-identity/internal/http/ngay_nghi_le.go:155"
+      "at": "service-identity/internal/http/ngay_nghi_le.go:156"
     },
     "http.DanhSachThonToDanPho": {
       "kind": "func",
@@ -532,7 +532,7 @@
     },
     "http.LichLamViecDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:205"
+      "at": "service-identity/internal/http/routes.go:204"
     },
     "http.LoaiDonViDanCuDanhMuc": {
       "kind": "type",
@@ -572,11 +572,11 @@
     },
     "http.NgayLamBuDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:225"
+      "at": "service-identity/internal/http/routes.go:224"
     },
     "http.NgayNghiLeDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:215"
+      "at": "service-identity/internal/http/routes.go:214"
     },
     "http.PhienDoc": {
       "kind": "type",
