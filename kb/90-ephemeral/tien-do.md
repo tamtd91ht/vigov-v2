@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 71b67e6
+derived_from_commit: a1b1145
 expires: 2026-12-19
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -24,9 +24,9 @@ tức tin `git log` chứ đừng tin tệp này.
 | | |
 |---|---|
 | ĐANG LÀM | 3 |
-| chưa làm | 36 |
+| chưa làm | 35 |
 | treo | 11 |
-| xong | 24 |
+| xong | 25 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -46,8 +46,8 @@ Nội dung câu hỏi ở `kb/00-foundation/open-questions.json`. Đây chỉ l�
 | #16 | OPEN | service-identity/ma-can-bo-va-dien-thoai · web-admin/moi-tuyen-ghi-cho-can-bo |
 | #17 | OPEN | service-identity/cap-tai-khoan-can-bo · web-admin/moi-tuyen-ghi-cho-can-bo |
 | #18 | OPEN | service-identity/cap-tai-khoan-can-bo · web-admin/moi-tuyen-ghi-cho-can-bo |
-| #19 | OPEN | web-admin/man-xac-thuc-loi-khai-cu-tru |
-| #20 | OPEN | web-admin/man-xac-thuc-loi-khai-cu-tru |
+| #19 | OPEN | service-identity/kho-doc-kenh-cong-dan · web-admin/man-xac-thuc-loi-khai-cu-tru |
+| #20 | OPEN | service-identity/kho-doc-kenh-cong-dan · web-admin/man-xac-thuc-loi-khai-cu-tru |
 | #21 | OPEN | service-documents/loai-van-ban-tuyen-ghi · service-finance/hang-muc-tuyen-ghi · service-petitions/danh-muc-nhiem-vu-tuyen-ghi |
 
 ## `_chung`
@@ -166,14 +166,14 @@ Cập nhật 2026-09-20 · 11 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
-| `store-crosstenant` — Gói đọc chéo xã — nơi duy nhất được phép đọc qua ranh giới xã | ĐANG LÀM | service-identity/internal/store/crosstenant/{dinh_danh_cong_dan.go,doc.go} + 2 tệp test, đã vào git ở commit 274b73a — kiểm 2026-09-20. ban-giao-phien.md §2.3 ghi "chưa tồn tại" là ĐÃ LỖI THỜI. Dòng này từng ghi "CHƯA COMMIT", tức dạy phiên sau rằng vùng ấy chưa vào git và có thể viết đè | #4 | migration nêu tên ba truy vấn đọc chéo; mới có dinh_danh_cong_dan. Mỗi truy vấn mang `// @cross-tenant: <lý do>` (luật 1 cấm #6) — đó là cách duy nhất khiến đọc chéo thành danh sách ĐẾM ĐƯỢC |
-| `kho-doc-kenh-cong-dan` — Kho đọc cho sáu bảng kênh công dân — giai đoạn 2 mới xong một phần | ĐANG LÀM | hợp đồng + rìa core/httpx/citizen.go + sáu bảng migration đã có; store/crosstenant/dinh_danh_cong_dan.go đã có — kiểm 2026-09-20 | — | chưa có route nào. Kho đọc nằm ở service-identity/internal/store/ — vùng khác với vùng đã viết migration, đó là đường nối phải bắc |
+| `kho-doc-kenh-cong-dan` — Kho đọc cho sáu bảng kênh công dân — giai đoạn 2 mới xong một phần | ĐANG LÀM | bốn bảng kênh công dân đã có kho: dinh_danh_cong_dan + phien_cong_dan (trước đó), nay thêm quan_he_cong_dan_xa (store/quan_he_cong_dan_xa.go, phạm vi hoá qua core/store.Scoped) và ghep_phien (store/ghep_phien.go: tạo · dùng · huỷ, mã lưu HASH, một-lần do cơ sở dữ liệu giữ, trạng thái SUY từ ba mốc thời gian ở domain/ghep_phien.go). Kiểm 2026-09-20: `make check` EXIT=0; 13 ca *_pg_test.go mới BỎ QUA vì không có VIGOV_TEST_DSN. | #19 #20 | Vẫn CHƯA CÓ tuyến nào, và hai tuyến đầu đang bị chặn có lý do: màn xác thực lời khai cần khoá quyền chưa ai đặt tên (câu hỏi mở #20, ADR 0011 cấm tự dịch), màn công dân sửa lời khai đã xác thực cần câu hỏi mở #19. Tuyến đăng nhập công dân còn thiếu bí mật Zalo. Không có đường ghi nào cho quan_he_cong_dan_xa — cố ý. |
 | `sql-chua-chay` — Chạy migration 0005 + mười bộ pg_test của identity trên PostgreSQL thật | chưa làm | service-identity/migrations/0005_don_vi_dan_cu_va_danh_muc.sql 501 dòng; mười tệp *_pg_test.go trong internal/store/ (kể cả crosstenant/dinh_danh_cong_dan_pg_test.go) đều phụ thuộc VIGOV_TEST_DSN, thiếu biến thì SKIP mà gói vẫn in `ok` — kiểm 2026-09-20 | — | Bốn service khung đều đã có mục này, identity thì KHÔNG — tức sổ đang im lặng về việc chưa ai làm, hướng nguy hiểm hơn hẳn nói sai. Đi cùng _chung/chay-migration-that: cùng một cái thiếu, nhưng đây là phần của identity và nó nặng nhất vì 0005 là tệp dài nhất kho |
 | `cap-tai-khoan-can-bo` — Toàn bộ luồng cấp tài khoản cán bộ | chưa làm | — | #9 #17 #18 | mật khẩu đầu tiên của cán bộ mới · tự đặt lại mật khẩu · Ghi nhớ đăng nhập — cả ba chờ khách |
 | `tuyen-ghi-danh-ba-can-bo` — Toàn bộ tuyến GHI của danh bạ cán bộ | chưa làm | — | #10 #13 #14 | khoá hay xoá cán bộ · chặn mất quản trị viên cuối cùng · tự thao tác lên chính mình |
 | `ma-can-bo-va-dien-thoai` — Mã cán bộ do ai đặt, và dien_thoai/di_dong là một trường hay hai | chưa làm | — | #15 #16 | CHẶN SCHEMA nên đắt hơn các câu khác — hỏi trước khi viết migration tiếp |
 | `che-so-di-dong-can-bo` — Che hay không che số di động cán bộ, và ai quyết việc công khai lên Mini App | chưa làm | — | #11 #12 | chặn cả cột hiển thị lẫn khoá quyền |
 | `ban-giao-viec-khi-khoa-tai-khoan` — Bàn giao việc đang xử lý khi khoá tài khoản | treo | — | — | cố ý CHƯA ghi thành câu hỏi mở: chưa có bảng giao việc nào tồn tại để nói "việc đang giữ" nghĩa là gì. Hỏi khi dựng bảng nghiệp vụ đầu tiên có người phụ trách — câu trả lời nhiều khả năng là "tuỳ xã" |
+| `store-crosstenant` — Gói đọc chéo xã — nơi duy nhất được phép đọc qua ranh giới xã | xong | service-identity/internal/store/crosstenant/ — dinh_danh_cong_dan.go, quan_he_cong_dan_xa.go (XaCuaCongDanTrongPhien), ghep_phien.go (TheoMa); mỗi truy vấn mang `// @cross-tenant:` riêng. Kiểm 2026-09-20: `make check` EXIT=0; 34 ca thuần XANH trong gói, 5 ca *_pg_test.go BỎ QUA vì không có VIGOV_TEST_DSN. 8 phép đột biến đều ĐỎ (tráo hai cột cùng kiểu trong Scan, phạm vi hoá lại truy vấn tra mã ghép, rò xet_duyet_boi ra kênh công dân). | #4 | ĐỦ BA truy vấn migration 0004 nêu tên. Thêm bất cứ thứ gì vào gói này phải có ADR trước — câu hỏi mở #4 (tổng hợp nhiều xã) vẫn OPEN và doc.go cấm đích danh. |
 | `grpc-server` — Server gRPC của identity | xong | service-identity/internal/grpc/server.go — ResolveStaffPrincipal + BatchGetStaff, cả hai interceptor trên chuỗi mà cmd/server/dungGRPCServer dựng; server_test.go 14 ca + cmd/server/main_test.go bufconn trên hàm dựng THẬT. Năm đột biến đều đỏ, gồm: gỡ interceptor khoá caller (bên gọi trần trụi nhận OK trên cả hai RPC) và đảo phép đối chiếu xã xuống sau lượt đọc sổ phiên. `make check` rc=0 — kiểm 2026-09-20, commit 5a56a81 | — | Đã mở khoá sáu tuyến 401 (commit 19c6008). HAI THỨ CÒN LẠI TRÊN CỔNG NÀY, cả hai đã ghi trong tài liệu gói: (1) không có interceptor bắt panic — grpc-go KHÔNG tự phục hồi panic của handler, nên một `tenant.MustFrom` lọt qua sẽ hạ cả tiến trình đang phục vụ 200+ xã; chỗ đúng của nó là core/grpcx. (2) `vanTay` nay có hai bản sao (internal/http và internal/grpc) và PHẢI giữ y hệt nhau — người vận hành đối chiếu cảnh báo tập trung với cảnh báo của XacThuc bằng chính chuỗi ấy, hai bản lệch nhau đẻ ra hai dấu vân tay cho một sid, đọc ra là hai phiên. ListCitizenCommunes vẫn `Unimplemented`, hai chỗ chặn độc lập — xem mục store-crosstenant |
 | `danh-muc-dan-cu-tuyen-doc` — Ba tuyến ĐỌC danh mục dân cư: residential-units · residential-unit-types · task-blocs | xong | service-identity/internal/http/routes.go:157,167,177 khai ba kho; :251,253,255 panic ngay lúc dựng nếu thiếu kho — hỏng to tiếng chứ không phục vụ nửa vời. Commit cdc5b5f, tự khai là ba tuyến DUY NHẤT phục vụ được thật lúc ấy; fcea7bd sửa `is_active`->`active` trên dây — kiểm 2026-09-20 | — | Tuyến GHI chưa có, và chặn bởi cùng câu #21 như ba service kia — xem `danh-muc-nhiem-vu-tuyen-ghi` ở sổ service-petitions |
 | `kho-phien-cong-dan` — Kho phiên công dân — đường nối rìa kênh công dân chờ từ đầu | xong | service-identity/internal/store/phien_cong_dan.go 482 dòng + phien_cong_dan_test.go + phien_cong_dan_pg_test.go. Commit 274b73a — kiểm 2026-09-20 | — | Mục này SỞ HỮU tệp ấy. `core/kho-phien-cong-dan-dem` chỉ TRỎ tới nó để nói về phần ĐỆM còn thiếu — hai việc khác nhau, đừng gộp |
@@ -228,7 +228,7 @@ Cập nhật 2026-09-20 · 7 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
-| `tam-viec-web-tu-hop-dong` — Tám màn hình danh mục đã mở việc trong tasks/web/open/, chưa ai nhận | chưa làm | tasks/web/open/ có 8 tệp (task-types · map-asset-types · task-priorities · task-blocs · capital-plan-categories · residential-unit-types · document-types · residential-units); claimed 0 · done 10 · stale 1. web-admin/src/lib/api/schema.gen.ts 545 dòng, sinh từ hợp đồng 17 tuyến ở commit b899f4c — kiểm 2026-09-20 | — | Nhận việc là ĐỔI TÊN tệp sang tasks/web/claimed/ (ROUTING §3) — os.Rename là khoá duy nhất, đừng thêm cờ nào. Mục này tồn tại vì hàng đợi ấy BLOCKS NOTHING (ROUTING.md:137): tám việc có thể nằm đó vô hạn mà không cổng nào kêu, nên chỗ duy nhất làm chúng hiện ra là sổ này |
+| `tam-viec-web-tu-hop-dong` — Tám màn hình danh mục đã mở việc trong tasks/web/open/, chưa ai nhận | ĐANG LÀM | cả 8 tệp đã chuyển open -> tasks/web/claimed/ và web-admin/src/lib/api/{danh-muc-nghiep-vu,thon-to-dan-pho}.ts đã xuất hiện — một phiên song song đang làm, CHƯA COMMIT lúc kiểm 2026-09-20. Trước đó: 8 open · 0 claimed · 10 done · 1 stale; schema.gen.ts 545 dòng sinh từ hợp đồng 17 tuyến ở commit b899f4c | — | Xong thì chuyển tiếp sang tasks/web/done/ và đổi mục này thành `xong`. Nhận việc là ĐỔI TÊN tệp (ROUTING §3) — os.Rename là khoá duy nhất, đừng thêm cờ nào. Mục này tồn tại vì hàng đợi ấy BLOCKS NOTHING (ROUTING.md:137): tám việc có thể nằm ở claimed/ vô hạn mà không cổng nào kêu — và một việc mắc kẹt ở claimed/ còn khó thấy hơn ở open/, vì thư mục trông như đang có người làm |
 | `muoi-mot-phan-he-chua-dung` — Mười một phân hệ trong đặc tả chưa có màn hình nào | chưa làm | docs/ui-ux/ có 16 chương; web-admin/src/app/ mới có cau-hinh, dang-nhap, page.tsx, layout.tsx, not-found.tsx, globals.css — kiểm 2026-09-20 | — | Chưa dựng: nhiệm vụ (02) · biên bản họp (04) · văn bản đơn thư (05) · giải ngân (06) · thu chi ngân sách (07) · thông báo (08) · phản ánh (09) · bản đồ kinh tế số (10) · nội dung Mini App (11) · danh bạ cán bộ (12) · báo cáo (13). GIỮ MỘT MỤC chứ không tách mười một: tách ra là mười một dòng cùng nói một câu `chưa bắt đầu`, và sổ phình mà không thêm thông tin. Tách khi một phân hệ thật sự khởi công |
 | `man-xac-thuc-loi-khai-cu-tru` — Màn hình cán bộ xác thực lời khai cư trú của công dân | chưa làm | web-admin/src/app/ mới có cau-hinh, dang-nhap, page.tsx, not-found.tsx — kiểm 2026-09-20 | #19 #20 | ADR 0023 đã chốt nghiệp vụ. Hai điều phải đúng NGAY BẢN ĐẦU vì sửa sau là sửa chữ trên màn hình một cơ quan nhà nước: (1) nhãn nói "xác nhận LỜI KHAI", không phải xác nhận nhân thân — nút "Xác nhận thường trú" đứng trơ sẽ được hiểu là đang cấp một xác nhận hành chính; (2) `bị từ chối` là trạng thái riêng, giữ nguyên lời khai và giữ LÝ DO như trường nghiệp vụ BẮT BUỘC — một textarea tuỳ chọn thì thực tế sẽ rỗng, và công dân nhận về một "bị từ chối" không lý do, đúng cái im lặng luật 10 cấm |
 | `moi-tuyen-ghi-cho-can-bo` — Mọi tuyến GHI cho cán bộ | chưa làm | — | #9 #10 #11 #12 #13 #14 #15 #16 #17 #18 | cố ý không dựng scaffolding: một tuyến ghi viết dở trông y hệt một quyết định ai đó đã ra |

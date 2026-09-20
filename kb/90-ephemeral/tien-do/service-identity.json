@@ -6,18 +6,23 @@
     {
       "id": "store-crosstenant",
       "viec": "Gói đọc chéo xã — nơi duy nhất được phép đọc qua ranh giới xã",
-      "trang_thai": "dang_lam",
-      "bang_chung": "service-identity/internal/store/crosstenant/{dinh_danh_cong_dan.go,doc.go} + 2 tệp test, đã vào git ở commit 274b73a — kiểm 2026-09-20. ban-giao-phien.md §2.3 ghi \"chưa tồn tại\" là ĐÃ LỖI THỜI. Dòng này từng ghi \"CHƯA COMMIT\", tức dạy phiên sau rằng vùng ấy chưa vào git và có thể viết đè",
-      "no_confirm": [4],
-      "tiep_theo": "migration nêu tên ba truy vấn đọc chéo; mới có dinh_danh_cong_dan. Mỗi truy vấn mang `// @cross-tenant: <lý do>` (luật 1 cấm #6) — đó là cách duy nhất khiến đọc chéo thành danh sách ĐẾM ĐƯỢC"
+      "trang_thai": "xong",
+      "bang_chung": "service-identity/internal/store/crosstenant/ — dinh_danh_cong_dan.go, quan_he_cong_dan_xa.go (XaCuaCongDanTrongPhien), ghep_phien.go (TheoMa); mỗi truy vấn mang `// @cross-tenant:` riêng. Kiểm 2026-09-20: `make check` EXIT=0; 34 ca thuần XANH trong gói, 5 ca *_pg_test.go BỎ QUA vì không có VIGOV_TEST_DSN. 8 phép đột biến đều ĐỎ (tráo hai cột cùng kiểu trong Scan, phạm vi hoá lại truy vấn tra mã ghép, rò xet_duyet_boi ra kênh công dân).",
+      "no_confirm": [
+        4
+      ],
+      "tiep_theo": "ĐỦ BA truy vấn migration 0004 nêu tên. Thêm bất cứ thứ gì vào gói này phải có ADR trước — câu hỏi mở #4 (tổng hợp nhiều xã) vẫn OPEN và doc.go cấm đích danh."
     },
     {
       "id": "kho-doc-kenh-cong-dan",
       "viec": "Kho đọc cho sáu bảng kênh công dân — giai đoạn 2 mới xong một phần",
       "trang_thai": "dang_lam",
-      "bang_chung": "hợp đồng + rìa core/httpx/citizen.go + sáu bảng migration đã có; store/crosstenant/dinh_danh_cong_dan.go đã có — kiểm 2026-09-20",
-      "no_confirm": [],
-      "tiep_theo": "chưa có route nào. Kho đọc nằm ở service-identity/internal/store/ — vùng khác với vùng đã viết migration, đó là đường nối phải bắc"
+      "bang_chung": "bốn bảng kênh công dân đã có kho: dinh_danh_cong_dan + phien_cong_dan (trước đó), nay thêm quan_he_cong_dan_xa (store/quan_he_cong_dan_xa.go, phạm vi hoá qua core/store.Scoped) và ghep_phien (store/ghep_phien.go: tạo · dùng · huỷ, mã lưu HASH, một-lần do cơ sở dữ liệu giữ, trạng thái SUY từ ba mốc thời gian ở domain/ghep_phien.go). Kiểm 2026-09-20: `make check` EXIT=0; 13 ca *_pg_test.go mới BỎ QUA vì không có VIGOV_TEST_DSN.",
+      "no_confirm": [
+        19,
+        20
+      ],
+      "tiep_theo": "Vẫn CHƯA CÓ tuyến nào, và hai tuyến đầu đang bị chặn có lý do: màn xác thực lời khai cần khoá quyền chưa ai đặt tên (câu hỏi mở #20, ADR 0011 cấm tự dịch), màn công dân sửa lời khai đã xác thực cần câu hỏi mở #19. Tuyến đăng nhập công dân còn thiếu bí mật Zalo. Không có đường ghi nào cho quan_he_cong_dan_xa — cố ý."
     },
     {
       "id": "grpc-server",
@@ -56,7 +61,11 @@
       "viec": "Toàn bộ luồng cấp tài khoản cán bộ",
       "trang_thai": "chua_lam",
       "bang_chung": "",
-      "no_confirm": [9, 17, 18],
+      "no_confirm": [
+        9,
+        17,
+        18
+      ],
       "tiep_theo": "mật khẩu đầu tiên của cán bộ mới · tự đặt lại mật khẩu · Ghi nhớ đăng nhập — cả ba chờ khách"
     },
     {
@@ -64,7 +73,11 @@
       "viec": "Toàn bộ tuyến GHI của danh bạ cán bộ",
       "trang_thai": "chua_lam",
       "bang_chung": "",
-      "no_confirm": [10, 13, 14],
+      "no_confirm": [
+        10,
+        13,
+        14
+      ],
       "tiep_theo": "khoá hay xoá cán bộ · chặn mất quản trị viên cuối cùng · tự thao tác lên chính mình"
     },
     {
@@ -72,7 +85,10 @@
       "viec": "Mã cán bộ do ai đặt, và dien_thoai/di_dong là một trường hay hai",
       "trang_thai": "chua_lam",
       "bang_chung": "",
-      "no_confirm": [15, 16],
+      "no_confirm": [
+        15,
+        16
+      ],
       "tiep_theo": "CHẶN SCHEMA nên đắt hơn các câu khác — hỏi trước khi viết migration tiếp"
     },
     {
@@ -80,7 +96,10 @@
       "viec": "Che hay không che số di động cán bộ, và ai quyết việc công khai lên Mini App",
       "trang_thai": "chua_lam",
       "bang_chung": "",
-      "no_confirm": [11, 12],
+      "no_confirm": [
+        11,
+        12
+      ],
       "tiep_theo": "chặn cả cột hiển thị lẫn khoá quyền"
     },
     {
