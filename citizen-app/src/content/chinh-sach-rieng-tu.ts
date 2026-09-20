@@ -33,17 +33,33 @@
  *   | Lưu gì | Bao lâu | Vì sao không giống nhau |
  *   |---|---|---|
  *   | Số điện thoại | **không có hạn tự động**, tới khi người dùng yêu cầu xoá | nó là danh tính: hết nó là hết tài khoản, nên chủ của nó quyết |
- *   | Nhật ký đăng nhập | **90 ngày**, tự xoá | nó chứa IP của cả những người **chưa từng có tài khoản** — họ không có gì để yêu cầu xoá, nên một hạn tự động là cách duy nhất thứ ấy mất đi |
+ *   | Nhật ký đăng nhập | **chậm nhất 90 ngày** (thực tế 83–90) | nó chứa IP của cả những người **chưa từng có tài khoản** — họ không có gì để yêu cầu xoá, nên một hạn tự động là cách duy nhất thứ ấy mất đi |
+ *   | Dòng bằng chứng của một lần xoá | **vô thời hạn** | một bằng chứng tự huỷ thì không còn là bằng chứng |
+ *
+ *   ⚠ "90 NGÀY" LÀ TRẦN, KHÔNG PHẢI MỘT CÁI MỐC ĐÚNG NGÀY — và câu chữ phải nói ra đúng như cơ
+ *   chế chạy. Backend dọn theo LÔ TUẦN: `nhat_ky_don_qua_han()` DROP cả một phân mảnh tuần khi
+ *   ĐẦU khoảng của nó đã quá hạn (`migrations/0002_…sql`, điều kiện `d <= nguong`). Mỗi dòng vì
+ *   thế sống **tối đa 90 ngày, tối thiểu 83**. Bản đầu của hàm ấy DROP khi ĐUÔI khoảng quá hạn
+ *   — nghe "không xoá sớm của ai", nhưng đẩy dòng cũ nhất lên 97 ngày, tức **hệ thống vượt qua
+ *   chính cái trần đã hứa**. Lệch về phía xoá sớm thì người đọc không mất gì.
  *
  *   Hai chỗ trống ngày trước (`THOI_GIAN_LUU_CHUA_CHOT`, `THOI_HAN_LUU_NHAT_KY_CHUA_CHOT`) đã
  *   được lấp và hai hằng ấy biến mất. Cơ chế canh chỗ-trống đã làm đúng việc của nó hai lần:
  *   không ai bịa một con số, và ngày khách chốt thì ca kiểm đỏ lên bắt đi trọn bốn việc.
  *
  *   "Giữ tới khi bạn yêu cầu xoá" KHÔNG phải một cách né con số — nó là một cam kết, và một cam
- *   kết thì phải kèm CỬA THỰC HIỆN. Nên mục ấy nói đủ ba điều, thiếu một là hứa suông: không có
- *   hạn tự động · yêu cầu xoá bằng đường nào (hotline và email trên màn Liên hệ) · xoá thì xoá
- *   cái gì (số điện thoại và bản ghi định danh; nhật ký đăng nhập ở lại được vì nó không chứa
- *   số điện thoại).
+ *   kết thì phải kèm CỬA THỰC HIỆN. Nên mục ấy nói đủ năm điều, thiếu một là hứa suông: không
+ *   có hạn tự động · yêu cầu xoá bằng đường nào (hotline và email trên màn Liên hệ, không cần
+ *   đăng nhập, không phải nêu lý do) · xoá thì xoá cái gì (SỐ ĐIỆN THOẠI — không hứa xoá cả bản
+ *   ghi, vì lược đồ không cho) · mọi phiên còn hiệu lực bị thu hồi nên các máy đang đăng nhập
+ *   sẽ bị đăng xuất · và một DÒNG BẰNG CHỨNG của chính lần xoá ấy ở lại vô thời hạn.
+ *
+ *   ⚠ DÒNG BẰNG CHỨNG LÀ CHỖ DỄ IM LẶNG NHẤT CỦA CẢ VĂN BẢN: nó là dữ liệu DUY NHẤT về một
+ *   người còn ở lại **sau khi** họ đã yêu cầu xoá. Người đọc không nên phát hiện ra nó qua một
+ *   đường khác. Đọc từ `vihat-miniapp/migrations/0002_…sql`, bảng `nhat_ky_an_danh`: mã định
+ *   danh nội bộ · `hotline` hay `email` · người tiếp nhận (CHECK: không được rỗng) · ghi chú ·
+ *   thời điểm. Không cột nào chứa số điện thoại, và cũng không thể có — lúc dòng ấy được ghi
+ *   thì số đã bị ghi đè trong cùng một giao dịch.
  *
  * VÌ SAO MỤC VỀ CÁC QUYỀN NAY NẰM THẲNG TRONG DANH SÁCH NÀY:
  *
@@ -77,17 +93,7 @@ export type MucChinhSach = {
  * Một chính sách không ghi phiên bản là một chính sách không chứng minh được nó đã nói gì vào
  * lúc người dùng bấm đồng ý.
  *
- * KHI NÀO PHẢI LÊN SỐ — ba ví dụ THẬT từ lượt soạn thảo, giữ lại vì chúng vạch ranh giới rõ
- * hơn bất kỳ định nghĩa nào. Cả ba đều đã xảy ra trong tệp này:
- *
- *   | Thay đổi | Lên số? | Vì sao |
- *   |---|---|---|
- *   | `getPhoneNumber` đổi MỤC ĐÍCH: "gọi lại tư vấn" → định danh + thông báo ZNS | **CÓ** | người đã đồng ý cho việc này chưa đồng ý cho việc kia. Cùng một quyền, cùng một nút, hai sự đồng ý khác nhau |
- *   | Khai thêm rằng máy chủ ghi **địa chỉ IP** mỗi lượt đăng nhập | **CÓ** | người đọc bản trước bấm đồng ý mà không biết điều đó |
- *   | Thêm một quyền mới (máy ảnh, thư viện ảnh, ghi tệp) | **CÓ** | bề mặt quyền riêng tư mở rộng thật sự |
- *   | Sửa câu cho dễ đọc, không đổi hành vi nào | KHÔNG | số phiên bản chỉ tên một HÀNH VI, không tên một lượt biên tập |
- *
- * ⚠ VÀ MỘT CÂU ĐÃ THÀNH SAI GIỮA CHỪNG, GHI LẠI VÌ ĐÓ LÀ LOẠI LỖI NẶNG NHẤT TỆP NÀY MẮC PHẢI:
+ * ⚠ MỘT CÂU ĐÃ THÀNH SAI GIỮA CHỪNG, GHI LẠI VÌ ĐÓ LÀ LOẠI LỖI NẶNG NHẤT TỆP NÀY MẮC PHẢI:
  * *"không có ô đăng nhập"*. Nay ứng dụng CÓ đăng nhập — bằng một lần chạm, không ô nhập nào.
  * Câu ấy được thay bằng một câu nói đúng cả hai vế. Một câu đúng ở bản trước mà không ai sửa
  * khi hành vi đổi là loại lỗi **không có gì đỏ lên** để báo.
@@ -126,6 +132,9 @@ export type MucChinhSach = {
  *   |---|---|
  *   | `getPhoneNumber` đổi mục đích: "gọi lại tư vấn" → **định danh + thông báo ZNS** | **CÓ** — người đã đồng ý cho việc này chưa đồng ý cho việc kia |
  *   | Khai thêm rằng máy chủ ghi **địa chỉ IP** mỗi lượt đăng nhập | **CÓ** — người đọc bản trước không biết |
+ *   | Khai thêm một bảng máy chủ giữ (ví dụ dòng bằng chứng của một lần xoá) | **CÓ** |
+ *   | Thêm một quyền nền tảng mới | **CÓ** — bề mặt quyền riêng tư mở rộng thật sự |
+ *   | Sửa một con số cho khớp cơ chế đã chạy (90 → "chậm nhất 90, sớm nhất 83") | **CÓ** — người đọc bản trước tưởng mình được giữ đủ 90 |
  *   | Sửa một câu cho dễ đọc, không đổi hành vi nào | KHÔNG |
  */
 export const PHIEN_BAN_CHINH_SACH = "1.0";
@@ -254,9 +263,10 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       "Kiểu kết nối mạng đọc được cũng chỉ hiện lên màn hình rồi mất đi. Ứng dụng không ghi lại lịch sử bạn đã kiểm tra những lần nào.",
       "Phiếu phiên nhận được sau khi bạn đăng nhập cũng chỉ nằm trong bộ nhớ ấy: ứng dụng không ghi nó xuống máy bạn, nên đóng ứng dụng là nó mất đi và lần sau bạn đăng nhập lại bằng một lần chạm.",
       "Trên máy bạn không có việc lưu trữ, nên không có bản sao lưu nào trên máy bạn chứa dữ liệu của bạn.",
-      "Ở máy chủ, ba thứ được lưu: số điện thoại dùng làm tên đăng nhập của bạn; bản ghi của từng phiên đăng nhập (thời điểm tạo, thời điểm hết hạn, và bản mã hoá một chiều của phiếu phiên); và nhật ký đăng nhập. Mỗi bản ghi định danh còn mang thời điểm nó được tạo và lần gần nhất được cập nhật.",
-      "Ngoài ba thứ ấy, máy chủ KHÔNG lưu gì khác của bạn: không tên, không email, không vị trí, không thông tin thiết bị, không danh bạ, không ảnh. Dịch vụ này cũng không cài công cụ đo hành vi nào và không nhúng bộ công cụ của bên thứ ba nào.",
-      "THỜI HẠN LƯU NHẬT KÝ ĐĂNG NHẬP: 90 ngày. Sau 90 ngày, dòng nhật ký được xoá — và điều này áp cho MỌI dòng, kể cả những dòng của một lượt đăng nhập không thành công. Nghĩa là nếu bạn chưa từng đăng nhập thành công, nên không có gì để yêu cầu xoá, thì địa chỉ IP trong những dòng ấy vẫn tự mất đi sau 90 ngày mà bạn không phải làm gì cả.",
+      "Ở máy chủ, bốn thứ được lưu: số điện thoại dùng làm tên đăng nhập của bạn; bản ghi của từng phiên đăng nhập (thời điểm tạo, thời điểm hết hạn, và bản mã hoá một chiều của phiếu phiên); nhật ký đăng nhập; và — chỉ khi bạn từng yêu cầu xoá — một dòng bằng chứng của chính lần xoá ấy, nói ở cuối mục này. Mỗi bản ghi định danh còn mang thời điểm nó được tạo và lần gần nhất được cập nhật.",
+      "Ngoài bốn thứ ấy, máy chủ KHÔNG lưu gì khác của bạn: không tên, không email, không vị trí, không thông tin thiết bị, không danh bạ, không ảnh. Dịch vụ này cũng không cài công cụ đo hành vi nào và không nhúng bộ công cụ của bên thứ ba nào.",
+      "THỜI HẠN LƯU NHẬT KÝ ĐĂNG NHẬP: CHẬM NHẤT 90 NGÀY. Đây là mức trần: chúng tôi dọn nhật ký theo từng lô mỗi tuần chứ không xoá từng dòng đúng vào ngày thứ 90, nên một dòng có thể bị xoá SỚM HƠN — sớm nhất là ngày thứ 83. Không dòng nào sống quá 90 ngày.",
+      "Thời hạn ấy áp cho MỌI dòng, kể cả những dòng của một lượt đăng nhập không thành công. Nghĩa là nếu bạn chưa từng đăng nhập thành công, nên không có gì để yêu cầu xoá, thì địa chỉ IP trong những dòng ấy vẫn tự mất đi trong vòng 90 ngày mà bạn không phải làm gì cả.",
       "THỜI GIAN LƯU SỐ ĐIỆN THOẠI: KHÔNG có hạn tự động. Chúng tôi giữ nó chừng nào bạn còn dùng ứng dụng, và giữ tới khi chính bạn yêu cầu xoá — không có mốc nào tự động xoá, và cũng không có mốc nào tự động giữ thêm.",
       "CÁCH YÊU CẦU XOÁ: gọi hotline hoặc gửi email cho chúng tôi theo hai đầu mối ở màn Liên hệ của ứng dụng. Bạn không cần đăng nhập để yêu cầu, và không phải nêu lý do.",
       // CÂU NÀY ĐÃ PHẢI SỬA, VÀ ĐÓ LÀ SỬA MỘT LỜI HỨA KHÔNG GIỮ ĐƯỢC. Bản nháp viết
@@ -268,6 +278,15 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // THOẠI khỏi bản ghi ấy. Hứa một hành vi mã không làm được là tuyên bố sai dưới tên một
       // pháp nhân, kể cả khi lời hứa nghe mạnh hơn.
       "KHI XOÁ, CHÚNG TÔI XOÁ SỐ ĐIỆN THOẠI CỦA BẠN — thứ duy nhất trong hệ thống nhận ra bạn là ai. Bản ghi còn lại chỉ là một mã định danh nội bộ không gắn với số nào, và những dòng nhật ký cũ vẫn trỏ vào mã ấy; nhưng từ mã ấy không còn số điện thoại nào để tra về bạn nữa.",
+      "Cùng lúc đó, mọi phiên đăng nhập còn hiệu lực của bạn bị thu hồi: nếu bạn đang đăng nhập trên một máy nào đó, máy ấy sẽ bị đăng xuất.",
+      // KHAI RA MỘT BẢNG NỮA, VÀ ĐÂY LÀ CHỖ DỄ IM LẶNG NHẤT CỦA CẢ VĂN BẢN: nó là dòng dữ liệu
+      // DUY NHẤT về một người còn ở lại SAU KHI họ đã yêu cầu xoá. Người đọc không nên phát
+      // hiện ra nó qua một đường khác. Đọc từ `vihat-miniapp/migrations/0002_…sql`, bảng
+      // `nhat_ky_an_danh`: `nguoi_dung_id` · `nguon_yeu_cau` (CHECK: 'hotline' | 'email') ·
+      // `nguoi_thuc_hien` (CHECK: không được rỗng) · `ghi_chu` · `tao_luc`. Không có cột nào
+      // chứa số điện thoại, và cũng không thể có: lúc dòng này được ghi thì số đã bị ghi đè rồi.
+      "CHÚNG TÔI GIỮ LẠI MỘT DÒNG BẰNG CHỨNG CHO CHÍNH VIỆC XOÁ ẤY, và nói ra ở đây để bạn không phát hiện nó qua một đường khác. Dòng ấy gồm: mã định danh nội bộ của bạn, yêu cầu tới qua hotline hay qua email, tên người tiếp nhận và thực hiện, một ghi chú ngắn (số phiếu hoặc tiêu đề email), và thời điểm. Nó KHÔNG chứa số điện thoại của bạn — lúc nó được ghi thì số đã bị xoá khỏi hệ thống rồi.",
+      "Dòng bằng chứng ấy được giữ VÔ THỜI HẠN, nằm ngoài quy tắc 90 ngày, và lý do nằm ở chính công dụng của nó: nó là thứ chứng minh chúng tôi ĐÃ làm điều đã hứa với bạn, và trả lời được câu 'ai cho phép xoá dữ liệu của người này'. Một bằng chứng tự huỷ sau một thời gian thì không còn là bằng chứng.",
       "NẾU BẠN CHƯA TỪNG ĐĂNG NHẬP THÀNH CÔNG: chúng tôi không có bản ghi định danh nào của bạn để mà xoá — chỉ có những dòng nhật ký ghi lại thời điểm, địa chỉ IP và việc lượt ấy đã hỏng vì lý do gì. Chúng tôi không xoá riêng những dòng ấy theo yêu cầu được, vì nhật ký chỉ ghi thêm, và cũng không có cách nào biết dòng nào là của bạn: trong hệ thống không có gì khác của bạn để đối chiếu. Nhưng bạn không cần yêu cầu — chúng tự hết hạn và bị xoá sau 90 ngày, như mọi dòng nhật ký khác.",
     ],
   },

@@ -143,12 +143,12 @@ Người chạy lệnh chọn **đẩy bản nào**. Biến thể quyết địn
 
 | Biến thể | Nội dung | Dùng để | `dist/assets/app.js` |
 |---|---|---|---|
-| **`goc`** | Ứng dụng sản phẩm đầy đủ: bốn màn giới thiệu + tab Danh thiếp (ba tính năng) + hai khối trên màn Liên hệ (đăng nhập · tìm văn phòng) | **BẢN NỘP** | **576,92 kB** thô · 159,26 kB gzip |
-| **`day-du`** (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **588,46 kB** thô · 162,39 kB gzip |
+| **`goc`** | Ứng dụng sản phẩm đầy đủ: bốn màn giới thiệu + tab Danh thiếp (ba tính năng) + hai khối trên màn Liên hệ (đăng nhập · tìm văn phòng) | **BẢN NỘP** | **578,41 kB** thô · 159,79 kB gzip |
+| **`day-du`** (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **589,96 kB** thô · 162,91 kB gzip |
 
 Hai con số ấy **đo ngày 20/09/2026**, bằng `npm run build:goc` và `npm run build`, đọc từ chính
 tệp phát ra. Phần tăng so với lần đo 18/09 (566,48 / 578,03) là khối đăng nhập cộng các điều
-khoản mới của chính sách: **+10,44 kB** ở bản nộp, **+10,43 kB** ở bản đầy đủ — hai bản tăng
+khoản mới của chính sách: **+11,93 kB** ở bản nộp, **+11,93 kB** ở bản đầy đủ — hai bản tăng
 bằng nhau, vì **khối đăng nhập và chính sách giống hệt nhau ở cả hai**. Phần lớn số ấy là CHỮ:
 một văn bản pháp lý khai đủ thì dài, và đó là cái giá rẻ nhất trong toàn bộ bảng này.
 
@@ -225,7 +225,7 @@ Cơ chế là `resolve.alias`, không phải tree-shaking — tree-shaking **kh�
 | `src/features/dang-nhap/hop-dong.ts` | **Hợp đồng với máy chủ, một tệp** — đường dẫn, tên hai trường gửi đi, hình dạng phản hồi, và `VIGOV_API_HOST`. Máy chủ là kho riêng `vihat-miniapp`, **đang dựng song song**: đổi hợp đồng là sửa tệp này và `dang-nhap.test.tsx` nằm cạnh, không sửa gì khác |
 | `src/features/dang-nhap/goi-may-chu.ts` | **Tệp DUY NHẤT trong kho được `fetch`.** Năm nhánh kết quả, không ném ra ngoài, không log |
 | `src/features/dang-nhap/dang-nhap.test.tsx` | 11 ca: năm nhánh của bước máy chủ · 401 và 502 KHÔNG được gộp · gọi đúng một lần bằng POST · thân yêu cầu mang đúng hai mã · bearer không ra màn hình |
-| `src/content/chinh-sach.test.ts` | 18 ca về chính văn bản pháp lý: câu "không gửi đi đâu" đã biến mất · mục Đăng nhập nói đủ **gửi gì · ai nhận · lưu gì · vì sao** · thời gian lưu nói đủ **không có hạn tự động · cửa yêu cầu xoá · phạm vi xoá** · nhật ký khai đủ **IP · thời điểm · kết quả · mã lý do · chỉ-ghi-thêm** · **lượt THẤT BẠI cũng bị ghi** · danh sách **KHÔNG lưu** · **90 ngày cho nhật ký, áp cả dòng của lượt thất bại** · và MỘT số phiên bản, vì chưa bản nào tới tay ai |
+| `src/content/chinh-sach.test.ts` | 22 ca về chính văn bản pháp lý: câu "không gửi đi đâu" đã biến mất · mục Đăng nhập nói đủ **gửi gì · ai nhận · lưu gì · vì sao** · thời gian lưu nói đủ **không có hạn tự động · cửa yêu cầu xoá · phạm vi xoá** · nhật ký khai đủ **IP · thời điểm · kết quả · mã lý do · chỉ-ghi-thêm** · **lượt THẤT BẠI cũng bị ghi** · danh sách **KHÔNG lưu** · **90 ngày là TRẦN (dọn theo lô tuần, 83–90), áp cả dòng của lượt thất bại**, kèm ca canh chiều ngược nếu ai viết lại thành "đúng 90 ngày" · **dòng bằng chứng của một lần xoá** khai đủ bốn vế · và MỘT số phiên bản, vì chưa bản nào tới tay ai |
 | `src/features/kham-pha/bien-the.test.ts` | Hai bản rỗng khai đúng bề mặt · **không tệp nào nhập thẳng vòng qua alias** · danh sách biến thể ở `vite.config.ts` và `scripts/dung.mjs` **không lệch nhau** |
 | `src/bundle-for-zalo.test.ts` | Dựng thật **cả hai** biến thể rồi đọc bundle — bằng chứng cuối cùng, kèm lượt quét từ cấm |
 
@@ -427,7 +427,25 @@ với một mô tả. Bốn thứ được khai nhờ lần đối chiếu ấy:
 | Lưu gì | Bao lâu | Vì sao không giống nhau |
 |---|---|---|
 | Số điện thoại | **không có hạn tự động**, tới khi người dùng yêu cầu xoá | nó là danh tính — hết nó là hết tài khoản, nên chủ của nó quyết |
-| Nhật ký đăng nhập | **90 ngày**, tự xoá, **kể cả dòng của lượt thất bại** | nó chứa IP của cả những người **chưa từng có tài khoản**: họ không có gì để yêu cầu xoá, nên một hạn tự động là cách duy nhất thứ ấy mất đi |
+| Nhật ký đăng nhập | **chậm nhất 90 ngày** — thực tế 83–90, **kể cả dòng của lượt thất bại** | nó chứa IP của cả những người **chưa từng có tài khoản**: họ không có gì để yêu cầu xoá, nên một hạn tự động là cách duy nhất thứ ấy mất đi |
+| Dòng bằng chứng của một lần xoá | **vô thời hạn** | một bằng chứng tự huỷ thì không còn là bằng chứng |
+
+⚠ **"90 ngày" là TRẦN, không phải một cái mốc đúng ngày — và câu chữ nói ra đúng cơ chế chạy.**
+Backend dọn theo **lô tuần**: `nhat_ky_don_qua_han()` DROP cả một phân mảnh tuần khi **đầu**
+khoảng của nó quá hạn (`migrations/0002_…sql`, điều kiện `d <= nguong`), nên mỗi dòng sống **tối
+đa 90 ngày, tối thiểu 83**. Bản đầu của hàm ấy DROP khi **đuôi** khoảng quá hạn — nghe như
+"không xoá sớm của ai", nhưng đẩy dòng cũ nhất lên **97 ngày**, tức hệ thống **vượt qua chính
+cái trần đã hứa** trong văn bản pháp lý. Chính sách từng viết *"sau 90 ngày, dòng nhật ký được
+xoá"*: một câu mô tả cơ chế xoá-đúng-ngày **không hề tồn tại**, và sai về phía giữ lâu hơn. Nay
+văn bản nói cả cận trên lẫn cận dưới, và có **ca canh chiều ngược** để một lượt "biên tập cho
+gọn" không rút nó về câu cũ.
+
+⚠ **Một bảng nữa được khai: dòng bằng chứng của một lần xoá** (`nhat_ky_an_danh`). Đây là dữ
+liệu **duy nhất** về một người còn ở lại **sau khi** họ đã yêu cầu xoá — chỗ dễ im lặng nhất của
+cả văn bản. Nó gồm mã định danh nội bộ · yêu cầu tới qua hotline hay email · người tiếp nhận ·
+ghi chú · thời điểm; **không chứa số điện thoại** (lúc ghi thì số đã bị ghi đè trong cùng giao
+dịch); **giữ vô thời hạn**, vì nó là thứ chứng minh chúng tôi đã làm điều đã hứa. Văn bản cũng
+nói ra rằng yêu cầu xoá **thu hồi mọi phiên**, nên máy đang đăng nhập sẽ bị đăng xuất.
 
 Cơ chế canh chỗ-trống (`THOI_GIAN_LUU_CHUA_CHOT`, rồi `THOI_HAN_LUU_NHAT_KY_CHUA_CHOT`) đã làm
 đúng việc của nó **hai lần**: không ai bịa một con số vào văn bản pháp lý, và ngày khách chốt thì
@@ -460,13 +478,12 @@ nới dây bẫy.
 **Số mục không viết cứng vào tiêu đề**: React đánh số lúc vẽ. Một con số viết cứng sẽ lệch ngay
 lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý, im lặng.
 
-### Còn thiếu — ba câu hỏi cho khách hàng, một việc của backend, và hai phép thử phải chạy thật
+### Còn thiếu — hai việc vận hành, hai câu hỏi cho khách hàng, và hai phép thử phải chạy thật
 
 | Thiếu | Vì sao chưa điền |
 |---|---|
-| ⚠ **ĐƯỜNG XOÁ NHẬT KÝ SAU 90 NGÀY** — chính sách đã cam kết, lược đồ đang CHẶN | `nhat_ky_dang_nhap` có trigger `nhat_ky_chan_sua_xoa` (`BEFORE UPDATE OR DELETE` → `RAISE EXCEPTION`) và `nhat_ky_chan_truncate`, nên **một lệnh xoá theo tuổi sẽ bị CSDL từ chối**. Cam kết 90 ngày chỉ đúng khi backend có một đường xoá hợp lệ — ví dụ phân mảnh theo tháng rồi `DROP` mảnh cũ, hoặc một hàm `SECURITY DEFINER` được trigger cho qua. **Phải xong trước khi nộp**, nếu không văn bản đang hứa một việc hệ thống từ chối làm |
-| ⚠ **CƠ CHẾ XOÁ SỐ ĐIỆN THOẠI phía `vihat-miniapp`** | Chính sách 1.5 cam kết xoá số khi người dùng yêu cầu, nhưng **kho backend chưa có một dòng mã nào làm việc ấy** — không có tuyến API, không có lệnh, không có bộ xoá (`internal/` chỉ có hai tuyến: `/api/v1/sessions` và `/healthz`). Thêm nữa, `so_dien_thoai` là `NOT NULL UNIQUE` với `CHECK (~ '^[0-9]{9,15}$')`, nên "xoá" phải là **ghi đè bằng một giá trị vô danh hợp lệ**, và giá trị ấy phải duy nhất cho từng người. Đây là việc của agent backend, không phải của app |
-| **Đường nhận yêu cầu xoá** | Cửa thực hiện là hotline/email — tức một **quy trình có người làm**. Ai nhận, xoá bằng lệnh nào, trả lời trong bao lâu: chưa ai mô tả. Một cam kết pháp lý không có quy trình đằng sau là một cam kết sẽ lỡ |
+| ⚠ **LỊCH CHẠY HẰNG NGÀY CHO `nhat_ky_don_qua_han()`** | Trần 90 ngày chỉ đúng **nếu hàm dọn chạy hằng ngày**: khoảng cách giữa hai lần chạy **cộng thẳng** vào tuổi của dòng cũ nhất, nên cron hằng tuần biến trần 90 thành 97 — đúng cái vừa sửa. Kho backend **ghi rõ yêu cầu ấy** (`make don-nhat-ky`, README §cron) nhưng **không chứa một định nghĩa lịch nào** — không cron file, không systemd timer, không job nền tảng. Cam kết trong một văn bản pháp lý đang phụ thuộc vào việc có người nhớ gõ lệnh |
+| **Quy trình nhận yêu cầu xoá** | Lệnh `an-danh` **chạy tay** bởi người tiếp nhận — cố ý, vì một tuyến công khai xoá theo số điện thoại là tuyến xoá dữ liệu người khác. Nhưng "ai trực hotline/email, trả lời trong bao lâu, ghi số phiếu ở đâu" thì chưa ai mô tả. Một cam kết pháp lý không có quy trình đằng sau là một cam kết sẽ lỡ |
 | **Phép gọi thật tới `vihat-miniapp`** | Backend đang dựng song song, chưa có địa chỉ để gọi. Năm nhánh kết quả đã có test bằng `fetch` giả, nhưng **chưa một lần nào chạm máy chủ thật**. Phải gọi thử một lần — đủ cả 201, 401, 502 — trước khi nộp |
 | **Mã số thuế**, **người đại diện theo pháp luật** | Không có nguồn. `content/company-profile.ts` chỉ chứa thứ đã công bố trên vihatsoftware.com và vihatgroup.com. Bịa hai trường này trong một văn bản pháp lý là thứ không sửa lại được sau khi nộp |
 | **URL trang chính sách** | Developer Console còn một ô URL ngoài bản trong app. Chưa biết đăng ở đâu, nên chưa dựng bộ sinh trang tĩnh — dựng cho một đích chưa biết là đoán. Khi chốt, trang ấy phải sinh ra TỪ `chinh-sach-rieng-tu.ts`, không chép tay, để trang đăng và app không lệch nhau |

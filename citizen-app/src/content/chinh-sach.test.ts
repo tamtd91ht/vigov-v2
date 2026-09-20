@@ -225,13 +225,69 @@ describe("nhật ký đăng nhập — khai ra, kèm mục đích", () => {
    * ấy nằm lại vĩnh viễn — và văn bản sẽ đang hứa một thứ không đúng với chính người dễ tổn
    * thương nhất trong ba nhóm người đọc nó.
    */
-  it("thời hạn lưu nhật ký là 90 ngày, và nói rõ nó áp cho CẢ dòng của lượt thất bại", () => {
+  it("90 ngày là TRẦN, không phải một cái mốc đúng ngày — và văn bản nói ra cả cận dưới", () => {
+    // CÂU NÀY TỪNG SAI, VÀ SAI VỀ PHÍA GIỮ LÂU HƠN — loại sai tệ nhất trong một cam kết lưu trữ.
+    // Cơ chế dọn thật (`vihat-miniapp/migrations/0002_…sql`, `nhat_ky_don_qua_han`) là DROP cả
+    // một phân mảnh TUẦN khi đầu khoảng của nó quá hạn (`d <= nguong`), nên mỗi dòng sống tối
+    // đa 90 ngày và tối thiểu 83. Viết "sau 90 ngày, dòng nhật ký được xoá" là mô tả một cơ chế
+    // xoá-đúng-ngày không hề tồn tại.
+    //
+    // Ba vế, ba `expect`, để mất vế nào thì đỏ đúng vế ấy.
     const chu = cachThuc();
-    expect(chu).toMatch(/THỜI HẠN LƯU NHẬT KÝ ĐĂNG NHẬP: 90 ngày/);
+    expect(chu, "không nói 90 ngày là mức TRẦN").toMatch(/CHẬM NHẤT 90 NGÀY/);
+    expect(chu, "không nói cơ chế dọn theo lô tuần").toMatch(/theo từng lô mỗi tuần/);
+    expect(chu, "không nói cận dưới — một dòng có thể bị xoá sớm hơn").toMatch(
+      /SỚM HƠN — sớm nhất là ngày thứ 83/,
+    );
+    expect(chu, "không khẳng định cái trần").toMatch(/Không dòng nào sống quá 90 ngày/);
+  });
+
+  it("KHÔNG quay lại cách viết 'đúng 90 ngày' — cách viết ấy mô tả một cơ chế không tồn tại", () => {
+    // Ca canh theo CHIỀU NGƯỢC, vì câu sai cũ đọc trôi hơn câu đúng: một lượt "biên tập cho gọn"
+    // sẽ rút về "sau 90 ngày, dòng nhật ký được xoá" mà không ai thấy mình vừa đổi một cam kết.
+    const chu = cachThuc();
+    expect(chu, "đã quay lại cách viết xoá-đúng-ngày").not.toMatch(
+      /[Ss]au 90 ngày, dòng nhật ký được xoá/,
+    );
+  });
+
+  it("thời hạn ấy áp cho CẢ dòng của lượt thất bại", () => {
+    const chu = cachThuc();
     expect(chu, "không nói 90 ngày áp cho MỌI dòng").toMatch(/áp cho MỌI dòng/);
     expect(chu, "không nói ra vế lượt thất bại").toMatch(
       /kể cả những dòng của một lượt đăng nhập không thành công/,
     );
+  });
+
+  /**
+   * DÒNG BẰNG CHỨNG CỦA MỘT LẦN XOÁ — `nhat_ky_an_danh`.
+   *
+   * Đây là dữ liệu DUY NHẤT về một người còn ở lại **sau khi** họ đã yêu cầu xoá, và là chỗ dễ
+   * im lặng nhất của cả văn bản: nói ra thì phải giải thích, không nói thì không ai biết. Người
+   * đọc không nên phát hiện ra nó qua một đường khác — nên nó có ca kiểm riêng, và ca ấy đòi cả
+   * bốn vế: có bảng đó · nó chứa gì · KHÔNG chứa số điện thoại · giữ vô thời hạn VÀ vì sao.
+   */
+  it("khai dòng bằng chứng của một lần xoá, đủ bốn vế", () => {
+    const chu = cachThuc();
+    expect(chu, "không khai dòng bằng chứng").toMatch(/CHÚNG TÔI GIỮ LẠI MỘT DÒNG BẰNG CHỨNG/);
+    expect(chu, "không nói nó chứa gì").toMatch(/hotline hay qua email/);
+    expect(chu).toMatch(/tên người tiếp nhận và thực hiện/);
+    expect(chu, "không nói nó KHÔNG chứa số điện thoại").toMatch(
+      /KHÔNG chứa số điện thoại của bạn/,
+    );
+    expect(chu, "không nói nó giữ vô thời hạn").toMatch(/giữ VÔ THỜI HẠN, nằm ngoài quy tắc 90 ngày/);
+    expect(chu, "giữ vô thời hạn mà không nói VÌ SAO").toMatch(
+      /bằng chứng tự huỷ sau một thời gian thì không còn là bằng chứng/,
+    );
+  });
+
+  it("nói ra rằng yêu cầu xoá làm các máy đang đăng nhập bị đăng xuất", () => {
+    // Lệnh `an-danh` thu hồi mọi phiên còn hiệu lực trong CÙNG một giao dịch với việc ghi đè số
+    // điện thoại (`internal/store/an_danh.go`). Người dùng sẽ thấy mình bị đăng xuất; biết
+    // trước thì đó là hệ quả đã báo, không biết thì đó là một sự cố họ tự đoán nguyên nhân.
+    const chu = cachThuc();
+    expect(chu).toMatch(/mọi phiên đăng nhập còn hiệu lực của bạn bị thu hồi/);
+    expect(chu).toMatch(/sẽ bị đăng xuất/);
   });
 
   it("người chưa từng đăng nhập thành công được chỉ sang đúng lối 90 ngày", () => {
