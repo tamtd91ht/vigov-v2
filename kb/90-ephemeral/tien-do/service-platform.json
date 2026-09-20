@@ -21,19 +21,19 @@
     },
     {
       "id": "loi-he-thong",
-      "viec": "Bảng loi_he_thong",
-      "trang_thai": "chua_lam",
-      "bang_chung": "`grep -rl loi_he_thong --include=*.sql --include=*.go .` không có kết quả — kiểm 2026-09-20",
+      "viec": "Bảng loi_he_thong — ĐẶT NHẦM MODULE, không phải việc của platform",
+      "trang_thai": "treo",
+      "bang_chung": "`grep loi_he_thong` trên *.go và *.sql vẫn 0 kết quả — kiểm 2026-09-20. Nhưng hai điều đã kiểm được và chúng bác chính mục này: (1) TÊN GÂY HIỂU NHẦM — docs/ui-ux/14-cau-hinh.md:208-282 cho thấy `loi_he_thong` là tab 'LỜI hệ thống', 39 câu chữ hiển thị cho người dân (32 nhãn KPI báo cáo + 1 dòng ranh giới giải ngân + 6 thông báo từ chối phiếu), cột `(id, nhom, khoa, mo_ta, noi_dung, di_kem_phan_mem, dang_dung)` — KHÔNG phải nhật ký lỗi, không có chỗ cho dấu vết ngoại lệ; (2) CHỦ SỞ HỮU ĐÃ CHỐT VÀ KHÔNG PHẢI PLATFORM — ADR 0024 kb/10-decisions/0024-so-huu-danh-muc-tham-chieu.md:138-148 chia theo bên PHÁT RA câu nói: feedback.* (6 khoá) -> petitions, budget.scope_notice (1) -> finance, report.* (32) CHƯA CHỐT; dòng 240: 'Chốt việc này TRƯỚC KHI viết bảng loi_he_thong đầu tiên, không phải sau'. Mục này sinh ra trong commit 874c36c cùng lúc với cả tầng sổ, cùng lớp lỗi thời với mục `danh-muc-tham-chieu` ngay trên",
       "no_confirm": [],
-      "tiep_theo": "không bị chặn bởi câu hỏi nào"
+      "tiep_theo": "KHÔNG viết bảng này ở service-platform: platform không phát ra câu nào trong 39 khoá, và viết ở đây là dựng bảng của service khác trong schema của mình (luật 2 bất biến 1). Giữ mục lại để phiên sau không nhặt lại việc đã bác. Đường đi đúng: sang sổ service-petitions (feedback.*, đã chốt) và service-finance (budget.scope_notice, đã chốt); còn report.* (32 khoá) cần một ADR chọn một trong ba lối ra ở ADR 0024 §Phụ dòng 229-240 — đó là quyết định KỸ THUẬT chứ không phải câu của khách, nên nó không có số trong open-questions.json và no_confirm ở đây phải để rỗng"
     },
     {
       "id": "dang-viet-ten-tinh-thanh",
       "viec": "34 tên tỉnh/thành ở dạng viết chính thức",
       "trang_thai": "dang_lam",
-      "bang_chung": "service-platform/migrations/0005_seed_tinh_thanh.sql đã seed, và tự khai ngay đầu tệp: DỮ LIỆU CHƯA ĐƯỢC ĐỐI CHIẾU VỚI VĂN BẢN GỐC — kiểm 2026-09-20",
+      "bang_chung": "service-platform/migrations/0005_seed_tinh_thanh.sql:54-89 seed đủ 34 dòng và tự khai ở dòng 8-13: DỮ LIỆU CHƯA ĐƯỢC ĐỐI CHIẾU VỚI VĂN BẢN GỐC. Phiên 2026-09-20 làm được phần đối chiếu NỘI BỘ và chỉ phần đó: 11 đơn vị không bị sắp xếp liệt kê ở dòng 16-17 đều có mặt trong danh sách, 6 thành phố trực thuộc trung ương đều có mặt (28 tỉnh còn lại), chốt chặn count=34 ở dòng 95-102 khớp với danh sách. ĐỐI CHIẾU VỚI NGHỊ QUYẾT 202/2025/QH15 VẪN CHƯA LÀM ĐƯỢC: phiên này không có công cụ đọc văn bản gốc, và trí nhớ của agent KHÔNG được tính là nguồn — chính nó đã dựng ra danh sách đang cần kiểm, nên dùng nó để kiểm là kiểm một lời kể bằng chính lời kể ấy. MỚI PHÁT HIỆN, một lỗi khác và kiểm được ngay trong tệp: `thu_tu` sai thứ tự bảng chữ cái tiếng Việt ở hai chỗ, trong khi dòng 36 khai là đã xếp theo đúng thứ tự ấy — 'Điện Biên' (dòng 60, thu_tu 60) đứng TRƯỚC 'Đà Nẵng' và 'Đắk Lắk' (a < ă < i), và 'Lâm Đồng' (dòng 73, thu_tu 190) đứng TRƯỚC 'Lạng Sơn' + 'Lào Cai' (la- < lâ-). gofmt -l . rỗng · go vet ./... rc=0 · go test -count=1 ./... rc=0 — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "đối chiếu với Nghị quyết 202/2025/QH15. Cột này in thẳng ra màn hình công dân nên DẠNG VIẾT là nội dung (`Đà Nẵng` hay `Thành phố Đà Nẵng`). Đã thử ba nguồn chính phủ, cả ba render phía client. Sửa một tên là THÊM một migration, không đụng tệp đã chạy"
+      "tiep_theo": "BỊ CHẶN BỞI NGƯỜI, không bởi câu hỏi mở nào: cần (a) bản Nghị quyết 202/2025/QH15 ở dạng đọc được, hoặc một người xác nhận 34 tên; (b) chốt DẠNG VIẾT cho cột in ra màn hình công dân — tên trần ('Đà Nẵng') hay có tiền tố ('Thành phố Đà Nẵng'), và ngoại lệ 'Thành phố Hồ Chí Minh' ở dòng 86 có giữ không; (c) chốt cách bỏ dấu 'Hòa/Hoà' và 'Hóa/Hoá' ('Khánh Hòa' dòng 71, 'Thanh Hóa' dòng 85) — hai cách viết là hai chuỗi khác nhau dưới ràng buộc UNIQUE(ten) của 0004. Có đủ ba thì gộp CẢ HAI sửa (tên + thu_tu) vào ĐÚNG MỘT migration 0006, giữ nguyên `id` vì id là ULID vô nghĩa (luật 1 bất biến 2); không đụng 0004/0005 đã chạy. Thứ tự đúng nếu (b) chọn tên trần: ... 50 Cần Thơ, 60 Đà Nẵng, 70 Đắk Lắk, 80 Điện Biên, 90 Đồng Nai, 100 Đồng Tháp ... 180 Lai Châu, 190 Lạng Sơn, 200 Lào Cai, 210 Lâm Đồng, 220 Nghệ An ... (các dòng khác giữ nguyên)"
     },
     {
       "id": "ca-kiem-interceptor-xa-da-chet",

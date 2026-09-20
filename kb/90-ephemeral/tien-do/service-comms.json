@@ -4,6 +4,38 @@
   "cap_nhat": "2026-09-20",
   "muc": [
     {
+      "id": "so-thong-bao-gui-cong-dan",
+      "viec": "Sổ thông báo gửi công dân — bảng, kho có phạm vi xã, ca sử dụng ghi sổ bất biến theo số lần",
+      "trang_thai": "xong",
+      "bang_chung": "service-comms/migrations/0004_thong_bao_gui_cong_dan.sql (bảng phân mảnh MODULUS 32, UNIQUE (tenant_id, khoa_lan_gui), trigger bất biến, CHECK buộc số người nhận phải che); internal/domain/thong_bao_gui_cong_dan.go; internal/store/thong_bao_gui_cong_dan.go; internal/app/so_thong_bao.go. `gofmt -l .` rỗng, `go vet ./...` sạch, `go test -count=1 ./...` xanh — kiểm 2026-09-20. ĐÃ THỬ ĐỘT BIẾN, không chỉ chạy xanh: 5 đột biến ở kho (bỏ ON CONFLICT DO NOTHING · bỏ `trang_thai <> 'da-gui'` · hoán hai cột Scan kề nhau · LIMIT thành đúng trần · bỏ lọc xoá mềm) và 4 ở app (ghi vết cả khi giao lại · không chuẩn hoá `lan` · ghi đè người gây · bỏ kiểm nội dung) đều ĐỎ",
+      "no_confirm": [],
+      "tiep_theo": "Bộ nối Zalo ZNS chưa có: chưa dòng nào gọi ra ngoài, chưa khoá nào được thêm. Trạng thái `chua-cau-hinh-kenh` đã có chỗ trong lược đồ cho ADR 0006 hệ quả 3 (xã chưa có OA phải suy giảm NHÌN THẤY ĐƯỢC) nhưng chưa có màn hình nào đọc nó"
+    },
+    {
+      "id": "tuyen-doc-so-thong-bao",
+      "viec": "Tuyến HTTP đọc sổ thông báo của một hồ sơ",
+      "trang_thai": "treo",
+      "bang_chung": "CỐ Ý CHƯA GẮN. Hai thứ chưa chốt, mỗi thứ là một điều kiện dừng: (1) DANH TỪ URL — `notifications` trong bảng ánh xạ kb/00-foundation/ubiquitous-language.md:148 là CHUÔNG Ở HEADER, không phải sổ này; .claude/skills/rest-api-design/SKILL.md §2 nói rõ `thong_bao` là ba thứ và liệt kê ba danh từ, không thứ nào mang nghĩa 'tin đã gửi ra ngoài cho một công dân'. Khái niệm này KHÔNG CÓ DÒNG trong bảng, và cả hai tệp đều bảo: dừng lại và hỏi, đừng tự dịch. (2) KHOÁ QUYỀN — docs/ui-ux/09-phan-anh-nguoi-dan.md §9.6 chốt `feedback.create|read|assign|resolve|restricted`, không khoá nào nói về việc xem sổ thông báo. Luật 5 bất biến 1 đòi khai tường minh; đoán một khoá là tự quyết một ô trên màn hình Phân quyền. Kho đã có sẵn ThongBaoGuiCongDanStore.TheoDoiTuong, nên gắn tuyến là MỘT câu lệnh khi hai câu trên có trả lời",
+      "no_confirm": [],
+      "tiep_theo": "Hỏi khách hai câu: danh từ URL cho 'sổ tin đã gửi cho dân', và ai được xem nó. Đường dẫn không sửa lại được sau khi một xã chạy thật"
+    },
+    {
+      "id": "su-kien-petitions-bao-comms",
+      "viec": "Sự kiện `petitions` → `comms` khi phiếu đổi trạng thái",
+      "trang_thai": "chua_lam",
+      "bang_chung": "KHÔNG THUỘC service này. Hình dạng cần đã mô tả trong bàn giao; hợp đồng giữa hai service là luật 2, nguồn chuẩn là proto/, và nó thuộc contract-designer. service-comms/internal/app/so_thong_bao.go nhận YeuCauGhiNo và không đăng ký nghe gì cả — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Cho tới khi có sự kiện, KHÔNG dòng nào chảy vào sổ. Luật 10 bất biến 5 vẫn CHƯA đứng được: bảng có chỗ để ghi, nhưng không ai ghi"
+    },
+    {
+      "id": "sql-0004-chua-chay",
+      "viec": "Chạy 0004_thong_bao_gui_cong_dan.sql trên PostgreSQL thật",
+      "trang_thai": "chua_lam",
+      "bang_chung": "15 ca service-comms/internal/store/thong_bao_gui_cong_dan_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN. Chưa câu SQL nào của tệp 0004 từng chạy trên một máy chủ — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Bộ này mới là chỗ chứng minh được thứ driver giả không với tới: UNIQUE (tenant_id, khoa_lan_gui) — thứ làm cho ON CONFLICT DO NOTHING có nghĩa; cùng một khoá ở HAI xã đều ghi được; CHECK từ chối số chưa che; trigger từ chối sửa cột định danh và từ chối đưa `da-gui` quay ngược. MỘT CA CỐ Ý KHÔNG VIẾT, ghi ra thay vì im: 'xoá cứng bị trigger từ chối' — viết ca ấy là viết câu lệnh xoá, và data_safety_guard chặn chuỗi đó trong tệp .go, không phân biệt được test KHẲNG ĐỊNH sự từ chối với mã thực hiện việc xoá. Đi vòng qua rào chắn tệ hơn ca thiếu, nên ca ấy hiện chỉ được bảo đảm bằng việc ĐỌC migration"
+    },
+    {
       "id": "loai-tai-nguyen-ban-do-tuyen-doc",
       "viec": "GET /api/v1/map-asset-types — tuyến ĐỌC danh mục loại tài nguyên bản đồ",
       "trang_thai": "xong",

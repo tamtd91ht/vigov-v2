@@ -4,7 +4,14 @@
 
 ## Owns
 
-Article · RadioBulletin · Video · MapLayer · MapPin · GovContact · Notification
+Article · RadioBulletin · Video · MapLayer · MapPin · GovContact · Notification · **CitizenNotification** · MapAssetType
+
+`Notification` and `CitizenNotification` are **two entities, not one split in two**. The first is
+the staff-facing notice (`docs/ui-ux/08-thong-bao.md`, table `thong_bao`, permission
+`announcement.create`); the second is the ledger of messages sent **out of the commune to one
+citizen about that citizen's own record** (table `thong_bao_gui_cong_dan`, migration 0004). One
+Vietnamese word covers both — `kb/00-foundation/ubiquitous-language.md:148` — and merging them is
+how an internal notice reaches the citizen channel.
 
 Ownership is authoritative in `kb/30-indexes/data-ownership.json` (GENERATED — run `make kb`).
 No other service may open this service's schema; they read through gRPC or events (rule 2).
@@ -19,10 +26,13 @@ A commune with no OA configured yet **degrades visibly**: staff see a "not notif
 Sending is eventually consistent with the business write — a petition must never fail to be
 accepted because a notification could not be sent.
 
-⚠ ADR 0006 records an **unverified precondition**: that one Mini App can work with many OAs.
-Check the vendor documentation before writing the first line of this channel.
+ADR 0006's **unverified precondition** — that one Mini App can work with many OAs — was checked on
+17/09/2026 and is **false**. ADR 0018 supersedes it: the app has **one** OA (platform-wide, for
+authentication), messages have **many** (one per commune, over ZNS, by phone number). The six
+architectural consequences above survive unchanged; read ADR 0018 first, then ADR 0006 for their
+full text.
 
-→ ADR 0006
+→ ADR 0018 (supersedes) · ADR 0006
 
 ## Layout
 
