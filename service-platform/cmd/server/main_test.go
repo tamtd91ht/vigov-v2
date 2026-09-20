@@ -122,12 +122,50 @@ func TestCongGRPCChoQuaKhiDungCaHaiDieuKien(t *testing.T) {
 		t.Fatalf("GetTenant với khoá và xã đầy đủ vẫn bị từ chối: %v", err)
 	}
 
-	// ...and the commune interceptor is still in the chain behind the key: the key alone does
-	// not buy a commune. Refused by the CLIENT interceptor, before it leaves the process.
+	// ...and a call with no commune is refused. THIS ONE PROVES THE CLIENT INTERCEPTOR ONLY —
+	// the refusal happens before anything leaves the process, so it says nothing about the
+	// server's chain. Kept because the client half is worth pinning; see the test below for the
+	// server half, which this test was once believed to cover.
 	if _, err := cl.GetTenant(context.Background(),
 		&platformv1.GetTenantRequest{Id: ulidThu.String()}); status.Code(err) != codes.InvalidArgument {
-		t.Errorf("GetTenant thiếu xã: mã = %v, muốn InvalidArgument (lỗi: %v)",
+		t.Errorf("GetTenant thiếu xã (phía client): mã = %v, muốn InvalidArgument (lỗi: %v)",
 			status.Code(err), err)
+	}
+}
+
+// THE SERVER'S OWN COMMUNE CHECK, and this test exists because its absence was measured.
+//
+// Deleting grpcx.UnaryServerInterceptor from dungGRPCServer turned NOTHING red in this package
+// (checked 2026-09-20). Every other test here dials with the client interceptor attached, so
+// `x-tenant-id` is on the wire whatever the server does with it — the suite could not tell a
+// server that enforces the commune from one that ignores it.
+//
+// So this test dials WITH the caller key and deliberately WITHOUT the client commune
+// interceptor. Nothing puts a commune on the wire, and GetTenant is not on
+// grpcx.methodsWithoutTenant — so an InvalidArgument here can only have come from the server's
+// own chain. The caller key is attached on purpose: without it the call is refused earlier with
+// Unauthenticated, and the test would pass for the wrong reason a second time.
+//
+// WHY IT MATTERS FOR THIS SERVICE SPECIFICALLY, stated so nobody downgrades it later: platform's
+// two RPCs do not currently read the commune from context, so a missing interceptor leaks
+// nothing TODAY. What it removes is the declaration that a non-exempt RPC must carry a commune
+// at all — rule 1, forbidden #1. The first RPC added here that does scope by commune would
+// inherit a port with no such guarantee, and nothing would say so.
+func TestMayChuTuChoiRpcKhongMangXaDuDaCoKhoa(t *testing.T) {
+	cl := moMay(t, grpc.WithChainUnaryInterceptor(grpcx.UnaryClientCallerAuth(khoaGoiGia)))
+
+	_, err := cl.GetTenant(context.Background(), &platformv1.GetTenantRequest{Id: ulidThu.String()})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Errorf("GetTenant có khoá nhưng không mang xã: mã = %v, muốn InvalidArgument (lỗi: %v)",
+			status.Code(err), err)
+	}
+
+	// ResolveHost is the control: it IS exempt from carrying a commune, so the same dial must
+	// succeed. Without this line the test above would also pass on a server that refused
+	// everything, which is the failure shape the exemption list exists to make visible.
+	if _, err := cl.ResolveHost(context.Background(),
+		&platformv1.ResolveHostRequest{Host: hostThu}); err != nil {
+		t.Errorf("ResolveHost được miễn xã mà vẫn bị từ chối: %v", err)
 	}
 }
 
