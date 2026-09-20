@@ -22,10 +22,10 @@
     {
       "id": "xac-thuc-can-bo",
       "viec": "Dựng authz.Principal cho yêu cầu của cán bộ",
-      "trang_thai": "chua_lam",
-      "bang_chung": "XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71 — luật 2 cấm #1 cấm import. Hệ quả đã kiểm: GET /api/v1/map-asset-types trả 401 cho MỌI người gọi — kiểm 2026-09-20",
+      "trang_thai": "xong",
+      "bang_chung": "cmd/server/main.go dựng chuỗi rìa thật qua `dungBien`, gắn core/staffauth.Middleware; cmd/server/main_test.go có ca principal của xã A gọi ở host xã A TỚI ĐƯỢC handler và nhận 200 — lần đầu một tuyến của service này phục vụ được một yêu cầu. Bốn đột biến đều đỏ, gồm biến thể đệm hẹp theo từng middleware. `make check` rc=0 — kiểm 2026-09-20, commit 19c6008",
       "no_confirm": [],
-      "tiep_theo": "TIỀN ĐỀ ĐÃ XONG (ADR 0025, chốt 2026-09-20, thay thế ADR 0012 quyết định 3). Ba bước còn lại chung cho cả bốn service khung — xem cùng mục ở service-documents.json"
+      "tiep_theo": "MỘT CHỖ ĐỘT BIẾN KHÔNG BẮT ĐƯỢC, ghi ra thay vì im: main_test.go chứng minh `dungBien` dựng đúng chuỗi, KHÔNG chứng minh `run()` có gọi `dungBien` — xoá lời gọi ấy rồi phục vụ `mux` trần thì không gì đỏ. Bịt được cần một phép kiểm khởi động tiến trình thật, một lớp test khác"
     },
     {
       "id": "sql-chua-chay",

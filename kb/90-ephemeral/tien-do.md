@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: a39ec37
+derived_from_commit: e3ed99b
 expires: 2026-12-19
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -24,9 +24,9 @@ tức tin `git log` chứ đừng tin tệp này.
 | | |
 |---|---|
 | ĐANG LÀM | 3 |
-| chưa làm | 32 |
+| chưa làm | 27 |
 | treo | 11 |
-| xong | 12 |
+| xong | 19 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -92,11 +92,12 @@ Cập nhật 2026-09-20 · 3 mục
 
 ## `proto`
 
-Cập nhật 2026-09-20 · 1 mục
+Cập nhật 2026-09-20 · 2 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
-| `staff-thieu-ho-ten` — Message Staff không có trường họ tên nên BatchGetStaff chưa phục vụ được mục đích nó tự khai | treo | — | #11 | thêm trường là SỬA HỢP ĐỒNG — cùng lúc phải trả lời câu che/không che số di động cán bộ |
+| `staff-thieu-ho-ten` — Message Staff không có trường họ tên nên BatchGetStaff chưa phục vụ được mục đích nó tự khai | treo | — | #11 | thêm trường là SỬA HỢP ĐỒNG — cùng lúc phải trả lời câu che/không che số di động cán bộ. Thêm một chỗ chặn chưa ai nói: trong 33 khoá quyền đã seed KHÔNG có khoá nào nghĩa là 'xem chi tiết đầy đủ cán bộ', nên chọn một khoá cho tuyến ấy là thiết kế hộ khách mô hình phân quyền |
+| `resolve-staff-principal` — RPC biến một chứng thực của cán bộ thành một principal, cho service không phải identity | xong | proto/vigov/identity/v1/identity.proto — ResolveStaffPrincipal + ba message; buf lint, buf breaking, buf generate đều sạch; mục đầu tiên có thật trong kb/30-indexes/transaction-boundaries.json. Commit ae65ac7 — kiểm 2026-09-20 | — | HAI THỨ HỢP ĐỒNG NÀY CỐ Ý KHÔNG MANG, và cả hai sẽ bị đòi thêm: (1) `ho_ten`/`chuc_vu` — không cổng gác nào đọc tên, và câu mở #11 chặn; (2) `ma` nghiệp vụ — vết kiểm của bốn service sẽ cần 'ai' theo luật 6 bất biến 2, và lúc ấy phải chọn: thêm `ma` vào StaffPrincipal (dữ liệu nhận dạng cán bộ đi qua biên), hay để bốn service ghi id nội bộ — tức HAI vết kiểm gọi một người bằng hai tên. Chưa quyết, liên quan ADR 0025 mục còn mở #4. MỘT SỰ THẬT ĐÃ ĐO: `[debug_redact = true]` VÔ TÁC DỤNG trong protobuf-go v1.36.12 — `%+v` in token nguyên văn, nên không gì trong mã sinh bảo vệ được; dấu ấy đã gỡ thay vì để lại |
 
 ## `service-comms`
 
@@ -104,10 +105,10 @@ Cập nhật 2026-09-20 · 4 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
-| `xac-thuc-can-bo` — Dựng authz.Principal cho yêu cầu của cán bộ | chưa làm | XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71 — luật 2 cấm #1 cấm import. Hệ quả đã kiểm: GET /api/v1/map-asset-types trả 401 cho MỌI người gọi — kiểm 2026-09-20 | — | TIỀN ĐỀ ĐÃ XONG (ADR 0025, chốt 2026-09-20, thay thế ADR 0012 quyết định 3). Ba bước còn lại chung cho cả bốn service khung — xem cùng mục ở service-documents.json |
 | `sql-chua-chay` — Chạy 0003_danh_muc_loai_tai_nguyen_ban_do.sql trên PostgreSQL thật | chưa làm | 7 ca service-comms/internal/store/loai_tai_nguyen_ban_do_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN — kiểm 2026-09-20 | — | Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat — đọc information_schema để đối chiếu danh sách cột trong mã với lược đồ thật. Đó là phép kiểm duy nhất bắt được một migration đổi tên cột dưới chân store; ba service kia đang thêm bản tương ứng |
 | `dac-ta-ban-do-tu-mau-thuan` — Đặc tả bản đồ lệch với chính nó — số nhóm và bộ mã | treo | docs/ui-ux/10-ban-do-kinh-te-so.md:37 nói 11 nhóm, :53 nói 8 nhóm; một chỗ dùng mã `enterprise`, chỗ kia `doanh-nghiep`. Ghi sẵn trong service-comms/migrations/0003_danh_muc_loai_tai_nguyen_ban_do.sql — kiểm 2026-09-20 | — | Bảng ship RỖNG có chủ đích cho tới khi đặc tả tự khớp. KHÔNG chọn hộ một trong hai bản — hỏi người viết đặc tả |
 | `loai-tai-nguyen-ban-do-tuyen-doc` — GET /api/v1/map-asset-types — tuyến ĐỌC danh mục loại tài nguyên bản đồ | xong | service-comms/internal/http/routes.go — tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store service-comms/internal/store/loai_tai_nguyen_ban_do.go. `go test -count=1 ./...` xanh, 21 ca chạy thật (12 tuyến + 9 kho trên driver database/sql giả), 0 skip ngoài bộ pg — kiểm 2026-09-20 | — | tên tài nguyên URL đã chốt với người dùng 2026-09-20 nhưng ubiquitous-language.md:156 vẫn ghi (chưa chốt) — knowledge-keeper phải điền ô đó |
+| `xac-thuc-can-bo` — Dựng authz.Principal cho yêu cầu của cán bộ | xong | cmd/server/main.go dựng chuỗi rìa thật qua `dungBien`, gắn core/staffauth.Middleware; cmd/server/main_test.go có ca principal của xã A gọi ở host xã A TỚI ĐƯỢC handler và nhận 200 — lần đầu một tuyến của service này phục vụ được một yêu cầu. Bốn đột biến đều đỏ, gồm biến thể đệm hẹp theo từng middleware. `make check` rc=0 — kiểm 2026-09-20, commit 19c6008 | — | MỘT CHỖ ĐỘT BIẾN KHÔNG BẮT ĐƯỢC, ghi ra thay vì im: main_test.go chứng minh `dungBien` dựng đúng chuỗi, KHÔNG chứng minh `run()` có gọi `dungBien` — xoá lời gọi ấy rồi phục vụ `mux` trần thì không gì đỏ. Bịt được cần một phép kiểm khởi động tiến trình thật, một lớp test khác |
 
 ## `service-documents`
 
@@ -116,9 +117,9 @@ Cập nhật 2026-09-20 · 4 mục
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
 | `loai-van-ban-tuyen-ghi` — Tuyến GHI danh mục loại văn bản (thêm/sửa/tắt) | chưa làm | không có tuyến POST/PUT/PATCH/DELETE nào trong service-documents/internal/http/routes.go — kiểm 2026-09-20 | #21 | KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ. Một tuyến ghi viết trước là quyết hộ khách |
-| `xac-thuc-can-bo` — Dựng authz.Principal cho yêu cầu của cán bộ | chưa làm | XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71, nằm trong internal/ của identity nên luật 2 cấm #1 cấm import. Hệ quả đã kiểm: GET /api/v1/document-types trả 401 cho MỌI người gọi — kiểm 2026-09-20 | — | TIỀN ĐỀ ĐÃ XONG: người dùng chốt 2026-09-20 xác thực giữa service bằng MỘT cặp header, giá trị đọc env từ secret k8s — ADR 0025, thay thế ADR 0012 quyết định 3. Còn thiếu ba bước, theo thứ tự: (1) server gRPC của identity, CHƯA tồn tại; (2) một RPC xác minh phiên trong identity.proto — sửa hợp đồng, việc của contract-designer; (3) middleware dựng Principal dùng chung trong core, gọi RPC ấy. Đường token tự kiểm KHÔNG dùng: thu hồi phiên mất tác dụng, vỡ luật 5 bất biến 4 |
 | `sql-chua-chay` — Chạy 0003_danh_muc_loai_van_ban.sql trên PostgreSQL thật | chưa làm | 5 ca service-documents/internal/store/loai_van_ban_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN, gói vẫn in `ok` — kiểm 2026-09-20 | — | Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat — đọc information_schema để đối chiếu danh sách cột trong mã với lược đồ thật, gồm cả tenant_id/deleted_at/thu_tu vốn không nằm trong SELECT. Nó TỒN TẠI nhưng CHƯA CHẠY: driver giả không bắt được tên cột sai, và ca này chỉ bắt được từ lần chạy đầu tiên có DSN |
 | `loai-van-ban-tuyen-doc` — GET /api/v1/document-types — tuyến ĐỌC danh mục loại văn bản | xong | service-documents/internal/http/routes.go — tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store service-documents/internal/store/loai_van_ban.go. `go test -count=1 ./...` xanh, 21 ca chạy thật (11 tuyến + 10 kho trên driver database/sql giả) — kiểm 2026-09-20 | — | tên tài nguyên URL đã chốt với người dùng 2026-09-20 nhưng ubiquitous-language.md:158 vẫn ghi (chưa chốt) — knowledge-keeper phải điền ô đó |
+| `xac-thuc-can-bo` — Dựng authz.Principal cho yêu cầu của cán bộ | xong | BA BƯỚC ĐÃ XONG CẢ BA: hợp đồng ResolveStaffPrincipal (ae65ac7) → core/staffauth + core/identityclient (ebc3b0b) → server gRPC của identity (5a56a81) → đấu rìa (19c6008). cmd/server/main_test.go có ca principal của xã A gọi ở host xã A nhận 200. `make check` rc=0 — kiểm 2026-09-20 | — | HAI ĐIỀU PHẢI GIỮ, cả hai đều là thứ người sau sẽ 'tối ưu': (1) tập khoá quyền chỉ sống trong ĐÚNG MỘT yêu cầu, nằm trong context và không đâu khác — sống lâu hơn là thành vai trò nhúng trong token, phá luật 5 bất biến 4; có hai ca test bắt cả biến thể đệm hẹp. (2) mọi lỗi vận chuyển là 503, KHÔNG BAO GIỜ là 'không có principal' — dịch sai là bảo mọi cán bộ đăng nhập lại qua chính service đang sập. Khoảng hở còn lại: main_test.go chứng minh `dungBien` dựng đúng chuỗi, không chứng minh `run()` gọi nó |
 
 ## `service-finance`
 
@@ -127,9 +128,9 @@ Cập nhật 2026-09-20 · 4 mục
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
 | `hang-muc-tuyen-ghi` — Tuyến GHI danh mục hạng mục kế hoạch vốn | chưa làm | không có tuyến POST/PUT/PATCH/DELETE nào trong service-finance/internal/http/routes.go — kiểm 2026-09-20 | #21 | KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ |
-| `xac-thuc-can-bo` — Dựng authz.Principal cho yêu cầu của cán bộ | chưa làm | XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71 — luật 2 cấm #1 cấm import. Hệ quả đã kiểm: GET /api/v1/capital-plan-categories trả 401 cho MỌI người gọi — kiểm 2026-09-20 | — | TIỀN ĐỀ ĐÃ XONG (ADR 0025, chốt 2026-09-20, thay thế ADR 0012 quyết định 3). Ba bước còn lại chung cho cả bốn service khung — xem cùng mục ở service-documents.json |
 | `sql-chua-chay` — Chạy 0003_danh_muc_hang_muc_ke_hoach_von.sql trên PostgreSQL thật | chưa làm | 6 ca service-finance/internal/store/hang_muc_ke_hoach_von_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN, gói vẫn in `ok` — kiểm 2026-09-20 | — | Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat (đọc information_schema) nhưng nó CHƯA CHẠY. Một lượt đối chiếu TĨNH với DDL của migration cho kết quả thiếu 0 cột — đó là đọc hai tệp trong kho, KHÔNG phải kiểm lược đồ đã triển khai. Driver giả cũng không kiểm được định tuyến phân mảnh, UNIQUE một mặc định, hay trigger ba tầng |
 | `hang-muc-ke-hoach-von-tuyen-doc` — GET /api/v1/capital-plan-categories — tuyến ĐỌC danh mục hạng mục kế hoạch vốn | xong | service-finance/internal/http/routes.go — tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store service-finance/internal/store/hang_muc_ke_hoach_von.go. `go test -count=1 ./...` xanh, 22 ca chạy thật (13 tuyến + 9 kho trên driver database/sql giả) — kiểm 2026-09-20 | — | tên tài nguyên URL đã chốt với người dùng 2026-09-20 nhưng ubiquitous-language.md:157 vẫn ghi (chưa chốt) — knowledge-keeper phải điền ô đó |
+| `xac-thuc-can-bo` — Dựng authz.Principal cho yêu cầu của cán bộ | xong | cmd/server/main.go dựng chuỗi rìa thật qua `dungBien`, gắn core/staffauth.Middleware; cmd/server/main_test.go có ca principal của xã A gọi ở host xã A nhận 200, và ca identity chết thì trả 503 CHỨ KHÔNG 401. `make check` rc=0 — kiểm 2026-09-20, commit 19c6008 | — | Cùng khoảng hở với ba service kia: main_test.go chứng minh `dungBien` dựng đúng chuỗi, không chứng minh `run()` gọi nó — xem service-comms.json |
 
 ## `service-identity`
 
@@ -139,12 +140,12 @@ Cập nhật 2026-09-20 · 8 mục
 |---|---|---|---|---|
 | `store-crosstenant` — Gói đọc chéo xã — nơi duy nhất được phép đọc qua ranh giới xã | ĐANG LÀM | service-identity/internal/store/crosstenant/{dinh_danh_cong_dan.go,doc.go} + 2 tệp test — kiểm 2026-09-20, CHƯA COMMIT (một phiên song song đang viết vùng này lúc kiểm). ban-giao-phien.md §2.3 ghi "chưa tồn tại" là ĐÃ LỖI THỜI | #4 | migration nêu tên ba truy vấn đọc chéo; mới có dinh_danh_cong_dan. Mỗi truy vấn mang `// @cross-tenant: <lý do>` (luật 1 cấm #6) — đó là cách duy nhất khiến đọc chéo thành danh sách ĐẾM ĐƯỢC |
 | `kho-doc-kenh-cong-dan` — Kho đọc cho sáu bảng kênh công dân — giai đoạn 2 mới xong một phần | ĐANG LÀM | hợp đồng + rìa core/httpx/citizen.go + sáu bảng migration đã có; store/crosstenant/dinh_danh_cong_dan.go đã có — kiểm 2026-09-20 | — | chưa có route nào. Kho đọc nằm ở service-identity/internal/store/ — vùng khác với vùng đã viết migration, đó là đường nối phải bắc |
-| `grpc-server` — Server gRPC của identity | chưa làm | không có service-identity/internal/grpc — kiểm 2026-09-20 | — | VIỆC KẾ TIẾP ĐƯỢC NGƯỜI DÙNG CHỐT 2026-09-20: dựng cái này TRƯỚC, để mở khoá sáu tuyến đọc danh mục đang trả 401 cho mọi người gọi (xem mục `xac-thuc-can-bo` trong sổ của service-{comms,documents,finance,petitions}). Lý do chọn đường này thay vì hai đường nhanh hơn: `XacThuc` tra SỔ ĐĂNG KÝ PHIÊN mỗi request, và bỏ phép tra ấy là token không thu hồi được nữa — phá luật 5 bất biến 4. Dùng lại interceptor hai đầu ở core/grpcx, nay đã có xác thực bên gọi (ADR 0025). ĐỌC ADR 0012 quyết định 1, 2, 4 trước khi thêm RPC — quyết định 3 ĐÃ BỊ THAY THẾ, đừng đọc theo bản cũ |
 | `cap-tai-khoan-can-bo` — Toàn bộ luồng cấp tài khoản cán bộ | chưa làm | — | #9 #17 #18 | mật khẩu đầu tiên của cán bộ mới · tự đặt lại mật khẩu · Ghi nhớ đăng nhập — cả ba chờ khách |
 | `tuyen-ghi-danh-ba-can-bo` — Toàn bộ tuyến GHI của danh bạ cán bộ | chưa làm | — | #10 #13 #14 | khoá hay xoá cán bộ · chặn mất quản trị viên cuối cùng · tự thao tác lên chính mình |
 | `ma-can-bo-va-dien-thoai` — Mã cán bộ do ai đặt, và dien_thoai/di_dong là một trường hay hai | chưa làm | — | #15 #16 | CHẶN SCHEMA nên đắt hơn các câu khác — hỏi trước khi viết migration tiếp |
 | `che-so-di-dong-can-bo` — Che hay không che số di động cán bộ, và ai quyết việc công khai lên Mini App | chưa làm | — | #11 #12 | chặn cả cột hiển thị lẫn khoá quyền |
 | `ban-giao-viec-khi-khoa-tai-khoan` — Bàn giao việc đang xử lý khi khoá tài khoản | treo | — | — | cố ý CHƯA ghi thành câu hỏi mở: chưa có bảng giao việc nào tồn tại để nói "việc đang giữ" nghĩa là gì. Hỏi khi dựng bảng nghiệp vụ đầu tiên có người phụ trách — câu trả lời nhiều khả năng là "tuỳ xã" |
+| `grpc-server` — Server gRPC của identity | xong | service-identity/internal/grpc/server.go — ResolveStaffPrincipal + BatchGetStaff, cả hai interceptor trên chuỗi mà cmd/server/dungGRPCServer dựng; server_test.go 14 ca + cmd/server/main_test.go bufconn trên hàm dựng THẬT. Năm đột biến đều đỏ, gồm: gỡ interceptor khoá caller (bên gọi trần trụi nhận OK trên cả hai RPC) và đảo phép đối chiếu xã xuống sau lượt đọc sổ phiên. `make check` rc=0 — kiểm 2026-09-20, commit 5a56a81 | — | Đã mở khoá sáu tuyến 401 (commit 19c6008). HAI THỨ CÒN LẠI TRÊN CỔNG NÀY, cả hai đã ghi trong tài liệu gói: (1) không có interceptor bắt panic — grpc-go KHÔNG tự phục hồi panic của handler, nên một `tenant.MustFrom` lọt qua sẽ hạ cả tiến trình đang phục vụ 200+ xã; chỗ đúng của nó là core/grpcx. (2) `vanTay` nay có hai bản sao (internal/http và internal/grpc) và PHẢI giữ y hệt nhau — người vận hành đối chiếu cảnh báo tập trung với cảnh báo của XacThuc bằng chính chuỗi ấy, hai bản lệch nhau đẻ ra hai dấu vân tay cho một sid, đọc ra là hai phiên. ListCitizenCommunes vẫn `Unimplemented`, hai chỗ chặn độc lập — xem mục store-crosstenant |
 
 ## `service-petitions`
 
@@ -155,19 +156,20 @@ Cập nhật 2026-09-20 · 6 mục
 | `vong-doi-phieu-phan-anh` — Nghiệp vụ phản ánh — tiếp nhận, phân loại, phân công, nghiệm thu, đóng phiếu | chưa làm | — | — | CHỈ bắt đầu sau khi có lich_lam_viec + ngay_nghi_le theo xã (ADR 0007). Đếm hạn bằng giờ hành chính mà thiếu lịch của xã thì mọi con số hạn đều sai, và sai theo hướng không ai thấy cho tới lúc báo cáo lên trên |
 | `lich-lam-viec-theo-xa` — Cấu hình lich_lam_viec + ngay_nghi_le theo từng xã | chưa làm | — | — | tiền đề của mọi phép đếm hạn — ADR 0007, luật 10 bất biến 4 |
 | `danh-muc-nhiem-vu-tuyen-ghi` — Tuyến GHI hai danh mục nhiệm vụ | chưa làm | không có tuyến POST/PUT/PATCH/DELETE nào trong service-petitions/internal/http/routes.go — kiểm 2026-09-20 | #21 | KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ |
-| `xac-thuc-can-bo` — Dựng authz.Principal cho yêu cầu của cán bộ | chưa làm | XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71 — luật 2 cấm #1 cấm import. Hệ quả đã kiểm: hai tuyến trên trả 401 cho MỌI người gọi — kiểm 2026-09-20 | — | TIỀN ĐỀ ĐÃ XONG (ADR 0025, chốt 2026-09-20, thay thế ADR 0012 quyết định 3). Ba bước còn lại chung cho cả bốn service khung — xem cùng mục ở service-documents.json |
 | `sql-danh-muc-chua-chay` — Chạy 0003_danh_muc_nhiem_vu.sql trên PostgreSQL thật | chưa làm | 5 ca service-petitions/internal/store/danh_muc_nhiem_vu_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN, gói vẫn in `ok` — kiểm 2026-09-20 | — | Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat (đọc information_schema, kiểm cả thu_tu — với muc_uu_tien_nhiem_vu thì thu_tu CHÍNH LÀ thang, đổi tên nó là phá thang trong im lặng). Nó TỒN TẠI nhưng CHƯA CHẠY. Vẫn chưa gì kiểm được định tuyến phân mảnh, partial index, và sáu phép từ chối của trigger danh_muc_ba_tang |
 | `danh-muc-nhiem-vu-tuyen-doc` — GET /api/v1/task-types + /api/v1/task-priorities — hai tuyến ĐỌC danh mục nhiệm vụ | xong | service-petitions/internal/http/routes.go — hai tuyến, mỗi tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store internal/store/{loai_nhiem_vu,muc_uu_tien_nhiem_vu}.go. `go test -count=1 ./...` xanh, 36 ca chạy thật (20 tuyến + 16 kho trên driver database/sql giả) — kiểm 2026-09-20 | — | 0003_danh_muc_nhiem_vu.sql KHÔNG tạo bảng trạng thái nhiệm vụ nào — đã kiểm. Tên tài nguyên URL chốt với người dùng 2026-09-20 nhưng ubiquitous-language.md:162-163 vẫn ghi (chưa chốt) |
+| `xac-thuc-can-bo` — Dựng authz.Principal cho yêu cầu của cán bộ | xong | cmd/server/main.go dựng chuỗi rìa thật qua `dungBien`, gắn core/staffauth.Middleware; cmd/server/main_test.go có ca principal của xã A gọi ở host xã A nhận 200 trên cả hai tuyến. `make check` rc=0 — kiểm 2026-09-20, commit 19c6008 | — | Hai điều phải giữ và một khoảng hở còn lại — xem cùng mục ở service-documents.json, không chép lại ở đây |
 
 ## `service-platform`
 
-Cập nhật 2026-09-20 · 3 mục
+Cập nhật 2026-09-20 · 4 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
 | `dang-viet-ten-tinh-thanh` — 34 tên tỉnh/thành ở dạng viết chính thức | ĐANG LÀM | service-platform/migrations/0005_seed_tinh_thanh.sql đã seed, và tự khai ngay đầu tệp: DỮ LIỆU CHƯA ĐƯỢC ĐỐI CHIẾU VỚI VĂN BẢN GỐC — kiểm 2026-09-20 | — | đối chiếu với Nghị quyết 202/2025/QH15. Cột này in thẳng ra màn hình công dân nên DẠNG VIẾT là nội dung (`Đà Nẵng` hay `Thành phố Đà Nẵng`). Đã thử ba nguồn chính phủ, cả ba render phía client. Sửa một tên là THÊM một migration, không đụng tệp đã chạy |
 | `loi-he-thong` — Bảng loi_he_thong | chưa làm | `grep -rl loi_he_thong --include=*.sql --include=*.go .` không có kết quả — kiểm 2026-09-20 | — | không bị chặn bởi câu hỏi nào |
 | `danh-muc-tham-chieu` — Tám bảng danh mục tham chiếu | xong | ADR 0024 chuyển quyền sở hữu danh mục SANG DỊCH VỤ SỞ HỮU, không nằm ở platform: service-{comms,documents,finance,petitions}/migrations/0003_danh_muc_*.sql + service-identity/migrations/0005 — kiểm 2026-09-20. ban-giao-phien.md §2.5 ghi "platform: danh_muc chưa có" là ĐÃ LỖI THỜI | — | KHÔNG seed dòng nào, có chủ ý (commit fa10cf1) |
+| `ca-kiem-interceptor-xa-da-chet` — Ca kiểm interceptor xã trên cổng gRPC xanh vì lý do sai | xong | ĐÃ ĐO: gỡ grpcx.UnaryServerInterceptor khỏi chuỗi dungGRPCServer dựng -> 0 ca đỏ; gỡ UnaryServerCallerAuth -> 2 ca đỏ. Nguyên nhân: mọi ca đều quay số CÓ gắn interceptor client nên x-tenant-id luôn trên dây. Ca mới TestMayChuTuChoiRpcKhongMangXaDuDaCoKhoa quay số có khoá và KHÔNG có interceptor xã phía client; đột biến lại -> đúng nó đỏ, một mình. Commit e3ed99b — kiểm 2026-09-20 | — | PHẠM VI THẬT, đừng thổi lên: hai RPC của platform hiện không đọc xã từ context nên thiếu interceptor hôm nay KHÔNG rò gì. Thứ mất là lời KHAI rằng một RPC không được miễn thì phải mang xã (luật 1 cấm #1). Phát hiện ra nó là agent viết server identity khi so khuôn ca test của hai service — không cổng kiểm nào bắt được. Bài học cùng lớp với ba ca khác trong phiên: một rào chắn xanh không nói lên gì tới khi có người thử làm nó đỏ |
 
 ## `tools`
 

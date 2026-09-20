@@ -26,6 +26,14 @@
       "bang_chung": "service-platform/migrations/0005_seed_tinh_thanh.sql đã seed, và tự khai ngay đầu tệp: DỮ LIỆU CHƯA ĐƯỢC ĐỐI CHIẾU VỚI VĂN BẢN GỐC — kiểm 2026-09-20",
       "no_confirm": [],
       "tiep_theo": "đối chiếu với Nghị quyết 202/2025/QH15. Cột này in thẳng ra màn hình công dân nên DẠNG VIẾT là nội dung (`Đà Nẵng` hay `Thành phố Đà Nẵng`). Đã thử ba nguồn chính phủ, cả ba render phía client. Sửa một tên là THÊM một migration, không đụng tệp đã chạy"
+    },
+    {
+      "id": "ca-kiem-interceptor-xa-da-chet",
+      "viec": "Ca kiểm interceptor xã trên cổng gRPC xanh vì lý do sai",
+      "trang_thai": "xong",
+      "bang_chung": "ĐÃ ĐO: gỡ grpcx.UnaryServerInterceptor khỏi chuỗi dungGRPCServer dựng -> 0 ca đỏ; gỡ UnaryServerCallerAuth -> 2 ca đỏ. Nguyên nhân: mọi ca đều quay số CÓ gắn interceptor client nên x-tenant-id luôn trên dây. Ca mới TestMayChuTuChoiRpcKhongMangXaDuDaCoKhoa quay số có khoá và KHÔNG có interceptor xã phía client; đột biến lại -> đúng nó đỏ, một mình. Commit e3ed99b — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "PHẠM VI THẬT, đừng thổi lên: hai RPC của platform hiện không đọc xã từ context nên thiếu interceptor hôm nay KHÔNG rò gì. Thứ mất là lời KHAI rằng một RPC không được miễn thì phải mang xã (luật 1 cấm #1). Phát hiện ra nó là agent viết server identity khi so khuôn ca test của hai service — không cổng kiểm nào bắt được. Bài học cùng lớp với ba ca khác trong phiên: một rào chắn xanh không nói lên gì tới khi có người thử làm nó đỏ"
     }
   ]
 }

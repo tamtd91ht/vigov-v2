@@ -22,10 +22,10 @@
     {
       "id": "xac-thuc-can-bo",
       "viec": "Dựng authz.Principal cho yêu cầu của cán bộ",
-      "trang_thai": "chua_lam",
-      "bang_chung": "XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71 — luật 2 cấm #1 cấm import. Hệ quả đã kiểm: GET /api/v1/capital-plan-categories trả 401 cho MỌI người gọi — kiểm 2026-09-20",
+      "trang_thai": "xong",
+      "bang_chung": "cmd/server/main.go dựng chuỗi rìa thật qua `dungBien`, gắn core/staffauth.Middleware; cmd/server/main_test.go có ca principal của xã A gọi ở host xã A nhận 200, và ca identity chết thì trả 503 CHỨ KHÔNG 401. `make check` rc=0 — kiểm 2026-09-20, commit 19c6008",
       "no_confirm": [],
-      "tiep_theo": "TIỀN ĐỀ ĐÃ XONG (ADR 0025, chốt 2026-09-20, thay thế ADR 0012 quyết định 3). Ba bước còn lại chung cho cả bốn service khung — xem cùng mục ở service-documents.json"
+      "tiep_theo": "Cùng khoảng hở với ba service kia: main_test.go chứng minh `dungBien` dựng đúng chuỗi, không chứng minh `run()` gọi nó — xem service-comms.json"
     },
     {
       "id": "sql-chua-chay",

@@ -22,10 +22,10 @@
     {
       "id": "grpc-server",
       "viec": "Server gRPC của identity",
-      "trang_thai": "chua_lam",
-      "bang_chung": "không có service-identity/internal/grpc — kiểm 2026-09-20",
+      "trang_thai": "xong",
+      "bang_chung": "service-identity/internal/grpc/server.go — ResolveStaffPrincipal + BatchGetStaff, cả hai interceptor trên chuỗi mà cmd/server/dungGRPCServer dựng; server_test.go 14 ca + cmd/server/main_test.go bufconn trên hàm dựng THẬT. Năm đột biến đều đỏ, gồm: gỡ interceptor khoá caller (bên gọi trần trụi nhận OK trên cả hai RPC) và đảo phép đối chiếu xã xuống sau lượt đọc sổ phiên. `make check` rc=0 — kiểm 2026-09-20, commit 5a56a81",
       "no_confirm": [],
-      "tiep_theo": "VIỆC KẾ TIẾP ĐƯỢC NGƯỜI DÙNG CHỐT 2026-09-20: dựng cái này TRƯỚC, để mở khoá sáu tuyến đọc danh mục đang trả 401 cho mọi người gọi (xem mục `xac-thuc-can-bo` trong sổ của service-{comms,documents,finance,petitions}). Lý do chọn đường này thay vì hai đường nhanh hơn: `XacThuc` tra SỔ ĐĂNG KÝ PHIÊN mỗi request, và bỏ phép tra ấy là token không thu hồi được nữa — phá luật 5 bất biến 4. Dùng lại interceptor hai đầu ở core/grpcx, nay đã có xác thực bên gọi (ADR 0025). ĐỌC ADR 0012 quyết định 1, 2, 4 trước khi thêm RPC — quyết định 3 ĐÃ BỊ THAY THẾ, đừng đọc theo bản cũ"
+      "tiep_theo": "Đã mở khoá sáu tuyến 401 (commit 19c6008). HAI THỨ CÒN LẠI TRÊN CỔNG NÀY, cả hai đã ghi trong tài liệu gói: (1) không có interceptor bắt panic — grpc-go KHÔNG tự phục hồi panic của handler, nên một `tenant.MustFrom` lọt qua sẽ hạ cả tiến trình đang phục vụ 200+ xã; chỗ đúng của nó là core/grpcx. (2) `vanTay` nay có hai bản sao (internal/http và internal/grpc) và PHẢI giữ y hệt nhau — người vận hành đối chiếu cảnh báo tập trung với cảnh báo của XacThuc bằng chính chuỗi ấy, hai bản lệch nhau đẻ ra hai dấu vân tay cho một sid, đọc ra là hai phiên. ListCitizenCommunes vẫn `Unimplemented`, hai chỗ chặn độc lập — xem mục store-crosstenant"
     },
     {
       "id": "cap-tai-khoan-can-bo",

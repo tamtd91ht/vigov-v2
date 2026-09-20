@@ -22,10 +22,10 @@
     {
       "id": "xac-thuc-can-bo",
       "viec": "Dựng authz.Principal cho yêu cầu của cán bộ",
-      "trang_thai": "chua_lam",
-      "bang_chung": "XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71, nằm trong internal/ của identity nên luật 2 cấm #1 cấm import. Hệ quả đã kiểm: GET /api/v1/document-types trả 401 cho MỌI người gọi — kiểm 2026-09-20",
+      "trang_thai": "xong",
+      "bang_chung": "BA BƯỚC ĐÃ XONG CẢ BA: hợp đồng ResolveStaffPrincipal (ae65ac7) → core/staffauth + core/identityclient (ebc3b0b) → server gRPC của identity (5a56a81) → đấu rìa (19c6008). cmd/server/main_test.go có ca principal của xã A gọi ở host xã A nhận 200. `make check` rc=0 — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "TIỀN ĐỀ ĐÃ XONG: người dùng chốt 2026-09-20 xác thực giữa service bằng MỘT cặp header, giá trị đọc env từ secret k8s — ADR 0025, thay thế ADR 0012 quyết định 3. Còn thiếu ba bước, theo thứ tự: (1) server gRPC của identity, CHƯA tồn tại; (2) một RPC xác minh phiên trong identity.proto — sửa hợp đồng, việc của contract-designer; (3) middleware dựng Principal dùng chung trong core, gọi RPC ấy. Đường token tự kiểm KHÔNG dùng: thu hồi phiên mất tác dụng, vỡ luật 5 bất biến 4"
+      "tiep_theo": "HAI ĐIỀU PHẢI GIỮ, cả hai đều là thứ người sau sẽ 'tối ưu': (1) tập khoá quyền chỉ sống trong ĐÚNG MỘT yêu cầu, nằm trong context và không đâu khác — sống lâu hơn là thành vai trò nhúng trong token, phá luật 5 bất biến 4; có hai ca test bắt cả biến thể đệm hẹp. (2) mọi lỗi vận chuyển là 503, KHÔNG BAO GIỜ là 'không có principal' — dịch sai là bảo mọi cán bộ đăng nhập lại qua chính service đang sập. Khoảng hở còn lại: main_test.go chứng minh `dungBien` dựng đúng chuỗi, không chứng minh `run()` gọi nó"
     },
     {
       "id": "sql-chua-chay",
