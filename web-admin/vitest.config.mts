@@ -21,6 +21,19 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    // `.tsx` IS COLLECTED, AND THE REASON IS A MEASURED HOLE RATHER THAN A PREFERENCE.
+    //
+    // While the Danh mục tab was being built, one mutation was run and NOT caught: blanking
+    // `{nhanNhomRong(nhom.nhan)}` — the single most important sentence on that screen, the one
+    // that tells a commune its catalogue is empty rather than broken — left all 167 tests green
+    // and `tsc` clean. Every test guarded a DECISION in a pure module; nothing guarded that any
+    // component ever put the decision on the page.
+    //
+    // This does NOT reverse the argument below. Closing it needs no jsdom, no testing-library
+    // and no new dependency: `react-dom/server` renders a presentational component to a string
+    // in plain Node, and a string is enough to ask "is the sentence there". What stays out of
+    // scope is anything needing a browser — events, focus, layout — which is what the paragraph
+    // below is actually about.
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
 });

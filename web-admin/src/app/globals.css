@@ -607,3 +607,71 @@ body {
 .bang-phan-quyen .o-chua-cap {
   color: var(--xam-chu);
 }
+
+/* ---- màn cấu hình · tab Thôn/Tổ dân phố và tab Danh mục -------------------------------- */
+
+.tab-thon-to-dan-pho,
+.tab-danh-muc {
+  margin-top: 2.5rem;
+}
+
+/* MỖI NHÓM DANH MỤC LÀ MỘT KHỐI RIÊNG, CÁCH NHAU RÕ. Bảy bảng nhỏ nối nhau mà không có khoảng
+ * nghỉ thì đọc thành một bảng dài có những dòng tiêu đề lạ ở giữa — và ở màn hình này phần lớn
+ * các khối là một câu "chưa có mục nào", nên ranh giới giữa chúng càng phải thấy được. */
+.nhom-danh-muc {
+  margin-top: 1.75rem;
+}
+
+.nhom-danh-muc h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+/* Số mục đứng cạnh tên nhóm: nhẹ hơn tên nhóm, nhưng vẫn là chữ nên vẫn phải đạt tương phản
+ * 4.5:1 (`--xam-chu`, không phải một màu nhạt hơn). */
+.dem-muc {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--xam-chu);
+}
+
+/* Bảng của hai tab này dùng lại đúng kiểu bảng danh bạ: cùng mật độ, cùng viền, cùng hàng tiêu
+ * đề. Hai kiểu bảng khác nhau trên cùng một trang làm người đọc tưởng hai bảng nói hai loại dữ
+ * liệu khác hẳn nhau. */
+.bang-danh-muc {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.bang-danh-muc th,
+.bang-danh-muc td {
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--xam-vien);
+}
+
+.bang-danh-muc thead th {
+  background: var(--nen);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--xam-chu);
+}
+
+.bang-danh-muc tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* MÃ DANH MỤC ĐỂ FONT ĐẲNG CHIỀU (đặc tả §5). Đây không phải trang trí: `ma` là một slug được gõ
+ * lại vào tệp nhập liệu và đọc qua điện thoại, nên `l` với `1` và `O` với `0` phải phân biệt
+ * được. Không thu nhỏ cỡ chữ: font đẳng chiều vốn đã trông nhỏ hơn font thường ở cùng cỡ. */
+.ma-muc {
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
+}
