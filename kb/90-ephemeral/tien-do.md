@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: ad4e312
+derived_from_commit: b6ca85b
 expires: 2026-12-19
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -23,10 +23,10 @@ tức tin `git log` chứ đừng tin tệp này.
 
 | | |
 |---|---|
-| ĐANG LÀM | 3 |
+| ĐANG LÀM | 2 |
 | chưa làm | 34 |
 | treo | 11 |
-| xong | 27 |
+| xong | 28 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -229,10 +229,10 @@ Cập nhật 2026-09-20 · 7 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
-| `tam-viec-web-tu-hop-dong` — Tám màn hình danh mục đã mở việc trong tasks/web/open/, chưa ai nhận | ĐANG LÀM | cả 8 tệp đã chuyển open -> tasks/web/claimed/ và web-admin/src/lib/api/{danh-muc-nghiep-vu,thon-to-dan-pho}.ts đã xuất hiện — một phiên song song đang làm, CHƯA COMMIT lúc kiểm 2026-09-20. Trước đó: 8 open · 0 claimed · 10 done · 1 stale; schema.gen.ts 545 dòng sinh từ hợp đồng 17 tuyến ở commit b899f4c | — | Xong thì chuyển tiếp sang tasks/web/done/ và đổi mục này thành `xong`. Nhận việc là ĐỔI TÊN tệp (ROUTING §3) — os.Rename là khoá duy nhất, đừng thêm cờ nào. Mục này tồn tại vì hàng đợi ấy BLOCKS NOTHING (ROUTING.md:137): tám việc có thể nằm ở claimed/ vô hạn mà không cổng nào kêu — và một việc mắc kẹt ở claimed/ còn khó thấy hơn ở open/, vì thư mục trông như đang có người làm |
 | `muoi-mot-phan-he-chua-dung` — Mười một phân hệ trong đặc tả chưa có màn hình nào | chưa làm | docs/ui-ux/ có 16 chương; web-admin/src/app/ mới có cau-hinh, dang-nhap, page.tsx, layout.tsx, not-found.tsx, globals.css — kiểm 2026-09-20 | — | Chưa dựng: nhiệm vụ (02) · biên bản họp (04) · văn bản đơn thư (05) · giải ngân (06) · thu chi ngân sách (07) · thông báo (08) · phản ánh (09) · bản đồ kinh tế số (10) · nội dung Mini App (11) · danh bạ cán bộ (12) · báo cáo (13). GIỮ MỘT MỤC chứ không tách mười một: tách ra là mười một dòng cùng nói một câu `chưa bắt đầu`, và sổ phình mà không thêm thông tin. Tách khi một phân hệ thật sự khởi công |
 | `man-xac-thuc-loi-khai-cu-tru` — Màn hình cán bộ xác thực lời khai cư trú của công dân | chưa làm | web-admin/src/app/ mới có cau-hinh, dang-nhap, page.tsx, not-found.tsx — kiểm 2026-09-20 | #19 #20 | ADR 0023 đã chốt nghiệp vụ. Hai điều phải đúng NGAY BẢN ĐẦU vì sửa sau là sửa chữ trên màn hình một cơ quan nhà nước: (1) nhãn nói "xác nhận LỜI KHAI", không phải xác nhận nhân thân — nút "Xác nhận thường trú" đứng trơ sẽ được hiểu là đang cấp một xác nhận hành chính; (2) `bị từ chối` là trạng thái riêng, giữ nguyên lời khai và giữ LÝ DO như trường nghiệp vụ BẮT BUỘC — một textarea tuỳ chọn thì thực tế sẽ rỗng, và công dân nhận về một "bị từ chối" không lý do, đúng cái im lặng luật 10 cấm |
 | `moi-tuyen-ghi-cho-can-bo` — Mọi tuyến GHI cho cán bộ | chưa làm | — | #9 #10 #11 #12 #13 #14 #15 #16 #17 #18 | cố ý không dựng scaffolding: một tuyến ghi viết dở trông y hệt một quyết định ai đó đã ra |
 | `tong-quan-va-so-tay` — Trang /tong-quan và /nhiem-vu/so-tay | chưa làm | — | — | cần API thống kê chưa tồn tại. Một bảng điều khiển với số bịa ra là thứ lãnh đạo đọc rồi báo cáo lên trên |
 | `goc-api-noi-bo` — Biến môi trường gốc API nội bộ cho web-admin | chưa làm | tiến trình Next.js gọi https://<Host>/api/v1/communes/current bằng TÊN MIỀN CÔNG KHAI — đã chứng minh, không còn là suy đoán | — | chờ devops xác nhận cụm có split-horizon DNS / chặn egress không; nếu chặn thì MỌI yêu cầu 500. web-admin hiện không có tệp mẫu env nào để thêm vào |
 | `can-bo-khong-co-vai-tro` — Cán bộ không có vai trò nào thì vào `/` thấy gì | treo | đặc tả docs/ui-ux §1 chỉ chia "Lãnh đạo" / "vai trò khác" | — | chưa ghi thành câu hỏi mở vì chưa biết trạng thái ấy có tồn tại thật trên dữ liệu xã hay không |
+| `tam-viec-web-tu-hop-dong` — Tám màn hình danh mục đã mở việc trong tasks/web/open/, chưa ai nhận | xong | cả 8 tệp nay ở tasks/web/done/, claimed/ rỗng. Hai tab mới: web-admin/src/features/cau-hinh/{tab-danh-muc.tsx,tab-thon-to-dan-pho.tsx}, mắc vào app/cau-hinh/page.tsx theo thứ tự đặc tả §0. `npx tsc --noEmit` sạch · `npm test` 172/172 · `npm run check:api` khớp hợp đồng · `npm run lint` sạch — kiểm 2026-09-20 | — | MỘT LỖ HỔNG PHÉP KIỂM ĐÃ ĐO VÀ ĐÃ VÁ trong cùng lượt, đáng đọc trước khi viết màn tiếp theo: bôi trắng câu báo danh mục rỗng — câu quan trọng nhất trên màn hình — làm 167 ca vẫn xanh và tsc vẫn sạch, vì vitest chỉ gom `*.test.ts` và mọi ca đều canh QUYẾT ĐỊNH trong module thuần, không ca nào canh quyết định ấy có ra tới trang. Nay `*.test.tsx` được gom, và tab-danh-muc.test.tsx kết xuất bằng react-dom/server; đột biến ấy làm 2 ca đỏ. KHÔNG thêm phụ thuộc nào: kiểu của react-dom/server khai tại chỗ ở src/types/, vì cài @types/react-dom là đổi đầu vào của npm ci trong Dockerfile. Màn nào còn lại cũng nên có một ca kết xuất như thế cho câu chữ quan trọng nhất của nó |

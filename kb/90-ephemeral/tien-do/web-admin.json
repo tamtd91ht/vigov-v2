@@ -6,10 +6,10 @@
     {
       "id": "tam-viec-web-tu-hop-dong",
       "viec": "Tám màn hình danh mục đã mở việc trong tasks/web/open/, chưa ai nhận",
-      "trang_thai": "dang_lam",
-      "bang_chung": "cả 8 tệp đã chuyển open -> tasks/web/claimed/ và web-admin/src/lib/api/{danh-muc-nghiep-vu,thon-to-dan-pho}.ts đã xuất hiện — một phiên song song đang làm, CHƯA COMMIT lúc kiểm 2026-09-20. Trước đó: 8 open · 0 claimed · 10 done · 1 stale; schema.gen.ts 545 dòng sinh từ hợp đồng 17 tuyến ở commit b899f4c",
+      "trang_thai": "xong",
+      "bang_chung": "cả 8 tệp nay ở tasks/web/done/, claimed/ rỗng. Hai tab mới: web-admin/src/features/cau-hinh/{tab-danh-muc.tsx,tab-thon-to-dan-pho.tsx}, mắc vào app/cau-hinh/page.tsx theo thứ tự đặc tả §0. `npx tsc --noEmit` sạch · `npm test` 172/172 · `npm run check:api` khớp hợp đồng · `npm run lint` sạch — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "Xong thì chuyển tiếp sang tasks/web/done/ và đổi mục này thành `xong`. Nhận việc là ĐỔI TÊN tệp (ROUTING §3) — os.Rename là khoá duy nhất, đừng thêm cờ nào. Mục này tồn tại vì hàng đợi ấy BLOCKS NOTHING (ROUTING.md:137): tám việc có thể nằm ở claimed/ vô hạn mà không cổng nào kêu — và một việc mắc kẹt ở claimed/ còn khó thấy hơn ở open/, vì thư mục trông như đang có người làm"
+      "tiep_theo": "MỘT LỖ HỔNG PHÉP KIỂM ĐÃ ĐO VÀ ĐÃ VÁ trong cùng lượt, đáng đọc trước khi viết màn tiếp theo: bôi trắng câu báo danh mục rỗng — câu quan trọng nhất trên màn hình — làm 167 ca vẫn xanh và tsc vẫn sạch, vì vitest chỉ gom `*.test.ts` và mọi ca đều canh QUYẾT ĐỊNH trong module thuần, không ca nào canh quyết định ấy có ra tới trang. Nay `*.test.tsx` được gom, và tab-danh-muc.test.tsx kết xuất bằng react-dom/server; đột biến ấy làm 2 ca đỏ. KHÔNG thêm phụ thuộc nào: kiểu của react-dom/server khai tại chỗ ở src/types/, vì cài @types/react-dom là đổi đầu vào của npm ci trong Dockerfile. Màn nào còn lại cũng nên có một ca kết xuất như thế cho câu chữ quan trọng nhất của nó"
     },
     {
       "id": "muoi-mot-phan-he-chua-dung",
