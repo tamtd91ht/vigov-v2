@@ -12,6 +12,51 @@
 //
 // Rule 1, invariant 10. There is deliberately no Get("...") helper here that business code
 // could reach for — the absence of that function is the enforcement.
+//
+// # WHERE EACH VARIABLE COMES FROM IN THE CLUSTER
+//
+// Every infrastructure dependency is read HERE and nowhere else: no host, no port and no
+// credential is read from another package, and none is hard-coded. The values arrive as
+// environment variables, and the cluster fills them from one of exactly two objects. Which one
+// is not a deployment detail — it is the difference between a value that may sit in a git-
+// tracked manifest and one that may not (rule 8, invariants 1 and 2):
+//
+//	k8s Secret     anything credentialed: a password, a token, an API key, or a DSN with a
+//	               password inside it. The Go type is secret.Secret or secret.DSN, so it cannot
+//	               reach a log line by accident
+//	k8s ConfigMap  anything not credentialed: a host, a port, an address list, an exchange
+//	               name, an index prefix, a database number, a TTL. Plain Go types
+//
+//	Variable                    Object      Refusal
+//	------------------------------------------------------------------------------------
+//	DATABASE_DSN                Secret      REQUIRED — Load refuses, by name
+//	GRPC_CALLER_KEY             Secret      REQUIRED — Load refuses, by name (ADR 0025)
+//	SESSION_SIGNING_KEYS        Secret      REQUIRED outside dev — Load refuses, by name
+//	ENV                         ConfigMap   REQUIRED — Load refuses, by name
+//	REDIS_DSN                   Secret      optional — empty means no cache; CanhBao reports it
+//	PLATFORM_GRPC_ADDR          ConfigMap   optional here, refused by name at Dial
+//	IDENTITY_GRPC_ADDR          ConfigMap   optional here, refused by name at Dial
+//	LISTEN_ADDR                 ConfigMap   optional — default :8080
+//	GRPC_LISTEN_ADDR            ConfigMap   optional — default :9090
+//	TENANT_CACHE_TTL            ConfigMap   optional — default 30s
+//	RABBITMQ_DSN                Secret      optional — refused by name at connect time
+//	RABBITMQ_EXCHANGE           ConfigMap   optional — refused by name at connect time
+//	ELASTICSEARCH_ADDRS         ConfigMap   optional — refused by name at connect time
+//	ELASTICSEARCH_API_KEY       Secret      optional — refused by name at connect time
+//	ELASTICSEARCH_INDEX_PREFIX  ConfigMap   optional — refused by name at connect time
+//	DANGEROUS_AUTH_BYPASS       ConfigMap   optional — refused outright when ENV=prod
+//
+// THE TABLE IS HERE AND NOT IN A MANIFEST because the manifests are not in this repository's
+// gift and a classification that lives only in deploy/ is one nobody reading the config layer
+// can check. What deploy/ decides is which object holds the value; what this file decides is
+// which object is ALLOWED to.
+//
+// WHY POSTGRESQL AND REDIS HAVE ONE VARIABLE EACH AND NOT FIVE: a DSN already carries the host,
+// the port, the user, the password and the Redis database number, and every consumer in this
+// repository takes a DSN (sql.Open, redis.ParseURL). Splitting it into PG_HOST + PG_PORT +
+// PG_USER + PG_PASSWORD + REDIS_DB would create a second source for facts the DSN already
+// states, and two sources for one fact drift (rule 9, invariant 2) — here the drift is a
+// service pointed at one database while the startup line names another.
 package config
 
 import (
@@ -29,6 +74,18 @@ import (
 type Config struct {
 	// ListenAddr is the address this process serves on.
 	ListenAddr string
+
+	// listenAddrEnv is LISTEN_ADDR exactly as the environment gave it — empty when unset.
+	//
+	// WHY A SECOND, UNEXPORTED COPY: six services used to read LISTEN_ADDR themselves with
+	// `os.Getenv` because each wanted its own default port (:8085, :8087, …) and ListenAddr
+	// had already collapsed "unset" into ":8080". Two reads of one variable is two answers to
+	// one question, and the two had already drifted — every one of those six would have
+	// listened on a port the config layer did not know about.
+	//
+	// Unexported on purpose: the only way to use it is ListenAddrHoac, which forces the caller
+	// to state its default. A public field would let the next caller re-invent the collapse.
+	listenAddrEnv string
 
 	// GRPCListenAddr is the address this process serves gRPC on — a SEPARATE port from
 	// ListenAddr, not a shared one.
@@ -67,6 +124,78 @@ type Config struct {
 	//
 	// Same type, same reason as DatabaseDSN: it carries a credential.
 	RedisDSN secret.DSN
+
+	// RabbitMQDSN is the broker for DELAYED background work — deadline reminders, escalation,
+	// and the five automation jobs. ADR 0010 fixes what it is and is not for: background tasks
+	// with a delay, NEVER inter-service events, which are Kafka's. Putting an inter-service
+	// event on this connection is rule 2, invariant 3 broken, not a shortcut.
+	//
+	// k8s SECRET: an amqp URL carries the broker password. Same type and same reason as
+	// DatabaseDSN — secret.DSN redacts the password on every rendering path while keeping the
+	// host readable, so a startup line still says which broker this process opened.
+	//
+	// OPTIONAL, AND THAT IS THE WHOLE ARGUMENT OF THIS FIELD. Nothing in this repository
+	// publishes or consumes a task yet. Making it required at Load would stop all eight services
+	// from starting on any machine that has not set it — refusing to run working code in order
+	// to protect code that does not exist. Required belongs to what is actually used:
+	// DATABASE_DSN, because every service opens a database in its first thirty lines.
+	//
+	// IT IS THE IdentityGRPCAddr PRECEDENT, NOT A THIRD PATTERN: empty is allowed here, and the
+	// first thing that genuinely needs a broker refuses BY NAME at connect time, so the operator
+	// reads "thiếu RABBITMQ_DSN" rather than watching reminders silently never fire.
+	RabbitMQDSN secret.DSN
+
+	// RabbitMQExchange is the exchange the background-task publisher binds to.
+	//
+	// k8s CONFIGMAP: a name is not a credential. It belongs in a manifest a reviewer can read.
+	//
+	// NO DEFAULT, on purpose, and this one is not the usual "a default on the isolation path"
+	// argument — it is that the exchange topology has not been decided. ADR 0010 chose RabbitMQ
+	// and named what it is for; it did not name an exchange, a queue or a routing key. Writing
+	// "vigov.tasks" here would record that decision in a source file instead of in an ADR, and
+	// the next person would read it as settled. Empty until whoever wires the first job names it.
+	RabbitMQExchange string
+
+	// ElasticsearchAddrs are the search cluster nodes, comma-separated in the environment.
+	//
+	// k8s CONFIGMAP: hosts and ports, no credential.
+	//
+	// ADR 0010 CONSTRAINS THIS HARDER THAN THE OTHERS, and the constraint is a business one:
+	// Elasticsearch serves FULL-SYSTEM SEARCH ONLY and must never produce a reported figure.
+	// It is near-real-time — refresh is a second by default, longer during a reindex — and the
+	// disbursement totals and overdue-petition counts go to leadership. A figure that is off is
+	// an incident somebody answers for, not a display bug. Reporting figures come from the
+	// PostgreSQL read model.
+	//
+	// OPTIONAL, and more clearly so than RabbitMQ: ADR 0010 itself says to consider DEFERRING
+	// Elastic, on the grounds that pg_trgm + unaccent is probably enough at ~10,000 records per
+	// commune, and that it should be added when search is measured slow rather than assumed so.
+	// A deployment with this empty is the deployment ADR 0010 expects today.
+	ElasticsearchAddrs []string
+
+	// ElasticsearchAPIKey authenticates to the search cluster.
+	//
+	// k8s SECRET: the bytes ARE the credential, so the type has to refuse to render them — same
+	// reason as GRPCCallerKey. An API key differs from a DSN in that there is no host inside it
+	// worth keeping readable, so it collapses to *** on every path.
+	//
+	// OPTIONAL, like the addresses. A cluster reachable without authentication is a legitimate
+	// choice inside a closed network and a bad one for an index holding petition contents
+	// (rule 3), so it is not refused here — it is REPORTED at every startup outside dev by
+	// CanhBao, which is where a choice somebody has to own belongs.
+	ElasticsearchAPIKey secret.Secret
+
+	// ElasticsearchIndexPrefix namespaces this deployment's indices.
+	//
+	// k8s CONFIGMAP: a name, not a credential.
+	//
+	// IT IS THE DEPLOYMENT'S PREFIX AND NOTHING MORE. The per-commune part of an index name is
+	// NOT decided here: rule 1, invariant 7 requires every index, room, cache key and queue to
+	// carry t:<tenant_id>, and that belongs to whoever writes the indexer, where the tenant is
+	// in the context. A prefix read from the environment cannot be per-commune anyway — one
+	// process serves every commune, so an environment variable holding a commune's name gives
+	// every commune whichever one was deployed last (rule 8, invariant 5).
+	ElasticsearchIndexPrefix string
 
 	// PlatformGRPCAddr is where the platform service answers ResolveHost — the RPC that maps an
 	// incoming Host to a commune (proto/vigov/platform/v1/platform.proto).
@@ -234,11 +363,27 @@ func Load(serviceName string) (Config, error) {
 
 	cfg := Config{
 		ListenAddr:       firstNonEmpty(os.Getenv("LISTEN_ADDR"), ":8080"),
+		listenAddrEnv:    strings.TrimSpace(os.Getenv("LISTEN_ADDR")),
 		GRPCListenAddr:   firstNonEmpty(os.Getenv("GRPC_LISTEN_ADDR"), ":9090"),
 		DatabaseDSN:      secret.DSN(dsn),
 		RedisDSN:         secret.DSN(strings.TrimSpace(os.Getenv("REDIS_DSN"))),
 		PlatformGRPCAddr: strings.TrimSpace(os.Getenv("PLATFORM_GRPC_ADDR")),
 		IdentityGRPCAddr: strings.TrimSpace(os.Getenv("IDENTITY_GRPC_ADDR")),
+		// NONE OF THE FOLLOWING FIVE APPEARS IN `thieu` ABOVE, and that is a decision rather
+		// than an omission. Nothing in this repository connects to RabbitMQ or Elasticsearch
+		// yet; a variable made required at Load stops all eight services from starting until
+		// four more values are set, in order to protect code that does not exist. Each is
+		// refused BY NAME by the first thing that genuinely needs it — the IDENTITY_GRPC_ADDR
+		// precedent — so an absent broker is a named refusal at connect time, never a reminder
+		// that silently never fires.
+		//
+		// Trimmed for the same reason as GRPC_CALLER_KEY below: a trailing newline pasted out
+		// of a k8s Secret or ConfigMap turns into a connection error that names the wrong cause.
+		RabbitMQDSN:              secret.DSN(strings.TrimSpace(os.Getenv("RABBITMQ_DSN"))),
+		RabbitMQExchange:         strings.TrimSpace(os.Getenv("RABBITMQ_EXCHANGE")),
+		ElasticsearchAddrs:       danhSach(os.Getenv("ELASTICSEARCH_ADDRS")),
+		ElasticsearchAPIKey:      secret.Secret(strings.TrimSpace(os.Getenv("ELASTICSEARCH_API_KEY"))),
+		ElasticsearchIndexPrefix: strings.TrimSpace(os.Getenv("ELASTICSEARCH_INDEX_PREFIX")),
 		// Trimmed above: a trailing newline pasted out of a k8s secret would make the key
 		// compare unequal at the far end, and the refusal it produces says "unauthenticated" —
 		// which sends the reader looking for a missing variable rather than for an invisible
@@ -262,6 +407,26 @@ func Load(serviceName string) (Config, error) {
 
 // CanhBao lists the dangerous settings currently in force, for logging at startup.
 // Empty in a correctly configured deployment.
+// ListenAddrHoac reports the configured listen address, or this service's own default.
+//
+// IT EXISTS SO THE ENVIRONMENT IS READ EXACTLY ONCE (rule 11, invariant 1). Six services used
+// to call `os.Getenv("LISTEN_ADDR")` in their own main.go, each with a different hard-coded
+// fallback, because ListenAddr had already turned "unset" into ":8080". The result was two
+// sources for one fact that disagreed: the config layer believed :8080 while the process
+// listened on :8087.
+//
+// The default is the CALLER's, and that is deliberate: which port a service takes when nothing
+// says otherwise is a property of that service, not of the shared config package. Under k8s
+// every pod has its own address and they can all be :8080; the distinct ports only matter when
+// several services run on one developer machine, which is exactly where getting it wrong is
+// cheapest to discover and most annoying to live with.
+func (c Config) ListenAddrHoac(macDinh string) string {
+	if c.listenAddrEnv == "" {
+		return macDinh
+	}
+	return c.listenAddrEnv
+}
+
 func (c Config) CanhBao() []string {
 	var ra []string
 	if c.DangerousAuthBypass {
@@ -276,6 +441,31 @@ func (c Config) CanhBao() []string {
 	if c.Env != EnvDev && c.RedisDSN == "" {
 		ra = append(ra, "REDIS_DSN trống — chống trùng request không hoạt động, "+
 			"route khai idem.DongKhiHong sẽ trả 503")
+	}
+	// A HALF-CONFIGURED DEPENDENCY, WHICH IS THE ONE STATE NOBODY MEANS TO BE IN. Both pairs
+	// below report a name that was set while the thing it names has nowhere to go — and the
+	// usual cause is a typo'd key in the ConfigMap or the Secret, which leaves the intended
+	// variable empty while a plausible-looking one is present.
+	//
+	// DELIBERATELY SILENT WHEN BOTH ARE EMPTY. Nothing uses RabbitMQ or Elasticsearch yet, so a
+	// warning on every startup of all eight services would be noise in every environment — and
+	// a CanhBao list that is never empty is a list operators learn to scroll past, which costs
+	// the DANGEROUS_AUTH_BYPASS line above its only reader.
+	if c.RabbitMQExchange != "" && c.RabbitMQDSN == "" {
+		ra = append(ra, "RABBITMQ_EXCHANGE có giá trị nhưng RABBITMQ_DSN trống — "+
+			"tác vụ nền không có chỗ để gửi; kiểm lại tên khoá trong k8s Secret")
+	}
+	if !c.ElasticsearchAPIKey.Rong() && len(c.ElasticsearchAddrs) == 0 {
+		ra = append(ra, "ELASTICSEARCH_API_KEY có giá trị nhưng ELASTICSEARCH_ADDRS trống — "+
+			"một khoá đang nằm trong môi trường của tiến trình không bao giờ dùng tới nó")
+	}
+	// An index holding petition contents is an index holding citizen personal data (rule 3).
+	// Reachable without authentication is a choice somebody may legitimately make inside a
+	// closed network — it is not refused, it is said out loud so it is owned. Dev is exempt:
+	// a local single-node Elastic has no credential to configure.
+	if c.Env != EnvDev && len(c.ElasticsearchAddrs) > 0 && c.ElasticsearchAPIKey.Rong() {
+		ra = append(ra, "ELASTICSEARCH_ADDRS có giá trị nhưng ELASTICSEARCH_API_KEY trống — "+
+			"cụm tìm kiếm chứa nội dung phản ánh đang mở, không xác thực")
 	}
 	// Only reachable in dev — Load refuses to start anywhere else.
 	if len(c.SessionSigningKeys) == 0 {
@@ -300,6 +490,10 @@ func (c Config) CanhBao() []string {
 func (c Config) Redacted() Config {
 	c.DatabaseDSN = secret.DSN(c.DatabaseDSN.String())
 	c.RedisDSN = secret.DSN(c.RedisDSN.String())
+	// Every DSN field, not merely the two that existed when this function was written. A DSN
+	// added to the struct and forgotten here is a value that still leaks through .Lo() to
+	// anything holding a "redacted" copy.
+	c.RabbitMQDSN = secret.DSN(c.RabbitMQDSN.String())
 	return c
 }
 
@@ -330,10 +524,24 @@ func duration(s string, mac time.Duration) time.Duration {
 // "which strings were configured".
 func khoaKy(raw string) []Khoa {
 	var ra []Khoa
+	for _, phan := range danhSach(raw) {
+		ra = append(ra, Khoa(phan))
+	}
+	return ra
+}
+
+// danhSach splits a comma-separated variable, trims each entry and drops the empty ones.
+//
+// ONE SPLITTER, NOT TWO. Trailing commas and stray whitespace arrive from every hand-edited
+// manifest, and a second copy of this loop is a second place for the trimming to be forgotten —
+// which shows up as a cluster node addressed with a leading space and a dial error that names
+// the wrong cause. Order is preserved: SESSION_SIGNING_KEYS depends on it, because the first
+// key signs.
+func danhSach(raw string) []string {
+	var ra []string
 	for _, phan := range strings.Split(raw, ",") {
-		phan = strings.TrimSpace(phan)
-		if phan != "" {
-			ra = append(ra, Khoa(phan))
+		if phan = strings.TrimSpace(phan); phan != "" {
+			ra = append(ra, phan)
 		}
 	}
 	return ra

@@ -127,10 +127,9 @@ func chay(log *slog.Logger) error {
 		Log:         log,
 	})
 
-	addr := os.Getenv("LISTEN_ADDR")
-	if addr == "" {
-		addr = ":8084"
-	}
+	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
+	// The default is this service's own — see config.ListenAddrHoac for why it lives here.
+	addr := cfg.ListenAddrHoac(":8084")
 	log.Info("starting", "service", "petitions", "addr", addr)
 	return http.ListenAndServe(addr, dungBien(mux, directory, dinhDanh, log))
 }

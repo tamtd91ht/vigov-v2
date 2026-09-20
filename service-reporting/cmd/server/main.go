@@ -43,7 +43,10 @@ func main() {
 	// It is wired ahead of the rest on purpose. The schema is what every other step will be
 	// written against, and `0002_audit_log_append_only.sql` — which turns "append-only" from a
 	// comment into a database constraint — had been committed and never applied by anything.
-	if err := chayMigration(log); err != nil {
+	// chayMigration returns the config it already loaded: loading it a second time here
+	// would be two reads of one environment for one fact (rule 11, invariant 1).
+	cfg, err := chayMigration(log)
+	if err != nil {
 		log.Error("migration không chạy được", "service", "reporting", "err", err)
 		os.Exit(1)
 	}
@@ -66,10 +69,9 @@ func main() {
 	//	h = httpx.Recover(traceID)(h)
 	//	h = httpx.StripTenantHeaders(h)
 
-	addr := os.Getenv("LISTEN_ADDR")
-	if addr == "" {
-		addr = ":8088"
-	}
+	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
+	// The default is this service's own — see config.ListenAddrHoac for why it lives here.
+	addr := cfg.ListenAddrHoac(":8088")
 	log.Info("starting", "service", "reporting", "addr", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Error("server stopped", "err", err)
@@ -82,13 +84,13 @@ func main() {
 // The pool is opened and closed here rather than handed onward because step 2 of the list above
 // is not written yet: this service has no store. When store.New arrives, this function folds
 // into the main wiring and the pool is opened once — the migration call itself does not change.
-func chayMigration(log *slog.Logger) error {
+func chayMigration(log *slog.Logger) (config.Config, error) {
 	// Platform-wide constants only. Per-commune values are read at RUNTIME (rule 1, invariant
 	// 10) — there is nothing per-commune on this path in any case: the schema is shared by every
 	// commune the process serves, partitioned by tenant_id rather than split per commune.
 	cfg, err := config.Load("reporting")
 	if err != nil {
-		return err
+		return config.Config{}, err
 	}
 	for _, canhBao := range cfg.CanhBao() {
 		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet", canhBao)
@@ -98,23 +100,23 @@ func chayMigration(log *slog.Logger) error {
 	// argument, and nowhere else (rule 8).
 	db, err := sql.Open("pgx", cfg.DatabaseDSN.Lo())
 	if err != nil {
-		return err
+		return config.Config{}, err
 	}
 	defer db.Close()
 
 	ctx, huy := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer huy()
 	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("reporting: không nối được cơ sở dữ liệu: %w", err)
+		return config.Config{}, fmt.Errorf("reporting: không nối được cơ sở dữ liệu: %w", err)
 	}
 
 	kq, err := migrate.Chay(ctx, db, migrations.FS, "reporting")
 	if err != nil {
-		return err
+		return config.Config{}, err
 	}
 	// Logged even when nothing was applied: "applied 0 files" at startup is how an operator
 	// finds out the replica is already at the schema they expected, without opening a psql
 	// prompt.
 	log.Info("migration xong", "service", "reporting", "da_ap", kq.DaAp, "bo_qua", len(kq.BoQua))
-	return nil
+	return cfg, nil
 }

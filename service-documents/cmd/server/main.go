@@ -143,10 +143,9 @@ func run(log *slog.Logger) error {
 		Log:        log,
 	})
 
-	addr := os.Getenv("LISTEN_ADDR")
-	if addr == "" {
-		addr = ":8083"
-	}
+	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
+	// The default is this service's own — see config.ListenAddrHoac for why it lives here.
+	addr := cfg.ListenAddrHoac(":8083")
 	log.Info("starting", "service", "documents", "addr", addr,
 		// secret.DSN redacts the password on every rendering path and keeps the host, so this line
 		// still says which database was opened (rule 8).

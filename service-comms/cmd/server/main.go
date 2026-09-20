@@ -117,10 +117,9 @@ func main() {
 		Log:           log,
 	})
 
-	addr := os.Getenv("LISTEN_ADDR")
-	if addr == "" {
-		addr = ":8087"
-	}
+	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
+	// The default is this service's own — see config.ListenAddrHoac for why it lives here.
+	addr := cfg.ListenAddrHoac(":8087")
 	log.Info("starting", "service", "comms", "addr", addr)
 	if err := http.ListenAndServe(addr, dungBien(mux, directory, dinhDanh, log)); err != nil {
 		log.Error("server stopped", "err", err)
