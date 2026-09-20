@@ -20,14 +20,15 @@ import (
 // ordering and isolation, and a test that needs infrastructure is a test that stops being run —
 // this repository's integration suites skip themselves silently without VIGOV_TEST_DSN.
 //
-// THE ONE THING THIS HARNESS FAKES THAT IDENTITY'S DOES NOT, said plainly so nobody reads more
-// into a green run than it proves: comms HAS NO AUTHENTICATION EDGE YET. identity builds its
-// principal in XacThuc, from a signed cookie checked against the session registry, and its tests
-// exercise that real middleware. This service has no equivalent — cmd/server steps 3 and 4
-// (tenant.Directory, authz.Checker) are still TODOs — so `xacThucGia` below puts a principal into
-// the context directly. What the tests below therefore prove is what authz.AnyAuthenticated and
-// the handler do with a principal, NOT that a token is validated: that part does not exist in this
-// service and no test here can pretend otherwise.
+// WHAT THIS HARNESS STILL FAKES, said plainly so nobody reads more into a green run than it proves:
+// `xacThucGia` below puts a principal into the context directly, so the tests here prove what
+// authz.AnyAuthenticated and the handler do WITH a principal, and nothing about how one is obtained.
+//
+// The real edge exists now — core/staffauth.Middleware, asking identity over gRPC, mounted by
+// cmd/server.dungBien — and it is exercised where it is wired, in cmd/server/main_test.go. Keeping
+// the injection here is deliberate rather than leftover: the route's own properties (ordering,
+// isolation, refusal) must stay testable without a resolver, and a harness that had to stand up a
+// fake identity to assert a sort order is a harness that gets bypassed.
 
 // --- fixtures ---------------------------------------------------------------------------
 

@@ -116,12 +116,14 @@ func (c *checkerGia) Allows(context.Context, authz.Principal, authz.Perm) bool {
 
 type khoaChuTheThu struct{}
 
-// chuTheThu STANDS IN FOR THE AUTHENTICATION MIDDLEWARE THIS SERVICE DOES NOT HAVE YET, and the
-// gap is real rather than a testing convenience — see cmd/server/main.go, where the same edge
-// chain is still a TODO. service-identity builds its principal in XacThuc, from a session cookie
-// it verifies against the session registry; documents has no session registry of its own and may
-// not import identity's (rule 2, forbidden #1), so how it will rebuild a principal is an open
-// wiring question.
+// chuTheThu INJECTS A PRINCIPAL DIRECTLY, in place of the real authentication edge.
+//
+// THE EDGE EXISTS NOW: core/staffauth.Middleware asks identity over gRPC, and cmd/server.dungBien
+// mounts it — cmd/server/main_test.go drives that chain end to end, including the wrong-commune
+// and identity-down cases. Keeping the injection here is deliberate rather than leftover: the
+// properties this package owns (ordering, isolation, refusal) must stay testable without standing
+// up a fake identity service, and a harness that needed one to assert a sort order is a harness
+// that gets bypassed.
 //
 // What this stand-in reproduces is the ONE property the routes depend on: a principal carrying its
 // OWN commune, put into the context INSIDE httpx.TenantMiddleware. It deliberately does NOT copy

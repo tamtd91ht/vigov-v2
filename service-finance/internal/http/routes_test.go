@@ -51,7 +51,9 @@ var (
 	xaB = tenant.ID("01JB" + strings.Repeat("B", 22))
 )
 
-// canBoCua builds the principal the real authentication middleware will build for one commune.
+// canBoCua builds the principal core/staffauth.Middleware builds for one commune — the same shape,
+// injected directly so this package's properties stay testable without a fake identity service.
+// The real middleware is driven end to end in cmd/server/main_test.go.
 func canBoCua(xa tenant.ID) *authz.Principal {
 	return &authz.Principal{ID: idNoiBo, Kind: "staff", TenantID: xa}
 }

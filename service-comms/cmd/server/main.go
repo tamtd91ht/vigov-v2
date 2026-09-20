@@ -17,8 +17,13 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/vihat/vigov/core/config"
+	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/migrate"
+	"github.com/vihat/vigov/core/platformclient"
+	"github.com/vihat/vigov/core/staffauth"
 	pkgstore "github.com/vihat/vigov/core/store"
+	"github.com/vihat/vigov/core/tenant"
 	svchttp "github.com/vihat/vigov/service-comms/internal/http"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 	"github.com/vihat/vigov/service-comms/migrations"
@@ -27,19 +32,14 @@ import (
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
-	// Steps 1 and 2 of the wiring list are below and are no longer a skeleton: config is loaded
-	// from the environment, and the pool is opened once and handed to both the migration runner
-	// and the repositories — the fold the note on chayMigration predicted.
+	// Steps 1 to 4 of the wiring list are below and are no longer a skeleton: config, the pool, the
+	// commune directory and the staff-authentication edge are all real.
 	//
-	// TODO(skeleton): still missing, in this order —
-	//   3. directory   tenant.Directory backed by the platform service, cached with a short
-	//                  TTL — this sits on the path of every request at 200+ communes
-	//   4. checker     authz.Checker backed by the identity service
+	// TODO(skeleton): still missing —
 	//   5. consumers   event handlers; each refuses a message with no commune
 	//
-	// UNTIL 3 AND 4 LAND, THE ONE MOUNTED ROUTE ANSWERS 401 TO EVERYBODY — see the note at
-	// svchttp.Register below. It fails closed, which is the right direction, but it is not
-	// serving.
+	// A consumer is NOT covered by the edge chain below: a message carries its commune inside
+	// itself (rule 1, invariant 9), and a consumer that finds none refuses rather than guessing.
 
 	// 1. config — platform-wide constants only. Per-commune values are read at RUNTIME (rule 1,
 	// invariant 10); there is nothing per-commune on this path in any case, because the schema is
@@ -83,49 +83,96 @@ func main() {
 	// raw pool is a repository that can read every commune at once (rule 1, invariant 5).
 	kho := pkgstore.New(db)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	// 3. directory — Host -> commune, over gRPC to the platform service. There is no second way to
+	// resolve a commune: the registry tables belong to the platform service, and a connection to
+	// another service's schema is rule 2, forbidden #2. The cache is what makes a network call per
+	// request affordable at 200+ communes (ADR 0004, decision 5).
+	//
+	// NEITHER CLIENT IS CLOSED ON A defer, for the reason already stated on the pool above: this
+	// process exits through os.Exit, which runs no defers.
+	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr, cfg.GRPCCallerKey, log)
+	if err != nil {
+		log.Error("không nối được dịch vụ nền tảng", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+	directory := tenant.NewCachedDirectory(nenTang, cfg.TenantCacheTTL)
 
-	// WHAT THE MOUNTED ROUTE CAN AND CANNOT DO TODAY, said here rather than discovered in staging.
-	//
-	// The edge chain below is still commented out, because step 3 (a tenant.Directory backed by the
-	// platform service) and step 4 (an authz.Checker backed by identity) do not exist in this
-	// service yet. Nothing here builds an authz.Principal, so GET /api/v1/map-asset-types answers
-	// 401 to every caller: authz.AnyAuthenticated refuses before the handler runs, before
-	// tenant.MustFrom is ever reached. That is the correct direction to fail in — closed — but it
-	// means this route serves no traffic until those two steps land, and no amount of testing in
-	// this service can substitute for them.
-	//
-	// Deps.Checker is left nil on purpose: no mounted route consults it, and inventing a stand-in
-	// that answers "yes" would be a permission check that is not one.
+	// 4. identity — session cookie -> staff principal, over gRPC. This service owns no session
+	// registry and may not import identity's (rule 2, forbidden #1), so the principal comes from
+	// the contract: ResolveStaffPrincipal, once per staff request, with no cache.
+	dinhDanh, err := identityclient.Dial(cfg.IdentityGRPCAddr, cfg.GRPCCallerKey, log)
+	if err != nil {
+		log.Error("không nối được dịch vụ định danh", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+
+	// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware obtained
+	// for THIS request and holds no state of its own. No mounted route declares
+	// authz.RequirePermission yet; wiring it now is what makes the first one that does work rather
+	// than meet a nil interface at request time.
+	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
+		Checker:       staffauth.Checker{},
 		LoaiTaiNguyen: commsstore.NewLoaiTaiNguyenBanDoStore(kho),
 		Log:           log,
 	})
-
-	// The edge chain. Order matters and is not negotiable:
-	//   StripTenantHeaders  a client naming its own commune is a client granting itself access
-	//   Recover             turns tenant.MustFrom's deliberate panic into a traceable 500
-	//   TenantMiddleware    resolves Host -> commune; unknown Host returns 404, never a default
-	//
-	//	var h http.Handler = mux
-	//	h = httpx.TenantMiddleware(directory)(h)
-	//	h = httpx.Recover(traceID)(h)
-	//	h = httpx.StripTenantHeaders(h)
 
 	addr := os.Getenv("LISTEN_ADDR")
 	if addr == "" {
 		addr = ":8087"
 	}
 	log.Info("starting", "service", "comms", "addr", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, dungBien(mux, directory, dinhDanh, log)); err != nil {
 		log.Error("server stopped", "err", err)
 		os.Exit(1)
 	}
 }
+
+// dungBien builds the edge chain this binary serves.
+//
+// IT IS A FUNCTION SO A TEST CAN DRIVE THE REAL CHAIN. core/staffauth proves what the
+// authentication middleware does and core/httpx proves what TenantMiddleware does; neither can see
+// whether THIS binary installs them. A middleware deleted from here leaves a service that starts,
+// serves and answers — and answers 401 to every member of staff holding a valid session, which is
+// the exact state this service shipped in until today. Nothing else in this repository turns red
+// for that, so cmd/server/main_test.go speaks through this function.
+//
+// ORDER MATTERS AND IS NOT NEGOTIABLE, outermost first:
+//
+//	StripTenantHeaders  a client naming its own commune is a client granting itself access
+//	Recover             turns tenant.MustFrom's deliberate panic into a traceable 500
+//	TenantMiddleware    resolves Host -> commune; unknown Host returns 404, never a default
+//	staffauth           rebuilds authz.Principal by asking identity; INSIDE TenantMiddleware,
+//	                    because the outgoing call carries the commune from the context and the
+//	                    principal is stamped with the commune resolved from Host
+//
+// /healthz IS DELIBERATELY OUTSIDE THE WHOLE CHAIN, on the outer mux: it answers whether this
+// process is alive, which is true or false regardless of which commune is asking. Behind Host
+// resolution it would fail whenever the platform service does, and an orchestrator would then
+// restart a healthy process during somebody else's outage.
+func dungBien(mux http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
+	log *slog.Logger) http.Handler {
+
+	var h http.Handler = mux
+	h = staffauth.Middleware(dinhDanh, log)(h)
+	h = httpx.TenantMiddleware(danhBa)(h)
+	h = httpx.Recover(traceID)(h)
+	h = httpx.StripTenantHeaders(h)
+
+	ngoai := http.NewServeMux()
+	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	ngoai.Handle("/", h)
+	return ngoai
+}
+
+// traceID returns the id a caller can quote when reporting a problem.
+//
+// TODO(next): lift this from the incoming request header once the reverse proxy sets one, so a
+// single citizen complaint can be followed across services. Same shape and same TODO as identity's.
+func traceID(context.Context) string { return "" }
 
 // chayMigration applies this service's embedded migrations to this service's OWN database.
 //
