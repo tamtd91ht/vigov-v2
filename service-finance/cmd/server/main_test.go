@@ -25,6 +25,7 @@ import (
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-finance/internal/domain"
 	svchttp "github.com/vihat/vigov/service-finance/internal/http"
+	fistore "github.com/vihat/vigov/service-finance/internal/store"
 )
 
 const (
@@ -114,7 +115,12 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 	svchttp.Register(mux, svchttp.Deps{
 		Checker: staffauth.Checker{},
 		HangMuc: kho,
-		Log:     log,
+		// The disbursement routes are wired so that Register mounts THE WHOLE surface this service
+		// ships. This file is about the edge chain — Host -> commune -> principal — and it asserts
+		// on the capital plan catalogue route; a Deps missing a dependency would make Register
+		// refuse to start, which is exactly what it is supposed to do.
+		DuAn: khoDuAnTrong{},
+		Log:  log,
 	})
 
 	danhBa := thuMucGia{
@@ -259,4 +265,16 @@ func TestLoiGoiPhanGiaiMangXaCuaHost(t *testing.T) {
 	if m2.pg.xaDaGui != xaB {
 		t.Errorf("ở host B, xã đã gửi = %q, muốn %q", m2.pg.xaDaGui, xaB)
 	}
+}
+
+// khoDuAnTrong is a project store holding nothing. No case in this file reads a project: the
+// properties under test here are about the edge, not about disbursement figures.
+type khoDuAnTrong struct{}
+
+func (khoDuAnTrong) DanhSach(context.Context, fistore.LocDuAn) ([]domain.TienDoDuAn, error) {
+	return nil, nil
+}
+
+func (khoDuAnTrong) ChiTiet(context.Context, string) (domain.TienDoDuAn, error) {
+	return domain.TienDoDuAn{}, fistore.ErrKhongThayDuAn
 }

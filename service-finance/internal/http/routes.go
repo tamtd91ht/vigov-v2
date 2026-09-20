@@ -29,9 +29,11 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/service-finance/internal/domain"
+	fistore "github.com/vihat/vigov/service-finance/internal/store"
 )
 
 // HangMucKeHoachVonDanhMuc is the commune's capital plan category catalogue, for
@@ -51,10 +53,29 @@ type HangMucKeHoachVonDanhMuc interface {
 	DanhSach(ctx context.Context) ([]domain.HangMucKeHoachVon, error)
 }
 
+// DuAnTienDo is the commune's investment projects with their DERIVED disbursement figures, for
+// GET /api/v1/disbursements/projects and .../{id}.
+//
+// AN INTERFACE DECLARED AT THE POINT OF USE, not the concrete *fistore.DuAnStore — the same reason
+// HangMucKeHoachVonDanhMuc gives: the properties these routes exist to hold (the permission
+// declaration, the commune check ahead of any read, a refusal rather than a truncated list that
+// gets totalled) have to be testable without a PostgreSQL, or they get tested once and never
+// again. There is no PostgreSQL reachable from this repository's build environment.
+type DuAnTienDo interface {
+	DanhSach(ctx context.Context, loc fistore.LocDuAn) ([]domain.TienDoDuAn, error)
+	ChiTiet(ctx context.Context, id string) (domain.TienDoDuAn, error)
+}
+
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
 type Deps struct {
 	Checker authz.Checker
 	HangMuc HangMucKeHoachVonDanhMuc
+	DuAn    DuAnTienDo
+
+	// Nay is the clock the derived disbursement figures are computed against. NIL IN PRODUCTION,
+	// where Handler.nay falls back to time.Now — see the reason there. It exists so the delay
+	// arithmetic of §3 can be exercised at the two dates it is most fragile on.
+	Nay func() time.Time
 
 	Log *slog.Logger
 }
@@ -69,12 +90,19 @@ func Register(mux *http.ServeMux, d Deps) {
 	// find out would be a member of staff in front of a government screen. Same discipline as
 	// authz.Public("") and idem.KhongCan("").
 	//
-	// Deps.Checker is deliberately NOT checked yet: no route in this service declares
-	// RequirePermission, so demanding a checker would refuse to start over a dependency nothing
-	// uses. The first guarded route adds its own case here — and until then a nil Checker cannot
-	// silently weaken anything, because nothing reads it.
+	// Deps.Checker IS NOW CHECKED, and the comment that used to stand here said why it was not:
+	// no route declared RequirePermission, so demanding a checker would have refused to start over
+	// a dependency nothing read. The disbursement routes below declare `budget.read`, so that is no
+	// longer true — a nil Checker would make authz.RequirePermission panic on the first request
+	// from a member of staff, which is the worst possible moment to find out.
+	if d.Checker == nil {
+		panic("finance/http: thiếu authz.Checker — các tuyến giải ngân khai budget.read và sẽ panic khi có người gọi")
+	}
 	if d.HangMuc == nil {
 		panic("finance/http: thiếu kho danh mục hạng mục kế hoạch vốn — GET /api/v1/capital-plan-categories sẽ panic khi có người gọi")
+	}
+	if d.DuAn == nil {
+		panic("finance/http: thiếu kho dự án — các tuyến /api/v1/disbursements/projects sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -140,4 +168,57 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/capital-plan-categories",
 		authz.AnyAuthenticated("tên hạng mục xuất hiện ở ô phân loại dòng kế hoạch vốn và mọi bộ lọc của các màn hình tài chính — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục của xã lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachHangMucKeHoachVon)))
+
+	// --- disbursement tracking: the commune's investment projects -----------------------------
+	//
+	// `budget.read` IS A KEY THAT ALREADY EXISTS — it is one of the three `budget.*` rows loaded by
+	// service-identity/migrations/0001_init.sql (`budget.read`, `budget.update`, `budget.confirm`).
+	// Nothing here invents a new one: a permission string absent from `quyen` is a permission no
+	// administrator can grant on the Phân quyền screen, so a route guarded by one is a route
+	// nobody can ever reach (rule 5, invariant 3b).
+	//
+	// NOT AnyAuthenticated, unlike the catalogue route above, and the difference is the data. A
+	// list of budget classifications says nothing; this says how much money the commune has and
+	// how much of it has moved, project by project, with the names of the units responsible. That
+	// is the commune's financial position before it is published anywhere — readable by the
+	// accountant and by leadership, not by every account that can sign in.
+	//
+	// THE URL NOUN `projects` IS NOT SETTLED, AND THIS IS THE ONE THING TO CONFIRM BEFORE THE
+	// CONTRACT IS PUBLISHED. `disbursements` is settled — kb/00-foundation/ubiquitous-language.md
+	// maps `giai_ngan` to it. `du_an` HAS NO ROW IN THAT TABLE, and ADR 0011 says a concept with no
+	// row is asked about, not translated on the spot: `org-units` is the worked example of an
+	// obvious English word being the wrong one. The path is written here so the slice runs; it has
+	// reached no client, because kb/20-contracts/openapi.json has not been regenerated. Moving it
+	// is one string today and a contract change after that.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Danh sách dự án đầu tư của xã theo năm ngân sách, kèm số đã giải ngân suy ra từ chứng từ
+	// @screen   06-giai-ngan §7
+	// @reply    200 danhSachDuAnRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/disbursements/projects",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.DanhSachDuAn)))
+
+	// 404 covers both "no such project" and "a project of another commune", deliberately — see the
+	// handler. There is no path here that could answer differently for the two, because the store
+	// cannot reach another commune's row at all.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Chi tiết một dự án đầu tư: kế hoạch vốn, đã giải ngân, tỷ lệ và điểm chậm
+	// @screen   06-giai-ngan §8
+	// @reply    200 duAnRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/disbursements/projects/{id}",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.ChiTietDuAn)))
 }

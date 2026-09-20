@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
@@ -130,9 +131,31 @@ func hangMucMau() *hangMucGia {
 // a checker that granted something would be describing an enforcement path that does not exist. It
 // is wired anyway, so that the AnyAuthenticated route is proved to answer 200 for an account
 // holding NO permission at all — which is the whole reason that declaration was chosen.
-type checkerGia struct{}
+// checkerGia grants exactly the permissions it was built with, and nothing else, in any commune.
+//
+// IT USED TO GRANT NOTHING AT ALL, and the comment here said why: no route declared
+// RequirePermission, so a checker that granted something would have described an enforcement path
+// that did not exist. The disbursement routes declare `budget.read`, so the fixture now has to be
+// able to say "this account holds it" and "this one does not" — that difference is what the 403
+// case of rule 5, invariant 7 is made of.
+//
+// THE COMMUNE IS NOT COMPARED HERE, deliberately: authz.RequirePermission does that comparison
+// itself, before it ever calls Allows. A checker that also compared would hide a guard that had
+// stopped comparing.
+type checkerGia struct{ cho map[authz.Perm]bool }
 
-func (checkerGia) Allows(context.Context, authz.Principal, authz.Perm) bool { return false }
+func (c checkerGia) Allows(_ context.Context, _ authz.Principal, perm authz.Perm) bool {
+	return c.cho[perm]
+}
+
+// khongQuyen is an account that can sign in and holds nothing. It is the fixture the
+// AnyAuthenticated route needs — that declaration exists precisely so such an account gets 200.
+func khongQuyen() checkerGia { return checkerGia{} }
+
+// coQuyen grants one real key. `budget.read` is one of the three `budget.*` rows loaded by
+// service-identity/migrations/0001_init.sql; a fixture granting an invented key would prove a
+// route reachable that no administrator could ever grant access to.
+func coQuyen(perm authz.Perm) checkerGia { return checkerGia{cho: map[authz.Perm]bool{perm: true}} }
 
 // --- harness ----------------------------------------------------------------------------------
 
@@ -141,6 +164,7 @@ type mayChu struct {
 	mux     *http.ServeMux
 	thuMuc  thuMucGia
 	hangMuc *hangMucGia
+	duAn    *duAnGia
 }
 
 // dungMayChu mounts the REAL routes through Register.
@@ -151,17 +175,31 @@ type mayChu struct {
 func dungMayChu(t *testing.T) *mayChu {
 	t.Helper()
 
+	return dungMayChuVoi(t, khongQuyen())
+}
+
+// dungMayChuVoi mounts the REAL routes with a chosen permission set.
+//
+// The clock is FIXED at lucDaQua7096 — the instant §3 uses in its worked examples, 70,96% of the
+// 2026 budget year. A test that let the routes read the wall clock would assert a different delay
+// score every day it ran, so it would end up asserting nothing.
+func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
+	t.Helper()
+
 	hangMuc := hangMucMau()
+	duAn := duAnMau()
 	d := Deps{
-		Checker: checkerGia{},
+		Checker: c,
 		HangMuc: hangMuc,
+		DuAn:    duAn,
+		Nay:     func() time.Time { return lucDaQua7096 },
 		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	mux := http.NewServeMux()
 	Register(mux, d)
 
-	return &mayChu{d: d, mux: mux, thuMuc: thuMucMau(), hangMuc: hangMuc}
+	return &mayChu{d: d, mux: mux, thuMuc: thuMucMau(), hangMuc: hangMuc, duAn: duAn}
 }
 
 // xacThucGia stands in for the staff-authentication middleware this service does not have yet.

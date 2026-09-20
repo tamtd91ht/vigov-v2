@@ -55,6 +55,83 @@
         }
       }
     },
+    "/api/v1/citizen-reports/{maTraCuu}": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Một phiếu phản ánh, tra theo mã tra cứu đã trả cho người dân",
+        "operationId": "petitions_get_citizen_reports_by_maTraCuu",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.read"
+        },
+        "x-vigov-task": "df25652c98fe",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.phieuPhanAnhRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/communes/current": {
       "get": {
         "summary": "Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập",
@@ -75,6 +152,160 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/identity.thongTinXa"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/disbursements/projects": {
+      "get": {
+        "summary": "Danh sách dự án đầu tư của xã theo năm ngân sách, kèm số đã giải ngân suy ra từ chứng từ",
+        "operationId": "finance_get_disbursements_projects",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "e31112187547",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.danhSachDuAnRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/disbursements/projects/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Chi tiết một dự án đầu tư: kế hoạch vốn, đã giải ngân, tỷ lệ và điểm chậm",
+        "operationId": "finance_get_disbursements_projects_by_id",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "b323b19c2d66",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.duAnRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
                 }
               }
             }
@@ -1206,6 +1437,30 @@
         ],
         "additionalProperties": false
       },
+      "finance.danhSachDuAnRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.duAnRa"
+            }
+          },
+          "year": {
+            "type": "integer"
+          },
+          "delay_threshold": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "delay_threshold",
+          "items",
+          "year"
+        ],
+        "additionalProperties": false
+      },
       "finance.danhSachHangMucRa": {
         "type": "object",
         "properties": {
@@ -1218,6 +1473,99 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "finance.duAnRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "`ma` — issued once, never reissued"
+          },
+          "year": {
+            "type": "integer",
+            "description": "`nam` — each budget year is its own set of projects (§13 rule 8)"
+          },
+          "category_id": {
+            "type": "string",
+            "description": "`hang_muc_id`"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "planned_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "`ke_hoach_von_nam`, đồng"
+          },
+          "approved_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "§9's rule for a blank field already applied"
+          },
+          "disbursed_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "DERIVED from the vouchers, stored nowhere"
+          },
+          "remaining_amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "disbursed_ratio": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "delay_score": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "is_delayed": {
+            "type": "boolean"
+          },
+          "org_unit_id": {
+            "type": "string"
+          },
+          "assignee_id": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string"
+          },
+          "completion_date": {
+            "type": "string"
+          },
+          "disbursement_deadline": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "approved_amount",
+          "category_id",
+          "code",
+          "delay_score",
+          "disbursed_amount",
+          "disbursed_ratio",
+          "disbursement_deadline",
+          "id",
+          "is_delayed",
+          "name",
+          "planned_amount",
+          "remaining_amount",
+          "year"
         ],
         "additionalProperties": false
       },
@@ -2140,6 +2488,86 @@
           "id",
           "is_default",
           "label"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.phieuPhanAnhRa": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string",
+            "description": "`zalo-mini-app` | `zalo-oa` | `web-xa` | `can-bo-nhap-ho`"
+          },
+          "status": {
+            "type": "string",
+            "description": "one of the nine (ADR 0027)"
+          },
+          "field": {
+            "type": "string"
+          },
+          "field_label": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "reporter_name": {
+            "type": "string"
+          },
+          "reporter_phone": {
+            "type": "string"
+          },
+          "anonymous": {
+            "type": "boolean"
+          },
+          "clock_from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "booked_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acknowledge_due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "resolve_due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "public": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "acknowledge_due",
+          "address",
+          "anonymous",
+          "booked_at",
+          "channel",
+          "clock_from",
+          "code",
+          "content",
+          "field",
+          "field_label",
+          "public",
+          "reporter_name",
+          "reporter_phone",
+          "resolve_due",
+          "status"
         ],
         "additionalProperties": false
       }

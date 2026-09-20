@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 // Handler serves the finance routes. It holds no business logic: the use cases in internal/app
@@ -20,6 +21,21 @@ func NewHandler(d Deps) *Handler {
 		d.Log = slog.Default()
 	}
 	return &Handler{d: d}
+}
+
+// nay is the clock every derived figure is computed against.
+//
+// WHY A SEAM AND NOT time.Now() AT THE CALL SITE: the disbursement screen's "điểm chậm" is a
+// comparison between how much of the budget year has gone and how much money has moved (§3). That
+// arithmetic is at its most fragile on the first and last days of a year, and a handler reading
+// the wall clock directly cannot be tested on either of those days — so the one case that matters
+// would be the one case never exercised. Deps.Nay is nil in production and this returns the real
+// clock; a test sets it to a fixed instant.
+func (h *Handler) nay() time.Time {
+	if h.d.Nay == nil {
+		return time.Now()
+	}
+	return h.d.Nay()
 }
 
 // vietJSON writes one JSON body. Same shape as the identity service's helper of the same name,

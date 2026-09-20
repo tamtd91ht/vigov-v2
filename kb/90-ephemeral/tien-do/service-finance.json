@@ -36,6 +36,38 @@
       "bang_chung": "6 ca service-finance/internal/store/hang_muc_ke_hoach_von_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN, gói vẫn in `ok` — kiểm 2026-09-20",
       "no_confirm": [],
       "tiep_theo": "Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat (đọc information_schema) nhưng nó CHƯA CHẠY. Một lượt đối chiếu TĨNH với DDL của migration cho kết quả thiếu 0 cột — đó là đọc hai tệp trong kho, KHÔNG phải kiểm lược đồ đã triển khai. Driver giả cũng không kiểm được định tuyến phân mảnh, UNIQUE một mặc định, hay trigger ba tầng"
+    },
+    {
+      "id": "giai-ngan-migration-du-an-chung-tu",
+      "viec": "Migration 0004: bảng du_an + chung_tu_giai_ngan (§11) — tiền là BIGINT đơn vị đồng, phân mảnh HASH MODULUS 32",
+      "trang_thai": "xong",
+      "bang_chung": "service-finance/migrations/0004_du_an_va_chung_tu_giai_ngan.sql — hai bảng, 64 phân mảnh, UNIQUE (tenant_id, ma) ĐẾM CẢ dòng xoá mềm, trigger ho_so_luu_tru_cam_xoa_cung chặn DELETE trên cả hai bảng, trigger chung_tu_da_khoa chặn sửa/xoá chứng từ đã khoá, khối BACKSTOP kiểm phân mảnh. KHÔNG có cột da_giai_ngan: luỹ kế suy ra từ SUM chứng từ. `gofmt -l . && go vet ./... && go test -count=1 ./...` sạch — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA CHẠY TRÊN PostgreSQL THẬT. Không tệp .sql nào của service này từng chạy (xem mục sql-chua-chay). Chưa kiểm được: định tuyến phân mảnh, khoá ngoại logic du_an.hang_muc_id (cố ý KHÔNG khai FK — theo tiền lệ 0003), hai trigger, và CHECK chung_tu_giai_ngan_khoa_co_thoi_diem"
+    },
+    {
+      "id": "giai-ngan-mien-va-kho",
+      "viec": "Miền: tỷ lệ giải ngân, điểm chậm, luỹ kế · kho có phạm vi xã cho dự án",
+      "trang_thai": "xong",
+      "bang_chung": "service-finance/internal/domain/du_an.go (Dong int64, PhanVan phần vạn, TyLeGiaiNgan, PhanTramThoiGianDaQua, DiemCham, LaCham, LuyKe, KeHoachTuyenTinh) + du_an_test.go đối chiếu ĐÚNG số của §3 (10,33% · 70,96 điểm · 176,5%). service-finance/internal/store/du_an.go dùng Scoped.QueryJoin, $1 ràng buộc CẢ HAI vế của phép nối + du_an_test.go. Một lỗi TRÀN int64 bị test bắt tại chỗ: `nay.Sub(dau) * 10000` tràn vì Duration là nanô giây — đã sửa sang giây, chú thích tại dòng",
+      "no_confirm": [],
+      "tiep_theo": "Chưa có: tìm tự do theo tên/mã dự án (§7.1 `q`) — cần chốt bỏ dấu và khớp tiền tố hay khớp chuỗi con; và tổng hợp 'tiến độ theo hạng mục' (§5)"
+    },
+    {
+      "id": "giai-ngan-tuyen-doc",
+      "viec": "Hai tuyến ĐỌC: danh sách dự án theo năm, chi tiết dự án",
+      "trang_thai": "xong",
+      "bang_chung": "service-finance/internal/http/routes.go khai authz.RequirePermission(d.Checker, \"budget.read\") trong CÙNG câu lệnh mux.Handle cho GET /api/v1/disbursements/projects và .../{id}. service-finance/internal/http/du_an_test.go có đủ bốn ca luật 5 bất biến 7 cho CẢ HAI tuyến, cộng ca hai xã trùng id dự án. Đồng hồ cố định qua Deps.Nay nên điểm chậm tái lập được",
+      "no_confirm": [],
+      "tiep_theo": "DANH TỪ URL `projects` CHƯA CHỐT — hỏi khách/chủ sở hữu trước khi `make kb` sinh openapi.json. `disbursements` đã chốt trong ubiquitous-language.md; `du_an` KHÔNG có dòng nào, và ADR 0011 bảo HỎI chứ đừng tự dịch. Chưa có client nào thấy đường dẫn này"
+    },
+    {
+      "id": "giai-ngan-tuyen-ghi",
+      "viec": "Tuyến GHI: nhập giải ngân (§10) và ghi nhận khoản chi (§8.2)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "không có tuyến POST/PATCH nào cho giải ngân trong service-finance/internal/http/routes.go — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Hết giờ, và còn câu chưa rõ: ai được mở khoá chứng từ ngoài budget.confirm, chứng từ hoàn/âm có tồn tại không (schema đang CHECK so_tien > 0), và ngưỡng cảnh báo chậm theo năm (bảng nam_ngan_sach §11) chưa dựng nên đang là hằng số trong domain"
     }
   ]
 }

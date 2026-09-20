@@ -97,13 +97,18 @@ func main() {
 	defer dinhDanh.Close()
 
 	// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware obtained
-	// for THIS request and holds no state of its own. No route here declares
-	// authz.RequirePermission yet; wiring it now is what makes the first one that does work rather
-	// than meet a nil interface at request time.
+	// for THIS request and holds no state of its own. The disbursement routes declare
+	// authz.RequirePermission("budget.read"), so it is now load-bearing rather than wired ahead of
+	// its first user — Register refuses to start without it.
+	//
+	// Deps.Nay is left nil ON PURPOSE: in production the derived disbursement figures are computed
+	// against the real clock (Handler.nay). Only tests replace it, so that the delay arithmetic can
+	// be exercised on the first and last days of a budget year.
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		Checker: staffauth.Checker{},
 		HangMuc: fistore.NewHangMucKeHoachVonStore(kho),
+		DuAn:    fistore.NewDuAnStore(kho),
 		Log:     log,
 	})
 

@@ -35,8 +35,41 @@ export type documents_loaiVanBanRa = {
   "is_default": boolean;
 };
 
+export type finance_danhSachDuAnRa = {
+  "items": Array<finance_duAnRa>;
+  "year": number;
+  "delay_threshold": number;
+};
+
 export type finance_danhSachHangMucRa = {
   "items": Array<finance_hangMucRa>;
+};
+
+export type finance_duAnRa = {
+  "id": string;
+  /** `ma` — issued once, never reissued */
+  "code": string;
+  /** `nam` — each budget year is its own set of projects (§13 rule 8) */
+  "year": number;
+  /** `hang_muc_id` */
+  "category_id": string;
+  "name": string;
+  "description"?: string;
+  /** `ke_hoach_von_nam`, đồng */
+  "planned_amount": number;
+  /** §9's rule for a blank field already applied */
+  "approved_amount": number;
+  /** DERIVED from the vouchers, stored nowhere */
+  "disbursed_amount": number;
+  "remaining_amount": number;
+  "disbursed_ratio": number | null;
+  "delay_score": number | null;
+  "is_delayed": boolean;
+  "org_unit_id"?: string;
+  "assignee_id"?: string;
+  "start_date"?: string;
+  "completion_date"?: string;
+  "disbursement_deadline": string;
 };
 
 export type finance_hangMucRa = {
@@ -314,6 +347,26 @@ export type petitions_mucUuTienRa = {
   "active": boolean;
 };
 
+export type petitions_phieuPhanAnhRa = {
+  "code": string;
+  /** `zalo-mini-app` | `zalo-oa` | `web-xa` | `can-bo-nhap-ho` */
+  "channel": string;
+  /** one of the nine (ADR 0027) */
+  "status": string;
+  "field": string;
+  "field_label": string;
+  "content": string;
+  "address": string;
+  "reporter_name": string;
+  "reporter_phone": string;
+  "anonymous": boolean;
+  "clock_from": string;
+  "booked_at": string;
+  "acknowledge_due": string | null;
+  "resolve_due": string | null;
+  "public": boolean;
+};
+
 /** GET /api/v1/capital-plan-categories — Danh mục hạng mục kế hoạch vốn của xã — dùng cho ô phân loại dòng kế hoạch và bộ lọc */
 export type finance_get_capital_plan_categories = {
   duongDan: "/api/v1/capital-plan-categories";
@@ -330,6 +383,25 @@ export type finance_get_capital_plan_categories = {
   };
 };
 
+/** GET /api/v1/citizen-reports/{maTraCuu} — Một phiếu phản ánh, tra theo mã tra cứu đã trả cho người dân */
+export type petitions_get_citizen_reports_by_maTraCuu = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}";
+  phuongThuc: "GET";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_phieuPhanAnhRa;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/communes/current — Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập */
 export type identity_get_communes_current = {
   duongDan: "/api/v1/communes/current";
@@ -341,6 +413,44 @@ export type identity_get_communes_current = {
   than: never;
   phanHoi: {
     200: identity_thongTinXa;
+  };
+};
+
+/** GET /api/v1/disbursements/projects — Danh sách dự án đầu tư của xã theo năm ngân sách, kèm số đã giải ngân suy ra từ chứng từ */
+export type finance_get_disbursements_projects = {
+  duongDan: "/api/v1/disbursements/projects";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_danhSachDuAnRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/disbursements/projects/{id} — Chi tiết một dự án đầu tư: kế hoạch vốn, đã giải ngân, tỷ lệ và điểm chậm */
+export type finance_get_disbursements_projects_by_id = {
+  duongDan: "/api/v1/disbursements/projects/{id}";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_duAnRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
   };
 };
 

@@ -22,6 +22,26 @@
       "declared_in": "service-finance/internal/http/routes.go"
     },
     {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/citizen-reports/{maTraCuu}",
+      "operation_id": "petitions_get_citizen_reports_by_maTraCuu",
+      "task_id": "df25652c98fe",
+      "summary": "Một phiếu phản ánh, tra theo mã tra cứu đã trả cho người dân",
+      "screen": "09-phan-anh-nguoi-dan §8",
+      "permission_kind": "permission",
+      "permission": "feedback.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.phieuPhanAnhRa",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
       "service": "identity",
       "method": "GET",
       "path": "/api/v1/communes/current",
@@ -36,6 +56,47 @@
         "200": "identity.thongTinXa"
       },
       "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/disbursements/projects",
+      "operation_id": "finance_get_disbursements_projects",
+      "task_id": "e31112187547",
+      "summary": "Danh sách dự án đầu tư của xã theo năm ngân sách, kèm số đã giải ngân suy ra từ chứng từ",
+      "screen": "06-giai-ngan §7",
+      "permission_kind": "permission",
+      "permission": "budget.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.danhSachDuAnRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/disbursements/projects/{id}",
+      "operation_id": "finance_get_disbursements_projects_by_id",
+      "task_id": "b323b19c2d66",
+      "summary": "Chi tiết một dự án đầu tư: kế hoạch vốn, đã giải ngân, tỷ lệ và điểm chậm",
+      "screen": "06-giai-ngan §8",
+      "permission_kind": "permission",
+      "permission": "budget.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.duAnRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
     },
     {
       "service": "documents",
