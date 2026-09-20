@@ -115,7 +115,7 @@ func (r *rowsCot) Next(dest []driver.Value) error {
 // test is pinned to cotCanBo itself rather than to a copy of it.
 func cotTrongCauLenh(q string) ([]string, error) {
 	i := strings.Index(q, "SELECT ")
-	j := strings.Index(q, " FROM ")
+	j := ketThucDanhSachCot(q)
 	if i < 0 || j <= i {
 		return nil, fmt.Errorf("driver giả: không đọc được danh sách cột từ %q", q)
 	}
@@ -124,6 +124,38 @@ func cotTrongCauLenh(q string) ([]string, error) {
 		ten = append(ten, tenCot(bieu))
 	}
 	return ten, nil
+}
+
+// ketThucDanhSachCot finds the FROM that ends the SELECT list: the first one at parenthesis
+// DEPTH ZERO.
+//
+// IT USED TO BE strings.Index(q, " FROM ") AND THAT WAS TWO TRAPS IN ONE LINE. A statement whose
+// FROM starts a line — which every multi-line query in this package does — was not found at all,
+// because the character before FROM is a newline rather than a space. And a statement carrying a
+// derived table (`LEFT JOIN (SELECT … FROM …)`) or an `EXTRACT(EPOCH FROM x)` in its column list
+// matched the INNER one, so the "column list" this returned stopped in the middle of an expression
+// and the fake driver reported a missing sample value for a column nobody had written.
+func ketThucDanhSachCot(q string) int {
+	muc := 0
+	for i := 0; i < len(q); i++ {
+		switch q[i] {
+		case '(':
+			muc++
+		case ')':
+			muc--
+		}
+		if muc != 0 || i == 0 || !khoangTrang(q[i-1]) || !strings.HasPrefix(q[i:], "FROM") {
+			continue
+		}
+		if i+4 < len(q) && khoangTrang(q[i+4]) {
+			return i
+		}
+	}
+	return -1
+}
+
+func khoangTrang(b byte) bool {
+	return b == ' ' || b == '\n' || b == '\t' || b == '\r'
 }
 
 // tachDauPhay splits on commas AT DEPTH ZERO. `coalesce(bo_phan_id,”)` carries a comma of its
@@ -148,14 +180,39 @@ func tachDauPhay(s string) []string {
 	return append(ra, s[sau:])
 }
 
-// tenCot reduces one SELECT-list expression to the column it reads.
+// tenCot reduces one SELECT-list expression to THE NAME POSTGRESQL WOULD GIVE THAT OUTPUT COLUMN.
+// That is the whole contract: the fake driver builds rows by looking these names up, so it can
+// only assert something real if it names columns the same way the server does.
+//
+// Three forms, in the order PostgreSQL resolves them:
+//
+//	`… AS ten`        an explicit alias wins over everything. Statements that compute a value —
+//	                  `date_part('epoch', bat_dau)::int AS bat_dau` — MUST carry one, or the server
+//	                  names the column `date_part`, twice, and nothing lines up with the Scan.
+//	`nl.ngay`         a qualified column is named by its last segment, exactly as the server names
+//	                  it. Without this, a joined statement would need sample rows keyed "nl.ngay",
+//	                  which is a name no database ever returns.
+//	`coalesce(x, '')` named after the column inside, which is what the pre-existing single-table
+//	                  statements in this package rely on.
 func tenCot(bieu string) string {
+	if truong := strings.Fields(bieu); len(truong) >= 2 &&
+		strings.EqualFold(truong[len(truong)-2], "AS") {
+		return truong[len(truong)-1]
+	}
 	s := strings.Join(strings.Fields(bieu), "")
 	if rest, co := strings.CutPrefix(s, "coalesce("); co {
 		if i := strings.Index(rest, ","); i >= 0 {
-			return rest[:i]
+			s = rest[:i]
+		} else {
+			s = strings.TrimSuffix(rest, ")")
 		}
-		return strings.TrimSuffix(rest, ")")
+	}
+	// The qualifier is dropped only on a bare column reference: an expression carrying a '(' is a
+	// function call, and its dots belong to whatever is inside it.
+	if !strings.Contains(s, "(") {
+		if i := strings.LastIndex(s, "."); i >= 0 {
+			return s[i+1:]
+		}
 	}
 	return s
 }

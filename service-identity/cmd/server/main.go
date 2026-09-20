@@ -147,6 +147,16 @@ func run(log *slog.Logger) error {
 	thonToDanPho := idstore.NewThonToDanPhoStore(kho)
 	loaiDonViDanCu := idstore.NewLoaiDonViDanCuStore(kho)
 	khoiNhiemVu := idstore.NewKhoiNhiemVuStore(kho)
+	// The commune's working calendar (migration 0006): the ordinary week, the closures, the swap
+	// days. Three stores, three tables, mirroring the three narrow interfaces in internal/http.
+	//
+	// THEY ARE WIRED ALTHOUGH NO ROUTE IS MOUNTED YET. The URL resource names are being asked
+	// rather than guessed (ADR 0011) — see the end of internal/http/routes.go — and Register
+	// refuses an incomplete Deps regardless of which routes it mounts, so the wiring lands with
+	// the stores rather than with the paths.
+	lichLamViec := idstore.NewLichLamViecStore(kho)
+	ngayNghiLe := idstore.NewNgayNghiLeStore(kho)
+	ngayLamBu := idstore.NewNgayLamBuStore(kho)
 
 	// 5. ONE signer, and the variable is used twice on purpose.
 	//
@@ -215,9 +225,15 @@ func run(log *slog.Logger) error {
 		ThonToDanPho:   thonToDanPho,
 		LoaiDonViDanCu: loaiDonViDanCu,
 		KhoiNhiemVu:    khoiNhiemVu,
-		Signer:         signer, // the SAME pointer app.NewDangNhap was given above
-		Phien:          phien,
-		CanBo:          canBo,
+		// Lịch làm việc của xã (migration 0006) — CHỈ ĐỌC, và chưa có tuyến nào được gắn: tên tài
+		// nguyên URL của ba khái niệm này chưa có dòng trong bảng ánh xạ, nên đang HỎI chứ không
+		// tự dịch (ADR 0011). Ai sửa được lịch của xã cũng chưa ai hỏi.
+		LichLamViec: lichLamViec,
+		NgayNghiLe:  ngayNghiLe,
+		NgayLamBu:   ngayLamBu,
+		Signer:      signer, // the SAME pointer app.NewDangNhap was given above
+		Phien:       phien,
+		CanBo:       canBo,
 		// The SAME store behind two fields, and two fields on purpose: CanBoDoc is the
 		// three-condition read the session middleware runs on every request, CanBoDanhBa is the
 		// register the Cấu hình → Người dùng screen pages through. See the note on CanBoDanhBa.

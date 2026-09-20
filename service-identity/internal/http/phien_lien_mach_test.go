@@ -110,11 +110,17 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		ThonToDanPho:   thonToDanPhoMau(),
 		LoaiDonViDanCu: loaiDonViDanCuMau(),
 		KhoiNhiemVu:    khoiNhiemVuMau(),
-		CanBo:          &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
-		DanhBa:         danhBaMau(),
-		DangNhap:       &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
-		DangXuat:       &dangXuatGia{},
-		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// The three calendar stores, for the same reason and with the same caveat: Register refuses
+		// incomplete Deps whatever it mounts, and today it mounts no calendar route at all — the URL
+		// resource names are being asked rather than guessed (ADR 0011).
+		LichLamViec: lichLamViecMau(),
+		NgayNghiLe:  ngayNghiLeMau(),
+		NgayLamBu:   ngayLamBuMau(),
+		CanBo:       &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
+		DanhBa:      danhBaMau(),
+		DangNhap:    &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
+		DangXuat:    &dangXuatGia{},
+		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	mux := http.NewServeMux()

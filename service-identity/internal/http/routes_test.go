@@ -422,6 +422,117 @@ func khoiNhiemVuMau() *khoiNhiemVuGia {
 	}}
 }
 
+// --- the commune's working calendar (migration 0006) ----------------------------------------
+//
+// THREE FAKES, mirroring the three narrow interfaces in routes.go, and all three KEYED BY COMMUNE
+// — read from the context exactly as *store.Scoped does. Keyed any other way, the isolation cases
+// in lich_lam_viec_test.go would pass while proving nothing.
+//
+// The two date stores are keyed by commune AND YEAR, because the year is the caller's parameter
+// and a fake that ignored it could not tell "the window reaches the store" from "the store returns
+// whatever it has".
+
+type lichLamViecGia struct {
+	theo map[tenant.ID][]domain.CaLamViec
+	loi  error
+	goi  int
+}
+
+func (l *lichLamViecGia) DanhSach(ctx context.Context) ([]domain.CaLamViec, error) {
+	l.goi++
+	if l.loi != nil {
+		return nil, l.loi
+	}
+	return l.theo[tenant.MustFrom(ctx)], nil
+}
+
+// lichLamViecMau gives commune A an ordinary week — a Monday morning and a Monday afternoon with
+// a lunch break between them — and commune B a DIFFERENT shape, a Saturday duty session. Two
+// communes whose calendars looked alike could not show a leak.
+//
+// The gap between the two Monday sessions is deliberate: it is what proves "touching or separate"
+// is not reported as an overlap. The overlapping case is built per-test, because a fixture that
+// always carried a defect would make the healthy path unassertable.
+func lichLamViecMau() *lichLamViecGia {
+	return &lichLamViecGia{theo: map[tenant.ID][]domain.CaLamViec{
+		xaA: {
+			{ID: "llv-001", Thu: 1, BatDau: 7*3600 + 30*60, KetThuc: 11*3600 + 30*60, GhiChu: "Buổi sáng"},
+			{ID: "llv-002", Thu: 1, BatDau: 13*3600 + 30*60, KetThuc: 17 * 3600, GhiChu: "Buổi chiều"},
+		},
+		xaB: {
+			{ID: "llv-b-001", Thu: 6, BatDau: 7*3600 + 30*60, KetThuc: 11*3600 + 30*60, GhiChu: "Ca trực thứ Bảy"},
+		},
+	}}
+}
+
+type ngayNghiLeGia struct {
+	theo map[tenant.ID]map[int][]domain.NgayNghiLe
+	loi  error
+	goi  int
+	nam  int // the year the last call asked for
+}
+
+func (n *ngayNghiLeGia) TheoNam(ctx context.Context, nam int) ([]domain.NgayNghiLe, error) {
+	n.goi++
+	n.nam = nam
+	if n.loi != nil {
+		return nil, n.loi
+	}
+	return n.theo[tenant.MustFrom(ctx)][nam], nil
+}
+
+// ngayNghiLeMau gives commune A two holidays in 2026 and ONE IN 2025, so a test can tell the
+// window apart from "everything this commune has". Commune B's holiday carries a different name.
+func ngayNghiLeMau() *ngayNghiLeGia {
+	return &ngayNghiLeGia{theo: map[tenant.ID]map[int][]domain.NgayNghiLe{
+		xaA: {
+			2025: {{ID: "nnl-2025", Ngay: "2025-09-02", Ten: "Quốc khánh 2025"}},
+			2026: {
+				{ID: "nnl-001", Ngay: "2026-01-01", Ten: "Tết Dương lịch"},
+				{ID: "nnl-002", Ngay: "2026-09-02", Ten: "Quốc khánh"},
+			},
+		},
+		xaB: {
+			2026: {{ID: "nnl-b-001", Ngay: "2026-03-10", Ten: "Lễ hội đình làng xã B"}},
+		},
+	}}
+}
+
+type ngayLamBuGia struct {
+	theo map[tenant.ID]map[int][]domain.CaLamBu
+	loi  error
+	goi  int
+	nam  int
+}
+
+func (n *ngayLamBuGia) TheoNam(ctx context.Context, nam int) ([]domain.CaLamBu, error) {
+	n.goi++
+	n.nam = nam
+	if n.loi != nil {
+		return nil, n.loi
+	}
+	return n.theo[tenant.MustFrom(ctx)][nam], nil
+}
+
+// ngayLamBuMau gives commune A one swap day WITH A LUNCH BREAK — two sessions on one date, which
+// is the shape the table exists to express — and commune B a different date.
+func ngayLamBuMau() *ngayLamBuGia {
+	return &ngayLamBuGia{theo: map[tenant.ID]map[int][]domain.CaLamBu{
+		xaA: {
+			2026: {
+				{ID: "nlb-001", Ngay: "2026-02-21", BatDau: 7*3600 + 30*60, KetThuc: 11*3600 + 30*60,
+					Ten: "Làm bù nghỉ Tết"},
+				{ID: "nlb-002", Ngay: "2026-02-21", BatDau: 13*3600 + 30*60, KetThuc: 17 * 3600,
+					Ten: "Làm bù nghỉ Tết"},
+			},
+		},
+		xaB: {
+			2026: {{ID: "nlb-b-001", Ngay: "2026-04-25", BatDau: 8 * 3600, KetThuc: 11 * 3600,
+				Ten: "Làm bù xã B"}},
+		},
+	}}
+}
+
 // phienGia counts its reads. The count is what proves the commune check happens BEFORE any
 // database access.
 type phienGia struct {
@@ -536,6 +647,12 @@ type mayChu struct {
 	thonToDanPho   *thonToDanPhoGia
 	loaiDonViDanCu *loaiDonViDanCuGia
 	khoiNhiemVu    *khoiNhiemVuGia
+	// The commune's working calendar (migration 0006). No route is mounted for these yet — see
+	// the end of Register — so the tests that exercise them mount the handlers themselves through
+	// `them`.
+	lichLamViec *lichLamViecGia
+	ngayNghiLe  *ngayNghiLeGia
+	ngayLamBu   *ngayLamBuGia
 	// dangNhap and dangXuat are the same values as d.DangNhap / d.DangXuat, typed.
 	dangNhap *dangNhapGia
 	dangXuat *dangXuatGia
@@ -574,6 +691,9 @@ func dungMayChu(t *testing.T) *mayChu {
 	thonToDanPho := thonToDanPhoMau()
 	loaiDonViDanCu := loaiDonViDanCuMau()
 	khoiNhiemVu := khoiNhiemVuMau()
+	lichLamViec := lichLamViecMau()
+	ngayNghiLe := ngayNghiLeMau()
+	ngayLamBu := ngayLamBuMau()
 
 	d := Deps{
 		// Commune A grants the permission; commune B has the same account and grants nothing.
@@ -592,10 +712,15 @@ func dungMayChu(t *testing.T) *mayChu {
 		ThonToDanPho:   thonToDanPho,
 		LoaiDonViDanCu: loaiDonViDanCu,
 		KhoiNhiemVu:    khoiNhiemVu,
-		Signer:         signer,
-		Phien:          phien,
-		CanBo:          canBo,
-		DanhBa:         danhBa,
+		// Wired although no route is mounted: Register refuses an incomplete Deps whatever it
+		// mounts, so the turn that adds the three paths has nothing left to remember.
+		LichLamViec: lichLamViec,
+		NgayNghiLe:  ngayNghiLe,
+		NgayLamBu:   ngayLamBu,
+		Signer:      signer,
+		Phien:       phien,
+		CanBo:       canBo,
+		DanhBa:      danhBa,
 		// The harness gives Deps.Xa its OWN directory value, not the one the edge is built with
 		// below, although both start from the same map. Two values is what lets a test make the
 		DangNhap: &dangNhapGia{
@@ -629,6 +754,10 @@ func dungMayChu(t *testing.T) *mayChu {
 		thonToDanPho:   thonToDanPho,
 		loaiDonViDanCu: loaiDonViDanCu,
 		khoiNhiemVu:    khoiNhiemVu,
+
+		lichLamViec: lichLamViec,
+		ngayNghiLe:  ngayNghiLe,
+		ngayLamBu:   ngayLamBu,
 
 		dangNhap: d.DangNhap.(*dangNhapGia),
 		dangXuat: d.DangXuat.(*dangXuatGia),

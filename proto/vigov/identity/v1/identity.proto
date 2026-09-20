@@ -2,12 +2,22 @@ syntax = "proto3";
 
 package vigov.identity.v1;
 
+import "google/protobuf/timestamp.proto";
+
 // Identity owns two clearly separated populations.
 //
 // Staff are per-commune, accountable, and governed by RBAC.
 // Citizens are PLATFORM-WIDE with a many-to-many relationship to communes, because a person
 // registered in one commune may live, work, or report an issue in another.
 // See kb/10-decisions/0002-citizen-identity-platform-level.md.
+//
+// IT ALSO OWNS ONE THING THAT IS NOT A POPULATION: the commune's WORKING CALENDAR — its
+// ordinary week, its public holidays, its swap working days
+// (service-identity/migrations/0006_lich_lam_viec.sql). It sits here because ADR 0024 places
+// ownership with the CADENCE OF CHANGE rather than with the reader: a commune's office hours
+// change with its administration, alongside `bo_phan`, `vai_tro` and `thon_to_dan_pho`, which
+// already live here — not with a petition. AdvanceWorkingHours below is the only way that
+// calendar leaves this service.
 //
 // CONTRACT RULE — the commune travels in gRPC METADATA, never in a message body.
 //
@@ -145,6 +155,192 @@ service IdentityService {
   rpc BatchGetStaff(BatchGetStaffRequest) returns (BatchGetStaffResponse);
 
   rpc ListCitizenCommunes(ListCitizenCommunesRequest) returns (ListCitizenCommunesResponse);
+
+  // AdvanceWorkingHours moves an instant forward through ONE commune's working calendar and
+  // answers with the instant at which that many WORKING hours have elapsed.
+  //
+  // WHAT IT IS: arithmetic over data this service owns, and nothing more. The caller supplies
+  // both of the things ADR 0007 decides — WHERE the count starts and HOW MANY hours it runs —
+  // so this RPC never decides what a deadline means. identity supplies the one thing the caller
+  // cannot have without opening another service's database (rule 2, forbidden #2): the
+  // commune's own week, its holidays and its swap days.
+  //
+  // WHY IT IS NOT CALLED ComputeDeadline. "Deadline" is the CALLER's word for what it does with
+  // the answer, and ADR 0017 names a contract after what the data IS rather than after what the
+  // reader calls it. The name also keeps the boundary legible: an RPC called ComputeDeadline in
+  // identity reads as identity owning the SLA, which it does not and must not — ADR 0007 owns
+  // the meaning of a deadline, and the numbers stay in the service that receives the record.
+  // (The verb is temporal, not CRUD: this RPC creates no `lich_lam_viec` row and writes nothing
+  // at all.)
+  //
+  // # It returns the ANSWER, not the CALENDAR — the expensive decision of this contract
+  //
+  // The rejected shape is `GetWorkingCalendar`: hand the caller the sessions, the holidays and
+  // the swap days and let it count. It buys two real things — the counting rule stays in the
+  // service that owns the SLA, and one fetch serves many deadlines — and it was rejected for
+  // three things it cannot buy:
+  //
+  //   THE CALLER CANNOT KNOW WHAT TO FETCH. ADR 0007's largest configured value is 168 working
+  //   hours, about four working weeks, and how far in real time that runs DEPENDS ON THE
+  //   HOLIDAYS INSIDE IT — which is the thing being fetched. So the caller must name a date
+  //   range up front, and a caller that names too short a range counts straight through a
+  //   holiday it never asked for. No contract can make "I fetched enough" checkable, and the
+  //   failure mode is a deadline that is too early, told to a citizen, with nothing red.
+  //
+  //   THE REFUSALS BECOME ONE COPY PER CONSUMER. An empty calendar, a date in both the holiday
+  //   and the swap list, and two overlapping sessions are all faults the DATABASE deliberately
+  //   does not enforce — 0006_lich_lam_viec.sql says so, three times, in its own words. Under
+  //   `GetWorkingCalendar` every consumer has to implement all three refusals, and a consumer
+  //   that implements none of them still compiles, still passes its tests, and still answers.
+  //
+  //   FOUR IMPLEMENTATIONS OF THE HARD PART. ADR 0007 §Hệ quả names the hard cases itself:
+  //   holidays, the lunch gap, a receipt outside working hours, a file spanning several weeks.
+  //   `petitions` and `documents` both need this today — ADR 0007's SLA table counts `Văn bản
+  //   đến` as well as `Phản ánh` — and `dossiers` and `finance` are the obvious third and
+  //   fourth. Four counting functions are four places for one off-by-one, on the one figure in
+  //   this system that is a public authority's commitment.
+  //
+  // WHAT THE REJECTED SHAPE BOUGHT IS NOT ALL LOST. The "many deadlines from one fetch" half is
+  // bought back by making THIS request plural (see `working_hours`): one intake computes both
+  // the `Tiếp nhận` and the `Xử lý xong` deadline of ADR 0007's table, from one instant, in one
+  // hop, against one read of one calendar. The half genuinely given up is that identity now
+  // runs the arithmetic — and the first paragraph says exactly what that does and does not
+  // include.
+  //
+  // # One hop per RECEIVED RECORD, and there is no cache
+  //
+  // COUNT THE HOPS HONESTLY: one per intake — one petition received, one incoming document
+  // registered — not one per request and not one per row. Rule 10, invariant 2 is what makes
+  // that true: the deadline is computed ONCE, at intake, and stored, so every later read of
+  // that record reads a stored TIMESTAMPTZ and calls nothing here. That is a different cost
+  // shape from ResolveStaffPrincipal above, which pays a hop on every staff request of four
+  // services.
+  //
+  // SO THERE IS NOTHING HOT TO CACHE, and a cache here would be actively WRONG rather than
+  // merely unnecessary. ADR 0007, decision 6 fixes that a configuration change is NOT
+  // retroactive: it applies to records received AFTER it. A cached calendar inverts exactly
+  // that — a record received after the commune corrected its holidays gets a deadline computed
+  // from the calendar as it was before, on whichever process still held the stale copy. It is
+  // the failure service-identity/internal/store/phien_cong_dan.go refused a cache over (ADR
+  // 0010 leaves no shared cache, identity runs several replicas, and no channel reaches the
+  // copy another replica holds) — landing this time not on a session but on a commitment told
+  // to a citizen and reported upward.
+  //
+  // # The commune travels in metadata, and this RPC is not a candidate for exemption
+  //
+  // ONE CALL, ONE COMMUNE. "x-tenant-id" names whose calendar is read, and there is deliberately
+  // no field in the request that could name a second one. The caller always holds it: an intake
+  // runs behind an edge that has already resolved the commune from Host. Putting this method in
+  // core/grpcx.methodsWithoutTenant would mean reading a commune's configuration without naming
+  // a commune — not a shape this RPC can have — and adding any name to that list is a stop
+  // condition in its own right (ADR 0012, decision 1).
+  //
+  // # Configuration faults the database cannot catch, and this RPC refuses rather than guesses
+  //
+  // Each of these is named in 0006_lich_lam_viec.sql together with the reason the schema does
+  // not enforce it. They all arrive here, and they all have exactly one answer:
+  // FAILED_PRECONDITION — a state a human must fix, never a result.
+  //
+  //   NO SESSIONS AT ALL. A commune with no `lich_lam_viec` row has no working hours, so a count
+  //   in working hours never arrives. THE REFUSAL IS THE ANSWER. "Mon–Fri 08:00–17:00" is not a
+  //   fallback, it is a commitment invented by software and told to a citizen on a false basis
+  //   (rule 10, and the fail-closed principle CLAUDE.md opens with). An empty calendar is also
+  //   the ordinary state of a commune today: nothing is seeded, and the onboarding step that
+  //   would sow the first rows does not exist yet.
+  //
+  //   A DATE IN BOTH `ngay_nghi_le` AND `ngay_lam_bu` — closed and open on the same date. There
+  //   is deliberately NO precedence rule: a silent winner makes one of two rows a person can see
+  //   on the configuration screen do nothing, and nobody ever finds out which. Refused when the
+  //   count CROSSES that date; a conflict on a date the count never reaches cannot change this
+  //   answer and belongs to the write path.
+  //
+  //   TWO SESSIONS THAT OVERLAP on one weekday, or on one swap day. The database stops two
+  //   sessions STARTING at the same minute and no more — the stronger EXCLUDE constraint needs
+  //   `btree_gist`, and 0006 would not put the service's startup behind an extension nobody has
+  //   confirmed is present. Overlapping sessions double-count their overlap, which makes the
+  //   deadline EARLIER than the commune's real hours: the direction that reports an authority
+  //   late when it was not. It stays refused here even after the write path rejects it — a read
+  //   path that assumes a guarantee nothing enforces answers confidently and wrongly.
+  //
+  //   AN ANSWER BEYOND THE HORIZON, 366 days after `count_from`. See `reached_at`: this is the
+  //   same family of fault, because past the horizon the holidays are not in the table yet.
+  //
+  // A FIFTH CASE IS REFUSED ON THE SAME PRINCIPLE AND IS NOT SETTLED: a `ngay_lam_bu` row on a
+  // date whose weekday ALREADY has `lich_lam_viec` sessions. Two readings exist — the swap day
+  // REPLACES that day's hours, or it ADDS to them — and they differ by exactly the overlap.
+  // Nothing in ADR 0007 or in 0006 decides between them, so neither may be guessed: refused.
+  // Whoever needs a one-off extra session on an ordinary working day asks the user for the rule
+  // first; loosening a refusal later is additive, un-inventing a wrong deadline is not.
+  //
+  // THE STATUS CODES ARE PART OF THE CONTRACT:
+  //
+  //   OK                  every requested amount answered. There is no partial success — see
+  //                       AdvanceWorkingHoursResponse.
+  //   INVALID_ARGUMENT    the CALLER is wrong: no `count_from`, an empty `working_hours`, a
+  //                       zero, a value over the ceiling, or more entries than allowed.
+  //   FAILED_PRECONDITION the COMMUNE'S CONFIGURATION is wrong or missing — the cases above.
+  //                       The distinction from INVALID_ARGUMENT is not cosmetic: it is the
+  //                       difference between "fix the calling service" and "open the
+  //                       configuration screen", and an operator sent to the wrong one of those
+  //                       reads a calendar that is fine for an afternoon.
+  //   NOT_FOUND           NEVER produced. Nothing here is looked up by id.
+  //   UNAUTHENTICATED     NEVER produced by this RPC, for the reason the table on
+  //                       ResolveStaffPrincipal gives: that code belongs to the caller-key
+  //                       interceptor and means the DEPLOYMENT is misconfigured.
+  //   UNAVAILABLE etc.    the call did not happen, and it is NOT "no deadline". A caller that
+  //                       treats an outage as an answer stores an administrative record with no
+  //                       commitment attached to it. Fail the intake instead.
+  //
+  // # The one obligation on the caller, and it is the easy one to break
+  //
+  // CALL IT ONCE, AT INTAKE, AND STORE WHAT IT RETURNS. The answer is a pure function of the
+  // arguments AND of the calendar as it stands at the instant of the call — so the same call
+  // made next month can legitimately answer differently, because the commune entered a holiday.
+  // Calling it again to "re-derive" a deadline that is already stored silently moves a
+  // commitment already made to a citizen: rule 10, invariant 2 and ADR 0007, decision 6 both
+  // forbid it, and neither is something this contract can enforce.
+  //
+  // RETRYING A FAILED CALL IS SAFE AND EXPECTED: this RPC writes nothing, publishes nothing, and
+  // leaves no audit entry. The audited act is the INTAKE, written by the caller inside its own
+  // transaction (rule 6, invariant 3) — this hop is a read of configuration, not a business act.
+  //
+  // OVERDUE IS STILL DERIVED. This returns the deadline, never a state: rule 10, invariant 3
+  // forbids a column or a field that says "late".
+  //
+  // # What this contract deliberately does NOT answer, and what is therefore blocked
+  //
+  // ADR 0007 §"Lỗ hổng đặc tả" leaves five questions open, and 0006_lich_lam_viec.sql shows
+  // where each one lands. FOUR OF THEM ARE ROWS — office hours, the lunch gap, Saturday, local
+  // holidays — so no shape here depends on their answers, and every answer stays expressible.
+  // THE FIFTH IS NOT A ROW:
+  //
+  //   `count_from` FALLING OUTSIDE EVERY WORKING SESSION — a report submitted at 22:00, on a
+  //   Sunday, during Tết. ADR 0007 PROPOSES counting from the start of the next working session
+  //   and explicitly does not decide it. This contract does not decide it either. The shape
+  //   above holds whichever way it goes, because one rule serves every caller.
+  //
+  //   THE SERVER SIDE OF THIS RPC THEREFORE CANNOT BE WRITTEN YET. Whoever implements it must
+  //   pick that rule, and picking it inside a function is deciding a commitment to a citizen in
+  //   the one place nobody reviews. Ask the user first. If the answer ever turns out to differ
+  //   per commune or per kind of record, THAT is the single thing that would add a field here,
+  //   and it would be additive.
+  //
+  // # Times on this boundary are INSTANTS; the calendar is wall clock; they meet in one place
+  //
+  // `count_from` and `reached_at` are google.protobuf.Timestamp — absolute instants, with no
+  // zone and no offset to get wrong. The calendar they are counted against is the opposite kind
+  // of thing: `lich_lam_viec.bat_dau` is a `TIME` with no zone, because "07:30" is an
+  // instruction to a commune's staff and not a moment in history (0006 argues this at length).
+  //
+  // THE TWO MEET IN EXACTLY ONE PLACE — inside this server, which combines a wall-clock time
+  // with a date IN Asia/Ho_Chi_Minh. That zone is a property of the commune, not of the process:
+  // a server running with TZ=UTC must produce the same answer, so the implementation names the
+  // zone and never reads the host's. Two consequences follow from the shape and are the reason
+  // for it: NO CONSUMER EVER ATTACHES AN OFFSET, and NO WEEKDAY EVER CROSSES THIS BOUNDARY —
+  // `thu` is ISO 8601 where it is stored and where it is read (0006 owns that fact), and a
+  // weekday conversion is where an off-by-one lives for a year before anybody notices the
+  // deadline is a day out.
+  rpc AdvanceWorkingHours(AdvanceWorkingHoursRequest) returns (AdvanceWorkingHoursResponse);
 }
 
 message Staff {
@@ -460,3 +656,117 @@ message BatchGetStaffResponse {
 
 message ListCitizenCommunesRequest { string citizen_id = 1; }
 message ListCitizenCommunesResponse { repeated CitizenCommune items = 1; }
+
+message AdvanceWorkingHoursRequest {
+  // The instant the count starts from. AN INSTANT, not a local wall-clock time.
+  //
+  // IT CARRIES THE CALLER'S MARK, AND THE MARK BELONGS TO THE CALLER. ADR 0007, decision 5 says
+  // the mark is reception and not assignment — and this field is deliberately NOT named
+  // `received_at`, because "reception" is a business event of the calling service and a contract
+  // is named for what the data IS (ADR 0017). A `Văn bản đến` and a `Phản ánh` reach this field
+  // through two different business events; the arithmetic is the same one.
+  //
+  // NOT COMPARED WITH `now`, ON PURPOSE. A document that arrived yesterday and is registered
+  // today counts from yesterday — an ordinary administrative fact, not a mistake. A server that
+  // clamped this forward to `now` would silently move a commitment the caller had already fixed.
+  //
+  // UNSET IS INVALID_ARGUMENT. There is no "count from now" default: a default here makes the
+  // deadline depend on when the call happened to be made rather than on when the authority
+  // received the file, and a default on a path that produces a citizen-facing commitment is the
+  // same class of mistake as a default on the isolation path.
+  google.protobuf.Timestamp count_from = 1;
+
+  // The amounts of WORKING time to advance, in whole working hours. ADR 0007's table holds
+  // 2, 8, 16, 24, 40 and 168.
+  //
+  // PLURAL BECAUSE ONE INTAKE HAS MORE THAN ONE DEADLINE — not as an application of ADR 0012's
+  // batching default, whose reasoning (a list screen, one round trip per row) has no purchase
+  // here. ADR 0007's table gives every row TWO deadlines, `Tiếp nhận` and `Xử lý xong` — 2 hours
+  // and 16 hours for an `An ninh trật tự` report — counted from the SAME instant against the
+  // SAME calendar. A singular RPC would make one intake two hops and give the second hop the
+  // chance to read a calendar the first one did not.
+  //
+  // AN INTEGER OF HOURS, NOT A google.protobuf.Duration, and the type is the safety. A Duration
+  // means wall-clock elapsed time everywhere else it appears, so `16h` in a Duration reads as
+  // "sixteen hours later" — precisely the answer rule 10, forbidden #2 forbids and this whole
+  // RPC exists to prevent. Here the unit sits in the field NAME, where it cannot be mistaken for
+  // an offset. WHOLE HOURS because that is what ADR 0007's table holds; a commune needing 90
+  // minutes is a change to what a deadline MEANS, which belongs to ADR 0007 and would add a
+  // field here rather than reinterpret this one.
+  //
+  // ZERO IS INVALID_ARGUMENT, and this is the cheap one to get wrong. An SLA that was never
+  // configured arrives here as a zero, and a zero answered politely returns `count_from` itself
+  // — a record due at the instant it was received, which every report downstream then reads as
+  // "already late". A missing configuration must fail loudly in the caller that owns it.
+  //
+  // AT MOST 20 ENTRIES; above that INVALID_ARGUMENT, NEVER a silent truncation — the same reason
+  // BatchGetStaffRequest gives: there is no cursor to carry on from, and a truncated answer
+  // stores an administrative record with one of its two commitments missing. 20 is derived from
+  // the caller rather than guessed: ADR 0007's table needs two per record, so this leaves an
+  // order of magnitude of headroom.
+  //
+  // AT MOST 2 000 PER ENTRY; above that INVALID_ARGUMENT and deliberately NOT
+  // FAILED_PRECONDITION. An ordinary working year is 8 hours × 5 days × 52 weeks = 2 080, so
+  // nothing above this ceiling can be delivered inside the horizon on `reached_at` by any week a
+  // commune actually works — which makes it a fault in the CALLER by construction rather than a
+  // fault in the calendar. Answering it with the configuration code would send an operator to
+  // read a calendar that is perfectly correct. ADR 0007's largest real value is 168.
+  //
+  // DUPLICATES ARE COLLAPSED by the server and the order carries no meaning. Map the response by
+  // `working_hours`, never by position.
+  repeated uint32 working_hours = 2;
+}
+
+// Wrapped, not a bare repeated WorkingHoursReached: adding a field later must not change the
+// RPC signature.
+message AdvanceWorkingHoursResponse {
+  // ONE ITEM PER DISTINCT `working_hours` REQUESTED — ALL OF THEM, OR THE CALL FAILS.
+  //
+  // THERE IS NO PARTIAL SUCCESS, and that is the OPPOSITE discipline from BatchGetStaffResponse
+  // above, on purpose. There, a missing id is an ordinary answer, and telling the three reasons
+  // apart would leak that a record exists in a commune the caller may not read. Here every entry
+  // in one call is counted against ONE calendar for ONE commune, so anything that stops one
+  // entry stops every entry — and a response holding one of two amounts would let a petition be
+  // stored carrying its `Tiếp nhận` commitment and no `Xử lý xong` commitment, a half-processed
+  // administrative file of exactly the kind rule 2, invariant 6 exists to forbid.
+  // 0006_lich_lam_viec.sql makes the same choice for the same reason: three tables in one
+  // transaction, all or none.
+  //
+  // MAP BY `working_hours`, NOT BY POSITION. Duplicates in the request are collapsed, so
+  // len(items) can be smaller than len(working_hours) and an index is never a key.
+  repeated WorkingHoursReached items = 1;
+}
+
+// One requested amount of working time, and the instant this commune reaches it.
+message WorkingHoursReached {
+  // Echoed from the request. It is the KEY the caller maps by — never a position.
+  uint32 working_hours = 1;
+
+  // The EARLIEST instant at which this commune has been open for `working_hours` since
+  // `count_from`.
+  //
+  // "EARLIEST" IS ARITHMETIC, NOT A POLICY, and it is written down because the alternative is a
+  // silent off-by-one-session: if the count runs out exactly at 11:30 and the afternoon session
+  // opens at 13:30, the answer is 11:30. Returning 13:30 would hand the commune two hours nobody
+  // granted it — on every deadline that lands on a session boundary, and lunch is a session
+  // boundary every working day.
+  //
+  // AN INSTANT, which is exactly the `TIMESTAMPTZ` the caller stores (ADR 0007, decision 1). The
+  // caller stores this value as given; it does not re-render it through a zone of its own, and
+  // it does not round it.
+  //
+  // THE HORIZON IS 366 DAYS AFTER `count_from`. An answer that would fall beyond it is
+  // FAILED_PRECONDITION, not an answer — and the reason is the Vietnamese working year rather
+  // than a wish to bound a loop. Tết and National Day arrangements, including làm bù, are
+  // announced ONE YEAR AT A TIME (0006_lich_lam_viec.sql, on `ngay_lam_bu`), so a calendar is
+  // only ever complete for about a year ahead. A count that walks past the last holidays anybody
+  // entered does not fail — it returns a confident instant computed from a stretch of time with
+  // no holidays in it, which is the worst of the available answers. Refusing also bounds the
+  // server's walk, but that is the smaller of the two reasons.
+  //
+  // THE HORIZON DOES NOT MAKE THE CALENDAR COMPLETE, and no contract can. A count starting in
+  // December and running into January is inside the horizon and still crosses a year whose
+  // holidays may not be entered yet. That gap belongs to whoever operates the configuration
+  // screen; it is named here so the next reader does not mistake the horizon for a guarantee.
+  google.protobuf.Timestamp reached_at = 2;
+}

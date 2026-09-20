@@ -183,6 +183,49 @@ type (
 		DanhSach(ctx context.Context) ([]domain.KhoiNhiemVu, error)
 	}
 
+	// The commune's working calendar (migration 0006). THREE INTERFACES, THREE TABLES, and the
+	// same discipline as the three reference reads above: an interface is the list of things a
+	// handler CAN do, so the holiday handler must not be able to reach the weekly calendar.
+	//
+	// ⚠ NONE OF THE THREE HAS A ROUTE YET, AND THAT IS THE DECISION, NOT AN OVERSIGHT. The URL
+	// resource names for these concepts have no row in kb/00-foundation/ubiquitous-language.md;
+	// ADR 0011 forbids translating one on the spot and kb/INDEX.yaml's `not_here` says to ASK. A
+	// path cannot be taken back once a commune is live. The handlers, the response shapes and the
+	// stores are complete and wired; what is missing is exactly three `mux.Handle` statements with
+	// their permission declaration and their @-annotation block.
+	//
+	// NO WRITE PATH ON ANY OF THE THREE: who may edit a commune's working calendar has not been
+	// asked — it is the sibling of open question #21 — and a half-written write path looks like a
+	// decision somebody made.
+
+	// LichLamViecDoc is the commune's ordinary working week.
+	//
+	// NO page.Request PARAMETER: a calendar is only correct WHOLE, so the bound is a ceiling
+	// (idstore.TranLichLamViec) rather than a `limit`.
+	LichLamViecDoc interface {
+		DanhSach(ctx context.Context) ([]domain.CaLamViec, error)
+	}
+
+	// NgayNghiLeDoc is the dates the commune does not work, READ ONE YEAR AT A TIME.
+	//
+	// THE YEAR IS A PARAMETER WHERE THE CATALOGUES HAVE NONE, and it is the one difference that
+	// matters: this table grows with TIME rather than with how the commune is organised, so "all
+	// of it" is a list with no upper bound. The window is the unit the screen shows and the unit
+	// the annual announcement arrives in — see idstore.TranNgayNghiLeMotNam.
+	NgayNghiLeDoc interface {
+		TheoNam(ctx context.Context, nam int) ([]domain.NgayNghiLe, error)
+	}
+
+	// NgayLamBuDoc is the dates the commune DOES work although the week says otherwise.
+	//
+	// SEPARATE FROM NgayNghiLeDoc although both are read by year and both answer "what is special
+	// about this date". They are two tables with two shapes — a holiday is a date, a swap day is a
+	// date plus the hours worked — and a date appearing in both is a configuration error both
+	// stores refuse rather than resolve (domain.LoiNgayVuaNghiVuaLamBu).
+	NgayLamBuDoc interface {
+		TheoNam(ctx context.Context, nam int) ([]domain.CaLamBu, error)
+	}
+
 	// DangNhapUC and DangXuatUC are the use cases. The handlers only translate HTTP; the
 	// business write and its audit entry share one transaction inside these.
 	DangNhapUC interface {
@@ -207,12 +250,17 @@ type Deps struct {
 	ThonToDanPho   ThonToDanPhoDanhSach
 	LoaiDonViDanCu LoaiDonViDanCuDanhMuc
 	KhoiNhiemVu    KhoiNhiemVuDanhMuc
-	Signer         *token.Signer
-	Phien          PhienDoc
-	CanBo          CanBoDoc
-	DanhBa         CanBoDanhBa
-	DangNhap       DangNhapUC
-	DangXuat       DangXuatUC
+	// The commune's working calendar (migration 0006). Wired now although no route is mounted
+	// yet — see the three interfaces above for why the paths are being asked rather than guessed.
+	LichLamViec LichLamViecDoc
+	NgayNghiLe  NgayNghiLeDoc
+	NgayLamBu   NgayLamBuDoc
+	Signer      *token.Signer
+	Phien       PhienDoc
+	CanBo       CanBoDoc
+	DanhBa      CanBoDanhBa
+	DangNhap    DangNhapUC
+	DangXuat    DangXuatUC
 
 	Log *slog.Logger
 }
@@ -253,6 +301,17 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho loại đơn vị dân cư — GET /api/v1/residential-unit-types sẽ panic khi có người gọi")
 	case d.KhoiNhiemVu == nil:
 		panic("identity/http: thiếu kho khối nhiệm vụ — GET /api/v1/task-blocs sẽ panic khi có người gọi")
+	// The three calendar stores are refused here ALTHOUGH NO ROUTE IS MOUNTED YET, and that is
+	// deliberate: the turn that adds the three `mux.Handle` statements must not also have to
+	// remember the wiring. Register is called once, at startup, from cmd/server with a full Deps —
+	// so this cannot take a running service down; it can only stop one that was assembled
+	// incompletely, which is the point (same discipline as every case above).
+	case d.LichLamViec == nil:
+		panic("identity/http: thiếu kho lịch làm việc — tuyến đọc lịch (tên tài nguyên URL chưa chốt) sẽ panic khi được gắn")
+	case d.NgayNghiLe == nil:
+		panic("identity/http: thiếu kho ngày nghỉ lễ — tuyến đọc ngày nghỉ (tên tài nguyên URL chưa chốt) sẽ panic khi được gắn")
+	case d.NgayLamBu == nil:
+		panic("identity/http: thiếu kho ngày làm bù — tuyến đọc ngày làm bù (tên tài nguyên URL chưa chốt) sẽ panic khi được gắn")
 	}
 
 	h := NewHandler(d)
@@ -620,4 +679,45 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/task-blocs",
 		authz.AnyAuthenticated("nhãn khối nhiệm vụ xuất hiện ở ô chọn khối trên biểu mẫu nhiệm vụ, ở nhãn dòng và ở bộ lọc danh sách nhiệm vụ — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachKhoiNhiemVu)))
+
+	// --- the commune's working calendar. THREE READ ROUTES, NOT MOUNTED, ON PURPOSE -------------
+	//
+	// WHAT IS MISSING IS THREE `mux.Handle` STATEMENTS AND NOTHING ELSE. The handlers
+	// (h.DanhSachCaLamViec, h.DanhSachNgayNghiLe, h.DanhSachCaLamBu), the response shapes, the
+	// three stores and the wiring above are all in place and tested.
+	//
+	// WHY THEY ARE NOT HERE: the URL resource name for each of the three concepts —
+	// `lich_lam_viec` / `ngay_nghi_le` / `ngay_lam_bu` — has NO ROW in
+	// kb/00-foundation/ubiquitous-language.md. ADR 0011 forbids translating one on the spot, and
+	// kb/INDEX.yaml's `not_here` closes with exactly this case: "Tên tài nguyên URL cho khái niệm
+	// chưa có trong bảng ánh xạ → HỎI, đừng tự dịch". A path cannot be taken back once a commune is
+	// live, which is why `org-units` exists rather than `departments`.
+	//
+	// WHEN THE NAMES ARE SETTLED, each statement takes this shape — the permission is decided and
+	// is NOT the open part:
+	//
+	//	mux.Handle("GET /api/v1/<tên đã chốt>",
+	//	    authz.AnyAuthenticated("<lý do cụ thể>")(
+	//	        http.HandlerFunc(h.DanhSachCaLamViec)))
+	//
+	// AnyAuthenticated, SAME CALL AND SAME REASON AS /org-units, /roles AND THE THREE ABOVE, which
+	// the user settled for catalogue reads on 2026-09-20: office hours and public holidays are
+	// shown on nearly every screen that states a deadline — the due date on a task, the "còn mấy
+	// ngày" chip on a petition, any form that offers a date — so requiring a configuration
+	// permission would not protect anything, it would break those screens for everybody who is not
+	// an administrator.
+	//
+	// THE TRADE-OFF, STATED RATHER THAN GLOSSED: a commune's working hours, its holidays and its
+	// swap days are readable by every signed-in account OF THAT COMMUNE. They are NOT readable
+	// across communes and cannot be — Scoped binds `tenant_id` from the context (rule 1,
+	// invariant 5), so the same request against another commune's domain is refused at the token
+	// layer before any query runs. What is accepted is that a member of staff with no
+	// configuration rights can read when their own authority is open, which is information printed
+	// on the door.
+	//
+	// THE @-ANNOTATION BLOCK GOES WITH EACH STATEMENT, no blank line between, or `tools/apidoc`
+	// will not see it and kb/20-contracts/openapi.json will not carry the route. Each block owes
+	// its real statuses — and the two date routes really do answer 400 (year missing or out of
+	// range) and 409 (a date recorded as both a holiday and a swap day, which both routes REFUSE
+	// rather than resolve; see domain.LoiNgayVuaNghiVuaLamBu).
 }
