@@ -1,0 +1,226 @@
+// Package identityclient is how a service asks identity "who is holding this session".
+//
+// WHY IT LIVES IN core/ AND NOT INSIDE ONE SERVICE: four service edges have to rebuild a staff
+// principal before any guard runs, and the only thing that can answer is identity — whose session
+// registry sits in its own `internal/`, unreachable by rule 2, forbidden #1. Buried in one of the
+// four, the second service to need it would write a second one: two clients, two timeout values,
+// two readings of what a failure means, and eventually two answers to the question every guarded
+// route in the system rests on.
+//
+// WHY IT IS NOT IN core/staffauth, where Resolver is declared: same split as platformclient and
+// tenant.Directory. The interface belongs beside the middleware that consumes it; the transport
+// lives here, so a test of the middleware needs no gRPC and a test of the transport needs no HTTP.
+//
+// WHY NOT A DATABASE READ: the session registry and the grants belong to identity. A second
+// service opening a connection to them is rule 2, forbidden #2 — the read path around the contract
+// that turns eight services into a distributed monolith with no symptoms. It would also be a
+// second implementation of "is this session still valid", and the two would disagree on the day a
+// session is revoked.
+package identityclient
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+
+	"github.com/vihat/vigov/core/authz"
+	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
+	"github.com/vihat/vigov/core/grpcx"
+	"github.com/vihat/vigov/core/secret"
+	"github.com/vihat/vigov/core/staffauth"
+)
+
+// HanGoi bounds one principal resolution.
+//
+// IT EXISTS BECAUSE THIS CALL IS ON THE PATH OF EVERY STAFF REQUEST. Without a deadline, an
+// identity service that accepts connections but never answers holds every in-flight request of
+// four other services open until their own clients give up — one slow dependency becomes five
+// unresponsive services. Three seconds is long for a session read plus a grant read, and short
+// enough that a stall shows up as a 503 rather than as a hang. The same number as
+// platformclient.HanGoi, deliberately: two different deadlines on two hops of the same request
+// would make the observed timeout depend on which dependency was slow.
+const HanGoi = 3 * time.Second
+
+// Client resolves a session credential into a staff principal over gRPC. It implements
+// staffauth.Resolver.
+//
+// THERE IS NO CACHE AND THERE MUST NOT BE ONE. The argument is written out in full on
+// ResolveStaffPrincipal in proto/vigov/identity/v1/identity.proto and on
+// staffauth.StaffPrincipal.PermissionKeys: identity runs several replicas, ADR 0010 fixes the
+// data infrastructure at PostgreSQL only so there is no shared cache, and a revocation served by
+// one replica has no channel on which to reach a copy held by another. A TTL here would keep a
+// revoked session, a locked account or a withdrawn role working for the length of that TTL, and
+// nothing would turn red.
+type Client struct {
+	cl   identityv1.IdentityServiceClient
+	conn *grpc.ClientConn // nil when the client was injected directly, e.g. in a test
+	log  *slog.Logger
+}
+
+// Dial opens the connection to the identity service.
+//
+// grpc.NewClient does not connect eagerly, and that is wanted: a service must still start when
+// identity is momentarily down. What it must NOT do is pretend a session resolved, and
+// ResolveStaff below is where that is held.
+//
+// INSECURE CREDENTIALS, STATED RATHER THAN HIDDEN, and the stakes are higher on this hop than on
+// the platform one: what travels here is a WORKING SESSION TOKEN. The transport is not encrypted
+// and there is no per-service identity. What guards it is two layers, and neither is TLS — the
+// shared caller key attached below, and the gRPC port being confined to the cluster's internal
+// network (ADR 0025). So this client must be pointed at a cluster-internal address ONLY; an
+// address that leaves the cluster puts every staff session on the wire in the clear. When
+// per-service identity arrives — mTLS or a mesh — the credentials change HERE, in one place.
+//
+// khoa IS THE DEPLOYMENT'S ONE CALLER KEY (config.GRPCCallerKey). An empty one panics inside
+// grpcx.UnaryClientCallerAuth, at construction: this end would otherwise send every call without
+// a key and have every one refused, and "503 on every staff request" is a much slower read than a
+// startup message naming the variable.
+func Dial(addr string, khoa secret.Secret, log *slog.Logger) (*Client, error) {
+	if addr == "" {
+		// Fail closed and BY NAME, the same shape as platformclient.Dial. A client with no address
+		// resolves no session, which turns into 503 for every member of staff of every commune —
+		// a failure that looks like "identity is down" and sends somebody to inspect a service
+		// that is running perfectly well.
+		return nil, fmt.Errorf("identityclient: thiếu địa chỉ IDENTITY_GRPC_ADDR")
+	}
+	conn, err := grpc.NewClient(addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// core/grpcx, never a hand-written copy: it is the one place that decides how the commune
+		// travels on the wire, and which RPCs may travel without one.
+		//
+		// ResolveStaffPrincipal IS NOT ON THE EXEMPTION LIST and must never be added to it. The
+		// commune in that metadata is what the server compares against the commune inside the
+		// credential — the comparison rule 1, invariant 8 asks for, made once for all four
+		// services. Exempt it and the comparison has nothing to compare.
+		//
+		// CHAINED, and the caller key goes FIRST, mirroring the server: "who is calling" is
+		// answered before "which commune", so a caller with no key never reaches the commune logic.
+		grpc.WithChainUnaryInterceptor(
+			grpcx.UnaryClientCallerAuth(khoa),
+			grpcx.UnaryClientInterceptor(),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("identityclient: mở kết nối tới %s: %w", addr, err)
+	}
+	return New(identityv1.NewIdentityServiceClient(conn), log).voi(conn), nil
+}
+
+// New wraps an already-built client. Exported so the failure behaviour below can be tested against
+// a fake server — a test that needs a running identity service is a test that stops being run.
+func New(cl identityv1.IdentityServiceClient, log *slog.Logger) *Client {
+	if log == nil {
+		log = slog.Default()
+	}
+	return &Client{cl: cl, log: log}
+}
+
+func (c *Client) voi(conn *grpc.ClientConn) *Client {
+	c.conn = conn
+	return c
+}
+
+// Close releases the connection. Safe on an injected client.
+func (c *Client) Close() error {
+	if c.conn == nil {
+		return nil
+	}
+	return c.conn.Close()
+}
+
+// ResolveStaff implements staffauth.Resolver.
+//
+// THE THREE OUTCOMES ARE KEPT APART HERE AND NOWHERE ELSE, because this is the only place that can
+// see a gRPC status code:
+//
+//	err != nil        the call did not happen — unreachable, timed out, refused, deadline,
+//	                  broken contract. The middleware turns it into 503. It is NEVER folded into
+//	                  "no principal": a caller that reads an outage as anonymity tells every member
+//	                  of staff to sign in again, through the service that is down.
+//	ok == false       OK with no principal. The credential is not usable, and the contract
+//	                  deliberately does not say why — unknown, malformed, expired, revoked, locked,
+//	                  deleted, or issued for another commune all answer the same, so a probe cannot
+//	                  learn how close it is.
+//	ok == true        a usable credential. The key set MAY BE EMPTY and that is an ordinary answer:
+//	                  a live session held by somebody who currently holds no permission.
+//
+// NOTHING HERE LOGS THE TOKEN, AT ANY LEVEL (rule 3, rule 8). Not the value, not the request
+// message — the generated String() prints session_token in full, so a single `"req", req` would
+// put a working credential into the log pipeline, from where it cannot be recalled. The fields
+// below are chosen one at a time for that reason.
+func (c *Client) ResolveStaff(ctx context.Context, sessionToken, clientIP string) (staffauth.StaffPrincipal, bool, error) {
+	if sessionToken == "" {
+		// The middleware never calls without a credential — no cookie means no call. Reaching here
+		// is a wiring fault in some other caller, and it is refused locally rather than sent: the
+		// server answers INVALID_ARGUMENT for exactly this, and a request that can only fail has no
+		// business on the network.
+		return staffauth.StaffPrincipal{}, false, fmt.Errorf(
+			"identityclient: gọi ResolveStaffPrincipal với phiếu phiên rỗng — bên gọi phải bỏ qua khi không có cookie")
+	}
+
+	ctx, huy := context.WithTimeout(ctx, HanGoi)
+	defer huy()
+
+	ra, err := c.cl.ResolveStaffPrincipal(ctx, &identityv1.ResolveStaffPrincipalRequest{
+		SessionToken: sessionToken,
+		// A CLAIM, and it decides nothing. It exists for one line of output at the other end — the
+		// alert raised when a credential's commune disagrees with the commune in metadata — because
+		// across this hop the server can otherwise see only a pod address inside the cluster.
+		ClientIp: clientIP,
+	})
+	if err != nil {
+		// Warn, not Error: this service is still healthy and answering. What has failed is the
+		// dependency every staff request needs, and the middleware says so again with the commune
+		// and the path. The gRPC code is here because it is how an operator tells a genuine outage
+		// (UNAVAILABLE, DeadlineExceeded) from a misconfiguration (Unauthenticated: the caller key;
+		// InvalidArgument: the contract) — all three answer 503 to the client on purpose.
+		c.log.WarnContext(ctx, "CẢNH BÁO HẠ TẦNG: không gọi được ResolveStaffPrincipal",
+			"ma_loi", status.Code(err).String(), "err", err)
+		return staffauth.StaffPrincipal{}, false, fmt.Errorf("identityclient: ResolveStaffPrincipal: %w", err)
+	}
+
+	p := ra.GetPrincipal()
+	if p == nil {
+		// ABSENT MEANS NO PRINCIPAL. This is the ordinary negative — a stale cookie is a daily
+		// event — so it raises nothing and logs nothing.
+		return staffauth.StaffPrincipal{}, false, nil
+	}
+
+	if p.GetStaffId() == "" {
+		// The contract says a principal that is present carries an id: the message exists so the
+		// two facts cannot be half-set. An empty id means the two ends disagree about the contract,
+		// and it is worth as much noise as an outage — a principal with no id would make every
+		// permission check answer false and every guarded route 403, with nothing to point at.
+		//
+		// AN ERROR, NOT "no principal": a contract fault must not be served as an ordinary expired
+		// session, or it is invisible for as long as the two ends disagree.
+		c.log.WarnContext(ctx, "CẢNH BÁO HỢP ĐỒNG: ResolveStaffPrincipal trả về chủ thể không có staff_id")
+		return staffauth.StaffPrincipal{}, false, fmt.Errorf(
+			"identityclient: chủ thể trả về không có staff_id")
+	}
+
+	// Copied into our own slice rather than aliasing the response's: the message is reachable from
+	// the caller only through what is returned here, and a shared backing array is a set two
+	// requests could come to share.
+	//
+	// EMPTY STAYS EMPTY, and is not turned into nil-and-therefore-suspicious. An account whose role
+	// was withdrawn holds no key, and the middleware must build a principal for them all the same.
+	khoa := make([]authz.Perm, 0, len(p.GetPermissionKeys()))
+	for _, k := range p.GetPermissionKeys() {
+		if k == "" {
+			// A blank key matches no route declaration and can only be noise on the wire. Dropping
+			// it is safe in the one direction that matters: it can never widen access.
+			continue
+		}
+		khoa = append(khoa, authz.Perm(k))
+	}
+
+	return staffauth.StaffPrincipal{StaffID: p.GetStaffId(), PermissionKeys: khoa}, true, nil
+}
+
+var _ staffauth.Resolver = (*Client)(nil)

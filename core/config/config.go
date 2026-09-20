@@ -80,6 +80,25 @@ type Config struct {
 	// the registry. Every other service refuses to start without it, and says so by name.
 	PlatformGRPCAddr string
 
+	// IdentityGRPCAddr is where the identity service answers ResolveStaffPrincipal — the RPC that
+	// turns a staff member's session cookie into the principal every guard needs
+	// (proto/vigov/identity/v1/identity.proto).
+	//
+	// EXACTLY THE SHAPE OF PlatformGRPCAddr ABOVE, AND FOR THE SAME REASON: no default, empty
+	// allowed here, refused by name at Dial. A guessed address would not fail closed in an obvious
+	// way — it would make every staff request answer 503 while identity was healthy, which reads as
+	// "identity is down" and sends somebody to inspect the wrong service for an afternoon.
+	//
+	// Empty is allowed HERE because two services do not need it: identity itself builds its
+	// principal from its own session registry (its XacThuc), and platform holds the registry and
+	// calls nobody. Every service that guards a staff route refuses to start without it, and says
+	// so by name — identityclient.Dial("").
+	//
+	// CLUSTER-INTERNAL ADDRESS ONLY. A WORKING SESSION TOKEN travels on this hop and there is no
+	// TLS on it (ADR 0025); an address that leaves the cluster puts every staff session on the wire
+	// in the clear.
+	IdentityGRPCAddr string
+
 	// GRPCCallerKey authenticates the CALLER on the inter-service gRPC port. ONE key, shared by
 	// every service on the deployment, read from GRPC_CALLER_KEY and sourced from a k8s secret.
 	//
@@ -219,6 +238,7 @@ func Load(serviceName string) (Config, error) {
 		DatabaseDSN:      secret.DSN(dsn),
 		RedisDSN:         secret.DSN(strings.TrimSpace(os.Getenv("REDIS_DSN"))),
 		PlatformGRPCAddr: strings.TrimSpace(os.Getenv("PLATFORM_GRPC_ADDR")),
+		IdentityGRPCAddr: strings.TrimSpace(os.Getenv("IDENTITY_GRPC_ADDR")),
 		// Trimmed above: a trailing newline pasted out of a k8s secret would make the key
 		// compare unequal at the far end, and the refusal it produces says "unauthenticated" —
 		// which sends the reader looking for a missing variable rather than for an invisible

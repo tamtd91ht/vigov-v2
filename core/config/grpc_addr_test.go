@@ -180,3 +180,69 @@ func TestKhoaGoiNoiBoKhongTuHienRaKhiGhiLog(t *testing.T) {
 		t.Error("Lo() không trả về khoá thật — interceptor sẽ từ chối mọi lời gọi")
 	}
 }
+
+func TestIdentityGRPCAddrKhongCoMacDinh(t *testing.T) {
+	// NO DEFAULT, for the same reason as PLATFORM_GRPC_ADDR above. This is the address of the
+	// service that answers "who is holding this session", so every guarded staff route in four
+	// services depends on it. A guessed default does not fail closed in a readable way: every
+	// staff request answers 503 while identity is perfectly healthy.
+	//
+	// Empty is allowed HERE because identity builds its own principal and platform calls nobody.
+	// Refusing to start belongs to the services that need it: identityclient.Dial("") fails by
+	// name, so the operator reads which variable is missing.
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":       dsnGia,
+		"ENV":                EnvDev,
+		"IDENTITY_GRPC_ADDR": "",
+	})
+
+	cfg, err := Load("identity")
+	if err != nil {
+		t.Fatalf("Load lỗi: %v", err)
+	}
+	if cfg.IdentityGRPCAddr != "" {
+		t.Errorf("IdentityGRPCAddr = %q, phải để trống chứ không đoán", cfg.IdentityGRPCAddr)
+	}
+}
+
+func TestIdentityGRPCAddrDocTuMoiTruong(t *testing.T) {
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":       dsnGia,
+		"ENV":                EnvDev,
+		"IDENTITY_GRPC_ADDR": "  identity.noi-bo:9090\n",
+	})
+
+	cfg, err := Load("documents")
+	if err != nil {
+		t.Fatalf("Load lỗi: %v", err)
+	}
+	// Trimmed: a trailing newline pasted from a deployment manifest turns into a dial error that
+	// reads like identity is down.
+	if cfg.IdentityGRPCAddr != "identity.noi-bo:9090" {
+		t.Errorf("IdentityGRPCAddr = %q", cfg.IdentityGRPCAddr)
+	}
+}
+
+func TestHaiDiaChiGRPCKhongLanNhau(t *testing.T) {
+	// Two addresses, two variables, and a reader has to be able to tell which is which. They were
+	// briefly one field's worth of typing apart in the struct literal, and a swap there would point
+	// every session resolution at the registry and every Host resolution at identity — both fail,
+	// neither says why.
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":       dsnGia,
+		"ENV":                EnvDev,
+		"PLATFORM_GRPC_ADDR": "platform.noi-bo:9090",
+		"IDENTITY_GRPC_ADDR": "identity.noi-bo:9090",
+	})
+
+	cfg, err := Load("petitions")
+	if err != nil {
+		t.Fatalf("Load lỗi: %v", err)
+	}
+	if cfg.PlatformGRPCAddr != "platform.noi-bo:9090" {
+		t.Errorf("PlatformGRPCAddr = %q", cfg.PlatformGRPCAddr)
+	}
+	if cfg.IdentityGRPCAddr != "identity.noi-bo:9090" {
+		t.Errorf("IdentityGRPCAddr = %q", cfg.IdentityGRPCAddr)
+	}
+}

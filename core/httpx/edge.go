@@ -7,6 +7,7 @@ package httpx
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"strings"
 
@@ -112,4 +113,35 @@ func Recover(traceIDFrom func(context.Context) string) func(http.Handler) http.H
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// ClientIP reports the address the client connected from, as THIS process observed it on its
+// own socket.
+//
+// X-Forwarded-For IS DELIBERATELY NOT TRUSTED. Any client can set it, and a forged address in
+// an archival record is worse than a proxy's address: the trail then states, with the authority
+// of a government record, that somebody acted from an address they never used (rule 6,
+// invariant 2). When a trusted reverse proxy is actually in place, this is the single function
+// to change, and the trust boundary has to be CONFIGURED — not assumed.
+//
+// IT LIVES HERE, IN core, BECAUSE TWO EDGES NOW NEED THE SAME ANSWER: the staff-authentication
+// middleware sends this address to identity so the cross-commune alert names where a probe came
+// from, and identity's own XacThuc logs it directly. service-identity/internal/http/middleware.go
+// still carries its own `ipTu` with the same body; pointing it here is a one-line change that
+// belongs to whoever next edits that file, and until it happens the two copies are the thing to
+// keep an eye on — a trust boundary configured in one and not the other is a trail that
+// contradicts itself.
+//
+// A client address is not personal data in the sense of rule 3: it identifies a connection, and
+// it is the only handle an operator has when the question is "where was this probe from". It is
+// still never returned to a client.
+func ClientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// RemoteAddr is not always host:port — an in-process test server, a unix socket. Return
+		// it verbatim rather than "": an odd-looking value in one log line beats an empty one
+		// that reads as "not observed" everywhere it is used.
+		return r.RemoteAddr
+	}
+	return host
 }
