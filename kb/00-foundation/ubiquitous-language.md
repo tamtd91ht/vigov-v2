@@ -3,7 +3,7 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: 1e5dfe5
+derived_from_commit: 1e63ccf
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
@@ -12,6 +12,7 @@ owns_facts:
   - "vì sao khái niệm cán bộ mang bốn cái tên trên bốn bề mặt"
   - "phân biệt phản ánh, khiếu nại, tố cáo"
   - "tên gọi các bước trong vòng đời phiếu phản ánh"
+  - "mã và nhãn của chín trạng thái phiếu phản ánh"
   - "tên gọi vai trò cán bộ cấp xã"
   - "tên thực thể tiếng Anh của tám danh mục tham chiếu"
   - "tên tài nguyên URL của ba bảng lịch làm việc của xã"
@@ -61,7 +62,8 @@ Vòng đời đầy đủ ở `skills/petition-lifecycle`; bảng này chỉ ch�
 |---|---|---|
 | Phiếu phản ánh | `phieu_phan_anh` | Một lượt phản ánh, có **mã tra cứu** trả cho dân |
 | Mã tra cứu | `ma_tra_cuu` | Không tuần tự, không tái cấp (luật 4, 7) |
-| Lĩnh vực | `linh_vuc` | Rác thải, giao thông, trật tự đô thị… — **cấu hình theo xã** |
+| Lĩnh vực | `linh_vuc` | Rác thải, giao thông, trật tự đô thị… — **mã do nền tảng cấp và đóng; xã chỉ đổi được NHÃN, không thêm mã** (ADR 0026). Dòng này trước 20/09/2026 ghi "cấu hình theo xã" và **đã sai**: câu ấy đúng cho bảy danh mục của ADR 0024, không đúng cho danh mục này — số liệu lĩnh vực phải cộng được giữa các xã |
+| Trạng thái phiếu | `trang_thai` | Chín giá trị, danh sách đóng — §Chín trạng thái ngay dưới |
 | Tiếp nhận | `tiep_nhan` | **Mốc bắt đầu đếm hạn** — không phải lúc phân công |
 | Phân loại | `phan_loai` | Cán bộ xác định lĩnh vực — **không** để dân tự chọn |
 | Phân công | `phan_cong` | Giao cán bộ/đơn vị xử lý |
@@ -70,6 +72,44 @@ Vòng đời đầy đủ ở `skills/petition-lifecycle`; bảng này chỉ ch�
 | Hạn xử lý | `sla_deadline` | Lưu **một lần** lúc tiếp nhận, tính bằng **giờ làm việc** |
 | Giờ làm việc | `gio_lam_viec` | Theo `lich_lam_viec` + `ngay_nghi_le` + `ngay_lam_bu` của xã — **cả BA bảng**, ADR 0007. Thiếu bảng thứ ba là đếm xuyên ngày làm bù như thể xã đóng cửa, và ngày làm bù dồn quanh Tết và Quốc khánh. Tên tài nguyên URL và hình dạng từng dòng: §Lịch làm việc của xã |
 | Quá hạn | — | **Suy ra**, không có cột. Xem luật 10 |
+
+### Chín trạng thái của phiếu phản ánh — ADR 0027
+
+**BƯỚC không phải TRẠNG THÁI, và bảng trên với bảng này nói hai thứ khác nhau.** Bảng trên đặt
+tên cho **hành vi** của cán bộ (`phan_loai` là việc một người làm); bảng dưới đặt tên cho **chỗ
+phiếu đang đứng** khi nhìn vào sổ. Bảy bước và chín trạng thái không trùng số nhau, và ép chúng
+trùng là cách một cột `trang_thai` bị viết thành nhật ký thao tác.
+
+Mã viết **tiếng Việt không dấu**, kebab-case — ADR 0011, và giá trị enum không dịch sang tiếng
+Anh. Nhãn là chuỗi người đọc, lấy nguyên của khách.
+
+| Mã | Nhãn | Nhóm |
+|---|---|---|
+| `da-tiep-nhan` | Đã tiếp nhận | luồng chính — **tự động**, phần mềm sinh phiếu |
+| `dang-phan-loai` | Đang phân loại | luồng chính — **cán bộ động vào lần đầu tại đây**, ADR 0027 quyết định D |
+| `da-chuyen-xu-ly` | Đã chuyển xử lý | luồng chính |
+| `dang-xu-ly` | Đang xử lý | luồng chính |
+| `da-xu-ly` | Đã xử lý | luồng chính |
+| `cho-dan-xac-nhan` | Chờ dân xác nhận | luồng chính |
+| `da-dong` | Đã đóng | luồng chính |
+| `khong-tiep-nhan` | Không tiếp nhận | rẽ nhánh |
+| `chuyen-cap-tren` | Chuyển cấp trên | rẽ nhánh |
+
+**Danh sách này đóng.** Xã không thêm, không bớt — lý do và ca hỏng cụ thể ở ADR 0027, không
+chép lại. Hệ quả cho người viết mã: máy chuyển trạng thái được phép gọi thẳng chín mã này.
+
+**Đặc tả đã sửa theo bảng này ngày 2026-09-20**, sau khi hỏi khách: `docs/ui-ux/09-phan-anh-nguoi-dan.md`
+§6 trước đó ghi chín mã bằng chuỗi tiếng Anh của bản mẫu, nay mang đúng chín mã trên. Gặp lại
+`received` · `screening` · `assigned` ở đâu đó thì đó là **tên đã bị thay**, không phải cách
+gọi thứ hai đang song song. Vì sao mã lấy theo nhãn chứ không dịch ngược chuỗi tiếng Anh: ADR
+0027 §"Đặc tả đã sửa theo".
+
+⚠ **Chữ của chín mã do phiên 2026-09-20 gõ ra từ nhãn tiếng Việt của khách.** Khách chốt *danh
+sách* và chốt *mã viết tiếng Việt*; cách viết từng mã là suy ra. Chúng **đã đi vào đặc tả của
+chính khách cùng ngày, theo yêu cầu của khách** — đó là mức xác nhận cao nhất hiện có, nhưng nó
+xác nhận **danh sách**, không phải từng ký tự. Giá trị enum nằm trong hồ sơ lưu trữ và không di
+trú được (ADR 0011 · luật 7), nên **đọc lại chín chuỗi này một lượt trước khi migration đầu tiên
+chạm cột `trang_thai`** — sau đó thì không còn dịp rẻ nào nữa.
 
 ## Vai trò cán bộ
 
@@ -336,3 +376,5 @@ vài chữ cái mà nghĩa khác hẳn.
 → Kỹ năng: `skills/administrative-language` · `.claude/skills/rest-api-design/SKILL.md`
 → Ranh giới ngôn ngữ của hợp đồng: `kb/10-decisions/0011-contract-surface-language.md`
 → Lý do của sáu dòng kênh công dân và của `communes/current`: `kb/10-decisions/0023-thuat-ngu-kenh-cong-dan.md`
+→ Vì sao `linh_vuc` không còn là "cấu hình theo xã": `kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md`
+→ Vì sao danh sách trạng thái phiếu đóng, và hai đồng hồ đếm từ đâu: `kb/10-decisions/0027-trang-thai-va-dong-ho-phieu-phan-anh.md`

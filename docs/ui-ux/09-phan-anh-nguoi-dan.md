@@ -83,24 +83,39 @@ Tabs: [Danh sách (21)] [Bản đồ nhiệt] [Báo cáo]
 
 ## 6. Chín trạng thái
 
+Danh sách **đóng** — xã không thêm, không bớt (ADR 0027 quyết định B, khách chốt 20/09/2026).
+Mã viết **tiếng Việt không dấu**, kebab-case, theo ADR 0011: giá trị enum nằm trong hồ sơ lưu
+trữ nên không di trú được về sau.
+
+> ⚠ **CÁCH VIẾT từng mã dưới đây là do phía thi công SUY RA từ nhãn tiếng Việt, khách chưa
+> duyệt.** Khách đã chốt *danh sách chín trạng thái* và chốt *mã viết tiếng Việt* — chưa chốt
+> chín chuỗi cụ thể. Vì giá trị enum đi vào hồ sơ lưu trữ và không sửa lại được (luật 7),
+> **phải hỏi một lần trước khi migration đầu tiên chạm cột `trang_thai`**.
+
 | Mã | Nhãn | Nhóm |
 |---|---|---|
-| `received` | Đã tiếp nhận | luồng chính |
-| `screening` | Đang phân loại | luồng chính |
-| `assigned` | Đã chuyển xử lý | luồng chính |
-| `in_progress` | Đang xử lý | luồng chính |
-| `resolved` | Đã xử lý | luồng chính |
-| `awaiting_citizen_confirm` | Chờ dân xác nhận | luồng chính |
-| `closed` | Đã đóng | luồng chính |
-| `rejected` | Không tiếp nhận | rẽ nhánh |
-| `out_of_scope` | Chuyển cấp trên | rẽ nhánh |
+| `da-tiep-nhan` | Đã tiếp nhận | luồng chính — **tự động**, phần mềm sinh phiếu |
+| `dang-phan-loai` | Đang phân loại | luồng chính — **cán bộ động vào lần đầu tại đây** |
+| `da-chuyen-xu-ly` | Đã chuyển xử lý | luồng chính |
+| `dang-xu-ly` | Đang xử lý | luồng chính |
+| `da-xu-ly` | Đã xử lý | luồng chính |
+| `cho-dan-xac-nhan` | Chờ dân xác nhận | luồng chính |
+| `da-dong` | Đã đóng | luồng chính |
+| `khong-tiep-nhan` | Không tiếp nhận | rẽ nhánh |
+| `chuyen-cap-tren` | Chuyển cấp trên | rẽ nhánh |
 
 ```
-received → screening → assigned → in_progress → resolved → awaiting_citizen_confirm → closed
-                ↘ rejected
-                ↘ out_of_scope
+da-tiep-nhan → dang-phan-loai → da-chuyen-xu-ly → dang-xu-ly → da-xu-ly → cho-dan-xac-nhan → da-dong
+                     ↘ khong-tiep-nhan
+                     ↘ chuyen-cap-tren
 ```
-Đánh giá 1–2 sao ở bước `awaiting_citizen_confirm`/`closed` ⇒ **tự mở lại phiếu** về `in_progress`.
+Đánh giá 1–2 sao ở bước `cho-dan-xac-nhan`/`da-dong` ⇒ **tự mở lại phiếu** về `dang-xu-ly`.
+
+> **Bản trước của mục này ghi mã tiếng Anh** (`received`, `screening`, `assigned`…), chép từ
+> định danh bên trong bản mẫu xã đang chạy. Sửa ngày 20/09/2026 theo yêu cầu của khách.
+> Một chỗ phải đọc bằng mắt chứ không bằng từ điển: `out_of_scope` dịch sát là *"ngoài phạm
+> vi"*, còn việc hành chính thật là **chuyển cho nơi có thẩm quyền nhận** — nên mã mới lấy
+> theo **nhãn tiếng Việt**, không lấy theo chuỗi tiếng Anh cũ.
 
 ---
 
@@ -300,7 +315,7 @@ Nút: `Huỷ` · `Vào sổ phản ánh`
 
 ## 14. Quy tắc nghiệp vụ
 
-1. **Hạn xử lý** tính từ bảng SLA theo **lĩnh vực** (xem `14-cau-hinh.md`). Ví dụ `An ninh trật tự`: tiếp nhận 2 giờ, xử lý xong 16 giờ; `Hạ tầng giao thông`: 8 giờ / 168 giờ. Nếu lĩnh vực không có dòng riêng thì dùng dòng `Mặc định cho mọi lĩnh vực` (8 giờ / 56 giờ).
+1. **Hạn xử lý** tính từ bảng SLA theo **lĩnh vực** (xem `14-cau-hinh.md`). Ví dụ `An ninh trật tự`: tiếp nhận 2 giờ, xử lý xong 16 giờ; `Hạ tầng giao thông`: 8 giờ / 168 giờ. Nếu lĩnh vực không có dòng riêng thì dùng dòng `Mặc định cho mọi lĩnh vực` (8 giờ / 56 giờ). Giờ ở đây là **giờ làm việc** của xã, không phải giờ treo tường — ADR 0007. Mốc khởi động cả hai đồng hồ, và quy tắc khi cán bộ đổi lĩnh vực lúc phân loại: **ADR 0027**, không chép lại ở đây.
 2. **Không đóng phiếu được khi thiếu ảnh sau xử lý.** Chặn ở cả client và server.
 3. Đánh giá **1–2 sao tự mở lại phiếu** về `Đang xử lý` và ghi nhật ký tự động.
 4. Phiếu mặc định **không công khai**; phải kiểm duyệt (`Cho hiện công khai`) mới lên trang công khai/Mini App. Người gửi luôn tra cứu được phiếu của mình.

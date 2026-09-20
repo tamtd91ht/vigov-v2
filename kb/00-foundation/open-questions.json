@@ -51,9 +51,9 @@
   },
   {
     "id": 4,
-    "question": "Cấp huyện/tỉnh xem tổng hợp nhiều xã tới mức chi tiết nào?",
+    "question": "Cấp huyện/tỉnh xem tổng hợp nhiều xã TỚI MỨC CHI TIẾT NÀO — chỉ số đếm theo lĩnh vực, hay tới từng phiếu; ai được đọc; và lĩnh vực hạn chế `can-bo` (Thái độ / tác phong cán bộ) có nằm trong số liệu rời khỏi xã không?",
     "status": "OPEN",
-    "why_it_matters": "Đây là cửa duy nhất cố ý mở xuyên ranh giới cách ly — nơi mọi rò rỉ nghiêm trọng sẽ đi qua. Nguyên tắc an toàn: chỉ đọc, chỉ số liệu tổng hợp, phạm vi tính từ cây tổ chức (không nhận từ client), mọi lần đọc ghi nhật ký.",
+    "why_it_matters": "Đây là cửa duy nhất cố ý mở xuyên ranh giới cách ly — nơi mọi rò rỉ nghiêm trọng sẽ đi qua. Nguyên tắc an toàn: chỉ đọc, chỉ số liệu tổng hợp, phạm vi tính từ cây tổ chức (không nhận từ client), mọi lần đọc ghi nhật ký. PHẦN ĐÃ TRẢ LỜI LÀM PHẦN CÒN LẠI NẶNG HƠN CHỨ KHÔNG NHẸ ĐI: nay đã chắc là CÓ đường đọc xuyên xã, nên mức chi tiết là thứ duy nhất còn giữ được ranh giới. Riêng `can-bo` là lĩnh vực chỉ quyền `feedback.restricted` mới xem được trong chính xã đó (docs/ui-ux/09:80) — để nó vào một con số cấp tỉnh là mở một cửa mà ngay trong xã còn đang khoá.",
     "code_signals": [
       {
         "pattern": "@cross-tenant",
@@ -64,9 +64,13 @@
     "reversal_cost": "Trung bình",
     "ask_before": [
       "viết endpoint báo cáo đầu tiên đọc nhiều xã",
-      "dựng bảng danh mục Lĩnh vực phản ánh, hoặc bất kỳ bảng phiếu nào mang cột linh_vuc",
-      "dựng bảng danh mục Loại đơn thư"
-    ]
+      "khai `// @cross-tenant` lần đầu trên một truy vấn",
+      "dựng bảng danh mục Loại đơn thư",
+      "đưa lĩnh vực hạn chế `can-bo` vào bất kỳ số liệu nào rời khỏi xã"
+    ],
+    "partial_answer": "ĐÃ TRẢ LỜI PHẦN 'cấp trên có tổng hợp theo LĨNH VỰC không' = CÓ, xuyên 200+ xã. Hệ quả: bộ mã lĩnh vực là bộ mã đóng ở tầng nền tảng, xã chỉ đổi được nhãn — ADR 0026. PHẦN CÒN LẠI VẪN MỞ và là nội dung câu hỏi ở trên.",
+    "partial_answered_on": "2026-09-20",
+    "adr": "kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md"
   },
   {
     "id": 5,
@@ -437,5 +441,74 @@
       "viết máy chuyển trạng thái nhiệm vụ"
     ],
     "adr": "kb/10-decisions/0024-so-huu-danh-muc-tham-chieu.md"
+  },
+  {
+    "id": 22,
+    "question": "Bộ mã `Lĩnh vực phản ánh` đóng ở tầng nền tảng: AI được thêm mã thứ 13, và bằng cách nào — một lần phát hành phần mềm, hay một thao tác của quản trị viên nhà cung cấp trên màn hình?",
+    "status": "OPEN",
+    "why_it_matters": "Câu này quyết ĐỒNG THỜI hai thứ mà ADR 0026 không tự quyết được: service nào giữ bảng mã, và petitions đọc nó bằng gRPC, bằng sự kiện, hay không cần đường nào. Hai cách đọc: (a) mã là hằng số của phần mềm -> bảng nằm trong petitions, không mang tenant_id, gieo bằng migration, thêm mã là một đợt phát hành; (b) mã là dữ liệu nhà cung cấp quản trị -> bảng nằm ở platform, và petitions phải đọc qua gRPC hoặc giữ bản sao cập nhật bằng sự kiện (luật 2 bất biến 3). TIỀN LỆ `quyen` KHÔNG KÉO SANG ĐƯỢC: quyen là hằng số vì CÓ NHÁNH MÃ KIỂM NÓ; mã lĩnh vực không có nhánh mã nào, nó đóng vì lý do khác hẳn là để số liệu cộng được giữa các xã — và lý do ấy không nói gì về chỗ đặt bảng.",
+    "code_signals": [
+      {
+        "pattern": "CREATE TABLE[^;]*linh_vuc",
+        "means": "đang tạo bảng bộ mã lĩnh vực — phải biết service nào giữ nó TRƯỚC khi chốt khoá và chỗ đặt",
+        "threshold": 1
+      },
+      {
+        "pattern": "\"(rac-thai|giao-thong|trat-tu-do-thi|an-toan-thuc-pham)\"",
+        "means": "12 mã lĩnh vực đang nằm cứng trong mã nguồn — tức đã ngầm chọn cách đọc (a)",
+        "threshold": 2
+      }
+    ],
+    "reversal_cost": "TRUNG BÌNH THEO MỘT CHIỀU, CAO THEO CHIỀU KIA. Dời bảng giữa hai service sau khi đã có bên đọc là đổi đường đọc của mọi màn hình hiện nhãn lĩnh vực — lớn nhưng làm được. Chiều đắt là chọn (a) rồi phát hiện nhà cung cấp cần thêm lĩnh vực mà không được chờ một đợt phát hành: lúc đó mỗi lần thêm một mã là một lần dựng và phát hành lại service, trên một hệ thống đang chạy cho 200+ xã.",
+    "ask_before": [
+      "viết migration cho bảng bộ mã lĩnh vực",
+      "viết bảng nhãn lĩnh vực theo xã",
+      "viết đường đọc danh mục lĩnh vực cho petitions"
+    ],
+    "adr": "kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md"
+  },
+  {
+    "id": 23,
+    "question": "Công dân gửi phản ánh từ Mini App có TỰ CHỌN lĩnh vực không, hay lĩnh vực chỉ do cán bộ xác định ở bước Phân loại?",
+    "status": "OPEN",
+    "why_it_matters": "LỘ RA TỪ TỔNG CỦA HAI QUYẾT ĐỊNH ĐỀU ĐÚNG, KHÔNG LỘ RA TỪ BẤT KỲ CÂU NÀO ĐÃ HỎI. ADR 0027 chốt đổi lĩnh vực lúc phân loại CHỈ ĐƯỢC RÚT NGẮN hạn. ubiquitous-language.md ghi lĩnh vực do cán bộ xác định, không để dân tự chọn — nên lúc tiếp nhận một phiếu dân gửi thì chưa ai biết lĩnh vực, và hạn đầu tiên chỉ lấy được từ dòng mặc định của bảng SLA (8 giờ / 56 giờ, docs/ui-ux/14-cau-hinh.md §8). Ghép lại: DÒNG MẶC ĐỊNH THÀNH TRẦN cho mọi phiếu dân tự gửi, và SÁU dòng SLA dài hơn 56 giờ — Hạ tầng giao thông 168 giờ, Thái độ / tác phong cán bộ 120 giờ, bốn dòng 72 giờ — không bao giờ áp được ở kênh ấy. Cùng lý do, ba dòng `2 giờ` của cột Tiếp nhận cũng không với tới được, vì hành vi làm dừng đồng hồ Tiếp nhận chính là hành vi xác định lĩnh vực. Hệ quả nhìn thấy được: hai phiếu về cùng một ổ gà, một dân gửi và một trưởng thôn nhập hộ, mang hai hạn khác nhau — 56 giờ và 168 giờ. Ba đường ra đều là quyết định của khách: cho dân chọn lĩnh vực lúc gửi; nâng dòng mặc định lên cho bằng dòng dài nhất, tức hứa rộng hơn với MỌI phiếu; hoặc chấp nhận trần và nói điều đó ra với xã.",
+    "code_signals": [
+      {
+        "pattern": "CREATE TABLE[^;]*phieu_phan_anh",
+        "means": "đang tạo bảng phiếu — linh_vuc có cho phép NULL lúc tiếp nhận hay không CHÍNH LÀ câu này, đóng lại bằng một ràng buộc",
+        "threshold": 1
+      },
+      {
+        "pattern": "[Ll]inh_?[Vv]uc[^\\n]*json:\"linh_?vuc",
+        "means": "đường ghi phiếu đang nhận lĩnh vực từ thân yêu cầu — nếu đó là tuyến CitizenOnly thì đã ngầm chọn 'dân tự chọn'",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "CAO. Hạn lưu MỘT LẦN lúc tiếp nhận và luật 10 bất biến 2 không cho tính lại, nên mọi phiếu đã nhận trước khi đổi ý sẽ mang hạn theo thang cũ — và số liệu đúng hạn/quá hạn của những kỳ ấy không dựng lại được. Thêm nữa, cho dân chọn lĩnh vực là đổi cả mô hình phân loại: bước Phân loại hiện được định nghĩa là việc của cán bộ.",
+    "ask_before": [
+      "viết đường ghi phiếu phản ánh của kênh công dân",
+      "viết hàm tính hạn lúc tiếp nhận cho phiếu dân gửi",
+      "gieo hạt giống bảng SLA"
+    ],
+    "adr": "kb/10-decisions/0027-trang-thai-va-dong-ho-phieu-phan-anh.md"
+  },
+  {
+    "id": 24,
+    "question": "Phiếu NHẬP HỘ (dân gọi điện, ghé trụ sở, gặp trưởng thôn): mốc khởi động đồng hồ là lúc nào, và đồng hồ `Tiếp nhận` còn nghĩa gì khi chính cán bộ là người vào sổ?",
+    "status": "OPEN",
+    "why_it_matters": "ADR 0027 chốt cả hai đồng hồ đếm từ THỜI ĐIỂM CÔNG DÂN BẤM GỬI. Kênh nhập hộ không có động tác ấy: docs/ui-ux/09 §11 nói phiếu nhập hộ 'đi cùng quy trình và cùng thời hạn với phiếu gửi từ Zalo' nhưng không nói mốc nào thay thế. Nếu mốc là lúc vào sổ, thì đồng hồ Tiếp nhận — vốn dừng khi có cán bộ động vào phiếu — đã được thoả ngay tại thời điểm 0, cho đúng một trong bốn kênh (kenh_tiep_nhan có bốn giá trị: zalo-mini-app, zalo-oa, web-xa, can-bo-nhap-ho). Chỉ số 'tiếp nhận đúng hạn' khi ấy trộn một kênh luôn đạt 100% theo cấu tạo với ba kênh đo thật, trong một con số duy nhất gửi lên lãnh đạo — sai lệch không ai đọc ra được từ con số.",
+    "code_signals": [
+      {
+        "pattern": "can-bo-nhap-ho|kenh_tiep_nhan",
+        "means": "kênh tiếp nhận đã vào mã — mỗi kênh một mốc khởi động, và mốc ấy chưa ai chốt",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "CAO, cùng lý do với #23: hạn lưu một lần, không tính lại (luật 10 bất biến 2). Chọn sai mốc thì mọi phiếu nhập hộ đã nhận mang hạn sai, và chỉ số tiếp nhận đúng hạn của các kỳ đã báo cáo không dựng lại được.",
+    "ask_before": [
+      "viết đường nhập hộ phiếu phản ánh",
+      "tính chỉ số tiếp nhận đúng hạn"
+    ],
+    "adr": "kb/10-decisions/0027-trang-thai-va-dong-ho-phieu-phan-anh.md"
   }
 ]

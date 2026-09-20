@@ -165,7 +165,11 @@ Ba nhóm dưới đây **không có chủ sở hữu trong ADR này**, và đó 
 chứ không phải một lần quên. Mỗi ô ghi rõ: chờ ai, chờ câu nào, và **điều gì đổi nếu câu ấy
 chốt theo hướng ngược lại**.
 
-### 1. `Lĩnh vực phản ánh` (12 mục) — chờ **câu mở #4**
+**Cập nhật 2026-09-20:** ô §1 đã có trả lời của khách và nay có ADR riêng; ô §2 có một trong
+hai câu được trả lời. **Cả ba ô vẫn chưa ô nào có đủ chủ sở hữu để viết migration** — đọc
+từng ô, đừng đọc lướt dòng này rồi coi §1 là đã xong.
+
+### 1. `Lĩnh vực phản ánh` (12 mục) — ~~chờ **câu mở #4**~~ **ĐÃ LẤP 2026-09-20**
 
 | | |
 |---|---|
@@ -175,15 +179,38 @@ chốt theo hướng ngược lại**.
 | **Nếu trả lời CÓ** | **Khác hẳn ADR này.** Phải có một **bộ mã đóng ở tầng nền tảng** (để con số của 200 xã cộng được với nhau) cộng một **nhãn theo xã** đè lên. Hai tầng, hai chủ sở hữu, và xã **không** còn được thêm mã tự do — chỉ được đặt lại tên |
 | **Vì sao không đoán trước** | Chọn sai chiều thì mọi báo cáo tổng hợp hoặc sai, hoặc phải ánh xạ thủ công 200 bộ mã khác nhau về một bộ. Không có đường sửa rẻ sau khi các xã đã tự đặt mã |
 
+**KẾT QUẢ: khách trả lời CÓ ngày 2026-09-20.** Lập luận trên giữ nguyên, không sửa một chữ —
+nó là bản ghi của lần cân nhắc, và nhánh nó dự liệu chính là nhánh đã xảy ra. Chi tiết của
+nhánh ấy, kể cả vì sao phép thử ở §Vì sao mọi bảng mang `tenant_id` không đủ để bắt được ca
+này, nằm ở **ADR 0026** (`kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md`).
+
+Hai điều phải đọc kèm, kẻo ô này bị coi là đã xong hẳn:
+
+1. **Chủ sở hữu bảng mã tầng nền tảng vẫn CHƯA có** — câu mở **#22**. Hình dạng đã chốt không
+   phải là chủ sở hữu đã chốt, nên **điều kiện dừng #3 dưới đây vẫn còn hiệu lực cho đúng
+   bảng này**: viết migration cho nó lúc này vẫn là quyết hộ khách.
+2. Tầng nhãn theo xã thì đã có chủ: `petitions`, suy từ ADR 0003 cộng quy tắc nhịp đổi. Lý do
+   ở ADR 0026 §2, không chép lại.
+
 ### 2. `Loại đơn thư` (5 mục) — chờ **câu mở #4**, cộng một câu chưa hỏi
 
 | | |
 |---|---|
 | **Chờ ai** | Khách |
-| **Chờ câu gì** | (a) đúng câu #4 ở trên — đơn thư cũng là thứ cấp trên tổng hợp; (b) **sổ đơn thư do ai cấp số vào sổ**: văn thư (`documents`) hay tiếp dân (`petitions`) |
+| **Chờ câu gì** | ~~(a) đúng câu #4 ở trên — đơn thư cũng là thứ cấp trên tổng hợp~~ **(a) đã có trả lời, xem dưới**; (b) **sổ đơn thư do ai cấp số vào sổ**: văn thư (`documents`) hay tiếp dân (`petitions`) |
 | **Nếu (b) trả lời "văn thư"** | Danh mục thuộc `documents`, đi cùng quy tắc đánh số sổ |
 | **Nếu (b) trả lời "tiếp dân"** | Thuộc `petitions` |
 | **Vì sao không đoán trước** | `kieu-nghi / phan-anh / khieu-nai / to-cao / de-nghi` là **năm thứ khác nhau về pháp lý**, và số vào sổ là thứ đã cấp thì không cấp lại (luật 7 bất biến 3). Đặt sai chỗ thì việc sửa là di trú số sổ trên hồ sơ lưu trữ |
+
+**(a) đã có trả lời 2026-09-20, và nó KHÔNG mở được ô này.** Khách chốt cấp trên có cộng số
+liệu xuyên xã, nên **hình dạng** của ô này coi như đã biết: áp phép thử thứ hai của ADR 0026
+(*con số mang mã này có phải cộng với xã khác không*) cho năm loại đơn thư thì câu trả lời đi
+theo cùng một chiều, tức bộ mã đóng cộng nhãn theo xã.
+
+**(b) vẫn chặn, và nó là câu chưa ai hỏi khách.** Biết hình dạng hai tầng không cho biết
+**tầng nhãn nằm ở service nào** — đó đúng là thứ (b) quyết, vì nhãn đi cùng sổ và sổ đi cùng
+người cấp số. Viết migration cho ô này khi (b) chưa có trả lời vẫn là quyết hộ khách, y như
+trước 2026-09-20.
 
 ### 3. `Trạng thái nhiệm vụ` (7 mục) — chờ một **câu hỏi MỚI**, chưa có trong `open-questions.json`
 
@@ -194,7 +221,8 @@ chốt theo hướng ngược lại**.
 | **Vì sao nó không phải danh mục cho tới khi có câu trả lời** | Nó **trượt phép thử** ở §Vì sao mọi bảng mang `tenant_id`: thêm một dòng vào đây thì phần mềm **phải** có nhánh mã mới xử lý. `docs/ui-ux/02-nhiem-vu.md:214` gọi nó là danh mục "sửa được ở Cấu hình", nhưng ngay dưới, dòng 227–231 vẽ một máy trạng thái có hướng đi cố định, và `task.approve` gắn cứng vào đúng bước `cho-duyet → hoan-thanh` |
 | **Nếu chốt "chỉ sửa nhãn và thứ tự"** | Mã là hằng số của phần mềm — giống `quyen`. Bảng vẫn có, mang `tenant_id`, nhưng cột `ma` **không** cho xã thêm/bớt |
 | **Nếu chốt "xã sửa được cả mã"** | Máy trạng thái phải trở thành **dữ liệu** (bảng chuyển trạng thái theo xã), và mọi nhánh mã đang gọi tên `hoan-thanh` phải đi qua một khái niệm gián tiếp. Đây là thiết kế khác, không phải một cột thêm vào |
-| **Câu hỏi này chưa nằm trong `kb/00-foundation/open-questions.json`** | Nội dung đã soạn và **chuyển cho người dùng** trong phiên này; tệp ấy đang thuộc phạm vi một phiên song song nên ADR này **không** tự ghi vào đó |
+| ~~Câu hỏi này chưa nằm trong `open-questions.json`~~ **nay đã nằm: câu mở #21** | Lúc viết ADR này nội dung mới chỉ được chuyển cho người dùng, vì tệp ấy đang thuộc phạm vi một phiên song song. Nó đã được ghi vào từ đó. **Đừng soạn lại một câu thứ hai cho cùng việc này** |
+| **Đừng đóng #21 bằng ADR 0027** | ADR 0027 chốt danh sách trạng thái của **phiếu phản ánh** là cố định. Đó là vòng đời khác, đối tượng khác, người vận hành khác. Hai vòng đời trả lời giống nhau là chuyện có thể, nhưng phải do khách nói |
 
 ### Phụ: 32 khoá `report.*` của `loi_he_thong`
 
@@ -231,6 +259,7 @@ Chốt việc này **trước khi** viết bảng `loi_he_thong` đầu tiên, k
 4. Đề xuất gộp lại thành một bảng `danh_muc` "cho tiện màn hình cấu hình" — tiện cho màn hình
    là lý do bản mẫu làm thế, và nó không phải lý do cho mô hình dữ liệu
 
+→ ADR 0026 (ô §1 sau khi khách trả lời, và phép thử thứ hai cho danh mục): `kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md`
 → ADR 0001 (vì sao ranh giới cắt ở đó): `kb/10-decisions/0001-service-decomposition.md`
 → ADR 0003 (vì sao `platform` không giữ dữ liệu nghiệp vụ): `kb/10-decisions/0003-platform-admin-metadata-only.md`
 → ADR 0004 (phân mảnh theo xã): `kb/10-decisions/0004-shard-by-tenant.md`

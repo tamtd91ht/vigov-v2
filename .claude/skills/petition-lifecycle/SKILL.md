@@ -35,8 +35,16 @@ routing history (rule 4).
 | **THREE** tables, not two | `lich_lam_viec` (the week, one row per SESSION so a lunch break is two rows) · `ngay_nghi_le` (closed) · `ngay_lam_bu` (**open although the week says otherwise** — the Prime Minister's annual swap days). Dropping the third counts straight through every swap day, and swap days cluster at Tết and National Day, when the backlog is largest |
 | Do not compute it here | `identity` owns the three tables and answers `AdvanceWorkingHours` over gRPC. A second implementation is a second set of answers to one question |
 | Received outside working hours | The clock starts at the **next session's opening** — ADR 0007 decision 8, settled 2026-09-20 |
+| **Where `count_from` is** | The moment the **citizen pressed send** — for **both** clocks, ADR 0027 decision D. `da-tiep-nhan` is written by the software, so counting to it measures the system against itself |
+| **What stops the acknowledge clock** | The first act by a **human**: entering `dang-phan-loai`. Not the creation of the row |
+| **Field changed at classification** | The deadline may only be **SHORTENED**: take the earlier of *the deadline already promised* and *the one the new field yields from the same `count_from`* — ADR 0027 decision C. Never the later one |
 | Per commune | every number and every table row is **tenant config**, not a constant |
 | Overdue is derived | `func (p Petition) IsOverdue(now) bool` — never a stored column |
+
+Decision C is **not** a breach of rule 10 invariant 2. That invariant forbids recomputing on
+**read**; here a stored value is lowered by a human act, in the same transaction as the act,
+with before/after in the audit entry. ADR 0008 already set the precedent: `tinh_lai_han_khi_mo_lai`
+writes a new deadline when a petition is reopened.
 
 ```go
 // Derive, never store. A stored flag is wrong the moment a job is late or a
@@ -65,12 +73,27 @@ table `sla(loai_viec, linh_vuc, gio_tiep_nhan, gio_xu_ly_xong, …)`, `linh_vuc 
 default row. A single `deadline` field silently drops the acknowledge commitment, which is the
 one the citizen feels first: for `An ninh trật tự` it is **2 working hours**.
 
-**Do not copy the 12 names into source, and do not give the catalogue an owning service yet.**
-ADR 0024 §"BA Ô ĐỂ TRỐNG" leaves this one deliberately unowned, waiting on open question **#4**:
-if the district/province aggregates **by field** across 200+ communes, the codes must be a
-**closed platform-level set** with a per-commune label on top — two layers, two owners, and the
-commune may rename but not add. Building it as an ordinary per-commune catalogue first means
-mapping 200 divergent code sets back to one by hand.
+**The catalogue has TWO LAYERS — settled 2026-09-20, ADR 0026.** The customer confirmed that the
+province aggregates **by field** across 200+ communes, so the codes are a **closed set granted by
+the platform** and the commune may only **rename** them. It is not an ordinary per-commune
+catalogue, and the seven catalogues of ADR 0024 are not a template for it.
+
+| Layer | Who may change it | Where |
+|---|---|---|
+| The code set | **not the commune** | service still **undecided** — open question **#22** |
+| The label | the commune, `(tenant_id, ma)` | `petitions` |
+
+**Still do not write the migration.** Open **#22** asks who may add a 13th code and how, and that
+answer names the service and the read path (gRPC, events, or neither). ADR 0024 stop condition 3
+still applies to this exact table.
+
+**The trap this creates — read before writing the intake path.** The commune's officer decides the
+field at classification, so on the citizen channel nothing is known at intake and the deadline can
+only come from the default row (8h / 56h). Combined with decision C (shorten only), **the default
+row becomes a ceiling**: the six SLA rows longer than 56h, and the three 2-hour acknowledge rows,
+are unreachable for a petition the citizen submitted. A petition recorded by staff (`nhập hộ`) picks
+the field at intake, so it gets the full table — two deadlines for one pothole. That is open
+question **#23**, and none of the three ways out is the agent's to pick.
 
 ## Lookup codes
 
@@ -96,18 +119,35 @@ a result; say what was actually done.
 | #6 — fields and SLA | Working **hours**, per commune, not retroactive | ADR 0007 |
 | #7 — who may close, is field acceptance mandatory | Permission `feedback.resolve`, plus two **per-commune flags**: `bat_buoc_nguoi_khac_dong` (default false) · `bat_buoc_anh_nghiem_thu` (default **true**) | ADR 0008 |
 | #8 — may a citizen reopen | **Yes**, per-commune: `cho_phep_mo_lai` (true) · `nguong_sao_mo_lai` (2) · `so_lan_mo_lai_toi_da` (1) · `tinh_lai_han_khi_mo_lai` (true). Config changes are **not retroactive** | ADR 0008 |
+| A — who owns `Lĩnh vực phản ánh` | **Two layers**: a closed code set granted by the platform, a per-commune label on top. The commune renames, never adds a code | ADR 0026 |
+| B — which statuses exist | **Nine, a closed list.** The commune adds none and removes none, so the state machine may name the codes directly. Codes and labels: `kb/00-foundation/ubiquitous-language.md` | ADR 0027 |
+| C — field changed at classification | The deadline **only shortens** | ADR 0027 |
+| D — when the clock starts | The citizen's send, for **both** clocks; the acknowledge clock stops at the first staff act | ADR 0027 |
 
-All three were answered as **configuration**, not as constants. So the implementation rule is
-the same in every case: read the commune's value, never write the default into a branch.
+Those first three were answered as **configuration**, not as constants. So the implementation rule
+is the same in every case: read the commune's value, never write the default into a branch.
+
+The four decisions of 2026-09-20 went the **other** way — fixed, not configurable — and that is
+the point, not an inconsistency. What a commune may shape is how it works inside its own walls
+(#6, #7, #8). What is fixed is what leaves the commune: a number that must add up with 200 other
+communes (A), a lifecycle a commune must not be able to stop (B), and a promise already spoken to
+a citizen (C, D).
 
 ## STOP — ask, never decide alone
 
 1. Changing how a deadline is **computed** (the formula, not a commune's number)
-2. Adding or removing a **status**
-3. Who owns the `Lĩnh vực phản ánh` catalogue — open **#4**, ADR 0024
-4. Any behaviour ADR 0008 does **not** already express as a flag
+2. Adding or removing a **status** — the list is closed by ADR 0027, which makes this a change
+   to a decision, not a gap to fill
+3. Writing the migration for the platform-level field code table — open **#22**
+4. Letting the citizen pick the field when submitting — open **#23**, and it moves classification
+   out of the officer's hands
+5. The intake moment, and the meaning of the acknowledge clock, for a petition recorded by
+   staff — open **#24**
+6. Any behaviour ADR 0008 does **not** already express as a flag
+7. Any path that would make a deadline **later** than the one already promised
 
 → Rule 10: `.claude/rules/critical/10-citizen-commitment.md`
-→ Open question #4: `kb/00-foundation/open-questions.json`
+→ Open questions #4 · #22 · #23 · #24: `kb/00-foundation/open-questions.json`
 → Decisions: `kb/10-decisions/0007-sla-working-hours.md` · `0008-petition-lifecycle-config.md`
-→ Terminology: `kb/00-foundation/ubiquitous-language.md`
+→ Decisions of 2026-09-20: `kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md` · `kb/10-decisions/0027-trang-thai-va-dong-ho-phieu-phan-anh.md`
+→ Terminology, and the nine status codes: `kb/00-foundation/ubiquitous-language.md`
