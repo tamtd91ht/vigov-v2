@@ -132,6 +132,41 @@ CASES = [
     ("tenant_scope_guard", "explicit @cross-tenant escape", PASS,
      w("baocao/internal/app/huyen.go",
        "// @cross-tenant: tổng hợp phản ánh cấp huyện, chỉ số liệu, đã ghi nhật ký\n\trows, _ := s.db.Find(ctx, f)")),
+    # THE CASE THAT WAS MISSING FOR THE WHOLE LIFE OF THIS GUARD, and it is the one that matters:
+    # `database/sql` offers every method twice, and this repository uses the Context form
+    # everywhere. DB_CALL required `Query(` / `Exec(` with no suffix, so it matched none of the
+    # 20 real call sites — the guard rule 1 names as its BLOCK enforcement saw nothing at all,
+    # while `make check` stayed 7/7. Measured 2026-09-20, before the fix.
+    ("tenant_scope_guard", "unscoped QueryContext — the form this repo really uses", BLOCK,
+     w("donthu/internal/store/phien.go",
+       "func (s *Store) Moi(ctx context.Context, id string) {\n"
+       "\trows, err := s.raw.QueryContext(ctx, `SELECT id FROM phien WHERE cong_dan_id = $1`, id)\n}")),
+    # A reason worth writing is longer than one line, and Go puts a declaration between the
+    # comment and the statement. Demanding adjacency would flag a correctly annotated query and
+    # teach the author to move code to please a hook — which is how a guard gets switched off.
+    ("tenant_scope_guard", "@cross-tenant block separated by a declaration", PASS,
+     w("danhtinh/internal/store/crosstenant/cong_dan.go",
+       "\t// @cross-tenant: bảng này có một dòng cho mỗi công dân trên TOÀN NỀN TẢNG và không có\n"
+       "\t// cột tenant_id nào để phạm vi hoá (ADR 0002). Trả về nhiều nhất một dòng.\n"
+       "\tvar id string\n"
+       "\terr := tx.QueryRowContext(ctx,\n"
+       "\t\t`SELECT id FROM dinh_danh_cong_dan WHERE so_dien_thoai = $1`, so).Scan(&id)")),
+    # ONE MARK, ONE QUERY. Rule 1 forbidden #6 asks each cross-commune read to carry its own
+    # reason; a mark that covered everything below it until the closing brace would turn one
+    # sentence into a blanket exemption for a whole function.
+    ("tenant_scope_guard", "a second query does not inherit the first one's mark", BLOCK,
+     w("baocao/internal/app/huyen.go",
+       "\t// @cross-tenant: tổng hợp cấp huyện, chỉ số liệu\n"
+       "\trows, _ := s.raw.QueryContext(ctx, tongHop)\n"
+       "\tthem, _ := s.raw.QueryContext(ctx, `SELECT ho_ten FROM nguoi_dung`)")),
+    # The commune is in the statement, as the first column of the INSERT — just not in the six
+    # lines around the call. Blocking this would make the guard fire every time anyone edited a
+    # correctly scoped write, and the exemption stays narrow: the constant must name tenant_id.
+    ("tenant_scope_guard", "commune inside the named SQL constant", PASS,
+     w("danhtinh/internal/store/phien_cong_dan.go",
+       "const chenPhien = `INSERT INTO phien_cong_dan (tenant_id, id, bam_token) VALUES ($1,$2,$3)`\n\n"
+       "func (s *Store) Tao(ctx context.Context, tx *sql.Tx, xa, sid, bam string) error {\n"
+       "\t_, err := tx.ExecContext(ctx, chenPhien, xa, sid, bam)\n\treturn err\n}")),
 
     # ---- rule 2 · service boundary ---------------------------------------
     ("service_boundary_guard", "imports another service's internal", BLOCK,

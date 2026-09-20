@@ -176,6 +176,7 @@ func quetFile(fset *token.FileSet, duongDan, service, root string) ([]tuyen, []e
 	rel, _ := filepath.Rel(root, duongDan)
 	rel = filepath.ToSlash(rel)
 	pkgDir := filepath.Dir(duongDan)
+	hangChuoi := hangChuoiTrongTep(f)
 
 	var out []tuyen
 	var loi []error
@@ -193,12 +194,13 @@ func quetFile(fset *token.FileSet, duongDan, service, root string) ([]tuyen, []e
 		if !ok || (sel.Sel.Name != "Handle" && sel.Sel.Name != "HandleFunc") || len(call.Args) == 0 {
 			return true
 		}
-		mau, ok := chuoiLit(call.Args[0])
+		mau, ok := mauRoute(call.Args[0], hangChuoi)
 		if !ok {
 			// A pattern built at runtime is a route this generator cannot describe, and a
 			// route missing from the contract is exactly what it exists to prevent.
 			loi = append(loi, fmt.Errorf(
-				"apidoc: %s:%d: mẫu route không phải hằng chuỗi — không trích được",
+				"apidoc: %s:%d: mẫu route không đọc được lúc dựng — phải là chuỗi viết thẳng, "+
+					"hoặc một hằng chuỗi khai trong CÙNG tệp",
 				rel, fset.Position(call.Args[0].Pos()).Line))
 			return true
 		}
@@ -443,6 +445,63 @@ func argDau(c *ast.CallExpr) ast.Expr {
 		return nil
 	}
 	return c.Args[0]
+}
+
+// mauRoute reads the route pattern out of the first argument of mux.Handle.
+//
+// TWO SHAPES ARE ACCEPTED, AND THE SECOND ONE IS WHY THIS FUNCTION EXISTS. A literal is the
+// common case. A NAMED CONSTANT declared in the same file is the case the generator used to
+// refuse — and refusing it punished the shape this repository actually wants: a path that is
+// registered, asserted in a test and printed in a runbook has to have ONE source, which is
+// exactly what a constant is (rule 9). `service-platform/internal/http/webhook_zalo.go:14`
+// declares `DuongDanWebhookZalo` for that reason, and the whole generator then failed on it —
+// `make kb` could not regenerate the REST contract at all while the author had done the right
+// thing. The alternative the old behaviour pushed people toward was writing the path twice,
+// which is the drift rule 9 exists to prevent.
+//
+// SAME FILE ONLY, DELIBERATELY. Reaching across the package would mean parsing every file of
+// the package to answer a question about one call, and a constant that lives in another file
+// is a constant a reader of this call cannot see either. The error message names this limit
+// instead of leaving the author to guess which half of the rule they broke.
+//
+// EVERYTHING ELSE IS STILL AN ERROR, and that half must not soften: a pattern built at runtime
+// (a variable, a concatenation, fmt.Sprintf) is a route that cannot appear in the contract, and
+// a route missing from the contract is the one thing this generator exists to make impossible.
+func mauRoute(e ast.Expr, hangChuoi map[string]string) (string, bool) {
+	if s, ok := chuoiLit(e); ok {
+		return s, true
+	}
+	id, ok := e.(*ast.Ident)
+	if !ok {
+		return "", false
+	}
+	s, ok := hangChuoi[id.Name]
+	return s, ok
+}
+
+// hangChuoiTrongTep collects the file's package-level `const X = "..."` declarations.
+//
+// Only untyped string constants with one name and one literal value: `const a, b = "x", "y"` and
+// a constant whose value is itself an expression are left out rather than half-resolved. A
+// generator that guesses at a value it cannot see is worse than one that says it cannot see it.
+func hangChuoiTrongTep(f *ast.File) map[string]string {
+	out := map[string]string{}
+	for _, d := range f.Decls {
+		gen, ok := d.(*ast.GenDecl)
+		if !ok || gen.Tok != token.CONST {
+			continue
+		}
+		for _, s := range gen.Specs {
+			vs, ok := s.(*ast.ValueSpec)
+			if !ok || len(vs.Names) != 1 || len(vs.Values) != 1 {
+				continue
+			}
+			if v, ok := chuoiLit(vs.Values[0]); ok {
+				out[vs.Names[0].Name] = v
+			}
+		}
+	}
+	return out
 }
 
 // chuoiLit unquotes a string literal, including a raw one.

@@ -200,3 +200,67 @@ func TestReplySapXepTheoMaTrangThai(t *testing.T) {
 		t.Fatalf("@reply chưa sắp xếp: %v", ma)
 	}
 }
+
+// --- mẫu route là một HẰNG CHUỖI ----------------------------------------------------------
+//
+// Ba ca dưới đây đi cùng nhau. Bỏ ca thứ ba đi thì hai ca đầu đọc như "bộ sinh chấp nhận mọi
+// thứ", trong khi thứ phải giữ nguyên là: cái gì không đọc được lúc dựng thì vẫn phải báo lỗi.
+
+const dauFileHang = `package http
+
+import (
+	"net/http"
+
+	"github.com/vihat/vigov/core/authz"
+)
+
+const DuongThings = "GET /api/v1/things"
+const DuongWebhook = "/webhooks/zalo"
+
+func Register(mux *http.ServeMux) {
+`
+
+func TestMauRouteLaHangChuoiCungTepThiTrichDuoc(t *testing.T) {
+	ts, errs := trich(t, dauFileHang+`
+	// @summary  Danh sách
+	// @reply    200 -
+	mux.Handle(DuongThings, authz.Public("lý do")(http.HandlerFunc(nil)))
+}
+`)
+	if len(errs) != 0 {
+		t.Fatalf("hằng chuỗi cùng tệp phải trích được, lỗi: %v", errs)
+	}
+	if len(ts) != 1 || ts[0].Method != "GET" || ts[0].Path != "/api/v1/things" {
+		t.Fatalf("trích sai: %+v", ts)
+	}
+}
+
+// Đây là ca thật đã làm cả `make kb` đỏ: service-platform gắn webhook Zalo bằng
+// `mux.Handle(DuongDanWebhookZalo, ...)` — một hằng, vì đường dẫn ấy có mặt ở ba chỗ và phải
+// có MỘT nguồn. Bộ sinh cũ báo lỗi, tức phạt đúng khuôn mã luật 9 đòi.
+//
+// Mẫu không có phương thức nên nó là một MOUNT, không phải route: không vào hợp đồng, và cũng
+// không phải lỗi.
+func TestMountBangHangChuoiKhongPhaiRouteVaKhongPhaiLoi(t *testing.T) {
+	ts, errs := trich(t, dauFileHang+`
+	mux.Handle(DuongWebhook, authz.Public("Zalo gọi từ hạ tầng của họ")(http.HandlerFunc(nil)))
+}
+`)
+	if len(errs) != 0 || len(ts) != 0 {
+		t.Fatalf("mount bằng hằng: mong 0 route 0 lỗi, được %+v %v", ts, errs)
+	}
+}
+
+func TestMauRouteDungBienThiVanLaLoi(t *testing.T) {
+	// Một mẫu dựng lúc chạy là một tuyến không mô tả được — nửa này của quy tắc không được nới.
+	_, errs := trich(t, dauFileHang+`
+	duong := "GET /api/v1/" + ten
+	// @summary  Có
+	// @reply    200 -
+	mux.Handle(duong, authz.Public("lý do")(http.HandlerFunc(nil)))
+}
+`)
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "không đọc được lúc dựng") {
+		t.Fatalf("mong lỗi mẫu không đọc được, được: %v", errs)
+	}
+}

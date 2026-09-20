@@ -25,10 +25,18 @@ import _common as c  # noqa: E402
 
 HOOK = "tenant_scope_guard"
 
-# Calls that touch the data store
+# Calls that touch the data store.
+#
+# `(?:Context)?` IS LOAD-BEARING, AND ITS ABSENCE MADE THIS GUARD BLIND FOR THE WHOLE LIFE OF
+# THE REPOSITORY. `database/sql` offers each method twice — `Query` and `QueryContext` — and
+# EVERY call in this codebase uses the Context form, because a query that cannot be cancelled
+# is a query that outlives the request. Without this group the pattern matched none of them:
+# checked on 2026-09-20, 20 production call sites, 0 seen. The guard still fired on the SCOPED
+# path (`.For(ctx).Query(`), which SCOPED_OK then passes — so it looked alive in exactly the
+# case that needed no protection, and was silent in the case rule 1 exists for.
 DB_CALL = re.compile(
     r"\.\s*(Find|FindOne|FindAll|First|Get|GetAll|List|Query|QueryRow|Exec|Select|"
-    r"Where|Count|Aggregate|Update|Updates|Save|Insert|Create|Delete)\s*\("
+    r"Where|Count|Aggregate|Update|Updates|Save|Insert|Create|Delete)(?:Context)?\s*\("
 )
 
 # The RIGHT path — a repository already scoped from context
@@ -124,17 +132,80 @@ def in_scope(path: str) -> bool:
     return dv is not None or "/internal/" in path
 
 
+def khoi_chu_thich_tren(lines: list[str], i: int) -> str:
+    """The contiguous comment block immediately above line i, plus line i itself.
+
+    WHY NOT JUST THE PREVIOUS LINE, which is what this used to read. Rule 1 forbidden #6 requires
+    a cross-commune query to carry `// @cross-tenant: <reason>`, and a reason worth writing is
+    never one line: both real marks in this repository open a block that runs three to six lines
+    before the statement (`store/phien_cong_dan.go`, `store/crosstenant/dinh_danh_cong_dan.go`).
+    Reading only `lines[i-1]` found neither.
+
+    THE TWO BUGS WERE CANCELLING EACH OTHER, and that is the part worth remembering: DB_CALL saw
+    no call, so this never got the chance to reject a correctly annotated one. Fixing the regex
+    alone would have turned a blind guard into a guard that punishes the one discipline rule 1
+    asks for — and the obvious way out, shortening the reason to a single line, destroys exactly
+    what the mark exists to preserve.
+
+    IT DOES NOT REQUIRE THE MARK TO TOUCH THE STATEMENT, and that was the first patch's mistake
+    — caught by running this guard on the real repository instead of counting its warnings.
+    `store/crosstenant/dinh_danh_cong_dan.go` writes the mark at :96-98, then `var id string`
+    at :99, then the query at :100. Demanding adjacency would have flagged a correctly annotated
+    query and taught the author to move a declaration to please a hook.
+
+    Three stops, each closing a way the exemption could leak:
+
+      `}` or `func `   the mark cannot reach in from another scope or another function
+      a previous DB call   one mark covers the NEXT query, never two — rule 1 forbidden #6 asks
+                           each cross-commune read to carry its own reason
+      8 lines              a bound, so a mark written far above cannot quietly cover something
+                           a reader would not associate with it
+    """
+    khoi = [lines[i]]
+    j = i - 1
+    while j >= 0 and len(khoi) <= 8:
+        s = lines[j].strip()
+        if s.startswith("}") or s.startswith("func ") or DB_CALL.search(lines[j]):
+            break
+        khoi.append(lines[j])
+        j -= 1
+    return "\n".join(khoi)
+
+
+# SQL statements held in a named constant — the shape every store in this repository uses.
+CONST_SQL = re.compile(r"(\w+)\s*=\s*`([^`]*)`", re.S)
+
+
+def hang_sql_co_tenant(content: str) -> set[str]:
+    """Names of this file's SQL constants whose text really names `tenant_id`.
+
+    WHY THIS EXISTS: a store writes `tx.ExecContext(ctx, chenPhienCongDan, xa, sid, …)`, and the
+    commune is right there — inside the constant, as the first column of the INSERT. HAS_TENANT
+    reads a six-line window around the call and sees neither, so the guard would block a query
+    that is correctly scoped, every time anyone edited that line.
+
+    The exemption is narrow ON PURPOSE: the constant must contain the literal `tenant_id`. An
+    inline query with no commune in it matches no constant and is still reported. Widening
+    HAS_TENANT itself to accept this repository's Vietnamese word for commune (`xa`) was the
+    other way to fix it, and it is the wrong one — it weakens an EXEMPTION, so it buys silence
+    everywhere, including where the commune genuinely is not there.
+    """
+    return {m.group(1) for m in CONST_SQL.finditer(content) if "tenant_id" in m.group(2)}
+
+
 def scan(content: str) -> list[str]:
     hits: list[str] = []
     lines = content.splitlines()
+    hang_tenant = hang_sql_co_tenant(content)
 
     for i, line in enumerate(lines):
-        prev = lines[i - 1] if i else ""
         # Filters often wrap across lines — look at a small window around the call
         ctx = "\n".join(lines[max(0, i - 2): i + 4])
 
         if DB_CALL.search(line):
-            if not (SCOPED_OK.search(ctx) or HAS_TENANT.search(ctx) or ESCAPE.search(prev)):
+            if not (SCOPED_OK.search(ctx) or HAS_TENANT.search(ctx)
+                    or any(ten in ctx for ten in hang_tenant)
+                    or ESCAPE.search(khoi_chu_thich_tren(lines, i))):
                 hits.append(f"line {i+1}: {line.strip()[:70]} — no tenant scope")
 
         if UNIQUE_ONE_COL.search(line) and not HAS_TENANT.search(line):
