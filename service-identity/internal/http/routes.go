@@ -142,6 +142,47 @@ type (
 		MaTran(ctx context.Context) (domain.MaTranQuyen, error)
 	}
 
+	// The three reference reads of migration 0005 (ADR 0024). THREE INTERFACES AND NOT ONE WIDE
+	// READER, although all three have the identical method signature and two of them are satisfied
+	// by stores built the same way.
+	//
+	// The discipline is the one BoPhanDanhMuc and VaiTroDanhMuc already follow one screen up, and
+	// the reason is the same: an interface is the list of things a handler CAN do. A single
+	// `DanhMucDoc` carrying three methods would hand the residential-unit handler the task-bloc
+	// catalogue it has no business reading, and the day somebody reaches for it — to "enrich" a
+	// response, to fill a picker on the wrong screen — nothing turns red and the two catalogues are
+	// coupled through a handler. Three names also mean the panic in Register can say WHICH route
+	// would have failed, which is the whole value of refusing incomplete wiring at construction.
+
+	// ThonToDanPhoDanhSach is the commune's residential units, for GET /api/v1/residential-units.
+	//
+	// NO page.Request PARAMETER, like the two catalogues below and unlike CanBoDanhBa: this route
+	// returns the whole list on purpose. The reason is on idstore.ThonToDanPhoStore.DanhSach, and
+	// the bound that replaces the missing `limit` is idstore.TranDanhSachThonToDanPho.
+	ThonToDanPhoDanhSach interface {
+		DanhSach(ctx context.Context) ([]domain.ThonToDanPho, error)
+	}
+
+	// LoaiDonViDanCuDanhMuc is the residential-unit-type catalogue, for
+	// GET /api/v1/residential-unit-types.
+	//
+	// SEPARATE FROM ThonToDanPhoDanhSach even though the list route above already carries each
+	// unit's type LABEL. Those answer two different questions: that one says what the units the
+	// commune HAS are classified as, this one says what classifications EXIST — including the ones
+	// no unit uses yet, which is exactly what a picker must offer and what a list can never reveal.
+	LoaiDonViDanCuDanhMuc interface {
+		DanhSach(ctx context.Context) ([]domain.LoaiDonViDanCu, error)
+	}
+
+	// KhoiNhiemVuDanhMuc is the task-bloc catalogue, for GET /api/v1/task-blocs.
+	//
+	// IT IS READ BY THIS SERVICE AND CONSUMED BY `petitions`, which holds the chosen code as a
+	// VALUE and never joins into this schema (rule 2, invariant 3; ADR 0024). The table lives here
+	// because the list changes with the org chart, not with tasks — domain.KhoiNhiemVu.
+	KhoiNhiemVuDanhMuc interface {
+		DanhSach(ctx context.Context) ([]domain.KhoiNhiemVu, error)
+	}
+
 	// DangNhapUC and DangXuatUC are the use cases. The handlers only translate HTTP; the
 	// business write and its audit entry share one transaction inside these.
 	DangNhapUC interface {
@@ -161,12 +202,17 @@ type Deps struct {
 	BoPhan    BoPhanDanhMuc
 	VaiTroMuc VaiTroDanhMuc
 	MaTran    MaTranQuyenDoc
-	Signer    *token.Signer
-	Phien     PhienDoc
-	CanBo     CanBoDoc
-	DanhBa    CanBoDanhBa
-	DangNhap  DangNhapUC
-	DangXuat  DangXuatUC
+	// The three reference reads of migration 0005. Three fields, three interfaces — see the note
+	// above them.
+	ThonToDanPho   ThonToDanPhoDanhSach
+	LoaiDonViDanCu LoaiDonViDanCuDanhMuc
+	KhoiNhiemVu    KhoiNhiemVuDanhMuc
+	Signer         *token.Signer
+	Phien          PhienDoc
+	CanBo          CanBoDoc
+	DanhBa         CanBoDanhBa
+	DangNhap       DangNhapUC
+	DangXuat       DangXuatUC
 
 	Log *slog.Logger
 }
@@ -201,6 +247,12 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho danh mục vai trò — GET /api/v1/roles sẽ panic khi có người gọi")
 	case d.MaTran == nil:
 		panic("identity/http: thiếu kho ma trận phân quyền — GET /api/v1/role-permissions sẽ panic khi có người gọi")
+	case d.ThonToDanPho == nil:
+		panic("identity/http: thiếu kho thôn/tổ dân phố — GET /api/v1/residential-units sẽ panic khi có người gọi")
+	case d.LoaiDonViDanCu == nil:
+		panic("identity/http: thiếu kho loại đơn vị dân cư — GET /api/v1/residential-unit-types sẽ panic khi có người gọi")
+	case d.KhoiNhiemVu == nil:
+		panic("identity/http: thiếu kho khối nhiệm vụ — GET /api/v1/task-blocs sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -494,4 +546,78 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/role-permissions",
 		authz.RequirePermission(d.Checker, "admin.role")(
 			http.HandlerFunc(h.MaTranQuyen)))
+
+	// --- the three reference reads of migration 0005. THREE READ ROUTES, DELIBERATELY NO WRITE ---
+	//
+	// The resource nouns come from kb/00-foundation/ubiquitous-language.md:159-161, which already
+	// fixed the ENTITY names (ADR 0024) — `ResidentialUnit`, `ResidentialUnitType`, `TaskBloc` —
+	// and skills/rest-api-design REQUIRED #1, which makes a path segment English, plural and
+	// kebab-case. Nothing here was translated on the spot: `org-units` above is what happens when
+	// the obvious English word asserts something false, so the mapping gets looked up even when the
+	// obvious word turns out to be right.
+	//
+	// NO WRITE ROUTE ON ANY OF THE THREE, and the reason is one unanswered question rather than an
+	// oversight: open question #21 — whether a commune may edit the CODE LIST itself or only the
+	// labels and the order — is still open. A half-written write path looks like a decision
+	// somebody made. The database already refuses the dangerous half (migration 0005's trigger
+	// refuses six operations); what nobody has settled is who may add a row.
+	//
+	// ALL THREE ARE AnyAuthenticated, SAME CALL AND SAME REASON AS /org-units AND /roles ABOVE.
+	// These lists fill pickers and filters on nearly every screen in the system — the `Loại` column
+	// on the residential-unit list, the address picker on a petition, the bloc field on a task form
+	// in another service. Requiring a configuration permission would not protect anything; it would
+	// break those screens for every account that is not an administrator.
+	//
+	// THE TRADE-OFF, STATED RATHER THAN LEFT IMPLICIT: a commune's hamlets, its residential-unit
+	// types and its task blocs are readable by every signed-in account OF THAT COMMUNE. They are
+	// NOT readable across communes and cannot be — Scoped binds `tenant_id` from the context
+	// (rule 1, invariant 5), so the same request against another commune's domain is refused at the
+	// token layer before any query runs. What is accepted is that a member of staff with no
+	// configuration rights can read how their own authority divides its territory and its work,
+	// which is information printed on the noticeboard in the lobby.
+	//
+	// NO idem.* DECLARATION ON ANY OF THE THREE: a GET changes no state.
+	//
+	// NO 403 IN ANY OF THE @reply BLOCKS, AND THAT IS NOT AN OMISSION: an AnyAuthenticated route has
+	// no permission to fail, so 403 is a status these handlers never return. A declared status the
+	// handler cannot produce is a contract the admin web writes dead code for.
+
+	// @summary  Danh sách thôn / tổ dân phố của xã — kèm nhãn loại đơn vị, dùng cho ô chọn địa bàn và bộ lọc
+	// @screen   14-cau-hinh §2
+	// 500 covers two different causes and says so honestly: an ordinary store failure, and the
+	// commune's list exceeding idstore.TranDanhSachThonToDanPho — which this route REFUSES rather
+	// than truncating, because a silently short list is a thôn missing from the address picker.
+	//
+	// @reply    200 danhSachThonToDanPhoRa
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/residential-units",
+		authz.AnyAuthenticated("tên thôn/tổ dân phố xuất hiện ở ô chọn địa bàn của phản ánh, hồ sơ hộ và mọi bộ lọc theo địa bàn — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh sách địa bàn lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
+			http.HandlerFunc(h.DanhSachThonToDanPho)))
+
+	// @summary  Danh mục loại đơn vị dân cư của xã — thôn / tổ dân phố, dùng cho ô chọn Loại và bộ lọc
+	// @screen   14-cau-hinh §5
+	// 500 covers an ordinary store failure and the catalogue exceeding
+	// idstore.TranDanhMucLoaiDonViDanCu — REFUSED rather than truncated, because a missing
+	// classification is a unit filed under the wrong one.
+	//
+	// @reply    200 danhSachLoaiDonViDanCuRa
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/residential-unit-types",
+		authz.AnyAuthenticated("nhãn loại đơn vị dân cư xuất hiện ở cột Loại của danh sách thôn/tổ dân phố, ở ô chọn khi thêm địa bàn và ở bộ lọc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
+			http.HandlerFunc(h.DanhSachLoaiDonViDanCu)))
+
+	// @summary  Danh mục khối nhiệm vụ của xã — Khối Uỷ ban / Khối Đảng / Khác, dùng cho ô chọn khối và bộ lọc nhiệm vụ
+	// @screen   14-cau-hinh §5
+	// 500 covers an ordinary store failure and the catalogue exceeding idstore.TranDanhMucKhoiNhiemVu
+	// — REFUSED rather than truncated, because a missing bloc files a task under the wrong arm of the
+	// apparatus and the count reported upward is then false.
+	//
+	// @reply    200 danhSachKhoiNhiemVuRa
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/task-blocs",
+		authz.AnyAuthenticated("nhãn khối nhiệm vụ xuất hiện ở ô chọn khối trên biểu mẫu nhiệm vụ, ở nhãn dòng và ở bộ lọc danh sách nhiệm vụ — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
+			http.HandlerFunc(h.DanhSachKhoiNhiemVu)))
 }

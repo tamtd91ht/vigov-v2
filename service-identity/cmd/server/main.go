@@ -131,6 +131,13 @@ func run(log *slog.Logger) error {
 	// access one key at a time for the caller, this one describes every role's grants for one
 	// administration screen. See MaTranQuyenDoc for why the three grant readers stay apart.
 	maTranQuyen := idstore.NewQuyenStore(kho)
+	// The three reference reads of migration 0005 (ADR 0024). Three stores and not one, mirroring
+	// the three narrow interfaces in internal/http: a store per table is what lets the panic in
+	// Register name the route that would have failed, and it keeps the residential-unit read —
+	// which joins — apart from the two catalogues, which do not.
+	thonToDanPho := idstore.NewThonToDanPhoStore(kho)
+	loaiDonViDanCu := idstore.NewLoaiDonViDanCuStore(kho)
+	khoiNhiemVu := idstore.NewKhoiNhiemVuStore(kho)
 
 	// 5. ONE signer, and the variable is used twice on purpose.
 	//
@@ -194,9 +201,14 @@ func run(log *slog.Logger) error {
 		// Ma trận phân quyền — chỉ ĐỌC. Không có tuyến ghi nào, và lý do nằm ở đầu tệp
 		// internal/http/quyen.go: lưu một cột vai trò chạm đúng câu hỏi mở #13 và #14.
 		MaTran: maTranQuyen,
-		Signer: signer, // the SAME pointer app.NewDangNhap was given above
-		Phien:  phien,
-		CanBo:  canBo,
+		// Ba tuyến đọc tham chiếu của migration 0005 — CHỈ ĐỌC. Không có tuyến ghi nào: câu hỏi
+		// mở #21 (xã được sửa DANH SÁCH MÃ hay chỉ nhãn và thứ tự) chưa có lời đáp.
+		ThonToDanPho:   thonToDanPho,
+		LoaiDonViDanCu: loaiDonViDanCu,
+		KhoiNhiemVu:    khoiNhiemVu,
+		Signer:         signer, // the SAME pointer app.NewDangNhap was given above
+		Phien:          phien,
+		CanBo:          canBo,
 		// The SAME store behind two fields, and two fields on purpose: CanBoDoc is the
 		// three-condition read the session middleware runs on every request, CanBoDanhBa is the
 		// register the Cấu hình → Người dùng screen pages through. See the note on CanBoDanhBa.

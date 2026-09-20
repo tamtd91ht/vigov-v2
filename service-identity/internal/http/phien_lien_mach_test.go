@@ -103,11 +103,18 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		BoPhan:    boPhanMau(),
 		VaiTroMuc: vaiTroMucMau(),
 		MaTran:    maTranMau(),
-		CanBo:     &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
-		DanhBa:    danhBaMau(),
-		DangNhap:  &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
-		DangXuat:  &dangXuatGia{},
-		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// The three reference reads are wired here for one reason only: Register REFUSES incomplete
+		// Deps at construction, so this harness cannot build the real route table without them.
+		// Nothing in this file calls those routes — it is about the session staying readable across
+		// two requests.
+		ThonToDanPho:   thonToDanPhoMau(),
+		LoaiDonViDanCu: loaiDonViDanCuMau(),
+		KhoiNhiemVu:    khoiNhiemVuMau(),
+		CanBo:          &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
+		DanhBa:         danhBaMau(),
+		DangNhap:       &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
+		DangXuat:       &dangXuatGia{},
+		Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	mux := http.NewServeMux()

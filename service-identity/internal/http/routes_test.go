@@ -300,6 +300,128 @@ func boPhanMau() *boPhanGia {
 	}}
 }
 
+// --- the three reference reads of migration 0005 --------------------------------------------
+//
+// THREE FAKES AND NOT ONE, mirroring the three narrow interfaces in routes.go. A single fake
+// satisfying all three would let a test wire the task-bloc catalogue into the residential-unit
+// route and still pass, which is the coupling the three interfaces exist to make impossible.
+//
+// All three are KEYED BY COMMUNE and read it from the context exactly as *store.Scoped does. Keyed
+// any other way, the isolation cases below would pass while proving nothing.
+
+type thonToDanPhoGia struct {
+	theo map[tenant.ID][]domain.ThonToDanPho
+	loi  error
+	goi  int
+}
+
+func (t *thonToDanPhoGia) DanhSach(ctx context.Context) ([]domain.ThonToDanPho, error) {
+	t.goi++
+	if t.loi != nil {
+		return nil, t.loi
+	}
+	return t.theo[tenant.MustFrom(ctx)], nil
+}
+
+// soNguyen makes a pointer for the two counts. THE POINTERS ARE THE POINT: nil is "not entered"
+// and a pointer to 0 is a counted zero, and the tests below assert that the difference survives
+// all the way into the JSON.
+func soNguyen(n int) *int { return &n }
+
+// thonToDanPhoMau gives commune A three units covering the three states of the `loai` column, and
+// commune B one unit with a DIFFERENT name — two communes whose hamlets were named the same could
+// not show a leak.
+//
+// The three states are not padding; each one is a real row shape the store's LEFT JOIN produces:
+//
+//	classified      LoaiMa + LoaiNhan, the ordinary case
+//	unclassified    both empty — the specification's own `—` (14-cau-hinh.md:54)
+//	orphan code     LoaiMa with NO label: the type row was soft-deleted while units still carry
+//	                its code. The unit must survive that, which is why `deleted_at IS NULL` sits
+//	                in the JOIN rather than in the WHERE.
+//
+// The order is the one the store returns (ORDER BY ten, ma) and the counts differ per row on
+// purpose: a fixture where every unit had the same figures could not show a column being read off
+// the wrong row.
+func thonToDanPhoMau() *thonToDanPhoGia {
+	return &thonToDanPhoGia{theo: map[tenant.ID][]domain.ThonToDanPho{
+		xaA: {
+			{ID: "tt-001", Ma: "thon-binh-an", Ten: "Thôn Bình An",
+				LoaiMa: "thon", LoaiNhan: "Thôn",
+				SoHo: soNguyen(284), NhanKhau: soNguyen(1132), DangDung: true},
+			// Counts NOT entered — nil, not zero. This is the row that turns red if a pointer is
+			// ever flattened into an int somewhere between the store and the JSON.
+			{ID: "tt-002", Ma: "thon-chua-phan-loai", Ten: "Thôn Chưa Phân Loại", DangDung: true},
+			// Out of use AND holding a code whose catalogue row is gone. Two states at once because
+			// they are independent, and a fixture that never combined them could not show one
+			// overwriting the other.
+			{ID: "tt-003", Ma: "to-dan-pho-so-1", Ten: "Tổ dân phố số 1",
+				LoaiMa: "to-dan-pho", SoHo: soNguyen(0), DangDung: false},
+		},
+		xaB: {
+			{ID: "tt-b-001", Ma: "thon-binh-duong", Ten: "Thôn Bình Dương",
+				LoaiMa: "thon", LoaiNhan: "Thôn", DangDung: true},
+		},
+	}}
+}
+
+type loaiDonViDanCuGia struct {
+	theo map[tenant.ID][]domain.LoaiDonViDanCu
+	loi  error
+	goi  int
+}
+
+func (l *loaiDonViDanCuGia) DanhSach(ctx context.Context) ([]domain.LoaiDonViDanCu, error) {
+	l.goi++
+	if l.loi != nil {
+		return nil, l.loi
+	}
+	return l.theo[tenant.MustFrom(ctx)], nil
+}
+
+// loaiDonViDanCuMau gives commune A the two shipped codes with DIFFERENT flags on each — one is the
+// default and in use, the other is neither — so a test can tell "the flag is read" from "the flag
+// is always false". Commune B carries a row with a different label.
+func loaiDonViDanCuMau() *loaiDonViDanCuGia {
+	return &loaiDonViDanCuGia{theo: map[tenant.ID][]domain.LoaiDonViDanCu{
+		xaA: {
+			{ID: "ldv-001", Ma: "thon", Nhan: "Thôn", LaMacDinh: true, DangDung: true},
+			{ID: "ldv-002", Ma: "to-dan-pho", Nhan: "Tổ dân phố"},
+		},
+		xaB: {
+			{ID: "ldv-b-001", Ma: "to-dan-pho", Nhan: "Tổ dân phố xã B", DangDung: true},
+		},
+	}}
+}
+
+type khoiNhiemVuGia struct {
+	theo map[tenant.ID][]domain.KhoiNhiemVu
+	loi  error
+	goi  int
+}
+
+func (k *khoiNhiemVuGia) DanhSach(ctx context.Context) ([]domain.KhoiNhiemVu, error) {
+	k.goi++
+	if k.loi != nil {
+		return nil, k.loi
+	}
+	return k.theo[tenant.MustFrom(ctx)], nil
+}
+
+// khoiNhiemVuMau mirrors loaiDonViDanCuMau: commune A has two blocs with different flags, commune B
+// one bloc with a DIFFERENT label.
+func khoiNhiemVuMau() *khoiNhiemVuGia {
+	return &khoiNhiemVuGia{theo: map[tenant.ID][]domain.KhoiNhiemVu{
+		xaA: {
+			{ID: "knv-001", Ma: "khoi-uy-ban", Nhan: "Khối Uỷ ban", LaMacDinh: true, DangDung: true},
+			{ID: "knv-002", Ma: "khoi-dang", Nhan: "Khối Đảng"},
+		},
+		xaB: {
+			{ID: "knv-b-001", Ma: "khac", Nhan: "Khác — xã B", DangDung: true},
+		},
+	}}
+}
+
 // phienGia counts its reads. The count is what proves the commune check happens BEFORE any
 // database access.
 type phienGia struct {
@@ -410,6 +532,10 @@ type mayChu struct {
 	boPhan    *boPhanGia
 	vaiTroMuc *vaiTroMucGia
 	maTran    *maTranGia
+	// The three reference reads of migration 0005.
+	thonToDanPho   *thonToDanPhoGia
+	loaiDonViDanCu *loaiDonViDanCuGia
+	khoiNhiemVu    *khoiNhiemVuGia
 	// dangNhap and dangXuat are the same values as d.DangNhap / d.DangXuat, typed.
 	dangNhap *dangNhapGia
 	dangXuat *dangXuatGia
@@ -445,6 +571,9 @@ func dungMayChu(t *testing.T) *mayChu {
 	boPhan := boPhanMau()
 	vaiTroMuc := vaiTroMucMau()
 	maTran := maTranMau()
+	thonToDanPho := thonToDanPhoMau()
+	loaiDonViDanCu := loaiDonViDanCuMau()
+	khoiNhiemVu := khoiNhiemVuMau()
 
 	d := Deps{
 		// Commune A grants the permission; commune B has the same account and grants nothing.
@@ -458,10 +587,15 @@ func dungMayChu(t *testing.T) *mayChu {
 		BoPhan:    boPhan,
 		VaiTroMuc: vaiTroMuc,
 		MaTran:    maTran,
-		Signer:    signer,
-		Phien:     phien,
-		CanBo:     canBo,
-		DanhBa:    danhBa,
+		// Three fields, three fakes — Register panics if any of them is missing, which is how an
+		// unwired route is caught at construction rather than by the first person to call it.
+		ThonToDanPho:   thonToDanPho,
+		LoaiDonViDanCu: loaiDonViDanCu,
+		KhoiNhiemVu:    khoiNhiemVu,
+		Signer:         signer,
+		Phien:          phien,
+		CanBo:          canBo,
+		DanhBa:         danhBa,
 		// The harness gives Deps.Xa its OWN directory value, not the one the edge is built with
 		// below, although both start from the same map. Two values is what lets a test make the
 		DangNhap: &dangNhapGia{
@@ -491,8 +625,13 @@ func dungMayChu(t *testing.T) *mayChu {
 		boPhan:    boPhan,
 		vaiTroMuc: vaiTroMuc,
 		maTran:    maTran,
-		dangNhap:  d.DangNhap.(*dangNhapGia),
-		dangXuat:  d.DangXuat.(*dangXuatGia),
+
+		thonToDanPho:   thonToDanPho,
+		loaiDonViDanCu: loaiDonViDanCu,
+		khoiNhiemVu:    khoiNhiemVu,
+
+		dangNhap: d.DangNhap.(*dangNhapGia),
+		dangXuat: d.DangXuat.(*dangXuatGia),
 	}
 	m.dungLai(t, nil)
 	return m
