@@ -241,9 +241,21 @@ Chú thích: *"Điểm đen là nơi vừa nhiều phản ánh vừa xử lý kh
 Tiêu đề: `Nhập hộ phản ánh của người dân`
 Mô tả: *"Dùng khi người dân gọi điện, ghé trụ sở, hoặc gặp trưởng thôn ngoài địa bàn. Phiếu nhập ở đây đi cùng quy trình và cùng thời hạn với phiếu gửi từ Zalo."*
 
+> ⚠ **CÂU MÔ TẢ TRÊN NAY KHÔNG CÒN ĐÚNG, và nó là chữ hiện trên màn hình cán bộ.** ADR 0028
+> quyết định E và F: phiếu nhập hộ **không** đi cùng thời hạn với phiếu gửi từ Zalo — nó có
+> lĩnh vực ngay lúc vào sổ nên đặt được **cả hai** hạn, còn phiếu dân tự gửi chỉ có hạn tiếp
+> nhận cho tới khi cán bộ phân loại. Và đồng hồ `Tiếp nhận` của phiếu nhập hộ là `NULL`,
+> không áp dụng.
+>
+> **Đề xuất câu thay thế, chờ duyệt — tôi không tự sửa chữ hiện ra cho người dùng:**
+> *"Dùng khi người dân gọi điện, ghé trụ sở, hoặc gặp trưởng thôn ngoài địa bàn. Phiếu nhập
+> ở đây đi cùng quy trình với phiếu gửi từ Zalo. Vì đã biết lĩnh vực ngay, hạn xử lý được
+> ấn định luôn — hãy ghi đúng thời điểm người dân phản ánh."*
+
 | Trường | Kiểu | Bắt buộc | Ghi chú |
 |---|---|---|---|
-| Lĩnh vực | select | ✔ | `— Chọn lĩnh vực —` + 12 lĩnh vực |
+| Lĩnh vực | select | ✔ | `— Chọn lĩnh vực —` + 12 lĩnh vực. **Bắt buộc ở kênh này, và đó là khác biệt lớn nhất so với phiếu dân tự gửi**: có lĩnh vực ngay lúc vào sổ nên **cả hai hạn** đặt được luôn (ADR 0028) |
+| **Dân phản ánh lúc** | datetime | | **ADR 0028 quyết định F — TRƯỜNG MỚI, bản trước không có.** Lúc dân thật sự gọi điện / ghé trụ sở / gặp trưởng thôn, nếu cán bộ ghi được. Để trống thì lấy lúc vào sổ. **Chặn hai đầu: không sớm hơn 7 ngày trước lúc vào sổ, không muộn hơn lúc vào sổ** — một mốc quá khứ tuỳ ý cho phép chế ra một phiếu quá hạn, hoặc giấu một phiếu đã trễ. Mọi giá trị khác mặc định đều **ghi vết**, có trước và sau |
 | Nội dung phản ánh | textarea | ✔ | placeholder `Ghi lại lời người dân: sự việc gì, ở đâu, từ khi nào.` |
 | Địa chỉ, vị trí | text | | placeholder `Đầu ngõ thôn Hà Lam` |
 | Thôn, tổ dân phố | select | | `— Chưa xác định —` + 6 thôn |
@@ -277,7 +289,9 @@ Nút: `Huỷ` · `Vào sổ phản ánh`
 | `trang_thai` | enum | 9 mã |
 | `bo_phan_id` | uuid null | |
 | `can_bo_xu_ly_id` | uuid null | |
-| `han_xu_ly` | timestamp | tính từ SLA theo lĩnh vực |
+| `han_tiep_nhan` | timestamp **null** | **ADR 0028.** Đặt lúc sinh phiếu, lấy `gio_tiep_nhan` của **dòng mặc định** — chưa ai đọc phiếu thì chưa ai biết lĩnh vực. `NULL` nghĩa là **KHÔNG ÁP DỤNG**, chỉ dùng cho phiếu `can-bo-nhap-ho`: chính cán bộ là người đọc phiếu nên đồng hồ ấy vô nghĩa |
+| `han_xu_ly_xong` | timestamp **null** | **ADR 0028.** KHÔNG đặt lúc sinh phiếu với phiếu dân tự gửi — đặt lúc chuyển sang `dang-phan-loai`, khi cán bộ chốt lĩnh vực. `NULL` nghĩa là **CHƯA CÓ, chờ phân loại** |
+| `goc_dem_han` | timestamp | Mốc đếm của **cả hai** hạn: lúc **dân bấm gửi**. Với phiếu nhập hộ là lúc dân thật sự phản ánh, chặn không sớm hơn 7 ngày trước lúc vào sổ |
 | `tiep_nhan_luc` | timestamp | |
 | `xu_ly_xong_luc` | timestamp null | |
 | `dong_luc` | timestamp null | |
@@ -285,6 +299,17 @@ Nút: `Huỷ` · `Vào sổ phản ánh`
 | `diem_hai_long` | int null | 1–5 |
 | `danh_gia_luc` | timestamp null | |
 | `da_mo_lai` | bool | do đánh giá thấp |
+
+> ⚠ **HAI CỘT `NULL` MANG HAI NGHĨA NGƯỢC NHAU** — đây là chỗ một người đọc lướt chắc chắn
+> nhầm. `han_tiep_nhan IS NULL` = *"không áp dụng"*; `han_xu_ly_xong IS NULL` = *"chưa có"*.
+> **Hệ quả cho báo cáo:** mọi số liệu về thời gian tiếp nhận phải **LOẠI** các dòng `NULL`
+> ấy, không được coi chúng là 0 — ghi 0 giờ cho mọi phiếu nhập hộ sẽ kéo con số trung bình
+> của xã về gần 0, một con số đẹp và sai gửi lên lãnh đạo.
+>
+> Cột `han_xu_ly` (một cột, không `NULL`) của bản trước **đã bỏ**: nó ép đặt hạn xử lý lúc
+> sinh phiếu, mà lúc ấy chưa biết lĩnh vực nên chỉ lấy được dòng mặc định 56 giờ — làm sáu
+> dòng SLA dài hơn 56 giờ và ba dòng tiếp nhận 2 giờ **không bao giờ áp được** cho phiếu dân
+> gửi. Lập luận đầy đủ ở ADR 0028 §"Ba cái giá".
 
 **`anh_phan_anh`**: `id, phan_anh_id, loai (truoc|sau), url, nguoi_tai_id, tao_luc`
 
@@ -314,7 +339,7 @@ Nút: `Huỷ` · `Vào sổ phản ánh`
 
 ## 14. Quy tắc nghiệp vụ
 
-1. **Hạn xử lý** tính từ bảng SLA theo **lĩnh vực** (xem `14-cau-hinh.md`). Ví dụ `An ninh trật tự`: tiếp nhận 2 giờ, xử lý xong 16 giờ; `Hạ tầng giao thông`: 8 giờ / 168 giờ. Nếu lĩnh vực không có dòng riêng thì dùng dòng `Mặc định cho mọi lĩnh vực` (8 giờ / 56 giờ). Giờ ở đây là **giờ làm việc** của xã, không phải giờ treo tường — ADR 0007. Mốc khởi động cả hai đồng hồ, và quy tắc khi cán bộ đổi lĩnh vực lúc phân loại: **ADR 0027**, không chép lại ở đây.
+1. **Hạn xử lý** tính từ bảng SLA theo **lĩnh vực** (xem `14-cau-hinh.md`). Ví dụ `An ninh trật tự`: tiếp nhận 2 giờ, xử lý xong 16 giờ; `Hạ tầng giao thông`: 8 giờ / 168 giờ. Nếu lĩnh vực không có dòng riêng thì dùng dòng `Mặc định cho mọi lĩnh vực` (8 giờ / 56 giờ). Giờ ở đây là **giờ làm việc** của xã, không phải giờ treo tường — ADR 0007. Mốc khởi động cả hai đồng hồ và **thời điểm ấn định** từng hạn: **ADR 0028**. Quy tắc khi cán bộ đổi lĩnh vực — chỉ **RÚT NGẮN**, không bao giờ kéo dài: **ADR 0027** quyết định C. Không chép lại ở đây.
 2. **Không đóng phiếu được khi thiếu ảnh sau xử lý.** Chặn ở cả client và server.
 3. Đánh giá **1–2 sao tự mở lại phiếu** về `Đang xử lý` và ghi nhật ký tự động.
 4. Phiếu mặc định **không công khai**; phải kiểm duyệt (`Cho hiện công khai`) mới lên trang công khai/Mini App. Người gửi luôn tra cứu được phiếu của mình.
