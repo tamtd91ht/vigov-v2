@@ -18,6 +18,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -25,6 +26,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/vihat/vigov/core/authz"
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
@@ -52,6 +54,11 @@ type mayChuGia struct {
 	thayXa  []string
 	thayKey []string
 	thayReq *identityv1.ResolveStaffPrincipalRequest
+
+	traLich  []*identityv1.WorkingHoursReached
+	loiLich  error
+	goiLich  int
+	thayLich *identityv1.AdvanceWorkingHoursRequest
 }
 
 func (s *mayChuGia) ResolveStaffPrincipal(ctx context.Context, in *identityv1.ResolveStaffPrincipalRequest) (
@@ -300,4 +307,115 @@ func TestDialThieuKhoaGoiThiPanic(t *testing.T) {
 		}
 	}()
 	_, _ = Dial("identity:9090", secret.Secret(""), nil)
+}
+
+// ---- TienGioLamViec ------------------------------------------------------------------
+//
+// What these tests defend is NOT "does it call the RPC". It is the three ways a caller ends up
+// with a WRONG DEADLINE while every happy-path test stays green — and a wrong deadline is a
+// commitment a public authority made to a citizen and will miss.
+
+func (s *mayChuGia) AdvanceWorkingHours(ctx context.Context, in *identityv1.AdvanceWorkingHoursRequest) (
+	*identityv1.AdvanceWorkingHoursResponse, error) {
+	s.goiLich++
+	s.thayLich = in
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		s.thayXa = md.Get(grpcx.MetadataTenantKey)
+		s.thayKey = md.Get(grpcx.MetadataCallerKey)
+	}
+	if s.loiLich != nil {
+		return nil, s.loiLich
+	}
+	return &identityv1.AdvanceWorkingHoursResponse{Items: s.traLich}, nil
+}
+
+func moc(gio uint32, t time.Time) *identityv1.WorkingHoursReached {
+	return &identityv1.WorkingHoursReached{WorkingHours: gio, ReachedAt: timestamppb.New(t)}
+}
+
+var nhanLuc = time.Date(2026, 9, 21, 9, 30, 0, 0, time.UTC)
+
+func TestHaiHanTraVeTraCUUTHEOSOGIO_KhongTheoThuTu(t *testing.T) {
+	// THE CASE THAT CATCHES AN INDEX-BASED READ. The server answers in the REVERSE order of the
+	// request on purpose: nothing in the contract promises order, and a caller that took items[0]
+	// as "the first amount I asked for" would here swap the acknowledge deadline with the resolve
+	// deadline — a petition due in 2 hours would be recorded as due in 16, on the security field.
+	hanTiepNhan := nhanLuc.Add(2 * time.Hour)
+	hanXuLy := nhanLuc.Add(48 * time.Hour)
+	srv := &mayChuGia{traLich: []*identityv1.WorkingHoursReached{moc(16, hanXuLy), moc(2, hanTiepNhan)}}
+	c := moMay(t, srv)
+
+	got, err := c.TienGioLamViec(ngucCanh(), nhanLuc, []uint32{2, 16})
+	if err != nil {
+		t.Fatalf("TienGioLamViec: %v", err)
+	}
+	if !got[2].Equal(hanTiepNhan) {
+		t.Errorf("2 giờ: got %v, want %v", got[2], hanTiepNhan)
+	}
+	if !got[16].Equal(hanXuLy) {
+		t.Errorf("16 giờ: got %v, want %v", got[16], hanXuLy)
+	}
+	if srv.goiLich != 1 {
+		t.Errorf("phải gọi ĐÚNG MỘT lần cho cả hai hạn, gọi %d lần", srv.goiLich)
+	}
+}
+
+func TestThieuMotMocLaLOI_KhongPhaiThanhCongMotPhan(t *testing.T) {
+	// The server answers only one of the two amounts. Without this check the missing one reaches
+	// the caller as the zero time.Time — a deadline in year 1 — and the petition is overdue the
+	// instant it is received, on a call that returned no error.
+	srv := &mayChuGia{traLich: []*identityv1.WorkingHoursReached{moc(2, nhanLuc.Add(2*time.Hour))}}
+	c := moMay(t, srv)
+
+	_, err := c.TienGioLamViec(ngucCanh(), nhanLuc, []uint32{2, 16})
+	if err == nil {
+		t.Fatal("thiếu một mốc phải là LỖI")
+	}
+	if !strings.Contains(err.Error(), "16") {
+		t.Errorf("lỗi phải nói rõ THIẾU MỐC NÀO, got: %v", err)
+	}
+}
+
+func TestLichRongLaLOI_KhongBaoGioLaKhongCoHan(t *testing.T) {
+	// FAILED_PRECONDITION is today's ordinary answer: no commune has a calendar yet. It must reach
+	// the caller as an error so the intake fails — a caller that read it as "no deadline needed"
+	// would store a petition with no commitment at all, and nothing on any screen would show it.
+	srv := &mayChuGia{loiLich: status.Error(codes.FailedPrecondition, "xã chưa khai lịch làm việc")}
+	c := moMay(t, srv)
+
+	if _, err := c.TienGioLamViec(ngucCanh(), nhanLuc, []uint32{8}); err == nil {
+		t.Fatal("lịch rỗng phải là LỖI, không phải map rỗng")
+	}
+}
+
+func TestMocKhoiDongRongThiKhongRaKhoiTienTrinh(t *testing.T) {
+	// A zero instant is a wiring fault in the caller. Sent, it comes back as a horizon failure
+	// about the year 1, and an operator reads that as a fault in the commune's calendar.
+	srv := &mayChuGia{}
+	c := moMay(t, srv)
+
+	_, err := c.TienGioLamViec(ngucCanh(), time.Time{}, []uint32{8})
+	if err == nil {
+		t.Fatal("mốc khởi động rỗng phải bị từ chối")
+	}
+	if srv.goiLich != 0 {
+		t.Errorf("một yêu cầu chỉ có thể hỏng thì không được lên dây: gọi %d lần", srv.goiLich)
+	}
+}
+
+func TestGoiLichMangXaVaKhoaGoi(t *testing.T) {
+	// The calendar belongs to ONE commune (rule 1). If the tenant never reaches the wire, identity
+	// answers for whichever commune it guesses — and every deadline in the system is that guess.
+	srv := &mayChuGia{traLich: []*identityv1.WorkingHoursReached{moc(8, nhanLuc.Add(8*time.Hour))}}
+	c := moMay(t, srv)
+
+	if _, err := c.TienGioLamViec(ngucCanh(), nhanLuc, []uint32{8}); err != nil {
+		t.Fatalf("TienGioLamViec: %v", err)
+	}
+	if len(srv.thayXa) != 1 || srv.thayXa[0] != string(xaA) {
+		t.Errorf("xã trên dây: got %v, want %v", srv.thayXa, xaA)
+	}
+	if len(srv.thayKey) != 1 {
+		t.Errorf("khoá gọi nội bộ phải có trên dây, got %v", srv.thayKey)
+	}
 }

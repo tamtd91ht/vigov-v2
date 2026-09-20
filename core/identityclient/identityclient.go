@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/vihat/vigov/core/authz"
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
@@ -224,3 +225,85 @@ func (c *Client) ResolveStaff(ctx context.Context, sessionToken, clientIP string
 }
 
 var _ staffauth.Resolver = (*Client)(nil)
+
+// TienGioLamViec asks identity when a number of WORKING hours has elapsed from an instant, against
+// ONE commune's calendar. It is the only correct way to produce an administrative deadline.
+//
+// WHY A SECOND METHOD HERE AND NOT A SECOND PACKAGE: the argument at the top of this file applies
+// unchanged and the count makes it sharper. `petitions` needs two deadlines at intake (ADR 0028),
+// `documents` needs one for `Văn bản đến` (ADR 0007), `dossiers` will need one. Left to each
+// service, that is three clients and — far worse — three readings of what a failure means, on a
+// value that is a COMMITMENT MADE TO A CITIZEN by a public authority.
+//
+// THE CALLER MUST NEVER FALL BACK TO A LOCAL DURATION when this returns an error. Adding hours in
+// the caller walks straight through nights, weekends, `ngay_nghi_le` and `ngay_lam_bu` while
+// looking like it respected the unit — the two answers differ only on the days a citizen notices.
+// Rule 10, forbidden #2 says so and `hooks/citizen_commitment_guard.py` blocks the shape outside
+// `service-identity`. An error here means FAIL THE INTAKE, not "no deadline".
+//
+// KEYED BY THE AMOUNT, NEVER BY INDEX. The contract collapses duplicates, so `len` of the answer
+// can be smaller than `len(gio)` for a request that fully succeeded. A caller reading
+// `items[0]` and `items[1]` after asking for `{8, 8}` would silently take the acknowledge
+// deadline as the resolve deadline — a shift no test of the happy path would catch.
+//
+// THERE IS NO PARTIAL SUCCESS. An amount asked for and not answered is a contract fault, not a
+// missing optional: it would otherwise reach the caller as a zero `time.Time`, i.e. a deadline in
+// year 1, i.e. a petition overdue the moment it is received.
+func (c *Client) TienGioLamViec(ctx context.Context, tuLuc time.Time, gio []uint32) (map[uint32]time.Time, error) {
+	if tuLuc.IsZero() {
+		// REFUSED LOCALLY, and the message names the cause rather than the symptom. Sent, a zero
+		// instant comes back as a horizon failure about the year 1 — an operator reading that
+		// would go looking at the commune's calendar for a fault that is in the caller's wiring.
+		return nil, fmt.Errorf("identityclient: TienGioLamViec với mốc khởi động rỗng — bên gọi chưa đặt thời điểm tiếp nhận")
+	}
+	if len(gio) == 0 {
+		// A request that asks nothing can only come back empty, and has no business on the network.
+		return nil, fmt.Errorf("identityclient: TienGioLamViec không có số giờ nào để tính")
+	}
+
+	// THE SAME DEADLINE AS ResolveStaff, on purpose. This is a read of configuration — at most two
+	// years of calendar rows, all indexed — not a different class of work, and two numbers would
+	// make the observed timeout depend on which call was slow. It is also NOT on every request:
+	// it runs once, at intake.
+	ctx, huy := context.WithTimeout(ctx, HanGoi)
+	defer huy()
+
+	ra, err := c.cl.AdvanceWorkingHours(ctx, &identityv1.AdvanceWorkingHoursRequest{
+		CountFrom:    timestamppb.New(tuLuc),
+		WorkingHours: gio,
+	})
+	if err != nil {
+		// FAILED_PRECONDITION is the ordinary answer today and it is the contract working, not a
+		// bug to route around: no commune has a working calendar yet, because migration 0006 seeds
+		// nothing and onboarding does not exist. Logged at Warn with the code so an operator can
+		// tell "nobody filled in the commune's hours" from "identity is down" — both must fail the
+		// intake, but only one of them is fixed on a configuration screen.
+		c.log.WarnContext(ctx, "CẢNH BÁO: không tính được hạn theo giờ làm việc",
+			"ma_loi", status.Code(err).String(), "err", err)
+		return nil, fmt.Errorf("identityclient: AdvanceWorkingHours: %w", err)
+	}
+
+	moc := make(map[uint32]time.Time, len(gio))
+	for _, it := range ra.GetItems() {
+		t := it.GetReachedAt()
+		if t == nil {
+			return nil, fmt.Errorf(
+				"identityclient: AdvanceWorkingHours trả về mốc rỗng cho %d giờ làm việc", it.GetWorkingHours())
+		}
+		moc[it.GetWorkingHours()] = t.AsTime()
+	}
+
+	for _, g := range gio {
+		if _, co := moc[g]; !co {
+			// A contract fault, and it is worth as much noise as an outage: the two ends disagree
+			// about what a complete answer is, and every deadline produced from here on would be
+			// short by whichever amount went missing.
+			c.log.WarnContext(ctx, "CẢNH BÁO HỢP ĐỒNG: AdvanceWorkingHours thiếu một mốc đã hỏi",
+				"so_gio", g)
+			return nil, fmt.Errorf(
+				"identityclient: AdvanceWorkingHours không trả mốc cho %d giờ làm việc — không có thành công một phần", g)
+		}
+	}
+
+	return moc, nil
+}
