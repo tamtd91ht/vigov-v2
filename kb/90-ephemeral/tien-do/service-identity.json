@@ -20,9 +20,10 @@
       "bang_chung": "bốn bảng kênh công dân đã có kho: dinh_danh_cong_dan + phien_cong_dan (trước đó), nay thêm quan_he_cong_dan_xa (store/quan_he_cong_dan_xa.go, phạm vi hoá qua core/store.Scoped) và ghep_phien (store/ghep_phien.go: tạo · dùng · huỷ, mã lưu HASH, một-lần do cơ sở dữ liệu giữ, trạng thái SUY từ ba mốc thời gian ở domain/ghep_phien.go). Kiểm 2026-09-20: `make check` EXIT=0; 13 ca *_pg_test.go mới BỎ QUA vì không có VIGOV_TEST_DSN.",
       "no_confirm": [
         19,
-        20
+        20,
+        25
       ],
-      "tiep_theo": "Vẫn CHƯA CÓ tuyến nào, và hai tuyến đầu đang bị chặn có lý do: màn xác thực lời khai cần khoá quyền chưa ai đặt tên (câu hỏi mở #20, ADR 0011 cấm tự dịch), màn công dân sửa lời khai đã xác thực cần câu hỏi mở #19. Tuyến đăng nhập công dân còn thiếu bí mật Zalo. Không có đường ghi nào cho quan_he_cong_dan_xa — cố ý."
+      "tiep_theo": "Vẫn CHƯA CÓ tuyến nào, và hai tuyến đầu đang bị chặn có lý do: màn xác thực lời khai cần khoá quyền chưa ai đặt tên (câu hỏi mở #20, ADR 0011 cấm tự dịch), màn công dân sửa lời khai đã xác thực cần câu hỏi mở #19. Tuyến đăng nhập công dân còn thiếu bí mật Zalo. Không có đường ghi nào cho quan_he_cong_dan_xa — cố ý. LÝ DO CHẶN THỨ BA, tìm ra 20/09/2026 và nặng hơn hai lý do kia vì nó chặn ở TẦNG KIỂU chứ không ở câu chữ: tuyến đăng nhập công dân không biên dịch được nếu vẫn giữ luật 6 bất biến 3. ADR 0020 bất biến 5 đòi vết đăng nhập mang xã, nhưng phiên ra đời trước khi chọn xã (core/httpx/citizen.go:52-58), còn core/audit.Write chỉ nhận *store.ScopedTx và Entry.validate() từ chối TenantID rỗng (core/audit/audit.go:63-68, :49-52) — nên TaoChuaChonXa phải nhận *sql.Tx thô (store/phien_cong_dan.go:319-329). Vết của một hành vi chưa thuộc xã nào ghi ở đâu là câu hỏi mở #25, bốn hướng đã cân và chưa hướng nào được chọn. KHÔNG sửa ADR 0020 hay 0022 — ngày có quyết định thì viết ADR mới."
     },
     {
       "id": "grpc-server",

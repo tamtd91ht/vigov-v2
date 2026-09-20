@@ -445,7 +445,7 @@
   {
     "id": 22,
     "question": "Bộ mã `Lĩnh vực phản ánh` đóng ở tầng nền tảng: AI được thêm mã thứ 13, và bằng cách nào — một lần phát hành phần mềm, hay một thao tác của quản trị viên nhà cung cấp trên màn hình?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "Câu này quyết ĐỒNG THỜI hai thứ mà ADR 0026 không tự quyết được: service nào giữ bảng mã, và petitions đọc nó bằng gRPC, bằng sự kiện, hay không cần đường nào. Hai cách đọc: (a) mã là hằng số của phần mềm -> bảng nằm trong petitions, không mang tenant_id, gieo bằng migration, thêm mã là một đợt phát hành; (b) mã là dữ liệu nhà cung cấp quản trị -> bảng nằm ở platform, và petitions phải đọc qua gRPC hoặc giữ bản sao cập nhật bằng sự kiện (luật 2 bất biến 3). TIỀN LỆ `quyen` KHÔNG KÉO SANG ĐƯỢC: quyen là hằng số vì CÓ NHÁNH MÃ KIỂM NÓ; mã lĩnh vực không có nhánh mã nào, nó đóng vì lý do khác hẳn là để số liệu cộng được giữa các xã — và lý do ấy không nói gì về chỗ đặt bảng.",
     "code_signals": [
       {
@@ -465,12 +465,15 @@
       "viết bảng nhãn lĩnh vực theo xã",
       "viết đường đọc danh mục lĩnh vực cho petitions"
     ],
-    "adr": "kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md"
+    "adr": "kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md",
+    "decision": "BỘ MÃ TẦNG 1 NẰM Ở SERVICE `platform`, và thêm mã thứ 13 là MỘT THAO TÁC TRÊN MÀN HÌNH QUẢN TRỊ CỦA NHÀ CUNG CẤP — không phải một đợt phát hành phần mềm. Khách trả lời nguyên văn: \"admin tổng nhé, trang quản trị admin cao nhất\". Tức cách đọc (b) trong hai cách đọc của ADR 0026 §1. RÀNG BUỘC ĐI KÈM, NAY ĐANG HIỆU LỰC: chiều gọi là NGHIỆP VỤ -> PLATFORM; tuyệt đối không sinh client theo chiều ngược lại; `platform` vẫn chỉ nhận số đếm tổng hợp qua sự kiện. ADR 0003 KHÔNG bị vi phạm vì nền tảng CẤP XUỐNG một tập hằng số không mang nội dung hồ sơ, không mang tên người, không mang số đếm của xã nào. `petitions` giữ mã dưới dạng GIÁ TRỊ, có phép kiểm lúc ghi, không khoá ngoại và không JOIN sang tầng 1. PHẦN CÒN LẠI KHÔNG PHẢI CÂU CỦA KHÁCH: hình dạng đường đọc — gRPC gọi thẳng hay bản sao đọc nuôi bằng sự kiện — là quyết định kỹ thuật, cần ADR riêng vào ngày `petitions` đọc bộ mã lần đầu, và KHÔNG đưa trở lại tệp này.",
+    "decided_on": "2026-09-20",
+    "open_gap": "Xã cần một lĩnh vực mà bộ mã không có thì phải ĐỀ NGHỊ nhà cung cấp, và tới lúc đó phiếu rơi vào `khac`. Đây là cái giá của việc số liệu 200+ xã cộng được với nhau, và nó phải được nói ra với xã chứ không để xã tự phát hiện."
   },
   {
     "id": 23,
     "question": "Công dân gửi phản ánh từ Mini App có TỰ CHỌN lĩnh vực không, hay lĩnh vực chỉ do cán bộ xác định ở bước Phân loại?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "LỘ RA TỪ TỔNG CỦA HAI QUYẾT ĐỊNH ĐỀU ĐÚNG, KHÔNG LỘ RA TỪ BẤT KỲ CÂU NÀO ĐÃ HỎI. ADR 0027 chốt đổi lĩnh vực lúc phân loại CHỈ ĐƯỢC RÚT NGẮN hạn. ubiquitous-language.md ghi lĩnh vực do cán bộ xác định, không để dân tự chọn — nên lúc tiếp nhận một phiếu dân gửi thì chưa ai biết lĩnh vực, và hạn đầu tiên chỉ lấy được từ dòng mặc định của bảng SLA (8 giờ / 56 giờ, docs/ui-ux/14-cau-hinh.md §8). Ghép lại: DÒNG MẶC ĐỊNH THÀNH TRẦN cho mọi phiếu dân tự gửi, và SÁU dòng SLA dài hơn 56 giờ — Hạ tầng giao thông 168 giờ, Thái độ / tác phong cán bộ 120 giờ, bốn dòng 72 giờ — không bao giờ áp được ở kênh ấy. Cùng lý do, ba dòng `2 giờ` của cột Tiếp nhận cũng không với tới được, vì hành vi làm dừng đồng hồ Tiếp nhận chính là hành vi xác định lĩnh vực. Hệ quả nhìn thấy được: hai phiếu về cùng một ổ gà, một dân gửi và một trưởng thôn nhập hộ, mang hai hạn khác nhau — 56 giờ và 168 giờ. Ba đường ra đều là quyết định của khách: cho dân chọn lĩnh vực lúc gửi; nâng dòng mặc định lên cho bằng dòng dài nhất, tức hứa rộng hơn với MỌI phiếu; hoặc chấp nhận trần và nói điều đó ra với xã.",
     "code_signals": [
       {
@@ -490,12 +493,15 @@
       "viết hàm tính hạn lúc tiếp nhận cho phiếu dân gửi",
       "gieo hạt giống bảng SLA"
     ],
-    "adr": "kb/10-decisions/0027-trang-thai-va-dong-ho-phieu-phan-anh.md"
+    "adr": "kb/10-decisions/0028-moc-dat-han-hai-dong-ho.md",
+    "decision": "KHÔNG cho dân chọn lĩnh vực, và trần 56 giờ vẫn biến mất — bằng cách TÁCH THỜI ĐIỂM ĐẶT HẠN ra khỏi GỐC ĐẾM. `han_tiep_nhan` đặt lúc SINH PHIẾU theo dòng mặc định; `han_xu_ly_xong` của phiếu dân tự gửi đặt LÚC CHUYỂN SANG `dang-phan-loai`, theo lĩnh vực cán bộ vừa chốt, và vẫn đếm từ LÚC DÂN BẤM GỬI (quyết định D của ADR 0027 không đổi). Phiếu nhập hộ đặt cả hai cùng lúc. Quyết định C (chỉ rút ngắn) áp cho mọi lần đổi lĩnh vực SAU lần chốt đầu tiên. Cả 12 dòng SLA dùng được ở kênh công dân. QUYẾT THEO UỶ QUYỀN: khách nói \"theo rule chung của hành chính xã\" và giao phía thi công quyết — căn cứ là lệ `Phiếu tiếp nhận và hẹn trả kết quả`, ghi ngày hẹn SAU khi cán bộ nhận và kiểm hồ sơ. BÁC hai đường còn lại: cho dân chọn lĩnh vực ghép với quyết định C tạo một lỗ khai thác thật (chọn `An ninh trật tự` cho một ổ gà thì được 16 giờ và cán bộ không kéo dài được, nên mọi phiếu trôi về lĩnh vực khẩn nhất); nâng dòng mặc định lên 168 giờ là hứa rộng hơn với MỌI phiếu, kể cả phiếu đáng lẽ 16 giờ. BA CÁI GIÁ ĐÃ GHI RA: (a) từ lúc gửi tới lúc phân loại, phiếu dân gửi KHÔNG có hạn xử lý xong — Mini App nói \"sẽ được xem trong N giờ làm việc\", tuyệt đối không hiện một ngày trả kết quả bịa ra; khoảng trống ấy do đồng hồ Tiếp nhận canh và nó quá hạn được; (b) cột `gio_tiep_nhan` = 2 giờ của ba lĩnh vực khẩn KHÔNG dùng tới ở kênh công dân, nên app phải nói rõ việc khẩn cấp thật thì gọi 113/114/115; (c) nó UỐN CHỮ của luật 10 bất biến 2 — vẫn lưu MỘT lần và không tính lại lúc đọc, nhưng với `han_xu_ly_xong` thì \"lúc tiếp nhận\" nghĩa là HÀNH VI PHÂN LOẠI, không phải lúc chèn dòng.",
+    "decided_on": "2026-09-20",
+    "open_gap": "docs/ui-ux/09 §12 còn ghi MỘT cột `han_xu_ly`; mô hình dữ liệu phải tách thành hai cột, cả hai cho phép NULL với hai nghĩa khác nhau. Câu mở MỚI sinh ra từ quyết định này: #26."
   },
   {
     "id": 24,
     "question": "Phiếu NHẬP HỘ (dân gọi điện, ghé trụ sở, gặp trưởng thôn): mốc khởi động đồng hồ là lúc nào, và đồng hồ `Tiếp nhận` còn nghĩa gì khi chính cán bộ là người vào sổ?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "ADR 0027 chốt cả hai đồng hồ đếm từ THỜI ĐIỂM CÔNG DÂN BẤM GỬI. Kênh nhập hộ không có động tác ấy: docs/ui-ux/09 §11 nói phiếu nhập hộ 'đi cùng quy trình và cùng thời hạn với phiếu gửi từ Zalo' nhưng không nói mốc nào thay thế. Nếu mốc là lúc vào sổ, thì đồng hồ Tiếp nhận — vốn dừng khi có cán bộ động vào phiếu — đã được thoả ngay tại thời điểm 0, cho đúng một trong bốn kênh (kenh_tiep_nhan có bốn giá trị: zalo-mini-app, zalo-oa, web-xa, can-bo-nhap-ho). Chỉ số 'tiếp nhận đúng hạn' khi ấy trộn một kênh luôn đạt 100% theo cấu tạo với ba kênh đo thật, trong một con số duy nhất gửi lên lãnh đạo — sai lệch không ai đọc ra được từ con số.",
     "code_signals": [
       {
@@ -509,6 +515,65 @@
       "viết đường nhập hộ phiếu phản ánh",
       "tính chỉ số tiếp nhận đúng hạn"
     ],
-    "adr": "kb/10-decisions/0027-trang-thai-va-dong-ho-phieu-phan-anh.md"
+    "adr": "kb/10-decisions/0028-moc-dat-han-hai-dong-ho.md",
+    "decision": "`count_from` = THỜI ĐIỂM DÂN THẬT SỰ PHẢN ÁNH nếu cán bộ ghi được — modal Nhập hộ có thêm một trường TUỲ CHỌN \"dân phản ánh lúc\"; trống thì lấy lúc vào sổ. CHẶN HAI ĐẦU: không sớm hơn 7 ngày trước lúc vào sổ, không muộn hơn lúc vào sổ; ngoài khoảng thì TỪ CHỐI, không cắt về biên — một mốc quá khứ tuỳ ý cho phép chế ra một phiếu quá hạn hoặc giấu một phiếu đã trễ. Mọi giá trị khác mặc định đều GHI VẾT có trước/sau (luật 6 bất biến 5). `han_tiep_nhan` của phiếu nhập hộ ghi NULL kèm lý do \"không áp dụng\", TUYỆT ĐỐI KHÔNG ghi 0 giờ: chính cán bộ là người đọc phiếu nên đồng hồ ấy không có nghĩa, và 0 giờ sẽ kéo \"thời gian tiếp nhận trung bình\" của xã về gần 0 — một con số đẹp và SAI gửi lên lãnh đạo. Mọi báo cáo về thời gian tiếp nhận phải LOẠI các dòng NULL này, không được coi chúng là 0. QUYẾT THEO UỶ QUYỀN: khách nói \"bạn đề xuất đi\". QUY TẮC CHUNG rút ra, viết theo hình dạng biểu mẫu chứ không theo danh sách kênh: kênh nào có lĩnh vực trong biểu mẫu lúc vào sổ thì đặt cả hai hạn ngay lúc ấy, kênh nào không thì hoãn `han_xu_ly_xong` tới lần chốt lĩnh vực đầu tiên.",
+    "decided_on": "2026-09-20",
+    "open_gap": "Modal \"Nhập hộ phản ánh\" (docs/ui-ux/09 §11) chưa có trường \"dân phản ánh lúc\"; đặc tả phải bổ sung trước khi dựng màn hình."
+  },
+  {
+    "id": 25,
+    "question": "Vết của một hành vi CHƯA THUỘC XÃ NÀO ghi ở đâu — bắt đầu từ lần đăng nhập của công dân, xảy ra trước khi chọn xã?",
+    "status": "OPEN",
+    "why_it_matters": "CHẶN MÃ CHỨ KHÔNG CHẶN CÂU CHỮ, và đó là chỗ nó khác một mâu thuẫn tài liệu thông thường. ADR 0020 bất biến 5 đòi mỗi lần đăng nhập ghi vết `lúc nào · từ IP nào · XÃ NÀO` (0020-xac-thuc-so-dien-thoai-cong-dan.md:106). Nhưng phiên công dân ra đời TRƯỚC khi có xã: core/httpx/citizen.go:52-58 ghi thẳng rằng TenantID rỗng là \"một câu trả lời thật, không phải lỗi\", vì ADR 0005 tách ba lớp và ở lớp khám phá công dân đã có phiên mà chưa chọn xã nào. ADR 0022 dựng hẳn một lớp endpoint `KhongThuocXa` cho đúng khoảnh khắc ấy (0022-ria-kenh-cong-dan.md:69,82) nhưng KHÔNG NÓI GÌ về việc ghi vết ở lớp đó — im lặng chứ không mâu thuẫn ra mặt, nên không ai đọc ra cho tới lúc ngồi viết tuyến. Tầng kiểu thì đã chốt sẵn theo hướng ngược lại: core/audit.Write chỉ nhận `*store.ScopedTx`, cố ý — \"There is no overload that writes standalone, because that overload is exactly the bug\" (core/audit/audit.go:63-68) — và Entry.validate() từ chối TenantID rỗng (audit.go:49-52). Kho phiên đã phải đi đường vòng cho đúng lý do ấy: TaoChuaChonXa nhận `*sql.Tx` THÔ vì core/store không sinh nổi giao dịch có phạm vi khi chưa có xã, For(ctx) panic (service-identity/internal/store/phien_cong_dan.go:319-329; ThuHoiChuaChonXa:396-408 cùng lý do). Cộng lại: viết tuyến đăng nhập công dân mà vẫn giữ luật 6 bất biến 3 — vết đi trong CÙNG giao dịch với thay đổi — thì KHÔNG BIÊN DỊCH ĐƯỢC. Đây không phải một cài đặt còn thiếu, là một quyết định chưa ai ra. BỐN HƯỚNG ĐÃ CÂN NGÀY 20/09/2026, KHÔNG HƯỚNG NÀO ĐƯỢC CHỌN: (A) một bảng nhật ký tầng NỀN TẢNG riêng, không mang tenant_id, append-only như audit_log, ghi bằng `*sql.Tx` thô; (B) nới core/audit nhận giao dịch thô — bác, vì để sửa một tuyến mà xoá đúng bức tường kiểu mạnh nhất của kho, và mở cửa ấy cho cả tám dịch vụ chứ không riêng identity; (C) không ghi vết lúc đăng nhập, gộp vào vết \"chọn xã\" — bác, vì đăng nhập rồi KHÔNG chọn xã thì không còn vết nào, mà đó đúng là ca cần ghi nhất: người đang thử một token điện thoại lấy được dừng lại đúng ở bước ấy; (D) đảo luồng, chọn xã trước rồi mới đăng nhập — bác, vì mâu thuẫn ADR 0005 §ba lớp, biến TaoChuaChonXa thành mã chết, và buộc client tự khai xã trên một tuyến chưa xác thực (luật 1 cấm #2). Hướng A đang có vẻ đúng nhất, nhưng nó là MỘT BẢNG MỚI ở tầng nền tảng, và \"dịch vụ nào sở hữu bảng ấy\" là luật 2 bất biến 1 — không tự quyết được.",
+    "code_signals": [
+      {
+        "pattern": "CREATE TABLE[^;]*(nhat_ky_nen_tang|nhat_ky_dang_nhap|platform_audit)",
+        "means": "đã có người dựng bảng nhật ký tầng nền tảng — tức đã chọn hướng A, và đã tự quyết luôn dịch vụ nào sở hữu nó",
+        "threshold": 1
+      },
+      {
+        "pattern": "func\\s+Write\\w*\\([^)]*\\*sql\\.Tx",
+        "means": "core/audit đã nhận giao dịch thô — tức hướng B đã xảy ra, kiểm ngay: bức tường kiểu chặn ghi vết ngoài giao dịch có phạm vi đã mở cho cả tám dịch vụ",
+        "threshold": 1
+      },
+      {
+        "pattern": "TaoChuaChonXa\\(",
+        "means": "phiên chưa chọn xã đã được một tuyến gọi tới — đúng thời điểm phải trả lời câu này, vì lời gọi ấy hoặc để lại vết ở đâu đó, hoặc không để lại gì",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "CAO VÀ MỘT CHIỀU THEO THỜI GIAN, KHÔNG THEO MÃ. Thêm bảng nhật ký nền tảng về sau chỉ là một migration, nhưng vết chỉ ghi được từ ngày có nó trở đi: mọi lần đăng nhập đã xảy ra trước đó là khoảng trống vĩnh viễn, không dựng lại được từ bất cứ nguồn nào — và đó đúng là khoảng thanh tra sẽ hỏi nếu kênh công dân có sự cố. Chiều đắt hơn hẳn là hướng B: nới core/audit rồi muốn rút lại là đi sửa mọi chỗ đã dùng đường nới ở cả tám dịch vụ, và một bức tường kiểu đã gỡ thì lần dựng lại phải chứng minh không còn ai đi vòng — khác hẳn lần đầu, khi chưa ai kịp đi.",
+    "ask_before": [
+      "viết tuyến đăng nhập công dân đầu tiên của service-identity",
+      "gọi TaoChuaChonXa từ bất kỳ tuyến HTTP nào",
+      "nới core/audit.Write nhận giao dịch không có phạm vi",
+      "viết migration cho bảng nhật ký tầng nền tảng"
+    ],
+    "adr": "kb/10-decisions/0020-xac-thuc-so-dien-thoai-cong-dan.md"
+  },
+  {
+    "id": 26,
+    "question": "Phiếu dân gửi CHƯA ĐƯỢC PHÂN LOẠI thì chưa có hạn xử lý xong: chỉ số \"xử lý đúng hạn\" của xã tính trên mẫu số nào, và có trần bắt buộc phân loại trong bao lâu không?",
+    "status": "OPEN",
+    "why_it_matters": "LỘ RA TỪ ADR 0028 QUYẾT ĐỊNH E, không lộ ra từ bất kỳ câu nào đã hỏi. `han_xu_ly_xong` chỉ tồn tại từ lúc cán bộ chốt lĩnh vực, nên một phiếu nằm ở `da-tiep-nhan` KHÔNG THỂ quá hạn xử lý — nó chỉ quá hạn TIẾP NHẬN. Hai hệ quả, và cả hai đều làm được bằng việc KHÔNG làm gì: (1) mẫu số của chỉ số \"xử lý đúng hạn\" không chứa phiếu chưa phân loại, nên một xã phân loại chậm lại có chỉ số xử lý ĐẸP HƠN — con số thưởng cho đúng hành vi nó phải phạt; (2) không có mốc thứ hai nào buộc phiếu rời `da-tiep-nhan`: đồng hồ tiếp nhận quá hạn rồi vẫn chạy, và phiếu có thể nằm đó vô hạn với một người dân đang giữ mã tra cứu. Hai đường ra đều là câu của khách: coi quá hạn tiếp nhận là đủ — và khi ấy MỌI báo cáo phải hiện SỐ PHIẾU CHƯA PHÂN LOẠI ngay cạnh tỷ lệ đúng hạn, nếu không tỷ lệ ấy đọc ra sai; hoặc đặt một trần bắt buộc phân loại, hết trần thì phần mềm tự chốt `khac` và ấn định hạn theo dòng mặc định — tức phần mềm tự phát ra một cam kết, thứ phải có người ký.",
+    "code_signals": [
+      {
+        "pattern": "han_xu_ly_xong",
+        "means": "đang viết cột hạn xử lý xong — mẫu số của mọi chỉ số đúng hạn phụ thuộc vào việc cột này có NULL hay không",
+        "threshold": 1
+      },
+      {
+        "pattern": "COALESCE\\s*\\(\\s*han_",
+        "means": "một cột hạn đang bị kéo về giá trị mặc định trong truy vấn — đúng thứ ADR 0028 cấm, và nó biến NULL 'chưa có' thành một mẫu hợp lệ",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "TRUNG BÌNH cho phần báo cáo (đổi truy vấn và cách hiện số). CAO cho phần trần: một trần bắt buộc phân loại ẤN ĐỊNH một hạn cho phiếu, và hạn đã phát ra thì luật 10 bất biến 2 không cho tính lại — mọi phiếu nhận trước khi đổi ý mang thang cũ.",
+    "ask_before": [
+      "viết chỉ số xử lý đúng hạn",
+      "viết job quét phiếu quá hạn",
+      "viết màn hình báo cáo phản ánh"
+    ],
+    "adr": "kb/10-decisions/0028-moc-dat-han-hai-dong-ho.md"
   }
 ]
