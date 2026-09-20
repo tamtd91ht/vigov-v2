@@ -78,3 +78,25 @@ type CanBoTomTat struct {
 
 	TaoLuc time.Time
 }
+
+// CanBoVaiTro is one staff member as the INTER-SERVICE contract sees them, and it is
+// deliberately the narrowest of the three staff types in this file.
+//
+// WHY A THIRD TYPE AND NOT CanBoTomTat. CanBoTomTat carries HoTen, DienThoai, Email and ChucVu —
+// four citizen-grade personal data of a member of staff (rule 3). `message Staff` in
+// proto/vigov/identity/v1/identity.proto declares NONE of them, so a read path that loads them
+// would be a read path that has the values in hand at the moment somebody adds a field to the
+// wire type. Having nothing to send is a stronger guarantee than remembering not to send it.
+//
+// The gap that creates is REAL and is stated on the RPC that returns this — BatchGetStaff in
+// service-identity/internal/grpc/server.go. It is not closed here.
+type CanBoVaiTro struct {
+	ID string // ULID, internal — the value the caller maps its rows by
+
+	// VaiTroMa is the role SLUG (`vai_tro.ma`, "chu-tich-ubnd"), not `vai_tro_id`.
+	//
+	// "" MEANS THE PERSON HOLDS NO ROLE, and it is an ordinary answer: `nguoi_dung.vai_tro_id`
+	// is nullable, and a person can sit in the commune's org chart holding nothing. It is never
+	// "we could not find out" — a read failure is an error, never an empty string.
+	VaiTroMa string
+}

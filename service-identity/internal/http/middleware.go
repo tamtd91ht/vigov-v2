@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"net"
 	"net/http"
 	"time"
 
@@ -190,10 +189,11 @@ func vanTay(s string) string {
 // of a government record, that somebody acted from an address they never used. When a trusted
 // reverse proxy is actually in place, this is the single function to change, and the trust
 // boundary has to be configured — not assumed.
-func ipTu(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
-}
+//
+// IT DELEGATES RATHER THAN REPEATING, and the reason is the sentence just above. `core/httpx`
+// now holds the same logic for the four services that send this address to identity over gRPC.
+// Two copies of one trust boundary is a boundary that gets widened in one copy: somebody adds
+// X-Forwarded-For where a proxy was deployed, misses the other, and the audit trail then
+// disagrees with itself about where one person acted. One function to change, as this comment
+// already promised — it now has to be true across the repository, not just in this file.
+func ipTu(r *http.Request) string { return httpx.ClientIP(r) }

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,16 +19,21 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"google.golang.org/grpc"
 
 	"github.com/vihat/vigov/core/config"
+	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
+	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/migrate"
 	"github.com/vihat/vigov/core/platformclient"
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/token"
 	"github.com/vihat/vigov/service-identity/internal/app"
+	svcgrpc "github.com/vihat/vigov/service-identity/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-identity/internal/http"
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 	"github.com/vihat/vigov/service-identity/migrations"
@@ -270,13 +276,68 @@ func run(log *slog.Logger) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	// 10. Graceful shutdown. A sign-in cut in half by a deploy would leave a session row whose
+	// 10. gRPC — the inter-service surface, on its OWN port. gRPC needs HTTP/2 and the REST
+	//     surface is served to browsers over HTTP/1.1; one listener for both means demultiplexing
+	//     by protocol, and every proxy and health check in front of the process then has to
+	//     understand both. Same shape as service-platform.
+	//
+	// WHAT THIS PORT NOW CARRIES, AND WHY IT IS NOT THE SAME EXPOSURE AS PLATFORM'S. ADR 0003
+	// keeps the platform contract to registry metadata — a ULID already printed on a QR code, a
+	// commune's display name. THIS contract carries neither of those things and is not covered by
+	// that argument: ResolveStaffPrincipal accepts a live session credential and answers with a
+	// person's whole grant set inside one commune. It is the first RPC in this system to read
+	// anything a caller could act on, which is precisely the stop condition ADR 0012 decision 3
+	// named — and it is already answered: the user decided on 2026-09-20, and ADR 0025 is the
+	// decision. The two layers that decision rests on are:
+	//
+	//	1. the shared caller key on EVERY RPC, checked by grpcx.UnaryServerCallerAuth below;
+	//	2. this port confined to the cluster's internal network — never published, never bound to
+	//	   a public address. Layer 1 stops a process that reached the port; layer 2 is what stops
+	//	   it reaching the port. Removing either removes half.
+	//
+	// STILL OWED, and the shared key does not deliver it: the CALLER'S IDENTITY on the call. One
+	// key proves the caller is inside the deployment, never WHICH service it is — so an audit
+	// entry written on this boundary could not name a "who" (rule 6, invariant 2), and
+	// "x-tenant-id" remains a claim by the caller rather than evidence. What makes that claim
+	// harmless for ResolveStaffPrincipal specifically is the comparison inside the handler: a
+	// credential issued for commune A yields nothing at all when the metadata names commune B,
+	// and nothing here mints credentials on a caller's say-so. Per-service identity (mTLS or a
+	// mesh) is what closes the rest, and it is required before a real deployment.
+	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey, svcgrpc.Deps{
+		// The SAME signer the HTTP side and app.DangNhap were given — see step 5. A second signer
+		// here would verify tokens with a key that did not sign them, and every staff request in
+		// the four calling services would come back with no principal while identity's own routes
+		// kept working. That failure names nothing in any log.
+		Signer: signer,
+		Phien:  phien,
+		// CanBo is the THREE-condition read (not deleted, has an account, not locked); Lo is the
+		// register read, which filters only `deleted_at IS NULL`. The same *CanBoStore behind two
+		// fields, two fields on purpose — identical to the CanBo/DanhBa split above, and for the
+		// identical reason: merging them would put the register's looser predicate one careless
+		// edit away from the authentication path.
+		CanBo: canBo,
+		Lo:    canBo,
+		// The SAME *idstore.Checker that guards every route, through its QuyenCua method. One
+		// grant predicate for the guard and for the principal: a second one would drift, and
+		// drift in either direction is a defect with no error attached.
+		Quyen: checker,
+		Log:   log,
+	}, log)
+
+	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)
+	if err != nil {
+		return fmt.Errorf("identity: không mở được cổng gRPC %q: %w", cfg.GRPCListenAddr, err)
+	}
+
+	// 11. Graceful shutdown. A sign-in cut in half by a deploy would leave a session row whose
 	//     audit entry says a person signed in while no cookie was ever issued — a state the
 	//     retention rules do not permit (rule 2, invariant 6).
 	dungLai := make(chan os.Signal, 1)
 	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
-	loi := make(chan error, 1)
+	// Buffered for TWO now, not one: either server may fail, and an unbuffered send from a
+	// goroutine nobody is reading any more would leak it.
+	loi := make(chan error, 2)
 	go func() {
 		log.Info("khởi động", "service", "identity", "addr", cfg.ListenAddr,
 			"env", cfg.Env,
@@ -288,17 +349,91 @@ func run(log *slog.Logger) error {
 			loi <- err
 		}
 	}()
+	go func() {
+		log.Info("khởi động gRPC", "service", "identity", "addr", cfg.GRPCListenAddr)
+		// Serve returns nil after GracefulStop, so there is no ErrServerClosed equivalent to
+		// filter out here.
+		if err := grpcSrv.Serve(grpcLis); err != nil {
+			loi <- err
+		}
+	}()
 
 	select {
 	case err := <-loi:
+		// One surface failing takes the whole process down rather than leaving it half-serving.
+		// An identity answering its own HTTP routes but not ResolveStaffPrincipal looks healthy
+		// while every guarded route in four other services answers 401 to valid sessions — which
+		// is exactly the outage this server was built to end.
+		grpcSrv.Stop()
+		_ = srv.Close()
 		return err
 
 	case <-dungLai:
 		log.Info("nhận tín hiệu dừng, đang đóng kết nối")
 		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
 		defer huy()
-		return srv.Shutdown(ctx)
+
+		// Both surfaces drain, and neither waits for the other.
+		xongGRPC := make(chan struct{})
+		go func() {
+			grpcSrv.GracefulStop()
+			close(xongGRPC)
+		}()
+
+		errHTTP := srv.Shutdown(ctx)
+
+		select {
+		case <-xongGRPC:
+		case <-ctx.Done():
+			// A call that will not finish must not hold a deploy open indefinitely. Forcing the
+			// stop here is visible in the logs; hanging is not.
+			log.Warn("gRPC không đóng kịp hạn, buộc dừng")
+			grpcSrv.Stop()
+		}
+		return errHTTP
 	}
+}
+
+// dungGRPCServer builds the inter-service gRPC surface with its COMPLETE interceptor chain.
+//
+// IT IS A NAMED FUNCTION AND NOT AN EXPRESSION INSIDE run() FOR ONE REASON: so a test can start
+// it. core/grpcx proves the interceptors refuse what they should, but nothing in core/grpcx can
+// see whether THIS binary installs them — an interceptor deleted from the chain leaves a server
+// that starts, serves, and answers every unauthenticated call on a port that now carries session
+// credentials and grant sets. main_test.go starts this function over a real connection, so that
+// deletion turns something red.
+//
+// CHAINED, AND THE ORDER IS NOT NEGOTIABLE. Caller authentication runs FIRST: an unauthenticated
+// caller must not reach the commune logic at all, or the errors it gets back begin describing
+// what the server was expecting next.
+//
+// TWO INTERCEPTORS BECAUSE THERE ARE TWO QUESTIONS, AND THEY ARE ORTHOGONAL — this is the part
+// most likely to be got wrong, and getting it wrong is silent. "Who is calling" applies to every
+// RPC with NO exemption at all. "Which commune" has an exemption list, and NEITHER RPC OF THIS
+// SERVICE IS ON IT. An RPC excused from carrying a COMMUNE is never thereby excused from proving
+// the CALLER holds the key; folding either interceptor into the other is how the tenant exemption
+// list quietly becomes a list of RPCs that skip authentication.
+func dungGRPCServer(khoaGoi secret.Secret, d svcgrpc.Deps, log *slog.Logger) *grpc.Server {
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			// Panics here, at construction, when GRPC_CALLER_KEY is empty. A server that starts
+			// without the key accepts every call it is supposed to refuse, and nothing looks
+			// wrong — no error, no failed request, no metric moving. config.Load already requires
+			// the variable, so a process that starts is a process that authenticates; this is the
+			// second lock on the same door, for the day somebody constructs a server elsewhere.
+			grpcx.UnaryServerCallerAuth(khoaGoi, log),
+			// The commune is lifted out of metadata into context here, once, before any handler,
+			// so every handler reads it exactly as an HTTP handler does. A call to a non-exempt
+			// RPC with no commune is refused with InvalidArgument — never defaulted (rule 1,
+			// forbidden #1).
+			grpcx.UnaryServerInterceptor(),
+		),
+	)
+	// NewServer panics on any missing collaborator, at construction, for the same reason
+	// identity/http.Register does: incomplete wiring must fail where a human is watching a
+	// process fail to start, not at request time in four other services.
+	identityv1.RegisterIdentityServiceServer(srv, svcgrpc.NewServer(d))
+	return srv
 }
 
 // traceID returns the id a caller can quote when reporting a problem.

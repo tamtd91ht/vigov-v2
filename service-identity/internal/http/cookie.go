@@ -3,11 +3,23 @@ package http
 import (
 	"net/http"
 	"time"
+
+	"github.com/vihat/vigov/core/staffauth"
 )
 
 // CookiePhien is the name of the session cookie. The browser side declares the same name in
 // web-admin/src/lib/session.ts — one name, two ends, no translation layer.
-const CookiePhien = "vigov_session"
+//
+// IT IS AN ALIAS, NOT A SECOND SPELLING, AND THAT MATTERS MORE THAN IT LOOKS. This service SETS
+// the cookie; `core/staffauth` READS it in the four services that ask identity who the caller is.
+// Two independent string literals would have been one edit away from drifting, and the failure is
+// silent in the cruellest direction: every service EXCEPT this one stops seeing a cookie the
+// browser is still sending, so the symptom reads as "everybody is signed out everywhere, except
+// the sign-in screen" — which points an operator at the session store, the one thing that is fine.
+//
+// Naming it here rather than importing `staffauth.CookieName` at each use keeps this file's own
+// vocabulary intact; the compiler is what holds the two equal.
+const CookiePhien = staffauth.CookieName
 
 // datCookiePhien writes the signed session token.
 //
