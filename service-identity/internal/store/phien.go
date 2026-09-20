@@ -75,9 +75,13 @@ func (s *PhienStore) Tao(ctx context.Context, tx *store.ScopedTx, nguoiDungID, i
 
 	// User agent is truncated: it is a diagnostic, and an unbounded client-supplied string in a
 	// government database is a liability, not a feature.
-	if len(thietBi) > 200 {
-		thietBi = thietBi[:200]
-	}
+	//
+	// THE CUT IS ON A RUNE BOUNDARY, AND THAT IS NOT TIDINESS. `thietBi[:200]` cuts by BYTE, so a
+	// multi-byte character straddling byte 200 leaves an invalid UTF-8 sequence. PostgreSQL
+	// refuses such a sequence outright, the INSERT fails, and because the session row and its
+	// audit entry share one transaction (rule 6, invariant 3) the whole sign-in rolls back — a
+	// member of staff locked out of a government system by the name of their own device.
+	thietBi = catNgan(thietBi, 200)
 
 	_, err = tx.Exec(ctx,
 		`INSERT INTO phien (tenant_id, id, nguoi_dung_id, refresh_hash, het_han_luc, ip_tao, thiet_bi)
