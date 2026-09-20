@@ -4,6 +4,24 @@
   "_contract": "kb/20-contracts/openapi.json",
   "routes": [
     {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/capital-plan-categories",
+      "operation_id": "finance_get_capital_plan_categories",
+      "task_id": "95fbbb3f4699",
+      "summary": "Danh mục hạng mục kế hoạch vốn của xã — dùng cho ô phân loại dòng kế hoạch và bộ lọc",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "tên hạng mục xuất hiện ở ô phân loại dòng kế hoạch vốn và mọi bộ lọc của các màn hình tài chính — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục của xã lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.danhSachHangMucRa",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
       "service": "identity",
       "method": "GET",
       "path": "/api/v1/communes/current",
@@ -20,6 +38,42 @@
       "declared_in": "service-identity/internal/http/routes.go"
     },
     {
+      "service": "documents",
+      "method": "GET",
+      "path": "/api/v1/document-types",
+      "operation_id": "documents_get_document_types",
+      "task_id": "d6e9ae03da18",
+      "summary": "Danh mục loại văn bản của xã — dùng cho ô chọn loại khi vào sổ, bộ lọc và nhãn trên mọi văn bản",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "tên loại văn bản xuất hiện ở ô chọn loại khi vào sổ, bộ lọc của mọi danh sách văn bản và nhãn trên từng văn bản đã vào sổ — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "documents.danhSachLoaiVanBanRa",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/map-asset-types",
+      "operation_id": "comms_get_map_asset_types",
+      "task_id": "1107344fbd75",
+      "summary": "Danh mục loại tài nguyên bản đồ của xã — dùng cho ô chọn nhóm trên bản đồ kinh tế số, bộ lọc và nhãn của tài nguyên đã lưu",
+      "screen": "10-ban-do-kinh-te-so §2",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "tên nhóm tài nguyên xuất hiện ở ô chọn nhóm trên bản đồ kinh tế số, bộ lọc bên cạnh và nhãn của mọi tài nguyên đã lưu — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.danhSachLoaiTaiNguyenRa",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
       "service": "identity",
       "method": "GET",
       "path": "/api/v1/org-units",
@@ -32,6 +86,42 @@
       "idempotency": "",
       "reply_schemas": {
         "200": "identity.danhSachBoPhanRa",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/residential-unit-types",
+      "operation_id": "identity_get_residential_unit_types",
+      "task_id": "9fa2ec8e2c51",
+      "summary": "Danh mục loại đơn vị dân cư của xã — thôn / tổ dân phố, dùng cho ô chọn Loại và bộ lọc",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "nhãn loại đơn vị dân cư xuất hiện ở cột Loại của danh sách thôn/tổ dân phố, ở ô chọn khi thêm địa bàn và ở bộ lọc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.danhSachLoaiDonViDanCuRa",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/residential-units",
+      "operation_id": "identity_get_residential_units",
+      "task_id": "feba8763012c",
+      "summary": "Danh sách thôn / tổ dân phố của xã — kèm nhãn loại đơn vị, dùng cho ô chọn địa bàn và bộ lọc",
+      "screen": "14-cau-hinh §2",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "tên thôn/tổ dân phố xuất hiện ở ô chọn địa bàn của phản ánh, hồ sơ hộ và mọi bộ lọc theo địa bàn — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh sách địa bàn lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.danhSachThonToDanPhoRa",
         "401": "httpx.Error",
         "500": "httpx.Error"
       },
@@ -172,6 +262,60 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/task-blocs",
+      "operation_id": "identity_get_task_blocs",
+      "task_id": "7a1626afaa4c",
+      "summary": "Danh mục khối nhiệm vụ của xã — Khối Uỷ ban / Khối Đảng / Khác, dùng cho ô chọn khối và bộ lọc nhiệm vụ",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "nhãn khối nhiệm vụ xuất hiện ở ô chọn khối trên biểu mẫu nhiệm vụ, ở nhãn dòng và ở bộ lọc danh sách nhiệm vụ — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.danhSachKhoiNhiemVuRa",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/task-priorities",
+      "operation_id": "petitions_get_task_priorities",
+      "task_id": "6689f9f46de8",
+      "summary": "Danh mục mức ưu tiên nhiệm vụ của xã, theo đúng thứ tự thang — dùng cho ô chọn và bộ lọc",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "tên mức ưu tiên xuất hiện ở ô chọn trên biểu mẫu nhiệm vụ và ở bộ lọc của hầu hết màn hình nhiệm vụ — đòi một quyền cấu hình sẽ làm rỗng những ô đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: thang ưu tiên của xã lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.danhSachMucUuTienRa",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/task-types",
+      "operation_id": "petitions_get_task_types",
+      "task_id": "01803b1fb646",
+      "summary": "Danh mục loại nhiệm vụ của xã — dùng cho ô chọn loại trên biểu mẫu nhiệm vụ và bộ lọc",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "tên loại nhiệm vụ xuất hiện ở ô chọn trên biểu mẫu nhiệm vụ và ở bộ lọc của hầu hết màn hình nhiệm vụ — đòi một quyền cấu hình sẽ làm rỗng những ô đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục của xã lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.danhSachLoaiNhiemVuRa",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
     }
   ]
 }
