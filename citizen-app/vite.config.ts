@@ -2,6 +2,11 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vite";
 
+// MỘT NGUỒN SỰ THẬT cho cấu hình lúc dựng — `scripts/deploy.mjs` nhập đúng mô-đun này. Nó đọc
+// `.env.local` bằng `loadEnv` (Vite KHÔNG tự nạp tệp ấy vào `process.env`), để biến shell thắng
+// tệp, và CHẶN mọi tên biến ngoài danh sách trắng. Đọc khối chú thích ở đó trước khi sửa.
+import { docCauHinh } from "./scripts/cau-hinh.mjs";
+
 /**
  * HAI BIẾN THỂ BẢN DỰNG — `VIGOV_BIEN_THE`.
  *
@@ -43,9 +48,13 @@ type BienThe = (typeof BIEN_THE_HOP_LE)[number];
  *
  * SAI TÊN THÌ DỪNG, KHÔNG ĐOÁN. `VIGOV_BIEN_THE=gôc` mà vẫn dựng tiếp nghĩa là dựng bản ĐẦY ĐỦ
  * rồi đem nộp duyệt dưới nhãn "bản gốc" — hỏng trong im lặng, và hỏng đúng ở chỗ đắt nhất.
+ *
+ * Giá trị đọc qua `cauHinh()`: `.env.local` cho máy local, biến shell đè lên nó. `npm run
+ * build:goc` và `deploy.mjs` đặt biến shell, nên một dòng `VIGOV_BIEN_THE` trong tệp KHÔNG bao
+ * giờ đổi được biến thể của một lệnh đã nói rõ nó dựng bản nào.
  */
 function docBienThe(): BienThe {
-  const dat = (process.env.VIGOV_BIEN_THE ?? "day-du").trim();
+  const dat = (cauHinh().VIGOV_BIEN_THE || "day-du").trim();
   if (!(BIEN_THE_HOP_LE as readonly string[]).includes(dat)) {
     throw new Error(
       `VIGOV_BIEN_THE="${dat}" không phải biến thể nào cả. Chỉ nhận: ${BIEN_THE_HOP_LE.join(" · ")}.`,
@@ -101,7 +110,25 @@ function aliasTheoBienThe(): Record<string, string> {
  * nằm ở backend (ADR 0020, bất biến 2).
  */
 function diaChiMayChu(): string {
-  return (process.env.VIGOV_API_HOST ?? "").trim();
+  return cauHinh().VIGOV_API_HOST;
+}
+
+/**
+ * Đọc cấu hình MỘT LẦN MỖI LẦN DỰNG, không phải một lần mỗi tiến trình.
+ *
+ * `bundle-for-zalo.test.ts` dựng hai biến thể liên tiếp trong cùng một tiến trình bằng cách
+ * đổi `process.env.VIGOV_BIEN_THE` giữa hai lần. Nhớ kết quả ở cấp mô-đun thì lần dựng thứ hai
+ * đọc lại giá trị của lần đầu — và ca kiểm "hai biến thể" sẽ so bản `goc` với chính nó.
+ *
+ * Cache theo giá trị shell đang thấy: cùng một lần dựng thì đọc đĩa đúng một lần (kiểm danh
+ * sách trắng cũng chỉ chạy một lần, thông báo lỗi không lặp ba lần), đổi shell thì đọc lại.
+ */
+let nho: { khoa: string; gia_tri: ReturnType<typeof docCauHinh> } | null = null;
+
+function cauHinh(): ReturnType<typeof docCauHinh> {
+  const khoa = `${process.env.VIGOV_BIEN_THE ?? ""}\u0000${process.env.VIGOV_API_HOST ?? ""}`;
+  if (nho === null || nho.khoa !== khoa) nho = { khoa, gia_tri: docCauHinh() };
+  return nho.gia_tri;
 }
 
 /**

@@ -36,6 +36,14 @@
       "tiep_theo": "MỘT CÂU ĐÃ SAI VÀ ĐÃ SỬA: 'sau 90 ngày, dòng nhật ký được xoá' mô tả một cơ chế xoá-đúng-ngày không tồn tại, và sai về phía GIỮ LÂU HƠN. Cơ chế thật: DROP cả phân mảnh tuần khi đầu khoảng quá hạn (d <= nguong) → mỗi dòng sống tối đa 90, tối thiểu 83. Văn bản nay nói cả cận trên lẫn cận dưới, và có ca canh CHIỀU NGƯỢC nếu ai rút về câu cũ. SỐ PHIÊN BẢN GIỮ 1.0: vẫn cùng một lượt soạn thảo trước lần công bố đầu tiên, chưa ai đọc bản nào. CÒN LẠI CHO VẬN HÀNH: (1) chưa có định nghĩa lịch nào cho `make don-nhat-ky` trong kho backend (không cron file, không systemd timer) — mà trần 90 ngày chỉ đúng nếu nó chạy HẰNG NGÀY; (2) quy trình người trực hotline/email nhận yêu cầu xoá rồi chạy lệnh an-danh chưa ai mô tả"
     },
     {
+      "id": "cau-hinh-local-cho-may-day-ban",
+      "viec": "`.env.local` chạy thật ở citizen-app, một nguồn sự thật cho bước dựng + bước đẩy, kèm rào chặn bí mật",
+      "trang_thai": "xong",
+      "bang_chung": "citizen-app/scripts/cau-hinh.mjs (mới) — loadEnv(mode, goc, \"\") đọc .env.local; vite.config.ts và scripts/deploy.mjs cùng nhập docCauHinh(), không chép logic. citizen-app/.env.local.example (mới, placeholder) + .gitignore gốc dòng 3 đã chặn .env.local thật (git check-ignore xác nhận). ĐÃ ĐO TRÊN BẢN DỰNG THẬT 2026-09-20: giá trị trong .env.local vào bundle 1 lần; đặt thêm biến shell thì shell THẮNG (tệp 0 lần, shell 1 lần); .env.local chứa ZALO_MINIAPP_SECRET_KEY làm `node scripts/dung.mjs goc` DỪNG với exit=1 kèm giải thích. scripts/cau-hinh.test.mjs 10 ca. npm test 426 ca / 14 tệp xanh + tsc sạch",
+      "no_confirm": [],
+      "tiep_theo": "HAI CÁI BẪY ĐÃ ĐÓNG: (1) Vite KHÔNG nạp .env.local vào process.env — chỉ loadEnv mới đọc, nên bản cũ đọc process.env.VIGOV_API_HOST im lặng trả rỗng; (2) tham số thứ ba của loadEnv phải là \"\", mặc định chỉ lấy VITE_*. RÀO BÍ MẬT hai lớp: danh sách trắng đúng hai tên cho .env.local (tên lạ -> dựng đỏ), và docCauHinh trả ĐÚNG HAI KHOÁ nên loadEnv(…,\"\") gom 87 khoá của process.env cũng không có đường vào define. KHÔNG soi .env vì tệp ấy của zmp-cli (APP_ID, ZMP_TOKEN) và không đi vào bundle — bắt nó theo luật bước dựng là làm hỏng thiết lập đang chạy đúng"
+    },
+    {
       "id": "nop-zalo-duyet",
       "viec": "Nộp Mini App cho Zalo duyệt",
       "trang_thai": "chua_lam",

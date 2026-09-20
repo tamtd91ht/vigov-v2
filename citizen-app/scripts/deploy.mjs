@@ -38,6 +38,7 @@
  */
 import { spawnSync } from "node:child_process";
 
+import { docCauHinh } from "./cau-hinh.mjs";
 import { BIEN_THE, dung, MO_TA_BIEN_THE } from "./dung.mjs";
 
 const ZMP = "zmp-cli@4.0.3";
@@ -86,13 +87,22 @@ if (!BIEN_THE.includes(bien_the)) {
  * chạy được trên một máy chưa có địa chỉ máy chủ nào — `bundle-for-zalo.test.ts` dựng cả hai
  * biến thể trong mọi lần chạy test. Ma sát đặt đúng chỗ có hậu quả: đường ĐẨY LÊN ZALO.
  */
-const api_host = (process.env.VIGOV_API_HOST ?? "").trim();
+// ĐỌC CÙNG MỘT NGUỒN VỚI BƯỚC DỰNG. Script này chạy NGOÀI Vite nên nó không tự thấy
+// `.env.local`; `docCauHinh` là chỗ duy nhất biết cách đọc tệp ấy. Nhập lại nó ở đây là cách
+// duy nhất để "deploy thấy host" và "vite thấy host" không bao giờ lệch nhau — chép logic đọc
+// ra hai nơi thì ngày chúng lệch là ngày script chặn một bản dựng hợp lệ, hoặc tệ hơn: cho qua
+// một bản không có host rồi đẩy nó lên Zalo.
+//
+// Lời gọi này cũng chạy phép kiểm danh sách trắng của `.env.local`, nên một bí mật đặt nhầm
+// vào tệp ấy bị chặn ở ĐÂY nữa, trước cả bước dựng.
+const api_host = docCauHinh().VIGOV_API_HOST;
 if (api_host === "" && !chi_thu) {
   console.error(
     "\nVIGOV_API_HOST chưa được đặt.\n" +
       "  Khối đăng nhập đọc biến này LÚC DỰNG. Thiếu nó, bản đẩy lên sẽ có một nút đăng nhập\n" +
       "  không đăng nhập được, và hiện một câu dành cho người dựng bản.\n" +
-      "  Đặt biến rồi chạy lại, ví dụ:  VIGOV_API_HOST=https://<host> npm run zmp:deploy:goc\n" +
+      "  Cách thường dùng: chép `.env.local.example` thành `.env.local` rồi điền địa chỉ.\n" +
+      "  Hoặc đặt cho đúng một lần chạy: VIGOV_API_HOST=https://<host> npm run zmp:deploy:goc\n" +
       "  (Thêm --thu để chỉ in ra kế hoạch mà không cần biến này.)\n",
   );
   process.exit(2);

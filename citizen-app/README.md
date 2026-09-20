@@ -164,6 +164,48 @@ thì **fail closed**: không một lời gọi nào được phát đi, và màn
 được khai địa chỉ. Không có địa chỉ mặc định — đoán một địa chỉ là gửi hai mã đăng nhập của một
 người thật tới một máy chủ không ai chọn.
 
+### `.env.local` — cấu hình cho máy đẩy bản
+
+Bản lên Zalo được đẩy từ **máy local**, nên hai biến trên nằm trong một tệp, không phải gõ vào
+shell mỗi lần:
+
+```bash
+cp .env.local.example .env.local     # rồi điền địa chỉ máy chủ vào .env.local
+```
+
+| | |
+|---|---|
+| Đọc bằng | `loadEnv` trong `scripts/cau-hinh.mjs` — **một nguồn sự thật**, `vite.config.ts` và `scripts/deploy.mjs` cùng nhập nó |
+| Ưu tiên | **biến shell THẮNG tệp** — CI và một lần đẩy tay phải đè được tệp local. Đã đo, không suy đoán |
+| Vào git? | Không. `.gitignore` gốc kho chặn `.env.local` (dòng 3). `.env.local.example` thì có trong kho, chỉ chứa placeholder |
+
+**Hai cái bẫy đã trả giá để biết, ghi ra để không ai vấp lại:**
+
+1. **Vite KHÔNG tự nạp `.env.local` vào `process.env`.** Chỉ `loadEnv()` mới đọc các tệp
+   `.env*`. Bản trước của `vite.config.ts` đọc `process.env.VIGOV_API_HOST`, nên đặt tệp xuống
+   thì nó **im lặng** trả rỗng và `deploy.mjs` chặn đường đẩy vì tưởng chưa khai host.
+2. **Tham số thứ ba của `loadEnv` phải là `""`.** Mặc định nó chỉ lấy biến có tiền tố `VITE_`,
+   và đó cũng là một cái hỏng không báo gì.
+
+`scripts/deploy.mjs` chạy **ngoài** Vite nên không tự thấy tệp — nó nhập cùng `docCauHinh()`.
+Chép logic đọc ra hai nơi thì ngày chúng lệch là ngày script chặn một bản hợp lệ, hoặc tệ hơn:
+cho qua một bản không có host rồi đẩy lên Zalo.
+
+⚠ **`.env.local` KHÔNG PHẢI CHỖ ĐỂ BÍ MẬT — và đây là một cái rào, không phải một lời khuyên.**
+Mọi giá trị ở đây đi qua `define:` và được **nung thẳng vào bundle** gửi lên Zalo rồi tải về máy
+người dùng (luật 8, bất biến 4 — cùng lý do với `NEXT_PUBLIC_*`). Một người quen `.env` phía máy
+chủ sẽ đặt secret key vào đây theo phản xạ. Nên:
+
+| Cơ chế | Chặn được gì |
+|---|---|
+| **Danh sách trắng hai tên** (`VIGOV_API_HOST`, `VIGOV_BIEN_THE`) trong `scripts/cau-hinh.mjs` | Một tên lạ trong `.env.local` làm **bước dựng DỪNG** kèm câu giải thích và chỉ ra chỗ đúng — đã thử: `ZALO_MINIAPP_SECRET_KEY` cho `exit=1` |
+| **`docCauHinh()` trả về ĐÚNG HAI KHOÁ**, không bao giờ trả cả môi trường | `loadEnv(…, "")` gom toàn bộ `process.env` (đo được **87 khoá**). Trả nguyên đống ấy ra là đặt sẵn đường cho một lượt sửa `define: { ...docCauHinh() }` nung `ZMP_TOKEN` vào bundle |
+
+**`.env` là TỆP KHÁC, và nó ở đúng chỗ của nó.** `citizen-app/.env` thuộc về `zmp-cli`
+(`APP_ID`, `ZMP_TOKEN` — token đăng nhập Zalo, một bí mật thật). Công cụ dòng lệnh đọc nó trên
+máy; nó **không** đi vào bundle. Danh sách trắng vì thế **chỉ soi `.env.local`** — bắt `.env`
+theo luật của bước dựng là làm hỏng một thiết lập đang chạy đúng.
+
 ⚠ **Quên biến ấy = nộp một nút đăng nhập không đăng nhập nổi.** Nên `scripts/deploy.mjs` **chặn
 đường đẩy** khi nó rỗng, và in địa chỉ ra trước khi làm gì. Chặn ở đó chứ không ném lỗi lúc
 dựng, vì `npm test` dựng cả hai biến thể trong mọi lần chạy và phải chạy được trên máy chưa có
@@ -224,6 +266,7 @@ Cơ chế là `resolve.alias`, không phải tree-shaking — tree-shaking **kh�
 | `src/features/dang-nhap/PhatHanhPhien.tsx` | **Bước máy chủ** của khối đăng nhập — có mặt ở CẢ HAI bản dựng, không còn cửa biến thể nào |
 | `src/features/dang-nhap/hop-dong.ts` | **Hợp đồng với máy chủ, một tệp** — đường dẫn, tên hai trường gửi đi, hình dạng phản hồi, và `VIGOV_API_HOST`. Máy chủ là kho riêng `vihat-miniapp`, **đang dựng song song**: đổi hợp đồng là sửa tệp này và `dang-nhap.test.tsx` nằm cạnh, không sửa gì khác |
 | `src/features/dang-nhap/goi-may-chu.ts` | **Tệp DUY NHẤT trong kho được `fetch`.** Năm nhánh kết quả, không ném ra ngoài, không log |
+| `scripts/cau-hinh.mjs` · `cau-hinh.test.mjs` | Đọc `.env.local` cho CẢ bước dựng lẫn bước đẩy, và **danh sách trắng** chặn bí mật đặt nhầm chỗ. 10 ca: hai chiều của danh sách trắng · shell thắng tệp · trả đúng hai khoá · và ba ca ghim rằng cái rào **thật sự được nối vào** `vite.config.ts`, `deploy.mjs`, `.env.local.example` |
 | `src/features/dang-nhap/dang-nhap.test.tsx` | 11 ca: năm nhánh của bước máy chủ · 401 và 502 KHÔNG được gộp · gọi đúng một lần bằng POST · thân yêu cầu mang đúng hai mã · bearer không ra màn hình |
 | `src/content/chinh-sach.test.ts` | 22 ca về chính văn bản pháp lý: câu "không gửi đi đâu" đã biến mất · mục Đăng nhập nói đủ **gửi gì · ai nhận · lưu gì · vì sao** · thời gian lưu nói đủ **không có hạn tự động · cửa yêu cầu xoá · phạm vi xoá** · nhật ký khai đủ **IP · thời điểm · kết quả · mã lý do · chỉ-ghi-thêm** · **lượt THẤT BẠI cũng bị ghi** · danh sách **KHÔNG lưu** · **90 ngày là TRẦN (dọn theo lô tuần, 83–90), áp cả dòng của lượt thất bại**, kèm ca canh chiều ngược nếu ai viết lại thành "đúng 90 ngày" · **dòng bằng chứng của một lần xoá** khai đủ bốn vế · và MỘT số phiên bản, vì chưa bản nào tới tay ai |
 | `src/features/kham-pha/bien-the.test.ts` | Hai bản rỗng khai đúng bề mặt · **không tệp nào nhập thẳng vòng qua alias** · danh sách biến thể ở `vite.config.ts` và `scripts/dung.mjs` **không lệch nhau** |
@@ -504,13 +547,16 @@ Cả bốn đi qua `scripts/deploy.mjs`: dựng đúng biến thể → `sync-co
 **trong** script vì biến thể quyết định lúc dựng — dựng ngoài rồi đẩy trong là hai lệnh có thể
 lệch nhau, và lần lệch ấy nộp bản `day-du` dưới nhãn `goc`.
 
-⚠ **Cả bốn đều cần `VIGOV_API_HOST`**, vì khối đăng nhập đọc địa chỉ máy chủ lúc dựng:
+⚠ **Cả bốn đều cần `VIGOV_API_HOST`**, vì khối đăng nhập đọc địa chỉ máy chủ lúc dựng. Cách
+thường dùng là điền nó một lần vào `.env.local` (§"`.env.local` — cấu hình cho máy đẩy bản");
+đè cho đúng một lần chạy thì đặt biến shell, nó thắng tệp:
 
 ```bash
-VIGOV_API_HOST=https://<host> npm run zmp:phat-hanh:goc
+npm run zmp:phat-hanh:goc                              # đọc .env.local
+VIGOV_API_HOST=https://<host> npm run zmp:phat-hanh:goc # đè tệp, cho một lần chạy
 ```
 
-Thiếu biến thì script **dừng với mã thoát 2 trước khi dựng gì cả** — đẩy một bản chưa khai địa
+Thiếu cả hai thì script **dừng với mã thoát 2 trước khi dựng gì cả** — đẩy một bản chưa khai địa
 chỉ là nộp một nút đăng nhập không đăng nhập nổi, kèm một câu chữ dành cho người dựng bản.
 Script cũng **in địa chỉ ấy ra** cùng biến thể và nhãn phiên bản trước khi làm gì: nó được nung
 thẳng vào bundle, nên người chạy lệnh phải đọc được nó. `--thu` thì không cần biến — nó chỉ in
