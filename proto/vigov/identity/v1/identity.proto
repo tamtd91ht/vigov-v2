@@ -32,6 +32,109 @@ package vigov.identity.v1;
 // optional with a safe default.
 
 service IdentityService {
+  // ResolveStaffPrincipal turns the session credential a staff member's browser holds into the
+  // principal every service's guards need: who is acting, and what they may do, in the commune
+  // the call already names.
+  //
+  // WHY IT EXISTS. `XacThuc` (service-identity/internal/http/middleware.go:71) is the only
+  // thing in this system that builds a principal, and it sits inside identity's `internal/`,
+  // which rule 2 forbidden #1 forbids any other service from importing. Without this RPC a
+  // guarded route in service-documents, -finance, -comms or -petitions answers 401 to EVERY
+  // caller, including a member of staff holding a perfectly valid session. That is not a
+  // hypothesis: six catalogue routes shipped in that state and were measured doing it on
+  // 2026-09-20.
+  //
+  // # It runs on every staff request, and there is no cache
+  //
+  // ONE CALL PER REQUEST, PER SERVICE. A page of the admin web that fires four XHRs pays four
+  // of these. Say the cost out loud rather than discover it: one LAN round trip, plus — inside
+  // identity — the session-registry read, the account read and the grant read that `XacThuc`
+  // already performs today on every one of ITS requests.
+  //
+  // THE OBVIOUS SAVING IS NOT AVAILABLE, and the argument is already written down for the
+  // citizen path in service-identity/internal/store/phien_cong_dan.go: ADR 0010 fixes the data
+  // infrastructure at PostgreSQL only, so there is no shared cache; identity runs several
+  // replicas, so any cache is PER PROCESS; and a revocation served by one replica has no
+  // channel on which to reach the copy held by another. A TTL cache here — in identity or in
+  // the four callers — would therefore keep a revoked session, a locked account or a withdrawn
+  // role working for the length of that TTL, on every process that did not serve the
+  // revocation. Rule 5, invariant 4 exists precisely so that cannot happen, and a cache with no
+  // invalidation trades it away silently: nothing turns red, and the property is not one any
+  // test would discover.
+  //
+  // So the flow is STRONGLY CONSISTENT by construction, declared as such in
+  // kb/30-indexes/transaction-boundaries.json (`xac_thuc_can_bo_lien_service`) — which is where
+  // to argue with this decision, not in a caller's hot path.
+  //
+  // # Not batched, and that is not a lapse from ADR 0012 decision 2
+  //
+  // Batching is the default for lookup RPCs because their caller is a LIST SCREEN decorating
+  // rows, and a singular form makes one round trip per row. That reasoning has no purchase
+  // here: the caller is ONE HTTP request holding ONE credential, and there is no list from
+  // which a second credential could arrive. A batched form would be a shape no caller can fill.
+  //
+  // # The commune, and the comparison rule 1 invariant 8 asks for
+  //
+  // THIS RPC IS NOT EXEMPT FROM CARRYING A COMMUNE, and it must never become exempt: it is
+  // always called from a service edge that has ALREADY resolved the commune from Host, so
+  // "x-tenant-id" costs the caller nothing and is present by the time the call is made.
+  //
+  // That metadata value IS the Host-derived commune, which makes this RPC the place where rule
+  // 1, invariant 8 is enforced ONCE for all four services: the server decodes the credential,
+  // compares the commune inside it with the commune in metadata, and on a mismatch answers with
+  // no principal AND raises the security alert that skills/session-and-token §2 requires. Four
+  // services each remembering to make that comparison is four places for one of them to forget,
+  // and the one that forgets serves one commune's staff inside another commune's data.
+  //
+  // WHAT THE COMPARISON IS WORTH, STATED HONESTLY: "x-tenant-id" remains a CLAIM by the caller
+  // (ADR 0025 — the one shared caller key proves a call came from inside the deployment, never
+  // WHICH service made it). What the comparison does buy is absolute: the answer can never be
+  // wider than the credential presented, because a credential issued for commune A yields
+  // nothing at all when the call names commune B, and nothing in this service mints credentials
+  // on a caller's say-so.
+  //
+  // # What it deliberately does NOT reproduce from XacThuc
+  //
+  //   * XacThuc answers 401 IMMEDIATELY on a commune mismatch, even on a Public route, and
+  //     clears the cookie. Here a mismatch is simply "no principal", so a Public route in the
+  //     calling service still serves and the stale cookie is not cleared. The part that
+  //     mattered — the ALERT — is preserved and is now raised in one place instead of four. The
+  //     part given up is unreachable in practice by the client this protects against: a browser
+  //     does not send a cookie across hosts, which is why XacThuc's own comment calls that case
+  //     a deliberate probe rather than a user mistake.
+  //   * The session id, the registry's expiry, and the two display fields XacThuc copies onto
+  //     PhienHienTai do not cross this boundary. See StaffPrincipal for each omission's reason.
+  //
+  // # Failure has exactly one answer
+  //
+  // Unknown credential, malformed credential, expired token, revoked session, locked account,
+  // soft-deleted account, wrong commune: ALL of them return an OK response with no principal.
+  // There is no reason code and no enum, and there is deliberately no way to add one without
+  // this paragraph being edited. A response that varies with the reason tells whoever is
+  // probing how close they are — the same discipline that makes an absent id in
+  // BatchGetStaffResponse indistinguishable between "does not exist", "deleted" and "another
+  // commune", and the same one rule 4 forbidden #2 imposes on 404 versus 403.
+  //
+  // THE STATUS CODES ARE PART OF THE CONTRACT, and confusing any two of them is expensive:
+  //
+  //   OK + no principal   the credential is not usable. The caller builds no principal and lets
+  //                       its guards answer — 401 on a guarded route, served on a Public one,
+  //                       exactly as if no credential had been presented.
+  //   INVALID_ARGUMENT    `session_token` was empty. A caller with no credential MUST NOT call
+  //                       at all, so this is a wiring fault and is answered loudly rather than
+  //                       as "no principal": the quiet answer would cost a round trip on every
+  //                       anonymous request, forever, with nothing to report it.
+  //   UNAUTHENTICATED     NEVER produced by this RPC. That code belongs to the caller-key
+  //                       interceptor (core/grpcx.UnaryServerCallerAuth, ADR 0025) and means
+  //                       the DEPLOYMENT is misconfigured — every call failing, not one user's
+  //                       session being stale. Reusing it here would make an operator unable to
+  //                       tell a fleet-wide outage from an ordinary expired login.
+  //   UNAVAILABLE etc.    the call did not happen. IT IS NOT "no principal": a caller that
+  //                       treats an outage as anonymity turns "identity is down" into
+  //                       "everybody is signed out", and staff are then told to sign in again
+  //                       through the service that is down. Answer 503.
+  rpc ResolveStaffPrincipal(ResolveStaffPrincipalRequest) returns (ResolveStaffPrincipalResponse);
+
   // BatchGetStaff resolves staff by id — plural by design, there is no singular form.
   //
   // WHY BATCHED AND NOT GetStaff(id): the caller is always a list screen decorating rows
@@ -76,6 +179,179 @@ message Staff {
   // `mat_khau_hash` is deliberately absent and must never be added, in any form, hashed or
   // not (rule 3, rule 8). Nothing outside identity has a reason to see it, and a credential
   // that crosses a service boundary is a credential in somebody else's logs.
+}
+
+// StaffPrincipal is the authorisation state of one member of staff, at the instant one request
+// was authenticated. It is the whole of what leaves this service for a guard to work on.
+//
+// EVERY FIELD THAT IS NOT HERE IS ABSENT ON PURPOSE, and the list of omissions is longer than
+// the list of fields — read it before adding anything:
+//
+//	ho_ten, chuc_vu         XacThuc copies these onto PhienHienTai for identity's OWN header and
+//	                        its own /sessions/current route. None of the four guards
+//	                        (RequirePermission, AnyAuthenticated, CitizenOnly, Public) reads a
+//	                        name, so sending one would put a citizen-grade personal datum into
+//	                        four more processes and four more log pipelines to be used by
+//	                        nothing (rule 3, invariant 1). Widening toward `ho_ten` is also
+//	                        BLOCKED by an unanswered question: open question #11 (mask a staff
+//	                        member's mobile number to other staff, or not) has to be settled
+//	                        first, because it decides what "staff personal data" is allowed to
+//	                        cross a boundary at all.
+//	ma (the business code)  Wanted eventually: rule 6, invariant 3 records the business code on
+//	                        the audit trail, and a service writing an audited change will need a
+//	                        "who". It is NOT here because nothing reads it yet, and a contract
+//	                        records what exists rather than what is planned (ADR 0021). Adding a
+//	                        field later is additive and costs nothing; removing one costs a
+//	                        permanent `reserved`. Whoever adds it states which audit path reads
+//	                        it.
+//	sid                     The session id is credential-adjacent — XacThuc's own alert logs a
+//	                        one-way fingerprint of it rather than the value, because an alert
+//	                        carrying a working handle to a session is a second copy of it. It
+//	                        earns its place on PhienHienTai for ONE job, ending one's own
+//	                        session, and no other service does that job.
+//	expiry                  Decided by the registry, re-read on the next request anyway. A
+//	                        caller holding an expiry is a caller one edit away from deciding
+//	                        validity from it, which is the revocation hole this whole RPC exists
+//	                        to avoid.
+//	tenant_id               The caller already holds it: it is the commune it resolved from Host
+//	                        and sent in "x-tenant-id", and the server refused the call outright
+//	                        if the credential disagreed. Echoing it back would create a second
+//	                        source for one fact and hand the caller a choice between two values
+//	                        — and a choice on the isolation path is where a default grows.
+//	kind                    Every principal from this RPC is staff. A field with one possible
+//	                        value is a field every consumer stops checking. The caller sets
+//	                        Kind = "staff" because it called the staff RPC.
+//	roles                   XacThuc leaves authz.Principal.Roles empty ON PURPOSE: a role
+//	                        carried on the principal means a role change takes effect only when
+//	                        the session ends. permission_keys below is read live, per request,
+//	                        which is the property that has to be kept.
+message StaffPrincipal {
+  // The INTERNAL id of the staff record — the same value as Staff.id, and NOT the business code
+  // `ma`.
+  //
+  // THE DISTINCTION IS LOAD-BEARING and it has a known failure mode: identity's own permission
+  // query matches on `nd.id` (service-identity/internal/store/checker.go, truyVanQuyenGoc), so
+  // a principal carrying the business code matches no row, every permission check answers
+  // false, and every guarded route returns 403 with nothing in the response, the logs or a test
+  // to point at the cause.
+  string staff_id = 1;
+
+  // Every permission key this person holds in this commune, as of this request.
+  //
+  // FLAT KEYS, "<nhóm>.<việc>" — "task.extend", "admin.role". They are the SAME strings that sit
+  // in `vai_tro_quyen.quyen_ma`, that authz.Perm carries, and that the Phân quyền screen shows.
+  // There is deliberately no translation layer and no (subsystem, action) pair: these rights are
+  // not a Cartesian product, and `task.approve` is deliberately not `task.extend` (rule 5,
+  // invariant 3b).
+  //
+  // WHY THE KEYS TRAVEL AT ALL — THE EXPENSIVE DECISION OF THIS CONTRACT. authz.Checker asks one
+  // question at guard time, "may this caller do this one thing". In identity that question is
+  // answered by a local query. In the other four services there is no local query to make, and
+  // there must not be one: rule 2 forbidden #2 forbids them a connection to identity's database.
+  // That leaves two shapes, and the cost of the rejected one is per request of every screen:
+  //
+  //	keys here (chosen)  ONE hop per request. ~30 short strings on the wire.
+  //	a second RPC        TWO hops per request — one to authenticate, one per guard to ask about
+  //	                    one key. Same freshness, double the latency and double the failure
+  //	                    surface on the hot path of every guarded route in four services.
+  //
+  // THIS DOES NOT COLLAPSE THE SPLIT service-identity/internal/http/routes.go ARGUES AT LENGTH,
+  // and the difference is worth stating precisely because it looks like the same list. That file
+  // keeps authz.Checker (DECIDES, one key at a time) apart from QuyenDoc (DESCRIBES the caller's
+  // own keys, so the web can avoid drawing what the server would refuse), and the accident it
+  // fears is a caller deciding access from a list drawn for a menu. Neither interface changes
+  // here, and this is not that list: it is the grant set computed by the service that OWNS the
+  // grants, inside the very request it authenticates, handed to that request's guard. The web's
+  // menu still comes from identity's own route through QuyenDoc. What WOULD collapse the split
+  // is storing this set anywhere that outlives the request.
+  //
+  // SO, THE ONE OBLIGATION ON THE CALLER: this set is scoped to the single request it
+  // authenticated. It is never written into a token, never attached to a session, never cached
+  // across requests, and never written to disk. A withdrawn role must stop working on the very
+  // next request — the moment this set outlives one request it becomes a role embedded in a
+  // token, which skills/session-and-token names as FORBIDDEN and which rule 5, invariant 4
+  // exists to prevent.
+  //
+  // AN EMPTY LIST IS A REAL AND ORDINARY ANSWER: an account whose role was withdrawn, or which
+  // never held one, holds no key. It means every RequirePermission route answers 403 while
+  // AnyAuthenticated routes still serve — it does NOT mean "we could not find out". A server
+  // that cannot read the grants must fail the RPC, never answer a principal with an empty list.
+  //
+  // Ordered, and the order carries no meaning beyond making one caller's responses comparable
+  // between requests.
+  repeated string permission_keys = 2;
+}
+
+message ResolveStaffPrincipalRequest {
+  // The signed session token exactly as the browser presented it — the value of the
+  // `vigov_session` cookie, verbatim, not parsed, not trimmed, not re-encoded by the caller.
+  //
+  // IT IS A CREDENTIAL, NOT DATA (rule 8). It never appears in a log line at either end, never
+  // in an error message, never in an audit entry, and never in a metric label — at any level,
+  // including debug. Anything that has to correlate two lines about one session uses a one-way
+  // fingerprint, the way XacThuc's alert already does, never the value.
+  //
+  // AND NOTHING IN THE GENERATED CODE PROTECTS IT — measured on 2026-09-20, not assumed. The
+  // generated String() prints this field in full, so `log.Info("req", "r", req)`, `%v` or `%+v`
+  // on this message puts a WORKING session token into the log pipeline, where rule 8 says a
+  // secret must never reach and from where it cannot be recalled. The `debug_redact` option was
+  // tried and is a no-op in protobuf-go v1.36.12 — it was removed again rather than left in
+  // place, because a marking that does nothing is worse than none: the next reader trusts it.
+  // The protection is therefore a rule for humans: NEVER log this message, log the fields you
+  // chose.
+  //
+  // THE CALLER DOES NOT VALIDATE IT FIRST. It does not hold the signing key, and a caller that
+  // pre-checks anything about this string has started to build a second, weaker copy of the
+  // decision this RPC exists to make — one that will disagree with the real one the first time
+  // the token format changes.
+  //
+  // Empty is INVALID_ARGUMENT, not "no principal": a request with no credential must never
+  // reach this RPC. See the status-code table on the RPC.
+  string session_token = 1;
+
+  // The address the BROWSER connected from, as the calling service observed it on its own
+  // socket.
+  //
+  // WHY IT IS HERE: it exists for exactly one line of output — the security alert raised when a
+  // credential's commune disagrees with the commune in metadata. Across this hop the server can
+  // otherwise see only a pod address inside the cluster, which answers "which of our services
+  // relayed it" and never "where was this probe from". XacThuc logs the real address today
+  // (middleware.go, ipTu); dropping it would make the centralised alert strictly weaker than
+  // the four scattered ones it replaces.
+  //
+  // IT IS A CLAIM AND MUST NEVER DECIDE ANYTHING. It is caller-supplied, so it is worth exactly
+  // what the caller key is worth (ADR 0025: the key proves a call came from inside the
+  // deployment, never which service). Rate-limiting on it, blocking on it, or storing it as the
+  // audit trail's "from which IP" would be acting on a value nobody verified. The audit entry
+  // for a business write is written by the service that observed the address itself, in its own
+  // transaction (rule 6, invariant 3) — not from this echo.
+  //
+  // THE CALLER TAKES IT FROM ITS OWN SOCKET, NOT FROM X-Forwarded-For, for the reason spelled
+  // out on ipTu: any client can set that header, and a forged address recorded with the
+  // authority of a government record states that somebody acted from an address they never
+  // used.
+  //
+  // "" IS VALID and means "not observed". The server logs the alert without it rather than
+  // refusing the call: an authentication path that fails because a diagnostic field is missing
+  // trades every staff member's access for a log line.
+  string client_ip = 2;
+}
+
+// Wrapped, not a bare StaffPrincipal: adding a field later must not change the RPC signature.
+message ResolveStaffPrincipalResponse {
+  // ABSENT MEANS NO PRINCIPAL — the credential is not usable, for one of the reasons the RPC's
+  // comment lists and deliberately does not distinguish.
+  //
+  // A MESSAGE RATHER THAN A SENTINEL STRING, so the two facts a principal is made of cannot be
+  // half-set: there is no state in which an id arrives without its keys, or keys arrive without
+  // an id. A caller checks presence once and is done.
+  //
+  // PRESENT WITH AN EMPTY permission_keys IS NOT THE SAME THING and callers must not merge the
+  // two branches: it means a valid, live session held by somebody who currently holds no
+  // permission — AnyAuthenticated serves them, RequirePermission refuses them. Merging it into
+  // "no principal" would sign that person out instead of telling them they may not do this one
+  // thing.
+  StaffPrincipal principal = 1;
 }
 
 // CitizenIdentity is one citizen, once for the whole platform (ADR 0002).

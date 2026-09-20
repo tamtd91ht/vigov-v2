@@ -11,5 +11,12 @@
       "adr": "kb/10-decisions/NNNN-....md (neu co tranh luan)"
     }
   },
-  "_empty": "chua co luong nghiep vu nao — khai o day TRUOC khi viet ma"
+  "xac_thuc_can_bo_lien_service": {
+    "consistency": "manh",
+    "scope": "Hai service moi yeu cau cua can bo: service-{documents,finance,comms,petitions} goi IdentityService.ResolveStaffPrincipal (proto/vigov/identity/v1/identity.proto), roi tu quyet dinh tai cho bang authz.RequirePermission / AnyAuthenticated. Khong ghi du lieu nghiep vu nao trong buoc nay.",
+    "max_lag": null,
+    "compensation": "Khong co gi de bu: buoc nay khong ghi. Goi that bai (UNAVAILABLE) thi ben goi tra 503 va KHONG dung principal nao — tuyet doi khong duoc doc thanh 'khong co principal', vi nhu the mot su co cua identity bien thanh 'moi nguoi bi dang xuat' va can bo duoc bao di dang nhap lai qua dung cai service dang hong.",
+    "why": "Doc thang moi yeu cau, KHONG cache, va day la cho duy nhat de tranh luan voi quyet dinh ay. Luat 5 bat bien 4 doi mot phien bi thu hoi phai het tac dung o yeu cau ke tiep; ADR 0010 chot ha tang du lieu chi co PostgreSQL nen khong co cache dung chung, identity lai chay nhieu replica, tuc moi cache deu la PER PROCESS va mot lan thu hoi do replica A phuc vu khong co duong nao bao cho ban sao cua replica B. Mot TTL du ngan cung giu phien da thu hoi, tai khoan da khoa va vai tro da rut tiep tuc chay het TTL tren moi tien trinh khong phuc vu lan thu hoi do — hong im lang, khong test nao do. Lap luan nay da duoc viet mot lan cho duong cong dan o service-identity/internal/store/phien_cong_dan.go; day la cung mot lap luan cho duong can bo. Cai gia phai tra la mot vong mang cho MOI yeu cau cua can bo toi bon service ay, va do la cai gia duoc chon, khong phai cai gia bi bo sot. Dieu KIEN de mo lai cau hoi cache: co mot kenh thu hoi toi duoc moi replica cua moi service — day la ha tang chua ton tai va la viec phai hoi nguoi dung, khong phai viec toi uu trong luc viet ma.",
+    "adr": "kb/10-decisions/0012-grpc-boundary-contract.md (quyet dinh 1, 2, 4) · kb/10-decisions/0025-xac-thuc-giua-cac-service.md"
+  }
 }
