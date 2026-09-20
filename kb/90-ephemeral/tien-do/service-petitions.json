@@ -9,9 +9,10 @@
       "trang_thai": "chua_lam",
       "bang_chung": "",
       "no_confirm": [
-        4
+        4,
+        26
       ],
-      "tiep_theo": "Rào CŨ đã gỡ: ba bảng lịch đã có (service-identity/migrations/0006_lich_lam_viec.sql) và hàm đếm hạn đang dựng. Rào CÒN LẠI là CÂU MỞ #4, và nó chặn đúng cột đầu tiên của bảng phiếu: ADR 0024 mục `BA Ô ĐỂ TRỐNG` §1 CỐ Ý không giao `Lĩnh vực phản ánh` cho service nào, chờ khách trả lời cấp huyện/tỉnh có tổng hợp THEO LĨNH VỰC xuyên 200+ xã không. Trả lời KHÔNG: danh mục theo xã, thuộc petitions. Trả lời CÓ: bộ mã ĐÓNG ở tầng nền tảng + nhãn theo xã đè lên — hai tầng, hai chủ sở hữu, xã không được thêm mã. Dựng theo chiều sai rồi đổi là ánh xạ thủ công 200 bộ mã đã có dữ liệu thật, trên hồ sơ lưu trữ. Ngoài #4 còn ba câu domain-expert nêu 2026-09-20 mà khách chưa được hỏi: danh sách trạng thái (ba tài liệu đang ghi 9 / 7 / 5 — luật 10 dừng #2); phân loại lại lúc sàng lọc thì hạn có dời không (luật 10 dừng #1); và mốc nào khởi động đồng hồ `Tiếp nhận` — lúc dân gửi hay lúc cán bộ nhận"
+      "tiep_theo": "BA RÀO ĐÃ GỠ NGÀY 20/09/2026, và tệp này trước đó ghi chúng là 'khách chưa được hỏi' — nay đã hỏi và đã có trả lời: (1) danh mục `Lĩnh vực phản ánh` là BỘ MÃ ĐÓNG hai tầng, bộ mã nằm ở service `platform`, xã chỉ đổi NHÃN — ADR 0026 và §Bổ sung của nó (câu mở #22 đã đóng); (2) chín trạng thái là danh sách cố định và khách DUYỆT nguyên văn chín chuỗi mã — ADR 0027, nên máy trạng thái gọi thẳng mã được, và từ nay đổi một chuỗi là di trú hồ sơ lưu trữ; (3) hạn: HAI cột, đặt ở HAI thời điểm, chung một gốc đếm — `han_tiep_nhan` lúc sinh phiếu theo dòng mặc định, `han_xu_ly_xong` lúc chốt lĩnh vực; phiếu nhập hộ đặt cả hai lúc vào sổ và `han_tiep_nhan` của nó là NULL 'không áp dụng', tuyệt đối không 0 giờ — ADR 0028 (câu mở #23 và #24 đã đóng). RÀO CÒN LẠI, và chúng chặn những thứ khác nhau: CÂU MỞ #4 vẫn chặn đường đọc XUYÊN XÃ theo lĩnh vực (mức chi tiết, và lĩnh vực hạn chế `can-bo` có rời khỏi xã không) — nó KHÔNG còn chặn cột `linh_vuc` của bảng phiếu; CÂU MỞ #26 (mới, sinh từ ADR 0028) chặn phần CHỈ SỐ: phiếu chưa phân loại chưa có `han_xu_ly_xong`, nên mẫu số của 'xử lý đúng hạn' bỏ sót chúng và xã phân loại chậm lại có chỉ số đẹp hơn. Một việc kỹ thuật chưa có ADR: `petitions` đọc bộ mã tầng 1 bằng gRPC hay bằng bản sao nuôi bằng sự kiện — phải chốt bằng ADR riêng TRƯỚC lần đọc đầu tiên, và chiều gọi luôn là nghiệp vụ -> platform."
     },
     {
       "id": "lich-lam-viec-theo-xa",

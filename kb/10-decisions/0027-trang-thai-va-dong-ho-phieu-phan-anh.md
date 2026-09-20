@@ -3,10 +3,11 @@ id: 0027-trang-thai-va-dong-ho-phieu-phan-anh
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: 1e63ccf
+derived_from_commit: 3d43fa1
 expires: null
 owns_facts:
   - "chín trạng thái phiếu phản ánh là danh sách cố định, xã không thêm không bớt"
+  - "khách duyệt nguyên văn chín chuỗi mã trạng thái ngày 2026-09-20"
   - "đổi lĩnh vực lúc phân loại chỉ được rút ngắn hạn, không bao giờ kéo dài"
   - "cả hai đồng hồ hạn của phiếu khởi động từ lúc công dân bấm gửi"
   - "đồng hồ tiếp nhận dừng khi có cán bộ động vào, không phải khi sinh phiếu"
@@ -103,6 +104,12 @@ trên màn hình nới được cam kết đã phát ra.
 
 ### Hệ quả đắt nhất: sáu dòng SLA trở thành KHÔNG VỚI TỚI ĐƯỢC ở kênh công dân
 
+> **ĐÃ ĐƯỢC GỠ CÙNG NGÀY — ADR 0028 quyết định E.** Trần 56 giờ **không còn**, và cả 12 dòng
+> SLA dùng được ở kênh công dân. Giữ nguyên mục này vì nó ghi **vì sao** cái trần từng tồn
+> tại — một phiên đặt cả hai hạn lúc sinh phiếu sẽ dựng lại đúng nó. **Đừng hành động theo
+> mục này; đọc ADR 0028 trước.** Phần vẫn còn đúng: ba dòng `2 giờ` của cột **Tiếp nhận** vẫn
+> không với tới được ở kênh công dân (ADR 0028 §Ba cái giá, mục b).
+
 Đây là phần khách nên được nghe lại trước khi mã chạy thật, vì nó không lộ ra từ câu hỏi.
 
 `ubiquitous-language.md` ghi lĩnh vực do **cán bộ** xác định ở bước Phân loại, không để dân tự
@@ -172,10 +179,64 @@ bác đơn vị ngày; nó vẫn đúng cho phiếu nhập hộ, và chưa dùng
 5. Cho dân chọn lĩnh vực lúc gửi "vì như thế hạn mới đúng" — đó là #23, và nó đổi cả mô hình
    phân loại (`ubiquitous-language.md` ghi lĩnh vực là việc của cán bộ)
 
+## Bổ sung 2026-09-20 (muộn hơn trong ngày) — khách DUYỆT nguyên văn chín chuỗi mã
+
+**Trạng thái:** đã chốt · **Ngày:** 2026-09-20
+
+Quyết định B chốt **danh sách** chín trạng thái và chốt **mã viết tiếng Việt không dấu**;
+cách viết từng chuỗi khi ấy vẫn là thứ phía thi công gõ ra từ nhãn tiếng Việt. Phiên này đưa
+đúng chín chuỗi cho khách đọc lại. Khách trả lời: *"ok làm luôn"*.
+
+`da-tiep-nhan` · `dang-phan-loai` · `da-chuyen-xu-ly` · `dang-xu-ly` · `da-xu-ly` ·
+`cho-dan-xac-nhan` · `da-dong` · `khong-tiep-nhan` · `chuyen-cap-tren`
+
+**Từ nay đổi một trong chín chuỗi là DI TRÚ HỒ SƠ LƯU TRỮ (luật 7), không phải đổi tên.**
+Trước hôm nay còn một dịp rẻ — đọc lại trước khi migration đầu tiên chạm cột `trang_thai`.
+Dịp ấy đã dùng. Mọi cảnh báo "chưa duyệt từng ký tự" trong `kb/` và trong
+`docs/ui-ux/09-phan-anh-nguoi-dan.md` **đã gỡ cùng ngày**; gặp lại một cảnh báo như thế ở đâu
+đó thì đó là bản sao sót lại, không phải một nghi ngờ còn sống.
+
+## Bổ sung 2026-09-20 (cuối ngày) — MẶC ĐỊNH TẠM: xã KHÔNG đổi nhãn chín trạng thái
+
+Khách được hỏi *"xã có được đổi nhãn của chín trạng thái không"* và trả lời: **để mặc định,
+sẽ cập nhật khi có màn hình web hoàn chỉnh và nhận phản hồi từ các bên liên quan.**
+
+**Mặc định: KHÔNG.** Chín nhãn là chuỗi của phần mềm, giống chín mã.
+
+**Vì sao chặt hơn nhãn lĩnh vực, dù hai thứ nghe giống nhau.** Nhãn lĩnh vực chỉ sống trong
+một xã. Nhãn trạng thái thì không:
+
+| | |
+|---|---|
+| Công dân đọc nó | trên màn tra cứu của chính họ, và một người ở hai xã sẽ thấy hai chữ cho cùng một bước |
+| Báo cáo xuyên xã đọc nó | cấp trên tổng hợp theo trạng thái thì 200 cách gọi là 200 cột |
+| Hỗ trợ và tập huấn đọc nó | một tài liệu hướng dẫn không viết được nếu mỗi xã một chữ |
+
+Nới ra sau thì **rẻ** — thêm một bảng nhãn theo xã là thao tác cộng thêm. Thu lại thì **đắt**:
+phải đi hỏi từng xã rằng chữ họ đang dùng nay không dùng nữa. Đó là lý do mặc định nằm ở
+phía chặt.
+
+**MỞ LẠI KHI NÀO:** có màn hình web hoàn chỉnh và có phản hồi các bên.
+
+## Bổ sung 2026-09-20 (muộn hơn trong ngày) — #23 và #24 đã đóng, ADR 0028
+
+**Ba điều đổi ở tệp này, và đúng ba điều đó:**
+
+| # | |
+|---|---|
+| 1 | **Trần 56 giờ không còn.** ADR 0028 quyết định E tách *thời điểm ĐẶT hạn* khỏi *gốc đếm*: `han_xu_ly_xong` của phiếu dân tự gửi đặt **lúc chốt lĩnh vực**. §"Hệ quả đắt nhất" ở trên nay chỉ còn giá trị **lịch sử** |
+| 2 | **Quyết định D KHÔNG đổi.** Gốc đếm của cả hai đồng hồ vẫn là lúc dân bấm gửi; thời gian nằm chờ phân loại vẫn bị trừ vào hạn xử lý |
+| 3 | **Quyết định C KHÔNG đổi**, chỉ được nói rõ phạm vi: nó áp cho mọi lần **đổi** lĩnh vực **sau** lần chốt đầu tiên. Lần chốt đầu tiên là lần *ấn định*, không phải lần *đổi* |
+
+**Điều kiện dừng #4 và #5 ở trên được thay:** #24 và #23 đã có trả lời, nên hai dòng ấy nay
+đọc là *"làm trái ADR 0028"* chứ không còn là *"chưa ai trả lời"*. Danh sách điều kiện dừng
+đang có hiệu lực cho hai câu đó nằm ở ADR 0028.
+
 → ADR 0007 (giờ làm việc, ba bảng lịch, điểm bắt đầu đếm khi gửi ngoài giờ): `kb/10-decisions/0007-sla-working-hours.md`
 → ADR 0008 (cờ đóng phiếu và mở lại, tiền lệ ghi hạn mới): `kb/10-decisions/0008-petition-lifecycle-config.md`
 → ADR 0011 (vì sao mã giữ tiếng Việt): `kb/10-decisions/0011-contract-surface-language.md`
 → ADR 0026 (lĩnh vực hai tầng, quyết định cùng ngày): `kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md`
+→ ADR 0028 (mốc ĐẶT hạn — đóng #23 và #24, gỡ trần 56 giờ): `kb/10-decisions/0028-moc-dat-han-hai-dong-ho.md`
 → Bảng mã trạng thái: `kb/00-foundation/ubiquitous-language.md`
 → Câu mở #21 · #23 · #24: `kb/00-foundation/open-questions.json`
 → Luật 10: `.claude/rules/critical/10-citizen-commitment.md`

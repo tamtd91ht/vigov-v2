@@ -14,7 +14,7 @@ produces a figure reported to leadership that is simply false — and the citize
 | # | Invariant |
 |---|---|
 | 1 | Every petition gets a **lookup code** returned to the citizen the moment it is received |
-| 2 | `sla_deadline` is computed **once, at intake**, and stored. Never recomputed on read |
+| 2 | Each deadline is computed **once, at the act that FIXES it**, and stored — `han_tiep_nhan` when the row is created, `han_xu_ly_xong` when the field is settled (ADR 0028). Never recomputed on read |
 | 3 | **Overdue is DERIVED** from `sla_deadline` vs now — never a hand-set column or flag |
 | 4 | Deadlines count **working hours**, from **per-commune** configuration (rule 1, invariant 10) — see ADR 0007 |
 | 5 | Every status transition **notifies the citizen** and leaves an audit entry (rule 6) |
@@ -22,7 +22,7 @@ produces a figure reported to leadership that is simply false — and the citize
 | 7 | The citizen sees their **own** petition's progress only — staff notes and routing history stay internal (rule 4) |
 
 **Why #2 and #3 are not contradictory:** the *deadline* is **stored**, the *overdue state* is
-**derived**. The deadline is an obligation fixed at intake — recomputing it later silently
+**derived**. The deadline is an obligation fixed by that act — recomputing it later silently
 moves a commitment already made to a citizen. The state is only a comparison against that
 fixed point.
 

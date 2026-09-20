@@ -3,7 +3,7 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: 1e63ccf
+derived_from_commit: 3d43fa1
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
@@ -13,6 +13,7 @@ owns_facts:
   - "phân biệt phản ánh, khiếu nại, tố cáo"
   - "tên gọi các bước trong vòng đời phiếu phản ánh"
   - "mã và nhãn của chín trạng thái phiếu phản ánh"
+  - "tên hai cột hạn của phiếu phản ánh, và nghĩa của NULL trên từng cột"
   - "tên gọi vai trò cán bộ cấp xã"
   - "tên thực thể tiếng Anh của tám danh mục tham chiếu"
   - "tên tài nguyên URL của ba bảng lịch làm việc của xã"
@@ -65,11 +66,13 @@ Vòng đời đầy đủ ở `skills/petition-lifecycle`; bảng này chỉ ch�
 | Lĩnh vực | `linh_vuc` | Rác thải, giao thông, trật tự đô thị… — **mã do nền tảng cấp và đóng; xã chỉ đổi được NHÃN, không thêm mã** (ADR 0026). Dòng này trước 20/09/2026 ghi "cấu hình theo xã" và **đã sai**: câu ấy đúng cho bảy danh mục của ADR 0024, không đúng cho danh mục này — số liệu lĩnh vực phải cộng được giữa các xã |
 | Trạng thái phiếu | `trang_thai` | Chín giá trị, danh sách đóng — §Chín trạng thái ngay dưới |
 | Tiếp nhận | `tiep_nhan` | **Mốc bắt đầu đếm hạn** — không phải lúc phân công |
-| Phân loại | `phan_loai` | Cán bộ xác định lĩnh vực — **không** để dân tự chọn |
+| Phân loại | `phan_loai` | Cán bộ xác định lĩnh vực — **không** để dân tự chọn (câu mở #23 đã đóng theo hướng này, ADR 0028). Cũng là **hành vi ấn định `han_xu_ly_xong`** cho phiếu dân tự gửi |
 | Phân công | `phan_cong` | Giao cán bộ/đơn vị xử lý |
 | Nghiệm thu | `nghiem_thu` | Xác nhận đã xử lý trên thực địa, thường kèm ảnh |
 | Đóng phiếu | `dong_phieu` | Kết thúc — **bắt buộc có kết quả dân đọc được** |
-| Hạn xử lý | `sla_deadline` | Lưu **một lần** lúc tiếp nhận, tính bằng **giờ làm việc** |
+| Hạn tiếp nhận | `han_tiep_nhan` | Hạn **có cán bộ đọc phiếu**. Đặt lúc **sinh phiếu**, lấy dòng mặc định của bảng SLA. **Cho phép `NULL`, nghĩa là "KHÔNG ÁP DỤNG"** — phiếu nhập hộ, vì chính cán bộ là người vào sổ. `NULL` ở đây **không** phải "chưa có", và báo cáo phải **loại** các dòng ấy, tuyệt đối không đọc thành 0 giờ (ADR 0028) |
+| Hạn xử lý xong | `han_xu_ly_xong` | Hạn **xử lý xong**, lấy theo lĩnh vực. Với phiếu dân tự gửi thì đặt lúc **chốt lĩnh vực**, nên **`NULL` trong khoảng chờ phân loại — nghĩa là "CHƯA CÓ"**. Với phiếu nhập hộ thì đặt ngay lúc vào sổ (ADR 0028) |
+| Hạn xử lý *(nói chung)* | `sla_deadline` | Từ dùng chung cho **một** trong hai cột trên khi ngữ cảnh đã rõ. Mỗi hạn tính **một lần, tại hành vi ấn định nó**, rồi lưu; tính bằng **giờ làm việc**. Hai cột, hai thời điểm ấn định, **một** gốc đếm — ADR 0028 |
 | Giờ làm việc | `gio_lam_viec` | Theo `lich_lam_viec` + `ngay_nghi_le` + `ngay_lam_bu` của xã — **cả BA bảng**, ADR 0007. Thiếu bảng thứ ba là đếm xuyên ngày làm bù như thể xã đóng cửa, và ngày làm bù dồn quanh Tết và Quốc khánh. Tên tài nguyên URL và hình dạng từng dòng: §Lịch làm việc của xã |
 | Quá hạn | — | **Suy ra**, không có cột. Xem luật 10 |
 
@@ -104,12 +107,10 @@ chép lại. Hệ quả cho người viết mã: máy chuyển trạng thái đ�
 gọi thứ hai đang song song. Vì sao mã lấy theo nhãn chứ không dịch ngược chuỗi tiếng Anh: ADR
 0027 §"Đặc tả đã sửa theo".
 
-⚠ **Chữ của chín mã do phiên 2026-09-20 gõ ra từ nhãn tiếng Việt của khách.** Khách chốt *danh
-sách* và chốt *mã viết tiếng Việt*; cách viết từng mã là suy ra. Chúng **đã đi vào đặc tả của
-chính khách cùng ngày, theo yêu cầu của khách** — đó là mức xác nhận cao nhất hiện có, nhưng nó
-xác nhận **danh sách**, không phải từng ký tự. Giá trị enum nằm trong hồ sơ lưu trữ và không di
-trú được (ADR 0011 · luật 7), nên **đọc lại chín chuỗi này một lượt trước khi migration đầu tiên
-chạm cột `trang_thai`** — sau đó thì không còn dịp rẻ nào nữa.
+**Khách đã DUYỆT nguyên văn chín chuỗi mã ngày 2026-09-20** — không chỉ danh sách, mà từng ký
+tự. Dịp đọc lại rẻ đã dùng hết: **từ nay đổi một trong chín chuỗi là DI TRÚ HỒ SƠ LƯU TRỮ
+(luật 7), không phải đổi tên.** Gặp lại ở đâu đó một cảnh báo "cách viết còn chờ khách duyệt"
+thì đó là bản sao sót lại, không phải một nghi ngờ còn sống.
 
 ## Vai trò cán bộ
 

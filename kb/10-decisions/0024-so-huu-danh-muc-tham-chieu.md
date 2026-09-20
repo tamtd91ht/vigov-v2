@@ -186,9 +186,11 @@ này, nằm ở **ADR 0026** (`kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.m
 
 Hai điều phải đọc kèm, kẻo ô này bị coi là đã xong hẳn:
 
-1. **Chủ sở hữu bảng mã tầng nền tảng vẫn CHƯA có** — câu mở **#22**. Hình dạng đã chốt không
-   phải là chủ sở hữu đã chốt, nên **điều kiện dừng #3 dưới đây vẫn còn hiệu lực cho đúng
-   bảng này**: viết migration cho nó lúc này vẫn là quyết hộ khách.
+1. ~~**Chủ sở hữu bảng mã tầng nền tảng vẫn CHƯA có** — câu mở **#22**~~ — **đã chốt cùng ngày,
+   muộn hơn: service `platform`**, và thêm mã là một thao tác trên màn hình quản trị của nhà
+   cung cấp (ADR 0026 §Bổ sung 2026-09-20). Điều kiện dừng #3 dưới đây **hết hiệu lực cho bảng
+   này**; thay vào đó: viết bảng mã ấy ở `petitions` là đặt sai chỗ, và viết đường đọc cho
+   `petitions` mà chưa có ADR chốt gRPC hay bản sao qua sự kiện là quyết hộ người viết mã sau.
 2. Tầng nhãn theo xã thì đã có chủ: `petitions`, suy từ ADR 0003 cộng quy tắc nhịp đổi. Lý do
    ở ADR 0026 §2, không chép lại.
 

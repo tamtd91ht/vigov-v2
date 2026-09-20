@@ -87,10 +87,9 @@ Danh sách **đóng** — xã không thêm, không bớt (ADR 0027 quyết đị
 Mã viết **tiếng Việt không dấu**, kebab-case, theo ADR 0011: giá trị enum nằm trong hồ sơ lưu
 trữ nên không di trú được về sau.
 
-> ⚠ **CÁCH VIẾT từng mã dưới đây là do phía thi công SUY RA từ nhãn tiếng Việt, khách chưa
-> duyệt.** Khách đã chốt *danh sách chín trạng thái* và chốt *mã viết tiếng Việt* — chưa chốt
-> chín chuỗi cụ thể. Vì giá trị enum đi vào hồ sơ lưu trữ và không sửa lại được (luật 7),
-> **phải hỏi một lần trước khi migration đầu tiên chạm cột `trang_thai`**.
+> **Khách đã duyệt nguyên văn chín chuỗi mã dưới đây ngày 20/09/2026** — không chỉ danh sách,
+> mà từng ký tự. Từ nay đổi một trong chín chuỗi là **di trú hồ sơ lưu trữ** (luật 7), không
+> phải đổi tên.
 
 | Mã | Nhãn | Nhóm |
 |---|---|---|
