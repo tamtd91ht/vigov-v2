@@ -25,7 +25,7 @@
       "trang_thai": "chua_lam",
       "bang_chung": "không có service-identity/internal/grpc — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "dùng lại interceptor hai đầu ở core/grpcx. ĐỌC ADR 0012 TRƯỚC khi thêm bất kỳ RPC nào"
+      "tiep_theo": "VIỆC KẾ TIẾP ĐƯỢC NGƯỜI DÙNG CHỐT 2026-09-20: dựng cái này TRƯỚC, để mở khoá sáu tuyến đọc danh mục đang trả 401 cho mọi người gọi (xem mục `xac-thuc-can-bo` trong sổ của service-{comms,documents,finance,petitions}). Lý do chọn đường này thay vì hai đường nhanh hơn: `XacThuc` tra SỔ ĐĂNG KÝ PHIÊN mỗi request, và bỏ phép tra ấy là token không thu hồi được nữa — phá luật 5 bất biến 4. Dùng lại interceptor hai đầu ở core/grpcx, nay đã có xác thực bên gọi (ADR 0025). ĐỌC ADR 0012 quyết định 1, 2, 4 trước khi thêm RPC — quyết định 3 ĐÃ BỊ THAY THẾ, đừng đọc theo bản cũ"
     },
     {
       "id": "cap-tai-khoan-can-bo",

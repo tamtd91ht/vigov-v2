@@ -77,11 +77,11 @@
     },
     {
       "id": "xac-thuc-service-service",
-      "viec": "Chưa có xác thực giữa các service",
-      "trang_thai": "treo",
-      "bang_chung": "ADR 0012, quyết định 3",
+      "viec": "Xác thực giữa các service — món nợ ADR 0012 quyết định 3 để lại",
+      "trang_thai": "xong",
+      "bang_chung": "ADR 0025 (kb/10-decisions/0025-xac-thuc-giua-cac-service.md) chốt 2026-09-20; ADR 0012 quyết định 3 đã ghi ĐÃ BỊ THAY THẾ ở :19 và :175, giữ nguyên văn lập luận cũ; mã ở core/grpcx/caller_auth.go + 2 tệp test — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "rủi ro đã chấp nhận có chủ ý kèm điều kiện gỡ. KHÔNG dựng cơ chế bí mật chia sẻ tạm"
+      "tiep_theo": "CHỦ SỞ HỮU CỦA SỰ THẬT NÀY NAY LÀ `core/xac-thuc-ben-goi-grpc`, kèm ba giới hạn đã biết của cơ chế khoá chung. Mục này giữ lại làm VẾT (đã từng là món nợ, ai trả, bằng gì) — đừng ghi tiếp ở đây, hai chỗ cùng kể một chuyện là hai chỗ sẽ lệch. Dòng `tiep_theo` cũ ở đây từng đọc là 'KHÔNG dựng cơ chế bí mật chia sẻ tạm', tức chỉ thị NGƯỢC HẲN quyết định người dùng vừa chốt"
     },
     {
       "id": "ra-lop-nhan-dien-theo-ten-thu-muc",

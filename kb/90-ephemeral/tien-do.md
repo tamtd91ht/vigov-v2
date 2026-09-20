@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: e50bddd
+derived_from_commit: 1d64ec6
 expires: 2026-12-19
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -25,8 +25,8 @@ tức tin `git log` chứ đừng tin tệp này.
 |---|---|
 | ĐANG LÀM | 3 |
 | chưa làm | 32 |
-| treo | 12 |
-| xong | 11 |
+| treo | 11 |
+| xong | 12 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -64,10 +64,10 @@ Cập nhật 2026-09-20 · 12 mục
 | `revoke-audit-log` — REVOKE trên audit_log thuộc khâu cấp phát CSDL, không nằm trong tay mã nguồn | treo | — | — | câu SQL đúng giữ trong comment của service-*/migrations/0002. Khâu cấp phát không làm thì lớp quyền vẫn hở dù trigger vẫn đúng |
 | `tieu-de-dac-ta-quyen` — Tiêu đề docs/ui-ux/14-cau-hinh.md §4.2 ghi 43 quyền / 11 nhóm, bảng ngay dưới có 33 khoá / 10 nhóm | treo | đếm lại trên chính tệp ấy 2026-09-18 | — | hỏi khách xác nhận TIÊU ĐỀ là chỗ sai. Migration khớp bảng. KHÔNG bịa mười khoá và cũng đừng đi tìm chúng |
 | `pii-trong-lich-su-git` — Dữ liệu cá nhân thật vẫn còn trong lịch sử git | treo | cây làm việc đã dọn | — | gỡ khỏi lịch sử là viết lại lịch sử trên main — cần quyết định của chủ dự án, không phải việc agent tự làm |
-| `xac-thuc-service-service` — Chưa có xác thực giữa các service | treo | ADR 0012, quyết định 3 | — | rủi ro đã chấp nhận có chủ ý kèm điều kiện gỡ. KHÔNG dựng cơ chế bí mật chia sẻ tạm |
 | `ra-lop-nhan-dien-theo-ten-thu-muc` — Rà cả lớp lỗi "cơ chế nhận diện mã theo tên thư mục" | treo | đã soát .claude/hooks/ và tools/, tìm được ca thứ năm (stop_verify_guard.CODE_DIR thiếu /tools/), đã vá + thêm ca test | — | chưa soát CI vì chưa có .github/. Ngày dựng CI thì đây là thứ phải soát lại đầu tiên |
 | `ra-hook-hoi-dung-cau` — Rà 16 hook theo trục "thứ nó đang đọc có trả lời đúng câu nó đang hỏi không" | treo | doc_guard đã lộ ra trục này: luật frontmatter là tính chất của TỆP nhưng nó chấm LẦN SỬA | — | hỏng được cả hai chiều: secret_scan mà đi chấm cả tệp thì tố cáo một lần sửa vô can vì bí mật có sẵn từ trước |
 | `tang-tien-do-theo-module` — Tầng ghi tiến độ cho agent: ghi theo module, đọc một tệp, có rào chặn | xong | .claude/hooks/progress_guard.py + .claude/commands/progress.md + .claude/agents/progress-reviewer.md + tools/tien_do.py; `python tools/test_hooks.py` 133/133 (6 ca mới), `python tools/check_brain.py` 7/7; nhánh Stop đã thử đột biến: thiếu ghi -> rc=2, có ghi -> rc=0 | — | thứ hook KHÔNG kiểm được: agent nào ghi module nào (payload không mang danh tính agent), và bằng chứng có thật hay không — đó là việc của progress-reviewer, và nó BÁO chứ không sửa |
+| `xac-thuc-service-service` — Xác thực giữa các service — món nợ ADR 0012 quyết định 3 để lại | xong | ADR 0025 (kb/10-decisions/0025-xac-thuc-giua-cac-service.md) chốt 2026-09-20; ADR 0012 quyết định 3 đã ghi ĐÃ BỊ THAY THẾ ở :19 và :175, giữ nguyên văn lập luận cũ; mã ở core/grpcx/caller_auth.go + 2 tệp test — kiểm 2026-09-20 | — | CHỦ SỞ HỮU CỦA SỰ THẬT NÀY NAY LÀ `core/xac-thuc-ben-goi-grpc`, kèm ba giới hạn đã biết của cơ chế khoá chung. Mục này giữ lại làm VẾT (đã từng là món nợ, ai trả, bằng gì) — đừng ghi tiếp ở đây, hai chỗ cùng kể một chuyện là hai chỗ sẽ lệch. Dòng `tiep_theo` cũ ở đây từng đọc là 'KHÔNG dựng cơ chế bí mật chia sẻ tạm', tức chỉ thị NGƯỢC HẲN quyết định người dùng vừa chốt |
 
 ## `citizen-app`
 
@@ -139,7 +139,7 @@ Cập nhật 2026-09-20 · 8 mục
 |---|---|---|---|---|
 | `store-crosstenant` — Gói đọc chéo xã — nơi duy nhất được phép đọc qua ranh giới xã | ĐANG LÀM | service-identity/internal/store/crosstenant/{dinh_danh_cong_dan.go,doc.go} + 2 tệp test — kiểm 2026-09-20, CHƯA COMMIT (một phiên song song đang viết vùng này lúc kiểm). ban-giao-phien.md §2.3 ghi "chưa tồn tại" là ĐÃ LỖI THỜI | #4 | migration nêu tên ba truy vấn đọc chéo; mới có dinh_danh_cong_dan. Mỗi truy vấn mang `// @cross-tenant: <lý do>` (luật 1 cấm #6) — đó là cách duy nhất khiến đọc chéo thành danh sách ĐẾM ĐƯỢC |
 | `kho-doc-kenh-cong-dan` — Kho đọc cho sáu bảng kênh công dân — giai đoạn 2 mới xong một phần | ĐANG LÀM | hợp đồng + rìa core/httpx/citizen.go + sáu bảng migration đã có; store/crosstenant/dinh_danh_cong_dan.go đã có — kiểm 2026-09-20 | — | chưa có route nào. Kho đọc nằm ở service-identity/internal/store/ — vùng khác với vùng đã viết migration, đó là đường nối phải bắc |
-| `grpc-server` — Server gRPC của identity | chưa làm | không có service-identity/internal/grpc — kiểm 2026-09-20 | — | dùng lại interceptor hai đầu ở core/grpcx. ĐỌC ADR 0012 TRƯỚC khi thêm bất kỳ RPC nào |
+| `grpc-server` — Server gRPC của identity | chưa làm | không có service-identity/internal/grpc — kiểm 2026-09-20 | — | VIỆC KẾ TIẾP ĐƯỢC NGƯỜI DÙNG CHỐT 2026-09-20: dựng cái này TRƯỚC, để mở khoá sáu tuyến đọc danh mục đang trả 401 cho mọi người gọi (xem mục `xac-thuc-can-bo` trong sổ của service-{comms,documents,finance,petitions}). Lý do chọn đường này thay vì hai đường nhanh hơn: `XacThuc` tra SỔ ĐĂNG KÝ PHIÊN mỗi request, và bỏ phép tra ấy là token không thu hồi được nữa — phá luật 5 bất biến 4. Dùng lại interceptor hai đầu ở core/grpcx, nay đã có xác thực bên gọi (ADR 0025). ĐỌC ADR 0012 quyết định 1, 2, 4 trước khi thêm RPC — quyết định 3 ĐÃ BỊ THAY THẾ, đừng đọc theo bản cũ |
 | `cap-tai-khoan-can-bo` — Toàn bộ luồng cấp tài khoản cán bộ | chưa làm | — | #9 #17 #18 | mật khẩu đầu tiên của cán bộ mới · tự đặt lại mật khẩu · Ghi nhớ đăng nhập — cả ba chờ khách |
 | `tuyen-ghi-danh-ba-can-bo` — Toàn bộ tuyến GHI của danh bạ cán bộ | chưa làm | — | #10 #13 #14 | khoá hay xoá cán bộ · chặn mất quản trị viên cuối cùng · tự thao tác lên chính mình |
 | `ma-can-bo-va-dien-thoai` — Mã cán bộ do ai đặt, và dien_thoai/di_dong là một trường hay hai | chưa làm | — | #15 #16 | CHẶN SCHEMA nên đắt hơn các câu khác — hỏi trước khi viết migration tiếp |
