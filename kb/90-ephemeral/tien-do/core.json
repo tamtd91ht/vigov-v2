@@ -10,6 +10,22 @@
       "bang_chung": "core/migrate chỉ lo DDL — kiểm 2026-09-20",
       "no_confirm": [],
       "tiep_theo": "luật 7 bất biến 5 (migration chạy per-commune, resumable, ghi tiến độ) mới đạt một nửa. Ngưỡng cần cơ chế thật là khi thời gian giữ khoá thành đáng kể — ADR 0013, mục Giới hạn"
+    },
+    {
+      "id": "xac-thuc-ben-goi-grpc",
+      "viec": "Xác thực bên gọi trên cổng gRPC — một cặp header, giá trị từ secret k8s",
+      "trang_thai": "xong",
+      "bang_chung": "core/grpcx/caller_auth.go + caller_auth_test.go + caller_auth_exempt_test.go; hằng MetadataCallerKey trong core/grpcx/grpcx.go; GRPCCallerKey trong core/config/config.go; service-platform/cmd/server/main_test.go chạy bufconn trên hàm dựng thật. `make check` rc=0 — kiểm 2026-09-20. ADR 0025",
+      "no_confirm": [],
+      "tiep_theo": "Ba giới hạn ĐÃ BIẾT, không phải thiếu sót: khoá chung không nói service nào gọi nên vết kiểm không quy được trách nhiệm; ai trong cụm cầm khoá đều gọi được mọi thứ, lớp mạng là thứ chặn bán kính; xoay khoá phải đổi đồng loạt. Đường ra cho cả ba là mTLS/mesh, và phải SỬA ADR 0025 chứ không lặng lẽ thêm header thứ hai"
+    },
+    {
+      "id": "kho-phien-cong-dan-dem",
+      "viec": "Đệm TTL ngắn cho đường tra cứu phiên công dân (ADR 0022 đòi)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "core/httpx/citizen.go:72-74 khai đây là đường nóng và đòi đệm có TTL ngắn, vô hiệu khi thu hồi; service-identity/internal/store/phien_cong_dan.go ghi rõ đã HOÃN và vì sao — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Hoãn có lý do, không phải bỏ quên: identity chạy nhiều bản sao và ADR 0010 chốt chỉ có PostgreSQL, nên không có kênh nào để một lần thu hồi ở bản sao A với tới bản sao B. Cửa sổ lệch sẽ đúng bằng TTL, và ca hỏng là nút 'đăng xuất màn hình này' ở quầy một cửa. Đo trước, rồi mới đệm, kèm kênh vô hiệu hoá thật"
     }
   ]
 }

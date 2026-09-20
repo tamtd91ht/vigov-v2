@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 16294e5
+derived_from_commit: e50bddd
 expires: 2026-12-19
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -24,9 +24,9 @@ tức tin `git log` chứ đừng tin tệp này.
 | | |
 |---|---|
 | ĐANG LÀM | 3 |
-| chưa làm | 30 |
+| chưa làm | 32 |
 | treo | 12 |
-| xong | 9 |
+| xong | 11 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -82,11 +82,13 @@ Cập nhật 2026-09-20 · 4 mục
 
 ## `core`
 
-Cập nhật 2026-09-20 · 1 mục
+Cập nhật 2026-09-20 · 3 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
+| `kho-phien-cong-dan-dem` — Đệm TTL ngắn cho đường tra cứu phiên công dân (ADR 0022 đòi) | chưa làm | core/httpx/citizen.go:72-74 khai đây là đường nóng và đòi đệm có TTL ngắn, vô hiệu khi thu hồi; service-identity/internal/store/phien_cong_dan.go ghi rõ đã HOÃN và vì sao — kiểm 2026-09-20 | — | Hoãn có lý do, không phải bỏ quên: identity chạy nhiều bản sao và ADR 0010 chốt chỉ có PostgreSQL, nên không có kênh nào để một lần thu hồi ở bản sao A với tới bản sao B. Cửa sổ lệch sẽ đúng bằng TTL, và ca hỏng là nút 'đăng xuất màn hình này' ở quầy một cửa. Đo trước, rồi mới đệm, kèm kênh vô hiệu hoá thật |
 | `backfill-theo-xa` — Backfill dữ liệu theo từng xã | treo | core/migrate chỉ lo DDL — kiểm 2026-09-20 | — | luật 7 bất biến 5 (migration chạy per-commune, resumable, ghi tiến độ) mới đạt một nửa. Ngưỡng cần cơ chế thật là khi thời gian giữ khoá thành đáng kể — ADR 0013, mục Giới hạn |
+| `xac-thuc-ben-goi-grpc` — Xác thực bên gọi trên cổng gRPC — một cặp header, giá trị từ secret k8s | xong | core/grpcx/caller_auth.go + caller_auth_test.go + caller_auth_exempt_test.go; hằng MetadataCallerKey trong core/grpcx/grpcx.go; GRPCCallerKey trong core/config/config.go; service-platform/cmd/server/main_test.go chạy bufconn trên hàm dựng thật. `make check` rc=0 — kiểm 2026-09-20. ADR 0025 | — | Ba giới hạn ĐÃ BIẾT, không phải thiếu sót: khoá chung không nói service nào gọi nên vết kiểm không quy được trách nhiệm; ai trong cụm cầm khoá đều gọi được mọi thứ, lớp mạng là thứ chặn bán kính; xoay khoá phải đổi đồng loạt. Đường ra cho cả ba là mTLS/mesh, và phải SỬA ADR 0025 chứ không lặng lẽ thêm header thứ hai |
 
 ## `proto`
 
@@ -169,12 +171,14 @@ Cập nhật 2026-09-20 · 3 mục
 
 ## `tools`
 
-Cập nhật 2026-09-20 · 2 mục
+Cập nhật 2026-09-20 · 4 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
+| `bo-sinh-doc-dau-entity` — Bộ sinh đọc dấu @entity để điền data-ownership.json | chưa làm | kb/30-indexes/data-ownership.json vẫn là chỗ giữ chỗ rỗng; 8 thực thể danh mục đã có dấu @entity trong migration nhưng không có gì đọc chúng — kiểm 2026-09-20 | — | CLAUDE.md bước 4 dạy phiên sau hỏi 'ai sở hữu X' thì mở data-ownership.json. Hôm nay họ mở ra và không thấy gì cho cả tám, rồi có thể kết luận chúng vô chủ. Bịt bằng bộ sinh trong tools/, KHÔNG bịt bằng cách hand-write một dòng sẽ mục nát ngay khi bộ sinh ra đời (luật 9) |
 | `bo-sinh-tien-do` — tools/tien_do.py — sinh tệp đọc tien-do.md từ các tệp ghi theo module | xong | tools/tien_do.py:1; `python tools/tien_do.py` chạy thật, sinh ra kb/90-ephemeral/tien-do.md; đã nối vào mục `kb` của Makefile:122. KHÔNG ghi số module/mục ở đây — con số nào chép vào cũng sai trong vài ngày | — | hạn của tệp sinh tính từ `cap_nhat` MỚI NHẤT của các module, không phải ngày sinh — quá hạn nghĩa là 90 ngày không ai cập nhật tiến độ |
 | `check-brain-bo-qua-tmp` — check_brain bất biến 6 đỏ vì một tệp .md nháp trong tmp/ (đã nằm trong .gitignore) | xong | tools/check_brain.py:272 thêm `tmp` vào danh sách loại trừ khi duyệt cây; `python tools/check_brain.py` 7/7 | — | phép kiểm đi bằng hệ tệp chứ không đi bằng git. Nếu còn thư mục nào khác trong .gitignore mà sinh .md thì sẽ đỏ lại theo đúng cách này |
+| `apidoc-mau-route-hang-chuoi` — apidoc từ chối mẫu route là hằng chuỗi — bộ sinh hợp đồng REST hỏng từ 1a8ce11 | xong | tools/apidoc/route.go — mauRoute + hangChuoiTrongTep; 3 ca mới trong route_test.go, đã đột biến (bỏ phần tra hằng -> 2 ca đỏ). `make kb` chạy lại được: hợp đồng đi từ 9 lên 17 tuyến — kiểm 2026-09-20 | — | Chỉ tra hằng khai trong CÙNG tệp, có chủ ý; mẫu dựng lúc chạy vẫn là lỗi và có ca test giữ. Bài học ghi trong mã: bộ sinh từng phạt đúng khuôn mã luật 9 đòi (một đường dẫn, một nguồn) và đẩy người viết đi chép đường dẫn ra hai chỗ |
 
 ## `web-admin`
 
