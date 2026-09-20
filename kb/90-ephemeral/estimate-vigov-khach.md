@@ -1,14 +1,16 @@
 ---
-id: estimate-vigov
+id: estimate-vigov-khach
 tier: T5
-source: CURATED
+source: GENERATED
 owner: architecture
 derived_from_commit: b6ca85b
 expires: 2026-12-19
 owns_facts:
-  - "khối lượng thi công toàn dự án ViGov v2 và cách quy nó thành ngày-người"
+  - "bản trình bày ra ngoài của estimate ViGov v2 — sinh từ bản nội bộ, đã cắt số đo nội bộ"
 ---
 
+<!-- SINH RA bởi `python tools/estimate_khach.py` từ kb/90-ephemeral/estimate-vigov.md.
+     KHÔNG sửa tệp này — sửa bản nội bộ rồi chạy `make kb`. Sửa tay sẽ mất ở lần sinh sau. -->
 # Estimate thi công — ViGov v2
 
 **Báo cáo đầu kỳ.** Ước cho **toàn bộ** dự án, lập trước khi thi công. Bản tổng quan dùng cho
@@ -51,22 +53,6 @@ theo đúng mô hình này (Go microservices · Next.js · Zalo Mini App · nhi�
 |---|---|
 | **Hệ số** | **22.300 dòng mỗi NN** |
 | Tỉ lệ test trong đó | **34%** — hệ số đã bao gồm chi phí viết test |
-<!-- NOI-BO -->
-| Cách đo | 122.625 dòng (kể cả test và tài liệu) trên 5,5 NN |
-
-### 1.1 Kiểm chứng trên một lát cắt dọc thật
-
-Một cụm danh mục hoàn chỉnh — 8 bảng + 9 tuyến đọc + mắc xác thực + sinh hợp đồng + việc cho web:
-
-| Phần | Dòng |
-|---|---|
-| 8 bảng danh mục (migration) | 1.873 |
-| 3 tuyến đọc + kho + test | 2.310 |
-| 6 tuyến đọc ở 4 service | 7.666 |
-| Mắc xác thực cán bộ vào 4 service | 1.448 |
-| Sinh lại hợp đồng REST + phát sinh việc web | 1.566 |
-| **Tổng** | **14.863** ⇒ **0,67 NN** |
-<!-- /NOI-BO -->
 
 ### Giới hạn của hệ số này
 
@@ -323,11 +309,6 @@ rủi ro giả định. Có đủ đặc tả 16 chương và chốt được ph
 > **Lớp rủi ro đắt nhất của mô hình này không phải viết sai mã — là "rào chắn trông như đang
 > canh mà đã chết".** Một phép kiểm tự động vẫn chạy, vẫn xanh, và không còn khớp gì nữa.
 > Không có gì đỏ vào ngày nó chết.
-<!-- NOI-BO -->
-> Ví dụ điển hình: mẫu dò truy vấn không phạm vi hoá đòi `.Query(` không hậu tố, trong khi cả
-> kho dùng bản `*Context` — rào chắn được nêu tên làm cơ chế chặn chính **không khớp một call
-> site nào**, mà cổng kiểm vẫn xanh.
-<!-- /NOI-BO -->
 > Mỗi ca cùng lớp tốn ~0,2–0,5 NN để truy. **+3,73 NN của đệm A ≈ 7–18 ca**, nên đệm A **đã có
 > chủ** và không dùng thay được cho việc của đệm B.
 
@@ -556,7 +537,7 @@ biết nó đúng hay sai — với hệ thống hành chính nhà nước, đó
 | Cụm chặn egress / split-horizon DNS | Chưa xác nhận được trước khi có cụm | **+1,00 NN**, và nếu phát hiện muộn thì mọi yêu cầu web trả 500 | Hỏi devops **trước** khi nhận resources; bước Validate §5.2 |
 | Zalo trả hồ sơ vì sai khoá cấu hình app | Trung bình | 1 vòng = 0,50–1,00 NN + 5–20 NC | Đối chiếu Developer Console trước khi nộp |
 | Một trong ba giả định về Zalo sai | Chưa xác nhận | Sửa **kiến trúc**, không sửa giao diện | Hỏi cùng lượt nộp (§6.1) |
-| Lớp "rào chắn trông như đang canh mà đã chết" | **Cao**<!-- NOI-BO --> — xuất hiện ~7 lần trên chu kỳ hiệu chuẩn<!-- /NOI-BO --> | 0,2–0,5 NN mỗi ca | Đã tính trong đệm A (§4.7) |
+| Lớp "rào chắn trông như đang canh mà đã chết" | **Cao** | 0,2–0,5 NN mỗi ca | Đã tính trong đệm A (§4.7) |
 | Mất khả năng chạy nhiều agent song song | Thấp | **×2..×3 toàn bộ §4** | Giữ ranh giới ghi của các agent (§2) |
 | Phạm vi hồ sơ một cửa chưa xác định | Cao | +0,75 NN nếu trong phạm vi | Hỏi trước khi ký (§3.3) |
 | Sáp nhập/chia tách xã giữa dự án | Thấp, tác động lớn | Nếu định danh xã mang nghĩa thì phải sửa khoá ngoại trên toàn bộ dữ liệu lịch sử | **Phòng từ đầu**: định danh xã là ULID vô nghĩa (§3B.3) |

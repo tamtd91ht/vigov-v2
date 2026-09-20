@@ -123,6 +123,9 @@ kb:                             ## Regenerate the GENERATED tiers of kb/ from so
 	@# viết ngay trên: thứ phải nhớ chạy riêng là thứ sẽ có ngày không ai chạy, và một
 	@# `tien-do.md` cũ hơn các tệp module là tệp nói dối về việc gì đã xong.
 	VIGOV_COMMIT=$$(git rev-parse --short HEAD) python tools/tien_do.py
+	@# Bản estimate gửi khách sinh từ bản nội bộ. Hai tệp estimate chép tay là hai tệp sẽ lệch,
+	@# và bản lệch là bản có người gửi ra ngoài.
+	python tools/estimate_khach.py
 
 proto:                        ## Regenerate Go code from .proto (requires buf)
 	buf generate
