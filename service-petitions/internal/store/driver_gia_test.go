@@ -80,7 +80,18 @@ func (h hangGia) giaTri(cot string) driver.Value {
 type khoGia struct {
 	lenh []lenhGia
 	hang []hangGia
-	loi  error
+
+	// hangTheoCot is the same idea as `hang` for a table whose shape hangGia does not cover —
+	// the petition register has twenty-five columns and three different SQL types, and one
+	// struct covering both shapes would be a struct where half the fields are always unused.
+	//
+	// EXPRESSED AS column -> value, NOT AS A SLICE, and that is what preserves the property this
+	// whole driver exists for: the row is assembled BY NAME from the SELECT list the store
+	// itself wrote, so reordering a `cot…` constant without reordering the matching Scan comes
+	// back as WRONG DATA rather than as a plausible-looking zero.
+	hangTheoCot []map[string]driver.Value
+
+	loi error
 }
 
 func (k *khoGia) Connect(context.Context) (driver.Conn, error) { return &connGia{k: k}, nil }
@@ -115,11 +126,25 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 	if err != nil {
 		return nil, err
 	}
-	dong := make([][]driver.Value, 0, len(c.k.hang))
+	dong := make([][]driver.Value, 0, len(c.k.hang)+len(c.k.hangTheoCot))
 	for _, h := range c.k.hang {
 		mot := make([]driver.Value, len(cot))
 		for i, c := range cot {
 			mot[i] = h.giaTri(c)
+		}
+		dong = append(dong, mot)
+	}
+	for _, h := range c.k.hangTheoCot {
+		mot := make([]driver.Value, len(cot))
+		for i, c := range cot {
+			v, co := h[c]
+			if !co {
+				// A column was added to a `cot…` constant and not to the fixture. Failing loudly
+				// beats scanning a nil that "passes" while proving nothing — the same discipline
+				// as hangGia.giaTri.
+				panic("driver giả: không có giá trị mẫu cho cột " + c)
+			}
+			mot[i] = v
 		}
 		dong = append(dong, mot)
 	}

@@ -168,6 +168,8 @@ type mayChu struct {
 	thuMuc thuMucGia
 	loai   *loaiNhiemVuGia
 	uuTien *mucUuTienGia
+	phieu  *phieuGia
+	nhan   *nhanLinhVucGia
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -175,24 +177,33 @@ func dungMayChu(t *testing.T) *mayChu {
 
 	loai := loaiNhiemVuMau()
 	uuTien := mucUuTienMau()
+	phieu := phieuMau()
+	nhan := nhanLinhVucMau()
 
 	m := &mayChu{
 		d: Deps{
-			// A checker that grants this account one unrelated permission in commune A and nothing
-			// in commune B. Neither route consults it; it is wired because the real service will
-			// have one, and because a test that swaps it for an empty checker (below) has to be
-			// swapping something.
+			// A checker that grants commune A's account `feedback.read` — what the petition route
+			// requires — plus one unrelated key, and grants commune B's account NOTHING. The
+			// restricted key `feedback.restricted` is deliberately absent from both, so the
+			// restricted-field case has something real to fail on.
 			Checker: checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{
-				xaA: {idCanBo: {authz.Perm("task.read"): true}},
+				xaA: {idCanBo: {
+					authz.Perm("task.read"):     true,
+					authz.Perm("feedback.read"): true,
+				}},
 				xaB: {},
 			}},
 			LoaiNhiemVu: loai,
 			MucUuTien:   uuTien,
+			Phieu:       phieu,
+			NhanLinhVuc: nhan,
 			Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		thuMuc: thuMucMau(),
 		loai:   loai,
 		uuTien: uuTien,
+		phieu:  phieu,
+		nhan:   nhan,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -256,17 +267,37 @@ func loiTra(t *testing.T, w *httptest.ResponseRecorder) httpx.Error {
 
 // --- wiring -------------------------------------------------------------------------------------
 
-func TestRegisterThieuKhoThiPanicNgayLucDung(t *testing.T) {
+// depsDay is a COMPLETE Deps. Every case below starts from it and removes exactly ONE thing.
+//
+// THE COMPLETENESS IS THE WHOLE POINT, and this test was rewritten for it: the earlier version
+// built each case from a partial literal naming only one dependency, so once Deps grew from two
+// fields to five, every case panicked over a field the case was not about. It stayed green while
+// testing nothing — the failure shape that is indistinguishable from success.
+func depsDay() Deps {
+	return Deps{
+		Checker:     checkerGia{},
+		LoaiNhiemVu: loaiNhiemVuMau(),
+		MucUuTien:   mucUuTienMau(),
+		Phieu:       phieuMau(),
+		NhanLinhVuc: nhanLinhVucMau(),
+	}
+}
+
+func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 	// A route mounted without its store would accept requests it cannot answer, and the first
 	// person to find out would be a member of staff in front of a government screen. Failing at
 	// construction is loud, happens before any commune is served, and names the missing piece.
 	//
-	// THIS IS ALSO WHAT KEEPS THE PANIC SWITCH IN STEP WITH Deps: a third catalogue added to Deps
-	// and forgotten in the switch leaves this test green only while nobody adds a case for it, and
-	// the next person adding one finds the pattern here.
-	for ten, d := range map[string]Deps{
-		"thiếu kho loại nhiệm vụ": {MucUuTien: mucUuTienMau()},
-		"thiếu kho mức ưu tiên":   {LoaiNhiemVu: loaiNhiemVuMau()},
+	// THE Checker CASE IS THE ONE THAT CHANGED MEANING. It used to be correct for it to be
+	// absent, because no route declared a permission; GET /api/v1/citizen-reports/{maTraCuu} now
+	// does, and authz.RequirePermission(nil, …) panics when a member of staff CALLS it rather
+	// than at startup.
+	for ten, bo := range map[string]func(d *Deps){
+		"thiếu kho loại nhiệm vụ": func(d *Deps) { d.LoaiNhiemVu = nil },
+		"thiếu kho mức ưu tiên":   func(d *Deps) { d.MucUuTien = nil },
+		"thiếu Checker":           func(d *Deps) { d.Checker = nil },
+		"thiếu kho phiếu":         func(d *Deps) { d.Phieu = nil },
+		"thiếu kho nhãn lĩnh vực": func(d *Deps) { d.NhanLinhVuc = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {
@@ -274,7 +305,21 @@ func TestRegisterThieuKhoThiPanicNgayLucDung(t *testing.T) {
 					t.Error("dựng được route với phụ thuộc thiếu — lỗi sẽ nổ trên màn hình người dùng")
 				}
 			}()
+			d := depsDay()
+			bo(&d)
 			Register(http.NewServeMux(), d)
 		})
 	}
+}
+
+// TestRegisterDuPhuThuocThiKhongPanic is the other half, and without it the test above proves
+// only that Register panics — not that it panics for the reason claimed. A switch that panicked
+// unconditionally would pass every case above.
+func TestRegisterDuPhuThuocThiKhongPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Register panic dù đủ phụ thuộc: %v", r)
+		}
+	}()
+	Register(http.NewServeMux(), depsDay())
 }

@@ -25,6 +25,7 @@ import (
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 	svchttp "github.com/vihat/vigov/service-petitions/internal/http"
+	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
 
 const (
@@ -73,6 +74,24 @@ type khoUuTien struct{}
 func (khoUuTien) DanhSach(ctx context.Context) ([]domain.MucUuTienNhiemVu, error) {
 	// tenant.MustFrom even here: a store that read without a commune would read every commune, and
 	// a stand-in that skips the precondition teaches the wrong shape to whoever copies it.
+	_ = tenant.MustFrom(ctx)
+	return nil, nil
+}
+
+// khoPhieu and khoNhanLinhVuc are the petition register and its label overrides, present for the
+// same reason as khoUuTien: Register refuses incomplete Deps at construction, and the assertions
+// in this file are about the EDGE CHAIN rather than about any one route. What that route does is
+// proved in internal/http, with a harness that can inject a principal per request.
+type khoPhieu struct{}
+
+func (khoPhieu) TheoMaTraCuu(ctx context.Context, _ string) (domain.PhieuPhanAnh, error) {
+	_ = tenant.MustFrom(ctx)
+	return domain.PhieuPhanAnh{}, petstore.ErrPhieuKhongTonTai
+}
+
+type khoNhanLinhVuc struct{}
+
+func (khoNhanLinhVuc) DanhSach(ctx context.Context) ([]domain.NhanLinhVuc, error) {
 	_ = tenant.MustFrom(ctx)
 	return nil, nil
 }
@@ -127,8 +146,10 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// The second catalogue this service mounts. It is wired because Register refuses
 		// incomplete Deps at construction, and it is deliberately NOT read by any assertion below:
 		// one route is enough to prove the chain, and two would only be two copies of one test.
-		MucUuTien: khoUuTien{},
-		Log:       log,
+		MucUuTien:   khoUuTien{},
+		Phieu:       khoPhieu{},
+		NhanLinhVuc: khoNhanLinhVuc{},
+		Log:         log,
 	})
 
 	danhBa := thuMucGia{

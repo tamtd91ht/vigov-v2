@@ -118,12 +118,14 @@ func chay(log *slog.Logger) error {
 	svchttp.Register(mux, svchttp.Deps{
 		// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware
 		// obtained for THIS request and holds no state of its own — not a stand-in that answers
-		// questions nobody asked it. No route here declares authz.RequirePermission yet; wiring it
-		// now is what makes the first one that does work rather than meet a nil interface at
-		// request time.
+		// questions nobody asked it. It is now load-bearing: GET /api/v1/citizen-reports/{maTraCuu}
+		// declares authz.RequirePermission("feedback.read"), which is the first route in this
+		// service to guard a real operation.
 		Checker:     staffauth.Checker{},
 		LoaiNhiemVu: petstore.NewLoaiNhiemVuStore(kho),
 		MucUuTien:   petstore.NewMucUuTienNhiemVuStore(kho),
+		Phieu:       petstore.NewPhieuPhanAnhStore(kho),
+		NhanLinhVuc: petstore.NewNhanLinhVucStore(kho),
 		Log:         log,
 	})
 
