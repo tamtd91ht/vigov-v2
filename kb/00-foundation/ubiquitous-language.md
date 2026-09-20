@@ -3,11 +3,12 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: 3d43fa1
+derived_from_commit: 0960b2a
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
   - "ánh xạ khái niệm nghiệp vụ sang danh từ tài nguyên trên URL"
+  - "vì sao dự án đầu tư là investment-projects chứ không projects hay disbursements/projects"
   - "vì sao khoá quyền feedback.* lệch với tài nguyên citizen-reports"
   - "vì sao khái niệm cán bộ mang bốn cái tên trên bốn bề mặt"
   - "phân biệt phản ánh, khiếu nại, tố cáo"
@@ -47,7 +48,7 @@ Ba từ này là **giá trị enum**, và giá trị enum **không dịch sang t
 | Thụ lý | `thu_ly` | Nhận và bắt đầu xử lý — không dùng "xử lý" |
 | Luân chuyển | `luan_chuyen` | Chuyển giữa các bộ phận — không dùng "chuyển" |
 | Ban hành | `ban_hanh` | Ký và phát hành chính thức |
-| Hồ sơ một cửa | `ho_so_mot_cua` | Không viết "1 cửa" |
+| Hồ sơ một cửa | — | **NGOÀI PHẠM VI từ 20/09/2026** (ADR 0001 §Bổ sung). Không có bảng nào trong kho. Chính tả: không viết "1 cửa" |
 | Đơn thư | `don_thu` | Bao gồm khiếu nại, tố cáo, kiến nghị |
 | Giải ngân | `giai_ngan` | |
 | Nhiệm vụ | `nhiem_vu` | Việc giao cho cán bộ |
@@ -141,6 +142,7 @@ có thể.
 | Văn bản đi | `van_ban_di` | `outgoing-documents` | |
 | Nhiệm vụ | `nhiem_vu` | `tasks` | |
 | Giải ngân | `giai_ngan` | `disbursements` | |
+| **Dự án đầu tư** | `du_an` (bảng) · **`@entity: Project`** — xem ô bên phải | `investment-projects` — `GET /api/v1/investment-projects` · `…/{id}` | **`disbursements/projects` LỒNG NGƯỢC quan hệ nghiệp vụ và đã bị bác:** một dự án tồn tại độc lập, còn chứng từ giải ngân mới là thứ **thuộc về** dự án (`service-finance/migrations/0004_du_an_va_chung_tu_giai_ngan.sql` — `chung_tu_giai_ngan.du_an_id`, không có chiều ngược lại). Lồng một danh từ dưới một danh từ khác là **khai quan hệ sở hữu trên URL**, nên lồng ngược là nói sai nghiệp vụ ở chỗ bên tích hợp đọc.<br><br>**`investment-projects` chứ không `projects` trần:** ADR 0011 lấy `org-units` làm ví dụ *"từ dễ đoán nhưng sai"*. Ngày xã có "dự án" ở nghĩa khác — dự án dân sinh, dự án chuyển đổi số — thì danh từ `projects` đã bị chiếm và **không đòi lại được**.<br><br>⚠ **Dấu trong migration là `@entity: Project`, KHÔNG phải `InvestmentProject` — chỗ lệch có thật, đừng "sửa cho khớp".** Đúng quy tắc §Quy ước đặt tên: tên thực thể đi theo **khái niệm** (trong miền tài chính của một xã, `Project` không mơ hồ — `:174` ghi rõ *"one investment project"*), còn danh từ URL phải sống chung với **mọi** nghĩa khác của chữ "dự án" mà hệ thống sẽ gặp sau này. Sửa dấu là sửa một migration **đã áp** — `core/migrate` so checksum mỗi lần khởi động (cùng ca với `PublicHoliday` ở §Lịch làm việc) |
 | Phiên đăng nhập | `phien` | `sessions` — `POST /api/v1/sessions` · `GET …/current` · `DELETE …/{sid}` | Phiên **cán bộ**. Đăng nhập là **tạo một phiên**, không phải `POST /login`: động từ không thành đường dẫn (`rest-api-design` REQUIRED #8). Phiên công dân là khái niệm khác, bảng khác — xem bảng kênh công dân |
 | Bộ phận | `bo_phan` | `org-units` — `GET /api/v1/org-units`, `AnyAuthenticated` | Cây này chứa Đảng uỷ, HĐND, UBMTTQ — **không phải** phòng ban của UBND, nên không gọi `departments` |
 | Vai trò | `vai_tro` | `roles` — `GET /api/v1/roles`, `AnyAuthenticated` | Từ dễ đoán và lần này **đúng** — nhưng vẫn phải tra: `role` là chính từ luật 5 bất biến 3 dùng trong `(tenant_id, role, permission)`, nên hợp đồng và mô hình phân quyền nói cùng một từ cho cùng một thứ. `org-units` ngay trên là ví dụ từ dễ đoán sai |
@@ -259,6 +261,13 @@ cũng chốt hôm ấy: ADR 0007 đếm hạn cho **`Văn bản đến`** chứ 
 đi theo **nhịp đổi**, mà giờ làm việc của xã đổi cùng bộ máy hành chính. Lập luận đầy đủ ở
 `service-identity/migrations/0006_lich_lam_viec.sql:14-20` — không chép lại ở đây.
 
+**Bảng `sla` đi theo ba bảng này, chốt 20/09/2026 — ADR 0029.** Cùng một lập luận, áp cho một
+bảng khác: số giờ SLA phủ cả `van-ban-den` (`documents`) lẫn `phan-anh` / `nhiem-vu`
+(`petitions`), nên nó **không thuộc service nào trong hai**, và nó đổi cùng nhịp với chính sách
+hành chính của xã — cùng nhịp với lịch. **Chưa có tài nguyên URL**, vì chưa có tuyến nào: đừng
+điền sẵn một cái tên (§Danh mục tham chiếu). Bảng này **chưa tồn tại trong kho** và đang chặn
+mọi tuyến ghi của `petitions` lẫn `documents` — hệ quả và điều kiện dừng ở ADR 0029.
+
 | Khái niệm | Thực thể (`@entity`) | Bảng | Tài nguyên URL | Vì sao không phải từ dễ đoán |
 |---|---|---|---|---|
 | Tuần làm việc của xã | `WorkingHours` | `lich_lam_viec` | `working-hours` | **Không phải `working-sessions`, dù một dòng đúng LÀ một ca chứ không phải một ngày.** `sessions` đã mang nghĩa phiên đăng nhập **cán bộ** (`/api/v1/sessions`), và `citizen-sessions` đã mang nghĩa lớp tin cậy còn lại (ADR 0023). Một nghĩa thứ ba cách đó **đúng một đoạn đường dẫn** là dựng lại ca `commune`/`communes` mà ADR 0023 §B phải tốn một lần đổi đường dẫn đang chạy mới gỡ xong. Đã bác thêm: `office-hours` (trôi khỏi dấu `@entity: WorkingHours`, tức hợp đồng và migration gọi một thứ bằng hai từ), `working-calendar` và `work-schedule` (số ít — trái quy ước; và chữ "calendar" mời người sau đổ **sự kiện** vào bảng này) |
@@ -320,8 +329,15 @@ niệm mới thì đặt **một** tên và giữ nguyên qua các tầng.
 
 | Bề mặt | Dùng | Trạng thái |
 |---|---|---|
-| Khoá quyền | `feedback.assign` `feedback.create` `feedback.read` `feedback.resolve` `feedback.restricted` | `identity/migrations/0001_init.sql` đã nạp; ADR 0008 đã chốt `feedback.resolve` quyết định ai đóng phiếu |
+| Khoá quyền | `feedback.assign` `feedback.create` `feedback.read` `feedback.resolve` `feedback.restricted` — cộng **hai khoá chốt 20/09/2026**: `feedback.classify` `feedback.unmask` | Năm khoá đầu nạp ở `service-identity/migrations/0001_init.sql`, hai khoá sau ở `service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql`; ADR 0008 đã chốt `feedback.resolve` quyết định ai đóng phiếu, ADR 0030 chốt hai khoá mới |
 | Tài nguyên URL | `citizen-reports` | ADR 0011 |
+
+**Hai khoá mới KHÔNG suy ra được từ năm khoá cũ, và đó là điểm chính** (luật 5 bất biến 3b):
+`feedback.classify` là hành vi **ấn định hạn** cho dân chứ không phải một dạng `assign`, và
+`feedback.unmask` **gỡ che** họ tên + số điện thoại người gửi ở **mọi** lĩnh vực, khác hẳn
+`feedback.restricted` vốn là phạm vi **nội dung** (lĩnh vực `can-bo`). Lý do đầy đủ, quy ước
+đặt tên khoá (`nhóm.mộttừ` — vì sao `unmask` chứ không `view_full`), và ràng buộc ghi vết mỗi
+lần đọc đầy đủ: **ADR 0030** — không chép lại ở đây.
 
 **Vì sao không thống nhất lại thành một từ:** hai bề mặt này có **giá đổi tên khác hẳn nhau**.
 Khoá quyền đã nằm trong migration và trong bảng `quyen`, và đã được một ADR đã chốt viện dẫn —

@@ -416,9 +416,25 @@ export type identity_get_communes_current = {
   };
 };
 
-/** GET /api/v1/disbursements/projects — Danh sách dự án đầu tư của xã theo năm ngân sách, kèm số đã giải ngân suy ra từ chứng từ */
-export type finance_get_disbursements_projects = {
-  duongDan: "/api/v1/disbursements/projects";
+/** GET /api/v1/document-types — Danh mục loại văn bản của xã — dùng cho ô chọn loại khi vào sổ, bộ lọc và nhãn trên mọi văn bản */
+export type documents_get_document_types = {
+  duongDan: "/api/v1/document-types";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: documents_danhSachLoaiVanBanRa;
+    401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/investment-projects — Danh sách dự án đầu tư của xã theo năm ngân sách, kèm số đã giải ngân suy ra từ chứng từ */
+export type finance_get_investment_projects = {
+  duongDan: "/api/v1/investment-projects";
   phuongThuc: "GET";
   thamSo: {
   };
@@ -434,9 +450,9 @@ export type finance_get_disbursements_projects = {
   };
 };
 
-/** GET /api/v1/disbursements/projects/{id} — Chi tiết một dự án đầu tư: kế hoạch vốn, đã giải ngân, tỷ lệ và điểm chậm */
-export type finance_get_disbursements_projects_by_id = {
-  duongDan: "/api/v1/disbursements/projects/{id}";
+/** GET /api/v1/investment-projects/{id} — Chi tiết một dự án đầu tư: kế hoạch vốn, đã giải ngân, tỷ lệ và điểm chậm */
+export type finance_get_investment_projects_by_id = {
+  duongDan: "/api/v1/investment-projects/{id}";
   phuongThuc: "GET";
   thamSo: {
     "id": string;
@@ -450,22 +466,6 @@ export type finance_get_disbursements_projects_by_id = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
-    500: httpx_Error;
-  };
-};
-
-/** GET /api/v1/document-types — Danh mục loại văn bản của xã — dùng cho ô chọn loại khi vào sổ, bộ lọc và nhãn trên mọi văn bản */
-export type documents_get_document_types = {
-  duongDan: "/api/v1/document-types";
-  phuongThuc: "GET";
-  thamSo: {
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: documents_danhSachLoaiVanBanRa;
-    401: httpx_Error;
     500: httpx_Error;
   };
 };

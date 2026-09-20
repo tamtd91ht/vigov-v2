@@ -54,7 +54,7 @@ type HangMucKeHoachVonDanhMuc interface {
 }
 
 // DuAnTienDo is the commune's investment projects with their DERIVED disbursement figures, for
-// GET /api/v1/disbursements/projects and .../{id}.
+// GET /api/v1/investment-projects and .../{id}.
 //
 // AN INTERFACE DECLARED AT THE POINT OF USE, not the concrete *fistore.DuAnStore — the same reason
 // HangMucKeHoachVonDanhMuc gives: the properties these routes exist to hold (the permission
@@ -102,7 +102,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("finance/http: thiếu kho danh mục hạng mục kế hoạch vốn — GET /api/v1/capital-plan-categories sẽ panic khi có người gọi")
 	}
 	if d.DuAn == nil {
-		panic("finance/http: thiếu kho dự án — các tuyến /api/v1/disbursements/projects sẽ panic khi có người gọi")
+		panic("finance/http: thiếu kho dự án — các tuyến /api/v1/investment-projects sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -183,13 +183,20 @@ func Register(mux *http.ServeMux, d Deps) {
 	// is the commune's financial position before it is published anywhere — readable by the
 	// accountant and by leadership, not by every account that can sign in.
 	//
-	// THE URL NOUN `projects` IS NOT SETTLED, AND THIS IS THE ONE THING TO CONFIRM BEFORE THE
-	// CONTRACT IS PUBLISHED. `disbursements` is settled — kb/00-foundation/ubiquitous-language.md
-	// maps `giai_ngan` to it. `du_an` HAS NO ROW IN THAT TABLE, and ADR 0011 says a concept with no
-	// row is asked about, not translated on the spot: `org-units` is the worked example of an
-	// obvious English word being the wrong one. The path is written here so the slice runs; it has
-	// reached no client, because kb/20-contracts/openapi.json has not been regenerated. Moving it
-	// is one string today and a contract change after that.
+	// THE URL NOUN IS SETTLED — the user decided `investment-projects` on 20/09/2026, and both
+	// halves of that name were chosen against a specific failure.
+	//
+	// TOP LEVEL, NOT NESTED UNDER `disbursements`, because the provisional
+	// `/api/v1/disbursements/projects` stated the relationship BACKWARDS: a project exists on its
+	// own, and a disbursement voucher is the thing that belongs to a project. A path that inverts
+	// a business relationship teaches the inversion to whoever builds the screen against it, and
+	// they build the data model to match.
+	//
+	// `investment-projects`, NOT `projects`, because ADR 0011's worked example is `org-units` —
+	// an obvious English word that turned out to be the wrong one. `projects` is that kind of
+	// word: the day a commune has a "dự án" in another sense — a livelihood project, a
+	// digital-transformation project — the noun is already taken, and a URL is not reclaimable
+	// once a commune is live on it.
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
@@ -200,7 +207,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
-	mux.Handle("GET /api/v1/disbursements/projects",
+	mux.Handle("GET /api/v1/investment-projects",
 		authz.RequirePermission(d.Checker, "budget.read")(
 			http.HandlerFunc(h.DanhSachDuAn)))
 
@@ -218,7 +225,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
-	mux.Handle("GET /api/v1/disbursements/projects/{id}",
+	mux.Handle("GET /api/v1/investment-projects/{id}",
 		authz.RequirePermission(d.Checker, "budget.read")(
 			http.HandlerFunc(h.ChiTietDuAn)))
 }

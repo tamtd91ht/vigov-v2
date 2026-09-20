@@ -94,3 +94,63 @@ Ranh giới ngôn ngữ sau khi chốt:
 - **Phải trả sau:** nếu một bộ phận tách đôi ngoài đời (ví dụ tiếp dân tách khỏi xử lý đơn thư), service tương ứng cũng phải tách — và lúc đó là việc thật, không phải refactor
 
 → Nguyên tắc cắt: `kb/00-foundation/domain-boundaries.md`
+
+## Bổ sung 2026-09-20 — một cửa ra khỏi phạm vi
+
+**KHÔNG SỬA phần trên.** Bảng tám service ở §Quyết định là quyết định ngày 15/09/2026 và nó
+đã đúng vào ngày ấy; mục này ghi cái đã đổi, không xoá cái đã ghi. Kể từ hôm nay kho có
+**bảy** service Go — `dossiers` đã gỡ.
+
+**Khách chốt ngày 20/09/2026: hồ sơ một cửa KHÔNG thuộc phạm vi hợp đồng.** Đây chính là câu
+chặn nặng nhất mà sổ `service-dossiers` treo từ trước, nay đã có đáp án.
+
+### Bằng chứng khảo sát (đợt 2026-09-20) — vì sao gỡ chứ không để khung rỗng
+
+| # | Rào | Bằng chứng |
+|---|---|---|
+| 1 | Không có chương đặc tả | `docs/ui-ux/` có 16 chương, không chương nào cho một cửa; sơ đồ dữ liệu tổng thể `docs/ui-ux/00-tong-quan-he-thong.md:163-188` liệt kê 14 nhánh, không nhánh nào là hồ sơ một cửa; thứ tự dựng `:276-284` chín mục cũng không có |
+| 2 | Không có danh mục thủ tục | 10 nhóm danh mục ở `docs/ui-ux/14-cau-hinh.md:164-176`, không nhóm nào là Thủ tục hành chính |
+| 3 | Không có chỗ cho hạn | Bảng SLA `docs/ui-ux/14-cau-hinh.md:316` khai `loai_viec enum('van-ban-den','phan-anh','nhiem-vu')` — ba giá trị, không có hồ sơ; ADR 0007:28-33 cũng ba dòng ấy |
+| 4 | Không có khoá quyền | 33 khoá nạp ở `service-identity/migrations/0001_init.sql`, không khoá nào chạm hồ sơ |
+| 5 | Không có tên tài nguyên URL | `kb/00-foundation/ubiquitous-language.md` mới chốt tên BẢNG `ho_so_mot_cua`; bảng tên tài nguyên không có dòng nào cho một cửa |
+| 6 | Vai trò có thật nhưng không có màn hình | `Cán bộ một cửa` có trong bộ máy (`docs/ui-ux/00-tong-quan-he-thong.md:41`, `14-cau-hinh.md:95`) — prototype không cấp cho vai trò ấy một màn hình nào |
+
+Estimate cũng đã cảnh báo đúng chỗ này trước khi ký: `kb/90-ephemeral/estimate-vigov.md:156`
+ghi thẳng “không estimate được”, và `:567` xếp phạm vi một cửa là rủi ro **Cao**.
+
+Tiền đề DUY NHẤT đã có: lịch làm việc theo xã đã chạy
+(`service-identity/migrations/0006_lich_lam_viec.sql`, RPC `AdvanceWorkingHours`, và bọc
+client `identityclient.TienGioLamViec`). Nó được **giữ nguyên**: `petitions` và `documents`
+cần nó theo bảng SLA của ADR 0007, `finance` là chỗ thứ ba hiển nhiên. Kiểm 2026-09-20:
+ngoài `service-identity` chưa service nào GỌI bọc client ấy — nó là chỗ đã dựng sẵn, chưa
+phải chỗ đang dùng.
+
+### Đã gỡ ở commit này
+
+`service-dossiers/` · `proto/vigov/dossiers/v1/` · mục trong `go.work` · sổ tiến độ
+`kb/90-ephemeral/tien-do/service-dossiers.json` · dòng trong `kb/00-foundation/domain-boundaries.md`
+· dòng trong `deploy/README.md`.
+
+### ĐƯỜNG QUAY LẠI — nếu khách đưa một cửa vào phạm vi
+
+**Thứ tự bắt buộc, không được đảo:** phải có **chương đặc tả** trước; chưa có đặc tả thì
+không dựng lại service, vì đúng sáu rào trên sẽ hiện ra lần nữa và mỗi rào là một chỗ để
+đoán sai trong im lặng.
+
+Sau chương đặc tả, phải chốt với khách các câu dưới đây trước dòng mã nghiệp vụ đầu tiên —
+chúng phải được đánh số vào `kb/00-foundation/open-questions.json` chứ không để trong sổ
+module:
+
+1. Một cửa có trong phạm vi hợp đồng không — **đã trả lời 20/09/2026: KHÔNG**
+2. Danh mục **thủ tục hành chính** lấy từ đâu, ai cập nhật, có phải nhóm danh mục thứ 11 không
+3. Hạn xử lý hồ sơ đếm thế nào, và `loai_viec` có thêm giá trị thứ tư không (ADR 0007, ADR 0028)
+4. Khoá quyền cho một cửa là những khoá nào — 33 khoá hiện có không khoá nào chạm hồ sơ (luật 5)
+5. Tên tài nguyên URL tiếng Anh cho hồ sơ một cửa (`ubiquitous-language` cấm tự dịch rồi viết route)
+6. Vai trò `Cán bộ một cửa` được cấp những màn hình nào
+7. Hồ sơ một cửa có phải service riêng, hay một miền trong `documents`
+
+**GHI RÕ MỘT CHỖ HỤT:** sổ `service-dossiers.json` nói có **chín** câu, nhưng chỉ liệt kê
+được câu chặn và sáu rào. Hai câu còn lại **chưa từng được viết ra ở đâu** — đã tìm trong
+`git log`, trong `open-questions.json` (26 câu, không câu nào về một cửa) và trong estimate.
+Bảy câu trên là tất cả những gì có bằng chứng; phiên nào dựng lại một cửa phải khảo sát lại
+từ chương đặc tả chứ đừng tin rằng danh sách này đủ chín.

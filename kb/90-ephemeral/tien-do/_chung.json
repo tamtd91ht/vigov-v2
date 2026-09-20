@@ -98,6 +98,14 @@
       "bang_chung": "doc_guard đã lộ ra trục này: luật frontmatter là tính chất của TỆP nhưng nó chấm LẦN SỬA",
       "no_confirm": [],
       "tiep_theo": "hỏng được cả hai chiều: secret_scan mà đi chấm cả tệp thì tố cáo một lần sửa vô can vì bí mật có sẵn từ trước"
+    },
+    {
+      "id": "go-service-dossiers",
+      "viec": "Gỡ service-dossiers khỏi kho — khách chốt hồ sơ một cửa ngoài phạm vi hợp đồng",
+      "trang_thai": "xong",
+      "bang_chung": "Khách chốt 20/09/2026. Đã xoá: service-dossiers/ · proto/vigov/dossiers/ · core/gen/vigov/dossiers/ · kb/90-ephemeral/tien-do/service-dossiers.json. Đã sửa tham chiếu: go.work (10->9 module) · deploy/README.md (11->10 job Jenkins) · kb/00-foundation/domain-boundaries.md (Tám->Bảy service) · ubiquitous-language.md dòng Hồ sơ một cửa · .dockerignore + tools/check_build.py (tám->bảy dịch vụ) · core/identityclient/identityclient.go:234 · proto/vigov/identity/v1/identity.proto:196-201 · .claude/rules/critical/10-citizen-commitment.md · .claude/hooks/rest_api_guard.py (GIỮ từ khoá chặn, chỉ đổi nhãn nhóm). Khảo sát và ĐƯỜNG QUAY LẠI đã chuyển vào ADR 0001 §Bổ sung 2026-09-20 TRƯỚC khi xoá sổ module. KIỂM ĐỊNH 2026-09-20: check_brain 7/7 · test_hooks 151/151 · check_build PASS (7 dịch vụ + web · 8 Dockerfile · 8 Jenkinsfile) · go build + go vet sạch trên 9 module · go run ./tools/kb báo 7 services",
+      "no_confirm": [],
+      "tiep_theo": "CÒN SÓT CÓ CHỦ Ý, đừng đọc thành bỏ quên: (1) chú thích trong 7 tệp migration đã áp dụng (0002_audit_log_append_only.sql, 0004_kenh_cong_dan.sql) vẫn nhắc `dossiers` — KHÔNG sửa, luật 7 cấm sửa migration đã chạy; (2) .claude/hooks/data_safety_guard.py giữ `dossier` trong biểu thức chặn bảng nghiệp vụ — gỡ là làm yếu rào chắn chứ không phải dọn rác; (3) core/gen/ còn chú thích cũ, tự hết sau `make proto`; (4) docs/ui-ux/ vẫn có vai trò `Cán bộ một cửa` — vai trò CÓ THẬT ngoài đời, đặc tả của khách không sửa theo phạm vi hợp đồng"
     }
   ]
 }

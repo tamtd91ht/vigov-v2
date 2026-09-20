@@ -126,7 +126,7 @@ func duAnMau() *duAnGia {
 	}}
 }
 
-const duongDanDuAn = "/api/v1/disbursements/projects?year=2026"
+const duongDanDuAn = "/api/v1/investment-projects?year=2026"
 
 // --- rule 5, invariant 7: the four cases, on the list route -----------------------------------
 
@@ -191,7 +191,7 @@ func TestDanhSachDuAnDuQuyenDungXaThi200(t *testing.T) {
 // --- rule 5, invariant 7: the four cases, on the detail route ---------------------------------
 
 func TestChiTietDuAnBonCaQuyen(t *testing.T) {
-	duong := "/api/v1/disbursements/projects/da-001"
+	duong := "/api/v1/investment-projects/da-001"
 
 	t.Run("401 không phiên", func(t *testing.T) {
 		m := dungMayChuVoi(t, coQuyen("budget.read"))
@@ -234,7 +234,7 @@ func TestChiTietDuAnKhongVoiSangXaKHACDuTrungID(t *testing.T) {
 	// Commune B holds a project with the SAME id. A caller in commune B must get B's project, not
 	// A's — and this is the only fixture shape that can show it.
 	m := dungMayChuVoi(t, coQuyen("budget.read"))
-	w := m.goi(t, http.MethodGet, hostB, "/api/v1/disbursements/projects/da-001", canBoCua(xaB))
+	w := m.goi(t, http.MethodGet, hostB, "/api/v1/investment-projects/da-001", canBoCua(xaB))
 	doiMa(t, w, http.StatusOK)
 
 	var ra duAnRa
@@ -313,10 +313,10 @@ func TestDanhSachDuAnThieuNamThi400ChuKhongMacDinh(t *testing.T) {
 	// A default would report another year's money under this year's heading, with every figure on
 	// the page internally consistent and wrong (§13 rule 8).
 	for _, duong := range []string{
-		"/api/v1/disbursements/projects",
-		"/api/v1/disbursements/projects?year=",
-		"/api/v1/disbursements/projects?year=khong-phai-so",
-		"/api/v1/disbursements/projects?year=12",
+		"/api/v1/investment-projects",
+		"/api/v1/investment-projects?year=",
+		"/api/v1/investment-projects?year=khong-phai-so",
+		"/api/v1/investment-projects?year=12",
 	} {
 		t.Run(duong, func(t *testing.T) {
 			m := dungMayChuVoi(t, coQuyen("budget.read"))
@@ -340,14 +340,14 @@ func TestDanhSachDuAnVuotTranThi500ChuKhongCat(t *testing.T) {
 
 func TestChiTietDuAnKhongCoThi404(t *testing.T) {
 	m := dungMayChuVoi(t, coQuyen("budget.read"))
-	w := m.goi(t, http.MethodGet, hostA, "/api/v1/disbursements/projects/khong-co", canBoCua(xaA))
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/investment-projects/khong-co", canBoCua(xaA))
 	doiMa(t, w, http.StatusNotFound)
 }
 
 func TestChiTietDuAnLoiKhoThi500VaKhongLoRaNgoai(t *testing.T) {
 	m := dungMayChuVoi(t, coQuyen("budget.read"))
 	m.duAn.loi = errors.New("chi tiết kết nối kho: dsn=postgres://nguoi:matkhau@may-chu")
-	w := m.goi(t, http.MethodGet, hostA, "/api/v1/disbursements/projects/da-001", canBoCua(xaA))
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/investment-projects/da-001", canBoCua(xaA))
 	doiMa(t, w, http.StatusInternalServerError)
 	if than := w.Body.String(); len(than) > 0 && (contains(than, "matkhau") || contains(than, "dsn")) {
 		t.Fatalf("chi tiết lỗi hệ thống lọt ra cho client: %s", than)

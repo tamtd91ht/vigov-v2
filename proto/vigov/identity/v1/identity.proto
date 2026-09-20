@@ -193,11 +193,11 @@ service IdentityService {
   //   `GetWorkingCalendar` every consumer has to implement all three refusals, and a consumer
   //   that implements none of them still compiles, still passes its tests, and still answers.
   //
-  //   FOUR IMPLEMENTATIONS OF THE HARD PART. ADR 0007 §Hệ quả names the hard cases itself:
+  //   THREE IMPLEMENTATIONS OF THE HARD PART. ADR 0007 §Hệ quả names the hard cases itself:
   //   holidays, the lunch gap, a receipt outside working hours, a file spanning several weeks.
   //   `petitions` and `documents` both need this today — ADR 0007's SLA table counts `Văn bản
-  //   đến` as well as `Phản ánh` — and `dossiers` and `finance` are the obvious third and
-  //   fourth. Four counting functions are four places for one off-by-one, on the one figure in
+  //   đến` as well as `Phản ánh` — and `finance` is the obvious third. Three counting
+  //   functions are three places for one off-by-one, on the one figure in
   //   this system that is a public authority's commitment.
   //
   // WHAT THE REJECTED SHAPE BOUGHT IS NOT ALL LOST. The "many deadlines from one fetch" half is

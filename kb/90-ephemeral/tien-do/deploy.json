@@ -17,7 +17,7 @@
       "trang_thai": "chua_lam",
       "bang_chung": "deploy/base/ chỉ có identity, mang, platform, web-admin — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "Thiếu: service-comms · service-documents · service-dossiers · service-finance · service-petitions · service-reporting · citizen-app · platform-admin. Bốn service khung nay đã phục vụ được thật (commit 19c6008) nên khoảng cách giữa 'chạy được cục bộ' và 'triển khai được' đang rộng ra, không hẹp lại"
+      "tiep_theo": "Thiếu: service-comms · service-documents · service-finance · service-petitions · service-reporting · citizen-app · platform-admin. Bốn service khung nay đã phục vụ được thật (commit 19c6008) nên khoảng cách giữa 'chạy được cục bộ' và 'triển khai được' đang rộng ra, không hẹp lại"
     },
     {
       "id": "cum-chua-chay-that",

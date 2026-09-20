@@ -11,15 +11,15 @@ Tầng này chạm vào cụm. Chín job đóng ảnh **không** chạm — ph�
 | `overlays/<mt>/` | Namespace, cấu hình theo môi trường, và **thẻ ảnh** |
 | `Jenkinsfile` | Job triển khai — nơi duy nhất gọi `kubectl` |
 
-**Ba dịch vụ, không phải mười một.** `platform`, `identity`, `web-admin` có mã thật. Sáu
-dịch vụ Go còn lại (`comms`, `documents`, `dossiers`, `finance`, `petitions`, `reporting`)
+**Ba dịch vụ, không phải mười.** `platform`, `identity`, `web-admin` có mã thật. Năm
+dịch vụ Go còn lại (`comms`, `documents`, `finance`, `petitions`, `reporting`)
 hôm nay là khung sinh sẵn ~220 dòng không có route nào; `platform-admin` còn chưa có
-`Dockerfile`. Đưa chúng lên cụm là 12 pod không phục vụ gì, trên đúng 3 node. Thêm manifest
+`Dockerfile`. Đưa chúng lên cụm là 11 pod không phục vụ gì, trên đúng 3 node. Thêm manifest
 cho từng cái vào ngày nó có endpoint đầu tiên.
 
-## Dựng 11 job trên Jenkins
+## Dựng 10 job trên Jenkins
 
-Jenkins **không tự tìm ra** chín `Jenkinsfile` nằm rải trong kho. Bạn tạo 11 job kiểu
+Jenkins **không tự tìm ra** mười `Jenkinsfile` nằm rải trong kho. Bạn tạo 10 job kiểu
 **Pipeline**, tất cả trỏ về cùng một kho, và thứ duy nhất khác nhau giữa chúng là ô
 **Script Path**.
 
@@ -28,7 +28,6 @@ Jenkins **không tự tìm ra** chín `Jenkinsfile` nằm rải trong kho. Bạn
 | `vigov-gate` | `Jenkinsfile` | webhook / poll `main` |
 | `vigov-svc-comms` | `service-comms/Jenkinsfile` | ″ |
 | `vigov-svc-documents` | `service-documents/Jenkinsfile` | ″ |
-| `vigov-svc-dossiers` | `service-dossiers/Jenkinsfile` | ″ |
 | `vigov-svc-finance` | `service-finance/Jenkinsfile` | ″ |
 | `vigov-svc-identity` | `service-identity/Jenkinsfile` | ″ |
 | `vigov-svc-petitions` | `service-petitions/Jenkinsfile` | ″ |

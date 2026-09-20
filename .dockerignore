@@ -1,6 +1,6 @@
-# Những gì KHÔNG được gửi sang trình đóng ảnh, cho TÁM DỊCH VỤ GO.
+# Những gì KHÔNG được gửi sang trình đóng ảnh, cho BẢY DỊCH VỤ GO.
 #
-# Tám dịch vụ lấy ngữ cảnh ở GỐC KHO — không phải vì chúng dùng chung go.mod (mỗi dịch vụ có
+# Bảy dịch vụ lấy ngữ cảnh ở GỐC KHO — không phải vì chúng dùng chung go.mod (mỗi dịch vụ có
 # go.mod riêng), mà vì mỗi go.mod `replace` module core bằng đường dẫn `../core`. Một ngữ
 # cảnh đặt ở thư mục dịch vụ sẽ không với tới core/.
 #

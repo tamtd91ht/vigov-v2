@@ -1,4 +1,4 @@
-// Khong gian lam viec Go — muoi module trong mot kho.
+// Khong gian lam viec Go — chin module trong mot kho.
 //
 // VI SAO CO TEP NAY: moi don vi trien khai la mot module rieng, nhung trong luc phat trien
 // thi mot sua doi o `core/` phai thay duoc ngay o ca tam dich vu. Khong co go.work, moi lan
@@ -15,7 +15,6 @@ use (
 	./core
 	./service-comms
 	./service-documents
-	./service-dossiers
 	./service-finance
 	./service-identity
 	./service-petitions

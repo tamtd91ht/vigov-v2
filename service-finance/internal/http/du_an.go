@@ -139,7 +139,7 @@ func duAnRaNgoai(t domain.TienDoDuAn, nay time.Time, nguong domain.PhanVan) duAn
 }
 
 // DanhSachDuAn serves one commune's projects for one budget year.
-// GET /api/v1/disbursements/projects?year=2026&category=<id>
+// GET /api/v1/investment-projects?year=2026&category=<id>
 //
 // NO AUDIT ENTRY. Rule 6, invariant 7 audits reading FULL personal data and reading ACROSS
 // communes; this is neither — public money inside the commune the request arrived in, read by a
@@ -216,7 +216,7 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 }
 
 // ChiTietDuAn serves one project of the commune in the context.
-// GET /api/v1/disbursements/projects/{id}
+// GET /api/v1/investment-projects/{id}
 //
 // A PROJECT OF ANOTHER COMMUNE ANSWERS 404, THE SAME AS ONE THAT DOES NOT EXIST — and it does so
 // because the store cannot reach it at all, not because this handler compares anything. Two

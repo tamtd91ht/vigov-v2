@@ -15,12 +15,6 @@
       "summary": "Văn thư — Incoming and outgoing documents, per-authority numbering, routing between units."
     },
     {
-      "name": "dossiers",
-      "path": "service-dossiers",
-      "has_main": true,
-      "summary": "Một cửa — Administrative procedure files submitted at the one-stop shop, and their processing steps."
-    },
-    {
       "name": "finance",
       "path": "service-finance",
       "has_main": true,

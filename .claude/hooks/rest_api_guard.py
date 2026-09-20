@@ -86,7 +86,9 @@ VN_SEGMENTS = {
     "nhiem-vu", "cong-viec", "so-tay", "bien-ban", "bien-ban-hop", "ket-luan",
     "tiep-nhan", "thu-ly", "phan-cong", "phan-loai", "nghiem-thu", "dong-phieu",
     "mo-lai", "gia-han", "lui-han", "phe-duyet", "danh-gia", "hai-long", "linh-vuc",
-    # dossiers
+    # hồ sơ / thủ tục hành chính — service `dossiers` đã gỡ 20/09/2026 (ADR 0001 §Bổ sung),
+    # nhưng các từ này VẪN phải chặn: chúng là tiếng Việt trong đường dẫn, và `ho-so` còn
+    # xuất hiện trong các miền khác.
     "ho-so", "thu-tuc", "mot-cua", "hoso", "thu-tuc-hanh-chinh",
     # finance
     "giai-ngan", "ngan-sach", "du-toan", "chung-tu", "du-an", "nguon-von",

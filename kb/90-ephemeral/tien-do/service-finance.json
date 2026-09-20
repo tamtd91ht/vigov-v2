@@ -68,6 +68,14 @@
       "bang_chung": "không có tuyến POST/PATCH nào cho giải ngân trong service-finance/internal/http/routes.go — kiểm 2026-09-20",
       "no_confirm": [],
       "tiep_theo": "Hết giờ, và còn câu chưa rõ: ai được mở khoá chứng từ ngoài budget.confirm, chứng từ hoàn/âm có tồn tại không (schema đang CHECK so_tien > 0), và ngưỡng cảnh báo chậm theo năm (bảng nam_ngan_sach §11) chưa dựng nên đang là hằng số trong domain"
+    },
+    {
+      "id": "danh-tu-url-du-an",
+      "viec": "Danh từ URL cho dự án đầu tư — /api/v1/investment-projects",
+      "trang_thai": "xong",
+      "bang_chung": "service-finance/internal/http/routes.go:203,221 — đổi từ bản tạm /api/v1/disbursements/projects. Người dùng chốt 2026-09-20. `gofmt -l` trống, `go test -count=1 ./...` xanh, hợp đồng sinh lại — kiểm 2026-09-20.",
+      "no_confirm": [],
+      "tiep_theo": "HAI NỬA CỦA TÊN, mỗi nửa chọn để tránh một ca hỏng cụ thể, ghi lại để đừng ai 'sửa cho gọn': (1) TẦNG TRÊN CÙNG chứ không lồng dưới `disbursements`, vì bản tạm nói NGƯỢC quan hệ nghiệp vụ — dự án tồn tại độc lập, chứng từ giải ngân mới là thứ thuộc về dự án; một đường dẫn đảo quan hệ sẽ dạy sự đảo ấy cho người dựng màn hình, và họ dựng mô hình dữ liệu theo. (2) `investment-projects` chứ không `projects` trần, vì ADR 0011 lấy `org-units` làm ví dụ 'từ dễ đoán nhưng sai': ngày xã có 'dự án' ở nghĩa khác thì danh từ đã bị chiếm, và một URL không đòi lại được sau khi một xã chạy thật."
     }
   ]
 }

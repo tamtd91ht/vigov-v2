@@ -1,13 +1,14 @@
 # RULE 10 — The commitment made to the citizen
 
 A petition (`phan_anh`) is the one object in this system a **citizen** creates and then
-watches. Everything else — documents, dossiers, disbursements — is staff-facing. This is the
+watches. Everything else — documents, tasks, disbursements — is staff-facing. This is the
 surface the commune is judged on, and the reason most citizens open the app at all.
 
 A processing deadline is not a UI nicety: it is a **commitment by a public authority**,
-counted in **working days**, and it differs per commune and per field. Getting it wrong
-produces a figure reported to leadership that is simply false — and the citizen who was told
-"within 3 days" is the one who finds out first.
+counted in **working HOURS** (ADR 0007), and it differs per commune and per field. Getting it
+wrong produces a figure reported to leadership that is simply false — and the citizen who was
+told "within 2 hours" is the one who finds out first. The security field really is **2 working
+hours to acknowledge**: no count in days can express that, which is why the unit is not a detail.
 
 ## INVARIANTS
 

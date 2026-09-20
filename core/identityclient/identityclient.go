@@ -231,8 +231,8 @@ var _ staffauth.Resolver = (*Client)(nil)
 //
 // WHY A SECOND METHOD HERE AND NOT A SECOND PACKAGE: the argument at the top of this file applies
 // unchanged and the count makes it sharper. `petitions` needs two deadlines at intake (ADR 0028),
-// `documents` needs one for `Văn bản đến` (ADR 0007), `dossiers` will need one. Left to each
-// service, that is three clients and — far worse — three readings of what a failure means, on a
+// `documents` needs one for `Văn bản đến` (ADR 0007). Left to each
+// service, that is two clients and — far worse — two readings of what a failure means, on a
 // value that is a COMMITMENT MADE TO A CITIZEN by a public authority.
 //
 // THE CALLER MUST NEVER FALL BACK TO A LOCAL DURATION when this returns an error. Adding hours in

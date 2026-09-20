@@ -159,10 +159,57 @@
         }
       }
     },
-    "/api/v1/disbursements/projects": {
+    "/api/v1/document-types": {
+      "get": {
+        "summary": "Danh mục loại văn bản của xã — dùng cho ô chọn loại khi vào sổ, bộ lọc và nhãn trên mọi văn bản",
+        "operationId": "documents_get_document_types",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "14-cau-hinh §5",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "tên loại văn bản xuất hiện ở ô chọn loại khi vào sổ, bộ lọc của mọi danh sách văn bản và nhãn trên từng văn bản đã vào sổ — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id"
+        },
+        "x-vigov-task": "d6e9ae03da18",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.danhSachLoaiVanBanRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/investment-projects": {
       "get": {
         "summary": "Danh sách dự án đầu tư của xã theo năm ngân sách, kèm số đã giải ngân suy ra từ chứng từ",
-        "operationId": "finance_get_disbursements_projects",
+        "operationId": "finance_get_investment_projects",
         "tags": [
           "finance"
         ],
@@ -171,7 +218,7 @@
           "kind": "permission",
           "key": "budget.read"
         },
-        "x-vigov-task": "e31112187547",
+        "x-vigov-task": "e0b90d44eae7",
         "responses": {
           "200": {
             "description": "OK",
@@ -226,7 +273,7 @@
         }
       }
     },
-    "/api/v1/disbursements/projects/{id}": {
+    "/api/v1/investment-projects/{id}": {
       "parameters": [
         {
           "name": "id",
@@ -239,7 +286,7 @@
       ],
       "get": {
         "summary": "Chi tiết một dự án đầu tư: kế hoạch vốn, đã giải ngân, tỷ lệ và điểm chậm",
-        "operationId": "finance_get_disbursements_projects_by_id",
+        "operationId": "finance_get_investment_projects_by_id",
         "tags": [
           "finance"
         ],
@@ -248,7 +295,7 @@
           "kind": "permission",
           "key": "budget.read"
         },
-        "x-vigov-task": "b323b19c2d66",
+        "x-vigov-task": "24bc22b6d477",
         "responses": {
           "200": {
             "description": "OK",
@@ -292,53 +339,6 @@
           },
           "404": {
             "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/document-types": {
-      "get": {
-        "summary": "Danh mục loại văn bản của xã — dùng cho ô chọn loại khi vào sổ, bộ lọc và nhãn trên mọi văn bản",
-        "operationId": "documents_get_document_types",
-        "tags": [
-          "documents"
-        ],
-        "x-vigov-screen": "14-cau-hinh §5",
-        "x-vigov-permission": {
-          "kind": "any-authenticated",
-          "reason": "tên loại văn bản xuất hiện ở ô chọn loại khi vào sổ, bộ lọc của mọi danh sách văn bản và nhãn trên từng văn bản đã vào sổ — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id"
-        },
-        "x-vigov-task": "d6e9ae03da18",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/documents.danhSachLoaiVanBanRa"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {

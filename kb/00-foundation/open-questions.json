@@ -158,7 +158,7 @@
     "id": 9,
     "question": "Mật khẩu ĐẦU TIÊN của một cán bộ mới đến tay người đó bằng cách nào? (a) quản trị viên tự đặt rồi đọc cho người ta · (b) hệ thống sinh mật khẩu tạm, bắt đổi lần đăng nhập đầu · (c) gửi link kích hoạt qua thư điện tử để người đó tự đặt",
     "status": "OPEN",
-    "why_it_matters": "Ba phương án cho ra ba schema khác nhau, và không phương án nào cài được sau mà không đụng CSDL: (b) cần một cột kiểu phai_doi_mat_khau, (c) cần cột hoặc bảng token kích hoạt có hạn dùng. Quan trọng hơn, câu hỏi này ĐANG CHẶN MỘT RÀNG BUỘC CSDL: identity/migrations/0003_nguoi_dung_co_tai_khoan.sql §4 cố ý KHÔNG thêm CHECK (NOT co_tai_khoan OR mat_khau_hash <> '') — vì luồng (c) cần đúng trạng thái đó (co_tai_khoan = true với hash rỗng) suốt thời gian link kích hoạt còn hiệu lực. Viết ràng buộc đó bây giờ là tự quyết câu hỏi của khách bằng cách làm cho một đáp án không cài được nữa. Riêng (c) còn một vòng lặp chết phải nói với khách trước khi họ chọn: máy chủ thư là cấu hình THEO XÃ và có thể chưa khai (docs/ui-ux/14-cau-hinh.md §10 — cảnh báo 'Chưa có máy chủ thư nào. Thông báo vẫn đúng đường nhưng chưa thật sự gửi đi'), nên xã mới onboard không gửi được link để tạo tài khoản đầu tiên, trong khi người khai máy chủ thư lại phải đăng nhập được đã.",
+    "why_it_matters": "Ba phương án cho ra ba schema khác nhau, và không phương án nào cài được sau mà không đụng CSDL: (b) cần một cột kiểu phai_doi_mat_khau, (c) cần cột hoặc bảng token kích hoạt có hạn dùng. Quan trọng hơn, câu hỏi này ĐANG CHẶN MỘT RÀNG BUỘC CSDL: service-identity/migrations/0003_nguoi_dung_co_tai_khoan.sql §4 cố ý KHÔNG thêm CHECK (NOT co_tai_khoan OR mat_khau_hash <> '') — vì luồng (c) cần đúng trạng thái đó (co_tai_khoan = true với hash rỗng) suốt thời gian link kích hoạt còn hiệu lực. Viết ràng buộc đó bây giờ là tự quyết câu hỏi của khách bằng cách làm cho một đáp án không cài được nữa. Riêng (c) còn một vòng lặp chết phải nói với khách trước khi họ chọn: máy chủ thư là cấu hình THEO XÃ và có thể chưa khai (docs/ui-ux/14-cau-hinh.md §10 — cảnh báo 'Chưa có máy chủ thư nào. Thông báo vẫn đúng đường nhưng chưa thật sự gửi đi'), nên xã mới onboard không gửi được link để tạo tài khoản đầu tiên, trong khi người khai máy chủ thư lại phải đăng nhập được đã.",
     "code_signals": [
       {
         "pattern": "phai_?doi_?mat_?khau|must_?change_?password|doi_mat_khau_lan_dau",
@@ -186,7 +186,7 @@
     "id": 10,
     "question": "Cán bộ nghỉ hưu / chuyển công tác thì KHOÁ hay XOÁ? Và 'xoá nhầm một dòng nhập trùng' có phải cùng một thao tác không?",
     "status": "OPEN",
-    "why_it_matters": "Xoá mềm một cán bộ làm TÊN NGƯỜI XỬ LÝ BIẾN MẤT KHỎI MỌI HỒ SƠ CŨ, chứ không chỉ làm xấu giao diện. Đường đi cụ thể: audit_log.actor_id (identity/migrations/0001_init.sql:22) chỉ là TEXT, KHÔNG có khoá ngoại — vết kiểm toán cố ý sống sót độc lập — nên bản ghi vết vẫn còn, nhưng thứ dịch id đó ra tên người là BatchGetStaff, và hợp đồng đã chốt rằng một id bị xoá mềm thì KHÔNG trả về (proto/vigov/identity/v1/identity.proto:125). Kết quả: hồ sơ lưu trữ giữ được 'ai làm' dưới dạng id mà không hiển thị được ra tên, đúng lúc có thanh tra hỏi. Bảng phien thì có khoá ngoại thật tới nguoi_dung (0001_init.sql:238). Vế thứ hai mới là chỗ đặc tả im lặng: docs/ui-ux/12-danh-ba-can-bo.md:61 chỉ có MỘT nút '🗑 Xoá khỏi danh bạ', trong khi 'người này đã nghỉ việc' và 'dòng này nhập trùng, chưa từng làm gì' là hai tình huống cần hai thao tác khác nhau — cái trước phải giữ nguyên mọi dấu vết, cái sau thì không có dấu vết nào để giữ.",
+    "why_it_matters": "Xoá mềm một cán bộ làm TÊN NGƯỜI XỬ LÝ BIẾN MẤT KHỎI MỌI HỒ SƠ CŨ, chứ không chỉ làm xấu giao diện. Đường đi cụ thể: audit_log.actor_id (service-identity/migrations/0001_init.sql:22) chỉ là TEXT, KHÔNG có khoá ngoại — vết kiểm toán cố ý sống sót độc lập — nên bản ghi vết vẫn còn, nhưng thứ dịch id đó ra tên người là BatchGetStaff, và hợp đồng đã chốt rằng một id bị xoá mềm thì KHÔNG trả về (proto/vigov/identity/v1/identity.proto:125). Kết quả: hồ sơ lưu trữ giữ được 'ai làm' dưới dạng id mà không hiển thị được ra tên, đúng lúc có thanh tra hỏi. Bảng phien thì có khoá ngoại thật tới nguoi_dung (0001_init.sql:238). Vế thứ hai mới là chỗ đặc tả im lặng: docs/ui-ux/12-danh-ba-can-bo.md:61 chỉ có MỘT nút '🗑 Xoá khỏi danh bạ', trong khi 'người này đã nghỉ việc' và 'dòng này nhập trùng, chưa từng làm gì' là hai tình huống cần hai thao tác khác nhau — cái trước phải giữ nguyên mọi dấu vết, cái sau thì không có dấu vết nào để giữ.",
     "code_signals": [
       {
         "pattern": "func\\s+\\(\\w+\\s+\\*?CanBoStore\\)\\s+(Xoa|Khoa)|XoaCanBo|KhoaTaiKhoan",
@@ -208,7 +208,7 @@
     "id": 11,
     "question": "Số di động của cán bộ hiện cho cán bộ khác trong xã: CHE hay KHÔNG CHE? Nếu che thì khoá quyền nào mở được?",
     "status": "OPEN",
-    "why_it_matters": "Đặc tả đang hiện ĐẦY ĐỦ ở cả hai màn (docs/ui-ux/14-cau-hinh.md:74 và 12-danh-ba-can-bo.md:45,59), còn luật 3 bất biến 3 đòi che trừ khi bên gọi có quyền xem đầy đủ TƯỜNG MINH. Chỗ kẹt không phải là chọn chính sách mà là KHÔNG CÓ KHOÁ ĐỂ KHAI: trong 33 khoá đã seed vào bảng quyen lẫn bảng 43 quyền của đặc tả, không khoá nào nghĩa là 'xem đầy đủ thông tin cán bộ' — admin.user là 'Quản lý người dùng', còn feedback.restricted là phạm vi NỘI DUNG phản ánh, không phải dữ liệu cá nhân. Không có khoá thì không tồn tại đường nào là 'tường minh', nên chỉ còn hai trạng thái: che tất, hoặc mở tất. Tự đặt thêm một khoá quyền là tự thiết kế mô hình phân quyền của khách. Nhiều khả năng khoá này chính là một trong 10 khoá thiếu: đặc tả ghi tiêu đề 43 quyền nhưng chỉ liệt kê 33 — xem việc treo cùng tên trong kb/90-ephemeral/2026-09-16-ban-giao-phien.md §7.",
+    "why_it_matters": "Đặc tả đang hiện ĐẦY ĐỦ ở cả hai màn (docs/ui-ux/14-cau-hinh.md:74 và 12-danh-ba-can-bo.md:45,59), còn luật 3 bất biến 3 đòi che trừ khi bên gọi có quyền xem đầy đủ TƯỜNG MINH. Chỗ kẹt không phải là chọn chính sách mà là KHÔNG CÓ KHOÁ ĐỂ KHAI: trong 33 khoá đã seed vào bảng quyen lẫn bảng 43 quyền của đặc tả, không khoá nào nghĩa là 'xem đầy đủ thông tin cán bộ' — admin.user là 'Quản lý người dùng', còn feedback.restricted là phạm vi NỘI DUNG phản ánh, không phải dữ liệu cá nhân. Không có khoá thì không tồn tại đường nào là 'tường minh', nên chỉ còn hai trạng thái: che tất, hoặc mở tất. Tự đặt thêm một khoá quyền là tự thiết kế mô hình phân quyền của khách. Nhiều khả năng khoá này chính là một trong 10 khoá thiếu: đặc tả ghi tiêu đề 43 quyền nhưng chỉ liệt kê 33 — xem việc treo cùng tên trong kb/90-ephemeral/ban-giao-phien.md §7.",
     "code_signals": [
       {
         "pattern": "Mask(Phone|Cccd)\\(\\s*\\w*\\.(DienThoai|DiDong)",
@@ -278,7 +278,7 @@
     "id": 14,
     "question": "Người có quyền admin.user có được tự thao tác lên CHÍNH MÌNH không — tự đổi vai trò của mình, tự khoá mình?",
     "status": "OPEN",
-    "why_it_matters": "Đặc tả không có một dòng nào. Hệ quả thì lớn hơn vẻ ngoài của câu hỏi: nếu không ràng buộc thì admin.user trên thực tế BAO TRÙM MỌI QUYỀN KHÁC, vì người giữ nó gán được bất kỳ ai — kể cả chính mình — vào vai trò mạnh nhất, và làm thế không vi phạm quy tắc nào đang có. Tức bảng phân quyền 33 khoá mô tả một mô hình phẳng, còn thực tế chạy là một mô hình có một khoá đứng trên tất cả. Đó là điều lãnh đạo xã cần biết khi ký duyệt ai được giữ khoá này, không phải chi tiết cài đặt. Nếu khách muốn ràng buộc thì schema hiện có đúng một điểm tựa: vai_tro.la_lanh_dao (identity/migrations/0001_init.sql:105) là chỗ DUY NHẤT phân biệt vai trò mạnh với vai trò yếu — mọi thang bậc khác sẽ phải bịa thêm. Câu này khác câu #13: #13 lo xã mất người quản trị cuối cùng, câu này lo một người tự nâng mình lên.",
+    "why_it_matters": "Đặc tả không có một dòng nào. Hệ quả thì lớn hơn vẻ ngoài của câu hỏi: nếu không ràng buộc thì admin.user trên thực tế BAO TRÙM MỌI QUYỀN KHÁC, vì người giữ nó gán được bất kỳ ai — kể cả chính mình — vào vai trò mạnh nhất, và làm thế không vi phạm quy tắc nào đang có. Tức bảng phân quyền 33 khoá mô tả một mô hình phẳng, còn thực tế chạy là một mô hình có một khoá đứng trên tất cả. Đó là điều lãnh đạo xã cần biết khi ký duyệt ai được giữ khoá này, không phải chi tiết cài đặt. Nếu khách muốn ràng buộc thì schema hiện có đúng một điểm tựa: vai_tro.la_lanh_dao (service-identity/migrations/0001_init.sql:105) là chỗ DUY NHẤT phân biệt vai trò mạnh với vai trò yếu — mọi thang bậc khác sẽ phải bịa thêm. Câu này khác câu #13: #13 lo xã mất người quản trị cuối cùng, câu này lo một người tự nâng mình lên.",
     "code_signals": [
       {
         "pattern": "la_lanh_dao",
@@ -301,7 +301,7 @@
     "id": 15,
     "question": "Mã cán bộ (nguoi_dung.ma) do ai đặt và sinh theo quy tắc nào — xã đã có mã cán bộ sẵn trong hồ sơ nhân sự chưa?",
     "status": "OPEN",
-    "why_it_matters": "Không hỏi thì buộc phải bịa, vì schema bắt NOT NULL và UNIQUE (tenant_id, ma) (identity/migrations/0001_init.sql:167,184) trong khi form của cả hai màn đặc tả KHÔNG CÓ ô Mã (docs/ui-ux/12-danh-ba-can-bo.md §5, 14-cau-hinh.md:79). Hai ràng buộc thu hẹp lựa chọn tới mức lựa chọn dễ nhất là lựa chọn sai: mã đã cấp thì KHÔNG BAO GIỜ cấp lại, kể cả sau xoá mềm (luật 7 bất biến 3), và mã phải ĐỌC ĐƯỢC VỚI NGƯỜI vì nó là chủ thể trong vết kiểm toán — người đọc vết một năm sau phải tra ra được đó là ai. ULID sinh tự động thoả cả hai ràng buộc kỹ thuật mà hỏng đúng cái yêu cầu thứ hai. Nửa còn lại chỉ khách trả lời được: nhiều xã đã có mã cán bộ trong hồ sơ nhân sự sẵn có, và nếu có thì hệ thống phải NHẬN mã của xã chứ không sinh mã riêng rồi bắt xã nhớ hai hệ.",
+    "why_it_matters": "Không hỏi thì buộc phải bịa, vì schema bắt NOT NULL và UNIQUE (tenant_id, ma) (service-identity/migrations/0001_init.sql:167,184) trong khi form của cả hai màn đặc tả KHÔNG CÓ ô Mã (docs/ui-ux/12-danh-ba-can-bo.md §5, 14-cau-hinh.md:79). Hai ràng buộc thu hẹp lựa chọn tới mức lựa chọn dễ nhất là lựa chọn sai: mã đã cấp thì KHÔNG BAO GIỜ cấp lại, kể cả sau xoá mềm (luật 7 bất biến 3), và mã phải ĐỌC ĐƯỢC VỚI NGƯỜI vì nó là chủ thể trong vết kiểm toán — người đọc vết một năm sau phải tra ra được đó là ai. ULID sinh tự động thoả cả hai ràng buộc kỹ thuật mà hỏng đúng cái yêu cầu thứ hai. Nửa còn lại chỉ khách trả lời được: nhiều xã đã có mã cán bộ trong hồ sơ nhân sự sẵn có, và nếu có thì hệ thống phải NHẬN mã của xã chứ không sinh mã riêng rồi bắt xã nhớ hai hệ.",
     "code_signals": [
       {
         "pattern": "(?i)(sinh|tao|gen)\\w*Ma(CanBo|NguoiDung)",
@@ -575,5 +575,37 @@
       "viết màn hình báo cáo phản ánh"
     ],
     "adr": "kb/10-decisions/0028-moc-dat-han-hai-dong-ho.md"
+  },
+  {
+    "id": 27,
+    "question": "Đặc tả ghi tiêu đề 43 quyền / 11 nhóm nhưng chỉ liệt kê 33 khoá / 10 nhóm: TÁM khoá còn thiếu là những khoá nào, và NHÓM THỨ MƯỜI MỘT là nhóm gì?",
+    "status": "OPEN",
+    "why_it_matters": "KHÔNG PHẢI LỆCH GIỮA ĐẶC TẢ VỚI MÃ — LỆCH BÊN TRONG CHÍNH ĐẶC TẢ, và đó là lý do không ai đọc ra nó cho tới khi ngồi đếm. Đã đếm bằng cây cú pháp chứ không bằng mắt: docs/ui-ux/14-cau-hinh.md:104 ghi tiêu đề `Bốn mươi ba quyền, gom theo 11 nhóm`, nhưng bảng ngay dưới (:106-140) chỉ có 33 khoá thuộc 10 nhóm — admin · announcement · asset · budget · content · document · feedback · petition · report · task. service-identity/migrations/0001_init.sql nạp ĐÚNG 33 khoá ấy, không thừa không thiếu một khoá nào; migration 0007 (2026-09-20) thêm hai khoá đã được khách chốt, thành 35 khoá / 10 nhóm. Tức MƯỜI khoá và TRỌN MỘT NHÓM chưa bao giờ được viết ra ở đâu, và phần còn thiếu nay là TÁM khoá cộng một nhóm. Hệ quả không phải thẩm mỹ: luật 5 bất biến 1 bắt mọi endpoint khai quyền tường minh, nên MỖI khoá thiếu là một tuyến chưa viết được, hoặc tệ hơn là một tuyến viết bằng khoá hàng xóm — tức cấp quyền ngoài ý định cho một nhóm cán bộ mà không ai thấy, vì màn Phân quyền chỉ hiện một ô. Hai ca cụ thể đã chặn việc và ĐANG CHỜ đúng câu này: câu #11 (không có khoá nào nghĩa là `xem đầy đủ thông tin cán bộ`, nên số di động cán bộ chỉ còn hai trạng thái che tất hoặc mở tất) và câu #20 (khoá cho việc cán bộ xác thực lời khai cư trú chưa tồn tại). Cả hai rất có thể nằm trong tám khoá thiếu, và NHÓM THỨ MƯỜI MỘT có thể chính là nhóm của kênh công dân — nhưng đó là suy đoán, và suy đoán ở đây đẻ ra một khoá quyền không xoá lại được.",
+    "code_signals": [
+      {
+        "pattern": "INSERT INTO quyen",
+        "means": "đang gieo thêm khoá quyền — kiểm khoá ấy có trong bảng đặc tả không, hay là một khoá tự nghĩ ra để một tuyến viết xong",
+        "threshold": 1
+      },
+      {
+        "pattern": "RequirePermission\\(\\s*\\w+\\s*,\\s*\"[a-z_]+\\.[a-z_]+\"",
+        "means": "một tuyến đang khai quyền — đối chiếu chuỗi ấy với bảng quyen; một chuỗi không có trong bảng là một quyền không ai cấp được, và tuyến ấy 403 với MỌI tài khoản",
+        "threshold": 1
+      },
+      {
+        "pattern": "\\.[a-z]+_[a-z]+'",
+        "means": "một khoá có gạch dưới ở vế sau — trái quy ước nhóm.mộttừ đã chốt ở ADR 0030",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "TRUNG BÌNH VÀ TĂNG THEO SỐ XÃ ĐÃ CHẠY. Thêm một khoá về sau là một migration riêng, rẻ (tiền lệ 0007). Cái đắt là ĐẶT SAI TÊN hoặc CHIA SAI NGHĨA: khoá là chính chuỗi bảng `quyen` lưu và màn Phân quyền hiện (luật 5 bất biến 3b), nên sau khi một xã đã gán nó cho một vai trò thì đổi tên là migration trên dữ liệu phân quyền đang chạy. Đắt hơn nữa là ca không có khoá: tuyến được viết bằng khoá hàng xóm, và khoảng thời gian ấy là khoảng mọi lần truy cập vượt ý định đều hợp lệ trong vết kiểm toán — về sau không phân biệt được lần nào đúng thẩm quyền.",
+    "ask_before": [
+      "thêm bất kỳ khoá quyền mới nào vào migration",
+      "khai quyền cho một tuyến mà bảng quyen không có khoá đúng nghĩa",
+      "viết route danh sách cán bộ",
+      "khai route cho màn xác thực lời khai cư trú"
+    ],
+    "adr": "kb/10-decisions/0030-hai-khoa-quyen-phan-anh.md",
+    "open_gap": "Khách đã chốt ĐÚNG HAI khoá cần ngay (feedback.classify, feedback.unmask) và CỐ Ý để lại phần còn thiếu. Đừng bịa tám khoá kia cho đủ số 43."
   }
 ]

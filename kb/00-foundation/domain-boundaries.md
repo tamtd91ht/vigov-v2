@@ -55,7 +55,7 @@ thống sẽ kẹt khi một service chậm.
 
 - **Định danh máy đọc dùng tiếng Anh** — tên service, proto package, import path, tên trường,
   và **đoạn đường dẫn URL**. Văn xuôi tài liệu (`kb/*.md`) giữ tiếng Việt.
-- Service theo **miền nghiệp vụ**, không theo màn hình: `documents`, `petitions`, `dossiers`,
+- Service theo **miền nghiệp vụ**, không theo màn hình: `documents`, `petitions`,
   `finance`. Không có `admin-service` — "admin" là giao diện, không phải miền.
 - Sự kiện: `<miền số nhiều>.<việc đã xảy ra, tiếng Anh>.<phiên bản>` — `petitions.received.v1`
 - Tên ở **thì quá khứ**: sự kiện mô tả việc **đã xảy ra**, không phải lệnh
@@ -66,10 +66,13 @@ thống sẽ kẹt khi một service chậm.
 Ranh giới ngôn ngữ đầy đủ — vì sao đường dẫn tiếng Anh nhưng **giá trị enum giữ tiếng Việt**,
 và vì sao tên sự kiện là dạng trên: `kb/10-decisions/0011-contract-surface-language.md`.
 
-## Tám service
+## Bảy service
 
 Cắt theo **bộ phận chịu trách nhiệm trong một UBND xã** — xem lý do đầy đủ ở
 `kb/10-decisions/0001-service-decomposition.md`.
+
+`dossiers` (một cửa) đã **gỡ khỏi kho ngày 20/09/2026**: khách chốt hồ sơ một cửa không
+thuộc phạm vi hợp đồng. Bằng chứng khảo sát và đường quay lại ở ADR 0001 §Bổ sung 2026-09-20.
 
 | Service | Bộ phận ngoài đời |
 |---|---|
@@ -77,7 +80,6 @@ Cắt theo **bộ phận chịu trách nhiệm trong một UBND xã** — xem l�
 | `identity` | Tổ chức – cán bộ, định danh công dân toàn nền tảng, và **đơn vị dân cư** (thôn / tổ dân phố) |
 | `documents` | Văn thư — văn bản đến/đi |
 | `petitions` | Tiếp dân — phản ánh, khiếu nại, tố cáo, và nhiệm vụ phát sinh |
-| `dossiers` | Một cửa — hồ sơ thủ tục hành chính |
 | `finance` | Tài chính – kế toán — dự toán, giải ngân |
 | `comms` | Thông tin – truyền thông — tin bài, truyền thanh, bản đồ, thông báo |
 | `reporting` | Read model — **không sở hữu dữ liệu gốc nào** |

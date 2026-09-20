@@ -16,7 +16,7 @@ Nên phần CHUNG không được giữ bằng một tệp nữa, mà bằng m�
 vụ tự quyết phần RIÊNG của nó, không phải để lặng lẽ bỏ phần chung.
 
 CÙNG MỘT LẬP LUẬN ÁP CHO Jenkinsfile. Mỗi dịch vụ tự quyết build cái gì và khi nào. Phần
-dễ đánh rơi nhất ở đó KHÔNG phải thư mục của chính nó mà là MÃ DÙNG CHUNG: tám dịch vụ chung
+dễ đánh rơi nhất ở đó KHÔNG phải thư mục của chính nó mà là MÃ DÙNG CHUNG: bảy dịch vụ chung
 một `go.mod` và một `core/`, nên một pipeline chỉ kích hoạt theo `<tên>/**` sẽ ngồi im
 khi `core/authz` được vá. Mọi pipeline vẫn xanh, không cái nào chạy, và bản vá nằm yên trong
 kho mã trong khi tám ảnh đang chạy vẫn mang mã cũ.
@@ -93,7 +93,7 @@ def dich_vu() -> list[str]:
 DUONG_DUNG_CHUNG = ["core/**", "proto/**", "go.work"]
 
 
-# Thư mục cấp một ĐƯỢC PHÉP đi theo ngữ cảnh build của dịch vụ Go, ngoài chính tám dịch vụ.
+# Thư mục cấp một ĐƯỢC PHÉP đi theo ngữ cảnh build của dịch vụ Go, ngoài chính bảy dịch vụ.
 #
 # `core/` vì mọi go.mod `replace` nó bằng `../core`, và `proto/` vì `core/gen` sinh ra từ đó.
 # Không có mục thứ ba: mọi thứ khác ở cấp một là mã không chạy trong runtime của dịch vụ Go.
@@ -107,7 +107,7 @@ def kiem_dockerignore(svcs: list[str], loi: list[str]) -> None:
     web dưới `apps/`, và .dockerignore loại trừ đúng một dòng `apps`. Bố cục phẳng (ADR 0015)
     bỏ tầng đó đi; dòng `apps` ở lại, trỏ vào một thư mục không còn tồn tại. Nó không loại trừ
     gì nữa, mà vẫn nằm đó trông y hệt một biện pháp — và ba cây nguồn web lặng lẽ đi theo ngữ
-    cảnh build của cả tám dịch vụ Go. Không có gì đỏ: build vẫn chạy, ảnh vẫn đúng.
+    cảnh build của cả bảy dịch vụ Go. Không có gì đỏ: build vẫn chạy, ảnh vẫn đúng.
 
     Nên điều được kiểm KHÔNG phải "dòng `apps` còn không" — một phép kiểm như thế mục ruỗng
     cùng nhịp với thứ nó canh. Kiểm chiều ngược lại: mọi thư mục cấp một phải được kể tới ở
@@ -117,7 +117,7 @@ def kiem_dockerignore(svcs: list[str], loi: list[str]) -> None:
     if not os.path.isfile(duong):
         loi.append(
             ".dockerignore KHÔNG TỒN TẠI — toàn bộ kho, gồm .git với đầy đủ lịch sử, đi theo "
-            "ngữ cảnh build của tám dịch vụ."
+            "ngữ cảnh build của bảy dịch vụ."
         )
         return
 
@@ -138,7 +138,7 @@ def kiem_dockerignore(svcs: list[str], loi: list[str]) -> None:
         loi.append(
             f"thư mục cấp một '{ten}/' không bị .dockerignore loại, và cũng không phải mã của "
             f"dịch vụ Go"
-            f"\n        → Nó đi theo ngữ cảnh build của CẢ TÁM dịch vụ. Không có gì đỏ vì việc "
+            f"\n        → Nó đi theo ngữ cảnh build của CẢ BẢY dịch vụ. Không có gì đỏ vì việc "
             f"này không làm hỏng ảnh — nó chỉ đưa mã không thuộc dịch vụ vào tầm với của mọi "
             f"lệnh COPY, và một tệp đã vào ảnh rồi tới registry thì không gọi về được (luật 8)."
             f"\n        → Thêm '{ten}' vào .dockerignore, hoặc vào DUOC_DI_THEO nếu ảnh Go thật "
@@ -188,12 +188,12 @@ def kiem_pipeline(duong: str, ten_rieng: str, loi: list[str]) -> None:
         if mau not in danh_sach:
             loi.append(
                 f"{tuong_doi(duong)} thiếu đường kích hoạt '{mau}'\n"
-                f"        → Tám dịch vụ dùng chung một go.mod và một core/. Thiếu mẫu này thì "
+                f"        → Bảy dịch vụ dùng chung một go.mod và một core/. Thiếu mẫu này thì "
                 f"một bản vá trong mã dùng chung KHÔNG kích hoạt dịch vụ này: pipeline vẫn "
                 f"xanh, không chạy, và ảnh đang chạy vẫn mang mã cũ."
             )
 
-    # Thẻ di động. Quy ước nêu ở cuối Jenkinsfile gốc; giữ cho chín tệp kia không ai phá.
+    # Thẻ di động. Quy ước nêu ở cuối Jenkinsfile gốc; giữ cho tám tệp kia không ai phá.
     if re.search(r":latest\b", noi_dung):
         loi.append(
             f"{tuong_doi(duong)} đẩy thẻ di động `latest`\n"
