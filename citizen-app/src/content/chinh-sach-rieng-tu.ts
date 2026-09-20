@@ -28,10 +28,16 @@
  *   MẤT KHỎI CẢ BẢN NỘP, không chỉ khỏi bản đầy đủ. Nó từng là câu mạnh nhất app này có để nói;
  *   hôm nay nó là một tuyên bố sai dưới tên một pháp nhân có thật.
  *
- * ⚠ CHỖ TRỐNG VỀ THỜI GIAN LƯU ĐÃ ĐƯỢC LẤP — 20/09/2026, bản `1.4`. Khách chốt: **không có hạn
- * tự động; số điện thoại được lưu tới khi chính người dùng yêu cầu xoá.** Hằng
- * `THOI_GIAN_LUU_CHUA_CHOT` vì thế đã biến mất, và ca kiểm canh chỗ trống ấy được thay bằng ca
- * canh chính CAM KẾT mới (`chinh-sach.test.ts`).
+ * ⚠ HAI THỜI HẠN, HAI CÂU TRẢ LỜI KHÁC NHAU, VÀ CẢ HAI ĐỀU ĐÃ CHỐT:
+ *
+ *   | Lưu gì | Bao lâu | Vì sao không giống nhau |
+ *   |---|---|---|
+ *   | Số điện thoại | **không có hạn tự động**, tới khi người dùng yêu cầu xoá | nó là danh tính: hết nó là hết tài khoản, nên chủ của nó quyết |
+ *   | Nhật ký đăng nhập | **90 ngày**, tự xoá | nó chứa IP của cả những người **chưa từng có tài khoản** — họ không có gì để yêu cầu xoá, nên một hạn tự động là cách duy nhất thứ ấy mất đi |
+ *
+ *   Hai chỗ trống ngày trước (`THOI_GIAN_LUU_CHUA_CHOT`, `THOI_HAN_LUU_NHAT_KY_CHUA_CHOT`) đã
+ *   được lấp và hai hằng ấy biến mất. Cơ chế canh chỗ-trống đã làm đúng việc của nó hai lần:
+ *   không ai bịa một con số, và ngày khách chốt thì ca kiểm đỏ lên bắt đi trọn bốn việc.
  *
  *   "Giữ tới khi bạn yêu cầu xoá" KHÔNG phải một cách né con số — nó là một cam kết, và một cam
  *   kết thì phải kèm CỬA THỰC HIỆN. Nên mục ấy nói đủ ba điều, thiếu một là hứa suông: không có
@@ -71,61 +77,62 @@ export type MucChinhSach = {
  * Một chính sách không ghi phiên bản là một chính sách không chứng minh được nó đã nói gì vào
  * lúc người dùng bấm đồng ý.
  *
- * LÊN `1.1` VÌ NỘI DUNG ĐÃ ĐỔI, KHÔNG PHẢI VÌ ĐỔI CÂU CHỮ CHO ĐẸP: ba quyền nay gắn với ba tính
- * năng của ứng dụng sản phẩm, và mục "Chuyển dữ liệu cho bên thứ ba" nay nói ra việc ứng dụng mở
- * trang bản đồ và trang web của công ty. Hai thay đổi ấy là thay đổi về HÀNH VI, nên số phiên
- * bản phải đổi theo — nếu không thì "phiên bản 1.0" chỉ tên hai văn bản khác nhau.
+ * KHI NÀO PHẢI LÊN SỐ — ba ví dụ THẬT từ lượt soạn thảo, giữ lại vì chúng vạch ranh giới rõ
+ * hơn bất kỳ định nghĩa nào. Cả ba đều đã xảy ra trong tệp này:
  *
- * LÊN `1.2` VÌ BỀ MẶT QUYỀN RIÊNG TƯ MỞ RỘNG THẬT SỰ — bốn thứ mới, mỗi thứ một dòng phải khai:
- *
- *   | Mới | Ứng dụng làm gì | Khai ở mục |
+ *   | Thay đổi | Lên số? | Vì sao |
  *   |---|---|---|
- *   | **Máy ảnh** | Hỏi quyền để chụp lại một tấm danh thiếp giấy | `cac-quyen` |
- *   | **Thư viện ảnh** | Mở cửa sổ chọn ảnh của Zalo; ảnh **không rời khỏi máy** | `du-lieu` · `cac-quyen` |
- *   | **Thông tin mạng** | Chỉ **kiểu** kết nối — không IP, không tên mạng | `cac-quyen` |
- *   | **Ghi một tệp xuống máy** | Tệp danh thiếp **của chúng tôi**, không phải dữ liệu của người dùng | `ghi-tep` |
+ *   | `getPhoneNumber` đổi MỤC ĐÍCH: "gọi lại tư vấn" → định danh + thông báo ZNS | **CÓ** | người đã đồng ý cho việc này chưa đồng ý cho việc kia. Cùng một quyền, cùng một nút, hai sự đồng ý khác nhau |
+ *   | Khai thêm rằng máy chủ ghi **địa chỉ IP** mỗi lượt đăng nhập | **CÓ** | người đọc bản trước bấm đồng ý mà không biết điều đó |
+ *   | Thêm một quyền mới (máy ảnh, thư viện ảnh, ghi tệp) | **CÓ** | bề mặt quyền riêng tư mở rộng thật sự |
+ *   | Sửa câu cho dễ đọc, không đổi hành vi nào | KHÔNG | số phiên bản chỉ tên một HÀNH VI, không tên một lượt biên tập |
  *
- * Ba thứ đầu là dữ liệu ĐI VÀO ứng dụng; thứ tư là thứ ứng dụng VIẾT RA, và đó là một loại hành
- * vi mà bản 1.1 hoàn toàn không có. Giấu nó đi vì "chỉ là tệp của chính mình" là đúng thứ Nghị
- * định 13 buộc phải nói ra: người dùng có quyền biết ứng dụng ghi gì lên thiết bị của họ.
+ * ⚠ VÀ MỘT CÂU ĐÃ THÀNH SAI GIỮA CHỪNG, GHI LẠI VÌ ĐÓ LÀ LOẠI LỖI NẶNG NHẤT TỆP NÀY MẮC PHẢI:
+ * *"không có ô đăng nhập"*. Nay ứng dụng CÓ đăng nhập — bằng một lần chạm, không ô nhập nào.
+ * Câu ấy được thay bằng một câu nói đúng cả hai vế. Một câu đúng ở bản trước mà không ai sửa
+ * khi hành vi đổi là loại lỗi **không có gì đỏ lên** để báo.
  *
- * LÊN `1.3` VÌ MỤC ĐÍCH CỦA MỘT QUYỀN ĐÃ ĐỔI — và đổi mục đích là thay đổi nặng nhất một chính
- * sách quyền riêng tư có thể mang, nặng hơn cả thêm một quyền mới:
+ * ⚠ MỘT SỐ PHIÊN BẢN, KHÔNG PHẢI SÁU — VÀ ĐÂY LÀ QUYẾT ĐỊNH DỰA TRÊN BẰNG CHỨNG, KHÔNG PHẢI
+ * DỌN CHO GỌN.
  *
- *   | Bản 1.2 | Bản 1.3 |
+ *   Trong một ngày soạn thảo, văn bản này đã đi 1.0 → 1.1 → 1.2 → 1.3 → 1.4 → 1.5, mỗi lần vì
+ *   một lý do đúng: hành vi xử lý dữ liệu đổi thì số phải đổi. Nhưng LÝ DO TỒN TẠI của việc lên
+ *   số là *"một người đã bấm đồng ý ở bản cũ không biết về thứ mới"* — và nó chỉ có nghĩa khi
+ *   CÓ một người như thế.
+ *
+ *   ĐÃ KIỂM, 20/09/2026, và đây là bằng chứng chứ không phải suy đoán:
+ *
+ *     • `git log -- citizen-app` — không một commit nào nói tới một lần phát hành;
+ *     • sổ tiến độ, mục `nop-zalo-duyet` — `chua_lam`;
+ *     • README §"Còn thiếu" #1 — ảnh chụp màn hình và mô tả store **chưa có**, mà Zalo bắt buộc
+ *       phải có mới xét duyệt được: chưa nộp được, nói gì tới phát hành;
+ *     • README §"Hai thứ đã kiểm bằng cách chạy thật" — phép đo 18/09 ghi rằng đường công khai
+ *       trả *"ứng dụng đang trong giai đoạn phát triển"*, tức app CHƯA phát hành; chỉ có bản
+ *       THỬ NGHIỆM (`env=TESTING`, Version 6–7), thứ chỉ tài khoản người dựng mở được.
+ *
+ *   KHÔNG MỘT NGƯỜI DÙNG NÀO TỪNG ĐỌC MỘT BẢN NÀO CỦA VĂN BẢN NÀY. Sáu số trong một ngày vì thế
+ *   không bảo vệ ai cả: chúng kể lại quá trình soạn thảo trong một văn bản pháp lý, và làm người
+ *   đọc tưởng đã có sáu đợt thay đổi được công bố. Nên bản đầu tiên ra ngoài mang số **`1.0`**.
+ *
+ *   QUÁ TRÌNH SOẠN THẢO KHÔNG BỊ XOÁ — nó nằm trong `git log` của chính tệp này, đúng nơi lịch
+ *   sử soạn thảo thuộc về. Thứ bị bỏ chỉ là việc kể lại nó dưới dạng "lịch sử phiên bản đã công
+ *   bố", một điều không có thật.
+ *
+ * ⚠ TỪ LẦN PHÁT HÀNH ĐẦU TIÊN TRỞ ĐI, QUY TẮC ĐẢO NGƯỢC: mỗi thay đổi về HÀNH VI XỬ LÝ DỮ LIỆU
+ * phải lên một số mới, kể cả khi cách nhau vài giờ, và **không được gộp**. Ba ví dụ thật, giữ
+ * lại vì chúng nói rõ ranh giới hơn bất kỳ định nghĩa nào:
+ *
+ *   | Thay đổi | Lên số? |
  *   |---|---|
- *   | `getPhoneNumber` — "để đội kinh doanh gọi lại tư vấn" | `getPhoneNumber` — **để đăng nhập / định danh**, và để gửi **thông báo ZNS** |
- *   | không nhắc `getAccessToken` | khai `getAccessToken`: mã cho biết bạn là người dùng Zalo nào đối với riêng ứng dụng này |
- *   | không có hành vi gửi đi nào | bản dựng CÓ bước máy chủ gửi hai mã ấy đi khi bạn bấm đăng nhập |
- *
- *   Một người đã đồng ý cho "gọi lại tư vấn" KHÔNG phải đã đồng ý cho "định danh và gửi thông
- *   báo". Cùng một quyền, cùng một nút, nhưng là hai sự đồng ý khác nhau — nên phải có một số
- *   phiên bản mới để chỉ đúng văn bản họ đã đọc lúc bấm.
- *
- * ⚠ VÀ MỘT CÂU CỦA BẢN 1.2 ĐÃ THÀNH SAI: *"không có ô đăng nhập"*. Nay ứng dụng CÓ đăng nhập —
- * bằng một lần chạm, không ô nhập nào. Câu ấy được thay bằng một câu nói đúng cả hai vế: không
- * có ô để gõ, nhưng có việc đăng nhập. Một câu đúng ở bản trước mà không ai sửa khi hành vi đổi
- * là loại lỗi nặng nhất một văn bản như thế này mắc phải, và là loại không có gì đỏ lên.
- *
- * LÊN `1.4` VÌ HAI ĐIỀU KHOẢN ĐỔI NỘI DUNG — cùng ngày với 1.3, và vẫn phải là một số mới:
- *
- *   | Mới ở 1.4 | Nội dung |
- *   |---|---|
- *   | **Thời gian lưu** | Bản 1.3 **không nêu** thời hạn nào (chưa ai chốt). Nay chốt: **không có hạn tự động**, giữ tới khi người dùng yêu cầu xoá — kèm cửa thực hiện và phạm vi xoá |
- *   | **Nhật ký đăng nhập** | Máy chủ ghi **thời điểm và địa chỉ IP** mỗi lần đăng nhập để phát hiện lạm dụng. Bản 1.3 hoàn toàn không khai điều này |
- *
- *   Cả hai đều là HÀNH VI XỬ LÝ DỮ LIỆU, không phải câu chữ. Một người đọc bản 1.3 rồi bấm đồng
- *   ý **không** biết địa chỉ IP của mình được ghi lại — nên bản họ đã đọc và bản hôm nay phải
- *   mang hai số khác nhau, kể cả khi cách nhau vài giờ.
- *
- *   ⚠ Địa chỉ IP là thứ MÁY CHỦ THẤY TỪ CHÍNH LỜI GỌI, không phải thứ ứng dụng gửi lên. Câu mở
- *   đầu *"gửi đi đúng MỘT việc"* vì thế vẫn đúng từng chữ — nhưng im lặng về việc máy chủ ghi
- *   lại nó thì là giấu một hành vi mà hệ thống CÓ, đúng thứ Nghị định 13 nhắm tới.
+ *   | `getPhoneNumber` đổi mục đích: "gọi lại tư vấn" → **định danh + thông báo ZNS** | **CÓ** — người đã đồng ý cho việc này chưa đồng ý cho việc kia |
+ *   | Khai thêm rằng máy chủ ghi **địa chỉ IP** mỗi lượt đăng nhập | **CÓ** — người đọc bản trước không biết |
+ *   | Sửa một câu cho dễ đọc, không đổi hành vi nào | KHÔNG |
  */
-export const PHIEN_BAN_CHINH_SACH = "1.4";
+export const PHIEN_BAN_CHINH_SACH = "1.0";
 export const NGAY_HIEU_LUC = "20/09/2026";
 
 export const TIEU_DE_CHINH_SACH = "Chính sách quyền riêng tư";
+
 
 /**
  * CÂU ĐỨNG ĐẦU — MỘT CÂU, ĐÚNG CHO CẢ HAI BIẾN THỂ.
@@ -160,11 +167,11 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     ma: "du-lieu",
     tieu_de: "Dữ liệu ứng dụng xử lý",
     doan: [
-      // CÂU NÀY ĐÃ ĐƯỢC SỬA Ở PHIÊN BẢN 1.3. Bản 1.2 viết "không có ô đăng nhập"; nay ứng dụng
+      // CÂU NÀY ĐÃ PHẢI SỬA GIỮA CHỪNG. Bản trước viết "không có ô đăng nhập"; nay ứng dụng
       // CÓ đăng nhập, chỉ là không có ô nào để gõ. Giữ nguyên câu cũ là mô tả sai bản dựng.
       "Ứng dụng không yêu cầu bạn nhập bất kỳ thông tin nào: không có biểu mẫu, không có ô nhập số điện thoại, không có mã sáu số nào phải gõ. Việc đăng nhập là một lần chạm, bằng chính số Zalo bạn đang dùng — mục Đăng nhập bên dưới nói rõ.",
       "Ứng dụng không đọc danh bạ, không đọc tin nhắn và không theo dõi hành vi sử dụng của bạn.",
-      // CÂU NÀY ĐÃ ĐƯỢC SỬA Ở PHIÊN BẢN 1.2, VÀ VIỆC SỬA NÓ LÀ BẮT BUỘC. Bản 1.1 viết "không
+      // CÂU NÀY ĐÃ PHẢI SỬA, VÀ VIỆC SỬA NÓ LÀ BẮT BUỘC. Bản trước viết "không
       // đọc thư viện ảnh"; nay ứng dụng mở cửa sổ chọn ảnh của Zalo, nên câu ấy đã thành SAI.
       // Một chính sách mô tả sai bản dựng nó nằm trong là thứ Nghị định 13 nhắm tới, và là thứ
       // không sửa lại được sau khi đã nộp duyệt.
@@ -177,7 +184,7 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
      * thể, và nó có một dòng tiêu đề riêng vì đúng lý do mục `ghi-tep` có:
      *
      *   Người đọc chính sách để biết "ứng dụng này làm gì với số điện thoại của tôi" phải tìm
-     *   thấy câu trả lời bằng một dòng tiêu đề, không phải bằng cách đọc hết. Và từ bản 1.3,
+     *   thấy câu trả lời bằng một dòng tiêu đề, không phải bằng cách đọc hết. Và nay
      *   `getPhoneNumber` không còn là "để gọi lại tư vấn" mà là ĐỊNH DANH — thứ quyết định
      *   người dùng thấy gì khi mở lại ứng dụng.
      */
@@ -188,10 +195,13 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       "Zalo không trả số điện thoại của bạn về máy: ứng dụng chỉ nhận hai mã dùng được một lần, hết hạn sau hai phút. Số điện thoại của bạn không nằm trong hai mã ấy.",
       "Khi bạn bấm đăng nhập, ứng dụng gửi hai mã ấy tới máy chủ của VihatSoftware — bên phát hành ứng dụng này, không phải một bên thứ ba. Máy chủ đổi mã tại Zalo bằng một khoá bí mật mà ứng dụng trên máy bạn không có và không được có.",
       "MÁY CHỦ LƯU SỐ ĐIỆN THOẠI CỦA BẠN, và lưu để làm đúng hai việc: làm tên đăng nhập cho những lần bạn mở lại ứng dụng, và làm nơi nhận thông báo ZNS. Ngoài số điện thoại, ứng dụng không gửi thông tin nào khác của bạn đi.",
-      "Máy chủ trả về một phiếu phiên. Ứng dụng giữ phiếu ấy trong bộ nhớ, không ghi xuống máy bạn và không hiện nó ra màn hình; bạn đóng ứng dụng là phiếu mất đi và lần sau đăng nhập lại bằng một lần chạm.",
-      // KHAI Ở BẢN 1.4. Địa chỉ IP là thứ máy chủ THẤY từ chính lời gọi, không phải thứ ứng dụng
-      // gửi lên — nhưng im lặng về việc nó được GHI LẠI là giấu một hành vi mà hệ thống có.
-      "Mỗi lần bạn đăng nhập, máy chủ ghi lại thời điểm và địa chỉ IP của lần đăng nhập đó, để phát hiện việc lạm dụng (ví dụ một máy thử đăng nhập hàng loạt). Nhật ký này KHÔNG chứa số điện thoại của bạn.",
+      "Máy chủ trả về một phiếu phiên, và giữ lại bản ghi của phiên ấy: thời điểm tạo, thời điểm hết hạn, và một bản mã hoá một chiều của chính phiếu — không phải phiếu. Phiên hết hạn sau 7 ngày. Ứng dụng trên máy bạn thì chỉ giữ phiếu trong bộ nhớ: không ghi xuống máy, không hiện ra màn hình, và mất đi khi bạn đóng ứng dụng.",
+      // VIẾT LẠI CHO ĐÚNG SAU KHI ĐỌC LƯỢC ĐỒ THẬT
+      // (`vihat-miniapp/migrations/0001_init.sql`). Bản nháp viết "mỗi lần bạn đăng nhập" — người
+      // đọc hiểu là lần THÀNH CÔNG, và hiểu như vậy là hiểu sai một nửa sự thật.
+      "MÁY CHỦ GHI MỘT DÒNG NHẬT KÝ CHO MỖI LƯỢT ĐĂNG NHẬP, KỂ CẢ LƯỢT KHÔNG THÀNH CÔNG. Nghĩa là: nếu bạn bấm đăng nhập rồi việc ấy hỏng giữa chừng — mã hết hạn, Zalo không trả lời, hoặc bạn thử quá nhiều lần — thì địa chỉ IP của bạn vẫn được ghi lại, dù bạn chưa từng đăng nhập thành công lần nào và chưa từng có tài khoản ở đây.",
+      "Mỗi dòng nhật ký gồm: thời điểm, địa chỉ IP, lượt ấy thành công hay không, một mã lý do ngắn do chúng tôi đặt, và mã định danh nội bộ của bạn NẾU lượt ấy thành công. Nhật ký KHÔNG chứa số điện thoại của bạn, và cũng không chứa tên, thiết bị hay vị trí.",
+      "Nhật ký này dùng để phát hiện lạm dụng — ví dụ một máy thử đăng nhập hàng loạt. Nó là loại dữ liệu CHỈ GHI THÊM: không sửa được và không xoá được, kể cả bởi chính chúng tôi, vì một nhật ký sửa được thì không chứng minh được gì khi có tranh chấp.",
       "Bạn có thể dùng ứng dụng mà KHÔNG đăng nhập: toàn bộ phần giới thiệu, danh thiếp, văn phòng và các tính năng khác vẫn dùng được, và hotline cùng email nằm ngay dưới nút đăng nhập.",
     ],
   },
@@ -223,8 +233,8 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
   },
   {
     /**
-     * THỜI GIAN LƯU — ĐÃ CHỐT Ở BẢN 1.4: **không có hạn tự động, giữ tới khi người dùng yêu cầu
-     * xoá.** Bản 1.3 để trống chỗ này vì chưa ai chốt, và chỗ trống ấy có một ca kiểm canh.
+     * THỜI GIAN LƯU — ĐÃ CHỐT: **không có hạn tự động, giữ tới khi người dùng yêu cầu
+     * xoá.** Chỗ này từng để trống vì chưa ai chốt, và chỗ trống ấy có một ca kiểm canh.
      *
      * ⚠ MỘT CAM KẾT KIỂU NÀY PHẢI ĐI KÈM CỬA THỰC HIỆN, nếu không nó là hứa suông — và Nghị
      * định 13 đòi đúng cái cửa ấy. Nên ba đoạn dưới nói đủ ba điều, thiếu một là hỏng:
@@ -244,17 +254,28 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       "Kiểu kết nối mạng đọc được cũng chỉ hiện lên màn hình rồi mất đi. Ứng dụng không ghi lại lịch sử bạn đã kiểm tra những lần nào.",
       "Phiếu phiên nhận được sau khi bạn đăng nhập cũng chỉ nằm trong bộ nhớ ấy: ứng dụng không ghi nó xuống máy bạn, nên đóng ứng dụng là nó mất đi và lần sau bạn đăng nhập lại bằng một lần chạm.",
       "Trên máy bạn không có việc lưu trữ, nên không có bản sao lưu nào trên máy bạn chứa dữ liệu của bạn.",
-      "Ở máy chủ, hai thứ được lưu: số điện thoại dùng làm tên đăng nhập của bạn, và nhật ký đăng nhập gồm thời điểm cùng địa chỉ IP của mỗi lần đăng nhập.",
-      "THỜI GIAN LƯU: số điện thoại của bạn KHÔNG có hạn tự động. Chúng tôi giữ nó chừng nào bạn còn dùng ứng dụng, và giữ tới khi chính bạn yêu cầu xoá — không có mốc nào tự động xoá, và cũng không có mốc nào tự động giữ thêm.",
+      "Ở máy chủ, ba thứ được lưu: số điện thoại dùng làm tên đăng nhập của bạn; bản ghi của từng phiên đăng nhập (thời điểm tạo, thời điểm hết hạn, và bản mã hoá một chiều của phiếu phiên); và nhật ký đăng nhập. Mỗi bản ghi định danh còn mang thời điểm nó được tạo và lần gần nhất được cập nhật.",
+      "Ngoài ba thứ ấy, máy chủ KHÔNG lưu gì khác của bạn: không tên, không email, không vị trí, không thông tin thiết bị, không danh bạ, không ảnh. Dịch vụ này cũng không cài công cụ đo hành vi nào và không nhúng bộ công cụ của bên thứ ba nào.",
+      "THỜI HẠN LƯU NHẬT KÝ ĐĂNG NHẬP: 90 ngày. Sau 90 ngày, dòng nhật ký được xoá — và điều này áp cho MỌI dòng, kể cả những dòng của một lượt đăng nhập không thành công. Nghĩa là nếu bạn chưa từng đăng nhập thành công, nên không có gì để yêu cầu xoá, thì địa chỉ IP trong những dòng ấy vẫn tự mất đi sau 90 ngày mà bạn không phải làm gì cả.",
+      "THỜI GIAN LƯU SỐ ĐIỆN THOẠI: KHÔNG có hạn tự động. Chúng tôi giữ nó chừng nào bạn còn dùng ứng dụng, và giữ tới khi chính bạn yêu cầu xoá — không có mốc nào tự động xoá, và cũng không có mốc nào tự động giữ thêm.",
       "CÁCH YÊU CẦU XOÁ: gọi hotline hoặc gửi email cho chúng tôi theo hai đầu mối ở màn Liên hệ của ứng dụng. Bạn không cần đăng nhập để yêu cầu, và không phải nêu lý do.",
-      "KHI XOÁ, CHÚNG TÔI XOÁ: số điện thoại của bạn và bản ghi định danh gắn với nó — nghĩa là bạn trở lại như chưa từng đăng nhập. Nhật ký đăng nhập được giữ lại, và lý do là nó KHÔNG chứa số điện thoại của bạn: sau khi xoá, không còn đường nào nối những dòng nhật ký ấy về với bạn.",
+      // CÂU NÀY ĐÃ PHẢI SỬA, VÀ ĐÓ LÀ SỬA MỘT LỜI HỨA KHÔNG GIỮ ĐƯỢC. Bản nháp viết
+      // "chúng tôi xoá số điện thoại VÀ BẢN GHI ĐỊNH DANH". Đọc lược đồ thật
+      // (`vihat-miniapp/migrations/0001_init.sql`) thì thấy không làm được: nhật ký đăng nhập
+      // tham chiếu tới bản ghi định danh và là bảng CHỈ GHI THÊM (trigger chặn UPDATE/DELETE),
+      // nên CSDL sẽ TỪ CHỐI xoá hàng định danh của bất cứ ai từng đăng nhập thành công. Thứ
+      // làm được — và cũng là thứ Nghị định 13 gọi là xoá dữ liệu cá nhân — là XOÁ SỐ ĐIỆN
+      // THOẠI khỏi bản ghi ấy. Hứa một hành vi mã không làm được là tuyên bố sai dưới tên một
+      // pháp nhân, kể cả khi lời hứa nghe mạnh hơn.
+      "KHI XOÁ, CHÚNG TÔI XOÁ SỐ ĐIỆN THOẠI CỦA BẠN — thứ duy nhất trong hệ thống nhận ra bạn là ai. Bản ghi còn lại chỉ là một mã định danh nội bộ không gắn với số nào, và những dòng nhật ký cũ vẫn trỏ vào mã ấy; nhưng từ mã ấy không còn số điện thoại nào để tra về bạn nữa.",
+      "NẾU BẠN CHƯA TỪNG ĐĂNG NHẬP THÀNH CÔNG: chúng tôi không có bản ghi định danh nào của bạn để mà xoá — chỉ có những dòng nhật ký ghi lại thời điểm, địa chỉ IP và việc lượt ấy đã hỏng vì lý do gì. Chúng tôi không xoá riêng những dòng ấy theo yêu cầu được, vì nhật ký chỉ ghi thêm, và cũng không có cách nào biết dòng nào là của bạn: trong hệ thống không có gì khác của bạn để đối chiếu. Nhưng bạn không cần yêu cầu — chúng tự hết hạn và bị xoá sau 90 ngày, như mọi dòng nhật ký khác.",
     ],
   },
   {
     ma: "ben-thu-ba",
     tieu_de: "Chuyển dữ liệu cho bên thứ ba",
     doan: [
-      // SỬA Ở BẢN 1.3: câu cũ ("nó không có đường gửi dữ liệu đi đâu cả") chỉ còn đúng ở bản
+      // ĐÃ SỬA: câu cũ ("nó không có đường gửi dữ liệu đi đâu cả") chỉ còn đúng ở bản
       // nộp. Vế BÊN THỨ BA thì đúng ở cả hai bản và là vế mục này nói tới — máy chủ nhận hai mã
       // đăng nhập là máy chủ của chính bên phát hành ứng dụng, không phải một bên thứ ba.
       "Ứng dụng không gửi dữ liệu của bạn cho bất kỳ bên thứ ba nào, trong nước hay ngoài nước. Nơi duy nhất nhận gì đó từ ứng dụng là máy chủ của chính VihatSoftware, ở bước đăng nhập nói tại mục Đăng nhập bên trên.",
@@ -269,7 +290,7 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     doan: [
       "Bạn có quyền được biết, quyền đồng ý và rút lại đồng ý, quyền truy cập, chỉnh sửa, xoá và hạn chế việc xử lý dữ liệu cá nhân của mình, quyền phản đối và quyền khiếu nại.",
       "Trong ứng dụng này, việc thực hiện các quyền ấy rất đơn giản: bạn rút lại đồng ý bằng cách tắt quyền tương ứng trong phần cài đặt của Zalo.",
-      // SỬA Ở BẢN 1.3, cùng lý do với mục "Chuyển dữ liệu cho bên thứ ba": câu cũ ("không có
+      // ĐÃ SỬA, cùng lý do với mục "Chuyển dữ liệu cho bên thứ ba": câu cũ ("không có
       // dữ liệu nào để yêu cầu xoá") chỉ đúng khi ứng dụng không gửi gì đi. Vế "trên máy bạn"
       // thì đúng ở mọi bản dựng, và vế còn lại được chỉ sang đúng chỗ người đọc phải đi.
       "Trên máy bạn không có dữ liệu nào được lưu lại. Với những gì đã gửi tới máy chủ của chúng tôi ở bước đăng nhập, bạn thực hiện các quyền trên bằng cách liên hệ theo các đầu mối ở màn Liên hệ; chúng tôi trả lời trong thời hạn Nghị định 13/2023/NĐ-CP quy định.",

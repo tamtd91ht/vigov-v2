@@ -143,13 +143,14 @@ Người chạy lệnh chọn **đẩy bản nào**. Biến thể quyết địn
 
 | Biến thể | Nội dung | Dùng để | `dist/assets/app.js` |
 |---|---|---|---|
-| **`goc`** | Ứng dụng sản phẩm đầy đủ: bốn màn giới thiệu + tab Danh thiếp (ba tính năng) + hai khối trên màn Liên hệ (đăng nhập · tìm văn phòng) | **BẢN NỘP** | **574,34 kB** thô · 158,48 kB gzip |
-| **`day-du`** (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **585,89 kB** thô · 161,61 kB gzip |
+| **`goc`** | Ứng dụng sản phẩm đầy đủ: bốn màn giới thiệu + tab Danh thiếp (ba tính năng) + hai khối trên màn Liên hệ (đăng nhập · tìm văn phòng) | **BẢN NỘP** | **576,92 kB** thô · 159,26 kB gzip |
+| **`day-du`** (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **588,46 kB** thô · 162,39 kB gzip |
 
 Hai con số ấy **đo ngày 20/09/2026**, bằng `npm run build:goc` và `npm run build`, đọc từ chính
 tệp phát ra. Phần tăng so với lần đo 18/09 (566,48 / 578,03) là khối đăng nhập cộng các điều
-khoản mới của chính sách `1.4`: **+7,86 kB** ở bản nộp, **+7,86 kB** ở bản đầy đủ — hai bản tăng
-bằng nhau, vì **khối đăng nhập và chính sách giống hệt nhau ở cả hai**.
+khoản mới của chính sách: **+10,44 kB** ở bản nộp, **+10,43 kB** ở bản đầy đủ — hai bản tăng
+bằng nhau, vì **khối đăng nhập và chính sách giống hệt nhau ở cả hai**. Phần lớn số ấy là CHỮ:
+một văn bản pháp lý khai đủ thì dài, và đó là cái giá rẻ nhất trong toàn bộ bảng này.
 
 **KHỐI ĐĂNG NHẬP KHÔNG PHẢI MỘT BIẾN THỂ, VÀ NÓ TỪNG LÀ.** Bản đầu đặt lời gọi máy chủ sau một
 cửa `bien-the/dang-nhap` để bản nộp không gọi mạng. Tiền đề ấy đảo chiều trong cùng ngày: **bản
@@ -224,7 +225,7 @@ Cơ chế là `resolve.alias`, không phải tree-shaking — tree-shaking **kh�
 | `src/features/dang-nhap/hop-dong.ts` | **Hợp đồng với máy chủ, một tệp** — đường dẫn, tên hai trường gửi đi, hình dạng phản hồi, và `VIGOV_API_HOST`. Máy chủ là kho riêng `vihat-miniapp`, **đang dựng song song**: đổi hợp đồng là sửa tệp này và `dang-nhap.test.tsx` nằm cạnh, không sửa gì khác |
 | `src/features/dang-nhap/goi-may-chu.ts` | **Tệp DUY NHẤT trong kho được `fetch`.** Năm nhánh kết quả, không ném ra ngoài, không log |
 | `src/features/dang-nhap/dang-nhap.test.tsx` | 11 ca: năm nhánh của bước máy chủ · 401 và 502 KHÔNG được gộp · gọi đúng một lần bằng POST · thân yêu cầu mang đúng hai mã · bearer không ra màn hình |
-| `src/content/chinh-sach.test.ts` | 10 ca về chính văn bản pháp lý: câu "không gửi đi đâu" đã biến mất · mục Đăng nhập nói đủ **gửi gì · ai nhận · lưu gì · vì sao** · thời gian lưu nói đủ **không có hạn tự động · cửa yêu cầu xoá · phạm vi xoá** · nhật ký đăng nhập khai đủ **IP · thời điểm · mục đích** |
+| `src/content/chinh-sach.test.ts` | 18 ca về chính văn bản pháp lý: câu "không gửi đi đâu" đã biến mất · mục Đăng nhập nói đủ **gửi gì · ai nhận · lưu gì · vì sao** · thời gian lưu nói đủ **không có hạn tự động · cửa yêu cầu xoá · phạm vi xoá** · nhật ký khai đủ **IP · thời điểm · kết quả · mã lý do · chỉ-ghi-thêm** · **lượt THẤT BẠI cũng bị ghi** · danh sách **KHÔNG lưu** · **90 ngày cho nhật ký, áp cả dòng của lượt thất bại** · và MỘT số phiên bản, vì chưa bản nào tới tay ai |
 | `src/features/kham-pha/bien-the.test.ts` | Hai bản rỗng khai đúng bề mặt · **không tệp nào nhập thẳng vòng qua alias** · danh sách biến thể ở `vite.config.ts` và `scripts/dung.mjs` **không lệch nhau** |
 | `src/bundle-for-zalo.test.ts` | Dựng thật **cả hai** biến thể rồi đọc bundle — bằng chứng cuối cùng, kèm lượt quét từ cấm |
 
@@ -372,120 +373,100 @@ tab đang nói năm việc, và người tìm thông tin pháp lý đã đứng 
 này công bố dưới tên một pháp nhân có thật — một câu mô tả hành vi mà mã không có là tuyên bố
 sai dưới tên ấy; giấu một hành vi mà mã CÓ là vi phạm chính Nghị định 13/2023/NĐ-CP.
 
-**Phiên bản `1.4`, hiệu lực 20/09/2026.**
+**Phiên bản `1.0`, hiệu lực 20/09/2026.**
 
-**Lên `1.4` vì hai điều khoản đổi NỘI DUNG** — cùng ngày với 1.3, và vẫn phải là một số mới:
+⚠ **MỘT SỐ PHIÊN BẢN, KHÔNG PHẢI SÁU — và đây là quyết định dựa trên bằng chứng, không phải dọn
+cho gọn.** Trong một ngày soạn thảo, văn bản này đã đi `1.0 → 1.1 → 1.2 → 1.3 → 1.4 → 1.5`, mỗi
+lần vì một lý do đúng. Nhưng lý do tồn tại của việc lên số là *"một người đã bấm đồng ý ở bản cũ
+không biết về thứ mới"*, và nó chỉ có nghĩa khi **có** một người như thế.
 
-| Mới ở 1.4 | Nội dung |
+Đã kiểm, 20/09/2026:
+
+| Nguồn | Kết quả |
 |---|---|
-| **Thời gian lưu** | Bản 1.3 **không nêu** thời hạn nào (chưa ai chốt). Nay chốt: **không có hạn tự động**, số điện thoại được giữ **tới khi chính người dùng yêu cầu xoá** |
-| **Nhật ký đăng nhập** | Máy chủ ghi **thời điểm và địa chỉ IP** mỗi lần đăng nhập, để phát hiện lạm dụng. Bản 1.3 **hoàn toàn không khai** điều này |
+| `git log -- citizen-app` | không một commit nào nói tới một lần phát hành |
+| Sổ tiến độ, mục `nop-zalo-duyet` | `chua_lam` |
+| README §"Còn thiếu" #1 | ảnh chụp màn hình và mô tả store **chưa có** — Zalo bắt buộc phải có mới xét duyệt được |
+| README §"Hai thứ đã kiểm bằng cách chạy thật" | đường công khai trả *"ứng dụng đang trong giai đoạn phát triển"*, tức **chưa phát hành**; chỉ có bản THỬ NGHIỆM (`env=TESTING`, Version 6–7) mà chỉ tài khoản người dựng mở được |
 
-Một người đọc bản 1.3 rồi bấm đồng ý **không** biết địa chỉ IP của mình được ghi lại — nên hai
-bản phải mang hai số khác nhau, kể cả khi cách nhau vài giờ. Địa chỉ IP là thứ **máy chủ thấy từ
-chính lời gọi**, không phải thứ ứng dụng gửi lên, nên câu mở đầu *"gửi đi đúng MỘT việc"* vẫn
-đúng từng chữ; im lặng về việc nó được **ghi lại** thì mới là giấu một hành vi hệ thống có.
+**Không một người dùng nào từng đọc một bản nào của văn bản này.** Sáu số trong một ngày vì thế
+không bảo vệ ai — chúng kể lại quá trình soạn thảo bên trong một văn bản pháp lý, và làm người
+đọc tưởng đã có sáu đợt thay đổi được công bố. Nên bản đầu tiên ra ngoài mang số **`1.0`**.
+Quá trình soạn thảo **không bị xoá**: nó nằm trong `git log` của `chinh-sach-rieng-tu.ts`, đúng
+nơi lịch sử soạn thảo thuộc về.
 
-**"Giữ tới khi bạn yêu cầu xoá" là một CAM KẾT, không phải một cách né con số** — nên nó đi kèm
-cửa thực hiện, và mỗi vế có một ca kiểm riêng trong `src/content/chinh-sach.test.ts`:
+⚠ **TỪ LẦN PHÁT HÀNH ĐẦU TIÊN TRỞ ĐI, QUY TẮC ĐẢO NGƯỢC:** mỗi thay đổi về **hành vi xử lý dữ
+liệu** phải lên một số mới, kể cả khi cách nhau vài giờ, và **không được gộp**. Ba ví dụ thật từ
+lượt soạn thảo này, giữ lại vì chúng nói rõ ranh giới hơn mọi định nghĩa:
 
-| Vế | Văn bản phải nói |
+| Thay đổi | Lên số? |
 |---|---|
-| Không có hạn tự động | nói **thẳng** — im lặng về thời hạn và "giữ tới khi bạn yêu cầu xoá" là hai thứ khác nhau với người đọc |
-| Cửa thực hiện | hotline và email **đã có sẵn** trên màn Liên hệ; không cần đăng nhập, không phải nêu lý do |
-| Phạm vi xoá | số điện thoại **và** bản ghi định danh. Nhật ký đăng nhập ở lại, và lý do nói ra được: nó không chứa số điện thoại, nên sau khi xoá không còn đường nào nối nó về với người dùng |
+| `getPhoneNumber` đổi mục đích: "gọi lại tư vấn" → **định danh + thông báo ZNS** | **CÓ** — người đã đồng ý cho việc này chưa đồng ý cho việc kia |
+| Khai thêm rằng máy chủ ghi **địa chỉ IP** mỗi lượt đăng nhập | **CÓ** — người đọc bản trước không biết |
+| Sửa một câu cho dễ đọc, không đổi hành vi nào | KHÔNG |
 
-#### Bản 1.3 — vì sao lên số
+### Văn bản nói gì — bốn điều nặng nhất
 
-**Lên `1.3` vì MỤC ĐÍCH của một quyền đã đổi** — thay đổi nặng hơn cả thêm một quyền mới:
+**Một văn bản, đúng cho cả hai biến thể.** Không còn câu *"không lưu trữ và không gửi đi bất kỳ
+dữ liệu nào của bạn"*: nó thành sai ngày bản nộp bắt đầu gọi máy chủ, và bị gỡ trong đúng lượt
+làm nó sai. Câu mở đầu nay nói ngay ba điều: không lưu gì xuống máy · gửi đi **đúng một việc** ·
+và chỉ khi chính người dùng bấm đăng nhập.
 
-| | Bản 1.2 | Bản 1.3 |
+**Văn bản được đối chiếu với LƯỢC ĐỒ THẬT** (`vihat-miniapp/migrations/0001_init.sql`), không
+với một mô tả. Bốn thứ được khai nhờ lần đối chiếu ấy:
+
+| Máy chủ thật sự lưu | Khai ở đâu |
+|---|---|
+| IP của **MỌI LƯỢT đăng nhập, kể cả lượt THẤT BẠI** — một đoạn riêng, in hoa | mục Đăng nhập |
+| Kết quả từng lượt + mã lý do + mã định danh nội bộ nếu thành công | mục Đăng nhập |
+| Thời điểm tạo/cập nhật bản ghi định danh · tạo/hết hạn từng phiên (**7 ngày**) | mục Đăng nhập · Cách xử lý |
+| Bản băm SHA-256 của phiếu phiên — **có khai**, vì bỏ đúng một mục khỏi một danh sách đầy đủ là mời câu hỏi *"còn bỏ gì nữa"*, và vì nó là điều **tốt** nói được ra | mục Đăng nhập |
+
+**Hai thời hạn, hai câu trả lời khác nhau, cả hai đã chốt:**
+
+| Lưu gì | Bao lâu | Vì sao không giống nhau |
 |---|---|---|
-| `getPhoneNumber` | "để đội kinh doanh gọi lại tư vấn" | **đăng nhập / định danh**, và **nhận thông báo ZNS** |
-| `getAccessToken` | không nhắc tới | khai riêng một dòng: mã cho biết bạn là người dùng Zalo nào **đối với riêng ứng dụng này** |
-| Gửi đi | không có hành vi gửi nào | **cả hai bản dựng** gửi hai mã ấy tới máy chủ khi bạn bấm đăng nhập, và máy chủ **lưu số điện thoại** |
+| Số điện thoại | **không có hạn tự động**, tới khi người dùng yêu cầu xoá | nó là danh tính — hết nó là hết tài khoản, nên chủ của nó quyết |
+| Nhật ký đăng nhập | **90 ngày**, tự xoá, **kể cả dòng của lượt thất bại** | nó chứa IP của cả những người **chưa từng có tài khoản**: họ không có gì để yêu cầu xoá, nên một hạn tự động là cách duy nhất thứ ấy mất đi |
 
-Một người đã đồng ý cho "gọi lại tư vấn" **không** phải đã đồng ý cho "định danh và gửi thông
-báo": cùng một quyền, cùng một nút, hai sự đồng ý khác nhau. Và một câu của bản 1.2 đã thành
-sai — *"không có ô đăng nhập"* — nên nó được thay bằng câu nói đúng cả hai vế: không có ô nào để
-gõ, nhưng **có** việc đăng nhập.
+Cơ chế canh chỗ-trống (`THOI_GIAN_LUU_CHUA_CHOT`, rồi `THOI_HAN_LUU_NHAT_KY_CHUA_CHOT`) đã làm
+đúng việc của nó **hai lần**: không ai bịa một con số vào văn bản pháp lý, và ngày khách chốt thì
+ca kiểm đỏ lên bắt đi trọn bốn việc — câu thật · bỏ hằng · số phiên bản · sửa ca kiểm. Cả hai
+hằng nay đã biến mất vì cả hai câu hỏi đã có đáp án.
 
-**MỘT VĂN BẢN, ĐÚNG CHO CẢ HAI BẢN DỰNG** — và câu mở đầu cũ đã bị **gỡ khỏi cả bản nộp**:
+⚠ **MỘT LỜI HỨA ĐÃ PHẢI RÚT LẠI, VÌ LƯỢC ĐỒ KHÔNG CHO GIỮ NÓ.** Một bản nháp cam kết *"khi xoá,
+chúng tôi xoá số điện thoại **và bản ghi định danh**"*. Lược đồ: `nhat_ky_dang_nhap` tham chiếu
+`nguoi_dung(id)` và là bảng **chỉ ghi thêm** (trigger chặn `UPDATE`/`DELETE`), nên PostgreSQL
+**từ chối** xoá hàng định danh của bất cứ ai đã từng đăng nhập thành công. Văn bản nay hứa đúng
+thứ làm được: **xoá số điện thoại** — thứ duy nhất nhận ra người dùng — và nói rõ bản ghi còn
+lại chỉ là một mã không gắn với số nào. → §"Còn thiếu"
 
-> *"Ứng dụng này không lưu trữ và không gửi đi bất kỳ dữ liệu nào của bạn."*
+#### Ba bài học của lượt soạn thảo, giữ lại vì chúng không thuộc về một số phiên bản nào
 
-Câu ấy từng là thứ mạnh nhất app này có để nói. Nó thành **sai** ngày bản nộp bắt đầu gọi máy
-chủ, nên nó biến mất trong đúng lượt sửa làm nó sai — không để lại một phiên bản nào của app
-mang một câu không còn đúng. `chinh-sach.test.ts` có một ca canh cho nó không quay lại, và
-`bundle-for-zalo.test.ts` khẳng định **cả hai bundle** đều không chứa nó.
+**Một cơ chế tách đôi khi không còn gì để tách là một cái bẫy.** Đã mắc hai lần trong tệp này:
+`MUC_TRUOC_QUYEN`/`MUC_SAU_QUYEN` (tách mục quyền theo biến thể, khi mọi biến thể đều xin quyền),
+rồi một cửa `bien-the/dang-nhap` tách câu mở đầu chính sách (khi cả hai biến thể đều gọi máy chủ).
+Cả hai lần, cách sửa là **gỡ cơ chế**, không phải nuôi hai nửa giống hệt nhau.
 
-Câu mở đầu mới nói ngay ba điều: không lưu gì xuống máy · gửi đi **đúng một việc** · và chỉ khi
-chính người dùng bấm đăng nhập. Mục "Đăng nhập bằng số điện thoại Zalo" nói đủ bốn vế Nghị định
-13 đòi: **gửi gì · ai nhận · lưu gì · vì sao**, trong đó có câu phải nói thẳng: *máy chủ lưu số
-điện thoại của bạn để làm tên đăng nhập và làm nơi nhận thông báo ZNS.*
+**Bốn câu trong chính sách đúng vì `phase1-collects-nothing.test.ts` cấm điều ngược lại**, không
+phải vì ai hứa: "gửi đi đúng MỘT việc" ← dây bẫy cấm `fetch`/XHR/WebSocket/EventSource/axios ở
+mọi tệp, miễn cho **đúng một tệp** · "không lưu lại" (trên máy) ← dây bẫy cấm
+`localStorage`/`sessionStorage`/`cookie`/`indexedDB`, **không nới một dòng nào** · "ảnh không rời
+khỏi máy" ← dây bẫy cấm `serverUploadUrl`, **không nới một dòng nào**. **Ai nới một trong ba dây
+bẫy ấy phải sửa chính sách TRƯỚC** — nếu không, chính sách thành sai mà không có gì đỏ lên. Lần
+thu hẹp 20/09 đã đi đúng thứ tự ấy: **gỡ câu "không gửi đi đâu"** trong cùng một lượt với việc
+nới dây bẫy.
 
-Chỗ trống về thời gian lưu **đã được lấp ở bản 1.4** (xem ngay trên). Cơ chế canh nó đã làm
-đúng việc của mình: khách chốt → ca kiểm đỏ → bốn việc phải đi trọn trong một lượt (câu thật ·
-bỏ hằng chỗ-trống · lên số phiên bản · sửa ca kiểm).
-
-Dây bẫy `fetch` đã **thu hẹp về đúng một tệp** (`features/dang-nhap/goi-may-chu.ts`), không gỡ;
-hai dây bẫy chống "lưu lại" và `serverUploadUrl` **không nới một dòng nào**, nên hai câu tương
-ứng trong chính sách vẫn đứng nguyên trên chỗ cũ.
-
-#### Bản 1.2 — vì sao lên số
-
-**Lên `1.2` vì bề mặt quyền riêng tư MỞ RỘNG THẬT SỰ**, không vì câu chữ — bốn thứ mới:
-
-| Mới | Ứng dụng làm gì | Khai ở mục |
-|---|---|---|
-| **Máy ảnh** | Hỏi quyền để chụp lại một tấm danh thiếp giấy | `cac-quyen` · `tung-quyen` |
-| **Thư viện ảnh** | Mở cửa sổ chọn ảnh của Zalo; ảnh **không rời khỏi máy** | `du-lieu` · `cac-quyen` |
-| **Thông tin mạng** | Chỉ **kiểu** kết nối — không IP, không tên mạng Wi-Fi | `cac-quyen` · `tung-quyen` |
-| **Ghi một tệp xuống máy** | Tệp danh thiếp **của chúng tôi**, không phải dữ liệu của người dùng | `ghi-tep`, mục MỚI |
-
-Ba thứ đầu là dữ liệu ĐI VÀO ứng dụng; thứ tư là thứ ứng dụng VIẾT RA — một loại hành vi
-bản 1.1 hoàn toàn không có. Nó được cho một mục riêng chứ không phải một câu lẫn trong mục
-khác: người đọc để biết "ứng dụng này làm gì với máy tôi" phải tìm thấy nó bằng một dòng
-tiêu đề, không phải bằng cách đọc hết.
-
-**MỘT CÂU CỦA BẢN 1.1 ĐÃ THÀNH SAI VÀ PHẢI SỬA**: *"không đọc thư viện ảnh"*. Nay ứng dụng
-mở cửa sổ chọn ảnh, nên câu ấy được thay bằng *"không **tự** đọc thư viện ảnh; chỉ nhận đúng
-tấm ảnh bạn tự chọn trong cửa sổ của Zalo"*. Một câu đúng ở bản trước mà không ai sửa khi hành
-vi đổi là loại lỗi nặng nhất một văn bản như thế này có thể mắc — và là loại không có gì đỏ
-lên để báo.
-
-**Câu thứ tư được thêm vào danh sách "đúng vì có dây bẫy"**: *"ảnh không rời khỏi máy"* ← dây
-bẫy cấm `serverUploadUrl` trên toàn cây mã, không miễn cho thư mục nào.
-
-#### Lịch sử số phiên bản
-
-**Phiên bản `1.1`, hiệu lực 18/09/2026.** Lên số vì **hành vi** đã đổi, không vì câu chữ: ba
-quyền nay gắn với ba tính năng sản phẩm, và mục "Chuyển dữ liệu cho bên thứ ba" nay nói ra việc
-ứng dụng mở trang bản đồ và trang web khi người dùng bấm. Hai thay đổi ấy phải đi kèm một số
-phiên bản mới, nếu không thì "phiên bản 1.0" chỉ tên hai văn bản khác nhau.
-
-**Mục về các quyền nay nằm trong danh sách chung**, không còn sau một cửa alias: ba quyền có mặt ở
-**mọi** biến thể, nên cơ chế `MUC_TRUOC_QUYEN`/`MUC_SAU_QUYEN` đã thành thừa và bị bỏ. Giữ lại một
-cơ chế tách đôi khi không còn gì để tách là giữ lại một cái bẫy.
-
-Bốn câu trong chính sách đúng **vì `phase1-collects-nothing.test.ts` cấm điều ngược lại**, không
-phải vì ai hứa: "gửi đi đúng MỘT việc" ← dây bẫy cấm
-`fetch`/XHR/WebSocket/EventSource/axios ở mọi tệp, miễn cho **đúng một tệp** · "không lưu lại"
-(trên máy) ← dây bẫy cấm
-`localStorage`/`sessionStorage`/`cookie`/`indexedDB`, **không nới một dòng nào** · "ảnh không
-rời khỏi máy" ← dây bẫy cấm `serverUploadUrl`, **không nới một dòng nào**. **Ai nới một trong ba
-dây bẫy ấy phải sửa chính sách TRƯỚC** — nếu không, chính sách thành sai mà không có gì đỏ lên.
-Lần thu hẹp 20/09 đã đi đúng thứ tự ấy: chính sách lên `1.3` và **gỡ câu "không gửi đi đâu"**
-trong cùng một lượt với việc nới dây bẫy.
-
-Số mục **không viết cứng vào tiêu đề**: React đánh số lúc vẽ. Một con số viết cứng sẽ lệch ngay
+**Số mục không viết cứng vào tiêu đề**: React đánh số lúc vẽ. Một con số viết cứng sẽ lệch ngay
 lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý, im lặng.
 
-### Còn thiếu — hai câu hỏi cho khách hàng, và hai phép thử phải chạy thật
+### Còn thiếu — ba câu hỏi cho khách hàng, một việc của backend, và hai phép thử phải chạy thật
 
 | Thiếu | Vì sao chưa điền |
 |---|---|
-| **Đường xoá dữ liệu phía máy chủ** | Chính sách 1.4 cam kết *"giữ tới khi bạn yêu cầu xoá"*, và cửa thực hiện là hotline/email — tức một **quy trình có người làm**, không phải một nút trong app. Ai nhận yêu cầu, xoá bằng lệnh nào ở `vihat-miniapp`, và trả lời trong bao lâu: chưa ai mô tả. Một cam kết pháp lý không có quy trình đằng sau là một cam kết sẽ lỡ |
+| ⚠ **ĐƯỜNG XOÁ NHẬT KÝ SAU 90 NGÀY** — chính sách đã cam kết, lược đồ đang CHẶN | `nhat_ky_dang_nhap` có trigger `nhat_ky_chan_sua_xoa` (`BEFORE UPDATE OR DELETE` → `RAISE EXCEPTION`) và `nhat_ky_chan_truncate`, nên **một lệnh xoá theo tuổi sẽ bị CSDL từ chối**. Cam kết 90 ngày chỉ đúng khi backend có một đường xoá hợp lệ — ví dụ phân mảnh theo tháng rồi `DROP` mảnh cũ, hoặc một hàm `SECURITY DEFINER` được trigger cho qua. **Phải xong trước khi nộp**, nếu không văn bản đang hứa một việc hệ thống từ chối làm |
+| ⚠ **CƠ CHẾ XOÁ SỐ ĐIỆN THOẠI phía `vihat-miniapp`** | Chính sách 1.5 cam kết xoá số khi người dùng yêu cầu, nhưng **kho backend chưa có một dòng mã nào làm việc ấy** — không có tuyến API, không có lệnh, không có bộ xoá (`internal/` chỉ có hai tuyến: `/api/v1/sessions` và `/healthz`). Thêm nữa, `so_dien_thoai` là `NOT NULL UNIQUE` với `CHECK (~ '^[0-9]{9,15}$')`, nên "xoá" phải là **ghi đè bằng một giá trị vô danh hợp lệ**, và giá trị ấy phải duy nhất cho từng người. Đây là việc của agent backend, không phải của app |
+| **Đường nhận yêu cầu xoá** | Cửa thực hiện là hotline/email — tức một **quy trình có người làm**. Ai nhận, xoá bằng lệnh nào, trả lời trong bao lâu: chưa ai mô tả. Một cam kết pháp lý không có quy trình đằng sau là một cam kết sẽ lỡ |
 | **Phép gọi thật tới `vihat-miniapp`** | Backend đang dựng song song, chưa có địa chỉ để gọi. Năm nhánh kết quả đã có test bằng `fetch` giả, nhưng **chưa một lần nào chạm máy chủ thật**. Phải gọi thử một lần — đủ cả 201, 401, 502 — trước khi nộp |
 | **Mã số thuế**, **người đại diện theo pháp luật** | Không có nguồn. `content/company-profile.ts` chỉ chứa thứ đã công bố trên vihatsoftware.com và vihatgroup.com. Bịa hai trường này trong một văn bản pháp lý là thứ không sửa lại được sau khi nộp |
 | **URL trang chính sách** | Developer Console còn một ô URL ngoài bản trong app. Chưa biết đăng ở đâu, nên chưa dựng bộ sinh trang tĩnh — dựng cho một đích chưa biết là đoán. Khi chốt, trang ấy phải sinh ra TỪ `chinh-sach-rieng-tu.ts`, không chép tay, để trang đăng và app không lệch nhau |

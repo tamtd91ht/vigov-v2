@@ -430,8 +430,8 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
   ...NOI_DUNG_TINH_NANG.map((mot) => `${mot.nhan_ngan} — ${mot.vi_sao}`),
   "Với số điện thoại và vị trí, Zalo không trả giá trị thật về máy: ứng dụng chỉ nhận một mã dùng được một lần và hết hạn sau 2 phút. Số điện thoại và toạ độ của bạn không nằm trong mã đó.",
   "Với quét mã QR, nội dung mã hiện lên màn hình và mất đi khi bạn quét mã khác hoặc rời màn hình. Nếu mã là một tấm danh thiếp, nội dung ấy là dữ liệu cá nhân của người đã đưa nó cho bạn, và ứng dụng cũng không lưu lại.",
-  // VẾ TRONG NGOẶC THÊM Ở BẢN 1.4, VÀ NÓ BẮT BUỘC PHẢI CÓ. Câu này nói "ứng dụng không nhận địa
-  // chỉ IP" — đúng, vì `getNetworkType` chỉ trả về kiểu kết nối. Nhưng từ bản 1.4, mục Đăng nhập
+  // VẾ TRONG NGOẶC LÀ BẮT BUỘC, KHÔNG PHẢI TRANG TRÍ. Câu này nói "ứng dụng không nhận địa
+  // chỉ IP" — đúng, vì `getNetworkType` chỉ trả về kiểu kết nối. Nhưng mục Đăng nhập
   // khai rằng MÁY CHỦ ghi lại địa chỉ IP của mỗi lần đăng nhập. Hai câu ấy khác chủ ngữ và đều
   // đúng, nhưng đọc liền nhau thì người ta kết luận "địa chỉ IP không bao giờ bị chạm tới" — một
   // kết luận SAI mà chính văn bản này vừa mời gọi. Nói ra ngay tại chỗ, đừng bắt người đọc tự
@@ -440,7 +440,7 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
   "Với máy ảnh và cửa sổ chọn ảnh, tấm ảnh bạn chọn KHÔNG RỜI KHỎI MÁY: ứng dụng nhận một đường dẫn tạm trên chính thiết bị của bạn, hiện ảnh lên màn hình, và không tải ảnh lên bất kỳ máy chủ nào. Ứng dụng không tự đọc thư viện ảnh — nó chỉ nhận đúng tấm ảnh bạn tự chọn trong cửa sổ của Zalo.",
   "Với việc giữ màn hình sáng, ứng dụng chỉ bật chế độ ấy khi bạn tự bấm, và tự tắt lại khi bạn rời màn hình danh thiếp. Chế độ này không đọc gì và không gửi gì; nó chỉ ngăn màn hình tối đi trong lúc người khác đang quét mã.",
   "Với việc tải tệp, ứng dụng GHI MỘT TỆP XUỐNG MÁY BẠN, và đây là hành vi duy nhất ứng dụng viết lên thiết bị. Tệp ấy là danh thiếp của chúng tôi — tên, hotline, email và trang web của công ty — không phải dữ liệu của bạn. Ứng dụng không đọc, không sửa và không xoá bất kỳ tệp nào khác.",
-  // CÂU CUỐI ĐÃ ĐỔI Ở PHIÊN BẢN 1.3, VÀ VIỆC ĐỔI NÓ LÀ BẮT BUỘC. Bản 1.2 viết "chưa gửi bất kỳ
+  // CÂU CUỐI ĐÃ PHẢI ĐỔI, VÀ VIỆC ĐỔI NÓ LÀ BẮT BUỘC. Bản trước viết "chưa gửi bất kỳ
   // dữ liệu nào của bạn đi đâu" — một câu ĐÚNG với bản nộp và SAI với bản dựng có bước đăng
   // nhập. Một câu chỉ đúng ở một nửa số bản dựng là một câu sai ở nửa kia, và không có gì đỏ
   // lên. Nên nó trỏ sang mục "Đăng nhập", nơi từng biến thể tự nói ra điều nó thật sự làm.
