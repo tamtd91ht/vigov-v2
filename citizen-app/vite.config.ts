@@ -7,12 +7,12 @@ import { defineConfig } from "vite";
  *
  * | Biến thể | Nội dung | Dùng để |
  * |---|---|---|
- * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm ba tính năng dùng ba quyền nền tảng | **BẢN NỘP** |
+ * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm sáu tính năng dùng chín quyền nền tảng | **BẢN NỘP** |
  * | `day-du` (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Thử nghiệm, demo |
  *
  * VÌ SAO BIẾN THỂ `quyen` KHÔNG CÒN: nó từng tồn tại vì ba màn quyền là một lớp trình diễn thêm
  * vào một app giới thiệu tĩnh — gỡ được, và bản nộp tối thiểu thì gỡ nó đi. Nay ba quyền ấy
- * thuộc về chính ứng dụng sản phẩm (quét danh thiếp · tìm văn phòng · đăng ký nhận tư vấn), nên
+ * thuộc về chính ứng dụng sản phẩm (quét danh thiếp · tìm văn phòng · đăng nhập bằng số Zalo), nên
  * `quyen` trùng hoàn toàn với `goc`. Hai biến thể nói cùng một thứ là hai biến thể sẽ lệch nhau.
  *
  * VÌ SAO TÁCH Ở TẦNG DỰNG CHỨ KHÔNG PHẢI MỘT CỜ LÚC CHẠY:
@@ -61,19 +61,47 @@ const duongDan = (tuong_doi: string) => fileURLToPath(new URL(tuong_doi, import.
  * nhập thẳng một tệp bên trong là đi vòng qua alias, và bản rút gọn khi ấy vẫn dựng xanh trong
  * khi mang theo đúng thứ đáng lẽ không có. `bien-the.test.ts` là thứ canh điều đó.
  *
- * Bản `goc` là BẢN NỘP: ứng dụng sản phẩm đủ ba tính năng, nhưng không tên đơn vị hành chính đặt
- * ra, không số điện thoại mẫu, không bảng chẩn đoán. `day-du` là bản demo nội bộ và có tất cả.
+ * Bản `goc` là BẢN NỘP: ứng dụng sản phẩm đủ sáu tính năng, **gồm cả khối đăng nhập gọi máy chủ
+ * thật**, nhưng không tên đơn vị hành chính đặt ra, không số điện thoại mẫu, không bảng chẩn
+ * đoán. `day-du` là bản demo nội bộ và có tất cả.
  */
 function aliasTheoBienThe(): Record<string, string> {
-  const co_kham_pha = docBienThe() === "day-du";
+  const day_du = docBienThe() === "day-du";
   return {
     "bien-the/kham-pha": duongDan(
-      co_kham_pha ? "./src/features/kham-pha/index.ts" : "./src/features/kham-pha/index.rong.ts",
+      day_du ? "./src/features/kham-pha/index.ts" : "./src/features/kham-pha/index.rong.ts",
     ),
     "bien-the/chan-doan": duongDan(
-      co_kham_pha ? "./src/features/diagnostics/index.ts" : "./src/features/diagnostics/index.rong.ts",
+      day_du ? "./src/features/diagnostics/index.ts" : "./src/features/diagnostics/index.rong.ts",
     ),
+    // KHÔNG CÓ CỬA CHO KHỐI ĐĂNG NHẬP, VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH ĐÃ ĐẢO NGƯỢC MỘT LẦN — 20/09.
+    // Bản đầu đặt lời gọi máy chủ sau một cửa `bien-the/dang-nhap` để bản nộp không gọi mạng.
+    // Nay CẢ HAI biến thể gọi thật, nên không còn gì để tách; giữ lại cái cửa khi hai bên nó
+    // giống hệt nhau là giữ lại đúng cái bẫy mà biến thể `quyen` đã để lại một lần.
   };
+}
+
+/**
+ * ĐỊA CHỈ MÁY CHỦ — MỘT BIẾN LÚC DỰNG, cùng khuôn với `VIGOV_BIEN_THE` ngay trên.
+ *
+ * `VIGOV_API_HOST` đi vào mã dưới cái tên `__VIGOV_API_HOST__`, và chỉ `features/dang-nhap/`
+ * đọc nó. ⚠ CẢ HAI BIẾN THỂ ĐỀU CẦN NÓ, kể cả BẢN NỘP: quên khai là nộp một nút đăng nhập nói
+ * "người dựng bản cần đặt biến…". `scripts/deploy.mjs` chặn đường đẩy khi biến còn rỗng —
+ * chặn ở đó chứ không ném lỗi lúc dựng, vì `npm test` và `npm run dev` phải chạy được trên một
+ * máy chưa có địa chỉ máy chủ nào.
+ *
+ * ⚠ KHÔNG CÓ GIÁ TRỊ MẶC ĐỊNH, VÀ KHÔNG BAO GIỜ ĐƯỢC CÓ. Một `?? "https://…"` ở đây là gửi hai
+ * mã đăng nhập của một người thật tới một máy chủ không ai chọn, trên mọi bản dựng của mọi máy
+ * quên đặt biến. Chưa khai thì `hop-dong.ts` trả về chuỗi rỗng và màn hình nói ra điều đó —
+ * fail closed.
+ *
+ * ⚠ ĐÂY KHÔNG PHẢI CHỖ ĐỂ MỘT BÍ MẬT NÀO. `define` chèn giá trị THẲNG vào bundle, tức là vào
+ * một tệp gửi lên Zalo và tải về máy người dùng (luật 8, bất biến 4 — cùng lý do với
+ * `NEXT_PUBLIC_*`). Một địa chỉ máy chủ thì công khai được; khoá bí mật của Mini App thì chỉ
+ * nằm ở backend (ADR 0020, bất biến 2).
+ */
+function diaChiMayChu(): string {
+  return (process.env.VIGOV_API_HOST ?? "").trim();
 }
 
 /**
@@ -118,6 +146,7 @@ export default defineConfig(() => ({
   base: "./",
   plugins: [thePlainScript],
   resolve: { alias: aliasTheoBienThe() },
+  define: { __VIGOV_API_HOST__: JSON.stringify(diaChiMayChu()) },
   build: {
     outDir: "dist",
     // Zalo reviews and hosts a static bundle. Keeping sourcemaps out keeps the uploaded

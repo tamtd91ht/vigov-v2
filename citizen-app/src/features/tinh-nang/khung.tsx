@@ -175,7 +175,14 @@ export function TinhNangCoTrangThai<T>({
 
 /**
  * Kết quả của hai tính năng dùng token: độ dài, vài ký tự đầu, và vì sao màn hình này không có
- * gì để che. `noi_them` là câu nói ra thứ bản dựng này CHƯA làm được với cái token ấy.
+ * gì để che.
+ *
+ * `noi_them` là câu nói ra thứ bản dựng này CHƯA làm được với cái token ấy. NÓ TUỲ CHỌN, và
+ * khác biệt ấy có lý do: với `van-phong` thì bản dựng thật sự dừng ở chỗ nhận được mã — không
+ * xếp được văn phòng theo khoảng cách — nên có một câu ranh giới để nói. Với `dang-nhap` thì
+ * KHÔNG CÓ RANH GIỚI NÀO ĐỂ NÓI: mã đi thẳng tới máy chủ và một phiên được mở, nên phần đuôi là
+ * TRẠNG THÁI THẬT của lời gọi ấy (`features/dang-nhap/PhatHanhPhien.tsx`), không phải một câu
+ * ghim sẵn. Ghim một câu "bản này chưa làm gì" ở đây là nói dối bằng giao diện.
  */
 export function KetQuaToken({
   ma,
@@ -183,10 +190,10 @@ export function KetQuaToken({
   da_nhan,
   noi_them,
 }: {
-  ma: "tu-van" | "van-phong";
+  ma: "dang-nhap" | "van-phong";
   token: string;
   da_nhan: string;
-  noi_them: string;
+  noi_them?: string;
 }) {
   if (token === "") return <p className="tn__loi">{MA_RONG}</p>;
   return (
@@ -197,7 +204,7 @@ export function KetQuaToken({
         <li>Vài ký tự đầu: {cheToken(token)}</li>
       </ul>
       <p className="tn__giai-thich">{TOKEN_KHONG_CHUA_GI[ma]}</p>
-      <p className="tn__ranh-gioi">{noi_them}</p>
+      {noi_them !== undefined && <p className="tn__ranh-gioi">{noi_them}</p>}
     </>
   );
 }

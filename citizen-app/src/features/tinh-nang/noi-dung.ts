@@ -32,7 +32,10 @@
 export type MaTinhNang =
   | "danh-thiep"
   | "van-phong"
-  | "tu-van"
+  // ĐỔI TÊN TỪ `tu-van`, KHÔNG PHẢI THÊM MỘT TÍNH NĂNG: khối `getPhoneNumber` trên màn Liên hệ
+  // nay là KHỐI ĐĂNG NHẬP (ADR 0020), không còn là "đăng ký nhận tư vấn". Tên mã đi theo việc
+  // nó làm — một cái tên cũ còn lại là một cái tên sẽ được người sau đọc thành lời hứa cũ.
+  | "dang-nhap"
   | "duong-truyen"
   | "thiep-cua-chung-toi"
   | "so-hoa-thiep";
@@ -66,7 +69,7 @@ export type NoiDungTinhNang = {
  *   người dùng là lý do đáng tin nhất để họ bấm đồng ý.
  */
 export const TOKEN_KHONG_CHUA_GI = {
-  "tu-van":
+  "dang-nhap":
     "Số điện thoại của bạn không nằm trong mã này và không được gửi về máy. Chỉ máy chủ của VihatSoftware mới đổi được mã thành số điện thoại, và mã chỉ dùng được một lần trong 2 phút.",
   "van-phong":
     "Toạ độ của bạn không nằm trong mã này và không được gửi về máy. Chỉ máy chủ của VihatSoftware mới đổi được mã thành vị trí, và mã chỉ dùng được một lần trong 2 phút.",
@@ -108,19 +111,29 @@ export const NOI_DUNG_TINH_NANG: readonly NoiDungTinhNang[] = [
       "Chưa nhận được trả lời từ Zalo. Bạn hãy bấm lại nút bên trên; cả ba văn phòng vẫn nằm ngay bên dưới, kèm nút chỉ đường.",
   },
   {
-    ma: "tu-van",
-    nhan_ngan: "Nhận tư vấn",
-    tieu_de: "Đăng ký nhận tư vấn giải pháp",
+    /**
+     * KHỐI ĐĂNG NHẬP — `getPhoneNumber` là đường đăng nhập MỘT CHẠM, không phải một biểu mẫu
+     * đăng ký. Đây là câu chữ người duyệt Zalo đọc để quyết định có cấp quyền hay không (điều
+     * 3.3.4), nên mục đích phải nói thẳng: số điện thoại dùng để ĐĂNG NHẬP và để NHẬN THÔNG BÁO.
+     *
+     * ⚠ KHÔNG MỘT CHỮ NÀO HỨA MỘT MÃ OTP. ADR 0020 bác đường OTP có lý do đo được: màn nhập sáu
+     * số là rào thật với người cao tuổi — đổi ứng dụng để đọc tin nhắn, nhớ sáu chữ số, quay
+     * lại, gõ đúng trước khi hết hạn; mỗi bước là một chỗ bỏ cuộc. Hứa một mã rồi không gửi còn
+     * tệ hơn: người dùng ngồi chờ một tin nhắn không bao giờ tới.
+     */
+    ma: "dang-nhap",
+    nhan_ngan: "Đăng nhập",
+    tieu_de: "Đăng nhập bằng số Zalo",
     vi_sao:
-      "Khi bạn muốn được tư vấn về tổng đài đám mây, CRM hay ứng dụng AI cho doanh nghiệp mình, đội kinh doanh cần một số điện thoại để gọi lại. Ứng dụng xin số điện thoại Zalo của bạn để làm đúng việc đó, và chỉ xin đúng lúc bạn bấm nút đăng ký.",
-    nut: "Đăng ký nhận tư vấn",
+      "Ứng dụng dùng số điện thoại Zalo của bạn làm tên đăng nhập, để lần sau mở lại là bạn thấy đúng phần việc của mình. Một lần chạm là xong: không mật khẩu, không phải chờ một mã sáu số gửi qua tin nhắn. Số ấy cũng là nơi chúng tôi gửi thông báo ZNS cho bạn khi có kết quả. Ứng dụng chỉ hỏi đúng lúc bạn bấm nút đăng nhập, và bạn có quyền từ chối.",
+    nut: "Đăng nhập bằng số Zalo",
     dang_cho: "Đang chờ bạn trả lời trên Zalo…",
     tu_choi:
-      "Bạn đã từ chối chia sẻ số điện thoại. Không sao cả — bạn vẫn gọi hotline hoặc gửi email cho chúng tôi được ngay bên dưới.",
+      "Bạn đã từ chối chia sẻ số điện thoại, nên chưa đăng nhập được. Không sao cả — bạn vẫn xem được toàn bộ ứng dụng, và vẫn gọi hotline hoặc gửi email cho chúng tôi ngay bên dưới.",
     ngoai_zalo:
-      "Phần này chỉ chạy được bên trong ứng dụng Zalo. Bạn vẫn gọi hotline hoặc gửi email cho chúng tôi được ngay bên dưới.",
+      "Việc đăng nhập chỉ chạy được bên trong ứng dụng Zalo. Bạn hãy mở lại trang này trong Zalo trên điện thoại rồi bấm lại; hotline và email ngay bên dưới thì lúc nào cũng dùng được.",
     khong_lay_duoc:
-      "Chưa nhận được trả lời từ Zalo. Bạn hãy bấm lại nút bên trên, hoặc gọi hotline ngay bên dưới nếu bạn cần trao đổi luôn.",
+      "Chưa đăng nhập được. Bạn hãy bấm lại nút bên trên sau vài giây, hoặc gọi hotline ngay bên dưới nếu bạn cần trao đổi luôn.",
   },
   {
     ma: "duong-truyen",
@@ -257,15 +270,22 @@ export const VAN_PHONG = {
     "Việc xếp ba văn phòng theo khoảng cách cần một bước máy chủ đổi mã này thành toạ độ. Bản hiện tại chưa có bước đó, nên danh sách bên dưới giữ nguyên thứ tự và chưa sắp theo khoảng cách.",
 } as const;
 
-/** ---------- Đăng ký nhận tư vấn ---------- */
+/** ---------- Đăng nhập bằng số Zalo ---------- */
 
-export const TU_VAN = {
+export const DANG_NHAP = {
   dan_nhap:
-    "Để lại số điện thoại Zalo để đội kinh doanh gọi lại tư vấn giải pháp tổng đài đám mây, CRM và ứng dụng AI cho doanh nghiệp của bạn.",
+    "Đăng nhập bằng chính số Zalo bạn đang dùng. Một lần chạm là xong — không mật khẩu, không phải gõ mã sáu số nào.",
   da_nhan_ma: "Đã nhận được mã số điện thoại từ Zalo.",
-  /** Cùng lý do với `VAN_PHONG.chua_xep_duoc`: nói ra thứ bản này CHƯA làm. */
-  chua_gui_di:
-    "Yêu cầu tư vấn sẽ được chuyển tới đội kinh doanh khi phần dịch vụ được nối vào. Bản hiện tại chưa gửi gì đi, nên nếu bạn cần trao đổi ngay, hãy dùng hotline hoặc email bên dưới.",
+  /**
+   * CÂU "BẢN NÀY CHƯA NỐI MÁY CHỦ" ĐÃ BỊ XOÁ — 20/09/2026, và nó bị xoá vì đã thành SAI.
+   *
+   * Cả hai biến thể nay gọi máy chủ thật (`features/dang-nhap/`), nên một câu nói ngược lại là
+   * một lời nói dối bằng giao diện — đúng thứ mà §"RANH GIỚI" của README cấm theo chiều ngược:
+   * ở đó ta không được hứa việc bản dựng không làm, và ở đây ta không được chối việc nó có làm.
+   *
+   * Thứ thay chỗ nó là các câu trạng thái thật trong `features/dang-nhap/PhatHanhPhien.tsx`:
+   * đang gửi · đã đăng nhập · mã hết hạn · Zalo không trả lời · không gọi được.
+   */
   nhac_lien_he: "Cần trao đổi ngay? Hai đường này chạy được ngay bây giờ:",
 } as const;
 
@@ -410,11 +430,21 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
   ...NOI_DUNG_TINH_NANG.map((mot) => `${mot.nhan_ngan} — ${mot.vi_sao}`),
   "Với số điện thoại và vị trí, Zalo không trả giá trị thật về máy: ứng dụng chỉ nhận một mã dùng được một lần và hết hạn sau 2 phút. Số điện thoại và toạ độ của bạn không nằm trong mã đó.",
   "Với quét mã QR, nội dung mã hiện lên màn hình và mất đi khi bạn quét mã khác hoặc rời màn hình. Nếu mã là một tấm danh thiếp, nội dung ấy là dữ liệu cá nhân của người đã đưa nó cho bạn, và ứng dụng cũng không lưu lại.",
-  "Với thông tin mạng, ứng dụng chỉ nhận về KIỂU kết nối: Wi-Fi, mạng di động, không có mạng, hoặc không xác định. Ứng dụng không nhận địa chỉ IP, không nhận tên mạng Wi-Fi, không đo tốc độ và không biết bạn đang ở đâu.",
+  // VẾ TRONG NGOẶC THÊM Ở BẢN 1.4, VÀ NÓ BẮT BUỘC PHẢI CÓ. Câu này nói "ứng dụng không nhận địa
+  // chỉ IP" — đúng, vì `getNetworkType` chỉ trả về kiểu kết nối. Nhưng từ bản 1.4, mục Đăng nhập
+  // khai rằng MÁY CHỦ ghi lại địa chỉ IP của mỗi lần đăng nhập. Hai câu ấy khác chủ ngữ và đều
+  // đúng, nhưng đọc liền nhau thì người ta kết luận "địa chỉ IP không bao giờ bị chạm tới" — một
+  // kết luận SAI mà chính văn bản này vừa mời gọi. Nói ra ngay tại chỗ, đừng bắt người đọc tự
+  // đối chiếu hai mục cách nhau nửa trang.
+  "Với thông tin mạng, ứng dụng chỉ nhận về KIỂU kết nối: Wi-Fi, mạng di động, không có mạng, hoặc không xác định. Ứng dụng không nhận địa chỉ IP, không nhận tên mạng Wi-Fi, không đo tốc độ và không biết bạn đang ở đâu. (Riêng khi bạn bấm đăng nhập, máy chủ nhìn thấy địa chỉ IP của lời gọi ấy và ghi vào nhật ký đăng nhập — xem mục Đăng nhập.)",
   "Với máy ảnh và cửa sổ chọn ảnh, tấm ảnh bạn chọn KHÔNG RỜI KHỎI MÁY: ứng dụng nhận một đường dẫn tạm trên chính thiết bị của bạn, hiện ảnh lên màn hình, và không tải ảnh lên bất kỳ máy chủ nào. Ứng dụng không tự đọc thư viện ảnh — nó chỉ nhận đúng tấm ảnh bạn tự chọn trong cửa sổ của Zalo.",
   "Với việc giữ màn hình sáng, ứng dụng chỉ bật chế độ ấy khi bạn tự bấm, và tự tắt lại khi bạn rời màn hình danh thiếp. Chế độ này không đọc gì và không gửi gì; nó chỉ ngăn màn hình tối đi trong lúc người khác đang quét mã.",
   "Với việc tải tệp, ứng dụng GHI MỘT TỆP XUỐNG MÁY BẠN, và đây là hành vi duy nhất ứng dụng viết lên thiết bị. Tệp ấy là danh thiếp của chúng tôi — tên, hotline, email và trang web của công ty — không phải dữ liệu của bạn. Ứng dụng không đọc, không sửa và không xoá bất kỳ tệp nào khác.",
-  "Các mục đích nêu trên là mục đích ứng dụng sẽ dùng các quyền này khi có đầy đủ chức năng. Bản hiện tại chỉ hiện kết quả lên màn hình, ngoài đúng một tệp danh thiếp của chúng tôi nói ở trên: nó chưa lưu và chưa gửi bất kỳ dữ liệu nào của bạn đi đâu.",
+  // CÂU CUỐI ĐÃ ĐỔI Ở PHIÊN BẢN 1.3, VÀ VIỆC ĐỔI NÓ LÀ BẮT BUỘC. Bản 1.2 viết "chưa gửi bất kỳ
+  // dữ liệu nào của bạn đi đâu" — một câu ĐÚNG với bản nộp và SAI với bản dựng có bước đăng
+  // nhập. Một câu chỉ đúng ở một nửa số bản dựng là một câu sai ở nửa kia, và không có gì đỏ
+  // lên. Nên nó trỏ sang mục "Đăng nhập", nơi từng biến thể tự nói ra điều nó thật sự làm.
+  "Các mục đích nêu trên là mục đích ứng dụng sẽ dùng các quyền này khi có đầy đủ chức năng. Ngoài đúng một tệp danh thiếp của chúng tôi nói ở trên, ứng dụng không lưu gì xuống máy bạn; việc đăng nhập có gửi gì đi hay không thì mục Đăng nhập bên dưới nói rõ cho đúng bản bạn đang dùng.",
 ];
 
 /**
@@ -424,9 +454,15 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
  * nói theo QUYỀN, thứ Developer Console cấp và người duyệt đối chiếu. Một tính năng dùng hai
  * quyền, nên hai cách kể không thay thế nhau được — và người duyệt phải tra được từng quyền họ
  * sắp bấm nút cấp.
+ *
+ * `getAccessToken` CÓ MẶT Ở ĐÂY DÙ KHÔNG PHẢI MỘT QUYỀN PHẢI CẤP: `zmp-sdk/index.d.ts` dòng
+ * 3009 ghi rằng từ SDK 2.35.0 ứng dụng mặc định truy xuất được access token mà không cần người
+ * dùng xác nhận. Nhưng nó vẫn là một thứ ứng dụng NHẬN VỀ và GỬI ĐI ở bước đăng nhập, nên
+ * Nghị định 13 buộc nói ra. Số quyền phải xin ở Developer Console vẫn là CHÍN.
  */
 export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
-  "Số điện thoại (getPhoneNumber) — để đội kinh doanh gọi lại tư vấn. Ứng dụng chỉ nhận một mã, không nhận số.",
+  "Số điện thoại (getPhoneNumber) — để bạn đăng nhập bằng một lần chạm, và để gửi thông báo ZNS tới đúng số ấy. Ứng dụng chỉ nhận một mã, không nhận số.",
+  "Thông tin xác thực phiên Zalo (getAccessToken) — mã này cho biết bạn là người dùng Zalo nào đối với riêng ứng dụng này. Nó đi cùng mã số điện thoại ở bước đăng nhập, và không cho ứng dụng biết tên hay ảnh đại diện của bạn.",
   "Vị trí (getLocation) — để chỉ ra văn phòng gần bạn. Ứng dụng chỉ nhận một mã, không nhận toạ độ.",
   "Quét mã QR (scanQRCode) — để đọc danh thiếp số của đối tác.",
   "Kiểu kết nối mạng (getNetworkType) — để cho bạn biết cuộc gọi sắp tới đi qua Wi-Fi hay mạng di động.",

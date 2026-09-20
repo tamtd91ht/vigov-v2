@@ -1,9 +1,9 @@
 /**
  * LỚP DUY NHẤT CHẠM VÀO `zmp-sdk` — và nó cố tình nhỏ đúng bằng những lời gọi ba tính năng cần.
  *
- * Tệp này là chỗ duy nhất trong cả kho được phép nhắc tên mô-đun `zmp-sdk` và tên ba hàm
- * `getPhoneNumber` · `getLocation` · `scanQRCode`. `phase1-collects-nothing.test.ts` cấm chúng ở
- * MỌI tệp khác — lệnh cấm không bị xoá, nó được thu hẹp phạm vi, và có một ca chứng minh rằng
+ * Tệp này là chỗ duy nhất trong cả kho được phép nhắc tên mô-đun `zmp-sdk` và tên các lời gọi
+ * nền tảng — `getPhoneNumber` · `getLocation` · `scanQRCode` · `getAccessToken` và sáu tên còn
+ * lại. `phase1-collects-nothing.test.ts` cấm chúng ở MỌI tệp khác — lệnh cấm không bị xoá, nó được thu hẹp phạm vi, và có một ca chứng minh rằng
  * ngoài `src/features/tinh-nang/` thì nó vẫn bắt.
  *
  * ⚠ NHẬP ĐỘNG, TRONG HÀM, BỌC TRY/CATCH — BA ĐIỀU KIỆN, KHÔNG PHẢI KHẨU VỊ:
@@ -90,6 +90,35 @@ async function xin<T>(goi: (sdk: typeof import("zmp-sdk")) => Promise<T>): Promi
 /** Token số điện thoại. Chuỗi rỗng là câu trả lời thật của nền tảng ở môi trường phát triển. */
 export function xinTokenSoDienThoai(): Promise<KetQuaXin<string>> {
   return xin(async (sdk) => (await sdk.getPhoneNumber()).token ?? "");
+}
+
+/**
+ * HAI MÃ CỦA MỘT LẦN ĐĂNG NHẬP — `getAccessToken` + `getPhoneNumber`, đúng luồng ADR 0020.
+ *
+ * ⚠ CẢ HAI ĐỀU LÀ MÃ, KHÔNG PHẢI DỮ LIỆU. Số điện thoại không nằm trong mã nào, và cả hai chỉ
+ * đổi được ở MÁY CHỦ bằng khoá bí mật của Mini App (ADR 0020, bất biến 2). Đổi mã ở client là
+ * đưa khoá bí mật xuống máy người dùng — điều kiện dừng #1 của chính ADR ấy, và luật 8 cấm #5.
+ *
+ * `getAccessToken` GỌI TRƯỚC, CÓ CHỦ ĐÍCH: `index.d.ts` dòng 3009 ghi rằng từ SDK 2.35.0 lời
+ * gọi này KHÔNG hỏi người dùng. Nên nếu nó hỏng thì hỏng trước khi ai bị làm phiền bằng một hộp
+ * thoại; gọi sau thì người dùng vừa bấm "Đồng ý" chia sẻ số xong lại nhận một câu báo hỏng.
+ *
+ * KHÔNG CÓ OTP Ở ĐÂY, VÀ SẼ KHÔNG CÓ: ADR 0020 chọn một chạm chính vì màn nhập sáu số là rào
+ * với người cao tuổi. Ai định thêm một bước "nhập mã" vào đây phải mở lại ADR ấy trước.
+ */
+export type MaDangNhap = {
+  /** Token của `getPhoneNumber` — máy chủ đổi thành số điện thoại. */
+  ma_so_dien_thoai: string;
+  /** Access token của phiên Zalo — máy chủ đổi thành định danh người dùng Zalo. */
+  ma_truy_cap: string;
+};
+
+export function xinMaDangNhap(): Promise<KetQuaXin<MaDangNhap>> {
+  return xin(async (sdk) => {
+    const ma_truy_cap = await sdk.getAccessToken();
+    const { token } = await sdk.getPhoneNumber();
+    return { ma_so_dien_thoai: token ?? "", ma_truy_cap };
+  });
 }
 
 /** Token vị trí. Không đọc `latitude`/`longitude` — xem khối chú thích đầu tệp. */

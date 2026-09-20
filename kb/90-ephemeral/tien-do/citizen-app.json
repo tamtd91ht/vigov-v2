@@ -12,6 +12,30 @@
       "tiep_theo": "thứ DUY NHẤT trong kho sẵn sàng giao ra ngoài"
     },
     {
+      "id": "khoi-dang-nhap-getphonenumber",
+      "viec": "Khối getPhoneNumber ở tab Liên hệ thành KHỐI ĐĂNG NHẬP ĐỊNH DANH, gọi máy chủ thật ở CẢ HAI biến thể (ADR 0020, một chạm, KHÔNG OTP)",
+      "trang_thai": "xong",
+      "bang_chung": "citizen-app/src/features/tinh-nang/LienHeTinhNang.tsx (KhoiDangNhap) + zalo-api.ts (xinMaDangNhap: getAccessToken + getPhoneNumber) + noi-dung.ts (DANG_NHAP, mã tính năng đổi tu-van→dang-nhap) + features/dang-nhap/{hop-dong.ts, goi-may-chu.ts, PhatHanhPhien.tsx} + chinh-sach-rieng-tu.ts lên 1.3 + chinh-sach.test.ts (mới). Dây bẫy fetch THU HẸP về ĐÚNG MỘT tệp (goi-may-chu.ts), getAccessToken chuyển từ lệnh cấm tuyệt đối sang lệnh cấm có phạm vi một thư mục; lệnh cấm lưu trữ, serverUploadUrl, getUserInfo/getSetting/authorize KHÔNG nới. npm test 401 ca xanh (13 tệp, gồm bundle-for-zalo dựng THẬT cả hai biến thể) + tsc --noEmit sạch — chạy 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "đo 2026-09-20 sau khi chốt hợp đồng: goc 573,02 kB thô / 158,05 kB gzip · day-du 584,57 kB / 161,18 kB. CẢ HAI bundle chứa /api/v1/sessions đúng 1 lần, phoneToken 1 lần, fetch( 15 lần (14 của zmp-sdk + 1 của ta); năm từ cấm vẫn đếm 0 trên bản nộp. Cửa biến thể bien-the/dang-nhap ĐÃ GỠ — cả hai bản gọi máy chủ nên không còn gì để tách"
+    },
+    {
+      "id": "hop-dong-phien-dang-nhap",
+      "viec": "Hợp đồng tuyến phát hành phiên của khối đăng nhập — ĐÃ CHỐT, chưa gọi thử thật",
+      "trang_thai": "dang_lam",
+      "bang_chung": "citizen-app/src/features/dang-nhap/hop-dong.ts — POST <api-host>/api/v1/sessions, gửi {accessToken, phoneToken}, nhận 201 {token, expiresAt}, lỗi 401 (mã Zalo sai/hết hạn) · 502 (không với tới Zalo). Năm nhánh có test bằng fetch giả ở dang-nhap.test.tsx. Địa chỉ đọc lúc dựng qua VIGOV_API_HOST (vite.config.ts define); chưa khai thì FAIL CLOSED, không gọi, và scripts/deploy.mjs chặn đường đẩy với mã thoát 2",
+      "no_confirm": [],
+      "tiep_theo": "Máy chủ là KHO RIÊNG `vihat-miniapp` (backend thương mại của VihatSoftware, KHÔNG phải ViGov), đang dựng song song — CHƯA một lần nào gọi thử thật. Phải gọi đủ 201/401/502 một lần trước khi nộp, và cần giá trị thật của VIGOV_API_HOST. Hợp đồng nằm trọn trong ĐÚNG MỘT tệp (hop-dong.ts) + tệp test nằm cạnh; không tệp nào khác biết đường dẫn hay hai tên trường"
+    },
+    {
+      "id": "thoi-gian-luu-so-dien-thoai",
+      "viec": "Thời gian lưu số điện thoại ở máy chủ + khai nhật ký đăng nhập (thời điểm, IP) — chính sách lên 1.4",
+      "trang_thai": "xong",
+      "bang_chung": "citizen-app/src/content/chinh-sach-rieng-tu.ts — PHIEN_BAN_CHINH_SACH 1.4, hằng THOI_GIAN_LUU_CHUA_CHOT đã bỏ, mục `cach-thuc` nói đủ ba vế (không có hạn tự động · cửa yêu cầu xoá là hotline/email trên màn Liên hệ, không cần đăng nhập · xoá số điện thoại và bản ghi định danh, nhật ký ở lại vì không chứa số), mục `dang-nhap` khai nhật ký thời điểm + IP kèm mục đích chống lạm dụng. chinh-sach.test.ts 10 ca. npm test 404 ca xanh + tsc sạch — chạy 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Khách chốt: KHÔNG có hạn tự động, giữ tới khi người dùng yêu cầu xoá. Còn hai thứ chưa ai mô tả: (1) QUY TRÌNH xoá phía vihat-miniapp — ai nhận yêu cầu qua hotline/email, xoá bằng lệnh nào, trả lời trong bao lâu; (2) backend còn trường nào chạm tới người dùng ngoài số điện thoại và nhật ký IP hay không — đang hỏi agent backend, có thêm thì chính sách phải lên số tiếp"
+    },
+    {
       "id": "nop-zalo-duyet",
       "viec": "Nộp Mini App cho Zalo duyệt",
       "trang_thai": "chua_lam",

@@ -1,5 +1,5 @@
 import { COMPANY, CONTACT } from "../../content/company-profile";
-import { DangKyTuVan, TimVanPhong } from "../tinh-nang/index";
+import { KhoiDangNhap, TimVanPhong } from "../tinh-nang/index";
 
 import { ChinhSachRiengTu } from "./ChinhSachRiengTu";
 import { GlobeGlyph, MailGlyph, NetworkBackdrop, PhoneGlyph } from "./icons";
@@ -11,8 +11,9 @@ import { GlobeGlyph, MailGlyph, NetworkBackdrop, PhoneGlyph } from "./icons";
  *
  *   1. Hotline · email · website. Ba thứ này chạy được ngay bây giờ, không cần quyền nào, không
  *      cần máy chủ nào. Người muốn nói chuyện với công ty phải gặp chúng trước tiên.
- *   2. Đăng ký nhận tư vấn (`getPhoneNumber`) — nhận được mã, và nói thẳng rằng bản này chưa gửi
- *      yêu cầu đi đâu, kèm lại hai đường liên hệ chạy được ngay.
+ *   2. Đăng nhập bằng số Zalo (`getPhoneNumber`) — một lần chạm, không mã sáu số nào phải gõ
+ *      (ADR 0020). Bản nộp dừng ở chỗ nhận được mã và nói thẳng rằng bước đổi mã cần máy chủ;
+ *      hai đường liên hệ chạy được ngay vẫn nằm ngay dưới nút, cho người từ chối chia sẻ số.
  *   3. Tìm văn phòng gần bạn (`getLocation`) — ba văn phòng và nút chỉ đường luôn hiện, chia sẻ
  *      vị trí hay không cũng vậy.
  *
@@ -66,7 +67,7 @@ export function ContactScreen() {
         </span>
       </a>
 
-      <DangKyTuVan />
+      <KhoiDangNhap />
       <TimVanPhong />
 
       {/* Chính sách quyền riêng tư nằm CUỐI màn Liên hệ, không phải một tab riêng: đây là chỗ

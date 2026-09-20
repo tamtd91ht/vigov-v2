@@ -16,6 +16,7 @@ import { MAN_GIOI_THIEU } from "./features/company-intro/screens";
 import { MAN_DANH_THIEP } from "./features/tinh-nang/index";
 import {
   CHI_HIEN_LEN_MAN_HINH,
+  DANG_NHAP,
   DANH_THIEP,
   DUONG_TRUYEN,
   KIEU_KET_NOI,
@@ -25,9 +26,9 @@ import {
   SO_HOA_THIEP,
   THIEP_CUA_CHUNG_TOI,
   TOKEN_KHONG_CHUA_GI,
-  TU_VAN,
   VAN_PHONG,
 } from "./features/tinh-nang/noi-dung";
+import { DUONG_DAN_PHIEN, thanYeuCau } from "./features/dang-nhap/hop-dong";
 import {
   DEMO_DANH_MUC_XA,
   DEMO_GHI_CHU,
@@ -203,11 +204,11 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     CHI_HIEN_LEN_MAN_HINH,
     MA_RONG,
     LOI_MO_NGOAI,
-    TOKEN_KHONG_CHUA_GI["tu-van"],
+    TOKEN_KHONG_CHUA_GI["dang-nhap"],
     TOKEN_KHONG_CHUA_GI["van-phong"],
     ...Object.values(DANH_THIEP),
     ...Object.values(VAN_PHONG),
-    ...Object.values(TU_VAN),
+    ...Object.values(DANG_NHAP),
     // Ba tính năng thêm vào. `KIEU_KET_NOI` là một bản đồ lồng nhau, nên trải phẳng ra tường
     // minh: `Object.values` trên nó sẽ cho ra những đối tượng, và `toContain` trên một đối
     // tượng là một phép kiểm xanh vì lý do sai.
@@ -330,6 +331,72 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     }
   });
 
+  /**
+   * CẢ HAI BẢN ĐỀU GỌI MÁY CHỦ — VÀ PHÉP ĐO NÀY VỪA ĐƯỢC DỰNG LẠI VÌ TIỀN ĐỀ ĐÃ ĐẢO CHIỀU.
+   *
+   * ⚠ BẢN TRƯỚC CỦA CA NÀY ĐÃ CHẾT TRONG IM LẶNG NẾU KHÔNG SỬA — ghi lại vì đây là đúng chế độ
+   * hỏng mà cả tệp này sinh ra để chặn, và lần này nó suýt xảy ra với chính tệp này:
+   *
+   *   Ngày 20/09 sáng, lời gọi máy chủ chỉ có ở bản `day-du`, nên ca này đo bằng HIỆU giữa hai
+   *   bản: đường dẫn vắng ở `goc`, tên trường hơn đúng 1, `fetch(` hơn đúng 1. Chiều cùng ngày,
+   *   bản nộp bắt đầu gọi thật. Cả ba vế ấy lập tức thành `0 === 0` — **xanh vĩnh viễn, vì không
+   *   còn gì để tìm**. Không một ca nào khác đỏ lên để báo rằng ca này vừa mất hết nội dung.
+   *
+   * NÊN PHÉP ĐO NAY ĐO ĐÚNG THỨ PHẢI ĐÚNG HÔM NAY: **cả hai bản đều PHẢI mang lời gọi của ta.**
+   *
+   *   1. Đường dẫn tuyến có mặt ở CẢ HAI, và **đúng một lần** ở mỗi bản. `zmp-sdk` không thể
+   *      tình cờ chứa chuỗi ấy, nên đây là vế chắc nhất — và "đúng một lần" là cách đo "đúng
+   *      một chỗ gọi" mà không phải ghim một con số của SDK.
+   *   2. Tên hai trường gửi đi có mặt ở cả hai, đọc từ chính `thanYeuCau` chứ không gõ lại: đổi
+   *      hợp đồng thì ca này đi theo, thay vì xanh vì không tìm thấy gì.
+   *   3. `fetch(` có mặt ở cả hai, và hai bản chênh nhau ĐÚNG 0 lần — khối đăng nhập không còn
+   *      cửa biến thể nào, nên một chênh lệch xuất hiện nghĩa là ai đó vừa dựng lại một cửa.
+   *
+   * ⚠ KHÔNG THỂ KHẲNG ĐỊNH MỘT CON SỐ TUYỆT ĐỐI CHO `fetch(`. ĐÃ ĐO 20/09/2026: riêng `zmp-sdk`
+   * đóng góp **14 lần** `fetch(` và **4 lần** `XMLHttpRequest` cho mọi bản dựng; mã của ta thêm
+   * đúng 1. Ghim "15" là một ca đỏ vào ngày Zalo phát hành một bản SDK khác — một lý do ta không
+   * sửa được, và một test đỏ vì lý do không sửa được là một test sắp bị ai đó xoá.
+   */
+  it("CẢ HAI bản đều mang đúng MỘT đường gọi máy chủ của ta", () => {
+    const ten_truong = Object.keys(
+      JSON.parse(thanYeuCau({ ma_so_dien_thoai: "x", ma_truy_cap: "y" })) as Record<string, unknown>,
+    );
+    expect(ten_truong.length, "hợp đồng không còn trường nào để đo").toBe(2);
+
+    const dem = (ban: string, chuoi: string) => ban.split(chuoi).length - 1;
+
+    for (const [ten, ban] of [
+      ["goc", goc],
+      ["day-du", day_du],
+    ] as const) {
+      expect(
+        dem(ban, DUONG_DAN_PHIEN),
+        `bản ${ten} phải nhắc tuyến đăng nhập ĐÚNG MỘT lần. 0 lần = khối đăng nhập không gọi ` +
+          "được máy chủ (nộp một nút không đăng nhập nổi); 2 lần trở lên = có chỗ gọi thứ hai.",
+      ).toBe(1);
+
+      for (const truong of ten_truong) {
+        expect(
+          dem(ban, truong),
+          `bản ${ten} không mang tên trường "${truong}" của hợp đồng đăng nhập`,
+        ).toBeGreaterThan(0);
+      }
+
+      expect(
+        (ban.match(/fetch\s*\(/g) ?? []).length,
+        `bản ${ten} không có một lời gọi mạng nào`,
+      ).toBeGreaterThan(0);
+    }
+
+    // HAI BẢN PHẢI GIỐNG NHAU Ở ĐIỂM NÀY. Khối đăng nhập không còn cửa biến thể; một chênh lệch
+    // nghĩa là ai đó vừa dựng lại một cửa, và lần ấy bản nộp sẽ khác bản đã thử.
+    const demGoi = (ban: string) => (ban.match(/fetch\s*\(/g) ?? []).length;
+    expect(
+      demGoi(day_du) - demGoi(goc),
+      "hai biến thể chênh nhau một lời gọi mạng — khối đăng nhập phải giống hệt nhau ở cả hai",
+    ).toBe(0);
+  });
+
   it("bản NỘP không chứa bảng chẩn đoán", () => {
     // Một bảng in tham số nội bộ nằm trong bundle của một đơn vị đang xin duyệt là một câu hỏi
     // phải trả lời ở vòng duyệt, và "đó là công cụ nội bộ" không giúp được gì ở vòng đó.
@@ -345,6 +412,9 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     expect(goc, "bản nộp không mang zmp-sdk").toContain("zmp-sdk");
     for (const ten of [
       "getPhoneNumber",
+      // Lời gọi thứ mười, thêm cùng khối đăng nhập (ADR 0020). Thiếu nó trong bản nộp thì luồng
+      // đăng nhập một chạm không có gì để nộp lên vòng duyệt.
+      "getAccessToken",
       "getLocation",
       "scanQRCode",
       // Sáu quyền xin thêm. Zalo chỉ cấp khi bản nộp CÓ chỗ dùng chúng nhìn thấy được, và "nhìn
@@ -394,6 +464,43 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     }
   });
 
+  /**
+   * CHÍNH SÁCH MÔ TẢ ĐÚNG BẢN DỰNG NÓ NẰM TRONG — nay là MỘT văn bản cho cả hai bản dựng.
+   *
+   * Bản trước của ca này kiểm hai câu mở đầu khác nhau, vì bản nộp khi ấy không gọi mạng. Tiền
+   * đề đó không còn: cả hai biến thể gọi máy chủ thật, nên hai bản phải nói **y hệt nhau** về
+   * quyền riêng tư. Ca này đổi chiều theo: nó khẳng định câu mở đầu MỚI có trong cả hai, và câu
+   * mở đầu CŨ — thứ đã thành sai — không còn trong bản nào.
+   */
+  it("một văn bản chính sách, giống hệt nhau ở cả hai bản dựng", () => {
+    const CAU_DAU_DA_THANH_SAI = "không lưu trữ và không gửi đi bất kỳ dữ liệu nào của bạn";
+    for (const [ten, ban] of [
+      ["goc", goc],
+      ["day-du", day_du],
+    ] as const) {
+      expect(ban, `bản ${ten} thiếu câu mở đầu chính sách`).toContain(CAU_DAU);
+      expect(
+        ban,
+        `bản ${ten} vẫn mang câu mở đầu CŨ — câu ấy thành sai từ ngày khối đăng nhập gọi máy chủ`,
+      ).not.toContain(CAU_DAU_DA_THANH_SAI);
+    }
+  });
+
+  it("mục Đăng nhập của chính sách có mặt ĐỦ trong cả hai bản", () => {
+    // Đây là mục khai việc gửi hai mã đi và việc máy chủ lưu số điện thoại. Thiếu nó trong bản
+    // nộp là giấu một hành vi mà mã CÓ — đúng thứ Nghị định 13 nhắm tới.
+    const muc = MUC_CHINH_SACH.find((m) => m.ma === "dang-nhap");
+    expect(muc, "chính sách không còn mục nào về đăng nhập").toBeDefined();
+    for (const [ten, ban] of [
+      ["goc", goc],
+      ["day-du", day_du],
+    ] as const) {
+      for (const doan of muc!.doan) {
+        expect(ban, `bản ${ten} thiếu đoạn chính sách: ${doan.slice(0, 40)}…`).toContain(doan);
+      }
+    }
+  });
+
   it("chính sách quyền riêng tư có mặt trong CẢ HAI bản, đủ mọi mục", () => {
     // Xin ba quyền mà không có chính sách thì vòng duyệt trả về. Mục về ba quyền nay nằm trong
     // danh sách chung, vì ba quyền có mặt ở MỌI bản dựng — không còn gì để tách.
@@ -402,7 +509,7 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
       ["day-du", day_du],
     ] as const) {
       expect(ban, `bản ${ten} thiếu tiêu đề chính sách`).toContain(TIEU_DE_CHINH_SACH);
-      expect(ban, `bản ${ten} thiếu câu mở đầu chính sách`).toContain(CAU_DAU);
+      // Câu mở đầu kiểm ở ca ngay trên, cùng với câu CŨ phải biến mất khỏi cả hai bản.
       expect(ban, `bản ${ten} ghi sai phiên bản chính sách`).toContain(PHIEN_BAN_CHINH_SACH);
       for (const m of MUC_CHINH_SACH) {
         expect(ban, `bản ${ten} thiếu mục "${m.tieu_de}"`).toContain(m.tieu_de);

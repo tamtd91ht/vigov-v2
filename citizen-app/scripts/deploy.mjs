@@ -74,6 +74,30 @@ if (!BIEN_THE.includes(bien_the)) {
   process.exit(2);
 }
 
+/**
+ * CHẶN ĐƯỜNG ĐẨY KHI CHƯA KHAI ĐỊA CHỈ MÁY CHỦ — 20/09/2026, ngày bản nộp bắt đầu gọi máy chủ.
+ *
+ * Khối đăng nhập đọc `VIGOV_API_HOST` **lúc dựng**. Quên đặt biến thì app vẫn dựng xanh, vẫn
+ * chạy, và cái nút đăng nhập hiện ra một câu nói với NGƯỜI DỰNG BẢN: *"Bản dựng này chưa được
+ * khai địa chỉ máy chủ…"*. Đẩy bản ấy đi duyệt là nộp một nút đăng nhập không đăng nhập nổi,
+ * kèm một câu chữ kỹ thuật — hồ sơ bị trả về, và người phát hiện ra là người duyệt.
+ *
+ * VÌ SAO CHẶN Ở ĐÂY CHỨ KHÔNG NÉM LỖI TRONG `vite.config.ts`: `npm test` và `npm run dev` phải
+ * chạy được trên một máy chưa có địa chỉ máy chủ nào — `bundle-for-zalo.test.ts` dựng cả hai
+ * biến thể trong mọi lần chạy test. Ma sát đặt đúng chỗ có hậu quả: đường ĐẨY LÊN ZALO.
+ */
+const api_host = (process.env.VIGOV_API_HOST ?? "").trim();
+if (api_host === "" && !chi_thu) {
+  console.error(
+    "\nVIGOV_API_HOST chưa được đặt.\n" +
+      "  Khối đăng nhập đọc biến này LÚC DỰNG. Thiếu nó, bản đẩy lên sẽ có một nút đăng nhập\n" +
+      "  không đăng nhập được, và hiện một câu dành cho người dựng bản.\n" +
+      "  Đặt biến rồi chạy lại, ví dụ:  VIGOV_API_HOST=https://<host> npm run zmp:deploy:goc\n" +
+      "  (Thêm --thu để chỉ in ra kế hoạch mà không cần biến này.)\n",
+  );
+  process.exit(2);
+}
+
 const sha = git("rev-parse", "--short", "HEAD") || "khong-ro";
 const ban = git("status", "--porcelain") ? " · dirty" : "";
 const luc = new Date().toISOString().slice(0, 16).replace("T", " ");
@@ -91,6 +115,9 @@ console.log(
     : "  Loại bản : THỬ NGHIỆM — có -t. Chỉ mở được bằng link bản thử nghiệm.",
 );
 console.log(`  Nhãn     : ${mota}`);
+// IN RA ĐỊA CHỈ MÁY CHỦ SẼ ĐI VÀO BUNDLE. Đây là thứ quyết định nút đăng nhập nói chuyện với ai,
+// và nó được nung vào tệp gửi đi — người chạy lệnh phải đọc được nó trước khi để lệnh chạy tiếp.
+console.log(`  Máy chủ  : ${api_host === "" ? "(chưa khai — chỉ hợp lệ với --thu)" : api_host}`);
 console.log("  Các bước : vite build → zmp sync-config → zmp deploy");
 console.log(`${vach}\n`);
 
@@ -116,7 +143,9 @@ if (phat_hanh) {
 
 if (chi_thu) {
   console.log("--thu: dừng ở đây, không dựng và không đẩy gì cả. Dòng lệnh sẽ chạy:");
-  console.log(`  VIGOV_BIEN_THE=${bien_the} vite build`);
+  // In cả hai biến LÚC DỰNG: biến thể quyết định nội dung, địa chỉ máy chủ quyết định nút đăng
+  // nhập nói chuyện với ai. Một bản diễn tập giấu mất biến thứ hai là một bản diễn tập nói sai.
+  console.log(`  VIGOV_BIEN_THE=${bien_the} VIGOV_API_HOST=${api_host || "<CHƯA KHAI>"} vite build`);
   console.log(`  npx --yes ${ZMP} sync-config dist/index.html`);
   console.log(`  npx --yes ${ZMP} ${co_zmp.map((c) => (c.includes(" ") ? `"${c}"` : c)).join(" ")}`);
   process.exit(0);

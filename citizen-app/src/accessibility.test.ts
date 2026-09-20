@@ -250,6 +250,18 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["the reminder that a scanned card is someone else's data", token("ink-muted"), token("surface")],
     ["the promise that nothing leaves this screen", token("ink-muted"), token("surface")],
 
+    // KHỐI ĐĂNG NHẬP (ADR 0020). Không một MÀU MỚI nào ở đây — khối này dùng lại đúng những lớp
+    // của năm khối kia (`tn__xong` · `tn__do` · `tn__giai-thich` · `tn__ranh-gioi` · `tn__loi`).
+    // Vẫn liệt kê riêng, vì cùng lý do như trên: một cặp màu chỉ được bảo vệ khi có tên nó ở
+    // đây, và đây là chữ người dùng đọc ở đúng khoảnh khắc họ quyết định có chia sẻ số điện
+    // thoại của mình hay không.
+    ["the 'you are signed in' line", token("navy"), token("surface")],
+    ["the session expiry line under it", token("ink"), token("surface")],
+    ["the note that the session is kept in memory only", token("ink"), token("surface-alt")],
+    ["the 'opening your session' line", token("ink"), token("surface-alt")],
+    ["the sentence saying the sign-in code expired", token("ink"), token("surface-alt")],
+    ["the sentence saying Zalo did not answer", token("ink"), token("surface-alt")],
+
     // THẺ DANH THIẾP quét được. Đây là tên, số điện thoại và email của một người thật, đọc trong
     // mười giây sau khi bắt tay ở một hội thảo — đọc nhầm một ký tự là gọi nhầm một người.
     ["the scanned card title", token("navy"), token("surface-alt")],

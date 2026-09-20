@@ -5,7 +5,7 @@ import { OFFICES } from "../../content/company-profile";
 
 import { docMaQR, thiepCoNoiDung } from "./danh-thiep";
 import { cheToken, KetQuaToken, KhungTinhNang } from "./khung";
-import { DangKyTuVan, DanhSachVanPhong, duongDanBanDo, TimVanPhong } from "./LienHeTinhNang";
+import { DanhSachVanPhong, duongDanBanDo, KhoiDangNhap, TimVanPhong } from "./LienHeTinhNang";
 import { KetQuaQuet, ManDanhThiep, TheDanhThiep } from "./ManDanhThiep";
 import { MAN_DANH_THIEP } from "./index";
 import {
@@ -15,8 +15,8 @@ import {
   type MaTinhNang,
   noiDung,
   NOI_DUNG_TINH_NANG,
+  DANG_NHAP,
   TOKEN_KHONG_CHUA_GI,
-  TU_VAN,
   VAN_PHONG,
 } from "./noi-dung";
 
@@ -224,7 +224,7 @@ describe("mỗi tính năng tự giải thích được cho người duyệt", (
       ...NOI_DUNG_TINH_NANG.flatMap((nd) => Object.values(nd)),
       ...Object.values(DANH_THIEP),
       ...Object.values(VAN_PHONG),
-      ...Object.values(TU_VAN),
+      ...Object.values(DANG_NHAP),
       ...Object.values(TOKEN_KHONG_CHUA_GI),
       CHI_HIEN_LEN_MAN_HINH,
       MA_RONG,
@@ -234,7 +234,7 @@ describe("mỗi tính năng tự giải thích được cho người duyệt", (
     }
   });
 
-  for (const ma of ["danh-thiep", "van-phong", "tu-van"] as const) {
+  for (const ma of ["danh-thiep", "van-phong", "dang-nhap"] as const) {
     it(`${ma}: nói VÌ SAO cần quyền, có nút, và trạng thái đọc được`, () => {
       const nd = noiDung(ma);
       const markup = ve(
@@ -261,11 +261,11 @@ describe("mỗi tính năng tự giải thích được cho người duyệt", (
     // năng ở đó phải là `<h2>` — nếu không, trình đọc màn hình nghe ba tiêu đề bậc nhất.
     expect(ve(<ManDanhThiep />)).toContain("<h1");
     expect(ve(<TimVanPhong />)).not.toContain("<h1");
-    expect(ve(<DangKyTuVan />)).not.toContain("<h1");
+    expect(ve(<KhoiDangNhap />)).not.toContain("<h1");
   });
 
   it("không mở ô nhập nào — ba tính năng lấy dữ liệu từ nền tảng, không hỏi người dùng gõ", () => {
-    for (const phan_tu of [<ManDanhThiep />, <TimVanPhong />, <DangKyTuVan />]) {
+    for (const phan_tu of [<ManDanhThiep />, <TimVanPhong />, <KhoiDangNhap />]) {
       expect(ve(phan_tu)).not.toMatch(/<(form|input|textarea|select)[\s/>]/);
     }
   });
@@ -319,8 +319,12 @@ describe("từ chối là đường đi bình thường, không phải lỗi", (
 describe("hai tính năng dùng token: màn hình không có dữ liệu cá nhân để mà che", () => {
   const TOKEN = "AbCdEf0123456789xyz";
 
+  // `van-phong` có một câu ranh giới truyền qua `noi_them`; `dang-nhap` thì KHÔNG, vì nó không
+  // có ranh giới nào để nói — mã đi thẳng tới máy chủ và phần đuôi là trạng thái thật của lời
+  // gọi ấy (`features/dang-nhap/PhatHanhPhien.tsx`, có test riêng). Nhánh bỏ trống `noi_them`
+  // được kiểm ở ca cuối của khối "khối đăng nhập" bên dưới.
   for (const [ma, da_nhan, noi_them] of [
-    ["tu-van", TU_VAN.da_nhan_ma, TU_VAN.chua_gui_di],
+    ["dang-nhap", DANG_NHAP.da_nhan_ma, undefined],
     ["van-phong", VAN_PHONG.da_nhan_ma, VAN_PHONG.chua_xep_duoc],
   ] as const) {
     it(`${ma}: hiện độ dài và vài ký tự đầu, KHÔNG hiện trọn token`, () => {
@@ -336,15 +340,15 @@ describe("hai tính năng dùng token: màn hình không có dữ liệu cá nh�
       expect(markup, "token hiện trọn vẹn trên màn hình").not.toContain(TOKEN);
     });
 
-    it(`${ma}: nói rõ dữ liệu thật KHÔNG nằm trong token, VÀ nói ra thứ bản này chưa làm`, () => {
+    it(`${ma}: nói rõ dữ liệu thật KHÔNG nằm trong token`, () => {
       const chu = textOf(
         ve(<KetQuaToken ma={ma} token={TOKEN} da_nhan={da_nhan} noi_them={noi_them} />),
       );
       expect(chu).toContain(TOKEN_KHONG_CHUA_GI[ma]);
       expect(TOKEN_KHONG_CHUA_GI[ma]).toMatch(/không nằm trong mã này/);
       expect(TOKEN_KHONG_CHUA_GI[ma]).toMatch(/máy chủ/);
-      // Vế thứ hai: ranh giới. Bỏ nó đi là hứa một việc bản dựng này không làm.
-      expect(chu).toContain(noi_them);
+      // Vế thứ hai: ranh giới — chỉ với tính năng CÓ một ranh giới thật để nói.
+      if (noi_them !== undefined) expect(chu).toContain(noi_them);
     });
   }
 
@@ -478,19 +482,61 @@ describe("tìm văn phòng: từ chối quyền KHÔNG được làm mất tính
   });
 });
 
-describe("đăng ký tư vấn: luôn có một đường liên hệ chạy được NGAY", () => {
-  const markup = ve(<DangKyTuVan />);
+describe("khối đăng nhập: một chạm, và luôn có một đường liên hệ chạy được NGAY", () => {
+  const markup = ve(<KhoiDangNhap />);
 
-  it("hotline và email nằm ngay dưới nút đăng ký, trước khi bấm gì", () => {
+  it("hotline và email nằm ngay dưới nút đăng nhập, trước khi bấm gì", () => {
+    // ĐƯỜNG LUI CHO NGƯỜI TỪ CHỐI QUYỀN. Từ chối chia sẻ số điện thoại là đường đi bình thường,
+    // và nó không được làm mất cách liên hệ với công ty.
     expect(markup).toContain("href=\"tel:");
     expect(markup).toContain("href=\"mailto:");
-    expect(textOf(markup)).toContain(TU_VAN.nhac_lien_he);
+    expect(textOf(markup)).toContain(DANG_NHAP.nhac_lien_he);
   });
 
-  it("câu nói ra ranh giới: bản này CHƯA gửi yêu cầu đi đâu", () => {
-    expect(TU_VAN.chua_gui_di).toMatch(/chưa gửi/);
-    expect(textOf(ve(<KetQuaToken ma="tu-van" token="abcdefgh" da_nhan={TU_VAN.da_nhan_ma} noi_them={TU_VAN.chua_gui_di} />))).toContain(
-      TU_VAN.chua_gui_di,
+  it("KHÔNG có ô nhập mã, và không câu nào hứa một mã OTP", () => {
+    // ADR 0020: một chạm, không OTP. Đây là ca giữ cho một lượt sửa sau không lặng lẽ thêm lại
+    // màn nhập sáu số — thứ ADR ấy bác bỏ vì nó là rào thật với người cao tuổi.
+    expect(markup).not.toMatch(/<(form|input|textarea|select)[\s/>]/);
+    const chu = [
+      ...Object.values(DANG_NHAP),
+      ...Object.values(noiDung("dang-nhap")),
+    ].join(" ");
+    expect(chu, "câu chữ khối đăng nhập hứa một mã OTP").not.toMatch(/OTP|mã xác thực|mã kích hoạt/i);
+    // Nói "không phải gõ mã" thì được — đó là lời phủ định, và là điều người dùng cần biết.
+    expect(chu).toMatch(/không.{0,40}(mã sáu số|gõ mã)/);
+  });
+
+  it("nói mục đích ĐỦ HAI VẾ: đăng nhập / định danh, và nhận thông báo ZNS", () => {
+    // Đây là câu người duyệt Zalo đọc để quyết định cấp quyền `getPhoneNumber` (điều 3.3.4).
+    // Thiếu một vế là mô tả thiếu mục đích, và mô tả thiếu thì vòng duyệt trả về.
+    const vi_sao = noiDung("dang-nhap").vi_sao;
+    expect(vi_sao).toMatch(/đăng nhập/);
+    expect(vi_sao).toMatch(/ZNS/);
+  });
+
+  it("KHÔNG còn câu nào nói 'bản này chưa nối máy chủ' — câu ấy đã thành SAI", () => {
+    // Cả hai biến thể nay gọi máy chủ thật (20/09/2026). Một câu chối việc mã CÓ làm là nói dối
+    // bằng giao diện, cùng hạng với một câu hứa việc mã KHÔNG làm — và nó sẽ sống sót rất lâu,
+    // vì không có gì đỏ lên khi một lời phủ định trở nên thừa.
+    const chu = [...Object.values(DANG_NHAP), ...Object.values(noiDung("dang-nhap"))].join(" ");
+    expect(chu, "câu chữ khối đăng nhập vẫn chối việc gọi máy chủ").not.toMatch(
+      /chưa nối|chưa có bước|chưa gửi|chưa mở được phiên/,
+    );
+  });
+
+  it("mã rỗng thì KHÔNG có bước máy chủ nào được vẽ ra", () => {
+    // Nền tảng trả mã rỗng ở môi trường phát triển. Gửi một mã rỗng đi thì máy chủ từ chối, và
+    // người đọc nhận một câu "mã đã quá hạn" — một câu SAI chỉ ra một việc không sửa được gì.
+    const chu = textOf(ve(<KetQuaToken ma="dang-nhap" token="" da_nhan={DANG_NHAP.da_nhan_ma} />));
+    expect(chu).toContain(MA_RONG);
+    expect(chu).not.toContain(DANG_NHAP.da_nhan_ma);
+  });
+
+  it("`noi_them` bỏ trống thì không vẽ ra một đoạn rỗng", () => {
+    // Khối đăng nhập không truyền `noi_them` — phần đuôi do cửa biến thể vẽ. Một `<p>` rỗng ở
+    // đó là một khoảng trắng không ai giải thích được giữa hai đoạn chữ.
+    expect(ve(<KetQuaToken ma="dang-nhap" token="abcdefgh" da_nhan={DANG_NHAP.da_nhan_ma} />)).not.toContain(
+      'class="tn__ranh-gioi"',
     );
   });
 });

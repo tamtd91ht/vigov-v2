@@ -6,20 +6,29 @@ import indexHtmlRaw from "../index.html?raw";
 /**
  * THE DEFECT CLASS THIS FILE EXISTS FOR:
  *
- *   Phase 1 was submitted to Zalo as an app that collects nothing — no sign-in, no
- *   `getPhoneNumber`, no OTP, no form, no backend call (README §"Phase 1 collects no personal
- *   data"). That is what makes rule 3 hold BY CONSTRUCTION rather than by argument.
+ *   Every screen still renders, every existing test stays green, the build succeeds — and the
+ *   app now collects something the review never covered. That defect is invisible until it is
+ *   an incident, and no other check in this repository can see it.
  *
- *   Nothing about that is self-enforcing. Six weeks from now somebody adds a "gửi góp ý" form,
- *   or a `getPhoneNumber` to "make support easier", or a `fetch` to a staging backend left in
- *   while debugging. Every screen still renders, every existing test stays green, the build
- *   succeeds — and the app now collects personal data under a review that was granted to an app
- *   that asked for nothing. The defect is invisible until it is an incident.
+ *   These tests are the tripwire. They are DELIBERATELY hostile to a silent change: the red is
+ *   the conversation that must happen BEFORE collection is added, not after.
  *
- *   These tests are the tripwire. They are DELIBERATELY hostile to a silent change: phase 2 will
- *   make some of them red, and that is the point — the red is the conversation that must happen
- *   before collection is added, not after. When phase 2 lands, this file is replaced with the
- *   rules of phase 2, not deleted.
+ * ⚠ CÁI ĐÃ ĐỔI, VÀ CÁI KHÔNG — ĐỌC BẢNG NÀY TRƯỚC KHI SỬA MỘT DÒNG NÀO Ở ĐÂY.
+ *
+ *   Tệp này ra đời khi app "không thu thập gì cả": không đăng nhập, không `getPhoneNumber`,
+ *   không một lời gọi máy chủ nào. Hai trong ba điều ấy nay KHÔNG CÒN ĐÚNG — ứng dụng có đăng
+ *   nhập một chạm (ADR 0020) và CÓ một lời gọi máy chủ, ở CẢ BẢN NỘP.
+ *
+ *   Mỗi lần một ranh giới bị bước qua, lệnh cấm tương ứng được **THU HẸP**, không bị gỡ, và
+ *   luôn kèm một ca chứng minh nó còn bắt được ở ngoài phạm vi mới:
+ *
+ *     `zmp-sdk` + 10 lời gọi nền tảng  →  miễn ĐÚNG MỘT THƯ MỤC (`features/tinh-nang/`)
+ *     `fetch`/XHR/WebSocket/…          →  miễn ĐÚNG MỘT TỆP (`features/dang-nhap/goi-may-chu.ts`)
+ *     `getUserInfo`/`getSetting`/`authorize` · lưu trữ · `serverUploadUrl` · geolocation · ô nhập
+ *                                      →  KHÔNG miễn cho gì cả, không một dòng nào
+ *
+ *   MỘT LỆNH CẤM BỊ XOÁ LÀ MỘT LỆNH CẤM KHÔNG AI BIẾT LÀ ĐÃ MẤT. Đó là lý do chưa lệnh cấm nào
+ *   trong tệp này biến mất, kể cả khi lý do ban đầu của nó đã hết.
  */
 
 const RAW_SOURCES = import.meta.glob("./**/*.{ts,tsx}", {
@@ -67,7 +76,8 @@ type Tripwire = {
   what: string;
   pattern: RegExp;
   /**
-   * THƯ MỤC DUY NHẤT được phép chứa thứ này. Không khai thì cấm ở mọi tệp.
+   * TIỀN TỐ ĐƯỜNG DẪN DUY NHẤT được phép chứa thứ này — một THƯ MỤC, hoặc ĐÚNG MỘT TỆP. Không
+   * khai thì cấm ở mọi tệp.
    *
    * ⚠ ĐÂY LÀ THU HẸP PHẠM VI, KHÔNG PHẢI GỠ LỆNH CẤM — và khác biệt ấy là toàn bộ vấn đề.
    *
@@ -91,6 +101,27 @@ type Tripwire = {
  */
 const THU_MUC_TINH_NANG = "./features/tinh-nang/";
 
+/**
+ * TỆP DUY NHẤT ĐƯỢC GỌI MẠNG — một TỆP, không phải một thư mục, và khác biệt ấy là cả vấn đề.
+ *
+ * ADR 0020 chốt đăng nhập bằng `getPhoneNumber`, và hai mã lấy được chỉ đổi được ở MÁY CHỦ
+ * (bất biến 2: khoá bí mật của Mini App không ra khỏi backend). Nên ứng dụng phải gọi được một
+ * tuyến — ở CẢ HAI biến thể, kể cả bản nộp — và lệnh cấm
+ * `fetch`/XHR/WebSocket/EventSource/axios được THU HẸP, không gỡ.
+ *
+ * VÌ SAO HẸP TỚI MỘT TỆP CHỨ KHÔNG PHẢI MỘT THƯ MỤC như `zmp-sdk`: `zmp-sdk` là một bề mặt rộng
+ * mà chín lời gọi có lý do nằm cạnh nhau. Một lời gọi mạng thì không: mỗi cái là một đường dữ
+ * liệu rời khỏi máy người dùng. Miễn cho cả thư mục thì lời gọi thứ hai, thứ ba mọc lên trong
+ * đó mà không có gì đỏ lên; miễn cho một tệp thì mỗi lời gọi mới phải đi qua đúng chỗ có chú
+ * thích nói vì sao nó được phép.
+ *
+ * Ca "lệnh cấm CÓ PHẠM VI vẫn bắt được vi phạm đặt NGOÀI…" ở cuối tệp cho lệnh cấm này ăn một
+ * `fetch` đặt trong `features/dang-nhap/PhatHanhPhien.tsx` — tệp nằm NGAY CẠNH tệp được miễn — và
+ * khẳng định nó vẫn bắt. Không có ca ấy thì `chi_trong` có thể bị sửa thành thư mục và không
+ * có gì báo.
+ */
+const TEP_GOI_MANG = "./features/dang-nhap/goi-may-chu.ts";
+
 /** Tệp vi phạm một dây bẫy: khớp mẫu, và KHÔNG nằm trong thư mục được miễn. */
 function viPham(
   day: Tripwire,
@@ -104,8 +135,17 @@ function viPham(
 
 const TRIPWIRES: readonly Tripwire[] = [
   {
-    what: "a Zalo SDK call that asks the platform for citizen data (profile, token, permission state)",
-    pattern: /\b(getUserInfo|getAccessToken|getSetting|authorize)\s*\(/,
+    // `getAccessToken` ĐÃ RỜI KHỎI LỆNH CẤM NÀY, SANG LỆNH CẤM CÓ PHẠM VI NGAY DƯỚI — không
+    // phải bị xoá. Luồng đăng nhập của ADR 0020 cần nó, và nó chỉ được gọi trong đúng một thư
+    // mục như chín lời gọi kia.
+    //
+    // BA TÊN CÒN LẠI KHÔNG ĐƯỢC NỚI THEO, VÀ ĐÓ LÀ CẢ Ý NGHĨA CỦA VIỆC TÁCH RA: `getUserInfo`
+    // trả về TÊN và ẢNH ĐẠI DIỆN — dữ liệu cá nhân thật, không phải một mã; `authorize` là đường
+    // xin thêm scope; `getSetting` đọc trạng thái quyền. Không tính năng nào trong app này cần
+    // chúng, nên chúng bị cấm ở MỌI tệp, kể cả trong `features/tinh-nang/`. Có một ca kiểm riêng
+    // ở cuối tệp cho đúng điều đó.
+    what: "a Zalo SDK call that asks the platform for citizen data (profile, permission state)",
+    pattern: /\b(getUserInfo|getSetting|authorize)\s*\(/,
   },
   {
     // BA LỜI GỌI CỦA BA TÍNH NĂNG, và chỉ trong `src/features/tinh-nang/`. Ở mọi tệp khác chúng
@@ -120,11 +160,17 @@ const TRIPWIRES: readonly Tripwire[] = [
     // `requestCameraPermission` · `openMediaPicker` · `downloadFile`. Chín cái tên, MỘT thư mục.
     // Một `openMediaPicker` xuất hiện trong `App.tsx` là mở cửa sổ chọn ảnh ngoài phạm vi đã
     // nộp, và nó sẽ đi vào CẢ bản `goc` vì `App.tsx` không nằm sau alias.
+    // `getAccessToken` LÀ TÊN THỨ MƯỜI, THÊM VÀO LẦN NÀY. Khối `getPhoneNumber` trên màn Liên hệ
+    // nay là KHỐI ĐĂNG NHẬP (ADR 0020), và luồng ấy gửi đi hai mã: mã số điện thoại và access
+    // token của phiên Zalo. Nó chuyển từ lệnh cấm tuyệt đối ở trên xuống đây, tức là **được phép
+    // trong đúng một thư mục** — không phải được phép ở mọi nơi. Số QUYỀN phải xin ở Developer
+    // Console vẫn là chín: `index.d.ts` dòng 3009 ghi rằng từ SDK 2.35.0 lời gọi này không cần
+    // người dùng xác nhận.
     what:
-      'a platform-permission call outside "src/features/tinh-nang/" — those nine are the ONLY ' +
-      "platform permissions this app asks for, and they live in exactly one directory",
+      'a platform call outside "src/features/tinh-nang/" — those ten are the ONLY platform ' +
+      "calls this app makes, and they live in exactly one directory",
     pattern:
-      /\b(getPhoneNumber|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile)\s*\(/,
+      /\b(getPhoneNumber|getAccessToken|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile)\s*\(/,
     chi_trong: THU_MUC_TINH_NANG,
   },
   {
@@ -192,11 +238,29 @@ const TRIPWIRES: readonly Tripwire[] = [
     chi_trong: THU_MUC_TINH_NANG,
   },
   {
-    what: "an outbound request — phase 1 talks to no backend, so nothing about a citizen can leave the device",
+    /**
+     * LỜI GỌI MẠNG — THU HẸP VỀ ĐÚNG MỘT TỆP, KHÔNG GỠ. Xem `TEP_GOI_MANG` ở trên.
+     *
+     * ⚠ TỆP ẤY NAY CÓ MẶT TRONG CẢ BẢN NỘP (20/09/2026) — khối đăng nhập không còn cửa biến thể,
+     * cả hai bản gọi máy chủ thật. Ứng dụng vì thế KHÔNG còn nói "không gửi đi đâu" nữa; câu ấy
+     * đã bị gỡ khỏi chính sách quyền riêng tư trong cùng một lượt (bản 1.3).
+     *
+     * Điều lệnh cấm này giữ nay là một câu KHÁC, và vẫn đáng giá y như vậy: **ứng dụng gửi đi
+     * đúng MỘT việc, từ đúng MỘT tệp.** Một lời gọi mạng thứ hai — một "gửi log lỗi cho tiện",
+     * một bộ đo hành vi — không lọt được vào đâu mà không đỏ lên ở đây.
+     */
+    what:
+      'an outbound request outside "src/features/dang-nhap/goi-may-chu.ts" — that ONE file is ' +
+      "the only place this app may talk to a server, and it talks to exactly one route",
     pattern: /\bfetch\s*\(|XMLHttpRequest|sendBeacon|new\s+WebSocket|new\s+EventSource|\baxios\b/,
+    chi_trong: TEP_GOI_MANG,
   },
   {
-    what: "device-side storage of user state — nothing is collected, so nothing needs keeping",
+    // KHÔNG NỚI MỘT DÒNG NÀO, kể cả cho tệp gọi mạng: phiếu phiên nhận về sống trong `useState`
+    // và mất khi đóng app (xã đã chọn của lớp khám phá cũng vậy). Ghi một bearer xuống máy là
+    // để nó ở lại sau khi người dùng đóng ứng dụng, trên một thiết bị có thể cho mượn — và câu
+    // "không lưu lại" trong chính sách quyền riêng tư đứng được là nhờ đúng lệnh cấm này.
+    what: "device-side storage of user state — the session ticket lives in memory, never on the device",
     pattern: /localStorage|sessionStorage|document\.cookie|indexedDB/,
   },
   {
@@ -221,6 +285,9 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // quét thì không miễn gì cả — và ngày thư mục ấy đổi tên, lệnh cấm có phạm vi trở thành lệnh
     // cấm toàn phần mà không ai biết, hoặc ngược lại.
     expect(paths).toContain(`${THU_MUC_TINH_NANG}zalo-api.ts`);
+    // Cùng lý do, cho ngoại lệ hẹp nhất trong tệp này: một tệp được miễn mà lượt quét không hề
+    // đọc tới thì "miễn" và "không tồn tại" là một, và ngày nó đổi tên sẽ không có gì báo.
+    expect(paths).toContain(TEP_GOI_MANG);
   });
 
   for (const tripwire of TRIPWIRES) {
@@ -276,7 +343,7 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // và khẳng định nó vẫn bắt. Không có ca này thì sáu tuần nữa `chi_trong` có thể bị sửa thành
     // `"./"` và không có gì đỏ lên.
     const co_pham_vi = TRIPWIRES.filter((t) => t.chi_trong !== undefined);
-    expect(co_pham_vi.length, "không còn lệnh cấm có phạm vi nào để kiểm").toBe(2);
+    expect(co_pham_vi.length, "không còn lệnh cấm có phạm vi nào để kiểm").toBe(3);
 
     const VI_PHAM = [
       { path: "./App.tsx", code: 'const { token } = await getPhoneNumber();' },
@@ -293,18 +360,33 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
       { path: "./lib/launch-params.ts", code: "await requestCameraPermission();" },
       { path: "./App.tsx", code: 'await openMediaPicker({ type: "photo" });' },
       { path: "./main.tsx", code: 'await downloadFile({ url: "https://vidu.vn/a.pdf" });' },
+      // TÊN THỨ MƯỜI: `getAccessToken` nay được phép trong `features/tinh-nang/`, và chỉ ở đó.
+      { path: "./App.tsx", code: "const ma = await getAccessToken();" },
+
+      // LỜI GỌI MẠNG — NGOẠI LỆ HẸP NHẤT TRONG TỆP NÀY, và ba dòng dưới là thứ chứng minh nó
+      // hẹp đúng bằng MỘT TỆP. Dòng thứ hai nằm trong chính thư mục của tệp được miễn, ngay
+      // cạnh nó: nếu `chi_trong` bị sửa thành thư mục, đúng dòng ấy đỏ lên.
+      { path: "./App.tsx", code: 'await fetch("https://vidu.vn/a");' },
+      { path: "./features/dang-nhap/PhatHanhPhien.tsx", code: 'await fetch("https://vidu.vn/a");' },
+      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "new XMLHttpRequest();" },
+      { path: "./lib/launch-params.ts", code: 'navigator.sendBeacon("/do", d);' },
+      { path: "./components/TabBar.tsx", code: 'new WebSocket("wss://vidu.vn");' },
+      { path: "./main.tsx", code: "import axios from 'axios';" },
     ];
     for (const tep of VI_PHAM) {
       const bat = co_pham_vi.some((day) => viPham(day, [tep]).length === 1);
       expect(bat, `lệnh cấm có phạm vi không bắt được: ${tep.path} — ${tep.code}`).toBe(true);
     }
 
-    // Và trong thư mục ấy thì đúng là được phép — nếu không thì biến thể `quyen` không dựng nổi.
+    // Và ở đúng chỗ được miễn thì được phép — nếu không thì sáu tính năng và khối đăng nhập
+    // không dựng nổi, và một dây bẫy chặn cả mã sản phẩm là một dây bẫy sắp bị ai đó tắt.
     const TRONG = [
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await (await import("zmp-sdk")).getPhoneNumber();' },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "await scanQRCode();" },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await openMediaPicker({ type: "photo" });' },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "await keepScreen({ keepScreenOn: false });" },
+      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "const ma = await sdk.getAccessToken();" },
+      { path: TEP_GOI_MANG, code: 'await fetch(dia_chi, { method: "POST" });' },
     ];
     for (const tep of TRONG) {
       for (const day of co_pham_vi) {
@@ -312,6 +394,37 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
           [],
         );
       }
+    }
+  });
+
+  it("ba lệnh cấm KHÔNG có phạm vi vẫn bắt ngay trong thư mục được miễn của những lệnh cấm khác", () => {
+    // CA VỀ THỨ ĐÃ **KHÔNG** ĐƯỢC NỚI, và nó tồn tại vì lần thu hẹp này đã tách một tên ra khỏi
+    // một lệnh cấm tuyệt đối: `getAccessToken` rời sang lệnh cấm có phạm vi để luồng đăng nhập
+    // của ADR 0020 chạy được. Ba tên ở lại thì KHÔNG được đi theo, và "không được đi theo" phải
+    // có một ca cho nó ăn một vi phạm — đặt ngay trong thư mục mà chín lời gọi kia được phép.
+    //
+    //   getUserInfo → tên và ảnh đại diện: dữ liệu cá nhân thật, không phải một mã;
+    //   authorize   → xin thêm scope, tức mở rộng đúng thứ vòng duyệt đã cấp;
+    //   getSetting  → đọc trạng thái quyền của người dùng.
+    //
+    // Cùng ca ấy ghim lệnh cấm lưu trữ: phiếu phiên đăng nhập sống trong `useState`, và lệnh
+    // cấm `localStorage`/`sessionStorage`/`cookie`/`indexedDB` không được nới cho một tệp nào —
+    // kể cả cho chính tệp gọi mạng.
+    const TUYET_DOI = TRIPWIRES.filter((t) => t.chi_trong === undefined);
+    expect(TUYET_DOI.length, "một lệnh cấm tuyệt đối vừa được cho một phạm vi").toBe(5);
+
+    const VI_PHAM = [
+      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "const me = await getUserInfo();" },
+      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await authorize({ scopes: ["scope.userInfo"] });' },
+      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "const q = await getSetting();" },
+      { path: TEP_GOI_MANG, code: 'localStorage.setItem("phien", phien.token);' },
+      { path: TEP_GOI_MANG, code: 'document.cookie = "phien=" + token;' },
+      { path: "./features/dang-nhap/PhatHanhPhien.tsx", code: "sessionStorage.setItem(k, v);" },
+      { path: "./App.tsx", code: "indexedDB.open('phien');" },
+    ];
+    for (const tep of VI_PHAM) {
+      const bat = TUYET_DOI.some((day) => viPham(day, [tep]).length === 1);
+      expect(bat, `lệnh cấm tuyệt đối không bắt được: ${tep.path} — ${tep.code}`).toBe(true);
     }
   });
 

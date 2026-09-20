@@ -123,9 +123,10 @@ describe("alias là cửa DUY NHẤT vào hai phần gỡ được", () => {
     }
     expect(
       vi_pham,
-      "một tệp nhập thẳng vào lớp khám phá, bảng chẩn đoán hoặc ba màn quyền, không qua " +
-        "`bien-the/…`.\nAlias trong vite.config.ts chỉ thay được đúng ba cái tên ấy; mọi đường " +
-        "khác lọt vào bản GỐC — bản nộp tối thiểu.",
+      "một tệp nhập thẳng vào lớp khám phá hoặc bảng chẩn đoán, không qua `bien-the/…`.\n" +
+        "Alias trong vite.config.ts chỉ thay được đúng hai cái tên ấy; mọi đường khác lọt vào " +
+        "bản GỐC — BẢN NỘP.\n(Khối đăng nhập KHÔNG nằm trong danh sách này: từ 20/09 cả hai " +
+        "biến thể gọi máy chủ thật, nên nó không còn cửa nào và được nhập thẳng.)",
     ).toEqual([]);
   });
 });

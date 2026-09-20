@@ -6,7 +6,9 @@ tripwire in `src/phase1-collects-nothing.test.ts` is what keeps that true: it wa
 those features landed, it was **narrowed to one directory**, and it has a case proving it still
 fires everywhere outside it.
 
-Citizens are identified by phone plus OTP — a **weak identity**, not to be trusted. And they
+Citizens are identified by their Zalo phone number — one tap, **no OTP** (ADR 0020) — which is
+still a **weak identity**, not to be trusted: Zalo asserts that the number belongs to that Zalo
+account, never that the person holding the phone owns the number. And they
 **do not choose** this software: being unable to use it means being unable to reach a public
 service. That makes accessibility a rights question, not a preference.
 
@@ -44,18 +46,34 @@ different OA per commune: `kb/10-decisions/0018-oa-xac-thuc-tach-khoi-oa-thong-b
 commune gets resolved at runtime with no domain to key off:
 `kb/10-decisions/0005-miniapp-tenant-resolution.md`. Both are read there, not repeated here.
 
-### The app stores nothing and sends nothing — keep it that way
+### The app stores nothing on the device, and sends exactly ONE thing — keep it that way
 
-No sign-in, no OTP, no form, no input control of any kind, **no backend call, no device storage**.
-The outbound links are `tel:`, `mailto:`, the company website, and a map page opened only when the
-user taps "Chỉ đường".
+**No OTP, no form, no input control of any kind, no device storage.** The outbound links are
+`tel:`, `mailto:`, the company website, and a map page opened only when the user taps "Chỉ đường".
 
-Ba tính năng ở `src/features/tinh-nang/` gọi `getPhoneNumber` · `getLocation` · `scanQRCode`. Chúng
-**lấy dữ liệu rồi hiện lên màn hình, hết**: không `fetch`, không `localStorage`, không
-`console.log`, không gửi đi đâu. Hai lệnh cấm ấy trong `phase1-collects-nothing.test.ts` **không
-được nới một dòng nào** — chúng là thứ biến "không gửi đi đâu" từ lời hứa thành ràng buộc kiểm
-được. §"Ba tính năng thật" nói rõ vì sao hai trong ba màn ấy **không có dữ liệu cá nhân ngay từ
-đầu**, và vì sao màn thứ ba thì có — của người khác.
+**Sign-in exists, it is one tap** (`getPhoneNumber` + `getAccessToken`, ADR 0020) — never a
+six-digit code to type — **and it calls a server, in both builds including the submitted one**.
+That call is the ONE outbound request this repository allows: one route, from ONE file
+(`src/features/dang-nhap/goi-may-chu.ts`), enforced by the tripwire in
+`src/phase1-collects-nothing.test.ts`.
+
+What crosses the wire is **two single-use Zalo codes, never a phone number** — the number cannot
+reach the device at all (`GetPhoneNumberReturns` has only `token`). The server —
+**`vihat-miniapp`, VihatSoftware's own backend, a separate repository, not ViGov** — exchanges
+them and stores the phone number as the login name. The session ticket it returns lives in
+`useState`: never written to the device, never drawn on screen, gone when the app closes.
+
+⚠ The privacy policy says all of that, in both builds, in one text — §"Chính sách quyền riêng
+tư". **It no longer claims the app sends nothing, because that claim became false**, and the
+sentence was removed in the same commit that made it false.
+
+Sáu tính năng ở `src/features/tinh-nang/` **lấy dữ liệu rồi hiện lên màn hình, hết**: không
+`localStorage`, không `console.log`, không một lời gọi mạng nào — lời gọi duy nhất của cả kho
+nằm ở `features/dang-nhap/goi-may-chu.ts`. Lệnh cấm lưu trữ trong `phase1-collects-nothing.test.ts`
+**không được nới một dòng nào**; lệnh cấm `fetch` thì được **thu hẹp về đúng MỘT tệp**, và có
+một ca cho nó ăn một `fetch` đặt ở tệp NGAY CẠNH để chứng minh ngoại lệ ấy hẹp đúng bằng một
+tệp. §"Sáu tính năng thật" nói rõ vì sao hai trong các màn ấy **không có dữ liệu cá nhân ngay từ
+đầu**, và vì sao màn quét mã thì có — của người khác.
 
 **The discovery layer changes none of that**, in any build. It reads a parameter the platform
 already put in the URL before our code ran, it holds the confirmed commune in `useState` — lost
@@ -125,11 +143,34 @@ Người chạy lệnh chọn **đẩy bản nào**. Biến thể quyết địn
 
 | Biến thể | Nội dung | Dùng để | `dist/assets/app.js` |
 |---|---|---|---|
-| **`goc`** | Ứng dụng sản phẩm đầy đủ: bốn màn giới thiệu + tab Danh thiếp (ba tính năng) + hai tính năng trên màn Liên hệ | **BẢN NỘP** | **566,48 kB** thô · 156,10 kB gzip |
-| **`day-du`** (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **578,03 kB** thô · 159,16 kB gzip |
+| **`goc`** | Ứng dụng sản phẩm đầy đủ: bốn màn giới thiệu + tab Danh thiếp (ba tính năng) + hai khối trên màn Liên hệ (đăng nhập · tìm văn phòng) | **BẢN NỘP** | **574,34 kB** thô · 158,48 kB gzip |
+| **`day-du`** (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **585,89 kB** thô · 161,61 kB gzip |
 
-Hai con số ấy **đo ngày 18/09/2026**, bằng `npm run build:goc` và `npm run build`, đọc từ chính
-tệp phát ra. Gần trọn 536 kB của bản `goc` là **`zmp-sdk`** (≈264 kB thô / ≈66 kB gzip): app không
+Hai con số ấy **đo ngày 20/09/2026**, bằng `npm run build:goc` và `npm run build`, đọc từ chính
+tệp phát ra. Phần tăng so với lần đo 18/09 (566,48 / 578,03) là khối đăng nhập cộng các điều
+khoản mới của chính sách `1.4`: **+7,86 kB** ở bản nộp, **+7,86 kB** ở bản đầy đủ — hai bản tăng
+bằng nhau, vì **khối đăng nhập và chính sách giống hệt nhau ở cả hai**.
+
+**KHỐI ĐĂNG NHẬP KHÔNG PHẢI MỘT BIẾN THỂ, VÀ NÓ TỪNG LÀ.** Bản đầu đặt lời gọi máy chủ sau một
+cửa `bien-the/dang-nhap` để bản nộp không gọi mạng. Tiền đề ấy đảo chiều trong cùng ngày: **bản
+nộp gọi máy chủ thật**, vì một nút đăng nhập bấm là được thuyết phục vòng duyệt hơn hẳn một nút
+nói "bản này chưa nối máy chủ" (điều 3.3.4). Cửa ấy bị **gỡ hẳn** — giữ một cơ chế tách đôi khi
+hai nửa nói y hệt nhau là giữ lại đúng cái bẫy biến thể `quyen` đã để lại một lần.
+
+**`VIGOV_API_HOST` — biến lúc dựng thứ hai, và CẢ HAI bản đều cần.** Địa chỉ máy chủ của khối
+đăng nhập, đọc trong `vite.config.ts` (`define`), chỉ `features/dang-nhap/` đọc tới. Không khai
+thì **fail closed**: không một lời gọi nào được phát đi, và màn hình nói ra rằng bản dựng chưa
+được khai địa chỉ. Không có địa chỉ mặc định — đoán một địa chỉ là gửi hai mã đăng nhập của một
+người thật tới một máy chủ không ai chọn.
+
+⚠ **Quên biến ấy = nộp một nút đăng nhập không đăng nhập nổi.** Nên `scripts/deploy.mjs` **chặn
+đường đẩy** khi nó rỗng, và in địa chỉ ra trước khi làm gì. Chặn ở đó chứ không ném lỗi lúc
+dựng, vì `npm test` dựng cả hai biến thể trong mọi lần chạy và phải chạy được trên máy chưa có
+địa chỉ nào.
+
+⚠ **Không một bí mật nào đi qua biến ấy.** `define` chèn giá trị thẳng vào bundle — tức vào tệp
+tải về máy người dùng (luật 8, bất biến 4). Khoá bí mật của Mini App chỉ nằm ở backend (ADR
+0020, bất biến 2). Gần trọn 536 kB của bản `goc` là **`zmp-sdk`** (≈264 kB thô / ≈66 kB gzip): app không
 có SDK từng nặng 254,39 kB. Đó là cái giá của việc chín quyền nay là sáu tính năng thật, và nó được
 trả một lần cho cả ứng dụng.
 
@@ -179,6 +220,11 @@ Cơ chế là `resolve.alias`, không phải tree-shaking — tree-shaking **kh�
 |---|---|
 | `src/features/kham-pha/index.ts` · `index.rong.ts` | Bề mặt lớp khám phá, và bản rỗng của nó — kể cả hai nhãn của vỏ |
 | `src/features/diagnostics/index.ts` · `index.rong.ts` | Như trên, cho bảng chẩn đoán |
+| `src/features/dang-nhap/PhatHanhPhien.tsx` | **Bước máy chủ** của khối đăng nhập — có mặt ở CẢ HAI bản dựng, không còn cửa biến thể nào |
+| `src/features/dang-nhap/hop-dong.ts` | **Hợp đồng với máy chủ, một tệp** — đường dẫn, tên hai trường gửi đi, hình dạng phản hồi, và `VIGOV_API_HOST`. Máy chủ là kho riêng `vihat-miniapp`, **đang dựng song song**: đổi hợp đồng là sửa tệp này và `dang-nhap.test.tsx` nằm cạnh, không sửa gì khác |
+| `src/features/dang-nhap/goi-may-chu.ts` | **Tệp DUY NHẤT trong kho được `fetch`.** Năm nhánh kết quả, không ném ra ngoài, không log |
+| `src/features/dang-nhap/dang-nhap.test.tsx` | 11 ca: năm nhánh của bước máy chủ · 401 và 502 KHÔNG được gộp · gọi đúng một lần bằng POST · thân yêu cầu mang đúng hai mã · bearer không ra màn hình |
+| `src/content/chinh-sach.test.ts` | 10 ca về chính văn bản pháp lý: câu "không gửi đi đâu" đã biến mất · mục Đăng nhập nói đủ **gửi gì · ai nhận · lưu gì · vì sao** · thời gian lưu nói đủ **không có hạn tự động · cửa yêu cầu xoá · phạm vi xoá** · nhật ký đăng nhập khai đủ **IP · thời điểm · mục đích** |
 | `src/features/kham-pha/bien-the.test.ts` | Hai bản rỗng khai đúng bề mặt · **không tệp nào nhập thẳng vòng qua alias** · danh sách biến thể ở `vite.config.ts` và `scripts/dung.mjs` **không lệch nhau** |
 | `src/bundle-for-zalo.test.ts` | Dựng thật **cả hai** biến thể rồi đọc bundle — bằng chứng cuối cùng, kèm lượt quét từ cấm |
 
@@ -203,7 +249,7 @@ khác quét cần cả `keepScreen` lẫn `downloadFile`. Tách chúng thành ha
 |---|---|---|---|
 | **Quét danh thiếp số** | Tab "Danh thiếp" | `scanQRCode` | **Trọn vẹn.** Quét → bóc tách vCard → thẻ có cấu trúc → nút Gọi (`openPhone`) · Gửi email (`mailto:`) · Mở liên kết (`openWebview`) · Quét mã khác |
 | **Tìm văn phòng gần bạn** | Tab "Liên hệ" | `getLocation` | **Một nửa.** Nhận được token; ba văn phòng thật và nút "Chỉ đường" (`openWebview` → bản đồ) chạy ngay. **Không xếp được theo khoảng cách** — xem ranh giới dưới |
-| **Đăng ký nhận tư vấn** | Tab "Liên hệ" | `getPhoneNumber` | **Một nửa.** Nhận được token; **không có đường gửi nó đi đâu**. Màn hình nói thẳng điều đó rồi đưa ngay hotline và email — hai đường chạy được bây giờ |
+| **Đăng nhập bằng số Zalo** | Tab "Liên hệ" | `getPhoneNumber` + `getAccessToken` | **Trọn vẹn, ở CẢ HAI bản.** Một chạm, **không OTP, không ô nhập sáu số** (ADR 0020) → hai mã → máy chủ `vihat-miniapp` đổi mã và phát hành phiên → phiên giữ trong `useState`, không ghi xuống máy. ⚠ **Chưa gọi thử trên máy chủ thật** — backend đang dựng song song. Hotline và email nằm ngay dưới nút: đường lui cho người từ chối quyền |
 | **Kiểm tra đường truyền** | Tab "Giải pháp" | `getNetworkType` + `vibrate` | **Trọn vẹn.** Tổng đài đám mây chạy trên chính đường mạng của máy, nên một nhà cung cấp VoIP có lý do thật để hỏi. Bốn kiểu kết nối → nhãn tiếng Việt + một câu đúng sự thật. **Không một con số nào** — xem ranh giới dưới |
 | **Danh thiếp số của chúng tôi** | Tab "Danh thiếp" | `keepScreen` + `downloadFile` | **Trọn vẹn.** Mã QR chứa vCard dựng từ `COMPANY`/`CONTACT` → giữ màn sáng khi người khác quét (**tắt lại khi rời màn**) → tải `.vcf` bằng `fileBase64Data`, **không máy chủ nào** |
 | **Số hoá danh thiếp giấy** | Tab "Danh thiếp" | `requestCameraPermission` + `openMediaPicker` | **Một nửa.** Xin quyền → chọn ảnh → hiện ảnh. **Chưa đọc được chữ trên ảnh** (cần OCR ở máy chủ) — màn hình nói thẳng. Ảnh **không rời khỏi máy** |
@@ -247,7 +293,8 @@ dây bẫy còn lại đều không thấy gì**. Nên nó có một dây bẫy 
 | Ranh giới | Vì sao không vượt được | Màn hình làm gì thay thế |
 |---|---|---|
 | **Không xếp được văn phòng theo khoảng cách** | `getLocation` chỉ trả token; đổi token cần một bước máy chủ có app secret. `navigator.geolocation` thì dây bẫy cấm, và là một quyền khác | Hiện đủ ba văn phòng thật kèm nút "Chỉ đường", và **một câu tiếng Việt nói rõ danh sách chưa sắp theo khoảng cách** |
-| **Không gửi được yêu cầu tư vấn** | Chỉ có token, và dây bẫy cấm `fetch` | Nói thẳng rằng bản này chưa gửi gì, rồi đưa hotline và email **ngay dưới nút** |
+| **Không đổi được mã Zalo ngay trên máy** | Đổi mã cần **khoá bí mật của Mini App**, và khoá ấy chỉ nằm ở máy chủ (ADR 0020, bất biến 2 · luật 8 cấm #5). Đưa nó xuống thiết bị là điều kiện dừng #1 của chính ADR ấy | Gửi hai mã tới máy chủ `vihat-miniapp` và để nó đổi. Ứng dụng không bao giờ thấy số điện thoại — chỉ thấy mã, và một phiếu phiên trả về |
+| **Phiếu phiên là TẠM, không phải "đã đăng nhập vĩnh viễn"** | ADR 0005: sau khi công dân chọn xã thì máy chủ **phát hành lại** phiên | Phiên sống trong `useState` và mất khi đóng app. Không một dòng mã nào dựng trên giả định giữ mãi — xem khối chú thích đầu `PhatHanhPhien.tsx` |
 | **`openPhone` / `openWebview` chỉ chạy trong Zalo** | `@zaloOnly` trong chính `index.d.ts` | Một câu tiếng Việt nói mở lại trong Zalo, không mã lỗi |
 | **Không đọc được chữ trên ảnh danh thiếp giấy** | Bóc tách cần OCR, OCR cần một bước máy chủ, và dây bẫy cấm mọi đường gửi ra | Hiện ảnh lên màn hình và **nói thẳng bằng một câu** rằng bản này chưa đọc được chữ. **Không một dòng mã nào giả vờ đang nhận dạng** |
 | **Không đo được tốc độ hay độ trễ đường truyền** | `getNetworkType` trả đúng MỘT chuỗi: kiểu kết nối. SDK không có phép đo nào khác | Nói kiểu kết nối và một câu đúng về bản chất của nó. **Cấm mọi con số ms / Mbps / điểm chất lượng** — có một ca test quét chính những câu ấy |
@@ -272,7 +319,7 @@ không tác dụng phụ — nên nó không có chỗ nào để rò rỉ, và 
 
 | Tệp | Việc nó làm |
 |---|---|
-| `src/features/tinh-nang/zalo-api.ts` | **Nơi duy nhất** nhắc `zmp-sdk`. Mười một lời gọi, quy mọi đường về bốn nhánh: `xong` · `tu-choi` · `ngoai-zalo` · `khong-lay-duoc` |
+| `src/features/tinh-nang/zalo-api.ts` | **Nơi duy nhất** nhắc `zmp-sdk`. Mười hai lời gọi (thêm `getAccessToken` của khối đăng nhập), quy mọi đường về bốn nhánh: `xong` · `tu-choi` · `ngoai-zalo` · `khong-lay-duoc` |
 | `src/features/tinh-nang/vcard.ts` | Bộ **sinh** vCard của chính chúng tôi + mã hoá base64 UTF-8. **Thuần** — mặt đối xứng của `danh-thiep.ts` |
 | `src/features/tinh-nang/MaQR.tsx` | Vẽ mã QR bằng SVG nội tuyến từ ma trận `uqr`. Một `<path>`, không phải nghìn `<rect>` |
 | `src/features/tinh-nang/giu-man-sang.ts` | Hợp đồng bật/tắt `keepScreen`, tách ra để kiểm được "**luôn tắt khi rời màn**" mà không cần DOM |
@@ -325,7 +372,67 @@ tab đang nói năm việc, và người tìm thông tin pháp lý đã đứng 
 này công bố dưới tên một pháp nhân có thật — một câu mô tả hành vi mà mã không có là tuyên bố
 sai dưới tên ấy; giấu một hành vi mà mã CÓ là vi phạm chính Nghị định 13/2023/NĐ-CP.
 
-**Phiên bản `1.2`, hiệu lực 18/09/2026.**
+**Phiên bản `1.4`, hiệu lực 20/09/2026.**
+
+**Lên `1.4` vì hai điều khoản đổi NỘI DUNG** — cùng ngày với 1.3, và vẫn phải là một số mới:
+
+| Mới ở 1.4 | Nội dung |
+|---|---|
+| **Thời gian lưu** | Bản 1.3 **không nêu** thời hạn nào (chưa ai chốt). Nay chốt: **không có hạn tự động**, số điện thoại được giữ **tới khi chính người dùng yêu cầu xoá** |
+| **Nhật ký đăng nhập** | Máy chủ ghi **thời điểm và địa chỉ IP** mỗi lần đăng nhập, để phát hiện lạm dụng. Bản 1.3 **hoàn toàn không khai** điều này |
+
+Một người đọc bản 1.3 rồi bấm đồng ý **không** biết địa chỉ IP của mình được ghi lại — nên hai
+bản phải mang hai số khác nhau, kể cả khi cách nhau vài giờ. Địa chỉ IP là thứ **máy chủ thấy từ
+chính lời gọi**, không phải thứ ứng dụng gửi lên, nên câu mở đầu *"gửi đi đúng MỘT việc"* vẫn
+đúng từng chữ; im lặng về việc nó được **ghi lại** thì mới là giấu một hành vi hệ thống có.
+
+**"Giữ tới khi bạn yêu cầu xoá" là một CAM KẾT, không phải một cách né con số** — nên nó đi kèm
+cửa thực hiện, và mỗi vế có một ca kiểm riêng trong `src/content/chinh-sach.test.ts`:
+
+| Vế | Văn bản phải nói |
+|---|---|
+| Không có hạn tự động | nói **thẳng** — im lặng về thời hạn và "giữ tới khi bạn yêu cầu xoá" là hai thứ khác nhau với người đọc |
+| Cửa thực hiện | hotline và email **đã có sẵn** trên màn Liên hệ; không cần đăng nhập, không phải nêu lý do |
+| Phạm vi xoá | số điện thoại **và** bản ghi định danh. Nhật ký đăng nhập ở lại, và lý do nói ra được: nó không chứa số điện thoại, nên sau khi xoá không còn đường nào nối nó về với người dùng |
+
+#### Bản 1.3 — vì sao lên số
+
+**Lên `1.3` vì MỤC ĐÍCH của một quyền đã đổi** — thay đổi nặng hơn cả thêm một quyền mới:
+
+| | Bản 1.2 | Bản 1.3 |
+|---|---|---|
+| `getPhoneNumber` | "để đội kinh doanh gọi lại tư vấn" | **đăng nhập / định danh**, và **nhận thông báo ZNS** |
+| `getAccessToken` | không nhắc tới | khai riêng một dòng: mã cho biết bạn là người dùng Zalo nào **đối với riêng ứng dụng này** |
+| Gửi đi | không có hành vi gửi nào | **cả hai bản dựng** gửi hai mã ấy tới máy chủ khi bạn bấm đăng nhập, và máy chủ **lưu số điện thoại** |
+
+Một người đã đồng ý cho "gọi lại tư vấn" **không** phải đã đồng ý cho "định danh và gửi thông
+báo": cùng một quyền, cùng một nút, hai sự đồng ý khác nhau. Và một câu của bản 1.2 đã thành
+sai — *"không có ô đăng nhập"* — nên nó được thay bằng câu nói đúng cả hai vế: không có ô nào để
+gõ, nhưng **có** việc đăng nhập.
+
+**MỘT VĂN BẢN, ĐÚNG CHO CẢ HAI BẢN DỰNG** — và câu mở đầu cũ đã bị **gỡ khỏi cả bản nộp**:
+
+> *"Ứng dụng này không lưu trữ và không gửi đi bất kỳ dữ liệu nào của bạn."*
+
+Câu ấy từng là thứ mạnh nhất app này có để nói. Nó thành **sai** ngày bản nộp bắt đầu gọi máy
+chủ, nên nó biến mất trong đúng lượt sửa làm nó sai — không để lại một phiên bản nào của app
+mang một câu không còn đúng. `chinh-sach.test.ts` có một ca canh cho nó không quay lại, và
+`bundle-for-zalo.test.ts` khẳng định **cả hai bundle** đều không chứa nó.
+
+Câu mở đầu mới nói ngay ba điều: không lưu gì xuống máy · gửi đi **đúng một việc** · và chỉ khi
+chính người dùng bấm đăng nhập. Mục "Đăng nhập bằng số điện thoại Zalo" nói đủ bốn vế Nghị định
+13 đòi: **gửi gì · ai nhận · lưu gì · vì sao**, trong đó có câu phải nói thẳng: *máy chủ lưu số
+điện thoại của bạn để làm tên đăng nhập và làm nơi nhận thông báo ZNS.*
+
+Chỗ trống về thời gian lưu **đã được lấp ở bản 1.4** (xem ngay trên). Cơ chế canh nó đã làm
+đúng việc của mình: khách chốt → ca kiểm đỏ → bốn việc phải đi trọn trong một lượt (câu thật ·
+bỏ hằng chỗ-trống · lên số phiên bản · sửa ca kiểm).
+
+Dây bẫy `fetch` đã **thu hẹp về đúng một tệp** (`features/dang-nhap/goi-may-chu.ts`), không gỡ;
+hai dây bẫy chống "lưu lại" và `serverUploadUrl` **không nới một dòng nào**, nên hai câu tương
+ứng trong chính sách vẫn đứng nguyên trên chỗ cũ.
+
+#### Bản 1.2 — vì sao lên số
 
 **Lên `1.2` vì bề mặt quyền riêng tư MỞ RỘNG THẬT SỰ**, không vì câu chữ — bốn thứ mới:
 
@@ -362,18 +469,24 @@ phiên bản mới, nếu không thì "phiên bản 1.0" chỉ tên hai văn b�
 cơ chế tách đôi khi không còn gì để tách là giữ lại một cái bẫy.
 
 Bốn câu trong chính sách đúng **vì `phase1-collects-nothing.test.ts` cấm điều ngược lại**, không
-phải vì ai hứa: "không gửi đi đâu" ← dây bẫy cấm `fetch`/XHR/WebSocket/EventSource/axios ·
-"không lưu lại" ← dây bẫy cấm `localStorage`/`sessionStorage`/`cookie`/`indexedDB` · "ảnh không
-rời khỏi máy" ← dây bẫy cấm `serverUploadUrl`. **Ai nới một trong ba dây bẫy ấy phải sửa chính
-sách TRƯỚC** — nếu không, chính sách thành sai mà không có gì đỏ lên.
+phải vì ai hứa: "gửi đi đúng MỘT việc" ← dây bẫy cấm
+`fetch`/XHR/WebSocket/EventSource/axios ở mọi tệp, miễn cho **đúng một tệp** · "không lưu lại"
+(trên máy) ← dây bẫy cấm
+`localStorage`/`sessionStorage`/`cookie`/`indexedDB`, **không nới một dòng nào** · "ảnh không
+rời khỏi máy" ← dây bẫy cấm `serverUploadUrl`, **không nới một dòng nào**. **Ai nới một trong ba
+dây bẫy ấy phải sửa chính sách TRƯỚC** — nếu không, chính sách thành sai mà không có gì đỏ lên.
+Lần thu hẹp 20/09 đã đi đúng thứ tự ấy: chính sách lên `1.3` và **gỡ câu "không gửi đi đâu"**
+trong cùng một lượt với việc nới dây bẫy.
 
 Số mục **không viết cứng vào tiêu đề**: React đánh số lúc vẽ. Một con số viết cứng sẽ lệch ngay
 lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý, im lặng.
 
-### Còn thiếu — hai câu hỏi cho khách hàng, và một phép thử phải chạy trên máy thật
+### Còn thiếu — hai câu hỏi cho khách hàng, và hai phép thử phải chạy thật
 
 | Thiếu | Vì sao chưa điền |
 |---|---|
+| **Đường xoá dữ liệu phía máy chủ** | Chính sách 1.4 cam kết *"giữ tới khi bạn yêu cầu xoá"*, và cửa thực hiện là hotline/email — tức một **quy trình có người làm**, không phải một nút trong app. Ai nhận yêu cầu, xoá bằng lệnh nào ở `vihat-miniapp`, và trả lời trong bao lâu: chưa ai mô tả. Một cam kết pháp lý không có quy trình đằng sau là một cam kết sẽ lỡ |
+| **Phép gọi thật tới `vihat-miniapp`** | Backend đang dựng song song, chưa có địa chỉ để gọi. Năm nhánh kết quả đã có test bằng `fetch` giả, nhưng **chưa một lần nào chạm máy chủ thật**. Phải gọi thử một lần — đủ cả 201, 401, 502 — trước khi nộp |
 | **Mã số thuế**, **người đại diện theo pháp luật** | Không có nguồn. `content/company-profile.ts` chỉ chứa thứ đã công bố trên vihatsoftware.com và vihatgroup.com. Bịa hai trường này trong một văn bản pháp lý là thứ không sửa lại được sau khi nộp |
 | **URL trang chính sách** | Developer Console còn một ô URL ngoài bản trong app. Chưa biết đăng ở đâu, nên chưa dựng bộ sinh trang tĩnh — dựng cho một đích chưa biết là đoán. Khi chốt, trang ấy phải sinh ra TỪ `chinh-sach-rieng-tu.ts`, không chép tay, để trang đăng và app không lệch nhau |
 | **Tên và chỗ lưu của tệp `.vcf`** | `downloadFile` không có tham số tên tệp, và `fileBase64Data` **không có một dòng tài liệu nào** trong `index.d.ts` — bảng định dạng được hỗ trợ ở đó chỉ nói về đường `url`, và **không liệt kê `.vcf`**. Chưa thử được trên máy thật trong phiên này. Nút vẫn ghi "(.vcf)" vì **nội dung** đúng là vCard; cái chưa biết là Zalo đặt tên tệp ra sao. **Phải mở bằng Zalo trên một máy thật rồi bấm nút ấy một lần** trước khi nộp |
@@ -392,6 +505,18 @@ npm run zmp:phat-hanh:goc     # bản GỐC,    BẢN PHÁT HÀNH (bỏ -t) — 
 Cả bốn đi qua `scripts/deploy.mjs`: dựng đúng biến thể → `sync-config` → `deploy`. Dựng nằm
 **trong** script vì biến thể quyết định lúc dựng — dựng ngoài rồi đẩy trong là hai lệnh có thể
 lệch nhau, và lần lệch ấy nộp bản `day-du` dưới nhãn `goc`.
+
+⚠ **Cả bốn đều cần `VIGOV_API_HOST`**, vì khối đăng nhập đọc địa chỉ máy chủ lúc dựng:
+
+```bash
+VIGOV_API_HOST=https://<host> npm run zmp:phat-hanh:goc
+```
+
+Thiếu biến thì script **dừng với mã thoát 2 trước khi dựng gì cả** — đẩy một bản chưa khai địa
+chỉ là nộp một nút đăng nhập không đăng nhập nổi, kèm một câu chữ dành cho người dựng bản.
+Script cũng **in địa chỉ ấy ra** cùng biến thể và nhãn phiên bản trước khi làm gì: nó được nung
+thẳng vào bundle, nên người chạy lệnh phải đọc được nó. `--thu` thì không cần biến — nó chỉ in
+kế hoạch rồi dừng.
 
 Thêm `--thu` vào bất kỳ lệnh nào để **in ra rồi dừng**, không dựng và không đẩy gì cả.
 

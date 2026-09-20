@@ -2,9 +2,19 @@
  * HAI TÍNH NĂNG CỦA MÀN LIÊN HỆ — `getLocation` và `getPhoneNumber`.
  *
  * Cả hai đứng trên màn Liên hệ chứ không thành tab riêng, và đó là chủ đích: người mở màn Liên
- * hệ đang muốn nói chuyện với công ty. "Tìm văn phòng gần tôi" và "Đăng ký nhận tư vấn" là đúng
- * hai việc họ định làm ở đó — một tab riêng tên "Quyền" thì nói với người duyệt rằng đây là một
- * app đi xin quyền, còn hai tính năng đặt đúng chỗ thì nói rằng đây là app có việc để làm.
+ * hệ đang muốn nói chuyện với công ty. "Tìm văn phòng gần tôi" và "Đăng nhập bằng số Zalo" là
+ * đúng hai việc họ định làm ở đó — một tab riêng tên "Quyền" thì nói với người duyệt rằng đây
+ * là một app đi xin quyền, còn hai tính năng đặt đúng chỗ thì nói rằng đây là app có việc làm.
+ *
+ * ⚠ KHỐI `getPhoneNumber` LÀ KHỐI ĐĂNG NHẬP, KHÔNG PHẢI "ĐĂNG KÝ NHẬN TƯ VẤN" NỮA (ADR 0020):
+ *
+ *   Đăng nhập MỘT CHẠM bằng chính số Zalo. **Không OTP, không ô nhập sáu số, không màn chờ mã** —
+ *   ADR 0020 bác đường ấy vì màn nhập sáu số là rào thật với người cao tuổi, và kênh này người
+ *   dân không chọn. Ai định thêm một bước nhập mã vào đây phải mở lại ADR ấy trước.
+ *
+ *   Khối này có mặt ở CẢ HAI biến thể, **và cả hai đều gọi máy chủ thật** — kể cả BẢN NỘP. Một
+ *   nút đăng nhập bấm là được thuyết phục vòng duyệt hơn hẳn một nút nói "bản này chưa nối máy
+ *   chủ" (điều 3.3.4). Máy chủ là `vihat-miniapp`, backend riêng của VihatSoftware.
  *
  * ⚠ RANH GIỚI THẬT, VÀ MÃ NÀY KHÔNG GIẢ VỜ VƯỢT QUA NÓ:
  *
@@ -14,18 +24,20 @@
  *   văn phòng theo khoảng cách trên máy** — nên ở đây không có một dòng nào tính khoảng cách, và
  *   màn hình nói ra điều đó bằng tiếng Việt (`VAN_PHONG.chua_xep_duoc`).
  *
- *   `getPhoneNumber` cũng chỉ trả token, và không có đường gửi nó đi đâu (dây bẫy cấm `fetch`).
- *   Nên "đăng ký tư vấn" ở bản này dừng ở chỗ nhận được mã, và màn hình nói thẳng như vậy rồi
- *   đưa ngay hai đường liên hệ CHẠY ĐƯỢC BÂY GIỜ: hotline và email.
+ *   `getPhoneNumber` cũng chỉ trả token. Đổi token cần khoá bí mật của Mini App, và khoá ấy chỉ
+ *   được nằm ở máy chủ (ADR 0020, bất biến 2) — nên không có bước đổi mã nào ở client, ở bất kỳ
+ *   biến thể nào.
  *
- *   Một người muốn được tư vấn phải liên hệ được ngay, không phải chờ một giai đoạn sau.
+ * ⚠ HAI ĐƯỜNG LIÊN HỆ Ở LẠI NGAY DƯỚI NÚT, VÀ CHÚNG KHÔNG PHẢI TRANG TRÍ: người từ chối chia sẻ
+ * số điện thoại vẫn phải liên hệ được ngay. "Từ chối không làm mất tính năng" có ca test riêng.
  */
 import { CONTACT, OFFICES } from "../../content/company-profile";
 import { CompassGlyph, HandshakeGlyph, MailGlyph, PhoneGlyph, PinGlyph } from "../company-intro/icons";
+import { PhatHanhPhien } from "../dang-nhap/PhatHanhPhien";
 
 import { KetQuaToken, TinhNangCoTrangThai } from "./khung";
-import { LOI_MO_NGOAI, TU_VAN, VAN_PHONG } from "./noi-dung";
-import { moTrangWeb, xinTokenSoDienThoai, xinTokenViTri } from "./zalo-api";
+import { DANG_NHAP, LOI_MO_NGOAI, VAN_PHONG } from "./noi-dung";
+import { type MaDangNhap, moTrangWeb, xinMaDangNhap, xinTokenViTri } from "./zalo-api";
 import { useState } from "react";
 
 /**
@@ -97,16 +109,17 @@ export function TimVanPhong() {
 }
 
 /**
- * Hai đường liên hệ chạy được ngay bây giờ, đặt ngay dưới nút đăng ký.
+ * Hai đường liên hệ chạy được ngay bây giờ, đặt ngay dưới nút đăng nhập.
  *
- * Chúng lặp lại hotline và email ở đầu màn Liên hệ, và việc lặp lại ấy là CÓ CHỦ ĐÍCH: người vừa
- * đọc câu "bản này chưa gửi yêu cầu đi" phải thấy ngay một đường khác, ở đúng chỗ mắt họ đang
- * nhìn. Bắt họ cuộn ngược lên là bắt một khách hàng tiềm năng tự đi tìm cách liên hệ.
+ * Chúng lặp lại hotline và email ở đầu màn Liên hệ, và việc lặp lại ấy là CÓ CHỦ ĐÍCH: người
+ * vừa từ chối chia sẻ số điện thoại, hoặc vừa đọc câu "bản này chưa mở được phiên", phải thấy
+ * ngay một đường khác ở đúng chỗ mắt họ đang nhìn. Bắt họ cuộn ngược lên là bắt một người đang
+ * cần liên hệ tự đi tìm cách liên hệ.
  */
 function DuongLienHeNgay() {
   return (
     <>
-      <p className="tn__nhac">{TU_VAN.nhac_lien_he}</p>
+      <p className="tn__nhac">{DANG_NHAP.nhac_lien_he}</p>
       <div className="tn__doi-nut">
         <a className="tn-hanh-dong tn-hanh-dong--rong" href={`tel:${CONTACT.hotlineDialable}`}>
           <PhoneGlyph className="tn-hanh-dong__glyph" />
@@ -121,22 +134,38 @@ function DuongLienHeNgay() {
   );
 }
 
-export function DangKyTuVan() {
+/**
+ * Kết quả một lần đăng nhập: mã nhận được, rồi bước máy chủ của ĐÚNG biến thể đang dựng.
+ *
+ * MÃ RỖNG THÌ DỪNG Ở ĐÂY, KHÔNG GỌI MÁY CHỦ. `zmp-sdk` trả mã rỗng ở môi trường phát triển
+ * (`MA_RONG` nói ra điều đó). Gửi một mã rỗng đi thì máy chủ từ chối, và người đọc nhận một câu
+ * "mã đã quá hạn" — một câu SAI, chỉ ra một việc phải làm không giải quyết được gì.
+ */
+function KetQuaDangNhap({ ma }: { ma: MaDangNhap }) {
+  return (
+    <>
+      <KetQuaToken ma="dang-nhap" token={ma.ma_so_dien_thoai} da_nhan={DANG_NHAP.da_nhan_ma} />
+      {ma.ma_so_dien_thoai !== "" && <PhatHanhPhien ma={ma} />}
+    </>
+  );
+}
+
+/**
+ * KHỐI ĐĂNG NHẬP ĐỊNH DANH — `getPhoneNumber` + `getAccessToken`, một lần chạm.
+ *
+ * Vẫn đúng khuôn `TinhNangCoTrangThai` như năm khối kia: một tiêu đề, một lý do đọc được, một
+ * nút, một chỗ hiện kết quả, và bốn nhánh — xong · từ chối · ngoài Zalo · không lấy được. Từ
+ * chối là ĐƯỜNG BÌNH THƯỜNG (`code === -201`), không phải lỗi.
+ */
+export function KhoiDangNhap() {
   return (
     <TinhNangCoTrangThai
-      ma="tu-van"
-      xin={xinTokenSoDienThoai}
+      ma="dang-nhap"
+      xin={xinMaDangNhap}
       cap_tieu_de="h2"
       glyph={<HandshakeGlyph className="tn__glyph" />}
-      dan_nhap={TU_VAN.dan_nhap}
-      veKetQua={(token) => (
-        <KetQuaToken
-          ma="tu-van"
-          token={token}
-          da_nhan={TU_VAN.da_nhan_ma}
-          noi_them={TU_VAN.chua_gui_di}
-        />
-      )}
+      dan_nhap={DANG_NHAP.dan_nhap}
+      veKetQua={(ma) => <KetQuaDangNhap ma={ma} />}
       duoi_cung={<DuongLienHeNgay />}
     />
   );

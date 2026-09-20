@@ -3,7 +3,7 @@
  *
  * | Biến thể | Nội dung | Dùng để |
  * |---|---|---|
- * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm ba tính năng dùng ba quyền nền tảng | BẢN NỘP |
+ * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm sáu tính năng dùng chín quyền nền tảng | BẢN NỘP |
  * | `day-du` | Thêm lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Thử nghiệm, demo |
  *
  * VÌ SAO PHẢI LÀ MỘT TỆP SCRIPT CHỨ KHÔNG PHẢI `VIGOV_BIEN_THE=goc vite build` TRONG package.json:
@@ -14,6 +14,10 @@
  *
  * Gọi `vite` bằng `process.execPath` chứ không qua shell: không có chuỗi nào phải trích dẫn, nên
  * không có đường dẫn nào chứa dấu cách làm hỏng lệnh.
+ *
+ * ⚠ CÒN MỘT BIẾN LÚC DỰNG NỮA — `VIGOV_API_HOST`, địa chỉ máy chủ của khối đăng nhập. Tệp này
+ * KHÔNG chặn khi nó rỗng (dựng thử và chạy test phải được), nhưng `deploy.mjs` thì CHẶN: đẩy
+ * một bản chưa khai địa chỉ là nộp một nút đăng nhập không đăng nhập nổi.
  */
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
@@ -22,7 +26,7 @@ import { fileURLToPath } from "node:url";
 export const BIEN_THE = ["goc", "day-du"];
 
 export const MO_TA_BIEN_THE = {
-  goc: "ứng dụng sản phẩm đầy đủ (quét danh thiếp · tìm văn phòng · đăng ký nhận tư vấn) — BẢN NỘP, không lớp khám phá, không danh mục xã, không bảng chẩn đoán",
+  goc: "ứng dụng sản phẩm đầy đủ (quét danh thiếp · tìm văn phòng · đăng nhập bằng số Zalo, CÓ gọi máy chủ) — BẢN NỘP, không lớp khám phá, không danh mục xã, không bảng chẩn đoán",
   "day-du": "bản gốc + lớp khám phá + danh mục xã mẫu + bảng chẩn đoán",
 };
 
