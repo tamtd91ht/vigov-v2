@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: a1b1145
+derived_from_commit: ad4e312
 expires: 2026-12-19
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -24,9 +24,9 @@ tức tin `git log` chứ đừng tin tệp này.
 | | |
 |---|---|
 | ĐANG LÀM | 3 |
-| chưa làm | 35 |
+| chưa làm | 34 |
 | treo | 11 |
-| xong | 25 |
+| xong | 27 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -162,7 +162,7 @@ Cập nhật 2026-09-20 · 4 mục
 
 ## `service-identity`
 
-Cập nhật 2026-09-20 · 11 mục
+Cập nhật 2026-09-20 · 12 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -177,6 +177,7 @@ Cập nhật 2026-09-20 · 11 mục
 | `grpc-server` — Server gRPC của identity | xong | service-identity/internal/grpc/server.go — ResolveStaffPrincipal + BatchGetStaff, cả hai interceptor trên chuỗi mà cmd/server/dungGRPCServer dựng; server_test.go 14 ca + cmd/server/main_test.go bufconn trên hàm dựng THẬT. Năm đột biến đều đỏ, gồm: gỡ interceptor khoá caller (bên gọi trần trụi nhận OK trên cả hai RPC) và đảo phép đối chiếu xã xuống sau lượt đọc sổ phiên. `make check` rc=0 — kiểm 2026-09-20, commit 5a56a81 | — | Đã mở khoá sáu tuyến 401 (commit 19c6008). HAI THỨ CÒN LẠI TRÊN CỔNG NÀY, cả hai đã ghi trong tài liệu gói: (1) không có interceptor bắt panic — grpc-go KHÔNG tự phục hồi panic của handler, nên một `tenant.MustFrom` lọt qua sẽ hạ cả tiến trình đang phục vụ 200+ xã; chỗ đúng của nó là core/grpcx. (2) `vanTay` nay có hai bản sao (internal/http và internal/grpc) và PHẢI giữ y hệt nhau — người vận hành đối chiếu cảnh báo tập trung với cảnh báo của XacThuc bằng chính chuỗi ấy, hai bản lệch nhau đẻ ra hai dấu vân tay cho một sid, đọc ra là hai phiên. ListCitizenCommunes vẫn `Unimplemented`, hai chỗ chặn độc lập — xem mục store-crosstenant |
 | `danh-muc-dan-cu-tuyen-doc` — Ba tuyến ĐỌC danh mục dân cư: residential-units · residential-unit-types · task-blocs | xong | service-identity/internal/http/routes.go:157,167,177 khai ba kho; :251,253,255 panic ngay lúc dựng nếu thiếu kho — hỏng to tiếng chứ không phục vụ nửa vời. Commit cdc5b5f, tự khai là ba tuyến DUY NHẤT phục vụ được thật lúc ấy; fcea7bd sửa `is_active`->`active` trên dây — kiểm 2026-09-20 | — | Tuyến GHI chưa có, và chặn bởi cùng câu #21 như ba service kia — xem `danh-muc-nhiem-vu-tuyen-ghi` ở sổ service-petitions |
 | `kho-phien-cong-dan` — Kho phiên công dân — đường nối rìa kênh công dân chờ từ đầu | xong | service-identity/internal/store/phien_cong_dan.go 482 dòng + phien_cong_dan_test.go + phien_cong_dan_pg_test.go. Commit 274b73a — kiểm 2026-09-20 | — | Mục này SỞ HỮU tệp ấy. `core/kho-phien-cong-dan-dem` chỉ TRỎ tới nó để nói về phần ĐỆM còn thiếu — hai việc khác nhau, đừng gộp |
+| `lich-lam-viec` — Lịch làm việc của xã — tuần làm việc, ngày nghỉ lễ, ngày làm bù | xong | service-identity/migrations/0006_lich_lam_viec.sql — 3 bảng, cả 3 PARTITION BY kèm vòng MODULUS 32, 0 lệnh INSERT, đếm bằng cây cú pháp của pglast chứ không bằng regex. Bảy rào chắn của kho chạy trên tệp: rc=0. `make check` rc=0 — kiểm 2026-09-20 | — | BA ĐIỀU NGƯỜI VIẾT HÀM ĐẾM HẠN PHẢI BIẾT, cả ba đã ghi trong tệp: (1) lịch RỖNG nghĩa là xã KHÔNG có giờ làm việc nào — phải TỪ CHỐI tính hạn, tuyệt đối không rơi về mặc định 'thứ Hai đến thứ Sáu 8-17', vì một mặc định ở đây là cam kết do phần mềm bịa ra rồi nói với dân; (2) một ngày có mặt ở cả ngay_nghi_le lẫn ngay_lam_bu là lỗi cấu hình, phải từ chối chứ không chọn bên thắng; (3) KHÔNG có ràng buộc chống chồng ca trong lich_lam_viec — cần extension btree_gist, mà migration hỏng vì thiếu extension thì service không khởi động được (ADR 0013), nên đường ghi phải tự kiểm và phải có ca test. Năm câu ADR 0007 để mở vẫn để mở: lược đồ chỉ bảo đảm MỌI đáp án đều diễn đạt được mà không cần migration thứ hai |
 
 ## `service-petitions`
 
@@ -185,9 +186,9 @@ Cập nhật 2026-09-20 · 6 mục
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
 | `vong-doi-phieu-phan-anh` — Nghiệp vụ phản ánh — tiếp nhận, phân loại, phân công, nghiệm thu, đóng phiếu | chưa làm | — | — | CHỈ bắt đầu sau khi có lich_lam_viec + ngay_nghi_le theo xã (ADR 0007). Đếm hạn bằng giờ hành chính mà thiếu lịch của xã thì mọi con số hạn đều sai, và sai theo hướng không ai thấy cho tới lúc báo cáo lên trên |
-| `lich-lam-viec-theo-xa` — Cấu hình lich_lam_viec + ngay_nghi_le theo từng xã | chưa làm | — | — | tiền đề của mọi phép đếm hạn — ADR 0007, luật 10 bất biến 4 |
 | `danh-muc-nhiem-vu-tuyen-ghi` — Tuyến GHI hai danh mục nhiệm vụ | chưa làm | không có tuyến POST/PUT/PATCH/DELETE nào trong service-petitions/internal/http/routes.go — kiểm 2026-09-20 | #21 | KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ |
 | `sql-danh-muc-chua-chay` — Chạy 0003_danh_muc_nhiem_vu.sql trên PostgreSQL thật | chưa làm | 5 ca service-petitions/internal/store/danh_muc_nhiem_vu_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN, gói vẫn in `ok` — kiểm 2026-09-20 | — | Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat (đọc information_schema, kiểm cả thu_tu — với muc_uu_tien_nhiem_vu thì thu_tu CHÍNH LÀ thang, đổi tên nó là phá thang trong im lặng). Nó TỒN TẠI nhưng CHƯA CHẠY. Vẫn chưa gì kiểm được định tuyến phân mảnh, partial index, và sáu phép từ chối của trigger danh_muc_ba_tang |
+| `lich-lam-viec-theo-xa` — Cấu hình lich_lam_viec + ngay_nghi_le theo từng xã | xong | ĐỔI CHỦ SỞ HỮU, người dùng chốt 2026-09-20: ba bảng nằm ở service-identity/migrations/0006_lich_lam_viec.sql, KHÔNG ở petitions. Lý do: ADR 0007 đếm hạn cho cả `Văn bản đến`, nên lịch được hai service đọc và không thuộc service nào trong hai; ADR 0024 chốt sở hữu đi theo NHỊP ĐỔI, mà lịch đổi cùng bộ máy hành chính của xã. Chi tiết ở sổ service-identity/lich-lam-viec — kiểm 2026-09-20 | — | Phần CÒN LẠI của petitions là HÀM ĐẾM HẠN, không phải bảng: đọc ba bảng ấy qua gRPC của identity, và luật 10 cấm #2 cấm đếm bằng giờ treo tường. Một điều hàm ấy PHẢI làm mà lược đồ không cưỡng chế được: gặp một ngày có mặt ở CẢ ngay_nghi_le lẫn ngay_lam_bu thì TỪ CHỐI, đừng chọn bên thắng — một quy tắc ưu tiên lặng lẽ làm một trong hai dòng cấu hình đang hiện trên màn hình trở thành vô nghĩa mà không ai thấy |
 | `danh-muc-nhiem-vu-tuyen-doc` — GET /api/v1/task-types + /api/v1/task-priorities — hai tuyến ĐỌC danh mục nhiệm vụ | xong | service-petitions/internal/http/routes.go — hai tuyến, mỗi tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store internal/store/{loai_nhiem_vu,muc_uu_tien_nhiem_vu}.go. `go test -count=1 ./...` xanh — kiểm 2026-09-20 | — | 0003_danh_muc_nhiem_vu.sql KHÔNG tạo bảng trạng thái nhiệm vụ nào — đã kiểm. Tên tài nguyên URL ĐÃ chốt và ô ĐÃ điền (commit 9388eaf); dòng cũ còn trỏ ubiquitous-language.md:162-163, mà hai dòng ấy nay là ResidentialUnitType và TaskBloc — hai danh mục của identity, tức trỏ SAI THỰC THỂ chứ không chỉ lệch dòng. KHÔNG ghi số ca test ở đây: bản cũ chốt một con số, rồi 19c6008 thêm main_test.go cho cả bốn service và mọi con số thành thấp hơn thực tế — sai theo kiểu trông y hệt số đúng. |
 | `xac-thuc-can-bo` — Dựng authz.Principal cho yêu cầu của cán bộ | xong | cmd/server/main.go dựng chuỗi rìa thật qua `dungBien`, gắn core/staffauth.Middleware; cmd/server/main_test.go có ca principal của xã A gọi ở host xã A nhận 200 trên cả hai tuyến. `make check` rc=0 — kiểm 2026-09-20, commit 19c6008 | — | Hai điều phải giữ và một khoảng hở còn lại — xem cùng mục ở service-documents.json, không chép lại ở đây |
 

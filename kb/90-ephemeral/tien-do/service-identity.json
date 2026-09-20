@@ -109,6 +109,14 @@
       "bang_chung": "",
       "no_confirm": [],
       "tiep_theo": "cố ý CHƯA ghi thành câu hỏi mở: chưa có bảng giao việc nào tồn tại để nói \"việc đang giữ\" nghĩa là gì. Hỏi khi dựng bảng nghiệp vụ đầu tiên có người phụ trách — câu trả lời nhiều khả năng là \"tuỳ xã\""
+    },
+    {
+      "id": "lich-lam-viec",
+      "viec": "Lịch làm việc của xã — tuần làm việc, ngày nghỉ lễ, ngày làm bù",
+      "trang_thai": "xong",
+      "bang_chung": "service-identity/migrations/0006_lich_lam_viec.sql — 3 bảng, cả 3 PARTITION BY kèm vòng MODULUS 32, 0 lệnh INSERT, đếm bằng cây cú pháp của pglast chứ không bằng regex. Bảy rào chắn của kho chạy trên tệp: rc=0. `make check` rc=0 — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "BA ĐIỀU NGƯỜI VIẾT HÀM ĐẾM HẠN PHẢI BIẾT, cả ba đã ghi trong tệp: (1) lịch RỖNG nghĩa là xã KHÔNG có giờ làm việc nào — phải TỪ CHỐI tính hạn, tuyệt đối không rơi về mặc định 'thứ Hai đến thứ Sáu 8-17', vì một mặc định ở đây là cam kết do phần mềm bịa ra rồi nói với dân; (2) một ngày có mặt ở cả ngay_nghi_le lẫn ngay_lam_bu là lỗi cấu hình, phải từ chối chứ không chọn bên thắng; (3) KHÔNG có ràng buộc chống chồng ca trong lich_lam_viec — cần extension btree_gist, mà migration hỏng vì thiếu extension thì service không khởi động được (ADR 0013), nên đường ghi phải tự kiểm và phải có ca test. Năm câu ADR 0007 để mở vẫn để mở: lược đồ chỉ bảo đảm MỌI đáp án đều diễn đạt được mà không cần migration thứ hai"
     }
   ]
 }
