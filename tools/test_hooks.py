@@ -474,6 +474,43 @@ CASES = [
        "// @sla-ok: Law on Complaints art. 28 counts calendar days\n"
        "func due(t time.Time) time.Time { return t.AddDate(0, 0, 30) } // sla")),
 
+    # --- rule 11 — the infrastructure configuration contract ---
+    #
+    # The `.env.example` check needs the real template on disk, so these cases use variables
+    # that are genuinely declared there (DATABASE_DSN) and genuinely absent (KAFKA_*). A case
+    # that invented its own template would go green the day the template moved, which is the
+    # failure shape this file has already been bitten by.
+    ("env_contract_guard", "os.Getenv ngoài core/config", BLOCK,
+     w("donthu/internal/http/h.go",
+       "func h() {\n\taddr := os.Getenv(\"DATABASE_DSN\")\n}")),
+    ("env_contract_guard", "core/config được đọc môi trường", PASS,
+     w("core/config/config.go",
+       "func Load() {\n\tdsn := os.Getenv(\"DATABASE_DSN\")\n}")),
+    # The mechanism the user bought: the role is named in code, the cluster is chosen in the
+    # manifest. A cluster ordinal in source throws it away — moving a workload then costs a
+    # release of every image that reads it.
+    ("env_contract_guard", "số cụm trong tên biến mã đọc", BLOCK,
+     w("core/config/config.go",
+       "func Load() {\n\tk := os.Getenv(\"KAFKA_02_ADDRESS\")\n}")),
+    ("env_contract_guard", "dấu gạch ngang trong tên biến môi trường", BLOCK,
+     w("core/config/config.go",
+       "func Load() {\n\tk := os.Getenv(\"POSTGRESQL-HOST-AND-PORT\")\n}")),
+    ("env_contract_guard", "biến không có dòng nào trong .env.example", BLOCK,
+     w("core/config/config.go",
+       "func Load() {\n\tk := os.Getenv(\"KAFKA_LOG_ADDRESS\")\n}")),
+    # `REDIS_DB_0` is Redis database ZERO — a value, not an instance. The first version of the
+    # pattern flagged it, and the comment beside that pattern claimed it would not; both were
+    # fixed together. A number in the MIDDLE names an instance, a number at the END qualifies
+    # the value.
+    # The "number at the end is a VALUE, not an instance" distinction is tested against the
+    # pattern itself, in SO_CUM_CASES below — not here. A payload case for it would be blocked
+    # by the .env.example check instead and go red for a reason it does not name, which is the
+    # failure this repository keeps finding in its own gates.
+    ("env_contract_guard", "lối thoát @env-ok có lý do", PASS,
+     w("donthu/internal/http/h.go",
+       "func h() {\n\t// @env-ok: công cụ dựng, chạy ngoài tiến trình phục vụ\n"
+       "\taddr := os.Getenv(\"DATABASE_DSN\")\n}")),
+
     # ---- tầng tiến độ · progress_guard ---------------------------------------
     #
     ("progress_guard", "khai xong mà không có bằng chứng", BLOCK,
@@ -594,13 +631,43 @@ NEN_CANH_BAO_CASES = [
 ]
 
 
+# env_contract_guard.SO_CUM — a cluster ordinal, or a number that qualifies the value.
+#
+# THE DISTINCTION IS THE WHOLE RULE: a number wedged BETWEEN two words names which instance
+# (`KAFKA_02_ADDRESS`), and rule 11 forbidden #2 keeps that out of source so a workload can be
+# moved in the manifest. A number at the END qualifies the value (`REDIS_DB_0` is Redis
+# database zero) and is legitimate.
+#
+# The first version of the pattern flagged `REDIS_DB_0` while the comment beside it claimed it
+# would not. These cases exist so the pattern and its comment cannot disagree again.
+SO_CUM_CASES = [
+    ("KAFKA_02_ADDRESS", True, "số cụm ở giữa — tên cụm nằm trong mã"),
+    ("REDIS_1_DSN", True, "số cụm một chữ số"),
+    ("ES_03_ADDRS", True, "số cụm có số 0 đứng đầu"),
+    ("REDIS_DB_0", False, "số CUỐI là số database, không phải số cụm"),
+    ("KAFKA_LOG_PARTITIONS_3", False, "số CUỐI là một phép đếm"),
+    ("ELASTICSEARCH_ADDRS", False, "không có số nào"),
+    ("DATABASE_DSN", False, "không có số nào"),
+]
+
+
 def chay_thuan() -> list[tuple[str, str, bool, bool]]:
     """Trả về các ca SAI của phần THUẦN. Import tại chỗ: hook tự thêm thư mục của nó vào sys.path."""
     sys.path.insert(0, HOOKS)
     import stop_verify_guard as svg  # noqa: E402
     import drift_guard as dg  # noqa: E402
+    import env_contract_guard as ecg  # noqa: E402
 
     sai = []
+
+    for ten, mong, nhan in SO_CUM_CASES:
+        duoc = bool(ecg.SO_CUM.search(ten))
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        want = "CỤM " if mong else "GIÁ TRỊ"
+        print(f"{mark} [{want}] {'env_contract_guard.SO_CUM':24s} {nhan}")
+        if not ok:
+            sai.append((ten, nhan, mong, duoc))
     for duong, mong, nhan in IS_CODE_CASES:
         duoc = svg.is_code(duong)
         ok = duoc == mong

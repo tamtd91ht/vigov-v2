@@ -123,8 +123,8 @@ own: if you see a risk, **state the risk**, then do what was asked.
 
 | Location | Contents |
 |---|---|
-| `rules/critical/` | **10 rules**, always loaded (below). Each names an enforcing hook |
-| `hooks/` | **16 hooks**: 10 rule hooks + 6 cross-cutting |
+| `rules/critical/` | **11 rules**, always loaded (below). Each names an enforcing hook |
+| `hooks/` | **17 hooks**: 11 rule hooks + 6 cross-cutting |
 | `skills/` | Skills, lazily loaded by keyword |
 | `commands/` | Procedures invoked as `/command-name` |
 | `agents/` | **10 agents** — 5 build, 5 review. Entry point: `agents/ROUTING.md` |
@@ -156,3 +156,4 @@ Extending the brain: `.claude/README.md`.
 @.claude/rules/critical/8-secrets-config.md
 @.claude/rules/critical/9-knowledge-single-source.md
 @.claude/rules/critical/10-citizen-commitment.md
+@.claude/rules/critical/11-infra-config-contract.md
