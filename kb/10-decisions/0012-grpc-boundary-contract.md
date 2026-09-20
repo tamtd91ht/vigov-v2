@@ -50,7 +50,7 @@ Không suy ra xã từ payload, không có xã mặc định. Hỏng thì đóng
 
 ### Vì sao đúng tên `x-tenant-id` — điểm chịu lực của quyết định này
 
-Tên khoá không phải chuyện thẩm mỹ. `core/httpx/edge.go:39` — `StripTenantHeaders` — **xoá
+Tên khoá không phải chuyện thẩm mỹ. `core/httpx/edge.go:56` — `StripTenantHeaders` — **xoá
 mọi header từ ngoài vào có tiền tố `x-tenant`**, không liệt kê từng tên mà quét theo tiền tố.
 Đặt khoá metadata trong đúng tiền tố đó nghĩa là: nếu có ngày một header client cung cấp lọt
 được tới tầng trong, nó đã bị lớp phòng thủ **hiện có** xoá trước.
