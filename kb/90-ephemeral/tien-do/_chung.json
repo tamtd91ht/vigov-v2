@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "_chung",
-  "cap_nhat": "2026-09-20",
+  "cap_nhat": "2026-09-21",
   "muc": [
     {
       "id": "chay-migration-that",
@@ -24,7 +24,9 @@
       "viec": "Quy trình sáp nhập / chia tách / đổi tên đơn vị hành chính",
       "trang_thai": "chua_lam",
       "bang_chung": "",
-      "no_confirm": [1],
+      "no_confirm": [
+        1
+      ],
       "tiep_theo": "chưa làm được gì cho tới khi khách chốt — luật 1 stop condition #3"
     },
     {
@@ -63,9 +65,11 @@
       "id": "tieu-de-dac-ta-quyen",
       "viec": "Tiêu đề docs/ui-ux/14-cau-hinh.md §4.2 ghi 43 quyền / 11 nhóm, bảng ngay dưới có 33 khoá / 10 nhóm",
       "trang_thai": "treo",
-      "bang_chung": "đếm lại trên chính tệp ấy 2026-09-18",
-      "no_confirm": [],
-      "tiep_theo": "hỏi khách xác nhận TIÊU ĐỀ là chỗ sai. Migration khớp bảng. KHÔNG bịa mười khoá và cũng đừng đi tìm chúng"
+      "bang_chung": "ĐÃ ĐẾM BẰNG CÂY CÚ PHÁP, không bằng mắt: docs/ui-ux/14-cau-hinh.md:104 ghi 43 quyền / 11 nhóm; service-identity/migrations/0001_init.sql nạp 33 khoá / 10 nhóm; migration 0007 thêm 2 khoá nữa -> 35 khoá / 10 nhóm. Còn thiếu TÁM khoá và TRỌN MỘT NHÓM — kiểm 2026-09-21",
+      "no_confirm": [
+        27
+      ],
+      "tiep_theo": "ĐÃ THÀNH CÂU HỎI MỞ #27, không còn là một ghi chú trôi nổi. Ngày 20/09 khách chốt thêm ĐÚNG HAI khoá cần ngay (feedback.classify, feedback.unmask — ADR 0030) và CỐ Ý để lại phần còn thiếu. ĐỪNG BỊA TÁM KHOÁ CÒN LẠI CHO ĐỦ SỐ: luật 5 nói tuyến không khai quyền là tuyến MỌI vai trò cán bộ gọi được, nhưng một khoá BỊA RA còn tệ hơn — nó hiện lên màn Phân quyền như một thẩm quyền có thật, quản trị xã tick vào, và không ai biết nó canh cái gì. Nhóm thứ 11 còn thiếu rất có thể là nhóm của một phân hệ chưa dựng."
     },
     {
       "id": "pii-trong-lich-su-git",
@@ -106,6 +110,14 @@
       "bang_chung": "Khách chốt 20/09/2026. Đã xoá: service-dossiers/ · proto/vigov/dossiers/ · core/gen/vigov/dossiers/ · kb/90-ephemeral/tien-do/service-dossiers.json. Đã sửa tham chiếu: go.work (10->9 module) · deploy/README.md (11->10 job Jenkins) · kb/00-foundation/domain-boundaries.md (Tám->Bảy service) · ubiquitous-language.md dòng Hồ sơ một cửa · .dockerignore + tools/check_build.py (tám->bảy dịch vụ) · core/identityclient/identityclient.go:234 · proto/vigov/identity/v1/identity.proto:196-201 · .claude/rules/critical/10-citizen-commitment.md · .claude/hooks/rest_api_guard.py (GIỮ từ khoá chặn, chỉ đổi nhãn nhóm). Khảo sát và ĐƯỜNG QUAY LẠI đã chuyển vào ADR 0001 §Bổ sung 2026-09-20 TRƯỚC khi xoá sổ module. KIỂM ĐỊNH 2026-09-20: check_brain 7/7 · test_hooks 151/151 · check_build PASS (7 dịch vụ + web · 8 Dockerfile · 8 Jenkinsfile) · go build + go vet sạch trên 9 module · go run ./tools/kb báo 7 services",
       "no_confirm": [],
       "tiep_theo": "CÒN SÓT CÓ CHỦ Ý, đừng đọc thành bỏ quên: (1) chú thích trong 7 tệp migration đã áp dụng (0002_audit_log_append_only.sql, 0004_kenh_cong_dan.sql) vẫn nhắc `dossiers` — KHÔNG sửa, luật 7 cấm sửa migration đã chạy; (2) .claude/hooks/data_safety_guard.py giữ `dossier` trong biểu thức chặn bảng nghiệp vụ — gỡ là làm yếu rào chắn chứ không phải dọn rác; (3) core/gen/ còn chú thích cũ, tự hết sau `make proto`; (4) docs/ui-ux/ vẫn có vai trò `Cán bộ một cửa` — vai trò CÓ THẬT ngoài đời, đặc tả của khách không sửa theo phạm vi hợp đồng"
+    },
+    {
+      "id": "do-lai-rao-luat-10",
+      "viec": "Đo lại citizen_commitment_guard khi đã có mã tính hạn thật",
+      "trang_thai": "xong",
+      "bang_chung": ".claude/hooks/citizen_commitment_guard.py — thêm mẫu DURATION_DEADLINE, miễn trừ service-identity/internal/ (ADR 0007 giao nó sở hữu phép tính). Quét 251 tệp thật: 0 báo nhầm. Hai ca test mới trong tools/test_hooks.py, hai đột biến riêng, mỗi cái làm đúng ca của nó đỏ rồi khôi phục. test_hooks 151/151, check_brain 7/7 — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "VÌ SAO PHẢI ĐO LẠI, và vì sao ghi chú CALIBRATION trong hook là thứ đáng đọc: bản cũ tự khai 'các service còn là khung nên chưa có mã thật để đo — ĐO LẠI khi có'. Mã thật có rồi nên đo, và lỗ hổng lộ ra ngay: CALENDAR_DAYS chỉ biết 24|48|72 * time.Hour, nên dòng một người SẼ THẬT SỰ viết khi bảng SLA ghi bằng giờ — from.Add(time.Duration(gio) * time.Hour) — LỌT SẠCH. Cam kết 2 giờ của An ninh trật tự sẽ đáo hạn 09:30 sáng Chủ nhật và báo cáo ghi là đúng hạn. CÒN MỘT CHỖ HẸP ĐÃ ĐO, CHƯA VÁ: hai dấu @sla-ok trong service-petitions là DẤU CHẾT — gọi thẳng scan() với dấu và không dấu đều trả [], vì cửa sổ hai dòng quanh chúng không có chữ thuộc ngữ cảnh hạn. Dấu được giữ và chú thích đã nói rõ nó không miễn trừ gì, nhưng ngày nới rào thì phải xem lại cả hai. Liên quan mục treo 'Rà 16 hook theo trục thứ nó đang đọc có trả lời đúng câu nó đang hỏi không' — đây là một ca của chính lớp ấy."
     }
   ]
 }

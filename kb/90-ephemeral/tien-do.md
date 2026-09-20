@@ -3,8 +3,8 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 0960b2a
-expires: 2026-12-19
+derived_from_commit: 82b9c7e
+expires: 2026-12-20
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
 ---
@@ -17,16 +17,16 @@ owns_facts:
 Tệp này trả lời đúng một câu: **module nào còn nợ gì.** Vì sao làm thế → `kb/10-decisions/`.
 Đã làm gì → `git log`. Cạm bẫy và quyết định đã chốt → `kb/90-ephemeral/ban-giao-phien.md`.
 
-Cập nhật gần nhất **2026-09-20** · hết hạn **2026-12-19**. Hạn đo lần cuối có người cập nhật
+Cập nhật gần nhất **2026-09-21** · hết hạn **2026-12-20**. Hạn đo lần cuối có người cập nhật
 một module, không phải lần cuối sinh tệp — quá hạn nghĩa là 90 ngày không ai chạm tới,
 tức tin `git log` chứ đừng tin tệp này.
 
 | | |
 |---|---|
 | ĐANG LÀM | 4 |
-| chưa làm | 34 |
+| chưa làm | 33 |
 | treo | 13 |
-| xong | 39 |
+| xong | 43 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -51,10 +51,11 @@ Nội dung câu hỏi ở `kb/00-foundation/open-questions.json`. Đây chỉ l�
 | #21 | OPEN | service-documents/loai-van-ban-tuyen-ghi · service-finance/hang-muc-tuyen-ghi · service-petitions/danh-muc-nhiem-vu-tuyen-ghi |
 | #25 | OPEN | service-identity/kho-doc-kenh-cong-dan |
 | #26 | OPEN | service-petitions/vong-doi-phieu-phan-anh |
+| #27 | OPEN | _chung/tieu-de-dac-ta-quyen |
 
 ## `_chung`
 
-Cập nhật 2026-09-20 · 13 mục
+Cập nhật 2026-09-21 · 14 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -64,13 +65,14 @@ Cập nhật 2026-09-20 · 13 mục
 | `jenkins-chay-that` — Mười Jenkinsfile chưa từng chạy trên Jenkins thật | chưa làm | — | — | cần hạ tầng — phạm vi của kho dừng ở Dockerfile + Jenkinsfile, cụm k8s do đội devops phụ trách |
 | `ma-hoa-vung-xuyen-xa` — Chính sách mã hoá cho vùng xuyên xã | treo | ADR 0009 là envelope encryption THEO XÃ; dinh_danh_cong_dan không thuộc xã nào nên không có DEK nào bọc nó | — | người dùng đã chốt: ghi thành KHOẢNG HỞ CÓ TÊN, chưa thiết kế gì. Thứ đang bảo vệ nó là luật 3 + phân quyền CSDL |
 | `revoke-audit-log` — REVOKE trên audit_log thuộc khâu cấp phát CSDL, không nằm trong tay mã nguồn | treo | — | — | câu SQL đúng giữ trong comment của service-*/migrations/0002. Khâu cấp phát không làm thì lớp quyền vẫn hở dù trigger vẫn đúng |
-| `tieu-de-dac-ta-quyen` — Tiêu đề docs/ui-ux/14-cau-hinh.md §4.2 ghi 43 quyền / 11 nhóm, bảng ngay dưới có 33 khoá / 10 nhóm | treo | đếm lại trên chính tệp ấy 2026-09-18 | — | hỏi khách xác nhận TIÊU ĐỀ là chỗ sai. Migration khớp bảng. KHÔNG bịa mười khoá và cũng đừng đi tìm chúng |
+| `tieu-de-dac-ta-quyen` — Tiêu đề docs/ui-ux/14-cau-hinh.md §4.2 ghi 43 quyền / 11 nhóm, bảng ngay dưới có 33 khoá / 10 nhóm | treo | ĐÃ ĐẾM BẰNG CÂY CÚ PHÁP, không bằng mắt: docs/ui-ux/14-cau-hinh.md:104 ghi 43 quyền / 11 nhóm; service-identity/migrations/0001_init.sql nạp 33 khoá / 10 nhóm; migration 0007 thêm 2 khoá nữa -> 35 khoá / 10 nhóm. Còn thiếu TÁM khoá và TRỌN MỘT NHÓM — kiểm 2026-09-21 | #27 | ĐÃ THÀNH CÂU HỎI MỞ #27, không còn là một ghi chú trôi nổi. Ngày 20/09 khách chốt thêm ĐÚNG HAI khoá cần ngay (feedback.classify, feedback.unmask — ADR 0030) và CỐ Ý để lại phần còn thiếu. ĐỪNG BỊA TÁM KHOÁ CÒN LẠI CHO ĐỦ SỐ: luật 5 nói tuyến không khai quyền là tuyến MỌI vai trò cán bộ gọi được, nhưng một khoá BỊA RA còn tệ hơn — nó hiện lên màn Phân quyền như một thẩm quyền có thật, quản trị xã tick vào, và không ai biết nó canh cái gì. Nhóm thứ 11 còn thiếu rất có thể là nhóm của một phân hệ chưa dựng. |
 | `pii-trong-lich-su-git` — Dữ liệu cá nhân thật vẫn còn trong lịch sử git | treo | cây làm việc đã dọn | — | gỡ khỏi lịch sử là viết lại lịch sử trên main — cần quyết định của chủ dự án, không phải việc agent tự làm |
 | `ra-lop-nhan-dien-theo-ten-thu-muc` — Rà cả lớp lỗi "cơ chế nhận diện mã theo tên thư mục" | treo | BẢY ca, không phải năm — bộ đếm cũ dừng ở năm và một bộ đếm thiếu làm người ta tưởng đã rà hết. Ca 5: stop_verify_guard.CODE_DIR thiếu /tools/. Ca 6: tenant_scope_guard.DB_CALL đòi `.Query(` không hậu tố trong khi cả 20 lời gọi CSDL của kho đều là bản *Context — rào chắn mà luật 1 nêu tên làm cơ chế BLOCK không khớp một call site nào, commit babf9bb. Ca 7 cùng lớp nhưng khác trục: grpcx.UnaryServerInterceptor gỡ khỏi chuỗi máy chủ mà 0 ca đỏ, commit e3ed99b — kiểm 2026-09-20. TÁM ca kể từ 20/09/2026: `_common.dich_vu_cua` nhận diện dịch vụ bằng HÌNH DẠNG đường dẫn (`<đoạn>/internal/…`) chứ không theo gốc kho, nên khi một phiên mở ở kho này ghi tệp sang kho `vihat-miniapp` (sản phẩm khác, không có xã, không có core/), `tenant_scope_guard` coi nó là dịch vụ ViGov và chặn — ĐÃ SỬA: `_common.ngoai_du_an()` suy gốc kho từ vị trí chính tệp hook, gọi từ `tenant_scope_guard` và `env_contract_guard`; `secret_scan`/`pii_guard` cố ý KHÔNG gọi. 151 ca hook xanh, gồm hai ca 'đường dẫn tuyệt đối trong ViGov thì VẪN chặn' — đó là phần giữ bản vá khỏi nới quá tay | — | chưa soát CI vì chưa có .github/. Ngày dựng CI thì đây là thứ phải soát lại đầu tiên. Hai ca mới nhất dạy thêm một trục: ca 6 là rào KHÔNG KHỚP GÌ, ca 7 là ca test khẳng định về máy chủ nhưng chỉ chạm client — cả hai đều xanh. Phép kiểm duy nhất đáng tin vẫn là đột biến: gỡ thứ nó đáng lẽ phải chặn rồi xem có đỏ không. CÒN MỘT TRỤC NỮA, ca 8 lộ ra và CHƯA SỬA: rào KHỚP QUÁ RỘNG — `tenant_scope_guard.DB_CALL` có `Get` nên `r.Header.Get("Origin")` bị chặn như một truy vấn không phạm vi. Trong ViGov nó chưa lộ vì `Header.Get(` chỉ xuất hiện ở tệp `_test.go`, mà hook bỏ qua tệp test — tức nó đang chờ đúng dòng mã sản xuất đầu tiên. CỐ Ý KHÔNG sửa hôm nay: gỡ `Get` khỏi DB_CALL sẽ mù với `sqlx.Get(`, tức đổi một lần chặn nhầm lấy một lỗ thật |
 | `ra-hook-hoi-dung-cau` — Rà 16 hook theo trục "thứ nó đang đọc có trả lời đúng câu nó đang hỏi không" | treo | doc_guard đã lộ ra trục này: luật frontmatter là tính chất của TỆP nhưng nó chấm LẦN SỬA | — | hỏng được cả hai chiều: secret_scan mà đi chấm cả tệp thì tố cáo một lần sửa vô can vì bí mật có sẵn từ trước |
 | `tang-tien-do-theo-module` — Tầng ghi tiến độ cho agent: ghi theo module, đọc một tệp, có rào chặn | xong | .claude/hooks/progress_guard.py + .claude/commands/progress.md + .claude/agents/progress-reviewer.md + tools/tien_do.py; `python tools/test_hooks.py` 133/133 (6 ca mới), `python tools/check_brain.py` 7/7; nhánh Stop đã thử đột biến: thiếu ghi -> rc=2, có ghi -> rc=0 | — | thứ hook KHÔNG kiểm được: agent nào ghi module nào (payload không mang danh tính agent), và bằng chứng có thật hay không — đó là việc của progress-reviewer, và nó BÁO chứ không sửa |
 | `xac-thuc-service-service` — Xác thực giữa các service — món nợ ADR 0012 quyết định 3 để lại | xong | ADR 0025 (kb/10-decisions/0025-xac-thuc-giua-cac-service.md) chốt 2026-09-20; ADR 0012 quyết định 3 đã ghi ĐÃ BỊ THAY THẾ ở :19 và :175, giữ nguyên văn lập luận cũ; mã ở core/grpcx/caller_auth.go + 2 tệp test — kiểm 2026-09-20 | — | CHỦ SỞ HỮU CỦA SỰ THẬT NÀY NAY LÀ `core/xac-thuc-ben-goi-grpc`, kèm ba giới hạn đã biết của cơ chế khoá chung. Mục này giữ lại làm VẾT (đã từng là món nợ, ai trả, bằng gì) — đừng ghi tiếp ở đây, hai chỗ cùng kể một chuyện là hai chỗ sẽ lệch. Dòng `tiep_theo` cũ ở đây từng đọc là 'KHÔNG dựng cơ chế bí mật chia sẻ tạm', tức chỉ thị NGƯỢC HẲN quyết định người dùng vừa chốt |
 | `go-service-dossiers` — Gỡ service-dossiers khỏi kho — khách chốt hồ sơ một cửa ngoài phạm vi hợp đồng | xong | Khách chốt 20/09/2026. Đã xoá: service-dossiers/ · proto/vigov/dossiers/ · core/gen/vigov/dossiers/ · kb/90-ephemeral/tien-do/service-dossiers.json. Đã sửa tham chiếu: go.work (10->9 module) · deploy/README.md (11->10 job Jenkins) · kb/00-foundation/domain-boundaries.md (Tám->Bảy service) · ubiquitous-language.md dòng Hồ sơ một cửa · .dockerignore + tools/check_build.py (tám->bảy dịch vụ) · core/identityclient/identityclient.go:234 · proto/vigov/identity/v1/identity.proto:196-201 · .claude/rules/critical/10-citizen-commitment.md · .claude/hooks/rest_api_guard.py (GIỮ từ khoá chặn, chỉ đổi nhãn nhóm). Khảo sát và ĐƯỜNG QUAY LẠI đã chuyển vào ADR 0001 §Bổ sung 2026-09-20 TRƯỚC khi xoá sổ module. KIỂM ĐỊNH 2026-09-20: check_brain 7/7 · test_hooks 151/151 · check_build PASS (7 dịch vụ + web · 8 Dockerfile · 8 Jenkinsfile) · go build + go vet sạch trên 9 module · go run ./tools/kb báo 7 services | — | CÒN SÓT CÓ CHỦ Ý, đừng đọc thành bỏ quên: (1) chú thích trong 7 tệp migration đã áp dụng (0002_audit_log_append_only.sql, 0004_kenh_cong_dan.sql) vẫn nhắc `dossiers` — KHÔNG sửa, luật 7 cấm sửa migration đã chạy; (2) .claude/hooks/data_safety_guard.py giữ `dossier` trong biểu thức chặn bảng nghiệp vụ — gỡ là làm yếu rào chắn chứ không phải dọn rác; (3) core/gen/ còn chú thích cũ, tự hết sau `make proto`; (4) docs/ui-ux/ vẫn có vai trò `Cán bộ một cửa` — vai trò CÓ THẬT ngoài đời, đặc tả của khách không sửa theo phạm vi hợp đồng |
+| `do-lai-rao-luat-10` — Đo lại citizen_commitment_guard khi đã có mã tính hạn thật | xong | .claude/hooks/citizen_commitment_guard.py — thêm mẫu DURATION_DEADLINE, miễn trừ service-identity/internal/ (ADR 0007 giao nó sở hữu phép tính). Quét 251 tệp thật: 0 báo nhầm. Hai ca test mới trong tools/test_hooks.py, hai đột biến riêng, mỗi cái làm đúng ca của nó đỏ rồi khôi phục. test_hooks 151/151, check_brain 7/7 — kiểm 2026-09-20 | — | VÌ SAO PHẢI ĐO LẠI, và vì sao ghi chú CALIBRATION trong hook là thứ đáng đọc: bản cũ tự khai 'các service còn là khung nên chưa có mã thật để đo — ĐO LẠI khi có'. Mã thật có rồi nên đo, và lỗ hổng lộ ra ngay: CALENDAR_DAYS chỉ biết 24|48|72 * time.Hour, nên dòng một người SẼ THẬT SỰ viết khi bảng SLA ghi bằng giờ — from.Add(time.Duration(gio) * time.Hour) — LỌT SẠCH. Cam kết 2 giờ của An ninh trật tự sẽ đáo hạn 09:30 sáng Chủ nhật và báo cáo ghi là đúng hạn. CÒN MỘT CHỖ HẸP ĐÃ ĐO, CHƯA VÁ: hai dấu @sla-ok trong service-petitions là DẤU CHẾT — gọi thẳng scan() với dấu và không dấu đều trả [], vì cửa sổ hai dòng quanh chúng không có chữ thuộc ngữ cảnh hạn. Dấu được giữ và chú thích đã nói rõ nó không miễn trừ gì, nhưng ngày nới rào thì phải xem lại cả hai. Liên quan mục treo 'Rà 16 hook theo trục thứ nó đang đọc có trả lời đúng câu nó đang hỏi không' — đây là một ca của chính lớp ấy. |
 
 ## `citizen-app`
 
@@ -89,7 +91,7 @@ Cập nhật 2026-09-20 · 8 mục
 
 ## `core`
 
-Cập nhật 2026-09-20 · 4 mục
+Cập nhật 2026-09-21 · 5 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -97,6 +99,7 @@ Cập nhật 2026-09-20 · 4 mục
 | `backfill-theo-xa` — Backfill dữ liệu theo từng xã | treo | core/migrate chỉ lo DDL — kiểm 2026-09-20 | — | luật 7 bất biến 5 (migration chạy per-commune, resumable, ghi tiến độ) mới đạt một nửa. Ngưỡng cần cơ chế thật là khi thời gian giữ khoá thành đáng kể — ADR 0013, mục Giới hạn |
 | `xac-thuc-ben-goi-grpc` — Xác thực bên gọi trên cổng gRPC — một cặp header, giá trị từ secret k8s | xong | core/grpcx/caller_auth.go + caller_auth_test.go + caller_auth_exempt_test.go; MetadataCallerKey ở core/grpcx/grpcx.go:110; GRPCCallerKey ở core/config/config.go:128. Phép kiểm đáng tin là ĐỘT BIẾN chứ không phải `make check` xanh: gỡ UnaryServerCallerAuth -> 2 ca đỏ. Mốc e3ed99b — kiểm 2026-09-20. ADR 0025 | — | Ba giới hạn ĐÃ BIẾT, không phải thiếu sót: khoá chung không nói service nào gọi nên vết kiểm không quy được trách nhiệm; ai trong cụm cầm khoá đều gọi được mọi thứ, lớp mạng là thứ chặn bán kính; xoay khoá phải đổi đồng loạt. Đường ra cho cả ba là mTLS/mesh, và phải SỬA ADR 0025 chứ không lặng lẽ thêm header thứ hai. Bằng chứng cũ của mục này từng viện `make check` rc=0 — e3ed99b đo được lượt xanh ấy xanh vì lý do sai, nên bằng chứng nay là phép đột biến |
 | `staffauth-va-identityclient` — core/staffauth + core/identityclient — một cài đặt xác thực cán bộ dùng chung cho bốn service khung | xong | core/staffauth/staffauth.go 306 dòng + test, core/identityclient/identityclient.go 226 dòng + test; bốn service-{comms,documents,finance,petitions}/cmd/server/main.go đều import và mắc vào chuỗi. Commit ebc3b0b — kiểm 2026-09-20 | — | Đây là thứ gỡ 401 cho sáu tuyến (19c6008). Vì một cài đặt phục vụ bốn service nên mọi thay đổi ở đây là thay đổi cho cả bốn: đổi hành vi thì phải chạy main_test.go của cả bốn, không phải của service đang sửa |
+| `boc-tien-gio-lam-viec` — core/identityclient.TienGioLamViec — bọc AdvanceWorkingHours | xong | core/identityclient/identityclient.go + identityclient_test.go — 5 ca. Ba đột biến đều đỏ đúng ca của nó: đọc theo chỉ số · bỏ phép kiểm thiếu mốc · nuốt lỗi gRPC thành map rỗng. `go test ./core/identityclient/` xanh, `make check` rc=0 — kiểm 2026-09-20, commit f802d1b | — | BA TÍNH CHẤT BÊN GỌI PHẢI GIỮ, cả ba đã có ca test nhưng ca test không sang được service khác. (1) TRẢ VỀ MAP THEO SỐ GIỜ, KHÔNG THEO CHỈ SỐ — hợp đồng gộp số trùng nên len đáp án có thể nhỏ hơn len(gio) NGAY CẢ KHI thành công trọn vẹn; đọc items[0]/items[1] sau khi hỏi {2,16} là tráo hạn tiếp nhận thành hạn xử lý, trên lĩnh vực An ninh trật tự, và không phép kiểm đường-hạnh-phúc nào bắt được. (2) KHÔNG CÓ THÀNH CÔNG MỘT PHẦN — mốc thiếu sẽ tới tay bên gọi dưới dạng time.Time rỗng, tức hạn NĂM 1, tức phiếu quá hạn ngay lúc tiếp nhận. (3) LỖI LUÔN LÀ LỖI: FAILED_PRECONDITION là đáp án BÌNH THƯỜNG hôm nay vì chưa xã nào khai lịch, và nó có nghĩa PHẢI HỎNG VIỆC TIẾP NHẬN — tuyệt đối không rơi về một phép cộng thời lượng tại chỗ. TÍNH TỚI 21/09 CHƯA SERVICE NÀO GỌI bọc này: nó đã dựng sẵn, chưa phải đang dùng. |
 
 ## `deploy`
 
@@ -119,12 +122,13 @@ Cập nhật 2026-09-20 · 2 mục
 
 ## `proto`
 
-Cập nhật 2026-09-20 · 2 mục
+Cập nhật 2026-09-21 · 3 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
 | `staff-thieu-ho-ten` — Message Staff không có trường họ tên nên BatchGetStaff chưa phục vụ được mục đích nó tự khai | treo | — | #11 | thêm trường là SỬA HỢP ĐỒNG — cùng lúc phải trả lời câu che/không che số di động cán bộ. Thêm một chỗ chặn chưa ai nói: trong 33 khoá quyền đã seed KHÔNG có khoá nào nghĩa là 'xem chi tiết đầy đủ cán bộ', nên chọn một khoá cho tuyến ấy là thiết kế hộ khách mô hình phân quyền |
 | `resolve-staff-principal` — RPC biến một chứng thực của cán bộ thành một principal, cho service không phải identity | xong | proto/vigov/identity/v1/identity.proto — ResolveStaffPrincipal + ba message; buf lint, buf breaking, buf generate đều sạch; mục đầu tiên có thật trong kb/30-indexes/transaction-boundaries.json. Commit ae65ac7 — kiểm 2026-09-20 | — | HAI THỨ HỢP ĐỒNG NÀY CỐ Ý KHÔNG MANG, và cả hai sẽ bị đòi thêm: (1) `ho_ten`/`chuc_vu` — không cổng gác nào đọc tên, và câu mở #11 chặn; (2) `ma` nghiệp vụ — vết kiểm của bốn service sẽ cần 'ai' theo luật 6 bất biến 2, và lúc ấy phải chọn: thêm `ma` vào StaffPrincipal (dữ liệu nhận dạng cán bộ đi qua biên), hay để bốn service ghi id nội bộ — tức HAI vết kiểm gọi một người bằng hai tên. Chưa quyết, liên quan ADR 0025 mục còn mở #4. MỘT SỰ THẬT ĐÃ ĐO: `[debug_redact = true]` VÔ TÁC DỤNG trong protobuf-go v1.36.12 — `%+v` in token nguyên văn, nên không gì trong mã sinh bảo vệ được; dấu ấy đã gỡ thay vì để lại |
+| `go-hop-dong-mot-cua` — Gỡ vigov/dossiers/v1 khỏi hợp đồng | xong | proto/vigov/dossiers/v1/dossiers.proto đã xoá cùng service-dossiers; `buf breaking` báo đúng và xanh lại ngay sau commit xoá; `make check` rc=0 — kiểm 2026-09-21, commit 82b9c7e | — | KIỂM TRƯỚC KHI XOÁ, không xoá rồi mới kiểm: 0 tham chiếu tới `vigov/dossiers`, `dossiers.v1` hay `DossiersService` trong toàn kho. KHÔNG thêm ngoại lệ vào buf.yaml — `buf breaking --against '.git#ref=HEAD'` so cây làm việc với commit cuối nên nó KHÔNG THỂ xanh trước commit xoá, và một `ignore` cho đường dẫn đã xoá là cấu hình chết làm yếu cổng về sau. Chú thích của identity.proto cũng sửa theo (FOUR -> THREE implementations). |
 
 ## `service-comms`
 
@@ -224,14 +228,14 @@ Cập nhật 2026-09-20 · 1 mục
 
 ## `tools`
 
-Cập nhật 2026-09-20 · 4 mục
+Cập nhật 2026-09-21 · 4 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
-| `bo-sinh-doc-dau-entity` — Bộ sinh đọc dấu @entity để điền data-ownership.json | chưa làm | kb/30-indexes/data-ownership.json vẫn là chỗ giữ chỗ rỗng; 8 thực thể danh mục đã có dấu @entity trong migration nhưng không có gì đọc chúng — kiểm 2026-09-20 | — | CLAUDE.md bước 4 dạy phiên sau hỏi 'ai sở hữu X' thì mở data-ownership.json. Hôm nay họ mở ra và không thấy gì cho cả tám, rồi có thể kết luận chúng vô chủ. Bịt bằng bộ sinh trong tools/, KHÔNG bịt bằng cách hand-write một dòng sẽ mục nát ngay khi bộ sinh ra đời (luật 9) |
 | `bo-sinh-tien-do` — tools/tien_do.py — sinh tệp đọc tien-do.md từ các tệp ghi theo module | xong | tools/tien_do.py:1; `python tools/tien_do.py` chạy thật, sinh ra kb/90-ephemeral/tien-do.md; đã nối vào mục `kb` của Makefile:125. KHÔNG ghi số module/mục ở đây — con số nào chép vào cũng sai trong vài ngày | — | hạn của tệp sinh tính từ `cap_nhat` MỚI NHẤT của các module, không phải ngày sinh — quá hạn nghĩa là 90 ngày không ai cập nhật tiến độ |
 | `check-brain-bo-qua-tmp` — check_brain bất biến 6 đỏ vì một tệp .md nháp trong tmp/ (đã nằm trong .gitignore) | xong | tools/check_brain.py:277 thêm `tmp` vào danh sách loại trừ khi duyệt cây; `python tools/check_brain.py` 7/7 — số dòng kiểm lại 2026-09-20 (bản cũ ghi :272, đã lệch) | — | phép kiểm đi bằng hệ tệp chứ không đi bằng git. Nếu còn thư mục nào khác trong .gitignore mà sinh .md thì sẽ đỏ lại theo đúng cách này |
 | `apidoc-mau-route-hang-chuoi` — apidoc từ chối mẫu route là hằng chuỗi — bộ sinh hợp đồng REST hỏng từ 1a8ce11 | xong | tools/apidoc/route.go — mauRoute + hangChuoiTrongTep; 3 ca mới trong route_test.go, đã đột biến (bỏ phần tra hằng -> 2 ca đỏ). `make kb` chạy lại được: hợp đồng đi từ 9 lên 17 tuyến — kiểm 2026-09-20 | — | Chỉ tra hằng khai trong CÙNG tệp, có chủ ý; mẫu dựng lúc chạy vẫn là lỗi và có ca test giữ. Bài học ghi trong mã: bộ sinh từng phạt đúng khuôn mã luật 9 đòi (một đường dẫn, một nguồn) và đẩy người viết đi chép đường dẫn ra hai chỗ |
+| `bo-sinh-doc-dau-entity` — Bộ sinh đọc dấu @entity để điền data-ownership.json | xong | tools/kb/ownership.go + ownership_test.go. Sinh ra 22 thực thể trên 7 service, 0 cảnh báo (trước đó chỉ mục là placeholder rỗng). 5 ca test chạy trên MIGRATION THẬT chứ không trên fixture. `go test ./tools/kb/` xanh; đột biến đưa cửa sổ nhìn xuống về 12 dòng làm 3 ca đỏ. `make check` rc=0 — kiểm 2026-09-20, commit 11448fa | — | HAI BÀI HỌC ĐÁNG ĐỌC TRƯỚC KHI SỬA TỆP NÀY. (1) Chỉ mục này RỖNG nhiều tháng với câu 'no schemas defined yet', mà câu ấy SAI từ khi ADR 0021 đưa dấu @entity vào migration — 24 dấu trên 7 service. CLAUDE.md bước 4 gửi MỌI phiên tới đây trước kèm lời dặn 'đừng đọc mọi lược đồ', nên lời dặn lặng lẽ ngừng hiệu lực và luật 2 'đúng một chủ sở hữu' không ai cưỡng chế. Một chỉ mục SINH ra mà rỗng vì lý do đã cũ thì tệ hơn không có chỉ mục: chính lời lẽ của placeholder ngăn người ta hỏi. (2) BẢN VÁ ĐẦU CỦA CHÍNH PHIÊN NÀY HỎNG CÙNG KIỂU: cửa sổ nhìn xuống 12 dòng làm mất 11 trong 20 dấu, vì nhà này viết chú thích WHY dài giữa dấu và CREATE TABLE. Một con số chọn bằng cảm tính cho ra chỉ mục TRÔNG NHƯ ĐÃ ĐẦY mà thiếu quá nửa — tệ hơn placeholder nó thay. Luật nay là: dấu sở hữu CREATE TABLE ĐẦU TIÊN sau nó, dừng khi gặp dấu @entity khác, KHÔNG có hạn mức dòng. Đừng đặt lại hạn mức. |
 
 ## `web-admin`
 

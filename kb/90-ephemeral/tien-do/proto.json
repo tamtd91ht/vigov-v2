@@ -1,14 +1,16 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "proto",
-  "cap_nhat": "2026-09-20",
+  "cap_nhat": "2026-09-21",
   "muc": [
     {
       "id": "staff-thieu-ho-ten",
       "viec": "Message Staff không có trường họ tên nên BatchGetStaff chưa phục vụ được mục đích nó tự khai",
       "trang_thai": "treo",
       "bang_chung": "",
-      "no_confirm": [11],
+      "no_confirm": [
+        11
+      ],
       "tiep_theo": "thêm trường là SỬA HỢP ĐỒNG — cùng lúc phải trả lời câu che/không che số di động cán bộ. Thêm một chỗ chặn chưa ai nói: trong 33 khoá quyền đã seed KHÔNG có khoá nào nghĩa là 'xem chi tiết đầy đủ cán bộ', nên chọn một khoá cho tuyến ấy là thiết kế hộ khách mô hình phân quyền"
     },
     {
@@ -18,6 +20,14 @@
       "bang_chung": "proto/vigov/identity/v1/identity.proto — ResolveStaffPrincipal + ba message; buf lint, buf breaking, buf generate đều sạch; mục đầu tiên có thật trong kb/30-indexes/transaction-boundaries.json. Commit ae65ac7 — kiểm 2026-09-20",
       "no_confirm": [],
       "tiep_theo": "HAI THỨ HỢP ĐỒNG NÀY CỐ Ý KHÔNG MANG, và cả hai sẽ bị đòi thêm: (1) `ho_ten`/`chuc_vu` — không cổng gác nào đọc tên, và câu mở #11 chặn; (2) `ma` nghiệp vụ — vết kiểm của bốn service sẽ cần 'ai' theo luật 6 bất biến 2, và lúc ấy phải chọn: thêm `ma` vào StaffPrincipal (dữ liệu nhận dạng cán bộ đi qua biên), hay để bốn service ghi id nội bộ — tức HAI vết kiểm gọi một người bằng hai tên. Chưa quyết, liên quan ADR 0025 mục còn mở #4. MỘT SỰ THẬT ĐÃ ĐO: `[debug_redact = true]` VÔ TÁC DỤNG trong protobuf-go v1.36.12 — `%+v` in token nguyên văn, nên không gì trong mã sinh bảo vệ được; dấu ấy đã gỡ thay vì để lại"
+    },
+    {
+      "id": "go-hop-dong-mot-cua",
+      "viec": "Gỡ vigov/dossiers/v1 khỏi hợp đồng",
+      "trang_thai": "xong",
+      "bang_chung": "proto/vigov/dossiers/v1/dossiers.proto đã xoá cùng service-dossiers; `buf breaking` báo đúng và xanh lại ngay sau commit xoá; `make check` rc=0 — kiểm 2026-09-21, commit 82b9c7e",
+      "no_confirm": [],
+      "tiep_theo": "KIỂM TRƯỚC KHI XOÁ, không xoá rồi mới kiểm: 0 tham chiếu tới `vigov/dossiers`, `dossiers.v1` hay `DossiersService` trong toàn kho. KHÔNG thêm ngoại lệ vào buf.yaml — `buf breaking --against '.git#ref=HEAD'` so cây làm việc với commit cuối nên nó KHÔNG THỂ xanh trước commit xoá, và một `ignore` cho đường dẫn đã xoá là cấu hình chết làm yếu cổng về sau. Chú thích của identity.proto cũng sửa theo (FOUR -> THREE implementations)."
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "tools",
-  "cap_nhat": "2026-09-20",
+  "cap_nhat": "2026-09-21",
   "muc": [
     {
       "id": "bo-sinh-tien-do",
@@ -30,10 +30,10 @@
     {
       "id": "bo-sinh-doc-dau-entity",
       "viec": "Bộ sinh đọc dấu @entity để điền data-ownership.json",
-      "trang_thai": "chua_lam",
-      "bang_chung": "kb/30-indexes/data-ownership.json vẫn là chỗ giữ chỗ rỗng; 8 thực thể danh mục đã có dấu @entity trong migration nhưng không có gì đọc chúng — kiểm 2026-09-20",
+      "trang_thai": "xong",
+      "bang_chung": "tools/kb/ownership.go + ownership_test.go. Sinh ra 22 thực thể trên 7 service, 0 cảnh báo (trước đó chỉ mục là placeholder rỗng). 5 ca test chạy trên MIGRATION THẬT chứ không trên fixture. `go test ./tools/kb/` xanh; đột biến đưa cửa sổ nhìn xuống về 12 dòng làm 3 ca đỏ. `make check` rc=0 — kiểm 2026-09-20, commit 11448fa",
       "no_confirm": [],
-      "tiep_theo": "CLAUDE.md bước 4 dạy phiên sau hỏi 'ai sở hữu X' thì mở data-ownership.json. Hôm nay họ mở ra và không thấy gì cho cả tám, rồi có thể kết luận chúng vô chủ. Bịt bằng bộ sinh trong tools/, KHÔNG bịt bằng cách hand-write một dòng sẽ mục nát ngay khi bộ sinh ra đời (luật 9)"
+      "tiep_theo": "HAI BÀI HỌC ĐÁNG ĐỌC TRƯỚC KHI SỬA TỆP NÀY. (1) Chỉ mục này RỖNG nhiều tháng với câu 'no schemas defined yet', mà câu ấy SAI từ khi ADR 0021 đưa dấu @entity vào migration — 24 dấu trên 7 service. CLAUDE.md bước 4 gửi MỌI phiên tới đây trước kèm lời dặn 'đừng đọc mọi lược đồ', nên lời dặn lặng lẽ ngừng hiệu lực và luật 2 'đúng một chủ sở hữu' không ai cưỡng chế. Một chỉ mục SINH ra mà rỗng vì lý do đã cũ thì tệ hơn không có chỉ mục: chính lời lẽ của placeholder ngăn người ta hỏi. (2) BẢN VÁ ĐẦU CỦA CHÍNH PHIÊN NÀY HỎNG CÙNG KIỂU: cửa sổ nhìn xuống 12 dòng làm mất 11 trong 20 dấu, vì nhà này viết chú thích WHY dài giữa dấu và CREATE TABLE. Một con số chọn bằng cảm tính cho ra chỉ mục TRÔNG NHƯ ĐÃ ĐẦY mà thiếu quá nửa — tệ hơn placeholder nó thay. Luật nay là: dấu sở hữu CREATE TABLE ĐẦU TIÊN sau nó, dừng khi gặp dấu @entity khác, KHÔNG có hạn mức dòng. Đừng đặt lại hạn mức."
     }
   ]
 }

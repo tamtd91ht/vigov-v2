@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "core",
-  "cap_nhat": "2026-09-20",
+  "cap_nhat": "2026-09-21",
   "muc": [
     {
       "id": "backfill-theo-xa",
@@ -34,6 +34,14 @@
       "bang_chung": "core/httpx/citizen.go:72-74 khai đây là đường nóng và đòi đệm có TTL ngắn, vô hiệu khi thu hồi; service-identity/internal/store/phien_cong_dan.go ghi rõ đã HOÃN và vì sao — kiểm 2026-09-20",
       "no_confirm": [],
       "tiep_theo": "Hoãn có lý do, không phải bỏ quên: identity chạy nhiều bản sao và ADR 0010 chốt chỉ có PostgreSQL, nên không có kênh nào để một lần thu hồi ở bản sao A với tới bản sao B. Cửa sổ lệch sẽ đúng bằng TTL, và ca hỏng là nút 'đăng xuất màn hình này' ở quầy một cửa. Đo trước, rồi mới đệm, kèm kênh vô hiệu hoá thật"
+    },
+    {
+      "id": "boc-tien-gio-lam-viec",
+      "viec": "core/identityclient.TienGioLamViec — bọc AdvanceWorkingHours",
+      "trang_thai": "xong",
+      "bang_chung": "core/identityclient/identityclient.go + identityclient_test.go — 5 ca. Ba đột biến đều đỏ đúng ca của nó: đọc theo chỉ số · bỏ phép kiểm thiếu mốc · nuốt lỗi gRPC thành map rỗng. `go test ./core/identityclient/` xanh, `make check` rc=0 — kiểm 2026-09-20, commit f802d1b",
+      "no_confirm": [],
+      "tiep_theo": "BA TÍNH CHẤT BÊN GỌI PHẢI GIỮ, cả ba đã có ca test nhưng ca test không sang được service khác. (1) TRẢ VỀ MAP THEO SỐ GIỜ, KHÔNG THEO CHỈ SỐ — hợp đồng gộp số trùng nên len đáp án có thể nhỏ hơn len(gio) NGAY CẢ KHI thành công trọn vẹn; đọc items[0]/items[1] sau khi hỏi {2,16} là tráo hạn tiếp nhận thành hạn xử lý, trên lĩnh vực An ninh trật tự, và không phép kiểm đường-hạnh-phúc nào bắt được. (2) KHÔNG CÓ THÀNH CÔNG MỘT PHẦN — mốc thiếu sẽ tới tay bên gọi dưới dạng time.Time rỗng, tức hạn NĂM 1, tức phiếu quá hạn ngay lúc tiếp nhận. (3) LỖI LUÔN LÀ LỖI: FAILED_PRECONDITION là đáp án BÌNH THƯỜNG hôm nay vì chưa xã nào khai lịch, và nó có nghĩa PHẢI HỎNG VIỆC TIẾP NHẬN — tuyệt đối không rơi về một phép cộng thời lượng tại chỗ. TÍNH TỚI 21/09 CHƯA SERVICE NÀO GỌI bọc này: nó đã dựng sẵn, chưa phải đang dùng."
     }
   ]
 }
