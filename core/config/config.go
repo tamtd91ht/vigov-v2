@@ -80,6 +80,34 @@ type Config struct {
 	// the registry. Every other service refuses to start without it, and says so by name.
 	PlatformGRPCAddr string
 
+	// GRPCCallerKey authenticates the CALLER on the inter-service gRPC port. ONE key, shared by
+	// every service on the deployment, read from GRPC_CALLER_KEY and sourced from a k8s secret.
+	//
+	// IT IS HALF OF A TWO-LAYER DEFENCE, and reading it as the whole one overestimates it
+	// badly: the other half is the gRPC port being confined to the cluster's internal network.
+	// What the shape does and does not buy — no caller attribution, no blast-radius limit
+	// inside the cluster, no graceful rotation — is written out in core/grpcx's package doc and
+	// recorded in ADR 0025. Read it before reasoning about this value.
+	//
+	// IT IS A PLATFORM-WIDE CONSTANT, not a per-commune value: it says nothing about which
+	// commune a call is for (rule 8, invariant 5). The commune travels separately, in metadata.
+	//
+	// REQUIRED, IN EVERY ENVIRONMENT, WITH NO DEV EXEMPTION (ADR 0025, invariant 3). Not the
+	// shape of PlatformGRPCAddr above, which is allowed to be empty here: an address that is
+	// missing produces a service that answers nothing, while a KEY that is missing would
+	// produce a server that answers EVERYTHING. "Runs without the key" is the one configuration
+	// that must not be reachable, so it is refused at the earliest point that can name the
+	// variable — Load — rather than at a stack trace further in.
+	//
+	// The interceptors refuse an empty key again, at construction. That is not a second answer
+	// to the same question: this function answers "is the deployment configured", and the
+	// interceptor answers "is this server wired", and a direct caller of the interceptor never
+	// passes through here at all.
+	//
+	// Same type, same reason as the signing keys: the bytes ARE the credential, so the type has
+	// to refuse to render them (rule 8, invariant 1).
+	GRPCCallerKey secret.Secret
+
 	// TenantCacheTTL bounds how long a deactivated commune keeps being served, and how long a
 	// reassigned domain keeps resolving to the old commune (ADR 0004, decision 5).
 	TenantCacheTTL time.Duration
@@ -152,6 +180,15 @@ func Load(serviceName string) (Config, error) {
 		thieu = append(thieu, "ENV")
 	}
 
+	// Required everywhere, dev included. A missing database DSN produces a service that cannot
+	// answer; a missing caller key would produce a gRPC port that answers ANYTHING that reaches
+	// it, silently and on every RPC. There is no environment in which that is a tolerable
+	// default (ADR 0025, invariant 3).
+	khoaGoi := strings.TrimSpace(os.Getenv("GRPC_CALLER_KEY"))
+	if khoaGoi == "" {
+		thieu = append(thieu, "GRPC_CALLER_KEY")
+	}
+
 	// A missing signing key is fatal everywhere except dev, where it only means this process
 	// cannot issue or read a session. Outside dev the alternative would be a service that
 	// accepts forged tokens, or one that invents a key per replica and signs everybody out on
@@ -177,11 +214,16 @@ func Load(serviceName string) (Config, error) {
 	}
 
 	cfg := Config{
-		ListenAddr:          firstNonEmpty(os.Getenv("LISTEN_ADDR"), ":8080"),
-		GRPCListenAddr:      firstNonEmpty(os.Getenv("GRPC_LISTEN_ADDR"), ":9090"),
-		DatabaseDSN:         secret.DSN(dsn),
-		RedisDSN:            secret.DSN(strings.TrimSpace(os.Getenv("REDIS_DSN"))),
-		PlatformGRPCAddr:    strings.TrimSpace(os.Getenv("PLATFORM_GRPC_ADDR")),
+		ListenAddr:       firstNonEmpty(os.Getenv("LISTEN_ADDR"), ":8080"),
+		GRPCListenAddr:   firstNonEmpty(os.Getenv("GRPC_LISTEN_ADDR"), ":9090"),
+		DatabaseDSN:      secret.DSN(dsn),
+		RedisDSN:         secret.DSN(strings.TrimSpace(os.Getenv("REDIS_DSN"))),
+		PlatformGRPCAddr: strings.TrimSpace(os.Getenv("PLATFORM_GRPC_ADDR")),
+		// Trimmed above: a trailing newline pasted out of a k8s secret would make the key
+		// compare unequal at the far end, and the refusal it produces says "unauthenticated" —
+		// which sends the reader looking for a missing variable rather than for an invisible
+		// character.
+		GRPCCallerKey:       secret.Secret(khoaGoi),
 		TenantCacheTTL:      duration(os.Getenv("TENANT_CACHE_TTL"), 30*time.Second),
 		SessionSigningKeys:  khoa,
 		Env:                 env,

@@ -29,6 +29,7 @@ import (
 
 	platformv1 "github.com/vihat/vigov/core/gen/vigov/platform/v1"
 	"github.com/vihat/vigov/core/grpcx"
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
 )
 
@@ -57,12 +58,18 @@ type Directory struct {
 // the platform is momentarily down. What it must NOT do is pretend it resolved a commune, and
 // ByHost below is where that is held.
 //
-// INSECURE CREDENTIALS, STATED RATHER THAN HIDDEN: there is no mTLS and no caller identity on
-// this hop yet — the gRPC port is protected by network isolation alone, which is the named gap
-// written out in platform/cmd/server/main.go. This client must be pointed at a
-// cluster-internal address only. When that gap is closed, the credentials are changed HERE, in
+// INSECURE CREDENTIALS, STATED RATHER THAN HIDDEN: the transport is not encrypted and there is
+// still no PER-SERVICE identity on this hop. What guards it is two layers, and neither is TLS:
+// the shared caller key attached below, and the gRPC port being confined to the cluster's
+// internal network (ADR 0025). So this client must be pointed at a cluster-internal address
+// only. When per-service identity arrives — mTLS or a mesh — the credentials change HERE, in
 // one place, for every service.
-func Dial(addr string, log *slog.Logger) (*Directory, error) {
+//
+// khoa IS THE DEPLOYMENT'S ONE CALLER KEY (config.GRPCCallerKey). An empty one panics inside
+// grpcx.UnaryClientCallerAuth, at construction: this end would otherwise send every call
+// without a key and have every one refused, and "Unauthenticated on everything" is a slower
+// read than a startup message naming the variable.
+func Dial(addr string, khoa secret.Secret, log *slog.Logger) (*Directory, error) {
 	if addr == "" {
 		// Fail closed and by name. A client with no address resolves no Host, which turns into
 		// 404 for every commune — a failure that looks like "the domain is misconfigured" and
@@ -74,7 +81,15 @@ func Dial(addr string, log *slog.Logger) (*Directory, error) {
 		// pkg/grpcx, never a hand-written copy: it is the one place that decides how the commune
 		// travels on the wire, and which RPCs may travel without one. ResolveHost is on that
 		// exemption list — it is the call that ESTABLISHES the commune, so it cannot carry one.
-		grpc.WithUnaryInterceptor(grpcx.UnaryClientInterceptor()),
+		//
+		// CHAINED, and the caller key goes FIRST, mirroring the server. The two interceptors
+		// answer different questions — "who is calling" and "which commune" — and the commune
+		// exemption above must never be read as an authentication exemption: ResolveHost
+		// carries no commune and still carries the key.
+		grpc.WithChainUnaryInterceptor(
+			grpcx.UnaryClientCallerAuth(khoa),
+			grpcx.UnaryClientInterceptor(),
+		),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("platformclient: mở kết nối tới %s: %w", addr, err)

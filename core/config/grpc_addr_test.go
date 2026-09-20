@@ -6,7 +6,13 @@ package config
 // both are being worked on. The helper and the fake DSN come from config_test.go, same
 // package.
 
-import "testing"
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+)
 
 func TestGRPCListenAddrMacDinh(t *testing.T) {
 	datMoiTruong(t, map[string]string{
@@ -84,5 +90,93 @@ func TestPlatformGRPCAddrDocTuMoiTruong(t *testing.T) {
 	// reads like the platform is down.
 	if cfg.PlatformGRPCAddr != "platform.noi-bo:9090" {
 		t.Errorf("PlatformGRPCAddr = %q", cfg.PlatformGRPCAddr)
+	}
+}
+
+func TestKhoaGoiNoiBoDocTuMoiTruong(t *testing.T) {
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":    dsnGia,
+		"ENV":             EnvDev,
+		"GRPC_CALLER_KEY": "  " + khoaGoiNoiBoGia + "\n",
+	})
+
+	cfg, err := Load("identity")
+	if err != nil {
+		t.Fatalf("Load lỗi: %v", err)
+	}
+	// Trimmed. A trailing newline pasted out of a k8s secret compares unequal at the far end,
+	// and the refusal it produces reads "unauthenticated" — which sends the reader hunting for
+	// a missing variable instead of an invisible character.
+	if string(cfg.GRPCCallerKey) != khoaGoiNoiBoGia {
+		t.Errorf("GRPCCallerKey đọc sai: %q", string(cfg.GRPCCallerKey))
+	}
+}
+
+func TestKhoaGoiNoiBoThieuThiChanKhoiDongOMoiMoiTruong(t *testing.T) {
+	// NO DEV EXEMPTION, unlike SESSION_SIGNING_KEYS (ADR 0025, invariant 3). A signing key that
+	// is missing in dev means this process cannot read a session — annoying, local, visible. A
+	// CALLER KEY that is missing means a gRPC port that accepts anything reaching it, and
+	// "works fine locally" is exactly how that configuration reaches a cluster.
+	//
+	// The message must name the variable. "Unauthenticated on every call" sends the reader to
+	// the network; "thiếu GRPC_CALLER_KEY" sends them to the deployment manifest.
+	for _, env := range []string{EnvDev, EnvStaging, EnvProd} {
+		t.Run(env, func(t *testing.T) {
+			datMoiTruong(t, map[string]string{
+				"DATABASE_DSN":         dsnGia,
+				"ENV":                  env,
+				"SESSION_SIGNING_KEYS": khoaGia,
+			})
+			t.Setenv("GRPC_CALLER_KEY", "")
+
+			_, err := Load("comms")
+			if !errors.Is(err, ErrThieuBienMoiTruong) {
+				t.Fatalf("muốn ErrThieuBienMoiTruong, nhận %v", err)
+			}
+			if !strings.Contains(err.Error(), "GRPC_CALLER_KEY") {
+				t.Errorf("thông báo phải nói rõ thiếu biến nào: %v", err)
+			}
+		})
+	}
+}
+
+func TestKhoaGoiNoiBoKhongTuHienRaKhiGhiLog(t *testing.T) {
+	// One `slog.Info("boot", "cfg", cfg)` written while debugging would put the key that guards
+	// the whole inter-service surface into centralised logging, backups and a third-party
+	// monitoring vendor at once — from where it cannot be recalled (rule 8, invariant 1). And
+	// there is exactly ONE key, so a leak is a leak for every service on the deployment.
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":         dsnGia,
+		"ENV":                  EnvProd,
+		"SESSION_SIGNING_KEYS": khoaGia,
+		"GRPC_CALLER_KEY":      khoaGoiNoiBoGia,
+	})
+
+	cfg, err := Load("platform")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tho, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range []string{
+		fmt.Sprintf("%v", cfg.GRPCCallerKey),
+		fmt.Sprintf("%s", cfg.GRPCCallerKey),
+		fmt.Sprintf("%d", cfg.GRPCCallerKey),
+		fmt.Sprintf("%#v", cfg.GRPCCallerKey),
+		fmt.Sprintf("%+v", cfg),
+		fmt.Sprintf("%v", cfg.Redacted()),
+		string(tho),
+	} {
+		if strings.Contains(r, khoaGoiNoiBoGia) {
+			t.Errorf("khoá gọi nội bộ lọt ra khi in: %q", r)
+		}
+	}
+
+	// ...but it must still be reachable for the interceptor.
+	if string(cfg.GRPCCallerKey.Lo()) != khoaGoiNoiBoGia {
+		t.Error("Lo() không trả về khoá thật — interceptor sẽ từ chối mọi lời gọi")
 	}
 }

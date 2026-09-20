@@ -16,7 +16,46 @@
 // Only unary calls are handled, because only unary RPCs exist today. THE FIRST STREAMING RPC
 // NEEDS A STREAM INTERCEPTOR ADDED HERE BEFORE IT IS REGISTERED: without one the stream path
 // runs with no commune in context and nothing turns red — the server handler simply sees an
-// empty context and pkg/store refuses or, worse, some future code defaults.
+// empty context and pkg/store refuses or, worse, some future code defaults. The same sentence
+// applies to caller authentication below: a stream interceptor is a SECOND place to forget it.
+//
+// # Caller authentication — and what it deliberately does not buy
+//
+// Every RPC arriving here must carry MetadataCallerKey holding the one value every service on
+// the deployment shares (UnaryServerCallerAuth, caller_auth.go). THE DEFENCE IS TWO LAYERS,
+// and a reader who sees only the first badly overestimates it:
+//
+//  1. this shared key, on EVERY call — including the RPCs exempt from carrying a commune
+//  2. the gRPC port confined to the cluster's internal network, never published
+//
+// Layer 2 is not a footnote. The key is what stops a process that has reached the port; the
+// network confinement is what stops a process reaching it at all. Whoever removes either one
+// is not removing "one of several" measures — they are removing half of the whole protection.
+//
+// THREE THINGS THIS DOES NOT BUY. Written down because the next reader will otherwise assume
+// them, and each is expensive to assume wrongly:
+//
+//	IT DOES NOT SAY WHICH SERVICE CALLED. One shared key proves the caller is inside the
+//	deployment and nothing more. So an audit entry cannot attribute an inter-service call to a
+//	caller — rule 6, invariant 2 wants a "who", and this boundary cannot supply one. And
+//	MetadataTenantKey remains a CLAIM MADE BY THE CALLER rather than evidence: it is worth
+//	exactly as much as the trust placed in every holder of the key.
+//
+//	IT DOES NOT BOUND THE BLAST RADIUS INSIDE THE CLUSTER. Anything holding the key may call
+//	anything — every RPC of every service, not only the ones it has business with. What bounds
+//	the damage is layer 2, and nothing else. This is a trade accepted knowingly (ADR 0025), for
+//	a stated reason: maintenance. One key that nobody has to keep working beats per-service
+//	identities that rot unnoticed. It is NOT an oversight for the next person to improvise away.
+//
+//	IT DOES NOT ROTATE GRACEFULLY. There is exactly ONE key, so changing it means changing it
+//	everywhere AT ONCE. Every service is a holder, and a rolling restart with half the fleet on
+//	the new value is a fleet answering Unauthenticated to half its own calls. Rotation is a
+//	coordinated deployment, not a per-service action (rule 8, invariant 6) — whoever schedules
+//	one needs to know that BEFORE scheduling it, not halfway through.
+//
+// Per-service identity (mTLS or a service mesh) is what removes all three, and it remains the
+// answer ADR 0012, decision 3 names for a real deployment. ADR 0025 records what was built
+// here and what it leaves open; the first item still open is attribution.
 package grpcx
 
 import (
@@ -37,8 +76,8 @@ import (
 // actually lives. Both interceptors below read it from here, so the string is never typed
 // twice and the two ends cannot drift apart.
 //
-// WHY THE "x-tenant" PREFIX IS LOAD-BEARING, NOT COSMETIC: pkg/httpx.StripTenantHeaders
-// (pkg/httpx/edge.go:39) deletes every inbound header whose name begins with "x-tenant",
+// WHY THE "x-tenant" PREFIX IS LOAD-BEARING, NOT COSMETIC: core/httpx.StripTenantHeaders
+// (core/httpx/edge.go:56) deletes every inbound header whose name begins with "x-tenant",
 // because a client naming its own commune is a client granting itself access. gRPC carries
 // metadata as HTTP/2 headers, so a key inside that prefix is already inside the sweep that
 // exists to stop exactly this. Renaming it to something "tidier" moves the key OUT of that
@@ -47,6 +86,28 @@ import (
 // Lower-case because gRPC lower-cases every metadata key. A constant in any other case
 // compares unequal and silently never matches.
 const MetadataTenantKey = "x-tenant-id"
+
+// MetadataCallerKey is the ONE name the inter-service caller key travels under.
+//
+// It sits beside MetadataTenantKey because the two are the complete set of things this
+// boundary carries out of band, and they answer DIFFERENT questions — "which commune is this
+// request for" and "is the caller inside the deployment at all". Neither implies the other,
+// and the interceptors that read them are deliberately separate (caller_auth.go).
+//
+// ONE NAME, ONE VALUE, FOR THE WHOLE SYSTEM — not one key per service, and no key id for
+// rotation. That is a choice of maintenance over precision: these are local calls between
+// services inside one cluster, and a scheme with more moving parts is a scheme nobody keeps
+// working. What the choice costs is written out in the package doc; read it before reasoning
+// about this key as if it were the only thing standing between this port and the internet.
+//
+// Lower-case for the same protocol reason as MetadataTenantKey: gRPC lower-cases every
+// metadata key, so a constant in any other case never matches and every call is refused.
+//
+// DELIBERATELY OUTSIDE THE "x-tenant" PREFIX. That prefix is swept by
+// httpx.StripTenantHeaders, and the sweep exists to answer a different question — a client
+// naming its own commune. Sharing the prefix would invite a future edit aimed at one key to
+// land on the other, and these two must be able to change independently.
+const MetadataCallerKey = "x-vigov-caller-key"
 
 // MethodResolveHost is the one RPC that answers "which commune", and therefore the one that
 // cannot itself carry a commune. Declared as a constant so the exemption list below is a list
@@ -72,17 +133,23 @@ const MethodResolveHost = "/vigov.platform.v1.PlatformService/ResolveHost"
 // destination:
 //
 //	ResolveHost answers about ONE commune the caller already names. ListTenants answers about
-//	ALL of them, in a few calls, and the gRPC port has no caller authentication at all today —
-//	service-platform/cmd/server/main.go says so in its own words. Adding these two names now
-//	would turn "any process that can open a TCP connection" into "any process can read the
-//	whole registry", and the ULIDs it returns are the prefix of every cache key, queue, realtime
-//	room and file path in the system (rule 1, invariant 7). service-identity deliberately does
-//	not return that ULID on its public route for the same reason.
+//	ALL of them, in a few calls, and the ULIDs it returns are the prefix of every cache key,
+//	queue, realtime room and file path in the system (rule 1, invariant 7). service-identity
+//	deliberately does not return that ULID on its public route for the same reason.
 //
-// So: caller authentication on the gRPC port FIRST, these two names SECOND. Until then the
-// interceptor refuses them with InvalidArgument, which is the correct answer to an RPC whose
-// safety precondition has not been built. grpcx_test.go pins their absence so that removing
-// this comment is not enough to undo the decision.
+// THE PRECONDITION NAMED HERE HAS NOW BEEN BUILT — caller authentication exists on this
+// boundary (caller_auth.go, ADR 0025), so the clause this paragraph used to carry, "the gRPC
+// port has no caller authentication at all today", is no longer true. THE CONCLUSION IS
+// UNCHANGED, and the distinction matters: one condition being met does not lift a stop
+// condition that was never conditional on it. Adding a name to this list is a STOP CONDITION
+// in its own right (ADR 0012, decision 1) — ask the user, do not decide it while writing code.
+//
+// What did change is the size of the exposure, from "any process that can open a TCP
+// connection" to "any holder of the one shared key", which is every service in the cluster.
+// That is smaller, not small: the package doc says exactly why one shared key is a weaker
+// statement than it looks. Until the question is asked and answered, the interceptor refuses
+// these two with InvalidArgument. grpcx_test.go pins their absence so that editing this
+// comment is not enough to undo the decision.
 var methodsWithoutTenant = map[string]struct{}{
 	MethodResolveHost: {},
 }

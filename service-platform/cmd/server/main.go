@@ -26,6 +26,7 @@ import (
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/migrate"
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
 	svcgrpc "github.com/vihat/vigov/service-platform/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-platform/internal/http"
@@ -160,49 +161,45 @@ func run(log *slog.Logger) error {
 	//    demultiplexing by protocol, and every proxy and health check in front of the process
 	//    then has to understand both.
 	//
-	// TODO(security): CALLER AUTHENTICATION ON THE gRPC PORT IS NOT IMPLEMENTED.
+	// CALLER AUTHENTICATION ON THE gRPC PORT — what is now in place, and what is still not.
 	//
-	//	What is in place today: network isolation only. This port is internal to the cluster
-	//	and must not be published. There is no mTLS, no service token, no caller identity —
-	//	any process that can open a TCP connection here can call both RPCs.
+	//	IN PLACE (ADR 0025), two layers, and neither is sufficient alone:
+	//	  1. a shared caller key on EVERY RPC, checked by grpcx.UnaryServerCallerAuth below.
+	//	     One key for the whole deployment, from GRPC_CALLER_KEY, sourced from a k8s secret
+	//	  2. this port confined to the cluster's internal network — never published, never
+	//	     bound to 0.0.0.0 on a public host. Layer 1 stops a process that reached the port;
+	//	     layer 2 is what stops it reaching the port. Removing either removes half.
 	//
-	//	Why that is tolerable for THIS service and no other: ADR 0003 means no business data
-	//	crosses this boundary at all. ResolveHost returns a ULID that is already public — it
-	//	travels in the QR deep link every citizen scans (ADR 0005) — and GetTenant returns
-	//	registry metadata: name, host, active. Both answer about ONE commune the caller already
-	//	names, so an unauthenticated caller here learns about a commune it could already name,
-	//	and nothing about any other.
+	//	STILL NOT IN PLACE, and the shared key does NOT deliver it: THE CALLER'S IDENTITY
+	//	RECORDED ON THE CALL, so a cross-service read is attributable. One key authenticates
+	//	that the caller holds the key — never WHICH service it is. So an audit entry cannot
+	//	name a caller on this boundary (rule 6, invariant 2 wants a "who"), and x-tenant-id in
+	//	metadata remains a claim by the caller rather than evidence. Per-service identity —
+	//	mTLS or a mesh — is what closes this, and it is still required before a real
+	//	deployment. The full list of what the current shape does not buy is in core/grpcx's
+	//	package doc; the decision and its cost are in ADR 0025.
 	//
-	//	THAT SENTENCE STOPS BEING TRUE THE DAY ListTenants IS IMPLEMENTED. It answers about
-	//	every commune at once, so one call is the whole registry rather than one row of it —
-	//	and the ULIDs in it are the prefix of every cache key, queue, realtime room and file
-	//	path in the system (rule 1, invariant 7). That is why the RPC is declared in the
-	//	contract but NOT on core/grpcx.methodsWithoutTenant: step 1 below is its precondition,
-	//	not a task that runs alongside it. Implementing ListTenants before step 1 turns "any
-	//	process that can open a TCP connection" into "any process can enumerate every commune".
+	//	Why the exposure was tolerable even BEFORE layer 1, and why that argument does not
+	//	transfer: ADR 0003 means no business data crosses this boundary at all. ResolveHost
+	//	returns a ULID that is already public — it travels in the QR deep link every citizen
+	//	scans (ADR 0005) — and GetTenant returns registry metadata: name, host, active. Both
+	//	answer about ONE commune the caller already names.
 	//
-	//	REQUIRED BEFORE A REAL DEPLOYMENT, required BEFORE ListTenants is implemented, and
-	//	required BEFORE any other service exposes gRPC:
-	//	  1. mTLS between services, or a signed service token verified by a server interceptor
-	//	  2. the caller's identity recorded on the call, so a cross-service read is attributable
-	//	  3. this port bound to the internal interface only, never 0.0.0.0 on a public host
+	//	THAT STOPS BEING TRUE THE DAY ListTenants IS IMPLEMENTED. It answers about every
+	//	commune at once, so one call is the whole registry rather than one row of it — and the
+	//	ULIDs in it are the prefix of every cache key, queue, realtime room and file path in
+	//	the system (rule 1, invariant 7). That is why the RPC is declared in the contract but
+	//	NOT on core/grpcx.methodsWithoutTenant, and layer 1 arriving does not by itself add it:
+	//	the exposure moves from "any process that can open a TCP connection" to "any holder of
+	//	the one shared key", which is every service in the cluster. Adding that name is a stop
+	//	condition of its own (ADR 0012, decision 1) — ask, do not infer.
 	//
-	//	No stop-gap scheme is invented here on purpose. A hand-rolled shared secret would be
-	//	replaced by whatever is chosen in step 1 anyway, and in the meantime it would read
-	//	like authentication to anyone reviewing this file. A NAMED gap can be audited; a
-	//	silent one cannot.
-	grpcSrv := grpc.NewServer(
-		// The commune is lifted out of metadata into context here, once, before any handler.
-		// A call to a non-exempt RPC with no commune is refused with InvalidArgument — never
-		// defaulted (rule 1, forbidden #1).
-		grpc.UnaryInterceptor(grpcx.UnaryServerInterceptor()),
-	)
 	// The UNCACHED directory on purpose: the gRPC paths use ByHostErr / ByID, which keep
 	// "no such commune" and "the database is down" apart, and CachedDirectory implements only
 	// tenant.Directory, whose bool answer collapses the two. Caching this path needs a cache
 	// that preserves the distinction — TODO(next), it matters once every service edge resolves
 	// its Host through here (ADR 0004, decision 5).
-	platformv1.RegisterPlatformServiceServer(grpcSrv, svcgrpc.NewServer(danhBa, log))
+	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey, danhBa, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)
 	if err != nil {
@@ -267,6 +264,39 @@ func run(log *slog.Logger) error {
 		}
 		return errHTTP
 	}
+}
+
+// dungGRPCServer builds the inter-service gRPC surface with its COMPLETE interceptor chain.
+//
+// IT IS A NAMED FUNCTION AND NOT AN EXPRESSION INSIDE run() FOR ONE REASON: so a test can start
+// it. core/grpcx proves the interceptors refuse what they should, but nothing in core/grpcx can
+// see whether THIS binary installs them — and an interceptor deleted from a chain leaves a
+// server that starts, serves, and answers every unauthenticated call. main_test.go starts this
+// function over a real connection, so that deletion turns something red.
+//
+// CHAINED, AND THE ORDER IS NOT NEGOTIABLE. Caller authentication runs FIRST: an unauthenticated
+// caller must not reach the commune logic at all, or the errors it gets back begin describing
+// what the server was expecting next.
+//
+// TWO INTERCEPTORS BECAUSE THERE ARE TWO QUESTIONS, and they are orthogonal. "Who is calling"
+// applies to every RPC with no exemption at all; "which commune" is exempt for ResolveHost,
+// because that call is what ESTABLISHES a commune. Folding either into the other is how the
+// tenant exemption list quietly becomes a list of RPCs that skip authentication.
+func dungGRPCServer(khoaGoi secret.Secret, danhBa svcgrpc.Directory, log *slog.Logger) *grpc.Server {
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			// Panics here, at construction, when GRPC_CALLER_KEY is empty. A server that starts
+			// without the key accepts every call it is supposed to refuse, and nothing looks
+			// wrong — no error, no failed request, no metric moving.
+			grpcx.UnaryServerCallerAuth(khoaGoi, log),
+			// The commune is lifted out of metadata into context here, once, before any handler.
+			// A call to a non-exempt RPC with no commune is refused with InvalidArgument — never
+			// defaulted (rule 1, forbidden #1).
+			grpcx.UnaryServerInterceptor(),
+		),
+	)
+	platformv1.RegisterPlatformServiceServer(srv, svcgrpc.NewServer(danhBa, log))
+	return srv
 }
 
 // traceID returns the id a caller can quote when reporting a problem.

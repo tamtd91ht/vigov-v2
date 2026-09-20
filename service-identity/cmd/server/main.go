@@ -112,7 +112,10 @@ func run(log *slog.Logger) error {
 	//
 	// The cache is what makes a network call per request affordable at 200+ communes; it lives
 	// in pkg/tenant because every service edge needs the same one (ADR 0004, decision 5).
-	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr, log)
+	// The caller key goes with the address: the port answers nothing without it (ADR 0025).
+	// An empty key panics inside the client interceptor, at construction — before this service
+	// can start making calls that would all be refused.
+	nenTang, err := platformclient.Dial(cfg.PlatformGRPCAddr, cfg.GRPCCallerKey, log)
 	if err != nil {
 		return err
 	}

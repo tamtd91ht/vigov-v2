@@ -61,15 +61,22 @@ func TestDanhSachMienLaTuongMinh(t *testing.T) {
 	// Anything not named on the list is not exempt. This is the half of the rule that decays
 	// first: an exemption that applies by default applies to every RPC written afterwards.
 	//
-	// ListTenants and ResolveTenantSuccession are on this list ON PURPOSE, and the reason is worth
-	// the two lines. Both answer a question asked BEFORE any commune is known, so both will
-	// eventually need the exemption — and the person who implements them will meet
-	// InvalidArgument and reach for the one-line fix of naming them above. That one line is
-	// not wrong on its own; it is wrong TODAY, because the gRPC port has no caller
-	// authentication (service-platform/cmd/server/main.go, TODO(security)) and ListTenants
-	// hands back the whole registry in a few calls. So the order is fixed here rather than
-	// left to memory: caller authentication first, exemption second. When that lands, this
-	// block moves up four lines and this comment goes with it.
+	// ListTenants and ResolveTenantSuccession are named here ON PURPOSE — in the NOT-exempt
+	// list — and the reason is worth the lines. Both answer a question asked BEFORE any commune
+	// is known, so both will eventually need the exemption, and the person who implements them
+	// will meet InvalidArgument and reach for the one-line fix of naming them above.
+	//
+	// CALLER AUTHENTICATION HAS NOW LANDED, AND IT IS NOT THE PERMISSION SLIP (ADR 0025;
+	// core/grpcx/caller_auth.go). The text here used to read "caller authentication first,
+	// exemption second", which invites exactly one misreading: the first half arriving means
+	// the second half is due. It does not. One shared key says the caller is inside the
+	// cluster and never which service it is, so ListTenants would still hand the whole
+	// registry to any holder of that key — and the ULIDs in it prefix every cache key, queue,
+	// realtime room and file path in the system (rule 1, invariant 7).
+	//
+	// Whether these two names belong on the exemption list is a separate question for the user
+	// (ADR 0012, decision 1). Until it is asked and answered, this loop is what stops the
+	// answer being given by accident.
 	for _, m := range []string{
 		"/vigov.platform.v1.PlatformService/GetTenant",
 		"/vigov.platform.v1.PlatformService/ListTenants",

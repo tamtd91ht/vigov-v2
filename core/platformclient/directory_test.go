@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	platformv1 "github.com/vihat/vigov/core/gen/vigov/platform/v1"
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
 )
 
@@ -189,11 +190,26 @@ func TestXaNgungHoatDongVanTraVeDeEdgeTuQuyetDinh(t *testing.T) {
 func TestDialKhongCoDiaChiThiTuChoi(t *testing.T) {
 	// Fail closed and by name. A client with no address resolves no Host, so every commune gets
 	// a 404 that reads like a misconfigured domain.
-	if _, err := Dial("", slog.Default()); err == nil {
+	if _, err := Dial("", khoaGoiGia, slog.Default()); err == nil {
 		t.Fatal("địa chỉ rỗng phải bị từ chối")
 	} else if !strings.Contains(err.Error(), "PLATFORM_GRPC_ADDR") {
 		t.Errorf("thông báo phải nói rõ thiếu biến nào: %v", err)
 	}
+}
+
+// khoaGoiGia is fake key material — the text says so in full (rule 8, forbidden #1).
+var khoaGoiGia = secret.Secret("khoa-goi-noi-bo-GIA-KHONG-PHAI-KHOA-THAT")
+
+func TestDialKhongCoKhoaGoiThiTuChoiLucDung(t *testing.T) {
+	// A client built without the key would send every call unauthenticated and have every one
+	// refused. Failing at construction names the missing variable; failing at request time
+	// produces "Unauthenticated" on everything, which reads like the far end is broken.
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("dựng được client với khoá gọi rỗng")
+		}
+	}()
+	_, _ = Dial("platform:9090", nil, slog.Default())
 }
 
 func TestCoHanGoiDeMotPhuThuocChamKhongKeoSapMoiThu(t *testing.T) {

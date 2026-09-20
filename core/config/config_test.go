@@ -21,8 +21,28 @@ const redisGia = "redis://vigov:khong-phai-mat-khau-that@localhost:6379/0"
 // must both be able to tell at a glance that this is not a real key (rule 8, forbidden #1).
 const khoaGia = "khoa-ky-gia-KHONG-PHAI-KHOA-THAT-cho-test"
 
+// nenBatBuoc is the set of variables Load requires that most tests here are NOT about.
+//
+// WHY A BASELINE AND NOT A LINE IN EVERY MAP: GRPC_CALLER_KEY became required for every service
+// in every environment (ADR 0025, invariant 3), and twenty tests that are about DSNs, TTLs and
+// signing keys would each have to carry it. The copies drift, and the drift shows up as a test
+// failing for a reason that has nothing to do with what it is testing.
+//
+// IT DOES NOT WEAKEN ANYTHING. A test that needs the variable ABSENT clears it with t.Setenv
+// after this helper runs — the last Setenv wins — and the refusal is asserted by name in
+// TestLoadThieuBienThiHong below. Nothing here is asserted true because the baseline hid it.
+var nenBatBuoc = map[string]string{"GRPC_CALLER_KEY": khoaGoiNoiBoGia}
+
+// khoaGoiNoiBoGia is fake key material for the inter-service caller key (rule 8, forbidden #1).
+const khoaGoiNoiBoGia = "khoa-goi-noi-bo-GIA-KHONG-PHAI-KHOA-THAT"
+
 func datMoiTruong(t *testing.T, cap map[string]string) {
 	t.Helper()
+	for k, v := range nenBatBuoc {
+		if _, co := cap[k]; !co {
+			t.Setenv(k, v)
+		}
+	}
 	for k, v := range cap {
 		t.Setenv(k, v)
 	}
@@ -61,6 +81,11 @@ func TestLoadThieuBienThiHong(t *testing.T) {
 		{"thiếu DSN", map[string]string{"ENV": EnvDev}},
 		{"thiếu ENV", map[string]string{"DATABASE_DSN": dsnGia}},
 		{"thiếu cả hai", map[string]string{}},
+		// Required in EVERY environment, dev included: a missing DSN produces a service that
+		// cannot answer, a missing caller key would produce a gRPC port that answers anything
+		// reaching it (ADR 0025, invariant 3).
+		{"thiếu khoá gọi nội bộ", map[string]string{
+			"DATABASE_DSN": dsnGia, "ENV": EnvDev, "GRPC_CALLER_KEY": ""}},
 	}
 	for _, c := range cases {
 		t.Run(c.ten, func(t *testing.T) {
