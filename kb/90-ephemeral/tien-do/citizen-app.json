@@ -1,0 +1,39 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "citizen-app",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "giai-doan-1-gioi-thieu",
+      "viec": "Mini App giai đoạn 1 — giới thiệu ViHAT Software",
+      "trang_thai": "xong",
+      "bang_chung": "citizen-app/src/features/{company-intro,diagnostics,kham-pha,tinh-nang} + phase1-collects-nothing.test.ts, bundle-for-zalo.test.ts, accessibility.test.ts — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "thứ DUY NHẤT trong kho sẵn sàng giao ra ngoài"
+    },
+    {
+      "id": "nop-zalo-duyet",
+      "viec": "Nộp Mini App cho Zalo duyệt",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "hai thứ còn thiếu đều KHÔNG phải mã: (1) logo/icon, ảnh chụp màn hình, mô tả store — Zalo bắt buộc, kho chưa có tệp ảnh nào; (2) citizen-app/app-config.json phải đối chiếu Developer Console — tên khoá viết từ NGUỒN THỨ CẤP, thư mục build đang là dist/ (mặc định Vite) trong khi zmp-cli thường dùng www/. Sai khoá là hồ sơ bị trả về"
+    },
+    {
+      "id": "ba-cau-hoi-zalo",
+      "viec": "Ba giả định về Zalo chưa ai xác nhận",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "hỏi CÙNG LÚC lúc nộp: ràng buộc 1 Mini App ↔ 1 OA (cả ADR 0018 đứng trên nguồn thứ cấp) · app duyệt dạng hồ sơ doanh nghiệp sau này gắn dịch vụ công có phải xác thực lại không · tham số deep link có tới app khi app đang chạy nền không"
+    },
+    {
+      "id": "giai-doan-2-man-hinh-cong-dan",
+      "viec": "Màn hình kênh công dân giai đoạn 2",
+      "trang_thai": "chua_lam",
+      "bang_chung": "citizen-app/src/features/ chưa có tính năng kênh công dân nào — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "chờ kho đọc + route ở service-identity (xem tien-do/service-identity.json, mục kho-doc-kenh-cong-dan)"
+    }
+  ]
+}

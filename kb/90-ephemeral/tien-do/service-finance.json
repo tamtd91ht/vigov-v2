@@ -1,0 +1,39 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "service-finance",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "hang-muc-ke-hoach-von-tuyen-doc",
+      "viec": "GET /api/v1/capital-plan-categories — tuyến ĐỌC danh mục hạng mục kế hoạch vốn",
+      "trang_thai": "xong",
+      "bang_chung": "service-finance/internal/http/routes.go — tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store service-finance/internal/store/hang_muc_ke_hoach_von.go. `go test -count=1 ./...` xanh, 22 ca chạy thật (13 tuyến + 9 kho trên driver database/sql giả) — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "tên tài nguyên URL đã chốt với người dùng 2026-09-20 nhưng ubiquitous-language.md:157 vẫn ghi (chưa chốt) — knowledge-keeper phải điền ô đó"
+    },
+    {
+      "id": "hang-muc-tuyen-ghi",
+      "viec": "Tuyến GHI danh mục hạng mục kế hoạch vốn",
+      "trang_thai": "chua_lam",
+      "bang_chung": "không có tuyến POST/PUT/PATCH/DELETE nào trong service-finance/internal/http/routes.go — kiểm 2026-09-20",
+      "no_confirm": [21],
+      "tiep_theo": "KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ"
+    },
+    {
+      "id": "xac-thuc-can-bo",
+      "viec": "Dựng authz.Principal cho yêu cầu của cán bộ",
+      "trang_thai": "chua_lam",
+      "bang_chung": "XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71 — luật 2 cấm #1 cấm import. Hệ quả đã kiểm: GET /api/v1/capital-plan-categories trả 401 cho MỌI người gọi — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "QUYẾT ĐỊNH KIẾN TRÚC chung cho cả bốn service khung, chưa ai chốt — xem cùng mục ở service-documents.json. Đọc ADR 0012 quyết định 3 trước"
+    },
+    {
+      "id": "sql-chua-chay",
+      "viec": "Chạy 0003_danh_muc_hang_muc_ke_hoach_von.sql trên PostgreSQL thật",
+      "trang_thai": "chua_lam",
+      "bang_chung": "6 ca service-finance/internal/store/hang_muc_ke_hoach_von_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN, gói vẫn in `ok` — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat (đọc information_schema) nhưng nó CHƯA CHẠY. Một lượt đối chiếu TĨNH với DDL của migration cho kết quả thiếu 0 cột — đó là đọc hai tệp trong kho, KHÔNG phải kiểm lược đồ đã triển khai. Driver giả cũng không kiểm được định tuyến phân mảnh, UNIQUE một mặc định, hay trigger ba tầng"
+    }
+  ]
+}

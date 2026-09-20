@@ -1,0 +1,39 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "service-documents",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "loai-van-ban-tuyen-doc",
+      "viec": "GET /api/v1/document-types — tuyến ĐỌC danh mục loại văn bản",
+      "trang_thai": "xong",
+      "bang_chung": "service-documents/internal/http/routes.go — tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store service-documents/internal/store/loai_van_ban.go. `go test -count=1 ./...` xanh, 21 ca chạy thật (11 tuyến + 10 kho trên driver database/sql giả) — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "tên tài nguyên URL đã chốt với người dùng 2026-09-20 nhưng ubiquitous-language.md:158 vẫn ghi (chưa chốt) — knowledge-keeper phải điền ô đó"
+    },
+    {
+      "id": "loai-van-ban-tuyen-ghi",
+      "viec": "Tuyến GHI danh mục loại văn bản (thêm/sửa/tắt)",
+      "trang_thai": "chua_lam",
+      "bang_chung": "không có tuyến POST/PUT/PATCH/DELETE nào trong service-documents/internal/http/routes.go — kiểm 2026-09-20",
+      "no_confirm": [21],
+      "tiep_theo": "KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ. Một tuyến ghi viết trước là quyết hộ khách"
+    },
+    {
+      "id": "xac-thuc-can-bo",
+      "viec": "Dựng authz.Principal cho yêu cầu của cán bộ",
+      "trang_thai": "chua_lam",
+      "bang_chung": "XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71, nằm trong internal/ của identity nên luật 2 cấm #1 cấm import. Hệ quả đã kiểm: GET /api/v1/document-types trả 401 cho MỌI người gọi — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "QUYẾT ĐỊNH KIẾN TRÚC, chưa ai chốt: hoặc identity mở RPC xác minh phiên (server gRPC của identity CHƯA tồn tại), hoặc token tự kiểm — đường sau vi phạm luật 5 bất biến 4 vì thu hồi phiên mất tác dụng. Đọc ADR 0012 quyết định 3 trước"
+    },
+    {
+      "id": "sql-chua-chay",
+      "viec": "Chạy 0003_danh_muc_loai_van_ban.sql trên PostgreSQL thật",
+      "trang_thai": "chua_lam",
+      "bang_chung": "5 ca service-documents/internal/store/loai_van_ban_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN, gói vẫn in `ok` — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat — đọc information_schema để đối chiếu danh sách cột trong mã với lược đồ thật, gồm cả tenant_id/deleted_at/thu_tu vốn không nằm trong SELECT. Nó TỒN TẠI nhưng CHƯA CHẠY: driver giả không bắt được tên cột sai, và ca này chỉ bắt được từ lần chạy đầu tiên có DSN"
+    }
+  ]
+}

@@ -119,8 +119,12 @@ kb:                             ## Regenerate the GENERATED tiers of kb/ from so
 	@# kb/20-contracts/openapi.json means the web builds a screen against a shape the server
 	@# stopped sending.
 	go run ./tools/apidoc
+	@# Tầng tiến độ: tệp ĐỌC sinh từ các tệp GHI theo module. Nằm cùng mục `kb` vì lý do đã
+	@# viết ngay trên: thứ phải nhớ chạy riêng là thứ sẽ có ngày không ai chạy, và một
+	@# `tien-do.md` cũ hơn các tệp module là tệp nói dối về việc gì đã xong.
+	VIGOV_COMMIT=$$(git rev-parse --short HEAD) python tools/tien_do.py
 
-proto:                          ## Regenerate Go code from .proto (requires buf)
+proto:                        ## Regenerate Go code from .proto (requires buf)
 	buf generate
 
 tidy:

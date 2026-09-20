@@ -1,0 +1,71 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "service-identity",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "store-crosstenant",
+      "viec": "Gói đọc chéo xã — nơi duy nhất được phép đọc qua ranh giới xã",
+      "trang_thai": "dang_lam",
+      "bang_chung": "service-identity/internal/store/crosstenant/{dinh_danh_cong_dan.go,doc.go} + 2 tệp test — kiểm 2026-09-20, CHƯA COMMIT (một phiên song song đang viết vùng này lúc kiểm). ban-giao-phien.md §2.3 ghi \"chưa tồn tại\" là ĐÃ LỖI THỜI",
+      "no_confirm": [4],
+      "tiep_theo": "migration nêu tên ba truy vấn đọc chéo; mới có dinh_danh_cong_dan. Mỗi truy vấn mang `// @cross-tenant: <lý do>` (luật 1 cấm #6) — đó là cách duy nhất khiến đọc chéo thành danh sách ĐẾM ĐƯỢC"
+    },
+    {
+      "id": "kho-doc-kenh-cong-dan",
+      "viec": "Kho đọc cho sáu bảng kênh công dân — giai đoạn 2 mới xong một phần",
+      "trang_thai": "dang_lam",
+      "bang_chung": "hợp đồng + rìa core/httpx/citizen.go + sáu bảng migration đã có; store/crosstenant/dinh_danh_cong_dan.go đã có — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "chưa có route nào. Kho đọc nằm ở service-identity/internal/store/ — vùng khác với vùng đã viết migration, đó là đường nối phải bắc"
+    },
+    {
+      "id": "grpc-server",
+      "viec": "Server gRPC của identity",
+      "trang_thai": "chua_lam",
+      "bang_chung": "không có service-identity/internal/grpc — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "dùng lại interceptor hai đầu ở core/grpcx. ĐỌC ADR 0012 TRƯỚC khi thêm bất kỳ RPC nào"
+    },
+    {
+      "id": "cap-tai-khoan-can-bo",
+      "viec": "Toàn bộ luồng cấp tài khoản cán bộ",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [9, 17, 18],
+      "tiep_theo": "mật khẩu đầu tiên của cán bộ mới · tự đặt lại mật khẩu · Ghi nhớ đăng nhập — cả ba chờ khách"
+    },
+    {
+      "id": "tuyen-ghi-danh-ba-can-bo",
+      "viec": "Toàn bộ tuyến GHI của danh bạ cán bộ",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [10, 13, 14],
+      "tiep_theo": "khoá hay xoá cán bộ · chặn mất quản trị viên cuối cùng · tự thao tác lên chính mình"
+    },
+    {
+      "id": "ma-can-bo-va-dien-thoai",
+      "viec": "Mã cán bộ do ai đặt, và dien_thoai/di_dong là một trường hay hai",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [15, 16],
+      "tiep_theo": "CHẶN SCHEMA nên đắt hơn các câu khác — hỏi trước khi viết migration tiếp"
+    },
+    {
+      "id": "che-so-di-dong-can-bo",
+      "viec": "Che hay không che số di động cán bộ, và ai quyết việc công khai lên Mini App",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [11, 12],
+      "tiep_theo": "chặn cả cột hiển thị lẫn khoá quyền"
+    },
+    {
+      "id": "ban-giao-viec-khi-khoa-tai-khoan",
+      "viec": "Bàn giao việc đang xử lý khi khoá tài khoản",
+      "trang_thai": "treo",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "cố ý CHƯA ghi thành câu hỏi mở: chưa có bảng giao việc nào tồn tại để nói \"việc đang giữ\" nghĩa là gì. Hỏi khi dựng bảng nghiệp vụ đầu tiên có người phụ trách — câu trả lời nhiều khả năng là \"tuỳ xã\""
+    }
+  ]
+}

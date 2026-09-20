@@ -1,0 +1,47 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "web-admin",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "man-xac-thuc-loi-khai-cu-tru",
+      "viec": "Màn hình cán bộ xác thực lời khai cư trú của công dân",
+      "trang_thai": "chua_lam",
+      "bang_chung": "web-admin/src/app/ mới có cau-hinh, dang-nhap, page.tsx, not-found.tsx — kiểm 2026-09-20",
+      "no_confirm": [19, 20],
+      "tiep_theo": "ADR 0023 đã chốt nghiệp vụ. Hai điều phải đúng NGAY BẢN ĐẦU vì sửa sau là sửa chữ trên màn hình một cơ quan nhà nước: (1) nhãn nói \"xác nhận LỜI KHAI\", không phải xác nhận nhân thân — nút \"Xác nhận thường trú\" đứng trơ sẽ được hiểu là đang cấp một xác nhận hành chính; (2) `bị từ chối` là trạng thái riêng, giữ nguyên lời khai và giữ LÝ DO như trường nghiệp vụ BẮT BUỘC — một textarea tuỳ chọn thì thực tế sẽ rỗng, và công dân nhận về một \"bị từ chối\" không lý do, đúng cái im lặng luật 10 cấm"
+    },
+    {
+      "id": "moi-tuyen-ghi-cho-can-bo",
+      "viec": "Mọi tuyến GHI cho cán bộ",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+      "tiep_theo": "cố ý không dựng scaffolding: một tuyến ghi viết dở trông y hệt một quyết định ai đó đã ra"
+    },
+    {
+      "id": "tong-quan-va-so-tay",
+      "viec": "Trang /tong-quan và /nhiem-vu/so-tay",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "cần API thống kê chưa tồn tại. Một bảng điều khiển với số bịa ra là thứ lãnh đạo đọc rồi báo cáo lên trên"
+    },
+    {
+      "id": "can-bo-khong-co-vai-tro",
+      "viec": "Cán bộ không có vai trò nào thì vào `/` thấy gì",
+      "trang_thai": "treo",
+      "bang_chung": "đặc tả docs/ui-ux §1 chỉ chia \"Lãnh đạo\" / \"vai trò khác\"",
+      "no_confirm": [],
+      "tiep_theo": "chưa ghi thành câu hỏi mở vì chưa biết trạng thái ấy có tồn tại thật trên dữ liệu xã hay không"
+    },
+    {
+      "id": "goc-api-noi-bo",
+      "viec": "Biến môi trường gốc API nội bộ cho web-admin",
+      "trang_thai": "chua_lam",
+      "bang_chung": "tiến trình Next.js gọi https://<Host>/api/v1/communes/current bằng TÊN MIỀN CÔNG KHAI — đã chứng minh, không còn là suy đoán",
+      "no_confirm": [],
+      "tiep_theo": "chờ devops xác nhận cụm có split-horizon DNS / chặn egress không; nếu chặn thì MỌI yêu cầu 500. web-admin hiện không có tệp mẫu env nào để thêm vào"
+    }
+  ]
+}

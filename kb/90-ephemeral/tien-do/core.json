@@ -1,0 +1,15 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "core",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "backfill-theo-xa",
+      "viec": "Backfill dữ liệu theo từng xã",
+      "trang_thai": "treo",
+      "bang_chung": "core/migrate chỉ lo DDL — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "luật 7 bất biến 5 (migration chạy per-commune, resumable, ghi tiến độ) mới đạt một nửa. Ngưỡng cần cơ chế thật là khi thời gian giữ khoá thành đáng kể — ADR 0013, mục Giới hạn"
+    }
+  ]
+}

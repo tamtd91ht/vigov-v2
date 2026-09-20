@@ -270,7 +270,11 @@ ALLOWED = (
 )
 stray = []
 for dp, dn, fn in os.walk(ROOT):
-    dn[:] = [d for d in dn if d not in ("node_modules", ".git", "vendor", "dist", "__pycache__")]
+    # `tmp` nằm trong .gitignore, tức kho đã tuyên bố nó không phải một phần của kho. Phép kiểm
+    # này đi bằng hệ tệp chứ không đi bằng git, nên một tệp nháp cục bộ từng làm đỏ cả cổng — và
+    # một cổng đỏ vì lý do không ai sửa được là cổng người ta học cách bỏ qua.
+    dn[:] = [d for d in dn
+             if d not in ("node_modules", ".git", "vendor", "dist", "__pycache__", "tmp")]
     for f in fn:
         if not f.endswith(".md"):
             continue

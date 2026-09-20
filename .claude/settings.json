@@ -7,7 +7,8 @@
         "matcher": "",
         "hooks": [
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session_start.py\"" },
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/drift_guard.py\"" }
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/drift_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/progress_guard.py\"" }
         ]
       }
     ],
@@ -24,7 +25,8 @@
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/citizen_scope_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/citizen_commitment_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/rest_api_guard.py\"" },
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/doc_guard.py\"" }
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/doc_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/progress_guard.py\"" }
         ]
       },
       {
@@ -51,7 +53,8 @@
       {
         "matcher": "",
         "hooks": [
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stop_verify_guard.py\"" }
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stop_verify_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/progress_guard.py\"" }
         ]
       }
     ]

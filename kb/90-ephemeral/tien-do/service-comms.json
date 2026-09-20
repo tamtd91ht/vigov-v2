@@ -1,0 +1,39 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "service-comms",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "loai-tai-nguyen-ban-do-tuyen-doc",
+      "viec": "GET /api/v1/map-asset-types — tuyến ĐỌC danh mục loại tài nguyên bản đồ",
+      "trang_thai": "xong",
+      "bang_chung": "service-comms/internal/http/routes.go — tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store service-comms/internal/store/loai_tai_nguyen_ban_do.go. `go test -count=1 ./...` xanh, 21 ca chạy thật (12 tuyến + 9 kho trên driver database/sql giả), 0 skip ngoài bộ pg — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "tên tài nguyên URL đã chốt với người dùng 2026-09-20 nhưng ubiquitous-language.md:156 vẫn ghi (chưa chốt) — knowledge-keeper phải điền ô đó"
+    },
+    {
+      "id": "dac-ta-ban-do-tu-mau-thuan",
+      "viec": "Đặc tả bản đồ lệch với chính nó — số nhóm và bộ mã",
+      "trang_thai": "treo",
+      "bang_chung": "docs/ui-ux/10-ban-do-kinh-te-so.md:37 nói 11 nhóm, :53 nói 8 nhóm; một chỗ dùng mã `enterprise`, chỗ kia `doanh-nghiep`. Ghi sẵn trong service-comms/migrations/0003_danh_muc_loai_tai_nguyen_ban_do.sql — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Bảng ship RỖNG có chủ đích cho tới khi đặc tả tự khớp. KHÔNG chọn hộ một trong hai bản — hỏi người viết đặc tả"
+    },
+    {
+      "id": "xac-thuc-can-bo",
+      "viec": "Dựng authz.Principal cho yêu cầu của cán bộ",
+      "trang_thai": "chua_lam",
+      "bang_chung": "XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71 — luật 2 cấm #1 cấm import. Hệ quả đã kiểm: GET /api/v1/map-asset-types trả 401 cho MỌI người gọi — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "QUYẾT ĐỊNH KIẾN TRÚC chung cho cả bốn service khung, chưa ai chốt — xem cùng mục ở service-documents.json. Đọc ADR 0012 quyết định 3 trước"
+    },
+    {
+      "id": "sql-chua-chay",
+      "viec": "Chạy 0003_danh_muc_loai_tai_nguyen_ban_do.sql trên PostgreSQL thật",
+      "trang_thai": "chua_lam",
+      "bang_chung": "7 ca service-comms/internal/store/loai_tai_nguyen_ban_do_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat — đọc information_schema để đối chiếu danh sách cột trong mã với lược đồ thật. Đó là phép kiểm duy nhất bắt được một migration đổi tên cột dưới chân store; ba service kia đang thêm bản tương ứng"
+    }
+  ]
+}

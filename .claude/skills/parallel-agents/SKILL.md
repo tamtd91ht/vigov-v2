@@ -32,9 +32,14 @@ All four clear → dispatch together, in one message. Any one unclear → sequen
 
 ## ALWAYS SAFE
 
-**Read-only agents.** `isolation-reviewer` and `domain-expert` hold no `Write` or `Edit`
-tool, so they can run alongside anything, including each other and a builder. This is the
-cheapest parallelism available and it is usually the one worth taking.
+**Read-only agents.** `isolation-reviewer`, `domain-expert` and `progress-reviewer` hold no
+`Write` or `Edit` tool, so they can run alongside anything, including each other and a builder.
+This is the cheapest parallelism available and it is usually the one worth taking.
+
+**Several builders writing progress at once.** Each writes only
+`kb/90-ephemeral/tien-do/<its own module>.json`, so the ledger adds no shared state — the
+partition is in the path. The one thing that stays serial is `make kb`, which renders the read
+surface: it belongs to the main session, like every other repo-global command below.
 
 **A read-only agent alongside asking the user.** Dispatch, then ask your question in the same
 turn; the answer and the report arrive independently.

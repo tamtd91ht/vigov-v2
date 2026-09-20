@@ -68,8 +68,20 @@ load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾ
     tier: T5
     source: CURATED
     expires: 2026-12-16
-    load_when: "mở phiên mới hoặc sang máy khác — đã làm tới đâu, việc kế tiếp, cạm bẫy đã gặp"
+    load_when: "mở phiên mới hoặc sang máy khác — quyết định đã chốt, ai đang chặn, cạm bẫy đã gặp"
     warning: "hết hạn 16/12/2026. Sau đó tin `git log`, không tin tệp này"
+
+  # MỘT tệp để ĐỌC, NHIỀU tệp để GHI — và đó không phải mâu thuẫn, đó là chỗ duy nhất giải được
+  # cả hai đòi hỏi. Mỗi agent ghi đúng `tien-do/<module>.json` của mình nên không ai chạm tệp
+  # ai, không cần khoá, không có khoá kẹt lại khi một agent chết giữa chừng. Một tệp GHI chung
+  # cho nhiều agent là hình dạng `ROUTING.md` §3 cấm: lần ghi sau âm thầm xoá lần ghi trước.
+  - id: tien-do
+    file: kb/90-ephemeral/tien-do.md
+    tier: T5
+    source: GENERATED
+    expires: 2026-12-19    # tính từ lần cập nhật module MỚI NHẤT, không phải lần sinh tệp
+    load_when: "trước khi động vào một module — module ấy đã làm gì, chưa làm gì, nợ khách câu nào"
+    warning: "không sửa tay — sửa `kb/90-ephemeral/tien-do/<module>.json` rồi `make kb`. Thủ tục: `/progress`"
 
 faq_routes:       # định tuyến thẳng — tiết kiệm nhiều token nhất
   "X nằm ở đâu":              kb/30-indexes/code-map.json
@@ -88,7 +100,13 @@ not_here:           # nói rõ điều KHÔNG biết — chặn agent đi tìm v
   # và chặn agent 'bổ sung cho đủ' bằng cách viết thêm tài liệu (đó là cách lạm phát bắt đầu)
   - "Chi tiết cài đặt bên trong service → ĐỌC MÃ. kb/ không mô tả lại mã."
   - "Lịch sử đã làm gì → `git log`. kb/ không kể lại quá trình."
-  - "Trạng thái công việc → công cụ quản lý việc, không phải kb/. Hàng đợi việc cho web nằm ở
+  # DÒNG NÀY TỪNG ĐỌC LÀ 'mọi trạng thái công việc đều KHÔNG thuộc kb/', và như thế thì sai một
+  # chiều: nó đẩy thứ duy nhất phiên sau cần — đã làm tới đâu — ra khỏi nơi phiên sau được dạy
+  # là phải mở. Phân biệt hai thứ khác nhau: TIẾN ĐỘ theo module là tri thức có hạn (T5, ở
+  # `kb/90-ephemeral/tien-do.md`); HÀNG ĐỢI từng việc là trạng thái vận hành, và nó không vào kb/.
+  - "Tiến độ theo module → `kb/90-ephemeral/tien-do.md` (SINH RA; ghi ở `tien-do/<module>.json`,
+    thủ tục `/progress`). Nó trả lời 'module này còn nợ gì', KHÔNG kể lại quá trình."
+  - "Hàng đợi từng việc → công cụ quản lý việc, không phải kb/. Hàng đợi việc cho web nằm ở
     `tasks/web/{open,claimed,done,stale}/` — thư mục LÀ trạng thái, nhận việc là đổi tên.
     BỐN thư mục, không phải ba: `stale/` giữ việc có route đã biến mất khỏi mã nguồn — chuyển
     chứ không xoá, vì 'vì sao nó biến mất' là câu sẽ có người hỏi (ADR 0014)."

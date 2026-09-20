@@ -1,0 +1,31 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "service-platform",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "danh-muc-tham-chieu",
+      "viec": "Tám bảng danh mục tham chiếu",
+      "trang_thai": "xong",
+      "bang_chung": "ADR 0024 chuyển quyền sở hữu danh mục SANG DỊCH VỤ SỞ HỮU, không nằm ở platform: service-{comms,documents,finance,petitions}/migrations/0003_danh_muc_*.sql + service-identity/migrations/0005 — kiểm 2026-09-20. ban-giao-phien.md §2.5 ghi \"platform: danh_muc chưa có\" là ĐÃ LỖI THỜI",
+      "no_confirm": [],
+      "tiep_theo": "KHÔNG seed dòng nào, có chủ ý (commit fa10cf1)"
+    },
+    {
+      "id": "loi-he-thong",
+      "viec": "Bảng loi_he_thong",
+      "trang_thai": "chua_lam",
+      "bang_chung": "`grep -rl loi_he_thong --include=*.sql --include=*.go .` không có kết quả — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "không bị chặn bởi câu hỏi nào"
+    },
+    {
+      "id": "dang-viet-ten-tinh-thanh",
+      "viec": "34 tên tỉnh/thành ở dạng viết chính thức",
+      "trang_thai": "dang_lam",
+      "bang_chung": "service-platform/migrations/0005_seed_tinh_thanh.sql đã seed, và tự khai ngay đầu tệp: DỮ LIỆU CHƯA ĐƯỢC ĐỐI CHIẾU VỚI VĂN BẢN GỐC — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "đối chiếu với Nghị quyết 202/2025/QH15. Cột này in thẳng ra màn hình công dân nên DẠNG VIẾT là nội dung (`Đà Nẵng` hay `Thành phố Đà Nẵng`). Đã thử ba nguồn chính phủ, cả ba render phía client. Sửa một tên là THÊM một migration, không đụng tệp đã chạy"
+    }
+  ]
+}

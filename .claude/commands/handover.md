@@ -47,7 +47,11 @@ their output:
 git log --oneline <base>..HEAD        # <base> = last commit named in the current handover
 git status --short                    # uncommitted work is the most dangerous thing to lose
 ls tasks/web/open tasks/web/claimed tasks/web/stale
+git log --since="14 days" --name-only -- kb/90-ephemeral/tien-do/   # ledgers that moved
 ```
+
+Then read `kb/90-ephemeral/tien-do.md`. A module whose code moved while its ledger stood still
+is the first thing to chase — dispatch `progress-reviewer` before writing, not after.
 
 Then read `kb/00-foundation/open-questions.json` — a question still open there is a **blocker
 with a name**, and the single most valuable thing this file carries.
@@ -92,13 +96,27 @@ Body, in **Vietnamese** (it is `kb/` prose — CLAUDE.md), in this order:
 
 | § | Section | What belongs in it |
 |---|---|---|
-| 1 | **Đã làm** | Only what `git log` cannot say: decisions settled with the customer and where they are recorded; what a change was FOR; what was deliberately NOT built and why |
-| 2 | **Việc kế tiếp** | Ordered, each item naming the file to open and the gate that proves it done. The first item is marked **BẮT ĐẦU TỪ ĐÂY** |
-| 3 | **Đang bị chặn** | One row per blocker: on whom (customer / user / infrastructure), which question in `open-questions.json`, and what cannot proceed until it clears |
+| 1 | **Đã làm** | Only what `git log` cannot say: decisions settled with the customer and where they are recorded; what a change was FOR |
+| 2 | **Việc kế tiếp** | **A pointer only.** The work itself lives in `kb/90-ephemeral/tien-do.md`, one section per module — see below |
+| 3 | **Đang bị chặn** | **A pointer only** to the generated *"Nợ khách chốt"* table, which derives from each item's `no_confirm` |
 | 4 | **Phiên song song** | Which other sessions are live and which paths each holds. Omit the section entirely when there are none — never leave a stale one |
 | 5 | **Cạm bẫy đã gặp** | Traps that cost real time, each with the symptom as it appeared and why the obvious reading was wrong. This is the section that saves the most hours |
 | 6 | **Cổng kiểm** | How to verify, and **what the gate does not cover on this machine**. No numbers — they are wrong within days |
-| 7 | **Việc treo** | Work consciously deferred, with the reason. Distinct from §3: nobody is blocking these; we chose not to do them |
+| 7 | **Việc treo** | **A pointer only.** A deferred item lives in its module's ledger with `trang_thai: "treo"` |
+
+### §2, §3 and §7 are pointers — this is the whole division of labour
+
+This file and `kb/90-ephemeral/tien-do.md` answer **different questions**, and the moment both
+answer the same one, they start to disagree and the reader cannot tell which is current
+(rule 9, invariant 2):
+
+| Question | File |
+|---|---|
+| What is done, what is not, what does this module still owe | `kb/90-ephemeral/tien-do.md` — generated, per module, written by `/progress` |
+| What was decided with the customer · which traps have already cost an hour · which sessions are live | **this file** |
+
+So `/handover` **never writes a task list**. If, while writing, you find work that belongs in a
+ledger, put it there with `/progress` — do not copy it here.
 
 ### 4. Keep `kb/INDEX.yaml` in step
 

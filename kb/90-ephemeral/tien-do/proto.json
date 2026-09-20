@@ -1,0 +1,15 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "proto",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "staff-thieu-ho-ten",
+      "viec": "Message Staff không có trường họ tên nên BatchGetStaff chưa phục vụ được mục đích nó tự khai",
+      "trang_thai": "treo",
+      "bang_chung": "",
+      "no_confirm": [11],
+      "tiep_theo": "thêm trường là SỬA HỢP ĐỒNG — cùng lúc phải trả lời câu che/không che số di động cán bộ"
+    }
+  ]
+}

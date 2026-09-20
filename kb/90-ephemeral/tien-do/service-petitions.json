@@ -1,0 +1,55 @@
+{
+  "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
+  "module": "service-petitions",
+  "cap_nhat": "2026-09-20",
+  "muc": [
+    {
+      "id": "vong-doi-phieu-phan-anh",
+      "viec": "Nghiệp vụ phản ánh — tiếp nhận, phân loại, phân công, nghiệm thu, đóng phiếu",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "CHỈ bắt đầu sau khi có lich_lam_viec + ngay_nghi_le theo xã (ADR 0007). Đếm hạn bằng giờ hành chính mà thiếu lịch của xã thì mọi con số hạn đều sai, và sai theo hướng không ai thấy cho tới lúc báo cáo lên trên"
+    },
+    {
+      "id": "lich-lam-viec-theo-xa",
+      "viec": "Cấu hình lich_lam_viec + ngay_nghi_le theo từng xã",
+      "trang_thai": "chua_lam",
+      "bang_chung": "",
+      "no_confirm": [],
+      "tiep_theo": "tiền đề của mọi phép đếm hạn — ADR 0007, luật 10 bất biến 4"
+    },
+    {
+      "id": "danh-muc-nhiem-vu-tuyen-doc",
+      "viec": "GET /api/v1/task-types + /api/v1/task-priorities — hai tuyến ĐỌC danh mục nhiệm vụ",
+      "trang_thai": "xong",
+      "bang_chung": "service-petitions/internal/http/routes.go — hai tuyến, mỗi tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store internal/store/{loai_nhiem_vu,muc_uu_tien_nhiem_vu}.go. `go test -count=1 ./...` xanh, 36 ca chạy thật (20 tuyến + 16 kho trên driver database/sql giả) — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "0003_danh_muc_nhiem_vu.sql KHÔNG tạo bảng trạng thái nhiệm vụ nào — đã kiểm. Tên tài nguyên URL chốt với người dùng 2026-09-20 nhưng ubiquitous-language.md:162-163 vẫn ghi (chưa chốt)"
+    },
+    {
+      "id": "danh-muc-nhiem-vu-tuyen-ghi",
+      "viec": "Tuyến GHI hai danh mục nhiệm vụ",
+      "trang_thai": "chua_lam",
+      "bang_chung": "không có tuyến POST/PUT/PATCH/DELETE nào trong service-petitions/internal/http/routes.go — kiểm 2026-09-20",
+      "no_confirm": [21],
+      "tiep_theo": "KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ"
+    },
+    {
+      "id": "xac-thuc-can-bo",
+      "viec": "Dựng authz.Principal cho yêu cầu của cán bộ",
+      "trang_thai": "chua_lam",
+      "bang_chung": "XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71 — luật 2 cấm #1 cấm import. Hệ quả đã kiểm: hai tuyến trên trả 401 cho MỌI người gọi — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "QUYẾT ĐỊNH KIẾN TRÚC chung cho cả bốn service khung, chưa ai chốt — xem cùng mục ở service-documents.json. Đọc ADR 0012 quyết định 3 trước"
+    },
+    {
+      "id": "sql-danh-muc-chua-chay",
+      "viec": "Chạy 0003_danh_muc_nhiem_vu.sql trên PostgreSQL thật",
+      "trang_thai": "chua_lam",
+      "bang_chung": "5 ca service-petitions/internal/store/danh_muc_nhiem_vu_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN, gói vẫn in `ok` — kiểm 2026-09-20",
+      "no_confirm": [],
+      "tiep_theo": "Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat (đọc information_schema, kiểm cả thu_tu — với muc_uu_tien_nhiem_vu thì thu_tu CHÍNH LÀ thang, đổi tên nó là phá thang trong im lặng). Nó TỒN TẠI nhưng CHƯA CHẠY. Vẫn chưa gì kiểm được định tuyến phân mảnh, partial index, và sáu phép từ chối của trigger danh_muc_ba_tang"
+    }
+  ]
+}

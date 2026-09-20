@@ -79,9 +79,17 @@ agent: it catches the event, names the entry agent, and lists the mandatory foll
 keep the thread: dispatch, take the result, dispatch the next. Never ask an agent to
 coordinate other agents.
 
+### Before touching a module — read where it stands
+
+→ `kb/90-ephemeral/tien-do.md` — one generated file, one section per module: done · not done ·
+still owed to the customer. Read it instead of rediscovering the state from the source.
+
 ### Before saying it is done
 
 → run real verification (`make check`). `stop_verify_guard` blocks if it has not run.
+→ record what moved in `kb/90-ephemeral/tien-do/<module>.json`, then `make kb` (`/progress`).
+`progress_guard` blocks the session from ending if a module's code changed and its ledger
+did not. Nothing worth recording? Say that sentence out loud — never write an empty item.
 
 ---
 
@@ -116,10 +124,10 @@ own: if you see a risk, **state the risk**, then do what was asked.
 | Location | Contents |
 |---|---|
 | `rules/critical/` | **10 rules**, always loaded (below). Each names an enforcing hook |
-| `hooks/` | **15 hooks**: 10 rule hooks + 5 cross-cutting |
+| `hooks/` | **16 hooks**: 10 rule hooks + 6 cross-cutting |
 | `skills/` | Skills, lazily loaded by keyword |
 | `commands/` | Procedures invoked as `/command-name` |
-| `agents/` | **9 agents** — 5 build, 4 review. Entry point: `agents/ROUTING.md` |
+| `agents/` | **10 agents** — 5 build, 5 review. Entry point: `agents/ROUTING.md` |
 | `logs/guard.jsonl` | Guard log — evidence the enforcement layer actually ran |
 
 **Brain invariants.** Every rule names at least one enforcing hook: a rule you cannot write a

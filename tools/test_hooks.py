@@ -60,6 +60,26 @@ def mon(cmd: str) -> dict:
     return {"tool_name": "Monitor", "tool_input": {"command": cmd}}
 
 
+def td(module: str, them: dict) -> dict:
+    """Một lần ghi vào sổ tiến độ, DỰNG TỪ NỘI DUNG THẬT trên đĩa cộng đúng một mục.
+
+    Bản đầu của mấy ca này viết payload cứng và nhằm vào một module "chắc chưa có sổ". Nửa
+    tiếng sau một phiên song song tạo đúng tệp ấy: ca PASS đỏ, còn ca BLOCK cạnh nó thì vẫn
+    xanh — nhưng xanh vì luật CHỐNG XOÁ bắt, không phải vì luật nó định kiểm. Một ca xanh sai
+    lý do là ca đã chết mà không ai biết.
+
+    Đọc đĩa thì luật chống-xoá luôn được thoả, nên mỗi ca chỉ còn chấm đúng thứ nó nói.
+    """
+    p = os.path.join(ROOT, "kb", "90-ephemeral", "tien-do", f"{module}.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            d = json.load(f)
+    except Exception:
+        d = {"module": module, "cap_nhat": "2026-09-20", "muc": []}
+    d["muc"] = list(d.get("muc", [])) + [them]
+    return w(f"kb/90-ephemeral/tien-do/{module}.json", json.dumps(d, ensure_ascii=False))
+
+
 def wpost(path: str, content: str) -> dict:
     """A Write seen at PostToolUse. rest_api_guard blocks a bad PATH before the write, but
     only advises on a missing declaration after it — a route assembled over several edits
@@ -418,6 +438,36 @@ CASES = [
      w("petitions/internal/app/khieunai.go",
        "// @sla-ok: Law on Complaints art. 28 counts calendar days\n"
        "func due(t time.Time) time.Time { return t.AddDate(0, 0, 30) } // sla")),
+
+    # ---- tầng tiến độ · progress_guard ---------------------------------------
+    #
+    ("progress_guard", "khai xong mà không có bằng chứng", BLOCK,
+     td("core", {"id": "ca-kiem-thu-rao", "viec": "ca thử rào",
+                 "trang_thai": "xong", "bang_chung": ""})),
+    ("progress_guard", "trang_thai ngoài bảng", BLOCK,
+     td("core", {"id": "ca-kiem-thu-rao", "viec": "ca thử rào",
+                 "trang_thai": "gan_xong", "bang_chung": ""})),
+    ("progress_guard", "nợ một câu hỏi đã DECIDED", BLOCK,
+     td("core", {"id": "ca-kiem-thu-rao", "viec": "ca thử rào",
+                 "trang_thai": "chua_lam", "bang_chung": "", "no_confirm": [2]})),
+    ("progress_guard", "module không có trên đĩa", BLOCK,
+     w("kb/90-ephemeral/tien-do/service-khong-ton-tai.json",
+       '{"module": "service-khong-ton-tai", "cap_nhat": "2026-09-20", "muc": []}')),
+    ("progress_guard", "ghi tay vào tệp SINH RA", BLOCK,
+     w("kb/90-ephemeral/tien-do.md", "# Tiến độ\n\nsửa tay một dòng\n")),
+    # Ca nặng nhất: ghi đè trọn tệp từ một bản đọc cũ thì mục của agent trước biến mất, và
+    # không có gì đỏ khi nó xảy ra. Ca này cố ý KHÔNG đi qua `td()` — nó phải đọc tệp thật để
+    # có cái mà làm mất. Nó đỏ nếu `core.json` bị bỏ trống, và đó là ý đồ: một sổ tiến độ rỗng
+    # cũng là dữ liệu đã mất.
+    ("progress_guard", "ghi đè làm biến mất mục đang có", BLOCK,
+     w("kb/90-ephemeral/tien-do/core.json",
+       '{"module": "core", "cap_nhat": "2026-09-20", "muc": []}')),
+    ("progress_guard", "thêm một mục hợp lệ, giữ nguyên mục cũ", PASS,
+     td("core", {"id": "ca-kiem-thu-rao", "viec": "ca thử rào",
+                 "trang_thai": "chua_lam", "bang_chung": "",
+                 "no_confirm": [], "tiep_theo": "—"})),
+    ("progress_guard", "mã thường không liên quan tới tầng tiến độ", PASS,
+     w("service-comms/internal/app/zns.go", "func Send(ctx context.Context) error { return nil }")),
 ]
 
 

@@ -6,7 +6,7 @@ owner: architecture
 derived_from_commit: b22684a
 expires: 2026-12-16
 owns_facts:
-  - "trạng thái thi công tại 2026-09-17 và việc kế tiếp phải làm"
+  - "quyết định đã chốt với khách, cạm bẫy đã gặp, và phạm vi các phiên song song"
 ---
 
 # Bàn giao phiên — cập nhật 2026-09-17
@@ -56,117 +56,40 @@ xác hơn và không bao giờ lệch. Dưới đây chỉ những thứ `git lo
 
 ### Thứ cố ý KHÔNG dựng, và vì sao
 
+Thứ chưa dựng và lý do chưa dựng nay nằm cùng một chỗ với tiến độ:
+`kb/90-ephemeral/tien-do.md`, khoá `tiep_theo` của từng mục. Giữ hai bản là giữ hai bản sẽ lệch.
+
+Riêng một quyết định KHÔNG thuộc module nào, nên nó ở lại đây:
+
 | Không dựng | Vì sao |
 |---|---|
-| `/tong-quan` và `/nhiem-vu/so-tay` | Cần API thống kê chưa tồn tại. Một bảng điều khiển với số bịa ra là thứ lãnh đạo đọc rồi báo cáo lên trên |
-| Mọi tuyến **ghi** cho cán bộ | Cả cụm đang chờ khách chốt — xem §3 |
-| Bất kỳ scaffolding nào cho tuyến ghi ấy | Một tuyến ghi viết dở trông y hệt một quyết định ai đó đã ra |
-| Biến môi trường API nội bộ cho web-admin | Chưa biết cụm k8s có chặn không — xem §3, hàng hạ tầng |
 | **CHECK `co_tai_khoan => mat_khau_hash <> ''`** | Lập luận đầy đủ ở `service-identity/migrations/0003_…sql:189–217`. Viết ràng buộc ấy bây giờ làm **một trong ba phương án của câu mở #9 không cài đặt được nữa** — tức quyết hộ khách. Giá đảo ngược bất đối xứng: thêm sau là một dòng migration, gỡ sau là `ALTER TABLE` trên bảng đang chạy. *Đọc kèm §5: đúng khối chú thích này là thứ `drift_guard` từng buộc tội nhầm.* |
-| **Bảng `tinh_thanh` ship RỖNG** | Cơ cấu 6 thành phố + 28 tỉnh thì chắc; **dạng viết** từng tên thì không. Xem §3 |
 
 ---
 
-## 2. Việc kế tiếp — theo đúng thứ tự
+## 2. Việc kế tiếp
 
-### 2.1 Chạy migration thật ← **BẮT ĐẦU TỪ ĐÂY**
+**Không nằm ở đây nữa.** Việc kế tiếp theo từng module ở `kb/90-ephemeral/tien-do.md` — tệp ấy
+sinh ra từ `kb/90-ephemeral/tien-do/<module>.json`, mỗi agent ghi đúng tệp module của mình.
 
-**Toàn bộ tầng SQL của kho này chưa từng chạy một lần nào.** Đó là khoảng trống lớn nhất, và
-nó không tự lộ ra: các suite tích hợp **tự bỏ qua khi thiếu `VIGOV_TEST_DSN` và cả gói vẫn báo
-`ok`** (§5). Xanh ở cổng kiểm **không** có nghĩa là SQL đã chạy.
+Tách ra vì lý do rất cụ thể: hai tệp cùng liệt kê việc kế tiếp là hai tệp sẽ lệch, và bản lệch
+là bản phiên sau đọc (luật 9, bất biến 2). Tệp bàn giao giữ đúng thứ `tien-do` không giữ —
+**quyết định đã chốt, cạm bẫy đã gặp, phạm vi phiên song song** — thứ không thuộc module nào và
+không suy ra được từ mã.
 
-Máy này nay **có Docker chạy được**, nên không cần chờ máy chủ test của chủ dự án nữa: dựng một
-PostgreSQL cục bộ, đặt `VIGOV_TEST_DSN`, chạy `go test -count=1 ./...` trong từng module.
-
-Phải tự mắt nhìn thấy, không suy ra:
-
-| # | Phải thấy |
-|---|---|
-| 1 | Mọi tệp migration áp được, theo đúng thứ tự, trên một CSDL trống |
-| 2 | Trigger append-only **bắn thật** khi gõ thẳng tên partition, không chỉ khi gõ tên bảng cha |
-| 3 | Mảnh `PARTITION BY HASH` tồn tại đủ — thiếu một mảnh thì INSERT lỗi và **bản ghi nghiệp vụ rollback toàn bộ** |
-| 4 | Bài test canh `co_tai_khoan` chạy thật, chứ không phải skip rồi báo `ok` |
-| 5 | Sáu bảng kênh công dân vừa thêm áp được cùng mười bảy tệp cũ |
-
-### 2.2 Kênh công dân giai đoạn 2 — mới xong một phần ba
-
-Hợp đồng, rìa (`core/httpx/citizen.go`) và sáu bảng đã có. **Chưa có kho đọc, chưa có route,
-chưa có màn hình nào.**
-
-Phần kho đọc nằm ở `service-identity/internal/store/` — tức **vùng khác với vùng đã viết
-migration**. Đó là đường nối phải bắc, không phải một chi tiết bàn giao.
-
-### 2.3 `service-identity/internal/store/crosstenant/` — **chưa tồn tại**
-
-Ba truy vấn đọc chéo xã **đã được nêu tên trong migration** nhưng chưa có chỗ ở. Chúng phải nằm
-gọn trong một gói riêng, vì đó là cách duy nhất khiến "đọc chéo xã" thành một danh sách **đếm
-được** thay vì một thói quen rải khắp kho (luật 1, cấm #6: mỗi truy vấn chéo mang
-`// @cross-tenant: <lý do>`).
-
-Liên quan trực tiếp tới cảnh báo `drift_guard` về câu mở **#4** — xem §5.
-
-### 2.4 Server gRPC của `identity` — **chưa tồn tại**
-
-Chưa có `service-identity/internal/grpc`. Khi dựng thì dùng lại interceptor hai đầu trong
-`core/grpcx`, và **đọc ADR 0012 trước khi thêm bất kỳ RPC nào**.
-
-### 2.5 `platform`: `danh_muc` + `loi_he_thong`
-
-Chưa có. Không bị chặn bởi câu hỏi nào.
-
-### 2.6 Màn hình xác thực lời khai cư trú
-
-ADR 0023 đã chốt nghiệp vụ, nhưng **tuyến chưa viết được** — chờ câu hỏi #20 (§3). Hai điều
-phải đúng ngay từ bản đầu, vì sửa sau là sửa chữ trên màn hình của một cơ quan nhà nước:
-
-1. **Nhãn phải nói "xác nhận LỜI KHAI", không phải xác nhận nhân thân.** Một nút "Xác nhận
-   thường trú" đứng trơ sẽ được cán bộ hiểu là mình đang cấp một xác nhận hành chính.
-2. **`bị từ chối` là trạng thái riêng**, giữ nguyên lời khai và giữ lý do. Lý do là **văn bản
-   cán bộ viết cho công dân đọc**, không phải mã lỗi nội bộ — nên nó là **trường nghiệp vụ bắt
-   buộc**, không phải một textarea tuỳ chọn. Một ô tuỳ chọn thì thực tế sẽ rỗng, và công dân
-   nhận về một "bị từ chối" không lý do, tức đúng cái im lặng luật 10 cấm.
-
-### 2.7 Nộp Mini App cho Zalo duyệt — **chặn bởi thứ không nằm trong kho mã**
-
-`citizen-app/` giai đoạn 1 (giới thiệu ViHAT Software) đã xong và xanh. Nó là thứ duy nhất
-trong kho **sẵn sàng giao ra ngoài**, nhưng chưa nộp được, và hai thứ còn thiếu đều không phải mã:
-
-1. **Logo/icon, ảnh chụp màn hình, mô tả store.** Zalo bắt buộc. Kho chưa có tệp ảnh nào.
-2. **`citizen-app/app-config.json` phải đối chiếu Developer Console.** Tên khoá viết từ **nguồn
-   thứ cấp** — tài liệu Zalo render bằng JS nên không đọc trực tiếp được. Thư mục build đang là
-   `dist/` (mặc định Vite) trong khi `zmp-cli` thường dùng `www/`. Sai khoá là hồ sơ bị trả về.
-
-Ba câu nên hỏi Zalo **cùng lúc lúc nộp**, vì cả ba đang là giả định: ràng buộc **1 Mini App ↔ 1
-OA** (cả ADR 0018 đứng trên nguồn thứ cấp) · app duyệt dạng hồ sơ doanh nghiệp sau này gắn dịch
-vụ công có phải xác thực lại không · tham số deep link có tới app khi app đang chạy nền không.
-
-### 2.8 `petitions`
-
-**Chỉ bắt đầu sau khi có `lich_lam_viec` + `ngay_nghi_le` theo xã** — ADR 0007. Đếm hạn bằng
-giờ hành chính mà thiếu lịch của xã thì mọi con số hạn đều sai, và sai theo hướng không ai
-thấy cho tới lúc báo cáo lên trên.
+Ghi bằng `/progress`. Soát bằng `progress-reviewer`.
 
 ---
 
 ## 3. Đang bị chặn — và chặn bởi ai
 
-`kb/00-foundation/open-questions.json` là nguồn chuẩn. **14 câu đang OPEN.** Dưới đây là cụm
-và thứ chúng chặn — không chép lại nội dung câu hỏi.
+Nguồn chuẩn vẫn là `kb/00-foundation/open-questions.json`. **Câu nào đang chặn việc nào** thì
+đọc bảng *"Nợ khách chốt"* ở đầu `kb/90-ephemeral/tien-do.md`: bảng ấy **sinh ra** từ khoá
+`no_confirm` của từng mục, nên nó không lệch được với tiến độ — khác hẳn một bảng chép tay, thứ
+đúng vào ngày viết rồi im lặng sai dần.
 
-| Chặn bởi | Câu | Không làm được gì cho tới khi chốt |
-|---|---|---|
-| **Khách** | #9 #17 #18 | Mật khẩu đầu tiên của cán bộ mới · tự đặt lại mật khẩu · `Ghi nhớ đăng nhập`. **Toàn bộ luồng cấp tài khoản** |
-| **Khách** | #10 #13 #14 | Khoá hay xoá cán bộ · chặn mất quản trị viên cuối cùng · tự thao tác lên chính mình. **Toàn bộ tuyến ghi của danh bạ cán bộ** |
-| **Khách** | #11 #12 | Che hay không che số di động cán bộ, và ai quyết việc công khai lên Mini App. Chặn cả cột hiển thị lẫn quyền |
-| **Khách** | #15 #16 | Mã cán bộ do ai đặt · `dien_thoai` và `di_dong` là một trường hay hai. **Chặn schema**, nên đắt hơn các câu khác |
-| **Khách** | #19 #20 | Công dân sửa lời khai đã xác thực · tên khoá quyền cho việc xác thực. Chặn §2.6 |
-| **Khách** | #1 #4 | Sáp nhập/chia tách xã · cấp huyện-tỉnh xem tổng hợp tới mức nào. #4 chặn §2.3 |
-| **Khách** | — | **34 tên tỉnh/thành ở dạng viết chính thức.** Người dùng đã chốt nhà cung cấp seed sẵn, xã chỉ được chọn — nhưng bảng `tinh_thanh` ship **RỖNG có chủ đích**: cơ cấu 6 thành phố + 28 tỉnh thì chắc, *dạng viết* từng tên thì không (`Đà Nẵng` hay `Thành phố Đà Nẵng`). Cột này in thẳng ra màn hình công dân nên dạng viết **là** nội dung. Đã thử ba nguồn chính phủ, cả ba render phía client |
-| **Chủ dự án** | — | Mật khẩu máy chủ test, **nếu** muốn chạy trên máy ấy thay vì Postgres cục bộ. Không nằm trong kho mã (luật 8) |
-| **Chủ dự án** | — | Ba câu **mã hoá khi lưu** vẫn chưa có đáp: khoá nằm ở biến môi trường hay nguồn khác · khoá có phải một danh sách xoay vòng được không · có mã hoá `ho_ten` không (mã hoá thì **mất khả năng sắp xếp theo tên ở mọi màn hình**) |
-| **Chủ dự án / kiến trúc** | — | **Chính sách mã hoá cho vùng xuyên xã.** ADR 0009 là envelope encryption **theo xã**; `dinh_danh_cong_dan` không thuộc xã nào nên **không có DEK nào bọc nó**. Đây là chính sách KHÔNG ÁP DỤNG, không phải chưa cài. Người dùng đã chốt: ghi thành khoảng hở có tên, chưa thiết kế gì. Thứ đang bảo vệ nó là luật 3 + phân quyền CSDL |
-| **Hạ tầng** | — | Chạy 10 Jenkinsfile trên Jenkins thật |
-| **Hạ tầng** | — | **Đã chứng minh, không còn là suy đoán:** tiến trình Next.js gọi `https://<Host>/api/v1/communes/current` bằng **tên miền công khai**. Trong cụm có split-horizon DNS hoặc chặn egress thì **mọi yêu cầu 500**. Cần đội devops xác nhận; nếu chặn thì phải có biến môi trường gốc API nội bộ, và `web-admin` hiện **không có tệp mẫu env** nào để thêm vào |
+Một câu còn OPEN là một việc **không ai được tự quyết thay khách** (ROUTING §8). `drift_guard`
+cảnh báo khi mã đang lặng lẽ quyết một câu như thế.
 
 ---
 
@@ -184,7 +107,7 @@ số vùng có chú thích dày hơn hẳn phần còn lại:
 
 **Chỗ hai phạm vi chạm nhau, và là việc kế tiếp thật:** sáu bảng kênh công dân đã xong ở
 `service-identity/migrations/`, nhưng kho đọc cho chúng — và `store/crosstenant/` — nằm ở
-`service-identity/internal/store/`, vùng bên kia. Xem §2.2 và §2.3.
+`service-identity/internal/store/`, vùng bên kia. Xem `tien-do/service-identity.json`, mục `kho-doc-kenh-cong-dan` và `store-crosstenant`.
 
 **Cách hai phiên chia việc, đáng giữ lại vì nó chạy được:** phạm vi tuyên bố bằng đường dẫn và
 nhắc lại mỗi lần đổi · phát hiện trong vùng người khác thì **báo kèm bằng chứng, không tự sửa**
@@ -215,7 +138,7 @@ nó hỏng theo chiều ngược lại, tức quét thừa vài mili giây thay 
 | **`drift_guard` mù hẳn mà cổng kiểm vẫn 7/7** — **ĐÃ VÁ (`bbaad10`, `f9a2f45`)** | Hook DUY NHẤT canh chuyện "mã đang lặng lẽ quyết hộ khách một câu hỏi mở" — đúng lớp lỗi CLAUDE.md nói đã làm dự án trước mất 20–28 ngày. Từ ADR 0015 nó không đọc một dòng service, `core/`, web hay migration nào. **`check_brain` vẫn xanh vì nó kiểm "mỗi luật có NÊU TÊN một hook", không kiểm "hook ấy có NHÌN THẤY gì không"** — xem §6. Nay đổi sang **danh sách loại trừ**, và phần thuần (`duoc_quet`, `nen_canh_bao`) có ca test. **Giá trị còn lại của dòng này không nằm ở bản vá mà ở chỗ: nó câm hàng tháng trời và không ai nghe thấy gì.** |
 | **Guard vừa sống dậy bắn ngay một ÂM TÍNH GIẢ — và trúng tệp lập luận cẩn thận nhất kho** — **ĐÃ VÁ (`9307362`)** | Bản vá đầu đếm cả tín hiệu nằm trong **chú thích**, nên nó khớp dòng `--   CHECK (NOT co_tai_khoan OR ...)` trong `0003_nguoi_dung_co_tai_khoan.sql:215` — một **mẫu đã bị chú thích**, nằm trong khối *"NO CHECK CONSTRAINT. Decided, not overlooked"* mà chính nó giải thích rằng viết ràng buộc ấy bây giờ là quyết hộ khách. Migration làm **đúng** điều luật 9 đòi và bị guard phạt **vì đã giải thích lý do**. Bảng này đã ghi hệ quả ở dòng khác: **hook nhiễu là hook bị tắt** — và không gì làm người ta tắt nhanh bằng một guard câm hàng tháng rồi mở miệng ra là buộc tội nhầm |
 | **Bản vá cho âm tính giả suýt lặp lại đúng lỗi nó đang vá** | Cách hiển nhiên — bỏ sạch chú thích rồi đếm — làm **#9 biến mất và #4 cũng biến mất**, vì mẫu tín hiệu duy nhất của #4 là `@cross-tenant`, mà luật 1 cấm #6 **bắt buộc** dấu ấy nằm trong chú thích: Go và SQL không có chỗ nào khác đặt nó. Hook sẽ vĩnh viễn không báo được #4 trong khi vẫn trông như đang canh. Bản đã đẩy phân biệt hai thứ: **chú thích là văn xuôi, dấu khai báo thì không** — `@cross-tenant`, `@entity`, `@scope` sống sót, văn xuôi và mẫu đã chú thích thì không |
-| **Hai cảnh báo còn lại là việc thật — xử bằng cách trả lời câu hỏi, không phải nới ngưỡng** | Câu mở **#4**: đã có đường đọc chéo xã trong mã trong khi khách chưa chốt cấp tỉnh xem tổng hợp tới mức nào (→ §2.3). Câu mở **#19**: bảng quan hệ công dân↔xã vừa ra đời trong khi câu "công dân sửa lời khai đã xác thực thì sao" còn mở |
+| **Hai cảnh báo còn lại là việc thật — xử bằng cách trả lời câu hỏi, không phải nới ngưỡng** | Câu mở **#4**: đã có đường đọc chéo xã trong mã trong khi khách chưa chốt cấp tỉnh xem tổng hợp tới mức nào (→ `tien-do/service-identity.json`, mục `store-crosstenant`). Câu mở **#19**: bảng quan hệ công dân↔xã vừa ra đời trong khi câu "công dân sửa lời khai đã xác thực thì sao" còn mở |
 | **Test tích hợp SKIP nhưng cả gói vẫn báo `ok`** | Dạng nặng nhất. Đã kiểm chứng: đột biến một dòng vào **mã sản phẩm** (`AND nd.co_tai_khoan`) mà không có gì đỏ. Trước khi tin "có test canh chỗ này", **gỡ thử dòng đó ra và xem có đỏ không** |
 | **Kết quả grep âm tính KHÔNG phải bằng chứng vắng mặt** | Một agent báo "grep không có kết quả nào" ⇒ kết luận web không gọi tuyến ấy ⇒ **bảng thuật ngữ bị sửa yếu đi theo**. Thực tế có gọi: một chỗ là template literal có nội suy, một chỗ gán qua biến có kiểu sinh chứ không nằm trong lời gọi `fetch`. Loại sai này không ai soi ra **vì nó trông như thận trọng** |
 | **`--build-arg` cho một `ARG` không khai bị Docker bỏ qua lặng lẽ** | Một lượt "đột biến" để thử rào chắn sẽ **xanh** và trông như rào đã bắn. Muốn thử thật thì sửa `ENV` trong chính Dockerfile. Áp cho mọi phép thử rào chắn trong ảnh |
@@ -269,7 +192,7 @@ commit, và một con số sai trông y hệt một con số đúng.
 
 | Không phủ | Hệ quả |
 |---|---|
-| **SQL** | Thiếu `VIGOV_TEST_DSN` ⇒ suite tích hợp tự bỏ qua **và vẫn báo `ok`**. Xem §2.1 |
+| **SQL** | Thiếu `VIGOV_TEST_DSN` ⇒ suite tích hợp tự bỏ qua **và vẫn báo `ok`**. Xem `tien-do/_chung.json`, mục `chay-migration-that` |
 | **`golangci-lint`** | Không có trên máy này; mục `lint` bỏ qua nó bằng tiền tố `-`. Chưa từng chạy ở đây |
 | **`platform-admin/`** | In dòng BỎ QUA vì thiếu `node_modules`. Mã TypeScript của nó **không được kiểm** |
 | **10 Jenkinsfile** | Chưa từng chạy trên Jenkins thật |
@@ -287,18 +210,11 @@ hay đường dẫn nội bộ.
 
 ## 7. Việc treo — không ai chặn, ta chọn chưa làm
 
-| # | Việc | Ghi chú |
-|---|---|---|
-| 1 | **Backfill dữ liệu theo từng xã chưa tồn tại** | `core/migrate` chỉ lo DDL ⇒ **luật 7 bất biến 5 mới đạt một nửa**. Ngưỡng cần cơ chế thật là khi thời gian giữ khoá thành đáng kể. → ADR 0013, mục Giới hạn |
-| 2 | **`REVOKE` trên `audit_log` thuộc khâu cấp phát CSDL** | Câu đúng giữ trong comment tệp `0002`. **Không nằm trong tay mã nguồn**: khâu cấp phát không làm thì lớp quyền vẫn hở dù trigger vẫn đúng |
-| 3 | **Một con số trong TIÊU ĐỀ đặc tả không khớp bảng ngay dưới nó** | `docs/ui-ux/14-cau-hinh.md` §4.2 đặt tiêu đề *"Bốn mươi ba quyền, gom theo 11 nhóm"*, nhưng bảng liệt kê ngay bên dưới có **33 khoá duy nhất / 10 nhóm** — đã đếm lại trên chính tệp ấy 18/09. Migration khớp **bảng**, không khớp tiêu đề. Cách diễn đạt cũ ở dòng này — *"mười khoá còn lại là câu hỏi cho khách"* — **nặng hơn sự thật**: nó dựng ra hình ảnh mười khoá đã tồn tại ở đâu đó mà ta chưa nạp, trong khi không có khoá nào bị thiếu; chỉ có một con số viết sai. Hỏi khách để xác nhận tiêu đề là chỗ sai (rất nhiều khả năng), **đừng bịa mười khoá** và cũng đừng đi tìm chúng |
-| 4 | **Dữ liệu cá nhân thật vẫn còn trong LỊCH SỬ GIT** | Cây làm việc đã dọn. Gỡ khỏi lịch sử là **viết lại lịch sử** trên `main` — cần quyết định của chủ dự án, không phải việc agent tự làm |
-| 5 | **Xác thực service↔service chưa có** | Rủi ro đã chấp nhận có chủ ý, kèm điều kiện gỡ: ADR 0012, quyết định 3. **Không** dựng cơ chế bí mật chia sẻ tạm |
-| 6 | **`Staff` không có trường họ tên** | `BatchGetStaff` chưa phục vụ được mục đích nó tự khai. Thêm trường là sửa hợp đồng — cùng lúc phải trả lời câu che/không che (#11) |
-| 7 | **Bàn giao việc đang xử lý khi khoá tài khoản** | Cố ý **chưa** ghi thành câu hỏi mở: chưa có bảng giao việc nào tồn tại để nói "việc đang giữ" nghĩa là gì, nên hỏi bây giờ là hỏi một câu trừu tượng. Hỏi khi dựng bảng nghiệp vụ đầu tiên có người phụ trách — và nhớ câu trả lời nhiều khả năng là "tuỳ xã" |
-| 8 | **Cán bộ không có vai trò nào thì vào `/` thấy gì** | Đặc tả §1 chỉ chia "Lãnh đạo" / "vai trò khác". Chưa ghi thành câu hỏi mở vì chưa biết trạng thái ấy có tồn tại thật trên dữ liệu xã hay không |
-| 9 | **Rà cả lớp "cơ chế nhận diện mã theo tên thư mục"** | Đã soát `.claude/hooks/` và `tools/` và tìm được **ca thứ năm**: `stop_verify_guard.CODE_DIR` thiếu `/tools/`, nên sửa trình sinh hợp đồng rồi nói "xong" thì cổng không thấy gì. Đã vá + thêm ca test + đột biến để chắc nó bắn. **Chưa soát:** không có `.github/` nên chưa có cấu hình CI nào để soát, nhưng ngày dựng CI thì đây là thứ phải soát lại đầu tiên |
-| 10 | **Rà nốt các hook khác xem chúng hỏi ĐÚNG CÂU chưa** | `doc_guard` vừa lộ ra rằng một hook có thể dùng **sai đầu vào** cho câu nó đang hỏi: luật frontmatter là tính chất của **TỆP** nhưng nó lại chấm **lần sửa**. Đó là một trục hỏng khác hẳn trục "quét sót thư mục" ở mục 9, và chưa ai soát 15 hook theo trục này. Câu để soát từng hook: *thứ nó đang đọc có trả lời đúng câu nó đang hỏi không* — và cả hai chiều đều hỏng được, như `secret_scan` mà đi chấm cả tệp thì sẽ tố cáo một lần sửa vô can vì một bí mật có sẵn từ trước |
+**Không nằm ở đây nữa.** Mỗi việc treo nằm ở module của nó với `trang_thai: "treo"`, kèm lý do
+đã chọn chưa làm — `kb/90-ephemeral/tien-do.md`.
+
+Phân biệt hai thứ dễ lẫn: **`treo`** là *không ai chặn, ta chọn chưa làm*; **bị chặn** là
+`no_confirm` đang trỏ một câu còn OPEN. Cái thứ hai không tự gỡ được, cái thứ nhất thì được.
 
 ---
 
