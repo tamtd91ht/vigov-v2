@@ -25,7 +25,7 @@
       "trang_thai": "chua_lam",
       "bang_chung": "XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71, nằm trong internal/ của identity nên luật 2 cấm #1 cấm import. Hệ quả đã kiểm: GET /api/v1/document-types trả 401 cho MỌI người gọi — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "QUYẾT ĐỊNH KIẾN TRÚC, chưa ai chốt: hoặc identity mở RPC xác minh phiên (server gRPC của identity CHƯA tồn tại), hoặc token tự kiểm — đường sau vi phạm luật 5 bất biến 4 vì thu hồi phiên mất tác dụng. Đọc ADR 0012 quyết định 3 trước"
+      "tiep_theo": "TIỀN ĐỀ ĐÃ XONG: người dùng chốt 2026-09-20 xác thực giữa service bằng MỘT cặp header, giá trị đọc env từ secret k8s — ADR 0025, thay thế ADR 0012 quyết định 3. Còn thiếu ba bước, theo thứ tự: (1) server gRPC của identity, CHƯA tồn tại; (2) một RPC xác minh phiên trong identity.proto — sửa hợp đồng, việc của contract-designer; (3) middleware dựng Principal dùng chung trong core, gọi RPC ấy. Đường token tự kiểm KHÔNG dùng: thu hồi phiên mất tác dụng, vỡ luật 5 bất biến 4"
     },
     {
       "id": "sql-chua-chay",

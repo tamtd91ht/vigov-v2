@@ -41,7 +41,7 @@
       "trang_thai": "chua_lam",
       "bang_chung": "XacThuc chỉ tồn tại ở service-identity/internal/http/middleware.go:71 — luật 2 cấm #1 cấm import. Hệ quả đã kiểm: hai tuyến trên trả 401 cho MỌI người gọi — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "QUYẾT ĐỊNH KIẾN TRÚC chung cho cả bốn service khung, chưa ai chốt — xem cùng mục ở service-documents.json. Đọc ADR 0012 quyết định 3 trước"
+      "tiep_theo": "TIỀN ĐỀ ĐÃ XONG (ADR 0025, chốt 2026-09-20, thay thế ADR 0012 quyết định 3). Ba bước còn lại chung cho cả bốn service khung — xem cùng mục ở service-documents.json"
     },
     {
       "id": "sql-danh-muc-chua-chay",

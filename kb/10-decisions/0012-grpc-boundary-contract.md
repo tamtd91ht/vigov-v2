@@ -8,13 +8,16 @@ expires: null
 owns_facts:
   - "vì sao tenant_id đi trong metadata gRPC với khoá x-tenant-id, không bao giờ trong thân message"
   - "vì sao lời gọi gRPC giữa các service mặc định theo lô, và vì sao vượt trần là lỗi chứ không kẹp"
-  - "xác thực giữa hai service: rủi ro đã chấp nhận có chủ ý và điều kiện gỡ trước khi chạy thật"
+  - "quyết định 3 (xác thực giữa hai service) ĐÃ BỊ ADR 0025 THAY THẾ ngày 2026-09-20 — tệp này giữ nguyên văn lập luận cũ; sự thật hiện hành thuộc về ADR 0025"
   - "vì sao platform không tới được thì mọi Host thành 404 chứ không 503"
 ---
 
 # 0012. Ranh giới gRPC giữa các service
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-09-16 · **Nối tiếp ADR 0001, 0003, 0011**
+
+> **Quyết định 1, 2, 4 còn nguyên hiệu lực. QUYẾT ĐỊNH 3 ĐÃ BỊ ADR 0025 THAY THẾ (2026-09-20)**
+> — nguyên văn giữ lại làm lịch sử, chi tiết ở đầu mục ấy.
 
 ## Bối cảnh
 
@@ -169,6 +172,28 @@ cấm khi bắt `404` và `403` phải giống nhau. Bên gọi **phải ghép t
 
 ## Quyết định 3 — Xác thực giữa hai service: TẠM dựa vào cách ly mạng
 
+> ## ĐÃ BỊ THAY THẾ — 2026-09-20, bởi **ADR 0025**
+>
+> **Toàn bộ quyết định 3 dưới đây không còn là hướng dẫn đang có hiệu lực.** Người dùng đã
+> chốt ngày 2026-09-20: dựng xác thực bên gọi bằng **một cặp header/giá trị dùng chung**, giá
+> trị đọc từ biến môi trường nguồn k8s secret, phòng thủ hai lớp cùng với mạng nội bộ của cụm.
+>
+> **Câu bị lật đổ cụ thể:** mục *"Vì sao KHÔNG dựng một cơ chế bí mật chia sẻ tạm ngay bây
+> giờ"*. Chỉ thị ấy **không còn đúng** — đừng làm theo nó. Lý do người dùng nêu cho hình dạng
+> một cặp (thay vì khoá riêng mỗi service, hay khoá kèm key-id để xoay) là **bảo trì**.
+>
+> **Nguyên văn được giữ lại có chủ ý, không xoá.** Ba lý do dưới đây **không** sai vào ngày
+> chúng được viết, và lý do thứ hai — *"một bí mật dùng chung … không phân biệt được ai đang
+> gọi, không thu hồi riêng được"* — **vẫn đúng nguyên vẹn hôm nay**: nó là **cái giá** người
+> dùng chọn trả, không phải một điều đã được bác bỏ. ADR 0025 có nguyên một mục cho nó.
+>
+> **Thứ dưới đây còn hiệu lực:** điều kiện gỡ #1 (cổng gRPC không lắng nghe trên địa chỉ công
+> khai) — ADR 0025 giữ nó làm **nửa thứ hai** của cơ chế, không phải một chú thích. Điều kiện
+> #2 (mTLS/mesh) bị ADR 0025 thay bằng khoá dùng chung; cửa mTLS không đóng, chỉ không phải
+> việc hôm nay.
+>
+> → `kb/10-decisions/0025-xac-thuc-giua-cac-service.md`
+
 **Đây là một rủi ro đã chấp nhận có chủ ý, không phải một thiết kế.** Ghi nó như một thiết kế
 là cách nó biến thành vĩnh viễn: sáu tháng sau không ai nhớ đây là chỗ còn nợ.
 
@@ -206,6 +231,9 @@ Ba lý do, lý do thứ ba là lý do thật:
 | 1 | Cổng gRPC **không lắng nghe trên địa chỉ công khai**; chỉ mạng nội bộ, có network policy |
 | 2 | Danh tính theo service (**mTLS** hoặc mesh) trước khi xã đầu tiên chạy thật |
 | 3 | **ĐIỀU KIỆN DỪNG:** RPC đầu tiên trả dữ liệu nghiệp vụ qua ranh giới này → dừng, hỏi người dùng, viết ADR mới. Căn cứ ở mục trên tan biến đúng lúc đó |
+
+> **Kết thúc phần đã bị thay thế.** Điều kiện dừng #3 ở trên đã chạy đúng như thiết kế: bốn
+> service khung xếp hàng chờ đúng chỗ này, người dùng được hỏi, và ADR mới là **ADR 0025**.
 
 ---
 
@@ -254,7 +282,9 @@ nằm trên đường đi của mọi request — và vì vậy là **một ADR 
   đầu tiên phục vụ thật — không có interceptor thì hợp đồng trên chỉ là văn bản
 - **Phải trả sau:** xác thực giữa service với service (quyết định 3) là món nợ có ngày đáo
   hạn xác định, không phải món nợ mở
+  — **đã đáo hạn 2026-09-20: ADR 0025 chốt hình dạng trả nợ. Đọc ADR 0025, không đọc dòng này**
 
+→ **ADR 0025 (xác thực giữa các service — THAY THẾ quyết định 3 của tệp này):** `kb/10-decisions/0025-xac-thuc-giua-cac-service.md`
 → ADR 0003 (`platform` chỉ siêu dữ liệu — căn cứ của quyết định 3 và của hình dạng B): `kb/10-decisions/0003-platform-admin-metadata-only.md`
 → ADR 0005 (ULID công khai trong deep link): `kb/10-decisions/0005-miniapp-tenant-resolution.md`
 → Đường đi hợp lệ giữa các service: `kb/00-foundation/domain-boundaries.md`

@@ -46,12 +46,24 @@ package vigov.platform.v1;
 // nothing: the next person implements these RPCs, meets InvalidArgument, reads this comment,
 // and adds two names to that list on its authority.
 //
-// The exemption is CONDITIONAL on caller authentication existing on the gRPC port. ResolveHost
-// answers about one commune the caller already names; ListTenants answers about all of them at
-// once, and today that port has no mTLS, no service token and no caller identity
-// (service-platform/cmd/server/main.go). Order: authentication first, exemption second. Until
-// then these two RPCs are refused with INVALID_ARGUMENT, which is the right answer for an RPC
-// whose safety precondition has not been built.
+// WHAT THIS PORT CAN PROVE ABOUT A CALLER IS NARROWER THAN "AUTHENTICATED". Every call across
+// it carries the one caller key the whole deployment shares (core/grpcx.MetadataCallerKey,
+// ADR 0025), and that proves the caller is inside the deployment — never WHICH service it is.
+// There is no caller identity on this boundary. So an inter-service call cannot be attributed
+// to a caller in an audit entry (rule 6, invariant 2 asks "who"), and "x-tenant-id" above
+// stays a CLAIM MADE BY THE CALLER rather than evidence: what keeps that claim harmless is
+// ADR 0003 — this service has no path to business content — and not the key. Per-service
+// identity (mTLS, a mesh) is what would change those two sentences; nothing short of it does.
+//
+// UNBLOCKED IS NOT GRANTED, and the gap between those two words is where the mistake gets
+// made. Whether these two RPCs join that list is a question for the user: adding a member is a
+// STOP CONDITION in ADR 0012, decision 1, and a stop condition is not lifted by some separate
+// precondition beside it turning out to be met. The asymmetry it guards does not move either.
+// ResolveHost answers about ONE commune the caller already names; these two answer about ALL
+// of them at once, and the ULIDs they return are the prefix of every cache key, queue,
+// realtime room and file path in the system (rule 1, invariant 7). Until the question is put
+// and answered, both are refused with INVALID_ARGUMENT — the right answer for an RPC whose
+// exemption nobody has granted.
 //
 // NOT the same thing: `Tenant.id` below is the identifier of the record being described, not
 // an assertion by the caller about who it is.
