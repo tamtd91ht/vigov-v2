@@ -13,8 +13,7 @@ owns_facts:
      KHÔNG sửa tệp này — sửa bản nội bộ rồi chạy `make kb`. Sửa tay sẽ mất ở lần sinh sau. -->
 # Estimate thi công — ViGov v2
 
-**Báo cáo đầu kỳ.** Ước cho **toàn bộ** dự án, lập trước khi thi công. Bản tổng quan dùng cho
-dự án tương tự tách riêng, viết sau khi bản này được chốt.
+**Báo cáo đầu kỳ.** Ước cho **toàn bộ** dự án, lập trước khi thi công.
 
 **Ô ghi `___` là ô NHẬP TAY** — người lập estimate điền, vì nó phụ thuộc cách làm việc với
 khách hoặc phụ thuộc bên khác. Phần phân tích cho những ô ấy vẫn có ở đây; chỉ con số là của
