@@ -96,7 +96,7 @@
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:203"
+      "at": "core/config/config.go:245"
     },
     "config.Config": {
       "kind": "type",
@@ -104,19 +104,19 @@
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:129"
+      "at": "core/config/config.go:157"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:286"
+      "at": "core/config/config.go:328"
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:142"
+      "at": "core/config/config.go:170"
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:238"
+      "at": "core/config/config.go:280"
     },
     "crosstenant.DinhDanh": {
       "kind": "type",
@@ -252,15 +252,23 @@
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:94"
+      "at": "core/grpcx/grpcx.go:161"
+    },
+    "grpcx.UnaryClientCallerAuth": {
+      "kind": "func",
+      "at": "core/grpcx/caller_auth.go:117"
     },
     "grpcx.UnaryClientInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:110"
+      "at": "core/grpcx/grpcx.go:177"
+    },
+    "grpcx.UnaryServerCallerAuth": {
+      "kind": "func",
+      "at": "core/grpcx/caller_auth.go:62"
     },
     "grpcx.UnaryServerInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:143"
+      "at": "core/grpcx/grpcx.go:210"
     },
     "http.BoPhanDanhMuc": {
       "kind": "type",
@@ -716,23 +724,23 @@
     },
     "platformclient.ByHost": {
       "kind": "func",
-      "at": "core/platformclient/directory.go:121"
+      "at": "core/platformclient/directory.go:136"
     },
     "platformclient.Close": {
       "kind": "func",
-      "at": "core/platformclient/directory.go:101"
+      "at": "core/platformclient/directory.go:116"
     },
     "platformclient.Dial": {
       "kind": "func",
-      "at": "core/platformclient/directory.go:65"
+      "at": "core/platformclient/directory.go:72"
     },
     "platformclient.Directory": {
       "kind": "type",
-      "at": "core/platformclient/directory.go:48"
+      "at": "core/platformclient/directory.go:49"
     },
     "platformclient.NewDirectory": {
       "kind": "func",
-      "at": "core/platformclient/directory.go:88"
+      "at": "core/platformclient/directory.go:103"
     },
     "privacy.MaskCccd": {
       "kind": "func",
