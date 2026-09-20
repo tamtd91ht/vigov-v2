@@ -72,10 +72,24 @@ type phanGiaiGia struct {
 	tra staffauth.StaffPrincipal
 	co  bool
 	loi error
+
+	// The commune carried on the outgoing call — see ResolveStaff below.
+	xaDaGui tenant.ID
+	coXa    bool
 }
 
-func (p *phanGiaiGia) ResolveStaff(_ context.Context, _, _ string) (staffauth.StaffPrincipal, bool, error) {
+func (p *phanGiaiGia) ResolveStaff(ctx context.Context, _, _ string) (staffauth.StaffPrincipal, bool, error) {
 	p.goi++
+	// THE COMMUNE THAT LEAVES THIS PROCESS IS RECORDED, AND IT IS THE ONLY THING THIS SERVICE CAN
+	// ASSERT ABOUT THE CROSS-COMMUNE REFUSAL.
+	//
+	// authz.AnyAuthenticated's own commune check cannot fail here — core/staffauth stamps the Host
+	// commune onto the principal, so it compares a value with itself. The comparison that decides
+	// lives in identity (service-identity/internal/grpc/server.go:257), where the commune sent in
+	// `x-tenant-id` meets the commune INSIDE the credential. This service cannot reach that line;
+	// what it CAN prove is that it sent the right commune to be compared against. Drop that and
+	// the far side compares the wrong pair, and nothing here would have noticed.
+	p.xaDaGui, p.coXa = tenant.From(ctx)
 	return p.tra, p.co, p.loi
 }
 
@@ -213,5 +227,36 @@ func TestHealthzNamNgoaiChuoiXa(t *testing.T) {
 	doiMa(t, m.goi(t, "khong-co-xa.example.gov.vn", "/healthz", ""), http.StatusOK)
 	if m.pg.goi != 0 {
 		t.Error("/healthz gọi tới dịch vụ định danh")
+	}
+}
+
+// LỜI GỌI ĐI RA PHẢI MANG XÃ SUY TỪ `Host` — phép khẳng định duy nhất service này làm được về
+// việc từ chối chéo xã.
+//
+// Phép so của authz.AnyAuthenticated ở đây KHÔNG THỂ SAI: core/staffauth đóng dấu xã của `Host`
+// lên chính principal nó dựng (staffauth.go:157 và :241), nên xacNhanXa so một giá trị với chính
+// nó. Phép so quyết định nằm trong identity — service-identity/internal/grpc/server.go:257 — nơi
+// xã trong `x-tenant-id` gặp xã NẰM TRONG chứng thực. Service này với không tới dòng đó; thứ nó
+// chứng minh được là nó đã GỬI ĐÚNG XÃ để bên kia đem ra so.
+//
+// Bỏ mất phần gửi ấy thì bên kia so nhầm cặp, và trước ca test này thì không gì ở đây thấy được.
+func TestLoiGoiPhanGiaiMangXaCuaHost(t *testing.T) {
+	m := dungMayChu(t, canBoXaA())
+
+	// Xã A ở host A: lời gọi phải mang xã A.
+	doiMa(t, m.goi(t, hostA, tuyen, phieuGia), http.StatusOK)
+	if !m.pg.coXa {
+		t.Fatal("lời gọi phân giải KHÔNG mang xã nào — bên kia sẽ so với một giá trị rỗng")
+	}
+	if m.pg.xaDaGui != xaA {
+		t.Errorf("xã đã gửi = %q, muốn %q (xã suy từ Host)", m.pg.xaDaGui, xaA)
+	}
+
+	// Cùng phiếu ấy ở host B: xã gửi đi phải ĐỔI THEO HOST, không theo phiếu. Đây là nửa bắt được
+	// một bản cài đặt lấy xã từ phản hồi RPC thay vì từ Host.
+	m2 := dungMayChu(t, canBoXaA())
+	m2.goi(t, hostB, tuyen, phieuGia)
+	if m2.pg.xaDaGui != xaB {
+		t.Errorf("ở host B, xã đã gửi = %q, muốn %q", m2.pg.xaDaGui, xaB)
 	}
 }

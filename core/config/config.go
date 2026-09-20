@@ -405,8 +405,6 @@ func Load(serviceName string) (Config, error) {
 	return cfg, nil
 }
 
-// CanhBao lists the dangerous settings currently in force, for logging at startup.
-// Empty in a correctly configured deployment.
 // ListenAddrHoac reports the configured listen address, or this service's own default.
 //
 // IT EXISTS SO THE ENVIRONMENT IS READ EXACTLY ONCE (rule 11, invariant 1). Six services used
@@ -427,6 +425,8 @@ func (c Config) ListenAddrHoac(macDinh string) string {
 	return c.listenAddrEnv
 }
 
+// CanhBao lists the dangerous settings currently in force, for logging at startup.
+// Empty in a correctly configured deployment.
 func (c Config) CanhBao() []string {
 	var ra []string
 	if c.DangerousAuthBypass {

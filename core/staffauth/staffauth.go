@@ -51,12 +51,16 @@ import (
 
 // CookieName is the name of the staff session cookie, as the browser holds it.
 //
-// THE SAME STRING service-identity/internal/http/cookie.go WRITES. It cannot be imported from
-// there — `internal/` (rule 2, forbidden #1) — so this is the copy every other service reads, and
-// the two must not drift: a rename on one side alone means every service but identity stops seeing
-// a cookie that is being sent, and the symptom is "everybody is signed out everywhere except the
-// sign-in screen". Whoever renames it changes BOTH, and the honest fix is to point identity's
-// constant at this one, which is a one-line change in a file this turn deliberately did not touch.
+// IT IS THE ONE DEFINITION, NOT A COPY. `service-identity/internal/http/cookie.go:22` — the file
+// that SETS the cookie — declares `const CookiePhien = staffauth.CookieName`, so the compiler
+// holds the two equal and there is nothing here that can drift.
+//
+// It was a copy for part of one day, and the cost of that state is worth keeping written down
+// because it is why the alias exists: identity may not be imported (`internal/`, rule 2 forbidden
+// #1), so two literals could only ever have been kept equal by hand. Renaming one alone would
+// have meant every service EXCEPT identity stopped seeing a cookie the browser was still sending
+// — and the symptom reads as "everybody is signed out everywhere, except the sign-in screen",
+// which sends an operator to inspect the session registry, the one thing that is fine.
 const CookieName = "vigov_session"
 
 // StaffPrincipal is what one resolution answered: who is acting, and what they may do, in the

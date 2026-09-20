@@ -137,8 +137,19 @@ func Register(mux *http.ServeMux, d Deps) {
 	// catalogue exceeding petstore.TranDanhMucLoaiNhiemVu — which this route REFUSES rather than
 	// truncating, because a silently short list is a missing option in a form.
 	//
-	// 401 is authz.AnyAuthenticated's answer to BOTH "no session" and "a session issued by another
-	// commune"; there is no 403 on this route because there is no permission to fail.
+	// 401 is authz.AnyAuthenticated's answer to "no session", and there is no 403 on this route
+	// because there is no permission to fail.
+	//
+	// IT IS ALSO THE ANSWER TO A SESSION FROM ANOTHER COMMUNE, BUT NOT FOR THE REASON IT LOOKS.
+	// AnyAuthenticated's own commune check cannot fail here: core/staffauth stamps the Host
+	// commune onto the principal it builds (staffauth.go:157 and :241), so xacNhanXa compares a
+	// value with itself. The comparison that decides happens inside identity, at
+	// service-identity/internal/grpc/server.go:257, where the commune from `x-tenant-id` meets
+	// the commune INSIDE the credential — the only place both values exist. A mismatch there
+	// yields no principal, so this route answers 401 for ABSENCE, not for disagreement.
+	//
+	// The wall that is local and does hold alone: Scoped.Query binds `tenant_id` from the context
+	// (rule 1, invariant 5), so neither query could read another commune's rows in any case.
 	//
 	// @reply    200 danhSachLoaiNhiemVuRa
 	// @reply    401 httpx.Error

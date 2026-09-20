@@ -101,10 +101,25 @@ func Register(mux *http.ServeMux, d Deps) {
 	// rather than from anything the commune keeps to itself.
 	//
 	// THE TRADE-OFF, STATED RATHER THAN GLOSSED: the commune's own catalogue is readable by every
-	// signed-in account OF THAT COMMUNE. It is not readable across communes and cannot be —
-	// Scoped.Query binds `tenant_id` from the context (rule 1, invariant 5), and the same request
-	// carrying another commune's token is refused by authz.AnyAuthenticated's commune check before
-	// any query runs. What is accepted is that a member of staff with no configuration rights can
+	// signed-in account OF THAT COMMUNE. It is not readable across communes — and where that is
+	// enforced is NOT where it looks:
+	//
+	//	LOCAL AND REAL      Scoped.Query binds `tenant_id` from the context (rule 1, invariant 5),
+	//	                    so this query cannot reach another commune's rows even if a principal
+	//	                    lied about which commune it belongs to.
+	//	NOT LOCAL           authz.AnyAuthenticated's commune check cannot fail HERE: core/staffauth
+	//	                    stamps the Host commune onto the principal it builds (staffauth.go:157
+	//	                    and :241), so xacNhanXa compares a value with itself. The comparison
+	//	                    that decides is inside identity — service-identity/internal/grpc/
+	//	                    server.go:257 — where the commune from `x-tenant-id` meets the commune
+	//	                    INSIDE the credential. A mismatch there yields no principal, and this
+	//	                    route then answers 401 for absence, not for disagreement.
+	//
+	// Written out because three edits would remove it with no test in THIS service turning red:
+	// exempting ResolveStaffPrincipal from carrying a commune, moving that comparison below the
+	// session-registry read, or taking the commune from the RPC response instead of from Host.
+	//
+	// What is accepted is that a member of staff with no configuration rights can
 	// see how their own authority classifies its capital plan. What is NOT exposed here is any
 	// amount, any plan, and the tier a row sits in — see internal/domain.
 	//

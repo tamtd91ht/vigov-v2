@@ -95,13 +95,26 @@ func Register(mux *http.ServeMux, d Deps) {
 	// files its paperwork under.
 	//
 	// THE TRADE-OFF, STATED RATHER THAN GLOSSED: a commune's catalogue is readable by every
-	// signed-in account OF THAT COMMUNE. It is not readable across communes, and two independent
-	// things stop it: authz.AnyAuthenticated compares the commune in the principal against the
-	// commune resolved from Host and answers 401 before the handler runs, and the query itself
-	// could not reach another commune's rows in any case — Scoped.Query binds `tenant_id` from the
-	// context (rule 1, invariant 5). What is accepted is that a member of staff with no
-	// configuration rights can see how their own authority classifies its documents, which is
-	// information printed on the documents themselves.
+	// signed-in account OF THAT COMMUNE. It is not readable across communes — but READ THE NEXT
+	// PARAGRAPH BEFORE RELYING ON WHERE THAT IS ENFORCED, because the obvious answer is wrong.
+	//
+	// authz.AnyAuthenticated DOES compare the principal's commune against the commune from Host,
+	// and in THIS service that comparison CANNOT FAIL: core/staffauth stamps the Host commune
+	// onto the principal it builds (staffauth.go:157 and :241), so authz.xacNhanXa compares a
+	// value with itself. The comparison that actually decides anything happens inside identity,
+	// at service-identity/internal/grpc/server.go:257, where the commune sent in `x-tenant-id`
+	// metadata is compared against the commune INSIDE the credential — the only place both
+	// values exist. A mismatch there yields no principal at all, and this route then answers 401
+	// because there is nobody, not because the communes differed.
+	//
+	// WHY IT IS WRITTEN OUT: three edits would remove the protection without turning one test in
+	// this service red — adding ResolveStaffPrincipal to grpcx.methodsWithoutTenant, moving that
+	// comparison below the session-registry read, or "simplifying" staffauth to take the commune
+	// from the response instead of from Host.
+	//
+	// The second wall is local and does hold on its own: Scoped.Query binds `tenant_id` from the
+	// context (rule 1, invariant 5), so this query could not reach another commune's rows even
+	// with a principal that lied.
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
