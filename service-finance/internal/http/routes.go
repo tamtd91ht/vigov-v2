@@ -12,33 +12,117 @@ package http
 //	authz.CitizenOnly()                                     // citizen paths, isolated by identity
 //	authz.AnyAuthenticated("<why any account needs this>")  // reason mandatory
 //	authz.Public("<why this is public>")                    // reason mandatory
+//
+// EVERY route also carries an @-annotation block IMMEDIATELY above the statement — no blank
+// line between. `tools/apidoc` reads it and generates kb/20-contracts/openapi.json, which is
+// the type contract the admin web builds against.
+//
+//	// @summary  <one line, Vietnamese — a person reads it>
+//	// @screen   <file in docs/ui-ux/ §section>   design intent, the one part no tool can derive
+//	// @request  <Go type>                        omit when the route takes no body
+//	// @reply    <status> <Go type|->             one line per status the handler REALLY returns
+//
+// The permission and the idempotency mode are NOT annotated: apidoc reads them from the
+// authz.* / idem.* calls below, so there is no second copy to drift (rule 9).
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/vihat/vigov/core/authz"
+	"github.com/vihat/vigov/service-finance/internal/domain"
 )
+
+// HangMucKeHoachVonDanhMuc is the commune's capital plan category catalogue, for
+// GET /api/v1/capital-plan-categories.
+//
+// AN INTERFACE DECLARED AT THE POINT OF USE, not the concrete *fistore.HangMucKeHoachVonStore.
+// WHY: the properties this route exists to hold — the permission declaration, the commune check
+// ahead of any read, the refusal instead of a truncated list — have to be testable without a
+// PostgreSQL, or they get tested once and then never again. There is no PostgreSQL reachable from
+// this repository's build environment, so "needs a database" means "never runs". The concrete store
+// satisfies this as it is; nothing was changed to accommodate it.
+//
+// NO page.Request PARAMETER: this route returns the whole list on purpose. The reason is on
+// fistore.HangMucKeHoachVonStore.DanhSach, and the bound that replaces the missing `limit` is
+// fistore.TranDanhMucHangMuc.
+type HangMucKeHoachVonDanhMuc interface {
+	DanhSach(ctx context.Context) ([]domain.HangMucKeHoachVon, error)
+}
 
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
 type Deps struct {
 	Checker authz.Checker
+	HangMuc HangMucKeHoachVonDanhMuc
+
+	Log *slog.Logger
 }
 
 // Register mounts the finance routes.
 //
-// No business routes yet — this is the skeleton. Add them with their permission declaration
-// in the SAME statement, never on a nearby line: rbac_guard anchors to the statement, and so
-// should a reader.
+// Add every new route with its permission declaration in the SAME statement, never on a nearby
+// line: rbac_guard anchors to the statement, and so should a reader.
 func Register(mux *http.ServeMux, d Deps) {
-	_ = d // no routes yet
+	// Refusing incomplete wiring HERE, at construction, not at request time: a route mounted
+	// without the store behind it would accept requests it cannot honour, and the first person to
+	// find out would be a member of staff in front of a government screen. Same discipline as
+	// authz.Public("") and idem.KhongCan("").
+	//
+	// Deps.Checker is deliberately NOT checked yet: no route in this service declares
+	// RequirePermission, so demanding a checker would refuse to start over a dependency nothing
+	// uses. The first guarded route adds its own case here — and until then a nil Checker cannot
+	// silently weaken anything, because nothing reads it.
+	if d.HangMuc == nil {
+		panic("finance/http: thiếu kho danh mục hạng mục kế hoạch vốn — GET /api/v1/capital-plan-categories sẽ panic khi có người gọi")
+	}
 
-	// Example of the shape every real route must take:
+	h := NewHandler(d)
+
+	// --- the commune's capital plan category catalogue ----------------------------------------
 	//
-	//	mux.Handle("GET /api/v1/budget-items", authz.RequirePermission(d.Checker, "budget.read")(
-	//		http.HandlerFunc(h.list)))
+	// `capital-plan-categories` — English, plural, kebab-case, derived from the entity already
+	// settled as `CapitalPlanCategory` (kb/00-foundation/ubiquitous-language.md:157). Nothing is
+	// translated on the spot here: the row exists, and it states why the concept is a `…Category`
+	// and not an `…Item` — a hạng mục CLASSIFIES the lines of a capital plan, it is not a line of
+	// money. Renaming this path toward `items` would invite the next person to hang an amount on
+	// the catalogue itself.
 	//
-	// Paths are English, plural, versioned. A state-changing route declares duplicate
-	// protection in the SAME statement, and a non-CRUD action is a nominalised
-	// sub-resource (.../closure), never a verb.
-	// -> .claude/skills/rest-api-design/SKILL.md
+	// STATED GAP: that row's "Tài nguyên URL" column still reads *(chưa chốt)*. The path was
+	// decided by the user on 20/09/2026 and the row belongs to whoever owns that table, not to this
+	// file — copying the decision into a second place is how two sources drift (rule 9).
+	//
+	// AnyAuthenticated, AND THE REASON IS THE SHAPE OF THE DATA'S USE — the same call the user
+	// accepted for GET /api/v1/org-units in the identity service. Category names fill the pickers
+	// and filters of nearly every screen that touches a capital plan, so requiring a configuration
+	// permission would not protect anything; it would break those screens for everybody who is not
+	// an administrator. The alternative that actually protects something does not exist here: there
+	// is nothing sensitive in a list of budget classifications, which come from budget regulation
+	// rather than from anything the commune keeps to itself.
+	//
+	// THE TRADE-OFF, STATED RATHER THAN GLOSSED: the commune's own catalogue is readable by every
+	// signed-in account OF THAT COMMUNE. It is not readable across communes and cannot be —
+	// Scoped.Query binds `tenant_id` from the context (rule 1, invariant 5), and the same request
+	// carrying another commune's token is refused by authz.AnyAuthenticated's commune check before
+	// any query runs. What is accepted is that a member of staff with no configuration rights can
+	// see how their own authority classifies its capital plan. What is NOT exposed here is any
+	// amount, any plan, and the tier a row sits in — see internal/domain.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Danh mục hạng mục kế hoạch vốn của xã — dùng cho ô phân loại dòng kế hoạch và bộ lọc
+	// @screen   14-cau-hinh §5
+	// 500 covers two different causes and says so honestly: an ordinary store failure, and the
+	// commune's catalogue exceeding fistore.TranDanhMucHangMuc — which this route REFUSES rather
+	// than truncating, because a silently short list is a category missing from a classifier.
+	//
+	// 401 comes from authz.AnyAuthenticated: no session, or a token issued for another commune.
+	// There is no 403 on this route and none is claimed — there is no permission to be refused.
+	//
+	// @reply    200 danhSachHangMucRa
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/capital-plan-categories",
+		authz.AnyAuthenticated("tên hạng mục xuất hiện ở ô phân loại dòng kế hoạch vốn và mọi bộ lọc của các màn hình tài chính — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục của xã lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
+			http.HandlerFunc(h.DanhSachHangMucKeHoachVon)))
 }
