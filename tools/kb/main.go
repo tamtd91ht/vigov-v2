@@ -72,12 +72,27 @@ func main() {
 		"symbols":      symbols,
 	})
 
-	// data-ownership and event-flows need real schemas and event registrations to be
-	// meaningful. Emitting an honest empty index beats emitting a guess: a wrong ownership
-	// map is worse than a missing one, because people act on it.
-	ensurePlaceholder(out, "data-ownership.json",
-		"entity -> owning service. Populated once services declare their schemas.",
-		"no schemas defined yet")
+	// data-ownership is GENERATED FROM THE `-- @entity:` MARKS since 2026-09-20. It used to be
+	// a placeholder reading "no schemas defined yet", and that sentence had been false since
+	// ADR 0021 put the marks into the migrations — 24 marks across 7 services while the index
+	// said none. The placeholder did not look broken, it looked like an early repo, so nobody
+	// asked; and CLAUDE.md step 4 sends every session here FIRST, told not to read schemas.
+	// A generated index that is empty for a stale reason is the quietest way to lose a rule.
+	soHuuBang, canhBaoSoHuu, err := quetSoHuu(root, services)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "kb:", err)
+		os.Exit(1)
+	}
+	canhBaoSoHuu = append(canhBaoSoHuu, trung(soHuuBang)...)
+	write(out, "data-ownership.json", map[string]any{
+		"_": header,
+		"_description": "entity -> owning service, from the `-- @entity:` / `-- @scope:` marks in " +
+			"each service's migrations (ADR 0021). Rule 2, invariant 1: exactly one owner.",
+		"_warnings": canhBaoSoHuu,
+		"entities":  soHuuBang,
+		"_note_scope": "tenant = per commune · platform = platform-wide · cross-tenant = " +
+			"deliberately readable across communes, see rule 1",
+	})
 	ensurePlaceholder(out, "event-flows.json",
 		"event -> publisher, consumers, schema, supported versions.",
 		"no events published yet")
