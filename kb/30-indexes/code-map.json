@@ -96,7 +96,7 @@
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:245"
+      "at": "core/config/config.go:265"
     },
     "config.Config": {
       "kind": "type",
@@ -104,19 +104,19 @@
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:157"
+      "at": "core/config/config.go:176"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:328"
+      "at": "core/config/config.go:348"
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:170"
+      "at": "core/config/config.go:189"
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:280"
+      "at": "core/config/config.go:300"
     },
     "crosstenant.DinhDanh": {
       "kind": "type",
@@ -145,6 +145,10 @@
     "domain.CanBoTomTat": {
       "kind": "type",
       "at": "service-identity/internal/domain/can_bo.go:53"
+    },
+    "domain.CanBoVaiTro": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/can_bo.go:93"
     },
     "domain.CapQuyen": {
       "kind": "type",
@@ -230,6 +234,22 @@
       "kind": "type",
       "at": "core/events/events.go:33"
     },
+    "grpc.BatchGetStaff": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/server.go:351"
+    },
+    "grpc.CanBoDoc": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/server.go:101"
+    },
+    "grpc.CanBoLo": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/server.go:107"
+    },
+    "grpc.Deps": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/server.go:125"
+    },
     "grpc.Directory": {
       "kind": "type",
       "at": "service-platform/internal/grpc/server.go:38"
@@ -242,9 +262,21 @@
       "kind": "func",
       "at": "service-platform/internal/grpc/server.go:51"
     },
+    "grpc.PhienDoc": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/server.go:93"
+    },
+    "grpc.QuyenDoc": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/server.go:118"
+    },
     "grpc.ResolveHost": {
       "kind": "func",
       "at": "service-platform/internal/grpc/server.go:60"
+    },
+    "grpc.ResolveStaffPrincipal": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/server.go:221"
     },
     "grpc.Server": {
       "kind": "type",
@@ -404,11 +436,11 @@
     },
     "http.PhienHienTai": {
       "kind": "type",
-      "at": "service-identity/internal/http/middleware.go:23"
+      "at": "service-identity/internal/http/middleware.go:22"
     },
     "http.PhienTu": {
       "kind": "func",
-      "at": "service-identity/internal/http/middleware.go:52"
+      "at": "service-identity/internal/http/middleware.go:51"
     },
     "http.QuyenDoc": {
       "kind": "type",
@@ -436,7 +468,7 @@
     },
     "http.XacThuc": {
       "kind": "func",
-      "at": "service-identity/internal/http/middleware.go:71"
+      "at": "service-identity/internal/http/middleware.go:70"
     },
     "http.XemPhienHienTai": {
       "kind": "func",
@@ -458,9 +490,13 @@
       "kind": "type",
       "at": "core/httpx/citizen.go:75"
     },
+    "httpx.ClientIP": {
+      "kind": "func",
+      "at": "core/httpx/edge.go:138"
+    },
     "httpx.Error": {
       "kind": "type",
-      "at": "core/httpx/edge.go:87"
+      "at": "core/httpx/edge.go:88"
     },
     "httpx.KhongThuocXa": {
       "kind": "func",
@@ -468,15 +504,15 @@
     },
     "httpx.Recover": {
       "kind": "func",
-      "at": "core/httpx/edge.go:103"
+      "at": "core/httpx/edge.go:104"
     },
     "httpx.StripTenantHeaders": {
       "kind": "func",
-      "at": "core/httpx/edge.go:56"
+      "at": "core/httpx/edge.go:57"
     },
     "httpx.TenantMiddleware": {
       "kind": "func",
-      "at": "core/httpx/edge.go:20"
+      "at": "core/httpx/edge.go:21"
     },
     "httpx.Write": {
       "kind": "func",
@@ -484,7 +520,7 @@
     },
     "httpx.WriteError": {
       "kind": "func",
-      "at": "core/httpx/edge.go:93"
+      "at": "core/httpx/edge.go:94"
     },
     "httpx.WriteHeader": {
       "kind": "func",
@@ -585,6 +621,26 @@
     "idem.WriteHeader": {
       "kind": "func",
       "at": "core/idem/idem.go:562"
+    },
+    "identityclient.Client": {
+      "kind": "type",
+      "at": "core/identityclient/identityclient.go:59"
+    },
+    "identityclient.Close": {
+      "kind": "func",
+      "at": "core/identityclient/identityclient.go:129"
+    },
+    "identityclient.Dial": {
+      "kind": "func",
+      "at": "core/identityclient/identityclient.go:83"
+    },
+    "identityclient.New": {
+      "kind": "func",
+      "at": "core/identityclient/identityclient.go:116"
+    },
+    "identityclient.ResolveStaff": {
+      "kind": "func",
+      "at": "core/identityclient/identityclient.go:156"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -793,6 +849,26 @@
     "secret.String": {
       "kind": "func",
       "at": "core/secret/secret.go:103"
+    },
+    "staffauth.Allows": {
+      "kind": "func",
+      "at": "core/staffauth/staffauth.go:272"
+    },
+    "staffauth.Checker": {
+      "kind": "type",
+      "at": "core/staffauth/staffauth.go:266"
+    },
+    "staffauth.Middleware": {
+      "kind": "func",
+      "at": "core/staffauth/staffauth.go:141"
+    },
+    "staffauth.Resolver": {
+      "kind": "type",
+      "at": "core/staffauth/staffauth.go:105"
+    },
+    "staffauth.StaffPrincipal": {
+      "kind": "type",
+      "at": "core/staffauth/staffauth.go:68"
     },
     "store.Allows": {
       "kind": "func",
@@ -1041,6 +1117,10 @@
     "store.TheoID": {
       "kind": "func",
       "at": "service-identity/internal/store/can_bo.go:73"
+    },
+    "store.TheoNhieuID": {
+      "kind": "func",
+      "at": "service-identity/internal/store/can_bo_lo.go:72"
     },
     "store.ThonToDanPhoStore": {
       "kind": "type",
