@@ -297,6 +297,53 @@ def should_skip(path: str) -> bool:
     return any(f in norm for f in SKIP_FRAGMENTS)
 
 
+# --------------------------------------------------------------------------
+# RANH GIỚI THẨM QUYỀN — rào chắn của kho này chỉ phán xử kho này
+# --------------------------------------------------------------------------
+
+# Gốc kho, suy từ vị trí của CHÍNH TỆP NÀY: <gốc>/.claude/hooks/_common.py.
+#
+# KHÔNG đọc `CLAUDE_PROJECT_DIR`: một biến môi trường thiếu, hoặc trỏ sai một ký tự, sẽ tắt
+# lặng lẽ cả lớp cưỡng chế — đúng kiểu hỏng tệ nhất, vì mọi thứ vẫn trông bình thường. Vị trí
+# tệp thì không thể sai trong khi hook vẫn chạy được.
+GOC_DU_AN = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))).replace("\\", "/").rstrip("/").lower()
+
+# Đường dẫn tuyệt đối: `/x/y` (POSIX) hoặc `D:/x/y` (Windows). Cả hai đều tới đây ở dạng đã
+# thay `\` bằng `/` (path_of làm việc đó).
+_TUYET_DOI = re.compile(r"^(?:/|[a-z]:/)", re.IGNORECASE)
+
+
+def ngoai_du_an(path: str) -> bool:
+    """True khi `path` là đường dẫn TUYỆT ĐỐI nằm NGOÀI gốc kho này.
+
+    VÌ SAO CẦN: luật 1 (tenant_id) và luật 11 (core/config là nơi duy nhất đọc môi trường) là
+    luật CỦA VIGOV. Một phiên mở ở kho này nhưng ghi tệp sang kho khác — một sản phẩm khác,
+    không có xã, không có core/ — vẫn đi qua các hook này, và chúng đòi thứ kho kia cố ý không
+    có. Ngày 20/09/2026 điều đó đã chặn thật: `tenant_scope_guard` coi
+    `vihat-miniapp/internal/store/kho.go` là một dịch vụ ViGov, và chặn cả
+    `r.Header.Get("Origin")` vì `Get` nằm trong DB_CALL.
+
+    HỎNG THÌ ĐÓNG — đường dẫn TƯƠNG ĐỐI trả về False, tức VẪN SOI. Đa số ca test và một số
+    công cụ đưa đường dẫn tương đối; coi chúng là "ngoài kho" sẽ tắt rào chắn cho đúng những
+    đường dẫn khó kiểm nhất.
+
+    CHỈ HAI HOOK DÙNG HÀM NÀY, và đó là một quyết định chứ không phải chỗ còn thiếu:
+    `tenant_scope_guard` và `env_contract_guard` cưỡng chế những luật chỉ có nghĩa BÊN TRONG
+    ViGov. `secret_scan` và `pii_guard` thì KHÔNG gọi tới nó và không được gọi: một khoá bí mật
+    viết cứng, hay một số điện thoại lọt vào log, sai ở mọi kho — kể cả kho của sản phẩm khác.
+    """
+    norm = path.replace("\\", "/").lower()
+    if not _TUYET_DOI.match(norm):
+        return False
+    # Gom `..` lại TRƯỚC khi so tiền tố. Không có bước này thì
+    # `<gốc>/../kho-khac/internal/x.go` vẫn khớp tiền tố và bị coi là trong kho — hỏng về phía
+    # SOI THÊM chứ không phải bỏ sót, nhưng nó biến một đường dẫn hợp lệ thành một lần chặn
+    # không ai hiểu vì sao.
+    norm = os.path.normpath(norm).replace("\\", "/").rstrip("/")
+    return not (norm == GOC_DU_AN or norm.startswith(GOC_DU_AN + "/"))
+
+
 def is_generated(content: str, path: str = "") -> bool:
     """True only when the FILE PATH is a generated location.
 

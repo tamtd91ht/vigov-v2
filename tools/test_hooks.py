@@ -20,6 +20,12 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HOOKS = os.path.join(ROOT, ".claude", "hooks")
 
+# Hai hằng cho nhóm ca "ranh giới thẩm quyền" — xem khối chú thích của nhóm ấy trong CASES.
+# TÍNH RA chứ không viết cứng: một đường dẫn viết cứng chỉ đúng trên máy người viết nó, và
+# ngày nó sai thì ca "VẪN chặn" xanh vì đường dẫn không còn trong kho — xanh sai lý do.
+ROOT_URL = ROOT.replace("\\", "/")
+KHO_KHAC = os.path.join(os.path.dirname(ROOT), "mot-kho-hoan-toan-khac").replace("\\", "/")
+
 BLOCK, PASS = 2, 0
 
 # Windows terminals default to cp1252. Same reason as utf8_streams() in _common.
@@ -167,6 +173,29 @@ CASES = [
        "const chenPhien = `INSERT INTO phien_cong_dan (tenant_id, id, bam_token) VALUES ($1,$2,$3)`\n\n"
        "func (s *Store) Tao(ctx context.Context, tx *sql.Tx, xa, sid, bam string) error {\n"
        "\t_, err := tx.ExecContext(ctx, chenPhien, xa, sid, bam)\n\treturn err\n}")),
+
+    # ---- ranh giới THẨM QUYỀN: rào chắn của kho này chỉ phán xử kho này -------
+    #
+    # Ngày 20/09/2026 việc này đã chặn thật. Một phiên mở ở kho ViGov ghi tệp sang kho
+    # `vihat-miniapp` (sản phẩm khác, KHÔNG có xã, KHÔNG có core/): `tenant_scope_guard` nhận
+    # diện dịch vụ theo HÌNH DẠNG đường dẫn (`<đoạn>/internal/…`) nên coi nó là dịch vụ ViGov
+    # và đòi `tenant_id`; `env_contract_guard` đòi mọi lần đọc môi trường phải nằm trong
+    # `core/config` — gói mà kho kia cố ý không có.
+    #
+    # BỐN CA, VÀ HAI CA "VẪN CHẶN" QUAN TRỌNG NGANG HAI CA KIA: một bản vá kiểu này chết bằng
+    # cách nới quá tay, và lúc ấy cả hai rào chắn im lặng trên chính ViGov mà không ai thấy.
+    ("tenant_scope_guard", "đường dẫn TUYỆT ĐỐI trong kho ViGov — VẪN chặn", BLOCK,
+     w(ROOT_URL + "/donthu/internal/app/list.go",
+       "func (s *Svc) List(ctx context.Context) {\n\trows, err := s.db.Find(ctx, filter)\n}")),
+    ("tenant_scope_guard", "cùng khuyết tật ấy ở KHO KHÁC — không phải việc của luật 1", PASS,
+     w(KHO_KHAC + "/internal/store/kho.go",
+       "func (k *Kho) Lay(ctx context.Context) {\n\trows, err := k.pool.Query(ctx, cau)\n}")),
+    ("env_contract_guard", "đường dẫn TUYỆT ĐỐI trong kho ViGov — VẪN chặn", BLOCK,
+     w(ROOT_URL + "/donthu/internal/app/a.go",
+       'func init() {\n\tdsn := os.Getenv("DATABASE_DSN")\n}')),
+    ("env_contract_guard", "kho khác tự đọc môi trường của chính nó", PASS,
+     w(KHO_KHAC + "/internal/config/config.go",
+       'func Nap() {\n\tdsn := os.Getenv("DATABASE_DSN")\n}')),
 
     # ---- rule 2 · service boundary ---------------------------------------
     ("service_boundary_guard", "imports another service's internal", BLOCK,

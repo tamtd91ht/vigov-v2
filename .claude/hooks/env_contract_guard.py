@@ -71,7 +71,12 @@ def duong_chuan(path: str) -> str:
 
 
 def trong_pham_vi(path: str) -> bool:
-    return path.endswith(WATCH_EXT) and not c.should_skip(path)
+    # `core/config` là nơi duy nhất đọc môi trường — nhưng đó là `core/config` CỦA VIGOV. Một
+    # kho khác không có gói ấy và không được phép bị đòi nó; đòi thì lối thoát duy nhất của
+    # người viết là dính vào core/ của ViGov, tức là chính thứ "tách ra được" bị mất.
+    # Xem c.ngoai_du_an: đường dẫn tương đối thì VẪN SOI.
+    return (path.endswith(WATCH_EXT) and not c.should_skip(path)
+            and not c.ngoai_du_an(path))
 
 
 def la_goi_cau_hinh(path: str) -> bool:

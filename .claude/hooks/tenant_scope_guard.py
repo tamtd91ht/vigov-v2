@@ -98,7 +98,8 @@ SQL_COMMENT = re.compile(r"--[^\n]*")
 
 
 def in_scope_sql(path: str) -> bool:
-    return path.endswith(".sql") and "/migrations/" in path and not c.should_skip(path)
+    return (path.endswith(".sql") and "/migrations/" in path
+            and not c.should_skip(path) and not c.ngoai_du_an(path))
 
 
 def scan_sql(content: str) -> list[str]:
@@ -116,6 +117,12 @@ def scan_sql(content: str) -> list[str]:
 
 def in_scope(path: str) -> bool:
     if not path.endswith(WATCH_EXT) or c.should_skip(path):
+        return False
+    # Luật 1 là luật của ViGov. Tệp của một kho khác không có xã để mà phạm vi hoá, và nhận
+    # diện dịch vụ ở đây đi theo HÌNH DẠNG đường dẫn (`<đoạn>/internal/…`) chứ không theo gốc
+    # kho — nên không có dòng này thì mọi kho nào có thư mục `internal/` đều bị coi là một
+    # dịch vụ ViGov. Xem c.ngoai_du_an: tương đối thì VẪN SOI.
+    if c.ngoai_du_an(path):
         return False
     if any(p in path for p in PLATFORM):
         return False
