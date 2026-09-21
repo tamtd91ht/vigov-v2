@@ -439,6 +439,8 @@ export type finance_get_investment_projects = {
   thamSo: {
   };
   truyVan: {
+    "category"?: string;
+    "year": string;
   };
   than: never;
   phanHoi: {
@@ -509,6 +511,7 @@ export type identity_get_public_holidays = {
   thamSo: {
   };
   truyVan: {
+    "year": string;
   };
   than: never;
   phanHoi: {
@@ -684,6 +687,7 @@ export type identity_get_swap_working_days = {
   thamSo: {
   };
   truyVan: {
+    "year": string;
   };
   than: never;
   phanHoi: {

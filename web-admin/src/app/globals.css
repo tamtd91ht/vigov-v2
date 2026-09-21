@@ -675,3 +675,124 @@ body {
 .ma-muc {
   font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
 }
+
+/* ---- màn giải ngân · màn phản ánh · phần lịch làm việc ---------------------------------- */
+
+/* Banner "không phải phần mềm kế toán" (`06-giai-ngan §1`) — BẮT BUỘC hiện, nên nó phải đọc được
+ * chứ không chỉ có mặt. Nền xám nhạt và viền trái đậm để nó không lẫn vào phần mô tả trang, và
+ * KHÔNG dùng màu đỏ: nó không báo một sự cố, nó nói ra phạm vi của mọi con số bên dưới. */
+.canh-bao-pham-vi {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  background: var(--nen);
+  border-left: 4px solid var(--xam-chu);
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  color: #111827;
+}
+
+/* Hàng lọc xếp DỌC ở bề rộng nhỏ nhất (320px) và nằm ngang từ 768px — `15-phu-luc §7`. Không
+ * dùng `white-space: nowrap`: nhãn "Năm ngân sách" cạnh ô chọn phải xuống dòng được. */
+.hang-loc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem 1.5rem;
+  margin: 1rem 0;
+}
+
+@media (min-width: 768px) {
+  .hang-loc {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+  }
+}
+
+.chon-nam,
+.chon-hang-muc {
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+}
+
+.chon-nam label,
+.chon-hang-muc label {
+  color: var(--xam-chu);
+}
+
+.chon-nam select,
+.chon-hang-muc select {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--xam-vien);
+  border-radius: 0.375rem;
+  background: #fff;
+  font: inherit;
+  /* Ô chạm tối thiểu: dưới mức này thì trên điện thoại phải bấm hai ba lần mới trúng. */
+  min-height: 2.25rem;
+}
+
+/* Chip "Chậm N điểm". Đỏ, VÀ chữ đã nói rõ — màu không bao giờ là tín hiệu duy nhất (a11y §8). */
+.chip-cham {
+  background: #fee4e2;
+  color: var(--do-loi);
+}
+
+.man-giai-ngan,
+.man-phan-anh,
+.tab-lich-lam-viec {
+  margin-top: 2rem;
+}
+
+.duong-lui {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+}
+
+.mo-ta-du-an {
+  margin: 0.75rem 0 0;
+  color: var(--xam-chu);
+}
+
+/* Form tra cứu: ô nhập và nút xếp dọc ở 320px, nằm ngang từ 480px. Nút KHÔNG thu nhỏ theo ô nhập
+ * — một nút "Tra cứu" bị bóp còn nửa chữ là nút không ai bấm trúng. */
+.form-tra-cuu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: stretch;
+  margin: 1rem 0;
+}
+
+.form-tra-cuu .o-nhap {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+@media (min-width: 480px) {
+  .form-tra-cuu {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  .form-tra-cuu .nut-chinh {
+    flex: 0 0 auto;
+    width: auto;
+  }
+}
+
+/* Nội dung phản ánh là lời của người dân, có thể dài và có xuống dòng. `pre-wrap` giữ nguyên
+ * cách họ ngắt dòng; `overflow-wrap` chặn một chuỗi dài không dấu cách đẩy vỡ bố cục 320px. */
+.noi-dung-phan-anh {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Ba bảng lịch là ba khối riêng, cách nhau rõ: chúng nói ba điều khác hẳn nhau — giờ làm, ngày
+ * đóng cửa, ngày mở cửa ngoại lệ — và đọc liền nhau thì thành một bảng dài khó phân biệt. */
+.nhom-lich {
+  margin-top: 1.75rem;
+}
+
+.nhom-lich h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}

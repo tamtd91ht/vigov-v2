@@ -17,14 +17,19 @@
 
 import type { KetQua } from "@/lib/api/goi";
 import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen";
-import { coQuyen, QUYEN_PHAN_QUYEN, QUYEN_QUAN_LY_NGUOI_DUNG } from "@/lib/quyen";
+import {
+  QUYEN_PHAN_QUYEN,
+  QUYEN_QUAN_LY_NGUOI_DUNG,
+  quyetDinhTheoKhoa,
+  type QuyetDinhHien,
+} from "@/lib/quyen";
 
-export type QuyetDinhTab =
-  | { hien: true }
-  /** Đọc được quyền, và tài khoản không có khoá của tab ấy. Đặc tả §12.8: ẩn tab đó. */
-  | { hien: false; vi: "khong-du-quyen" }
-  /** Không đọc được quyền — phiên hết hạn, mạng hỏng, máy chủ lỗi. Vẫn là ẩn. */
-  | { hien: false; vi: "khong-doc-duoc"; thongBao: string };
+/**
+ * Cùng một hình dạng quyết định với mọi phần giao diện có cổng quyền — nay là một tên gọi khác
+ * của `QuyetDinhHien` chứ không còn là một khai báo thứ hai. Giữ tên `QuyetDinhTab` để hai tab
+ * hiện có không phải đổi, và vì ở màn Cấu hình thì "phần giao diện" đúng là một TAB (§12.8).
+ */
+export type QuyetDinhTab = QuyetDinhHien;
 
 export function quyetDinhTabNguoiDung(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
   return theoKhoaQuyen(ketQua, QUYEN_QUAN_LY_NGUOI_DUNG);
@@ -41,17 +46,9 @@ export function quyetDinhTabPhanQuyen(ketQua: KetQua<identity_phienHienTaiRa>): 
 }
 
 /**
- * Phần chung của hai quyết định trên: đọc được quyền chưa, và có ĐÚNG khoá ấy không.
- *
- * Riêng tư, và nhận một khoá duy nhất chứ không nhận một danh sách: một hàm công khai nhận danh
- * sách khoá là hàm mời người gọi truyền hai khoá vào rồi mở tab khi có bất kỳ khoá nào.
+ * Phần chung của hai quyết định trên — nay nằm ở `lib/quyen.ts` vì nó có người dùng thứ ba và
+ * thứ tư (`/giai-ngan`, `/phan-anh`). Đây chỉ còn là chỗ buộc mỗi tab vào ĐÚNG MỘT khoá.
  */
 function theoKhoaQuyen(ketQua: KetQua<identity_phienHienTaiRa>, khoa: string): QuyetDinhTab {
-  // FAIL CLOSED: không đọc được danh sách quyền thì coi như KHÔNG có quyền. "Chưa rõ" không
-  // được hành xử như "có" — trên đường cách ly thì không có giá trị mặc định nào (luật 1).
-  if (!ketQua.ok) return { hien: false, vi: "khong-doc-duoc", thongBao: ketQua.thongBao };
-
-  return coQuyen(ketQua.duLieu.permissions, khoa)
-    ? { hien: true }
-    : { hien: false, vi: "khong-du-quyen" };
+  return quyetDinhTheoKhoa(ketQua, khoa);
 }

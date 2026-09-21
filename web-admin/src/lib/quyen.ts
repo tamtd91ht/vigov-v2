@@ -15,6 +15,9 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
+import type { KetQua } from "./api/goi";
+import type { identity_phienHienTaiRa } from "./api/schema.gen";
+
 /**
  * Khoá quyền của tab "Người dùng" — `docs/ui-ux/14-cau-hinh.md §12.8`: tab nào thiếu quyền thì
  * ẩn tab đó. Cùng một chuỗi mà máy chủ đòi trên hai tuyến danh bạ (`x-vigov-permission` trong
@@ -32,6 +35,67 @@ export const QUYEN_QUAN_LY_NGUOI_DUNG = "admin.user";
  * khoá một (luật 5, bất biến 3b).
  */
 export const QUYEN_PHAN_QUYEN = "admin.role";
+
+/**
+ * Khoá quyền của màn "Theo dõi giải ngân" — `budget.read`.
+ *
+ * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đây đúng chuỗi máy chủ khai trên cả hai tuyến dự án
+ * (`x-vigov-permission.key` của `GET /api/v1/investment-projects` và `.../{id}` trong
+ * `kb/20-contracts/openapi.json`, sinh từ `service-finance/internal/http/routes.go`).
+ *
+ * `budget.read` MỞ MÀN ĐỌC, KHÔNG MỞ GÌ KHÁC. Đặc tả §8.2 liệt kê `budget.update` (nhập, sửa
+ * chứng từ) và `budget.confirm` (xác nhận, khoá) là hai khoá RIÊNG — chúng không có tuyến nào
+ * trong hợp đồng hôm nay, và không khoá nào trong ba suy ra được từ khoá kia.
+ */
+export const QUYEN_XEM_GIAI_NGAN = "budget.read";
+
+/**
+ * Khoá quyền của màn "Phản ánh của người dân" — `feedback.read`, cùng chuỗi máy chủ khai trên
+ * `GET /api/v1/citizen-reports/{maTraCuu}`.
+ *
+ * KHÔNG PHẢI `feedback.restricted`. Khoá thứ hai ấy mở riêng lĩnh vực `can-bo` — phản ánh VỀ
+ * tác phong cán bộ — và máy chủ cố ý trả **404** cho người thiếu nó, đúng câu trả lời mà một
+ * mã không tồn tại nhận được (`service-petitions/internal/http/phieu_phan_anh.go`). Không có
+ * cổng nào ở giao diện cho khoá ấy, và cũng không được dựng: một cổng ở đây sẽ nói ra sự tồn
+ * tại của đúng những phiếu máy chủ vừa giấu đi.
+ */
+export const QUYEN_XEM_PHAN_ANH = "feedback.read";
+
+/**
+ * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
+ *
+ * TỪNG NẰM RIÊNG TRONG `features/cau-hinh/quyen-tab.ts` VÀ NAY Ở ĐÂY, vì nó có người dùng thứ
+ * hai: hai màn hình mới (`/giai-ngan`, `/phan-anh`) cần đúng phép quyết định ấy. Chép lại nhánh
+ * FAIL CLOSED sang một tệp thứ hai là chép lại đúng nhánh KHÔNG ai nhìn thấy khi nó sai — ngày
+ * một bản đổi, bản kia vẫn xanh (luật 9, cấm #2). `quyen-tab.ts` nay gọi vào đây.
+ */
+export type QuyetDinhHien =
+  | { hien: true }
+  /** Đọc được quyền, và tài khoản không có khoá ấy. */
+  | { hien: false; vi: "khong-du-quyen" }
+  /** Không đọc được quyền — phiên hết hạn, mạng hỏng, máy chủ lỗi. Vẫn là ẩn. */
+  | { hien: false; vi: "khong-doc-duoc"; thongBao: string };
+
+/**
+ * Có hiện phần giao diện gắn với **một** khoá quyền hay không.
+ *
+ * NHẬN ĐÚNG MỘT KHOÁ, KHÔNG NHẬN DANH SÁCH. Một hàm công khai nhận danh sách khoá là hàm mời
+ * người gọi truyền hai khoá vào rồi mở màn khi có bất kỳ khoá nào — và `admin.audit` sẽ mở màn
+ * của `admin.user` mà không ai thấy (luật 5, bất biến 3b).
+ *
+ * FAIL CLOSED: không đọc được danh sách quyền thì coi như KHÔNG có quyền. "Chưa rõ" không được
+ * hành xử như "có" — trên đường cách ly không có giá trị mặc định nào (luật 1, cấm #1).
+ */
+export function quyetDinhTheoKhoa(
+  ketQua: KetQua<identity_phienHienTaiRa>,
+  khoa: string,
+): QuyetDinhHien {
+  if (!ketQua.ok) return { hien: false, vi: "khong-doc-duoc", thongBao: ketQua.thongBao };
+
+  return coQuyen(ketQua.duLieu.permissions, khoa)
+    ? { hien: true }
+    : { hien: false, vi: "khong-du-quyen" };
+}
 
 /**
  * Có đúng khoá quyền này hay không. **So sánh chuỗi chính xác, không tiền tố, không ký tự thay

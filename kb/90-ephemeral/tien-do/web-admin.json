@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-09-20",
+  "cap_nhat": "2026-09-21",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -13,11 +13,35 @@
     },
     {
       "id": "muoi-mot-phan-he-chua-dung",
-      "viec": "Mười một phân hệ trong đặc tả chưa có màn hình nào",
+      "viec": "Chín phân hệ trong đặc tả chưa có màn hình nào (trước là mười một)",
       "trang_thai": "chua_lam",
-      "bang_chung": "docs/ui-ux/ có 16 chương; web-admin/src/app/ mới có cau-hinh, dang-nhap, page.tsx, layout.tsx, not-found.tsx, globals.css — kiểm 2026-09-20",
+      "bang_chung": "docs/ui-ux/ có 16 chương; web-admin/src/app/ nay có cau-hinh, dang-nhap, giai-ngan, giai-ngan/du-an/[id], phan-anh, page.tsx, layout.tsx, not-found.tsx, globals.css — `npm run build` liệt kê đủ 7 tuyến, kiểm 2026-09-21",
       "no_confirm": [],
-      "tiep_theo": "Chưa dựng: nhiệm vụ (02) · biên bản họp (04) · văn bản đơn thư (05) · giải ngân (06) · thu chi ngân sách (07) · thông báo (08) · phản ánh (09) · bản đồ kinh tế số (10) · nội dung Mini App (11) · danh bạ cán bộ (12) · báo cáo (13). GIỮ MỘT MỤC chứ không tách mười một: tách ra là mười một dòng cùng nói một câu `chưa bắt đầu`, và sổ phình mà không thêm thông tin. Tách khi một phân hệ thật sự khởi công"
+      "tiep_theo": "Chưa dựng: nhiệm vụ (02) · biên bản họp (04) · văn bản đơn thư (05) · thu chi ngân sách (07) · thông báo (08) · bản đồ kinh tế số (10) · nội dung Mini App (11) · danh bạ cán bộ (12) · báo cáo (13). GIỮ MỘT MỤC cho những phân hệ CHƯA khởi công: tách ra là chín dòng cùng nói một câu `chưa bắt đầu`, và sổ phình mà không thêm thông tin. Giải ngân (06) và phản ánh (09) đã tách thành mục riêng vì đã thật sự khởi công — đúng như dòng này dặn"
+    },
+    {
+      "id": "giai-ngan-doc-du-an",
+      "viec": "Giải ngân (06): danh sách dự án đầu tư theo năm ngân sách + trang chi tiết dự án, CHỈ ĐỌC",
+      "trang_thai": "dang_lam",
+      "bang_chung": "tasks/web/done/{e0b90d44eae7,24bc22b6d477}.json. web-admin/src/app/giai-ngan/page.tsx + app/giai-ngan/du-an/[id]/page.tsx; features/giai-ngan/{bang-du-an.tsx,chi-tiet-du-an.tsx,nhan-du-an.ts}; lib/api/du-an.ts. Quyền `budget.read` lấy từ x-vigov-permission của hai tuyến trong kb/20-contracts/openapi.json. `npx tsc --noEmit` sạch · `npm test` 283/283 · `npm run check:api` khớp hợp đồng · `npm run lint` sạch · `npm run build` xanh — kiểm 2026-09-21",
+      "no_confirm": [],
+      "tiep_theo": "HỢP ĐỒNG THIẾU HAI THAM SỐ TRUY VẤN của GET /api/v1/investment-projects: `year` (BẮT BUỘC, máy chủ trả 400 nếu thiếu) và `category`. openapi.json không khai `parameters` nào, dù bộ sinh kiểu có hỗ trợ và GET /api/v1/staff thì có đủ bốn — lỗ hổng nằm ở tools/apidoc. Hệ quả: `finance_get_investment_projects[\"truyVan\"]` rỗng nên tsc không canh được hai tên ấy. CHƯA DỰNG và không được bịa: 4 thẻ KPI, biểu đồ luỹ kế, bảng theo hạng mục, khối nguồn vốn, chip nguồn vốn, cột vướng mắc, tab Chứng từ/Vướng mắc/Biểu đồ/Trao đổi, vạch 'thời gian đã trôi qua' — không thứ nào có tuyến. Tên bộ phận và cán bộ phụ trách cũng chưa: hợp đồng chỉ trả ID nội bộ"
+    },
+    {
+      "id": "phan-anh-tra-cuu-phieu",
+      "viec": "Phản ánh (09): tra một phiếu theo mã tra cứu, CHỈ ĐỌC",
+      "trang_thai": "dang_lam",
+      "bang_chung": "tasks/web/done/df25652c98fe.json. web-admin/src/app/phan-anh/page.tsx; features/phan-anh/{tra-cuu-phieu.tsx,nhan-phieu.ts}; lib/api/phieu-phan-anh.ts. Quyền `feedback.read` lấy từ x-vigov-permission của tuyến. Đã đối chiếu từng trường của petitions.phieuPhanAnhRa: KHÔNG có ghi chú nội bộ, KHÔNG có lịch sử luân chuyển; hai trường người gửi về ở dạng ĐÃ CHE và màn hình hiện nguyên dạng ấy. Kiểm 2026-09-21 (số liệu chung ở mục giải ngân)",
+      "no_confirm": [],
+      "tiep_theo": "KHÔNG CÓ TUYẾN DANH SÁCH `GET /api/v1/citizen-reports`, nên bốn thẻ KPI, ba bộ lọc, danh sách thẻ phiếu, tab Bản đồ nhiệt và tab Báo cáo đều chưa dựng được. HỢP ĐỒNG THIẾU `enum` cho `status` và `channel` (khai `string` trơn) dù danh sách đóng có thật trong domain Go — nên bảng nhãn tiếng Việt ở features/phan-anh/nhan-phieu.ts là bản chép tay, và thêm một trạng thái ở máy chủ KHÔNG làm tsc đỏ. Sửa ở tools/apidoc. Màn hình CỐ Ý không đếm 'quá hạn mấy ngày': khoảng ấy đếm bằng giờ làm việc và identity sở hữu phép cộng (ADR 0007)"
+    },
+    {
+      "id": "lich-lam-viec-xa-tren-man-cau-hinh",
+      "viec": "Cấu hình (14 §8): ba bảng lịch làm việc của xã — giờ làm tuần, ngày nghỉ lễ, ngày làm bù",
+      "trang_thai": "dang_lam",
+      "bang_chung": "tasks/web/done/{b3033152e6c6,d2c52a80badd,450688014959}.json. web-admin/src/features/cau-hinh/{tab-lich-lam-viec.tsx,nhan-lich-lam-viec.ts}; lib/api/lich-lam-viec.ts; mắc vào app/cau-hinh/page.tsx sau TabDanhMuc. Ba tuyến khai `any-authenticated` nên KHÔNG có cổng quyền ở giao diện — lý do ghi trong x-vigov-permission.reason. Kiểm 2026-09-21 (số liệu chung ở mục giải ngân)",
+      "no_confirm": [],
+      "tiep_theo": "Bảng SLA của §8 (số giờ tiếp nhận / xử lý xong theo từng lĩnh vực) VẪN CHƯA DỰNG: không có tuyến nào. HỢP ĐỒNG THIẾU tham số `year` của /public-holidays và /swap-working-days, cùng lỗ hổng tools/apidoc với tuyến dự án. KHÔNG một phép cộng giờ làm việc nào được viết ở phía web, và có hai ca test đọc thẳng mã nguồn canh điều đó — identity sở hữu ba bảng và phép cộng (ADR 0007, luật 10 #4)"
     },
     {
       "id": "man-xac-thuc-loi-khai-cu-tru",
