@@ -2,7 +2,7 @@
 //
 //   · build CÁI GÌ    — đúng một ảnh, vigov-service-finance
 //   · build KHI NÀO   — xem `duongKichHoat()` ở cuối tệp
-//   · đẩy ĐI ĐÂU      — tham số registry của riêng lượt chạy này
+//   · đẩy ĐI ĐÂU      — hằng số REGISTRY/PROJECT trong khối `environment` ngay dưới
 //
 // PHẠM VI DỪNG Ở ẢNH. Không `kubectl apply`, không đụng cụm k8s — đó là việc của devops.
 //
@@ -19,14 +19,18 @@ pipeline {
     disableConcurrentBuilds()
   }
 
-  parameters {
-    string(name: 'REGISTRY', defaultValue: 'harbor.omicrm.services',
-           description: 'Máy chủ Harbor, không kèm https://')
-    string(name: 'PROJECT', defaultValue: 'ci',
-           description: 'Project trong Harbor — ảnh là <REGISTRY>/<PROJECT>/vigov-service-finance')
-  }
-
+  // REGISTRY và PROJECT là HẰNG SỐ, không phải tham số của lượt chạy.
+  //
+  // Chúng từng là `parameters {}`, và hệ quả là mỗi lần bấm Build tay Jenkins đều hiện một form
+  // bắt điền lại — `defaultValue` chỉ tự áp khi build do SCM kích hoạt. Một cái form phải điền
+  // mỗi lượt để luôn điền đúng một giá trị là ma sát thuần tuý.
+  //
+  // Và với hệ thống hành chính còn hơn thế: registry chọn được lúc bấm nút nghĩa là câu "ảnh
+  // này nằm ở đâu" phụ thuộc vào thứ người bấm gõ vào ô nhập, một thứ không nằm trong kho mã và
+  // không ai xem lại được sau sáu tuần. Đổi registry là ĐỔI MÃ, đi qua commit và review.
   environment {
+    REGISTRY = 'harbor.omicrm.services'
+    PROJECT  = 'ci'
     DOCKER_BUILDKIT = '1'
     // Tên THƯ MỤC, cũng là tên module và tên ảnh. Tên NGHIỆP VỤ là `finance` — tiền tố
     // `service-` là dấu hiệu hạ tầng phân biệt backend với web, không phải một phần tên gọi.
@@ -92,7 +96,7 @@ pipeline {
     stage('Đóng ảnh') {
       when { environment name: 'CAN_DUNG', value: 'co' }
       steps {
-        script { env.ANH = "${params.REGISTRY}/${params.PROJECT}/vigov-${env.THU_MUC}:${env.TAG}" }
+        script { env.ANH = "${env.REGISTRY}/${env.PROJECT}/vigov-${env.THU_MUC}:${env.TAG}" }
 
         sh '''
           docker build --pull --build-arg VERSION="$TAG" -t "$ANH" -f "$THU_MUC/Dockerfile" .

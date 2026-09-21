@@ -2,7 +2,7 @@
 //
 //   · build CÁI GÌ    — đúng một ảnh, vigov-web-admin
 //   · build KHI NÀO   — xem `canDungLai()` ở cuối tệp
-//   · đẩy ĐI ĐÂU      — tham số registry của riêng lượt chạy này
+//   · đẩy ĐI ĐÂU      — hằng số REGISTRY/PROJECT trong khối `environment` ngay dưới
 //
 // PHẠM VI DỪNG Ở ẢNH. Việc triển khai lên k8s là của devops.
 
@@ -16,14 +16,18 @@ pipeline {
     disableConcurrentBuilds()
   }
 
-  parameters {
-    string(name: 'REGISTRY', defaultValue: 'harbor.omicrm.services',
-           description: 'Máy chủ Harbor, không kèm https://')
-    string(name: 'PROJECT', defaultValue: 'ci',
-           description: 'Project trong Harbor — ảnh là <REGISTRY>/<PROJECT>/vigov-web-admin')
-  }
-
+  // REGISTRY và PROJECT là HẰNG SỐ, không phải tham số của lượt chạy.
+  //
+  // Chúng từng là `parameters {}`, và hệ quả là mỗi lần bấm Build tay Jenkins đều hiện một form
+  // bắt điền lại — `defaultValue` chỉ tự áp khi build do SCM kích hoạt. Một cái form phải điền
+  // mỗi lượt để luôn điền đúng một giá trị là ma sát thuần tuý.
+  //
+  // Và với hệ thống hành chính còn hơn thế: registry chọn được lúc bấm nút nghĩa là câu "ảnh
+  // này nằm ở đâu" phụ thuộc vào thứ người bấm gõ vào ô nhập, một thứ không nằm trong kho mã và
+  // không ai xem lại được sau sáu tuần. Đổi registry là ĐỔI MÃ, đi qua commit và review.
   environment {
+    REGISTRY = 'harbor.omicrm.services'
+    PROJECT  = 'ci'
     DOCKER_BUILDKIT = '1'
     UNG_DUNG = 'web-admin'
   }
@@ -85,7 +89,7 @@ pipeline {
     stage('Đóng ảnh') {
       when { environment name: 'CAN_DUNG', value: 'co' }
       steps {
-        script { env.ANH = "${params.REGISTRY}/${params.PROJECT}/vigov-${env.UNG_DUNG}:${env.TAG}" }
+        script { env.ANH = "${env.REGISTRY}/${env.PROJECT}/vigov-${env.UNG_DUNG}:${env.TAG}" }
 
         // Ngữ cảnh dựng là THƯ MỤC `web-admin`, khác với bảy dịch vụ Go lấy ngữ cảnh ở
         // gốc kho: ứng dụng này không dùng chung go.mod/core/gen với ai cả.
