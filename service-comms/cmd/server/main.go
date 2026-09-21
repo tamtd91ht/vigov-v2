@@ -36,7 +36,16 @@ func main() {
 	// commune directory and the staff-authentication edge are all real.
 	//
 	// TODO(skeleton): still missing —
-	//   5. consumers   event handlers; each refuses a message with no commune
+	//   5. consumers   the HANDLER now exists — internal/event.PhieuDoiTrangThai, which consumes
+	//                  `petitions.status_changed.v1` and writes the citizen notification ledger.
+	//                  TWO THINGS ARE MISSING BEFORE IT CAN BE WIRED HERE, and both are decisions
+	//                  rather than code: (a) a Kafka client — ADR 0010 puts inter-service events on
+	//                  Kafka, but `core/events.Publisher` is still a bare interface with no
+	//                  implementation, and a broker client nobody has decided does not belong in a
+	//                  wiring file; (b) an implementation of event.MauTinXa — which APPROVED ZNS
+	//                  template this commune sends for a transition is per-commune configuration
+	//                  (ADR 0018, consequence 1) with no store, no adapter and no customer answer
+	//                  yet. A constant here would be one commune's template id serving 200+.
 	//
 	// A consumer is NOT covered by the edge chain below: a message carries its commune inside
 	// itself (rule 1, invariant 9), and a consumer that finds none refuses rather than guessing.
