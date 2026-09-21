@@ -48,7 +48,10 @@
       "viec": "Màn hình cán bộ xác thực lời khai cư trú của công dân",
       "trang_thai": "chua_lam",
       "bang_chung": "web-admin/src/app/ mới có cau-hinh, dang-nhap, page.tsx, not-found.tsx — kiểm 2026-09-20",
-      "no_confirm": [19, 20],
+      "no_confirm": [
+        19,
+        20
+      ],
       "tiep_theo": "ADR 0023 đã chốt nghiệp vụ. Hai điều phải đúng NGAY BẢN ĐẦU vì sửa sau là sửa chữ trên màn hình một cơ quan nhà nước: (1) nhãn nói \"xác nhận LỜI KHAI\", không phải xác nhận nhân thân — nút \"Xác nhận thường trú\" đứng trơ sẽ được hiểu là đang cấp một xác nhận hành chính; (2) `bị từ chối` là trạng thái riêng, giữ nguyên lời khai và giữ LÝ DO như trường nghiệp vụ BẮT BUỘC — một textarea tuỳ chọn thì thực tế sẽ rỗng, và công dân nhận về một \"bị từ chối\" không lý do, đúng cái im lặng luật 10 cấm"
     },
     {
@@ -56,7 +59,18 @@
       "viec": "Mọi tuyến GHI cho cán bộ",
       "trang_thai": "chua_lam",
       "bang_chung": "",
-      "no_confirm": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+      "no_confirm": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
       "tiep_theo": "cố ý không dựng scaffolding: một tuyến ghi viết dở trông y hệt một quyết định ai đó đã ra"
     },
     {
@@ -82,6 +96,14 @@
       "bang_chung": "tiến trình Next.js gọi https://<Host>/api/v1/communes/current bằng TÊN MIỀN CÔNG KHAI — đã chứng minh, không còn là suy đoán",
       "no_confirm": [],
       "tiep_theo": "chờ devops xác nhận cụm có split-horizon DNS / chặn egress không; nếu chặn thì MỌI yêu cầu 500. web-admin hiện không có tệp mẫu env nào để thêm vào"
+    },
+    {
+      "id": "anh-web-admin-dung-duoc",
+      "viec": "Ảnh web-admin: ba đường dẫn Dockerfile chép đã được chứng minh có thật",
+      "trang_thai": "dang_lam",
+      "bang_chung": "`npm run build` chạy thật trong web-admin/ ngày 21/09/2026: biên dịch xanh, tsc xanh, 7 route sinh ra. Sau đó `.next/standalone`, `.next/static` và `.next/standalone/server.js` đều có — đúng ba thứ web-admin/Dockerfile:87-88 chép và CMD:100 gọi. Đây là lần đầu `next build` chạy ở bất cứ đâu: `make check` mục `web` CỐ Ý không chạy nó (bản dựng phát hành là việc của ảnh CI), nên trước hôm nay không gì chứng minh `output: \"standalone\"` trong next.config.ts:27 thật sự sinh ra thứ Dockerfile trông đợi.",
+      "no_confirm": [],
+      "tiep_theo": "CÒN LẠI CHƯA CHỨNG MINH: chính lượt `docker build` chưa chạy lần nào — cụ thể là ảnh nền `node:22-alpine` (chưa kéo bao giờ; bảy dịch vụ Go thì `golang:1.26-bookworm` và `distroless/static-debian12:nonroot` đã được lượt build xanh của vihat-miniapp kéo về thành công lúc 22:15 cùng ngày), và rào chắn `env | grep '^NEXT_PUBLIC_'` ở Dockerfile:56 — nó chỉ chạy bên trong ảnh. Cách chứng minh: tạo job Jenkins cho web-admin và bấm chạy; job này KHÔNG cần `buf`, khác bảy dịch vụ Go."
     }
   ]
 }
