@@ -8,12 +8,12 @@
 # Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
 
 version: 1
-generated_at: 2026-09-20T16:11:41Z   # `make kb` điền
-from_commit: 0960b2a   # `make kb` điền
+generated_at: 2026-09-21T08:27:06Z   # `make kb` điền
+from_commit: 917ce3f   # `make kb` điền
 
 budget:
-  always_load_max: 25000  # token — trần do người dùng chốt 16/09/2026 (trước là 20000)
-  in_use: 24190   # `make kb` đo
+  always_load_max: 27000  # token — trần do người dùng chốt 21/09/2026 (20000 -> 25000 -> 27000)
+  in_use: 25451   # `make kb` đo
 
 always_load:                 # T0 — nạp mọi phiên, không hỏi
   - kb/00-foundation/domain-boundaries.md

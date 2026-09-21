@@ -44,6 +44,54 @@ it costs.**
 
 ---
 
+## THE MINI APP SPANS TWO REPOSITORIES
+
+| Repository | Holds |
+|---|---|
+| `vihat-miniapp` — **sibling directory**, `github.com/tamtd91ht/vihat-miniapp` | The **app itself**: Zalo registration, App ID + app secret, login backend (`POST /api/v1/sessions`), Zalo webhook, the QR codes it issues. Separate Go repo, commercial, **not ViGov** |
+| `vigov-v2/citizen-app` (here) | The **front-end running inside** that app. Ships into the App ID the other repo owns |
+
+**Which repo a Zalo surface belongs to is decided by WHICH SECRET SIGNS IT** — not by "who
+the vendor is". Answered wrongly once, and the wrong answer shipped (ADR 0032):
+
+| Surface | Signed with | Repo |
+|---|---|---|
+| Mini App webhook · `accessToken`/`phoneToken` exchange | the app owner's app secret | `vihat-miniapp` |
+| **ZNS from EACH COMMUNE's OA** | that commune's key | **here**, `service-comms` (ADR 0018) |
+
+Do **not** generalise the second row away into "anything Zalo leaves ViGov".
+
+A QR from `vihat-miniapp` carries parameters that load into `citizen-app`. They **steer the
+interface and grant nothing**: client-supplied data (rule 1, forbidden #2), commune enters a
+session only by the citizen's explicit act, matching check is **in the flow** → ADR 0005 ·
+0019 · 0022. Who owns the app and which OA authenticates it: ADR 0031 · 0018.
+
+### `vihat-miniapp` MUST sit beside `vigov-v2` — and must be there before Mini App work
+
+Not a tidiness convention. The work runs on **several machines**, and "beside `vigov-v2`" is
+the only location that is true on all of them; an absolute path is true on exactly one, and
+the day it stops being true nobody notices.
+
+**Missing it, while doing Mini App work, is an ERROR — stop and say so.** Do not reason about
+the Mini App from the half that lives here: that conclusion compiles, passes its tests, and is
+written into the wrong repository. It has already happened — the Zalo webhook lived a day
+inside `service-platform` before it was removed (ADR 0032).
+
+```sh
+cd <parent of vigov-v2> && git clone https://github.com/tamtd91ht/vihat-miniapp
+```
+
+`hooks/miniapp_sibling_guard.py` (BLOCK) enforces both halves: **absent** while a
+`citizen-app/**` or `vihat-miniapp/**` path — or a shell command naming the repo — is touched,
+and **present but somewhere other than beside this repo**. Two copies in two places are two
+copies that drift, and the forgotten one is the one somebody reads.
+
+⚠ The other hooks fire on edits to `vihat-miniapp` too — per session, not per repo — and that
+repo has no `core/authz` and no `kb/`. Read such a report, do **not** route around it, and do
+**not** import ViGov conventions there to silence it.
+
+---
+
 ## SESSION PROTOCOL
 
 ### Before reading any source code — in this order
@@ -124,7 +172,7 @@ own: if you see a risk, **state the risk**, then do what was asked.
 | Location | Contents |
 |---|---|
 | `rules/critical/` | **11 rules**, always loaded (below). Each names an enforcing hook |
-| `hooks/` | **17 hooks**: 11 rule hooks + 6 cross-cutting |
+| `hooks/` | **18 hooks**: 11 rule hooks + 7 cross-cutting |
 | `skills/` | Skills, lazily loaded by keyword |
 | `commands/` | Procedures invoked as `/command-name` |
 | `agents/` | **10 agents** — 5 build, 5 review. Entry point: `agents/ROUTING.md` |

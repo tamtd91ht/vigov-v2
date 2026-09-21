@@ -26,7 +26,34 @@ for _s in (sys.stdout, sys.stderr):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLAUDE = os.path.join(ROOT, ".claude")
-TOKEN_BUDGET = 25000
+
+
+def _token_budget() -> int:
+    """Đọc trần từ `kb/INDEX.yaml`, NGUỒN CHUẨN DUY NHẤT của con số này.
+
+    VÌ SAO KHÔNG VIẾT CỨNG Ở ĐÂY: trần từng nằm ở CẢ HAI chỗ — `budget.always_load_max` trong
+    INDEX.yaml và một hằng trong tệp này. Hai bản sao của một con số là hai bản sẽ lệch, và
+    lệch ở đây hỏng theo kiểu tệ nhất trong hai kiểu: người dùng nâng trần trong INDEX.yaml
+    (nơi chính tệp ấy khai rằng trần do người dùng chốt), cổng vẫn so với con số cũ, và câu
+    trả lời là một lần đỏ không ai hiểu vì sao — đo đúng ngày 21/09/2026.
+
+    Đọc bằng regex chứ không bằng PyYAML: `tools/` không được thêm phụ thuộc cho một phép kiểm
+    phải chạy được trên mọi máy, kể cả máy chưa `pip install` gì.
+
+    Không đọc được -> giữ 25000. HỎNG VỀ PHÍA CHẶT: một INDEX.yaml hỏng không được biến thành
+    một cổng không còn trần nào.
+    """
+    try:
+        with open(os.path.join(ROOT, "kb", "INDEX.yaml"), encoding="utf-8") as f:
+            m = re.search(r"^\s*always_load_max:\s*(\d+)", f.read(), re.MULTILINE)
+        if m:
+            return int(m.group(1))
+    except Exception:
+        pass
+    return 25000
+
+
+TOKEN_BUDGET = _token_budget()
 
 fails: list[str] = []
 

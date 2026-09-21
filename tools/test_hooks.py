@@ -197,6 +197,24 @@ CASES = [
      w(KHO_KHAC + "/internal/config/config.go",
        'func Nap() {\n\tdsn := os.Getenv("DATABASE_DSN")\n}')),
 
+    # ---- `vihat-miniapp` phải nằm CÙNG CẤP với kho này -------------------------
+    #
+    # Mini App nằm ở HAI kho, và một phiên chỉ nhìn thấy nửa ở đây sẽ kết luận từ nửa ấy. Đã
+    # xảy ra thật: endpoint webhook Zalo được viết vào `service-platform` ngày 20/09/2026 và
+    # sống ở đó tới hôm sau mới bị gỡ (ADR 0032). Mã biên dịch được, test xanh, chỉ là nó nằm
+    # ở kho sai — không rào chắn nào bắt được, vì không rào chắn nào biết kho kia tồn tại.
+    #
+    # CA CHẶN KHÔNG DỰA VÀO VIỆC KHO CÓ MẶT HAY KHÔNG, và đó là điều làm nó chạy được trên
+    # mọi máy: nó chấm LUẬT VỊ TRÍ — một `vihat-miniapp` nằm chỗ khác thì sai dù nó có tồn
+    # tại hay không. Một ca dựa vào sự VẮNG MẶT của kho sẽ xanh trên máy chưa clone và đỏ
+    # trên máy đã clone, tức xanh vì lý do sai đúng nửa số máy.
+    ("miniapp_sibling_guard", "bản sao đặt ở chỗ khác, không cùng cấp", BLOCK,
+     w(KHO_KHAC + "/vihat-miniapp/internal/httpapi/api.go", "package httpapi\n")),
+    ("miniapp_sibling_guard", "sửa citizen-app khi kho ấy có mặt đúng chỗ", PASS,
+     w("citizen-app/src/content/company-profile.ts", "export const COMPANY = {} as const\n")),
+    ("miniapp_sibling_guard", "tệp ViGov bình thường, không thuộc chủ đề Mini App", PASS,
+     w("service-petitions/internal/app/a.go", "package app\n")),
+
     # ---- rule 2 · service boundary ---------------------------------------
     ("service_boundary_guard", "imports another service's internal", BLOCK,
      w("baocao/internal/app/a.go",
