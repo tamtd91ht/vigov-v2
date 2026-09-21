@@ -102,7 +102,14 @@ describe("tấm thiếp của chính chúng tôi", () => {
     expect(vcard).toContain(`ORG:${COMPANY.name}`);
     expect(vcard).toContain(`TEL;TYPE=WORK,VOICE:${CONTACT.hotlineDialable}`);
     expect(vcard).toContain(`EMAIL;TYPE=WORK:${CONTACT.email}`);
-    expect(vcard).toContain(`URL:${COMPANY.website}`);
+    // ⚠ `URL` CHỈ CÓ MẶT KHI CÓ ĐỊA CHỈ THẬT. `COMPANY.website` trống từ 21/09/2026 (địa chỉ cũ
+    // là của VihatSoftware, địa chỉ tập đoàn chưa ai cấp), và `dungVCard` bỏ hẳn dòng của một
+    // trường rỗng. Một dòng `URL:` trống đi vào danh bạ người khác là một tấm thiếp hỏng.
+    if (COMPANY.website === undefined) {
+      expect(vcard, "thiếp mang một dòng URL trong khi không có địa chỉ nào").not.toContain("URL:");
+    } else {
+      expect(vcard).toContain(`URL:${COMPANY.website}`);
+    }
   });
 
   it("KHÔNG mang một trường nào ngoài những trường đã khai", () => {
@@ -116,7 +123,9 @@ describe("tấm thiếp của chính chúng tôi", () => {
     expect(truong).toEqual([
       "BEGIN",
       "VERSION",
-      ...TRUONG_THIEP_CUA_CHUNG_TOI.map((t) => t.ten),
+      // Trường rỗng không sinh ra dòng nào — cùng một luật với `dungVCard`, nên danh sách kỳ
+      // vọng phải lọc y như thế thay vì liệt kê cứng.
+      ...TRUONG_THIEP_CUA_CHUNG_TOI.filter((t) => t.gia_tri !== "").map((t) => t.ten),
       "END",
     ]);
     expect(vcard).not.toContain("ADR");
@@ -134,7 +143,7 @@ describe("tấm thiếp của chính chúng tôi", () => {
     expect(doc.to_chuc).toBe(COMPANY.name);
     expect(doc.dien_thoai).toEqual([CONTACT.hotlineDialable]);
     expect(doc.email).toEqual([CONTACT.email]);
-    expect(doc.trang_web).toEqual([COMPANY.website]);
+    expect(doc.trang_web).toEqual(COMPANY.website === undefined ? [] : [COMPANY.website]);
   });
 });
 

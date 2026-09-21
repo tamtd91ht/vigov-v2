@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { LaunchParamsPanel } from "bien-the/chan-doan";
 import {
@@ -13,7 +13,14 @@ import {
 
 import { TabBar } from "./components/TabBar";
 import { COMPANY } from "./content/company-profile";
-import { DEFAULT_SCREEN_ID, findScreen, type ScreenId } from "./features/company-intro/screens";
+import { NutChatOA } from "./features/company-intro/NutChatOA";
+import {
+  DEFAULT_SCREEN_ID,
+  type DiemDen,
+  findScreen,
+  type ScreenId,
+} from "./features/company-intro/screens";
+import { cuonToiMoc } from "./lib/cuon-toi";
 import { batChanDoan, type KetQuaDo, thamSo as thamSoLaunch, thamSoMoApp } from "./lib/launch-params";
 
 /**
@@ -91,15 +98,47 @@ export function KhungApp(props: {
         {props.children}
       </main>
 
+      {/* NÚT CHAT NỔI BIẾN MẤT CÙNG LÚC VỚI THANH TAB, CÙNG MỘT LÝ DO (xem `khamPha` ở trên):
+          màn chọn xã là màn mỗi-màn-một-việc, và việc ấy là chọn đúng xã. Một nút nổi mời trò
+          chuyện với một doanh nghiệp giữa lúc ấy là một đường rẽ sai chỗ — và nó nằm đè lên đúng
+          góc màn hình mà danh sách xã đang cuộn qua. */}
+      {!props.khamPha && <NutChatOA />}
+
       {!props.khamPha && <TabBar current={props.man} onSelect={props.onChonMan} />}
     </div>
   );
 }
 
+/**
+ * VỊ TRÍ HIỆN TẠI TRONG APP — màn nào, chỗ nào trong màn ấy, và lần điều hướng thứ mấy.
+ *
+ * `lan` KHÔNG PHẢI MỘT BỘ ĐẾM CHO VUI. Không có nó thì bấm "Văn phòng" hai lần liên tiếp chỉ cuộn
+ * một lần: lần thứ hai `man` và `moc` y hệt lần đầu, React không thấy gì đổi, và người bấm thấy
+ * một cái nút không phản hồi. Với người lớn tuổi, một nút không phản hồi là kết luận "app hỏng".
+ */
+type ViTri = { man: ScreenId; moc?: string; lan: number };
+
 export function App() {
-  const [currentId, setCurrentId] = useState<ScreenId>(DEFAULT_SCREEN_ID);
+  const [vi_tri, datViTri] = useState<ViTri>({ man: DEFAULT_SCREEN_ID, lan: 0 });
+  const currentId = vi_tri.man;
   const screen = findScreen(currentId);
   const Screen = screen.component;
+
+  /** Đi tới một chỗ khác trong app. Đây là chỗ DUY NHẤT trong cả kho cài đặt việc điều hướng. */
+  function di(diem: DiemDen) {
+    datViTri((truoc) => ({ man: diem.man, moc: diem.moc, lan: truoc.lan + 1 }));
+  }
+
+  /**
+   * Cuộn tới mỏ neo SAU KHI màn mới đã vẽ xong — đó là lý do việc này nằm trong `useEffect` chứ
+   * không nằm trong hàm `di` ở trên: lúc `di` chạy, phần tử mang `id` ấy chưa tồn tại.
+   *
+   * `moc` là tên một màn CON (`MOC_QUAN_LY_QUYEN`) thì không có gì để cuộn tới, và `cuonToiMoc`
+   * không làm gì — màn cha mới là chỗ đọc nó. Xem `features/company-intro/dieu-huong.ts`.
+   */
+  useEffect(() => {
+    cuonToiMoc(vi_tri.moc);
+  }, [vi_tri.lan, vi_tri.moc]);
 
   // Đọc MỘT LẦN, NGAY LÚC DỰNG. `location.search` có sẵn đồng bộ, nên không còn `useEffect` và
   // không còn nhịp nhấp nháy: công dân quét QR thấy thẳng màn xác nhận xã, không thấy màn giới
@@ -140,7 +179,17 @@ export function App() {
    */
   const dangKhamPha = CO_LOP_KHAM_PHA && !xaDaChon && !boQuaKhamPha && Boolean(p["t"]);
 
-  let noiDung: ReactNode = <Screen />;
+  /**
+   * `key` MANG CẢ `moc` LẪN `lan`, VÀ ĐÓ LÀ THỨ LÀM MỤC "QUYỀN" TRÊN MÀN CHỦ CHẠY ĐƯỢC LẦN THỨ HAI.
+   *
+   * `ContactScreen` đọc `moc` làm GIÁ TRỊ BAN ĐẦU của trạng thái "đang xem màn quyền". Giá trị ban
+   * đầu chỉ được đọc một lần cho mỗi lần dựng, nên không có `key` đổi thì: bấm Quyền -> mở, bấm
+   * Quay lại -> đóng, bấm Quyền lần nữa -> KHÔNG mở lại, vì màn cha không hề được dựng lại. Một
+   * nút chạy đúng một lần rồi im là kiểu hỏng không ai báo, người ta chỉ thôi bấm nó.
+   */
+  let noiDung: ReactNode = (
+    <Screen key={`${currentId}:${vi_tri.moc ?? ""}:${vi_tri.lan}`} moc={vi_tri.moc} onDi={di} />
+  );
   if (dangChonXa) {
     // Công dân tự bấm "Đổi xã": không cần giải thích gì, chính họ vừa yêu cầu.
     noiDung = (
@@ -190,7 +239,9 @@ export function App() {
   return (
     <KhungApp
       man={currentId}
-      onChonMan={setCurrentId}
+      // Bấm một tab là điều hướng KHÔNG CÓ MỐC: người bấm muốn về đầu màn ấy, không muốn bị thả
+      // xuống giữa một khối mà lần trước họ đi tới từ màn chủ.
+      onChonMan={(id) => di({ man: id })}
       xaDaChon={xaDaChon}
       onDoiXa={() => setDangChonXa(true)}
       khamPha={dangChonXa || dangKhamPha}

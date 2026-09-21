@@ -20,7 +20,7 @@ phases instead of two apps.
 
 | Phase | What ships | Why |
 |---|---|---|
-| **1 — now** | A **real, working product app of VihatSoftware**: the company introduction plus three features that use `getPhoneNumber` · `getLocation` · `scanQRCode`. The **discovery layer** — commune suggestion, commune picker, commune page — is built and ships only in the `day-du` build | This is the submission Zalo reviews, so the OA `VihatSoftware` can verify the App ID **and** grant the three permissions. Zalo grants them only when the submission **visibly uses** them, and phase 2 needs all three on **this** App ID |
+| **1 — now** | A **real, working product app of ViHAT Group**: the company introduction plus three features that use `getPhoneNumber` · `getLocation` · `scanQRCode`. The **discovery layer** — commune suggestion, commune picker, commune page — is built and ships only in the `day-du` build | This is the submission Zalo reviews, so the OA `Vihat` can verify the App ID **and** grant the three permissions. Zalo grants them only when the submission **visibly uses** them, and phase 2 needs all three on **this** App ID |
 | **2 — next** | The commune / citizen surface behind a real session | It lands on the **same App ID**, already verified |
 
 **No detail of a government body appears in the submitted build.** That is a requirement from the
@@ -41,15 +41,42 @@ a second approval.
 **Nothing of phase 2 gets deleted to make room for phase 1.** `src/lib/commune-resolution.ts`
 is the foundation phase 2 builds on and stays untouched.
 
-Why the verifying OA is VihatSoftware and not a commune, and why the notification OA is a
-different OA per commune: `kb/10-decisions/0018-oa-xac-thuc-tach-khoi-oa-thong-bao.md`. How the
+### Đổi pháp nhân đứng tên app — 21/09/2026
+
+**App chuyển quyền sở hữu từ VihatSoftware sang ViHAT Group (công ty mẹ), OA xác thực đổi từ
+`VihatSoftware` sang `Vihat`.** Giai đoạn 1 từ nay là app giới thiệu **Tập đoàn ViHAT Group**,
+không còn là app giới thiệu công ty con.
+
+Ba hệ quả đã vào mã, và mỗi thứ có một ca kiểm giữ:
+
+| Đổi gì | Vì sao không chỉ là đổi chuỗi |
+|---|---|
+| `COMPANY` và `GROUP` **nhập làm một** | Hai hằng ấy tồn tại để công ty con không nhận vơ số liệu, hệ sinh thái và đầu mối liên hệ của công ty mẹ. Bên phát hành nay CHÍNH LÀ công ty mẹ, nên ba ghi chú disclaim hết lý do tồn tại — gỡ khỏi cả nội dung lẫn từng màn đang vẽ chúng, không để lại node rỗng (`screens.test.tsx`) |
+| `ownsThisApp` **biến mất** | Không đơn vị thành viên nào còn "sở hữu app này". VihatSoftware **vẫn là một trong sáu đơn vị thành viên** và vẫn hiện trong danh sách |
+| Câu định vị · mô tả · website **đã điền lại từ `vihatgroup.com`** (21/09, chiều) | Ba chuỗi cũ là văn bản đã công bố **của VihatSoftware** và đã bị xoá sáng 21/09; chiều 21/09 chúng được điền lại từ trang của **chính tập đoàn**, và `company-profile.test.ts` nay ghim cả ba **nguyên văn** thay vì ghim chúng là `undefined`. ⚠ **Câu định vị đổi sang TIẾNG VIỆT, và đó là một quyết định thay khách**: tập đoàn không công bố câu định vị tiếng Anh nào, câu tiếng Anh cũ là của công ty con. Đánh dấu tại chỗ trong `company-profile.ts` để khách bác được |
+| **Tầng nền** — chuyển sắc + bóng đổ thay cho đường kẻ | Hướng thị giác của chủ dự án (21/09): đây là một công ty **công nghệ** — AI · tổng đài · CRM · SMS · ZNS — nên nền phải có chiều sâu, không phẳng trơn. Bốn token mới, **CSS thuần, không thêm thư viện nào**: `--bong-the` · `--bong-noi` (bóng đổ dựng từ chính `--navy`, nên nó xanh chứ không xám) và `--nen-the` · `--nen-the-luc` (nền thẻ chuyển sắc). Xanh lá `#78bd1a` nay có mặt trên **bề mặt sáng** chứ không chỉ trên panel tối. ⚠ Một dải chuyển sắc là chỗ độ tương phản **chết đầu tiên**, và nó chết ở phía **dưới** thẻ: nên hai đầu của mỗi dải đều là màu đã đo, `accessibility.test.ts` có thêm **6 cặp đo chữ ở đầu kia** và **3 ca buộc dải chỉ đi qua token đã đo** |
+| Màu đậm `#1e3150` → **`#144a80`** | `#1e3150` là màu khung website **của công ty con**. `#144a80` là `--color-primary` của `vihatgroup.com`. Bốn chỗ giữ giá trị này, ba chỗ được `bundle-for-zalo.test.ts` ghim chung: `BRAND_NAVY` · `app-config.json` · `index.html` · `--navy`. Bộ icon **không** phải chỗ thứ năm — `tools/logo.py` đọc màu từ `fill` của vector logo |
+
+⚠ **Chính sách quyền riêng tư đổi ĐÚNG MỘT VẾ.** Vế "ai phát hành / ai chịu trách nhiệm" sang
+ViHAT Group; vế "dữ liệu đăng nhập đi tới **máy chủ của VihatSoftware**" (`vihat-miniapp`)
+**giữ nguyên** — đó là lời khai nơi nhận dữ liệu theo Nghị định 13, và **ai vận hành máy chủ ấy
+sau chuyển giao là câu chưa ai trả lời**. Ba ca trong `chinh-sach.test.ts` canh cả hai chiều, để
+một lượt tìm-thay trên cả tệp không biến lời khai ấy thành một lời khai sai.
+
+Why the verifying OA is an OA of the publisher and not a commune, and why the notification OA is a
+different OA per commune: `kb/10-decisions/0018-oa-xac-thuc-tach-khoi-oa-thong-bao.md` (ADR ấy
+được soạn lại theo quyết định 21/09 — đọc ở đó, không chép lại ở đây). How the
 commune gets resolved at runtime with no domain to key off:
 `kb/10-decisions/0005-miniapp-tenant-resolution.md`. Both are read there, not repeated here.
 
 ### The app stores nothing on the device, and sends exactly ONE thing — keep it that way
 
 **No OTP, no form, no input control of any kind, no device storage.** The outbound links are
-`tel:`, `mailto:`, the company website, and a map page opened only when the user taps "Chỉ đường".
+`tel:`, `mailto:`, a map page opened only when the user taps "Chỉ đường", and the page behind a
+QR code the user just scanned, and the company's own website. (`COMPANY.website` was supplied on
+2026-09-21, so that anchor is back — on the Liên hệ screen and on a solution detail page. The
+privacy policy counts **three kinds of destination**, not three buttons: two anchors to one address
+are one destination, and counting buttons would mean editing the policy every time a button moves.)
 
 **Sign-in exists, it is one tap** (`getPhoneNumber` + `getAccessToken`, ADR 0020) — never a
 six-digit code to type — **and it calls a server, in both builds including the submitted one**.
@@ -97,6 +124,36 @@ A Mini App is identified by its platform App ID, not a domain, so the "tell comm
 domain" strategy does not apply here. The commune is resolved at runtime — see
 `src/lib/commune-resolution.ts`.
 
+## Hai nửa nghiệp vụ trong MỘT bundle — ba ràng buộc, mỗi cái là một ca test
+
+Dựng ngày 21/09/2026, **trước khi `src/cong-dan/` có tệp nghiệp vụ đầu tiên**. Chi tiết và thủ tục:
+`src/cong-dan/index.ts` (chú thích đầu tệp). Dây bẫy: `src/ranh-gioi-hai-nua.test.ts`.
+
+| Nửa | Ở đâu |
+|---|---|
+| Thương mại (khách hàng doanh nghiệp) | `src/content/` · `src/features/company-intro/` · `src/features/tinh-nang/` · `src/features/dang-nhap/` |
+| **Nhà nước (công dân)** | **`src/cong-dan/`** — còn rỗng, có tệp giữ chỗ để lượt quét đọc tới nó |
+| Lớp vỏ trung lập | `App.tsx` · `main.tsx` · `components/` · `lib/` · `features/kham-pha/` · `features/diagnostics/` |
+
+1. **Ranh giới hai chiều.** Nửa này không nhập tệp của nửa kia — cả hai chiều. Và **không tệp nào
+   ngoài `./cong-dan/` được nhập client API của ViGov** (`./cong-dan/api/`), kể cả lớp vỏ: `App.tsx`
+   không nằm sau `resolve.alias` nào, nên một `import` ở đó đi thẳng vào **bản nộp**. Một tệp không
+   thuộc khu nào cũng đỏ — thư mục mới **buộc phải khai**, vì một thư mục ngoài mọi tiền tố là một
+   thư mục ranh giới không cấm được gì.
+2. **Không lưu trữ định danh, ở cả hai nửa.** Một bundle là **một origin**: `localStorage` ·
+   `sessionStorage` · `IndexedDB` là **chung** giữa hai nửa theo cấu tạo, không có partition nào.
+   Phiếu phiên, số điện thoại, xã đã chọn sống trong `useState`. Lệnh cấm bắt cả họ tên `IDB*` —
+   hình thức duy nhất chạm IndexedDB mà không gõ ra cái tên trần.
+3. **Mỗi lời gọi SDK khai mục đích tại chỗ.** Bảng `KHAI_BAO_LOI_GOI` trong
+   `features/tinh-nang/zalo-api.ts` (nửa nào · màn nào · tính năng nào · để làm gì · Zalo có hỏi
+   không · gì rời khỏi máy). Màn **Quản lý quyền** vẽ từ bảng ấy, **không** từ một danh sách chép
+   tay. Quyền cấp theo **App ID**, nên nửa nhà nước **thừa hưởng nguyên vẹn** mọi quyền nửa thương
+   mại xin được — cột `nua` làm điều đó nhìn thấy được thay vì là một hệ quả nền tảng không ai nói.
+
+⚠ Một lời gọi trốn khỏi bảng khai bằng cách **ép kiểu** (`(sdk as X).openChat()`) hoặc **đổi tên**
+(`const s = sdk`). Cả hai hình dạng bị cấm riêng — **lỗ hổng ấy tìm ra bằng một lần thử đột biến
+thất bại**, không bằng suy luận; xem khối chú thích của ca ấy.
+
 ## Non-negotiables
 
 | # | Rule |
@@ -132,6 +189,19 @@ features keep theirs in `src/features/tinh-nang/noi-dung.ts`, for a third reason
 exact sentences the Zalo reviewer reads when deciding whether to grant the permissions, and a
 justification scattered through JSX is one nobody re-reads before submitting.
 
+Hai tệp nội dung nữa, thêm 21/09/2026 (tối), và cả hai ở đó vì **nguồn của chúng không phải
+vihatgroup.com**:
+
+| Tệp | Giữ gì | Vì sao tách riêng |
+|---|---|---|
+| `src/content/tin-tuc.ts` | Hai bài mới nhất trên trang tin — **ảnh chụp ngày 21/09/2026**, kèm ngày đăng và cách cập nhật | Chữ của trang tin, chép nguyên văn. App **không gọi mạng** để lấy tin: xem §"Còn thiếu" |
+| `src/content/dich-ra-ngoai.ts` | Năm đích ứng dụng mở ra ngoài, và câu khai trong chính sách dựng ra từ đó | Đây là nguồn của một câu trong **văn bản pháp lý**, không phải một câu giới thiệu |
+
+Câu slogan trong hero (`SLOGAN_HERO` trong `company-profile.ts`) là **chữ của bản mẫu PM**, không
+phải câu đã công bố — nên nó là một đối tượng mang cả `nguon` đi kèm, chứ không phải một chuỗi
+trần: một chú thích tách khỏi giá trị được, một trường thì không. Câu định vị đã công bố
+(`COMPANY.positioning`) **giữ nguyên chỗ của nó**, ngay dưới slogan.
+
 **Nothing may be added to `company-profile.ts` without a source.** The app carries the name of a
 real legal entity: an unsourced founding year, customer name, price, efficiency figure or award is
 a false statement published under that name. Facts that are missing are left out, never filled in.
@@ -143,14 +213,22 @@ Người chạy lệnh chọn **đẩy bản nào**. Biến thể quyết địn
 
 | Biến thể | Nội dung | Dùng để | `dist/assets/app.js` |
 |---|---|---|---|
-| **`goc`** | Ứng dụng sản phẩm đầy đủ: bốn màn giới thiệu + tab Danh thiếp (ba tính năng) + hai khối trên màn Liên hệ (đăng nhập · tìm văn phòng) | **BẢN NỘP** | **578,41 kB** thô · 159,79 kB gzip |
-| **`day-du`** (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **589,96 kB** thô · 162,91 kB gzip |
+| **`goc`** | Ứng dụng sản phẩm đầy đủ: bốn màn giới thiệu + tab Danh thiếp (ba tính năng) + hai khối trên màn Liên hệ (đăng nhập · tìm văn phòng) + trang chi tiết giải pháp + màn Quản lý quyền + bốn khối màn chủ (menu nhanh · giải pháp nổi bật · Tin ViHAT · quyền tóm tắt) + nút Chat nổi | **BẢN NỘP** | **602.274 B** thô · 164.993 B gzip |
+| **`day-du`** (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **613.821 B** thô · 167.989 B gzip |
 
-Hai con số ấy **đo ngày 20/09/2026**, bằng `npm run build:goc` và `npm run build`, đọc từ chính
-tệp phát ra. Phần tăng so với lần đo 18/09 (566,48 / 578,03) là khối đăng nhập cộng các điều
-khoản mới của chính sách: **+11,93 kB** ở bản nộp, **+11,93 kB** ở bản đầy đủ — hai bản tăng
-bằng nhau, vì **khối đăng nhập và chính sách giống hệt nhau ở cả hai**. Phần lớn số ấy là CHỮ:
-một văn bản pháp lý khai đủ thì dài, và đó là cái giá rẻ nhất trong toàn bộ bảng này.
+Hai con số ấy **đo ngày 21/09/2026 (tối)**, bằng `node scripts/dung.mjs goc` và `… day-du`, đọc từ
+chính tệp phát ra (gzip mức 9). So với lần đo cùng ngày buổi chiều (591.294 / 602.844): **+10.980 B**
+ở bản nộp (+1,9%; gzip +2.423 B, +1,5%), **+10.977 B** ở bản đầy đủ. Toàn bộ phần tăng nằm ở phần
+CHUNG và **phần lớn là CHỮ**: hai bài tin chụp sẵn, sáu mục menu, câu slogan, câu khai đích ra ngoài
+trong chính sách. Không một thư viện nào được thêm; CSS mới là 4 khối thuần.
+
+Đoạn dưới là phép đo của lần trước, giữ lại để thấy cái giá của từng lượt:
+từ chính tệp phát ra. So với lần đo cùng ngày buổi sáng (576.805 / 588.346): **+14.489 B** ở bản
+nộp (+2,5%; gzip +3.136 B, +2,0%), **+14.498 B** ở bản đầy đủ. Trong đó **lớp nền/chiều sâu chỉ
+chiếm 1.492 B thô / 207 B gzip** — toàn bộ là CSS thuần, không một thư viện hoạt hoạ hay bộ icon
+nào được thêm; phần còn lại — hai bản tăng gần bằng nhau, vì mọi thứ thêm vào đều nằm ở phần
+CHUNG: ba chuỗi thương hiệu, dải chín mốc lịch sử, bảng khai mười hai lời gọi, màn Quản lý quyền và
+trang chi tiết giải pháp. Phần lớn số ấy là CHỮ, và đó là cái giá rẻ nhất trong toàn bộ bảng này.
 
 **KHỐI ĐĂNG NHẬP KHÔNG PHẢI MỘT BIẾN THỂ, VÀ NÓ TỪNG LÀ.** Bản đầu đặt lời gọi máy chủ sau một
 cửa `bien-the/dang-nhap` để bản nộp không gọi mạng. Tiền đề ấy đảo chiều trong cùng ngày: **bản
@@ -236,18 +314,35 @@ hành chính **đặt ra**, tám số điện thoại mẫu và bảng chẩn đ
 duyệt — chỉ là không vẽ ra. Tách ở tầng dựng thì bản `goc` **thật sự không chứa** chúng, và
 điều đó **kiểm được bằng `grep` trên `dist/assets/app.js`**, không phải bằng lời hứa.
 
-### Grep thật trên bản `goc`, đo 18/09/2026
+### Grep thật trên bản `goc`, đo lại 21/09/2026 (tối)
 
 ```
 cơ quan: 0 · công dân: 0 · chính quyền: 0 · hành chính: 0 · thủ tục: 0 · Chọn xã: 0 · Đổi xã: 0
 xã hội: 1 (câu tầm nhìn đã công bố — phải còn)
+zalo.me: 25 — đường dẫn cửa sổ trò chuyện với Official Account của TA đếm ĐÚNG 1 lần
+              (`https://zalo.me/<OA id>`); 24 lần còn lại nằm trong chính `zmp-sdk`
+vihatgroup.com: 4 = 1 địa chỉ trang chủ + 2 đường dẫn bài viết + 1 lời khai nguồn câu slogan
 
-chín tên API đều CÓ MẶT: getPhoneNumber 7 · getLocation 7 · scanQRCode 6 · getNetworkType 6 ·
-keepScreen 9 · vibrate 7 · requestCameraPermission 5 · openMediaPicker 6 · downloadFile 6
+VihatSoftware: 7  = 5 câu "máy chủ của VihatSoftware" (cố ý) + 1 tên đơn vị thành viên
+                    + 1 mốc lịch sử "Thành lập VihatSoftware" (mới 21/09)
+"ViHAT Software" (có dấu cách): 0 — một chính tả trên màn, và đó là ca trong company-profile.test.ts
+vihatgroup.com: 1 · vihatsoftware.com: 0 · #144a80: 1 · #1e3150: 0
+2012: 0 — dải lịch sử bắt đầu 2013, đúng ngày thành lập
+"12 năm": 1 — nằm TRONG câu mô tả nguyên văn của khách. Con số app tự in ra là con số TÍNH RA,
+          nên nó không có mặt như một chuỗi trong bundle.
 
 serverUploadUrl: 2 — CẢ HAI là của chính `zmp-sdk` (lược đồ zod của `openMediaPicker`, và thân
 hàm đọc `e.serverUploadUrl`). Mã của ta đóng góp 0. Phép đo đúng là "không tệp nào GÁN một
 chuỗi cho tham số ấy": 0 lần, ở cả hai biến thể. Xem `bundle-for-zalo.test.ts`.
+
+localStorage: 1 · sessionStorage: 0 · indexedDB: 0
+⚠ MỘT LẦN `localStorage` ẤY LÀ CỦA `zmp-sdk`, KHÔNG PHẢI CỦA TA — đã mở ra xem: nó nằm trong lớp
+Storage của SDK (`value: localStorage` bên trong một `WeakMap`). Mã của kho này không chạm kho lưu
+trữ nào, và hai dây bẫy độc lập giữ điều đó ở TẦNG MÃ NGUỒN (`phase1-collects-nothing.test.ts` và
+`ranh-gioi-hai-nua.test.ts` §3b). Ghi lại con số này vì một lần đếm `1` mà không giải thích sẽ
+làm phiên sau tưởng dây bẫy đã chết.
+
+fetch(: 15 = 14 của `zmp-sdk` + đúng 1 của ta
 ```
 
 Hai nhãn `Chọn xã` · `Đổi xã` từng **nằm lại** trong bản `goc`: `App.tsx` là vỏ chung, không nằm
@@ -448,6 +543,33 @@ lượt soạn thảo này, giữ lại vì chúng nói rõ ranh giới hơn m�
 | Khai thêm rằng máy chủ ghi **địa chỉ IP** mỗi lượt đăng nhập | **CÓ** — người đọc bản trước không biết |
 | Sửa một câu cho dễ đọc, không đổi hành vi nào | KHÔNG |
 
+### Câu ĐẾM số chỗ mở trang ngoài — không còn gõ tay (21/09/2026, tối)
+
+Mục "Chuyển dữ liệu cho bên thứ ba" khai *"Có **năm** chỗ ứng dụng mở một trang bên ngoài"* rồi
+liệt kê đủ năm. Con số ấy đã phải sửa **bốn lần trong hai ngày** (ba → hai → ba → năm), lần nào
+cũng do một **người** đọc lại văn bản mà phát hiện, không lần nào do một phép kiểm.
+
+Nên nó thôi là một con số gõ tay:
+
+| Vế | Ở đâu |
+|---|---|
+| Danh sách đích đến, và quy ước **đếm theo ĐÍCH chứ không theo số NÚT** | `src/content/dich-ra-ngoai.ts` |
+| Câu trong chính sách, **dựng ra** từ danh sách ấy | `cauKhaiDichRaNgoai()` |
+| Cửa **duy nhất** ra ngoài — chỉ nhận một mã đích đã khai | `src/features/tinh-nang/mo-ra-ngoai.ts` |
+| Lệnh cấm mọi đường đi vòng: `moTrangWeb(` gọi thẳng · `target="_blank"` · `window.open(` · gán `location.href` | `src/content/dich-ra-ngoai.test.ts` |
+
+Năm đích hôm nay: **bản đồ** · **trang web trên mã QR vừa quét** · **trang chủ của chúng tôi** ·
+**bài viết trên trang tin** · **cửa sổ trò chuyện với Official Account**. Hai neo website (màn Liên
+hệ và trang chi tiết giải pháp) là **một** đích, một dòng.
+
+⚠ Hai neo ấy đã đổi từ `<a target="_blank">` sang **nút đi qua `openWebview`**: bên trong Zalo một
+liên kết mở bằng thẻ `a` không có đường quay lại Mini App. Hệ quả nói thẳng — ngoài Zalo (trình
+duyệt máy tính) nút ấy không mở được, và màn hình nói ra bằng đúng câu mọi chỗ mở ngoài khác dùng.
+
+⚠ **PHIÊN BẢN VẪN LÀ `1.0`** dù bề mặt "dữ liệu của bạn có thể tới đâu" vừa rộng ra thật sự: văn
+bản chưa từng tới tay một người dùng nào (bảng bằng chứng ngay trên). Từ lần công bố đầu trở đi,
+đúng thay đổi này phải lên một số mới.
+
 ### Văn bản nói gì — bốn điều nặng nhất
 
 **Một văn bản, đúng cho cả hai biến thể.** Không còn câu *"không lưu trữ và không gửi đi bất kỳ
@@ -521,7 +643,7 @@ nới dây bẫy.
 **Số mục không viết cứng vào tiêu đề**: React đánh số lúc vẽ. Một con số viết cứng sẽ lệch ngay
 lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý, im lặng.
 
-### Còn thiếu — hai việc vận hành, hai câu hỏi cho khách hàng, và hai phép thử phải chạy thật
+### Còn thiếu — việc vận hành, câu hỏi cho khách hàng, và phép thử phải chạy thật
 
 | Thiếu | Vì sao chưa điền |
 |---|---|
@@ -529,7 +651,16 @@ lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý
 | **Quy trình nhận yêu cầu xoá** | Lệnh `an-danh` **chạy tay** bởi người tiếp nhận — cố ý, vì một tuyến công khai xoá theo số điện thoại là tuyến xoá dữ liệu người khác. Nhưng "ai trực hotline/email, trả lời trong bao lâu, ghi số phiếu ở đâu" thì chưa ai mô tả. Một cam kết pháp lý không có quy trình đằng sau là một cam kết sẽ lỡ |
 | **Phép gọi thật tới `vihat-miniapp`** | Backend đang dựng song song, chưa có địa chỉ để gọi. Năm nhánh kết quả đã có test bằng `fetch` giả, nhưng **chưa một lần nào chạm máy chủ thật**. Phải gọi thử một lần — đủ cả 201, 401, 502 — trước khi nộp |
 | **Mã số thuế**, **người đại diện theo pháp luật** | Không có nguồn. `content/company-profile.ts` chỉ chứa thứ đã công bố trên vihatsoftware.com và vihatgroup.com. Bịa hai trường này trong một văn bản pháp lý là thứ không sửa lại được sau khi nộp |
+| ⚠ **KHÁCH XÁC NHẬN CÂU ĐỊNH VỊ TIẾNG VIỆT** | Ba chuỗi thương hiệu đã điền từ `vihatgroup.com` ngày 21/09/2026 và `company-profile.test.ts` ghim cả ba **nguyên văn**. Nhưng một trong ba là một quyết định **thay khách**: trường `positioning` từng là tiếng Anh (câu của công ty con), tập đoàn **không công bố câu định vị tiếng Anh nào**, nên chỗ ấy nay là câu hero tiếng Việt của trang "Về ViHAT". Đánh dấu tại chỗ trong `company-profile.ts`. Khách bác thì sửa đúng một hằng |
+| **Bản mẫu PM vs nguồn thật — bốn chỗ đã làm theo NGUỒN** | (1) "15 giải pháp, 3 nhóm nghiệp vụ" **không tồn tại** trên cả hai trang — số 15 là số **dự án** của công ty con; app dựng theo cấu trúc thật (4 dòng hệ sinh thái + 6 đơn vị thành viên). (2) Dải lịch sử bắt đầu **2013**, không phải 2012 — ngày thành lập là 06/12/2013, và một mốc trước ngày ấy là khẳng định sai về một pháp nhân. (3) **Không có mục AI nào**: toàn bộ nguồn về AI là MỘT câu gắn OMICall + một ô logo + một bài blog 2023; muốn hơn thì phải mở `omicall.com` và đó là quyết định của chủ dự án. (4) "12 năm" **không ghi cứng** — tính từ ngày thành lập. ⚠ Câu mô tả nguyên văn của khách vẫn mở đầu bằng "Hơn 12 năm", nên **từ 06/12/2026 con số tính ra (13) sẽ lệch với con số trong câu trích (12)**: chỗ sửa là khách công bố lại đoạn ấy, không phải mã sửa lời khách |
+| **Ô tìm kiếm trên màn Giải pháp** | Bản mẫu yêu cầu, **chưa làm**, và không nên làm bằng cách hiện tại: một ô tìm kiếm là một `<input>`, mà `phase1-collects-nothing.test.ts` cấm `<form\|input\|textarea\|select>` ở **mọi tệp**. Nới lệnh cấm ấy cho một ô lọc trên **bốn** mục là trả một giá không tương xứng. Cần ô tìm kiếm thật thì phải đi kèm quyết định: thu hẹp lệnh cấm ấy thế nào, và ca kiểm nào chứng minh nó còn bắt ở ngoài phạm vi mới |
+| **Màn "Quản lý quyền" không phải tab thứ sáu** | Đã đo, không đoán: `accessibility.test.ts` đo thanh tab trên máy 320px; với sáu tab mỗi nhãn chỉ còn ~4 ký tự cho từ dài nhất, mà "Trang", "thiếp", "ViHAT", "Quyền" đều 5. Nên nó là **màn con của tab Liên hệ**, ngay trên chính sách quyền riêng tư |
+| ⚠ **AI VẬN HÀNH `vihat-miniapp` SAU KHI APP ĐỔI CHỦ** | Chính sách khai nơi nhận dữ liệu đăng nhập là "máy chủ của VihatSoftware" — **giữ nguyên, cố ý**. Nhưng bên phát hành app nay là ViHAT Group, nên hai câu cũ *"bên phát hành ứng dụng này, không phải một bên thứ ba"* đã phải gỡ: vế đầu thành sai, vế sau là kết luận pháp lý dựa trên vế đầu. **Chủ dự án phải trả lời trước lần công bố đầu tiên**; nếu bên vận hành là một pháp nhân khác bên phát hành thì văn bản còn nợ một mục khai chuyển dữ liệu cho bên thứ ba — không ai được tự viết mục ấy |
 | **URL trang chính sách** | Developer Console còn một ô URL ngoài bản trong app. Chưa biết đăng ở đâu, nên chưa dựng bộ sinh trang tĩnh — dựng cho một đích chưa biết là đoán. Khi chốt, trang ấy phải sinh ra TỪ `chinh-sach-rieng-tu.ts`, không chép tay, để trang đăng và app không lệch nhau |
+| ⚠ **ID CỦA OFFICIAL ACCOUNT TRONG NÚT CHAT — CHƯA ĐỐI CHIẾU CONSOLE** | Nút Chat nổi mở `https://zalo.me/<OA id>`, và con số ấy lấy **từ bản mẫu giao diện của PM** (`content/dich-ra-ngoai.ts`, `OA_NEN_TANG_ID`, kèm `OA_NEN_TANG_NGUON` nói rõ điều này). ADR 0018 §Hệ quả điểm 3: **mọi bề mặt OA bên trong Mini App phải trỏ về OA NỀN TẢNG** (`Vihat` sau ADR 0031), không trỏ về OA của xã nào. Nếu ID ấy không phải OA xác thực của Mini App thì người dùng bấm "quan tâm" và tưởng đã theo dõi đúng nơi. **Phải mở Developer Console đối chiếu một lần trước khi nộp** |
+| **Hai mục của bản mẫu KHÔNG được dựng: `Brochure` và `24/7`** | Dải menu của bản mẫu có tám mục; app dựng **sáu**. Sau hai cái tên ấy **không có tính năng nào** trong kho này và chưa ai nói chúng mở ra cái gì. Một nút không dẫn đi đâu là thứ người duyệt bấm vào đầu tiên. Có người nói rõ chúng làm gì thì thêm lại — chỗ thêm là `MUC_MENU_NHANH` trong `features/company-intro/MenuNhanh.tsx`, và ca "mỗi mốc là một `id` có thật" sẽ bắt nếu đích chưa tồn tại |
+| **Mục "Tư vấn" gọi hotline, không mở biểu mẫu** | Bản mẫu có màn "Đăng ký nhận tư vấn"; màn ấy **không được dựng** theo yêu cầu, và chưa ai quyết một biểu mẫu sẽ gửi dữ liệu đi đâu (một `<input>` cũng phá dây bẫy `phase1-collects-nothing`). Mục menu vì thế là một neo `tel:` tới đúng hotline đã công bố, và **nói ra điều đó ngay trên nút** ("Tư vấn / Gọi hotline"). Ngày có người quyết đích đến thật của "Tư vấn", sửa đúng một dòng trong `MUC_MENU_NHANH` |
+| **Khối "Tin ViHAT" là ẢNH CHỤP, không phải tin trực tiếp** | Hai bài đọc từ `vihatgroup.com/wp-json/wp/v2/posts` ngày **21/09/2026** và nằm cứng trong `src/content/tin-tuc.ts`. App **không gọi mạng** để lấy tin: giai đoạn 1 có đúng MỘT đích mạng (tuyến đăng nhập), và thêm một đích là **sửa một lời khai trong chính sách quyền riêng tư** — một thay đổi pháp lý, không phải một tính năng. Màn hình nói ra ngày chụp; cách cập nhật ghi ở đầu tệp ấy, và có ca kiểm buộc ngày chụp không sớm hơn bài mới nhất |
 | **Tên và chỗ lưu của tệp `.vcf`** | `downloadFile` không có tham số tên tệp, và `fileBase64Data` **không có một dòng tài liệu nào** trong `index.d.ts` — bảng định dạng được hỗ trợ ở đó chỉ nói về đường `url`, và **không liệt kê `.vcf`**. Chưa thử được trên máy thật trong phiên này. Nút vẫn ghi "(.vcf)" vì **nội dung** đúng là vCard; cái chưa biết là Zalo đặt tên tệp ra sao. **Phải mở bằng Zalo trên một máy thật rồi bấm nút ấy một lần** trước khi nộp |
 
 ## Nộp lên Zalo
@@ -603,7 +734,7 @@ Phiên bản ghim cứng để lần chạy sau ra đúng kết quả lần ch�
 | # | Cái gì | Ghi chú |
 |---|---|---|
 | 0 | **Xoá danh mục xã mẫu** — `src/features/kham-pha/demo-danh-muc-xa.ts` — trước khi kênh công dân phục vụ người thật | Tám tên đơn vị hành chính **đặt ra**, kèm nội dung riêng của từng xã. Số trực dùng **dải giả đã thoả thuận `090000000x`** (luật 3, bất biến 5) — `kham-pha.test.tsx` ghim dải ấy, `phase1-collects-nothing.test.ts` quét toàn cây mã và **chỉ** miễn đúng dải ấy. Nguồn thật là `ListTenants` của service `platform` — đã khai trong proto, **chưa có cài đặt** |
-| 1 | Ảnh chụp màn hình và mô tả trên store | Bắt buộc để duyệt. Icon thì đã có — `tools/logo.py` dựng từ `brand/lg_vhs_full.svg` |
+| 1 | Ảnh chụp màn hình và mô tả trên store | Bắt buộc để duyệt. Icon thì đã có — `tools/logo.py` dựng từ `brand/lg_vhs_full.svg`. ⚠ Bảy ảnh trong `tmp/xin-quyen-zalo/anh/` chụp **18/09**, tức trước cả lần dựng lại giao diện 21/09 chiều **và** trước bốn khối mới của màn chủ + nút Chat nổi (21/09 tối) — phải chụp lại **toàn bộ**, không chỉ ảnh màn đăng nhập |
 | 2 | Các khoá còn lại trong `app-config.json` | `app.*` viết từ nguồn thứ cấp và **chưa đối chiếu** với Developer Console. Ba khoá `list*` thì đã do `sync-config` sinh, không phải đoán |
 
 ## Lớp khám phá — cái gì đang chạy, và cái gì còn thiếu

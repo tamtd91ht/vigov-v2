@@ -1,5 +1,5 @@
 /**
- * DANH THIẾP SỐ CỦA VihatSoftware — `keepScreen` + `downloadFile`.
+ * DANH THIẾP SỐ CỦA ViHAT Group — `keepScreen` + `downloadFile`.
  *
  * Đúng dòng sản phẩm đã công bố: "Giải pháp networking và quản lý danh thiếp số cho cá nhân và
  * doanh nghiệp" (`company-profile.ts`, `SOLUTIONS` mục `namecard`). Tấm thiếp này là chính dòng
@@ -46,11 +46,20 @@ const NHAN_TRUONG: Record<string, string> = {
   URL: "Trang web",
 };
 
-/** Thông tin trong mã, hiện bằng chữ. THUẦN — dựng thẳng từ danh sách trường của tấm thiếp. */
+/**
+ * Thông tin trong mã, hiện bằng chữ. THUẦN — dựng thẳng từ danh sách trường của tấm thiếp.
+ *
+ * ⚠ BỎ QUA TRƯỜNG RỖNG, ĐÚNG LUẬT `dungVCard` DÙNG. Một trường chưa có nguồn (`URL`, từ
+ * 21/09/2026) không được phép thành một dòng "Trang web" bỏ trống trên màn: nó vừa là một ô
+ * trống trình đọc màn hình vẫn đọc nhãn, vừa nói rằng phần chữ và mã QR chứa khác nhau — trong
+ * khi cả hai phải là một nguồn.
+ */
 export function ThongTinTrongMa() {
   return (
     <ul className="the-tt__danh-sach">
-      {TRUONG_THIEP_CUA_CHUNG_TOI.filter((truong) => NHAN_TRUONG[truong.ten] !== undefined).map(
+      {TRUONG_THIEP_CUA_CHUNG_TOI.filter(
+        (truong) => NHAN_TRUONG[truong.ten] !== undefined && truong.gia_tri !== "",
+      ).map(
         (truong) => (
           <li className="the-tt__dong" key={truong.ten}>
             <span className="the-tt__nhan">{NHAN_TRUONG[truong.ten]}</span>

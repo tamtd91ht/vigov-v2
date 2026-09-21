@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { MaDangNhap } from "../tinh-nang/zalo-api";
 
-import { docTraLoi, DUONG_DAN_PHIEN, thanYeuCau } from "./hop-dong";
+import { diaChiPhien, docTraLoi, DUONG_DAN_PHIEN, thanYeuCau } from "./hop-dong";
 import { phatHanhPhien } from "./goi-may-chu";
 import { PhatHanhPhien } from "./PhatHanhPhien";
 
@@ -54,12 +54,39 @@ describe("bước máy chủ: năm nhánh, mỗi nhánh một việc phải làm
   it("chưa khai địa chỉ máy chủ thì DỪNG, không đoán một địa chỉ", () => {
     // FAIL CLOSED. Một `?? "https://…"` ở đây là gửi hai mã đăng nhập của một người thật tới
     // một máy chủ không ai chọn, trên mọi máy quên đặt biến lúc dựng.
+    //
+    // ⚠ TRUYỀN THẲNG CHUỖI RỖNG, KHÔNG DỰA VÀO GIÁ TRỊ LÚC DỰNG — sửa 21/09/2026, và lý do đo
+    // được chứ không phải khẩu vị:
+    //
+    //   Bản trước gọi `phatHanhPhien(MA)` và đứng trên tiền đề "dưới Vitest thì địa chỉ luôn
+    //   rỗng". Tiền đề ấy chết vào ngày máy dựng có `.env.local` mang một `VIGOV_API_HOST` thật
+    //   (`scripts/cau-hinh.mjs`): Vite nung giá trị ấy vào `__VIGOV_API_HOST__` cho CẢ lượt chạy
+    //   test, nên ca này ĐỎ trên máy của người đẩy bản và XANH trên máy chưa cấu hình. Đã đo:
+    //   `diaChiPhien()` dài 44 ký tự trên máy đã cấu hình, 0 khi đặt biến shell rỗng.
+    //
+    //   Một ca đỏ tuỳ theo máy là một ca sắp bị ai đó tắt. Bất biến THẬT SỰ phải canh là "địa chỉ
+    //   rỗng thì không một lời gọi mạng nào", và nó được canh thẳng ở đây. Hình dạng của địa chỉ
+    //   đọc lúc dựng có ca riêng ngay dưới.
     const goi = vi.fn();
     vi.stubGlobal("fetch", goi);
-    return phatHanhPhien(MA).then((ket_qua) => {
+    return phatHanhPhien(MA, "").then((ket_qua) => {
       expect(ket_qua).toEqual({ kieu: "chua-khai-host" });
       expect(goi, "đã gọi mạng dù chưa khai địa chỉ").not.toHaveBeenCalled();
     });
+  });
+
+  it("địa chỉ đọc lúc dựng chỉ có HAI hình dạng hợp lệ: rỗng, hoặc một tuyến https đầy đủ", () => {
+    // Nửa còn lại của ca trên, và là phần chạy được trên MỌI máy — máy chưa cấu hình lẫn máy của
+    // người đẩy bản. Nó bắt đúng thứ ca cũ định bắt mà không phụ thuộc vào máy: một mặc định lén
+    // lút (`localhost`, `http://`, một địa chỉ cụt không có tuyến) là gửi hai mã đăng nhập của
+    // một người thật tới một nơi không ai chọn.
+    const dia_chi = diaChiPhien();
+    if (dia_chi === "") return;
+    expect(dia_chi, "địa chỉ máy chủ không đi qua https").toMatch(/^https:\/\//);
+    expect(
+      dia_chi.endsWith(DUONG_DAN_PHIEN),
+      `địa chỉ dựng ra không kết thúc bằng tuyến của hợp đồng (${DUONG_DAN_PHIEN})`,
+    ).toBe(true);
   });
 
   it("201 đúng khuôn thì trả về một phiên, và phiên ấy KHÔNG hiện ra màn hình", async () => {

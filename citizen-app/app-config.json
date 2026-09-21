@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "VihatSoftware",
-    "headerColor": "#1e3150",
+    "title": "ViHAT Group",
+    "headerColor": "#144a80",
     "textColor": "white",
     "leftButton": "back",
     "statusBar": "normal",

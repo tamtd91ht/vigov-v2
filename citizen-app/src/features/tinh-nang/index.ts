@@ -20,19 +20,27 @@ export { KhoiDangNhap, TimVanPhong } from "./LienHeTinhNang";
 export { KiemTraDuongTruyen } from "./KiemTraDuongTruyen";
 
 /**
- * Tab "Danh thiếp".
+ * Màn "Danh thiếp" — KHÔNG CÒN LÀ MỘT TAB từ 21/09/2026 (khuya).
  *
- * Nhãn ngắn có chủ đích: thanh tab có năm tab, và trên máy rộng 320px mỗi tab chỉ còn khoảng
- * 56px chữ. `screens.test.tsx` đo điều đó thay vì tin vào mắt.
+ * ⚠ MẤT TAB KHÔNG PHẢI MẤT ĐƯỜNG TỚI, VÀ KHOẢNG CÁCH GIỮA HAI ĐIỀU ẤY LÀ CẢ Ý NGHĨA CỦA DÒNG NÀY.
+ *
+ *   Bản mẫu của PM vẽ bốn tab và không có tab nào cho danh thiếp; hai việc danh thiếp nằm trong
+ *   menu nhanh của màn chủ ("Quét QR Lead", "Chụp danh thiếp"). Màn này giữ nguyên chỗ trong sổ
+ *   màn hình — nó vẫn là một màn thật, vẫn có tiêu đề riêng — chỉ là không có ô trên thanh tab.
+ *
+ *   ĐÂY LÀ MÀN DUY NHẤT DÙNG `scanQRCode`, `keepScreen` VÀ `downloadFile`. Ba quyền ấy được khai
+ *   với Zalo, và một quyền đã khai mà màn dùng nó không tới được là đúng thứ người duyệt trả về.
+ *   Nên `tabSangLen: "home"` không phải một mặc định cho có: menu nhanh của màn chủ là đường vào
+ *   duy nhất, nên ô "Trang chủ" là ô nói đúng công dân đang ở nhánh nào.
  */
 export const MAN_DANH_THIEP: {
   id: "danh-thiep";
-  tabLabel: string;
   headerTitle: string;
+  cho: { kieu: "ngoai-tab"; tabSangLen: "home" };
   component: ComponentType;
 } = {
   id: "danh-thiep",
-  tabLabel: "Danh thiếp",
   headerTitle: "Quét danh thiếp",
+  cho: { kieu: "ngoai-tab", tabSangLen: "home" },
   component: ManDanhThiep,
 };

@@ -541,10 +541,22 @@ describe("khối đăng nhập: một chạm, và luôn có một đường liê
   });
 });
 
-describe("tab Danh thiếp dẫn tới đúng tính năng ấy", () => {
-  it("cửa `features/tinh-nang` trỏ vào chính màn quét, và tab có nhãn đọc được", () => {
+describe("màn Danh thiếp dẫn tới đúng tính năng ấy", () => {
+  it("cửa `features/tinh-nang` trỏ vào chính màn quét, và màn có tiêu đề đọc được", () => {
     expect(MAN_DANH_THIEP.component).toBe(ManDanhThiep);
-    expect(MAN_DANH_THIEP.tabLabel.trim().length).toBeGreaterThan(0);
     expect(MAN_DANH_THIEP.headerTitle.trim().length).toBeGreaterThan(0);
+  });
+
+  /**
+   * MÀN NÀY KHÔNG CÒN TAB, VÀ ĐÓ LÀ ĐIỀU PHẢI ĐƯỢC NÓI RA THÀNH MỘT PHÉP KIỂM.
+   *
+   *   Đây là màn DUY NHẤT dùng `scanQRCode`, `keepScreen` và `downloadFile` — ba quyền đã khai
+   *   với Zalo. Một quyền đã khai mà màn dùng nó không tới được là đúng thứ người duyệt trả về.
+   *   Nên: nó bỏ tab, nhưng nó phải khai ô nào sáng lên khi công dân đang đứng ở đó, và
+   *   `screens.test.tsx` kiểm rằng menu nhanh thật sự dẫn tới nó.
+   */
+  it("bỏ tab theo bản mẫu, nhưng khai ô cha để thanh tab không tắt hết", () => {
+    expect(MAN_DANH_THIEP.cho.kieu).toBe("ngoai-tab");
+    expect(MAN_DANH_THIEP.cho.tabSangLen).toBe("home");
   });
 });

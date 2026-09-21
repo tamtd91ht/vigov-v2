@@ -161,6 +161,68 @@ export function MailGlyph({ className }: GlyphProps) {
   );
 }
 
+/**
+ * BỐN GLYPH CỦA THANH TAB VÀ MENU NHANH — thêm 21/09/2026 (khuya), theo bản mẫu của PM.
+ *
+ * Thanh tab trước đây chỉ có chữ. Bản mẫu vẽ MỘT BIỂU TƯỢNG TRÊN MỖI NHÃN, và ở đây điều đó không
+ * chỉ là trang trí: bốn nhãn tab đều là chữ Việt có dấu, đọc ở cỡ 16px, và một hình đứng trên chữ
+ * là thứ người lớn tuổi nhận ra trước khi đọc xong nhãn. Hình KHÔNG BAO GIỜ đứng một mình — nhãn
+ * chữ vẫn ở đó, vì một thanh tab chỉ có hình là một thanh tab phải học thuộc.
+ *
+ * Vẽ bằng `<path>`/`<rect>` trong bundle, như mọi glyph khác ở tệp này: không thêm một thư viện
+ * biểu tượng nào, và không một tệp ảnh nào đi vào gói nộp lên Zalo.
+ */
+
+/** Trang chủ — a house. */
+export function HomeGlyph({ className }: GlyphProps) {
+  return (
+    <svg {...BOX} className={className}>
+      <path d="M3.5,11 L12,4 L20.5,11" />
+      <path d="M5.8,9.6 v9.4 a1,1 0 0 0 1,1 h10.4 a1,1 0 0 0 1,-1 v-9.4" />
+      <path d="M9.8,20 v-5.2 h4.4 v5.2" />
+    </svg>
+  );
+}
+
+/** Giải pháp — four tiles, the shape a catalogue of products takes on a screen. */
+export function GridGlyph({ className }: GlyphProps) {
+  return (
+    <svg {...BOX} className={className}>
+      <rect x="3.6" y="3.6" width="7.2" height="7.2" rx="2" />
+      <rect x="13.2" y="3.6" width="7.2" height="7.2" rx="2" />
+      <rect x="3.6" y="13.2" width="7.2" height="7.2" rx="2" />
+      <rect x="13.2" y="13.2" width="7.2" height="7.2" rx="2" />
+    </svg>
+  );
+}
+
+/** Về ViHAT — an "i" in a circle, the sign for "about". */
+export function InfoGlyph({ className }: GlyphProps) {
+  return (
+    <svg {...BOX} className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12,11 v5.4" />
+      {/* Đoạn dài bằng không + đầu tròn = một chấm. Một `<circle r="0.1">` sẽ mất hút khi glyph bị
+          thu nhỏ, vì nó không dày lên theo `stroke-width`. */}
+      <path d="M12,7.8 v0.01" />
+    </svg>
+  );
+}
+
+/** Quét QR — a QR symbol: three finder squares and a broken fourth corner. */
+export function QrGlyph({ className }: GlyphProps) {
+  return (
+    <svg {...BOX} className={className}>
+      <rect x="3.6" y="3.6" width="6.8" height="6.8" rx="1.8" />
+      <rect x="13.6" y="3.6" width="6.8" height="6.8" rx="1.8" />
+      <rect x="3.6" y="13.6" width="6.8" height="6.8" rx="1.8" />
+      <path d="M13.6,13.6 h3.2 v3.2 h-3.2 z" />
+      <path d="M20.4,13.6 v3.2" />
+      <path d="M13.6,20.4 h6.8" />
+    </svg>
+  );
+}
+
 /** Trang web — a globe with meridians. */
 export function GlobeGlyph({ className }: GlyphProps) {
   return (

@@ -11,8 +11,18 @@ import {
   PHIEN_BAN_CHINH_SACH,
   TIEU_DE_CHINH_SACH,
 } from "./content/chinh-sach-rieng-tu";
-import { BRAND_NAVY, COMPANY } from "./content/company-profile";
-import { MAN_GIOI_THIEU } from "./features/company-intro/screens";
+import {
+  BRAND_NAVY,
+  CAU_SAN_PHAM,
+  COMPANY,
+  NHAN_LOAI_HINH,
+  SLOGAN_HERO,
+} from "./content/company-profile";
+import { DICH_MO_RA_NGOAI, DUONG_DAN_CHAT_OA } from "./content/dich-ra-ngoai";
+import { NGAY_CHUP_TIN, TIN_VIHAT } from "./content/tin-tuc";
+import { MUC_MENU_NHANH } from "./features/company-intro/MenuNhanh";
+import { NHAN_NUT_CHAT } from "./features/company-intro/NutChatOA";
+import { MAN_GIOI_THIEU, TABS } from "./features/company-intro/screens";
 import { MAN_DANH_THIEP } from "./features/tinh-nang/index";
 import {
   CHI_HIEN_LEN_MAN_HINH,
@@ -199,7 +209,8 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
    * "bản nộp CÓ chứa" xanh vì **không tìm thấy gì**, chứ không vì bản nộp đúng.
    */
   const CHUOI_SAU_TINH_NANG = () => [
-    MAN_DANH_THIEP.tabLabel,
+    // `tabLabel` không còn: màn Danh thiếp bỏ tab từ 21/09/2026 (khuya). Tiêu đề màn vẫn là chuỗi
+    // người duyệt đọc, và hai nhãn menu nhanh dẫn tới nó được kiểm ở ca "bốn khối mới" bên dưới.
     MAN_DANH_THIEP.headerTitle,
     CHI_HIEN_LEN_MAN_HINH,
     MA_RONG,
@@ -250,7 +261,7 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
    * DANH SÁCH TỪ CẤM — yêu cầu trực tiếp của người dùng, nên nó có một phép kiểm chứ không phải
    * một lời hứa.
    *
-   *   Bản nộp là một **ứng dụng sản phẩm của VihatSoftware**, một doanh nghiệp công nghệ. Không
+   *   Bản nộp là một **ứng dụng sản phẩm của ViHAT Group**, một doanh nghiệp công nghệ. Không
    *   một chi tiết nào trong nó được dính tới một cơ quan nhà nước: người đọc nó là khách hàng
    *   doanh nghiệp và người duyệt của Zalo, và một app của một công ty phần mềm mà nói chuyện
    *   "thủ tục" với "công dân" là một app không ai hiểu nổi nó bán gì.
@@ -395,6 +406,59 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
       demGoi(day_du) - demGoi(goc),
       "hai biến thể chênh nhau một lời gọi mạng — khối đăng nhập phải giống hệt nhau ở cả hai",
     ).toBe(0);
+  });
+
+  /**
+   * KHỐI MỚI CỦA MÀN CHỦ (21/09/2026, tối) — menu nhanh · tin ViHAT · nút chat · câu slogan.
+   *
+   * Cùng lý do với ca "bản nộp có đủ chữ của sáu tính năng" ngay trên: không có ca "CÓ CHỨA" thì
+   * mọi ca "KHÔNG CHỨA" ở dưới xanh vĩnh viễn ngay khi một khối biến mất khỏi bản dựng.
+   */
+  it("bản NỘP mang đủ chữ của bốn khối mới trên màn chủ", () => {
+    const chuoi = [
+      SLOGAN_HERO.cau,
+      // Câu sản phẩm của bản mẫu — câu thứ hai trong hero, cùng nguồn với câu slogan.
+      CAU_SAN_PHAM.cau,
+      NHAN_LOAI_HINH,
+      NHAN_NUT_CHAT,
+      DUONG_DAN_CHAT_OA,
+      // CÂU GHI CHÚ KIỂM THEO MẢNH, KHÔNG KIỂM CẢ CÂU — và đây là ĐÚNG cái bẫy mà tệp này đã mắc
+      // một lần vào 18/09: `GHI_CHU_TIN` ghép `NGAY_CHUP_TIN` vào lúc chạy, nên bundle chỉ chứa
+      // hai mảnh rời. Một `toContain` trên chuỗi ghép xanh vì KHÔNG BẢN NÀO chứa nó.
+      NGAY_CHUP_TIN,
+      "không tự tải tin mới",
+      ...TIN_VIHAT.flatMap((bai) => [bai.tieu_de, bai.trich, bai.duong_dan]),
+      ...MUC_MENU_NHANH.flatMap((muc) => [muc.nhan, muc.phu]),
+    ];
+    expect(chuoi.length).toBeGreaterThan(15);
+    for (const mot of chuoi) {
+      expect(goc, `bản nộp thiếu: ${mot}`).toContain(mot);
+    }
+  });
+
+  /**
+   * CÂU KHAI "MỞ MỘT TRANG BÊN NGOÀI" — KIỂM THEO TỪNG MẢNH, KHÔNG KIỂM CHUỖI GHÉP.
+   *
+   * Câu ấy được GHÉP LÚC CHẠY từ `DICH_MO_RA_NGOAI` (`cauKhaiDichRaNgoai`), nên chuỗi đầy đủ
+   * KHÔNG hề có trong bundle — bundle chỉ chứa các mảnh rời. Kiểm chuỗi ghép ở đây là một phép
+   * kiểm xanh vì **không bản nào** chứa nó, đúng kiểu hỏng mà tệp này đã tự mắc một lần (18/09).
+   *
+   * Cũng KHÔNG kiểm con số đọc thành chữ: "năm" là một từ thường, có mặt khắp bundle ("12 năm",
+   * "thành lập"), nên một `toContain("năm")` xanh mà không nói lên gì. Số ấy được canh ở
+   * `content/dich-ra-ngoai.test.ts`, nơi đọc được cả danh sách lẫn văn bản.
+   */
+  it("từng đích mở ra ngoài đều được khai trong CẢ HAI bản dựng", () => {
+    for (const [ten, ban] of [
+      ["goc", goc],
+      ["day-du", day_du],
+    ] as const) {
+      expect(ban, `bản ${ten} không còn câu khai số chỗ mở trang ngoài`).toContain(
+        "chỗ ứng dụng mở một trang bên ngoài",
+      );
+      for (const dich of DICH_MO_RA_NGOAI) {
+        expect(ban, `bản ${ten} không khai đích "${dich.ma}"`).toContain(dich.trong_chinh_sach);
+      }
+    }
   });
 
   it("bản NỘP không chứa bảng chẩn đoán", () => {
@@ -542,9 +606,15 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     // thứ phân biệt "đã gỡ đúng phần thừa" với "đã gỡ mất app".
     expect(goc).toContain(COMPANY.name);
     for (const man of MAN_GIOI_THIEU) {
-      expect(goc, `bản nộp thiếu màn ${man.id}`).toContain(man.tabLabel);
+      expect(goc, `bản nộp thiếu màn ${man.id}`).toContain(man.headerTitle);
     }
-    expect(goc, "bản nộp thiếu tab Danh thiếp").toContain(MAN_DANH_THIEP.tabLabel);
+    // BỐN NHÃN TAB, đọc từ chính danh sách thanh tab vẽ ra. Một bản nộp thiếu chúng là một bản
+    // nộp không có thanh tab — thứ ca "không chứa tên xã nào" ở trên vẫn cho qua.
+    expect(TABS, "thanh tab rỗng — ca này sẽ xanh vì không tìm thấy gì").toHaveLength(4);
+    for (const man of TABS) {
+      expect(goc, `bản nộp thiếu nhãn tab ${man.id}`).toContain(man.cho.nhan);
+    }
+    expect(goc, "bản nộp thiếu màn Danh thiếp").toContain(MAN_DANH_THIEP.headerTitle);
   });
 
   it("nhẹ hơn bản đầy đủ — bằng chứng rằng mã thật sự biến mất, không chỉ bị giấu", () => {

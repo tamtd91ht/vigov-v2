@@ -15,10 +15,12 @@
  *   committed to. So neither is ever a text colour and neither ever carries white text. They
  *   are surfaces and decoration; text on them is --tile-glyph (6.1:1 and 6.7:1).
  *
- *   --navy (#1e3150) is NOT a brand colour. It is the website's frame colour and the
- *   `headerColor` of app-config.json, and bundle-for-zalo.test.ts pins those three places to one
- *   value. Changing it here without changing app-config.json and index.html gives the reviewer a
- *   two-tone bar where the platform header meets ours.
+ *   --navy (#144a80) IS a brand colour now — it is `--color-primary` on vihatgroup.com, the
+ *   group's own dark tone, and it replaced `#1e3150` on 2026-09-21. `#1e3150` was the frame
+ *   colour of vihatsoftware.com, i.e. the SUBSIDIARY's; the app is published by the group.
+ *   It is also the `headerColor` of app-config.json and the `theme-color` of index.html, and
+ *   bundle-for-zalo.test.ts pins those three places to one value. Changing it here without
+ *   changing the other two gives the reviewer a two-tone bar where the platform header meets ours.
  *
  * Contrast of the palette below, measured against its own background (WCAG 2.1, recomputed from
  * the hex values by accessibility.test.ts — these numbers are a summary, that test is the check):
@@ -33,8 +35,8 @@
  */
 
 :root {
-  --navy: #1e3150;
-  --navy-deep: #16253d;
+  --navy: #144a80;
+  --navy-deep: #0f3a66;
   --ink: #1a2233;
   --ink-muted: #4a5568;
   --surface: #ffffff;
@@ -65,6 +67,25 @@
   --surface-tint-green: #e3eede;
   --grid-line: #e3e9f1;
 
+  /*
+   * ĐẦU SÁNG CỦA DẢI HERO — #0a6398, VÀ NÓ KHÔNG PHẢI #00aef4 CỦA BẢN MẪU. LÝ DO LÀ MỘT PHÉP ĐO.
+   *
+   *   Bản mẫu vẽ hero đi từ `--brand-blue` (#00aef4) xuống navy, chữ TRẮNG. Trắng trên #00aef4 là
+   *   **2,5:1** — dưới xa ngưỡng 4,5:1 mà app này đã cam kết, tức tiêu đề lớn nhất của cả ứng
+   *   dụng là chữ khó đọc nhất. Không đọc được ngoài nắng, và người phát hiện ra là người ít có
+   *   khả năng báo lại nhất.
+   *
+   *   Nên đầu sáng được đẩy xuống ĐÚNG ĐIỂM SÁNG NHẤT còn đạt ngưỡng, không xa hơn:
+   *     trắng trên #0a6398 ............ 6,5:1
+   *     --on-panel trên #0a6398 ....... 4,9:1   ← đây mới là cặp chặn, không phải cặp chữ trắng
+   *   Đo ở ĐẦU SÁNG chứ không ở giữa dải: chữ đứng trên cả dải, và chỗ hỏng là chỗ sáng nhất.
+   *   `accessibility.test.ts` tính lại cả hai con số này từ chính hai mã màu.
+   *
+   *   HỆ QUẢ NÓI THẲNG RA: hero của app xanh ĐẬM hơn hero của bản mẫu. Đổi lại được thì chỉ bằng
+   *   cách bỏ chữ trắng, không phải bằng cách hạ ngưỡng.
+   */
+  --hero-sang: #0a6398;
+
   /* Glyph colour on a brand-gradient tile. Dark on purpose: see the note above. */
   --tile-glyph: #16253d;
 
@@ -79,6 +100,45 @@
   --text-body: 17px;
   --text-small: 16px;
   --tap-min: 44px;
+
+  /*
+   * CHIỀU SÂU — hai bóng đổ, dựng từ chính `--navy` (#144a80) ở độ mờ thấp.
+   *
+   * VÌ SAO BÓNG ĐỔ LÀ THỨ AN TOÀN NHẤT ĐỂ LÀM "HIỆN ĐẠI", VÀ ĐƯỜNG KẺ THÌ KHÔNG:
+   *
+   *   Bóng đổ nằm NGOÀI hộp. Không một chữ nào đứng trên nó, nên nó không sinh ra một cặp
+   *   nền/chữ nào — tức không có gì cho `accessibility.test.ts` phải đo, và không có cách nào nó
+   *   làm tụt độ tương phản. Phân tầng bằng nền + khoảng trắng + bóng thay cho một lưới đường kẻ
+   *   là đúng thứ làm một app trông như hạ tầng công nghệ chứ như một tờ rơi.
+   *
+   *   Bóng mang SẮC XANH ĐẬM chứ không phải xám đen: một bóng xám trên nền có ánh xanh/lục đọc
+   *   ra là bẩn. Đây là lý do nó dựng từ `--navy` chứ từ `#000`.
+   */
+  --bong-the: 0 1px 2px rgba(20, 74, 128, 0.06), 0 10px 22px -14px rgba(20, 74, 128, 0.4);
+  --bong-noi: 0 2px 4px rgba(20, 74, 128, 0.08), 0 18px 34px -18px rgba(20, 74, 128, 0.55);
+
+  /*
+   * NỀN CỦA MỘT THẺ SÁNG — chuyển sắc, không phẳng trơn.
+   *
+   * ⚠ HAI ĐẦU ĐỀU LÀ MÀU ĐÃ ĐO, và đó là điều kiện để dùng được chuyển sắc ở đây: `--surface` và
+   * `--surface-tint` đều đã có trong danh sách cặp màu của `accessibility.test.ts` với cả ba màu
+   * chữ (`--ink`, `--ink-muted`, `--navy`). Nghĩa là chữ rơi vào bất kỳ điểm nào của dải này cũng
+   * nằm giữa hai giá trị đã đo. Một chuyển sắc kết thúc ở một màu chưa ai đo là chỗ độ tương phản
+   * chết đầu tiên, và nó chết ở phía DƯỚI thẻ — chỗ mắt đã mỏi khi đọc tới.
+   */
+  --nen-the: linear-gradient(168deg, var(--surface) 58%, var(--surface-tint) 100%);
+  --nen-the-luc: linear-gradient(168deg, var(--surface) 58%, var(--surface-tint-green) 100%);
+
+  /*
+   * NỀN HERO — dải xanh của bản mẫu, dựng từ HAI MÀU CÓ TÊN và không màu nào khác.
+   *
+   * Cùng điều kiện với `--nen-the` ngay trên: mỗi điểm dừng phải là một token đã có cặp màu đo
+   * trong `accessibility.test.ts`, và không có `transparent` — một dải hoà qua trong suốt là một
+   * dải đi qua những màu không ai đo được, vì thứ nằm dưới nó cũng là một dải.
+   *
+   * `--hero-sang` là đầu SÁNG, tức đầu quyết định. Xem chú thích của nó ở trên.
+   */
+  --nen-hero: linear-gradient(162deg, var(--hero-sang) 0%, var(--navy-deep) 76%);
 }
 
 * {
@@ -96,10 +156,9 @@ body,
 body {
   background: var(--surface-alt);
   color: var(--ink);
-  font-family: "Inter", "Roboto", "Helvetica Neue", Arial, sans-serif;
+  font-family: Inter, Roboto, Helvetica Neue, Arial, sans-serif;
   font-size: var(--text-body);
   line-height: 1.6;
-  /* Zoom is never disabled: -webkit-text-size-adjust stays untouched on purpose. */
 }
 
 .app {
@@ -109,14 +168,13 @@ body {
 }
 
 /* ---------- header ---------- */
-
 .app-header {
-  position: relative;
   background: linear-gradient(120deg, var(--navy-deep) 0%, var(--navy) 100%);
   color: #ffffff;
   padding: 14px 16px 16px;
   padding-top: calc(14px + env(safe-area-inset-top, 0px));
-  flex: 0 0 auto;
+  flex: none;
+  position: relative;
 }
 
 /* The seam with the platform's own header. A brand rule here reads as intent; without it the
@@ -140,7 +198,7 @@ body {
 }
 
 .app-header__ten {
-  flex: 1 1 auto;
+  flex: auto;
   min-width: 0;
 }
 
@@ -157,16 +215,16 @@ body {
 /* Đổi xã là hành động tường minh (ADR 0005), nên nó là một nút thật, cao đủ 44px, có chữ —
    không phải một biểu tượng bút chì mà người dùng phải đoán. */
 .app-header__doi-xa {
-  flex: 0 0 auto;
   min-height: var(--tap-min);
   min-width: var(--tap-min);
-  padding: 0 14px;
   border: 1px solid var(--on-panel);
-  border-radius: 10px;
-  background: transparent;
   color: #ffffff;
   font: inherit;
   font-size: var(--text-small);
+  background: 0 0;
+  border-radius: 10px;
+  flex: none;
+  padding: 0 14px;
   font-weight: 600;
 }
 
@@ -191,29 +249,21 @@ body {
  * WebViews, fringe grey.
  */
 .app-main {
-  flex: 1 1 auto;
-  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 16px 16px 28px;
+  padding: 16px 16px calc(28px + var(--tap-min) + 16px);
   background-color: var(--surface-alt);
-  background-image:
-    linear-gradient(var(--grid-line) 1px, rgba(255, 255, 255, 0) 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, rgba(255, 255, 255, 0) 1px),
-    linear-gradient(
-      165deg,
-      var(--surface-tint) 0%,
-      var(--surface-alt) 46%,
-      var(--surface-tint-green) 100%
-    );
+  background-image: linear-gradient(var(--grid-line) 1px, rgba(255, 255, 255, 0) 1px), linear-gradient(90deg, var(--grid-line) 1px, rgba(255, 255, 255, 0) 1px), linear-gradient(165deg, var(--surface-tint) 0%, var(--surface-alt) 46%, var(--surface-tint-green) 100%);
   background-size: 34px 34px, 34px 34px, 100% 100%;
   background-attachment: local, local, local;
+  flex: auto;
+  overflow-y: auto;
 }
 
 .screen-heading {
+  color: var(--navy);
+  margin: 4px 0;
   font-size: 26px;
   line-height: 1.3;
-  margin: 4px 0 4px;
-  color: var(--navy);
 }
 
 .screen-lead {
@@ -230,8 +280,7 @@ body {
  * the landmark each screen opens with.
  */
 .hero,
-.banner,
-.band {
+.banner {
   position: relative;
   overflow: hidden;
   border-radius: 18px;
@@ -250,14 +299,72 @@ body {
   );
 }
 
+/*
+ * HERO TRÀN NGANG, BO GÓC DƯỚI — bản mẫu của PM.
+ *
+ * ⚠ LỀ ÂM ĐÚNG BẰNG ĐỆM NGANG CỦA `.app-main` (16px), VÀ HAI CON SỐ ẤY LÀ MỘT CẶP. Lệch một pixel
+ *   thì ở 320px hoặc còn một vệt nền lộ ra hai bên, hoặc hero rộng hơn khung và đẻ ra một thanh
+ *   cuộn NGANG — thứ mà trên điện thoại không ai tìm ra nguyên nhân.
+ *
+ * ⚠ ĐỆM ĐÁY 76px LÀ CHỖ THẺ MENU NHANH ĐÈ LÊN. Nó phải LỚN HƠN lề âm của `.menu-the` (56px), nếu
+ *   không thẻ trắng trùm mất hàng chỉ số cuối cùng trong hero. `accessibility.test.ts` đọc cả hai
+ *   con số ra khỏi tệp này và so — một chồng lớp mà không ai đo là một chồng lớp đúng trên máy
+ *   người viết nó.
+ *
+ * KHÔNG CÒN `NetworkBackdrop` TRONG HERO, và đó là điều kiện để dải xanh sáng được tới #0a6398:
+ * một nét vẽ sáng 0,22 chồng lên đầu sáng của dải tạo ra một màu sáng hơn nữa, và chữ phụ đứng
+ * trên nó tụt xuống dưới 4,5:1. Nét vẽ ấy vẫn còn trên `.banner` của ba màn kia, nơi nền tối hơn.
+ */
 .hero {
-  padding: 22px 20px 24px;
-  margin: 0 0 18px;
+  box-shadow: var(--bong-noi);
+  margin: 0 -16px;
+  padding: 22px 20px 76px;
+  border-radius: 0 0 24px 24px;
+  background-image: var(--nen-hero);
+}
+
+/* Chạm luôn vào thanh tiêu đề — nhưng CHỈ khi hero là thứ đầu tiên trong vùng cuộn. Bảng chẩn
+   đoán (`?debug`) chèn một khối lên trước nó; kéo hero lên 16px lúc ấy là kéo nó ĐÈ lên bảng. */
+.app-main > .hero:first-child {
+  margin-top: -16px;
+}
+
+/* Hàng đầu hero: huy hiệu vuông + tên pháp nhân + dòng loại hình. */
+.hero__dau {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/*
+ * HUY HIỆU "Vi" — hai chữ cái đầu của tên pháp nhân, cắt ra lúc chạy (xem HomeScreen.tsx).
+ *
+ * Nền `--surface-tint` chứ không phải `--brand-blue`: chữ trên nó là `--navy`, và cặp
+ * navy/surface-tint đã có tên trong bảng cặp màu. Chữ navy trên brand-blue thì chưa ai đo.
+ */
+.hero__huy-hieu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--surface-tint);
+  color: var(--navy);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.hero__ten {
+  min-width: 0;
 }
 
 .banner {
-  padding: 20px;
+  box-shadow: var(--bong-noi);
   margin: 0 0 16px;
+  padding: 20px;
 }
 
 /* Rhythm between screens: the same panel, lit from the other side. */
@@ -269,51 +376,31 @@ body {
   );
 }
 
-/* The statistics band is lit from below, so the home screen reads as two different surfaces
-   rather than one long dark block. */
-.band {
-  background-image: radial-gradient(
-    80% 140% at 50% 130%,
-    var(--panel-glow-green) 0%,
-    var(--navy-deep) 72%
-  );
-}
+/* `.band` — dải chỉ số tối, đứng riêng dưới hero — KHÔNG CÒN từ 21/09/2026 (khuya): bản mẫu đặt
+   chỉ số NGAY TRONG hero, và giữ lại một lớp không màn nào dùng là để sẵn một bề mặt tối mà người
+   sau sẽ gắn chữ lên, không ai đo. Xem `.stat-grid` bên dưới. */
 
 /*
  * The drawn backdrop sits BEHIND the words, so its opacity is not a taste decision: at 0.22 the
  * lightest line a letter can cross is --panel-line-blue / --panel-line-green, and secondary text
  * still clears 4.5:1 there. Raising it is how a panel becomes beautiful and unreadable at once.
  */
-.hero__backdrop,
-.banner__backdrop,
-.band__backdrop {
+.banner__backdrop {
   position: absolute;
+  top: 0;
+  right: -6%;
+  width: 62%;
+  height: 130%;
   pointer-events: none;
   color: var(--brand-blue);
   opacity: 0.22;
 }
 
-.hero__backdrop {
-  top: -6%;
-  right: -4%;
-  width: 78%;
-  height: 112%;
-}
-
-.banner__backdrop {
-  top: 0;
-  right: -6%;
-  width: 62%;
-  height: 130%;
-}
-
-.band__backdrop {
-  top: -18px;
-  right: -14px;
-  width: 132px;
-  height: 132px;
+/* Màn Liên hệ được thắp bằng ánh lục (`--panel-glow-green`), nên nét vẽ trên nó cũng là nét LỤC:
+   `--panel-line-green` là đúng màu nét lục 0,22 chồng lên đầu sáng lục ấy, và nó có tên trong
+   bảng cặp màu. Một nét XANH trên nền lục là một màu pha chưa ai đo. */
+.banner--contact .banner__backdrop {
   color: var(--brand-green);
-  opacity: 0.22;
 }
 
 .hero__content,
@@ -321,8 +408,10 @@ body {
   position: relative;
 }
 
+/* Tên pháp nhân đứng cạnh huy hiệu, nên nó nhỏ — câu slogan bên dưới mới là chữ lớn nhất màn này
+   (bản mẫu). Cấp tiêu đề thì không đổi: nó vẫn là `<h1>`. Xem HomeScreen.tsx. */
 .hero__title {
-  font-size: 30px;
+  font-size: 21px;
   line-height: 1.2;
   margin: 0;
   color: #ffffff;
@@ -335,6 +424,46 @@ body {
   color: #ffffff;
 }
 
+/*
+ * DÒNG TRÊN TÊN PHÁP NHÂN: "Tập đoàn công nghệ · từ 2013".
+ *
+ * `--on-panel` chứ không phải trắng: nó là dòng PHỤ, và nếu nó cũng trắng thì mắt không biết đọc
+ * cái nào trước. Cặp `--on-panel` trên cả ba điểm của panel đã có tên trong `accessibility.test.ts`.
+ */
+.hero__kicker {
+  font-size: var(--text-small);
+  letter-spacing: 0.04em;
+  color: var(--on-panel);
+  margin: 2px 0 0;
+}
+
+/*
+ * CHỮ LỚN NHẤT CỦA CẢ ỨNG DỤNG — câu slogan bản mẫu, ba dòng, trắng, đậm.
+ *
+ * 29px ở 320px: từ dài nhất của câu ("khách", "doanh", "nghiệp" — 6-7 ký tự) cần ~7 × 29 × 0,62 ≈
+ * 126px, còn bề rộng chữ là 320 − 40 (đệm hero) = 280px. Không từ nào bị cắt, và câu xuống đúng
+ * ba dòng như bản mẫu.
+ *
+ * Nguồn của câu này KHÁC nguồn của `.hero__lead` ngay dưới, và app không trộn chúng lại — xem
+ * `SLOGAN_HERO` / `COMPANY.positioning` trong `content/company-profile.ts`.
+ */
+.hero__slogan {
+  color: #ffffff;
+  margin: 18px 0 0;
+  font-size: 29px;
+  font-weight: 700;
+  line-height: 1.22;
+}
+
+/* Câu sản phẩm của bản mẫu, ngay dưới slogan. Trắng ở mức phụ (`--on-panel`) chứ không trắng
+   tuyền: hai câu cùng trắng thì mắt không biết đọc câu nào trước. */
+.hero__san-pham {
+  font-size: var(--text-body);
+  line-height: 1.5;
+  margin: 12px 0 0;
+  color: var(--on-panel);
+}
+
 .hero__lead,
 .banner__lead {
   font-size: var(--text-body);
@@ -342,22 +471,42 @@ body {
   color: var(--on-panel);
 }
 
-.hero__body {
-  font-size: var(--text-body);
-  margin: 14px 0 0;
-  color: #ffffff;
-}
-
-.hero__rule {
-  display: block;
-  width: 88px;
-  height: 4px;
-  border-radius: 2px;
-  margin: 18px 0 0;
-  background: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-green) 100%);
-}
-
 /* ---------- section titles ---------- */
+
+/*
+ * ĐẦU MỤC + "Xem tất cả" TRÊN MỘT HÀNG — bản mẫu của PM.
+ *
+ * Hàng bọc là một lớp RIÊNG, không phải một biến thể của `.section-title`: đầu mục ấy dùng chung
+ * trên bốn màn, và nới nó ra để nhét một nút vào là đổi đầu mục của cả app cho đúng một chỗ.
+ */
+.hang-tieu-de {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Nút thật, cao đủ `--tap-min`, không phải một dòng chữ xanh: nó nằm sát mép phải màn hình, chỗ
+   ngón cái với tới cuối cùng và bấm trượt nhiều nhất. Chữ `--navy` trên nền trang — cặp
+   navy/surface-alt và navy/surface-tint đều đã đo. */
+.hang-tieu-de__them {
+  flex: 0 0 auto;
+  min-height: var(--tap-min);
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 700;
+  color: var(--navy);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.hang-tieu-de__them:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
 
 .section-title {
   display: flex;
@@ -370,16 +519,16 @@ body {
 }
 
 .section-title__mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
+  background: linear-gradient(135deg, var(--surface-tint) 0%, var(--surface-tint-green) 100%);
   width: 34px;
   height: 34px;
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--surface-tint);
   color: var(--navy);
+  border-radius: 12px;
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  display: inline-flex;
+  overflow: hidden;
 }
 
 .section-title__mark svg {
@@ -395,14 +544,14 @@ body {
 }
 
 /* ---------- cards ---------- */
-
 .card {
-  position: relative;
-  background: var(--surface);
+  background: var(--nen-the);
   border: 1px solid var(--hairline);
-  border-radius: 14px;
-  padding: 16px;
+  box-shadow: var(--bong-the);
+  border-radius: 18px;
   margin: 0 0 12px;
+  padding: 16px;
+  position: relative;
 }
 
 /* A brand edge instead of a brand headline: the colour carries no meaning, so it may be light. */
@@ -430,22 +579,6 @@ body {
   color: var(--ink);
 }
 
-.note {
-  font-size: var(--text-small);
-  color: var(--ink-muted);
-  background: var(--surface);
-  border-left: 4px solid var(--navy);
-  border-radius: 0 10px 10px 0;
-  padding: 12px 14px;
-  margin: 0 0 12px;
-}
-
-/* The attribution notes are the sentences a reviewer must not miss. The brand edge makes them
-   look deliberate rather than like a disclaimer somebody squeezed in. */
-.note--brand {
-  border-left-color: var(--brand-green);
-}
-
 /* ---------- icon tiles ---------- */
 
 /*
@@ -454,15 +587,15 @@ body {
  * blue end and 6.7:1 at the green end. A white glyph there would be 2.5:1.
  */
 .tile {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
   width: var(--tap-min);
   height: var(--tap-min);
-  border-radius: 13px;
   background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-green) 100%);
   color: var(--tile-glyph);
+  border-radius: 13px;
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  display: inline-flex;
 }
 
 .tile--soft {
@@ -475,64 +608,64 @@ body {
   height: 24px;
 }
 
-/* ---------- statistics band ---------- */
+/* ---------- chỉ số, NẰM TRONG hero ---------- */
 
-.band {
-  padding: 6px;
-  margin: 0 0 16px;
-}
-
+/*
+ * BỐN Ô TRÊN MỘT HÀNG + MỘT Ô TRÀN NGANG — bản mẫu bày bốn, ô thứ năm là con số TÍNH RA
+ * (`soNamHoatDong`), xem HomeScreen.tsx.
+ *
+ * BỐN CỘT Ở 320px: lề âm của hero trả lại 32px đệm trang, nên hero rộng đúng 320; trừ 40 đệm
+ * ngang còn 280, chia bốn là 70px mỗi ô. Giá trị dài nhất là "100K+" (5 ký tự): ở 20px cần
+ * 5 × 20 × 0,62 ≈ 62px — vừa. Nhãn dài nhất theo TỪ là "Khách"/"Quốc" (5 ký tự) ở 16px ≈ 50px.
+ * Không ô nào tràn, và nhãn hai từ thì xuống dòng chứ không bị cắt.
+ * `accessibility.test.ts` tính lại cả hai phép chia ấy từ chính các token trong tệp này.
+ */
 .stat-grid {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1px;
-  margin: 0;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  margin: 22px 0 0;
   padding: 0;
   list-style: none;
 }
 
 .stat {
-  padding: 14px 12px;
+  padding: 4px 2px;
   border-radius: 12px;
 }
 
-/* The lead figure gets the full width: five cells in a two-column grid otherwise leave a hole,
-   and a hole reads as a figure that failed to load. */
+/* Ô thứ năm chiếm nguyên hàng: bốn ô của bản mẫu đứng một hàng, và một ô lẻ ở hàng hai của lưới
+   bốn cột là đúng cái "ô lẻ loi" phải tránh. */
 .stat--wide {
   grid-column: 1 / -1;
-}
-
-/* Hairline separators instead of cell backgrounds: a lighter cell would be a background colour
-   nobody measured sitting under white text. A border carries no text. */
-.stat + .stat {
-  border-top: 1px solid rgba(255, 255, 255, 0.16);
-}
-
-.stat:nth-child(odd):not(:first-child) {
-  border-left: 1px solid rgba(255, 255, 255, 0.16);
+  margin: 10px 0 0;
+  padding: 12px 2px 0;
+  /* Vạch mảnh thay cho nền ô: một ô sáng hơn sẽ là một màu nền không ai đo nằm dưới chữ trắng.
+     Một đường viền thì không mang chữ nào. */
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .stat__value {
   display: block;
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1.2;
   color: #ffffff;
 }
 
 .stat--wide .stat__value {
-  font-size: 30px;
+  font-size: 24px;
 }
 
 .stat__label {
   display: block;
   font-size: var(--text-small);
+  line-height: 1.25;
   color: var(--on-panel);
 }
 
 /* ---------- keyword chips ---------- */
-
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -543,16 +676,17 @@ body {
 }
 
 .chip {
-  display: inline-flex;
+  border: 1px solid var(--hairline);
+  background: var(--surface-tint);
+  box-shadow: var(--bong-the);
+  color: var(--ink);
+  font-size: var(--text-small);
+  border-radius: 999px;
   align-items: center;
   gap: 7px;
   padding: 8px 14px 8px 11px;
-  border-radius: 999px;
-  border: 1px solid var(--hairline);
-  background: var(--surface-tint);
-  color: var(--ink);
-  font-size: var(--text-small);
   font-weight: 600;
+  display: inline-flex;
 }
 
 .chip__glyph {
@@ -562,7 +696,6 @@ body {
 }
 
 /* ---------- solution cards ---------- */
-
 .solutions {
   list-style: none;
   margin: 0;
@@ -570,14 +703,32 @@ body {
 }
 
 .solution {
-  display: flex;
+  background: var(--nen-the);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--bong-the);
+  border-radius: 18px;
   align-items: flex-start;
   gap: 14px;
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: 14px;
+  margin: 0 0 12px;
   padding: 14px;
-  margin: 0 0 10px;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+.solution::before {
+  content: "";
+  background: linear-gradient(180deg, var(--brand-blue) 0%, var(--brand-green) 100%);
+  width: 4px;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.solution:active {
+  background: var(--nen-the-luc);
+  box-shadow: var(--bong-noi);
 }
 
 .solution__text {
@@ -604,7 +755,6 @@ body {
 }
 
 /* ---------- member units ---------- */
-
 .unit-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -615,24 +765,24 @@ body {
 }
 
 .unit {
-  background: var(--surface);
+  background: var(--nen-the);
   border: 1px solid var(--hairline);
-  border-radius: 14px;
-  padding: 14px;
+  box-shadow: var(--bong-the);
   font-size: var(--text-body);
+  border-radius: 18px;
+  padding: 16px 14px 14px;
+  position: relative;
+  overflow: hidden;
 }
 
-/*
- * The publishing unit is set apart by a tinted surface, a brand border AND the badge's words.
- * Never by colour alone — a coloured square says nothing to a screen reader or to a colour-blind
- * eye, and which of six units published this app is the one thing this list has to answer.
- *
- * It deliberately does NOT get a bigger cell: six equal cards say six sister companies, and a
- * layout that promotes one of them makes a claim about the group that nobody sourced.
- */
-.unit--owner {
-  background: var(--surface-tint);
-  border-color: var(--brand-blue);
+.unit::before {
+  content: "";
+  background: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-green) 100%);
+  height: 3px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
 }
 
 .unit__name {
@@ -641,22 +791,7 @@ body {
   color: var(--navy);
 }
 
-.badge {
-  display: inline-block;
-  margin-top: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--navy);
-  color: #ffffff;
-  font-size: var(--text-small);
-  font-weight: 600;
-  line-height: 1.35;
-  /* The badge carries its own words, at full body size: it is the sentence that says which of
-     six companies published this app, not a decoration. Meaning never rests on the colour. */
-}
-
 /* ---------- certificates ---------- */
-
 .cert-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -667,9 +802,10 @@ body {
 }
 
 .cert {
-  background: var(--surface);
+  background: var(--nen-the);
   border: 1px solid var(--hairline);
-  border-radius: 14px;
+  box-shadow: var(--bong-the);
+  border-radius: 18px;
   padding: 14px;
 }
 
@@ -700,7 +836,6 @@ body {
 }
 
 /* ---------- offices ---------- */
-
 .office-list {
   list-style: none;
   margin: 0;
@@ -708,22 +843,23 @@ body {
 }
 
 .office {
-  display: flex;
+  background: var(--nen-the);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--bong-the);
+  border-radius: 18px;
   align-items: flex-start;
   gap: 12px;
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: 14px;
-  padding: 14px;
   margin: 0 0 10px;
+  padding: 14px;
+  display: flex;
 }
 
 .office__glyph {
-  flex: 0 0 auto;
   width: 24px;
   height: 24px;
-  margin-top: 2px;
   color: var(--navy);
+  flex: none;
+  margin-top: 2px;
 }
 
 .office__text {
@@ -742,19 +878,19 @@ body {
 }
 
 /* ---------- actions ---------- */
-
 .action {
-  display: flex;
+  min-height: var(--tap-min);
+  background: var(--nen-the);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--bong-the);
+  color: var(--ink);
+  border-radius: 18px;
   align-items: center;
   gap: 12px;
-  min-height: var(--tap-min);
-  padding: 12px 14px;
   margin: 0 0 10px;
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: 14px;
-  color: var(--ink);
+  padding: 12px 14px;
   text-decoration: none;
+  display: flex;
 }
 
 .action--primary {
@@ -782,28 +918,52 @@ body {
 }
 
 /* ---------- tab bar ---------- */
-
 .tabbar {
-  flex: 0 0 auto;
-  display: flex;
   background: var(--surface);
   border-top: 1px solid var(--hairline);
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  flex: none;
+  display: flex;
 }
 
+/*
+ * MỘT HÌNH TRÊN MỘT NHÃN CHỮ — bản mẫu của PM.
+ *
+ * `flex-direction: column` chứ không phải hình nằm cạnh chữ: bốn nhãn đều là chữ Việt có dấu ở
+ * 16px, và xếp ngang thì ở 320px mỗi ô chỉ còn ~50px cho chữ sau khi trừ hình — nhãn bị cắt đuôi.
+ * Xếp dọc thì cả bề rộng ô là bề rộng chữ, và `accessibility.test.ts` đo lại phép chia ấy.
+ *
+ * Hình KHÔNG thay chữ. Xem `components/TabBar.tsx`.
+ */
 .tabbar__item {
-  flex: 1 1 0;
   min-height: var(--tap-min);
   min-width: var(--tap-min);
-  padding: 10px 4px;
-  border: none;
-  border-top: 3px solid transparent;
-  background: transparent;
   color: var(--ink-muted);
   font-family: inherit;
   font-size: var(--text-small);
-  font-weight: 500;
+  line-height: 1.2;
   cursor: pointer;
+  background: transparent;
+  border: none;
+  border-top: 3px solid transparent;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  font-weight: 500;
+}
+
+.tabbar__glyph {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.tabbar__nhan {
+  display: block;
 }
 
 /* The active tab is marked three ways at once — weight, a top rule and aria-current —
@@ -828,7 +988,7 @@ body {
  * gets a completely static app rather than an app that stops animating some of the time.
  */
 @media (prefers-reduced-motion: no-preference) {
-  .hero__backdrop,
+  /* `.hero__backdrop` không còn: hero nay là một dải trơn, xem `.hero`. */
   .banner__backdrop {
     animation: drift 24s ease-in-out infinite alternate;
   }
@@ -864,32 +1024,33 @@ body {
 
 @keyframes drift {
   from {
-    transform: translate3d(0, 0, 0);
+    transform: translate(0, 0);
   }
+
   to {
-    transform: translate3d(-10px, 6px, 0);
+    transform: translate(-10px, 6px);
   }
 }
 
-/* `both` ở chỗ dùng, nên khung đầu tiên cũng là trạng thái nghỉ: không có nhịp nhấp nháy trước
-   khi hiệu ứng bắt đầu. Dịch 10px, không hơn — một khối bay từ xa vào là thứ gây chóng mặt. */
 @keyframes hien-len {
   from {
     opacity: 0;
-    transform: translate3d(0, 10px, 0);
+    transform: translateY(10px);
   }
+
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: translate(0, 0);
   }
 }
 
 @keyframes troi-mau {
-  from {
-    background-position: 0% 50%;
+  0% {
+    background-position: 0%;
   }
+
   to {
-    background-position: 100% 50%;
+    background-position: 100%;
   }
 }
 
@@ -961,12 +1122,12 @@ body {
 /* URL đầy đủ: dài, không có khoảng trắng, và là thứ cần ĐỌC ĐƯỢC BẰNG MẮT rồi gõ lại tay —
    nên chữ to hơn mặc định của bảng chẩn đoán và ngắt dòng ở mọi ký tự. */
 .chan-doan__href {
-  margin: 0;
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-family: ui-monospace, Cascadia Mono, Consolas, monospace;
   font-size: var(--text-small);
-  line-height: 1.5;
   color: var(--ink);
   word-break: break-all;
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* ---------- màn gợi ý xã (lớp khám phá, ADR 0005) ---------- */
@@ -1065,21 +1226,24 @@ body {
 
 /* Đường thoát về phần giới thiệu công ty. Nhạt hơn vì nó không phải việc công dân tới để làm. */
 .goi-y__nut--nhat {
-  background: transparent;
-  border-color: transparent;
   font-size: var(--text-small);
-  font-weight: 500;
   color: var(--ink-muted);
+  background: 0 0;
+  border-color: transparent;
+  font-weight: 500;
 }
 
-.goi-y__nut:focus-visible,
+.goi-y__nut:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
 .chon-xa__dong:focus-visible {
   outline: 3px solid var(--navy);
   outline-offset: 2px;
 }
 
 /* ---------- màn chọn xã ---------- */
-
 .chon-xa__li-do {
   margin: 0 0 16px;
   padding: 12px 14px;
@@ -1116,7 +1280,7 @@ body {
 }
 
 .chon-xa__chu {
-  flex: 1 1 auto;
+  flex: auto;
   min-width: 0;
 }
 
@@ -1135,10 +1299,10 @@ body {
 }
 
 .chon-xa__tiep {
-  flex: 0 0 auto;
   width: 22px;
   height: 22px;
   color: var(--navy);
+  flex: none;
 }
 
 /* Dòng nói đây là dữ liệu mẫu. Nhỏ nhưng ở cỡ chữ tối thiểu của app — một lời cảnh báo không
@@ -1150,7 +1314,6 @@ body {
 }
 
 /* ---------- trang xã (mỗi xã một nội dung) ---------- */
-
 .trang-xa {
   padding: 4px 0 8px;
 }
@@ -1248,7 +1411,7 @@ body {
 }
 
 .dich-vu__chu {
-  flex: 1 1 auto;
+  flex: auto;
   min-width: 0;
 }
 
@@ -1308,15 +1471,15 @@ body {
 /* Huy hiệu tròn mang dải màu thương hiệu. Glyph bên trong dùng `--tile-glyph` — tối, vì hai màu
    thương hiệu đều SÁNG; chữ trắng trên chúng chỉ đạt 2,3:1. */
 .tn__huy-hieu {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
+  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-green) 100%);
   width: 44px;
   height: 44px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-green) 100%);
   color: var(--tile-glyph);
+  border-radius: 14px;
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  display: inline-flex;
 }
 
 .tn__glyph {
@@ -1388,8 +1551,16 @@ body {
   color: var(--navy);
 }
 
-.tn__nut:focus-visible,
-.tn__nut-phu:focus-visible,
+.tn__nut:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.tn__nut-phu:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
 .tn-hanh-dong:focus-visible {
   outline: 3px solid var(--navy);
   outline-offset: 2px;
@@ -1500,7 +1671,7 @@ body {
 }
 
 .tn-hanh-dong--rong {
-  flex: 1 1 200px;
+  flex: 200px;
 }
 
 .tn-hanh-dong__glyph {
@@ -1509,7 +1680,6 @@ body {
 }
 
 /* ---------- tấm thiếp đã bóc tách ---------- */
-
 .the-tt {
   margin: 0;
   padding: 14px;
@@ -1551,11 +1721,11 @@ body {
 }
 
 .the-tt__gia-tri {
-  flex: 1 1 140px;
   font-size: var(--text-body);
-  font-weight: 600;
   color: var(--ink);
   word-break: break-word;
+  flex: 140px;
+  font-weight: 600;
 }
 
 .the-tt__nhan-tho {
@@ -1567,20 +1737,19 @@ body {
 /* Nội dung mã quét được: dữ liệu THẬT, dài tuỳ ý, có thể không có khoảng trắng. Ngắt ở mọi ký tự
    để nó không tràn ra ngoài màn hình. */
 .the-tt__tho {
-  margin: 0 0 10px;
-  padding: 12px 14px;
   border: 1px solid var(--hairline);
-  border-radius: 12px;
   background: var(--surface);
-  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-family: ui-monospace, Cascadia Mono, Consolas, monospace;
   font-size: var(--text-body);
-  line-height: 1.55;
   color: var(--ink);
   word-break: break-all;
+  border-radius: 12px;
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  line-height: 1.55;
 }
 
 /* ---------- ba văn phòng ---------- */
-
 .van-phong {
   margin: 4px 0 0;
   padding: 0;
@@ -1597,15 +1766,15 @@ body {
 }
 
 .van-phong__glyph {
-  flex: 0 0 auto;
   width: 22px;
   height: 22px;
-  margin-top: 2px;
   color: var(--brand-blue);
+  flex: none;
+  margin-top: 2px;
 }
 
 .van-phong__chu {
-  flex: 1 1 180px;
+  flex: 180px;
   min-width: 0;
 }
 
@@ -1743,7 +1912,6 @@ body {
 }
 
 /* ---------- ảnh danh thiếp giấy vừa chọn ---------- */
-
 .tn__anh {
   margin: 0 0 10px;
   padding: 0;
@@ -1766,4 +1934,428 @@ body {
   font-size: var(--text-small);
   line-height: 1.55;
   color: var(--ink-muted);
+}
+
+.quay-lai {
+  min-height: var(--tap-min);
+  border: 1px solid var(--hairline);
+  background: var(--nen-the);
+  box-shadow: var(--bong-the);
+  font: inherit;
+  font-size: var(--text-small);
+  color: var(--navy);
+  border-radius: 999px;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 8px 14px;
+  font-weight: 600;
+  display: inline-flex;
+}
+
+.quay-lai:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.solution--mo {
+  width: 100%;
+  min-height: var(--tap-min);
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: 0 0;
+  border: 0;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 0;
+  display: flex;
+}
+
+.solution--mo:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 4px;
+}
+
+.solution__mui {
+  color: var(--navy);
+  flex: none;
+  align-self: center;
+  margin-left: auto;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.banner--giai-phap {
+  background-image: radial-gradient(120% 160% at 0% 0%, var(--panel-glow-blue) 0%, var(--navy) 62%);
+}
+
+.tile--lon {
+  border-radius: 16px;
+  width: 56px;
+  height: 56px;
+  margin: 0 0 10px;
+}
+
+.tile--lon .tile__glyph {
+  width: 30px;
+  height: 30px;
+}
+
+.card__body--lon {
+  color: var(--navy);
+  margin: 0 0 8px;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.lich-su {
+  border-left: 3px solid var(--brand-blue);
+  border-image: linear-gradient(180deg, var(--brand-blue) 0%, var(--brand-green) 100%) 1;
+  margin: 0 0 16px;
+  padding: 0 0 0 16px;
+  list-style: none;
+}
+
+.moc {
+  background: var(--nen-the);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--bong-the);
+  border-radius: 18px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  position: relative;
+}
+
+.moc__nam {
+  font-size: var(--text-small);
+  letter-spacing: .02em;
+  color: var(--navy);
+  font-weight: 700;
+  display: block;
+}
+
+.moc__viec {
+  font-size: var(--text-body);
+  color: var(--ink);
+  display: block;
+}
+
+.action--mo {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.action--mo:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.quyen-ds {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quyen {
+  background: var(--nen-the);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--bong-the);
+  border-radius: 18px;
+  margin: 0 0 12px;
+  padding: 16px 14px 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.quyen::before {
+  content: "";
+  background: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-green) 100%);
+  height: 3px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.quyen__ten {
+  color: var(--navy);
+  margin: 0 0 2px;
+  font-size: 19px;
+}
+
+.quyen__vi-tri {
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+  margin: 0 0 8px;
+}
+
+.quyen__de-lam-gi {
+  font-size: var(--text-body);
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+
+.quyen__hoi,
+.quyen__ra-ngoai {
+  background: var(--surface-tint);
+  font-size: var(--text-small);
+  color: var(--ink);
+  border-radius: 10px;
+  margin: 0 0 6px;
+  padding: 8px 10px;
+}
+
+.quyen__api {
+  font-family: SFMono-Regular, Consolas, Liberation Mono, monospace;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+  word-break: break-all;
+  margin: 0;
+}
+
+/* ---------- menu nhanh trên màn chủ ---------- */
+
+/*
+ * THẺ TRẮNG ĐÈ LÊN ĐÁY HERO — bản mẫu của PM.
+ *
+ * ⚠ LỀ ÂM 56px LÀ MỘT NỬA CỦA MỘT CẶP. Nửa kia là `padding-bottom: 76px` của `.hero`: chồng lớp
+ *   chỉ đúng khi đệm đáy hero LỚN HƠN phần thẻ trèo lên, nếu không thẻ trắng trùm mất hàng chỉ số
+ *   cuối. Hai con số ấy ở hai chỗ cách nhau gần hai nghìn dòng trong tệp này, nên
+ *   `accessibility.test.ts` đọc cả hai ra và so — chú thích không đếm được gì.
+ *
+ * ⚠ `z-index` MỘT CÁCH TƯỜNG MINH, KHÔNG DỰA VÀO THỨ TỰ DOM: hero có `box-shadow` và một nền
+ *   chuyển sắc; không có ngữ cảnh xếp lớp riêng thì bóng đổ của hero rơi lên mặt thẻ và mép trên
+ *   thẻ trông như bị bẩn.
+ */
+.menu-the {
+  position: relative;
+  z-index: 1;
+  margin: -56px 0 18px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 22px;
+  box-shadow: var(--bong-noi);
+}
+
+/*
+ * BA CỘT, KHÔNG PHẢI BỐN — và đó là một phép đo, không phải một khẩu vị.
+ *
+ *   Bản mẫu bày 4 cột vì nó có 8 ô. Sáu ô trong lưới 4 cột để lại hàng hai chỉ có hai ô lẻ, lệch
+ *   hẳn về trái. Bề rộng cũng chỉ đủ cho ba: ở 320px, thẻ này rộng 320 − 32 (lề trang) = 288, trừ
+ *   28 đệm thẻ còn 260; chia ba, trừ khe 10 và đệm ô, còn ~76px cho chữ. Chia bốn thì còn ~54px,
+ *   mà "hotline" ở 16px đã cần ~69px. `accessibility.test.ts` tính lại đúng phép chia này.
+ *
+ *   Và nó KHÔNG phải một dải cuộn ngang: người không biết vuốt ngang — đúng nhóm người
+ *   `skills/accessibility-elderly` nói tới — sẽ không bao giờ thấy những ô nằm ngoài màn hình.
+ */
+.menu-nhanh {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+
+.menu-nhanh__muc {
+  display: flex;
+}
+
+/* Ô menu KHÔNG có viền và bóng riêng: chúng nằm TRONG một thẻ trắng đã có viền và bóng, và một
+   thẻ trong thẻ là hai khung lồng nhau — bản mẫu vẽ ô trần trên mặt thẻ. Vẫn khai `background`
+   tường minh, vì đó là bề mặt chữ đứng lên và `accessibility.test.ts` đòi mọi bề mặt thẻ gọi tên
+   màu của nó thay vì tự dựng một dải riêng. */
+.menu-nhanh__nut {
+  min-height: var(--tap-min);
+  background: var(--surface);
+  border: none;
+  font: inherit;
+  text-align: center;
+  color: var(--ink);
+  border-radius: 16px;
+  flex-direction: column;
+  flex: auto;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 2px 6px;
+  text-decoration: none;
+  display: flex;
+}
+
+/* Hai màu pastel xen kẽ cho ô biểu tượng — bản mẫu xen kẽ BỐN màu; ở đây là hai, và cả hai đã có
+   cặp với `--navy` trong bảng cặp màu. Bốn màu mới là bốn cặp chưa ai đo, để lấy một nhịp trang
+   trí. Màu ở đây KHÔNG mang thông tin nào: nhãn chữ dưới mỗi ô nói hết. */
+.menu-nhanh__muc:nth-child(even) .tile--soft {
+  background: var(--surface-tint-green);
+}
+
+.menu-nhanh__nut:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.menu-nhanh__nut:active {
+  background: var(--nen-the-luc);
+}
+
+.menu-nhanh__nhan {
+  font-size: var(--text-small);
+  color: var(--navy);
+  font-weight: 700;
+  line-height: 1.25;
+  display: block;
+}
+
+/* Dòng phụ nói mục này dẫn TỚI ĐÂU. Vẫn `--text-small` (≥16px): một dòng giải thích không đọc
+   được là một dòng giải thích không được nói ra. */
+.menu-nhanh__phu {
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+  line-height: 1.25;
+  display: block;
+}
+
+/* ---------- giải pháp nổi bật (màn chủ) ---------- */
+
+/* Một thẻ, nhiều dòng — KHÔNG phải bốn nút. Thẻ bấm được sống ở tab Giải pháp; ở đây là bản xem
+   trước, và đúng MỘT nút "Xem tất cả" dẫn sang chỗ đầy đủ. Xem chú thích trong `HomeScreen.tsx`. */
+.gp-noi-bat {
+  background: var(--nen-the);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--bong-the);
+  border-radius: 18px;
+  margin: 0 0 12px;
+  padding: 4px 14px;
+  list-style: none;
+}
+
+.gp-noi-bat__mot {
+  border-top: 1px solid var(--hairline);
+  padding: 12px 0;
+}
+
+.gp-noi-bat__mot:first-child {
+  border-top: none;
+}
+
+.gp-noi-bat__ten {
+  color: var(--navy);
+  font-size: 19px;
+  display: block;
+}
+
+.gp-noi-bat__cau {
+  font-size: var(--text-body);
+  color: var(--ink);
+  display: block;
+}
+
+/* ---------- khối "Tin ViHAT" ---------- */
+
+.tin-ds {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tin {
+  background: var(--nen-the);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--bong-the);
+  border-radius: 18px;
+  margin: 0 0 12px;
+  padding: 14px;
+}
+
+/* NGÀY ĐĂNG ĐỨNG TRƯỚC TIÊU ĐỀ, và nó không phải chữ ký nhỏ ở góc: đây là thứ người đọc dùng để
+   quyết định tin này còn mới hay đã cũ, và cả khối là một BẢN CHỤP. */
+.tin__ngay {
+  font-size: var(--text-small);
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+  font-weight: 600;
+  display: block;
+}
+
+.tin__tieu-de {
+  color: var(--navy);
+  margin: 2px 0 6px;
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.tin__trich {
+  font-size: var(--text-body);
+  color: var(--ink);
+  margin: 0 0 12px;
+  line-height: 1.55;
+}
+
+.tin__ghi-chu {
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+  margin: 0 0 18px;
+  line-height: 1.55;
+}
+
+/* ---------- nút chat nổi ---------- */
+
+/*
+ * NỔI TRÊN MỌI MÀN, NGAY TRÊN THANH TAB.
+ *
+ * `pointer-events: none` trên vỏ và `auto` trên hai đứa con: vỏ là một hộp trong suốt chiếm góc
+ * phải dưới, và nếu nó nhận được chạm thì nó nuốt mất những cú chạm dành cho nội dung nằm dưới —
+ * một vùng chết vô hình, thứ khó tìm ra nhất khi có người báo "bấm không được".
+ *
+ * Đệm đáy của `.app-main` (28px + --tap-min + 16px) là thứ giữ cho nút này không che mất nội dung
+ * cuối trang: nó chừa đúng chiều cao nút cộng khoảng hở.
+ */
+.chat-noi {
+  right: 16px;
+  bottom: calc(var(--tap-min) + 16px + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  display: flex;
+  position: fixed;
+}
+
+/* Câu "chỉ mở được trong Zalo". Hẹp lại để không phủ kín màn hình, và có bóng để tách khỏi nội
+   dung đang cuộn phía sau. */
+.chat-noi__loi {
+  pointer-events: auto;
+  max-width: 260px;
+  box-shadow: var(--bong-noi);
+}
+
+.nut-chat {
+  min-height: var(--tap-min);
+  pointer-events: auto;
+  border: 1px solid var(--navy);
+  background-color: var(--navy);
+  background-image: radial-gradient(90% 200% at 110% 50%, var(--panel-glow-blue) 0%, var(--navy) 70%);
+  box-shadow: var(--bong-noi);
+  font: inherit;
+  font-size: var(--text-small);
+  color: #ffffff;
+  border-radius: 999px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  font-weight: 700;
+  display: inline-flex;
+}
+
+.nut-chat:focus-visible {
+  outline-offset: 2px;
+  outline: 3px solid #ffffff;
+}
+
+.nut-chat__glyph {
+  width: 22px;
+  height: 22px;
 }

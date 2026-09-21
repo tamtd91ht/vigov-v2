@@ -260,8 +260,14 @@ const TRIPWIRES: readonly Tripwire[] = [
     // và mất khi đóng app (xã đã chọn của lớp khám phá cũng vậy). Ghi một bearer xuống máy là
     // để nó ở lại sau khi người dùng đóng ứng dụng, trên một thiết bị có thể cho mượn — và câu
     // "không lưu lại" trong chính sách quyền riêng tư đứng được là nhờ đúng lệnh cấm này.
+    // ĐÃ MỞ RỘNG 21/09/2026 — MỞ RỘNG, KHÔNG NỚI. Bốn cái tên cũ ở lại nguyên vẹn; thêm vào là
+    // họ tên `IDB*`, thứ duy nhất trong ba API lưu trữ có đường đi tới mà KHÔNG gõ ra tên trần
+    // của nó: một `IDBOpenDBRequest` nhận về từ hàm khác, một `IDBTransaction` truyền vào. Lý do
+    // của lệnh cấm này nay có thêm một vế — xem `ranh-gioi-hai-nua.test.ts` §3b: một bundle là
+    // MỘT origin, nên kho lưu trữ là CHUNG giữa nửa thương mại và nửa nhà nước, theo cấu tạo.
     what: "device-side storage of user state — the session ticket lives in memory, never on the device",
-    pattern: /localStorage|sessionStorage|document\.cookie|indexedDB/,
+    pattern:
+      /localStorage|sessionStorage|document\.cookie|indexedDB|\bIDB(?:Factory|Database|OpenDBRequest|Transaction|ObjectStore)\b/,
   },
   {
     what: "geolocation — GPS in this system may suggest a commune and never decide one, and phase 1 has no commune at all",

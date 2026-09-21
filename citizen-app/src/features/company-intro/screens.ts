@@ -2,9 +2,11 @@ import type { ComponentType } from "react";
 
 import { MAN_DANH_THIEP } from "../tinh-nang/index";
 
+import type { ScreenId, ThamSoMan } from "./dieu-huong";
 import { AboutScreen } from "./AboutScreen";
 import { ContactScreen } from "./ContactScreen";
 import { HomeScreen } from "./HomeScreen";
+import { GridGlyph, HomeGlyph, InfoGlyph, MailGlyph } from "./icons";
 import { SolutionsScreen } from "./SolutionsScreen";
 
 /**
@@ -14,31 +16,112 @@ import { SolutionsScreen } from "./SolutionsScreen";
  * switch all read from this list. A second list would drift from this one, and the symptom of
  * that drift is a tab that leads nowhere.
  *
- * NĂM TAB, MỖI TAB MỘT VIỆC. Tab "Danh thiếp" là một TÍNH NĂNG, không phải một màn giới thiệu:
- * nó nằm giữa thanh tab vì đó là thứ người dùng mở app để làm, và vì người duyệt của Zalo phải
- * thấy ngay `scanQRCode` được dùng vào việc gì. Hai tính năng còn lại — tìm văn phòng và đăng ký
- * nhận tư vấn — nằm trên tab Liên hệ, đúng chỗ người ta đã định liên hệ.
+ * ⚠ NĂM MÀN, BỐN TAB — ĐỔI 21/09/2026 (khuya), THEO BẢN MẪU CỦA PM.
+ *
+ *   Bản mẫu vẽ BỐN tab, mỗi tab một biểu tượng: Trang chủ · Giải pháp · Về ViHAT · Liên hệ. Màn
+ *   "Danh thiếp" không có tab trong bản mẫu, nên nó mất tab — nhưng KHÔNG mất đường tới: hai tính
+ *   năng danh thiếp (`scanQRCode`, `keepScreen`, `downloadFile` sống ở đó) vào bằng hai mục của
+ *   menu nhanh trên màn chủ, đúng như bản mẫu bày chúng ("Quét QR Lead", "Chụp danh thiếp").
+ *
+ *   MỘT MÀN KHÔNG CÓ TAB VẪN PHẢI TRẢ LỜI "TAB NÀO SÁNG KHI TÔI ĐANG MỞ" — đó là lý do `cho` là
+ *   một hợp kiểu phân biệt chứ không phải một cờ tuỳ chọn. Không khai thì không biên dịch được.
+ *   Bỏ trống câu ấy nghĩa là công dân đứng ở màn Danh thiếp và thanh tab không sáng ô nào: họ
+ *   không biết mình đang ở đâu trong app, và với người lớn tuổi thì "không biết mình ở đâu" là
+ *   lúc họ đóng app.
  */
 
-export type ScreenId = "home" | "solutions" | "danh-thiep" | "about" | "contact";
+/**
+ * Kiểu và mỏ neo điều hướng sống ở `dieu-huong.ts` — một tệp LÁ, không nhập màn hình nào — và
+ * được xuất lại ở đây để mọi nơi đang nhập từ `./screens` không phải đổi đường nhập. Xem khối chú
+ * thích đầu tệp ấy về vòng nhập.
+ */
+export {
+  MOC_CHANG_DUONG,
+  MOC_QUAN_LY_QUYEN,
+  MOC_QUET_MA_QR,
+  MOC_SO_HOA_THIEP,
+  MOC_TIM_VAN_PHONG,
+} from "./dieu-huong";
+export type { DiemDen, ScreenId, ThamSoMan } from "./dieu-huong";
+
+/** Hình vẽ trong bundle, không phải tệp ảnh. Xem `icons.tsx`. */
+export type GlyphComponent = ComponentType<{ className?: string }>;
+
+/**
+ * Chỗ của một màn trên thanh tab. HAI DẠNG, KHÔNG CÓ DẠNG THỨ BA VÀ KHÔNG CÓ MẶC ĐỊNH.
+ *
+ *   • `tab` — màn có ô riêng trên thanh tab: một nhãn CHỮ và một hình. Cả hai bắt buộc; một tab
+ *     chỉ có hình là một tab phải học thuộc mới dùng được.
+ *   • `ngoai-tab` — màn tới được bằng đường khác (menu nhanh), và `tabSangLen` nói ô nào sáng khi
+ *     công dân đang đứng ở đây. Không có trường ấy thì thanh tab không sáng ô nào và người dùng
+ *     mất dấu vị trí của mình trong app.
+ */
+export type ChoTrenThanhTab =
+  | { kieu: "tab"; nhan: string; glyph: GlyphComponent }
+  | { kieu: "ngoai-tab"; tabSangLen: ScreenId };
 
 export type ScreenDefinition = {
   id: ScreenId;
-  /** Shown in the bottom tab bar. Short enough not to truncate on a 320px screen. */
-  tabLabel: string;
   /** Shown in the app header under the entity name, so the citizen always knows where they are. */
   headerTitle: string;
-  component: ComponentType;
+  cho: ChoTrenThanhTab;
+  component: ComponentType<ThamSoMan>;
 };
 
 /** Sổ màn hình — giống nhau ở mọi biến thể bản dựng. */
 export const SCREENS: readonly ScreenDefinition[] = [
-  { id: "home", tabLabel: "Trang chủ", headerTitle: "Trang chủ", component: HomeScreen },
-  { id: "solutions", tabLabel: "Giải pháp", headerTitle: "Giải pháp", component: SolutionsScreen },
+  {
+    id: "home",
+    headerTitle: "Trang chủ",
+    cho: { kieu: "tab", nhan: "Trang chủ", glyph: HomeGlyph },
+    component: HomeScreen,
+  },
+  {
+    id: "solutions",
+    headerTitle: "Giải pháp",
+    cho: { kieu: "tab", nhan: "Giải pháp", glyph: GridGlyph },
+    component: SolutionsScreen,
+  },
   MAN_DANH_THIEP,
-  { id: "about", tabLabel: "Về ViHAT", headerTitle: "Về ViHAT", component: AboutScreen },
-  { id: "contact", tabLabel: "Liên hệ", headerTitle: "Liên hệ", component: ContactScreen },
+  {
+    id: "about",
+    headerTitle: "Về ViHAT",
+    cho: { kieu: "tab", nhan: "Về ViHAT", glyph: InfoGlyph },
+    component: AboutScreen,
+  },
+  {
+    id: "contact",
+    headerTitle: "Liên hệ",
+    cho: { kieu: "tab", nhan: "Liên hệ", glyph: MailGlyph },
+    component: ContactScreen,
+  },
 ];
+
+/** Một màn CÓ ô trên thanh tab — kiểu đã thu hẹp, để `cho.nhan` đọc được mà không phải ép kiểu. */
+export type ManCoTab = ScreenDefinition & {
+  cho: Extract<ChoTrenThanhTab, { kieu: "tab" }>;
+};
+
+/**
+ * Những ô thanh tab vẽ ra, theo đúng thứ tự sổ màn hình khai.
+ *
+ * LỌC TỪ `SCREENS`, KHÔNG PHẢI MỘT DANH SÁCH THỨ HAI: hai danh sách sẽ lệch, và triệu chứng của
+ * lần lệch ấy là một tab dẫn tới một màn không còn tồn tại.
+ */
+export const TABS: readonly ManCoTab[] = SCREENS.filter(
+  (man): man is ManCoTab => man.cho.kieu === "tab",
+);
+
+/**
+ * Ô nào trên thanh tab sáng lên khi màn `id` đang mở.
+ *
+ * Màn có tab thì là chính nó; màn không có tab thì là ô cha nó đã khai. Hàm này là chỗ DUY NHẤT
+ * trả lời câu ấy — một `if` viết lại trong `TabBar` là chỗ thứ hai để lệch.
+ */
+export function tabDangSang(id: ScreenId): ScreenId {
+  const man = findScreen(id);
+  return man.cho.kieu === "tab" ? man.id : man.cho.tabSangLen;
+}
 
 /**
  * Giữ lại cái tên cũ cho những chỗ chỉ quan tâm tới bốn màn giới thiệu công ty.

@@ -1,7 +1,7 @@
 /**
  * TÍNH NĂNG KIỂM TRA ĐƯỜNG TRUYỀN — `getNetworkType` + `vibrate`.
  *
- * VÌ SAO TÍNH NĂNG NÀY THUỘC VỀ ĐÚNG ỨNG DỤNG NÀY: VihatSoftware bán tổng đài đám mây. Một cuộc
+ * VÌ SAO TÍNH NĂNG NÀY THUỘC VỀ ĐÚNG ỨNG DỤNG NÀY: ViHAT Group bán tổng đài đám mây. Một cuộc
  * gọi của tổng đài đám mây đi qua chính đường mạng của máy người dùng, nên "đang đi bằng Wi-Fi
  * hay bằng mạng di động" là câu hỏi đầu tiên của mọi cuộc gọi nghe không rõ. Nó nằm trên màn
  * Giải pháp, ngay dưới phần nói về tổng đài — không phải trong một tab tên "Quyền".

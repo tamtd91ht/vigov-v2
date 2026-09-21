@@ -150,14 +150,26 @@ describe("danh thiếp số của chúng tôi", () => {
     expect(chu).toContain(COMPANY.name);
     expect(chu).toContain(CONTACT.hotlineDialable);
     expect(chu).toContain(CONTACT.email);
-    expect(chu).toContain(COMPANY.website);
+    // Trang web chỉ hiện khi tấm thiếp thật sự có trường ấy. `COMPANY.website` trống từ
+    // 21/09/2026 (xem `company-profile.ts`), nên dòng "Trang web" KHÔNG được vẽ ra: một nhãn
+    // không có giá trị là một dòng trình đọc màn hình vẫn đọc mà không nói được gì.
+    if (COMPANY.website === undefined) {
+      expect(chu, "vẽ nhãn Trang web trong khi tấm thiếp không có địa chỉ nào").not.toContain(
+        "Trang web",
+      );
+    } else {
+      expect(chu).toContain(COMPANY.website);
+    }
   });
 
   it("nội dung mã và phần chữ đọc từ CÙNG MỘT nguồn", () => {
     // Hai bản của một sự thật thì một bản sẽ cũ, và bản cũ là bản người ta quét về danh bạ.
     const vcard = vCardCuaChungToi();
     const chu = textOf(ve(<TheQrCuaChungToi noi_dung_vcard={vcard} />));
-    for (const gia_tri of [COMPANY.name, CONTACT.hotlineDialable, CONTACT.email, COMPANY.website]) {
+    const co_that = [COMPANY.name, CONTACT.hotlineDialable, CONTACT.email, COMPANY.website].filter(
+      (gia_tri): gia_tri is string => typeof gia_tri === "string",
+    );
+    for (const gia_tri of co_that) {
       expect(vcard, `mã thiếu ${gia_tri}`).toContain(gia_tri);
       expect(chu, `phần chữ thiếu ${gia_tri}`).toContain(gia_tri);
     }

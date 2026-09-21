@@ -39,6 +39,19 @@ export function cheToken(token: string): string {
 export type TrangThai<T = string> = { kieu: "chua-goi" } | { kieu: "dang-cho" } | KetQuaXin<T>;
 
 /**
+ * `id` của tiêu đề một khối tính năng — và cũng là MỎ NEO để một màn khác cuộn tới nó.
+ *
+ * MỘT HÀM, KHÔNG PHẢI MỘT CHUỖI GÕ Ở HAI CHỖ. Menu nhanh trên màn chủ có hai mục dẫn thẳng tới
+ * một khối tính năng nằm giữa một màn khác ("Văn phòng", "QR"). Nếu mỏ neo ấy được gõ tay ở
+ * `features/company-intro/` thì ngày ai đó đổi quy ước `id` ở đây, hai mục menu im lặng không cuộn
+ * đi đâu cả — người bấm thấy đúng đầu màn và tự kết luận là nút hỏng. Một hàm thì cả hai bên đọc
+ * cùng một chỗ.
+ */
+export function mocTinhNang(ma: MaTinhNang): string {
+  return `tn-${ma}`;
+}
+
+/**
  * Khung một tính năng, THUẦN — nhận cả trạng thái qua tham số, không giữ gì.
  *
  * Tách ra vì bộ test ở đây dựng bằng `react-dom/server` và không có DOM để bấm. Bốn nhánh kết
@@ -86,14 +99,14 @@ export function KhungTinhNang<T>({
   const TieuDe = cap_tieu_de;
 
   return (
-    <section className="tn hien-len" aria-labelledby={`tn-${ma}`}>
+    <section className="tn hien-len" aria-labelledby={mocTinhNang(ma)}>
       <div className="tn__dau">
         {glyph !== undefined && (
           <span className="tn__huy-hieu" aria-hidden="true">
             {glyph}
           </span>
         )}
-        <TieuDe className="tn__tieu-de" id={`tn-${ma}`}>
+        <TieuDe className="tn__tieu-de" id={mocTinhNang(ma)}>
           {nd.tieu_de}
         </TieuDe>
       </div>

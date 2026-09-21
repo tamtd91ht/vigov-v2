@@ -9,11 +9,13 @@
       `viewport-fit=cover` is what makes env(safe-area-inset-*) resolve in styles.css.
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#1e3150" />
+    <meta name="theme-color" content="#144a80" />
     <!--
-      Icon sinh từ `tools/logo.py`, không phải tệp ai đó kéo vào kho: màu `#1e3150` ở đây,
-      trong `app-config.json` và trong `--navy` của styles.css phải là MỘT giá trị, và một
-      trình sinh là chỗ duy nhất nói được điều đó thành lời.
+      Icon sinh từ `tools/logo.py`, không phải tệp ai đó kéo vào kho. Icon KHÔNG mang màu
+      `theme-color` ở trên: `logo.py` đọc màu từ thuộc tính `fill` của chính vector logo (xanh
+      thương hiệu), nên đổi `--navy` không làm bộ icon lệch. Ba chỗ phải trùng nhau là
+      `theme-color` ở đây, `headerColor` trong `app-config.json` và `--navy` trong styles.css —
+      `bundle-for-zalo.test.ts` ghim đúng ba chỗ ấy.
       Đường dẫn TƯƠNG ĐỐI — Mini App chạy từ một đường dẫn do nền tảng chọn, `/icon-192.png`
       sẽ trỏ vào hư không trên máy thật trong khi `vite preview` vẫn đúng.
     -->
@@ -22,9 +24,9 @@
     <link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png" />
     <meta
       name="description"
-      content="Giới thiệu VihatSoftware — Outsourcing Software Development Company."
+      content="Giới thiệu Tập đoàn ViHAT Group."
     />
-    <title>VihatSoftware</title>
+    <title>ViHAT Group</title>
   </head>
   <body>
     <div id="app"></div>

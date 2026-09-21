@@ -28,6 +28,31 @@
  *   MẤT KHỎI CẢ BẢN NỘP, không chỉ khỏi bản đầy đủ. Nó từng là câu mạnh nhất app này có để nói;
  *   hôm nay nó là một tuyên bố sai dưới tên một pháp nhân có thật.
  *
+ * ⚠ CHUYỂN QUYỀN SỞ HỮU APP, 21/09/2026 — VÀ MỘT CÂU HỎI CHƯA AI TRẢ LỜI ĐANG TREO Ở ĐÂY:
+ *
+ *   Bên phát hành ứng dụng đổi từ **VihatSoftware** sang **Tập đoàn ViHAT Group**. Văn bản này
+ *   vì thế có hai vế phải tách bạch, và trộn chúng là hỏng theo hai kiểu khác nhau:
+ *
+ *   | Vế | Nói gì | Đã làm gì |
+ *   |---|---|---|
+ *   | **AI CHỊU TRÁCH NHIỆM** | ai phát hành app, ai chịu trách nhiệm về chính sách | đổi sang **ViHAT Group** |
+ *   | **AI NHẬN DỮ LIỆU** | dữ liệu đăng nhập đi tới "máy chủ của VihatSoftware" (`vihat-miniapp`) | **GIỮ NGUYÊN** |
+ *
+ *   Vế thứ hai giữ nguyên vì nó là một KHẲNG ĐỊNH SỰ THẬT về nơi nhận dữ liệu theo Nghị định
+ *   13/2023: máy chủ ấy là kho `vihat-miniapp`, và **ai vận hành nó sau khi chuyển quyền sở hữu
+ *   app thì chưa ai trả lời**. Lật nó sang ViHAT Group là khai sai nơi nhận dữ liệu cá nhân —
+ *   đúng thứ Nghị định 13 nhắm tới, và là thứ không sửa lại được sau khi công bố.
+ *
+ *   ⚠ HỆ QUẢ ĐÃ PHẢI XỬ LÝ NGAY, không chờ được: hai câu cũ nói nơi nhận ấy "là bên phát hành
+ *   ứng dụng này, không phải một bên thứ ba". Vế trước nay SAI; vế sau là một kết luận pháp lý
+ *   dựa trên vế trước. Cả hai đã được gỡ khỏi hai câu (mục Đăng nhập và mục Chuyển dữ liệu cho
+ *   bên thứ ba), giữ lại đúng phần đo được. **CHỦ DỰ ÁN PHẢI QUYẾT** ai vận hành `vihat-miniapp`
+ *   trước lần công bố đầu tiên; nếu là một pháp nhân khác bên phát hành thì văn bản này còn nợ
+ *   một mục khai chuyển dữ liệu cho bên thứ ba, và mục ấy không ai được tự viết.
+ *
+ *   `PHIEN_BAN_CHINH_SACH` GIỮ `1.0`: bản này chưa từng tới tay một người dùng nào, nên đây vẫn
+ *   là cùng một lượt soạn thảo trước lần công bố đầu tiên — xem khối về số phiên bản bên dưới.
+ *
  * ⚠ HAI THỜI HẠN, HAI CÂU TRẢ LỜI KHÁC NHAU, VÀ CẢ HAI ĐỀU ĐÃ CHỐT:
  *
  *   | Lưu gì | Bao lâu | Vì sao không giống nhau |
@@ -61,6 +86,22 @@
  *   thời điểm. Không cột nào chứa số điện thoại, và cũng không thể có — lúc dòng ấy được ghi
  *   thì số đã bị ghi đè trong cùng một giao dịch.
  *
+ * ⚠ MỘT CÂU TRONG VĂN BẢN NÀY KHÔNG CÒN ĐƯỢC GÕ TAY — 21/09/2026:
+ *
+ *   Câu *"Có <N> chỗ ứng dụng mở một trang bên ngoài…"* trong mục "Chuyển dữ liệu cho bên thứ ba"
+ *   nay được DỰNG RA từ `content/dich-ra-ngoai.ts` (`cauKhaiDichRaNgoai`). Con số ấy đã phải sửa
+ *   BỐN lần trong hai ngày, lần nào cũng do một người đọc lại văn bản mà phát hiện — và một con
+ *   số đếm bằng mắt trong một văn bản pháp lý sắp nộp là con số sẽ có lần không ai đếm.
+ *
+ *   Nửa còn lại của cơ chế nằm ở `content/dich-ra-ngoai.test.ts`: mã nguồn không có đường nào mở
+ *   một trang ngoài mà không gọi tên một đích đã khai. Thêm một lối ra mà quên khai là một ca ĐỎ,
+ *   không phải một câu sai trong hồ sơ.
+ *
+ *   PHIÊN BẢN VẪN LÀ 1.0 dù bề mặt "dữ liệu của bạn có thể tới đâu" vừa rộng ra thật sự (nút Chat
+ *   với Official Account, hai liên kết bài viết): văn bản này CHƯA từng tới tay một người dùng
+ *   nào, nên đây vẫn là cùng một lượt soạn thảo trước lần công bố đầu tiên — xem khối về số phiên
+ *   bản bên dưới. Từ lần công bố đầu trở đi, đúng thay đổi này sẽ phải lên một số mới.
+ *
  * VÌ SAO MỤC VỀ CÁC QUYỀN NAY NẰM THẲNG TRONG DANH SÁCH NÀY:
  *
  *   Trước đây nó nằm sau cửa `bien-the/quyen`, vì có một biến thể bản dựng KHÔNG xin quyền nào
@@ -78,6 +119,8 @@ import {
   DOAN_CHINH_SACH_TINH_NANG,
   DOAN_CHINH_SACH_TUNG_QUYEN,
 } from "../features/tinh-nang/noi-dung";
+
+import { cauKhaiDichRaNgoai } from "./dich-ra-ngoai";
 
 export type MucChinhSach = {
   /** Dùng làm khoá React và làm mỏ neo cho test. Không hiện ra. */
@@ -168,7 +211,7 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     ma: "ben-xu-ly",
     tieu_de: "Bên xử lý dữ liệu",
     doan: [
-      "VihatSoftware — đơn vị thành viên của Tập đoàn ViHAT Group — là bên phát hành ứng dụng này và là bên chịu trách nhiệm về chính sách này.",
+      "Tập đoàn ViHAT Group là bên phát hành ứng dụng này và là bên chịu trách nhiệm về chính sách này.",
       "Địa chỉ trụ sở chính và các đầu mối liên hệ được ghi ở màn Liên hệ của ứng dụng.",
     ],
   },
@@ -202,7 +245,15 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     doan: [
       "Ứng dụng xin số điện thoại Zalo của bạn để bạn đăng nhập bằng một lần chạm, và để gửi thông báo ZNS tới đúng số ấy khi bạn cần được báo kết quả. Không có ô nhập số điện thoại, và không có mã sáu số nào phải gõ.",
       "Zalo không trả số điện thoại của bạn về máy: ứng dụng chỉ nhận hai mã dùng được một lần, hết hạn sau hai phút. Số điện thoại của bạn không nằm trong hai mã ấy.",
-      "Khi bạn bấm đăng nhập, ứng dụng gửi hai mã ấy tới máy chủ của VihatSoftware — bên phát hành ứng dụng này, không phải một bên thứ ba. Máy chủ đổi mã tại Zalo bằng một khoá bí mật mà ứng dụng trên máy bạn không có và không được có.",
+      // ⚠ VẾ "bên phát hành ứng dụng này, không phải một bên thứ ba" ĐÃ BỊ GỠ KHỎI CÂU NÀY,
+      // 21/09/2026, và việc gỡ là bắt buộc: từ ngày bên phát hành app là Tập đoàn ViHAT Group,
+      // câu ấy khẳng định VihatSoftware là bên phát hành — một câu SAI, trong cùng một văn bản
+      // có mục "Bên xử lý dữ liệu" nói điều ngược lại. Thứ CÒN GIỮ NGUYÊN là vế sự thật: dữ
+      // liệu đi tới máy chủ của VihatSoftware (`vihat-miniapp`). AI VẬN HÀNH máy chủ ấy sau khi
+      // chuyển quyền sở hữu app, và vì thế nơi nhận có phải "bên thứ ba" theo Nghị định 13 hay
+      // không, là CÂU CHƯA AI TRẢ LỜI — nên văn bản này không khẳng định gì về nó. Khi chủ dự
+      // án trả lời, vế ấy quay lại (hoặc thành một mục khai chuyển dữ liệu cho bên thứ ba).
+      "Khi bạn bấm đăng nhập, ứng dụng gửi hai mã ấy tới máy chủ của VihatSoftware — đơn vị thành viên của Tập đoàn ViHAT Group. Máy chủ đổi mã tại Zalo bằng một khoá bí mật mà ứng dụng trên máy bạn không có và không được có.",
       "MÁY CHỦ LƯU SỐ ĐIỆN THOẠI CỦA BẠN, và lưu để làm đúng hai việc: làm tên đăng nhập cho những lần bạn mở lại ứng dụng, và làm nơi nhận thông báo ZNS. Ngoài số điện thoại, ứng dụng không gửi thông tin nào khác của bạn đi.",
       "Máy chủ trả về một phiếu phiên, và giữ lại bản ghi của phiên ấy: thời điểm tạo, thời điểm hết hạn, và một bản mã hoá một chiều của chính phiếu — không phải phiếu. Phiên hết hạn sau 7 ngày. Ứng dụng trên máy bạn thì chỉ giữ phiếu trong bộ nhớ: không ghi xuống máy, không hiện ra màn hình, và mất đi khi bạn đóng ứng dụng.",
       // VIẾT LẠI CHO ĐÚNG SAU KHI ĐỌC LƯỢC ĐỒ THẬT
@@ -234,7 +285,13 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     ma: "ghi-tep",
     tieu_de: "Tệp ứng dụng ghi xuống máy bạn",
     doan: [
-      "Ứng dụng ghi đúng MỘT loại tệp xuống máy bạn, và chỉ khi chính bạn bấm nút tải: tệp danh thiếp của VihatSoftware, ở định dạng vCard (.vcf).",
+      "Ứng dụng ghi đúng MỘT loại tệp xuống máy bạn, và chỉ khi chính bạn bấm nút tải: tệp danh thiếp của ViHAT Group, ở định dạng vCard (.vcf).",
+      // ⚠ CÂU NÀY LIỆT KÊ ĐÚNG NHỮNG TRƯỜNG TẤM THIẾP THẬT SỰ CHỨA, và tấm thiếp dựng từ
+      // `COMPANY` + `CONTACT` (`features/tinh-nang/vcard.ts`). "trang web" ĐÃ QUAY LẠI danh sách
+      // ngày 21/09/2026: `COMPANY.website` được cấp (`https://vihatgroup.com`, đọc từ
+      // vihatgroup.com), nên `vcard.ts` sinh lại dòng `URL`. Khai thiếu một trường tệp CÓ, y như
+      // khai thừa một trường tệp KHÔNG có, đều là mô tả sai chính thứ người dùng vừa tải về.
+      // `chinh-sach.test.ts` buộc hai bên khớp nhau theo CẢ HAI CHIỀU.
       "Tệp ấy chứa tên công ty, hotline, email và trang web của chúng tôi. Nó KHÔNG chứa bất kỳ thông tin nào của bạn, vì ứng dụng không có thông tin nào của bạn để đưa vào.",
       "Nội dung tệp được dựng ngay trên máy bạn và đưa thẳng cho Zalo ghi hộ. Không có một lời gọi mạng nào, không có máy chủ nào tham gia, và Zalo là bên quyết định tệp nằm ở thư mục nào.",
       "Ngoài tệp ấy, ứng dụng không đọc, không sửa, không xoá và không tạo bất kỳ tệp nào khác trên máy bạn.",
@@ -294,11 +351,35 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     ma: "ben-thu-ba",
     tieu_de: "Chuyển dữ liệu cho bên thứ ba",
     doan: [
-      // ĐÃ SỬA: câu cũ ("nó không có đường gửi dữ liệu đi đâu cả") chỉ còn đúng ở bản
-      // nộp. Vế BÊN THỨ BA thì đúng ở cả hai bản và là vế mục này nói tới — máy chủ nhận hai mã
-      // đăng nhập là máy chủ của chính bên phát hành ứng dụng, không phải một bên thứ ba.
-      "Ứng dụng không gửi dữ liệu của bạn cho bất kỳ bên thứ ba nào, trong nước hay ngoài nước. Nơi duy nhất nhận gì đó từ ứng dụng là máy chủ của chính VihatSoftware, ở bước đăng nhập nói tại mục Đăng nhập bên trên.",
-      "Có ba chỗ ứng dụng mở một trang bên ngoài, và cả ba đều chỉ mở khi chính bạn bấm: trang web của công ty, trang bản đồ để chỉ đường tới một văn phòng, và trang web ghi trên mã QR bạn vừa quét. Ứng dụng không gửi kèm thông tin nào của bạn khi mở chúng; từ lúc trang mở ra, việc bạn dùng trang ấy chịu sự điều chỉnh của chính sách bên sở hữu nó.",
+      // ĐÃ SỬA HAI LẦN, VÀ LẦN THỨ HAI LÀ LẦN BỚT MỘT LỜI KHẲNG ĐỊNH:
+      //   1. (20/09) câu cũ "nó không có đường gửi dữ liệu đi đâu cả" chỉ còn đúng ở bản nộp.
+      //   2. (21/09) câu "không gửi cho BẤT KỲ BÊN THỨ BA NÀO" đứng được là nhờ một tiền đề đã
+      //      mất: bên nhận và bên phát hành app là MỘT. Từ khi app thuộc Tập đoàn ViHAT Group,
+      //      việc máy chủ của VihatSoftware có phải "bên thứ ba" theo Nghị định 13 hay không
+      //      phụ thuộc vào câu chưa ai trả lời — ai vận hành `vihat-miniapp` sau chuyển giao.
+      //      Nên câu nay nói ĐÚNG THỨ ĐO ĐƯỢC: có đúng một nơi nhận, và không còn nơi nào khác.
+      //      Khẳng định pháp lý về "bên thứ ba" chờ chủ dự án, không ai tự viết lại.
+      "Nơi duy nhất nhận gì đó từ ứng dụng là máy chủ của VihatSoftware — đơn vị thành viên của Tập đoàn ViHAT Group — ở bước đăng nhập nói tại mục Đăng nhập bên trên. Ngoài nơi ấy, ứng dụng không gửi dữ liệu của bạn đi đâu khác, trong nước hay ngoài nước.",
+      // ⚠ CÂU NÀY KHÔNG CÒN ĐƯỢC GÕ TAY — 21/09/2026. Nó được DỰNG RA từ `DICH_MO_RA_NGOAI`, và
+      // đó là cách duy nhất con số và danh sách không lệch nhau được nữa.
+      //
+      // LỊCH SỬ CỦA ĐÚNG MỘT CON SỐ, giữ lại vì nó là toàn bộ lý lẽ:
+      //
+      //   20/09  ba: bản đồ · trang web trên mã QR · neo website chính thức.
+      //   21/09  hai: `COMPANY.website` trống nên neo website không vẽ ra.
+      //   21/09  ba trở lại: website được cấp, neo vẽ lại, và trang chi tiết giải pháp thêm một
+      //          neo TỚI CÙNG ĐỊA CHỈ ẤY.
+      //   21/09  năm: nút Chat với Official Account (mọi màn) và hai liên kết bài viết trên trang
+      //          tin của chúng tôi (màn chủ).
+      //
+      // Bốn lần sửa trong hai ngày, lần nào cũng do một người ĐỌC LẠI văn bản mà phát hiện — không
+      // lần nào do một phép kiểm. Một con số đếm bằng mắt trong một văn bản pháp lý sắp nộp là
+      // con số sẽ có lần không ai đếm, và khai thiếu một nơi dữ liệu người dùng có thể đi tới là
+      // đúng thứ Nghị định 13 nhắm tới.
+      //
+      // Cách đếm KHÔNG ĐỔI — theo LOẠI ĐÍCH ĐẾN, không theo số nút: hai neo website là một dòng.
+      // Xem `content/dich-ra-ngoai.ts`, nơi cả danh sách lẫn quy ước đếm được ghi ra một lần.
+      cauKhaiDichRaNgoai(),
       "Nút chỉ đường chỉ mang theo ĐỊA CHỈ VĂN PHÒNG của chúng tôi — không mang theo vị trí của bạn, vì ứng dụng không hề có vị trí của bạn.",
       "Zalo là nền tảng ứng dụng chạy trên đó. Việc bạn dùng Zalo chịu sự điều chỉnh của chính sách quyền riêng tư của Zalo, nằm ngoài phạm vi văn bản này.",
     ],

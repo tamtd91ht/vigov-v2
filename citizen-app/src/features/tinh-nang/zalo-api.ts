@@ -39,6 +39,199 @@
  * nó). Hiện lên màn hình rồi thôi; ghi nó ra log là đưa nó vào một nơi không ai gỡ lại được.
  */
 
+/* ==============================================================================================
+   KHAI BÁO MỤC ĐÍCH — MỖI LỜI GỌI NỀN TẢNG KHAI TẠI CHỖ NÓ ĐƯỢC VIẾT RA.
+
+   VÌ SAO KHAI BÁO NẰM NGAY TRONG TỆP GỌI, KHÔNG NẰM Ở MÀN "QUẢN LÝ QUYỀN":
+
+     Quyền của Zalo cấp theo **App ID**, không theo màn hình và không theo nửa ứng dụng. Nghĩa là
+     ngày kênh công dân (nửa nhà nước) có tệp đầu tiên, nó **thừa hưởng nguyên vẹn** mọi quyền mà
+     nửa thương mại đã xin được — không ai phải cấp lại, và không có gì chặn lại. Một danh sách
+     quyền chép tay ở màn hình thì không mô tả được điều đó: nó mô tả cái người viết danh sách
+     NHỚ, và nó đứng yên trong lúc mã nguồn đi tiếp.
+
+     Nên màn "Quản lý quyền" ĐỌC TỪ BẢNG NÀY. Thêm một lời gọi mà quên khai là một ca đỏ
+     (`ranh-gioi-hai-nua.test.ts` đối chiếu bảng này với chính mã nguồn của tệp này), chứ không
+     phải một dòng thiếu trên một màn hình không ai soát.
+
+   ⚠ CỘT `nua` KHÔNG PHẢI MỘT RÀO CHẮN. Nó là một lời KHAI: "hôm nay nửa nào cần lời gọi này".
+     Rào chắn thật nằm ở ranh giới nhập mô-đun — nửa thương mại không nhập được tệp của nửa nhà
+     nước và ngược lại. Cột này tồn tại để việc "nửa nhà nước thừa hưởng quyền của nửa thương mại"
+     là thứ NHÌN THẤY ĐƯỢC trên màn hình, thay vì một hệ quả nền tảng không ai nói ra.
+   ============================================================================================== */
+
+/**
+ * Hai nửa của MỘT Mini App, cộng một giá trị cho lời gọi cả hai nửa đều dùng.
+ *
+ * `nha-nuoc` chưa có lời gọi nào — kênh công dân chưa có tệp nào (`src/cong-dan/`). Giá trị vẫn
+ * được khai từ bây giờ: bảng dưới là chỗ lời gọi đầu tiên của nửa ấy phải khai mình, và một kiểu
+ * chưa có giá trị nào là một kiểu người sau sẽ thêm sai.
+ */
+export type NuaUngDung = "thuong-mai" | "nha-nuoc" | "ca-hai";
+
+export type KhaiBaoLoiGoi = {
+  /** Tên API của nền tảng, đúng chữ `zmp-sdk` khai. Đối chiếu ngược với mã nguồn tệp này. */
+  api: string;
+  /** Nửa nào của ứng dụng đang cần lời gọi này, HÔM NAY. Xem cảnh báo ở khối trên. */
+  nua: NuaUngDung;
+  /** Màn hình người dùng đang đứng khi lời gọi chạy. Nhãn tab, đúng chữ trên thanh tab. */
+  man: string;
+  /** Tính năng cụ thể trong màn ấy. */
+  tinh_nang: string;
+  /** Để làm gì — viết cho người dùng đọc, không phải cho lập trình viên. */
+  de_lam_gi: string;
+  /**
+   * Zalo có hỏi người dùng trước khi lời gọi này chạy không.
+   *
+   * KHÔNG PHẢI CÙNG MỘT CÂU VỚI "có phải xin quyền ở Developer Console không". `getAccessToken`
+   * cần quyền nhưng từ SDK 2.35.0 KHÔNG hỏi người dùng (`index.d.ts` dòng 3009), và nói ngược
+   * lại trên một màn hình giải thích quyền là nói sai với đúng người đang cần biết.
+   */
+  hoi_nguoi_dung: boolean;
+  /**
+   * Thứ rời khỏi máy vì lời gọi này. Chuỗi rỗng nghĩa là KHÔNG CÓ GÌ rời khỏi máy.
+   *
+   * Đây là cột đắt nhất của bảng và là cột người duyệt đọc kỹ nhất: nó phải khớp với chính sách
+   * quyền riêng tư, và `ranh-gioi-hai-nua.test.ts` buộc mỗi lời gọi có khai cột này.
+   */
+  roi_khoi_may: string;
+};
+
+/**
+ * MƯỜI HAI LỜI GỌI, MỘT BẢNG. Thứ tự theo màn hình, để màn "Quản lý quyền" đọc xuôi.
+ *
+ * Chín quyền phải xin ở Developer Console; `getAccessToken` là lời gọi thứ mười cần quyền nhưng
+ * không hỏi người dùng; `openPhone` và `openWebview` là `@zaloOnly` và không nằm trong số quyền
+ * phải xin — chúng vẫn ở đây, vì màn "Quản lý quyền" trả lời câu "app này gọi những gì của nền
+ * tảng", và một lời gọi bị bỏ khỏi bảng vì "nó không phải quyền" là đúng cái lỗ hổng khai báo mà
+ * bảng này tồn tại để đóng.
+ */
+export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
+  {
+    api: "getNetworkType",
+    nua: "thuong-mai",
+    man: "Giải pháp",
+    tinh_nang: "Kiểm tra đường truyền",
+    de_lam_gi:
+      "Đọc kiểu kết nối hiện tại (Wi-Fi hay di động) để nói trước chất lượng một cuộc gọi tổng đài trên đường mạng bạn đang dùng.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may: "",
+  },
+  {
+    api: "scanQRCode",
+    nua: "thuong-mai",
+    man: "Danh thiếp",
+    tinh_nang: "Quét danh thiếp",
+    de_lam_gi: "Mở máy ảnh để đọc mã QR trên một tấm danh thiếp và hiện nội dung lên màn hình.",
+    hoi_nguoi_dung: true,
+    roi_khoi_may: "",
+  },
+  {
+    api: "openPhone",
+    nua: "thuong-mai",
+    man: "Danh thiếp",
+    tinh_nang: "Quét danh thiếp",
+    de_lam_gi: "Chuyển số điện thoại vừa quét sang màn hình gọi của điện thoại.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may: "",
+  },
+  {
+    // ⚠ DÒNG NÀY RỘNG RA NGÀY 21/09/2026, VÀ VIỆC SỬA NÓ LÀ BẮT BUỘC, KHÔNG PHẢI LỊCH SỰ: nút
+    // Chat nổi có mặt trên MỌI màn, và khối "Tin ViHAT" trên màn chủ mở bài viết bằng cùng lời
+    // gọi này. Một dòng khai kể ít hơn thứ app thật sự làm là một màn "Quản lý quyền" nói thiếu —
+    // đúng lỗ hổng khai báo mà bảng này tồn tại để đóng.
+    //
+    // DANH SÁCH ĐÍCH ĐẾN KHÔNG NẰM Ở ĐÂY mà ở `content/dich-ra-ngoai.ts`, vì chính sách quyền
+    // riêng tư đếm từ đó. Hai danh sách cho một sự thật thì một trong hai sẽ cũ.
+    api: "openWebview",
+    nua: "thuong-mai",
+    man: "Mọi màn",
+    tinh_nang: "Chat với Official Account · Quét danh thiếp · Tìm văn phòng · Tin ViHAT · Website",
+    de_lam_gi:
+      "Mở một trang bên ngoài ngay trong Zalo, và chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của chúng tôi, bản đồ chỉ đường tới một văn phòng, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, hoặc trang web chính thức của chúng tôi.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may: "Địa chỉ trang được mở đi tới trình duyệt trong Zalo.",
+  },
+  {
+    api: "keepScreen",
+    nua: "thuong-mai",
+    man: "Danh thiếp",
+    tinh_nang: "Danh thiếp của chúng tôi",
+    de_lam_gi:
+      "Giữ màn hình sáng trong lúc bạn chìa mã QR danh thiếp ra cho người khác quét. Tắt ngay khi bạn rời màn hình đó.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may: "",
+  },
+  {
+    api: "downloadFile",
+    nua: "thuong-mai",
+    man: "Danh thiếp",
+    tinh_nang: "Danh thiếp của chúng tôi",
+    de_lam_gi:
+      "Lưu danh thiếp của ViHAT Group xuống máy bạn dưới dạng tệp .vcf, để thêm thẳng vào danh bạ.",
+    hoi_nguoi_dung: true,
+    roi_khoi_may: "",
+  },
+  {
+    api: "requestCameraPermission",
+    nua: "thuong-mai",
+    man: "Danh thiếp",
+    tinh_nang: "Số hoá thiếp giấy",
+    de_lam_gi: "Hỏi bạn có cho phép dùng máy ảnh hay không, trước khi mở cửa sổ chọn ảnh.",
+    hoi_nguoi_dung: true,
+    roi_khoi_may: "",
+  },
+  {
+    api: "openMediaPicker",
+    nua: "thuong-mai",
+    man: "Danh thiếp",
+    tinh_nang: "Số hoá thiếp giấy",
+    de_lam_gi:
+      "Mở cửa sổ chọn ảnh để bạn chụp hoặc chọn một tấm thiếp giấy. Ảnh chỉ hiện lên màn hình này.",
+    hoi_nguoi_dung: true,
+    roi_khoi_may: "",
+  },
+  {
+    api: "vibrate",
+    nua: "thuong-mai",
+    man: "Giải pháp · Danh thiếp",
+    tinh_nang: "Phản hồi khi một việc chạy xong",
+    de_lam_gi: "Rung một nhịp ngắn để báo việc bạn vừa bấm đã xong.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may: "",
+  },
+  {
+    api: "getAccessToken",
+    nua: "ca-hai",
+    man: "Liên hệ",
+    tinh_nang: "Đăng nhập bằng số Zalo",
+    de_lam_gi:
+      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may: "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập.",
+  },
+  {
+    api: "getPhoneNumber",
+    nua: "ca-hai",
+    man: "Liên hệ",
+    tinh_nang: "Đăng nhập bằng số Zalo",
+    de_lam_gi:
+      "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ đổi được mã thành số.",
+    hoi_nguoi_dung: true,
+    roi_khoi_may: "Mã số điện thoại được gửi tới máy chủ để phát hành phiên đăng nhập.",
+  },
+  {
+    api: "getLocation",
+    nua: "ca-hai",
+    man: "Liên hệ",
+    tinh_nang: "Tìm văn phòng gần bạn",
+    de_lam_gi:
+      "Lấy mã vị trí sau khi bạn đồng ý chia sẻ. Toạ độ KHÔNG về máy bạn, nên bản dựng này chưa xếp được văn phòng theo khoảng cách và nói thẳng điều đó trên màn hình.",
+    hoi_nguoi_dung: true,
+    roi_khoi_may: "",
+  },
+];
+
 /**
  * Kết quả một lần gọi nền tảng. TỪ CHỐI LÀ MỘT NHÁNH RIÊNG, NGANG HÀNG VỚI THÀNH CÔNG — không
  * phải một lỗi: người dùng có quyền nói không, và một app coi đó là lỗi sẽ hiện một câu trách móc.

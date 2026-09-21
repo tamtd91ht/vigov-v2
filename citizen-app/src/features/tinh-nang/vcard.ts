@@ -1,7 +1,7 @@
 /**
  * BỘ SINH vCARD CỦA CHÍNH CHÚNG TÔI — mặt đối xứng của `danh-thiep.ts`.
  *
- * `danh-thiep.ts` ĐỌC một tấm thiếp của người khác. Tệp này VIẾT tấm thiếp của VihatSoftware,
+ * `danh-thiep.ts` ĐỌC một tấm thiếp của người khác. Tệp này VIẾT tấm thiếp của ViHAT Group,
  * và văn bản nó sinh ra đi vào đúng hai chỗ: nội dung mã QR chìa ra cho người khác quét, và một
  * tệp tải xuống máy. Hai chỗ ấy là hai thứ người ngoài cầm về — nên một dấu chấm phẩy không
  * thoát ở đây là một tên công ty hiện sai trên danh bạ của một khách hàng.
@@ -14,8 +14,8 @@
  * thuế hay một người đại diện vào đây là phát tán một tuyên bố sai dưới tên một pháp nhân có
  * thật — và lần này là phát tán bằng một tệp người ta lưu vào danh bạ, chỗ khó thu hồi nhất.
  *
- * KHÔNG CÓ DỮ LIỆU CÁ NHÂN Ở ĐÂY. Hotline và email là đầu mối doanh nghiệp của ViHAT Group
- * (`CONTACT.ownerNote`), không định danh một cá nhân nào — nên tấm thiếp này là dữ liệu doanh
+ * KHÔNG CÓ DỮ LIỆU CÁ NHÂN Ở ĐÂY. Hotline và email là đầu mối doanh nghiệp đã công bố của ViHAT
+ * Group (`CONTACT`), không định danh một cá nhân nào — nên tấm thiếp này là dữ liệu doanh
  * nghiệp, không phải dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP.
  */
 import { COMPANY, CONTACT } from "../../content/company-profile";
@@ -79,11 +79,16 @@ export function dungVCard(truong: readonly TruongVCard[]): string {
 }
 
 /**
- * Các trường của tấm thiếp VihatSoftware — ĐÚNG NHỮNG GÌ `COMPANY` VÀ `CONTACT` CÓ, không hơn.
+ * Các trường của tấm thiếp ViHAT Group — ĐÚNG NHỮNG GÌ `COMPANY` VÀ `CONTACT` CÓ, không hơn.
  *
  * `N` có mặt bên cạnh `FN` vì vCard 3.0 khai `N` là bắt buộc, và một số ứng dụng danh bạ cũ bỏ
  * qua cả thẻ nếu thiếu nó. Đây là một tấm thiếp của TỔ CHỨC, nên `N` mang đúng tên tổ chức ấy,
  * không phải một cái tên người bịa ra để lấp chỗ.
+ *
+ * ⚠ `URL` LÀ CHUỖI RỖNG KHI CHƯA CÓ ĐỊA CHỈ, VÀ `dungVCard` BỎ HẲN DÒNG ẤY. `COMPANY.website`
+ * trống từ 21/09/2026: địa chỉ cũ là của VihatSoftware, địa chỉ của tập đoàn chưa ai cấp. Điền
+ * một địa chỉ nghe hợp lý vào đây là phát tán một tuyên bố sai bằng một tệp người ta lưu vào
+ * danh bạ — chỗ khó thu hồi nhất. Trường ở lại để ngày có nguồn thì chỉ điền một chỗ.
  */
 export const TRUONG_THIEP_CUA_CHUNG_TOI: readonly TruongVCard[] = [
   { ten: "FN", gia_tri: COMPANY.name },
@@ -91,7 +96,7 @@ export const TRUONG_THIEP_CUA_CHUNG_TOI: readonly TruongVCard[] = [
   { ten: "ORG", gia_tri: COMPANY.name },
   { ten: "TEL;TYPE=WORK,VOICE", gia_tri: CONTACT.hotlineDialable },
   { ten: "EMAIL;TYPE=WORK", gia_tri: CONTACT.email },
-  { ten: "URL", gia_tri: COMPANY.website },
+  { ten: "URL", gia_tri: COMPANY.website ?? "" },
 ];
 
 /** Nội dung tấm thiếp, dùng cho cả mã QR lẫn tệp tải về. MỘT nguồn, hai chỗ dùng. */

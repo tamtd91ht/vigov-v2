@@ -607,5 +607,27 @@
     ],
     "adr": "kb/10-decisions/0030-hai-khoa-quyen-phan-anh.md",
     "open_gap": "Khách đã chốt ĐÚNG HAI khoá cần ngay (feedback.classify, feedback.unmask) và CỐ Ý để lại phần còn thiếu. Đừng bịa tám khoá kia cho đủ số 43."
+  },
+  {
+    "id": 28,
+    "question": "Sau khi Mini App chuyển sang ViHAT Group (ADR 0031), pháp nhân nào VẬN HÀNH backend `vihat-miniapp` — và do đó, bên NHẬN dữ liệu mà chính sách riêng tư khai với người dân là ai?",
+    "status": "OPEN",
+    "why_it_matters": "CÂU NÀY CHẶN MÃ, KHÔNG CHỈ CHẶN CÂU CHỮ. Tuyến duy nhất rời khỏi máy người dân là POST /api/v1/sessions tới backend `vihat-miniapp` (citizen-app/src/features/dang-nhap/hop-dong.ts:47), và văn bản đang KHẲNG ĐỊNH với người dân rằng nơi nhận là `máy chủ của VihatSoftware`: chinh-sach-rieng-tu.ts:157, :205, :300 (số dòng đo ở commit 917ce3f). ĐỪNG LẪN HAI VẾ: vế BÊN PHÁT HÀNH / BÊN CHỊU TRÁCH NHIỆM VỀ CHÍNH SÁCH đã được chốt là ViHAT Group ngày 21/09 và được phép sửa; vế BÊN NHẬN DỮ LIỆU là vế còn mở, và nó đang nằm trong cùng những câu văn ấy. Hai câu nữa nằm NGOÀI tệp chính sách và rất dễ bị bỏ sót khi rà: citizen-app/src/features/tinh-nang/noi-dung.ts:73 và :75 (`Chỉ máy chủ của VihatSoftware mới đổi được mã thành số điện thoại / vị trí`), và chinh-sach.test.ts chốt câu chữ ấy bằng một ca test — nên sửa nửa vời thì test đỏ, còn sửa cho test xanh lại thành khai sai đủ chỗ. Ngày 21/09/2026 MỘT vế đã đổi: pháp nhân đứng tên Mini App nay là ViHAT Group. Vế kia — ai vận hành máy chủ nhận hai mã đăng nhập — CHƯA AI XÁC NHẬN. Đây là khai báo về BÊN NHẬN DỮ LIỆU theo Nghị định 13/2023/NĐ-CP (luật 3), không phải một dòng thương hiệu: khai sai bên nhận là sai với người dân về nơi dữ liệu của họ đi tới, và nó sai theo CẢ HAI chiều — bên vận hành đổi mà câu không đổi thì chính sách sai; câu đổi mà bên vận hành không đổi thì cũng sai.",
+    "code_signals": [
+      {
+        "pattern": "(?i)m[áa]y ch[ủu] c[ủu]a(?:(?!vihatsoftware)[^\"\\n]){0,40}vihat[ _-]?group",
+        "means": "đã có người sửa câu khai BÊN NHẬN DỮ LIỆU sang ViHAT Group — tức trả lời hộ khách câu này bằng một dòng chữ, đúng hành vi ADR 0031 ĐIỀU KIỆN DỪNG #3 cấm",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "RẺ HÔM NAY, KHÔNG THU HỒI ĐƯỢC SAU LẦN PHÁT HÀNH ĐẦU TIÊN. Bản chính sách vẫn là 1.0 (chinh-sach-rieng-tu.ts:140) và CHƯA MỘT NGƯỜI DÙNG NÀO ĐỌC bản nào — :119, dựng trên bốn bằng chứng ở :109-117, và sổ tiến độ citizen-app mục `nop-zalo-duyet` vẫn `chua_lam`. Nên sửa lúc này chỉ là sửa chữ. Từ lần phát hành đầu tiên quy tắc đảo ngược (:127): mỗi thay đổi về HÀNH VI XỬ LÝ DỮ LIỆU phải lên một số phiên bản mới và không được gộp — đổi bên nhận dữ liệu đúng là loại thay đổi đó. Lúc ấy cái đắt không phải migration mà là những người đã bấm đồng ý ở bản khai sai bên nhận: không gọi lại được từng người, và mỗi người là một lần khai sai theo Nghị định 13/2023.",
+    "ask_before": [
+      "sửa câu khai bên nhận dữ liệu trong chinh-sach-rieng-tu.ts",
+      "công bố chính sách riêng tư bản đầu tiên",
+      "trỏ VIGOV_API_HOST tới máy chủ thật",
+      "nộp hồ sơ Mini App cho Zalo dưới tên ViHAT Group"
+    ],
+    "adr": "kb/10-decisions/0031-chuyen-phap-nhan-mini-app-sang-vihat-group.md",
+    "open_gap": "CHỈ MỘT tín hiệu, và chỉ theo MỘT chiều — có chủ ý. Chiều còn lại (`máy chủ của VihatSoftware`, hôm nay 6 lần trong mã được quét) là hiện trạng đứng yên: khai nó thành tín hiệu thì hook kêu mỗi phiên khi chưa ai làm gì, và tệ hơn, luật áp đảo của drift_guard (nen_canh_bao: rest*3 > top_n thì im) sẽ làm hook CÂM đúng lúc tệp bị sửa dở dang — to nhất khi không có gì xảy ra, im nhất lúc nguy hiểm. Mẫu hiện tại khớp 0 chỗ hôm nay (đã đo bằng chính iter_files + bo_chu_thich của drift_guard), nên nó chỉ kêu khi có người thật sự sửa. `(?!vihatsoftware)` trong mẫu KHÔNG phải trang trí: bản đầu tiên không có nó đã khớp nhầm đúng lối viết văn bản đang dùng — `máy chủ của VihatSoftware (thuộc ViHAT Group)` — tức câu GIỮ NGUYÊN bên nhận lại bị báo là đã đổi. Giữ vế chặn ấy, nếu không mẫu này chết vì nhiễu. ĐỪNG thêm mẫu `ViHAT Group` trần: 11 chỗ hợp lệ đang mang chuỗi ấy (nội dung giới thiệu tập đoàn), và đó là dương tính giả ngay từ phiên sau. Và KHÔNG gộp câu tệp vector biểu tượng của tập đoàn vào đây: đó là một ĐẦU VÀO CÒN THIẾU, không phải quyết định khách phải ra — nó thuộc sổ tiến độ citizen-app."
   }
 ]

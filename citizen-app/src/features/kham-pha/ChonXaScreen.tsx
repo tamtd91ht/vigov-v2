@@ -80,7 +80,7 @@ export function ChonXaScreen({ li_do, onChon, onXemGioiThieu }: Props) {
       {/* Giai đoạn 1 vẫn phải tới được: đó là bản Zalo đã duyệt. Một tham số `t` trên đường
           liên kết không được phép khoá vĩnh viễn phần giới thiệu công ty. */}
       <button type="button" className="goi-y__nut goi-y__nut--nhat" onClick={onXemGioiThieu}>
-        Xem giới thiệu VihatSoftware
+        Xem giới thiệu ViHAT Group
       </button>
     </section>
   );

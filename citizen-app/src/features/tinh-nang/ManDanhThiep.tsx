@@ -24,9 +24,10 @@ import { NamecardGlyph } from "../company-intro/icons";
 import { type DanhThiep, docMaQR, thiepCoNoiDung } from "./danh-thiep";
 import { KhungTinhNang, type TrangThai } from "./khung";
 import { ManThiepCuaChungToi } from "./ManThiepCuaChungToi";
+import { moRaNgoai } from "./mo-ra-ngoai";
 import { DANH_THIEP, LOI_MO_NGOAI } from "./noi-dung";
 import { SoHoaThiepGiay } from "./SoHoaThiepGiay";
-import { moCuocGoi, moTrangWeb, quetMaQR } from "./zalo-api";
+import { moCuocGoi, quetMaQR } from "./zalo-api";
 
 /** Một dòng thông tin của tấm thiếp: nhãn, giá trị, và (có thể) một nút hành động. */
 function DongThiep({
@@ -189,10 +190,21 @@ export function QuetDanhThiep() {
     datTrangThai(await quetMaQR());
   }
 
-  /** Mở ngoài (gọi điện, mở trang) chỉ có hai kết cục đáng nói: được, hoặc chưa được. */
-  async function moNgoai(chay: () => Promise<{ kieu: string }>) {
-    const ket_qua = await chay();
+  /** Mở màn hình gọi cho một số vừa quét. Hai kết cục đáng nói: được, hoặc chưa được. */
+  async function goi(so: string) {
+    const ket_qua = await moCuocGoi(so);
     datKhongMoDuoc(ket_qua.kieu !== "xong");
+  }
+
+  /**
+   * Mở trang web ghi trên mã vừa quét — qua CỬA KHAI BÁO, không gọi thẳng `moTrangWeb`.
+   *
+   * `"ma-qr"` là một đích đã khai trong `content/dich-ra-ngoai.ts`, tức một dòng đã có trong câu
+   * "ứng dụng mở một trang bên ngoài ở những chỗ nào" của chính sách quyền riêng tư. Xem
+   * `mo-ra-ngoai.ts` về vì sao đây là đường DUY NHẤT.
+   */
+  async function moLienKet(duong_dan: string) {
+    datKhongMoDuoc(!(await moRaNgoai("ma-qr", duong_dan)));
   }
 
   return (
@@ -206,8 +218,8 @@ export function QuetDanhThiep() {
         <>
           <KetQuaQuet
             noi_dung_qr={noi_dung_qr}
-            onGoi={(so) => void moNgoai(() => moCuocGoi(so))}
-            onMoLienKet={(duong_dan) => void moNgoai(() => moTrangWeb(duong_dan))}
+            onGoi={(so) => void goi(so)}
+            onMoLienKet={(duong_dan) => void moLienKet(duong_dan)}
           />
           {khong_mo_duoc && <p className="tn__loi">{LOI_MO_NGOAI}</p>}
           <button type="button" className="tn__nut-phu" onClick={() => void quet()}>

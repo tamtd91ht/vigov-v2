@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
+import { DOAN_CHINH_SACH_TINH_NANG } from "../features/tinh-nang/noi-dung";
+import { TRUONG_THIEP_CUA_CHUNG_TOI } from "../features/tinh-nang/vcard";
+
 import {
   CAU_DAU,
   MUC_CHINH_SACH,
   NGAY_HIEU_LUC,
   PHIEN_BAN_CHINH_SACH,
 } from "./chinh-sach-rieng-tu";
+import { COMPANY } from "./company-profile";
 
 /**
  * CHÍNH SÁCH QUYỀN RIÊNG TƯ — PHÉP KIỂM CỦA MỘT VĂN BẢN PHÁP LÝ, KHÔNG PHẢI CỦA MỘT MÀN HÌNH.
@@ -321,5 +325,100 @@ describe("nhật ký đăng nhập — khai ra, kèm mục đích", () => {
       noi_khong_nhan_ip[0],
       'câu "ứng dụng không nhận địa chỉ IP" đứng một mình, không dẫn sang mục Đăng nhập',
     ).toMatch(/máy chủ nhìn thấy địa chỉ IP/);
+  });
+});
+
+/**
+ * CHUYỂN QUYỀN SỞ HỮU APP (21/09/2026) — HAI VẾ PHẢI TÁCH BẠCH, VÀ CHÚNG HỎNG THEO HAI KIỂU:
+ *
+ *   | Vế | Hỏng kiểu gì nếu sai |
+ *   |---|---|
+ *   | AI CHỊU TRÁCH NHIỆM về chính sách | văn bản pháp lý đứng tên sai pháp nhân |
+ *   | AI NHẬN dữ liệu đăng nhập | khai sai nơi nhận dữ liệu cá nhân — đúng thứ Nghị định 13 nhắm tới |
+ *
+ *   Cách hỏng dễ xảy ra nhất là một lượt tìm-thay "VihatSoftware" → "ViHAT Group" chạy trên cả
+ *   tệp: vế trên đúng, vế dưới thành một lời khai sai, và không có gì đỏ lên. Ba ca dưới đây là
+ *   thứ đỏ lên.
+ */
+describe("bên phát hành và bên nhận dữ liệu là HAI câu khác nhau", () => {
+  it("nói bên chịu trách nhiệm về chính sách là ViHAT Group", () => {
+    const muc = MUC_CHINH_SACH.find((m) => m.ma === "ben-xu-ly");
+    expect(muc, "chính sách không còn mục nào về bên xử lý dữ liệu").toBeDefined();
+    const chu = muc!.doan.join("\n");
+    expect(chu).toMatch(/ViHAT Group/);
+    expect(chu).toMatch(/bên phát hành ứng dụng này và là bên chịu trách nhiệm/);
+  });
+
+  it("KHÔNG còn câu nào nói VihatSoftware là bên phát hành ứng dụng", () => {
+    // Câu ấy đúng tới 20/09/2026 và sai từ 21/09. Nó nằm trong CÙNG một văn bản với mục trên,
+    // nên để lại là để văn bản tự mâu thuẫn — chỗ người duyệt đọc ra ngay.
+    const chu = MUC_CHINH_SACH.flatMap((m) => m.doan).join("\n");
+    expect(chu, "văn bản vẫn nói VihatSoftware phát hành ứng dụng").not.toMatch(
+      /VihatSoftware[^.]*bên phát hành/,
+    );
+  });
+
+  it("GIỮ NGUYÊN lời khai nơi nhận dữ liệu: máy chủ của VihatSoftware", () => {
+    // ⚠ CA NÀY CANH CHIỀU NGƯỢC VỚI CA TRÊN, VÀ ĐÓ LÀ CHỦ ĐÍCH. Máy chủ đổi mã là kho
+    // `vihat-miniapp`; ai vận hành nó sau khi chuyển quyền sở hữu app là câu CHƯA AI TRẢ LỜI.
+    // Đổi tên bên nhận theo tên bên phát hành là khai một nơi nhận dữ liệu cá nhân không đúng
+    // sự thật — không sửa lại được sau khi công bố.
+    const chu = [CAU_DAU, ...MUC_CHINH_SACH.flatMap((m) => m.doan)].join("\n");
+    expect(chu, "lời khai nơi nhận dữ liệu đã bị đổi tên").toMatch(/máy chủ của VihatSoftware/);
+  });
+});
+
+/**
+ * TỆP `.vcf` — VĂN BẢN KHAI NÓ CHỨA GÌ, VÀ TẤM THIẾP THẬT SỰ CHỨA GÌ, LÀ MỘT.
+ *
+ *   Chính sách liệt kê từng trường của tệp ứng dụng ghi xuống máy người dùng. Tấm thiếp thì dựng
+ *   từ `COMPANY` + `CONTACT`, và một trường không có nguồn (`URL`, từ 21/09/2026) bị bỏ hẳn. Hai
+ *   nơi ấy lệch nhau một lần là văn bản khai một trường tệp không có — mô tả sai đúng thứ người
+ *   dùng vừa tải về, và không có gì đỏ lên vì cả hai nửa đều "đúng" khi đọc riêng.
+ */
+describe("khai của tệp danh thiếp khớp với tấm thiếp thật", () => {
+  const ghiTep = () => {
+    const muc = MUC_CHINH_SACH.find((m) => m.ma === "ghi-tep");
+    expect(muc, "chính sách không còn mục nào về tệp ghi xuống máy").toBeDefined();
+    return muc!.doan.join("\n");
+  };
+
+  it("nói tệp là danh thiếp của ViHAT Group, đúng tên trên chính tấm thiếp", () => {
+    expect(ghiTep()).toContain(COMPANY.name);
+  });
+
+  // HAI CÂU, KHÔNG PHẢI MỘT — và ca này chỉ canh một câu cho tới 21/09/2026.
+  //
+  // Cùng tấm thiếp được khai ở HAI chỗ: mục `ghi-tep` của chính sách, và đoạn "Với việc tải tệp"
+  // trong `DOAN_CHINH_SACH_TINH_NANG`. Ca cũ chỉ hỏi mục `ghi-tep`, nên khi `COMPANY.website` được
+  // điền lại thì câu trong chính sách đúng trở lại còn câu kia đứng yên — văn bản khai THIẾU một
+  // trường mà tệp tải về CÓ, và không có gì đỏ.
+  //
+  // Nên phép kiểm hỏi CẢ HAI nguồn văn bản, cùng một câu hỏi. Thêm một chỗ khai thứ ba thì thêm
+  // nó vào mảng này, đừng viết một ca thứ ba: một câu hỏi hỏi ở hai nơi là hai nơi có thể trả lời
+  // khác nhau.
+  const NOI_KHAI_TEP: readonly (readonly [string, () => string])[] = [
+    ["chính sách, mục ghi-tep", ghiTep],
+    ["đoạn tính năng 'Với việc tải tệp'", () =>
+      DOAN_CHINH_SACH_TINH_NANG.filter((d) => d.includes("tải tệp")).join("\n")],
+  ];
+
+  it.each(NOI_KHAI_TEP)("%s — khai 'trang web' khi và chỉ khi tấm thiếp có dòng URL", (_ten, doc) => {
+    const co_url = TRUONG_THIEP_CUA_CHUNG_TOI.some(
+      (truong) => truong.ten === "URL" && truong.gia_tri !== "",
+    );
+    expect(co_url, "tấm thiếp có URL nhưng COMPANY.website trống, hoặc ngược lại").toBe(
+      COMPANY.website !== undefined,
+    );
+
+    const van_ban = doc();
+    expect(van_ban, "không tìm thấy câu khai tệp ở nguồn này — nó bị đổi chữ hay bị xoá?")
+      .not.toBe("");
+
+    if (co_url) {
+      expect(van_ban, "tệp có trang web mà văn bản không khai").toMatch(/trang web/);
+    } else {
+      expect(van_ban, "văn bản khai một trang web mà tệp không chứa").not.toMatch(/trang web/);
+    }
   });
 });

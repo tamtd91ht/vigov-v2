@@ -36,8 +36,9 @@ import { CompassGlyph, HandshakeGlyph, MailGlyph, PhoneGlyph, PinGlyph } from ".
 import { PhatHanhPhien } from "../dang-nhap/PhatHanhPhien";
 
 import { KetQuaToken, TinhNangCoTrangThai } from "./khung";
+import { moRaNgoai } from "./mo-ra-ngoai";
 import { DANG_NHAP, LOI_MO_NGOAI, VAN_PHONG } from "./noi-dung";
-import { type MaDangNhap, moTrangWeb, xinMaDangNhap, xinTokenViTri } from "./zalo-api";
+import { type MaDangNhap, xinMaDangNhap, xinTokenViTri } from "./zalo-api";
 import { useState } from "react";
 
 /**
@@ -78,9 +79,10 @@ export function DanhSachVanPhong({ onChiDuong }: { onChiDuong: (dia_chi: string)
 export function TimVanPhong() {
   const [khong_mo_duoc, datKhongMoDuoc] = useState(false);
 
+  // Qua CỬA KHAI BÁO (`mo-ra-ngoai.ts`), không gọi thẳng `moTrangWeb`: `"ban-do"` là một đích đã
+  // khai trong `content/dich-ra-ngoai.ts`, tức một dòng đã có trong câu khai của chính sách.
   async function chiDuong(dia_chi: string) {
-    const ket_qua = await moTrangWeb(duongDanBanDo(dia_chi));
-    datKhongMoDuoc(ket_qua.kieu !== "xong");
+    datKhongMoDuoc(!(await moRaNgoai("ban-do", duongDanBanDo(dia_chi))));
   }
 
   return (

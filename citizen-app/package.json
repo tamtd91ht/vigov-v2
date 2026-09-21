@@ -9,6 +9,7 @@
     "build:goc": "node scripts/dung.mjs goc",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "ho-so": "node scripts/ho-so-zalo.mjs",
     "test": "vitest run",
     "zmp:login": "npx --yes zmp-cli@4.0.3 login",
     "zmp:sync": "npm run build && npx --yes zmp-cli@4.0.3 sync-config dist/index.html",

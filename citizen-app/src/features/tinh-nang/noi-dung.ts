@@ -17,9 +17,16 @@
  * Mô tả sai cho người duyệt là thứ không sửa lại được sau đó — và mô tả sai cho một người đang
  * chờ được gọi lại thì tệ hơn thế.
  *
- * ⚠ NGỮ CẢNH LÀ MỘT DOANH NGHIỆP CÔNG NGHỆ, KHÔNG PHẢI MỘT DỊCH VỤ CÔNG. VihatSoftware bán giải
+ * ⚠ NGỮ CẢNH LÀ MỘT DOANH NGHIỆP CÔNG NGHỆ, KHÔNG PHẢI MỘT DỊCH VỤ CÔNG. ViHAT Group bán giải
  * pháp tổng đài đám mây, CRM và ứng dụng AI cho doanh nghiệp. Mọi câu ở đây nói với một khách
  * hàng hoặc một đối tác đang tìm hiểu giải pháp.
+ *
+ * ⚠ HAI CÂU TRONG TỆP NÀY VẪN NÓI "máy chủ của VihatSoftware", VÀ ĐÓ LÀ CHỦ ĐÍCH (21/09/2026):
+ * bên phát hành app nay là Tập đoàn ViHAT Group, nhưng máy chủ đổi mã là kho `vihat-miniapp` và
+ * ai vận hành nó sau chuyển giao thì chưa ai trả lời. Hai câu ấy phải khớp từng chữ với chính
+ * sách quyền riêng tư — người dùng đọc cả hai chỗ, và hai chỗ nói hai nơi nhận khác nhau là một
+ * mâu thuẫn trong chính thứ Nghị định 13 bắt khai. Xem `content/chinh-sach-rieng-tu.ts`, khối
+ * "CHUYỂN QUYỀN SỞ HỮU APP".
  */
 /**
  * SÁU TÍNH NĂNG, CHÍN QUYỀN NỀN TẢNG. Thứ tự này là thứ tự hiện ra.
@@ -100,7 +107,7 @@ export const NOI_DUNG_TINH_NANG: readonly NoiDungTinhNang[] = [
     nhan_ngan: "Tìm văn phòng",
     tieu_de: "Tìm văn phòng gần bạn",
     vi_sao:
-      "VihatSoftware có ba văn phòng. Ứng dụng xin vị trí để chỉ ra văn phòng gần bạn nhất khi bạn muốn tới gặp đội kinh doanh, thay vì bắt bạn tự đối chiếu ba địa chỉ. Vị trí chỉ để GỢI Ý — bạn luôn là người chọn nơi mình tới.",
+      "Chúng tôi có ba văn phòng. Ứng dụng xin vị trí để chỉ ra văn phòng gần bạn nhất khi bạn muốn tới gặp đội kinh doanh, thay vì bắt bạn tự đối chiếu ba địa chỉ. Vị trí chỉ để GỢI Ý — bạn luôn là người chọn nơi mình tới.",
     nut: "Tìm văn phòng gần tôi",
     dang_cho: "Đang chờ bạn trả lời trên Zalo…",
     tu_choi:
@@ -157,7 +164,7 @@ export const NOI_DUNG_TINH_NANG: readonly NoiDungTinhNang[] = [
     // một chuỗi ghép lúc chạy KHÔNG hề có trong bundle, bundle chỉ chứa hai mảnh rời. Ca
     // "bản nộp có đủ chữ của sáu tính năng" trong `bundle-for-zalo.test.ts` bắt được đúng điều
     // đó. Cùng lối viết với `TOKEN_KHONG_CHUA_GI` ngay trên, vì cùng một lý do.
-    tieu_de: "Danh thiếp số của VihatSoftware",
+    tieu_de: "Danh thiếp số của ViHAT Group",
     vi_sao:
       "Khi bạn gặp đội kinh doanh của chúng tôi, đây là tấm thiếp để bạn lưu lại. Ứng dụng xin quyền giữ màn hình sáng để mã không tối đi giữa lúc người đối diện đang quét, và xin quyền ghi tệp để bạn tải tấm thiếp về máy rồi thêm thẳng vào danh bạ.",
     nut: "Tải danh thiếp (.vcf)",
@@ -439,6 +446,18 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
   "Với thông tin mạng, ứng dụng chỉ nhận về KIỂU kết nối: Wi-Fi, mạng di động, không có mạng, hoặc không xác định. Ứng dụng không nhận địa chỉ IP, không nhận tên mạng Wi-Fi, không đo tốc độ và không biết bạn đang ở đâu. (Riêng khi bạn bấm đăng nhập, máy chủ nhìn thấy địa chỉ IP của lời gọi ấy và ghi vào nhật ký đăng nhập — xem mục Đăng nhập.)",
   "Với máy ảnh và cửa sổ chọn ảnh, tấm ảnh bạn chọn KHÔNG RỜI KHỎI MÁY: ứng dụng nhận một đường dẫn tạm trên chính thiết bị của bạn, hiện ảnh lên màn hình, và không tải ảnh lên bất kỳ máy chủ nào. Ứng dụng không tự đọc thư viện ảnh — nó chỉ nhận đúng tấm ảnh bạn tự chọn trong cửa sổ của Zalo.",
   "Với việc giữ màn hình sáng, ứng dụng chỉ bật chế độ ấy khi bạn tự bấm, và tự tắt lại khi bạn rời màn hình danh thiếp. Chế độ này không đọc gì và không gửi gì; nó chỉ ngăn màn hình tối đi trong lúc người khác đang quét mã.",
+  // LIỆT KÊ ĐÚNG NHỮNG TRƯỜNG TẤM THIẾP THẬT SỰ CHỨA. Câu này và câu `ghi-tep` trong chính sách
+  // phải khớp nhau VÀ khớp với `vcard.ts`.
+  //
+  // "trang web" ĐÃ RỜI KHỎI CÂU NÀY RỒI QUAY LẠI TRONG CÙNG MỘT NGÀY, và lần quay lại suýt không
+  // xảy ra — đó mới là phần đáng ghi. Sáng 21/09/2026 nó bị bỏ vì `COMPANY.website` đang trống
+  // nên `vcard.ts` không sinh dòng `URL`. Chiều cùng ngày website được điền, dòng `URL` sinh trở
+  // lại — nhưng CÂU NÀY thì không, vì tiền đề của nó nằm trong một chú thích chứ không nằm trong
+  // một phép kiểm. Hệ quả: văn bản khai THIẾU một trường mà tệp người dùng tải về CÓ, tức mô tả
+  // sai đúng thứ vừa gửi xuống máy họ.
+  //
+  // Câu tương ứng trong chính sách thì thoát, vì nó CÓ ca canh "khi và chỉ khi". Nay ca ấy phủ
+  // cả hai câu — xem `chinh-sach.test.ts`, khối "khai của tệp danh thiếp khớp với tấm thiếp thật".
   "Với việc tải tệp, ứng dụng GHI MỘT TỆP XUỐNG MÁY BẠN, và đây là hành vi duy nhất ứng dụng viết lên thiết bị. Tệp ấy là danh thiếp của chúng tôi — tên, hotline, email và trang web của công ty — không phải dữ liệu của bạn. Ứng dụng không đọc, không sửa và không xoá bất kỳ tệp nào khác.",
   // CÂU CUỐI ĐÃ PHẢI ĐỔI, VÀ VIỆC ĐỔI NÓ LÀ BẮT BUỘC. Bản trước viết "chưa gửi bất kỳ
   // dữ liệu nào của bạn đi đâu" — một câu ĐÚNG với bản nộp và SAI với bản dựng có bước đăng
