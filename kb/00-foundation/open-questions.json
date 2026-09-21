@@ -629,5 +629,174 @@
     ],
     "adr": "kb/10-decisions/0031-chuyen-phap-nhan-mini-app-sang-vihat-group.md",
     "open_gap": "CHỈ MỘT tín hiệu, và chỉ theo MỘT chiều — có chủ ý. Chiều còn lại (`máy chủ của VihatSoftware`, hôm nay 6 lần trong mã được quét) là hiện trạng đứng yên: khai nó thành tín hiệu thì hook kêu mỗi phiên khi chưa ai làm gì, và tệ hơn, luật áp đảo của drift_guard (nen_canh_bao: rest*3 > top_n thì im) sẽ làm hook CÂM đúng lúc tệp bị sửa dở dang — to nhất khi không có gì xảy ra, im nhất lúc nguy hiểm. Mẫu hiện tại khớp 0 chỗ hôm nay (đã đo bằng chính iter_files + bo_chu_thich của drift_guard), nên nó chỉ kêu khi có người thật sự sửa. `(?!vihatsoftware)` trong mẫu KHÔNG phải trang trí: bản đầu tiên không có nó đã khớp nhầm đúng lối viết văn bản đang dùng — `máy chủ của VihatSoftware (thuộc ViHAT Group)` — tức câu GIỮ NGUYÊN bên nhận lại bị báo là đã đổi. Giữ vế chặn ấy, nếu không mẫu này chết vì nhiễu. ĐỪNG thêm mẫu `ViHAT Group` trần: 11 chỗ hợp lệ đang mang chuỗi ấy (nội dung giới thiệu tập đoàn), và đó là dương tính giả ngay từ phiên sau. Và KHÔNG gộp câu tệp vector biểu tượng của tập đoàn vào đây: đó là một ĐẦU VÀO CÒN THIẾU, không phải quyết định khách phải ra — nó thuộc sổ tiến độ citizen-app."
+  },
+  {
+    "id": 29,
+    "question": "MỞ KHOÁ một chứng từ giải ngân `Đã khoá`: có phải ghi lý do không · người vừa khoá có tự mở lại được không · có trần số lần mở không · nút `🗑 Gỡ` đi với khoá quyền nào · và `nam_ngan_sach.khoa` khoá cái gì?",
+    "status": "OPEN",
+    "why_it_matters": "CHẶN MÃ, VÀ CHỖ CHẶN ĐÃ NẰM SẴN TRONG CSDL CHỨ KHÔNG CHỈ TRONG ĐẶC TẢ. `docs/ui-ux/06-giai-ngan.md:340` chốt đúng một nửa: chứng từ `Đã khoá` thì không sửa/xoá, muốn sửa phải mở khoá, quyền `budget.confirm`. Trigger `chung_tu_da_khoa` (`service-finance/migrations/0004_du_an_va_chung_tu_giai_ngan.sql:141-168`) ĐÃ CHỪA SẴN đúng đường ấy: nó từ chối việc đổi số liệu trong khi dòng còn khoá (`:148-159`) và từ chối xoá mềm dòng đang khoá (`:161-165`), nhưng KHÔNG từ chối việc hạ `trang_thai` — tức đường mở khoá là đường duy nhất ở tầng CSDL còn để ngỏ, để ngỏ cho một thủ tục chưa ai viết ra. Năm chỗ đặc tả im lặng, và mỗi chỗ là một cột hoặc một khoá quyền chứ không phải một tham số hàm: (1) mở khoá có phải ghi lý do không — nếu có thì đó là một cột trên chứng từ hoặc một bảng vết riêng; (2) người vừa khoá có tự mở lại được không — nếu không thì phải so người thao tác với `nguoi_xac_nhan_id`, cột ấy đã có (`0004:290`); (3) `nam_ngan_sach.khoa` xuất hiện đúng MỘT lần trong toàn bộ đặc tả (`06-giai-ngan.md:255`) và không dòng nào nói nó khoá cái gì — khoá cả năm ngân sách thì chứng từ của năm ấy có còn mở khoá được không, và ai mở; (4) nút `🗑 Gỡ` (`06-giai-ngan.md:198`) đi với khoá quyền nào — `:202` chỉ gán `budget.update` cho nhập/sửa và `budget.confirm` cho xác nhận/khoá, không gán gì cho gỡ, mà luật 5 bất biến 1 bắt mọi tuyến khai quyền tường minh; (5) có trần số lần mở khoá không. Chính chú thích của trigger đã nói ra cái giá của việc không trả lời: mở khoá phải là một câu lệnh riêng, vì \"a record of what changed is only readable if the two changes are two events\" (`0004:132-135`) — một sự kiện riêng mà không có lý do đi kèm là một sự kiện không giải thích được với thanh tra, trên đúng một con số đã có người ký.",
+    "code_signals": [
+      {
+        "pattern": "MoKhoaChungTu|mo_khoa_chung_tu|/mo-khoa",
+        "means": "đã có người dựng đường mở khoá / gỡ chứng từ, hoặc tự đặt chính sách cho nó — tức năm chỗ đặc tả im lặng đã được trả lời trong mã",
+        "threshold": 1
+      },
+      {
+        "pattern": "ly_do_mo_khoa|so_lan_mo_khoa|nguoi_mo_khoa|LyDoMoKhoa|SoLanMoKhoa",
+        "means": "đã có người dựng đường mở khoá / gỡ chứng từ, hoặc tự đặt chính sách cho nó — tức năm chỗ đặc tả im lặng đã được trả lời trong mã",
+        "threshold": 1
+      },
+      {
+        "pattern": "budget\\.(unlock|delete|remove|void)",
+        "means": "đã có người dựng đường mở khoá / gỡ chứng từ, hoặc tự đặt chính sách cho nó — tức năm chỗ đặc tả im lặng đã được trả lời trong mã",
+        "threshold": 1
+      },
+      {
+        "pattern": "XoaChungTu|GoChungTu",
+        "means": "đã có người dựng đường mở khoá / gỡ chứng từ, hoặc tự đặt chính sách cho nó — tức năm chỗ đặc tả im lặng đã được trả lời trong mã",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "CAO VÀ MỘT CHIỀU THEO THỜI GIAN, KHÔNG THEO MÃ. Thêm cột lý do hay một trần số lần về sau chỉ là một migration; nhưng vết của những lần mở khoá ĐÃ XẢY RA thì không dựng lại được từ bất cứ nguồn nào — chứng từ đã bị mở, sửa, khoá lại, và không gì lưu rằng lần mở ấy có lý do gì. Đó đúng là con số thanh tra sẽ hỏi, vì nó là con số đã có người ký rồi bị sửa. Ca `người vừa khoá tự mở lại` đắt thêm một lớp: một chính sách đã chạy vài tháng thì các chứng từ đi qua nó mang trạng thái trộn lẫn, và về sau không cột nào phân biệt được.",
+    "ask_before": [
+      "viết route mở khoá chứng từ giải ngân",
+      "viết route gỡ (xoá mềm) chứng từ giải ngân",
+      "viết migration cho bảng nam_ngan_sach",
+      "đặt tên khoá quyền mới trong nhóm budget"
+    ]
+  },
+  {
+    "id": 30,
+    "question": "Có `chứng từ hoàn` (thu hồi tạm ứng, điều chỉnh giảm) không — hay mọi điều chỉnh giảm đều buộc phải đi qua đường MỞ KHOÁ chứng từ cũ?",
+    "status": "OPEN",
+    "why_it_matters": "RÀNG BUỘC ĐÃ ĐÓNG THEO MỘT CHIỀU, VÀ CHÍNH CHÚ THÍCH CỦA NÓ TỰ KHAI ĐÂY LÀ CÂU CỦA KHÁCH. `service-finance/migrations/0004_du_an_va_chung_tu_giai_ngan.sql:305` đặt `CHECK (so_tien > 0)`, và bốn dòng ngay trên (`:300-304`) viết nguyên văn rằng một chứng từ âm là một khoản hoàn — \"a different business event with a different name\" — và \"If refunds have to be recorded, that is a question for the customer, not a sign change\". Câu ấy đúng, và chưa ai hỏi. Module anh em CÙNG PHÂN HỆ thì đã cho số âm tường minh: `docs/ui-ux/07-thu-chi-ngan-sach.md:230` quy tắc 4 — \"Giá trị có thể âm hoặc trống\". Nghiệp vụ thu hồi tạm ứng là có thật ở đầu tư công cấp xã, nên đây không phải một ca giả định. PHẢI HỎI CÙNG LÚC VỚI #29, và đó là nửa quan trọng nhất của cả hai câu: không có chứng từ hoàn thì MỌI điều chỉnh giảm buộc phải đi qua mở khoá — tần suất mở khoá khi ấy cao hơn hẳn hình dung của người viết quy tắc \"khoá\", và một cơ chế thiết kế cho ca hiếm sẽ được dùng như đường đi hằng ngày. Trả lời hai câu rời nhau sẽ ra hai thiết kế không khớp. Hệ quả cuối nằm ở con số gửi lên lãnh đạo: `da_giai_ngan` là SUM các chứng từ còn sống (`docs/ui-ux/06-giai-ngan.md:292`), nên chọn đường nào cũng đổi cách một khoản hoàn hiện ra trong tỷ lệ giải ngân.",
+    "code_signals": [
+      {
+        "pattern": "DROP CONSTRAINT\\s+chung_tu_giai_ngan_so_tien_duong|so_tien\\s*(<>|!=)\\s*0|so_tien\\s*>=\\s*0",
+        "means": "đã có người mở đường cho khoản hoàn hoặc số âm — tức tự trả lời câu này bằng một ràng buộc hoặc một khái niệm mới",
+        "threshold": 1
+      },
+      {
+        "pattern": "chung_tu_hoan|la_hoan_tra|hoan_ung|loai_chung_tu|LoaiChungTu",
+        "means": "đã có người mở đường cho khoản hoàn hoặc số âm — tức tự trả lời câu này bằng một ràng buộc hoặc một khái niệm mới",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "CAO THEO MỘT CHIỀU. Nới `CHECK (so_tien > 0)` về sau là một migration rẻ, nhưng khoảng thời gian chưa có chứng từ hoàn là khoảng mà mọi khoản thu hồi đã được ghi bằng cách KHÁC — sửa chứng từ cũ qua đường mở khoá — và những dòng ấy về sau không phân biệt được với một lần sửa sai chính tả. Chiều ngược lại đắt hơn: đã cho số âm rồi muốn thu về đúng một dấu thì phải ánh xạ thủ công những dòng âm đã ghi, tức sửa hồ sơ đã có người ký (luật 7).",
+    "ask_before": [
+      "nới hoặc gỡ CHECK (so_tien > 0) trên chung_tu_giai_ngan",
+      "viết route nhập chứng từ giải ngân",
+      "viết công thức da_giai_ngan"
+    ]
+  },
+  {
+    "id": 31,
+    "question": "`nguong_canh_bao_cham` là CẤU HÌNH của xã theo năm ngân sách hay HẰNG SỐ của phần mềm — và nếu là cấu hình thì xã khai nó ở màn hình nào, bảng nào giữ, service nào sở hữu?",
+    "status": "OPEN",
+    "why_it_matters": "ĐÃ CÓ NGƯỜI TRẢ LỜI, VÀ NGƯỜI ẤY LÀ TUYẾN ĐỌC — đó là chỗ câu này khác một việc còn thiếu. Đặc tả nói ba lần rằng con số là của xã: `docs/ui-ux/06-giai-ngan.md:255` đặt `nguong_canh_bao_cham` trên `nam_ngan_sach`, `:342` quy tắc 5 ghi \"cấu hình theo năm ngân sách, mặc định 10 điểm\", và `:45` GIỚI THIỆU con số ấy với xã ngay trên thẻ KPI (`Ngưỡng cảnh báo chậm: 10 điểm`). Nhưng không màn hình nào khai nó (`docs/ui-ux/14-cau-hinh.md` không có tab nào), không endpoint nào chạm, không khoá quyền nào ứng, và bảng `nam_ngan_sach` chưa tồn tại. Hôm nay nó là hằng số trong kho mã của nhà cung cấp: `service-finance/internal/domain/du_an.go:44`. Cái làm nó nặng hơn một TODO là TUYẾN ĐỌC ĐÃ PHÁT KẾT QUẢ RA NGOÀI: `service-finance/internal/http/du_an.go:201` và `:247` truyền đúng hằng số ấy vào phép tính, tuyến trả `is_delayed` (`du_an.go:71`, `:123`) và `delay_threshold` (`:95`, `:210`), còn web đã vẽ thành chip `chậm N điểm` kèm dòng chú thích ngưỡng (`web-admin/src/features/giai-ngan/bang-du-an.tsx:151`, `:203`). Tức một quy tắc nghiệp vụ của xã đang quyết định 29 hay 30 dự án bị gọi là chậm, từ một hằng số xã không sửa được và không nhìn thấy — đúng hình dạng luật 1 bất biến 10 và luật 10 cấm #3 nói tới. Phần mã đã chuẩn bị sẵn và tự khai như thế (`du_an.go:38-43` gọi đây là hình dạng tạm, cố ý bắt mọi nơi gọi truyền ngưỡng tường minh, và `http/du_an.go:197-200` cố ý trả ngưỡng đã dùng ra cho client); thứ còn thiếu là câu trả lời: ai đặt con số, theo năm hay theo xã, ai được sửa. Ba câu ấy quyết bảng `nam_ngan_sach` có ra đời không, và nếu có thì service nào giữ nó (luật 2 bất biến 1).",
+    "code_signals": [
+      {
+        "pattern": "CREATE TABLE[^;]*nam_ngan_sach",
+        "means": "chỗ ở của ngưỡng cảnh báo chậm đang được chọn trong mã — bảng nào giữ nó, và ai được sửa",
+        "threshold": 1
+      },
+      {
+        "pattern": "nguong_canh_bao_cham",
+        "means": "chỗ ở của ngưỡng cảnh báo chậm đang được chọn trong mã — bảng nào giữ nó, và ai được sửa",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "RẺ HÔM NAY, ĐẮT DẦN THEO SỐ KỲ ĐÃ BÁO CÁO. Đổi hằng số thành cột là một migration cộng một dòng ở `http/du_an.go:201`. Cái không lấy lại được là các kỳ đã báo cáo: \"số dự án chậm\" của mỗi kỳ được tính bằng ngưỡng đang hiệu lực lúc ấy và không được lưu lại, nên đổi ngưỡng về sau thì những con số đã gửi lên lãnh đạo không dựng lại được — cùng lý do luật 10 bất biến 2 bắt LƯU hạn thay vì tính lại lúc đọc.",
+    "ask_before": [
+      "viết migration cho bảng nam_ngan_sach",
+      "viết màn hình hoặc route khai ngưỡng cảnh báo chậm",
+      "đổi NguongCanhBaoChamMacDinh thành giá trị đọc từ cấu hình"
+    ]
+  },
+  {
+    "id": 32,
+    "question": "Ô `Cân đối thu - chi` lấy `Tổng thu` từ CỘT NÀO — `Thu ngân sách NSNN` (số phát sinh trên địa bàn) hay `Thu xã hưởng`? Hai cột cho ra hai con số TRÁI DẤU nhau.",
+    "status": "OPEN",
+    "why_it_matters": "ĐẢO DẤU MỘT CON SỐ GỬI LÊN LÃNH ĐẠO, VÀ CẢ HAI ĐẦU ĐỀU NẰM TRONG ĐẶC TẢ CHỨ KHÔNG PHẢI TRONG MÃ. `docs/ui-ux/07-thu-chi-ngan-sach.md:235` định nghĩa `Cân đối thu - chi = Tổng thu − Tổng chi`; `:231` quy tắc 5 nói số tổng lấy từ dòng được đánh sao, mặc định dòng đầu tiên — ở tab Thu là `TỔNG THU NỘI ĐỊA PHÁT SINH TRÊN ĐỊA BÀN`. Dòng ấy là số PHÁT SINH TRÊN ĐỊA BÀN, không phải phần xã được hưởng; phần xã hưởng là một CỘT RIÊNG của cùng bảng — `:73` liệt kê cả hai cột, và ô tóm tắt cho đúng hai số: `Thu ngân sách NSNN` = 4.316.764,3 (`:69`) bên cạnh `Thu ngân sách Thu xã hưởng` = 3.300.800,5 (`:70`). Ghép với tổng chi 3.463.459,2 (`:242`) ra hai kết quả trái dấu: lấy cột NSNN ra +853,3 — đúng con số `docs/ui-ux/01-tong-quan-dieu-hanh.md:98` đang hiện (`853,3 tỷ`, thặng dư); lấy cột xã hưởng ra −162,7, tức HỤT. Không phải lệch vài phần trăm, là đổi dấu. Và nó KHÔNG chỉ nằm ở màn tài chính: `01-tong-quan-dieu-hanh.md:90-98` đưa cả bốn chỉ số ấy lên `/tong-quan`, màn hình đầu tiên lãnh đạo xã mở, còn `07:232` nói rõ số liệu này nuôi cả `/bao-cao`. Một xã đọc \"thặng dư 853 tỷ\" trong khi ngân sách của chính họ đang hụt là chuyện có người phải trả lời. ĐÂY KHÔNG PHẢI CÂU HỎI KỸ THUẬT: hai cột là hai khái niệm ngân sách khác nhau, và cái nào là \"thu\" trong phép cân đối của một xã là câu của người làm tài chính. Hỏi cùng lúc với #33 — cùng một khối KPI, cùng một bảng dữ liệu.",
+    "code_signals": [
+      {
+        "pattern": "can_doi_thu_chi|CanDoiThuChi|canDoiThuChi",
+        "means": "khối thu - chi ngân sách đang vào mã — cột nào là `Tổng thu` sẽ được chọn ở đây, và chọn im lặng thì con số đảo dấu",
+        "threshold": 1
+      },
+      {
+        "pattern": "TỔNG THU NỘI ĐỊA|tong-thu-noi-dia|tong_thu_noi_dia",
+        "means": "khối thu - chi ngân sách đang vào mã — cột nào là `Tổng thu` sẽ được chọn ở đây, và chọn im lặng thì con số đảo dấu",
+        "threshold": 1
+      },
+      {
+        "pattern": "CREATE TABLE[^;]*(khoan_muc_ngan_sach|cot_ngan_sach|gia_tri_khoan_muc)",
+        "means": "khối thu - chi ngân sách đang vào mã — cột nào là `Tổng thu` sẽ được chọn ở đây, và chọn im lặng thì con số đảo dấu",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "RẺ VỀ MÃ, KHÔNG THU HỒI ĐƯỢC VỀ CON SỐ ĐÃ GỬI ĐI. Đổi cột là đổi một truy vấn; nhưng một kỳ đã báo cáo bằng cột sai là một con số đã nằm trong văn bản gửi lên cấp trên, và sửa về sau nghĩa là xã phải đính chính một văn bản đã phát hành. Cái giá tăng theo SỐ KỲ đã báo, không theo số dòng mã — nên nó rẻ nhất đúng vào hôm nay, khi chưa có kỳ nào.",
+    "ask_before": [
+      "viết truy vấn hoặc thẻ KPI Cân đối thu - chi",
+      "viết bảng thu ngân sách và cơ chế dòng được đánh sao",
+      "đưa nhóm KPI THU - CHI NGÂN SÁCH XÃ lên /tong-quan hoặc /bao-cao"
+    ]
+  },
+  {
+    "id": 33,
+    "question": "`Thu đạt dự toán` chia cho `Dự toán TP giao` hay `Dự toán Xã giao`? CÙNG MỘT TỆP đặc tả cho hai mẫu số, lệch 16 điểm phần trăm.",
+    "status": "OPEN",
+    "why_it_matters": "LỆCH BÊN TRONG CHÍNH MỘT TỆP, nên không ai đọc ra cho tới lúc ngồi tính. Ô tóm tắt tab Thu (`docs/ui-ux/07-thu-chi-ngan-sach.md:67-71`) hiện `Tỷ lệ % thu = 108,1%`, và 108,1% chỉ ra được khi chia `Thu ngân sách NSNN` 4.316.764,3 (`:69`) cho `Dự toán 2026 TP giao` 3.993.010 (`:67`). Nhưng quy tắc nghiệp vụ ở `:233` viết `Thu đạt dự toán = Thu ngân sách NSNN / Dự toán Xã giao`, và 4.316.764,3 / 4.681.290 (`:68`) = 92,2%. Mười sáu điểm giữa hai dòng của cùng một tệp, và cả hai đều là \"đặc tả\". `docs/ui-ux/01-tong-quan-dieu-hanh.md:94` chép 108.1% lên `/tong-quan` với công thức ghi chung chung `tổng thu / dự toán thu` — tức nó KHÔNG phân xử được, nó chỉ mang theo một trong hai. Hệ quả không phải thẩm mỹ: 108,1% là \"vượt dự toán\", 92,2% là \"chưa đạt dự toán\" — hai câu trái nghĩa nhau về cùng một năm ngân sách, và câu ấy là thứ lãnh đạo xã đọc để quyết việc. Hỏi CÙNG LÚC với #32: hai câu cùng một khối KPI và cùng một bảng dữ liệu, trả lời rời nhau sẽ ra một thẻ KPI mà tử số và mẫu số nói về hai thứ khác nhau.",
+    "code_signals": [
+      {
+        "pattern": "thu_dat_du_toan|ThuDatDuToan|thuDatDuToan",
+        "means": "công thức hoặc hai cột dự toán đã vào mã — mẫu số đang được chọn ở đây",
+        "threshold": 1
+      },
+      {
+        "pattern": "du_toan_tp_giao|du_toan_xa_giao|DuToanTpGiao|DuToanXaGiao",
+        "means": "công thức hoặc hai cột dự toán đã vào mã — mẫu số đang được chọn ở đây",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "Như #32 về con số đã báo cáo: rẻ về mã, không thu hồi được. Thêm một chiều riêng — `Dự toán TP giao` và `Dự toán Xã giao` là HAI CỘT của bảng khoản mục (`07:73`), nên chọn mẫu số cũng là chọn cột nào BẮT BUỘC phải có dữ liệu. Một xã bỏ trống cột kia thì chỉ số biến mất, và điều đó chỉ lộ ra ở xã thứ hai, sau khi mẫu số đã được chọn.",
+    "ask_before": [
+      "viết công thức Thu đạt dự toán",
+      "viết thẻ KPI THU - CHI NGÂN SÁCH XÃ"
+    ]
+  },
+  {
+    "id": 34,
+    "question": "`Hạng mục kế hoạch vốn` là DANH MỤC tham chiếu (không năm, không tiền) hay DÒNG KẾ HOẠCH THEO NĂM mang `ke_hoach_von_nam` và `thoi_han_giai_ngan`? Đặc tả mô hình hoá nó HAI LẦN, không tương thích.",
+    "status": "OPEN",
+    "why_it_matters": "HAI MÔ HÌNH, BẢNG ĐÃ DỰNG THEO MỘT, VÀ KHÔNG CHỖ NÀO GHI LẠI LÀ ĐÃ CHỌN — nên hôm nay có hai cột trên màn hình không có chỗ lưu, và không ai biết đó là cố ý hay bỏ sót. Bản thứ nhất: `docs/ui-ux/14-cau-hinh.md:168` xếp `Hạng mục kế hoạch vốn` vào 10 nhóm danh mục với đúng 6 mã, và `:180` cho mọi danh mục đúng một hình dạng — `danh_muc(id, nhom, ma, nhan, thu_tu, nguon, la_mac_dinh, dang_dung)`: không năm, không tiền. Bản thứ hai: `docs/ui-ux/06-giai-ngan.md:257-264` mô hình hoá `hang_muc_von` là một bảng KHÁC, có `nam`, `ke_hoach_von_nam` và `thoi_han_giai_ngan`. Mã đã dựng theo bản `14`: `service-finance/migrations/0003_danh_muc_hang_muc_ke_hoach_von.sql:208-245` tạo `hang_muc_ke_hoach_von` đúng hình dạng danh mục, `UNIQUE (tenant_id, ma)` (`:244`) và `ma` bất biến bằng trigger (`:148-153`). HỆ QUẢ HÔM NAY, không phải giả định: hai cột `KH vốn năm` (`06:77`) và `Thời hạn giải ngân` (`06:82`) của bảng §5 KHÔNG CÓ CHỖ LƯU, và `06:98` còn nói rõ màn quản lý hạng mục cho \"đặt thời hạn giải ngân, đặt kế hoạch vốn năm cho từng hạng mục\" — một thao tác không có cột nào nhận. Hai đường ra là hai mô hình dữ liệu và hai cách làm ngân sách, chỉ khách phân xử được: (a) hai cột ấy là SỐ TỔNG suy ra từ các dự án trong hạng mục — `du_an` đã có cả `ke_hoach_von_nam` (`0004:203`) lẫn `thoi_han_giai_ngan` (`0004:214`) nên không cần cột mới, nhưng khi ấy xã KHÔNG đặt được kế hoạch vốn cho hạng mục và `06:98` là một dòng đặc tả phải bỏ; (b) hạng mục thật sự mang kế hoạch vốn theo năm — khi ấy phải có một bảng thứ hai khoá `(tenant_id, hang_muc_id, nam)`, vì `UNIQUE (tenant_id, ma)` hiện tại chỉ cho MỘT dòng mỗi mã cho MỌI năm, và nhét `nam` vào bảng danh mục là phá đúng khoá ấy. Khác biệt là nghiệp vụ chứ không phải kỹ thuật: (a) nghĩa là kế hoạch vốn đi TỪ DƯỚI LÊN, tổng của các dự án; (b) nghĩa là xã phân bổ TRẦN cho từng hạng mục rồi dự án phải nằm dưới trần.",
+    "code_signals": [
+      {
+        "pattern": "ALTER TABLE\\s+hang_muc_ke_hoach_von",
+        "means": "hạng mục đang được cho mang TIỀN hoặc mang NĂM — tức mô hình (b) đã được chọn trong mã mà chưa ai hỏi xã",
+        "threshold": 1
+      },
+      {
+        "pattern": "CREATE TABLE[^;]*hang_muc_von",
+        "means": "hạng mục đang được cho mang TIỀN hoặc mang NĂM — tức mô hình (b) đã được chọn trong mã mà chưa ai hỏi xã",
+        "threshold": 1
+      },
+      {
+        "pattern": "(?i)hang_?muc[a-z_]*\\.(ke_hoach_von_nam|thoi_han_giai_ngan)",
+        "means": "hạng mục đang được cho mang TIỀN hoặc mang NĂM — tức mô hình (b) đã được chọn trong mã mà chưa ai hỏi xã",
+        "threshold": 1
+      },
+      {
+        "pattern": "HangMucKeHoachVon\\s+struct[^}]*(KeHoachVonNam|ThoiHanGiaiNgan)",
+        "means": "hạng mục đang được cho mang TIỀN hoặc mang NĂM — tức mô hình (b) đã được chọn trong mã mà chưa ai hỏi xã",
+        "threshold": 1
+      }
+    ],
+    "reversal_cost": "CAO THEO CHIỀU (a) -> (b). Thêm một bảng kế hoạch vốn theo năm về sau là một migration; cái không lấy lại được là những con số đã hiện trên bảng §5 trong lúc chưa có bảng ấy — chúng là số SUY RA, và về sau không phân biệt được với số xã đã đặt tay: hai nghĩa khác nhau nằm trong cùng một ô. Chiều ngược lại đắt hơn: `ma` của `hang_muc_ke_hoach_von` bất biến bằng trigger và `UNIQUE (tenant_id, ma)` tính cả dòng đã xoá mềm, nên mọi lần sửa hình dạng bảng này đều là migration trên một danh mục ĐÃ CẤP MÃ (luật 7 bất biến 3).",
+    "ask_before": [
+      "viết migration thêm cột nam / ke_hoach_von_nam / thoi_han_giai_ngan cho hạng mục",
+      "viết bảng Tiến độ theo hạng mục (§5 của 06-giai-ngan.md)",
+      "viết màn quản lý hạng mục kế hoạch vốn"
+    ]
   }
 ]

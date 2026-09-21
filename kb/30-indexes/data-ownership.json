@@ -75,6 +75,13 @@
       "source": "service-petitions/migrations/0004_phieu_phan_anh.sql:162"
     },
     {
+      "entity": "ProcessingDeadline",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "sla",
+      "source": "service-identity/migrations/0008_sla.sql:146"
+    },
+    {
       "entity": "Project",
       "service": "finance",
       "scope": "tenant",
