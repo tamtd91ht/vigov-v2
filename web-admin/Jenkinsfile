@@ -35,6 +35,10 @@ pipeline {
     stage('Chuẩn bị') {
       steps {
         sh 'command -v node && command -v npm && command -v docker'
+        // Để lượt build tự làm chứng về môi trường nó chạy. Docker phải >= 18.09 (ngưỡng có
+        // BuildKit) vì Dockerfile dùng `--mount=type=cache`; docker 1.13.1 của CentOS 7 thì
+        // không, và stage đóng ảnh sẽ đỏ SAU KHI cổng kiểm đã xanh.
+        sh 'node --version; docker version --format "server {{.Server.Version}}" || docker version'
         script {
           env.TAG = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
           if (!env.TAG) { error('Không lấy được commit hiện tại — không có thẻ ảnh nào để đặt.') }
@@ -62,29 +66,53 @@ pipeline {
       }
     }
 
+    // KHÔNG DÙNG `docker.build` / `docker.withRegistry`: plugin Docker Pipeline KHÔNG có
+    // trên máy chủ Jenkins này. Lý do đầy đủ nêu MỘT LẦN ở `Jenkinsfile` gốc, mục
+    // "VÌ SAO KHÔNG GỌI PLUGIN DOCKER PIPELINE" — đừng chép nó xuống đây.
     stage('Đóng ảnh') {
       when { environment name: 'CAN_DUNG', value: 'co' }
       steps {
-        script {
-          def ten = "${params.REGISTRY}/${params.PROJECT}/vigov-${env.UNG_DUNG}"
-          docker.withRegistry("https://${params.REGISTRY}", params.REGISTRY_CRED) {
-            // Ngữ cảnh là THƯ MỤC NÀY, khác với tám dịch vụ Go: ứng dụng này không dùng
-            // chung go.mod/core/gen với ai cả.
-            def anh = docker.build("${ten}:${env.TAG}",
-                                   "--build-arg VERSION=${env.TAG} " +
-                                   "-f web-admin/Dockerfile web-admin")
-            anh.push()
-            // Ghi mốc NGAY SAU khi push thành công. Lượt build sau so với commit này,
-            // không so với "lượt build liền trước" — xem `mocDaDongAnh()` ở cuối tệp.
-            currentBuild.description = "${nhanAnh()}${env.TAG}"
+        script { env.ANH = "${params.REGISTRY}/${params.PROJECT}/vigov-${env.UNG_DUNG}:${env.TAG}" }
+
+        // DOCKER_CONFIG riêng từng lượt: `docker login` mặc định ghi vào ~/.docker/config.json
+        // của user `jenkins` — MỘT tệp dùng chung cho mọi job trên máy, kể cả job của dự án
+        // khác. Tách ra thì lượt này đăng xuất không đá văng phiên của ai.
+        withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-cau-hinh"]) {
+          withCredentials([usernamePassword(credentialsId: params.REGISTRY_CRED,
+                                            usernameVariable: 'REG_USER',
+                                            passwordVariable: 'REG_PASS')]) {
+            // Ngữ cảnh dựng là THƯ MỤC `web-admin`, khác với bảy dịch vụ Go lấy ngữ cảnh ở
+            // gốc kho: ứng dụng này không dùng chung go.mod/core/gen với ai cả.
+            sh '''
+              set +x
+              echo "$REG_PASS" | docker login -u "$REG_USER" --password-stdin "$REGISTRY"
+              set -x
+
+              docker build --pull --build-arg VERSION="$TAG" -t "$ANH" -f web-admin/Dockerfile web-admin
+              docker push "$ANH"
+              docker image rm "$ANH" || true
+            '''
           }
-          echo "ĐÃ ĐẨY  ${ten}:${env.TAG}\n" +
-               "  Nghe cổng 3000, chạy dưới UID 1000 — đặt runAsNonRoot: true.\n" +
-               "  KHÔNG có biến môi trường nào mang giá trị riêng của xã: tên xã, cơ quan cấp\n" +
-               "  trên và mọi cấu hình khác đều đọc LÚC CHẠY theo Host. Cùng một ảnh phục vụ\n" +
-               "  mọi xã, và đó là điều kiện để cách ly giữa các xã còn đúng."
         }
+
+        // Ghi mốc NGAY SAU khi push thành công (bước `sh` ở trên đỏ thì không tới được đây).
+        // Lượt build sau so với commit này, không so với "lượt build liền trước" — xem
+        // `mocDaDongAnh()` ở cuối tệp.
+        script { currentBuild.description = "${nhanAnh()}${env.TAG}" }
+        echo "ĐÃ ĐẨY  ${env.ANH}\n" +
+             "  Nghe cổng 3000, chạy dưới UID 1000 — đặt runAsNonRoot: true.\n" +
+             "  KHÔNG có biến môi trường nào mang giá trị riêng của xã: tên xã, cơ quan cấp\n" +
+             "  trên và mọi cấu hình khác đều đọc LÚC CHẠY theo Host. Cùng một ảnh phục vụ\n" +
+             "  mọi xã, và đó là điều kiện để cách ly giữa các xã còn đúng."
       }
+    }
+  }
+
+  post {
+    always {
+      // `config.json` là tệp `docker login` ghi token registry vào. Xoá ĐÚNG nó, cả khi build
+      // đỏ: một lượt hỏng GIỮA login và push là đúng lượt để lại token nằm trên đĩa.
+      sh 'rm -f "$WORKSPACE/.docker-cau-hinh/config.json"'
     }
   }
 }

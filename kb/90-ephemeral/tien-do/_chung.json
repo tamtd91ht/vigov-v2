@@ -51,7 +51,7 @@
       "trang_thai": "chua_lam",
       "bang_chung": "",
       "no_confirm": [],
-      "tiep_theo": "cần hạ tầng — phạm vi của kho dừng ở Dockerfile + Jenkinsfile, cụm k8s do đội devops phụ trách"
+      "tiep_theo": "VẪN chưa tệp nào của ViGov chạy trên Jenkins thật. Nhưng ngày 2026-09-21, pipeline kho anh em `vihat-miniapp` đã chạy trên ĐÚNG máy chủ Jenkins ấy và đỏ hai lượt, nên phần môi trường không còn là suy đoán: (a) máy chủ KHÔNG có `go` — và bước `sh` của Jenkins là shell không-login nên nó không đọc /etc/profile.d, tức 'đã cài rồi' chưa đủ; (b) máy chủ KHÔNG có plugin Docker Pipeline — `agent { docker }` đổ lúc BIÊN DỊCH với 'Must be one of [any, label, none]', và cùng lý do ấy sẽ giết `docker.withRegistry` ở tám tệp đóng ảnh. Mười tệp đã được sửa để không gọi plugin nào ngoài `credentials-binding`; phần còn lại là máy chủ phải có go>=1.25, make, gcc, docker>=18.09 và user `jenkins` trong group `docker` — đội vận hành nhận cài."
     },
     {
       "id": "revoke-audit-log",

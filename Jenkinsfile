@@ -40,10 +40,16 @@ pipeline {
 
     stage('Kiểm công cụ') {
       steps {
+        // `make` và `gcc` vào danh sách sau lượt chạy thật đầu tiên (2026-09-21).
+        //   · `make`: mọi stage dưới đây gọi `make proto` / `make check`. Thiếu nó thì lỗi là
+        //     "make: not found" ở giữa một stage, trông như mục tiêu hỏng chứ không như máy
+        //     chủ thiếu công cụ.
+        //   · `gcc`: `make check` chạy `go test -race`, mà `-race` cần cgo. Thiếu nó thì lỗi
+        //     là "race is only supported ... with cgo" — trông như mã hỏng.
         sh '''
           set -eu
           thieu=""
-          for cc in go buf node npm python3; do
+          for cc in go buf node npm python3 make gcc; do
             command -v "$cc" >/dev/null 2>&1 || thieu="$thieu $cc"
           done
           if [ -n "$thieu" ]; then
@@ -116,4 +122,43 @@ pipeline {
 //
 // Cái giá là manifest phải sửa thẻ mỗi lần triển khai. Đó chính là điều mong muốn: một lần
 // triển khai phải là một thay đổi ai đó nhìn thấy được.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+//
+// VÌ SAO KHÔNG GỌI PLUGIN DOCKER PIPELINE — nêu MỘT LẦN ở đây; tám pipeline đóng ảnh
+// (`web-admin` + bảy dịch vụ) chỉ trỏ tới mục này, không chép nó xuống.
+//
+// Tám tệp ấy từng viết `docker.withRegistry { docker.build(...).push() }`. Hai lệnh đó thuộc
+// plugin **Docker Pipeline**, và MÁY CHỦ JENKINS THẬT KHÔNG CÓ NÓ. Phát hiện ngày 2026-09-21
+// trên kho `vihat-miniapp` (dùng chung máy chủ này), và triệu chứng đáng nhớ vì nó không
+// giống một lỗi thiếu plugin:
+//
+//     Invalid agent type "docker" specified. Must be one of [any, label, none]
+//
+// Ba tên ấy là những loại agent Jenkins core tự biết. Danh sách chỉ có ba tên nghĩa là KHÔNG
+// plugin nào đăng ký thêm loại nào — và lỗi xảy ra lúc BIÊN DỊCH Jenkinsfile, trước khi lượt
+// build kịp chạy một dòng, nên trong log không có stage nào để lần theo.
+//
+// Máy chủ Jenkins dùng chung với dự án khác, nên "cài thêm plugin" không phải quyết định của
+// kho này. Đổi lại, tám tệp tự làm ba việc plugin vốn làm hộ — mỗi việc một cái bẫy riêng:
+//
+//   1. `DOCKER_CONFIG` RIÊNG TỪNG LƯỢT BUILD. `docker login` mặc định ghi vào
+//      `~/.docker/config.json` của user `jenkins` — MỘT tệp dùng chung cho mọi job trên máy.
+//      Không tách thì lượt đăng xuất của job này đá văng phiên đăng nhập của job dự án khác
+//      đang đẩy ảnh giữa chừng, và triệu chứng bên kia là một lỗi 401 không lý do.
+//
+//   2. `--password-stdin` VÀ `set +x`. Bước `sh` của Jenkins chạy `sh -xe`, mà `-x` in ra ĐỐI
+//      SỐ ĐÃ KHAI TRIỂN: `echo "$REG_PASS"` sẽ hiện nguyên mật khẩu registry trong log. Bộ lọc
+//      che của Jenkins bắt được, nhưng một bí mật đã ra tới chỗ cần bộ lọc thì chỉ còn đúng
+//      một lớp giữa nó và log — luật 8, và một khoá registry rò là rò cho MỌI xã.
+//      Cùng lý do: script để trong nháy ĐƠN, giá trị vào bằng biến môi trường. Nội suy Groovy
+//      một bí mật vào chuỗi script là đưa nó ra ngoài tầm che.
+//
+//   3. `docker image rm` SAU KHI ĐẨY. Máy dùng chung, mỗi commit một thẻ mới; không dọn thì
+//      đĩa của người khác đầy vì kho này. Chỉ bỏ THẺ — các tầng nằm lại trong cache.
+//
+// Và `post { always }` xoá `config.json`: một lượt hỏng GIỮA login và push là đúng lượt để
+// lại token đăng nhập registry nằm trên đĩa máy chủ.
+//
+// `withCredentials` thì vẫn dùng — nó thuộc `credentials-binding`, plugin có trong mọi bản
+// cài Jenkins tiêu chuẩn. Không có nó thì không còn đường nào lấy bí mật mà không phạm luật 8.
 // ─────────────────────────────────────────────────────────────────────────────────────────

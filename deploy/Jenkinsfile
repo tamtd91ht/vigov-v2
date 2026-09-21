@@ -16,6 +16,18 @@
 // ─────────────────────────────────────────────────────────────────────────────────────────
 //
 // MÁY CHỦ BUILD CẦN: git, kubectl, kustomize (hoặc kubectl >= 1.27 có -k sẵn), skopeo hoặc crane.
+// Dòng trên là CHÚ THÍCH, và một chú thích không kiểm gì cả — stage 'Kiểm công cụ' bên dưới mới
+// là thứ kiểm. Thêm ngày 2026-09-21, sau khi lượt chạy thật đầu tiên của dự án trên Jenkins cho
+// thấy máy chủ không có cả những công cụ mọi tệp ở đây vẫn mặc định là có.
+//
+// KHÔNG DÙNG `withKubeConfig`: nó thuộc plugin `kubernetes-cli`, mà máy chủ Jenkins này không
+// có plugin nào ngoài bộ lõi — xem `Jenkinsfile` gốc, mục "VÌ SAO KHÔNG GỌI PLUGIN DOCKER
+// PIPELINE". Thay bằng ràng buộc `file` của `credentials-binding`: nó đặt biến `KUBECONFIG` trỏ
+// tới một tệp tạm, và `kubectl` tự đọc biến ấy.
+//
+// ĐIỀU KIỆN: credentials `kubeconfig-vigov` phải là kiểu **Secret file** (nội dung là kubeconfig).
+// Nếu nó đang được lưu dưới kiểu riêng của plugin kubernetes-cli thì ràng buộc `file` không gắn
+// được, và lỗi sẽ là "credentials ... is not a file" — lúc ấy đổi kiểu lưu, đừng đổi lại mã.
 
 pipeline {
   agent any
@@ -51,6 +63,26 @@ pipeline {
   }
 
   stages {
+
+    stage('Kiểm công cụ') {
+      steps {
+        sh '''
+          set -eu
+          thieu=""
+          for cc in git kubectl kustomize skopeo; do
+            command -v "$cc" >/dev/null 2>&1 || thieu="$thieu $cc"
+          done
+          if [ -n "$thieu" ]; then
+            echo ""
+            echo "MÁY CHỦ BUILD THIẾU:$thieu"
+            echo "Dừng ở đây thay vì đổ giữa một lượt triển khai đã sửa cụm được một nửa."
+            echo ""
+            exit 1
+          fi
+          kubectl version --client
+        '''
+      }
+    }
 
     stage('Kiểm tham số') {
       steps {
@@ -122,7 +154,7 @@ Job: ${BUILD_URL}"
 
     stage('Áp lên cụm') {
       steps {
-        withKubeConfig(credentialsId: params.KUBE_CRED) {
+        withCredentials([file(credentialsId: params.KUBE_CRED, variable: 'KUBECONFIG')]) {
           sh '''
             set -eu
             # Không `--prune`. Xoá một tài nguyên là một hành động riêng, có người quyết —
@@ -135,7 +167,7 @@ Job: ${BUILD_URL}"
 
     stage('Đợi rollout') {
       steps {
-        withKubeConfig(credentialsId: params.KUBE_CRED) {
+        withCredentials([file(credentialsId: params.KUBE_CRED, variable: 'KUBECONFIG')]) {
           // 6 phút: startupProbe cho phép tới 5 phút vì di trú CSDL chạy TRONG tiến trình
           // lúc khởi động và ôm advisory lock (core/migrate.Chay) — replica thứ hai đợi
           // replica thứ nhất. Timeout chặt hơn sẽ "thất bại" trong lúc mọi thứ vẫn đúng.
@@ -152,7 +184,7 @@ Job: ${BUILD_URL}"
     failure {
       // Quay lại bản trước Ở CỤM ngay. Commit ghim thẻ thì GIỮ NGUYÊN, không revert tự động:
       // nhật ký phải ghi cả lần thất bại. Rút lại nó là việc của người, ở lượt chạy sau.
-      withKubeConfig(credentialsId: params.KUBE_CRED) {
+      withCredentials([file(credentialsId: params.KUBE_CRED, variable: 'KUBECONFIG')]) {
         sh '''
           set +e
           echo "THẤT BẠI — quay lại bản trước ở cụm"

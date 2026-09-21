@@ -39,7 +39,15 @@ pipeline {
 
     stage('Chuẩn bị') {
       steps {
-        sh 'command -v go && command -v buf && command -v docker'
+        // `gcc` nằm trong danh sách vì một lý do không hiển nhiên: cổng kiểm chạy
+        // `go test -race`, mà `-race` cần cgo, tức cần một trình biên dịch C. Thiếu nó thì
+        // lỗi rơi vào giữa cổng kiểm dưới dạng "race is only supported ... with cgo" — một
+        // dòng trông như mã hỏng chứ không phải như máy chủ thiếu công cụ.
+        sh 'command -v go && command -v buf && command -v docker && command -v gcc'
+        // Để lượt build tự làm chứng về môi trường nó chạy. Docker phải >= 18.09 (ngưỡng có
+        // BuildKit) vì Dockerfile dùng `--mount=type=cache`; docker 1.13.1 của CentOS 7 thì
+        // không, và stage đóng ảnh sẽ đỏ SAU KHI cổng kiểm đã xanh.
+        sh 'go version; docker version --format "server {{.Server.Version}}" || docker version'
         script {
           env.TAG = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
           if (!env.TAG) { error('Không lấy được commit hiện tại — không có thẻ ảnh nào để đặt.') }
@@ -65,23 +73,47 @@ pipeline {
       }
     }
 
+    // KHÔNG DÙNG `docker.build` / `docker.withRegistry`: plugin Docker Pipeline KHÔNG có
+    // trên máy chủ Jenkins này. Lý do đầy đủ nêu MỘT LẦN ở `Jenkinsfile` gốc, mục
+    // "VÌ SAO KHÔNG GỌI PLUGIN DOCKER PIPELINE" — đừng chép nó xuống đây.
     stage('Đóng ảnh') {
       when { environment name: 'CAN_DUNG', value: 'co' }
       steps {
-        script {
-          def ten = "${params.REGISTRY}/${params.PROJECT}/vigov-${env.THU_MUC}"
-          docker.withRegistry("https://${params.REGISTRY}", params.REGISTRY_CRED) {
-            def anh = docker.build("${ten}:${env.TAG}",
-                                   "--build-arg VERSION=${env.TAG} " +
-                                   "-f ${env.THU_MUC}/Dockerfile .")
-            anh.push()
-            // Ghi mốc NGAY SAU khi push thành công. Lượt build sau so với commit này,
-            // không so với "lượt build liền trước" — xem `mocDaDongAnh()` ở cuối tệp.
-            currentBuild.description = "${nhanAnh()}${env.TAG}"
+        script { env.ANH = "${params.REGISTRY}/${params.PROJECT}/vigov-${env.THU_MUC}:${env.TAG}" }
+
+        // DOCKER_CONFIG riêng từng lượt: `docker login` mặc định ghi vào ~/.docker/config.json
+        // của user `jenkins` — MỘT tệp dùng chung cho mọi job trên máy, kể cả job của dự án
+        // khác. Tách ra thì lượt này đăng xuất không đá văng phiên của ai.
+        withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-cau-hinh"]) {
+          withCredentials([usernamePassword(credentialsId: params.REGISTRY_CRED,
+                                            usernameVariable: 'REG_USER',
+                                            passwordVariable: 'REG_PASS')]) {
+            sh '''
+              set +x
+              echo "$REG_PASS" | docker login -u "$REG_USER" --password-stdin "$REGISTRY"
+              set -x
+
+              docker build --pull --build-arg VERSION="$TAG" -t "$ANH" -f "$THU_MUC/Dockerfile" .
+              docker push "$ANH"
+              docker image rm "$ANH" || true
+            '''
           }
-          echo "DA DAY  ${ten}:${env.TAG}"
         }
+
+        // Ghi mốc NGAY SAU khi push thành công (bước `sh` ở trên đỏ thì không tới được đây).
+        // Lượt build sau so với commit này, không so với "lượt build liền trước" — xem
+        // `mocDaDongAnh()` ở cuối tệp.
+        script { currentBuild.description = "${nhanAnh()}${env.TAG}" }
+        echo "DA DAY  ${env.ANH}"
       }
+    }
+  }
+
+  post {
+    always {
+      // `config.json` là tệp `docker login` ghi token registry vào. Xoá ĐÚNG nó, cả khi build
+      // đỏ: một lượt hỏng GIỮA login và push là đúng lượt để lại token nằm trên đĩa.
+      sh 'rm -f "$WORKSPACE/.docker-cau-hinh/config.json"'
     }
   }
 }
