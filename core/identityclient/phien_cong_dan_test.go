@@ -22,7 +22,6 @@ import (
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/httpx"
-	"github.com/vihat/vigov/core/tenant"
 )
 
 const tokenCongDanGia = "token-phien-cong-dan-GIA-KHONG-PHAI-THAT"
@@ -56,40 +55,60 @@ func (s *mayChuCongDanGia) ResolveCitizenSession(ctx context.Context, in *identi
 	return &identityv1.ResolveCitizenSessionResponse{Session: s.tra}, nil
 }
 
-// ⚠ THE TEST THIS FILE EXISTS FOR, AND IT ASSERTS A REFUSAL.
+// ⚠ THE TEST THIS FILE EXISTS FOR — and as of 2026-09-21 it asserts a CALL, not a refusal.
 //
-// The citizen edge has NO commune in context — that is the entire reason ResolveCitizenSession
-// exists (ADR 0022) — so grpcx.UnaryClientInterceptor refuses the call before anything leaves the
-// process, because the method is not on grpcx.methodsWithoutTenant. Adding it there is a STOP
-// CONDITION for the user (ADR 0012, decision 1).
+// It used to assert the opposite. The citizen edge has NO commune in context — that is the entire
+// reason ResolveCitizenSession exists (ADR 0022) — and until the user answered ADR 0012's stop
+// condition, grpcx.UnaryClientInterceptor refused the call before anything left the process. The
+// refusal was pinned here precisely so that whoever took the decision would be told that every
+// other test in this file had, until that moment, been exercising a transport that never reached a
+// server. The decision was taken, this went red, and this is the replacement it asked for: the same
+// call from a commune-less context REACHING the fake server.
 //
-// WHEN THAT DECISION IS TAKEN, THIS TEST GOES RED. That is the point: it is the thing that tells
-// whoever adds the exemption that the rest of this file was, until that moment, exercising a
-// transport that never reached a server. Replace it then with the real shape — the same call from a
-// commune-less context REACHING the fake server — and not before.
-func TestPhienCongDanBiChanViKhongCoMienXa(t *testing.T) {
-	if grpcx.ExemptFromTenant("/vigov.identity.v1.IdentityService/ResolveCitizenSession") {
-		t.Fatal("ResolveCitizenSession đã được miễn xã — ĐIỀU KIỆN DỪNG này đã được trả lời ở đâu đó; " +
-			"hãy viết lại ca kiểm này thành lời gọi THẬT từ context không có xã")
+// TWO ASSERTIONS, AND THE SECOND IS THE LOAD-BEARING ONE. That the call arrives is the easy half.
+// That it arrives carrying NO "x-tenant-id" is the half that would rot silently: an exemption means
+// the interceptor stops REQUIRING a commune, and if some later edit made it start SENDING one
+// picked up from an ambient context, this RPC would be answering "which commune" for a caller that
+// had already named one — rule 1, forbidden #2, arriving through the back door.
+func TestPhienCongDanGoiDuocTuNgucCanhKhongCoXa(t *testing.T) {
+	if !grpcx.ExemptFromTenant("/vigov.identity.v1.IdentityService/ResolveCitizenSession") {
+		t.Fatal("ResolveCitizenSession KHÔNG còn được miễn xã — miễn trừ đã bị gỡ ở đâu đó; " +
+			"kênh công dân không gọi được nữa, và mọi ca dưới đây chạy trên một transport không tới máy chủ")
 	}
 
-	srv := &mayChuCongDanGia{}
+	srv := &mayChuCongDanGia{tra: &identityv1.CitizenSessionPrincipal{
+		SessionId: "01JE1AAAAAAAAAAAAAAAAAAAAA",
+		CitizenId: "01JE1BBBBBBBBBBBBBBBBBBBBB",
+		TenantId:  string(xaA),
+	}}
 	cl := moMay(t, srv)
 
 	// A citizen edge's context: no commune, by construction.
-	_, _, err := cl.TraCuuPhienCongDan(context.Background(), tokenCongDanGia)
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("mã lỗi = %v, muốn InvalidArgument từ interceptor xã", status.Code(err))
+	p, co, err := cl.TraCuuPhienCongDan(context.Background(), tokenCongDanGia)
+	if err != nil {
+		t.Fatalf("lỗi: %v", err)
 	}
-	if srv.goi != 0 {
-		t.Fatal("lời gọi vẫn ra tới máy chủ — interceptor xã không nằm trong chuỗi")
+	if !co {
+		t.Fatal("phiên hợp lệ mà trả về không có")
+	}
+	if srv.goi != 1 {
+		t.Fatalf("máy chủ nhận %d lời gọi, muốn 1 — lời gọi không rời khỏi tiến trình", srv.goi)
+	}
+	if len(srv.thayXa) != 0 {
+		t.Fatalf("lời gọi mang %q trong metadata xã — RPC này PHÂN GIẢI ra xã, không được NHẬN xã "+
+			"(luật 1 cấm #2)", srv.thayXa)
+	}
+	if string(p.TenantID) != string(xaA) {
+		t.Errorf("xã = %q, muốn %q — xã phải tới TỪ PHẢN HỒI", p.TenantID, xaA)
 	}
 }
 
-// ngucCanhCongDan is the context these mapping tests have to borrow: a commune, purely so the
-// commune interceptor lets the call through and the MAPPING can be exercised at all. The real
-// citizen edge has none — see the test above.
-func ngucCanhCongDan() context.Context { return tenant.Into(context.Background(), xaA) }
+// ngucCanhCongDan is the context the mapping tests run on: EMPTY, exactly like the real citizen
+// edge (ADR 0022). It used to borrow a commune, purely so the commune interceptor would let the
+// call through at all; that borrow stopped being necessary on 2026-09-21 and was removed, because
+// a mapping test that runs with a commune in context is a mapping test running on a shape that
+// never occurs.
+func ngucCanhCongDan() context.Context { return context.Background() }
 
 func TestPhienCongDanDungDuocTraVeDuBaDinhDanh(t *testing.T) {
 	srv := &mayChuCongDanGia{tra: &identityv1.CitizenSessionPrincipal{

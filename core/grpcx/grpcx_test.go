@@ -58,6 +58,12 @@ func TestDanhSachMienLaTuongMinh(t *testing.T) {
 	if !grpcx.ExemptFromTenant(grpcx.MethodResolveHost) {
 		t.Fatal("ResolveHost phải được miễn: nó chạy trước khi biết xã")
 	}
+	// Cùng một hình dạng, cho kênh KHÔNG CÓ TÊN MIỀN: Mini App không có Host, nên xã được suy ra
+	// TỪ PHIÊN (ADR 0022) — đòi "x-tenant-id" ở đây là vòng lặp "biết xã để tìm ra xã".
+	// Người dùng chốt 21/09/2026.
+	if !grpcx.ExemptFromTenant(grpcx.MethodResolveCitizenSession) {
+		t.Fatal("ResolveCitizenSession phải được miễn: nó CHÍNH LÀ thứ trả lời xã nào cho kênh công dân")
+	}
 	// Anything not named on the list is not exempt. This is the half of the rule that decays
 	// first: an exemption that applies by default applies to every RPC written afterwards.
 	//
@@ -78,28 +84,19 @@ func TestDanhSachMienLaTuongMinh(t *testing.T) {
 	// (ADR 0012, decision 1). Until it is asked and answered, this loop is what stops the
 	// answer being given by accident.
 	//
-	// ResolveCitizenSession IS NAMED HERE FOR THE SAME REASON AND IT IS THE STRONGEST CASE OF THE
-	// THREE, which is exactly why it is pinned rather than granted. It is the citizen channel's
-	// ResolveHost: the Mini App has no domain (ADR 0005), so the citizen edge has no Host and
-	// derives the commune FROM the session (ADR 0022). Requiring "x-tenant-id" on it is the loop
-	// — knowing the commune in order to find the commune — so the person who implements the
-	// caller WILL meet InvalidArgument and WILL reach for the one-line fix of naming it above.
+	// ResolveCitizenSession HAS MOVED OUT OF THIS LOOP — asked and answered 2026-09-21, the user
+	// said yes — and the move is recorded rather than quietly made, because the loop's whole
+	// value is that leaving it costs a visible diff. It sits with ResolveHost above.
 	//
-	// THE ARGUMENT BEING STRONG IS NOT THE SAME AS THE DECISION BEING TAKEN. ADR 0012 decision 1
-	// makes adding a second name a stop condition regardless of how good the reason is, precisely
-	// because every addition will have a good reason; the discipline is that the list is short
-	// enough to read in one review, and that the user owns its length. The contract, the identity
-	// handler and the client adapter are all written and all unreachable until that one line is
-	// added deliberately:
-	//   proto/vigov/identity/v1/identity.proto        (rpc ResolveCitizenSession)
-	//   service-identity/internal/grpc/phien_cong_dan.go
-	//   core/identityclient/phien_cong_dan.go
+	// THE TWO THAT STAYED, STAYED. One question being answered does not answer the others:
+	// ListTenants hands back the whole registry, and the ULIDs in it prefix every cache key,
+	// queue, realtime room and file path in the system — a different exposure from a call whose
+	// reply is one session's own commune. Their question has not been put to the user.
 	for _, m := range []string{
 		"/vigov.platform.v1.PlatformService/GetTenant",
 		"/vigov.platform.v1.PlatformService/ListTenants",
 		"/vigov.platform.v1.PlatformService/ResolveTenantSuccession",
 		"/vigov.identity.v1.IdentityService/BatchGetStaff",
-		"/vigov.identity.v1.IdentityService/ResolveCitizenSession",
 		"",
 		"/vigov.platform.v1.PlatformService/ResolveHostSomethingElse",
 	} {

@@ -114,6 +114,10 @@ const MetadataCallerKey = "x-vigov-caller-key"
 // of names a reviewer can read, not a string literal buried in a condition.
 const MethodResolveHost = "/vigov.platform.v1.PlatformService/ResolveHost"
 
+// MethodResolveCitizenSession is the citizen channel's counterpart to MethodResolveHost: the RPC
+// that answers "which commune" when there is no domain to answer it. Same reason for a constant.
+const MethodResolveCitizenSession = "/vigov.identity.v1.IdentityService/ResolveCitizenSession"
+
 // methodsWithoutTenant is the WHITELIST of RPCs allowed to travel without a commune.
 //
 // EXEMPTION IS BY LIST, NEVER BY DEFAULT. An implicit exemption — "no metadata, so probably
@@ -150,8 +154,27 @@ const MethodResolveHost = "/vigov.platform.v1.PlatformService/ResolveHost"
 // statement than it looks. Until the question is asked and answered, the interceptor refuses
 // these two with InvalidArgument. grpcx_test.go pins their absence so that editing this
 // comment is not enough to undo the decision.
+//
+// ResolveCitizenSession WAS asked, and answered on 2026-09-21: the user said yes. It is here
+// because it passes the ADR's own test — "can this RPC know the commune at call time?" — with a
+// no that is structural rather than inconvenient. It is the call that ESTABLISHES the commune of
+// a citizen request (ADR 0022): the Mini App has no domain, so there is nothing to derive one
+// from until this answers. Requiring a commune would mean knowing the commune in order to find
+// it, the identical shape that exempts ResolveHost.
+//
+// WHY THIS DOES NOT WIDEN THE HOLE, which is the question a reviewer should ask next: the
+// contract gives it nothing to widen. Its request carries ONLY `session_token` — there is no
+// commune field in it, so a caller cannot ask "is this session valid in commune X" and have the
+// exemption launder a claim into an answer (rule 1, forbidden #2). The commune comes back in the
+// RESPONSE, derived from the session registry alone. And the reply carries no permission key and
+// no personal data: it resolves a session, it grants nothing (rule 4).
+//
+// ListTenants and ResolveTenantSuccession STAY ABSENT. One question being answered does not
+// answer the others — theirs is a different question with a different exposure, spelled out
+// above, and it has not been put to the user.
 var methodsWithoutTenant = map[string]struct{}{
-	MethodResolveHost: {},
+	MethodResolveHost:           {},
+	MethodResolveCitizenSession: {},
 }
 
 // ExemptFromTenant reports whether fullMethod may be called without a commune.
