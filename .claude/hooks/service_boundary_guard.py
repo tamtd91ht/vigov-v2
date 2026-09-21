@@ -75,9 +75,18 @@ def scan(content: str, path: str) -> list[str]:
 
         if DB_CONNECT.search(line):
             ctx = "\n".join(lines[max(0, i - 3): i + 4])
+            # SO BẰNG TÊN NGHIỆP VỤ, không bằng tên thư mục. Thư mục là `service-identity`; the
+            # database it owns is `identity`. Comparing the DSN against the DIRECTORY name made
+            # every CORRECT connection a violation, so the only clean line this branch could
+            # ever report was one pointing at the wrong database by accident — and an author
+            # accused on the right line stops reading the hook.
+            #
+            # Same shape as the exclusions already fixed in audit_guard and tenant_scope_guard:
+            # a directory prefix quietly standing in for a business name.
+            ten = c.ten_nghiep_vu(me) if me else None
             for db in DSN_DBNAME.findall(ctx):
-                if me and db != me and db not in ("postgres", "localhost", "127", "0"):
-                    hits.append(f"line {i+1}: connects to database '{db}' — service '{me}' does not own it")
+                if ten and db != ten and db not in ("postgres", "localhost", "127", "0"):
+                    hits.append(f"line {i+1}: connects to database '{db}' — service '{ten}' does not own it")
                     break
 
     return hits

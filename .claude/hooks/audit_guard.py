@@ -19,8 +19,17 @@ import _common as c  # noqa: E402
 
 HOOK = "audit_guard"
 
+# `(?:Context)?` IS LOAD-BEARING — the same defect measured in tenant_scope_guard on
+# 2026-09-20, still unpatched here. `database/sql` offers every method twice, and EVERY write
+# in this repository uses the Context form (`tx.ExecContext(ctx, chenPhienCongDan, …)`,
+# service-identity/internal/store/phien_cong_dan.go:354) because a statement that cannot be
+# cancelled outlives its request.
+#
+# The SQL branch below does not cover the gap either: this repository keeps its statements in
+# PACKAGE-LEVEL constants, and `funcs()` drops everything written before the first `func`. So
+# neither half saw a single real store write — rule 6's guard read the one shape nobody uses.
 WRITE_OP = re.compile(
-    r"\.\s*(Create|Insert|Save|Update|Updates|Delete|SoftDelete|Exec)\s*\(|"
+    r"\.\s*(Create|Insert|Save|Update|Updates|Delete|SoftDelete|Exec)(?:Context)?\s*\(|"
     r"[\"'`]\s*(INSERT\s+INTO|UPDATE\s+|DELETE\s+FROM)", re.I)
 
 AUDIT_CALL = re.compile(r"(audit\.|Audit\(|WriteAudit|RecordAudit)", re.I)

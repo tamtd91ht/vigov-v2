@@ -20,10 +20,24 @@ import _common as c  # noqa: E402
 
 HOOK = "pii_guard"
 
+# `[^)]` AND NOT `[^)\n]` — the newline exclusion was the whole defect, and it is the shape
+# this repository keeps calling "green by luck": the pattern went quiet because the statement
+# was longer than its own limit, not because the statement was clean.
+#
+# A structured log call with three key/value pairs is written across lines, and that is the
+# normal way, not an exotic one:
+#
+#     slog.Error("khong gui duoc",
+#         "so_dien_thoai", ct.DienThoai,     <- invisible to `[^)\n]`
+#         "err", err)
+#
+# The bound does not get looser by allowing the newline: `[^)]` still cannot run past the first
+# `)`, so the window is still exactly the argument list of one call. What changes is that the
+# window now reaches the arguments that were pushed onto the next line.
 PATTERNS = [
-    (rf"{c.LOG_CALL}\s*\([^)\n]{{0,200}}{c.PII_TOKEN}",
+    (rf"{c.LOG_CALL}\s*\([^)]{{0,200}}{c.PII_TOKEN}",
      "logging personal data / auth secret"),
-    (rf"{c.LOG_CALL}\s*\(\s*[`'\"][^`'\"\n]{{0,200}}%[sv][^`'\"\n]{{0,80}}[`'\"]\s*,[^)\n]{{0,80}}{c.PII_TOKEN}",
+    (rf"{c.LOG_CALL}\s*\(\s*[`'\"][^`'\"\n]{{0,200}}%[sv][^`'\"\n]{{0,80}}[`'\"]\s*,[^)]{{0,80}}{c.PII_TOKEN}",
      "logging personal data through a format string"),
     (rf"{c.LOG_CALL}\s*\(\s*(?:req\.Body|r\.Body|req\.user|dto|payload|body|user|citizen)\s*[,)]",
      "logging a whole body / user — drags in every field"),
@@ -57,6 +71,73 @@ def in_plain_string(line: str, pos: int) -> bool:
     return False
 
 
+def mien_tru(line: str, vi_tri: int) -> bool:
+    """The two places a PII WORD is not a PII VALUE: plain prose in a literal, and a comment."""
+    return in_plain_string(line, vi_tri) or trong_chu_thich(line, vi_tri)
+
+
+def trong_chu_thich(line: str, vi_tri: int) -> bool:
+    """True when `vi_tri` sits after a `//` that is not itself inside a string literal.
+
+    A COMMENT IS PROSE, NOT AN ARGUMENT — the same reasoning as `in_plain_string`, one level
+    out. It became necessary the moment the log-call window was allowed to cross a newline,
+    and the measurement said so immediately: 710 real files, and two of the three new reports
+    were this, verbatim from `service-identity/cmd/server/main.go:368`:
+
+        log.Info("khởi động", "service", "identity", "addr", cfg.ListenAddr,
+            // secret.DSN redacts the password on every rendering path and keeps the host, so
+            // this line still says which database was opened (rule 8).
+            "dsn", cfg.DatabaseDSN)
+
+    The hook would have accused the line for EXPLAINING WHY IT IS SAFE. This repository has
+    the precedent written down already — drift_guard did exactly that to the most carefully
+    reasoned migration in the tree, and the lesson recorded was "hook nhiễu là hook bị tắt".
+
+    It opens no hole: a comment does not execute, so no personal data leaves through one. A
+    real phone number or national ID written into a comment is still blocked, by the VALUE
+    patterns (VN_PHONE / VN_CCCD), which do not go through this exemption.
+    """
+    vung = [m.span() for m in _STR_LIT.finditer(line)]
+    i = line.find("//")
+    while i != -1:
+        if not any(a <= i < b for a, b in vung):
+            return vi_tri > i
+        i = line.find("//", i + 2)
+    return False
+
+
+def dong_quanh(content: str, vi_tri: int) -> tuple[str, int]:
+    """(the line holding `vi_tri`, the offset of `vi_tri` inside it).
+
+    Computed from the TOKEN, not from the start of the log call. Now that a match may span
+    several lines, taking the call's line would hand `in_plain_string` a line the token is not
+    even on — a literal on one line would then decide for a bare variable on another.
+    """
+    dau = content.rfind("\n", 0, vi_tri) + 1
+    cuoi = content.find("\n", vi_tri)
+    return content[dau: cuoi if cuoi > 0 else len(content)], vi_tri - dau
+
+
+def da_che(span: str, vi_tri: int) -> bool:
+    """True when the token at `vi_tri` is an argument of a Mask… call.
+
+    Rule 3 invariant 3 names masking as the CORRECT way to let a value out, and this hook's own
+    block message tells the author to "log a MASKED value". Without this exemption the widened
+    token list in `_common.PII_TOKEN` reports the very line the rule asks for — and a guard that
+    is wrong about the right answer is a guard somebody switches off within the week.
+
+    Narrow by construction: the mask call must open BEFORE the token and must not have closed in
+    between, so `MaskPhone(a), cb.HoTen` still reports `HoTen`. A variable merely named `masked`
+    proves nothing and is not accepted — the claim has to be visible at the call site, the same
+    discipline `// @cross-tenant:` follows.
+    """
+    truoc = span[:vi_tri]
+    cuoi = None
+    for m in c.MASK_CALL.finditer(truoc):
+        cuoi = m.end()
+    return cuoi is not None and ")" not in truoc[cuoi:]
+
+
 def main() -> None:
     c.utf8_streams()
     data = c.read_input()
@@ -81,13 +162,25 @@ def main() -> None:
             span = m.group(0)
 
             if is_log_pattern:
-                tok = pii_re.search(span)
-                if tok:
-                    line_start = content.rfind("\n", 0, m.start()) + 1
-                    line_end = content.find("\n", m.start())
-                    line = content[line_start: line_end if line_end > 0 else len(content)]
-                    if in_plain_string(line, m.start() + tok.start() - line_start):
-                        continue
+                # EVERY token in the window, not just the first one. Judging only
+                # `pii_re.search(span)` meant the FIRST token decided for all of them — and in
+                # structured logging the first token is the KEY, written as a plain literal:
+                #
+                #     slog.Error("khong gui duoc", "so_dien_thoai", ct.DienThoai, "err", err)
+                #                                   ^ exempt, correctly   ^ never looked at
+                #
+                # So the key name shielded the value beside it, which is the one arrangement
+                # that carries real personal data into the log.
+                #
+                # `toks and` is load-bearing: patterns 3 and 4 ("a whole body / user", "%+v")
+                # carry no PII token at all, and an empty `all()` is True — which would have
+                # switched those two off in silence.
+                toks = list(pii_re.finditer(span))
+                if toks and all(
+                        da_che(span, tok.start())
+                        or mien_tru(*dong_quanh(content, m.start() + tok.start()))
+                        for tok in toks):
+                    continue
 
             snippet = span.replace("\n", " ").strip()
             digits = re.sub(r"\D", "", snippet)

@@ -360,12 +360,39 @@ def is_generated(content: str, path: str = "") -> bool:
 # --------------------------------------------------------------------------
 
 # Fields carrying citizen personal data or auth secrets (rule 3)
+#
+# THE VIETNAMESE HALF WAS WRITTEN IN camelCase ONLY, AND THIS LIST IS CASE-SENSITIVE — so it
+# matched a spelling this repository does not use. Go exports its struct fields in PascalCase,
+# and that is how every personal-data field here is actually named:
+# `HoTen`, `DienThoai`, `MatKhau`, `MatKhauHash` (service-identity/internal/domain/can_bo.go:13,19).
+# Measured 2026-09-21: `slog.Info("dang nhap", "ten", cb.HoTen)` passed, and so did
+# `slog.Debug("kiem tra", "mk", yc.MatKhau)`. Rule 3's only BLOCK hook was blind to the
+# repository's own naming convention while looking fully armed.
+#
+# The second group below is written `[Hh]oTen` rather than adding `(?i)` to the whole pattern:
+# a case-insensitive list would make `\bphone\b` match the word "phone" in every English
+# comment and `address` match `Address` in every URL helper — trading a miss for the kind of
+# noise that gets a hook switched off. The snake_case forms are the JSON tags and SQL columns
+# of the same fields, which is what a log call's key argument usually spells.
 PII_TOKEN = (
     r"(?:citizenPhone|CitizenPhone|applicantPhone|phoneNumber|soDienThoai|"
     r"\bphone\b|\bPhone\b|cccd|CCCD|cmnd|canCuoc|identityNumber|idNumber|"
     r"\botp\b|\bOTP\b|otpCode|maXacThuc|password|Password|passwordHash|matKhau|"
-    r"accessToken|refreshToken|bearer|Bearer|sessionId|fullName|hoTen|diaChi|address)"
+    r"accessToken|refreshToken|bearer|Bearer|sessionId|fullName|hoTen|diaChi|address|"
+    # the spellings this codebase really uses — Go fields, JSON tags, SQL columns
+    r"[Hh]oTen|ho_ten|[Mm]atKhau|mat_khau|[Dd]ienThoai|dien_thoai|so_dien_thoai|"
+    r"[Dd]iaChi|dia_chi|[Cc]anCuoc|can_cuoc|[Mm]aXacThuc|ma_xac_thuc|[Nn]gaySinh|ngay_sinh)"
 )
+
+# A value that has ALREADY been masked is what rule 3 invariant 3 asks for — pii_guard's own
+# block message says "log a MASKED value". Without this the widened token list above turns the
+# hook into something that punishes the correct line, and a hook that is wrong about the right
+# answer is a hook nobody keeps.
+#
+# Deliberately anchored to the CALL: only a token sitting inside `MaskPhone(`/`MaskCccd(`/
+# `MaskName(` (core/privacy/mask.go) is exempt. A variable merely NAMED `masked` is not — the
+# claim has to be visible at the call site, the same discipline `// @cross-tenant:` follows.
+MASK_CALL = re.compile(r"\bMask[A-Z]\w*\s*\(")
 
 # Logging calls in Go and TS/JS
 LOG_CALL = (

@@ -22,11 +22,21 @@ import _common as c  # noqa: E402
 
 HOOK = "citizen_scope_guard"
 
-# Matches both  .Query("phone")  and  .Query().Get("phone")
+# Matches  .Query("phone") ·  .Query().Get("phone")  and  .Header.Get("phone")
+#
+# `Header` IS A FIELD, NOT A METHOD, and that one pair of parentheses was the whole defect.
+# `net/http` spells the REQUEST side `r.Header.Get("X-Citizen-Id")` and only the RESPONSE side
+# `w.Header().Get(...)`. Requiring `Header()` meant the only shape this branch could match was
+# the one on the response writer — where nobody takes an identity from. Measured 2026-09-21:
+# `r.Header.Get("citizen_id")` passed.
+#
+# `(?:\(\s*\))?` rather than dropping the parentheses from the alternation: `Query` genuinely
+# is a method and `PostForm` is spelled both ways, so one optional group covers all three
+# without loosening WHICH FIELD NAMES count — that list stays exactly as narrow as it was.
 _ID_FIELD = r"(?:phone|so_dien_thoai|sdt|citizen_?id|cccd|cmnd|identity|nguoi_gui)"
 FROM_REQUEST = re.compile(
     r"""(?:(?:Query|FormValue|PostForm|Param|URLParam)\s*\(\s*["'`]""" + _ID_FIELD + r"""["'`]"""
-    r"""|(?:Query|Header|PostForm)\s*\(\s*\)\s*\.\s*Get\s*\(\s*["'`]""" + _ID_FIELD + r"""["'`])""",
+    r"""|(?:Query|Header|PostForm)\s*(?:\(\s*\))?\s*\.\s*Get\s*\(\s*["'`]""" + _ID_FIELD + r"""["'`])""",
     re.I,
 )
 

@@ -39,6 +39,23 @@ DB_CALL = re.compile(
     r"Where|Count|Aggregate|Update|Updates|Save|Insert|Create|Delete)(?:Context)?\s*\("
 )
 
+# `.Get(` MUST STAY IN DB_CALL — `sqlx.Get(dest, query, …)` and `repo.Get(ctx, id)` are real
+# queries, and dropping the verb to silence the noise below would trade one false alarm for a
+# genuine hole. So the exclusion is keyed on WHAT IS BEING ASKED, not on the method name: these
+# receivers are HTTP request plumbing, and none of them has a commune to scope by.
+#
+# WHY IT MATTERS THAT THIS IS A FALSE ALARM AND NOT A MISS: `r.Header.Get("Origin")` is an
+# ordinary line in an ordinary handler, and the block message tells its author to put the
+# request's headers behind a scoped repository — advice that cannot be followed. The author's
+# only way forward is to turn the hook off, and rule 1's only BLOCK goes with it.
+#
+# Not covered on purpose: `url.Values.Get` reached through a local variable (`q := r.URL.Query()`
+# then `q.Get("x")`). The receiver is gone by then, and widening to bare `q.Get(` would swallow
+# every single-letter repository handle in the codebase.
+KHONG_PHAI_KHO = re.compile(
+    r"\.\s*(?:Header|Trailer|Form|PostForm|MultipartForm|Cookie|Values|"
+    r"(?:URL\s*\.\s*)?Query\s*\(\s*\))\s*\.\s*Get\s*\(")
+
 # The RIGHT path — a repository already scoped from context
 SCOPED_OK = re.compile(
     r"(scoped\s*\(|\.For\s*\(\s*ctx|WithTenant\s*\(|TenantFrom\s*\(|tenantFrom\s*\(|"
@@ -200,6 +217,21 @@ def hang_sql_co_tenant(content: str) -> set[str]:
     return {m.group(1) for m in CONST_SQL.finditer(content) if "tenant_id" in m.group(2)}
 
 
+def chi_la_doc_http(line: str) -> bool:
+    """True when EVERY store-looking call on this line is really HTTP request plumbing.
+
+    Span-based, not "the line contains a header read": a line holding both an unscoped query
+    and a header read must still be reported. Requiring ALL matches to fall inside a
+    KHONG_PHAI_KHO span is what keeps the exemption from being a way to hide a query behind a
+    header read written beside it.
+    """
+    goi = list(DB_CALL.finditer(line))
+    if not goi:
+        return False
+    vung = [m.span() for m in KHONG_PHAI_KHO.finditer(line)]
+    return all(any(a <= m.start() and m.end() <= b for a, b in vung) for m in goi)
+
+
 def scan(content: str) -> list[str]:
     hits: list[str] = []
     lines = content.splitlines()
@@ -209,7 +241,7 @@ def scan(content: str) -> list[str]:
         # Filters often wrap across lines — look at a small window around the call
         ctx = "\n".join(lines[max(0, i - 2): i + 4])
 
-        if DB_CALL.search(line):
+        if DB_CALL.search(line) and not chi_la_doc_http(line):
             if not (SCOPED_OK.search(ctx) or HAS_TENANT.search(ctx)
                     or any(ten in ctx for ten in hang_tenant)
                     or ESCAPE.search(khoi_chu_thich_tren(lines, i))):

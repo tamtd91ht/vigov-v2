@@ -215,6 +215,19 @@ CASES = [
     ("miniapp_sibling_guard", "tệp ViGov bình thường, không thuộc chủ đề Mini App", PASS,
      w("service-petitions/internal/app/a.go", "package app\n")),
 
+    # `.Get(` phải Ở LẠI trong DB_CALL (`sqlx.Get` là một truy vấn thật), nên loại trừ được
+    # viết theo THỨ ĐANG BỊ HỎI chứ không theo tên phương thức. Hai ca đi liền nhau: bỏ ca
+    # dưới thì bản vá "hết kêu oan" bằng cách gỡ `Get` khỏi DB_CALL sẽ xanh trọn vẹn — và đó
+    # đúng là đổi một lần chặn nhầm lấy một lỗ thật.
+    ("tenant_scope_guard", "r.Header.Get — đọc header HTTP, không phải truy vấn", PASS,
+     w("service-petitions/internal/http/phieu.go",
+       'func h(w http.ResponseWriter, r *http.Request) {\n'
+       '\torigin := r.Header.Get("Origin")\n\t_ = origin\n}')),
+    ("tenant_scope_guard", "sqlx.Get vẫn là một truy vấn không phạm vi", BLOCK,
+     w("service-petitions/internal/store/phieu.go",
+       'func (s *Kho) Doc(ctx context.Context, id string) error {\n'
+       '\treturn s.db.Get(ctx, &out, truyVanTheoID, id)\n}')),
+
     # ---- rule 2 · service boundary ---------------------------------------
     ("service_boundary_guard", "imports another service's internal", BLOCK,
      w("baocao/internal/app/a.go",
@@ -224,6 +237,14 @@ CASES = [
        'import (\n\t"vigov/core/tenant"\n)')),
     ("service_boundary_guard", "hand-edits a proto-generated file", BLOCK,
      w("kb/20-contracts/grpc/donthu.pb.go", "package pb\n// sửa tay")),
+    # Thư mục là `service-identity`, CSDL là `identity` — tên NGHIỆP VỤ. So DSN với tên THƯ MỤC
+    # thì mọi kết nối ĐÚNG đều bị tố cáo, và rào chắn bị tắt vì kêu oan chứ không vì sai luật.
+    ("service_boundary_guard", "DSN trỏ đúng CSDL của mình — tên nghiệp vụ", PASS,
+     w("service-identity/internal/store/kho.go",
+       'func open() {\n\tdb, err := sql.Open("pgx", "postgres://u:p@h:5432/identity?sslmode=disable")\n}')),
+    ("service_boundary_guard", "DSN trỏ CSDL của dịch vụ khác", BLOCK,
+     w("service-identity/internal/store/kho.go",
+       'func open() {\n\tdb, err := sql.Open("pgx", "postgres://u:p@h:5432/petitions?sslmode=disable")\n}')),
 
     # ---- rule 3 · personal data -----------------------------------------
     ("pii_guard", "logs a phone number", BLOCK,
@@ -238,6 +259,44 @@ CASES = [
      w("congdan/internal/app/seed.go", 'phone := "0900000000"')),
     ("pii_guard", "personal data in .json", BLOCK,
      w("congdan/seed/cd.json", '[{"phone":"0912345678","cccd":"079123456789"}]')),
+    # TÊN TRƯỜNG CỦA CHÍNH KHO NÀY. `c.PII_TOKEN` mang `hoTen`/`soDienThoai` kiểu camelCase,
+    # so KHỚP CHỮ HOA CHỮ THƯỜNG — còn trường Go xuất khẩu của kho là `HoTen`, `DienThoai`,
+    # `MatKhau` (service-identity/internal/domain/can_bo.go:13,19). Rào chắn BLOCK của luật 3
+    # do đó mù với đúng cách kho này đặt tên.
+    ("pii_guard", "trường Go viết hoa của kho — cb.HoTen", BLOCK,
+     w("service-identity/internal/app/dang_nhap.go",
+       'slog.Info("dang nhap", "ten", cb.HoTen)')),
+    ("pii_guard", "mật khẩu qua tên trường của kho — yc.MatKhau", BLOCK,
+     w("service-identity/internal/app/dang_nhap.go",
+       'slog.Debug("kiem tra", "mk", yc.MatKhau)')),
+    # LỜI GỌI LOG XUỐNG DÒNG. `[^)\n]` cấm ký tự xuống dòng, nên một lời gọi `slog` viết theo
+    # đúng lối nhiều dòng — lối phổ biến nhất khi có ba cặp khoá/giá trị — im lặng thoát.
+    # Đây là dạng "xanh nhờ may": mẫu im vì câu dài hơn giới hạn của nó, không vì câu sạch.
+    ("pii_guard", "lời gọi log trải trên nhiều dòng", BLOCK,
+     w("service-comms/internal/app/zns.go",
+       'func g() {\n\tslog.Error("khong gui duoc",\n'
+       '\t\t"so_dien_thoai", ct.DienThoai,\n\t\t"err", err)\n}')),
+    # Giá trị ĐÃ QUA MASK là cách luật 3 bất biến 3 BẢO phải làm — chính thông điệp chặn của
+    # hook viết ra câu ấy. Không có ca này thì hai bản vá trên biến hook thành thứ phạt đúng
+    # lối đi đúng, và một hook nhiễu là một hook bị tắt.
+    ("pii_guard", "giá trị đã đi qua MaskPhone", PASS,
+     w("service-comms/internal/app/zns.go",
+       'slog.Info("da gui", "sdt", privacy.MaskPhone(ct.DienThoai))')),
+    # NGUYÊN VĂN TỪ service-identity/cmd/server/main.go:366-371 — ca kêu oan THẬT, lộ ra khi
+    # quét 710 tệp của kho sau bản vá nhiều dòng. Chữ `password` nằm trong một chú thích GIẢI
+    # THÍCH chính sách riêng tư ("secret.DSN redacts the password"), và cửa sổ nhiều dòng với
+    # tay tới nó. Kho này đã có tiền lệ đúng hình dạng ấy — drift_guard từng tố cáo tệp lập
+    # luận cẩn thận nhất kho VÌ NÓ ĐÃ GIẢI THÍCH LÝ DO.
+    ("pii_guard", "chú thích giải thích chính sách riêng tư", PASS,
+     w("service-identity/cmd/server/main.go",
+       'log.Info("khoi dong", "service", "identity",\n'
+       '\t// secret.DSN redacts the password on every rendering path and keeps the host.\n'
+       '\t"dsn", cfg.DatabaseDSN)')),
+    ("pii_guard", "cùng lời gọi ấy nhưng dữ liệu THẬT ở dòng sau", BLOCK,
+     w("service-identity/cmd/server/main.go",
+       'log.Info("khoi dong", "service", "identity",\n'
+       '\t// secret.DSN redacts the password on every rendering path.\n'
+       '\t"ten", cb.HoTen)')),
 
     # ---- rule 4 · citizen isolation ----------------------------------------
     ("citizen_scope_guard", "identity from the query string", BLOCK,
@@ -246,6 +305,15 @@ CASES = [
     ("citizen_scope_guard", "identity from the session", PASS,
      w("congdan/internal/http/citizen.go",
        "cit := auth.CitizenFrom(ctx)")),
+    # `Header` LÀ MỘT TRƯỜNG, không phải một phương thức: `net/http` viết `r.Header.Get(...)`.
+    # Mẫu cũ đòi `Header()` có cặp ngoặc — hình dạng của `w.Header()` bên PHẢN HỒI — nên nhánh
+    # duy nhất nó canh được là nhánh không ai lấy danh tính từ đó.
+    ("citizen_scope_guard", "danh tính lấy từ header yêu cầu", BLOCK,
+     w("congdan/internal/http/citizen.go",
+       'cid := r.Header.Get("citizen_id")')),
+    ("citizen_scope_guard", "header không phải trường danh tính", PASS,
+     w("congdan/internal/http/citizen.go",
+       'tok := r.Header.Get("Authorization")')),
 
     # ---- rule 5 · authorisation ----------------------------------------------
     ("rbac_guard", "route with no permission", BLOCK,
@@ -413,6 +481,22 @@ CASES = [
     ("audit_guard", "write with an audit entry", PASS,
      w("donthu/internal/app/update.go",
        "func (s *Svc) Update(ctx context.Context) error {\n\ts.repo.Save(ctx, dt)\n\treturn audit.Write(ctx, e)\n}")),
+    # CÙNG MỘT KHUYẾT TẬT ĐÃ ĐO Ở `tenant_scope_guard`, chưa ai vá ở đây: `database/sql` có mỗi
+    # phương thức hai bản, và CẢ KHO dùng bản *Context. `WRITE_OP` thiếu `(?:Context)?` nên
+    # `tx.ExecContext(ctx, chenPhienCongDan, …)` — hình dạng thật ở
+    # service-identity/internal/store/phien_cong_dan.go:354 — không khớp một lần nào.
+    # Câu SQL thì nằm trong hằng cấp GÓI, ngoài mọi thân hàm, nên nhánh "INSERT INTO" cũng
+    # không cứu được: hằng bị `funcs()` bỏ lại trước hàm đầu tiên.
+    ("audit_guard", "ExecContext — hình dạng ghi THẬT của kho", BLOCK,
+     w("service-identity/internal/store/phien_cong_dan.go",
+       "func (s *Kho) Chen(ctx context.Context, tx *Tx) error {\n"
+       "\tif _, err := tx.ExecContext(ctx, chenPhienCongDan, xa, sid); err != nil {\n"
+       "\t\treturn err\n\t}\n\treturn nil\n}")),
+    ("audit_guard", "ExecContext có ghi vết", PASS,
+     w("service-identity/internal/store/phien_cong_dan.go",
+       "func (s *Kho) Chen(ctx context.Context, tx *Tx) error {\n"
+       "\tif _, err := tx.ExecContext(ctx, chenPhienCongDan, xa, sid); err != nil {\n"
+       "\t\treturn err\n\t}\n\treturn audit.Write(ctx, tx, e)\n}")),
 
     # ---- rule 7 · data preservation ----------------------------------------
     ("data_safety_guard", "rm -rf", BLOCK, b("rm -rf ./tmp")),
@@ -787,7 +871,10 @@ if __name__ == "__main__":
 
     sai_thuan = chay_thuan()
 
-    tong = (len(CASES) + len(IS_CODE_CASES) + len(DUOC_QUET_CASES)
+    # SO_CUM_CASES chạy trong `chay_thuan()` nhưng KHÔNG được cộng vào đây, nên con số báo ra
+    # thiếu bảy ca. Một bộ đếm thiếu không làm ca nào đỏ — nó chỉ làm người đọc tưởng mình
+    # biết kho đã canh bao nhiêu, và sổ `_chung` đã một lần ghi nhầm vì đúng chuyện này.
+    tong = (len(CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(DUOC_QUET_CASES)
             + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES))
     hong = len(fails) + len(sai_thuan)
     print()
