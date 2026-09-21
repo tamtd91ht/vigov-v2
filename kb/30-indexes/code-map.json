@@ -790,10 +790,6 @@
       "kind": "type",
       "at": "service-identity/internal/http/routes.go:141"
     },
-    "http.MountWebhookZalo": {
-      "kind": "func",
-      "at": "service-platform/internal/http/webhook_zalo.go:51"
-    },
     "http.MucUuTienDanhMuc": {
       "kind": "type",
       "at": "service-petitions/internal/http/routes.go:65"

@@ -143,10 +143,18 @@ func run(log *slog.Logger) error {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-	// Webhook của Zalo Mini App — CÙNG LÝ DO với /healthz, không phải tiện tay đặt cạnh:
-	// người gọi ở ngoài, Host của họ không thuộc xã nào, nên sau TenantMiddleware thì mọi lần
-	// Zalo gọi đều nhận 404 và Zalo sẽ tắt webhook. Xem `internal/http/webhook_zalo.go`.
-	svchttp.MountWebhookZalo(ngoai)
+	// KHÔNG gắn webhook của Zalo Mini App ở đây, và chỗ trống này là có chủ ý — ADR 0032.
+	//
+	// Nó TỪNG nằm đúng chỗ này, biện hộ bằng `domain-boundaries.md`: "platform = Nền tảng —
+	// nhà cung cấp vận hành". Câu ấy nghĩa là nhà cung cấp vận hành NỀN TẢNG ViGov — sổ đăng
+	// ký xã, vòng đời xã, siêu dữ liệu (ADR 0003) — chứ KHÔNG phải "mọi thứ thuộc nhà cung
+	// cấp thì để vào đây". Đọc rộng ra như thế thì service này dần thành sọt đựng.
+	//
+	// Phép thử đã chốt: một bề mặt tích hợp Zalo thuộc hệ thống nào là do KHOÁ BÍ MẬT NÀO KÝ
+	// NÓ quyết. Webhook của Mini App ký bằng app secret của bên đứng tên app, nên nó thuộc
+	// kho `vihat-miniapp`. Còn ZNS gửi từ OA của TỪNG XÃ ký bằng khoá của xã, nên đường ấy Ở
+	// LẠI ViGov, tại `service-comms` (ADR 0018 giữ nguyên) — đừng suy rộng thành "mọi thứ
+	// dính chữ Zalo đều rời đi".
 
 	ngoai.Handle("/", h)
 

@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-09-20",
+  "cap_nhat": "2026-09-21",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -13,11 +13,11 @@
     },
     {
       "id": "webhook-zalo-mini-app",
-      "viec": "Endpoint nhận webhook Zalo Mini App — nhận được, chưa xử lý gì",
+      "viec": "Endpoint nhận webhook Zalo Mini App — ĐÃ CHUYỂN sang kho vihat-miniapp",
       "trang_thai": "xong",
-      "bang_chung": "service-platform/internal/http/webhook_zalo.go 66 dòng + webhook_zalo_test.go 93 dòng, nối vào cmd/server/main.go. Commit 1a8ce11 — kiểm 2026-09-20",
+      "bang_chung": "GỠ KHỎI KHO NÀY 21/09/2026 (ADR 0032): xoá service-platform/internal/http/webhook_zalo.go + webhook_zalo_test.go; `go build` và `go test ./service-platform/...` xanh. Chỗ gắn ở cmd/server/main.go thay bằng một khối chú thích nói vì sao chỗ ấy để trống — một chỗ trống không giải thích là chỗ người sau lấp lại. Dựng lại ở vihat-miniapp/internal/httpapi/{webhook_zalo.go,webhook_zalo_test.go}, mắc vào Handler(); `go test -race ./...` xanh cả kho. ĐÃ THỬ ĐỘT BIẾN chứ không chỉ chạy xanh: cho handler đọc thân yêu cầu -> đúng một ca TestWebhookZaloKhongDocThan đỏ, một mình.",
       "no_confirm": [],
-      "tiep_theo": "LUÔN TRẢ 200 là chủ ý, không phải chưa làm xong: Zalo thử lại khi nhận mã lỗi, nên một lỗi phía ta sẽ thành bão yêu cầu. Nhưng hệ quả là sự kiện nhận được hiện KHÔNG đi tới đâu — chưa có hàng đợi, chưa có consumer, chưa ai quyết sự kiện nào đáng giữ. Đó là việc còn nợ của mục này"
+      "tiep_theo": "KHÔNG dựng lại endpoint này ở ViGov. Phép thử ở ADR 0032: một bề mặt tích hợp Zalo thuộc hệ thống nào là do KHOÁ BÍ MẬT NÀO KÝ NÓ quyết. Webhook Mini App ký bằng app secret của bên đứng tên app -> vihat-miniapp. ZNS gửi từ OA CỦA TỪNG XÃ ký bằng khoá của xã -> VẪN Ở LẠI ViGov, tại service-comms (ADR 0018 giữ nguyên) — đừng suy rộng thành 'mọi thứ dính chữ Zalo đều rời đi'. CÒN NỢ BÊN KHO KIA: chưa Ingress nào mở đường /webhooks/zalo ra Internet, đã ghi vào vihat-miniapp/deploy/README.md §'Những gì thư mục này KHÔNG có'."
     },
     {
       "id": "loi-he-thong",
