@@ -1,3 +1,6 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources: [netpol.yaml]
+# `ingress.yaml` ĐƯỢC SINH RA từ `kb/20-contracts/openapi.json` bởi `tools/ingress` — nó nằm
+# ở base vì bảng định tuyến giống hệt nhau ở mọi môi trường. Host và TLS thì không, nên
+# overlay vá hai thứ ấy vào (`overlays/<mt>/ingress-moi-truong.yaml`).
+resources: [netpol.yaml, ingress.yaml]

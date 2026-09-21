@@ -4,7 +4,12 @@ namespace: vigov-prod
 
 resources:
   - ../../base
-  - ingress.yaml
+
+# Host + TLS của prod. Bảng định tuyến của Ingress KHÔNG ở đây: nó SINH ra ở
+# `base/mang/ingress.yaml` từ `kb/20-contracts/openapi.json`. Xem `ingress-moi-truong.yaml`.
+patches:
+  - path: ingress-moi-truong.yaml
+    target: { group: networking.k8s.io, version: v1, kind: Ingress, name: vigov }
 
 commonLabels:
   # Nhãn để CHỌN, không phải để xoá. Job triển khai cố ý KHÔNG dùng `kubectl apply --prune`:

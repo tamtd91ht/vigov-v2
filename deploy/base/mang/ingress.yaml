@@ -1,0 +1,201 @@
+# TỆP NÀY ĐƯỢC SINH RA bởi tools/ingress. KHÔNG SỬA TAY — sửa tay là mất, im lặng, ở
+# lần sinh sau (luật 9, bất biến 8). Sinh lại: `go run ./tools/ingress` (hoặc `make kb`).
+#
+# NGUỒN CHUẨN: kb/20-contracts/openapi.json — chính nó sinh từ khai báo route trong
+# */internal/ (ADR 0014). Thêm một tuyến KHÔNG phải sửa tệp này: khai route trong Go,
+# chạy `make kb`, tệp này đổi theo. Quên sinh lại thì `go test ./tools/ingress` ĐỎ.
+#
+# VÌ SAO KHÔNG CÒN MỘT DÒNG `/api/v1` → identity: dòng ấy đúng 100% vào ngày nó được
+# viết, khi mọi tài nguyên REST đều thuộc identity. Nay hợp đồng có
+#
+#     23 tuyến của 5 dịch vụ — identity 15 · finance 3 · petitions 3 · comms 1 · documents 1
+#
+# nên dòng gộp ấy đưa mọi tuyến không phải của identity tới identity và trả 404 — 404
+# trên một tuyến hành chính thật. Chủ dự án chốt lối (b), SINH Ingress từ openapi.json,
+# ngày 21/09/2026.
+#
+# HOST và TLS KHÔNG nằm ở đây: chúng khác nhau giữa các môi trường, nên overlay vá vào
+# (deploy/overlays/<mt>/ingress-moi-truong.yaml). Bảng định tuyến thì giống nhau ở mọi
+# môi trường nên nó thuộc base — đúng ranh giới base/overlay kho này đang dùng.
+#
+# 19 luật định tuyến cho 23 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vigov
+  annotations:
+    # Bắt buộc HTTPS. Số điện thoại và nội dung phản ánh của công dân đi qua đây
+    # (Nghị định 13/2023/NĐ-CP).
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+spec:
+  ingressClassName: nginx
+  # `tls:` do overlay THÊM VÀO — tên secret và danh sách host khác nhau từng môi trường.
+  rules:
+    # MỘT quy tắc ký tự đại diện cho MỌI xã. `Host` thật đi nguyên vẹn tới pod —
+    # ingress-nginx giữ nguyên Host mặc định — và `httpx.TenantMiddleware` phân giải nó
+    # thành xã ở rìa ngoài cùng. Host không khớp xã nào ⇒ 404, không bao giờ một xã
+    # mặc định (luật 1, bất biến 3).
+    #
+    # Thêm một xã = thêm một bản ghi DNS + một hàng trong sổ đăng ký của `platform`.
+    # KHÔNG phải sửa tệp này. Đó là lý do nó là ký tự đại diện chứ không phải 200 dòng host.
+    #
+    # ĐÚNG MỘT phần tử trong `rules`, và overlay dựa vào điều đó: bản vá JSON6902 của nó
+    # trỏ vào `/spec/rules/0/host`. `TestOverlayVaDungChiSoLuatDuyNhat` giữ lời hứa ấy.
+    - host: "*.vigov.vn"
+      http:
+        # THỨ TỰ CÓ Ý NGHĨA, và bản kê này viết dài-trước-ngắn.
+        #
+        # ingress-nginx tự sắp location theo độ dài giảm dần, nên trên controller ấy thứ tự
+        # trong tệp không quyết định kết quả khớp. Bản kê KHÔNG dựa vào đặc tính đó: viết
+        # dài-trước nó cũng đúng dưới một controller lấy khớp ĐẦU TIÊN, và đọc theo đúng
+        # thứ tự một người sẽ suy luận.
+        #
+        # `pathType: Prefix` khớp theo ĐOẠN đường dẫn, không theo ký tự: `/api/v1/roles`
+        # KHÔNG nuốt `/api/v1/role-permissions`. Nhờ đó gom theo tài nguyên là an toàn —
+        # và vì sao gom đúng tới mức TÀI NGUYÊN chứ không hơn: `task-blocs` là identity
+        # trong khi `task-priorities` và `task-types` là petitions. Một tiền tố `task` sẽ
+        # gửi hai tuyến của petitions sang identity.
+        paths:
+          # finance — 1 tuyến: /api/v1/capital-plan-categories
+          - path: /api/v1/capital-plan-categories
+            pathType: Prefix
+            backend:
+              service:
+                name: finance
+                port: { name: rest }
+          # identity — 1 tuyến: /api/v1/residential-unit-types
+          - path: /api/v1/residential-unit-types
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # finance — 2 tuyến: /api/v1/investment-projects · /api/v1/investment-projects/{id}
+          - path: /api/v1/investment-projects
+            pathType: Prefix
+            backend:
+              service:
+                name: finance
+                port: { name: rest }
+          # identity — 1 tuyến: /api/v1/residential-units
+          - path: /api/v1/residential-units
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # identity — 1 tuyến: /api/v1/swap-working-days
+          - path: /api/v1/swap-working-days
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # identity — 1 tuyến: /api/v1/role-permissions
+          - path: /api/v1/role-permissions
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # petitions — 1 tuyến: /api/v1/citizen-reports/{maTraCuu}
+          - path: /api/v1/citizen-reports
+            pathType: Prefix
+            backend:
+              service:
+                name: petitions
+                port: { name: rest }
+          # comms — 1 tuyến: /api/v1/map-asset-types
+          - path: /api/v1/map-asset-types
+            pathType: Prefix
+            backend:
+              service:
+                name: comms
+                port: { name: rest }
+          # identity — 1 tuyến: /api/v1/public-holidays
+          - path: /api/v1/public-holidays
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # petitions — 1 tuyến: /api/v1/task-priorities
+          - path: /api/v1/task-priorities
+            pathType: Prefix
+            backend:
+              service:
+                name: petitions
+                port: { name: rest }
+          # documents — 1 tuyến: /api/v1/document-types
+          - path: /api/v1/document-types
+            pathType: Prefix
+            backend:
+              service:
+                name: documents
+                port: { name: rest }
+          # identity — 1 tuyến: /api/v1/working-hours
+          - path: /api/v1/working-hours
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # identity — 1 tuyến: /api/v1/task-blocs
+          - path: /api/v1/task-blocs
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # petitions — 1 tuyến: /api/v1/task-types
+          - path: /api/v1/task-types
+            pathType: Prefix
+            backend:
+              service:
+                name: petitions
+                port: { name: rest }
+          # identity — 1 tuyến: /api/v1/org-units
+          - path: /api/v1/org-units
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # identity — 1 tuyến: /api/v1/communes/current
+          - path: /api/v1/communes
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # identity — 3 tuyến: /api/v1/sessions · /api/v1/sessions/current · /api/v1/sessions/{sid}
+          - path: /api/v1/sessions
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # identity — 1 tuyến: /api/v1/roles
+          - path: /api/v1/roles
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # identity — 2 tuyến: /api/v1/staff · /api/v1/staff/{id}
+          - path: /api/v1/staff
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # BẮT HẾT — web quản trị (Next.js). KHÔNG sinh từ hợp đồng.
+          # Một `/api/v1/<chưa định tuyến>` rơi vào đây và nhận 404 của web: nó KHÔNG tới
+          # một dịch vụ không sở hữu nó. Đó là hướng sai an toàn.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-admin
+                port: { name: http }

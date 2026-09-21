@@ -4,7 +4,6 @@ namespace: vigov-staging
 
 resources:
   - ../../base
-  - ingress.yaml
 
 commonLabels:
   vigov.vn/mt: staging
@@ -31,6 +30,10 @@ patches:
       - op: replace
         path: /spec/minAvailable
         value: 1
+
+  # Host + TLS của staging. Bảng định tuyến KHÔNG ở đây — xem `ingress-moi-truong.yaml`.
+  - path: ingress-moi-truong.yaml
+    target: { group: networking.k8s.io, version: v1, kind: Ingress, name: vigov }
 
 images:
   - name: harbor.omicrm.services/ci/vigov-service-platform

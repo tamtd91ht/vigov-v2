@@ -1,0 +1,27 @@
+# Phần MÔI TRƯỜNG của Ingress — và CHỈ phần ấy.
+#
+# Bảng định tuyến không nằm ở đây: nó được SINH ra ở `deploy/base/mang/ingress.yaml` từ
+# `kb/20-contracts/openapi.json` (`go run ./tools/ingress`, chạy sẵn trong `make kb`). Chủ dự
+# án chốt lối sinh ấy ngày 21/09/2026. Đừng thêm `paths` vào đây — chúng sẽ không được kiểm
+# đối chiếu với hợp đồng, và đó chính là cách 8 tuyến của bốn dịch vụ đã im lặng trả 404.
+#
+# VÌ SAO LÀ BẢN VÁ JSON6902 CHỨ KHÔNG PHẢI MỘT `Ingress` ĐẦY ĐỦ:
+# `spec.rules` là danh sách KHÔNG có khoá trộn (`patchMergeKey`), nên một strategic-merge
+# patch chỉ cần NHẮC TỚI `rules` là THAY CẢ DANH SÁCH — xoá sạch bảng định tuyến sinh ra, và
+# kustomize không kêu một tiếng. Bản vá JSON6902 chạm đúng một trường vô hướng, không đọc và
+# không viết lại `paths`.
+#
+# `/spec/rules/0` dựa vào việc base khai ĐÚNG MỘT phần tử `rules` — một quy tắc ký tự đại
+# diện cho mọi xã. `TestOverlayVaDungChiSoLuatDuyNhat` trong `tools/ingress` đỏ nếu điều đó
+# thôi đúng, nên chỉ số 0 không phải một giả định không ai canh.
+- op: replace
+  path: /spec/rules/0/host
+  value: "*.vigov.vn"
+
+# `add` chứ không `replace`: base cố ý KHÔNG khai `tls` — tên secret và danh sách host là
+# chuyện của từng môi trường, và một `replace` sẽ đổ khi đường dẫn chưa tồn tại.
+- op: add
+  path: /spec/tls
+  value:
+    - hosts: ["*.vigov.vn"]
+      secretName: vigov-wildcard-tls     # tạo ngoài kho này — KHÔNG BAO GIỜ commit khoá

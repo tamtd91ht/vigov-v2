@@ -3,7 +3,7 @@
 # `make check` is what stop_verify_guard looks for in the session transcript. The agent must
 # not report "done" before it has run.
 
-.PHONY: check brain hooks buildfiles lint build standalone test web kb proto tidy
+.PHONY: check brain hooks quyen buildfiles lint build standalone test web kb proto tidy
 
 # Danh sách module, HỎI CHÍNH GO — không gõ tay, và không bóc tách văn bản go.work.
 #
@@ -22,13 +22,24 @@ MOD_DIRS := $(shell go list -m -f '{{.Dir}}' | tr '\134' '/')
 MODULES  := $(addsuffix /...,$(MOD_DIRS))
 
 
-check: brain hooks buildfiles lint build standalone test web   ## Full verification — run before saying it is done
+check: brain hooks quyen buildfiles lint build standalone test web   ## Full verification — run before saying it is done
 
 brain:                          ## 7 structural invariants of the brain — anti-drift
 	python tools/check_brain.py
 
 hooks:                          ## Hook self-test: one block case + one pass case each
 	python tools/test_hooks.py
+
+quyen:                          ## Mọi khoá quyền trong mã Go có thật trong bảng `quyen` chưa
+	@# LỚP LỖI IM LẶNG NHẤT CỦA LUẬT 5. Một chuỗi trao cho `authz.RequirePermission` mà bảng
+	@# `quyen` không có là một quyền KHÔNG QUẢN TRỊ VIÊN NÀO CẤP ĐƯỢC: màn Phân quyền không có
+	@# ô ấy, nên tuyến trả 403 với mọi tài khoản, mãi mãi — trong khi bộ đồ thử giả cấp bất kỳ
+	@# chuỗi nào nên phép kiểm vẫn xanh. Ngày 21/09/2026 kho này có BA chuỗi như thế cùng lúc.
+	@#
+	@# `.claude/hooks/quyen_key_guard.py` chặn cùng lớp lỗi lúc GHI, nhưng nó chỉ thấy MỘT tệp
+	@# và không bao giờ đọc lại thứ đã nằm sẵn trên đĩa — đúng chỗ ba khoá ấy đã sống. Chỉ lần
+	@# quét toàn kho này trả lời được câu "hôm nay cả kho còn khoá bịa nào không".
+	python tools/check_quyen.py
 
 buildfiles:                     ## Dockerfile + Jenkinsfile của từng dịch vụ, và phần chung không ai đánh rơi
 	@# Mỗi dịch vụ tự dựng và tự đóng gói: nó quyết build cái gì, khi nào, ra ảnh nào.
@@ -119,6 +130,12 @@ kb:                             ## Regenerate the GENERATED tiers of kb/ from so
 	@# kb/20-contracts/openapi.json means the web builds a screen against a shape the server
 	@# stopped sending.
 	go run ./tools/apidoc
+	@# SAU `apidoc`, và thứ tự ấy bắt buộc: bảng định tuyến Ingress sinh TỪ openapi.json, nên
+	@# chạy trước thì nó sinh ra từ bản hợp đồng cũ. Đây là mắt thứ hai của cùng một chuỗi —
+	@# route trong Go → openapi.json → deploy/base/mang/ingress.yaml — và nó nằm ở đây vì lý
+	@# do đã viết ngay trên: một lệnh sinh lại mọi thứ dẫn xuất từ mã. Ingress lệch hợp đồng
+	@# nghĩa là tuyến của dịch vụ không phải identity trả 404 dù pod xanh và probe xanh.
+	go run ./tools/ingress
 	@# Tầng tiến độ: tệp ĐỌC sinh từ các tệp GHI theo module. Nằm cùng mục `kb` vì lý do đã
 	@# viết ngay trên: thứ phải nhớ chạy riêng là thứ sẽ có ngày không ai chạy, và một
 	@# `tien-do.md` cũ hơn các tệp module là tệp nói dối về việc gì đã xong.

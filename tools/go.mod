@@ -19,6 +19,11 @@ require (
 	github.com/vihat/vigov/service-petitions v0.0.0
 	github.com/vihat/vigov/service-platform v0.0.0
 	github.com/vihat/vigov/service-reporting v0.0.0
+	// `tools/ingress` đọc manifest Service trong deploy/base/ và ĐỌC LẠI tệp Ingress nó vừa
+	// sinh — bằng một bộ đọc YAML thật, không dùng chung mã với bộ kết xuất. Phép đối chiếu
+	// vì thế chứng minh hai đoạn mã độc lập đồng ý về nội dung, chứ không phải một đoạn mã
+	// đồng ý với chính nó.
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

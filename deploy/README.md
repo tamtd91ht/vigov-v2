@@ -29,9 +29,10 @@ một dịch vụ vào ngày nó có endpoint đầu tiên, và "có endpoint" �
 Ba dòng cuối là **kết luận đã cân nhắc, không phải chỗ sót**: một pod không phục vụ gì vẫn
 chiếm chỗ trên đúng 3 node, vẫn phải vá, vẫn phải theo dõi.
 
-⚠ **Bốn dịch vụ mới lên cụm sẽ KHÔNG nhận được yêu cầu nào từ Internet** cho tới khi câu
-"định tuyến `/api/v1/*`" ở mục *Chưa chốt* dưới đây được chủ dự án chốt: Ingress hiện đưa cả
-`/api/v1` về `identity`. Chúng chạy được, di trú lược đồ của mình, và chờ.
+Cả năm dịch vụ có tuyến REST **đều có đường vào từ Internet** kể từ 21/09/2026: bảng định
+tuyến của Ingress **được sinh ra** từ `kb/20-contracts/openapi.json` bởi `tools/ingress`, nên
+"thêm tuyến trong Go" và "tuyến ấy đi tới đúng dịch vụ" không còn là hai việc rời nhau. Xem
+mục *Ingress sinh từ hợp đồng REST* dưới đây.
 
 ## Dựng 10 job trên Jenkins
 
@@ -188,17 +189,40 @@ lúc nào. Không có sổ nào khác.
 | "`/healthz` xanh nghĩa là hệ thống ổn" | **Không.** Nó nằm ngoài chuỗi phân giải xã có chủ ý, nên nó vẫn xanh khi CSDL hoặc `platform` hỏng. Bắt sự cố đó bằng **giám sát tỉ lệ 404** từ `TenantMiddleware`, không bằng probe |
 | "NetworkPolicy là tuỳ chọn" | **Không.** gRPC 9090 dùng `insecure.NewCredentials()` — không TLS, không xác thực. NetworkPolicy là biên duy nhất giữ danh bạ xã của toàn hệ thống |
 
-## Chưa chốt
+## Ingress sinh từ hợp đồng REST — CHỐT 21/09/2026, lối (b)
 
-**Định tuyến `/api/v1/*` — NGÀY ẤY ĐÃ TỚI, và đây là việc đang chặn.** Chú giải đầu
-`overlays/prod/ingress.yaml` viết "ngày `petitions` có route đầu tiên, dòng đó thành sai".
-Hôm nay **bốn** dịch vụ có route: `comms` · `documents` · `finance` · `petitions`, tổng 8
-tuyến (`kb/20-contracts/openapi.json`). Ingress vẫn đưa cả `/api/v1` về `identity`, nên 8
-tuyến ấy trả **404** dù pod chạy đúng và probe xanh.
+Chú giải cũ đầu `overlays/prod/ingress.yaml` hẹn: "ngày `petitions` có route đầu tiên, dòng
+`/api/v1` → `identity` thành sai". Ngày ấy tới, và nó tới với **năm** dịch vụ chứ không phải
+hai: 23 tuyến REST — `identity` 15 · `finance` 3 · `petitions` 3 · `documents` 1 · `comms` 1.
+Tám tuyến trong đó sẽ trả **404** dù pod chạy đúng và probe xanh.
 
-Ba lối ra nằm trong chính chú giải đó — (a) liệt kê từng tài nguyên, (b) sinh Ingress từ
-`openapi.json`, (c) thêm gateway. **Đây là câu hỏi cho chủ dự án, không phải cho agent**:
-đừng chọn hộ, và đừng thêm path vào `ingress.yaml` trước khi có câu trả lời.
+Ba lối ra đã viết sẵn ở chú giải ấy. Chủ dự án chốt **(b): sinh Ingress từ `openapi.json`**.
+
+| Tệp | Vai trò |
+|---|---|
+| `tools/ingress/` | Bộ sinh. `go run ./tools/ingress`, đã gắn vào mục `kb` của `Makefile` **sau** `apidoc` |
+| `base/mang/ingress.yaml` | **SINH RA.** Bảng định tuyến — giống nhau ở mọi môi trường nên nó thuộc `base/` |
+| `overlays/<mt>/ingress-moi-truong.yaml` | Bản vá **JSON6902** cho host + TLS — thứ duy nhất khác nhau giữa hai môi trường |
+
+**Vì sao bản vá là JSON6902 chứ không phải một `Ingress` đầy đủ trong overlay:** `spec.rules`
+là danh sách không có khoá trộn, nên một strategic-merge patch chỉ cần *nhắc tới* `rules` là
+**thay cả danh sách** — xoá sạch bảng sinh ra, và `kustomize` không kêu một tiếng.
+
+**Gom tới mức TÀI NGUYÊN, không hơn.** 23 tuyến thành 19 luật (`sessions` gom 3, `staff` 2,
+`investment-projects` 2). Không gom theo tiền tố có gạch nối: `task-blocs` là `identity` trong
+khi `task-priorities` và `task-types` là `petitions` — một luật `task` sẽ gửi hai tuyến của
+`petitions` sang `identity`. `pathType: Prefix` khớp theo **đoạn** đường dẫn, nên
+`/api/v1/roles` không nuốt `/api/v1/role-permissions`.
+
+**Một tuyến không xác định được dịch vụ chủ thì bộ sinh DỪNG** và không ghi tệp nào — không
+mặc định về `identity` (luật 1: không có mặc định trên đường cách ly). Ba tín hiệu phải khớp
+nhau: đúng một `tag`, `operationId` mở đầu bằng chính tag ấy, và mọi phương thức của một
+đường dẫn cùng một chủ. Dịch vụ có tuyến nhưng **không có** `base/<tên>/service.yaml` cũng là
+DỪNG — Ingress trỏ vào hư không trả 503 và không manifest nào giải thích được.
+
+`go test ./tools/ingress` đối chiếu tệp **trên đĩa** với hợp đồng: mọi tuyến phải có đúng một
+luật và trỏ đúng dịch vụ, và không luật nào được thừa. Xoá một luật hay đổi một backend là
+**đỏ**, cả hai đã thử.
 
 ## Chưa vá
 

@@ -38,10 +38,10 @@
     {
       "id": "ingress-chua-dinh-tuyen-bon-dich-vu-moi",
       "viec": "Tám tuyến REST của bốn dịch vụ mới không có đường vào từ Internet",
-      "trang_thai": "chua_lam",
-      "bang_chung": "deploy/overlays/{prod,staging}/ingress.yaml vẫn đưa cả /api/v1 về service identity; kb/20-contracts/openapi.json có 8 tuyến thuộc comms/documents/finance/petitions — kiểm 2026-09-21",
+      "trang_thai": "xong",
+      "bang_chung": "Chủ dự án chốt lối (b) ngày 21/09/2026: SINH Ingress từ hợp đồng. Bộ sinh tools/ingress/{main,dinhtuyen,sinh}.go sinh deploy/base/mang/ingress.yaml (dòng 1 ghi 'TỆP NÀY ĐƯỢC SINH RA ... KHÔNG SỬA TAY'), gắn vào Makefile:136 ngay sau `go run ./tools/apidoc`. 23 tuyến hợp đồng -> 19 luật + 1 luật bắt hết; identity 15 · finance 3 · petitions 3 · documents 1 · comms 1; 0 tuyến không xác định được chủ. deploy/base/mang/kustomization.yaml:6 nạp tệp sinh; overlays/{prod,staging}/ingress.yaml BỊ XOÁ, thay bằng bản vá JSON6902 ingress-moi-truong.yaml chỉ vá host + TLS (prod/kustomization.yaml:9, staging/kustomization.yaml:33). `kubectl kustomize deploy/overlays/{prod,staging}` rc=0, mỗi bản dựng có 20 `pathType: Prefix`, host và secretName đúng từng môi trường — kiểm 2026-09-21",
       "no_confirm": [],
-      "tiep_theo": "CÂU HỎI CHO CHỦ DỰ ÁN, chưa có số hiệu trong kb/00-foundation/open-questions.json — ba lối ra viết sẵn ở khối cảnh báo đầu ingress.yaml: (a) liệt kê từng tài nguyên ở Ingress, (b) sinh Ingress từ openapi.json, (c) thêm dịch vụ gateway. Chú giải ấy đã hẹn 'ngày petitions có route đầu tiên thì dòng đó thành sai' — ngày ấy tới rồi. KHÔNG thêm path nào vào ingress.yaml trước khi có câu trả lời; pod của bốn dịch vụ chạy được và di trú lược đồ của mình, chỉ là chưa ai gọi tới"
+      "tiep_theo": "PHÉP ĐỐI CHIẾU CÒN SỐNG, đã đột biến hai lần: xoá luật /api/v1/task-types khỏi tệp sinh -> TestTepSinhRaKhopVoiHopDong + TestMoiTuyenHopDongCoDungMotLuatIngress ĐỎ ('tuyến /api/v1/task-types (petitions) KHÔNG có luật ingress nào'); đổi backend luật ấy sang identity -> thêm TestKhongCoLuatIngressThua ĐỎ. Phục hồi bằng bản chụp tệp. CHƯA KIỂM ĐƯỢC: cú pháp k8s theo lược đồ máy chủ — `kubectl apply --dry-run=client` cần API discovery và máy này không có cụm; `kubectl kustomize` chỉ chứng minh YAML dựng được, không chứng minh API server chấp nhận. GOM TỚI MỨC TÀI NGUYÊN, KHÔNG HƠN: task-blocs là identity trong khi task-priorities/task-types là petitions, nên một luật tiền tố `task` sẽ gửi hai tuyến của petitions sang identity"
     },
     {
       "id": "bon-dich-vu-moi-khong-dong-em",

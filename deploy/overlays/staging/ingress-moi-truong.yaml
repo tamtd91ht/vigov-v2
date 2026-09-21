@@ -1,0 +1,16 @@
+# Phần MÔI TRƯỜNG của Ingress — xem chú giải đầy đủ ở
+# `deploy/overlays/prod/ingress-moi-truong.yaml`. Bảng định tuyến SINH ra ở
+# `deploy/base/mang/ingress.yaml`, giống hệt nhau ở hai môi trường; chỉ host và TLS khác.
+#
+# Host staging có THÊM MỘT NHÃN (`*.staging.vigov.vn`), và đó không phải chi tiết trang trí:
+# `*.vigov.vn` chỉ khớp ĐÚNG MỘT nhãn, nên một xã trên staging không bao giờ rơi vào quy tắc
+# của prod và ngược lại.
+- op: replace
+  path: /spec/rules/0/host
+  value: "*.staging.vigov.vn"
+
+- op: add
+  path: /spec/tls
+  value:
+    - hosts: ["*.staging.vigov.vn"]
+      secretName: vigov-staging-tls
