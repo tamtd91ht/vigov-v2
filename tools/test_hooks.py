@@ -655,6 +655,35 @@ CASES = [
        "func h() {\n\t// @env-ok: công cụ dựng, chạy ngoài tiến trình phục vụ\n"
        "\taddr := os.Getenv(\"DATABASE_DSN\")\n}")),
 
+    # --- rule 5 — khoá quyền phải TỒN TẠI trong bảng `quyen` ---
+    #
+    # BA CA BLOCK LÀ BA CHUỖI CÓ THẬT, không phải ví dụ nghĩ ra: `finance.read`, `map.read` và
+    # `document.approve` đã sống trong kho này tới 21/09/2026 và không rào nào thấy (commit
+    # 4888f6e). Chúng nằm đây để câu "rào mới có còn sống không" trả lời được bằng một lần
+    # chạy, mãi mãi — chứ không chỉ vào ngày nó được viết.
+    #
+    # Ca PASS bên cạnh mỗi ca dùng khoá THẬT ở đúng vị trí ấy, nên một rào chết vì "chặn tất"
+    # cũng đỏ chứ không xanh.
+    ("quyen_key_guard", "RequirePermission với khoá bảng không có", BLOCK,
+     w("service-finance/internal/http/routes.go",
+       'mux.Handle("GET /x", authz.RequirePermission(d.Checker, "finance.read")(h))')),
+    ("quyen_key_guard", "RequirePermission với khoá bảng có thật", PASS,
+     w("service-finance/internal/http/routes.go",
+       'mux.Handle("GET /x", authz.RequirePermission(d.Checker, "budget.read")(h))')),
+    ("quyen_key_guard", "bộ đồ thử cấp khoá bảng không có", BLOCK,
+     w("service-comms/cmd/server/main_test.go",
+       'p := staffauth.Principal{PermissionKeys: []authz.Perm{"map.read"}}')),
+    ("quyen_key_guard", "ép kiểu authz.Perm sang khoá bảng không có", BLOCK,
+     w("core/staffauth/staffauth_test.go",
+       'var quyenKhac = authz.Perm("document.approve")')),
+    # Chú thích GHI LẠI khiếm khuyết đã vá là thứ có thật trong kho
+    # (service-comms/cmd/server/main_test.go:149). Báo đỏ ở đó là phạt đúng tệp đã lập luận
+    # cẩn thận nhất — và một rào lên tiếng lần đầu để buộc tội tệp ấy là rào không ai giữ.
+    ("quyen_key_guard", "khoá bịa nằm trong chú thích", PASS,
+     w("service-comms/cmd/server/main_test.go",
+       '// WHAT STOOD HERE: PermissionKeys: []authz.Perm{"map.read"}\n'
+       'p := staffauth.Principal{PermissionKeys: []authz.Perm{}}')),
+
     # ---- tầng tiến độ · progress_guard ---------------------------------------
     #
     ("progress_guard", "khai xong mà không có bằng chứng", BLOCK,
@@ -795,14 +824,103 @@ SO_CUM_CASES = [
 ]
 
 
+# ---- pure-function cases: quyen_keys — ĐỐI CHIẾU MÃ GO VỚI BẢNG `quyen` --------------------
+#
+# Mỗi ca: (mã Go, tập khoá PHẢI bị báo là không có trong bảng, nhãn). Chấm trọn chuỗi — bóc
+# chú thích, trích khoá, rồi đem so với bảng `quyen` THẬT trên đĩa. Một mắt xích chết ở bất kỳ
+# đâu cũng làm ca ở đây đỏ, kể cả khi hook vẫn chạy và vẫn thoát 0.
+#
+# BA CA ĐẦU LÀ BA CHUỖI CÓ THẬT, nguyên văn từ commit 4888f6e: tới 21/09/2026 cả ba nằm trong
+# kho, cấp những quyền không migration nào gieo, và không gì đỏ. Đây là câu trả lời cho "một ca
+# chưa từng đỏ thì chưa chứng minh được gì": ba ca này ĐÃ đỏ, trên mã thật, trước khi được vá.
+KHOA_QUYEN_CASES = [
+    ('mux.Handle("GET /x", authz.RequirePermission(d.Checker, "finance.read")(h))',
+     {"finance.read"}, "khoá bịa THẬT — service-finance, tới 21/09"),
+    ('p := staffauth.Principal{PermissionKeys: []authz.Perm{"map.read"}}',
+     {"map.read"}, "khoá bịa THẬT — service-comms, tới 21/09"),
+    ('var quyenKhac = authz.Perm("document.approve")',
+     {"document.approve"}, "khoá bịa THẬT — core/staffauth, tới 21/09"),
+
+    # Cùng ba vị trí, khoá THẬT. Không có nhóm này thì một rào "chặn tất" vẫn xanh ở trên.
+    ('mux.Handle("GET /x", authz.RequirePermission(d.Checker, "budget.read")(h))',
+     set(), "budget.read — bảng CÓ, phải im"),
+    ('p := staffauth.Principal{PermissionKeys: []authz.Perm{"budget.read", "task.read"}}',
+     set(), "hai khoá bảng đều có, phải im"),
+    ('var quyenKhac = authz.Perm("document.route")',
+     set(), "document.route — bảng CÓ, phải im"),
+
+    # Chú thích và chuỗi thô là DỮ LIỆU, không phải lời gọi. Cả hai đều có thật trong kho:
+    # service-comms/cmd/server/main_test.go:149 và tools/apidoc/lop_xa_test.go:110.
+    ('// WHAT STOOD HERE: PermissionKeys: []authz.Perm{"map.read"}\nvar x = 1',
+     set(), "khoá bịa trong chú thích dòng — phải im"),
+    ('/* cũ: authz.RequirePermission(c, "finance.read") */\nvar x = 1',
+     set(), "khoá bịa trong chú thích khối — phải im"),
+    ('ts, errs := trich(t, `\n\tauthz.RequirePermission(nil, "hoso.read")(h)\n`)',
+     set(), "mã Go làm DỮ LIỆU THỬ trong chuỗi thô — phải im"),
+
+    # Hình dạng CẤP QUYỀN phổ biến nhất của kho: hàm phụ trợ của gói nhận `authz.Perm`, chuỗi
+    # được ép kiểu ngay tại lời gọi (service-finance/internal/http/routes_test.go:158).
+    ('func coQuyen(perm authz.Perm) checkerGia { return checkerGia{} }\n'
+     'func TestX(t *testing.T) { m := dung(t, coQuyen("finance.read")) }',
+     {"finance.read"}, "đối của hàm phụ trợ nhận authz.Perm — hình dạng từng mù"),
+    ('func coQuyen(perm authz.Perm) checkerGia { return checkerGia{} }\n'
+     'func TestX(t *testing.T) { m := dung(t, coQuyen("budget.read")) }',
+     set(), "cùng hình dạng, khoá thật — phải im"),
+
+    # map lồng map: khoá thật nằm ở literal trong cùng, kiểu của nó đã được lược đi
+    # (service-identity/internal/http/routes_test.go:701).
+    ('c := checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{'
+     'xaA: {idNoiBo: {"task.readd": true}}}}',
+     {"task.readd"}, "khoá lệch một chữ, nằm sâu trong map lồng map"),
+    ('c := checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{'
+     'xaA: {idNoiBo: {"task.read": true}}}}',
+     set(), "cùng hình dạng, khoá thật — phải im"),
+    # `map[authz.Perm]struct{}` (core/staffauth/staffauth.go:124): cặp ngoặc rỗng của `struct{}`
+    # không phải literal, và bước nhầm vào nó là bỏ sót trọn literal thật ngay sau.
+    ('khoa := map[authz.Perm]struct{}{"map.read": {}}',
+     {"map.read"}, "map[authz.Perm]struct{} — phải bước qua cặp ngoặc rỗng"),
+
+    # KHÔNG ĐƯỢC NUỐT THÂN HÀM. `authz.Perm` ở đây là kiểu của một THAM SỐ, dấu `{` gần nhất là
+    # thân hàm — lấy nó thì mọi chuỗi hình dạng `a.b` bên trong thành một khoá tưởng tượng.
+    ('func (c checkerGia) Allows(_ context.Context, _ authz.Principal, perm authz.Perm) bool {\n'
+     '\treturn c.cho[perm] && ct == "application.json"\n}',
+     set(), "authz.Perm là kiểu THAM SỐ — không được nuốt thân hàm"),
+
+    # CA ÂM CỐ Ý CỦA web-admin, chuyển sang Go. Ba chuỗi gần giống ấy là dữ liệu thử khẳng định
+    # "gần giống cũng không mở được tab" (web-admin/src/features/cau-hinh/quyen-tab.test.ts:74).
+    # Không có neo `authz.Perm` nào thì chúng chỉ là chuỗi, và rào phải im.
+    ('var khoaGan = []string{"admin.users", "admin.roles", "budget.reads"}',
+     set(), "chuỗi gần giống KHÔNG gắn với tầng quyền — phải im"),
+]
+
+
 def chay_thuan() -> list[tuple[str, str, bool, bool]]:
     """Trả về các ca SAI của phần THUẦN. Import tại chỗ: hook tự thêm thư mục của nó vào sys.path."""
     sys.path.insert(0, HOOKS)
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
     import stop_verify_guard as svg  # noqa: E402
     import drift_guard as dg  # noqa: E402
     import env_contract_guard as ecg  # noqa: E402
+    import quyen_keys as qk  # noqa: E402
 
     sai = []
+
+    # Bảng `quyen` THẬT trên đĩa, không phải một bảng giả. Đọc ra rỗng là hỏng — và phải đỏ ở
+    # đây, vì một bảng rỗng biến mọi ca "phải im" bên dưới thành xanh vì lý do sai.
+    bang, _ = qk.doc_bang_quyen(ROOT)
+    if not bang:
+        print("  FAIL  [BẢNG ] quyen_keys.doc_bang_quyen      "
+              "không đọc được khoá nào từ service-identity/migrations/")
+        sai.append(("doc_bang_quyen", "bảng rỗng", True, False))
+    for src, mong, nhan in KHOA_QUYEN_CASES:
+        phu = qk.ham_nhan_perm(qk.ma_thuc_thi_go(src))
+        duoc = {k for k, _, _ in qk.khoa_trong_go(src, phu) if k not in bang}
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        want = "BÁO " if mong else "IM   "
+        print(f"{mark} [{want}] {'quyen_keys.khoa_trong_go':24s} {nhan}")
+        if not ok:
+            sai.append((src[:40], nhan, str(mong), str(duoc)))
 
     for ten, mong, nhan in SO_CUM_CASES:
         duoc = bool(ecg.SO_CUM.search(ten))
@@ -875,7 +993,7 @@ if __name__ == "__main__":
     # thiếu bảy ca. Một bộ đếm thiếu không làm ca nào đỏ — nó chỉ làm người đọc tưởng mình
     # biết kho đã canh bao nhiêu, và sổ `_chung` đã một lần ghi nhầm vì đúng chuyện này.
     tong = (len(CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(DUOC_QUET_CASES)
-            + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES))
+            + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES))
     hong = len(fails) + len(sai_thuan)
     print()
     print(f"Total: {tong} cases · passed: {tong-hong} · failed: {hong}")

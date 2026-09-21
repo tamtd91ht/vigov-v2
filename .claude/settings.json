@@ -25,6 +25,7 @@
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/citizen_scope_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/citizen_commitment_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/rest_api_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/quyen_key_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/doc_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/env_contract_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/progress_guard.py\"" },

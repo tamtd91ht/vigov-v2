@@ -15,6 +15,7 @@ explicitly declared cross-read path.
 | 2 | No implicit default. A missing declaration means **deny**, not allow |
 | 3 | Permission is checked against `(tenant_id, role, permission)` — a missing `tenant_id` is cross-commune escalation |
 | 3b | A permission is **one flat key**, `"<nhóm>.<việc>"` (`task.extend`) — the same string the Phân quyền screen shows and `quyen` stores. Never `(subsystem, action)`: these rights are not a Cartesian product, and `task.approve` is deliberately not `task.extend` |
+| 3c | The key must **exist in the `quyen` table**. A key no migration seeds is a right no administrator can grant, so that route answers 403 to **every** account, forever — and the tests stay green, because a fake checker grants any string. Needing a key the table lacks is a **finding for open question #27**, never a new `INSERT` |
 | 4 | Tokens are revocable: they carry a `sid` checked against a session registry on every request |
 | 5 | Privilege changes, role changes and account locks are all **audited** (rule 6) |
 | 6 | Citizen routes do not use RBAC — they are isolated per rule 4 |
@@ -37,4 +38,8 @@ explicitly declared cross-read path.
 
 → Enforcement: `hooks/rbac_guard.py` (advisory — runs PostToolUse, so it reports on the
   written file rather than preventing the write; a half-written route must not be blocked)
+→ Enforcement (3c): `hooks/quyen_key_guard.py` (BLOCK, at the write) **and**
+  `tools/check_quyen.py` (whole repo, in `make check`). Two shapes because a hook sees one
+  file and never re-reads what is already on disk — which is exactly where three invented
+  keys lived until 2026-09-21
 → Skills: `skills/session-and-token` · `skills/cross-tenant-reporting`
