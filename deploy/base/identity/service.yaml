@@ -6,3 +6,8 @@ spec:
   selector: { app.kubernetes.io/name: identity }
   ports:
     - { name: rest, port: 8080, targetPort: rest }
+    # Tên DNS trong cụm: identity.<namespace>.svc.cluster.local:9090
+    # Đây là giá trị `IDENTITY_GRPC_ADDR` của comms · documents · finance · petitions, và
+    # `.env.example:114` đã ghi sẵn `identity:9090`. Không có dòng này thì bốn dịch vụ ấy nối
+    # tới một cổng không tồn tại và mọi tuyến có kiểm quyền của chúng trả 401 cho phiên hợp lệ.
+    - { name: grpc, port: 9090, targetPort: grpc }

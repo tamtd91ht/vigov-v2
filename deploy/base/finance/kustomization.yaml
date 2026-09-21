@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# KHÔNG CÓ `pdb.yaml`, khác `platform` và `identity` — và đó là một lựa chọn, không phải chỗ
+# sót. PDB tồn tại để một lượt rút node không làm đứt dịch vụ; ở đây nó sẽ làm ngược lại.
+# Dịch vụ này chạy 1 replica (xem `deployment.yaml`) vì chưa có đường vào từ Internet, và một
+# PDB `minAvailable: 1` trên 1 replica CHẶN mọi lượt rút node để bảo vệ một pod chưa ai gọi —
+# đổi một nhu cầu vận hành thật lấy một lợi ích chưa tồn tại.
+# Thêm `pdb.yaml` cùng ngày nâng `replicas` lên 2, không sớm hơn.
+resources: [deployment.yaml, service.yaml]

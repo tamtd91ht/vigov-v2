@@ -45,7 +45,7 @@ spec:
 
       containers:
         - name: web
-          image: registry.vihat.vn/vigov/vigov-web-admin:CHUA-GHIM-THE
+          image: harbor.omicrm.services/ci/vigov-web-admin:CHUA-GHIM-THE
           imagePullPolicy: IfNotPresent
 
           ports:

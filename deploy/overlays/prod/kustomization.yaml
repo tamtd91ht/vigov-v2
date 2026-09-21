@@ -31,9 +31,20 @@ configMapGenerator:
 # ai, đưa bản nào, lúc nào. Không có sổ nào khác.
 # ════════════════════════════════════════════════════════════════════════════════════════
 images:
-  - name: registry.vihat.vn/vigov/vigov-service-platform
+  - name: harbor.omicrm.services/ci/vigov-service-platform
     newTag: CHUA-TRIEN-KHAI-LAN-NAO
-  - name: registry.vihat.vn/vigov/vigov-service-identity
+  - name: harbor.omicrm.services/ci/vigov-service-identity
     newTag: CHUA-TRIEN-KHAI-LAN-NAO
-  - name: registry.vihat.vn/vigov/vigov-web-admin
+  - name: harbor.omicrm.services/ci/vigov-web-admin
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  # MỖI ẢNH TRONG `base/` PHẢI CÓ MỘT DÒNG Ở ĐÂY. Thiếu một dòng thì `kustomize` KHÔNG báo
+  # lỗi — nó giữ nguyên `CHUA-GHIM-THE` của base, và lượt deploy đỏ ở ImagePullBackOff, cách
+  # xa nguyên nhân.
+  - name: harbor.omicrm.services/ci/vigov-service-comms
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-service-documents
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-service-finance
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-service-petitions
     newTag: CHUA-TRIEN-KHAI-LAN-NAO

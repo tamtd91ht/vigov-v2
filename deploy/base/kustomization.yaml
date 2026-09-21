@@ -6,3 +6,15 @@ resources:
   - platform
   - identity
   - web-admin
+  # BỐN ĐƠN VỊ DƯỚI ĐÂY ĐƯỢC THÊM VÌ CHÚNG ĐÃ CÓ TUYẾN REST THẬT, không phải để đủ bộ.
+  # Tiêu chí là một câu kiểm được: dịch vụ có bao nhiêu tuyến trong
+  # `kb/20-contracts/openapi.json`. comms 1 · documents 1 · finance 3 · petitions 3.
+  #
+  # `reporting` có 0 tuyến (`service-reporting/internal/http/routes.go` chưa mount cái nào)
+  # nên nó KHÔNG có ở đây — đó là kết luận đã cân nhắc, không phải chỗ sót; lý do đầy đủ nằm
+  # ở `deploy/README.md`. `citizen-app` và `platform-admin` cũng không: cái đầu chạy trong
+  # Zalo Mini App chứ không thành pod, cái sau chưa có Dockerfile nên chưa có ảnh để đưa lên.
+  - comms
+  - documents
+  - finance
+  - petitions

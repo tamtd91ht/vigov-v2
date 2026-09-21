@@ -1,12 +1,19 @@
 # Dịch vụ `identity` — tài khoản cán bộ, RBAC, cơ cấu tổ chức, danh tính công dân, phiên, OTP.
 #
-# Hôm nay đây là dịch vụ DUY NHẤT có route REST thật: `/api/v1/{staff,roles,role-permissions,
-# sessions,org-units,communes}` (kb/20-contracts/openapi.json). Bảy dịch vụ còn lại là khung
-# sinh sẵn — chưa đáng đưa lên cụm, xem deploy/README.md.
+# Nó giữ phần lớn bề mặt REST: `/api/v1/{staff,roles,role-permissions,sessions,org-units,
+# communes,...}` — 15 trong 23 tuyến của `kb/20-contracts/openapi.json`. Bốn dịch vụ khác nay
+# cũng có tuyến thật và đã có manifest riêng (comms · documents · finance · petitions);
+# `reporting` vẫn 0 tuyến nên vẫn chưa, xem deploy/README.md.
 #
-# Nó KHÔNG phục vụ gRPC: `cmd/server/main.go` chỉ mở một `http.Server`. Vì thế không có cổng
-# 9090 và không có nhãn `vigov.vn/grpc` — khai một cổng không ai nghe là mời người sau tin
-# rằng có đường gọi tới nó.
+# NÓ PHỤC VỤ gRPC, VÀ HAI DÒNG NGAY ĐÂY TỪNG NÓI NGƯỢC LẠI. `cmd/server/main.go:351` mở một
+# listener thứ hai ở `GRPC_LISTEN_ADDR` (mặc định `:9090`) và đăng ký `IdentityService`
+# (main.go:459) — đó là đường DUY NHẤT để bốn dịch vụ kia đổi cookie phiên lấy principal cán
+# bộ, và `.env.example:114` đã ghi sẵn `IDENTITY_GRPC_ADDR=identity:9090`.
+#
+# Thiếu cổng 9090 ở đây và ở `service.yaml`, cộng với thiếu nhãn `vigov.vn/grpc` mà quy tắc 3
+# của `mang/netpol.yaml` dựa vào, thì hỏng theo kiểu KHÔNG CÓ GÌ BÁO: identity xanh, probe
+# xanh, REST của nó chạy — chỉ có mọi tuyến có kiểm quyền của bốn dịch vụ kia trả 401 cho
+# phiên hợp lệ. Đúng cảnh mà main.go:388-390 mô tả là thứ máy chủ gRPC ấy sinh ra để chấm dứt.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,7 +34,8 @@ spec:
       labels:
         app.kubernetes.io/name: identity
         app.kubernetes.io/part-of: vigov
-        vigov.vn/be-mat: rest
+        vigov.vn/be-mat: rest    # NetworkPolicy: nhận 8080 từ ingress
+        vigov.vn/grpc: "co"      # NetworkPolicy: nhận 9090 từ pod cùng namespace
     spec:
       topologySpreadConstraints:
         - maxSkew: 1
@@ -38,7 +46,9 @@ spec:
 
       # Đăng nhập bị cắt đôi bởi một lượt deploy sẽ để lại bản ghi audit nói rằng một người
       # đã đăng nhập trong khi không cookie nào được phát — trạng thái quy định lưu trữ không
-      # cho phép (`service-identity/cmd/server/main.go:258`).
+      # cho phép. Tiến trình đóng êm THẬT: HTTP `Shutdown` với ngữ cảnh 20 giây song song với
+      # `GracefulStop` của gRPC (`service-identity/cmd/server/main.go:356-418`), nên 45 giây ở
+      # đây là để đoạn ấy chạy xong chứ không phải một con số cho đẹp.
       terminationGracePeriodSeconds: 45
 
       automountServiceAccountToken: false
@@ -51,11 +61,16 @@ spec:
 
       containers:
         - name: server
-          image: registry.vihat.vn/vigov/vigov-service-identity:CHUA-GHIM-THE
+          image: harbor.omicrm.services/ci/vigov-service-identity:CHUA-GHIM-THE
           imagePullPolicy: IfNotPresent
 
           ports:
             - { name: rest, containerPort: 8080 }
+            # 9090 KHÔNG ĐƯỢC PHƠI RA INTERNET: `insecure.NewCredentials()`, không TLS, và nó
+            # không đi qua lớp kiểm quyền của bề mặt REST. Thứ chặn thật là NetworkPolicy quy
+            # tắc 3 (`mang/netpol.yaml`) cộng với `GRPC_CALLER_KEY` trên mỗi RPC — cả hai, chứ
+            # không phải một trong hai.
+            - { name: grpc, containerPort: 9090 }
 
           env:
             # Bắt buộc. `platformclient.Dial` từ chối khởi động khi rỗng — fail closed, có

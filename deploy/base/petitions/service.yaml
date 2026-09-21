@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: petitions
+spec:
+  selector: { app.kubernetes.io/name: petitions }
+  # CHỈ cổng REST. Dịch vụ này không phục vụ gRPC (`cmd/server/main.go:136` chỉ mở một
+  # listener HTTP), nên khai thêm một cổng 9090 ở đây sẽ tạo một Endpoint không có ai nghe —
+  # và người sau sẽ đọc nó là "có đường gọi tới petitions qua gRPC".
+  ports:
+    - { name: rest, port: 8080, targetPort: rest }

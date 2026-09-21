@@ -11,11 +11,27 @@ Tầng này chạm vào cụm. Chín job đóng ảnh **không** chạm — ph�
 | `overlays/<mt>/` | Namespace, cấu hình theo môi trường, và **thẻ ảnh** |
 | `Jenkinsfile` | Job triển khai — nơi duy nhất gọi `kubectl` |
 
-**Ba dịch vụ, không phải mười.** `platform`, `identity`, `web-admin` có mã thật. Năm
-dịch vụ Go còn lại (`comms`, `documents`, `finance`, `petitions`, `reporting`)
-hôm nay là khung sinh sẵn ~220 dòng không có route nào; `platform-admin` còn chưa có
-`Dockerfile`. Đưa chúng lên cụm là 11 pod không phục vụ gì, trên đúng 3 node. Thêm manifest
-cho từng cái vào ngày nó có endpoint đầu tiên.
+**Bảy đơn vị, không phải mười — và tiêu chí là một câu kiểm được.** Manifest được thêm cho
+một dịch vụ vào ngày nó có endpoint đầu tiên, và "có endpoint" đọc từ
+`kb/20-contracts/openapi.json` chứ không từ cảm giác:
+
+| Đơn vị | Số tuyến REST | Có manifest |
+|---|---|---|
+| `identity` | 15 | có |
+| `finance` · `petitions` | 3 mỗi cái | có, thêm 21/09/2026 |
+| `comms` · `documents` | 1 mỗi cái | có, thêm 21/09/2026 |
+| `platform` | 0 REST, nhưng LÀ gRPC phân giải xã | có |
+| `web-admin` | — (Next.js) | có |
+| `reporting` | **0** | **không** — `internal/http/routes.go` chưa mount tuyến nào |
+| `platform-admin` | — | **không** — chưa có `Dockerfile`, nên chưa có ảnh để đưa lên |
+| `citizen-app` | — | **không** — chạy trong Zalo Mini App, không thành pod trên cụm |
+
+Ba dòng cuối là **kết luận đã cân nhắc, không phải chỗ sót**: một pod không phục vụ gì vẫn
+chiếm chỗ trên đúng 3 node, vẫn phải vá, vẫn phải theo dõi.
+
+⚠ **Bốn dịch vụ mới lên cụm sẽ KHÔNG nhận được yêu cầu nào từ Internet** cho tới khi câu
+"định tuyến `/api/v1/*`" ở mục *Chưa chốt* dưới đây được chủ dự án chốt: Ingress hiện đưa cả
+`/api/v1` về `identity`. Chúng chạy được, di trú lược đồ của mình, và chờ.
 
 ## Dựng 10 job trên Jenkins
 
@@ -108,13 +124,26 @@ kubectl apply -f deploy/cluster/rbac-jenkins.yaml
 
 # Bí mật — TẠO NGOÀI KHO NÀY, không bao giờ commit (luật 8, bất biến 1)
 kubectl -n vigov-prod create secret docker-registry harbor-vigov \
-  --docker-server=registry.vihat.vn --docker-username=... --docker-password=...
+  --docker-server=harbor.omicrm.services --docker-username=... --docker-password=...
 
 kubectl -n vigov-prod create secret generic bi-mat-platform \
   --from-literal=DATABASE_DSN='postgres://...' \
   --from-literal=REDIS_DSN='redis://...' \
-  --from-literal=SESSION_SIGNING_KEYS='...'
+  --from-literal=SESSION_SIGNING_KEYS='...' \
+  --from-literal=GRPC_CALLER_KEY='...'   # BẮT BUỘC ở MỌI dịch vụ — `config.Load` không khởi
+                                         # động khi rỗng: một cổng gRPC không có khoá gọi là
+                                         # một cổng trả lời BẤT KỲ AI chạm tới nó (ADR 0025)
 kubectl -n vigov-prod create secret generic bi-mat-identity --from-literal=...
+
+# Bốn dịch vụ thêm ngày 21/09/2026. BA KHOÁ LÀ ĐIỀU KIỆN KHỞI ĐỘNG, không phải tuỳ chọn:
+# `core/config.Load` gom đủ tên còn thiếu rồi thoát. SESSION_SIGNING_KEYS nằm trong danh sách
+# kể cả khi dịch vụ không tự phát phiên — Load đòi nó ở staging/prod.
+for s in comms documents finance petitions; do
+  kubectl -n vigov-prod create secret generic bi-mat-$s \
+    --from-literal=DATABASE_DSN='postgres://...' \
+    --from-literal=GRPC_CALLER_KEY='...' \
+    --from-literal=SESSION_SIGNING_KEYS='...'
+done
 
 kubectl -n vigov-prod create secret tls vigov-wildcard-tls --cert=... --key=...
 ```
@@ -161,9 +190,15 @@ lúc nào. Không có sổ nào khác.
 
 ## Chưa chốt
 
-Định tuyến `/api/v1/*`. Hôm nay mọi tài nguyên REST đều thuộc `identity` nên một dòng là
-đúng. Ngày dịch vụ thứ hai có route, nó thành sai — xem chú giải đầu
-`overlays/prod/ingress.yaml`.
+**Định tuyến `/api/v1/*` — NGÀY ẤY ĐÃ TỚI, và đây là việc đang chặn.** Chú giải đầu
+`overlays/prod/ingress.yaml` viết "ngày `petitions` có route đầu tiên, dòng đó thành sai".
+Hôm nay **bốn** dịch vụ có route: `comms` · `documents` · `finance` · `petitions`, tổng 8
+tuyến (`kb/20-contracts/openapi.json`). Ingress vẫn đưa cả `/api/v1` về `identity`, nên 8
+tuyến ấy trả **404** dù pod chạy đúng và probe xanh.
+
+Ba lối ra nằm trong chính chú giải đó — (a) liệt kê từng tài nguyên, (b) sinh Ingress từ
+`openapi.json`, (c) thêm gateway. **Đây là câu hỏi cho chủ dự án, không phải cho agent**:
+đừng chọn hộ, và đừng thêm path vào `ingress.yaml` trước khi có câu trả lời.
 
 ## Chưa vá
 
@@ -171,3 +206,21 @@ lúc nào. Không có sổ nào khác.
 `main` nhích lên trong lúc job chạy, push bị từ chối **sau khi** `kustomize edit` đã sửa tệp
 — lượt deploy đỏ ở một chỗ khó đọc. Cần `git fetch origin main && git rebase origin/main`
 trước khi push. Chưa cháy vì chưa lượt nào chạy.
+
+**HAI TÊN REGISTRY — ĐÃ VÁ 21/09/2026.** Giữ lại đoạn này vì cách hỏng của nó đáng nhớ, không
+phải vì nó còn đang hỏng.
+
+Chủ dự án chốt `harbor.omicrm.services/ci` (cùng registry mà mọi job khác trên máy chủ Jenkins
+ấy đang đẩy). Cả hai nơi nay mang **một** tên: 21 tham chiếu trong `base/*/deployment.yaml` và
+`overlays/*/kustomization.yaml` đã đổi theo, cùng lệnh `create secret docker-registry
+--docker-server=` ở mục *Thứ tự cài lần đầu*.
+
+Vì sao nó nguy hiểm hơn một chỗ lệch tên bình thường: `kustomize edit set image` khớp theo TÊN
+ẢNH. Hai tên khác nhau thì kustomize **không đổi gì cả** — nhưng `git diff` vẫn thấy tệp đổi,
+vì một mục `images:` mới được thêm vào. Nên bước "không có diff thì dừng" ở `deploy/Jenkinsfile`
+vẫn cho đi tiếp: lượt deploy ghim một dòng vô tác dụng, đẩy một commit nói dối vào nhật ký
+triển khai, rồi ngồi `ImagePullBackOff` với thẻ `CHUA-TRIEN-KHAI-LAN-NAO`. Ba bước xanh trước
+khi có gì đỏ, và chỗ đỏ cách nguyên nhân rất xa.
+
+Bài học giữ lại: **đổi registry là đổi ở HAI hệ thống tên** — Jenkinsfile sinh ra tên, manifest
+tiêu thụ tên. Đổi một bên là dựng ra đúng cái bẫy trên.

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: documents
+spec:
+  selector: { app.kubernetes.io/name: documents }
+  # CHỈ cổng REST. Dịch vụ này không phục vụ gRPC (`cmd/server/main.go:158` chỉ mở một
+  # `http.Server`), nên khai thêm một cổng 9090 ở đây sẽ tạo một Endpoint không có ai nghe —
+  # và người sau sẽ đọc nó là "có đường gọi tới documents qua gRPC".
+  ports:
+    - { name: rest, port: 8080, targetPort: rest }

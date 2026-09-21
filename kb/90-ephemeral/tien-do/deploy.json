@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "deploy",
-  "cap_nhat": "2026-09-20",
+  "cap_nhat": "2026-09-21",
   "muc": [
     {
       "id": "manifest-k8s-ba-don-vi",
@@ -14,10 +14,42 @@
     {
       "id": "thieu-manifest-tam-don-vi",
       "viec": "Tám đơn vị triển khai chưa có manifest nào",
-      "trang_thai": "chua_lam",
-      "bang_chung": "deploy/base/ chỉ có identity, mang, platform, web-admin — kiểm 2026-09-20",
+      "trang_thai": "xong",
+      "bang_chung": "deploy/base/{comms,documents,finance,petitions}/{deployment,service,kustomization}.yaml — 12 tệp mới, gom vào deploy/base/kustomization.yaml, ghim thẻ ở cả overlays/prod lẫn overlays/staging. `kubectl kustomize deploy/overlays/{staging,prod}` chạy sạch, 22 tài nguyên và 7 Deployment mỗi môi trường, không còn chuỗi CHUA-GHIM-THE trong bản dựng ra; `python tools/check_build.py` PASS — kiểm 2026-09-21",
       "no_confirm": [],
-      "tiep_theo": "Thiếu: service-comms · service-documents · service-finance · service-petitions · service-reporting · citizen-app · platform-admin. Bốn service khung nay đã phục vụ được thật (commit 19c6008) nên khoảng cách giữa 'chạy được cục bộ' và 'triển khai được' đang rộng ra, không hẹp lại"
+      "tiep_theo": "BỐN chứ không phải tám, và ba đơn vị bị BỎ QUA CÓ LÝ DO — đừng đọc là sót: `reporting` 0 tuyến REST (service-reporting/internal/http/routes.go chưa mount cái nào) nên manifest của nó là một pod không phục vụ gì; `platform-admin` chưa có Dockerfile nên chưa có ảnh; `citizen-app` chạy trong Zalo Mini App, không thành pod. Tiêu chí thêm manifest là số tuyến trong kb/20-contracts/openapi.json: comms 1 · documents 1 · finance 3 · petitions 3. Bốn cái mới chạy 1 replica và KHÔNG có pdb.yaml (1 replica + minAvailable:1 sẽ chặn mọi lượt rút node để giữ một pod chưa ai gọi) — nâng cả hai cùng ngày Ingress có đường vào"
+    },
+    {
+      "id": "identity-thieu-cong-grpc",
+      "viec": "Manifest identity không khai cổng gRPC 9090 mà tiến trình thật sự phục vụ",
+      "trang_thai": "xong",
+      "bang_chung": "service-identity/cmd/server/main.go:351 mở listener GRPC_LISTEN_ADDR (mặc định :9090), :459 đăng ký IdentityService, .env.example:114 ghi IDENTITY_GRPC_ADDR=identity:9090 — trong khi deploy/base/identity/{deployment,service}.yaml trước 2026-09-21 không có cổng 9090, không có nhãn vigov.vn/grpc, và chú giải đầu tệp còn khẳng định 'nó KHÔNG phục vụ gRPC'. Đã vá: bản dựng ra nay có Service identity với hai cổng rest 8080 + grpc 9090",
+      "no_confirm": [],
+      "tiep_theo": "Đây là loại hỏng KHÔNG CÓ GÌ BÁO: identity xanh, probe xanh, REST của nó chạy — chỉ có mọi tuyến có kiểm quyền của comms/documents/finance/petitions trả 401 cho phiên hợp lệ, vì cả bốn đổi cookie lấy principal qua đúng cổng ấy. Chú giải cũ sai vì nó đúng vào ngày được viết, và không có phép kiểm nào gắn manifest với main.go"
+    },
+    {
+      "id": "hai-ten-registry-lech-nhau",
+      "viec": "Tên ảnh trong Jenkinsfile và trong manifest k8s không khớp",
+      "trang_thai": "xong",
+      "bang_chung": "Chủ dự án chốt harbor.omicrm.services/ci ngày 21/09/2026. 21 tham chiếu đã đổi: deploy/base/{comms,documents,finance,identity,petitions,platform,web-admin}/deployment.yaml (mỗi tệp 1) và deploy/overlays/{prod,staging}/kustomization.yaml (mỗi tệp 7), cùng --docker-server ở deploy/README.md:127. Kiểm: grep 'registry.vihat.vn' dưới deploy/ không còn dòng nào.",
+      "no_confirm": [],
+      "tiep_theo": "Đã đóng. Bài học giữ lại ở deploy/README.md: đổi registry là đổi ở HAI hệ thống tên — Jenkinsfile SINH ra tên ảnh, manifest TIÊU THỤ tên ấy, và `kustomize edit set image` khớp theo tên nên lệch một bên thì nó âm thầm không đổi gì trong khi git diff vẫn thấy tệp đổi. Chưa lượt deploy nào chạy thật để chứng minh bản vá."
+    },
+    {
+      "id": "ingress-chua-dinh-tuyen-bon-dich-vu-moi",
+      "viec": "Tám tuyến REST của bốn dịch vụ mới không có đường vào từ Internet",
+      "trang_thai": "chua_lam",
+      "bang_chung": "deploy/overlays/{prod,staging}/ingress.yaml vẫn đưa cả /api/v1 về service identity; kb/20-contracts/openapi.json có 8 tuyến thuộc comms/documents/finance/petitions — kiểm 2026-09-21",
+      "no_confirm": [],
+      "tiep_theo": "CÂU HỎI CHO CHỦ DỰ ÁN, chưa có số hiệu trong kb/00-foundation/open-questions.json — ba lối ra viết sẵn ở khối cảnh báo đầu ingress.yaml: (a) liệt kê từng tài nguyên ở Ingress, (b) sinh Ingress từ openapi.json, (c) thêm dịch vụ gateway. Chú giải ấy đã hẹn 'ngày petitions có route đầu tiên thì dòng đó thành sai' — ngày ấy tới rồi. KHÔNG thêm path nào vào ingress.yaml trước khi có câu trả lời; pod của bốn dịch vụ chạy được và di trú lược đồ của mình, chỉ là chưa ai gọi tới"
+    },
+    {
+      "id": "bon-dich-vu-moi-khong-dong-em",
+      "viec": "comms · documents · finance · petitions không bắt SIGTERM",
+      "trang_thai": "chua_lam",
+      "bang_chung": "service-comms/cmd/server/main.go:133 · service-documents/cmd/server/main.go:158 · service-finance/cmd/server/main.go:119 · service-petitions/cmd/server/main.go:136 gọi thẳng ListenAndServe, không signal.Notify, không srv.Shutdown — khác identity (main.go:356-418) và platform — kiểm 2026-09-21",
+      "no_confirm": [],
+      "tiep_theo": "Vì thế terminationGracePeriodSeconds của bốn manifest mới là 30 (mặc định) chứ KHÔNG phải 45 như platform/identity: hạn ấy không bao giờ trôi hết khi tiến trình chết ngay lúc nhận tín hiệu. Đáng vá TRƯỚC tuyến ghi đầu tiên của petitions — một lượt deploy cắt ngang lúc tiếp nhận phản ánh để lại phiếu dở trong khi công dân đã cầm mã tra cứu. Việc này thuộc mã Go, không thuộc deploy/"
     },
     {
       "id": "cum-chua-chay-that",
