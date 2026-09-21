@@ -93,9 +93,33 @@ func main() {
 		"_note_scope": "tenant = per commune · platform = platform-wide · cross-tenant = " +
 			"deliberately readable across communes, see rule 1",
 	})
-	ensurePlaceholder(out, "event-flows.json",
-		"event -> publisher, consumers, schema, supported versions.",
-		"no events published yet")
+	// event-flows LÀ SINH RA TỪ 2026-09-21 — trước đó nó mang nhãn GENERATED mà chưa bao giờ
+	// được sinh: `ensurePlaceholder` chỉ ghi một tệp rỗng, rồi RETURN NGAY khi tệp đã có nội
+	// dung. Mà `kb/INDEX.yaml` lại định tuyến thẳng câu "đổi cái này thì ai vỡ" vào đó, nên câu
+	// trả lời người đọc nhận được là "không ai nghe" — câu sai nguy hiểm nhất tệp này có thể
+	// đưa ra, và là câu luôn xanh. Xem tools/kb/sukien.go.
+	suKien, canhBaoSuKien, err := quetSuKien(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "kb:", err)
+		os.Exit(1)
+	}
+	mucSuKien := map[string]any{
+		"_": header,
+		"_description": "sự kiện -> bên phát, bên nhận, lược đồ, phiên bản. Tên và lược đồ SINH TỪ " +
+			"proto/ (luật 2 bất biến 7); bên phát và bên nhận SINH TỪ mã Go.",
+		"_how": "Tên sự kiện: dòng đứng riêng dạng `<miền>.<việc>.v<n>` trong khối chú thích DÍNH LIỀN " +
+			"ngay trên `message` của .proto. Bên phát: ĐẶT tên vào phong bì — `events.Envelope{Name: " +
+			"...}` — hoặc một lời gọi Publish/Phat mang tên ấy. Bên nhận: SO tên phong bì đang đến " +
+			"với nó (`e.Name != TenSuKien...`), một `case \"...\":`, hoặc một lời gọi " +
+			"Subscribe/Consume/Nghe. Tên đi qua một hằng số cấp gói vẫn theo được. Hình dạng khác " +
+			"thì tên vẫn hiện ở `unclassified_mentions` kèm cảnh báo — không bị bỏ đi trong im lặng.",
+		"_warnings": rongNeuNilChuoi(canhBaoSuKien),
+		"events":    suKien,
+	}
+	if len(suKien) == 0 {
+		mucSuKien["_empty"] = "không tệp .proto nào khai tên sự kiện"
+	}
+	write(out, "event-flows.json", mucSuKien)
 	ensurePlaceholder(out, "dependencies.json",
 		"call graph between services; used to detect synchronous dependency cycles.",
 		"no inter-service calls yet")

@@ -209,6 +209,31 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 			}
 			thamSo = append(thamSo, thamSoPhanTrang(pt)...)
 		}
+		// THAM SỐ TRUY VẤN ĐỌC THẲNG TỪ HANDLER — truyvan.go nói vì sao nó không phải một chú
+		// thích. Gộp vào CÙNG danh sách `parameters`, sau phân trang, nên một tuyến vừa phân
+		// trang vừa có tham số riêng không mất bên nào.
+		if tv, err := gm.thamSoTruyVanCua(t.pkgDir, t.Handler); err != nil {
+			return nil, nil, fmt.Errorf("apidoc: %s: %s %s: %w", t.File, t.Method, t.Path, err)
+		} else if len(tv) > 0 {
+			// Tên trùng thì GIỮ BẢN ĐÃ CÓ: `@page` mô tả `limit/cursor/sort/order` đầy đủ hơn —
+			// kèm enum cột và trần trang — còn hai tham số cùng tên trong một operation là một
+			// tài liệu OpenAPI không hợp lệ.
+			daCo := map[string]bool{}
+			for _, x := range thamSo {
+				if o, ok := x.(*om); ok {
+					if n, ok := o.gt["name"].(string); ok {
+						daCo[n] = true
+					}
+				}
+			}
+			var con []thamSoTruyVan
+			for _, x := range tv {
+				if !daCo[x.Ten] {
+					con = append(con, x)
+				}
+			}
+			thamSo = append(thamSo, thamSoTruyVanJSON(con)...)
+		}
 		if len(thamSo) > 0 {
 			op.set("parameters", thamSo)
 		}

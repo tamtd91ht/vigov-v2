@@ -29,7 +29,13 @@ type tuyen struct {
 	// NÓ LÀ MỘT CON TRỎ, KHÔNG PHẢI MỘT BẢN SAO. Danh sách cột được phép sắp xếp vẫn nằm đúng
 	// một chỗ: biến Go ấy. Chú thích chỉ nói TÌM Ở ĐÂU, nên nó không thể lệch với sự thật —
 	// lệch thì apidoc không giải được biến và dừng, chứ không công bố một danh sách cũ.
-	Page    string
+	Page string
+	// Handler names the handler functions this route registers — `h.DanhSachDuAn`.
+	//
+	// ĐỌC RA CHỨ KHÔNG CHÚ THÍCH, cùng lý do với `authz.*`: nó đã nằm trong câu lệnh route. Nó
+	// là lối vào để `thamSoTruyVanCua` đọc các THAM SỐ TRUY VẤN mà handler thật sự nhận —
+	// xem truyvan.go.
+	Handler []string
 	Replies []traLoi // sorted by status
 	Quyen   quyenDecl
 	Idem    idemDecl
@@ -223,6 +229,7 @@ func quetFile(fset *token.FileSet, duongDan, service, root string) ([]tuyen, []e
 			return true
 		}
 		t.Quyen, t.Idem, t.Xa = q, id, xa
+		t.Handler = tenHandler(call)
 
 		if err := kiemTuyen(&t); err != nil {
 			loi = append(loi, fmt.Errorf("apidoc: %s:%d: %s %s: %w", rel, dong, method, p, err))

@@ -54,6 +54,13 @@ type goiGo struct {
 	// bien holds package-level `var` and `const` declarations, for `@page` to resolve the
 	// sort allowlist without the tool ever copying what that allowlist says.
 	bien map[string]*ast.ValueSpec
+	// ham holds every function and method of the package, BY NAME, so a route can be followed
+	// into its handler and the query parameters read there (truyvan.go).
+	//
+	// MỘT TÊN -> NHIỀU KHAI BÁO, có chủ ý: hai phương thức cùng tên trên hai receiver khác nhau
+	// là hợp lệ trong một gói. Lấy hợp của cả hai thân hàm thì cùng lắm là thừa một tham số đọc
+	// được thật; chọn bừa một cái thì có thể bỏ sót đúng cái đang cần, và bỏ sót thì im lặng.
+	ham map[string][]*ast.FuncDecl
 }
 
 type giaiMa struct {
@@ -127,7 +134,7 @@ func (g *giaiMa) nap(pkgDir string) (*goiGo, error) {
 		return nil, fmt.Errorf("apidoc: đọc gói %s: %w", pkgDir, err)
 	}
 	p := &goiGo{kieu: map[string]kieuGo{}, imports: map[string]string{}, xungDot: map[string]bool{},
-		bien: map[string]*ast.ValueSpec{}}
+		bien: map[string]*ast.ValueSpec{}, ham: map[string][]*ast.FuncDecl{}}
 	fset := token.NewFileSet()
 
 	ten := make([]string, 0, len(ents))
@@ -159,6 +166,10 @@ func (g *giaiMa) nap(pkgDir string) (*goiGo, error) {
 			p.imports[alias] = path
 		}
 		for _, d := range f.Decls {
+			if fd, ok := d.(*ast.FuncDecl); ok {
+				p.ham[fd.Name.Name] = append(p.ham[fd.Name.Name], fd)
+				continue
+			}
 			gd, ok := d.(*ast.GenDecl)
 			if !ok {
 				continue
