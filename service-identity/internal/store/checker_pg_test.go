@@ -367,8 +367,12 @@ func TestDanhMucQuyenDuocNap(t *testing.T) {
 	if err := db.QueryRow(`SELECT count(*) FROM quyen`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 33 {
-		t.Errorf("có %d quyền trong danh mục, muốn 33 theo đặc tả", n)
+	// 33 của `0001_init.sql` CỘNG hai khoá `0007_quyen_phan_loai_va_xem_day_du.sql` thêm
+	// (`feedback.classify`, `feedback.unmask` — ADR 0030). Con số 33 đứng ở đây từ trước
+	// migration 0007 và không ai thấy nó sai, vì ca này CHƯA TỪNG CHẠY MỘT LẦN NÀO: thiếu
+	// `VIGOV_TEST_DSN` thì nó tự bỏ qua mà gói vẫn in `ok`.
+	if n != 35 {
+		t.Errorf("có %d quyền trong danh mục, muốn 35 (33 của 0001 + 2 của 0007)", n)
 	}
 }
 

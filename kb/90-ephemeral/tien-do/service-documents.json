@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-documents",
-  "cap_nhat": "2026-09-20",
+  "cap_nhat": "2026-09-21",
   "muc": [
     {
       "id": "loai-van-ban-tuyen-doc",
@@ -32,10 +32,10 @@
     {
       "id": "sql-chua-chay",
       "viec": "Chạy 0003_danh_muc_loai_van_ban.sql trên PostgreSQL thật",
-      "trang_thai": "chua_lam",
-      "bang_chung": "5 ca service-documents/internal/store/loai_van_ban_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN, gói vẫn in `ok` — kiểm 2026-09-20",
+      "trang_thai": "xong",
+      "bang_chung": "ĐÃ CHẠY THẬT 2026-09-21 — PostgreSQL 16.10 trong Docker (postgres:16), CSDL TRỐNG, áp bằng CHÍNH core/migrate qua tools/schema-smoke. Cả 3 tệp migration của documents áp XANH trên schema trống. 5 ca service-documents/internal/store/loai_van_ban_pg_test.go THOÁT SKIP và ĐỀU XANH. Truy pg_class: audit_log và loai_van_ban mỗi bảng có ĐỦ 32 mảnh.",
       "no_confirm": [],
-      "tiep_theo": "Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat — đọc information_schema để đối chiếu danh sách cột trong mã với lược đồ thật, gồm cả tenant_id/deleted_at/thu_tu vốn không nằm trong SELECT. Nó TỒN TẠI nhưng CHƯA CHẠY: driver giả không bắt được tên cột sai, và ca này chỉ bắt được từ lần chạy đầu tiên có DSN"
+      "tiep_theo": "TestPgCotTrongMaKhopVoiLuocDoThat đã chạy thật và XANH: danh sách cột trong mã khớp lược đồ đã triển khai, kể cả tenant_id/deleted_at/thu_tu vốn không nằm trong SELECT. CÒN HỞ: trigger append-only mới chỉ được kiểm là CÓ MẶT, chưa ca nào bắn thử."
     }
   ]
 }

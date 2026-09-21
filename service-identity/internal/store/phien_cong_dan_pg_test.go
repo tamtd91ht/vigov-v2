@@ -154,8 +154,15 @@ func TestPhienHetHanKhongTraCuuDuoc(t *testing.T) {
 	congDan := themCongDan(t, db)
 	sid, token := moPhienCongDan(t, db, xaA, congDan)
 
+	// CẢ HAI cột lùi về quá khứ, không chỉ `het_han_luc`. Lược đồ giữ
+	// `CHECK (het_han_luc > tao_luc)` (`migrations/0004_kenh_cong_dan.sql:372`), nên một phiên
+	// "hết hạn" phải là phiên ĐƯỢC TẠO SỚM HƠN NỮA — không phải phiên có hạn nằm trước lúc tạo,
+	// thứ không đường mã sản xuất nào tạo ra được (thu hồi dùng cột `thu_hoi_luc` riêng).
+	// Mẫu thử cũ vi phạm chính ràng buộc ấy, và nó sống sót vì ca này chưa từng gặp PostgreSQL.
 	if _, err := db.Exec(
-		`UPDATE phien_cong_dan SET het_han_luc = now() - interval '1 minute'
+		`UPDATE phien_cong_dan
+		    SET tao_luc     = now() - interval '2 hours',
+		        het_han_luc = now() - interval '1 minute'
 		 WHERE tenant_id = $1 AND id = $2`, xaA, sid); err != nil {
 		t.Fatal(err)
 	}
