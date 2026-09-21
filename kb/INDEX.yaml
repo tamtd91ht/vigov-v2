@@ -67,9 +67,9 @@ load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾ
     file: kb/90-ephemeral/ban-giao-phien.md
     tier: T5
     source: CURATED
-    expires: 2026-12-16
+    expires: 2026-12-21
     load_when: "mở phiên mới hoặc sang máy khác — quyết định đã chốt, ai đang chặn, cạm bẫy đã gặp"
-    warning: "hết hạn 16/12/2026. Sau đó tin `git log`, không tin tệp này"
+    warning: "hết hạn 21/12/2026. Sau đó tin `git log`, không tin tệp này"
 
   # MỘT tệp để ĐỌC, NHIỀU tệp để GHI — và đó không phải mâu thuẫn, đó là chỗ duy nhất giải được
   # cả hai đòi hỏi. Mỗi agent ghi đúng `tien-do/<module>.json` của mình nên không ai chạm tệp
