@@ -4,6 +4,14 @@
   "cap_nhat": "2026-09-21",
   "muc": [
     {
+      "id": "su-kien-phieu-doi-trang-thai",
+      "viec": "Su kien petitions -> comms khi phieu phan anh doi trang thai, de luat 10 bat bien 5 (moi chuyen trang thai deu bao cong dan) co duong chay",
+      "trang_thai": "xong",
+      "bang_chung": "proto/vigov/petitions/v1/events.proto — `petitions.status_changed.v1`, message PetitionStatusChanged (lookup_code, status, occurrence, citizen_id, citizen_message) + CitizenMessage (status_label, next_step). buf lint rc=0; buf breaking --against '.git#ref=HEAD' rc=0; buf generate rc=0 (core/gen/vigov/petitions/v1/events.pb.go); go build ./core/... va ./service-{petitions,comms,identity,platform}/... rc=0 — kiem 2026-09-21. Ranh gioi giao dich: kb/30-indexes/transaction-boundaries.json muc `thong_bao_cong_dan_khi_phieu_doi_trang_thai` (cuoi_cung, ADR 0006 he qua 4)",
+      "no_confirm": [],
+      "tiep_theo": "MOI HOP DONG, CHUA CO BEN NAO NOI: chua ai phat va chua ai nghe, nen kb/30-indexes/event-flows.json van rong — va no la PLACEHOLDER (tools/kb/main.go:96 chi ghi khi tep chua co noi dung that), tuc `make kb` KHONG tu dien dong nay; phai viet tay dung luc producer/consumer dau tien ton tai. BA THU CO Y DE MO, khong phai lam thieu: (1) TRANG THAI NAO OWE MOT TIN — skills/petition-lifecycle chot ba buoc (tiep nhan, vao xu ly, dong phieu), nhung chin trang thai cua ADR 0027 co ba ma khong buoc nao trong bay buoc ay phu: `cho-dan-xac-nhan` (ca trang thai ton tai de CONG DAN lam gi do — khong bao thi no la trang thai chet), `khong-tiep-nhan` va `chuyen-cap-tren` (hai ket cuc cong dan phai duoc biet). Do la cau cua luat 10 (dieu kien dung #3), phai hoi khach, KHONG duoc suy tu hop dong; hop dong co y chi khai HINH DANG (`citizen_message` vang mat = khong no tin nhan) chu khong khai danh sach. (2) `next_step` va `status_label` phai do PHAN MEM soan theo trang thai, KHONG duoc lay van ban can bo go — ket qua dong phieu ma luat 10 bat bien 6 doi la thu cong dan doc BANG MA TRA CUU, khong phai thu day vao tin nhan: van ban tu do se co ngay mang ten nguoi bao, dia chi hay noi dung phan anh, va luc do ca hang doi lan so thong bao thanh kho du lieu ca nhan (luat 3). (3) NGUOI NHAN cho phieu `can-bo-nhap-ho`: su kien doi mot `citizen_id` mo cua identity, va chua ai noi mot phieu nhap ho co luon mot dinh danh cong dan hay khong — neu khong co thi khong co ai de bao, va cho ay phai SUY GIAM NHIN THAY DUOC chu khong duoc lang le khong phat su kien."
+    },
+    {
       "id": "staff-thieu-ho-ten",
       "viec": "Message Staff không có trường họ tên nên BatchGetStaff chưa phục vụ được mục đích nó tự khai",
       "trang_thai": "treo",

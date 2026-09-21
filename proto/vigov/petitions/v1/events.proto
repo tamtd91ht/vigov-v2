@@ -1,0 +1,263 @@
+syntax = "proto3";
+
+package vigov.petitions.v1;
+
+// petitions — EVENT payloads. `petitions.proto` holds the RPC surface; this file holds the
+// other half of the same contract: the facts `petitions` publishes to whoever listens.
+//
+// WHY A SEPARATE FILE AND NOT A SECOND HALF OF petitions.proto: an RPC is a question somebody
+// asks this service, and an event is a statement this service makes to services it does not
+// know. They version on different clocks — an RPC changes when a caller needs something new,
+// an event changes only when the business fact changes — and mixing them makes every
+// `buf breaking` run answer for both at once.
+//
+// ---------------------------------------------------------------------------
+// HOW A PAYLOAD HERE TRAVELS. Read this before adding a second event.
+//
+//   * the wrapper is `vigov.events.v1.Envelope` (Go: `core/events.Envelope`). The envelope
+//     carries `id` (deduplication — queues deliver at least once), `name`, `tenant_id` and
+//     `occurred_at`. NONE of those four is repeated in a payload here.
+//   * `tenant_id` LIVES IN THE ENVELOPE AND NOWHERE ELSE. The envelope is set by
+//     infrastructure; a payload is data the publisher declares, and a publisher naming its own
+//     commune is a publisher granting itself a commune (rule 1, forbidden #2).
+//     `core/events.Dispatch` REFUSES an envelope with no commune rather than guessing, and a
+//     `tenant_id` field on one of these messages would hand a consumer a second, weaker
+//     answer to the same question — the one it must never read.
+//   * the payload bytes are the **protojson** encoding of the message, with proto field names
+//     preserved (`UseProtoNames`). Two reasons, both operational: `core/events.Envelope.Payload`
+//     is a `json.RawMessage`, so the whole envelope stays one readable JSON document; and the
+//     person who opens a dead-lettered message at 2am sees the same field names this file
+//     declares, instead of a base64 blob or a lowerCamelCase spelling that matches nothing.
+//   * a consumer is IDEMPOTENT. The same fact WILL arrive twice, and not only as a redelivery
+//     of one message: a publisher that crashed after publishing and republished sends two
+//     different messages carrying one fact. Deduplicating on the envelope id alone does not
+//     catch the second case — see `occurrence` below.
+//
+// ---------------------------------------------------------------------------
+// RULE 3 — THE CONSTRAINT THAT MATTERS MOST IN THIS FILE, because what travels here becomes a
+// message to a real person and every field is one keystroke away from being their data.
+//
+// A queue is persisted, replicated, backed up and read during debugging. A personal datum put
+// into an event is a personal datum in infrastructure nobody on this project controls, and
+// deleting the field later does not recall the copies.
+//
+// SO THE FOLLOWING MAY NEVER APPEAR IN ANY MESSAGE IN THIS FILE, at any nesting depth:
+// a phone number (masked or not), a full name, an address, a national ID, coordinates, the
+// TEXT OF THE PETITION, a photograph or its URL. The recipient travels as an OPAQUE identity
+// id; the record travels as its BUSINESS CODE. A consumer that needs more asks for it over
+// gRPC, under its own permission, and its read is audited (rule 6, invariant 7) — which is
+// exactly the accounting an event silently skips.
+// ---------------------------------------------------------------------------
+
+// PetitionStatusChanged is the payload of the event named:
+//
+//     petitions.status_changed.v1
+//
+// PAST TENSE AND VERSIONED IN THE NAME (rule 2, invariant 4). It states a fact that has
+// already happened and is never a command: `petitions` does not tell `comms` to send
+// anything, it says what the petition did. The difference is not pedantry — a command makes
+// the publisher depend on the consumer's behaviour, which is the coupling events exist to
+// remove.
+//
+// WHO LISTENS TODAY: `comms`, which turns a transition that owes the citizen a message into a
+// row of its `thong_bao_gui_cong_dan` ledger, then tries to send it. Before changing anything
+// here, check `kb/30-indexes/event-flows.json` for who else has arrived: with a live consumer
+// an in-place change is off the table and the move is to publish `.v2` alongside, migrate, and
+// retire `.v1` separately (rule 2, invariant 4).
+//
+// PUBLISHED ON EVERY ONE OF THE NINE TRANSITIONS, not only the ones that owe a message. The
+// event is the FACT that the status moved; whether that fact also owes the citizen a
+// notification is expressed by the presence of `citizen_message`, not by which events exist.
+// Publishing only the notifying ones would make the event name a lie the day a second consumer
+// (reporting, time-in-status) arrives, and that consumer would have no way to discover that
+// three of the nine transitions were never emitted.
+//
+// PUBLISHED AFTER THE BUSINESS TRANSACTION COMMITS, never inside it (outbox —
+// `skills/events-and-queues` #5). An event published inside an open transaction arrives at a
+// consumer that then reads a petition the database has not yet made visible, and the failure
+// is timing-dependent, so it survives every test.
+//
+// THE FLOW IS EVENTUALLY CONSISTENT WITH THE BUSINESS WRITE, and that is a decision with a
+// name: ADR 0006 consequence 4 — a petition is NEVER refused because a message could not be
+// sent. The declared boundary, its compensation and its `why` are in
+// `kb/30-indexes/transaction-boundaries.json` under `thong_bao_chuyen_trang_thai_phieu`.
+message PetitionStatusChanged {
+  // The citizen's own lookup code — the BUSINESS code, never the internal ULID of the row.
+  //
+  // It is the one handle the citizen has on their case (rule 10, invariant 1): the string they
+  // were given at intake, the string they read out on the phone, the string on the piece of
+  // paper somebody is holding when a complaint arrives three months later. `comms` stores it as
+  // `doi_tuong_ma` and sends it back to the citizen as the `ma_tra_cuu` parameter, so a value
+  // that meant something only inside `petitions` would make the ledger unreadable to the very
+  // people who consult it, and the message useless to the person who receives it.
+  //
+  // It is also the reason no internal id is here at all: two identifiers for one record is an
+  // invitation to log, join or display the wrong one.
+  string lookup_code = 1;
+
+  // The status the petition is IN after the transition — one of the nine codes of ADR 0027
+  // (`da-tiep-nhan`, `dang-phan-loai`, `da-chuyen-xu-ly`, `dang-xu-ly`, `da-xu-ly`,
+  // `cho-dan-xac-nhan`, `da-dong`, `khong-tiep-nhan`, `chuyen-cap-tren`).
+  //
+  // A STRING AND DELIBERATELY NOT AN ENUM, which is the decision in this file most likely to be
+  // "fixed" by a later session. `petitions` owns the list; an enum would compile a copy of it
+  // into every consumer's generated code and into this shared contract, which is a second
+  // source for one fact sitting on the far side of a service boundary (rule 9, invariant 2;
+  // rule 2). Two things go wrong with the copy, and both are silent: a consumer built against
+  // an older contract meets a value its enum does not have and decodes it to the zero value —
+  // "unspecified" becomes a legitimate-looking status — and the buf `FILE` breaking class makes
+  // the day a status is corrected a contract break on top of what is already an archival
+  // migration (rule 7). `comms` stores this value as `moc` and validates NOTHING against it,
+  // with the reason written on the column in its migration 0004; the same shape `petitions`
+  // already uses for `linh_vuc` across the same kind of boundary (ADR 0026).
+  //
+  // Values stay Vietnamese kebab-case: ADR 0011 forbids translating enum VALUES, because a
+  // translated value is a business assertion, not a naming choice.
+  string status = 2;
+
+  // WHICH OCCURRENCE of this status on this petition: 1 the first time, 2 after a reopening has
+  // put it back through the same transition.
+  //
+  // WITHOUT THIS FIELD THE WHOLE DESIGN LEAKS, so it is required rather than optional. ADR 0008
+  // lets a citizen reopen a closed petition, so "this petition reached `da-dong`" is true more
+  // than once, and each closing is a DIFFERENT commitment being met that owes a DIFFERENT
+  // message. `comms` builds its deduplication key from the business fact and not from the
+  // message id — `doi_tuong_loai | doi_tuong_ma | moc | lan | nguoi_nhan_ma | kenh`
+  // (`domain.KhoaLanGui`) — precisely so that a republished message is a no-op. Omit the
+  // occurrence and the second closing collapses onto the first: the citizen is told once and
+  // never again, and from inside the system that failure is INDISTINGUISHABLE from correct
+  // deduplication. Nothing turns red; a person simply stops being told.
+  //
+  // Starts at 1. Zero is not a valid occurrence, and a consumer that receives 0 should treat
+  // the message as malformed rather than defaulting it — a default here silently rebuilds the
+  // collapse this field exists to prevent.
+  uint32 occurrence = 3;
+
+  // WHO IS OWED THE MESSAGE — the OPAQUE citizen identity id (`vigov.identity.v1.CitizenIdentity.id`,
+  // a ULID). Never a phone number, never a name, not even masked.
+  //
+  // It identifies the recipient exactly and means nothing to whoever reads a queue backup, which
+  // is the entire point (rule 3). `comms` stores it as `nguoi_nhan_ma` and resolves the real
+  // number inside its adapter at send time, holds it for one call and never writes it back.
+  //
+  // IT IS PRESENT EVEN FOR AN ANONYMOUS PETITION, and that is not a leak: `an_danh` (ADR 0008)
+  // hides the reporter from STAFF and from public surfaces, not from the notification path —
+  // the citizen who filed anonymously is still the citizen who must be told what happened to
+  // their petition, and the system has always stored `cong_dan_id` for exactly that reason.
+  // Since this id is opaque, carrying it tells a consumer nothing about who the person is.
+  //
+  // IT IS ALSO IN THE DEDUPLICATION KEY. The day a petition can be watched by somebody other
+  // than its author (rule 4, stop condition 1 is open), one transition will owe several
+  // messages, and without the recipient in the key the second person's message would look like
+  // a duplicate of the first's.
+  string citizen_id = 4;
+
+  // WHAT THE CITIZEN IS TOLD — PRESENT ONLY WHEN THIS TRANSITION OWES THEM A MESSAGE.
+  //
+  // ABSENCE IS A FACT, NOT AN OMISSION: it says this transition has no citizen-facing wording,
+  // because it is an internal step (`skills/petition-lifecycle`: classify, assign and field
+  // acceptance are internal; the citizen sees status and result, never staff notes or routing
+  // history — rule 4, forbidden #5). A consumer does no work for such an event; `comms` writes
+  // no ledger row and sends nothing.
+  //
+  // WHY THE WORDING TRAVELS INSTEAD OF BEING LOOKED UP BY STATUS: the alternative is `comms`
+  // holding a status -> sentence table, which is a copy of a list `petitions` owns living on the
+  // far side of a service boundary — the exact thing its migration 0004 refuses for the `moc`
+  // column. The copy would be discovered to have drifted on the day a transition quietly stopped
+  // telling anybody anything.
+  //
+  // WHY THE DECISION "WHICH TRANSITIONS CARRY THIS" IS NOT ENCODED IN THE CONTRACT: it is a
+  // promise to citizens (rule 10), so it belongs to the publisher and to the customer, not to a
+  // wire format. Settled today by `skills/petition-lifecycle`: intake, entering processing, and
+  // closing. NOT settled for `cho-dan-xac-nhan`, `khong-tiep-nhan` and `chuyen-cap-tren` — see
+  // the note on CitizenMessage.
+  CitizenMessage citizen_message = 5;
+}
+
+// CitizenMessage is EXACTLY what may leave the system inside a message about a petition, and
+// the list is closed at two fields plus the lookup code above.
+//
+// It is the wire form of `comms`'s `domain.ThamSoThongBao` (`ma_tra_cuu`, `moc_nhan`,
+// `viec_tiep_theo`) — the declaration rule 3, invariant 6 requires when data goes to an
+// external service. It is a message and not a map for the same reason that type is a struct and
+// not a map: a map accepts whatever key somebody adds during an incident, and the field added
+// under pressure is the one carrying the citizen's name or the text of their petition.
+//
+// BOTH STRINGS ARE COMPOSED BY THE SOFTWARE FROM THE TRANSITION. NEITHER IS TEXT A HUMAN TYPED
+// INTO A FORM — and this is the sentence to re-read before wiring the publisher. Rule 10,
+// invariant 6 requires closing a petition to record a result the citizen can read, and the
+// obvious shortcut is to forward that staff-written result as `next_step`. It must not be
+// forwarded: free text written by a member of staff about a specific case will eventually name
+// the reporter, quote their complaint, or give their address, and from that moment a commune's
+// personal data is in the queue, in its backups, and in the notification ledger — none of which
+// have a lawful basis to hold it (Decree 13/2023). The readable result stays where the citizen
+// reaches it by their lookup code, behind an authenticated read (rule 4). What travels is the
+// procedural sentence that is the same for every citizen at that transition.
+//
+// The receiving side refuses an empty value for either field, and refuses a `next_step` that
+// merely repeats `status_label` (`domain.ThamSoThongBao.KiemTra`). That refusal is deliberate:
+// a notification that names a state and no consequence — "Đã xử lý." — tells the citizen
+// nothing they can act on, and a channel that answers like that is a channel people stop
+// reading. Publishing either field empty produces a message that is dropped at the consumer,
+// which from the publisher's side looks like success.
+message CitizenMessage {
+  // WHAT CHANGED, in words a citizen reads — the label of the status this petition just
+  // entered ("Đã chuyển xử lý"). `comms` sends it as the `moc_nhan` parameter.
+  //
+  // The label and not the code: the code is for machines and appears in `status` above, where a
+  // consumer can key on it without a human ever seeing it. The nine labels are software strings
+  // owned by `kb/00-foundation/ubiquitous-language.md` — a commune may NOT rename them
+  // (ADR 0027, addendum of 2026-09-20), which is why the label may travel at all: it is the same
+  // word in all 200+ communes, so it carries no local meaning and no personal data.
+  string status_label = 1;
+
+  // WHAT HAPPENS NEXT — a sentence about the PROCEDURE, never about the person. `comms` sends
+  // it as the `viec_tiep_theo` parameter.
+  //
+  // This is the field that makes the notification worth receiving: a citizen who is told only
+  // that a state changed cannot tell "being processed" from "ignored". On the citizen channel at
+  // intake it is where the acknowledge commitment is phrased — "sẽ được xem trong N giờ làm
+  // việc" — because at that moment no resolve date exists yet and inventing one is forbidden
+  // (ADR 0028: `han_xu_ly_xong` is NULL until the field is settled).
+  //
+  // NO DEADLINE FIELD IS DECLARED ON THIS MESSAGE, deliberately. A structured date would have to
+  // be produced for every transition, including the ones where it does not exist yet, and the
+  // absent value would be filled with something plausible — which is how a promise the commune
+  // never made reaches a citizen. Whatever this sentence says about timing is said by the
+  // publisher, which is the only service that knows which of the two clocks has been set.
+  string next_step = 2;
+}
+
+// ---------------------------------------------------------------------------
+// WHAT IS DELIBERATELY ABSENT from PetitionStatusChanged, so its absence does not read as
+// unfinished work. A later session WILL want to add some of these; each line says what to do
+// instead, and adding a field is cheap (new fields are optional with a safe default) while
+// removing one costs a permanent `reserved` line.
+//
+//   tenant_id             in the ENVELOPE. See the header — a commune named in a body is a
+//                         commune the publisher granted itself.
+//   the internal petition id   the business lookup code is the identifier that crosses this
+//                         boundary. Two identifiers for one record means one of them gets
+//                         logged, joined or displayed wrongly.
+//   previous_status       no consumer needs it today. It is a legitimate future field for
+//                         time-in-status reporting, and it costs one optional field then.
+//   occurred_at, message_id    both are envelope fields. A payload copy would be a second
+//                         answer that can disagree with the first.
+//   linh_vuc (the field)  `comms` does not need it, and one of the twelve codes — `can-bo`,
+//                         a report ABOUT a member of staff — is visible only under
+//                         `feedback.restricted` even inside the commune. Open question #4 is
+//                         still open about where that code may travel; not carrying it keeps
+//                         this contract out of a question the customer has not answered.
+//   any deadline or due date   see `next_step`. It would also tie this contract to open
+//                         question #26 (what an unclassified petition's clock means), which it
+//                         is currently independent of.
+//   the channel and the template code   `comms` owns the channel (ADR 0006: one OA per commune,
+//                         behind an adapter) and picks the approved ZNS template. A publisher
+//                         naming a template would put channel knowledge in `petitions` and
+//                         break the moment a commune's OA changes.
+//   the actor (who moved the status)   the audit trail records who did what, in the same
+//                         transaction as the change (rule 6, invariant 3). It is not a fact
+//                         `comms` may act on, and a staff identity in a message read by the
+//                         citizen channel is a step toward a staff name leaving the commune.
+//   anything from the RULE 3 list in the header   not "not yet" — never.
+// ---------------------------------------------------------------------------
