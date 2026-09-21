@@ -616,19 +616,19 @@
     },
     "grpc.BatchGetStaff": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:381"
+      "at": "service-identity/internal/grpc/server.go:404"
     },
     "grpc.CanBoDoc": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/server.go:103"
+      "at": "service-identity/internal/grpc/server.go:115"
     },
     "grpc.CanBoLo": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/server.go:109"
+      "at": "service-identity/internal/grpc/server.go:121"
     },
     "grpc.Deps": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/server.go:127"
+      "at": "service-identity/internal/grpc/server.go:139"
     },
     "grpc.Directory": {
       "kind": "type",
@@ -654,13 +654,21 @@
       "kind": "type",
       "at": "service-identity/internal/grpc/lich_lam_viec.go:60"
     },
+    "grpc.PhienCongDanDoc": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/phien_cong_dan.go:45"
+    },
     "grpc.PhienDoc": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/server.go:95"
+      "at": "service-identity/internal/grpc/server.go:107"
     },
     "grpc.QuyenDoc": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/server.go:120"
+      "at": "service-identity/internal/grpc/server.go:132"
+    },
+    "grpc.ResolveCitizenSession": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/phien_cong_dan.go:79"
     },
     "grpc.ResolveHost": {
       "kind": "func",
@@ -668,7 +676,7 @@
     },
     "grpc.ResolveStaffPrincipal": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:251"
+      "at": "service-identity/internal/grpc/server.go:274"
     },
     "grpc.Server": {
       "kind": "type",
@@ -1074,13 +1082,29 @@
       "kind": "func",
       "at": "core/identityclient/identityclient.go:117"
     },
+    "identityclient.NewSoPhienCongDan": {
+      "kind": "func",
+      "at": "core/identityclient/phien_cong_dan.go:56"
+    },
     "identityclient.ResolveStaff": {
       "kind": "func",
       "at": "core/identityclient/identityclient.go:157"
     },
+    "identityclient.SoPhienCongDan": {
+      "kind": "type",
+      "at": "core/identityclient/phien_cong_dan.go:47"
+    },
     "identityclient.TienGioLamViec": {
       "kind": "func",
       "at": "core/identityclient/identityclient.go:252"
+    },
+    "identityclient.TraCuu": {
+      "kind": "func",
+      "at": "core/identityclient/phien_cong_dan.go:98"
+    },
+    "identityclient.TraCuuPhienCongDan": {
+      "kind": "func",
+      "at": "core/identityclient/phien_cong_dan.go:136"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -1400,7 +1424,7 @@
     },
     "store.GhiNhanDung": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:457"
+      "at": "service-identity/internal/store/phien_cong_dan.go:502"
     },
     "store.HangCho": {
       "kind": "type",
@@ -1608,7 +1632,7 @@
     },
     "store.PhienMoi": {
       "kind": "type",
-      "at": "service-identity/internal/store/phien_cong_dan.go:255"
+      "at": "service-identity/internal/store/phien_cong_dan.go:300"
     },
     "store.PhienStore": {
       "kind": "type",
@@ -1660,7 +1684,7 @@
     },
     "store.TaoChuaChonXa": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:329"
+      "at": "service-identity/internal/store/phien_cong_dan.go:374"
     },
     "store.TenantID": {
       "kind": "func",
@@ -1704,11 +1728,11 @@
     },
     "store.ThuHoi": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:376"
+      "at": "service-identity/internal/store/phien_cong_dan.go:421"
     },
     "store.ThuHoiChuaChonXa": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:396"
+      "at": "service-identity/internal/store/phien_cong_dan.go:441"
     },
     "store.ThuHoiCuaCanBo": {
       "kind": "func",
@@ -1716,11 +1740,15 @@
     },
     "store.ThuHoiCuaCongDan": {
       "kind": "func",
-      "at": "service-identity/internal/store/phien_cong_dan.go:417"
+      "at": "service-identity/internal/store/phien_cong_dan.go:462"
     },
     "store.TraCuu": {
       "kind": "func",
       "at": "service-identity/internal/store/phien_cong_dan.go:181"
+    },
+    "store.TraCuuCoLoi": {
+      "kind": "func",
+      "at": "service-identity/internal/store/phien_cong_dan.go:221"
     },
     "store.Tx": {
       "kind": "func",
