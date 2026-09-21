@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/tenant"
@@ -96,6 +97,19 @@ func (khoNhanLinhVuc) DanhSach(ctx context.Context) ([]domain.NhanLinhVuc, error
 	return nil, nil
 }
 
+// vetGia stands in for the full-view audit trail, present for the same reason as the two above.
+//
+// IT RETURNS AN ERROR RATHER THAN nil, and that is the safe stand-in rather than a lazy one: no
+// assertion in this file reaches the unmask branch, and if one ever does, "the trail failed" makes
+// the route refuse to disclose. A stand-in that answered nil would hand back a citizen's real
+// number with nothing written anywhere.
+type vetGia struct{}
+
+func (vetGia) GhiVet(ctx context.Context, _ string, _ audit.Actor) error {
+	_ = tenant.MustFrom(ctx)
+	return errors.New("vết giả: phép kiểm này không đi qua nhánh xem đầy đủ")
+}
+
 type phanGiaiGia struct {
 	goi int
 	tra staffauth.StaffPrincipal
@@ -149,6 +163,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		MucUuTien:   khoUuTien{},
 		Phieu:       khoPhieu{},
 		NhanLinhVuc: khoNhanLinhVuc{},
+		Vet:         vetGia{},
 		Log:         log,
 	})
 

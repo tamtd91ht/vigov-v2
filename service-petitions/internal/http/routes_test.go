@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
@@ -146,6 +147,35 @@ func mucUuTienMau() *mucUuTienGia {
 	}}
 }
 
+// vetXemGia is the full-view audit trail, RECORDING WHAT IT WAS ASKED TO WRITE.
+//
+// IT KEEPS THE COMMUNE FROM THE CONTEXT ON EVERY ENTRY, which the real use case also does (through
+// store.Scoped) and which is the one property a fake keyed any other way could not show: an entry
+// attributed to the wrong commune is useless to an inspection, and rule 6, invariant 2 lists the
+// commune among the six things an entry must carry.
+//
+// `loi` makes the trail fail, which is the case the route has to treat as "do not disclose".
+type vetXemGia struct {
+	ghi []vetDaGhi
+	loi error
+}
+
+type vetDaGhi struct {
+	xa    tenant.ID
+	ma    string
+	nguoi audit.Actor
+}
+
+func (v *vetXemGia) GhiVet(ctx context.Context, ma string, nguoi audit.Actor) error {
+	if v.loi != nil {
+		// NOTHING IS RECORDED ON FAILURE, deliberately: the real use case commits or it does not,
+		// and a fake that kept a half-entry would let a test pass that the database would fail.
+		return v.loi
+	}
+	v.ghi = append(v.ghi, vetDaGhi{xa: tenant.MustFrom(ctx), ma: ma, nguoi: nguoi})
+	return nil
+}
+
 // checkerGia grants permissions per commune and per staff id, reading the commune from the context
 // exactly as the real query does. Both routes below are AnyAuthenticated, so what this fake is for
 // is the opposite of the usual case: proving that an account holding NOTHING still gets 200.
@@ -170,6 +200,7 @@ type mayChu struct {
 	uuTien *mucUuTienGia
 	phieu  *phieuGia
 	nhan   *nhanLinhVucGia
+	vet    *vetXemGia
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -179,13 +210,16 @@ func dungMayChu(t *testing.T) *mayChu {
 	uuTien := mucUuTienMau()
 	phieu := phieuMau()
 	nhan := nhanLinhVucMau()
+	vet := &vetXemGia{}
 
 	m := &mayChu{
 		d: Deps{
 			// A checker that grants commune A's account `feedback.read` — what the petition route
 			// requires — plus one unrelated key, and grants commune B's account NOTHING. The
-			// restricted key `feedback.restricted` is deliberately absent from both, so the
-			// restricted-field case has something real to fail on.
+			// restricted key `feedback.restricted` AND the full-view key `feedback.unmask` are
+			// deliberately absent from both, so the restricted-field case and the masking case
+			// each have something real to fail on. A default harness that held every key would
+			// turn the ordinary masked read — the common case in a commune — into the untested one.
 			Checker: checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{
 				xaA: {idCanBo: {
 					authz.Perm("task.read"):     true,
@@ -197,6 +231,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			MucUuTien:   uuTien,
 			Phieu:       phieu,
 			NhanLinhVuc: nhan,
+			Vet:         vet,
 			Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		thuMuc: thuMucMau(),
@@ -204,6 +239,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		uuTien: uuTien,
 		phieu:  phieu,
 		nhan:   nhan,
+		vet:    vet,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -280,6 +316,7 @@ func depsDay() Deps {
 		MucUuTien:   mucUuTienMau(),
 		Phieu:       phieuMau(),
 		NhanLinhVuc: nhanLinhVucMau(),
+		Vet:         &vetXemGia{},
 	}
 }
 
@@ -298,6 +335,10 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"thiếu Checker":           func(d *Deps) { d.Checker = nil },
 		"thiếu kho phiếu":         func(d *Deps) { d.Phieu = nil },
 		"thiếu kho nhãn lĩnh vực": func(d *Deps) { d.NhanLinhVuc = nil },
+		// THE CASE WITH THE QUIETEST FAILURE MODE. A nil here does not break a screen: it breaks
+		// only the branch that discloses a citizen's name and number, and only for an account
+		// holding `feedback.unmask`. Without this case, a wiring line dropped in a refactor ships.
+		"thiếu đường ghi vết xem đầy đủ": func(d *Deps) { d.Vet = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {

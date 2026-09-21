@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/privacy"
@@ -21,15 +22,30 @@ import (
 
 // phieuPhanAnhRa is one petition as it leaves the API to a member of staff.
 //
-// EVERY PIECE OF PERSONAL DATA ON IT IS MASKED, AND THE DEFAULT IS THE DECISION (rule 3,
-// invariant 3): anything leaving the API is masked unless the caller holds an EXPLICIT full-view
-// permission. There is no such key in `quyen` today — the five `feedback.*` keys are read,
-// create, assign, resolve and restricted — so there is nothing to check, and inventing one here
-// would be granting full view of a citizen's contact details to whoever happens to be reading.
+// PERSONAL DATA ON IT IS MASKED BY DEFAULT, AND THE DEFAULT IS STILL THE DECISION (rule 3,
+// invariant 3): anything leaving the API is masked UNLESS the caller holds an EXPLICIT full-view
+// permission. That permission now exists — `feedback.unmask`, seeded 2026-09-20 by
+// service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql and decided by ADR 0030 —
+// so the exception is a key a commune administrator ticked, never an assumption made here.
 //
-// THAT IS A REAL COST AND IT IS STATED RATHER THAN HIDDEN: an officer cannot ring the reporter
-// back from this response. Which permission opens the full number is rule 3's stop condition #1
-// and belongs to the customer; masking is the answer that fails closed while they decide.
+// THE COST THIS CLOSES, NAMED BY THE ADR ITSELF: with no such key there were only two states,
+// mask everything or open everything, so the register masked unconditionally and AN OFFICER
+// COULD NOT RING THE REPORTER BACK. That was fail-closed working as intended while the customer
+// decided, and ADR 0030 is them deciding.
+//
+// WHAT THE KEY DOES NOT BUY — read before widening it:
+//
+//	AN ANONYMOUS PETITION STAYS ANONYMOUS. `feedback.unmask` removes MASKING; it does not
+//	override `an_danh`. Those are two different promises: masking is a precaution the system
+//	takes, anonymity is a choice the citizen made and docs/ui-ux/09 §348 says it hides the name
+//	and number from EVERY interface. Reversing a citizen's own choice is a customer decision
+//	nobody has made, so this route does not make it either (rule 3, stop condition #1).
+//
+//	IT IS NOT `feedback.restricted`. That key is a CONTENT scope — the `can-bo` field — and it
+//	is checked separately below. Holding one has never implied the other (rule 5, invariant 3b).
+//
+// EVERY DISCLOSURE IS AUDITED, IN THE SAME REQUEST, BEFORE THE BODY IS WRITTEN — rule 6,
+// invariant 7 and ADR 0030 stop condition #4. See DocPhieuPhanAnh.
 //
 // THE CONTENT ITSELF IS NOT MASKED, and that is not an inconsistency. `noi_dung` is what the
 // commune has to act on — an officer who cannot read the report cannot process it, and there is
@@ -78,10 +94,18 @@ type phieuPhanAnhRa struct {
 	Content string `json:"content"`
 	Address string `json:"address"`
 
-	// ReporterName and ReporterPhone are MASKED — "Nguyễn V. A." and "09****5678" — and are
-	// EMPTY, both of them, when the citizen asked to file anonymously. Anonymous means hidden
-	// from the staff screen; the identity is still recorded in the database (ADR 0008), and a
-	// path that reveals it is itself audited (rule 6, invariant 7).
+	// ReporterName and ReporterPhone are MASKED — "Nguyễn V. A." and "09****5678" — unless the
+	// caller holds `feedback.unmask`, in which case they carry the real values and the request
+	// has already written an audit entry for the disclosure (rule 6, invariant 7).
+	//
+	// THEY ARE EMPTY, BOTH OF THEM, WHEN THE CITIZEN FILED ANONYMOUSLY — with or without the key.
+	// Anonymous means hidden from the staff screen; the identity is still recorded in the
+	// database (ADR 0008), and opening THAT is a different decision nobody has made.
+	//
+	// THERE IS NO `reporter_unmasked` FLAG BESIDE THEM, and that absence is deliberate for the
+	// same reason there is no `overdue`: the client already holds the answer. A masked number
+	// carries `*`, a full one does not, so a boolean would be a second representation of a fact
+	// already on the wire (rule 9) — and the one that goes stale is the one a screen renders.
 	ReporterName  string `json:"reporter_name"`
 	ReporterPhone string `json:"reporter_phone"`
 	Anonymous     bool   `json:"anonymous"`
@@ -107,7 +131,13 @@ type phieuPhanAnhRa struct {
 	Public bool `json:"public"`
 }
 
-func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string) phieuPhanAnhRa {
+// phieuRaNgoai builds the response. `xemDayDu` is the ONLY switch between masked and full, and it
+// is a decision the caller has already paid for: DocPhieuPhanAnh sets it true only after the
+// permission was checked AND the audit entry was committed.
+//
+// IT IS A PARAMETER RATHER THAN A LOOKUP IN HERE. This function has no context, no Checker and no
+// way to write a trail, so it cannot accidentally grow a path that unmasks without one.
+func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAnhRa {
 	ra := phieuPhanAnhRa{
 		Code:       p.MaTraCuu,
 		Channel:    string(p.Kenh),
@@ -122,12 +152,18 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string) phieuPhanAnhRa {
 		Public:     p.HienCongKhai,
 	}
 
-	// An anonymous petition carries NEITHER field, not a masked one. A masked name is still a
-	// name: "Nguyễn V. A." in a commune of a few thousand people identifies somebody, and the
-	// whole point of the flag is that the officer handling it does not know who filed it.
+	// An anonymous petition carries NEITHER field, not a masked one and not a full one. A masked
+	// name is still a name: "Nguyễn V. A." in a commune of a few thousand people identifies
+	// somebody, and the whole point of the flag is that the officer handling it does not know who
+	// filed it. `xemDayDu` is deliberately not consulted on this branch — see the type's doc.
 	if !p.AnDanh {
-		ra.ReporterName = privacy.MaskName(p.NguoiGuiHoTen)
-		ra.ReporterPhone = privacy.MaskPhone(p.NguoiGuiDienThoai)
+		if xemDayDu {
+			ra.ReporterName = p.NguoiGuiHoTen
+			ra.ReporterPhone = p.NguoiGuiDienThoai
+		} else {
+			ra.ReporterName = privacy.MaskName(p.NguoiGuiHoTen)
+			ra.ReporterPhone = privacy.MaskPhone(p.NguoiGuiDienThoai)
+		}
 	}
 
 	// The two NULLs are produced from the two predicates that NAME which question is being
@@ -156,16 +192,47 @@ const LinhVucHanChe = "can-bo"
 // not invented here.
 const QuyenHanChe authz.Perm = "feedback.restricted"
 
+// QuyenXemDayDu opens the reporter's real name and phone number, in EVERY field.
+//
+// The key exists in `quyen` — service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql
+// seeded it on 2026-09-20, the customer decided it in ADR 0030 — and it is NOT invented here. The
+// string is copied from that migration character for character: rule 5, invariant 3b makes the
+// key the same flat string the Phân quyền screen shows and the `quyen` table stores, so a
+// spelling that differs by one character is a tick box that grants nothing and a route nobody can
+// open, with no test red anywhere.
+//
+// IT IS NOT DERIVED FROM QuyenHanChe AND MUST NEVER BE. `feedback.restricted` is a scope over
+// CONTENT (the `can-bo` field); this is a scope over PERSONAL DATA, in every field. ADR 0030
+// spells out the direction that makes the difference concrete: somebody verifying a complaint
+// about a colleague does not thereby need the phone number of everybody who reported fly-tipping.
+const QuyenXemDayDu authz.Perm = "feedback.unmask"
+
 // DocPhieuPhanAnh serves one petition to a member of staff.
 // GET /api/v1/citizen-reports/{maTraCuu}
 //
-// NO AUDIT ENTRY, and that is a decision with a boundary rather than an omission. Rule 6,
-// invariant 7 audits reading FULL personal data and reading ACROSS communes. This is neither:
-// the contact details are masked on the way out, and the query cannot leave the commune the
-// request arrived in. THE DAY A FULL-VIEW PERMISSION EXISTS, the path that uses it is audited —
-// that is the same invariant, and it will apply to the route that unmasks, not to this one.
+// AN AUDIT ENTRY IS WRITTEN ON EXACTLY ONE BRANCH OF THIS ROUTE, and the boundary is rule 6,
+// invariant 7: what is audited is reading FULL personal data and reading ACROSS communes. An
+// ordinary masked read is neither — the contact details are masked on the way out and the query
+// cannot leave the commune the request arrived in — so it writes nothing, and an audit ledger
+// that grew a row per screen opened would bury the disclosures it exists to make findable.
 //
-// NO idem.* DECLARATION: a GET changes no state.
+// A read by a holder of `feedback.unmask` IS the first of those two, so it writes one entry.
+// (This comment used to say the day would come and the trail would live on "the route that
+// unmasks". It lives here instead, on the route that already renders the two fields: ADR 0030 §43
+// names THIS response as the thing it is fixing, and a second read route would have needed a URL
+// noun nobody has decided and a screen the specification does not have — docs/ui-ux/09 §139 shows
+// the number inline, with no reveal button.)
+//
+// WHY THE WRITE HAPPENS BEFORE THE BODY AND WHY ITS FAILURE IS A 500: rule 6 does not permit the
+// disclosure without the trail, so the only two orderings that are honest are "trail first, then
+// answer" and "refuse". Answering with masked values instead would be a government screen
+// quietly showing something different from what the officer's permissions say, with nothing on
+// it to explain why — the officer reads it as "my key was taken away" and nobody is told the
+// ledger is broken.
+//
+// NO idem.* DECLARATION: a GET changes no BUSINESS state. The audit entry is append-only by
+// design (rule 6, invariant 4) — two identical reads are two disclosures and are two rows,
+// which is the correct count, not a duplicate to be suppressed.
 func (h *Handler) DocPhieuPhanAnh(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ma := r.PathValue("maTraCuu")
@@ -220,7 +287,34 @@ func (h *Handler) DocPhieuPhanAnh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	vietJSON(w, http.StatusOK, phieuRaNgoai(p, nhan))
+	// THE DISCLOSURE DECISION, LAST, AND THE TRAIL BEFORE THE BODY.
+	//
+	// Last on purpose: everything above can still fail with a 500, and an entry recording a
+	// disclosure that never reached anybody is a trail that says a citizen's number was read when
+	// it was not. An inspection cannot tell that row from a real one.
+	xemDayDu := false
+	if !p.AnDanh {
+		if principal, ok := authz.From(ctx); ok && h.d.Checker.Allows(ctx, principal, QuyenXemDayDu) {
+			// The IP comes from this process's own socket. httpx.ClientIP does not trust
+			// X-Forwarded-For, and rule 6, invariant 2 wants the address the request really
+			// arrived from, not one the caller chose to name.
+			err := h.d.Vet.GhiVet(ctx, p.MaTraCuu, audit.Actor{
+				ID:   principal.ID,
+				Kind: principal.Kind,
+				IP:   httpx.ClientIP(r),
+			})
+			if err != nil {
+				h.d.Log.Error("ghi vết xem đầy đủ người gửi: lỗi hệ thống",
+					"xa", string(tenant.MustFrom(ctx)), "err", err)
+				httpx.WriteError(w, http.StatusInternalServerError, "internal",
+					"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+				return
+			}
+			xemDayDu = true
+		}
+	}
+
+	vietJSON(w, http.StatusOK, phieuRaNgoai(p, nhan, xemDayDu))
 }
 
 // khongTimThay is the ONE answer for "no such code", "another commune's code", "soft deleted"

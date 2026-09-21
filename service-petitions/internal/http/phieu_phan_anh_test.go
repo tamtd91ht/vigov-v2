@@ -294,6 +294,245 @@ func TestDocPhieuCheDuLieuCaNhan(t *testing.T) {
 	if ra.ReporterPhone == "" || ra.ReporterName == "" {
 		t.Error("che thành rỗng — cán bộ không nhận ra được bản ghi; phải là giá trị ĐÃ CHE, không phải mất")
 	}
+
+	// AND NOTHING WAS WRITTEN TO THE TRAIL. Rule 6, invariant 7 audits reading FULL personal data;
+	// a masked read is not that, and a ledger that grew a row per screen opened would bury the
+	// disclosures it exists to make findable.
+	if len(m.vet.ghi) != 0 {
+		t.Errorf("ghi %d vết cho một lần đọc ĐÃ CHE — vết dành cho lần đọc ĐẦY ĐỦ", len(m.vet.ghi))
+	}
+}
+
+// --- rule 3 + ADR 0030: `feedback.unmask` opens the two fields, and pays for it with a trail ----
+//
+// capQuyenXaA rebuilds the chain granting commune A's account exactly these keys, and grants
+// commune B's account THE SAME ONES. The second half is what makes the cross-commune case mean
+// something: the refusal must come from the commune comparison, never from a missing grant.
+func capQuyenXaA(t *testing.T, m *mayChu, khoa ...authz.Perm) {
+	t.Helper()
+	bo := map[authz.Perm]bool{}
+	for _, k := range khoa {
+		bo[k] = true
+	}
+	m.dungLai(t, func(d *Deps) {
+		d.Checker = checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{
+			xaA: {idCanBo: bo},
+			xaB: {idCanBo: bo},
+		}}
+	})
+}
+
+// TestXemDayDuNguoiGuiBonCa is rule 5, invariant 7 applied to the full-view axis.
+//
+// THE FOUR CASES DO NOT ALL SHOW UP AS STATUS CODES HERE, and that is the point of writing them
+// out: `feedback.unmask` does not gate the ROUTE — `feedback.read` does — it gates WHAT LEAVES IT.
+// So "wrong permission" is a 200 whose body is masked, and a test that only checked status codes
+// would be green against a handler that ignored the key completely.
+//
+//	no session                            401, nothing read, nothing written
+//	feedback.read, NO feedback.unmask     200 MASKED, no trail
+//	both keys, session issued by commune B  401 at commune A's host, nothing read, nothing written
+//	both keys, right commune              200 FULL, exactly one trail entry
+func TestXemDayDuNguoiGuiBonCa(t *testing.T) {
+	const khoaDayDu = authz.Perm("feedback.unmask")
+
+	t.Run("không phiếu làm việc thì 401", func(t *testing.T) {
+		m := dungMayChu(t)
+		capQuyenXaA(t, m, "feedback.read", khoaDayDu)
+
+		w := m.goi(t, http.MethodGet, hostA, duong(maPhieuThuong), nil)
+
+		doiMa(t, w, http.StatusUnauthorized)
+		if m.phieu.goi != 0 {
+			t.Errorf("đã đọc kho %d lần dù chưa có phiên", m.phieu.goi)
+		}
+		if len(m.vet.ghi) != 0 {
+			t.Errorf("ghi %d vết cho một yêu cầu không có phiên", len(m.vet.ghi))
+		}
+	})
+
+	t.Run("có feedback.read nhưng KHÔNG có feedback.unmask thì 200 mà vẫn che", func(t *testing.T) {
+		m := dungMayChu(t)
+		capQuyenXaA(t, m, "feedback.read") // khoá xem đầy đủ CỐ Ý vắng mặt
+
+		w := m.goi(t, http.MethodGet, hostA, duong(maPhieuThuong), canBoCuaXa(xaA))
+
+		doiMa(t, w, http.StatusOK)
+		if than := w.Body.String(); strings.Contains(than, "0900000000") || strings.Contains(than, "Nguyễn Văn An") {
+			t.Error("mở dữ liệu cá nhân cho tài khoản KHÔNG giữ feedback.unmask — luật 3 bất biến 3")
+		}
+		if len(m.vet.ghi) != 0 {
+			t.Errorf("ghi %d vết dù không mở gì cả", len(m.vet.ghi))
+		}
+	})
+
+	// The case no single-commune suite can produce: the right TWO keys, held in commune B, arriving
+	// at commune A's host. Holding `feedback.unmask` somewhere is not holding it here.
+	t.Run("đủ hai khoá nhưng phiên của xã khác thì 401", func(t *testing.T) {
+		m := dungMayChu(t)
+		capQuyenXaA(t, m, "feedback.read", khoaDayDu)
+
+		w := m.goi(t, http.MethodGet, hostA, duong(maPhieuThuong), canBoCuaXa(xaB))
+
+		doiMa(t, w, http.StatusUnauthorized)
+		if m.phieu.goi != 0 {
+			t.Errorf("đã đọc kho %d lần cho phiên của xã khác", m.phieu.goi)
+		}
+		if len(m.vet.ghi) != 0 {
+			t.Errorf("ghi %d vết cho phiên của xã khác", len(m.vet.ghi))
+		}
+	})
+
+	t.Run("đủ hai khoá và đúng xã thì 200 với họ tên và số đầy đủ", func(t *testing.T) {
+		m := dungMayChu(t)
+		capQuyenXaA(t, m, "feedback.read", khoaDayDu)
+
+		w := m.goi(t, http.MethodGet, hostA, duong(maPhieuThuong), canBoCuaXa(xaA))
+
+		doiMa(t, w, http.StatusOK)
+		ra := docPhieu(t, w.Body.Bytes())
+
+		// THE ASSERTION IS ON EQUALITY WITH THE STORED VALUE, not on "contains no asterisk": a
+		// handler that half-masked would pass the weaker check while still leaving the officer
+		// unable to dial the number, which is the entire reason ADR 0030 exists.
+		if ra.ReporterPhone != "0900000000" {
+			t.Errorf("reporter_phone = %q — cán bộ giữ feedback.unmask phải nhận số đầy đủ", ra.ReporterPhone)
+		}
+		if ra.ReporterName != "Nguyễn Văn An" {
+			t.Errorf("reporter_name = %q — cán bộ giữ feedback.unmask phải nhận họ tên đầy đủ", ra.ReporterName)
+		}
+	})
+}
+
+// TestXemDayDuGhiVetDayDuSauThuoc asserts the six things rule 6, invariant 2 requires of an entry,
+// on the entry this route actually asks for.
+//
+// WHAT IT CANNOT SEE, SAID PLAINLY: the fake is an interface, so this proves the route ASKS for the
+// entry with the right contents and refuses to answer when the ask fails. That the ask becomes a
+// committed row in `audit_log`, inside a transaction, is proved one layer down — internal/app,
+// against a real database/sql driver.
+func TestXemDayDuGhiVetDayDuSauThuoc(t *testing.T) {
+	m := dungMayChu(t)
+	capQuyenXaA(t, m, "feedback.read", "feedback.unmask")
+
+	w := m.goi(t, http.MethodGet, hostA, duong(maPhieuThuong), canBoCuaXa(xaA))
+	doiMa(t, w, http.StatusOK)
+
+	if len(m.vet.ghi) != 1 {
+		t.Fatalf("ghi %d vết cho một lần đọc đầy đủ, muốn đúng 1", len(m.vet.ghi))
+	}
+	v := m.vet.ghi[0]
+
+	if v.xa != xaA {
+		t.Errorf("vết ghi cho xã %q, muốn %q — luật 6 bất biến 2 đòi vết nói rõ TRONG XÃ NÀO", v.xa, xaA)
+	}
+	if v.ma != maPhieuThuong {
+		t.Errorf("vết trỏ bản ghi %q, muốn %q", v.ma, maPhieuThuong)
+	}
+	if v.nguoi.ID != idCanBo {
+		t.Errorf("vết ghi người gây %q, muốn %q", v.nguoi.ID, idCanBo)
+	}
+	if v.nguoi.Kind != "staff" {
+		t.Errorf("vết ghi loại người gây %q, muốn %q", v.nguoi.Kind, "staff")
+	}
+	// The address of the socket the request arrived on — mayChu.goi sets RemoteAddr to
+	// 10.0.0.7:51000 — with the port stripped. Never X-Forwarded-For: any client can set that.
+	if v.nguoi.IP != "10.0.0.7" {
+		t.Errorf("vết ghi IP %q, muốn %q", v.nguoi.IP, "10.0.0.7")
+	}
+}
+
+// TestXemDayDuMoiLanDocLaMotVet pins that the entries are NOT deduplicated.
+//
+// Two reads are two disclosures. A ledger that suppressed the second would answer "read once" to an
+// inspection asking how often a citizen's number was opened — and rule 6, invariant 4 makes entries
+// append-only precisely so that count is the truth.
+func TestXemDayDuMoiLanDocLaMotVet(t *testing.T) {
+	m := dungMayChu(t)
+	capQuyenXaA(t, m, "feedback.read", "feedback.unmask")
+
+	for i := 0; i < 3; i++ {
+		doiMa(t, m.goi(t, http.MethodGet, hostA, duong(maPhieuThuong), canBoCuaXa(xaA)), http.StatusOK)
+	}
+	if len(m.vet.ghi) != 3 {
+		t.Errorf("ghi %d vết cho ba lần đọc đầy đủ, muốn 3", len(m.vet.ghi))
+	}
+}
+
+// TestXemDayDuGhiVetHongThi500VaKhongLoSo is the test that makes the trail load-bearing rather
+// than decorative.
+//
+// ADR 0030 stop condition #4: returning full personal data with no trail, on ANY route. So when the
+// trail cannot be written the disclosure must not happen — and the response must not quietly fall
+// back to masked either, because a government screen that shows something different from what the
+// officer's permissions say, with nothing to explain why, is read as "my key was withdrawn" and
+// nobody is told the ledger is broken.
+func TestXemDayDuGhiVetHongThi500VaKhongLoSo(t *testing.T) {
+	m := dungMayChu(t)
+	capQuyenXaA(t, m, "feedback.read", "feedback.unmask")
+	// The message is deliberately hostile: it carries the lookup code and a name, which is exactly
+	// what must not travel back to a client (rule 3, forbidden #3).
+	m.vet.loi = errors.New("pg: audit_log đầy khi ghi vết phiếu PA-4K7M-92XR-BTVD của Nguyễn Văn An")
+
+	w := m.goi(t, http.MethodGet, hostA, duong(maPhieuThuong), canBoCuaXa(xaA))
+
+	doiMa(t, w, http.StatusInternalServerError)
+	than := w.Body.String()
+	if strings.Contains(than, "0900000000") || strings.Contains(than, "Nguyễn Văn An") {
+		t.Error("trả dữ liệu cá nhân đầy đủ dù KHÔNG ghi được vết — ADR 0030 điều kiện dừng #4")
+	}
+	if strings.Contains(than, "audit_log") || strings.Contains(than, maPhieuThuong) {
+		t.Errorf("lỗi nội bộ lọt ra ngoài: %s", than)
+	}
+}
+
+// TestXemDayDuKhongPhaDuocAnDanh fixes the BOUNDARY of the key, which is the part most likely to be
+// widened by somebody reading only its name.
+//
+// `feedback.unmask` removes MASKING. It does not override `an_danh`: masking is a precaution the
+// system takes, anonymity is a choice the citizen made, and docs/ui-ux/09 §348 hides the name and
+// number from every interface. Reversing a citizen's own choice is a decision nobody has made, and
+// ADR 0030 does not make it — "làm đúng phạm vi nó chốt, đừng rộng hơn".
+//
+// NO TRAIL IS WRITTEN HERE EITHER, and that follows rather than being a second rule: nothing full
+// was disclosed, so there is nothing to record.
+func TestXemDayDuKhongPhaDuocAnDanh(t *testing.T) {
+	m := dungMayChu(t)
+	// All three keys, including the restricted one — maPhieuCanBo is in the `can-bo` field, and
+	// the point of this test is anonymity, not the field restriction.
+	capQuyenXaA(t, m, "feedback.read", "feedback.restricted", "feedback.unmask")
+
+	w := m.goi(t, http.MethodGet, hostA, duong(maPhieuCanBo), canBoCuaXa(xaA))
+	doiMa(t, w, http.StatusOK)
+
+	if than := w.Body.String(); strings.Contains(than, "0900000000") || strings.Contains(than, "Nguyễn Văn An") {
+		t.Error("phiếu ẩn danh lộ người gửi cho tài khoản giữ feedback.unmask — khoá ấy gỡ CHE, không gỡ ẨN DANH")
+	}
+	ra := docPhieu(t, w.Body.Bytes())
+	if ra.ReporterName != "" || ra.ReporterPhone != "" {
+		t.Errorf("phiếu ẩn danh vẫn trả người gửi: ten=%q so=%q", ra.ReporterName, ra.ReporterPhone)
+	}
+	if len(m.vet.ghi) != 0 {
+		t.Errorf("ghi %d vết dù không mở gì — vết dành cho lần ĐỌC ĐẦY ĐỦ, không phải cho lần có quyền", len(m.vet.ghi))
+	}
+}
+
+// TestXemDayDuKhongThayTheQuyenHanChe keeps the two keys from collapsing into one another.
+//
+// They answer different questions — CONTENT scope versus PERSONAL DATA — and rule 5, invariant 3b
+// forbids deriving either from the other. A handler that checked only one would pass every test
+// above and hand a restricted petition to somebody holding the wrong key.
+func TestXemDayDuKhongThayTheQuyenHanChe(t *testing.T) {
+	m := dungMayChu(t)
+	// feedback.unmask WITHOUT feedback.restricted, on a petition in the restricted field.
+	capQuyenXaA(t, m, "feedback.read", "feedback.unmask")
+
+	w := m.goi(t, http.MethodGet, hostA, duong(maPhieuCanBo), canBoCuaXa(xaA))
+
+	doiMa(t, w, http.StatusNotFound)
+	if len(m.vet.ghi) != 0 {
+		t.Errorf("ghi %d vết cho một phiếu người gọi còn không được biết là có tồn tại", len(m.vet.ghi))
+	}
 }
 
 // TestDocPhieuAnDanhKhongTraTenLanSo asserts the stronger rule for an anonymous petition:

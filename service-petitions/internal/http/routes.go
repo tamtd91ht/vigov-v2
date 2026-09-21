@@ -30,6 +30,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
@@ -77,6 +78,21 @@ type (
 		TheoMaTraCuu(ctx context.Context, ma string) (domain.PhieuPhanAnh, error)
 	}
 
+	// VetXemNguoiGui records ONE disclosure of a reporter's full name and phone number.
+	//
+	// IT IS A DEPENDENCY OF A READ ROUTE, which looks wrong and is not: rule 6, invariant 7 audits
+	// reading FULL personal data, and ADR 0030 makes that the condition attached to the
+	// `feedback.unmask` key rather than a follow-up task. The handler cannot write the entry
+	// itself — audit.Write takes a *store.ScopedTx and there is no overload that writes outside a
+	// transaction — so the use case owns it and the route depends on the use case.
+	//
+	// THE INTERFACE TAKES NO TRANSACTION AND RETURNS ONLY AN ERROR, and that shape is the
+	// contract: an implementation either committed the entry or it did not, and the route treats
+	// "did not" as "do not disclose". There is no third answer for a caller to interpret.
+	VetXemNguoiGui interface {
+		GhiVet(ctx context.Context, maTraCuu string, nguoi audit.Actor) error
+	}
+
 	// NhanLinhVucDanhMuc is the commune's OVERRIDES for the petition field labels — tier 2 of
 	// ADR 0026. A code with no row here is valid and simply carries the platform's default
 	// label; absence is never "unknown field".
@@ -88,9 +104,9 @@ type (
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
 type Deps struct {
 	// Checker decides permissions. IT IS NOW LOAD-BEARING: GET /api/v1/citizen-reports/{maTraCuu}
-	// declares authz.RequirePermission, and the handler consults the Checker a second time for
-	// the restricted field. A nil one is therefore in the panic switch in Register — see the note
-	// there, which predicted exactly this route.
+	// declares authz.RequirePermission, and the handler consults the Checker TWICE more — once
+	// for the restricted field, once for `feedback.unmask`. A nil one is therefore in the panic
+	// switch in Register — see the note there, which predicted exactly this route.
 	Checker authz.Checker
 
 	LoaiNhiemVu LoaiNhiemVuDanhMuc
@@ -98,6 +114,9 @@ type Deps struct {
 
 	Phieu       PhieuPhanAnhDoc
 	NhanLinhVuc NhanLinhVucDanhMuc
+
+	// Vet writes the trail for a full-view read. Required, not optional — see the panic switch.
+	Vet VetXemNguoiGui
 
 	Log *slog.Logger
 }
@@ -130,6 +149,14 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu kho phiếu phản ánh — GET /api/v1/citizen-reports/{maTraCuu} sẽ panic khi có người gọi")
 	case d.NhanLinhVuc == nil:
 		panic("petitions/http: thiếu kho nhãn lĩnh vực — GET /api/v1/citizen-reports/{maTraCuu} sẽ panic khi có người gọi")
+	case d.Vet == nil:
+		// THE MOST DANGEROUS OF THE FIVE TO LEAVE OUT, because a nil here does not crash a screen:
+		// it crashes the ONE path that discloses a citizen's name and number, and only when
+		// somebody with `feedback.unmask` reads a petition. Refusing at startup is what keeps
+		// "every full read leaves a trail" (rule 6, invariant 7) from depending on a wiring line
+		// nobody re-reads.
+		panic("petitions/http: thiếu đường ghi vết xem đầy đủ — quyền feedback.unmask mở họ tên và số " +
+			"điện thoại người gửi, và luật 6 bất biến 7 không cho phép đọc đầy đủ mà không ghi vết")
 	}
 
 	h := NewHandler(d)
@@ -220,38 +247,49 @@ func Register(mux *http.ServeMux, d Deps) {
 	// nobody has decided, and each would look entirely reasonable if written anyway — which is
 	// what makes writing them expensive rather than merely premature:
 	//
+	// TWO OF THE BLOCKERS LISTED BELOW HAVE BEEN CLEARED SINCE THIS LIST WAS WRITTEN, and they are
+	// marked CLEARED rather than deleted: a reader who finds this comment through ADR 0029 §115 or
+	// through the ledger needs to see that the reason moved, not that it vanished.
+	//
 	//   POST /api/v1/citizen-reports  (nhập hộ)
 	//       Booking a petition FIXES BOTH DEADLINES at once, because the staff form carries the
 	//       field (ADR 0028, decision E). Both numbers come from the `sla` table of
-	//       docs/ui-ux/14-cau-hinh.md §8 — A TABLE THAT EXISTS IN NO SERVICE. Its rows cover
-	//       `van-ban-den` (documents), `phan-anh` and `nhiem-vu` (petitions), so which service
-	//       owns it is rule 2's stop condition #1: the same question the user answered for
-	//       `lich_lam_viec` by putting the three calendar tables in identity. Nobody has answered
-	//       it for `sla`, and a route that guessed would either split one configuration screen
-	//       across two services or hold another service's numbers.
+	//       docs/ui-ux/14-cau-hinh.md §8.
+	//       CLEARED — "a table that exists in no service" was true until 2026-09-20. ADR 0029 put
+	//       `sla` in identity, beside the three calendar tables, and
+	//       service-identity/migrations/0008_sla.sql creates it.
+	//       STILL BLOCKED, one step further along: there is NO RPC that reads the hours. identity's
+	//       .proto has AdvanceWorkingHours, which answers "lúc nào" and not "bao lâu", and ADR 0029
+	//       §118 says in its own words that the shape of the reading contract is undecided —
+	//       whether it returns the HOURS for the caller to add, or the DEADLINE already computed.
+	//       Those put the working-hours arithmetic in two different services, and ADR 0007 forbids
+	//       two implementations of it. Writing the read path before that contract exists is ADR
+	//       0029's stop condition #3.
 	//
 	//   POST …/{maTraCuu}/<classification>  (phân loại)
-	//       Blocked three ways. (1) The same `sla` question, for `gio_xu_ly_xong` of the settled
-	//       field. (2) ADR 0026 requires the field code to be CHECKED ON WRITE against the
-	//       tier-1 set in service `platform`, and how petitions reads that set — live gRPC or an
-	//       event-fed replica — has no ADR; writing the read path without one is ADR 0026's stop
-	//       condition #2. (3) NO PERMISSION KEY NAMES THIS ACT. `quyen` holds exactly five
-	//       `feedback.*` keys — read, create, assign, resolve, restricted — and classification is
-	//       none of them: it is not assignment, and rule 5, invariant 3b is explicit that these
-	//       rights are not a Cartesian product to be derived. Guarding the act that fixes a
-	//       citizen's resolve deadline with a neighbouring key is a guess about authority inside
-	//       a public body.
-	//       The URL noun is missing too: `ubiquitous-language.md` maps tiếp nhận, thụ lý, nghiệm
+	//       Blocked three ways; one of the three is now clear.
+	//       (1) The same `sla` question, for `gio_xu_ly_xong` of the settled field — see above.
+	//       (2) ADR 0026 requires the field code to be CHECKED ON WRITE against the tier-1 set in
+	//       service `platform`, and how petitions reads that set — live gRPC or an event-fed
+	//       replica — still has NO ADR. kb/10-decisions/ ends at 0032 and none of 0029..0032
+	//       answers it. Writing the read path without one is ADR 0026's stop condition #2.
+	//       (3) CLEARED — `feedback.classify` was seeded on 2026-09-20 by
+	//       service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql, decided by ADR
+	//       0030. The key that names this act now exists and must not be replaced by a guess.
+	//       The URL noun is STILL missing: `ubiquitous-language.md` maps tiếp nhận, thụ lý, nghiệm
 	//       thu and đóng phiếu, and deliberately does not map phân loại — and that file says to
 	//       stop and ask rather than translate on the spot, because a path a commune is already
 	//       running cannot be taken back.
 	//
 	//   POST /api/cong/citizen-reports  (công dân gửi)
-	//       This service has no citizen edge and cannot build one today: httpx.CitizenEdge needs
-	//       an httpx.CitizenSessions, the only implementation is inside
-	//       service-identity/internal/ (unreachable, rule 2 forbidden #1), and identity's .proto
-	//       has no RPC that resolves a citizen session. Adding one is the contract owner's work,
-	//       not this service's.
+	//       PARTLY CLEARED. identity's .proto now has ResolveCitizenSession and
+	//       core/identityclient returns an httpx.CitizenSessions this service can use without
+	//       importing service-identity/internal/ (rule 2, forbidden #1). One thing still blocks it
+	//       and it is not programming: that RPC cannot carry `x-tenant-id` — it is the call that
+	//       RESOLVES the commune (ADR 0022) — so its name has to be in core/grpcx.methodsWithoutTenant,
+	//       and adding a name to that list is ADR 0012 decision 1's stop condition. Until then the
+	//       caller-side interceptor refuses every call with InvalidArgument, so mounting a citizen
+	//       edge here would produce an edge that builds, runs, and answers 401 to every citizen.
 	//
 	// The store already carries the mechanical half of the two staff writes — Tao and
 	// ChotLinhVuc, each taking a *store.ScopedTx so the audit entry cannot be written anywhere
@@ -270,6 +308,17 @@ func Register(mux *http.ServeMux, d Deps) {
 	// to no session AND to a session issued by another commune — those are one answer because
 	// authz.xacNhanXa refuses before the permission is ever consulted (rule 5, invariant 3), so
 	// no query runs and the response cannot differ by commune.
+	//
+	// A SECOND AND A THIRD PERMISSION ARE CONSULTED INSIDE THE HANDLER, and neither changes the
+	// status code — which is why neither can be read off this block and both are stated here:
+	//
+	//	feedback.restricted  absent, on a `can-bo` petition -> 404, identical to an unknown code
+	//	feedback.unmask      absent                         -> 200 with the reporter MASKED
+	//	feedback.unmask      present                        -> 200 with the reporter in full,
+	//	                                                        and one audit entry written first
+	//
+	// 500 therefore covers one more cause than it did: the audit entry for a full-view read
+	// failing to commit. Rule 6 gives no other answer — no trail, no disclosure.
 	//
 	// @reply    200 phieuPhanAnhRa
 	// @reply    401 httpx.Error

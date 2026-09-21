@@ -24,6 +24,7 @@ import (
 	"github.com/vihat/vigov/core/staffauth"
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-petitions/internal/app"
 	svchttp "github.com/vihat/vigov/service-petitions/internal/http"
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 	"github.com/vihat/vigov/service-petitions/migrations"
@@ -126,7 +127,11 @@ func chay(log *slog.Logger) error {
 		MucUuTien:   petstore.NewMucUuTienNhiemVuStore(kho),
 		Phieu:       petstore.NewPhieuPhanAnhStore(kho),
 		NhanLinhVuc: petstore.NewNhanLinhVucStore(kho),
-		Log:         log,
+		// The trail for a full-view read of a reporter's name and number. It takes the same
+		// *store.DB as the repositories because it opens its own transaction: rule 6, invariant 3
+		// admits no audit write outside one, and audit.Write takes only a *store.ScopedTx.
+		Vet: app.NewXemNguoiGui(kho),
+		Log: log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
