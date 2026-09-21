@@ -179,8 +179,48 @@ WHERE bam_token = $1
 // merged commune's citizen sessions keep working — written down here rather than left for
 // somebody to discover.
 func (s *PhienCongDanStore) TraCuu(ctx context.Context, token string) (httpx.CitizenSession, bool) {
-	if token == "" {
+	p, ok, err := s.TraCuuCoLoi(ctx, token)
+	if err != nil {
+		// A database failure is not "no such session", but the interface has one negative
+		// answer and that is right FOR THE EDGE, where identity's own routes are failing in the
+		// same breath. It is logged — WITHOUT the token and without any citizen identifier —
+		// because the alternative is an outage that looks like every citizen in the country
+		// mistyping their session at once.
+		//
+		// THE COLLAPSE IS MADE HERE AND NOWHERE DEEPER, so the ONE caller that must not make it
+		// can avoid it: across a service boundary, "identity is down" read as "everybody is
+		// signed out" tells every citizen in every commune that their session ended, through the
+		// one channel a commune is judged on (rule 10). See TraCuuCoLoi.
+		s.log.Error("phiên công dân: không tra cứu được, từ chối", "err", err)
 		return httpx.CitizenSession{}, false
+	}
+	return p, ok
+}
+
+// TraCuuCoLoi is TraCuu with the third answer the edge deliberately does not have: the registry
+// COULD NOT BE READ.
+//
+// WHY BOTH EXIST. core/httpx.CitizenSessions promises ONE negative answer, and that promise is
+// right at the HTTP edge: unknown token, expired session and revoked session must be
+// indistinguishable from outside. An outage is not one of those three, and the difference only
+// becomes actionable ACROSS A SERVICE BOUNDARY — which is where vigov.identity.v1's
+// ResolveCitizenSession sits. Its contract is explicit: "UNAVAILABLE etc. — the call did not
+// happen. IT IS NOT 'no session'". That distinction cannot be recovered once TraCuu has collapsed
+// it, so the collapse happens in TraCuu and the RPC calls this instead. Exactly the split
+// ResolveStaffPrincipal already documents against XacThuc, for the identical reason.
+//
+// IT DOES NOT LOG. Each of the two callers logs once, in its own voice: TraCuu at the edge, the
+// gRPC handler through Server.loi. Logging here as well would put every citizen outage into the
+// log pipeline twice.
+//
+// WHAT IT STILL COLLAPSES, STATED RATHER THAN LEFT TO BE DISCOVERED: a Scan failure returns
+// ok=false with no error. That is a column-type or column-order disagreement between this Go and
+// this schema — a fault in THIS service that no caller can act on and that would be identical on
+// every row of every commune, not the transient dependency failure the third answer exists for. A
+// connection that drops mid-read IS surfaced, through rows.Err() below.
+func (s *PhienCongDanStore) TraCuuCoLoi(ctx context.Context, token string) (httpx.CitizenSession, bool, error) {
+	if token == "" {
+		return httpx.CitizenSession{}, false, nil
 	}
 
 	// THE TOKEN NEVER LEAVES THIS LINE. Only its hash is bound as a parameter, so a driver
@@ -192,16 +232,21 @@ func (s *PhienCongDanStore) TraCuu(ctx context.Context, token string) (httpx.Cit
 	// token 256 bit do máy chủ phát — không bao giờ trả về danh sách.
 	rows, err := s.raw.QueryContext(ctx, truyVanPhienTheoToken, bamRefresh(token))
 	if err != nil {
-		// A database failure is not "no such session", but the interface has one negative
-		// answer and that is right for the edge. It is logged — WITHOUT the token and without
-		// any citizen identifier — because the alternative is an outage that looks like every
-		// citizen in the country mistyping their session at once.
-		s.log.Error("phiên công dân: không tra cứu được, từ chối", "err", err)
-		return httpx.CitizenSession{}, false
+		// WRAPPED WITHOUT THE TOKEN AND WITHOUT ANY CITIZEN IDENTIFIER. This error travels into
+		// a log at whichever caller handles it (rule 3).
+		return httpx.CitizenSession{}, false, fmt.Errorf("phiên công dân: tra cứu: %w", err)
 	}
 	defer rows.Close()
 
-	return quetPhien(rows)
+	p, ok := quetPhien(rows)
+	// ASKED AGAIN AFTER quetPhien, and that is not redundant: quetPhien answers the EDGE's
+	// question, so it folds a dropped connection into the same ok=false as an unknown token. The
+	// sticky error is still on *sql.Rows here, and this is the one place that can tell the caller
+	// the read never completed rather than that the session does not exist.
+	if err := rows.Err(); err != nil {
+		return httpx.CitizenSession{}, false, fmt.Errorf("phiên công dân: tra cứu: %w", err)
+	}
+	return p, ok, nil
 }
 
 // dongPhien is what *sql.Rows satisfies, so quetPhien can be tested without a database. The

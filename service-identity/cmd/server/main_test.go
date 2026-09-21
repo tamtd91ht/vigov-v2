@@ -36,6 +36,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/grpcx"
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/token"
@@ -58,13 +59,14 @@ const (
 // The stores, absent. This test is about the chain in FRONT of the handlers, so the handlers only
 // have to answer something.
 type (
-	phienGia  struct{}
-	canBoGia  struct{}
-	loGia     struct{}
-	quyenGia  struct{}
-	lichGia   struct{}
-	nghiLeGia struct{}
-	lamBuGia  struct{}
+	phienGia        struct{}
+	canBoGia        struct{}
+	loGia           struct{}
+	quyenGia        struct{}
+	phienCongDanGia struct{}
+	lichGia         struct{}
+	nghiLeGia       struct{}
+	lamBuGia        struct{}
 )
 
 func (phienGia) KiemTra(context.Context, string) (idstore.Phien, error) {
@@ -87,6 +89,13 @@ func (loGia) TheoNhieuID(_ context.Context, ids []string) ([]domain.CanBoVaiTro,
 
 func (quyenGia) QuyenCua(context.Context, authz.Principal) ([]authz.Perm, error) {
 	return []authz.Perm{"admin.user"}, nil
+}
+
+// The citizen session registry, absent. It answers a usable session so the interceptor chain is
+// what decides the outcome of a call to ResolveCitizenSession — which today is a refusal, because
+// that RPC is not on core/grpcx.methodsWithoutTenant.
+func (phienCongDanGia) TraCuuCoLoi(context.Context, string) (httpx.CitizenSession, bool, error) {
+	return httpx.CitizenSession{ID: "sid-cong-dan-gia", CitizenID: idThu, TenantID: ulidThu}, true, nil
 }
 
 // A minimal working week — Monday 07:30–11:30 — and no closures, no swap days. Enough for
@@ -114,10 +123,13 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		CanBo:  canBoGia{},
 		Lo:     loGia{},
 		Quyen:  quyenGia{},
-		Lich:   lichGia{},
-		NghiLe: nghiLeGia{},
-		LamBu:  lamBuGia{},
-		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// Required, or NewServer refuses to build: every OTHER service's citizen edge is built on
+		// this one lookup (svcgrpc.Deps.PhienCongDan).
+		PhienCongDan: phienCongDanGia{},
+		Lich:         lichGia{},
+		NghiLe:       nghiLeGia{},
+		LamBu:        lamBuGia{},
+		Log:          slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 }
 

@@ -42,6 +42,24 @@
       "bang_chung": "core/identityclient/identityclient.go + identityclient_test.go — 5 ca. Ba đột biến đều đỏ đúng ca của nó: đọc theo chỉ số · bỏ phép kiểm thiếu mốc · nuốt lỗi gRPC thành map rỗng. `go test ./core/identityclient/` xanh, `make check` rc=0 — kiểm 2026-09-20, commit f802d1b",
       "no_confirm": [],
       "tiep_theo": "BA TÍNH CHẤT BÊN GỌI PHẢI GIỮ, cả ba đã có ca test nhưng ca test không sang được service khác. (1) TRẢ VỀ MAP THEO SỐ GIỜ, KHÔNG THEO CHỈ SỐ — hợp đồng gộp số trùng nên len đáp án có thể nhỏ hơn len(gio) NGAY CẢ KHI thành công trọn vẹn; đọc items[0]/items[1] sau khi hỏi {2,16} là tráo hạn tiếp nhận thành hạn xử lý, trên lĩnh vực An ninh trật tự, và không phép kiểm đường-hạnh-phúc nào bắt được. (2) KHÔNG CÓ THÀNH CÔNG MỘT PHẦN — mốc thiếu sẽ tới tay bên gọi dưới dạng time.Time rỗng, tức hạn NĂM 1, tức phiếu quá hạn ngay lúc tiếp nhận. (3) LỖI LUÔN LÀ LỖI: FAILED_PRECONDITION là đáp án BÌNH THƯỜNG hôm nay vì chưa xã nào khai lịch, và nó có nghĩa PHẢI HỎNG VIỆC TIẾP NHẬN — tuyệt đối không rơi về một phép cộng thời lượng tại chỗ. TÍNH TỚI 21/09 CHƯA SERVICE NÀO GỌI bọc này: nó đã dựng sẵn, chưa phải đang dùng."
+    },
+    {
+      "id": "khoa-quyen-trong-bai-kiem-phai-co-that",
+      "viec": "core/staffauth: khoá quyền trong bài kiểm phải là dòng CÓ THẬT của bảng `quyen`",
+      "trang_thai": "xong",
+      "bang_chung": "core/staffauth/staffauth_test.go:52 — `quyenKhac` từng là \"document.approve\", một chuỗi KHÔNG migration nào gieo và KHÔNG tuyến nào khai; đã đổi sang \"document.route\" (service-identity/migrations/0001_init.sql:289). Đã chứng minh bài kiểm CÒN SỐNG bằng hai đột biến: (a) đặt `quyenKhac` = \"document.read\" — ĐỎ (staffauth_test.go:342, 200 thay vì 403); (b) cấp \"MUTANT.rac\" cho nửa ĐƯỢC PHỤC VỤ — ĐỎ (staffauth_test.go:335, 403 thay vì 200). Phục hồi bằng bản chụp tệp, KHÔNG dùng git restore. `gofmt -l .` rỗng và `go test -race -count=1 -p 1 ./...` xanh toàn module — kiểm 2026-09-21",
+      "no_confirm": [
+        27
+      ],
+      "tiep_theo": "Đột biến (a) mới là phép kiểm có nghĩa cho ô `quyenKhac`: một chuỗi RÁC ở ô đó vẫn XANH, vì tính chất cần giữ là 'khác khoá tuyến khai', mà rác thì cũng khác. Nghĩa là ô ấy KHÔNG bắt được khoá bịa — đúng cách \"document.approve\" sống sót ở đây. Chưa có rào tự động nào đối chiếu khoá trong mã với bảng `quyen`; xem mục cùng tên ở tools.json."
+    },
+    {
+      "id": "boc-phan-giai-phien-cong-dan",
+      "viec": "core/identityclient - boc ResolveCitizenSession va bo noi httpx.CitizenSessions cho service khong phai identity",
+      "trang_thai": "dang_lam",
+      "bang_chung": "core/identityclient/phien_cong_dan.go - Client.TraCuuPhienCongDan tra BA ket qua (loi goi / khong co phien / co phien, xa co the rong theo ADR 0005) va SoPhienCongDan cai core/httpx.CitizenSessions. core/identityclient/phien_cong_dan_test.go: 9 ca, noi that qua mot may chu gRPC that voi du chuoi interceptor (moMay doi nhan identityv1.IdentityServiceServer thay vi *mayChuGia). core/grpcx/grpcx_test.go: ResolveCitizenSession duoc them vao danh sach KHONG-mien-xa. gofmt -l core rong; go vet ./... sach; go test -race -count=1 -p 2 ./... XANH (18 goi) - kiem 2026-09-21.",
+      "no_confirm": [],
+      "tiep_theo": "HAI THU CHAN, ca hai da ghim bang phep kiem chu khong phai loi hua: (1) moi loi goi hom nay bi chinh grpcx.UnaryClientInterceptor tu choi vi RPC chua duoc mien xa - DIEU KIEN DUNG cua ADR 0012 quyet dinh 1, xem muc `resolve-citizen-session` trong tien-do/proto.json; DUNG di vong bang cach nhet mot xa bat ky vao context de qua interceptor (luat 1 cam #1) hay mo mot ket noi thu hai khong co interceptor. (2) httpx.CitizenSessions chi co hai ket qua nen bo noi buoc phai gop su co thanh 'khong co phien' - cong dan nhan 401 trong luc identity chet. Cach sua: cho httpx.CitizenSessions.TraCuu tra them error va cho XaTuPhien mot nhanh 503, giong het staffauth.Resolver da lam cho duong can bo. La sua hop dong ria trong core/httpx, chua lam."
     }
   ]
 }

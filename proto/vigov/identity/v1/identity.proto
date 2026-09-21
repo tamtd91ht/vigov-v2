@@ -38,6 +38,18 @@ import "google/protobuf/timestamp.proto";
 // record — which commune that row belongs to. It is an answer the server returns, never an
 // input, and it is never read to decide what the caller may see.
 //
+// ONE RPC HERE CANNOT OBEY THE RULE ABOVE, AND IT IS NOT YET EXCUSED FROM IT.
+// ResolveCitizenSession is the call that ESTABLISHES the commune of a citizen request: the Mini
+// App has no domain (ADR 0005), so the citizen edge has no Host to resolve and derives the
+// commune FROM the session (ADR 0022). Requiring "x-tenant-id" on it is the loop ADR 0012 §A
+// describes for ResolveHost — knowing the commune in order to find the commune. It therefore
+// needs a place on core/grpcx.methodsWithoutTenant, and ADR 0012 decision 1 makes ADDING A
+// SECOND NAME TO THAT LIST A STOP CONDITION: the user decides it, not whoever is writing code.
+// Until that question is asked and answered the name is NOT on the list, the client interceptor
+// refuses the call with INVALID_ARGUMENT, and core/grpcx/grpcx_test.go pins the absence so the
+// answer cannot be given by accident. The contract is written and the implementation exists; the
+// one line that makes them reachable is deliberately not written.
+//
 // Field numbers are never reused; a removed field becomes `reserved`. New fields are always
 // optional with a safe default.
 
@@ -144,6 +156,101 @@ service IdentityService {
   //                       "everybody is signed out", and staff are then told to sign in again
   //                       through the service that is down. Answer 503.
   rpc ResolveStaffPrincipal(ResolveStaffPrincipalRequest) returns (ResolveStaffPrincipalResponse);
+
+  // ResolveCitizenSession turns the bearer token a Mini App holds into the three opaque
+  // identifiers the citizen edge needs: which session, which citizen, and WHICH COMMUNE.
+  //
+  // WHY IT EXISTS. `core/httpx.CitizenEdge` needs a `core/httpx.CitizenSessions`, and the only
+  // implementation is `*store.PhienCongDanStore` inside service-identity's `internal/`
+  // (service-identity/internal/store/phien_cong_dan.go:180, `TraCuu`), which rule 2, forbidden #1
+  // forbids any other service from importing. Without this RPC service-petitions — the service
+  // that owns the ONE object a citizen creates and then watches (rule 10) — cannot mount a
+  // citizen edge at all, and said so in its own source rather than shipping a second, weaker
+  // session reader (service-petitions/internal/http/routes.go, the `TUYẾN CÔNG DÂN GỬI` note).
+  //
+  // # IT RESOLVES A SESSION. IT GRANTS NOTHING.
+  //
+  // This is the sentence that has to survive every later edit. A citizen identity is a phone
+  // number plus an OTP, which rule 4 calls deliberately weak: phone numbers change hands, SIMs
+  // get taken over, OTPs get read over a shoulder. So there is no permission set in the response
+  // and there must never be one — not a `permission_keys`, not a role, not a capability flag.
+  // Whatever a citizen may see is decided by rule 4's isolation (their own records, in one
+  // commune) at the point of the query, never by anything this RPC hands back.
+  //
+  // THE ASYMMETRY WITH ResolveStaffPrincipal IS THE WHOLE DESIGN, not an unfinished half:
+  // that RPC answers "who is acting AND what may they do", this one answers only "whose session
+  // is this, and in which commune". Merging the two messages, or growing this one toward the
+  // other, would put the weaker trust level behind the shape that carries authority.
+  //
+  // # The commune is the ANSWER, and the caller may not choose it
+  //
+  // ADR 0022: the citizen channel resolves the commune FROM THE SESSION, never from Host and
+  // never from anything the client sent. `tenant_id` is therefore in the RESPONSE body — the
+  // subject being answered, exactly the distinction ADR 0012 §B draws for ResolveHost — and
+  // there is no commune field in the REQUEST. A caller cannot ask "is this session valid IN
+  // COMMUNE X", because that question is a client naming its own commune (rule 1, forbidden #2)
+  // wearing the clothes of a stricter check.
+  //
+  // AN EMPTY `tenant_id` IN THE RESPONSE IS A REAL ANSWER, NOT A MISSING VALUE. ADR 0005
+  // separates discovery from session: a citizen signs in first, and the screen that offers the
+  // choice of commune is called WITH that session. The caller must map it to
+  // `httpx.CitizenSession.TenantID == ""`, where `httpx.XaTuPhien` answers 401 on every business
+  // route. A caller that substitutes any default there is rule 1, forbidden #1.
+  //
+  // # THIS RPC CANNOT CARRY "x-tenant-id", AND IS NOT YET EXCUSED FROM CARRYING IT
+  //
+  // See the paragraph at the top of this file. It is the citizen channel's ResolveHost, so it
+  // belongs on core/grpcx.methodsWithoutTenant — and putting a second name on that list is a
+  // STOP CONDITION under ADR 0012, decision 1, which is the user's to answer. Until it is
+  // answered, calls made through core/identityclient are refused locally by the client
+  // interceptor. That is the contract working, not a bug to route around: DO NOT make the caller
+  // invent a commune to satisfy the interceptor.
+  //
+  // # NO PERSONAL DATA CROSSES THIS BOUNDARY, BY CONSTRUCTION
+  //
+  // Three opaque identifiers and there is no fourth field — the same refusal
+  // `core/httpx.CitizenSession` makes, for the same reason. A citizen is identified in the
+  // business by phone number (ADR 0020), and a phone number is personal data under Decree
+  // 13/2023 (rule 3). This RPC runs on EVERY request of EVERY citizen, which makes it the single
+  // most likely line in the system to put an entire commune's phone numbers into a log. Adding
+  // `phone_masked` here — even masked — would be adding it to the hottest path in the system for
+  // a caller that has no use for it: `CitizenIdentity` already exists for the callers that do.
+  //
+  // # Failure has exactly one answer
+  //
+  // Unknown token, malformed token, expired session, revoked session, a session the registry
+  // cannot attribute: ALL of them return OK with no session. No reason code, no enum, and no way
+  // to add one without editing this paragraph — a response that varies with the reason tells
+  // whoever is probing how close they are (rule 4, forbidden #2). `core/httpx.CitizenSessions`
+  // makes the identical promise at the edge, in the same words.
+  //
+  //   OK + no session   the token is not usable. The caller builds no session, so every business
+  //                     route answers 401 exactly as if no token had been presented.
+  //   INVALID_ARGUMENT  `session_token` was empty. The edge never calls without a bearer token,
+  //                     so this is a wiring fault and is answered loudly rather than as "no
+  //                     session": the quiet answer would cost a round trip on every anonymous
+  //                     request of the citizen channel, forever, with nothing to report it.
+  //   UNAUTHENTICATED   NEVER produced by this RPC — it belongs to the caller-key interceptor
+  //                     (ADR 0025) and means the DEPLOYMENT is misconfigured.
+  //   UNAVAILABLE etc.  the call did not happen. IT IS NOT "no session": a caller that reads an
+  //                     outage as anonymity tells every citizen their session ended, through the
+  //                     one channel a commune is judged on (rule 10). Answer 503.
+  //
+  // # It runs on every citizen request, and there is no cache
+  //
+  // The argument is already written out twice and is unchanged here: ADR 0010 fixes the data
+  // infrastructure at PostgreSQL only so there is no shared cache; identity runs several
+  // replicas so any cache is PER PROCESS; and a revocation served by one replica has no channel
+  // on which to reach a copy held by another. What a TTL would buy back here is measured in
+  // milliseconds; what it would sell is the "log this screen out" button of ADR 0019 step 6,
+  // pressed at a one-stop counter the citizen has already walked away from. See
+  // service-identity/internal/store/phien_cong_dan.go for the full version.
+  //
+  // # Not batched, for the same reason ResolveStaffPrincipal is not
+  //
+  // The caller is ONE HTTP request holding ONE bearer token. There is no list from which a
+  // second token could arrive, so a batched form would be a shape no caller can fill.
+  rpc ResolveCitizenSession(ResolveCitizenSessionRequest) returns (ResolveCitizenSessionResponse);
 
   // BatchGetStaff resolves staff by id — plural by design, there is no singular form.
   //
@@ -550,6 +657,85 @@ message ResolveStaffPrincipalResponse {
   // "no principal" would sign that person out instead of telling them they may not do this one
   // thing.
   StaffPrincipal principal = 1;
+}
+
+message ResolveCitizenSessionRequest {
+  // The bearer token exactly as the Mini App presented it — the value after `Bearer ` in the
+  // `Authorization` header, verbatim, not parsed, not trimmed, not re-encoded by the caller.
+  //
+  // IT IS A CREDENTIAL, NOT DATA (rule 8), and it substitutes for a WHOLE CITIZEN SESSION. It
+  // never appears in a log line at either end, never in an error message, never in an audit
+  // entry, never in a metric label, at any level including debug.
+  //
+  // AND NOTHING IN THE GENERATED CODE PROTECTS IT — the same measurement recorded on
+  // `ResolveStaffPrincipalRequest.session_token` on 2026-09-20 applies unchanged: the generated
+  // String() prints this field in full, and `debug_redact` is a no-op in protobuf-go v1.36.12.
+  // The protection is a rule for humans: NEVER log this message, log the fields you chose.
+  //
+  // THERE IS NO SECOND FIELD, and in particular no `client_ip`. ResolveStaffPrincipal carries
+  // one for exactly one line of output — the alert raised when a credential's commune disagrees
+  // with the commune in metadata. THAT COMPARISON DOES NOT EXIST HERE and cannot: this RPC
+  // carries no commune to compare against, because it is the call that establishes one
+  // (ADR 0022). A field whose only consumer is an alert that cannot be raised would be a
+  // caller-supplied address collected for nothing, which rule 3 does not permit.
+  //
+  // Empty is INVALID_ARGUMENT, not "no session". See the status-code table on the RPC.
+  string session_token = 1;
+}
+
+// Wrapped, not a bare CitizenSessionPrincipal: adding a field later must not change the RPC
+// signature.
+message ResolveCitizenSessionResponse {
+  // ABSENT MEANS NO SESSION — the token is not usable, for one of the reasons the RPC's comment
+  // lists and deliberately does not distinguish.
+  //
+  // A MESSAGE RATHER THAN THREE BARE STRINGS, so the facts cannot be half-set: there is no state
+  // in which a citizen id arrives without the session id it was read from. A caller checks
+  // presence once and is done.
+  //
+  // PRESENT WITH AN EMPTY `tenant_id` IS NOT THE SAME THING and callers MUST NOT merge the two
+  // branches: it is a live session held by a citizen who has not chosen a commune yet (ADR 0005)
+  // — the state the commune-picker screen is called in. Merging it into "no session" would sign
+  // that citizen out at the exact moment they were about to choose.
+  CitizenSessionPrincipal session = 1;
+}
+
+// CitizenSessionPrincipal is what the citizen edge learns about one request. Three opaque
+// identifiers, and THERE IS NO FOURTH FIELD.
+//
+// It is the wire form of `core/httpx.CitizenSession`, field for field, and the two are meant to
+// stay that way: the edge type refuses to be able to carry personal data, and a contract that
+// could carry more would make that refusal a matter of the caller's discipline instead of a
+// matter of the type. Read the comment on `core/httpx.CitizenSession` before adding anything
+// here — it is the same argument and it is written out in full.
+//
+// NAMED `...Principal` TO SIT BESIDE StaffPrincipal AND TO BE READ AGAINST IT. A staff principal
+// answers "who is acting and what may they do". This one answers "whose session, in which
+// commune" and NOTHING about what may be done: a citizen identity is weak (rule 4) and grants
+// nothing on its own. The shared suffix is there so the next person compares the two field lists
+// and sees the missing permission set as a decision rather than an omission.
+message CitizenSessionPrincipal {
+  // The session id (sid) — the same role as StaffPrincipal's revocable session: it is what makes
+  // a session REVOCABLE and it is what an audit entry quotes. IT NEVER DECIDES ACCESS.
+  string session_id = 1;
+
+  // The platform-wide opaque citizen identifier (ADR 0002), minted by the server. A phone number
+  // cannot be derived from it.
+  //
+  // IT EXISTS SO RULE 4, INVARIANT 2 IS ACHIEVABLE: a citizen's identity comes FROM THE SESSION,
+  // never from a request parameter. Every citizen-path query filters on this value AND on the
+  // commune below.
+  string citizen_id = 2;
+
+  // The commune of this session — an ANSWER the server computed, never an input (see the note at
+  // the top of this file, and ADR 0012 §B).
+  //
+  // "" IS A REAL ANSWER: the citizen is signed in but has chosen no commune yet (ADR 0005). The
+  // caller maps it straight through to an empty `httpx.CitizenSession.TenantID`, where
+  // `httpx.XaTuPhien` answers 401 for every business route. FILLING IN ANY DEFAULT HERE, OR IN
+  // THE CALLER, IS RULE 1 FORBIDDEN #1 — one line that collapses isolation silently, with every
+  // test still green.
+  string tenant_id = 3;
 }
 
 // CitizenIdentity is one citizen, once for the whole platform (ADR 0002).

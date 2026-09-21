@@ -156,6 +156,13 @@ func run(log *slog.Logger) error {
 	lichLamViec := idstore.NewLichLamViecStore(kho)
 	ngayNghiLe := idstore.NewNgayNghiLeStore(kho)
 	ngayLamBu := idstore.NewNgayLamBuStore(kho)
+	// The CITIZEN session registry (migration 0004) — the only store here built on the RAW *sql.DB
+	// rather than on `kho`, and the exemption is argued in full at NewPhienCongDanStore: this
+	// lookup is what ESTABLISHES the commune, so there is no commune with which to scope it
+	// (ADR 0022). It is read by exactly one thing, the gRPC RPC ResolveCitizenSession — no HTTP
+	// route of this service touches it, because who may open or revoke a citizen session on an
+	// HTTP route is a question nobody has asked.
+	phienCongDan := idstore.NewPhienCongDanStore(db, log)
 
 	// 5. ONE signer, and the variable is used twice on purpose.
 	//
@@ -336,6 +343,18 @@ func run(log *slog.Logger) error {
 		// grant predicate for the guard and for the principal: a second one would drift, and
 		// drift in either direction is a defect with no error attached.
 		Quyen: checker,
+		// The citizen session registry, for ResolveCitizenSession — the only way a citizen session
+		// leaves this service, and the only thing that lets any OTHER service mount a citizen edge
+		// at all (core/httpx.CitizenEdge needs a core/httpx.CitizenSessions, whose one
+		// implementation is the store behind this field, inside this service's `internal/`).
+		//
+		// ⚠ WIRED BUT NOT YET REACHABLE. The RPC is absent from core/grpcx.methodsWithoutTenant, so
+		// grpcx.UnaryServerInterceptor below refuses every call to it with InvalidArgument before
+		// the handler runs. It cannot be on that list yet: adding a second name there is a STOP
+		// CONDITION for the user (ADR 0012, decision 1), and it is not a decision to take while
+		// wiring a binary. It is wired anyway so that the answer, when it comes, is one line in
+		// core/grpcx and nothing else — not a second day's work discovering this field is missing.
+		PhienCongDan: phienCongDan,
 		// The commune's working calendar, for AdvanceWorkingHours — the only way that calendar
 		// leaves this service. The SAME three read-only stores the HTTP routes were given above:
 		// one read path per table, so a deadline is computed from exactly what the configuration

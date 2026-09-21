@@ -114,6 +114,10 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		CanBo: canBoGia{cb: domain.CanBo{ID: idCanBo, Ma: "CB001", CoTaiKhoan: true, DangHoatDong: true}},
 		Lo:    &loGia{},
 		Quyen: quyenGia{quyen: []authz.Perm{"admin.user", "task.extend"}},
+		// The citizen session registry — a default that answers successfully, like every other
+		// collaborator here, so a test about ResolveCitizenSession overrides only the one thing it
+		// is about. Its fakes live in phien_cong_dan_test.go, beside the handler they exercise.
+		PhienCongDan: phienCongDanTot(),
 		// The ordinary week, no closures, no swap days — so a test about AdvanceWorkingHours
 		// overrides only the one table it is about. See lich_lam_viec_test.go.
 		Lich:   &lichGia{cas: tuanGia()},
@@ -521,25 +525,29 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 	}
 	du := func() Deps {
 		return Deps{
-			Signer: ky,
-			Phien:  &phienGia{},
-			CanBo:  canBoGia{},
-			Lo:     &loGia{},
-			Quyen:  quyenGia{},
-			Lich:   &lichGia{},
-			NghiLe: &nghiLeGia{},
-			LamBu:  &lamBuGia{},
-			Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+			Signer:       ky,
+			Phien:        &phienGia{},
+			CanBo:        canBoGia{},
+			Lo:           &loGia{},
+			Quyen:        quyenGia{},
+			PhienCongDan: &phienCongDanGia{},
+			Lich:         &lichGia{},
+			NghiLe:       &nghiLeGia{},
+			LamBu:        &lamBuGia{},
+			Log:          slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 	}
 
 	ca := map[string]func(*Deps){
-		"thiếu signer":        func(d *Deps) { d.Signer = nil },
-		"thiếu phiên":         func(d *Deps) { d.Phien = nil },
-		"thiếu cán bộ":        func(d *Deps) { d.CanBo = nil },
-		"thiếu lô":            func(d *Deps) { d.Lo = nil },
-		"thiếu quyền":         func(d *Deps) { d.Quyen = nil },
-		"thiếu lịch làm việc": func(d *Deps) { d.Lich = nil },
+		"thiếu signer": func(d *Deps) { d.Signer = nil },
+		"thiếu phiên":  func(d *Deps) { d.Phien = nil },
+		"thiếu cán bộ": func(d *Deps) { d.CanBo = nil },
+		"thiếu lô":     func(d *Deps) { d.Lo = nil },
+		"thiếu quyền":  func(d *Deps) { d.Quyen = nil },
+		// Missing it is not "one RPC unavailable": every OTHER service's citizen edge is built on
+		// this one lookup, so the whole citizen channel of the platform goes with it.
+		"thiếu sổ phiên công dân": func(d *Deps) { d.PhienCongDan = nil },
+		"thiếu lịch làm việc":     func(d *Deps) { d.Lich = nil },
 		// A calendar read without its closures counts a deadline THROUGH a day the office was
 		// shut; without its swap days it counts a day the office WAS open as closed. Neither is a
 		// shorter answer — both are wrong, in opposite directions, with nothing on any screen to

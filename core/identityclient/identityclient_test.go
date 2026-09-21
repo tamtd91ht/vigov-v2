@@ -77,7 +77,11 @@ func (s *mayChuGia) ResolveStaffPrincipal(ctx context.Context, in *identityv1.Re
 
 // moMay starts the real server on an in-memory connection and returns a Client built exactly the
 // way Dial builds one — same interceptors, same order.
-func moMay(t *testing.T, srv *mayChuGia) *Client {
+//
+// IT TAKES THE SERVER INTERFACE, NOT *mayChuGia, so a second fake can be exercised through the same
+// real interceptor chain without a second copy of this function — see phien_cong_dan_test.go. Every
+// existing call site passes *mayChuGia unchanged.
+func moMay(t *testing.T, srv identityv1.IdentityServiceServer) *Client {
 	t.Helper()
 
 	lis := bufconn.Listen(1 << 20)

@@ -29,9 +29,10 @@
 //
 // # Nothing here is audited, and that is a decision rather than an omission
 //
-// Rule 6, invariant 1 covers WRITES to business data. All three RPCs here are reads — the third,
-// AdvanceWorkingHours, reads a commune's configuration and writes nothing at all — and one of them
-// runs on EVERY staff request of four services. An audit entry per principal resolution would
+// Rule 6, invariant 1 covers WRITES to business data. All four RPCs here are reads —
+// AdvanceWorkingHours reads a commune's configuration and writes nothing at all — and two of them
+// run on EVERY request, one per staff request of four services and one per citizen request of the
+// Mini App (ResolveCitizenSession, phien_cong_dan.go). An audit entry per session resolution would
 // add rows at the rate of page loads — recording nothing anybody would ever look for, and
 // burying the entries that carry legal weight.
 //
@@ -50,10 +51,21 @@
 //
 // core/grpcx.UnaryServerInterceptor lifts "x-tenant-id" out of metadata into context.Context
 // before any handler runs, so every handler below reads it exactly as an HTTP handler does, and
-// none of them touches metadata itself. No RPC here is on grpcx.methodsWithoutTenant, and none may
-// ever be added to it: every one of them is called from a service edge that has ALREADY resolved
-// its commune from Host, so carrying the commune costs the caller nothing. For AdvanceWorkingHours
-// the exemption is not even expressible — "x-tenant-id" names WHOSE calendar is read.
+// none of them touches metadata itself. THREE OF THE FOUR RPCs here must always carry a commune and
+// must never be exempted: each is called from a service edge that has ALREADY resolved its commune
+// from Host, so carrying it costs the caller nothing, and for AdvanceWorkingHours the exemption is
+// not even expressible — "x-tenant-id" names WHOSE calendar is read.
+//
+// THE FOURTH IS THE EXCEPTION AND IT IS NOT YET GRANTED. ResolveCitizenSession CANNOT carry a
+// commune, because it is the call that establishes one for the citizen channel (ADR 0022) — the
+// same loop ADR 0012 §A describes for ResolveHost. It therefore belongs on
+// grpcx.methodsWithoutTenant and is NOT on it: adding a second name to that list is a STOP
+// CONDITION for the user (ADR 0012, decision 1). Until that is answered the interceptor refuses the
+// call with InvalidArgument and phien_cong_dan.go is never entered. Do not read the sentence above
+// as covering it, and do not lift the exemption while writing code.
+//
+// ONE CONSEQUENCE FOR READERS OF THIS FILE: Server.xa must NOT be called from that handler. Every
+// other handler starts with it; that one runs with no commune in context, deliberately.
 package grpc
 
 import (
@@ -136,6 +148,15 @@ type Deps struct {
 	Lo    CanBoLo
 	Quyen QuyenDoc
 
+	// The CITIZEN session registry, read by ResolveCitizenSession and by nothing else here.
+	//
+	// A SEPARATE FIELD FROM Phien, AND THE TWO MUST NEVER BE MERGED — the same discipline
+	// internal/store keeps between `phien` and `phien_cong_dan`. `phien` has a foreign key to an
+	// accountable staff account; this one is behind a phone number and an OTP, which rule 4 calls
+	// deliberately weak. One field would put two trust levels behind one lookup, and the weaker
+	// one would decide the shape of it. Declared in phien_cong_dan.go, at the point of use.
+	PhienCongDan PhienCongDanDoc
+
 	// The commune's working calendar, read by AdvanceWorkingHours and by nothing else here. The
 	// three interfaces are declared in lich_lam_viec.go, at the point of use — three tables, three
 	// reads, three different windows.
@@ -182,6 +203,8 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho đọc cán bộ theo lô — BatchGetStaff sẽ panic khi có người gọi")
 	case d.Quyen == nil:
 		panic("identity/grpc: thiếu kho quyền — ResolveStaffPrincipal sẽ trả principal rỗng quyền, không phân biệt được với người thật sự không có quyền")
+	case d.PhienCongDan == nil:
+		panic("identity/grpc: thiếu sổ phiên công dân — ResolveCitizenSession sẽ panic, và kênh công dân của mọi service khác không dựng được rìa")
 	case d.Lich == nil:
 		panic("identity/grpc: thiếu kho lịch làm việc — AdvanceWorkingHours sẽ panic khi có người gọi")
 	case d.NghiLe == nil:
@@ -441,11 +464,15 @@ func (s *Server) BatchGetStaff(ctx context.Context, req *identityv1.BatchGetStaf
 // handler, so a panic here takes down a process serving 200+ communes because one call arrived
 // misrouted.
 //
-// REACHING THIS BRANCH MEANS core/grpcx.UnaryServerInterceptor IS NOT IN THE CHAIN. No RPC
-// on this server is exempt from carrying a commune, so with the interceptor installed the call
+// REACHING THIS BRANCH MEANS core/grpcx.UnaryServerInterceptor IS NOT IN THE CHAIN. No RPC that
+// CALLS THIS FUNCTION is exempt from carrying a commune, so with the interceptor installed the call
 // would already have been refused with InvalidArgument. Internal is therefore the honest code:
 // the fault is this deployment's wiring, not the caller's request. It also closes the panic path
 // through store.Scoped, which calls MustFrom itself.
+//
+// ResolveCitizenSession DOES NOT CALL THIS, and must not: it is the call that establishes the
+// commune, so it runs with none in context by design (phien_cong_dan.go). Calling this from there
+// would turn its every success into Internal.
 func (s *Server) xa(ctx context.Context) (tenant.ID, error) {
 	id, ok := tenant.From(ctx)
 	if !ok {
