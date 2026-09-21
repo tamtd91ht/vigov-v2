@@ -22,6 +22,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/so_thong_bao.go:117"
     },
+    "app.GhiVet": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/xem_nguoi_gui.go:64"
+    },
     "app.KetQuaDangNhap": {
       "kind": "type",
       "at": "service-identity/internal/app/dang_nhap.go:55"
@@ -50,9 +54,17 @@
       "kind": "func",
       "at": "service-comms/internal/app/so_thong_bao.go:55"
     },
+    "app.NewXemNguoiGui": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/xem_nguoi_gui.go:39"
+    },
     "app.SoThongBao": {
       "kind": "type",
       "at": "service-comms/internal/app/so_thong_bao.go:47"
+    },
+    "app.XemNguoiGui": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/xem_nguoi_gui.go:35"
     },
     "app.YeuCauDangNhap": {
       "kind": "type",
@@ -684,7 +696,7 @@
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:161"
+      "at": "core/grpcx/grpcx.go:184"
     },
     "grpcx.UnaryClientCallerAuth": {
       "kind": "func",
@@ -692,7 +704,7 @@
     },
     "grpcx.UnaryClientInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:177"
+      "at": "core/grpcx/grpcx.go:200"
     },
     "grpcx.UnaryServerCallerAuth": {
       "kind": "func",
@@ -700,7 +712,7 @@
     },
     "grpcx.UnaryServerInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:210"
+      "at": "core/grpcx/grpcx.go:233"
     },
     "http.BoPhanDanhMuc": {
       "kind": "type",
@@ -804,7 +816,7 @@
     },
     "http.DocPhieuPhanAnh": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_phan_anh.go:169"
+      "at": "service-petitions/internal/http/phieu_phan_anh.go:236"
     },
     "http.DuAnTienDo": {
       "kind": "type",
@@ -832,7 +844,7 @@
     },
     "http.LoaiNhiemVuDanhMuc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:52"
+      "at": "service-petitions/internal/http/routes.go:53"
     },
     "http.LoaiTaiNguyenDanhMuc": {
       "kind": "type",
@@ -852,7 +864,7 @@
     },
     "http.MucUuTienDanhMuc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:65"
+      "at": "service-petitions/internal/http/routes.go:66"
     },
     "http.NewHandler": {
       "kind": "func",
@@ -868,7 +880,7 @@
     },
     "http.NhanLinhVucDanhMuc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:83"
+      "at": "service-petitions/internal/http/routes.go:99"
     },
     "http.PhienDoc": {
       "kind": "type",
@@ -884,7 +896,7 @@
     },
     "http.PhieuPhanAnhDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:76"
+      "at": "service-petitions/internal/http/routes.go:77"
     },
     "http.QuyenDoc": {
       "kind": "type",
@@ -909,6 +921,10 @@
     "http.VaiTroDoc": {
       "kind": "type",
       "at": "service-identity/internal/http/routes.go:100"
+    },
+    "http.VetXemNguoiGui": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/routes.go:92"
     },
     "http.XacThuc": {
       "kind": "func",
