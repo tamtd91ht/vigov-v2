@@ -139,26 +139,36 @@ pipeline {
 // build kịp chạy một dòng, nên trong log không có stage nào để lần theo.
 //
 // Máy chủ Jenkins dùng chung với dự án khác, nên "cài thêm plugin" không phải quyết định của
-// kho này. Đổi lại, tám tệp tự làm ba việc plugin vốn làm hộ — mỗi việc một cái bẫy riêng:
+// kho này. Tám tệp ấy nay gọi thẳng `docker` CLI.
 //
-//   1. `DOCKER_CONFIG` RIÊNG TỪNG LƯỢT BUILD. `docker login` mặc định ghi vào
-//      `~/.docker/config.json` của user `jenkins` — MỘT tệp dùng chung cho mọi job trên máy.
-//      Không tách thì lượt đăng xuất của job này đá văng phiên đăng nhập của job dự án khác
-//      đang đẩy ảnh giữa chừng, và triệu chứng bên kia là một lỗi 401 không lý do.
+// KHÔNG `docker login`, KHÔNG credentials — VÀ ĐÓ LÀ MỘT PHỤ THUỘC, không phải một chỗ thiếu.
+// Máy chủ này đã đăng nhập sẵn và lâu dài vào Harbor bằng tài khoản của user `jenkins`: token
+// nằm trong `~jenkins/.docker/config.json`, do ai đó đăng nhập một lần và KHÔNG phiên bản hoá ở
+// đâu cả. Pipeline `cloud-vihat-saas-omicrm-callbot-service` trên cùng máy chủ đẩy ảnh đúng
+// theo cách này và đã chạy nhiều tháng; ngày 2026-09-21 người dùng chốt dùng chung cơ chế ấy
+// thay vì tạo mục credentials riêng cho ViGov.
 //
-//   2. `--password-stdin` VÀ `set +x`. Bước `sh` của Jenkins chạy `sh -xe`, mà `-x` in ra ĐỐI
-//      SỐ ĐÃ KHAI TRIỂN: `echo "$REG_PASS"` sẽ hiện nguyên mật khẩu registry trong log. Bộ lọc
-//      che của Jenkins bắt được, nhưng một bí mật đã ra tới chỗ cần bộ lọc thì chỉ còn đúng
-//      một lớp giữa nó và log — luật 8, và một khoá registry rò là rò cho MỌI xã.
-//      Cùng lý do: script để trong nháy ĐƠN, giá trị vào bằng biến môi trường. Nội suy Groovy
-//      một bí mật vào chuỗi script là đưa nó ra ngoài tầm che.
+// CÁI GIÁ, ghi ra để người sau biết mình đang đổi cái gì lấy cái gì:
 //
-//   3. `docker image rm` SAU KHI ĐẨY. Máy dùng chung, mỗi commit một thẻ mới; không dọn thì
-//      đĩa của người khác đầy vì kho này. Chỉ bỏ THẺ — các tầng nằm lại trong cache.
+//   · NHẬT KÝ MẤT MỘT CÂU. Vết chỉ trả lời được "Jenkins đẩy ảnh này", không trả lời được
+//     "TÀI KHOẢN NÀO đẩy". Với hệ thống hành chính, đó là một câu hỏi thanh tra có thể hỏi.
+//     Nó chấp nhận được CHỪNG NÀO Jenkins này chỉ có đúng một danh tính đẩy ảnh — ngày có
+//     danh tính thứ hai, phải quay lại đây.
+//   · MỘT TRẠNG THÁI VÔ HÌNH THÀNH ĐIỀU KIỆN CHẠY. Ngày token trên máy chủ hết hạn hoặc bị thu
+//     hồi, MỌI job đóng ảnh đỏ cùng lúc, và không kho mã nào chứa manh mối vì trạng thái ấy
+//     không nằm trong kho nào. Vì thế mỗi tệp KIỂM NÓ RA MẶT ở stage 'Chuẩn bị': tìm tên
+//     registry trong `config.json` và dừng ngay với câu giải thích, thay vì để `docker push`
+//     đỏ sau hai phút dựng với "denied: requested access to the resource is denied" — một dòng
+//     đọc như lỗi phân quyền của tài khoản chứ không như "máy này chưa đăng nhập bao giờ".
 //
-// Và `post { always }` xoá `config.json`: một lượt hỏng GIỮA login và push là đúng lượt để
-// lại token đăng nhập registry nằm trên đĩa máy chủ.
+// Muốn lấy lại danh tính riêng: tạo một mục credentials kiểu Username with password ở phạm vi
+// GLOBAL (phạm vi System thì job không đọc được), rồi bọc bước `sh` đóng ảnh bằng
+// `withCredentials` + `docker login --password-stdin`. Khi ấy nhớ hai thứ đi kèm: `set +x`
+// quanh lệnh login, vì bước `sh` chạy `sh -xe` và `-x` in ra ĐỐI SỐ ĐÃ KHAI TRIỂN (luật 8); và
+// `DOCKER_CONFIG` riêng từng lượt, vì `docker logout` trên tệp dùng chung sẽ đá văng phiên
+// đăng nhập của job dự án khác đang đẩy ảnh giữa chừng.
 //
-// `withCredentials` thì vẫn dùng — nó thuộc `credentials-binding`, plugin có trong mọi bản
-// cài Jenkins tiêu chuẩn. Không có nó thì không còn đường nào lấy bí mật mà không phạm luật 8.
+// `docker image rm` SAU KHI ĐẨY thì giữ lại trong cả hai đường: máy dùng chung, mỗi commit một
+// thẻ mới, không dọn thì đĩa của người khác đầy vì kho này. Chỉ bỏ THẺ — các tầng nằm lại
+// trong cache và lượt sau vẫn dựng nhanh.
 // ─────────────────────────────────────────────────────────────────────────────────────────

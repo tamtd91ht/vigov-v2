@@ -20,12 +20,10 @@ pipeline {
   }
 
   parameters {
-    string(name: 'REGISTRY', defaultValue: 'registry.vihat.vn',
+    string(name: 'REGISTRY', defaultValue: 'harbor.omicrm.services',
            description: 'Máy chủ Harbor, không kèm https://')
-    string(name: 'PROJECT', defaultValue: 'vigov',
+    string(name: 'PROJECT', defaultValue: 'ci',
            description: 'Project trong Harbor — ảnh là <REGISTRY>/<PROJECT>/vigov-service-finance')
-    string(name: 'REGISTRY_CRED', defaultValue: 'harbor-vigov',
-           description: 'ID credentials trong Jenkins. CHỈ LÀ ID, không bao giờ là giá trị thật.')
   }
 
   environment {
@@ -48,6 +46,21 @@ pipeline {
         // BuildKit) vì Dockerfile dùng `--mount=type=cache`; docker 1.13.1 của CentOS 7 thì
         // không, và stage đóng ảnh sẽ đỏ SAU KHI cổng kiểm đã xanh.
         sh 'go version; docker version --format "server {{.Server.Version}}" || docker version'
+
+        // MÁY CHỦ ĐÃ ĐĂNG NHẬP REGISTRY CHƯA. Stage đóng ảnh không `docker login` — nó dựa vào
+        // phiên đăng nhập sẵn có của user `jenkins`; lý do đầy đủ ở `Jenkinsfile` gốc, mục
+        // "VÌ SAO KHÔNG GỌI PLUGIN DOCKER PIPELINE". Đó là một trạng thái nằm NGOÀI kho này,
+        // nên nó phải được kiểm ra mặt chứ không được giả định.
+        sh '''
+          cfg="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+          if ! grep -q "$REGISTRY" "$cfg" 2>/dev/null; then
+            echo ""
+            echo "MÁY CHỦ BUILD CHƯA ĐĂNG NHẬP $REGISTRY"
+            echo "Chạy MỘT LẦN dưới user jenkins:  sudo -u jenkins docker login $REGISTRY"
+            echo ""
+            exit 1
+          fi
+        '''
         script {
           env.TAG = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
           if (!env.TAG) { error('Không lấy được commit hiện tại — không có thẻ ảnh nào để đặt.') }
@@ -81,24 +94,11 @@ pipeline {
       steps {
         script { env.ANH = "${params.REGISTRY}/${params.PROJECT}/vigov-${env.THU_MUC}:${env.TAG}" }
 
-        // DOCKER_CONFIG riêng từng lượt: `docker login` mặc định ghi vào ~/.docker/config.json
-        // của user `jenkins` — MỘT tệp dùng chung cho mọi job trên máy, kể cả job của dự án
-        // khác. Tách ra thì lượt này đăng xuất không đá văng phiên của ai.
-        withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-cau-hinh"]) {
-          withCredentials([usernamePassword(credentialsId: params.REGISTRY_CRED,
-                                            usernameVariable: 'REG_USER',
-                                            passwordVariable: 'REG_PASS')]) {
-            sh '''
-              set +x
-              echo "$REG_PASS" | docker login -u "$REG_USER" --password-stdin "$REGISTRY"
-              set -x
-
-              docker build --pull --build-arg VERSION="$TAG" -t "$ANH" -f "$THU_MUC/Dockerfile" .
-              docker push "$ANH"
-              docker image rm "$ANH" || true
-            '''
-          }
-        }
+        sh '''
+          docker build --pull --build-arg VERSION="$TAG" -t "$ANH" -f "$THU_MUC/Dockerfile" .
+          docker push "$ANH"
+          docker image rm "$ANH" || true
+        '''
 
         // Ghi mốc NGAY SAU khi push thành công (bước `sh` ở trên đỏ thì không tới được đây).
         // Lượt build sau so với commit này, không so với "lượt build liền trước" — xem
@@ -106,14 +106,6 @@ pipeline {
         script { currentBuild.description = "${nhanAnh()}${env.TAG}" }
         echo "DA DAY  ${env.ANH}"
       }
-    }
-  }
-
-  post {
-    always {
-      // `config.json` là tệp `docker login` ghi token registry vào. Xoá ĐÚNG nó, cả khi build
-      // đỏ: một lượt hỏng GIỮA login và push là đúng lượt để lại token nằm trên đĩa.
-      sh 'rm -f "$WORKSPACE/.docker-cau-hinh/config.json"'
     }
   }
 }
