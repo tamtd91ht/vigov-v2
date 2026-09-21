@@ -41,8 +41,15 @@ var (
 	xaA = tenant.ID("01JA" + strings.Repeat("A", 22))
 	xaB = tenant.ID("01JB" + strings.Repeat("B", 22))
 
-	quyenDoc  = authz.Perm("document.read")
-	quyenKhac = authz.Perm("document.approve")
+	// BOTH KEYS ARE ROWS OF `quyen`, and that is a property of the test, not decoration.
+	// service-identity/migrations/0001_init.sql:288 and :289 load them. A test that grants a key
+	// no migration seeds proves the Checker compares two strings and nothing about the permission
+	// system this repository actually ships: the key would be one no administrator can grant on
+	// the Phân quyền screen, so no route could ever be reached with it (rule 5, invariant 3b).
+	// `document.approve` stood here until today and was exactly that — a key present in no
+	// migration and in no route.
+	quyenDoc  = authz.Perm("document.read")  // the key /can-quyen declares
+	quyenKhac = authz.Perm("document.route") // a REAL key that route does NOT declare
 )
 
 type thuMucGia map[string]tenant.Tenant

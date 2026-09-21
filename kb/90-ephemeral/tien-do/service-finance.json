@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-finance",
-  "cap_nhat": "2026-09-20",
+  "cap_nhat": "2026-09-21",
   "muc": [
     {
       "id": "hang-muc-ke-hoach-von-tuyen-doc",
@@ -32,10 +32,10 @@
     {
       "id": "sql-chua-chay",
       "viec": "Chạy 0003_danh_muc_hang_muc_ke_hoach_von.sql trên PostgreSQL thật",
-      "trang_thai": "chua_lam",
-      "bang_chung": "6 ca service-finance/internal/store/hang_muc_ke_hoach_von_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN, gói vẫn in `ok` — kiểm 2026-09-20",
+      "trang_thai": "xong",
+      "bang_chung": "ĐÃ CHẠY THẬT 2026-09-21 — PostgreSQL 16.10 trong Docker (postgres:16), CSDL TRỐNG, áp bằng CHÍNH core/migrate qua tools/schema-smoke. Cả 4 tệp migration của finance áp XANH trên schema trống, gồm 0004_du_an_va_chung_tu_giai_ngan. 6 ca hang_muc_ke_hoach_von_pg_test.go THOÁT SKIP và ĐỀU XANH. Truy pg_class: audit_log, chung_tu_giai_ngan, du_an, hang_muc_ke_hoach_von mỗi bảng ĐỦ 32 mảnh — tức định tuyến phân mảnh nay có thật, không còn là khai báo suông.",
       "no_confirm": [],
-      "tiep_theo": "Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat (đọc information_schema) nhưng nó CHƯA CHẠY. Một lượt đối chiếu TĨNH với DDL của migration cho kết quả thiếu 0 cột — đó là đọc hai tệp trong kho, KHÔNG phải kiểm lược đồ đã triển khai. Driver giả cũng không kiểm được định tuyến phân mảnh, UNIQUE một mặc định, hay trigger ba tầng"
+      "tiep_theo": "Lượt đối chiếu TĨNH trước đây nay đã được thay bằng lượt chạy thật. CÒN HỞ, đo chứ không đoán: KHÔNG ca nào chạm du_an/chung_tu_giai_ngan — 0004 mới chỉ được PostgreSQL CHẤP NHẬN, chưa được kiểm hành vi; CHECK chung_tu_giai_ngan_khoa_co_thoi_diem và hai trigger vẫn chưa có ca nào bắn thử."
     },
     {
       "id": "giai-ngan-migration-du-an-chung-tu",
@@ -76,6 +76,16 @@
       "bang_chung": "service-finance/internal/http/routes.go:203,221 — đổi từ bản tạm /api/v1/disbursements/projects. Người dùng chốt 2026-09-20. `gofmt -l` trống, `go test -count=1 ./...` xanh, hợp đồng sinh lại — kiểm 2026-09-20.",
       "no_confirm": [],
       "tiep_theo": "HAI NỬA CỦA TÊN, mỗi nửa chọn để tránh một ca hỏng cụ thể, ghi lại để đừng ai 'sửa cho gọn': (1) TẦNG TRÊN CÙNG chứ không lồng dưới `disbursements`, vì bản tạm nói NGƯỢC quan hệ nghiệp vụ — dự án tồn tại độc lập, chứng từ giải ngân mới là thứ thuộc về dự án; một đường dẫn đảo quan hệ sẽ dạy sự đảo ấy cho người dựng màn hình, và họ dựng mô hình dữ liệu theo. (2) `investment-projects` chứ không `projects` trần, vì ADR 0011 lấy `org-units` làm ví dụ 'từ dễ đoán nhưng sai': ngày xã có 'dự án' ở nghĩa khác thì danh từ đã bị chiếm, và một URL không đòi lại được sau khi một xã chạy thật."
+    },
+    {
+      "id": "khoa-quyen-trong-bai-kiem-phai-co-that",
+      "viec": "cmd/server/main_test.go: bỏ khoá bịa `finance.read`, và làm cho khoá thật CÓ TRỌNG LƯỢNG",
+      "trang_thai": "xong",
+      "bang_chung": "cmd/server/main_test.go:168 — từng cấp \"finance.read\", một chuỗi chỉ xuất hiện ĐÚNG ở dòng test đó trong cả kho: không migration nào gieo, không tuyến nào kiểm. Đã đổi sang \"budget.read\" (service-identity/migrations/0001_init.sql:283, khai ở internal/http/routes.go:211 và :229). Thêm TestQuyenBudgetReadThatSuDuocKiem (main_test.go:300) bắn vào /api/v1/investment-projects — tuyến DUY NHẤT của dịch vụ có RequirePermission — với đủ bốn ca luật 5 bất biến 7: 200 đúng khoá · 403 đã đăng nhập không khoá · 401 không phiếu · 401 đúng khoá SAI XÃ. Đã chứng minh CÒN SỐNG: đổi khoá thành \"MUTANT.rac\" → ĐỎ (main_test.go:306, 403 thay vì 200). Phục hồi bằng bản chụp tệp, KHÔNG dùng git restore. `gofmt -l .` rỗng và `go test -race -count=1 -p 1 ./...` xanh toàn module — kiểm 2026-09-21",
+      "no_confirm": [
+        27
+      ],
+      "tiep_theo": "BẰNG CHỨNG ĐÁNG GHI LẠI: dưới đột biến \"MUTANT.rac\", SÁU ca cũ của tệp vẫn XANH, chỉ ca mới đỏ. Sáu ca ấy bắn vào tuyến danh mục khai AnyAuthenticated, và guard đó không bao giờ đọc bộ khoá (core/authz/authz.go:187-208) — nên `PermissionKeys` ở đó là trang trí, bất kể ghi chuỗi gì. Đó là toàn bộ lý do một khoá bịa sống được ở đây suốt thời gian qua."
     }
   ]
 }

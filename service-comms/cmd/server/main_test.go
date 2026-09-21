@@ -20,7 +20,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/domain"
@@ -144,11 +143,30 @@ func doiMa(t *testing.T, w *httptest.ResponseRecorder, muon int) {
 	}
 }
 
+// canBoXaA is a member of staff of commune A, signed in and HOLDING NO PERMISSION KEY AT ALL —
+// and the empty key set is the assertion, not an omission.
+//
+// WHAT STOOD HERE UNTIL TODAY: `PermissionKeys: []authz.Perm{"map.read"}`. `map.read` is a string
+// that appears in no migration and in no route in this repository — the seeded catalogue calls
+// that subsystem `asset.*` (service-identity/migrations/0001_init.sql:280-281). A key absent from
+// `quyen` is a key no administrator can grant on the Phân quyền screen, so a route guarded by it
+// could never be reached by anybody (rule 5, invariant 3b).
+//
+// It survived because it was never read. The one route this service mounts —
+// GET /api/v1/map-asset-types — declares authz.AnyAuthenticated, and that guard never consults the
+// key set (core/authz/authz.go:187-208). Any string whatsoever made these cases green, which is
+// precisely why an invented one could sit here unnoticed.
+//
+// So the honest fixture is an account that holds nothing, and it carries a real assertion a
+// plausible-looking key never could: THIS ROUTE MUST SERVE AN ACCOUNT WITH NO RIGHTS. That is the
+// trade-off routes.go:146 states in writing. The day somebody swaps that declaration for
+// RequirePermission, every case in this file turns red — which is the whole point, because the
+// screens that fill their category pickers from it would go blank for every non-administrator.
+//
+// NO REAL KEY IS WRITTEN HERE INSTEAD: `asset.read` would read as "this route needs asset.read",
+// which is false, and the next person would build a role around it.
 func canBoXaA() *phanGiaiGia {
-	return &phanGiaiGia{co: true, tra: staffauth.StaffPrincipal{
-		StaffID:        idCanBo,
-		PermissionKeys: []authz.Perm{"map.read"},
-	}}
+	return &phanGiaiGia{co: true, tra: staffauth.StaffPrincipal{StaffID: idCanBo}}
 }
 
 func TestCanBoXaAO_HostXaA_DuocPhucVu(t *testing.T) {

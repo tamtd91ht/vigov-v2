@@ -150,11 +150,31 @@ func doiMa(t *testing.T, w *httptest.ResponseRecorder, muon int) {
 	}
 }
 
+// canBoXaA is a member of staff of commune A holding `budget.read`.
+//
+// THE KEY IS A ROW OF `quyen` AND IT IS THE ONE THIS SERVICE'S ROUTES DECLARE. Until today this
+// read `finance.read` — a string that appears in NO migration and in NO route in this repository.
+// It made every case below green while proving nothing about permissions: the catalogue route is
+// AnyAuthenticated, which never consults the key set at all, so any string whatsoever passed. A
+// key absent from `quyen` is a key no administrator can grant on the Phân quyền screen, so a
+// route guarded by it could never be reached by anybody (rule 5, invariant 3b).
+//
+// `budget.read` is loaded by service-identity/migrations/0001_init.sql:283 and declared by
+// service-finance/internal/http/routes.go:211 and :229. TestQuyenBudgetReadThatSuDuocKiem below
+// is what keeps this line honest: without it, this key would still be decoration.
 func canBoXaA() *phanGiaiGia {
 	return &phanGiaiGia{co: true, tra: staffauth.StaffPrincipal{
 		StaffID:        idCanBo,
-		PermissionKeys: []authz.Perm{"finance.read"},
+		PermissionKeys: []authz.Perm{"budget.read"},
 	}}
+}
+
+// canBoKhongCoQuyen is a member of staff of commune A who is signed in and holds NOTHING.
+//
+// This is the account the specification's smallest role produces, and it is the one a 403 has to
+// be provable against.
+func canBoKhongCoQuyen() *phanGiaiGia {
+	return &phanGiaiGia{co: true, tra: staffauth.StaffPrincipal{StaffID: idCanBo}}
 }
 
 func TestCanBoXaAO_HostXaA_DuocPhucVu(t *testing.T) {
@@ -265,6 +285,40 @@ func TestLoiGoiPhanGiaiMangXaCuaHost(t *testing.T) {
 	if m2.pg.xaDaGui != xaB {
 		t.Errorf("ở host B, xã đã gửi = %q, muốn %q", m2.pg.xaDaGui, xaB)
 	}
+}
+
+// --- the permission declaration, exercised through the chain this binary builds ---------------
+
+// TUYẾN DUY NHẤT CỦA DỊCH VỤ NÀY CÓ KHAI `RequirePermission`, ĐI QUA ĐÚNG CHUỖI dungBien DỰNG.
+//
+// Vì sao ca này phải có: mọi ca khác trong tệp bắn vào tuyến danh mục, và tuyến ấy khai
+// AnyAuthenticated — guard đó KHÔNG BAO GIỜ đọc bộ khoá (core/authz/authz.go:187-208). Nên trước
+// ca này, `PermissionKeys` trong tệp này là trang trí: đổi nó thành chuỗi rác, mọi ca vẫn xanh.
+// Đó chính là cách `finance.read` — một khoá không migration nào gieo — sống sót ở đây.
+//
+// Ca này buộc bộ khoá phải có nghĩa: staffauth.Checker đọc đúng bộ khoá mà Middleware đặt vào
+// context, và authz.RequirePermission so nó với "budget.read".
+func TestQuyenBudgetReadThatSuDuocKiem(t *testing.T) {
+	const tuyenDuAn = "/api/v1/investment-projects?year=2026"
+
+	// 200 — đúng xã, đúng khoá.
+	m := dungMayChu(t, canBoXaA())
+	doiMa(t, m.goi(t, hostA, tuyenDuAn, phieuGia), http.StatusOK)
+
+	// 403 — đã đăng nhập, đúng xã, KHÔNG có khoá. Đây là nửa chứng minh khoá được đem ra so thật,
+	// chứ không phải guard cho qua mọi tài khoản.
+	k := dungMayChu(t, canBoKhongCoQuyen())
+	doiMa(t, k.goi(t, hostA, tuyenDuAn, phieuGia), http.StatusForbidden)
+
+	// 401 — không phiếu.
+	n := dungMayChu(t, canBoXaA())
+	doiMa(t, n.goi(t, hostA, tuyenDuAn, ""), http.StatusUnauthorized)
+
+	// 401 — ĐÚNG KHOÁ, SAI XÃ. Hình dạng một vụ rò chéo xã có thật: quyền hợp lệ, nhưng phiếu cấp
+	// cho xã khác. Bên phân giải trả "không có chủ thể" đúng như identity trả khi x-tenant-id
+	// không khớp xã nằm trong chứng thực (service-identity/internal/grpc/server.go:257).
+	x := dungMayChu(t, &phanGiaiGia{co: false})
+	doiMa(t, x.goi(t, hostB, tuyenDuAn, phieuGia), http.StatusUnauthorized)
 }
 
 // khoDuAnTrong is a project store holding nothing. No case in this file reads a project: the

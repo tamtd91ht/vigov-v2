@@ -62,10 +62,20 @@
     {
       "id": "sql-chua-chay",
       "viec": "Chạy 0003_danh_muc_loai_tai_nguyen_ban_do.sql trên PostgreSQL thật",
-      "trang_thai": "chua_lam",
-      "bang_chung": "7 ca service-comms/internal/store/loai_tai_nguyen_ban_do_pg_test.go đều SKIP vì thiếu VIGOV_TEST_DSN — kiểm 2026-09-20",
+      "trang_thai": "xong",
+      "bang_chung": "ĐÃ CHẠY THẬT 2026-09-21 — PostgreSQL 16.10 trong Docker (postgres:16), CSDL TRỐNG, áp bằng CHÍNH core/migrate qua tools/schema-smoke. Cả 4 tệp migration của comms áp XANH trên schema trống (0001, 0002, 0003_danh_muc_loai_tai_nguyen_ban_do, 0004_thong_bao_gui_cong_dan). 22 ca *_pg_test.go THOÁT SKIP và ĐỀU XANH: 7 ca loai_tai_nguyen_ban_do_pg_test.go + 15 ca thong_bao_gui_cong_dan_pg_test.go. Truy pg_class: audit_log, loai_tai_nguyen_ban_do và thong_bao_gui_cong_dan mỗi bảng có ĐỦ 32 mảnh.",
       "no_confirm": [],
-      "tiep_theo": "Bộ này có TestPgCotTrongMaKhopVoiLuocDoThat — đọc information_schema để đối chiếu danh sách cột trong mã với lược đồ thật. Đó là phép kiểm duy nhất bắt được một migration đổi tên cột dưới chân store; ba service kia đang thêm bản tương ứng"
+      "tiep_theo": "TestPgCotTrongMaKhopVoiLuocDoThat đã chạy thật và XANH — tên cột trong store khớp lược đồ đã triển khai. CÒN HỞ: không ca nào bắn thử trigger append-only. Trigger CÓ MẶT (audit_log_no_update_delete mức DÒNG trên bảng cha, được nhân bản xuống cả 32 lá; audit_log_no_truncate gắn theo từng lá) nhưng CHƯA AI CHỨNG MINH nó TỪ CHỐI được một lệnh sửa gõ thẳng vào tên partition — xem _chung/chay-migration-that."
+    },
+    {
+      "id": "khoa-quyen-trong-bai-kiem-phai-co-that",
+      "viec": "cmd/server/main_test.go: bỏ khoá bịa `map.read` — dịch vụ này KHÔNG có tuyến nào kiểm quyền",
+      "trang_thai": "xong",
+      "bang_chung": "cmd/server/main_test.go:168 — từng cấp \"map.read\", một chuỗi không migration nào gieo và không tuyến nào kiểm; phân hệ bản đồ tài nguyên trong bảng `quyen` mang tiền tố `asset.*` (service-identity/migrations/0001_init.sql:280-281). KHÔNG thay bằng `asset.read`: tuyến duy nhất của dịch vụ — GET /api/v1/map-asset-types — khai AnyAuthenticated (internal/http/routes.go:146), nên viết một khoá thật vào đây vẫn là lời khai SAI về thứ tuyến đòi hỏi. Đã đổi thành cán bộ KHÔNG GIỮ KHOÁ NÀO, tức đúng điều tuyến ấy cam kết. Đã chứng minh CÒN SỐNG: đổi khai báo tuyến thành RequirePermission(\"asset.read\") → ĐỎ hai ca (main_test.go:179 và :265, 403 thay vì 200); đã phục hồi routes.go bằng bản chụp tệp, KHÔNG dùng git restore. `gofmt -l .` rỗng và `go test -race -count=1 -p 1 ./...` xanh toàn module — kiểm 2026-09-21",
+      "no_confirm": [
+        27
+      ],
+      "tiep_theo": "service-comms hiện KHÔNG có tuyến nào khai RequirePermission, nên không khoá nào trong module này có thể mang trọng lượng. Khi tuyến GHI tài nguyên bản đồ xuất hiện, nó sẽ là tuyến đầu tiên cần `asset.update` — và là chỗ đầu tiên viết được bốn ca luật 5 bất biến 7 cho dịch vụ này."
     }
   ]
 }
