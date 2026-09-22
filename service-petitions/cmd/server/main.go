@@ -185,6 +185,13 @@ func chay(log *slog.Logger) error {
 	muxCongDan := http.NewServeMux()
 	svchttp.RegisterCongDan(muxCongDan, svchttp.DepsCongDan{
 		Phieu: petstore.NewPhieuPhanAnhStore(kho),
+		// THE CITIZEN INTAKE. It is given *store.DB rather than a transaction because opening one is
+		// precisely what it is for (rule 6, invariant 3), and `dinhDanh` because the acknowledge
+		// deadline is read from the commune's own table by the ONE service that owns the working-hours
+		// calendar (ADR 0007, ADR 0029). THE SAME *identityclient.Client the staff path uses: a second
+		// dial would be a second connection with its own view of identity's health, and the two would
+		// disagree at the exact moment that matters.
+		GuiPhieu: app.NewGuiPhanAnh(kho, petstore.NewPhieuPhanAnhStore(kho), dinhDanh),
 		// THE SAME label catalogue the staff routes read. Sharing is right here and only here: the
 		// commune's wording for a field code is its public vocabulary, and two readers of one
 		// catalogue are two things to keep in step.
@@ -257,8 +264,31 @@ func chay(log *slog.Logger) error {
 //	CitizenPrincipal    the same resolved session, read on the identity axis. ONE registry lookup
 //	                    feeds both axes; two would be two answers that can disagree mid-revocation
 //
-// NO idem.Middleware ON THE CITIZEN CHAIN: it carries one GET. Idempotency protects repeated
-// WRITES, and mounting it here would claim a protection with nothing to protect.
+// idem.Middleware IS NOW ON THE CITIZEN CHAIN TOO, and that note used to say the opposite for a
+// reason that has expired: it said the surface carried one GET, so duplicate protection would be a
+// claim with nothing to protect. POST /api/v1/my-citizen-reports is the write that changed it — a
+// double-tapped `Gửi` producing two petitions with two lookup codes is permanent, because rule 7
+// forbids hard delete.
+//
+// IT SITS INNERMOST, unlike the staff chain where it sits immediately inside TenantMiddleware. The
+// difference is not a style choice: Middleware only puts the Store on the context, while the
+// COMMUNE that prefixes the key is put there by httpx.XaTuPhien — which is declared PER ROUTE on
+// this surface, not on the chain (ADR 0022). So the commune is in place by the time
+// idem.Required runs inside the route, and nowhere earlier on this chain is it available at all.
+//
+// # TWO PATTERNS ON THE OUTER MUX FOR ONE RESOURCE, AND THE SECOND IS LOAD-BEARING
+//
+// `tienToCongDan` ends in `/` so it matches the SUBTREE. It does NOT match the collection itself.
+//
+// MEASURED RATHER THAN ASSUMED, because the first version of this note guessed and guessed wrong:
+// with `tapCongDan` removed, a POST to `/api/v1/my-citizen-reports` is answered **307** with
+// `Location: /api/v1/my-citizen-reports/` — and following that redirect lands on a path NO pattern
+// matches, so the citizen gets `404 page not found` in plain text. 307 preserves the method and the
+// body, so a compliant client really does re-send the report; it just re-sends it at a door that
+// does not exist.
+//
+// Registering `tapCongDan` explicitly is what puts the intake on the citizen chain rather than on
+// the staff chain, where TenantMiddleware would answer 404 to every citizen who pressed send.
 func dungBien(mux, muxCongDan http.Handler, soPhien httpx.CitizenSessions,
 	danhBa tenant.Directory, dinhDanh staffauth.Resolver,
 	idemStore idem.Store, log *slog.Logger) http.Handler {
@@ -277,6 +307,7 @@ func dungBien(mux, muxCongDan http.Handler, soPhien httpx.CitizenSessions,
 
 	// The citizen chain. Order is outermost-last here, exactly as above.
 	var c http.Handler = muxCongDan
+	c = idem.Middleware(idemStore, log)(c)
 	c = authz.CitizenPrincipal()(c)
 	c = httpx.CitizenEdge(soPhien)(c)
 	c = httpx.Recover(traceID)(c)
@@ -292,6 +323,10 @@ func dungBien(mux, muxCongDan http.Handler, soPhien httpx.CitizenSessions,
 	// anything. Swapping them changes nothing; deleting the first sends every citizen request into
 	// the staff chain and answers 404 to all of them.
 	ngoai.Handle(tienToCongDan, c)
+	// THE COLLECTION ITSELF. Deleting this line turns every citizen submission into a 307 to the
+	// subtree root followed by a bare `404 page not found` — measured, not assumed. See the note on
+	// dungBien.
+	ngoai.Handle(tapCongDan, c)
 	ngoai.Handle("/", h)
 	return ngoai
 }
@@ -305,7 +340,15 @@ func dungBien(mux, muxCongDan http.Handler, soPhien httpx.CitizenSessions,
 // A CONSTANT RATHER THAN A LITERAL, because this string has to agree with the route registered in
 // internal/http/routes_cong_dan.go, and main_test.go asserts the agreement. Two spellings of one
 // path is the defect this names out of existence.
-const tienToCongDan = "/api/v1/my-citizen-reports/"
+const tienToCongDan = tapCongDan + "/"
+
+// tapCongDan is the same resource WITHOUT the trailing slash — the collection a citizen POSTs to.
+//
+// DERIVED FROM, NOT PARALLEL TO, the prefix above: one literal in the file, so the two patterns
+// registered on the outer mux cannot come to name two different resources. Two spellings of one
+// path is the defect this arrangement names out of existence, and here it would be a silent one —
+// a citizen's report answered with a redirect.
+const tapCongDan = "/api/v1/my-citizen-reports"
 
 // traceID returns the id a caller can quote when reporting a problem.
 //

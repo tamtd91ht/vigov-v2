@@ -24,6 +24,7 @@ import (
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
@@ -176,6 +177,31 @@ func (khoPhieuCongDan) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma
 	}, nil
 }
 
+// guiPhieuGia is the citizen INTAKE use case, and like khoPhieuCongDan it asserts its own
+// preconditions rather than returning a fixture blindly.
+//
+// THE COMMUNE AND THE ACTOR ARE BOTH CHECKED, because both are things only the citizen chain can
+// have put in place: the commune comes from httpx.XaTuPhien and the actor from
+// authz.CitizenPrincipal. A stand-in that ignored them would let this route be moved onto the staff
+// chain — where it would answer 404 to every citizen — with every test in this file still green.
+type guiPhieuGia struct{ goi int }
+
+func (g *guiPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan audit.Actor) (
+	domain.PhieuPhanAnh, error) {
+
+	g.goi++
+	xa := tenant.MustFrom(ctx)
+	if xa != xaA || congDan.ID != idCongDan || congDan.Kind != "citizen" {
+		return domain.PhieuPhanAnh{}, errors.New("gửi phiếu giả: xã hoặc chủ thể không phải của phiên công dân")
+	}
+	return domain.PhieuPhanAnh{
+		MaTraCuu: maPhieuCuaToi, Kenh: domain.KenhZaloMiniApp,
+		CongDanID: congDan.ID, NoiDung: yc.NoiDung,
+		TrangThai: domain.DaTiepNhan, GocDemHan: mocGui, VaoSoLuc: mocGui,
+		HanTiepNhan: mocGui.Add(0),
+	}, nil
+}
+
 // soPhienGia is the citizen session registry the edge asks on every citizen request.
 //
 // ONE USABLE TOKEN AND NOTHING ELSE. Every other string — unknown, expired, revoked — comes back
@@ -196,6 +222,7 @@ type mayChu struct {
 	kho *khoGia
 	pg  *phanGiaiGia
 	so  *soPhienGia
+	gui *guiPhieuGia
 }
 
 func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
@@ -230,9 +257,11 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 	})
 
 	// THE CITIZEN SURFACE, REGISTERED THE WAY main() REGISTERS IT — its own mux, its own Deps.
+	gui := &guiPhieuGia{}
 	muxCongDan := http.NewServeMux()
 	svchttp.RegisterCongDan(muxCongDan, svchttp.DepsCongDan{
 		Phieu:       khoPhieuCongDan{},
+		GuiPhieu:    gui,
 		NhanLinhVuc: khoNhanLinhVuc{},
 		Log:         log,
 	})
@@ -244,7 +273,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 	so := &soPhienGia{}
 	return &mayChu{
 		h:   dungBien(mux, muxCongDan, so, danhBa, pg, nil, log),
-		kho: kho, pg: pg, so: so,
+		kho: kho, pg: pg, so: so, gui: gui,
 	}
 }
 
@@ -487,4 +516,118 @@ func TestTienToCongDanKhopVoiTuyenDaDangKy(t *testing.T) {
 	// resolution. Either way it is 404, so this case cannot distinguish them on its own; what it
 	// does prove is that the prefix does not swallow requests into a handler that answers anyway.
 	doiMa(t, m.goiCongDan(t, tienToCongDan, tokenCongDan), http.StatusNotFound)
+}
+
+// --- the CITIZEN INTAKE reaches the citizen chain, and never the staff one ---------------------
+
+// goiGuiCongDan posts one petition the way the Mini App does. The host is deliberately one the
+// directory does not know — see goiCongDan.
+func (m *mayChu) goiGuiCongDan(t *testing.T, path, token, khoa string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodPost, "https://"+hostMiniApp+path,
+		strings.NewReader(`{"content":"Đống rác ở đầu ngõ đã ba ngày chưa ai dọn."}`))
+	r.Host = hostMiniApp
+	r.RemoteAddr = "10.0.0.9:51000"
+	r.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+	if khoa != "" {
+		r.Header.Set(idem.Header, khoa)
+	}
+	w := httptest.NewRecorder()
+	m.h.ServeHTTP(w, r)
+	return w
+}
+
+// TestTuyenGuiPhanAnhKhongBiCHUYENHUONG is the trap this whole pair of patterns exists for, and it
+// is invisible in any 404.
+//
+// `tienToCongDan` ends in `/`, so it matches the SUBTREE and not the collection. Registering it
+// alone leaves Go's ServeMux to answer a bare `/api/v1/my-citizen-reports` with a redirect to the
+// slash form — which matches no route at all.
+//
+// ĐỘT BIẾN ĐÃ CHẠY, và số đo ở đây là số đo thật chứ không phải phỏng đoán: xoá dòng
+// `ngoai.Handle(tapCongDan, c)` khỏi dungBien thì lượt gửi trả **307** kèm
+// `Location: /api/v1/my-citizen-reports/`, và đi theo Location ấy ra `404 page not found` dạng văn
+// bản thuần. 307 GIỮ NGUYÊN method và thân, nên client đúng chuẩn thật sự gửi lại phản ánh — chỉ là
+// gửi vào một cánh cửa không tồn tại. Bốn ca trong tệp này ĐỎ cùng lúc.
+func TestTuyenGuiPhanAnhKhongBiChuyenHuong(t *testing.T) {
+	m := dungMayChu(t, canBoXaA())
+
+	w := m.goiGuiCongDan(t, tapCongDan, tokenCongDan, "01JKHOACHONGTRUNGCUAKHACH")
+
+	// EVERY REDIRECT CODE, not just the one measured. The point is that a submission must be SERVED
+	// here; which flavour of redirect a future Go version picks is not something this assertion
+	// should depend on.
+	if w.Code >= 300 && w.Code < 400 {
+		t.Fatalf("POST tới tập bị CHUYỂN HƯỚNG %d tới %q — đích ấy không khớp tuyến nào và trả "+
+			"404, nên phản ánh của người dân biến mất", w.Code, w.Header().Get("Location"))
+	}
+	doiMa(t, w, http.StatusCreated)
+	if m.gui.goi != 1 {
+		t.Errorf("use case tiếp nhận chạy %d lần, muốn 1", m.gui.goi)
+	}
+}
+
+// TestTuyenGuiPhanAnhKhongDiQuaPhanGiaiHost is the same assertion the read route makes, for the
+// write: the Mini App host resolves to NO commune, so a request that reached the staff chain would
+// be answered 404 by httpx.TenantMiddleware — and the directory would have been asked.
+//
+// ĐỘT BIẾN: đổi `ngoai.Handle(tapCongDan, c)` thành `ngoai.Handle(tapCongDan, h)` và ca này ĐỎ.
+func TestTuyenGuiPhanAnhKhongDiQuaPhanGiaiHost(t *testing.T) {
+	m := dungMayChu(t, canBoXaA())
+
+	doiMa(t, m.goiGuiCongDan(t, tapCongDan, tokenCongDan, "01JKHOACHONGTRUNGCUAKHACH"),
+		http.StatusCreated)
+
+	// THE DIRECTORY WAS NEVER ASKED. A 201 alone cannot prove the request avoided Host resolution;
+	// this can.
+	if m.pg.goi != 0 {
+		t.Errorf("tuyến gửi phản ánh gọi phân giải cán bộ %d lần — nó đang chạy trên chuỗi cán bộ",
+			m.pg.goi)
+	}
+}
+
+// TestTuyenGuiPhanAnhKhongCoPhienLa401 — the write surface refuses the same three situations the
+// read surface does, and the use case is not reached.
+func TestTuyenGuiPhanAnhKhongCoPhienLa401(t *testing.T) {
+	for ten, token := range map[string]string{
+		"không có Bearer":           "",
+		"token sổ phiên không nhận": "token-khong-ai-cap-BAO-GIO",
+	} {
+		t.Run(ten, func(t *testing.T) {
+			m := dungMayChu(t, canBoXaA())
+			doiMa(t, m.goiGuiCongDan(t, tapCongDan, token, "01JKHOACHONGTRUNGCUAKHACH"),
+				http.StatusUnauthorized)
+			if m.gui.goi != 0 {
+				t.Errorf("use case tiếp nhận chạy %d lần dù không có phiên dùng được", m.gui.goi)
+			}
+		})
+	}
+}
+
+// TestTuyenCANBOKhongPostDuocVaoTapCongDan is the mirror image, and it is what makes the split a
+// SPLIT rather than a second door. A staff request arriving at a commune host must not reach the
+// citizen intake: `my-citizen-reports` is a resource of its own, and Go's ServeMux matches path
+// ELEMENTS, so `citizen-reports` cannot be captured by it either.
+func TestTuyenCanBoKhongPostDuocVaoTapCongDan(t *testing.T) {
+	m := dungMayChu(t, canBoXaA())
+
+	// A staff host, a staff cookie, and the CITIZEN collection path. It lands on the citizen chain
+	// by path — where there is no citizen session — and is refused 401. What must NOT happen is a
+	// staff principal reaching the intake.
+	r := httptest.NewRequest(http.MethodPost, "https://"+hostA+tapCongDan,
+		strings.NewReader(`{"content":"x"}`))
+	r.Host = hostA
+	r.RemoteAddr = "10.0.0.7:51000"
+	r.AddCookie(&http.Cookie{Name: staffauth.CookieName, Value: "phien-cua-can-bo"})
+	r.Header.Set(idem.Header, "01JKHOACHONGTRUNGCUAKHACH")
+	w := httptest.NewRecorder()
+	m.h.ServeHTTP(w, r)
+
+	doiMa(t, w, http.StatusUnauthorized)
+	if m.gui.goi != 0 {
+		t.Errorf("use case tiếp nhận của công dân chạy %d lần cho một yêu cầu của CÁN BỘ", m.gui.goi)
+	}
 }

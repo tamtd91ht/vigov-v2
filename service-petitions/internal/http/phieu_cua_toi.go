@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/privacy"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-petitions/internal/app"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
@@ -39,6 +41,22 @@ type PhieuCuaCongDanDoc interface {
 	CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma string) (domain.PhieuPhanAnh, error)
 }
 
+// GuiPhanAnhCongDan receives ONE petition from the citizen filing it.
+//
+// A SECOND, SEPARATE INTERFACE RATHER THAN A METHOD ON PhieuCuaCongDanDoc, and the separation is
+// the same one rule 6 turns on. The read is a store call; this one opens a TRANSACTION and writes
+// an audit entry inside it (rule 6, invariant 3), which is why it is an app use case and not a
+// store method. Behind one interface a future caller would reach for whichever method was nearest
+// and could end up writing the petition outside a transaction — the exact defect core/audit was
+// shaped to make impossible.
+//
+// IT TAKES THE ACTOR AND NO CITIZEN IDENTIFIER, and that is rule 4, invariant 2 at the type level:
+// on a self-filed petition the person acting IS the owner, so one value serves both and there is no
+// second parameter a handler could fill from a request body.
+type GuiPhanAnhCongDan interface {
+	Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, congDan audit.Actor) (domain.PhieuPhanAnh, error)
+}
+
 // DepsCongDan is everything the CITIZEN routes need — and nothing the staff routes need.
 //
 // NO authz.Checker FIELD, AND THAT ABSENCE IS RULE 5, INVARIANT 6: citizen routes do not use RBAC.
@@ -48,6 +66,11 @@ type PhieuCuaCongDanDoc interface {
 type DepsCongDan struct {
 	// Phieu is the identity-filtered read. Required; RegisterCongDan refuses a nil at startup.
 	Phieu PhieuCuaCongDanDoc
+
+	// GuiPhieu is the citizen intake — the one write on this surface. Required, for a harder reason
+	// than the others: a nil here does not crash a screen, it crashes the act rule 10 exists for,
+	// in front of a member of the public who has just typed out a complaint.
+	GuiPhieu GuiPhanAnhCongDan
 
 	// NhanLinhVuc is the commune's own wording for the field code, so the citizen reads
 	// "Rác thải – Vệ sinh môi trường" rather than `rac-thai`. The SAME interface the staff route

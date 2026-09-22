@@ -188,7 +188,11 @@ func dungMayChuCongDan(t *testing.T) *mayChuCongDan {
 
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
-		Phieu:       phieu,
+		Phieu: phieu,
+		// The intake use case is wired because RegisterCongDan refuses incomplete Deps at
+		// construction, and it is deliberately NOT exercised here: this file is about the READ
+		// surface. The write surface has its own suite, gui_phan_anh_test.go.
+		GuiPhieu:    soPhieuMoi(),
 		NhanLinhVuc: nhanLinhVucMau(),
 		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
@@ -283,6 +287,7 @@ func chuoiCongDanVoi(t *testing.T, m *mayChuCongDan, so httpx.CitizenSessions) h
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
 		Phieu:       m.phieu,
+		GuiPhieu:    soPhieuMoi(),
 		NhanLinhVuc: nhanLinhVucMau(),
 		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
@@ -513,6 +518,7 @@ func TestCuaToiLoiKhoLa500VaKhongLoDuLieu(t *testing.T) {
 func TestRegisterCongDanThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 	for ten, bo := range map[string]func(d *DepsCongDan){
 		"thiếu kho phiếu theo danh tính": func(d *DepsCongDan) { d.Phieu = nil },
+		"thiếu use case tiếp nhận":       func(d *DepsCongDan) { d.GuiPhieu = nil },
 		"thiếu kho nhãn lĩnh vực":        func(d *DepsCongDan) { d.NhanLinhVuc = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
@@ -521,7 +527,7 @@ func TestRegisterCongDanThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 					t.Error("dựng được tuyến công dân với phụ thuộc thiếu — lỗi sẽ nổ trước mặt người dân")
 				}
 			}()
-			d := DepsCongDan{Phieu: phieuCuaToiMau(), NhanLinhVuc: nhanLinhVucMau()}
+			d := DepsCongDan{Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), NhanLinhVuc: nhanLinhVucMau()}
 			bo(&d)
 			RegisterCongDan(http.NewServeMux(), d)
 		})
@@ -537,7 +543,7 @@ func TestRegisterCongDanDuPhuThuocThiKhongPanic(t *testing.T) {
 		}
 	}()
 	RegisterCongDan(http.NewServeMux(), DepsCongDan{
-		Phieu: phieuCuaToiMau(), NhanLinhVuc: nhanLinhVucMau(),
+		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), NhanLinhVuc: nhanLinhVucMau(),
 	})
 }
 
