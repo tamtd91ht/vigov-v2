@@ -134,6 +134,17 @@ func dongBoViec(goc string, tuyens []tuyen) (ketQuaViec, error) {
 		}
 	}
 
+	// hienTai IS BUILT FROM EVERY ROUTE, INCLUDING THE CITIZEN ONES THAT NEVER GET A TASK BELOW.
+	//
+	// The two loops ask different questions and must not share an answer. This map answers "does
+	// this route still exist in the source", which decides whether an existing file is moved to
+	// stale/. The create loop below answers "is this web-admin's work", which decides whether a
+	// file is made at all.
+	//
+	// Leaving citizen routes out of this map would answer the first question with the second one's
+	// answer, and stale/ is a CLAIM ABOUT CAUSE — `tasks/web/` is read as "the route disappeared
+	// from the source" (ADR 0014). Filing a live route there is a confident answer to a question
+	// nobody asked, which is worse than the misfiling it would be fixing.
 	hienTai := map[string]bool{}
 	for _, t := range tuyens {
 		hienTai[maViec(t.Service, t.Method, t.Path)] = true
@@ -141,6 +152,19 @@ func dongBoViec(goc string, tuyens []tuyen) (ketQuaViec, error) {
 
 	// 1. Revive or create.
 	for _, t := range tuyens {
+		// A CITIZEN ROUTE IS NOT WEB-ADMIN'S WORK. `tasks/web/` is the queue for the staff admin
+		// web; a `citizen-only` route is consumed by `citizen-app`, a different surface in a
+		// different framework with different rules (rule 4, not rule 5). Filing one here invites
+		// an admin-web-builder agent to build a staff screen for a citizen endpoint — the concrete
+		// failure this skips, observed on 2026-09-22 with GET /api/v1/my-citizen-reports.
+		//
+		// WHAT THIS DOES NOT DO, said plainly: it does not create a queue for citizen-app. That is
+		// a decision about structure, not a defect, and it belongs to the project owner. Today the
+		// citizen surface is tracked in kb/90-ephemeral/tien-do/citizen-app.json like any other
+		// module.
+		if t.Quyen.Kind == "citizen-only" {
+			continue
+		}
 		id := maViec(t.Service, t.Method, t.Path)
 		switch oDau(goc, id) {
 		case "done", "claimed", "open":

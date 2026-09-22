@@ -285,6 +285,65 @@ func TestStaleCoGitkeep(t *testing.T) {
 	}
 }
 
+// tuyenCongDan is a citizen-surface route: declared CitizenOnly, consumed by citizen-app.
+func tuyenCongDan(method, path string) tuyen {
+	t := tuyenGia(method, path)
+	t.Service = "petitions"
+	t.Quyen = quyenDecl{Kind: "citizen-only"}
+	return t
+}
+
+// `tasks/web/` IS THE STAFF ADMIN WEB'S QUEUE. A citizen route filed there invites an
+// admin-web-builder agent to build a staff screen for a citizen endpoint — which happened on
+// 2026-09-22 with both my-citizen-reports routes before this was fixed.
+func TestTuyenCongDanKhongVaoHangDoiWeb(t *testing.T) {
+	goc := filepath.Join(t.TempDir(), "web")
+
+	kq := dongBo(t, goc, []tuyen{
+		tuyenPhien,
+		tuyenCongDan("GET", "/api/v1/my-citizen-reports/{maTraCuu}"),
+		tuyenCongDan("POST", "/api/v1/my-citizen-reports"),
+	})
+
+	if kq.Moi != 1 {
+		t.Fatalf("sinh %d việc, muốn 1 — chỉ tuyến cán bộ mới thuộc hàng đợi web", kq.Moi)
+	}
+	if n := demTep(t, filepath.Join(goc, "open")); n != 1 {
+		t.Fatalf("open/ có %d tệp, muốn 1", n)
+	}
+	// Named explicitly: a count of 1 would also pass if the wrong one survived.
+	if _, err := os.Stat(filepath.Join(goc, "open", maPhien+".json")); err != nil {
+		t.Fatalf("việc của tuyến CÁN BỘ phải còn: %v", err)
+	}
+}
+
+// THE HALF THAT IS EASY TO BREAK WHILE FIXING THE OTHER HALF.
+//
+// `stale/` is a CLAIM ABOUT CAUSE — it says the route disappeared from the source (ADR 0014).
+// The obvious way to skip citizen routes is to leave them out of `hienTai`, and that quietly
+// turns every citizen task already on the board into a false statement about why it moved.
+// History in claimed/ and done/ is real: somebody did that work.
+func TestTuyenCongDanDaOTrongDoneThiKhongBiChuyenSangStale(t *testing.T) {
+	goc := filepath.Join(t.TempDir(), "web")
+	tcd := tuyenCongDan("GET", "/api/v1/my-citizen-reports/{maTraCuu}")
+	ma := maViec(tcd.Service, tcd.Method, tcd.Path)
+
+	// A task that predates the fix, already finished.
+	dongBo(t, goc, []tuyen{tuyenPhien})
+	if err := os.WriteFile(filepath.Join(goc, "done", ma+".json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	kq := dongBo(t, goc, []tuyen{tuyenPhien, tcd})
+
+	if kq.Stale != 0 {
+		t.Errorf("chuyển %d việc sang stale/, muốn 0 — tuyến công dân VẪN TỒN TẠI trong mã nguồn", kq.Stale)
+	}
+	if _, err := os.Stat(filepath.Join(goc, "done", ma+".json")); err != nil {
+		t.Errorf("việc đã xong phải ở nguyên done/: %v", err)
+	}
+}
+
 func demTep(t *testing.T, dir string) int {
 	t.Helper()
 	ents, err := os.ReadDir(dir)
