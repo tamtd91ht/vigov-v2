@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-09-21",
+  "cap_nhat": "2026-09-22",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -55,23 +55,20 @@
       "tiep_theo": "ADR 0023 đã chốt nghiệp vụ. Hai điều phải đúng NGAY BẢN ĐẦU vì sửa sau là sửa chữ trên màn hình một cơ quan nhà nước: (1) nhãn nói \"xác nhận LỜI KHAI\", không phải xác nhận nhân thân — nút \"Xác nhận thường trú\" đứng trơ sẽ được hiểu là đang cấp một xác nhận hành chính; (2) `bị từ chối` là trạng thái riêng, giữ nguyên lời khai và giữ LÝ DO như trường nghiệp vụ BẮT BUỘC — một textarea tuỳ chọn thì thực tế sẽ rỗng, và công dân nhận về một \"bị từ chối\" không lý do, đúng cái im lặng luật 10 cấm"
     },
     {
+      "id": "danh-muc-duong-ghi-dau-tien",
+      "viec": "Cấu hình (14 §5): tab Danh mục có ĐƯỜNG GHI — thêm, sửa, tắt/bật, xoá mềm cho 5 danh mục",
+      "trang_thai": "dang_lam",
+      "bang_chung": "15 tệp việc ở tasks/web/done/ (5 danh mục × POST/PATCH/DELETE). Mở rộng chính web-admin/src/features/cau-hinh/tab-danh-muc.tsx — KHÔNG dựng màn thứ hai — nên màn vẫn ở tuyến /cau-hinh, không thêm đoạn đường dẫn nào (lý do ở app/cau-hinh/page.tsx: tên tài nguyên URL cho khái niệm này chưa được khách chốt). Mới: features/cau-hinh/tang-danh-muc.ts (quy tắc ba tầng, hàm thuần) · lib/api/danh-muc.ts phần hai (3 hàm ghi + bảng 5 đường dẫn có `satisfies` theo hợp đồng) · lib/quyen.ts QUYEN_QUAN_LY_DANH_MUC. Kiểm 2026-09-22: `npx tsc --noEmit` sạch ở mọi tệp của mục này · `npx vitest run` 331/331 · `npx eslint .` sạch · `node scripts/gen-api-types.mjs --check` khớp hợp đồng. ĐỘT BIẾN ĐÃ CHẠY: cho `thaoTacTheoTang(3)` trả `xoa: true` → 3 ca đỏ, trong đó 2 ca là ca KẾT XUẤT (tab-danh-muc.test.tsx), tức rào chắn canh cả quyết định lẫn việc quyết định ấy ra tới trang; phục hồi bằng bản chụp tệp.",
+      "no_confirm": [],
+      "tiep_theo": "BA TẦNG VẼ TỪ `tier` MÁY CHỦ TRẢ VỀ, không tính lại ở client: tầng 3 không Tắt/Xoá, tầng 2 không Xoá, cả ba tầng đều đổi được nhãn. `source` và `tier` KHÔNG BAO GIỜ đi lên trong thân POST/PATCH (400 kể cả giá trị đúng) — chặn hai lớp: kiểu `Omit<...>` lúc biên dịch và phép dựng thân TỪNG TRƯỜNG lúc chạy, có ca test ép kiểu một dòng đọc từ máy chủ gửi ngược lên. `code` cũng không đi lên trong PATCH (mã đã cấp không đổi, luật 7 #3). CHƯA DỰNG và không được bịa: nút `⬆ Nhập từ Excel` (không có tuyến), chip lọc nhóm, và ba nhóm `Lĩnh vực phản ánh` · `Loại đơn thư` · `Trạng thái nhiệm vụ` (không có tuyến nào; riêng nhóm thứ ba là tâm điểm câu hỏi mở #21). Hai nhóm `Loại đơn vị dân cư` và `Khối nhiệm vụ` hiện trong bảng nhưng CHỈ XEM: hợp đồng chưa có tuyến ghi, và chúng cũng không phát ra `tier`/`source` — màn hình nhận ra bằng chính sự vắng mặt ấy chứ không bằng tên nhóm. CỔNG QUYỀN CHỈ BỌC PHẦN GHI (`admin.lookup`), KHÔNG bọc bảng: bảy tuyến đọc khai `any-authenticated` và ẩn cả bảng sẽ là giao diện từ chối điều máy chủ đang phục vụ."
+    },
+    {
       "id": "moi-tuyen-ghi-cho-can-bo",
-      "viec": "Mọi tuyến GHI cho cán bộ",
-      "trang_thai": "chua_lam",
-      "bang_chung": "",
-      "no_confirm": [
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-        17,
-        18
-      ],
-      "tiep_theo": "cố ý không dựng scaffolding: một tuyến ghi viết dở trông y hệt một quyết định ai đó đã ra"
+      "viec": "Danh bạ cán bộ: năm tuyến GHI ở web + gộp cách gọi ghi về `lib/api/goi.ts`",
+      "trang_thai": "dang_lam",
+      "bang_chung": "DANH BẠ CÁN BỘ ĐÃ CÓ ĐỦ NĂM TUYẾN GHI, commit 6109337 — `lib/api/can-bo.ts`: `themCanBo` (POST 201, `Idempotency-Key` là THAM SỐ chứ không sinh tại chỗ) · `suaCanBo` (PATCH 200, sáu trường, `null` = không đổi và chuỗi rỗng = xoá nội dung ô, hai nghĩa khác nhau) · `datKhoaCanBo` (POST/DELETE .../lockout, một hàm hai chiều) · `doiVaiTroCanBo` (PUT .../role). Màn hình: `features/cau-hinh/danh-ba-can-bo.tsx`. HAI MÓN NỢ CỦA LƯỢT ẤY ĐÃ TRẢ NGÀY 22/09/2026, và món thứ nhất là một điều kiện đã ghi sẵn chứ không phải một ý thích: chú thích `lib/api/danh-muc.ts` viết từ lượt danh mục rằng *bề mặt ghi THỨ HAI xuất hiện là lúc `goiGhi` chuyển sang `goi.ts`*. Bề mặt ấy là `can-bo.ts`, nên hai bản đã gộp thành một ở `lib/api/goi.ts` (hợp của cả hai: thêm `PUT`, và `than === undefined` nghĩa là KHÔNG thân + KHÔNG `Content-Type`). Hàm trả `Response` THÔ chứ không phân giải sẵn — `DELETE` danh mục thành công bằng 204 KHÔNG THÂN, nên một hàm dùng chung mà luôn gọi `.json()` sẽ biến lần xoá thành công thành 'không đọc được'; `can-bo.ts` giữ lại đúng lớp mỏng đọc `identity_canBoTomTat`. Món thứ hai: `.bang-can-bo .o-thao-tac` trong `globals.css`. KIỂM 22/09/2026: `npx tsc --noEmit` sạch · `npx vitest run` 379/379 (34 tệp) · `npx eslint src --max-warnings=0` sạch · `npm run check:api` khớp hợp đồng. ĐỘT BIẾN ĐÃ CHẠY trên bản gộp: bỏ nhánh `than === undefined` của `goi.ts` (luôn khai `Content-Type`) → `lib/api/can-bo.test.ts:510` đỏ ĐÚNG MỘT CA, ca canh hai tuyến khoá/mở khoá không khai thân; phục hồi bằng BẢN CHỤP TỆP, không `git checkout`.",
+      "no_confirm": [],
+      "tiep_theo": "CÒN LẠI, và không được bịa: các phân hệ ngoài Cấu hình vẫn chưa có tuyến ghi nào ở web — xem `muoi-mot-phan-he-chua-dung`. MÓN NỢ CSS ĐÃ TRẢ NHƯNG KHÔNG CÓ RÀO CHẮN NÀO CANH: `white-space: normal` MỘT MÌNH không đủ cho cụm nút danh bạ, vì bốn nút là bốn thẻ JSX trên bốn dòng và JSX bỏ hẳn khoảng trắng chỉ-có-xuống-dòng giữa hai thẻ — không còn ký tự trắng nào để ngắt dòng vào, nên phải là `display: flex; flex-wrap: wrap`. `gap` cũng bắt buộc vì `.nut-phu` là `inline-block` không lề: thiếu nó thì 'Khoá tài khoản' dính sát 'Đổi vai trò' ở 320px. Kho này không kiểm CSS bằng test nào, nên dòng ấy được chứng minh bằng đọc mã chứ không bằng một phép kiểm xanh — nói ra thay vì để một con số 379/379 trông như đã phủ nó."
     },
     {
       "id": "tong-quan-va-so-tay",

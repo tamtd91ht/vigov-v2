@@ -28,7 +28,7 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import { CHUNG, docJSON, LOI_KHONG_RO, thongBaoLoi, type KetQua } from "./goi";
+import { docJSON, goiGhi, LOI_KHONG_RO, type KetQua } from "./goi";
 import type {
   identity_canBoTomTat,
   identity_datVaiTroVao,
@@ -188,11 +188,16 @@ export function layChiTietCanBo(id: string): Promise<KetQua<identity_canBoTomTat
  * sẽ rơi vào vết kiểm toán mà không màn hình nào đọc lại được). Gửi `{}` kèm `Content-Type` là
  * tuyên bố có một thân — thứ sẽ mời người sau điền vào.
  *
- * ĐẶT Ở ĐÂY CHỨ CHƯA Ở `goi.ts`, VÀ ĐÓ LÀ MỘT MÓN NỢ ĐÃ GHI SỔ: `lib/api/danh-muc.ts` có một hàm
- * cùng hình dạng (`goiGhi`), và chú thích của chính nó nói rằng bề mặt ghi THỨ HAI là lúc phải
- * dọn về `goi.ts`. Bề mặt thứ hai chính là tệp này. Việc dọn KHÔNG làm trong lượt này vì
- * `lib/api/danh-muc.ts` nằm ngoài phạm vi tệp được giao và đang do một lượt khác sửa song song;
- * chép hàm sang `goi.ts` mà để nguyên bản cũ ở `danh-muc.ts` là biến một bản sao thành hai.
+ * CÁCH GỌI MẠNG NẰM Ở `goi.ts`, MÓN NỢ ĐÃ TRẢ. Trước 2026-09-22 hàm này tự dựng lấy `fetch` — bản
+ * thứ hai của một hình dạng `lib/api/danh-muc.ts` đã viết, và chú thích của chính bản ấy đặt sẵn
+ * điều kiện: *"màn hình ghi thứ hai xuất hiện là lúc hàm này chuyển sang `goi.ts`"*. Màn hình thứ
+ * hai là tệp này, nên cả hai bản đã gộp về `goiGhi`. Thứ CÒN LẠI ở đây là phần duy nhất của riêng
+ * danh bạ: đọc thân thành `identity_canBoTomTat`.
+ *
+ * `goiGhi` TRẢ `Response` THÔ CHỨ KHÔNG PHÂN GIẢI SẴN, và đó là lý do lớp mỏng này tồn tại chứ
+ * không gọi thẳng: `DELETE` của danh mục thành công bằng **204 không thân**, nên một hàm dùng chung
+ * mà luôn gọi `.json()` sẽ biến lần xoá thành công ấy thành "không đọc được". Tuyến nào biết mình
+ * trả gì thì tự đọc lấy.
  */
 async function goiGhiCanBo(
   duongDan: string,
@@ -201,26 +206,14 @@ async function goiGhiCanBo(
   maMongDoi: number,
   headerThem?: Readonly<Record<string, string>>,
 ): Promise<KetQua<identity_canBoTomTat>> {
-  let phanHoi: Response;
-  try {
-    phanHoi = await fetch(duongDan, {
-      ...CHUNG,
-      method: phuongThuc,
-      headers:
-        than === undefined
-          ? { ...headerThem }
-          : { "Content-Type": "application/json", ...headerThem },
-      body: than === undefined ? undefined : JSON.stringify(than),
-    });
-  } catch {
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-
-  if (phanHoi.status !== maMongDoi) return { ok: false, thongBao: await thongBaoLoi(phanHoi) };
+  const ketQua = await goiGhi(duongDan, phuongThuc, than, maMongDoi, headerThem);
+  if (!ketQua.ok) return ketQua;
 
   try {
-    return { ok: true, duLieu: (await phanHoi.json()) as identity_canBoTomTat };
+    return { ok: true, duLieu: (await ketQua.duLieu.json()) as identity_canBoTomTat };
   } catch {
+    // Đúng mã mong đợi mà thân không phải JSON là máy chủ hoặc proxy đang trả thứ khác. Với cán bộ
+    // thì đó vẫn là "không đọc được", không phải một trạng thái nghiệp vụ.
     return { ok: false, thongBao: LOI_KHONG_RO };
   }
 }

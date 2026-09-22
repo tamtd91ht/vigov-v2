@@ -40,7 +40,7 @@ import {
   layLoaiVanBan,
   layMucUuTienNhiemVu,
 } from "./danh-muc-nghiep-vu";
-import { CHUNG, LOI_KHONG_RO, docJSON, thongBaoLoi, type KetQua } from "./goi";
+import { LOI_KHONG_RO, docJSON, goiGhi, type KetQua } from "./goi";
 import type {
   comms_delete_map_asset_types_by_id,
   comms_loaiTaiNguyenRa,
@@ -300,45 +300,6 @@ export type XoaMucVao = comms_xoaLoaiTaiNguyenVao &
 /** Đường dẫn của một mục cụ thể. `encodeURIComponent` vì id đi vào ĐƯỜNG DẪN, không vào thân. */
 function duongDanMuc(mauMuc: string, id: string): string {
   return mauMuc.replace("{id}", encodeURIComponent(id));
-}
-
-/**
- * Gửi một yêu cầu GHI và trả về phản hồi, hoặc một câu cho người dùng đọc.
- *
- * ĐẶT Ở ĐÂY CHỨ KHÔNG Ở `goi.ts`, VÀ CÓ HẠN DÙNG: hôm nay đây là bề mặt GHI duy nhất của web
- * quản trị, nên một lớp chung cho đúng một chỗ gọi là trừu tượng không ai cần. Màn hình ghi thứ
- * hai xuất hiện là lúc hàm này chuyển sang `goi.ts` — bản sao thứ hai của cách gọi ghi là đúng
- * thứ `goi.ts` được tách ra để chặn.
- *
- * KHÔNG RẼ NHÁNH THEO `code`, KHÔNG HIỆN `trace_id`, KHÔNG HIỆN SỐ HIỆU HTTP. `thongBaoLoi` đọc
- * đúng `message` máy chủ viết — và với các tuyến này thì đó là toàn bộ điểm: một lần từ chối theo
- * tầng trả 409 kèm nguyên câu "Mục do hệ thống cấp thì không xoá được. Hãy tắt mục đó thay vì
- * xoá." (`service-documents/internal/http/danh_muc_ghi.go`). Viết lại câu ấy ở client là dựng bản
- * sao thứ hai của một quy tắc nghiệp vụ, và bản sao ấy trôi mà không ai thấy.
- *
- * KHÔNG GHI LOG GÌ KHI MẠNG HỎNG: thân yêu cầu mang chữ cán bộ vừa gõ, gồm cả lý do xoá.
- */
-async function goiGhi(
-  duongDan: string,
-  phuongThuc: "POST" | "PATCH" | "DELETE",
-  than: unknown,
-  maMongDoi: number,
-  headerThem?: Readonly<Record<string, string>>,
-): Promise<KetQua<Response>> {
-  let phanHoi: Response;
-  try {
-    phanHoi = await fetch(duongDan, {
-      ...CHUNG,
-      method: phuongThuc,
-      headers: { "Content-Type": "application/json", ...headerThem },
-      body: JSON.stringify(than),
-    });
-  } catch {
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-
-  if (phanHoi.status !== maMongDoi) return { ok: false, thongBao: await thongBaoLoi(phanHoi) };
-  return { ok: true, duLieu: phanHoi };
 }
 
 /** Đọc thân JSON của một phản hồi đã thành công. Thân hỏng là "không đọc được", không phải 200. */

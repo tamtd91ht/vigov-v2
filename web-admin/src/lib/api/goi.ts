@@ -88,3 +88,55 @@ export async function docJSON<T>(duongDan: string): Promise<KetQua<T>> {
     return { ok: false, thongBao: LOI_KHONG_RO };
   }
 }
+
+/**
+ * GHI một tuyến, trả về phản hồi thô — bên gọi tự đọc kiểu của mình.
+ *
+ * NÓ ĐẾN ĐÂY VÌ ĐÃ CÓ HAI BẢN SAO, không vì một nguyên tắc. `lib/api/danh-muc.ts` viết bản đầu
+ * kèm đúng một điều kiện: *"màn hình ghi thứ hai xuất hiện là lúc hàm này chuyển sang `goi.ts`"*.
+ * Màn hình ấy là danh bạ cán bộ, và nó đến kèm một bản thứ hai — nên điều kiện đã thoả và hai bản
+ * gộp lại thành một. Bản sao thứ hai của cách gọi ghi là đúng thứ `goi.ts` được tách ra để chặn.
+ *
+ * TRẢ `Response` CHỨ KHÔNG PHẢI `T` ĐÃ PHÂN GIẢI, khác `docJSON` ngay bên trên. Không phải để
+ * tổng quát hơn: `DELETE` của danh mục thành công bằng **204 không thân**, nên một hàm luôn gọi
+ * `.json()` sẽ biến lần xoá thành công thành "không đọc được". Bên gọi biết tuyến của mình trả gì.
+ *
+ * `than === undefined` THÌ KHÔNG CÓ THÂN VÀ KHÔNG CÓ `Content-Type`. Hai tuyến khoá/mở khoá cán bộ
+ * cố ý không nhận thân nào (`can_bo_ghi.go`: lược đồ không có cột nào giữ lý do khoá, nên một ô lý
+ * do sẽ rơi vào vết kiểm toán mà không màn hình nào đọc lại được). Gửi `{}` kèm `Content-Type` là
+ * tuyên bố có một thân — thứ sẽ mời người sau điền vào.
+ *
+ * KHÔNG RẼ NHÁNH THEO `code`, KHÔNG HIỆN `trace_id`, KHÔNG HIỆN SỐ HIỆU HTTP. `thongBaoLoi` đọc
+ * đúng `message` máy chủ viết, và với các tuyến ghi thì đó là toàn bộ điểm: một lần từ chối theo
+ * tầng trả 409 kèm nguyên câu *"Mục do hệ thống cấp thì không xoá được…"*, và một lần chạm ràng
+ * buộc #13 trả nguyên câu về người quản trị cuối cùng. Viết lại chúng ở client là dựng bản sao thứ
+ * hai của một quy tắc nghiệp vụ, và bản sao ấy trôi mà không ai thấy.
+ *
+ * KHÔNG GHI LOG GÌ KHI MẠNG HỎNG: thân yêu cầu mang chữ cán bộ vừa gõ — họ tên, số điện thoại, lý
+ * do xoá (luật 3).
+ */
+export async function goiGhi(
+  duongDan: string,
+  phuongThuc: "POST" | "PATCH" | "PUT" | "DELETE",
+  than: unknown | undefined,
+  maMongDoi: number,
+  headerThem?: Readonly<Record<string, string>>,
+): Promise<KetQua<Response>> {
+  let phanHoi: Response;
+  try {
+    phanHoi = await fetch(duongDan, {
+      ...CHUNG,
+      method: phuongThuc,
+      headers:
+        than === undefined
+          ? { ...headerThem }
+          : { "Content-Type": "application/json", ...headerThem },
+      body: than === undefined ? undefined : JSON.stringify(than),
+    });
+  } catch {
+    return { ok: false, thongBao: LOI_KHONG_RO };
+  }
+
+  if (phanHoi.status !== maMongDoi) return { ok: false, thongBao: await thongBaoLoi(phanHoi) };
+  return { ok: true, duLieu: phanHoi };
+}
