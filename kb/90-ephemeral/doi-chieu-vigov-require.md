@@ -9,6 +9,7 @@ owns_facts:
   - "mức độ lệch giữa đặc tả ../vigov-require/docs/spec và kho vigov-v2, đo ngày 2026-09-22"
   - "bản chất quan hệ giữa hai kho: vigov-require LÀ nguồn của prototype mà docs/ui-ux chép ra"
   - "những điểm đặc tả vigov-require TRẢ LỜI ĐƯỢC câu hỏi mở của kho này"
+  - "sổ việc đối chiếu hai kho: mục nào đã kiểm, mục nào còn nợ, mục nào chờ khách"
 ---
 
 # Đối chiếu `../vigov-require/docs/spec` với kho này
@@ -18,6 +19,65 @@ owns_facts:
 
 Tệp này **chỉ đọc tài liệu**, chưa đọc mã của `vigov-require`. Mọi con số dưới đây đều
 trích từ tệp có đường dẫn ghi kèm.
+
+---
+
+# SỔ VIỆC — sửa dần, đừng xoá dòng
+
+**Đây là phần sống của tệp.** Mọi phần dưới §0 trở đi là **bằng chứng đã đo ngày 22/09/2026**
+— đọc thì được, sửa thì chỉ khi đo lại. Phần này mới là chỗ ghi tiếp.
+
+**Luật ghi:** một mục xong thì **đổi trạng thái và ghi bằng chứng `file:line` + ngày**, KHÔNG
+xoá dòng. Dòng đã xoá là dòng phiên sau lại đi đo lại từ đầu — đúng cái giá tệp này sinh ra để
+tránh. Một mục hoá ra sai thì ghi **vì sao sai**, cũng không xoá.
+
+**Trạng thái:** `chưa làm` · `ĐANG LÀM` · `xong` · `treo` (chờ thứ ngoài tầm) · `hỏi khách`
+
+## D — Điểm lệch cần QUYẾT (không ai trong phiên tự quyết được)
+
+| # | Việc | Trạng thái | Bằng chứng / ghi chú |
+|---|---|---|---|
+| D1 | **Hỏi khách câu #27** kèm hai dữ kiện mới: nhóm quyền thứ 11 là `dossier.*`, và **luật nắm giữ** (§4.1, §4.3) | `hỏi khách` | Đang chặn 6 mục ở 5 module. Trước đây hỏi tay không; nay có bằng chứng |
+| D2 | **Hỏi chủ dự án: có bật RLS trong Postgres không** (§2) | `hỏi khách` | Đo 22/09: `grep -ri "ROW LEVEL SECURITY"` trên 31 migration = **0**. Đắt dần theo số xã đã chạy → hỏi muộn là hỏi đắt |
+| D3 | **Ràng buộc hạ tầng đặt tại Việt Nam** — kèm ADR 0020, `citizen-app` đang chờ (§1) | `chưa làm` | Bên kia có bằng chứng Zalo cưỡng chế bằng IP: định danh lấy được, **số điện thoại và vị trí thì không** |
+| D4 | Phạm vi **Hồ sơ công dân** — khách đã chốt ngoài phạm vi 20/09/2026; chỉ mở lại nếu khách đổi ý (§3.1) | `treo` | ADR 0001 §Bổ sung 2026-09-20. Thiết kế bên kia dùng lại được nguyên vẹn nếu mở lại |
+| D5 | Cặp trạng thái `out_of_scope` ↔ `chuyen-cap-tren` — **không hiển nhiên**, tám cặp kia khớp (§3.2) | `chưa làm` | Kiểm nghĩa trước khi ai đó ánh xạ vội. Đổi một trong chín chuỗi từ 20/09 là **di trú hồ sơ lưu trữ** (luật 7) |
+
+## K — Phép kiểm cần CHẠY trên kho này (rẻ, đo được ngay)
+
+Cả năm mục đều là **bẫy bên kia đã trả giá** (§5). Chưa mục nào được kiểm.
+
+| # | Việc | Trạng thái | Bằng chứng / ghi chú |
+|---|---|---|---|
+| K1 | Quét 31 migration tìm `UNIQUE (…)` trên bảng có `deleted_at` mà **thiếu** `WHERE deleted_at IS NULL` | `chưa làm` | Luật 1 bất biến 6 và luật 7 gặp nhau đúng ở đây, **không luật nào nói câu này**. Lỗi chỉ lộ khi người dùng thật "gỡ ra rồi thêm lại" |
+| K2 | Kiểm đường gọi Zalo của `service-comms` có ghi URL ra log không | `chưa làm` | Bên kia: mã bot nằm **trong đường dẫn**, thư viện HTTP ghi URL ở mức INFO → dòng log vô hại chính là bí mật. Luật 8 không lường đường vòng này |
+| K3 | `GET /api/v1/my-citizen-reports/{maTraCuu}` — có **giới hạn số lần tra** không | `chưa làm` | Luật 4 cấm #2 nói vế 404-vs-403, **không nói** vế giới hạn số lần. Bên kia: 20 lần / 10 phút / một địa chỉ |
+| K4 | `service-finance` — `chung_tu_giai_ngan` có cột **nguồn vốn** không | `chưa làm` | `migrations/0004` có `du_an_id`. Bên kia: *"không có cột ấy thì tiến độ theo nguồn phải suy từ dự án, và suy sai ngay khi dự án có hai nguồn"* |
+| K5 | Mọi nhánh "bỏ qua" ở kênh thông báo có **ghi log kèm lý do** không | `chưa làm` | Bên kia có sáu lý do bỏ qua chính đáng; không ghi thì cả sáu nhìn hệt như hỏng |
+
+## N — Nghiệp vụ nên MƯỢN khi phân hệ tới lượt (§6)
+
+Không phải lệch — là **khuyết**. Đọc bên kia trước rẻ hơn tự nghĩ lại. Mục nào chưa tới lượt
+thì để `chưa làm`, đừng dựng sớm.
+
+| # | Phân hệ / việc | Trạng thái | Nguồn bên kia |
+|---|---|---|---|
+| N1 | **M1 Nhiệm vụ** — giao việc không có ô "người thực hiện"; "Chờ duyệt lùi hạn" là NHÃN không phải trạng thái; bàn giao ghi từ-ai-sang-ai | `chưa làm` | `05-nghiep-vu.md` §M1 |
+| N2 | **Việc nền + thông báo** — một ngưỡng `warn_before_hours` duy nhất; bản tin gộp một tin/người/ngày; giờ yên tĩnh | `chưa làm` | `07-viec-nen-va-thong-bao.md`. ADR 0029 có số giờ cam kết, **chưa có** ngưỡng cảnh báo sớm |
+| N3 | **M2** — nhập Excel kiểm cả tệp trước khi ghi; cảnh báo trùng đơn (unaccent + pg_trgm) lúc còn ở quầy | `chưa làm` | `05-nghiep-vu.md` §M2 |
+| N4 | **M3 Giải ngân** — tiến độ tính từ **ngày khởi công**, không phải tháng 1→12 | `chưa làm` | `05-nghiep-vu.md` §M3. Trùng vùng câu hỏi mở #31 |
+| N5 | **M3 Thu-chi** — đơn vị tính đọc từ chính tệp; đơn vị lạ thì **bỏ hẳn số tuyệt đối**, chỉ giữ phần trăm | `chưa làm` | `05-nghiep-vu.md` §M3. Trùng vùng #32, #33 |
+| N6 | **M7 Báo cáo** — mẫu số rỗng trả `None` (dấu gạch), **không** trả 0; mỗi số bấm sâu ra đúng bấy nhiêu dòng | `chưa làm` | `05-nghiep-vu.md` §M7. `service-reporting` chưa dựng — **ghi trước khi dựng** |
+| N7 | **Zalo Bot** làm kênh nhắc việc cán bộ — bot không nhắn trước được, ghép nối bằng mã 8 ký tự sống 10 phút | `chưa làm` | `08-tich-hop-ngoai.md`. **Kho này không có khái niệm Zalo Bot nào** |
+| N8 | **Cổng TTĐT của xã** → `content_sources`, đồng bộ tin về Mini App | `chưa làm` | `08-tich-hop-ngoai.md`. `service-comms` chưa có |
+
+## X — Việc của chính tệp này
+
+| # | Việc | Trạng thái | Ghi chú |
+|---|---|---|---|
+| X1 | **Đọc MÃ `vigov-require`** — chỉ sau khi D1–D3 đã rõ | `chưa làm` | Đọc 49 migration + 16 module trước khi biết định hỏi gì là đọc để tìm câu mình chưa đặt |
+| X2 | Đối chiếu **22 câu Q-01…Q-22** của bên kia với 34 câu của kho này | `chưa làm` | `../vigov-require/docs/open-questions.md` — **bộ khác hẳn**, chưa đối chiếu dòng nào |
+| X3 | Đo lại toàn bộ tệp khi tới hạn | `chưa làm` | Hạn **22/12/2026**. Quá hạn nghĩa là một trong hai kho đã đi xa — đo lại, đừng tin |
 
 ---
 
@@ -305,20 +365,17 @@ báo), `09-bay-va-bai-hoc.md` (bẫy đã trả giá).
 
 ---
 
-## 9. Việc nên làm tiếp — theo thứ tự
+## 9. Việc nên làm tiếp
 
-| # | Việc | Vì sao đứng ở vị trí này |
-|---|---|---|
-| 1 | **Hỏi khách câu #27 kèm bằng chứng §4.1 và §4.3** | Đang chặn 6 mục ở 5 module. Bây giờ đã có **hai** dữ kiện mới để hỏi, không phải hỏi tay không |
-| 2 | **Hỏi chủ dự án về RLS (§2)** | Thay đổi ở khâu cấp phát CSDL, chạm mọi dịch vụ, **đắt dần theo số xã đã chạy**. Hỏi muộn là hỏi đắt |
-| 3 | **Kiểm 31 tệp migration cho bẫy `UNIQUE … WHERE deleted_at IS NULL`** | Rẻ, đo được ngay, và lỗi này chỉ lộ ra khi người dùng thật "gỡ ra rồi thêm lại" — tức là ở xã thật |
-| 4 | **Kiểm đường gọi Zalo của `service-comms` có ghi URL ra log không** | Cùng lớp lỗi với hai ca đã đo trong tháng: xanh cho tới khi có người quét |
-| 5 | **Quyết định về ràng buộc hạ tầng Việt Nam (§1)** kèm ADR 0020 | `citizen-app` đang chờ. Bên kia đã có bằng chứng Zalo cưỡng chế bằng IP |
-| 6 | **Đọc mã `vigov-require`** — chỉ sau khi 1–5 đã rõ | Đọc mã trước khi biết định hỏi gì là đọc 49 migration và 16 module để tìm câu mình chưa đặt |
+**Không có danh sách thứ hai ở đây — nó nằm ở [SỔ VIỆC](#sổ-việc--sửa-dần-đừng-xoá-dòng) đầu
+tệp.** Hai danh sách việc trong một tệp là hai danh sách sẽ lệch nhau, và cái lệch là cái
+người ta đọc.
 
----
+**Thứ tự đề xuất:** `D1` → `D2` → `K1` → `K2` → `D3` → `X1`. Ba mục nhóm `D` là câu phải hỏi
+người khác, nên gửi đi trước rồi làm việc khác trong lúc chờ; `K1` và `K2` rẻ và đo được ngay;
+`X1` (đọc mã bên kia) đứng cuối, lý do ghi tại chính dòng của nó.
 
 → Câu hỏi mở của kho này: `kb/00-foundation/open-questions.json`
 → Câu hỏi mở của kho kia: `../vigov-require/docs/open-questions.md` (22 câu Q-01…Q-22, **bộ
-   khác hẳn**, chưa đối chiếu — việc riêng, chưa làm)
+   khác hẳn**, chưa đối chiếu — mục `X2` ở Sổ việc)
 → Tiến độ module kho này: `kb/90-ephemeral/tien-do.md`
