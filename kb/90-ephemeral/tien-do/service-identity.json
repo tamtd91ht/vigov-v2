@@ -62,8 +62,7 @@
       "viec": "Toàn bộ luồng cấp tài khoản cán bộ",
       "trang_thai": "chua_lam",
       "bang_chung": "",
-      "no_confirm": [
-      ],
+      "no_confirm": [],
       "tiep_theo": "HẾT CHẶN 22/09/2026: #9 (hệ thống sinh mật khẩu tạm, bắt đổi lần đầu) · #17 (KHÔNG tự phục vụ đặt lại, quản trị viên xã đặt hộ) · #18 (phiên một ngày làm việc ~8–12 giờ, không cho xã tự cấu hình) đều đã DECIDED. Nửa LƯỢC ĐỒ của #9 đã xong ở mục ma-can-bo-va-dien-thoai (cột phai_doi_mat_khau + ràng buộc). CÒN LẠI ở mục này là luồng: đường ghi mint mật khẩu tạm + đặt cờ, màn bắt đổi ở lần đăng nhập đầu, đường quản trị viên đặt lại hộ, và hạn phiên theo #18"
     },
     {
@@ -137,6 +136,14 @@
       "bang_chung": "service-identity/internal/grpc/sla.go (SLADoc · TranMocHan=2 · ResolveDeadlines · loiThieuCauHinhSLA · loaiViecTu · mocHanTu · gioCua · gopGio) + internal/grpc/lich_lam_viec.go: TÁCH Server.tienGioLamViec ra làm MỘT đường đọc lịch + gọi domain.TienGioLamViec cho CẢ HAI rpc — AdvanceWorkingHours nay chỉ còn gọi nó. Nối dây: cmd/server/main.go (idstore.NewSLAStore(kho) → Deps.SLA); NewServer panic nếu thiếu, có ca kiểm. 14 ca mới ở internal/grpc/sla_test.go. TỰ CHẠY 22/09/2026: gofmt -l RỖNG · go vet ./service-identity/... rc=0 · go test -count=1 -p 1 ./service-identity/... 8 gói ok. ĐỘT BIẾN (phục hồi bằng BẢN CHỤP TỆP, không dùng git): bỏ domain.DongTheoLinhVuc và trả hằng số 8/8 giờ → 8 ca ĐỎ gồm cả ba ca bắt buộc (chưa cấu hình · ngày nghỉ lễ nằm giữa · hai xã khác số giờ).",
       "no_confirm": [],
       "tiep_theo": "XÃ CHƯA CẤU HÌNH → FAILED_PRECONDITION, và HÔM NAY ĐÓ LÀ MỌI XÃ: migration 0008 cố ý không gieo dòng nào. Tức hợp đồng đã hết chặn nhưng DỮ LIỆU thì chưa — tuyến ghi của petitions/documents gọi vào đây sẽ nhận từ chối cho tới khi có đường ghi bảng `sla` (mục `bang-sla` (2), ADR 0026 điều kiện dừng #2) và một màn hình cấu hình. Đó là fail-closed đúng ý luật 10 cấm #3, không phải lỗi để đi vòng. MÃ LỖI PHÂN BIỆT BA THỨ và đừng gộp: InvalidArgument = sửa service đang gọi · FailedPrecondition = mở màn hình cấu hình của xã (thiếu dòng SLA, thiếu dòng mặc định, số giờ không dương, hoặc bốn lỗi lịch) · Internal = kho hỏng hoặc lược đồ mất CHECK (ErrQuaNhieuDongSLA, ErrLoaiViecLa). MỘT CHỖ HẸP HƠN, cố ý: số giờ vượt trần 2000 từ DÒNG CẤU HÌNH trả FailedPrecondition chứ không InvalidArgument như AdvanceWorkingHours — cùng hình dạng, khác NGUỒN của con số. CHƯA KIỂM ĐƯỢC: 8 ca sla_pg_test.go vẫn SKIP vì thiếu VIGOV_TEST_DSN, nên phép đọc thật của SLAStore (phạm vi hoá theo xã, ORDER BY NULLS FIRST) chưa có phép kiểm nào chạy — cùng nợ với mục sql-chua-chay."
+    },
+    {
+      "id": "dien-ma-vao-staffprincipal",
+      "viec": "Điền `ma` vào `StaffPrincipal` và vào chủ thể của chính identity",
+      "trang_thai": "xong",
+      "bang_chung": "`internal/grpc/server.go:389` `Ma: cb.Ma` bên cạnh `StaffId: cb.ID` (hai câu hỏi khác nhau); `internal/http/middleware.go` điền `Ma: cb.Ma` vào `authz.Principal` — cùng một `cb`, cùng một chỗ với `PhienHienTai.MaCanBo`, nên không có gì lệch được. Ca mới trong `internal/grpc/server_test.go` khẳng định `ma` là mã nghiệp vụ VÀ khác `staff_id` (ca thứ hai là thứ bắt được một bản vá gửi `cb.ID` hai lần). `dang_nhap.go:149/:226` VỐN ĐÃ ĐÚNG từ trước — chính chú thích ở :151 là chính sách mà năm chỗ mới đã vi phạm. go vet sạch · test xanh.",
+      "no_confirm": [],
+      "tiep_theo": ""
     }
   ]
 }

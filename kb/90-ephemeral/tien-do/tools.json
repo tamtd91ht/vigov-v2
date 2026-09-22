@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "tools",
-  "cap_nhat": "2026-09-21",
+  "cap_nhat": "2026-09-22",
   "muc": [
     {
       "id": "bo-sinh-tien-do",
@@ -50,6 +50,14 @@
       "bang_chung": "tools/schema-smoke/main.go + tools/go.mod (thêm require/replace tới core và 7 service) + tools/go.sum. Chạy 2026-09-21 trên postgres:16 (PostgreSQL 16.10) trong Docker, CSDL TRỐNG: TOÀN BỘ 30 tệp migration của 7 service áp XANH, mỗi service một schema riêng, 0 service HỎNG. Nó gọi CHÍNH migrate.Chay — cùng lời gọi cmd/server/main.go dùng lúc khởi động — nên thứ được kiểm là đường khởi động thật, không phải bản dựng lại. Đây là thứ ĐẦU TIÊN trong kho đọc migrations.FS của service-reporting: service ấy không có tệp _test.go nào, nên trước đó hai migration của nó không có bất kỳ người đọc nào. `gofmt -l tools/` rỗng; `go vet ./schema-smoke` sạch; dựng được cả trong workspace lẫn `GOWORK=off`.",
       "no_confirm": [],
       "tiep_theo": "TÍNH CHẤT QUAN TRỌNG NHẤT CỦA CÔNG CỤ NÀY LÀ NÓ KHÔNG BIẾT BỎ QUA: thiếu VIGOV_TEST_DSN thì nó THOÁT MÃ 2, không phải in `ok`. Sáu bộ *_pg_test.go đều tự bỏ qua khi thiếu biến ấy và gói vẫn in `ok`, và đó đúng là lý do cả tầng SQL sống 30 tệp mà chưa từng chạm máy chủ nào. Đừng thêm nhánh tự bỏ qua vào đây cho CI đỡ đỏ. CHƯA LÀM: (1) chưa nối vào `make check` — nối thì phải quyết máy chạy CI lấy PostgreSQL ở đâu, và đó là câu của người dựng CI chứ không phải của công cụ; (2) công cụ chỉ kiểm migration ÁP ĐƯỢC, không kiểm HÀNH VI của ràng buộc — trigger append-only mới được kiểm là CÓ MẶT, chưa ai bắn thử (xem _chung/chay-migration-that)."
+    },
+    {
+      "id": "cong-doi-chieu-chu-the-vet",
+      "viec": "Cổng đối chiếu chủ thể vết kiểm toán với chính sách 'vết lưu mã cán bộ'",
+      "trang_thai": "xong",
+      "bang_chung": "`tools/vet_actor.py` (bộ phân tích DÙNG CHUNG cho cổng và hook, dùng lại bộ quét Go của `quyen_keys` chứ không chép bản thứ hai) + `tools/check_audit_actor.py` (quét toàn kho, nối vào mục `vet-actor` của `make check`). Quét 385 tệp Go hôm nay: 0 vi phạm. `tools/test_hooks.py` thêm 13 ca thuần `VET_ACTOR_CASES` + 5 ca payload -> 214/214 xanh. HỎNG THÌ ĐỎ: không nạp được bộ phân tích, hoặc không đọc được tệp Go nào, thì cổng exit 1 chứ không im.",
+      "no_confirm": [],
+      "tiep_theo": "Giới hạn đã viết đầy đủ trong docstring của `vet_actor.py`: bắt HÌNH DẠNG CÚ PHÁP, không bắt ngữ nghĩa; `id := p.ID` rồi `audit.Actor{ID: id}` thoát sạch, và sự bỏ sót ấy ĐÃ THÀNH MỘT CA KIỂM để ngày nó được đóng thì ca ấy đỏ. Mở rộng sang `Entry.Subject` là việc còn lại."
     }
   ]
 }

@@ -84,6 +84,14 @@
         27
       ],
       "tiep_theo": "BẰNG CHỨNG ĐÁNG GHI LẠI: dưới đột biến \"MUTANT.rac\", SÁU ca cũ của tệp vẫn XANH, chỉ ca mới đỏ. Sáu ca ấy bắn vào tuyến danh mục khai AnyAuthenticated, và guard đó không bao giờ đọc bộ khoá (core/authz/authz.go:187-208) — nên `PermissionKeys` ở đó là trang trí, bất kể ghi chuỗi gì. Đó là toàn bộ lý do một khoá bịa sống được ở đây suốt thời gian qua."
+    },
+    {
+      "id": "vet-ghi-ma-can-bo",
+      "viec": "Tuyến ghi danh mục để lại vết mang mã cán bộ",
+      "trang_thai": "xong",
+      "bang_chung": "`internal/http/danh_muc_ghi.go:71` đổi `p.ID` -> `p.Ma`, rỗng thì từ chối. Bộ đồ thử `internal/http` và `internal/app` khẳng định trên mã nghiệp vụ và khẳng định thêm 'KHÔNG phải ULID'. go vet sạch · test xanh.",
+      "no_confirm": [],
+      "tiep_theo": ""
     }
   ]
 }

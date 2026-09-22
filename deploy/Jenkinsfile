@@ -94,15 +94,38 @@ pipeline {
     stage('Kiểm tham số') {
       steps {
         script {
+          // Cờ cho khối `post { failure }`. Phải đặt Ở STAGE ĐẦU TIÊN có script, vì khối ấy
+          // chạy cho MỌI stage đỏ — kể cả stage này.
+          env.DA_AP = 'chua'
+
           if (!(params.THE ==~ /^[0-9a-f]{12}$/)) {
             error("THE phải là 12 ký tự hex — commit đã sinh ra ảnh. Nhận được: '${params.THE}'\n" +
                   "Thẻ di động (latest, main, prod) bị cấm: hai pod cùng manifest có thể chạy " +
                   "hai đoạn mã khác nhau, và câu 'bản nào đang chạy lúc đó' mất lời giải.")
           }
+
+          // AI BẤM — kiểm Ở ĐÂY, trước khi chạm git và cụm, vì đây là chỗ duy nhất còn quay
+          // lại được mà không tốn gì. Chi tiết cơ chế ở cuối tệp, hàm `nguoiBam()`.
+          env.NGUOI_BAM = nguoiBam()
+          if (!env.NGUOI_BAM) {
+            error('KHÔNG XÁC ĐỊNH ĐƯỢC AI BẤM LƯỢT NÀY — dừng trước khi chạm git và cụm.\n' +
+                  '\n' +
+                  'Commit ghim thẻ LÀ nhật ký triển khai của hệ thống. Một dòng không có tên\n' +
+                  'người là một dòng trả lời được "bản nào" và "lúc nào" nhưng không trả lời\n' +
+                  'được "AI" — và với hệ thống lưu hồ sơ hành chính, đó đúng là câu một cuộc\n' +
+                  'thanh tra sẽ hỏi. Ghi một cái tên giả (`khong-ro`) còn tệ hơn để trống: nó\n' +
+                  'làm dòng nhật ký TRÔNG NHƯ đã có câu trả lời.\n' +
+                  '\n' +
+                  'Job này KHÔNG khai trigger tự động, nên mọi lượt chạy hợp lệ đều do một\n' +
+                  'người đã đăng nhập bấm. Thấy dòng này nghĩa là lượt chạy không mang\n' +
+                  'hudson.model.Cause$UserIdCause — kiểm xem nó có bị một job khác, một timer,\n' +
+                  'hay một script gọi hộ không.')
+          }
+
           env.ANH = (params.DICH_VU == 'web-admin')
                   ? "${env.REGISTRY}/${env.PROJECT}/vigov-web-admin"
                   : "${env.REGISTRY}/${env.PROJECT}/vigov-service-${params.DICH_VU}"
-          echo "sẽ đưa ${env.ANH}:${params.THE} lên ${env.NS}"
+          echo "sẽ đưa ${env.ANH}:${params.THE} lên ${env.NS} — người bấm: ${env.NGUOI_BAM}"
         }
       }
     }
@@ -156,7 +179,7 @@ pipeline {
             git add deploy/overlays/${MT}/kustomization.yaml
             git commit -m "deploy(${MT}): ${DICH_VU} -> ${THE}
 
-Bấm bởi: ${BUILD_USER_ID:-khong-ro}
+Bấm bởi: ${NGUOI_BAM}
 Job: ${BUILD_URL}"
             git push origin HEAD:main
           '''
@@ -166,6 +189,11 @@ Job: ${BUILD_URL}"
 
     stage('Áp lên cụm') {
       steps {
+        // TỪ DÒNG NÀY TRỞ ĐI CỤM CÓ THỂ ĐÃ ĐỔI, nên từ đây `post { failure }` mới được phép
+        // rút lại. Đặt TRƯỚC `apply` chứ không sau: một `apply` đổ giữa chừng vẫn có thể đã
+        // sửa xong một phần tài nguyên.
+        script { env.DA_AP = 'roi' }
+
         withCredentials([file(credentialsId: params.KUBE_CRED, variable: 'KUBECONFIG')]) {
           sh '''
             set -eu
@@ -194,22 +222,70 @@ Job: ${BUILD_URL}"
 
   post {
     failure {
-      // Quay lại bản trước Ở CỤM ngay. Commit ghim thẻ thì GIỮ NGUYÊN, không revert tự động:
-      // nhật ký phải ghi cả lần thất bại. Rút lại nó là việc của người, ở lượt chạy sau.
-      withCredentials([file(credentialsId: params.KUBE_CRED, variable: 'KUBECONFIG')]) {
-        sh '''
-          set +e
-          echo "THẤT BẠI — quay lại bản trước ở cụm"
-          kubectl -n ${NS} rollout undo deploy/${DICH_VU}
-          kubectl -n ${NS} rollout status deploy/${DICH_VU} --timeout=5m
-          echo ""
-          echo "Cụm đã về bản cũ. Commit ghim thẻ VẪN CÒN trong deploy/overlays/${MT}/ —"
-          echo "chạy lại job này với thẻ cũ để nhật ký khớp với thực tế."
-        '''
+      // `post { failure }` CHẠY CHO MỌI STAGE ĐỎ, kể cả các stage kiểm chạy TRƯỚC khi có gì
+      // được áp lên cụm. Không có cờ `DA_AP` thì một lỗi gõ ở ô `THE` — đỏ ở 'Kiểm tham số',
+      // trước cả khi job biết mình sẽ làm gì — vẫn chạy `rollout undo`, tức RÚT LẠI BẢN ĐANG
+      // CHẠY ĐÚNG của một dịch vụ mà lượt này chưa hề đụng tới. `set +e` không che được: nó
+      // chỉ giữ cho job khỏi đỏ thêm, lệnh vẫn thi hành. Lỗ này có sẵn từ trước; bản vá 'ai
+      // bấm' thêm một đường đỏ sớm nữa nên nó phải được bịt cùng lượt.
+      script {
+        if (env.DA_AP != 'roi') {
+          echo 'Đỏ TRƯỚC khi chạm cụm — không có gì để rút lại, cụm không bị đụng tới.'
+        } else {
+          // Quay lại bản trước Ở CỤM ngay. Commit ghim thẻ thì GIỮ NGUYÊN, không revert tự
+          // động: nhật ký phải ghi cả lần thất bại. Rút lại nó là việc của người, ở lượt sau.
+          withCredentials([file(credentialsId: params.KUBE_CRED, variable: 'KUBECONFIG')]) {
+            sh '''
+              set +e
+              echo "THẤT BẠI — quay lại bản trước ở cụm"
+              kubectl -n ${NS} rollout undo deploy/${DICH_VU}
+              kubectl -n ${NS} rollout status deploy/${DICH_VU} --timeout=5m
+              echo ""
+              echo "Cụm đã về bản cũ. Commit ghim thẻ VẪN CÒN trong deploy/overlays/${MT}/ —"
+              echo "chạy lại job này với thẻ cũ để nhật ký khớp với thực tế."
+            '''
+          }
+        }
       }
     }
     success {
-      echo "XONG  ${env.ANH}:${params.THE} đang chạy ở ${env.NS}"
+      echo "XONG  ${env.ANH}:${params.THE} đang chạy ở ${env.NS} — bấm bởi ${env.NGUOI_BAM}"
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// AI BẤM LƯỢT NÀY — đọc từ NGUYÊN NHÂN của lượt build, không qua plugin nào.
+//
+// `BUILD_USER_ID` là biến của plugin `build-user-vars`, và máy chủ Jenkins này chỉ có bộ lõi
+// (`Jenkinsfile` gốc, mục "VÌ SAO KHÔNG GỌI PLUGIN DOCKER PIPELINE"). Biến ấy vì thế LUÔN
+// rỗng ở đây, nên dòng cũ `${BUILD_USER_ID:-khong-ro}` ghi `khong-ro` vào MỌI commit triển
+// khai — và nó hỏng theo kiểu tệ nhất: không đỏ, không cảnh báo, chỉ là một nhật ký trông
+// như đã trả lời câu "ai" trong khi chưa bao giờ trả lời.
+//
+// `currentBuild.getBuildCauses()` thuộc Pipeline lõi (`workflow-support`), không cần cài gì
+// thêm — đó là lý do chọn nó thay vì đi xin cài plugin trên một máy chủ dùng chung.
+//
+// TRẢ VỀ CHUỖI RỖNG KHI KHÔNG BIẾT, KHÔNG BAO GIỜ TRẢ VỀ MỘT TÊN THAY THẾ. Nơi gọi mới là
+// nơi quyết định làm gì với cái không biết ấy, và ở đây nó quyết định DỪNG. Một hàm tự bịa
+// `khong-ro` là đúng cái khiếm khuyết đang được vá, viết lại ở chỗ khác.
+String nguoiBam() {
+  List nn
+  try {
+    nn = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')
+  } catch (Throwable e) {
+    // BẮT RỘNG, CÓ CHỦ Ý — và nó an toàn ĐÚNG VÌ nhánh này trả về rỗng. Bắt rộng chỉ nguy
+    // hiểm khi nó nuốt lỗi rồi đi tiếp theo hướng dễ dãi; ở đây mọi thất bại đều dẫn tới
+    // cùng một kết luận "không biết ai bấm", và nơi gọi DỪNG. Bản Pipeline cũ ném
+    // `MissingMethodException` (một Exception) còn `NoSuchMethodError` là một Error —
+    // `catch (Exception)` sẽ hụt nửa sau, và `catch (A | B)` thì đa-bắt từng vỡ dưới phép
+    // biến đổi CPS của Jenkins.
+    echo "Không đọc được nguyên nhân lượt build (${e.getClass().getSimpleName()}) — coi như không xác định được người bấm."
+    return ''
+  }
+  if (nn == null || nn.isEmpty()) {
+    return ''
+  }
+  def id = nn[0].userId
+  return id == null ? '' : id.toString().trim()
 }

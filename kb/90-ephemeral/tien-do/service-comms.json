@@ -84,6 +84,14 @@
         27
       ],
       "tiep_theo": "service-comms hiện KHÔNG có tuyến nào khai RequirePermission, nên không khoá nào trong module này có thể mang trọng lượng. Khi tuyến GHI tài nguyên bản đồ xuất hiện, nó sẽ là tuyến đầu tiên cần `asset.update` — và là chỗ đầu tiên viết được bốn ca luật 5 bất biến 7 cho dịch vụ này."
+    },
+    {
+      "id": "vet-ghi-ma-can-bo",
+      "viec": "Tuyến ghi danh mục để lại vết mang mã cán bộ",
+      "trang_thai": "xong",
+      "bang_chung": "`internal/http/danh_muc_ghi.go:71` đổi `p.ID` -> `p.Ma`, và điều kiện canh đổi sang `p.Ma == \"\"` — rỗng thì TỪ CHỐI (500), không lùi về id nội bộ. Bài kiểm khẳng định trên GIÁ TRỊ THẬT: vết phải mang `CB-00123` VÀ phải KHÁC ULID (hai vế, vì vế đầu một mình vẫn xanh nếu hai hằng bị làm cho bằng nhau). Bộ đồ thử `internal/app` trước đây chốt `\"nd-01JINTERNALIDCUACANBO\"` làm chủ thể cán bộ — đã đổi sang mã nghiệp vụ. ĐỘT BIẾN: đổi về `p.ID` -> 3 ca ĐỎ và cổng `check_audit_actor` exit 1 đúng dòng 71; hoàn nguyên bằng bản chụp tệp.",
+      "no_confirm": [],
+      "tiep_theo": ""
     }
   ]
 }

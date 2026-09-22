@@ -224,27 +224,27 @@
     },
     "authz.AnyAuthenticated": {
       "kind": "func",
-      "at": "core/authz/authz.go:187"
+      "at": "core/authz/authz.go:234"
     },
     "authz.Checker": {
       "kind": "type",
-      "at": "core/authz/authz.go:69"
+      "at": "core/authz/authz.go:116"
     },
     "authz.CitizenOnly": {
       "kind": "func",
-      "at": "core/authz/authz.go:138"
+      "at": "core/authz/authz.go:185"
     },
     "authz.CitizenPrincipal": {
       "kind": "func",
-      "at": "core/authz/authz.go:163"
+      "at": "core/authz/authz.go:210"
     },
     "authz.From": {
       "kind": "func",
-      "at": "core/authz/authz.go:60"
+      "at": "core/authz/authz.go:107"
     },
     "authz.Into": {
       "kind": "func",
-      "at": "core/authz/authz.go:56"
+      "at": "core/authz/authz.go:103"
     },
     "authz.Nhom": {
       "kind": "func",
@@ -256,15 +256,15 @@
     },
     "authz.Principal": {
       "kind": "type",
-      "at": "core/authz/authz.go:47"
+      "at": "core/authz/authz.go:72"
     },
     "authz.Public": {
       "kind": "func",
-      "at": "core/authz/authz.go:211"
+      "at": "core/authz/authz.go:258"
     },
     "authz.RequirePermission": {
       "kind": "func",
-      "at": "core/authz/authz.go:91"
+      "at": "core/authz/authz.go:138"
     },
     "authz.String": {
       "kind": "func",
@@ -372,11 +372,11 @@
     },
     "domain.CanBoTomTat": {
       "kind": "type",
-      "at": "service-identity/internal/domain/can_bo.go:53"
+      "at": "service-identity/internal/domain/can_bo.go:72"
     },
     "domain.CanBoVaiTro": {
       "kind": "type",
-      "at": "service-identity/internal/domain/can_bo.go:93"
+      "at": "service-identity/internal/domain/can_bo.go:130"
     },
     "domain.CapChongNhau": {
       "kind": "type",
@@ -674,6 +674,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/quyen.go:26"
     },
+    "domain.SinhMaCanBo": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/ma_can_bo.go:96"
+    },
     "domain.SinhMaTraCuu": {
       "kind": "func",
       "at": "service-petitions/internal/domain/phieu_phan_anh.go:397"
@@ -816,7 +820,7 @@
     },
     "grpc.BatchGetStaff": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:417"
+      "at": "service-identity/internal/grpc/server.go:422"
     },
     "grpc.CanBoDoc": {
       "kind": "type",
@@ -1424,7 +1428,7 @@
     },
     "identityclient.TienGioLamViec": {
       "kind": "func",
-      "at": "core/identityclient/identityclient.go:252"
+      "at": "core/identityclient/identityclient.go:262"
     },
     "identityclient.TraCuu": {
       "kind": "func",
@@ -1644,19 +1648,19 @@
     },
     "staffauth.Allows": {
       "kind": "func",
-      "at": "core/staffauth/staffauth.go:276"
+      "at": "core/staffauth/staffauth.go:295"
     },
     "staffauth.Checker": {
       "kind": "type",
-      "at": "core/staffauth/staffauth.go:270"
+      "at": "core/staffauth/staffauth.go:289"
     },
     "staffauth.Middleware": {
       "kind": "func",
-      "at": "core/staffauth/staffauth.go:145"
+      "at": "core/staffauth/staffauth.go:157"
     },
     "staffauth.Resolver": {
       "kind": "type",
-      "at": "core/staffauth/staffauth.go:109"
+      "at": "core/staffauth/staffauth.go:121"
     },
     "staffauth.StaffPrincipal": {
       "kind": "type",
@@ -1708,7 +1712,7 @@
     },
     "store.ChiTiet": {
       "kind": "func",
-      "at": "service-identity/internal/store/can_bo_danh_sach.go:108"
+      "at": "service-identity/internal/store/can_bo_danh_sach.go:122"
     },
     "store.ChotLinhVuc": {
       "kind": "func",
@@ -1728,7 +1732,7 @@
     },
     "store.DatMatKhauHash": {
       "kind": "func",
-      "at": "service-identity/internal/store/can_bo.go:101"
+      "at": "service-identity/internal/store/can_bo.go:127"
     },
     "store.DemDangSong": {
       "kind": "func",
@@ -1764,7 +1768,7 @@
     },
     "store.GhiNhanDangNhap": {
       "kind": "func",
-      "at": "service-identity/internal/store/can_bo.go:84"
+      "at": "service-identity/internal/store/can_bo.go:93"
     },
     "store.GhiNhanDung": {
       "kind": "func",
@@ -2044,11 +2048,11 @@
     },
     "store.TheoEmail": {
       "kind": "func",
-      "at": "service-identity/internal/store/can_bo.go:55"
+      "at": "service-identity/internal/store/can_bo.go:64"
     },
     "store.TheoID": {
       "kind": "func",
-      "at": "service-identity/internal/store/can_bo.go:73"
+      "at": "service-identity/internal/store/can_bo.go:82"
     },
     "store.TheoIDDeSua": {
       "kind": "func",

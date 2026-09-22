@@ -76,6 +76,14 @@
       "bang_chung": "core/ulid/ulid.go + ulid_test.go. Năm ca sử dụng ghi danh mục (documents, finance, petitions ×2, comms) gọi ulid.Moi thay vì tự chép. Ba tính chất được ghim: đúng 26 ký tự, chỉ bảng chữ Crockford (không I/L/O/U — chép tay một mã không ra được mã KHÁC vẫn hợp lệ), và 1000 lần gọi liên tiếp trong cùng một mili-giây không trùng. `go test ./ulid/...` XANH — 2026-09-22.",
       "no_confirm": [],
       "tiep_theo": "CÒN HAI BẢN CHÉP TAY, và cả hai đều nằm ngoài phạm vi lần này nên KHÔNG bị đụng vào: service-identity/internal/store/crosstenant/dinh_danh_cong_dan.go:154 và service-comms/internal/app/so_thong_bao.go (maULID). Chính chú thích của bản thứ hai nói việc dời sang core/ là đúng 'vào ngày có người gọi thứ hai' — ngày ấy là hôm nay, nhưng gộp chúng lại là sửa mã của hai dịch vụ cho một lý do không thuộc việc đang làm. Cái giá của việc để nguyên được ghi ra chứ không giấu: ba bản cùng một thuật toán, và một ULID lệch bảng chữ hay lệch độ dài giữa hai dịch vụ là một mã đi qua được ở nơi này và vỡ ràng buộc ở nơi kia — trên dòng ĐÃ ghi."
+    },
+    {
+      "id": "vet-kiem-toan-mang-ma-can-bo",
+      "viec": "`authz.Principal` mang MÃ CÁN BỘ cho vết kiểm toán, tách khỏi id nội bộ quyết định quyền",
+      "trang_thai": "xong",
+      "bang_chung": "`core/authz.Principal` thêm trường `Ma` (GIỮ `ID`, không thay — `ID` là thứ `identity/store/checker.go:124` join `nd.id`, `staffauth.go:294` buộc bộ khoá vào một người, và `idem.go:506` dùng làm chủ khoá idempotency; đổi nghĩa nó thì mọi tuyến có rào trả 403 im lặng). `core/staffauth.StaffPrincipal.Ma` + Middleware điền, KHÔNG lấy `StaffID` thay khi rỗng. `core/identityclient` chép `p.GetMa()` sang, và CỐ Ý không lỗi khi rỗng (khác `staff_id`) — lỗi ở đây biến một lượt cuốn chiếu thành mất trắng dịch vụ. Hai ca mới trong `core/staffauth/staffauth_test.go`: `TestMaSangChuThe` và `TestMaRongKhongLayIDThayThe`; ca thứ hai là ca chứng minh KHÔNG có đường lùi. ĐỘT BIẾN: bỏ `Ma: p.Ma` khỏi Middleware -> `TestMaSangChuThe` ĐỎ, hoàn nguyên bằng bản chụp tệp. gofmt rỗng · go vet sạch · `go test -count=1 -p 1 ./...` xanh.",
+      "no_confirm": [],
+      "tiep_theo": "`core/audit.Entry.Subject` cũng đòi mã nghiệp vụ (audit.go:44) và chưa có gì đối chiếu — cùng lớp lỗi, chưa có ca đỏ nên chưa làm."
     }
   ]
 }

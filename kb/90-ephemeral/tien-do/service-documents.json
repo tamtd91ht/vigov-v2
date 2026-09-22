@@ -34,6 +34,14 @@
       "bang_chung": "ĐÃ CHẠY THẬT 2026-09-21 — PostgreSQL 16.10 trong Docker (postgres:16), CSDL TRỐNG, áp bằng CHÍNH core/migrate qua tools/schema-smoke. Cả 3 tệp migration của documents áp XANH trên schema trống. 5 ca service-documents/internal/store/loai_van_ban_pg_test.go THOÁT SKIP và ĐỀU XANH. Truy pg_class: audit_log và loai_van_ban mỗi bảng có ĐỦ 32 mảnh.",
       "no_confirm": [],
       "tiep_theo": "TestPgCotTrongMaKhopVoiLuocDoThat đã chạy thật và XANH: danh sách cột trong mã khớp lược đồ đã triển khai, kể cả tenant_id/deleted_at/thu_tu vốn không nằm trong SELECT. CÒN HỞ: trigger append-only mới chỉ được kiểm là CÓ MẶT, chưa ca nào bắn thử."
+    },
+    {
+      "id": "vet-ghi-ma-can-bo",
+      "viec": "Tuyến ghi danh mục để lại vết mang mã cán bộ",
+      "trang_thai": "xong",
+      "bang_chung": "`internal/http/danh_muc_ghi.go:71` đổi `p.ID` -> `p.Ma`, rỗng thì từ chối. Bộ đồ thử `internal/http/routes_test.go` thêm hằng `maCanBo` RIÊNG (khác `idCanBo` có chủ ý — một giá trị dùng cho cả hai thì bài kiểm không phân biệt được hai trường), và bộ đồ thử `internal/app` thôi chốt ULID làm chủ thể cán bộ. go vet sạch · test xanh.",
+      "no_confirm": [],
+      "tiep_theo": ""
     }
   ]
 }
