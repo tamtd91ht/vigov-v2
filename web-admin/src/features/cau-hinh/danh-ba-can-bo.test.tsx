@@ -3,23 +3,36 @@ import { describe, expect, it } from "vitest";
 
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
-import { BangCanBo } from "./danh-ba-can-bo";
+import { BangCanBo, type ThaoTacDong } from "./danh-ba-can-bo";
 import type { BangTraDanhMuc } from "./tra-danh-muc";
 
 /**
- * HAI CỘT ĐIỆN THOẠI PHẢI Ở RIÊNG — và đây là ca duy nhất chặn việc gộp chúng lại.
+ * HAI ĐIỀU TỆP NÀY CANH, và cả hai đều là những thứ một lần sửa MỘT DÒNG phá được mà không phép
+ * kiểm nào khác thấy:
  *
- * Câu mở #16, khách chốt 22/09/2026: máy bàn cơ quan là THÔNG TIN CÔNG VỤ, di động cá nhân là
- * DỮ LIỆU CÁ NHÂN theo Nghị định 13. Hai địa vị pháp lý khác nhau nghĩa là hai luật che, hai luật
- * xuất Excel, hai luật công khai ra Mini App.
+ * 1. HAI CỘT ĐIỆN THOẠI PHẢI Ở RIÊNG — câu mở #16, khách chốt 22/09/2026. Máy bàn cơ quan là
+ *    THÔNG TIN CÔNG VỤ, di động cá nhân là DỮ LIỆU CÁ NHÂN theo Nghị định 13. Hai địa vị pháp lý
+ *    khác nhau nghĩa là hai luật che, hai luật xuất Excel, hai luật công khai ra Mini App. Hệ quả
+ *    của một lần gộp không phải giao diện xấu: mọi quy tắc về sau buộc áp CHUNG một mức cho hai
+ *    loại dữ liệu, mà mức an toàn phải lấy theo loại nhạy hơn — nên hoặc số máy bàn của cơ quan
+ *    bị che vô cớ, hoặc số di động cá nhân đi theo bản xuất ra ngoài.
  *
- * Gộp lại là một lần sửa MỘT DÒNG, và trước ca này không phép kiểm nào thấy được. Hệ quả của lần
- * gộp ấy không phải giao diện xấu: mọi quy tắc về sau buộc áp CHUNG một mức cho hai loại dữ liệu,
- * mà mức an toàn phải lấy theo loại nhạy hơn — nên hoặc số máy bàn của cơ quan bị che vô cớ, hoặc
- * số di động cá nhân đi theo bản xuất ra ngoài.
+ * 2. KHÔNG CÓ NÚT XOÁ Ở BẤT KỲ DÒNG NÀO — câu mở #10, cùng ngày. Xoá mềm một cán bộ là thao tác
+ *    RIÊNG mang QUYỀN RIÊNG, và bảng `quyen` chưa có khoá nào mang nghĩa ấy (phát hiện cho câu mở
+ *    #27). Đặc tả thì vẽ nút ấy (`docs/ui-ux/12-danh-ba-can-bo.md:61`), nên áp lực thêm lại nó là
+ *    có thật và đến từ một tài liệu trông có thẩm quyền. Một nút gọi vào tuyến không tồn tại là
+ *    lời hứa suông: người quản trị bấm, nhận một lỗi, và kết luận hệ thống hỏng — trong khi thứ
+ *    đang thiếu là một quyết định của khách.
  */
 
 const TRA_RONG: BangTraDanhMuc = { pha: "xong", ten: new Map() };
+
+const KHONG_LAM_GI: ThaoTacDong = {
+  chiTiet: () => {},
+  sua: () => {},
+  doiVaiTro: () => {},
+  datKhoa: () => {},
+};
 
 /**
  * HAI ĐẦU SỐ KHÁC HẲN NHAU, có chủ ý: nếu hai giá trị giống nhau thì một lần vẽ nhầm cột vẫn cho
@@ -52,7 +65,7 @@ function ve(danhSach: readonly identity_canBoTomTat[] = [CAN_BO]) {
       khoa="code"
       chieu="asc"
       doiSapXep={() => {}}
-      moChiTiet={() => {}}
+      thaoTac={KHONG_LAM_GI}
       idDangMo={null}
       traBoPhan={TRA_RONG}
       traVaiTro={TRA_RONG}
@@ -102,5 +115,44 @@ describe("danh bạ cán bộ giữ hai cột điện thoại riêng", () => {
 
     expect(html).toContain(`<td>${MAY_BAN}</td>`);
     expect(html).toContain("<td></td>");
+  });
+});
+
+describe("cụm nút của một dòng — ba thao tác ghi, KHÔNG có Xoá", () => {
+  it("mỗi dòng có Sửa hồ sơ và Đổi vai trò", () => {
+    const html = ve();
+
+    expect(html).toContain("Sửa hồ sơ");
+    expect(html).toContain("Đổi vai trò");
+    expect(html).toContain("Chi tiết");
+  });
+
+  it("KHÔNG có nút Xoá dưới bất kỳ cách viết nào", () => {
+    const html = ve();
+
+    // BỐN CÁCH VIẾT, KHÔNG MỘT. Ca này tồn tại để đỏ khi ai đó thêm lại nút của đặc tả, và đặc tả
+    // viết nó là `🗑 Xoá khỏi danh bạ` — nên chặn cả biểu tượng lẫn chữ, cả chữ hoa lẫn chữ
+    // thường. Một phép kiểm chỉ tìm đúng một chuỗi là phép kiểm né được bằng cách đổi nhãn.
+    expect(html).not.toContain("🗑");
+    expect(html).not.toMatch(/Xo[áa] kh[ỏo]i danh b[ạa]/i);
+    expect(html).not.toMatch(/>\s*Xoá\s*</);
+    expect(html).not.toContain("nut-xoa");
+  });
+
+  it("nhãn nút khoá đi theo `active`, không theo một cờ riêng", () => {
+    // `active` là `dang_hoat_dong` của máy chủ và cũng là thứ tuyến lockout ghi vào, nên nhãn nút
+    // không thể lệch với việc nút ấy sắp làm. Đọc nhầm sang `has_account` là mời người dùng bấm
+    // "Mở khoá" lên một tài khoản đang chạy bình thường.
+    expect(ve([{ ...CAN_BO, active: true }])).toContain("Khoá tài khoản");
+    expect(ve([{ ...CAN_BO, active: false }])).toContain("Mở khoá tài khoản");
+  });
+
+  it("mỗi nút mang tên người trong nhãn trợ năng", () => {
+    // Hai mươi dòng cho ra hai mươi nút đọc lên giống hệt nhau là danh sách mà người dùng trình
+    // đọc màn hình không chọn đúng được dòng nào — và chọn nhầm dòng ở đây là khoá nhầm tài khoản.
+    const html = ve();
+
+    expect(html).toContain('aria-label="Sửa hồ sơ: Huỳnh Văn A"');
+    expect(html).toContain('aria-label="Khoá tài khoản: Huỳnh Văn A"');
   });
 });

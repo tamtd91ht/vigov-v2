@@ -1,23 +1,46 @@
 /**
- * Gọi hai tuyến đọc của danh bạ cán bộ: `GET /api/v1/staff` và `GET /api/v1/staff/{id}`.
+ * Gọi bảy tuyến của danh bạ cán bộ — hai tuyến đọc và **năm tuyến ghi**.
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `page_Result_identity_canBoTomTat` và
  * `identity_canBoTomTat` đến từ `schema.gen.ts`. Không tệp nào trong ứng dụng này mô tả lại
- * mười hai trường của một cán bộ — có bản thứ hai là có hai bản sẽ trôi (luật 9).
+ * mười ba trường của một cán bộ — có bản thứ hai là có hai bản sẽ trôi (luật 9).
  *
- * KHÔNG CÓ TUYẾN GHI Ở ĐÂY, và cũng không có khung để về sau điền vào. Hợp đồng không có tuyến
- * nào tạo, sửa, khoá hay xoá cán bộ: cả bốn đang chờ khách chốt
- * `kb/00-foundation/open-questions.json` #9 (mật khẩu đầu tiên tới tay cán bộ mới bằng cách
- * nào), #10 (nghỉ hưu thì khoá hay xoá), #13 (có chặn việc xã mất người quản trị cuối cùng
- * không) và #14 (`admin.user` có được tác động lên chính tài khoản mình không). Một đường ghi
- * viết dở trông y hệt một quyết định đã có người ra.
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ * NĂM TUYẾN GHI, KHÔNG PHẢI MỘT — và sự tách ấy là của máy chủ, tệp này chỉ theo đúng nó
+ * (`service-identity/internal/http/can_bo_ghi.go`, chú thích đầu tệp):
+ *
+ *   POST   /api/v1/staff                 thêm một dòng danh bạ
+ *   PATCH  /api/v1/staff/{id}            sửa hồ sơ — KHÔNG đổi thẩm quyền của ai
+ *   POST   /api/v1/staff/{id}/lockout    nghỉ hưu / chuyển công tác (#10)
+ *   DELETE /api/v1/staff/{id}/lockout    quay lại làm việc
+ *   PUT    /api/v1/staff/{id}/role       chuyển vai trò (#13, #14)
+ *
+ * Gộp lại thành một hàm `luuCanBo(...)` ở đây là dựng lại đúng thứ máy chủ vừa tách ra: một
+ * lời gọi mang cả "sửa số điện thoại" lẫn "đưa người này vào vai trò điều hành xã" thì vết
+ * kiểm toán chỉ còn một động từ, và một cuộc thanh tra phải tự đoán ra ý định từ delta.
+ *
+ * KHÔNG CÓ TUYẾN XOÁ, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT PHÁT HIỆN CHỨ KHÔNG PHẢI MỘT THIẾU SÓT. Câu mở
+ * #10 chốt XOÁ MỀM là thao tác riêng, mang quyền riêng; bảng `quyen` không có khoá nào nghĩa
+ * là "xoá một dòng danh bạ nhập trùng", và dùng tạm `admin.user` cho nó chính là hình dạng #10
+ * vừa từ chối — một quyền cho hai việc. Đây là phát hiện cho câu mở #27, không phải một dòng
+ * `INSERT INTO quyen` (luật 5, bất biến 3c). Vì vậy tệp này không có `xoaCanBo`, và màn hình
+ * không có nút Xoá.
+ * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import { docJSON, type KetQua } from "./goi";
+import { CHUNG, docJSON, LOI_KHONG_RO, thongBaoLoi, type KetQua } from "./goi";
 import type {
   identity_canBoTomTat,
+  identity_datVaiTroVao,
+  identity_delete_staff_by_id_lockout,
   identity_get_staff,
   identity_get_staff_by_id,
+  identity_patch_staff_by_id,
+  identity_post_staff,
+  identity_post_staff_by_id_lockout,
+  identity_put_staff_by_id_role,
+  identity_suaCanBoVao,
+  identity_themCanBoVao,
   page_Result_identity_canBoTomTat,
 } from "./schema.gen";
 
@@ -132,4 +155,191 @@ export function layDanhSachCanBo(
 export function layChiTietCanBo(id: string): Promise<KetQua<identity_canBoTomTat>> {
   const thamSo: identity_get_staff_by_id["thamSo"] = { id };
   return docJSON<identity_canBoTomTat>(`/api/v1/staff/${encodeURIComponent(thamSo.id)}`);
+}
+
+/* ---- năm tuyến ghi ------------------------------------------------------------------------- */
+
+/**
+ * Gửi một yêu cầu GHI của danh bạ và đọc `identity_canBoTomTat` trả về.
+ *
+ * NĂM TUYẾN ĐỀU TRẢ VỀ NGUYÊN DÒNG DANH BẠ SAU KHI GHI — 201 cho `POST /staff`, 200 cho bốn
+ * tuyến còn lại, kể cả `DELETE .../lockout`. Đó là lý do hàm này có một kiểu trả về duy nhất:
+ * màn hình vẽ lại đúng dòng vừa đổi bằng chính câu trả lời của lần ghi, không phải bằng một lần
+ * đọc thứ hai — mà một lần đọc thứ hai có thể trả về dòng người khác vừa sửa, và đọc ra như thể
+ * lần ghi vừa rồi đã làm một việc nó không làm (`can_bo_ghi.go`, chú thích trên `datKhoaCanBo`).
+ *
+ * KHÔNG RẼ NHÁNH THEO `code`, KHÔNG HIỆN `trace_id`, KHÔNG HIỆN SỐ HIỆU HTTP. `thongBaoLoi` lấy
+ * đúng `message` máy chủ viết, và với các tuyến này đó là toàn bộ điểm: ba quy tắc khách chốt
+ * 22/09/2026 đi tới người dùng NGUYÊN VĂN câu của máy chủ —
+ *
+ *   #13 → 409 "Xã phải luôn còn ít nhất một người quản trị. Hãy cấp quyền quản trị cho một cán
+ *         bộ khác trước, rồi thực hiện lại thao tác này."
+ *   #14 → 403 "Không thao tác được lên chính tài khoản của mình…" và 403 "Vai trò này mang
+ *         quyền mà tài khoản của bạn không có…" — HAI câu khác nhau cho HAI ràng buộc khác nhau.
+ *
+ * Viết lại ba câu ấy ở client là dựng bản sao thứ hai của một quy tắc nghiệp vụ, và bản sao ấy
+ * trôi mà không bài test nào đỏ (luật 9, cấm #2). Việc của màn hình là ĐƯA CÂU ẤY RA TRANG.
+ *
+ * KHÔNG GHI LOG GÌ KHI MẠNG HỎNG: thân yêu cầu mang họ tên, thư điện tử và hai số điện thoại của
+ * một cán bộ (luật 3, bất biến 1).
+ *
+ * `than === undefined` THÌ KHÔNG CÓ THÂN VÀ KHÔNG CÓ `Content-Type`. Hai tuyến khoá/mở khoá cố ý
+ * không nhận thân nào (`can_bo_ghi.go`: lược đồ không có cột nào giữ lý do, nên một ô lý do ở đây
+ * sẽ rơi vào vết kiểm toán mà không màn hình nào đọc lại được). Gửi `{}` kèm `Content-Type` là
+ * tuyên bố có một thân — thứ sẽ mời người sau điền vào.
+ *
+ * ĐẶT Ở ĐÂY CHỨ CHƯA Ở `goi.ts`, VÀ ĐÓ LÀ MỘT MÓN NỢ ĐÃ GHI SỔ: `lib/api/danh-muc.ts` có một hàm
+ * cùng hình dạng (`goiGhi`), và chú thích của chính nó nói rằng bề mặt ghi THỨ HAI là lúc phải
+ * dọn về `goi.ts`. Bề mặt thứ hai chính là tệp này. Việc dọn KHÔNG làm trong lượt này vì
+ * `lib/api/danh-muc.ts` nằm ngoài phạm vi tệp được giao và đang do một lượt khác sửa song song;
+ * chép hàm sang `goi.ts` mà để nguyên bản cũ ở `danh-muc.ts` là biến một bản sao thành hai.
+ */
+async function goiGhiCanBo(
+  duongDan: string,
+  phuongThuc: "POST" | "PATCH" | "PUT" | "DELETE",
+  than: unknown | undefined,
+  maMongDoi: number,
+  headerThem?: Readonly<Record<string, string>>,
+): Promise<KetQua<identity_canBoTomTat>> {
+  let phanHoi: Response;
+  try {
+    phanHoi = await fetch(duongDan, {
+      ...CHUNG,
+      method: phuongThuc,
+      headers:
+        than === undefined
+          ? { ...headerThem }
+          : { "Content-Type": "application/json", ...headerThem },
+      body: than === undefined ? undefined : JSON.stringify(than),
+    });
+  } catch {
+    return { ok: false, thongBao: LOI_KHONG_RO };
+  }
+
+  if (phanHoi.status !== maMongDoi) return { ok: false, thongBao: await thongBaoLoi(phanHoi) };
+
+  try {
+    return { ok: true, duLieu: (await phanHoi.json()) as identity_canBoTomTat };
+  } catch {
+    return { ok: false, thongBao: LOI_KHONG_RO };
+  }
+}
+
+/** Đường dẫn của một cán bộ cụ thể. `encodeURIComponent` vì id đi vào ĐƯỜNG DẪN, không vào thân. */
+function duongDanMotCanBo(mau: string, id: string): string {
+  return mau.replace("{id}", encodeURIComponent(id));
+}
+
+/**
+ * POST /api/v1/staff — thêm một dòng danh bạ. 201, trả về dòng vừa tạo.
+ *
+ * KHÔNG CÓ `code` TRONG THÂN, VÀ KHÔNG CÓ CHỖ NÀO ĐỂ TRUYỀN VÀO. Câu mở #15 chốt 22/09/2026: mã
+ * cán bộ do hệ thống sinh (`domain.SinhMaCanBo`), vì mã đã cấp thì không bao giờ cấp lại kể cả
+ * sau xoá mềm (luật 7, bất biến 3) — một mã do client chọn là một mã có thể chỉ vào hồ sơ lưu
+ * trữ của người khác. `identity_themCanBoVao` sinh từ hợp đồng không có trường ấy, nên form
+ * không vẽ ô Mã được kể cả khi ai đó muốn: `tsc` đỏ ngay.
+ *
+ * KHÔNG CÓ `role_id` VÀ KHÔNG CÓ MẬT KHẨU. Gán vai trò là `PUT .../role` — tuyến mang hai ràng
+ * buộc của #14; một `role_id` ở đây là đường vòng qua cả hai. Cấp tài khoản đăng nhập là luồng
+ * khác (#9 — mật khẩu tạm, bắt đổi lần đầu), và máy chủ ghi `co_tai_khoan = false` làm hằng, nên
+ * dòng vừa thêm là một dòng DANH BẠ chứ chưa phải một tài khoản.
+ *
+ * `khoaChongTrung` LÀ THAM SỐ, KHÔNG SINH TẠI CHỖ. Hợp đồng đòi `Idempotency-Key` bắt buộc trên
+ * tuyến này. Sinh khoá bên trong hàm thì mỗi lần bấm lại sau một lỗi mạng là một khoá mới — tức
+ * đúng cái khoá chống trùng sinh ra để chặn, vì lần gửi đầu CÓ THỂ đã tới máy chủ và đã tạo
+ * người. Khoá do biểu mẫu giữ, sống bằng đời một lần mở form, và lần bấm lại dùng lại chính nó.
+ */
+export function themCanBo(
+  than: identity_themCanBoVao,
+  khoaChongTrung: string,
+): Promise<KetQua<identity_canBoTomTat>> {
+  const duongDan: identity_post_staff["duongDan"] = "/api/v1/staff";
+
+  // DỰNG TỪNG TRƯỜNG, KHÔNG `...than`. Một phép trải ở đây là đường để một trường lạ — `code`,
+  // `role_id`, `active` — đi lên máy chủ vào ngày ai đó truyền vào một dòng vừa đọc được.
+  const thanGui: identity_themCanBoVao = {
+    full_name: than.full_name,
+    position: than.position,
+    email: than.email,
+    org_unit_id: than.org_unit_id,
+    office_phone: than.office_phone,
+    mobile: than.mobile,
+  };
+
+  return goiGhiCanBo(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung });
+}
+
+/**
+ * PATCH /api/v1/staff/{id} — sửa hồ sơ. 200, trả về dòng sau khi sửa.
+ *
+ * SÁU TRƯỜNG, KHÔNG MỘT TRƯỜNG NÀO ĐỔI THẨM QUYỀN. Vai trò và trạng thái khoá không có mặt ở
+ * đây vì chúng có tuyến riêng mang phép chặn riêng; một `role_id` lọt vào thân này là lối đi
+ * vòng qua cả #13 lẫn #14.
+ *
+ * `null` NGHĨA LÀ "KHÔNG ĐỔI", không phải "xoá trắng". Máy chủ đọc sáu con trỏ và bỏ qua con trỏ
+ * `nil` (`suaCanBoVao`), nên một màn hình chỉ sửa chức danh gửi `null` cho năm trường còn lại.
+ * Chuỗi rỗng thì KHÁC HẲN: nó là "xoá nội dung ô này", một việc hợp lệ với chức danh, bộ phận và
+ * hai số điện thoại. Lẫn hai thứ ấy là xoá trắng hai số điện thoại của một danh bạ công vụ mà
+ * không ai báo gì.
+ */
+export function suaCanBo(
+  id: string,
+  than: identity_suaCanBoVao,
+): Promise<KetQua<identity_canBoTomTat>> {
+  const mau: identity_patch_staff_by_id["duongDan"] = "/api/v1/staff/{id}";
+
+  const thanGui: identity_suaCanBoVao = {
+    full_name: than.full_name,
+    position: than.position,
+    email: than.email,
+    org_unit_id: than.org_unit_id,
+    office_phone: than.office_phone,
+    mobile: than.mobile,
+  };
+
+  return goiGhiCanBo(duongDanMotCanBo(mau, id), "PATCH", thanGui, 200);
+}
+
+/**
+ * Khoá (`POST`) hoặc mở khoá (`DELETE`) tài khoản một cán bộ. 200 ở CẢ HAI chiều.
+ *
+ * MỘT HÀM CHO HAI CHIỀU, đúng như máy chủ có một `datKhoaCanBo` cho hai tuyến: hai bản sao là hai
+ * chỗ để phép chặn #13 bị sửa ra khỏi một bản.
+ *
+ * KHOÁ KHÔNG PHẢI XOÁ (#10). Người bị khoá VẪN CÒN trong danh bạ, vẫn hiện trên mọi hồ sơ cũ, chỉ
+ * là không đăng nhập được nữa — đó là điều xảy ra khi một cán bộ nghỉ hưu hay chuyển công tác.
+ * Xoá mềm một dòng nhập trùng là việc khác, và tuyến cho nó chưa tồn tại (xem đầu tệp).
+ */
+export function datKhoaCanBo(id: string, khoa: boolean): Promise<KetQua<identity_canBoTomTat>> {
+  const mauKhoa: identity_post_staff_by_id_lockout["duongDan"] = "/api/v1/staff/{id}/lockout";
+  const mauMo: identity_delete_staff_by_id_lockout["duongDan"] = "/api/v1/staff/{id}/lockout";
+
+  return goiGhiCanBo(
+    duongDanMotCanBo(khoa ? mauKhoa : mauMo, id),
+    khoa ? "POST" : "DELETE",
+    undefined,
+    200,
+  );
+}
+
+/**
+ * PUT /api/v1/staff/{id}/role — đổi vai trò. 200, trả về dòng sau khi đổi.
+ *
+ * `PUT` CHỨ KHÔNG `PATCH`, và thân mang TOÀN BỘ trạng thái của quan hệ chứ không một mệnh lệnh:
+ * `role_id: ""` là "không giữ vai trò nào", một đích đến hợp lệ (`nguoi_dung.vai_tro_id` cho
+ * NULL, và một người có thể ngồi trong sơ đồ tổ chức mà chưa cầm vai trò nào). Vì vậy hàm này
+ * KHÔNG được có một nhánh "rỗng thì thôi không gửi" — nhánh ấy làm việc gỡ vai trò lặng lẽ không
+ * xảy ra, mà màn hình vẫn báo đã lưu.
+ *
+ * ĐÂY LÀ TUYẾN MANG CẢ HAI RÀNG BUỘC CỦA #14 và đường thứ ba của #13 (hạ vai trò người quản trị
+ * cuối cùng). Cả ba lần từ chối đều về đây dưới dạng một câu tiếng Việt do máy chủ viết.
+ */
+export function doiVaiTroCanBo(
+  id: string,
+  vaiTroID: string,
+): Promise<KetQua<identity_canBoTomTat>> {
+  const mau: identity_put_staff_by_id_role["duongDan"] = "/api/v1/staff/{id}/role";
+  const thanGui: identity_datVaiTroVao = { role_id: vaiTroID };
+
+  return goiGhiCanBo(duongDanMotCanBo(mau, id), "PUT", thanGui, 200);
 }

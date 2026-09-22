@@ -3,9 +3,36 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  BieuMauGhiCanBo,
+  type DangMoGhi,
+  type MucChon,
+} from "@/components/danh-ba/bieu-mau-ghi-can-bo";
+import {
+  BAN_TRONG,
+  NUT_DOI_VAI_TRO,
+  NUT_KHOA,
+  NUT_MO_KHOA,
+  NUT_SUA,
+  NUT_THEM_CAN_BO,
+  VI_SAO_KHONG_CO_NUT_XOA,
+  banTuCanBo,
+  daDatKhoa,
+  daDoiVaiTro,
+  daLuuHoSo,
+  daThem,
+  khoaChongTrungMoi,
+  thanSua,
+  thanThem,
+  type BanNhapCanBo,
+} from "@/components/danh-ba/nhan-ghi-danh-ba";
+import {
   KHOA_SAP_XEP,
+  datKhoaCanBo,
+  doiVaiTroCanBo,
   layChiTietCanBo,
   layDanhSachCanBo,
+  suaCanBo,
+  themCanBo,
   type ChieuSapXep,
   type KhoaSapXep,
 } from "@/lib/api/can-bo";
@@ -33,15 +60,23 @@ import { bangTraTuKetQua, traTen, type BangTraDanhMuc, type KetTra } from "./tra
  * Bảng danh bạ cán bộ — `docs/ui-ux/14-cau-hinh.md §3`, tab "Người dùng".
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * MÀN HÌNH NÀY ÍT HƠN ĐẶC TẢ, VÀ ĐÓ LÀ CHỦ Ý. Hợp đồng REST hiện có BỐN tuyến đọc phục vụ màn
- * hình này: `GET /api/v1/staff`, `GET /api/v1/staff/{id}`, và hai danh mục của xã —
- * `GET /api/v1/org-units`, `GET /api/v1/roles` — dùng để tra `department_id` và `role_id` ra
- * tên. KHÔNG có tuyến ghi nào. Mỗi thứ đặc tả vẽ mà ở đây không có đều mang một chú thích ngay
- * tại chỗ nói vì sao nó vắng và cái gì mở khoá nó.
+ * MÀN HÌNH NÀY VẪN ÍT HƠN ĐẶC TẢ, VÀ ĐÓ LÀ CHỦ Ý. Hợp đồng REST phục vụ màn hình này bằng chín
+ * tuyến: bốn tuyến đọc (`GET /api/v1/staff`, `GET /api/v1/staff/{id}`, và hai danh mục của xã
+ * `GET /api/v1/org-units` · `GET /api/v1/roles`) và **năm tuyến ghi** hạ cánh 22/09/2026 —
+ * `POST /staff`, `PATCH /staff/{id}`, `POST`/`DELETE /staff/{id}/lockout`, `PUT /staff/{id}/role`.
+ * Mỗi thứ đặc tả vẽ mà ở đây không có đều mang một chú thích ngay tại chỗ nói vì sao nó vắng và
+ * cái gì mở khoá nó.
  *
  * Vẽ ra một điều khiển không chạy được tệ hơn hẳn không vẽ: một ô tìm kiếm gõ vào không có gì
  * xảy ra khiến cán bộ gõ tên một người, thấy danh sách không đổi, và kết luận người đó không
- * có trong hệ thống.
+ * có trong hệ thống. Cùng lý lẽ ấy là vì sao **không có nút Xoá** — xem
+ * `VI_SAO_KHONG_CO_NUT_XOA`.
+ *
+ * KHÔNG CÓ CỔNG QUYỀN RIÊNG CHO PHẦN GHI, và đó không phải sơ suất: cả năm tuyến ghi khai đúng
+ * một khoá `admin.user` — cùng khoá mà `TabNguoiDung` đã dùng để quyết định có dựng màn hình này
+ * hay không. Một cổng thứ hai cho cùng một khoá là một bản sao sẽ trôi. Và lớp chặn THẬT vẫn nằm
+ * ở máy chủ, trên TỪNG yêu cầu (luật 5, cấm #1): ẩn một nút chỉ để cán bộ khỏi bấm vào thứ chắc
+ * chắn trả 403.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
@@ -66,6 +101,25 @@ export function DanhBaCanBo() {
   const [danhMuc, datDanhMuc] = useState<DanhMucDanhBa | null>(null);
   /** Id của lần bấm "Chi tiết" mới nhất — xem `moChiTiet`. */
   const idDangDoi = useRef<string | null>(null);
+
+  /* ---- trạng thái của đường GHI ---------------------------------------------------------- */
+
+  const [dangMo, datDangMo] = useState<DangMoGhi | null>(null);
+  const [ban, datBan] = useState<BanNhapCanBo>(BAN_TRONG);
+  const [vaiTroID, datVaiTroID] = useState("");
+  const [loiMayChu, datLoiMayChu] = useState("");
+  const [dangGui, datDangGui] = useState(false);
+  const [cauDaXong, datCauDaXong] = useState("");
+  /**
+   * Đếm số lần cần đọc lại danh sách. Tăng sau MỖI lần ghi thành công.
+   *
+   * VÌ SAO ĐỌC LẠI CẢ TRANG CHỨ KHÔNG VÁ MỘT DÒNG TẠI CHỖ: lần ghi trả về đúng dòng vừa đổi, nên
+   * vá tại chỗ là làm được — nhưng nó chỉ đúng với `PATCH`, `lockout` và `role`. Với `POST` thì
+   * người mới có thể thuộc về một TRANG KHÁC (danh sách sắp theo mã, còn mã do máy chủ sinh), và
+   * một dòng chèn vào trang đang xem là một dòng ở sai chỗ so với thứ tự sắp xếp đang hiện. Hai
+   * cách cư xử cho một nút Lưu là chỗ người dùng học sai cách màn hình hoạt động.
+   */
+  const [lanDoc, datLanDoc] = useState(0);
 
   /**
    * HAI DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT KHI MỞ MÀN HÌNH — `[]` ở cuối effect là phần quan trọng
@@ -123,7 +177,7 @@ export function DanhBaCanBo() {
     return () => {
       bo = true;
     };
-  }, [khoaSapXep, chieu, nganXep]);
+  }, [khoaSapXep, chieu, nganXep, lanDoc]);
 
   /**
    * Chuyển trang. `dangTai` được đặt Ở ĐÂY, trong sự kiện bấm, chứ không trong thân effect:
@@ -185,6 +239,107 @@ export function DanhBaCanBo() {
     );
   }, []);
 
+  /* ---- mở, đóng và gửi bốn biểu mẫu ghi ---------------------------------------------------- */
+
+  /**
+   * Danh sách mục cho hai ô chọn, lấy từ CHÍNH hai danh mục đã đọc cho bảng tra.
+   *
+   * KHÔNG ĐỌC LẠI KHI MỞ BIỂU MẪU. Dữ liệu đã nằm trong tay màn hình; một lời gọi nữa ở đây chỉ
+   * thêm một câu trả lời thứ hai có thể lệch với tên đang hiện trên chính dòng người dùng vừa bấm.
+   *
+   * DANH MỤC HỎNG THÌ RA MẢNG RỖNG, VÀ BIỂU MẪU VẪN MỞ ĐƯỢC. Ô chọn khi ấy chỉ còn mục "chưa
+   * phân bộ phận" cộng mục giữ nguyên giá trị đang lưu (`OChon`), nên sửa số điện thoại vẫn làm
+   * được trong lúc tuyến danh mục đang hỏng — và không thao tác nào ghi đè liên kết cũ.
+   */
+  const mucBoPhan = useMemo<readonly MucChon[]>(
+    () => (danhMuc !== null && danhMuc.boPhan.ok ? danhMuc.boPhan.duLieu.items : []),
+    [danhMuc],
+  );
+  const mucVaiTro = useMemo<readonly MucChon[]>(
+    () => (danhMuc !== null && danhMuc.vaiTro.ok ? danhMuc.vaiTro.duLieu.items : []),
+    [danhMuc],
+  );
+
+  /** Mở một biểu mẫu: dọn sạch mọi thông báo của lần trước, và nạp giá trị đang có vào bản nháp. */
+  const moBieuMau = useCallback((m: DangMoGhi) => {
+    datDangMo(m);
+    datBan(m.kieu === "sua" ? banTuCanBo(m.canBo) : BAN_TRONG);
+    datVaiTroID(m.kieu === "vaiTro" ? m.canBo.role_id : "");
+    datLoiMayChu("");
+    datCauDaXong("");
+  }, []);
+
+  const dongBieuMau = useCallback(() => {
+    datDangMo(null);
+    datBan(BAN_TRONG);
+    datVaiTroID("");
+    datLoiMayChu("");
+  }, []);
+
+  /**
+   * Sau một lần ghi thành công: đóng biểu mẫu, nói ra đã làm gì, và đọc lại danh sách.
+   *
+   * ĐÓNG LUÔN KHỐI CHI TIẾT. Khối ấy giữ một bản chụp đọc trước lần ghi, nên để nó mở lại là để
+   * trên màn hình hai câu trả lời khác nhau về cùng một người — dòng trong bảng đã cập nhật, khối
+   * chi tiết ngay dưới vẫn là hồ sơ cũ.
+   */
+  const ghiXong = useCallback((cau: string) => {
+    datDangMo(null);
+    datBan(BAN_TRONG);
+    datVaiTroID("");
+    datLoiMayChu("");
+    datCauDaXong(cau);
+    idDangDoi.current = null;
+    datChiTiet(null);
+    datLanDoc((n) => n + 1);
+  }, []);
+
+  const guiBieuMau = useCallback(() => {
+    if (dangMo === null || dangGui) return;
+
+    datLoiMayChu("");
+    datCauDaXong("");
+    datDangGui(true);
+
+    // KHÔNG KIỂM ĐỘ DÀI, KHUÔN THƯ ĐIỆN TỬ HAY KÝ TỰ SỐ ĐIỆN THOẠI Ở ĐÂY. Máy chủ kiểm cả ba, mỗi
+    // thứ kèm một câu tiếng Việt nói rõ phải sửa gì (`domain/danh_ba_ghi.go`); chép chúng xuống
+    // client là dựng bản sao thứ hai của một bộ quy tắc nghiệp vụ (luật 9, cấm #2).
+    const goi =
+      dangMo.kieu === "them"
+        ? themCanBo(thanThem(ban), dangMo.khoaChongTrung).then((kq) =>
+            kq.ok ? ghiXong(daThem(kq.duLieu.full_name)) : datLoiMayChu(kq.thongBao),
+          )
+        : dangMo.kieu === "sua"
+          ? suaCanBo(dangMo.canBo.id, thanSua(ban)).then((kq) =>
+              kq.ok ? ghiXong(daLuuHoSo(kq.duLieu.full_name)) : datLoiMayChu(kq.thongBao),
+            )
+          : dangMo.kieu === "vaiTro"
+            ? doiVaiTroCanBo(dangMo.canBo.id, vaiTroID).then((kq) =>
+                kq.ok ? ghiXong(daDoiVaiTro(kq.duLieu.full_name)) : datLoiMayChu(kq.thongBao),
+              )
+            : datKhoaCanBo(dangMo.canBo.id, dangMo.khoa).then((kq) =>
+                kq.ok
+                  ? ghiXong(daDatKhoa(kq.duLieu.full_name, dangMo.khoa))
+                  : datLoiMayChu(kq.thongBao),
+              );
+
+    void goi.finally(() => datDangGui(false));
+  }, [ban, dangGui, dangMo, ghiXong, vaiTroID]);
+
+  /**
+   * Bốn hành động của một dòng. Gom vào MỘT đối tượng để `BangCanBo` nhận đúng một tham số thay
+   * vì bốn — và để không ai thêm được hành động thứ năm mà không đi qua chỗ này.
+   */
+  const thaoTac = useMemo<ThaoTacDong>(
+    () => ({
+      chiTiet: (id) => void moChiTiet(id),
+      sua: (cb) => moBieuMau({ kieu: "sua", canBo: cb }),
+      doiVaiTro: (cb) => moBieuMau({ kieu: "vaiTro", canBo: cb }),
+      datKhoa: (cb) => moBieuMau({ kieu: "khoa", canBo: cb, khoa: cb.active }),
+    }),
+    [moBieuMau, moChiTiet],
+  );
+
   return (
     <section className="tab-nguoi-dung" aria-labelledby="tieu-de-nguoi-dung">
       <h2 id="tieu-de-nguoi-dung">Người dùng</h2>
@@ -196,16 +351,54 @@ export function DanhBaCanBo() {
             tìm kiếm nào (`core/page/page.go` chỉ đọc limit/cursor/sort/order). Mở khoá bằng một
             tham số truy vấn mới trên tuyến ấy — một thay đổi hợp đồng, phải qua khai báo route
             trong `service-identity/internal/`, không phải một ô input ở đây.
-          · `⬆ Nhập từ Excel` và `+ Thêm cán bộ`: không có tuyến ghi nào. Đang chờ khách chốt
-            câu hỏi mở #9 (mật khẩu đầu tiên tới tay cán bộ mới bằng cách nào).
-          · `✎` `🗑` trên từng dòng: cũng không có tuyến ghi nào — câu hỏi mở #10 (nghỉ hưu thì
-            khoá hay xoá), #13 (có chặn việc xã mất người quản trị cuối cùng không), #14
-            (`admin.user` có được tác động lên chính tài khoản mình không).
+          · Bộ lọc theo bộ phận và theo trạng thái: cùng lý do, cùng tuyến, cùng cách mở khoá.
+          · `⬆ Nhập từ Excel` và `⬇ Xuất Excel`: không có tuyến nào trong hợp đồng. Bản xuất còn
+            kéo theo một quyết định chưa có: #11 chốt KHÔNG che số trên màn hình nội bộ nhưng
+            VẪN CHE ở bản xuất, nên tuyến xuất phải có luật che riêng chứ không tái dùng tuyến đọc.
+          · `🖼 Ảnh đại diện` và ô `Hiện trên Mini App`: không có cột nào trong lược đồ. Ô Mini App
+            còn bị chặn bởi chính quyết định #12 — phải lưu SỰ ĐỒNG Ý của từng người kèm thời
+            điểm, và chưa có chỗ nào giữ bằng chứng ấy.
+          · `🗑 Xoá khỏi danh bạ`: xem `VI_SAO_KHONG_CO_NUT_XOA` — #10 tách xoá khỏi khoá và cho
+            nó một quyền riêng mà bảng `quyen` chưa có (phát hiện cho câu mở #27).
       */}
-      <p className="ghi-chu">
-        Màn hình hiện chỉ xem. Thêm, sửa, xoá cán bộ và nhập từ Excel chưa mở vì quy trình cấp
-        mật khẩu đầu tiên và quy trình kết thúc công tác chưa được đơn vị chốt.
-      </p>
+      <p className="ghi-chu">{VI_SAO_KHONG_CO_NUT_XOA}</p>
+
+      <div className="cum-nut">
+        <button
+          type="button"
+          className="nut-chinh"
+          onClick={() => moBieuMau({ kieu: "them", khoaChongTrung: khoaChongTrungMoi() })}
+        >
+          {NUT_THEM_CAN_BO}
+        </button>
+      </div>
+
+      {/* Câu xác nhận sau một lần ghi. `role="status"` chứ không `alert`: không có gì hỏng. */}
+      {cauDaXong !== "" && <p role="status">{cauDaXong}</p>}
+
+      {/*
+        MỘT BIỂU MẪU, MỘT CHỖ TRÊN MÀN HÌNH, ĐẶT NGAY DƯỚI THANH NÚT.
+
+        Không dựng biểu mẫu lồng trong dòng của bảng: ở bề rộng nhỏ nhất (320px) bảng cuộn NGANG,
+        nên một biểu mẫu nằm trong một ô của bảng có thể mở ra ngoài khung nhìn và người dùng
+        không thấy nó đã mở. Ở đây tiêu đề biểu mẫu luôn gọi tên người đang được thao tác, nên
+        không có ca nào sửa nhầm hồ sơ vì không biết biểu mẫu thuộc về dòng nào.
+      */}
+      {dangMo !== null && (
+        <BieuMauGhiCanBo
+          dangMo={dangMo}
+          ban={ban}
+          datBan={datBan}
+          vaiTroID={vaiTroID}
+          datVaiTroID={datVaiTroID}
+          boPhan={mucBoPhan}
+          vaiTro={mucVaiTro}
+          loiMayChu={loiMayChu}
+          dangGui={dangGui}
+          onGui={guiBieuMau}
+          onHuy={dongBieuMau}
+        />
+      )}
 
       <ThanhSapXep khoa={khoaSapXep} chieu={chieu} doiSapXep={doiSapXep} />
 
@@ -253,7 +446,7 @@ export function DanhBaCanBo() {
             khoa={khoaSapXep}
             chieu={chieu}
             doiSapXep={doiSapXep}
-            moChiTiet={moChiTiet}
+            thaoTac={thaoTac}
             idDangMo={chiTiet?.id ?? null}
             traBoPhan={traBoPhan}
             traVaiTro={traVaiTro}
@@ -359,6 +552,84 @@ const NHAN_KHOA: Record<KhoaSapXep, string> = {
   created_at: "Ngày tạo",
 };
 
+/**
+ * Bốn hành động một dòng danh bạ mở ra. **BỐN, và không có hành động thứ năm tên là "Xoá".**
+ *
+ * Kiểu này là chỗ hẹp nhất mà một nút Xoá phải đi qua: thêm nó vào đây là thêm một trường vào một
+ * kiểu có bài kiểm đọc lại, chứ không phải thêm một dòng JSX không ai thấy. Vì sao không có nó:
+ * `VI_SAO_KHONG_CO_NUT_XOA`.
+ *
+ * `sua`, `doiVaiTro` và `datKhoa` nhận CẢ DÒNG chứ không nhận `id`: biểu mẫu mở ra phải gọi tên
+ * người đang được thao tác trên tiêu đề, và `datKhoa` còn phải biết người ấy đang khoá hay chưa
+ * để chọn đúng chiều. Truyền `id` rồi đi tìm lại dòng là mở đường cho một lần tìm ra dòng khác.
+ */
+export type ThaoTacDong = {
+  chiTiet: (id: string) => void;
+  sua: (cb: identity_canBoTomTat) => void;
+  doiVaiTro: (cb: identity_canBoTomTat) => void;
+  datKhoa: (cb: identity_canBoTomTat) => void;
+};
+
+/**
+ * Cụm nút của một dòng.
+ *
+ * MỖI NÚT MANG TÊN NGƯỜI TRONG `aria-label`. Hai mươi dòng cho ra hai mươi nút đọc lên giống hệt
+ * nhau là danh sách mà người dùng trình đọc màn hình không chọn đúng được dòng nào — và ở đây
+ * chọn nhầm dòng nghĩa là khoá nhầm tài khoản của một cán bộ.
+ *
+ * KHOÁ HAY MỞ KHOÁ ĐỌC TỪ `active`, không phải từ một cờ riêng. `active` là `dang_hoat_dong` của
+ * máy chủ, và nó cũng chính là thứ tuyến khoá/mở khoá ghi vào — nên nhãn nút không thể lệch với
+ * việc nút ấy sắp làm.
+ */
+function NutCuaDong({
+  cb,
+  thaoTac,
+  idDangMo,
+}: {
+  cb: identity_canBoTomTat;
+  thaoTac: ThaoTacDong;
+  idDangMo: string | null;
+}) {
+  const nhanKhoa = cb.active ? NUT_KHOA : NUT_MO_KHOA;
+  return (
+    <span className="o-thao-tac">
+      <button
+        type="button"
+        className="nut-phu"
+        aria-expanded={idDangMo === cb.id}
+        aria-label={`Chi tiết: ${cb.full_name}`}
+        onClick={() => thaoTac.chiTiet(cb.id)}
+      >
+        Chi tiết
+      </button>
+      <button
+        type="button"
+        className="nut-phu"
+        aria-label={`${NUT_SUA}: ${cb.full_name}`}
+        onClick={() => thaoTac.sua(cb)}
+      >
+        {NUT_SUA}
+      </button>
+      <button
+        type="button"
+        className="nut-phu"
+        aria-label={`${NUT_DOI_VAI_TRO}: ${cb.full_name}`}
+        onClick={() => thaoTac.doiVaiTro(cb)}
+      >
+        {NUT_DOI_VAI_TRO}
+      </button>
+      <button
+        type="button"
+        className="nut-phu"
+        aria-label={`${nhanKhoa}: ${cb.full_name}`}
+        onClick={() => thaoTac.datKhoa(cb)}
+      >
+        {nhanKhoa}
+      </button>
+    </span>
+  );
+}
+
 // EXPORTED SO THE TWO PHONE COLUMNS CAN BE PINNED BY A RENDER TEST. The parent reads the API in
 // `useEffect`, which `renderToStaticMarkup` never runs, so rendering it proves nothing about a row.
 // The property being pinned is not cosmetic: merging these two back into one column is a one-line
@@ -369,7 +640,7 @@ export function BangCanBo({
   khoa,
   chieu,
   doiSapXep,
-  moChiTiet,
+  thaoTac,
   idDangMo,
   traBoPhan,
   traVaiTro,
@@ -378,7 +649,7 @@ export function BangCanBo({
   khoa: KhoaSapXep;
   chieu: ChieuSapXep;
   doiSapXep: (khoa: KhoaSapXep) => void;
-  moChiTiet: (id: string) => void;
+  thaoTac: ThaoTacDong;
   idDangMo: string | null;
   /** Bảng tra đã dựng sẵn, đi XUỐNG như tham số. Không dòng nào tự đi hỏi máy chủ. */
   traBoPhan: BangTraDanhMuc;
@@ -473,15 +744,7 @@ export function BangCanBo({
               <td>{nhanTaiKhoan(cb.has_account)}</td>
               <td>{nhanNgayTao(cb.created_at)}</td>
               <td>
-                {/* Chỉ một hành động: XEM. `✎` và `🗑` của đặc tả không có tuyến nào phía sau. */}
-                <button
-                  type="button"
-                  className="nut-phu"
-                  aria-expanded={idDangMo === cb.id}
-                  onClick={() => moChiTiet(cb.id)}
-                >
-                  Chi tiết
-                </button>
+                <NutCuaDong cb={cb} thaoTac={thaoTac} idDangMo={idDangMo} />
               </td>
             </tr>
           ))}
