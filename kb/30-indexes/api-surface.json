@@ -349,6 +349,29 @@
     },
     {
       "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/my-citizen-reports",
+      "operation_id": "petitions_post_my_citizen_reports",
+      "task_id": "1b3efe935db0",
+      "summary": "Công dân gửi một phiếu phản ánh — trả MÃ TRA CỨU ngay khi tiếp nhận",
+      "screen": "09-phan-anh-nguoi-dan §13",
+      "permission_kind": "citizen-only",
+      "tenant_class": "tu-phien",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "petitions.guiPhanAnhVao",
+      "reply_schemas": {
+        "201": "petitions.phieuCuaToiRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
+    },
+    {
+      "service": "petitions",
       "method": "GET",
       "path": "/api/v1/my-citizen-reports/{maTraCuu}",
       "operation_id": "petitions_get_my_citizen_reports_by_maTraCuu",

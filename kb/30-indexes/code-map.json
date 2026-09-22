@@ -46,6 +46,18 @@
       "kind": "func",
       "at": "service-petitions/internal/app/xem_nguoi_gui.go:64"
     },
+    "app.Gui": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/gui_phan_anh.go:176"
+    },
+    "app.GuiPhanAnh": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/gui_phan_anh.go:144"
+    },
+    "app.HanTiepNhanDoc": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/gui_phan_anh.go:67"
+    },
     "app.KetQuaDangNhap": {
       "kind": "type",
       "at": "service-identity/internal/app/dang_nhap.go:55"
@@ -73,6 +85,10 @@
     "app.KhoMucUuTien": {
       "kind": "type",
       "at": "service-petitions/internal/app/danh_muc_muc_uu_tien_nhiem_vu.go:41"
+    },
+    "app.KhoPhieuGhi": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/gui_phan_anh.go:52"
     },
     "app.KhoThongBao": {
       "kind": "type",
@@ -110,6 +126,10 @@
       "kind": "func",
       "at": "service-petitions/internal/app/danh_muc_muc_uu_tien_nhiem_vu.go:60"
     },
+    "app.NewGuiPhanAnh": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/gui_phan_anh.go:159"
+    },
     "app.NewSoThongBao": {
       "kind": "func",
       "at": "service-comms/internal/app/so_thong_bao.go:55"
@@ -145,6 +165,10 @@
     "app.YeuCauGhiNo": {
       "kind": "type",
       "at": "service-comms/internal/app/so_thong_bao.go:65"
+    },
+    "app.YeuCauGuiPhanAnh": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/gui_phan_anh.go:130"
     },
     "app.YeuCauSuaHangMuc": {
       "kind": "type",
@@ -374,6 +398,18 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/phieu_phan_anh.go:243"
     },
+    "domain.ChuanHoaDiaChi": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:94"
+    },
+    "domain.ChuanHoaDienThoai": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:114"
+    },
+    "domain.ChuanHoaHoTen": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:104"
+    },
     "domain.ChuanHoaLyDoXoa": {
       "kind": "func",
       "at": "service-petitions/internal/domain/danh_muc_ba_tang.go:235"
@@ -385,6 +421,10 @@
     "domain.ChuanHoaNhan": {
       "kind": "func",
       "at": "service-petitions/internal/domain/danh_muc_ba_tang.go:201"
+    },
+    "domain.ChuanHoaNoiDung": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:80"
     },
     "domain.Chuoi": {
       "kind": "func",
@@ -525,6 +565,10 @@
     "domain.LaDongMacDinh": {
       "kind": "func",
       "at": "service-identity/internal/domain/sla.go:96"
+    },
+    "domain.LaLoiGuiPhanAnh": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:129"
     },
     "domain.LoaiDonViDanCu": {
       "kind": "type",
@@ -968,7 +1012,7 @@
     },
     "http.DepsCongDan": {
       "kind": "type",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:48"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:66"
     },
     "http.DocPhieuPhanAnh": {
       "kind": "func",
@@ -998,13 +1042,21 @@
       "kind": "type",
       "at": "service-petitions/internal/http/routes.go:142"
     },
+    "http.GuiPhanAnhCongDan": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:56"
+    },
+    "http.GuiPhieu": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/gui_phan_anh.go:132"
+    },
     "http.Handler": {
       "kind": "type",
       "at": "service-petitions/internal/http/handler.go:12"
     },
     "http.HandlerCongDan": {
       "kind": "type",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:62"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:85"
     },
     "http.HangMucKeHoachVonDanhMuc": {
       "kind": "type",
@@ -1052,7 +1104,7 @@
     },
     "http.NewHandlerCongDan": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:66"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:89"
     },
     "http.NgayLamBuDoc": {
       "kind": "type",
@@ -1080,11 +1132,11 @@
     },
     "http.PhieuCuaCongDanDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:38"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:40"
     },
     "http.PhieuCuaToi": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:229"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:252"
     },
     "http.PhieuPhanAnhDoc": {
       "kind": "type",
@@ -1100,7 +1152,7 @@
     },
     "http.RegisterCongDan": {
       "kind": "func",
-      "at": "service-petitions/internal/http/routes_cong_dan.go:46"
+      "at": "service-petitions/internal/http/routes_cong_dan.go:47"
     },
     "http.SuaHangMuc": {
       "kind": "func",

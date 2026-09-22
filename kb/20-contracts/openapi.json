@@ -1313,6 +1313,113 @@
         }
       }
     },
+    "/api/v1/my-citizen-reports": {
+      "post": {
+        "summary": "Công dân gửi một phiếu phản ánh — trả MÃ TRA CỨU ngay khi tiếp nhận",
+        "operationId": "petitions_post_my_citizen_reports",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §13",
+        "x-vigov-permission": {
+          "kind": "citizen-only"
+        },
+        "x-vigov-tenant-class": {
+          "kind": "tu-phien",
+          "tenant_in_context": true,
+          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)"
+        },
+        "x-vigov-task": "1b3efe935db0",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.guiPhanAnhVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.phieuCuaToiRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/my-citizen-reports/{maTraCuu}": {
       "parameters": [
         {
@@ -4335,6 +4442,104 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.guiPhanAnhVao": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "reporter_name": {
+            "type": "string"
+          },
+          "reporter_phone": {
+            "type": "string"
+          },
+          "anonymous": {
+            "type": "boolean"
+          },
+          "citizen_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cong_dan_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "field": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "linh_vuc": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "channel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "clock_from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "acknowledge_due": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolve_due": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "acknowledge_due",
+          "address",
+          "anonymous",
+          "channel",
+          "citizen_id",
+          "clock_from",
+          "code",
+          "cong_dan_id",
+          "content",
+          "field",
+          "linh_vuc",
+          "reporter_name",
+          "reporter_phone",
+          "resolve_due",
+          "status"
         ],
         "additionalProperties": false
       },
