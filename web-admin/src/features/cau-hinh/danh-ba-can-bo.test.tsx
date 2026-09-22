@@ -1,14 +1,24 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { LOI_KHONG_RO } from "@/lib/api/goi";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
 import { BangCanBo, type ThaoTacDong } from "./danh-ba-can-bo";
+import {
+  CAU_CHI_HIEN_MOT_LAN,
+  NUT_CAP_TAI_KHOAN,
+  NUT_DAT_LAI_MAT_KHAU,
+  NUT_DA_GHI_LAI,
+  OMatKhauTam,
+  XacNhanTaiKhoan,
+  cauKhongRoKetQua,
+} from "./mat-khau-tam";
 import type { BangTraDanhMuc } from "./tra-danh-muc";
 
 /**
- * HAI ĐIỀU TỆP NÀY CANH, và cả hai đều là những thứ một lần sửa MỘT DÒNG phá được mà không phép
- * kiểm nào khác thấy:
+ * BA ĐIỀU TỆP NÀY CANH, và cả ba đều là những thứ một lần sửa MỘT DÒNG phá được mà không phép
+ * kiểm nào khác thấy (điều thứ ba ở cuối tệp, cùng với lý do của nó):
  *
  * 1. HAI CỘT ĐIỆN THOẠI PHẢI Ở RIÊNG — câu mở #16, khách chốt 22/09/2026. Máy bàn cơ quan là
  *    THÔNG TIN CÔNG VỤ, di động cá nhân là DỮ LIỆU CÁ NHÂN theo Nghị định 13. Hai địa vị pháp lý
@@ -32,6 +42,8 @@ const KHONG_LAM_GI: ThaoTacDong = {
   sua: () => {},
   doiVaiTro: () => {},
   datKhoa: () => {},
+  capTaiKhoan: () => {},
+  datLaiMatKhau: () => {},
 };
 
 /**
@@ -154,5 +166,166 @@ describe("cụm nút của một dòng — ba thao tác ghi, KHÔNG có Xoá", (
 
     expect(html).toContain('aria-label="Sửa hồ sơ: Huỳnh Văn A"');
     expect(html).toContain('aria-label="Khoá tài khoản: Huỳnh Văn A"');
+  });
+});
+
+/**
+ * ĐIỀU THỨ BA: PHẦN QUẢN TRỊ VIÊN CỦA THÔNG TIN ĐĂNG NHẬP — `14-cau-hinh §3`.
+ *
+ * Hai tuyến, hai nút LOẠI TRỪ NHAU theo `has_account`, và một ô hiện mật khẩu tạm đúng một lần.
+ * Mỗi ca dưới đây canh một thứ mà một dòng sửa "cho tiện" phá được:
+ *
+ *   · Gộp hai nút thành một nút đổi nhãn, hoặc hiện cả hai và làm mờ cái không dùng được. Máy chủ
+ *     tách hai việc bằng hai tuyến và hai điều kiện loại trừ nhau trong mệnh đề WHERE, nên không
+ *     nút nào làm được việc của nút kia. VẾ PHỦ ĐỊNH là vế chịu lực ở đây: một lần đọc nhầm cờ chỉ
+ *     lộ ra ở chỗ nút KHÔNG được có mặt.
+ *   · Che mật khẩu tạm bằng `type="password"` hay dấu sao — che một giá trị mà mục đích duy nhất
+ *     của nó là được đọc to cho người khác.
+ *   · Bỏ mất câu "chỉ hiện một lần". Không có câu ấy, quản trị viên đánh mất giá trị sẽ đi tìm một
+ *     nút "xem lại" không tồn tại, và không ai nói cho họ biết rằng bấm Đặt lại sinh giá trị KHÁC.
+ */
+
+/** Giá trị GIẢ, và trông rõ là giả: không một mật khẩu thật nào được viết vào kho này (luật 8). */
+const MAT_KHAU_GIA = "mat-khau-gia-de-kiem-tra";
+
+describe("hai nút thông tin đăng nhập loại trừ nhau theo `has_account`", () => {
+  it("chưa có tài khoản → có Cấp tài khoản, KHÔNG có Đặt lại mật khẩu", () => {
+    const html = ve([{ ...CAN_BO, has_account: false }]);
+
+    expect(html).toContain(NUT_CAP_TAI_KHOAN);
+    expect(html).toContain(`aria-label="${NUT_CAP_TAI_KHOAN}: Huỳnh Văn A"`);
+
+    // VẾ CHỊU LỰC. Đặt lại mật khẩu lên một người chưa có tài khoản là một nút gọi vào tuyến chắc
+    // chắn từ chối — và người quản trị bấm nó sẽ kết luận hệ thống hỏng.
+    expect(html).not.toContain(NUT_DAT_LAI_MAT_KHAU);
+  });
+
+  it("đã có tài khoản → có Đặt lại mật khẩu, KHÔNG có Cấp tài khoản", () => {
+    const html = ve([{ ...CAN_BO, has_account: true }]);
+
+    expect(html).toContain(NUT_DAT_LAI_MAT_KHAU);
+    expect(html).toContain(`aria-label="${NUT_DAT_LAI_MAT_KHAU}: Huỳnh Văn A"`);
+
+    // VẾ CHỊU LỰC. `POST /staff/{id}/account` mang `AND NOT co_tai_khoan`, nên nút này trên một
+    // dòng đã có tài khoản chỉ dẫn tới 409 — và việc thật sự cần làm lúc ấy là ĐẶT LẠI.
+    expect(html).not.toContain(NUT_CAP_TAI_KHOAN);
+  });
+
+  it("KHÔNG BAO GIỜ hiện cả hai, kể cả dưới dạng một nút bị làm mờ", () => {
+    // Một nút `disabled` là hình dạng "cả hai cùng có mặt" mà một phép kiểm chỉ đếm chữ sẽ bỏ lọt.
+    // Nó mời người dùng hỏi "vì sao không bấm được" và đi tìm một quyền họ không hề thiếu; nhiều
+    // trình đọc màn hình còn bỏ qua hẳn nút bị vô hiệu, nên họ không biết là có gì ở đó.
+    for (const coTaiKhoan of [true, false]) {
+      const html = ve([{ ...CAN_BO, has_account: coTaiKhoan }]);
+      const soNut =
+        Number(html.includes(NUT_CAP_TAI_KHOAN)) + Number(html.includes(NUT_DAT_LAI_MAT_KHAU));
+
+      expect(soNut).toBe(1);
+      expect(html).not.toContain("disabled");
+    }
+  });
+});
+
+describe("ô mật khẩu tạm — hiện một lần, đọc được, đóng bằng tay", () => {
+  function veO() {
+    return renderToStaticMarkup(
+      <OMatKhauTam
+        matKhauTam={{
+          kieu: "cap",
+          maCanBo: "CB001",
+          hoTen: "Huỳnh Văn A",
+          matKhau: MAT_KHAU_GIA,
+        }}
+        onDong={() => {}}
+      />,
+    );
+  }
+
+  it("hiện giá trị dạng chữ đọc được, KHÔNG che", () => {
+    const html = veO();
+
+    expect(html).toContain(MAT_KHAU_GIA);
+    // Là nội dung văn bản của một phần tử, không phải giá trị của một ô nhập: `type="password"`
+    // biến một giá trị sinh ra để đọc to thành một hàng chấm, và `<input>` còn kéo theo khả năng
+    // bị trình duyệt nhớ vào bộ nhớ điền tự động.
+    expect(html).toContain(`>${MAT_KHAU_GIA}<`);
+    expect(html).not.toContain('type="password"');
+    expect(html).not.toContain("****");
+    expect(html).not.toContain("<input");
+  });
+
+  it("nói rõ CHỈ HIỆN MỘT LẦN, và nói ra rằng đặt lại sinh giá trị khác", () => {
+    const html = veO();
+
+    expect(html).toContain(CAU_CHI_HIEN_MOT_LAN);
+    expect(CAU_CHI_HIEN_MOT_LAN).toMatch(/CHỈ HIỆN MỘT LẦN/);
+    expect(CAU_CHI_HIEN_MOT_LAN).toMatch(/KHÁC/);
+  });
+
+  it("giá trị KHÔNG nằm trong một thuộc tính nào", () => {
+    // Luật 3, cấm #4: `aria-label`, `title`, URL và tên tệp đều là chỗ giá trị này bị mang đi —
+    // vào cây trợ năng, vào nhật ký của trình duyệt, vào ảnh chụp màn hình gửi cho hỗ trợ.
+    const html = veO();
+
+    expect(html).not.toContain(`aria-label="${MAT_KHAU_GIA}`);
+    expect(html).not.toContain(`title="${MAT_KHAU_GIA}`);
+    expect(html).not.toContain(`value="${MAT_KHAU_GIA}`);
+  });
+
+  it("đóng bằng một hành động rõ ràng, không có đếm ngược", () => {
+    const html = veO();
+
+    expect(html).toContain(NUT_DA_GHI_LAI);
+    // "Tôi đã ghi lại" là một lời khẳng định; "Đóng" là một phản xạ dọn màn hình. Sự khác nhau ấy
+    // đúng bằng nửa giây cần thiết trước khi một giá trị không lấy lại được biến mất.
+    expect(NUT_DA_GHI_LAI).not.toMatch(/^(Đóng|OK)$/);
+  });
+});
+
+describe("lỗi của máy chủ ra nguyên văn, và ca im lặng có câu riêng", () => {
+  function veXacNhan(loiMayChu: string) {
+    return renderToStaticMarkup(
+      <XacNhanTaiKhoan
+        dangMo={{ kieu: "datLai", canBo: CAN_BO, khoaChongTrung: "khoa-gia-cua-bai-kiem" }}
+        loiMayChu={loiMayChu}
+        dangGui={false}
+        onGui={() => {}}
+        onHuy={() => {}}
+      />,
+    );
+  }
+
+  it("câu tiếng Việt của máy chủ ra nguyên văn, không thêm không bớt", () => {
+    // Câu 409 thật của tuyến cấp tài khoản là một câu máy chủ viết sẵn; việc của màn hình chỉ là
+    // đưa nó ra trang. Không rẽ nhánh theo `code`, không hiện `trace_id`, không hiện số hiệu HTTP.
+    const cauCuaMayChu = "Cán bộ này đã có tài khoản đăng nhập.";
+    const html = veXacNhan(cauCuaMayChu);
+
+    expect(html).toContain(cauCuaMayChu);
+    expect(html).not.toContain("409");
+    expect(html).not.toContain("trace");
+  });
+
+  it("máy chủ im lặng thì KHÔNG nói `thất bại` cụt lủn — mời kiểm tra lại và đặt lại", () => {
+    // `LOI_KHONG_RO` phủ cả hai đường: mạng đứt TRƯỚC khi yêu cầu tới nơi, và mạng đứt SAU khi máy
+    // chủ đã ghi. Ở đường thứ hai thì mật khẩu tạm đã sinh ra và vừa mất vĩnh viễn, nên một câu
+    // "Thất bại, vui lòng thử lại" là câu sai ở đúng nửa nguy hiểm.
+    const html = veXacNhan(LOI_KHONG_RO);
+
+    expect(html).toContain(LOI_KHONG_RO);
+    expect(html).toContain(cauKhongRoKetQua("datLai"));
+    // Câu ấy phải MỜI ĐẶT LẠI, không được dừng ở "thất bại": mật khẩu của lần vừa rồi có thể đã
+    // sinh ra và đã mất, và lần đặt lại sinh một giá trị KHÁC — người đọc phải biết cả hai vế.
+    expect(cauKhongRoKetQua("datLai")).toMatch(/Đặt lại mật khẩu/);
+    expect(cauKhongRoKetQua("datLai")).toMatch(/KHÁC/);
+    expect(cauKhongRoKetQua("cap")).toMatch(/KHÁC/);
+  });
+
+  it("câu bổ sung ấy KHÔNG xuất hiện khi máy chủ đã trả lời rõ ràng", () => {
+    // Vế phủ định: dán câu "chưa biết đã ghi hay chưa" vào một lần từ chối 403 là nói với quản trị
+    // viên rằng có thể đã có gì đó xảy ra — trong khi máy chủ vừa nói rõ là không.
+    const html = veXacNhan("Tài khoản của bạn không có quyền quản lý người dùng.");
+
+    expect(html).not.toContain(cauKhongRoKetQua("datLai"));
   });
 });

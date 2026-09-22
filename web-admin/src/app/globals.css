@@ -676,6 +676,26 @@ body {
   font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
 }
 
+/* MẬT KHẨU TẠM — đi kèm `.ma-muc`, và hai lớp lo hai việc khác nhau.
+ *
+ * `.ma-muc` lo phần PHÂN BIỆT ĐƯỢC KÝ TỰ (`l` với `1`, `O` với `0`). Lớp này lo phần NHÌN THẤY
+ * ĐƯỢC: giá trị này tồn tại để được ĐỌC TO cho một cán bộ qua điện thoại, hiện ĐÚNG MỘT LẦN rồi
+ * mất hẳn, và người đọc nó thường là cán bộ lớn tuổi cầm một màn hình 320px xa tầm mắt. Ở cỡ chữ
+ * thân trang (16px) thì yêu cầu ấy KHÔNG được thoả, và cái giá của một lần đọc nhầm không phải
+ * đọc lại — máy chủ không dựng lại được giá trị, nên phải đặt lại và sinh một mật khẩu KHÁC
+ * (`skills/accessibility-elderly`).
+ *
+ * `user-select: all` để một lần bấm chọn trọn giá trị, không dính khoảng trắng hai đầu — màn hình
+ * cố ý KHÔNG vẽ nút sao chép, nên đây là đường chọn duy nhất. `word-break` vì giá trị không có
+ * chỗ nào để xuống dòng theo từ. */
+.mat-khau-tam {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  word-break: break-all;
+  user-select: all;
+}
+
 /* ---- màn giải ngân · màn phản ánh · phần lịch làm việc ---------------------------------- */
 
 /* Banner "không phải phần mềm kế toán" (`06-giai-ngan §1`) — BẮT BUỘC hiện, nên nó phải đọc được
@@ -884,6 +904,58 @@ body {
 
 @media (min-width: 480px) {
   .form-danh-muc .nut-chinh {
+    width: auto;
+  }
+}
+
+/* ---- màn đổi mật khẩu (`15-phu-luc §1`) -------------------------------------------------- */
+
+/* Một việc trên một màn hình: cột hẹp để mắt không phải quét ngang giữa nhãn và ô, và để bố cục
+ * ở 320px giống hệt bố cục ở màn rộng — cùng một hình, không có ca thứ hai để thử sót
+ * (`skills/accessibility-elderly`, REQUIRED #4). */
+.form-doi-mat-khau {
+  max-width: 28rem;
+  margin: 0;
+  padding: 1.25rem;
+  background: #fff;
+  border: 1px solid var(--xam-vien);
+  border-radius: 0.75rem;
+}
+
+/* VÙNG CHẠM TỐI THIỂU — cùng ngưỡng và cùng lý do với `.o-thao-tac .nut-phu` ở trên: cán bộ lớn
+ * tuổi bấm trên điện thoại, nên đây là điều kiện để bấm trúng chứ không phải trang trí. Ở màn
+ * này nó tính cả Ô NHẬP, không chỉ nút: cả ba ô đều gõ mù, và một ô cao 2rem là một ô phải chạm
+ * chính xác mới đặt được con trỏ vào. */
+.form-doi-mat-khau .o-nhap input,
+.form-doi-mat-khau .nut-phu,
+.form-doi-mat-khau .nut-chinh {
+  min-height: 2.75rem;
+}
+
+/* Nút hiện/ẩn đứng ngay dưới ba ô, chiếm trọn hàng ở bề rộng nhỏ nhất để không dính vào ô nhập
+ * phía trên — bấm trượt ở đây là lộ mật khẩu ra màn hình giữa phòng làm việc. */
+.nut-hien-mat-khau {
+  display: block;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+/* Lời nhắc cho người BỊ BẮT đổi. Viền trái xanh chứ không đỏ: đây là một trạng thái bình thường
+ * của tài khoản mới, không phải một thứ hỏng. Và màu chỉ là dấu hiệu THỨ HAI — chữ trong khối đã
+ * nói đủ, để người không phân biệt được màu vẫn đọc ra (a11y, `15-phu-luc §8`). */
+.nhac-bat-doi {
+  max-width: 28rem;
+  margin: 0 0 1rem;
+  padding: 0.875rem 1rem;
+  background: #fff;
+  border: 1px solid var(--xam-vien);
+  border-left: 4px solid var(--xanh);
+  border-radius: 0.5rem;
+}
+
+@media (min-width: 480px) {
+  .nut-hien-mat-khau {
+    display: inline-block;
     width: auto;
   }
 }

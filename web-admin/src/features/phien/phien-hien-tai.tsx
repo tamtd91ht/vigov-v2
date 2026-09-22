@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
+import { duongDanBatDoiMatKhau } from "@/features/mat-khau/bat-doi-mat-khau";
 import type { KetQua } from "@/lib/api/goi";
 import { layPhienHienTai } from "@/lib/api/phien";
 import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen";
@@ -39,7 +40,32 @@ export function PhienProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let bo = false;
     layPhienHienTai().then((kq) => {
-      if (!bo) datPhien(kq);
+      if (bo) return;
+      datPhien(kq);
+
+      // ĐƯỜNG BẮT ĐỔI MẬT KHẨU LẦN ĐẦU, đặt ở đây và CHỈ ở đây.
+      //
+      // VÌ SAO TRONG PROVIDER CHỨ KHÔNG Ở TỪNG TRANG: mọi màn hình của người đã đăng nhập đều
+      // bọc `PhienProvider`, nên đây là chỗ duy nhất chạy đúng một lần trên mỗi màn và không
+      // quên được. Một lời gọi thêm vào từng trang là một danh sách trang phải nhớ cập nhật, và
+      // trang thứ sáu ai đó viết sau sẽ thiếu nó — im lặng, vì cán bộ vẫn vào được màn hình và
+      // chỉ nhận 403 ở mọi thao tác.
+      //
+      // NÓ KHÔNG PHẢI LỚP CHẶN, và không được đọc như một lớp chặn: máy chủ đã chặn ngay trong
+      // `XacThuc` bằng một danh sách cho phép ba tuyến, nên sửa JavaScript ở đây không mở thêm
+      // được gì. Việc của dòng này là đưa người dùng tới màn hình gỡ được cờ, thay vì để họ bấm
+      // quanh và nhận 403 ở mọi nơi. Toàn bộ lý lẽ ở `features/mat-khau/bat-doi-mat-khau.ts`.
+      //
+      // Rời trang bằng CẢ TRANG: yêu cầu kế tiếp phải là một yêu cầu thật, để phía máy chủ dựng
+      // lại màn mới với đúng cấu hình xã đọc từ `Host`.
+      //
+      // KHÔNG CÓ `eslint-disable` Ở ĐÂY, và sự vắng mặt ấy KHÔNG phải một ngoại lệ đã được cấp:
+      // quy tắc `no-location-assign-relative-destination` của Next chỉ nhận ra một chuỗi VIẾT
+      // THẲNG, nên đích đi qua một biến thì nó không thấy. Thêm một dòng tắt quy tắc vào đây sẽ
+      // thành cảnh báo "chỉ thị thừa" và làm đỏ `--max-warnings=0`. Lý lẽ rời trang bằng cả
+      // trang thì vẫn y nguyên — xem `features/auth/nut-dang-xuat.tsx`.
+      const toi = duongDanBatDoiMatKhau(kq, window.location.pathname);
+      if (toi !== null) window.location.assign(toi);
     });
     return () => {
       bo = true;

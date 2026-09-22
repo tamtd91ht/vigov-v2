@@ -38,7 +38,17 @@ import {
 } from "@/lib/api/can-bo";
 import { docDanhMucDanhBa, type DanhMucDanhBa } from "@/lib/api/danh-muc";
 import type { identity_canBoTomTat, page_Result_identity_canBoTomTat } from "@/lib/api/schema.gen";
+import { capTaiKhoan, datLaiMatKhau } from "@/lib/api/tai-khoan";
 
+import {
+  CAU_PHAT_LAI_KHONG_CO_MAT_KHAU,
+  NUT_CAP_TAI_KHOAN,
+  NUT_DAT_LAI_MAT_KHAU,
+  OMatKhauTam,
+  XacNhanTaiKhoan,
+  type DangMoTaiKhoan,
+  type MatKhauTamHienRa,
+} from "./mat-khau-tam";
 import {
   coTrangTruoc,
   sangTrangSau,
@@ -60,23 +70,24 @@ import { bangTraTuKetQua, traTen, type BangTraDanhMuc, type KetTra } from "./tra
  * Bảng danh bạ cán bộ — `docs/ui-ux/14-cau-hinh.md §3`, tab "Người dùng".
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * MÀN HÌNH NÀY VẪN ÍT HƠN ĐẶC TẢ, VÀ ĐÓ LÀ CHỦ Ý. Hợp đồng REST phục vụ màn hình này bằng chín
+ * MÀN HÌNH NÀY VẪN ÍT HƠN ĐẶC TẢ, VÀ ĐÓ LÀ CHỦ Ý. Hợp đồng REST phục vụ màn hình này bằng mười một
  * tuyến: bốn tuyến đọc (`GET /api/v1/staff`, `GET /api/v1/staff/{id}`, và hai danh mục của xã
- * `GET /api/v1/org-units` · `GET /api/v1/roles`) và **năm tuyến ghi** hạ cánh 22/09/2026 —
- * `POST /staff`, `PATCH /staff/{id}`, `POST`/`DELETE /staff/{id}/lockout`, `PUT /staff/{id}/role`.
- * Mỗi thứ đặc tả vẽ mà ở đây không có đều mang một chú thích ngay tại chỗ nói vì sao nó vắng và
- * cái gì mở khoá nó.
+ * `GET /api/v1/org-units` · `GET /api/v1/roles`) và **bảy tuyến ghi** hạ cánh 22/09/2026 —
+ * `POST /staff`, `PATCH /staff/{id}`, `POST`/`DELETE /staff/{id}/lockout`, `PUT /staff/{id}/role`,
+ * `POST /staff/{id}/account`, `PUT /staff/{id}/password`. Mỗi thứ đặc tả vẽ mà ở đây không có đều
+ * mang một chú thích ngay tại chỗ nói vì sao nó vắng và cái gì mở khoá nó.
  *
  * Vẽ ra một điều khiển không chạy được tệ hơn hẳn không vẽ: một ô tìm kiếm gõ vào không có gì
  * xảy ra khiến cán bộ gõ tên một người, thấy danh sách không đổi, và kết luận người đó không
  * có trong hệ thống. Cùng lý lẽ ấy là vì sao **không có nút Xoá** — xem
  * `VI_SAO_KHONG_CO_NUT_XOA`.
  *
- * KHÔNG CÓ CỔNG QUYỀN RIÊNG CHO PHẦN GHI, và đó không phải sơ suất: cả năm tuyến ghi khai đúng
+ * KHÔNG CÓ CỔNG QUYỀN RIÊNG CHO PHẦN GHI, và đó không phải sơ suất: cả bảy tuyến ghi khai đúng
  * một khoá `admin.user` — cùng khoá mà `TabNguoiDung` đã dùng để quyết định có dựng màn hình này
- * hay không. Một cổng thứ hai cho cùng một khoá là một bản sao sẽ trôi. Và lớp chặn THẬT vẫn nằm
- * ở máy chủ, trên TỪNG yêu cầu (luật 5, cấm #1): ẩn một nút chỉ để cán bộ khỏi bấm vào thứ chắc
- * chắn trả 403.
+ * hay không, kể cả hai tuyến thông tin đăng nhập (`routes.go:819` và `:856` cùng khai
+ * `RequirePermission(d.Checker, "admin.user")`). Một cổng thứ hai cho cùng một khoá là một bản sao
+ * sẽ trôi. Và lớp chặn THẬT vẫn nằm ở máy chủ, trên TỪNG yêu cầu (luật 5, cấm #1): ẩn một nút chỉ
+ * để cán bộ khỏi bấm vào thứ chắc chắn trả 403.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
@@ -120,6 +131,28 @@ export function DanhBaCanBo() {
    * cách cư xử cho một nút Lưu là chỗ người dùng học sai cách màn hình hoạt động.
    */
   const [lanDoc, datLanDoc] = useState(0);
+
+  /* ---- trạng thái của hai tuyến THÔNG TIN ĐĂNG NHẬP --------------------------------------- */
+
+  /**
+   * Bốn trạng thái RIÊNG, không dùng lại `dangMo`/`loiMayChu`/`dangGui` của bốn biểu mẫu danh bạ.
+   *
+   * Không phải để tách cho gọn: `ghiXong` của đường danh bạ dọn sạch màn hình sau mỗi lần ghi
+   * thành công, còn đường này phải để lại trên màn hình một giá trị KHÔNG LẤY LẠI ĐƯỢC. Dùng chung
+   * một ô trạng thái là mở đúng một đường cho một lần ghi khác — hay một lần đọc lại danh sách —
+   * xoá mất mật khẩu tạm trước khi quản trị viên kịp đọc, và không bài test nào thấy.
+   */
+  const [moTaiKhoan, datMoTaiKhoan] = useState<DangMoTaiKhoan | null>(null);
+  const [loiTaiKhoan, datLoiTaiKhoan] = useState("");
+  const [dangGuiTaiKhoan, datDangGuiTaiKhoan] = useState(false);
+  /**
+   * Mật khẩu tạm đang hiện. `null` là không có gì để hiện.
+   *
+   * ĐÂY LÀ NƠI DUY NHẤT GIÁ TRỊ ẤY SỐNG: state của component đang hiện nó, chết cùng component.
+   * Không `localStorage`, không `sessionStorage`, không biến ở mức module, không `console.*` ở bất
+   * kỳ nhánh nào chạm tới nó (luật 3, cấm #1 và #4 — xem đầu tệp `mat-khau-tam.tsx`).
+   */
+  const [matKhauTam, datMatKhauTam] = useState<MatKhauTamHienRa | null>(null);
 
   /**
    * HAI DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT KHI MỞ MÀN HÌNH — `[]` ở cuối effect là phần quan trọng
@@ -267,6 +300,11 @@ export function DanhBaCanBo() {
     datVaiTroID(m.kieu === "vaiTro" ? m.canBo.role_id : "");
     datLoiMayChu("");
     datCauDaXong("");
+    // Đóng biểu mẫu xác nhận của đường thông tin đăng nhập: hai biểu mẫu mở cùng lúc là hai nút
+    // Lưu cạnh nhau cho hai người khác nhau. KHÔNG đụng `matKhauTam` — ô ấy giữ một giá trị không
+    // lấy lại được, và chỉ một hành động rõ ràng của người dùng mới được đóng nó.
+    datMoTaiKhoan(null);
+    datLoiTaiKhoan("");
   }, []);
 
   const dongBieuMau = useCallback(() => {
@@ -326,9 +364,106 @@ export function DanhBaCanBo() {
     void goi.finally(() => datDangGui(false));
   }, [ban, dangGui, dangMo, ghiXong, vaiTroID]);
 
+  /* ---- cấp tài khoản và đặt lại mật khẩu ---------------------------------------------------- */
+
   /**
-   * Bốn hành động của một dòng. Gom vào MỘT đối tượng để `BangCanBo` nhận đúng một tham số thay
-   * vì bốn — và để không ai thêm được hành động thứ năm mà không đi qua chỗ này.
+   * Mở biểu mẫu xác nhận của một trong hai tuyến.
+   *
+   * KHOÁ CHỐNG TRÙNG SINH Ở ĐÂY, LÚC MỞ — không lúc gửi, và chỉ cho nhánh `datLai`. Sinh lúc gửi
+   * thì mỗi lần bấm lại sau một lỗi mạng là một khoá mới, tức một mật khẩu tạm KHÁC vô hiệu hoá
+   * cái quản trị viên vừa đọc qua điện thoại (`lib/api/tai-khoan.ts`, `datLaiMatKhau`). Tuyến cấp
+   * tài khoản không có khoá vì chính tài khoản là khoá tự nhiên — lần gửi thứ hai trả 409.
+   *
+   * ĐÓNG BIỂU MẪU DANH BẠ ĐANG MỞ, KHÔNG ĐÓNG Ô MẬT KHẨU TẠM. Xem `moBieuMau` cho nửa đối xứng.
+   */
+  const moCapTaiKhoan = useCallback((cb: identity_canBoTomTat) => {
+    datDangMo(null);
+    datLoiMayChu("");
+    datCauDaXong("");
+    datLoiTaiKhoan("");
+    datMoTaiKhoan({ kieu: "cap", canBo: cb });
+  }, []);
+
+  const moDatLaiMatKhau = useCallback((cb: identity_canBoTomTat) => {
+    datDangMo(null);
+    datLoiMayChu("");
+    datCauDaXong("");
+    datLoiTaiKhoan("");
+    datMoTaiKhoan({ kieu: "datLai", canBo: cb, khoaChongTrung: khoaChongTrungMoi() });
+  }, []);
+
+  const dongXacNhanTaiKhoan = useCallback(() => {
+    datMoTaiKhoan(null);
+    datLoiTaiKhoan("");
+  }, []);
+
+  /**
+   * Đóng ô mật khẩu tạm — HÀNH ĐỘNG DUY NHẤT xoá được giá trị ấy khỏi màn hình.
+   *
+   * Không có bộ đếm ngược, không có `setTimeout`, không có lần đọc lại danh sách nào chạm tới nó:
+   * một ô tự biến mất sau 30 giây là ô biến mất đúng lúc cán bộ ở đầu dây bên kia hỏi lại.
+   */
+  const dongMatKhauTam = useCallback(() => datMatKhauTam(null), []);
+
+  /**
+   * Gửi một trong hai tuyến ghi thông tin đăng nhập.
+   *
+   * TÊN VÀ MÃ LẤY TỪ DÒNG NGƯỜI DÙNG VỪA BẤM, KHÔNG TỪ THÂN CÂU TRẢ LỜI. Hai lẽ, và lẽ thứ hai là
+   * lẽ nặng: `kq.duLieu.staff` KHÔNG CHẮC CÓ MẶT — một lần phát lại theo khoá chống trùng trả đúng
+   * mã 200 kèm thân `{"code":…,"replayed":true}`, vì `core/idem` cố ý không lưu thân câu trả lời
+   * nào (`core/idem/idem.go:421`). Đọc `.staff.full_name` trên thân ấy là một `TypeError` ném ra
+   * giữa một `then`, không ai bắt, và màn hình đứng im không nói gì.
+   *
+   * VÌ VẬY PHẢI KIỂM HÌNH DẠNG THÂN TRƯỚC KHI MỞ Ô. TypeScript ép kiểu thân JSON mà không kiểm gì
+   * lúc chạy, nên `temporary_password` của một lần phát lại chỉ đơn giản là `undefined` — và nếu
+   * không ai kiểm thì ô mật khẩu mở ra rỗng, hoặc đọc to hai chữ "undefined" cho một cán bộ đang
+   * cầm bút.
+   *
+   * ĐỌC LẠI DANH SÁCH SAU KHI THÀNH CÔNG vì `has_account` vừa đổi ở nhánh `cap`, và cột Tài khoản
+   * cùng cặp nút của dòng ấy đều đọc từ nó. Ô mật khẩu tạm được dựng NGOÀI mọi nhánh của
+   * `trangThai`, nên một lần đọc lại hỏng cũng không xoá mất giá trị đang hiện.
+   */
+  const guiTaiKhoan = useCallback(() => {
+    if (moTaiKhoan === null || dangGuiTaiKhoan) return;
+
+    const canBo = moTaiKhoan.canBo;
+    const kieu = moTaiKhoan.kieu;
+
+    datLoiTaiKhoan("");
+    datDangGuiTaiKhoan(true);
+
+    const goi =
+      moTaiKhoan.kieu === "cap"
+        ? capTaiKhoan(canBo.id)
+        : datLaiMatKhau(canBo.id, moTaiKhoan.khoaChongTrung);
+
+    void goi
+      .then((kq) => {
+        // Câu của máy chủ ra nguyên văn — 409 của tuyến cấp nghĩa là người này ĐÃ có tài khoản, và
+        // câu ấy do máy chủ viết. Ca "không có câu trả lời nào" được `XacNhanTaiKhoan` nói thêm.
+        if (!kq.ok) {
+          datLoiTaiKhoan(kq.thongBao);
+          return;
+        }
+
+        const matKhau = kq.duLieu.temporary_password;
+        if (typeof matKhau !== "string" || matKhau === "") {
+          datLoiTaiKhoan(CAU_PHAT_LAI_KHONG_CO_MAT_KHAU);
+          return;
+        }
+
+        datMoTaiKhoan(null);
+        datMatKhauTam({ kieu, maCanBo: canBo.code, hoTen: canBo.full_name, matKhau });
+        idDangDoi.current = null;
+        datChiTiet(null);
+        datLanDoc((n) => n + 1);
+      })
+      .finally(() => datDangGuiTaiKhoan(false));
+  }, [dangGuiTaiKhoan, moTaiKhoan]);
+
+  /**
+   * Sáu hành động của một dòng. Gom vào MỘT đối tượng để `BangCanBo` nhận đúng một tham số thay
+   * vì sáu — và để không ai thêm được một hành động thứ bảy mà không đi qua chỗ này.
    */
   const thaoTac = useMemo<ThaoTacDong>(
     () => ({
@@ -336,8 +471,10 @@ export function DanhBaCanBo() {
       sua: (cb) => moBieuMau({ kieu: "sua", canBo: cb }),
       doiVaiTro: (cb) => moBieuMau({ kieu: "vaiTro", canBo: cb }),
       datKhoa: (cb) => moBieuMau({ kieu: "khoa", canBo: cb, khoa: cb.active }),
+      capTaiKhoan: moCapTaiKhoan,
+      datLaiMatKhau: moDatLaiMatKhau,
     }),
-    [moBieuMau, moChiTiet],
+    [moBieuMau, moChiTiet, moCapTaiKhoan, moDatLaiMatKhau],
   );
 
   return (
@@ -375,6 +512,28 @@ export function DanhBaCanBo() {
 
       {/* Câu xác nhận sau một lần ghi. `role="status"` chứ không `alert`: không có gì hỏng. */}
       {cauDaXong !== "" && <p role="status">{cauDaXong}</p>}
+
+      {/*
+        Ô MẬT KHẨU TẠM ĐỨNG NGOÀI MỌI NHÁNH CỦA `trangThai`, và chỗ đứng ấy là một điều kiện chứ
+        không phải thứ tự trình bày: nó được dựng ngay sau một lần ghi thành công, mà lần ghi ấy
+        kéo theo một lần đọc lại danh sách. Đặt nó trong nhánh `pha === "xong"` thì một lần đọc lại
+        hỏng — phiên hết hạn, mạng chập — sẽ thay cả vùng ấy bằng một dòng báo lỗi và mang theo một
+        giá trị không lấy lại được.
+
+        NÓ CŨNG ĐỨNG TRÊN BIỂU MẪU: sau khi bấm, mắt người dùng ở đúng chỗ này, và thứ họ phải đọc
+        ngay là mật khẩu cùng câu "chỉ hiện một lần".
+      */}
+      {matKhauTam !== null && <OMatKhauTam matKhauTam={matKhauTam} onDong={dongMatKhauTam} />}
+
+      {moTaiKhoan !== null && (
+        <XacNhanTaiKhoan
+          dangMo={moTaiKhoan}
+          loiMayChu={loiTaiKhoan}
+          dangGui={dangGuiTaiKhoan}
+          onGui={guiTaiKhoan}
+          onHuy={dongXacNhanTaiKhoan}
+        />
+      )}
 
       {/*
         MỘT BIỂU MẪU, MỘT CHỖ TRÊN MÀN HÌNH, ĐẶT NGAY DƯỚI THANH NÚT.
@@ -553,21 +712,28 @@ const NHAN_KHOA: Record<KhoaSapXep, string> = {
 };
 
 /**
- * Bốn hành động một dòng danh bạ mở ra. **BỐN, và không có hành động thứ năm tên là "Xoá".**
+ * Sáu hành động một dòng danh bạ mở ra. **KHÔNG hành động nào tên là "Xoá".**
  *
  * Kiểu này là chỗ hẹp nhất mà một nút Xoá phải đi qua: thêm nó vào đây là thêm một trường vào một
  * kiểu có bài kiểm đọc lại, chứ không phải thêm một dòng JSX không ai thấy. Vì sao không có nó:
  * `VI_SAO_KHONG_CO_NUT_XOA`.
  *
- * `sua`, `doiVaiTro` và `datKhoa` nhận CẢ DÒNG chứ không nhận `id`: biểu mẫu mở ra phải gọi tên
- * người đang được thao tác trên tiêu đề, và `datKhoa` còn phải biết người ấy đang khoá hay chưa
- * để chọn đúng chiều. Truyền `id` rồi đi tìm lại dòng là mở đường cho một lần tìm ra dòng khác.
+ * Mọi hành động trừ `chiTiet` nhận CẢ DÒNG chứ không nhận `id`: biểu mẫu mở ra phải gọi tên người
+ * đang được thao tác trên tiêu đề, `datKhoa` còn phải biết người ấy đang khoá hay chưa để chọn
+ * đúng chiều, và ô mật khẩu tạm lấy tên với mã từ chính dòng ấy (xem `guiTaiKhoan`). Truyền `id`
+ * rồi đi tìm lại dòng là mở đường cho một lần tìm ra dòng khác.
+ *
+ * `capTaiKhoan` VÀ `datLaiMatKhau` LÀ HAI TRƯỜNG, KHÔNG PHẢI MỘT TRƯỜNG MANG CỜ. Máy chủ tách
+ * chúng bằng hai tuyến, hai mã thành công (201 và 200) và hai điều kiện loại trừ nhau trong mệnh
+ * đề WHERE; một trường chung ở đây là chỗ giao diện gộp lại thứ máy chủ vừa tách.
  */
 export type ThaoTacDong = {
   chiTiet: (id: string) => void;
   sua: (cb: identity_canBoTomTat) => void;
   doiVaiTro: (cb: identity_canBoTomTat) => void;
   datKhoa: (cb: identity_canBoTomTat) => void;
+  capTaiKhoan: (cb: identity_canBoTomTat) => void;
+  datLaiMatKhau: (cb: identity_canBoTomTat) => void;
 };
 
 /**
@@ -626,6 +792,38 @@ function NutCuaDong({
       >
         {nhanKhoa}
       </button>
+
+      {/*
+        MỘT NÚT, KHÔNG HAI — và nút kia VẮNG MẶT chứ không mờ đi.
+
+        `has_account` là hai thế giới loại trừ nhau, không phải hai trạng thái của một việc: máy
+        chủ tách chúng ngay trong mệnh đề WHERE (`AND NOT co_tai_khoan` cho tuyến cấp, và tuyến đặt
+        lại chỉ có nghĩa khi tài khoản đã tồn tại), nên không nút nào làm được việc của nút kia.
+
+        Một nút mờ đi mời người dùng hỏi "vì sao không bấm được" và đi tìm một quyền họ không
+        thiếu; một nút vắng mặt nói đúng điều đang đúng — việc ấy không áp dụng cho dòng này. Và
+        `disabled` còn là một cái bẫy riêng với trình đọc màn hình: nhiều bộ bỏ qua hẳn nút bị vô
+        hiệu, nên người dùng ấy không biết là có thứ gì ở đó cả.
+      */}
+      {cb.has_account ? (
+        <button
+          type="button"
+          className="nut-phu"
+          aria-label={`${NUT_DAT_LAI_MAT_KHAU}: ${cb.full_name}`}
+          onClick={() => thaoTac.datLaiMatKhau(cb)}
+        >
+          {NUT_DAT_LAI_MAT_KHAU}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="nut-phu"
+          aria-label={`${NUT_CAP_TAI_KHOAN}: ${cb.full_name}`}
+          onClick={() => thaoTac.capTaiKhoan(cb)}
+        >
+          {NUT_CAP_TAI_KHOAN}
+        </button>
+      )}
     </span>
   );
 }
