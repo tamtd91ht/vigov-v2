@@ -20,6 +20,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/vihat/vigov/core/httpx"
@@ -257,24 +258,17 @@ var (
 	errTrangThaiKhongHopLe = errors.New("`status` không phải một trạng thái của sổ văn bản đến")
 )
 
-func locVanBanDiTuQuery(q map[string][]string) (docstore.LocVanBanDi, error) {
-	lay := func(k string) string {
-		if v, ok := q[k]; ok && len(v) > 0 {
-			return v[0]
-		}
-		return ""
-	}
-
+func locVanBanDiTuQuery(q url.Values) (docstore.LocVanBanDi, error) {
 	var loc docstore.LocVanBanDi
-	if s := lay("year"); s != "" {
+	if s := q.Get("year"); s != "" {
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 2000 || n > 2200 {
 			return loc, errNamKhongHopLe
 		}
 		loc.Nam = n
 	}
-	loc.LoaiVanBan = lay("document_type")
-	loc.Tim = lay("q")
+	loc.LoaiVanBan = q.Get("document_type")
+	loc.Tim = q.Get("q")
 	if len(loc.Tim) > 200 {
 		return loc, errTimQuaDai
 	}

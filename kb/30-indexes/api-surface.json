@@ -95,6 +95,26 @@
     {
       "service": "petitions",
       "method": "GET",
+      "path": "/api/v1/citizen-reports",
+      "operation_id": "petitions_get_citizen_reports",
+      "task_id": "db9a4ae6ade1",
+      "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn",
+      "screen": "09-phan-anh-nguoi-dan §2, §4",
+      "permission_kind": "permission",
+      "permission": "feedback.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_petitions.phieuPhanAnhRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
       "path": "/api/v1/citizen-reports/{maTraCuu}",
       "operation_id": "petitions_get_citizen_reports_by_maTraCuu",
       "task_id": "df25652c98fe",
@@ -108,6 +128,100 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/assignment",
+      "operation_id": "petitions_post_citizen_reports_by_maTraCuu_assignment",
+      "task_id": "e6768b13ecfb",
+      "summary": "Chuyển phiếu phản ánh cho một bộ phận xử lý, kèm cán bộ phụ trách nếu đã biết",
+      "screen": "09-phan-anh-nguoi-dan §8.5",
+      "permission_kind": "permission",
+      "permission": "feedback.assign",
+      "idempotency": "khong-can",
+      "idempotency_reason": "phân công lại cùng một bộ phận để lại đúng một dòng ở đúng một trạng thái; vết thứ hai là một hành vi CÓ THẬT của con người, không phải bản sao",
+      "request_schema": "petitions.phanCongVao",
+      "reply_schemas": {
+        "200": "petitions.phieuPhanAnhRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/classification",
+      "operation_id": "petitions_post_citizen_reports_by_maTraCuu_classification",
+      "task_id": "6818d0449909",
+      "summary": "Chốt lĩnh vực cho phiếu phản ánh — hành vi ẤN ĐỊNH hạn xử lý xong theo cấu hình của xã",
+      "screen": "09-phan-anh-nguoi-dan §8.2",
+      "permission_kind": "permission",
+      "permission": "feedback.classify",
+      "idempotency": "khong-can",
+      "idempotency_reason": "câu UPDATE mang `trang_thai = 'da-tiep-nhan'`, nên lần gửi thứ hai không khớp dòng nào và trả 409 — đúng một lần chốt lĩnh vực, đúng một hạn, đúng một vết",
+      "request_schema": "petitions.phanLoaiVao",
+      "reply_schemas": {
+        "200": "petitions.phieuPhanAnhRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/closure",
+      "operation_id": "petitions_post_citizen_reports_by_maTraCuu_closure",
+      "task_id": "57f1b2b710f3",
+      "summary": "Đóng phiếu phản ánh kèm kết quả xử lý người dân đọc được",
+      "screen": "09-phan-anh-nguoi-dan §8.2",
+      "permission_kind": "permission",
+      "permission": "feedback.resolve",
+      "idempotency": "khong-can",
+      "idempotency_reason": "câu UPDATE mang `trang_thai = 'cho-dan-xac-nhan'`, nên lần gửi thứ hai không khớp dòng nào — đúng một lần đóng, đúng một kết quả, đúng một vết",
+      "request_schema": "petitions.dongPhieuVao",
+      "reply_schemas": {
+        "200": "petitions.phieuPhanAnhRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/status",
+      "operation_id": "petitions_post_citizen_reports_by_maTraCuu_status",
+      "task_id": "8dadab015da6",
+      "summary": "Chuyển phiếu phản ánh sang bước kế tiếp của luồng chính (máy trạng thái quyết định bước nào)",
+      "screen": "09-phan-anh-nguoi-dan §8.2",
+      "permission_kind": "permission",
+      "permission": "feedback.resolve",
+      "idempotency": "khong-can",
+      "idempotency_reason": "câu UPDATE mang trạng thái đang chờ, nên bấm hai lần vẫn chỉ tiến đúng một bước và lần thứ hai trả 409",
+      "reply_schemas": {
+        "200": "petitions.phieuPhanAnhRa",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"

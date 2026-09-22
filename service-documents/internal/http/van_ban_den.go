@@ -28,6 +28,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -447,23 +448,16 @@ func (h *Handler) DanhSachVanBanDen(w http.ResponseWriter, r *http.Request) {
 // AN UNKNOWN `status` IS REFUSED RATHER THAN IGNORED. A filter silently dropped returns the WHOLE
 // register to a screen that asked for one slice of it, and the screen has no way to know — which on
 // this surface means a clerk believing they are looking at every document of one kind.
-func locVanBanDenTuQuery(q map[string][]string) (docstore.LocVanBanDen, error) {
-	lay := func(k string) string {
-		if v, ok := q[k]; ok && len(v) > 0 {
-			return v[0]
-		}
-		return ""
-	}
-
+func locVanBanDenTuQuery(q url.Values) (docstore.LocVanBanDen, error) {
 	var loc docstore.LocVanBanDen
-	if s := lay("year"); s != "" {
+	if s := q.Get("year"); s != "" {
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 2000 || n > 2200 {
 			return loc, errNamKhongHopLe
 		}
 		loc.Nam = n
 	}
-	if s := lay("status"); s != "" {
+	if s := q.Get("status"); s != "" {
 		switch domain.TrangThaiVanBanDen(s) {
 		case domain.VanBanMoiVaoSo, domain.VanBanDaPhanCong, domain.VanBanDangXuLy,
 			domain.VanBanDaGiaiQuyet, domain.VanBanChuyenCapTren, domain.VanBanLuuKhongThuLy:
@@ -472,9 +466,9 @@ func locVanBanDenTuQuery(q map[string][]string) (docstore.LocVanBanDen, error) {
 			return loc, errTrangThaiKhongHopLe
 		}
 	}
-	loc.LoaiVanBan = lay("document_type")
-	loc.BoPhan = lay("holding_unit")
-	loc.Tim = lay("q")
+	loc.LoaiVanBan = q.Get("document_type")
+	loc.BoPhan = q.Get("holding_unit")
+	loc.Tim = q.Get("q")
 	if len(loc.Tim) > 200 {
 		return loc, errTimQuaDai
 	}

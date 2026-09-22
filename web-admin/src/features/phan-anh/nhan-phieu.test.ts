@@ -32,6 +32,20 @@ function phieu(sua: Partial<petitions_phieuPhanAnhRa> = {}): petitions_phieuPhan
     booked_at: "2026-09-09T07:21:00Z",
     acknowledge_due: null,
     resolve_due: null,
+    // Hạn BẮT BUỘC PHÂN LOẠI — trần 1 ngày làm việc, ADR 0035 §C (câu mở #26,
+    // chốt 22/09/2026). `null` là trạng thái THẬT: phiếu đã phân loại rồi thì trần
+    // ấy không còn nghĩa gì. Nó là hạn THỨ BA của một phiếu, cạnh hạn tiếp nhận và
+    // hạn xử lý xong — cả ba đều LƯU một lần tại hành vi ấn định, không tính lại.
+    classify_due: null,
+    // BỐN TRƯỜNG CỦA ĐƯỜNG XỬ LÝ PHÍA CÁN BỘ (`service-petitions`, 23/09/2026). Chuỗi rỗng
+    // là trạng thái THẬT — "chưa phân công bộ phận nào", "chưa có kết quả" — chứ không
+    // phải thiếu dữ liệu, nên hợp đồng khai `string` chứ không `string | null`.
+    //
+    // `public` là cờ CÔNG KHAI phiếu ra kênh công dân, mặc định tắt: một phiếu mang họ tên
+    // và số điện thoại người gửi (luật 3), nên công khai phải là một hành vi có người bấm.
+    unit: "",
+    assignee: "",
+    result: "",
     public: false,
     ...sua,
   };

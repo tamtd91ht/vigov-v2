@@ -105,7 +105,7 @@ func (g *giaiMa) thamSoTruyVanCua(pkgDir string, handlers []string) ([]thamSoTru
 			if fd.Body == nil {
 				continue
 			}
-			for t, bb := range docThanHam(fd.Body) {
+			for t, bb := range docThanHam(fd) {
 				co[t] = true
 				batBuoc[t] = batBuoc[t] || bb
 			}
@@ -150,8 +150,31 @@ func (g *giaiMa) thamSoTruyVanCua(pkgDir string, handlers []string) ([]thamSoTru
 // đáng lẽ bắt buộc thì `tsc` vẫn canh đúng TÊN — thứ đang thiếu hoàn toàn hôm nay. Ngược lại,
 // bịa ra `required: true` cho một tham số thật sự tùy chọn là ép mọi máy khách gửi một thứ máy
 // chủ không đòi.
-func docThanHam(than *ast.BlockStmt) map[string]bool {
-	bienQuery := map[string]bool{}        // biến giữ `r.URL.Query()`
+func docThanHam(fd *ast.FuncDecl) map[string]bool {
+	than := fd.Body
+	bienQuery := map[string]bool{} // biến giữ `r.URL.Query()`
+
+	// THAM SỐ KIỂU `url.Values` CŨNG LÀ MỘT BIẾN QUERY, và thiếu dòng này là chỗ phép đi bộ MẤT
+	// DẤU ở biên hàm.
+	//
+	// Đo được 23/09/2026: `GET /api/v1/incoming-documents` và `/outgoing-documents` đọc năm tham
+	// số (`year · status · document_type · holding_unit · q`) trong một HÀM PHỤ cùng gói, còn
+	// `GET /api/v1/investment-projects` đọc `year`/`category` NGAY TRONG handler. Phép đi bộ theo
+	// được lời gọi sang hàm phụ (`goiCungGoi` nhận cả `*ast.Ident`), nhưng tới nơi thì `q` chỉ là
+	// một tham số — chưa từng có phép gán nào từ `r.URL.Query()` — nên `bienQuery` rỗng và cả năm
+	// tham số biến mất khỏi hợp đồng TRONG IM LẶNG. Hai tuyến ấy sinh ra `truyVan: {}`, và web
+	// phải chép tên bộ lọc từ MÃ NGUỒN, tức `tsc` không còn canh được tên nào.
+	//
+	// SUY THEO KIỂU, KHÔNG THEO ĐỐI SỐ. Ghép đối số ở chỗ gọi với tham số ở chỗ khai là một phép
+	// phân tích luồng dữ liệu thật, và nó hỏng ngay khi có hai chỗ gọi khác nhau. Một hàm nhận
+	// `url.Values` thì theo định nghĩa đang nhận tham số truy vấn — không cần biết ai gọi nó.
+	//
+	// `map[string][]string` CŨNG NHẬN vì `url.Values` chính là kiểu ấy, và một hàm phụ khai kiểu
+	// nền thay vì tên kiểu vẫn đang làm đúng một việc.
+	for _, ts := range thamSoKieuQuery(fd) {
+		bienQuery[ts] = true
+	}
+
 	nhiem := map[string]map[string]bool{} // tham số -> tên biến mang giá trị của nó
 	co := map[string]bool{}               // tham số đọc được
 	batBuoc := map[string]bool{}
@@ -259,6 +282,50 @@ func docThamSo(n ast.Node, bienQuery map[string]bool) (string, bool) {
 		return chuoiLit(x.Index)
 	}
 	return "", false
+}
+
+// thamSoKieuQuery names the parameters of one function whose type is a query-values map.
+//
+// HAI CÁCH VIẾT, cả hai là cùng một kiểu: `url.Values` (tên kiểu, cách viết đúng) và
+// `map[string][]string` (kiểu nền — `url.Values` được khai đúng là nó). Không nhận bất kỳ kiểu
+// nào khác: một hàm nhận `map[string]string` đang làm việc khác, và đoán rộng ra là đưa vào hợp
+// đồng những tên không phải tham số truy vấn.
+func thamSoKieuQuery(fd *ast.FuncDecl) []string {
+	if fd.Type == nil || fd.Type.Params == nil {
+		return nil
+	}
+	var ra []string
+	for _, f := range fd.Type.Params.List {
+		if !laKieuQuery(f.Type) {
+			continue
+		}
+		for _, n := range f.Names {
+			if n.Name != "_" {
+				ra = append(ra, n.Name)
+			}
+		}
+	}
+	return ra
+}
+
+func laKieuQuery(e ast.Expr) bool {
+	switch t := e.(type) {
+	case *ast.SelectorExpr: // url.Values
+		id, ok := t.X.(*ast.Ident)
+		return ok && id.Name == "url" && t.Sel.Name == "Values"
+	case *ast.MapType: // map[string][]string
+		k, ok := t.Key.(*ast.Ident)
+		if !ok || k.Name != "string" {
+			return false
+		}
+		arr, ok := t.Value.(*ast.ArrayType)
+		if !ok || arr.Len != nil {
+			return false
+		}
+		v, ok := arr.Elt.(*ast.Ident)
+		return ok && v.Name == "string"
+	}
+	return false
 }
 
 // laGoiQuery reports whether an expression is `<req>.URL.Query()`.

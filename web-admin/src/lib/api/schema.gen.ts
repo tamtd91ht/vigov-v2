@@ -694,12 +694,23 @@ export type page_Result_identity_canBoTomTat = {
   "has_more": boolean;
 };
 
+export type page_Result_petitions_phieuPhanAnhRa = {
+  "items": Array<petitions_phieuPhanAnhRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
 export type petitions_danhSachLoaiNhiemVuRa = {
   "items": Array<petitions_loaiNhiemVuRa>;
 };
 
 export type petitions_danhSachMucUuTienRa = {
   "items": Array<petitions_mucUuTienRa>;
+};
+
+export type petitions_dongPhieuVao = {
+  "result": string;
 };
 
 export type petitions_guiPhanAnhVao = {
@@ -746,6 +757,15 @@ export type petitions_mucUuTienRa = {
   "tier": number;
 };
 
+export type petitions_phanCongVao = {
+  "unit": string;
+  "assignee"?: string;
+};
+
+export type petitions_phanLoaiVao = {
+  "field": string;
+};
+
 export type petitions_phieuCuaToiRa = {
   "code": string;
   /** `zalo-mini-app` | `zalo-oa` | `web-xa` | `can-bo-nhap-ho` */
@@ -762,6 +782,7 @@ export type petitions_phieuCuaToiRa = {
   "clock_from": string;
   "acknowledge_due": string | null;
   "resolve_due": string | null;
+  "result": string;
 };
 
 export type petitions_phieuPhanAnhRa = {
@@ -781,6 +802,10 @@ export type petitions_phieuPhanAnhRa = {
   "booked_at": string;
   "acknowledge_due": string | null;
   "resolve_due": string | null;
+  "classify_due": string | null;
+  "unit": string;
+  "assignee": string;
+  "result": string;
   "public": boolean;
 };
 
@@ -907,6 +932,24 @@ export type finance_delete_capital_plan_categories_by_id = {
   };
 };
 
+/** GET /api/v1/citizen-reports — Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn */
+export type petitions_get_citizen_reports = {
+  duongDan: "/api/v1/citizen-reports";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_petitions_phieuPhanAnhRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/citizen-reports/{maTraCuu} — Một phiếu phản ánh, tra theo mã tra cứu đã trả cho người dân */
 export type petitions_get_citizen_reports_by_maTraCuu = {
   duongDan: "/api/v1/citizen-reports/{maTraCuu}";
@@ -922,6 +965,89 @@ export type petitions_get_citizen_reports_by_maTraCuu = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/assignment — Chuyển phiếu phản ánh cho một bộ phận xử lý, kèm cán bộ phụ trách nếu đã biết */
+export type petitions_post_citizen_reports_by_maTraCuu_assignment = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/assignment";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_phanCongVao;
+  phanHoi: {
+    200: petitions_phieuPhanAnhRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/classification — Chốt lĩnh vực cho phiếu phản ánh — hành vi ẤN ĐỊNH hạn xử lý xong theo cấu hình của xã */
+export type petitions_post_citizen_reports_by_maTraCuu_classification = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/classification";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_phanLoaiVao;
+  phanHoi: {
+    200: petitions_phieuPhanAnhRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/closure — Đóng phiếu phản ánh kèm kết quả xử lý người dân đọc được */
+export type petitions_post_citizen_reports_by_maTraCuu_closure = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/closure";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_dongPhieuVao;
+  phanHoi: {
+    200: petitions_phieuPhanAnhRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/status — Chuyển phiếu phản ánh sang bước kế tiếp của luồng chính (máy trạng thái quyết định bước nào) */
+export type petitions_post_citizen_reports_by_maTraCuu_status = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/status";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_phieuPhanAnhRa;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -1147,6 +1273,11 @@ export type documents_get_incoming_documents = {
   thamSo: {
   };
   truyVan: {
+    "document_type"?: string;
+    "holding_unit"?: string;
+    "q"?: string;
+    "status"?: string;
+    "year"?: string;
   };
   than: never;
   phanHoi: {
@@ -1416,6 +1547,9 @@ export type documents_get_outgoing_documents = {
   thamSo: {
   };
   truyVan: {
+    "document_type"?: string;
+    "q"?: string;
+    "year"?: string;
   };
   than: never;
   phanHoi: {
