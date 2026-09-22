@@ -758,9 +758,38 @@ body {
 
 .man-giai-ngan,
 .man-phan-anh,
+.man-van-ban,
 .tab-lich-lam-viec,
 .tab-thoi-han {
   margin-top: 2rem;
+}
+
+/* ---- màn Văn bản & đơn thư --------------------------------------------------------------- */
+
+/* Cụm nút của một dòng sổ văn bản: cùng hình dạng và cùng lý do với `.bang-can-bo .o-thao-tac`.
+ * `white-space: normal` MỘT MÌNH KHÔNG ĐỦ — ba nút là ba thẻ JSX trên ba dòng, mà JSX bỏ hẳn
+ * khoảng trắng chỉ-có-xuống-dòng giữa hai thẻ, nên không còn ký tự trắng nào để ngắt dòng vào.
+ * `gap` giữ hai vùng chạm rời nhau: ở 320px trên tay một cán bộ lớn tuổi, "Gỡ khỏi sổ" dính sát
+ * "Chuyển xử lý" nghĩa là một lần bấm trượt gỡ mất một số không bao giờ cấp lại được
+ * (`skills/accessibility-elderly`). */
+.bang-van-ban .o-thao-tac {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  white-space: normal;
+}
+
+/* Trích yếu là câu dài nhất trong bảng và là cột người ta đọc để nhận ra văn bản. Cho nó xuống
+ * dòng trong một bề rộng có trần, thay vì kéo cả bảng ra thành một hàng ngang không đọc nổi
+ * (`.bang-danh-muc td` mặc định là `white-space: nowrap`).
+ *
+ * GẮN VÀO MỘT LỚP, KHÔNG PHẢI `td:nth-child(n)`: hai quyển sổ dùng chung kiểu bảng này và cột
+ * trích yếu của chúng nằm ở hai vị trí khác nhau — một quy tắc theo vị trí sẽ bôi đúng cột "Người
+ * ký" của sổ đi vào ngày ai đó thêm một cột. */
+.bang-van-ban .o-trich-yeu {
+  white-space: normal;
+  min-width: 14rem;
+  max-width: 24rem;
 }
 
 /* ---- màn cấu hình · tab Thời hạn xử lý --------------------------------------------------- */

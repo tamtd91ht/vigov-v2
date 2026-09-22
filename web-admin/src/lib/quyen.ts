@@ -99,6 +99,44 @@ export const QUYEN_QUAN_LY_DANH_MUC = "admin.lookup";
 export const QUYEN_CAU_HINH_THOI_HAN = "admin.sla";
 
 /**
+ * Khoá quyền của mọi thao tác GHI trên hai quyển sổ văn bản — `document.create`, "Vào sổ văn bản".
+ *
+ * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên cả sáu tuyến ghi của hai sổ
+ * (`x-vigov-permission.key` của `POST/PATCH/DELETE` hai bộ tuyến trong `kb/20-contracts/
+ * openapi.json`) và đúng chuỗi migration gieo vào bảng `quyen`
+ * (`service-identity/migrations/0001_init.sql:287`). Một khoá bảng `quyen` không có là một khoá
+ * không quản trị viên nào cấp được, tức tuyến ấy 403 với MỌI tài khoản (luật 5, bất biến 3c).
+ *
+ * MỘT KHOÁ CHO CẢ SÁU TUYẾN, KỂ CẢ HAI TUYẾN GỠ, VÀ ĐÓ LÀ MỘT PHÁT HIỆN ĐÃ ĐƯỢC GHI Ở MÁY CHỦ
+ * CHỨ KHÔNG PHẢI MỘT LẦN GỘP CHO GỌN Ở ĐÂY: bảng `quyen` không có `document.update` hay
+ * `document.delete`, nên tuyến gỡ đứng sau khoá gần nhất là khoá vào sổ. Một xã hoàn toàn có thể
+ * muốn người vào sổ KHÔNG gỡ được — đó là một quyền khác, và nó là câu hỏi mở #27, không phải một
+ * dòng `INSERT INTO quyen` (`service-documents/internal/http/van_ban_den.go:11`).
+ */
+export const QUYEN_GHI_SO_VAN_BAN = "document.create";
+
+/**
+ * Khoá quyền của riêng thao tác CHUYỂN XỬ LÝ — `document.route`, "Phân luồng văn bản".
+ *
+ * KHÔNG SUY RA TỪ `document.create`, và sự tách ấy là của đặc tả (§7 quy tắc 4) rồi của máy chủ
+ * (`routes.go`, `POST .../routings`): chuyển một văn bản cho bộ phận nào là hành vi quyết định AI
+ * CHỊU TRÁCH NHIỆM, không phải hành vi gõ một văn bản vào sổ. Một xã giao việc nhập cho văn thư và
+ * giữ việc phân luồng cho lãnh đạo là cách làm bình thường, nên hai khoá không được gộp ở giao
+ * diện dù chúng thường cấp cùng nhau (luật 5, bất biến 3b).
+ */
+export const QUYEN_CHUYEN_VAN_BAN = "document.route";
+
+/**
+ * KHÔNG CÓ HẰNG NÀO CHO `document.read`, VÀ SỰ VẮNG MẶT ẤY LÀ CHỦ Ý.
+ *
+ * Hai tuyến đọc sổ đòi `document.read` thật, nhưng màn hình KHÔNG dựng cổng quyền ở client cho
+ * chúng: tài khoản thiếu khoá nhận 403 ngay ở lượt đọc và màn hình hiện NGUYÊN câu của máy chủ —
+ * cùng khuôn với `GET /api/v1/sla` ở tab Thời hạn xử lý. Dựng thêm một cổng đoán trước điều ấy chỉ
+ * thêm một chỗ có thể lệch với máy chủ, và khi nó lệch thì nó ẩn mất một quyển sổ mà máy chủ đang
+ * phục vụ bình thường.
+ */
+
+/**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
  *
  * TỪNG NẰM RIÊNG TRONG `features/cau-hinh/quyen-tab.ts` VÀ NAY Ở ĐÂY, vì nó có người dùng thứ
