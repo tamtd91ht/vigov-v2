@@ -27,13 +27,15 @@ configMapGenerator:
       # động nếu nó bật ở ENV=prod (luật 8 bất biến 7). Không khai là cách chắc chắn nhất.
 
 # ════════════════════════════════════════════════════════════════════════════════════════
-# THẺ ẢNH — ĐÂY LÀ TOÀN BỘ "DEPLOY A MÀ B ĐỨNG YÊN".
+# THẺ ẢNH — CHỈ DÙNG CHO LẦN CÀI ĐẦU. Chốt 22/09/2026.
 #
-# Job `vigov-deploy` sửa ĐÚNG MỘT dòng `newTag` trong khối này rồi commit. Dịch vụ khác
-# không có diff → `kubectl apply` không sinh generation mới → pod của nó không khởi động lại.
+# Job `vigov-deploy` KHÔNG còn sửa khối này. Nó đặt ảnh bằng `kubectl set image` và nhật ký
+# triển khai nằm ở lịch sử build của job — xem `deploy/Jenkinsfile`, khối đầu tệp.
 #
-# `git log -p deploy/overlays/prod/kustomization.yaml` là NHẬT KÝ TRIỂN KHAI của hệ thống:
-# ai, đưa bản nào, lúc nào. Không có sổ nào khác.
+# Vì thế khối này KHÔNG phản ánh thẻ đang chạy trên cụm. Chạy `kubectl apply -k` lên một
+# namespace đã có dịch vụ sẽ đẩy CẢ BẢY về `CHUA-TRIEN-KHAI-LAN-NAO`, tức ImagePullBackOff
+# đồng loạt. Cách sửa manifest mà không đạp phải bẫy ấy: `deploy/README.md`, mục *Sửa
+# manifest sau khi đã chạy*.
 # ════════════════════════════════════════════════════════════════════════════════════════
 images:
   - name: harbor.omicrm.services/ci/vigov-service-platform

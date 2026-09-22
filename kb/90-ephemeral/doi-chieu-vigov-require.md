@@ -186,7 +186,7 @@ Câu hỏi mở #27 của kho này: *"Đặc tả ghi tiêu đề 43 quyền / 1
 |---|---|
 | Chỉ có ở `vigov-require` | `dossier.read` · `dossier.import` · `dossier.update` |
 | Chỉ có ở kho này | `feedback.classify` · `feedback.restricted` · `feedback.unmask` · `task.approve` |
-| Trùng nhau | 30 khoá |
+| Trùng nhau | **31 khoá** (đo bằng `comm -12` trên hai danh sách đã sắp; kho này 35 khoá, bên kia 34) |
 
 **Nhóm thứ mười một là `dossier.*` — và nó biến mất khỏi kho này đúng vì `dossiers` bị gỡ
 20/09/2026 (§3.1).** Điều đó giải thích luôn vì sao đếm được 10 nhóm chứ không 11.

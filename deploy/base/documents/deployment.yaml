@@ -83,8 +83,9 @@ spec:
 
       containers:
         - name: server
-          # Thẻ CỐ Ý không dùng được. Chỉ `overlays/<mt>/kustomization.yaml` ghim thẻ thật;
-          # áp thẳng base là một nhầm lẫn, và nó phải đổ chứ không được kéo nhầm ảnh.
+          # Thẻ CỐ Ý không dùng được: áp thẳng base là một nhầm lẫn, và nó phải đổ chứ không
+          # được kéo nhầm ảnh. Thẻ thật do job `vigov-deploy` đặt bằng `kubectl set image`
+          # — overlay chỉ ghim thẻ cho LẦN CÀI ĐẦU.
           image: harbor.omicrm.services/ci/vigov-service-documents:CHUA-GHIM-THE
           imagePullPolicy: IfNotPresent
 

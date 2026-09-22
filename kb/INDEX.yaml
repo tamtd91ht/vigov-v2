@@ -8,8 +8,8 @@
 # Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
 
 version: 1
-generated_at: 2026-09-22T14:23:00Z   # `make kb` điền
-from_commit: e0ebacb   # `make kb` điền
+generated_at: 2026-09-22T15:32:38Z   # `make kb` điền
+from_commit: 4c96e9a   # `make kb` điền
 
 budget:
   always_load_max: 27000  # token — trần do người dùng chốt 21/09/2026 (20000 -> 25000 -> 27000)
@@ -82,6 +82,17 @@ load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾ
     expires: 2026-12-19    # tính từ lần cập nhật module MỚI NHẤT, không phải lần sinh tệp
     load_when: "trước khi động vào một module — module ấy đã làm gì, chưa làm gì, nợ khách câu nào"
     warning: "không sửa tay — sửa `kb/90-ephemeral/tien-do/<module>.json` rồi `make kb`. Thủ tục: `/progress`"
+
+  # KHO ANH EM, KHÔNG PHẢI KHO NÀY. `../vigov-require` là bản cài đặt ĐANG CHẠY mà `docs/ui-ux/`
+  # của kho này đã chép ra (README của nó khai ngày 16/09/2026). Tệp dưới đo mức lệch giữa đặc tả
+  # bên ấy và kho này — ĐỌC TÀI LIỆU, chưa đọc mã bên ấy.
+  - id: doi-chieu-vigov-require
+    file: kb/90-ephemeral/doi-chieu-vigov-require.md
+    tier: T5
+    source: CURATED
+    expires: 2026-12-22
+    load_when: "trước khi mượn thiết kế / mã / đường API từ `../vigov-require`, hoặc khi dựng một phân hệ M1–M8 mà kho này chưa có tài liệu nghiệp vụ"
+    warning: "đo 22/09/2026 trên vigov-require@b159f0e · vigov-v2@4c96e9a. Hết hạn 22/12/2026 — sau đó đo lại, đừng tin"
 
 faq_routes:       # định tuyến thẳng — tiết kiệm nhiều token nhất
   "X nằm ở đâu":              kb/30-indexes/code-map.json

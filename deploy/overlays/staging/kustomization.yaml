@@ -35,6 +35,8 @@ patches:
   - path: ingress-moi-truong.yaml
     target: { group: networking.k8s.io, version: v1, kind: Ingress, name: vigov }
 
+# THẺ ẢNH — CHỈ DÙNG CHO LẦN CÀI ĐẦU, không phản ánh thẻ đang chạy. Lý do đầy đủ ở khối
+# cùng tên trong `overlays/prod/kustomization.yaml`.
 images:
   - name: harbor.omicrm.services/ci/vigov-service-platform
     newTag: CHUA-TRIEN-KHAI-LAN-NAO
