@@ -110,12 +110,15 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		ThonToDanPho:   thonToDanPhoMau(),
 		LoaiDonViDanCu: loaiDonViDanCuMau(),
 		KhoiNhiemVu:    khoiNhiemVuMau(),
-		// The three calendar stores, for the same reason and with the same caveat: Register refuses
-		// incomplete Deps whatever it mounts, and today it mounts no calendar route at all — the URL
-		// resource names are being asked rather than guessed (ADR 0011).
-		LichLamViec: lichLamViecMau(),
-		NgayNghiLe:  ngayNghiLeMau(),
-		NgayLamBu:   ngayLamBuMau(),
+		// The three calendar stores AND the write use case behind their eleven write routes, for the
+		// same reason: Register refuses incomplete Deps whatever it mounts, and nothing in this file
+		// calls a calendar route.
+		LichLamViec:    lichLamViecMau(),
+		NgayNghiLe:     ngayNghiLeMau(),
+		NgayLamBu:      ngayLamBuMau(),
+		GhiLichLamViec: ghiLichMau(),
+		GhiNgayNghiLe:  ghiLichMau(),
+		GhiNgayLamBu:   ghiLichMau(),
 		// The deadline table, read and write. Unlike the calendar these ARE mounted — three routes
 		// under `admin.sla` — so Register would refuse this Deps without them.
 		SLA:    slaMau(),

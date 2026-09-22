@@ -228,6 +228,18 @@ func run(log *slog.Logger) error {
 	// because the seeding decision READS the very rows it then writes, inside one transaction — a
 	// second store would be a second connection and the read would not see the transaction.
 	ghiSLA := app.NewSLA(kho, sla)
+	// The WRITE surface of the working calendar — eleven routes over three tables.
+	//
+	// IT IS GIVEN THE SAME THREE STORES the read fields and the gRPC server carry, for the same
+	// reason ghiSLA gets the same *idstore.SLAStore: every decision here is read-decide-write inside
+	// one transaction (does this session overlap, is this date already a swap day, does the commune
+	// already have this seed row), and a second store would be a second connection whose read could
+	// not see the transaction.
+	//
+	// ONE VALUE BEHIND THREE Deps FIELDS. The narrowing is at the routes, not here: three interfaces
+	// so the holiday handler cannot move a working session, one type because the rules that matter
+	// SPAN the three tables (app/lich_lam_viec.go).
+	ghiLich := app.NewLich(kho, lichLamViec, ngayNghiLe, ngayLamBu)
 
 	// 7. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
 	//    cache — and the routes then behave per the CheDoHong each one declared. A service must
@@ -273,12 +285,21 @@ func run(log *slog.Logger) error {
 		ThonToDanPho:   thonToDanPho,
 		LoaiDonViDanCu: loaiDonViDanCu,
 		KhoiNhiemVu:    khoiNhiemVu,
-		// Lịch làm việc của xã (migration 0006) — CHỈ ĐỌC, và chưa có tuyến nào được gắn: tên tài
-		// nguyên URL của ba khái niệm này chưa có dòng trong bảng ánh xạ, nên đang HỎI chứ không
-		// tự dịch (ADR 0011). Ai sửa được lịch của xã cũng chưa ai hỏi.
-		LichLamViec: lichLamViec,
-		NgayNghiLe:  ngayNghiLe,
-		NgayLamBu:   ngayLamBu,
+		// Lịch làm việc của xã (migration 0006) — BA KHO ĐỌC và MỘT USE CASE GHI đứng sau ba trường
+		// ghi. Câu "ai sửa được lịch của xã" đã có lời đáp không bịa ra khoá nào: `admin.sla`, đúng
+		// khoá migration 0001:277 gieo cho "Cấu hình thời hạn xử lý" — vì lịch làm việc chính là nửa
+		// còn lại của màn hình ấy (14-cau-hinh.md §8:318).
+		//
+		// LỊCH RỖNG LÀ THỨ ĐANG LÀM MỌI TUYẾN TÍNH HẠN TỪ CHỐI, y như bảng `sla` rỗng: không có ca
+		// làm việc nào thì một hạn đếm bằng giờ làm việc không bao giờ tới, nên
+		// grpc.AdvanceWorkingHours trả FAILED_PRECONDITION và `documents` trả 409. Ba trường ghi này
+		// là đường duy nhất để xã tự gỡ.
+		LichLamViec:    lichLamViec,
+		NgayNghiLe:     ngayNghiLe,
+		NgayLamBu:      ngayLamBu,
+		GhiLichLamViec: ghiLich,
+		GhiNgayNghiLe:  ghiLich,
+		GhiNgayLamBu:   ghiLich,
 		// Bảng thời hạn xử lý của xã (migration 0008, ADR 0029) — nửa còn lại của ba bảng lịch:
 		// lịch trả lời "lúc nào", bảng này trả lời "bao lâu".
 		//

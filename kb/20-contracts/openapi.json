@@ -3003,6 +3003,363 @@
             }
           }
         }
+      },
+      "post": {
+        "summary": "Thêm một ngày nghỉ lễ của xã — ngày xã KHÔNG làm việc, gồm cả lễ quốc gia lẫn lễ địa phương",
+        "operationId": "identity_post_public_holidays",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "e34272bae737",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.themNgayNghiLeVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.ngayNghiLeRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public-holidays/defaults": {
+      "post": {
+        "summary": "Gieo các ngày nghỉ lễ CỐ ĐỊNH THEO DƯƠNG LỊCH của một năm — BỐN ngày, không phải mười một",
+        "operationId": "identity_post_public_holidays_defaults",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "eb75c48a92d5",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.gieoNgayNghiLeVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.gieoLichRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public-holidays/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Xoá mềm một ngày nghỉ lễ, kèm lý do bắt buộc — dòng ở lại, ngày đó không khai lại được",
+        "operationId": "identity_delete_public_holidays_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "182b2f36c1d5",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.xoaLichVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa một ngày nghỉ lễ — KHÔNG hồi tố lên hạn đã phát ra cho hồ sơ cũ",
+        "operationId": "identity_patch_public_holidays_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "b2d1a3a35774",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.suaNgayNghiLeVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.ngayNghiLeRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/residential-unit-types": {
@@ -4572,6 +4929,276 @@
             }
           }
         }
+      },
+      "post": {
+        "summary": "Thêm một ca làm bù — ngày xã CÓ làm việc dù lịch tuần nói không, kèm giờ làm của chính ngày đó",
+        "operationId": "identity_post_swap_working_days",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "e47e274913c5",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.themNgayLamBuVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.caLamBuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/swap-working-days/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Xoá mềm một ca làm bù, kèm lý do bắt buộc — dòng ở lại vì hạn đã phát ra đếm qua nó",
+        "operationId": "identity_delete_swap_working_days_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "ac7f9f384991",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.xoaLichVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa một ca làm bù — KHÔNG hồi tố lên hạn đã phát ra cho hồ sơ cũ",
+        "operationId": "identity_patch_swap_working_days_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "c64ae43497c8",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.suaNgayLamBuVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.caLamBuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/task-blocs": {
@@ -5333,6 +5960,343 @@
           },
           "401": {
             "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Thêm một ca làm việc vào tuần của xã — nghỉ trưa là khoảng hở giữa hai ca, không phải một cờ",
+        "operationId": "identity_post_working_hours",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "d60166cea3ce",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.themCaLamViecVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.caLamViecRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/working-hours/defaults": {
+      "post": {
+        "summary": "Gieo tuần làm việc mặc định cho xã chưa cấu hình — KHÔNG ghi đè giờ xã đã sửa",
+        "operationId": "identity_post_working_hours_defaults",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "27a670cefcba",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.gieoLichRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/working-hours/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Xoá mềm một ca làm việc, kèm lý do bắt buộc — dòng ở lại, giờ mở ca không cấp lại được",
+        "operationId": "identity_delete_working_hours_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "72bb9cea6d73",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.xoaLichVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa một ca làm việc — KHÔNG hồi tố lên hạn đã phát ra cho hồ sơ cũ",
+        "operationId": "identity_patch_working_hours_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "e006f7647ea5",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.suaCaLamViecVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.caLamViecRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -6942,6 +7906,41 @@
         ],
         "additionalProperties": false
       },
+      "identity.gieoLichRa": {
+        "type": "object",
+        "properties": {
+          "seeded": {
+            "type": "integer"
+          },
+          "kept": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kept",
+          "seeded",
+          "skipped"
+        ],
+        "additionalProperties": false
+      },
+      "identity.gieoNgayNghiLeVao": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "year"
+        ],
+        "additionalProperties": false
+      },
       "identity.gieoSLARa": {
         "type": "object",
         "properties": {
@@ -7176,6 +8175,42 @@
         ],
         "additionalProperties": false
       },
+      "identity.suaCaLamViecVao": {
+        "type": "object",
+        "properties": {
+          "weekday": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "start": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "end": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "end",
+          "note",
+          "start",
+          "weekday"
+        ],
+        "additionalProperties": false
+      },
       "identity.suaCanBoVao": {
         "type": "object",
         "properties": {
@@ -7223,6 +8258,64 @@
           "office_phone",
           "org_unit_id",
           "position"
+        ],
+        "additionalProperties": false
+      },
+      "identity.suaNgayLamBuVao": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "end": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "date",
+          "end",
+          "name",
+          "start"
+        ],
+        "additionalProperties": false
+      },
+      "identity.suaNgayNghiLeVao": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "date",
+          "name"
         ],
         "additionalProperties": false
       },
@@ -7286,6 +8379,30 @@
         ],
         "additionalProperties": false
       },
+      "identity.themCaLamViecVao": {
+        "type": "object",
+        "properties": {
+          "weekday": {
+            "type": "integer"
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "end",
+          "note",
+          "start",
+          "weekday"
+        ],
+        "additionalProperties": false
+      },
       "identity.themCanBoVao": {
         "type": "object",
         "properties": {
@@ -7315,6 +8432,46 @@
           "office_phone",
           "org_unit_id",
           "position"
+        ],
+        "additionalProperties": false
+      },
+      "identity.themNgayLamBuVao": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "end",
+          "name",
+          "start"
+        ],
+        "additionalProperties": false
+      },
+      "identity.themNgayNghiLeVao": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "name"
         ],
         "additionalProperties": false
       },
@@ -7544,6 +8701,18 @@
           "kind",
           "message",
           "work_kind"
+        ],
+        "additionalProperties": false
+      },
+      "identity.xoaLichVao": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },

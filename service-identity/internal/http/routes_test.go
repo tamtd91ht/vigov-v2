@@ -667,12 +667,13 @@ type mayChu struct {
 	thonToDanPho   *thonToDanPhoGia
 	loaiDonViDanCu *loaiDonViDanCuGia
 	khoiNhiemVu    *khoiNhiemVuGia
-	// The commune's working calendar (migration 0006). No route is mounted for these yet — see
-	// the end of Register — so the tests that exercise them mount the handlers themselves through
-	// `them`.
+	// The commune's working calendar (migration 0006). FOUR FAKES FOR THREE TABLES: three read
+	// stores and ONE write use case sitting behind all three write fields, exactly as cmd/server
+	// wires it. See ghiLichGia in lich_ghi_test.go.
 	lichLamViec *lichLamViecGia
 	ngayNghiLe  *ngayNghiLeGia
 	ngayLamBu   *ngayLamBuGia
+	ghiLich     *ghiLichGia
 	// The deadline table (migration 0008). TWO fakes for one table, matching the two Deps fields:
 	// the read is a store, the write is a use case. See slaGia / ghiSLAGia in sla_test.go.
 	sla    *slaGia
@@ -720,6 +721,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	lichLamViec := lichLamViecMau()
 	ngayNghiLe := ngayNghiLeMau()
 	ngayLamBu := ngayLamBuMau()
+	ghiLich := ghiLichMau()
 	sla := slaMau()
 	ghiSLA := ghiSLAMau()
 
@@ -745,6 +747,12 @@ func dungMayChu(t *testing.T) *mayChu {
 		LichLamViec: lichLamViec,
 		NgayNghiLe:  ngayNghiLe,
 		NgayLamBu:   ngayLamBu,
+		// The eleven write routes. Register panics without them, and the panic says why: without a
+		// write surface a commune has no way to fill an empty calendar, and an empty calendar is
+		// what makes every deadline uncomputable.
+		GhiLichLamViec: ghiLich,
+		GhiNgayNghiLe:  ghiLich,
+		GhiNgayLamBu:   ghiLich,
 		// The deadline table, read and write. Register panics without either, which is how an
 		// unwired configuration surface fails at startup rather than at the first commune that
 		// cannot register a single incoming document.
@@ -800,6 +808,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		lichLamViec: lichLamViec,
 		ngayNghiLe:  ngayNghiLe,
 		ngayLamBu:   ngayLamBu,
+		ghiLich:     ghiLich,
 
 		sla:    sla,
 		ghiSLA: ghiSLA,

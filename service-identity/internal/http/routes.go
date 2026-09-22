@@ -291,9 +291,12 @@ type (
 	// the `closure-days` objection that was raised and rejected, is on the routes at the bottom of
 	// Register. Do not reopen it here.
 	//
-	// NO WRITE PATH ON ANY OF THE THREE: who may edit a commune's working calendar has not been
-	// asked — it is the sibling of open question #21 — and a half-written write path looks like a
-	// decision somebody made.
+	// THE THREE READS HAVE THREE WRITE SIBLINGS SINCE 2026-09-23 — LichLamViecGhi, NgayNghiLeGhi
+	// and NgayLamBuGhi below. The sentence that used to stand here said the write path was missing
+	// because *who may edit a commune's calendar had not been asked*. It has an answer that invents
+	// nothing: `admin.sla`, the key migration 0001:277 already seeds for "Cấu hình thời hạn xử lý",
+	// which is the same screen (14-cau-hinh.md §8 names these three tables at :318 as what "giờ làm
+	// việc" means). No new permission key was created — rule 5, invariant 3c.
 
 	// LichLamViecDoc is the commune's ordinary working week.
 	//
@@ -323,6 +326,44 @@ type (
 		TheoNam(ctx context.Context, nam int) ([]domain.CaLamBu, error)
 	}
 
+	// The WRITE surface of the working calendar. THREE INTERFACES OVER ONE *app.Lich, and the split
+	// is not decoration: an interface is the list of things a handler CAN do, so the holiday
+	// handler must not be able to move a working session. One type sits behind them because the
+	// rules that matter here SPAN the three tables — a date that is both a closure and a swap day,
+	// a swap day on a weekday that already works (ADR 0007 decision 9) — and three types would be
+	// three copies of the same three store handles (app/lich_lam_viec.go states it in full).
+	//
+	// EVERY METHOD IS A USE CASE, NEVER A STORE: each one opens the transaction its audit entry
+	// shares (rule 6, invariant 3). There is no signature here that would let a calendar change and
+	// its trail land in two transactions.
+
+	// LichLamViecGhi is the ordinary week: add a session, move one, remove one, sow the default week.
+	LichLamViecGhi interface {
+		ThemCa(ctx context.Context, yc app.YeuCauThemCa, nguoi app.NguoiThucHien) (domain.CaLamViec, error)
+		SuaCa(ctx context.Context, id string, yc app.YeuCauSuaCa, nguoi app.NguoiThucHien) (domain.CaLamViec, error)
+		XoaCa(ctx context.Context, id, lyDo string, nguoi app.NguoiThucHien) error
+		GieoTuanMacDinh(ctx context.Context, nguoi app.NguoiThucHien) (app.KetQuaGieoLich, error)
+	}
+
+	// NgayNghiLeGhi is the closure dates. THE SEED TAKES A YEAR and has no default for it, for the
+	// same reason the read route's `year` is mandatory: "this year" silently changes at midnight on
+	// 31/12.
+	NgayNghiLeGhi interface {
+		ThemNgayNghi(ctx context.Context, yc app.YeuCauThemNgayNghi, nguoi app.NguoiThucHien) (domain.NgayNghiLe, error)
+		SuaNgayNghi(ctx context.Context, id string, yc app.YeuCauSuaNgayNghi, nguoi app.NguoiThucHien) (domain.NgayNghiLe, error)
+		XoaNgayNghi(ctx context.Context, id, lyDo string, nguoi app.NguoiThucHien) error
+		GieoNgayNghiLeMacDinh(ctx context.Context, nam int, nguoi app.NguoiThucHien) (app.KetQuaGieoLich, error)
+	}
+
+	// NgayLamBuGhi is the swap working days. THREE METHODS AND NOT FOUR — there is deliberately no
+	// seed: a swap day exists only because the Prime Minister announced one for a particular year,
+	// so there is no fixed set to sow (domain.KhongCoNgayLamBuMacDinh).
+	NgayLamBuGhi interface {
+		ThemLamBu(ctx context.Context, yc app.YeuCauThemLamBu, nguoi app.NguoiThucHien) (domain.CaLamBu, error)
+		SuaLamBu(ctx context.Context, id string, yc app.YeuCauSuaLamBu, nguoi app.NguoiThucHien) (domain.CaLamBu, error)
+		XoaLamBu(ctx context.Context, id, lyDo string, nguoi app.NguoiThucHien) error
+	}
+
 	// DangNhapUC and DangXuatUC are the use cases. The handlers only translate HTTP; the
 	// business write and its audit entry share one transaction inside these.
 	DangNhapUC interface {
@@ -348,10 +389,22 @@ type Deps struct {
 	LoaiDonViDanCu LoaiDonViDanCuDanhMuc
 	KhoiNhiemVu    KhoiNhiemVuDanhMuc
 	// The commune's working calendar (migration 0006) — GET /api/v1/working-hours,
-	// /api/v1/public-holidays, /api/v1/swap-working-days. Read only; no write route exists.
+	// /api/v1/public-holidays, /api/v1/swap-working-days.
 	LichLamViec LichLamViecDoc
 	NgayNghiLe  NgayNghiLeDoc
 	NgayLamBu   NgayLamBuDoc
+	// The WRITE surface of the same three tables. SIX FIELDS FOR THREE TABLES, read and write, for
+	// the reason given at LichLamViecGhi: the read is a STORE, every write is a USE CASE, because a
+	// write opens the transaction its audit entry shares. In production one *app.Lich satisfies all
+	// three write fields.
+	//
+	// AN EMPTY CALENDAR IS WHAT MAKES grpc.AdvanceWorkingHours ANSWER FAILED_PRECONDITION, and
+	// therefore what makes `service-documents` refuse every entry into the document register and
+	// `service-petitions` refuse every petition. These three fields are the only path by which a
+	// commune can fill it.
+	GhiLichLamViec LichLamViecGhi
+	GhiNgayNghiLe  NgayNghiLeGhi
+	GhiNgayLamBu   NgayLamBuGhi
 	// The commune's processing deadlines in working hours (migration 0008, ADR 0029) — the other
 	// half of the three calendar tables above: those answer "lúc nào", this one answers "bao lâu".
 	//
@@ -426,6 +479,13 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho ngày nghỉ lễ — GET /api/v1/public-holidays sẽ panic khi có người gọi")
 	case d.NgayLamBu == nil:
 		panic("identity/http: thiếu kho ngày làm bù — GET /api/v1/swap-working-days sẽ panic khi có người gọi")
+	case d.GhiLichLamViec == nil || d.GhiNgayNghiLe == nil || d.GhiNgayLamBu == nil:
+		// Refused at construction like every other dependency, and this one has the same second
+		// consequence as GhiSLA below: without these write routes a commune has NO way to fill an
+		// empty working calendar, and an empty calendar makes every deadline uncomputable — so
+		// every entry into the document register and every petition is refused, with the service
+		// running perfectly and nothing saying why.
+		panic("identity/http: thiếu use case ghi lịch làm việc — xã sẽ không có cách nào khai giờ làm việc, ngày nghỉ lễ hay ngày làm bù, và mọi tuyến tính hạn vẫn bị từ chối")
 	case d.SLA == nil:
 		panic("identity/http: thiếu kho thời hạn xử lý — GET /api/v1/sla sẽ panic khi có người gọi")
 	case d.GhiSLA == nil:
@@ -1252,6 +1312,241 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/swap-working-days",
 		authz.AnyAuthenticated("ngày làm bù theo thông báo hằng năm của Thủ tướng quyết định hạn xử lý đúng vào những ngày tồn đọng nhiều nhất trong năm, và mọi ô chọn ngày phải biết ngày nào xã vẫn làm việc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: lịch làm bù lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachCaLamBu)))
+
+	// --- the commune's working calendar, WRITE. ELEVEN ROUTES, ALL `admin.sla` -------------------
+	//
+	// THESE ROUTES ARE THE OTHER HALF OF WHAT UNBLOCKS TWO SERVICES. `ResolveDeadlines` needs TWO
+	// things in order: the number of working hours (`sla`, filled by the three routes below) and
+	// then the calendar to count those hours through (these three tables). With the calendar empty,
+	// domain.TienGioLamViec refuses with `empty_calendar`, grpc.AdvanceWorkingHours turns that into
+	// FAILED_PRECONDITION, and `service-documents` answers 409 on every entry into the register —
+	// exactly as it does for an empty `sla`. Until now there was no route by which a commune could
+	// fix that, which made it a closed loop.
+	//
+	// THEY BREAK THE LOOP BY FILLING THE TABLES. Not one of them softens a refusal: an empty
+	// calendar is still FAILED_PRECONDITION, a date that is both a closure and a swap day is still
+	// refused with no winner picked, and a swap day on a weekday that already works is still
+	// ADR 0007 decision 9. Nothing here may ever become a fallback on the deadline path (rule 10,
+	// forbidden #3; the argument in full at domain.BoGieoCaLamViec).
+	//
+	// `admin.sla` ON ALL ELEVEN, AND NO KEY IS INVENTED. The key exists in the `quyen` table
+	// (migration 0001:277, "Cấu hình thời hạn xử lý") and the calendar is the same screen's other
+	// half — 14-cau-hinh.md §8:318 names these three tables as what "giờ làm việc" means. Rule 5,
+	// invariant 3c: a key no migration seeds is a right no administrator can grant, so the route
+	// would answer 403 to every account forever while its tests stayed green. Rule 5, invariant 3b
+	// is the other half of the argument: these rights are not a Cartesian product to be generated,
+	// and a second key would need a migration on the permission catalogue — a finding for open
+	// question #27, not a decision a route may take.
+	//
+	// THE READS ABOVE STAY AnyAuthenticated AND THAT ASYMMETRY IS DELIBERATE: office hours sit under
+	// every deadline printed on a screen, so a configuration permission on the READ would break
+	// those screens for every non-administrator. Writing is the act that moves a commune's
+	// commitments, and exactly one job does that.
+	//
+	// EVERY ONE OF THE ELEVEN DECLARES idem.KhongCan, AND EACH CLAIM IS EARNED BY A NATURAL KEY OR
+	// BY THE USE CASE WRITING NOTHING — never by hope. The reason is written on each statement.
+	//
+	// ⚠ 409 IS THE STATUS OF EVERY CALENDAR REFUSAL ON THIS SURFACE, and it is 409 rather than 403
+	// on purpose: the caller HOLDS `admin.sla`. What is refused is the operation against the state
+	// of the commune's own calendar, and 403 would send an administrator to the Phân quyền screen
+	// to be granted a right they already have.
+
+	// @summary  Thêm một ca làm việc vào tuần của xã — nghỉ trưa là khoảng hở giữa hai ca, không phải một cờ
+	// @screen   14-cau-hinh §8
+	// 400 is a weekday outside 1–7 (ISO: 1 = thứ Hai … 7 = Chủ nhật, KHÔNG phải getDay()), a time
+	// that is not HH:MM/HH:MM:SS, or a session ending before it starts.
+	// 409 is either of the two states the schema cannot refuse: a session overlapping one the commune
+	// already has (the EXCLUDE constraint needs `btree_gist` — migration 0006:109), or a start minute
+	// already taken on that weekday, INCLUDING by a soft-deleted row.
+	//
+	// @request  themCaLamViecVao
+	// @reply    201 caLamViecRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/working-hours",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("khoá duy nhất (tenant_id, thu, bat_dau) chỉ cho một ca mở đúng phút đó trong một thứ, nên lần gửi thứ hai bị chính khoá ấy từ chối chứ không tạo ca thứ hai — không có dòng trùng nào để chặn")(
+				http.HandlerFunc(h.ThemCaLamViec))))
+
+	// @summary  Sửa một ca làm việc — KHÔNG hồi tố lên hạn đã phát ra cho hồ sơ cũ
+	// @screen   14-cau-hinh §8
+	// 404 is an id matching no live row OF THIS COMMUNE — the same answer for an invented id, a
+	// soft-deleted row and another authority's row, so none can be told apart by trying.
+	//
+	// @request  suaCaLamViecVao
+	// @reply    200 caLamViecRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/working-hours/{id}",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết trên một dòng đã có; use case không ghi gì khi kết quả bằng đúng dòng vừa đọc, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaCaLamViec))))
+
+	// @summary  Xoá mềm một ca làm việc, kèm lý do bắt buộc — dòng ở lại, giờ mở ca không cấp lại được
+	// @screen   14-cau-hinh §8
+	// 400 is a missing or over-long `reason`: rule 7, invariant 1 names `delete_reason`, and a
+	// removal nobody can be asked about is not a removal this surface performs.
+	//
+	// @request  xoaLichVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/working-hours/{id}",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("xoá một dòng đã xoá trả 404 ở cả hai lần vì câu lệnh mang `deleted_at IS NULL`; lần gửi thứ hai không ghi đè lý do của lần xoá thật, nên không có trạng thái nào để bảo vệ")(
+				http.HandlerFunc(h.XoaCaLamViec))))
+
+	// @summary  Gieo tuần làm việc mặc định cho xã chưa cấu hình — KHÔNG ghi đè giờ xã đã sửa
+	// @screen   14-cau-hinh §8
+	// ⚠ GIỜ MẶC ĐỊNH KHÔNG CÓ TRONG ĐẶC TẢ NÀO. domain.BoGieoCaLamViec giữ lập luận đầy đủ: ADR 0007
+	// liệt kê "Giờ hành chính của xã là mấy giờ tới mấy giờ?" là câu CHƯA AI TRẢ LỜI, và phân loại nó
+	// là DỮ LIỆU chứ không phải quy tắc. Bốn con số ở đó là ví dụ của chính migration 0006:90, và là
+	// GIÁ TRỊ KHỞI TẠO xã sửa được ngay ngày đầu — không phải hằng số của phần mềm.
+	// 200 on every run, first or tenth: the request brings the week to a known state rather than
+	// creating one addressable resource, so there is no Location a 201 would owe. `skipped` counts
+	// seed rows NOT written because they would have overlapped a session the commune already had —
+	// the seed button must never be the thing that makes deadlines uncomputable.
+	//
+	// @reply    200 gieoLichRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/working-hours/defaults",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("bộ gieo chỉ CHÈN những ca xã chưa có, quyết định bên trong đúng giao dịch ghi, tính cả dòng đã xoá mềm là 'đã có', và khoá duy nhất (tenant_id, thu, bat_dau) chặn dòng thứ hai — nên lần bấm thứ hai không ghi gì, không ghi đè giờ xã đã sửa, và trả seeded: 0")(
+				http.HandlerFunc(h.GieoCaLamViecMacDinh))))
+
+	// @summary  Thêm một ngày nghỉ lễ của xã — ngày xã KHÔNG làm việc, gồm cả lễ quốc gia lẫn lễ địa phương
+	// @screen   14-cau-hinh §8
+	// 409 is a date the commune has ALREADY declared a ngày làm bù — closed and working on one day.
+	// The system refuses rather than picking a winner: a silent precedence rule would make one of two
+	// VISIBLE configuration rows do nothing, and nobody would ever see which (migration 0006:254).
+	//
+	// @request  themNgayNghiLeVao
+	// @reply    201 ngayNghiLeRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/public-holidays",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("khoá duy nhất (tenant_id, ngay) chỉ cho một dòng mỗi ngày, nên lần gửi thứ hai bị chính khoá ấy từ chối chứ không tạo dòng thứ hai")(
+				http.HandlerFunc(h.ThemNgayNghiLe))))
+
+	// @summary  Sửa một ngày nghỉ lễ — KHÔNG hồi tố lên hạn đã phát ra cho hồ sơ cũ
+	// @screen   14-cau-hinh §8
+	//
+	// @request  suaNgayNghiLeVao
+	// @reply    200 ngayNghiLeRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/public-holidays/{id}",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi kết quả bằng đúng dòng vừa đọc, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaNgayNghiLe))))
+
+	// @summary  Xoá mềm một ngày nghỉ lễ, kèm lý do bắt buộc — dòng ở lại, ngày đó không khai lại được
+	// @screen   14-cau-hinh §8
+	//
+	// @request  xoaLichVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/public-holidays/{id}",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("xoá một dòng đã xoá trả 404 ở cả hai lần vì câu lệnh mang `deleted_at IS NULL`; lần gửi thứ hai không ghi đè lý do của lần xoá thật")(
+				http.HandlerFunc(h.XoaNgayNghiLe))))
+
+	// @summary  Gieo các ngày nghỉ lễ CỐ ĐỊNH THEO DƯƠNG LỊCH của một năm — BỐN ngày, không phải mười một
+	// @screen   14-cau-hinh §8
+	// ⚠ TẾT NGUYÊN ĐÁN VÀ GIỖ TỔ HÙNG VƯƠNG CỐ Ý KHÔNG ĐƯỢC GIEO: cả hai theo ÂM LỊCH, và một phép
+	// quy đổi âm lịch tự viết sai một ngày là một hạn đếm xuyên qua ngày cơ quan đóng cửa — sai đúng
+	// chiều báo cáo một cơ quan là trễ trong khi nó không trễ. NGÀY LIỀN KỀ 02/9 cũng không gieo: Bộ
+	// luật Lao động 2019 điều 112 khoản 3 giao cho Thủ tướng chọn giữa 01/9 và 03/9 TỪNG NĂM. Xã tự
+	// nhập ba nhóm ngày ấy qua POST /api/v1/public-holidays. Lập luận đầy đủ: domain.BoGieoNgayNghiLe.
+	// 400 is a missing `year` — "năm nay" is not a default this code gets to pick, for the same reason
+	// the read route's `year` is mandatory: it would silently change at midnight on 31/12.
+	//
+	// @request  gieoNgayNghiLeVao
+	// @reply    200 gieoLichRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/public-holidays/defaults",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("bộ gieo chỉ CHÈN những ngày xã chưa có trong năm ấy, quyết định bên trong đúng giao dịch ghi, tính cả dòng đã xoá mềm là 'đã có', và khoá duy nhất (tenant_id, ngay) chặn dòng thứ hai — nên lần bấm thứ hai trả seeded: 0 và không ghi đè tên xã đã sửa")(
+				http.HandlerFunc(h.GieoNgayNghiLeMacDinh))))
+
+	// @summary  Thêm một ca làm bù — ngày xã CÓ làm việc dù lịch tuần nói không, kèm giờ làm của chính ngày đó
+	// @screen   14-cau-hinh §8
+	// 409 covers THREE refusals, each one a state the deadline function would otherwise meet later:
+	// the date is also a ngày nghỉ lễ; the weekday ALREADY has sessions in the ordinary week
+	// (ADR 0007 decision 9 — REPLACE and ADD are both defensible and nothing decides between them);
+	// or the session overlaps another swap-day session on that date.
+	//
+	// @request  themNgayLamBuVao
+	// @reply    201 caLamBuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/swap-working-days",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("khoá duy nhất (tenant_id, ngay, bat_dau) chỉ cho một ca mở đúng phút đó trong một ngày, nên lần gửi thứ hai bị chính khoá ấy từ chối chứ không tạo ca thứ hai")(
+				http.HandlerFunc(h.ThemNgayLamBu))))
+
+	// @summary  Sửa một ca làm bù — KHÔNG hồi tố lên hạn đã phát ra cho hồ sơ cũ
+	// @screen   14-cau-hinh §8
+	//
+	// @request  suaNgayLamBuVao
+	// @reply    200 caLamBuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/swap-working-days/{id}",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi kết quả bằng đúng dòng vừa đọc, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaNgayLamBu))))
+
+	// @summary  Xoá mềm một ca làm bù, kèm lý do bắt buộc — dòng ở lại vì hạn đã phát ra đếm qua nó
+	// @screen   14-cau-hinh §8
+	//
+	// @request  xoaLichVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/swap-working-days/{id}",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("xoá một dòng đã xoá trả 404 ở cả hai lần vì câu lệnh mang `deleted_at IS NULL`; lần gửi thứ hai không ghi đè lý do của lần xoá thật")(
+				http.HandlerFunc(h.XoaNgayLamBu))))
 
 	// ---- Cấu hình → Thời hạn xử lý (14-cau-hinh.md §8, migration 0008, ADR 0029) -----------------
 	//

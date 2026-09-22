@@ -452,6 +452,16 @@ export type identity_dongSLARa = {
   "escalate_president_hours": number;
 };
 
+export type identity_gieoLichRa = {
+  "seeded": number;
+  "kept": number;
+  "skipped": number;
+};
+
+export type identity_gieoNgayNghiLeVao = {
+  "year": number | null;
+};
+
 export type identity_gieoSLARa = {
   "seeded": number;
   "kept": number;
@@ -521,6 +531,13 @@ export type identity_quyenMucRa = {
   "label": string;
 };
 
+export type identity_suaCaLamViecVao = {
+  "weekday": number | null;
+  "start": string | null;
+  "end": string | null;
+  "note": string | null;
+};
+
 export type identity_suaCanBoVao = {
   "full_name": string | null;
   "position": string | null;
@@ -528,6 +545,18 @@ export type identity_suaCanBoVao = {
   "org_unit_id": string | null;
   "office_phone": string | null;
   "mobile": string | null;
+};
+
+export type identity_suaNgayLamBuVao = {
+  "date": string | null;
+  "start": string | null;
+  "end": string | null;
+  "name": string | null;
+};
+
+export type identity_suaNgayNghiLeVao = {
+  "date": string | null;
+  "name": string | null;
 };
 
 export type identity_suaSLAVao = {
@@ -543,6 +572,13 @@ export type identity_thanDangNhap = {
   "password": string;
 };
 
+export type identity_themCaLamViecVao = {
+  "weekday": number;
+  "start": string;
+  "end": string;
+  "note": string;
+};
+
 export type identity_themCanBoVao = {
   "full_name": string;
   "position": string;
@@ -550,6 +586,18 @@ export type identity_themCanBoVao = {
   "org_unit_id": string;
   "office_phone": string;
   "mobile": string;
+};
+
+export type identity_themNgayLamBuVao = {
+  "date": string;
+  "start": string;
+  "end": string;
+  "name": string;
+};
+
+export type identity_themNgayNghiLeVao = {
+  "date": string;
+  "name": string;
 };
 
 export type identity_thonToDanPhoRa = {
@@ -619,6 +667,10 @@ export type identity_vanDeSLARa = {
   "kind": string;
   "work_kind": string;
   "message": string;
+};
+
+export type identity_xoaLichVao = {
+  "reason": string;
 };
 
 export type page_Result_documents_vanBanDenRa = {
@@ -1454,6 +1506,85 @@ export type identity_get_public_holidays = {
   };
 };
 
+/** POST /api/v1/public-holidays — Thêm một ngày nghỉ lễ của xã — ngày xã KHÔNG làm việc, gồm cả lễ quốc gia lẫn lễ địa phương */
+export type identity_post_public_holidays = {
+  duongDan: "/api/v1/public-holidays";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_themNgayNghiLeVao;
+  phanHoi: {
+    201: identity_ngayNghiLeRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/public-holidays/defaults — Gieo các ngày nghỉ lễ CỐ ĐỊNH THEO DƯƠNG LỊCH của một năm — BỐN ngày, không phải mười một */
+export type identity_post_public_holidays_defaults = {
+  duongDan: "/api/v1/public-holidays/defaults";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_gieoNgayNghiLeVao;
+  phanHoi: {
+    200: identity_gieoLichRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/public-holidays/{id} — Sửa một ngày nghỉ lễ — KHÔNG hồi tố lên hạn đã phát ra cho hồ sơ cũ */
+export type identity_patch_public_holidays_by_id = {
+  duongDan: "/api/v1/public-holidays/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_suaNgayNghiLeVao;
+  phanHoi: {
+    200: identity_ngayNghiLeRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/public-holidays/{id} — Xoá mềm một ngày nghỉ lễ, kèm lý do bắt buộc — dòng ở lại, ngày đó không khai lại được */
+export type identity_delete_public_holidays_by_id = {
+  duongDan: "/api/v1/public-holidays/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_xoaLichVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/residential-unit-types — Danh mục loại đơn vị dân cư của xã — thôn / tổ dân phố, dùng cho ô chọn Loại và bộ lọc */
 export type identity_get_residential_unit_types = {
   duongDan: "/api/v1/residential-unit-types";
@@ -1842,6 +1973,66 @@ export type identity_get_swap_working_days = {
   };
 };
 
+/** POST /api/v1/swap-working-days — Thêm một ca làm bù — ngày xã CÓ làm việc dù lịch tuần nói không, kèm giờ làm của chính ngày đó */
+export type identity_post_swap_working_days = {
+  duongDan: "/api/v1/swap-working-days";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_themNgayLamBuVao;
+  phanHoi: {
+    201: identity_caLamBuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/swap-working-days/{id} — Sửa một ca làm bù — KHÔNG hồi tố lên hạn đã phát ra cho hồ sơ cũ */
+export type identity_patch_swap_working_days_by_id = {
+  duongDan: "/api/v1/swap-working-days/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_suaNgayLamBuVao;
+  phanHoi: {
+    200: identity_caLamBuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/swap-working-days/{id} — Xoá mềm một ca làm bù, kèm lý do bắt buộc — dòng ở lại vì hạn đã phát ra đếm qua nó */
+export type identity_delete_swap_working_days_by_id = {
+  duongDan: "/api/v1/swap-working-days/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_xoaLichVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/task-blocs — Danh mục khối nhiệm vụ của xã — Khối Uỷ ban / Khối Đảng / Khác, dùng cho ô chọn khối và bộ lọc nhiệm vụ */
 export type identity_get_task_blocs = {
   duongDan: "/api/v1/task-blocs";
@@ -2024,6 +2215,84 @@ export type identity_get_working_hours = {
   phanHoi: {
     200: identity_danhSachCaLamViecRa;
     401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/working-hours — Thêm một ca làm việc vào tuần của xã — nghỉ trưa là khoảng hở giữa hai ca, không phải một cờ */
+export type identity_post_working_hours = {
+  duongDan: "/api/v1/working-hours";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_themCaLamViecVao;
+  phanHoi: {
+    201: identity_caLamViecRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/working-hours/defaults — Gieo tuần làm việc mặc định cho xã chưa cấu hình — KHÔNG ghi đè giờ xã đã sửa */
+export type identity_post_working_hours_defaults = {
+  duongDan: "/api/v1/working-hours/defaults";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_gieoLichRa;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/working-hours/{id} — Sửa một ca làm việc — KHÔNG hồi tố lên hạn đã phát ra cho hồ sơ cũ */
+export type identity_patch_working_hours_by_id = {
+  duongDan: "/api/v1/working-hours/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_suaCaLamViecVao;
+  phanHoi: {
+    200: identity_caLamViecRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/working-hours/{id} — Xoá mềm một ca làm việc, kèm lý do bắt buộc — dòng ở lại, giờ mở ca không cấp lại được */
+export type identity_delete_working_hours_by_id = {
+  duongDan: "/api/v1/working-hours/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_xoaLichVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
     500: httpx_Error;
   };
 };
