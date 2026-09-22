@@ -40,6 +40,40 @@ import (
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
 
+// THE THREE PATTERNS A SESSION UNDER THE FORCED PASSWORD CHANGE MAY STILL REACH, and they are
+// CONSTANTS RATHER THAN LITERALS FOR EXACTLY ONE REASON: `XacThuc` in middleware.go refuses every
+// other route while `phai_doi_mat_khau` is true (open question #9), and it decides that by
+// comparing the request against these same three values. Written twice, the allow-list and the mux
+// would drift — and the drift has no symptom in either direction that a test would catch by
+// accident. Too loose and a person carrying an administrator's password walks into the rest of the
+// system; too tight and they cannot reach the screen that would free them, which is a member of
+// staff locked out of a government system with no way forward at all.
+//
+// THEY CARRY THE METHOD AS WELL AS THE PATH, because that is what `mux.Handle` takes and what the
+// comparison needs. `tools/apidoc` resolves a route pattern given as a same-file constant
+// (tools/apidoc/route.go, mauRoute), so the REST contract is generated from these exactly as it is
+// from a literal.
+//
+// THE FOURTH THING THAT IS ALLOWED IS NOT HERE, because it needs no permission at all: a request
+// carrying NO principal. A Public route — the sign-in screen, the commune's name — never reaches
+// the check. See duocPhepKhiPhaiDoiMatKhau.
+const (
+	// MauDoiMatKhauChinhMinh is the one route that clears the flag. Exported because the forced
+	// change is a behaviour of the whole edge, and a caller assembling this service's chain — or a
+	// test asserting the refusal — needs to name it without copying the string.
+	MauDoiMatKhauChinhMinh = "PUT /api/v1/staff/current/password"
+
+	// mauXemPhienHienTai — "who am I, and why am I being sent to this screen". Without it the
+	// forced-change page cannot render the person's own name, and the client cannot tell a session
+	// that must change its password from one that was simply signed out.
+	mauXemPhienHienTai = "GET /api/v1/sessions/current"
+
+	// mauDangXuat — ending one's own session must never be the thing that is blocked. Somebody who
+	// does not want to change their password on a shared counter machine has to be able to walk
+	// away, and leaving them signed in is worse for everybody than letting them leave.
+	mauDangXuat = "DELETE /api/v1/sessions/{sid}"
+)
+
 // The four collaborators below are interfaces, not the concrete store and use-case types.
 //
 // WHY: the routes and the middleware carry the isolation rules this service exists to enforce —
@@ -89,6 +123,25 @@ type (
 	// NO `Xoa` METHOD. #10's soft delete carries its own permission and the `quyen` table holds no
 	// key that means it — see the header of can_bo_ghi.go. An unused method here would be the
 	// scaffolding that makes the absence look like an oversight.
+	// TaiKhoanCanBoUC is the CREDENTIAL surface — issuing an account, resetting a password, and a
+	// person changing their own (open questions #9, #17).
+	//
+	// SEPARATE FROM CanBoGhiDanhBa, although both are use cases over the same table and both are
+	// reached from the Cấu hình → Người dùng screen. An interface is the list of things a handler
+	// CAN do, and these three are the only operations in this service that mint a working
+	// credential: keeping them on their own type means the five register handlers — which edit
+	// names, telephone numbers and roles — hold no value that could produce one.
+	//
+	// THE SELF ROUTE IS ON THE SAME INTERFACE AS THE TWO ADMINISTRATOR ROUTES even though it is
+	// guarded differently. They are one use case type because they are one invariant: exactly one
+	// of the three clears `phai_doi_mat_khau`, and that is only checkable if all three are written
+	// and read together (app/tai_khoan_can_bo.go).
+	TaiKhoanCanBoUC interface {
+		Cap(ctx context.Context, id string, nguoi app.NguoiThucHien) (app.KetQuaCapMatKhau, error)
+		DatLai(ctx context.Context, id string, nguoi app.NguoiThucHien) (app.KetQuaCapMatKhau, error)
+		DoiCuaChinhMinh(ctx context.Context, yc app.YeuCauDoiMatKhau, nguoi app.NguoiThucHien) error
+	}
+
 	CanBoGhiDanhBa interface {
 		Them(ctx context.Context, yc app.YeuCauThemCanBo, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
 		Sua(ctx context.Context, id string, yc app.YeuCauSuaCanBo, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
@@ -283,8 +336,12 @@ type Deps struct {
 	CanBo       CanBoDoc
 	DanhBa      CanBoDanhBa
 	GhiDanhBa   CanBoGhiDanhBa
-	DangNhap    DangNhapUC
-	DangXuat    DangXuatUC
+	// TaiKhoan is the credential surface: POST /api/v1/staff/{id}/account,
+	// PUT /api/v1/staff/{id}/password and PUT /api/v1/staff/current/password. A use case, not a
+	// store — every method opens the transaction the write and its audit entry share.
+	TaiKhoan TaiKhoanCanBoUC
+	DangNhap DangNhapUC
+	DangXuat DangXuatUC
 
 	Log *slog.Logger
 }
@@ -307,6 +364,12 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho danh bạ cán bộ — hai tuyến đọc cán bộ sẽ panic khi có người gọi")
 	case d.GhiDanhBa == nil:
 		panic("identity/http: thiếu use case ghi danh bạ cán bộ — năm tuyến ghi cán bộ sẽ panic khi có người gọi")
+	case d.TaiKhoan == nil:
+		// Refused at construction, like every other dependency here — and this one has a second
+		// consequence worth naming: without the three credential routes, an account whose
+		// `phai_doi_mat_khau` is true has NO route by which to clear it, so the forced-change gate
+		// in XacThuc would refuse that person everything, permanently.
+		panic("identity/http: thiếu use case tài khoản cán bộ — không cấp, không đặt lại và KHÔNG ĐỔI ĐƯỢC mật khẩu, nên tài khoản bị bắt đổi sẽ kẹt vĩnh viễn")
 	case d.DangNhap == nil || d.DangXuat == nil:
 		panic("identity/http: thiếu use case đăng nhập/đăng xuất")
 	case d.Checker == nil:
@@ -372,7 +435,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    401 httpx.Error
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
-	mux.Handle("DELETE /api/v1/sessions/{sid}",
+	// THE PATTERN IS A CONSTANT, NOT A LITERAL, and the reason is at the declaration: XacThuc
+	// compares against the same value to decide what a forced password change still allows.
+	mux.Handle(mauDangXuat,
 		authz.AnyAuthenticated("mọi tài khoản đã đăng nhập đều được kết thúc phiên của chính mình")(
 			idem.KhongCan("thu hồi một phiên đã thu hồi cho cùng một kết quả")(
 				http.HandlerFunc(h.DangXuat))))
@@ -396,8 +461,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    200 phienHienTaiRa
 	// @reply    401 httpx.Error
 	// @reply    500 httpx.Error
-	mux.Handle("GET /api/v1/sessions/current",
-		authz.AnyAuthenticated("mọi tài khoản đã đăng nhập đều được hỏi 'tôi là ai' — kể cả tài khoản vừa bị gỡ hết vai trò, vốn không còn quyền nào để đòi")(
+	mux.Handle(mauXemPhienHienTai,
+		authz.AnyAuthenticated("mọi tài khoản đã đăng nhập đều được hỏi 'tôi là ai' — kể cả tài khoản vừa bị gỡ hết vai trò, vốn không còn quyền nào để đòi, và kể cả tài khoản đang bị bắt đổi mật khẩu, vốn cần đúng màn hình này để biết vì sao")(
 			http.HandlerFunc(h.XemPhienHienTai)))
 
 	// --- the commune behind this Host ---------------------------------------------------------
@@ -695,6 +760,141 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.user")(
 			idem.KhongCan("PUT mang trạng thái tuyệt đối: gán đúng vai trò đang có thì use case không ghi gì, nên lần gửi thứ hai cho cùng một kết quả")(
 				http.HandlerFunc(h.DoiVaiTroCanBo))))
+
+	// --- the staff register: the CREDENTIAL routes (#9, #17, #18) --------------------------------
+	//
+	// TWO SUB-RESOURCE NOUNS ARE NEW HERE, AND NEITHER HAS A ROW IN
+	// kb/00-foundation/ubiquitous-language.md: `account` and `password`. ADR 0011 says a concept
+	// with no row is a concept to ASK about rather than translate on the spot, so both are written
+	// to make the work testable and BOTH ARE REPORTED AS OPEN NAMING DECISIONS — the same standing
+	// `lockout` has had since it was written one turn earlier. Changing either is still free: no
+	// commune is live.
+	//
+	// WHY THEY ARE TWO NOUNS AND NOT ONE ROUTE WITH TWO MEANINGS. `POST .../account` and
+	// `PUT .../password` do the same mechanical thing — mint a value, hash it, set
+	// `phai_doi_mat_khau` — and they are two acts with two consequences. One creates the ability to
+	// sign in to a government system at all; the other replaces a credential on an ability that
+	// already exists. Folded into one route they would share one audit verb, and a ledger where
+	// "this person was given access" and "this person's password was reset" are the same entry
+	// cannot answer an inspection without somebody interpreting every delta (rule 6, invariant 2).
+	//
+	// `account` IS A STATE SUB-RESOURCE, the same shape as `lockout`: POST creates it. A future
+	// `GET .../account` describing when it was issued fits without a new path, and a `DELETE` —
+	// withdrawing somebody's access while keeping their directory entry — is DELIBERATELY ABSENT.
+	// It is a third act with its own permission, no key in the 35-key `quyen` table means it, and
+	// rule 5, invariant 3c forbids inventing one. Same finding for #27 as the soft delete of #10.
+	//
+	// ALL THREE DECLARE A PERMISSION EXPLICITLY, and the two administrator routes declare
+	// `admin.user` — CHECKED AGAINST THE TABLE, not assumed: it is the key the Cấu hình → Người
+	// dùng tab is specified with (14-cau-hinh.md §12.8), seeded by migration 0001:278, and already
+	// carried by the seven staff routes above. Managing accounts IS what "Quản lý người dùng"
+	// means, so a commune that granted somebody that screen granted them this.
+
+	// Giving somebody an account. POST /api/v1/staff/{id}/account
+	//
+	// 201 CARRIES THE ONE-TIME PASSWORD, and it is the only response in this service that carries a
+	// working credential. It is never stored, never audited and never returned again — see the
+	// header of tai_khoan_can_bo.go.
+	//
+	// idem.KhongCan, AND THE PROTECTION IS REAL RATHER THAN CLAIMED: the account itself is the
+	// natural unique key. `capTaiKhoanCanBo` carries `AND NOT co_tai_khoan` in its WHERE clause and
+	// the use case refuses ErrDaCoTaiKhoan before it, both inside the transaction that holds the row
+	// — so a double-submitted form produces exactly ONE account and ONE audit entry, and the second
+	// request answers 409. That is the opposite of POST /api/v1/staff above, where there is no key
+	// underneath and a duplicate row is permanent.
+	//
+	// WHAT A LOST FIRST RESPONSE COSTS, STATED: the account exists and nobody knows its password.
+	// The administrator resets it, which mints a different value and files a second entry saying so.
+	// Recoverable, visible, and better than the alternative — an idempotency replay cannot return
+	// the password either, because core/idem deliberately never stores a response body.
+	//
+	// @summary  Cấp tài khoản đăng nhập cho một cán bộ đang có trong danh bạ — hệ thống sinh mật khẩu tạm, trả về ĐÚNG MỘT LẦN
+	// @screen   14-cau-hinh §3
+	// @reply    201 capTaiKhoanRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/staff/{id}/account",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			idem.KhongCan("tài khoản LÀ khoá tự nhiên: câu UPDATE mang `AND NOT co_tai_khoan` và use case từ chối trước đó, cả hai trong giao dịch giữ dòng — nên lần gửi thứ hai trả 409 chứ không cấp thêm tài khoản nào")(
+				http.HandlerFunc(h.CapTaiKhoanCanBo))))
+
+	// An administrator resetting somebody's password. PUT /api/v1/staff/{id}/password
+	//
+	// THIS IS OPEN QUESTION #17's WHOLE ANSWER. There is no `/quen-mat-khau` and no
+	// `/dat-lai-mat-khau/:token`: the self-service flow inherits #9's dead loop — a commune's mail
+	// server is per-commune configuration and may not be filled in — so the one moment a person
+	// needs it most, being unable to sign in, is the moment it is least likely to work.
+	//
+	// #14 REFUSES A SELF-TARGET HERE AND IT STOPS SOMETHING REAL, unlike on the account route: this
+	// route does not ask for the current password, because its purpose is to help somebody who
+	// cannot supply one. On #18's SHARED counter machine, an unattended signed-in browser would
+	// otherwise be a complete account takeover with no credential and no distinguishing trail. An
+	// administrator changing their own password uses the route below, which demands the current one.
+	//
+	// idem.Required(idem.MoKhiHong) — THE ONE ROUTE IN THIS SERVICE WITH NO NATURAL KEY AND NO
+	// STATE TO LEAN ON. Each call mints a DIFFERENT password, so a double-click leaves the
+	// administrator reading out a value that the second request invalidated 200ms earlier, and the
+	// person is locked out with nothing on any screen saying why.
+	//
+	// MoKhiHong AND NOT DongKhiHong, which is the opposite choice from POST /api/v1/staff and needs
+	// its reason stated: this route IS the recovery path. Refusing it while Redis is down would
+	// leave the person it exists to rescue locked out for the length of a cache outage, and the harm
+	// it guards against — a superseded password read aloud — is visible immediately and fixed by
+	// resetting again. Nothing here is permanent: no record is created, no code is issued (rule 7).
+	//
+	// @summary  Quản trị viên xã đặt lại mật khẩu hộ một cán bộ — sinh mật khẩu tạm mới, trả về ĐÚNG MỘT LẦN
+	// @screen   14-cau-hinh §3
+	// @reply    200 capTaiKhoanRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/staff/{id}/password",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.DatLaiMatKhauCanBo))))
+
+	// The person changing their own password. PUT /api/v1/staff/current/password
+	//
+	// `current` IS THE SAME SELECTOR `GET /api/v1/sessions/current` AND `GET /api/v1/communes/
+	// current` ALREADY USE: "the one this request is", derived from the request itself and never
+	// from a parameter. It cannot be a request body field and it cannot be `{id}` — a person naming
+	// whose password they are setting is rule 4, invariant 2 applied to staff.
+	//
+	// IT DOES NOT COLLIDE WITH `PUT /api/v1/staff/{id}/password` ABOVE, and that is a rule of
+	// net/http rather than luck: a literal segment beats a wildcard because this pattern matches a
+	// strict subset of that one, so ServeMux registers both and routes `current` here. It is pinned
+	// by a test rather than left to a reader's memory — if it ever inverted, a person changing their
+	// own password would be answered by the administrator route, which requires `admin.user` and
+	// would refuse most of the commune. A staff id is a ULID and is never the literal `current`.
+	//
+	// AnyAuthenticated AND NOT A PERMISSION, for the same reason as sign-out: every account must be
+	// able to do this, including one whose roles were all withdrawn, and INCLUDING one sitting under
+	// the forced change of #9 — which is most of the accounts that will ever call it. Requiring a
+	// permission would mean the people who must change their password are the people who cannot.
+	//
+	// THE CURRENT PASSWORD IS MANDATORY, INCLUDING ON THE FORCED-CHANGE SCREEN. See doiMatKhauVao.
+	//
+	// idem.KhongCan — the state protects it, and visibly: after the first request the old password
+	// no longer verifies, so a second identical request answers 400, and every session including
+	// this one has been revoked, so it more likely answers 401. Either way exactly one change and
+	// one audit entry.
+	//
+	// @summary  Cán bộ tự đổi mật khẩu của chính mình — bắt buộc ở lần đăng nhập đầu, và là đường DUY NHẤT gỡ cờ bắt đổi
+	// @screen   15-phu-luc-giao-dien-chung §1
+	// @request  doiMatKhauVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle(MauDoiMatKhauChinhMinh,
+		authz.AnyAuthenticated("mọi tài khoản phải tự đổi được mật khẩu của mình — kể cả tài khoản không còn quyền nào, và NHẤT LÀ tài khoản đang bị bắt đổi mật khẩu lần đầu (#9), vốn bị chặn mọi tuyến khác")(
+			idem.KhongCan("đổi xong thì mật khẩu cũ không còn đúng và mọi phiên đã bị thu hồi, nên lần gửi thứ hai bị chính trạng thái từ chối — đúng một lần đổi, đúng một vết")(
+				http.HandlerFunc(h.DoiMatKhauChinhMinh))))
 
 	// --- the commune's organisational chart ----------------------------------------------------
 	//

@@ -193,12 +193,46 @@ func TestPhienHienTaiKhongTraTokenHashHayDuLieuCaNhan(t *testing.T) {
 	if strings.Contains(than, tok) {
 		t.Fatal("phản hồi chứa CHÍNH token phiên — trả lại một thông tin xác thực đang còn hiệu lực")
 	}
+
+	// THE FORBIDDEN LIST IS APPLIED TO THE VALUES, AND THE KEY SET IS CHECKED SEPARATELY — which is
+	// STRICTER than scanning the whole document, not looser.
+	//
+	// It used to scan the raw body, and that broke the day a legitimate boolean called
+	// `must_change_password` was added (open question #9): a FIELD NAME containing the word
+	// "password" is not a credential, and the obvious repair — deleting "password" from the list —
+	// would have removed the guard that matters. Splitting the two questions keeps both teeth:
+	//
+	//	the key set     EXACT. Any new field at all fails here until somebody looks at it and says
+	//	                what it is. That is a stronger promise than the substring scan ever made.
+	//	the values      no credential, no personal data, whatever they are called.
+	var goi map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &goi); err != nil {
+		t.Fatalf("thân không phải JSON: %v — %s", err, than)
+	}
+	muonKhoa := map[string]bool{
+		"sid": true, "expires_at": true, "staff": true, "role": true,
+		"permissions": true, "must_change_password": true,
+	}
+	for k := range goi {
+		if !muonKhoa[k] {
+			t.Errorf("phản hồi có trường %q chưa ai xét — nói rõ nó là gì rồi mới thêm vào danh sách", k)
+		}
+	}
+	for k := range muonKhoa {
+		if _, co := goi[k]; !co {
+			t.Errorf("thiếu trường %q trong phản hồi", k)
+		}
+	}
+	var giaTri strings.Builder
+	for _, v := range goi {
+		giaTri.Write(v)
+	}
 	for _, cam := range []string{
 		"0900000000", "argon2", "mat_khau", "password", "refresh", "token",
 		"dien_thoai_co_quan", "phone", emailDung, "email",
 	} {
-		if strings.Contains(strings.ToLower(than), strings.ToLower(cam)) {
-			t.Errorf("phản hồi chứa %q: %s", cam, than)
+		if strings.Contains(strings.ToLower(giaTri.String()), strings.ToLower(cam)) {
+			t.Errorf("GIÁ TRỊ trong phản hồi chứa %q: %s", cam, than)
 		}
 	}
 }

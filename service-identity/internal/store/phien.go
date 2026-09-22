@@ -55,6 +55,33 @@ var (
 )
 
 // ThoiHanPhien is how long a session may live without being refreshed.
+//
+// ONE WORKING DAY — open question #18, DECIDED 2026-09-22, and the figure is a SAFETY TRADE-OFF
+// rather than a preference, which is why the next two paragraphs matter more than the number.
+//
+// IT IS A CONSTANT AND MUST NOT BECOME PER-COMMUNE CONFIGURATION. Rule 1, invariant 10 sends
+// commune-specific values to runtime configuration, and this one deliberately goes the other way:
+// the customer's decision says so outright ("KHÔNG để xã tự cấu hình"). A commune that set it to 30
+// days would not be expressing a local administrative practice — it would be turning off the thing
+// that keeps the audit trail true, and rule 6, invariant 2 is not a local matter.
+//
+// WHY A LONG SESSION IS A FALSIFIED AUDIT TRAIL RATHER THAN A CONVENIENCE. The computer at the
+// one-stop-shop counter is SHARED: several members of staff sit at it during a day. A session that
+// outlives the shift means the person sitting down at 14:00 acts under the name of the person who
+// sat there at 09:00 — and every entry written in between states, with the authority of a
+// government record, that somebody did something they did not do. That is far worse than being
+// asked to sign in again.
+//
+// THE `Ghi nhớ đăng nhập` CHECKBOX STAYS ON THE FORM (15-phu-luc-giao-dien-chung.md §1) AND DOES
+// NOT EXTEND THIS. #18 kept the box and fixed the ceiling: whatever it is ticked to, the session
+// ends when the shift does. Note what is absent as a consequence — `thanDangNhap` (internal/http/
+// handler.go) has NO `remember_me` field, and adding one would be re-deciding a settled question.
+//
+// 12 HOURS IS THE TOP OF THE RANGE THE DECISION GAVE (~8–12). It is what this constant already
+// held before #18 was answered, so the answer changed nothing here — and that is worth writing
+// down, because "the code already did the right thing" is indistinguishable from "nobody checked"
+// unless somebody says which. Pinned by TestThoiHanPhienLaMotNgayLamViec, so a later edit to a
+// figure that looks arbitrary has to argue with the decision instead of with a magic number.
 const ThoiHanPhien = 12 * time.Hour
 
 // Tao opens a session and returns the sid plus the refresh token.

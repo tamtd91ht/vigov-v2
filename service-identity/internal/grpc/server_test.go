@@ -209,6 +209,21 @@ func TestResolveMoiCredentialKhongDungDuocChoCungMotCauTraLoi(t *testing.T) {
 			func(d *Deps) { d.Phien = &phienGia{err: idstore.ErrPhienHetHan} }},
 		{"tài khoản khoá hoặc đã xoá mềm", &identityv1.ResolveStaffPrincipalRequest{SessionToken: tokA},
 			func(d *Deps) { d.CanBo = canBoGia{err: idstore.ErrCanBoKhongTonTai} }},
+		// OPEN QUESTION #9: the account is still carrying a password an administrator chose. Such a
+		// session may do exactly ONE thing — change that password — and that is an HTTP route of
+		// THIS service. There is nothing in documents, petitions, finance or comms it has any
+		// business reaching, so the four calling services get no principal at all.
+		//
+		// MUTATION THAT MUST TURN THIS RED: delete the `cb.PhaiDoiMatKhau` branch from
+		// ResolveStaffPrincipal. Every other test in this file stays green, and a temporary
+		// password quietly becomes a full account everywhere except identity itself.
+		{"tài khoản đang mang mật khẩu tạm (#9)", &identityv1.ResolveStaffPrincipalRequest{SessionToken: tokA},
+			func(d *Deps) {
+				d.CanBo = canBoGia{cb: domain.CanBo{
+					ID: idCanBo, Ma: "CB001", CoTaiKhoan: true, DangHoatDong: true,
+					PhaiDoiMatKhau: true,
+				}}
+			}},
 	}
 
 	for _, c := range ca {

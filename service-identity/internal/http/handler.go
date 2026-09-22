@@ -46,6 +46,21 @@ type phanHoiDangNhap struct {
 	Sid       string    `json:"sid"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Staff     canBoGon  `json:"staff"`
+
+	// MustChangePassword tells the client to go straight to the change-password screen — open
+	// question #9, decided 2026-09-22.
+	//
+	// IT IS A CONVENIENCE FOR THE CLIENT AND NEVER THE CONTROL. The control is XacThuc, which
+	// refuses every other route of this service while the flag is set, and ResolveStaffPrincipal,
+	// which answers "no principal" to the other four services. A client that ignores this field
+	// gets 403 `password_change_required` on the first thing it tries — the same reading rule 5,
+	// forbidden #1 takes of the permission list on GET /api/v1/sessions/current.
+	//
+	// WHY IT IS RETURNED AT ALL: without it the browser learns the account is restricted only by
+	// being refused, and a 403 on an ordinary screen is indistinguishable from a missing
+	// permission. The person would be told they lack rights when what they need is to pick a
+	// password.
+	MustChangePassword bool `json:"must_change_password"`
 }
 
 type canBoGon struct {
@@ -128,6 +143,9 @@ func (h *Handler) DangNhap(w http.ResponseWriter, r *http.Request) {
 			FullName: kq.CanBo.HoTen,
 			Position: kq.CanBo.ChucVu,
 		},
+		// Read off the account row the use case just authenticated — the same single source
+		// XacThuc derives its refusal from, never a second copy written onto the session.
+		MustChangePassword: kq.CanBo.PhaiDoiMatKhau,
 	})
 }
 

@@ -1890,7 +1890,7 @@
         "x-vigov-screen": "15-phu-luc-giao-dien-chung §1",
         "x-vigov-permission": {
           "kind": "any-authenticated",
-          "reason": "mọi tài khoản đã đăng nhập đều được hỏi 'tôi là ai' — kể cả tài khoản vừa bị gỡ hết vai trò, vốn không còn quyền nào để đòi"
+          "reason": "mọi tài khoản đã đăng nhập đều được hỏi 'tôi là ai' — kể cả tài khoản vừa bị gỡ hết vai trò, vốn không còn quyền nào để đòi, và kể cả tài khoản đang bị bắt đổi mật khẩu, vốn cần đúng màn hình này để biết vì sao"
         },
         "x-vigov-task": "4141103d6d0a",
         "responses": {
@@ -2205,6 +2205,66 @@
         }
       }
     },
+    "/api/v1/staff/current/password": {
+      "put": {
+        "summary": "Cán bộ tự đổi mật khẩu của chính mình — bắt buộc ở lần đăng nhập đầu, và là đường DUY NHẤT gỡ cờ bắt đổi",
+        "operationId": "identity_put_staff_current_password",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "15-phu-luc-giao-dien-chung §1",
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "mọi tài khoản phải tự đổi được mật khẩu của mình — kể cả tài khoản không còn quyền nào, và NHẤT LÀ tài khoản đang bị bắt đổi mật khẩu lần đầu (#9), vốn bị chặn mọi tuyến khác"
+        },
+        "x-vigov-task": "0fb90e38e305",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.doiMatKhauVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/staff/{id}": {
       "parameters": [
         {
@@ -2377,6 +2437,93 @@
         }
       }
     },
+    "/api/v1/staff/{id}/account": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Cấp tài khoản đăng nhập cho một cán bộ đang có trong danh bạ — hệ thống sinh mật khẩu tạm, trả về ĐÚNG MỘT LẦN",
+        "operationId": "identity_post_staff_by_id_account",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user"
+        },
+        "x-vigov-task": "458219ffede7",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.capTaiKhoanRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/staff/{id}/lockout": {
       "parameters": [
         {
@@ -2472,6 +2619,109 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/identity.canBoTomTat"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/staff/{id}/password": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "summary": "Quản trị viên xã đặt lại mật khẩu hộ một cán bộ — sinh mật khẩu tạm mới, trả về ĐÚNG MỘT LẦN",
+        "operationId": "identity_put_staff_by_id_password",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user"
+        },
+        "x-vigov-task": "0f6e0fbdacb9",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.capTaiKhoanRa"
                 }
               }
             }
@@ -4280,6 +4530,23 @@
         ],
         "additionalProperties": false
       },
+      "identity.capTaiKhoanRa": {
+        "type": "object",
+        "properties": {
+          "staff": {
+            "$ref": "#/components/schemas/identity.canBoTomTat"
+          },
+          "temporary_password": {
+            "type": "string",
+            "description": "⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — Mật khẩu tạm dùng MỘT LẦN, khách chốt 22/09/2026 (câu mở #9): quản trị viên đọc lại cho cán bộ, máy chủ không giữ bản trần và không trả lại lần thứ hai. Đổi ở lần đăng nhập đầu là bắt buộc."
+          }
+        },
+        "required": [
+          "staff",
+          "temporary_password"
+        ],
+        "additionalProperties": false
+      },
       "identity.danhSachBoPhanRa": {
         "type": "object",
         "properties": {
@@ -4423,6 +4690,24 @@
         },
         "required": [
           "role_id"
+        ],
+        "additionalProperties": false
+      },
+      "identity.doiMatKhauVao": {
+        "type": "object",
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "writeOnly": true
+          },
+          "new_password": {
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
         ],
         "additionalProperties": false
       },
@@ -4570,10 +4855,14 @@
           },
           "staff": {
             "$ref": "#/components/schemas/identity.canBoGon"
+          },
+          "must_change_password": {
+            "type": "boolean"
           }
         },
         "required": [
           "expires_at",
+          "must_change_password",
           "sid",
           "staff"
         ],
@@ -4607,10 +4896,14 @@
             "items": {
               "type": "string"
             }
+          },
+          "must_change_password": {
+            "type": "boolean"
           }
         },
         "required": [
           "expires_at",
+          "must_change_password",
           "permissions",
           "role",
           "sid",

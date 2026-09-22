@@ -20,6 +20,11 @@ const doc: PhienDaDoc = {
     staff: { code: "CB-001", full_name: "Huỳnh Văn 1", position: "Chủ tịch UBND xã" },
     role: { code: "chu-tich-ubnd", name: "Chủ tịch UBND", is_leader: true },
     permissions: ["admin.user"],
+    // Câu mở #9, khách chốt 22/09/2026: `false` là "không bị bắt đổi", trạng thái của một người
+    // đã dùng tài khoản bình thường — đúng tiền đề của mọi ca trong tệp này. Trường là BẮT BUỘC
+    // trong hợp đồng, nên `tsc` đỏ khi nó vắng thay vì để một `undefined` lặng lẽ đọc thành
+    // "không bắt đổi" ở màn hình thật.
+    must_change_password: false,
   },
 };
 

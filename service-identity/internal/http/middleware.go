@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/authz"
@@ -43,6 +44,24 @@ type PhienHienTai struct {
 	// (rule 3, forbidden #1; rule 8). Two strings can leak nothing a response already shows.
 	HoTen  string
 	ChucVu string
+
+	// PhaiDoiMatKhau is "this account is still carrying a password somebody else chose" — open
+	// question #9, decided 2026-09-22, column `nguoi_dung.phai_doi_mat_khau` (migration 0009 §1).
+	//
+	// IT IS COPIED FROM THE ACCOUNT ROW ON EVERY REQUEST AND IS NOT STORED ON THE SESSION, and that
+	// is the design decision this field exists to record. The obvious alternative — a flag written
+	// onto `phien` when the session is opened — would be a SECOND COPY of a fact the account row
+	// already owns, and the two drift in the one situation that matters: an administrator resets
+	// somebody's password while that person is signed in. The account says "must change"; a session
+	// flag written at sign-in still says "no", and that session carries on working with the
+	// authority of somebody whose credential has just been taken away from them. Derived, it cannot
+	// drift — the very next request reads the new value (rule 9's one-line test: a fact a tool can
+	// rebuild must not be written down a second time).
+	//
+	// WHAT IT COSTS: nothing. XacThuc already reads this row on every request to find out whether
+	// the account is locked or withdrawn, and `phai_doi_mat_khau` is already in that SELECT list
+	// (store.cotCanBo). There is no extra query and no extra column.
+	PhaiDoiMatKhau bool
 }
 
 type ctxKeyPhien struct{}
@@ -166,10 +185,49 @@ func XacThuc(d Deps) func(http.Handler) http.Handler {
 				MaCanBo: cb.Ma,
 				// ph.HetHanLuc, not claims.ExpiresAt: the registry is what expiry and revocation
 				// are decided on, and the two can differ.
-				HetHanLuc: ph.HetHanLuc,
-				HoTen:     cb.HoTen,
-				ChucVu:    cb.ChucVu,
+				HetHanLuc:      ph.HetHanLuc,
+				HoTen:          cb.HoTen,
+				ChucVu:         cb.ChucVu,
+				PhaiDoiMatKhau: cb.PhaiDoiMatKhau,
 			})
+
+			// 6b. THE FORCED PASSWORD CHANGE — open question #9, decided 2026-09-22.
+			//
+			// A session opened by an account that is still carrying a password an administrator
+			// chose MAY DO EXACTLY ONE THING: change that password. Everything else is refused
+			// here, at the edge, for every route of this service including ones written later.
+			//
+			// WHY THE REFUSAL IS AN ALLOW-LIST AND NOT A CHECK ON EACH ROUTE. A per-route
+			// declaration would be closed-by-default in name only: the failure mode is a route
+			// somebody adds without thinking about this at all, and with a per-route check that
+			// route is silently OPEN. The list names three patterns and refuses the rest, so the
+			// default for anything new is "refused" (rule 5, invariant 2, applied to a second axis).
+			//
+			// WHY IT LIVES INSIDE XacThuc RATHER THAN IN A SECOND MIDDLEWARE. A second middleware is
+			// a second thing to mount, and the day somebody assembles this chain and forgets it,
+			// nothing turns red: every test passes, every screen works, and the only difference is
+			// that a temporary password is now a full account. Here it cannot be mounted apart from
+			// the thing that builds the principal.
+			//
+			// WHY THIS IS PLACED AFTER THE PRINCIPAL IS BUILT AND NOT BEFORE. The allowed routes
+			// need it: GET /api/v1/sessions/current answers "who am I", and the change itself has to
+			// know whose password it is setting.
+			//
+			// 403 AND NOT 401. The session IS valid; what is refused is this operation until the
+			// password is changed. A 401 makes the browser clear the session and go to the sign-in
+			// screen, where the person signs in correctly and arrives back in exactly this state —
+			// a loop with no way out. The code `password_change_required` is what the admin web
+			// routes on, and it is deliberately specific enough to act on.
+			//
+			// NOTHING IS LOGGED HERE. This is an ordinary state of an ordinary account, not a
+			// security signal like the commune mismatch above, and a line per request of a person
+			// who has not yet changed their password would be noise in a pipeline shared by 200+
+			// communes.
+			if cb.PhaiDoiMatKhau && !duocPhepKhiPhaiDoiMatKhau(r) {
+				httpx.WriteError(w, http.StatusForbidden, "password_change_required",
+					"Tài khoản đang dùng mật khẩu tạm. Vui lòng đổi mật khẩu trước khi tiếp tục sử dụng hệ thống.", "")
+				return
+			}
 
 			// 7. Last-seen stamp. Deliberately outside any transaction and its failure ignored:
 			// it is a diagnostic column, and failing a real request because a timestamp could
@@ -179,6 +237,37 @@ func XacThuc(d Deps) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// duocPhepKhiPhaiDoiMatKhau reports whether this request is one of the three a session under the
+// forced password change may still make.
+//
+// IT COMPARES AGAINST THE ROUTE PATTERNS THEMSELVES — the constants routes.go registers with — so
+// the allow-list and the mux cannot say different things. Written as three literals here, a
+// renamed path would leave this function quietly refusing the very screen that frees the account.
+//
+// THE THREE, AND WHY EACH IS NOT NEGOTIABLE:
+//
+//	the change itself      obviously. Without it the flag can never be cleared.
+//	sessions/current       the forced-change screen has to render the person's name, and the client
+//	                       has to be able to tell "must change password" from "signed out".
+//	sign-out               somebody who will not change their password on a shared counter machine
+//	                       has to be able to leave. Leaving them signed in is the worse outcome.
+//
+// THE SIGN-OUT PATTERN CARRIES A WILDCARD, so it is matched by its prefix rather than by equality,
+// and the prefix is DERIVED from the same constant rather than written again. The trailing check
+// refuses anything deeper: `DELETE /api/v1/sessions/{sid}` is one segment, and a longer path under
+// it would be a different route that this list has not considered.
+func duocPhepKhiPhaiDoiMatKhau(r *http.Request) bool {
+	yeuCau := r.Method + " " + r.URL.Path
+	if yeuCau == MauDoiMatKhauChinhMinh || yeuCau == mauXemPhienHienTai {
+		return true
+	}
+	dauDangXuat := strings.TrimSuffix(mauDangXuat, "{sid}")
+	if sid, co := strings.CutPrefix(yeuCau, dauDangXuat); co {
+		return sid != "" && !strings.Contains(sid, "/")
+	}
+	return false
 }
 
 // vanTay is a short, one-way fingerprint of a secret, so two log lines can be correlated

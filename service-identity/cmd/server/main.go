@@ -200,6 +200,15 @@ func run(log *slog.Logger) error {
 	// rather than reusing `canBo` directly: every method opens the transaction that the business
 	// write and its audit entry share (rule 6, invariant 3).
 	ghiDanhBa := app.NewDanhBaCanBo(kho, canBo)
+	// The CREDENTIAL surface (open questions #9, #17, both decided 2026-09-22): issuing an account,
+	// an administrator resetting a password, and a person changing their own.
+	//
+	// IT IS GIVEN THE SAME *idstore.CanBoStore as the register above AND the session registry, and
+	// the second one is not optional: skills/session-and-token required #7 says a password change
+	// revokes every open session, and that revocation shares the transaction with the credential
+	// write (rule 6, invariant 3). Wired without it, a reset would leave the sessions opened with
+	// the old password working — which is the one thing a reset exists to stop.
+	taiKhoan := app.NewTaiKhoanCanBo(kho, canBo, phien)
 
 	// 7. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
 	//    cache — and the routes then behave per the CheDoHong each one declared. A service must
@@ -262,9 +271,13 @@ func run(log *slog.Logger) error {
 		// built. Register panics without it, so an unwired write surface fails at startup rather
 		// than at the first administrator who tries to add a member of staff.
 		GhiDanhBa: ghiDanhBa,
-		DangNhap:  dangNhap,
-		DangXuat:  dangXuat,
-		Log:       log,
+		// The three credential routes. Register panics without it, and the panic says why: an
+		// account carrying a temporary password would have no route by which to clear the flag, so
+		// the forced-change gate in XacThuc would refuse that person everything, permanently.
+		TaiKhoan: taiKhoan,
+		DangNhap: dangNhap,
+		DangXuat: dangXuat,
+		Log:      log,
 	}
 
 	mux := http.NewServeMux()

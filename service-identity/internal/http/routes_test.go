@@ -595,6 +595,11 @@ type dangNhapGia struct {
 	tok     string
 	hetHan  time.Time
 	loi     error
+
+	// canBo overrides the account the sign-in answers with. nil means canBoMau(). One case needs an
+	// account carrying the forced password change of open question #9, and that state is a FIELD OF
+	// THE ACCOUNT ROW rather than of the session — see PhienHienTai.PhaiDoiMatKhau.
+	canBo *domain.CanBo
 }
 
 func (u *dangNhapGia) Chay(_ context.Context, yc app.YeuCauDangNhap) (app.KetQuaDangNhap, error) {
@@ -606,12 +611,16 @@ func (u *dangNhapGia) Chay(_ context.Context, yc app.YeuCauDangNhap) (app.KetQua
 	if yc.Email != emailDung || yc.MatKhau != matKhauDung {
 		return app.KetQuaDangNhap{}, app.ErrDangNhapThatBai
 	}
+	cb := canBoMau()
+	if u.canBo != nil {
+		cb = *u.canBo
+	}
 	return app.KetQuaDangNhap{
 		Sid:       u.sid,
 		Token:     u.tok,
 		Refresh:   "refresh-gia-khong-dung-den",
 		HetHanLuc: u.hetHan,
-		CanBo:     canBoMau(),
+		CanBo:     cb,
 	}, nil
 }
 
@@ -643,6 +652,9 @@ type mayChu struct {
 	// a separate fake from danhBa even though one *CanBoStore sits behind both in production. See
 	// CanBoGhiDanhBa.
 	ghiDanhBa *ghiDanhBaGia
+	// taiKhoan is the CREDENTIAL surface: the two administrator routes and the self-change route.
+	// See taiKhoanGia in tai_khoan_can_bo_test.go.
+	taiKhoan *taiKhoanGia
 	// idem is the duplicate-request store the chain installs. In memory, per harness — see the
 	// note in dungLai.
 	idem      *khoIdemGia
@@ -692,6 +704,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	canBo := &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}}
 	danhBa := danhBaMau()
 	ghiDanhBa := ghiDanhBaMau()
+	taiKhoan := taiKhoanMau()
 	quyen := quyenMau()
 	vaiTro := vaiTroMau()
 	boPhan := boPhanMau()
@@ -733,6 +746,9 @@ func dungMayChu(t *testing.T) *mayChu {
 		// The five write routes. Register panics without it, which is how an unwired write surface
 		// is caught at construction rather than by the first administrator who tries to use it.
 		GhiDanhBa: ghiDanhBa,
+		// The three credential routes (#9, #17). Register panics without it, and the panic says why:
+		// an account under the forced change would have no route by which to clear the flag.
+		TaiKhoan: taiKhoan,
 		// The harness gives Deps.Xa its OWN directory value, not the one the edge is built with
 		// below, although both start from the same map. Two values is what lets a test make the
 		DangNhap: &dangNhapGia{
@@ -758,6 +774,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		canBo:     canBo,
 		danhBa:    danhBa,
 		ghiDanhBa: ghiDanhBa,
+		taiKhoan:  taiKhoan,
 		idem:      khoIdemMau(),
 		quyen:     quyen,
 		vaiTro:    vaiTro,
@@ -918,10 +935,37 @@ func TestDangNhapKhongTraDuLieuCaNhanVaKhongTraHash(t *testing.T) {
 		`{"email":"`+emailDung+`","password":"`+matKhauDung+`"}`, "")
 	doiMa(t, w, http.StatusCreated)
 
+	// THE FORBIDDEN LIST IS APPLIED TO THE VALUES, AND THE KEY SET IS CHECKED SEPARATELY — the same
+	// split, for the same reason, as TestPhienHienTaiKhongTraTokenHashHayDuLieuCaNhan. Scanning the
+	// raw body made a legitimate boolean named `must_change_password` (open question #9) look like a
+	// leaked credential, and the obvious repair would have been to delete "password" from the list —
+	// removing the guard that matters. Checking the key set EXACTLY is stricter than the substring
+	// scan ever was: any new field fails until somebody says what it is.
 	than := w.Body.String()
+	var goi map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &goi); err != nil {
+		t.Fatalf("thân không phải JSON: %v — %s", err, than)
+	}
+	muonKhoa := map[string]bool{
+		"sid": true, "expires_at": true, "staff": true, "must_change_password": true,
+	}
+	for k := range goi {
+		if !muonKhoa[k] {
+			t.Errorf("phản hồi đăng nhập có trường %q chưa ai xét", k)
+		}
+	}
+	for k := range muonKhoa {
+		if _, co := goi[k]; !co {
+			t.Errorf("thiếu trường %q trong phản hồi đăng nhập", k)
+		}
+	}
+	var giaTri strings.Builder
+	for _, v := range goi {
+		giaTri.Write(v)
+	}
 	for _, cam := range []string{"0900000000", "argon2", "dien_thoai_co_quan", "phone", "mat_khau", "password"} {
-		if strings.Contains(strings.ToLower(than), strings.ToLower(cam)) {
-			t.Errorf("phản hồi đăng nhập chứa %q: %s", cam, than)
+		if strings.Contains(strings.ToLower(giaTri.String()), strings.ToLower(cam)) {
+			t.Errorf("GIÁ TRỊ trong phản hồi đăng nhập chứa %q: %s", cam, than)
 		}
 	}
 }

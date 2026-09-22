@@ -70,6 +70,19 @@ type phienHienTaiRa struct {
 	// Sorted, and never null: an account whose roles were all withdrawn gets [], which renders as
 	// an app with no menu rather than as a client crash on `null.includes`.
 	Permissions []string `json:"permissions"`
+
+	// MustChangePassword — open question #9. The same field the sign-in response carries, for the
+	// same reason, and it matters MORE here: this is the one route a restricted session may still
+	// call, so it is where a client that reloaded the page, or opened a second tab, finds out why
+	// everything else answers 403.
+	//
+	// IT DESCRIBES, IT DOES NOT DECIDE. The refusal is XacThuc's; this only lets the interface say
+	// something true instead of showing a screen full of failures.
+	//
+	// THE PERMISSION LIST ABOVE IS STILL RETURNED IN FULL while this is true, and deliberately so:
+	// it is what this account WILL hold, and emptying it would state something false about the
+	// person. What they may do right now is decided at the edge, not here.
+	MustChangePassword bool `json:"must_change_password"`
 }
 
 // vaiTroGon is the caller's role as it leaves the API. Three fields, and no fourth is coming: this
@@ -171,6 +184,8 @@ func (h *Handler) XemPhienHienTai(w http.ResponseWriter, r *http.Request) {
 			Position: ph.ChucVu,
 		},
 		Permissions: make([]string, 0, len(quyen)),
+		// From the account row the edge read on this very request, not from a stored session flag.
+		MustChangePassword: ph.PhaiDoiMatKhau,
 	}
 	// Left nil — marshalled as null — when there is no role. The zero value of the pointer IS the
 	// answer here, which is why the store returns a bool rather than an empty struct.

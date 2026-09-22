@@ -227,6 +227,12 @@ export type identity_capQuyenRa = {
   "permission": string;
 };
 
+export type identity_capTaiKhoanRa = {
+  "staff": identity_canBoTomTat;
+  /** ⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — Mật khẩu tạm dùng MỘT LẦN, khách chốt 22/09/2026 (câu mở #9): quản trị viên đọc lại cho cán bộ, máy chủ không giữ bản trần và không trả lại lần thứ hai. Đổi ở lần đăng nhập đầu là bắt buộc. */
+  "temporary_password": string;
+};
+
 export type identity_danhSachBoPhanRa = {
   "items": Array<identity_boPhanRa>;
 };
@@ -263,6 +269,11 @@ export type identity_danhSachVaiTroRa = {
 
 export type identity_datVaiTroVao = {
   "role_id": string;
+};
+
+export type identity_doiMatKhauVao = {
+  "current_password": string;
+  "new_password": string;
 };
 
 export type identity_khoiNhiemVuRa = {
@@ -310,6 +321,7 @@ export type identity_phanHoiDangNhap = {
   "sid": string;
   "expires_at": string;
   "staff": identity_canBoGon;
+  "must_change_password": boolean;
 };
 
 export type identity_phienHienTaiRa = {
@@ -318,6 +330,7 @@ export type identity_phienHienTaiRa = {
   "staff": identity_canBoGon;
   "role": identity_vaiTroGon | null;
   "permissions": Array<string>;
+  "must_change_password": boolean;
 };
 
 export type identity_quyenMucRa = {
@@ -1089,6 +1102,23 @@ export type identity_post_staff = {
   };
 };
 
+/** PUT /api/v1/staff/current/password — Cán bộ tự đổi mật khẩu của chính mình — bắt buộc ở lần đăng nhập đầu, và là đường DUY NHẤT gỡ cờ bắt đổi */
+export type identity_put_staff_current_password = {
+  duongDan: "/api/v1/staff/current/password";
+  phuongThuc: "PUT";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_doiMatKhauVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/staff/{id} — Chi tiết một cán bộ trong xã */
 export type identity_get_staff_by_id = {
   duongDan: "/api/v1/staff/{id}";
@@ -1121,6 +1151,26 @@ export type identity_patch_staff_by_id = {
   phanHoi: {
     200: identity_canBoTomTat;
     400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/staff/{id}/account — Cấp tài khoản đăng nhập cho một cán bộ đang có trong danh bạ — hệ thống sinh mật khẩu tạm, trả về ĐÚNG MỘT LẦN */
+export type identity_post_staff_by_id_account = {
+  duongDan: "/api/v1/staff/{id}/account";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: identity_capTaiKhoanRa;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
@@ -1164,6 +1214,26 @@ export type identity_delete_staff_by_id_lockout = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/staff/{id}/password — Quản trị viên xã đặt lại mật khẩu hộ một cán bộ — sinh mật khẩu tạm mới, trả về ĐÚNG MỘT LẦN */
+export type identity_put_staff_by_id_password = {
+  duongDan: "/api/v1/staff/{id}/password";
+  phuongThuc: "PUT";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_capTaiKhoanRa;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };

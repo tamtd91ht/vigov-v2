@@ -372,6 +372,28 @@ func (s *Server) ResolveStaffPrincipal(ctx context.Context, req *identityv1.Reso
 		return nil, s.loi(ctx, err, "ResolveStaffPrincipal/can_bo")
 	}
 
+	// 4b. THE ACCOUNT IS STILL CARRYING A PASSWORD SOMEBODY ELSE CHOSE — open question #9, decided
+	// 2026-09-22. NO PRINCIPAL, and the four calling services then treat the request exactly as
+	// they treat an expired cookie: authz.Public serves, everything else answers 401.
+	//
+	// WHY A REFUSAL AND NOT A FLAG ON THE WIRE. #9 says such a session may do ONE thing — change
+	// that password — and the route that does it is an HTTP route of THIS service. There is nothing
+	// in documents, petitions, finance or comms that such a session has any business reaching, so a
+	// flag on StaffPrincipal would be a field four services each have to remember to honour, and
+	// the one that forgets is the one where a temporary password is a full account. Refusing here
+	// is the same decision made once, in the one place all four already depend on.
+	//
+	// IT IS THE TWIN OF XacThuc's ALLOW-LIST, NOT A DUPLICATE OF IT. That edge has three routes to
+	// let through and refuses the rest with 403; this edge has none to let through, so the answer
+	// is the contract's ordinary "not usable". Both read the same column of the same row on the
+	// same request — there is no second copy of the fact, and no place for the two to drift.
+	//
+	// NOTHING IS LOGGED. This is an ordinary account state, not the security signal step 2 raises,
+	// and a line per request would be noise across 200+ communes.
+	if cb.PhaiDoiMatKhau {
+		return khongCoPrincipal(), nil
+	}
+
 	// 5. The grants, read live, through the SAME predicate the guard path uses
 	// (store.truyVanQuyenGoc). A second predicate written here would drift from it, and drift in
 	// either direction is a defect with no error attached: looser and the web draws what the
