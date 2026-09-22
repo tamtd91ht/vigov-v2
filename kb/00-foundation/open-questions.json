@@ -2,7 +2,7 @@
   {
     "id": 1,
     "question": "Khi sáp nhập / chia tách xã, dữ liệu xã cũ xử lý ra sao?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "Quyết định hình dạng tenant_id. Nếu tenant_id mang nghĩa (mã hành chính, tên miền), lần sáp nhập đầu tiên buộc sửa khoá ngoại trên toàn bộ dữ liệu lịch sử — tức sửa tài liệu lưu trữ, thứ pháp luật không cho phép.",
     "code_signals": [
       {
@@ -20,7 +20,11 @@
     "ask_before": [
       "thiết kế bảng đầu tiên",
       "sinh tenant_id đầu tiên"
-    ]
+    ],
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "SÁP NHẬP: `tenant_id` giữ mờ đục (ULID) — phần đắt nhất ĐÃ đúng sẵn. Xã sáp nhập ĐÁNH DẤU NGỪNG HOẠT ĐỘNG, dữ liệu và mã giữ nguyên (luật 7 bất biến 6); xã mới nhận `tenant_id` MỚI; một bản ghi kế thừa nối hai xã cho đường tra cứu lịch sử CHỈ ĐỌC (`ResolveTenantSuccession` đã có trong proto). KHÔNG gộp dữ liệu hai xã vào một `tenant_id`: hồ sơ của xã cũ do xã cũ ban hành.",
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa"
   },
   {
     "id": 2,
@@ -52,7 +56,7 @@
   {
     "id": 4,
     "question": "Cấp huyện/tỉnh xem tổng hợp nhiều xã TỚI MỨC CHI TIẾT NÀO — chỉ số đếm theo lĩnh vực, hay tới từng phiếu; ai được đọc; và lĩnh vực hạn chế `can-bo` (Thái độ / tác phong cán bộ) có nằm trong số liệu rời khỏi xã không?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "Đây là cửa duy nhất cố ý mở xuyên ranh giới cách ly — nơi mọi rò rỉ nghiêm trọng sẽ đi qua. Nguyên tắc an toàn: chỉ đọc, chỉ số liệu tổng hợp, phạm vi tính từ cây tổ chức (không nhận từ client), mọi lần đọc ghi nhật ký. PHẦN ĐÃ TRẢ LỜI LÀM PHẦN CÒN LẠI NẶNG HƠN CHỨ KHÔNG NHẸ ĐI: nay đã chắc là CÓ đường đọc xuyên xã, nên mức chi tiết là thứ duy nhất còn giữ được ranh giới. Riêng `can-bo` là lĩnh vực chỉ quyền `feedback.restricted` mới xem được trong chính xã đó (docs/ui-ux/09:80) — để nó vào một con số cấp tỉnh là mở một cửa mà ngay trong xã còn đang khoá.",
     "code_signals": [
       {
@@ -70,7 +74,10 @@
     ],
     "partial_answer": "ĐÃ TRẢ LỜI PHẦN 'cấp trên có tổng hợp theo LĨNH VỰC không' = CÓ, xuyên 200+ xã. Hệ quả: bộ mã lĩnh vực là bộ mã đóng ở tầng nền tảng, xã chỉ đổi được nhãn — ADR 0026. PHẦN CÒN LẠI VẪN MỞ và là nội dung câu hỏi ở trên.",
     "partial_answered_on": "2026-09-20",
-    "adr": "kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md"
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa",
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "ĐỌC XUYÊN XÃ: chỉ SỐ ĐẾM theo lĩnh vực, KHÔNG tới từng phiếu. Lĩnh vực `can-bo` KHÔNG nằm trong bất kỳ số liệu nào rời khỏi xã — ngay trong xã nó đã cần `feedback.restricted`. Phạm vi tính từ cây tổ chức, không nhận từ client. Mọi lần đọc ghi vết."
   },
   {
     "id": 5,
@@ -402,7 +409,7 @@
   {
     "id": 19,
     "question": "Công dân SỬA lời khai cư trú đã được cán bộ xác thực thì sao — mất hiệu lực xác thực cũ, hay phải đi qua một quy trình?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "ADR 0023 §A chốt quan hệ công dân↔xã mang HAI sự thật tách rời: công dân khai gì, và xã đã xác thực chưa. Câu này quyết định bản ghi có LỊCH SỬ PHIÊN BẢN hay không — và lịch sử phiên bản là thứ không thêm được sau khi đã có dữ liệu thật, vì các phiên bản trước đó đã không được lưu và không dựng lại được. Nếu sửa là ghi đè lặng lẽ thì một lời khai đã xác thực có thể bị thay bằng nội dung khác mà vẫn mang dấu 'đã xác thực' — tức việc xác thực của cán bộ được gán cho một nội dung cán bộ chưa từng đọc. Đó là hỏng nặng hơn hẳn việc mất dữ liệu: nó tạo ra một xác nhận của cơ quan nhà nước cho một nội dung không ai xác nhận.",
     "code_signals": [
       {
@@ -416,12 +423,15 @@
       "viết migration cho bảng quan hệ công dân↔xã",
       "viết màn hình cho công dân sửa lời khai cư trú"
     ],
-    "adr": "kb/10-decisions/0023-thuat-ngu-kenh-cong-dan.md"
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa",
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "SỬA LỜI KHAI ĐÃ XÁC THỰC: cờ xác thực tự động về `chưa xác thực`, và bản trước khi sửa ĐƯỢC GIỮ LẠI (lịch sử phiên bản). Ghi đè lặng lẽ sẽ tạo ra một xác nhận của cơ quan nhà nước cho nội dung cán bộ chưa từng đọc."
   },
   {
     "id": 20,
     "question": "Khoá quyền cho việc cán bộ xác thực lời khai cư trú tên là gì?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "CHẶN VIỆC VIẾT ROUTE, không chỉ là một câu hỏi đặt tên. Luật 5 bất biến 1 bắt mọi endpoint khai quyền tường minh, và bất biến 3b bắt khoá quyền là MỘT chuỗi phẳng đúng bằng chuỗi màn Phân quyền hiện ra và bảng `quyen` lưu — nên đặt tên sai là một migration trên dữ liệu phân quyền đang chạy, không phải một lần đổi tên biến. Khoá này CHƯA TỒN TẠI trong bảng `quyen` (migration 0001 của identity mới có nhóm `feedback.*`, `admin.*`…), và ADR 0011 cấm tự dịch một khái niệm chưa có dòng trong bảng ánh xạ. Tự đặt rồi sửa sau là đúng cái giá mà mục `feedback.*` trong ubiquitous-language.md đang phải trả.",
     "code_signals": [
       {
@@ -435,12 +445,15 @@
       "khai route cho màn xác thực lời khai cư trú",
       "thêm bất kỳ khoá quyền mới nào vào migration"
     ],
-    "adr": "kb/10-decisions/0023-thuat-ngu-kenh-cong-dan.md"
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa",
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "KHOÁ QUYỀN: `citizen.verify`. Nhóm `citizen` là nhóm thứ mười một mà đặc tả đếm tới nhưng không liệt kê. Cần migration nạp khoá — rẻ đúng hôm nay vì chưa xã nào chạy thật."
   },
   {
     "id": 21,
     "question": "Xã sửa được DANH SÁCH MÃ trạng thái nhiệm vụ, hay chỉ sửa được NHÃN và THỨ TỰ?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "ĐẶC TẢ TỰ MÂU THUẪN, VÀ CẢ HAI CA HỎNG ĐỀU LÀM ĐƯỢC BẰNG THAO TÁC MÀN HÌNH ĐANG CHO PHÉP — không cần một lỗi phần mềm nào. `docs/ui-ux/02-nhiem-vu.md:214` gọi trạng thái là danh mục \"sửa được ở Cấu hình\", và `docs/ui-ux/14-cau-hinh.md:176` liệt kê đúng danh mục ấy với 7 mục; mỗi dòng danh mục có nút `Tắt` (`14-cau-hinh.md:161`), và `:182` nói mục nguồn hệ thống không xoá được NHƯNG ĐƯỢC TẮT. Trong khi đó `02-nhiem-vu.md:227-231` vẽ một máy trạng thái có hướng đi CỐ ĐỊNH, và `:235` gắn quyền `task.approve` vào đúng bước `cho-duyet -> hoan-thanh`. Hệ quả: (1) xã THÊM một mã thì sinh ra trạng thái không lối vào, không lối ra — nhiệm vụ rơi vào đó nằm lại vĩnh viễn, mà Kanban vẫn vẽ cột ấy như cột bình thường; (2) xã TẮT `hoan-thanh` thì KHÔNG nhiệm vụ nào của cả xã kết thúc được, `task.approve` mất đích đến, và chỉ số báo cáo mất mẫu số. Ca (2) nặng hơn vì nó KHÔNG phải kẽ hở: đặc tả cho phép đúng thao tác làm sập vòng đời. Tiền lệ đã có: luật 10 điều kiện dừng #2 cấm đúng việc này cho vòng đời phiếu phản ánh — vòng đời nhiệm vụ chưa có luật tương ứng, nên hôm nay không gì chặn và không gì đỏ vào ngày một xã bấm `Tắt`.",
     "code_signals": [
       {
@@ -460,7 +473,10 @@
       "viết route sửa trạng thái nhiệm vụ",
       "viết máy chuyển trạng thái nhiệm vụ"
     ],
-    "adr": "kb/10-decisions/0024-so-huu-danh-muc-tham-chieu.md"
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa",
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "TRẠNG THÁI NHIỆM VỤ: xã sửa được NHÃN và THỨ TỰ, KHÔNG sửa được DANH SÁCH MÃ. Nhóm danh mục này KHÔNG có nút `Tắt`: tắt một trạng thái đang có nhiệm vụ nằm trong đó là làm những nhiệm vụ ấy rơi khỏi mọi bộ lọc."
   },
   {
     "id": 22,
@@ -543,7 +559,7 @@
   {
     "id": 25,
     "question": "Vết của một hành vi CHƯA THUỘC XÃ NÀO ghi ở đâu — bắt đầu từ lần đăng nhập của công dân, xảy ra trước khi chọn xã?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "CHẶN MÃ CHỨ KHÔNG CHẶN CÂU CHỮ, và đó là chỗ nó khác một mâu thuẫn tài liệu thông thường. ADR 0020 bất biến 5 đòi mỗi lần đăng nhập ghi vết `lúc nào · từ IP nào · XÃ NÀO` (0020-xac-thuc-so-dien-thoai-cong-dan.md:106). Nhưng phiên công dân ra đời TRƯỚC khi có xã: core/httpx/citizen.go:52-58 ghi thẳng rằng TenantID rỗng là \"một câu trả lời thật, không phải lỗi\", vì ADR 0005 tách ba lớp và ở lớp khám phá công dân đã có phiên mà chưa chọn xã nào. ADR 0022 dựng hẳn một lớp endpoint `KhongThuocXa` cho đúng khoảnh khắc ấy (0022-ria-kenh-cong-dan.md:69,82) nhưng KHÔNG NÓI GÌ về việc ghi vết ở lớp đó — im lặng chứ không mâu thuẫn ra mặt, nên không ai đọc ra cho tới lúc ngồi viết tuyến. Tầng kiểu thì đã chốt sẵn theo hướng ngược lại: core/audit.Write chỉ nhận `*store.ScopedTx`, cố ý — \"There is no overload that writes standalone, because that overload is exactly the bug\" (core/audit/audit.go:63-68) — và Entry.validate() từ chối TenantID rỗng (audit.go:49-52). Kho phiên đã phải đi đường vòng cho đúng lý do ấy: TaoChuaChonXa nhận `*sql.Tx` THÔ vì core/store không sinh nổi giao dịch có phạm vi khi chưa có xã, For(ctx) panic (service-identity/internal/store/phien_cong_dan.go:319-329; ThuHoiChuaChonXa:396-408 cùng lý do). Cộng lại: viết tuyến đăng nhập công dân mà vẫn giữ luật 6 bất biến 3 — vết đi trong CÙNG giao dịch với thay đổi — thì KHÔNG BIÊN DỊCH ĐƯỢC. Đây không phải một cài đặt còn thiếu, là một quyết định chưa ai ra. BỐN HƯỚNG ĐÃ CÂN NGÀY 20/09/2026, KHÔNG HƯỚNG NÀO ĐƯỢC CHỌN: (A) một bảng nhật ký tầng NỀN TẢNG riêng, không mang tenant_id, append-only như audit_log, ghi bằng `*sql.Tx` thô; (B) nới core/audit nhận giao dịch thô — bác, vì để sửa một tuyến mà xoá đúng bức tường kiểu mạnh nhất của kho, và mở cửa ấy cho cả tám dịch vụ chứ không riêng identity; (C) không ghi vết lúc đăng nhập, gộp vào vết \"chọn xã\" — bác, vì đăng nhập rồi KHÔNG chọn xã thì không còn vết nào, mà đó đúng là ca cần ghi nhất: người đang thử một token điện thoại lấy được dừng lại đúng ở bước ấy; (D) đảo luồng, chọn xã trước rồi mới đăng nhập — bác, vì mâu thuẫn ADR 0005 §ba lớp, biến TaoChuaChonXa thành mã chết, và buộc client tự khai xã trên một tuyến chưa xác thực (luật 1 cấm #2). Hướng A đang có vẻ đúng nhất, nhưng nó là MỘT BẢNG MỚI ở tầng nền tảng, và \"dịch vụ nào sở hữu bảng ấy\" là luật 2 bất biến 1 — không tự quyết được.",
     "code_signals": [
       {
@@ -569,12 +585,15 @@
       "nới core/audit.Write nhận giao dịch không có phạm vi",
       "viết migration cho bảng nhật ký tầng nền tảng"
     ],
-    "adr": "kb/10-decisions/0020-xac-thuc-so-dien-thoai-cong-dan.md"
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa",
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "VẾT CHƯA THUỘC XÃ: ghi vào một BẢNG NHẬT KÝ RIÊNG ở tầng nền tảng. KHÔNG nới `core/audit.Write` nhận giao dịch không phạm vi — nới rồi rút lại là sửa mọi chỗ đã dùng ở cả tám dịch vụ, còn một bảng riêng thì gỡ được mà không ai phải chứng minh gì."
   },
   {
     "id": 26,
     "question": "Phiếu dân gửi CHƯA ĐƯỢC PHÂN LOẠI thì chưa có hạn xử lý xong: chỉ số \"xử lý đúng hạn\" của xã tính trên mẫu số nào, và có trần bắt buộc phân loại trong bao lâu không?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "LỘ RA TỪ ADR 0028 QUYẾT ĐỊNH E, không lộ ra từ bất kỳ câu nào đã hỏi. `han_xu_ly_xong` chỉ tồn tại từ lúc cán bộ chốt lĩnh vực, nên một phiếu nằm ở `da-tiep-nhan` KHÔNG THỂ quá hạn xử lý — nó chỉ quá hạn TIẾP NHẬN. Hai hệ quả, và cả hai đều làm được bằng việc KHÔNG làm gì: (1) mẫu số của chỉ số \"xử lý đúng hạn\" không chứa phiếu chưa phân loại, nên một xã phân loại chậm lại có chỉ số xử lý ĐẸP HƠN — con số thưởng cho đúng hành vi nó phải phạt; (2) không có mốc thứ hai nào buộc phiếu rời `da-tiep-nhan`: đồng hồ tiếp nhận quá hạn rồi vẫn chạy, và phiếu có thể nằm đó vô hạn với một người dân đang giữ mã tra cứu. Hai đường ra đều là câu của khách: coi quá hạn tiếp nhận là đủ — và khi ấy MỌI báo cáo phải hiện SỐ PHIẾU CHƯA PHÂN LOẠI ngay cạnh tỷ lệ đúng hạn, nếu không tỷ lệ ấy đọc ra sai; hoặc đặt một trần bắt buộc phân loại, hết trần thì phần mềm tự chốt `khac` và ấn định hạn theo dòng mặc định — tức phần mềm tự phát ra một cam kết, thứ phải có người ký.",
     "code_signals": [
       {
@@ -594,12 +613,15 @@
       "viết job quét phiếu quá hạn",
       "viết màn hình báo cáo phản ánh"
     ],
-    "adr": "kb/10-decisions/0028-moc-dat-han-hai-dong-ho.md"
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa",
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "TRẦN PHÂN LOẠI: 1 NGÀY LÀM VIỆC kể từ tiếp nhận, đếm bằng GIỜ LÀM VIỆC qua `identity.AdvanceWorkingHours` (ADR 0007). Phiếu quá trần mà chưa phân loại TÍNH LÀ TRỄ trong mẫu số — nếu không, xã phân loại chậm lại có chỉ số ĐẸP HƠN."
   },
   {
     "id": 27,
     "question": "Đặc tả ghi tiêu đề 43 quyền / 11 nhóm nhưng chỉ liệt kê 33 khoá / 10 nhóm: TÁM khoá còn thiếu là những khoá nào, và NHÓM THỨ MƯỜI MỘT là nhóm gì?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "KHÔNG PHẢI LỆCH GIỮA ĐẶC TẢ VỚI MÃ — LỆCH BÊN TRONG CHÍNH ĐẶC TẢ, và đó là lý do không ai đọc ra nó cho tới khi ngồi đếm. Đã đếm bằng cây cú pháp chứ không bằng mắt: docs/ui-ux/14-cau-hinh.md:104 ghi tiêu đề `Bốn mươi ba quyền, gom theo 11 nhóm`, nhưng bảng ngay dưới (:106-140) chỉ có 33 khoá thuộc 10 nhóm — admin · announcement · asset · budget · content · document · feedback · petition · report · task. service-identity/migrations/0001_init.sql nạp ĐÚNG 33 khoá ấy, không thừa không thiếu một khoá nào; migration 0007 (2026-09-20) thêm hai khoá đã được khách chốt, thành 35 khoá / 10 nhóm. Tức MƯỜI khoá và TRỌN MỘT NHÓM chưa bao giờ được viết ra ở đâu, và phần còn thiếu nay là TÁM khoá cộng một nhóm. Hệ quả không phải thẩm mỹ: luật 5 bất biến 1 bắt mọi endpoint khai quyền tường minh, nên MỖI khoá thiếu là một tuyến chưa viết được, hoặc tệ hơn là một tuyến viết bằng khoá hàng xóm — tức cấp quyền ngoài ý định cho một nhóm cán bộ mà không ai thấy, vì màn Phân quyền chỉ hiện một ô. Hai ca cụ thể đã chặn việc và ĐANG CHỜ đúng câu này: câu #11 (không có khoá nào nghĩa là `xem đầy đủ thông tin cán bộ`, nên số di động cán bộ chỉ còn hai trạng thái che tất hoặc mở tất) và câu #20 (khoá cho việc cán bộ xác thực lời khai cư trú chưa tồn tại). Cả hai rất có thể nằm trong tám khoá thiếu, và NHÓM THỨ MƯỜI MỘT có thể chính là nhóm của kênh công dân — nhưng đó là suy đoán, và suy đoán ở đây đẻ ra một khoá quyền không xoá lại được.",
     "code_signals": [
       {
@@ -625,13 +647,16 @@
       "viết route danh sách cán bộ",
       "khai route cho màn xác thực lời khai cư trú"
     ],
-    "adr": "kb/10-decisions/0030-hai-khoa-quyen-phan-anh.md",
-    "open_gap": "Khách đã chốt ĐÚNG HAI khoá cần ngay (feedback.classify, feedback.unmask) và CỐ Ý để lại phần còn thiếu. Đừng bịa tám khoá kia cho đủ số 43."
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa",
+    "open_gap": "Khách đã chốt ĐÚNG HAI khoá cần ngay (feedback.classify, feedback.unmask) và CỐ Ý để lại phần còn thiếu. Đừng bịa tám khoá kia cho đủ số 43.",
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "CHỈ NẠP KHOÁ NÀO CÓ TUYẾN THẬT CẦN, không bịa đủ tám: `citizen.verify` (#20) · `admin.user.delete` (#10) · `admin.user.revoke`. Con số 43 trong tiêu đề coi như CHƯA GIẢI THÍCH ĐƯỢC, ghi đúng như thế thay vì lấp đầy."
   },
   {
     "id": 28,
     "question": "Sau khi Mini App chuyển sang ViHAT Group (ADR 0031), pháp nhân nào VẬN HÀNH backend `vihat-miniapp` — và do đó, bên NHẬN dữ liệu mà chính sách riêng tư khai với người dân là ai?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "CÂU NÀY CHẶN MÃ, KHÔNG CHỈ CHẶN CÂU CHỮ. Tuyến duy nhất rời khỏi máy người dân là POST /api/v1/sessions tới backend `vihat-miniapp` (citizen-app/src/features/dang-nhap/hop-dong.ts:47), và văn bản đang KHẲNG ĐỊNH với người dân rằng nơi nhận là `máy chủ của VihatSoftware`: chinh-sach-rieng-tu.ts:157, :205, :300 (số dòng đo ở commit 917ce3f). ĐỪNG LẪN HAI VẾ: vế BÊN PHÁT HÀNH / BÊN CHỊU TRÁCH NHIỆM VỀ CHÍNH SÁCH đã được chốt là ViHAT Group ngày 21/09 và được phép sửa; vế BÊN NHẬN DỮ LIỆU là vế còn mở, và nó đang nằm trong cùng những câu văn ấy. Hai câu nữa nằm NGOÀI tệp chính sách và rất dễ bị bỏ sót khi rà: citizen-app/src/features/tinh-nang/noi-dung.ts:73 và :75 (`Chỉ máy chủ của VihatSoftware mới đổi được mã thành số điện thoại / vị trí`), và chinh-sach.test.ts chốt câu chữ ấy bằng một ca test — nên sửa nửa vời thì test đỏ, còn sửa cho test xanh lại thành khai sai đủ chỗ. Ngày 21/09/2026 MỘT vế đã đổi: pháp nhân đứng tên Mini App nay là ViHAT Group. Vế kia — ai vận hành máy chủ nhận hai mã đăng nhập — CHƯA AI XÁC NHẬN. Đây là khai báo về BÊN NHẬN DỮ LIỆU theo Nghị định 13/2023/NĐ-CP (luật 3), không phải một dòng thương hiệu: khai sai bên nhận là sai với người dân về nơi dữ liệu của họ đi tới, và nó sai theo CẢ HAI chiều — bên vận hành đổi mà câu không đổi thì chính sách sai; câu đổi mà bên vận hành không đổi thì cũng sai.",
     "code_signals": [
       {
@@ -647,13 +672,16 @@
       "trỏ VIGOV_API_HOST tới máy chủ thật",
       "nộp hồ sơ Mini App cho Zalo dưới tên ViHAT Group"
     ],
-    "adr": "kb/10-decisions/0031-chuyen-phap-nhan-mini-app-sang-vihat-group.md",
-    "open_gap": "CHỈ MỘT tín hiệu, và chỉ theo MỘT chiều — có chủ ý. Chiều còn lại (`máy chủ của VihatSoftware`, hôm nay 6 lần trong mã được quét) là hiện trạng đứng yên: khai nó thành tín hiệu thì hook kêu mỗi phiên khi chưa ai làm gì, và tệ hơn, luật áp đảo của drift_guard (nen_canh_bao: rest*3 > top_n thì im) sẽ làm hook CÂM đúng lúc tệp bị sửa dở dang — to nhất khi không có gì xảy ra, im nhất lúc nguy hiểm. Mẫu hiện tại khớp 0 chỗ hôm nay (đã đo bằng chính iter_files + bo_chu_thich của drift_guard), nên nó chỉ kêu khi có người thật sự sửa. `(?!vihatsoftware)` trong mẫu KHÔNG phải trang trí: bản đầu tiên không có nó đã khớp nhầm đúng lối viết văn bản đang dùng — `máy chủ của VihatSoftware (thuộc ViHAT Group)` — tức câu GIỮ NGUYÊN bên nhận lại bị báo là đã đổi. Giữ vế chặn ấy, nếu không mẫu này chết vì nhiễu. ĐỪNG thêm mẫu `ViHAT Group` trần: 11 chỗ hợp lệ đang mang chuỗi ấy (nội dung giới thiệu tập đoàn), và đó là dương tính giả ngay từ phiên sau. Và KHÔNG gộp câu tệp vector biểu tượng của tập đoàn vào đây: đó là một ĐẦU VÀO CÒN THIẾU, không phải quyết định khách phải ra — nó thuộc sổ tiến độ citizen-app."
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa",
+    "open_gap": "CHỈ MỘT tín hiệu, và chỉ theo MỘT chiều — có chủ ý. Chiều còn lại (`máy chủ của VihatSoftware`, hôm nay 6 lần trong mã được quét) là hiện trạng đứng yên: khai nó thành tín hiệu thì hook kêu mỗi phiên khi chưa ai làm gì, và tệ hơn, luật áp đảo của drift_guard (nen_canh_bao: rest*3 > top_n thì im) sẽ làm hook CÂM đúng lúc tệp bị sửa dở dang — to nhất khi không có gì xảy ra, im nhất lúc nguy hiểm. Mẫu hiện tại khớp 0 chỗ hôm nay (đã đo bằng chính iter_files + bo_chu_thich của drift_guard), nên nó chỉ kêu khi có người thật sự sửa. `(?!vihatsoftware)` trong mẫu KHÔNG phải trang trí: bản đầu tiên không có nó đã khớp nhầm đúng lối viết văn bản đang dùng — `máy chủ của VihatSoftware (thuộc ViHAT Group)` — tức câu GIỮ NGUYÊN bên nhận lại bị báo là đã đổi. Giữ vế chặn ấy, nếu không mẫu này chết vì nhiễu. ĐỪNG thêm mẫu `ViHAT Group` trần: 11 chỗ hợp lệ đang mang chuỗi ấy (nội dung giới thiệu tập đoàn), và đó là dương tính giả ngay từ phiên sau. Và KHÔNG gộp câu tệp vector biểu tượng của tập đoàn vào đây: đó là một ĐẦU VÀO CÒN THIẾU, không phải quyết định khách phải ra — nó thuộc sổ tiến độ citizen-app.",
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "BÊN NHẬN DỮ LIỆU: ViHAT Group, ở cả vế phát hành lẫn vế nhận. ⚠ MỤC DUY NHẤT CẦN NGƯỜI XÁC NHẬN TRƯỚC KHI NỘP ZALO — đây là khẳng định PHÁP LÝ với người dân, không phải lựa chọn kỹ thuật. Chặn NỘP, không chặn viết mã."
   },
   {
     "id": 29,
     "question": "MỞ KHOÁ một chứng từ giải ngân `Đã khoá`: có phải ghi lý do không · người vừa khoá có tự mở lại được không · có trần số lần mở không · nút `🗑 Gỡ` đi với khoá quyền nào · và `nam_ngan_sach.khoa` khoá cái gì?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "CHẶN MÃ, VÀ CHỖ CHẶN ĐÃ NẰM SẴN TRONG CSDL CHỨ KHÔNG CHỈ TRONG ĐẶC TẢ. `docs/ui-ux/06-giai-ngan.md:340` chốt đúng một nửa: chứng từ `Đã khoá` thì không sửa/xoá, muốn sửa phải mở khoá, quyền `budget.confirm`. Trigger `chung_tu_da_khoa` (`service-finance/migrations/0004_du_an_va_chung_tu_giai_ngan.sql:141-168`) ĐÃ CHỪA SẴN đúng đường ấy: nó từ chối việc đổi số liệu trong khi dòng còn khoá (`:148-159`) và từ chối xoá mềm dòng đang khoá (`:161-165`), nhưng KHÔNG từ chối việc hạ `trang_thai` — tức đường mở khoá là đường duy nhất ở tầng CSDL còn để ngỏ, để ngỏ cho một thủ tục chưa ai viết ra. Năm chỗ đặc tả im lặng, và mỗi chỗ là một cột hoặc một khoá quyền chứ không phải một tham số hàm: (1) mở khoá có phải ghi lý do không — nếu có thì đó là một cột trên chứng từ hoặc một bảng vết riêng; (2) người vừa khoá có tự mở lại được không — nếu không thì phải so người thao tác với `nguoi_xac_nhan_id`, cột ấy đã có (`0004:290`); (3) `nam_ngan_sach.khoa` xuất hiện đúng MỘT lần trong toàn bộ đặc tả (`06-giai-ngan.md:255`) và không dòng nào nói nó khoá cái gì — khoá cả năm ngân sách thì chứng từ của năm ấy có còn mở khoá được không, và ai mở; (4) nút `🗑 Gỡ` (`06-giai-ngan.md:198`) đi với khoá quyền nào — `:202` chỉ gán `budget.update` cho nhập/sửa và `budget.confirm` cho xác nhận/khoá, không gán gì cho gỡ, mà luật 5 bất biến 1 bắt mọi tuyến khai quyền tường minh; (5) có trần số lần mở khoá không. Chính chú thích của trigger đã nói ra cái giá của việc không trả lời: mở khoá phải là một câu lệnh riêng, vì \"a record of what changed is only readable if the two changes are two events\" (`0004:132-135`) — một sự kiện riêng mà không có lý do đi kèm là một sự kiện không giải thích được với thanh tra, trên đúng một con số đã có người ký.",
     "code_signals": [
       {
@@ -683,12 +711,16 @@
       "viết route gỡ (xoá mềm) chứng từ giải ngân",
       "viết migration cho bảng nam_ngan_sach",
       "đặt tên khoá quyền mới trong nhóm budget"
-    ]
+    ],
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "MỞ KHOÁ CHỨNG TỪ: lý do BẮT BUỘC (cột riêng) · người vừa khoá KHÔNG tự mở lại được · KHÔNG đặt trần số lần nhưng ĐẾM và lưu.",
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa"
   },
   {
     "id": 30,
     "question": "Có `chứng từ hoàn` (thu hồi tạm ứng, điều chỉnh giảm) không — hay mọi điều chỉnh giảm đều buộc phải đi qua đường MỞ KHOÁ chứng từ cũ?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "RÀNG BUỘC ĐÃ ĐÓNG THEO MỘT CHIỀU, VÀ CHÍNH CHÚ THÍCH CỦA NÓ TỰ KHAI ĐÂY LÀ CÂU CỦA KHÁCH. `service-finance/migrations/0004_du_an_va_chung_tu_giai_ngan.sql:305` đặt `CHECK (so_tien > 0)`, và bốn dòng ngay trên (`:300-304`) viết nguyên văn rằng một chứng từ âm là một khoản hoàn — \"a different business event with a different name\" — và \"If refunds have to be recorded, that is a question for the customer, not a sign change\". Câu ấy đúng, và chưa ai hỏi. Module anh em CÙNG PHÂN HỆ thì đã cho số âm tường minh: `docs/ui-ux/07-thu-chi-ngan-sach.md:230` quy tắc 4 — \"Giá trị có thể âm hoặc trống\". Nghiệp vụ thu hồi tạm ứng là có thật ở đầu tư công cấp xã, nên đây không phải một ca giả định. PHẢI HỎI CÙNG LÚC VỚI #29, và đó là nửa quan trọng nhất của cả hai câu: không có chứng từ hoàn thì MỌI điều chỉnh giảm buộc phải đi qua mở khoá — tần suất mở khoá khi ấy cao hơn hẳn hình dung của người viết quy tắc \"khoá\", và một cơ chế thiết kế cho ca hiếm sẽ được dùng như đường đi hằng ngày. Trả lời hai câu rời nhau sẽ ra hai thiết kế không khớp. Hệ quả cuối nằm ở con số gửi lên lãnh đạo: `da_giai_ngan` là SUM các chứng từ còn sống (`docs/ui-ux/06-giai-ngan.md:292`), nên chọn đường nào cũng đổi cách một khoản hoàn hiện ra trong tỷ lệ giải ngân.",
     "code_signals": [
       {
@@ -707,12 +739,16 @@
       "nới hoặc gỡ CHECK (so_tien > 0) trên chung_tu_giai_ngan",
       "viết route nhập chứng từ giải ngân",
       "viết công thức da_giai_ngan"
-    ]
+    ],
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "KHOẢN HOÀN LÀ CHỨNG TỪ RIÊNG, không phải số âm. `CHECK (so_tien > 0)` GIỮ NGUYÊN. Chứng từ hoàn mang tham chiếu BẮT BUỘC tới chứng từ gốc, số tiền dương; tổng đã giải ngân = tổng(chi) − tổng(hoàn).",
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa"
   },
   {
     "id": 31,
     "question": "`nguong_canh_bao_cham` là CẤU HÌNH của xã theo năm ngân sách hay HẰNG SỐ của phần mềm — và nếu là cấu hình thì xã khai nó ở màn hình nào, bảng nào giữ, service nào sở hữu?",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "ĐÃ CÓ NGƯỜI TRẢ LỜI, VÀ NGƯỜI ẤY LÀ TUYẾN ĐỌC — đó là chỗ câu này khác một việc còn thiếu. Đặc tả nói ba lần rằng con số là của xã: `docs/ui-ux/06-giai-ngan.md:255` đặt `nguong_canh_bao_cham` trên `nam_ngan_sach`, `:342` quy tắc 5 ghi \"cấu hình theo năm ngân sách, mặc định 10 điểm\", và `:45` GIỚI THIỆU con số ấy với xã ngay trên thẻ KPI (`Ngưỡng cảnh báo chậm: 10 điểm`). Nhưng không màn hình nào khai nó (`docs/ui-ux/14-cau-hinh.md` không có tab nào), không endpoint nào chạm, không khoá quyền nào ứng, và bảng `nam_ngan_sach` chưa tồn tại. Hôm nay nó là hằng số trong kho mã của nhà cung cấp: `service-finance/internal/domain/du_an.go:44`. Cái làm nó nặng hơn một TODO là TUYẾN ĐỌC ĐÃ PHÁT KẾT QUẢ RA NGOÀI: `service-finance/internal/http/du_an.go:201` và `:247` truyền đúng hằng số ấy vào phép tính, tuyến trả `is_delayed` (`du_an.go:71`, `:123`) và `delay_threshold` (`:95`, `:210`), còn web đã vẽ thành chip `chậm N điểm` kèm dòng chú thích ngưỡng (`web-admin/src/features/giai-ngan/bang-du-an.tsx:151`, `:203`). Tức một quy tắc nghiệp vụ của xã đang quyết định 29 hay 30 dự án bị gọi là chậm, từ một hằng số xã không sửa được và không nhìn thấy — đúng hình dạng luật 1 bất biến 10 và luật 10 cấm #3 nói tới. Phần mã đã chuẩn bị sẵn và tự khai như thế (`du_an.go:38-43` gọi đây là hình dạng tạm, cố ý bắt mọi nơi gọi truyền ngưỡng tường minh, và `http/du_an.go:197-200` cố ý trả ngưỡng đã dùng ra cho client); thứ còn thiếu là câu trả lời: ai đặt con số, theo năm hay theo xã, ai được sửa. Ba câu ấy quyết bảng `nam_ngan_sach` có ra đời không, và nếu có thì service nào giữ nó (luật 2 bất biến 1).",
     "code_signals": [
       {
@@ -731,12 +767,16 @@
       "viết migration cho bảng nam_ngan_sach",
       "viết màn hình hoặc route khai ngưỡng cảnh báo chậm",
       "đổi NguongCanhBaoChamMacDinh thành giá trị đọc từ cấu hình"
-    ]
+    ],
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "`nguong_canh_bao_cham` là CẤU HÌNH CỦA XÃ theo năm ngân sách, mặc định 10 điểm. Ngưỡng đang hiệu lực lúc tính phải được LƯU cùng chỉ số, không tính lại lúc đọc.",
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa"
   },
   {
     "id": 32,
     "question": "Ô `Cân đối thu - chi` lấy `Tổng thu` từ CỘT NÀO — `Thu ngân sách NSNN` (số phát sinh trên địa bàn) hay `Thu xã hưởng`? Hai cột cho ra hai con số TRÁI DẤU nhau.",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "ĐẢO DẤU MỘT CON SỐ GỬI LÊN LÃNH ĐẠO, VÀ CẢ HAI ĐẦU ĐỀU NẰM TRONG ĐẶC TẢ CHỨ KHÔNG PHẢI TRONG MÃ. `docs/ui-ux/07-thu-chi-ngan-sach.md:235` định nghĩa `Cân đối thu - chi = Tổng thu − Tổng chi`; `:231` quy tắc 5 nói số tổng lấy từ dòng được đánh sao, mặc định dòng đầu tiên — ở tab Thu là `TỔNG THU NỘI ĐỊA PHÁT SINH TRÊN ĐỊA BÀN`. Dòng ấy là số PHÁT SINH TRÊN ĐỊA BÀN, không phải phần xã được hưởng; phần xã hưởng là một CỘT RIÊNG của cùng bảng — `:73` liệt kê cả hai cột, và ô tóm tắt cho đúng hai số: `Thu ngân sách NSNN` = 4.316.764,3 (`:69`) bên cạnh `Thu ngân sách Thu xã hưởng` = 3.300.800,5 (`:70`). Ghép với tổng chi 3.463.459,2 (`:242`) ra hai kết quả trái dấu: lấy cột NSNN ra +853,3 — đúng con số `docs/ui-ux/01-tong-quan-dieu-hanh.md:98` đang hiện (`853,3 tỷ`, thặng dư); lấy cột xã hưởng ra −162,7, tức HỤT. Không phải lệch vài phần trăm, là đổi dấu. Và nó KHÔNG chỉ nằm ở màn tài chính: `01-tong-quan-dieu-hanh.md:90-98` đưa cả bốn chỉ số ấy lên `/tong-quan`, màn hình đầu tiên lãnh đạo xã mở, còn `07:232` nói rõ số liệu này nuôi cả `/bao-cao`. Một xã đọc \"thặng dư 853 tỷ\" trong khi ngân sách của chính họ đang hụt là chuyện có người phải trả lời. ĐÂY KHÔNG PHẢI CÂU HỎI KỸ THUẬT: hai cột là hai khái niệm ngân sách khác nhau, và cái nào là \"thu\" trong phép cân đối của một xã là câu của người làm tài chính. Hỏi cùng lúc với #33 — cùng một khối KPI, cùng một bảng dữ liệu.",
     "code_signals": [
       {
@@ -760,12 +800,16 @@
       "viết truy vấn hoặc thẻ KPI Cân đối thu - chi",
       "viết bảng thu ngân sách và cơ chế dòng được đánh sao",
       "đưa nhóm KPI THU - CHI NGÂN SÁCH XÃ lên /tong-quan hoặc /bao-cao"
-    ]
+    ],
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "`Cân đối thu - chi` lấy Tổng thu từ `Thu xã hưởng`, KHÔNG từ `Thu ngân sách NSNN`. Ngân sách xã cân đối trên nguồn thu xã được hưởng theo phân cấp; phần lớn khoản phát sinh trên địa bàn điều tiết lên trên và xã không được chi. Màn hình hiện CẢ HAI số, gọi đúng tên từng số.",
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa"
   },
   {
     "id": 33,
     "question": "`Thu đạt dự toán` chia cho `Dự toán TP giao` hay `Dự toán Xã giao`? CÙNG MỘT TỆP đặc tả cho hai mẫu số, lệch 16 điểm phần trăm.",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "LỆCH BÊN TRONG CHÍNH MỘT TỆP, nên không ai đọc ra cho tới lúc ngồi tính. Ô tóm tắt tab Thu (`docs/ui-ux/07-thu-chi-ngan-sach.md:67-71`) hiện `Tỷ lệ % thu = 108,1%`, và 108,1% chỉ ra được khi chia `Thu ngân sách NSNN` 4.316.764,3 (`:69`) cho `Dự toán 2026 TP giao` 3.993.010 (`:67`). Nhưng quy tắc nghiệp vụ ở `:233` viết `Thu đạt dự toán = Thu ngân sách NSNN / Dự toán Xã giao`, và 4.316.764,3 / 4.681.290 (`:68`) = 92,2%. Mười sáu điểm giữa hai dòng của cùng một tệp, và cả hai đều là \"đặc tả\". `docs/ui-ux/01-tong-quan-dieu-hanh.md:94` chép 108.1% lên `/tong-quan` với công thức ghi chung chung `tổng thu / dự toán thu` — tức nó KHÔNG phân xử được, nó chỉ mang theo một trong hai. Hệ quả không phải thẩm mỹ: 108,1% là \"vượt dự toán\", 92,2% là \"chưa đạt dự toán\" — hai câu trái nghĩa nhau về cùng một năm ngân sách, và câu ấy là thứ lãnh đạo xã đọc để quyết việc. Hỏi CÙNG LÚC với #32: hai câu cùng một khối KPI và cùng một bảng dữ liệu, trả lời rời nhau sẽ ra một thẻ KPI mà tử số và mẫu số nói về hai thứ khác nhau.",
     "code_signals": [
       {
@@ -783,12 +827,16 @@
     "ask_before": [
       "viết công thức Thu đạt dự toán",
       "viết thẻ KPI THU - CHI NGÂN SÁCH XÃ"
-    ]
+    ],
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "`Thu đạt dự toán` chia cho `Dự toán TP giao` — con số xã BỊ ĐÁNH GIÁ theo. Số liệu mẫu của chính đặc tả nhất quán với mẫu số này (108,1%), còn dòng quy tắc `:233` không khớp với ô nào trong cùng tệp. Cột `Dự toán TP giao` thành cột BẮT BUỘC có dữ liệu.",
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa"
   },
   {
     "id": 34,
     "question": "`Hạng mục kế hoạch vốn` là DANH MỤC tham chiếu (không năm, không tiền) hay DÒNG KẾ HOẠCH THEO NĂM mang `ke_hoach_von_nam` và `thoi_han_giai_ngan`? Đặc tả mô hình hoá nó HAI LẦN, không tương thích.",
-    "status": "OPEN",
+    "status": "DECIDED",
     "why_it_matters": "HAI MÔ HÌNH, BẢNG ĐÃ DỰNG THEO MỘT, VÀ KHÔNG CHỖ NÀO GHI LẠI LÀ ĐÃ CHỌN — nên hôm nay có hai cột trên màn hình không có chỗ lưu, và không ai biết đó là cố ý hay bỏ sót. Bản thứ nhất: `docs/ui-ux/14-cau-hinh.md:168` xếp `Hạng mục kế hoạch vốn` vào 10 nhóm danh mục với đúng 6 mã, và `:180` cho mọi danh mục đúng một hình dạng — `danh_muc(id, nhom, ma, nhan, thu_tu, nguon, la_mac_dinh, dang_dung)`: không năm, không tiền. Bản thứ hai: `docs/ui-ux/06-giai-ngan.md:257-264` mô hình hoá `hang_muc_von` là một bảng KHÁC, có `nam`, `ke_hoach_von_nam` và `thoi_han_giai_ngan`. Mã đã dựng theo bản `14`: `service-finance/migrations/0003_danh_muc_hang_muc_ke_hoach_von.sql:208-245` tạo `hang_muc_ke_hoach_von` đúng hình dạng danh mục, `UNIQUE (tenant_id, ma)` (`:244`) và `ma` bất biến bằng trigger (`:148-153`). HỆ QUẢ HÔM NAY, không phải giả định: hai cột `KH vốn năm` (`06:77`) và `Thời hạn giải ngân` (`06:82`) của bảng §5 KHÔNG CÓ CHỖ LƯU, và `06:98` còn nói rõ màn quản lý hạng mục cho \"đặt thời hạn giải ngân, đặt kế hoạch vốn năm cho từng hạng mục\" — một thao tác không có cột nào nhận. Hai đường ra là hai mô hình dữ liệu và hai cách làm ngân sách, chỉ khách phân xử được: (a) hai cột ấy là SỐ TỔNG suy ra từ các dự án trong hạng mục — `du_an` đã có cả `ke_hoach_von_nam` (`0004:203`) lẫn `thoi_han_giai_ngan` (`0004:214`) nên không cần cột mới, nhưng khi ấy xã KHÔNG đặt được kế hoạch vốn cho hạng mục và `06:98` là một dòng đặc tả phải bỏ; (b) hạng mục thật sự mang kế hoạch vốn theo năm — khi ấy phải có một bảng thứ hai khoá `(tenant_id, hang_muc_id, nam)`, vì `UNIQUE (tenant_id, ma)` hiện tại chỉ cho MỘT dòng mỗi mã cho MỌI năm, và nhét `nam` vào bảng danh mục là phá đúng khoá ấy. Khác biệt là nghiệp vụ chứ không phải kỹ thuật: (a) nghĩa là kế hoạch vốn đi TỪ DƯỚI LÊN, tổng của các dự án; (b) nghĩa là xã phân bổ TRẦN cho từng hạng mục rồi dự án phải nằm dưới trần.",
     "code_signals": [
       {
@@ -817,6 +865,10 @@
       "viết migration thêm cột nam / ke_hoach_von_nam / thoi_han_giai_ngan cho hạng mục",
       "viết bảng Tiến độ theo hạng mục (§5 của 06-giai-ngan.md)",
       "viết màn quản lý hạng mục kế hoạch vốn"
-    ]
+    ],
+    "decided_on": "2026-09-22",
+    "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
+    "decision": "`Hạng mục kế hoạch vốn` GIỮ mô hình DANH MỤC tham chiếu (bản `14-cau-hinh.md`). Hệ quả: hai cột `ke_hoach_von_nam` và `thoi_han_giai_ngan` KHÔNG có chỗ lưu nên màn hình KHÔNG được hiện chúng.",
+    "adr": "0035-muoi-lam-cau-mo-quyet-theo-thuc-te-cap-xa"
   }
 ]
