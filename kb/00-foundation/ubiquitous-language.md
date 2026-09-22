@@ -157,6 +157,15 @@ có thể.
 | **Cán bộ** | `nguoi_dung` (bảng) · `can_bo` (nghiệp vụ) | `staff` — `GET /api/v1/staff` · `GET …/{id}`, quyền `admin.user`. **`web-admin` đã gọi cả hai tuyến** — `web-admin/src/lib/api/can-bo.ts` | `user` thì trùng với công dân — hai lớp tin cậy khác hẳn nhau (luật 4). Xem mục dưới: khái niệm này mang **bốn** cái tên |
 | **Xã của yêu cầu này** | `tenant` (bảng, service `platform`) | `communes/current` — `GET /api/v1/communes/current`, công khai | Cho **cán bộ**, suy từ `Host` ở rìa (luật 1 bất biến 3), trả `thongTinXa` cho màn đăng nhập. Số nhiều **dù chỉ trả về một xã** — xem ngay dưới |
 | **Phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI** | `phan_anh` (cùng bảng `phieu_phan_anh`) | `my-citizen-reports` — `GET /api/v1/my-citizen-reports/{maTraCuu}` | Cùng dữ liệu, **khác bề mặt**: đọc bởi công dân, lọc theo danh tính phiên. Không thể dùng lại `citizen-reports` vì tuyến cán bộ đã chiếm đúng đường dẫn ấy — xem §Tiền tố `my-` |
+| **Khoá tài khoản** (nghỉ hưu, chuyển công tác) | `dang_hoat_dong = false` | `lockout` — `POST`/`DELETE /api/v1/staff/{id}/lockout` | **KHÔNG phải `disable`, `deactivate`, `suspend`.** Đây là một TRẠNG THÁI có thể mở lại, nên nó là một **tài nguyên con** mà `POST` tạo và `DELETE` gỡ — không phải một động từ trong đường dẫn. Khoá ≠ xoá (#10): người bị khoá VẪN còn trong danh bạ và vẫn hiện trên mọi hồ sơ cũ |
+| **Tài khoản đăng nhập của một cán bộ** | `co_tai_khoan` · `mat_khau_hash` | `account` — `POST /api/v1/staff/{id}/account` | Một dòng danh bạ **KHÔNG tự động là một tài khoản**: xã nhập cả người chưa cần đăng nhập. `account` là thứ CẤP THÊM cho một dòng đã có, nên nó là tài nguyên con của `staff`. Bác `login-account` (dài mà không thêm nghĩa), `credentials` (số nhiều mơ hồ, lẫn với cặp tên/mật khẩu), `sign-in` (động từ — `rest_api_guard` chặn) |
+| **Mật khẩu** | `mat_khau_hash` (CSDL chỉ giữ chuỗi băm) | `password` — `PUT /api/v1/staff/{id}/password` · `PUT /api/v1/staff/current/password` | Giữ `password` chứ không `credential`/`passphrase`: đây là **đúng một chuỗi bí mật**, và `credential` trong hệ này còn gồm phiên và `sid`. `current` là của máy chủ lấy từ phiên — **không** có `id` nào trên tuyến tự đổi, vì một tham số định danh ở đó là đổi mật khẩu người khác (luật 4 cấm #1) |
+| **Xác thực lời khai cư trú** | `citizen.verify` (khoá quyền) | *(tuyến chưa dựng)* | Khoá quyền chốt 22/09/2026 — ADR 0035 §D. Nhóm `citizen` là **nhóm thứ mười một** mà `14-cau-hinh.md:104` đếm tới nhưng bảng dưới không liệt kê. **Chưa có migration nạp**: viết tuyến thì nạp cùng lượt, nếu không tuyến ấy trả 403 cho mọi tài khoản mãi mãi (luật 5 bất biến 3c) |
+
+**Ba danh từ `lockout` · `account` · `password` chốt 22/09/2026 bởi NHÀ CUNG CẤP, không phải
+khách** (ADR 0035). Ghi ra vì ADR 0011 bảo hỏi chứ đừng tự dịch, và ở đây đã tự dịch có chủ ý:
+đổi bây giờ còn miễn phí vì **chưa xã nào chạy thật**. Ngày một xã chạy, đổi một đoạn đường dẫn
+là đổi thứ `tools/ingress` đã sinh vào manifest và thứ `web-admin` đã gọi.
 
 ### Tiền tố `my-` — KHUÔN cho mọi tuyến công dân đọc dữ liệu của chính mình (chốt 22/09/2026)
 
