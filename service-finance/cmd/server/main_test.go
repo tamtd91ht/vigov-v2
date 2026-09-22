@@ -125,6 +125,10 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// Register refuses a nil dependency at construction, so it has to be present.
 		GhiHangMuc: app.NewDanhMucHangMuc(nil, nil),
 		DuAn:       khoDuAnTrong{},
+		// Same reasoning as GhiHangMuc above: built on a nil *store.DB, never called from this file,
+		// present because Register refuses a nil dependency at construction.
+		GhiChungTu: app.NewChungTuGiaiNgan(nil, nil),
+		Nguong:     nguongTrong{},
 		Log:        log,
 	})
 
@@ -336,4 +340,13 @@ func (khoDuAnTrong) DanhSach(context.Context, fistore.LocDuAn) ([]domain.TienDoD
 
 func (khoDuAnTrong) ChiTiet(context.Context, string) (domain.TienDoDuAn, error) {
 	return domain.TienDoDuAn{}, fistore.ErrKhongThayDuAn
+}
+
+// nguongTrong answers the software's default threshold, which is what every commune is on today —
+// `cau_hinh_giai_ngan` has no write path yet. No case in this file reads it; it is here because
+// Register refuses to start without one, deliberately (see routes.go).
+type nguongTrong struct{}
+
+func (nguongTrong) NguongCanhBaoCham(context.Context, int) (domain.NguongCanhBaoCham, error) {
+	return domain.MacDinhCuaPhanMem(), nil
 }

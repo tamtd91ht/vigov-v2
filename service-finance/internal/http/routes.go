@@ -111,11 +111,48 @@ type GhiHangMuc interface {
 	Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
 }
 
+// GhiChungTu is the WRITE half of the disbursement voucher register, and it is its own interface
+// rather than more methods on DuAnTienDo for the same reason GhiHangMuc is separate from
+// HangMucKeHoachVonDanhMuc.
+//
+// The reads are store calls; each of these six opens a TRANSACTION and writes an audit entry inside
+// it (rule 6, invariant 3). Behind one interface a future caller would reach for whichever method
+// was nearest and could end up writing the voucher outside a transaction — the exact defect
+// core/audit was shaped to make impossible. Two interfaces, two obligations, visible at the point
+// of use.
+//
+// SIX METHODS AND NOT ONE `DoiTrangThai(op)`: the caller names the operation at the call site, so a
+// seventh lifecycle move cannot silently fall into a default branch that allows it. It is also what
+// lets each route declare the permission the specification assigns to THAT act — `budget.update`
+// for entry and correction, `budget.confirm` for confirmation and the lock.
+type GhiChungTu interface {
+	Them(ctx context.Context, yc app.YeuCauThemChungTu, nguoi audit.Actor) (domain.ChungTuGiaiNgan, error)
+	Sua(ctx context.Context, id string, yc app.YeuCauSuaChungTu, nguoi audit.Actor) (domain.ChungTuGiaiNgan, error)
+	Go(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+	XacNhan(ctx context.Context, id string, nguoi audit.Actor) (domain.ChungTuGiaiNgan, error)
+	Khoa(ctx context.Context, id string, nguoi audit.Actor) (domain.ChungTuGiaiNgan, error)
+	MoKhoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) (domain.ChungTuGiaiNgan, error)
+}
+
+// NguongCham is the commune's own slow-project warning threshold (§13 rule 5, migration 0005).
+//
+// AN INTERFACE AT THE POINT OF USE, like the two reads above, and for one extra reason worth
+// stating: this value decides whether a commune's KPI card reads "29 dự án chậm" or "0", so the two
+// cases a test has to be able to reach — the commune has set a figure, and the commune has set
+// nothing — must be reachable without a PostgreSQL. There is none in this repository's build
+// environment, so "needs a database" means "never runs", and this is precisely the read that must
+// not silently fall back to a default.
+type NguongCham interface {
+	NguongCanhBaoCham(ctx context.Context, nam int) (domain.NguongCanhBaoCham, error)
+}
+
 type Deps struct {
 	Checker    authz.Checker
 	HangMuc    HangMucKeHoachVonDanhMuc
 	GhiHangMuc GhiHangMuc
 	DuAn       DuAnTienDo
+	GhiChungTu GhiChungTu
+	Nguong     NguongCham
 
 	// Nay is the clock the derived disbursement figures are computed against. NIL IN PRODUCTION,
 	// where Handler.nay falls back to time.Now — see the reason there. It exists so the delay
@@ -151,6 +188,17 @@ func Register(mux *http.ServeMux, d Deps) {
 	}
 	if d.DuAn == nil {
 		panic("finance/http: thiếu kho dự án — các tuyến /api/v1/investment-projects sẽ panic khi có người gọi")
+	}
+	if d.GhiChungTu == nil {
+		panic("finance/http: thiếu use case ghi chứng từ giải ngân — các tuyến /api/v1/disbursements sẽ panic khi có người gọi")
+	}
+	if d.Nguong == nil {
+		// REFUSED AT CONSTRUCTION RATHER THAN DEFAULTED AT REQUEST TIME, and that is the whole point
+		// of migration 0005. A nil store here would have to fall back to the software's 10 points on
+		// every read — which is exactly the state the migration was written to end: every commune
+		// silently on the vendor's number, with nothing on the screen saying so. A process that
+		// refuses to start is a deployment that fails visibly.
+		panic("finance/http: thiếu kho cấu hình giải ngân — ngưỡng cảnh báo chậm sẽ im lặng về mặc định của phần mềm")
 	}
 
 	h := NewHandler(d)
@@ -375,4 +423,227 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.XoaHangMuc))))
+
+	// --- the disbursement voucher register (§8.2) -----------------------------------------------
+	//
+	// THE URL NOUN IS `disbursements` — kb/00-foundation/ubiquitous-language.md:145 settles
+	// `giai_ngan` -> `disbursements`, and a voucher IS one recorded disbursement.
+	//
+	// TOP LEVEL, NOT NESTED UNDER `investment-projects/{id}`, and the reason is the SAME row that
+	// rejected the inverse nesting (:146). A path declares ownership, and a voucher does belong to a
+	// project — but the four lifecycle routes below act on ONE voucher by its own id, and nesting
+	// would put a project id in every one of them that nothing reads and nothing checks. A segment
+	// the server ignores is a segment a client will eventually get wrong, and nobody will notice.
+	// The project is a FIELD of the create body, where it is validated against this commune's live
+	// projects (fistore.ErrKhongThayDuAnCuaChungTu).
+	//
+	// THE TWO PERMISSION KEYS BELOW ARE THE SPECIFICATION'S OWN, checked rather than assumed:
+	// docs/ui-ux/06-giai-ngan.md:202 — "`budget.update` (nhập/sửa), `budget.confirm` (xác nhận,
+	// khoá), `budget.read`". Both are seeded at service-identity/migrations/0001_init.sql:282-284,
+	// so a commune administrator can actually tick them. NO NEW KEY WAS INVENTED (rule 5, invariant
+	// 3c): a key no migration seeds is a right nobody can grant, so the route would answer 403 to
+	// every account forever while every test stayed green — this repository carried three such keys
+	// for several sessions. Written out as string literals at every call site because tools/apidoc
+	// refuses anything that is not one there.
+
+	// `budget.update` — "Cập nhật giải ngân". Entering a payment is data entry by the accountant,
+	// which is precisely what §8.2 assigns to this key.
+	//
+	// idem.Required(DongKhiHong), AND THIS IS THE FIRST ROUTE IN THIS SERVICE THAT EARNS IT. The
+	// catalogue's POST takes MoKhiHong because `UNIQUE (tenant_id, ma)` makes a duplicate row
+	// impossible whatever happens to Redis. THERE IS NO SUCH KEY HERE and there must not be one: two
+	// genuine payments to the same company, on the same day, for the same amount are a real thing
+	// (two instalments, two lines of one treasury document), so no uniqueness constraint could tell
+	// them from a double-submitted form. With nothing underneath, a cache outage plus a double click
+	// is a voucher counted twice in "đã giải ngân" — money on a figure a decision quotes. That is
+	// exactly the legal-consequence case skills/rest-api-design reserves DongKhiHong for: answer 503
+	// and let the commune retry, rather than take a payment record on trust.
+	//
+	// @summary  Ghi nhận một chứng từ giải ngân cho dự án đầu tư
+	// @screen   06-giai-ngan §8.2
+	// @request  themChungTuVao
+	// @reply    201 chungTuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/disbursements",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ThemChungTu))))
+
+	// PATCH AND NOT PUT: `counterparty` and `voucher_no` are optional and their empty string is a
+	// meaningful value, so a full replacement cannot tell "not mentioned" from "cleared".
+	//
+	// A LOCKED VOUCHER ANSWERS 409 WITH §13 RULE 3'S OWN SENTENCE, and that is this route's real
+	// job. The `chung_tu_da_khoa` trigger refuses the same UPDATE underneath (0004:141-168) with an
+	// English exception naming a constraint; what an accountant is owed is "chứng từ đã khoá thì
+	// không sửa, không gỡ — phải mở khoá trước (quyền `budget.confirm`)". The trigger is the floor,
+	// this is the sentence, and the sentence arrives first.
+	//
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
+	// compares the voucher it read against the voucher it would write and, when nothing moved,
+	// writes NOTHING — no UPDATE and no audit entry. So the same request sent twice leaves one row
+	// in one state and one entry in the ledger. Were that comparison removed, this declaration would
+	// become a lie and the second request would file an entry saying nothing changed.
+	//
+	// @summary  Sửa ngày chi, số tiền, nội dung, đối tác hoặc số chứng từ của một chứng từ chưa khoá
+	// @screen   06-giai-ngan §8.2
+	// @request  suaChungTuVao
+	// @reply    200 chungTuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/disbursements/{id}",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaChungTu))))
+
+	// `budget.confirm` ON A REMOVAL, AND THE SPECIFICATION ASSIGNS NONE — this is the decision
+	// migration 0005:39-42 deferred to the route, so here it is.
+	//
+	// 06-giai-ngan.md:202 covers `budget.update` for entry/edit and `budget.confirm` for
+	// confirm/lock; the `🗑 Gỡ` button on the same screen is listed with no key at all. The choice is
+	// between the two that exist:
+	//
+	//	budget.update    "the person who entered it can take it back". True for a typo caught in the
+	//	                 same minute — and it is also the key every accountant holds, so it makes
+	//	                 removing a payment record the same authority as typing one.
+	//	budget.confirm   CHOSEN. A voucher's money is already inside "đã giải ngân" from the moment
+	//	                 it is entered (§11 counts `ke-toan-nhap`), so removing one CHANGES A FIGURE
+	//	                 THAT HAS ALREADY BEEN READ off a screen and possibly reported upward. That
+	//	                 is the same class of act as freezing one, which is what this key is for.
+	//
+	// CHOSEN IN THE DIRECTION THAT CAN BE LOOSENED LATER WITH ONE LINE and cannot be tightened later
+	// at all: widening it to `budget.update` the day the customer says so costs one edit, while
+	// narrowing it afterwards means every removal already made was made under the wrong authority.
+	// Needing a third key — a `budget.delete` the `quyen` table does not have — would be a finding
+	// for open question #27, never an INSERT (rule 5, invariant 3c).
+	//
+	// A BODY ON A DELETE, and the alternative was worse: the reason is mandatory (rule 7, invariant
+	// 1 names `delete_reason`), and the query string would put free text about a public authority's
+	// spending into every access log and proxy cache.
+	//
+	// idem.KhongCan — removing an already-removed voucher is a 404 either way, and the second
+	// request cannot overwrite who removed it or why: the UPDATE carries `AND deleted_at IS NULL`.
+	//
+	// @summary  Gỡ mềm một chứng từ giải ngân, kèm lý do bắt buộc
+	// @screen   06-giai-ngan §8.2
+	// @request  goChungTuVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/disbursements/{id}",
+		authz.RequirePermission(d.Checker, "budget.confirm")(
+			idem.KhongCan("gỡ một chứng từ đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
+				http.HandlerFunc(h.GoChungTu))))
+
+	// `confirmation` IS A NOMINALISED SUB-RESOURCE, NOT THE VERB `confirm`: a verb in a path is what
+	// skills/rest-api-design forbids and `rest_api_guard` reports, and the nominalisation it names
+	// for this verb is exactly `confirmation`. The act becomes a record you can point at.
+	//
+	// POST AND NO DELETE, DELIBERATELY. A confirmation cannot be taken back — domain.ChoXacNhan
+	// refuses a second one, because overwriting `nguoi_xac_nhan_id` would be editing a historical
+	// fact (rule 7, forbidden #5). The way back from `Đã xác nhận` does not exist and is not being
+	// invented here; the way back from `Đã khoá` does, and it is the route below.
+	//
+	// idem.KhongCan — the second identical request finds the voucher already `Đã xác nhận` and
+	// answers 409 without writing anything. One confirmation, one entry, whatever the network did.
+	//
+	// @summary  Xác nhận một chứng từ giải ngân (`Kế toán nhập` → `Đã xác nhận`)
+	// @screen   06-giai-ngan §8.2
+	// @reply    200 chungTuRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/disbursements/{id}/confirmation",
+		authz.RequirePermission(d.Checker, "budget.confirm")(
+			idem.KhongCan("xác nhận lần thứ hai gặp chứng từ đã ở `da-xac-nhan` và trả 409 mà không ghi gì — một lần xác nhận, một dòng vết")(
+				http.HandlerFunc(h.XacNhanChungTu))))
+
+	// `lockout` IS THE NOUN THIS SYSTEM ALREADY SETTLED FOR THIS EXACT SHAPE — a STATE that POST
+	// creates and DELETE removes, rather than a verb in a path. See
+	// kb/00-foundation/ubiquitous-language.md:160, which chose it over `disable` / `deactivate` /
+	// `suspend` for `POST`/`DELETE /api/v1/staff/{id}/lockout`.
+	//
+	// ⚠ THAT ROW IS ABOUT A STAFF ACCOUNT AND NOT ABOUT A VOUCHER. The mapping table has no row for
+	// "khoá chứng từ", and ADR 0011 says to ask rather than translate on the spot; the noun is being
+	// REUSED here by this session on the strength of the shape being identical. It is written into
+	// the hand-over as a finding, not buried in a route — and it is still free to change, because no
+	// commune is live on this path.
+	//
+	// LOCKING FROM `Kế toán nhập` IS REFUSED (409) even though §8.2's screen draws both buttons on
+	// such a row, and domain.ErrChuaXacNhanThiChuaKhoaDuoc carries the reason: unlocking has to put
+	// the voucher back in the state it was in BEFORE the lock, and the row does not store what that
+	// was. Requiring the chain makes "before the lock" always `Đã xác nhận`, so an unlock restores
+	// exactly what was there and invents nothing. The alternative is one more column that exists
+	// only to remember a shortcut the specification does not describe.
+	//
+	// @summary  Khoá một chứng từ giải ngân (`Đã xác nhận` → `Đã khoá`)
+	// @screen   06-giai-ngan §8.2
+	// @reply    200 chungTuRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/disbursements/{id}/lockout",
+		authz.RequirePermission(d.Checker, "budget.confirm")(
+			idem.KhongCan("khoá lần thứ hai gặp chứng từ đã ở `da-khoa` và trả 409 mà không ghi gì — người khoá và thời điểm khoá không bị ghi đè")(
+				http.HandlerFunc(h.KhoaChungTu))))
+
+	// --- the unlock: the most expensive route in this file ---------------------------------------
+	//
+	// TWO RULES RIDE ON IT, both settled by THIS PROJECT on 2026-09-22 rather than by the customer
+	// (open question #29, migration 0005's header, ADR 0035 §B), and both chosen in the direction
+	// that can be loosened later with one line and cannot be tightened later at all:
+	//
+	//	the reason is MANDATORY       every unlock that has ALREADY HAPPENED is unexplainable
+	//	                              otherwise, and no source anywhere can rebuild it. That is
+	//	                              exactly the figure an inspection asks about, because it is a
+	//	                              figure somebody signed and somebody then changed.
+	//	the person who LOCKED it      nobody acts alone on the act that gives themselves room — the
+	//	  may NOT unlock it           same shape the customer already settled for the staff register
+	//	                              in #13 and #14. It needs a SECOND holder of `budget.confirm`.
+	//
+	// THE SELF-UNLOCK REFUSAL IS 409 AND NOT 403, and the distinction is not cosmetic: the caller
+	// HOLDS `budget.confirm` and is allowed to unlock vouchers. What is refused is this person
+	// against THIS row. A 403 would send them to the Phân quyền screen to be granted a permission
+	// they already have, where nothing they could do would help.
+	//
+	// THERE IS NO CEILING ON THE NUMBER OF UNLOCKS, and every one is counted (`so_lan_mo_khoa`,
+	// incremented in SQL). A ceiling is a number that belongs to the customer; a count is what lets
+	// them choose one later from real figures instead of somebody's guess.
+	//
+	// A BODY ON A DELETE, for the same reason as the removal above: the reason is mandatory and the
+	// query string is a place free text about a reopened financial record must not go.
+	//
+	// idem.KhongCan — after the first unlock the voucher is `Đã xác nhận`, so a repeat finds nothing
+	// locked and answers 409 without writing. The count cannot be incremented twice by one retry.
+	//
+	// @summary  Mở khoá một chứng từ giải ngân, kèm lý do bắt buộc; người vừa khoá không tự mở lại được
+	// @screen   06-giai-ngan §8.2
+	// @request  moKhoaVao
+	// @reply    200 chungTuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/disbursements/{id}/lockout",
+		authz.RequirePermission(d.Checker, "budget.confirm")(
+			idem.KhongCan("mở khoá lần thứ hai gặp chứng từ đã ở `da-xac-nhan` và trả 409 mà không ghi gì — `so_lan_mo_khoa` không tăng hai lần vì một lần thử lại")(
+				http.HandlerFunc(h.MoKhoaChungTu))))
 }

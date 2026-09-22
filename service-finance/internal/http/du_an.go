@@ -79,6 +79,25 @@ type duAnRa struct {
 	// it is not the completion date: works finished in March may still have to be disbursed before
 	// 31/12. Two different dates, deliberately two different fields.
 	DisbursementDeadline string `json:"disbursement_deadline"`
+
+	// DelayThreshold is the threshold `is_delayed` was decided against, in hundredths of a percent,
+	// and DelayThresholdSource says WHO CHOSE IT — `xa` or `mac-dinh`.
+	//
+	// THE SECOND FIELD IS THE POINT AND THE FIRST ONE ALONE WOULD BE A LIE BY OMISSION. Migration
+	// 0005 gave the threshold a home per commune and per budget year (§13 rule 5), and 0004's header
+	// had already named the failure that follows a table nobody writes: the API "reads as 'already
+	// configurable' while every commune silently gets the default". A number with no provenance
+	// cannot tell a commune that has chosen 10 points from one that has chosen nothing — and only
+	// the second needs to be told. `mac-dinh` is the honest answer for every commune today.
+	//
+	// THE LIST ROUTE ALSO CARRIES THESE TWO AT THE TOP LEVEL, and that is not two sources for one
+	// fact (rule 9): the handler reads the threshold ONCE per request and fans the same value out,
+	// so nothing inside one response can disagree with itself. The top-level pair is kept because a
+	// client already reads it (`delay_threshold`); the per-project pair exists because the DETAIL
+	// route returns a bare duAnRa and has nowhere else to put it — apidoc refuses embedded structs,
+	// so wrapping that reply would rename a field web-admin already builds against.
+	DelayThreshold       int64  `json:"delay_threshold"`
+	DelayThresholdSource string `json:"delay_threshold_source"`
 }
 
 type danhSachDuAnRa struct {
@@ -89,10 +108,19 @@ type danhSachDuAnRa struct {
 	Year int `json:"year"`
 
 	// DelayThreshold is the threshold the server actually applied, in hundredths of a percent.
-	// SENT BACK RATHER THAN ASSUMED BY THE CLIENT: today it is the §13 rule 5 default of 10 points,
-	// tomorrow it is per commune and per budget year, and a client holding its own copy would keep
-	// labelling projects by the old figure with nothing saying so.
+	// SENT BACK RATHER THAN ASSUMED BY THE CLIENT: it is per commune and per budget year
+	// (`cau_hinh_giai_ngan`, migration 0005), and a client holding its own copy would keep labelling
+	// projects by the old figure with nothing saying so.
 	DelayThreshold int64 `json:"delay_threshold"`
+
+	// DelayThresholdSource is `xa` when the commune set this figure for this budget year, and
+	// `mac-dinh` when nobody has and the software's 10 points (§13 rule 5) are in force.
+	//
+	// "TOMORROW IT IS PER COMMUNE" IS NOW TODAY, and this field is what stops that from being
+	// invisible. No screen writes `cau_hinh_giai_ngan` yet — that is the web's work and needs a
+	// permission decision — so every commune is on `mac-dinh`, and the honest thing is to say so
+	// rather than to present the vendor's number as the commune's own choice.
+	DelayThresholdSource string `json:"delay_threshold_source"`
 }
 
 func ngayRa(t time.Time) string {
@@ -108,7 +136,11 @@ func ngayRa(t time.Time) string {
 // and a function that reads the clock itself cannot be tested at a chosen moment — which would
 // leave the arithmetic deciding "chậm 31,36 điểm" untested at exactly the dates that matter, the
 // first and last days of a budget year.
-func duAnRaNgoai(t domain.TienDoDuAn, nay time.Time, nguong domain.PhanVan) duAnRa {
+// `nguong` IS THE WHOLE domain.NguongCanhBaoCham AND NOT A BARE domain.PhanVan, and the type change
+// is the fix rather than a detail. The bare figure made "the commune chose 10 points" and "nobody
+// has chosen anything" the same value, so no caller COULD report the difference; carrying the
+// provenance means every caller has to handle it and the API cannot quietly drop it.
+func duAnRaNgoai(t domain.TienDoDuAn, nay time.Time, nguong domain.NguongCanhBaoCham) duAnRa {
 	ra := duAnRa{
 		ID:                   t.DuAn.ID,
 		Code:                 t.DuAn.Ma,
@@ -120,7 +152,9 @@ func duAnRaNgoai(t domain.TienDoDuAn, nay time.Time, nguong domain.PhanVan) duAn
 		ApprovedAmount:       int64(t.DuAn.TongMucHieuLuc()),
 		DisbursedAmount:      int64(t.DaGiaiNgan),
 		RemainingAmount:      int64(t.ConPhaiGiaiNgan()),
-		IsDelayed:            domain.LaCham(t, nay, nguong),
+		IsDelayed:            domain.LaCham(t, nay, nguong.Gia),
+		DelayThreshold:       int64(nguong.Gia),
+		DelayThresholdSource: string(nguong.Nguon),
 		OrgUnitID:            t.DuAn.DonViThucHienID,
 		AssigneeID:           t.DuAn.CanBoPhuTrachID,
 		StartDate:            ngayRa(t.DuAn.NgayKhoiCong),
@@ -194,20 +228,36 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// THE THRESHOLD IS A CONSTANT TODAY AND THE REPLY SAYS WHICH ONE WAS USED. §11 puts
-	// `nguong_canh_bao_cham` on `nam_ngan_sach`, per commune and per year; no table and no screen
-	// writes it yet. When it becomes configurable this line reads it, and every client already
-	// renders whatever it is told.
-	nguong := domain.NguongCanhBaoChamMacDinh
+	// THE THRESHOLD IS THE COMMUNE'S, READ FOR THIS BUDGET YEAR, and the reply says both the figure
+	// and who chose it. It used to be domain.NguongCanhBaoChamMacDinh — a constant in the vendor's
+	// source deciding whether a commune's KPI card reads "29 dự án chậm" or "0" (rule 1, invariant
+	// 10 read backwards, open question #31). Migration 0005 gave it a home; this is the read.
+	//
+	// READ ONCE PER REQUEST AND FANNED OUT, not read per project: one value for one budget year, so
+	// nothing inside one response can disagree with itself.
+	//
+	// A FAILURE HERE IS A 500 AND NOT A FALL BACK TO THE DEFAULT. Falling back would answer with a
+	// plausible number and label it `mac-dinh`, which is indistinguishable from the ordinary case —
+	// so a commune whose stored threshold is unreadable or out of range would be told it had never
+	// set one. Fail closed: refuse, and name the commune in the log.
+	nguong, err := h.d.Nguong.NguongCanhBaoCham(ctx, nam)
+	if err != nil {
+		h.d.Log.Error("ngưỡng cảnh báo chậm: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "nam", nam, "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
 	nay := h.nay()
 
 	// make(..., 0, ...) and not a nil slice: `items` must marshal as [] and never as null. A client
 	// that has to handle both handles one of them wrong — and an empty year is the ordinary state
 	// here, since no commune has a project until somebody enters one.
 	ra := danhSachDuAnRa{
-		Items:          make([]duAnRa, 0, len(ds)),
-		Year:           nam,
-		DelayThreshold: int64(nguong),
+		Items:                make([]duAnRa, 0, len(ds)),
+		Year:                 nam,
+		DelayThreshold:       int64(nguong.Gia),
+		DelayThresholdSource: string(nguong.Nguon),
 	}
 	for _, mot := range ds {
 		ra.Items = append(ra.Items, duAnRaNgoai(mot, nay, nguong))
@@ -244,5 +294,18 @@ func (h *Handler) ChiTietDuAn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vietJSON(w, http.StatusOK, duAnRaNgoai(mot, h.nay(), domain.NguongCanhBaoChamMacDinh))
+	// THE YEAR COMES FROM THE PROJECT, NOT FROM A PARAMETER, and that is the only correct source
+	// here: §13 rule 8 makes each budget year its own set of projects, and the threshold is stored
+	// per year. Reading the current calendar year instead would judge a 2025 project against a
+	// figure the commune chose for 2026 — silently re-flagging closed work.
+	nguong, err := h.d.Nguong.NguongCanhBaoCham(ctx, mot.DuAn.Nam)
+	if err != nil {
+		h.d.Log.Error("ngưỡng cảnh báo chậm: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "nam", mot.DuAn.Nam, "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+
+	vietJSON(w, http.StatusOK, duAnRaNgoai(mot, h.nay(), nguong))
 }

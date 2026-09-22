@@ -455,6 +455,583 @@
         }
       }
     },
+    "/api/v1/disbursements": {
+      "post": {
+        "summary": "Ghi nhận một chứng từ giải ngân cho dự án đầu tư",
+        "operationId": "finance_post_disbursements",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "0f8d758a3df8",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.themChungTuVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.chungTuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/disbursements/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Gỡ mềm một chứng từ giải ngân, kèm lý do bắt buộc",
+        "operationId": "finance_delete_disbursements_by_id",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.confirm"
+        },
+        "x-vigov-task": "e48345103511",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.goChungTuVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa ngày chi, số tiền, nội dung, đối tác hoặc số chứng từ của một chứng từ chưa khoá",
+        "operationId": "finance_patch_disbursements_by_id",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "e500edac6396",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.suaChungTuVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.chungTuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/disbursements/{id}/confirmation": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Xác nhận một chứng từ giải ngân (`Kế toán nhập` → `Đã xác nhận`)",
+        "operationId": "finance_post_disbursements_by_id_confirmation",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.confirm"
+        },
+        "x-vigov-task": "676b71e2a1bf",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.chungTuRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/disbursements/{id}/lockout": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Mở khoá một chứng từ giải ngân, kèm lý do bắt buộc; người vừa khoá không tự mở lại được",
+        "operationId": "finance_delete_disbursements_by_id_lockout",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.confirm"
+        },
+        "x-vigov-task": "58ef56256c8e",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.moKhoaVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.chungTuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Khoá một chứng từ giải ngân (`Đã xác nhận` → `Đã khoá`)",
+        "operationId": "finance_post_disbursements_by_id_lockout",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "06-giai-ngan §8.2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.confirm"
+        },
+        "x-vigov-task": "4df5b143c66e",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.chungTuRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/document-types": {
       "get": {
         "summary": "Danh mục loại văn bản của xã — dùng cho ô chọn loại khi vào sổ, bộ lọc và nhãn trên mọi văn bản",
@@ -4050,6 +4627,77 @@
         ],
         "additionalProperties": false
       },
+      "finance.chungTuRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "payment_date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "đồng, always > 0 (open question #30)"
+          },
+          "description": {
+            "type": "string"
+          },
+          "counterparty": {
+            "type": "string"
+          },
+          "voucher_no": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "entered_by": {
+            "type": "string",
+            "description": "`nguoi_nhap_id` — a staff business code"
+          },
+          "confirmed_by": {
+            "type": "string",
+            "description": "`nguoi_xac_nhan_id`"
+          },
+          "locked_by": {
+            "type": "string",
+            "description": "`nguoi_khoa_id`"
+          },
+          "locked_at": {
+            "type": "string",
+            "description": "RFC 3339"
+          },
+          "unlocked_by": {
+            "type": "string"
+          },
+          "unlocked_at": {
+            "type": "string"
+          },
+          "unlock_reason": {
+            "type": "string"
+          },
+          "unlock_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "amount",
+          "description",
+          "entered_by",
+          "id",
+          "payment_date",
+          "project_id",
+          "status",
+          "unlock_count"
+        ],
+        "additionalProperties": false
+      },
       "finance.danhSachDuAnRa": {
         "type": "object",
         "properties": {
@@ -4065,10 +4713,14 @@
           "delay_threshold": {
             "type": "integer",
             "format": "int64"
+          },
+          "delay_threshold_source": {
+            "type": "string"
           }
         },
         "required": [
           "delay_threshold",
+          "delay_threshold_source",
           "items",
           "year"
         ],
@@ -4163,6 +4815,13 @@
           },
           "disbursement_deadline": {
             "type": "string"
+          },
+          "delay_threshold": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "delay_threshold_source": {
+            "type": "string"
           }
         },
         "required": [
@@ -4170,6 +4829,8 @@
           "category_id",
           "code",
           "delay_score",
+          "delay_threshold",
+          "delay_threshold_source",
           "disbursed_amount",
           "disbursed_ratio",
           "disbursement_deadline",
@@ -4179,6 +4840,18 @@
           "planned_amount",
           "remaining_amount",
           "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.goChungTuVao": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },
@@ -4223,6 +4896,67 @@
           "source",
           "tier"
         ],
+        "additionalProperties": false
+      },
+      "finance.moKhoaVao": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "finance.suaChungTuVao": {
+        "type": "object",
+        "properties": {
+          "payment_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "counterparty": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "voucher_no": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "additionalProperties": false
       },
       "finance.suaHangMucVao": {
@@ -4271,6 +5005,45 @@
             ]
           }
         },
+        "additionalProperties": false
+      },
+      "finance.themChungTuVao": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "payment_date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "đồng"
+          },
+          "description": {
+            "type": "string"
+          },
+          "counterparty": {
+            "type": "string"
+          },
+          "voucher_no": {
+            "type": "string"
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "amount",
+          "description",
+          "payment_date",
+          "project_id"
+        ],
         "additionalProperties": false
       },
       "finance.themHangMucVao": {

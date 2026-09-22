@@ -48,10 +48,8 @@
       "viec": "core/staffauth: khoá quyền trong bài kiểm phải là dòng CÓ THẬT của bảng `quyen`",
       "trang_thai": "xong",
       "bang_chung": "core/staffauth/staffauth_test.go:52 — `quyenKhac` từng là \"document.approve\", một chuỗi KHÔNG migration nào gieo và KHÔNG tuyến nào khai; đã đổi sang \"document.route\" (service-identity/migrations/0001_init.sql:289). Đã chứng minh bài kiểm CÒN SỐNG bằng hai đột biến: (a) đặt `quyenKhac` = \"document.read\" — ĐỎ (staffauth_test.go:342, 200 thay vì 403); (b) cấp \"MUTANT.rac\" cho nửa ĐƯỢC PHỤC VỤ — ĐỎ (staffauth_test.go:335, 403 thay vì 200). Phục hồi bằng bản chụp tệp, KHÔNG dùng git restore. `gofmt -l .` rỗng và `go test -race -count=1 -p 1 ./...` xanh toàn module — kiểm 2026-09-21",
-      "no_confirm": [
-        27
-      ],
-      "tiep_theo": "Đột biến (a) mới là phép kiểm có nghĩa cho ô `quyenKhac`: một chuỗi RÁC ở ô đó vẫn XANH, vì tính chất cần giữ là 'khác khoá tuyến khai', mà rác thì cũng khác. Nghĩa là ô ấy KHÔNG bắt được khoá bịa — đúng cách \"document.approve\" sống sót ở đây. Chưa có rào tự động nào đối chiếu khoá trong mã với bảng `quyen`; xem mục cùng tên ở tools.json."
+      "no_confirm": [],
+      "tiep_theo": "Đột biến (a) mới là phép kiểm có nghĩa cho ô `quyenKhac`: một chuỗi RÁC ở ô đó vẫn XANH, vì tính chất cần giữ là 'khác khoá tuyến khai', mà rác thì cũng khác. Nghĩa là ô ấy KHÔNG bắt được khoá bịa — đúng cách \"document.approve\" sống sót ở đây. Chưa có rào tự động nào đối chiếu khoá trong mã với bảng `quyen`; xem mục cùng tên ở tools.json. CÂU TỪNG CHẶN MỤC NÀY NAY ĐÃ CHỐT: #27 (ADR 0035 §D). Đó là ĐỀ XUẤT CỦA NHÀ CUNG CẤP ngày 22/09/2026, không phải trả lời của khách — đọc ADR 0035 trước khi dựa vào nó, và bảng \"cái gì đỏ nếu một mục bị phủ quyết\" ở cuối ADR ấy."
     },
     {
       "id": "boc-phan-giai-phien-cong-dan",

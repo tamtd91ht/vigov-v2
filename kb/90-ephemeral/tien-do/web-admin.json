@@ -48,11 +48,8 @@
       "viec": "Màn hình cán bộ xác thực lời khai cư trú của công dân",
       "trang_thai": "chua_lam",
       "bang_chung": "web-admin/src/app/ mới có cau-hinh, dang-nhap, page.tsx, not-found.tsx — kiểm 2026-09-20",
-      "no_confirm": [
-        19,
-        20
-      ],
-      "tiep_theo": "ADR 0023 đã chốt nghiệp vụ. Hai điều phải đúng NGAY BẢN ĐẦU vì sửa sau là sửa chữ trên màn hình một cơ quan nhà nước: (1) nhãn nói \"xác nhận LỜI KHAI\", không phải xác nhận nhân thân — nút \"Xác nhận thường trú\" đứng trơ sẽ được hiểu là đang cấp một xác nhận hành chính; (2) `bị từ chối` là trạng thái riêng, giữ nguyên lời khai và giữ LÝ DO như trường nghiệp vụ BẮT BUỘC — một textarea tuỳ chọn thì thực tế sẽ rỗng, và công dân nhận về một \"bị từ chối\" không lý do, đúng cái im lặng luật 10 cấm"
+      "no_confirm": [],
+      "tiep_theo": "ADR 0023 đã chốt nghiệp vụ. Hai điều phải đúng NGAY BẢN ĐẦU vì sửa sau là sửa chữ trên màn hình một cơ quan nhà nước: (1) nhãn nói \"xác nhận LỜI KHAI\", không phải xác nhận nhân thân — nút \"Xác nhận thường trú\" đứng trơ sẽ được hiểu là đang cấp một xác nhận hành chính; (2) `bị từ chối` là trạng thái riêng, giữ nguyên lời khai và giữ LÝ DO như trường nghiệp vụ BẮT BUỘC — một textarea tuỳ chọn thì thực tế sẽ rỗng, và công dân nhận về một \"bị từ chối\" không lý do, đúng cái im lặng luật 10 cấm CÂU TỪNG CHẶN MỤC NÀY NAY ĐÃ CHỐT: #19 (ADR 0035 §C) · #20 (ADR 0035 §D). Đó là ĐỀ XUẤT CỦA NHÀ CUNG CẤP ngày 22/09/2026, không phải trả lời của khách — đọc ADR 0035 trước khi dựa vào nó, và bảng \"cái gì đỏ nếu một mục bị phủ quyết\" ở cuối ADR ấy."
     },
     {
       "id": "danh-muc-duong-ghi-dau-tien",

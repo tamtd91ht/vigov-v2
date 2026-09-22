@@ -206,6 +206,15 @@ func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
 		// answer anything wrongly.
 		GhiHangMuc: &ghiDanhMucGia{},
 		DuAn:       duAn,
+		// The voucher write use case and the commune's threshold, so Register accepts the Deps.
+		// NOTHING IN THIS FILE CALLS THE FIRST: the write routes have their own four-case suite in
+		// chung_tu_giai_ngan_test.go, with a fake that records the commune and the acting person.
+		// The threshold IS read here, by the two project routes. nguongMacDinh() leaves EVERY commune
+		// on the software's 10 points — the state of every commune today — so the delay assertions in
+		// du_an_test.go stay about the projects rather than about a threshold fixture. The case where
+		// a commune has chosen its own figure lives beside the fake, in chung_tu_giai_ngan_test.go.
+		GhiChungTu: &ghiChungTuGia{},
+		Nguong:     nguongMacDinh(),
 		Nay:        func() time.Time { return lucDaQua7096 },
 		Log:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}

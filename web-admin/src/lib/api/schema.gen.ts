@@ -87,10 +87,36 @@ export type documents_xoaLoaiVanBanVao = {
   "reason": string;
 };
 
+export type finance_chungTuRa = {
+  "id": string;
+  "project_id": string;
+  /** YYYY-MM-DD */
+  "payment_date": string;
+  /** đồng, always > 0 (open question #30) */
+  "amount": number;
+  "description": string;
+  "counterparty"?: string;
+  "voucher_no"?: string;
+  "status": string;
+  /** `nguoi_nhap_id` — a staff business code */
+  "entered_by": string;
+  /** `nguoi_xac_nhan_id` */
+  "confirmed_by"?: string;
+  /** `nguoi_khoa_id` */
+  "locked_by"?: string;
+  /** RFC 3339 */
+  "locked_at"?: string;
+  "unlocked_by"?: string;
+  "unlocked_at"?: string;
+  "unlock_reason"?: string;
+  "unlock_count": number;
+};
+
 export type finance_danhSachDuAnRa = {
   "items": Array<finance_duAnRa>;
   "year": number;
   "delay_threshold": number;
+  "delay_threshold_source": string;
 };
 
 export type finance_danhSachHangMucRa = {
@@ -122,6 +148,12 @@ export type finance_duAnRa = {
   "start_date"?: string;
   "completion_date"?: string;
   "disbursement_deadline": string;
+  "delay_threshold": number;
+  "delay_threshold_source": string;
+};
+
+export type finance_goChungTuVao = {
+  "reason": string;
 };
 
 export type finance_hangMucRa = {
@@ -138,6 +170,20 @@ export type finance_hangMucRa = {
   "tier": number;
 };
 
+export type finance_moKhoaVao = {
+  "reason": string;
+};
+
+export type finance_suaChungTuVao = {
+  "payment_date"?: string | null;
+  "amount"?: number | null;
+  "description"?: string | null;
+  "counterparty"?: string | null;
+  "voucher_no"?: string | null;
+  "project_id"?: string | null;
+  "status"?: string | null;
+};
+
 export type finance_suaHangMucVao = {
   "label"?: string | null;
   "order"?: number | null;
@@ -146,6 +192,18 @@ export type finance_suaHangMucVao = {
   "code"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
+};
+
+export type finance_themChungTuVao = {
+  "project_id": string;
+  /** YYYY-MM-DD */
+  "payment_date": string;
+  /** đồng */
+  "amount": number;
+  "description": string;
+  "counterparty"?: string;
+  "voucher_no"?: string;
+  "status"?: string | null;
 };
 
 export type finance_themHangMucVao = {
@@ -676,6 +734,129 @@ export type identity_get_communes_current = {
   than: never;
   phanHoi: {
     200: identity_thongTinXa;
+  };
+};
+
+/** POST /api/v1/disbursements — Ghi nhận một chứng từ giải ngân cho dự án đầu tư */
+export type finance_post_disbursements = {
+  duongDan: "/api/v1/disbursements";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: finance_themChungTuVao;
+  phanHoi: {
+    201: finance_chungTuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/disbursements/{id} — Sửa ngày chi, số tiền, nội dung, đối tác hoặc số chứng từ của một chứng từ chưa khoá */
+export type finance_patch_disbursements_by_id = {
+  duongDan: "/api/v1/disbursements/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_suaChungTuVao;
+  phanHoi: {
+    200: finance_chungTuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/disbursements/{id} — Gỡ mềm một chứng từ giải ngân, kèm lý do bắt buộc */
+export type finance_delete_disbursements_by_id = {
+  duongDan: "/api/v1/disbursements/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_goChungTuVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/disbursements/{id}/confirmation — Xác nhận một chứng từ giải ngân (`Kế toán nhập` → `Đã xác nhận`) */
+export type finance_post_disbursements_by_id_confirmation = {
+  duongDan: "/api/v1/disbursements/{id}/confirmation";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_chungTuRa;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/disbursements/{id}/lockout — Khoá một chứng từ giải ngân (`Đã xác nhận` → `Đã khoá`) */
+export type finance_post_disbursements_by_id_lockout = {
+  duongDan: "/api/v1/disbursements/{id}/lockout";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_chungTuRa;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/disbursements/{id}/lockout — Mở khoá một chứng từ giải ngân, kèm lý do bắt buộc; người vừa khoá không tự mở lại được */
+export type finance_delete_disbursements_by_id_lockout = {
+  duongDan: "/api/v1/disbursements/{id}/lockout";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_moKhoaVao;
+  phanHoi: {
+    200: finance_chungTuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
   };
 };
 

@@ -129,6 +129,7 @@ func main() {
 	}
 
 	hangMuc := fistore.NewHangMucKeHoachVonStore(kho)
+	chungTu := fistore.NewChungTuGiaiNganStore(kho)
 
 	svchttp.Register(mux, svchttp.Deps{
 		Checker: staffauth.Checker{},
@@ -138,7 +139,15 @@ func main() {
 		// one is precisely what it is for.
 		GhiHangMuc: app.NewDanhMucHangMuc(kho, hangMuc),
 		DuAn:       fistore.NewDuAnStore(kho),
-		Log:        log,
+		// The disbursement voucher write path — six use cases, each opening one transaction that
+		// carries the business write AND its audit entry. Same reason as above, and it matters more
+		// here: these rows are money inside a figure the commune reports upward.
+		GhiChungTu: app.NewChungTuGiaiNgan(kho, chungTu),
+		// The commune's own slow-project threshold. WIRED RATHER THAN DEFAULTED: Register panics
+		// without it, because a nil store would mean every commune silently judged by the vendor's
+		// 10 points with nothing on the screen saying so (migration 0005, open question #31).
+		Nguong: fistore.NewCauHinhGiaiNganStore(kho),
+		Log:    log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

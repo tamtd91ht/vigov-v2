@@ -40,6 +40,13 @@
       "source": "service-identity/migrations/0004_kenh_cong_dan.sql:348"
     },
     {
+      "entity": "DisbursementSettings",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "cau_hinh_giai_ngan",
+      "source": "service-finance/migrations/0005_mo_khoa_chung_tu_va_nguong_canh_bao_cham.sql:184"
+    },
+    {
       "entity": "DisbursementVoucher",
       "service": "finance",
       "scope": "tenant",

@@ -32,10 +32,8 @@
       "viec": "Quy trình sáp nhập / chia tách / đổi tên đơn vị hành chính",
       "trang_thai": "chua_lam",
       "bang_chung": "",
-      "no_confirm": [
-        1
-      ],
-      "tiep_theo": "chưa làm được gì cho tới khi khách chốt — luật 1 stop condition #3"
+      "no_confirm": [],
+      "tiep_theo": "chưa làm được gì cho tới khi khách chốt — luật 1 stop condition #3 CÂU TỪNG CHẶN MỤC NÀY NAY ĐÃ CHỐT: #1 (ADR 0035 §D). Đó là ĐỀ XUẤT CỦA NHÀ CUNG CẤP ngày 22/09/2026, không phải trả lời của khách — đọc ADR 0035 trước khi dựa vào nó, và bảng \"cái gì đỏ nếu một mục bị phủ quyết\" ở cuối ADR ấy."
     },
     {
       "id": "ma-hoa-khi-luu",
@@ -74,10 +72,8 @@
       "viec": "Tiêu đề docs/ui-ux/14-cau-hinh.md §4.2 ghi 43 quyền / 11 nhóm, bảng ngay dưới có 33 khoá / 10 nhóm",
       "trang_thai": "treo",
       "bang_chung": "ĐÃ ĐẾM BẰNG CÂY CÚ PHÁP, không bằng mắt: docs/ui-ux/14-cau-hinh.md:104 ghi 43 quyền / 11 nhóm; service-identity/migrations/0001_init.sql nạp 33 khoá / 10 nhóm; migration 0007 thêm 2 khoá nữa -> 35 khoá / 10 nhóm. Còn thiếu TÁM khoá và TRỌN MỘT NHÓM — kiểm 2026-09-21",
-      "no_confirm": [
-        27
-      ],
-      "tiep_theo": "ĐÃ THÀNH CÂU HỎI MỞ #27, không còn là một ghi chú trôi nổi. Ngày 20/09 khách chốt thêm ĐÚNG HAI khoá cần ngay (feedback.classify, feedback.unmask — ADR 0030) và CỐ Ý để lại phần còn thiếu. ĐỪNG BỊA TÁM KHOÁ CÒN LẠI CHO ĐỦ SỐ: luật 5 nói tuyến không khai quyền là tuyến MỌI vai trò cán bộ gọi được, nhưng một khoá BỊA RA còn tệ hơn — nó hiện lên màn Phân quyền như một thẩm quyền có thật, quản trị xã tick vào, và không ai biết nó canh cái gì. Nhóm thứ 11 còn thiếu rất có thể là nhóm của một phân hệ chưa dựng."
+      "no_confirm": [],
+      "tiep_theo": "ĐÃ THÀNH CÂU HỎI MỞ #27, không còn là một ghi chú trôi nổi. Ngày 20/09 khách chốt thêm ĐÚNG HAI khoá cần ngay (feedback.classify, feedback.unmask — ADR 0030) và CỐ Ý để lại phần còn thiếu. ĐỪNG BỊA TÁM KHOÁ CÒN LẠI CHO ĐỦ SỐ: luật 5 nói tuyến không khai quyền là tuyến MỌI vai trò cán bộ gọi được, nhưng một khoá BỊA RA còn tệ hơn — nó hiện lên màn Phân quyền như một thẩm quyền có thật, quản trị xã tick vào, và không ai biết nó canh cái gì. Nhóm thứ 11 còn thiếu rất có thể là nhóm của một phân hệ chưa dựng. CÂU TỪNG CHẶN MỤC NÀY NAY ĐÃ CHỐT: #27 (ADR 0035 §D). Đó là ĐỀ XUẤT CỦA NHÀ CUNG CẤP ngày 22/09/2026, không phải trả lời của khách — đọc ADR 0035 trước khi dựa vào nó, và bảng \"cái gì đỏ nếu một mục bị phủ quyết\" ở cuối ADR ấy."
     },
     {
       "id": "pii-trong-lich-su-git",

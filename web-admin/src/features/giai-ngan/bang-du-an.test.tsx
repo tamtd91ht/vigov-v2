@@ -28,12 +28,18 @@ function duAn(sua: Partial<finance_duAnRa> = {}): finance_duAnRa {
     delay_score: null,
     is_delayed: false,
     disbursement_deadline: "2026-12-31",
+    // Ngưỡng cảnh báo chậm nay của TỪNG XÃ, đọc từ `cau_hinh_giai_ngan` chứ không còn là hằng số
+    // trong kho mã nhà cung cấp (luật 1 bất biến 10, câu mở #31 chốt 22/09/2026). `…_source` nói
+    // con số ấy đến từ đâu — `mac_dinh` khi xã chưa khai — nên một màn hình đọc được nó phân biệt
+    // được "xã đã chọn 10" với "chưa ai chọn gì nên lấy 10".
+    delay_threshold: 1000,
+    delay_threshold_source: "mac_dinh",
     ...sua,
   };
 }
 
 function danhSach(items: finance_duAnRa[]): finance_danhSachDuAnRa {
-  return { items, year: 2026, delay_threshold: 1000 };
+  return { items, year: 2026, delay_threshold: 1000, delay_threshold_source: "mac_dinh" };
 }
 
 describe("bảng dự án kết xuất ra trang", () => {
@@ -80,7 +86,10 @@ describe("bảng dự án kết xuất ra trang", () => {
   it("năm trên bảng lấy từ PHẢN HỒI, không từ ô chọn", () => {
     // Một phản hồi không nói nó thuộc năm nào thì không phân biệt được với phản hồi của năm khác.
     const html = renderToStaticMarkup(
-      <BangDanhSach duLieu={{ items: [duAn()], year: 2024, delay_threshold: 1000 }} danhMuc={[]} />,
+      <BangDanhSach
+        duLieu={{ items: [duAn()], year: 2024, delay_threshold: 1000, delay_threshold_source: "mac_dinh" }}
+        danhMuc={[]}
+      />,
     );
 
     expect(html).toContain("2024");

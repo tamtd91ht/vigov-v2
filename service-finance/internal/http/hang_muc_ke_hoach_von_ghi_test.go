@@ -162,6 +162,10 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		HangMuc:    hangMucMau(),
 		GhiHangMuc: ghi,
 		DuAn:       duAnMau(),
+		// Present because Register refuses a nil dependency at construction. No case in this file
+		// touches a voucher — the disbursement write routes have their own suite next door.
+		GhiChungTu: &ghiChungTuGia{},
+		Nguong:     nguongMacDinh(),
 		Nay:        func() time.Time { return lucDaQua7096 },
 		Log:        im,
 	})

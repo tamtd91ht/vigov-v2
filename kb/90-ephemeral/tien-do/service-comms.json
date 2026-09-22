@@ -80,10 +80,8 @@
       "viec": "cmd/server/main_test.go: bỏ khoá bịa `map.read` — dịch vụ này KHÔNG có tuyến nào kiểm quyền",
       "trang_thai": "xong",
       "bang_chung": "cmd/server/main_test.go:168 — từng cấp \"map.read\", một chuỗi không migration nào gieo và không tuyến nào kiểm; phân hệ bản đồ tài nguyên trong bảng `quyen` mang tiền tố `asset.*` (service-identity/migrations/0001_init.sql:280-281). KHÔNG thay bằng `asset.read`: tuyến duy nhất của dịch vụ — GET /api/v1/map-asset-types — khai AnyAuthenticated (internal/http/routes.go:146), nên viết một khoá thật vào đây vẫn là lời khai SAI về thứ tuyến đòi hỏi. Đã đổi thành cán bộ KHÔNG GIỮ KHOÁ NÀO, tức đúng điều tuyến ấy cam kết. Đã chứng minh CÒN SỐNG: đổi khai báo tuyến thành RequirePermission(\"asset.read\") → ĐỎ hai ca (main_test.go:179 và :265, 403 thay vì 200); đã phục hồi routes.go bằng bản chụp tệp, KHÔNG dùng git restore. `gofmt -l .` rỗng và `go test -race -count=1 -p 1 ./...` xanh toàn module — kiểm 2026-09-21",
-      "no_confirm": [
-        27
-      ],
-      "tiep_theo": "service-comms hiện KHÔNG có tuyến nào khai RequirePermission, nên không khoá nào trong module này có thể mang trọng lượng. Khi tuyến GHI tài nguyên bản đồ xuất hiện, nó sẽ là tuyến đầu tiên cần `asset.update` — và là chỗ đầu tiên viết được bốn ca luật 5 bất biến 7 cho dịch vụ này."
+      "no_confirm": [],
+      "tiep_theo": "service-comms hiện KHÔNG có tuyến nào khai RequirePermission, nên không khoá nào trong module này có thể mang trọng lượng. Khi tuyến GHI tài nguyên bản đồ xuất hiện, nó sẽ là tuyến đầu tiên cần `asset.update` — và là chỗ đầu tiên viết được bốn ca luật 5 bất biến 7 cho dịch vụ này. CÂU TỪNG CHẶN MỤC NÀY NAY ĐÃ CHỐT: #27 (ADR 0035 §D). Đó là ĐỀ XUẤT CỦA NHÀ CUNG CẤP ngày 22/09/2026, không phải trả lời của khách — đọc ADR 0035 trước khi dựa vào nó, và bảng \"cái gì đỏ nếu một mục bị phủ quyết\" ở cuối ADR ấy."
     },
     {
       "id": "vet-ghi-ma-can-bo",

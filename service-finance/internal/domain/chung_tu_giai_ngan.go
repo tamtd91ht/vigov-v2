@@ -72,7 +72,7 @@ const (
 // is read years later by somebody handling an inspection, and a ULID names nobody. The migration
 // states the convention once, at 0005.
 type ChungTuGiaiNgan struct {
-	ID    string // ULID
+	ID     string // ULID
 	DuAnID string
 
 	// NgayChi is the date of the payment, not the date the row was typed. They differ routinely —
@@ -83,10 +83,10 @@ type ChungTuGiaiNgan struct {
 	// SoTien is the amount in ĐỒNG. Always > 0 — see KiemTraSoTien and open question #30.
 	SoTien Dong
 
-	NoiDung    string
-	DoiTac     string // "Công ty ABC" — a company, not a person. Nothing here is personal data.
-	SoChungTu  string
-	TrangThai  TrangThaiChungTu
+	NoiDung   string
+	DoiTac    string // "Công ty ABC" — a company, not a person. Nothing here is personal data.
+	SoChungTu string
+	TrangThai TrangThaiChungTu
 
 	NguoiNhapID    string
 	NguoiXacNhanID string
@@ -153,7 +153,28 @@ var (
 // --- what a client may actually supply ----------------------------------------------------------
 
 var (
-	ErrThieuDuAn        = errors.New("chung_tu: thiếu dự án cho chứng từ")
+	ErrThieuDuAn = errors.New("chung_tu: thiếu dự án cho chứng từ")
+
+	// ErrTrangThaiDoTuClient — a request tried to set `trang_thai` itself.
+	//
+	// REFUSED RATHER THAN IGNORED, and the difference is what the client learns. The state is not
+	// reachable from any layer above the store — the INSERT writes `'ke-toan-nhap'` as a literal and
+	// no UPDATE outside the three lifecycle statements names the column — so ignoring it would be
+	// safe and would leave the client believing it had just created a voucher already `Đã khoá`: a
+	// figure nobody confirmed, frozen against editing, counting toward the commune's total. The
+	// state moves through the four lifecycle routes, each with its own permission and its own entry
+	// in the trail.
+	ErrTrangThaiDoTuClient = errors.New("chung_tu: `status` không do client đặt — vòng đời đi qua các tuyến xác nhận / khoá / mở khoá, mỗi bước một vết kiểm toán")
+
+	// ErrDuAnBatBien — a request tried to move a voucher to another project.
+	//
+	// WHY IT IS REFUSED AT ALL, when "the accountant filed it under the wrong project" is a real and
+	// ordinary mistake: moving the row moves money between two totals that have already been read
+	// off a screen, and it does so leaving ONE entry that reads as an edit. Removing the voucher
+	// with a reason and entering it again leaves two, both naming the project they belong to, which
+	// is what an inspection can actually follow.
+	ErrDuAnBatBien = errors.New("chung_tu: không chuyển chứng từ sang dự án khác — hãy gỡ chứng từ kèm lý do rồi nhập lại ở dự án đúng")
+
 	ErrSoTienKhongDuong = errors.New("chung_tu: `amount` phải lớn hơn 0 đồng")
 	ErrSoTienQuaLon     = errors.New("chung_tu: `amount` vượt mức một chứng từ giải ngân cấp xã có thể có")
 	ErrThieuNgayChi     = errors.New("chung_tu: thiếu `payment_date`")
@@ -172,13 +193,13 @@ var (
 // which a value stops being a voucher field and starts being a mistake or an attack. An unbounded
 // client-supplied string in a government database is a liability, not a feature.
 const (
-	NoiDungChungTuToiDa   = 1000
-	DoiTacToiDa           = 300
-	SoChungTuToiDa        = 100
-	LyDoMoKhoaToiDa       = 500
-	LyDoGoChungTuToiDa    = 500
-	NamChungTuSom         = 2000
-	NamChungTuMuon        = 2100
+	NoiDungChungTuToiDa = 1000
+	DoiTacToiDa         = 300
+	SoChungTuToiDa      = 100
+	LyDoMoKhoaToiDa     = 500
+	LyDoGoChungTuToiDa  = 500
+	NamChungTuSom       = 2000
+	NamChungTuMuon      = 2100
 
 	// SoTienToiDa is one hundred thousand billion đồng (10^17), and it is a TYPO GUARD, not a
 	// business ceiling.
