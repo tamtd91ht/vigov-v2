@@ -195,7 +195,7 @@ func TestPhienHienTaiKhongTraTokenHashHayDuLieuCaNhan(t *testing.T) {
 	}
 	for _, cam := range []string{
 		"0900000000", "argon2", "mat_khau", "password", "refresh", "token",
-		"dien_thoai", "phone", emailDung, "email",
+		"dien_thoai_co_quan", "phone", emailDung, "email",
 	} {
 		if strings.Contains(strings.ToLower(than), strings.ToLower(cam)) {
 			t.Errorf("phản hồi chứa %q: %s", cam, than)

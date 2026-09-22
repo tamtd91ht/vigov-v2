@@ -24,7 +24,7 @@ import (
 //	            (rule 1, invariant 6).
 //	§3 of 0009  `co_tai_khoan` implies a non-empty `mat_khau_hash`.
 //	§1 of 0009  `phai_doi_mat_khau` defaults to TRUE — fail closed.
-//	§2 of 0009  `di_dong` exists, separately from `dien_thoai`.
+//	§2 of 0009  `di_dong_ca_nhan` exists, separately from `dien_thoai_co_quan`.
 //
 // Skipped unless VIGOV_TEST_DSN is set. The DSN carries a password and lives only in the
 // environment (rule 8). The shared harness is in checker_pg_test.go (moKetNoi, xaRieng, ctxXa).
@@ -175,10 +175,10 @@ func TestPgPhaiDoiMatKhauMacDinhLaTrue(t *testing.T) {
 	}
 
 	var phaiDoi bool
-	var diDong string
+	var diDongCaNhan string
 	err := db.QueryRow(
-		`SELECT phai_doi_mat_khau, di_dong FROM nguoi_dung WHERE tenant_id = $1 AND id = $2`,
-		xa, "md-"+xa).Scan(&phaiDoi, &diDong)
+		`SELECT phai_doi_mat_khau, di_dong_ca_nhan FROM nguoi_dung WHERE tenant_id = $1 AND id = $2`,
+		xa, "md-"+xa).Scan(&phaiDoi, &diDongCaNhan)
 	if err != nil {
 		t.Fatalf("đọc lại: %v", err)
 	}
@@ -186,9 +186,9 @@ func TestPgPhaiDoiMatKhauMacDinhLaTrue(t *testing.T) {
 		t.Error("phai_doi_mat_khau mặc định FALSE — một tài khoản do quản trị viên tạo sẽ " +
 			"giữ mãi mật khẩu người khác đặt (câu #9, luật 6 bất biến 2)")
 	}
-	// di_dong exists and is '' rather than NULL — one spelling of "no number", so no query has to
+	// di_dong_ca_nhan exists and is '' rather than NULL — one spelling of "no number", so no query has to
 	// handle two (migration 0009 §2).
-	if diDong != "" {
-		t.Errorf("di_dong mặc định %q, muốn chuỗi rỗng", diDong)
+	if diDongCaNhan != "" {
+		t.Errorf("di_dong_ca_nhan mặc định %q, muốn chuỗi rỗng", diDongCaNhan)
 	}
 }

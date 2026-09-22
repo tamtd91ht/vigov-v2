@@ -8,15 +8,15 @@ import "time"
 // opposite of citizen identity — a phone number plus an OTP — which is deliberately weak and
 // never enough on its own for an act with legal consequences. The two never share a type.
 type CanBo struct {
-	ID          string // ULID, internal
-	Ma          string // business code, the one that appears in the audit trail
-	HoTen       string
-	Email       string
-	ChucVu      string
-	BoPhanID    string
-	VaiTroID    string
-	DienThoai   string
-	MatKhauHash string // argon2id. NEVER the password, never logged (rule 3, rule 8)
+	ID              string // ULID, internal
+	Ma              string // business code, the one that appears in the audit trail
+	HoTen           string
+	Email           string
+	ChucVu          string
+	BoPhanID        string
+	VaiTroID        string
+	DienThoaiCoQuan string
+	MatKhauHash     string // argon2id. NEVER the password, never logged (rule 3, rule 8)
 
 	// PhaiDoiMatKhau — "this account is still carrying a password somebody else chose".
 	//
@@ -62,7 +62,7 @@ type CanBo struct {
 // while a field merely left empty by convention is one careless SELECT away from being filled
 // again, and the read path that would fill it is the one nobody re-reads.
 //
-// DienThoai AND DiDong ARE BOTH HELD RAW HERE, and must be masked before they leave the API
+// DienThoaiCoQuan AND DiDongCaNhan ARE BOTH HELD RAW HERE, and must be masked before they leave the API
 // (rule 3, invariant 3) — but NOT by the same rule, and that is the whole reason they are two
 // fields. The masking lives at the edge, in internal/http, because "what a caller is allowed to
 // see" is a question about the caller — not about the record. Masking in the store would also
@@ -86,9 +86,9 @@ type CanBoTomTat struct {
 	// 2026-09-22. Merging them would force ONE masking, export and publication rule onto both,
 	// and the level that is right for one is always wrong for the other.
 	//
-	//	DienThoai  the OFFICE LANDLINE of a public office. Duty information. A commune puts it on
+	//	DienThoaiCoQuan  the OFFICE LANDLINE of a public office. Duty information. A commune puts it on
 	//	           its own notice board; redacting it protects nobody.
-	//	DiDong     the person's OWN MOBILE. PERSONAL DATA under Decree 13/2023/NĐ-CP. Shown
+	//	DiDongCaNhan     the person's OWN MOBILE. PERSONAL DATA under Decree 13/2023/NĐ-CP. Shown
 	//	           unmasked to staff of the same commune — they have to ring each other, and
 	//	           hiding it just moves the number into a private channel the commune cannot
 	//	           audit (#11) — but ALWAYS masked in an Excel export (rule 3, invariant 4), and
@@ -98,8 +98,8 @@ type CanBoTomTat struct {
 	// Both RAW here. Masked at the edge — see the note above. Reading one for the other is the
 	// mistake this comment exists to prevent: they are adjacent TEXT columns in the SELECT list,
 	// and swapping them produces no error anywhere (see store.cotTomTat).
-	DienThoai string
-	DiDong    string
+	DienThoaiCoQuan string
+	DiDongCaNhan    string
 
 	// The two flags answer two different questions; see CanBo for why they are not one column.
 	// BOTH are returned, unfiltered, because ONE table serves TWO screens: the directory shows
@@ -118,8 +118,8 @@ type CanBoTomTat struct {
 // CanBoVaiTro is one staff member as the INTER-SERVICE contract sees them, and it is
 // deliberately the narrowest of the three staff types in this file.
 //
-// WHY A THIRD TYPE AND NOT CanBoTomTat. CanBoTomTat carries HoTen, DiDong, Email and ChucVu —
-// four citizen-grade personal data of a member of staff (rule 3), DiDong being the one Decree
+// WHY A THIRD TYPE AND NOT CanBoTomTat. CanBoTomTat carries HoTen, DiDongCaNhan, Email and ChucVu —
+// four citizen-grade personal data of a member of staff (rule 3), DiDongCaNhan being the one Decree
 // 13/2023/NĐ-CP names outright since #16 separated it from the office landline. `message Staff` in
 // proto/vigov/identity/v1/identity.proto declares NONE of them, so a read path that loads them
 // would be a read path that has the values in hand at the moment somebody adds a field to the

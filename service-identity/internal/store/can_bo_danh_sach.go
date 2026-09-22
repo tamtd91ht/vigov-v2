@@ -36,11 +36,11 @@ import (
 // (14-cau-hinh.md §3). Every one of these is excluded for a reason pkg/page states, not for
 // convenience:
 //
-//	ho_ten, dien_thoai   a sort key travels in a URL, an access log and a browser history.
-//	di_dong              Sorting on a person's own attributes puts personal data in all three
+//	ho_ten, dien_thoai_co_quan   a sort key travels in a URL, an access log and a browser history.
+//	di_dong_ca_nhan              Sorting on a person's own attributes puts personal data in all three
 //	                     (rule 3, forbidden #4) — pkg/page says so in its package comment.
-//	                     `di_dong` is the clearest case of the three since #16 named it personal
-//	                     data outright, and `dien_thoai` stays excluded even though it is duty
+//	                     `di_dong_ca_nhan` is the clearest case of the three since #16 named it personal
+//	                     data outright, and `dien_thoai_co_quan` stays excluded even though it is duty
 //	                     information: a sort key is a promise about the whole column, and the
 //	                     next column somebody adds to this list will not be re-argued.
 //	dang_nhap_gan_nhat   NULLABLE. `(col, id) > ($2, $3)` is NULL when col is NULL, so every
@@ -65,10 +65,10 @@ var SapXepCanBo = page.NewAllowlist(page.Asc,
 // selected cannot leak through a handler that forgot to drop it. domain.CanBoTomTat has no field
 // to put it in either, so adding it here would not even compile.
 //
-// `dien_thoai` AND `di_dong` ARE ADJACENT TEXT COLUMNS AND ARE THE SECOND TRAP IN THIS LIST,
+// `dien_thoai_co_quan` AND `di_dong_ca_nhan` ARE ADJACENT TEXT COLUMNS AND ARE THE SECOND TRAP IN THIS LIST,
 // added by migration 0009 §2. A swap between them is exactly as silent as the one above — two
 // strings into two strings — and it is WORSE in consequence, because the two are different kinds
-// of data in law (#16): `dien_thoai` is the office landline, duty information; `di_dong` is the
+// of data in law (#16): `dien_thoai_co_quan` is the office landline, duty information; `di_dong_ca_nhan` is the
 // person's own mobile, personal data under Decree 13/2023/NĐ-CP. Traded over, every masking rule
 // then applies to the wrong one — the switchboard number is redacted from the commune's own
 // directory while the personal mobile goes out in an unmasked export. Pinned by a test that
@@ -76,7 +76,7 @@ var SapXepCanBo = page.NewAllowlist(page.Asc,
 // read.
 const cotTomTat = `id, ma, ho_ten, email, chuc_vu,
                    coalesce(bo_phan_id,''), coalesce(vai_tro_id,''),
-                   dien_thoai, di_dong, co_tai_khoan, dang_hoat_dong,
+                   dien_thoai_co_quan, di_dong_ca_nhan, co_tai_khoan, dang_hoat_dong,
                    dang_nhap_gan_nhat, tao_luc`
 
 // locTomTat is the ONE predicate both read paths share.
@@ -165,7 +165,7 @@ func motTomTat(rows quetDuoc) (domain.CanBoTomTat, error) {
 func quetTomTat(rows quetDuoc) (domain.CanBoTomTat, error) {
 	var cb domain.CanBoTomTat
 	err := rows.Scan(&cb.ID, &cb.Ma, &cb.HoTen, &cb.Email, &cb.ChucVu,
-		&cb.BoPhanID, &cb.VaiTroID, &cb.DienThoai, &cb.DiDong,
+		&cb.BoPhanID, &cb.VaiTroID, &cb.DienThoaiCoQuan, &cb.DiDongCaNhan,
 		&cb.CoTaiKhoan, &cb.DangHoatDong,
 		&cb.DangNhapGanNhat, &cb.TaoLuc)
 	if err != nil {

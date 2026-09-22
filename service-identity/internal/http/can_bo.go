@@ -94,7 +94,7 @@ func raNgoai(cb domain.CanBoTomTat) canBoTomTat {
 		Position:     cb.ChucVu,
 		DepartmentID: cb.BoPhanID,
 		RoleID:       cb.VaiTroID,
-		Phone:        maskDienThoai(cb.DienThoai),
+		Phone:        maskDienThoai(cb.DienThoaiCoQuan),
 		HasAccount:   cb.CoTaiKhoan,
 		Active:       cb.DangHoatDong,
 		LastLoginAt:  cb.DangNhapGanNhat,

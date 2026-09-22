@@ -36,15 +36,15 @@ import (
 // a row is DECODED, not about which rows come back. The predicates are asserted separately, at
 // the bottom of this file.
 var hangMau = map[string]driver.Value{
-	"id":            "nd-01JINTERNALIDCUACANBO",
-	"ma":            "CB-2026-7K3M9Q",
-	"ho_ten":        "Nguyễn Văn A",
-	"email":         "canbo.a@example.gov.vn",
-	"chuc_vu":       "Công chức Văn phòng",
-	"bo_phan_id":    "bp-001",
-	"vai_tro_id":    "vt-001",
-	"dien_thoai":    "0900000000", // the agreed fake number (rule 3, invariant 5)
-	"mat_khau_hash": "$argon2id$gia$KHONG-PHAI-HASH-THAT",
+	"id":                 "nd-01JINTERNALIDCUACANBO",
+	"ma":                 "CB-2026-7K3M9Q",
+	"ho_ten":             "Nguyễn Văn A",
+	"email":              "canbo.a@example.gov.vn",
+	"chuc_vu":            "Công chức Văn phòng",
+	"bo_phan_id":         "bp-001",
+	"vai_tro_id":         "vt-001",
+	"dien_thoai_co_quan": "0900000000", // the agreed fake number (rule 3, invariant 5)
+	"mat_khau_hash":      "$argon2id$gia$KHONG-PHAI-HASH-THAT",
 	// phai_doi_mat_khau = true against co_tai_khoan = false: a THIRD asymmetric value, so a
 	// positional slip involving this column cannot hide behind the other two. It also sits
 	// between two TEXT columns in cotCanBo on purpose — see the note there.
@@ -278,15 +278,15 @@ func TestMoiTruongCanBoVeDungChoCuaNo(t *testing.T) {
 		t.Fatalf("đọc cán bộ lỗi: %v", err)
 	}
 	for ten, cap := range map[string][2]string{
-		"ID":          {cb.ID, hangMau["id"].(string)},
-		"Ma":          {cb.Ma, hangMau["ma"].(string)},
-		"HoTen":       {cb.HoTen, hangMau["ho_ten"].(string)},
-		"Email":       {cb.Email, hangMau["email"].(string)},
-		"ChucVu":      {cb.ChucVu, hangMau["chuc_vu"].(string)},
-		"BoPhanID":    {cb.BoPhanID, hangMau["bo_phan_id"].(string)},
-		"VaiTroID":    {cb.VaiTroID, hangMau["vai_tro_id"].(string)},
-		"DienThoai":   {cb.DienThoai, hangMau["dien_thoai"].(string)},
-		"MatKhauHash": {cb.MatKhauHash, hangMau["mat_khau_hash"].(string)},
+		"ID":              {cb.ID, hangMau["id"].(string)},
+		"Ma":              {cb.Ma, hangMau["ma"].(string)},
+		"HoTen":           {cb.HoTen, hangMau["ho_ten"].(string)},
+		"Email":           {cb.Email, hangMau["email"].(string)},
+		"ChucVu":          {cb.ChucVu, hangMau["chuc_vu"].(string)},
+		"BoPhanID":        {cb.BoPhanID, hangMau["bo_phan_id"].(string)},
+		"VaiTroID":        {cb.VaiTroID, hangMau["vai_tro_id"].(string)},
+		"DienThoaiCoQuan": {cb.DienThoaiCoQuan, hangMau["dien_thoai_co_quan"].(string)},
+		"MatKhauHash":     {cb.MatKhauHash, hangMau["mat_khau_hash"].(string)},
 	} {
 		if cap[0] != cap[1] {
 			t.Errorf("%s = %q, muốn %q — sai thứ tự cột", ten, cap[0], cap[1])

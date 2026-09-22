@@ -121,13 +121,13 @@ func TestLoi500KhongLoNoiDungLoiRaNgoai(t *testing.T) {
 	// wrapping a driver error can carry a column value with it, so the edge answers with a fixed
 	// sentence and keeps the detail on the server side.
 	m, _ := mayChuLog(t)
-	m.dangXuat.loi = errors.New("pq: duplicate key value violates unique constraint (dien_thoai)=(0900000000)")
+	m.dangXuat.loi = errors.New("pq: duplicate key value violates unique constraint (dien_thoai_co_quan)=(0900000000)")
 
 	w := m.goi(t, "DELETE", hostA, "/api/v1/sessions/"+sidA, "", m.tokenCho(t, xaA, sidA))
 	doiMa(t, w, http.StatusInternalServerError)
 
 	than := w.Body.String()
-	for _, cam := range []string{"0900000000", "pq:", "dien_thoai", "constraint"} {
+	for _, cam := range []string{"0900000000", "pq:", "dien_thoai_co_quan", "constraint"} {
 		if strings.Contains(than, cam) {
 			t.Errorf("thân phản hồi 500 chứa %q: %s", cam, than)
 		}

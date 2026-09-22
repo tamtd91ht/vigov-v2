@@ -380,7 +380,7 @@ func TestMaTranQuyenChiDemKhongTraTenNguoi(t *testing.T) {
 
 	than := strings.ToLower(w.Body.String())
 	for _, cam := range []string{"0900000000", "nguyễn văn a", emailDung, maCanBo, idNoiBo,
-		"ho_ten", "full_name", "email", "phone", "dien_thoai"} {
+		"ho_ten", "full_name", "email", "phone", "dien_thoai_co_quan"} {
 		if strings.Contains(than, strings.ToLower(cam)) {
 			t.Errorf("ma trận phân quyền chứa %q: %s", cam, w.Body.String())
 		}

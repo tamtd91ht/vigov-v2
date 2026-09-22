@@ -268,7 +268,7 @@ func dieuKien(q string) string {
 // SELECT list.
 var cotNguoiDung = []string{
 	"id", "ma", "ho_ten", "email", "chuc_vu", "bo_phan_id", "vai_tro_id",
-	"dien_thoai", "phai_doi_mat_khau", "mat_khau_hash", "co_tai_khoan", "dang_hoat_dong",
+	"dien_thoai_co_quan", "phai_doi_mat_khau", "mat_khau_hash", "co_tai_khoan", "dang_hoat_dong",
 }
 
 func giaTri(args []driver.NamedValue) []driver.Value {

@@ -39,7 +39,7 @@ var ErrCanBoKhongTonTai = errors.New("can_bo: không tồn tại")
 // somebody having written a test.
 const cotCanBo = `id, ma, ho_ten, email, chuc_vu,
                   coalesce(bo_phan_id,''), coalesce(vai_tro_id,''),
-                  dien_thoai, phai_doi_mat_khau, mat_khau_hash,
+                  dien_thoai_co_quan, phai_doi_mat_khau, mat_khau_hash,
                   co_tai_khoan, dang_hoat_dong`
 
 // TheoEmail looks a staff member up for sign-in.
@@ -152,7 +152,7 @@ func motCanBo(rows quetDuoc) (domain.CanBo, error) {
 	// POSITIONAL — this list must stay in lockstep with cotCanBo. See the note there on the two
 	// adjacent bools.
 	err := rows.Scan(&cb.ID, &cb.Ma, &cb.HoTen, &cb.Email, &cb.ChucVu,
-		&cb.BoPhanID, &cb.VaiTroID, &cb.DienThoai, &cb.PhaiDoiMatKhau, &cb.MatKhauHash,
+		&cb.BoPhanID, &cb.VaiTroID, &cb.DienThoaiCoQuan, &cb.PhaiDoiMatKhau, &cb.MatKhauHash,
 		&cb.CoTaiKhoan, &cb.DangHoatDong)
 	if err != nil {
 		return domain.CanBo{}, fmt.Errorf("can_bo: đọc dòng: %w", err)

@@ -71,8 +71,8 @@ func canBoMau() domain.CanBo {
 		ChucVu: "Công chức Văn phòng",
 		// The agreed fake number (rule 3, invariant 5). It is here so the tests below can prove
 		// it never reaches the response.
-		DienThoai:   "0900000000",
-		MatKhauHash: "$argon2id$gia$KHONG-PHAI-HASH-THAT",
+		DienThoaiCoQuan: "0900000000",
+		MatKhauHash:     "$argon2id$gia$KHONG-PHAI-HASH-THAT",
 		// Both true: this fixture is a person who HAS a sign-in account and is NOT locked. The
 		// two are separate columns since migration 0003 and the store filters on both, so a
 		// principal that reaches these routes has satisfied both.
@@ -895,7 +895,7 @@ func TestDangNhapKhongTraDuLieuCaNhanVaKhongTraHash(t *testing.T) {
 	doiMa(t, w, http.StatusCreated)
 
 	than := w.Body.String()
-	for _, cam := range []string{"0900000000", "argon2", "dien_thoai", "phone", "mat_khau", "password"} {
+	for _, cam := range []string{"0900000000", "argon2", "dien_thoai_co_quan", "phone", "mat_khau", "password"} {
 		if strings.Contains(strings.ToLower(than), strings.ToLower(cam)) {
 			t.Errorf("phản hồi đăng nhập chứa %q: %s", cam, than)
 		}

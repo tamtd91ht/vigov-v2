@@ -51,19 +51,19 @@ func danhBaXaA() []domain.CanBoTomTat {
 			ChucVu: "Công chức Văn phòng", BoPhanID: "bp-001", VaiTroID: "vt-001",
 			// The agreed fake number (rule 3, invariant 5), here so the tests can prove the raw
 			// value never reaches a response body.
-			DienThoai: "0900000000", CoTaiKhoan: true, DangHoatDong: true,
+			DienThoaiCoQuan: "0900000000", CoTaiKhoan: true, DangHoatDong: true,
 			DangNhapGanNhat: &dangNhapLuc, TaoLuc: tao,
 		},
 		{
 			ID: "nd-02", Ma: "CB-002", HoTen: "Trần Thị B", Email: "canbo.b@example.gov.vn",
 			ChucVu: "Trưởng thôn", BoPhanID: "bp-002",
-			DienThoai: "0900000002", CoTaiKhoan: false, DangHoatDong: true,
+			DienThoaiCoQuan: "0900000002", CoTaiKhoan: false, DangHoatDong: true,
 			TaoLuc: tao.Add(time.Hour),
 		},
 		{
 			ID: "nd-03", Ma: "CB-003", HoTen: "Lê Văn C", Email: "canbo.c@example.gov.vn",
 			ChucVu: "Kế toán", BoPhanID: "bp-001", VaiTroID: "vt-002",
-			DienThoai: "0900000003", CoTaiKhoan: true, DangHoatDong: false,
+			DienThoaiCoQuan: "0900000003", CoTaiKhoan: true, DangHoatDong: false,
 			TaoLuc: tao.Add(2 * time.Hour),
 		},
 	}
@@ -79,7 +79,7 @@ func danhBaMau() *danhBaGia {
 		// does not exist anywhere.
 		xaB: {{
 			ID: idCuaXaB, Ma: "CB-001", HoTen: "Phạm Thị D", Email: "canbo.d@example.gov.vn",
-			DienThoai: "0900000004", CoTaiKhoan: true, DangHoatDong: true,
+			DienThoaiCoQuan: "0900000004", CoTaiKhoan: true, DangHoatDong: true,
 		}},
 	}}
 }
@@ -214,7 +214,7 @@ func TestCanBo_200DuCaHai(t *testing.T) {
 
 func TestCanBoCheSoDienThoai(t *testing.T) {
 	// MUTATION THAT MUST TURN THIS RED: drop privacy.MaskPhone from raNgoai and return
-	// cb.DienThoai. Nothing else in the suite notices — the field is still present, still a
+	// cb.DienThoaiCoQuan. Nothing else in the suite notices — the field is still present, still a
 	// string, still the right person's.
 	//
 	// Masking is the fail-closed default while open question #11 is unanswered: no seeded
@@ -448,7 +448,7 @@ func TestCanBoSapXepNgoaiDanhSachTrangTra400(t *testing.T) {
 	// than ignored.
 	m := dungMayChu(t)
 
-	for _, truyVan := range []string{"?sort=ho_ten", "?sort=dien_thoai", "?order=cheo", "?limit=0"} {
+	for _, truyVan := range []string{"?sort=ho_ten", "?sort=dien_thoai_co_quan", "?order=cheo", "?limit=0"} {
 		w := m.goi(t, "GET", hostA, "/api/v1/staff"+truyVan, "", m.tokenCho(t, xaA, sidA))
 		doiMa(t, w, http.StatusBadRequest)
 	}
@@ -504,12 +504,12 @@ func TestSapXepCanBoKhongMoCotDuLieuCaNhanVaKhongMoCotNULL(t *testing.T) {
 	// The allowlist is what decides which column names may appear in a URL. Two kinds must never
 	// be on it, and neither failure is visible from a passing screen:
 	//
-	//   ho_ten / dien_thoai   a sort key travels in the URL, the access log and the browser
+	//   ho_ten / dien_thoai_co_quan   a sort key travels in the URL, the access log and the browser
 	//                         history (rule 3, forbidden #4);
 	//   dang_nhap_gan_nhat    NULLABLE — `(col, id) > ($2, $3)` is NULL for a NULL col, so every
 	//                         person who has never signed in vanishes from every page after the
 	//                         first.
-	for _, cot := range []string{"ho_ten", "full_name", "dien_thoai", "phone",
+	for _, cot := range []string{"ho_ten", "full_name", "dien_thoai_co_quan", "phone",
 		"dang_nhap_gan_nhat", "last_login_at", "email"} {
 		if _, err := page.New(idstore.SapXepCanBo, cot, "", "", ""); err == nil {
 			t.Errorf("sắp xếp theo %q được chấp nhận", cot)

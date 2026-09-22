@@ -118,11 +118,13 @@ COMMENT ON COLUMN nguoi_dung.phai_doi_mat_khau IS
     'Meaningless where co_tai_khoan is false: there is no account to force.';
 
 -- ---------------------------------------------------------------------------
--- 2. di_dong — question #16. TWO COLUMNS, BECAUSE THEY ARE TWO KINDS OF DATA IN LAW.
+-- 2. di_dong_ca_nhan — question #16. TWO COLUMNS, BECAUSE THEY ARE TWO KINDS OF DATA IN LAW.
 --
---   dien_thoai  the office landline of a public office. DUTY INFORMATION. A commune publishes it
---               on its own notice board; masking it between colleagues protects nobody.
---   di_dong     the staff member's own mobile. PERSONAL DATA under Decree 13/2023/NĐ-CP.
+--   dien_thoai_co_quan  the office landline of a public office. DUTY INFORMATION. A commune
+--                       publishes it on its own notice board; masking it between colleagues
+--                       protects nobody. (Renamed from `dien_thoai` further down — see the block
+--                       above the DO $$ guard for why the name itself is load-bearing.)
+--   di_dong_ca_nhan     the staff member's own mobile. PERSONAL DATA under Decree 13/2023/NĐ-CP.
 --
 -- Merged into one column, every masking, export and publication rule would have to apply ONE
 -- level to both, and the level that is right for one is always wrong for the other: safe enough
@@ -139,7 +141,7 @@ COMMENT ON COLUMN nguoi_dung.phai_doi_mat_khau IS
 -- re-classified because no row exists. Had one existed, this file would not have been written
 -- without asking the customer which kind of number was in that column.
 --
--- TYPE: `TEXT NOT NULL DEFAULT ''`, matching `dien_thoai`, and deliberately NOT the `text null`
+-- TYPE: `TEXT NOT NULL DEFAULT ''`, matching the landline column, and deliberately NOT the `text null`
 -- of the specification's table (docs/ui-ux/12-danh-ba-can-bo.md §7). Two ways to spell "no
 -- number" — NULL and '' — is two ways every future query has to handle, and the one that gets
 -- forgotten is NULL, which turns a comparison into NULL and drops the row silently. One
@@ -150,22 +152,56 @@ COMMENT ON COLUMN nguoi_dung.phai_doi_mat_khau IS
 -- commune's real directory contains. Normalisation belongs on the write path, where a person can
 -- be told what was changed, not in a constraint that can only refuse.
 -- ---------------------------------------------------------------------------
+-- THE NAMES CARRY THE CLASSIFICATION, because a COMMENT is something you have to go and look up.
+--
+-- `dien_thoai` and `di_dong` differ in LAW but not in NAME: both read as "phone", and they sit
+-- next to each other in every SELECT. The person who exports a directory to Excel, or ticks the
+-- box that publishes a column to the Mini App, is choosing between two words that look the same.
+-- `dien_thoai_co_quan` and `di_dong_ca_nhan` cannot be confused at a glance.
+--
+-- SAME MOVE 0003 ALREADY MADE, and for the same reason: it renamed `tai_khoan_hoat_dong` to
+-- `co_tai_khoan` because the old name answered a different question from the one it was being
+-- read for.
+--
+-- WHY THE RENAME IS HERE AND NOT IN 0001. Editing an applied migration changes its checksum and
+-- `core/migrate` then refuses to start (ErrChecksumLech). §4 of 0003 was edited in this same
+-- batch and carries the sentence "THIS IS NOT A PRECEDENT"; doing it a second time the same day
+-- would make that sentence untrue. A rename forward costs one statement and leaves the history
+-- honest — 0001 still says what was actually deployed.
+--
+-- FREE TODAY AND NOT TOMORROW: `nguoi_dung` is empty in every environment (§2 above records the
+-- four independent checks). Once a commune has rows, a rename is a migration over live archival
+-- data plus every query, export and screen that names the column.
+--
+-- IDEMPOTENT BY GUARD, not by `IF EXISTS` — PostgreSQL has no `RENAME COLUMN IF EXISTS`. The
+-- rename recurses into all 32 partitions on its own, exactly like ADD COLUMN above.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'nguoi_dung' AND column_name = 'dien_thoai')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'nguoi_dung' AND column_name = 'dien_thoai_co_quan') THEN
+        ALTER TABLE nguoi_dung RENAME COLUMN dien_thoai TO dien_thoai_co_quan;
+    END IF;
+END $$;
+
 ALTER TABLE nguoi_dung
-    ADD COLUMN IF NOT EXISTS di_dong TEXT NOT NULL DEFAULT '';
+    ADD COLUMN IF NOT EXISTS di_dong_ca_nhan TEXT NOT NULL DEFAULT '';
 
 -- The classification is written into the catalogue, not only into this file. The person about to
 -- confuse these two columns is a person at a psql prompt reading `\d nguoi_dung`, and they will
 -- not have this migration open. COMMENT ON is idempotent: it replaces.
-COMMENT ON COLUMN nguoi_dung.di_dong IS
+COMMENT ON COLUMN nguoi_dung.di_dong_ca_nhan IS
     'Personal mobile. PERSONAL DATA under Decree 13/2023/NĐ-CP (open question #16, decided '
     '2026-09-22). NOT masked between staff of the same commune (#11 — they have to ring each '
     'other). ALWAYS masked in Excel exports (rule 3, invariant 4), and never published to the '
-    'Mini App without that person''s own recorded consent (#12). NOT the same as dien_thoai.';
+    'Mini App without that person''s own recorded consent (#12). NOT the same as '
+    'dien_thoai_co_quan.';
 
-COMMENT ON COLUMN nguoi_dung.dien_thoai IS
+COMMENT ON COLUMN nguoi_dung.dien_thoai_co_quan IS
     'Office landline of the public office. DUTY INFORMATION, not personal data (open question '
-    '#16, decided 2026-09-22). NOT the same as di_dong, which is the personal mobile and is '
-    'governed by Decree 13/2023/NĐ-CP.';
+    '#16, decided 2026-09-22). NOT the same as di_dong_ca_nhan, which is the personal mobile and '
+    'is governed by Decree 13/2023/NĐ-CP.';
 
 -- ---------------------------------------------------------------------------
 -- 3. THE CHECK CONSTRAINT 0003 §4 LEFT OUT ON PURPOSE. Question #9 has now closed it.
@@ -319,14 +355,25 @@ COMMENT ON COLUMN nguoi_dung.ma IS
 --
 -- THE COMMENTS are reversible by restating the previous text; they hold no data either.
 --
--- THE TWO COLUMNS ARE ADDITIVE: nothing existing was overwritten, so "reverting" is achieved by
--- ceasing to read them, at no cost. Actually DROPPING one once it holds data is a DIFFERENT act —
--- and `di_dong` will hold personal data (Decree 13), so dropping it destroys the only record of a
--- contact a citizen may have been given. That is rule 7, stop condition #2: it needs an explicit
--- decision by the user plus a verified backup. Neither is written here as a runnable line,
--- because a runnable line is a line that gets run:
+-- THE RENAME IS THE ONE STATEMENT HERE THAT IS NOT ADDITIVE, so it is named first rather than
+-- left inside a sentence about columns being added. It loses no data — a rename moves no bytes —
+-- and it reverses exactly, with the same guard shape:
 --
---      -- ALTER TABLE nguoi_dung DROP COLUMN di_dong;            -- USER DECISION + BACKUP ONLY
+--      ALTER TABLE nguoi_dung RENAME COLUMN dien_thoai_co_quan TO dien_thoai;
+--
+-- That line IS runnable and IS safe, which is why it appears in full while the two below do not.
+-- What it does NOT undo is the Go side: code reading `DienThoaiCoQuan` would then name a column
+-- that no longer exists, and the failure is a query error at runtime, not a compile error. Revert
+-- both halves or neither.
+--
+-- THE TWO ADDED COLUMNS ARE ADDITIVE: nothing existing was overwritten, so "reverting" them is
+-- achieved by ceasing to read them, at no cost. Actually DROPPING one once it holds data is a
+-- DIFFERENT act — and `di_dong_ca_nhan` will hold personal data (Decree 13), so dropping it
+-- destroys the only record of a contact a citizen may have been given. That is rule 7, stop
+-- condition #2: it needs an explicit decision by the user plus a verified backup. Neither is
+-- written here as a runnable line, because a runnable line is a line that gets run:
+--
+--      -- ALTER TABLE nguoi_dung DROP COLUMN di_dong_ca_nhan;    -- USER DECISION + BACKUP ONLY
 --      -- ALTER TABLE nguoi_dung DROP COLUMN phai_doi_mat_khau;  -- USER DECISION + BACKUP ONLY
 --
 -- AND AFTERWARDS, for any of the above to be applied again, this file's progress row has to be
