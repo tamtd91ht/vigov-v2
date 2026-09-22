@@ -33,8 +33,10 @@ import (
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/service-documents/internal/app"
 	"github.com/vihat/vigov/service-documents/internal/domain"
+	docstore "github.com/vihat/vigov/service-documents/internal/store"
 )
 
 // THE PERMISSION ON THE THREE WRITE ROUTES BELOW IS `admin.lookup`, WRITTEN OUT AT EVERY CALL SITE.
@@ -93,6 +95,39 @@ type GhiLoaiVanBan interface {
 	Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
 }
 
+// VanBanDenDanhSach is the READ half of the incoming register, declared at the point of use.
+//
+// IT TAKES page.Request AND A FILTER STRUCT, NOT A URL — the handler parses and validates; the store
+// binds. Nothing between them assembles SQL, which is what keeps a government register free of an
+// injection point.
+type VanBanDenDanhSach interface {
+	DanhSach(ctx context.Context, loc docstore.LocVanBanDen, yc page.Request) (page.Result[domain.VanBanDen], error)
+}
+
+// GhiVanBanDen is the WRITE half, and it is a second interface rather than four more methods on the
+// one above — on purpose, and for the reason GhiLoaiVanBan states: each of these opens a TRANSACTION
+// and writes an audit entry inside it (rule 6, invariant 3), and one of them allocates an issued
+// number under a row lock. Behind one interface a future caller would reach for whichever method was
+// nearest and could end up writing the row outside a transaction — which for this register means a
+// number issued with no document behind it.
+type GhiVanBanDen interface {
+	Them(ctx context.Context, yc app.YeuCauVaoSoVanBanDen, nguoi audit.Actor) (domain.VanBanDen, error)
+	Sua(ctx context.Context, id string, yc app.YeuCauSuaVanBanDen, nguoi audit.Actor) (domain.VanBanDen, error)
+	Go(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+	Chuyen(ctx context.Context, id string, yc app.YeuCauChuyenVanBan, nguoi audit.Actor) (domain.VanBanDen, error)
+}
+
+// VanBanDiDanhSach and GhiVanBanDi are the same split for the outgoing register.
+type VanBanDiDanhSach interface {
+	DanhSach(ctx context.Context, loc docstore.LocVanBanDi, yc page.Request) (page.Result[domain.VanBanDi], error)
+}
+
+type GhiVanBanDi interface {
+	CapSo(ctx context.Context, yc app.YeuCauCapSoVanBanDi, nguoi audit.Actor) (domain.VanBanDi, error)
+	Sua(ctx context.Context, id string, yc app.YeuCauSuaVanBanDi, nguoi audit.Actor) (domain.VanBanDi, error)
+	Go(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+}
+
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
 type Deps struct {
 	// Checker guards the routes declared with authz.RequirePermission. THREE ROUTES NOW USE ONE,
@@ -102,6 +137,13 @@ type Deps struct {
 	Checker       authz.Checker
 	LoaiVanBan    LoaiVanBanDanhMuc
 	GhiLoaiVanBan GhiLoaiVanBan
+
+	// The two registers this service exists for. Each is refused at construction when missing, for
+	// the reason the switch in Register states.
+	VanBanDen    VanBanDenDanhSach
+	GhiVanBanDen GhiVanBanDen
+	VanBanDi     VanBanDiDanhSach
+	GhiVanBanDi  GhiVanBanDi
 
 	Log *slog.Logger
 }
@@ -119,8 +161,16 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("documents/http: thiếu kho loại văn bản — GET /api/v1/document-types sẽ panic khi có người gọi")
 	case d.GhiLoaiVanBan == nil:
 		panic("documents/http: thiếu use case ghi danh mục loại văn bản — POST/PATCH/DELETE /api/v1/document-types sẽ panic khi có người gọi")
+	case d.VanBanDen == nil:
+		panic("documents/http: thiếu kho sổ văn bản đến — GET /api/v1/incoming-documents sẽ panic khi có người gọi")
+	case d.GhiVanBanDen == nil:
+		panic("documents/http: thiếu use case ghi sổ văn bản đến — các tuyến vào sổ / sửa / gỡ / chuyển sẽ panic")
+	case d.VanBanDi == nil:
+		panic("documents/http: thiếu kho sổ văn bản đi — GET /api/v1/outgoing-documents sẽ panic khi có người gọi")
+	case d.GhiVanBanDi == nil:
+		panic("documents/http: thiếu use case ghi sổ văn bản đi — các tuyến cấp số / sửa / gỡ sẽ panic")
 	case d.Checker == nil:
-		panic("documents/http: thiếu authz.Checker — ba tuyến ghi danh mục sẽ không kiểm được quyền")
+		panic("documents/http: thiếu authz.Checker — mọi tuyến ghi sẽ không kiểm được quyền")
 	}
 
 	h := NewHandler(d)
@@ -283,4 +333,199 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.XoaLoaiVanBan))))
+
+	// --- SỔ VĂN BẢN ĐẾN -------------------------------------------------------------------------
+	//
+	// THE THREE KEYS BELOW ARE THE SPECIFICATION'S OWN (docs/ui-ux/05-van-ban-don-thu.md §7 rule 4)
+	// and all three are seeded at service-identity/migrations/0001_init.sql:287-289. NO KEY WAS
+	// INVENTED — rule 5, invariant 3c, and `tools/check_quyen.py` scans the whole repository against
+	// the `quyen` table on every `make check`.
+	//
+	// ⚠ `document.create` GUARDS THREE ROUTES, NOT ONE, AND THAT IS A FINDING RATHER THAN A CHOICE.
+	// The table has no `document.update` and no `document.delete`, so correcting an entry and
+	// removing one are guarded by the key for booking. A commune may well want those separated —
+	// see the block at the top of van_ban_den.go. Inventing a key here would produce routes that
+	// answer 403 to EVERY account forever while every test stayed green.
+
+	// VÀO SỔ — the act that ISSUES A NUMBER, which is why this is the one route in the service with
+	// idem.Required(DongKhiHong).
+	//
+	// DongKhiHong AND NOT MoKhiHong, and the difference is what happens during a Redis outage:
+	// MoKhiHong would let a double-submitted form through, and the second submission would take THE
+	// NEXT NUMBER. That is not a duplicate row that can be removed — it is a second entry in an
+	// archival register, and the number it consumed can never be given back (rule 7, invariant 3).
+	// skills/rest-api-design reserves DongKhiHong for exactly this: acts with legal consequences,
+	// naming "issued document numbers" outright. Refusing to book while the cache is down is the
+	// cheaper failure, and it is visible.
+	//
+	// @summary  Vào sổ một văn bản đến; hệ thống cấp số đến và ấn định hạn xử lý theo cấu hình của xã
+	// @screen   05-van-ban-don-thu §3.4
+	// @request  themVanBanDenVao
+	// @reply    201 vanBanDenRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/incoming-documents",
+		authz.RequirePermission(d.Checker, "document.create")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ThemVanBanDen))))
+
+	// PATCH AND NOT PUT: three of the seven editable fields have a meaningful empty value, so a full
+	// replacement cannot tell "not mentioned" from "cleared" — see suaVanBanDenVao.
+	//
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
+	// compares the row it read against the row it would write and, when nothing moved, writes
+	// NOTHING — no UPDATE and no audit entry. So the same request sent twice leaves one row in one
+	// state and one entry in the ledger.
+	//
+	// @summary  Sửa thông tin một văn bản đến đã vào sổ (số đến, trạng thái và hạn xử lý không sửa được)
+	// @screen   05-van-ban-don-thu §3.4
+	// @request  suaVanBanDenVao
+	// @reply    200 vanBanDenRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/incoming-documents/{id}",
+		authz.RequirePermission(d.Checker, "document.create")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaVanBanDen))))
+
+	// THIS IS A SOFT DELETE AND THE METHOD IS THE ONLY THING THAT SAYS OTHERWISE. The row stays,
+	// carrying `deleted_at`, `deleted_by` and `delete_reason` (rule 7, invariant 1), and ITS NUMBER
+	// STAYS TAKEN — the series never goes back, so the removed entry leaves a visible gap. That gap
+	// is the record. DELETE is still the right method: the resource is gone from every read path.
+	//
+	// A BODY ON A DELETE, and the alternative was worse: the reason is mandatory, and the query
+	// string would put free text about a government record into every access log and proxy cache.
+	//
+	// @summary  Gỡ một văn bản đến khỏi sổ (xoá mềm, kèm lý do bắt buộc; số đến không được cấp lại)
+	// @screen   05-van-ban-don-thu §3.1
+	// @request  goVanBanVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/incoming-documents/{id}",
+		authz.RequirePermission(d.Checker, "document.create")(
+			idem.KhongCan("gỡ một văn bản đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
+				http.HandlerFunc(h.GoVanBanDen))))
+
+	// CHUYỂN XỬ LÝ — the chairman's instruction and the office's handover, in one transaction with
+	// the timeline entry and the audit entry.
+	//
+	// `document.route` IS ITS OWN KEY AND THE SPECIFICATION SAYS SO (§7 rule 4). It is the one act
+	// on this register that decides WHO IS RESPONSIBLE, which is not the same right as being able to
+	// type a document into the book.
+	//
+	// idem.KhongCan, AND IT IS THE HONEST DECLARATION RATHER THAN THE COMFORTABLE ONE: a second
+	// identical routing DOES write a second timeline entry, because the timeline is append-only and
+	// records acts, not states. That is correct — two routings happened — so this route is not
+	// idempotent and does not claim to be. `idem.Required` would not help either: it would hide the
+	// second act instead of recording it.
+	//
+	// @summary  Chuyển văn bản đến cho một bộ phận xử lý, kèm ý kiến chỉ đạo — ghi vào dòng thời gian không sửa được
+	// @screen   05-van-ban-don-thu §3.5
+	// @request  chuyenVanBanVao
+	// @reply    200 vanBanDenRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/incoming-documents/{id}/routings",
+		authz.RequirePermission(d.Checker, "document.route")(
+			idem.KhongCan("mỗi lần chuyển là một hành vi có thật và để lại một dòng lịch sử riêng — bảng lịch sử chỉ thêm, không sửa (luật 7 cấm #5), nên gửi lại là một lần chuyển nữa chứ không phải một bản sao")(
+				http.HandlerFunc(h.ChuyenVanBanDen))))
+
+	// THE REGISTER ITSELF. `document.read` and not AnyAuthenticated: unlike the type catalogue, this
+	// is the commune's correspondence — issuing bodies, summaries, and free text that may name a
+	// citizen (rule 3). The specification gives it its own key for that reason.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Danh sách sổ văn bản đến, phân trang theo con trỏ, lọc theo năm · trạng thái · loại · bộ phận đang giữ
+	// @screen   05-van-ban-don-thu §3.1
+	// @reply    200 page.Result[vanBanDenRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/incoming-documents",
+		authz.RequirePermission(d.Checker, "document.read")(
+			http.HandlerFunc(h.DanhSachVanBanDen)))
+
+	// --- SỔ VĂN BẢN ĐI --------------------------------------------------------------------------
+	//
+	// ⚠ NO SPECIFICATION EXISTS FOR THIS REGISTER. The routes mirror the incoming ones minus routing
+	// and minus the deadline; the permission keys are the same two, because the `quyen` table has no
+	// others for this subsystem. See van_ban_di.go.
+
+	// CẤP SỐ VĂN BẢN ĐI — the heaviest write in the service. The number it issues goes onto paper,
+	// under a seal, to a district office or a citizen.
+	//
+	// idem.Required(DongKhiHong) for the same reason as the incoming register, one step stronger: a
+	// double submission during a cache outage would issue a SECOND OUTGOING NUMBER, and the document
+	// carrying the first one is already outside this commune.
+	//
+	// @summary  Cấp số văn bản đi và ghi vào sổ; số đã cấp không bao giờ cấp lại
+	// @screen   *(chưa có đặc tả — xem migration 0004)*
+	// @request  capSoVanBanDiVao
+	// @reply    201 vanBanDiRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/outgoing-documents",
+		authz.RequirePermission(d.Checker, "document.create")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.CapSoVanBanDi))))
+
+	// @summary  Sửa thông tin một văn bản đi đã cấp số (số đi và năm không sửa được)
+	// @screen   *(chưa có đặc tả — xem migration 0004)*
+	// @request  suaVanBanDiVao
+	// @reply    200 vanBanDiRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/outgoing-documents/{id}",
+		authz.RequirePermission(d.Checker, "document.create")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaVanBanDi))))
+
+	// @summary  Gỡ một văn bản đi khỏi sổ (xoá mềm, kèm lý do bắt buộc; số đi không được cấp lại)
+	// @screen   *(chưa có đặc tả — xem migration 0004)*
+	// @request  goVanBanVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/outgoing-documents/{id}",
+		authz.RequirePermission(d.Checker, "document.create")(
+			idem.KhongCan("gỡ một văn bản đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
+				http.HandlerFunc(h.GoVanBanDi))))
+
+	// @summary  Danh sách sổ văn bản đi, phân trang theo con trỏ, lọc theo năm · loại văn bản
+	// @screen   *(chưa có đặc tả — xem migration 0004)*
+	// @reply    200 page.Result[vanBanDiRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/outgoing-documents",
+		authz.RequirePermission(d.Checker, "document.read")(
+			http.HandlerFunc(h.DanhSachVanBanDi)))
 }

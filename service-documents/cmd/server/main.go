@@ -104,6 +104,12 @@ func run(log *slog.Logger) error {
 	//    here to an unscoped query (rule 1, invariant 5).
 	kho := store.New(db)
 	loaiVanBan := docstore.NewLoaiVanBanStore(kho)
+	vanBanDen := docstore.NewVanBanDenStore(kho)
+	vanBanDi := docstore.NewVanBanDiStore(kho)
+	// ONE DaySoStore SHARED BY BOTH REGISTERS, and that is correct rather than convenient: the two
+	// series are told apart by the `so_sach` value inside each statement, not by which Go object
+	// issued them. Two stores would be two objects over one table, which is one object too many.
+	daySo := docstore.NewDaySoStore(kho)
 
 	// 3b. use cases — the business write and its audit entry share ONE transaction inside these
 	//     (rule 6, invariant 3). The handlers only translate HTTP. It is given *store.DB rather
@@ -140,6 +146,24 @@ func run(log *slog.Logger) error {
 	}
 	defer dinhDanh.Close()
 
+	// 5b. the two registers' use cases. THEY ARE BUILT HERE AND NOT BESIDE THE OTHER USE CASES
+	// because the incoming register needs the identity client: the processing deadline is computed
+	// from THIS COMMUNE's SLA row and THIS COMMUNE's working calendar, both of which live in
+	// identity and are reachable only over gRPC (rule 2, forbidden #2; ADR 0007 and 0029).
+	//
+	// ⚠ CONSEQUENCE, STATED RATHER THAN DISCOVERED IN PRODUCTION: `sla` is empty for every commune
+	// in this repository — migration 0008 of identity seeds nothing and the onboarding step that
+	// sows a commune's first rows does not exist. So POST /api/v1/incoming-documents answers 409
+	// ("Xã chưa cấu hình thời hạn xử lý") until somebody fills that screen in. That is the contract
+	// working: a deadline invented by software is still reported upward as though the authority
+	// made it (rule 10, forbidden #3).
+	//
+	// THE OUTGOING REGISTER TAKES NO IDENTITY CLIENT. An outgoing document carries no commitment to
+	// meet — issuing it IS the act — so there is no deadline to fetch and no reason for that
+	// register to stop working when identity is slow.
+	ghiVanBanDen := app.NewVanBanDen(kho, vanBanDen, daySo, dinhDanh)
+	ghiVanBanDi := app.NewVanBanDi(kho, vanBanDi, daySo)
+
 	// 6. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
 	//    cache — and each route then behaves per the CheDoHong it declared. A service must not fail
 	//    to start because a cache is absent; the missing cache is already reported by cfg.CanhBao().
@@ -168,6 +192,10 @@ func run(log *slog.Logger) error {
 		Checker:       staffauth.Checker{},
 		LoaiVanBan:    loaiVanBan,
 		GhiLoaiVanBan: ghiLoaiVanBan,
+		VanBanDen:     vanBanDen,
+		GhiVanBanDen:  ghiVanBanDen,
+		VanBanDi:      vanBanDi,
+		GhiVanBanDi:   ghiVanBanDi,
 		Log:           log,
 	})
 
