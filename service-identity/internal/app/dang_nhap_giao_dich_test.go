@@ -237,7 +237,12 @@ func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedV
 		(strings.Contains(dk, "dang_hoat_dong") && !c.g.dangHoatDong)
 	hang := []driver.Value{
 		idNoiBo, maCanBo, "Nguyễn Văn A", emailCB, "Công chức Văn phòng",
-		"bp-001", "vt-001", dienThoaiGia, bamGia(), c.g.coTaiKhoan, c.g.dangHoatDong,
+		"bp-001", "vt-001", dienThoaiGia,
+		// phai_doi_mat_khau = false: this fixture is a person already signed in with their own
+		// password. The sign-in path does not read it yet (migration 0009 §1); the value is here
+		// because the SELECT list names the column, not because anything asserts on it.
+		false,
+		bamGia(), c.g.coTaiKhoan, c.g.dangHoatDong,
 	}
 	c.g.mu.Unlock()
 
@@ -263,7 +268,7 @@ func dieuKien(q string) string {
 // SELECT list.
 var cotNguoiDung = []string{
 	"id", "ma", "ho_ten", "email", "chuc_vu", "bo_phan_id", "vai_tro_id",
-	"dien_thoai", "mat_khau_hash", "co_tai_khoan", "dang_hoat_dong",
+	"dien_thoai", "phai_doi_mat_khau", "mat_khau_hash", "co_tai_khoan", "dang_hoat_dong",
 }
 
 func giaTri(args []driver.NamedValue) []driver.Value {

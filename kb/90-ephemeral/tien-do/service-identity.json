@@ -63,45 +63,32 @@
       "trang_thai": "chua_lam",
       "bang_chung": "",
       "no_confirm": [
-        9,
-        17,
-        18
       ],
-      "tiep_theo": "mật khẩu đầu tiên của cán bộ mới · tự đặt lại mật khẩu · Ghi nhớ đăng nhập — cả ba chờ khách"
+      "tiep_theo": "HẾT CHẶN 22/09/2026: #9 (hệ thống sinh mật khẩu tạm, bắt đổi lần đầu) · #17 (KHÔNG tự phục vụ đặt lại, quản trị viên xã đặt hộ) · #18 (phiên một ngày làm việc ~8–12 giờ, không cho xã tự cấu hình) đều đã DECIDED. Nửa LƯỢC ĐỒ của #9 đã xong ở mục ma-can-bo-va-dien-thoai (cột phai_doi_mat_khau + ràng buộc). CÒN LẠI ở mục này là luồng: đường ghi mint mật khẩu tạm + đặt cờ, màn bắt đổi ở lần đăng nhập đầu, đường quản trị viên đặt lại hộ, và hạn phiên theo #18"
     },
     {
       "id": "tuyen-ghi-danh-ba-can-bo",
       "viec": "Toàn bộ tuyến GHI của danh bạ cán bộ",
       "trang_thai": "chua_lam",
       "bang_chung": "",
-      "no_confirm": [
-        10,
-        13,
-        14
-      ],
-      "tiep_theo": "khoá hay xoá cán bộ · chặn mất quản trị viên cuối cùng · tự thao tác lên chính mình"
+      "no_confirm": [],
+      "tiep_theo": "HẾT CHẶN 22/09/2026: #10 (nghỉ hưu = KHOÁ, nhập trùng = XOÁ MỀM — hai thao tác khác nhau, và BatchGetStaff phải dịch được tên của id đã xoá mềm khi đọc hồ sơ cũ) · #13 · #14 đều đã DECIDED. Chưa viết dòng nào cho mục này trong lượt 22/09 — lượt ấy chỉ làm lược đồ"
     },
     {
       "id": "ma-can-bo-va-dien-thoai",
-      "viec": "Mã cán bộ do ai đặt, và dien_thoai/di_dong là một trường hay hai",
-      "trang_thai": "chua_lam",
-      "bang_chung": "",
-      "no_confirm": [
-        15,
-        16
-      ],
-      "tiep_theo": "CHẶN SCHEMA nên đắt hơn các câu khác — hỏi trước khi viết migration tiếp"
+      "viec": "Mã cán bộ do ai đặt, và dien_thoai/di_dong là một trường hay hai — PHẦN LƯỢC ĐỒ",
+      "trang_thai": "xong",
+      "bang_chung": "Khách chốt #9 #15 #16 ngày 22/09/2026. LƯỢC ĐỒ: service-identity/migrations/0009_tai_khoan_tam_va_danh_ba_can_bo.sql — §1 cột phai_doi_mat_khau BOOLEAN NOT NULL DEFAULT true (fail closed, NGƯỢC chiều co_tai_khoan của 0003 và cùng một lý do); §2 cột di_dong TEXT NOT NULL DEFAULT '' kèm COMMENT phân loại pháp lý trên CẢ HAI cột (dien_thoai = thông tin công vụ, di_dong = dữ liệu cá nhân Nghị định 13); §3 ràng buộc nguoi_dung_co_tai_khoan_co_mat_khau mà 0003 §4 cố ý chưa thêm, kèm báo cáo THEO TỪNG XÃ trước khi thêm; §4 COMMENT trên nguoi_dung.ma. QUY TẮC SINH MÃ: service-identity/internal/domain/ma_can_bo.go SinhMaCanBo(luc) cho ra dạng CB-2026-XXXXXX, 30 bit crypto/rand, bộ chữ Crockford (bỏ I L O U). KHÔNG CẤP LẠI bảo đảm bằng HAI cơ chế: mã không suy ra từ bảng (không đếm, không MAX, không sequence) + UNIQUE (tenant_id, ma) của 0001 KHÔNG partial nên dòng xoá mềm giữ mã vĩnh viễn. MIỀN+KHO: domain/can_bo.go (CanBo.PhaiDoiMatKhau, CanBoTomTat.DiDong), store/can_bo.go cotCanBo (phai_doi_mat_khau đặt GIỮA HAI CỘT TEXT có chủ ý — ba bool cạnh nhau biến lỗi hoán vị hai chiều thành sáu chiều), store/can_bo_danh_sach.go cotTomTat. ĐÃ CHẠY THẬT 2026-09-22: PostgreSQL 16 trong Docker, CSDL trống, tools/schema-smoke áp cả 9 tệp migration của identity XANH, 7/7 dịch vụ XANH, EXIT=0. gofmt -l rỗng, go vet sạch, go test -count=1 -p 1 XANH ở service-identity và core; riêng gói internal/store 192 ca XANH 0 ca BỎ QUA khi có DSN. HAI PHÉP ĐỘT BIẾN ĐỀU ĐỎ, phục hồi bằng BẢN CHỤP TỆP: (1) bỏ ADD CONSTRAINT ở §3 thì TestPgTaiKhoanKhongCoMatKhauBiTuChoi ĐỎ; (2) đổi UNIQUE (tenant_id, ma) thành partial WHERE deleted_at IS NULL thì TestPgMaCuaNguoiDaXoaMemKhongCapLaiDuoc ĐỎ.",
+      "no_confirm": [],
+      "tiep_theo": "ĐÃ SỬA MỘT TỆP MIGRATION ĐÃ ÁP: khối §4 của 0003_nguoi_dung_co_tai_khoan.sql được viết lại vì lập luận của nó hết đúng từ 22/09. Việc này ĐỔI CHECKSUM và core/migrate sẽ chặn khởi động trên CSDL nào đã áp 0003 — đã kiểm là KHÔNG CÓ: schema-smoke và mọi *_pg_test đều tạo schema dùng một lần rồi bỏ, và chưa triển khai ở đâu. Máy nào còn giữ schema thử cũ thì bỏ schema ấy. KHÔNG lấy làm tiền lệ; lần sau phải kiểm lại bằng chứng ấy. CÒN NỢ, cố ý không làm trong lượt này: (a) đường GHI gọi SinhMaCanBo và đặt phai_doi_mat_khau chưa có — nằm ở mục cap-tai-khoan-can-bo và tuyen-ghi-danh-ba-can-bo; (b) đường đăng nhập CHƯA đọc phai_doi_mat_khau, nên cột mới chưa đổi hành vi của ai; (c) tuyến HTTP chưa trả di_dong và chưa có luật che riêng cho hai cột. ĐỀ XUẤT CẦN NGƯỜI DÙNG QUYẾT: dien_thoai và di_dong chỉ khác nhau ở NGHĨA chứ không ở TÊN — đúng cái bẫy mà 0003 đã đổi tên tai_khoan_hoat_dong để tránh. Đổi thành dien_thoai_co_quan/di_dong_ca_nhan bây giờ còn miễn phí vì bảng rỗng ở mọi môi trường; sau khi có dữ liệu thì không còn."
     },
     {
       "id": "che-so-di-dong-can-bo",
       "viec": "Che hay không che số di động cán bộ, và ai quyết việc công khai lên Mini App",
       "trang_thai": "chua_lam",
       "bang_chung": "",
-      "no_confirm": [
-        11,
-        12
-      ],
-      "tiep_theo": "chặn cả cột hiển thị lẫn khoá quyền"
+      "no_confirm": [],
+      "tiep_theo": "HẾT CHẶN 22/09/2026: #11 KHÔNG che trong nội bộ xã, VẪN che khi xuất Excel và khi ra kênh công khai, và KHÔNG đặt khoá quyền mới nào; #12 công khai lên Mini App là TỪNG NGƯỜI MỘT và PHẢI HỎI Ý người đó, bỏ thao tác bật hàng loạt của đặc tả. LƯỢC ĐỒ CÒN THIẾU và nó thuộc mục này chứ không phải mục 0009: #12 đòi LƯU SỰ ĐỒNG Ý KÈM THỜI ĐIỂM — chưa có cột nào, cũng chưa có hien_tren_mini_app. Đó là thứ duy nhất trả lời được 'căn cứ nào để đưa số tôi lên'"
     },
     {
       "id": "ban-giao-viec-khi-khoa-tai-khoan",

@@ -39,10 +39,13 @@ func themNguoi(t *testing.T, db *sql.DB, tenantID, id, vaiTroID string) {
 	if vaiTroID != "" {
 		vt = vaiTroID
 	}
+	// mat_khau_hash IS REQUIRED WHEREVER co_tai_khoan IS TRUE since migration 0009 §3 — see the
+	// note on bamMauPg in checker_pg_test.go.
 	_, err := db.Exec(
-		`INSERT INTO nguoi_dung (tenant_id, id, ma, ho_ten, email, vai_tro_id, co_tai_khoan)
-		 VALUES ($1,$2,$3,$4,$5,$6,true)`,
-		tenantID, id, "CB-"+id, "Nguyễn Văn A", id+"@xa.danang.gov.vn", vt)
+		`INSERT INTO nguoi_dung
+		     (tenant_id, id, ma, ho_ten, email, vai_tro_id, co_tai_khoan, mat_khau_hash)
+		 VALUES ($1,$2,$3,$4,$5,$6,true,$7)`,
+		tenantID, id, "CB-"+id, "Nguyễn Văn A", id+"@xa.danang.gov.vn", vt, bamMauPg)
 	if err != nil {
 		t.Fatalf("thêm cán bộ: %v", err)
 	}

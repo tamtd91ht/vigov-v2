@@ -29,9 +29,18 @@ var ErrCanBoKhongTonTai = errors.New("can_bo: không tồn tại")
 // lists are kept in the same order and pinned by a test that asserts an asymmetric pair
 // (co_tai_khoan = false, dang_hoat_dong = true) comes back the right way round — a symmetric
 // pair cannot tell a swap from a correct read.
+//
+// `phai_doi_mat_khau` (migration 0009 §1) IS A THIRD BOOLEAN, AND IT IS DELIBERATELY NOT PLACED
+// BESIDE THE OTHER TWO. It would read more naturally next to `mat_khau_hash` at the end of the
+// list; put there, it makes a run of THREE interchangeable bools, and the swap above stops being
+// a two-way mistake and becomes a six-way one. Sitting between two TEXT columns instead, any
+// positional slip involving it is a bool scanned into a *string — which the driver refuses, out
+// loud, on the first read. A type mismatch is the only guard here that does not depend on
+// somebody having written a test.
 const cotCanBo = `id, ma, ho_ten, email, chuc_vu,
                   coalesce(bo_phan_id,''), coalesce(vai_tro_id,''),
-                  dien_thoai, mat_khau_hash, co_tai_khoan, dang_hoat_dong`
+                  dien_thoai, phai_doi_mat_khau, mat_khau_hash,
+                  co_tai_khoan, dang_hoat_dong`
 
 // TheoEmail looks a staff member up for sign-in.
 //
@@ -98,6 +107,23 @@ func (s *CanBoStore) GhiNhanDangNhap(ctx context.Context, tx *store.ScopedTx, id
 // (skills/session-and-token, required #7) — a password change that leaves old sessions working
 // does not actually lock anybody out. The one exception is a silent rehash after a successful
 // sign-in, where the password did not change.
+//
+// IT DOES NOT TOUCH `phai_doi_mat_khau`, AND MUST NOT, because of who its one caller is: the
+// silent rehash at app.namLaiMatKhau, where the person's password is unchanged and only the
+// argon2 cost is being raised. Writing either value there would be wrong — `true` would order a
+// change nobody asked for, `false` would quietly release an account still carrying the password
+// an administrator typed for it (#9).
+//
+// THE TWO WRITES THAT DO OWN THAT FLAG DO NOT EXIST YET, and both are blocked on flows recorded
+// as not started (kb/90-ephemeral/tien-do/service-identity.json, `cap-tai-khoan-can-bo`). When
+// they are written, each sets the flag in the SAME statement as the hash — never afterwards:
+//
+//	minting / administrator reset   hash + phai_doi_mat_khau = true
+//	the person changing their own   hash + phai_doi_mat_khau = false
+//
+// They are separate statements from this one on purpose. A single method with a bool parameter
+// would have to be given a value by this caller too, and there is no value it could pass that is
+// not a lie.
 func (s *CanBoStore) DatMatKhauHash(ctx context.Context, tx *store.ScopedTx, id, bam string) error {
 	_, err := tx.Exec(ctx,
 		`UPDATE nguoi_dung SET mat_khau_hash = $3, cap_nhat_luc = now()
@@ -126,7 +152,7 @@ func motCanBo(rows quetDuoc) (domain.CanBo, error) {
 	// POSITIONAL — this list must stay in lockstep with cotCanBo. See the note there on the two
 	// adjacent bools.
 	err := rows.Scan(&cb.ID, &cb.Ma, &cb.HoTen, &cb.Email, &cb.ChucVu,
-		&cb.BoPhanID, &cb.VaiTroID, &cb.DienThoai, &cb.MatKhauHash,
+		&cb.BoPhanID, &cb.VaiTroID, &cb.DienThoai, &cb.PhaiDoiMatKhau, &cb.MatKhauHash,
 		&cb.CoTaiKhoan, &cb.DangHoatDong)
 	if err != nil {
 		return domain.CanBo{}, fmt.Errorf("can_bo: đọc dòng: %w", err)

@@ -57,28 +57,38 @@ const dsXaB = "01J0000000000000000000000B"
 //	commune B's rows sort LAST           by both code and time, so a walk that ever dropped the
 //	                                     commune from the statement would return them at the end
 //	                                     instead of stopping.
+//	every row's dienThoai ≠ diDong       the second adjacent-column trap, added with migration
+//	                                     0009 §2. The two are different KINDS OF DATA IN LAW
+//	                                     (#16), so a silent swap misapplies every masking rule.
+//	                                     Different prefixes, not just different digits, so a
+//	                                     failure message says at a glance which one came back.
+//
+// Every number here is a fake of the agreed shape (rule 3, invariant 5).
 var dsDuLieu = []hangND{
 	{xa: xaMau, id: "nd-01", ma: "CB-001", hoTen: "Nguyễn Văn A", email: "a@example.gov.vn",
-		chucVu: "Chủ tịch UBND xã", boPhan: "bp-001", vaiTro: "vt-001", dienThoai: "0900000001",
+		chucVu: "Chủ tịch UBND xã", boPhan: "bp-001", vaiTro: "vt-001",
+		dienThoai: "0900000001", diDong: "0300000001",
 		coTaiKhoan: true, dangHoatDong: true, dangNhap: &dsMoc, taoLuc: dsMoc.Add(1 * time.Minute)},
 	{xa: xaMau, id: "nd-02", ma: "CB-002", hoTen: "Trần Thị B", email: "b@example.gov.vn",
-		chucVu: "Trưởng thôn", boPhan: "bp-002", dienThoai: "0900000002",
+		chucVu: "Trưởng thôn", boPhan: "bp-002",
+		dienThoai: "0900000002", diDong: "0300000002",
 		coTaiKhoan: false, dangHoatDong: true, taoLuc: dsMoc.Add(2 * time.Minute)},
 	{xa: xaMau, id: "nd-03", ma: "CB-003", hoTen: "Lê Văn C", email: "c@example.gov.vn",
-		chucVu: "Kế toán", boPhan: "bp-001", vaiTro: "vt-002", dienThoai: "0900000003",
+		chucVu: "Kế toán", boPhan: "bp-001", vaiTro: "vt-002",
+		dienThoai: "0900000003", diDong: "0300000003",
 		coTaiKhoan: true, dangHoatDong: false, taoLuc: dsMoc.Add(2 * time.Minute)},
 	{xa: xaMau, id: "nd-04", ma: "CB-004", hoTen: "Phạm Thị D", email: "d@example.gov.vn",
-		dienThoai: "0900000004", coTaiKhoan: true, dangHoatDong: true,
+		dienThoai: "0900000004", diDong: "0300000004", coTaiKhoan: true, dangHoatDong: true,
 		taoLuc: dsMoc.Add(3 * time.Minute), daXoa: true},
 	{xa: xaMau, id: "nd-05", ma: "CB-005", hoTen: "Đỗ Văn E", email: "e@example.gov.vn",
-		dienThoai: "0900000005", coTaiKhoan: true, dangHoatDong: true,
+		dienThoai: "0900000005", diDong: "0300000005", coTaiKhoan: true, dangHoatDong: true,
 		taoLuc: dsMoc.Add(4 * time.Minute)},
 
 	{xa: dsXaB, id: "ndb-01", ma: "CB-900", hoTen: "Vũ Thị F", email: "f@example.gov.vn",
-		dienThoai: "0900000009", coTaiKhoan: true, dangHoatDong: true,
+		dienThoai: "0900000009", diDong: "0300000009", coTaiKhoan: true, dangHoatDong: true,
 		taoLuc: dsMoc.Add(30 * time.Minute)},
 	{xa: dsXaB, id: "ndb-02", ma: "CB-901", hoTen: "Bùi Văn G", email: "g@example.gov.vn",
-		dienThoai: "0900000010", coTaiKhoan: true, dangHoatDong: true,
+		dienThoai: "0900000010", diDong: "0300000010", coTaiKhoan: true, dangHoatDong: true,
 		taoLuc: dsMoc.Add(31 * time.Minute)},
 }
 
@@ -383,6 +393,65 @@ func TestCoTaiKhoanVaDangHoatDongVeDungChoCuaNo(t *testing.T) {
 	}
 }
 
+func TestSoCoQuanVaSoDiDongKhongDoiChoChoNhau(t *testing.T) {
+	// THE SECOND ADJACENT-COLUMN TRAP IN cotTomTat, and the one with a legal consequence rather
+	// than a cosmetic one. `dien_thoai` (office landline, duty information) and `di_dong`
+	// (personal mobile, personal data under Decree 13/2023/NĐ-CP) are two TEXT columns side by
+	// side: swap them in either list and the driver scans a string into a string, every test that
+	// does not look at the values keeps passing, and from then on every masking rule is applied to
+	// the wrong number — the commune's own switchboard redacted from its own directory while a
+	// staff member's personal mobile goes out unmasked in an export (#16, decided 2026-09-22).
+	//
+	// Asserted on BOTH read paths, because they have two separate Scan sites to get wrong.
+	b := moBanThuDS(t)
+	mau := dsDuLieu[0] // nd-01, whose two numbers differ in their prefix
+
+	ct, err := b.kho.ChiTiet(ctxXa(xaMau), mau.id)
+	if err != nil {
+		t.Fatalf("ChiTiet: %v", err)
+	}
+	if ct.DienThoai != mau.dienThoai || ct.DiDong != mau.diDong {
+		t.Errorf("ChiTiet đọc ra (DienThoai=%q, DiDong=%q), muốn (%q, %q) — "+
+			"hai cột số điện thoại bị hoán đổi giữa cotTomTat và quetTomTat",
+			ct.DienThoai, ct.DiDong, mau.dienThoai, mau.diDong)
+	}
+
+	kq, err := b.kho.DanhSach(ctxXa(xaMau), yeuCauTrang(t, "limit=100"))
+	if err != nil {
+		t.Fatalf("DanhSach: %v", err)
+	}
+	var thay bool
+	for _, cb := range kq.Items {
+		if cb.ID != mau.id {
+			continue
+		}
+		thay = true
+		if cb.DienThoai != mau.dienThoai || cb.DiDong != mau.diDong {
+			t.Errorf("DanhSach đọc ra (DienThoai=%q, DiDong=%q), muốn (%q, %q) — "+
+				"hai cột số điện thoại bị hoán đổi",
+				cb.DienThoai, cb.DiDong, mau.dienThoai, mau.diDong)
+		}
+	}
+	if !thay {
+		t.Fatal("không thấy nd-01 trong danh sách — bài kiểm không kiểm được gì")
+	}
+}
+
+// yeuCauTrang parses a query string the way the handler does, so a test asserting on the DOMAIN
+// type (rather than on canBoRa) does not have to restate page.Parse's arguments.
+func yeuCauTrang(t *testing.T, truyVan string) page.Request {
+	t.Helper()
+	q, err := url.ParseQuery(truyVan)
+	if err != nil {
+		t.Fatalf("chuỗi truy vấn hỏng trong chính bài kiểm: %v", err)
+	}
+	yc, err := page.Parse(q, SapXepCanBo)
+	if err != nil {
+		t.Fatalf("page.Parse: %v", err)
+	}
+	return yc
+}
+
 func TestChuaDangNhapBaoGioThiDangNhapGanNhatLaNil(t *testing.T) {
 	// dang_nhap_gan_nhat is NULLABLE. Scanned into a plain time.Time, every person who has never
 	// signed in would be a scan error — and the register would stop listing exactly the accounts
@@ -461,11 +530,16 @@ func TestMocCanBoBuocDungDanhSachTrang(t *testing.T) {
 // --- fake driver: a small, honest keyset engine ---------------------------------------------------
 
 type hangND struct {
-	xa, id, ma, hoTen, email, chucVu, boPhan, vaiTro, dienThoai string
-	coTaiKhoan, dangHoatDong                                    bool
-	dangNhap                                                    *time.Time
-	taoLuc                                                      time.Time
-	daXoa                                                       bool
+	xa, id, ma, hoTen, email, chucVu, boPhan, vaiTro string
+	// TWO phone fields, and a fixture must give them DIFFERENT values wherever it asserts on
+	// either: `dien_thoai` (office landline, duty information) and `di_dong` (personal mobile,
+	// Decree 13/2023/NĐ-CP) are adjacent TEXT columns in cotTomTat, so equal values cannot tell a
+	// swap from a correct read — and a swap here misapplies every masking rule (#16).
+	dienThoai, diDong        string
+	coTaiKhoan, dangHoatDong bool
+	dangNhap                 *time.Time
+	taoLuc                   time.Time
+	daXoa                    bool
 }
 
 func (h hangND) giaTri(cot string) driver.Value {
@@ -486,6 +560,8 @@ func (h hangND) giaTri(cot string) driver.Value {
 		return h.vaiTro
 	case "dien_thoai":
 		return h.dienThoai
+	case "di_dong":
+		return h.diDong
 	case "co_tai_khoan":
 		return h.coTaiKhoan
 	case "dang_hoat_dong":

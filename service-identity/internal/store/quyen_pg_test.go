@@ -36,10 +36,15 @@ func dungQuyenStore(db *sql.DB) *QuyenStore { return NewQuyenStore(pkgstore.New(
 // must not.
 func themNguoiDaXoa(t *testing.T, db *sql.DB, tenantID, id, vaiTroID string) {
 	t.Helper()
+	// A SOFT-DELETED ACCOUNT STILL HAS TO SATISFY `nguoi_dung_co_tai_khoan_co_mat_khau`
+	// (migration 0009 §3): the constraint is unconditional on purpose, so withdrawing an account
+	// means setting co_tai_khoan = false, never merely clearing the hash. This fixture keeps the
+	// account flag, so it keeps the hash — see bamMauPg in checker_pg_test.go.
 	_, err := db.Exec(
-		`INSERT INTO nguoi_dung (tenant_id, id, ma, ho_ten, email, vai_tro_id, co_tai_khoan, deleted_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,true,now())`,
-		tenantID, id, "CB-"+id, "Nguyễn Văn A", id+"@xa.danang.gov.vn", vaiTroID)
+		`INSERT INTO nguoi_dung
+		     (tenant_id, id, ma, ho_ten, email, vai_tro_id, co_tai_khoan, mat_khau_hash, deleted_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,true,$7,now())`,
+		tenantID, id, "CB-"+id, "Nguyễn Văn A", id+"@xa.danang.gov.vn", vaiTroID, bamMauPg)
 	if err != nil {
 		t.Fatalf("thêm cán bộ đã xoá: %v", err)
 	}
@@ -134,10 +139,15 @@ func TestPgMaTranDemCanBoTrongSQL(t *testing.T) {
 // (`dang_hoat_dong = false`). Both are people the register counts and store.Checker refuses.
 func themNguoiKhoa(t *testing.T, db *sql.DB, tenantID, id, vaiTroID string, coTaiKhoan, dangHoatDong bool) {
 	t.Helper()
+	// The hash goes in whatever coTaiKhoan is: harmless on a directory-only row, required on an
+	// account row (migration 0009 §3). Making it conditional here would put a branch in a fixture
+	// for no gain.
 	_, err := db.Exec(
-		`INSERT INTO nguoi_dung (tenant_id, id, ma, ho_ten, email, vai_tro_id, co_tai_khoan, dang_hoat_dong)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-		tenantID, id, "CB-"+id, "Nguyễn Văn A", id+"@xa.danang.gov.vn", vaiTroID, coTaiKhoan, dangHoatDong)
+		`INSERT INTO nguoi_dung
+		     (tenant_id, id, ma, ho_ten, email, vai_tro_id, co_tai_khoan, dang_hoat_dong, mat_khau_hash)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+		tenantID, id, "CB-"+id, "Nguyễn Văn A", id+"@xa.danang.gov.vn", vaiTroID,
+		coTaiKhoan, dangHoatDong, bamMauPg)
 	if err != nil {
 		t.Fatalf("thêm cán bộ không dùng được: %v", err)
 	}

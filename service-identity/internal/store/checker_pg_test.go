@@ -97,6 +97,21 @@ func TestMain(m *testing.M) {
 	os.Exit(ma)
 }
 
+// bamMauPg is what every fixture in this package puts in `mat_khau_hash` when it inserts a row
+// with `co_tai_khoan = true`.
+//
+// WHY IT APPEARED: migration 0009 §3 adds the CHECK that a row with co_tai_khoan must hold a
+// non-empty mat_khau_hash —
+// the constraint 0003 §4 wrote out and deliberately did not run while the customer's onboarding
+// flow was still open. Open question #9 was decided on 2026-09-22 (the system mints a temporary
+// password), so the state these fixtures were building — a record claiming to be an account while
+// holding nothing to authenticate against — is now one the database refuses.
+//
+// THE FIXTURES WERE WRONG, NOT THE CONSTRAINT. They were seeding the exact confusion 0003 existed
+// to end. The value below is DELIBERATELY NOT A VALID argon2id ENCODING: core/password.KiemTra
+// cannot parse it and fails closed, so no test can accidentally sign in with it.
+const bamMauPg = "$argon2id$gia$KHONG-PHAI-HASH-THAT"
+
 func moKetNoi(t *testing.T) *sql.DB {
 	t.Helper()
 	if dbChung == nil {
@@ -142,10 +157,11 @@ func dungXa(t *testing.T, db *sql.DB, tenantID, vaiTroID, nguoiID string, quyen 
 	// was designed to do. These tests are about the permission check, so their people are
 	// accounts.
 	_, err = db.Exec(
-		`INSERT INTO nguoi_dung (tenant_id, id, ma, ho_ten, email, vai_tro_id, co_tai_khoan)
-		 VALUES ($1,$2,$3,$4,$5,$6,true)`,
+		`INSERT INTO nguoi_dung
+		     (tenant_id, id, ma, ho_ten, email, vai_tro_id, co_tai_khoan, mat_khau_hash)
+		 VALUES ($1,$2,$3,$4,$5,$6,true,$7)`,
 		tenantID, nguoiID, "CB-"+nguoiID, "Nguyễn Văn A",
-		nguoiID+"@xa.danang.gov.vn", vaiTroID)
+		nguoiID+"@xa.danang.gov.vn", vaiTroID, bamMauPg)
 	if err != nil {
 		t.Fatalf("thêm cán bộ: %v", err)
 	}

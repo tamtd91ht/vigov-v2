@@ -187,33 +187,50 @@ CREATE INDEX IF NOT EXISTS nguoi_dung_dang_nhap
     WHERE deleted_at IS NULL AND co_tai_khoan AND dang_hoat_dong;
 
 -- ---------------------------------------------------------------------------
--- 4. NO CHECK CONSTRAINT (co_tai_khoan => mat_khau_hash <> ''). Decided, not overlooked.
+-- 4. NO CHECK CONSTRAINT HERE (co_tai_khoan => mat_khau_hash <> '').
+--     THE ARGUMENT BELOW EXPIRED ON 2026-09-22. THE CONSTRAINT NOW EXISTS, IN 0009.
 --
--- THE CASE FOR IT: it would make one nonsense state impossible — a record claiming to be an
--- account while holding nothing to authenticate against. Constraints in the database hold
--- against every writer, including a psql prompt, which is more than any Go-side check can say.
+-- ⚠ WHY THIS BLOCK WAS EDITED AFTER THE FILE HAD BEEN APPLIED — read before doing it again.
+-- This file's own header says an applied migration is never edited, and core/migrate enforces
+-- that with a checksum (ErrChecksumLech). The edit was made anyway, ONCE, on 2026-09-22, for a
+-- reason that was checked rather than assumed: at that moment no durable database had this file
+-- applied. tools/schema-smoke creates a throwaway schema per run and removes it; every *_pg_test
+-- suite does the same with a schema named after the clock; there is no deployment. So the whole
+-- cost of the changed checksum was zero, and the cost of LEAVING IT was not: the paragraph below
+-- told every future session that the customer's onboarding flow was still open, which would have
+-- stopped somebody from acting on a decision already taken — or worse, prompted them to "restore"
+-- consistency by dropping the constraint 0009 adds. A stale argument reads exactly like a live one.
+-- THIS IS NOT A PRECEDENT. The next such edit needs the same evidence, freshly checked, and if any
+-- database anywhere has applied the file the answer is no — write the correction in a new file.
 --
--- THE CASE AGAINST, which wins: "create the account, e-mail an activation link, the person sets
--- their own password" is a normal way to onboard staff, and it needs precisely the state the
--- constraint forbids — co_tai_khoan = true with an empty hash, for as long as the link is
--- outstanding. WHICH ONBOARDING FLOW THE CUSTOMER WANTS IS STILL OPEN. Writing the constraint
--- now decides that open question by making one answer impossible to implement, which is the one
--- thing an agent must not do. The cost is asymmetric, too: adding the constraint later is one
--- line in a new migration; removing it later means an ALTER TABLE under time pressure, during
--- the sprint the feature it blocks is being built, against a live table — and a constraint
--- dropped in a hurry is a constraint dropped without the argument being had.
+-- WHAT THE BLOCK SAID, AND WHY IT IS NO LONGER TRUE:
 --
--- SO THE INVARIANT IS NOT ENFORCED HERE, and that must be said rather than assumed. It is worth
--- knowing that an empty hash cannot sign in today by accident: core/password.KiemTra cannot parse
--- '' as an argon2id encoding and returns an error, so verification fails closed. That is a
--- property of the password package, not of this schema — the Go sign-in query is where the
--- guarantee has to be made explicit (see the note on TheoEmail in the handover).
+--   THE CASE FOR IT was always sound: the constraint makes one nonsense state impossible — a
+--   record claiming to be an account while holding nothing to authenticate against — and a
+--   constraint in the database holds against every writer, including a psql prompt.
 --
--- When the customer settles on "password is set at creation", this is the whole change:
+--   THE CASE AGAINST, which won at the time: "create the account, e-mail an activation link, the
+--   person sets their own password" is a normal way to onboard staff, and it needs precisely the
+--   state the constraint forbids — co_tai_khoan = true with an empty hash, for as long as the
+--   link is outstanding. While the customer had not chosen, writing the constraint would have
+--   decided their question by making one answer impossible to implement.
 --
---      ALTER TABLE nguoi_dung ADD CONSTRAINT nguoi_dung_co_tai_khoan_co_mat_khau
---          CHECK (NOT co_tai_khoan OR mat_khau_hash <> '');
+--   THAT ANSWER IS GONE. Open question #9 was decided on 2026-09-22 (kb/00-foundation/
+--   open-questions.json): the SYSTEM MINTS A TEMPORARY PASSWORD and forces a change at the first
+--   sign-in — answer (b). The activation-link flow (c) was rejected, on the customer's own
+--   ground: the mail server is per-commune configuration and may not be filled in yet, so a
+--   newly onboarded commune could not send the link that creates its first account. #17, decided
+--   the same day, closes the other route to a hash-less account by ruling out self-service
+--   password reset. No flow left in this system needs co_tai_khoan = true with an empty hash.
 --
+-- WHERE THE CONSTRAINT LIVES NOW: migration 0009_tai_khoan_tam_va_danh_ba_can_bo.sql §3, under
+-- the name this block predicted, `nguoi_dung_co_tai_khoan_co_mat_khau`, and the same file adds
+-- the `phai_doi_mat_khau` column that answer (b) needs. The asymmetry noted here held exactly as
+-- written: adding it later was one line in a new migration.
+--
+-- STILL TRUE, AND NOT REPLACED BY THE CONSTRAINT: an empty hash cannot sign in by accident,
+-- because core/password.KiemTra cannot parse '' as an argon2id encoding and returns an error, so
+-- verification fails closed. That is a property of the password package, not of this schema.
 -- ---------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------

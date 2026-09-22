@@ -36,17 +36,21 @@ import (
 // a row is DECODED, not about which rows come back. The predicates are asserted separately, at
 // the bottom of this file.
 var hangMau = map[string]driver.Value{
-	"id":             "nd-01JINTERNALIDCUACANBO",
-	"ma":             "CB-001",
-	"ho_ten":         "Nguyễn Văn A",
-	"email":          "canbo.a@example.gov.vn",
-	"chuc_vu":        "Công chức Văn phòng",
-	"bo_phan_id":     "bp-001",
-	"vai_tro_id":     "vt-001",
-	"dien_thoai":     "0900000000", // the agreed fake number (rule 3, invariant 5)
-	"mat_khau_hash":  "$argon2id$gia$KHONG-PHAI-HASH-THAT",
-	"co_tai_khoan":   false,
-	"dang_hoat_dong": true,
+	"id":            "nd-01JINTERNALIDCUACANBO",
+	"ma":            "CB-2026-7K3M9Q",
+	"ho_ten":        "Nguyễn Văn A",
+	"email":         "canbo.a@example.gov.vn",
+	"chuc_vu":       "Công chức Văn phòng",
+	"bo_phan_id":    "bp-001",
+	"vai_tro_id":    "vt-001",
+	"dien_thoai":    "0900000000", // the agreed fake number (rule 3, invariant 5)
+	"mat_khau_hash": "$argon2id$gia$KHONG-PHAI-HASH-THAT",
+	// phai_doi_mat_khau = true against co_tai_khoan = false: a THIRD asymmetric value, so a
+	// positional slip involving this column cannot hide behind the other two. It also sits
+	// between two TEXT columns in cotCanBo on purpose — see the note there.
+	"phai_doi_mat_khau": true,
+	"co_tai_khoan":      false,
+	"dang_hoat_dong":    true,
 }
 
 const xaMau = "01J0000000000000000000000A"
@@ -287,6 +291,14 @@ func TestMoiTruongCanBoVeDungChoCuaNo(t *testing.T) {
 		if cap[0] != cap[1] {
 			t.Errorf("%s = %q, muốn %q — sai thứ tự cột", ten, cap[0], cap[1])
 		}
+	}
+
+	// The bool among the strings, checked separately because the map above is typed for strings.
+	// This is the assertion that turns red if `phai_doi_mat_khau` is moved next to the other two
+	// booleans and then trades places with one of them.
+	if cb.PhaiDoiMatKhau != hangMau["phai_doi_mat_khau"].(bool) {
+		t.Errorf("PhaiDoiMatKhau = %v, muốn %v — sai thứ tự cột",
+			cb.PhaiDoiMatKhau, hangMau["phai_doi_mat_khau"])
 	}
 }
 

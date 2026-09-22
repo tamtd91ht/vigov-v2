@@ -18,6 +18,23 @@ type CanBo struct {
 	DienThoai   string
 	MatKhauHash string // argon2id. NEVER the password, never logged (rule 3, rule 8)
 
+	// PhaiDoiMatKhau — "this account is still carrying a password somebody else chose".
+	//
+	// Open question #9, decided 2026-09-22: an administrator mints a TEMPORARY password and the
+	// person must change it at the FIRST sign-in. Until they do, a second person knows the
+	// credentials of a staff member whose name goes into the audit trail — which is the state
+	// rule 6, invariant 2 exists to prevent, and the reason this is not a nicety.
+	//
+	// It is cleared ONLY by the person themselves setting a new password. An administrator reset
+	// sets it back to true, because a reset produces exactly the same situation.
+	//
+	// DEFAULTS TO true IN THE SCHEMA (migration 0009 §1), which is the opposite direction from
+	// CoTaiKhoan below and fail-closed for the same reason: here `true` means LESS authority.
+	// A write path that forgets this field mints an account nobody is ever asked to secure.
+	//
+	// MEANINGLESS WHERE CoTaiKhoan IS FALSE — there is no account to force a change on.
+	PhaiDoiMatKhau bool
+
 	// CoTaiKhoan and DangHoatDong ANSWER TWO DIFFERENT QUESTIONS, and reading one for the other
 	// is the defect migration 0003 exists to repair.
 	//
@@ -45,11 +62,13 @@ type CanBo struct {
 // while a field merely left empty by convention is one careless SELECT away from being filled
 // again, and the read path that would fill it is the one nobody re-reads.
 //
-// DienThoai IS HELD RAW HERE, and must be masked before it leaves the API (rule 3, invariant 3).
-// The masking lives at the edge, in internal/http, because "what a caller is allowed to see" is
-// a question about the caller — not about the record. Masking in the store would also mask it
-// for a future internal consumer that has a legitimate need (sending an SMS, for instance), and
-// a store that hands back an unusable value invites somebody to add a second, unmasked read path.
+// DienThoai AND DiDong ARE BOTH HELD RAW HERE, and must be masked before they leave the API
+// (rule 3, invariant 3) — but NOT by the same rule, and that is the whole reason they are two
+// fields. The masking lives at the edge, in internal/http, because "what a caller is allowed to
+// see" is a question about the caller — not about the record. Masking in the store would also
+// mask it for a future internal consumer that has a legitimate need (sending an SMS, for
+// instance), and a store that hands back an unusable value invites somebody to add a second,
+// unmasked read path.
 type CanBoTomTat struct {
 	ID     string // ULID, internal — the value the {id} route segment carries
 	Ma     string // business code, the one the audit trail shows
@@ -63,7 +82,24 @@ type CanBoTomTat struct {
 	BoPhanID string
 	VaiTroID string
 
-	DienThoai string // RAW. Masked at the edge — see the note above.
+	// TWO PHONE FIELDS, BECAUSE THEY ARE TWO KINDS OF DATA IN LAW. Open question #16, decided
+	// 2026-09-22. Merging them would force ONE masking, export and publication rule onto both,
+	// and the level that is right for one is always wrong for the other.
+	//
+	//	DienThoai  the OFFICE LANDLINE of a public office. Duty information. A commune puts it on
+	//	           its own notice board; redacting it protects nobody.
+	//	DiDong     the person's OWN MOBILE. PERSONAL DATA under Decree 13/2023/NĐ-CP. Shown
+	//	           unmasked to staff of the same commune — they have to ring each other, and
+	//	           hiding it just moves the number into a private channel the commune cannot
+	//	           audit (#11) — but ALWAYS masked in an Excel export (rule 3, invariant 4), and
+	//	           never published to the Mini App without that person's own recorded consent
+	//	           (#12).
+	//
+	// Both RAW here. Masked at the edge — see the note above. Reading one for the other is the
+	// mistake this comment exists to prevent: they are adjacent TEXT columns in the SELECT list,
+	// and swapping them produces no error anywhere (see store.cotTomTat).
+	DienThoai string
+	DiDong    string
 
 	// The two flags answer two different questions; see CanBo for why they are not one column.
 	// BOTH are returned, unfiltered, because ONE table serves TWO screens: the directory shows
@@ -82,8 +118,9 @@ type CanBoTomTat struct {
 // CanBoVaiTro is one staff member as the INTER-SERVICE contract sees them, and it is
 // deliberately the narrowest of the three staff types in this file.
 //
-// WHY A THIRD TYPE AND NOT CanBoTomTat. CanBoTomTat carries HoTen, DienThoai, Email and ChucVu —
-// four citizen-grade personal data of a member of staff (rule 3). `message Staff` in
+// WHY A THIRD TYPE AND NOT CanBoTomTat. CanBoTomTat carries HoTen, DiDong, Email and ChucVu —
+// four citizen-grade personal data of a member of staff (rule 3), DiDong being the one Decree
+// 13/2023/NĐ-CP names outright since #16 separated it from the office landline. `message Staff` in
 // proto/vigov/identity/v1/identity.proto declares NONE of them, so a read path that loads them
 // would be a read path that has the values in hand at the moment somebody adds a field to the
 // wire type. Having nothing to send is a stronger guarantee than remembering not to send it.
