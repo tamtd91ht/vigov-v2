@@ -133,7 +133,15 @@ export function MaTranPhanQuyen() {
  * quan hệ hàng–cột nhất.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
-function BangMaTran({
+// EXPORTED FOR ONE REASON, and it is worth the widened surface: this is the component that turns
+// the server's answer into the rows a person reads, and until 2026-09-22 NOTHING rendered it in a
+// test. `ma-tran-quyen.test.ts` proves the module shapes the data correctly; it cannot see whether
+// this JSX uses that data or a list typed by hand. Replacing `n.permissions.map` with a hardcoded
+// array stayed green — measured, not assumed.
+//
+// The parent reads the API inside `useEffect`, which `renderToStaticMarkup` never runs, so the
+// property can only be pinned by rendering this half directly with data the test controls.
+export function BangMaTran({
   nhom,
   vaiTro,
   daCap,
