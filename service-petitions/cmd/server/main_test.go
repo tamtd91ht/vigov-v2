@@ -25,6 +25,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
@@ -107,6 +108,16 @@ type khoPhieu struct{}
 func (khoPhieu) TheoMaTraCuu(ctx context.Context, _ string) (domain.PhieuPhanAnh, error) {
 	_ = tenant.MustFrom(ctx)
 	return domain.PhieuPhanAnh{}, petstore.ErrPhieuKhongTonTai
+}
+
+// DanhSach lets the same stand-in serve the register list. IT STILL ASSERTS THE COMMUNE IS IN THE
+// CONTEXT, which is the only thing this file's tests can prove about a store: a route reachable
+// without one would panic inside store.Scoped in production, on a member of staff's screen.
+func (khoPhieu) DanhSach(ctx context.Context, _ petstore.LocPhieu, _ page.Request) (
+	page.Result[domain.PhieuPhanAnh], error) {
+
+	_ = tenant.MustFrom(ctx)
+	return page.NewResult[domain.PhieuPhanAnh](), nil
 }
 
 type khoNhanLinhVuc struct{}
@@ -253,7 +264,14 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		Phieu:          khoPhieu{},
 		NhanLinhVuc:    khoNhanLinhVuc{},
 		Vet:            vetGia{},
-		Log:            log,
+		// The register list and the four staff acts, built on a nil *store.DB for the same reason as
+		// the two catalogue writers above: this file is about the EDGE CHAIN, it asserts on a read
+		// route, and Register refuses a nil dependency at construction. A use case that is never
+		// invoked cannot dereference the nil handle. Their own four-case suites live in
+		// internal/http/xu_ly_phan_anh_test.go.
+		DanhSachPhieu: khoPhieu{},
+		XuLyPhieu:     app.NewXuLyPhanAnh(nil, nil, nil, nil),
+		Log:           log,
 	})
 
 	// THE CITIZEN SURFACE, REGISTERED THE WAY main() REGISTERS IT — its own mux, its own Deps.

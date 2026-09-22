@@ -45,6 +45,27 @@ type hanGia struct {
 	thayLinh   []string
 	thayTuLuc  []time.Time
 	thayCanMoc [][]identityv1.DeadlineKind
+
+	// The CLASSIFICATION CEILING half — ADR 0035 §C. It is a DIFFERENT RPC because the ceiling is not
+	// a row of the `sla` table, and this fake records what it was asked for the same reason as above:
+	// the arguments are the decision.
+	traTran     map[uint32]time.Time
+	loiTran     error
+	goiTran     int
+	thayTranTu  []time.Time
+	thayTranGio [][]uint32
+}
+
+func (h *hanGia) TienGioLamViec(_ context.Context, tuLuc time.Time, gio []uint32) (
+	map[uint32]time.Time, error) {
+
+	h.goiTran++
+	h.thayTranTu = append(h.thayTranTu, tuLuc)
+	h.thayTranGio = append(h.thayTranGio, gio)
+	if h.loiTran != nil {
+		return nil, h.loiTran
+	}
+	return h.traTran, nil
 }
 
 func (h *hanGia) HanXuLy(_ context.Context, loai identityv1.WorkKind, linhVuc string,
@@ -96,12 +117,22 @@ var (
 	// let a local `.Add(8 * time.Hour)` pass every assertion here.
 	mocGuiThu = time.Date(2026, 9, 22, 7, 14, 3, 0, time.UTC)
 	mocHanThu = time.Date(2026, 9, 23, 2, 30, 0, 0, time.UTC)
+
+	// mocTranThu is the classification ceiling identity computed — one working day, wherever this
+	// commune's calendar puts it. DELIBERATELY NOT 24 HOURS AFTER mocGuiThu and deliberately NOT
+	// equal to mocHanThu: a fixture at a round offset would let a local `.Add(24 * time.Hour)` pass,
+	// and a fixture equal to the acknowledge deadline would let the two columns be swapped with
+	// nothing turning red.
+	mocTranThu = time.Date(2026, 9, 23, 9, 45, 0, 0, time.UTC)
 )
 
 func hanThu() *hanGia {
-	return &hanGia{tra: map[identityv1.DeadlineKind]time.Time{
-		identityv1.DeadlineKind_DEADLINE_KIND_TIEP_NHAN: mocHanThu,
-	}}
+	return &hanGia{
+		tra: map[identityv1.DeadlineKind]time.Time{
+			identityv1.DeadlineKind_DEADLINE_KIND_TIEP_NHAN: mocHanThu,
+		},
+		traTran: map[uint32]time.Time{domain.GioTranPhanLoai: mocTranThu},
+	}
 }
 
 func congDanThu() audit.Actor {

@@ -165,7 +165,11 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		Phieu:          phieuMau(),
 		NhanLinhVuc:    nhanLinhVucMau(),
 		Vet:            &vetXemGia{},
-		Log:            im,
+		// Present because Register refuses incomplete Deps at construction, and never called here —
+		// see the same note in loai_nhiem_vu_ghi_test.go.
+		DanhSachPhieu: danhSachTuPhieuMau(phieuMau()),
+		XuLyPhieu:     &xuLyPhieuGia{},
+		Log:           im,
 	})
 
 	var h http.Handler = mux

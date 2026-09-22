@@ -33,8 +33,10 @@ import (
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/service-petitions/internal/app"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
+	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
 
 // The catalogue readers are INTERFACES, not the concrete stores.
@@ -100,6 +102,38 @@ type (
 	// label; absence is never "unknown field".
 	NhanLinhVucDanhMuc interface {
 		DanhSach(ctx context.Context) ([]domain.NhanLinhVuc, error)
+	}
+
+	// PhieuPhanAnhDanhSach is the paginated read of the register, for GET /api/v1/citizen-reports.
+	//
+	// A THIRD INTERFACE OVER THE SAME STORE, and not a method added to PhieuPhanAnhDoc, because the
+	// two answer different questions and one of them carries the restricted-field decision. A list
+	// route that could reach TheoMaTraCuu would be a list route somebody could make read one
+	// petition WITHOUT the `can-bo` filter — which is exactly the path that filter exists to close.
+	PhieuPhanAnhDanhSach interface {
+		DanhSach(ctx context.Context, loc petstore.LocPhieu, yc page.Request) (
+			page.Result[domain.PhieuPhanAnh], error)
+	}
+
+	// XuLyPhieuPhanAnh is the four STAFF acts, each of which opens a transaction and writes the
+	// business change, the audit entry and the notification obligation inside it (rule 6, invariant
+	// 3; rule 10, invariant 5).
+	//
+	// ONE INTERFACE FOR THE FOUR, unlike the two catalogue writers above, and the reason is the
+	// opposite of theirs: those two are DIFFERENT CATALOGUES, so one shared interface would need to
+	// be told which table to write. These four are four acts on ONE record, they share the locking
+	// read and the outbox, and splitting them would be four wiring lines that can disagree about
+	// which use case instance — and therefore which transaction boundary — is in play.
+	//
+	// THE PERMISSIONS ARE NOT IN THE INTERFACE, deliberately: they are declared per route below, at
+	// the one place rbac_guard and tools/apidoc both read.
+	XuLyPhieuPhanAnh interface {
+		ChotLinhVuc(ctx context.Context, ma string, yc app.YeuCauChotLinhVuc, nguoi audit.Actor) (
+			domain.PhieuPhanAnh, error)
+		PhanCong(ctx context.Context, ma string, yc app.YeuCauPhanCong, nguoi audit.Actor) (
+			domain.PhieuPhanAnh, error)
+		TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor) (domain.PhieuPhanAnh, error)
+		Dong(ctx context.Context, ma, ketQua string, nguoi audit.Actor) (domain.PhieuPhanAnh, error)
 	}
 )
 
@@ -167,6 +201,12 @@ type Deps struct {
 	Phieu       PhieuPhanAnhDoc
 	NhanLinhVuc NhanLinhVucDanhMuc
 
+	// The register list and the four staff acts. THE LIST IS SEPARATE FROM `Phieu` on purpose — see
+	// PhieuPhanAnhDanhSach — and `XuLyPhieu` is given *store.DB rather than a transaction because
+	// opening one is precisely what it is for (rule 6, invariant 3).
+	DanhSachPhieu PhieuPhanAnhDanhSach
+	XuLyPhieu     XuLyPhieuPhanAnh
+
 	// Vet writes the trail for a full-view read. Required, not optional — see the panic switch.
 	Vet VetXemNguoiGui
 
@@ -205,6 +245,13 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu kho phiếu phản ánh — GET /api/v1/citizen-reports/{maTraCuu} sẽ panic khi có người gọi")
 	case d.NhanLinhVuc == nil:
 		panic("petitions/http: thiếu kho nhãn lĩnh vực — GET /api/v1/citizen-reports/{maTraCuu} sẽ panic khi có người gọi")
+	case d.DanhSachPhieu == nil:
+		panic("petitions/http: thiếu đường đọc danh sách phiếu — GET /api/v1/citizen-reports sẽ panic khi có người gọi")
+	case d.XuLyPhieu == nil:
+		// THE FOUR WRITE ROUTES AT ONCE. A nil here does not break a screen quietly: it breaks every
+		// act a member of staff can perform on a petition, which means petitions come in and nothing
+		// can be done with them — the exact state this service was in before these routes existed.
+		panic("petitions/http: thiếu use case xử lý phiếu — bốn tuyến phân loại/phân công/chuyển trạng thái/đóng phiếu sẽ panic khi có người gọi")
 	case d.Vet == nil:
 		// THE MOST DANGEROUS OF THE FIVE TO LEAVE OUT, because a nil here does not crash a screen:
 		// it crashes the ONE path that discloses a citizen's name and number, and only when
@@ -384,6 +431,139 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/citizen-reports/{maTraCuu}",
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			http.HandlerFunc(h.DocPhieuPhanAnh)))
+
+	// --- THE STAFF PROCESSING PATH. FIVE ROUTES, and until today there were NONE ------------------
+	//
+	// A citizen could file a petition and look it up, and no member of staff could classify it,
+	// assign it, move it or close it. Every petition that arrived stayed where it landed, with a
+	// deadline running and a person watching. The reasoning for each route, its URL noun and the two
+	// findings raised for open question #27 are on internal/http/xu_ly_phan_anh.go.
+
+	// @summary  Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn
+	// @screen   09-phan-anh-nguoi-dan §2, §4
+	// `feedback.read` and NOT AnyAuthenticated, unlike the two catalogue reads above: this is a
+	// commune's register of what its citizens have reported — names, numbers, addresses and the free
+	// text of a complaint (rule 3). The specification gives it its own key for that reason.
+	//
+	// TWO THINGS DECIDED INSIDE THE HANDLER THAT NO STATUS CODE SHOWS, so they are stated here:
+	//
+	//	feedback.restricted  absent -> petitions in the field `can-bo` are NOT in the page, NOT in
+	//	                     the cursor, and therefore not in any count derived by paging
+	//	feedback.unmask      irrelevant -> the reporter is masked on this route WHATEVER the caller
+	//	                     holds, because rule 6 invariant 7 wants one audit entry per disclosure
+	//	                     and a list cannot produce an honest one
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @reply    200 page.Result[phieuPhanAnhRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-reports",
+		authz.RequirePermission(d.Checker, "feedback.read")(
+			http.HandlerFunc(h.DanhSachPhieu)))
+
+	// PHÂN LOẠI — the act that ISSUES THE COMMUNE'S PROMISE, which is why it has a key of its own.
+	//
+	// `feedback.classify` AND NOT `feedback.assign` (ADR 0030, and rule 5 invariant 3b: these rights
+	// are not a Cartesian product). Settling the field is what fixes `han_xu_ly_xong` — being handed
+	// the work is not being allowed to promise on behalf of the authority.
+	//
+	// idem.KhongCan, AND IT IS THE HONEST DECLARATION RATHER THAN THE COMFORTABLE ONE: the act is
+	// idempotent by the shape of the lifecycle, not by luck. The UPDATE carries
+	// `trang_thai = 'da-tiep-nhan'`, so a second identical request matches no row and answers 409 —
+	// one classification, one deadline, one audit entry. idem.Required would hide the second attempt
+	// instead of telling the officer their screen is stale.
+	//
+	// 409 COVERS TWO VERY DIFFERENT THINGS and the code in the body tells them apart:
+	// `petition_state` (somebody classified it first) and `sla_chua_cau_hinh` (the commune has not
+	// configured the hours for this field — the ordinary answer in every commune today).
+	//
+	// @summary  Chốt lĩnh vực cho phiếu phản ánh — hành vi ẤN ĐỊNH hạn xử lý xong theo cấu hình của xã
+	// @screen   09-phan-anh-nguoi-dan §8.2
+	// @request  phanLoaiVao
+	// @reply    200 phieuPhanAnhRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/classification",
+		authz.RequirePermission(d.Checker, "feedback.classify")(
+			idem.KhongCan("câu UPDATE mang `trang_thai = 'da-tiep-nhan'`, nên lần gửi thứ hai không khớp dòng nào và trả 409 — đúng một lần chốt lĩnh vực, đúng một hạn, đúng một vết")(
+				http.HandlerFunc(h.PhanLoaiPhieu))))
+
+	// PHÂN CÔNG — who inside the authority is answerable for this petition.
+	//
+	// idem.KhongCan, and here the reason is different from the route above: a second identical
+	// assignment writes the same department and the same officer onto the same row, so the ROW ends
+	// in one state. It does file a second audit entry, and that is CORRECT rather than a duplicate —
+	// somebody performed the act twice, and an append-only ledger records acts (rule 6, invariant 4).
+	//
+	// @summary  Chuyển phiếu phản ánh cho một bộ phận xử lý, kèm cán bộ phụ trách nếu đã biết
+	// @screen   09-phan-anh-nguoi-dan §8.5
+	// @request  phanCongVao
+	// @reply    200 phieuPhanAnhRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/assignment",
+		authz.RequirePermission(d.Checker, "feedback.assign")(
+			idem.KhongCan("phân công lại cùng một bộ phận để lại đúng một dòng ở đúng một trạng thái; vết thứ hai là một hành vi CÓ THẬT của con người, không phải bản sao")(
+				http.HandlerFunc(h.PhanCongPhieu))))
+
+	// CHUYỂN TRẠNG THÁI — one step along the main flow, and the target is deliberately not a
+	// parameter. See the handler.
+	//
+	// ⚠ `feedback.resolve` GUARDS THIS AND THE CLOSING ROUTE, WHICH IS A FINDING FOR OPEN QUESTION
+	// #27 RATHER THAN A CHOICE. The `quyen` table has no key for "move the work along", and inventing
+	// one would produce a route that answers 403 to EVERY account forever while every test stayed
+	// green (rule 5, invariant 3c).
+	//
+	// idem.KhongCan: the UPDATE carries the expected status, so a double click advances the petition
+	// exactly one step and the second request answers 409.
+	//
+	// @summary  Chuyển phiếu phản ánh sang bước kế tiếp của luồng chính (máy trạng thái quyết định bước nào)
+	// @screen   09-phan-anh-nguoi-dan §8.2
+	// @reply    200 phieuPhanAnhRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/status",
+		authz.RequirePermission(d.Checker, "feedback.resolve")(
+			idem.KhongCan("câu UPDATE mang trạng thái đang chờ, nên bấm hai lần vẫn chỉ tiến đúng một bước và lần thứ hai trả 409")(
+				http.HandlerFunc(h.TienTrangThaiPhieu))))
+
+	// ĐÓNG PHIẾU — the act rule 10, invariant 6 governs: it records a RESULT THE CITIZEN CAN READ,
+	// and the server refuses a closing without one. "Đã xử lý" alone is not a result.
+	//
+	// `closure` IS THE SETTLED URL NOUN for `dong_phieu` (kb/00-foundation/ubiquitous-language.md) —
+	// not translated on the spot.
+	//
+	// idem.KhongCan for the same mechanical reason as the two above: the UPDATE carries
+	// `trang_thai = 'cho-dan-xac-nhan'`, so one closing, one result, one entry.
+	//
+	// @summary  Đóng phiếu phản ánh kèm kết quả xử lý người dân đọc được
+	// @screen   09-phan-anh-nguoi-dan §8.2
+	// @request  dongPhieuVao
+	// @reply    200 phieuPhanAnhRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/closure",
+		authz.RequirePermission(d.Checker, "feedback.resolve")(
+			idem.KhongCan("câu UPDATE mang `trang_thai = 'cho-dan-xac-nhan'`, nên lần gửi thứ hai không khớp dòng nào — đúng một lần đóng, đúng một kết quả, đúng một vết")(
+				http.HandlerFunc(h.DongPhieu))))
 
 	// --- the commune adds a task type of its own -------------------------------------------
 	//

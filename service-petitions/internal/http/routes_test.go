@@ -199,14 +199,16 @@ func (c checkerGia) Allows(ctx context.Context, p authz.Principal, perm authz.Pe
 // --- harness ------------------------------------------------------------------------------------
 
 type mayChu struct {
-	h      http.Handler
-	d      Deps // kept so a test can rebuild the chain with ONE dependency swapped — see dungLai
-	thuMuc thuMucGia
-	loai   *loaiNhiemVuGia
-	uuTien *mucUuTienGia
-	phieu  *phieuGia
-	nhan   *nhanLinhVucGia
-	vet    *vetXemGia
+	h        http.Handler
+	d        Deps // kept so a test can rebuild the chain with ONE dependency swapped — see dungLai
+	thuMuc   thuMucGia
+	loai     *loaiNhiemVuGia
+	uuTien   *mucUuTienGia
+	phieu    *phieuGia
+	nhan     *nhanLinhVucGia
+	vet      *vetXemGia
+	danhSach *danhSachPhieuGia
+	xuLy     *xuLyPhieuGia
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -217,6 +219,11 @@ func dungMayChu(t *testing.T) *mayChu {
 	phieu := phieuMau()
 	nhan := nhanLinhVucMau()
 	vet := &vetXemGia{}
+	// The register list is fed from the SAME fixtures as the single-petition reader, so commune A's
+	// page really does contain a `can-bo` petition for the restricted-field cases to exclude, and
+	// commune B's page contains only commune B's.
+	danhSach := danhSachTuPhieuMau(phieu)
+	xuLy := &xuLyPhieuGia{}
 
 	m := &mayChu{
 		d: Deps{
@@ -246,14 +253,18 @@ func dungMayChu(t *testing.T) *mayChu {
 			Phieu:          phieu,
 			NhanLinhVuc:    nhan,
 			Vet:            vet,
+			DanhSachPhieu:  danhSach,
+			XuLyPhieu:      xuLy,
 			Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
-		thuMuc: thuMucMau(),
-		loai:   loai,
-		uuTien: uuTien,
-		phieu:  phieu,
-		nhan:   nhan,
-		vet:    vet,
+		thuMuc:   thuMucMau(),
+		loai:     loai,
+		uuTien:   uuTien,
+		phieu:    phieu,
+		nhan:     nhan,
+		vet:      vet,
+		danhSach: danhSach,
+		xuLy:     xuLy,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -333,6 +344,8 @@ func depsDay() Deps {
 		Phieu:          phieuMau(),
 		NhanLinhVuc:    nhanLinhVucMau(),
 		Vet:            &vetXemGia{},
+		DanhSachPhieu:  danhSachTuPhieuMau(phieuMau()),
+		XuLyPhieu:      &xuLyPhieuGia{},
 	}
 }
 
@@ -346,11 +359,17 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 	// does, and authz.RequirePermission(nil, …) panics when a member of staff CALLS it rather
 	// than at startup.
 	for ten, bo := range map[string]func(d *Deps){
-		"thiếu kho loại nhiệm vụ": func(d *Deps) { d.LoaiNhiemVu = nil },
-		"thiếu kho mức ưu tiên":   func(d *Deps) { d.MucUuTien = nil },
-		"thiếu Checker":           func(d *Deps) { d.Checker = nil },
-		"thiếu kho phiếu":         func(d *Deps) { d.Phieu = nil },
-		"thiếu kho nhãn lĩnh vực": func(d *Deps) { d.NhanLinhVuc = nil },
+		"thiếu kho loại nhiệm vụ":         func(d *Deps) { d.LoaiNhiemVu = nil },
+		"thiếu kho mức ưu tiên":           func(d *Deps) { d.MucUuTien = nil },
+		"thiếu Checker":                   func(d *Deps) { d.Checker = nil },
+		"thiếu kho phiếu":                 func(d *Deps) { d.Phieu = nil },
+		"thiếu kho nhãn lĩnh vực":         func(d *Deps) { d.NhanLinhVuc = nil },
+		"thiếu đường đọc danh sách phiếu": func(d *Deps) { d.DanhSachPhieu = nil },
+		// THE ONE THAT TAKES THE WHOLE PROCESSING PATH WITH IT. A nil here does not break one screen:
+		// it breaks classify, assign, advance and close at once, which puts the service back in the
+		// state it was in before these routes existed — petitions arriving and nothing able to move
+		// them.
+		"thiếu use case xử lý phiếu": func(d *Deps) { d.XuLyPhieu = nil },
 		// THE CASE WITH THE QUIETEST FAILURE MODE. A nil here does not break a screen: it breaks
 		// only the branch that discloses a citizen's name and number, and only for an account
 		// holding `feedback.unmask`. Without this case, a wiring line dropped in a refactor ships.

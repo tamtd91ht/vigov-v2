@@ -43,11 +43,17 @@ var ErrPhieuKhongTonTai = errors.New("phieu_phan_anh: không có phiếu")
 // sit: `han_tiep_nhan` and `han_xu_ly_xong` are adjacent TIMESTAMPTZ columns whose NULLs mean
 // OPPOSITE things, and swapping them produces no error at all — it produces a staff-booked
 // petition that looks unclassified and a report that silently excludes the wrong rows.
+//
+// `han_phan_loai` IS A THIRD ADJACENT TIMESTAMPTZ WHOSE NULL MEANS "KHÔNG ÁP DỤNG" — the same
+// meaning as `han_tiep_nhan` and the OPPOSITE of `han_xu_ly_xong`. It sits beside the other two on
+// purpose: they are set at the same act, from the same origin, and reading them as a group is how a
+// later session keeps the three meanings straight.
 const cotPhieu = `id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vuc,
 	dia_chi, thon_id, lat, lng, nguoi_gui_ho_ten, nguoi_gui_dien_thoai, an_danh,
 	trang_thai, bo_phan_id, can_bo_xu_ly_id,
-	goc_dem_han, vao_so_luc, han_tiep_nhan, han_xu_ly_xong,
-	phan_loai_luc, xu_ly_xong_luc, dong_luc, hien_cong_khai, so_lan_mo_lai`
+	goc_dem_han, vao_so_luc, han_tiep_nhan, han_xu_ly_xong, han_phan_loai,
+	phan_loai_luc, xu_ly_xong_luc, dong_luc, ket_qua_xu_ly,
+	hien_cong_khai, so_lan_mo_lai`
 
 // TheoMaTraCuu reads one petition by the code the citizen was handed.
 //
@@ -167,7 +173,21 @@ type quangKiem interface {
 	Scan(dest ...any) error
 }
 
-func quetPhieu(r quangKiem) (domain.PhieuPhanAnh, error) {
+// quetPhieu reads one row of cotPhieu.
+func quetPhieu(r quangKiem) (domain.PhieuPhanAnh, error) { return quetPhieuThem(r) }
+
+// quetPhieuThem is quetPhieu with EXTRA destinations appended, for a SELECT that asked for extra
+// columns after cotPhieu.
+//
+// VARIADIC AND APPENDED AT THE END, WHICH IS THE ONLY SHAPE THAT IS SAFE HERE. database/sql binds by
+// POSITION, so an extra destination inserted anywhere but the tail would silently shift every column
+// after it — and the columns it would shift are `han_tiep_nhan`, `han_xu_ly_xong` and
+// `han_phan_loai`, three adjacent TIMESTAMPTZs whose NULLs mean two opposite things. A swap there
+// produces no error at all: it produces a report that excludes the wrong rows.
+//
+// The one caller is quetPhieuCoTaoLuc, and the column list it pairs with — cotPhieuCoTaoLuc — is
+// built as `cotPhieu + ", tao_luc"` for exactly this reason.
+func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 	var (
 		p    domain.PhieuPhanAnh
 		kenh string
@@ -178,19 +198,22 @@ func quetPhieu(r quangKiem) (domain.PhieuPhanAnh, error) {
 		// others, and the second of those is how `han_tiep_nhan IS NULL` quietly becomes a
 		// deadline in year 1.
 		congDan, linhVuc, diaChi, thon, hoTen, dienThoai, boPhan, canBo sql.NullString
+		ketQua                                                          sql.NullString
 		lat, lng                                                        sql.NullFloat64
-		hanTiepNhan, hanXuLyXong                                        sql.NullTime
+		hanTiepNhan, hanXuLyXong, hanPhanLoai                           sql.NullTime
 		phanLoaiLuc, xuLyXongLuc, dongLuc                               sql.NullTime
 	)
 
 	// POSITIONAL — in lockstep with cotPhieu. See the note there.
-	if err := r.Scan(
+	dich := []any{
 		&p.ID, &p.MaTraCuu, &kenh, &congDan, &p.NoiDung, &linhVuc,
 		&diaChi, &thon, &lat, &lng, &hoTen, &dienThoai, &p.AnDanh,
 		&tt, &boPhan, &canBo,
-		&p.GocDemHan, &p.VaoSoLuc, &hanTiepNhan, &hanXuLyXong,
-		&phanLoaiLuc, &xuLyXongLuc, &dongLuc, &p.HienCongKhai, &p.SoLanMoLai,
-	); err != nil {
+		&p.GocDemHan, &p.VaoSoLuc, &hanTiepNhan, &hanXuLyXong, &hanPhanLoai,
+		&phanLoaiLuc, &xuLyXongLuc, &dongLuc, &ketQua,
+		&p.HienCongKhai, &p.SoLanMoLai,
+	}
+	if err := r.Scan(append(dich, them...)...); err != nil {
 		return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: đọc dòng: %w", err)
 	}
 
@@ -204,6 +227,7 @@ func quetPhieu(r quangKiem) (domain.PhieuPhanAnh, error) {
 	p.NguoiGuiDienThoai = dienThoai.String
 	p.BoPhanID = boPhan.String
 	p.CanBoXuLyID = canBo.String
+	p.KetQuaXuLy = ketQua.String
 	if lat.Valid {
 		v := lat.Float64
 		p.Lat = &v
@@ -216,6 +240,7 @@ func quetPhieu(r quangKiem) (domain.PhieuPhanAnh, error) {
 	// HanTiepNhanKhongApDung / ChuaChotHanXuLy are the only sanctioned way to ask.
 	p.HanTiepNhan = hanTiepNhan.Time
 	p.HanXuLyXong = hanXuLyXong.Time
+	p.HanPhanLoai = hanPhanLoai.Time
 	p.PhanLoaiLuc = phanLoaiLuc.Time
 	p.XuLyXongLuc = xuLyXongLuc.Time
 	p.DongLuc = dongLuc.Time
@@ -235,8 +260,9 @@ func (s *PhieuPhanAnhStore) Tao(ctx context.Context, tx *store.ScopedTx, p domai
 	const stmt = `INSERT INTO phieu_phan_anh (
 		tenant_id, id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vuc,
 		dia_chi, thon_id, lat, lng, nguoi_gui_ho_ten, nguoi_gui_dien_thoai, an_danh,
-		trang_thai, goc_dem_han, vao_so_luc, han_tiep_nhan, han_xu_ly_xong, hien_cong_khai)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`
+		trang_thai, goc_dem_han, vao_so_luc, han_tiep_nhan, han_xu_ly_xong, han_phan_loai,
+		hien_cong_khai)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`
 
 	_, err := tx.Exec(ctx, stmt,
 		string(tx.TenantID()), p.ID, p.MaTraCuu, string(p.Kenh), rongThanhNull(p.CongDanID),
@@ -245,6 +271,11 @@ func (s *PhieuPhanAnhStore) Tao(ctx context.Context, tx *store.ScopedTx, p domai
 		rongThanhNull(p.NguoiGuiHoTen), rongThanhNull(p.NguoiGuiDienThoai), p.AnDanh,
 		string(p.TrangThai), p.GocDemHan, p.VaoSoLuc,
 		khongThanhNull(p.HanTiepNhan), khongThanhNull(p.HanXuLyXong),
+		// THE CLASSIFICATION CEILING, WRITTEN AT THE SAME ACT AS `han_tiep_nhan` (ADR 0035 §C). It
+		// goes through the same zero -> NULL translation, which on the staff-booked channel means
+		// "KHÔNG ÁP DỤNG" — that channel's form settles the field at booking, so there is no
+		// unclassified interval to bound.
+		khongThanhNull(p.HanPhanLoai),
 		p.HienCongKhai)
 	if err != nil {
 		// NOT the content, NOT the reporter, NOT the lookup code — an INSERT error message can
@@ -286,16 +317,16 @@ func (s *PhieuPhanAnhStore) ChotLinhVuc(ctx context.Context, tx *store.ScopedTx,
 	if err != nil {
 		return fmt.Errorf("phieu_phan_anh: chốt lĩnh vực: %w", err)
 	}
-	n, err := kq.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("phieu_phan_anh: chốt lĩnh vực, đếm dòng: %w", err)
-	}
-	if n == 0 {
-		// The petition moved, was soft deleted, or never belonged to this commune. All three are
-		// the same answer for the same reason as ErrPhieuKhongTonTai.
-		return ErrPhieuKhongTonTai
-	}
-	return nil
+	// ZERO ROWS IS ErrPhieuDaChuyenTrang AND NO LONGER ErrPhieuKhongTonTai, and the change is the
+	// arrival of a caller that reads the row under FOR UPDATE first.
+	//
+	// When this method had no such caller, "the petition moved" and "there is no such petition" were
+	// genuinely indistinguishable from here, so one sentinel was the honest answer. Now the use case
+	// has already read the live row of this commune inside the same transaction — so a zero count can
+	// only mean the STATUS moved between the two statements, i.e. another officer classified it
+	// first. Telling the officer "không tìm thấy phiếu" for that would send them looking for a record
+	// that is sitting on their screen; ErrPhieuDaChuyenTrang is a 409 saying reload.
+	return doiMotDongPhieu(kq, "chốt lĩnh vực")
 }
 
 // rongThanhNull turns an empty Go string into SQL NULL.

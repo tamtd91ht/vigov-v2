@@ -35,6 +35,7 @@ var (
 	mocVaoSo = time.Date(2026, 9, 9, 7, 20, 3, 0, time.UTC)
 	mocNhan  = time.Date(2026, 9, 9, 15, 20, 0, 0, time.UTC)
 	mocXong  = time.Date(2026, 9, 16, 9, 20, 0, 0, time.UTC)
+	mocTran  = time.Date(2026, 9, 10, 11, 5, 0, 0, time.UTC)
 )
 
 // dongPhieu is one row of `phieu_phan_anh` as the driver hands it back.
@@ -64,11 +65,21 @@ func dongPhieu(sua map[string]driver.Value) map[string]driver.Value {
 		"vao_so_luc":           mocVaoSo,
 		"han_tiep_nhan":        mocNhan,
 		"han_xu_ly_xong":       mocXong,
-		"phan_loai_luc":        time.Date(2026, 9, 9, 9, 0, 0, 0, time.UTC),
-		"xu_ly_xong_luc":       nil,
-		"dong_luc":             nil,
-		"hien_cong_khai":       false,
-		"so_lan_mo_lai":        int64(0),
+		// A THIRD INSTANT, DISTINCT FROM THE OTHER TWO on purpose: `han_phan_loai` sits between them
+		// in cotPhieu and its NULL means the same as `han_tiep_nhan`'s and the OPPOSITE of
+		// `han_xu_ly_xong`'s. Equal fixtures would make a positional swap of any pair invisible.
+		"han_phan_loai":  mocTran,
+		"phan_loai_luc":  time.Date(2026, 9, 9, 9, 0, 0, 0, time.UTC),
+		"xu_ly_xong_luc": nil,
+		"dong_luc":       nil,
+		// Empty rather than a sentence: nothing in this file asserts on the result text, and a
+		// fixture holding free text about a case is a fixture somebody copies into a log line.
+		"ket_qua_xu_ly":  nil,
+		"hien_cong_khai": false,
+		"so_lan_mo_lai":  int64(0),
+		// Only cotPhieuCoTaoLuc asks for it; the map is shared by both shapes, and a value the SELECT
+		// did not ask for is simply not read.
+		"tao_luc": mocVaoSo,
 	}
 	for k, v := range sua {
 		d[k] = v

@@ -165,7 +165,12 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		Phieu:          phieuMau(),
 		NhanLinhVuc:    nhanLinhVucMau(),
 		Vet:            &vetXemGia{},
-		Log:            im,
+		// Present because Register refuses incomplete Deps at construction. NOTHING IN THIS FILE
+		// CALLS THEM — it is about the catalogue write routes, and the five petition processing
+		// routes have their own four-case suites in xu_ly_phan_anh_test.go.
+		DanhSachPhieu: danhSachTuPhieuMau(phieuMau()),
+		XuLyPhieu:     &xuLyPhieuGia{},
+		Log:           im,
 	})
 
 	var h http.Handler = mux

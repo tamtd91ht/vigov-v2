@@ -171,6 +171,20 @@ type phieuCuaToiRa struct {
 
 	AcknowledgeDue *time.Time `json:"acknowledge_due"`
 	ResolveDue     *time.Time `json:"resolve_due"`
+
+	// Result is `ket_qua_xu_ly` — WHAT THE COMMUNE ACTUALLY DID, written when the petition was
+	// closed. Empty until then.
+	//
+	// IT IS THE ONE PIECE OF STAFF-WRITTEN TEXT THIS SURFACE CARRIES, and it is here because rule 10,
+	// invariant 6 requires it: "closing a petition records a result the citizen can read. Never close
+	// silently." Everything else a member of staff types about a petition — notes, routing reasons —
+	// stays internal (rule 4, forbidden #5); this one string was written FOR the person reading it.
+	//
+	// IT IS ALSO WHY THE NOTIFICATION DOES NOT CARRY IT. The message that leaves through `comms` says
+	// only that the petition was closed and to look it up; the result itself stays behind this
+	// authenticated read, because a queue is persisted, replicated and backed up and this text is
+	// about one named case (proto/vigov/petitions/v1/events.proto, §CitizenMessage).
+	Result string `json:"result"`
 }
 
 // phieuCuaToiRaNgoai builds the citizen response.
@@ -190,6 +204,7 @@ func phieuCuaToiRaNgoai(p domain.PhieuPhanAnh, nhan string) phieuCuaToiRa {
 		Address:    p.DiaChi,
 		Anonymous:  p.AnDanh,
 		ClockFrom:  p.GocDemHan,
+		Result:     p.KetQuaXuLy,
 	}
 
 	// An anonymous petition carries NEITHER field, not even masked. A masked name is still a name

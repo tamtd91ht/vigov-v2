@@ -63,10 +63,26 @@ type KhoPhieuGhi interface {
 // citizen channel asks for `phan-anh`, for the DEFAULT row (`linh_vuc` ""), and for the acknowledge
 // clock ALONE.
 //
+// # THE SECOND METHOD IS THE CLASSIFICATION CEILING, AND IT IS A DIFFERENT QUESTION
+//
+// ADR 0035 §C (which closed open question #26 on 2026-09-22) puts a ceiling on how long a petition
+// may sit unclassified: ONE WORKING DAY from intake, counted in WORKING HOURS through
+// identity.AdvanceWorkingHours. That number does NOT come from the `sla` table — that table has two
+// columns, `gio_tiep_nhan` and `gio_xu_ly_xong`, and no third — so ResolveDeadlines cannot answer it
+// and TienGioLamViec is the correct call: this is precisely the case core/identityclient describes as
+// "a caller that genuinely holds its own number of hours and is not reading `sla`".
+//
+// BOTH METHODS ON ONE INTERFACE because one act — creating the row — fixes both clocks from the same
+// origin, and a use case that could be built with one and not the other is a use case that can store
+// a petition with an acknowledge deadline and no ceiling. Those petitions are invisible to the
+// indicator ADR 0035 §C created, which is the exact hole it was written to close.
+//
 // *identityclient.Client satisfies this as it is.
 type HanTiepNhanDoc interface {
 	HanXuLy(ctx context.Context, loaiViec identityv1.WorkKind, linhVuc string, tuLuc time.Time,
 		can []identityv1.DeadlineKind) (map[identityv1.DeadlineKind]time.Time, error)
+
+	TienGioLamViec(ctx context.Context, tuLuc time.Time, gio []uint32) (map[uint32]time.Time, error)
 }
 
 // kenhCongDan is the channel EVERY petition filed through this use case carries.
@@ -253,6 +269,37 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 			ErrChuaAnDinhDuocHan, tenant.MustFrom(ctx))
 	}
 
+	// STEP 1b — THE CLASSIFICATION CEILING (ADR 0035 §C, open question #26 closed 2026-09-22).
+	//
+	// A SECOND CALL AND NOT A SECOND CLOCK ON THE FIRST ONE: ResolveDeadlines answers from the `sla`
+	// table, which has two hour columns and no third, so the ceiling has no row there. This is the
+	// caller that genuinely holds its own number of hours — domain.GioTranPhanLoai, which states in
+	// full why 8 is an assumption of the implementer rather than a figure the customer wrote.
+	//
+	// COUNTED FROM THE SAME `bayGio` AS THE ACKNOWLEDGE CLOCK. ADR 0035 §C says "kể từ khi tiếp
+	// nhận", and on this channel the instant the citizen pressed send IS the intake — it is
+	// `goc_dem_han` and `vao_so_luc` both.
+	//
+	// A FAILURE HERE FAILS THE INTAKE, exactly like the first call, and the reason is the indicator
+	// rather than the petition: a row stored with no ceiling is a petition that can never be counted
+	// as late-to-classify, so a commune that lost this call for an afternoon would report a better
+	// classification figure than one that did not. The ceiling is not decoration on the record; it is
+	// the denominator.
+	tran, err := uc.han.TienGioLamViec(ctx, bayGio, []uint32{domain.GioTranPhanLoai})
+	if err != nil {
+		return domain.PhieuPhanAnh{}, fmt.Errorf("%w cho xã %s: %w",
+			ErrChuaAnDinhDuocHan, tenant.MustFrom(ctx), err)
+	}
+	hanPhanLoai, co := tran[domain.GioTranPhanLoai]
+	if !co || hanPhanLoai.IsZero() {
+		// UNREACHABLE unless the contract stops holding — identityclient already refuses a partial
+		// answer. Checked rather than assumed because the alternative is the zero time.Time, which
+		// reaches `han_phan_loai` as SQL NULL, i.e. "KHÔNG ÁP DỤNG" — a citizen's petition silently
+		// recorded as one nobody has to classify in any particular time.
+		return domain.PhieuPhanAnh{}, fmt.Errorf("%w cho xã %s: hợp đồng trả về trần phân loại rỗng",
+			ErrChuaAnDinhDuocHan, tenant.MustFrom(ctx))
+	}
+
 	// STEP 2 — the code, minted only now. See the note at the top of this file.
 	id, err := uc.sinhID()
 	if err != nil {
@@ -288,6 +335,11 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		// STORED, ONCE, HERE. Rule 10, invariant 2.
 		HanTiepNhan: hanTiepNhan,
 
+		// THE CLASSIFICATION CEILING, fixed by the same act and from the same origin. Also stored
+		// once and never recomputed: ADR 0035 §C fixes that changing the ceiling later applies only
+		// to petitions received from that moment on.
+		HanPhanLoai: hanPhanLoai,
+
 		// HanXuLyXong IS LEFT ZERO ON PURPOSE -> SQL NULL -> "CHƯA CÓ". It is fixed by the act that
 		// settles the field (ADR 0028 decision E), and the opposite NULL — `han_tiep_nhan` NULL,
 		// "KHÔNG ÁP DỤNG" — belongs to the staff-booked channel alone.
@@ -322,6 +374,7 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 			"an_danh":         moi.AnDanh,
 			"goc_dem_han":     moi.GocDemHan,
 			"han_tiep_nhan":   moi.HanTiepNhan,
+			"han_phan_loai":   moi.HanPhanLoai,
 			"truong_da_dien":  truongDaDien(moi),
 			"do_dai_noi_dung": len([]rune(moi.NoiDung)),
 		})

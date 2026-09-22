@@ -168,6 +168,7 @@ func (k KenhTiepNhan) HanTiepNhanApDung() bool {
 //
 //	HanTiepNhanKhongApDung()  han_tiep_nhan IS NULL — "KHÔNG ÁP DỤNG", staff-booked
 //	ChuaChotHanXuLy()         han_xu_ly_xong IS NULL — "CHƯA CÓ", not classified yet
+//	TranPhanLoaiKhongApDung() han_phan_loai IS NULL — "KHÔNG ÁP DỤNG", staff-booked
 //
 // THERE IS NO OVERDUE FIELD ON THIS STRUCT AND THERE MUST NEVER BE ONE (rule 10, invariant 3).
 // See QuaHan and QuaHanTiepNhan.
@@ -220,13 +221,48 @@ type PhieuPhanAnh struct {
 	// days after GocDemHan, and that gap is exactly how long the citizen has already waited.
 	VaoSoLuc time.Time
 
-	HanTiepNhan  time.Time
-	HanXuLyXong  time.Time
-	PhanLoaiLuc  time.Time
-	XuLyXongLuc  time.Time
-	DongLuc      time.Time
+	HanTiepNhan time.Time
+	HanXuLyXong time.Time
+
+	// HanPhanLoai is the CLASSIFICATION CEILING — ADR 0035 §C, which closed open question #26 on
+	// 2026-09-22. It is a THIRD stored deadline, fixed at the same act as HanTiepNhan (the row being
+	// created) and counted in working hours from the same GocDemHan, from GioTranPhanLoai.
+	//
+	// WHY IT IS STORED AND NOT DERIVED FROM HanTiepNhan: it is a commitment fixed by an act, exactly
+	// like the other two (rule 10, invariant 2). ADR 0035 §C says so outright — "đổi trần về sau chỉ
+	// áp cho phiếu nhận từ lúc đổi trở đi" — and a value recomputed on read would move every
+	// already-received petition's ceiling the day the constant changed.
+	//
+	// IT IS ZERO (SQL NULL) ON A STAFF-BOOKED PETITION, with the same meaning as HanTiepNhan NULL:
+	// "KHÔNG ÁP DỤNG". That channel's form carries the field at booking, so the petition is never
+	// unclassified and there is no interval to bound.
+	HanPhanLoai time.Time
+
+	PhanLoaiLuc time.Time
+	XuLyXongLuc time.Time
+	DongLuc     time.Time
+
+	// KetQuaXuLy is the result a CITIZEN reads, written when the petition is closed (rule 10,
+	// invariant 6). It is NOT a staff note: staff notes and routing history stay internal (rule 4,
+	// forbidden #5), and this one string is deliberately the only free text that crosses to the
+	// citizen surface.
+	//
+	// IT NEVER TRAVELS ON THE EVENT. proto/vigov/petitions/v1/events.proto says why in full: free
+	// text written about a specific case will eventually name the reporter or quote their complaint,
+	// and a queue is persisted, replicated and backed up. The citizen reaches it with their lookup
+	// code, behind an authenticated read.
+	KetQuaXuLy string
+
 	HienCongKhai bool
 	SoLanMoLai   int
+
+	// TaoLuc is when the ROW was created, and it is filled ONLY by the paginated read — the cursor
+	// offers it as a sort column and nothing else in this service uses it.
+	//
+	// IT IS NOT VaoSoLuc AND THE TWO MUST NOT BE SHOWN AS ONE. `vao_so_luc` is a business fact (when
+	// the commune took the report into its register) and `tao_luc` is a row-lifecycle fact. On the
+	// staff-booked channel they can differ, and the gap is not something any screen should explain.
+	TaoLuc time.Time
 }
 
 // HanTiepNhanKhongApDung reports that there is no acknowledge commitment on this petition at
@@ -280,6 +316,32 @@ func (p PhieuPhanAnh) QuaHanTiepNhan(now time.Time) bool {
 		return p.PhanLoaiLuc.After(p.HanTiepNhan)
 	}
 	return now.After(p.HanTiepNhan)
+}
+
+// TranPhanLoaiKhongApDung reports that this petition has no classification ceiling at all — not
+// that one is missing. Same shape and same meaning as HanTiepNhanKhongApDung, and for the same
+// reason: on the staff-booked channel the petition arrives already classified.
+func (p PhieuPhanAnh) TranPhanLoaiKhongApDung() bool { return p.HanPhanLoai.IsZero() }
+
+// QuaHanPhanLoai DERIVES whether the classification ceiling was missed — whether the petition sat
+// unclassified longer than ADR 0035 §C allows. It is never stored (rule 10, invariant 3).
+//
+// THE CEILING IS WHAT PUTS AN UNCLASSIFIED PETITION INTO THE DENOMINATOR, which is the whole point
+// of question #26 and of the decision that closed it: without it, a commune that classifies slowly
+// has a BETTER on-time figure than one that classifies promptly, because its slow petitions are not
+// counted at all. A commune must be hurt where it is slow.
+//
+// THE CLOCK STOPS AT PhanLoaiLuc, the same instant that stops the acknowledge clock — settling the
+// field IS the classification. A petition classified late STAYS late, for the reason QuaHan gives:
+// otherwise last quarter's figures would change every time somebody opened the screen.
+func (p PhieuPhanAnh) QuaHanPhanLoai(now time.Time) bool {
+	if p.TranPhanLoaiKhongApDung() {
+		return false
+	}
+	if !p.PhanLoaiLuc.IsZero() {
+		return p.PhanLoaiLuc.After(p.HanPhanLoai)
+	}
+	return now.After(p.HanPhanLoai)
 }
 
 // --- the deadline rules ----------------------------------------------------------------------

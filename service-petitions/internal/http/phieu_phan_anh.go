@@ -128,6 +128,30 @@ type phieuPhanAnhRa struct {
 	// làm việc", from AcknowledgeDue.
 	ResolveDue *time.Time `json:"resolve_due"`
 
+	// ClassifyDue is `han_phan_loai` — the CLASSIFICATION CEILING of ADR 0035 §C. NULL means "KHÔNG
+	// ÁP DỤNG", the same meaning AcknowledgeDue's NULL carries and for the same reason: a
+	// staff-booked petition arrives classified.
+	//
+	// IT IS ON THE STAFF RESPONSE AND NOT ON THE CITIZEN ONE. It is an internal management figure —
+	// how long the office may take to read a report — and it is not a commitment anybody made to the
+	// person waiting. Showing a citizen two different deadlines for two internal steps would invite
+	// exactly the question the commune cannot answer usefully.
+	ClassifyDue *time.Time `json:"classify_due"`
+
+	// Unit and Assignee are `bo_phan_id` and `can_bo_xu_ly_id` — the "ĐANG GIAO CHO" box of
+	// docs/ui-ux/09 §8.3. Both are empty until the petition is assigned.
+	//
+	// STAFF SURFACE ONLY. phieuCuaToiRa deliberately omits both: naming the officer on a citizen's
+	// screen is routing history in its smallest form and invites pressure on an individual over a
+	// report they did not choose to receive (rule 4, forbidden #5).
+	Unit     string `json:"unit"`
+	Assignee string `json:"assignee"`
+
+	// Result is `ket_qua_xu_ly`, empty until the petition is closed. It is written FOR the citizen
+	// (rule 10, invariant 6) and is on this response so an officer can read back what the commune
+	// told them.
+	Result string `json:"result"`
+
 	Public bool `json:"public"`
 }
 
@@ -149,6 +173,9 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 		Anonymous:  p.AnDanh,
 		ClockFrom:  p.GocDemHan,
 		BookedAt:   p.VaoSoLuc,
+		Unit:       p.BoPhanID,
+		Assignee:   p.CanBoXuLyID,
+		Result:     p.KetQuaXuLy,
 		Public:     p.HienCongKhai,
 	}
 
@@ -176,16 +203,21 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 		t := p.HanXuLyXong
 		ra.ResolveDue = &t
 	}
+	if !p.TranPhanLoaiKhongApDung() {
+		t := p.HanPhanLoai
+		ra.ClassifyDue = &t
+	}
 	return ra
 }
 
 // LinhVucHanChe is the one field code whose petitions are not visible to every reader.
 //
-// `can-bo` is "Thái độ / tác phong cán bộ" — a report ABOUT a member of staff
-// (docs/ui-ux/09 §5 and §14.5). It needs its own key because the ordinary readers of this
-// register are the colleagues of the person being reported on, and a channel a citizen does not
-// trust stops carrying the reports a commune actually needs.
-const LinhVucHanChe = "can-bo"
+// IT IS NOW AN ALIAS AND NOT A LITERAL, and the move is deliberate: the LIST route has to exclude
+// these petitions in the WHERE clause rather than after the page comes back, so `internal/store`
+// needs the same value, and a store may not import a handler package. The value and the full
+// reasoning live at domain.LinhVucHanChe; this line exists so the handlers below read the same
+// short name they always did, from one source (rule 9, invariant 2).
+const LinhVucHanChe = domain.LinhVucHanChe
 
 // QuyenHanChe opens it. The key already exists in `quyen`
 // (service-identity/migrations/0001_init.sql:294, "Xem phản ánh về tác phong cán bộ") — it is

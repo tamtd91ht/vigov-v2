@@ -154,6 +154,25 @@ func chay(log *slog.Logger) error {
 	loaiNhiemVu := petstore.NewLoaiNhiemVuStore(kho)
 	mucUuTien := petstore.NewMucUuTienNhiemVuStore(kho)
 
+	// ONE PhieuPhanAnhStore FOR EVERY READER AND WRITER OF THE REGISTER, and that is a change from
+	// the three separate constructions this file used to do. A store holds no state beyond the pool,
+	// so several were harmless — but they invited the reading that the citizen path and the staff
+	// path talk to different things, which is exactly the confusion rule 4, invariant 5 is about.
+	// They do not: ONE table, and what separates the two surfaces is the mux, the Deps type and the
+	// method each is given.
+	phieu := petstore.NewPhieuPhanAnhStore(kho)
+
+	// The outbox. It is a SEPARATE store from the register because the two hold different kinds of
+	// thing — one archival record, one piece of infrastructure state a relay will drain — and the
+	// use case takes both so it can write the change and the notification obligation in ONE
+	// transaction (rule 10, invariant 5).
+	//
+	// ⚠ NOTHING DRAINS IT YET. There is no broker client in this repository; `core/events.Publisher`
+	// is a bare interface with no implementation. Rows accumulate with `gui_luc` NULL and no citizen
+	// is messaged. That is a recorded, recoverable backlog rather than a silent loss — see the table
+	// comment in migration 0005 — and it is reported as an open gap.
+	suKien := petstore.NewSuKienDiStore(kho)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware
@@ -169,8 +188,15 @@ func chay(log *slog.Logger) error {
 		// one is precisely what it is for.
 		GhiLoaiNhiemVu: app.NewDanhMucLoaiNhiemVu(kho, loaiNhiemVu),
 		GhiMucUuTien:   app.NewDanhMucMucUuTien(kho, mucUuTien),
-		Phieu:          petstore.NewPhieuPhanAnhStore(kho),
+		Phieu:          phieu,
 		NhanLinhVuc:    petstore.NewNhanLinhVucStore(kho),
+		// The register list, and the four staff acts that finally make a petition processable. Each
+		// act opens a transaction and writes the change, the audit entry and the notification
+		// obligation inside it, which is why the use case takes *store.DB rather than a transaction.
+		// `dinhDanh` is here because classification ASKS identity for the commune's resolve deadline —
+		// the same client the intake path uses, so the two never disagree about identity's health.
+		DanhSachPhieu: phieu,
+		XuLyPhieu:     app.NewXuLyPhanAnh(kho, phieu, suKien, dinhDanh),
 		// The trail for a full-view read of a reporter's name and number. It takes the same
 		// *store.DB as the repositories because it opens its own transaction: rule 6, invariant 3
 		// admits no audit write outside one, and audit.Write takes only a *store.ScopedTx.
@@ -187,14 +213,14 @@ func chay(log *slog.Logger) error {
 	// a citizen route cannot reach the unfiltered staff read even by typing it.
 	muxCongDan := http.NewServeMux()
 	svchttp.RegisterCongDan(muxCongDan, svchttp.DepsCongDan{
-		Phieu: petstore.NewPhieuPhanAnhStore(kho),
+		Phieu: phieu,
 		// THE CITIZEN INTAKE. It is given *store.DB rather than a transaction because opening one is
 		// precisely what it is for (rule 6, invariant 3), and `dinhDanh` because the acknowledge
 		// deadline is read from the commune's own table by the ONE service that owns the working-hours
 		// calendar (ADR 0007, ADR 0029). THE SAME *identityclient.Client the staff path uses: a second
 		// dial would be a second connection with its own view of identity's health, and the two would
 		// disagree at the exact moment that matters.
-		GuiPhieu: app.NewGuiPhanAnh(kho, petstore.NewPhieuPhanAnhStore(kho), dinhDanh),
+		GuiPhieu: app.NewGuiPhanAnh(kho, phieu, dinhDanh),
 		// THE SAME label catalogue the staff routes read. Sharing is right here and only here: the
 		// commune's wording for a field code is its public vocabulary, and two readers of one
 		// catalogue are two things to keep in step.
