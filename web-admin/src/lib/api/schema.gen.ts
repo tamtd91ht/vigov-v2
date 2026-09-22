@@ -18,6 +18,32 @@ export type comms_loaiTaiNguyenRa = {
   "label": string;
   "is_default": boolean;
   "active": boolean;
+  "order": number;
+  "source": string;
+  "tier": number;
+};
+
+export type comms_suaLoaiTaiNguyenVao = {
+  "label"?: string | null;
+  "order"?: number | null;
+  "active"?: boolean | null;
+  "is_default"?: boolean | null;
+  "code"?: string | null;
+  "source"?: string | null;
+  "tier"?: number | null;
+};
+
+export type comms_themLoaiTaiNguyenVao = {
+  "code": string;
+  "label": string;
+  "order"?: number;
+  "is_default"?: boolean;
+  "source"?: string | null;
+  "tier"?: number | null;
+};
+
+export type comms_xoaLoaiTaiNguyenVao = {
+  "reason": string;
 };
 
 export type documents_danhSachLoaiVanBanRa = {
@@ -33,6 +59,32 @@ export type documents_loaiVanBanRa = {
   "label": string;
   "active": boolean;
   "is_default": boolean;
+  "order": number;
+  "source": string;
+  "tier": number;
+};
+
+export type documents_suaLoaiVanBanVao = {
+  "label"?: string | null;
+  "order"?: number | null;
+  "active"?: boolean | null;
+  "is_default"?: boolean | null;
+  "code"?: string | null;
+  "source"?: string | null;
+  "tier"?: number | null;
+};
+
+export type documents_themLoaiVanBanVao = {
+  "code": string;
+  "label": string;
+  "order"?: number;
+  "is_default"?: boolean;
+  "source"?: string | null;
+  "tier"?: number | null;
+};
+
+export type documents_xoaLoaiVanBanVao = {
+  "reason": string;
 };
 
 export type finance_danhSachDuAnRa = {
@@ -81,6 +133,32 @@ export type finance_hangMucRa = {
   "label": string;
   "is_default": boolean;
   "active": boolean;
+  "order": number;
+  "source": string;
+  "tier": number;
+};
+
+export type finance_suaHangMucVao = {
+  "label"?: string | null;
+  "order"?: number | null;
+  "active"?: boolean | null;
+  "is_default"?: boolean | null;
+  "code"?: string | null;
+  "source"?: string | null;
+  "tier"?: number | null;
+};
+
+export type finance_themHangMucVao = {
+  "code": string;
+  "label": string;
+  "order"?: number;
+  "is_default"?: boolean;
+  "source"?: string | null;
+  "tier"?: number | null;
+};
+
+export type finance_xoaHangMucVao = {
+  "reason": string;
 };
 
 export type httpx_Error = {
@@ -136,6 +214,7 @@ export type identity_canBoTomTat = {
   "department_id": string;
   "role_id": string;
   "phone": string;
+  "mobile": string;
   "has_account": boolean;
   "active": boolean;
   "last_login_at": string | null;
@@ -180,6 +259,10 @@ export type identity_danhSachThonToDanPhoRa = {
 
 export type identity_danhSachVaiTroRa = {
   "items": Array<identity_vaiTroMucRa>;
+};
+
+export type identity_datVaiTroVao = {
+  "role_id": string;
 };
 
 export type identity_khoiNhiemVuRa = {
@@ -244,9 +327,27 @@ export type identity_quyenMucRa = {
   "label": string;
 };
 
+export type identity_suaCanBoVao = {
+  "full_name": string | null;
+  "position": string | null;
+  "email": string | null;
+  "org_unit_id": string | null;
+  "office_phone": string | null;
+  "mobile": string | null;
+};
+
 export type identity_thanDangNhap = {
   "email": string;
   "password": string;
+};
+
+export type identity_themCanBoVao = {
+  "full_name": string;
+  "position": string;
+  "email": string;
+  "org_unit_id": string;
+  "office_phone": string;
+  "mobile": string;
 };
 
 export type identity_thonToDanPhoRa = {
@@ -327,6 +428,24 @@ export type petitions_danhSachMucUuTienRa = {
   "items": Array<petitions_mucUuTienRa>;
 };
 
+export type petitions_guiPhanAnhVao = {
+  "content": string;
+  "address": string;
+  "reporter_name": string;
+  "reporter_phone": string;
+  "anonymous": boolean;
+  "citizen_id": string | null;
+  "cong_dan_id": string | null;
+  "field": string | null;
+  "linh_vuc": string | null;
+  "channel": string | null;
+  "code": string | null;
+  "status": string | null;
+  "clock_from": string | null;
+  "acknowledge_due": string | null;
+  "resolve_due": string | null;
+};
+
 export type petitions_loaiNhiemVuRa = {
   /** ULID — what a task record references */
   "id": string;
@@ -335,6 +454,9 @@ export type petitions_loaiNhiemVuRa = {
   "label": string;
   "is_default": boolean;
   "active": boolean;
+  "order": number;
+  "source": string;
+  "tier": number;
 };
 
 export type petitions_mucUuTienRa = {
@@ -345,6 +467,27 @@ export type petitions_mucUuTienRa = {
   "label": string;
   "is_default": boolean;
   "active": boolean;
+  "order": number;
+  "source": string;
+  "tier": number;
+};
+
+export type petitions_phieuCuaToiRa = {
+  "code": string;
+  /** `zalo-mini-app` | `zalo-oa` | `web-xa` | `can-bo-nhap-ho` */
+  "channel": string;
+  /** one of the nine (ADR 0027) */
+  "status": string;
+  "field": string;
+  "field_label": string;
+  "content": string;
+  "address": string;
+  "reporter_name": string;
+  "reporter_phone": string;
+  "anonymous": boolean;
+  "clock_from": string;
+  "acknowledge_due": string | null;
+  "resolve_due": string | null;
 };
 
 export type petitions_phieuPhanAnhRa = {
@@ -367,6 +510,52 @@ export type petitions_phieuPhanAnhRa = {
   "public": boolean;
 };
 
+export type petitions_suaLoaiNhiemVuVao = {
+  "label"?: string | null;
+  "order"?: number | null;
+  "active"?: boolean | null;
+  "is_default"?: boolean | null;
+  "code"?: string | null;
+  "source"?: string | null;
+  "tier"?: number | null;
+};
+
+export type petitions_suaMucUuTienVao = {
+  "label"?: string | null;
+  "order"?: number | null;
+  "active"?: boolean | null;
+  "is_default"?: boolean | null;
+  "code"?: string | null;
+  "source"?: string | null;
+  "tier"?: number | null;
+};
+
+export type petitions_themLoaiNhiemVuVao = {
+  "code": string;
+  "label": string;
+  "order"?: number;
+  "is_default"?: boolean;
+  "source"?: string | null;
+  "tier"?: number | null;
+};
+
+export type petitions_themMucUuTienVao = {
+  "code": string;
+  "label": string;
+  "order"?: number;
+  "is_default"?: boolean;
+  "source"?: string | null;
+  "tier"?: number | null;
+};
+
+export type petitions_xoaLoaiNhiemVuVao = {
+  "reason": string;
+};
+
+export type petitions_xoaMucUuTienVao = {
+  "reason": string;
+};
+
 /** GET /api/v1/capital-plan-categories — Danh mục hạng mục kế hoạch vốn của xã — dùng cho ô phân loại dòng kế hoạch và bộ lọc */
 export type finance_get_capital_plan_categories = {
   duongDan: "/api/v1/capital-plan-categories";
@@ -379,6 +568,67 @@ export type finance_get_capital_plan_categories = {
   phanHoi: {
     200: finance_danhSachHangMucRa;
     401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/capital-plan-categories — Thêm một hạng mục kế hoạch vốn của riêng xã vào danh mục */
+export type finance_post_capital_plan_categories = {
+  duongDan: "/api/v1/capital-plan-categories";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: finance_themHangMucVao;
+  phanHoi: {
+    201: finance_hangMucRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/capital-plan-categories/{id} — Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một hạng mục kế hoạch vốn */
+export type finance_patch_capital_plan_categories_by_id = {
+  duongDan: "/api/v1/capital-plan-categories/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_suaHangMucVao;
+  phanHoi: {
+    200: finance_hangMucRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/capital-plan-categories/{id} — Xoá mềm một mục danh mục do xã tự thêm, kèm lý do bắt buộc */
+export type finance_delete_capital_plan_categories_by_id = {
+  duongDan: "/api/v1/capital-plan-categories/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_xoaHangMucVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -428,6 +678,67 @@ export type documents_get_document_types = {
   phanHoi: {
     200: documents_danhSachLoaiVanBanRa;
     401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/document-types — Thêm một loại văn bản của riêng xã vào danh mục */
+export type documents_post_document_types = {
+  duongDan: "/api/v1/document-types";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: documents_themLoaiVanBanVao;
+  phanHoi: {
+    201: documents_loaiVanBanRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/document-types/{id} — Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một loại văn bản */
+export type documents_patch_document_types_by_id = {
+  duongDan: "/api/v1/document-types/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_suaLoaiVanBanVao;
+  phanHoi: {
+    200: documents_loaiVanBanRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/document-types/{id} — Xoá mềm một mục danh mục do xã tự thêm, kèm lý do bắt buộc */
+export type documents_delete_document_types_by_id = {
+  duongDan: "/api/v1/document-types/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_xoaLoaiVanBanVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -484,6 +795,104 @@ export type comms_get_map_asset_types = {
   phanHoi: {
     200: comms_danhSachLoaiTaiNguyenRa;
     401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/map-asset-types — Thêm một loại tài nguyên bản đồ của riêng xã vào danh mục */
+export type comms_post_map_asset_types = {
+  duongDan: "/api/v1/map-asset-types";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_themLoaiTaiNguyenVao;
+  phanHoi: {
+    201: comms_loaiTaiNguyenRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/map-asset-types/{id} — Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một loại tài nguyên bản đồ */
+export type comms_patch_map_asset_types_by_id = {
+  duongDan: "/api/v1/map-asset-types/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_suaLoaiTaiNguyenVao;
+  phanHoi: {
+    200: comms_loaiTaiNguyenRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/map-asset-types/{id} — Xoá mềm một mục danh mục do xã tự thêm, kèm lý do bắt buộc */
+export type comms_delete_map_asset_types_by_id = {
+  duongDan: "/api/v1/map-asset-types/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_xoaLoaiTaiNguyenVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/my-citizen-reports — Công dân gửi một phiếu phản ánh — trả MÃ TRA CỨU ngay khi tiếp nhận */
+export type petitions_post_my_citizen_reports = {
+  duongDan: "/api/v1/my-citizen-reports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: petitions_guiPhanAnhVao;
+  phanHoi: {
+    201: petitions_phieuCuaToiRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/my-citizen-reports/{maTraCuu} — Phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI, tra theo mã tra cứu — dùng trong Zalo Mini App */
+export type petitions_get_my_citizen_reports_by_maTraCuu = {
+  duongDan: "/api/v1/my-citizen-reports/{maTraCuu}";
+  phuongThuc: "GET";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_phieuCuaToiRa;
+    401: httpx_Error;
+    404: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -661,6 +1070,25 @@ export type identity_get_staff = {
   };
 };
 
+/** POST /api/v1/staff — Thêm một cán bộ vào danh bạ của xã — mã cán bộ do hệ thống sinh, không có ô nhập */
+export type identity_post_staff = {
+  duongDan: "/api/v1/staff";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_themCanBoVao;
+  phanHoi: {
+    201: identity_canBoTomTat;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/staff/{id} — Chi tiết một cán bộ trong xã */
 export type identity_get_staff_by_id = {
   duongDan: "/api/v1/staff/{id}";
@@ -676,6 +1104,87 @@ export type identity_get_staff_by_id = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/staff/{id} — Sửa hồ sơ một cán bộ — họ tên, chức vụ, thư điện tử, bộ phận, hai số điện thoại */
+export type identity_patch_staff_by_id = {
+  duongDan: "/api/v1/staff/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_suaCanBoVao;
+  phanHoi: {
+    200: identity_canBoTomTat;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/staff/{id}/lockout — Khoá tài khoản một cán bộ đã nghỉ hưu hoặc chuyển công tác — người này vẫn còn trong danh bạ */
+export type identity_post_staff_by_id_lockout = {
+  duongDan: "/api/v1/staff/{id}/lockout";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_canBoTomTat;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/staff/{id}/lockout — Mở khoá tài khoản một cán bộ */
+export type identity_delete_staff_by_id_lockout = {
+  duongDan: "/api/v1/staff/{id}/lockout";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_canBoTomTat;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/staff/{id}/role — Đổi vai trò của một cán bộ — chuỗi rỗng nghĩa là gỡ vai trò */
+export type identity_put_staff_by_id_role = {
+  duongDan: "/api/v1/staff/{id}/role";
+  phuongThuc: "PUT";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_datVaiTroVao;
+  phanHoi: {
+    200: identity_canBoTomTat;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -731,6 +1240,67 @@ export type petitions_get_task_priorities = {
   };
 };
 
+/** POST /api/v1/task-priorities — Thêm một mức ưu tiên nhiệm vụ của riêng xã vào danh mục */
+export type petitions_post_task_priorities = {
+  duongDan: "/api/v1/task-priorities";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: petitions_themMucUuTienVao;
+  phanHoi: {
+    201: petitions_mucUuTienRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/task-priorities/{id} — Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một mức ưu tiên nhiệm vụ */
+export type petitions_patch_task_priorities_by_id = {
+  duongDan: "/api/v1/task-priorities/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: petitions_suaMucUuTienVao;
+  phanHoi: {
+    200: petitions_mucUuTienRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/task-priorities/{id} — Xoá mềm một mục danh mục do xã tự thêm, kèm lý do bắt buộc */
+export type petitions_delete_task_priorities_by_id = {
+  duongDan: "/api/v1/task-priorities/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: petitions_xoaMucUuTienVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/task-types — Danh mục loại nhiệm vụ của xã — dùng cho ô chọn loại trên biểu mẫu nhiệm vụ và bộ lọc */
 export type petitions_get_task_types = {
   duongDan: "/api/v1/task-types";
@@ -743,6 +1313,67 @@ export type petitions_get_task_types = {
   phanHoi: {
     200: petitions_danhSachLoaiNhiemVuRa;
     401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/task-types — Thêm một loại nhiệm vụ của riêng xã vào danh mục */
+export type petitions_post_task_types = {
+  duongDan: "/api/v1/task-types";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: petitions_themLoaiNhiemVuVao;
+  phanHoi: {
+    201: petitions_loaiNhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/task-types/{id} — Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một loại nhiệm vụ */
+export type petitions_patch_task_types_by_id = {
+  duongDan: "/api/v1/task-types/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: petitions_suaLoaiNhiemVuVao;
+  phanHoi: {
+    200: petitions_loaiNhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/task-types/{id} — Xoá mềm một mục danh mục do xã tự thêm, kèm lý do bắt buộc */
+export type petitions_delete_task_types_by_id = {
+  duongDan: "/api/v1/task-types/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: petitions_xoaLoaiNhiemVuVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };

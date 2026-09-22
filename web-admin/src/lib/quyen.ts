@@ -62,6 +62,23 @@ export const QUYEN_XEM_GIAI_NGAN = "budget.read";
 export const QUYEN_XEM_PHAN_ANH = "feedback.read";
 
 /**
+ * Khoá quyền của ba thao tác GHI ở tab "Danh mục" — `admin.lookup`.
+ *
+ * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên cả mười lăm tuyến ghi danh mục
+ * (`x-vigov-permission.key` của `POST/PATCH/DELETE` năm danh mục trong `kb/20-contracts/
+ * openapi.json`), và đúng chuỗi migration gieo vào bảng `quyen`
+ * (`service-identity/migrations/0001_init.sql:274` — "Quản lý danh mục"). Một khoá bảng `quyen`
+ * không có là một khoá không quản trị viên nào cấp được, tức tuyến ấy 403 với MỌI tài khoản
+ * (luật 5, bất biến 3c).
+ *
+ * KHOÁ NÀY KHÔNG CHE PHẦN ĐỌC, và sự bất đối xứng ấy đến từ máy chủ chứ không từ giao diện: bảy
+ * tuyến ĐỌC danh mục khai `any-authenticated` vì nhãn danh mục xuất hiện ở ô chọn và bộ lọc của
+ * gần như mọi màn hình. Dùng khoá này để ẩn cả bảng sẽ là giao diện từ chối điều máy chủ đang
+ * phục vụ bình thường — xem lý lẽ đầy đủ ở `features/cau-hinh/tab-danh-muc.tsx`.
+ */
+export const QUYEN_QUAN_LY_DANH_MUC = "admin.lookup";
+
+/**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
  *
  * TỪNG NẰM RIÊNG TRONG `features/cau-hinh/quyen-tab.ts` VÀ NAY Ở ĐÂY, vì nó có người dùng thứ

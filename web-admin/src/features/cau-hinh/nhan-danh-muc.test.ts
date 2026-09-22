@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { nhanTrangThai } from "./nhan-can-bo";
 import {
-  GHI_CHU_CHI_XEM,
+  GHI_CHU_BA_TANG,
+  GHI_CHU_NHOM_CHI_XEM,
   GIAI_THICH_THANG_BAC,
+  giaiThichKhongThaoTac,
   lopTrangThaiMuc,
   nhanMacDinh,
+  nhanNguon,
   nhanNhomRong,
   nhanSoMuc,
   nhanTrangThaiMuc,
@@ -48,38 +51,88 @@ describe("số mục cạnh tên nhóm", () => {
   });
 });
 
-describe("TRẠNG THÁI RỖNG — câu quan trọng nhất của màn hình này", () => {
-  it("nói ĐỦ HAI điều: đơn vị chưa có mục, và không thêm được từ đây", () => {
-    // Thiếu điều thứ nhất thì màn hình trông như đang hỏng. Thiếu điều thứ hai thì cán bộ đi tìm
-    // nút `+ Thêm mục` mà đặc tả §5 có vẽ nhưng hợp đồng không có tuyến phía sau (câu hỏi mở #21).
-    const cau = nhanNhomRong("Loại văn bản");
+describe("cột Nguồn", () => {
+  it("dịch đúng hai giá trị của ràng buộc CHECK", () => {
+    expect(nhanNguon("he-thong")).toBe("Hệ thống");
+    expect(nhanNguon("don-vi")).toBe("Đơn vị");
+  });
 
-    expect(cau).toBe(
+  it("GIÁ TRỊ LẠ hiện nguyên văn, không đoán bừa thành một trong hai", () => {
+    // Ràng buộc CHECK chỉ nhận hai giá trị, nên giá trị thứ ba nghĩa là hợp đồng đã trôi khỏi
+    // CSDL. Dịch bừa nó thành "Đơn vị" là giấu một sự cố sau một chữ trông bình thường — và chính
+    // chữ ấy quyết định dòng này có nút Xoá hay không.
+    expect(nhanNguon("he-thong-2")).toBe("he-thong-2");
+    expect(nhanNguon("")).toBe("");
+  });
+});
+
+describe("TRẠNG THÁI RỖNG — câu quan trọng nhất của màn hình này", () => {
+  it("nói ĐỦ HAI điều: đơn vị chưa có mục, và làm gì tiếp theo", () => {
+    // Thiếu điều thứ nhất thì màn hình trông như đang hỏng. Thiếu điều thứ hai thì cán bộ đứng
+    // trước một bảng trống mà không biết bước kế tiếp là bấm nút nào.
+    expect(nhanNhomRong("Loại văn bản", "themDuoc")).toBe(
       "Đơn vị chưa có mục nào trong danh mục Loại văn bản. " +
-        "Màn hình này chỉ xem, không thêm được mục mới.",
+        "Bấm + Thêm mục ở trên để lập mục đầu tiên.",
     );
+  });
+
+  it("BA LÝ DO, BA CÂU KHÁC NHAU — không gộp 'thiếu quyền' với 'chưa có tuyến'", () => {
+    // Một người cần đi xin quyền; người kia xin quyền cũng không có gì mở ra. Một câu chung cho
+    // cả hai là một câu sai với một trong hai người đọc.
+    const ds = (["themDuoc", "thieuQuyen", "khongCoTuyen"] as const).map((l) =>
+      nhanNhomRong("Loại văn bản", l),
+    );
+    expect(new Set(ds).size).toBe(3);
+    expect(nhanNhomRong("Loại văn bản", "thieuQuyen")).toContain("quyền");
   });
 
   it("NÊU TÊN NHÓM trong chính câu, không chỉ ở tiêu đề phía trên", () => {
     // Trình đọc màn hình đọc từng đoạn một. Một câu "chưa có mục nào trong danh mục này" tách khỏi
     // tiêu đề thì không còn biết đang nói về danh mục nào trong bảy danh mục.
-    expect(nhanNhomRong("Mức ưu tiên nhiệm vụ")).toContain("Mức ưu tiên nhiệm vụ");
-    expect(nhanNhomRong("Khối nhiệm vụ")).toContain("Khối nhiệm vụ");
+    expect(nhanNhomRong("Mức ưu tiên nhiệm vụ", "themDuoc")).toContain("Mức ưu tiên nhiệm vụ");
+    expect(nhanNhomRong("Khối nhiệm vụ", "khongCoTuyen")).toContain("Khối nhiệm vụ");
   });
 
   it("KHÔNG nói là lỗi, và không hứa hẹn gì", () => {
-    const cau = nhanNhomRong("Loại nhiệm vụ");
-    for (const tu of ["lỗi", "thất bại", "sắp", "đang phát triển", "thử lại"]) {
-      expect(cau.toLowerCase()).not.toContain(tu);
+    for (const l of ["themDuoc", "thieuQuyen", "khongCoTuyen"] as const) {
+      const cau = nhanNhomRong("Loại nhiệm vụ", l).toLowerCase();
+      for (const tu of ["lỗi", "thất bại", "sắp", "đang phát triển", "thử lại"]) {
+        expect(cau).not.toContain(tu);
+      }
     }
   });
 });
 
-describe("ghi chú đầu tab", () => {
-  it("nói LÝ DO THẬT vì sao không có nút ghi nào, không nói 'sắp có'", () => {
-    expect(GHI_CHU_CHI_XEM).toContain("chỉ xem");
-    expect(GHI_CHU_CHI_XEM.toLowerCase()).not.toContain("sắp");
-    expect(GHI_CHU_CHI_XEM.toLowerCase()).not.toContain("đang phát triển");
+describe("ghi chú đầu tab — quy tắc ba tầng", () => {
+  it("nói ra cả ba tầng TRƯỚC, để người dùng không phát hiện quy tắc bằng cách thiếu nút", () => {
+    // Một cán bộ thấy dòng này có `Xoá` còn dòng kia không sẽ kết luận màn hình hỏng rồi gọi hỗ
+    // trợ — trong khi đó là quy tắc đang làm đúng việc của nó (ADR 0024).
+    expect(GHI_CHU_BA_TANG).toContain("đơn vị tự thêm");
+    expect(GHI_CHU_BA_TANG).toContain("không xoá được");
+    expect(GHI_CHU_BA_TANG).toContain("đổi được nhãn");
+    expect(GHI_CHU_BA_TANG.toLowerCase()).not.toContain("sắp");
+  });
+
+  it("nhóm chưa có tuyến ghi nói rõ là CHƯA, không hứa khi nào có", () => {
+    expect(GHI_CHU_NHOM_CHI_XEM).toContain("chỉ xem");
+    expect(GHI_CHU_NHOM_CHI_XEM.toLowerCase()).not.toContain("sắp");
+    expect(GHI_CHU_NHOM_CHI_XEM.toLowerCase()).not.toContain("đang phát triển");
+  });
+});
+
+describe("câu giải thích vì sao một dòng thiếu nút", () => {
+  it("tầng 2 và tầng 3 nói hai chuyện khác nhau", () => {
+    // Gộp lại thành "mục này không sửa được" là bỏ mất điều người đọc cần nhất: tầng 2 tắt được,
+    // tầng 3 thì không.
+    expect(giaiThichKhongThaoTac(2)).toContain("tắt được");
+    expect(giaiThichKhongThaoTac(3)).toContain("nhãn hiển thị");
+    expect(giaiThichKhongThaoTac(2)).not.toBe(giaiThichKhongThaoTac(3));
+  });
+
+  it("KHÔNG BAO GIỜ rỗng — ô trống đọc bằng trình đọc màn hình thành im lặng", () => {
+    for (const t of [null, 0, 1, 2, 3, 9]) {
+      expect(giaiThichKhongThaoTac(t).length).toBeGreaterThan(0);
+    }
   });
 });
 

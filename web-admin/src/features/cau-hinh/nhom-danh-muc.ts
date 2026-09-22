@@ -36,6 +36,7 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
+import { NAM_DANH_MUC_GHI, type MoTaDanhMucGhi } from "@/lib/api/danh-muc";
 import type { BayDanhMuc, MucDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 
@@ -57,6 +58,15 @@ export type NhomDanhMuc = {
    * Đúng một nhóm trả lời `true`: mức ưu tiên nhiệm vụ. Xem chú thích trên `BANG_NHOM`.
    */
   thuTuLaThangBac: boolean;
+  /**
+   * Đường ghi của nhóm này, hoặc `null` nếu hợp đồng chưa có tuyến ghi nào cho nó.
+   *
+   * `null` KHÔNG PHẢI MỘT MẶC ĐỊNH, NÓ LÀ MỘT SỰ THẬT: hai trong bảy nhóm (`Loại đơn vị dân cư`,
+   * `Khối nhiệm vụ`) hôm nay chỉ có tuyến đọc. Nhóm mang `null` thì màn hình không vẽ nút ghi
+   * nào và nói ra lý do — chứ không vẽ một nút bấm vào không có gì xảy ra, thứ khiến cán bộ tin
+   * rằng mình thao tác sai.
+   */
+  ghi: MoTaDanhMucGhi | null;
   trangThai: TrangThaiNhom;
 };
 
@@ -93,7 +103,26 @@ const BANG_NHOM: readonly { khoa: KhoaNhom; nhan: string; thuTuLaThangBac: boole
  * kết luận đơn vị không có danh mục đó — một câu sai. Nhóm vẫn hiện, kèm đúng câu máy chủ trả về.
  */
 export function nhomDanhMuc(bay: BayDanhMuc): readonly NhomDanhMuc[] {
-  return BANG_NHOM.map((n) => ({ ...n, trangThai: trangThaiNhom(bay[n.khoa]) }));
+  return BANG_NHOM.map((n) => ({
+    ...n,
+    ghi: duongGhiCua(n.khoa),
+    trangThai: trangThaiNhom(bay[n.khoa]),
+  }));
+}
+
+/**
+ * Nhóm này có tuyến ghi không, và nếu có thì ở đâu.
+ *
+ * GHÉP THEO KHOÁ, KHÔNG CHÉP LẠI ĐƯỜNG DẪN. Bảng năm đường ghi có chủ ở `lib/api/danh-muc.ts` và
+ * mỗi đường dẫn ở đó mang một phép kiểm kiểu dựa trên hợp đồng. Một bảng thứ hai ở đây sẽ trôi,
+ * và khi nó trôi thì màn hình gửi PATCH tới một đường dẫn không còn tồn tại — hiện ra thành
+ * "không lưu được" chứ không thành một lỗi ai đọc được (luật 9, cấm #2).
+ *
+ * `?? null` Ở ĐÂY KHÔNG PHẢI MẶC ĐỊNH TRÊN ĐƯỜNG CÁCH LY: nó trả lời "nhóm này chưa có tuyến
+ * ghi", và hệ quả là màn hình vẽ ÍT nút đi, không phải nhiều hơn.
+ */
+function duongGhiCua(khoa: KhoaNhom): MoTaDanhMucGhi | null {
+  return NAM_DANH_MUC_GHI.find((m) => m.khoa === khoa) ?? null;
 }
 
 /**

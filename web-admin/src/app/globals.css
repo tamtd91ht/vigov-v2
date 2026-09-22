@@ -796,3 +796,77 @@ body {
   margin: 0 0 0.5rem;
   font-size: 1rem;
 }
+
+/* ---- màn cấu hình · tab Danh mục, phần GHI ---------------------------------------------- */
+
+/* Cụm nút của một dòng và của một biểu mẫu. XUỐNG DÒNG ĐƯỢC, không cuộn: ở 320px ba nút
+ * `Sửa` · `Tắt` · `Xoá` không nằm vừa một hàng, và một nút bị đẩy khuất là một nút không ai
+ * bấm. `gap` giữ khoảng hở để hai vùng chạm không dính vào nhau — bấm nhầm ở đây là bấm
+ * `Xoá` khi định bấm `Sửa`. */
+.cum-nut {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Ô hành động KHÔNG dùng `white-space: nowrap` như các ô còn lại của bảng: ở đây nội dung là
+ * nút và câu giải thích, cả hai đều phải xuống dòng được. */
+.bang-danh-muc .o-thao-tac {
+  white-space: normal;
+}
+
+/* VÙNG CHẠM TỐI THIỂU. `.nut-phu` dùng chung cho cả những chỗ chỉ có một nút; trong bảng thì ba
+ * nút đứng cạnh nhau và cán bộ lớn tuổi bấm trên điện thoại, nên chiều cao tối thiểu ở đây là
+ * điều kiện để bấm trúng chứ không phải trang trí (`skills/accessibility-elderly`). */
+.o-thao-tac .nut-phu,
+.form-danh-muc .nut-phu,
+.form-danh-muc .nut-chinh {
+  min-height: 2.75rem;
+}
+
+/* Nút Xoá KHÔNG chỉ khác màu — chữ trong nút đã nói "Xoá". Màu chỉ là dấu hiệu thứ hai, để
+ * người không phân biệt được màu vẫn đọc ra (a11y, `15-phu-luc §8`). */
+.nut-xoa {
+  border-color: var(--do-loi);
+  color: var(--do-loi);
+}
+
+/* Biểu mẫu ghi mở NGAY TRONG nhóm của nó, không phải một hộp thoại nổi. Hộp thoại nổi phải tự
+ * lo bẫy tiêu điểm, phím Esc và cuộn nền; một khối trong luồng thì không cần thứ nào trong số
+ * đó, và ở 320px nó không che mất bảng mà cán bộ đang đối chiếu. */
+.form-danh-muc {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--xam-vien);
+  border-left: 4px solid var(--xanh);
+  border-radius: 0.5rem;
+  background: var(--nen);
+}
+
+.form-danh-muc h4 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+/* Ô đánh dấu: nhãn nằm CẠNH ô, và cả hai cùng nằm trong vùng bấm của nhãn. */
+.o-chon {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.o-chon input {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.o-chon label {
+  margin: 0;
+}
+
+@media (min-width: 480px) {
+  .form-danh-muc .nut-chinh {
+    width: auto;
+  }
+}

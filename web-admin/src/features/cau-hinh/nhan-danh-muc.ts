@@ -33,7 +33,7 @@ export function lopTrangThaiMuc(active: boolean): string {
  * MỘT CHỮ CHO CẢ HAI CA, KHÔNG PHẢI MỘT DẤU GẠCH. Đặc tả vẽ badge `Mặc định` ở mục được chọn sẵn
  * và không vẽ gì ở những mục khác; một ô trống hoặc một dấu `—` đọc bằng trình đọc màn hình thì
  * thành im lặng, và người dùng không biết ô ấy trống vì chưa có dữ liệu hay vì mục này không phải
- * mặc định. Nút `Đặt mặc định` của đặc tả không có ở đây: nó là một thao tác GHI (xem `tab-danh-muc.tsx`).
+ * mặc định.
  */
 export function nhanMacDinh(laMacDinh: boolean): string {
   return laMacDinh ? "Mặc định" : "Không";
@@ -45,46 +45,122 @@ export function nhanSoMuc(soMuc: number): string {
 }
 
 /**
+ * Cột "Nguồn" của đặc tả §5 — `he-thong` / `don-vi` thành chữ người đọc.
+ *
+ * GIÁ TRỊ LẠ HIỆN NGUYÊN VĂN, KHÔNG ĐOÁN VÀ KHÔNG GIẤU. Ràng buộc CHECK của mọi bảng danh mục
+ * chỉ nhận đúng hai giá trị, nên một giá trị thứ ba nghĩa là hợp đồng đã trôi khỏi CSDL. Dịch
+ * bừa nó thành "Đơn vị" là giấu một sự cố sau một chữ trông bình thường — và chính chữ ấy quyết
+ * định dòng này có nút Xoá hay không.
+ */
+export function nhanNguon(source: string): string {
+  switch (source) {
+    case "he-thong":
+      return "Hệ thống";
+    case "don-vi":
+      return "Đơn vị";
+    default:
+      return source;
+  }
+}
+
+/**
+ * Vì sao một dòng không có nút — câu đặt ngay trong ô hành động của chính dòng ấy.
+ *
+ * ĐẶT Ở DÒNG, KHÔNG PHẢI MỘT CHÚ THÍCH CHUNG Ở CUỐI BẢNG. Người đọc đang nhìn một dòng cụ thể và
+ * hỏi "vì sao dòng này không xoá được"; một câu giải thích chung ở chỗ khác bắt họ tự ghép, và
+ * người dùng trình đọc màn hình thì không nghe thấy nó ở đâu cả. Ô trống thì càng tệ: nó đọc
+ * thành im lặng, không phân biệt được với "màn hình chưa dựng xong".
+ */
+export function giaiThichKhongThaoTac(tang: number | null): string {
+  switch (tang) {
+    case 2:
+      return "Mục do phần mềm cấp: tắt được, không xoá được.";
+    case 3:
+      return "Phần mềm có xử lý riêng theo mã của mục này: chỉ đổi được nhãn hiển thị.";
+    default:
+      return "Không có thao tác nào cho mục này.";
+  }
+}
+
+/**
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * CÂU QUAN TRỌNG NHẤT CỦA MÀN HÌNH NÀY. Đọc kỹ trước khi sửa một chữ.
+ * CÂU CỦA TRẠNG THÁI RỖNG. Đọc kỹ trước khi sửa một chữ.
  *
- * Bảy danh mục hôm nay RỖNG ở mọi đơn vị và sẽ còn rỗng: migration cố ý không gieo mục nào, và
- * bước khởi tạo đơn vị — nơi những mục đầu tiên được lập — chưa tồn tại (`nhom-danh-muc.ts`).
- * Nên đây là đường THÔNG THƯỜNG, và câu chữ phải nói đủ HAI điều, vì thiếu điều nào cũng để lại
- * một người ngồi chờ hoặc đi tìm nút không có:
+ * Bảy danh mục hôm nay rỗng ở hầu hết đơn vị: migration cố ý không gieo mục nào, và bước khởi
+ * tạo đơn vị chưa tồn tại (`nhom-danh-muc.ts`). Nên đây là đường THÔNG THƯỜNG, và câu chữ phải
+ * nói đủ HAI điều, vì thiếu điều nào cũng để lại một người ngồi chờ hoặc đi tìm nút không có:
  *
- *   1. Đơn vị chưa có mục nào — hệ thống KHÔNG hỏng, không phải mất mạng, không phải mất quyền.
- *   2. Không thêm được từ màn hình này — để không ai đi tìm nút `+ Thêm mục` mà đặc tả có vẽ.
+ *   1. Đơn vị chưa có mục nào — hệ thống KHÔNG hỏng, không mất mạng, không mất quyền.
+ *   2. Từ đây làm được gì tiếp theo — và câu trả lời khác nhau theo BA ca, nên tham số này là
+ *      một union ba nhánh chứ không phải một `boolean`. Gộp "chưa có tuyến" với "thiếu quyền"
+ *      vào một câu là nói sai với một trong hai người đọc: một người cần đi xin quyền, người
+ *      kia xin quyền cũng không có gì mở ra.
  *
  * TÊN NHÓM NẰM TRONG CHÍNH CÂU, không chỉ ở tiêu đề phía trên: trình đọc màn hình đọc từng đoạn
- * một, và một câu "Đơn vị chưa có mục nào trong danh mục này" tách khỏi tiêu đề thì không còn
- * biết đang nói về danh mục nào.
+ * một, và một câu tách khỏi tiêu đề thì không còn biết đang nói về danh mục nào.
  *
  * HAI CÂU NGẮN, KHÔNG PHẢI MỘT CÂU DÀI: cán bộ đọc màn hình này gồm cả người lớn tuổi, và một
  * câu ghép nhiều mệnh đề là câu phải đọc lại lần hai (`skills/accessibility-elderly`).
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
-export function nhanNhomRong(tenNhom: string): string {
-  return `Đơn vị chưa có mục nào trong danh mục ${tenNhom}. Màn hình này chỉ xem, không thêm được mục mới.`;
+export type LoiRaCuaNhomRong = "themDuoc" | "thieuQuyen" | "khongCoTuyen";
+
+export function nhanNhomRong(tenNhom: string, loiRa: LoiRaCuaNhomRong): string {
+  const dau = `Đơn vị chưa có mục nào trong danh mục ${tenNhom}.`;
+  switch (loiRa) {
+    case "themDuoc":
+      return `${dau} Bấm ${NUT_THEM} ở trên để lập mục đầu tiên.`;
+    case "thieuQuyen":
+      return `${dau} Tài khoản của bạn không có quyền thêm mục cho danh mục này.`;
+    case "khongCoTuyen":
+      return `${dau} Danh mục này chưa sửa được từ màn hình.`;
+  }
+}
+
+/** Nhãn các nút thao tác. Có chữ, không chỉ có biểu tượng — xem `GHI_CHU_NUT_CO_CHU`. */
+export const NUT_THEM = "+ Thêm mục";
+export const NUT_SUA = "✎ Sửa";
+export const NUT_TAT = "Tắt";
+export const NUT_BAT_LAI = "Bật lại";
+export const NUT_XOA = "🗑 Xoá";
+export const NUT_LUU = "Lưu";
+export const NUT_HUY = "Huỷ";
+export const NUT_XAC_NHAN_XOA = "Xoá mục";
+
+/**
+ * Vì sao mọi nút đều có CHỮ bên cạnh biểu tượng, dù đặc tả §5 chỉ vẽ `✎` và `🗑`.
+ *
+ * Một nút chỉ có biểu tượng là một nút phải đoán, và người đoán sai ở đây bấm `🗑` khi định bấm
+ * `✎`. Trình đọc màn hình cũng đọc `🗑` thành một tên emoji chứ không thành "xoá". Giữ biểu
+ * tượng làm dấu nhận mặt, thêm chữ làm nghĩa (`skills/accessibility-elderly`).
+ */
+export const GHI_CHU_NUT_CO_CHU =
+  "Mỗi nút đều có chữ bên cạnh biểu tượng để đọc được bằng trình đọc màn hình.";
+
+/** Nhãn đọc-được-một-mình cho nút của một dòng: trình đọc màn hình đọc nút tách khỏi bảng. */
+export function nhanNutCuaDong(nut: string, nhanMuc: string): string {
+  return `${nut} — mục ${nhanMuc}`;
 }
 
 /**
- * Ghi chú đầu tab — vì sao không có nút thêm, sửa, tắt hay nhập Excel nào.
+ * Ghi chú đầu tab — BA TẦNG, và vì sao có dòng không hiện đủ nút.
  *
- * NÓI LÝ DO THẬT, KHÔNG NÓI "SẮP CÓ". Lý do là câu hỏi mở #21 chưa được đơn vị chốt: đơn vị được
- * sửa cả DANH SÁCH MÃ hay chỉ được sửa nhãn và thứ tự (`kb/00-foundation/open-questions.json`).
- * "Tính năng đang phát triển" là một lời hứa không ai đặt ra và sẽ bị hỏi lại sau ba tháng.
+ * NÓI QUY TẮC RA TRƯỚC, KHÔNG ĐỂ NGƯỜI DÙNG PHÁT HIỆN BẰNG CÁCH THIẾU NÚT. Một cán bộ thấy dòng
+ * này có `Xoá` còn dòng kia không sẽ kết luận màn hình hỏng, rồi gọi hỗ trợ — trong khi đó là
+ * quy tắc đang làm đúng việc của nó (ADR 0024).
  */
-export const GHI_CHU_CHI_XEM =
-  "Màn hình hiện chỉ xem. Thêm, sửa, tắt mục và nhập từ tệp Excel chưa mở vì chưa có quy định " +
-  "đơn vị được sửa danh sách mã hay chỉ được sửa nhãn hiển thị và thứ tự.";
+export const GHI_CHU_BA_TANG =
+  "Mục do đơn vị tự thêm thì sửa, tắt và xoá được. Mục do phần mềm cấp chỉ tắt và đổi nhãn " +
+  "được, không xoá được. Riêng mục mà phần mềm có xử lý theo mã thì chỉ đổi được nhãn.";
+
+/** Ghi chú cho hai nhóm chưa có tuyến ghi nào — nói rõ là CHƯA, và không hứa khi nào có. */
+export const GHI_CHU_NHOM_CHI_XEM = "Danh mục này hiện chỉ xem, chưa sửa được từ màn hình.";
 
 /**
  * Vì sao bảng vẫn liệt kê những mục đã tắt.
  *
- * Chỉ hiện khi trên màn hình ĐANG CÓ mục để mà giải thích — cùng lý do `BaoLoiDanhMuc` của tab
- * Người dùng đặt dòng báo cạnh bảng chứ không trên đầu màn hình: một câu giải thích đứng cạnh
- * bảy bảng rỗng không giải thích được gì cả.
+ * Chỉ hiện khi trên màn hình ĐANG CÓ mục để mà giải thích — một câu giải thích đứng cạnh bảy
+ * bảng rỗng không giải thích được gì cả.
  */
 export const GIAI_THICH_DA_TAT =
   "Mục đã tắt vẫn nằm trong bảng: hồ sơ đã lập theo mã đó vẫn cần nhãn để hiển thị. Mục đã tắt " +
@@ -102,3 +178,66 @@ export const GIAI_THICH_DA_TAT =
 export const GIAI_THICH_THANG_BAC =
   "Thứ tự trong bảng là thang bậc do đơn vị sắp. Bảng giữ nguyên thứ tự đơn vị đã sắp và không " +
   "sắp xếp lại.";
+
+/* ---- câu chữ của ba biểu mẫu ghi --------------------------------------------------------- */
+
+export function tieuDeThem(tenNhom: string): string {
+  return `Thêm mục vào danh mục ${tenNhom}`;
+}
+
+export function tieuDeSua(nhanMuc: string): string {
+  return `Sửa mục ${nhanMuc}`;
+}
+
+export function tieuDeXoa(nhanMuc: string): string {
+  return `Xoá mục ${nhanMuc}`;
+}
+
+export const O_MA = "Mã";
+export const O_NHAN = "Nhãn hiển thị";
+export const O_THU_TU = "Thứ tự";
+export const O_MAC_DINH = "Đặt làm mục mặc định";
+export const O_LY_DO_XOA = "Lý do xoá";
+
+/**
+ * Chú thích dưới ô `Mã` — mã gõ một lần, và không sửa lại được bao giờ.
+ *
+ * NÓI TRƯỚC KHI GÕ, KHÔNG NÓI SAU KHI LƯU. Mã đã cấp thì không đổi (luật 7, bất biến 3) vì hồ sơ
+ * nghiệp vụ giữ nó làm giá trị; biết điều đó sau khi đã lưu một mã gõ sai là biết quá muộn.
+ */
+export const GIAI_THICH_O_MA =
+  "Chữ thường không dấu, nối bằng dấu gạch ngang — ví dụ: cong-van. Mã đã lưu thì không sửa " +
+  "được nữa; muốn đổi cách gọi thì sửa nhãn hiển thị.";
+
+/** Chú thích dưới ô `Nhãn hiển thị` — đây là thứ cán bộ khác nhìn thấy trên mọi màn hình. */
+export const GIAI_THICH_O_NHAN =
+  "Nhãn là chữ hiện trên các màn hình khác. Sửa nhãn không ảnh hưởng tới hồ sơ đã lập.";
+
+/**
+ * Chú thích trên biểu mẫu xoá — nói đúng chuyện gì sẽ xảy ra, gồm cả chuyện mã bị giữ lại.
+ *
+ * "XOÁ" Ở ĐÂY KHÔNG PHẢI XOÁ, và người bấm phải biết điều đó TRƯỚC. Dòng vẫn nằm lại trong CSDL,
+ * và mã của nó vẫn bị chiếm vĩnh viễn — thêm lại đúng mã ấy sẽ bị từ chối (luật 7, bất biến 3).
+ * Một cán bộ tưởng xoá xong là làm lại được từ đầu sẽ mất buổi chiều để hiểu ra.
+ */
+export const CANH_BAO_XOA =
+  "Mục sẽ không còn hiện trong danh mục, nhưng hồ sơ đã lập theo mục này vẫn giữ nguyên. Mã của " +
+  "mục vẫn bị giữ chỗ và không dùng lại được cho mục mới.";
+
+/** Câu báo sau khi ghi xong. Nói rõ ĐÃ LÀM GÌ, vì một chữ "Thành công" không xác nhận điều gì. */
+export function daLuu(tenNhom: string): string {
+  return `Đã lưu thay đổi cho danh mục ${tenNhom}.`;
+}
+
+export function daThem(tenNhom: string): string {
+  return `Đã thêm mục mới vào danh mục ${tenNhom}.`;
+}
+
+export function daXoa(tenNhom: string): string {
+  return `Đã xoá mục khỏi danh mục ${tenNhom}.`;
+}
+
+/** Câu hiện ở chỗ các nút khi tài khoản không có quyền `admin.lookup`. */
+export const CAU_THIEU_QUYEN_GHI =
+  "Tài khoản của bạn chỉ xem được danh mục. Việc thêm, sửa, tắt và xoá mục cần quyền Quản lý " +
+  "danh mục.";

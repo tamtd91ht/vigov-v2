@@ -121,8 +121,29 @@ describe("ngày", () => {
 
 describe("tra hạng mục kế hoạch vốn", () => {
   const danhMuc: finance_hangMucRa[] = [
-    { id: "01JHM1", code: "tra-no", label: "Vốn trả nợ", is_default: false, active: true },
-    { id: "01JHM2", code: "xay-moi", label: "", is_default: false, active: false },
+    // `order`, `source`, `tier` có mặt vì hợp đồng đòi — chúng không tham gia phép tra ở đây, và
+    // chính vì thế chúng được đặt ĐÚNG như máy chủ trả về chứ không phải giá trị tuỳ tiện: một
+    // dữ liệu mẫu nói sai về tầng của một dòng là một dữ liệu mẫu sẽ bị chép sang bài test khác.
+    {
+      id: "01JHM1",
+      code: "tra-no",
+      label: "Vốn trả nợ",
+      is_default: false,
+      active: true,
+      order: 1,
+      source: "he-thong",
+      tier: 2,
+    },
+    {
+      id: "01JHM2",
+      code: "xay-moi",
+      label: "",
+      is_default: false,
+      active: false,
+      order: 2,
+      source: "don-vi",
+      tier: 1,
+    },
   ];
 
   it("tra được thì hiện nhãn", () => {
