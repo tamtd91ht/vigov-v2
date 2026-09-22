@@ -1,6 +1,6 @@
 # `deploy/` — manifest Kubernetes
 
-Tầng này chạm vào cụm. Chín job đóng ảnh **không** chạm — phạm vi của chúng dừng ở Harbor.
+Tầng này chạm vào cụm. **Tám** job đóng ảnh **không** chạm — phạm vi của chúng dừng ở Harbor.
 
 ## Cái gì đang ở đây
 
@@ -33,6 +33,96 @@ Cả năm dịch vụ có tuyến REST **đều có đường vào từ Internet
 tuyến của Ingress **được sinh ra** từ `kb/20-contracts/openapi.json` bởi `tools/ingress`, nên
 "thêm tuyến trong Go" và "tuyến ấy đi tới đúng dịch vụ" không còn là hai việc rời nhau. Xem
 mục *Ingress sinh từ hợp đồng REST* dưới đây.
+
+## Phương án đưa lên — bốn pha
+
+**Chốt 22/09/2026.** Mô hình: Jenkins đóng ảnh và **dừng ở Harbor**; job `vigov-deploy` là
+thứ duy nhất chạm cụm. Kubeconfig tới Jenkins bằng credentials `kubeconfig-vigov` kiểu
+**Secret file** — tức giữ nguyên `deploy/Jenkinsfile` hiện tại, không đổi sang tệp nằm sẵn
+trên đĩa như dự án `omicrm` dùng.
+
+Bốn pha đi **tuần tự**. Mỗi pha có một điều kiện xanh **kiểm được**; chưa xanh thì không sang
+pha sau. Không pha nào chạy song song cho nhanh: mỗi pha chứng minh đúng một tầng mà pha sau
+đã giả định là đúng, và bỏ qua nó chỉ dời chỗ phát hiện lỗi ra xa nguyên nhân.
+
+| Pha | Việc | Điều kiện xanh | Chi tiết |
+|---|---|---|---|
+| **0** | Hạ tầng: cụm, wildcard DNS, chứng thư | **ĐÃ CÓ** — chủ dự án xác nhận 22/09/2026 | — |
+| **1** | Dựng 10 job, chứng minh máy chủ build đủ công cụ | `vigov-gate` xanh · một job đóng ảnh đẩy được lên Harbor | *Dựng 10 job* ↓ |
+| **2** | Cài một lần lên cụm: namespace, RBAC, bí mật, TLS | `kubectl -n vigov-staging get secret` đủ mục | *Thứ tự cài lần đầu* ↓ |
+| **3** | staging — 7 lượt `vigov-deploy` | 7 Deployment `READY`, một xã thử gọi được qua Ingress | *Triển khai* ↓ |
+| **4** | prod — lặp lại pha 3 + phép kiểm hai xã | như trên, cộng phép kiểm cách ly hai xã | *Triển khai* ↓ |
+
+### Pha 1 — Jenkins
+
+1. Tạo 10 job theo bảng *Dựng 10 job trên Jenkins*, và tạo trước hai mục credentials
+   (`kubeconfig-vigov`, `git-vigov`).
+2. Chạy **`vigov-gate` trước mọi job khác.** Nó là job duy nhất kiểm cả 7 công cụ và chạy
+   `make check`, nên nó biến "máy chủ build thiếu gì" thành **một** lần đỏ đọc được, thay vì
+   8 lần đỏ rải rác. Rủi ro đã dự đoán: `buf`, `node`, `npm`, `python3` chưa từng được chứng
+   minh có trên máy chủ này — `go`, `docker`, `make`, `gcc` thì đã, qua lượt chạy thật
+   21/09/2026 của kho `vihat-miniapp`.
+3. Chạy **một** job đóng ảnh, đề xuất `vigov-svc-platform` — nó là đơn vị đầu tiên phải lên
+   cụm ở pha 3.
+4. Lượt đầu của mọi job đóng ảnh sẽ báo *"Chưa lượt build nào ghi mốc đã đóng ảnh — dựng"* và
+   dựng tất. Đúng, không phải lỗi — xem *Lượt chạy đầu tiên*.
+
+**Xanh khi:** `vigov-gate` xanh **và** `skopeo inspect docker://harbor.omicrm.services/ci/vigov-service-platform:<thẻ>`
+trả về manifest.
+
+### Pha 2 — cụm
+
+Chạy khối lệnh ở *Thứ tự cài lần đầu*, **cho `vigov-staging` trước**. Ba thứ dễ sót, và cả ba
+đều hỏng ở chỗ cách xa nguyên nhân:
+
+| Sót | Triệu chứng |
+|---|---|
+| Secret `harbor-vigov` (kéo ảnh) | `ImagePullBackOff`, không nói gì về quyền |
+| `GRPC_CALLER_KEY` / `SESSION_SIGNING_KEYS` | pod `CrashLoopBackOff` — `core/config.Load` gom đủ tên còn thiếu rồi thoát |
+| Secret TLS `vigov-staging-tls` | Ingress lên bình thường, chỉ HTTPS đứt |
+
+**Xanh khi:** `kubectl -n vigov-staging get secret` liệt kê đủ `harbor-vigov`,
+`vigov-staging-tls`, và `bi-mat-{platform,identity,comms,documents,finance,petitions}`.
+
+### Pha 3 và 4 — bảy lượt deploy, **theo đúng thứ tự này**
+
+Mỗi lượt là một lần bấm `vigov-deploy` với `DICH_VU` + `THE` + `MT`. Thứ tự không phải thói
+quen — nó là thứ tự phụ thuộc lúc chạy:
+
+| # | Đơn vị | Đi trước vì |
+|---|---|---|
+| 1 | `platform` | Sáu đơn vị kia quay số cổng 9090 của nó để phân giải `Host` → xã. Chưa có nó thì **mọi xã trả 404** |
+| 2 | `identity` | Bốn dịch vụ ở dưới đổi cookie lấy principal qua gRPC 9090 của nó. Chưa có nó thì **mọi tuyến có kiểm quyền trả 401 cho một phiên hợp lệ** — pod xanh, probe xanh, không gì báo |
+| 3–6 | `comms` · `documents` · `finance` · `petitions` | Độc lập nhau, thứ tự tuỳ |
+| 7 | `web-admin` | **Sau cùng, có chủ ý.** Nó là bề mặt cán bộ nhìn thấy; đưa lên trước khi API sau lưng trả lời được nghĩa là một màn hình lỗi mang tên một cơ quan nhà nước |
+
+**Xanh khi:** 7 Deployment `READY`, **và** một xã thử — đã có bản ghi DNS và một hàng trong
+sổ đăng ký của `platform` — gọi được một tuyến qua Ingress bằng `Host` của chính nó.
+
+`/healthz` xanh **không** phải điều kiện xanh: nó nằm ngoài chuỗi phân giải xã có chủ ý — xem
+*Bốn điều dễ hiểu sai*.
+
+Trước khi sang **pha 4 (prod)**: chạy phép kiểm cách ly hai xã (luật 1) — hai `Host` khác
+nhau, cùng một tuyến, và dữ liệu trả về không được giao nhau. Đó là phép kiểm mà staging tồn
+tại để chạy; một lượt deploy prod không chứng minh lại được nó.
+
+### Rút lui
+
+Job tự `rollout undo` khi `rollout status` đỏ, rồi đợi bản cũ `READY`. **Commit ghim thẻ
+được giữ nguyên, cố ý** (`deploy/Jenkinsfile:197`): nhật ký triển khai phải ghi cả lần thất
+bại. Đưa nhật ký khớp lại với thực tế là việc của người — **chạy lại job với thẻ cũ**, đừng
+`git revert`.
+
+### Còn nợ trước khi gọi là chạy thật
+
+| Nợ | Ở đâu | Hệ quả nếu bỏ qua |
+|---|---|---|
+| `BUILD_USER_ID` luôn rỗng | `deploy/Jenkinsfile:159` | Nhật ký triển khai không trả lời được *ai* — nửa lý do nó tồn tại |
+| `git push` không rebase | *Chưa vá* ↓ | Lượt deploy đỏ ở chỗ khó đọc khi `main` nhích lên giữa chừng |
+| 4 dịch vụ không bắt `SIGTERM` | `service-{comms,documents,finance,petitions}/cmd/server/main.go` | Một lượt deploy cắt ngang lúc tiếp nhận phản ánh để lại phiếu dở trong khi công dân đã cầm mã tra cứu. **Đáng vá TRƯỚC tuyến ghi đầu tiên của `petitions`** |
+| Manifest chưa từng qua API server thật | — | `kubectl kustomize` chỉ chứng minh YAML dựng được, không chứng minh máy chủ chấp nhận. Pha 2 là lần đầu biết |
+
+---
 
 ## Dựng 10 job trên Jenkins
 
@@ -70,47 +160,66 @@ Jenkins **không tự tìm ra** mười `Jenkinsfile` nằm rải trong kho. B�
 **`Shallow clone`.** Cơ chế dựng lại so bằng `git diff <mốc>..HEAD`, trong đó mốc là commit
 của lượt đóng ảnh trước (xem `mocDaDongAnh()` ở cuối mỗi `Jenkinsfile`). Clone nông không
 chứa commit đó, `git cat-file -e` trượt, và job **dựng lại mọi lần**. Không hỏng — cơ chế cố
-ý sai về phía dựng thừa — nhưng toàn bộ việc lọc biến mất, mỗi push thành chín lượt đóng ảnh.
+ý sai về phía dựng thừa — nhưng toàn bộ việc lọc biến mất, mỗi push thành tám lượt đóng ảnh.
 
-**`Sparse checkout`.** Tám dịch vụ Go lấy ngữ cảnh build ở **gốc kho** vì `go.mod` của chúng
+**`Sparse checkout`.** Bảy dịch vụ Go lấy ngữ cảnh build ở **gốc kho** vì `go.mod` của chúng
 `replace` module `core` bằng đường dẫn `../core`. Checkout thiếu `core/` là `docker build` đổ.
 
 **`Lightweight checkout`** cũng phải bỏ: nó chỉ kéo riêng tệp Jenkinsfile qua API, không tạo
 cây làm việc — mà `canDungLai()` chạy `git` thật trong stage `Chuẩn bị`.
 
-### Vì sao 11 job, không phải một job có tham số `DICH_VU`
+### Vì sao 10 job, không phải một job có tham số `DICH_VU`
 
 Mốc "commit đã thành ảnh" được ghi vào **`description` của lượt build**, và mỗi job có lịch
-sử build riêng. Gộp tám dịch vụ vào một job có tham số thì tám mốc chen nhau trong **một**
-dòng lịch sử: job tìm ngược lại sẽ nhặt phải mốc của dịch vụ khác, rồi kết luận "không có gì
-đổi" cho một dịch vụ vừa bị sửa.
+sử build riêng. Gộp tám đơn vị đóng ảnh vào một job có tham số thì tám mốc chen nhau trong
+**một** dòng lịch sử: job tìm ngược lại sẽ nhặt phải mốc của dịch vụ khác, rồi kết luận
+"không có gì đổi" cho một dịch vụ vừa bị sửa.
 
 Một job cho mỗi dịch vụ không phải để UI cho gọn — nó là **nơi lưu trạng thái** của cơ chế.
 
 ### Credentials — ID phải khớp từng ký tự với `defaultValue` trong Jenkinsfile
 
+**HAI mục, không phải ba.** Mọi lời gọi `withCredentials` còn lại trong kho:
+
 | ID | Kiểu | Dùng ở |
 |---|---|---|
-| `harbor-vigov` | Username with password | 9 job đóng ảnh (`docker.withRegistry`) **và** `vigov-deploy` (`skopeo inspect`) |
-| `git-vigov` | Username with password (PAT) | `vigov-deploy` — đẩy commit ghim thẻ |
-| `kubeconfig-vigov` | Secret file | `vigov-deploy` (`withKubeConfig`) |
+| `kubeconfig-vigov` | **Secret file** (nội dung là kubeconfig) | `deploy/Jenkinsfile:169,182,199` — ràng buộc `file`, đặt biến `KUBECONFIG` |
+| `git-vigov` | Username with password (PAT) | `deploy/Jenkinsfile:151` — đẩy commit ghim thẻ · **và** ô `SCM` của cả 10 job |
+
+**`harbor-vigov` KHÔNG còn là một mục credentials của Jenkins.** Tám job đóng ảnh gọi thẳng
+`docker` CLI và `vigov-deploy` gọi `skopeo --authfile`, cả hai dựa vào phiên đăng nhập sẵn
+trong `~jenkins/.docker/config.json` — chốt 21/09/2026, lý do đầy đủ ở `Jenkinsfile:144`.
+Cái tên vẫn tồn tại ở **một chỗ khác, nghĩa khác**: Secret `harbor-vigov` **trong cụm k8s**
+(`imagePullSecrets`, mục *Thứ tự cài lần đầu*). Hai vật khác nhau trùng tên — đừng gộp.
 
 ### Plugin và công cụ trên máy chủ build
 
-**Plugin:** Git · Pipeline · **Docker Pipeline** (`docker.build`) · **Kubernetes CLI**
-(`withKubeConfig`) · Credentials Binding · **build-user-vars**.
+**Máy chủ Jenkins này chỉ có bộ lõi**, và nó dùng chung với dự án khác nên cài thêm plugin
+không phải quyết định của kho này. Mười `Jenkinsfile` đã được viết để chạy trên đúng bộ ấy:
 
-Thiếu `build-user-vars` thì commit ghim thẻ ghi `Bấm bởi: khong-ro` — nhật ký triển khai mất
-phần "ai", vốn là nửa lý do nó tồn tại. Cài plugin **và** bọc stage bằng
-`wrap([$class: 'BuildUser'])`.
+| Cần | Ghi chú |
+|---|---|
+| Git · Pipeline · **Credentials Binding** | `credentials-binding` cấp ràng buộc `file` và `gitUsernamePassword` — hai thứ duy nhất job deploy dùng |
+| ~~Docker Pipeline~~ | **KHÔNG dùng.** `docker.build` / `docker.withRegistry` đã bị gỡ khỏi 8 pipeline đóng ảnh, thay bằng `docker` CLI — `Jenkinsfile:127` |
+| ~~Kubernetes CLI~~ | **KHÔNG dùng.** `withKubeConfig` đã bị thay bằng ràng buộc `file` — `deploy/Jenkinsfile:23` |
+
+**`BUILD_USER_ID` hôm nay luôn rỗng**, nên commit ghim thẻ ghi `Bấm bởi: khong-ro`
+(`deploy/Jenkinsfile:159`): biến ấy do plugin `build-user-vars` cấp, plugin không có, và
+`deploy/Jenkinsfile` cũng không bọc `wrap([$class: 'BuildUser'])`. Nhật ký triển khai vì thế
+trả lời được *bản nào, lúc nào*, **không** trả lời được *ai*. Chưa vá — xem *Còn nợ*.
 
 **Công cụ:** `go` 1.26+ · `buf` · `node` 22+ · `npm` · `python3` · một trình biên dịch C
-(`go test -race` cần cgo) · `docker`. Riêng `vigov-deploy` thêm: `kubectl`, `kustomize` bản
-độc lập (`kubectl -k` **không** có `kustomize edit`), `skopeo`.
+(`go test -race` cần cgo) · `docker` có BuildKit. Riêng `vigov-deploy` thêm: `kubectl`,
+`kustomize` bản độc lập (`kubectl -k` **không** có `kustomize edit`), `skopeo`.
+
+Mỗi pipeline tự kiểm công cụ ở stage đầu và **dừng ngay** nếu thiếu, thay vì đổ giữa chừng
+với một lỗi không đọc được: `Jenkinsfile:52` (7 công cụ) · `service-*/Jenkinsfile:48`
+(`go buf docker gcc`) · `web-admin/Jenkinsfile:39` (`node npm docker`) ·
+`deploy/Jenkinsfile:79` (`git kubectl kustomize skopeo`).
 
 ### Lượt chạy đầu tiên
 
-Chín job đóng ảnh sẽ báo `Chưa lượt build nào ghi mốc đã đóng ảnh — dựng` và đóng **cả chín
+Tám job đóng ảnh sẽ báo `Chưa lượt build nào ghi mốc đã đóng ảnh — dựng` và đóng **cả tám
 ảnh**. Đó là đúng, không phải lỗi: chưa có mốc nào để so. Từ lượt thứ hai mới lọc.
 
 `vigov-deploy` khai tham số **bên trong** Jenkinsfile, nên lần đầu nó chạy không có ô nhập

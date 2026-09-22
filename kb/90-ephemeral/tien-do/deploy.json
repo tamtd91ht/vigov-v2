@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "deploy",
-  "cap_nhat": "2026-09-21",
+  "cap_nhat": "2026-09-22",
   "muc": [
     {
       "id": "manifest-k8s-ba-don-vi",
@@ -9,7 +9,7 @@
       "trang_thai": "xong",
       "bang_chung": "deploy/base/{identity,platform,web-admin,mang}/, deploy/cluster/{namespace,rbac-jenkins}.yaml, deploy/overlays/{prod,staging}/{ingress,kustomization}.yaml, deploy/Jenkinsfile. Commit 0e54c51 — 32 tệp, 1524 dòng thêm; cũng vá mốc dựng lại của 9 pipeline — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "Bố cục có chủ ý: `base/` KHÔNG mang namespace và KHÔNG mang thẻ ảnh; namespace, cấu hình môi trường và thẻ ảnh chỉ nằm ở `overlays/<mt>/`. `deploy/Jenkinsfile` là NƠI DUY NHẤT gọi kubectl — chín job đóng ảnh dừng ở Harbor, không chạm cụm. Thành quả này trước 2026-09-20 không chỗ nào trong sổ ghi là đã có, tức nó là loại kết quả biến mất giữa hai phiên"
+      "tiep_theo": "Bố cục có chủ ý: `base/` KHÔNG mang namespace và KHÔNG mang thẻ ảnh; namespace, cấu hình môi trường và thẻ ảnh chỉ nằm ở `overlays/<mt>/`. `deploy/Jenkinsfile` là NƠI DUY NHẤT gọi kubectl — tám job đóng ảnh dừng ở Harbor, không chạm cụm. Thành quả này trước 2026-09-20 không chỗ nào trong sổ ghi là đã có, tức nó là loại kết quả biến mất giữa hai phiên"
     },
     {
       "id": "thieu-manifest-tam-don-vi",
@@ -57,7 +57,15 @@
       "trang_thai": "chua_lam",
       "bang_chung": "",
       "no_confirm": [],
-      "tiep_theo": "Đi cùng `_chung/jenkins-chay-that` nhưng KHÁC nó: mục kia nói mười Jenkinsfile chưa chạy, mục này nói manifest chưa ai `kubectl apply`. Một tệp YAML chưa bao giờ được máy chủ đọc là một tệp chưa ai biết có đúng không — phạm vi kho dừng ở đây, cụm do đội devops phụ trách"
+      "tiep_theo": "Đi cùng `_chung/jenkins-chay-that` nhưng KHÁC nó: mục kia nói mười Jenkinsfile chưa chạy, mục này nói manifest chưa ai `kubectl apply`. Một tệp YAML chưa bao giờ được máy chủ đọc là một tệp chưa ai biết có đúng không — phạm vi kho dừng ở đây, cụm do đội devops phụ trách. Từ 22/09/2026 đã có trình tự thực thi ở mục `phuong-an-dua-len-bon-pha` — đọc nó trước khi chạm cụm, đừng dựng lại thứ tự từ đầu"
+    },
+    {
+      "id": "phuong-an-dua-len-bon-pha",
+      "viec": "Phương án đưa lên: trình tự thực thi bốn pha + hai mục README đã lệch với mã",
+      "trang_thai": "xong",
+      "bang_chung": "deploy/README.md mục `Phương án đưa lên — bốn pha` (pha 0 hạ tầng · 1 Jenkins · 2 cụm · 3 staging · 4 prod, mỗi pha một điều kiện xanh kiểm được; thứ tự 7 lượt deploy; rút lui; bảng Còn nợ). CÙNG LƯỢT VÁ HAI MỤC ĐÃ LỆCH VỚI MÃ TỪ 21/09: bảng Credentials còn kê `harbor-vigov` là mục credentials Jenkins (không lời gọi `withCredentials` nào dùng nó — chỉ còn `kubeconfig-vigov` ở deploy/Jenkinsfile:169,182,199 và `git-vigov` ở :151), và mục Plugin còn đòi Docker Pipeline + Kubernetes CLI + build-user-vars trong khi Jenkinsfile:127 và deploy/Jenkinsfile:23 nói rõ đã bỏ cả hai. Mọi file:line trong bản viết đã mở kiểm lại: service-*/Jenkinsfile:48 đúng ở cả 7 tệp, bốn dịch vụ đều `identityclient.Dial` (comms:114 · documents:134 · finance:94 · petitions:114), `signal.Notify` chỉ có ở identity và platform, core/config/config.go:337,350 gom GRPC_CALLER_KEY/SESSION_SIGNING_KEYS vào `thieu` rồi thoát — kiểm 2026-09-22 CÙNG LƯỢT SỬA MỘT SỐ ĐẾM LỆCH ở bốn chỗ: kho có TÁM đơn vị đóng ảnh (7 `service-*` + `web-admin`, đúng con số `tools/check_build.py` in ra: '7 dịch vụ + web · 8 Dockerfile · 8 Jenkinsfile') và MƯỜI job, trong khi deploy/README.md viết 'chín job đóng ảnh' ở 4 chỗ và '11 job' ở tiêu đề, Jenkinsfile:108 viết 'chín pipeline', deploy/Jenkinsfile:6 viết 'Chín job kia'. Đã sửa cả BẢY chỗ; chỗ thứ bảy (deploy/Jenkinsfile:4 `CHÍN JOB` viết hoa) lọt qua lần quét đầu vì mẫu tìm phân biệt hoa thường — quét lại bằng `-i` mới ra. Chỉ sửa CHỮ SỐ và chú thích, không đổi mã.",
+      "no_confirm": [],
+      "tiep_theo": "CHỦ DỰ ÁN CHỐT 22/09/2026, ba câu: (1) cụm + wildcard DNS `*.vigov.vn`/`*.staging.vigov.vn` + chứng thư ĐÃ SẴN SÀNG; (2) bước `kubectl apply` do job `vigov-deploy` chạy, giữ nguyên mã hiện tại — tức kubeconfig vào Jenkins bằng credentials `kubeconfig-vigov` kiểu Secret file, KHÔNG dùng tệp nằm sẵn trên đĩa như dự án omicrm. Câu này trước đó ghi ở `_chung/jenkins-chay-that` là CHƯA AI CHỐT, nay đã chốt. BẢN KẾ HOẠCH LÀ GIẤY, CHƯA LÀ BẰNG CHỨNG: chưa pha nào chạy. Mục `cum-chua-chay-that` và `_chung/jenkins-chay-that` mới là nơi ghi khi nó chạy thật. `BUILD_USER_ID` rỗng (deploy/Jenkinsfile:159 không bọc `wrap([$class:'BuildUser'])`, plugin không có) nên nhật ký triển khai sẽ ghi `Bấm bởi: khong-ro` ngay từ lượt đầu — quyết định có vá hay chấp nhận là của chủ dự án, chưa hỏi"
     }
   ]
 }

@@ -1,9 +1,9 @@
 // Job TRIỂN KHAI. Tệp này là nơi DUY NHẤT chạm vào cụm k8s.
 //
 // ─────────────────────────────────────────────────────────────────────────────────────────
-// VÌ SAO NÓ TÁCH KHỎI CHÍN JOB ĐÓNG ẢNH, VÀ VÌ SAO NÓ KHÔNG TỰ CHẠY
+// VÌ SAO NÓ TÁCH KHỎI TÁM JOB ĐÓNG ẢNH, VÀ VÌ SAO NÓ KHÔNG TỰ CHẠY
 //
-// Chín job kia đóng ảnh tự động, thoải mái — một ảnh nằm trong Harbor không làm gì cả.
+// Tám job kia đóng ảnh tự động, thoải mái — một ảnh nằm trong Harbor không làm gì cả.
 // Đưa một ảnh lên cụm thì khác: nó thay mã đang phục vụ hồ sơ hành chính của 200+ xã.
 //
 // Nên job này chỉ chạy khi có người bấm, với ba tham số người ấy phải tự điền, và nó để
