@@ -69,6 +69,47 @@ a dependency, and both then write the same two files.
 **These commands belong to the main session only.** Say so in the brief; do not assume an
 agent will avoid them.
 
+## THE MACHINE IS SHARED STATE TOO — AND IT IS THE ONE THAT DESTROYS WORK
+
+Everything above is about agents corrupting each other's *files*. This one is different: nothing
+is corrupted, the agent simply **dies mid-sentence and its work is gone**.
+
+**HARD CAP: at most TWO concurrent agents that compile Go. One is the safe number.**
+
+Measured on this project, 22/09/2026, not reasoned from first principles:
+
+| What was run | What happened |
+|---|---|
+| 3 × `go-service-builder`, disjoint modules, textbook-correct boundaries | All three killed. Two left **nothing at all**; the third left 818 lines that happened to compile |
+| Same day, earlier | Two whole sessions killed with exit 137, terminal closed with them |
+
+The boundaries were right. Question 3 of the four questions passed. **It still cost most of a
+night**, because a Go toolchain compiling a module is expensive and three of them plus the main
+session is more than this machine has.
+
+Why it is worse than any conflict in the table above:
+
+- **It gives no signal.** No error, no partial file, no hand-back. The task notification says the
+  agent stopped; the transcript is saved but the work is not.
+- **A dying agent has not committed.** The main session cannot recover what was in its head.
+- **It looks like progress right up to the end.** Three agents "running" reads as three times the
+  throughput until the moment all three are gone.
+
+**Practical rules:**
+
+```
+[ ] Go-compiling agents: 1 concurrent, 2 at the absolute most
+[ ] Read-only agents (isolation-reviewer, domain-expert, progress-reviewer): cheap, parallel is fine
+[ ] Web agents (tsc/vitest): 2 is fine — the Node toolchain costs far less than Go's
+[ ] NEVER run a Go build in the main session while a Go agent is working
+[ ] Long agent + valuable partial work → tell it in the brief: "if a command is killed, COMMIT what
+    exists first, then re-run"
+```
+
+**And when an agent does die: check the working tree before assuming the task is lost.** Partial
+work that compiles is worth a `wip(...)` commit immediately — the alternative is losing it a
+second time to the same cause.
+
 ## VERIFICATION IS ALWAYS SERIAL
 
 Fan out to write, then come back to one thread to verify:
@@ -112,6 +153,7 @@ A single agent on a well-scoped task beats three agents on a vague one.
 [ ] boundaries disjoint per ROUTING §3
 [ ] neither needs the other's output
 [ ] no shared go.mod / gen/ / kb indexes / build cache
+[ ] AT MOST 2 Go-compiling agents — 1 is the safe number. This one is not theory
 [ ] every brief self-contained: no question left for the agent to ask
 [ ] repo-global commands reserved to the main session
 [ ] verification runs alone, after all of them return
