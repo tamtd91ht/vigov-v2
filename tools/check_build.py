@@ -203,6 +203,89 @@ def kiem_pipeline(duong: str, ten_rieng: str, loi: list[str]) -> None:
         )
 
 
+def kiem_dong_em(svcs: list[str], loi: list[str]) -> int:
+    """Hạn `Shutdown` trong mã phải NHỎ HƠN `terminationGracePeriodSeconds` của manifest.
+
+    VÌ SAO PHÉP KIỂM NÀY TỒN TẠI, và vì sao nó không phải chuyện vận hành. Hai con số ở hai
+    tệp khác nhau, hai ngôn ngữ khác nhau, hai người sửa vào hai lúc khác nhau — và khi chúng
+    lệch thì KHÔNG CÓ GÌ HỎNG THEO CÁCH NHÌN THẤY ĐƯỢC. Pod vẫn khởi động, healthz vẫn xanh,
+    mọi bài test vẫn qua. Chỉ mỗi lượt deploy là cắt ngang những yêu cầu đang chạy, và không ai
+    biết vì đó chính là lúc không ai nhìn.
+
+    HƯỚNG LỆCH DUY NHẤT GÂY HẠI LÀ `grace <= shutdown`: k8s gửi SIGTERM, mã bắt đầu rút êm với
+    hạn của nó, rồi k8s `SIGKILL` TRƯỚC khi hạn ấy trôi hết. Đoạn đóng êm chạy được một nửa —
+    tức nó tồn tại, được đọc qua như một biện pháp, và không bao giờ làm xong việc của mình.
+    Đó đúng là hình dạng "rào chắn trông như đang canh mà đã chết" mà kho này đã mất cả ngày
+    17/09 để dọn ở bốn chỗ khác.
+
+    KHÔNG BẮT DỊCH VỤ PHẢI CÓ ĐÓNG ÊM. Phép kiểm chỉ nói: nếu mã CÓ `signal.Notify`, thì hai số
+    phải đứng đúng thứ tự. Một dịch vụ chưa có đóng êm là một mục trong sổ tiến độ, không phải
+    một lần đỏ ở đây — bắt đỏ thứ chưa ai hứa làm là cách nhanh nhất để có người thêm `# noqa`.
+
+    ⚠ HAI CÂY THƯ MỤC ĐẶT TÊN KHÁC NHAU, và bản đầu tiên của hàm này đã chết vì đúng chỗ đó:
+    `dich_vu()` trả `service-petitions` (tên thư mục module), còn manifest nằm ở
+    `deploy/base/petitions/`. Ghép thẳng hai cái cho ra một đường dẫn không tồn tại, hàm `continue`
+    qua mọi dịch vụ, và cổng in [PASS] — kể cả khi hạ `terminationGracePeriodSeconds` xuống 20.
+    Nó được phát hiện bằng một phép ĐỘT BIẾN, không bằng lần chạy xanh đầu tiên.
+
+    Vì thế hàm trả về SỐ CẶP ĐÃ ĐỐI CHIẾU và `main` in con số ấy ra. Một phép kiểm không nói nó
+    đã kiểm bao nhiêu thứ là một phép kiểm không phân biệt được với một phép kiểm đã chết.
+    """
+    da_kiem = 0
+    for svc in svcs:
+        duong_go = os.path.join(GOC, svc, "cmd", "server", "main.go")
+        # `service-petitions` -> `petitions`. Cắt tiền tố chứ không gõ tay bảng ánh xạ: một bảng
+        # gõ tay thiếu một dòng thì dịch vụ ấy lặng lẽ không được kiểm, y như lần hỏng vừa rồi.
+        ten_deploy = svc[len("service-"):] if svc.startswith("service-") else svc
+        duong_yaml = os.path.join(GOC, "deploy", "base", ten_deploy, "deployment.yaml")
+        if not os.path.isfile(duong_go) or not os.path.isfile(duong_yaml):
+            continue
+
+        with open(duong_go, encoding="utf-8") as f:
+            ma = f.read()
+        if "signal.Notify" not in ma:
+            continue  # chưa hứa đóng êm — xem sổ tiến độ, không phải việc của cổng này
+        da_kiem += 1
+
+        # `context.WithTimeout(..., N*time.Second)` — hạn rút êm. Lấy số LỚN NHẤT: identity có
+        # hai đoạn chờ song song, và thứ quyết định pod sống bao lâu là đoạn dài nhất.
+        hans = [int(m) for m in re.findall(r"WithTimeout\([^,]+,\s*(\d+)\s*\*\s*time\.Second", ma)]
+        if not hans:
+            loi.append(
+                f"{svc}/cmd/server/main.go có `signal.Notify` nhưng không tìm thấy hạn "
+                f"`context.WithTimeout(..., N*time.Second)` nào\n"
+                f"        → Một đoạn đóng êm không có hạn là một lượt deploy có thể treo vô "
+                f"hạn, và k8s sẽ cắt nó ở `terminationGracePeriodSeconds` mà không ai chọn "
+                f"con số ấy cho việc này."
+            )
+            continue
+        han = max(hans)
+
+        with open(duong_yaml, encoding="utf-8") as f:
+            yaml_txt = f.read()
+        m = re.search(r"terminationGracePeriodSeconds:\s*(\d+)", yaml_txt)
+        if not m:
+            loi.append(
+                f"deploy/base/{svc}/deployment.yaml không khai "
+                f"`terminationGracePeriodSeconds`, trong khi mã CÓ đóng êm {han}s\n"
+                f"        → Mặc định của k8s là 30s. Dựa vào một mặc định không viết ra là "
+                f"để hạn ấy đổi theo phiên bản cụm mà không ai đọc lại mã."
+            )
+            continue
+        grace = int(m.group(1))
+
+        if grace <= han:
+            loi.append(
+                f"{svc}: `terminationGracePeriodSeconds: {grace}` KHÔNG LỚN HƠN hạn rút êm "
+                f"{han}s trong cmd/server/main.go\n"
+                f"        → k8s sẽ SIGKILL trước khi `Shutdown` xong. Đoạn đóng êm vẫn nằm "
+                f"đó, vẫn đọc qua như một biện pháp, và chạy được một nửa — yêu cầu đang dở "
+                f"bị cắt giữa chừng đúng vào lúc không ai nhìn."
+            )
+
+    return da_kiem
+
+
 def main() -> int:
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -251,6 +334,7 @@ def main() -> int:
                       f"{svc}/**", loi)
 
     kiem_dockerignore(svcs, loi)
+    so_dong_em = kiem_dong_em(svcs, loi)
 
     web = os.path.join(GOC, "web-admin", "Dockerfile")
     if not os.path.isfile(web):
@@ -295,9 +379,13 @@ def main() -> int:
             print(f"      - {l}")
         return 1
 
+    # `so_dong_em` IN RA CHỨ KHÔNG ẨN, và đó là bài học của chính phép kiểm ấy: bản đầu ghép sai
+    # tên thư mục nên không đối chiếu được cặp nào, mà dòng [PASS] vẫn y hệt lúc nó chạy đúng.
+    # Một con số 0 ở đây là câu "cổng này chưa canh gì cả", đọc được mà không cần đột biến.
     print(f"[PASS] hồ sơ dựng — {len(svcs)} dịch vụ + web · "
           f"{len(svcs) + 1} Dockerfile · {len(svcs) + 1} Jenkinsfile · "
-          f"{len(BAT_BIEN)} bất biến an toàn · ngữ cảnh build kín · 0 vi phạm")
+          f"{len(BAT_BIEN)} bất biến an toàn · ngữ cảnh build kín · "
+          f"{so_dong_em} cặp hạn đóng-êm đối chiếu · 0 vi phạm")
     return 0
 
 

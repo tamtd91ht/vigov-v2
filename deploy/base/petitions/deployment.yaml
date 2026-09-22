@@ -63,17 +63,21 @@ spec:
           labelSelector:
             matchLabels: { app.kubernetes.io/name: petitions }
 
-      # 30 GIÂY — VÀ ĐÂY KHÔNG PHẢI SỐ CHÉP TỪ `platform`. Tiến trình này KHÔNG bắt tín hiệu:
-      # `main.go:136` gọi thẳng `http.ListenAndServe`, không `signal.Notify`, không
-      # `srv.Shutdown`. Nghĩa là SIGTERM kết thúc tiến trình NGAY, thời hạn dưới đây không bao
-      # giờ trôi hết, và yêu cầu đang dở bị cắt giữa chừng.
+      # 45 GIÂY, VÀ CON SỐ NÀY NAY CÓ THẬT MỘT ĐOẠN MÃ ĐỂ CHỜ. Tới 22/09/2026 đây là 30 giây kèm
+      # một chú thích nói thẳng rằng tiến trình KHÔNG bắt tín hiệu, nên hạn ấy không bao giờ trôi
+      # hết — chú thích ấy đã đúng, và nó tự đặt điều kiện gỡ: *"ngày dịch vụ này có đóng-êm, sửa
+      # số ở đây"*. Ngày ấy là hôm nay.
       #
-      # 45 giây của `platform`/`identity` là để chờ một đoạn đóng-êm có thật (ngữ cảnh 20 giây
-      # rồi GracefulStop gRPC). Chép con số ấy sang đây sẽ nói dối rằng dịch vụ này cũng đóng
-      # êm. Giữ mặc định 30 và viết ra sự thật — và ghi thêm điều đáng lo nhất: ngày dịch vụ
-      # này có tuyến TIẾP NHẬN phản ánh, một lượt deploy cắt ngang sẽ để lại một phiếu ghi dở
-      # mà công dân đã nhận mã tra cứu. Đóng-êm phải có TRƯỚC tuyến ghi đầu tiên, không phải sau.
-      terminationGracePeriodSeconds: 30
+      # `cmd/server/main.go` nay `signal.Notify` rồi `srv.Shutdown` với ngữ cảnh **20 giây**.
+      # 45 > 20 là điều kiện để đoạn ấy chạy tới cuối: đảo ngược thì k8s `SIGKILL` trước khi
+      # `Shutdown` xong, và toàn bộ phần đóng êm thành thứ trông như đang canh mà không bao giờ
+      # chạy hết. Sửa một trong hai số thì phải đọc lại số kia.
+      #
+      # Ở dịch vụ này nó đáng nhất, và điều đáng lo đã được viết ra từ lượt trước: một lượt deploy
+      # cắt ngang tuyến TIẾP NHẬN để lại một phiếu ghi dở mà CÔNG DÂN ĐÃ CẦM MÃ TRA CỨU. Giao dịch
+      # bị cuộn lại nên phía máy chủ sạch — cái mất nằm ngoài giao dịch: người dân có mã, hệ thống
+      # không có gì, và dòng vết nói chuyện đó đã xảy ra cũng vừa bị cuộn lại cùng.
+      terminationGracePeriodSeconds: 45
 
       automountServiceAccountToken: false
       securityContext:

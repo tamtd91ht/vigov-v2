@@ -60,17 +60,18 @@ spec:
           labelSelector:
             matchLabels: { app.kubernetes.io/name: finance }
 
-      # 30 GIÂY — VÀ ĐÂY KHÔNG PHẢI SỐ CHÉP TỪ `platform`. Tiến trình này KHÔNG bắt tín hiệu:
-      # `main.go:119` gọi thẳng `http.ListenAndServe`, không `signal.Notify`, không
-      # `srv.Shutdown`. Nghĩa là SIGTERM kết thúc tiến trình NGAY, thời hạn dưới đây không bao
-      # giờ trôi hết, và yêu cầu đang dở bị cắt giữa chừng.
+      # 45 GIÂY, VÀ CON SỐ NÀY NAY CÓ THẬT MỘT ĐOẠN MÃ ĐỂ CHỜ. Tới 22/09/2026 đây là 30 giây kèm
+      # một chú thích nói thẳng rằng tiến trình KHÔNG bắt tín hiệu, nên hạn ấy không bao giờ trôi
+      # hết — chú thích ấy đã đúng, và nó tự đặt điều kiện gỡ: *"ngày dịch vụ này có đóng-êm, sửa
+      # số ở đây"*. Ngày ấy là hôm nay.
       #
-      # 45 giây của `platform`/`identity` là để chờ một đoạn đóng-êm có thật (ngữ cảnh 20 giây
-      # rồi GracefulStop gRPC). Chép con số ấy sang đây sẽ nói dối rằng dịch vụ này cũng đóng
-      # êm. Giữ mặc định 30 và viết ra sự thật: ngày `finance` có đóng-êm, sửa số ở đây — và
-      # dịch vụ này là nơi điều đó đáng làm sớm, vì chứng từ giải ngân là bản ghi nghiệp vụ
-      # không được phép dở dang.
-      terminationGracePeriodSeconds: 30
+      # `cmd/server/main.go` nay `signal.Notify` rồi `srv.Shutdown` với ngữ cảnh **20 giây**.
+      # 45 > 20 là điều kiện để đoạn ấy chạy tới cuối: đảo ngược thì k8s `SIGKILL` trước khi
+      # `Shutdown` xong, và toàn bộ phần đóng êm thành thứ trông như đang canh mà không bao giờ
+      # chạy hết. Sửa một trong hai số thì phải đọc lại số kia.
+      #
+      # Ở dịch vụ này nó đáng nhất: chứng từ giải ngân là bản ghi nghiệp vụ không được phép dở dang.
+      terminationGracePeriodSeconds: 45
 
       automountServiceAccountToken: false
       securityContext:

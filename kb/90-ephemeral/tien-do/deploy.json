@@ -45,11 +45,11 @@
     },
     {
       "id": "bon-dich-vu-moi-khong-dong-em",
-      "viec": "comms · documents · finance · petitions không bắt SIGTERM",
-      "trang_thai": "chua_lam",
-      "bang_chung": "service-comms/cmd/server/main.go:133 · service-documents/cmd/server/main.go:158 · service-finance/cmd/server/main.go:119 · service-petitions/cmd/server/main.go:136 gọi thẳng ListenAndServe, không signal.Notify, không srv.Shutdown — khác identity (main.go:356-418) và platform — kiểm 2026-09-21",
+      "viec": "comms · documents · finance · petitions ĐÃ bắt SIGTERM và đóng êm",
+      "trang_thai": "xong",
+      "bang_chung": "22/09/2026: cả bốn `cmd/server/main.go` nay `signal.Notify(os.Interrupt, syscall.SIGTERM)` rồi `srv.Shutdown(ctx)` với ngữ cảnh 20 giây, và bốn manifest lên 45 (`deploy/base/{comms,documents,finance,petitions}/deployment.yaml`) — khớp identity và platform. Chú thích cũ ở chính bốn manifest ấy đã đặt sẵn điều kiện gỡ: *\"ngày dịch vụ này có đóng-êm, sửa số ở đây\"*. HAI HÌNH DẠNG, KHÔNG MỘT, và sự khác nhau được viết ra tại chỗ: `documents` và `petitions` có sẵn hàm bọc trả `error` nên `return srv.Shutdown(ctx)`; `comms` và `finance` chưa tách hàm nào ra khỏi `main` nên giữ `os.Exit(1)` vốn có — tách `main` là một thay đổi khác với lý do khác, không nhân vào lượt vá này. KIỂM: `gofmt -l` rỗng · `go vet ./...` sạch cả bốn module · `go test -count=1 -p 1 ./...` xanh cả bốn · bảy manifest phân giải YAML được.",
       "no_confirm": [],
-      "tiep_theo": "Vì thế terminationGracePeriodSeconds của bốn manifest mới là 30 (mặc định) chứ KHÔNG phải 45 như platform/identity: hạn ấy không bao giờ trôi hết khi tiến trình chết ngay lúc nhận tín hiệu. Đáng vá TRƯỚC tuyến ghi đầu tiên của petitions — một lượt deploy cắt ngang lúc tiếp nhận phản ánh để lại phiếu dở trong khi công dân đã cầm mã tra cứu. Việc này thuộc mã Go, không thuộc deploy/"
+      "tiep_theo": "ĐIỀU KIỆN 45 > 20 NAY CÓ CỔNG CANH: `tools/check_build.py::kiem_dong_em`, chạy trong `make check`. Nó chỉ áp cho dịch vụ CÓ `signal.Notify` — bắt đỏ thứ chưa ai hứa làm là cách nhanh nhất để có người thêm một dòng bỏ qua. ⚠ BẢN ĐẦU CỦA CỔNG ẤY ĐÃ CHẾT NGAY LÚC VIẾT và chỉ lộ ra nhờ một phép ĐỘT BIẾN: `dich_vu()` trả `service-petitions` còn manifest ở `deploy/base/petitions/`, nên đường dẫn ghép ra không tồn tại, hàm `continue` qua mọi dịch vụ, và cổng in [PASS] kể cả khi hạ `terminationGracePeriodSeconds` xuống 20. Vì thế nó nay IN RA SỐ CẶP ĐÃ ĐỐI CHIẾU (hiện 6 = bảy dịch vụ trừ `reporting` chưa có manifest): một con số 0 đọc được ngay mà không cần đột biến lần nữa. Đột biến đã chạy lại sau khi sửa — 45→20 ở petitions cho rc=1, phục hồi bằng bản chụp tệp. CÒN LẠI, không thuộc mục này: `web-admin` vẫn ở 30 giây — đó là tiến trình Node của `next start`, không phải mã Go của kho này, và cổng trên không đọc tới nó."
     },
     {
       "id": "cum-chua-chay-that",

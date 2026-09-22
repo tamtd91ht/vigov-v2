@@ -8,10 +8,13 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -142,9 +145,55 @@ func main() {
 	// The default is this service's own — see config.ListenAddrHoac for why it lives here.
 	addr := cfg.ListenAddrHoac(":8086")
 	log.Info("starting", "service", "finance", "addr", addr)
-	if err := http.ListenAndServe(addr, dungBien(mux, directory, dinhDanh, idemStore, log)); err != nil {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           dungBien(mux, directory, dinhDanh, idemStore, log),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	// ĐÓNG ÊM. Trước 2026-09-22 bốn dịch vụ này gọi thẳng `http.ListenAndServe`, nên `SIGTERM`
+	// giết tiến trình NGAY — giữa một yêu cầu đang chạy, giữa một giao dịch chưa commit.
+	//
+	// VÌ SAO NÓ ĐẮT Ở ĐÂY CHỨ KHÔNG PHẢI MỘT CHI TIẾT VẬN HÀNH: mọi tuyến ghi của kho này viết
+	// bản ghi nghiệp vụ VÀ dòng vết kiểm toán trong CÙNG một giao dịch (luật 6, bất biến 3). Một
+	// tiến trình chết giữa chừng thì giao dịch ấy bị CSDL cuộn lại — điều đó vẫn đúng. Cái mất là
+	// thứ nằm NGOÀI giao dịch: công dân đã cầm mã tra cứu trên tay, hoặc người gửi đã nhận HTTP
+	// 202, trong khi phía máy chủ không còn gì cả. Không vết nào ghi rằng chuyện đó đã xảy ra, vì
+	// dòng vết cũng vừa bị cuộn lại.
+	//
+	// 20 GIÂY, và con số ấy phải NHỎ HƠN `terminationGracePeriodSeconds` của manifest (45). Ngược
+	// lại thì k8s `SIGKILL` trước khi hạn ở đây trôi hết, và toàn bộ đoạn mã này trở thành thứ
+	// trông như đang canh mà không bao giờ chạy tới cuối.
+	dungLai := make(chan os.Signal, 1)
+	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
+
+	// Có đệm: `ListenAndServe` hỏng sau khi đã có ai đọc kênh là một goroutine rò lại mãi mãi.
+	loi := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			loi <- err
+		}
+	}()
+
+	// `os.Exit` CHỨ KHÔNG `return err` NHƯ HAI DỊCH VỤ KIA, và sự khác nhau ấy không phải tuỳ
+	// hứng: dịch vụ này chưa tách một hàm `chay(log) error` ra khỏi `main`, nên ở đây không có
+	// chỗ nào để trả lỗi về. Giữ nguyên cách báo lỗi vốn có của tệp thay vì tách hàm nhân một
+	// lượt vá đóng êm — tách `main` là một thay đổi khác, với lý do khác.
+	//
+	// ⚠ `os.Exit` KHÔNG CHẠY `defer`. Mọi thứ phải dọn khi tiến trình dừng phải nằm TRƯỚC lời
+	// gọi ấy, không nằm trong một `defer` phía trên.
+	select {
+	case err := <-loi:
 		log.Error("server stopped", "err", err)
 		os.Exit(1)
+	case <-dungLai:
+		log.Info("nhận tín hiệu dừng, đang đóng kết nối", "service", "finance")
+		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
+		defer huy()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Error("đóng không sạch", "err", err)
+			os.Exit(1)
+		}
 	}
 }
 

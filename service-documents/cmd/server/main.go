@@ -8,10 +8,13 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -180,7 +183,39 @@ func run(log *slog.Logger) error {
 		Handler:           dungBien(mux, directory, dinhDanh, idemStore, log),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	return srv.ListenAndServe()
+	// ĐÓNG ÊM. Trước 2026-09-22 bốn dịch vụ này gọi thẳng `http.ListenAndServe`, nên `SIGTERM`
+	// giết tiến trình NGAY — giữa một yêu cầu đang chạy, giữa một giao dịch chưa commit.
+	//
+	// VÌ SAO NÓ ĐẮT Ở ĐÂY CHỨ KHÔNG PHẢI MỘT CHI TIẾT VẬN HÀNH: mọi tuyến ghi của kho này viết
+	// bản ghi nghiệp vụ VÀ dòng vết kiểm toán trong CÙNG một giao dịch (luật 6, bất biến 3). Một
+	// tiến trình chết giữa chừng thì giao dịch ấy bị CSDL cuộn lại — điều đó vẫn đúng. Cái mất là
+	// thứ nằm NGOÀI giao dịch: công dân đã cầm mã tra cứu trên tay, hoặc người gửi đã nhận HTTP
+	// 202, trong khi phía máy chủ không còn gì cả. Không vết nào ghi rằng chuyện đó đã xảy ra, vì
+	// dòng vết cũng vừa bị cuộn lại.
+	//
+	// 20 GIÂY, và con số ấy phải NHỎ HƠN `terminationGracePeriodSeconds` của manifest (45). Ngược
+	// lại thì k8s `SIGKILL` trước khi hạn ở đây trôi hết, và toàn bộ đoạn mã này trở thành thứ
+	// trông như đang canh mà không bao giờ chạy tới cuối.
+	dungLai := make(chan os.Signal, 1)
+	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
+
+	// Có đệm: `ListenAndServe` hỏng sau khi đã có ai đọc kênh là một goroutine rò lại mãi mãi.
+	loi := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			loi <- err
+		}
+	}()
+
+	select {
+	case err := <-loi:
+		return err
+	case <-dungLai:
+		log.Info("nhận tín hiệu dừng, đang đóng kết nối", "service", "documents")
+		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
+		defer huy()
+		return srv.Shutdown(ctx)
+	}
 }
 
 // dungBien builds the edge chain this binary serves.
