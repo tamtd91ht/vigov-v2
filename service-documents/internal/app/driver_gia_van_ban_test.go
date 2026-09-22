@@ -198,6 +198,13 @@ func (c *connVBGia) ExecContext(_ context.Context, q string, args []driver.Named
 	if err := c.k.kiemLoi(q); err != nil {
 		return nil, err
 	}
+	// THE GUARD BELOW IS NOT DEFENSIVE PADDING. A statement against the series with a DIFFERENT
+	// parameter list is exactly what the mutation "trả số về dãy" looks like, and without this the
+	// fake panics on an index — which turns a test that CAUGHT a defect into a test that crashed.
+	// A crash and a failure read the same in CI and do not read the same to a person.
+	if len(args) < 4 && strings.Contains(q, "day_so_van_ban") {
+		return driver.RowsAffected(1), nil
+	}
 	switch {
 	case strings.Contains(q, "INSERT INTO day_so_van_ban"):
 		// ON CONFLICT DO NOTHING — the row is created once and never overwritten.
