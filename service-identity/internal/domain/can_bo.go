@@ -137,3 +137,39 @@ type CanBoVaiTro struct {
 	// "we could not find out" — a read failure is an error, never an empty string.
 	VaiTroMa string
 }
+
+// TenCanBo is one line of an archival record made readable: the staff code that record stores,
+// and the name to print beside it. It is the read behind ResolveStaffNames (ADR 0034).
+//
+// WHY A FOURTH STAFF TYPE, and why it must stay the narrowest of them. The other three all
+// describe a person who is IN the directory today; this one is the only one that describes a
+// record that may have been REMOVED from it. Reusing CanBoVaiTro would have meant widening the
+// read behind BatchGetStaff to carry a name — which is exactly the shape ADR 0034 refused,
+// because the ordinary path (an assignee dropdown) would then start carrying personal data it has
+// no use for, with nothing on the wire able to say the record was removed.
+//
+// KEYED BY `ma`, NOT BY ID, and the difference is not cosmetic. `audit_log.actor_id` stores the
+// business code (rule 6, invariant 8), so a lookup keyed on `nguoi_dung.id` would resolve no trail
+// entry ever written and render a blank where a person's name belongs.
+//
+// NOTHING ELSE MAY BE ADDED HERE. A phone number, an email or a position on this struct is a
+// value in hand at the moment somebody widens StaffName — and per ADR 0034 that step owes a
+// permission key and an audit entry first (rule 3, invariant 3; rule 6, invariant 7).
+type TenCanBo struct {
+	// Ma is `nguoi_dung.ma` — the same string the caller sent and the one it maps its rows by.
+	Ma string
+
+	// HoTen is personal data (rule 3). NEVER LOGGED, at any level, on any path that carries it.
+	//
+	// `nguoi_dung.ho_ten` is NOT NULL, so an empty string here is a read fault and never "this
+	// person has no name".
+	HoTen string
+
+	// ConTrongDanhBa is `deleted_at IS NULL`, and NOTHING MORE.
+	//
+	// IT SAYS NOTHING ABOUT THE PERSON'S EMPLOYMENT. Open question #10 (decided 2026-09-22) makes
+	// retirement a LOCK — such a person is still in the directory — and a soft delete a duplicated
+	// row, whose human may be perfectly current under their other row. A locked account is
+	// therefore `true` here: `dang_hoat_dong` is deliberately not read.
+	ConTrongDanhBa bool
+}

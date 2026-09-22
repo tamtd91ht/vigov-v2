@@ -345,6 +345,12 @@ func run(log *slog.Logger) error {
 		// edit away from the authentication path.
 		CanBo: canBo,
 		Lo:    canBo,
+		// Ten is the name read behind ResolveStaffNames — the THIRD predicate on the same
+		// *CanBoStore, and the only one that does NOT filter `deleted_at`. Three fields on purpose,
+		// for the same reason CanBo and Lo are two: a record removed from the directory must be
+		// readable when an archival record names it (ADR 0034), and must stay invisible to the two
+		// paths above, where "this person exists today" is what is being asked.
+		Ten: canBo,
 		// The SAME *idstore.Checker that guards every route, through its QuyenCua method. One
 		// grant predicate for the guard and for the principal: a second one would drift, and
 		// drift in either direction is a defect with no error attached.

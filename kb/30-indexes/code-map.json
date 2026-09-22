@@ -690,6 +690,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/danh_muc_ba_tang.go:64"
     },
+    "domain.TenCanBo": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/can_bo.go:158"
+    },
     "domain.Tenant": {
       "kind": "type",
       "at": "service-platform/internal/domain/tenant.go:12"
@@ -820,7 +824,7 @@
     },
     "grpc.BatchGetStaff": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:422"
+      "at": "service-identity/internal/grpc/server.go:437"
     },
     "grpc.CanBoDoc": {
       "kind": "type",
@@ -829,6 +833,10 @@
     "grpc.CanBoLo": {
       "kind": "type",
       "at": "service-identity/internal/grpc/server.go:123"
+    },
+    "grpc.CanBoTen": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/ten_can_bo.go:17"
     },
     "grpc.Deps": {
       "kind": "type",
@@ -882,9 +890,13 @@
       "kind": "func",
       "at": "service-platform/internal/grpc/server.go:60"
     },
+    "grpc.ResolveStaffNames": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/ten_can_bo.go:75"
+    },
     "grpc.ResolveStaffPrincipal": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:287"
+      "at": "service-identity/internal/grpc/server.go:299"
     },
     "grpc.SLADoc": {
       "kind": "type",
@@ -1425,6 +1437,14 @@
     "identityclient.SoPhienCongDan": {
       "kind": "type",
       "at": "core/identityclient/phien_cong_dan.go:51"
+    },
+    "identityclient.TenCanBo": {
+      "kind": "type",
+      "at": "core/identityclient/ten_can_bo.go:32"
+    },
+    "identityclient.TenCanBoTheoMa": {
+      "kind": "func",
+      "at": "core/identityclient/ten_can_bo.go:84"
     },
     "identityclient.TienGioLamViec": {
       "kind": "func",
@@ -2037,6 +2057,10 @@
     "store.TaoChuaChonXa": {
       "kind": "func",
       "at": "service-identity/internal/store/phien_cong_dan.go:374"
+    },
+    "store.TenTheoNhieuMa": {
+      "kind": "func",
+      "at": "service-identity/internal/store/can_bo_ten.go:62"
     },
     "store.TenantID": {
       "kind": "func",

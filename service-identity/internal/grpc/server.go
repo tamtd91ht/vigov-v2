@@ -150,6 +150,16 @@ type Deps struct {
 	Lo    CanBoLo
 	Quyen QuyenDoc
 
+	// The name read behind ResolveStaffNames — the ONE path by which a staff member's name leaves
+	// this service (ADR 0034). A THIRD staff field beside CanBo and Lo, and the third predicate:
+	// this one does NOT filter `deleted_at`, because a record removed from the directory is the
+	// case that RPC exists to answer. Declared in ten_can_bo.go, at the point of use.
+	//
+	// IT MUST NEVER BE THE SAME FIELD AS Lo. Merging them puts "also returns removed records" one
+	// careless edit away from the read an assignee dropdown calls — which would offer a person who
+	// was taken off the directory, with nothing turning red.
+	Ten CanBoTen
+
 	// The CITIZEN session registry, read by ResolveCitizenSession and by nothing else here.
 	//
 	// A SEPARATE FIELD FROM Phien, AND THE TWO MUST NEVER BE MERGED — the same discipline
@@ -212,6 +222,8 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho cán bộ — ResolveStaffPrincipal không dựng được principal")
 	case d.Lo == nil:
 		panic("identity/grpc: thiếu kho đọc cán bộ theo lô — BatchGetStaff sẽ panic khi có người gọi")
+	case d.Ten == nil:
+		panic("identity/grpc: thiếu kho đọc tên cán bộ — ResolveStaffNames sẽ panic, và hồ sơ lưu trữ hiện mã trần ở chỗ tên người xử lý")
 	case d.Quyen == nil:
 		panic("identity/grpc: thiếu kho quyền — ResolveStaffPrincipal sẽ trả principal rỗng quyền, không phân biệt được với người thật sự không có quyền")
 	case d.PhienCongDan == nil:
@@ -398,27 +410,30 @@ func (s *Server) ResolveStaffPrincipal(ctx context.Context, req *identityv1.Reso
 
 // BatchGetStaff resolves staff by id, within the commune the metadata names.
 //
-// ⚠ THE LIMIT OF THIS RPC, STATED RATHER THAN FIXED. Its own contract comment says the caller is
-// "always a list screen decorating rows with A HANDLER'S NAME" — AND `message Staff` CARRIES NO
-// NAME. It declares `id`, `tenant_id` and `roles`, and field 3 is permanently `reserved`. So this
-// RPC cannot serve the purpose it names: a list screen calling it learns which of its ids exist
-// in this commune and which role each holds, and still has nothing to render in the column it
-// opened the call for.
+// ⚠ `message Staff` CARRIES NO NAME, AND THAT IS NOW A CHOICE RATHER THAN A GAP. It declares `id`,
+// `tenant_id` and `roles`, and field 3 is permanently `reserved`. A list screen calling this learns
+// which of its ids exist in this commune and which role each holds — and asks ResolveStaffNames for
+// the column it wanted the name in.
 //
-// IT IS NOT FIXED HERE, AND THE BLOCKER IS NOT TECHNICAL. Adding `ho_ten` means deciding what a
-// staff member's personal data may do across a service boundary, and that is OPEN QUESTION #11 —
-// "is a staff member's mobile number masked from other staff, and if so which permission key
-// opens it" — which the customer has not answered and which cannot be answered here, because
-// there is no key in the 33 seeded into `quyen` that means "view full staff detail". Choosing
-// one would be designing the customer's authorisation model. Widening the message is also
-// contract-designer's to do, not this service's (rule 2, invariant 7).
+// THE BLOCKER THAT STOOD HERE HAS BEEN LIFTED, AND IT DID NOT LIFT THIS RPC. The paragraph this
+// replaces said the obstacle was OPEN QUESTION #11 — "is a staff member's mobile number masked from
+// other staff, and if so which permission key opens it". It was DECIDED on 2026-09-22: staff data is
+// NOT masked from staff inside one commune, and NO NEW PERMISSION KEY is created (the decision says
+// so outright, so the "there is no key meaning view full staff detail" argument no longer blocks
+// anything). Exports and anything leaving the authority stay masked — that obligation is the
+// caller's, not this hop's.
 //
-// So: no field is added, no workaround is built, and no second route is opened to fetch the name
-// out of band — an out-of-band route would answer the open question by building the thing it is
-// about. The next person stands exactly here.
+// SO WHY IS `ho_ten` STILL NOT ON `Staff`: because the name got its own path instead, and ADR 0034
+// records why that is better rather than merely different. `Staff` has nowhere to say that a record
+// was REMOVED from the directory, so a name served here would come back indistinguishable from a
+// serving one — and a caller would offer somebody who was taken off the directory in an assignee
+// dropdown, with nothing turning red. ResolveStaffNames answers the display question, carrying
+// StaffRecordStanding; this RPC answers the membership question, and its answer is the one a caller
+// may DECIDE from. Do not add `full_name` here later: two paths carrying a name are two paths that
+// must both remember to mask, both remember to say the record was removed, and one of them cannot.
 //
-// WHAT IT IS USABLE FOR TODAY: existence and role within one commune. Everything below is
-// correct for that, and stays correct when the message is widened.
+// WHAT IT IS USABLE FOR: existence and role within one commune. Everything below is correct for
+// that.
 func (s *Server) BatchGetStaff(ctx context.Context, req *identityv1.BatchGetStaffRequest) (
 	*identityv1.BatchGetStaffResponse, error) {
 
@@ -524,14 +539,18 @@ func (s *Server) loi(ctx context.Context, err error, cho string) error {
 	return status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
 }
 
-// locID drops empty ids and collapses duplicates.
+// locID drops empty keys and collapses duplicates.
 //
-// DUPLICATES ARE COLLAPSED BY THE SERVER, as the contract states — a caller building ids from a
-// list of rows naturally repeats the same handler. Empty strings are dropped because "" matches
-// no ULID and only widens the array the database has to scan.
+// SHARED BY BatchGetStaff (internal ids) AND ResolveStaffNames (`ma` codes), because both contracts
+// state the same two rules and a second copy would be a second place for one of them to drift.
+//
+// DUPLICATES ARE COLLAPSED BY THE SERVER, as both contracts state — a caller building its keys from
+// a list of rows naturally repeats the same handler. Empty strings are dropped because "" matches
+// neither a ULID nor a staff code, and on ResolveStaffNames that drop is load-bearing: it is what
+// stops `ma: [""]` from being a spelling of "give me everybody" (ADR 0034).
 //
 // Order is not preserved and does not matter: the response's order carries no meaning either,
-// and the caller maps by Staff.id.
+// and the caller maps by Staff.id or StaffName.ma.
 func locID(ids []string) []string {
 	if len(ids) == 0 {
 		return nil

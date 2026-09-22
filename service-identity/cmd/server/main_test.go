@@ -62,6 +62,7 @@ type (
 	phienGia        struct{}
 	canBoGia        struct{}
 	loGia           struct{}
+	tenGia          struct{}
 	quyenGia        struct{}
 	phienCongDanGia struct{}
 	lichGia         struct{}
@@ -84,6 +85,18 @@ func (loGia) TheoNhieuID(_ context.Context, ids []string) ([]domain.CanBoVaiTro,
 	ra := make([]domain.CanBoVaiTro, 0, len(ids))
 	for _, id := range ids {
 		ra = append(ra, domain.CanBoVaiTro{ID: id, VaiTroMa: "chu-tich-ubnd"})
+	}
+	return ra, nil
+}
+
+// The name read behind ResolveStaffNames. It answers for EVERY code asked, including codes whose
+// record would be soft deleted — the predicate itself is defended in internal/store against a real
+// PostgreSQL, and what each standing means in internal/grpc. These wiring tests only need the RPC
+// to be reachable through the real interceptor chain.
+func (tenGia) TenTheoNhieuMa(_ context.Context, ma []string) ([]domain.TenCanBo, error) {
+	ra := make([]domain.TenCanBo, 0, len(ma))
+	for _, m := range ma {
+		ra = append(ra, domain.TenCanBo{Ma: m, HoTen: "Nguyễn Văn A", ConTrongDanhBa: true})
 	}
 	return ra, nil
 }
@@ -128,6 +141,7 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		Phien:  phienGia{},
 		CanBo:  canBoGia{},
 		Lo:     loGia{},
+		Ten:    tenGia{},
 		Quyen:  quyenGia{},
 		// Required, or NewServer refuses to build: every OTHER service's citizen edge is built on
 		// this one lookup (svcgrpc.Deps.PhienCongDan).

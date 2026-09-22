@@ -113,6 +113,10 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		}},
 		CanBo: canBoGia{cb: domain.CanBo{ID: idCanBo, Ma: "CB001", CoTaiKhoan: true, DangHoatDong: true}},
 		Lo:    &loGia{},
+		// The name read behind ResolveStaffNames. Its fake lives in ten_can_bo_test.go, beside the
+		// handler it exercises — and it answers NOTHING by default, so a test about that RPC has to
+		// say out loud which records it put in the directory and which it removed from it.
+		Ten:   &tenGia{},
 		Quyen: quyenGia{quyen: []authz.Perm{"admin.user", "task.extend"}},
 		// The citizen session registry — a default that answers successfully, like every other
 		// collaborator here, so a test about ResolveCitizenSession overrides only the one thing it
@@ -548,6 +552,7 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 			Phien:        &phienGia{},
 			CanBo:        canBoGia{},
 			Lo:           &loGia{},
+			Ten:          &tenGia{},
 			Quyen:        quyenGia{},
 			PhienCongDan: &phienCongDanGia{},
 			Lich:         &lichGia{},
@@ -563,7 +568,11 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		"thiếu phiên":  func(d *Deps) { d.Phien = nil },
 		"thiếu cán bộ": func(d *Deps) { d.CanBo = nil },
 		"thiếu lô":     func(d *Deps) { d.Lo = nil },
-		"thiếu quyền":  func(d *Deps) { d.Quyen = nil },
+		// Missing it is not "one RPC unavailable": ResolveStaffNames is the ONE path by which a
+		// staff member's name leaves this service, so every archival record in the system renders a
+		// bare code where the handler's name belongs (ADR 0034).
+		"thiếu kho tên cán bộ": func(d *Deps) { d.Ten = nil },
+		"thiếu quyền":          func(d *Deps) { d.Quyen = nil },
 		// Missing it is not "one RPC unavailable": every OTHER service's citizen edge is built on
 		// this one lookup, so the whole citizen channel of the platform goes with it.
 		"thiếu sổ phiên công dân": func(d *Deps) { d.PhienCongDan = nil },
