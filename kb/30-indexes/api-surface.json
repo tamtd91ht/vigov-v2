@@ -581,6 +581,29 @@
     },
     {
       "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/staff",
+      "operation_id": "identity_post_staff",
+      "task_id": "dc9b1e1b75cb",
+      "summary": "Thêm một cán bộ vào danh bạ của xã — mã cán bộ do hệ thống sinh, không có ô nhập",
+      "screen": "12-danh-ba-can-bo §5",
+      "permission_kind": "permission",
+      "permission": "admin.user",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "request_schema": "identity.themCanBoVao",
+      "reply_schemas": {
+        "201": "identity.canBoTomTat",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
       "method": "GET",
       "path": "/api/v1/staff/{id}",
       "operation_id": "identity_get_staff_by_id",
@@ -595,6 +618,97 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "PATCH",
+      "path": "/api/v1/staff/{id}",
+      "operation_id": "identity_patch_staff_by_id",
+      "task_id": "651ed02fe403",
+      "summary": "Sửa hồ sơ một cán bộ — họ tên, chức vụ, thư điện tử, bộ phận, hai số điện thoại",
+      "screen": "12-danh-ba-can-bo §5",
+      "permission_kind": "permission",
+      "permission": "admin.user",
+      "idempotency": "khong-can",
+      "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "identity.suaCanBoVao",
+      "reply_schemas": {
+        "200": "identity.canBoTomTat",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "DELETE",
+      "path": "/api/v1/staff/{id}/lockout",
+      "operation_id": "identity_delete_staff_by_id_lockout",
+      "task_id": "28c50a1d9ed5",
+      "summary": "Mở khoá tài khoản một cán bộ",
+      "screen": "14-cau-hinh §3",
+      "permission_kind": "permission",
+      "permission": "admin.user",
+      "idempotency": "khong-can",
+      "idempotency_reason": "mở khoá một tài khoản đang mở thì use case không ghi gì, nên lần gửi thứ hai cho cùng một trạng thái",
+      "reply_schemas": {
+        "200": "identity.canBoTomTat",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/staff/{id}/lockout",
+      "operation_id": "identity_post_staff_by_id_lockout",
+      "task_id": "906959c401d6",
+      "summary": "Khoá tài khoản một cán bộ đã nghỉ hưu hoặc chuyển công tác — người này vẫn còn trong danh bạ",
+      "screen": "14-cau-hinh §3",
+      "permission_kind": "permission",
+      "permission": "admin.user",
+      "idempotency": "khong-can",
+      "idempotency_reason": "khoá một tài khoản đã khoá thì use case không ghi gì — không UPDATE, không vết — nên lần gửi thứ hai cho cùng một trạng thái",
+      "reply_schemas": {
+        "200": "identity.canBoTomTat",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "PUT",
+      "path": "/api/v1/staff/{id}/role",
+      "operation_id": "identity_put_staff_by_id_role",
+      "task_id": "7ebdf66d5c36",
+      "summary": "Đổi vai trò của một cán bộ — chuỗi rỗng nghĩa là gỡ vai trò",
+      "screen": "14-cau-hinh §3",
+      "permission_kind": "permission",
+      "permission": "admin.user",
+      "idempotency": "khong-can",
+      "idempotency_reason": "PUT mang trạng thái tuyệt đối: gán đúng vai trò đang có thì use case không ghi gì, nên lần gửi thứ hai cho cùng một kết quả",
+      "request_schema": "identity.datVaiTroVao",
+      "reply_schemas": {
+        "200": "identity.canBoTomTat",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-identity/internal/http/routes.go"

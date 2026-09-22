@@ -118,9 +118,12 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		NgayLamBu:   ngayLamBuMau(),
 		CanBo:       &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
 		DanhBa:      danhBaMau(),
-		DangNhap:    &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
-		DangXuat:    &dangXuatGia{},
-		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// Same reason again: the five write routes of the register are mounted by Register, so the
+		// use case behind them has to be wired even though nothing in this file calls them.
+		GhiDanhBa: ghiDanhBaMau(),
+		DangNhap:  &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
+		DangXuat:  &dangXuatGia{},
+		Log:       slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	mux := http.NewServeMux()

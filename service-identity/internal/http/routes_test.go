@@ -14,6 +14,7 @@ import (
 
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/token"
@@ -631,13 +632,20 @@ func (u *dangXuatGia) Chay(_ context.Context, sid, ma, ip string) error {
 // --- harness ----------------------------------------------------------------------------
 
 type mayChu struct {
-	h         http.Handler
-	d         Deps // kept so a test can rebuild the chain with ONE dependency swapped — see dungLai
-	thuMuc    thuMucGia
-	signer    *token.Signer
-	phien     *phienGia
-	canBo     *canBoGia
-	danhBa    *danhBaGia
+	h      http.Handler
+	d      Deps // kept so a test can rebuild the chain with ONE dependency swapped — see dungLai
+	thuMuc thuMucGia
+	signer *token.Signer
+	phien  *phienGia
+	canBo  *canBoGia
+	danhBa *danhBaGia
+	// ghiDanhBa is the WRITE surface of the register — a use case, not a store, which is why it is
+	// a separate fake from danhBa even though one *CanBoStore sits behind both in production. See
+	// CanBoGhiDanhBa.
+	ghiDanhBa *ghiDanhBaGia
+	// idem is the duplicate-request store the chain installs. In memory, per harness — see the
+	// note in dungLai.
+	idem      *khoIdemGia
 	quyen     *quyenGia
 	vaiTro    *vaiTroGia
 	boPhan    *boPhanGia
@@ -683,6 +691,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	}
 	canBo := &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}}
 	danhBa := danhBaMau()
+	ghiDanhBa := ghiDanhBaMau()
 	quyen := quyenMau()
 	vaiTro := vaiTroMau()
 	boPhan := boPhanMau()
@@ -721,6 +730,9 @@ func dungMayChu(t *testing.T) *mayChu {
 		Phien:       phien,
 		CanBo:       canBo,
 		DanhBa:      danhBa,
+		// The five write routes. Register panics without it, which is how an unwired write surface
+		// is caught at construction rather than by the first administrator who tries to use it.
+		GhiDanhBa: ghiDanhBa,
 		// The harness gives Deps.Xa its OWN directory value, not the one the edge is built with
 		// below, although both start from the same map. Two values is what lets a test make the
 		DangNhap: &dangNhapGia{
@@ -745,6 +757,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		phien:     phien,
 		canBo:     canBo,
 		danhBa:    danhBa,
+		ghiDanhBa: ghiDanhBa,
+		idem:      khoIdemMau(),
 		quyen:     quyen,
 		vaiTro:    vaiTro,
 		boPhan:    boPhan,
@@ -786,6 +800,16 @@ func (m *mayChu) dungLai(t *testing.T, sua func(d *Deps)) {
 
 	var h http.Handler = mux
 	h = XacThuc(m.d)(h)
+	// THE SAME ORDER cmd/server BUILDS: idem.Middleware inside TenantMiddleware, because the
+	// idempotency key is prefixed with the commune (rule 1, invariant 7), and outside XacThuc,
+	// because the key is also prefixed with the PRINCIPAL — which XacThuc is what puts in the
+	// context.
+	//
+	// THE STORE IS A REAL ONE (in memory), NOT nil, and that matters for exactly one route:
+	// POST /api/v1/staff declares idem.Required(DongKhiHong), so a nil store answers 503 by
+	// design. A harness with no store would turn every assertion about that route into an
+	// assertion about a missing cache. See khoIdemGia.
+	h = idem.Middleware(m.idem, slog.New(slog.NewTextHandler(io.Discard, nil)))(h)
 	h = httpx.TenantMiddleware(m.thuMuc)(h)
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)

@@ -7,7 +7,6 @@ import (
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/page"
-	"github.com/vihat/vigov/core/privacy"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
@@ -15,12 +14,13 @@ import (
 
 // The two read routes of the staff register. GET /api/v1/staff and GET /api/v1/staff/{id}.
 //
-// THE WRITE ROUTES ARE DELIBERATELY ABSENT, and no scaffolding for them is left here either. All
-// of them are blocked on questions the customer has not answered — kb/00-foundation/
-// open-questions.json #9 (how a new member of staff gets their first password), #10 (retiring
-// somebody: lock or delete), #13 (whether a commune may remove its last administrator) and #14
-// (whether admin.user may act on its own account). A half-written write path is worse than none:
-// it looks like a decision somebody made.
+// THE WRITE ROUTES LIVE IN can_bo_ghi.go, added on 2026-09-22 once the customer answered #10,
+// #13, #14, #15 and #16. They share this file's `canBoTomTat` and `raNgoai`, which is what keeps
+// "what a staff record looks like on the wire" a single decision: a write route returning a shape
+// of its own is how a screen ends up rendering two different versions of one row.
+//
+// ONE WRITE PATH IS STILL ABSENT ON PURPOSE — the soft delete of #10. It carries its own
+// permission, and no key in the `quyen` table means it. See the header of can_bo_ghi.go.
 
 // canBoTomTat is one staff record as it leaves the API. JSON field names are English
 // (rest-api-design §1); the values are whatever the commune typed, in Vietnamese.
@@ -41,8 +41,13 @@ type canBoTomTat struct {
 	DepartmentID string `json:"department_id"`
 	RoleID       string `json:"role_id"`
 
-	// MASKED — 09****5678, never the number itself. See maskDienThoai.
-	Phone string `json:"phone"`
+	// TWO NUMBERS, BECAUSE THEY ARE TWO KINDS OF DATA IN LAW (#16). Neither is masked on this
+	// surface, and the reason is #11 rather than convenience — see soRaManHinhNoiBo.
+	//
+	//	phone   `dien_thoai_co_quan`, the office landline. Duty information.
+	//	mobile  `di_dong_ca_nhan`, the person's own mobile. Personal data under Decree 13/2023.
+	Phone  string `json:"phone"`
+	Mobile string `json:"mobile"`
 
 	// HasAccount separates "this person can sign in" from "this account is not locked". They are
 	// two questions (migration 0003), and a client that reads one for the other reports a
@@ -57,27 +62,34 @@ type canBoTomTat struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// maskDienThoai decides what a staff phone number looks like on the way out.
+// soRaManHinhNoiBo decides what a staff telephone number looks like on the way out of THIS
+// surface — the commune's own staff screens.
 //
-// IT IS MASKED, ALWAYS, FOR EVERY CALLER — and this is a FAIL-CLOSED DEFAULT, not a business
-// rule somebody chose. Rule 3, invariant 3 lets full personal data out only to a caller holding
-// an EXPLICIT full-view permission. Of the 33 permission keys seeded into `quyen` there is no
-// key that means "see a staff member's full details": `admin.user` is "Quản lý người dùng" and
-// `feedback.restricted` scopes the CONTENT of petitions, not personal data. With no key there is
-// no explicit path, so there are only two reachable states — mask everyone, or show everyone.
+// IT IS NOT MASKED, AND THAT IS A CUSTOMER DECISION TAKEN ON 2026-09-22, NOT A RELAXATION.
+// Open question #11, answered in full: staff of the same commune are NOT shown a masked number,
+// because they have to ring each other to do their work — mask it and they pass the number
+// through a private channel instead, where the authority has neither a trail nor any control.
+// The scope stays shut regardless: `Scoped` binds `tenant_id` (rule 1, invariant 5), so this is
+// one commune's directory shown to that commune's own staff, behind `admin.user`.
 //
-// → THIS IS WAITING ON open-questions.json #11, which asks the customer exactly this and is
-// still OPEN. Do not remove the mask because a screen looks incomplete. Masking first and opening
-// later is one line; showing first and closing later does not take the number back out of the
-// access logs, the Excel exports and the screens people have already seen.
+// THE DECISION EXPLICITLY DID NOT CREATE A PERMISSION KEY ("KHÔNG ĐẶT KHOÁ MỚI nào"), which is
+// why there is no Checker call here and why #27 is not blocking this route.
 //
-// When #11 is answered with "some role may see it", the change is: a new permission key, a
-// migration into `quyen`, a Checker call here, and an audit entry for the full read (rule 6,
-// invariant 7 — reading FULL personal data is itself an audited event). Not a deleted line.
-func maskDienThoai(so string) string { return privacy.MaskPhone(so) }
+// WHAT #11 DID NOT OPEN, AND WHAT THIS FUNCTION'S NAME IS FOR: the same decision keeps the mask on
+// EXCEL EXPORTS and on anything published outside the authority (rule 3, invariant 4), and #12
+// keeps the mobile off the Mini App until that person's own consent is recorded — a column that
+// does not exist yet. Neither of those surfaces exists in this service today. When one is written
+// it must NOT reuse this function; the name says which surface this is, so that reuse has to be a
+// decision somebody takes rather than an import somebody copies.
+//
+// IT IS STILL A FUNCTION AND NOT A DELETED LINE, so there is exactly one place to change if the
+// customer revisits #11 — and one place for a reader to find the argument.
+func soRaManHinhNoiBo(so string) string { return so }
 
-// raNgoai converts one record for the wire. IT IS THE ONLY EXIT, which is what makes the masking
-// decision above enforceable: there is no second place that builds this shape.
+// raNgoai converts one record for the wire. IT IS THE ONLY EXIT — for the two read routes AND for
+// the five write routes in can_bo_ghi.go — which is what makes the decision above enforceable:
+// there is no second place that builds this shape, so a masking rule cannot hold on the list and
+// be forgotten on the reply to an edit.
 //
 // ho_ten, chuc_vu and the department are NOT masked. `admin.user` — "Quản lý người dùng" — is an
 // explicit permission that guards exactly this screen (14-cau-hinh.md §12.8), and a register of
@@ -94,7 +106,8 @@ func raNgoai(cb domain.CanBoTomTat) canBoTomTat {
 		Position:     cb.ChucVu,
 		DepartmentID: cb.BoPhanID,
 		RoleID:       cb.VaiTroID,
-		Phone:        maskDienThoai(cb.DienThoaiCoQuan),
+		Phone:        soRaManHinhNoiBo(cb.DienThoaiCoQuan),
+		Mobile:       soRaManHinhNoiBo(cb.DiDongCaNhan),
 		HasAccount:   cb.CoTaiKhoan,
 		Active:       cb.DangHoatDong,
 		LastLoginAt:  cb.DangNhapGanNhat,
@@ -104,11 +117,24 @@ func raNgoai(cb domain.CanBoTomTat) canBoTomTat {
 
 // DanhSachCanBo serves one page of the register. GET /api/v1/staff
 //
-// NO AUDIT ENTRY, and that is a decision rather than an omission. Rule 6, invariant 7 audits
-// reading FULL personal data; the phone number leaves here masked, so nothing full is read. An
-// entry for every page of every list would bury the entries that carry legal weight — who
-// changed a role, who locked an account — under thousands that carry none, and a trail nobody can
-// read is a trail that answers no inspection.
+// NO AUDIT ENTRY, and since 2026-09-22 THE ARGUMENT FOR THAT HAS CHANGED — read this before
+// assuming it is still the old one.
+//
+// It used to be simple: rule 6, invariant 7 audits reading FULL personal data, and the number left
+// here masked, so nothing full was read. Open question #11 ended that: a staff mobile is now shown
+// UNMASKED to the commune's own staff, so this route does return full personal data.
+//
+// It still records nothing, and the reason is what invariant 7 is FOR. It audits the EXCEPTIONAL
+// read — the moment somebody uses a privilege to see more than the screen normally shows. #11
+// deliberately created no such privilege ("KHÔNG ĐẶT KHOÁ MỚI nào"): the unmasked view IS the
+// ordinary state of this screen for every holder of `admin.user`, so there is no exceptional event
+// to record. An entry per page of the directory would add thousands that say "somebody opened the
+// staff list" to a ledger kept for years, and bury the entries that carry legal weight — who
+// changed a role, who locked an account. A trail nobody can read answers no inspection.
+//
+// → STATED FOR THE CUSTOMER RATHER THAN DECIDED HERE: #11 settled the masking and said nothing
+// about the trail. Rule 6, stop condition #1 is "a new operation where it is unclear whether it
+// must be audited". This turn kept the existing behaviour — it did not choose it.
 func (h *Handler) DanhSachCanBo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

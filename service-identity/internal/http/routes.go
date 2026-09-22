@@ -72,6 +72,30 @@ type (
 		ChiTiet(ctx context.Context, id string) (domain.CanBoTomTat, error)
 	}
 
+	// CanBoGhiDanhBa is the WRITE surface of the register — five use cases, one interface.
+	//
+	// SEPARATE FROM CanBoDanhBa ON PURPOSE, although both describe the same table and the same
+	// screen. They are not the same kind of thing: that one is a store, this one is
+	// *app.DanhBaCanBo, and every method here opens a transaction in which the business write and
+	// its audit entry land together (rule 6, invariant 3). Merging them would put a read the two
+	// GET routes depend on behind a type whose other methods can rewrite the commune's org chart —
+	// and an interface is the list of things a handler CAN do.
+	//
+	// THE FOUR VERBS ARE FOUR METHODS AND NOT ONE `Ghi(...)` WITH A MODE. Each carries a different
+	// set of the refusals the customer decided on 2026-09-22 (#10, #13, #14); a single entry point
+	// would make those refusals conditionals inside one function, where the one that is missing
+	// looks exactly like the one that is there.
+	//
+	// NO `Xoa` METHOD. #10's soft delete carries its own permission and the `quyen` table holds no
+	// key that means it — see the header of can_bo_ghi.go. An unused method here would be the
+	// scaffolding that makes the absence look like an oversight.
+	CanBoGhiDanhBa interface {
+		Them(ctx context.Context, yc app.YeuCauThemCanBo, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
+		Sua(ctx context.Context, id string, yc app.YeuCauSuaCanBo, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
+		DatKhoa(ctx context.Context, id string, khoa bool, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
+		DoiVaiTro(ctx context.Context, id, vaiTroID string, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
+	}
+
 	// QuyenDoc lists the caller's OWN permission keys, for GET /api/v1/sessions/current.
 	//
 	// SEPARATE FROM authz.Checker ON PURPOSE, although *idstore.Checker satisfies both and the
@@ -258,6 +282,7 @@ type Deps struct {
 	Phien       PhienDoc
 	CanBo       CanBoDoc
 	DanhBa      CanBoDanhBa
+	GhiDanhBa   CanBoGhiDanhBa
 	DangNhap    DangNhapUC
 	DangXuat    DangXuatUC
 
@@ -280,6 +305,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho phiên hoặc kho cán bộ — không dựng được Principal")
 	case d.DanhBa == nil:
 		panic("identity/http: thiếu kho danh bạ cán bộ — hai tuyến đọc cán bộ sẽ panic khi có người gọi")
+	case d.GhiDanhBa == nil:
+		panic("identity/http: thiếu use case ghi danh bạ cán bộ — năm tuyến ghi cán bộ sẽ panic khi có người gọi")
 	case d.DangNhap == nil || d.DangXuat == nil:
 		panic("identity/http: thiếu use case đăng nhập/đăng xuất")
 	case d.Checker == nil:
@@ -477,6 +504,197 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/staff/{id}",
 		authz.RequirePermission(d.Checker, "admin.user")(
 			http.HandlerFunc(h.ChiTietCanBo)))
+
+	// --- the staff register: the WRITE routes ---------------------------------------------------
+	//
+	// ALL FIVE DECLARE `admin.user`, AND THAT WAS CHECKED AGAINST THE `quyen` TABLE RATHER THAN
+	// ASSUMED. It is the key the Cấu hình → Người dùng tab is specified with (14-cau-hinh.md
+	// §12.8), it is already seeded (migration 0001:278, "Quản lý người dùng"), and it is what the
+	// two read routes above declare — so a commune that granted somebody the staff screen granted
+	// them the screen, not half of it.
+	//
+	// WHY NOT `content.update`, which the OTHER screen specifies (12-danh-ba-can-bo.md §9.4): that
+	// key is "Sửa nội dung và danh bạ Mini App" and it governs what the CITIZEN-FACING directory
+	// shows — the publication flag and the ordering, i.e. open question #12, which needs a consent
+	// column that does not exist. None of the five routes here touches that surface.
+	//
+	// THE ONE ROUTE THAT IS NOT HERE is the soft delete of #10. It carries a permission of its own
+	// by the customer's decision, no key in the table means it, and rule 5 invariant 3c forbids
+	// inventing one — the full argument is in the header of can_bo_ghi.go. Declaring it with
+	// `admin.user` would collapse two operations the customer deliberately separated.
+
+	// Adding somebody to the register. POST /api/v1/staff
+	//
+	// idem.Required(idem.DongKhiHong), AND WHICH LAYER IS ACTUALLY PROTECTING THIS — the question
+	// skills/rest-api-design §4 says to answer at the route. THE ANSWER IS: ONLY THIS ONE. There is
+	// no natural unique key underneath, and that is not an oversight of the schema: the staff code
+	// is minted from crypto/rand precisely so that it owes nothing to the table (#15), and a
+	// person's name, position and department are not a key — two people in one commune may share
+	// all three. So a double-submitted form produces TWO rows with TWO permanent codes.
+	//
+	// DongKhiHong AND NOT MoKhiHong, which is the stricter of the two and needs its reason stated:
+	// rule 7 forbids hard delete, so the duplicate row is permanent, and the operation that would
+	// retire it — #10's soft delete — CANNOT BE BUILT YET for want of a permission key. A duplicate
+	// created during a Redis outage would therefore sit in the commune's directory with no route
+	// able to remove it. Refusing to add a member of staff for the minutes a cache is down is the
+	// cheaper failure by a wide margin.
+	//
+	// @summary  Thêm một cán bộ vào danh bạ của xã — mã cán bộ do hệ thống sinh, không có ô nhập
+	// @screen   12-danh-ba-can-bo §5
+	// @request  themCanBoVao
+	// @reply    201 canBoTomTat
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/staff",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ThemCanBo))))
+
+	// Correcting a profile. PATCH /api/v1/staff/{id}
+	//
+	// PATCH AND NOT PUT: four of the six editable fields have a meaningful empty value — clearing a
+	// position, a department or either telephone number is a legitimate edit — so a full
+	// replacement cannot tell "not mentioned" from "cleared". See suaCanBoVao.
+	//
+	// THIS ROUTE CHANGES NO AUTHORITY, which is why it carries none of the three refusals #13 and
+	// #14 produce. The UPDATE statement names six columns and `vai_tro_id`, `dang_hoat_dong`,
+	// `co_tai_khoan` and `ma` are not among them, so there is no request body that could reach
+	// them.
+	//
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
+	// compares the row it read against the row it would write and, when nothing moved, writes
+	// NOTHING — no UPDATE and no audit entry. The same request sent twice leaves one row in one
+	// state and one entry in the ledger. Were that comparison removed, this declaration would
+	// become a lie and the second request would file an entry saying nothing changed.
+	//
+	// @summary  Sửa hồ sơ một cán bộ — họ tên, chức vụ, thư điện tử, bộ phận, hai số điện thoại
+	// @screen   12-danh-ba-can-bo §5
+	// @request  suaCanBoVao
+	// @reply    200 canBoTomTat
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/staff/{id}",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaCanBo))))
+
+	// Retiring somebody. POST /api/v1/staff/{id}/lockout
+	//
+	// ⚠ `lockout` IS THE ONE NAME ON THESE FIVE ROUTES THAT THE USER HAS NOT CONFIRMED, and ADR
+	// 0011 says a concept with no row in kb/00-foundation/ubiquitous-language.md is a concept to
+	// ASK about rather than translate. It is written here so the work is testable; it is reported
+	// as an open naming decision, and it is still free to change because no commune is live.
+	//
+	// WHY NOT `lock`, WHICH WAS WRITTEN FIRST: `.claude/hooks/rest_api_guard.py` lists `lock` among
+	// the VERB segments, and the rule it enforces is REQUIRED #8 — an action with legal consequence
+	// must be a record you can GET back, not a command. The skill's own prose mentions "lock on a
+	// disbursement" as a transition, which is what made `lock` look settled; the hook is the
+	// machine-decidable half and it disagrees. Renaming rather than arguing with the guard.
+	//
+	// WHY NOT `suspension`, WHICH IS THE OBVIOUS NOMINALISATION: in Vietnamese administrative
+	// language `đình chỉ` is a DISCIPLINARY measure with legal meaning. #10's lock is for somebody
+	// who retired or transferred. An English word asserting a distinction the data does not have is
+	// the exact failure `org-units` exists to illustrate.
+	//
+	// `lockout` IS A NOUN — the state the account is in — so POST creates it and DELETE lifts it,
+	// and a future `GET .../lockout` returning who shut the account and when fits without a new
+	// path.
+	//
+	// THIS IS OPEN QUESTION #10's ANSWER AND IT IS NOT A DELETE. A member of staff who retires or
+	// transfers is LOCKED and STAYS IN THE DIRECTORY, because their name is what makes years of
+	// administrative records readable — BatchGetStaff resolving a name is the whole reason #10
+	// attached a mandatory requirement to its own decision. Deleting them is the other situation
+	// (a duplicated row), and that route is absent for want of its own permission key.
+	//
+	// #13 IS ENFORCED HERE, INSIDE THE TRANSACTION, NOT ON THE SCREEN: locking the last account
+	// that can administer this commune answers 409 and writes nothing. A warning would not do —
+	// the customer's word is "CHẶN CỨNG" — and ADR 0003 leaves the vendor no way back in.
+	//
+	// idem.KhongCan — locking an account that is already locked writes nothing and audits nothing,
+	// so the second request leaves exactly one row and one entry.
+	//
+	// @summary  Khoá tài khoản một cán bộ đã nghỉ hưu hoặc chuyển công tác — người này vẫn còn trong danh bạ
+	// @screen   14-cau-hinh §3
+	// @reply    200 canBoTomTat
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/staff/{id}/lockout",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			idem.KhongCan("khoá một tài khoản đã khoá thì use case không ghi gì — không UPDATE, không vết — nên lần gửi thứ hai cho cùng một trạng thái")(
+				http.HandlerFunc(h.KhoaCanBo))))
+
+	// They are back. DELETE /api/v1/staff/{id}/lockout
+	//
+	// DELETE ON THE SUB-RESOURCE AND NOT A SECOND VERB: removing the lockout is the exact inverse
+	// of creating it, and two paths spelled `.../lock` and `.../unlock` would be two verbs for one
+	// thing. It does NOT delete the person — rule 7 — and nothing on this path can: the handler
+	// writes one boolean.
+	//
+	// NO #13 CHECK ON THIS DIRECTION, deliberately: unlocking can only ever make the set of
+	// administrators BIGGER, and a rule that fires on an operation which cannot cause the harm is a
+	// rule people learn to route around.
+	//
+	// @summary  Mở khoá tài khoản một cán bộ
+	// @screen   14-cau-hinh §3
+	// @reply    200 canBoTomTat
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/staff/{id}/lockout",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			idem.KhongCan("mở khoá một tài khoản đang mở thì use case không ghi gì, nên lần gửi thứ hai cho cùng một trạng thái")(
+				http.HandlerFunc(h.MoKhoaCanBo))))
+
+	// Moving somebody to a role. PUT /api/v1/staff/{id}/role
+	//
+	// PUT ON A SINGULAR SUB-RESOURCE, the same shape rest-api-design §3 gives
+	// `PUT /api/v1/tasks/{id}/assignment`: a person holds at most one role, so the body carries the
+	// WHOLE state of that relationship and `""` means "no role" — a legitimate destination, since
+	// `nguoi_dung.vai_tro_id` is nullable and somebody can sit in the org chart holding nothing.
+	// `role` singular and not `roles`: this is the one relationship, not a collection.
+	//
+	// THIS IS WHERE #13 AND #14 BOTH LAND, and it is why the role is not a field on the PATCH
+	// above:
+	//
+	//	#14 first    the caller may not move THEMSELVES. Without it, `admin.user` silently contains
+	//	             every other permission — its holder can put themselves in the strongest role.
+	//	#14 second   the caller may not grant a key they do not hold. Without it the first
+	//	             constraint is a formality: promote a colleague, then ask them to promote you.
+	//	             THE CONSEQUENCE, STATED BECAUSE A COMMUNE WILL MEET IT: an administrator who
+	//	             holds only `admin.user` cannot assign a role carrying `budget.confirm`. That is
+	//	             what the customer chose — the alternative is a permission table that describes
+	//	             a flat model while one key stands above all of them (rule 5, forbidden #2).
+	//	#13          moving the last administrator to a role without `admin.user` answers 409.
+	//
+	// idem.KhongCan — assigning the role somebody already holds writes nothing and audits nothing.
+	// PUT carries an absolute state rather than a step, so the second request cannot compound the
+	// first.
+	//
+	// @summary  Đổi vai trò của một cán bộ — chuỗi rỗng nghĩa là gỡ vai trò
+	// @screen   14-cau-hinh §3
+	// @request  datVaiTroVao
+	// @reply    200 canBoTomTat
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/staff/{id}/role",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			idem.KhongCan("PUT mang trạng thái tuyệt đối: gán đúng vai trò đang có thì use case không ghi gì, nên lần gửi thứ hai cho cùng một kết quả")(
+				http.HandlerFunc(h.DoiVaiTroCanBo))))
 
 	// --- the commune's organisational chart ----------------------------------------------------
 	//

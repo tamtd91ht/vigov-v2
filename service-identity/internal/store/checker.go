@@ -43,7 +43,26 @@ FROM nguoi_dung nd
 JOIN vai_tro       vt ON vt.tenant_id = nd.tenant_id AND vt.id         = nd.vai_tro_id
 JOIN vai_tro_quyen vq ON vq.tenant_id = nd.tenant_id AND vq.vai_tro_id = vt.id
 WHERE nd.tenant_id = $1
-  AND nd.id = $2
+  AND nd.id = $2` + dieuKienGiuQuyen
+
+// dieuKienGiuQuyen is THE definition of "this person can exercise a permission today", lifted out
+// of the query above so it has exactly one spelling.
+//
+// IT IS SHARED WITH can_bo_ghi.go truyVanQuanTriDeGhi, and that is the only reason it is a
+// separate constant. That query answers open question #13 — "would this operation leave the
+// commune with no administrator" — by counting the people this predicate admits. Two copies of
+// these four conditions would drift, and drift in either direction is a defect with no error
+// attached:
+//
+//	looser there    the system believes another administrator exists when none does, and permits
+//	                the operation that locks a commune out of its own system for good.
+//	stricter there  it refuses an operation that was safe, which a commune reads as the software
+//	                being broken.
+//
+// The conditions themselves are argued at length above the query: `co_tai_khoan` and
+// `dang_hoat_dong` are two different questions, and `vt.deleted_at` is what stops a soft-deleted
+// role from carrying grants.
+const dieuKienGiuQuyen = `
   AND nd.deleted_at IS NULL
   AND nd.co_tai_khoan
   AND nd.dang_hoat_dong

@@ -192,6 +192,14 @@ func run(log *slog.Logger) error {
 	//    (rule 6, invariant 3). The handlers only translate HTTP.
 	dangNhap := app.NewDangNhap(kho, canBo, phien, signer, log)
 	dangXuat := app.NewDangXuat(kho, phien)
+	// The WRITE surface of the staff register (open questions #10, #13, #14, #15, #16, all decided
+	// 2026-09-22). It is given the SAME *idstore.CanBoStore the two read fields below carry — one
+	// store, because the guards read the very rows they then write, inside one transaction.
+	//
+	// IT IS A USE CASE AND NOT A STORE ON Deps, and that is the whole reason this line exists here
+	// rather than reusing `canBo` directly: every method opens the transaction that the business
+	// write and its audit entry share (rule 6, invariant 3).
+	ghiDanhBa := app.NewDanhBaCanBo(kho, canBo)
 
 	// 7. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
 	//    cache — and the routes then behave per the CheDoHong each one declared. A service must
@@ -249,10 +257,14 @@ func run(log *slog.Logger) error {
 		// The SAME store behind two fields, and two fields on purpose: CanBoDoc is the
 		// three-condition read the session middleware runs on every request, CanBoDanhBa is the
 		// register the Cấu hình → Người dùng screen pages through. See the note on CanBoDanhBa.
-		DanhBa:   canBo,
-		DangNhap: dangNhap,
-		DangXuat: dangXuat,
-		Log:      log,
+		DanhBa: canBo,
+		// The five WRITE routes of the register. A use case, not the store: see the note where it is
+		// built. Register panics without it, so an unwired write surface fails at startup rather
+		// than at the first administrator who tries to add a member of staff.
+		GhiDanhBa: ghiDanhBa,
+		DangNhap:  dangNhap,
+		DangXuat:  dangXuat,
+		Log:       log,
 	}
 
 	mux := http.NewServeMux()

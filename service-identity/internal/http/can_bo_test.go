@@ -49,21 +49,26 @@ func danhBaXaA() []domain.CanBoTomTat {
 		{
 			ID: idNoiBo, Ma: maCanBo, HoTen: "Nguyễn Văn A", Email: emailDung,
 			ChucVu: "Công chức Văn phòng", BoPhanID: "bp-001", VaiTroID: "vt-001",
-			// The agreed fake number (rule 3, invariant 5), here so the tests can prove the raw
-			// value never reaches a response body.
-			DienThoaiCoQuan: "0900000000", CoTaiKhoan: true, DangHoatDong: true,
+			// The agreed fake numbers (rule 3, invariant 5). The two columns carry DIFFERENT values
+			// on purpose: they are adjacent strings of the same type, so a swap produces no error
+			// anywhere — and since #16 they are two kinds of data in law, which means a swap applies
+			// every masking, export and publication rule to the wrong one.
+			DienThoaiCoQuan: "0900000000", DiDongCaNhan: "0900000011",
+			CoTaiKhoan: true, DangHoatDong: true,
 			DangNhapGanNhat: &dangNhapLuc, TaoLuc: tao,
 		},
 		{
 			ID: "nd-02", Ma: "CB-002", HoTen: "Trần Thị B", Email: "canbo.b@example.gov.vn",
 			ChucVu: "Trưởng thôn", BoPhanID: "bp-002",
-			DienThoaiCoQuan: "0900000002", CoTaiKhoan: false, DangHoatDong: true,
+			DienThoaiCoQuan: "0900000002", DiDongCaNhan: "0900000012",
+			CoTaiKhoan: false, DangHoatDong: true,
 			TaoLuc: tao.Add(time.Hour),
 		},
 		{
 			ID: "nd-03", Ma: "CB-003", HoTen: "Lê Văn C", Email: "canbo.c@example.gov.vn",
 			ChucVu: "Kế toán", BoPhanID: "bp-001", VaiTroID: "vt-002",
-			DienThoaiCoQuan: "0900000003", CoTaiKhoan: true, DangHoatDong: false,
+			DienThoaiCoQuan: "0900000003", DiDongCaNhan: "0900000013",
+			CoTaiKhoan: true, DangHoatDong: false,
 			TaoLuc: tao.Add(2 * time.Hour),
 		},
 	}
@@ -212,14 +217,27 @@ func TestCanBo_200DuCaHai(t *testing.T) {
 
 // --- rule 3: what leaves the API ------------------------------------------------------------
 
-func TestCanBoCheSoDienThoai(t *testing.T) {
-	// MUTATION THAT MUST TURN THIS RED: drop privacy.MaskPhone from raNgoai and return
-	// cb.DienThoaiCoQuan. Nothing else in the suite notices — the field is still present, still a
-	// string, still the right person's.
-	//
-	// Masking is the fail-closed default while open question #11 is unanswered: no seeded
-	// permission key means "see a staff member's full details", so there is no explicit path
-	// rule 3, invariant 3 could open.
+// THIS CASE REVERSED ON 2026-09-22, AND THE REVERSAL IS A CUSTOMER DECISION — read it before
+// "restoring" the mask.
+//
+// It used to assert that both numbers left MASKED, because open question #11 was unanswered and
+// masking was the fail-closed default. #11 is now DECIDED: staff of the same commune see each
+// other's numbers in full, because they have to ring each other, and masking them only moves the
+// number into a private channel the authority can neither audit nor control. The decision also
+// says explicitly that NO new permission key is created for it — so there is no Checker call here
+// and nothing about it is conditional.
+//
+// WHAT THE DECISION DID NOT OPEN, and what this case therefore still guards: the scope. These
+// numbers leave through ONE commune's screens, behind `admin.user`, with `Scoped` binding
+// `tenant_id`. Excel exports and anything published outside the authority stay masked (rule 3,
+// invariant 4) and the Mini App needs the person's own consent (#12); neither surface exists yet,
+// and neither may reuse soRaManHinhNoiBo.
+//
+// MUTATION THAT MUST TURN THIS RED: make raNgoai read DiDongCaNhan into Phone (or the reverse).
+// The two columns are adjacent strings of the same type, so a swap produces no error anywhere —
+// and since #16 they are two kinds of data in law, so every future masking and export rule would
+// then apply to the wrong one.
+func TestCanBoKhongCheSoTrongNoiBoXaVaKhongLanHaiCot(t *testing.T) {
 	m := dungMayChu(t)
 	tok := m.tokenCho(t, xaA, sidA)
 
@@ -228,11 +246,14 @@ func TestCanBoCheSoDienThoai(t *testing.T) {
 		doiMa(t, w, http.StatusOK)
 		than := w.Body.String()
 
-		if strings.Contains(than, "0900000000") {
-			t.Errorf("%s trả về số điện thoại đầy đủ: %s", duong, than)
+		if strings.Contains(than, "****") {
+			t.Errorf("%s vẫn che số trong nội bộ xã — câu #11 chốt KHÔNG che: %s", duong, than)
 		}
-		if !strings.Contains(than, "09****0000") {
-			t.Errorf("%s không có số đã che — mong 09****0000: %s", duong, than)
+		if !strings.Contains(than, `"phone":"0900000000"`) {
+			t.Errorf("%s: dien_thoai_co_quan không ra trường phone: %s", duong, than)
+		}
+		if !strings.Contains(than, `"mobile":"0900000011"`) {
+			t.Errorf("%s: di_dong_ca_nhan không ra trường mobile: %s", duong, than)
 		}
 	}
 }
@@ -272,7 +293,10 @@ func TestCanBoTraDuTruongManHinhCan(t *testing.T) {
 	muon := canBoTomTat{
 		ID: idNoiBo, Code: maCanBo, FullName: "Nguyễn Văn A", Email: emailDung,
 		Position: "Công chức Văn phòng", DepartmentID: "bp-001", RoleID: "vt-001",
-		Phone: "09****0000", HasAccount: true, Active: true,
+		// Both numbers in full, in their own fields — open question #11, decided 2026-09-22. See
+		// TestCanBoKhongCheSoTrongNoiBoXaVaKhongLanHaiCot for the argument and for what the
+		// decision did NOT open.
+		Phone: "0900000000", Mobile: "0900000011", HasAccount: true, Active: true,
 	}
 	ra.LastLoginAt, ra.CreatedAt = nil, time.Time{} // compared separately, below
 	if ra != muon {
