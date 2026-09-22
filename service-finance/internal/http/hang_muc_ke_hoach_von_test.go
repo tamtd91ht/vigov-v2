@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/service-finance/internal/domain"
+
 	fistore "github.com/vihat/vigov/service-finance/internal/store"
 )
 
@@ -96,8 +98,13 @@ func TestHangMuc_200(t *testing.T) {
 	if len(ra.Items) != 3 {
 		t.Fatalf("nhận %d hạng mục, muốn 3", len(ra.Items))
 	}
+	// `Source` AND `Tier` ARE IN THE EXPECTED VALUE, not left to a zero. The fixture row carries
+	// nguon = "don-vi", so the tier is 1 — and tier 1 is the ONLY tier the configuration screen may
+	// offer `Xoá` on. A mapper that dropped either field would answer tier 0 here, which is no tier
+	// at all, and the screen would draw buttons from it.
 	if ra.Items[0] != (hangMucRa{
 		ID: "hm-001", Code: "xay-dung-moi", Label: "Xây dựng mới", IsDefault: true, Active: true,
+		Source: domain.NguonDonVi, Tier: int(domain.TangDonVi),
 	}) {
 		t.Errorf("hạng mục đầu sai: %+v", ra.Items[0])
 	}
@@ -247,18 +254,24 @@ func TestHangMucXaChuaCoDongNaoTraMangRong(t *testing.T) {
 
 // --- (5) the contract shape ----------------------------------------------------------------------
 
-func TestHangMucChiTraNamTruongCuaHopDong(t *testing.T) {
+func TestHangMucChiTraTruongCuaHopDong(t *testing.T) {
 	// THE FIELDS THAT ARE ABSENT ARE THE DESIGN, so their absence is asserted rather than assumed.
 	//
 	//	tenant_id    never leaves this service — it is not data, it is the dimension every row is
 	//	             already filtered by (rule 1, invariant 4)
-	//	thu_tu       the sort key, not data. Exposing it invites a client to re-sort, which is a
-	//	             client overruling the commune on its own catalogue
-	//	nguon,       they answer "what may be DONE to this row" — the three tiers of ADR 0024 §6.
-	//	ma_nguon_    Only a configuration surface asks that, and open question #21 has not settled
-	//	re_nhanh     who may do anything at all. Publishing the tier now would describe buttons
-	//	             nobody has decided to allow
 	//	deleted_at   a soft-deleted row never leaves the store, so no reader needs to ask
+	//
+	// `order`, `source` AND `tier` ARE NOW IN THE CONTRACT, and the comment that used to stand here
+	// said the opposite: that `thu_tu` invites a client to re-sort, and that `nguon` /
+	// `ma_nguon_re_nhanh` describe buttons open question #21 had not settled. THAT READING IS OUT
+	// OF DATE — #21 is about the TASK STATUS catalogue, whose codes a fixed state machine walks;
+	// this catalogue's own answer is in the schema and is enforced by a trigger
+	// (0003_danh_muc_hang_muc_ke_hoach_von.sql:74-76). The write routes exist, and the
+	// configuration screen has to know which buttons it may draw: `Tắt` is refused at tier 3,
+	// `Xoá` at tiers 2 and 3.
+	//
+	// The re-sort argument still stands as an instruction to CLIENTS and is written on the field
+	// itself; it was never an argument for hiding the value from a screen that edits it.
 	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongHangMuc, canBoCua(xaA))
@@ -273,7 +286,10 @@ func TestHangMucChiTraNamTruongCuaHopDong(t *testing.T) {
 	// `label`, NOT `name` — the field is `nhan`, and ADR 0017 names a contract field after what the
 	// data IS. Every ADR 0024 catalogue in this system answers `label`; entities with a `ten` column
 	// answer `name`. This literal is where a drift back to `name` turns red.
-	muon := map[string]bool{"id": true, "code": true, "label": true, "is_default": true, "active": true}
+	muon := map[string]bool{
+		"id": true, "code": true, "label": true, "is_default": true, "active": true,
+		"order": true, "source": true, "tier": true,
+	}
 	for _, mot := range tho.Items {
 		for khoa := range mot {
 			if !muon[khoa] {

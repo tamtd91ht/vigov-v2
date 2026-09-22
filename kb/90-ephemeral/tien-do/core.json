@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "core",
-  "cap_nhat": "2026-09-21",
+  "cap_nhat": "2026-09-22",
   "muc": [
     {
       "id": "backfill-theo-xa",
@@ -57,9 +57,25 @@
       "id": "boc-phan-giai-phien-cong-dan",
       "viec": "core/identityclient - boc ResolveCitizenSession va bo noi httpx.CitizenSessions cho service khong phai identity",
       "trang_thai": "xong",
-      "bang_chung": "Chan (1) DA GO 21/09/2026: nguoi dung chot mien xa, ten da vao core/grpcx/grpcx.go. TestPhienCongDanBiChanViKhongCoMienXa da duoc VIET LAI thanh TestPhienCongDanGoiDuocTuNgucCanhKhongCoXa - goi THAT tu context KHONG co xa, khang dinh ca hai chieu: loi goi TOI duoc may chu (srv.goi==1) VA khong mang \"x-tenant-id\" nao (luat 1 cam #2 di cua sau). ngucCanhCongDan() doi tu tenant.Into(...) sang context.Background(): cho muon mot xa truoc day chi de interceptor cho qua, nay khong can nua - mot ca anh xa chay voi xa trong context la ca chay tren hinh dang khong bao gio xay ra. TU CHAY 21/09: core 18/18 goi xanh, gofmt sach, dot bien lam do 4 ca roi phuc hoi.",
+      "bang_chung": "Chan (1) DA GO 21/09/2026: nguoi dung chot mien xa, ten da vao core/grpcx/grpcx.go. TestPhienCongDanBiChanViKhongCoMienXa da duoc VIET LAI thanh TestPhienCongDanGoiDuocTuNgucCanhKhongCoXa - goi THAT tu context KHONG co xa, khang dinh ca hai chieu: loi goi TOI duoc may chu (srv.goi==1) VA khong mang \"x-tenant-id\" nao (luat 1 cam #2 di cua sau). ngucCanhCongDan() doi tu tenant.Into(...) sang context.Background(): cho muon mot xa truoc day chi de interceptor cho qua, nay khong can nua - mot ca anh xa chay voi xa trong context la ca chay tren hinh dang khong bao gio xay ra. TU CHAY 21/09: core 18/18 goi xanh, gofmt sach, dot bien lam do 4 ca roi phuc hoi. CHU THICH DA LAC HAU, SUA 22/09/2026: khoi chu thich dau tep (core/identityclient/phien_cong_dan.go:26) van ghi 'NOTHING HERE WORKS YET ... refuses every call below with InvalidArgument' — cau ay SAI ke tu d9ea349, va no la loai sai dat nhat trong kho nay: mot phien sau doc no se DUNG vi mot rao chan khong con ton tai. Nay ghi lai thanh quyet dinh da co (ngay, vi tri grpcx.go:177, ly do o :158), GIU NGUYEN doan noi hai hinh dang van bi cam — dat xa gia vao context, va quay so thu hai khong co interceptor. Khong cham ma, chi cham chu thich; core 18/18 goi van xanh.",
       "no_confirm": [],
       "tiep_theo": "Chan (2) VAN CON, co y chua sua: httpx.CitizenSessions.TraCuu chi tra hai ket qua. Xem tien-do/proto.json muc resolve-citizen-session."
+    },
+    {
+      "id": "boc-han-xu-ly",
+      "viec": "Bọc Client.HanXuLy — đường DUY NHẤT để một service ngoài identity lấy được hạn xử lý từ bảng `sla` của xã",
+      "trang_thai": "xong",
+      "bang_chung": "core/identityclient/han_xu_ly.go (Client.HanXuLy) + han_xu_ly_test.go, 8 ca qua bufconn với CHUỖI INTERCEPTOR THẬT. TỰ CHẠY 22/09/2026: gofmt -l core RỖNG · go vet ./core/... rc=0 · go test -count=1 -p 1 ./core/... 19 gói ok. Ca đáng kể: máy chủ giả CỐ Ý trả ngược thứ tự hai mục để một bản cài đặt ánh xạ theo VỊ TRÍ sẽ đỏ; và TestHanXuLyKhongCoXaThiBiTuChoiTaiCho ghim rằng RPC này KHÔNG nằm trong grpcx.methodsWithoutTenant — gọi mà context không có xã thì interceptor phía client từ chối tại chỗ, máy chủ không nhận lời gọi nào.",
+      "no_confirm": [],
+      "tiep_theo": "ĐẶT CẠNH TienGioLamViec CHỨ KHÔNG THAY NÓ: TienGioLamViec dành cho bên gọi TỰ giữ số giờ và không đọc `sla`; HanXuLy là đường cho bên gọi đọc cam kết CỦA XÃ. Bên gọi phản ánh/văn bản đến phải dùng HanXuLy — dùng TienGioLamViec với một con số tự chọn là tự đặt cam kết hộ cơ quan. BA ĐIỀU BẮT BUỘC VỚI BÊN GỌI, cả ba đều viết trong chú thích của hàm: (1) lỗi nghĩa là HỎNG LƯỢT TIẾP NHẬN — không ghi dòng, không cấp mã tra cứu (transaction-boundaries.json `tinh_han_xu_ly_luc_tiep_nhan`); (2) không rơi về một con số mặc định khi xã chưa cấu hình (luật 10 cấm #3); (3) gọi MỘT LẦN tại hành vi ấn định đồng hồ rồi LƯU — gọi lại để 'tính lại' là âm thầm dời một cam kết đã phát ra (luật 10 bất biến 2, ADR 0007 quyết định 6). CHƯA CÓ AI GỌI: service-petitions và service-documents vẫn chưa có tuyến ghi nào dùng hàm này — đó là việc của phiên sau, không phải của mục này."
+    },
+    {
+      "id": "core-ulid",
+      "viec": "core/ulid — MỘT bộ sinh mã dòng ULID cho cả kho",
+      "trang_thai": "xong",
+      "bang_chung": "core/ulid/ulid.go + ulid_test.go. Năm ca sử dụng ghi danh mục (documents, finance, petitions ×2, comms) gọi ulid.Moi thay vì tự chép. Ba tính chất được ghim: đúng 26 ký tự, chỉ bảng chữ Crockford (không I/L/O/U — chép tay một mã không ra được mã KHÁC vẫn hợp lệ), và 1000 lần gọi liên tiếp trong cùng một mili-giây không trùng. `go test ./ulid/...` XANH — 2026-09-22.",
+      "no_confirm": [],
+      "tiep_theo": "CÒN HAI BẢN CHÉP TAY, và cả hai đều nằm ngoài phạm vi lần này nên KHÔNG bị đụng vào: service-identity/internal/store/crosstenant/dinh_danh_cong_dan.go:154 và service-comms/internal/app/so_thong_bao.go (maULID). Chính chú thích của bản thứ hai nói việc dời sang core/ là đúng 'vào ngày có người gọi thứ hai' — ngày ấy là hôm nay, nhưng gộp chúng lại là sửa mã của hai dịch vụ cho một lý do không thuộc việc đang làm. Cái giá của việc để nguyên được ghi ra chứ không giấu: ba bản cùng một thuật toán, và một ULID lệch bảng chữ hay lệch độ dài giữa hai dịch vụ là một mã đi qua được ở nơi này và vỡ ràng buộc ở nơi kia — trên dòng ĐÃ ghi."
     }
   ]
 }

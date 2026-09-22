@@ -146,7 +146,13 @@ func dungMayChu(t *testing.T) *mayChu {
 		d: Deps{
 			Checker:       checker,
 			LoaiTaiNguyen: danhMuc,
-			Log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
+			// The write use case, so Register accepts the Deps. NOTHING IN THIS FILE CALLS IT: the
+			// three write routes have their own four-case suite in
+			// loai_tai_nguyen_ban_do_ghi_test.go, with a fake that records the commune and the
+			// acting person. Register refuses a nil dependency at construction, so it has to be
+			// present — and a fake that is never invoked cannot answer anything wrongly.
+			GhiLoaiTaiNguyen: &ghiDanhMucGia{},
+			Log:              slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 	}
 

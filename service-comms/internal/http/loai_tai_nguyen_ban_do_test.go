@@ -257,20 +257,26 @@ func TestLoaiTaiNguyenNhomDaTatVanTraVeKemCoActiveFalse(t *testing.T) {
 
 // --- (6) the contract shape ----------------------------------------------------------------------
 
-func TestLoaiTaiNguyenChiTraNamTruongCuaHopDong(t *testing.T) {
+func TestLoaiTaiNguyenChiTraTruongCuaHopDong(t *testing.T) {
 	// THE FIELDS THAT ARE ABSENT ARE THE DESIGN, so their absence is asserted rather than assumed.
 	// Unmarshalling into the typed struct cannot show this: an extra field added to loaiTaiNguyenRa
 	// would ship on every response and every existing test would stay green.
 	//
 	//	tenant_id    never leaves this service — it is not data, it is the dimension every row is
 	//	             already filtered by (rule 1, invariant 4)
-	//	thu_tu       the sort key, not data. Exposing it invites a client to re-sort, which is a
-	//	             client overruling the commune on its own catalogue
-	//	nguon,       they answer "what may be DONE to this row" — the three tiers of ADR 0024 §6.
-	//	ma_nguon_    Only a configuration surface asks that, and open question #21 has not settled
-	//	re_nhanh     who may do anything at all. Publishing the tier now would describe buttons
-	//	             nobody has decided to allow
 	//	deleted_at   a soft-deleted row never leaves the store, so no reader needs to ask
+	//
+	// `order`, `source` AND `tier` ARE NOW IN THE CONTRACT, and the comment that used to stand here
+	// said the opposite: that `thu_tu` invites a client to re-sort, and that `nguon` /
+	// `ma_nguon_re_nhanh` describe buttons open question #21 had not settled. THAT READING IS OUT
+	// OF DATE — #21 is about the TASK STATUS catalogue, whose codes a fixed state machine walks;
+	// this catalogue's own answer is in the schema and is enforced by a trigger
+	// (0003_danh_muc_loai_tai_nguyen_ban_do.sql:89-91). The write routes exist, and the
+	// configuration screen has to know which buttons it may draw: `Tắt` is refused at tier 3, `Xoá`
+	// at tiers 2 and 3.
+	//
+	// The re-sort argument still stands as an instruction to CLIENTS and is written on the field
+	// itself; it was never an argument for hiding the value from a screen that edits it.
 	//
 	// It also pins the ONE name this field has. `label` and not `name`: the column is `nhan`, and a
 	// catalogue row carries a label while a unit or a role carries a name (ADR 0017 — the argument
@@ -290,7 +296,10 @@ func TestLoaiTaiNguyenChiTraNamTruongCuaHopDong(t *testing.T) {
 	if len(tho.Items) == 0 {
 		t.Fatal("không có dòng nào để kiểm hình dạng hợp đồng")
 	}
-	muon := map[string]bool{"id": true, "code": true, "label": true, "is_default": true, "active": true}
+	muon := map[string]bool{
+		"id": true, "code": true, "label": true, "is_default": true, "active": true,
+		"order": true, "source": true, "tier": true,
+	}
 	for _, mot := range tho.Items {
 		for khoa := range mot {
 			if !muon[khoa] {

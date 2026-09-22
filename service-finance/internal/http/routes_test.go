@@ -115,12 +115,20 @@ func (h *hangMucGia) DanhSach(ctx context.Context) ([]domain.HangMucKeHoachVon, 
 func hangMucMau() *hangMucGia {
 	return &hangMucGia{theo: map[tenant.ID][]domain.HangMucKeHoachVon{
 		xaA: {
-			{ID: "hm-001", Ma: "xay-dung-moi", Nhan: "Xây dựng mới", LaMacDinh: true, DangDung: true},
-			{ID: "hm-002", Ma: "cai-tao-nang-cap", Nhan: "Cải tạo, nâng cấp", DangDung: true},
-			{ID: "hm-003", Ma: "tra-no", Nhan: "Trả nợ"},
+			// A FOURTH PROPERTY, ADDED WITH THE WRITE ROUTES: the three tiers of ADR 0024 are all
+			// represented, because the tier is what the configuration screen reads to decide which
+			// buttons it may draw. A fixture where every row was `don-vi` could not tell a mapper
+			// that always answers tier 1 from one that reads the columns.
+			{ID: "hm-001", Ma: "xay-dung-moi", Nhan: "Xây dựng mới", LaMacDinh: true, DangDung: true,
+				Nguon: domain.NguonDonVi},
+			{ID: "hm-002", Ma: "cai-tao-nang-cap", Nhan: "Cải tạo, nâng cấp", DangDung: true,
+				ThuTu: 2, Nguon: domain.NguonHeThong},
+			{ID: "hm-003", Ma: "tra-no", Nhan: "Trả nợ",
+				ThuTu: 3, Nguon: domain.NguonHeThong, MaNguonReNhanh: true},
 		},
 		xaB: {
-			{ID: "hm-b-001", Ma: "giai-phong-mat-bang", Nhan: "Giải phóng mặt bằng XÃ B", DangDung: true},
+			{ID: "hm-b-001", Ma: "giai-phong-mat-bang", Nhan: "Giải phóng mặt bằng XÃ B",
+				DangDung: true, Nguon: domain.NguonDonVi},
 		},
 	}}
 }
@@ -191,9 +199,15 @@ func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
 	d := Deps{
 		Checker: c,
 		HangMuc: hangMuc,
-		DuAn:    duAn,
-		Nay:     func() time.Time { return lucDaQua7096 },
-		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// The write use case, so Register accepts the Deps. NOTHING IN THIS FILE CALLS IT: the
+		// write routes have their own four-case suite in hang_muc_ke_hoach_von_ghi_test.go, with a
+		// fake that records the commune and the acting person. Register refuses a nil dependency at
+		// construction, so it has to be present here — and a fake that is never invoked cannot
+		// answer anything wrongly.
+		GhiHangMuc: &ghiDanhMucGia{},
+		DuAn:       duAn,
+		Nay:        func() time.Time { return lucDaQua7096 },
+		Log:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	mux := http.NewServeMux()

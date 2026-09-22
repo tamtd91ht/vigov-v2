@@ -241,20 +241,29 @@ func TestLoaiNhiemVuXaChuaCoDongNaoTraMangRong(t *testing.T) {
 
 // --- (5) the contract shape ---------------------------------------------------------------------
 
-func TestLoaiNhiemVuChiTraNamTruongCuaHopDong(t *testing.T) {
+func TestLoaiNhiemVuChiTraTruongCuaHopDong(t *testing.T) {
 	// THE FIELDS THAT ARE ABSENT ARE THE DESIGN, so their absence is asserted rather than assumed.
 	// The struct is decoded into a map here precisely so a field ADDED to loaiNhiemVuRa turns this
 	// red instead of quietly shipping:
 	//
 	//	tenant_id    never leaves this service — it is not data, it is the dimension every row is
 	//	             already filtered by (rule 1, invariant 4)
-	//	thu_tu       the sort key, not data. Exposing it invites a client to re-sort, which is a
-	//	             client overruling the commune on its own catalogue
-	//	nguon,       they answer "what may be DONE to this row" — the three tiers of ADR 0024 §6.
-	//	ma_nguon_    Only a configuration surface asks that, and open question #21 has not settled
-	//	re_nhanh     who may do anything at all. Publishing the tier now would describe buttons
-	//	             nobody has decided to allow
 	//	deleted_at   a soft-deleted row never leaves the store, so no reader needs to ask
+	//
+	// `order`, `source` AND `tier` ARE NOW IN THE CONTRACT, and the comment that used to stand here
+	// said the opposite: that `thu_tu` invites a client to re-sort, and that `nguon` /
+	// `ma_nguon_re_nhanh` describe buttons open question #21 had not settled. THE SECOND HALF OF
+	// THAT READING IS OUT OF DATE FOR THESE TWO CATALOGUES, and the distinction matters: #21 is
+	// about the TASK STATUS catalogue (`trang_thai_nhiem_vu`), whose codes a fixed state machine
+	// walks — adding one makes a status with no way in and no way out, and disabling `hoan-thanh`
+	// stops every task in the commune from ever finishing. `loai_nhiem_vu` and
+	// `muc_uu_tien_nhiem_vu` have no state machine, and their own answer is in the schema, enforced
+	// by a trigger (0003_danh_muc_nhiem_vu.sql). The write routes exist, and the configuration
+	// screen has to know which buttons it may draw: `Tắt` is refused at tier 3, `Xoá` at tiers 2
+	// and 3.
+	//
+	// The re-sort argument still stands as an instruction to CLIENTS and is written on the field
+	// itself; it was never an argument for hiding the value from a screen that edits it.
 	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongLoaiNhiemVu, canBoCuaXa(xaA))
@@ -273,7 +282,10 @@ func TestLoaiNhiemVuChiTraNamTruongCuaHopDong(t *testing.T) {
 	// data IS. Every ADR 0024 catalogue in this system answers `label`; entities with a `ten` column
 	// answer `name`. This literal is where a drift back to `name` turns red, and it is also where
 	// `is_active` would.
-	muon := map[string]bool{"id": true, "code": true, "label": true, "is_default": true, "active": true}
+	muon := map[string]bool{
+		"id": true, "code": true, "label": true, "is_default": true, "active": true,
+		"order": true, "source": true, "tier": true,
+	}
 	for _, mot := range tho.Items {
 		for khoa := range mot {
 			if !muon[khoa] {

@@ -18,12 +18,14 @@ import (
 
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/migrate"
 	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-documents/internal/app"
 	svchttp "github.com/vihat/vigov/service-documents/internal/http"
 	docstore "github.com/vihat/vigov/service-documents/internal/store"
 	"github.com/vihat/vigov/service-documents/migrations"
@@ -100,6 +102,11 @@ func run(log *slog.Logger) error {
 	kho := store.New(db)
 	loaiVanBan := docstore.NewLoaiVanBanStore(kho)
 
+	// 3b. use cases — the business write and its audit entry share ONE transaction inside these
+	//     (rule 6, invariant 3). The handlers only translate HTTP. It is given *store.DB rather
+	//     than a transaction because opening one is precisely what it is for.
+	ghiLoaiVanBan := app.NewDanhMucLoaiVanBan(kho, loaiVanBan)
+
 	// 4. directory — Host -> commune, over gRPC to the platform service.
 	//
 	// THERE IS NO SECOND WAY TO RESOLVE A COMMUNE. This service does not read the registry tables:
@@ -130,17 +137,35 @@ func run(log *slog.Logger) error {
 	}
 	defer dinhDanh.Close()
 
-	// 6. routes. Register refuses incomplete Deps at construction, not at request time.
+	// 6. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
+	//    cache — and each route then behaves per the CheDoHong it declared. A service must not fail
+	//    to start because a cache is absent; the missing cache is already reported by cfg.CanhBao().
+	//
+	// The variable is declared as the INTERFACE and left nil when there is no Redis: assigning a
+	// nil *idem.RedisStore into it would produce a non-nil interface holding a nil pointer, and
+	// idem would call methods on it instead of taking its documented no-cache path.
+	var idemStore idem.Store
+	if cfg.RedisDSN != "" {
+		r, err := idem.NewRedisStore(cfg.RedisDSN.Lo())
+		if err != nil {
+			return err
+		}
+		defer r.Close()
+		idemStore = r
+	}
+
+	// 7. routes. Register refuses incomplete Deps at construction, not at request time.
 	//
 	// Checker is staffauth.Checker: it answers from the permission set the middleware obtained for
-	// THIS request and put in its context, and it holds no state of its own. No route here declares
-	// authz.RequirePermission yet — but wiring it now is what makes the first one that does work,
-	// instead of meeting a nil interface at request time.
+	// THIS request and put in its context, and it holds no state of its own. THE THREE WRITE ROUTES
+	// OF THE CATALOGUE DECLARE authz.RequirePermission("admin.lookup"), so this is now read on every
+	// one of them — Register panics on a nil Checker rather than letting them 403 or panic later.
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
-		Checker:    staffauth.Checker{},
-		LoaiVanBan: loaiVanBan,
-		Log:        log,
+		Checker:       staffauth.Checker{},
+		LoaiVanBan:    loaiVanBan,
+		GhiLoaiVanBan: ghiLoaiVanBan,
+		Log:           log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
@@ -152,7 +177,7 @@ func run(log *slog.Logger) error {
 		"dsn", cfg.DatabaseDSN)
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           dungBien(mux, directory, dinhDanh, log),
+		Handler:           dungBien(mux, directory, dinhDanh, idemStore, log),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	return srv.ListenAndServe()
@@ -172,6 +197,7 @@ func run(log *slog.Logger) error {
 //	StripTenantHeaders  a client naming its own commune is a client granting itself access
 //	Recover             turns tenant.MustFrom's deliberate panic into a traceable 500
 //	TenantMiddleware    resolves Host -> commune; unknown Host returns 404, never a default
+//	idem.Middleware     installs the duplicate-request store for the routes that declare it
 //	staffauth           rebuilds authz.Principal by asking identity; INSIDE TenantMiddleware,
 //	                    because the outgoing call carries the commune from the context and the
 //	                    principal is stamped with the commune resolved from Host
@@ -179,15 +205,23 @@ func run(log *slog.Logger) error {
 // Recover sits OUTSIDE TenantMiddleware so a panic raised while resolving the commune is still
 // caught; it sits INSIDE StripTenantHeaders because stripping cannot panic.
 //
+// idem.Middleware sits AFTER TenantMiddleware because the idempotency key is prefixed with the
+// commune (rule 1, invariant 7). Mounted the other way round it would build keys with no commune
+// in them, so two communes whose clients generate the same key collide — one commune's request
+// answered with another commune's result. It sits OUTSIDE staffauth only because it does not need
+// the principal to be installed before it runs: idem.Required reads the principal from the context
+// at REQUEST time, by which point staffauth (which is inside) has already put it there.
+//
 // /healthz IS DELIBERATELY OUTSIDE THE WHOLE CHAIN, on the outer mux. It answers whether this
 // process is alive, which is true or false regardless of which commune is asking. Behind Host
 // resolution it would fail whenever the platform service does, and an orchestrator would then
 // restart a healthy process during somebody else's outage.
 func dungBien(mux http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
-	log *slog.Logger) http.Handler {
+	idemStore idem.Store, log *slog.Logger) http.Handler {
 
 	var h http.Handler = mux
 	h = staffauth.Middleware(dinhDanh, log)(h)
+	h = idem.Middleware(idemStore, log)(h)
 	h = httpx.TenantMiddleware(danhBa)(h)
 	h = httpx.Recover(traceID)(h)
 	h = httpx.StripTenantHeaders(h)

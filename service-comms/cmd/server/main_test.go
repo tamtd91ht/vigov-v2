@@ -22,6 +22,7 @@ import (
 
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/tenant"
+	commsapp "github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
 	svchttp "github.com/vihat/vigov/service-comms/internal/http"
 )
@@ -113,14 +114,18 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:       staffauth.Checker{},
 		LoaiTaiNguyen: kho,
-		Log:           log,
+		// Built on a nil *store.DB. NOTHING IN THIS FILE CALLS IT: this test is about the edge
+		// chain — Host -> commune -> principal — and it asserts on the catalogue READ route.
+		// Register refuses a nil dependency at construction, so it has to be present.
+		GhiLoaiTaiNguyen: commsapp.NewDanhMucLoaiTaiNguyen(nil, nil),
+		Log:              log,
 	})
 
 	danhBa := thuMucGia{
 		hostA: {ID: xaA, Host: hostA, Active: true},
 		hostB: {ID: xaB, Host: hostB, Active: true},
 	}
-	return &mayChu{h: dungBien(mux, danhBa, pg, log), kho: kho, pg: pg}
+	return &mayChu{h: dungBien(mux, danhBa, pg, nil, log), kho: kho, pg: pg}
 }
 
 func (m *mayChu) goi(t *testing.T, host, path, phieu string) *httptest.ResponseRecorder {

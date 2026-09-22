@@ -80,6 +80,87 @@ func (s *PhieuPhanAnhStore) TheoMaTraCuu(ctx context.Context, ma string) (domain
 	return p, nil
 }
 
+// ErrThieuDinhDanhCongDan means the caller asked for a citizen's own petition without saying
+// WHICH citizen. It is a wiring fault in the caller, never an answer about a petition.
+//
+// IT IS A SEPARATE ERROR FROM ErrPhieuKhongTonTai ON PURPOSE, AND THE DIFFERENCE IS WHO IT IS FOR.
+// ErrPhieuKhongTonTai is what a citizen is told (404); this one never reaches a citizen at all —
+// it means the route lost the session identity between the edge and the query, and the honest
+// answer to that is a 500 an operator can find, not a 404 that reads as "your petition is gone".
+// Folding it into the sentinel would hide a broken isolation path behind a plausible answer.
+var ErrThieuDinhDanhCongDan = errors.New("phieu_phan_anh: thiếu định danh công dân")
+
+// CuaCongDanTheoMaTraCuu reads ONE petition that belongs to THIS citizen, in THIS commune.
+//
+// # A SECOND METHOD RATHER THAN A PARAMETER ON TheoMaTraCuu, AND THAT IS THE WHOLE POINT
+//
+// The staff path must NOT filter by citizen — an officer reads the register of the commune. The
+// citizen path must ALWAYS filter by citizen (rule 4, invariant 1). One method with an optional
+// filter is one method where "" means "no filter", and the day a caller passes an empty identity
+// the register opens to whoever asked. Two methods make that impossible to express: there is no
+// argument to this one that turns the citizen filter off.
+//
+// # WHERE congDanID MAY COME FROM — ONE SOURCE, AND IT IS NOT THE REQUEST
+//
+// It is `core/httpx.CitizenSession.CitizenID`, resolved by the citizen edge from the bearer token
+// and by nothing else (rule 4, invariant 2; the same sentence is in the contract that carries it,
+// proto/vigov/identity/v1/identity.proto — CitizenSessionPrincipal.citizen_id: "Every citizen-path
+// query filters on this value AND on the commune below").
+//
+// TAKING IT FROM A QUERY STRING, A HEADER OR A BODY FIELD IS RULE 4, FORBIDDEN #1 — the defect
+// that route class exists to prevent, and it is invisible in a diff at this layer: the parameter
+// looks identical whichever end it came from. That is why the reader has to be told here, at the
+// one place the value is used, and not only at the handler.
+//
+// # THE COMMUNE IS STILL NOT A PARAMETER
+//
+// Scoped.Query binds `tenant_id` to $1 from the context (rule 1, invariants 4 and 5), so BOTH
+// axes of rule 4, invariant 3 hold at once and neither can be switched off from a call site.
+//
+// # ONE ANSWER FOR FOUR CAUSES
+//
+// No such code · another citizen's code · another commune's code · soft deleted — all four return
+// ErrPhieuKhongTonTai, and the route answers all four the same way (rule 4, forbidden #2). A
+// different answer for "exists but is not yours" tells the person trying codes that they found a
+// real one, which is the fact the isolation exists to keep.
+func (s *PhieuPhanAnhStore) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma string) (
+	domain.PhieuPhanAnh, error) {
+
+	if congDanID == "" {
+		// FAIL CLOSED, BEFORE THE QUERY. `cong_dan_id = ''` would match no row today, so this
+		// refusal buys nothing against the database — it buys against the NEXT edit, the one that
+		// makes the predicate conditional or the column defaultable. An empty identity on the
+		// isolation path is never a narrower question, it is a caller that lost the session
+		// (rule 1, forbidden #1 in its citizen form).
+		return domain.PhieuPhanAnh{}, ErrThieuDinhDanhCongDan
+	}
+
+	rows, err := s.db.For(ctx).Query(ctx, cotPhieu, "phieu_phan_anh",
+		`AND ma_tra_cuu = $2 AND cong_dan_id = $3 AND deleted_at IS NULL`, ma, congDanID)
+	if err != nil {
+		// NEITHER THE CODE NOR THE CITIZEN IDENTIFIER IS IN THE WRAPPED MESSAGE. The code is the
+		// one string that opens a citizen's petition and the identifier names a person; an error
+		// travels into centralised logging (rule 3, invariants 1 and 2).
+		return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: đọc phiếu của công dân: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: đọc phiếu của công dân: %w", err)
+		}
+		return domain.PhieuPhanAnh{}, ErrPhieuKhongTonTai
+	}
+	p, err := quetPhieu(rows)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+	if err := rows.Err(); err != nil {
+		return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: duyệt kết quả: %w", err)
+	}
+	return p, nil
+}
+
 // quangKiem is the row interface both Scan paths satisfy. It exists so quetPhieu can be shared
 // without the store handing out *sql.Rows.
 type quangKiem interface {

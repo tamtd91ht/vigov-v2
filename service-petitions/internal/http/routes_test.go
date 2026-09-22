@@ -229,10 +229,18 @@ func dungMayChu(t *testing.T) *mayChu {
 			}},
 			LoaiNhiemVu: loai,
 			MucUuTien:   uuTien,
-			Phieu:       phieu,
-			NhanLinhVuc: nhan,
-			Vet:         vet,
-			Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+			// The two write use cases, so Register accepts the Deps. NOTHING IN THIS FILE CALLS
+			// THEM: the six write routes have their own four-case suites in
+			// loai_nhiem_vu_ghi_test.go and muc_uu_tien_nhiem_vu_ghi_test.go, each with a fake that
+			// records the commune and the acting person. Register refuses a nil dependency at
+			// construction, so both have to be present — and a fake nothing invokes cannot answer
+			// anything wrongly.
+			GhiLoaiNhiemVu: &ghiDanhMucGia{},
+			GhiMucUuTien:   &ghiDanhMucGiaUuTien{},
+			Phieu:          phieu,
+			NhanLinhVuc:    nhan,
+			Vet:            vet,
+			Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		thuMuc: thuMucMau(),
 		loai:   loai,
@@ -311,12 +319,14 @@ func loiTra(t *testing.T, w *httptest.ResponseRecorder) httpx.Error {
 // testing nothing — the failure shape that is indistinguishable from success.
 func depsDay() Deps {
 	return Deps{
-		Checker:     checkerGia{},
-		LoaiNhiemVu: loaiNhiemVuMau(),
-		MucUuTien:   mucUuTienMau(),
-		Phieu:       phieuMau(),
-		NhanLinhVuc: nhanLinhVucMau(),
-		Vet:         &vetXemGia{},
+		Checker:        checkerGia{},
+		LoaiNhiemVu:    loaiNhiemVuMau(),
+		MucUuTien:      mucUuTienMau(),
+		GhiLoaiNhiemVu: &ghiDanhMucGia{},
+		GhiMucUuTien:   &ghiDanhMucGiaUuTien{},
+		Phieu:          phieuMau(),
+		NhanLinhVuc:    nhanLinhVucMau(),
+		Vet:            &vetXemGia{},
 	}
 }
 

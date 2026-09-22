@@ -36,4 +36,15 @@ type LoaiTaiNguyenBanDo struct {
 	// its group's name. Only soft-deleted rows drop out, and they drop out in the store (rule 7,
 	// invariant 2).
 	DangDung bool
+
+	// Nguon and MaNguonReNhanh together answer "what may be DONE to this row" — the three-tier
+	// model of ADR 0024 §6, see danh_muc_ba_tang.go. They are DERIVED INTO a tier, never stored as
+	// one: two sources for one fact drift, and the stale one is what a screen would read.
+	//
+	// THE COMMUNE NEVER SUPPLIES EITHER FIELD. The write route sets Nguon to NguonDonVi and leaves
+	// MaNguonReNhanh false, and the store writes both as SQL LITERALS so there is no parameter a
+	// request could reach. Provenance decides the tier; a client that could name it could put its
+	// own row in tier 2 and step around every guard.
+	Nguon          string
+	MaNguonReNhanh bool
 }

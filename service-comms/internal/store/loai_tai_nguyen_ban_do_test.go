@@ -54,6 +54,8 @@ type hangGia struct {
 	id, ma, nhan      string
 	thuTu             int64
 	macDinh, dangDung bool
+	nguon             string
+	reNhanh           bool
 }
 
 func (h hangGia) giaTri(cot string) driver.Value {
@@ -70,6 +72,10 @@ func (h hangGia) giaTri(cot string) driver.Value {
 		return h.macDinh
 	case "dang_dung":
 		return h.dangDung
+	case "nguon":
+		return h.nguon
+	case "ma_nguon_re_nhanh":
+		return h.reNhanh
 	default:
 		// A column was added to cotLoaiTaiNguyen and not here. Failing loudly beats scanning a nil
 		// that "passes" while proving nothing.
@@ -166,6 +172,8 @@ func mauMotDong() []hangGia {
 	return []hangGia{{
 		id: "ltn-001", ma: "mau-mot", nhan: "Nhóm mẫu một",
 		thuTu: 7, macDinh: true, dangDung: false,
+		// A TIER 3 row — the one combination whose tier cannot be guessed from either column alone.
+		nguon: "he-thong", reNhanh: true,
 	}}
 }
 
@@ -327,6 +335,7 @@ func nhieuDong(n int) []hangGia {
 		ra = append(ra, hangGia{
 			id: fmt.Sprintf("ltn-%04d", i), ma: fmt.Sprintf("mau-%04d", i),
 			nhan: fmt.Sprintf("Nhóm mẫu %d", i), thuTu: int64(i), dangDung: true,
+			nguon: "don-vi",
 		})
 	}
 	return ra

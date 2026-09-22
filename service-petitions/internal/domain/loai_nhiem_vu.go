@@ -40,4 +40,23 @@ type LoaiNhiemVu struct {
 	// picker offering NEW choices filters on this field. Only soft-deleted rows disappear (rule 7,
 	// invariant 2), and they disappear in the store, on every path.
 	DangDung bool
+	// ThuTu is the order the commune arranged its own catalogue in.
+	//
+	// CARRIED BUT NEVER RE-APPLIED. The store's ORDER BY is what puts the rows in order; a caller
+	// sorting on this field again is a second answer to the same question, and the two disagree the
+	// moment two rows share a rank. It is here because the configuration screen shows a `Thứ tự`
+	// column and lets the commune edit it (docs/ui-ux/14-cau-hinh.md:158) — a screen that cannot
+	// read the current value cannot offer to change it.
+	ThuTu int
+
+	// Nguon and MaNguonReNhanh together answer "what may be DONE to this row" — the three-tier
+	// model of ADR 0024 §6, see danh_muc_ba_tang.go. They are DERIVED INTO a tier, never stored as
+	// one: two sources for one fact drift, and the stale one is what a screen would read.
+	//
+	// THE COMMUNE NEVER SUPPLIES EITHER FIELD. The write route sets Nguon to NguonDonVi and leaves
+	// MaNguonReNhanh false, and the store writes both as SQL LITERALS so there is no parameter a
+	// request could reach. Provenance decides the tier; a client that could name it could put its
+	// own row in tier 2 and step around every guard.
+	Nguon          string
+	MaNguonReNhanh bool
 }

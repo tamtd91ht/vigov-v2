@@ -24,6 +24,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-documents/internal/app"
 	"github.com/vihat/vigov/service-documents/internal/domain"
 	svchttp "github.com/vihat/vigov/service-documents/internal/http"
 )
@@ -117,11 +118,20 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:    staffauth.Checker{},
 		LoaiVanBan: kho,
-		Log:        log,
+		// The write use case, built on a *store.DB that is nil. NOTHING IN THIS FILE CALLS IT: what
+		// this test drives is the edge chain in front of the READ route. Register refuses a nil
+		// dependency at construction, so it has to be present — and a use case that is never invoked
+		// cannot dereference the nil handle. The write routes have their own four-case suite in
+		// internal/http, where the store behind them is a fake that records what was written.
+		GhiLoaiVanBan: app.NewDanhMucLoaiVanBan(nil, nil),
+		Log:           log,
 	})
 
 	return &mayChu{
-		h:   dungBien(mux, thuMucGia{hostA: {ID: xaA, Host: hostA, Active: true}, hostB: {ID: xaB, Host: hostB, Active: true}}, pg, log),
+		// A NIL idem.Store IS A VALID DEPLOYMENT and is what runs here: local development with no
+		// Redis. Every route this file exercises is a GET, which declares no duplicate protection
+		// at all, so the store is never consulted.
+		h:   dungBien(mux, thuMucGia{hostA: {ID: xaA, Host: hostA, Active: true}, hostB: {ID: xaB, Host: hostB, Active: true}}, pg, nil, log),
 		kho: kho,
 		pg:  pg,
 	}

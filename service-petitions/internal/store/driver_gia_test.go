@@ -56,6 +56,9 @@ type lenhGia struct {
 type hangGia struct {
 	id, ma, nhan      string
 	macDinh, dangDung bool
+	thuTu             int
+	nguon             string
+	reNhanh           bool
 }
 
 func (h hangGia) giaTri(cot string) driver.Value {
@@ -70,6 +73,15 @@ func (h hangGia) giaTri(cot string) driver.Value {
 		return h.macDinh
 	case "dang_dung":
 		return h.dangDung
+	case "thu_tu":
+		// int64 AND NOT int: database/sql only accepts the driver.Value set, and `int` is not in
+		// it. A fake handing back `int` fails every Scan with a message about conversion rather
+		// than about the column — the kind of noise that gets a fake deleted.
+		return int64(h.thuTu)
+	case "nguon":
+		return h.nguon
+	case "ma_nguon_re_nhanh":
+		return h.reNhanh
 	default:
 		// A column was added to one of the cot… constants and not here. Failing loudly beats
 		// scanning a nil that "passes" while proving nothing.
@@ -249,7 +261,11 @@ func doiCauLenhCoXaVaLoc(t *testing.T, k *khoGia, xa tenant.ID, bang string, tra
 // two BOOLEANs are OPPOSITE: read by position, `ma`/`nhan` and `la_mac_dinh`/`dang_dung` are two
 // pairs of adjacent same-typed columns, and swapping either compiles, runs and is wrong.
 func mauMotDong(id, ma, nhan string) []hangGia {
-	return []hangGia{{id: id, ma: ma, nhan: nhan, macDinh: true, dangDung: false}}
+	// `thu_tu` is deliberately NOT 0 and NOT 1: a zero is indistinguishable from an unscanned
+	// field, and 1 from a length. `nguon`/`ma_nguon_re_nhanh` describe a TIER 3 row — the one
+	// combination whose tier cannot be guessed from either column alone.
+	return []hangGia{{id: id, ma: ma, nhan: nhan, macDinh: true, dangDung: false,
+		thuTu: 7, nguon: "he-thong", reNhanh: true}}
 }
 
 func nhieuDong(n int) []hangGia {
@@ -262,6 +278,8 @@ func nhieuDong(n int) []hangGia {
 			// dangDung true here and false in mauMotDong: neither value may be the one the code
 			// happens to assume.
 			dangDung: true,
+			thuTu:    i,
+			nguon:    "don-vi",
 		})
 	}
 	return ra

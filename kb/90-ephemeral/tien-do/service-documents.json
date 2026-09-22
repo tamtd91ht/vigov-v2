@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-documents",
-  "cap_nhat": "2026-09-21",
+  "cap_nhat": "2026-09-22",
   "muc": [
     {
       "id": "loai-van-ban-tuyen-doc",
@@ -13,13 +13,11 @@
     },
     {
       "id": "loai-van-ban-tuyen-ghi",
-      "viec": "Tuyến GHI danh mục loại văn bản (thêm/sửa/tắt)",
-      "trang_thai": "chua_lam",
-      "bang_chung": "không có tuyến POST/PUT/PATCH/DELETE nào trong service-documents/internal/http/routes.go — kiểm 2026-09-20",
-      "no_confirm": [
-        21
-      ],
-      "tiep_theo": "KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ. Một tuyến ghi viết trước là quyết hộ khách"
+      "viec": "Tuyến GHI danh mục loại văn bản — POST + PATCH + DELETE /api/v1/document-types",
+      "trang_thai": "xong",
+      "bang_chung": "Ba tuyến/danh mục: POST + PATCH + DELETE, quyền `admin.lookup` khai TƯỜNG MINH ở từng câu lệnh route (apidoc từ chối khoá không phải hằng chuỗi, nên không dùng hằng Go). Ghi + vết kiểm toán trong CÙNG một giao dịch — app/danh_muc_*.go mở giao dịch, core/audit.Write nhận *store.ScopedTx nên không có đường ghi vết ngoài giao dịch. `nguon` và `ma_nguon_re_nhanh` là HẰNG trong câu INSERT, không phải tham số; tuyến còn trả 400 khi thân yêu cầu nhắc `source` hoặc `tier`. Xoá là XOÁ MỀM, chỉ tầng 1, bắt buộc có lý do. Tệp: service-documents/internal/{domain/danh_muc_ba_tang.go, store/{loai_van_ban.go,danh_muc_ghi.go}, app/{danh_muc_loai_van_ban.go,danh_muc_chung.go}, http/{loai_van_ban.go,danh_muc_ghi.go,routes.go}}. `go test -count=1 -p 1 ./...` XANH · gofmt · go vet · check_quyen rc=0 · check_brain rc=0 · test_hooks 196/196 · apidoc + ingress đã sinh lại (38 route) — kiểm 2026-09-22. ĐÃ KIỂM BẰNG ĐỘT BIẾN (phục hồi bằng bản chụp tệp, không dùng git restore): (a) bỏ phép từ chối `source` ở handler → TestGhiLoaiVanBanTuChoiNguonTuClient ĐỎ; (a2) biến `nguon` thành tham số $8 của INSERT → TestChenKhongCoThamSoNaoChoNguon ĐỎ; (b) bỏ `deleted_at IS NULL` ở ba câu lệnh → TestDanhSachChiLocDongDaXoaMem + TestMoiDuongDocGhiDeuLoaiDongDaXoaMem ĐỎ; (c) đổi khoá quyền thành `admin.lookup-rac` → TestKhoaQuyenDungChuoiCuaBangQuyen ĐỎ và tools/check_quyen.py rc=1; (d) bỏ audit.Write khỏi Them → ba ca giao dịch ĐỎ.",
+      "no_confirm": [],
+      "tiep_theo": "DÒNG \"KHÔNG viết trước khi khách chốt: xã sửa được DANH SÁCH MÃ hay chỉ NHÃN và THỨ TỰ\" ĐÃ BỊ XOÁ VÌ LẠC HẬU, không vì ai bỏ qua nó. Câu hỏi mở #21 hỏi về danh mục TRẠNG THÁI NHIỆM VỤ — nơi một máy trạng thái cố định đi qua từng mã — chứ không về danh mục này; lược đồ đã tự trả lời bằng TRIGGER (0003_danh_muc_loai_van_ban.sql:72-77 và :157-185, ADR 0024): xã VỪA thêm được mã mới, VỪA đổi được nhãn và thứ tự. CÒN LẠI, và không cái nào là mã: (1) bước GIEO dòng `nguon='he-thong'` — commune onboarding — CHƯA TỒN TẠI trong kho, nên mọi xã vẫn có danh mục RỖNG và tuyến POST là đường duy nhất có dòng nào; ai ghi những dòng đầu tiên và dưới principal nào trong vết kiểm toán (luật 6 bất biến 6) là quyết định của chủ dự án, ghi ở 0003_*.sql:47-52. (2) Trigger `danh_muc_ba_tang` mới chỉ được kiểm là CÓ MẶT: chưa ca nào bắn nó trên PostgreSQL thật, nên tầng ứng dụng đang là thứ DUY NHẤT đã chứng minh từ chối — sàn CSDL thì chưa. (3) Chưa có màn hình nào gọi: web-admin chưa dựng tab Danh mục."
     },
     {
       "id": "xac-thuc-can-bo",

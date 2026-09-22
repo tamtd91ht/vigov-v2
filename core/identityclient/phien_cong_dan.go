@@ -23,17 +23,21 @@ import (
 // session still usable" disagree on the day a session is revoked, and the one that says yes is the
 // one that serves.
 //
-// ⚠ NOTHING HERE WORKS YET, AND THAT IS A DECISION THE USER STILL OWES, NOT A BUG.
-// "/vigov.identity.v1.IdentityService/ResolveCitizenSession" is absent from
-// core/grpcx.methodsWithoutTenant, so grpcx.UnaryClientInterceptor refuses every call below with
-// InvalidArgument BEFORE anything leaves this process — the citizen edge has no commune in context,
-// which is the entire reason this RPC exists. The exemption is the correct answer and it is a STOP
-// CONDITION under ADR 0012 decision 1: adding a second name to that list is the user's call.
+// ⚠ THIS PARAGRAPH USED TO SAY "NOTHING HERE WORKS YET", AND THAT IS NO LONGER TRUE — 2026-09-21.
+// "/vigov.identity.v1.IdentityService/ResolveCitizenSession" WAS absent from
+// core/grpcx.methodsWithoutTenant, so grpcx.UnaryClientInterceptor refused every call below with
+// InvalidArgument before anything left this process. The user was asked — it is a STOP CONDITION
+// under ADR 0012 decision 1 — and answered yes: the name is on that list now
+// (core/grpcx/grpcx.go:177, with the reasoning at :158). The calls below travel.
 //
-// DO NOT ROUTE AROUND IT. The shapes that would "make it work" are all worse than the refusal:
-// putting any commune into the context to satisfy the interceptor is rule 1, forbidden #1 wearing
-// a disguise; dialling a second connection without the interceptor is deleting the isolation check
-// for every call that connection ever makes. State the blocker, do not remove the guard.
+// THE REASON IT IS RECORDED RATHER THAN DELETED: the decision, not the code, is what a reader
+// needs. It also fixes the shape of the NEXT request of this kind — adding a further name there is
+// still the user's call, and the answer for this one does not answer any other (grpcx.go:172).
+//
+// WHAT REMAINS FORBIDDEN, UNCHANGED BY THE EXEMPTION. Putting any commune into the context to
+// satisfy the interceptor is rule 1, forbidden #1 wearing a disguise; dialling a second connection
+// without the interceptor is deleting the isolation check for every call that connection ever
+// makes. Neither was ever the way past the block, and neither becomes acceptable now.
 
 // SoPhienCongDan resolves a citizen bearer token to a session, over gRPC, for a service that does
 // not own the registry. It implements core/httpx.CitizenSessions.

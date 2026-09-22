@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-documents/internal/domain"
 )
 
 // WHAT THIS FILE PROVES, AND WHAT IT DOES NOT — stated first, because a test suite that prints
@@ -59,6 +60,9 @@ type lenhGia struct {
 type hangGia struct {
 	id, ma, nhan      string
 	dangDung, macDinh bool
+	thuTu             int
+	nguon             string
+	reNhanh           bool
 }
 
 func (h hangGia) giaTri(cot string) driver.Value {
@@ -73,6 +77,15 @@ func (h hangGia) giaTri(cot string) driver.Value {
 		return h.dangDung
 	case "la_mac_dinh":
 		return h.macDinh
+	case "thu_tu":
+		// int64 AND NOT int: database/sql only accepts the driver.Value set, and `int` is not in
+		// it. A fake that handed back `int` would fail every Scan with a message about conversion
+		// rather than about the column, which is the kind of noise that gets a fake deleted.
+		return int64(h.thuTu)
+	case "nguon":
+		return h.nguon
+	case "ma_nguon_re_nhanh":
+		return h.reNhanh
 	default:
 		// A column was added to cotLoaiVanBan and not here. Failing loudly beats scanning a nil
 		// that "passes" while proving nothing.
@@ -178,6 +191,10 @@ func mauMotDong() []hangGia {
 		// values would make a swap invisible. This row is the awkward-but-legal combination the
 		// schema allows: a default that has been taken out of use.
 		dangDung: false, macDinh: true,
+		// `thu_tu` is deliberately NOT 0 and NOT 1: a zero would be indistinguishable from an
+		// unscanned field, and 1 from a length. `nguon`/`ma_nguon_re_nhanh` describe a TIER 3 row,
+		// the one combination whose tier cannot be guessed from either column alone.
+		thuTu: 7, nguon: "he-thong", reNhanh: true,
 	}}
 }
 
@@ -189,8 +206,10 @@ func nhieuDong(n int) []hangGia {
 			ma:   fmt.Sprintf("loai-%04d", i),
 			nhan: fmt.Sprintf("Loại %04d", i),
 			// dang_dung true: rows in ordinary use, which is what a commune at its ceiling would
-			// actually hold.
+			// actually hold. `nguon` is the commune's own, which is what a catalogue grows into.
 			dangDung: true,
+			thuTu:    i,
+			nguon:    "don-vi",
 		})
 	}
 	return ra
@@ -312,6 +331,19 @@ func TestDanhSachDocDungTungCot(t *testing.T) {
 	// fixture. Swapped, the screen pre-selects a type the commune has taken out of use.
 	if mot.DangDung || !mot.LaMacDinh {
 		t.Errorf("dang_dung / la_mac_dinh đọc ngược: %+v", mot)
+	}
+	// The three columns the WRITE surface added. `thu_tu` is what the configuration screen edits;
+	// `nguon` and `ma_nguon_re_nhanh` are what decide which buttons that screen may even draw, so a
+	// Scan reading them into the wrong field offers `Xoá` on a row the database will refuse to
+	// delete — a button that always fails, on the one screen an administrator uses to fix things.
+	if mot.ThuTu != 7 {
+		t.Errorf("thu_tu đọc sai: %+v", mot)
+	}
+	if mot.Nguon != "he-thong" || !mot.MaNguonReNhanh {
+		t.Errorf("nguon / ma_nguon_re_nhanh đọc sai: %+v", mot)
+	}
+	if mot.Tang() != domain.TangReNhanh {
+		t.Errorf("tầng suy ra = %d, muốn %d (tầng 3)", mot.Tang(), domain.TangReNhanh)
 	}
 }
 

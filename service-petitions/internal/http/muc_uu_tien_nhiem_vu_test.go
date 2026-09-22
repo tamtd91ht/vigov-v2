@@ -196,14 +196,21 @@ func TestMucUuTienXaChuaCoDongNaoTraMangRong(t *testing.T) {
 
 // --- the contract shape -------------------------------------------------------------------------
 
-func TestMucUuTienChiTraNamTruongCuaHopDong(t *testing.T) {
-	// Same five fields as every other ADR 0024 catalogue in this system, and the same absences —
-	// the list of what is left out, and why, is on the twin of this test in loai_nhiem_vu_test.go.
+func TestMucUuTienChiTraTruongCuaHopDong(t *testing.T) {
+	// The same fields as every other ADR 0024 catalogue in this system, and the same absences — the
+	// list of what is left out, and why, is on the twin of this test in loai_nhiem_vu_test.go.
 	//
-	// ONE ABSENCE IS HEAVIER HERE: `thu_tu`. On a type catalogue the sort key is a display
-	// preference; on a SCALE it is the rank itself, and publishing it would hand a client the
-	// numbers to re-sort by — which is how a priority list ends up rendered in an order that means
-	// nothing while every screen still shows plausible words.
+	// `thu_tu` USED TO BE ABSENT AND THE NOTE HERE ARGUED IT WAS THE HEAVIEST ABSENCE OF ALL: on a
+	// type catalogue the sort key is a display preference, while on a SCALE it IS the rank, so
+	// publishing it hands a client the numbers to re-sort by — and a priority list rendered in an
+	// order that means nothing still shows plausible words on every screen.
+	//
+	// THE ARGUMENT WAS RIGHT AND ITS CONCLUSION IS NOW WRONG, which is worth writing out rather
+	// than deleting. `order` is published because the commune EDITS it: the configuration screen
+	// shows a `Thứ tự` column (docs/ui-ux/14-cau-hinh.md:158) and a screen that cannot read the
+	// current rank cannot offer to change it. What the argument really established is an
+	// instruction to CLIENTS — do not re-sort, the list already arrives in rank order — and that
+	// instruction now lives on the field itself, where a client reading the contract will see it.
 	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongMucUuTien, canBoCuaXa(xaA))
@@ -218,7 +225,10 @@ func TestMucUuTienChiTraNamTruongCuaHopDong(t *testing.T) {
 	if len(tho.Items) == 0 {
 		t.Fatal("không có mục nào để kiểm hình dạng — fixture rỗng thì test này không khẳng định gì")
 	}
-	muon := map[string]bool{"id": true, "code": true, "label": true, "is_default": true, "active": true}
+	muon := map[string]bool{
+		"id": true, "code": true, "label": true, "is_default": true, "active": true,
+		"order": true, "source": true, "tier": true,
+	}
 	for _, mot := range tho.Items {
 		for khoa := range mot {
 			if !muon[khoa] {

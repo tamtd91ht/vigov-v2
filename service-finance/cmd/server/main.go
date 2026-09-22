@@ -18,12 +18,14 @@ import (
 
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/migrate"
 	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/staffauth"
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-finance/internal/app"
 	svchttp "github.com/vihat/vigov/service-finance/internal/http"
 	fistore "github.com/vihat/vigov/service-finance/internal/store"
 	"github.com/vihat/vigov/service-finance/migrations"
@@ -105,18 +107,42 @@ func main() {
 	// against the real clock (Handler.nay). Only tests replace it, so that the delay arithmetic can
 	// be exercised on the first and last days of a budget year.
 	mux := http.NewServeMux()
+	// Idempotency store. An empty REDIS_DSN is a valid deployment — local development with no cache
+	// — and each route then behaves per the CheDoHong it declared. A service must not fail to start
+	// because a cache is absent; the missing cache is already reported by cfg.CanhBao().
+	//
+	// The variable is declared as the INTERFACE and left nil when there is no Redis: assigning a
+	// nil *idem.RedisStore into it would produce a non-nil interface holding a nil pointer, and
+	// idem would call methods on it instead of taking its documented no-cache path.
+	var idemStore idem.Store
+	if cfg.RedisDSN != "" {
+		r, err := idem.NewRedisStore(cfg.RedisDSN.Lo())
+		if err != nil {
+			log.Error("không mở được Redis cho chống trùng thao tác", "err", err)
+			os.Exit(1)
+		}
+		defer r.Close()
+		idemStore = r
+	}
+
+	hangMuc := fistore.NewHangMucKeHoachVonStore(kho)
+
 	svchttp.Register(mux, svchttp.Deps{
 		Checker: staffauth.Checker{},
-		HangMuc: fistore.NewHangMucKeHoachVonStore(kho),
-		DuAn:    fistore.NewDuAnStore(kho),
-		Log:     log,
+		HangMuc: hangMuc,
+		// The write use case owns the transaction the business write and its audit entry share
+		// (rule 6, invariant 3). It is given *store.DB rather than a transaction because opening
+		// one is precisely what it is for.
+		GhiHangMuc: app.NewDanhMucHangMuc(kho, hangMuc),
+		DuAn:       fistore.NewDuAnStore(kho),
+		Log:        log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// The default is this service's own — see config.ListenAddrHoac for why it lives here.
 	addr := cfg.ListenAddrHoac(":8086")
 	log.Info("starting", "service", "finance", "addr", addr)
-	if err := http.ListenAndServe(addr, dungBien(mux, directory, dinhDanh, log)); err != nil {
+	if err := http.ListenAndServe(addr, dungBien(mux, directory, dinhDanh, idemStore, log)); err != nil {
 		log.Error("server stopped", "err", err)
 		os.Exit(1)
 	}
@@ -145,10 +171,16 @@ func main() {
 // resolution it would fail whenever the platform service does, and an orchestrator would then
 // restart a healthy process during somebody else's outage.
 func dungBien(mux http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
-	log *slog.Logger) http.Handler {
+	idemStore idem.Store, log *slog.Logger) http.Handler {
 
 	var h http.Handler = mux
 	h = staffauth.Middleware(dinhDanh, log)(h)
+	// idem.Middleware sits AFTER TenantMiddleware because the idempotency key is prefixed with the
+	// commune (rule 1, invariant 7). Mounted the other way round it would build keys with no
+	// commune in them, so two communes whose clients generate the same key collide — one commune's
+	// request answered with another commune's result, which is a breach between two authorities
+	// through a cache key.
+	h = idem.Middleware(idemStore, log)(h)
 	h = httpx.TenantMiddleware(danhBa)(h)
 	h = httpx.Recover(traceID)(h)
 	h = httpx.StripTenantHeaders(h)

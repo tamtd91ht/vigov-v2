@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-09-21",
+  "cap_nhat": "2026-09-22",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -42,6 +42,14 @@
       "bang_chung": "service-comms/internal/http/routes.go — tuyến khai authz.AnyAuthenticated trong CÙNG câu lệnh; store service-comms/internal/store/loai_tai_nguyen_ban_do.go. `go test -count=1 ./...` xanh — kiểm 2026-09-20",
       "no_confirm": [],
       "tiep_theo": "Tên tài nguyên URL ĐÃ chốt và ô trong ubiquitous-language.md ĐÃ điền (commit 9388eaf) — `grep -c \"(chưa chốt)\"` trả 0. Dòng này từng giao việc ấy cho knowledge-keeper: việc đã xong trước khi ai đọc tới, tức sổ đang đặt hàng một việc thừa. KHÔNG ghi số ca test ở đây: bản cũ chốt một con số, rồi 19c6008 thêm main_test.go cho cả bốn service và mọi con số thành thấp hơn thực tế — sai theo kiểu trông y hệt số đúng."
+    },
+    {
+      "id": "loai-tai-nguyen-ban-do-tuyen-ghi",
+      "viec": "Tuyến GHI danh mục loại tài nguyên bản đồ — POST + PATCH + DELETE /api/v1/map-asset-types",
+      "trang_thai": "xong",
+      "bang_chung": "Ba tuyến/danh mục: POST + PATCH + DELETE, quyền `admin.lookup` khai TƯỜNG MINH ở từng câu lệnh route (apidoc từ chối khoá không phải hằng chuỗi, nên không dùng hằng Go). Ghi + vết kiểm toán trong CÙNG một giao dịch — app/danh_muc_*.go mở giao dịch, core/audit.Write nhận *store.ScopedTx nên không có đường ghi vết ngoài giao dịch. `nguon` và `ma_nguon_re_nhanh` là HẰNG trong câu INSERT, không phải tham số; tuyến còn trả 400 khi thân yêu cầu nhắc `source` hoặc `tier`. Xoá là XOÁ MỀM, chỉ tầng 1, bắt buộc có lý do. Sinh từ ĐÚNG bản mẫu của service-documents (thay định danh, không viết lại). Đột biến (d) chạy lại trên chính dịch vụ này: bỏ audit.Write khỏi Them làm ĐỎ ba ca giao dịch, phục hồi bằng bản chụp tệp. `go test -count=1 -p 1 ./...` XANH — kiểm 2026-09-22.",
+      "no_confirm": [],
+      "tiep_theo": "LƯU Ý RIÊNG CỦA DỊCH VỤ NÀY: mục `dac-ta-ban-do-tu-mau-thuan` vẫn TREO — đặc tả nói 8 mục ở 10-ban-do-kinh-te-so.md:53 và 11 nhóm ở :37. Tuyến ghi KHÔNG giải quyết điều đó và cũng không bị nó chặn: bảng vẫn RỖNG cho mọi xã, và bộ mã xuất xưởng là thứ bước GIEO sẽ ghi chứ không phải tuyến này. CÒN LẠI: (1) bước GIEO dòng `nguon='he-thong'` — commune onboarding — CHƯA TỒN TẠI trong kho; ai ghi những dòng đầu tiên và dưới principal nào trong vết kiểm toán (luật 6 bất biến 6) là quyết định của chủ dự án, ghi ở 0003_*.sql:47-52. (2) Trigger `danh_muc_ba_tang` mới chỉ được kiểm là CÓ MẶT: chưa ca nào bắn nó trên PostgreSQL thật. (3) Chưa có màn hình nào gọi."
     },
     {
       "id": "dac-ta-ban-do-tu-mau-thuan",

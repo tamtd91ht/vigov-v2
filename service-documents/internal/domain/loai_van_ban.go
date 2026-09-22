@@ -36,17 +36,36 @@ type LoaiVanBan struct {
 	// no more than one — and on there being NONE at all, which is the state of every commune until
 	// its catalogue is sown.
 	LaMacDinh bool
+
+	// ThuTu is the order the commune arranged its own catalogue in.
+	//
+	// IT IS CARRIED BUT NEVER RE-APPLIED. The store's ORDER BY is what puts the rows in order; a
+	// caller sorting on this field again is a second answer to the same question, and the two
+	// disagree the moment two rows share a rank. It is here because the configuration screen shows
+	// a `Thứ tự` column and lets the commune edit it (docs/ui-ux/14-cau-hinh.md:158) — a screen
+	// that cannot read the current value cannot offer to change it.
+	ThuTu int
+
+	// Nguon and MaNguonReNhanh together answer "what may be DONE to this row" — the three-tier
+	// model of ADR 0024 §6, see danh_muc_ba_tang.go.
+	//
+	// THEY USED TO BE ABSENT ON PURPOSE, and the comment saying so pointed at open question #21.
+	// That reading is out of date: #21 asks whether a commune may edit the list of TASK STATUS
+	// codes, whose lifecycle a fixed state machine walks; this catalogue's own answer is in the
+	// schema and is enforced by a trigger, not by a promise (migrations/0003_danh_muc_loai_van_ban
+	// .sql:72-77 and :157-185). A commune may add its own codes AND relabel and reorder every row;
+	// what it may not do is delete or disable what the software ships.
+	//
+	// THE COMMUNE NEVER SUPPLIES EITHER FIELD. A write route sets Nguon to NguonDonVi as a literal
+	// and leaves MaNguonReNhanh false; see the comment on the constants.
+	Nguon          string
+	MaNguonReNhanh bool
 }
 
 // WHAT THIS TYPE DELIBERATELY DOES NOT CARRY, so the absence reads as a decision:
 //
-//	thu_tu             the display order. It is applied by the store's ORDER BY and consumed by
-//	                   nobody else; carrying it would invite a caller to re-sort on it, and a
-//	                   second sort is a second answer to the order the commune arranged itself in.
-//	nguon              provenance, and `ma_nguon_re_nhanh` with it. Together they answer "what may
-//	                   be DONE to this row" — the three-tier model (ADR 0024 §6) — which is a
-//	                   question only a WRITE surface asks. There is no write route here, and open
-//	                   question #21 (may a commune edit the code list, or only labels and order)
-//	                   is unanswered, so shipping the tier of each row now would describe a
-//	                   decision nobody has made.
-//	deleted_at         the read never returns a soft-deleted row, so the field would always be nil.
+//	deleted_at         every read path excludes soft-deleted rows (rule 7, invariant 2), so the
+//	                   field would always be nil. The soft delete itself is a write that names the
+//	                   row by id; it never needs to read the column back.
+//	moc_mac_dinh       a GENERATED column. It exists so the database can refuse a second default;
+//	                   it carries no fact LaMacDinh does not already carry.

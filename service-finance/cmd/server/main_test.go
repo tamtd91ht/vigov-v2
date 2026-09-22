@@ -23,6 +23,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-finance/internal/app"
 	"github.com/vihat/vigov/service-finance/internal/domain"
 	svchttp "github.com/vihat/vigov/service-finance/internal/http"
 	fistore "github.com/vihat/vigov/service-finance/internal/store"
@@ -119,15 +120,19 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// ships. This file is about the edge chain — Host -> commune -> principal — and it asserts
 		// on the capital plan catalogue route; a Deps missing a dependency would make Register
 		// refuse to start, which is exactly what it is supposed to do.
-		DuAn: khoDuAnTrong{},
-		Log:  log,
+		// Built on a nil *store.DB. NOTHING IN THIS FILE CALLS IT: this test is about the edge
+		// chain — Host -> commune -> principal — and it asserts on the catalogue READ route.
+		// Register refuses a nil dependency at construction, so it has to be present.
+		GhiHangMuc: app.NewDanhMucHangMuc(nil, nil),
+		DuAn:       khoDuAnTrong{},
+		Log:        log,
 	})
 
 	danhBa := thuMucGia{
 		hostA: {ID: xaA, Host: hostA, Active: true},
 		hostB: {ID: xaB, Host: hostB, Active: true},
 	}
-	return &mayChu{h: dungBien(mux, danhBa, pg, log), kho: kho, pg: pg}
+	return &mayChu{h: dungBien(mux, danhBa, pg, nil, log), kho: kho, pg: pg}
 }
 
 func (m *mayChu) goi(t *testing.T, host, path, phieu string) *httptest.ResponseRecorder {

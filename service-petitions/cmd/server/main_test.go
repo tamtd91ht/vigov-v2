@@ -24,6 +24,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-petitions/internal/app"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 	svchttp "github.com/vihat/vigov/service-petitions/internal/http"
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
@@ -160,18 +161,24 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// The second catalogue this service mounts. It is wired because Register refuses
 		// incomplete Deps at construction, and it is deliberately NOT read by any assertion below:
 		// one route is enough to prove the chain, and two would only be two copies of one test.
-		MucUuTien:   khoUuTien{},
-		Phieu:       khoPhieu{},
-		NhanLinhVuc: khoNhanLinhVuc{},
-		Vet:         vetGia{},
-		Log:         log,
+		MucUuTien: khoUuTien{},
+		// The two catalogue write use cases, built on a nil *store.DB. NOTHING IN THIS FILE CALLS
+		// THEM: this test is about the edge chain — Host -> commune -> principal — and it asserts
+		// on a READ route. Register refuses a nil dependency at construction, so both have to be
+		// present, and a use case that is never invoked cannot dereference the nil handle.
+		GhiLoaiNhiemVu: app.NewDanhMucLoaiNhiemVu(nil, nil),
+		GhiMucUuTien:   app.NewDanhMucMucUuTien(nil, nil),
+		Phieu:          khoPhieu{},
+		NhanLinhVuc:    khoNhanLinhVuc{},
+		Vet:            vetGia{},
+		Log:            log,
 	})
 
 	danhBa := thuMucGia{
 		hostA: {ID: xaA, Host: hostA, Active: true},
 		hostB: {ID: xaB, Host: hostB, Active: true},
 	}
-	return &mayChu{h: dungBien(mux, danhBa, pg, log), kho: kho, pg: pg}
+	return &mayChu{h: dungBien(mux, danhBa, pg, nil, log), kho: kho, pg: pg}
 }
 
 func (m *mayChu) goi(t *testing.T, host, path, phieu string) *httptest.ResponseRecorder {
