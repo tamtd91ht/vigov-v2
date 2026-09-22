@@ -24,7 +24,21 @@ import type { identity_canBoTomTat } from "./schema.gen";
  *   đúng hình dạng `httpx.Error`, nên một lần client dựng sai URL là một test đỏ.
  */
 
-/** Dữ liệu mẫu. Số điện thoại đã che đúng như máy chủ trả — `09****0000` (luật 3). */
+/**
+ * Dữ liệu mẫu.
+ *
+ * HAI SỐ, KHÔNG CHE — và câu chú thích cũ ở đây ("đã che đúng như máy chủ trả — `09****0000`") nay
+ * SAI. Câu mở #11 được khách chốt 22/09/2026: cán bộ cùng một xã KHÔNG bị che số của nhau, vì họ
+ * phải gọi nhau để làm việc; che thì họ truyền số qua kênh riêng và cơ quan mất cả vết lẫn quyền
+ * kiểm soát. Máy chủ nay trả số nguyên vẹn trên bề mặt nội bộ
+ * (`service-identity/internal/http/can_bo.go`, `soRaManHinhNoiBo`).
+ *
+ * HAI TRƯỜNG RIÊNG vì hai địa vị pháp lý khác nhau (#16): `phone` là máy bàn cơ quan — thông tin
+ * công vụ; `mobile` là di động cá nhân — dữ liệu cá nhân theo Nghị định 13. Vật mẫu dùng hai đầu
+ * số KHÁC HẲN NHAU, để một lần lẫn cột là một ca đỏ chứ không phải một ca xanh trùng giá trị.
+ *
+ * Số ở đây là số giả đã thoả thuận của kho (luật 3, bất biến 5), không phải số của người thật.
+ */
 function canBo(n: number, dangNhapGanNhat: string | null): identity_canBoTomTat {
   const so = String(n).padStart(3, "0");
   return {
@@ -35,7 +49,8 @@ function canBo(n: number, dangNhapGanNhat: string | null): identity_canBoTomTat 
     position: "Chuyên viên chuyên môn",
     department_id: "01J0000000000000000BOPHAN",
     role_id: "01J00000000000000000VAITRO",
-    phone: "09****0000",
+    phone: "02350000000",
+    mobile: "0900000000",
     has_account: true,
     active: true,
     last_login_at: dangNhapGanNhat,

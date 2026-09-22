@@ -359,7 +359,12 @@ const NHAN_KHOA: Record<KhoaSapXep, string> = {
   created_at: "Ngày tạo",
 };
 
-function BangCanBo({
+// EXPORTED SO THE TWO PHONE COLUMNS CAN BE PINNED BY A RENDER TEST. The parent reads the API in
+// `useEffect`, which `renderToStaticMarkup` never runs, so rendering it proves nothing about a row.
+// The property being pinned is not cosmetic: merging these two back into one column is a one-line
+// edit that no existing test sees, and it would put duty information and Decree 13 personal data
+// under one label — see the header comment on the columns.
+export function BangCanBo({
   danhSach,
   khoa,
   chieu,
@@ -407,7 +412,17 @@ function BangCanBo({
             */}
             <th scope="col">Bộ phận</th>
             <th scope="col">Vai trò</th>
-            <th scope="col">Điện thoại</th>
+            {/* HAI CỘT, KHÔNG MỘT — và nhãn phải nói rõ loại nào, không phải "Điện thoại" trung
+                tính. Câu mở #16, chốt 22/09/2026: máy bàn cơ quan là THÔNG TIN CÔNG VỤ, di động cá
+                nhân là DỮ LIỆU CÁ NHÂN theo Nghị định 13. Hai địa vị pháp lý khác nhau nghĩa là hai
+                luật che, hai luật xuất Excel, hai luật công khai ra Mini App.
+
+                Một nhãn trung tính là chỗ người sắp bấm nút xuất, hay sắp tick ô công khai, không
+                biết mình đang đụng loại nào — và đó là lúc một số di động cá nhân rời khỏi cơ quan
+                mà không ai định làm thế. Cột này trước 22/09 hiện số CƠ QUAN dưới nhãn trung tính
+                ấy, tức nó còn mập mờ theo cả chiều ngược lại. */}
+            <th scope="col">Máy bàn cơ quan</th>
+            <th scope="col">Di động cá nhân</th>
             <th scope="col">Đăng nhập gần nhất</th>
             <th scope="col">Trạng thái</th>
             <th scope="col">Tài khoản</th>
@@ -437,10 +452,18 @@ function BangCanBo({
               <td>
                 <ODanhMuc ket={traTen(traVaiTro, cb.role_id)} nhan={nhanVaiTro} />
               </td>
-              {/* `phone` LUÔN về đây đã che (`09****0000`) — hiện đúng thứ máy chủ trả, không
-                  ghép lại, không định dạng lại thành `0900 000 001` như ví dụ trong đặc tả: một
-                  số đã che mà định dạng như số thật là mời người đọc tin đó là số thật. */}
+              {/* HAI Ô RIÊNG. Không gộp bằng `phone || mobile` và không nối bằng dấu phẩy: một ô
+                  chứa hai loại số là ô mà mọi luật che, luật xuất và luật công khai về sau phải áp
+                  CHUNG một mức cho hai thứ có địa vị pháp lý khác nhau — và mức an toàn buộc lấy
+                  theo loại nhạy hơn, tức số máy bàn của cơ quan cũng bị che vô cớ.
+
+                  HIỆN NGUYÊN VĂN thứ máy chủ trả, không định dạng lại thành `0900 000 001` như ví
+                  dụ trong đặc tả. Câu chú thích cũ ở đây nói `phone` "LUÔN về đây đã che" — nay
+                  SAI: #11 chốt 22/09/2026 là không che trong nội bộ xã, và máy chủ trả số nguyên
+                  vẹn (`soRaManHinhNoiBo`). Việc che còn nguyên ở bản xuất Excel và ở mọi đường ra
+                  ngoài cơ quan, hai bề mặt chưa tồn tại. */}
               <td>{cb.phone}</td>
+              <td>{cb.mobile}</td>
               <td>{nhanDangNhapGanNhat(cb.last_login_at)}</td>
               <td>
                 <span className={cb.active ? "chip chip-hoat-dong" : "chip chip-ngung"}>
@@ -596,8 +619,12 @@ function KhoiChiTiet({
           <dd>
             <ODanhMuc ket={traTen(traVaiTro, chiTiet.canBo.role_id)} nhan={nhanVaiTro} />
           </dd>
-          <dt>Điện thoại</dt>
+          {/* Cùng lý do như hai cột của bảng: hai địa vị pháp lý khác nhau thì hai nhãn khác nhau,
+              kể cả ở màn chi tiết nơi chỗ hiển thị không thiếu. */}
+          <dt>Máy bàn cơ quan</dt>
           <dd>{chiTiet.canBo.phone}</dd>
+          <dt>Di động cá nhân</dt>
+          <dd>{chiTiet.canBo.mobile}</dd>
           <dt>Đăng nhập gần nhất</dt>
           <dd>{nhanDangNhapGanNhat(chiTiet.canBo.last_login_at)}</dd>
           <dt>Trạng thái</dt>
