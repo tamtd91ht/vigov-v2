@@ -270,7 +270,192 @@ service IdentityService {
   // grows with the data and is invisible in tests — 20 rows, 20 calls; 3.000 rows, 3.000
   // calls and the page stops loading.
   // See .claude/skills/load-data-once/SKILL.md, REQUIRED #4.
+  //
+  // ⚠ THE NAME IN THAT PARAGRAPH IS NOT SERVED HERE, AND IT IS NOT AN OVERSIGHT. `message Staff`
+  // carries no name and must not grow one: ResolveStaffNames below is the ONE path by which a
+  // staff member's name crosses this boundary, and one path is what makes there be one place to
+  // widen, one place to refuse a phone number, and one place to say whether the record is still in
+  // the directory. THIS RPC ANSWERS A DIFFERENT QUESTION — is this id a staff record of this
+  // commune today, and what role does it hold — and its answer is the one a caller may DECIDE
+  // from. A screen needing both asks both; the second call is the price of not merging two
+  // populations behind one predicate.
   rpc BatchGetStaff(BatchGetStaffRequest) returns (BatchGetStaffResponse);
+
+  // ResolveStaffNames turns the staff ids an ALREADY-STORED RECORD carries into names a person can
+  // read — INCLUDING ids whose staff record has since been removed from the commune's directory.
+  //
+  // WHY IT EXISTS, AND IT IS NOT A CONVENIENCE. `audit_log.actor_id` is TEXT with NO foreign key
+  // (service-identity/migrations/0001_init.sql:22), deliberately, so the trail outlives the row it
+  // points at. The ENTRY therefore survives a deletion — and the ability to READ it does not,
+  // because the only thing in this system that turns that id into a person is this service, and
+  // BatchGetStaff answers nothing at all for a soft-deleted id. A 2026 handling sheet opened in
+  // 2029 then shows a ULID where a name belongs, at the exact moment an inspection asks *"ai xử lý
+  // việc này"*. Rule 6, invariant 2 does not break at the deletion; it breaks SILENTLY, years
+  // later, in front of the person who came to check.
+  //
+  // OPEN QUESTION #10, DECIDED 2026-09-22, NAMES THIS PATH AS PART OF THE DECISION rather than as
+  // follow-up work: retiring or transferring a member of staff is a LOCK and they stay in the
+  // directory; a duplicated row is a SOFT DELETE. Two operations — and the second one is what used
+  // to take a name off every record that person had ever touched.
+  //
+  // # IT RESOLVES A NAME. IT DECIDES NOTHING.
+  //
+  // The sentence that has to survive every later edit, and the same discipline ResolveCitizenSession
+  // states for itself. What comes back is for DISPLAY: printing who acted, beside a record the
+  // caller was already entitled to open. No role, no permission, no department, nothing a caller
+  // could route work by.
+  //
+  // A CALLER MUST NOT DECIDE ANYTHING FROM IT — not "this id is valid staff", not "this person can
+  // be assigned", not "this account exists". Deciding from this RPC treats a name that is here
+  // PRECISELY BECAUSE the record was removed as evidence that the record is there. The membership
+  // question has an RPC of its own, with the predicate that belongs to it: BatchGetStaff.
+  //
+  // # WHY A SECOND RPC AND NOT A FLAG — the decision this contract exists to record
+  //
+  // Three shapes were on the table, and the two rejected ones are rejected for reasons that
+  // outlive today's callers:
+  //
+  //   A FLAG (`include_deleted`) ON BatchGetStaff — the cheapest line to write, and it fails
+  //   twice. FIRST, it does not answer the question on its own: `message Staff` carries no name,
+  //   so the flag would have to arrive together with a name ON Staff, and then the ORDINARY path —
+  //   the one an assignee dropdown calls — starts carrying personal data it has no use for.
+  //   SECOND, a flag makes one response mean two things depending on a request field, and `Staff`
+  //   has nowhere to say which it is: a removed record would come back INDISTINGUISHABLE from a
+  //   serving one, so a caller that set the flag "to be safe" would offer a deleted row in a
+  //   dropdown with nothing turning red. ADR 0029 §119 refused the same shape for the same reason
+  //   when ResolveDeadlines could have been a flag on AdvanceWorkingHours, and the property bought
+  //   there is bought again here: A REVIEWER CAN TELL THE TWO CALL SITES APART.
+  //
+  //   A SECOND LIST IN THE RESPONSE (`items` + `removed_items`). It puts the distinction where it
+  //   cannot be missed, and it MOVES the failure rather than removing it: a caller that renders the
+  //   first list and forgets the second drops exactly the name it opened the call for, and the
+  //   archival record renders blank where a person's name belongs. One list, mapped by id, with one
+  //   field that says how to label the name, has no branch to forget.
+  //
+  // WHAT THE SECOND RPC COSTS, STATED: one more method on this service, and a screen needing both
+  // a name and a role now makes two calls. That is real, and it is the smaller cost — the two
+  // calls ask two different questions about two different populations.
+  //
+  // # IT IS A LOOKUP BY AN ID THE CALLER ALREADY HOLDS. IT IS NOT, AND MUST NEVER BECOME, A LIST
+  //
+  // THE QUESTION IS ANSWERED OUT LOUD BECAUSE IT HAS TO BE: "read the names of removed staff" is
+  // one careless field away from "enumerate the people a commune deleted", which would be a new
+  // leak surface built by the fix for an old one.
+  //
+  // FOUR PROPERTIES MAKE IT A LOOKUP, and all four are structural rather than a promise:
+  //
+  //   1. THE REQUEST HAS EXACTLY ONE FIELD AND IT IS A LIST OF IDS. No filter, no cursor, no page
+  //      size, no "since", no name prefix, no department. There is no request this server can
+  //      answer with an id the caller did not already name.
+  //   2. AN EMPTY `ids` ANSWERS EMPTY — never everything. That is the single line a later edit
+  //      could turn a lookup into a listing with, so it is in the contract and not left to the
+  //      implementation.
+  //   3. THE RESPONSE NEVER CARRIES AN ID THAT WAS NOT REQUESTED, and carries no count and no
+  //      cursor from which a caller could learn that anything else exists.
+  //   4. THE IDS ARE ULIDs AND THE ANSWER IS SCOPED BY "x-tenant-id": 80 random bits cannot be
+  //      walked, and an id belonging to another commune is simply absent.
+  //
+  // WHAT IT DOES GIVE, SAID HONESTLY RATHER THAN DENIED: whoever already holds a commune's records
+  // can recover the name of everybody who acted on them, including people whose staff record was
+  // removed. THAT IS WHAT AN ARCHIVAL RECORD IS FOR. What it cannot give is a ROSTER — a person who
+  // appears on no record the caller holds is unreachable through this path, and reading the record
+  // that names an id is itself guarded in the calling service.
+  //
+  // THE LINE THAT MUST NEVER BE CROSSED: no field may be added to the request that is anything but
+  // an id the caller already holds. A predicate here — a date range, a department, "everyone
+  // removed since" — converts this RPC into the listing it was designed not to be, in one line,
+  // with every existing test still green.
+  //
+  // # The commune travels in metadata, and this RPC is not a candidate for exemption
+  //
+  // ONE CALL, ONE COMMUNE. "x-tenant-id" is what makes an id of another commune answer nothing, so
+  // an exemption here would not merely be unnecessary — it is the thing that would open the leak.
+  // The caller always holds it: a screen reading an archival record runs behind an edge that has
+  // already resolved the commune from Host. Putting this method on core/grpcx.methodsWithoutTenant
+  // is a STOP CONDITION in its own right (ADR 0012, decision 1), and that list has exactly two
+  // names.
+  //
+  // # IT RETURNS PERSONAL DATA, AND THREE FIELDS ARE THE WHOLE OF IT
+  //
+  // A member of staff who has left is still a real person, and Decree 13/2023 does not stop
+  // applying to a row somebody deleted. StaffName carries why each field is there, and a longer
+  // list of what is deliberately not.
+  //
+  // THE NAME IS NOT MASKED, and that is open question #11, DECIDED 2026-09-22: inside one commune,
+  // staff data is not masked from staff. THE DECISION'S OWN LIMIT TRAVELS WITH IT — it covers an
+  // INTERNAL SCREEN. An Excel export, or anything leaving the authority, is still masked (rule 3,
+  // invariant 4), and that obligation is the CALLER's: this RPC cannot see which surface its answer
+  // is heading for.
+  //
+  // NEVER LOG THIS RESPONSE. The generated String() prints `full_name` in full, and `debug_redact`
+  // is a no-op in protobuf-go v1.36.12 — measured on 2026-09-20, not assumed. A `%+v` anywhere on
+  // this path puts a commune's staff roster into the log pipeline, from where it cannot be recalled
+  // (rule 3, forbidden #1). Log the id; never the message.
+  //
+  // # Reading this is NOT audited, and that is a decision rather than an omission
+  //
+  // Rule 6, invariant 7 audits reads of FULL personal data. It is not applied here, for two reasons
+  // that would have to stop holding together:
+  //
+  //   THIS SERVICE CANNOT NAME A "WHO". The request carries ids and a commune, and no principal.
+  //   ADR 0025's one shared caller key proves a call came from inside the deployment and never
+  //   WHICH service made it, so an entry written here would carry a system actor and an in-cluster
+  //   address — an entry answering none of the six questions rule 6, invariant 2 asks. The service
+  //   that OPENED THE RECORD holds the principal and the observed address, and that read is where
+  //   the entry belongs, inside that service's own transaction. Same shape as AdvanceWorkingHours:
+  //   the audited act is the caller's, not this hop.
+  //
+  //   IT RUNS AT THE RATE OF PAGE LOADS. One call per screen that shows who did something. An
+  //   entry per call would add rows faster than the writes they exist to make traceable, and bury
+  //   the entries that carry legal weight.
+  //
+  // THE ANSWER CHANGES THE DAY THIS MESSAGE CARRIES A FIELD THAT IS NOT NEEDED TO PRINT A LINE OF
+  // HISTORY — a phone number, an email, a national id. Whoever adds one is opening a full-personal-
+  // data read (rule 3, invariant 3) and owes it a permission key and an audit entry.
+  //
+  // # ONLY STAFF IDS BELONG HERE
+  //
+  // `audit_log.actor_kind` holds "staff", "citizen" or "system" (core/audit.Actor). ONLY the first
+  // is a question this RPC can answer: a citizen is platform-wide and has no `nguoi_dung` row
+  // (ADR 0002), and `system` is not a person at all — the caller renders it itself and does not
+  // call. Sending either costs an absent item, which the caller then has to tell apart from a real
+  // absence. FILTER ON `actor_kind` BEFORE CALLING.
+  //
+  // THIS RPC TAKES THE INTERNAL id — the same value as Staff.id and StaffPrincipal.staff_id. THERE
+  // IS NO LOOKUP BY THE BUSINESS CODE `ma`, AND THE REPOSITORY IS NOT OF ONE MIND ABOUT WHICH OF
+  // THE TWO THE TRAIL HOLDS. State it here rather than discover it from a blank column:
+  //
+  //	MEASURED, TODAY      core/audit/audit.go:89 writes authz.Principal.ID into `actor_id`, and
+  //	                     that is the internal id — StaffPrincipal.staff_id says why it must be
+  //	                     (identity's own grant query matches `nd.id`). The entries asserted in
+  //	                     service-documents/internal/app and service-petitions/internal/app both
+  //	                     pin an internal id.
+  //	ASSUMED, ELSEWHERE   `nguoi_dung.ma`'s own comment calls it "staff code used in the audit
+  //	                     trail" (0001_init.sql:167), and question #15's reasoning — carried into
+  //	                     migration 0009 §4 — keeps `ma` short and non-ULID precisely so a person
+  //	                     reading the trail a year later can look somebody up from it.
+  //
+  // SO THE TWO READINGS DISAGREE AND NEITHER HAS BEEN DECIDED. This contract takes the id because
+  // that is what the writer actually writes today. If the trail is ever changed to store `ma`, the
+  // change to make HERE is additive — a second lookup, named — and it is a question for the user
+  // alongside StaffPrincipal's own open note about carrying `ma`. It is NOT something to guess at
+  // in either direction: an entry whose `actor_id` this RPC cannot resolve renders as a blank on an
+  // archival record, which is the exact defect this RPC exists to close.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more items. FEWER THAN REQUESTED IS ORDINARY, never an error.
+  //   INVALID_ARGUMENT    more than 200 ids in one call. Never a silent truncation, for the reason
+  //                       BatchGetStaffRequest gives: there is no cursor to carry on from, so a
+  //                       clamped batch renders real rows blank with nothing to report it.
+  //   NOT_FOUND           NEVER produced. An id that resolves to nothing is an ABSENT ITEM.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor
+  //                       (ADR 0025) and means the DEPLOYMENT is misconfigured.
+  //   UNAVAILABLE etc.    the call did not happen, and IT IS NOT "no name". A caller that renders
+  //                       an outage as a blank writes an absence onto an administrative record that
+  //                       a person then reads as fact. Say the names could not be loaded, or fail
+  //                       the page.
+  rpc ResolveStaffNames(ResolveStaffNamesRequest) returns (ResolveStaffNamesResponse);
 
   rpc ListCitizenCommunes(ListCitizenCommunesRequest) returns (ListCitizenCommunesResponse);
 
@@ -637,6 +822,14 @@ message Staff {
   // `mat_khau_hash` is deliberately absent and must never be added, in any form, hashed or
   // not (rule 3, rule 8). Nothing outside identity has a reason to see it, and a credential
   // that crosses a service boundary is a credential in somebody else's logs.
+  //
+  // `ho_ten` IS DELIBERATELY ABSENT TOO, AND IT NOW HAS A HOME ELSEWHERE — `StaffName`, answered by
+  // ResolveStaffNames. Open question #11 (decided 2026-09-22) removed the blocker that used to keep
+  // a staff name off every boundary; it did NOT make this the right message for one. This message
+  // is what a caller DECIDES from — is this id a staff record of this commune, what role does it
+  // hold — and it answers only for records still in the directory. A name here would be a second
+  // path by which a staff member's name leaves this service, on a shape that cannot say whether the
+  // record was removed, which is exactly how a departed person ends up rendered as current.
 }
 
 // StaffPrincipal is the authorisation state of one member of staff, at the instant one request
@@ -993,6 +1186,169 @@ message BatchGetStaffResponse {
   // indistinguishable in the response — telling them apart would leak that a record exists
   // in a commune the caller may not read.
   repeated Staff items = 1;
+}
+
+message ResolveStaffNamesRequest {
+  // The staff ids an already-stored record carries. Duplicates are collapsed by the server; order
+  // carries no meaning.
+  //
+  // AT MOST 200 ids per call — the same ceiling as BatchGetStaffRequest, and deliberately the same
+  // NUMBER, so a caller that batches correctly for one batches correctly for both. More is
+  // INVALID_ARGUMENT, never a silent truncation: there is no cursor to carry on from, so a clamped
+  // batch makes real rows render blank with nothing reporting it.
+  //
+  // AN EMPTY LIST IS A VALID REQUEST AND ANSWERS WITH AN EMPTY RESPONSE. It is NOT "give me
+  // everybody", and there is no spelling of this request that means that. It is deliberately not
+  // INVALID_ARGUMENT either: a list page with no rows legitimately produces no ids, so this is an
+  // ordinary call rather than a wiring fault.
+  //
+  // THERE IS NO SECOND FIELD, AND THAT IS THE DESIGN. No date range, no department, no "removed
+  // only", no cursor, no flag. See the RPC comment: a predicate here turns a lookup into a listing,
+  // in one line, with every existing test still green.
+  repeated string ids = 1;
+}
+
+// Wrapped, not a bare repeated StaffName: adding a field later must not change the RPC signature.
+message ResolveStaffNamesResponse {
+  // FEWER ITEMS THAN IDS REQUESTED IS A VALID RESPONSE, and the order is NOT the order of `ids`.
+  // The caller MUST map by StaffName.id. Assuming index alignment, or assuming
+  // len(items) == len(ids), attaches one person's name to another person's record — which in an
+  // administrative file is a falsified record, not a display bug.
+  //
+  // AN ID IS ABSENT when it does not exist, or when it belongs to ANOTHER COMMUNE than the one in
+  // "x-tenant-id". The two stay deliberately indistinguishable, exactly as in
+  // BatchGetStaffResponse: telling them apart would leak that a record exists in a commune the
+  // caller may not read.
+  //
+  // WHAT IS NO LONGER A REASON FOR ABSENCE IS THE WHOLE POINT OF THIS RPC. A soft-deleted record is
+  // ANSWERED here, carrying its name and STAFF_RECORD_STANDING_REMOVED_FROM_DIRECTORY. That single
+  // difference from BatchGetStaffResponse is why this message exists, and widening
+  // BatchGetStaffResponse to match would undo the property that one of the two is safe to decide
+  // from.
+  repeated StaffName items = 1;
+}
+
+// StaffName is what it takes to print ONE person's name beside ONE line of history, and nothing
+// else.
+//
+// NAMED AFTER WHAT IT HOLDS, NOT AFTER THE PERSON — the decision ADR 0023 made for
+// `CitizenIdentity` over `Citizen`, for the same reason. A message called `HistoricalStaff`, or
+// `Actor`, is an open invitation to add `chuc_vu`, `dien_thoai`, `email`, `bo_phan`. A message
+// called `StaffName` makes each of those a sentence somebody has to say out loud first. The name
+// stops nobody adding a field; that is the whole of what a name can do, and it is worth having.
+//
+// EVERY FIELD THAT IS NOT HERE IS ABSENT ON PURPOSE:
+//
+//	dien_thoai, email   Contact details, and NOT NEEDED TO READ A RECORD — which is the entire
+//	                    purpose of this message, and rule 3, invariant 6 gives only the fields
+//	                    actually needed. For somebody who has left the authority they are worse than
+//	                    unnecessary: there is no reason to hold a former employee's contact details
+//	                    open to four more services and their log pipelines. Open question #11
+//	                    unmasked staff contact details on a commune's OWN INTERNAL SCREENS on
+//	                    2026-09-22. It did not put them on this boundary, and it is not read as
+//	                    having done so.
+//	chuc_vu, bo_phan    The position and department AS THEY ARE TODAY — which is precisely not the
+//	                    position the person held when they acted. Printing today's title beside a
+//	                    2026 act states something false about an administrative record, and it is
+//	                    believed because it came from the system. A historical title is a fact the
+//	                    RECORD would have to carry; no lookup can reconstruct it.
+//	roles               An authorisation-adjacent fact with no part in printing a name, and one a
+//	                    caller would eventually decide from. BatchGetStaff carries it for callers
+//	                    asking the membership question.
+//	tenant_id           The caller already holds it: it is the commune it sent in "x-tenant-id", and
+//	                    an id from any other commune is absent from this response. Echoing it back
+//	                    would create a second source for one fact on the isolation path, and a
+//	                    second source is where a disagreement gets settled by guessing.
+//	ma                  The business code. Wanted eventually — an inspector matching this line to a
+//	                    personnel file would use it — and NOT here, because nothing reads it today
+//	                    and a contract records what exists rather than what is planned (ADR 0021).
+//	                    Adding a field later is additive and costs nothing; removing one costs a
+//	                    permanent `reserved`. Whoever adds it names the screen that reads it.
+message StaffName {
+  // Echoed from the request. It is the KEY the caller maps by — never a position.
+  //
+  // THE INTERNAL id: the same value as Staff.id and StaffPrincipal.staff_id, and the same value
+  // `audit_log.actor_id` stores. NOT the business code `ma`.
+  string id = 1;
+
+  // The person's full name, exactly as `nguoi_dung.ho_ten` holds it.
+  //
+  // IT IS PERSONAL DATA (rule 3) and it is here because a record that names nobody answers nothing
+  // when an inspection asks who handled a file. It is the ONE piece of personal data on this
+  // contract, and the RPC comment carries the argument for it.
+  //
+  // `full_name` AND NOT `ho_ten`: the contract surface is English (ADR 0011), and unlike `linh_vuc`
+  // this is not a Vietnamese administrative term with no English equivalent — a person's full name
+  // is the same fact in both languages, so naming it in English asserts nothing.
+  //
+  // NEVER EMPTY IN AN OK RESPONSE. `nguoi_dung.ho_ten` is NOT NULL, so an empty string here is a
+  // contract fault and never "this person has no name" — a caller that renders it as a blank has
+  // printed an unattributed line onto an archival record.
+  string full_name = 2;
+
+  // WHETHER THIS STAFF RECORD IS STILL IN THIS COMMUNE'S DIRECTORY — nothing more.
+  //
+  // WHY THE FIELD EXISTS: without it this RPC is a wider BatchGetStaff, and a caller eventually
+  // decides "this id resolved, so this person can be assigned work" — about a record that resolved
+  // PRECISELY BECAUSE it had been removed.
+  //
+  // READ THE VALUES EXACTLY AS THEY ARE NAMED. They describe the RECORD, not the person's
+  // employment, and that is not pedantry — see StaffRecordStanding for what the data does and does
+  // not hold.
+  //
+  // NEVER UNSPECIFIED IN AN OK RESPONSE. An item with an unspecified standing is a contract fault,
+  // not "we could not find out": the server answers it from one nullable column it has already
+  // read. THE ZERO VALUE IS UNSPECIFIED RATHER THAN A BOOL'S `false` ON PURPOSE — a bool would make
+  // a forgotten assignment silently claim one of the two real answers, and on this field one of
+  // them is a statement about a person, printed on a government screen.
+  StaffRecordStanding standing = 3;
+}
+
+// StaffRecordStanding says whether a staff RECORD is still in its commune's directory. IT DOES NOT
+// SAY WHETHER THE PERSON STILL WORKS THERE, and the distinction is why this enum is worded as it is
+// rather than as "đang công tác / không còn công tác".
+//
+// OPEN QUESTION #10 (decided 2026-09-22) SPLIT ONE BUTTON INTO TWO OPERATIONS: retirement and
+// transfer are a LOCK and the person STAYS in the directory; a duplicated row is a SOFT DELETE. So
+// under that decision a soft-deleted record is a row that should never have existed — and the
+// PERSON named on it may be perfectly current under their other row. Labelling that record "không
+// còn công tác" would state, on a government screen, that somebody had left when they had not.
+//
+// AND FOR OLDER ROWS THE DATA CANNOT TELL THE TWO APART AT ALL. Question #10's own `reversal_cost`
+// records it: before that date there was ONE button, so a deleted row may be a genuine departure or
+// a duplicate, and no column distinguishes them afterwards. An enum naming an employment status
+// would therefore assert a fact the data does not hold — the failure ADR 0023 §2 names, where a
+// status the data cannot support is a status somebody eventually counts.
+//
+// SO THERE ARE TWO VALUES AND NOT THREE. A LOCKED account is IN_DIRECTORY: question #10 decided that
+// somebody who retires is locked and stays listed, and `nguoi_dung.dang_hoat_dong` is ALSO what a
+// temporary suspension sets — one column, two meanings, so it cannot carry a third value here
+// honestly either. What the caller gets is exactly what the data holds: `deleted_at`.
+//
+// THE VALUES ARE IN ENGLISH, unlike WorkKind and DeadlineKind, and ADR 0011's test is what decides
+// it. Those two carry the exact strings a COLUMN stores, so translating them would be a second
+// spelling of a stored value and a lookup on the wrong spelling finds no row. This enum stores
+// nothing — it is derived per request from `deleted_at IS NULL` — so there is no Vietnamese value
+// being translated and no procedure to get wrong. The Vietnamese sentence a screen prints is the
+// CALLER's wording, not this contract's.
+enum StaffRecordStanding {
+  STAFF_RECORD_STANDING_UNSPECIFIED = 0;
+
+  // The record is in this commune's staff directory today.
+  //
+  // IT SAYS NOTHING ABOUT WHETHER THE ACCOUNT IS USABLE. A locked account is still IN the
+  // directory (question #10), and a caller needing "may this person sign in, or be assigned work"
+  // asks BatchGetStaff, whose predicate is the one that answers it.
+  STAFF_RECORD_STANDING_IN_DIRECTORY = 1;
+
+  // The record has been removed from the directory — `nguoi_dung.deleted_at` is set. The row itself
+  // is still there (rule 7: soft delete, never destruction), which is the only reason the name can
+  // be answered at all.
+  //
+  // WHAT A CALLER MAY SAY FROM IT: that this staff RECORD is no longer in the commune's directory.
+  // WHAT IT MAY NOT SAY: that the person left, retired, or was dismissed. See the comment on this
+  // enum for why the data does not support that sentence.
+  STAFF_RECORD_STANDING_REMOVED_FROM_DIRECTORY = 2;
 }
 
 message ListCitizenCommunesRequest { string citizen_id = 1; }

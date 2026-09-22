@@ -4,6 +4,14 @@
   "cap_nhat": "2026-09-22",
   "muc": [
     {
+      "id": "resolve-staff-names",
+      "viec": "RPC để HỒ SƠ CŨ đọc được TÊN một cán bộ, kể cả id đã xoá mềm — đòi hỏi bắt buộc kèm quyết định câu mở #10 (22/09/2026)",
+      "trang_thai": "xong",
+      "bang_chung": "HỢP ĐỒNG XONG, MÁY CHỦ CHƯA — đọc kỹ `tiep_theo`. proto/vigov/identity/v1/identity.proto: rpc ResolveStaffNames + ResolveStaffNamesRequest (MỘT trường `ids`, trần 200) + ResolveStaffNamesResponse + message StaffName (id, full_name, standing) + enum StaffRecordStanding (UNSPECIFIED / IN_DIRECTORY / REMOVED_FROM_DIRECTORY). Vì sao hình dạng này: kb/10-decisions/0034-doc-ten-can-bo-da-xoa-mem.md. TỰ CHẠY 22/09/2026 trên máy Windows: buf lint rc=0 · buf breaking --against '.git#ref=HEAD' rc=0 (THÊM RPC là cộng thêm, không phá) · buf generate rc=0 (core/gen/vigov/identity/v1/identity.pb.go có StaffRecordStanding, ResolveStaffNamesRequest) · gofmt -l . (trừ core/gen) RỖNG · go vet ./core/... rc=0 · go build ./core/... và ./service-identity/... rc=0 · go test -count=1 -p 1 ./core/... TẤT CẢ ok (19 gói). KHÔNG chạm core/grpcx.methodsWithoutTenant — danh sách vẫn ĐÚNG HAI tên (ResolveHost, ResolveCitizenSession), đúng ADR 0012 quyết định 1.",
+      "no_confirm": [],
+      "tiep_theo": "MÁY CHỦ, KHO ĐỌC VÀ BỌC CLIENT CHƯA VIẾT — ranh giới ghi của go-service-builder, không phải của contract-designer (agents/ROUTING.md §3). Cần: (a) một truy vấn kho BÊN CẠNH truyVanCanBoLo, KHÔNG sửa nó — vị từ khác hẳn: BỎ `AND nd.deleted_at IS NULL`, GIỮ `WHERE nd.tenant_id = $1`, chọn thêm ho_ten và deleted_at; nới truyVanCanBoLo là nới ĐƯỜNG ĐANG CHẠY và làm ô chọn người phụ trách mời người đã bị gỡ; (b) handler trong internal/grpc dùng CHUNG Server.xa và locID, trần TranIDMotLo; (c) bọc ở core/identityclient. BỐN CA PHẢI CÓ TEST: id đã xoá mềm TRẢ VỀ TÊN kèm REMOVED_FROM_DIRECTORY · id xã khác KHÔNG trả gì · id đang tại chức trả IN_DIRECTORY (tài khoản bị KHOÁ cũng IN_DIRECTORY — câu #10) · BatchGetStaff VẪN KHÔNG trả id đã xoá (chốt rằng đường cũ không bị nới). ĐỘT BIẾN bắt buộc: bỏ `nd.tenant_id = $1` ở truy vấn MỚI → ca 'id xã khác' phải ĐỎ. CÒN MỞ, KHÔNG ĐƯỢC ĐOÁN: `audit_log.actor_id` hôm nay nhận ID NỘI BỘ (core/audit/audit.go:89 ghi authz.Principal.ID) trong khi chú thích cột nguoi_dung.ma (0001_init.sql:167) và lập luận câu #15 (migration 0009 §4) giả định vết mang `ma` — hai cách đọc mâu thuẫn, chưa ai chọn. Hợp đồng lấy id vì đó là thứ bên ghi đang thật sự ghi; ngày đổi sang `ma` thì thêm lối tra thứ hai là việc CỘNG THÊM và là câu hỏi cho người dùng. Đường này KHÔNG tự ghi vết (lý do đầy đủ ở ADR 0034 và trong chú thích RPC) — service MỞ HỒ SƠ mới ghi, vì chỉ nó cầm principal và địa chỉ thật."
+    },
+    {
       "id": "su-kien-phieu-doi-trang-thai",
       "viec": "Su kien petitions -> comms khi phieu phan anh doi trang thai, de luat 10 bat bien 5 (moi chuyen trang thai deu bao cong dan) co duong chay",
       "trang_thai": "xong",
@@ -14,12 +22,10 @@
     {
       "id": "staff-thieu-ho-ten",
       "viec": "Message Staff không có trường họ tên nên BatchGetStaff chưa phục vụ được mục đích nó tự khai",
-      "trang_thai": "treo",
-      "bang_chung": "",
-      "no_confirm": [
-        11
-      ],
-      "tiep_theo": "thêm trường là SỬA HỢP ĐỒNG — cùng lúc phải trả lời câu che/không che số di động cán bộ. Thêm một chỗ chặn chưa ai nói: trong 33 khoá quyền đã seed KHÔNG có khoá nào nghĩa là 'xem chi tiết đầy đủ cán bộ', nên chọn một khoá cho tuyến ấy là thiết kế hộ khách mô hình phân quyền"
+      "trang_thai": "xong",
+      "bang_chung": "GIẢI BẰNG CÁCH KHÁC CHỨ KHÔNG THÊM TRƯỜNG, và đó là quyết định chứ không phải né: tên người nay đi qua `ResolveStaffNames` → `StaffName` (mục `resolve-staff-names` dưới đây, ADR 0034). `message Staff` CỐ Ý vẫn không mang tên — chú thích mới ở cuối message nói vì sao, và `buf breaking --against '.git#ref=HEAD'` rc=0 chứng minh không đụng gì tới hình dạng cũ. Câu mở #11 đã DECIDED 22/09/2026 (không che trong nội bộ xã) nên chặn cũ được gỡ; chặn 'không có khoá quyền nghĩa là xem đầy đủ cán bộ' KHÔNG bị chạm tới vì đường mới chỉ trả TÊN, không trả liên hệ.",
+      "no_confirm": [],
+      "tiep_theo": "ĐỪNG THÊM `full_name` VÀO `Staff` VỀ SAU. Hai đường mang tên người là hai đường phải cùng nhớ che, cùng nhớ ghi vết, cùng nhớ nói bản ghi đã bị gỡ khỏi danh bạ hay chưa — và `Staff` không có chỗ nói điều cuối, nên một người đã nghỉ sẽ hiện ra như đang tại chức. `Staff` là câu ĐƯỢC PHÉP QUYẾT ĐỊNH THEO (id này có phải cán bộ của xã hôm nay không, vai trò gì); `StaffName` là câu CHỈ ĐỂ HIỂN THỊ."
     },
     {
       "id": "resolve-staff-principal",
