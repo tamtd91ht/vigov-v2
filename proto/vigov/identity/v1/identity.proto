@@ -1223,23 +1223,36 @@ message BatchGetStaffResponse {
 }
 
 message ResolveStaffNamesRequest {
-  // The staff ids an already-stored record carries. Duplicates are collapsed by the server; order
-  // carries no meaning.
+  // THE STAFF CODES an already-stored record carries — `nguoi_dung.ma`, spelled `CB-2026-7K3M9Q`.
+  // Duplicates are collapsed by the server; order carries no meaning.
   //
-  // AT MOST 200 ids per call — the same ceiling as BatchGetStaffRequest, and deliberately the same
-  // NUMBER, so a caller that batches correctly for one batches correctly for both. More is
+  // WHY CODES AND NOT INTERNAL IDS, since this field held `ids` when the contract was first
+  // written on 2026-09-22: this RPC exists to put a name beside a line of an archival record, and
+  // the identifier those lines actually hold is the business code. `audit_log.actor_id` stores
+  // `ma` — decided the same day, rule 6 invariant 8. A lookup keyed on the internal id would have
+  // resolved nothing ever written, which is the one failure this RPC was built to prevent.
+  //
+  // The rename cost nothing because it was made before the first implementation and before the
+  // first consumer; both halves were still unwritten. That window is closed now.
+  //
+  // AT MOST 200 codes per call — the same ceiling as BatchGetStaffRequest, and deliberately the
+  // same NUMBER, so a caller that batches correctly for one batches correctly for both. More is
   // INVALID_ARGUMENT, never a silent truncation: there is no cursor to carry on from, so a clamped
   // batch makes real rows render blank with nothing reporting it.
   //
   // AN EMPTY LIST IS A VALID REQUEST AND ANSWERS WITH AN EMPTY RESPONSE. It is NOT "give me
   // everybody", and there is no spelling of this request that means that. It is deliberately not
-  // INVALID_ARGUMENT either: a list page with no rows legitimately produces no ids, so this is an
-  // ordinary call rather than a wiring fault.
+  // INVALID_ARGUMENT either: a list page with no rows legitimately produces no codes, so this is
+  // an ordinary call rather than a wiring fault.
   //
   // THERE IS NO SECOND FIELD, AND THAT IS THE DESIGN. No date range, no department, no "removed
   // only", no cursor, no flag. See the RPC comment: a predicate here turns a lookup into a listing,
   // in one line, with every existing test still green.
-  repeated string ids = 1;
+  //
+  // `ma` AND NOT `codes`: it is the same string the Phân quyền screen shows and `nguoi_dung.ma`
+  // stores, and StaffPrincipal already spells it `ma` (ADR 0011 keeps the Vietnamese term where
+  // the mapping table has no English one).
+  repeated string ma = 1;
 }
 
 // Wrapped, not a bare repeated StaffName: adding a field later must not change the RPC signature.
@@ -1301,13 +1314,16 @@ message ResolveStaffNamesResponse {
 message StaffName {
   // Echoed from the request. It is the KEY the caller maps by — never a position.
   //
-  // THE INTERNAL id: the same value as Staff.id and StaffPrincipal.staff_id. NOT the business
-  // code `ma`.
+  // THE BUSINESS CODE `nguoi_dung.ma`, the same value `audit_log.actor_id` stores (rule 6,
+  // invariant 8) and the same value StaffPrincipal.ma carries. NOT the internal id: Staff.id and
+  // StaffPrincipal.staff_id are a different identifier with a different job — they decide
+  // AUTHORISATION, this one records RESPONSIBILITY, and a reader of an archival line needs the
+  // second.
   //
-  // ⚠ AND THAT IS NO LONGER THE VALUE `audit_log.actor_id` STORES — the user decided on
-  // 2026-09-22 that the trail holds `ma`. This line used to claim the two were the same. See the
-  // warning block on the RPC above: it has to be settled before this RPC is implemented.
-  string id = 1;
+  // ECHOED SO THE CALLER CAN MAP, and echoed as the SAME KIND of value it sent. A response that
+  // echoed the internal id would force every caller to hold a second table just to join the answer
+  // back onto the line it asked about — and the caller has no way to build that table.
+  string ma = 1;
 
   // The person's full name, exactly as `nguoi_dung.ho_ten` holds it.
   //

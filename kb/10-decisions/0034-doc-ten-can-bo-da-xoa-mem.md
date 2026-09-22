@@ -161,6 +161,44 @@ số điện thoại, email, số định danh. Người thêm trường ấy đ
 3. Đổi chỗ `audit_log.actor_id` lưu từ **id nội bộ** sang **`ma`**, hoặc ngược lại
 4. Cho phép một bên gọi **quyết định** điều gì từ RPC này thay vì chỉ hiển thị
 
+## Bổ sung 22/09/2026 — ĐIỀU KIỆN DỪNG #3 ĐÃ BẬT, và câu trả lời đổi khoá tra cứu
+
+Điều kiện dừng #3 ở trên viết: *"Đổi chỗ `audit_log.actor_id` lưu từ id nội bộ sang `ma`, hoặc
+ngược lại"*. Nó bật **cùng ngày ADR này được viết**, vài giờ sau: người dùng chốt vết kiểm toán
+lưu **mã cán bộ**, và luật 6 nhận bất biến 8.
+
+**Hệ quả: khoá tra cứu của RPC này đổi từ id nội bộ sang `ma`.**
+
+| | Trước | Sau |
+|---|---|---|
+| `ResolveStaffNamesRequest` | `repeated string ids` | `repeated string ma` |
+| `StaffName` | `string id` | `string ma` |
+
+Không phải một lựa chọn phong cách. Một lời tra cứu khoá trên id nội bộ **không phân giải được
+một dòng vết nào đã từng được ghi** — nó sẽ trả *item vắng mặt*, và bên gọi in ra **ô trống trên
+hồ sơ lưu trữ**. Đó đúng là khiếm khuyết ADR này sinh ra để đóng, nên giữ nguyên khoá cũ là để
+lại một RPC trông như đã giải quyết vấn đề mà không giải quyết gì.
+
+**Đổi được rẻ vì cửa sổ còn mở, và cửa sổ ấy nay đóng.** Lúc đổi: chưa có cài đặt máy chủ, chưa
+có kho đọc, chưa có bọc client, và `grep` toàn kho cho `ResolveStaffNames` ngoài `core/gen/` trả
+về **không kết quả nào**. Từ lần cài đặt đầu tiên trở đi, đổi khoá là đổi một hợp đồng có người
+dùng.
+
+**`buf breaking` BÁO ĐÚNG, và không bị làm im.** Nó nêu bốn phát hiện (đổi tên trường và đổi
+`json_name` trên cả hai message), thoát mã 100. Lời biện minh không phải "không sao đâu" mà là một
+sự kiện kiểm được: **không bên tiêu thụ nào tồn tại**. Sau khi commit thì phép kiểm so với HEAD mới
+nên tự xanh lại — nên thứ đáng tin ở đây là phép đếm bên tiêu thụ, không phải màu của cổng.
+
+Ba tính chất chống-liệt-kê ở §"Đường này có thành cách LIỆT KÊ không" **giữ nguyên hiệu lực**:
+yêu cầu vẫn đúng một trường, danh sách rỗng vẫn trả rỗng, phản hồi vẫn không mang khoá chưa được
+hỏi. Đổi khoá không đổi hình dạng. Riêng tính chất thứ tư đổi lập luận chứ không đổi kết luận:
+`ma` **không** phải ULID 80 bit ngẫu nhiên mà là chuỗi ngắn đọc được (`CB-2026-7K3M9Q`, 30 bit từ
+`crypto/rand` — `domain.SinhMaCanBo`), nên nó **dò được dễ hơn id nội bộ**. Thứ chặn liệt kê vẫn
+là ba tính chất kia cộng phép cắt theo `x-tenant-id`, chứ **không** còn là độ khó đoán của khoá —
+ai muốn thêm bộ lọc vào yêu cầu phải biết điều đó.
+
+→ Luật 6 bất biến 8 · `hooks/audit_actor_guard.py` · `tools/check_audit_actor.py`
+
 → Câu mở #10 (hai thao tác: khoá / xoá mềm): `kb/00-foundation/open-questions.json`
 → Câu mở #11 (không che dữ liệu cán bộ trong nội bộ xã — thứ gỡ chặn cho tên người đi qua biên)
 → ADR 0012 (xã đi trong metadata; ba ca vắng mặt cố ý không phân biệt được)
