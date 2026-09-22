@@ -653,13 +653,28 @@ func (b *boSchema) structSchema(st *ast.StructType, ngucanh kieuGo, nghiem bool)
 				ten = nm.Name // documented encoding/json behaviour for `json:",omitempty"`
 			}
 
-			if laBiMat(nm.Name, ten) && !laBool(fld.Type) {
+			lyDoMienTru, coMienTru := mienTruBiMat(fld.Tag)
+			if coMienTru && len(lyDoMienTru) < LY_DO_TOI_THIEU {
+				// REFUSED EVEN THOUGH AN EXEMPTION WAS WRITTEN, and refused on BOTH sides of
+				// `nghiem` — a request shape gets no free pass either. The reason is the entire
+				// mechanism: without it the tag is a way to silence the guard by typing eleven
+				// characters, which is a guard that has been removed with extra steps.
+				return nil, fmt.Errorf(
+					"trường %s (json:%q) khai `apidoc:\"bi-mat-co-chu-y:…\"` nhưng LÝ DO chỉ %d ký tự "+
+						"(cần ít nhất %d). Một miễn trừ không có lý do là một rào chắn bị gỡ bằng đường vòng: "+
+						"viết ra ai đã quyết, ngày nào, và cái giá đã chấp nhận là gì (luật 3, luật 8)",
+					nm.Name, ten, len(lyDoMienTru), LY_DO_TOI_THIEU)
+			}
+
+			if laBiMat(nm.Name, ten) && !laBool(fld.Type) && !coMienTru {
 				if nghiem {
 					return nil, fmt.Errorf(
 						"trường %s (json:%q) mang tên gợi bí mật/dữ liệu cá nhân nhưng không có `json:\"-\"`, "+
 							"và kiểu này nằm trong hình dạng PHẢN HỒI. "+
 							"Một tài liệu công bố hình dạng chứa mật khẩu là tài liệu dạy người ta chờ mật khẩu ở đó "+
-							"(luật 3, luật 8)", nm.Name, ten)
+							"(luật 3, luật 8). Nếu giá trị ấy BẮT BUỘC phải ra — và đó là một quyết định của "+
+							"khách, không phải của người viết mã — hãy khai `apidoc:\"bi-mat-co-chu-y:<lý do>\"`, "+
+							"lý do sẽ được in vào chính hợp đồng", nm.Name, ten)
 				}
 				fmt.Fprintf(os.Stderr,
 					"apidoc: LƯU Ý %s.%s (json:%q) là thông tin nhạy cảm đi VÀO — sinh writeOnly, không bao giờ trả ra\n",
@@ -677,11 +692,19 @@ func (b *boSchema) structSchema(st *ast.StructType, ngucanh kieuGo, nghiem bool)
 			// was: a generator reading `writeOnly` drops the field from the response type, so the
 			// client cannot see the flag, the person is never sent to the change-password screen,
 			// and nothing anywhere turns red. A refusal stops the build; this would have shipped.
-			if laBiMat(nm.Name, ten) && !laBool(fld.Type) {
+			if laBiMat(nm.Name, ten) && !laBool(fld.Type) && !coMienTru {
 				s.set("writeOnly", true)
 			}
 			if c := moTaTruong(fld); c != "" {
 				s.set("description", c)
+			}
+			// THE EXEMPTION'S REASON IS PUBLISHED, and it overwrites the trailing comment rather
+			// than sitting beside it. An exemption must not be a way to make the contract QUIETER
+			// about a credential: the one thing every reader of this shape has to be told is that
+			// a real secret comes back here and who decided that. That sentence outranks whatever
+			// the field's one-line comment said.
+			if coMienTru {
+				s.set("description", "⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — "+lyDoMienTru)
 			}
 			props.set(ten, s)
 			// CÓ MẶT và CÓ THỂ RỖNG là hai sự thật khác nhau, và chỉ `omitempty` quyết định
@@ -714,6 +737,56 @@ func (b *boSchema) structSchema(st *ast.StructType, ngucanh kieuGo, nghiem bool)
 
 // theJSON reads the `json` struct tag. coThe is false when there is no json tag at all — the
 // one case this generator refuses rather than guesses.
+// LY_DO_TOI_THIEU is how short a reason may be before the exemption is refused as undeclared.
+//
+// A number, not a `!= ""` check, and it is the whole point of the mechanism. `apidoc:"bi-mat-co-chu-y:ok"`
+// satisfies a non-empty test and says nothing; six months on, the person deciding whether the
+// field may stay reads "ok" and learns that somebody once typed something. The threshold is low
+// enough that one real sentence clears it and high enough that a placeholder does not.
+const LY_DO_TOI_THIEU = 40
+
+// mienTruBiMat reads the DECLARED exemption from a field's tag and returns its reason.
+//
+//	`apidoc:"bi-mat-co-chu-y:<lý do>"`
+//
+// WHY A TAG AND NOT A LIST IN THIS PACKAGE. An allowlist keyed by type and field name lives two
+// modules away from the field it excuses: renaming the field silently drops the entry, renaming
+// the type silently drops it, and the reason sits where nobody reviewing the handler will read
+// it. The tag cannot drift from the field, because it IS the field — and it appears in the diff
+// of any change to that struct, which is exactly where the question should be asked again.
+//
+// THE REASON IS MANDATORY AND IT IS PUBLISHED. `structSchema` puts it in the schema's
+// `description`, so the exemption is not a way to make the contract quieter about a credential —
+// it makes the contract say out loud that one is there and why. An exemption that hid the field
+// would be the dangerous shape; this one is louder than the refusal it replaces.
+//
+// SETTLED BY THE CUSTOMER 2026-09-22, for `POST /api/v1/staff/{id}/account` and
+// `PUT /api/v1/staff/{id}/password` (open question #9). The rejected alternative was the server
+// sending the value to the staff member's own mobile by ZNS, which is cleaner under rule 3 and
+// needs `service-comms`, a per-commune ZNS key (ADR 0018) and a template decision that does not
+// exist yet. THE COST OF THE CHOSEN SHAPE, STATED RATHER THAN BURIED: the value transits the
+// administrator's browser and any proxy that logs response bodies, and `temporary_password` is
+// now a NAMED field in a committed `openapi.json`. That is a real cost and it was accepted, not
+// overlooked.
+func mienTruBiMat(tag *ast.BasicLit) (lyDo string, co bool) {
+	if tag == nil {
+		return "", false
+	}
+	raw, err := strconv.Unquote(tag.Value)
+	if err != nil {
+		return "", false
+	}
+	v, ok := reflect.StructTag(raw).Lookup("apidoc")
+	if !ok {
+		return "", false
+	}
+	sau, ok := strings.CutPrefix(v, "bi-mat-co-chu-y:")
+	if !ok {
+		return "", false
+	}
+	return strings.TrimSpace(sau), true
+}
+
 func theJSON(tag *ast.BasicLit) (ten string, boQuaKhiRong bool, coThe bool) {
 	if tag == nil {
 		return "", false, false

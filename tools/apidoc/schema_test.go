@@ -246,6 +246,61 @@ type PhanHoi struct {
 	}
 }
 
+// MIỄN TRỪ KHAI TƯỜNG MINH — ba ca, và cả ba đều cần, vì mỗi ca chặn một cách hỏng khác nhau.
+//
+// Ca 1: có lý do đủ dài thì trường ra được hợp đồng. Đây là quyết định của khách ngày 22/09/2026
+// cho `temporary_password` (câu mở #9).
+func TestMienTruCoLyDoThiTruongRaDuocHopDong(t *testing.T) {
+	lyDo := "Mật khẩu tạm dùng MỘT LẦN, khách chốt 22/09/2026 (câu mở #9): quản trị viên đọc lại cho cán bộ."
+	api := "package http\n\ntype PhanHoi struct {\n" +
+		"\tTemporaryPassword string `json:\"temporary_password\" apidoc:\"bi-mat-co-chu-y:" + lyDo + "\"`\n}\n"
+
+	got, err := sinhSchema(t, api, "PhanHoi", true)
+	if err != nil {
+		t.Fatalf("miễn trừ có lý do phải qua được: %v", err)
+	}
+	// BA VẾ, VÀ VẾ THỨ BA LÀ VẾ CHỊU LỰC. Trường phải CÓ MẶT; phải KHÔNG mang `writeOnly` (một
+	// `writeOnly` ở đây nói máy chủ không bao giờ trả nó — đúng ngược sự thật, và bộ sinh sẽ bỏ
+	// trường khỏi kiểu phản hồi); và LÝ DO phải đi vào chính hợp đồng. Thiếu vế thứ ba thì miễn
+	// trừ trở thành cách làm hợp đồng IM HƠN về một bí mật, tức đúng thứ nó không được phép là.
+	if !strings.Contains(got, `"temporary_password"`) {
+		t.Fatalf("trường phải ra tới hợp đồng:\n%s", got)
+	}
+	if strings.Contains(got, "writeOnly") {
+		t.Fatalf("miễn trừ KHÔNG được sinh writeOnly — máy chủ có trả trường này:\n%s", got)
+	}
+	if !strings.Contains(got, "BÍ MẬT ĐI RA, CÓ CHỦ Ý") || !strings.Contains(got, "câu mở #9") {
+		t.Fatalf("lý do phải được in vào hợp đồng, không chỉ nằm trong mã:\n%s", got)
+	}
+}
+
+// Ca 2: lý do cụt thì DỪNG. Không có ca này thì `apidoc:"bi-mat-co-chu-y:x"` là mười ba ký tự để
+// gỡ một rào chắn của luật 3 và luật 8 — một rào chắn bị gỡ bằng đường vòng, không phải một miễn trừ.
+func TestMienTruLyDoCutThiVanDung(t *testing.T) {
+	api := "package http\n\ntype PhanHoi struct {\n" +
+		"\tMatKhauTam string `json:\"temporary_password\" apidoc:\"bi-mat-co-chu-y:ok\"`\n}\n"
+
+	_, err := sinhSchema(t, api, "PhanHoi", true)
+	if err == nil {
+		t.Fatal("mong DỪNG: một miễn trừ không có lý do là rào chắn bị gỡ bằng đường vòng")
+	}
+	if !strings.Contains(err.Error(), "LÝ DO") {
+		t.Fatalf("thông báo phải nói rõ thiếu lý do, được: %v", err)
+	}
+}
+
+// Ca 3: HÌNH DẠNG ĐI VÀO cũng bị soi, và đây là chỗ một bản vá cẩu thả sẽ để hở. Lời từ chối bí mật
+// chỉ áp cho phản hồi (`nghiem`), nên rất dễ viết phép kiểm lý do nằm luôn trong nhánh ấy — và thế
+// thì một thân YÊU CẦU khai miễn trừ rỗng đi qua êm, dựng sẵn thói quen gõ cái thẻ ấy cho xong.
+func TestMienTruLyDoCutBiDungCaTrenHinhDangDiVao(t *testing.T) {
+	api := "package http\n\ntype YeuCau struct {\n" +
+		"\tMatKhau string `json:\"password\" apidoc:\"bi-mat-co-chu-y:\"`\n}\n"
+
+	if _, err := sinhSchema(t, api, "YeuCau", false); err == nil {
+		t.Fatal("mong DỪNG kể cả ở hình dạng chỉ đi vào — phép kiểm lý do không được nằm trong nhánh `nghiem`")
+	}
+}
+
 // json:"-" is the sanctioned way out, and it must actually work.
 func TestBiMatCoJsonGachNganThiQua(t *testing.T) {
 	api := `package http
