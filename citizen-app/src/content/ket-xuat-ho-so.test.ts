@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
 
+import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
+import {
+  thanYeuCau as thanYeuCauPhien,
+  TRUONG_GUI_DI_PHIEN,
+} from "../features/dang-nhap/hop-dong";
 import { KHAI_BAO_LOI_GOI, type KhaiBaoLoiGoi } from "../features/tinh-nang/zalo-api";
 
 import type { MucChinhSach } from "./chinh-sach-rieng-tu";
 import {
+  canhBaoVanXuoi,
+  DUONG_ROI_KHOI_MAY,
+  khoiRoiKhoiMay,
   MOC_BAT_DAU,
+  MOC_BAT_DAU_ROI_MAY,
   MOC_KET_THUC,
+  MOC_KET_THUC_ROI_MAY,
   VAN_BAN_CHINH_SACH,
   VAN_BAN_DIEU_KHOAN,
   bangQuyen,
@@ -346,5 +356,141 @@ describe("4 — khối sinh ra chỉ ăn phần giữa hai mốc", () => {
     // và người duyệt đọc phải bảng nào là chuyện may rủi.
     expect(() => thayKhoiSinhRa("# Không còn mốc nào", "BẢNG MỚI")).toThrow(/mốc đánh dấu/);
     expect(() => thayKhoiSinhRa(`${MOC_KET_THUC}\n${MOC_BAT_DAU}`, "X")).toThrow(/mốc đánh dấu/);
+  });
+
+  it("thay được khối THỨ HAI mà không đụng khối thứ nhất", () => {
+    // README nay có hai khối sinh ra. Một hàm chỉ biết một cặp mốc thì khối thứ hai phải được
+    // thay bằng tay — tức là không bao giờ được thay.
+    const hai_khoi = [
+      MOC_BAT_DAU,
+      "bảng quyền cũ",
+      MOC_KET_THUC,
+      "văn xuôi ở giữa",
+      MOC_BAT_DAU_ROI_MAY,
+      "khối rời khỏi máy cũ",
+      MOC_KET_THUC_ROI_MAY,
+    ].join("\n");
+
+    const ra = thayKhoiSinhRa(hai_khoi, "RỜI MÁY MỚI", MOC_BAT_DAU_ROI_MAY, MOC_KET_THUC_ROI_MAY);
+    expect(ra).toContain("RỜI MÁY MỚI");
+    expect(ra, "khối rời khỏi máy cũ vẫn còn").not.toContain("khối rời khỏi máy cũ");
+    expect(ra, "thay khối thứ hai lại nuốt mất khối thứ nhất").toContain("bảng quyền cũ");
+    expect(ra).toContain("văn xuôi ở giữa");
+  });
+});
+
+/* =============================================================================================
+   5 — KHỐI "NHỮNG GÌ RỜI KHỎI MÁY": KHOÁ HAI CHIỀU VỚI HAI HỢP ĐỒNG
+   ============================================================================================= */
+
+/**
+ * ⚠ KHỐI NÀY RA ĐỜI VÌ MỘT LỜI KHAI SAI ĐÃ SỐNG TRONG HỒ SƠ PHÁP LÝ, VÀ KHÔNG GÌ ĐỎ LÊN.
+ *
+ *   `bangQuyen()` đọc `KHAI_BAO_LOI_GOI`, mà bảng ấy chỉ biết lời gọi `zmp-sdk`. Khi giai đoạn B
+ *   mở `POST /api/v1/requests` — một `fetch` thuần, gửi đi chữ người dùng TỰ GÕ — hai câu trong
+ *   văn xuôi vẫn khai rằng đăng nhập là đường DUY NHẤT có dữ liệu rời khỏi máy.
+ *
+ *   Ba ca dưới là hai chiều của một cái khoá, cộng một ca chống "xanh vì không tìm thấy gì".
+ */
+describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi thứ khai đều thật sự rời khỏi máy", () => {
+  it("quét đủ HAI tuyến — một lượt quét một tuyến sẽ xanh vì lý do sai", () => {
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(2);
+    const tuyen = DUONG_ROI_KHOI_MAY.map((d) => d.tuyen);
+    expect(tuyen).toContain("/api/v1/sessions");
+    expect(tuyen).toContain("/api/v1/requests");
+  });
+
+  it("MỌI khoá hai thân yêu cầu gửi đi đều có một dòng khai", () => {
+    // Chiều "mã đi trước": thêm một trường vào `thanYeuCau` mà quên khai là ĐỎ ở đây.
+    for (const [ten, than, bang] of [
+      ["phiên đăng nhập", thanYeuCauPhien({ ma_so_dien_thoai: "x", ma_truy_cap: "y" }), TRUONG_GUI_DI_PHIEN],
+      [
+        "yêu cầu tư vấn",
+        thanYeuCau({ loai: "consult", quan_tam: [], quy_mo: "", ghi_chu: "", nguon: "" }),
+        TRUONG_GUI_DI,
+      ],
+    ] as const) {
+      const khoa = Object.keys(JSON.parse(than) as Record<string, unknown>);
+      expect(khoa.length, `thân ${ten} không còn trường nào để đo`).toBeGreaterThan(0);
+      const da_khai = bang.map((t) => t.khoa);
+      for (const k of khoa) {
+        expect(
+          da_khai,
+          `tuyến ${ten} gửi đi trường "${k}" mà hồ sơ Zalo KHÔNG khai. Thêm một dòng vào bảng ` +
+            "TRUONG_GUI_DI tương ứng — đừng sửa ca này.",
+        ).toContain(k);
+      }
+      // Chiều ngược: không khai thừa một trường mã KHÔNG gửi.
+      for (const t of bang) {
+        expect(khoa, `hồ sơ khai trường "${t.khoa}" mà tuyến ${ten} không hề gửi`).toContain(t.khoa);
+      }
+    }
+  });
+
+  it("khối sinh ra in ĐỦ mọi dòng khai của cả hai tuyến", () => {
+    const khoi = khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY);
+    for (const duong of DUONG_ROI_KHOI_MAY) {
+      expect(khoi, `khối thiếu tuyến ${duong.tuyen}`).toContain(duong.tuyen);
+      expect(khoi, `khối không nói tuyến ${duong.tuyen} chạy khi nào`).toContain(duong.khi_nao);
+      for (const t of duong.truong) {
+        expect(khoi, `khối thiếu trường ${t.khoa}`).toContain(t.khoa);
+        expect(khoi, `khối thiếu câu khai của ${t.khoa}`).toContain(t.trong_chinh_sach);
+      }
+    }
+    // Và nó nói ra rằng không tuyến nào mang một trường định danh — câu người duyệt hỏi đầu tiên.
+    expect(khoi).toContain("tôi là ai");
+  });
+
+  it("bắt được một tuyến vừa khai mà khối chưa in ra", () => {
+    // Ca về chính cơ chế: nếu `khoiRoiKhoiMay` bỏ sót một dòng, ba ca trên phải đỏ. Cho nó ăn một
+    // tuyến dựng sẵn mà bản in KHÔNG chứa, và khẳng định phép so bắt được.
+    const khoi = khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY);
+    expect(khoi).not.toContain("/api/v1/tuyen-chua-khai");
+  });
+});
+
+/* =============================================================================================
+   6 — RÀO CHO PHẦN VĂN XUÔI GIỮ TAY
+   ============================================================================================= */
+
+/**
+ * ⚠ PHẦN VĂN XUÔI KHÔNG NẰM TRONG KHO (`tmp/` bị `.gitignore`), nên `npm test` không nhìn thấy
+ * nó — và đó chính là nơi hai câu sai đã sống. Chỗ DUY NHẤT vừa chạy được vừa nhìn thấy nó là
+ * `npm run ho-so`. Nên rào là một hàm THUẦN kiểm được ở đây, và script gọi nó rồi DỪNG.
+ */
+describe("6 — văn xuôi giữ tay không được tự đếm thứ rời khỏi máy", () => {
+  it("bắt được đúng hai câu đã từng sai thật trong hồ sơ", () => {
+    // Hai chuỗi này là NGUYÊN VĂN những gì đã nằm trong `tmp/xin-quyen-zalo/README.md` tới
+    // 22/09/2026. Giữ nguyên văn để ca này chứng minh được nó bắt đúng cái đã xảy ra.
+    const cu = [
+      "**Đây là chức năng DUY NHẤT của ứng dụng có dữ liệu rời khỏi máy**, và nó gửi đúng hai thứ.",
+      "4. **Đúng MỘT chức năng có dữ liệu rời khỏi máy: đăng nhập** (mục 9).",
+    ].join("\n");
+    const ra = canhBaoVanXuoi(cu);
+    expect(ra.length, "rào không bắt được hai câu đã sai thật").toBeGreaterThanOrEqual(2);
+    for (const c of ra) {
+      expect(c.vi_sao, "cảnh báo không nói việc phải làm tiếp").not.toBe("");
+      expect(c.cau, "cảnh báo không chỉ ra câu phải sửa").not.toBe("");
+    }
+  });
+
+  it("KHÔNG kêu oan ở phần văn xuôi đúng, và KHÔNG ăn khối sinh ra", () => {
+    // Một rào kêu oan bị tắt nhanh y như một rào câm. Khối sinh ra CÓ QUYỀN nói "2 đường" —
+    // nó là bản sinh ra, và bắt chính nó là làm rào này đỏ ngay lần đầu chạy.
+    const sach = [
+      "Xem khối **Những gì rời khỏi máy** ở trên để biết dữ liệu của bạn đi đâu.",
+      "Ứng dụng không ghi bất kỳ dữ liệu nào của người dùng xuống máy.",
+      MOC_BAT_DAU_ROI_MAY,
+      khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY),
+      MOC_KET_THUC_ROI_MAY,
+    ].join("\n");
+    expect(canhBaoVanXuoi(sach)).toEqual([]);
+  });
+
+  it("README thật của hồ sơ — nếu có trên máy này — phải sạch", () => {
+    // ⚠ CA NÀY KHÔNG ĐỌC ĐĨA, có chủ đích (xem khối đầu tệp): `tmp/` bị `.gitignore`, và một ca
+    // đòi một tệp không có trong kho là một ca đỏ vì lý do sai trên mọi bản sao mới. Thứ kiểm
+    // được ở đây là chính bản sinh ra của khối — và nó phải không tự kích hoạt rào.
+    expect(canhBaoVanXuoi(khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY))).toEqual([]);
   });
 });

@@ -480,8 +480,11 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
  * Nghị định 13 buộc nói ra. Số quyền phải xin ở Developer Console vẫn là CHÍN.
  */
 export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
-  "Số điện thoại (getPhoneNumber) — để bạn đăng nhập bằng một lần chạm, và để gửi thông báo ZNS tới đúng số ấy. Ứng dụng chỉ nhận một mã, không nhận số.",
-  "Thông tin xác thực phiên Zalo (getAccessToken) — mã này cho biết bạn là người dùng Zalo nào đối với riêng ứng dụng này. Nó đi cùng mã số điện thoại ở bước đăng nhập, và không cho ứng dụng biết tên hay ảnh đại diện của bạn.",
+  // ⚠ HAI CÂU NÀY RỘNG RA 22/09/2026, CÙNG LÚC VỚI `KHAI_BAO_LOI_GOI`. Phiên đăng nhập nay còn là
+  // CỬA VÀO màn "Tư vấn và báo giá" và màn "Yêu cầu của tôi". Người đã đồng ý cho "đăng nhập +
+  // ZNS" chưa đồng ý cho "gửi yêu cầu tư vấn", và câu khai từng quyền là chỗ họ đọc điều đó.
+  "Số điện thoại (getPhoneNumber) — để bạn đăng nhập bằng một lần chạm; để gửi thông báo ZNS tới đúng số ấy; và để chúng tôi gọi lại đúng số ấy nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá. Ứng dụng chỉ nhận một mã, không nhận số.",
+  "Thông tin xác thực phiên Zalo (getAccessToken) — mã này cho biết bạn là người dùng Zalo nào đối với riêng ứng dụng này. Nó đi cùng mã số điện thoại ở bước đăng nhập, và không cho ứng dụng biết tên hay ảnh đại diện của bạn. Phiên mở ra từ hai mã ấy là thứ cho bạn gửi yêu cầu tư vấn và chỉ xem được yêu cầu của chính mình.",
   "Vị trí (getLocation) — để chỉ ra văn phòng gần bạn. Ứng dụng chỉ nhận một mã, không nhận toạ độ.",
   "Quét mã QR (scanQRCode) — để đọc danh thiếp số của đối tác.",
   "Kiểu kết nối mạng (getNetworkType) — để cho bạn biết cuộc gọi sắp tới đi qua Wi-Fi hay mạng di động.",

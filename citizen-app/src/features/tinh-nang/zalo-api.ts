@@ -201,12 +201,28 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     roi_khoi_may: "",
   },
   {
+    /**
+     * ⚠ MỤC ĐÍCH CỦA HAI DÒNG ĐĂNG NHẬP ĐÃ RỘNG RA — 22/09/2026, giai đoạn B. ĐÂY LÀ LẦN THỨ HAI.
+     *
+     *   Lần thứ nhất (20/09): "gọi lại tư vấn" → "định danh + nhận ZNS" (ADR 0020).
+     *   Lần thứ hai (22/09): phiên đăng nhập nay còn là CỬA VÀO hai màn mới — "Tư vấn và báo giá"
+     *   và "Yêu cầu của tôi". Không đăng nhập thì không gửi được yêu cầu nào và không đọc được
+     *   yêu cầu nào.
+     *
+     *   Người đã đồng ý cho việc thứ nhất CHƯA đồng ý cho việc thứ hai, và câu `de_lam_gi` là câu
+     *   chính ứng dụng nói với họ — nó phải kể đủ, chứ không phải kể phần dễ nghe. Đây cũng là câu
+     *   người duyệt của Zalo đối chiếu với màn hình thật.
+     *
+     * `man` GIỮ "Liên hệ": chỉ `KhoiDangNhap` gọi hai API này, và khối ấy vẫn nằm trên màn Liên
+     * hệ. Hai màn mới KHÔNG gọi chúng — chúng chỉ ĐỌC phiếu phiên đã phát hành. Ghi "Liên hệ ·
+     * Tư vấn" ở đây là khai sai chỗ lời gọi chạy, và người duyệt sẽ đi tìm một nút không có ở đó.
+     */
     api: "getAccessToken",
     nua: "ca-hai",
     man: "Liên hệ",
     tinh_nang: "Đăng nhập bằng số Zalo",
     de_lam_gi:
-      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng.",
+      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập.",
   },
@@ -216,7 +232,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     man: "Liên hệ",
     tinh_nang: "Đăng nhập bằng số Zalo",
     de_lam_gi:
-      "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ đổi được mã thành số.",
+      "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ đổi được mã thành số. Số ấy làm tên đăng nhập của bạn, là nơi nhận thông báo ZNS, và là số chúng tôi gọi lại nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá.",
     hoi_nguoi_dung: true,
     roi_khoi_may: "Mã số điện thoại được gửi tới máy chủ để phát hành phiên đăng nhập.",
   },

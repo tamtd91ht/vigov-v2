@@ -108,12 +108,41 @@ async function main() {
     // từ mã nguồn. Sinh ra nó là bịa; xoá nó là làm hồ sơ mất phần người duyệt cần nhất.
     const duong_dan_readme = resolve(THU_MUC_HO_SO, "README.md");
     const readme_cu = await readFile(duong_dan_readme, "utf8");
+
+    // HAI KHỐI SINH RA, THAY LẦN LƯỢT. Khối thứ hai ("Những gì rời khỏi máy") thêm 22/09/2026:
+    // bảng quyền đọc `KHAI_BAO_LOI_GOI`, mà bảng ấy chỉ biết lời gọi `zmp-sdk` — một `fetch` thuần
+    // vô hình với nó, và đó là cái lỗ đã để một lời khai sai sống trong hồ sơ.
     const readme_moi = datDongBao(
-      ket_xuat.thayKhoiSinhRa(readme_cu, ket_xuat.bangQuyen(zalo_api.KHAI_BAO_LOI_GOI)),
+      ket_xuat.thayKhoiSinhRa(
+        ket_xuat.thayKhoiSinhRa(readme_cu, ket_xuat.bangQuyen(zalo_api.KHAI_BAO_LOI_GOI)),
+        ket_xuat.khoiRoiKhoiMay(ket_xuat.DUONG_ROI_KHOI_MAY),
+        ket_xuat.MOC_BAT_DAU_ROI_MAY,
+        ket_xuat.MOC_KET_THUC_ROI_MAY,
+      ),
     );
+
+    /**
+     * RÀO CHO PHẦN VĂN XUÔI GIỮ TAY — QUÉT TRƯỚC KHI GHI, VÀ DỪNG HẲN NẾU BẨN.
+     *
+     * Phần văn xuôi không nằm trong kho (`tmp/` bị `.gitignore`), nên không một `npm test` nào
+     * nhìn thấy nó. Chỗ DUY NHẤT vừa chạy được vừa nhìn thấy nó là đúng lệnh này. Ghi tệp rồi mới
+     * cảnh báo thì hồ sơ bẩn đã nằm trên đĩa và sẵn sàng để ai đó nộp; nên quét TRƯỚC khi ghi.
+     */
+    const canh_bao = ket_xuat.canhBaoVanXuoi(readme_moi);
+    if (canh_bao.length > 0) {
+      const ke = canh_bao
+        .map((c, i) => `  ${i + 1}. "${c.cau}"\n     → ${c.vi_sao}`)
+        .join("\n");
+      throw new Error(
+        `Phần văn xuôi giữ tay của README hồ sơ đang khai SAI về dữ liệu rời khỏi máy.\n` +
+          `${duongDanNgan(duong_dan_readme)} — ${canh_bao.length} chỗ phải sửa:\n${ke}\n\n` +
+          `Hồ sơ KHÔNG được ghi lại. Sửa những câu trên rồi chạy lại.`,
+      );
+    }
+
     await writeFile(duong_dan_readme, readme_moi, "utf8");
     da_ghi.push(
-      `${duongDanNgan(duong_dan_readme)}  <- citizen-app/src/features/tinh-nang/zalo-api.ts (chỉ phần giữa hai mốc)`,
+      `${duongDanNgan(duong_dan_readme)}  <- zalo-api.ts + hop-dong.ts + hop-dong-yeu-cau.ts (hai khối sinh ra)`,
     );
 
     console.log("Đã sinh hồ sơ nộp Zalo:");

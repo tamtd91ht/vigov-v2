@@ -35,6 +35,7 @@
  * → `.claude/skills/zalo-miniapp-multi-tenant` §"The API host is singular".
  */
 import { diaChiApi } from "../../api/dia-chi";
+import type { TruongGuiDi } from "../../api/hop-dong-yeu-cau";
 
 import type { MaDangNhap } from "../tinh-nang/zalo-api";
 
@@ -75,6 +76,37 @@ export type Phien = {
 export function diaChiPhien(): string {
   return diaChiApi(DUONG_DAN_PHIEN);
 }
+
+/**
+ * HAI THỨ TUYẾN NÀY ĐƯA RA KHỎI MÁY — và câu khai từng thứ, cho hồ sơ nộp Zalo.
+ *
+ * ⚠ BẢNG NÀY RA ĐỜI 22/09/2026 VÌ MỘT CÂU SAI ĐÃ LỌT VÀO HỒ SƠ PHÁP LÝ.
+ *
+ *   `tmp/xin-quyen-zalo/README.md` khai *"Đây là chức năng DUY NHẤT của ứng dụng có dữ liệu rời
+ *   khỏi máy"*. Câu ấy đúng cho tới giai đoạn B, rồi thành SAI — và không một phép kiểm nào đỏ
+ *   lên, vì bảng sinh ra của hồ sơ đọc `KHAI_BAO_LOI_GOI`, mà bảng ấy **chỉ biết lời gọi
+ *   `zmp-sdk`**. Một `fetch` thuần vô hình với nó.
+ *
+ *   Nên "thứ gì rời khỏi máy" nay là một BẢNG, không phải một câu văn xuôi: tuyến này khai hai
+ *   dòng dưới đây, tuyến yêu cầu khai `TRUONG_GUI_DI` (`api/hop-dong-yeu-cau.ts`), và
+ *   `content/ket-xuat-ho-so.ts` sinh ra khối "Những gì rời khỏi máy" từ cả hai.
+ *
+ * ⚠ KHOÁ HAI CHIỀU với `thanYeuCau` ngay dưới, đúng cơ chế của chính sách quyền riêng tư: mọi
+ * khoá hàm ấy sinh ra phải có một dòng ở đây, và mọi dòng ở đây phải là một khoá hàm ấy sinh ra.
+ * `ket-xuat-ho-so.test.ts` giữ cả hai chiều.
+ */
+export const TRUONG_GUI_DI_PHIEN: readonly TruongGuiDi[] = [
+  {
+    khoa: "accessToken",
+    trong_chinh_sach:
+      "mã phiên Zalo của bạn — cho biết bạn là tài khoản Zalo nào đối với riêng ứng dụng này, và KHÔNG chứa tên hay ảnh đại diện",
+  },
+  {
+    khoa: "phoneToken",
+    trong_chinh_sach:
+      "mã số điện thoại do Zalo cấp sau khi bạn đồng ý — SỐ ĐIỆN THOẠI KHÔNG NẰM TRONG MÃ NÀY, chỉ máy chủ đổi được mã thành số",
+  },
+];
 
 /**
  * Hai mã của Zalo → thân yêu cầu đúng khuôn của máy chủ.
