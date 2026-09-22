@@ -54,6 +54,20 @@
       "source": "service-finance/migrations/0004_du_an_va_chung_tu_giai_ngan.sql:258"
     },
     {
+      "entity": "DocumentNumberSeries",
+      "service": "documents",
+      "scope": "tenant",
+      "table": "day_so_van_ban",
+      "source": "service-documents/migrations/0004_so_van_ban.sql:196"
+    },
+    {
+      "entity": "DocumentRouting",
+      "service": "documents",
+      "scope": "tenant",
+      "table": "lich_su_chuyen_van_ban",
+      "source": "service-documents/migrations/0004_so_van_ban.sql:480"
+    },
+    {
       "entity": "DocumentType",
       "service": "documents",
       "scope": "tenant",
@@ -61,11 +75,25 @@
       "source": "service-documents/migrations/0003_danh_muc_loai_van_ban.sql:190"
     },
     {
+      "entity": "IncomingDocument",
+      "service": "documents",
+      "scope": "tenant",
+      "table": "van_ban_den",
+      "source": "service-documents/migrations/0004_so_van_ban.sql:290"
+    },
+    {
       "entity": "MapAssetType",
       "service": "comms",
       "scope": "tenant",
       "table": "loai_tai_nguyen_ban_do",
       "source": "service-comms/migrations/0003_danh_muc_loai_tai_nguyen_ban_do.sql:205"
+    },
+    {
+      "entity": "OutgoingDocument",
+      "service": "documents",
+      "scope": "tenant",
+      "table": "van_ban_di",
+      "source": "service-documents/migrations/0004_so_van_ban.sql:406"
     },
     {
       "entity": "Petition",
