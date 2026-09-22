@@ -149,6 +149,27 @@ type (
 		DoiVaiTro(ctx context.Context, id, vaiTroID string, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
 	}
 
+	// SLADoc reads the commune's processing-deadline table, for GET /api/v1/sla.
+	//
+	// SEPARATE FROM SLAGhi although one *idstore.SLAStore sits behind both in production, and the
+	// split is the same one CanBoDanhBa / CanBoGhiDanhBa makes: the read is a STORE, the write is a
+	// USE CASE, because every write opens the transaction its audit entry shares (rule 6,
+	// invariant 3). One interface would let a future handler call a write with no transaction in
+	// sight.
+	SLADoc interface {
+		DanhSach(ctx context.Context) ([]domain.DongSLA, error)
+	}
+
+	// SLAGhi is the WRITE surface of the deadline table: PATCH /api/v1/sla/{id} and
+	// POST /api/v1/sla/defaults. A use case, not a store.
+	//
+	// NEITHER METHOD TAKES A FIELD CODE, and that is what keeps these routes clear of ADR 0026
+	// stop condition #2 — see internal/http/sla.go and internal/store/sla_ghi.go.
+	SLAGhi interface {
+		Sua(ctx context.Context, id string, yc app.YeuCauSuaSLA, nguoi app.NguoiThucHien) (domain.DongSLA, error)
+		GieoMacDinh(ctx context.Context, nguoi app.NguoiThucHien) (app.KetQuaGieo, error)
+	}
+
 	// QuyenDoc lists the caller's OWN permission keys, for GET /api/v1/sessions/current.
 	//
 	// SEPARATE FROM authz.Checker ON PURPOSE, although *idstore.Checker satisfies both and the
@@ -331,11 +352,20 @@ type Deps struct {
 	LichLamViec LichLamViecDoc
 	NgayNghiLe  NgayNghiLeDoc
 	NgayLamBu   NgayLamBuDoc
-	Signer      *token.Signer
-	Phien       PhienDoc
-	CanBo       CanBoDoc
-	DanhBa      CanBoDanhBa
-	GhiDanhBa   CanBoGhiDanhBa
+	// The commune's processing deadlines in working hours (migration 0008, ADR 0029) — the other
+	// half of the three calendar tables above: those answer "lúc nào", this one answers "bao lâu".
+	//
+	// TWO FIELDS FOR ONE TABLE, read and write, for the reason given at SLADoc. Unlike the calendar,
+	// this one DOES have a write surface: `admin.sla` already names who may configure deadlines
+	// (migration 0001:277), and an empty table here is what refuses every entry into the document
+	// register and every petition (ADR 0029 §"Xã chưa cấu hình").
+	SLA       SLADoc
+	GhiSLA    SLAGhi
+	Signer    *token.Signer
+	Phien     PhienDoc
+	CanBo     CanBoDoc
+	DanhBa    CanBoDanhBa
+	GhiDanhBa CanBoGhiDanhBa
 	// TaiKhoan is the credential surface: POST /api/v1/staff/{id}/account,
 	// PUT /api/v1/staff/{id}/password and PUT /api/v1/staff/current/password. A use case, not a
 	// store — every method opens the transaction the write and its audit entry share.
@@ -396,6 +426,15 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho ngày nghỉ lễ — GET /api/v1/public-holidays sẽ panic khi có người gọi")
 	case d.NgayLamBu == nil:
 		panic("identity/http: thiếu kho ngày làm bù — GET /api/v1/swap-working-days sẽ panic khi có người gọi")
+	case d.SLA == nil:
+		panic("identity/http: thiếu kho thời hạn xử lý — GET /api/v1/sla sẽ panic khi có người gọi")
+	case d.GhiSLA == nil:
+		// Refused at construction like every other dependency, and this one has a second consequence
+		// worth naming: without the two write routes a commune has NO way to fill an empty `sla`
+		// table, and an empty table is what makes every entry into the document register and every
+		// petition answer 409 `sla_chua_cau_hinh`. The service would start and the commune would be
+		// unable to do its work, with nothing saying why.
+		panic("identity/http: thiếu use case ghi thời hạn xử lý — xã sẽ không có cách nào cấu hình SLA, và mọi tuyến vào sổ vẫn bị từ chối")
 	}
 
 	h := NewHandler(d)
@@ -1213,4 +1252,95 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/swap-working-days",
 		authz.AnyAuthenticated("ngày làm bù theo thông báo hằng năm của Thủ tướng quyết định hạn xử lý đúng vào những ngày tồn đọng nhiều nhất trong năm, và mọi ô chọn ngày phải biết ngày nào xã vẫn làm việc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: lịch làm bù lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachCaLamBu)))
+
+	// ---- Cấu hình → Thời hạn xử lý (14-cau-hinh.md §8, migration 0008, ADR 0029) -----------------
+	//
+	// ALL THREE DECLARE `admin.sla`, WHICH ALREADY EXISTS IN THE `quyen` TABLE (migration 0001:277,
+	// "Cấu hình thời hạn xử lý"). No key is invented — rule 5, invariant 3c.
+	//
+	// THESE ARE THE ROUTES THAT UNBLOCK TWO OTHER SERVICES. `sla` is empty in every commune, so
+	// grpc.ResolveDeadlines answers FAILED_PRECONDITION and `service-documents` answers 409
+	// `sla_chua_cau_hinh` on every entry into the register; `service-petitions` is refused the same
+	// way. Until now there was no route by which a commune could fix that, which made it a closed
+	// loop. These routes break the loop BY FILLING THE TABLE — they do not soften the refusal, and
+	// nothing here may ever become a fallback on the deadline path (rule 10, forbidden #3; the
+	// argument in full at domain.BoGieoSLA).
+	//
+	// WHY THE READ IS `admin.sla` AND NOT AnyAuthenticated LIKE THE THREE CALENDAR READS ABOVE:
+	// internal/http/sla.go states it — the calendar is read to RENDER every screen showing a date,
+	// this table is read to CONFIGURE, and the service that needs the figures reads them over gRPC
+	// rather than here. Restricting it breaks no screen, and 14-cau-hinh.md:394 hides the tab from
+	// accounts without the key anyway.
+	//
+	// ⚠ THE PATH SEGMENT `sla` IS NOT A NOUN THE USER HAS APPROVED —
+	// kb/00-foundation/ubiquitous-language.md:296 says of this exact table "đừng điền sẵn một cái
+	// tên", and ADR 0011 makes it the user's call. It is used because the commissioning task named
+	// it. `processing-deadlines` would match the migration's `-- @entity: ProcessingDeadline` and the
+	// plural-word convention of every sibling resource. Renaming is cheap here and only here — no
+	// APPLIED migration mark references it. STATED GAP, needs the user's decision.
+
+	// @summary  Bảng thời hạn xử lý của xã — số GIỜ LÀM VIỆC cho từng loại việc và lĩnh vực
+	// @screen   14-cau-hinh §8
+	// 200 carries `problems` beside `items`: an empty table and a kind of work missing its default
+	// row are both states the database cannot refuse, and both are DERIVED on every read, never
+	// stored (rule 10, invariant 3). An empty table is today the answer for EVERY commune.
+	// 500 covers an ordinary store failure and the table exceeding idstore.TranSLA — REFUSED rather
+	// than truncated, because a dropped row makes DongTheoLinhVuc fall back to the default and
+	// quietly answer with a different promise than the commune made.
+	//
+	// @reply    200 danhSachSLARa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/sla",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			http.HandlerFunc(h.DanhSachSLA)))
+
+	// idem.KhongCan, AND THE PROTECTION IS THE STATE RATHER THAN A HOPE: app.SLA.Sua applies the
+	// figures to the row it read and writes NOTHING when the result equals what was already there —
+	// no UPDATE, no audit entry. So a second identical request leaves exactly one row and exactly
+	// one entry, which is what the declaration claims.
+	//
+	// @summary  Sửa năm con số của một dòng thời hạn — KHÔNG hồi tố lên hồ sơ đã tiếp nhận
+	// @screen   14-cau-hinh §8
+	// 400 is a body that is not JSON, a body mentioning no figure at all, or a figure outside
+	// 0 < giờ <= domain.GioToiDa.
+	// 404 is an id matching no live row OF THIS COMMUNE — the same answer for an invented id, a
+	// soft-deleted row and another authority's row, so none can be told apart by trying.
+	//
+	// @request  suaSLAVao
+	// @reply    200 dongSLARa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/sla/{id}",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết trên một dòng đã có; use case không ghi gì khi năm con số không đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaSLA))))
+
+	// idem.KhongCan, AND THIS IS THE ONE WHERE THE CLAIM HAS TO BE EARNED RATHER THAN ASSERTED: the
+	// natural key IS the protection. `UNIQUE (tenant_id, loai_viec, linh_vuc_khoa)` admits one live
+	// row per pair, and the use case only ever INSERTS rows whose pair it did not find inside the
+	// same transaction. A second request therefore finds all fifteen present, writes nothing, audits
+	// nothing, and answers `seeded: 0, kept: 15`. It also OVERWRITES NOTHING a commune has edited —
+	// there is no path from the use case to an UPDATE, and the store offers no UPSERT to reach for.
+	//
+	// @summary  Gieo bộ thời hạn mặc định cho xã chưa cấu hình — KHÔNG ghi đè con số xã đã sửa
+	// @screen   14-cau-hinh §8
+	// 200 on every run, first or fifteenth: the request brings the table to a known state rather
+	// than creating one addressable resource, so there is no Location a 201 would owe.
+	// 409 is two administrators pressing the button at the same instant — this transaction lost the
+	// race, nothing was half-written, and retrying answers `seeded: 0`.
+	//
+	// @reply    200 gieoSLARa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/sla/defaults",
+		authz.RequirePermission(d.Checker, "admin.sla")(
+			idem.KhongCan("bộ gieo chỉ CHÈN những dòng xã chưa có, quyết định bên trong đúng giao dịch ghi, và khoá duy nhất (tenant_id, loai_viec, linh_vuc_khoa) chặn dòng thứ hai — nên lần bấm thứ hai không ghi gì, không ghi đè con số xã đã sửa, và trả seeded: 0")(
+				http.HandlerFunc(h.GieoSLAMacDinh))))
 }

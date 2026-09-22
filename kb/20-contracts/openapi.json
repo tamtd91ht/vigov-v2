@@ -3377,6 +3377,227 @@
         }
       }
     },
+    "/api/v1/sla": {
+      "get": {
+        "summary": "Bảng thời hạn xử lý của xã — số GIỜ LÀM VIỆC cho từng loại việc và lĩnh vực",
+        "operationId": "identity_get_sla",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "62981d629478",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.danhSachSLARa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sla/defaults": {
+      "post": {
+        "summary": "Gieo bộ thời hạn mặc định cho xã chưa cấu hình — KHÔNG ghi đè con số xã đã sửa",
+        "operationId": "identity_post_sla_defaults",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "a9d4db42b6c6",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.gieoSLARa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sla/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Sửa năm con số của một dòng thời hạn — KHÔNG hồi tố lên hồ sơ đã tiếp nhận",
+        "operationId": "identity_patch_sla_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "14-cau-hinh §8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.sla"
+        },
+        "x-vigov-task": "82d2ba65054a",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.suaSLAVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.dongSLARa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/staff": {
       "get": {
         "summary": "Danh sách cán bộ của xã — gồm cả người có tài khoản đăng nhập và người chỉ có trong danh bạ",
@@ -6594,6 +6815,28 @@
         ],
         "additionalProperties": false
       },
+      "identity.danhSachSLARa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.dongSLARa"
+            }
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.vanDeSLARa"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "problems"
+        ],
+        "additionalProperties": false
+      },
       "identity.danhSachThonToDanPhoRa": {
         "type": "object",
         "properties": {
@@ -6651,6 +6894,67 @@
         "required": [
           "current_password",
           "new_password"
+        ],
+        "additionalProperties": false
+      },
+      "identity.dongSLARa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID — what PATCH /api/v1/sla/{id} references"
+          },
+          "work_kind": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "acknowledge_hours": {
+            "type": "integer"
+          },
+          "resolve_hours": {
+            "type": "integer"
+          },
+          "due_soon_hours": {
+            "type": "integer"
+          },
+          "escalate_leader_hours": {
+            "type": "integer"
+          },
+          "escalate_president_hours": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "acknowledge_hours",
+          "due_soon_hours",
+          "escalate_leader_hours",
+          "escalate_president_hours",
+          "field",
+          "id",
+          "is_default",
+          "resolve_hours",
+          "work_kind"
+        ],
+        "additionalProperties": false
+      },
+      "identity.gieoSLARa": {
+        "type": "object",
+        "properties": {
+          "seeded": {
+            "type": "integer"
+          },
+          "kept": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kept",
+          "seeded"
         ],
         "additionalProperties": false
       },
@@ -6922,6 +7226,49 @@
         ],
         "additionalProperties": false
       },
+      "identity.suaSLAVao": {
+        "type": "object",
+        "properties": {
+          "acknowledge_hours": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "resolve_hours": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "due_soon_hours": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "escalate_leader_hours": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "escalate_president_hours": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "acknowledge_hours",
+          "due_soon_hours",
+          "escalate_leader_hours",
+          "escalate_president_hours",
+          "resolve_hours"
+        ],
+        "additionalProperties": false
+      },
       "identity.thanDangNhap": {
         "type": "object",
         "properties": {
@@ -7177,6 +7524,26 @@
           "message",
           "session_ids",
           "weekday"
+        ],
+        "additionalProperties": false
+      },
+      "identity.vanDeSLARa": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "work_kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "message",
+          "work_kind"
         ],
         "additionalProperties": false
       },

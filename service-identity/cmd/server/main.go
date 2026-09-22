@@ -157,10 +157,23 @@ func run(log *slog.Logger) error {
 	ngayNghiLe := idstore.NewNgayNghiLeStore(kho)
 	ngayLamBu := idstore.NewNgayLamBuStore(kho)
 	// The commune's processing deadlines in working hours (migration 0008, ADR 0029) — the other
-	// half of the three tables above. Read only, and NOT mounted on any HTTP route: who may edit a
-	// commune's SLA is `admin.sla`, but whether changing it needs a leader's approval is ADR 0029's
-	// stop condition #4 and nobody has asked the customer. It leaves this service through exactly
-	// one door, the gRPC RPC ResolveDeadlines.
+	// half of the three tables above.
+	//
+	// IT NOW HAS A WRITE PATH, UNLIKE THE THREE CALENDAR STORES, and the difference is one the
+	// comment here used to record the other way round. What changed is not the answer to ADR 0029
+	// stop condition #4 — nobody has asked the customer whether changing a figure needs a leader's
+	// approval, and these routes apply the change immediately — but the weight of NOT having one:
+	// `sla` is empty in every commune, so ResolveDeadlines answers FAILED_PRECONDITION, so
+	// `documents` answers 409 on every entry into the register and `petitions` is refused the same
+	// way, AND THE COMMUNE HAS NO WAY TO FIX IT. That is a closed loop, not a missing feature.
+	//
+	// THE WRITE PATH IS NOT ADR 0026 STOP CONDITION #2 BEING ROUTED AROUND: neither route accepts a
+	// `linh_vuc` from a caller, so no unvalidated field code can enter the table and no cross-service
+	// read path is created. The `+ Thêm thời hạn cho một lĩnh vực` button still has no route. Full
+	// argument at internal/store/sla_ghi.go.
+	//
+	// It leaves this service by two doors now: the gRPC RPC ResolveDeadlines (the figures, for the
+	// deadline path) and GET /api/v1/sla (the rows, for the configuration screen).
 	sla := idstore.NewSLAStore(kho)
 	// The CITIZEN session registry (migration 0004) — the only store here built on the RAW *sql.DB
 	// rather than on `kho`, and the exemption is argued in full at NewPhienCongDanStore: this
@@ -209,6 +222,12 @@ func run(log *slog.Logger) error {
 	// write (rule 6, invariant 3). Wired without it, a reset would leave the sessions opened with
 	// the old password working — which is the one thing a reset exists to stop.
 	taiKhoan := app.NewTaiKhoanCanBo(kho, canBo, phien)
+	// The WRITE surface of the deadline table: PATCH /api/v1/sla/{id} and POST /api/v1/sla/defaults.
+	//
+	// IT IS GIVEN THE SAME *idstore.SLAStore the read field and the gRPC server carry. One store,
+	// because the seeding decision READS the very rows it then writes, inside one transaction — a
+	// second store would be a second connection and the read would not see the transaction.
+	ghiSLA := app.NewSLA(kho, sla)
 
 	// 7. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
 	//    cache — and the routes then behave per the CheDoHong each one declared. A service must
@@ -260,9 +279,23 @@ func run(log *slog.Logger) error {
 		LichLamViec: lichLamViec,
 		NgayNghiLe:  ngayNghiLe,
 		NgayLamBu:   ngayLamBu,
-		Signer:      signer, // the SAME pointer app.NewDangNhap was given above
-		Phien:       phien,
-		CanBo:       canBo,
+		// Bảng thời hạn xử lý của xã (migration 0008, ADR 0029) — nửa còn lại của ba bảng lịch:
+		// lịch trả lời "lúc nào", bảng này trả lời "bao lâu".
+		//
+		// KHÁC BA BẢNG LỊCH Ở CHỖ NÀY CÓ TUYẾN GHI, và đó không phải một ngoại lệ tuỳ tiện:
+		// `admin.sla` đã trả lời "ai được cấu hình thời hạn" từ migration 0001:277, trong khi "ai
+		// sửa được lịch của xã" thì chưa ai hỏi khách. Bảng rỗng ở đây là thứ đang làm MỌI tuyến
+		// vào sổ của `documents` và mọi tuyến ghi của `petitions` trả 409 — không có tuyến ghi thì
+		// xã không có cách nào tự gỡ (ADR 0029 §"Xã chưa cấu hình").
+		//
+		// MỘT KHO CHO ĐỌC, MỘT USE CASE CHO GHI. `sla` là cùng một *idstore.SLAStore mà máy chủ
+		// gRPC dưới kia dùng, nên màn hình cấu hình và phép tính hạn đọc đúng một chỗ; `ghiSLA` mở
+		// giao dịch mà vết kiểm toán dùng chung (luật 6 bất biến 3).
+		SLA:    sla,
+		GhiSLA: ghiSLA,
+		Signer: signer, // the SAME pointer app.NewDangNhap was given above
+		Phien:  phien,
+		CanBo:  canBo,
 		// The SAME store behind two fields, and two fields on purpose: CanBoDoc is the
 		// three-condition read the session middleware runs on every request, CanBoDanhBa is the
 		// register the Cấu hình → Người dùng screen pages through. See the note on CanBoDanhBa.

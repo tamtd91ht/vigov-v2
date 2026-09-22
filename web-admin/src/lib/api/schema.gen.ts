@@ -46,8 +46,28 @@ export type comms_xoaLoaiTaiNguyenVao = {
   "reason": string;
 };
 
+export type documents_capSoVanBanDiVao = {
+  /** YYYY-MM-DD */
+  "document_date": string;
+  "document_type": string;
+  "summary": string;
+  "recipient": string;
+  "signer"?: string;
+  "number"?: number | null;
+};
+
+export type documents_chuyenVanBanVao = {
+  "to_unit": string;
+  "assignee"?: string;
+  "reason": string;
+};
+
 export type documents_danhSachLoaiVanBanRa = {
   "items": Array<documents_loaiVanBanRa>;
+};
+
+export type documents_goVanBanVao = {
+  "reason": string;
 };
 
 export type documents_loaiVanBanRa = {
@@ -74,6 +94,28 @@ export type documents_suaLoaiVanBanVao = {
   "tier"?: number | null;
 };
 
+export type documents_suaVanBanDenVao = {
+  "received_date"?: string | null;
+  "reference_no"?: string | null;
+  "document_date"?: string | null;
+  "issuing_body"?: string | null;
+  "document_type"?: string | null;
+  "summary"?: string | null;
+  "urgency"?: string | null;
+  "number"?: number | null;
+  "status"?: string | null;
+  "due_at"?: string | null;
+};
+
+export type documents_suaVanBanDiVao = {
+  "document_date"?: string | null;
+  "document_type"?: string | null;
+  "summary"?: string | null;
+  "recipient"?: string | null;
+  "signer"?: string | null;
+  "number"?: number | null;
+};
+
 export type documents_themLoaiVanBanVao = {
   "code": string;
   "label": string;
@@ -81,6 +123,64 @@ export type documents_themLoaiVanBanVao = {
   "is_default"?: boolean;
   "source"?: string | null;
   "tier"?: number | null;
+};
+
+export type documents_themVanBanDenVao = {
+  /** YYYY-MM-DD */
+  "received_date": string;
+  "reference_no"?: string;
+  "document_date"?: string;
+  "issuing_body": string;
+  "document_type": string;
+  "summary": string;
+  "urgency"?: string;
+  "number"?: number | null;
+  "status"?: string | null;
+  "due_at"?: string | null;
+};
+
+export type documents_vanBanDenRa = {
+  "id": string;
+  "number": number;
+  "year": number;
+  /** YYYY-MM-DD, the day it arrived */
+  "received_date": string;
+  /** "1742-CV/BTCTU" */
+  "reference_no"?: string;
+  /** YYYY-MM-DD, the day it was signed */
+  "document_date"?: string;
+  "issuing_body": string;
+  /** the catalogue CODE */
+  "document_type": string;
+  "summary": string;
+  "urgency"?: string;
+  /** identity's `bo_phan.id` */
+  "holding_unit"?: string;
+  /** a STAFF BUSINESS CODE */
+  "assignee"?: string;
+  /** RFC 3339 — the commitment, fixed once at booking */
+  "due_at": string;
+  /** `moi-vao-so` … — Vietnamese without diacritics (ADR 0011) */
+  "status": string;
+  "created_by": string;
+  "created_at": string;
+  "updated_at": string;
+};
+
+export type documents_vanBanDiRa = {
+  "id": string;
+  "number": number;
+  "year": number;
+  /** YYYY-MM-DD, the day it was signed and issued */
+  "document_date": string;
+  /** the catalogue CODE */
+  "document_type": string;
+  "summary": string;
+  "recipient": string;
+  "signer"?: string;
+  "created_by": string;
+  "created_at": string;
+  "updated_at": string;
 };
 
 export type documents_xoaLoaiVanBanVao = {
@@ -317,6 +417,11 @@ export type identity_danhSachNgayNghiLeRa = {
   "items": Array<identity_ngayNghiLeRa>;
 };
 
+export type identity_danhSachSLARa = {
+  "items": Array<identity_dongSLARa>;
+  "problems": Array<identity_vanDeSLARa>;
+};
+
 export type identity_danhSachThonToDanPhoRa = {
   "items": Array<identity_thonToDanPhoRa>;
 };
@@ -332,6 +437,24 @@ export type identity_datVaiTroVao = {
 export type identity_doiMatKhauVao = {
   "current_password": string;
   "new_password": string;
+};
+
+export type identity_dongSLARa = {
+  /** ULID — what PATCH /api/v1/sla/{id} references */
+  "id": string;
+  "work_kind": string;
+  "field": string;
+  "is_default": boolean;
+  "acknowledge_hours": number;
+  "resolve_hours": number;
+  "due_soon_hours": number;
+  "escalate_leader_hours": number;
+  "escalate_president_hours": number;
+};
+
+export type identity_gieoSLARa = {
+  "seeded": number;
+  "kept": number;
 };
 
 export type identity_khoiNhiemVuRa = {
@@ -405,6 +528,14 @@ export type identity_suaCanBoVao = {
   "org_unit_id": string | null;
   "office_phone": string | null;
   "mobile": string | null;
+};
+
+export type identity_suaSLAVao = {
+  "acknowledge_hours": number | null;
+  "resolve_hours": number | null;
+  "due_soon_hours": number | null;
+  "escalate_leader_hours": number | null;
+  "escalate_president_hours": number | null;
 };
 
 export type identity_thanDangNhap = {
@@ -482,6 +613,26 @@ export type identity_vanDeLichRa = {
   "weekday": number | null;
   "session_ids": Array<string>;
   "message": string;
+};
+
+export type identity_vanDeSLARa = {
+  "kind": string;
+  "work_kind": string;
+  "message": string;
+};
+
+export type page_Result_documents_vanBanDenRa = {
+  "items": Array<documents_vanBanDenRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
+export type page_Result_documents_vanBanDiRa = {
+  "items": Array<documents_vanBanDiRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
 };
 
 export type page_Result_identity_canBoTomTat = {
@@ -937,6 +1088,105 @@ export type documents_delete_document_types_by_id = {
   };
 };
 
+/** GET /api/v1/incoming-documents — Danh sách sổ văn bản đến, phân trang theo con trỏ, lọc theo năm · trạng thái · loại · bộ phận đang giữ */
+export type documents_get_incoming_documents = {
+  duongDan: "/api/v1/incoming-documents";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_documents_vanBanDenRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/incoming-documents — Vào sổ một văn bản đến; hệ thống cấp số đến và ấn định hạn xử lý theo cấu hình của xã */
+export type documents_post_incoming_documents = {
+  duongDan: "/api/v1/incoming-documents";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: documents_themVanBanDenVao;
+  phanHoi: {
+    201: documents_vanBanDenRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/incoming-documents/{id} — Sửa thông tin một văn bản đến đã vào sổ (số đến, trạng thái và hạn xử lý không sửa được) */
+export type documents_patch_incoming_documents_by_id = {
+  duongDan: "/api/v1/incoming-documents/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_suaVanBanDenVao;
+  phanHoi: {
+    200: documents_vanBanDenRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/incoming-documents/{id} — Gỡ một văn bản đến khỏi sổ (xoá mềm, kèm lý do bắt buộc; số đến không được cấp lại) */
+export type documents_delete_incoming_documents_by_id = {
+  duongDan: "/api/v1/incoming-documents/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_goVanBanVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/incoming-documents/{id}/routings — Chuyển văn bản đến cho một bộ phận xử lý, kèm ý kiến chỉ đạo — ghi vào dòng thời gian không sửa được */
+export type documents_post_incoming_documents_by_id_routings = {
+  duongDan: "/api/v1/incoming-documents/{id}/routings";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_chuyenVanBanVao;
+  phanHoi: {
+    200: documents_vanBanDenRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/investment-projects — Danh sách dự án đầu tư của xã theo năm ngân sách, kèm số đã giải ngân suy ra từ chứng từ */
 export type finance_get_investment_projects = {
   duongDan: "/api/v1/investment-projects";
@@ -1107,6 +1357,84 @@ export type identity_get_org_units = {
   };
 };
 
+/** GET /api/v1/outgoing-documents — Danh sách sổ văn bản đi, phân trang theo con trỏ, lọc theo năm · loại văn bản */
+export type documents_get_outgoing_documents = {
+  duongDan: "/api/v1/outgoing-documents";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_documents_vanBanDiRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/outgoing-documents — Cấp số văn bản đi và ghi vào sổ; số đã cấp không bao giờ cấp lại */
+export type documents_post_outgoing_documents = {
+  duongDan: "/api/v1/outgoing-documents";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: documents_capSoVanBanDiVao;
+  phanHoi: {
+    201: documents_vanBanDiRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/outgoing-documents/{id} — Sửa thông tin một văn bản đi đã cấp số (số đi và năm không sửa được) */
+export type documents_patch_outgoing_documents_by_id = {
+  duongDan: "/api/v1/outgoing-documents/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_suaVanBanDiVao;
+  phanHoi: {
+    200: documents_vanBanDiRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/outgoing-documents/{id} — Gỡ một văn bản đi khỏi sổ (xoá mềm, kèm lý do bắt buộc; số đi không được cấp lại) */
+export type documents_delete_outgoing_documents_by_id = {
+  duongDan: "/api/v1/outgoing-documents/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_goVanBanVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/public-holidays — Ngày nghỉ lễ của xã trong một năm — ngày xã KHÔNG làm việc, gồm cả lễ quốc gia lẫn lễ địa phương */
 export type identity_get_public_holidays = {
   duongDan: "/api/v1/public-holidays";
@@ -1237,6 +1565,61 @@ export type identity_delete_sessions_by_sid = {
   phanHoi: {
     204: void;
     401: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/sla — Bảng thời hạn xử lý của xã — số GIỜ LÀM VIỆC cho từng loại việc và lĩnh vực */
+export type identity_get_sla = {
+  duongDan: "/api/v1/sla";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_danhSachSLARa;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/sla/defaults — Gieo bộ thời hạn mặc định cho xã chưa cấu hình — KHÔNG ghi đè con số xã đã sửa */
+export type identity_post_sla_defaults = {
+  duongDan: "/api/v1/sla/defaults";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_gieoSLARa;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/sla/{id} — Sửa năm con số của một dòng thời hạn — KHÔNG hồi tố lên hồ sơ đã tiếp nhận */
+export type identity_patch_sla_by_id = {
+  duongDan: "/api/v1/sla/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_suaSLAVao;
+  phanHoi: {
+    200: identity_dongSLARa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
     404: httpx_Error;
     500: httpx_Error;
   };

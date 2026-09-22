@@ -673,6 +673,10 @@ type mayChu struct {
 	lichLamViec *lichLamViecGia
 	ngayNghiLe  *ngayNghiLeGia
 	ngayLamBu   *ngayLamBuGia
+	// The deadline table (migration 0008). TWO fakes for one table, matching the two Deps fields:
+	// the read is a store, the write is a use case. See slaGia / ghiSLAGia in sla_test.go.
+	sla    *slaGia
+	ghiSLA *ghiSLAGia
 	// dangNhap and dangXuat are the same values as d.DangNhap / d.DangXuat, typed.
 	dangNhap *dangNhapGia
 	dangXuat *dangXuatGia
@@ -716,6 +720,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	lichLamViec := lichLamViecMau()
 	ngayNghiLe := ngayNghiLeMau()
 	ngayLamBu := ngayLamBuMau()
+	sla := slaMau()
+	ghiSLA := ghiSLAMau()
 
 	d := Deps{
 		// Commune A grants the permission; commune B has the same account and grants nothing.
@@ -739,10 +745,15 @@ func dungMayChu(t *testing.T) *mayChu {
 		LichLamViec: lichLamViec,
 		NgayNghiLe:  ngayNghiLe,
 		NgayLamBu:   ngayLamBu,
-		Signer:      signer,
-		Phien:       phien,
-		CanBo:       canBo,
-		DanhBa:      danhBa,
+		// The deadline table, read and write. Register panics without either, which is how an
+		// unwired configuration surface fails at startup rather than at the first commune that
+		// cannot register a single incoming document.
+		SLA:    sla,
+		GhiSLA: ghiSLA,
+		Signer: signer,
+		Phien:  phien,
+		CanBo:  canBo,
+		DanhBa: danhBa,
 		// The five write routes. Register panics without it, which is how an unwired write surface
 		// is caught at construction rather than by the first administrator who tries to use it.
 		GhiDanhBa: ghiDanhBa,
@@ -789,6 +800,9 @@ func dungMayChu(t *testing.T) *mayChu {
 		lichLamViec: lichLamViec,
 		ngayNghiLe:  ngayNghiLe,
 		ngayLamBu:   ngayLamBu,
+
+		sla:    sla,
+		ghiSLA: ghiSLA,
 
 		dangNhap: d.DangNhap.(*dangNhapGia),
 		dangXuat: d.DangXuat.(*dangXuatGia),
