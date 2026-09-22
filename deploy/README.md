@@ -117,7 +117,7 @@ bại. Đưa nhật ký khớp lại với thực tế là việc của người
 
 | Nợ | Ở đâu | Hệ quả nếu bỏ qua |
 |---|---|---|
-| `BUILD_USER_ID` luôn rỗng | `deploy/Jenkinsfile:159` | Nhật ký triển khai không trả lời được *ai* — nửa lý do nó tồn tại |
+| ~~`BUILD_USER_ID` luôn rỗng~~ | **VÁ 22/09/2026** | Nay đọc từ `getBuildCauses`; không xác định được thì job dừng trước khi chạm git và cụm — xem *Plugin và công cụ* ↓. **Chưa chạy thật lần nào** |
 | `git push` không rebase | *Chưa vá* ↓ | Lượt deploy đỏ ở chỗ khó đọc khi `main` nhích lên giữa chừng |
 | 4 dịch vụ không bắt `SIGTERM` | `service-{comms,documents,finance,petitions}/cmd/server/main.go` | Một lượt deploy cắt ngang lúc tiếp nhận phản ánh để lại phiếu dở trong khi công dân đã cầm mã tra cứu. **Đáng vá TRƯỚC tuyến ghi đầu tiên của `petitions`** |
 | Manifest chưa từng qua API server thật | — | `kubectl kustomize` chỉ chứng minh YAML dựng được, không chứng minh máy chủ chấp nhận. Pha 2 là lần đầu biết |
@@ -203,10 +203,16 @@ không phải quyết định của kho này. Mười `Jenkinsfile` đã đượ
 | ~~Docker Pipeline~~ | **KHÔNG dùng.** `docker.build` / `docker.withRegistry` đã bị gỡ khỏi 8 pipeline đóng ảnh, thay bằng `docker` CLI — `Jenkinsfile:127` |
 | ~~Kubernetes CLI~~ | **KHÔNG dùng.** `withKubeConfig` đã bị thay bằng ràng buộc `file` — `deploy/Jenkinsfile:23` |
 
-**`BUILD_USER_ID` hôm nay luôn rỗng**, nên commit ghim thẻ ghi `Bấm bởi: khong-ro`
-(`deploy/Jenkinsfile:159`): biến ấy do plugin `build-user-vars` cấp, plugin không có, và
-`deploy/Jenkinsfile` cũng không bọc `wrap([$class: 'BuildUser'])`. Nhật ký triển khai vì thế
-trả lời được *bản nào, lúc nào*, **không** trả lời được *ai*. Chưa vá — xem *Còn nợ*.
+**`build-user-vars` KHÔNG cần nữa — vá 22/09/2026.** Biến `BUILD_USER_ID` do plugin ấy cấp,
+plugin không có trên máy chủ này, nên nó luôn rỗng và commit ghim thẻ từng ghi
+`Bấm bởi: khong-ro` ở **mọi** lượt. Nay job đọc người bấm từ
+`currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')` — thuộc Pipeline lõi, không
+cần cài gì (hàm `nguoiBam()`, cuối `deploy/Jenkinsfile`).
+
+**Không xác định được người bấm ⇒ job DỪNG**, ở stage `Kiểm tham số`, trước khi chạm git và
+cụm. Đó là chỗ duy nhất còn quay lại được mà không tốn gì. Job này không khai trigger tự
+động, nên mọi lượt hợp lệ đều do một người đã đăng nhập bấm; gặp lần đỏ ấy thì kiểm xem lượt
+chạy có bị một job khác, một timer hay một script gọi hộ không — đừng nới hàm để nó đi tiếp.
 
 **Công cụ:** `go` 1.26+ · `buf` · `node` 22+ · `npm` · `python3` · một trình biên dịch C
 (`go test -race` cần cgo) · `docker` có BuildKit. Riêng `vigov-deploy` thêm: `kubectl`,
