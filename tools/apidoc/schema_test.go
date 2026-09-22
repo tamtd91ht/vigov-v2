@@ -207,6 +207,45 @@ type PhanHoi struct {
 	}
 }
 
+// A `bool` whose name contains a secret word is NOT a secret, and this is the case that found it:
+// `must_change_password` (open question #9) sits in the sign-in reply and in GET /sessions/current,
+// and on 2026-09-22 it stopped `apidoc` dead — a legitimate field the contract has to publish, or
+// no client knows to send the person to the change-password screen.
+func TestCoBoolTenGoiBiMatThiQua(t *testing.T) {
+	api := `package http
+
+type PhanHoi struct {
+	Sid                string ` + "`json:\"sid\"`" + `
+	MustChangePassword bool   ` + "`json:\"must_change_password\"`" + `
+}
+`
+	got, err := sinhSchema(t, api, "PhanHoi", true)
+	if err != nil {
+		t.Fatalf("bool không bao giờ mang được một mật khẩu, không được chặn: %v", err)
+	}
+	// VẾ CHỊU LỰC. Không đỏ là chưa đủ: một bản vá bỏ hẳn lời từ chối cũng cho ra "không đỏ", và
+	// điều phải đúng là trường ấy CÓ MẶT trong hợp đồng — vắng nó thì client không biết phải đưa
+	// người dùng sang màn đổi mật khẩu, mà không phép kiểm nào của web sẽ đỏ vì chuyện đó.
+	if !strings.Contains(got, `"must_change_password":{"type":"boolean"}`) {
+		t.Fatalf("trường phải ra tới hợp đồng:\n%s", got)
+	}
+}
+
+// Ca ĐỐI XỨNG, và là ca giữ cho lần nới ở trên không nuốt mất chính điều nó nới. Cùng một cái tên,
+// đổi `bool` thành `string`, thì phải đỏ trở lại: nếu ca này xanh thì phép nới đã ăn theo TÊN chứ
+// không theo KIỂU, và `MatKhauHash string` đi ra hợp đồng qua đúng đường ấy.
+func TestCungTenAyNhungLaChuoiThiVanDung(t *testing.T) {
+	api := `package http
+
+type PhanHoi struct {
+	MustChangePassword string ` + "`json:\"must_change_password\"`" + `
+}
+`
+	if _, err := sinhSchema(t, api, "PhanHoi", true); err == nil {
+		t.Fatal("mong DỪNG: phép nới chỉ dành cho `bool`, một chuỗi cùng tên vẫn là hình dạng chứa mật khẩu")
+	}
+}
+
 // json:"-" is the sanctioned way out, and it must actually work.
 func TestBiMatCoJsonGachNganThiQua(t *testing.T) {
 	api := `package http

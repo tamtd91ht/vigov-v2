@@ -279,6 +279,28 @@ func laBiMat(ten, tenJSON string) bool {
 	return false
 }
 
+// laBool narrows the refusal above, and the narrowing is by TYPE because the name alone cannot
+// settle it. `laBiMat` judges a spelling, and a spelling is all it has: "password" as a substring
+// refuses `MatKhauHash` correctly and `MustChangePassword` wrongly, and no list of words tells the
+// two apart — one CARRIES a credential, the other states a fact ABOUT one.
+//
+// A `bool` has two values. Neither of them is a password, an OTP or a signing key, so a boolean in
+// a response shape cannot be the thing rule 3 and rule 8 exist to keep off the wire, and the error
+// text above — *"a document publishing a shape containing a password teaches people to expect a
+// password there"* — is simply untrue of it. `must_change_password` (open question #9) is exactly
+// that field, and it belongs in the published shape: the client has to know to send the person
+// straight to the change-password screen.
+//
+// EXACTLY `bool`, NOTHING ELSE, and the narrowness is the point. A `string`, a `[]byte`, an `int`
+// or a named type whose underlying kind is bool all stay refused — a named type is refused because
+// resolving what it wraps would make the guard depend on package loading, and a guard that can
+// fail to resolve is a guard that can fail OPEN. `json:"-"` remains the way out for everything
+// else, which costs one tag on the rare legitimate case and never costs a published credential.
+func laBool(t ast.Expr) bool {
+	id, ok := t.(*ast.Ident)
+	return ok && id.Name == "bool" && id.Obj == nil // Obj == nil ⇒ the predeclared bool, not a local type
+}
+
 // tachTu splits camelCase and snake_case into lowercase words.
 func tachTu(s string) []string {
 	var out []string
@@ -631,7 +653,7 @@ func (b *boSchema) structSchema(st *ast.StructType, ngucanh kieuGo, nghiem bool)
 				ten = nm.Name // documented encoding/json behaviour for `json:",omitempty"`
 			}
 
-			if laBiMat(nm.Name, ten) {
+			if laBiMat(nm.Name, ten) && !laBool(fld.Type) {
 				if nghiem {
 					return nil, fmt.Errorf(
 						"trường %s (json:%q) mang tên gợi bí mật/dữ liệu cá nhân nhưng không có `json:\"-\"`, "+
@@ -648,7 +670,14 @@ func (b *boSchema) structSchema(st *ast.StructType, ngucanh kieuGo, nghiem bool)
 			if err != nil {
 				return nil, fmt.Errorf("trường %s: %w", nm.Name, err)
 			}
-			if laBiMat(nm.Name, ten) {
+			// `!laBool` HERE TOO, and leaving it off is the half-fix that looks finished: the
+			// refusal above would pass, the field would reach the contract, and it would carry
+			// `writeOnly: true` — a claim that the server NEVER returns it. That is the exact
+			// opposite of the truth for `must_change_password`, and it is worse than the refusal
+			// was: a generator reading `writeOnly` drops the field from the response type, so the
+			// client cannot see the flag, the person is never sent to the change-password screen,
+			// and nothing anywhere turns red. A refusal stops the build; this would have shipped.
+			if laBiMat(nm.Name, ten) && !laBool(fld.Type) {
 				s.set("writeOnly", true)
 			}
 			if c := moTaTruong(fld); c != "" {
