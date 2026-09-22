@@ -3,7 +3,7 @@
 # `make check` is what stop_verify_guard looks for in the session transcript. The agent must
 # not report "done" before it has run.
 
-.PHONY: check brain hooks quyen buildfiles lint build standalone test web kb proto tidy
+.PHONY: check brain hooks quyen vet-actor khoaduynhat buildfiles lint build standalone test web kb proto tidy
 
 # Danh sách module, HỎI CHÍNH GO — không gõ tay, và không bóc tách văn bản go.work.
 #
@@ -22,7 +22,7 @@ MOD_DIRS := $(shell go list -m -f '{{.Dir}}' | tr '\134' '/')
 MODULES  := $(addsuffix /...,$(MOD_DIRS))
 
 
-check: brain hooks quyen vet-actor buildfiles lint build standalone test web   ## Full verification — run before saying it is done
+check: brain hooks quyen vet-actor khoaduynhat buildfiles lint build standalone test web   ## Full verification — run before saying it is done
 
 brain:                          ## 7 structural invariants of the brain — anti-drift
 	python tools/check_brain.py
@@ -50,6 +50,21 @@ vet-actor:                      ## Chủ thể mọi dòng vết là MÃ CÁN B�
 	@# `.claude/hooks/audit_actor_guard.py` chặn cùng lớp lỗi lúc GHI, nhưng chỉ thấy MỘT tệp.
 	@# Năm trong sáu khiếm khuyết ấy đã nằm sẵn trên đĩa trước khi có rào nào.
 	python tools/check_audit_actor.py
+
+khoaduynhat:                    ## Khoá duy nhất hợp thành với `tenant_id`, và không tính sót dòng đã xoá mềm
+	@# HAI LUẬT ĐANG ĐÚNG MÀ KHÔNG GÌ KIỂM — luật 1 bất biến 6 và luật 7 bất biến 3. Cả hai
+	@# hỏng im lặng: không bài test nào đỏ, không lần chạy nào hỏng, và chỉ lộ ra ở một XÃ THẬT.
+	@#
+	@# `UNIQUE (…) WHERE deleted_at IS NULL` cho phép xoá mềm rồi thêm lại CÙNG MỘT MÃ — tức
+	@# một mã đã in ra giấy, đã đóng dấu, đã gửi đi thì được cấp lại. Kho anh em
+	@# `../vigov-require` đã trả giá cho đúng bẫy này.
+	@#
+	@# `UNIQUE (ma)` thiếu `tenant_id` thì xã thứ hai không onboard được — và nó chỉ đỏ vào
+	@# đúng ngày có xã thứ hai, khi sửa đã là migration trên dữ liệu đang chạy.
+	@#
+	@# Cổng này dựng lúc cả 49 khai báo đều ĐÚNG, tức nó GIỮ một tính chất chứ không dọn một
+	@# đống đã hỏng — đúng lúc rẻ nhất.
+	python tools/check_khoa_duy_nhat.py
 
 buildfiles:                     ## Dockerfile + Jenkinsfile của từng dịch vụ, và phần chung không ai đánh rơi
 	@# Mỗi dịch vụ tự dựng và tự đóng gói: nó quyết build cái gì, khi nào, ra ảnh nào.
