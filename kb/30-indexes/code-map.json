@@ -966,6 +966,10 @@
       "kind": "type",
       "at": "service-reporting/internal/http/routes.go:23"
     },
+    "http.DepsCongDan": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:48"
+    },
     "http.DocPhieuPhanAnh": {
       "kind": "func",
       "at": "service-petitions/internal/http/phieu_phan_anh.go:236"
@@ -997,6 +1001,10 @@
     "http.Handler": {
       "kind": "type",
       "at": "service-petitions/internal/http/handler.go:12"
+    },
+    "http.HandlerCongDan": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:62"
     },
     "http.HangMucKeHoachVonDanhMuc": {
       "kind": "type",
@@ -1042,6 +1050,10 @@
       "kind": "func",
       "at": "service-petitions/internal/http/handler.go:16"
     },
+    "http.NewHandlerCongDan": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:66"
+    },
     "http.NgayLamBuDoc": {
       "kind": "type",
       "at": "service-identity/internal/http/routes.go:224"
@@ -1066,6 +1078,14 @@
       "kind": "func",
       "at": "service-identity/internal/http/middleware.go:51"
     },
+    "http.PhieuCuaCongDanDoc": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:38"
+    },
+    "http.PhieuCuaToi": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:229"
+    },
     "http.PhieuPhanAnhDoc": {
       "kind": "type",
       "at": "service-petitions/internal/http/routes.go:79"
@@ -1077,6 +1097,10 @@
     "http.Register": {
       "kind": "func",
       "at": "service-reporting/internal/http/routes.go:32"
+    },
+    "http.RegisterCongDan": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/routes_cong_dan.go:46"
     },
     "http.SuaHangMuc": {
       "kind": "func",

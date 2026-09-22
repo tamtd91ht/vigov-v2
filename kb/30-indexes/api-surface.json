@@ -348,6 +348,25 @@
       "declared_in": "service-comms/internal/http/routes.go"
     },
     {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/my-citizen-reports/{maTraCuu}",
+      "operation_id": "petitions_get_my_citizen_reports_by_maTraCuu",
+      "task_id": "6bee0a6a60f3",
+      "summary": "Phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI, tra theo mã tra cứu — dùng trong Zalo Mini App",
+      "screen": "09-phan-anh-nguoi-dan §8",
+      "permission_kind": "citizen-only",
+      "tenant_class": "tu-phien",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.phieuCuaToiRa",
+        "401": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
+    },
+    {
       "service": "identity",
       "method": "GET",
       "path": "/api/v1/org-units",

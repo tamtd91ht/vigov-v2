@@ -1313,6 +1313,77 @@
         }
       }
     },
+    "/api/v1/my-citizen-reports/{maTraCuu}": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI, tra theo mã tra cứu — dùng trong Zalo Mini App",
+        "operationId": "petitions_get_my_citizen_reports_by_maTraCuu",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8",
+        "x-vigov-permission": {
+          "kind": "citizen-only"
+        },
+        "x-vigov-tenant-class": {
+          "kind": "tu-phien",
+          "tenant_in_context": true,
+          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)"
+        },
+        "x-vigov-task": "6bee0a6a60f3",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.phieuCuaToiRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/org-units": {
       "get": {
         "summary": "Danh mục bộ phận của xã — cây tổ chức, dùng cho ô phân công, luồng văn bản và bộ lọc",
@@ -4348,6 +4419,77 @@
           "order",
           "source",
           "tier"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.phieuCuaToiRa": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string",
+            "description": "`zalo-mini-app` | `zalo-oa` | `web-xa` | `can-bo-nhap-ho`"
+          },
+          "status": {
+            "type": "string",
+            "description": "one of the nine (ADR 0027)"
+          },
+          "field": {
+            "type": "string"
+          },
+          "field_label": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "reporter_name": {
+            "type": "string"
+          },
+          "reporter_phone": {
+            "type": "string"
+          },
+          "anonymous": {
+            "type": "boolean"
+          },
+          "clock_from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acknowledge_due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "resolve_due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "acknowledge_due",
+          "address",
+          "anonymous",
+          "channel",
+          "clock_from",
+          "code",
+          "content",
+          "field",
+          "field_label",
+          "reporter_name",
+          "reporter_phone",
+          "resolve_due",
+          "status"
         ],
         "additionalProperties": false
       },
