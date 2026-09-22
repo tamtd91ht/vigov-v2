@@ -8,7 +8,7 @@
 # VÌ SAO KHÔNG CÒN MỘT DÒNG `/api/v1` → identity: dòng ấy đúng 100% vào ngày nó được
 # viết, khi mọi tài nguyên REST đều thuộc identity. Nay hợp đồng có
 #
-#     23 tuyến của 5 dịch vụ — identity 15 · finance 3 · petitions 3 · comms 1 · documents 1
+#     28 tuyến của 5 dịch vụ — identity 15 · petitions 5 · finance 4 · comms 2 · documents 2
 #
 # nên dòng gộp ấy đưa mọi tuyến không phải của identity tới identity và trả 404 — 404
 # trên một tuyến hành chính thật. Chủ dự án chốt lối (b), SINH Ingress từ openapi.json,
@@ -18,7 +18,7 @@
 # (deploy/overlays/<mt>/ingress-moi-truong.yaml). Bảng định tuyến thì giống nhau ở mọi
 # môi trường nên nó thuộc base — đúng ranh giới base/overlay kho này đang dùng.
 #
-# 19 luật định tuyến cho 23 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
+# 19 luật định tuyến cho 28 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -57,7 +57,7 @@ spec:
         # trong khi `task-priorities` và `task-types` là petitions. Một tiền tố `task` sẽ
         # gửi hai tuyến của petitions sang identity.
         paths:
-          # finance — 1 tuyến: /api/v1/capital-plan-categories
+          # finance — 2 tuyến: /api/v1/capital-plan-categories · /api/v1/capital-plan-categories/{id}
           - path: /api/v1/capital-plan-categories
             pathType: Prefix
             backend:
@@ -106,7 +106,7 @@ spec:
               service:
                 name: petitions
                 port: { name: rest }
-          # comms — 1 tuyến: /api/v1/map-asset-types
+          # comms — 2 tuyến: /api/v1/map-asset-types · /api/v1/map-asset-types/{id}
           - path: /api/v1/map-asset-types
             pathType: Prefix
             backend:
@@ -120,14 +120,14 @@ spec:
               service:
                 name: identity
                 port: { name: rest }
-          # petitions — 1 tuyến: /api/v1/task-priorities
+          # petitions — 2 tuyến: /api/v1/task-priorities · /api/v1/task-priorities/{id}
           - path: /api/v1/task-priorities
             pathType: Prefix
             backend:
               service:
                 name: petitions
                 port: { name: rest }
-          # documents — 1 tuyến: /api/v1/document-types
+          # documents — 2 tuyến: /api/v1/document-types · /api/v1/document-types/{id}
           - path: /api/v1/document-types
             pathType: Prefix
             backend:
@@ -148,7 +148,7 @@ spec:
               service:
                 name: identity
                 port: { name: rest }
-          # petitions — 1 tuyến: /api/v1/task-types
+          # petitions — 2 tuyến: /api/v1/task-types · /api/v1/task-types/{id}
           - path: /api/v1/task-types
             pathType: Prefix
             backend:
