@@ -106,29 +106,47 @@ test:
 	@# rather than dropping the flag.
 	go test -race -count=1 $(MODULES)
 
-web:                            ## Typecheck + test the Next.js apps — skips LOUDLY when deps are absent
+web:                            ## Typecheck + test the Next.js apps — ĐỎ khi một app thiếu deps
 	@# Deliberately not `next build`: a production build is the CI image's job (web-admin/Dockerfile),
 	@# and doing it here would make the local gate several times slower for no extra signal.
-	@#
-	@# And deliberately not a silent skip. A gate that quietly does nothing is the failure this
-	@# project keeps finding elsewhere; this one says out loud that it checked nothing and why.
 	@#
 	@# check:api is part of THIS target on purpose. It re-derives src/lib/api/schema.gen.ts from
 	@# kb/20-contracts/openapi.json and fails when they differ — the one check that catches a
 	@# REST contract change the web has not been regenerated for. Listing it only in Jenkinsfile
 	@# would give the project two definitions of "verified", and the looser one always wins.
+	@# ĐỎ, KHÔNG PHẢI BỎ QUA — đổi 22/09/2026, và đây là câu mà sổ tiến độ để ngỏ:
+	@# *"một đơn vị chưa có mã thì nên BỎ QUA hay nên làm đỏ cổng"*. Trả lời: đỏ khi nó CÓ mã.
+	@#
+	@# Bản cũ in ra một câu rất rõ rằng mã TypeScript không được kiểm, rồi trả rc=0. Câu ấy đi
+	@# vào log CI giữa hàng trăm dòng khác và không ai đọc; thứ người ta đọc là màu của cổng, và
+	@# màu ấy nói "đã kiểm". `platform-admin` sống như thế từ 20/09 tới 22/09/2026 — một đơn vị
+	@# triển khai được, có mã TypeScript, chưa từng đi qua một phép kiểm nào.
+	@#
+	@# `npm test` và `check:api` chạy CÓ ĐIỀU KIỆN vì không phải app nào cũng khai chúng, và
+	@# `npm test` trên một app không có script ấy sẽ đỏ vì lý do sai — "chưa viết test nào" không
+	@# phải một khiếm khuyết cùng loại với "mã không biên dịch được". `tsc` thì KHÔNG có điều
+	@# kiện nào: mọi app đều phải biên dịch được.
 	@for app in */; do \
 		if [ -f "$$app/package.json" ]; then \
-			if [ -d "$$app/node_modules" ]; then \
-				echo "typecheck $$app"; \
-				(cd "$$app" && npx --no-install tsc --noEmit) || exit 1; \
+			if [ ! -d "$$app/node_modules" ]; then \
+				echo "[FAIL] $$app có package.json nhưng chưa có node_modules — mã TypeScript của nó KHÔNG được kiểm dòng nào."; \
+				echo "       Một cổng xanh trong khi một đơn vị triển khai không được kiểm là một cổng nói dối."; \
+				echo "       chạy: (cd $$app && npm install)"; \
+				exit 1; \
+			fi; \
+			echo "typecheck $$app"; \
+			(cd "$$app" && npx --no-install tsc --noEmit) || exit 1; \
+			if (cd "$$app" && npm run 2>/dev/null | grep -q '^  test$$'); then \
 				echo "test $$app"; \
 				(cd "$$app" && npm test --silent) || exit 1; \
+			else \
+				echo "  (bỏ qua test $$app — package.json không khai script 'test')"; \
+			fi; \
+			if (cd "$$app" && npm run 2>/dev/null | grep -q '^  check:api$$'); then \
 				echo "check:api $$app"; \
 				(cd "$$app" && npm run --silent check:api) || exit 1; \
 			else \
-				echo "BỎ QUA $$app — chưa có node_modules. Mã TypeScript KHÔNG được kiểm."; \
-				echo "         chạy: (cd $$app && npm install)"; \
+				echo "  (bỏ qua check:api $$app — package.json không khai script 'check:api')"; \
 			fi; \
 		fi; \
 	done

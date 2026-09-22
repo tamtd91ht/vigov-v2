@@ -27,6 +27,11 @@ node_modules/
 .next/
 out/
 web/build/
+# Đệm tăng tốc của `tsc --noEmit`, sinh ra ngay lần typecheck ĐẦU TIÊN của một app. Nó chứa
+# đường dẫn tuyệt đối của máy chạy, nên hai máy commit nó là hai bản xung đột mỗi lần chạy cổng.
+# `web-admin` và `citizen-app` chưa bao giờ để lộ nó chỉ vì chúng đã được typecheck từ trước khi
+# có ai `git add -A`; `platform-admin` thì lần đầu là 22/09/2026 — và tệp này hiện ra ngay.
+*.tsbuildinfo
 
 # The GENERATED kb tiers are committed on purpose, so a fresh clone has working
 # knowledge before anyone runs `make kb`.

@@ -24,9 +24,9 @@ tức tin `git log` chứ đừng tin tệp này.
 | | |
 |---|---|
 | ĐANG LÀM | 19 |
-| chưa làm | 15 |
+| chưa làm | 14 |
 | treo | 12 |
-| xong | 101 |
+| xong | 102 |
 
 ## Nợ khách chốt — chặn thật, không tự quyết được
 
@@ -131,12 +131,12 @@ CỬA SỔ CÒN LẠI, không giả vờ đã đóng: vài giây giữa fetch v�
 
 ## `platform-admin`
 
-Cập nhật 2026-09-20 · 2 mục
+Cập nhật 2026-09-22 · 2 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
-| `ts-chua-tung-duoc-kiem` — Mã TypeScript của platform-admin chưa từng đi qua cổng kiểm | chưa làm | `make check` in `BỎ QUA platform-admin/ — chưa có node_modules. Mã TypeScript KHÔNG được kiểm.` rồi tiếp tục và vẫn trả rc=0 — đọc trong log lượt chạy đầy đủ 2026-09-20 | — | Đây là LỖ HỔNG CỦA CỔNG, không phải của app: cổng xanh trong khi một đơn vị triển khai không được kiểm dòng nào. Cùng lớp với `golangci-lint` vắng mặt mà mục `lint` nuốt lỗi bằng tiền tố `-`. Gỡ bằng `(cd platform-admin && npm install)`, nhưng câu đáng hỏi trước là: một đơn vị chưa có mã thì nên BỎ QUA hay nên làm đỏ cổng |
 | `chua-dung-man-hinh-nao` — Console quản trị nền tảng chưa có màn hình nào | chưa làm | platform-admin/src/{app,components,features}/ đều RỖNG; chỉ có src/lib/api.ts. Commit cuối chạm vào module: 6d1d333 (lượt đưa mỗi đơn vị lên cấp một) — kiểm 2026-09-20 | — | ĐỌC ADR 0003 TRƯỚC khi dựng màn đầu tiên: platform chỉ giữ SIÊU DỮ LIỆU, nên console này không được có đường nào đọc dữ liệu nghiệp vụ của một xã. Đó cũng là stop condition #5 của luật 1 — quản trị viên nhà cung cấp chạm dữ liệu nghiệp vụ của xã là câu phải hỏi người dùng, không tự quyết |
+| `ts-chua-tung-duoc-kiem` — Mã TypeScript của platform-admin ĐÃ đi qua cổng kiểm — và cổng thôi bỏ qua | xong | 22/09/2026: `(cd platform-admin && npm install)` — 28 gói, rồi `npx tsc --noEmit` rc=0. Đây là lần ĐẦU TIÊN mã của đơn vị này đi qua một phép kiểm nào; trước đó nó có đúng một tệp TypeScript (`src/lib/api.ts`) chưa ai biên dịch thử. CỔNG CŨNG ĐÃ SỬA, và đó mới là phần quan trọng: mục `web` của Makefile trước đây in một câu rất rõ rằng mã TypeScript KHÔNG được kiểm — rồi trả rc=0. Câu ấy đi vào log CI giữa hàng trăm dòng khác và không ai đọc; thứ người ta đọc là MÀU của cổng, và màu ấy nói 'đã kiểm'. Nay thiếu `node_modules` mà có `package.json` là ĐỎ. `npm test` và `check:api` chạy CÓ ĐIỀU KIỆN vì `platform-admin` không khai hai script ấy, và 'chưa viết test nào' không phải khiếm khuyết cùng loại với 'mã không biên dịch được'; `tsc` thì không có điều kiện nào. KIỂM: chạy lại chính vòng lặp của mục `web` bằng shell (máy này không có `make`) — platform-admin typecheck xanh + hai dòng bỏ qua có nêu lý do; citizen-app 671/671 + check:api. ĐỘT BIẾN: một thư mục giả có `package.json` mà không có `node_modules` → rc=1. | — | CÂU MÀ MỤC NÀY ĐỂ NGỎ ĐÃ CÓ ĐÁP: *'một đơn vị chưa có mã thì nên BỎ QUA hay nên làm đỏ cổng'* → ĐỎ KHI NÓ CÓ MÃ. Một đơn vị thật sự rỗng (không `package.json`) vẫn không bị đụng tới; `platform-admin` không rỗng, nó có một tệp. PHÁT SINH: `tsconfig.tsbuildinfo` hiện ra ngay lần typecheck đầu và đã vào `.gitignore` — nó chứa đường dẫn tuyệt đối của máy chạy, nên hai máy commit nó là hai bản xung đột mỗi lần chạy cổng. `web-admin` và `citizen-app` chưa bao giờ để lộ tệp ấy chỉ vì chúng đã được typecheck từ trước khi có ai `git add -A`. `package-lock.json` thì ĐƯỢC commit, theo đúng `web-admin` và `citizen-app`. CÒN LẠI, không đổi: console này vẫn chưa có màn hình nào — xem mục `chua-dung-man-hinh-nao`, và ĐỌC ADR 0003 trước khi dựng màn đầu tiên. |
 
 ## `proto`
 
