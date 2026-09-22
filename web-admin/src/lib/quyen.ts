@@ -79,6 +79,26 @@ export const QUYEN_XEM_PHAN_ANH = "feedback.read";
 export const QUYEN_QUAN_LY_DANH_MUC = "admin.lookup";
 
 /**
+ * Khoá quyền của mọi thao tác GHI trên tab Thời hạn xử lý & Lịch làm việc — `admin.sla`,
+ * "Cấu hình thời hạn xử lý".
+ *
+ * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên cả mười bốn tuyến ghi
+ * (`x-vigov-permission.key` trong `kb/20-contracts/openapi.json`) và đúng chuỗi migration gieo vào
+ * bảng `quyen` (`service-identity/migrations/0001_init.sql:277`).
+ *
+ * MỘT KHOÁ CHO CẢ BẢNG THỜI HẠN LẪN BA BẢNG LỊCH, và đó là quyết định của MÁY CHỦ chứ không phải
+ * một lần gộp cho gọn ở đây: lịch làm việc là thứ số giờ trong bảng thời hạn được ĐẾM THEO, nên
+ * một người sửa được cột "40 giờ" mà không sửa được giờ làm việc thì vẫn đổi được hạn thật của
+ * mọi hồ sơ — chỉ bằng đường vòng.
+ *
+ * BẤT ĐỐI XỨNG ĐỌC/GHI, và nó KHÔNG giống danh mục: ba tuyến đọc lịch khai `any-authenticated`
+ * (lịch đọc để VẼ), nhưng `GET /api/v1/sla` thì đòi chính khoá này (bảng ấy đọc để CẤU HÌNH).
+ * Nên khoá này che phần ghi của cả bốn bảng, và che luôn phần đọc của riêng bảng thời hạn — việc
+ * che ấy do máy chủ làm, giao diện chỉ hiện nguyên văn câu 403 của nó.
+ */
+export const QUYEN_CAU_HINH_THOI_HAN = "admin.sla";
+
+/**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
  *
  * TỪNG NẰM RIÊNG TRONG `features/cau-hinh/quyen-tab.ts` VÀ NAY Ở ĐÂY, vì nó có người dùng thứ

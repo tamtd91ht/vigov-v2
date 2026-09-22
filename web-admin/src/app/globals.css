@@ -758,8 +758,63 @@ body {
 
 .man-giai-ngan,
 .man-phan-anh,
-.tab-lich-lam-viec {
+.tab-lich-lam-viec,
+.tab-thoi-han {
   margin-top: 2rem;
+}
+
+/* ---- màn cấu hình · tab Thời hạn xử lý --------------------------------------------------- */
+
+/* Khối "đơn vị chưa khai xong". ĐỎ, và đúng chỗ này thì màu đỏ là đúng — khác `.canh-bao-pham-vi`
+ * vốn cố ý xám: khối kia nói phạm vi của những con số bên dưới, khối này nói rằng xã ĐANG KHÔNG
+ * tiếp nhận được văn bản đến và phản ánh nào. Nhưng màu chỉ là dấu hiệu THỨ HAI: chữ trong khối
+ * đã nói đủ hậu quả, để người không phân biệt được màu vẫn đọc ra (a11y, `15-phu-luc §8`). */
+.khoi-chua-khai {
+  margin: 1rem 0 1.5rem;
+  padding: 1rem;
+  background: #fef3f2;
+  border: 1px solid var(--do-loi);
+  border-left: 6px solid var(--do-loi);
+  border-radius: 0.5rem;
+}
+
+.khoi-chua-khai h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.0625rem;
+  color: var(--do-loi);
+}
+
+/* Câu hậu quả KHÔNG nhỏ hơn chữ thường và không xám: nó là câu quan trọng nhất màn hình, và một
+ * câu đặt ở cỡ ghi chú là một câu người ta lướt qua. */
+.khoi-chua-khai .hau-qua {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.khoi-chua-khai ul {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+}
+
+/* VÙNG CHẠM TỐI THIỂU — cùng ngưỡng và cùng lý do với `.o-thao-tac .nut-phu`: hai nút này là hai
+ * nút quan trọng nhất của cả tab, bấm trên điện thoại, và bấm trượt nghĩa là xã vẫn đứng yên
+ * trong trạng thái không tiếp nhận được gì (`skills/accessibility-elderly`). */
+.khoi-chua-khai .nut-chinh {
+  min-height: 2.75rem;
+  width: auto;
+}
+
+/* MỌI nút phụ trên tab này đạt vùng chạm tối thiểu, không chỉ nút trong ô thao tác: ở đây còn ba
+ * nút gieo và ba nút thêm đứng ngoài bảng, và chúng là những nút một cán bộ bấm đúng một lần
+ * trong đời máy — bấm trượt thì họ không biết mình vừa bấm trượt hay hệ thống không nhận. */
+.tab-thoi-han .nut-phu {
+  min-height: 2.75rem;
+}
+
+/* Số giờ căn phải để mắt so được cột với cột — nhưng KHÔNG dùng `tabular-nums` một mình làm dấu
+ * hiệu: mỗi ô vẫn mang đủ chữ "giờ làm việc", vì một cột số trần đọc thành giờ đồng hồ. */
+.tab-thoi-han .bang-danh-muc td {
+  font-variant-numeric: tabular-nums;
 }
 
 .duong-lui {

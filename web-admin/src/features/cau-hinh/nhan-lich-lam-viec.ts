@@ -116,14 +116,3 @@ export function nhanNgayLamBuRong(nam: number): string {
     "trống, vốn nghĩa là đơn vị không có giờ làm việc nào."
   );
 }
-
-/**
- * Ghi chú: vì sao không có nút sửa nào.
- *
- * Lý do đến từ máy chủ, không từ đây: ai được sửa lịch làm việc của một xã chưa có ai hỏi, và
- * lịch làm việc là CĂN CỨ CỦA MỘT CAM KẾT ĐÃ PHÁT RA — khi đoàn kiểm tra hỏi vì sao phiếu nhận
- * ngày 30/04 lại đến hạn 05/05, câu trả lời là lịch như nó đứng NGÀY HÔM ẤY.
- */
-export const GHI_CHU_CHI_XEM_LICH =
-  "Màn hình hiện chỉ xem. Sửa lịch làm việc, ngày nghỉ lễ và ngày làm bù chưa mở vì chưa có quy " +
-  "định ai được sửa, và vì lịch là căn cứ của những thời hạn đã hứa với người dân.";

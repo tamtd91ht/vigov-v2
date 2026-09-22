@@ -2,9 +2,9 @@ import { CauHinhXaProvider, phanHienThi } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { TabDanhMuc } from "@/features/cau-hinh/tab-danh-muc";
-import { TabLichLamViec } from "@/features/cau-hinh/tab-lich-lam-viec";
 import { TabNguoiDung } from "@/features/cau-hinh/tab-nguoi-dung";
 import { TabPhanQuyen } from "@/features/cau-hinh/tab-phan-quyen";
+import { TabThoiHanXuLy } from "@/features/cau-hinh/tab-thoi-han-xu-ly";
 import { TabThonToDanPho } from "@/features/cau-hinh/tab-thon-to-dan-pho";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
@@ -17,17 +17,25 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  * đoạn đường dẫn đã chạy thật ở một xã thì không có lần sửa nào rẻ nữa. Nên tab mở ngay trong
  * trang này; đặt tên đoạn đường dẫn là việc của khách, không phải của lượt này.
  *
- * MƯỜI TAB CỦA §0, Ở ĐÂY CÓ BỐN VÀ MỘT NỬA. Năm tab còn lại — Sơ đồ tổ chức, Trường bản đồ, Lời
- * hệ thống, Tự động hoá, Máy chủ thư — chưa có tuyến nào trong hợp đồng REST. Một thanh mười tab
- * mà năm tab bấm vào không ra gì là năm lần hứa hẹn suông, nên thanh tab chỉ mọc thêm khi tuyến
- * mọc thêm.
+ * MƯỜI TAB CỦA §0, Ở ĐÂY CÓ NĂM. Năm tab còn lại — Sơ đồ tổ chức, Trường bản đồ, Lời hệ thống,
+ * Tự động hoá, Máy chủ thư — chưa có tuyến nào trong hợp đồng REST. Một thanh mười tab mà năm tab
+ * bấm vào không ra gì là năm lần hứa hẹn suông, nên thanh tab chỉ mọc thêm khi tuyến mọc thêm.
  *
- * "MỘT NỬA" LÀ TAB THỜI HẠN XỬ LÝ (§8), VÀ NỬA NÀO CÓ MẶT THÌ PHẢI NÓI RÕ. Bảng SLA — số giờ
- * tiếp nhận và xử lý xong theo từng lĩnh vực — KHÔNG có tuyến nào, nên nó không được dựng. Ba
- * bảng phụ mà chính §8 nêu ở cuối thì CÓ: lịch làm việc trong tuần, ngày nghỉ lễ và ngày làm bù
- * (`GET /api/v1/working-hours`, `/public-holidays`, `/swap-working-days`). Chúng là nền của cách
- * đếm hạn theo giờ làm việc (ADR 0007), và chúng là cấu hình CỦA TỪNG XÃ — `TabLichLamViec` nói
- * đúng câu đó ra trên màn hình, vì một cán bộ tưởng đó là quy định chung sẽ không bao giờ sửa nó.
+ * TAB THỜI HẠN XỬ LÝ (§8) NAY ĐỦ CẢ BỐN BẢNG, VÀ ĐÓ LÀ TAB GẤP NHẤT TRONG NĂM. Bảng thời hạn —
+ * số giờ tiếp nhận và xử lý xong — đã có tuyến (`/api/v1/sla`), cùng ba bảng lịch mà §8 nêu ở
+ * cuối (`/working-hours`, `/public-holidays`, `/swap-working-days`). Bốn bảng ấy là nền của cách
+ * đếm hạn theo giờ làm việc (ADR 0007), và HAI trong số đó rỗng thì xã KHÔNG vào sổ được văn bản
+ * đến và KHÔNG nhận được phản ánh: `identity.ResolveDeadlines` từ chối. `TabThoiHanXuLy` nói đúng
+ * câu đó ra trên màn hình, kèm hai nút gieo — đó là thứ thay cho một bước hướng dẫn ban đầu mà hệ
+ * thống không có.
+ *
+ * `TabLichLamViec` (chỉ xem) ĐÃ ĐƯỢC XOÁ cùng lượt này, không chỉ thôi được dựng. Tab mới bao trọn
+ * ba bảng lịch của nó và thêm đường ghi, nên giữ lại là hiện hai lần cùng ba bảng — nhưng lý do
+ * xoá hẳn nặng hơn thế: hằng `GHI_CHU_CHI_XEM_LICH` của nó nói với cán bộ rằng *"sửa lịch chưa mở
+ * vì chưa có quy định ai được sửa"*, và câu ấy nay SAI — `admin.sla` chính là quy định ấy. Bài
+ * kiểm của tệp cũ vẫn XANH khi câu ấy đã sai, vì nó chỉ kiểm câu có hiện ra hay không chứ không
+ * kiểm câu có còn đúng hay không. Một lời khai sai mà không cổng nào đỏ là thứ chỉ gỡ được bằng
+ * cách xoá nguồn của nó.
  *
  * VÀ Ở ĐÂY CHƯA CÓ THANH TAB NÀO: năm phần dựng nối tiếp trong trang, theo đúng thứ tự tab của
  * đặc tả §0. Chưa dựng thanh chuyển tab vì nó đặt ra một câu chưa ai trả lời: tài khoản chỉ mở
@@ -72,7 +80,7 @@ export default async function TrangCauHinh() {
           <TabNguoiDung />
           <TabPhanQuyen />
           <TabDanhMuc />
-          <TabLichLamViec />
+          <TabThoiHanXuLy />
         </main>
       </PhienProvider>
     </CauHinhXaProvider>
