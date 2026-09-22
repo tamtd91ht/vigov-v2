@@ -10,8 +10,9 @@ import {
 } from "../../content/company-profile";
 import { KHAI_BAO_LOI_GOI } from "../tinh-nang/zalo-api";
 
+import { DaiChienDich } from "./DaiChienDich";
 import { MOC_CHANG_DUONG, MOC_QUAN_LY_QUYEN, type ThamSoMan } from "./dieu-huong";
-import { NetworkBackdrop, ShieldGlyph } from "./icons";
+import { HandshakeGlyph, NetworkBackdrop, ShieldGlyph } from "./icons";
 import { KhoiTin } from "./KhoiTin";
 import { MenuNhanh } from "./MenuNhanh";
 
@@ -115,8 +116,33 @@ export function HomeScreen({ onDi }: ThamSoMan) {
       </section>
 
       {/* SÁU LỐI ĐI NGẮN, TRÊN MỘT THẺ TRẮNG ĐÈ LÊN ĐÁY HERO. Sáu chứ không tám — ba mục của bản
-          mẫu không có đích nào để dẫn tới, và mục thứ sáu là hotline. Xem `MenuNhanh`. */}
-      <MenuNhanh onDi={di} />
+          mẫu không có đích nào để dẫn tới, và mục thứ sáu là hotline. Xem `MenuNhanh`.
+
+          DẢI CHIẾN DỊCH ĐI VÀO THẺ ẤY, KHÔNG ĐỨNG GIỮA HERO VÀ THẺ: lề âm của thẻ và đệm đáy của
+          hero là một cặp đã đo, và một khối chen vào giữa làm thẻ trắng trùm mất chính dải ấy mà
+          không phép kiểm nào thấy. Lý do đầy đủ ở tham số `dau` của `MenuNhanh`. */}
+      <MenuNhanh onDi={di} dau={<DaiChienDich />} />
+
+      {/*
+        ĐƯỜNG VÀO MÀN "TƯ VẤN VÀ BÁO GIÁ" — MỘT NÚT, DƯỚI THẺ MENU, KHÔNG PHẢI MỘT Ô THỨ BẢY.
+
+        Sáu ô là một phép đo ở 320px (lưới 3x2, xem `MenuNhanh`); ô thứ bảy để lại một hàng ba có
+        một ô lẻ. Và nút này KHÔNG đứng giữa hero và thẻ menu: lề âm của thẻ ăn khớp với đệm đáy
+        hero, và một khối chen vào giữa làm thẻ trắng trùm lên nó mà không phép kiểm nào thấy.
+
+        Nó nói ra TRẠNG THÁI CỦA VIỆC, không chỉ tên việc: "Gửi yêu cầu, chúng tôi gọi lại" cho
+        biết sau cú bấm là gì. Một nút tên "Tư vấn" đứng cạnh một ô menu cũng tên "Tư vấn" (hotline)
+        là hai thứ người dùng phải đoán xem khác nhau chỗ nào — nên nhãn ở đây khác hẳn.
+      */}
+      <button type="button" className="action action--primary action--mo" onClick={() => di({ man: "tu-van" })}>
+        <span className="tile" aria-hidden="true">
+          <HandshakeGlyph className="tile__glyph" />
+        </span>
+        <span>
+          <span className="action__label">Gửi yêu cầu, chúng tôi liên hệ lại</span>
+          <span className="action__value">Tư vấn và báo giá</span>
+        </span>
+      </button>
 
       {/*
         GIẢI PHÁP NỔI BẬT — DANH SÁCH ĐỌC, KHÔNG PHẢI THẺ BẤM ĐƯỢC, và đó là chủ đích.

@@ -78,6 +78,25 @@ const KHU_VUC: Readonly<Record<Nua | "trung-lap", readonly string[]>> = {
     "./features/company-intro/",
     "./features/tinh-nang/",
     "./features/dang-nhap/",
+    // Bộ chọn ba bước trên màn chủ (22/09/2026). Nó đứng trên `SOLUTIONS` — danh mục sản phẩm của
+    // một doanh nghiệp — và không biết gì về xã/phường: nửa thương mại, không phải trung lập.
+    "./features/goi-y-giai-phap/",
+    // BỀ MẶT YÊU CẦU (22/09/2026, giai đoạn B) — tư vấn, báo giá, đề nghị gọi lại.
+    "./features/yeu-cau/",
+    /**
+     * ⚠ `./api/` LÀ CLIENT CỦA `vihat-miniapp`, KHÔNG PHẢI CLIENT CỦA ViGov — VÀ HAI THƯ MỤC TÊN
+     * `api` TRONG CÙNG MỘT CÂY MÃ LÀ MỘT CÁI BẪY PHẢI NÓI RA, KHÔNG PHẢI MỘT SỰ TRÙNG TÊN.
+     *
+     *   `./api/`          — backend thương mại `vihat-miniapp`: phiên đăng nhập, yêu cầu tư vấn.
+     *                       NỬA THƯƠNG MẠI.
+     *   `./cong-dan/api/` — client API của ViGov, chưa có tệp nào. NỬA NHÀ NƯỚC, và `CUA_CLIENT_VIGOV`
+     *                       ở dưới cấm MỌI tệp ngoài `./cong-dan/` nhập nó — kể cả lớp vỏ trung lập.
+     *
+     *   Hai ràng buộc ấy không đè lên nhau: tiền tố `./cong-dan/api/` dài hơn và không phải tiền tố
+     *   của `./api/`. Ca "`./api/` là nửa thương mại, `./cong-dan/api/` vẫn bị cấm từ ngoài" ở cuối
+     *   tệp giữ cho hai thứ ấy không bị ai gộp lại.
+     */
+    "./api/",
   ],
   "nha-nuoc": ["./cong-dan/"],
   "trung-lap": [
@@ -300,6 +319,30 @@ describe("3a — ranh giới hai nửa, cấm cả hai chiều", () => {
         { path: "./cong-dan/man/TrangXa.tsx", code: 'import { goiViGov } from "../api/vigov";' },
       ]),
     ).toEqual([]);
+  });
+
+  /**
+   * ⚠ HAI THƯ MỤC TÊN `api`, VÀ CHÚNG KHÔNG ĐƯỢC GỘP — 22/09/2026.
+   *
+   *   `./api/` (mới) là client của `vihat-miniapp`, backend THƯƠNG MẠI: phiên đăng nhập và bề mặt
+   *   yêu cầu tư vấn. `./cong-dan/api/` là client của ViGov, nửa NHÀ NƯỚC, chưa có tệp nào.
+   *
+   *   Hai cái tên giống nhau trong một cây mã là chỗ người đọc sau này tự kết luận "chắc là một
+   *   chỗ" rồi chuyển một tệp sang cho gọn. Ca này ghim cả hai vế: `./api/` thuộc nửa thương mại,
+   *   và ràng buộc nặng nhất của tệp này — cấm MỌI tệp ngoài `./cong-dan/` nhập client ViGov —
+   *   KHÔNG bị nới theo, kể cả cho `./api/`.
+   */
+  it("`./api/` là nửa THƯƠNG MẠI, và nó vẫn KHÔNG được nhập client ViGov", () => {
+    expect(khuCua("./api/goi-may-chu.ts")).toBe("thuong-mai");
+    expect(khuCua("./api/hop-dong-yeu-cau.ts")).toBe("thuong-mai");
+    // Và tiền tố `./api/` KHÔNG vô tình phủ lên `./cong-dan/api/`.
+    expect(khuCua("./cong-dan/api/vigov.ts")).toBe("nha-nuoc");
+    expect(
+      nhapClientViGovTuNgoai([
+        { path: "./api/goi-may-chu.ts", code: 'import { x } from "../cong-dan/api/vigov";' },
+      ]).length,
+      "client ViGov lọt từ chính tệp gọi mạng của nửa thương mại",
+    ).toBe(1);
   });
 });
 

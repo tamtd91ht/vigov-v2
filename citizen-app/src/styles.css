@@ -2359,3 +2359,140 @@ body {
   width: 22px;
   height: 22px;
 }
+
+/* ---------- dải chiến dịch (màn chủ) ---------- */
+
+/*
+ * DẢI CHIẾN DỊCH — NẰM TRONG THẺ MENU, KHÔNG NẰM GIỮA HERO VÀ THẺ.
+ *
+ *   `.menu-the` là một lớp CHỒNG: lề âm của nó và đệm đáy của `.hero` là MỘT CẶP mà
+ *   `accessibility.test.ts` đọc ra rồi so. Một khối chen vào giữa hai thẻ ấy thì lề âm kia trèo
+ *   lên khối mới chứ không trèo lên hero nữa — thẻ trắng trùm mất chính dải vừa thêm — và phép
+ *   kiểm vẫn xanh, vì hai con số nó đọc không đổi. Nên dải ở TRONG thẻ.
+ *
+ *   Nền `--surface-tint` chứ không phải một màu chiến dịch riêng: mọi cặp màu của dải này đã có
+ *   tên trong bảng cặp màu, và một màu mới là một cặp chưa ai đo để lấy một nhịp trang trí.
+ */
+.dai-cd {
+  background: var(--surface-tint);
+  border-radius: 14px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+}
+
+.dai-cd__tieu-de {
+  font-size: var(--text-small);
+  color: var(--navy);
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 4px;
+}
+
+.dai-cd__chao {
+  font-size: var(--text-small);
+  color: var(--ink);
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* ---------- gợi ý giải pháp (bộ chọn ba bước) ---------- */
+
+/*
+ * DANH SÁCH LỰA CHỌN — CHỈ GỠ DẤU CHẤM ĐẦU DÒNG, KHÔNG DỰNG MỘT LỚP NÚT MỚI.
+ *
+ * Mỗi lựa chọn là một `.action.action--mo` — đúng cái nút khối màn chủ và màn Quản lý quyền dùng,
+ * đã có `min-height: var(--tap-min)`, đã có nền nằm trong bảng cặp màu. Dựng một lớp nút riêng ở
+ * đây là dựng một bề mặt chữ thứ hai mà `accessibility.test.ts` không biết tên.
+ */
+.gygp-ds {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Nút chiếm trọn bề rộng dòng: một lựa chọn hẹp hơn dòng là một đích chạm phải ngắm. */
+.gygp-ds__nut {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+/* ---------- bề mặt yêu cầu: ô ghi chú, nút chọn nhiều ---------- */
+
+/*
+ * NÚT LỰA CHỌN ĐANG ĐƯỢC CHỌN.
+ *
+ * ⚠ TRẠNG THÁI KHÔNG ĐƯỢC NÓI BẰNG RIÊNG MÀU NỀN (README §Non-negotiables #6). Dấu "✓" / "＋" là
+ *   một ký tự CHỮ nằm trong `.la-chon__dau`, và `aria-pressed` nói điều đó cho trình đọc màn hình.
+ *   Nền đổi chỉ là lớp thứ ba, cho người nhìn được màu — không phải lớp duy nhất.
+ *
+ * Nền dùng `--nen-the-luc`, đúng dải đã đo cho trạng thái bấm của ô menu nhanh; viền dùng --navy
+ * để mép nút còn phân biệt được khi nền hai trạng thái gần nhau ngoài nắng.
+ */
+.la-chon {
+  border-color: var(--navy);
+  background: var(--nen-the-luc);
+}
+
+.la-chon__dau {
+  min-width: 22px;
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--navy);
+  text-align: center;
+}
+
+.o-ghi-chu {
+  margin: 0 0 12px;
+}
+
+.o-ghi-chu__nhan {
+  display: block;
+  font-size: var(--text-body);
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+
+/*
+ * Ô NHẬP DUY NHẤT CỦA CẢ ỨNG DỤNG.
+ *
+ * `font: inherit` chứ không để mặc định của trình duyệt: `<textarea>` mặc định dùng phông
+ * monospace ~13px, tức NHỎ HƠN ngưỡng 16px mà app này cam kết — và nó nhỏ đi ở đúng chỗ người
+ * dùng phải đọc lại những gì mình vừa gõ. `font-size` khai tường minh thêm một lần vì một vài
+ * WebView cũ bỏ qua `font` viết tắt trên phần tử biểu mẫu.
+ *
+ * `min-height` ba lần `--tap-min`: ô này vừa là đích chạm vừa là vùng đọc, và một ô cao bằng
+ * đúng một dòng buộc người dùng cuộn trong một khung 44px bằng ngón tay.
+ */
+.o-ghi-chu__o {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: calc(var(--tap-min) * 3);
+  font: inherit;
+  font-size: var(--text-body);
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.o-ghi-chu__o:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.o-ghi-chu__dem,
+.o-ghi-chu__tran {
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+  margin: 6px 0 0;
+}
+
+/* Vượt trần: chữ ĐỔI HẲN NỘI DUNG (xem `OGhiChu.tsx`), và màu chỉ là lớp nhấn thêm. `--navy`
+   chứ không một màu đỏ mới: một màu mới là một cặp chưa ai đo. */
+.o-ghi-chu__dem--qua {
+  color: var(--navy);
+  font-weight: 700;
+}

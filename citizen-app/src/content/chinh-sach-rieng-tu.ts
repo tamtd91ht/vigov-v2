@@ -13,9 +13,31 @@
  *     "không lưu gì xuống máy bạn"  <- dây bẫy cấm localStorage / sessionStorage / cookie /
  *                                      indexedDB, KHÔNG miễn cho tệp nào
  *     "ảnh không rời khỏi máy"      <- dây bẫy cấm `serverUploadUrl` trên toàn cây mã
- *     "chỉ gửi đi ở bước đăng nhập" <- dây bẫy cấm fetch / XHR / WebSocket / EventSource /
- *                                      axios ở MỌI tệp, miễn cho ĐÚNG MỘT:
- *                                      `features/dang-nhap/goi-may-chu.ts`
+ *     "gửi đi ở đúng HAI chỗ"       <- dây bẫy cấm fetch / XHR / WebSocket / EventSource /
+ *                                      axios ở MỌI tệp, miễn cho ĐÚNG HAI TỆP ĐƯỢC KÊ TÊN:
+ *                                      `features/dang-nhap/goi-may-chu.ts` (đăng nhập) và
+ *                                      `api/goi-may-chu.ts` (yêu cầu tư vấn)
+ *
+ * ⚠ 22/09/2026 — ỨNG DỤNG BẮT ĐẦU THU THẬP DỮ LIỆU BÁN HÀNG, VÀ ĐÓ LÀ THAY ĐỔI LỚN NHẤT MÀ VĂN
+ * BẢN NÀY TỪNG PHẢI GHI:
+ *
+ *   Tới hôm qua, thứ duy nhất rời khỏi máy là hai mã đăng nhập. Từ hôm nay có một bề mặt "Tư vấn
+ *   & báo giá" gửi đi: dòng giải pháp quan tâm · quy mô nhân sự · **một ô ghi chú tự do** · mã
+ *   chiến dịch · loại yêu cầu. Ô ghi chú là ô NHẬP đầu tiên trong cả ứng dụng, và nó là thứ đáng
+ *   khai nhất trong danh sách ấy: chúng tôi không kiểm soát được người dùng gõ gì vào đó.
+ *
+ *   ⚠ DANH SÁCH ẤY KHÔNG ĐƯỢC GÕ TAY Ở ĐÂY. Nó được DỰNG RA từ `TRUONG_GUI_DI` trong
+ *   `api/hop-dong-yeu-cau.ts` — đúng cùng một cơ chế với câu "Có N chỗ mở trang ngoài", và vì
+ *   đúng cùng một lý do. `content/chinh-sach.test.ts` khoá hai chiều: mọi khoá `thanYeuCau()` sinh
+ *   ra phải có một dòng khai, và mọi dòng khai phải có mặt nguyên văn trong văn bản này. Thêm một
+ *   trường mà quên khai là ĐỎ; dọn một mục khỏi văn bản trong khi mã vẫn gửi trường ấy cũng ĐỎ.
+ *
+ *   HẠN LƯU CỦA DỮ LIỆU ẤY LÀ **24 THÁNG, RỒI ẨN DANH HOÁ** — không phải xoá. Đọc từ
+ *   `vihat-miniapp/migrations/0003_yeu_cau.sql`, hàm `an_danh_yeu_cau_qua_han(interval '24 months')`:
+ *   nó đặt `ghi_chu = NULL` và ghi `an_danh_luc`, GIỮ NGUYÊN hàng. Nghĩa là ô ghi chú mất đi, còn
+ *   sự kiện "có một yêu cầu loại này, quan tâm sản phẩm này, ngày này" thì ở lại. Viết "sau 24
+ *   tháng chúng tôi xoá dữ liệu của bạn" là mô tả một cơ chế không tồn tại, và sai về phía hứa
+ *   nhiều hơn thứ mã làm.
  *
  * ⚠ MỘT VĂN BẢN, ĐÚNG CHO CẢ HAI BIẾN THỂ — 20/09/2026, và đây là một quyết định ĐÃ ĐẢO NGƯỢC:
  *
@@ -120,6 +142,8 @@ import {
   DOAN_CHINH_SACH_TUNG_QUYEN,
 } from "../features/tinh-nang/noi-dung";
 
+import { cauKhaiTruongGuiDi } from "../api/hop-dong-yeu-cau";
+
 import { cauKhaiDichRaNgoai } from "./dich-ra-ngoai";
 
 export type MucChinhSach = {
@@ -197,7 +221,7 @@ export const TIEU_DE_CHINH_SACH = "Chính sách quyền riêng tư";
  * cho đúng một tệp) giữ hộ.
  */
 export const CAU_DAU =
-  "Ứng dụng này không lưu bất kỳ dữ liệu nào của bạn xuống máy, và chỉ gửi đi đúng MỘT việc: khi chính bạn bấm đăng nhập, nó gửi hai mã dùng một lần do Zalo cấp tới máy chủ của VihatSoftware.";
+  "Ứng dụng này không lưu bất kỳ dữ liệu nào của bạn xuống máy, và chỉ gửi đi ở đúng HAI việc, cả hai đều do chính bạn bấm: khi bạn đăng nhập, nó gửi hai mã dùng một lần do Zalo cấp; và khi bạn bấm gửi một yêu cầu tư vấn, nó gửi những gì bạn vừa chọn và vừa gõ trong màn ấy. Cả hai đi tới máy chủ của VihatSoftware.";
 
 /**
  * MỘT DANH SÁCH PHẲNG, ĐỌC TỪ TRÊN XUỐNG.
@@ -219,9 +243,16 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     ma: "du-lieu",
     tieu_de: "Dữ liệu ứng dụng xử lý",
     doan: [
-      // CÂU NÀY ĐÃ PHẢI SỬA GIỮA CHỪNG. Bản trước viết "không có ô đăng nhập"; nay ứng dụng
-      // CÓ đăng nhập, chỉ là không có ô nào để gõ. Giữ nguyên câu cũ là mô tả sai bản dựng.
-      "Ứng dụng không yêu cầu bạn nhập bất kỳ thông tin nào: không có biểu mẫu, không có ô nhập số điện thoại, không có mã sáu số nào phải gõ. Việc đăng nhập là một lần chạm, bằng chính số Zalo bạn đang dùng — mục Đăng nhập bên dưới nói rõ.",
+      // ⚠ CÂU NÀY ĐÃ PHẢI SỬA HAI LẦN, VÀ LẦN THỨ HAI (22/09/2026) LÀ LẦN NẶNG NHẤT.
+      //
+      //   Bản đầu viết "không có ô đăng nhập"; ứng dụng CÓ đăng nhập, chỉ là không có ô nào để gõ.
+      //   Bản thứ hai viết "không có biểu mẫu, không yêu cầu bạn nhập bất kỳ thông tin nào" — và
+      //   câu ấy thành SAI vào đúng ngày màn "Tư vấn và báo giá" có một ô ghi chú.
+      //
+      //   Đây chính là chế độ hỏng mà cả tệp này sinh ra để chặn: hành vi đổi, câu chữ ở lại. Nên
+      //   câu mới nói ĐỦ BA VẾ, và không vế nào được bỏ: có đúng một ô nhập · nó không bắt buộc ·
+      //   việc đăng nhập vẫn không cần gõ gì.
+      "Ứng dụng có ĐÚNG MỘT ô để bạn gõ chữ: phần ghi chú trong màn 'Tư vấn và báo giá', và nó không bắt buộc. Ngoài ô ấy, không màn nào yêu cầu bạn nhập gì — không có ô nhập số điện thoại, không có mã sáu số nào phải gõ. Việc đăng nhập là một lần chạm, bằng chính số Zalo bạn đang dùng; mục Đăng nhập bên dưới nói rõ.",
       "Ứng dụng không đọc danh bạ, không đọc tin nhắn và không theo dõi hành vi sử dụng của bạn.",
       // CÂU NÀY ĐÃ PHẢI SỬA, VÀ VIỆC SỬA NÓ LÀ BẮT BUỘC. Bản trước viết "không
       // đọc thư viện ảnh"; nay ứng dụng mở cửa sổ chọn ảnh của Zalo, nên câu ấy đã thành SAI.
@@ -263,6 +294,34 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       "Mỗi dòng nhật ký gồm: thời điểm, địa chỉ IP, lượt ấy thành công hay không, một mã lý do ngắn do chúng tôi đặt, và mã định danh nội bộ của bạn NẾU lượt ấy thành công. Nhật ký KHÔNG chứa số điện thoại của bạn, và cũng không chứa tên, thiết bị hay vị trí.",
       "Nhật ký này dùng để phát hiện lạm dụng — ví dụ một máy thử đăng nhập hàng loạt. Nó là loại dữ liệu CHỈ GHI THÊM: không sửa được và không xoá được, kể cả bởi chính chúng tôi, vì một nhật ký sửa được thì không chứng minh được gì khi có tranh chấp.",
       "Bạn có thể dùng ứng dụng mà KHÔNG đăng nhập: toàn bộ phần giới thiệu, danh thiếp, văn phòng và các tính năng khác vẫn dùng được, và hotline cùng email nằm ngay dưới nút đăng nhập.",
+    ],
+  },
+  {
+    /**
+     * MỤC RIÊNG CHO BỀ MẶT YÊU CẦU — 22/09/2026, và nó có dòng tiêu đề riêng vì đúng lý do mục
+     * `dang-nhap` và mục `ghi-tep` có:
+     *
+     *   Người đọc chính sách để biết "ứng dụng này làm gì với những gì tôi vừa gõ" phải tìm thấy
+     *   câu trả lời bằng một dòng tiêu đề, không phải bằng cách đọc hết. Và đây là bề mặt DUY
+     *   NHẤT trong cả ứng dụng nhận chữ người dùng tự gõ.
+     *
+     * ⚠ ĐOẠN LIỆT KÊ DỮ LIỆU ĐƯỢC DỰNG RA TỪ `TRUONG_GUI_DI`, KHÔNG GÕ TAY. Xem khối đầu tệp.
+     */
+    ma: "yeu-cau-tu-van",
+    tieu_de: "Yêu cầu tư vấn và đề nghị gọi lại",
+    doan: [
+      "Ứng dụng có một màn 'Tư vấn và báo giá'. Nó chỉ mở ra khi bạn tự vào, và chỉ gửi đi khi chính bạn bấm nút gửi. Bạn dùng được toàn bộ phần còn lại của ứng dụng mà không cần chạm tới màn ấy.",
+      "Bạn phải đăng nhập trước khi gửi, vì chúng tôi cần biết liên hệ lại với ai. Nếu bạn chưa đăng nhập, màn ấy không hiện biểu mẫu nào — nó mời bạn đăng nhập, hoặc gọi thẳng hotline.",
+      // ⚠ KHÔNG GÕ TAY. Dựng từ `TRUONG_GUI_DI` trong `api/hop-dong-yeu-cau.ts`, khoá hai chiều
+      // với chính thân yêu cầu — xem khối chú thích đầu tệp này.
+      cauKhaiTruongGuiDi(),
+      "PHẦN GHI CHÚ LÀ Ô DUY NHẤT TRONG CẢ ỨNG DỤNG NHẬN CHỮ BẠN TỰ GÕ, và chúng tôi không kiểm soát được bạn viết gì vào đó. Bạn không bắt buộc phải điền nó, và chúng tôi khuyên bạn đừng ghi vào đó số căn cước, thông tin tài khoản ngân hàng, hay dữ liệu cá nhân của một người khác.",
+      "Ứng dụng KHÔNG gửi kèm tên, địa chỉ, vị trí, danh bạ, ảnh hay thông tin thiết bị của bạn. Máy chủ biết yêu cầu ấy là của ai vì bạn đang đăng nhập — ứng dụng không gửi kèm một trường nào nói 'tôi là ai', và tuyến ấy cũng không nhận một trường như thế.",
+      "SAU KHI BẠN GỬI, CHÚNG TÔI CÓ THỂ GỬI MỘT TIN ZNS XÁC NHẬN tới số Zalo bạn đã đăng nhập. Tin ấy có giới hạn số lượng và có thể tạm ngưng, nên không nhận được tin KHÔNG có nghĩa là yêu cầu của bạn chưa tới: bạn xem lại yêu cầu ở màn 'Yêu cầu của tôi' bất cứ lúc nào.",
+      "NẾU BẠN BẤM 'ĐỀ NGHỊ GỌI LẠI', một nhân viên của chúng tôi sẽ gọi vào số Zalo bạn đã đăng nhập. Bạn đề nghị gọi lại được tối đa 3 lần trong 24 giờ; quá mức ấy, màn hình nói rõ và mời bạn gọi hotline nếu cần gấp. Chúng tôi không cam kết một mốc thời gian cụ thể cho cuộc gọi ấy.",
+      "MÀN 'YÊU CẦU CỦA TÔI' CHỈ HIỆN YÊU CẦU CỦA CHÍNH BẠN. Máy chủ nhận ra bạn từ phiên đăng nhập, không từ một tham số nào ứng dụng gửi lên, nên không có cách nào đổi một con số để đọc yêu cầu của người khác.",
+      "THỜI GIAN LƯU YÊU CẦU: 24 THÁNG, RỒI ẨN DANH HOÁ — không phải xoá. Sau 24 tháng kể từ ngày bạn gửi, chúng tôi XOÁ PHẦN GHI CHÚ bạn đã gõ và đánh dấu hàng ấy là đã ẩn danh. Những gì ở lại là sự kiện đã xảy ra: có một yêu cầu loại này, quan tâm dòng giải pháp này, đến từ chiến dịch này, vào ngày này — để thống kê hiệu quả không vỡ khi dữ liệu tới hạn.",
+      "Trước mốc 24 tháng, bạn vẫn yêu cầu xoá được bất cứ lúc nào theo cách nói ở mục 'Cách xử lý và thời gian lưu' bên dưới.",
     ],
   },
   {
@@ -320,8 +379,12 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       "Kiểu kết nối mạng đọc được cũng chỉ hiện lên màn hình rồi mất đi. Ứng dụng không ghi lại lịch sử bạn đã kiểm tra những lần nào.",
       "Phiếu phiên nhận được sau khi bạn đăng nhập cũng chỉ nằm trong bộ nhớ ấy: ứng dụng không ghi nó xuống máy bạn, nên đóng ứng dụng là nó mất đi và lần sau bạn đăng nhập lại bằng một lần chạm.",
       "Trên máy bạn không có việc lưu trữ, nên không có bản sao lưu nào trên máy bạn chứa dữ liệu của bạn.",
-      "Ở máy chủ, bốn thứ được lưu: số điện thoại dùng làm tên đăng nhập của bạn; bản ghi của từng phiên đăng nhập (thời điểm tạo, thời điểm hết hạn, và bản mã hoá một chiều của phiếu phiên); nhật ký đăng nhập; và — chỉ khi bạn từng yêu cầu xoá — một dòng bằng chứng của chính lần xoá ấy, nói ở cuối mục này. Mỗi bản ghi định danh còn mang thời điểm nó được tạo và lần gần nhất được cập nhật.",
-      "Ngoài bốn thứ ấy, máy chủ KHÔNG lưu gì khác của bạn: không tên, không email, không vị trí, không thông tin thiết bị, không danh bạ, không ảnh. Dịch vụ này cũng không cài công cụ đo hành vi nào và không nhúng bộ công cụ của bên thứ ba nào.",
+      // ⚠ "BỐN THỨ" THÀNH "NĂM THỨ" NGÀY 22/09/2026, và việc sửa con số này là bắt buộc: một câu
+      // liệt kê đủ rồi chốt bằng "ngoài bốn thứ ấy, máy chủ KHÔNG lưu gì khác" là một lời khai
+      // TRỌN VẸN — thiếu một mục thì cả câu thành sai, không chỉ thiếu.
+      "Ở máy chủ, năm thứ được lưu: số điện thoại dùng làm tên đăng nhập của bạn; bản ghi của từng phiên đăng nhập (thời điểm tạo, thời điểm hết hạn, và bản mã hoá một chiều của phiếu phiên); nhật ký đăng nhập; những yêu cầu tư vấn hoặc đề nghị gọi lại bạn đã gửi, nói ở mục 'Yêu cầu tư vấn và đề nghị gọi lại' bên trên; và — chỉ khi bạn từng yêu cầu xoá — một dòng bằng chứng của chính lần xoá ấy, nói ở cuối mục này. Mỗi bản ghi định danh còn mang thời điểm nó được tạo và lần gần nhất được cập nhật.",
+      "Ngoài năm thứ ấy, máy chủ KHÔNG lưu gì khác của bạn: không tên, không email, không vị trí, không thông tin thiết bị, không danh bạ, không ảnh. Dịch vụ này cũng không cài công cụ đo hành vi nào và không nhúng bộ công cụ của bên thứ ba nào.",
+      "THỜI HẠN LƯU YÊU CẦU TƯ VẤN: 24 THÁNG kể từ ngày gửi, rồi phần ghi chú bạn tự gõ bị xoá và hàng ấy được đánh dấu là đã ẩn danh. Chi tiết ở mục 'Yêu cầu tư vấn và đề nghị gọi lại' bên trên.",
       "THỜI HẠN LƯU NHẬT KÝ ĐĂNG NHẬP: CHẬM NHẤT 90 NGÀY. Đây là mức trần: chúng tôi dọn nhật ký theo từng lô mỗi tuần chứ không xoá từng dòng đúng vào ngày thứ 90, nên một dòng có thể bị xoá SỚM HƠN — sớm nhất là ngày thứ 83. Không dòng nào sống quá 90 ngày.",
       "Thời hạn ấy áp cho MỌI dòng, kể cả những dòng của một lượt đăng nhập không thành công. Nghĩa là nếu bạn chưa từng đăng nhập thành công, nên không có gì để yêu cầu xoá, thì địa chỉ IP trong những dòng ấy vẫn tự mất đi trong vòng 90 ngày mà bạn không phải làm gì cả.",
       "THỜI GIAN LƯU SỐ ĐIỆN THOẠI: KHÔNG có hạn tự động. Chúng tôi giữ nó chừng nào bạn còn dùng ứng dụng, và giữ tới khi chính bạn yêu cầu xoá — không có mốc nào tự động xoá, và cũng không có mốc nào tự động giữ thêm.",
@@ -359,7 +422,11 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       //      phụ thuộc vào câu chưa ai trả lời — ai vận hành `vihat-miniapp` sau chuyển giao.
       //      Nên câu nay nói ĐÚNG THỨ ĐO ĐƯỢC: có đúng một nơi nhận, và không còn nơi nào khác.
       //      Khẳng định pháp lý về "bên thứ ba" chờ chủ dự án, không ai tự viết lại.
-      "Nơi duy nhất nhận gì đó từ ứng dụng là máy chủ của VihatSoftware — đơn vị thành viên của Tập đoàn ViHAT Group — ở bước đăng nhập nói tại mục Đăng nhập bên trên. Ngoài nơi ấy, ứng dụng không gửi dữ liệu của bạn đi đâu khác, trong nước hay ngoài nước.",
+      // ⚠ CÂU NÀY SỬA LẦN THỨ BA (22/09/2026): nay có HAI bước gửi đi, không còn một. Bên NHẬN
+      // thì KHÔNG ĐỔI — vẫn đúng một nơi — và việc phân biệt "mấy bước gửi" với "mấy nơi nhận" là
+      // toàn bộ giá trị của câu này. Câu hỏi mở #28 (ai vận hành `vihat-miniapp` sau chuyển giao)
+      // CHƯA AI TRẢ LỜI, nên không ai được tự viết lại vế "bên thứ ba" ở đây.
+      "Nơi duy nhất nhận gì đó từ ứng dụng là máy chủ của VihatSoftware — đơn vị thành viên của Tập đoàn ViHAT Group. Có hai bước gửi tới nơi ấy, và cả hai đều do chính bạn bấm: bước đăng nhập nói tại mục Đăng nhập, và bước gửi một yêu cầu tư vấn nói tại mục Yêu cầu tư vấn. Ngoài nơi ấy, ứng dụng không gửi dữ liệu của bạn đi đâu khác, trong nước hay ngoài nước.",
       // ⚠ CÂU NÀY KHÔNG CÒN ĐƯỢC GÕ TAY — 21/09/2026. Nó được DỰNG RA từ `DICH_MO_RA_NGOAI`, và
       // đó là cách duy nhất con số và danh sách không lệch nhau được nữa.
       //
@@ -393,14 +460,19 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // ĐÃ SỬA, cùng lý do với mục "Chuyển dữ liệu cho bên thứ ba": câu cũ ("không có
       // dữ liệu nào để yêu cầu xoá") chỉ đúng khi ứng dụng không gửi gì đi. Vế "trên máy bạn"
       // thì đúng ở mọi bản dựng, và vế còn lại được chỉ sang đúng chỗ người đọc phải đi.
-      "Trên máy bạn không có dữ liệu nào được lưu lại. Với những gì đã gửi tới máy chủ của chúng tôi ở bước đăng nhập, bạn thực hiện các quyền trên bằng cách liên hệ theo các đầu mối ở màn Liên hệ; chúng tôi trả lời trong thời hạn Nghị định 13/2023/NĐ-CP quy định.",
+      "Trên máy bạn không có dữ liệu nào được lưu lại. Với những gì đã gửi tới máy chủ của chúng tôi — ở bước đăng nhập, và ở những yêu cầu tư vấn bạn đã gửi — bạn thực hiện các quyền trên bằng cách liên hệ theo các đầu mối ở màn Liên hệ; chúng tôi trả lời trong thời hạn Nghị định 13/2023/NĐ-CP quy định.",
     ],
   },
   {
     ma: "rui-ro",
     tieu_de: "Rủi ro có thể xảy ra",
     doan: [
-      "Ứng dụng không lưu dữ liệu nào trên máy bạn, và thứ duy nhất nó gửi đi là hai mã đăng nhập dùng một lần — số điện thoại của bạn không nằm trong hai mã ấy. Nên rủi ro rò rỉ dữ liệu từ phía ứng dụng là rất hẹp.",
+      // ⚠ CÂU NÀY ĐÃ PHẢI SỬA 22/09/2026, VÀ ĐÓ LÀ MỘT LẦN BỚT MỘT LỜI TRẤN AN. Bản trước nói
+      // "thứ duy nhất nó gửi đi là hai mã đăng nhập" — câu ấy thành SAI từ ngày có bề mặt yêu
+      // cầu, và nó sai đúng về phía làm người đọc yên tâm hơn thực tế. Ô ghi chú là văn bản tự
+      // do: nó có thể chứa bất cứ thứ gì người dùng gõ vào, nên nó phải có tên trong mục rủi ro.
+      "Ứng dụng không lưu dữ liệu nào trên máy bạn. Thứ nó gửi đi là hai mã đăng nhập dùng một lần — số điện thoại của bạn không nằm trong hai mã ấy — và, nếu bạn tự gửi một yêu cầu tư vấn, những gì bạn đã chọn cùng phần ghi chú bạn tự gõ.",
+      "RỦI RO ĐÁNG KỂ NHẤT NẰM Ở CHÍNH Ô GHI CHÚ ẤY: nó là văn bản tự do, nên nó chứa đúng những gì bạn viết vào. Bạn hãy cân nhắc trước khi ghi vào đó số căn cước, thông tin tài khoản ngân hàng, hay dữ liệu cá nhân của một người khác — chúng tôi không có cách nào biết trước để ngăn.",
       "Rủi ro còn lại nằm ở màn hình: nội dung hiển thị sau khi bạn dùng một tính năng có thể bị người đứng cạnh nhìn thấy. Điều này đáng lưu ý nhất khi bạn vừa quét một tấm danh thiếp, hoặc vừa chọn ảnh một tấm thiếp giấy — thứ hiện ra là dữ liệu cá nhân của người đã đưa nó cho bạn, và bạn là người đang giữ nó.",
       "Khi bạn bật chế độ giữ màn hình sáng để người khác quét mã, màn hình sẽ không tự tối đi. Ứng dụng tắt chế độ ấy ngay khi bạn rời màn hình danh thiếp, nhưng trong lúc đang bật, những gì trên màn hình nằm trong tầm nhìn của người xung quanh lâu hơn bình thường.",
     ],

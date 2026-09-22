@@ -24,6 +24,7 @@ import { useEffect, useState } from "react";
 import type { MaDangNhap } from "../tinh-nang/zalo-api";
 
 import { type KetQuaPhien, phatHanhPhien } from "./goi-may-chu";
+import { dungPhien } from "./kho-phien";
 
 /**
  * CHỮ CỦA BƯỚC MÁY CHỦ — nằm cạnh mã vẽ nó, không ở `noi-dung.ts`.
@@ -86,18 +87,33 @@ export function PhatHanhPhien({ ma }: { ma: MaDangNhap }) {
     kieu: "dang-gui",
   });
 
+  /**
+   * ⚠ PHIÊN ĐI RA MỘT CHỖ GIỮ DÙNG CHUNG TỪ 22/09/2026 — `kho-phien.tsx`, CHỈ TRONG BỘ NHỚ.
+   *
+   *   Trước lượt này phiếu chết trong `useState` của chính khối này, vì không ai ngoài nó cần.
+   *   Giai đoạn B có hai màn khác cần phiếu, nên nó được ĐẶT VÀO một context — không phải ghi
+   *   xuống máy. Lệnh cấm `localStorage`/`sessionStorage`/`cookie`/`indexedDB` KHÔNG được nới cho
+   *   một tệp nào, kể cả tệp này và kể cả `kho-phien.tsx`.
+   */
+  const { datPhien } = dungPhien();
+
   useEffect(() => {
     // `con_tren_man`: màn hình có thể bị gỡ trước khi câu trả lời về. Đặt trạng thái cho một
     // component đã rời màn là một cảnh báo của React — không phải lỗi người dùng thấy, nhưng
     // là thứ che mất những cảnh báo thật.
     let con_tren_man = true;
     void phatHanhPhien(ma).then((ket_qua) => {
-      if (con_tren_man) datTrangThai(ket_qua);
+      if (!con_tren_man) return;
+      datTrangThai(ket_qua);
+      // CHỈ ĐẶT KHI XONG. Một nhánh lỗi KHÔNG được xoá phiên đang có: người dùng có thể bấm lại
+      // nút đăng nhập trong lúc đang có một phiên còn hiệu lực, và một lần bấm hỏng mà làm mất
+      // phiên cũ là bắt họ đăng nhập lại vì một việc họ không yêu cầu.
+      if (ket_qua.kieu === "xong") datPhien(ket_qua.phien);
     });
     return () => {
       con_tren_man = false;
     };
-  }, [ma]);
+  }, [ma, datPhien]);
 
   if (trang_thai.kieu === "dang-gui") {
     return <p className="tn__ranh-gioi">{CHU_PHIEN.dang_gui}</p>;

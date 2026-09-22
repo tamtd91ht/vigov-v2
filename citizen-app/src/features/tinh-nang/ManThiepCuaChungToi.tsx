@@ -115,7 +115,9 @@ export function ManThiepCuaChungToi() {
       ma="thiep-cua-chung-toi"
       trang_thai={trang_thai}
       onBam={() => void tai()}
-      cap_tieu_de="h2"
+      /* `<h1>` TỪ 22/09/2026: khối này là khối MỞ ĐẦU màn Danh thiếp, và cấp tiêu đề đi theo chỗ
+         đứng chứ không theo tính năng. Xem khối chú thích của `ManDanhThiep`. */
+      cap_tieu_de="h1"
       glyph={<NamecardGlyph className="tn__glyph" />}
       dan_nhap={THIEP_CUA_CHUNG_TOI.dan_nhap}
       truoc_nut={

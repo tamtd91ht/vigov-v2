@@ -34,6 +34,8 @@
  * phiên đang làm việc với ai, client không được tự chọn máy chủ của mình.
  * → `.claude/skills/zalo-miniapp-multi-tenant` §"The API host is singular".
  */
+import { diaChiApi } from "../../api/dia-chi";
+
 import type { MaDangNhap } from "../tinh-nang/zalo-api";
 
 /**
@@ -63,9 +65,15 @@ export type Phien = {
   het_han: string;
 };
 
-/** Địa chỉ đầy đủ của tuyến. Rỗng khi chưa khai host — `goi-may-chu.ts` fail-closed ở đó. */
+/**
+ * Địa chỉ đầy đủ của tuyến. Rỗng khi chưa khai host — `goi-may-chu.ts` fail-closed ở đó.
+ *
+ * HOST ĐỌC TỪ `api/dia-chi.ts` TỪ 22/09/2026: tuyến thứ hai (`/api/v1/requests`) cần đúng cùng
+ * một host và đúng cùng cách cắt dấu `/` thừa, nên chỗ đọc biến môi trường chuyển ra một tệp
+ * dùng chung thay vì được chép sang tệp thứ hai. Thứ VẪN CHỈ CÓ Ở ĐÂY là đường dẫn `/api/v1/sessions`.
+ */
 export function diaChiPhien(): string {
-  return API_HOST === "" ? "" : `${API_HOST}${DUONG_DAN_PHIEN}`;
+  return diaChiApi(DUONG_DAN_PHIEN);
 }
 
 /**
@@ -93,24 +101,10 @@ export function docTraLoi(than: unknown): Phien | null {
 }
 
 /**
- * HOST ĐỌC LÚC DỰNG, KHÔNG PHẢI LÚC CHẠY — cùng khuôn với `VIGOV_BIEN_THE` ở `vite.config.ts`.
+ * HOST ĐỌC LÚC DỰNG, KHÔNG PHẢI LÚC CHẠY — nay ở `api/dia-chi.ts`, một chỗ cho cả hai hợp đồng.
  *
- * `vite.config.ts` thay chuỗi `__VIGOV_API_HOST__` bằng giá trị biến môi trường `VIGOV_API_HOST`
- * ở bước dựng.
- *
- * ⚠ BẢN NỘP CŨNG GỌI MÁY CHỦ, NÊN QUÊN BIẾN NÀY LÀ NỘP MỘT NÚT ĐĂNG NHẬP KHÔNG ĐĂNG NHẬP ĐƯỢC.
- * `scripts/deploy.mjs` chặn đường đẩy khi biến chưa khai — chặn ở đó chứ không ném lỗi lúc dựng,
- * vì `npm test` và `npm run dev` phải chạy được trên một máy chưa có địa chỉ máy chủ nào.
- *
- * `typeof` chứ không đọc thẳng: khi chạy dưới Vitest mà không có bước thay chuỗi thì đọc thẳng
- * là `ReferenceError` làm sập cả tệp test, còn `typeof` trên một tên chưa khai là hợp lệ. Hỏng
- * theo hướng "chưa khai host" thì màn hình nói ra một câu tiếng Việt; hỏng theo hướng kia là
- * một màn trắng.
- *
- * KHÔNG CÓ HOST MẶC ĐỊNH, VÀ ĐÓ LÀ FAIL-CLOSED: đoán một địa chỉ là gửi hai mã đăng nhập của
- * một người thật tới một máy chủ không ai chọn.
+ * ⚠ BẢN NỘP CŨNG GỌI MÁY CHỦ, NÊN QUÊN BIẾN `VIGOV_API_HOST` LÀ NỘP MỘT NÚT ĐĂNG NHẬP KHÔNG
+ * ĐĂNG NHẬP NỔI. `scripts/deploy.mjs` chặn đường đẩy khi biến chưa khai — chặn ở đó chứ không
+ * ném lỗi lúc dựng, vì `npm test` và `npm run dev` phải chạy được trên một máy chưa có địa chỉ
+ * máy chủ nào. Lý do đầy đủ của cách đọc ấy nằm trong `api/dia-chi.ts`.
  */
-declare const __VIGOV_API_HOST__: string | undefined;
-
-const API_HOST: string =
-  typeof __VIGOV_API_HOST__ === "string" ? __VIGOV_API_HOST__.replace(/\/+$/, "") : "";

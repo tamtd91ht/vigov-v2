@@ -23,9 +23,15 @@ import indexHtmlRaw from "../index.html?raw";
  *   luôn kèm một ca chứng minh nó còn bắt được ở ngoài phạm vi mới:
  *
  *     `zmp-sdk` + 10 lời gọi nền tảng  →  miễn ĐÚNG MỘT THƯ MỤC (`features/tinh-nang/`)
- *     `fetch`/XHR/WebSocket/…          →  miễn ĐÚNG MỘT TỆP (`features/dang-nhap/goi-may-chu.ts`)
- *     `getUserInfo`/`getSetting`/`authorize` · lưu trữ · `serverUploadUrl` · geolocation · ô nhập
+ *     `fetch`/XHR/WebSocket/…          →  miễn ĐÚNG HAI TỆP ĐƯỢC KÊ TÊN (22/09/2026)
+ *     `<form|input|textarea|select>`   →  miễn ĐÚNG MỘT TỆP ĐƯỢC KÊ TÊN (22/09/2026)
+ *     `getUserInfo`/`getSetting`/`authorize` · lưu trữ · `serverUploadUrl` · geolocation
  *                                      →  KHÔNG miễn cho gì cả, không một dòng nào
+ *
+ *   ⚠ HAI DÒNG GIỮA VỪA ĐỔI 22/09/2026 (giai đoạn B: bề mặt "tư vấn & báo giá"). Ứng dụng từ hôm
+ *   nay THU THẬP DỮ LIỆU BÁN HÀNG, không chỉ định danh — và đó là một thay đổi phải đọc được từ
+ *   chính bảng này, không phải từ một commit. Lệnh cấm lưu trữ thì KHÔNG đi theo: phiếu phiên vẫn
+ *   sống trong bộ nhớ và mất khi đóng app.
  *
  *   MỘT LỆNH CẤM BỊ XOÁ LÀ MỘT LỆNH CẤM KHÔNG AI BIẾT LÀ ĐÃ MẤT. Đó là lý do chưa lệnh cấm nào
  *   trong tệp này biến mất, kể cả khi lý do ban đầu của nó đã hết.
@@ -76,8 +82,19 @@ type Tripwire = {
   what: string;
   pattern: RegExp;
   /**
-   * TIỀN TỐ ĐƯỜNG DẪN DUY NHẤT được phép chứa thứ này — một THƯ MỤC, hoặc ĐÚNG MỘT TỆP. Không
-   * khai thì cấm ở mọi tệp.
+   * TIỀN TỐ ĐƯỜNG DẪN được phép chứa thứ này — mỗi phần tử là một THƯ MỤC, hoặc ĐÚNG MỘT TỆP.
+   * Không khai thì cấm ở mọi tệp.
+   *
+   * ⚠ MỘT DANH SÁCH TỪ 22/09/2026, VÀ VIỆC ĐỔI SANG DANH SÁCH KHÔNG PHẢI MỘT LẦN NỚI.
+   *
+   *   Bề mặt yêu cầu (`/api/v1/requests`) cần một tệp gọi mạng thứ hai. Trước lượt này `chi_trong`
+   *   là MỘT chuỗi, nên cách rẻ nhất để có tệp thứ hai là đổi nó thành một THƯ MỤC — và đó đúng là
+   *   cách hỏng: `"./api/"` miễn cho mọi tệp hiện có lẫn mọi tệp sẽ có trong đó. Danh sách thì giữ
+   *   nguyên hình dạng "đúng những TỆP được kê tên": tệp thứ ba phải được ai đó viết tên ra ở đây,
+   *   cạnh lý do.
+   *
+   *   Hai lệnh cấm còn lại vẫn khai một THƯ MỤC (`features/tinh-nang/`) — hình dạng ấy không đổi,
+   *   chỉ là nó nằm trong một mảng một phần tử.
    *
    * ⚠ ĐÂY LÀ THU HẸP PHẠM VI, KHÔNG PHẢI GỠ LỆNH CẤM — và khác biệt ấy là toàn bộ vấn đề.
    *
@@ -89,7 +106,7 @@ type Tripwire = {
    *   có gì đỏ lên. Một lệnh cấm bị xoá là một lệnh cấm không ai biết là đã mất — nên nó ở lại,
    *   hẹp đi, và có ca kiểm ở cuối tệp chứng minh nó vẫn bắt được ở ngoài thư mục ấy.
    */
-  chi_trong?: string;
+  chi_trong?: readonly string[];
 };
 
 /**
@@ -102,25 +119,52 @@ type Tripwire = {
 const THU_MUC_TINH_NANG = "./features/tinh-nang/";
 
 /**
- * TỆP DUY NHẤT ĐƯỢC GỌI MẠNG — một TỆP, không phải một thư mục, và khác biệt ấy là cả vấn đề.
+ * HAI TỆP ĐƯỢC GỌI MẠNG — hai TỆP, không phải một thư mục, và khác biệt ấy là cả vấn đề.
  *
  * ADR 0020 chốt đăng nhập bằng `getPhoneNumber`, và hai mã lấy được chỉ đổi được ở MÁY CHỦ
  * (bất biến 2: khoá bí mật của Mini App không ra khỏi backend). Nên ứng dụng phải gọi được một
  * tuyến — ở CẢ HAI biến thể, kể cả bản nộp — và lệnh cấm
  * `fetch`/XHR/WebSocket/EventSource/axios được THU HẸP, không gỡ.
  *
- * VÌ SAO HẸP TỚI MỘT TỆP CHỨ KHÔNG PHẢI MỘT THƯ MỤC như `zmp-sdk`: `zmp-sdk` là một bề mặt rộng
- * mà chín lời gọi có lý do nằm cạnh nhau. Một lời gọi mạng thì không: mỗi cái là một đường dữ
+ * VÌ SAO HẸP TỚI TỪNG TỆP CHỨ KHÔNG PHẢI MỘT THƯ MỤC như `zmp-sdk`: `zmp-sdk` là một bề mặt rộng
+ * mà mười lời gọi có lý do nằm cạnh nhau. Một lời gọi mạng thì không: mỗi cái là một đường dữ
  * liệu rời khỏi máy người dùng. Miễn cho cả thư mục thì lời gọi thứ hai, thứ ba mọc lên trong
- * đó mà không có gì đỏ lên; miễn cho một tệp thì mỗi lời gọi mới phải đi qua đúng chỗ có chú
+ * đó mà không có gì đỏ lên; miễn cho từng tệp thì mỗi lời gọi mới phải đi qua đúng chỗ có chú
  * thích nói vì sao nó được phép.
  *
+ * ⚠ TỆP THỨ HAI THÊM VÀO 22/09/2026 — bề mặt yêu cầu (`/api/v1/requests`, giai đoạn B). Hai tệp,
+ * hai hợp đồng, và chúng KHÔNG được gộp: `features/dang-nhap/hop-dong.ts` là nơi duy nhất biết
+ * `/api/v1/sessions`, `api/hop-dong-yeu-cau.ts` là nơi duy nhất biết `/api/v1/requests`.
+ *
  * Ca "lệnh cấm CÓ PHẠM VI vẫn bắt được vi phạm đặt NGOÀI…" ở cuối tệp cho lệnh cấm này ăn một
- * `fetch` đặt trong `features/dang-nhap/PhatHanhPhien.tsx` — tệp nằm NGAY CẠNH tệp được miễn — và
- * khẳng định nó vẫn bắt. Không có ca ấy thì `chi_trong` có thể bị sửa thành thư mục và không
- * có gì báo.
+ * `fetch` đặt trong `features/dang-nhap/PhatHanhPhien.tsx` VÀ một `fetch` đặt trong
+ * `api/hop-dong-yeu-cau.ts` — hai tệp nằm NGAY CẠNH hai tệp được miễn — và khẳng định nó vẫn
+ * bắt. Không có hai ca ấy thì `chi_trong` có thể bị sửa thành hai thư mục và không có gì báo.
  */
-const TEP_GOI_MANG = "./features/dang-nhap/goi-may-chu.ts";
+const TEP_GOI_MANG: readonly string[] = [
+  "./features/dang-nhap/goi-may-chu.ts",
+  "./api/goi-may-chu.ts",
+];
+
+/**
+ * TỆP DUY NHẤT ĐƯỢC CÓ MỘT Ô NHẬP — và đây là lần THU HẸP ĐẦU TIÊN của lệnh cấm ấy.
+ *
+ * ⚠ LỆNH CẤM `<form|input|textarea|select>` TỪ 17/09 TỚI 21/09 KHÔNG MIỄN CHO GÌ CẢ, và việc nó
+ * mất tính tuyệt đối hôm nay là một thay đổi về HÀNH VI THU THẬP DỮ LIỆU, không phải một tiện ích.
+ *
+ *   Giai đoạn B mở bề mặt "tư vấn & báo giá", và bề mặt ấy có MỘT ô ghi chú tự do — ô duy nhất
+ *   trong cả ứng dụng nhận chữ người dùng tự gõ. Không có cách nào dựng nó mà không thu hẹp lệnh
+ *   cấm này: một `contenteditable` là cùng một điểm thu thập với một cái tên khác, và lách như
+ *   vậy còn tệ hơn — nó làm dây bẫy trông như vẫn nguyên vẹn.
+ *
+ *   BA CÂU HỎI CHỌN CỦA MÀN ẤY VẪN LÀ `<button>`, đúng như màn "Gợi ý giải pháp". Thu hẹp cho một
+ *   ô ghi chú không phải là mở đường cho radio và select: chúng không cần ô nhập nào, và mỗi thứ
+ *   thêm vào đây là một điểm thu thập nữa.
+ *
+ *   Và chính sách quyền riêng tư phải khai ô ấy — `TRUONG_GUI_DI` trong `api/hop-dong-yeu-cau.ts`
+ *   khoá hai chiều với văn bản, xem `content/chinh-sach.test.ts`.
+ */
+const TEP_O_GHI_CHU = "./features/yeu-cau/OGhiChu.tsx";
 
 /** Tệp vi phạm một dây bẫy: khớp mẫu, và KHÔNG nằm trong thư mục được miễn. */
 function viPham(
@@ -129,7 +173,10 @@ function viPham(
 ): string[] {
   return tep
     .filter((f) => day.pattern.test(f.code))
-    .filter((f) => !(day.chi_trong !== undefined && f.path.startsWith(day.chi_trong)))
+    .filter(
+      (f) =>
+        !(day.chi_trong !== undefined && day.chi_trong.some((tien_to) => f.path.startsWith(tien_to))),
+    )
     .map((f) => f.path);
 }
 
@@ -171,7 +218,7 @@ const TRIPWIRES: readonly Tripwire[] = [
       "calls this app makes, and they live in exactly one directory",
     pattern:
       /\b(getPhoneNumber|getAccessToken|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile)\s*\(/,
-    chi_trong: THU_MUC_TINH_NANG,
+    chi_trong: [THU_MUC_TINH_NANG],
   },
   {
     /**
@@ -235,7 +282,7 @@ const TRIPWIRES: readonly Tripwire[] = [
       'a reference to the "zmp-sdk" module — importing it costs 256 kB raw / 64 kB gzip and is ' +
       "the doorway to every citizen-data API the platform offers",
     pattern: /["'`]zmp-sdk(\/[^"'`]*)?["'`]/,
-    chi_trong: THU_MUC_TINH_NANG,
+    chi_trong: [THU_MUC_TINH_NANG],
   },
   {
     /**
@@ -274,8 +321,14 @@ const TRIPWIRES: readonly Tripwire[] = [
     pattern: /navigator\.geolocation/,
   },
   {
-    what: "an input control — a form is a collection point, and phase 1 has none",
+    // THU HẸP LẦN ĐẦU 22/09/2026 — xem `TEP_O_GHI_CHU` ở trên. Câu `what` đổi theo, vì một câu
+    // nói "phase 1 has none" trên một lệnh cấm đã có ngoại lệ là một câu làm người đọc báo cáo
+    // lỗi tin sai.
+    what:
+      'an input control outside "src/features/yeu-cau/OGhiChu.tsx" — that ONE file holds the ' +
+      "only field in this app that takes text the user typed",
     pattern: /<(form|input|textarea|select)[\s/>]/,
+    chi_trong: [TEP_O_GHI_CHU],
   },
 ];
 
@@ -291,9 +344,11 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // quét thì không miễn gì cả — và ngày thư mục ấy đổi tên, lệnh cấm có phạm vi trở thành lệnh
     // cấm toàn phần mà không ai biết, hoặc ngược lại.
     expect(paths).toContain(`${THU_MUC_TINH_NANG}zalo-api.ts`);
-    // Cùng lý do, cho ngoại lệ hẹp nhất trong tệp này: một tệp được miễn mà lượt quét không hề
+    // Cùng lý do, cho ba ngoại lệ hẹp nhất trong tệp này: một tệp được miễn mà lượt quét không hề
     // đọc tới thì "miễn" và "không tồn tại" là một, và ngày nó đổi tên sẽ không có gì báo.
-    expect(paths).toContain(TEP_GOI_MANG);
+    for (const tep of [...TEP_GOI_MANG, TEP_O_GHI_CHU]) {
+      expect(paths, `tệp được miễn không nằm trong lượt quét: ${tep}`).toContain(tep);
+    }
   });
 
   for (const tripwire of TRIPWIRES) {
@@ -304,7 +359,9 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
         `${tripwire.what}.\nPhase 1 was reviewed by Zalo as an app that collects nothing (README §"Phase 1 collects no personal data"). Adding collection changes what was submitted — raise it before writing it, do not relax this test.${
           tripwire.chi_trong === undefined
             ? ""
-            : `\nBa lời gọi quyền chỉ sống trong "src${tripwire.chi_trong.slice(1)}", và ba màn ở đó chỉ HIỆN kết quả lên màn hình: các lệnh cấm fetch/XHR/WebSocket và localStorage/cookie/indexedDB KHÔNG được nới theo — chúng là thứ biến "không gửi đi đâu" thành một ràng buộc kiểm được.`
+            : `\nThứ này chỉ được phép ở: ${tripwire.chi_trong
+                .map((t) => `"src${t.slice(1)}"`)
+                .join(" · ")}. Lệnh cấm localStorage/cookie/indexedDB KHÔNG được nới theo — nó là thứ biến "không lưu gì xuống máy bạn" thành một ràng buộc kiểm được.`
         }`,
       ).toEqual([]);
     });
@@ -349,7 +406,10 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // và khẳng định nó vẫn bắt. Không có ca này thì sáu tuần nữa `chi_trong` có thể bị sửa thành
     // `"./"` và không có gì đỏ lên.
     const co_pham_vi = TRIPWIRES.filter((t) => t.chi_trong !== undefined);
-    expect(co_pham_vi.length, "không còn lệnh cấm có phạm vi nào để kiểm").toBe(3);
+    // BỐN TỪ 22/09/2026 (trước đó ba): lệnh cấm ô nhập vừa mất tính tuyệt đối. Con số này ghim
+    // đúng một sự thật — có bao nhiêu lệnh cấm đã được thu hẹp — và nó đỏ lên ngay khi ai đó thu
+    // hẹp cái thứ năm, tức đúng lúc phải có một cuộc trò chuyện.
+    expect(co_pham_vi.length, "số lệnh cấm ĐƯỢC THU HẸP vừa đổi").toBe(4);
 
     const VI_PHAM = [
       { path: "./App.tsx", code: 'const { token } = await getPhoneNumber();' },
@@ -369,15 +429,31 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
       // TÊN THỨ MƯỜI: `getAccessToken` nay được phép trong `features/tinh-nang/`, và chỉ ở đó.
       { path: "./App.tsx", code: "const ma = await getAccessToken();" },
 
-      // LỜI GỌI MẠNG — NGOẠI LỆ HẸP NHẤT TRONG TỆP NÀY, và ba dòng dưới là thứ chứng minh nó
-      // hẹp đúng bằng MỘT TỆP. Dòng thứ hai nằm trong chính thư mục của tệp được miễn, ngay
-      // cạnh nó: nếu `chi_trong` bị sửa thành thư mục, đúng dòng ấy đỏ lên.
+      // LỜI GỌI MẠNG — NGOẠI LỆ HẸP NHẤT TRONG TỆP NÀY, và những dòng dưới là thứ chứng minh nó
+      // hẹp đúng bằng HAI TỆP ĐƯỢC KÊ TÊN. Hai dòng có ghi chú "SÁT BÊN" nằm trong chính thư mục
+      // của một tệp được miễn, ngay cạnh nó: nếu `chi_trong` bị sửa thành thư mục, đúng hai dòng
+      // ấy đỏ lên.
       { path: "./App.tsx", code: 'await fetch("https://vidu.vn/a");' },
+      // SÁT BÊN tệp được miễn thứ nhất.
       { path: "./features/dang-nhap/PhatHanhPhien.tsx", code: 'await fetch("https://vidu.vn/a");' },
+      // SÁT BÊN tệp được miễn thứ hai (22/09/2026). `api/hop-dong-yeu-cau.ts` là tệp hợp đồng,
+      // và nó KHÔNG được gọi mạng — nó chỉ mô tả dây.
+      { path: "./api/hop-dong-yeu-cau.ts", code: 'await fetch("https://vidu.vn/a");' },
+      { path: "./api/dia-chi.ts", code: "new XMLHttpRequest();" },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "new XMLHttpRequest();" },
       { path: "./lib/launch-params.ts", code: 'navigator.sendBeacon("/do", d);' },
       { path: "./components/TabBar.tsx", code: 'new WebSocket("wss://vidu.vn");' },
       { path: "./main.tsx", code: "import axios from 'axios';" },
+
+      // Ô NHẬP — NGOẠI LỆ MỚI NHẤT, và bốn dòng dưới chứng minh nó hẹp đúng bằng MỘT TỆP.
+      // Dòng thứ hai nằm NGAY CẠNH tệp được miễn, trong cùng thư mục `features/yeu-cau/`: đó là
+      // dòng đỏ lên nếu ai đó sửa `chi_trong` thành `"./features/yeu-cau/"`.
+      { path: "./App.tsx", code: '<input type="text" />' },
+      { path: "./features/yeu-cau/TuVanBaoGiaScreen.tsx", code: "<textarea />" },
+      { path: "./features/company-intro/SolutionsScreen.tsx", code: '<input type="search" />' },
+      { path: "./features/goi-y-giai-phap/GoiYGiaiPhapScreen.tsx", code: '<input type="radio" />' },
+      { path: "./features/company-intro/ContactScreen.tsx", code: "<select>" },
+      { path: "./main.tsx", code: "<form onSubmit={gui}>" },
     ];
     for (const tep of VI_PHAM) {
       const bat = co_pham_vi.some((day) => viPham(day, [tep]).length === 1);
@@ -392,7 +468,8 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await openMediaPicker({ type: "photo" });' },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "await keepScreen({ keepScreenOn: false });" },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "const ma = await sdk.getAccessToken();" },
-      { path: TEP_GOI_MANG, code: 'await fetch(dia_chi, { method: "POST" });' },
+      ...TEP_GOI_MANG.map((path) => ({ path, code: 'await fetch(dia_chi, { method: "POST" });' })),
+      { path: TEP_O_GHI_CHU, code: "<textarea value={ghi_chu} onChange={doi} />" },
     ];
     for (const tep of TRONG) {
       for (const day of co_pham_vi) {
@@ -403,7 +480,7 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     }
   });
 
-  it("ba lệnh cấm KHÔNG có phạm vi vẫn bắt ngay trong thư mục được miễn của những lệnh cấm khác", () => {
+  it("lệnh cấm KHÔNG có phạm vi vẫn bắt ngay trong thư mục được miễn của những lệnh cấm khác", () => {
     // CA VỀ THỨ ĐÃ **KHÔNG** ĐƯỢC NỚI, và nó tồn tại vì lần thu hẹp này đã tách một tên ra khỏi
     // một lệnh cấm tuyệt đối: `getAccessToken` rời sang lệnh cấm có phạm vi để luồng đăng nhập
     // của ADR 0020 chạy được. Ba tên ở lại thì KHÔNG được đi theo, và "không được đi theo" phải
@@ -415,17 +492,28 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     //
     // Cùng ca ấy ghim lệnh cấm lưu trữ: phiếu phiên đăng nhập sống trong `useState`, và lệnh
     // cấm `localStorage`/`sessionStorage`/`cookie`/`indexedDB` không được nới cho một tệp nào —
-    // kể cả cho chính tệp gọi mạng.
+    // kể cả cho hai tệp gọi mạng. ĐIỀU NÀY ĐẶC BIỆT QUAN TRỌNG TỪ 22/09/2026: bề mặt yêu cầu cần
+    // phiếu phiên ở một màn KHÁC màn đăng nhập, và cách rẻ nhất để làm việc ấy là ghi nó xuống
+    // máy. Chỗ giữ phiên là `features/dang-nhap/kho-phien.tsx`, và nó chỉ dùng `useState`.
     const TUYET_DOI = TRIPWIRES.filter((t) => t.chi_trong === undefined);
-    expect(TUYET_DOI.length, "một lệnh cấm tuyệt đối vừa được cho một phạm vi").toBe(5);
+    // BỐN TỪ 22/09/2026 (trước đó năm): lệnh cấm ô nhập chuyển sang nhóm CÓ PHẠM VI. Bốn cái còn
+    // lại — `getUserInfo`/`getSetting`/`authorize` · `serverUploadUrl` · lưu trữ · geolocation —
+    // vẫn tuyệt đối, và con số này là thứ đỏ lên nếu cái thứ năm mất tính tuyệt đối.
+    expect(TUYET_DOI.length, "một lệnh cấm tuyệt đối vừa được cho một phạm vi").toBe(4);
 
     const VI_PHAM = [
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "const me = await getUserInfo();" },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await authorize({ scopes: ["scope.userInfo"] });' },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "const q = await getSetting();" },
-      { path: TEP_GOI_MANG, code: 'localStorage.setItem("phien", phien.token);' },
-      { path: TEP_GOI_MANG, code: 'document.cookie = "phien=" + token;' },
+      ...TEP_GOI_MANG.map((path) => ({ path, code: 'localStorage.setItem("phien", phien.token);' })),
+      ...TEP_GOI_MANG.map((path) => ({ path, code: 'document.cookie = "phien=" + token;' })),
+      { path: "./features/dang-nhap/kho-phien.tsx", code: 'sessionStorage.setItem("phien", t);' },
       { path: "./features/dang-nhap/PhatHanhPhien.tsx", code: "sessionStorage.setItem(k, v);" },
+      { path: "./features/yeu-cau/TuVanBaoGiaScreen.tsx", code: 'localStorage.setItem("nhap", ghi_chu);' },
+      // Ô GHI CHÚ ĐƯỢC MIỄN CHO `<textarea>`, VÀ CHỈ CHO `<textarea>`: một `localStorage` đặt ở
+      // đúng tệp ấy — "lưu tạm chữ người dùng đang gõ cho tiện" — vẫn phải ĐỎ. Đây là cách một
+      // ngoại lệ hẹp bị hiểu thành một ngoại lệ rộng.
+      { path: TEP_O_GHI_CHU, code: 'localStorage.setItem("nhap", ghi_chu);' },
       { path: "./App.tsx", code: "indexedDB.open('phien');" },
     ];
     for (const tep of VI_PHAM) {

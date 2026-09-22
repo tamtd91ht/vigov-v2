@@ -31,14 +31,22 @@ import {
   TECH_KEYWORDS,
 } from "../../content/company-profile";
 import { NGAY_CHUP_TIN, ngayDoc, TIN_VIHAT } from "../../content/tin-tuc";
+import {
+  GoiYGiaiPhapScreen,
+  KetQuaGoiY,
+  LOI,
+} from "../goi-y-giai-phap/GoiYGiaiPhapScreen";
 import { ManDanhThiep } from "../tinh-nang/ManDanhThiep";
 import { KHAI_BAO_LOI_GOI } from "../tinh-nang/zalo-api";
+import { TuVanBaoGiaScreen } from "../yeu-cau/TuVanBaoGiaScreen";
+import { YeuCauCuaToiScreen } from "../yeu-cau/YeuCauCuaToiScreen";
 import { AboutScreen } from "./AboutScreen";
 import { ChiTietGiaiPhap } from "./ChiTietGiaiPhap";
 import { QuanLyQuyenScreen } from "./QuanLyQuyenScreen";
 import { ContactScreen } from "./ContactScreen";
 import { MOC_CHANG_DUONG, MOC_QUAN_LY_QUYEN } from "./dieu-huong";
 import { HomeScreen } from "./HomeScreen";
+import { CompassGlyph } from "./icons";
 import { MUC_MENU_NHANH } from "./MenuNhanh";
 import { DEFAULT_SCREEN_ID, findScreen, SCREENS, TABS, tabDangSang } from "./screens";
 import { SolutionsScreen } from "./SolutionsScreen";
@@ -115,6 +123,52 @@ const SCREEN_MARKUP = [
   { id: "home", markup: render(<HomeScreen />) },
   { id: "solutions", markup: render(<SolutionsScreen />) },
   { id: "danh-thiep", markup: render(<ManDanhThiep />) },
+  /**
+   * HAI TRẠNG THÁI CỦA BỘ CHỌN BA BƯỚC, KHÔNG PHẢI MỘT.
+   *
+   *   Màn này đổi hẳn nội dung sau mỗi lần bấm, nên dựng nó ở trạng thái đầu chỉ kiểm được bước
+   *   một. Màn KẾT QUẢ — nơi có thẻ sản phẩm, câu tóm tắt và hai nút — là chỗ dễ mọc ra cái
+   *   `<h1>` thứ hai hoặc một `<svg>` quên `aria-hidden` nhất, và nó không hề có mặt trong bản
+   *   dựng tĩnh của bước một. Dựng lại ở đây bằng chính cái vỏ mà màn thật dùng (`banner` +
+   *   `<h1>`), nên mọi bất biến dưới đây thật sự chạm tới nó.
+   *
+   *   Ba bước chọn thì được kiểm ở `goi-y-giai-phap.test.tsx`: chúng là KHỐI, không phải màn, nên
+   *   chúng không nợ người đọc một `<h1>` của riêng mình.
+   */
+  { id: "goi-y", markup: render(<GoiYGiaiPhapScreen />) },
+  {
+    id: "goi-y-ket-qua",
+    markup: render(
+      <>
+        <section className="banner">
+          <div className="banner__content">
+            <span className="tile tile--lon" aria-hidden="true">
+              <CompassGlyph className="tile__glyph" />
+            </span>
+            <h1 className="banner__title">{LOI.tieu_de}</h1>
+          </div>
+        </section>
+        <KetQuaGoiY
+          tra_loi={{ nganh: "ban-le", quy_mo: "10-50", viec: "da-kenh" }}
+          viec="da-kenh"
+          onXemGiaiPhap={() => {}}
+        />
+      </>,
+    ),
+  },
+  /**
+   * BỀ MẶT YÊU CẦU (giai đoạn B) — DỰNG Ở NHÁNH "CHƯA ĐĂNG NHẬP", VÀ ĐÓ LÀ NHÁNH ĐÚNG Ở ĐÂY.
+   *
+   *   Không có nhà cung cấp phiên trong lượt dựng này, nên cả hai màn ở nhánh mời đăng nhập —
+   *   nhánh KHÔNG có ô nhập nào, nên ca "không màn nào có ô nhập" bên dưới vẫn áp cho chúng
+   *   nguyên vẹn, không cần một ngoại lệ nào.
+   *
+   *   Nhánh CÓ biểu mẫu — chỗ duy nhất trong cả ứng dụng có một `<textarea>` — được đo ở
+   *   `features/yeu-cau/yeu-cau.test.tsx`, nơi dựng được nó bằng `NhaCungCapPhien`. Ghi ra đây
+   *   để người đọc ca dưới không kết luận rằng màn ấy không bao giờ có ô nhập.
+   */
+  { id: "tu-van", markup: render(<TuVanBaoGiaScreen />) },
+  { id: "yeu-cau", markup: render(<YeuCauCuaToiScreen />) },
   { id: "about", markup: render(<AboutScreen />) },
   { id: "contact", markup: render(<ContactScreen />) },
   /**

@@ -176,9 +176,13 @@ export function KetQuaQuet({
 /**
  * Khối quét mã, tách khỏi tab để tab còn chỗ cho hai tính năng danh thiếp còn lại.
  *
- * Nó giữ `<h1>` vì nó là việc chính của tab: tab tên "Danh thiếp" và tiêu đề màn là "Quét danh
- * thiếp". Hai khối kia — thiếp của chính chúng tôi, và số hoá thiếp giấy — dùng `<h2>`, nên tab
- * này vẫn có ĐÚNG MỘT `<h1>` như mọi màn khác (`screens.test.tsx` đo điều đó).
+ * ⚠ `<h2>`, KHÔNG CÒN `<h1>` — ĐỔI 22/09/2026, CÙNG LÚC VỚI THỨ TỰ BA KHỐI.
+ *
+ *   Cấp tiêu đề đi theo CHỖ ĐỨNG, không theo khối nào "quan trọng hơn": `<h1>` thuộc về khối MỞ
+ *   ĐẦU màn, và từ lượt này khối mở đầu là "Thiếp số của chúng tôi". Để `<h1>` lại ở đây thì màn
+ *   có hai tiêu đề bậc nhất, hoặc — tệ hơn — bậc nhất nằm ở khối thứ hai và trình đọc màn hình
+ *   đọc một màn bắt đầu bằng `<h2>`. `screens.test.tsx` đo "đúng một `<h1>` mỗi màn";
+ *   `tinh-nang-them.test.tsx` đo thêm "một `<h1>` và hai `<h2>`" trên đúng màn này.
  */
 export function QuetDanhThiep() {
   const [trang_thai, datTrangThai] = useState<TrangThai>({ kieu: "chua-goi" });
@@ -212,6 +216,7 @@ export function QuetDanhThiep() {
       ma="danh-thiep"
       trang_thai={trang_thai}
       onBam={() => void quet()}
+      cap_tieu_de="h2"
       glyph={<NamecardGlyph className="tn__glyph" />}
       dan_nhap={DANH_THIEP.dan_nhap}
       veKetQua={(noi_dung_qr) => (
@@ -232,21 +237,29 @@ export function QuetDanhThiep() {
 }
 
 /**
- * Tab "Danh thiếp" — ba việc quanh MỘT tấm danh thiếp, theo đúng thứ tự người ta gặp chúng.
+ * Màn "Danh thiếp" — ba việc quanh MỘT tấm danh thiếp.
  *
- *   1. **Quét thiếp số của đối tác** — việc chính, giữ `<h1>`.
- *   2. **Thiếp số của chính chúng tôi** — thứ để chìa lại cho họ.
- *   3. **Số hoá thiếp giấy** — thứ còn lại trong túi áo sau buổi gặp.
+ * ⚠ THỨ TỰ ĐỔI 22/09/2026, VÀ NÓ ĐI THEO VIỆC NGƯỜI TA TỚI ĐÂY ĐỂ LÀM:
  *
- * BA KHỐI, KHÔNG PHẢI BA TAB. Thanh tab đã có năm tab, và trên máy 320px mỗi tab chỉ còn khoảng
- * 56px chữ — `accessibility.test.ts` đo điều đó. Thêm tab thứ sáu là làm vỡ thanh tab để nói
- * một điều mà một tab tên "Danh thiếp" đã nói đủ.
+ *   1. **Thiếp số của chính chúng tôi** — thứ để CHÌA RA. Nó hiện ngay, không xin quyền nào, và
+ *      nó là dòng sản phẩm đã công bố (`SOLUTIONS` mục `namecard`) mà ô menu "Danh thiếp" mang
+ *      tên. Mở màn bằng nó là mở màn bằng thứ chạy được ngay. Nó giữ `<h1>`.
+ *   2. **Quét thiếp số của đối tác** — việc thứ hai, và là việc cần một lời xin quyền máy ảnh.
+ *   3. **Số hoá thiếp giấy** — cuối, vì nó là khối tự nói rằng bản này CHƯA đọc được chữ trên ảnh
+ *      (`SO_HOA_THIEP.chua_doc_duoc_chu`). Một màn không mở đầu bằng ranh giới của chính nó.
+ *
+ *   Trước lượt này khối quét đứng đầu, vì màn có tên "Quét danh thiếp" và vào bằng một ô menu tên
+ *   "Quét QR Lead". Cả hai cái tên ấy đã đổi (`index.ts`, `MenuNhanh.tsx`), nên thứ tự đi theo.
+ *
+ * BA KHỐI, KHÔNG PHẢI BA TAB. Thanh tab có bốn ô, và trên máy 320px mỗi ô chỉ còn khoảng 72px chữ
+ * — `accessibility.test.ts` đo điều đó. Thêm tab là làm vỡ thanh tab để nói một điều mà một màn
+ * tên "Danh thiếp" đã nói đủ.
  */
 export function ManDanhThiep() {
   return (
     <>
-      <QuetDanhThiep />
       <ManThiepCuaChungToi />
+      <QuetDanhThiep />
       <SoHoaThiepGiay />
     </>
   );

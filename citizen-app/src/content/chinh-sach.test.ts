@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
 import { DOAN_CHINH_SACH_TINH_NANG } from "../features/tinh-nang/noi-dung";
 import { TRUONG_THIEP_CUA_CHUNG_TOI } from "../features/tinh-nang/vcard";
 
@@ -57,6 +58,86 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
     expect(chu).toMatch(/ZNS/);
     // Và vẫn nói ra điều đúng: số điện thoại KHÔNG nằm trong hai mã gửi đi.
     expect(chu).toMatch(/không nằm trong hai mã/);
+  });
+
+  /**
+   * ⚠ KHOÁ HAI CHIỀU GIỮA THÂN YÊU CẦU VÀ VĂN BẢN CHÍNH SÁCH — DÂY BẪY ĐẮT NHẤT CỦA LƯỢT 22/09.
+   *
+   *   Từ 22/09/2026 ứng dụng thu thập DỮ LIỆU BÁN HÀNG, không chỉ định danh. Chế độ hỏng ở đây im
+   *   lặng theo đúng kiểu đã xảy ra HAI lần trong kho này ("không đọc thư viện ảnh", rồi "không có
+   *   ô đăng nhập"): mã gửi thêm một trường, câu chữ ở lại, và không có gì đỏ lên. Khai thiếu một
+   *   loại dữ liệu đang được thu thập là đúng thứ Nghị định 13 nhắm tới, và không sửa lại được sau
+   *   khi công bố.
+   *
+   *   HAI CA DƯỚI ĐÂY LÀ HAI CHIỀU CỦA CÙNG MỘT KHOÁ, và thiếu một chiều là mất cả cơ chế:
+   *     • chiều "mã đi trước" — thêm một khoá vào `thanYeuCau` mà quên khai;
+   *     • chiều "văn bản đi sau" — dọn một mục khỏi chính sách trong khi mã vẫn gửi trường ấy.
+   *   Chiều thứ hai mới là chiều người ta dọn văn bản cho gọn, và nó là chiều không ai nghĩ tới.
+   */
+  it("MỌI trường thân yêu cầu gửi đi đều có một dòng khai trong chính sách", () => {
+    const khoa_gui_di = Object.keys(
+      JSON.parse(
+        thanYeuCau({ loai: "consult", quan_tam: ["messaging"], quy_mo: "10-50", ghi_chu: "x", nguon: "" }),
+      ) as Record<string, unknown>,
+    );
+    expect(khoa_gui_di.length, "thân yêu cầu không còn trường nào để đo").toBeGreaterThan(0);
+
+    const da_khai = new Set(TRUONG_GUI_DI.map((t) => t.khoa));
+    for (const khoa of khoa_gui_di) {
+      expect(
+        da_khai,
+        `thân yêu cầu gửi đi trường "${khoa}" mà chính sách quyền riêng tư KHÔNG khai. Thêm một ` +
+          "dòng vào TRUONG_GUI_DI (api/hop-dong-yeu-cau.ts) — đừng sửa ca này.",
+      ).toContain(khoa);
+    }
+    // Và chiều ngược của chính vế này: không khai thừa một trường mã KHÔNG gửi. Khai thừa là mô
+    // tả sai theo hướng khác, và nó làm người đọc tưởng mình đã cho đi nhiều hơn thực tế.
+    for (const truong of TRUONG_GUI_DI) {
+      expect(
+        khoa_gui_di,
+        `chính sách khai trường "${truong.khoa}" mà thân yêu cầu không hề gửi`,
+      ).toContain(truong.khoa);
+    }
+  });
+
+  it("MỌI dòng khai ấy có mặt NGUYÊN VĂN trong văn bản chính sách", () => {
+    // Chiều thứ hai của khoá. Không có ca này thì gỡ hẳn mục "Yêu cầu tư vấn" khỏi
+    // `MUC_CHINH_SACH` vẫn xanh: bảng khai còn nguyên, chỉ là không ai đọc nó ra nữa.
+    expect(TRUONG_GUI_DI.length, "bảng khai rỗng — ca này sẽ xanh vì không tìm thấy gì").toBeGreaterThan(0);
+    for (const truong of TRUONG_GUI_DI) {
+      expect(
+        toanVan,
+        `văn bản chính sách không còn nói tới: ${truong.trong_chinh_sach.slice(0, 40)}…`,
+      ).toContain(truong.trong_chinh_sach);
+    }
+  });
+
+  it("mục về bề mặt yêu cầu nói đủ: phải đăng nhập · ZNS không chắc chắn · trần gọi lại · 24 tháng", () => {
+    const muc = MUC_CHINH_SACH.find((m) => m.ma === "yeu-cau-tu-van");
+    expect(muc, "chính sách không còn mục nào về bề mặt yêu cầu").toBeDefined();
+    const chu = muc!.doan.join("\n");
+
+    expect(chu, "không nói phải đăng nhập trước").toMatch(/đăng nhập trước/);
+    expect(chu, "không khai việc gửi tin ZNS xác nhận").toMatch(/ZNS/);
+    // ⚠ ZNS KHÔNG ĐƯỢC HỨA CHẮC. Nó có trần (`zns_da_gui.ket_qua` có giá trị `bo_qua_vuot_tran`)
+    // và có thể tắt. Một câu "Bạn sẽ nhận được tin" là một lời hứa mã không giữ được, và người
+    // phát hiện ra là người ngồi chờ một tin không tới.
+    expect(chu, "hứa chắc rằng sẽ có tin ZNS").not.toMatch(/[Bb]ạn sẽ nhận được (một )?tin/);
+    expect(chu, "không nói ra rằng không nhận được tin vẫn là bình thường").toMatch(
+      /không nhận được tin/,
+    );
+    expect(chu, "không nói trần gọi lại").toMatch(/3 lần trong 24 giờ/);
+    expect(chu, "không nói hạn lưu 24 tháng").toMatch(/24 THÁNG|24 tháng/);
+    // ⚠ 24 THÁNG LÀ ẨN DANH HOÁ, KHÔNG PHẢI XOÁ HÀNG. `an_danh_yeu_cau_qua_han()` đặt `ghi_chu`
+    // thành NULL và GIỮ hàng. Viết "chúng tôi xoá dữ liệu của bạn" là mô tả một cơ chế không tồn
+    // tại, và sai về phía hứa nhiều hơn thứ mã làm — đúng loại lỗi mục `cach-thuc` đã mắc một lần.
+    expect(chu, "không nói ra rằng sau 24 tháng là ẩn danh hoá chứ không xoá hàng").toMatch(
+      /ẩn danh/,
+    );
+    // KHÔNG MỘT CAM KẾT THỜI GIAN NÀO cho cuộc gọi lại.
+    expect(chu, "chính sách in một cam kết thời gian cho cuộc gọi lại").not.toMatch(
+      /trong \d+ (giây|phút)/,
+    );
   });
 
   it("câu mở đầu nói ngay việc gửi đi, không giấu xuống dưới", () => {

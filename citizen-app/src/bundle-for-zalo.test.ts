@@ -38,7 +38,11 @@ import {
   TOKEN_KHONG_CHUA_GI,
   VAN_PHONG,
 } from "./features/tinh-nang/noi-dung";
-import { DUONG_DAN_PHIEN, thanYeuCau } from "./features/dang-nhap/hop-dong";
+// HAI HỢP ĐỒNG, HAI HÀM CÙNG TÊN `thanYeuCau` — và chúng được ĐẶT BÍ DANH ở đây thay vì đổi tên
+// một trong hai: mỗi hàm là "thân yêu cầu" của đúng tuyến nó phục vụ, và đổi tên để tiện cho một
+// tệp test là để lại một cái tên không còn nói đúng việc ở hai tệp sản xuất.
+import { DUONG_DAN_YEU_CAU, thanYeuCau } from "./api/hop-dong-yeu-cau";
+import { DUONG_DAN_PHIEN, thanYeuCau as thanYeuCauPhien } from "./features/dang-nhap/hop-dong";
 import {
   DEMO_DANH_MUC_XA,
   DEMO_GHI_CHU,
@@ -370,7 +374,10 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
    */
   it("CẢ HAI bản đều mang đúng MỘT đường gọi máy chủ của ta", () => {
     const ten_truong = Object.keys(
-      JSON.parse(thanYeuCau({ ma_so_dien_thoai: "x", ma_truy_cap: "y" })) as Record<string, unknown>,
+      JSON.parse(thanYeuCauPhien({ ma_so_dien_thoai: "x", ma_truy_cap: "y" })) as Record<
+        string,
+        unknown
+      >,
     );
     expect(ten_truong.length, "hợp đồng không còn trường nào để đo").toBe(2);
 
@@ -406,6 +413,48 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
       demGoi(day_du) - demGoi(goc),
       "hai biến thể chênh nhau một lời gọi mạng — khối đăng nhập phải giống hệt nhau ở cả hai",
     ).toBe(0);
+  });
+
+  /**
+   * TUYẾN THỨ HAI — BỀ MẶT YÊU CẦU (22/09/2026, giai đoạn B).
+   *
+   * Cùng khuôn với ca ngay trên, và cùng lý do: "đúng một lần" là cách đo "đúng một chỗ gọi" mà
+   * không phải ghim một con số của SDK. 0 lần = bề mặt yêu cầu không gọi được máy chủ (nộp hai màn
+   * không làm được gì); 2 lần trở lên = có chỗ gọi thứ hai mà không ai khai.
+   *
+   * ⚠ VÀ NĂM TÊN TRƯỜNG ĐỌC TỪ CHÍNH `thanYeuCau`, KHÔNG GÕ LẠI. Gõ lại là tạo bản sao thứ hai,
+   * và ngày hợp đồng đổi thì bản sao ấy làm ca này xanh vì KHÔNG TÌM THẤY GÌ.
+   */
+  it("CẢ HAI bản đều mang đúng MỘT đường gọi tuyến yêu cầu của ta", () => {
+    const ten_truong = Object.keys(
+      JSON.parse(
+        thanYeuCau({ loai: "consult", quan_tam: ["messaging"], quy_mo: "", ghi_chu: "", nguon: "" }),
+      ) as Record<string, unknown>,
+    );
+    expect(ten_truong.length, "hợp đồng yêu cầu không còn trường nào để đo").toBe(5);
+
+    const dem = (ban: string, chuoi: string) => ban.split(chuoi).length - 1;
+
+    for (const [ten, ban] of [
+      ["goc", goc],
+      ["day-du", day_du],
+    ] as const) {
+      expect(
+        dem(ban, DUONG_DAN_YEU_CAU),
+        `bản ${ten} phải nhắc tuyến yêu cầu ĐÚNG MỘT lần`,
+      ).toBe(1);
+      // TÌM `ten:` CHỨ KHÔNG TÌM TÊN TRẦN, và khác biệt ấy quyết định ca này có nội dung hay không:
+      // `note`, `source`, `scale` là những từ tiếng Anh thường, gần như chắc chắn có mặt đâu đó
+      // trong bundle của `zmp-sdk` bất kể mã của ta gửi gì. Một `toContain("note")` vì thế xanh
+      // ngay cả khi hợp đồng đã bị xoá sạch — đúng kiểu xanh vì không tìm thấy gì. Bộ rút gọn
+      // KHÔNG đổi được tên khoá của một object literal đi lên dây, nên `note:` là cái neo đúng.
+      for (const truong of ten_truong) {
+        expect(
+          dem(ban, `${truong}:`),
+          `bản ${ten} không mang tên trường "${truong}" của hợp đồng yêu cầu`,
+        ).toBeGreaterThan(0);
+      }
+    }
   });
 
   /**

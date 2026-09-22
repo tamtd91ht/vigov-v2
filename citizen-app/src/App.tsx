@@ -14,6 +14,7 @@ import {
 import { TabBar } from "./components/TabBar";
 import { COMPANY } from "./content/company-profile";
 import { NutChatOA } from "./features/company-intro/NutChatOA";
+import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
 import {
   DEFAULT_SCREEN_ID,
   type DiemDen,
@@ -237,18 +238,29 @@ export function App() {
   }
 
   return (
-    <KhungApp
-      man={currentId}
-      // Bấm một tab là điều hướng KHÔNG CÓ MỐC: người bấm muốn về đầu màn ấy, không muốn bị thả
-      // xuống giữa một khối mà lần trước họ đi tới từ màn chủ.
-      onChonMan={(id) => di({ man: id })}
-      xaDaChon={xaDaChon}
-      onDoiXa={() => setDangChonXa(true)}
-      khamPha={dangChonXa || dangKhamPha}
-    >
-      {/* Bảng chẩn đoán: chỉ mở bằng `debug`. Xem lib/launch-params.ts. */}
-      {batChanDoan(thamSo) && <LaunchParamsPanel thamSo={thamSo} />}
-      {noiDung}
-    </KhungApp>
+    /**
+     * ⚠ CHỖ GIỮ PHIÊN BỌC CẢ VỎ APP, VÀ NÓ CHỈ SỐNG TRONG BỘ NHỚ.
+     *
+     *   Phiếu phiên được phát hành ở khối đăng nhập trên màn Liên hệ, và được ĐỌC ở hai màn khác
+     *   (Tư vấn & báo giá · Yêu cầu của tôi). Cách rẻ nhất để chuyền nó giữa ba chỗ ấy là ghi
+     *   xuống máy — và đó chính là dòng `phase1-collects-nothing.test.ts` cấm ở MỌI tệp. Lệnh cấm
+     *   ấy KHÔNG được thu hẹp trong lượt này, nên chỗ giữ là một context trên `useState`: đóng app
+     *   là mất, mở lại đăng nhập một chạm. Xem `features/dang-nhap/kho-phien.tsx`.
+     */
+    <NhaCungCapPhien>
+      <KhungApp
+        man={currentId}
+        // Bấm một tab là điều hướng KHÔNG CÓ MỐC: người bấm muốn về đầu màn ấy, không muốn bị thả
+        // xuống giữa một khối mà lần trước họ đi tới từ màn chủ.
+        onChonMan={(id) => di({ man: id })}
+        xaDaChon={xaDaChon}
+        onDoiXa={() => setDangChonXa(true)}
+        khamPha={dangChonXa || dangKhamPha}
+      >
+        {/* Bảng chẩn đoán: chỉ mở bằng `debug`. Xem lib/launch-params.ts. */}
+        {batChanDoan(thamSo) && <LaunchParamsPanel thamSo={thamSo} />}
+        {noiDung}
+      </KhungApp>
+    </NhaCungCapPhien>
   );
 }

@@ -10,7 +10,15 @@
 
 import { mocTinhNang } from "../tinh-nang/khung";
 
-export type ScreenId = "home" | "solutions" | "danh-thiep" | "about" | "contact";
+export type ScreenId =
+  | "home"
+  | "solutions"
+  | "danh-thiep"
+  | "goi-y"
+  | "tu-van"
+  | "yeu-cau"
+  | "about"
+  | "contact";
 
 /**
  * MỘT ĐIỂM ĐẾN BÊN TRONG ỨNG DỤNG — màn nào, và chỗ nào trong màn ấy.
@@ -60,16 +68,19 @@ export const MOC_QUAN_LY_QUYEN = "quan-ly-quyen";
  * Gõ tay `"tn-van-phong"` ở đây thì ngày quy ước `id` trong `khung.tsx` đổi, hai mục menu im lặng
  * không cuộn đi đâu: người bấm thấy đúng đầu màn và tự kết luận là nút hỏng. Không có gì đỏ lên,
  * vì cả hai bên đều "đúng" khi đọc riêng.
+ *
+ * ⚠ `MOC_QUET_MA_QR` VÀ `MOC_SO_HOA_THIEP` ĐÃ ĐƯỢC GỠ (22/09/2026). Hai mục menu "Quét QR Lead" và
+ * "Chụp danh thiếp" gộp lại thành MỘT mục "Danh thiếp" dẫn tới ĐẦU màn ấy, nên không còn ai đọc
+ * hai hằng kia. Một hằng không ai đọc là một hằng người sau tưởng là đang được dùng.
  */
 export const MOC_TIM_VAN_PHONG = mocTinhNang("van-phong");
-export const MOC_QUET_MA_QR = mocTinhNang("danh-thiep");
 
 /**
- * Mỏ neo khối "Số hoá thiếp giấy" — mục "Chụp danh thiếp" của bản mẫu dẫn tới đây.
+ * Mỏ neo khối đăng nhập trên màn Liên hệ — mục "Đăng nhập" của menu nhanh dẫn thẳng tới đây.
  *
- * NÓ PHẢI LÀ MỘT MỐC RIÊNG, KHÔNG DÙNG CHUNG VỚI `MOC_QUET_MA_QR`. Từ 21/09/2026 màn "Danh thiếp"
- * không còn tab riêng: cả hai tính năng danh thiếp vào bằng menu nhanh, và hai mục menu khác nhau
- * mà cùng thả người dùng xuống khối quét mã thì mục thứ hai là một nút nói dối — nó hứa "chụp" và
- * mở ra máy quét.
+ * ĐỌC TỪ `mocTinhNang`, ĐÚNG NHƯ `MOC_TIM_VAN_PHONG`, và vì đúng cái lý do ghi ở trên: khối ấy là
+ * `KhoiDangNhap` trong `features/tinh-nang/LienHeTinhNang.tsx`, dựng bằng `KhungTinhNang ma="dang-nhap"`,
+ * nên `id` của tiêu đề nó do chính hàm kia sinh ra. Gõ tay `"tn-dang-nhap"` ở đây là dựng chỗ thứ
+ * hai giữ một quy ước, và chỗ thứ hai là chỗ sẽ lệch.
  */
-export const MOC_SO_HOA_THIEP = mocTinhNang("so-hoa-thiep");
+export const MOC_DANG_NHAP = mocTinhNang("dang-nhap");

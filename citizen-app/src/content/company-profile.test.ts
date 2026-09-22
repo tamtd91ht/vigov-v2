@@ -504,15 +504,21 @@ describe("screen registry", () => {
     expect(new Set(ids).size).toBe(4);
   });
 
-  it("sổ màn hình là bốn màn ấy CỘNG tab tính năng, ở MỌI biến thể", () => {
-    // Không còn phụ thuộc biến thể: ba quyền nay thuộc về chính ứng dụng sản phẩm, nên tab
-    // "Danh thiếp" có mặt ở cả bản nộp lẫn bản demo. Ghim số 5 ở đây là ghim đúng một sự thật,
-    // và nó đỏ lên ngay nếu ai thêm tab thứ sáu mà quên đo lại bề rộng 320px
-    // (`accessibility.test.ts`).
+  it("sổ màn hình là bốn màn ấy CỘNG bốn màn ngoài tab, ở MỌI biến thể", () => {
+    // Không còn phụ thuộc biến thể: ba quyền nay thuộc về chính ứng dụng sản phẩm, nên màn
+    // "Danh thiếp" có mặt ở cả bản nộp lẫn bản demo; "Gợi ý giải pháp" (22/09/2026, giai đoạn A)
+    // và hai màn của bề mặt yêu cầu (22/09/2026, giai đoạn B) cũng vậy.
+    //
+    // GHIM TÁM Ở ĐÂY, VÀ GHIM BỐN Ở CA TRÊN — hai con số đo hai thứ khác nhau, và khoảng cách
+    // giữa chúng chính là số màn KHÔNG có ô trên thanh tab. Ca trên (`MAN_GIOI_THIEU`) đỏ lên nếu
+    // ai thêm tab thứ năm mà quên đo lại bề rộng 320px (`accessibility.test.ts`); ca này đỏ lên
+    // nếu ai thêm một màn mà quên khai nó vào sổ.
     const ids = SCREENS.map((screen) => screen.id);
     expect(new Set(ids).size, "hai màn trùng id — một tab sẽ dẫn sang màn kia").toBe(ids.length);
-    expect(SCREENS).toHaveLength(5);
-    expect(ids).toContain("danh-thiep");
+    expect(SCREENS).toHaveLength(8);
+    for (const id of ["danh-thiep", "goi-y", "tu-van", "yeu-cau"]) {
+      expect(ids, `sổ màn hình thiếu màn ngoài tab: ${id}`).toContain(id);
+    }
     for (const man of MAN_GIOI_THIEU) expect(ids).toContain(man.id);
   });
 

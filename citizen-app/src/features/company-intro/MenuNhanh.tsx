@@ -1,15 +1,17 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 import { CONTACT } from "../../content/company-profile";
 
 import type { DiemDen } from "./dieu-huong";
+import { MOC_TIM_VAN_PHONG } from "./dieu-huong";
 import {
-  MOC_QUAN_LY_QUYEN,
-  MOC_QUET_MA_QR,
-  MOC_SO_HOA_THIEP,
-  MOC_TIM_VAN_PHONG,
-} from "./dieu-huong";
-import { GridGlyph, NamecardGlyph, PhoneGlyph, PinGlyph, QrGlyph, ShieldGlyph } from "./icons";
+  CompassGlyph,
+  GridGlyph,
+  HandshakeGlyph,
+  NamecardGlyph,
+  PhoneGlyph,
+  PinGlyph,
+} from "./icons";
 
 /**
  * MENU NHANH TRÊN MÀN CHỦ — thẻ trắng ĐÈ LÊN ĐÁY HERO, sáu mục, mỗi mục dẫn tới một chỗ CÓ THẬT.
@@ -19,7 +21,9 @@ import { GridGlyph, NamecardGlyph, PhoneGlyph, PinGlyph, QrGlyph, ShieldGlyph } 
  *
  *   | Mục bản mẫu | Ở đây |
  *   |---|---|
- *   | Giải pháp · Quét QR Lead · Chụp danh thiếp · Quyền ứng dụng | dựng nguyên nhãn bản mẫu |
+ *   | Giải pháp | dựng nguyên nhãn bản mẫu |
+ *   | **Quét QR Lead** + **Chụp danh thiếp** | **GỘP LÀM MỘT**: "Danh thiếp". Xem khối riêng dưới |
+ *   | **Quyền ứng dụng** | **KHÔNG CÒN Ở ĐÂY** (22/09/2026). Xem khối riêng dưới |
  *   | **Văn phòng gần tôi** | dựng, nhưng nhãn rút thành "Văn phòng" — tính năng chưa xếp theo khoảng cách, xem dưới |
  *   | **Đặt lịch tư vấn** | **KHÔNG DỰNG** — là một biểu mẫu thu dữ liệu (xem dưới). Thay bằng một mục "Tư vấn" gọi hotline |
  *   | **Tải brochure** | **KHÔNG DỰNG** — trong kho không có một tệp PDF nào để tải |
@@ -61,9 +65,29 @@ import { GridGlyph, NamecardGlyph, PhoneGlyph, PinGlyph, QrGlyph, ShieldGlyph } 
  *   còn 260. Chia ba, trừ khe 10: ~80px mỗi ô. Chia bốn thì còn ~58px, mà từ dài nhất trong sáu
  *   nhãn ("phòng", "thiếp", "dụng" …) đã cần ~50px ở cỡ 16px — hết chỗ, và nhãn bị cắt đuôi.
  *
- * ⚠ HAI MỤC DANH THIẾP DẪN TỚI HAI MỎ NEO KHÁC NHAU của cùng một màn, vì từ lượt này màn ấy không
- * còn tab riêng (`features/tinh-nang/index.ts`). Dùng chung một mốc thì mục "Chụp danh thiếp" mở
- * ra máy quét — một nút nói dối.
+ * ⚠ MỘT MỤC "DANH THIẾP", KHÔNG PHẢI HAI — 22/09/2026, yêu cầu của chủ dự án.
+ *
+ *   Bản mẫu có "Quét QR Lead" và "Chụp danh thiếp": hai ô cho hai QUYỀN máy ảnh, không phải hai
+ *   việc khách cần. Thứ có thật đằng sau cả hai là MỘT DÒNG SẢN PHẨM ĐÃ CÔNG BỐ — `SOLUTIONS` mục
+ *   `namecard`, "giải pháp networking và quản lý danh thiếp số". Nên ở đây là một ô mang đúng tên
+ *   dòng sản phẩm ấy, dẫn tới ĐẦU màn Danh thiếp (không mốc), nơi ba việc quanh tấm thiếp nằm
+ *   cạnh nhau và người dùng chọn.
+ *
+ *   Và chữ "Lead" biến mất cùng lúc, vì hai lý do độc lập: app này KHÔNG tạo ra một lead nào —
+ *   không có tuyến nào nhận, giai đoạn A không thu thập gì — nên một nhãn hứa "lead" là một nhãn
+ *   hứa thứ chưa có; và nó là tiếng lóng bán hàng, thứ một người lớn tuổi đọc xong không biết ô
+ *   ấy mở ra cái gì.
+ *
+ * ⚠ KHÔNG CÒN Ô "QUYỀN ỨNG DỤNG" Ở ĐÂY — và đường tới màn ấy KHÔNG mất.
+ *
+ *   `HomeScreen` đã có sẵn một nút khối "Quản lý quyền" ở gần cuối màn, dẫn tới đúng cùng một chỗ.
+ *   Hai đường tới một màn, đứng trên cùng một màn chủ, là hai chỗ người dùng phải đoán xem chúng
+ *   khác gì nhau — và ô menu là bản trùng, không phải bản gốc. Màn `QuanLyQuyenScreen` giữ nguyên:
+ *   nó là thứ vòng duyệt của Zalo đọc.
+ *
+ *   Chỗ trống ấy, cộng chỗ trống của hai ô danh thiếp gộp lại, thành hai ô mới: "Gợi ý" (bộ chọn
+ *   ba bước, chạy hoàn toàn trên máy) và "Đăng nhập" (dẫn thẳng tới khối đăng nhập một chạm trên
+ *   màn Liên hệ). Vẫn đúng sáu ô, vẫn lưới 3x2 — phép đo 320px ở dưới không bị động tới.
  */
 
 type MucMenu = {
@@ -89,6 +113,34 @@ export const MUC_MENU_NHANH: readonly MucMenu[] = [
     di: { man: "solutions" },
   },
   {
+    // MỘT DÒNG SẢN PHẨM ĐÃ CÔNG BỐ, MỘT Ô. Không `moc`: ô này thả người dùng xuống ĐẦU màn Danh
+    // thiếp, nơi ba việc quanh tấm thiếp nằm cạnh nhau. Xem khối chú thích đầu tệp.
+    ma: "danh-thiep",
+    nhan: "Danh thiếp",
+    phu: "Thiếp số ViHAT",
+    glyph: NamecardGlyph,
+    kieu: "man",
+    di: { man: "danh-thiep" },
+  },
+  {
+    // BỘ CHỌN BA BƯỚC, CHẠY HOÀN TOÀN TRÊN MÁY. Dòng phụ nói ra số bước, vì một nhãn "Gợi ý" trần
+    // không cho biết sau cú bấm là một câu hỏi hay một danh sách.
+    ma: "goi-y",
+    nhan: "Gợi ý",
+    phu: "Chọn 3 bước",
+    glyph: CompassGlyph,
+    kieu: "man",
+    di: { man: "goi-y" },
+  },
+  {
+    ma: "tu-van",
+    nhan: "Tư vấn",
+    phu: "Gọi hotline",
+    glyph: PhoneGlyph,
+    kieu: "goi",
+    so: CONTACT.hotlineDialable,
+  },
+  {
     // ⚠ NHÃN BẢN MẪU LÀ "Văn phòng gần tôi", VÀ Ở ĐÂY NÓ KHÔNG ĐƯỢC DÙNG.
     //
     //   Khối ấy xin được mã vị trí của Zalo rồi nói thẳng rằng nó CHƯA xếp được ba văn phòng theo
@@ -103,45 +155,54 @@ export const MUC_MENU_NHANH: readonly MucMenu[] = [
     di: { man: "contact", moc: MOC_TIM_VAN_PHONG },
   },
   {
-    ma: "qr",
-    nhan: "Quét QR Lead",
-    phu: "Mở máy quét",
-    glyph: QrGlyph,
+    // ⚠ Ô NÀY LÀ "YÊU CẦU", KHÔNG CÒN LÀ "ĐĂNG NHẬP" — ĐỔI 22/09/2026 (giai đoạn B).
+    //
+    //   Đăng nhập là một BƯỚC, không phải một việc khách cần — đúng cùng một lỗi mà cả lượt thiết
+    //   kế lại này đang sửa: màn chủ bày thứ app cần, không bày thứ khách cần. Thứ khách cần là
+    //   xem lại những yêu cầu họ đã gửi.
+    //
+    //   ĐƯỜNG ĐĂNG NHẬP KHÔNG MẤT: màn "Yêu cầu của tôi" tự lo ca chưa đăng nhập bằng một lời mời
+    //   đăng nhập dẫn thẳng tới khối `getPhoneNumber` trên màn Liên hệ (`MOC_DANG_NHAP` vẫn còn và
+    //   vẫn được dùng, ở đó). Một ô menu tên "Đăng nhập" trên màn chủ là một ô chỉ có nghĩa với
+    //   người CHƯA đăng nhập, và không có nghĩa gì với người đã đăng nhập — tức là sai một nửa
+    //   thời gian.
+    ma: "yeu-cau",
+    nhan: "Yêu cầu",
+    phu: "Tình trạng",
+    glyph: HandshakeGlyph,
     kieu: "man",
-    di: { man: "danh-thiep", moc: MOC_QUET_MA_QR },
-  },
-  {
-    ma: "danh-thiep",
-    nhan: "Chụp danh thiếp",
-    phu: "Thiếp giấy",
-    glyph: NamecardGlyph,
-    kieu: "man",
-    di: { man: "danh-thiep", moc: MOC_SO_HOA_THIEP },
-  },
-  {
-    ma: "tu-van",
-    nhan: "Tư vấn",
-    phu: "Gọi hotline",
-    glyph: PhoneGlyph,
-    kieu: "goi",
-    so: CONTACT.hotlineDialable,
-  },
-  {
-    ma: "quyen",
-    nhan: "Quyền ứng dụng",
-    phu: "App xin gì",
-    glyph: ShieldGlyph,
-    kieu: "man",
-    di: { man: "contact", moc: MOC_QUAN_LY_QUYEN },
+    di: { man: "yeu-cau" },
   },
 ];
 
-export function MenuNhanh({ onDi }: { onDi: (diem: DiemDen) => void }) {
+export function MenuNhanh({
+  onDi,
+  dau,
+}: {
+  onDi: (diem: DiemDen) => void;
+  /**
+   * Khối đứng NGAY TRÊN lưới sáu ô, BÊN TRONG thẻ trắng — hôm nay là dải chiến dịch.
+   *
+   * ⚠ NÓ NẰM TRONG THẺ CHỨ KHÔNG ĐỨNG GIỮA HERO VÀ THẺ, VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH VỀ BỐ CỤC.
+   *
+   *   Thẻ này là một lớp CHỒNG: lề âm của nó (`.menu-the { margin: -56px … }`) ăn khớp với đệm
+   *   đáy của hero (`.hero { padding: … 76px }`), và `accessibility.test.ts` đọc cả hai con số ra
+   *   khỏi CSS rồi so. Chen một khối vào GIỮA hai thẻ ấy thì lề âm kia không còn trèo lên hero
+   *   nữa mà trèo lên khối mới — thẻ trắng trùm mất chính dải vừa thêm, và phép kiểm vẫn xanh vì
+   *   hai con số nó đọc không đổi. Một phép kiểm xanh trong lúc bố cục đã vỡ là phép kiểm tệ nhất
+   *   trong tệp này.
+   *
+   *   Đặt vào trong thẻ thì cặp số ấy giữ nguyên nghĩa, và dải vẫn ở đúng chỗ mắt cần: ngay dưới
+   *   hero, trên sáu ô.
+   */
+  dau?: ReactNode;
+}) {
   return (
     /* THẺ TRẮNG ĐÈ LÊN ĐÁY HERO (bản mẫu). Nó là một lớp CHỒNG, nên lề âm của nó và đệm đáy của
        hero là MỘT CẶP: đệm đáy phải lớn hơn, nếu không thẻ trùm lên hàng chỉ số trong hero.
        `accessibility.test.ts` đọc hai con số ấy ra khỏi CSS và so, thay vì tin vào mắt. */
     <div className="menu-the">
+      {dau}
       <ul className="menu-nhanh">
           {MUC_MENU_NHANH.map((muc) => {
           const Glyph = muc.glyph;

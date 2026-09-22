@@ -1,6 +1,8 @@
 import type { ComponentType } from "react";
 
+import { MAN_GOI_Y_GIAI_PHAP } from "../goi-y-giai-phap/index";
 import { MAN_DANH_THIEP } from "../tinh-nang/index";
+import { MAN_TU_VAN, MAN_YEU_CAU } from "../yeu-cau/index";
 
 import type { ScreenId, ThamSoMan } from "./dieu-huong";
 import { AboutScreen } from "./AboutScreen";
@@ -37,9 +39,8 @@ import { SolutionsScreen } from "./SolutionsScreen";
  */
 export {
   MOC_CHANG_DUONG,
+  MOC_DANG_NHAP,
   MOC_QUAN_LY_QUYEN,
-  MOC_QUET_MA_QR,
-  MOC_SO_HOA_THIEP,
   MOC_TIM_VAN_PHONG,
 } from "./dieu-huong";
 export type { DiemDen, ScreenId, ThamSoMan } from "./dieu-huong";
@@ -83,6 +84,11 @@ export const SCREENS: readonly ScreenDefinition[] = [
     component: SolutionsScreen,
   },
   MAN_DANH_THIEP,
+  MAN_GOI_Y_GIAI_PHAP,
+  // BỀ MẶT YÊU CẦU (giai đoạn B, 22/09/2026) — hai màn NGOÀI TAB. Thanh tab vẫn bốn ô; xem
+  // `features/yeu-cau/index.ts` về vì sao ô thứ năm là một phép đo chứ không một khẩu vị.
+  MAN_TU_VAN,
+  MAN_YEU_CAU,
   {
     id: "about",
     headerTitle: "Về ViHAT",
@@ -128,10 +134,14 @@ export function tabDangSang(id: ScreenId): ScreenId {
  *
  * `bundle-for-zalo.test.ts` dùng nó để khẳng định bản `goc` vẫn là một app có nội dung, chứ
  * không phải một bản rỗng — và phép kiểm ấy không nên đỏ chỉ vì thứ tự tab đổi.
+ *
+ * ⚠ ĐÂY LÀ ĐÚNG `TABS`, KHÔNG PHẢI MỘT PHÉP LỌC THỨ HAI — đổi 22/09/2026. Trước đây nó loại trừ
+ * MỘT id viết thẳng (`danh-thiep`), và đó là một danh sách âm: ngày màn "Gợi ý giải pháp" ra đời
+ * cũng là một màn ngoài tab, nó lặng lẽ lọt vào đây và ca "bốn màn giới thiệu" đỏ lên vì một lý
+ * do không liên quan gì tới nội dung. Lọc theo TÍNH CHẤT — có ô trên thanh tab hay không — thì
+ * danh sách tự đúng mỗi lần sổ màn hình đổi.
  */
-export const MAN_GIOI_THIEU: readonly ScreenDefinition[] = SCREENS.filter(
-  (man) => man.id !== "danh-thiep",
-);
+export const MAN_GIOI_THIEU: readonly ScreenDefinition[] = TABS;
 
 export const DEFAULT_SCREEN_ID: ScreenId = "home";
 

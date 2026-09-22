@@ -441,6 +441,32 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["the floating chat label at its blue glow", "#ffffff", token("panel-glow-blue")],
     ["the 'opens only inside Zalo' line under the chat button", token("ink"), token("surface-alt")],
 
+    /**
+     * DẢI CHIẾN DỊCH TRÊN MÀN CHỦ (22/09/2026) — hai dòng chữ trên `--surface-tint`.
+     *
+     * Không một màu mới nào: dải dùng lại đúng nền xanh nhạt và hai màu chữ đã đo ở trên. Vẫn có
+     * tên riêng ở đây, vì cùng lý do như mọi khối trước — một cặp màu chỉ được bảo vệ khi có TÊN
+     * NÓ trong danh sách này. Đây là hai dòng đầu tiên một người tới từ mã QR đọc được.
+     */
+    ["the campaign strip title", token("navy"), token("surface-tint")],
+    ["the campaign strip greeting", token("ink"), token("surface-tint")],
+
+    /**
+     * BỘ CHỌN BA BƯỚC "GỢI Ý GIẢI PHÁP" (22/09/2026).
+     *
+     * Cũng không một màu mới nào — màn này dùng lại `.banner`, `.action`, `.card` và
+     * `.section-title`. Liệt kê riêng vì cùng lý do: đổi `.gygp-ds__nut` sang một màu khác thì
+     * không dòng nào ở trên đỏ lên, và đây là chữ người dùng đọc để CHỌN — đọc sai một dòng là
+     * chọn sai một bước.
+     */
+    ["a wizard question", token("navy"), token("surface-alt")],
+    ["a wizard question over the blue wash", token("navy"), token("surface-tint")],
+    ["the step counter above a wizard question", token("ink-muted"), token("surface-alt")],
+    ["a wizard option label", token("ink"), token("surface")],
+    ["a wizard option label where its card gradient ends", token("ink"), token("surface-tint")],
+    ["the answer summary label", token("ink-muted"), token("surface")],
+    ["the answer summary value", token("ink"), token("surface")],
+
     ["card text where the card gradient ends green", token("ink"), token("surface-tint-green")],
     [
       "card secondary text where the card gradient ends green",
