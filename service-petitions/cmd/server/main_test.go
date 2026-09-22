@@ -19,9 +19,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/staffauth"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
@@ -41,7 +43,22 @@ const (
 
 	nhanXaA = "Theo văn bản xã A"
 	nhanXaB = "Theo văn bản xã B"
+
+	// --- the citizen surface -------------------------------------------------------------------
+	//
+	// hostMiniApp IS NOT IN thuMucGia, AND THAT IS THE PRODUCTION SHAPE, not a convenience. The
+	// Mini App has no domain: it calls ONE API host that maps to no commune (ADR 0005), so this
+	// host is 404 on the staff chain by construction. Every citizen assertion below turns on that.
+	hostMiniApp = "api.example.gov.vn"
+
+	tokenCongDan  = "token-phien-cong-dan-GIA-KHONG-PHAI-THAT"
+	idCongDan     = "cd-01JOPAQUECUACONGDAN"
+	maPhieuCuaToi = "PA-4K7M-92XR-BTVD"
 )
+
+// mocGui is a FIXED instant. A deadline expressed relative to time.Now() makes an assertion depend
+// on when the suite runs.
+var mocGui = time.Date(2026, 9, 9, 7, 20, 0, 0, time.UTC)
 
 var (
 	xaA = tenant.ID("01JA" + strings.Repeat("A", 22))
@@ -137,10 +154,48 @@ func (p *phanGiaiGia) ResolveStaff(ctx context.Context, _, _ string) (staffauth.
 	return p.tra, p.co, p.loi
 }
 
+// khoPhieuCongDan is the identity-filtered read behind the citizen route.
+//
+// IT ASSERTS ITS OWN PRECONDITIONS rather than returning a fixture blindly: the commune must be in
+// the context (which only httpx.XaTuPhien can put there on this chain) and the citizen identifier
+// must be the one the session carried. A stand-in that ignored both would let the citizen chain be
+// replaced by the staff chain with every test still green.
+type khoPhieuCongDan struct{}
+
+func (khoPhieuCongDan) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma string) (
+	domain.PhieuPhanAnh, error) {
+
+	xa := tenant.MustFrom(ctx)
+	if congDanID != idCongDan || xa != xaA || ma != maPhieuCuaToi {
+		return domain.PhieuPhanAnh{}, petstore.ErrPhieuKhongTonTai
+	}
+	return domain.PhieuPhanAnh{
+		MaTraCuu: maPhieuCuaToi, Kenh: domain.KenhZaloMiniApp,
+		CongDanID: idCongDan, NoiDung: "Đống rác ở đầu ngõ đã ba ngày chưa ai dọn.",
+		TrangThai: domain.DaTiepNhan, GocDemHan: mocGui, VaoSoLuc: mocGui,
+	}, nil
+}
+
+// soPhienGia is the citizen session registry the edge asks on every citizen request.
+//
+// ONE USABLE TOKEN AND NOTHING ELSE. Every other string — unknown, expired, revoked — comes back
+// ok=false, which is the real contract: httpx.CitizenSessions has ONE negative answer on purpose,
+// so a probe cannot learn how close it got (core/httpx/citizen.go).
+type soPhienGia struct{ goi int }
+
+func (s *soPhienGia) TraCuu(_ context.Context, token string) (httpx.CitizenSession, bool) {
+	s.goi++
+	if token != tokenCongDan {
+		return httpx.CitizenSession{}, false
+	}
+	return httpx.CitizenSession{ID: "sid-cong-dan", CitizenID: idCongDan, TenantID: xaA}, true
+}
+
 type mayChu struct {
 	h   http.Handler
 	kho *khoGia
 	pg  *phanGiaiGia
+	so  *soPhienGia
 }
 
 func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
@@ -174,11 +229,45 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		Log:            log,
 	})
 
+	// THE CITIZEN SURFACE, REGISTERED THE WAY main() REGISTERS IT — its own mux, its own Deps.
+	muxCongDan := http.NewServeMux()
+	svchttp.RegisterCongDan(muxCongDan, svchttp.DepsCongDan{
+		Phieu:       khoPhieuCongDan{},
+		NhanLinhVuc: khoNhanLinhVuc{},
+		Log:         log,
+	})
+
 	danhBa := thuMucGia{
 		hostA: {ID: xaA, Host: hostA, Active: true},
 		hostB: {ID: xaB, Host: hostB, Active: true},
 	}
-	return &mayChu{h: dungBien(mux, danhBa, pg, nil, log), kho: kho, pg: pg}
+	so := &soPhienGia{}
+	return &mayChu{
+		h:   dungBien(mux, muxCongDan, so, danhBa, pg, nil, log),
+		kho: kho, pg: pg, so: so,
+	}
+}
+
+// goiCongDan issues a request to the CITIZEN surface, the way the Mini App does.
+//
+// THE HOST IS DELIBERATELY ONE THE DIRECTORY DOES NOT KNOW. That is not a shortcut — it is the
+// production shape: the Mini App calls ONE API host that corresponds to no commune (ADR 0005), so
+// a citizen request reaching httpx.TenantMiddleware is answered 404. Using a commune host here
+// would let the split be deleted and every assertion still pass.
+//
+// THE TOKEN GOES IN `Authorization`, NEVER A COOKIE — one host serving every commune means a
+// cookie there is sent with every commune's traffic (rule 1, forbidden #3).
+func (m *mayChu) goiCongDan(t *testing.T, path, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodGet, "https://"+hostMiniApp+path, nil)
+	r.Host = hostMiniApp
+	r.RemoteAddr = "10.0.0.9:51000"
+	if token != "" {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+	w := httptest.NewRecorder()
+	m.h.ServeHTTP(w, r)
+	return w
 }
 
 func (m *mayChu) goi(t *testing.T, host, path, phieu string) *httptest.ResponseRecorder {
@@ -316,4 +405,86 @@ func TestLoiGoiPhanGiaiMangXaCuaHost(t *testing.T) {
 	if m2.pg.xaDaGui != xaB {
 		t.Errorf("ở host B, xã đã gửi = %q, muốn %q", m2.pg.xaDaGui, xaB)
 	}
+}
+
+// --- RÌA CÔNG DÂN — chuỗi thứ hai, tách ở mux NGOÀI theo tiền tố đường dẫn (chốt 22/09/2026) ----
+//
+// Điều bốn ca dưới đây bảo vệ, mà KHÔNG phép kiểm nào trong internal/http thấy được: tuyến công
+// dân nằm sau ĐÚNG chuỗi rìa. internal/http gắn principal thẳng vào context, nên nó chứng minh
+// handler làm gì với một danh tính — không chứng minh được danh tính ấy từ đâu ra, và cũng không
+// thấy được rằng một tuyến công dân mắc nhầm vào mux cán bộ sẽ trả 404 cho mọi công dân.
+
+// TestTuyenCongDanKhongDiQuaPhanGiaiHost is THE test the split exists for.
+//
+// The host is one the directory does not know — the real Mini App API host maps to no commune
+// (ADR 0005). On the staff chain that is a 404 from httpx.TenantMiddleware. Answering 200 here
+// proves the request never reached it, which is the whole point of the second chain.
+//
+// DELETE `ngoai.Handle(tienToCongDan, c)` FROM dungBien AND THIS TURNS RED WITH 404 — the exact
+// failure a citizen would see, and the one that reads as "no such petition".
+func TestTuyenCongDanKhongDiQuaPhanGiaiHost(t *testing.T) {
+	m := dungMayChu(t, canBoXaA())
+
+	w := m.goiCongDan(t, tienToCongDan+maPhieuCuaToi, tokenCongDan)
+	doiMa(t, w, http.StatusOK)
+
+	// The staff identity service is NEVER consulted on a citizen request: citizens have no roles
+	// and no permissions (rule 5, invariant 6). A call here would mean the staff chain ran.
+	if m.pg.goi != 0 {
+		t.Errorf("tuyến công dân gọi tới phân giải CÁN BỘ %d lần — chuỗi cán bộ đã chạy", m.pg.goi)
+	}
+	// The citizen session registry IS consulted, exactly once: the edge looks it up once and both
+	// axes read that one answer (core/authz.CitizenPrincipal).
+	if m.so.goi != 1 {
+		t.Errorf("tra sổ phiên công dân %d lần, muốn đúng 1", m.so.goi)
+	}
+}
+
+// TestCungHostAyThiTuyenCANBOVAN404 is the other half, and without it the test above proves only
+// that something answered — not that the SPLIT is what answered. If the citizen chain had simply
+// replaced the staff one, this would come back 200 and nobody would notice until a commune's
+// staff screen went blank.
+func TestCungHostAyThiTuyenCANBOVAN404(t *testing.T) {
+	m := dungMayChu(t, canBoXaA())
+
+	doiMa(t, m.goi(t, hostMiniApp, tuyen, phieuGia), http.StatusNotFound)
+	if m.kho.doc != 0 {
+		t.Error("kho danh mục bị chạm tới dù Host không phân giải được thành xã nào")
+	}
+}
+
+// TestTuyenCongDanKhongCoPhienLa401 — the 401 case AT THE CHAIN LEVEL.
+//
+// No bearer token at all, a token the registry does not know, and a session with no commune chosen
+// yet are ONE answer on purpose (ADR 0022): telling them apart tells somebody probing how far they
+// got. The third is the one that looks like an oversight and is not — a citizen signed in but with
+// no commune is an ordinary state of the Mini App (ADR 0005), and every BUSINESS route refuses it.
+func TestTuyenCongDanKhongCoPhienLa401(t *testing.T) {
+	for ten, token := range map[string]string{
+		"không có Bearer":           "",
+		"token sổ phiên không nhận": "token-khong-ai-cap-BAO-GIO",
+	} {
+		t.Run(ten, func(t *testing.T) {
+			m := dungMayChu(t, canBoXaA())
+			doiMa(t, m.goiCongDan(t, tienToCongDan+maPhieuCuaToi, token), http.StatusUnauthorized)
+		})
+	}
+}
+
+// TestTienToCongDanKhopVoiTuyenDaDangKy pins the two spellings of one path together.
+//
+// dungBien splits on `tienToCongDan`; RegisterCongDan mounts a pattern inside it. Two independent
+// strings that must agree is precisely the shape that drifts — and the failure is silent: the
+// prefix keeps routing, the pattern inside stops matching, and every citizen gets 404 from a mux
+// that is working exactly as told.
+func TestTienToCongDanKhopVoiTuyenDaDangKy(t *testing.T) {
+	m := dungMayChu(t, canBoXaA())
+
+	// Inside the prefix and matching the route -> served.
+	doiMa(t, m.goiCongDan(t, tienToCongDan+maPhieuCuaToi, tokenCongDan), http.StatusOK)
+
+	// Inside the prefix and matching NO route -> 404 from the citizen mux, NOT from Host
+	// resolution. Either way it is 404, so this case cannot distinguish them on its own; what it
+	// does prove is that the prefix does not swallow requests into a handler that answers anyway.
+	doiMa(t, m.goiCongDan(t, tienToCongDan, tokenCongDan), http.StatusNotFound)
 }

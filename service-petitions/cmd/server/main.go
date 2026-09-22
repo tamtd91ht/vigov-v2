@@ -16,6 +16,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
@@ -116,6 +117,20 @@ func chay(log *slog.Logger) error {
 	}
 	defer dinhDanh.Close()
 
+	// 3b. The CITIZEN session registry, over the SAME connection to identity.
+	//
+	// WHY IT CAN EXIST AT ALL, since it could not until 2026-09-21: httpx.CitizenEdge needs an
+	// httpx.CitizenSessions, whose only implementation is a store inside service-identity's
+	// `internal/` that rule 2, forbidden #1 forbids this service from importing. core/identityclient
+	// is the sanctioned path, and the RPC behind it is exempt from carrying a commune
+	// (core/grpcx.methodsWithoutTenant) because it is the call that RESOLVES the commune — the user
+	// answered that stop condition, ADR 0012 decision 1.
+	//
+	// THE SAME *Client AS THE STAFF PATH, ON PURPOSE. A second dial would be a second connection
+	// with its own pool and its own view of identity's health, and the two would disagree about
+	// whether identity is reachable at the exact moment that matters.
+	soPhien := identityclient.NewSoPhienCongDan(dinhDanh)
+
 	// Idempotency store. An empty REDIS_DSN is a valid deployment — local development with no cache
 	// — and each route then behaves per the CheDoHong it declared. A service must not fail to start
 	// because a cache is absent; the missing cache is already reported by cfg.CanhBao().
@@ -160,11 +175,28 @@ func chay(log *slog.Logger) error {
 		Log: log,
 	})
 
+	// THE CITIZEN SURFACE — ITS OWN MUX, and that is rule 4, invariant 5 made mechanical rather
+	// than remembered. It is a second mux and not two more lines on `mux` above because the two
+	// surfaces must run behind DIFFERENT edge chains: this one resolves the commune from the
+	// citizen session, the one above from `Host`. See dungBien.
+	//
+	// IT IS GIVEN A DIFFERENT Deps TYPE, carrying the identity-filtered read and nothing else, so
+	// a citizen route cannot reach the unfiltered staff read even by typing it.
+	muxCongDan := http.NewServeMux()
+	svchttp.RegisterCongDan(muxCongDan, svchttp.DepsCongDan{
+		Phieu: petstore.NewPhieuPhanAnhStore(kho),
+		// THE SAME label catalogue the staff routes read. Sharing is right here and only here: the
+		// commune's wording for a field code is its public vocabulary, and two readers of one
+		// catalogue are two things to keep in step.
+		NhanLinhVuc: petstore.NewNhanLinhVucStore(kho),
+		Log:         log,
+	})
+
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// The default is this service's own — see config.ListenAddrHoac for why it lives here.
 	addr := cfg.ListenAddrHoac(":8084")
 	log.Info("starting", "service", "petitions", "addr", addr)
-	return http.ListenAndServe(addr, dungBien(mux, directory, dinhDanh, idemStore, log))
+	return http.ListenAndServe(addr, dungBien(mux, muxCongDan, soPhien, directory, dinhDanh, idemStore, log))
 }
 
 // dungBien builds the edge chain this binary serves.
@@ -189,7 +221,46 @@ func chay(log *slog.Logger) error {
 // process is alive, which is true or false regardless of which commune is asking. Behind Host
 // resolution it would fail whenever the platform service does, and an orchestrator would then
 // restart a healthy process during somebody else's outage.
-func dungBien(mux http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
+//
+// # TWO CHAINS, ONE PORT, SPLIT ON THE OUTER MUX BY PATH PREFIX (chốt 22/09/2026)
+//
+// THIS IS THE FIRST CITIZEN EDGE IN THE REPOSITORY, so this shape is the one other services will
+// copy. Read the whole note before changing any of it.
+//
+//	/api/v1/my-citizen-reports/…   CITIZEN chain — commune from the SESSION (ADR 0022)
+//	everything else                STAFF chain   — commune from `Host` (rule 1, invariant 3)
+//
+// WHY THE SPLIT HAS TO EXIST. The two chains disagree about the one question every request must
+// answer first: which commune. The Mini App has NO DOMAIN — it calls one API host that maps to no
+// commune — so httpx.TenantMiddleware answers 404 for every citizen request. Mounting the citizen
+// routes on the staff mux therefore produces a service that starts, serves, passes every test in
+// internal/http, and 404s every member of the public.
+//
+// WHY ONE PORT AND NOT TWO. One port is one k8s Service, one port name in the Ingress, and one
+// health check. The separation rule 4, invariant 5 asks for is between ROUTERS and HANDLERS, and
+// that is delivered here by two muxes and two Deps types — not by a second listener, which would
+// buy the same isolation and cost a second deployment surface to keep in step.
+//
+// WHY THE PREFIX IS SAFE TO SPLIT ON, which is the part a reviewer should check rather than
+// assume: `my-citizen-reports` is a RESOURCE OF ITS OWN (kb/00-foundation/ubiquitous-language.md
+// §Tiền tố `my-`). Go's ServeMux matches path ELEMENTS, so this pattern cannot capture
+// `/api/v1/citizen-reports/…` — the staff route — even though one string is a prefix of the other.
+// tools/ingress groups by the same element, so the cluster splits them the same way this line does.
+//
+// THE CITIZEN CHAIN HAS NO staffauth AND NO TenantMiddleware, and both absences are the design:
+//
+//	StripTenantHeaders  a client naming its own commune is a client granting itself access — and
+//	                    it matters MORE here, because this chain has no `Host` to contradict it
+//	Recover             turns tenant.MustFrom's deliberate panic into a traceable 500
+//	CitizenEdge         bearer token -> the session the server issued. Does NOT put the commune in
+//	                    the context and does NOT refuse: httpx.XaTuPhien on the route does both
+//	CitizenPrincipal    the same resolved session, read on the identity axis. ONE registry lookup
+//	                    feeds both axes; two would be two answers that can disagree mid-revocation
+//
+// NO idem.Middleware ON THE CITIZEN CHAIN: it carries one GET. Idempotency protects repeated
+// WRITES, and mounting it here would claim a protection with nothing to protect.
+func dungBien(mux, muxCongDan http.Handler, soPhien httpx.CitizenSessions,
+	danhBa tenant.Directory, dinhDanh staffauth.Resolver,
 	idemStore idem.Store, log *slog.Logger) http.Handler {
 
 	var h http.Handler = mux
@@ -204,14 +275,37 @@ func dungBien(mux http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Reso
 	h = httpx.Recover(traceID)(h)
 	h = httpx.StripTenantHeaders(h)
 
+	// The citizen chain. Order is outermost-last here, exactly as above.
+	var c http.Handler = muxCongDan
+	c = authz.CitizenPrincipal()(c)
+	c = httpx.CitizenEdge(soPhien)(c)
+	c = httpx.Recover(traceID)(c)
+	c = httpx.StripTenantHeaders(c)
+
 	ngoai := http.NewServeMux()
 	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+	// THE CITIZEN PREFIX IS REGISTERED FIRST FOR READABILITY ONLY — Go's ServeMux picks the most
+	// SPECIFIC pattern, not the first registered, so the order of these two lines does not decide
+	// anything. Swapping them changes nothing; deleting the first sends every citizen request into
+	// the staff chain and answers 404 to all of them.
+	ngoai.Handle(tienToCongDan, c)
 	ngoai.Handle("/", h)
 	return ngoai
 }
+
+// tienToCongDan is the one path prefix served by the citizen chain.
+//
+// THE TRAILING SLASH IS LOAD-BEARING: without it this is an exact-match pattern and
+// `/api/v1/my-citizen-reports/PA-…` falls through to the staff chain, where TenantMiddleware
+// answers 404 to every citizen — a failure that looks exactly like "no such petition".
+//
+// A CONSTANT RATHER THAN A LITERAL, because this string has to agree with the route registered in
+// internal/http/routes_cong_dan.go, and main_test.go asserts the agreement. Two spellings of one
+// path is the defect this names out of existence.
+const tienToCongDan = "/api/v1/my-citizen-reports/"
 
 // traceID returns the id a caller can quote when reporting a problem.
 //

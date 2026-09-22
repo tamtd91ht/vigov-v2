@@ -10,6 +10,7 @@ owns_facts:
   - "ánh xạ khái niệm nghiệp vụ sang danh từ tài nguyên trên URL"
   - "vì sao dự án đầu tư là investment-projects chứ không projects hay disbursements/projects"
   - "vì sao khoá quyền feedback.* lệch với tài nguyên citizen-reports"
+  - "tiền tố my- cho tuyến công dân đọc dữ liệu của chính mình"
   - "vì sao khái niệm cán bộ mang bốn cái tên trên bốn bề mặt"
   - "phân biệt phản ánh, khiếu nại, tố cáo"
   - "tên gọi các bước trong vòng đời phiếu phản ánh"
@@ -155,6 +156,25 @@ có thể.
 | Cấp số văn bản | `so_di` | `number` | |
 | **Cán bộ** | `nguoi_dung` (bảng) · `can_bo` (nghiệp vụ) | `staff` — `GET /api/v1/staff` · `GET …/{id}`, quyền `admin.user`. **`web-admin` đã gọi cả hai tuyến** — `web-admin/src/lib/api/can-bo.ts` | `user` thì trùng với công dân — hai lớp tin cậy khác hẳn nhau (luật 4). Xem mục dưới: khái niệm này mang **bốn** cái tên |
 | **Xã của yêu cầu này** | `tenant` (bảng, service `platform`) | `communes/current` — `GET /api/v1/communes/current`, công khai | Cho **cán bộ**, suy từ `Host` ở rìa (luật 1 bất biến 3), trả `thongTinXa` cho màn đăng nhập. Số nhiều **dù chỉ trả về một xã** — xem ngay dưới |
+| **Phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI** | `phan_anh` (cùng bảng `phieu_phan_anh`) | `my-citizen-reports` — `GET /api/v1/my-citizen-reports/{maTraCuu}` | Cùng dữ liệu, **khác bề mặt**: đọc bởi công dân, lọc theo danh tính phiên. Không thể dùng lại `citizen-reports` vì tuyến cán bộ đã chiếm đúng đường dẫn ấy — xem §Tiền tố `my-` |
+
+### Tiền tố `my-` — KHUÔN cho mọi tuyến công dân đọc dữ liệu của chính mình (chốt 22/09/2026)
+
+**Quy tắc:** một tài nguyên đã có bề mặt cán bộ, khi mở cho công dân đọc **phần của chính họ**,
+mang một **tài nguyên RIÊNG** tên `my-<tài nguyên cán bộ>`. Không phải một đoạn con
+(`citizen-reports/{ma}/…`), không phải một tiền tố chung cho cả kênh (`/api/v1/me/…`).
+
+| Vì sao không dùng lại đường dẫn cán bộ | Vì sao không phải đoạn con | Vì sao không phải `/api/v1/me/…` |
+|---|---|---|
+| `GET /api/v1/citizen-reports/{maTraCuu}` đã là tuyến cán bộ. Hai lớp tin cậy khác hẳn nhau (luật 4) **không dùng chung handler** — luật 4 bất biến 5 | Một tài nguyên riêng cho bộ sinh Ingress **một luật riêng**: hai bề mặt tách được ở **tầng mạng**, không chỉ ở mux trong tiến trình | `tools/ingress` gom theo **đoạn đầu** sau `/api/v1/` (`dinhtuyen.go` §`taiNguyen`). `me` sẽ do dịch vụ đầu tiên dùng nó **chiếm**, và tuyến công dân của dịch vụ **thứ hai** dưới cùng tiền tố là *"một tài nguyên hai chủ"* — điều kiện dừng của chính bộ sinh ấy |
+
+**`/api/cong/…` (đề xuất ở `docs/ui-ux/09 §13`) KHÔNG dùng được, và lý do là máy chứ không phải
+khẩu vị:** `tools/ingress` chốt mọi tuyến REST nằm dưới `/api/v1/` và **dừng hẳn** với đường dẫn
+ngoài tiền tố ấy. Viết `/api/cong/` là sinh ra một tuyến **404 lúc phát hành**. Nó cũng là đoạn
+đường dẫn tiếng Việt, trái ADR 0011.
+
+Tuyến `my-…` **luôn** khai hai trục trong cùng câu lệnh route (ADR 0022):
+`authz.CitizenOnly()` trả lời *ai*, `httpx.XaTuPhien()` trả lời *xã nào*.
 
 ### Hai đường dẫn `communes`, hai lớp người dùng — đọc trước khi động vào một trong hai
 
