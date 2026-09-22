@@ -236,6 +236,19 @@ type mayChu struct {
 	loai    *loaiVanBanGia
 	ghi     *ghiLoaiVanBanGia
 	checker *checkerGia
+
+	// The two registers — see van_ban_gia_test.go.
+	den    *vanBanDenGia
+	ghiDen *ghiVanBanDenGia
+	di     *vanBanDiGia
+	ghiDi  *ghiVanBanDiGia
+
+	// khoIdem is nil BY DEFAULT, and that is deliberate: a nil store is a valid deployment (local
+	// development with no Redis) and it is what makes the CheDoHong each route DECLARED the thing
+	// under test rather than Redis behaviour. The two routes that ISSUE A NUMBER declare
+	// DongKhiHong, so with nil they answer 503 — see TestVanBan_KhongCoRedisThiTuyenCapSoDong,
+	// which pins exactly that. Every other assertion about those routes uses dungMayChuCoIdem.
+	khoIdem idem.Store
 }
 
 // dungMayChu builds the edge chain in the real order, with the stand-in above where the
@@ -249,15 +262,37 @@ func dungMayChu(t *testing.T) *mayChu {
 		ID: "lvb-moi", Ma: "bao-cao", Nhan: "Báo cáo", ThuTu: 5,
 		DangDung: true, Nguon: domain.NguonDonVi,
 	}}
+	den := vanBanDenMau()
+	di := vanBanDiMau()
+	// The rows the write use cases hand back. They carry a NUMBER AND A YEAR the request never sent,
+	// which is what lets a test assert that the register issues them rather than echoing the client.
+	ghiDen := &ghiVanBanDenGia{ra: domain.VanBanDen{
+		ID: "vbd-moi", SoVaoSo: 8, Nam: 2026, CoQuanBanHanh: "Huyện uỷ",
+		LoaiVanBan: "cong-van", TrichYeu: "Về việc rà soát hộ nghèo",
+		TrangThai: domain.VanBanMoiVaoSo,
+	}}
+	ghiDi := &ghiVanBanDiGia{ra: domain.VanBanDi{
+		ID: "vbdi-moi", SoDi: 12, Nam: 2026, LoaiVanBan: "cong-van",
+		TrichYeu: "Trả lời đơn của công dân", NoiNhan: "UBND huyện",
+	}}
+
 	m := &mayChu{
 		thuMuc:  thuMucMau(),
 		loai:    loai,
 		ghi:     ghi,
 		checker: checker,
+		den:     den,
+		ghiDen:  ghiDen,
+		di:      di,
+		ghiDi:   ghiDi,
 		d: Deps{
 			Checker:       checker,
 			LoaiVanBan:    loai,
 			GhiLoaiVanBan: ghi,
+			VanBanDen:     den,
+			GhiVanBanDen:  ghiDen,
+			VanBanDi:      di,
+			GhiVanBanDi:   ghiDi,
 			Log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 	}
@@ -290,11 +325,10 @@ func (m *mayChu) dungLai(t *testing.T, sua func(d *Deps)) {
 
 	var h http.Handler = mux
 	h = chuTheThu(h)
-	// THE SAME ORDER cmd/server.dungBien BUILDS, with a NIL store — which is a valid deployment
-	// (local development with no Redis) and is what makes the declared CheDoHong of each route the
-	// thing under test rather than Redis behaviour. Inside TenantMiddleware because the idempotency
-	// key is prefixed with the commune (rule 1, invariant 7).
-	h = idem.Middleware(nil, slog.New(slog.NewTextHandler(io.Discard, nil)))(h)
+	// THE SAME ORDER cmd/server.dungBien BUILDS. The store is m.khoIdem — nil unless a test asked
+	// for one, see the field. Inside TenantMiddleware because the idempotency key is prefixed with
+	// the commune (rule 1, invariant 7).
+	h = idem.Middleware(m.khoIdem, slog.New(slog.NewTextHandler(io.Discard, nil)))(h)
 	h = httpx.TenantMiddleware(m.thuMuc)(h)
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
@@ -363,17 +397,35 @@ func TestRegisterTuChoiDepsThieuKho(t *testing.T) {
 }
 
 func TestRegisterTuChoiDepsThieuCheckerVaUseCaseGhi(t *testing.T) {
-	// THE TWO DEPENDENCIES THE WRITE ROUTES ADDED, each on its own, because a switch that refused
-	// only the first missing one would let the second through unnoticed.
+	// EACH DEPENDENCY ON ITS OWN, and every other one present — which is the whole point of the
+	// shape below. An earlier version of this test passed a Deps carrying only ONE or TWO fields, so
+	// when the two registers were added every case went on passing while proving something else
+	// entirely: the panic it observed was about the missing register, not about the field the case
+	// was named after. A complete Deps minus one field cannot drift that way.
 	//
 	// A nil Checker is the dangerous one: authz.RequirePermission would meet a nil interface at
-	// request time, which is a panic turned into a 500 on the very screen an administrator uses to
-	// fix the catalogue — long after the deployment that caused it.
-	for ten, d := range map[string]Deps{
-		"thiếu use case ghi": {Checker: &checkerGia{}, LoaiVanBan: loaiVanBanMau()},
-		"thiếu Checker":      {LoaiVanBan: loaiVanBanMau(), GhiLoaiVanBan: &ghiLoaiVanBanGia{}},
+	// request time, which is a panic turned into a 500 on the very screen a member of staff uses —
+	// long after the deployment that caused it.
+	for ten, bo := range map[string]func(d *Deps){
+		"thiếu use case ghi danh mục":    func(d *Deps) { d.GhiLoaiVanBan = nil },
+		"thiếu kho danh mục":             func(d *Deps) { d.LoaiVanBan = nil },
+		"thiếu kho sổ văn bản đến":       func(d *Deps) { d.VanBanDen = nil },
+		"thiếu use case ghi văn bản đến": func(d *Deps) { d.GhiVanBanDen = nil },
+		"thiếu kho sổ văn bản đi":        func(d *Deps) { d.VanBanDi = nil },
+		"thiếu use case ghi văn bản đi":  func(d *Deps) { d.GhiVanBanDi = nil },
+		"thiếu Checker":                  func(d *Deps) { d.Checker = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
+			d := Deps{
+				Checker:       &checkerGia{},
+				LoaiVanBan:    loaiVanBanMau(),
+				GhiLoaiVanBan: &ghiLoaiVanBanGia{},
+				VanBanDen:     vanBanDenMau(),
+				GhiVanBanDen:  &ghiVanBanDenGia{},
+				VanBanDi:      vanBanDiMau(),
+				GhiVanBanDi:   &ghiVanBanDiGia{},
+			}
+			bo(&d)
 			defer func() {
 				if r := recover(); r == nil {
 					t.Fatalf("Register nhận Deps %s mà không panic", ten)

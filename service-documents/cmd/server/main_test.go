@@ -27,6 +27,7 @@ import (
 	"github.com/vihat/vigov/service-documents/internal/app"
 	"github.com/vihat/vigov/service-documents/internal/domain"
 	svchttp "github.com/vihat/vigov/service-documents/internal/http"
+	docstore "github.com/vihat/vigov/service-documents/internal/store"
 )
 
 const (
@@ -124,7 +125,19 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// cannot dereference the nil handle. The write routes have their own four-case suite in
 		// internal/http, where the store behind them is a fake that records what was written.
 		GhiLoaiVanBan: app.NewDanhMucLoaiVanBan(nil, nil),
-		Log:           log,
+
+		// THE TWO REGISTERS, PRESENT FOR THE SAME REASON AND JUST AS UNUSED. Register refuses a nil
+		// dependency at construction — a route mounted without the thing behind it would accept
+		// requests it cannot honour, and the first person to find out would be a clerk registering a
+		// document. Their stores and use cases are built on a nil *store.DB and a nil identity
+		// client; nothing in this file calls them, and the four-case permission suite for all nine
+		// routes lives in internal/http, over fakes that record what was written.
+		VanBanDen:    docstore.NewVanBanDenStore(nil),
+		GhiVanBanDen: app.NewVanBanDen(nil, nil, nil, nil),
+		VanBanDi:     docstore.NewVanBanDiStore(nil),
+		GhiVanBanDi:  app.NewVanBanDi(nil, nil, nil),
+
+		Log: log,
 	})
 
 	return &mayChu{

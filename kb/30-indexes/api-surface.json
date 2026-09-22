@@ -358,6 +358,120 @@
       "declared_in": "service-documents/internal/http/routes.go"
     },
     {
+      "service": "documents",
+      "method": "GET",
+      "path": "/api/v1/incoming-documents",
+      "operation_id": "documents_get_incoming_documents",
+      "task_id": "d70da9030316",
+      "summary": "Danh sách sổ văn bản đến, phân trang theo con trỏ, lọc theo năm · trạng thái · loại · bộ phận đang giữ",
+      "screen": "05-van-ban-don-thu §3.1",
+      "permission_kind": "permission",
+      "permission": "document.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_documents.vanBanDenRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "POST",
+      "path": "/api/v1/incoming-documents",
+      "operation_id": "documents_post_incoming_documents",
+      "task_id": "375662cbfaa3",
+      "summary": "Vào sổ một văn bản đến; hệ thống cấp số đến và ấn định hạn xử lý theo cấu hình của xã",
+      "screen": "05-van-ban-don-thu §3.4",
+      "permission_kind": "permission",
+      "permission": "document.create",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "request_schema": "documents.themVanBanDenVao",
+      "reply_schemas": {
+        "201": "documents.vanBanDenRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "DELETE",
+      "path": "/api/v1/incoming-documents/{id}",
+      "operation_id": "documents_delete_incoming_documents_by_id",
+      "task_id": "a16e76257a2c",
+      "summary": "Gỡ một văn bản đến khỏi sổ (xoá mềm, kèm lý do bắt buộc; số đến không được cấp lại)",
+      "screen": "05-van-ban-don-thu §3.1",
+      "permission_kind": "permission",
+      "permission": "document.create",
+      "idempotency": "khong-can",
+      "idempotency_reason": "gỡ một văn bản đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do",
+      "request_schema": "documents.goVanBanVao",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "PATCH",
+      "path": "/api/v1/incoming-documents/{id}",
+      "operation_id": "documents_patch_incoming_documents_by_id",
+      "task_id": "d4de1b9dbf8f",
+      "summary": "Sửa thông tin một văn bản đến đã vào sổ (số đến, trạng thái và hạn xử lý không sửa được)",
+      "screen": "05-van-ban-don-thu §3.4",
+      "permission_kind": "permission",
+      "permission": "document.create",
+      "idempotency": "khong-can",
+      "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "documents.suaVanBanDenVao",
+      "reply_schemas": {
+        "200": "documents.vanBanDenRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "POST",
+      "path": "/api/v1/incoming-documents/{id}/routings",
+      "operation_id": "documents_post_incoming_documents_by_id_routings",
+      "task_id": "fab044d1e03c",
+      "summary": "Chuyển văn bản đến cho một bộ phận xử lý, kèm ý kiến chỉ đạo — ghi vào dòng thời gian không sửa được",
+      "screen": "05-van-ban-don-thu §3.5",
+      "permission_kind": "permission",
+      "permission": "document.route",
+      "idempotency": "khong-can",
+      "idempotency_reason": "mỗi lần chuyển là một hành vi có thật và để lại một dòng lịch sử riêng — bảng lịch sử chỉ thêm, không sửa (luật 7 cấm #5), nên gửi lại là một lần chuyển nữa chứ không phải một bản sao",
+      "request_schema": "documents.chuyenVanBanVao",
+      "reply_schemas": {
+        "200": "documents.vanBanDenRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
       "service": "finance",
       "method": "GET",
       "path": "/api/v1/investment-projects",
@@ -546,6 +660,96 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "GET",
+      "path": "/api/v1/outgoing-documents",
+      "operation_id": "documents_get_outgoing_documents",
+      "task_id": "f06ad1301cdb",
+      "summary": "Danh sách sổ văn bản đi, phân trang theo con trỏ, lọc theo năm · loại văn bản",
+      "screen": "*(chưa có đặc tả — xem migration 0004)*",
+      "permission_kind": "permission",
+      "permission": "document.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_documents.vanBanDiRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "POST",
+      "path": "/api/v1/outgoing-documents",
+      "operation_id": "documents_post_outgoing_documents",
+      "task_id": "b8ad3a8bd9ce",
+      "summary": "Cấp số văn bản đi và ghi vào sổ; số đã cấp không bao giờ cấp lại",
+      "screen": "*(chưa có đặc tả — xem migration 0004)*",
+      "permission_kind": "permission",
+      "permission": "document.create",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "request_schema": "documents.capSoVanBanDiVao",
+      "reply_schemas": {
+        "201": "documents.vanBanDiRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "DELETE",
+      "path": "/api/v1/outgoing-documents/{id}",
+      "operation_id": "documents_delete_outgoing_documents_by_id",
+      "task_id": "8689993701bc",
+      "summary": "Gỡ một văn bản đi khỏi sổ (xoá mềm, kèm lý do bắt buộc; số đi không được cấp lại)",
+      "screen": "*(chưa có đặc tả — xem migration 0004)*",
+      "permission_kind": "permission",
+      "permission": "document.create",
+      "idempotency": "khong-can",
+      "idempotency_reason": "gỡ một văn bản đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do",
+      "request_schema": "documents.goVanBanVao",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "PATCH",
+      "path": "/api/v1/outgoing-documents/{id}",
+      "operation_id": "documents_patch_outgoing_documents_by_id",
+      "task_id": "78f7965d680e",
+      "summary": "Sửa thông tin một văn bản đi đã cấp số (số đi và năm không sửa được)",
+      "screen": "*(chưa có đặc tả — xem migration 0004)*",
+      "permission_kind": "permission",
+      "permission": "document.create",
+      "idempotency": "khong-can",
+      "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "documents.suaVanBanDiVao",
+      "reply_schemas": {
+        "200": "documents.vanBanDiRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
     },
     {
       "service": "identity",

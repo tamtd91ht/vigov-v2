@@ -1375,6 +1375,466 @@
         }
       }
     },
+    "/api/v1/incoming-documents": {
+      "get": {
+        "summary": "Danh sách sổ văn bản đến, phân trang theo con trỏ, lọc theo năm · trạng thái · loại · bộ phận đang giữ",
+        "operationId": "documents_get_incoming_documents",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.read"
+        },
+        "x-vigov-task": "d70da9030316",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_documents.vanBanDenRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Vào sổ một văn bản đến; hệ thống cấp số đến và ấn định hạn xử lý theo cấu hình của xã",
+        "operationId": "documents_post_incoming_documents",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.create"
+        },
+        "x-vigov-task": "375662cbfaa3",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.themVanBanDenVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.vanBanDenRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/incoming-documents/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Gỡ một văn bản đến khỏi sổ (xoá mềm, kèm lý do bắt buộc; số đến không được cấp lại)",
+        "operationId": "documents_delete_incoming_documents_by_id",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.create"
+        },
+        "x-vigov-task": "a16e76257a2c",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.goVanBanVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa thông tin một văn bản đến đã vào sổ (số đến, trạng thái và hạn xử lý không sửa được)",
+        "operationId": "documents_patch_incoming_documents_by_id",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.create"
+        },
+        "x-vigov-task": "d4de1b9dbf8f",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.suaVanBanDenVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.vanBanDenRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/incoming-documents/{id}/routings": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Chuyển văn bản đến cho một bộ phận xử lý, kèm ý kiến chỉ đạo — ghi vào dòng thời gian không sửa được",
+        "operationId": "documents_post_incoming_documents_by_id_routings",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.route"
+        },
+        "x-vigov-task": "fab044d1e03c",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.chuyenVanBanVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.vanBanDenRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/investment-projects": {
       "get": {
         "summary": "Danh sách dự án đầu tư của xã theo năm ngân sách, kèm số đã giải ngân suy ra từ chứng từ",
@@ -2094,6 +2554,359 @@
           },
           "401": {
             "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outgoing-documents": {
+      "get": {
+        "summary": "Danh sách sổ văn bản đi, phân trang theo con trỏ, lọc theo năm · loại văn bản",
+        "operationId": "documents_get_outgoing_documents",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "*(chưa có đặc tả — xem migration 0004)*",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.read"
+        },
+        "x-vigov-task": "f06ad1301cdb",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_documents.vanBanDiRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Cấp số văn bản đi và ghi vào sổ; số đã cấp không bao giờ cấp lại",
+        "operationId": "documents_post_outgoing_documents",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "*(chưa có đặc tả — xem migration 0004)*",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.create"
+        },
+        "x-vigov-task": "b8ad3a8bd9ce",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.capSoVanBanDiVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.vanBanDiRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outgoing-documents/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Gỡ một văn bản đi khỏi sổ (xoá mềm, kèm lý do bắt buộc; số đi không được cấp lại)",
+        "operationId": "documents_delete_outgoing_documents_by_id",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "*(chưa có đặc tả — xem migration 0004)*",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.create"
+        },
+        "x-vigov-task": "8689993701bc",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.goVanBanVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa thông tin một văn bản đi đã cấp số (số đi và năm không sửa được)",
+        "operationId": "documents_patch_outgoing_documents_by_id",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "*(chưa có đặc tả — xem migration 0004)*",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.create"
+        },
+        "x-vigov-task": "78f7965d680e",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/documents.suaVanBanDiVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.vanBanDiRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -4475,6 +5288,59 @@
         ],
         "additionalProperties": false
       },
+      "documents.capSoVanBanDiVao": {
+        "type": "object",
+        "properties": {
+          "document_date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "document_type": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "signer": {
+            "type": "string"
+          },
+          "number": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "document_date",
+          "document_type",
+          "recipient",
+          "summary"
+        ],
+        "additionalProperties": false
+      },
+      "documents.chuyenVanBanVao": {
+        "type": "object",
+        "properties": {
+          "to_unit": {
+            "type": "string"
+          },
+          "assignee": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "to_unit"
+        ],
+        "additionalProperties": false
+      },
       "documents.danhSachLoaiVanBanRa": {
         "type": "object",
         "properties": {
@@ -4487,6 +5353,18 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "documents.goVanBanVao": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },
@@ -4581,6 +5459,114 @@
         },
         "additionalProperties": false
       },
+      "documents.suaVanBanDenVao": {
+        "type": "object",
+        "properties": {
+          "received_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reference_no": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "document_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issuing_body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "document_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "urgency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "number": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "documents.suaVanBanDiVao": {
+        "type": "object",
+        "properties": {
+          "document_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "document_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recipient": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "signer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "number": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "documents.themLoaiVanBanVao": {
         "type": "object",
         "properties": {
@@ -4612,6 +5598,190 @@
         "required": [
           "code",
           "label"
+        ],
+        "additionalProperties": false
+      },
+      "documents.themVanBanDenVao": {
+        "type": "object",
+        "properties": {
+          "received_date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "reference_no": {
+            "type": "string"
+          },
+          "document_date": {
+            "type": "string"
+          },
+          "issuing_body": {
+            "type": "string"
+          },
+          "document_type": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "urgency": {
+            "type": "string"
+          },
+          "number": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "document_type",
+          "issuing_body",
+          "received_date",
+          "summary"
+        ],
+        "additionalProperties": false
+      },
+      "documents.vanBanDenRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "received_date": {
+            "type": "string",
+            "description": "YYYY-MM-DD, the day it arrived"
+          },
+          "reference_no": {
+            "type": "string",
+            "description": "\"1742-CV/BTCTU\""
+          },
+          "document_date": {
+            "type": "string",
+            "description": "YYYY-MM-DD, the day it was signed"
+          },
+          "issuing_body": {
+            "type": "string"
+          },
+          "document_type": {
+            "type": "string",
+            "description": "the catalogue CODE"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "urgency": {
+            "type": "string"
+          },
+          "holding_unit": {
+            "type": "string",
+            "description": "identity's `bo_phan.id`"
+          },
+          "assignee": {
+            "type": "string",
+            "description": "a STAFF BUSINESS CODE"
+          },
+          "due_at": {
+            "type": "string",
+            "description": "RFC 3339 — the commitment, fixed once at booking"
+          },
+          "status": {
+            "type": "string",
+            "description": "`moi-vao-so` … — Vietnamese without diacritics (ADR 0011)"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "created_by",
+          "document_type",
+          "due_at",
+          "id",
+          "issuing_body",
+          "number",
+          "received_date",
+          "status",
+          "summary",
+          "updated_at",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "documents.vanBanDiRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "document_date": {
+            "type": "string",
+            "description": "YYYY-MM-DD, the day it was signed and issued"
+          },
+          "document_type": {
+            "type": "string",
+            "description": "the catalogue CODE"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "signer": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "created_by",
+          "document_date",
+          "document_type",
+          "id",
+          "number",
+          "recipient",
+          "summary",
+          "updated_at",
+          "year"
         ],
         "additionalProperties": false
       },
@@ -6007,6 +7177,54 @@
           "message",
           "session_ids",
           "weekday"
+        ],
+        "additionalProperties": false
+      },
+      "page.Result_documents.vanBanDenRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.vanBanDenRa"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "page.Result_documents.vanBanDiRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.vanBanDiRa"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
         ],
         "additionalProperties": false
       },
