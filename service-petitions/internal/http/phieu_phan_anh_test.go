@@ -429,8 +429,16 @@ func TestXemDayDuGhiVetDayDuSauThuoc(t *testing.T) {
 	if v.ma != maPhieuThuong {
 		t.Errorf("vết trỏ bản ghi %q, muốn %q", v.ma, maPhieuThuong)
 	}
-	if v.nguoi.ID != idCanBo {
-		t.Errorf("vết ghi người gây %q, muốn %q", v.nguoi.ID, idCanBo)
+	// THE BUSINESS CODE, AND EXPLICITLY NOT THE INTERNAL id. This entry records that a named
+	// officer read a citizen's unmasked name and phone number (rule 6, invariant 7) — the row most
+	// likely to be produced in an inspection, where a ULID names nobody. It WAS idCanBo until
+	// 2026-09-22 and this assertion agreed with it, which is why the second check below names the
+	// wrong value outright rather than only the right one.
+	if v.nguoi.ID != maCanBo {
+		t.Errorf("vết ghi người gây %q, muốn MÃ CÁN BỘ %q", v.nguoi.ID, maCanBo)
+	}
+	if v.nguoi.ID == idCanBo {
+		t.Errorf("vết mang ID NỘI BỘ %q — luật 6 bất biến 2 đòi mã nghiệp vụ", idCanBo)
 	}
 	if v.nguoi.Kind != "staff" {
 		t.Errorf("vết ghi loại người gây %q, muốn %q", v.nguoi.Kind, "staff")

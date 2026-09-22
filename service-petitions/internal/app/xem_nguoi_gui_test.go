@@ -114,17 +114,23 @@ var (
 	xaKia = tenant.ID("01JB" + strings.Repeat("B", 22))
 )
 
-// No personal data in a fixture (rule 3, invariant 5). The actor is an internal staff id, the
+// No personal data in a fixture (rule 3, invariant 5). The actor is a staff BUSINESS CODE, the
 // subject is a lookup code of the unguessable shape SinhMaTraCuu really produces.
+//
+// IT READ "nd-01JCANBONOIBOCUAXA" — AN INTERNAL id — UNTIL 2026-09-22, and the assertions below
+// pinned that value, so the whole file agreed with a handler that was writing the wrong thing.
+// `audit_log.actor_id` holds the business code (rule 6, invariant 2); this entry in particular
+// records that a named officer read a citizen's unmasked details (invariant 7), which is the one
+// row most likely to be read aloud in an inspection. A ULID there names nobody.
 const (
-	maThu   = "PA-4K7M-92XR-BTVD"
-	idCanBo = "nd-01JCANBONOIBOCUAXA"
+	maThu      = "PA-4K7M-92XR-BTVD"
+	maCanBoThu = "CB-00123"
 )
 
 func ctxXa(xa tenant.ID) context.Context { return tenant.Into(context.Background(), xa) }
 
 func nguoiThu() audit.Actor {
-	return audit.Actor{ID: idCanBo, Kind: "staff", IP: "10.0.0.7"}
+	return audit.Actor{ID: maCanBoThu, Kind: "staff", IP: "10.0.0.7"}
 }
 
 func dungUC(k *khoGia) *XemNguoiGui { return NewXemNguoiGui(pkgstore.New(sql.OpenDB(k))) }
@@ -183,8 +189,8 @@ func TestGhiVetMangDuSauThuocCuaLuat6(t *testing.T) {
 		t.Errorf("tenant_id = %v, muốn %q", args[0], xaThu)
 	}
 	// AI
-	if args[1] != idCanBo {
-		t.Errorf("actor_id = %v, muốn %q", args[1], idCanBo)
+	if args[1] != maCanBoThu {
+		t.Errorf("actor_id = %v, muốn %q", args[1], maCanBoThu)
 	}
 	if args[2] != "staff" {
 		t.Errorf("actor_kind = %v, muốn %q", args[2], "staff")
@@ -288,7 +294,7 @@ func TestGhiVetKhoHongThiRollbackVaBocLoi(t *testing.T) {
 	}
 	// RULE 3: the error travels into centralised logging. `ma_tra_cuu` is the one string that opens
 	// a citizen's petition, and the actor id names a member of staff.
-	if strings.Contains(err.Error(), maThu) || strings.Contains(err.Error(), idCanBo) {
+	if strings.Contains(err.Error(), maThu) || strings.Contains(err.Error(), maCanBoThu) {
 		t.Errorf("thông điệp lỗi mang mã tra cứu hoặc người gây: %v", err)
 	}
 	// The commune IS allowed and IS wanted: it is not personal data, and it is what an operator
@@ -409,7 +415,7 @@ func TestPgVetXemDayDuDocLaiDuocTuBang(t *testing.T) {
 	if err != nil {
 		t.Fatalf("đọc lại vết từ bảng audit_log: %v", err)
 	}
-	if actorID != idCanBo || actorKind != "staff" || actorIP != "10.0.0.7" {
+	if actorID != maCanBoThu || actorKind != "staff" || actorIP != "10.0.0.7" {
 		t.Errorf("vết đọc lại: actor = %q / %q / %q", actorID, actorKind, actorIP)
 	}
 	if !strings.Contains(string(delta), "nguoi_gui_dien_thoai") {

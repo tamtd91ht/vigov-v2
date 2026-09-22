@@ -42,6 +42,20 @@ func docThan(w http.ResponseWriter, r *http.Request, vao any) bool {
 
 // nguoiThucHien builds the audit actor from the request.
 //
+// THE TRAIL RECORDS THE BUSINESS CODE `ma`, NEVER THE INTERNAL id (rule 6, invariant 2), and that
+// is why this reads `p.Ma` off a principal whose `p.ID` is right there beside it. `audit_log
+// .actor_id` is read years later by somebody handling a complaint or an inspection: `CB-00123`
+// names a person to them with no lookup still alive, a ULID names nobody. The policy was written
+// at service-identity/internal/app/dang_nhap.go:151 long before this file existed — and this file
+// broke it on 2026-09-22 with nothing turning red, because a comment is not a check. What reads
+// the policy now is `.claude/hooks/audit_actor_guard.py` and `tools/check_audit_actor.py`.
+//
+// AN EMPTY `Ma` REFUSES THE WRITE, AND NEVER FALLS BACK TO p.ID. It is empty only when this
+// service is talking to an identity older than the `ma` field, which rule 2, forbidden #4 made
+// optional on purpose. A fallback there would put internal ids back into the column silently, one
+// deployment window at a time, with every test still green. 500 is the honest answer: rule 6 does
+// not permit a business write whose trail cannot name who made it.
+//
 // THE IP COMES FROM THIS PROCESS'S OWN SOCKET. httpx.ClientIP does not trust X-Forwarded-For, and
 // rule 6, invariant 2 wants the address the request really arrived from — not one the caller chose
 // to name. The same call phieu_phan_anh.go makes for the same reason.
@@ -51,10 +65,10 @@ func docThan(w http.ResponseWriter, r *http.Request, vao any) bool {
 // mounted wrong, and an audit entry attributed to nobody is exactly what rule 6 exists to prevent.
 func nguoiThucHien(r *http.Request) (audit.Actor, bool) {
 	p, ok := authz.From(r.Context())
-	if !ok || p.ID == "" {
+	if !ok || p.Ma == "" {
 		return audit.Actor{}, false
 	}
-	return audit.Actor{ID: p.ID, Kind: p.Kind, IP: httpx.ClientIP(r)}, true
+	return audit.Actor{ID: p.Ma, Kind: p.Kind, IP: httpx.ClientIP(r)}, true
 }
 
 // traLoiLoiGhi maps one use-case failure onto a status and a sentence.

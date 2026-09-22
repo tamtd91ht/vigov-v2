@@ -44,8 +44,55 @@ func Nhom(p Perm) string {
 }
 
 // Principal is whoever is making the request.
+//
+// # TWO IDENTIFIERS FOR A STAFF PRINCIPAL, AND THE QUESTION "WHY NOT ONE" IS ANSWERED HERE
+//
+// ID was made to carry the business code instead of the internal id on 2026-09-22 and the change
+// was REJECTED, on a measurement rather than a preference. ID is the value every access decision
+// is made with, in three places that all match on the internal id:
+//
+//	service-identity/internal/store/checker.go:124   `nd.id = $2`, the grant query itself
+//	core/staffauth/staffauth.go:294                  binds one request's key set to one person
+//	core/idem/idem.go:506                            the idempotency key's owner
+//
+// A business code in ID matches no row in the first, so EVERY permission check answers false and
+// EVERY guarded route in four services returns 403 — with nothing in the response, the logs or a
+// test to point at the cause, because a fake checker in a test grants whatever it is given.
+//
+// So the two identifiers answer two questions, and neither can answer the other's:
+//
+//	ID   DECIDES ACCESS.          Internal, opaque, joins to `nguoi_dung.id`. Never on the trail.
+//	Ma   RECORDS RESPONSIBILITY.  The business code. Never compared, never joined, never a filter.
+//
+// CARRYING BOTH COSTS A CHOICE THE NEXT WRITER HAS TO MAKE CORRECTLY, and that cost is real — it
+// is the whole reason `.claude/hooks/audit_actor_guard.py` and `tools/check_audit_actor.py` exist.
+// The rejected alternative costs more: one field named `ID` holding a business code is a naming
+// trap that reads as correct at every call site, and the failure it produces is a silent 403 for
+// everybody rather than a guard saying which field to use.
 type Principal struct {
-	ID       string
+	// ID is the INTERNAL identifier. For staff it is `nguoi_dung.id` (a ULID); for a citizen it
+	// is the opaque citizen id. It is what authorisation is decided with — see the type comment.
+	//
+	// IT IS NOT WHAT AN AUDIT ENTRY RECORDS for a staff actor. Use Ma. A ULID on an archival
+	// record means nothing to the person reading it years later during an inspection, and the
+	// lookup that could translate it may no longer hold the row.
+	ID string
+
+	// Ma is the BUSINESS CODE of a staff member — `CB-00123`, `nguoi_dung.ma`, the string the
+	// Danh bạ cán bộ screen shows. It is the ONE value `audit_log.actor_id` holds for a staff
+	// actor (rule 6, invariant 2; the policy was written at
+	// service-identity/internal/app/dang_nhap.go:151 long before anything enforced it).
+	//
+	// EMPTY FOR A CITIZEN PRINCIPAL, and that is not an omission: a citizen has no staff code,
+	// and a citizen's audit entry records Principal.ID — an opaque citizen id — with
+	// Actor.Kind = "citizen". The two kinds are told apart by Kind, never by guessing.
+	//
+	// EMPTY IS NEVER PAPERED OVER WITH ID. A write path that finds this empty must REFUSE the
+	// write (core/audit.Entry.validate already refuses an empty actor). Falling back to ID would
+	// put the internal id back in the column and recreate exactly the defect measured on
+	// 2026-09-22, silently, with every test still green.
+	Ma string
+
 	Kind     string // "staff" | "citizen"
 	TenantID tenant.ID
 	Roles    []string

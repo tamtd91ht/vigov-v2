@@ -411,7 +411,11 @@ func TestGuiChuPhieuLaCHUTHE(t *testing.T) {
 
 func TestGuiChuTheKhongPhaiCongDanThiTuChoiTruocMoiThu(t *testing.T) {
 	for ten, nguoi := range map[string]audit.Actor{
-		"không có chủ thể":  {},
+		"không có chủ thể": {},
+		// @actor-ok: DỮ LIỆU THỬ CỐ Ý SAI, không phải một lượt ghi vết. Chính ca này khẳng định
+		// tuyến công dân TỪ CHỐI một chủ thể cán bộ trước khi chạm vào bất cứ thứ gì, nên định
+		// danh nội bộ ở đây là thứ đang BỊ từ chối. Đổi nó sang một mã cán bộ hợp lệ để rào chắn
+		// im đi là làm chính ca kiểm yếu hẳn mà vẫn xanh.
 		"chủ thể là cán bộ": {ID: "nd-01JCANBO", Kind: "staff", IP: "10.0.0.7"},
 		"thiếu định danh":   {Kind: "citizen", IP: "10.0.0.9"},
 	} {

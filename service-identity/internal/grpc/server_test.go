@@ -379,6 +379,19 @@ func TestResolveThanhCong(t *testing.T) {
 	if p.GetStaffId() != idCanBo {
 		t.Errorf("staff_id = %q, muốn id nội bộ %q", p.GetStaffId(), idCanBo)
 	}
+	// AND `ma` TRAVELS BESIDE IT, because the four services that receive this principal write it
+	// into `audit_log.actor_id` and have nothing else to write there (rule 6, invariant 2). Left
+	// empty, every audited write of those services refuses with 500 — and it WAS effectively empty
+	// until 2026-09-22, when the field did not exist and they wrote the ULID instead.
+	if p.GetMa() != "CB001" {
+		t.Errorf("ma = %q, muốn mã nghiệp vụ %q — vết kiểm toán không có gì để ghi", p.GetMa(), "CB001")
+	}
+	// The two fields must not collapse into one value. Asserting only "ma == CB001" would survive a
+	// change that sent cb.ID for both, as long as the fixture happened to agree.
+	if p.GetMa() == p.GetStaffId() {
+		t.Errorf("ma và staff_id cùng một giá trị %q — hai câu hỏi khác nhau, một giá trị không trả lời được cả hai",
+			p.GetMa())
+	}
 	if got := strings.Join(p.GetPermissionKeys(), ","); got != "admin.user,task.extend" {
 		t.Errorf("permission_keys = %q", got)
 	}

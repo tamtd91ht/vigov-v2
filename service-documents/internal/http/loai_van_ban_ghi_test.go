@@ -205,8 +205,16 @@ func TestGhiLoaiVanBan_DungQuyenDungXa(t *testing.T) {
 			if m.ghi.xaCuoi != xaA {
 				t.Errorf("use case chạy trong xã %q, muốn %q", m.ghi.xaCuoi, xaA)
 			}
-			if m.ghi.nguoiCuoi.ID != idCanBo || m.ghi.nguoiCuoi.Kind != "staff" {
-				t.Errorf("chủ thể vết = %+v, muốn cán bộ %q", m.ghi.nguoiCuoi, idCanBo)
+			// THE TRAIL CARRIES THE BUSINESS CODE, AND THE SECOND CHECK NAMES THE WRONG VALUE
+			// OUTRIGHT. Asserting only "equals the code" would stay green the day somebody made
+			// the two constants the same string, and it was green on 2026-09-22 while this route
+			// wrote the INTERNAL id into `audit_log.actor_id` — a column nobody can then query,
+			// because it held two kinds of identifier at once (rule 6, invariant 2).
+			if m.ghi.nguoiCuoi.ID != maCanBo || m.ghi.nguoiCuoi.Kind != "staff" {
+				t.Errorf("chủ thể vết = %+v, muốn MÃ CÁN BỘ %q", m.ghi.nguoiCuoi, maCanBo)
+			}
+			if m.ghi.nguoiCuoi.ID == idCanBo {
+				t.Errorf("vết mang ID NỘI BỘ %q — luật 6 bất biến 2 đòi mã nghiệp vụ", idCanBo)
 			}
 			// The IP is taken from this process's own socket, never from X-Forwarded-For: rule 6
 			// wants the address the request really arrived from.

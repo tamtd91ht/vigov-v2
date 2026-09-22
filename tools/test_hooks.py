@@ -684,6 +684,49 @@ CASES = [
        '// WHAT STOOD HERE: PermissionKeys: []authz.Perm{"map.read"}\n'
        'p := staffauth.Principal{PermissionKeys: []authz.Perm{}}')),
 
+    # ---- rule 6 · the trail names WHO with a business code ---------------------------------
+    #
+    # ĐO CHỨ KHÔNG ĐOÁN: ngày 22/09/2026 kho có SÁU chỗ ghi `p.ID` (ULID nội bộ) vào
+    # `audit_log.actor_id`, cả sáu viết trong một đợt, và không ca kiểm nào đỏ. Ca BLOCK đầu là
+    # NGUYÊN VĂN dòng đã có thật ở service-comms/internal/http/danh_muc_ghi.go:57 trước bản vá.
+    #
+    # Ca PASS bên cạnh mỗi ca dùng đúng hình dạng ĐÚNG ở đúng vị trí ấy, nên một rào chết vì
+    # "chặn tất" cũng đỏ chứ không xanh.
+    ("audit_actor_guard", "chủ thể cán bộ nạp `.ID` nội bộ", BLOCK,
+     w("service-comms/internal/http/danh_muc_ghi.go",
+       'func nguoiThucHien(r *http.Request) (audit.Actor, bool) {\\n'
+       '\\tp, _ := authz.From(r.Context())\\n'
+       '\\treturn audit.Actor{ID: p.ID, Kind: "staff", IP: httpx.ClientIP(r)}, true\\n}')),
+    ("audit_actor_guard", "chủ thể cán bộ nạp `.Ma`", PASS,
+     w("service-comms/internal/http/danh_muc_ghi.go",
+       'func nguoiThucHien(r *http.Request) (audit.Actor, bool) {\\n'
+       '\\tp, _ := authz.From(r.Context())\\n'
+       '\\treturn audit.Actor{ID: p.Ma, Kind: "staff", IP: httpx.ClientIP(r)}, true\\n}')),
+    # Bộ đồ thử chốt một ULID là hình dạng thứ hai, và là hình dạng đã sống lâu nhất: năm tệp
+    # `*_test.go` khẳng định đúng giá trị sai kể từ ngày chúng được viết.
+    ("audit_actor_guard", "bộ đồ thử chốt một ULID làm chủ thể cán bộ", BLOCK,
+     w("service-documents/internal/app/danh_muc_loai_van_ban_test.go",
+       'func nguoiThu() audit.Actor {\\n'
+       '\\treturn audit.Actor{ID: "nd-01JINTERNALIDCUACANBO", Kind: "staff", IP: "10.0.0.7"}\\n}')),
+    # CÔNG DÂN KHÔNG CÓ MÃ CÁN BỘ, nên `.ID` ở tuyến công dân là ĐÚNG. Rào đọc chính lời khẳng
+    # định của hàm (`p.Kind != "citizen"`) chứ không đọc tên tệp — ca thật:
+    # service-petitions/internal/http/gui_phan_anh.go:224.
+    ("audit_actor_guard", "chủ thể CÔNG DÂN nạp `.ID` — đúng, không chặn", PASS,
+     w("service-petitions/internal/http/gui_phan_anh.go",
+       'func (h *HandlerCongDan) congDanThucHien(r *http.Request) (audit.Actor, bool) {\\n'
+       '\\tp, ok := authz.From(r.Context())\\n'
+       '\\tif !ok || p.Kind != "citizen" || p.ID == "" {\\n\\t\\treturn audit.Actor{}, false\\n\\t}\\n'
+       '\\treturn audit.Actor{ID: p.ID, Kind: p.Kind, IP: httpx.ClientIP(r)}, true\\n}')),
+    # Lối thoát ĐÒI MỘT LÝ DO, và đọc cả KHỐI chú thích chứ không riêng dòng ngay trên —
+    # `citizen_scope_guard` chỉ đọc lines[i-1] và kho này đã ghi đó là một khuyết tật: một lý do
+    # đáng viết không bao giờ gói trong một dòng.
+    ("audit_actor_guard", "lối thoát @actor-ok có lý do, nhiều dòng", PASS,
+     w("service-petitions/internal/app/gui_phan_anh_test.go",
+       'func TestTuChoi(t *testing.T) {\\n'
+       '\\t// @actor-ok: DỮ LIỆU THỬ CỐ Ý SAI — ca này khẳng định tuyến công dân TỪ CHỐI\\n'
+       '\\t// một chủ thể cán bộ trước khi chạm vào bất cứ thứ gì.\\n'
+       '\\tnguoi := audit.Actor{ID: "nd-01JCANBO", Kind: "staff"}\\n\\t_ = nguoi\\n}')),
+
     # ---- tầng tiến độ · progress_guard ---------------------------------------
     #
     ("progress_guard", "khai xong mà không có bằng chứng", BLOCK,
@@ -833,6 +876,56 @@ SO_CUM_CASES = [
 # BA CA ĐẦU LÀ BA CHUỖI CÓ THẬT, nguyên văn từ commit 4888f6e: tới 21/09/2026 cả ba nằm trong
 # kho, cấp những quyền không migration nào gieo, và không gì đỏ. Đây là câu trả lời cho "một ca
 # chưa từng đỏ thì chưa chứng minh được gì": ba ca này ĐÃ đỏ, trên mã thật, trước khi được vá.
+# ---- pure-function cases: what vet_actor CALLS A VIOLATION --------------------------------
+#
+# WHY THESE SIT BESIDE THE PAYLOAD CASES rather than replacing them: a payload case proves the
+# hook is wired and blocks; these prove the ANALYSER's judgement on the exact strings that were
+# on disk. `tools/check_audit_actor.py` shares this one analyser, so a drift here is a drift in
+# both gates at once — which is the whole reason it lives in `tools/` and not inside the hook.
+#
+# CA ĐẦU LÀ DÒNG CÓ THẬT, nguyên văn từ service-comms/internal/http/danh_muc_ghi.go:57 của ngày
+# 22/09/2026, khi sáu chỗ như thế sống trong kho với mọi phép kiểm xanh.
+VET_ACTOR_CASES = [
+    ('func f() { _ = audit.Actor{ID: p.ID, Kind: p.Kind, IP: httpx.ClientIP(r)} }',
+     1, "`.ID` + Kind không phân giải được -> coi là cán bộ, CHẶN (ca THẬT 22/09)"),
+    ('func f() { _ = audit.Actor{ID: p.Ma, Kind: p.Kind, IP: httpx.ClientIP(r)} }',
+     0, "`.Ma` — hình dạng đúng, im"),
+    ('func f() { _ = audit.Actor{ID: "nd-01JINTERNALIDCUACANBO", Kind: "staff"} }',
+     1, "hằng chuỗi `nd-…` làm chủ thể cán bộ"),
+    ('func f() { _ = audit.Actor{ID: "01JD9AAAAAAAAAAAAAAAAAAAAA", Kind: "staff"} }',
+     1, "ULID trần 26 ký tự làm chủ thể cán bộ"),
+    ('func f() { _ = audit.Actor{ID: "CB-00123", Kind: "staff"} }',
+     0, "mã nghiệp vụ — im"),
+    # CÔNG DÂN: `.ID` là định danh ĐÚNG, và điều phân biệt là lời tự khẳng định của chính hàm.
+    ('func f() {\\n\\tif p.Kind != "citizen" { return }\\n'
+     '\\t_ = audit.Actor{ID: p.ID, Kind: p.Kind}\\n}',
+     0, "hàm tự khẳng định chủ thể là công dân -> `.ID` đúng, im"),
+    ('func f() { _ = audit.Actor{ID: audit.SystemActor, Kind: "system"} }',
+     0, "chủ thể hệ thống — im"),
+    # CHỐNG NỚI TAY: bỏ phép kiểm `Kind` của hàm công dân thì phải chặn LẠI. Không có ca này thì
+    # một bản vá làm rộng nhánh công dân sẽ mở luôn cho cán bộ mà không gì đỏ.
+    ('func f() {\\n\\t_ = audit.Actor{ID: p.ID, Kind: p.Kind}\\n}',
+     1, "KHÔNG có lời khẳng định công dân nào -> vẫn chặn (chống nới tay)"),
+    # Thân hàm phải cắt ĐÚNG: phép kiểm công dân của hàm TRƯỚC không được miễn trừ hàm SAU.
+    ('func a() {\\n\\tif p.Kind != "citizen" { return }\\n}\\n'
+     'func b() {\\n\\t_ = audit.Actor{ID: p.ID, Kind: p.Kind}\\n}',
+     1, "khẳng định công dân ở HÀM KHÁC không miễn trừ được (cắt thân hàm)"),
+    # Literal LỒNG đã lược kiểu — `map[string]audit.Actor{"x": {ID: …}}` là hình dạng có thật.
+    ('func f() { _ = map[string]audit.Actor{"x": {ID: "nd-01JCANBO", Kind: "staff"}} }',
+     1, "literal lồng trong map, kiểu đã lược — vẫn thấy"),
+    ('func f() { _ = audit.Actor{} }', 0, "chủ thể rỗng, không có ID — không phải lời khai nào"),
+    # Chú thích GHI LẠI khiếm khuyết đã vá là thứ có thật trong kho (quyen_keys đã trả giá cho
+    # đúng chuyện này). Báo đỏ ở đó là phạt đúng tệp lập luận cẩn thận nhất.
+    ('func f() {\\n\\t// TRƯỚC 22/09 dòng này là: audit.Actor{ID: p.ID, Kind: "staff"}\\n'
+     '\\t_ = audit.Actor{ID: p.Ma, Kind: "staff"}\\n}',
+     0, "hình dạng sai nằm trong CHÚ THÍCH — im"),
+    # GIỚI HẠN ĐÃ BIẾT, KHẲNG ĐỊNH THÀNH CA CHỨ KHÔNG ĐỂ NGƯỜI SAU ĐOÁN: đi vòng qua một biến
+    # thì thoát. Ca này XANH khi rào BỎ SÓT — nó tồn tại để ngày ai đó đóng lỗ hổng bằng
+    # `go/types`, ca này đỏ và buộc người ấy cập nhật cả phần mô tả giới hạn.
+    ('func f() {\\n\\tid := p.ID\\n\\t_ = audit.Actor{ID: id, Kind: "staff"}\\n}',
+     0, "GIỚI HẠN: giá trị đi vòng qua biến thì KHÔNG bắt được — xem vet_actor giới hạn 1"),
+]
+
 KHOA_QUYEN_CASES = [
     ('mux.Handle("GET /x", authz.RequirePermission(d.Checker, "finance.read")(h))',
      {"finance.read"}, "khoá bịa THẬT — service-finance, tới 21/09"),
@@ -902,6 +995,7 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
     import drift_guard as dg  # noqa: E402
     import env_contract_guard as ecg  # noqa: E402
     import quyen_keys as qk  # noqa: E402
+    import vet_actor as va  # noqa: E402
 
     sai = []
 
@@ -921,6 +1015,15 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         print(f"{mark} [{want}] {'quyen_keys.khoa_trong_go':24s} {nhan}")
         if not ok:
             sai.append((src[:40], nhan, str(mong), str(duoc)))
+
+    for src, mong, nhan in VET_ACTOR_CASES:
+        duoc = len(va.vi_pham_trong_go(src))
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        want = "CHAN" if mong else "IM  "
+        print(f"{mark} [{want}] {'vet_actor.vi_pham_trong_go':24s} {nhan}")
+        if not ok:
+            sai.append((src[:40], nhan, mong, duoc))
 
     for ten, mong, nhan in SO_CUM_CASES:
         duoc = bool(ecg.SO_CUM.search(ten))
@@ -993,7 +1096,8 @@ if __name__ == "__main__":
     # thiếu bảy ca. Một bộ đếm thiếu không làm ca nào đỏ — nó chỉ làm người đọc tưởng mình
     # biết kho đã canh bao nhiêu, và sổ `_chung` đã một lần ghi nhầm vì đúng chuyện này.
     tong = (len(CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(DUOC_QUET_CASES)
-            + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES))
+            + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES)
+            + len(VET_ACTOR_CASES))
     hong = len(fails) + len(sai_thuan)
     print()
     print(f"Total: {tong} cases · passed: {tong-hong} · failed: {hong}")

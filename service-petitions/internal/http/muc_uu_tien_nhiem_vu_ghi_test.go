@@ -30,8 +30,15 @@ import (
 
 const idCanBoGhiUuTien = "nd-01JINTERNALIDCUACANBO"
 
+// maCanBoGhiUuTien is the BUSINESS CODE of that same person, and the two constants exist SEPARATELY because
+// one principal carries both and they are read by different code for different reasons:
+// authorisation joins on the internal id, the audit trail records the business code (rule 6,
+// invariant 2). One value used for both is a test that cannot tell the two apart — which is
+// exactly the state this file was in on 2026-09-22, while the route wrote the wrong one.
+const maCanBoGhiUuTien = "CB-00123"
+
 func canBoGhiUuTien(xa tenant.ID) *authz.Principal {
-	return &authz.Principal{ID: idCanBoGhiUuTien, Kind: "staff", TenantID: xa}
+	return &authz.Principal{ID: idCanBoGhiUuTien, Ma: maCanBoGhiUuTien, Kind: "staff", TenantID: xa}
 }
 
 type khoaChuTheGhiUuTien struct{}
@@ -404,8 +411,16 @@ func TestGhiMucUuTien_DungQuyenDungXa(t *testing.T) {
 			if m.ghi.xaCuoi != xaA {
 				t.Errorf("use case chạy trong xã %q, muốn %q", m.ghi.xaCuoi, xaA)
 			}
-			if m.ghi.nguoiCuoi.ID != idCanBoGhiUuTien || m.ghi.nguoiCuoi.Kind != "staff" {
-				t.Errorf("chủ thể vết = %+v, muốn cán bộ %q", m.ghi.nguoiCuoi, idCanBoGhiUuTien)
+			// THE TRAIL CARRIES THE BUSINESS CODE, AND THE SECOND CHECK NAMES THE WRONG VALUE
+			// OUTRIGHT. Asserting only "equals the code" would stay green the day somebody made
+			// the two constants the same string, and it was green on 2026-09-22 while this route
+			// wrote the INTERNAL id into `audit_log.actor_id` — a column nobody can then query,
+			// because it held two kinds of identifier at once (rule 6, invariant 2).
+			if m.ghi.nguoiCuoi.ID != maCanBoGhiUuTien || m.ghi.nguoiCuoi.Kind != "staff" {
+				t.Errorf("chủ thể vết = %+v, muốn MÃ CÁN BỘ %q", m.ghi.nguoiCuoi, maCanBoGhiUuTien)
+			}
+			if m.ghi.nguoiCuoi.ID == idCanBoGhiUuTien {
+				t.Errorf("vết mang ID NỘI BỘ %q — luật 6 bất biến 2 đòi mã nghiệp vụ", idCanBoGhiUuTien)
 			}
 			// The IP is taken from this process's own socket, never from X-Forwarded-For: rule 6
 			// wants the address the request really arrived from.

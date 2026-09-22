@@ -38,6 +38,12 @@ const (
 
 	// The internal staff id a principal carries. No personal data in a fixture (rule 3).
 	idCanBo = "nd-01JCANBONOIBOCUAXA"
+
+	// The BUSINESS CODE of the same person. A DIFFERENT STRING FROM idCanBo ON PURPOSE: the trail
+	// records this one and authorisation joins on the other (rule 6, invariant 2; authz.Principal
+	// argues why neither can do the other's job). One value for both would leave a test unable to
+	// tell a correct write from the 2026-09-22 one.
+	maCanBo = "CB-00123"
 )
 
 var (
@@ -49,7 +55,7 @@ var (
 // authz compares against the commune resolved from Host, so it is the field every isolation case
 // below turns on.
 func canBoCuaXa(xa tenant.ID) *authz.Principal {
-	return &authz.Principal{ID: idCanBo, Kind: "staff", TenantID: xa}
+	return &authz.Principal{ID: idCanBo, Ma: maCanBo, Kind: "staff", TenantID: xa}
 }
 
 // --- fakes --------------------------------------------------------------------------------------

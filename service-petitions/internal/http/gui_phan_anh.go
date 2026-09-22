@@ -205,6 +205,19 @@ func (h *HandlerCongDan) GuiPhieu(w http.ResponseWriter, r *http.Request) {
 //
 // THE IP COMES FROM THIS PROCESS'S OWN SOCKET. httpx.ClientIP does not trust X-Forwarded-For, and
 // rule 6, invariant 2 wants the address the request really arrived from — not one the caller named.
+//
+// IT WRITES p.ID AND THAT IS CORRECT HERE, WHICH IS WORTH SAYING BECAUSE THE FOUR STAFF WRITE
+// PATHS WERE JUST CHANGED AWAY FROM IT. On 2026-09-22 the user decided `audit_log.actor_id` holds
+// the BUSINESS CODE for a staff actor, and `nguoiThucHien` in the four danh_muc_ghi.go files was
+// changed from p.ID to p.Ma. A CITIZEN HAS NO BUSINESS CODE: there is no `nguoi_dung` row, no
+// `ma`, and authz.Principal.Ma is empty for every citizen principal by construction. The opaque
+// citizen id IS the identifier of record here, and `Actor.Kind = "citizen"` beside it is what
+// tells a reader of the trail which of the two kinds of identifier this column holds.
+//
+// So do not "make this consistent" with the staff paths. Changing it to p.Ma would write an empty
+// actor, core/audit.Entry.validate would refuse it, and every citizen petition would stop being
+// accepted. `.claude/hooks/audit_actor_guard.py` exempts this shape for this reason and asserts
+// the `Kind` check above is what earns the exemption.
 func (h *HandlerCongDan) congDanThucHien(r *http.Request) (audit.Actor, bool) {
 	p, ok := authz.From(r.Context())
 	if !ok || p.Kind != "citizen" || p.ID == "" {

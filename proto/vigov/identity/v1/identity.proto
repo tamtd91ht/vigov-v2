@@ -421,26 +421,26 @@ service IdentityService {
   // call. Sending either costs an absent item, which the caller then has to tell apart from a real
   // absence. FILTER ON `actor_kind` BEFORE CALLING.
   //
-  // THIS RPC TAKES THE INTERNAL id — the same value as Staff.id and StaffPrincipal.staff_id. THERE
-  // IS NO LOOKUP BY THE BUSINESS CODE `ma`, AND THE REPOSITORY IS NOT OF ONE MIND ABOUT WHICH OF
-  // THE TWO THE TRAIL HOLDS. State it here rather than discover it from a blank column:
+  // ⚠ THIS RPC TAKES THE INTERNAL id AND THE TRAIL NO LONGER HOLDS ONE. The block that stood here
+  // recorded two readings of what `audit_log.actor_id` contains and said neither had been decided.
+  // ONE OF THEM HAS BEEN, BY THE USER, ON 2026-09-22: THE TRAIL STORES THE BUSINESS CODE `ma`.
+  // StaffPrincipal.ma carries it, the five write paths were changed to it, and
+  // `.claude/hooks/audit_actor_guard.py` now enforces it. The reasoning that won is the one this
+  // comment already recorded as ASSUMED: `nguoi_dung.ma`'s own comment calls it "staff code used in
+  // the audit trail" (0001_init.sql:167), and question #15 keeps `ma` short and non-ULID precisely
+  // so a person reading the trail a year later can look somebody up from it.
   //
-  //	MEASURED, TODAY      core/audit/audit.go:89 writes authz.Principal.ID into `actor_id`, and
-  //	                     that is the internal id — StaffPrincipal.staff_id says why it must be
-  //	                     (identity's own grant query matches `nd.id`). The entries asserted in
-  //	                     service-documents/internal/app and service-petitions/internal/app both
-  //	                     pin an internal id.
-  //	ASSUMED, ELSEWHERE   `nguoi_dung.ma`'s own comment calls it "staff code used in the audit
-  //	                     trail" (0001_init.sql:167), and question #15's reasoning — carried into
-  //	                     migration 0009 §4 — keeps `ma` short and non-ULID precisely so a person
-  //	                     reading the trail a year later can look somebody up from it.
+  // SO THIS RPC, AS WRITTEN, CANNOT SERVE THE PURPOSE IT NAMES for any entry written from
+  // 2026-09-22 onward: it is asked for an `actor_id` that is now a `ma`, matches `nguoi_dung.id`,
+  // and answers an ABSENT ITEM — which the caller renders as a blank on an archival record, the
+  // exact defect this RPC exists to close. IT HAS NO IMPLEMENTATION AND NO CONSUMER YET, which is
+  // the only reason nothing is broken today.
   //
-  // SO THE TWO READINGS DISAGREE AND NEITHER HAS BEEN DECIDED. This contract takes the id because
-  // that is what the writer actually writes today. If the trail is ever changed to store `ma`, the
-  // change to make HERE is additive — a second lookup, named — and it is a question for the user
-  // alongside StaffPrincipal's own open note about carrying `ma`. It is NOT something to guess at
-  // in either direction: an entry whose `actor_id` this RPC cannot resolve renders as a blank on an
-  // archival record, which is the exact defect this RPC exists to close.
+  // THE FIX IS A CONTRACT DECISION AND IS DELIBERATELY NOT TAKEN HERE — whether `ids` changes
+  // meaning, or a second named lookup by `ma` is added beside it, is the contract owner's call and
+  // both shapes have consequences for `StaffName.id`'s echo semantics. WHOEVER IMPLEMENTS THIS RPC
+  // MUST SETTLE IT FIRST: implementing it as written produces a lookup that compiles, passes its
+  // tests against fabricated internal ids, and resolves nothing against real data.
   //
   // # THE STATUS CODES ARE PART OF THE CONTRACT
   //
@@ -848,13 +848,12 @@ message Staff {
 //	                        member's mobile number to other staff, or not) has to be settled
 //	                        first, because it decides what "staff personal data" is allowed to
 //	                        cross a boundary at all.
-//	ma (the business code)  Wanted eventually: rule 6, invariant 3 records the business code on
-//	                        the audit trail, and a service writing an audited change will need a
-//	                        "who". It is NOT here because nothing reads it yet, and a contract
-//	                        records what exists rather than what is planned (ADR 0021). Adding a
-//	                        field later is additive and costs nothing; removing one costs a
-//	                        permanent `reserved`. Whoever adds it states which audit path reads
-//	                        it.
+//	ma (the business code)  NO LONGER OMITTED — it is field 3 below, added 2026-09-22. The note
+//	                        that stood here said "whoever adds it states which audit path reads
+//	                        it", so: the four catalogue write routes of comms, documents,
+//	                        finance and petitions (internal/http/danh_muc_ghi.go,
+//	                        `nguoiThucHien`) put it in `audit_log.actor_id`. Why it stopped
+//	                        being optional-in-practice is measured, not argued — see field 3.
 //	sid                     The session id is credential-adjacent — XacThuc's own alert logs a
 //	                        one-way fingerprint of it rather than the value, because an alert
 //	                        carrying a working handle to a session is a second copy of it. It
@@ -931,6 +930,41 @@ message StaffPrincipal {
   // Ordered, and the order carries no meaning beyond making one caller's responses comparable
   // between requests.
   repeated string permission_keys = 2;
+
+  // The BUSINESS CODE of the staff record — `CB-00123`, the same value as Staff.ma and the one
+  // the Danh bạ cán bộ screen shows. It is what an audit entry records as "who", and it is NOT
+  // the value any permission check may be made with.
+  //
+  // WHY BOTH ARE ON THE WIRE, WHICH IS THE QUESTION THIS FIELD EXISTS TO ANSWER. The two
+  // identifiers answer two different questions and one value cannot answer both:
+  //
+  //	staff_id (field 1)  DECIDES ACCESS. identity's grant query matches `nd.id`, so this is
+  //	                    the only value a permission check can be made with.
+  //	ma (this field)     RECORDS RESPONSIBILITY. `audit_log.actor_id` is read years later by a
+  //	                    person handling a complaint or an inspection, and `CB-00123` means
+  //	                    something to them without any lookup being alive. A ULID means nothing
+  //	                    to anyone, and the RPC that could translate it (ResolveStaffNames)
+  //	                    reads a table that may by then no longer hold the row.
+  //
+  // MEASURED, WHICH IS WHY IT IS HERE RATHER THAN STILL PLANNED (2026-09-22): the policy had
+  // been written in a comment since the login path was built —
+  // `service-identity/internal/app/dang_nhap.go:151`, `Subject: cb.Ma, // business code, never
+  // the internal id` — and nothing enforced it. Four catalogue write routes built on 2026-09-22
+  // put the internal id in `actor_id` instead, and no test turned red, because a comment is not
+  // a check. `audit_log.actor_id` then held two kinds of identifier in one column, which is a
+  // column nobody can query. The enforcement that was missing now exists:
+  // `.claude/hooks/audit_actor_guard.py` and `tools/check_audit_actor.py`.
+  //
+  // ADDITIVE, AND DELIBERATELY NOT REQUIRED (rule 2, forbidden #4). This message already has
+  // consumers — the staffauth middleware of four services — and a consumer built before this
+  // field simply does not read it. THE COST OF THAT CHOICE, STATED RATHER THAN HIDDEN: during a
+  // rolling deploy, a NEW service talking to an OLD identity receives an empty `ma`, and every
+  // AUDITED WRITE of that service then refuses with 500 rather than writing an entry attributed
+  // to nobody (core/audit.Entry.validate). Reads and unaudited routes keep serving. That is the
+  // narrow failure and it is the intended one: rule 6 does not permit a business write whose
+  // trail cannot name who made it, and a silent fallback to the internal id would recreate the
+  // very defect this field was added to close.
+  string ma = 3;
 }
 
 message ResolveStaffPrincipalRequest {
@@ -1267,8 +1301,12 @@ message ResolveStaffNamesResponse {
 message StaffName {
   // Echoed from the request. It is the KEY the caller maps by — never a position.
   //
-  // THE INTERNAL id: the same value as Staff.id and StaffPrincipal.staff_id, and the same value
-  // `audit_log.actor_id` stores. NOT the business code `ma`.
+  // THE INTERNAL id: the same value as Staff.id and StaffPrincipal.staff_id. NOT the business
+  // code `ma`.
+  //
+  // ⚠ AND THAT IS NO LONGER THE VALUE `audit_log.actor_id` STORES — the user decided on
+  // 2026-09-22 that the trail holds `ma`. This line used to claim the two were the same. See the
+  // warning block on the RPC above: it has to be settled before this RPC is implemented.
   string id = 1;
 
   // The person's full name, exactly as `nguoi_dung.ho_ten` holds it.
@@ -1639,7 +1677,8 @@ message Deadline {
   // A real consumer is coming: ADR 0028 §(a) has the Mini App telling a citizen "sẽ được xem
   // trong N giờ làm việc", and N cannot be recovered from an instant without the calendar. It is
   // NOT here because nothing reads it today, and a contract records what exists rather than what
-  // is planned (ADR 0021) — the same reason `StaffPrincipal` carries no `ma`. Adding a field later
+  // is planned (ADR 0021) — the same reason `StaffPrincipal` carried no `ma` until a write path
+  // actually read one, on 2026-09-22, at which point it was added. Adding a field later
   // is additive and costs nothing; removing one costs a permanent `reserved`.
   //
   // WHOEVER ADDS IT STATES WHICH SCREEN READS IT, and carries this warning with it: the figure is

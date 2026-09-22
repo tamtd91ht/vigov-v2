@@ -29,7 +29,12 @@ import (
 // act on, and — more importantly — that a refusal commits nothing.
 
 func nguoiThuMucUuTien() audit.Actor {
-	return audit.Actor{ID: "nd-01JINTERNALIDCUACANBO", Kind: "staff", IP: "10.0.0.7"}
+	// `CB-00123` AND NOT A ULID. `audit_log.actor_id` holds the BUSINESS CODE for a staff
+	// actor (rule 6, invariant 2), so a fixture handing the use case an internal id builds a
+	// world that does not exist and then asserts things about it. It held
+	// "CB-00123" until 2026-09-22, which is the same day the HTTP layer was
+	// found writing exactly that value for real.
+	return audit.Actor{ID: "CB-00123", Kind: "staff", IP: "10.0.0.7"}
 }
 
 func themMauMucUuTien() YeuCauThemMucUuTien {
@@ -102,7 +107,7 @@ func TestThemVetMangDuNguoiViecVaMa_MucUuTien(t *testing.T) {
 		t.Fatalf("ghi %d vết, muốn 1", len(vet))
 	}
 	doi := chuoiTrongDoiMucUuTien(vet[0].args)
-	for _, muon := range []string{string(xaMucUuTienA), "nd-01JINTERNALIDCUACANBO", "staff", "10.0.0.7",
+	for _, muon := range []string{string(xaMucUuTienA), "CB-00123", "staff", "10.0.0.7",
 		HanhViThemMucUuTien, "bao-cao"} {
 		if !doi[muon] {
 			t.Errorf("vết thiếu %q — đối số: %v", muon, vet[0].args)
@@ -320,7 +325,7 @@ func TestXoaLaXoaMemVaGhiDuBaCot_MucUuTien(t *testing.T) {
 		}
 	}
 	doi := chuoiTrongDoiMucUuTien(xoa[0].args)
-	if !doi["gộp vào loại khác"] || !doi["nd-01JINTERNALIDCUACANBO"] {
+	if !doi["gộp vào loại khác"] || !doi["CB-00123"] {
 		t.Errorf("xoá mềm không ghi ai xoá và vì sao: %v", xoa[0].args)
 	}
 }

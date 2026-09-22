@@ -120,6 +120,7 @@ func ngucCanh() context.Context { return tenant.Into(context.Background(), xaA) 
 func TestChuTheCoQuyenTraVeDayDu(t *testing.T) {
 	srv := &mayChuGia{tra: &identityv1.StaffPrincipal{
 		StaffId:        "nd-01JINTERNALIDCUACANBO",
+		Ma:             "CB-00123",
 		PermissionKeys: []string{"document.read", "task.extend"},
 	}}
 	cl := moMay(t, srv)
@@ -133,6 +134,13 @@ func TestChuTheCoQuyenTraVeDayDu(t *testing.T) {
 	}
 	if p.StaffID != "nd-01JINTERNALIDCUACANBO" {
 		t.Errorf("StaffID = %q", p.StaffID)
+	}
+	// `ma` CROSSES TOO, and it is the value the caller's audit entries record (rule 6, invariant
+	// 2). Dropping it here would be invisible: every permission check would still pass, every route
+	// would still serve, and only the archival record would come out holding an identifier that
+	// means nothing to the person reading it. That is precisely how 2026-09-22 happened.
+	if p.Ma != "CB-00123" {
+		t.Errorf("Ma = %q, muốn mã nghiệp vụ %q", p.Ma, "CB-00123")
 	}
 	if len(p.PermissionKeys) != 2 || p.PermissionKeys[0] != authz.Perm("document.read") {
 		t.Errorf("PermissionKeys = %v", p.PermissionKeys)

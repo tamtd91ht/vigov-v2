@@ -143,14 +143,20 @@ func XacThuc(d Deps) func(http.Handler) http.Handler {
 			// Principal.ID (identity/internal/store/checker.go:38). Putting the
 			// business code here matches no row, so EVERY permission check answers false and
 			// every guarded route returns 403 — with nothing in the response, the logs or a
-			// test to point at the cause. The business code has its own home: PhienHienTai
-			// .MaCanBo, which is what the audit trail records.
+			// test to point at the cause.
+			//
+			// Ma CARRIES THAT BUSINESS CODE INSTEAD, on its own field. It is what the audit
+			// trail records (rule 6, invariant 2) and it decides nothing. PhienHienTai.MaCanBo
+			// still holds the same value for identity's own header and /sessions/current; the
+			// two are filled from one `cb` in one place, so there is nothing here that can
+			// drift.
 			//
 			// Roles is left empty ON PURPOSE. Permissions are read from the database on every
 			// request by store.Checker. Carrying them on the principal would mean a role change
 			// takes effect only when the session ends (skills/session-and-token, FORBIDDEN).
 			p := authz.Principal{
 				ID:       cb.ID,
+				Ma:       cb.Ma,
 				Kind:     "staff",
 				TenantID: xa,
 			}

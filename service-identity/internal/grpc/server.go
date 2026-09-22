@@ -384,8 +384,13 @@ func (s *Server) ResolveStaffPrincipal(ctx context.Context, req *identityv1.Reso
 	s.d.Phien.GhiNhanDung(ctx, claims.Sid)
 
 	return &identityv1.ResolveStaffPrincipalResponse{
+		// BOTH IDENTIFIERS, AND THEY ARE NOT INTERCHANGEABLE. StaffId decides access (the grant
+		// query above matches `nd.id`); Ma is what the caller's audit entries record as "who"
+		// (rule 6, invariant 2). Sending cb.ID for both would leave four services writing internal
+		// ids onto archival records, which is the defect measured on 2026-09-22.
 		Principal: &identityv1.StaffPrincipal{
 			StaffId:        cb.ID,
+			Ma:             cb.Ma,
 			PermissionKeys: sangKhoaQuyen(quyen),
 		},
 	}, nil

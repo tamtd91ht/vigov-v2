@@ -30,6 +30,7 @@ const (
 	hostB = "xa-b.example.gov.vn"
 
 	idCanBo = "nd-01JINTERNALIDCUACANBO"
+	maCanBo = "CB-00123"
 )
 
 var (
@@ -44,7 +45,7 @@ var (
 // the database on every request, never carried on the principal, so a role change takes effect on
 // the next request rather than when the session ends.
 func canBoCua(xa tenant.ID) *authz.Principal {
-	return &authz.Principal{ID: idCanBo, Kind: "staff", TenantID: xa}
+	return &authz.Principal{ID: idCanBo, Ma: maCanBo, Kind: "staff", TenantID: xa}
 }
 
 // --- fakes --------------------------------------------------------------------------------------

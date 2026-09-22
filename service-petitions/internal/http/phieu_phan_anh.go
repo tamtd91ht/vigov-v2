@@ -294,12 +294,26 @@ func (h *Handler) DocPhieuPhanAnh(w http.ResponseWriter, r *http.Request) {
 	// it was not. An inspection cannot tell that row from a real one.
 	xemDayDu := false
 	if !p.AnDanh {
-		if principal, ok := authz.From(ctx); ok && h.d.Checker.Allows(ctx, principal, QuyenXemDayDu) {
+		if principal, ok := authz.From(ctx); ok && principal.Ma != "" &&
+			h.d.Checker.Allows(ctx, principal, QuyenXemDayDu) {
 			// The IP comes from this process's own socket. httpx.ClientIP does not trust
 			// X-Forwarded-For, and rule 6, invariant 2 wants the address the request really
 			// arrived from, not one the caller chose to name.
+			//
+			// `principal.Ma`, NEVER `principal.ID`. This entry is the record that a named officer
+			// read a citizen's unmasked details (rule 6, invariant 7) — the single entry in this
+			// service most likely to be produced in an inspection. A ULID in it names nobody, and
+			// the lookup that could translate it may not still hold the row. It WAS `principal.ID`
+			// until 2026-09-22 and nothing turned red; `.claude/hooks/audit_actor_guard.py` is why
+			// that cannot recur silently.
+			//
+			// AND `Ma == ""` IS CHECKED IN THE CONDITION ABOVE, WHICH CHANGES WHAT THIS BRANCH
+			// DOES RATHER THAN JUST WHAT IT WRITES: with no code to attribute the disclosure to,
+			// the officer does not get the unmasked value at all. `xemDayDu` stays false and the
+			// response is masked. That is the fail-closed direction — the alternative, disclosing
+			// and failing to record it, is the one state rule 6 does not permit.
 			err := h.d.Vet.GhiVet(ctx, p.MaTraCuu, audit.Actor{
-				ID:   principal.ID,
+				ID:   principal.Ma,
 				Kind: principal.Kind,
 				IP:   httpx.ClientIP(r),
 			})

@@ -76,6 +76,18 @@ type StaffPrincipal struct {
 	// or a test to point at the cause.
 	StaffID string
 
+	// Ma is the BUSINESS CODE of the same staff record — `CB-00123`. It decides nothing; it is
+	// what an audit entry records as "who" (rule 6, invariant 2). See authz.Principal for why
+	// both identifiers travel and why neither can do the other's job.
+	//
+	// MAY BE EMPTY, AND THE MIDDLEWARE DOES NOT REFUSE WHEN IT IS. The field is optional on the
+	// wire (rule 2, forbidden #4: this message already had consumers), so a NEW service talking to
+	// an OLD identity during a rolling deploy receives nothing here. Refusing at this layer would
+	// take every route of that service down, including reads and authz.Public ones. Refusing at
+	// the WRITE instead — core/audit.Entry.validate rejects an empty actor — takes down exactly
+	// the operations that cannot be recorded, and leaves the rest serving.
+	Ma string
+
 	// PermissionKeys is every key this person holds in this commune, AS OF THIS REQUEST.
 	//
 	// THE ONE OBLIGATION THE CONTRACT PUTS ON US, and the place somebody will try to optimise it:
@@ -239,8 +251,15 @@ func Middleware(pg Resolver, log *slog.Logger) func(http.Handler) http.Handler {
 			// Kind is "staff" because this is the staff RPC; the contract carries no kind field for
 			// exactly that reason. Roles is left empty, as XacThuc leaves it: a role carried on the
 			// principal is a role change that takes effect only when the session ends.
+			//
+			// Ma is copied straight across and is NOT defaulted to StaffID when empty. A default
+			// on this field would put the internal id back into `audit_log.actor_id` — the exact
+			// defect of 2026-09-22 — and it would do it silently, because a trail with a
+			// plausible-looking value in it reads as working. Empty travels as empty and the
+			// write path refuses; see StaffPrincipal.Ma.
 			ctx = authz.Into(ctx, authz.Principal{
 				ID:       p.StaffID,
+				Ma:       p.Ma,
 				Kind:     "staff",
 				TenantID: xa,
 			})

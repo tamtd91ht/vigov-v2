@@ -221,7 +221,17 @@ func (c *Client) ResolveStaff(ctx context.Context, sessionToken, clientIP string
 		khoa = append(khoa, authz.Perm(k))
 	}
 
-	return staffauth.StaffPrincipal{StaffID: p.GetStaffId(), PermissionKeys: khoa}, true, nil
+	// `ma` IS CARRIED BUT NOT REQUIRED, and the asymmetry with staff_id above is deliberate.
+	// staff_id absent is a contract fault that breaks every permission check, so it errors. `ma`
+	// absent is what an OLD identity answers during a rolling deploy (the field was added
+	// 2026-09-22, optional by rule 2, forbidden #4), and erroring here would turn that into a
+	// total outage of this service instead of a refusal of its audited writes alone. It is also
+	// NEVER substituted with staff_id: see staffauth.StaffPrincipal.Ma.
+	return staffauth.StaffPrincipal{
+		StaffID:        p.GetStaffId(),
+		Ma:             p.GetMa(),
+		PermissionKeys: khoa,
+	}, true, nil
 }
 
 var _ staffauth.Resolver = (*Client)(nil)

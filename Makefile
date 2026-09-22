@@ -22,7 +22,7 @@ MOD_DIRS := $(shell go list -m -f '{{.Dir}}' | tr '\134' '/')
 MODULES  := $(addsuffix /...,$(MOD_DIRS))
 
 
-check: brain hooks quyen buildfiles lint build standalone test web   ## Full verification — run before saying it is done
+check: brain hooks quyen vet-actor buildfiles lint build standalone test web   ## Full verification — run before saying it is done
 
 brain:                          ## 7 structural invariants of the brain — anti-drift
 	python tools/check_brain.py
@@ -40,6 +40,16 @@ quyen:                          ## Mọi khoá quyền trong mã Go có thật t
 	@# và không bao giờ đọc lại thứ đã nằm sẵn trên đĩa — đúng chỗ ba khoá ấy đã sống. Chỉ lần
 	@# quét toàn kho này trả lời được câu "hôm nay cả kho còn khoá bịa nào không".
 	python tools/check_quyen.py
+
+vet-actor:                      ## Chủ thể mọi dòng vết là MÃ CÁN BỘ, không phải id nội bộ
+	@# LỚP LỖI CÙNG HÌNH DẠNG VỚI `quyen` Ở TRÊN, khác cột. `audit_log.actor_id` trả lời câu
+	@# "AI làm việc này" trên sổ có giá trị pháp lý. Chính sách đã viết ở dang_nhap.go:151 từ
+	@# lâu — trong một CHÚ THÍCH, nên không gì đọc được nó, và ngày 22/09/2026 sáu chỗ ghi vết
+	@# mới nạp ULID nội bộ vào đúng cột ấy với mọi ca kiểm vẫn xanh.
+	@#
+	@# `.claude/hooks/audit_actor_guard.py` chặn cùng lớp lỗi lúc GHI, nhưng chỉ thấy MỘT tệp.
+	@# Năm trong sáu khiếm khuyết ấy đã nằm sẵn trên đĩa trước khi có rào nào.
+	python tools/check_audit_actor.py
 
 buildfiles:                     ## Dockerfile + Jenkinsfile của từng dịch vụ, và phần chung không ai đánh rơi
 	@# Mỗi dịch vụ tự dựng và tự đóng gói: nó quyết build cái gì, khi nào, ra ảnh nào.

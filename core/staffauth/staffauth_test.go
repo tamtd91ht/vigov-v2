@@ -32,6 +32,11 @@ const (
 	// An INTERNAL id, not a business code — the distinction StaffPrincipal.StaffID carries.
 	idCanBo = "nd-01JINTERNALIDCUACANBO"
 
+	// The BUSINESS CODE of the same person. Deliberately a different string from idCanBo: the two
+	// fields answer two different questions (authz.Principal says which), and a fixture that used
+	// one value for both could not tell a correct implementation from one that sends the id twice.
+	maCanBo = "CB-00123"
+
 	// Fake credential material, and the text says so in full (rule 8, forbidden #1). It is never
 	// logged and never asserted on beyond "the resolver received exactly this".
 	phieuGia = "phieu-phien-GIA-KHONG-PHAI-PHIEU-THAT"
@@ -85,7 +90,7 @@ func (p *phanGiaiGia) ResolveStaff(_ context.Context, phieu, ip string) (StaffPr
 }
 
 func canBoCo(khoa ...authz.Perm) *phanGiaiGia {
-	return &phanGiaiGia{tra: StaffPrincipal{StaffID: idCanBo, PermissionKeys: khoa}, co: true}
+	return &phanGiaiGia{tra: StaffPrincipal{StaffID: idCanBo, Ma: maCanBo, PermissionKeys: khoa}, co: true}
 }
 
 // --- the chain ------------------------------------------------------------------------------
@@ -520,5 +525,55 @@ func TestCheckerTuChoiKhiThieuBoiCanh(t *testing.T) {
 	// An empty permission key matches nothing.
 	if c.Allows(daCo, chuThe, "") {
 		t.Error("cho qua với khoá quyền rỗng")
+	}
+}
+
+// --- the business code on the principal -----------------------------------------------------
+
+// TestMaSangChuThe asserts the one thing that carries `ma` from the RPC to the audit trail.
+//
+// IT IS AN ASSERTION ABOUT A VALUE, NOT ABOUT A FIELD NAME. `audit_log.actor_id` is what a person
+// handling a complaint or an inspection reads years later, and rule 6, invariant 2 wants a "who"
+// that still means something then. On 2026-09-22 four services wrote authz.Principal.ID — a ULID
+// — into that column, every one of their tests stayed green, and the column ended up holding two
+// kinds of identifier at once: one nobody can query.
+func TestMaSangChuThe(t *testing.T) {
+	m := dungMayChu(t, canBoCo(quyenDoc))
+	doiMa(t, m.goi(t, hostA, "/can-quyen", phieuGia), http.StatusOK)
+
+	if m.thayChu == nil {
+		t.Fatal("không có chủ thể — chuỗi biên hỏng, ca này không nói được gì")
+	}
+	if m.thayChu.Ma != maCanBo {
+		t.Errorf("Principal.Ma = %q, muốn mã nghiệp vụ %q — vết kiểm toán không có gì để ghi",
+			m.thayChu.Ma, maCanBo)
+	}
+	// AND ID IS STILL THE INTERNAL ONE. The two must not collapse: ID is what every permission
+	// check joins on (see authz.Principal), so making it carry the code answers 403 everywhere.
+	if m.thayChu.ID != idCanBo {
+		t.Errorf("Principal.ID = %q, muốn id nội bộ %q", m.thayChu.ID, idCanBo)
+	}
+}
+
+// TestMaRongKhongLayIDThayThe is the half a green suite cannot otherwise prove.
+//
+// `ma` is OPTIONAL on the wire (rule 2, forbidden #4), so an identity deployed before the field
+// existed answers with it empty. The tempting repair — fall back to StaffID — is exactly the
+// defect being fixed, and it would be invisible: the write succeeds, the trail looks populated,
+// and the value in it is a ULID again. Empty stays empty here, and the WRITE refuses instead.
+func TestMaRongKhongLayIDThayThe(t *testing.T) {
+	pg := &phanGiaiGia{tra: StaffPrincipal{StaffID: idCanBo, PermissionKeys: []authz.Perm{quyenDoc}}, co: true}
+	m := dungMayChu(t, pg)
+	doiMa(t, m.goi(t, hostA, "/can-quyen", phieuGia), http.StatusOK)
+
+	if m.thayChu == nil {
+		t.Fatal("không có chủ thể — chuỗi biên hỏng, ca này không nói được gì")
+	}
+	if m.thayChu.ID != idCanBo {
+		t.Fatalf("Principal.ID = %q, muốn id nội bộ %q", m.thayChu.ID, idCanBo)
+	}
+	if m.thayChu.Ma != "" {
+		t.Errorf("Principal.Ma = %q khi định danh không gửi `ma` — một giá trị thay thế ở đây đưa "+
+			"id nội bộ trở lại cột actor_id, âm thầm, với mọi phép kiểm vẫn xanh", m.thayChu.Ma)
 	}
 }
