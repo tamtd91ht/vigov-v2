@@ -155,6 +155,49 @@ pipeline {
 
     stage('Ghim thẻ và commit') {
       steps {
+        // ─────────────────────────────────────────────────────────────────────────────────
+        // ĐỒNG BỘ VỚI ĐỈNH `main` TRƯỚC KHI SỬA BẤT CỨ GÌ.
+        //
+        // Jenkins checkout ra một detached HEAD ở commit X. Nếu ai đó đẩy commit Z lên `main`
+        // giữa lúc lượt này chạy, mọi thứ bên dưới vẫn dựng trên X — và hỏng theo HAI đường
+        // khác nhau, mà đường thứ hai mới là đường đáng sợ:
+        //
+        //   1. `git push origin HEAD:main` bị từ chối (non-fast-forward), vì commit ghim thẻ
+        //      có cha là X chứ không phải Z. Job đỏ ở dòng cuối cùng của stage này, sau khi
+        //      `kustomize edit` đã sửa tệp. Ồn, khó đọc, nhưng VÔ HẠI: chưa gì lên cụm.
+        //
+        //   2. `kubectl apply -k` ở stage sau áp CÂY ĐANG CHECKOUT, tức các manifest của X.
+        //      Nếu Z sửa một manifest — giới hạn bộ nhớ, một probe, một biến — thì lượt apply
+        //      ấy ÂM THẦM ĐẨY CỤM VỀ BẢN TRƯỚC Z, không ai thấy, không dòng nào đỏ.
+        //
+        // Hôm nay đường (1) đang vô tình che đường (2): push đỏ trước nên không bao giờ tới
+        // apply. Vì thế bản vá KHÔNG ĐƯỢC là `git rebase origin/main` ngay trước push như chú
+        // giải cũ ở `README.md` đề nghị — nó gỡ đúng cái chốt đang chặn, chuyển commit sang
+        // đỉnh mới trong khi CÂY LÀM VIỆC vẫn là của X, và biến một lần đỏ ồn ào thành một
+        // lượt deploy sai im lặng.
+        //
+        // Đồng bộ cả cây, ở đây, trước `kustomize edit`, giải cả hai: commit sinh ra đã có cha
+        // là đỉnh nên push luôn fast-forward, và manifest được áp là manifest thật của `main`.
+        // Nó còn sửa nghĩa của phép kiểm "không có diff" bên dưới cho đúng: câu hỏi là "thẻ này
+        // đã ghim trên main HIỆN TẠI chưa", không phải "trên bản checkout lúc nãy chưa".
+        //
+        // `reset --hard` an toàn ở đúng vị trí này vì nó chạy TRƯỚC mọi thay đổi của lượt chạy:
+        // thứ duy nhất nó bỏ đi là bản checkout SCM. Đặt nó xuống dưới một dòng là nó xoá mất
+        // `kustomize edit`.
+        //
+        // CỬA SỔ CÒN LẠI, ghi ra chứ không giả vờ đã đóng: `main` vẫn có thể nhích lên trong
+        // khoảng vài giây từ `fetch` tới `push`. Lúc ấy push vẫn đỏ — nhưng nay đỏ kèm một câu
+        // đọc được, và vẫn chưa gì lên cụm.
+        // ─────────────────────────────────────────────────────────────────────────────────
+        withCredentials([gitUsernamePassword(credentialsId: params.GIT_CRED)]) {
+          sh '''
+            set -eu
+            git fetch --no-tags origin main
+            git reset --hard FETCH_HEAD
+            echo "đồng bộ với đỉnh main: $(git rev-parse --short=12 HEAD)"
+          '''
+        }
+
         sh '''
           set -eu
           cd deploy/overlays/${MT}
@@ -181,7 +224,17 @@ pipeline {
 
 Bấm bởi: ${NGUOI_BAM}
 Job: ${BUILD_URL}"
-            git push origin HEAD:main
+
+            # Cửa sổ còn lại sau khi đã đồng bộ ở đầu stage: vài giây. Nếu vẫn trúng, đỏ ở
+            # đây kèm một câu nói rõ chuyện gì đã xảy ra — chứ không phải một thông báo
+            # plumbing của git mà người bấm phải tự dịch.
+            if ! git push origin HEAD:main; then
+              echo ""
+              echo "ĐẨY BỊ TỪ CHỐI — nhánh main vừa nhích lên trong lúc lượt này chạy."
+              echo "CHƯA CÓ GÌ LÊN CỤM. Chạy lại job với đúng ba tham số vừa rồi."
+              echo ""
+              exit 1
+            fi
           '''
         }
       }

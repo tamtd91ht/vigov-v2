@@ -118,7 +118,7 @@ bại. Đưa nhật ký khớp lại với thực tế là việc của người
 | Nợ | Ở đâu | Hệ quả nếu bỏ qua |
 |---|---|---|
 | ~~`BUILD_USER_ID` luôn rỗng~~ | **VÁ 22/09/2026** | Nay đọc từ `getBuildCauses`; không xác định được thì job dừng trước khi chạm git và cụm — xem *Plugin và công cụ* ↓. **Chưa chạy thật lần nào** |
-| `git push` không rebase | *Chưa vá* ↓ | Lượt deploy đỏ ở chỗ khó đọc khi `main` nhích lên giữa chừng |
+| ~~`git push` không đồng bộ với đỉnh `main`~~ | **VÁ 22/09/2026** | Nay `fetch` + `reset --hard` ở đầu stage ghim thẻ. Lối vá hiển nhiên (`rebase` trước push) là lối SAI — xem *Chưa vá* ↓. **Chưa chạy thật lần nào** |
 | 4 dịch vụ không bắt `SIGTERM` | `service-{comms,documents,finance,petitions}/cmd/server/main.go` | Một lượt deploy cắt ngang lúc tiếp nhận phản ánh để lại phiếu dở trong khi công dân đã cầm mã tra cứu. **Đáng vá TRƯỚC tuyến ghi đầu tiên của `petitions`** |
 | Manifest chưa từng qua API server thật | — | `kubectl kustomize` chỉ chứng minh YAML dựng được, không chứng minh máy chủ chấp nhận. Pha 2 là lần đầu biết |
 
@@ -341,10 +341,30 @@ luật và trỏ đúng dịch vụ, và không luật nào được thừa. Xo�
 
 ## Chưa vá
 
-`Jenkinsfile` đẩy commit ghim thẻ bằng `git push origin HEAD:main` từ một detached HEAD. Nếu
-`main` nhích lên trong lúc job chạy, push bị từ chối **sau khi** `kustomize edit` đã sửa tệp
-— lượt deploy đỏ ở một chỗ khó đọc. Cần `git fetch origin main && git rebase origin/main`
-trước khi push. Chưa cháy vì chưa lượt nào chạy.
+**`main` NHÍCH LÊN GIỮA LƯỢT DEPLOY — VÁ 22/09/2026.** Giữ đoạn này vì lối vá *hiển nhiên* ở
+đây là lối sai, và đó là thứ đáng nhớ.
+
+Jenkins checkout ra detached HEAD ở commit X. Ai đó đẩy Z lên `main` giữa lượt chạy thì mọi
+thứ phía sau vẫn dựng trên X, và hỏng theo **hai** đường:
+
+| # | Hỏng thế nào | Nặng ra sao |
+|---|---|---|
+| 1 | `git push origin HEAD:main` bị từ chối — commit ghim thẻ có cha là X, không phải Z | Ồn, khó đọc, **vô hại**: chưa gì lên cụm |
+| 2 | `kubectl apply -k` áp **cây đang checkout**, tức manifest của X. Z sửa một giới hạn bộ nhớ hay một probe thì lượt apply ấy **đẩy cụm về bản trước Z** | Im lặng, không dòng nào đỏ |
+
+Chú giải cũ ở đây đề nghị `git rebase origin/main` ngay trước push. **Đừng.** Đường (1) đang
+vô tình che đường (2) — push đỏ trước nên không bao giờ tới `apply`. Rebase gỡ đúng cái chốt
+ấy: commit sang đỉnh mới trong khi cây làm việc vẫn là của X, và một lần đỏ ồn ào thành một
+lượt deploy sai im lặng.
+
+Đã vá bằng cách khác: `git fetch --no-tags origin main && git reset --hard FETCH_HEAD` ở
+**đầu** stage *Ghim thẻ và commit*, **trước** `kustomize edit`. Commit sinh ra có cha là đỉnh
+nên push luôn fast-forward, và manifest được áp là manifest thật của `main`. Nó còn sửa nghĩa
+phép kiểm "không có diff" cho đúng: *thẻ này đã ghim trên `main` **hiện tại** chưa*, chứ không
+phải trên bản checkout lúc nãy.
+
+Cửa sổ còn lại là vài giây giữa `fetch` và `push`. Trúng thì push vẫn đỏ — nhưng kèm một câu
+đọc được, và vẫn chưa gì lên cụm. **Chưa lượt nào chạy thật.**
 
 **HAI TÊN REGISTRY — ĐÃ VÁ 21/09/2026.** Giữ lại đoạn này vì cách hỏng của nó đáng nhớ, không
 phải vì nó còn đang hỏng.
