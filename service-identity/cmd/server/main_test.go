@@ -67,6 +67,7 @@ type (
 	lichGia         struct{}
 	nghiLeGia       struct{}
 	lamBuGia        struct{}
+	slaGia          struct{}
 )
 
 func (phienGia) KiemTra(context.Context, string) (idstore.Phien, error) {
@@ -111,6 +112,11 @@ func (lichGia) DanhSach(context.Context) ([]domain.CaLamViec, error) {
 func (nghiLeGia) TheoNam(context.Context, int) ([]domain.NgayNghiLe, error) { return nil, nil }
 func (lamBuGia) TheoNam(context.Context, int) ([]domain.CaLamBu, error)     { return nil, nil }
 
+// An EMPTY deadline table — the real state of every commune, since migration 0008 seeds nothing.
+// These wiring tests only need ResolveDeadlines to be reachable and to refuse for the commune's own
+// reason; what each fault answers is defended in internal/grpc.
+func (slaGia) DanhSach(context.Context) ([]domain.DongSLA, error) { return nil, nil }
+
 func noiDayGia(t *testing.T) svcgrpc.Deps {
 	t.Helper()
 	ky, err := token.NewSigner([]secret.Secret{khoaKyGia})
@@ -129,6 +135,7 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		Lich:         lichGia{},
 		NghiLe:       nghiLeGia{},
 		LamBu:        lamBuGia{},
+		SLA:          slaGia{},
 		Log:          slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 }

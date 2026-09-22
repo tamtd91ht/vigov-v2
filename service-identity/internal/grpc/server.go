@@ -29,8 +29,9 @@
 //
 // # Nothing here is audited, and that is a decision rather than an omission
 //
-// Rule 6, invariant 1 covers WRITES to business data. All four RPCs here are reads —
-// AdvanceWorkingHours reads a commune's configuration and writes nothing at all — and two of them
+// Rule 6, invariant 1 covers WRITES to business data. All five RPCs here are reads —
+// AdvanceWorkingHours and ResolveDeadlines read a commune's configuration and write nothing at
+// all — and two of them
 // run on EVERY request, one per staff request of four services and one per citizen request of the
 // Mini App (ResolveCitizenSession, phien_cong_dan.go). An audit entry per session resolution would
 // add rows at the rate of page loads — recording nothing anybody would ever look for, and
@@ -51,12 +52,13 @@
 //
 // core/grpcx.UnaryServerInterceptor lifts "x-tenant-id" out of metadata into context.Context
 // before any handler runs, so every handler below reads it exactly as an HTTP handler does, and
-// none of them touches metadata itself. THREE OF THE FOUR RPCs here must always carry a commune and
+// none of them touches metadata itself. FOUR OF THE FIVE RPCs here must always carry a commune and
 // must never be exempted: each is called from a service edge that has ALREADY resolved its commune
-// from Host, so carrying it costs the caller nothing, and for AdvanceWorkingHours the exemption is
-// not even expressible — "x-tenant-id" names WHOSE calendar is read.
+// from Host, so carrying it costs the caller nothing, and for AdvanceWorkingHours and
+// ResolveDeadlines the exemption is not even expressible — "x-tenant-id" names WHOSE calendar and
+// WHOSE deadline table are read.
 //
-// THE FOURTH IS THE EXCEPTION AND IT IS NOT YET GRANTED. ResolveCitizenSession CANNOT carry a
+// THE FIFTH IS THE EXCEPTION AND IT IS NOT YET GRANTED. ResolveCitizenSession CANNOT carry a
 // commune, because it is the call that establishes one for the citizen channel (ADR 0022) — the
 // same loop ADR 0012 §A describes for ResolveHost. It therefore belongs on
 // grpcx.methodsWithoutTenant and is NOT on it: adding a second name to that list is a STOP
@@ -169,6 +171,15 @@ type Deps struct {
 	NghiLe NgayNghiLeDoc
 	LamBu  NgayLamBuDoc
 
+	// The commune's processing deadlines in working hours (migration 0008, ADR 0029), read by
+	// ResolveDeadlines and by nothing else here. Declared in sla.go, at the point of use.
+	//
+	// IT IS THE OTHER HALF OF THE THREE ABOVE, not a fifth unrelated table: `sla` says HOW LONG,
+	// the three calendars say WHEN this commune is open, and a deadline needs both. Having one
+	// without the other is not a partial answer, it is no answer at all — which is why
+	// ResolveDeadlines refuses rather than producing something from whichever half it holds.
+	SLA SLADoc
+
 	Log *slog.Logger
 }
 
@@ -211,6 +222,8 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho ngày nghỉ lễ — AdvanceWorkingHours sẽ tính hạn xuyên qua ngày cơ quan đóng cửa")
 	case d.LamBu == nil:
 		panic("identity/grpc: thiếu kho ngày làm bù — AdvanceWorkingHours sẽ tính hạn như thể xã nghỉ đúng những ngày nó có làm")
+	case d.SLA == nil:
+		panic("identity/grpc: thiếu kho thời hạn xử lý — ResolveDeadlines sẽ panic, và mọi tuyến ghi của petitions lẫn documents không đặt được hạn")
 	}
 	if d.Log == nil {
 		d.Log = slog.Default()

@@ -11,6 +11,7 @@ owns_facts:
   - "vì sao một bảng cấu hình theo xã lại không phải danh mục tham chiếu của ADR 0024"
   - "cái giá của việc identity giữ thêm một khái niệm không dính tới con người"
   - "hệ quả: bảng sla chưa tồn tại và đang chặn mọi tuyến ghi của petitions lẫn documents"
+  - "RPC đọc bảng sla trả MỐC HẠN đã cộng xong chứ không trả số giờ — chốt 22/09/2026"
 ---
 
 # 0029. Bảng `sla` thuộc `identity` — đặt cạnh lịch làm việc
@@ -120,9 +121,12 @@ thế là một câu hỏi, không phải `identity`.
 (`proto/vigov/identity/v1/identity.proto`) — nhưng nó trả lời *"lúc nào"*, không trả lời *"bao
 lâu"*, nên nó là **tiền lệ về hình dạng, không phải chỗ để nhét thêm trường**.
 
-Câu chưa ai hỏi và ADR này **không** tự trả lời: một lời gọi trả **số giờ** rồi bên gọi tự
-cộng, hay một lời gọi trả thẳng **mốc hạn** đã cộng xong. Hai đường cho ra hai chỗ đặt phép
-tính giờ làm việc, và ADR 0007 đã chốt là *không được có hai bản cài đặt của phép tính ấy*.
+Câu chưa ai hỏi lúc viết ADR này: một lời gọi trả **số giờ** rồi bên gọi tự cộng, hay một lời
+gọi trả thẳng **mốc hạn** đã cộng xong. Hai đường cho ra hai chỗ đặt phép tính giờ làm việc, và
+ADR 0007 đã chốt là *không được có hai bản cài đặt của phép tính ấy*.
+
+→ **ĐÃ TRẢ LỜI 22/09/2026 — xem §Bổ sung ở cuối tệp.** Đoạn trên giữ nguyên câu hỏi vì nó là thứ
+giải thích vì sao hình dạng hôm nay là hình dạng ấy.
 
 ## ĐIỀU KIỆN DỪNG
 
@@ -130,11 +134,64 @@ tính giờ làm việc, và ADR 0007 đã chốt là *không được có hai b
    miền nghiệp vụ vào bảng — hỏi trước khi thêm
 2. **Viết bảng `sla` ở `petitions` hoặc `documents`** — kể cả "tạm thời, để chạy được tuyến
    này". Một bảng tạm có dữ liệu thật thì không còn tạm
-3. **Viết đường đọc mà chưa có hợp đồng chốt hình dạng RPC** — xem §Hệ quả ngay. Đây là cùng
-   dạng lỗi mà ADR 0026 điều kiện dừng #2 chặn cho bộ mã lĩnh vực
+3. ~~**Viết đường đọc mà chưa có hợp đồng chốt hình dạng RPC**~~ — **ĐÃ ĐÓNG 22/09/2026**, xem
+   §Bổ sung. Giữ lại chứ không xoá: nó là tiền lệ cho lần sau, và nó **không** kéo theo điều kiện
+   dừng #2 của ADR 0026 (đường GHI bảng `sla` vẫn chặn vì mã lĩnh vực phải kiểm lúc ghi)
 4. **Ai được SỬA cấu hình SLA của xã** — `admin.sla` đã trả lời *ai bấm được nút*, nhưng chưa ai
    hỏi khách việc đổi số giờ có cần duyệt của lãnh đạo không. Đổi một dòng ở đây là đổi cam kết
    của cơ quan với dân, và nó **không hồi tố** (luật 10 bất biến 2, ADR 0007)
+
+## BỔ SUNG 22/09/2026 — RPC trả **MỐC HẠN**, không trả số giờ
+
+**Người dùng chốt.** `IdentityService.ResolveDeadlines` nhận (loại việc, lĩnh vực, gốc đếm) và
+trả về **mốc hạn đã cộng xong giờ làm việc**.
+
+**Lập luận đã nêu và được chấp nhận:** `identity` giữ **toàn bộ dữ liệu của phép tính** — bảng
+`sla` (*bao lâu*) và ba bảng lịch + `AdvanceWorkingHours` (*lúc nào*). Trả số giờ thì `petitions`
+**và** `documents` mỗi bên phải tự cộng giờ làm việc, và ADR 0007 cấm hai bản cài đặt của phép
+cộng ấy. Hai bản sẽ lệch — và chúng lệch đúng ở **đêm, cuối tuần, `ngay_nghi_le` và
+`ngay_lam_bu`**, tức đúng những ngày người dân nhận ra.
+
+| | |
+|---|---|
+| Hợp đồng | `proto/vigov/identity/v1/identity.proto` — `rpc ResolveDeadlines`, `enum WorkKind`, `enum DeadlineKind`, `message Deadline` |
+| Máy chủ | `service-identity/internal/grpc/sla.go` — tra `sla` rồi gọi **chính** `Server.tienGioLamViec`, đường dùng chung với `AdvanceWorkingHours` |
+| Bọc | `core/identityclient` — `Client.HanXuLy` |
+
+### Ba điều đi kèm quyết định, không tách rời
+
+| # | |
+|---|---|
+| 1 | **`AdvanceWorkingHours` KHÔNG bị thay.** Nó vẫn phục vụ bên gọi **tự giữ số giờ** và không đọc `sla`. Hai rpc, **một** phép cộng |
+| 2 | **Bên gọi phải NÓI RÕ đang ấn định đồng hồ nào** (`deadlines` bắt buộc, không có mặc định "trả cả hai"). Trả cả hai thì kênh công dân nhận `han_xu_ly_xong` tính từ **dòng mặc định** — đúng cái trần 56 giờ ADR 0028 vừa tháo, và là điều kiện dừng #1 của ADR ấy |
+| 3 | **Xã chưa cấu hình → `FAILED_PRECONDITION`, không bao giờ một con số.** Xem mục dưới |
+
+### Xã chưa cấu hình: TỪ CHỐI là câu trả lời
+
+Ba ca đều là `FAILED_PRECONDITION` — *"mở màn hình cấu hình của xã"*:
+
+- xã không có dòng `sla` nào;
+- loại việc được hỏi không có dòng nào dùng được;
+- lĩnh vực được hỏi không có dòng riêng **và** loại việc ấy cũng không có dòng mặc định để rơi về.
+
+**Không có mặc định, và không được có.** Không phải 24 giờ, cũng không phải 16 dòng của
+`docs/ui-ux/14-cau-hinh.md` §8 — những dòng ấy là bản mẫu của **một** xã, và một cam kết do phần
+mềm bịa ra vẫn đến tai người dân như thể **cơ quan** đã nói (luật 10 cấm #3). Bên gọi nhận lỗi thì
+**hỏng lượt tiếp nhận**: không ghi dòng, không cấp mã tra cứu
+(`kb/30-indexes/transaction-boundaries.json`, `tinh_han_xu_ly_luc_tiep_nhan`).
+
+**Hôm nay đó là câu trả lời của MỌI xã** — migration 0008 cố ý không gieo dòng nào và bước cấu
+hình chưa tồn tại. Nghĩa là thứ đang chặn tuyến ghi của `petitions` và `documents` **đã chuyển từ
+HỢP ĐỒNG sang DỮ LIỆU**: cần một đường ghi bảng `sla` (vẫn vướng điều kiện dừng #2 của ADR 0026) và
+một màn hình để xã điền. Đó là tiến bộ thật, nhưng **không** phải "đã xong".
+
+### Ba cột không ra khỏi service, và không phải vì quên
+
+`gio_sap_den_han` cần phép đếm **ngược** từ mốc hạn — phép tính ấy chưa tồn tại và chưa ai đặc tả.
+`gio_bao_lanh_dao` và `gio_bao_chu_tich` **chưa có mốc neo**: đặc tả nói hai kiểu mâu thuẫn nhau
+(§8 ghi "sau 24 giờ" không nói sau cái gì; §9 đếm từ lúc trễ hạn và **nhân đôi** cho chủ tịch thay
+vì đọc cột thứ hai). Tính leo thang từ chúng là báo cho lãnh đạo một xã trên một căn cứ **không ai
+chọn**, và bản tin không nói được nó dùng căn cứ nào.
 
 → ADR 0007 (giờ làm việc, ba bảng lịch, SLA không hồi tố): `kb/10-decisions/0007-sla-working-hours.md`
 → ADR 0024 (quyền sở hữu đi theo nhịp đổi, phép thử `tenant_id`): `kb/10-decisions/0024-so-huu-danh-muc-tham-chieu.md`

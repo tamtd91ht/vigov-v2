@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -151,13 +152,47 @@ func (s *Server) AdvanceWorkingHours(ctx context.Context, req *identityv1.Advanc
 		return nil, err
 	}
 
+	dat, err := s.tienGioLamViec(ctx, xa, tuMoc.AsTime(), sangGio(gio), "AdvanceWorkingHours")
+	if err != nil {
+		return nil, err
+	}
+
+	// ONE ITEM PER DISTINCT AMOUNT, each echoing its own `working_hours`: duplicates collapse, so
+	// len(items) can be smaller than len(working_hours) and an index is never a key.
+	items := make([]*identityv1.WorkingHoursReached, 0, len(dat))
+	for _, m := range dat {
+		items = append(items, &identityv1.WorkingHoursReached{
+			WorkingHours: uint32(m.Gio),
+			ReachedAt:    timestamppb.New(m.DatLuc),
+		})
+	}
+	return &identityv1.AdvanceWorkingHoursResponse{Items: items}, nil
+}
+
+// tienGioLamViec reads this commune's calendar and answers, for each amount of working hours, the
+// instant the commune reaches it.
+//
+// ONE IMPLEMENTATION, TWO ENTRANCES — and that is the point of the function existing at all.
+// AdvanceWorkingHours enters with hours the CALLER chose; ResolveDeadlines enters with hours the
+// COMMUNE configured (sla.go). ADR 0007 forbids two implementations of this count, and two
+// handlers each reading the three calendar tables and each mapping the faults would be exactly
+// that — identical today, and divergent on the first day somebody fixes a bug in one of them.
+//
+// `cho` NAMES THE ENTRANCE IN THE LOG, so an operator reading a refusal can tell which RPC asked.
+// It is a fixed string from the call site, never a value from the request.
+//
+// EVERY ERROR RETURNED IS ALREADY A gRPC STATUS. Callers return it unchanged; wrapping it again
+// would turn a FAILED_PRECONDITION an operator can act on into an Unknown.
+func (s *Server) tienGioLamViec(ctx context.Context, xa tenant.ID, tuMoc time.Time, gio []int, cho string) (
+	[]domain.MocDatDuoc, error) {
+
 	tuan, err := s.d.Lich.DanhSach(ctx)
 	if err != nil {
 		// Including ErrQuaNhieuCaLamViec: a calendar over its ceiling has stopped being a working
 		// week (an import run twice, a fixture on a live database), and the store's own note says
 		// the caller answers 500 — the HTTP route does exactly that. It is not one of the four
 		// configuration faults the contract names.
-		return nil, s.loiLich(ctx, err, xa, "AdvanceWorkingHours/lich_lam_viec")
+		return nil, s.loiLich(ctx, err, xa, cho+"/lich_lam_viec")
 	}
 
 	// LAZY, ONE YEAR AT A TIME, AND ONLY FOR A YEAR THE WALK ENTERS. A 16-hour deadline in March
@@ -175,21 +210,11 @@ func (s *Server) AdvanceWorkingHours(ctx context.Context, req *identityv1.Advanc
 		return nghi, bu, nil
 	}
 
-	dat, err := domain.TienGioLamViec(tuMoc.AsTime(), tuan, docNam, sangGio(gio))
+	dat, err := domain.TienGioLamViec(tuMoc, tuan, docNam, gio)
 	if err != nil {
-		return nil, s.loiLich(ctx, err, xa, "AdvanceWorkingHours/tinh")
+		return nil, s.loiLich(ctx, err, xa, cho+"/tinh")
 	}
-
-	// ONE ITEM PER DISTINCT AMOUNT, each echoing its own `working_hours`: duplicates collapse, so
-	// len(items) can be smaller than len(working_hours) and an index is never a key.
-	items := make([]*identityv1.WorkingHoursReached, 0, len(dat))
-	for _, m := range dat {
-		items = append(items, &identityv1.WorkingHoursReached{
-			WorkingHours: uint32(m.Gio),
-			ReachedAt:    timestamppb.New(m.DatLuc),
-		})
-	}
-	return &identityv1.AdvanceWorkingHoursResponse{Items: items}, nil
+	return dat, nil
 }
 
 // loiLich maps a calendar failure to a gRPC code, and the mapping is the part of this file that is

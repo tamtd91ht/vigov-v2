@@ -156,6 +156,12 @@ func run(log *slog.Logger) error {
 	lichLamViec := idstore.NewLichLamViecStore(kho)
 	ngayNghiLe := idstore.NewNgayNghiLeStore(kho)
 	ngayLamBu := idstore.NewNgayLamBuStore(kho)
+	// The commune's processing deadlines in working hours (migration 0008, ADR 0029) — the other
+	// half of the three tables above. Read only, and NOT mounted on any HTTP route: who may edit a
+	// commune's SLA is `admin.sla`, but whether changing it needs a leader's approval is ADR 0029's
+	// stop condition #4 and nobody has asked the customer. It leaves this service through exactly
+	// one door, the gRPC RPC ResolveDeadlines.
+	sla := idstore.NewSLAStore(kho)
 	// The CITIZEN session registry (migration 0004) — the only store here built on the RAW *sql.DB
 	// rather than on `kho`, and the exemption is argued in full at NewPhienCongDanStore: this
 	// lookup is what ESTABLISHES the commune, so there is no commune with which to scope it
@@ -364,7 +370,12 @@ func run(log *slog.Logger) error {
 		Lich:   lichLamViec,
 		NghiLe: ngayNghiLe,
 		LamBu:  ngayLamBu,
-		Log:    log,
+		// The commune's SLA table, for ResolveDeadlines — the RPC that unblocks every write route
+		// of `petitions` and the deadline path of `documents` (ADR 0029 §Hệ quả ngay). The same
+		// read-only store, and there is no second reader: a deadline must come from ONE place, and
+		// this field plus the three above are that place.
+		SLA: sla,
+		Log: log,
 	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)

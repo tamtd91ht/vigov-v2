@@ -11,13 +11,24 @@ import "google/protobuf/timestamp.proto";
 // registered in one commune may live, work, or report an issue in another.
 // See kb/10-decisions/0002-citizen-identity-platform-level.md.
 //
-// IT ALSO OWNS ONE THING THAT IS NOT A POPULATION: the commune's WORKING CALENDAR — its
-// ordinary week, its public holidays, its swap working days
-// (service-identity/migrations/0006_lich_lam_viec.sql). It sits here because ADR 0024 places
-// ownership with the CADENCE OF CHANGE rather than with the reader: a commune's office hours
-// change with its administration, alongside `bo_phan`, `vai_tro` and `thon_to_dan_pho`, which
-// already live here — not with a petition. AdvanceWorkingHours below is the only way that
-// calendar leaves this service.
+// IT ALSO OWNS TWO THINGS THAT ARE NOT POPULATIONS, and they are halves of one answer:
+//
+//   THE COMMUNE'S WORKING CALENDAR — its ordinary week, its public holidays, its swap working
+//   days (service-identity/migrations/0006_lich_lam_viec.sql). It answers WHEN the authority is
+//   open. It sits here because ADR 0024 places ownership with the CADENCE OF CHANGE rather than
+//   with the reader: a commune's office hours change with its administration, alongside
+//   `bo_phan`, `vai_tro` and `thon_to_dan_pho`, which already live here — not with a petition.
+//
+//   THE COMMUNE'S PROCESSING DEADLINES in working hours, the `sla` table
+//   (service-identity/migrations/0008_sla.sql, ADR 0029, decided 2026-09-20). It answers HOW
+//   LONG. It is read by `documents` (`van-ban-den`) and by `petitions` (`phan-anh`,
+//   `nhiem-vu`), belongs to neither, and changes with the same administrative policy the
+//   calendar does.
+//
+// TWO RPCs LEAVE THIS SERVICE FROM THAT PAIR, AND THE SPLIT IS DELIBERATE — see ResolveDeadlines
+// for the argument. AdvanceWorkingHours is the calendar alone, for a caller that already holds
+// the number of hours; ResolveDeadlines is both halves, for a caller fixing a commitment. Neither
+// hands out the calendar itself, and no third path exists.
 //
 // CONTRACT RULE — the commune travels in gRPC METADATA, never in a message body.
 //
@@ -274,11 +285,20 @@ service IdentityService {
   //
   // WHY IT IS NOT CALLED ComputeDeadline. "Deadline" is the CALLER's word for what it does with
   // the answer, and ADR 0017 names a contract after what the data IS rather than after what the
-  // reader calls it. The name also keeps the boundary legible: an RPC called ComputeDeadline in
-  // identity reads as identity owning the SLA, which it does not and must not — ADR 0007 owns
-  // the meaning of a deadline, and the numbers stay in the service that receives the record.
-  // (The verb is temporal, not CRUD: this RPC creates no `lich_lam_viec` row and writes nothing
-  // at all.)
+  // reader calls it. THIS RPC STILL DOES NOT KNOW WHAT A DEADLINE IS: the caller supplies the
+  // number of hours, so what comes back is an instant this commune is open until, and whether
+  // that instant is a commitment to anybody is not a fact this call holds. (The verb is
+  // temporal, not CRUD: this RPC creates no `lich_lam_viec` row and writes nothing at all.)
+  //
+  // ⚠ THE SECOND HALF OF THAT ARGUMENT WAS TRUE AND IS NOW FALSE, AND IT IS CORRECTED RATHER
+  // THAN DELETED. Until 2026-09-20 this paragraph read "an RPC called ComputeDeadline in identity
+  // reads as identity owning the SLA, WHICH IT DOES NOT AND MUST NOT". ADR 0029 decided the
+  // opposite: the `sla` table is in this service, because it is read by two services and belongs
+  // to neither. So the boundary argument no longer holds — what keeps this name right is only the
+  // first half, that this RPC reads no `sla` row. The RPC that does is ResolveDeadlines below,
+  // and it is a SEPARATE RPC rather than a flag on this one; ADR 0029 §118 calls this one a
+  // precedent for the SHAPE and not a place to add fields, and the reason is in ResolveDeadlines'
+  // own comment.
   //
   // # It returns the ANSWER, not the CALENDAR — the expensive decision of this contract
   //
@@ -450,6 +470,139 @@ service IdentityService {
   // weekday conversion is where an off-by-one lives for a year before anybody notices the
   // deadline is a day out.
   rpc AdvanceWorkingHours(AdvanceWorkingHoursRequest) returns (AdvanceWorkingHoursResponse);
+
+  // ResolveDeadlines answers, for ONE commune and ONE administrative record, the instants at
+  // which that record's processing commitments fall due.
+  //
+  // WHAT IT IS: the commune's own two halves joined once, here. `sla` says HOW LONG in working
+  // hours (migration 0008, ADR 0029); `lich_lam_viec` + `ngay_nghi_le` + `ngay_lam_bu` say WHEN
+  // this commune is open (migration 0006, ADR 0007). The caller supplies the three things only it
+  // knows — which kind of work, which field, and the instant the clock starts — and receives
+  // INSTANTS it stores as given.
+  //
+  // # WHY IT RETURNS THE INSTANT AND NOT THE NUMBER OF HOURS — the decision this contract exists to record
+  //
+  // ADR 0029 §123 left exactly one question open and refused to answer it: a call returning HOURS
+  // with the caller adding them up, or a call returning the DEADLINE already computed. THE USER
+  // DECIDED ON 2026-09-22: THE DEADLINE, ALREADY COMPUTED.
+  //
+  // The reason is not convenience, it is that the other shape is FORBIDDEN. Returning hours puts
+  // the working-hours arithmetic in `petitions` AND in `documents` — two implementations of one
+  // count, which ADR 0007 rules out and `hooks/citizen_commitment_guard.py` blocks at the write.
+  // The two copies would agree on every ordinary afternoon and disagree on exactly the days a
+  // citizen notices: nights, weekends, `ngay_nghi_le`, `ngay_lam_bu`. And the disagreement has no
+  // symptom — both compile, both pass their tests, and the wrong one has already been promised to
+  // somebody.
+  //
+  // WHAT THE REJECTED SHAPE WOULD HAVE BOUGHT, STATED HONESTLY: a caller could show "N giờ làm
+  // việc" on a screen without a second call. That is a real need (ADR 0028 §(a): the Mini App says
+  // "sẽ được xem trong N giờ làm việc"), and it is NOT served here — see the omission recorded on
+  // `Deadline`. It is additive when a screen exists that reads it.
+  //
+  // # WHY IT IS A SECOND RPC AND NOT A FIELD ON AdvanceWorkingHours
+  //
+  // ADR 0029 §119 calls that RPC "a precedent for the SHAPE, not a place to add fields", and the
+  // shapes really do differ: its `working_hours` is CALLER-DECLARED DATA, and an optional
+  // "look the hours up instead" flag would make the one required field of that message
+  // conditionally meaningless — the shape where a caller sets both and nothing says which won.
+  // Keeping them apart also keeps one property that is worth more than the saved message: a
+  // caller of AdvanceWorkingHours is visibly counting hours IT chose, and a caller of this RPC is
+  // visibly fixing a commitment THE COMMUNE chose. A reviewer can tell them apart at the call
+  // site.
+  //
+  // THE ARITHMETIC IS NOT DUPLICATED BY THE SPLIT. Both RPCs walk the same
+  // domain.TienGioLamViec, through the same calendar read, in the same process — one
+  // implementation, two entrances.
+  //
+  // # THE CALLER NAMES WHICH CLOCKS IT IS FIXING, AND THAT IS NOT A CONVENIENCE
+  //
+  // `deadlines` is required and there is deliberately no "give me everything" default. ADR 0028
+  // decision E sets a petition's two clocks AT TWO DIFFERENT MOMENTS: `han_tiep_nhan` when the row
+  // is created, `han_xu_ly_xong` when a member of staff settles the field. On the citizen channel
+  // the field is UNKNOWN at creation, so a response that always carried both would hand that
+  // caller a `han_xu_ly_xong` computed from the DEFAULT row — which is precisely the 56-hour
+  // ceiling ADR 0028 removed and its stop condition #1 forbids rebuilding. Requiring the caller to
+  // NAME the clock makes storing the wrong one a sentence somebody had to write.
+  //
+  // ONE CALL CAN STILL NAME BOTH, and a caller whose form carries the field at intake should —
+  // `van-ban-den`, and ADR 0028's rule for any channel with `linh_vuc` in the intake form. Two
+  // clocks in one call is one calendar read and one hop; two calls is two, and the second could
+  // read a calendar the first did not.
+  //
+  // # A COMMUNE WITH NO CONFIGURATION IS REFUSED. IT IS NEVER GIVEN A NUMBER
+  //
+  // `sla` IS EMPTY FOR EVERY COMMUNE TODAY — migration 0008 seeds nothing, deliberately, and the
+  // onboarding step does not exist. So this is the ORDINARY answer at the moment, not an edge
+  // case, and it is FAILED_PRECONDITION:
+  //
+  //   the commune has no `sla` row at all;
+  //   the requested `work_kind` has no row, and none it could fall back to;
+  //   the requested `linh_vuc` has no row AND that `work_kind` has no default row either.
+  //
+  // THERE IS NO DEFAULT AND THERE MUST NEVER BE ONE, in this service or in a caller. Not "24
+  // hours", and not the sixteen rows of docs/ui-ux/14-cau-hinh.md §8 either: those came from ONE
+  // commune's prototype, and a commitment invented by software is still told to a citizen as
+  // though the authority made it (rule 10, forbidden #3). The refusal IS the answer, and the fix
+  // is a configuration screen, not a fallback.
+  //
+  // WHAT THE CALLER DOES WITH IT: FAIL THE INTAKE. Do not store the record without a deadline —
+  // transaction-boundaries.json `tinh_han_xu_ly_luc_tiep_nhan` states it in full, and the reason
+  // is that a row with no deadline is a commitment nobody counts while every on-time/overdue
+  // report counts it anyway.
+  //
+  // # `linh_vuc` IS A VALUE, AND A MISSPELLED ONE GETS THE DEFAULT ROW SILENTLY
+  //
+  // Field codes are a closed platform-level set owned by service `platform` (ADR 0026), so nothing
+  // here can tell an unknown code from a code this commune simply has no row for — and the
+  // documented fallback for the second is the default row (docs/ui-ux/14-cau-hinh.md:311, "Mặc
+  // định cho mọi lĩnh vực"). A caller sending `ve-sinh-moi-truongg` therefore gets the DEFAULT
+  // deadline and no error. THAT HOLE IS CLOSED AT THE WRITE PATH, NOT HERE — ADR 0029's own
+  // conclusion, and the specification already carries the defect as evidence (14-cau-hinh.md:308,
+  // an SLA row pointing at a code that no longer exists). Callers validate the field code before
+  // they get here; this RPC is not the place that check lives.
+  //
+  // # The commune travels in metadata, and this RPC is not a candidate for exemption
+  //
+  // ONE CALL, ONE COMMUNE. "x-tenant-id" names WHOSE deadlines and WHOSE calendar are read, and
+  // there is deliberately no field in the request that could name a second one. The caller always
+  // holds it: an intake runs behind an edge that has already resolved the commune. Putting this
+  // method on core/grpcx.methodsWithoutTenant is not even expressible — a commune's configuration
+  // read without naming a commune — and adding any name to that list is a stop condition in its
+  // own right (ADR 0012, decision 1).
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  every requested clock answered. There is no partial success — see
+  //                       ResolveDeadlinesResponse.
+  //   INVALID_ARGUMENT    the CALLER is wrong: `work_kind` unspecified, no `count_from`, an empty
+  //                       or over-length `deadlines`, or an unspecified entry in it.
+  //   FAILED_PRECONDITION the COMMUNE'S CONFIGURATION is missing or wrong — no usable `sla` row
+  //                       (above), or any of the four calendar faults AdvanceWorkingHours lists.
+  //                       An `sla` row carrying a non-positive or absurd number of hours lands
+  //                       here TOO, and NOT on INVALID_ARGUMENT: the number came from the
+  //                       commune's table, not from the caller, and an operator sent to fix the
+  //                       calling service would find nothing wrong with it.
+  //   NOT_FOUND           NEVER produced. A commune with no configuration is FAILED_PRECONDITION:
+  //                       the row is not "missing from a collection", the commune has not made a
+  //                       decision yet, and those go to different people.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor
+  //                       (ADR 0025) and means the DEPLOYMENT is misconfigured.
+  //   UNAVAILABLE etc.    the call did not happen, and it is NOT "no deadline". Fail the intake.
+  //
+  // # The obligations that travel with the answer
+  //
+  // CALL IT ONCE, AT THE ACT THAT FIXES THE CLOCK, AND STORE WHAT IT RETURNS (rule 10, invariant
+  // 2). The answer is a pure function of the arguments AND of the commune's configuration as it
+  // stands at that instant, so the same call next month may legitimately answer differently —
+  // ADR 0007 decision 6 fixes that a configuration change is NOT retroactive. Calling it again to
+  // "re-derive" a stored deadline silently moves a commitment already made to a citizen.
+  //
+  // OVERDUE IS STILL DERIVED. This returns instants, never a state: rule 10, invariant 3 forbids a
+  // field or a column that says "late", and there is none here.
+  //
+  // RETRYING A FAILED CALL IS SAFE: this RPC writes nothing, publishes nothing, and leaves no
+  // audit entry. The audited act is the INTAKE, written by the caller in its own transaction.
+  rpc ResolveDeadlines(ResolveDeadlinesRequest) returns (ResolveDeadlinesResponse);
 }
 
 message Staff {
@@ -957,4 +1110,185 @@ message WorkingHoursReached {
   // holidays may not be entered yet. That gap belongs to whoever operates the configuration
   // screen; it is named here so the next reader does not mistake the horizon for a guarantee.
   google.protobuf.Timestamp reached_at = 2;
+}
+
+// WorkKind is the kind of work one `sla` row applies to — THREE BUSINESS DOMAINS, not three
+// labels. `van-ban-den` is `documents`' work; `phan-anh` and `nhiem-vu` are `petitions`'. That
+// split is the whole reason the table belongs to neither of those services and lives in identity
+// (ADR 0029).
+//
+// A FOURTH VALUE IS A DECISION, NOT A DEPLOYMENT — ADR 0029, stop condition #1. Adding one here
+// adds a business domain to a commune's commitment table, and whoever needs it asks the user
+// first.
+//
+// THE VALUES STAY IN VIETNAMESE, following `CitizenCommune.Capacity` above and ADR 0011's rule
+// for enum VALUES. They are the exact strings `sla.loai_viec` stores, spelled as the CHECK
+// constraint admits them (migration 0008, `sla_loai_viec_hop_le`), and as
+// service-identity/internal/domain.LoaiViec holds them. One vocabulary from the column to the
+// contract: an English name here would be a second spelling of one value, and a lookup keyed on
+// the wrong spelling finds no row — which this contract answers as "the commune has not
+// configured it", the one wrong answer that looks exactly like a right one.
+enum WorkKind {
+  WORK_KIND_UNSPECIFIED = 0;
+
+  WORK_KIND_VAN_BAN_DEN = 1; // sổ văn bản đến — service-documents
+  WORK_KIND_PHAN_ANH = 2;    // phản ánh của công dân — service-petitions
+  WORK_KIND_NHIEM_VU = 3;    // nhiệm vụ — service-petitions
+}
+
+// DeadlineKind names WHICH of a record's two clocks is being asked for.
+//
+// TWO CLOCKS, TWO SEPARATE ACTS THAT FIX THEM (ADR 0028, decision E), and the names are the names
+// of the two columns they are stored in — `han_tiep_nhan` and `han_xu_ly_xong`
+// (kb/00-foundation/ubiquitous-language.md). Vietnamese values for the reason WorkKind gives, and
+// with a second reason of its own: the caller's job is to put this answer in the column of the
+// same name, and two names for one column is where the two get swapped.
+//
+// SWAPPING THE TWO PRODUCES NO ERROR ANYWHERE. Both are instants, both are plausible, and the
+// only difference is which commitment the authority made. That is why they are an enum and not a
+// pair of positional fields.
+//
+// THERE IS NO THIRD VALUE, AND THREE CANDIDATES WERE REFUSED RATHER THAN OVERLOOKED. `sla` also
+// holds `gio_sap_den_han`, `gio_bao_lanh_dao` and `gio_bao_chu_tich`:
+//
+//   `gio_sap_den_han` is a count of working hours REMAINING BEFORE the deadline, so producing it
+//   means walking the calendar BACKWARD from an instant — arithmetic that does not exist in this
+//   service and that nothing has specified. Reusing the forward walk would silently answer a
+//   different question.
+//
+//   `gio_bao_lanh_dao` and `gio_bao_chu_tich` HAVE NO AGREED ANCHOR. The specification says it two
+//   ways at once — §8 heads the columns "sau 24 giờ" without saying after what, while §9's
+//   escalation job counts from the deadline being missed and DOUBLES the figure instead of reading
+//   the second column. Nothing may compute an escalation from them until somebody answers "after
+//   what", because a commune's leadership would be notified on a basis nobody chose and the
+//   message would not say which.
+enum DeadlineKind {
+  DEADLINE_KIND_UNSPECIFIED = 0;
+
+  // `han_tiep_nhan` — the deadline for a member of staff to READ the record. Fixed when the row
+  // is created, from `sla.gio_tiep_nhan`.
+  DEADLINE_KIND_TIEP_NHAN = 1;
+
+  // `han_xu_ly_xong` — the deadline for the matter to be SETTLED. Fixed at the act that settles
+  // which field the record belongs to, from `sla.gio_xu_ly_xong` of that field (ADR 0028).
+  DEADLINE_KIND_XU_LY_XONG = 2;
+}
+
+message ResolveDeadlinesRequest {
+  // Which kind of work this record is. UNSPECIFIED is INVALID_ARGUMENT — there is no default kind
+  // of work, and guessing one would read another domain's numbers.
+  WorkKind work_kind = 1;
+
+  // The field code this record belongs to, "" FOR THE DEFAULT ROW.
+  //
+  // "" IS A REAL REQUEST AND THE ORDINARY ONE ON THE CITIZEN CHANNEL: at the instant a citizen's
+  // petition is created nobody knows the field yet, so ADR 0028 decision E reads `gio_tiep_nhan`
+  // from the DEFAULT row. The schema refuses the empty string in the column outright
+  // (`sla_linh_vuc_khong_rong`), so "" can only ever mean the default row and never a field whose
+  // code is blank.
+  //
+  // A NON-EMPTY CODE FALLS BACK TO THE DEFAULT ROW when this commune has no row for it. That
+  // fallback is the SPECIFICATION's, not this RPC's — `linh_vuc = null` is labelled "Mặc định cho
+  // mọi lĩnh vực" — and without it a commune would have to type a row per field before one
+  // deadline could be computed. The cost is on the RPC comment: a misspelled code is
+  // indistinguishable from an unconfigured one, and the check belongs to the write path.
+  //
+  // THE SPELLING IS THE COLUMN'S. `linh_vuc` is not translated because no English name for it
+  // exists in kb/00-foundation/ubiquitous-language.md, and ADR 0011 forbids inventing one here.
+  // The value is a platform-level code (ADR 0026) and must reach `sla.linh_vuc` byte for byte.
+  string linh_vuc = 2;
+
+  // The instant both clocks count FROM. AN INSTANT, not a local wall-clock time.
+  //
+  // ONE START FOR BOTH CLOCKS, and that is ADR 0028 decision E, note 1: what differs between the
+  // two is WHEN EACH IS FIXED, never where it starts counting. A petition classified three days
+  // after it was sent still counts its `han_xu_ly_xong` from the moment the citizen pressed send —
+  // the waiting is SUBTRACTED from the processing time, deliberately. A caller passing "now" at
+  // classification time would hand the commune back the days it spent not classifying.
+  //
+  // UNSET IS INVALID_ARGUMENT. There is no "count from now" default, for the reason
+  // AdvanceWorkingHoursRequest.count_from gives at length: a default makes the commitment depend
+  // on when the call happened to be made rather than on when the authority received the file.
+  //
+  // NOT COMPARED WITH `now`, on purpose. A document that arrived yesterday and is registered today
+  // counts from yesterday. The bounds that DO apply to a hand-entered instant are the caller's —
+  // ADR 0028 decision F caps it at 7 days before the record is booked, and that is a rule about a
+  // form field in `petitions`, not about this arithmetic.
+  google.protobuf.Timestamp count_from = 3;
+
+  // Which clocks this call is fixing. REQUIRED — an empty list is INVALID_ARGUMENT.
+  //
+  // THERE IS NO "ALL OF THEM" DEFAULT, and the RPC comment gives the full argument: always
+  // returning both would hand a citizen-channel intake a `han_xu_ly_xong` computed from the
+  // default row, rebuilding the ceiling ADR 0028 removed.
+  //
+  // AT MOST 2 ENTRIES, checked on what the caller SENT and before duplicates are collapsed — the
+  // same discipline as BatchGetStaffRequest.ids, and here the ceiling is not a headroom estimate
+  // but the number of values that exist. A third entry cannot be anything legitimate.
+  //
+  // DUPLICATES ARE COLLAPSED and the order carries no meaning. Map the response by `kind`, never
+  // by position.
+  //
+  // AN UNSPECIFIED ENTRY IS INVALID_ARGUMENT, never skipped. Skipping it would return fewer items
+  // than asked for, which this contract defines as a fault — so the caller would see a contract
+  // error where the real fault was its own zero value.
+  repeated DeadlineKind deadlines = 4;
+}
+
+// Wrapped, not a bare repeated Deadline: adding a field later must not change the RPC signature.
+message ResolveDeadlinesResponse {
+  // ONE ITEM PER DISTINCT `deadlines` ENTRY REQUESTED — ALL OF THEM, OR THE CALL FAILS.
+  //
+  // THERE IS NO PARTIAL SUCCESS, the same discipline AdvanceWorkingHoursResponse states and for a
+  // sharper reason: both clocks of one call are read from ONE commune's table against ONE
+  // commune's calendar, so anything that stops one stops both. A response carrying one of two
+  // would let a record be stored with one commitment attached and the other silently absent —
+  // and an absent instant reaches a caller as a zero `time.Time`, i.e. a deadline in year 1, i.e.
+  // a record that is overdue the moment it is created.
+  //
+  // MAP BY `kind`, NOT BY POSITION. Duplicates in the request are collapsed, so len(items) can be
+  // smaller than len(deadlines) and an index is never a key.
+  repeated Deadline items = 1;
+}
+
+// One clock of one record, and the instant it falls due.
+//
+// NAMED `Deadline` AND NOT `ProcessingDeadline` ON PURPOSE. `ProcessingDeadline` is already taken:
+// it is the entity name of an `sla` ROW — a commune's configured number of hours
+// (service-identity/migrations/0008_sla.sql, `-- @entity: ProcessingDeadline`,
+// kb/30-indexes/data-ownership.json). This message is the OTHER thing: one instant computed from
+// such a row for one record. Two meanings behind one name is how a later reader comes to think
+// this message is the configuration.
+message Deadline {
+  // Echoed from the request. It is the KEY the caller maps by — never a position — and it is what
+  // tells the caller WHICH COLUMN to store `due_at` in.
+  DeadlineKind kind = 1;
+
+  // The instant this commitment falls due: the EARLIEST instant at which this commune has been
+  // open for the configured number of working hours since `count_from`.
+  //
+  // AN INSTANT, which is exactly the `TIMESTAMPTZ` the caller stores (ADR 0007, decision 1). The
+  // caller stores this value AS GIVEN: it does not re-render it through a zone of its own, does
+  // not round it, and does not adjust it. Every zone question was settled inside the server, which
+  // combines the commune's wall-clock calendar with a date in Asia/Ho_Chi_Minh — see the note on
+  // `WorkingHoursReached.reached_at`. No offset is ever attached on this boundary.
+  //
+  // NEVER UNSET IN AN OK RESPONSE. An item with no `due_at` is a contract fault, not "no deadline
+  // applies": the absence of a deadline is expressed by the call FAILING, never by an empty field
+  // a caller could store as a zero instant.
+  google.protobuf.Timestamp due_at = 2;
+
+  // THERE IS NO `working_hours` FIELD, AND ITS ABSENCE IS A DECISION.
+  //
+  // A real consumer is coming: ADR 0028 §(a) has the Mini App telling a citizen "sẽ được xem
+  // trong N giờ làm việc", and N cannot be recovered from an instant without the calendar. It is
+  // NOT here because nothing reads it today, and a contract records what exists rather than what
+  // is planned (ADR 0021) — the same reason `StaffPrincipal` carries no `ma`. Adding a field later
+  // is additive and costs nothing; removing one costs a permanent `reserved`.
+  //
+  // WHOEVER ADDS IT STATES WHICH SCREEN READS IT, and carries this warning with it: the figure is
+  // for DISPLAY. It is a count of WORKING hours, and adding it to anything — `count_from`, `now`,
+  // a `time.Duration` — walks straight through nights, weekends, `ngay_nghi_le` and `ngay_lam_bu`
+  // while looking like it respected the unit. That is rule 10, forbidden #2, and it is the exact
+  // shape this whole RPC exists to make unnecessary.
 }

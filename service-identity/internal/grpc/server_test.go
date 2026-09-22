@@ -123,7 +123,13 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		Lich:   &lichGia{cas: tuanGia()},
 		NghiLe: &nghiLeGia{},
 		LamBu:  &lamBuGia{},
-		Log:    slog.New(slog.NewTextHandler(nhatKy, nil)),
+		// The commune's deadline table. THE DEFAULT IS AN EMPTY TABLE, DELIBERATELY: that is the
+		// real state of every commune today (migration 0008 seeds nothing), so a test about
+		// ResolveDeadlines has to say out loud what it configured. A default holding plausible rows
+		// would make "the commune has configured nothing" the one state no test ever entered —
+		// which is the state that is live in production right now. Its fakes live in sla_test.go.
+		SLA: &slaGia{},
+		Log: slog.New(slog.NewTextHandler(nhatKy, nil)),
 	}
 	if sua != nil {
 		sua(&d)
@@ -534,6 +540,7 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 			Lich:         &lichGia{},
 			NghiLe:       &nghiLeGia{},
 			LamBu:        &lamBuGia{},
+			SLA:          &slaGia{},
 			Log:          slog.New(slog.NewTextHandler(io.Discard, nil)),
 		}
 	}
@@ -554,6 +561,10 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		// show it.
 		"thiếu ngày nghỉ lễ": func(d *Deps) { d.NghiLe = nil },
 		"thiếu ngày làm bù":  func(d *Deps) { d.LamBu = nil },
+		// Missing it is not "one RPC unavailable" either: `sla` is the OTHER half of the three
+		// tables above, and without it every write route of `petitions` and the deadline path of
+		// `documents` has nothing to compute a commitment from (ADR 0029 §Hệ quả ngay).
+		"thiếu kho thời hạn xử lý": func(d *Deps) { d.SLA = nil },
 	}
 	for ten, sua := range ca {
 		t.Run(ten, func(t *testing.T) {
