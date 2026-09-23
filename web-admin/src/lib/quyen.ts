@@ -185,6 +185,30 @@ export const QUYEN_CHUYEN_VAN_BAN = "document.route";
  */
 
 /**
+ * Khoá quyền XEM sổ nhiệm vụ — `task.read`, "Xem nhiệm vụ"
+ * (`service-identity/migrations/0001_init.sql:304`).
+ *
+ * MỘT HẰNG CHO MỘT KHOÁ ĐỌC — VÀ ĐIỀU ẤY KHÔNG MÂU THUẪN VỚI KHỐI `document.read` NGAY TRÊN.
+ * Khối ấy từ chối dựng cổng trong THÂN MÀN. Hằng này không dùng cho thân màn: `/nhiem-vu` và
+ * `/nhiem-vu/bien-ban` đều KHÔNG có `<CongQuyen>`, tài khoản thiếu khoá vẫn nhận 403 nguyên văn
+ * từ máy chủ, đúng khuôn `/van-ban`. Nó chỉ quyết định MỤC MENU có hiện hay không.
+ *
+ * VÌ SAO MỤC MENU CẦN MỘT KHOÁ, VÀ VÌ SAO PHẢI LÀ ĐÚNG KHOÁ NÀY: `muc-menu.ts` đã từ chối vẽ
+ * chín mục chưa có màn thành liên kết, vì "vẽ ra thứ không bấm được là hứa một chức năng không
+ * tồn tại". Một mục menu dẫn thẳng vào 403 là cùng lời hứa ấy. Nhưng khoá canh mục menu phải là
+ * ĐÚNG khoá tuyến đọc khai, không phải một khoá gần đúng: mục `Văn bản & Đơn thư` đang canh bằng
+ * `document.route` — một khoá GHI — nên cán bộ chỉ có `document.read` không thấy nổi quyển sổ mà
+ * máy chủ sẵn sàng trả cho họ. Đó đúng là kiểu lệch khối trên cảnh báo, và lấy `task.create` canh
+ * mục Nhiệm vụ sẽ chép lại nó.
+ *
+ * SÁU KHOÁ `task.*` CÒN LẠI CỐ Ý KHÔNG CÓ HẰNG: `task.create` · `update` · `approve` · `extend`
+ * · `delete` · `assign` đều có thật trong bảng `quyen` (`0001_init.sql:299-305`) và tuyến đã
+ * khai, nhưng hôm nay không chỗ nào ở client canh chúng. Một hằng không ai dùng là một hằng
+ * không ai thấy khi nó sai — thêm nó vào lúc lắp cổng thật, không phải trước.
+ */
+export const QUYEN_XEM_NHIEM_VU = "task.read";
+
+/**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
  *
  * TỪNG NẰM RIÊNG TRONG `features/cau-hinh/quyen-tab.ts` VÀ NAY Ở ĐÂY, vì nó có người dùng thứ

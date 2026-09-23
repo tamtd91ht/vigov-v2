@@ -236,7 +236,7 @@ export function SoNhiemVu() {
   }
 
   return (
-    <section aria-labelledby="tieu-de-so-nhiem-vu">
+    <section className="man-nhiem-vu" aria-labelledby="tieu-de-so-nhiem-vu">
       <h2 id="tieu-de-so-nhiem-vu">Sổ nhiệm vụ của xã</h2>
 
       <KhoiChuaDung />

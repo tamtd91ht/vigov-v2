@@ -4,6 +4,7 @@ import {
   QUYEN_QUAN_LY_DANH_MUC,
   QUYEN_QUAN_LY_NGUOI_DUNG,
   QUYEN_XEM_GIAI_NGAN,
+  QUYEN_XEM_NHIEM_VU,
   QUYEN_XEM_PHAN_ANH,
 } from "@/lib/quyen";
 
@@ -56,9 +57,9 @@ export const NHOM_MENU: readonly NhomMenu[] = [
     ten: "ĐIỀU HÀNH",
     muc: [
       { nhan: "Tổng quan", duong: null, khoa: null },
-      { nhan: "Nhiệm vụ", duong: null, khoa: null },
+      { nhan: "Nhiệm vụ", duong: "/nhiem-vu", khoa: QUYEN_XEM_NHIEM_VU },
       { nhan: "Sổ tay lãnh đạo", duong: null, khoa: null },
-      { nhan: "Biên bản họp", duong: null, khoa: null },
+      { nhan: "Biên bản họp", duong: "/nhiem-vu/bien-ban", khoa: QUYEN_XEM_NHIEM_VU },
       { nhan: "Văn bản & Đơn thư", duong: "/van-ban", khoa: QUYEN_CHUYEN_VAN_BAN },
       { nhan: "Giải ngân", duong: "/giai-ngan", khoa: QUYEN_XEM_GIAI_NGAN },
       { nhan: "Thu - Chi ngân sách", duong: "/giai-ngan/thu-chi", khoa: QUYEN_XEM_GIAI_NGAN },
