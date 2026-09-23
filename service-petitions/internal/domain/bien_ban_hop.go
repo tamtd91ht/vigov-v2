@@ -48,6 +48,21 @@ type BienBanHop struct {
 	// 8). §5 models it as a uuid; the rule wins, and 0007 states why.
 	ChuTriMa string
 
+	// NoiDung is §4's "Nội dung biên bản" — the minutes IN FULL — and ThanhPhan is its "Thành phần
+	// tham dự", staff codes and/or free text.
+	//
+	// ⚠ NEITHER IS POPULATED BY THE REGISTER LIST. `GET /api/v1/meetings` does not select them and
+	// the card of §2 does not draw them, so an empty value here means "this read did not ask for it",
+	// NOT "this meeting has none". They exist on this struct because the WRITE path carries them;
+	// reading them back needs the detail route, which does not exist yet.
+	//
+	// ⚠ ThanhPhan IS A LIST OF STAFF. Migration 0007 says so on the column: the day somebody writes a
+	// reporter's name and number into it, this table has become a personal-data store (rule 3). And
+	// NoiDung is free text a clerk typed which routinely quotes a case — it may not travel into a log
+	// line, an error message or a file name (rule 3, forbidden #1 and #4).
+	NoiDung   string
+	ThanhPhan []string
+
 	NguoiTaoMa string
 	TaoLuc     time.Time
 

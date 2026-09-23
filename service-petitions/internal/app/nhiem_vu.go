@@ -470,10 +470,16 @@ func (uc *GhiNhiemVu) Tao(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.
 		// to — the deadline above all, since that is the figure §11.3 measures against for ever.
 		delta, err := json.Marshal(map[string]any{
 			"sau": map[string]any{
-				"ma":                    moi.Ma,
-				"loai":                  moi.Loai,
-				"trang_thai":            string(moi.TrangThai),
-				"nguon_giao":            string(moi.NguonGiao),
+				"ma":         moi.Ma,
+				"loai":       moi.Loai,
+				"trang_thai": string(moi.TrangThai),
+				"nguon_giao": string(moi.NguonGiao),
+				// THE RECORD THE WORK CAME FROM, and it is here because a task can now be born from a
+				// MEETING CONCLUSION (§3 of chapter 04). `nguon_giao` alone says "from a meeting
+				// conclusion"; without `nguon_id` the entry cannot say WHICH, and that link is the whole
+				// reason the split route exists ("giữ liên kết ngược về kết luận gốc để truy vết được về
+				// sau"). It is EMPTY for a directly-assigned task, which is most of them.
+				"nguon_id":              moi.NguonID,
 				"han_xu_ly":             lucRaVet(moi.HanXuLy),
 				"han_ban_dau":           lucRaVet(moi.HanXuLy),
 				"lanh_dao_giao_viec_ma": moi.LanhDaoGiaoViecMa,

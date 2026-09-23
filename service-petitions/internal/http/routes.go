@@ -173,6 +173,32 @@ type (
 		DanhSach(ctx context.Context, yc page.Request) (page.Result[domain.BienBanHop], error)
 	}
 
+	// GhiBienBanUseCase is the three STAFF acts on the meeting register (§3, §4): record the
+	// minutes, append a conclusion, split a conclusion into a task.
+	//
+	// ONE INTERFACE FOR THE THREE, for the reason GhiNhiemVuUseCase gives: they are three acts on
+	// ONE record, they share the ordinal rule and the lock it is read under, and splitting them
+	// would be three wiring lines that can disagree about which use case instance — and therefore
+	// which transaction boundary — is in play.
+	//
+	// ⚠ THE THIRD METHOD RETURNS A TASK AND NOT A CONCLUSION, and that asymmetry IS the flow: the
+	// split does not write into this register at all. It resolves the conclusion and hands the work
+	// to the task register's own create use case, so everything a task is — the minted number, the
+	// cycle check, the deadline fixed once, the timeline row, the audit entry in one transaction —
+	// stays in one place (app.TachKetLuanThanhNhiemVu).
+	//
+	// ⚠ IT TAKES app.YeuCauTaoNhiemVu WITH NO `nguon_giao` / `nguon_id` SUPPLIED BY THE HANDLER.
+	// The pair is set from the conclusion named in the PATH, which is what makes §3's locked "Nguồn
+	// giao" field a property of the server rather than a field somebody has to remember to check.
+	GhiBienBanUseCase interface {
+		TaoBienBan(ctx context.Context, yc app.YeuCauTaoBienBan, nguoi audit.Actor) (
+			domain.BienBanHop, error)
+		ThemKetLuan(ctx context.Context, bienBanID string, yc app.YeuCauThemKetLuan,
+			nguoi audit.Actor) (domain.KetLuanHop, error)
+		TachKetLuanThanhNhiemVu(ctx context.Context, bienBanID string, thuTu int,
+			yc app.YeuCauTaoNhiemVu, nguoi audit.Actor) (domain.NhiemVu, error)
+	}
+
 	// XuLyPhieuPhanAnh is the four STAFF acts, each of which opens a transaction and writes the
 	// business change, the audit entry and the notification obligation inside it (rule 6, invariant
 	// 3; rule 10, invariant 5).
@@ -293,6 +319,13 @@ type Deps struct {
 	// to it through `nguon_giao`/`nguon_id`, which is why both registers live in this service.
 	DanhSachBienBan BienBanDanhSach
 
+	// The THREE WRITE acts on the meeting register. A SEPARATE field from the read one, and for the
+	// reason every pair above states: a read is a store call, while recording minutes opens a
+	// TRANSACTION and writes an audit entry inside it. Behind one interface a future caller would
+	// reach for whichever method was nearest — and could end up writing the row outside a
+	// transaction, the exact defect core/audit was shaped to prevent.
+	GhiBienBan GhiBienBanUseCase
+
 	// Vet writes the trail for a full-view read. Required, not optional — see the panic switch.
 	Vet VetXemNguoiGui
 
@@ -350,6 +383,11 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu use case ghi nhiệm vụ — sáu tuyến giao việc/sửa/chuyển trạng thái/xoá/lùi hạn sẽ panic khi có người gọi")
 	case d.DanhSachBienBan == nil:
 		panic("petitions/http: thiếu đường đọc danh sách biên bản họp — GET /api/v1/meetings sẽ panic khi có người gọi")
+	case d.GhiBienBan == nil:
+		// THE THREE WRITE ROUTES AT ONCE. A nil here leaves the meeting register readable and
+		// unfillable — and with it §3, the ONE path by which a conclusion becomes a task and keeps a
+		// back-link to where it came from.
+		panic("petitions/http: thiếu use case ghi biên bản họp — ba tuyến nhập biên bản/thêm kết luận/tách nhiệm vụ sẽ panic khi có người gọi")
 	case d.Vet == nil:
 		// THE MOST DANGEROUS OF THE FIVE TO LEAVE OUT, because a nil here does not crash a screen:
 		// it crashes the ONE path that discloses a citizen's name and number, and only when
@@ -943,7 +981,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("câu UPDATE mang `trang_thai = 'cho-duyet'`, nên lần gửi thứ hai không khớp dòng nào — đúng một đề nghị, đúng một quyết định, đúng một vết")(
 				http.HandlerFunc(h.QuyetDinhLuiHanNhiemVu))))
 
-	// --- MEETING MINUTES AND THEIR CONCLUSIONS. ONE READ ROUTE, AND NO WRITE ROUTE --------------
+	// --- MEETING MINUTES AND THEIR CONCLUSIONS. ONE READ ROUTE AND THREE WRITE ROUTES -----------
 	//
 	// `meetings` IS NOT FROM kb/00-foundation/ubiquitous-language.md — that table has no row for
 	// `bien_ban_hop` — and it is not translated on the spot either (ADR 0011 forbids both). It is
@@ -952,20 +990,26 @@ func Register(mux *http.ServeMux, d Deps) {
 	// 2026-09-23. The missing row is REPORTED as a finding for the session that owns that file,
 	// never written from a route. The full reasoning is on internal/http/bien_ban_hop.go.
 	//
-	// `task.read`, THE SAME KEY AS THE TASK REGISTER, and no `meeting.*` key is invented: the
-	// `quyen` table has none (service-identity/migrations/0001_init.sql:273-305) and a key no
-	// migration seeds is a right no administrator can grant — 403 to every account, forever, with
-	// the tests still green (rule 5, invariant 3c). Everything this screen shows is either the
-	// origin of a task or a count of tasks. Whether a commune wants the two rights separated is a
-	// question for the customer (#27), not for this file.
+	// `task.read` ON THE READ AND `task.create` ON THE THREE WRITES, and no `meeting.*` key is
+	// invented: the `quyen` table has none (service-identity/migrations/0001_init.sql:273-305) and a
+	// key no migration seeds is a right no administrator can grant — 403 to every account, forever,
+	// with the tests still green (rule 5, invariant 3c). Everything this screen shows is either the
+	// origin of a task or a count of tasks. Whether a commune wants "may record minutes" separated
+	// from "may create tasks" is a question for the CUSTOMER — open question #27, whose `ask_before`
+	// list names exactly this case — and it is reported as a finding. The full reasoning, including
+	// what the shared key costs and why `document.create` would be worse, is on
+	// internal/http/bien_ban_hop_ghi.go.
 	//
-	// WHY THE WRITE ROUTES OF §3 AND §4 ARE ABSENT: recording minutes and adding a conclusion are
-	// the next pass; SPLITTING A CONCLUSION INTO A TASK is blocked on what blocks POST
-	// /api/v1/tasks — creating a task fixes a deadline counted in WORKING HOURS and identity
-	// publishes no contract that returns them (ADR 0029 §118) — which §3 makes sharper, not softer,
-	// by asking for the date to be guessed out of the sentence ("báo cáo trước ngày 20/8"). And
-	// EDITING a conclusion that tasks already point at is an open question this pass refused to
-	// answer in a trigger (migration 0007).
+	// WHAT IS STILL ABSENT, so the absence is not read as unfinished work: there is NO EDIT and NO
+	// DELETE route for minutes or conclusions. Whether a conclusion that tasks already point at may
+	// be reworded is an open question migration 0007 deliberately refused to answer in a trigger,
+	// and §7.1's removal is "không xoá cứng, cảnh báo và giữ liên kết" — a warning flow, not an
+	// UPDATE. Answering either from a route would be deciding it.
+	//
+	// ⚠ THE DEADLINE ON A SPLIT TASK IS TYPED, NOT DERIVED. §3 suggests a date when the conclusion's
+	// sentence contains one ("báo cáo trước ngày 20/8") — that suggestion is the SCREEN's, and what
+	// reaches `han_xu_ly` is whatever the person confirmed. Nothing on this path performs
+	// working-hours arithmetic; that has one implementation, in identity (rule 10, forbidden #2).
 
 	// @summary  Danh sách biên bản họp của xã — mỗi biên bản kèm các kết luận và bộ đếm nhiệm vụ đã tách / đã xong
 	// @screen   04-bien-ban-hop §2, §5
@@ -984,6 +1028,97 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/meetings",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DanhSachBienBan)))
+
+	// NHẬP BIÊN BẢN (§4) — `task.create`, seeded at 0001_init.sql:301 ("Tạo nhiệm vụ").
+	//
+	// idem.Required(MoKhiHong), AND WHICH LAYER IS ACTUALLY PROTECTING THIS — the question
+	// skills/rest-api-design §4 says to answer at the route. THE HONEST ANSWER HERE IS: ONLY THE
+	// IDEMPOTENCY KEY. Unlike POST /api/v1/tasks there is no unique key underneath — migration 0007
+	// refuses one on `so_hieu`, which is typed by hand, optional, and restarts every year — so a
+	// double-submitted form produces two meeting cards and nothing in the database objects.
+	//
+	// MoKhiHong AND NOT DongKhiHong, with the residual risk stated rather than glossed: recording
+	// minutes is an INTAKE path, not one of the acts with legal consequence the skill reserves
+	// DongKhiHong for (money, an issued document number, closing a commitment to a citizen). While
+	// the cache is down a double submit leaves a duplicate card — visible, and one somebody must
+	// live with until §6's delete route exists, because rule 7 forbids removing it with a command.
+	// Refusing the whole register mid-morning would be the larger harm.
+	//
+	// @summary  Nhập một biên bản họp, kèm các kết luận đã gõ trên biểu mẫu — kết luận đánh số ① ② ③ theo thứ tự nhập
+	// @screen   04-bien-ban-hop §4
+	// @request  taoBienBanVao
+	// @reply    201 bienBanRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/meetings",
+		authz.RequirePermission(d.Checker, "task.create")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.TaoBienBan))))
+
+	// THÊM MỘT KẾT LUẬN (§2's last row) — `task.create`.
+	//
+	// idem.Required(MoKhiHong) FOR THE SAME REASON AND WITH THE SAME GAP: the unique key
+	// `(tenant_id, bien_ban_id, thu_tu)` does NOT protect this route, because the second request
+	// mints the NEXT ordinal rather than colliding with the first. Two identical conclusions, ③ and
+	// ④, are both perfectly valid to the database — which is exactly the shape an idempotency key
+	// exists for.
+	//
+	// 404 COVERS THE MINUTES NOT EXISTING, another commune's minutes, and minutes that have been
+	// removed. Telling them apart tells a caller which minutes exist in a register they are not
+	// reading.
+	//
+	// @summary  Thêm một kết luận vào biên bản đã có — số thứ tự nối tiếp số ĐÃ CẤP, kể cả khi kết luận mang số đó đã bị xoá
+	// @screen   04-bien-ban-hop §2, §7.2
+	// @request  themKetLuanVao
+	// @reply    201 ketLuanRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/meetings/{id}/conclusions",
+		authz.RequirePermission(d.Checker, "task.create")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.ThemKetLuan))))
+
+	// TÁCH KẾT LUẬN THÀNH NHIỆM VỤ (§3) — `task.create`, the same key POST /api/v1/tasks declares,
+	// because this IS that act: it runs the same use case and mints from the same `NV…` series.
+	//
+	// ⚠ THE BODY IS THE FULL TASK FORM AND THE SERVER DERIVES NOTHING FROM THE CONCLUSION'S
+	// SENTENCE. §3 pre-fills the "Giao việc mới" modal and waits for a person to confirm it; the
+	// sibling implementation measured what guessing costs — right three times out of four, and the
+	// fourth leaves a wrongly titled task in a register that cannot be deleted, only withdrawn.
+	//
+	// ⚠ `source` / `source_id` ARE NOT ON THE WIRE. §3 shows "Nguồn giao = Từ kết luận họp" as
+	// locked, and here that is the pair being ABSENT from the request rather than validated on it:
+	// the use case sets both from the conclusion named in the PATH, so there is no value a client
+	// could send to point a task at a record of its choosing.
+	//
+	// idem.Required(MoKhiHong), the same declaration POST /api/v1/tasks carries and for the same
+	// reason: `UNIQUE (tenant_id, ma)` cannot see anything wrong with two tasks minted under two
+	// DIFFERENT numbers for one piece of work, and §3 permits a conclusion to be split many times —
+	// so a duplicate is indistinguishable from an intended second split without the key.
+	//
+	// 409 COVERS TWO DIFFERENT THINGS, exactly as on POST /api/v1/tasks: `code_taken` and
+	// `task_tree`. They are mapped by the task register's own function, so one act answers one way
+	// whichever door it came through.
+	//
+	// @summary  Tách một kết luận họp thành một nhiệm vụ — nhiệm vụ giữ liên kết ngược về kết luận gốc qua cặp nguồn giao
+	// @screen   04-bien-ban-hop §3
+	// @request  tachKetLuanVao
+	// @reply    201 nhiemVuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/meetings/{id}/conclusions/{stt}/task",
+		authz.RequirePermission(d.Checker, "task.create")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.TachKetLuanThanhNhiemVu))))
 
 	// --- the commune adds a task type of its own -------------------------------------------
 	//

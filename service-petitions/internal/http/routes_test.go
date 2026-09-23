@@ -212,6 +212,7 @@ type mayChu struct {
 	nhiemVu    *nhiemVuGia
 	ghiNhiemVu *ghiNhiemVuGia
 	bienBan    *bienBanGia
+	ghiBienBan *ghiBienBanGia
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -240,6 +241,10 @@ func dungMayChu(t *testing.T) *mayChu {
 	// from nhiemVuMau() would be asserting that two fakes agree with each other rather than that the
 	// route renders what the store returned.
 	bienBan := bienBanMau()
+	// The THREE meeting-register write acts. A SEPARATE fake from the read one, exactly as the Deps
+	// field is separate: a read is a store call and each of these opens a transaction, so one object
+	// answering both would let a test prove a write route "worked" by reading.
+	ghiBienBan := &ghiBienBanGia{}
 
 	m := &mayChu{
 		d: Deps{
@@ -275,6 +280,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			DanhSachNhiemVu: nhiemVu,
 			GhiNhiemVu:      ghiNhiemVu,
 			DanhSachBienBan: bienBan,
+			GhiBienBan:      ghiBienBan,
 			Log:             slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		thuMuc:     thuMucMau(),
@@ -288,6 +294,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		nhiemVu:    nhiemVu,
 		ghiNhiemVu: ghiNhiemVu,
 		bienBan:    bienBan,
+		ghiBienBan: ghiBienBan,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -374,6 +381,7 @@ func depsDay() Deps {
 		DanhSachNhiemVu: nhiemVuMau(),
 		GhiNhiemVu:      &ghiNhiemVuGia{},
 		DanhSachBienBan: bienBanMau(),
+		GhiBienBan:      &ghiBienBanGia{},
 	}
 }
 
@@ -409,6 +417,10 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// The meeting register. A nil here is the Biên bản họp screen, and with it the only place a
 		// commune can see WHERE its tasks came from.
 		"thiếu đường đọc danh sách biên bản": func(d *Deps) { d.DanhSachBienBan = nil },
+		// The three meeting-register writes. A nil here leaves the register readable and unfillable —
+		// and with it §3, the ONE path by which a conclusion becomes a task and keeps a back-link to
+		// where it came from.
+		"thiếu use case ghi biên bản": func(d *Deps) { d.GhiBienBan = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {

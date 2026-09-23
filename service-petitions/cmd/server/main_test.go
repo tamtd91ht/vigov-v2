@@ -309,7 +309,11 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// nil handle. Its own four-case suite lives in internal/http/nhiem_vu_ghi_test.go.
 		GhiNhiemVu:      app.NewGhiNhiemVu(nil, nil, nil),
 		DanhSachBienBan: khoBienBan{},
-		Log:             log,
+		// The three meeting-register WRITE acts, on a nil *store.DB for the same reason: never
+		// invoked here, and Register refuses a nil dependency at construction. Its own four-case
+		// suite lives in internal/http/bien_ban_hop_ghi_test.go.
+		GhiBienBan: app.NewGhiBienBanHop(nil, nil, nil),
+		Log:        log,
 	})
 
 	// THE CITIZEN SURFACE, REGISTERED THE WAY main() REGISTERS IT — its own mux, its own Deps.

@@ -31,13 +31,15 @@ package http
 // QUESTION FOR THE CUSTOMER (open question #27), not for this file. Splitting it later is a seeded
 // key plus one literal here.
 //
-// # THERE IS NO WRITE ROUTE IN THIS FILE, AND THAT IS THIS PASS'S BOUNDARY
+// # THE WRITE ROUTES ARE IN internal/http/bien_ban_hop_ghi.go
 //
-// Recording minutes, adding a conclusion and SPLITTING A CONCLUSION INTO A TASK (§3) are the next
-// pass. The third one is additionally blocked on what already blocks POST /api/v1/tasks — creating
-// a task FIXES a deadline counted in working hours and identity publishes no contract that returns
-// them (ADR 0029 §118) — and §3 makes that sharper rather than softer, because it wants the deadline
-// GUESSED from a date inside the sentence ("báo cáo trước ngày 20/8").
+// Recording minutes (§4), appending a conclusion and SPLITTING A CONCLUSION INTO A TASK (§3) live
+// next door, under `task.create`. The third one does not derive a deadline out of "báo cáo trước
+// ngày 20/8": §3's suggestion is the SCREEN's, the person confirms a date, and working-hours
+// arithmetic keeps its single implementation in identity (rule 10, forbidden #2; ADR 0007).
+//
+// WHAT IS STILL ABSENT: no detail route, no edit, no delete. Whether a conclusion that tasks already
+// point at may be reworded is an open question migration 0007 deliberately refused to answer.
 
 import (
 	"net/http"

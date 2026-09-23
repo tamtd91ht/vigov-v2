@@ -175,6 +175,7 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		DanhSachNhiemVu: nhiemVuMau(),
 		GhiNhiemVu:      &ghiNhiemVuGia{},
 		DanhSachBienBan: bienBanMau(),
+		GhiBienBan:      &ghiBienBanGia{},
 		Log:             im,
 	})
 

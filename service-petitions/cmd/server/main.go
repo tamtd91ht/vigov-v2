@@ -189,6 +189,12 @@ func chay(log *slog.Logger) error {
 	// from. One store, one read route in this pass.
 	bienBan := petstore.NewBienBanHopStore(kho)
 
+	// THE SIX TASK ACTS, BUILT ONCE AND SHARED. It is a variable rather than an expression inside
+	// the Deps literal because the MEETING register borrows one of its methods: §3's "Tách thành
+	// nhiệm vụ" creates a task through THIS use case, so there is exactly one create path, one
+	// transaction boundary and one place every rule about a task lives (app.GhiBienBanHop).
+	ghiNhiemVu := app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware
@@ -231,13 +237,18 @@ func chay(log *slog.Logger) error {
 		// NO identity CLIENT HERE, unlike XuLyPhieu above, and that is not an omission: §7.1 has a
 		// leader TYPE the task's deadline, so nothing on this path derives one. See the header of
 		// internal/app/nhiem_vu.go.
-		GhiNhiemVu: app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan),
+		GhiNhiemVu: ghiNhiemVu,
 		// The meeting-minutes read route. No use case either, and for the same reason — with one
 		// thing worth naming: the two task counters on every card are computed by the STORE's
 		// query, not by a layer here, so the figure the badge shows and the rows the task register
 		// returns come from one place and cannot disagree.
 		DanhSachBienBan: bienBan,
-		Log:             log,
+		// THE THREE MEETING-REGISTER WRITE ACTS. It is given *store.DB because opening the
+		// transaction the minutes, their conclusions and the audit entry share is precisely what it
+		// is for (rule 6, invariant 3) — and it is given `ghiNhiemVu` above rather than its own task
+		// store, because §3's split must not become a SECOND way to create a task.
+		GhiBienBan: app.NewGhiBienBanHop(kho, bienBan, ghiNhiemVu),
+		Log:        log,
 	})
 
 	// THE CITIZEN SURFACE — ITS OWN MUX, and that is rule 4, invariant 5 made mechanical rather
