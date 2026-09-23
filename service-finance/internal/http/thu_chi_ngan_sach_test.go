@@ -285,6 +285,7 @@ func dungMayChuNganSach(t *testing.T) *mayChuNganSach {
 		HangMuc:     hangMucMau(),
 		GhiHangMuc:  &ghiDanhMucGia{},
 		DuAn:        duAnMau(),
+		GhiDuAn:     &ghiDuAnGia{},
 		GhiChungTu:  &ghiChungTuGia{},
 		Nguong:      nguongMacDinh(),
 		NganSach:    doc,

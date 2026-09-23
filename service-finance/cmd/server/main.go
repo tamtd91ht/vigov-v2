@@ -140,6 +140,12 @@ func main() {
 		// one is precisely what it is for.
 		GhiHangMuc: app.NewDanhMucHangMuc(kho, hangMuc),
 		DuAn:       fistore.NewDuAnStore(kho),
+		// The investment project write path. A SECOND STORE BESIDE THE READ ONE, not the same handle
+		// wearing two interfaces: every method of DuAnGhiStore takes the caller's transaction, and
+		// creating a project is two writes — the project and its funding allocation lines (§9) —
+		// which have to land together or not at all, with the audit entry inside the same
+		// transaction (rule 6, invariant 3).
+		GhiDuAn: app.NewDuAn(kho, fistore.NewDuAnGhiStore(kho)),
 		// The disbursement voucher write path — six use cases, each opening one transaction that
 		// carries the business write AND its audit entry. Same reason as above, and it matters more
 		// here: these rows are money inside a figure the commune reports upward.

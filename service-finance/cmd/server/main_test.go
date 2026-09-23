@@ -127,6 +127,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		DuAn:       khoDuAnTrong{},
 		// Same reasoning as GhiHangMuc above: built on a nil *store.DB, never called from this file,
 		// present because Register refuses a nil dependency at construction.
+		GhiDuAn:    app.NewDuAn(nil, nil),
 		GhiChungTu: app.NewChungTuGiaiNgan(nil, nil),
 		Nguong:     nguongTrong{},
 		// The budget board, same reasoning again: built on a nil *store.DB and never called from this

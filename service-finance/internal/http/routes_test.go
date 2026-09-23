@@ -213,6 +213,10 @@ func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
 		// on the software's 10 points — the state of every commune today — so the delay assertions in
 		// du_an_test.go stay about the projects rather than about a threshold fixture. The case where
 		// a commune has chosen its own figure lives beside the fake, in chung_tu_giai_ngan_test.go.
+		// The project write use case, so Register accepts the Deps. NOTHING IN THIS FILE CALLS IT:
+		// the three write routes have their own four-case suite in du_an_ghi_test.go, with a fake
+		// that records the commune and the acting person.
+		GhiDuAn:    &ghiDuAnGia{},
 		GhiChungTu: &ghiChungTuGia{},
 		Nguong:     nguongMacDinh(),
 		// The budget board, so Register accepts the Deps. NOTHING IN THIS FILE CALLS EITHER: the

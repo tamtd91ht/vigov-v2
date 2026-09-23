@@ -164,6 +164,7 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		DuAn:       duAnMau(),
 		// Present because Register refuses a nil dependency at construction. No case in this file
 		// touches a voucher — the disbursement write routes have their own suite next door.
+		GhiDuAn:    &ghiDuAnGia{},
 		GhiChungTu: &ghiChungTuGia{},
 		Nguong:     nguongMacDinh(),
 		// Present so Register accepts the Deps; never called from this file. See routes_test.go.

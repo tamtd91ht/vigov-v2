@@ -96,6 +96,25 @@ type DuAnTienDo interface {
 	ChiTiet(ctx context.Context, id string) (domain.TienDoDuAn, error)
 }
 
+// GhiDuAn is the WRITE half of the investment project register, and it is its own interface rather
+// than three more methods on DuAnTienDo — the same reason GhiChungTu is separate from DuAnTienDo and
+// GhiHangMuc from HangMucKeHoachVonDanhMuc.
+//
+// The reads are store calls; each of these three opens a TRANSACTION and writes an audit entry
+// inside it (rule 6, invariant 3). Behind one interface a future caller would reach for whichever
+// method was nearest and could end up writing the project outside a transaction — the exact defect
+// core/audit was shaped to make impossible. Two interfaces, two obligations, visible at the point of
+// use.
+//
+// IT MATTERS MORE HERE THAN ON THE CATALOGUE, because creating a project is TWO writes: the project
+// and its funding allocation lines (§9). A project committed with half its allocation is a §6 card
+// that is wrong with nothing on any screen saying so.
+type GhiDuAn interface {
+	Them(ctx context.Context, yc app.YeuCauThemDuAn, nguoi audit.Actor) (app.KetQuaThemDuAn, error)
+	Sua(ctx context.Context, id string, yc app.YeuCauSuaDuAn, nguoi audit.Actor) (domain.DuAn, error)
+	Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+}
+
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
 // GhiHangMuc is the WRITE half of the capital plan category catalogue, and it is a second
 // interface rather than three more methods on the read one — on purpose.
@@ -188,6 +207,7 @@ type Deps struct {
 	HangMuc     HangMucKeHoachVonDanhMuc
 	GhiHangMuc  GhiHangMuc
 	DuAn        DuAnTienDo
+	GhiDuAn     GhiDuAn
 	GhiChungTu  GhiChungTu
 	Nguong      NguongCham
 	NganSach    NganSachDoc
@@ -227,6 +247,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	}
 	if d.DuAn == nil {
 		panic("finance/http: thiếu kho dự án — các tuyến /api/v1/investment-projects sẽ panic khi có người gọi")
+	}
+	if d.GhiDuAn == nil {
+		panic("finance/http: thiếu use case ghi dự án đầu tư — POST/PATCH/DELETE /api/v1/investment-projects sẽ panic khi có người gọi")
 	}
 	if d.GhiChungTu == nil {
 		panic("finance/http: thiếu use case ghi chứng từ giải ngân — các tuyến /api/v1/disbursements sẽ panic khi có người gọi")
@@ -369,6 +392,162 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/investment-projects/{id}",
 		authz.RequirePermission(d.Checker, "budget.read")(
 			http.HandlerFunc(h.ChiTietDuAn)))
+
+	// --- the commune enters, corrects and withdraws its own investment projects ------------------
+	//
+	// THE TWO PERMISSION KEYS BELOW ARE THE SPECIFICATION'S OWN, checked rather than assumed:
+	// docs/ui-ux/06-giai-ngan.md:202 — "`budget.update` (nhập/sửa), `budget.confirm` (xác nhận,
+	// khoá), `budget.read`". Both are seeded at service-identity/migrations/0001_init.sql:282-284
+	// (`budget.confirm` :282, `budget.update` :284), so a commune administrator can actually tick
+	// them on the Phân quyền screen. NO NEW KEY WAS INVENTED (rule 5, invariant 3c): a key no
+	// migration seeds is a right nobody can grant, so the route would answer 403 to every account
+	// forever while every test stayed green — this repository carried three such keys for several
+	// sessions. Needing a `budget.project.*` the `quyen` table does not have would be a finding for
+	// open question #27, never an INSERT.
+	//
+	// Written out as string literals at every call site because tools/apidoc refuses anything that
+	// is not one there — a route whose key it cannot read is a route absent from
+	// kb/20-contracts/openapi.json, which is the contract the admin web builds against (ADR 0014).
+
+	// `budget.update` — "Cập nhật giải ngân". §9's modal is opened from the disbursement screen's
+	// own header (`+ Thêm dự án`) and entering a project's capital plan is data entry by the
+	// accountant, which is precisely what that key is for. It is the same key §8.2 assigns to
+	// entering a voucher, and a project is the thing a voucher is entered against.
+	//
+	// idem.Required(MoKhiHong), AND THE QUESTION skills/rest-api-design §4 SAYS TO ANSWER AT THE
+	// ROUTE — which layer is actually protecting this. The real guard is `UNIQUE (tenant_id, ma)`
+	// (0004:216-221), which counts soft-deleted rows: a second project with the same code CANNOT
+	// EXIST, whatever happens to Redis. The idempotency key is the second, independent layer — it is
+	// what stops a double-submitted form from producing one project and one confusing 409 instead of
+	// one project and a replayed 201.
+	//
+	// MoKhiHong AND NOT DongKhiHong, AND THE CONTRAST WITH POST /api/v1/disbursements IS THE WHOLE
+	// ARGUMENT. That route takes DongKhiHong because two genuine payments to one company on one day
+	// for one amount are a real thing, so NO uniqueness constraint could tell them from a
+	// double-submitted form — with nothing underneath, a cache outage plus a double click is money
+	// counted twice in "đã giải ngân". Here the code is mandatory and unique for ever, so a duplicate
+	// project is impossible by construction; refusing a commune mid-entry during a Redis outage would
+	// be paying with an outage for a risk that is already covered.
+	//
+	// ⚠ `code` IS REQUIRED AND §9's `☑ Tự sinh mã` IS NOT IMPLEMENTED. The specification gives two
+	// incompatible formats for that column (`DA01, DA02…` in §9, `DA-2026-be-tong-hoa-duong-ngo-xo-2`
+	// in §7.2 · §8 · §11) and no scope for the sequence — `UNIQUE (tenant_id, ma)` has no `nam` in
+	// it, so a per-year sequence collides across years while a per-commune one exhausts `DA01..DA99`
+	// inside two budget years (§14's commune carries 63 projects in ONE year). A project code is an
+	// ISSUED CODE: rule 7, invariant 3 forbids reissuing one and forbidden #4 forbids renumbering
+	// one. Refusing writes nothing and can be loosened with one function; generating cannot be taken
+	// back. This is a finding for the user — domain.ErrThieuMaDuAn carries the full argument.
+	//
+	// 409 AND NOT 403 for a code already issued: the caller holds `budget.update` and is allowed to
+	// enter projects. What is refused is this value against the state of the data.
+	//
+	// @summary  Thêm một dự án đầu tư cho năm ngân sách, kèm phân bổ nguồn vốn nếu xã khai
+	// @screen   06-giai-ngan §9
+	// @request  themDuAnVao
+	// @reply    201 duAnGhiRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/investment-projects",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.ThemDuAn))))
+
+	// PATCH AND NOT PUT: several fields have a meaningful zero — a description cleared to "", an
+	// officer unassigned back to "Chưa phân công", a plan revised down to 0 — so a full replacement
+	// cannot tell "not mentioned" from "cleared", and a dialog editing only the name would silently
+	// unassign the officer in charge.
+	//
+	// `code` AND `year` ANSWER 400, REFUSED RATHER THAN IGNORED, for two different reasons: a code
+	// that has been issued is never renumbered (rule 7, forbidden #4), and each budget year is its
+	// own set of projects (§13 rule 8), so moving one takes its whole plan and every voucher filed
+	// against it out of one year's totals and into another's. Ignoring either would leave the client
+	// believing the change landed while every screen still showed the old value.
+	//
+	// ⚠ A PROJECT WITH CONFIRMED OR LOCKED VOUCHERS IS EDITED NORMALLY, AND THAT IS DELIBERATE.
+	// ADR 0036 decided that a CONFIRMED VOUCHER returns to `Kế toán nhập` when ITS OWN figures move;
+	// that decision is about the voucher's own confirmation and does not carry over. A project has no
+	// `trang_thai` column and no confirmation on it, so there is nothing here for that rule to act on
+	// — and inventing an equivalent would be giving this record a lifecycle the specification never
+	// gave it. Revising a plan DOES move the denominator of §3's delay score and §7.2's ratio, which
+	// is exactly why the audit entry carries the before/after pair.
+	//
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
+	// compares the project it read against the project it would write and, when nothing moved, writes
+	// NOTHING — no UPDATE and no audit entry. So the same request sent twice leaves one row in one
+	// state and one entry in the ledger. Were that comparison removed, this declaration would become
+	// a lie and the second request would file an entry saying nothing changed.
+	//
+	// @summary  Sửa hạng mục, tên, mô tả, kế hoạch vốn, đơn vị, cán bộ phụ trách hoặc các mốc thời gian của một dự án đầu tư
+	// @screen   06-giai-ngan §8
+	// @request  suaDuAnVao
+	// @reply    200 duAnGhiRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/investment-projects/{id}",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaDuAn))))
+
+	// `budget.confirm` ON A REMOVAL, AND THE SPECIFICATION ASSIGNS NONE — the same decision the
+	// voucher's `🗑 Gỡ` route had to make, made the same way and for a heavier reason.
+	//
+	// 06-giai-ngan.md:202 covers `budget.update` for entry/edit and `budget.confirm` for
+	// confirm/lock; withdrawing a PROJECT is listed with no key at all. The choice is between the two
+	// that exist:
+	//
+	//	budget.update    "the person who entered it can take it back". True for a typo caught in the
+	//	                 same minute — and it is also the key every accountant holds, so it would make
+	//	                 withdrawing a whole year's capital plan line the same authority as typing one.
+	//	budget.confirm   CHOSEN. A project's `ke_hoach_von_nam` is inside "KẾ HOẠCH VỐN NĂM" on §3 and
+	//	                 inside its category's row on §5 from the moment it is entered, so removing one
+	//	                 CHANGES A FIGURE THAT HAS ALREADY BEEN READ off a screen and possibly reported
+	//	                 upward — and it takes the project's funding allocation lines with it, moving
+	//	                 two more figures on §6.
+	//
+	// CHOSEN IN THE DIRECTION THAT CAN BE LOOSENED LATER WITH ONE LINE and cannot be tightened later
+	// at all: widening it to `budget.update` the day the customer says so costs one edit, while
+	// narrowing it afterwards means every removal already made was made under the wrong authority.
+	// Needing a third key — a `budget.delete` the `quyen` table does not have — would be a finding for
+	// open question #27, never an INSERT (rule 5, invariant 3c).
+	//
+	// A BODY ON A DELETE, and the alternative was worse: the reason is mandatory (rule 7, invariant 1
+	// names `delete_reason`), and the query string would put free text about a public authority's
+	// spending into every access log and proxy cache.
+	//
+	// ⚠ 409 WHEN THE PROJECT STILL HAS LIVE VOUCHERS, AND THAT IS AN OPEN QUESTION ANSWERED IN THE
+	// ONLY DIRECTION THAT WRITES NOTHING. The specification says nothing about removing a project
+	// that has vouchers filed against it, and ADR 0037 settled the same SHAPE for the task tree — a
+	// different record, whose answer does not carry over. Leaving the vouchers live would strand
+	// their money: every read path drops the project, so the figures disappear from §3 and §5 while
+	// the rows sit in `chung_tu_giai_ngan`, and the commune's own totals stop agreeing with the sum
+	// of its own vouchers. Cascading would soft delete somebody else's payment records — including
+	// LOCKED ones, which `chung_tu_da_khoa` refuses outright — as a side effect. store
+	// .ErrDuAnConChungTu carries the full argument. This is a finding for the user.
+	//
+	// idem.KhongCan — removing an already-removed project is a 404 either way, and the second request
+	// cannot overwrite who removed it or why: the UPDATE carries `AND deleted_at IS NULL`.
+	//
+	// @summary  Xoá mềm một dự án đầu tư kèm lý do bắt buộc — từ chối khi dự án còn chứng từ giải ngân
+	// @screen   06-giai-ngan §7
+	// @request  xoaDuAnVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/investment-projects/{id}",
+		authz.RequirePermission(d.Checker, "budget.confirm")(
+			idem.KhongCan("xoá một dự án đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.XoaDuAn))))
 
 	// --- the commune adds a capital plan category of its own -------------------------------------------
 	//

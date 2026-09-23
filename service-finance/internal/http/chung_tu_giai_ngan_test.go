@@ -259,6 +259,7 @@ func dungMayChuChungTuVoi(t *testing.T, khoIdem idem.Store) *mayChuChungTu {
 		HangMuc:    hangMucMau(),
 		GhiHangMuc: &ghiDanhMucGia{},
 		DuAn:       duAnMau(),
+		GhiDuAn:    &ghiDuAnGia{},
 		GhiChungTu: ghi,
 		Nguong:     nguongMau(),
 		// Present so Register accepts the Deps; never called from this file. See routes_test.go.
