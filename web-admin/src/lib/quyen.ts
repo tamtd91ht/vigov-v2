@@ -209,6 +209,25 @@ export const QUYEN_CHUYEN_VAN_BAN = "document.route";
 export const QUYEN_XEM_NHIEM_VU = "task.read";
 
 /**
+ * Khoá quyền của sổ Thông báo nội bộ — `announcement.create`, "Soạn và gửi thông báo"
+ * (`service-identity/migrations/0001_init.sql:286`).
+ *
+ * TÊN HẰNG NÓI `SOẠN` NHƯNG NÓ CŨNG CANH ĐƯỜNG ĐỌC, và điều ấy KHÔNG phải lỗi lặp lại của mục
+ * `Văn bản & Đơn thư`. Ở đó mục menu canh bằng `document.route` trong khi tuyến đọc đòi
+ * `document.read` — hai khoá khác nhau, nên cán bộ chỉ có khoá đọc mất luôn lối vào. Ở đây
+ * `GET /api/v1/announcements` VÀ `POST` **cùng đòi đúng một khoá này**, vì nhóm THÔNG BÁO trong
+ * bảng `quyen` chỉ có một dòng duy nhất. Nên canh mục menu bằng nó là canh bằng CHÍNH khoá tuyến
+ * đọc khai — không có khoảng lệch nào để trôi vào.
+ *
+ * ĐÂY LÀ CẤP THIẾU, KHÔNG PHẢI CẤP THỪA, và chỗ thiếu ấy là một khiếm khuyết đã ghi: không có
+ * khoá ĐỌC nghĩa là một cán bộ bình thường không xem được thông báo gửi cho chính mình, tức bộ
+ * lọc `Gửi cho tôi` của §2 không ship được. Sổ tiến độ `service-comms/khoa-doc-so-thong-bao-chua-co`
+ * giữ hai lối thoát; luật 5 bất biến 3c cấm tự thêm một khoá vào bảng, nên nó chờ người quyết.
+ * Ngày khoá đọc ra đời thì mục menu đổi sang khoá ấy, và hằng này lui về đúng nghĩa tên nó.
+ */
+export const QUYEN_SOAN_THONG_BAO = "announcement.create";
+
+/**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
  *
  * TỪNG NẰM RIÊNG TRONG `features/cau-hinh/quyen-tab.ts` VÀ NAY Ở ĐÂY, vì nó có người dùng thứ

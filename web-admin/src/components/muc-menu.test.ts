@@ -15,6 +15,7 @@ const DU_QUYEN = [
   "admin.user",
   "admin.lookup",
   "task.read",
+  "announcement.create",
 ] as const;
 
 function tenMuc(nhom: ReturnType<typeof locMenu>): string[] {
@@ -26,12 +27,12 @@ describe("locMenu", () => {
     expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(14);
   });
 
-  it("KHÔNG quyền nào: tám mục có màn biến mất, sáu mục chưa có màn Ở LẠI", () => {
+  it("KHÔNG quyền nào: chín mục có màn biến mất, năm mục chưa có màn Ở LẠI", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, []));
 
-    // Tám mục có màn đều mở ra dữ liệu thật, nên chúng đi theo quyền. `Thu - Chi ngân sách` vào
-    // danh sách này ngày 23/09/2026, khi màn `/giai-ngan/thu-chi` ra đời; `Nhiệm vụ` và
-    // `Biên bản họp` cùng ngày, khi `/nhiem-vu` và `/nhiem-vu/bien-ban` ra đời.
+    // Chín mục có màn đều mở ra dữ liệu thật, nên chúng đi theo quyền. `Thu - Chi ngân sách` vào
+    // danh sách này ngày 23/09/2026, khi màn `/giai-ngan/thu-chi` ra đời; `Nhiệm vụ`,
+    // `Biên bản họp` và `Thông báo` cùng ngày, cùng lý do.
     for (const n of [
       "Văn bản & Đơn thư",
       "Giải ngân",
@@ -41,12 +42,13 @@ describe("locMenu", () => {
       "Cấu hình",
       "Nhiệm vụ",
       "Biên bản họp",
+      "Thông báo",
     ]) {
       expect(ten).not.toContain(n);
     }
-    // Sáu mục chưa có màn không mở ra dữ liệu nào cả — không có gì để rò rỉ, và lọc chúng theo
+    // Năm mục chưa có màn không mở ra dữ liệu nào cả — không có gì để rò rỉ, và lọc chúng theo
     // quyền sẽ buộc phải ĐOÁN một khoá cho một màn chưa tồn tại.
-    expect(ten).toHaveLength(6);
+    expect(ten).toHaveLength(5);
     expect(ten).toContain("Sổ tay lãnh đạo");
     expect(ten).toContain("Báo cáo");
   });
