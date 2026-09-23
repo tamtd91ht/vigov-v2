@@ -335,6 +335,28 @@ type SuaNhiemVu struct {
 	// cycle — a brand-new row has no descendants — so `A → B → C → A` can only ever be built by
 	// MOVING an existing task under one of its own descendants, i.e. here.
 	NhiemVuChaID *string
+
+	// VanBan is §5.4's document block — the three dynamic lists of §7.2, sent WHOLE.
+	//
+	// # A POINTER TO A SLICE, AND THE DOUBLE INDIRECTION IS THE RULE ITSELF
+	//
+	// nil          the client did not send the block. It is left exactly as it is.
+	// &[]{}        the client sent an EMPTY block. Every line is removed — that is three `✕`
+	//              clicks followed by Save, and it must be expressible.
+	//
+	// A plain slice could not tell those apart, and the one it would collapse into the other is the
+	// one that silently keeps lines a member of staff deleted.
+	//
+	// ⚠ IT IS REPLACE-BY-SET AND NOT AN APPEND. The lines the block does not name are removed, which
+	// is how `✕` reaches the server at all: the line simply stops being sent. domain.SoSanhVanBan
+	// decides what that means against the rows already stored, and it is the one place the `thu_tu`
+	// rule lives.
+	//
+	// IT IS NOT FOLDED BY Apdung AND IS NOT COUNTED BY CoGiDoi. Both of those work on a
+	// domain.NhiemVu, whose scalar columns are one UPDATE; this block is a set of rows and needs the
+	// stored lines read under the task's lock before anything about it can be decided. The use case
+	// therefore asks domain.SoSanhVanBan separately — see app.GhiNhiemVu.Sua.
+	VanBan *[]domain.VanBanNhiemVuVao
 }
 
 // CoGiDoi reports whether anything would actually change.

@@ -67,6 +67,17 @@ type khoNhiemVuGia struct {
 	// deNghi is the extension requests, keyed by request id.
 	deNghi map[string]map[string]driver.Value
 
+	// vanBan is §5.4's document block, keyed by TASK id and held in the order the store's ORDER BY
+	// returns it. A map of rows rather than one canned answer, because the rule being protected —
+	// what a request does to the lines already stored — only exists as a RELATIONSHIP between what
+	// is there and what was sent.
+	vanBan map[string][]map[string]driver.Value
+
+	// thuTuVanBanLonNhat answers the position-minting query, per group. KEYED BY GROUP because the
+	// three lists number independently: one shared counter would hide a write path that minted
+	// against the wrong group and still produced plausible numbers.
+	thuTuVanBanLonNhat map[string]int64
+
 	// soLonNhat is what the minting query answers.
 	soLonNhat int64
 
@@ -170,15 +181,41 @@ func dongDeNghiGia(sua map[string]driver.Value) map[string]driver.Value {
 	return d
 }
 
-// khoNVMau is one root task, nothing else: no children, no timeline, no requests.
+// dongVanBanGia is one `nhiem_vu_van_ban` row as the driver hands it back.
+//
+// EVERY VALUE IS DISTINCT AND OF THE RIGHT TYPE, so a Scan wired to the wrong position comes back as
+// visibly wrong data rather than as a zero that looks plausible. `so_ky_hieu` and `ngay_van_ban` are
+// the two NULLABLE columns, so a fixture that set them both would never exercise the NULL path —
+// the caller passes what it needs.
+func dongVanBanGia(id, nhiemVuID string, nhom domain.NhomVanBanNhiemVu, thuTu int64,
+	sua map[string]driver.Value) map[string]driver.Value {
+
+	d := map[string]driver.Value{
+		"id":           id,
+		"nhiem_vu_id":  nhiemVuID,
+		"nhom":         string(nhom),
+		"so_ky_hieu":   nil,
+		"ngay_van_ban": nil,
+		"trich_yeu":    "Thông báo số 90-TB/TU ngày 30/01/2026 về ý kiến chỉ đạo",
+		"thu_tu":       thuTu,
+	}
+	for k, v := range sua {
+		d[k] = v
+	}
+	return d
+}
+
+// khoNVMau is one root task, nothing else: no children, no timeline, no requests, no document lines.
 func khoNVMau() *khoNhiemVuGia {
 	return &khoNhiemVuGia{
 		doiDong: 1,
 		nhiemVu: map[string]map[string]driver.Value{
 			idNVGoc: dongNhiemVuGia(idNVGoc, maNVGoc, nil),
 		},
-		nhatKy: map[string][]string{},
-		deNghi: map[string]map[string]driver.Value{},
+		nhatKy:             map[string][]string{},
+		deNghi:             map[string]map[string]driver.Value{},
+		vanBan:             map[string][]map[string]driver.Value{},
+		thuTuVanBanLonNhat: map[string]int64{},
 	}
 }
 
@@ -306,6 +343,12 @@ func (c *connNVGia) QueryContext(_ context.Context, q string, args []driver.Name
 		return c.k.doNhatKy(cot, gt)
 	case strings.Contains(q, "FROM de_nghi_lui_han"):
 		return c.k.doDeNghi(q, cot, gt)
+	// ⚠ THIS BRANCH MUST STAY ABOVE `FROM nhiem_vu`, and it is not a matter of taste: `nhiem_vu` is a
+	// PREFIX of `nhiem_vu_van_ban`, so the wider branch swallows every read of the document block and
+	// answers it from the task register — which comes back as "column not found" at best and as a
+	// task row scanned into a document line at worst.
+	case strings.Contains(q, "FROM nhiem_vu_van_ban"):
+		return c.k.doVanBan(q, cot, gt)
 	case strings.Contains(q, "FROM nhiem_vu"):
 		return c.k.doNhiemVu(q, cot, gt)
 	}
@@ -365,6 +408,43 @@ func (k *khoNhiemVuGia) doNhiemVu(q string, cot []string, args []driver.Value) (
 		return &rowsNVGia{cot: cot}, nil
 	}
 	return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)
+}
+
+// doVanBan answers the two reads of the document block.
+//
+// THE HIGH-WATER MARK IS ANSWERED FROM ITS OWN MAP AND NOT COUNTED OFF `vanBan`, deliberately: the
+// real statement DOES NOT FILTER `deleted_at`, so it returns a number a removed line still holds,
+// while `vanBan` holds only the LIVE rows the other read returns. A fake that derived one from the
+// other would make the two agree — and "a removed line keeps its number" is exactly the property
+// migration 0009 leans on and the one a renumbering write path would break.
+func (k *khoNhiemVuGia) doVanBan(q string, cot []string, args []driver.Value) (driver.Rows, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	// THE ARGUMENT COUNT IS CHECKED BEFORE ANY INDEX, AND THIS GUARD WAS PAID FOR.
+	//
+	// Measured on 24/09/2026 by removing `tenant_id = $1` from these statements: every index below
+	// shifted, `args[2]` panicked inside a driver call, and because the harness runs with
+	// SetMaxOpenConns(1) the pool never got its connection back — so the suite failed as a
+	// TEN-MINUTE TIMEOUT naming a deadlock, and the test that should have named the missing commune
+	// predicate never ran at all. A red nobody can trace is a red somebody deletes.
+	if len(args) < 2 {
+		return nil, fmt.Errorf("driver giả: câu đọc `nhiem_vu_van_ban` chỉ mang %d tham số — xã phải "+
+			"là $1 của MỌI câu lệnh (luật 1 bất biến 5): %q", len(args), q)
+	}
+
+	if strings.Contains(q, "MAX(") {
+		// $2 is the task, $3 is the group.
+		if len(args) < 3 {
+			return nil, fmt.Errorf("driver giả: câu đọc mốc thứ tự chỉ mang %d tham số, muốn "+
+				"(xã, nhiệm vụ, nhóm): %q", len(args), q)
+		}
+		return &rowsNVGia{
+			cot:  []string{"so"},
+			hang: [][]driver.Value{{k.thuTuVanBanLonNhat[fmt.Sprint(args[2])]}},
+		}, nil
+	}
+	return dungRows(cot, k.vanBan[fmt.Sprint(args[1])])
 }
 
 func (k *khoNhiemVuGia) doNhatKy(cot []string, args []driver.Value) (driver.Rows, error) {

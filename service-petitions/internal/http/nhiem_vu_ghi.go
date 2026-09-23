@@ -135,6 +135,54 @@ type taoNhiemVuVao struct {
 	// the business code — the same shape `loai` already uses, which the `loai_nhiem_vu` foreign key
 	// settles in favour of codes. It changes a published contract, so it is the owner's call.
 	Parent string `json:"parent,omitempty"`
+
+	// Documents is §7.2's three dynamic lists. OPTIONAL, and its absence is the ordinary request:
+	// §7.3 removes the whole block for a `co-ban` task.
+	//
+	// ⚠ IT IS OPTIONAL BECAUSE IT HAS TO BE (rule 2, invariant 4). `taoNhiemVuVao` is a PUBLISHED
+	// contract with a real client behind it (`web-admin/src/lib/api/nhiem-vu.ts`), and a required
+	// field added to a published shape breaks every caller that was already correct. A client that
+	// sends nothing here gets a task with an empty block, exactly as before this pass.
+	Documents []vanBanNhiemVuVao `json:"documents,omitempty"`
+}
+
+// vanBanNhiemVuVao is ONE line of the block on the way in — §7.2's `+ Thêm văn bản` and, on PATCH,
+// also the lines that are being kept.
+//
+// # THERE IS NO `position` FIELD, AND THAT IS THE RULE RATHER THAN AN OVERSIGHT
+//
+// A line's position is MINTED BY THE REGISTER (max + 1 within its group, counting removed lines) and
+// never sent by a client. A request that could carry it could place a line at a number another line
+// already holds — and on this table that is a constraint error inside the business transaction,
+// which rolls the whole edit back. Migration 0009 spends a block on why this is the expensive one.
+//
+// THERE IS NO `task` FIELD EITHER: the task is the `{ma}` in the path. A body that could name a
+// different one is a body that can write into a record the caller never opened.
+type vanBanNhiemVuVao struct {
+	// ID names an EXISTING line. EMPTY MEANS A NEW ONE — that is the whole of `+ Thêm văn bản`.
+	//
+	// ⚠ ON PATCH, A LINE THE BODY DOES NOT NAME IS REMOVED. That is how `✕` reaches the server: the
+	// block is sent WHOLE, and the line simply stops being in it. A client that sends only the line
+	// it just added deletes the other two.
+	ID string `json:"id,omitempty"`
+
+	// Group is one of §5.4's three codes. REQUIRED on a new line; on an existing one it may be
+	// omitted, and if it is sent it must MATCH the stored group — a line does not move between the
+	// three boxes (domain.ErrDoiNhomVanBan).
+	Group string `json:"group"`
+
+	// Reference (`1742-CV/BTCTU`) and Date are optional, and both are absent from §7.2's form today:
+	// it offers ONE textarea, whose content is `summary`. They are on the contract so a later form
+	// that does collect them needs no migration and no new field.
+	Reference string `json:"reference,omitempty"`
+
+	// Date is `YYYY-MM-DD` — the day printed on the document, with no time and no zone. An RFC 3339
+	// instant is REFUSED rather than truncated: a browser's zone would otherwise decide which DAY a
+	// document was signed.
+	Date string `json:"date,omitempty"`
+
+	// Summary is the line's text and is MANDATORY. It is where §7.2's textarea lands.
+	Summary string `json:"summary"`
 }
 
 // suaNhiemVuVao is the body of PATCH /api/v1/tasks/{ma}.
@@ -162,6 +210,22 @@ type suaNhiemVuVao struct {
 	// Parent re-parents the task; an empty string detaches it into a root task. THIS IS THE ONE
 	// FIELD THAT CAN CLOSE A CYCLE — see app.kiemChuTrinh.
 	Parent *string `json:"parent,omitempty"`
+
+	// Documents replaces §5.4's document block WHOLE. A POINTER TO A SLICE, and the double
+	// indirection carries a distinction a plain slice cannot:
+	//
+	//	absent / null   the block is not being edited. It is left exactly as it is.
+	//	[]              the block is being EMPTIED. Three `✕` clicks then Save, and it has to be
+	//	                expressible — folded into "absent" it would silently keep lines a member of
+	//	                staff deleted.
+	//
+	// ⚠ REPLACE-BY-SET, NOT APPEND. Every line that is to survive must be sent back, WITH ITS `id`.
+	// §5.4 draws one `✎ Sửa` over the whole block, so one Save is one act over the whole block —
+	// and "the lines you did not send are gone" is the only reading under which `✕` works at all.
+	//
+	// OPTIONAL, like every field of this body and for the reason `taoNhiemVuVao.Documents` states:
+	// this is a published contract with a real client behind it (rule 2, invariant 4).
+	Documents *[]vanBanNhiemVuVao `json:"documents,omitempty"`
 }
 
 // doiTrangThaiVao is the body of POST /api/v1/tasks/{ma}/status.
@@ -251,6 +315,63 @@ func deNghiRaNgoai(d domain.DeNghiLuiHan) deNghiLuiHanRa {
 	return ra
 }
 
+// --- §5.4's document block, on the way in -----------------------------------------------------------
+
+// errNgayVanBanKhongDocDuoc — the date on a document line did not parse.
+//
+// THE CLIENT'S STRING IS NOT ECHOED BACK. What it typed is free text about an administrative
+// document and an error message travels into centralised logging (rule 3, forbidden #3); what the
+// caller can act on is the FORMAT, which the sentence names.
+var errNgayVanBanKhongDocDuoc = errors.New(
+	"`date` của một dòng văn bản phải theo dạng YYYY-MM-DD (ngày ghi trên văn bản, không có giờ)")
+
+// ngayVanBanVao reads a document date off the wire. IT IS THE INVERSE OF ngayVanBanRa.
+//
+// AN EMPTY STRING IS A LEGAL ANSWER and becomes the zero time.Time, which the store writes as SQL
+// NULL. That is the ordinary case: §7.2 offers one textarea and collects no date at all, so almost
+// every line arrives without one. This is exactly where it differs from `ngayHopVao` next door,
+// which refuses "" because §4 marks the meeting day required.
+//
+// `2006-01-02` AND NOTHING ELSE. Accepting an RFC 3339 instant here would let a browser's zone
+// decide which DAY a document was signed, and `ngay_van_ban` is a `DATE` column precisely because
+// that question has no answer.
+func ngayVanBanVao(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(dinhDangNgay, s)
+	if err != nil {
+		return time.Time{}, errNgayVanBanKhongDocDuoc
+	}
+	return t, nil
+}
+
+// vanBanVaoTrong turns the request block into the domain's shape.
+//
+// IT VALIDATES NOTHING BUT THE DATE, and that asymmetry is deliberate: a date is a WIRE FORMAT
+// question and can only be answered here, while "is this group one of the three", "is the text
+// present" and "are there too many lines" are BUSINESS rules and belong to domain.
+// KiemDanhSachVanBanNhiemVu, which the use case calls before it opens a transaction. Two layers
+// checking the same thing would be two sentences for one refusal, and the one that drifts is
+// whichever is edited second.
+func vanBanVaoTrong(ds []vanBanNhiemVuVao) ([]domain.VanBanNhiemVuVao, error) {
+	ra := make([]domain.VanBanNhiemVuVao, 0, len(ds))
+	for _, v := range ds {
+		ngay, err := ngayVanBanVao(v.Date)
+		if err != nil {
+			return nil, err
+		}
+		ra = append(ra, domain.VanBanNhiemVuVao{
+			ID:         v.ID,
+			Nhom:       domain.NhomVanBanNhiemVu(v.Group),
+			SoKyHieu:   v.Reference,
+			NgayVanBan: ngay,
+			TrichYeu:   v.Summary,
+		})
+	}
+	return ra, nil
+}
+
 // --- the six handlers ----------------------------------------------------------------------------
 
 // TaoNhiemVu books one task. POST /api/v1/tasks
@@ -262,6 +383,13 @@ func (h *Handler) TaoNhiemVu(w http.ResponseWriter, r *http.Request) {
 	nguoi, ok := nguoiThucHien(r)
 	if !ok {
 		h.thieuChuTheNhiemVu(w, r)
+		return
+	}
+
+	// REFUSED BEFORE THE USE CASE IS REACHED, so a malformed date opens no transaction at all.
+	vanBan, err := vanBanVaoTrong(vao.Documents)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
 		return
 	}
 
@@ -281,6 +409,7 @@ func (h *Handler) TaoNhiemVu(w http.ResponseWriter, r *http.Request) {
 		CoQuanChuTriID:      vao.LeadUnit,
 		ChuyenVienTheoDoiMa: vao.Monitor,
 		NhiemVuChaID:        vao.Parent,
+		VanBan:              vanBan,
 	}
 	if vao.DueAt != nil {
 		yc.HanXuLy = *vao.DueAt
@@ -308,6 +437,20 @@ func (h *Handler) SuaNhiemVu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// THE POINTER IS CARRIED THROUGH, NOT THE SLICE. `nil` means the block was not mentioned and
+	// must be left alone; a non-nil pointer to an EMPTY slice means the block is being emptied. A
+	// conversion that returned a plain slice would collapse the two — and the one it would lose is
+	// the one that deletes lines a member of staff removed.
+	var vanBan *[]domain.VanBanNhiemVuVao
+	if vao.Documents != nil {
+		ds, err := vanBanVaoTrong(*vao.Documents)
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+			return
+		}
+		vanBan = &ds
+	}
+
 	n, err := h.d.GhiNhiemVu.Sua(r.Context(), r.PathValue("ma"), petstore.SuaNhiemVu{
 		Khoi:                     vao.Bloc,
 		TieuDe:                   vao.Title,
@@ -319,6 +462,7 @@ func (h *Handler) SuaNhiemVu(w http.ResponseWriter, r *http.Request) {
 		LanhDaoPheDuyetHoanThanh: vao.LeaderApproved,
 		CapTrenCongNhanHoanThanh: vao.SuperiorAcknowledged,
 		NhiemVuChaID:             vao.Parent,
+		VanBan:                   vanBan,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiNhiemVu(w, r, "sửa nhiệm vụ", err)
@@ -498,6 +642,18 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 	case errors.Is(err, domain.ErrDaCoDeNghiChoDuyet), errors.Is(err, domain.ErrDeNghiDaQuyetDinh),
 		errors.Is(err, domain.ErrNhiemVuChuaCoHan):
 		httpx.WriteError(w, http.StatusConflict, "task_state", err.Error(), "")
+	case errors.Is(err, domain.ErrVanBanKhongThuocNhiemVu), errors.Is(err, domain.ErrDoiNhomVanBan):
+		// 409 AND NOT 400, AND THE LINE IS THE ONE DRAWN ABOVE. The caller holds the right and the
+		// body is well formed; what is refused is this act on THIS record — the line is not on the
+		// task any more, or it sits in a group the request disagrees with. Both are states an
+		// officer fixes by reloading the drawer, which is what the sentences say.
+		httpx.WriteError(w, http.StatusConflict, "task_document", err.Error(), "")
+
+	// --- 400: about what was sent, document block --------------------------------------------------
+	case domain.LaLoiDauVaoVanBanNhiemVu(err):
+		// The domain's own sentence: it names the field and the rule, holds no personal data and no
+		// internal detail. A second sentence written here would drift from it.
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
 
 	// --- 400: about what was sent ----------------------------------------------------------------
 	case domain.LaLoiDauVaoNhiemVu(err):

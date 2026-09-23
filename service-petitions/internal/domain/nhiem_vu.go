@@ -252,6 +252,19 @@ type NhiemVu struct {
 	NguoiTaoMa string
 
 	TaoLuc time.Time
+
+	// VanBan is §5.4's "SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO" — the three lists of referenced documents
+	// (migration 0009, and nhiem_vu_van_ban.go in this package for what a line is).
+	//
+	// ⚠ nil MEANS "NOT LOADED ON THIS SURFACE", NOT "THIS TASK HAS NO DOCUMENTS", and the two are
+	// different statements. The register LIST does not read this block — §4's card does not draw it,
+	// and loading three lists for every row of every page would be payload nobody renders — so every
+	// item of a page comes back with nil here. Only the DETAIL read and the two write acts fill it,
+	// and they fill it with a NON-nil slice, empty when the task really has no lines.
+	//
+	// Reading a nil here as "no documents" is therefore how a screen would report an empty block for
+	// a task that has three. The HTTP layer carries the same distinction onto the wire and says so.
+	VanBan []NhiemVuVanBan
 }
 
 // TreHan DERIVES whether the CURRENT commitment was missed. It is never stored (rule 10, invariant

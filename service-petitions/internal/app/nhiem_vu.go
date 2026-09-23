@@ -111,6 +111,24 @@ type KhoNhiemVuGhi interface {
 	GhiNhatKy(ctx context.Context, tx *store.ScopedTx, e domain.NhatKyNhiemVu) error
 	NhatKyGanNhat(ctx context.Context, tx *store.ScopedTx, nhiemVuID string, n int) (
 		[]domain.MocNhatKy, error)
+
+	// §5.4's document block (migration 0009). FOUR METHODS ON THIS INTERFACE AND NOT A FIFTH
+	// INTERFACE, unlike KhoDeNghiLuiHan below, and the difference is what the rows ARE: a line is a
+	// FIELD VALUE of the task, written by the same acts that write the task itself, while an
+	// extension request is a record with its own lifecycle decided by a different person under a
+	// different permission.
+	//
+	// EVERY ONE OF THEM TAKES THE TRANSACTION, including the read. A block read outside the
+	// transaction would be a block another officer could change before the diff computed against it
+	// was applied — and the diff is what decides which lines are REMOVED.
+	VanBanCuaNhiemVuDeSua(ctx context.Context, tx *store.ScopedTx, nhiemVuID string) (
+		[]domain.NhiemVuVanBan, error)
+	ThuTuVanBanLonNhat(ctx context.Context, tx *store.ScopedTx, nhiemVuID string,
+		nhom domain.NhomVanBanNhiemVu) (int, error)
+	ThemVanBan(ctx context.Context, tx *store.ScopedTx, v domain.NhiemVuVanBan) error
+	SuaVanBan(ctx context.Context, tx *store.ScopedTx, v domain.NhiemVuVanBan) error
+	XoaMemVanBan(ctx context.Context, tx *store.ScopedTx, nhiemVuID, id, nguoiMa string,
+		luc time.Time) error
 }
 
 // KhoDeNghiLuiHan is the extension-request table.
@@ -396,6 +414,17 @@ type YeuCauTaoNhiemVu struct {
 	// DEADLINE. A child's deadline is whatever the form carried in HanXuLy above — there is no line
 	// anywhere in this file that reads the parent's `han_xu_ly`, and that absence IS the rule.
 	NhiemVuChaID string
+
+	// VanBan is §7.2's three dynamic lists, on the create form. OPTIONAL, and empty is the ordinary
+	// case: §7.3 removes the whole block for a `co-ban` task, and even a `theo-van-ban` task is
+	// often filed with nothing in it.
+	//
+	// ⚠ AN ITEM CARRYING AN `ID` IS REFUSED HERE. The task does not exist yet, so it has no lines,
+	// and a client naming a line id on a create is either confused or choosing internal ids. The
+	// refusal is not written out as a branch: domain.SoSanhVanBan against an EMPTY stored block
+	// produces exactly it, which is why create and edit share one rule rather than two that can
+	// disagree.
+	VanBan []domain.VanBanNhiemVuVao
 }
 
 // Tao books one task. Permission: `task.create`.
@@ -411,6 +440,21 @@ func (uc *GhiNhiemVu) Tao(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.
 	domain.NhiemVu, error) {
 
 	moi, err := chuanHoaTaoNhiemVu(yc)
+	if err != nil {
+		return domain.NhiemVu{}, err
+	}
+	// THE DOCUMENT BLOCK IS CHECKED AND DECIDED BEFORE THE TRANSACTION OPENS, like every other field:
+	// a rejected form must hold no row lock on a government register, and must not have written a row
+	// that only a rollback takes back.
+	//
+	// THE DIFF IS THE SAME RULE THE EDIT PATH USES, against an EMPTY stored block — which is what
+	// makes an item carrying a line id a refusal here without a branch saying so. It needs no
+	// transaction precisely because a task that does not exist yet has nothing to compare against.
+	vanBanVao, err := domain.KiemDanhSachVanBanNhiemVu(yc.VanBan)
+	if err != nil {
+		return domain.NhiemVu{}, err
+	}
+	thayDoiVB, err := domain.SoSanhVanBan(nil, vanBanVao)
 	if err != nil {
 		return domain.NhiemVu{}, err
 	}
@@ -459,6 +503,21 @@ func (uc *GhiNhiemVu) Tao(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.
 			return err
 		}
 
+		// §5.4'S DOCUMENT BLOCK, IN THE SAME TRANSACTION AS THE TASK IT BELONGS TO. A line is a
+		// field value of the row above, so a task committed without its lines would be a record
+		// missing part of what the clerk typed — and there is no second act that would put them
+		// back.
+		//
+		// WHAT IS WRITTEN WAS DECIDED BEFORE THE TRANSACTION OPENED (see the top of this function);
+		// `Them` is every item, `Sua` and `Xoa` are empty by construction.
+		if err := uc.apDungVanBan(ctx, tx, moi.ID, thayDoiVB, nguoi.ID, bayGio); err != nil {
+			return err
+		}
+		var err error
+		if moi.VanBan, err = uc.kho.VanBanCuaNhiemVuDeSua(ctx, tx, moi.ID); err != nil {
+			return err
+		}
+
 		// THE FIRST TIMELINE ROW, IN THE SAME TRANSACTION. §5.9's drawer renders "Chưa có ghi chép
 		// nào." for an empty log, and a task that was given to somebody with no entry saying so
 		// would render exactly that on the day it was created.
@@ -486,6 +545,13 @@ func (uc *GhiNhiemVu) Tao(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.
 				"nhiem_vu_cha_id":       moi.NhiemVuChaID,
 			},
 			"ma_tu_sinh": yc.TuSinhMa,
+			// HOW MANY DOCUMENT LINES WERE FILED, AND NOT WHAT THEY SAY. `trich_yeu` is the subject
+			// line of an administrative document and routinely names a citizen's case; `audit_log` is
+			// append-only and never deleted (rule 6, invariant 4), so a copy there would be a second
+			// permanent store of that text (rule 3, forbidden #5). The count is what an inspection
+			// can act on — it says the block was filled in at creation — and the text itself lives on
+			// rows the archival trigger already protects.
+			"so_dong_van_ban": len(thayDoiVB.Them),
 		})
 		if err != nil {
 			return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
@@ -601,6 +667,11 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 		return domain.NhiemVu{}, err
 	}
 
+	// ONE INSTANT FOR THE WHOLE ACT, read before the transaction opens. `deleted_at` on a removed
+	// document line comes from it, and a clock read per statement would stamp the lines of one Save
+	// with different instants — which reads, years later, as several edits rather than one.
+	bayGio := uc.nayHoac()
+
 	var sau domain.NhiemVu
 
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
@@ -608,11 +679,41 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 		if err != nil {
 			return err
 		}
-		if !sua.CoGiDoi(truoc) {
-			// NOTHING MOVED. Writing an UPDATE and an audit entry here would put a row in an
-			// append-only ledger saying an act happened that changed nothing — and an inspection
-			// counting acts would count it.
+
+		// §5.4'S DOCUMENT BLOCK, READ AND DIFFED UNDER THE TASK'S LOCK.
+		//
+		// BOTH HALVES HAVE TO HAPPEN INSIDE THE TRANSACTION, and for different reasons. The READ
+		// must, because the diff decides which lines are REMOVED and a block read earlier is a block
+		// another officer can have changed since. The DIFF must, because it is what turns "the
+		// client sent these three lines" into three statements — and a decision made against rows
+		// nobody holds is a decision about a state that no longer exists.
+		//
+		// IT IS READ EVEN WHEN THE REQUEST DID NOT MENTION THE BLOCK, and the reason is the RESPONSE
+		// rather than the diff: PATCH answers with the detail shape, and that shape always carries
+		// `documents` as an array. Reading it only when the client sent it would make a PATCH of the
+		// title answer with `documents: null` — which a client cannot tell from "this task has no
+		// lines" without knowing what it happened to send.
+		vanBanTruoc, err := uc.kho.VanBanCuaNhiemVuDeSua(ctx, tx, truoc.ID)
+		if err != nil {
+			return err
+		}
+		var thayDoiVB domain.ThayDoiVanBan
+		if sua.VanBan != nil {
+			if thayDoiVB, err = domain.SoSanhVanBan(vanBanTruoc, *sua.VanBan); err != nil {
+				return err
+			}
+		}
+
+		if !sua.CoGiDoi(truoc) && !thayDoiVB.CoGiDoi() {
+			// NOTHING MOVED — neither a column of the task nor a line of its block. Writing an UPDATE
+			// and an audit entry here would put a row in an append-only ledger saying an act happened
+			// that changed nothing, and an inspection counting acts would count it.
+			//
+			// THE BLOCK IS STILL RETURNED, so the caller's response is the same shape whether or not
+			// anything moved. A detail response that dropped `documents` on a no-op save would look
+			// to a client exactly like a task whose lines had just been deleted.
 			sau = truoc
+			sau.VanBan = vanBanTruoc
 			return nil
 		}
 
@@ -631,6 +732,16 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			return err
 		}
 
+		// THE BLOCK IS APPLIED IN THE SAME TRANSACTION AS THE COLUMNS. §5.4 draws one `✎ Sửa` over
+		// the whole block, so one Save is ONE administrative act: a commit that moved the title but
+		// dropped the document lines would be half an act, with the audit entry claiming both.
+		if err := uc.apDungVanBan(ctx, tx, truoc.ID, thayDoiVB, nguoi.ID, bayGio); err != nil {
+			return err
+		}
+		if sau.VanBan, err = uc.kho.VanBanCuaNhiemVuDeSua(ctx, tx, truoc.ID); err != nil {
+			return err
+		}
+
 		delta, err := json.Marshal(map[string]any{
 			"truoc": map[string]any{
 				"tieu_de":         truoc.TieuDe,
@@ -638,6 +749,7 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 				"muc_uu_tien":     truoc.MucUuTien,
 				"tien_do":         truoc.TienDo,
 				"nhiem_vu_cha_id": truoc.NhiemVuChaID,
+				"so_dong_van_ban": len(vanBanTruoc),
 			},
 			"sau": map[string]any{
 				"tieu_de":         sau.TieuDe,
@@ -645,6 +757,22 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 				"muc_uu_tien":     sau.MucUuTien,
 				"tien_do":         sau.TienDo,
 				"nhiem_vu_cha_id": sau.NhiemVuChaID,
+				"so_dong_van_ban": len(sau.VanBan),
+			},
+			// WHAT HAPPENED TO THE BLOCK, IN COUNTS AND IDS — NEVER IN TEXT. `trich_yeu` is the
+			// subject line of an administrative document and routinely names a citizen's case, and
+			// `audit_log` is append-only and never deleted (rule 6, invariant 4), so quoting it here
+			// would be a second permanent store of that text (rule 3, forbidden #5).
+			//
+			// THE REMOVED LINES ARE NAMED BY ID AND THE OTHERS ARE NOT, and the asymmetry is what an
+			// inspection actually needs: an added or edited line is still on the record and can be
+			// read there, while a removed one has left every screen — the id is the only way back to
+			// the row, which is still in the table carrying `deleted_at` and `deleted_by`.
+			"van_ban": map[string]any{
+				"them":   len(thayDoiVB.Them),
+				"sua":    len(thayDoiVB.Sua),
+				"xoa":    len(thayDoiVB.Xoa),
+				"xoa_id": idVanBanDaGo(thayDoiVB.Xoa),
 			},
 		})
 		if err != nil {
@@ -1140,6 +1268,98 @@ func hanSauQuyetDinh(n domain.NhiemVu, dn domain.DeNghiLuiHan, duyet bool) time.
 		return dn.HanMoi
 	}
 	return n.HanXuLy
+}
+
+// --- §5.4's document block ------------------------------------------------------------------------
+
+// apDungVanBan turns a decided domain.ThayDoiVanBan into statements, INSIDE the caller's
+// transaction.
+//
+// ONE FUNCTION FOR CREATE AND FOR EDIT, so the two cannot disagree about what a block means. On a
+// create the diff was computed against an empty stored block, so only the first loop does anything —
+// which is the same code path, not a second one that happens to behave alike.
+//
+// # THE POSITION IS MINTED AGAINST THE STORE'S HIGH-WATER MARK, ONCE PER GROUP
+//
+// `ThuTuVanBanLonNhat` counts SOFT-DELETED rows on purpose (see its own comment), so a number a
+// removed line still holds can never be handed out again. It is read once per group that actually
+// receives a new line and then advanced in Go: reading it per line would be one round trip each, and
+// re-reading it would answer the same number every time because the INSERTs of this transaction are
+// not visible to a statement that has not run yet. A group nobody adds to is never queried at all.
+//
+// ⚠ NOTHING HERE RECOMPUTES `thu_tu` OF AN EXISTING LINE, and nothing here can: `SuaVanBan` does not
+// name that column, and `td.Sua` carries the value read from the stored row. That is the rule
+// migration 0009 spends a block on, and it is enforced in three places on purpose — the unique key
+// underneath, the absent column in the UPDATE, and domain.SoSanhVanBan above.
+func (uc *GhiNhiemVu) apDungVanBan(ctx context.Context, tx *store.ScopedTx, nhiemVuID string,
+	td domain.ThayDoiVanBan, nguoiMa string, luc time.Time) error {
+
+	moc := make(map[domain.NhomVanBanNhiemVu]int, 3)
+	for _, v := range td.Them {
+		lonNhat, daDoc := moc[v.Nhom]
+		if !daDoc {
+			var err error
+			if lonNhat, err = uc.kho.ThuTuVanBanLonNhat(ctx, tx, nhiemVuID, v.Nhom); err != nil {
+				return err
+			}
+		}
+		thuTu := domain.ThuTuVanBanTiepTheo(lonNhat)
+		moc[v.Nhom] = thuTu
+
+		id, err := uc.sinhID()
+		if err != nil {
+			return fmt.Errorf("nhiem_vu_van_ban: sinh mã nội bộ: %w", err)
+		}
+		if err := uc.kho.ThemVanBan(ctx, tx, domain.NhiemVuVanBan{
+			ID:        id,
+			NhiemVuID: nhiemVuID,
+			Nhom:      v.Nhom,
+			SoKyHieu:  v.SoKyHieu,
+			// A ZERO time.Time REACHES THE STORE AS SQL NULL, and it is the ordinary case: §7.2 has
+			// one textarea and collects no document date at all today.
+			NgayVanBan: v.NgayVanBan,
+			TrichYeu:   v.TrichYeu,
+			ThuTu:      thuTu,
+		}); err != nil {
+			return err
+		}
+	}
+
+	for _, v := range td.Sua {
+		if err := uc.kho.SuaVanBan(ctx, tx, v); err != nil {
+			return err
+		}
+	}
+
+	// SOFT, ALWAYS. `nguoiMa` is the acting principal's STAFF BUSINESS CODE (rule 6, invariant 8):
+	// `deleted_by` is read years later by somebody handling a complaint, and a ULID names nobody.
+	// There is no reason column here — migration 0009 sets out why: removing a line is an EDIT of the
+	// task, and the reason for an edit lives on the audit entry of the act.
+	for _, v := range td.Xoa {
+		if err := uc.kho.XoaMemVanBan(ctx, tx, nhiemVuID, v.ID, nguoiMa, luc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// idVanBanDaGo lists the internal ids of the lines an edit removed, for the audit delta.
+//
+// IDS AND NOT TEXT — see the note at the call site. A ULID names nobody on its own, which is exactly
+// why it is safe here and exactly why rule 6, invariant 8 forbids it for the ACTOR: this is a
+// pointer back to a row that still exists, not a claim about a person.
+//
+// IT RETURNS nil FOR AN EMPTY SET, so the delta carries `null` rather than `[]` when nothing was
+// removed. One shape for "no lines were removed" beats two.
+func idVanBanDaGo(xoa []domain.NhiemVuVanBan) []string {
+	if len(xoa) == 0 {
+		return nil
+	}
+	ra := make([]string, 0, len(xoa))
+	for _, v := range xoa {
+		ra = append(ra, v.ID)
+	}
+	return ra
 }
 
 // --- shared -------------------------------------------------------------------------------------

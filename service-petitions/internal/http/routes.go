@@ -123,6 +123,13 @@ type (
 	// have no business being reachable from a GET.
 	NhiemVuDoc interface {
 		TheoMa(ctx context.Context, ma string) (domain.NhiemVu, error)
+
+		// §5.4's document block (migration 0009). A SECOND METHOD AND NOT A WIDER TheoMa, because
+		// the two surfaces need different things: the register LIST renders no documents, and
+		// folding the block into the single-task read would have been the shape that put it there
+		// too. It is keyed by the task's INTERNAL id, which the caller has from the row it just
+		// read.
+		VanBanCuaNhiemVu(ctx context.Context, nhiemVuID string) ([]domain.NhiemVuVanBan, error)
 	}
 
 	// NhiemVuDanhSach is the paginated read of the task register, for GET /api/v1/tasks.

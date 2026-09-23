@@ -46,6 +46,19 @@ type nhiemVuGia struct {
 	loi     error
 	goi     int
 	locCuoi petstore.LocNhiemVu
+
+	// vanBan is §5.4's document block, KEYED BY THE TASK'S INTERNAL id — the key the real store uses,
+	// so a handler that passed the register number instead would come back empty here too.
+	vanBan map[string][]domain.NhiemVuVanBan
+
+	// loiVanBan fails ONLY the block read, so a test can prove the detail route answers 500 rather
+	// than a task with an empty block — a statement about the record made from a failure to read it.
+	loiVanBan error
+
+	// goiVanBan counts the block reads. It is what proves the LIST route never makes one: the card of
+	// §4 draws no documents, and a page that loaded three lists per row would be payload nobody
+	// renders.
+	goiVanBan int
 }
 
 func (n *nhiemVuGia) TheoMa(ctx context.Context, ma string) (domain.NhiemVu, error) {
@@ -72,6 +85,26 @@ func (n *nhiemVuGia) DanhSach(ctx context.Context, loc petstore.LocNhiemVu, _ pa
 	kq := page.NewResult[domain.NhiemVu]()
 	kq.Items = append(kq.Items, n.theo[tenant.MustFrom(ctx)]...)
 	return kq, nil
+}
+
+// VanBanCuaNhiemVu reads the document block, and IT READS THE COMMUNE FROM THE CONTEXT exactly as
+// *store.Scoped does. Keyed any other way, a handler that leaked the block across communes would
+// still pass.
+func (n *nhiemVuGia) VanBanCuaNhiemVu(ctx context.Context, nhiemVuID string) (
+	[]domain.NhiemVuVanBan, error) {
+
+	n.goiVanBan++
+	_ = tenant.MustFrom(ctx)
+	if n.loiVanBan != nil {
+		return nil, n.loiVanBan
+	}
+	// NEVER nil ON SUCCESS — the real store returns an empty slice, and the difference between nil
+	// and empty is the whole meaning of `documents` on the wire.
+	ds := n.vanBan[nhiemVuID]
+	if ds == nil {
+		ds = []domain.NhiemVuVanBan{}
+	}
+	return ds, nil
 }
 
 // The fixture instants are FIXED, not relative to time.Now(): a deadline expressed as "two hours ago"

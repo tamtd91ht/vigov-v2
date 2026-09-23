@@ -67,9 +67,9 @@ import (
 // leader who handed the work out and who decides an extension request; the drawer labels that box
 // "Lãnh đạo giao việc", and the two names are allowed to differ.
 //
-// THE `Theo văn bản` DOCUMENT BLOCK OF §5.4 IS NOT ON THIS RESPONSE. `nhiem_vu_van_ban` does not
-// exist yet (migration 0006 states the absence), so the drawer renders the task without the three
-// document lists. A client must not read an empty field as "no documents" — there is no field.
+// THE `Theo văn bản` DOCUMENT BLOCK OF §5.4 IS ON THIS RESPONSE SINCE MIGRATION 0009 — see the
+// `documents` field and read its note before rendering it, because `null` and `[]` are two different
+// statements on this one field.
 type nhiemVuRa struct {
 	// Code is `ma` — the number the commune issued, `NV19`. Not `id`: the internal ULID means
 	// nothing outside this service, and every screen, every printed Sổ theo dõi and every audit
@@ -163,6 +163,110 @@ type nhiemVuRa struct {
 
 	CreatedBy string    `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
+
+	// Documents is §5.4's "SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO" — the three dynamic lists of §7.2, in the
+	// order the block is drawn (group, then position).
+	//
+	// ⚠ `null` AND `[]` MEAN TWO DIFFERENT THINGS HERE, AND A CLIENT THAT FOLDS THEM IS WRONG ON ONE
+	// OF THEM:
+	//
+	//	null  NOT SENT ON THIS SURFACE. The register LIST (GET /api/v1/tasks) does not carry the
+	//	      block — §4's card does not draw it, and three lists of free text per row of every page
+	//	      is payload nobody renders. It says NOTHING about whether the task has lines.
+	//	[]    THIS TASK HAS NO LINES. Only the detail read and the two write routes answer this, and
+	//	      they always answer with an array.
+	//
+	// Rendering `null` as "no documents" is how a card would report an empty block for a task with
+	// three. The distinction is the same one `domain.NhiemVu.VanBan` carries inside the service.
+	//
+	// THE LINES ARE NOT MASKED AND DO NOT NEED TO BE. Every field here is text a member of staff
+	// typed about an administrative document; no citizen name, number or address is on the record —
+	// and the day one is, this needs the branch phieuRaNgoai has (rule 3).
+	Documents []nhiemVuVanBanRa `json:"documents"`
+}
+
+// nhiemVuVanBanRa is ONE line of the block.
+//
+// THE FIELD NAMES SAY WHAT THE DATA IS, NOT WHAT THE SCREEN CALLS IT (ADR 0017): `reference` is the
+// document's number and symbol, which §5.4 labels nothing at all because it renders it inline.
+type nhiemVuVanBanRa struct {
+	// ID is the line's internal id, and it is ON THE WIRE because the edit route needs it: PATCH
+	// sends the block back WHOLE, and a line without an id would arrive as a new one on every save —
+	// so a task's three documents would become six, then nine.
+	//
+	// IT IS AN INTERNAL id AND NAMES NOTHING OUTSIDE THIS SERVICE, exactly like `parent` above and
+	// unlike `code`. A line has no business number: it is a field value of the task, not a record.
+	ID string `json:"id"`
+
+	// Group is one of the three closed codes of §5.4 — `cap-tren-giao`, `chi-dao-dang-uy`,
+	// `san-pham-dau-ra`. THE LABELS ARE NOT HERE: they are fixed captions on the screen, and a
+	// second copy of a display string is a second copy that drifts.
+	Group string `json:"group"`
+
+	// Reference is `1742-CV/BTCTU` and Date is the day printed on the document. BOTH ARE EMPTY IN
+	// THE ORDINARY CASE TODAY: §7.2 offers one textarea and does not split them out, so what the
+	// clerk typed is in `summary` alone. The server does NOT parse a sentence to fill these — a
+	// guessed reference number is a document number that does not exist.
+	Reference string `json:"reference"`
+
+	// Date is `YYYY-MM-DD`, or "" when the line records no document date.
+	//
+	// A DATE AND NOT AN INSTANT, and the column is `DATE` for the same reason: this is the day
+	// printed on paper (`9/6/2026`), with no time and no zone. Sending it as RFC 3339 would let a
+	// browser's zone decide which DAY a document was signed. The `9/6/2026` of §5.4 is a RENDERING
+	// and belongs to the screen (ADR 0017).
+	Date string `json:"date"`
+
+	// Summary is the text of the line — the trích yếu, or today the whole sentence §7.2's textarea
+	// carried.
+	Summary string `json:"summary"`
+
+	// Position is `thu_tu`, the line's place WITHIN ITS GROUP. It is an ISSUED NUMBER and not an
+	// array index: it is stable across saves, and a gap in it is the correct trace of a line that
+	// was removed (migration 0009). A client must render the array as it arrives — already ordered —
+	// rather than sorting on this value and inventing meaning for the gaps.
+	Position int `json:"position"`
+}
+
+// dinhDangNgay is `YYYY-MM-DD`: ISO 8601 with no time and no zone, which is what a `DATE` column
+// means and what a JSON contract carries.
+//
+// ⚠ `ngayHopRa` / `ngayHopVao` (bien_ban_hop.go, bien_ban_hop_ghi.go) WRITE THE SAME LITERAL, and
+// this pass deliberately did not fold the three together. Those two are for a MANDATORY date and
+// refuse an empty string with the meeting register's own sentinel; these two accept "" because §7.2
+// does not collect a document date at all. Merging them would mean one function with a flag deciding
+// whether absence is legal — and the reformat would touch a register this task has no business in.
+const dinhDangNgay = "2006-01-02"
+
+// ngayVanBanRa renders a document date, and renders the ZERO as "" rather than as the year 1.
+//
+// Marshalled straight, a zero time.Time travels as `0001-01-01`, which a screen renders happily and
+// a reader takes for a real date on a real document.
+func ngayVanBanRa(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(dinhDangNgay)
+}
+
+// vanBanRaNgoai builds the block. NEVER nil FOR A NON-nil INPUT — see the note on `documents`: an
+// empty array and a missing field are two different statements on this surface.
+func vanBanRaNgoai(ds []domain.NhiemVuVanBan) []nhiemVuVanBanRa {
+	if ds == nil {
+		return nil
+	}
+	ra := make([]nhiemVuVanBanRa, 0, len(ds))
+	for _, v := range ds {
+		ra = append(ra, nhiemVuVanBanRa{
+			ID:        v.ID,
+			Group:     string(v.Nhom),
+			Reference: v.SoKyHieu,
+			Date:      ngayVanBanRa(v.NgayVanBan),
+			Summary:   v.TrichYeu,
+			Position:  v.ThuTu,
+		})
+	}
+	return ra
 }
 
 // nhiemVuRaNgoai builds the response.
@@ -195,6 +299,10 @@ func nhiemVuRaNgoai(n domain.NhiemVu) nhiemVuRa {
 		Parent:               n.NhiemVuChaID,
 		CreatedBy:            n.NguoiTaoMa,
 		CreatedAt:            n.TaoLuc,
+		// nil IN, nil OUT — the register list never loads the block, and `null` on the wire says
+		// exactly that. See the note on the field; it is the one place this response has two
+		// meanings for one absence, and they are both needed.
+		Documents: vanBanRaNgoai(n.VanBan),
 	}
 	// A ZERO time.Time BECOMES JSON null, HERE AND IN ONE PLACE. Marshalled straight, it would
 	// travel as `0001-01-01T00:00:00Z` — a date the screen would happily render and a comparison
@@ -457,6 +565,22 @@ func (h *Handler) DocNhiemVu(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.d.Log.Error("đọc nhiệm vụ: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+
+	// §5.4'S DOCUMENT BLOCK — A SECOND READ, AND ONLY ON THIS ROUTE.
+	//
+	// It is keyed by the task's INTERNAL id, which came from the row just read, so the block cannot
+	// belong to a task of another commune even before the store binds `tenant_id` to $1.
+	//
+	// A FAILURE HERE IS A 500 AND NOT A TASK WITHOUT ITS BLOCK. Answering 200 with `documents: []`
+	// would tell the drawer this task has no referenced documents — a statement about the record
+	// made from a failure to read it, on the one surface where the block is the screen's content.
+	if n.VanBan, err = h.d.NhiemVu.VanBanCuaNhiemVu(ctx, n.ID); err != nil {
+		h.d.Log.Error("đọc sổ theo dõi văn bản của nhiệm vụ: lỗi hệ thống",
 			"xa", string(tenant.MustFrom(ctx)), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal",
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")

@@ -138,6 +138,13 @@ func (khoNhiemVu) DanhSach(ctx context.Context, _ petstore.LocNhiemVu, _ page.Re
 	return page.NewResult[domain.NhiemVu](), nil
 }
 
+// VanBanCuaNhiemVu — §5.4's document block, asserting the same one thing: the commune reached the
+// store. It is unreachable in practice from these tests, because TheoMa above always refuses first.
+func (khoNhiemVu) VanBanCuaNhiemVu(ctx context.Context, _ string) ([]domain.NhiemVuVanBan, error) {
+	_ = tenant.MustFrom(ctx)
+	return nil, nil
+}
+
 // khoBienBan stands in for the MEETING MINUTES register, present for the same reason as the stores
 // above: Register refuses incomplete Deps at construction. It asserts the one thing this file can
 // assert about a store — that the commune reached it.
