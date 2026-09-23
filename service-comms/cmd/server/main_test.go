@@ -25,6 +25,7 @@ import (
 	commsapp "github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
 	svchttp "github.com/vihat/vigov/service-comms/internal/http"
+	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 )
 
 const (
@@ -118,7 +119,14 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// chain — Host -> commune -> principal — and it asserts on the catalogue READ route.
 		// Register refuses a nil dependency at construction, so it has to be present.
 		GhiLoaiTaiNguyen: commsapp.NewDanhMucLoaiTaiNguyen(nil, nil),
-		Log:              log,
+		// The announcement book, built on a nil *store.DB for the same reason and with the same
+		// consequence: NOTHING IN THIS FILE CALLS EITHER. Register refuses a nil dependency at
+		// construction, so both have to be present, and a dependency that is never invoked cannot
+		// answer anything wrongly. The announcement routes have their own four-case permission suite
+		// in internal/http/thong_bao_noi_bo_test.go.
+		ThongBao:    commsstore.NewThongBaoNoiBoStore(nil),
+		GhiThongBao: commsapp.NewSoanThongBaoNoiBo(nil, nil),
+		Log:         log,
 	})
 
 	danhBa := thuMucGia{

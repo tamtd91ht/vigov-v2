@@ -33,6 +33,7 @@ import (
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
 )
@@ -93,6 +94,22 @@ type GhiLoaiTaiNguyen interface {
 // argument accepted for GET /api/v1/org-units and for all eight catalogue reads). Changing the list
 // is administration of the commune's own configuration, which is precisely what this key is for.
 
+// ThongBaoDanhSach is the READ half of the internal announcement book, for
+// GET /api/v1/announcements. AN INTERFACE DECLARED AT THE POINT OF USE, for the same reason
+// LoaiTaiNguyenDanhMuc is: the route carries the isolation this service exists to enforce, and
+// that has to be testable without a PostgreSQL or it gets tested once and then never again.
+type ThongBaoDanhSach interface {
+	DanhSach(ctx context.Context, yc page.Request) (page.Result[domain.ThongBaoNoiBo], error)
+}
+
+// GhiThongBao is the WRITE half, and it is a second interface rather than another method on the
+// read one — same argument as GhiLoaiTaiNguyen: the read is a store call, while this opens a
+// TRANSACTION and writes an audit entry inside it (rule 6, invariant 3). Two interfaces, two
+// obligations, visible at the point of use.
+type GhiThongBao interface {
+	PhatHanh(ctx context.Context, yc domain.YeuCauSoanThongBao, nguoi audit.Actor) (domain.ThongBaoNoiBo, error)
+}
+
 type Deps struct {
 	// Checker WAS unused and deliberately outside the refusal switch, and the comment here said so:
 	// no mounted route declared authz.RequirePermission. The three catalogue WRITE routes below do,
@@ -102,6 +119,11 @@ type Deps struct {
 
 	LoaiTaiNguyen    LoaiTaiNguyenDanhMuc
 	GhiLoaiTaiNguyen GhiLoaiTaiNguyen
+
+	// The internal announcement book (docs/ui-ux/08-thong-bao.md) — see internal/http/
+	// thong_bao_noi_bo.go for what is shipped, what is not, and which question blocks the rest.
+	ThongBao    ThongBaoDanhSach
+	GhiThongBao GhiThongBao
 
 	Log *slog.Logger
 }
@@ -121,8 +143,14 @@ func Register(mux *http.ServeMux, d Deps) {
 	if d.GhiLoaiTaiNguyen == nil {
 		panic("comms/http: thiếu use case ghi danh mục loại tài nguyên bản đồ — POST/PATCH/DELETE /api/v1/map-asset-types sẽ panic khi có người gọi")
 	}
+	if d.ThongBao == nil {
+		panic("comms/http: thiếu kho sổ thông báo nội bộ — GET /api/v1/announcements sẽ panic khi có người gọi")
+	}
+	if d.GhiThongBao == nil {
+		panic("comms/http: thiếu use case phát hành thông báo — POST /api/v1/announcements sẽ panic khi có người gọi")
+	}
 	if d.Checker == nil {
-		panic("comms/http: thiếu authz.Checker — ba tuyến ghi danh mục sẽ không kiểm được quyền")
+		panic("comms/http: thiếu authz.Checker — năm tuyến có khai quyền sẽ không kiểm được quyền")
 	}
 
 	h := NewHandler(d)
@@ -295,4 +323,66 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.XoaLoaiTaiNguyen))))
+
+	// --- the commune's internal announcement book -----------------------------------------------
+	//
+	// `announcements` — THE NOUN WAS LOOKED UP, NOT TRANSLATED: it is the settled mapping for this
+	// meaning of `thông báo` in kb/00-foundation/ubiquitous-language.md, which splits the one
+	// Vietnamese word into three resources for three audiences. §7's `/api/thong-bao` sketch cannot
+	// ship — ADR 0011 puts path segments in English, and `thong-bao` is a blocked segment.
+	//
+	// `announcement.create` ON THE READ ROUTE IS A KNOWN GAP AND IS ARGUED IN FULL at the top of
+	// internal/http/thong_bao_noi_bo.go. In one line: the `quyen` table has no read key for this
+	// group, §2's `Cả sổ thông báo` wants one, and rule 5 invariant 3c forbids inventing it — so
+	// the book is readable by whoever may compose announcements, which UNDER-grants rather than
+	// over-grants, and §2's `Gửi cho tôi` filter is not shipped at all.
+	//
+	// NO idem.* DECLARATION ON THE GET: it changes no state.
+	//
+	// @summary  Sổ thông báo nội bộ của xã — một trang thẻ, mới nhất ở trên, kèm bộ đếm xác nhận
+	// @screen   08-thong-bao §2, §3
+	// 400 is page.Parse refusing a cursor, a sort key or a limit; there is no other client input on
+	// this route. 403 is a real answer here, unlike on the catalogue read: this route checks a key.
+	// @reply    200 page.Result[thongBaoRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/announcements",
+		authz.RequirePermission(d.Checker, "announcement.create")(
+			http.HandlerFunc(h.DanhSachThongBao)))
+
+	// --- the commune issues an announcement to named staff ---------------------------------------
+	//
+	// `announcement.create` IS THE KEY THE SPECIFICATION ITSELF NAMES — §9.1, "Quyền soạn & phát
+	// hành: announcement.create" — and it is seeded at service-identity/migrations/0001_init.sql:279,
+	// so a commune administrator can actually tick it. NO NEW KEY WAS INVENTED (rule 5, invariant
+	// 3c): a key no migration seeds is a right nobody can grant, so the route would answer 403 to
+	// every account forever while the tests stayed green.
+	//
+	// idem.Required(DongKhiHong), AND THE CHOICE IS THE OPPOSITE OF THE CATALOGUE'S. There is NO
+	// unique key underneath this write — an announcement has no code and two identical notices are
+	// two legitimate rows — so a Redis outage with MoKhiHong would let a double-submitted form
+	// issue the SAME announcement twice, to the same colleagues, with two acknowledgement counters.
+	// The idempotency key is the ONLY layer here, so it cannot be allowed to fail open. Refusing
+	// while the cache is down costs one button; the alternative is telling a commune's staff the
+	// same thing twice and being unable to say which copy is the real one.
+	//
+	// 501 is on this list and is not a placeholder: an announcement addressed to DEPARTMENTS is
+	// refused, because expanding one into its staff needs a service-identity RPC that does not
+	// exist. See app.ErrGuiTheoBoPhanChuaCo — the alternative was delivering to nobody, silently.
+	//
+	// @summary  Phát hành một thông báo nội bộ tới các cán bộ được chọn đích danh
+	// @screen   08-thong-bao §5
+	// @request  phatHanhThongBaoVao
+	// @reply    201 thongBaoRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    501 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/announcements",
+		authz.RequirePermission(d.Checker, "announcement.create")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.PhatHanhThongBao))))
 }

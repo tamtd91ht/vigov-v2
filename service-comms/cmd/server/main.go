@@ -143,10 +143,16 @@ func main() {
 
 	loaiTaiNguyen := commsstore.NewLoaiTaiNguyenBanDoStore(kho)
 
+	// The internal announcement book (migration 0005). ONE store behind both routes: the read is a
+	// query, the write goes through the use case that owns the transaction its audit entry shares.
+	thongBao := commsstore.NewThongBaoNoiBoStore(kho)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:       staffauth.Checker{},
 		LoaiTaiNguyen: loaiTaiNguyen,
+		ThongBao:      thongBao,
+		GhiThongBao:   commsapp.NewSoanThongBaoNoiBo(kho, thongBao),
 		// The write use case owns the transaction the business write and its audit entry share
 		// (rule 6, invariant 3). It is given *store.DB rather than a transaction because opening one
 		// is precisely what it is for.

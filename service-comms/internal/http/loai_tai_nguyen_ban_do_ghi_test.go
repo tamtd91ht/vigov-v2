@@ -160,7 +160,12 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		Checker:          checker,
 		LoaiTaiNguyen:    danhMucMau(),
 		GhiLoaiTaiNguyen: ghi,
-		Log:              im,
+		// Present so Register accepts the Deps, and called by nothing here — this file is the
+		// catalogue's write suite. The announcement routes are covered in thong_bao_noi_bo_test.go,
+		// which needs a real idempotency store because its POST declares DongKhiHong.
+		ThongBao:    &soThongBaoGia{},
+		GhiThongBao: &ghiThongBaoGia{},
+		Log:         im,
 	})
 
 	var h http.Handler = mux

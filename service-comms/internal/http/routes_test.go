@@ -152,7 +152,12 @@ func dungMayChu(t *testing.T) *mayChu {
 			// acting person. Register refuses a nil dependency at construction, so it has to be
 			// present — and a fake that is never invoked cannot answer anything wrongly.
 			GhiLoaiTaiNguyen: &ghiDanhMucGia{},
-			Log:              slog.New(slog.NewTextHandler(io.Discard, nil)),
+			// Same argument for the two announcement dependencies: Register refuses a nil one at
+			// construction, and NOTHING IN THIS FILE CALLS EITHER — the announcement routes have
+			// their own four-case permission suite in thong_bao_noi_bo_test.go.
+			ThongBao:    &soThongBaoGia{},
+			GhiThongBao: &ghiThongBaoGia{},
+			Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 	}
 
