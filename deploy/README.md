@@ -117,7 +117,13 @@ mục 1 phải sửa cùng lượt. Đừng đổi một nửa.
 
 | ID | Kiểu | Dùng ở |
 |---|---|---|
-| `git-vigov` | Username with password (PAT) | ô `SCM` của cả 10 job |
+| tuỳ đặt (gợi ý `git-vigov`) | Username with password (PAT) | ô `SCM` của cả 10 job |
+
+**ID đặt tên gì cũng được** — bản tài liệu trước viết là phải khớp từng ký tự, và điều đó
+**không còn đúng** kể từ khi `deploy/Jenkinsfile` bỏ `withCredentials`: hôm nay **không một
+`Jenkinsfile` nào trong kho gọi tên một credential**. Nó chỉ được chọn trong ô SCM của từng
+job, nên tên là việc của người dựng job. Lượt chạy thật 23/09/2026 dùng `huypdk` và đi qua
+bình thường.
 
 Hai thứ còn lại **không** đi qua credentials của Jenkins, vì máy chủ này chỉ có bộ plugin lõi
 và dùng chung với dự án khác:
