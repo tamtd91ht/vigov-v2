@@ -84,6 +84,32 @@ export const QUYEN_XAC_NHAN_NGAN_SACH = "budget.confirm";
 export const QUYEN_XEM_PHAN_ANH = "feedback.read";
 
 /**
+ * `feedback.classify` — CHỐT LĨNH VỰC, và nó **không** suy ra từ `feedback.assign`.
+ *
+ * Hai quyền cố ý không phải một (ADR 0030; luật 5 bất biến 3b): chốt lĩnh vực là hành vi ẤN ĐỊNH
+ * hạn xử lý xong, tức **hứa thay cơ quan** rằng việc này xong trong bao lâu. Được giao việc không
+ * phải là được hứa thay cơ quan.
+ */
+export const QUYEN_PHAN_LOAI_PHAN_ANH = "feedback.classify";
+
+/** `feedback.assign` — chuyển phiếu cho bộ phận xử lý (`docs/ui-ux/09` §8.5). */
+export const QUYEN_PHAN_CONG_PHAN_ANH = "feedback.assign";
+
+/**
+ * `feedback.resolve` — **KẾT THÚC** xử lý phản ánh. Cổng của nút `Đóng phiếu`, và **chỉ** nút ấy.
+ *
+ * ⚠ KHÔNG DÙNG KHOÁ NÀY CHO NÚT TIẾN TRẠNG THÁI. Tuyến `…/status` khai `feedback.read`, còn điều
+ * kiện thật là `feedback.resolve` **HOẶC** chính là cán bộ được phân công phiếu ấy — luật nắm giữ
+ * (`app.duocTienTrangThai`). Trưởng thôn nhận một phiếu phải tiến được phiếu ấy dù không có khoá
+ * toàn xã; gắn nút ấy sau `feedback.resolve` là lấy mất đúng điều luật nắm giữ mở ra.
+ *
+ * VÀ CHIỀU NGƯỢC LẠI CŨNG KHÔNG: `…/closure` **không** được nới theo luật nắm giữ. Đóng phiếu ghi
+ * một kết quả **người dân đọc** (luật 10 bất biến 6), và câu hỏi mở #7 chốt 16/09/2026:
+ * *"`feedback.resolve` quyết định ai đóng được"*. Hai nút, hai cổng khác nhau.
+ */
+export const QUYEN_DONG_PHAN_ANH = "feedback.resolve";
+
+/**
  * Khoá quyền của ba thao tác GHI ở tab "Danh mục" — `admin.lookup`.
  *
  * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên cả mười lăm tuyến ghi danh mục

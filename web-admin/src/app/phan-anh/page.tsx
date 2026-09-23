@@ -1,6 +1,7 @@
 import { CauHinhXaProvider, phanHienThi } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
+import { SoPhanAnh } from "@/features/phan-anh/so-phan-anh";
 import { TraCuuPhieu } from "@/features/phan-anh/tra-cuu-phieu";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
@@ -44,6 +45,11 @@ export default async function TrangPhanAnh() {
               "phần này không hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này."
             }
           >
+            {/* MỘT CỔNG `feedback.read` CHO CẢ HAI, vì cả sáu tuyến của màn này đứng sau nó (hoặc
+                sau một khoá hẹp hơn). Bốn thao tác ghi có cổng RIÊNG bên trong, và một trong bốn
+                — `Đóng phiếu` — cố ý đứng sau khoá khác với nút tiến trạng thái; xem
+                `features/phan-anh/quyen-phan-anh.ts`. */}
+            <SoPhanAnh />
             <TraCuuPhieu />
           </CongQuyen>
         </main>

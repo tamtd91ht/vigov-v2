@@ -24,12 +24,16 @@ import {
  * Tra cứu một phiếu phản ánh theo **mã tra cứu** — `docs/ui-ux/09-phan-anh-nguoi-dan.md §8`.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * VÌ SAO ĐÂY LÀ MÀN TRA MỘT PHIẾU CHỨ KHÔNG PHẢI DANH SÁCH THẺ MÀ ĐẶC TẢ §2 VẼ.
+ * ⚠ LÝ LẼ CŨ CỦA KHỐI NÀY ĐÃ HẾT HIỆU LỰC TỪ 23/09/2026, và nó được ghi lại chứ không xoá lặng
+ * lẽ: một chú thích nói "hợp đồng không có tuyến danh sách" là thứ người sau đọc rồi dựng một
+ * màn hình nghèo đi theo. Nay ĐÃ CÓ `GET /api/v1/citizen-reports`, và quyển sổ §2 kèm bộ lọc §4
+ * nằm ở `features/phan-anh/so-phan-anh.tsx`.
  *
- * Hợp đồng REST có đúng một tuyến đọc phản ánh: `GET /api/v1/citizen-reports/{maTraCuu}`. Không
- * có tuyến danh sách, không có tuyến thống kê, nên bốn thẻ KPI, ba bộ lọc, tab Bản đồ nhiệt và
- * tab Báo cáo đều không có gì đứng sau. Vẽ chúng ra là hứa với cán bộ những thứ không tồn tại,
- * và bốn con số KPI bịa ra là thứ lãnh đạo đọc rồi báo cáo lên trên.
+ * MÀN NÀY KHÔNG BỊ THAY THẾ, nó đứng CẠNH quyển sổ: mã tra cứu mở thẳng đúng một phiếu, kể cả
+ * phiếu không khớp bộ lọc đang chọn — đúng việc cán bộ làm khi người dân gọi điện đọc mã.
+ *
+ * Bốn thẻ KPI, tab Bản đồ nhiệt và tab Báo cáo thì VẪN không có gì đứng sau; danh sách đầy đủ
+ * những phần ấy nằm ở `PHAN_CHUA_DUNG` và hiện trên màn, không giấu ở đây.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
  * MÃ TRA CỨU KHÔNG ĐOÁN ĐƯỢC, VÀ MÀN HÌNH NÀY KHÔNG LÀM NÓ ĐOÁN ĐƯỢC. Không gợi ý, không tự hoàn
@@ -39,9 +43,10 @@ import {
  * KHÔNG CÓ GHI CHÚ NỘI BỘ, KHÔNG CÓ LỊCH SỬ LUÂN CHUYỂN, KHÔNG CÓ NHẬT KÝ XỬ LÝ trên màn này —
  * vì hợp đồng không trả về chúng. Đã đối chiếu từng trường của `petitions.phieuPhanAnhRa`.
  *
- * KHÔNG CÓ BỀ MẶT GHI NÀO: chuyển trạng thái, chuyển xử lý, ghi nhận đánh giá, cho hiện công
- * khai — đặc tả vẽ cả bốn, không thao tác nào có tuyến phía sau. Mỗi thao tác ấy đổi trạng thái
- * một hồ sơ hành chính và phải thông báo cho người dân cùng lúc (luật 10, bất biến 5).
+ * KHÔNG CÓ BỀ MẶT GHI NÀO **Ở MÀN NÀY**, và đó nay là một lựa chọn chứ không còn là một sự thiếu:
+ * bốn thao tác xử lý (phân loại · chuyển xử lý · tiến trạng thái · đóng phiếu) nằm ở khối chi tiết
+ * của quyển sổ, nơi có đủ danh mục bộ phận và đủ bộ quyền của phiên để vẽ đúng nút. Hai bề mặt ghi
+ * cho cùng bốn hành vi là hai bề mặt sẽ lệch nhau, và bản lệch là bản không ai mở ra xem lại.
  */
 
 type TrangThaiTra =

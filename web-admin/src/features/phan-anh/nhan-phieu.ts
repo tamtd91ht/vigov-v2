@@ -207,10 +207,329 @@ export function nhanHienCongKhai(hien: boolean): string {
     : "Chưa cho hiện công khai. Chỉ cán bộ trong xã xem được. Người gửi vẫn tra cứu được phiếu của mình.";
 }
 
-/** Câu dẫn của ô nhập mã. Nói rõ màn này tra MỘT phiếu, không phải danh sách. */
+/** Câu dẫn của ô nhập mã. Màn tra cứu nay đứng CẠNH quyển sổ, không thay cho nó. */
 export const HUONG_DAN_TRA_CUU =
-  "Nhập mã tra cứu đã trả cho người dân để mở đúng một phiếu. Màn hình này chưa có danh sách " +
-  "phiếu: hợp đồng chưa có tuyến trả về danh sách phản ánh.";
+  "Nhập mã tra cứu đã trả cho người dân để mở thẳng đúng một phiếu, kể cả phiếu không nằm trong " +
+  "bộ lọc đang chọn ở quyển sổ bên trên.";
 
 /** Chưa gõ mã nào. Trạng thái BÌNH THƯỜNG lúc mở màn, không phải lỗi. */
 export const CHUA_TRA_CUU = "Chưa tra phiếu nào. Nhập mã tra cứu rồi bấm Tra cứu.";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * DANH MỤC LĨNH VỰC PHẢN ÁNH — 12 mục, §5
+ *
+ * ⚠ ĐÂY LÀ BẢN CHÉP TAY THỨ BA CỦA TỆP NÀY, cùng loại với `NHAN_TRANG_THAI` và `NHAN_KENH` bên
+ * trên, và nó là LỖ HỔNG CỦA HỢP ĐỒNG chứ không phải một lựa chọn ở đây: `openapi.json` không có
+ * tuyến nào trả về danh mục lĩnh vực phản ánh. Bộ mã tầng 1 do dịch vụ `platform` giữ và
+ * `service-petitions` cũng không đọc được nó (ADR 0026, điều kiện dừng #2) — chính vì thế handler
+ * **không kiểm** `field` tồn tại hay không (`domain.KiemLinhVuc`).
+ *
+ * HAI HỆ QUẢ ĐƯỢC NÓI RA THAY VÌ GIẤU:
+ *
+ *   1. Xã đặt lại tên cho một mã thì NHÃN TRÊN THẺ vẫn đúng — nó lấy `field_label` máy chủ gửi.
+ *      Chỉ ô CHỌN dưới đây là dùng nhãn chép tay, vì lúc chọn thì chưa có phiếu nào để hỏi.
+ *   2. Khách chốt thêm mã thứ mười ba thì màn hình này KHÔNG đỏ ở `tsc` — ô chọn chỉ thiếu một
+ *      dòng, lặng lẽ. Đã báo về.
+ *
+ * `can-bo` CÓ TRONG DANH SÁCH NÀY, VÀ ĐÓ KHÔNG PHẢI SƠ SUẤT. Nó là lĩnh vực hạn chế ở đường ĐỌC
+ * (máy chủ trả 404 cho tài khoản thiếu `feedback.restricted`, và loại hẳn khỏi trang), nhưng chốt
+ * lĩnh vực VÀO `can-bo` là hành vi được phép với người có `feedback.classify`
+ * (`app.duocChamPhieuHanChe`) — đúng tình huống một cán bộ đọc phiếu rồi nhận ra nó nói về một
+ * đồng nghiệp. Bỏ mục ấy khỏi ô chọn là bịt đường phân loại đúng.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export type MucChon = { readonly ma: string; readonly nhan: string };
+
+export const LINH_VUC_PHAN_ANH: readonly MucChon[] = [
+  { ma: "rac-thai", nhan: "Rác thải – Vệ sinh môi trường" },
+  { ma: "giao-thong", nhan: "Hạ tầng giao thông" },
+  { ma: "cap-thoat-nuoc", nhan: "Cấp thoát nước" },
+  { ma: "dien", nhan: "Điện" },
+  { ma: "trat-tu-do-thi", nhan: "Trật tự đô thị – lấn chiếm vỉa hè" },
+  { ma: "an-ninh", nhan: "An ninh trật tự" },
+  { ma: "xay-dung", nhan: "Xây dựng không phép" },
+  { ma: "o-nhiem", nhan: "Ô nhiễm (tiếng ồn, khí thải, nước thải)" },
+  { ma: "y-te-giao-duc", nhan: "Y tế – Giáo dục" },
+  { ma: "can-bo", nhan: "Thái độ / tác phong cán bộ" },
+  { ma: "an-toan-thuc-pham", nhan: "An toàn thực phẩm" },
+  { ma: "khac", nhan: "Khác" },
+];
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * CHÍN TRẠNG THÁI — danh sách ĐÓNG (ADR 0027; khách duyệt NGUYÊN VĂN từng ký tự 20/09/2026)
+ *
+ * Đổi một trong chín chuỗi mã là **di trú hồ sơ lưu trữ** (luật 7), không phải đổi tên. Bảy mã
+ * luồng chính đi theo đúng thứ tự vòng đời; hai mã còn lại là rẽ nhánh.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const LUONG_CHINH: readonly string[] = [
+  "da-tiep-nhan",
+  "dang-phan-loai",
+  "da-chuyen-xu-ly",
+  "dang-xu-ly",
+  "da-xu-ly",
+  "cho-dan-xac-nhan",
+  "da-dong",
+];
+
+export const RE_NHANH: readonly string[] = ["khong-tiep-nhan", "chuyen-cap-tren"];
+
+/** Chín mã, đúng thứ tự ô chọn `Tất cả trạng thái` của §4. */
+export const MOI_TRANG_THAI: readonly string[] = [...LUONG_CHINH, ...RE_NHANH];
+
+/** Bốn kênh tiếp nhận (§7, §12), cho ô lọc. */
+export const MOI_KENH: readonly string[] = ["zalo-mini-app", "zalo-oa", "web-xa", "can-bo-nhap-ho"];
+
+/** Một ô của StatusStepper §8.2. */
+export type OBuoc = {
+  readonly ma: string;
+  readonly nhan: string;
+  readonly vaiTro: "daQua" | "dangODay" | "chuaToi";
+};
+
+/**
+ * Bảy ô luồng chính, với ô hiện tại đánh dấu `đang ở đây` (§8.2).
+ *
+ * PHIẾU ĐANG Ở MỘT RẼ NHÁNH (`khong-tiep-nhan`, `chuyen-cap-tren`) THÌ KHÔNG Ô NÀO LÀ "đang ở
+ * đây", và bảy ô đều `chuaToi`. Không suy bừa một vị trí trên luồng chính cho một phiếu đã rời
+ * khỏi luồng ấy: một ô tô màu sai nói với cán bộ rằng phiếu còn đang chạy.
+ *
+ * MỘT MÃ LẠ (hợp đồng mọc thêm trạng thái) cũng rơi vào đúng nhánh trên — không ô nào sáng — và
+ * chuỗi trạng thái hiện nguyên mã ở chỗ khác. Không nhánh dự phòng nào ở đây tô ô đầu tiên.
+ */
+export function buocLuongChinh(trangThai: string): readonly OBuoc[] {
+  const viTri = LUONG_CHINH.indexOf(trangThai);
+  return LUONG_CHINH.map((ma, i) => ({
+    ma,
+    nhan: nhanTrangThai(ma),
+    vaiTro: viTri < 0 ? "chuaToi" : i < viTri ? "daQua" : i === viTri ? "dangODay" : "chuaToi",
+  }));
+}
+
+/**
+ * Câu giải thích trạng thái hiện tại (§8.2, dòng dưới stepper).
+ *
+ * ĐẶC TẢ CHO ĐÚNG MỘT CÂU TRONG CHÍN, và tám câu còn lại **không được bịa ra ở đây**: đó là chữ
+ * hiện trên màn hình cán bộ của một cơ quan nhà nước, và §11 của chính chương này vừa cho thấy hậu
+ * quả — một câu mô tả cũ, không ai duyệt lại, nói sai về thời hạn của phiếu nhập hộ. Trả `null`
+ * thì màn hình không hiện dòng nào, chứ không hiện một câu do web nghĩ ra.
+ */
+export function cauGiaiThichTrangThai(trangThai: string): string | null {
+  if (trangThai === "dang-phan-loai") {
+    return "Đang xem phiếu thuộc lĩnh vực nào, có tiếp nhận không.";
+  }
+  return null;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * BỐN THAO TÁC, VÀ **HAI CỔNG KHÁC NHAU** — điểm chính của màn hình này
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Nút nào ĐƯỢC VẼ cho bộ quyền của phiên hiện tại. */
+export type CongThaoTac = {
+  readonly phanLoai: boolean;
+  readonly phanCong: boolean;
+  /**
+   * Nút `Đóng phiếu`. `feedback.resolve` và **chỉ** khoá ấy — xem `quyen-phan-anh.ts`.
+   */
+  readonly dongPhieu: boolean;
+};
+
+/**
+ * Bốn nút, và chỉ BA trong bốn có cổng ở giao diện.
+ *
+ * ⚠ `tienTrangThai` KHÔNG CÓ TRONG KIỂU NÀY, VÀ SỰ VẮNG MẶT ẤY LÀ NỘI DUNG CHÍNH CHỨ KHÔNG PHẢI
+ * MỘT CHỖ CÒN THIẾU. Điều kiện thật của `…/status` là `feedback.resolve` **HOẶC** chính là cán bộ
+ * được phân công phiếu ấy (LUẬT NẮM GIỮ). Vế thứ hai giao diện **không tính được**: phản hồi mang
+ * `assignee` là ULID nội bộ của cán bộ, còn phiên hiện tại chỉ mang `staff.code` — mã nghiệp vụ —
+ * và hợp đồng không có đường nối hai thứ ấy cho một tài khoản không có `admin.user`.
+ *
+ * Nên nút tiến trạng thái HIỆN VỚI MỌI NGƯỜI XEM ĐƯỢC SỔ, và câu 403 của máy chủ
+ * (*"Phiếu này không được phân công cho bạn…"*) ra thẳng màn hình. Gắn nó sau `feedback.resolve`
+ * cho "gọn" là lấy mất đúng điều luật nắm giữ mở ra cho trưởng thôn.
+ */
+export function congThaoTac(coPhanLoai: boolean, coPhanCong: boolean, coDong: boolean): CongThaoTac {
+  return { phanLoai: coPhanLoai, phanCong: coPhanCong, dongPhieu: coDong };
+}
+
+/**
+ * Nút `Phân loại` chỉ có nghĩa khi phiếu CHƯA phân loại.
+ *
+ * Máy chủ chốt lĩnh vực bằng một câu `UPDATE` mang `trang_thai = 'da-tiep-nhan'`, nên lần thứ hai
+ * trả **409** (`routes.go`, khối `PHÂN LOẠI`). Ẩn nút ở trạng thái khác là nói ra điều ấy trước,
+ * chứ không phải dựng thêm một luật.
+ */
+export function phanLoaiDuoc(trangThai: string): boolean {
+  return trangThai === "da-tiep-nhan";
+}
+
+/** Phiếu đã đóng hoặc đã rẽ nhánh thì không còn bước kế tiếp trên luồng chính. */
+export function conBuocKeTiep(trangThai: string): boolean {
+  const viTri = LUONG_CHINH.indexOf(trangThai);
+  return viTri >= 0 && viTri < LUONG_CHINH.length - 1;
+}
+
+/** Câu dưới nút `Đóng phiếu` khi tài khoản thiếu `feedback.resolve`. Nói ĐÚNG tên khoá. */
+export const CAU_THIEU_QUYEN_DONG =
+  "Tài khoản của bạn không có quyền kết thúc xử lý phản ánh (feedback.resolve), nên không có nút " +
+  "Đóng phiếu. Bạn vẫn tiến được trạng thái của phiếu được phân công cho mình.";
+
+export const CAU_THIEU_QUYEN_PHAN_LOAI =
+  "Tài khoản của bạn không có quyền chốt lĩnh vực phản ánh (feedback.classify), nên không có ô " +
+  "phân loại. Chốt lĩnh vực là hành vi ấn định hạn xử lý xong của xã.";
+
+export const CAU_THIEU_QUYEN_PHAN_CONG =
+  "Tài khoản của bạn không có quyền chuyển xử lý phản ánh (feedback.assign), nên không có khối " +
+  "Chuyển xử lý.";
+
+/** Nhãn nút tiến trạng thái. Không nêu tên bước kế tiếp: máy chủ giữ bản đồ, không phải màn này. */
+export const NHAN_TIEN_TRANG_THAI = "Chuyển sang bước kế tiếp";
+
+export const GHI_CHU_TIEN_TRANG_THAI =
+  "Máy chủ quyết định bước kế tiếp trên luồng chính. Phiếu được phân công cho bạn thì bạn tiến " +
+  "được, dù tài khoản không có quyền xử lý phản ánh của cả xã.";
+
+export const NHAN_O_KET_QUA = "Kết quả xử lý người dân đọc được";
+
+export const GHI_CHU_O_KET_QUA =
+  "Câu này hiện trên phiếu của người dân khi họ tra cứu. Bắt buộc phải có — một phiếu đóng mà " +
+  "không nói kết quả là một phiếu bị xếp lại trong im lặng.";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * QUYỂN SỔ — câu chữ của danh sách và bộ lọc (§2, §4)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const SO_RONG =
+  "Không có phiếu phản ánh nào khớp bộ lọc đang chọn. Bỏ bớt điều kiện lọc để xem rộng hơn.";
+
+export const DANG_TAI_SO = "Đang tải sổ phản ánh…";
+
+/** Nhãn "mọi giá trị" của từng ô lọc — nguyên văn §4. */
+export const MOI_TRANG_THAI_NHAN = "Tất cả trạng thái";
+export const MOI_LINH_VUC_NHAN = "Tất cả lĩnh vực";
+export const MOI_DIA_BAN_NHAN = "Tất cả địa bàn";
+export const MOI_BO_PHAN_NHAN = "Tất cả bộ phận";
+export const MOI_KENH_NHAN = "Tất cả kênh tiếp nhận";
+export const CHI_TRE_HAN_NHAN = "Chỉ phiếu trễ hạn";
+export const TIM_PLACEHOLDER = "Tìm theo nội dung, mã phiếu, địa chỉ…";
+
+/**
+ * Bộ phận đang giữ phiếu, đọc ra thành chữ.
+ *
+ * `unit` LÀ ULID, KHÔNG PHẢI TÊN. Tra sang tên bằng danh mục `GET /api/v1/org-units` — tuyến
+ * `any-authenticated`, nên mọi tài khoản xem được sổ đều tra được. Một id không có trong danh mục
+ * (bộ phận vừa bị đổi, danh mục đọc hỏng) thì hiện câu nói ra điều đó, KHÔNG hiện id: một chuỗi
+ * `01JB…` trên màn hình cán bộ là một chuỗi không ai làm gì được.
+ */
+export function nhanBoPhan(id: string, tenTheoID: ReadonlyMap<string, string>): string {
+  if (id === "") return "Chưa chuyển bộ phận";
+  return tenTheoID.get(id) ?? "Bộ phận không còn trong danh mục";
+}
+
+/**
+ * Ô `ĐANG GIAO CHO` của §8.3 — phần CÁN BỘ.
+ *
+ * ⚠ KHÔNG HIỆN ĐƯỢC HỌ TÊN VÀ EMAIL như đặc tả vẽ, và lý do nằm ở hợp đồng chứ không ở đây:
+ * `assignee` là **ULID nội bộ**, còn tuyến duy nhất tra được ULID → họ tên là `GET /api/v1/staff`,
+ * tuyến ấy đòi `admin.user` — một khoá **cấu hình hệ thống**, không liên quan gì tới việc xử lý
+ * phản ánh. Gọi nó ở đây sẽ 403 với gần như mọi cán bộ đang trực. Nên màn hình nói ra sự thật ngắn
+ * nhất mà nó biết chắc, và phần còn lại nằm ở `PHAN_CHUA_DUNG`.
+ */
+export function nhanCanBoXuLy(assignee: string): string {
+  return assignee === ""
+    ? "Chưa phân công cán bộ cụ thể"
+    : "Đã phân công cho một cán bộ (hợp đồng chỉ trả mã nội bộ, xem phần chưa dựng được)";
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
+ *
+ * Không giấu trong chú thích, không vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` của màn
+ * Thu - Chi ngân sách.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export type PhanChuaDung = {
+  readonly ten: string;
+  readonly viSao: string;
+};
+
+export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
+  {
+    ten: "Ảnh trước / sau khi xử lý (§8.4)",
+    viSao:
+      "Bảng `anh_phan_anh` KHÔNG TỒN TẠI — migration `0005_duong_xu_ly_phan_anh.sql:29-33` khai " +
+      "thẳng rằng nó cố ý chưa được tạo — và hợp đồng không có tuyến tải ảnh nào. Hệ quả nặng hơn " +
+      "một ô ảnh trống: quy tắc §14.2 *“không đóng phiếu được khi thiếu ảnh sau xử lý”* hôm nay " +
+      "KHÔNG được cưỡng chế ở đâu cả, vì cả bảng ảnh lẫn cờ `bat_buoc_anh_nghiem_thu` của ADR 0008 " +
+      "đều chưa có. Nút Đóng phiếu bên dưới vì thế đóng được một phiếu chưa có ảnh nghiệm thu.",
+  },
+  {
+    ten: "Nhật ký xử lý, dòng thời gian (§8.7)",
+    viSao:
+      "Bảng `nhat_ky_phan_anh` chưa có và không tuyến nào đọc hay ghi nó (cùng migration, dòng " +
+      "34-36). Đây là bản ghi NGHIỆP VỤ cán bộ đọc, khác `audit_log` — vết kiểm toán không hiện ra " +
+      "cho xã. Dựng ô nhập `Đã làm gì, ai làm, còn vướng gì…` mà không có chỗ lưu là mời cán bộ gõ " +
+      "vào một cái hộp rồi mất.",
+  },
+  {
+    ten: "Bốn thẻ KPI (§3), tab Bản đồ nhiệt (§9), tab Báo cáo (§10)",
+    viSao:
+      "Không có tuyến thống kê, không có tuyến heatmap, và hợp đồng không trả `lat`/`lng`. Bốn con " +
+      "số KPI hay một bảng “theo lĩnh vực” dựng bằng cách đếm trang đang xem sẽ là con số của MỘT " +
+      "TRANG chứ không của cả xã — và đó là con số lãnh đạo đọc rồi báo cáo lên trên.",
+  },
+  {
+    ten: "Phạm vi `Giao cho tôi` / `Liên quan đến tôi` (§4, phụ lục §5.1)",
+    viSao:
+      "Máy chủ chỉ nhận bảy bộ lọc và không có cái nào theo người dùng hiện tại. Một tham số máy " +
+      "chủ không nhận thì bị bỏ qua LẶNG LẼ: tab sẽ sáng lên trong khi danh sách vẫn là cả xã.",
+  },
+  {
+    ten: "Lọc `Bị đánh giá thấp`, ghi nhận đánh giá của người dân (§4, §8.6)",
+    viSao:
+      "Hợp đồng không trả `diem_hai_long` và không có tuyến ghi đánh giá. Cơ chế 1–2 sao tự mở lại " +
+      "phiếu do ba cờ cấu hình của ADR 0008 điều khiển, và không bảng nào trong kho này giữ chúng.",
+  },
+  {
+    ten: "Hai ô rẽ nhánh của StatusStepper: `Không tiếp nhận`, `Chuyển cấp trên` (§8.2)",
+    viSao:
+      "Tuyến `…/status` cố ý KHÔNG nhận trạng thái đích — máy chủ giữ bản đồ vòng đời và chỉ tiến " +
+      "một bước trên luồng chính. Vẽ hai ô bấm được là vẽ hai nút không có tuyến nào đứng sau.",
+  },
+  {
+    ten: "Nút `👁 Cho hiện công khai` / `🚫 Ẩn khỏi trang công khai` (§8.3)",
+    viSao:
+      "Hợp đồng trả `public` để ĐỌC nhưng không có tuyến ghi nó. Ô kiểm duyệt bên dưới vì thế là " +
+      "chữ chỉ đọc.",
+  },
+  {
+    ten: "Họ tên — email của cán bộ đang giữ phiếu (§8.3, §8.5)",
+    viSao:
+      "`assignee` về dạng ULID nội bộ, và tuyến duy nhất tra được nó — `GET /api/v1/staff` — đòi " +
+      "`admin.user`, một khoá cấu hình hệ thống không liên quan tới việc xử lý phản ánh. Vì thế ô " +
+      "chọn `Cán bộ xử lý` của §8.5 cũng không dựng: khối Chuyển xử lý gửi bộ phận, đúng lựa chọn " +
+      "mặc định mà đặc tả đã ghi — `— Để bộ phận phân công —`.",
+  },
+  {
+    ten: "Modal `Nhập hộ phản ánh` (§11)",
+    viSao:
+      "Không có tuyến vào sổ phía cán bộ: `POST /api/v1/citizen-reports` không tồn tại, chỉ có " +
+      "`POST /api/v1/my-citizen-reports` của công dân trong Mini App. Ngoài ra câu mô tả của modal " +
+      "ấy đã sai từ ADR 0028 và đang chờ khách duyệt câu thay thế (§11).",
+  },
+  {
+    ten: "Câu giải thích trạng thái, tám trong chín (§8.2)",
+    viSao:
+      "Đặc tả chỉ cho nguyên văn MỘT câu (`Đang phân loại`). Tám câu còn lại là chữ hiện ra cho cán " +
+      "bộ của một cơ quan nhà nước; viết thêm ở đây là tự quyết chữ chưa ai duyệt — đúng chỗ §11 " +
+      "của chính chương này vừa hỏng.",
+  },
+  {
+    ten: "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",
+    viSao:
+      "Hạn đếm bằng **giờ làm việc** của chính xã, cần lịch làm việc, ngày nghỉ lễ và ngày làm bù " +
+      "— ba bảng do `identity` sở hữu (ADR 0007). Đếm bằng giờ treo tường ở trình duyệt sẽ ra một " +
+      "con số khác con số của máy chủ vào đúng dịp lễ. Màn hình vì thế nói `Quá hạn` kèm mốc hạn " +
+      "cuối, không nói mấy ngày.",
+  },
+];

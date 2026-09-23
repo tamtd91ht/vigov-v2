@@ -3,8 +3,16 @@ import { describe, expect, it } from "vitest";
 import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
 
 import {
+  buocLuongChinh,
+  cauGiaiThichTrangThai,
+  conBuocKeTiep,
+  LINH_VUC_PHAN_ANH,
   linhVucPhanAnh,
   lopHan,
+  LUONG_CHINH,
+  MOI_TRANG_THAI,
+  nhanBoPhan,
+  nhanCanBoXuLy,
   nhanHan,
   nhanHienCongKhai,
   nhanKenh,
@@ -12,6 +20,8 @@ import {
   nhanNguoiGui,
   nhanThoiDiem,
   nhanTrangThai,
+  phanLoaiDuoc,
+  RE_NHANH,
   trangThaiHan,
 } from "./nhan-phieu";
 
@@ -175,5 +185,95 @@ describe("hiển thị với người dân", () => {
   it("hai ca nói hai câu khác nhau, và ca chưa công khai giữ nguyên lời trấn an của đặc tả", () => {
     expect(nhanHienCongKhai(false)).toContain("Người gửi vẫn tra cứu được phiếu của mình");
     expect(nhanHienCongKhai(true)).not.toBe(nhanHienCongKhai(false));
+  });
+});
+
+describe("chín trạng thái — danh sách ĐÓNG, khách duyệt nguyên văn 20/09/2026", () => {
+  it("bảy luồng chính cộng hai rẽ nhánh, đúng chín mã, đúng thứ tự vòng đời", () => {
+    // Đổi một trong chín chuỗi là DI TRÚ HỒ SƠ LƯU TRỮ (luật 7), không phải đổi tên. Bài này viết
+    // lại chín chuỗi bằng tay CÓ CHỦ Ý: nó phải đỏ khi ai đó "sửa chính tả" một mã.
+    expect(LUONG_CHINH).toEqual([
+      "da-tiep-nhan",
+      "dang-phan-loai",
+      "da-chuyen-xu-ly",
+      "dang-xu-ly",
+      "da-xu-ly",
+      "cho-dan-xac-nhan",
+      "da-dong",
+    ]);
+    expect(RE_NHANH).toEqual(["khong-tiep-nhan", "chuyen-cap-tren"]);
+    expect(MOI_TRANG_THAI).toHaveLength(9);
+  });
+
+  it("cả chín mã đều có nhãn — không mã nào rơi xuống nhánh dự phòng", () => {
+    for (const ma of MOI_TRANG_THAI) {
+      expect(nhanTrangThai(ma)).not.toContain("chưa có nhãn");
+    }
+  });
+});
+
+describe("mười hai lĩnh vực — §5", () => {
+  it("đủ mười hai mã, và `can-bo` CÓ trong ô chọn", () => {
+    expect(LINH_VUC_PHAN_ANH).toHaveLength(12);
+    // Lĩnh vực hạn chế ở đường ĐỌC, nhưng chốt lĩnh vực VÀO nó là hành vi được phép — đúng tình
+    // huống cán bộ đọc phiếu rồi nhận ra nó nói về một đồng nghiệp. Bỏ mục ấy là bịt đường phân
+    // loại đúng.
+    expect(LINH_VUC_PHAN_ANH.map((l) => l.ma)).toContain("can-bo");
+  });
+});
+
+describe("StatusStepper §8.2", () => {
+  it("phiếu trên luồng chính: đúng MỘT ô `đang ở đây`, các ô trước là `đã qua`", () => {
+    const o = buocLuongChinh("dang-xu-ly");
+    expect(o.filter((x) => x.vaiTro === "dangODay").map((x) => x.ma)).toEqual(["dang-xu-ly"]);
+    expect(o.filter((x) => x.vaiTro === "daQua")).toHaveLength(3);
+  });
+
+  it("phiếu ở RẼ NHÁNH: KHÔNG ô nào sáng — không đoán bừa một vị trí trên luồng chính", () => {
+    // Một ô tô màu sai nói với cán bộ rằng phiếu còn đang chạy trên luồng chính.
+    for (const ma of RE_NHANH) {
+      expect(buocLuongChinh(ma).some((x) => x.vaiTro === "dangODay")).toBe(false);
+    }
+  });
+
+  it("mã lạ (hợp đồng mọc thêm trạng thái) cũng không làm sáng ô đầu tiên", () => {
+    expect(buocLuongChinh("mot-ma-moi").every((x) => x.vaiTro === "chuaToi")).toBe(true);
+  });
+
+  it("chỉ MỘT trong chín trạng thái có câu giải thích — tám câu còn lại không được bịa", () => {
+    const coCau = MOI_TRANG_THAI.filter((ma) => cauGiaiThichTrangThai(ma) !== null);
+    expect(coCau).toEqual(["dang-phan-loai"]);
+    expect(cauGiaiThichTrangThai("dang-phan-loai")).toBe(
+      "Đang xem phiếu thuộc lĩnh vực nào, có tiếp nhận không.",
+    );
+  });
+});
+
+describe("khi nào vẽ nút nào", () => {
+  it("phân loại chỉ có nghĩa ở `da-tiep-nhan` — lần thứ hai máy chủ trả 409", () => {
+    expect(phanLoaiDuoc("da-tiep-nhan")).toBe(true);
+    for (const ma of MOI_TRANG_THAI.filter((m) => m !== "da-tiep-nhan")) {
+      expect(phanLoaiDuoc(ma)).toBe(false);
+    }
+  });
+
+  it("bước cuối luồng chính và hai rẽ nhánh thì không còn bước kế tiếp", () => {
+    expect(conBuocKeTiep("dang-xu-ly")).toBe(true);
+    expect(conBuocKeTiep("da-dong")).toBe(false);
+    for (const ma of RE_NHANH) expect(conBuocKeTiep(ma)).toBe(false);
+  });
+});
+
+describe("bộ phận và cán bộ đang giữ phiếu — hai ULID, hai câu trả lời khác nhau", () => {
+  it("id không tra được thì nói ra, KHÔNG in id lên màn hình cán bộ", () => {
+    const ten = new Map([["01JBOPHAN", "VĂN PHÒNG ĐẢNG ỦY"]]);
+    expect(nhanBoPhan("01JBOPHAN", ten)).toBe("VĂN PHÒNG ĐẢNG ỦY");
+    expect(nhanBoPhan("", ten)).toBe("Chưa chuyển bộ phận");
+    expect(nhanBoPhan("01JKHAC", ten)).not.toContain("01JKHAC");
+  });
+
+  it("cán bộ xử lý: không bao giờ in ULID ra màn hình", () => {
+    expect(nhanCanBoXuLy("")).toBe("Chưa phân công cán bộ cụ thể");
+    expect(nhanCanBoXuLy("01JCANBO")).not.toContain("01JCANBO");
   });
 });

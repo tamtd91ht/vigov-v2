@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { layPhieuPhanAnh } from "./phieu-phan-anh";
+import {
+  chuyenXuLyPhieu,
+  dongPhieu,
+  duongDanSoPhanAnh,
+  layPhieuPhanAnh,
+  phanLoaiPhieu,
+  tienTrangThaiPhieu,
+} from "./phieu-phan-anh";
 import type { petitions_phieuCuaToiRa, petitions_phieuPhanAnhRa } from "./schema.gen";
 
 function batFetch(tra: Response) {
@@ -113,6 +120,159 @@ describe("tra phiếu theo mã tra cứu", () => {
     expect(kq).toEqual({ ok: true, duLieu: than });
   });
 
+});
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ * BẢY TÊN THAM SỐ TRUY VẤN — VÀ ĐÂY LÀ CHỖ DUY NHẤT CANH CHÚNG.
+ *
+ * Hợp đồng KHÔNG khai tham số nào cho `GET /api/v1/citizen-reports`
+ * (`petitions_get_citizen_reports["truyVan"]` là một đối tượng rỗng), trong khi handler thật đọc
+ * và kiểm bảy cái (`xu_ly_phan_anh.go:255-294`). Nên `tsc` không canh giúp một chữ nào ở đây: gõ
+ * `hamlet_id` thay vì `hamlet` thì máy chủ bỏ qua bộ lọc và trả về CẢ QUYỂN SỔ, còn màn hình trông
+ * hoàn toàn bình thường — cán bộ tin mình đang xem một thôn.
+ *
+ * Mỗi `expect` dưới đây vì thế là một chuỗi ĐỌC LẠI TỪ HANDLER, không phải từ trí nhớ.
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ */
+describe("đường dẫn đọc sổ phản ánh", () => {
+  it("không lọc gì thì KHÔNG có dấu hỏi thừa", () => {
+    expect(duongDanSoPhanAnh()).toBe("/api/v1/citizen-reports");
+  });
+
+  it("bảy bộ lọc đi ra bảy tên tham số máy chủ thật sự đọc", () => {
+    const duong = duongDanSoPhanAnh({
+      trangThai: "dang-xu-ly",
+      kenh: "zalo-mini-app",
+      linhVuc: "rac-thai",
+      thonID: "01JTHON",
+      boPhanID: "01JBOPHAN",
+      tim: "rác đầu ngõ",
+      chiTreHan: true,
+    });
+    const truyVan = new URLSearchParams(duong.slice(duong.indexOf("?") + 1));
+
+    expect(truyVan.get("status")).toBe("dang-xu-ly");
+    expect(truyVan.get("channel")).toBe("zalo-mini-app");
+    expect(truyVan.get("field")).toBe("rac-thai");
+    expect(truyVan.get("hamlet")).toBe("01JTHON");
+    expect(truyVan.get("unit")).toBe("01JBOPHAN");
+    expect(truyVan.get("q")).toBe("rác đầu ngõ");
+    expect(truyVan.get("late")).toBe("true");
+  });
+
+  it("ô `Chỉ phiếu trễ hạn` bỏ tích: tham số VẮNG MẶT HẲN, không phải `late=false`", () => {
+    // Máy chủ chỉ nhận đúng chuỗi `true` và trả **400** cho mọi giá trị khác
+    // (`errLocTreHanKhongHopLe`) — có chủ ý, vì một ô đã tích mà bị bỏ qua lặng lẽ sẽ hiện cả sổ.
+    expect(duongDanSoPhanAnh({ chiTreHan: false })).toBe("/api/v1/citizen-reports");
+  });
+
+  it("trang đầu KHÔNG gửi `cursor` rỗng", () => {
+    // `cursor=` rỗng là 400 "con trỏ không hợp lệ" — đúng vào lần mở màn hình đầu tiên.
+    const duong = duongDanSoPhanAnh({ limit: 20, cursor: null });
+    expect(duong).toBe("/api/v1/citizen-reports?limit=20");
+  });
+
+  it("trang sau mang đúng con trỏ máy chủ phát ra", () => {
+    const duong = duongDanSoPhanAnh({ limit: 20, cursor: "eyJrIjoi" });
+    expect(new URLSearchParams(duong.slice(duong.indexOf("?") + 1)).get("cursor")).toBe("eyJrIjoi");
+  });
+
+  it("không một chỗ nào mang `tenant_id`", () => {
+    // Client tự khai xã là client tự cấp quyền (luật 1, cấm #2). Xã suy từ `Host` ở rìa ngoài cùng.
+    const duong = duongDanSoPhanAnh({ trangThai: "da-dong", boPhanID: "01JBOPHAN" });
+    expect(duong).not.toMatch(/tenant/i);
+    expect(duong.startsWith("/api/")).toBe(true);
+  });
+});
+
+describe("bốn thao tác ghi", () => {
+  function batGhi() {
+    const gia = vi.fn(async (_duongDan: string, _tuyChon?: RequestInit) =>
+      new Response(JSON.stringify({ code: "PA-2026-0021" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", gia);
+    return gia;
+  }
+
+  it("phân loại: POST …/classification, đúng MỘT trường `field`", () => {
+    const gia = batGhi();
+    return phanLoaiPhieu("PA-2026-0021", "rac-thai").then(() => {
+      expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/citizen-reports/PA-2026-0021/classification");
+      const tuyChon = gia.mock.calls[0]?.[1];
+      expect(tuyChon?.method).toBe("POST");
+      // KHÔNG có `due_at` và KHÔNG có `status`: hạn là cam kết của xã tính theo giờ làm việc của
+      // chính xã, và hành vi này chỉ đưa phiếu sang `dang-phan-loai`.
+      expect(JSON.parse(String(tuyChon?.body))).toEqual({ field: "rac-thai" });
+    });
+  });
+
+  it("chuyển xử lý không chọn cán bộ: thân KHÔNG có `assignee` rỗng", () => {
+    const gia = batGhi();
+    return chuyenXuLyPhieu("PA-2026-0021", "01JBOPHAN").then(() => {
+      expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/citizen-reports/PA-2026-0021/assignment");
+      expect(JSON.parse(String(gia.mock.calls[0]?.[1]?.body))).toEqual({ unit: "01JBOPHAN" });
+    });
+  });
+
+  it("tiến trạng thái: POST …/status, KHÔNG THÂN và KHÔNG `Content-Type`", () => {
+    // Một trạng thái đích đi trên dây là một client nhảy được bước. Gửi `{}` kèm `Content-Type` là
+    // tuyên bố có một thân — thứ mời người sau điền vào đó đúng cái trường ấy.
+    const gia = batGhi();
+    return tienTrangThaiPhieu("PA-2026-0021").then(() => {
+      expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/citizen-reports/PA-2026-0021/status");
+      const tuyChon = gia.mock.calls[0]?.[1];
+      expect(tuyChon?.body).toBeUndefined();
+      expect(tuyChon?.headers).toEqual({});
+    });
+  });
+
+  it("đóng phiếu: POST …/closure kèm kết quả người dân đọc được", () => {
+    const gia = batGhi();
+    return dongPhieu("PA-2026-0021", "Đã dọn xong điểm tập kết rác chiều 10/9.").then(() => {
+      expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/citizen-reports/PA-2026-0021/closure");
+      expect(JSON.parse(String(gia.mock.calls[0]?.[1]?.body))).toEqual({
+        result: "Đã dọn xong điểm tập kết rác chiều 10/9.",
+      });
+    });
+  });
+
+  it("mã tra cứu đi vào ĐƯỜNG DẪN thì được mã hoá, ở cả bốn tuyến", () => {
+    const gia = batGhi();
+    return dongPhieu("PA/2026 0021", "xong").then(() => {
+      expect(gia.mock.calls[0]?.[0]).toBe(
+        "/api/v1/citizen-reports/PA%2F2026%200021/closure",
+      );
+    });
+  });
+
+  it("409 của máy chủ ra thẳng màn hình, nguyên văn", () => {
+    // Ba tuyến trả 409 với đúng quy tắc nghiệp vụ đã từ chối. Viết lại câu ấy ở client là dựng bản
+    // sao thứ hai của một quy tắc rồi để nó trôi.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            code: "sla_chua_cau_hinh",
+            message:
+              "Xã chưa cấu hình thời hạn xử lý cho lĩnh vực này, nên chưa phân loại được. " +
+              "Vào Cấu hình → Thời hạn xử lý để đặt số giờ, rồi phân loại lại.",
+            trace_id: "01JTRACE",
+          }),
+          { status: 409, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+
+    return phanLoaiPhieu("PA-2026-0021", "an-ninh").then((kq) => {
+      expect(kq.ok).toBe(false);
+      expect(kq.ok === false && kq.thongBao).toContain("Cấu hình → Thời hạn xử lý");
+    });
+  });
 });
 
 /**
