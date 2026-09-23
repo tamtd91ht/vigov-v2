@@ -256,6 +256,71 @@ trong im lặng** (chỉ còn một Event `InvalidVariableNames` mà không ai �
 `thiếu biến môi trường bắt buộc: DATABASE_DSN`, đúng cái tên người vận hành đang nhìn thấy
 trong Secret. Ngày nào đổi sang `secretKeyRef` thì key mới được viết gạch ngang.
 
+### Mẫu giá trị — hình dạng, không phải giá trị thật
+
+Mọi thứ trong `<...>` anh tự điền. Không có giá trị thật nào trong kho này, và **không được
+có** (luật 8, bất biến 1): một mẫu trông như cấu hình chạy được là một mẫu có người ship.
+
+**`DATABASE_DSN`** — chuỗi kết nối PostgreSQL dạng URL, giống hệt dòng mẫu ở `.env.example`.
+`sql.Open("pgx", …)` đọc nó.
+
+| Phần | Điền gì |
+|---|---|
+| tài khoản | riêng cho **từng dịch vụ**, không dùng chung, không phải `postgres` |
+| máy chủ + cổng | **cụm-hình-dạng ngay từ dòng đầu**: nhiều node thì `h1:5432,h2:5432` — `pgx` hiểu danh sách. Đừng cắt bớt để giữ một host (luật 11, cấm #5) |
+| tên CSDL | **RIÊNG của từng dịch vụ** — xem cảnh báo ngay dưới |
+| `sslmode` | `require` trở lên. `disable` là mật khẩu và dữ liệu công dân đi trần trên dây |
+
+⚠ **SÁU DỊCH VỤ PHẢI CÓ SÁU CSDL KHÁC NHAU, và dùng chung thì KHÔNG CÓ GÌ BÁO.** Cả bảy dịch
+vụ đều chạy `CREATE TABLE IF NOT EXISTS audit_log` trong `migrations/0001_init.sql` của chính
+nó, và không chỗ nào đặt `search_path` — tức không có lớp schema ngăn cách. Trỏ hai dịch vụ
+vào cùng một CSDL thì `IF NOT EXISTS` làm dịch vụ thứ hai **lặng lẽ bỏ qua** và hai dịch vụ
+**ghi chung một bảng vết**: không lỗi, không cảnh báo, di trú xanh, pod xanh. Đó vừa là luật 2
+cấm #2 (một đường đọc vòng qua hợp đồng), vừa là một sổ vết pháp lý trộn hai nguồn mà về sau
+không tách lại được.
+
+Phần duy nhất bắt buộc khác nhau giữa sáu DSN là **tên tài khoản và tên CSDL**:
+
+```
+…@<host>:5432/vigov_platform?sslmode=require
+…@<host>:5432/vigov_identity?sslmode=require
+…@<host>:5432/vigov_documents?sslmode=require
+…@<host>:5432/vigov_finance?sslmode=require
+…@<host>:5432/vigov_petitions?sslmode=require
+…@<host>:5432/vigov_comms?sslmode=require
+```
+
+Đặt tên thế nào là tuỳ anh — điều bắt buộc là **sáu cái khác nhau**.
+
+**`REDIS_DSN`** — dạng `redis://…`, có mật khẩu thì đặt ở phần thông tin đăng nhập, số DB ở
+cuối đường dẫn (`/0`). Năm dịch vụ **dùng chung một Redis được**: khoá chống trùng đã mang
+tiền tố riêng, nên tách bằng số DB hay để chung đều đúng.
+
+**`GRPC_CALLER_KEY`** — một chuỗi ngẫu nhiên, **giống nhau ở cả sáu dịch vụ**: nó là khoá
+chung để bên gọi chứng minh mình thuộc hệ thống (ADR 0025). Sinh một lần rồi dùng lại:
+
+```sh
+openssl rand -base64 48
+```
+
+**`SESSION_SIGNING_KEYS`** — danh sách ngăn bằng dấu phẩy, **khoá mới đứng trước**, ít nhất
+hai khoá ở prod. Phải **giống nhau ở cả sáu dịch vụ**, nếu không thì phiên do dịch vụ này phát
+ra dịch vụ kia không đọc được. Sinh bằng lệnh trên. Xoay khoá = thêm khoá mới vào **đầu** danh
+sách và đẩy khoá cũ nhất ra khỏi danh sách, không phải thay tại chỗ:
+
+```
+<khoa-moi>,<khoa-truoc-do>
+```
+
+**`ENV`** — đúng một trong ba chuỗi: `dev` · `staging` · `prod`. Khác đi là `config.Load` từ chối.
+
+**Secret TLS** — tạo từ tệp chứng thư, không phải từ chuỗi:
+
+```sh
+kubectl -n vigov-prod create secret tls vigov-wildcard-tls \
+  --cert=/duong/dan/fullchain.pem --key=/duong/dan/privkey.pem
+```
+
 ### Kafka chưa có biến nào
 
 ADR 0010 đã chốt Kafka mang sự kiện giữa các service, nhưng `core/events.Publisher` còn là
