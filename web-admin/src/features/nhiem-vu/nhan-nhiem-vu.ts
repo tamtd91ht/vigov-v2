@@ -457,6 +457,126 @@ export const COT_RONG = "Không có nhiệm vụ";
 export const NHAT_KY_RONG = "Chưa có ghi chép nào.";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
+ * CÂU CHỮ CỦA MÀN HÌNH — §2, §3, §5, §7
+ *
+ * Đặt ở đây chứ không rải trong `so-nhiem-vu.tsx` vì cùng một lý do `nhan-phieu.ts` làm thế: một
+ * chuỗi giao diện nằm trong JSX là một chuỗi không bài kiểm nào so lại được với đặc tả mà không
+ * phải kết xuất cả cây.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Quyển sổ rỗng. */
+export const SO_RONG = "Chưa có nhiệm vụ nào khớp bộ lọc đang chọn.";
+
+/** Đang đọc trang. `role="status"`, không phải `alert`. */
+export const DANG_TAI_SO = "Đang tải sổ nhiệm vụ…";
+
+/** Ô tìm §3 — nguyên văn placeholder đặc tả. */
+export const TIM_PLACEHOLDER = "Tìm theo tên nhiệm vụ…";
+
+/** Bảy nhãn "tất cả" của §3, nguyên văn. */
+export const MOI_BO_PHAN_NHAN = "Tất cả bộ phận";
+export const MOI_NGUOI_THUC_HIEN_NHAN = "Tất cả người thực hiện";
+export const MOI_MUC_UU_TIEN_NHAN = "Mọi mức ưu tiên";
+export const MOI_LOAI_NHAN = "Mọi loại nhiệm vụ";
+export const MOI_KHOI_NHAN = "Mọi khối";
+export const MOI_NGUON_GIAO_NHAN = "Mọi nguồn giao";
+export const MOI_TRANG_THAI_NHAN = "Mọi trạng thái";
+export const CHI_QUA_HAN_NHAN = "Chỉ việc quá hạn";
+
+/** Hai tab phạm vi DỰNG ĐƯỢC. Tab thứ ba (`Liên quan đến tôi`) — xem `PHAN_CHUA_DUNG`. */
+export const PHAM_VI_TOAN_XA = "Toàn xã";
+export const PHAM_VI_CUA_TOI = "Giao cho tôi";
+
+/** §5.3 — ô `ĐANG GIAO CHO` khi nhiệm vụ chưa về bộ phận nào. Không phải dấu gạch: một trạng thái thật. */
+export const CHUA_GIAO_BO_PHAN = "Chưa giao bộ phận nào";
+
+/** Lựa chọn mặc định của hai ô chọn ở §5.7 và §7.1 — nguyên văn đặc tả. */
+export const CHUA_XAC_DINH = "— Chưa xác định —";
+
+/** §5.8 — chú thích bắt buộc dưới ô đề nghị lùi hạn. */
+export const GHI_CHU_LUI_HAN =
+  "Hạn gốc vẫn được giữ lại để báo cáo đúng hạn không bị lùi theo.";
+
+/** §7.1 — chú thích dưới ô `Lãnh đạo giao việc`. */
+export const GHI_CHU_LANH_DAO_GIAO_VIEC =
+  "Đề nghị lùi hạn sẽ gửi tới người này, qua chuông và qua thư.";
+
+/** §7.1 — chú thích dưới ô `Tự sinh mã`. */
+export const GHI_CHU_TU_SINH_MA =
+  "Tự sinh sẽ cấp số tiếp theo trong dãy NV01, NV02… Nhập từ Excel cũng được đánh số tự động " +
+  "theo dãy này.";
+
+/** §5.4 — chú thích BẮT BUỘC hiển thị dưới hai ô tick phê duyệt. */
+export const CHU_THICH_HAI_O_TICK =
+  "Hai ô này đánh dấu bằng tay và không làm đổi trạng thái nhiệm vụ.";
+
+/** §7 — mô tả dưới tiêu đề form `Giao việc mới`, nguyên văn. */
+export const MO_TA_FORM_GIAO_VIEC =
+  "Giao cho một bộ phận hoặc trực tiếp cho cán bộ. Giao cho bộ phận mà quá lâu chưa phân công " +
+  "người thì hệ thống báo lên lãnh đạo.";
+
+/**
+ * Câu nói ra rằng hạn CHỈ ĐẶT ĐƯỢC MỘT LẦN, đặt ngay cạnh ô ngày ở form tạo.
+ *
+ * Không phải một lời nhắc lịch sự: `han_ban_dau` lấy cùng mốc với `han_xu_ly` lúc INSERT và
+ * trigger `nhiem_vu_bat_bien` từ chối mọi lần ghi lại. Một nhiệm vụ tạo ra không có hạn thì
+ * **không bao giờ** có hạn nữa — kể cả qua đường đề nghị lùi hạn, vì không có gì để lùi.
+ */
+export const CANH_BAO_HAN_MOT_LAN =
+  "Hạn hoàn thành chỉ đặt được một lần, ngay lúc tạo. Bỏ trống thì nhiệm vụ này sẽ không có hạn " +
+  "và cũng không đặt được về sau — kể cả qua đề nghị lùi hạn.";
+
+/** §5.10 — việc con có hạn RIÊNG (ADR 0037 quyết định 2), không thừa kế hạn cha. */
+export const GHI_CHU_HAN_VIEC_CON =
+  "Việc con có hạn riêng, không lấy theo hạn của việc cha.";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * Ô NGÀY ↔ MỐC CỦA HỢP ĐỒNG
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * `<input type="date">` phát ra `YYYY-MM-DD`; hợp đồng đòi một **mốc `date-time`** (`due_at`,
+ * `new_due_at` là `time.Time` ở máy chủ, nên `"2026-12-20"` trần là **400**).
+ *
+ * ⚠ GIỜ TRONG NGÀY LÀ MỘT GIẢ ĐỊNH ĐƯỢC NÓI RA, KHÔNG PHẢI MỘT CHI TIẾT KỸ THUẬT. Đặc tả chỉ cho
+ * một ô NGÀY (§7.1, §5.6), nên phải chọn một mốc trong ngày ấy, và hai lựa chọn không tương đương:
+ *
+ *   00:00  ⇒ nhiệm vụ "hạn 20/6" ĐÃ QUÁ HẠN suốt cả ngày 20/6. Đọc lên là sai.
+ *   23:59  ⇒ đúng nghĩa thông thường của "hạn ngày 20/6", và là mốc dùng ở đây.
+ *
+ * KHÔNG DÙNG GIỜ TAN LÀM VIỆC (17:00 hay bất kỳ số nào): đó là `ca_lam_viec` của TỪNG XÃ, và một
+ * con số như thế nung vào bundle là đúng thứ luật 1 bất biến 10 cấm. Nếu khách muốn hạn rơi vào
+ * cuối giờ làm việc thì đó là một phép tính của `identity` (nơi giữ lịch làm việc, `ngay_nghi_le`
+ * và `ngay_lam_bu`), không phải một hằng ở trình duyệt. Đã báo về như một giả định chờ khách chốt.
+ *
+ * MÚI GIỜ GHIM `+07:00`, không lấy múi giờ máy: một cán bộ mở màn hình trên máy đặt sai múi giờ
+ * sẽ gửi lên một hạn lệch một ngày, và đó là một cam kết bị đọc sai.
+ */
+export function mocCuoiNgay(ngay: string): string {
+  return `${ngay}T23:59:59+07:00`;
+}
+
+/**
+ * Mốc của hợp đồng → `YYYY-MM-DD` để đổ vào `<input type="date">`.
+ *
+ * Cắt theo MÚI GIỜ VIỆT NAM chứ không `mocISO.slice(0, 10)`: một hạn `2026-06-20T23:59:59+07:00`
+ * lưu ở dạng UTC là `2026-06-20T16:59:59Z`, cắt mười ký tự đầu vẫn ra `2026-06-20` — nhưng
+ * `2026-06-20T00:30:00+07:00` là `2026-06-19T17:30:00Z`, và phép cắt ấy cho ra ngày **19**.
+ */
+export function ngayChoONhap(mocISO: string | null): string {
+  if (mocISO === null || mocISO === "") return "";
+  const t = Date.parse(mocISO);
+  if (Number.isNaN(t)) return "";
+  const phan = new Intl.DateTimeFormat("en-CA", {
+    timeZone: MUI_GIO,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(t));
+  return phan;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
  *
  * Không giấu trong chú thích, không vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` màn
@@ -544,6 +664,44 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Ba tuyến §10 đề xuất — `nhap-excel`, `xoa-nhieu`, `xuat-so-theo-doi` — không có trong hợp " +
       "đồng. Xoá từng nhiệm vụ thì có (`DELETE /api/v1/tasks/{ma}`, kèm lý do bắt buộc), nên thao " +
       "tác hàng loạt là bấm từng dòng chứ không phải một nút gom.",
+  },
+  {
+    ten: "THÊM VIỆC CON (§5.10) và chuyển việc sang cha khác (§5.4)",
+    viSao:
+      "`petitions.taoNhiemVuVao.parent` và `petitions.suaNhiemVuVao.parent` nhận **id nội bộ** " +
+      "của việc cha, nhưng `petitions.nhiemVuRa` KHÔNG phát ra `id` của chính nó — chỉ có `code` " +
+      "(`NV19`) và `parent` (id của cha). Nên một màn hình đang mở NV19 biết cha của NV19 là ai mà " +
+      "không bao giờ biết id của NV19, tức không gửi nổi một yêu cầu tạo việc con. Vẽ ô ấy ra rồi " +
+      "gửi `NV19` vào `parent` sẽ là 409 `task_tree` ở mọi lần bấm. Cần thêm `id` vào phản hồi, " +
+      "hoặc cho `parent` nhận mã sổ.",
+  },
+  {
+    ten: "Khối `Duyệt / Từ chối` đề nghị lùi hạn của người khác (§5.8)",
+    viSao:
+      "Tuyến quyết định cần `deNghiID`, mà hợp đồng KHÔNG có tuyến nào liệt kê đề nghị đang chờ " +
+      "của một nhiệm vụ, và `petitions.nhiemVuRa` cũng không mang đề nghị nào. Màn hình chỉ cầm " +
+      "được id của đúng đề nghị VỪA GỬI trong cùng lượt mở — trong khi người duyệt theo ADR 0038 " +
+      "là một người KHÁC, mở drawer sau đó. Phép kiểm hai lớp của ADR 0038 vẫn chạy và vẫn hiện " +
+      "câu từ chối, nhưng lãnh đạo không có đề nghị nào để bấm.",
+  },
+  {
+    ten: "Ô chọn `Người thực hiện` · `Lãnh đạo giao việc` · `Chuyên viên theo dõi` (§3, §7)",
+    viSao:
+      "Ba ô ấy cần danh bạ cán bộ, mà `GET /api/v1/staff` đứng sau `admin.user` — khoá quản trị " +
+      "danh bạ, không phải khoá nhiệm vụ. Một cán bộ có `task.create` mà không có `admin.user` sẽ " +
+      "nhận 403 khi màn hình đi đổ ba ô chọn ấy. Nên ba ô là **ô gõ mã cán bộ** (`CB-…`) chứ không " +
+      "phải ô chọn, và chúng nhận đúng loại giá trị ba cột kia giữ (luật 6, bất biến 8).",
+  },
+  {
+    ten: "CỔNG QUYỀN Ở GIAO DIỆN cho bảy khoá `task.*`",
+    viSao:
+      "Bảy khoá `task.read` · `task.create` · `task.update` · `task.approve` · `task.extend` · " +
+      "`task.delete` · `task.assign` ĐỀU CÓ trong bảng `quyen` và đều được tuyến khai, nhưng " +
+      "`lib/quyen.ts` chưa có hằng nào cho chúng và lượt này không được sửa tệp ấy. Hệ quả: màn " +
+      "hình vẽ đủ nút cho mọi tài khoản đọc được sổ, và câu 403 của máy chủ ra thẳng màn hình — " +
+      "cùng khuôn `document.read` đã chọn. Lớp chặn thật không đổi (máy chủ kiểm từng yêu cầu); " +
+      "thứ thiếu là sự tiện dụng. RIÊNG lớp hai của ADR 0038 vẫn chạy: nút duyệt vẫn ẩn với người " +
+      "không phải lãnh đạo giao việc ghi trên bản ghi.",
   },
 ];
 
