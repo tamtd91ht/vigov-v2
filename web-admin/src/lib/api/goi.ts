@@ -140,3 +140,54 @@ export async function goiGhi(
   if (phanHoi.status !== maMongDoi) return { ok: false, thongBao: await thongBaoLoi(phanHoi) };
   return { ok: true, duLieu: phanHoi };
 }
+
+/**
+ * Đọc thân JSON của một lần GHI đã thành công, thành kiểu của tuyến.
+ *
+ * ĐÂY LÀ CHỖ MƯỜI BA BẢN SAO GẶP NHAU (gom 24/09/2026). `goiGhi` ngay trên trả `Response` THÔ và
+ * nêu lý do: `DELETE` của danh mục thành công bằng **204 không thân**, nên một hàm gọi `.json()`
+ * vô điều kiện sẽ biến lần xoá thành công thành "không đọc được". Hệ quả không được lường trước là
+ * mọi tệp có tuyến ghi TRẢ thân đều phải tự viết lấy lớp mỏng này — mười bản có TÊN dưới ba chữ ký,
+ * một bản hợp nhất trong `goiGhiCanBo` của `can-bo.ts`, và hai bản viết THẲNG trong thân hàm ở
+ * `thoi-han-xu-ly.ts`. Hai bản cuối là chỗ đáng sợ nhất: không mang tên nào thì không đếm được, nên
+ * lần kiểm nào cũng bỏ sót chúng. Điều kiện `goi.ts` tự đặt cho mình từ bản đầu — *"màn hình ghi
+ * thứ hai xuất hiện là lúc hàm này chuyển sang `goi.ts`"* — đã thoả từ rất lâu trước khi có ai gom.
+ *
+ * HAI HÀM, KHÔNG MỘT VÀ CŨNG KHÔNG BA. Ba chữ ký cũ khác nhau đúng ở chỗ bên gọi đang cầm gì, chứ
+ * không ở việc chúng làm. Bản này nhận một `KetQua` ĐÃ CÓ; `docThanLoiGoi` ngay dưới nhận LỜI GỌI
+ * chưa xong. Chữ ký thứ ba — nhận thẳng `Response` — KHÔNG còn: mọi chỗ gọi nó viết
+ * `kq.ok ? doc(kq.duLieu) : kq`, tức là dựng lại bằng tay đúng nhánh `!ok` của hàm này. Ép cả hai
+ * bản còn lại vào một chữ ký thì hàm phải hỏi lúc CHẠY "đối số này là promise hay chưa" — một câu
+ * hỏi kiểu đã trả lời được, và một nhánh `if` mà không ca kiểm nào đi qua đủ cả hai chiều.
+ *
+ * KHÔNG CÓ NHÁNH NÀO CHO 204, CÓ CHỦ Ý. Tuyến thành công không thân thì KHÔNG đi qua đây: nó đọc
+ * `kq.ok` rồi trả thẳng `duLieu: null` (xem `xoaMuc` trong `danh-muc.ts`, `xoaDong` trong
+ * `lich-ghi.ts`). Một tham số "có thân hay không" ở đây là chỗ để ai đó truyền sai, và lần truyền
+ * sai ấy biến một lần xoá THÀNH CÔNG thành một câu báo lỗi trên màn hình.
+ *
+ * KHÔNG GHI LOG GÌ KHI THÂN HỎNG, và điều đó đúng cho MỌI tuyến đi qua đây chứ không riêng tuyến
+ * nào: thân của chúng mang họ tên và số điện thoại cán bộ, nội dung biên bản họp có thể nhắc tới
+ * hồ sơ của một công dân, số tiền công quỹ và lý do gỡ do người gõ (luật 3, cấm #1). Một dòng log
+ * thêm vào đây để gỡ lỗi sẽ đẩy cả bốn thứ ấy đi cùng một lúc.
+ */
+export async function docThanKetQua<T>(ketQua: KetQua<Response>): Promise<KetQua<T>> {
+  if (!ketQua.ok) return ketQua;
+  try {
+    return { ok: true, duLieu: (await ketQua.duLieu.json()) as T };
+  } catch {
+    // Đúng mã mong đợi mà thân không phải JSON là máy chủ hoặc proxy đang trả thứ khác. Với cán bộ
+    // thì đó vẫn là "không đọc được", không phải một trạng thái nghiệp vụ.
+    return { ok: false, thongBao: LOI_KHONG_RO };
+  }
+}
+
+/**
+ * Như `docThanKetQua`, nhưng nhận LỜI GỌI chưa xong: `docThanLoiGoi<T>(goiGhi(...))`.
+ *
+ * KHÔNG CÓ LOGIC RIÊNG — một phép `then` rồi giao lại, đúng để không có bản thứ hai của phép phân
+ * giải thân. Nó tồn tại vì phần lớn chỗ gọi dựng đối số của `goiGhi` trên nhiều dòng, và một
+ * `.then(...)` treo sau dấu ngoặc đóng ấy đọc ngược thứ tự việc.
+ */
+export function docThanLoiGoi<T>(loiGoi: Promise<KetQua<Response>>): Promise<KetQua<T>> {
+  return loiGoi.then(docThanKetQua<T>);
+}

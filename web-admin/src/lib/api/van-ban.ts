@@ -29,7 +29,7 @@
  * ấy đúng cho MỌI tuyến và được nói một lần ở `goi.ts`. Đọc tệp ấy trước khi sửa gì ở đây.
  */
 
-import { LOI_KHONG_RO, docJSON, goiGhi, type KetQua } from "./goi";
+import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
 import type {
   documents_capSoVanBanDiVao,
   documents_chuyenVanBanVao,
@@ -51,25 +51,6 @@ import type {
   page_Result_documents_vanBanDenRa,
   page_Result_documents_vanBanDiRa,
 } from "./schema.gen";
-
-/**
- * Đọc thân của một lần ghi thành công.
- *
- * `goiGhi` TRẢ `Response` THÔ, và đó là lý do lớp mỏng này tồn tại: hai tuyến `DELETE` thành công
- * bằng **204 không thân**, nên một hàm dùng chung luôn gọi `.json()` sẽ biến một lần gỡ thành
- * công thành "không đọc được". Tuyến nào biết mình trả gì thì tự đọc lấy.
- */
-async function docThanRa<T>(goi: Promise<KetQua<Response>>): Promise<KetQua<T>> {
-  const kq = await goi;
-  if (!kq.ok) return kq;
-  try {
-    return { ok: true, duLieu: (await kq.duLieu.json()) as T };
-  } catch {
-    // Đúng mã mong đợi mà thân không phải JSON là máy chủ hoặc proxy đang trả thứ khác. Với cán
-    // bộ thì đó vẫn là "không đọc được", không phải một trạng thái nghiệp vụ.
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-}
 
 /** Đường dẫn của một bản ghi cụ thể. `encodeURIComponent` vì id đi vào ĐƯỜNG DẪN, không vào thân. */
 function duongDanMot(mau: string, id: string): string {
@@ -227,7 +208,7 @@ export function vaoSoVanBanDen(
     urgency: than.urgency,
   };
 
-  return docThanRa<documents_vanBanDenRa>(
+  return docThanLoiGoi<documents_vanBanDenRa>(
     goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }),
   );
 }
@@ -261,7 +242,7 @@ export function suaVanBanDen(
     urgency: than.urgency,
   };
 
-  return docThanRa<documents_vanBanDenRa>(goiGhi(duongDanMot(mau, id), "PATCH", thanGui, 200));
+  return docThanLoiGoi<documents_vanBanDenRa>(goiGhi(duongDanMot(mau, id), "PATCH", thanGui, 200));
 }
 
 /**
@@ -311,7 +292,7 @@ export function chuyenVanBanDen(
     reason: than.reason,
   };
 
-  return docThanRa<documents_vanBanDenRa>(
+  return docThanLoiGoi<documents_vanBanDenRa>(
     goiGhi(duongDanMot(mau, id), "POST", thanGui, 200),
   );
 }
@@ -356,7 +337,7 @@ export function capSoVanBanDi(
     signer: than.signer,
   };
 
-  return docThanRa<documents_vanBanDiRa>(
+  return docThanLoiGoi<documents_vanBanDiRa>(
     goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }),
   );
 }
@@ -380,7 +361,7 @@ export function suaVanBanDi(
     signer: than.signer,
   };
 
-  return docThanRa<documents_vanBanDiRa>(goiGhi(duongDanMot(mau, id), "PATCH", thanGui, 200));
+  return docThanLoiGoi<documents_vanBanDiRa>(goiGhi(duongDanMot(mau, id), "PATCH", thanGui, 200));
 }
 
 /**

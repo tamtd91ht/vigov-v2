@@ -40,7 +40,7 @@ import {
   layLoaiVanBan,
   layMucUuTienNhiemVu,
 } from "./danh-muc-nghiep-vu";
-import { LOI_KHONG_RO, docJSON, goiGhi, type KetQua } from "./goi";
+import { docJSON, docThanKetQua, goiGhi, type KetQua } from "./goi";
 import type {
   comms_delete_map_asset_types_by_id,
   comms_loaiTaiNguyenRa,
@@ -302,15 +302,6 @@ function duongDanMuc(mauMuc: string, id: string): string {
   return mauMuc.replace("{id}", encodeURIComponent(id));
 }
 
-/** Đọc thân JSON của một phản hồi đã thành công. Thân hỏng là "không đọc được", không phải 200. */
-async function docThanRa(phanHoi: Response): Promise<KetQua<MucDanhMucGhi>> {
-  try {
-    return { ok: true, duLieu: (await phanHoi.json()) as MucDanhMucGhi };
-  } catch {
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-}
-
 /**
  * POST — thêm một mục của riêng đơn vị. Mục thêm từ đây LUÔN là tầng 1; máy chủ ghi
  * `source: "don-vi"` làm hằng và không đọc trường ấy từ yêu cầu.
@@ -337,7 +328,7 @@ export async function themMuc(
   const kq = await goiGhi(mo.gocThem, "POST", thanGui, 201, {
     "Idempotency-Key": khoaChongTrung,
   });
-  return kq.ok ? docThanRa(kq.duLieu) : kq;
+  return docThanKetQua<MucDanhMucGhi>(kq);
 }
 
 /**
@@ -360,7 +351,7 @@ export async function suaMuc(
   };
 
   const kq = await goiGhi(duongDanMuc(mo.mauMuc, id), "PATCH", thanGui, 200);
-  return kq.ok ? docThanRa(kq.duLieu) : kq;
+  return docThanKetQua<MucDanhMucGhi>(kq);
 }
 
 /**

@@ -38,7 +38,7 @@
  * Đã báo về để khai `@query` trên tuyến.
  */
 
-import { docJSON, goiGhi, LOI_KHONG_RO, type KetQua } from "./goi";
+import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
 import type {
   petitions_dongPhieuVao,
   petitions_get_citizen_reports,
@@ -52,26 +52,6 @@ import type {
   petitions_post_citizen_reports_by_maTraCuu_status,
   page_Result_petitions_phieuPhanAnhRa,
 } from "./schema.gen";
-
-/**
- * Đọc thân của một lần ghi thành công.
- *
- * ⚠ ĐÂY LÀ BẢN THỨ TƯ CỦA HÀM NÀY (`van-ban.ts:62`, `can-bo.ts:202`, `thu-chi.ts:61` là ba bản
- * kia), và nó được viết lại thay vì gộp về `goi.ts` vì `goi.ts` nằm NGOÀI ranh giới ghi của lượt
- * này. Ghi ra như một phát hiện chứ không im lặng: điều kiện `goi.ts` tự đặt cho mình —
- * *"màn hình ghi thứ hai xuất hiện là lúc hàm này chuyển sang goi.ts"* — nay đã thoả lần thứ ba.
- */
-async function docThanRa<T>(goi: Promise<KetQua<Response>>): Promise<KetQua<T>> {
-  const kq = await goi;
-  if (!kq.ok) return kq;
-  try {
-    return { ok: true, duLieu: (await kq.duLieu.json()) as T };
-  } catch {
-    // Đúng mã mong đợi mà thân không phải JSON là máy chủ hoặc proxy đang trả thứ khác. Với cán
-    // bộ thì đó vẫn là "không đọc được", không phải một trạng thái nghiệp vụ.
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-}
 
 /**
  * Điền mã tra cứu vào khuôn đường dẫn CỦA HỢP ĐỒNG.
@@ -210,7 +190,7 @@ export function phanLoaiPhieu(
   const mau: petitions_post_citizen_reports_by_maTraCuu_classification["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/classification";
   const than: petitions_phanLoaiVao = { field: linhVuc };
-  return docThanRa<petitions_phieuPhanAnhRa>(
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
   );
 }
@@ -232,7 +212,7 @@ export function chuyenXuLyPhieu(
     canBoID !== undefined && canBoID !== ""
       ? { unit: boPhanID, assignee: canBoID }
       : { unit: boPhanID };
-  return docThanRa<petitions_phieuPhanAnhRa>(
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
   );
 }
@@ -258,7 +238,7 @@ export function tienTrangThaiPhieu(
 ): Promise<KetQua<petitions_phieuPhanAnhRa>> {
   const mau: petitions_post_citizen_reports_by_maTraCuu_status["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/status";
-  return docThanRa<petitions_phieuPhanAnhRa>(
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", undefined, 200),
   );
 }
@@ -281,7 +261,7 @@ export function dongPhieu(
   const mau: petitions_post_citizen_reports_by_maTraCuu_closure["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/closure";
   const than: petitions_dongPhieuVao = { result: ketQua };
-  return docThanRa<petitions_phieuPhanAnhRa>(
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
   );
 }

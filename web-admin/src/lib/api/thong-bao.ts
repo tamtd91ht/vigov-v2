@@ -21,7 +21,7 @@
  * còn bài kiểm ấy bảo đảm thứ hàm này gửi đi khớp với hợp đồng.
  */
 
-import { docJSON, goiGhi, LOI_KHONG_RO, type KetQua } from "./goi";
+import { docJSON, docThanKetQua, goiGhi, type KetQua } from "./goi";
 import type {
   comms_get_announcements,
   comms_phatHanhThongBaoVao,
@@ -93,25 +93,6 @@ export function laySoThongBao(
 export type PhatHanhThongBaoVao = comms_phatHanhThongBaoVao;
 
 /**
- * Đọc thân của một lần ghi thành kiểu của tuyến.
- *
- * `goiGhi` trả `Response` thô chứ không phân giải sẵn, nên lớp mỏng này tồn tại — cùng lý do
- * `docThanGhi` tồn tại trong `bien-ban.ts`: có tuyến thành công bằng 204 không thân, và một hàm
- * dùng chung luôn gọi `.json()` sẽ biến lần ấy thành "không đọc được".
- *
- * KHÔNG GHI LOG GÌ KHI THÂN HỎNG: nội dung thông báo là chữ một cán bộ vừa gõ và một thông báo của
- * xã có thể nhắc tới hồ sơ của công dân (luật 3, cấm #1).
- */
-async function docThanGhi<T>(ketQua: KetQua<Response>): Promise<KetQua<T>> {
-  if (!ketQua.ok) return ketQua;
-  try {
-    return { ok: true, duLieu: (await ketQua.duLieu.json()) as T };
-  } catch {
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-}
-
-/**
  * POST /api/v1/announcements — phát hành một thông báo tới các cán bộ được chọn đích danh. 201,
  * trả về cả tấm thẻ.
  *
@@ -148,6 +129,6 @@ export function phatHanhThongBao(
   };
 
   return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(
-    docThanGhi<comms_thongBaoRa>,
+    docThanKetQua<comms_thongBaoRa>,
   );
 }

@@ -43,7 +43,7 @@
  * một ô lọc thành một trang lỗi; nên chúng ra tới màn hình qua `PHAN_CHUA_DUNG`.
  */
 
-import { docJSON, goiGhi, LOI_KHONG_RO, type KetQua } from "./goi";
+import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
 import type {
   page_Result_petitions_nhiemVuRa,
   petitions_deNghiLuiHanRa,
@@ -63,27 +63,6 @@ import type {
   petitions_taoNhiemVuVao,
   petitions_xoaNhiemVuVao,
 } from "./schema.gen";
-
-/**
- * Đọc thân của một lần ghi thành công.
- *
- * ⚠ ĐÂY LÀ BẢN THỨ NĂM CỦA HÀM NÀY (`van-ban.ts:62`, `can-bo.ts:202`, `thu-chi.ts:61`,
- * `phieu-phan-anh.ts` là bốn bản kia), và nó được viết lại thay vì gộp về `goi.ts` vì `goi.ts`
- * nằm NGOÀI ranh giới ghi của lượt này. Ghi ra như một phát hiện chứ không im lặng: điều kiện
- * `goi.ts` tự đặt cho mình — *"màn hình ghi thứ hai xuất hiện là lúc hàm này chuyển sang
- * goi.ts"* — nay đã thoả lần thứ tư.
- */
-async function docThanRa<T>(goi: Promise<KetQua<Response>>): Promise<KetQua<T>> {
-  const kq = await goi;
-  if (!kq.ok) return kq;
-  try {
-    return { ok: true, duLieu: (await kq.duLieu.json()) as T };
-  } catch {
-    // Đúng mã mong đợi mà thân không phải JSON là máy chủ hoặc proxy đang trả thứ khác. Với cán
-    // bộ thì đó vẫn là "không đọc được", không phải một trạng thái nghiệp vụ.
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-}
 
 /**
  * Điền mã nhiệm vụ vào khuôn đường dẫn CỦA HỢP ĐỒNG.
@@ -268,7 +247,7 @@ export function taoNhiemVu(
   }
   if (than.parent !== undefined && than.parent !== "") thanGui.parent = than.parent;
 
-  return docThanRa<petitions_nhiemVuRa>(
+  return docThanLoiGoi<petitions_nhiemVuRa>(
     goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }),
   );
 }
@@ -289,7 +268,7 @@ export function suaNhiemVu(
   than: petitions_suaNhiemVuVao,
 ): Promise<KetQua<petitions_nhiemVuRa>> {
   const mau: petitions_patch_tasks_by_ma["duongDan"] = "/api/v1/tasks/{ma}";
-  return docThanRa<petitions_nhiemVuRa>(
+  return docThanLoiGoi<petitions_nhiemVuRa>(
     goiGhi(duongDanNhiemVu(mau, ma), "PATCH", than, 200),
   );
 }
@@ -316,7 +295,7 @@ export function doiTrangThaiNhiemVu(
     ghiChu !== undefined && ghiChu !== ""
       ? { status: trangThai, note: ghiChu }
       : { status: trangThai };
-  return docThanRa<petitions_nhiemVuRa>(
+  return docThanLoiGoi<petitions_nhiemVuRa>(
     goiGhi(duongDanNhiemVu(mau, ma), "POST", than, 200),
   );
 }
@@ -358,7 +337,7 @@ export function deNghiLuiHan(
 ): Promise<KetQua<petitions_deNghiLuiHanRa>> {
   const mau: petitions_post_tasks_by_ma_extensions["duongDan"] = "/api/v1/tasks/{ma}/extensions";
   const than: petitions_deNghiLuiHanVao = { new_due_at: hanMoiISO, reason: lyDo };
-  return docThanRa<petitions_deNghiLuiHanRa>(
+  return docThanLoiGoi<petitions_deNghiLuiHanRa>(
     goiGhi(duongDanNhiemVu(mau, ma), "POST", than, 201),
   );
 }
@@ -390,5 +369,5 @@ export function quyetDinhLuiHan(
     ghiChu !== undefined && ghiChu !== ""
       ? { decision: duyet ? "approve" : "reject", note: ghiChu }
       : { decision: duyet ? "approve" : "reject" };
-  return docThanRa<petitions_deNghiLuiHanRa>(goiGhi(duongDan, "POST", than, 200));
+  return docThanLoiGoi<petitions_deNghiLuiHanRa>(goiGhi(duongDan, "POST", than, 200));
 }

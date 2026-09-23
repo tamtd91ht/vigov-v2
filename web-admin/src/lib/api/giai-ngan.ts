@@ -47,7 +47,7 @@
  * đệm (luật 3, cấm #1 và #4).
  */
 
-import { LOI_KHONG_RO, goiGhi, type KetQua } from "./goi";
+import { docThanLoiGoi, goiGhi, type KetQua } from "./goi";
 import type {
   finance_chungTuRa,
   finance_delete_disbursements_by_id,
@@ -68,27 +68,6 @@ import type {
   finance_themDuAnVao,
   finance_xoaDuAnVao,
 } from "./schema.gen";
-
-/**
- * Đọc thân của một lần ghi thành công.
- *
- * ⚠ ĐÂY LÀ BẢN THỨ NĂM CỦA HÀM NÀY (`van-ban.ts:62` · `can-bo.ts:202` · `thu-chi.ts:61` ·
- * `noi-dung.ts:172` là bốn bản kia), và nó được viết lại thay vì gộp về `goi.ts` vì `goi.ts` nằm
- * NGOÀI ranh giới ghi của lượt này. Ghi ra đây như một phát hiện chứ không im lặng: điều kiện
- * `goi.ts` tự đặt cho mình — *"màn hình ghi thứ hai xuất hiện là lúc hàm này chuyển sang goi.ts"* —
- * nay đã thoả lần thứ tư.
- */
-async function docThanRa<T>(goi: Promise<KetQua<Response>>): Promise<KetQua<T>> {
-  const kq = await goi;
-  if (!kq.ok) return kq;
-  try {
-    return { ok: true, duLieu: (await kq.duLieu.json()) as T };
-  } catch {
-    // Đúng mã mong đợi mà thân không phải JSON là máy chủ hoặc proxy đang trả thứ khác. Với cán bộ
-    // thì đó vẫn là "không đọc được", không phải một trạng thái nghiệp vụ.
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-}
 
 /** Đường dẫn của một bản ghi cụ thể. `encodeURIComponent` vì id đi vào ĐƯỜNG DẪN, không vào thân. */
 export function duongDanMot(mau: string, id: string): string {
@@ -152,7 +131,7 @@ export function themChungTu(
     funding_source_id: than.funding_source_id,
   };
 
-  return docThanRa<finance_chungTuRa>(
+  return docThanLoiGoi<finance_chungTuRa>(
     goiGhi(DUONG_DAN_CHUNG_TU, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }),
   );
 }
@@ -205,7 +184,7 @@ export function suaChungTu(id: string, than: SuaChungTuVao): Promise<KetQua<fina
     funding_source_id: than.funding_source_id,
   };
 
-  return docThanRa<finance_chungTuRa>(goiGhi(duongDanMot(MAU_MOT_CHUNG_TU, id), "PATCH", thanGui, 200));
+  return docThanLoiGoi<finance_chungTuRa>(goiGhi(duongDanMot(MAU_MOT_CHUNG_TU, id), "PATCH", thanGui, 200));
 }
 
 /**
@@ -238,7 +217,7 @@ export async function goChungTu(id: string, lyDo: string): Promise<KetQua<null>>
  * này trên CHỨNG TỪ NÀY. Câu của máy chủ ra thẳng màn hình.
  */
 export function xacNhanChungTu(id: string): Promise<KetQua<finance_chungTuRa>> {
-  return docThanRa<finance_chungTuRa>(goiGhi(duongDanMot(MAU_XAC_NHAN, id), "POST", undefined, 200));
+  return docThanLoiGoi<finance_chungTuRa>(goiGhi(duongDanMot(MAU_XAC_NHAN, id), "POST", undefined, 200));
 }
 
 /**
@@ -252,7 +231,7 @@ export function xacNhanChungTu(id: string): Promise<KetQua<finance_chungTuRa>> {
  * lại luật ấy bằng cách tự ẩn nút theo trạng thái nó đoán — nó ẩn theo `status` máy chủ vừa trả.
  */
 export function khoaChungTu(id: string): Promise<KetQua<finance_chungTuRa>> {
-  return docThanRa<finance_chungTuRa>(goiGhi(duongDanMot(MAU_KHOA, id), "POST", undefined, 200));
+  return docThanLoiGoi<finance_chungTuRa>(goiGhi(duongDanMot(MAU_KHOA, id), "POST", undefined, 200));
 }
 
 /**
@@ -270,7 +249,7 @@ export function khoaChungTu(id: string): Promise<KetQua<finance_chungTuRa>> {
  */
 export function moKhoaChungTu(id: string, lyDo: string): Promise<KetQua<finance_chungTuRa>> {
   const thanGui: finance_moKhoaVao = { reason: lyDo };
-  return docThanRa<finance_chungTuRa>(
+  return docThanLoiGoi<finance_chungTuRa>(
     goiGhi(duongDanMot(MAU_MO_KHOA, id), "DELETE", thanGui, 200),
   );
 }
@@ -334,7 +313,7 @@ export function themDuAn(
     })),
   };
 
-  return docThanRa<finance_duAnGhiRa>(
+  return docThanLoiGoi<finance_duAnGhiRa>(
     goiGhi(DUONG_DAN_DU_AN, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }),
   );
 }
@@ -383,7 +362,7 @@ export function suaDuAn(id: string, than: SuaDuAnVao): Promise<KetQua<finance_du
     disbursement_deadline: than.disbursement_deadline,
   };
 
-  return docThanRa<finance_duAnGhiRa>(goiGhi(duongDanMot(MAU_SUA_DU_AN, id), "PATCH", thanGui, 200));
+  return docThanLoiGoi<finance_duAnGhiRa>(goiGhi(duongDanMot(MAU_SUA_DU_AN, id), "PATCH", thanGui, 200));
 }
 
 /**

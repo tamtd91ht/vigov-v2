@@ -28,7 +28,7 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import { docJSON, goiGhi, LOI_KHONG_RO, type KetQua } from "./goi";
+import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
 import type {
   identity_canBoTomTat,
   identity_datVaiTroVao,
@@ -194,28 +194,23 @@ export function layChiTietCanBo(id: string): Promise<KetQua<identity_canBoTomTat
  * hai là tệp này, nên cả hai bản đã gộp về `goiGhi`. Thứ CÒN LẠI ở đây là phần duy nhất của riêng
  * danh bạ: đọc thân thành `identity_canBoTomTat`.
  *
- * `goiGhi` TRẢ `Response` THÔ CHỨ KHÔNG PHÂN GIẢI SẴN, và đó là lý do lớp mỏng này tồn tại chứ
- * không gọi thẳng: `DELETE` của danh mục thành công bằng **204 không thân**, nên một hàm dùng chung
- * mà luôn gọi `.json()` sẽ biến lần xoá thành công ấy thành "không đọc được". Tuyến nào biết mình
- * trả gì thì tự đọc lấy.
+ * MÓN NỢ THỨ HAI CŨNG ĐÃ TRẢ, 24/09/2026: phép đọc thân từng nằm nguyên văn ở đây, và đó là bản
+ * thứ MƯỜI MỘT của cùng một hàm trong `lib/api/` — năm tệp khác từng trỏ thẳng vào hàm này trong
+ * chú thích của chúng, coi nó là bản gốc. Cả mười ba nay ở `goi.ts` (`docThanKetQua` ·
+ * `docThanLoiGoi`), cạnh lý do vì sao `goiGhi` trả `Response` thô. Thứ CÒN LẠI ở đây là đúng một
+ * việc: buộc kiểu trả về vào `identity_canBoTomTat` cho cả bốn tuyến ghi của danh bạ, để không chỗ
+ * gọi nào tự khai kiểu.
  */
-async function goiGhiCanBo(
+function goiGhiCanBo(
   duongDan: string,
   phuongThuc: "POST" | "PATCH" | "PUT" | "DELETE",
   than: unknown | undefined,
   maMongDoi: number,
   headerThem?: Readonly<Record<string, string>>,
 ): Promise<KetQua<identity_canBoTomTat>> {
-  const ketQua = await goiGhi(duongDan, phuongThuc, than, maMongDoi, headerThem);
-  if (!ketQua.ok) return ketQua;
-
-  try {
-    return { ok: true, duLieu: (await ketQua.duLieu.json()) as identity_canBoTomTat };
-  } catch {
-    // Đúng mã mong đợi mà thân không phải JSON là máy chủ hoặc proxy đang trả thứ khác. Với cán bộ
-    // thì đó vẫn là "không đọc được", không phải một trạng thái nghiệp vụ.
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
+  return docThanLoiGoi<identity_canBoTomTat>(
+    goiGhi(duongDan, phuongThuc, than, maMongDoi, headerThem),
+  );
 }
 
 /** Đường dẫn của một cán bộ cụ thể. `encodeURIComponent` vì id đi vào ĐƯỜNG DẪN, không vào thân. */

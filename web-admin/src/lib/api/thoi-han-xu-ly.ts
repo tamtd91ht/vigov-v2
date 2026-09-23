@@ -25,7 +25,7 @@
  * ấy đúng cho MỌI tuyến và được nói một lần ở `goi.ts`.
  */
 
-import { LOI_KHONG_RO, docJSON, goiGhi, type KetQua } from "./goi";
+import { docJSON, docThanKetQua, goiGhi, type KetQua } from "./goi";
 import type {
   identity_danhSachSLARa,
   identity_dongSLARa,
@@ -100,12 +100,7 @@ export async function suaThoiHanXuLy(
 
   const mau: identity_patch_sla_by_id["duongDan"] = "/api/v1/sla/{id}";
   const kq = await goiGhi(mau.replace("{id}", encodeURIComponent(id)), "PATCH", thanGui, 200);
-  if (!kq.ok) return kq;
-  try {
-    return { ok: true, duLieu: (await kq.duLieu.json()) as identity_dongSLARa };
-  } catch {
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
+  return docThanKetQua<identity_dongSLARa>(kq);
 }
 
 /**
@@ -124,10 +119,5 @@ export async function suaThoiHanXuLy(
 export async function gieoThoiHanMacDinh(): Promise<KetQua<identity_gieoSLARa>> {
   const duongDan: identity_post_sla_defaults["duongDan"] = "/api/v1/sla/defaults";
   const kq = await goiGhi(duongDan, "POST", undefined, 200);
-  if (!kq.ok) return kq;
-  try {
-    return { ok: true, duLieu: (await kq.duLieu.json()) as identity_gieoSLARa };
-  } catch {
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
+  return docThanKetQua<identity_gieoSLARa>(kq);
 }

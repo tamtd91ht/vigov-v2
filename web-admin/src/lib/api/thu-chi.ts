@@ -30,7 +30,7 @@
  * `dot_thu_chi` không có bảng. Màn hình nói thẳng điều đó ra chứ không giấu trong chú thích.
  */
 
-import { LOI_KHONG_RO, docJSON, goiGhi, type KetQua } from "./goi";
+import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
 import type {
   finance_bangDayDuRa,
   finance_bangRa,
@@ -49,26 +49,6 @@ import type {
   finance_taoBangVao,
   finance_themDongVao,
 } from "./schema.gen";
-
-/**
- * Đọc thân của một lần ghi thành công.
- *
- * ⚠ ĐÂY LÀ BẢN THỨ BA CỦA HÀM NÀY (`van-ban.ts:62`, `can-bo.ts:202` là hai bản kia), và nó được
- * viết lại thay vì gộp về `goi.ts` vì `goi.ts` nằm NGOÀI ranh giới ghi của lượt này. Ghi ra đây
- * như một phát hiện chứ không im lặng: điều kiện `goi.ts` tự đặt cho mình — *"màn hình ghi thứ
- * hai xuất hiện là lúc hàm này chuyển sang goi.ts"* — nay đã thoả lần thứ hai.
- */
-async function docThanRa<T>(goi: Promise<KetQua<Response>>): Promise<KetQua<T>> {
-  const kq = await goi;
-  if (!kq.ok) return kq;
-  try {
-    return { ok: true, duLieu: (await kq.duLieu.json()) as T };
-  } catch {
-    // Đúng mã mong đợi mà thân không phải JSON là máy chủ hoặc proxy đang trả thứ khác. Với cán
-    // bộ thì đó vẫn là "không đọc được", không phải một trạng thái nghiệp vụ.
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-}
 
 /** Đường dẫn của một bản ghi cụ thể. `encodeURIComponent` vì id đi vào ĐƯỜNG DẪN, không vào thân. */
 function duongDanMot(mau: string, id: string): string {
@@ -176,7 +156,7 @@ export function taoBang(
     })),
   };
 
-  return docThanRa<finance_bangRa>(
+  return docThanLoiGoi<finance_bangRa>(
     goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }),
   );
 }
@@ -231,7 +211,7 @@ export function themKhoanMuc(
     order: than.order,
   };
 
-  return docThanRa<finance_dongRa>(
+  return docThanLoiGoi<finance_dongRa>(
     goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }),
   );
 }
@@ -272,7 +252,7 @@ export function suaKhoanMuc(id: string, than: SuaDongVao): Promise<KetQua<financ
     values: than.values,
   };
 
-  return docThanRa<finance_dongRa>(goiGhi(duongDanMot(mau, id), "PATCH", thanGui, 200));
+  return docThanLoiGoi<finance_dongRa>(goiGhi(duongDanMot(mau, id), "PATCH", thanGui, 200));
 }
 
 /**
@@ -309,5 +289,5 @@ export function datDongTong(id: string): Promise<KetQua<finance_dongRa>> {
   // KHÔNG THÂN và KHÔNG `Content-Type`: hành vi này không mang thông tin nào ngoài "dòng nào" và
   // "ai", mà cả hai đã nằm trong đường dẫn và trong phiên. Gửi `{}` là tuyên bố có một thân —
   // thứ mời người sau điền vào.
-  return docThanRa<finance_dongRa>(goiGhi(duongDanMot(mau, id), "POST", undefined, 200));
+  return docThanLoiGoi<finance_dongRa>(goiGhi(duongDanMot(mau, id), "POST", undefined, 200));
 }

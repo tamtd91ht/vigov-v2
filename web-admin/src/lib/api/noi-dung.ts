@@ -56,7 +56,7 @@
  * tệp, vào URL hay vào khoá đệm (luật 3, cấm #1 và #4).
  */
 
-import { docJSON, goiGhi, LOI_KHONG_RO, type KetQua } from "./goi";
+import { docJSON, docThanKetQua, goiGhi, type KetQua } from "./goi";
 import type {
   comms_danhMucRa,
   comms_danhSachDanhMucRa,
@@ -161,24 +161,6 @@ export function layMotNoiDung(id: string): Promise<KetQua<comms_noiDungRa>> {
 /* ── Ghi ───────────────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Đọc thân của một lần ghi thành kiểu của tuyến.
- *
- * `goiGhi` trả `Response` thô chứ không phân giải sẵn — cùng lý do `docThanGhi` tồn tại trong
- * `thong-bao.ts` và `bien-ban.ts`: có tuyến thành công bằng 204 không thân, và một hàm dùng chung
- * luôn gọi `.json()` sẽ biến lần ấy thành "không đọc được".
- *
- * KHÔNG GHI LOG GÌ KHI THÂN HỎNG: thân yêu cầu mang tin bài của xã (luật 3, cấm #1).
- */
-async function docThanGhi<T>(ketQua: KetQua<Response>): Promise<KetQua<T>> {
-  if (!ketQua.ok) return ketQua;
-  try {
-    return { ok: true, duLieu: (await ketQua.duLieu.json()) as T };
-  } catch {
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-}
-
-/**
  * Thân của `POST /api/v1/content-items` — §7, trường theo trường. Bí danh của kiểu SINH RA.
  *
  * KHÔNG CÓ `status`, `source`, `source_ref` HAY `author_code`, và cả bốn là TỪ CHỐI CỦA MÁY CHỦ
@@ -219,7 +201,7 @@ export function themNoiDung(
   };
 
   return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(
-    docThanGhi<comms_noiDungRa>,
+    docThanKetQua<comms_noiDungRa>,
   );
 }
 
@@ -256,7 +238,7 @@ export function suaNoiDung(id: string, than: SuaNoiDungVao): Promise<KetQua<comm
   };
 
   return goiGhi(duongDanMotNoiDung(id), "PATCH", thanGui, 200, undefined).then(
-    docThanGhi<comms_noiDungRa>,
+    docThanKetQua<comms_noiDungRa>,
   );
 }
 
@@ -303,6 +285,6 @@ export function themDanhMucNoiDung(
   };
 
   return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(
-    docThanGhi<comms_danhMucRa>,
+    docThanKetQua<comms_danhMucRa>,
   );
 }

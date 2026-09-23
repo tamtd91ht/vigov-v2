@@ -33,7 +33,7 @@
  * ══════════════════════════════════════════════════════════════════════════════════════════
  */
 
-import { docJSON, goiGhi, LOI_KHONG_RO, type KetQua } from "./goi";
+import { docJSON, docThanKetQua, goiGhi, type KetQua } from "./goi";
 import type {
   page_Result_petitions_bienBanRa,
   petitions_bienBanRa,
@@ -119,25 +119,6 @@ export type ThemKetLuanVao = petitions_themKetLuanVao;
 export type TachKetLuanVao = petitions_tachKetLuanVao;
 
 /**
- * Đọc thân của một lần ghi thành kiểu của tuyến.
- *
- * `goiGhi` trả `Response` thô chứ không phân giải sẵn, nên lớp mỏng này tồn tại — cùng lý do
- * `goiGhiCanBo` tồn tại trong `can-bo.ts`: có tuyến thành công bằng 204 không thân, và một hàm
- * dùng chung luôn gọi `.json()` sẽ biến lần ấy thành "không đọc được".
- *
- * KHÔNG GHI LOG GÌ KHI THÂN HỎNG: nội dung biên bản và nội dung kết luận là chữ của một cuộc
- * họp có thể nhắc tới hồ sơ của công dân (luật 3, cấm #1).
- */
-async function docThanGhi<T>(ketQua: KetQua<Response>): Promise<KetQua<T>> {
-  if (!ketQua.ok) return ketQua;
-  try {
-    return { ok: true, duLieu: (await ketQua.duLieu.json()) as T };
-  } catch {
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-}
-
-/**
  * POST /api/v1/meetings — nhập một biên bản kèm các kết luận đã gõ trên biểu mẫu. 201, trả về cả
  * tấm thẻ.
  *
@@ -170,7 +151,7 @@ export function taoBienBan(
   };
 
   return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(
-    docThanGhi<petitions_bienBanRa>,
+    docThanKetQua<petitions_bienBanRa>,
   );
 }
 
@@ -196,7 +177,7 @@ export function themKetLuan(
   const thanGui: ThemKetLuanVao = { content: than.content };
 
   return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(
-    docThanGhi<petitions_ketLuanRa>,
+    docThanKetQua<petitions_ketLuanRa>,
   );
 }
 
@@ -246,6 +227,6 @@ export function tachKetLuanThanhNhiemVu(
   };
 
   return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(
-    docThanGhi<petitions_nhiemVuRa>,
+    docThanKetQua<petitions_nhiemVuRa>,
   );
 }

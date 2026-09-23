@@ -252,3 +252,35 @@ describe("409 — từ chối theo tầng", () => {
     expect(kq.thongBao).toBe("Không kết nối được máy chủ. Vui lòng thử lại.");
   });
 });
+
+/**
+ * NỬA CÒN LẠI CỦA QUY TẮC MÀ `DELETE xoá mềm` CANH NỬA ĐẦU — và nó vào đây vì cả kho KHÔNG canh
+ * nó, đo bằng đột biến ngày 24/09/2026.
+ *
+ * Hai nửa ấy kéo ngược chiều nhau, nên bỏ một nửa là mời người sau sửa cho "gọn": 204 KHÔNG THÂN
+ * phải là thành công (`.json()` sẽ hỏng), còn 201 CÓ mã đúng mà thân KHÔNG đọc được thì KHÔNG phải
+ * thành công. Chỉ canh nửa đầu thì phép sửa hiển nhiên — nuốt lỗi phân giải rồi trả `ok: true` —
+ * làm xanh mọi ca của cả 72 tệp, trong khi nó vừa giao cho màn hình một `duLieu` là `undefined`.
+ *
+ * ĐIỀU ẤY GIỜ ĐẮT HƠN TRƯỚC, VÀ ĐÓ LÀ LÝ DO CA NÀY KHÔNG CHỜ ĐƯỢC: phép đọc thân từng có mười một
+ * bản rải khắp `lib/api/`, nay gom về `goi.ts` (`docThanKetQua`). Một dòng sai ở đó là sai ở MỌI
+ * tuyến ghi của mọi phân hệ cùng một lúc.
+ *
+ * MỘT CA CHO CẢ MƯỜI MỘT CHỖ GỌI, KHÔNG MƯỜI MỘT CA: thân hàm chỉ còn một bản: chép ca này sang
+ * từng tệp là dựng lại đúng thứ vừa gỡ đi. `docThanLoiGoi` không có ca riêng vì nó không có logic
+ * riêng — nó `then` sang chính hàm này.
+ */
+describe("mã đúng mà THÂN không đọc được KHÔNG phải là thành công", () => {
+  it("201 kèm thân không phải JSON ra một câu cho người dùng, không ra `ok: true`", async () => {
+    // Hình dạng có thật: một proxy chen vào giữa và trả trang lỗi HTML của nó kèm mã của máy chủ.
+    batFetchGhi(
+      () => new Response("<html>502</html>", { status: 201, headers: { "Content-Type": "text/html" } }),
+    );
+
+    const kq = await themMuc(moTa("loaiVanBan"), { code: "cong-van", label: "Công văn" }, "k-1");
+
+    expect(kq.ok).toBe(false);
+    if (kq.ok) return;
+    expect(kq.thongBao).toBe("Không kết nối được máy chủ. Vui lòng thử lại.");
+  });
+});

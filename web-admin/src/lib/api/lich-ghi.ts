@@ -30,7 +30,7 @@
  * ở `goi.ts`.
  */
 
-import { LOI_KHONG_RO, goiGhi, type KetQua } from "./goi";
+import { docThanKetQua, goiGhi, type KetQua } from "./goi";
 import type {
   identity_caLamBuRa,
   identity_caLamViecRa,
@@ -56,15 +56,6 @@ import type {
   identity_themNgayNghiLeVao,
   identity_xoaLichVao,
 } from "./schema.gen";
-
-/** Thân JSON của một phản hồi đã thành công. Thân hỏng là "không đọc được", không phải 200. */
-async function docThanRa<T>(phanHoi: Response): Promise<KetQua<T>> {
-  try {
-    return { ok: true, duLieu: (await phanHoi.json()) as T };
-  } catch {
-    return { ok: false, thongBao: LOI_KHONG_RO };
-  }
-}
 
 /** Đường dẫn của một dòng. `encodeURIComponent` vì id đi vào ĐƯỜNG DẪN, không vào thân. */
 function duongDanDong(mau: string, id: string): string {
@@ -111,7 +102,7 @@ export async function themCaLamViec(
     note: than.note,
   };
   const kq = await goiGhi(GOC_CA_LAM_VIEC, "POST", thanGui, 201);
-  return kq.ok ? docThanRa<identity_caLamViecRa>(kq.duLieu) : kq;
+  return docThanKetQua<identity_caLamViecRa>(kq);
 }
 
 /** Sửa một ca: trường nào vắng là KHÔNG ĐỔI. Khoá lấy từ hợp đồng, không gõ lại. */
@@ -138,7 +129,7 @@ export async function suaCaLamViec(
     note: than.note,
   };
   const kq = await goiGhi(duongDanDong(MAU_CA_LAM_VIEC, id), "PATCH", thanGui, 200);
-  return kq.ok ? docThanRa<identity_caLamViecRa>(kq.duLieu) : kq;
+  return docThanKetQua<identity_caLamViecRa>(kq);
 }
 
 /** DELETE /api/v1/working-hours/{id} — xoá mềm. Xem cảnh báo giờ mở ca ở đầu tệp. */
@@ -159,7 +150,7 @@ export async function gieoTuanMacDinh(): Promise<KetQua<identity_gieoLichRa>> {
     "/api/v1/working-hours/defaults";
   // Hợp đồng khai `than: never`: không thân, không `Content-Type`.
   const kq = await goiGhi(duongDan, "POST", undefined, 200);
-  return kq.ok ? docThanRa<identity_gieoLichRa>(kq.duLieu) : kq;
+  return docThanKetQua<identity_gieoLichRa>(kq);
 }
 
 /* ---- ngày nghỉ lễ -------------------------------------------------------------------------- */
@@ -181,7 +172,7 @@ export async function themNgayNghiLe(
 ): Promise<KetQua<identity_ngayNghiLeRa>> {
   const thanGui: identity_themNgayNghiLeVao = { date: than.date, name: than.name };
   const kq = await goiGhi(GOC_NGAY_NGHI_LE, "POST", thanGui, 201);
-  return kq.ok ? docThanRa<identity_ngayNghiLeRa>(kq.duLieu) : kq;
+  return docThanKetQua<identity_ngayNghiLeRa>(kq);
 }
 
 export type SuaNgayNghiLeVao = {
@@ -197,7 +188,7 @@ export async function suaNgayNghiLe(
     identity_suaNgayNghiLeVao[K]
   > | undefined } = { date: than.date, name: than.name };
   const kq = await goiGhi(duongDanDong(MAU_NGAY_NGHI_LE, id), "PATCH", thanGui, 200);
-  return kq.ok ? docThanRa<identity_ngayNghiLeRa>(kq.duLieu) : kq;
+  return docThanKetQua<identity_ngayNghiLeRa>(kq);
 }
 
 /** DELETE /api/v1/public-holidays/{id} — xoá mềm. Ngày đã khai vẫn bị chiếm sau khi xoá. */
@@ -222,7 +213,7 @@ export async function gieoNgayNghiLeMacDinh(nam: number): Promise<KetQua<identit
     "/api/v1/public-holidays/defaults";
   const than: identity_gieoNgayNghiLeVao = { year: nam };
   const kq = await goiGhi(duongDan, "POST", than, 200);
-  return kq.ok ? docThanRa<identity_gieoLichRa>(kq.duLieu) : kq;
+  return docThanKetQua<identity_gieoLichRa>(kq);
 }
 
 /* ---- ngày làm bù --------------------------------------------------------------------------- */
@@ -247,7 +238,7 @@ export async function themNgayLamBu(
     name: than.name,
   };
   const kq = await goiGhi(GOC_NGAY_LAM_BU, "POST", thanGui, 201);
-  return kq.ok ? docThanRa<identity_caLamBuRa>(kq.duLieu) : kq;
+  return docThanKetQua<identity_caLamBuRa>(kq);
 }
 
 export type SuaNgayLamBuVao = {
@@ -263,7 +254,7 @@ export async function suaNgayLamBu(
     identity_suaNgayLamBuVao[K]
   > | undefined } = { date: than.date, start: than.start, end: than.end, name: than.name };
   const kq = await goiGhi(duongDanDong(MAU_NGAY_LAM_BU, id), "PATCH", thanGui, 200);
-  return kq.ok ? docThanRa<identity_caLamBuRa>(kq.duLieu) : kq;
+  return docThanKetQua<identity_caLamBuRa>(kq);
 }
 
 /** DELETE /api/v1/swap-working-days/{id} — xoá mềm. Giờ mở ca của ngày ấy vẫn bị chiếm. */
