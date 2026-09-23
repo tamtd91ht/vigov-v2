@@ -181,7 +181,108 @@ không đăng xuất toàn bộ cán bộ của mọi xã cùng lúc (`core/conf
 Bí mật vào cụm hôm nay bằng `kubectl create secret` tay. Bước kế tiếp khi thấy phiền:
 **External Secrets Operator**. Manifest trong kho này khi ấy vẫn chỉ chứa **tên** khoá.
 
-## 5. Sửa manifest sau khi đã chạy — **cái bẫy của mô hình này**
+## 5. Biến môi trường — khai ở đâu, k8s cấp bằng gì
+
+Ba câu hỏi, ba nguồn. Đừng trả lời câu này bằng nguồn của câu kia:
+
+| Câu hỏi | Nguồn |
+|---|---|
+| **Biến nào tồn tại** | `.env.example` — sổ đăng ký. Không có dòng ở đó là biến không ai tìm ra được (luật 11, bất biến 6) |
+| **Ai đọc nó** | `core/config` — gói **DUY NHẤT** gọi `os.Getenv`. Mọi nơi khác nhận `config.Config` đã kiểu hoá |
+| **k8s cấp bằng gì** | bảng dưới đây — đó là fact tệp này sở hữu, không suy ra được từ hai nguồn kia |
+
+**Một tên, hai cách viết.** Dấu gạch ngang hợp lệ trong **key** của ConfigMap/Secret nhưng
+**không** hợp lệ trong tên biến môi trường của container — shell chỉ cho `A-Z`, `0-9`, `_`:
+
+| Ở đâu | Cách viết | Ví dụ |
+|---|---|---|
+| Key ConfigMap / Secret | `CHỮ-HOA-GẠCH-NGANG` | `ELASTICSEARCH-INDEX-PREFIX` |
+| Env var của container, và Go | `CHỮ_HOA_GẠCH_DƯỚI` | `ELASTICSEARCH_INDEX_PREFIX` |
+
+`-` → `_`, **không gì khác**. Lệch nhau ở bất cứ đâu ngoài dấu phân cách là **hai tên**.
+
+### Bảng map — 16 biến
+
+| Biến | Bắt buộc | k8s cấp bằng | Hình dạng |
+|---|---|---|---|
+| `DATABASE_DSN` | **có, mọi môi trường** | **Secret** `bi-mat-<dịch vụ>` | DSN, phần host **được phép nhiều host** |
+| `ENV` | **có, mọi môi trường** | ConfigMap `cau-hinh-chung` | `dev` · `staging` · `prod` — khác ba giá trị này là `config.Load` từ chối |
+| `GRPC_CALLER_KEY` | **có, mọi môi trường** | **Secret** `bi-mat-<dịch vụ>` | chuỗi khoá. Rỗng = cổng gRPC trả lời bất kỳ ai (ADR 0025) |
+| `SESSION_SIGNING_KEYS` | **có ở staging/prod** | **Secret** `bi-mat-<dịch vụ>` | danh sách phẩy, **≥ 2 khoá ở prod** để xoay được mà không đăng xuất toàn bộ cán bộ |
+| `REDIS_DSN` | không | **Secret** `bi-mat-<dịch vụ>` | DSN |
+| `RABBITMQ_DSN` | không | **Secret** | DSN |
+| `ELASTICSEARCH_API_KEY` | không | **Secret** | chuỗi khoá |
+| `LISTEN_ADDR` | không (mặc định `:8080`) | ConfigMap, hoặc `value:` trong Deployment | `:8080` |
+| `GRPC_LISTEN_ADDR` | không (mặc định `:9090`) | ConfigMap, hoặc `value:` | `:9090` |
+| `PLATFORM_GRPC_ADDR` | không, nhưng **từ chối tại chỗ dùng** | `value:` trong Deployment | `platform:9090` — DNS nội cụm |
+| `IDENTITY_GRPC_ADDR` | không, nhưng **từ chối tại chỗ dùng** | `value:` trong Deployment | `identity:9090` — DNS nội cụm |
+| `RABBITMQ_EXCHANGE` | không | ConfigMap | tên exchange |
+| `ELASTICSEARCH_ADDRS` | không | ConfigMap | **danh sách phẩy** `http://host:9200,http://host:9200` |
+| `ELASTICSEARCH_INDEX_PREFIX` | không | ConfigMap | tiền tố index |
+| `TENANT_CACHE_TTL` | không (mặc định `30s`) | ConfigMap `cau-hinh-chung` | `30s`. Dài hơn 1 phút thì `config.CanhBao()` kêu |
+| `DANGEROUS_AUTH_BYPASS` | không | **không khai ở đâu cả** | `config.Load` **từ chối khởi động** nếu nó bật ở `ENV=prod` (luật 8, bất biến 7). Không khai là cách chắc nhất |
+
+**Cột "k8s cấp bằng" không phải "nhạy cảm hay không".** Phép thử là ***"in ra một dòng log thì
+có đau không"***: một DSN có mật khẩu là **Secret** dù nó trông như một địa chỉ. Bốn biến trên
+mang kiểu `secret.DSN`/`secret.Secret` trong Go đúng vì lý do ấy — chúng từ chối tự in ra.
+
+**Bắt buộc quyết theo TỪNG biến, có lý do viết bên cạnh.** Đánh dấu bắt buộc cho mọi biến mới
+là sai lầm làm cả tám dịch vụ không khởi động được trên máy chưa đặt thêm bốn giá trị, để bảo
+vệ đoạn mã chưa tồn tại. Năm biến RabbitMQ/Elasticsearch **cố ý** không bắt buộc: chưa mã nào
+nối tới chúng, và cái đầu tiên thật sự cần sẽ **từ chối theo tên** tại chỗ nối.
+
+### Wiring thật hôm nay
+
+| Nơi | Cấp gì |
+|---|---|
+| `envFrom: configMapRef: cau-hinh-chung` | `ENV` · `TENANT_CACHE_TTL` — sinh bởi `configMapGenerator` ở `overlays/<mt>/kustomization.yaml` |
+| `envFrom: secretRef: bi-mat-<dịch vụ>` | `DATABASE_DSN` · `GRPC_CALLER_KEY` · `SESSION_SIGNING_KEYS` (+ `REDIS_DSN` ở `platform`) — tạo bằng tay, mục 4 |
+| `env: - value:` trong `deployment.yaml` | `LISTEN_ADDR` · `PLATFORM_GRPC_ADDR` · `IDENTITY_GRPC_ADDR` — **DNS nội cụm, không phải cấu hình của cụm**, nên chúng là hằng số của manifest |
+| `web-admin` | **không có `envFrom`** — Next.js không dùng `core/config`; nó đọc cấu hình theo tên miền **tại runtime** (luật 1, bất biến 10) |
+
+### Hai lỗ phải biết TRƯỚC khi bật RabbitMQ / Elasticsearch
+
+1. **Năm biến ấy hôm nay không có nguồn nào cấp** — không nằm trong `cau-hinh-chung`, không
+   nằm trong `bi-mat-*`. Đúng với hiện trạng (chưa mã nào nối), nhưng ngày nối thì phải thêm
+   `RABBITMQ_EXCHANGE` · `ELASTICSEARCH_ADDRS` · `ELASTICSEARCH_INDEX_PREFIX` vào
+   `configMapGenerator`, và `RABBITMQ_DSN` · `ELASTICSEARCH_API_KEY` vào `bi-mat-<dịch vụ>`.
+2. **KAFKA CHƯA CÓ BIẾN NÀO.** ADR 0010 đã chốt Kafka mang sự kiện giữa các service, nhưng
+   `core/events.Publisher` còn là interface thuần, chưa gắn hạ tầng — nên không có dòng nào
+   trong `.env.example` và không có trường nào trong `config.Config`. Đặt tên cho nó là
+   **STOP CONDITION của luật 11 (câu 1)**: tên phải nói **VAI TRÒ** (`KAFKA_EVENT_ADDRESS`),
+   không nói cụm (`KAFKA_02_ADDRESS`), và **ai cấp — ConfigMap hay Secret — là quyết định của
+   chủ cụm**. Đừng viết `os.Getenv("KAFKA_…")` trước khi có câu trả lời ấy;
+   `hooks/env_contract_guard.py` chặn lần ghi đó.
+
+### Tách VAI TRÒ khỏi CỤM — cơ chế trả tiền cho chính nó
+
+Mã chỉ biết vai trò. Manifest mới chọn cụm vật lý:
+
+```yaml
+env:
+  - name: KAFKA_EVENT_ADDRESS        # VAI TRÒ — tên duy nhất mã biết
+    valueFrom:
+      configMapKeyRef:
+        name: vigov-ha-tang
+        key: KAFKA-02-ADDRESS        # CỤM — chọn ở đây, đổi ở đây
+```
+
+Chuyển tải log từ kafka-02 sang kafka-05 khi ấy là **một dòng trong một tệp**. Cũng việc đó
+với `KAFKA_02_ADDRESS` nằm trong Go là: sửa mã, review, dựng lại **mọi** ảnh có đọc nó, phát
+hành cùng lúc, và hy vọng không sót cái nào.
+
+### Ba điều cấm
+
+| Cấm | Vì sao |
+|---|---|
+| Số thứ tự cụm trong tên mã đọc (`KAFKA_02_ADDRESS`, `REDIS_1_DSN`) | Hàn một tải công việc vào một cụm. Chuyển đi thành một lần sửa mã + phát hành mọi dịch vụ đọc nó |
+| **Cắt danh sách địa chỉ hoặc DSN để giữ một host** | Đúng-trông-như-đúng suốt thời gian còn một node, sai im lặng vào đúng ngày lên HA. Đưa nguyên giá trị cho driver hiểu nhiều host (`pgx` hiểu) |
+| Giá trị **riêng của một xã** trong biến môi trường | Luật 1, bất biến 10: môi trường chỉ mang hằng số **toàn nền tảng**. Giá trị theo xã đọc tại runtime từ sổ đăng ký của `platform` |
+
+Bảng 16 biến ở trên được `tools/check_env_map.py` đối chiếu với `.env.example` và
+`core/config/config.go` trong `make check`: thêm một biến mà quên cập nhật bảng là **đỏ**.
+
+## 6. Sửa manifest sau khi đã chạy — **cái bẫy của mô hình này**
 
 `overlays/<mt>/kustomization.yaml` **không** ghi thẻ đang chạy. Chạy `apply -k` lên một
 namespace đã có dịch vụ sẽ **đẩy cả bảy về `CHUA-TRIEN-KHAI-LAN-NAO`**, tức
@@ -203,7 +304,7 @@ kubectl -n vigov-prod set image deploy/<tên> server=<ảnh>:<thẻ>
 
 Tên thùng là `server` với sáu dịch vụ Go, `web` với `web-admin`.
 
-## 6. Bốn điều dễ hiểu sai
+## 7. Bốn điều dễ hiểu sai
 
 | Điều | Sự thật |
 |---|---|
@@ -212,7 +313,7 @@ Tên thùng là `server` với sáu dịch vụ Go, `web` với `web-admin`.
 | "`/healthz` xanh nghĩa là hệ thống ổn" | **Không.** Nó nằm ngoài chuỗi phân giải xã có chủ ý, nên vẫn xanh khi CSDL hoặc `platform` hỏng. Bắt sự cố đó bằng **giám sát tỉ lệ 404** từ `TenantMiddleware`, không bằng probe |
 | "NetworkPolicy là tuỳ chọn" | **Không.** gRPC 9090 dùng `insecure.NewCredentials()` — không TLS, không xác thực. NetworkPolicy là biên duy nhất giữ danh bạ xã của toàn hệ thống |
 
-## 7. Ingress sinh từ hợp đồng REST
+## 8. Ingress sinh từ hợp đồng REST
 
 Chốt 21/09/2026: bảng định tuyến **được sinh ra** từ `kb/20-contracts/openapi.json`, nên
 "thêm tuyến trong Go" và "tuyến ấy đi tới đúng dịch vụ" không còn là hai việc rời nhau.
@@ -234,7 +335,7 @@ danh sách không có khoá trộn, nên một strategic-merge patch chỉ cần
 (luật 1: không có mặc định trên đường cách ly). `go test ./tools/ingress` đối chiếu tệp trên
 đĩa với hợp đồng: xoá một luật hay đổi một backend là **đỏ**.
 
-## 8. Chưa được chứng minh
+## 9. Chưa được chứng minh
 
 | Việc | Trạng thái |
 |---|---|

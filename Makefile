@@ -3,7 +3,7 @@
 # `make check` is what stop_verify_guard looks for in the session transcript. The agent must
 # not report "done" before it has run.
 
-.PHONY: check brain hooks quyen vet-actor khoaduynhat buildfiles lint build standalone test web kb proto tidy
+.PHONY: check brain hooks quyen vet-actor khoaduynhat envmap buildfiles lint build standalone test web kb proto tidy
 
 # Danh sách module, HỎI CHÍNH GO — không gõ tay, và không bóc tách văn bản go.work.
 #
@@ -22,7 +22,7 @@ MOD_DIRS := $(shell go list -m -f '{{.Dir}}' | tr '\134' '/')
 MODULES  := $(addsuffix /...,$(MOD_DIRS))
 
 
-check: brain hooks quyen vet-actor khoaduynhat buildfiles lint build standalone test web   ## Full verification — run before saying it is done
+check: brain hooks quyen vet-actor khoaduynhat envmap buildfiles lint build standalone test web   ## Full verification — run before saying it is done
 
 brain:                          ## 7 structural invariants of the brain — anti-drift
 	python tools/check_brain.py
@@ -65,6 +65,13 @@ khoaduynhat:                    ## Khoá duy nhất hợp thành với `tenant_i
 	@# Cổng này dựng lúc cả 49 khai báo đều ĐÚNG, tức nó GIỮ một tính chất chứ không dọn một
 	@# đống đã hỏng — đúng lúc rẻ nhất.
 	python tools/check_khoa_duy_nhat.py
+
+envmap:                         ## Bảng map biến môi trường ở deploy/README.md còn khớp mã không
+	@# `deploy/README.md` mục 5 là nơi DUY NHẤT trả lời "biến này do ConfigMap hay Secret cấp".
+	@# `core/config` chỉ biết đọc, `.env.example` chỉ giữ chỗ, và `env_contract_guard` nói thẳng
+	@# rằng nó KHÔNG kiểm chỗ ràng buộc. Một fact viết tay cạnh một danh sách mọc từ mã là đúng
+	@# hình dạng sẽ trôi — và lúc trôi, người vận hành đọc bảng rồi tin là đã khai đủ.
+	python tools/check_env_map.py
 
 buildfiles:                     ## Dockerfile + Jenkinsfile của từng dịch vụ, và phần chung không ai đánh rơi
 	@# Mỗi dịch vụ tự dựng và tự đóng gói: nó quyết build cái gì, khi nào, ra ảnh nào.

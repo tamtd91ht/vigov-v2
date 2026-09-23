@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "deploy",
-  "cap_nhat": "2026-09-22",
+  "cap_nhat": "2026-09-23",
   "muc": [
     {
       "id": "manifest-k8s-ba-don-vi",
@@ -90,6 +90,14 @@
       "bang_chung": "Chủ dự án chốt 22/09/2026 sau khi chỉ ra tmp/deploy/Jenkinsfile (job omicrm đang chạy hằng ngày trên CÙNG máy chủ Jenkins). deploy/Jenkinsfile: gỡ stage 'Ghim thẻ và commit' (kustomize edit + git fetch/reset + commit + push), gỡ tham số KUBE_CRED và GIT_CRED, gỡ withCredentials; thêm hằng số KUBECONFIG='/u01/rancher/rancher-omi.yaml' và stage Kiểm công cụ đọc thử tệp; đặt ảnh bằng `kubectl -n ${NS} set image deploy/${DICH_VU} ${THUNG}=${ANH}:${THE}`; nhật ký triển khai chuyển vào currentBuild.description. Kiểm: `kubectl kustomize deploy/overlays/{staging,prod}` đều dựng sạch; `python tools/check_build.py` PASS; `python tools/check_brain.py` 7/7; `python tools/test_hooks.py` 214/214.",
       "no_confirm": [],
       "tiep_theo": "GIỮ main-only — chủ dự án chốt KHÔNG lấy mô hình nhánh-là-môi-trường của mẫu (dev/stg/master), vì đây là monorepo 8 ảnh: một nhánh môi trường sẽ đóng lại cả tám cho một thay đổi chạm một dịch vụ. Chỉ mượn CÁCH DEPLOY.\n\nHAI CÁI GIÁ ĐÃ BIẾT, đừng phát hiện lại: (1) nhật ký triển khai nay nằm ở lịch sử build của job và bị buildDiscarder cắt sau 200 lượt — `git log -p overlays/*/kustomization.yaml` KHÔNG còn là nhật ký; (2) overlays không còn ghi thẻ đang chạy, nên `kubectl apply -k` lên namespace đã có dịch vụ sẽ đẩy CẢ BẢY về CHUA-TRIEN-KHAI-LAN-NAO. Quy trình sửa manifest an toàn ở deploy/README.md mục 5.\n\nĐƯỜNG DẪN KUBECONFIG LÀ GIẢ ĐỊNH: lấy từ mẫu omicrm trên cùng máy chủ. Chưa ai xác nhận ViGov dùng cùng cụm ấy — stage đầu dừng nếu tệp không đọc được, nên sai sẽ đỏ sớm chứ không đỏ giữa lượt.\n\nCHƯA CÓ MÁY NÀO PHÂN TÍCH CÚ PHÁP deploy/Jenkinsfile: không có groovy/Jenkins ở máy trạm, và tools/check_build.py chỉ soi 8 Jenkinsfile của dịch vụ. Lượt chạy đầu trên Jenkins là lần đầu biết."
+    },
+    {
+      "id": "map-bien-moi-truong-vao-k8s",
+      "viec": "Tài liệu triển khai không nói biến môi trường nào do ConfigMap cấp, biến nào do Secret",
+      "trang_thai": "xong",
+      "bang_chung": "Chủ dự án chỉ ra chỗ thiếu ngày 23/09/2026. deploy/README.md mục 5 mới: bảng 16 biến `core/config` thật sự đọc, mỗi biến một cột bắt buộc + một cột k8s cấp bằng gì + hình dạng giá trị; wiring thật hôm nay (envFrom cau-hinh-chung + bi-mat-<dịch vụ>, địa chỉ nội cụm là `value:` literal, web-admin KHÔNG có envFrom); hai cách viết một tên (-/_); ví dụ configMapKeyRef tách VAI TRÒ khỏi CỤM; ba điều cấm. Rào: tools/check_env_map.py, đã gắn vào mục `envmap` của `make check`. Kiểm sống: xoá một dòng bảng -> rc=1; hạ GRPC_CALLER_KEY từ bắt buộc xuống không -> rc=1; bản thật -> rc=0.",
+      "no_confirm": [],
+      "tiep_theo": "HAI CHỖ CÒN HỞ, đã ghi vào chính mục 5 chứ không để người sau tự phát hiện:\n\n(1) Năm biến RabbitMQ/Elasticsearch KHÔNG có nguồn nào cấp hôm nay — không trong `cau-hinh-chung`, không trong `bi-mat-*`. Đúng với hiện trạng (chưa mã nào nối), nhưng ngày nối phải thêm RABBITMQ_EXCHANGE · ELASTICSEARCH_ADDRS · ELASTICSEARCH_INDEX_PREFIX vào configMapGenerator, và RABBITMQ_DSN · ELASTICSEARCH_API_KEY vào bi-mat-<dịch vụ>.\n\n(2) KAFKA CHƯA CÓ BIẾN NÀO. ADR 0010 chốt Kafka mang sự kiện giữa service, nhưng `core/events.Publisher` còn là interface thuần nên không có dòng nào trong .env.example và không có trường nào trong config.Config. Đặt tên cho nó là STOP CONDITION của luật 11 câu 1 — tên nói VAI TRÒ (KAFKA_EVENT_ADDRESS) chứ không nói cụm (KAFKA_02_ADDRESS), và ai cấp là quyết định của chủ cụm. ĐỪNG viết os.Getenv(\"KAFKA_…\") trước khi hỏi.\n\nCỔNG NÀY KHÔNG KIỂM NỘI DUNG cột 'k8s cấp bằng' — không gì quyết được điều đó từ mã. Nó kiểm đúng phần quyết được: bảng có đủ và chỉ những biến core/config đọc, và biến bắt buộc tại Load có được đánh dấu bắt buộc không. Đừng đọc nó như một bảo đảm rộng hơn."
     }
   ]
 }
