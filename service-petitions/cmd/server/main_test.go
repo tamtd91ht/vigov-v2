@@ -120,6 +120,24 @@ func (khoPhieu) DanhSach(ctx context.Context, _ petstore.LocPhieu, _ page.Reques
 	return page.NewResult[domain.PhieuPhanAnh](), nil
 }
 
+// khoNhiemVu stands in for the TASK register, and it serves both read routes from one type for the
+// same reason khoPhieu does: this file is about the EDGE CHAIN — Host -> commune -> principal — and
+// the only thing it can prove about a store is that the commune reached it. A route reachable without
+// one would panic inside store.Scoped in production, on a member of staff's screen.
+type khoNhiemVu struct{}
+
+func (khoNhiemVu) TheoMa(ctx context.Context, _ string) (domain.NhiemVu, error) {
+	_ = tenant.MustFrom(ctx)
+	return domain.NhiemVu{}, petstore.ErrNhiemVuKhongTonTai
+}
+
+func (khoNhiemVu) DanhSach(ctx context.Context, _ petstore.LocNhiemVu, _ page.Request) (
+	page.Result[domain.NhiemVu], error) {
+
+	_ = tenant.MustFrom(ctx)
+	return page.NewResult[domain.NhiemVu](), nil
+}
+
 type khoNhanLinhVuc struct{}
 
 func (khoNhanLinhVuc) DanhSach(ctx context.Context) ([]domain.NhanLinhVuc, error) {
@@ -269,9 +287,11 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// route, and Register refuses a nil dependency at construction. A use case that is never
 		// invoked cannot dereference the nil handle. Their own four-case suites live in
 		// internal/http/xu_ly_phan_anh_test.go.
-		DanhSachPhieu: khoPhieu{},
-		XuLyPhieu:     app.NewXuLyPhanAnh(nil, nil, nil, nil),
-		Log:           log,
+		DanhSachPhieu:   khoPhieu{},
+		XuLyPhieu:       app.NewXuLyPhanAnh(nil, nil, nil, nil),
+		NhiemVu:         khoNhiemVu{},
+		DanhSachNhiemVu: khoNhiemVu{},
+		Log:             log,
 	})
 
 	// THE CITIZEN SURFACE, REGISTERED THE WAY main() REGISTERS IT — its own mux, its own Deps.

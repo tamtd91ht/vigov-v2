@@ -209,6 +209,7 @@ type mayChu struct {
 	vet      *vetXemGia
 	danhSach *danhSachPhieuGia
 	xuLy     *xuLyPhieuGia
+	nhiemVu  *nhiemVuGia
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -224,6 +225,10 @@ func dungMayChu(t *testing.T) *mayChu {
 	// commune B's page contains only commune B's.
 	danhSach := danhSachTuPhieuMau(phieu)
 	xuLy := &xuLyPhieuGia{}
+	// ONE fake for BOTH task read routes, keyed by commune — the same object the wiring in
+	// cmd/server gives to both Deps fields, so a test cannot accidentally prove that two different
+	// registers agree with each other.
+	nhiemVu := nhiemVuMau()
 
 	m := &mayChu{
 		d: Deps{
@@ -248,14 +253,16 @@ func dungMayChu(t *testing.T) *mayChu {
 			// records the commune and the acting person. Register refuses a nil dependency at
 			// construction, so both have to be present — and a fake nothing invokes cannot answer
 			// anything wrongly.
-			GhiLoaiNhiemVu: &ghiDanhMucGia{},
-			GhiMucUuTien:   &ghiDanhMucGiaUuTien{},
-			Phieu:          phieu,
-			NhanLinhVuc:    nhan,
-			Vet:            vet,
-			DanhSachPhieu:  danhSach,
-			XuLyPhieu:      xuLy,
-			Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
+			GhiLoaiNhiemVu:  &ghiDanhMucGia{},
+			GhiMucUuTien:    &ghiDanhMucGiaUuTien{},
+			Phieu:           phieu,
+			NhanLinhVuc:     nhan,
+			Vet:             vet,
+			DanhSachPhieu:   danhSach,
+			XuLyPhieu:       xuLy,
+			NhiemVu:         nhiemVu,
+			DanhSachNhiemVu: nhiemVu,
+			Log:             slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		thuMuc:   thuMucMau(),
 		loai:     loai,
@@ -265,6 +272,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		vet:      vet,
 		danhSach: danhSach,
 		xuLy:     xuLy,
+		nhiemVu:  nhiemVu,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -346,6 +354,9 @@ func depsDay() Deps {
 		Vet:            &vetXemGia{},
 		DanhSachPhieu:  danhSachTuPhieuMau(phieuMau()),
 		XuLyPhieu:      &xuLyPhieuGia{},
+		// BOTH TASK FIELDS, from ONE fake — the same shape cmd/server wires.
+		NhiemVu:         nhiemVuMau(),
+		DanhSachNhiemVu: nhiemVuMau(),
 	}
 }
 
@@ -374,6 +385,10 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// only the branch that discloses a citizen's name and number, and only for an account
 		// holding `feedback.unmask`. Without this case, a wiring line dropped in a refactor ships.
 		"thiếu đường ghi vết xem đầy đủ": func(d *Deps) { d.Vet = nil },
+		// THE TWO TASK READ ROUTES. Four other subsystems stand on this register, so a nil here is
+		// not one screen: it is Nhiệm vụ, Sổ tay lãnh đạo, Biên bản họp and half of Tổng quan.
+		"thiếu kho nhiệm vụ":                 func(d *Deps) { d.NhiemVu = nil },
+		"thiếu đường đọc danh sách nhiệm vụ": func(d *Deps) { d.DanhSachNhiemVu = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {

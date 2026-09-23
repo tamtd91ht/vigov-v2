@@ -173,6 +173,11 @@ func chay(log *slog.Logger) error {
 	// comment in migration 0005 — and it is reported as an open gap.
 	suKien := petstore.NewSuKienDiStore(kho)
 
+	// THE TASK REGISTER (migration 0006). ONE store for both read routes, for the same reason the
+	// petition register has one: what separates the surfaces is the Deps field and the method each
+	// route is given, never a second object holding the same pool.
+	nhiemVu := petstore.NewNhiemVuStore(kho)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware
@@ -201,7 +206,12 @@ func chay(log *slog.Logger) error {
 		// *store.DB as the repositories because it opens its own transaction: rule 6, invariant 3
 		// admits no audit write outside one, and audit.Write takes only a *store.ScopedTx.
 		Vet: app.NewXemNguoiGui(kho),
-		Log: log,
+		// The task register's two READ routes. No use case between the handler and the store, the
+		// same as the petition reads: a read opens no transaction and writes no audit entry, so a
+		// layer here would carry nothing.
+		NhiemVu:         nhiemVu,
+		DanhSachNhiemVu: nhiemVu,
+		Log:             log,
 	})
 
 	// THE CITIZEN SURFACE — ITS OWN MUX, and that is rule 4, invariant 5 made mechanical rather

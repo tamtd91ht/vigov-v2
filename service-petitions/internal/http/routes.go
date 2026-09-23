@@ -115,6 +115,22 @@ type (
 			page.Result[domain.PhieuPhanAnh], error)
 	}
 
+	// NhiemVuDoc is the read side of ONE task, for GET /api/v1/tasks/{ma}.
+	//
+	// READ ONLY, and separate from the list below for the same reason PhieuPhanAnhDoc is separate
+	// from PhieuPhanAnhDanhSach: a route depending on a wider surface than it uses is how the next
+	// person justifies reaching through it. The write methods this store will grow in the next pass
+	// have no business being reachable from a GET.
+	NhiemVuDoc interface {
+		TheoMa(ctx context.Context, ma string) (domain.NhiemVu, error)
+	}
+
+	// NhiemVuDanhSach is the paginated read of the task register, for GET /api/v1/tasks.
+	NhiemVuDanhSach interface {
+		DanhSach(ctx context.Context, loc petstore.LocNhiemVu, yc page.Request) (
+			page.Result[domain.NhiemVu], error)
+	}
+
 	// XuLyPhieuPhanAnh is the four STAFF acts, each of which opens a transaction and writes the
 	// business change, the audit entry and the notification obligation inside it (rule 6, invariant
 	// 3; rule 10, invariant 5).
@@ -219,6 +235,11 @@ type Deps struct {
 	DanhSachPhieu PhieuPhanAnhDanhSach
 	XuLyPhieu     XuLyPhieuPhanAnh
 
+	// The TASK register — read paths only in this pass (migration 0006). Two fields for two
+	// interfaces over one store, see NhiemVuDoc.
+	NhiemVu         NhiemVuDoc
+	DanhSachNhiemVu NhiemVuDanhSach
+
 	// Vet writes the trail for a full-view read. Required, not optional — see the panic switch.
 	Vet VetXemNguoiGui
 
@@ -264,6 +285,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		// act a member of staff can perform on a petition, which means petitions come in and nothing
 		// can be done with them — the exact state this service was in before these routes existed.
 		panic("petitions/http: thiếu use case xử lý phiếu — bốn tuyến phân loại/phân công/chuyển trạng thái/đóng phiếu sẽ panic khi có người gọi")
+	case d.NhiemVu == nil:
+		panic("petitions/http: thiếu kho nhiệm vụ — GET /api/v1/tasks/{ma} sẽ panic khi có người gọi")
+	case d.DanhSachNhiemVu == nil:
+		panic("petitions/http: thiếu đường đọc danh sách nhiệm vụ — GET /api/v1/tasks sẽ panic khi có người gọi")
 	case d.Vet == nil:
 		// THE MOST DANGEROUS OF THE FIVE TO LEAVE OUT, because a nil here does not crash a screen:
 		// it crashes the ONE path that discloses a citizen's name and number, and only when
@@ -592,6 +617,70 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "feedback.resolve")(
 			idem.KhongCan("câu UPDATE mang `trang_thai = 'cho-dan-xac-nhan'`, nên lần gửi thứ hai không khớp dòng nào — đúng một lần đóng, đúng một kết quả, đúng một vết")(
 				http.HandlerFunc(h.DongPhieu))))
+
+	// --- THE TASK REGISTER. TWO READ ROUTES, AND NO WRITE ROUTE ---------------------------------
+	//
+	// `tasks` is the settled URL noun for `nhiem_vu` (kb/00-foundation/ubiquitous-language.md:144),
+	// not translated on the spot (ADR 0011).
+	//
+	// `task.read` ON BOTH, AND NOT AnyAuthenticated, unlike the two catalogue reads above. The
+	// catalogues are the WORDS a commune sorts its work with and fill a picker on nearly every
+	// screen; this is the work itself — who was told to do what, by when, and who has not. The
+	// specification gives it a key of its own for that reason (§6), and the key is seeded at
+	// service-identity/migrations/0001_init.sql:304. NO KEY WAS INVENTED (rule 5, invariant 3c).
+	//
+	// WHY THE WRITE ROUTES OF §10 ARE ABSENT — the reasoning, in full, is on internal/http/nhiem_vu.go.
+	// In one line each: creating a task fixes a deadline counted in WORKING HOURS and identity
+	// publishes no contract that returns the hours (ADR 0029 §118), and approving an extension needs
+	// the holding-rule answer that kb/50-doi-chieu/2026-09-23-feat-m8-multitenant-foundation.md
+	// §Mâu thuẫn says explicitly not to pick a side on. The sub-task tree of §5.10 is a third,
+	// separate stop condition and migration 0006 states why it created no column for it.
+
+	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn
+	// @screen   02-nhiem-vu §3, §4
+	// 400 covers a filter the server REFUSES rather than ignores, and two of those refusals are not
+	// bad input at all — they are missing contracts, answered with a sentence naming what is
+	// missing instead of a page that answers a different question:
+	//
+	//	scope=related  needs the caller's own department; the staff principal carries none
+	//	soon=true      needs the commune's own `sla.gio_sap_den_han`; identity exposes no RPC for it
+	//
+	// 500 additionally covers `scope=mine` on a principal with no staff business code — a wiring
+	// fault, refused rather than silently widened to the whole register.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @reply    200 page.Result[nhiemVuRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/tasks",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.DanhSachNhiemVu)))
+
+	// @summary  Một nhiệm vụ, tra theo mã nhiệm vụ của xã (NV19)
+	// @screen   02-nhiem-vu §5
+	// 404 is the single answer to three causes — no such number, another commune's number, and a
+	// soft-deleted task. Telling them apart tells a caller which numbers exist in a register they
+	// are not reading.
+	//
+	// 401 is RequirePermission's answer to no session AND to a session issued by another commune:
+	// authz.xacNhanXa refuses before the permission is consulted, so no query runs and the response
+	// cannot differ by commune.
+	//
+	// THE `Theo văn bản` DOCUMENT BLOCK OF §5.4 IS NOT IN THE REPLY — `nhiem_vu_van_ban` does not
+	// exist yet (migration 0006 says so). Nor are the progress log (§5.9) and the extension requests
+	// (§5.8): both have tables now, and neither has a route in this pass.
+	//
+	// @reply    200 nhiemVuRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/tasks/{ma}",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.DocNhiemVu)))
 
 	// --- the commune adds a task type of its own -------------------------------------------
 	//
