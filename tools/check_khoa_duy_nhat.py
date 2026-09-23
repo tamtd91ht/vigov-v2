@@ -98,12 +98,31 @@ MAU_UNIQUE_TRONG_BANG = re.compile(r'UNIQUE\s*\(([^)]*)\)', re.I)
 MAU_PK_BANG = re.compile(r'PRIMARY\s+KEY\s*\(([^)]*)\)', re.I)
 MAU_PK_COT = re.compile(r'^\s*([A-Za-z_]\w*)\s+[^,\n]*?\bPRIMARY\s+KEY\b(?!\s*\()', re.I | re.M)
 
-# BỎ CHÚ THÍCH `--` TRƯỚC KHI QUÉT KHOÁ CHÍNH. Chính tệp này đã ghi cái bẫy ấy ở `SO_KHAI_BAO_TOI_THIEU`:
-# một lần `grep 'UNIQUE ('` cho ra 59 thay vì 49 vì mười chỗ nằm trong lời văn GIẢI THÍCH về khoá.
-# Migration của kho này chú thích rất dày, nên đếm lời văn nói về khoá thành khoá là chuyện gần
-# như chắc chắn xảy ra — và nó sai theo chiều nguy hiểm: một con số khai báo phồng lên làm ngưỡng
-# dưới trông vẫn lành khi phép quét thật đã hụt.
+# BỎ CHÚ THÍCH `--` TRƯỚC KHI QUÉT — CẢ HAI NHÁNH, và chuyện "cả hai" là một bài học riêng.
+#
+# Chính tệp này đã ghi cái bẫy ấy ở `SO_KHAI_BAO_TOI_THIEU`: một lần `grep 'UNIQUE ('` cho ra 59
+# thay vì 49 vì mười chỗ nằm trong lời văn GIẢI THÍCH về khoá. Migration ở đây chú thích rất dày.
+#
+# NGÀY 23/09/2026, BẢN VÁ THÊM NHÁNH `PRIMARY KEY` BÓC CHÚ THÍCH — CÒN NHÁNH `UNIQUE` BÊN CẠNH
+# THÌ KHÔNG. Cùng một tệp, cùng một luật, hai cách làm, và `dem` của cả hai cộng vào MỘT ngưỡng.
+# Đo ra: 58 khớp `UNIQUE`, chỉ 41 là thật — **17 đơn vị là lời văn**. Tổng cổng in ra 119, tổng
+# thật 102, trong khi ngưỡng vừa đặt là 105. Tức NGƯỠNG NẰM TRÊN SỐ THẬT: ai sau này sửa đúng
+# khiếm khuyết này sẽ làm cổng đỏ ngay, và phản xạ lúc ấy là hạ ngưỡng — lần chết thứ hai của
+# cùng một cổng, do chính bản vá lần một gài lại.
+#
+# Và nhánh `UNIQUE` không chỉ ĐẾM lời văn, nó còn KIỂM lời văn: mỗi khớp trong chú thích đều đi
+# qua `if 'tenant_id' not in cot` và sinh được một lỗi giả. Hôm nay chưa sinh vì 17 chỗ ấy tình
+# cờ đều có `tenant_id` trong câu văn. Đó là may, không phải thiết kế.
+#
+# THAY BẰNG KHOẢNG TRẮNG CÙNG ĐỘ DÀI, KHÔNG XOÁ HẲN: `dong` tính bằng `than[:u.start()]`, nên xoá
+# ký tự là dời mọi vị trí phía sau và câu lỗi chỉ sai dòng. Giữ nguyên độ dài và giữ nguyên `\n`
+# thì số dòng báo ra vẫn đúng tuyệt đối — một cổng chỉ đúng chỗ báo mới có người đi sửa.
 MAU_CHU_THICH_DONG = re.compile(r'--[^\n]*')
+
+
+def bo_chu_thich(s: str) -> str:
+    """Xoá nội dung chú thích `--` nhưng GIỮ NGUYÊN mọi vị trí ký tự và mọi xuống dòng."""
+    return MAU_CHU_THICH_DONG.sub(lambda m: ' ' * len(m.group(0)), s)
 
 # Số khai báo duy nhất THẬT, đo ngày 22/09/2026: **49**. Ngưỡng đặt dưới nó một khoảng.
 #
@@ -117,11 +136,20 @@ MAU_CHU_THICH_DONG = re.compile(r'--[^\n]*')
 # ấy cố ý không từng phần. Đếm cả chúng là đếm lời văn nói về khoá thành khoá. Ngưỡng đầu tiên
 # của tệp này đặt theo con số 59 ấy và làm chính nó đỏ ngay lần chạy đầu.
 #
-# NÂNG 45 → 105 ngày 23/09/2026, cùng lúc thêm nhánh `PRIMARY KEY`. Số thật nhảy 57 → 115, và
-# 45 khi ấy thôi là một ngưỡng: nếu nhánh khoá chính chết hoàn toàn, số tụt về 57 — VẪN TRÊN 45,
-# nên cổng sẽ in [PASS] và ngưỡng không hé một lời. Một ngưỡng thấp hơn hẳn số thật không bảo vệ
-# gì cả; nó chỉ trông như đang bảo vệ, đúng thứ nhánh mới này vừa được thêm vào để chữa.
-SO_KHAI_BAO_TOI_THIEU = 105
+# 45 → 105 (23/09/2026, khi thêm nhánh `PRIMARY KEY`) → **95** (24/09/2026, khi bóc chú thích ở
+# CẢ HAI nhánh). Hai lần chỉnh, và lần thứ hai chữa lỗi của lần thứ nhất — ghi ra đủ vì cái sai
+# ấy đúng là cái tệp này tồn tại để chặn.
+#
+# 105 ĐẶT SAI, VÀ SAI THEO CHIỀU TỆ NHẤT: nó được đo trên con số 115 mà cổng in ra, trong khi
+# con số ấy có **17 đơn vị là CHỮ TRONG CHÚ THÍCH** — nhánh `PRIMARY KEY` mới thì bóc chú thích,
+# nhánh `UNIQUE` bên cạnh thì không. Số khai báo thật là 102, tức NGƯỠNG NẰM TRÊN SỐ THẬT. Hệ
+# quả: ai sửa đúng khiếm khuyết ấy sẽ làm cổng đỏ ngay lập tức, và phản xạ khi ấy là hạ ngưỡng
+# cho hết đỏ — lần chết thứ hai của cùng một cổng, do chính bản vá lần một gài lại.
+#
+# 95 đo trên số thật 102, dưới nó một khoảng đủ để một lần xoá bảng hợp lệ không làm đỏ, nhưng
+# không đủ để cả một NHÁNH quét chết mà lọt: nhánh `UNIQUE` chết thì tụt còn 61, nhánh
+# `PRIMARY KEY` chết thì còn 42 — cả hai đều dưới 95 và đều nói ra.
+SO_KHAI_BAO_TOI_THIEU = 95
 
 
 def than_bang(s: str, tu: int) -> str:
@@ -184,7 +212,7 @@ def kiem() -> tuple[list[str], int]:
         # 1. UNIQUE bên trong CREATE TABLE
         for m in MAU_BANG.finditer(s):
             ten_bang = m.group(1)
-            than = than_bang(s, m.end() - 1)
+            than = bo_chu_thich(than_bang(s, m.end() - 1))
             cross = khai_ngoai_xa(s, m.start())
             for u in MAU_UNIQUE_TRONG_BANG.finditer(than):
                 dem += 1
@@ -204,16 +232,17 @@ def kiem() -> tuple[list[str], int]:
         # 1b. PRIMARY KEY bên trong CREATE TABLE — xem khối lý do ở `MAU_PK_BANG`
         for m in MAU_BANG.finditer(s):
             ten_bang = m.group(1)
-            than = MAU_CHU_THICH_DONG.sub('', than_bang(s, m.end() - 1))
+            than = bo_chu_thich(than_bang(s, m.end() - 1))
             cross = khai_ngoai_xa(s, m.start())
-            dong_bang = s[:m.end()].count('\n') + 1
+            dau_than = s[:m.end()].count('\n')
 
             for u in MAU_PK_BANG.finditer(than):
                 dem += 1
                 cot = [c.strip().lower() for c in u.group(1).split(',')]
+                dong = dau_than + than[:u.start()].count('\n') + 1
                 if 'tenant_id' not in cot and not cross:
                     loi.append(
-                        f"{ngan}:{dong_bang} bảng `{ten_bang}` — PRIMARY KEY "
+                        f"{ngan}:{dong} bảng `{ten_bang}` — PRIMARY KEY "
                         f"({', '.join(cot)}) KHÔNG hợp thành với `tenant_id`\n"
                         f"        → Khoá chính LÀ một khoá duy nhất: Postgres cài nó bằng đúng "
                         f"một chỉ mục duy nhất. Xã thứ hai không onboard được (luật 1 bất biến 6).\n"
@@ -223,9 +252,10 @@ def kiem() -> tuple[list[str], int]:
 
             for u in MAU_PK_COT.finditer(than):
                 dem += 1
+                dong = dau_than + than[:u.start()].count('\n') + 1
                 if not cross:
                     loi.append(
-                        f"{ngan}:{dong_bang} bảng `{ten_bang}` — cột `{u.group(1)}` khai "
+                        f"{ngan}:{dong} bảng `{ten_bang}` — cột `{u.group(1)}` khai "
                         f"PRIMARY KEY MỘT CỘT\n"
                         f"        → Khoá duy nhất một cột trên dữ liệu nghiệp vụ là luật 1 cấm #4: "
                         f"xã thứ hai đụng mã xã thứ nhất ngay ở dòng đầu tiên họ ghi.\n"
