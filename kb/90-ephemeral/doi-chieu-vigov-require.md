@@ -49,7 +49,7 @@ Cả năm mục đều là **bẫy bên kia đã trả giá** (§5). Chưa mục
 
 | # | Việc | Trạng thái | Bằng chứng / ghi chú |
 |---|---|---|---|
-| K1 | Quét 31 migration tìm `UNIQUE (…)` trên bảng có `deleted_at` mà **thiếu** `WHERE deleted_at IS NULL` | `chưa làm` | Luật 1 bất biến 6 và luật 7 gặp nhau đúng ở đây, **không luật nào nói câu này**. Lỗi chỉ lộ khi người dùng thật "gỡ ra rồi thêm lại" |
+| K1 | ~~Quét migration tìm `UNIQUE (…)` **thiếu** `WHERE deleted_at IS NULL`~~ → **MỤC NÀY VIẾT NGƯỢC, đã bác 23/09/2026** | `xong` | **HAI KHO ĐỐI LẬP CÓ CHỦ Ý Ở ĐÚNG ĐIỂM NÀY — xem §2.1 dưới.** `tools/check_khoa_duy_nhat.py:175-186` **TỪ CHỐI** hình dạng ấy và gọi tên nó là bẫy. Làm theo mục K1 như viết ban đầu là làm `make check` đỏ. Cổng chạy 23/09: `[PASS] 36 tệp · 54 khai báo · 0 khoá tính sót dòng đã xoá mềm` |
 | K2 | Kiểm đường gọi Zalo của `service-comms` có ghi URL ra log không | `chưa làm` | Bên kia: mã bot nằm **trong đường dẫn**, thư viện HTTP ghi URL ở mức INFO → dòng log vô hại chính là bí mật. Luật 8 không lường đường vòng này |
 | K3 | `GET /api/v1/my-citizen-reports/{maTraCuu}` — có **giới hạn số lần tra** không | `chưa làm` | Luật 4 cấm #2 nói vế 404-vs-403, **không nói** vế giới hạn số lần. Bên kia: 20 lần / 10 phút / một địa chỉ |
 | K4 | `service-finance` — `chung_tu_giai_ngan` có cột **nguồn vốn** không | `chưa làm` | `migrations/0004` có `du_an_id`. Bên kia: *"không có cột ấy thì tiến độ theo nguồn phải suy từ dự án, và suy sai ngay khi dự án có hai nguồn"* |
@@ -146,6 +146,27 @@ Và nó kèm **bằng chứng ràng buộc ấy đã được cưỡng chế b�
 điện thoại công dân) của kho này.** Nó không phải điều khoản giấy tờ. → §5, mục cần quyết.
 
 ---
+
+## 2.1 KHOÁ DUY NHẤT — hai kho đối lập nhau có chủ ý, và cả hai đều đúng với luật của mình
+
+Phát hiện ngày **23/09/2026**, khi mục K1 của Sổ việc suýt được thi hành nguyên văn.
+
+| | Làm gì | Vì sao |
+|---|---|---|
+| `vigov-require` | **LUÔN** kèm `WHERE deleted_at IS NULL` | *"chặn đúng thao tác gỡ-ra-rồi-thêm-lại mà người dùng làm hằng ngày"* — `09-bay-va-bai-hoc.md` |
+| **kho này** | **CẤM** mệnh đề ấy trên khoá duy nhất | **Luật 7 bất biến 3: mã đã cấp KHÔNG BAO GIỜ được cấp lại, kể cả sau xoá mềm.** Cổng `tools/check_khoa_duy_nhat.py:175-186` chặn, và câu chặn viết: *"Mã đã cấp là mã đã in ra giấy, đã đóng dấu, đã gửi đi. Hai hồ sơ cùng số trong sổ lưu trữ là hai hồ sơ không ai phân biệt được nữa — và một trong hai đã có người ký."* |
+
+**Không bên nào sai.** Bên kia tối ưu cho thao tác hằng ngày; kho này tối ưu cho **tính toàn vẹn
+của hồ sơ lưu trữ**, và đó là ràng buộc pháp lý chứ không phải khẩu vị.
+
+**Vì sao mục này đáng nằm ở đây thay vì bị xoá đi:** K1 được viết ngày 22/09 từ một bài học có
+thật của kho bên kia, và nó **đọc rất thuyết phục**. Ngày 23/09 nó được đưa nguyên văn vào chỉ
+dẫn cho một agent dựng migration; agent mở cổng ra đọc, thấy cổng nói ngược, và **làm theo cổng**.
+Nếu nó làm theo chỉ dẫn thì `make check` đỏ — còn nếu cổng ấy chưa tồn tại thì một mã hồ sơ đã
+cấp sẽ được cấp lại, và không gì đỏ cả.
+
+**Bài học không phải "kiểm cổng trước".** Là: một bài học đúng ở kho khác **không tự động đúng ở
+kho này**, và chỗ nguy hiểm nhất là khi nó đúng *nghe có vẻ vì cùng một lý do*.
 
 ## 2. Điểm lệch NẶNG nhất: cách ly xã đặt ở tầng nào
 

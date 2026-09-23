@@ -1002,6 +1002,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/phieu_phan_anh.go:146"
     },
+    "domain.ConChuaPhanBo": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/nguon_von.go:142"
+    },
     "domain.ConPhaiGiaiNgan": {
       "kind": "func",
       "at": "service-finance/internal/domain/du_an.go:120"
@@ -1085,6 +1089,10 @@
     "domain.Error": {
       "kind": "func",
       "at": "service-identity/internal/domain/xung_dot_lich.go:41"
+    },
+    "domain.GanNguon": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/nguon_von.go:96"
     },
     "domain.GiaTri": {
       "kind": "func",
@@ -1410,6 +1418,10 @@
       "kind": "type",
       "at": "service-finance/internal/domain/nguong_canh_bao_cham.go:24"
     },
+    "domain.NguonVon": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/nguon_von.go:16"
+    },
     "domain.NguongCanhBaoCham": {
       "kind": "type",
       "at": "service-finance/internal/domain/nguong_canh_bao_cham.go:41"
@@ -1425,6 +1437,10 @@
     "domain.NormaliseHost": {
       "kind": "func",
       "at": "service-platform/internal/domain/tenant.go:54"
+    },
+    "domain.PhanBoNguonVon": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/nguon_von.go:39"
     },
     "domain.PhanTramThoiGianDaQua": {
       "kind": "func",
@@ -1526,6 +1542,10 @@
       "kind": "type",
       "at": "service-finance/internal/domain/du_an.go:107"
     },
+    "domain.TienDoNguonVon": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/nguon_von.go:121"
+    },
     "domain.TienGioLamViec": {
       "kind": "func",
       "at": "service-identity/internal/domain/tien_gio_lam_viec.go:178"
@@ -1537,6 +1557,10 @@
     "domain.TimChongNhau": {
       "kind": "func",
       "at": "service-identity/internal/domain/gio_trong_ngay.go:88"
+    },
+    "domain.TinhTrangGanNguon": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/nguon_von.go:67"
     },
     "domain.TongMucHieuLuc": {
       "kind": "func",
@@ -1553,6 +1577,10 @@
     "domain.TrangThaiChungTu": {
       "kind": "type",
       "at": "service-finance/internal/domain/chung_tu_giai_ngan.go:43"
+    },
+    "domain.TrangThaiGanNguon": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/nguon_von.go:54"
     },
     "domain.TrangThaiGhep": {
       "kind": "func",
@@ -1594,6 +1622,10 @@
       "kind": "type",
       "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:713"
     },
+    "domain.TyLeDaPhanBo": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/nguon_von.go:160"
+    },
     "domain.TyLeDong": {
       "kind": "func",
       "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:769"
@@ -1601,6 +1633,14 @@
     "domain.TyLeGiaiNgan": {
       "kind": "func",
       "at": "service-finance/internal/domain/du_an.go:134"
+    },
+    "domain.TyLeGiaiNganTrenPhanBo": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/nguon_von.go:169"
+    },
+    "domain.TyLeGiaiNganTrenTongNguon": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/nguon_von.go:177"
     },
     "domain.VaiTro": {
       "kind": "type",
@@ -3254,6 +3294,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/ngay_nghi_le.go:20"
     },
+    "store.NewNguonVonStore": {
+      "kind": "func",
+      "at": "service-finance/internal/store/nguon_von.go:26"
+    },
     "store.NewNhanLinhVucStore": {
       "kind": "func",
       "at": "service-petitions/internal/store/nhan_linh_vuc.go:30"
@@ -3322,6 +3366,10 @@
       "kind": "type",
       "at": "service-identity/internal/store/ngay_nghi_le.go:16"
     },
+    "store.NguonVonStore": {
+      "kind": "type",
+      "at": "service-finance/internal/store/nguon_von.go:22"
+    },
     "store.NguongCanhBaoCham": {
       "kind": "func",
       "at": "service-finance/internal/store/cau_hinh_giai_ngan.go:63"
@@ -3333,6 +3381,10 @@
     "store.PageSpec": {
       "kind": "type",
       "at": "core/store/page.go:18"
+    },
+    "store.PhanBoTheoDuAn": {
+      "kind": "func",
+      "at": "service-finance/internal/store/nguon_von.go:130"
     },
     "store.PhanCong": {
       "kind": "func",
@@ -3505,6 +3557,10 @@
     "store.ThuHoiCuaCongDan": {
       "kind": "func",
       "at": "service-identity/internal/store/phien_cong_dan.go:462"
+    },
+    "store.TienDoTheoNguon": {
+      "kind": "func",
+      "at": "service-finance/internal/store/nguon_von.go:210"
     },
     "store.TraCuu": {
       "kind": "func",

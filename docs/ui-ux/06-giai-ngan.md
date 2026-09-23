@@ -338,6 +338,9 @@ Trường tính: `da_giai_ngan` = SUM(`chung_tu_giai_ngan.so_tien` WHERE trạng
 1. Dự án **không tự sinh trạng thái hoàn thành** — chỉ có tỷ lệ giải ngân và điểm chậm.
 2. Tỷ lệ giải ngân có thể **> 100%** (ví dụ `176,5%`) — không chặn, chỉ hiển thị.
 3. Chứng từ đã `Đã khoá` thì không sửa/xoá; muốn sửa phải mở khoá (quyền `budget.confirm`).
+3b. Sửa một chứng từ đang ở `Đã xác nhận` thì nó **quay về `Kế toán nhập`** và dấu người xác
+   nhận bị xoá — muốn xác nhận lại phải có người bấm lại. Lý do và vì sao không phải "cấm sửa":
+   ADR 0036. Chốt 23/09/2026, sau khi thấy mã cho sửa mà vẫn giữ chữ xác nhận.
 4. Ghi vướng mắc mà dự án đã có cán bộ phụ trách ⇒ **tự sinh nhiệm vụ theo dõi** liên kết ngược.
 5. Ngưỡng cảnh báo chậm cấu hình theo năm ngân sách, mặc định 10 điểm.
 6. Chứng từ chưa gắn nguồn vốn vẫn cộng vào tổng đã giải ngân, nhưng bị nêu ở cảnh báo *"đã chi nhưng chưa ghi rút từ nguồn nào"*.

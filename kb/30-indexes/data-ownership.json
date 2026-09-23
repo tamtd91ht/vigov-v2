@@ -103,6 +103,20 @@
       "source": "service-documents/migrations/0003_danh_muc_loai_van_ban.sql:190"
     },
     {
+      "entity": "FundingAllocation",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "phan_bo_nguon_von",
+      "source": "service-finance/migrations/0007_nguon_von.sql:196"
+    },
+    {
+      "entity": "FundingSource",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "nguon_von",
+      "source": "service-finance/migrations/0007_nguon_von.sql:134"
+    },
+    {
       "entity": "IncomingDocument",
       "service": "documents",
       "scope": "tenant",
