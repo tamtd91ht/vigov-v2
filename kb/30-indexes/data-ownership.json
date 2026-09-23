@@ -278,6 +278,13 @@
       "source": "service-identity/migrations/0005_don_vi_dan_cu_va_danh_muc.sql:295"
     },
     {
+      "entity": "TaskDocument",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "nhiem_vu_van_ban",
+      "source": "service-petitions/migrations/0009_nhiem_vu_van_ban.sql:182"
+    },
+    {
       "entity": "TaskExtensionRequest",
       "service": "petitions",
       "scope": "tenant",

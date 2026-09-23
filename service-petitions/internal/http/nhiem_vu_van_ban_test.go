@@ -55,10 +55,16 @@ func TestDocNhiemVu_TraKhoiVanBanTheoDungThuTuDaLuu(t *testing.T) {
 	doiMa(t, w, http.StatusOK)
 	ra := docNhiemVu(t, w.Body.Bytes())
 
-	if len(ra.Documents) != 2 {
-		t.Fatalf("documents = %d dòng, muốn 2", len(ra.Documents))
+	// CON TRỎ, NÊN PHẢI KIỂM VẮNG MẶT TRƯỚC — và chính phép kiểm bắt buộc ấy là thứ hình dạng cũ
+	// không có: một mảng `null` đọc ra là mảng rỗng ở mọi máy khách không cẩn thận.
+	if ra.Documents == nil {
+		t.Fatalf("tuyến chi tiết KHÔNG mang khối documents — nó phải có mặt, kể cả khi rỗng")
 	}
-	mot := ra.Documents[0]
+	ds := *ra.Documents
+	if len(ds) != 2 {
+		t.Fatalf("documents = %d dòng, muốn 2", len(ds))
+	}
+	mot := ds[0]
 	if mot.ID != "vb-1" || mot.Group != string(domain.VanBanCapTrenGiao) {
 		t.Errorf("dòng đầu: id=%q group=%q", mot.ID, mot.Group)
 	}
@@ -75,9 +81,9 @@ func TestDocNhiemVu_TraKhoiVanBanTheoDungThuTuDaLuu(t *testing.T) {
 	}
 	// THE GAP SURVIVES ONTO THE WIRE. `position` is an ISSUED number, not an array index: 4 is
 	// correct here and renumbering it to 2 would be the client inventing a fact.
-	if ra.Documents[1].Position != 4 {
+	if ds[1].Position != 4 {
 		t.Errorf("position dòng hai = %d, muốn 4 — số đã cấp, không phải chỉ số mảng",
-			ra.Documents[1].Position)
+			ds[1].Position)
 	}
 	if m.nhiemVu.goiVanBan != 1 {
 		t.Errorf("đọc khối văn bản %d lần, muốn 1", m.nhiemVu.goiVanBan)
@@ -132,8 +138,12 @@ func TestDanhSachNhiemVu_KhongDocKhoiVanBanVaTraNull(t *testing.T) {
 		t.Errorf("sổ nhiệm vụ đọc khối văn bản %d lần — mỗi trang sẽ tải ba danh sách cho mỗi dòng "+
 			"mà thẻ §4 không vẽ", m.nhiemVu.goiVanBan)
 	}
-	if !strings.Contains(w.Body.String(), `"documents":null`) {
-		t.Fatalf("thân trang không mang `\"documents\":null`: %s", w.Body.String())
+	// VẮNG MẶT HẲN, không phải `null`. Hai cách nói cùng một điều trên dây, nhưng chỉ một cách
+	// diễn đạt được trong hợp đồng: một trường `null` vẫn được khai là mảng BẮT BUỘC, nên `tsc`
+	// cho phép `.map(...)` và lời gọi ấy nổ đúng trên tuyến này. Xem `vanBanRaNgoai`.
+	if strings.Contains(w.Body.String(), `"documents"`) {
+		t.Fatalf("thân trang MANG khoá `documents` — tuyến sổ cố ý không phục vụ khối này, và "+
+			"vắng mặt là cách duy nhất hợp đồng nói được điều đó: %s", w.Body.String())
 	}
 
 	// AND THE PARSED SHAPE AGREES: nil, not an empty slice.

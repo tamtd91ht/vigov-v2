@@ -14422,6 +14422,15 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "documents": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/petitions.nhiemVuVanBanRa"
+            }
           }
         },
         "required": [
@@ -14450,6 +14459,38 @@
           "title",
           "type",
           "unit"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.nhiemVuVanBanRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "date",
+          "group",
+          "id",
+          "position",
+          "reference",
+          "summary"
         ],
         "additionalProperties": false
       },
@@ -14828,6 +14869,15 @@
               "string",
               "null"
             ]
+          },
+          "documents": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/petitions.vanBanNhiemVuVao"
+            }
           }
         },
         "additionalProperties": false
@@ -14984,6 +15034,12 @@
           },
           "parent": {
             "type": "string"
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.vanBanNhiemVuVao"
+            }
           }
         },
         "required": [
@@ -15070,6 +15126,31 @@
         "required": [
           "code",
           "label"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.vanBanNhiemVuVao": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "group",
+          "summary"
         ],
         "additionalProperties": false
       },

@@ -1151,6 +1151,16 @@ export type petitions_nhiemVuRa = {
   "parent": string;
   "created_by": string;
   "created_at": string;
+  "documents"?: Array<petitions_nhiemVuVanBanRa> | null;
+};
+
+export type petitions_nhiemVuVanBanRa = {
+  "id": string;
+  "group": string;
+  "reference": string;
+  "date": string;
+  "summary": string;
+  "position": number;
 };
 
 export type petitions_phanCongVao = {
@@ -1241,6 +1251,7 @@ export type petitions_suaNhiemVuVao = {
   "leader_approved"?: boolean | null;
   "superior_acknowledged"?: boolean | null;
   "parent"?: string | null;
+  "documents"?: Array<petitions_vanBanNhiemVuVao> | null;
 };
 
 export type petitions_tachKetLuanVao = {
@@ -1288,6 +1299,7 @@ export type petitions_taoNhiemVuVao = {
   "monitor"?: string;
   "due_at"?: string | null;
   "parent"?: string;
+  "documents"?: Array<petitions_vanBanNhiemVuVao>;
 };
 
 export type petitions_themKetLuanVao = {
@@ -1310,6 +1322,14 @@ export type petitions_themMucUuTienVao = {
   "is_default"?: boolean;
   "source"?: string | null;
   "tier"?: number | null;
+};
+
+export type petitions_vanBanNhiemVuVao = {
+  "id"?: string;
+  "group": string;
+  "reference"?: string;
+  "date"?: string;
+  "summary": string;
 };
 
 export type petitions_xoaLoaiNhiemVuVao = {

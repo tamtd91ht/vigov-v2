@@ -182,7 +182,7 @@ type nhiemVuRa struct {
 	// THE LINES ARE NOT MASKED AND DO NOT NEED TO BE. Every field here is text a member of staff
 	// typed about an administrative document; no citizen name, number or address is on the record —
 	// and the day one is, this needs the branch phieuRaNgoai has (rule 3).
-	Documents []nhiemVuVanBanRa `json:"documents"`
+	Documents *[]nhiemVuVanBanRa `json:"documents,omitempty"`
 }
 
 // nhiemVuVanBanRa is ONE line of the block.
@@ -249,9 +249,17 @@ func ngayVanBanRa(t time.Time) string {
 	return t.Format(dinhDangNgay)
 }
 
-// vanBanRaNgoai builds the block. NEVER nil FOR A NON-nil INPUT — see the note on `documents`: an
-// empty array and a missing field are two different statements on this surface.
-func vanBanRaNgoai(ds []domain.NhiemVuVanBan) []nhiemVuVanBanRa {
+// vanBanRaNgoai builds the block. NEVER nil FOR A NON-nil INPUT — an empty array and a MISSING FIELD
+// are two different statements on this surface, and the pointer is what lets the CONTRACT say so.
+//
+// ⚠ TỪNG TRẢ `[]nhiemVuVanBanRa` VÀ DÙNG `null` LÀM DẤU VẮNG MẶT. Hình dạng ấy đúng trên dây và
+// SAI TRONG HỢP ĐỒNG: một lát cắt Go nil marshal thành `null`, nhưng `tools/apidoc` khai trường ấy
+// là mảng BẮT BUỘC, KHÔNG NULL. Nên `tsc` tin `nhiemVu.documents` luôn là một mảng và cho gọi
+// `.map(...)` — lời gọi ấy nổ trên tuyến SỔ, đúng tuyến cố ý không phục vụ khối này. Đo 24/09/2026.
+//
+// Con trỏ + `omitempty` nói đúng cùng một điều bằng thứ hợp đồng diễn đạt được: VẮNG MẶT trên sổ,
+// CÓ MẶT (có thể rỗng) ở tuyến chi tiết — và `tsc` bắt mọi lời gọi quên kiểm.
+func vanBanRaNgoai(ds []domain.NhiemVuVanBan) *[]nhiemVuVanBanRa {
 	if ds == nil {
 		return nil
 	}
@@ -266,7 +274,7 @@ func vanBanRaNgoai(ds []domain.NhiemVuVanBan) []nhiemVuVanBanRa {
 			Position:  v.ThuTu,
 		})
 	}
-	return ra
+	return &ra
 }
 
 // nhiemVuRaNgoai builds the response.
