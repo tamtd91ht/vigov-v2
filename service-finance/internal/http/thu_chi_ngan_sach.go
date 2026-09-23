@@ -422,7 +422,7 @@ func (h *Handler) DocChiSoNganSach(w http.ResponseWriter, r *http.Request) {
 	nam, err := strconv.Atoi(namTho)
 	if namTho == "" || err != nil || domain.KiemTraNamNganSach(nam) != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"Cần `year` trong khoảng 2000..2100.", "year")
+			"Cần `year` trong khoảng 2000..2100.", "")
 		return
 	}
 
@@ -503,13 +503,13 @@ func (h *Handler) TaoBangNganSach(w http.ResponseWriter, r *http.Request) {
 	}
 	if vao.Code != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"`code` không do client đặt — mã bảng do hệ thống cấp và không bao giờ cấp lại.", "code")
+			"`code` không do client đặt — mã bảng do hệ thống cấp và không bao giờ cấp lại.", "")
 		return
 	}
 	luyKe, ok := ngayVao(vao.CumulativeTo)
 	if !ok {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"`cumulative_to` phải theo dạng YYYY-MM-DD, ví dụ 2026-08-25.", "cumulative_to")
+			"`cumulative_to` phải theo dạng YYYY-MM-DD, ví dụ 2026-08-25.", "")
 		return
 	}
 

@@ -199,7 +199,7 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 	nam, err := strconv.Atoi(thamSo.Get("year"))
 	if err != nil || nam < 2000 || nam > 2100 {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_argument",
-			"Thiếu hoặc sai năm ngân sách. Ví dụ: ?year=2026", "year")
+			"Thiếu hoặc sai năm ngân sách. Ví dụ: ?year=2026", "")
 		return
 	}
 
@@ -277,7 +277,7 @@ func (h *Handler) ChiTietDuAn(w http.ResponseWriter, r *http.Request) {
 
 	id := r.PathValue("id")
 	if id == "" {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_argument", "Thiếu mã dự án.", "id")
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_argument", "Thiếu mã dự án.", "")
 		return
 	}
 

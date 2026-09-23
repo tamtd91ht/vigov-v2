@@ -244,13 +244,13 @@ func (h *Handler) ThemVanBanDen(w http.ResponseWriter, r *http.Request) {
 	ngayDen, ok := ngayVao(vao.ReceivedDate)
 	if !ok {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"`received_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-22.", "received_date")
+			"`received_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-22.", "")
 		return
 	}
 	ngayVanBan, ok := ngayVao(vao.DocumentDate)
 	if !ok {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"`document_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-18.", "document_date")
+			"`document_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-18.", "")
 		return
 	}
 
@@ -301,7 +301,7 @@ func (h *Handler) SuaVanBanDen(w http.ResponseWriter, r *http.Request) {
 		t, ok := ngayVao(*vao.ReceivedDate)
 		if !ok || t.IsZero() {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-				"`received_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-22.", "received_date")
+				"`received_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-22.", "")
 			return
 		}
 		yc.NgayDen = &t
@@ -312,7 +312,7 @@ func (h *Handler) SuaVanBanDen(w http.ResponseWriter, r *http.Request) {
 		t, ok := ngayVao(*vao.DocumentDate)
 		if !ok {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-				"`document_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-18.", "document_date")
+				"`document_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-18.", "")
 			return
 		}
 		yc.NgayVanBan = &t
@@ -520,7 +520,7 @@ func (h *Handler) traLoiLoiVanBan(w http.ResponseWriter, r *http.Request, viec s
 		// retired between the form loading and the clerk pressing save.
 		httpx.WriteError(w, http.StatusConflict, "document_type_unknown",
 			"Loại văn bản này không còn trong danh mục đang dùng của xã. Hãy chọn lại loại văn bản.",
-			"document_type")
+			"")
 	case errors.Is(err, app.ErrChuaAnDinhDuocHan):
 		// 409, AND THE SENTENCE NAMES THE SCREEN THAT FIXES IT. This is the ordinary answer in every
 		// commune today: `sla` is empty everywhere and the onboarding step that fills it does not

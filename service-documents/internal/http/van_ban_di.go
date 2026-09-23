@@ -117,7 +117,7 @@ func (h *Handler) CapSoVanBanDi(w http.ResponseWriter, r *http.Request) {
 	ngay, ok := ngayVao(vao.DocumentDate)
 	if !ok {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"`document_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-22.", "document_date")
+			"`document_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-22.", "")
 		return
 	}
 
@@ -164,7 +164,7 @@ func (h *Handler) SuaVanBanDi(w http.ResponseWriter, r *http.Request) {
 		t, ok := ngayVao(*vao.DocumentDate)
 		if !ok || t.IsZero() {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-				"`document_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-22.", "document_date")
+				"`document_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-22.", "")
 			return
 		}
 		yc.NgayVanBan = &t

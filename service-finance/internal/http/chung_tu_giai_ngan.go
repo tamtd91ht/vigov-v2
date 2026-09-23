@@ -249,7 +249,7 @@ func (h *Handler) ThemChungTu(w http.ResponseWriter, r *http.Request) {
 	ngay, ok := ngayVao(vao.PaymentDate)
 	if !ok {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"`payment_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-07.", "payment_date")
+			"`payment_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-07.", "")
 		return
 	}
 
@@ -308,7 +308,7 @@ func (h *Handler) SuaChungTu(w http.ResponseWriter, r *http.Request) {
 		ngay, ok := ngayVao(*vao.PaymentDate)
 		if !ok || ngay.IsZero() {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-				"`payment_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-07.", "payment_date")
+				"`payment_date` phải theo dạng YYYY-MM-DD, ví dụ 2026-09-07.", "")
 			return
 		}
 		yc.NgayChi = &ngay
@@ -451,7 +451,7 @@ func (h *Handler) traLoiLoiChungTu(w http.ResponseWriter, r *http.Request, viec 
 		// commune is indistinguishable from one that does not exist, because the query cannot reach
 		// it at all (rule 4, forbidden #2, applied between communes).
 		httpx.WriteError(w, http.StatusNotFound, "not_found",
-			"Không tìm thấy dự án cho chứng từ này.", "project_id")
+			"Không tìm thấy dự án cho chứng từ này.", "")
 	case errors.Is(err, fistore.ErrKhongThayNguonVonCuaChungTu):
 		// 404 NAMING THE FIELD, exactly as the project case above and for both of its reasons. A
 		// funding source of ANOTHER commune is indistinguishable from one that does not exist, because
@@ -462,7 +462,7 @@ func (h *Handler) traLoiLoiChungTu(w http.ResponseWriter, r *http.Request, viec 
 		// resource the body names, which is the same shape as `project_id`. One rule for both fields
 		// means a client does not have to learn which referenced id answers which status.
 		httpx.WriteError(w, http.StatusNotFound, "not_found",
-			"Không tìm thấy nguồn vốn này trong xã.", "funding_source_id")
+			"Không tìm thấy nguồn vốn này trong xã.", "")
 	case errors.Is(err, domain.ErrChungTuDaKhoa),
 		errors.Is(err, domain.ErrChungTuChuaKhoa),
 		errors.Is(err, domain.ErrChungTuDaXacNhan),
