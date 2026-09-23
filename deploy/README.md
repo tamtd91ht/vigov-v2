@@ -201,44 +201,69 @@ Ba câu hỏi, ba nguồn. Đừng trả lời câu này bằng nguồn của c�
 
 `-` → `_`, **không gì khác**. Lệch nhau ở bất cứ đâu ngoài dấu phân cách là **hai tên**.
 
+### Quy tắc quyết định — ba câu, theo đúng thứ tự
+
+**ConfigMap và Secret chỉ giữ khoá QUAN TRỌNG.** Mọi khoá còn lại lấy mặc định, hoặc là hằng
+số viết thẳng trong `deployment.yaml`.
+
+| # | Câu hỏi | Nếu ĐÚNG |
+|---|---|---|
+| 1 | In ra một dòng log thì **có đau không**? | **Secret** |
+| 2 | Giá trị **khác nhau giữa staging và prod** không? | **ConfigMap** |
+| 3 | Không cả hai | **Không vào ConfigMap/Secret.** Hằng số của manifest (`env: value:`), hoặc để `config.Load` lấy mặc định |
+
+Câu 1 không phải "có nhạy cảm không": một DSN có mật khẩu là **Secret** dù nó trông như một
+địa chỉ. Bốn biến DSN/khoá mang kiểu `secret.DSN`/`secret.Secret` trong Go đúng vì lý do ấy —
+chúng từ chối tự in ra.
+
+Câu 3 là câu hay bị bỏ qua, và nó có giá: **mỗi dòng thừa trong ConfigMap/Secret là một dòng
+người vận hành phải đọc rồi tự hỏi mình có quên đặt không.** Một sổ 16 dòng mà 10 dòng chỉ
+lặp lại mặc định của mã là một sổ không ai tin nữa — và ngày thiếu một khoá thật thì nó lẫn
+giữa chín khoá không quan trọng.
+
 ### Bảng map — 16 biến
 
-| Biến | Bắt buộc | k8s cấp bằng | Hình dạng |
+| Biến | Bắt buộc | Ở đâu | Hình dạng / mặc định |
 |---|---|---|---|
 | `DATABASE_DSN` | **có, mọi môi trường** | **Secret** `bi-mat-<dịch vụ>` | DSN, phần host **được phép nhiều host** |
-| `ENV` | **có, mọi môi trường** | ConfigMap `cau-hinh-chung` | `dev` · `staging` · `prod` — khác ba giá trị này là `config.Load` từ chối |
 | `GRPC_CALLER_KEY` | **có, mọi môi trường** | **Secret** `bi-mat-<dịch vụ>` | chuỗi khoá. Rỗng = cổng gRPC trả lời bất kỳ ai (ADR 0025) |
 | `SESSION_SIGNING_KEYS` | **có ở staging/prod** | **Secret** `bi-mat-<dịch vụ>` | danh sách phẩy, **≥ 2 khoá ở prod** để xoay được mà không đăng xuất toàn bộ cán bộ |
-| `REDIS_DSN` | không | **Secret** `bi-mat-<dịch vụ>` | DSN |
-| `RABBITMQ_DSN` | không | **Secret** | DSN |
-| `ELASTICSEARCH_API_KEY` | không | **Secret** | chuỗi khoá |
-| `LISTEN_ADDR` | không (mặc định `:8080`) | ConfigMap, hoặc `value:` trong Deployment | `:8080` |
-| `GRPC_LISTEN_ADDR` | không (mặc định `:9090`) | ConfigMap, hoặc `value:` | `:9090` |
-| `PLATFORM_GRPC_ADDR` | không, nhưng **từ chối tại chỗ dùng** | `value:` trong Deployment | `platform:9090` — DNS nội cụm |
-| `IDENTITY_GRPC_ADDR` | không, nhưng **từ chối tại chỗ dùng** | `value:` trong Deployment | `identity:9090` — DNS nội cụm |
-| `RABBITMQ_EXCHANGE` | không | ConfigMap | tên exchange |
-| `ELASTICSEARCH_ADDRS` | không | ConfigMap | **danh sách phẩy** `http://host:9200,http://host:9200` |
-| `ELASTICSEARCH_INDEX_PREFIX` | không | ConfigMap | tiền tố index |
-| `TENANT_CACHE_TTL` | không (mặc định `30s`) | ConfigMap `cau-hinh-chung` | `30s`. Dài hơn 1 phút thì `config.CanhBao()` kêu |
-| `DANGEROUS_AUTH_BYPASS` | không | **không khai ở đâu cả** | `config.Load` **từ chối khởi động** nếu nó bật ở `ENV=prod` (luật 8, bất biến 7). Không khai là cách chắc nhất |
+| `REDIS_DSN` | không | **Secret** `bi-mat-<dịch vụ>` | DSN. Hôm nay chỉ `platform` cần |
+| `RABBITMQ_DSN` | không | **Secret**, ngày bật | DSN |
+| `ELASTICSEARCH_API_KEY` | không | **Secret**, ngày bật | chuỗi khoá |
+| `ENV` | **có, mọi môi trường** | **ConfigMap** `cau-hinh-chung` | `dev` · `staging` · `prod`. Khác ba giá trị này là `config.Load` từ chối |
+| `TENANT_CACHE_TTL` | không | **ConfigMap** `cau-hinh-chung` | **đang khác nhau thật**: staging `10s`, prod `30s`. Mặc định của mã là `30s`; dài hơn 1 phút thì `config.CanhBao()` kêu |
+| `ELASTICSEARCH_ADDRS` | không | **ConfigMap**, ngày bật | **danh sách phẩy** `http://host:9200,http://host:9200` — địa chỉ cụm khác nhau giữa hai môi trường |
+| `RABBITMQ_EXCHANGE` | không | **ConfigMap** *nếu* hai môi trường đặt tên khác nhau; giống nhau thì để mặc định | tên exchange |
+| `LISTEN_ADDR` | không | `env: value:` trong `deployment.yaml` | `:8080`. **Bốn dịch vụ BẮT BUỘC phải có dòng này** — xem cảnh báo dưới bảng |
+| `PLATFORM_GRPC_ADDR` | không, nhưng **từ chối tại chỗ dùng** | `env: value:` trong `deployment.yaml` | `platform:9090` — DNS nội cụm, giống nhau mọi môi trường |
+| `IDENTITY_GRPC_ADDR` | không, nhưng **từ chối tại chỗ dùng** | `env: value:` trong `deployment.yaml` | `identity:9090` — DNS nội cụm, giống nhau mọi môi trường |
+| `GRPC_LISTEN_ADDR` | không | **không khai ở đâu cả** | mặc định `:9090` trong `config.Load` |
+| `ELASTICSEARCH_INDEX_PREFIX` | không | **không khai ở đâu cả** | mặc định rỗng |
+| `DANGEROUS_AUTH_BYPASS` | không | **không khai ở đâu cả, có chủ ý** | `config.Load` **từ chối khởi động** nếu nó bật ở `ENV=prod` (luật 8, bất biến 7). Không khai là cách chắc nhất |
 
-**Cột "k8s cấp bằng" không phải "nhạy cảm hay không".** Phép thử là ***"in ra một dòng log thì
-có đau không"***: một DSN có mật khẩu là **Secret** dù nó trông như một địa chỉ. Bốn biến trên
-mang kiểu `secret.DSN`/`secret.Secret` trong Go đúng vì lý do ấy — chúng từ chối tự in ra.
+⚠ **`LISTEN_ADDR` không phải một dòng thừa ở `comms` · `documents` · `finance` · `petitions`.**
+Bốn dịch vụ ấy gọi `cfg.ListenAddrHoac(":8087")` chứ không đọc `cfg.ListenAddr`, nên **không
+khai là tiến trình nghe ở cổng khác 8080** — rồi probe `httpGet` cổng 8080 không ai trả lời và
+NetworkPolicy chỉ mở 8080/3000 từ ingress. Hai thứ gãy cùng lúc và cả hai đều im.
 
 **Bắt buộc quyết theo TỪNG biến, có lý do viết bên cạnh.** Đánh dấu bắt buộc cho mọi biến mới
 là sai lầm làm cả tám dịch vụ không khởi động được trên máy chưa đặt thêm bốn giá trị, để bảo
 vệ đoạn mã chưa tồn tại. Năm biến RabbitMQ/Elasticsearch **cố ý** không bắt buộc: chưa mã nào
 nối tới chúng, và cái đầu tiên thật sự cần sẽ **từ chối theo tên** tại chỗ nối.
 
-### Wiring thật hôm nay
+### Hôm nay thực tế có bao nhiêu khoá
 
-| Nơi | Cấp gì |
-|---|---|
-| `envFrom: configMapRef: cau-hinh-chung` | `ENV` · `TENANT_CACHE_TTL` — sinh bởi `configMapGenerator` ở `overlays/<mt>/kustomization.yaml` |
-| `envFrom: secretRef: bi-mat-<dịch vụ>` | `DATABASE_DSN` · `GRPC_CALLER_KEY` · `SESSION_SIGNING_KEYS` (+ `REDIS_DSN` ở `platform`) — tạo bằng tay, mục 4 |
-| `env: - value:` trong `deployment.yaml` | `LISTEN_ADDR` · `PLATFORM_GRPC_ADDR` · `IDENTITY_GRPC_ADDR` — **DNS nội cụm, không phải cấu hình của cụm**, nên chúng là hằng số của manifest |
-| `web-admin` | **không có `envFrom`** — Next.js không dùng `core/config`; nó đọc cấu hình theo tên miền **tại runtime** (luật 1, bất biến 10) |
+| Nơi | Khoá | Ai tạo |
+|---|---|---|
+| ConfigMap `cau-hinh-chung` | **2**: `ENV` · `TENANT_CACHE_TTL` | `configMapGenerator` ở `overlays/<mt>/kustomization.yaml` |
+| Secret `bi-mat-platform` | **4**: `DATABASE_DSN` · `REDIS_DSN` · `GRPC_CALLER_KEY` · `SESSION_SIGNING_KEYS` | `kubectl create secret` bằng tay, mục 4 |
+| Secret `bi-mat-<sáu dịch vụ kia>` | **3**: `DATABASE_DSN` · `GRPC_CALLER_KEY` · `SESSION_SIGNING_KEYS` | ″ |
+| `env: value:` trong `deployment.yaml` | `LISTEN_ADDR` · `PLATFORM_GRPC_ADDR` · `IDENTITY_GRPC_ADDR` | nằm trong kho, đi qua review |
+| `web-admin` | **không có `envFrom`** | Next.js không dùng `core/config`; nó đọc cấu hình theo tên miền **tại runtime** (luật 1, bất biến 10) |
+
+Sáu biến còn lại không nằm ở đâu cả, và đó là trạng thái đúng — ba biến lấy mặc định của mã,
+ba biến chờ ngày RabbitMQ/Elasticsearch được nối.
 
 ### Hai lỗ phải biết TRƯỚC khi bật RabbitMQ / Elasticsearch
 
