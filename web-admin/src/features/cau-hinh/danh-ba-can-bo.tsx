@@ -610,8 +610,18 @@ export function DanhBaCanBo() {
             traBoPhan={traBoPhan}
             traVaiTro={traVaiTro}
           />
+          {/* CÂU NÀY TỪNG NÓI NGƯỢC VỚI CHÍNH BẢNG NGAY TRÊN NÓ, và sai theo chiều nguy hiểm.
+              Nó viết "hiển thị dạng che" trong khi hai cột ở :934-935 in `cb.phone` và
+              `cb.mobile` NGUYÊN VẸN — đúng như khách chốt câu #11 ngày 22/09/2026. Chú thích
+              kỹ thuật cạnh hai cột ấy đã ghi nhận #11; câu hiển thị thì chưa ai gỡ.
+
+              Vì sao một câu chữ đáng sửa như một khiếm khuyết: cán bộ đọc "đã che" rồi chụp màn
+              hình gửi đi, tin rằng mình đang gửi bản đã che. Một lời khai SAI về mức bảo vệ dữ
+              liệu cá nhân, đặt ngay cạnh dữ liệu CHƯA che, nguy hiểm hơn hẳn việc không nói gì.
+              Không phép kiểm nào đỏ vì nó — chỉ người đọc màn hình mới thấy. */}
           <p className="ghi-chu">
-            Số điện thoại hiển thị dạng che theo quy định về bảo vệ dữ liệu cá nhân.
+            Số điện thoại hiển thị đầy đủ cho cán bộ trong xã. Đây là dữ liệu cá nhân theo Nghị
+            định 13/2023/NĐ-CP — không sao chép ra ngoài cơ quan.
           </p>
           <DieuHuongTrang
             nganXep={nganXep}

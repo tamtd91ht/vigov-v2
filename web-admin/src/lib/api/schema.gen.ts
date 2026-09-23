@@ -187,6 +187,48 @@ export type documents_xoaLoaiVanBanVao = {
   "reason": string;
 };
 
+export type finance_bangDayDuRa = {
+  "sheet": finance_bangRa;
+  "columns": Array<finance_cotRa>;
+  "lines": Array<finance_dongRa>;
+  "summary": finance_tomTatRa;
+};
+
+export type finance_bangRa = {
+  "id": string;
+  /** "NS-2026-CHI-01" — the business code the audit trail is filed under */
+  "code": string;
+  "year": number;
+  /** `thu` | `chi` */
+  "kind": string;
+  "revision": number;
+  "title": string;
+  /** "Triệu đồng" — what the SCREEN prints. The wire carries đồng. */
+  "unit": string;
+  /** YYYY-MM-DD */
+  "cumulative_to"?: string;
+  "source_file"?: string;
+  /** RFC 3339 */
+  "loaded_at"?: string;
+};
+
+export type finance_chiSoNamRa = {
+  "year": number;
+  /** Thu đạt dự toán */
+  "revenue_achievement": finance_chiSoRa;
+  /** Chi đạt dự toán */
+  "expenditure_achievement": finance_chiSoRa;
+  /** Cân đối thu - chi */
+  "balance": finance_soTienRa;
+  "revenue_totals": Array<finance_oTongRa>;
+};
+
+export type finance_chiSoRa = {
+  "name": string;
+  "basis_points": number | null;
+  "unavailable_reason"?: string;
+};
+
 export type finance_chungTuRa = {
   "id": string;
   "project_id": string;
@@ -197,6 +239,7 @@ export type finance_chungTuRa = {
   "description": string;
   "counterparty"?: string;
   "voucher_no"?: string;
+  "funding_source_id"?: string;
   "status": string;
   /** `nguoi_nhap_id` — a staff business code */
   "entered_by": string;
@@ -212,6 +255,27 @@ export type finance_chungTuRa = {
   "unlock_count": number;
 };
 
+export type finance_cotRa = {
+  "id": string;
+  "name": string;
+  "order": number;
+  /** `so` | `phan_tram` */
+  "type": string;
+  "formula"?: string;
+  "role"?: string;
+};
+
+export type finance_cotVao = {
+  "name": string;
+  "order": number;
+  /** `so` | `phan_tram` */
+  "type": string;
+  /** required for `phan_tram`, refused on `so` */
+  "formula"?: string;
+  /** one of the six; empty for an ordinary column */
+  "role"?: string;
+};
+
 export type finance_danhSachDuAnRa = {
   "items": Array<finance_duAnRa>;
   "year": number;
@@ -221,6 +285,19 @@ export type finance_danhSachDuAnRa = {
 
 export type finance_danhSachHangMucRa = {
   "items": Array<finance_hangMucRa>;
+};
+
+export type finance_dongRa = {
+  "id": string;
+  "parent_id"?: string;
+  "no": string;
+  "name": string;
+  "order": number;
+  "method": string;
+  "level": number;
+  "is_headline": boolean;
+  /** columnID -> đồng, or null for an empty cell */
+  "values": Record<string, number | null>;
 };
 
 export type finance_duAnRa = {
@@ -256,6 +333,10 @@ export type finance_goChungTuVao = {
   "reason": string;
 };
 
+export type finance_goVao = {
+  "reason": string;
+};
+
 export type finance_hangMucRa = {
   /** ULID — what a capital plan line will reference */
   "id": string;
@@ -274,14 +355,40 @@ export type finance_moKhoaVao = {
   "reason": string;
 };
 
+export type finance_oTongRa = {
+  "column_id": string;
+  "name": string;
+  "role"?: string;
+  "value": number | null;
+};
+
+export type finance_soTienRa = {
+  /** đồng */
+  "amount": number | null;
+  "unavailable_reason"?: string;
+};
+
 export type finance_suaChungTuVao = {
   "payment_date"?: string | null;
   "amount"?: number | null;
   "description"?: string | null;
   "counterparty"?: string | null;
   "voucher_no"?: string | null;
+  "funding_source_id"?: string | null;
   "project_id"?: string | null;
   "status"?: string | null;
+};
+
+export type finance_suaDongVao = {
+  "no"?: string | null;
+  "name"?: string | null;
+  "order"?: number | null;
+  "values"?: Record<string, number | null>;
+  "sheet_id"?: string | null;
+  "parent_id"?: string | null;
+  "method"?: string | null;
+  "level"?: number | null;
+  "is_headline"?: boolean | null;
 };
 
 export type finance_suaHangMucVao = {
@@ -294,6 +401,18 @@ export type finance_suaHangMucVao = {
   "tier"?: number | null;
 };
 
+export type finance_taoBangVao = {
+  "year": number;
+  "kind": string;
+  "title": string;
+  "unit": string;
+  /** YYYY-MM-DD */
+  "cumulative_to"?: string;
+  "columns": Array<finance_cotVao>;
+  /** present only so it can be refused */
+  "code"?: string | null;
+};
+
 export type finance_themChungTuVao = {
   "project_id": string;
   /** YYYY-MM-DD */
@@ -303,7 +422,19 @@ export type finance_themChungTuVao = {
   "description": string;
   "counterparty"?: string;
   "voucher_no"?: string;
+  "funding_source_id"?: string;
   "status"?: string | null;
+};
+
+export type finance_themDongVao = {
+  "sheet_id": string;
+  "parent_id"?: string;
+  "no"?: string;
+  "name": string;
+  "order": number;
+  "method"?: string | null;
+  "level"?: number | null;
+  "is_headline"?: boolean | null;
 };
 
 export type finance_themHangMucVao = {
@@ -313,6 +444,13 @@ export type finance_themHangMucVao = {
   "is_default"?: boolean;
   "source"?: string | null;
   "tier"?: number | null;
+};
+
+export type finance_tomTatRa = {
+  "headline_line_id"?: string;
+  "unavailable_reason"?: string;
+  "cells": Array<finance_oTongRa>;
+  "indicator": finance_chiSoRa;
 };
 
 export type finance_xoaHangMucVao = {
@@ -855,6 +993,169 @@ export type petitions_xoaMucUuTienVao = {
   "reason": string;
 };
 
+/** GET /api/v1/budget-indicators — Ba chỉ số ngân sách của một năm: thu đạt dự toán, chi đạt dự toán, cân đối thu - chi */
+export type finance_get_budget_indicators = {
+  duongDan: "/api/v1/budget-indicators";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "year": string;
+  };
+  than: never;
+  phanHoi: {
+    200: finance_chiSoNamRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/budget-lines — Thêm một khoản mục vào cây của bảng ngân sách */
+export type finance_post_budget_lines = {
+  duongDan: "/api/v1/budget-lines";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: finance_themDongVao;
+  phanHoi: {
+    201: finance_dongRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/budget-lines/{id} — Sửa số thứ tự, tên hoặc các ô số của một khoản mục chưa có dòng con */
+export type finance_patch_budget_lines_by_id = {
+  duongDan: "/api/v1/budget-lines/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_suaDongVao;
+  phanHoi: {
+    200: finance_dongRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/budget-lines/{id} — Gỡ mềm một khoản mục chưa có dòng con, kèm lý do bắt buộc */
+export type finance_delete_budget_lines_by_id = {
+  duongDan: "/api/v1/budget-lines/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_goVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/budget-lines/{id}/headline — Đánh dấu một khoản mục là dòng tổng của bảng — số tóm tắt và chỉ số đọc từ dòng này */
+export type finance_post_budget_lines_by_id_headline = {
+  duongDan: "/api/v1/budget-lines/{id}/headline";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_dongRa;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/budget-sheets — Bảng thu hoặc chi của một năm ngân sách: cột, cây khoản mục, số liệu và ô tóm tắt */
+export type finance_get_budget_sheets = {
+  duongDan: "/api/v1/budget-sheets";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "kind"?: string;
+    "year"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: finance_bangDayDuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/budget-sheets — Tạo bảng thu hoặc chi cho một năm ngân sách, kèm bộ cột của biểu */
+export type finance_post_budget_sheets = {
+  duongDan: "/api/v1/budget-sheets";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: finance_taoBangVao;
+  phanHoi: {
+    201: finance_bangRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/budget-sheets/{id} — Gỡ mềm cả bảng ngân sách của một năm, kèm lý do bắt buộc */
+export type finance_delete_budget_sheets_by_id = {
+  duongDan: "/api/v1/budget-sheets/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_goVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/capital-plan-categories — Danh mục hạng mục kế hoạch vốn của xã — dùng cho ô phân loại dòng kế hoạch và bộ lọc */
 export type finance_get_capital_plan_categories = {
   duongDan: "/api/v1/capital-plan-categories";
@@ -1086,7 +1387,7 @@ export type finance_post_disbursements = {
   };
 };
 
-/** PATCH /api/v1/disbursements/{id} — Sửa ngày chi, số tiền, nội dung, đối tác hoặc số chứng từ của một chứng từ chưa khoá */
+/** PATCH /api/v1/disbursements/{id} — Sửa ngày chi, số tiền, nội dung, đối tác hoặc số chứng từ của một chứng từ chưa khoá — chứng từ đã xác nhận sẽ về nháp */
 export type finance_patch_disbursements_by_id = {
   duongDan: "/api/v1/disbursements/{id}";
   phuongThuc: "PATCH";

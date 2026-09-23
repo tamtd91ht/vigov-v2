@@ -162,7 +162,30 @@ function dichKieu(schema, duong) {
 function dichDoiTuong(schema, duong) {
   const thuocTinh = schema.properties ?? {};
   const batBuoc = new Set(schema.required ?? []);
-  if (schema.additionalProperties !== false && schema.additionalProperties !== undefined) {
+  const them = schema.additionalProperties;
+
+  // BẢNG TRA (`Record<string, T>`) — `additionalProperties` là một SCHEMA, và không có
+  // `properties` nào. Đây là cách OpenAPI khai một đối tượng mà KHOÁ là dữ liệu chứ không phải
+  // tên trường: `finance.dongRa.values` là `columnID -> đồng`, và số cột do xã tự khai nên tên
+  // khoá không thể nằm trong một kiểu sinh sẵn.
+  //
+  // VÌ SAO NHÁNH NÀY PHẢI CÓ, chứ không phải "chưa tới lượt": thiếu nó thì bộ sinh ném ở
+  // `finance.dongRa` và **KHÔNG SINH ĐƯỢC TỆP NÀO CẢ** — một lược đồ hình bảng tra làm hỏng
+  // kiểu của toàn bộ hợp đồng, kể cả những phân hệ không liên quan. Đo 23/09/2026: một agent
+  // dựng màn Thu-chi dừng với 0 tệp vì `npm run gen:api` hỏng toàn tệp, không riêng phần nó cần.
+  //
+  // CHỈ NHẬN DẠNG THUẦN. Có `properties` VÀ `additionalProperties` cùng lúc là "vài trường biết
+  // trước, phần còn lại tuỳ ý" — nó dịch được, nhưng nó cũng là chỗ một trường gõ sai tên lặng
+  // lẽ rơi vào phần tuỳ ý thay vì thành lỗi kiểu. Dạng ấy rơi xuống nhánh từ chối bên dưới để
+  // có người cân nhắc, đúng cách liên hợp kiểu thật đang được xử lý ở `dichKieu`.
+  if (them && typeof them === "object" && Object.keys(thuocTinh).length === 0) {
+    return `Record<string, ${dichKieu(them, `${duong}.<khoá>`)}>`;
+  }
+
+  // `additionalProperties: true` cũng rơi vào đây: nó là `Record<string, unknown>`, tức bỏ hẳn
+  // kiểm kiểu cho mọi giá trị. Từ chối để người viết hợp đồng nói ra kiểu, thay vì để màn hình
+  // đoán.
+  if (them !== false && them !== undefined) {
     tuChoi(duong, "additionalProperties khác false chưa hỗ trợ");
   }
   const dong = [];

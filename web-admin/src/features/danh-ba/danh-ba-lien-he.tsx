@@ -1,0 +1,348 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { BieuMauGhiCanBo, type MucChon } from "@/components/danh-ba/bieu-mau-ghi-can-bo";
+import {
+  BAN_TRONG,
+  banTuCanBo,
+  daLuuHoSo,
+  thanSua,
+  type BanNhapCanBo,
+} from "@/components/danh-ba/nhan-ghi-danh-ba";
+import {
+  coTrangTruoc,
+  sangTrangSau,
+  veTrangTruoc,
+  TRANG_DAU,
+  type NganXepConTro,
+} from "@/features/cau-hinh/ngan-xep-con-tro";
+import { bangTraTuKetQua, type BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
+import { layDanhSachCanBo, suaCanBo } from "@/lib/api/can-bo";
+import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
+import type {
+  identity_canBoTomTat,
+  identity_danhSachBoPhanRa,
+  page_Result_identity_canBoTomTat,
+} from "@/lib/api/schema.gen";
+import type { KetQua } from "@/lib/api/goi";
+
+import { BangLienHe } from "./bang-lien-he";
+import {
+  DANH_BA_RONG,
+  GHI_CHU_SO_DIEN_THOAI,
+  KHONG_DUNG_DUOC,
+  NHAN_SO_KHOI,
+  TIEU_DE_KHONG_DUNG_DUOC,
+  demSoKhoi,
+  nhanSoKhoi,
+} from "./nhan-danh-ba";
+
+/**
+ * Màn **Danh bạ cán bộ** — `docs/ui-ux/12-danh-ba-can-bo.md`, đường dẫn `/danh-ba`.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ * KHÔNG TỆP NÀO Ở ĐÂY DỰNG LẠI MỘT LỜI GỌI ĐÃ CÓ. Năm tuyến ghi và hai tuyến đọc của danh bạ đã
+ * có chủ ở `lib/api/can-bo.ts`; biểu mẫu sửa, câu chữ và phép đổi hình dạng bản nháp đã có chủ ở
+ * `components/danh-ba/`. Màn này chỉ thêm đúng thứ nó sở hữu: bố cục của một trang riêng, thẻ KPI
+ * đếm được, và danh sách nói rõ phần nào chưa mở.
+ *
+ * MỘT THAO TÁC GHI, KHÔNG NĂM. `PATCH /api/v1/staff/{id}` là tuyến duy nhất thuộc về một màn danh
+ * bạ: sửa chức vụ, khối/đơn vị, số liên hệ. Bốn tuyến còn lại đổi THẨM QUYỀN hoặc đường đăng nhập
+ * của một người — thêm, đổi vai trò, khoá, mở khoá — và chúng ở lại đúng chỗ đặc tả §1 đặt chúng:
+ * tab `Cấu hình → Người dùng`. Bày cùng một nút Khoá tài khoản ở hai màn hình là hai chỗ để một
+ * thao tác có hậu quả nặng bị bấm nhầm, và về sau là hai chỗ phải sửa khi quy tắc #13 đổi.
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * KHÔNG CÓ CỔNG QUYỀN Ở ĐÂY: cổng nằm ở `app/danh-ba/page.tsx` (`CongQuyen` + `admin.user`), một
+ * lần cho cả màn. Và lớp chặn THẬT vẫn ở máy chủ, trên TỪNG yêu cầu (luật 5, cấm #1) — ẩn một màn
+ * chỉ để cán bộ khỏi bấm vào thứ chắc chắn trả 403.
+ */
+
+/** Trạng thái một lần đọc danh sách. Ba nhánh rời nhau. */
+type TrangThaiTrang =
+  | { pha: "dangTai" }
+  | { pha: "loi"; thongBao: string }
+  | { pha: "xong"; trang: page_Result_identity_canBoTomTat };
+
+export function DanhBaLienHe() {
+  const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
+  const [trangThai, datTrangThai] = useState<TrangThaiTrang>({ pha: "dangTai" });
+  /** `null` là chưa đọc xong danh mục bộ phận — KHÔNG phải "xã không có bộ phận nào". */
+  const [boPhan, datBoPhan] = useState<KetQua<identity_danhSachBoPhanRa> | null>(null);
+
+  const [dangSua, datDangSua] = useState<identity_canBoTomTat | null>(null);
+  const [ban, datBan] = useState<BanNhapCanBo>(BAN_TRONG);
+  const [loiMayChu, datLoiMayChu] = useState("");
+  const [dangGui, datDangGui] = useState(false);
+  const [cauDaXong, datCauDaXong] = useState("");
+  /** Tăng sau mỗi lần ghi thành công — buộc đọc lại trang đang xem. Xem `ghiXong`. */
+  const [lanDoc, datLanDoc] = useState(0);
+
+  /**
+   * MỘT DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT KHI MỞ MÀN HÌNH — `[]` ở cuối effect là phần quan trọng nhất
+   * của khối này.
+   *
+   * Không đọc lại khi đổi trang hay khi mở biểu mẫu: danh mục bộ phận của một xã không đổi giữa
+   * hai lần bấm "Trang sau". Và tuyệt đối không đọc theo từng dòng — mỗi trang hai mươi dòng, nên
+   * một lời gọi mỗi dòng là hai mươi lời gọi thay vì một, và con số ấy đi lên theo dữ liệu chứ
+   * không đứng yên (`skills/load-data-once`, dạng 1).
+   *
+   * CHỈ ĐỌC BỘ PHẬN, KHÔNG ĐỌC VAI TRÒ. Màn này không có cột Vai trò và không có biểu mẫu đổi vai
+   * trò, nên `GET /api/v1/roles` là một lời gọi không ai dùng kết quả.
+   *
+   * VÌ SAO ĐỌC Ở TRÌNH DUYỆT CHỨ KHÔNG Ở MÁY CHỦ: tuyến này đòi đã đăng nhập, nên gọi phía máy chủ
+   * thì phải tự chuyển tiếp cookie phiên — thêm một chỗ cầm cookie, và là đúng chỗ dễ chuyển tiếp
+   * sang sai host. Ở đây đường dẫn tương đối trên chính host của xã, trình duyệt tự gửi cookie
+   * host-only (`lib/api/goi.ts`).
+   */
+  useEffect(() => {
+    let bo = false;
+    layDanhMucBoPhan().then((kq) => {
+      if (!bo) datBoPhan(kq);
+    });
+    return () => {
+      bo = true;
+    };
+  }, []);
+
+  const traBoPhan = useMemo<BangTraDanhMuc>(() => bangTraTuKetQua(boPhan), [boPhan]);
+  const soKhoi = useMemo(() => demSoKhoi(boPhan), [boPhan]);
+
+  /** Mục cho ô chọn của biểu mẫu sửa — lấy từ CHÍNH danh mục đã đọc, không đọc lại. */
+  const mucBoPhan = useMemo<readonly MucChon[]>(
+    () => (boPhan !== null && boPhan.ok ? boPhan.duLieu.items : []),
+    [boPhan],
+  );
+
+  useEffect(() => {
+    // `bo` chặn một phản hồi đến muộn của lần đọc trước ghi đè lên lần đọc sau. Không có nó thì
+    // bấm "Trang sau" hai lần nhanh có thể để lại trên màn hình đúng trang vừa rời khỏi.
+    let bo = false;
+
+    // KHÔNG TRUYỀN `limit`, `sort`, `order`: để máy chủ áp mặc định của chính nó (20 dòng, sắp
+    // theo mã, tăng dần). Giữ một bản sao của ba mặc định ấy ở client là giữ một bản sẽ trôi.
+    layDanhSachCanBo({ cursor: nganXep.hienTai }).then((ketQua) => {
+      if (bo) return;
+      datTrangThai(
+        ketQua.ok ? { pha: "xong", trang: ketQua.duLieu } : { pha: "loi", thongBao: ketQua.thongBao },
+      );
+    });
+
+    return () => {
+      bo = true;
+    };
+  }, [nganXep, lanDoc]);
+
+  /**
+   * Chuyển trang. `dangTai` đặt Ở ĐÂY, trong sự kiện bấm, chứ không trong thân effect: gọi
+   * setState thẳng trong thân effect kéo theo một lượt render phụ mỗi lần chạy, và lint của React
+   * chặn đúng mẫu ấy. Trạng thái khởi tạo đã là `dangTai` nên lần tải đầu không cần ai đặt gì.
+   *
+   * ĐÓNG BIỂU MẪU SỬA KHI ĐỔI TRANG. Biểu mẫu giữ bản nháp của một người ở trang vừa rời khỏi; để
+   * nó mở là để trên màn hình một ô Lưu thuộc về một dòng không còn nhìn thấy.
+   */
+  const diToiTrang = useCallback((toi: NganXepConTro) => {
+    datTrangThai({ pha: "dangTai" });
+    datDangSua(null);
+    datBan(BAN_TRONG);
+    datLoiMayChu("");
+    datNganXep(toi);
+  }, []);
+
+  /** Mở biểu mẫu sửa: nạp giá trị đang có vào bản nháp, dọn mọi thông báo của lần trước. */
+  const moSua = useCallback((cb: identity_canBoTomTat) => {
+    datDangSua(cb);
+    datBan(banTuCanBo(cb));
+    datLoiMayChu("");
+    datCauDaXong("");
+  }, []);
+
+  const dongSua = useCallback(() => {
+    datDangSua(null);
+    datBan(BAN_TRONG);
+    datLoiMayChu("");
+  }, []);
+
+  /**
+   * Sau một lần ghi thành công: đóng biểu mẫu, nói ra đã làm gì, và ĐỌC LẠI trang đang xem.
+   *
+   * ĐỌC LẠI CẢ TRANG CHỨ KHÔNG VÁ MỘT DÒNG TẠI CHỖ. `PATCH` trả về đúng dòng vừa sửa nên vá tại
+   * chỗ là làm được — nhưng một dòng vá tại chỗ và một dòng đọc lại là hai đường cập nhật màn
+   * hình, và đường ít chạy hơn là đường sẽ sai mà không ai thấy.
+   */
+  const ghiXong = useCallback((cau: string) => {
+    datDangSua(null);
+    datBan(BAN_TRONG);
+    datLoiMayChu("");
+    datCauDaXong(cau);
+    datLanDoc((n) => n + 1);
+  }, []);
+
+  const guiSua = useCallback(() => {
+    if (dangSua === null || dangGui) return;
+
+    datLoiMayChu("");
+    datCauDaXong("");
+    datDangGui(true);
+
+    // KHÔNG KIỂM ĐỘ DÀI, KHUÔN THƯ ĐIỆN TỬ HAY KÝ TỰ SỐ ĐIỆN THOẠI Ở ĐÂY. Máy chủ kiểm cả ba, mỗi
+    // thứ kèm một câu tiếng Việt nói rõ phải sửa gì (`domain/danh_ba_ghi.go`); chép chúng xuống
+    // client là dựng bản sao thứ hai của một bộ quy tắc nghiệp vụ (luật 9, cấm #2).
+    void suaCanBo(dangSua.id, thanSua(ban))
+      .then((kq) => {
+        if (kq.ok) ghiXong(daLuuHoSo(kq.duLieu.full_name));
+        else datLoiMayChu(kq.thongBao);
+      })
+      .finally(() => datDangGui(false));
+  }, [ban, dangGui, dangSua, ghiXong]);
+
+  return (
+    <section className="man-danh-ba" aria-labelledby="tieu-de-danh-ba-lien-he">
+      <h2 id="tieu-de-danh-ba-lien-he" className="an-thi-giac">
+        Danh sách cán bộ
+      </h2>
+
+      {/* MỘT THẺ KPI, KHÔNG BA — xem `KHONG_DUNG_DUOC`. Dựng bằng `dl` chứ không bằng một thẻ
+          trang trí: nhãn và con số phải đi liền nhau cả với trình đọc màn hình. */}
+      <dl className="danh-sach-truong">
+        <dt>{NHAN_SO_KHOI}</dt>
+        <dd>{nhanSoKhoi(soKhoi)}</dd>
+      </dl>
+
+      {/* Danh mục bộ phận hỏng thì NÓI RA MỘT LẦN Ở ĐÂY, không để hai mươi ô cùng báo lỗi. Hiện
+          đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`. */}
+      {soKhoi.pha === "loi" && (
+        <p className="thong-bao-loi" role="alert">
+          Danh mục khối / đơn vị: {soKhoi.thongBao}
+        </p>
+      )}
+
+      {/* Câu xác nhận sau một lần ghi. `role="status"` chứ không `alert`: không có gì hỏng. */}
+      {cauDaXong !== "" && <p role="status">{cauDaXong}</p>}
+
+      {/*
+        MỘT BIỂU MẪU, MỘT CHỖ TRÊN MÀN HÌNH, ĐẶT TRÊN BẢNG.
+
+        Không dựng biểu mẫu lồng trong dòng của bảng: ở bề rộng nhỏ nhất (320px) bảng cuộn NGANG,
+        nên một biểu mẫu nằm trong một ô của bảng có thể mở ra ngoài khung nhìn và người dùng không
+        thấy nó đã mở. Tiêu đề biểu mẫu luôn gọi tên người đang được sửa (`tieuDeSua`), nên không
+        có ca nào sửa nhầm hồ sơ vì không biết biểu mẫu thuộc về dòng nào.
+      */}
+      {dangSua !== null && (
+        <BieuMauGhiCanBo
+          dangMo={{ kieu: "sua", canBo: dangSua }}
+          ban={ban}
+          datBan={datBan}
+          // Hai tham số của nhánh "đổi vai trò". Nhánh ấy không bao giờ chạy ở đây vì `dangMo.kieu`
+          // luôn là `"sua"`; truyền giá trị rỗng chứ không đọc `GET /api/v1/roles` cho một ô chọn
+          // không bao giờ dựng ra.
+          vaiTroID=""
+          datVaiTroID={() => undefined}
+          boPhan={mucBoPhan}
+          vaiTro={[]}
+          loiMayChu={loiMayChu}
+          dangGui={dangGui}
+          onGui={guiSua}
+          onHuy={dongSua}
+        />
+      )}
+
+      {trangThai.pha === "dangTai" && <p role="status">Đang tải danh bạ…</p>}
+
+      {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải. Mọi mã lỗi — kể cả 401, 403, 404 —
+          đều trả cùng hình dạng `httpx.Error`, nên không có chỗ nào ở đây rẽ nhánh theo `code` để
+          đoán chuyện gì đã xảy ra, và `trace_id` không hiện ra: nó là mốc tra log, không phải mã
+          lỗi nghiệp vụ (`lib/api/goi.ts`). */}
+      {trangThai.pha === "loi" && (
+        <p className="thong-bao-loi" role="alert">
+          {trangThai.thongBao}
+        </p>
+      )}
+
+      {trangThai.pha === "xong" && trangThai.trang.items.length === 0 && (
+        <p className="trang-thai-rong">{DANH_BA_RONG}</p>
+      )}
+
+      {trangThai.pha === "xong" && trangThai.trang.items.length > 0 && (
+        <>
+          <BangLienHe danhSach={trangThai.trang.items} traBoPhan={traBoPhan} onSua={moSua} />
+          <p className="ghi-chu">{GHI_CHU_SO_DIEN_THOAI}</p>
+          <DieuHuongTrang
+            nganXep={nganXep}
+            conTroTiep={trangThai.trang.next_cursor}
+            conTrangSau={trangThai.trang.has_more}
+            diToiTrang={diToiTrang}
+          />
+        </>
+      )}
+
+      <KhoiChuaMo />
+    </section>
+  );
+}
+
+/**
+ * Danh sách "đặc tả có, ở đây không" — hiện ngay trên màn hình, không giấu trong chú thích.
+ *
+ * ĐẶT CUỐI TRANG, KHÔNG ĐẦU TRANG: người mở danh bạ đến để tìm một số điện thoại, và bảy dòng giải
+ * thích chắn trước bảng là bảy dòng bị lướt qua mỗi ngày. Ở cuối, nó là thứ người ta đọc đúng lúc
+ * đi tìm một nút không thấy.
+ */
+function KhoiChuaMo() {
+  return (
+    <aside className="khoi-chua-khai" aria-labelledby="tieu-de-danh-ba-chua-mo">
+      <h3 id="tieu-de-danh-ba-chua-mo">{TIEU_DE_KHONG_DUNG_DUOC}</h3>
+      <ul>
+        {KHONG_DUNG_DUOC.map((p) => (
+          <li key={p.viec}>
+            <strong>{p.viec}</strong> — {p.vi}
+          </li>
+        ))}
+      </ul>
+    </aside>
+  );
+}
+
+/**
+ * Phân trang theo con trỏ.
+ *
+ * KHÔNG CÓ SỐ TRANG VÀ KHÔNG CÓ TỔNG SỐ, và đó không phải thiếu sót: hợp đồng trả `next_cursor` +
+ * `has_more` chứ không trả `total`, vì máy chủ đọc theo mốc và cố ý không chạy `COUNT(*)` trên bảng
+ * đã phân mảnh. Hiện "Trang 3/12" ở đây là báo một con số không ai tính (`core/page`).
+ */
+function DieuHuongTrang({
+  nganXep,
+  conTroTiep,
+  conTrangSau,
+  diToiTrang,
+}: {
+  nganXep: NganXepConTro;
+  conTroTiep: string;
+  conTrangSau: boolean;
+  diToiTrang: (toi: NganXepConTro) => void;
+}) {
+  // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi tới đó. Bấm
+  // khi con trỏ rỗng thì `sangTrangSau` ném lỗi — nút phải mờ đi trước khi tới đó.
+  const coSau = conTrangSau && conTroTiep !== "";
+  return (
+    <nav className="dieu-huong-trang" aria-label="Phân trang danh bạ cán bộ">
+      <button
+        type="button"
+        className="nut-phu"
+        disabled={!coTrangTruoc(nganXep)}
+        onClick={() => diToiTrang(veTrangTruoc(nganXep))}
+      >
+        Trang trước
+      </button>
+      <button
+        type="button"
+        className="nut-phu"
+        disabled={!coSau}
+        onClick={() => diToiTrang(sangTrangSau(nganXep, conTroTiep))}
+      >
+        Trang sau
+      </button>
+    </nav>
+  );
+}
