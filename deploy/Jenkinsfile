@@ -58,10 +58,15 @@ pipeline {
     // giống mẫu omicrm, và vì lý do thực tế: máy chủ này chỉ có bộ plugin lõi, nên mọi đường
     // đi qua plugin đều là một thứ phải xin cài trên một máy dùng chung.
     //
-    // GIÁ TRỊ NÀY LẤY TỪ MẪU omicrm trên CHÍNH máy chủ ấy. Nếu ViGov dùng cụm khác thì sửa
-    // đúng dòng này — stage 'Kiểm công cụ' đọc thử tệp và DỪNG nếu không có, nên sai đường
-    // dẫn sẽ đỏ ngay ở stage đầu chứ không đỏ giữa một lượt đã sửa cụm một nửa.
-    KUBECONFIG = '/u01/rancher/rancher-omi.yaml'
+    // ĐƯỜNG DẪN NÀY DO CHỦ DỰ ÁN CHỈ, ngày 23/09/2026. Nó KHÔNG phải kubeconfig của omicrm
+    // (`rancher-omi.yaml`) — ViGov có tệp riêng, `rancher-vigov.yaml`, cạnh nó. Hai tệp cùng
+    // thư mục và tên chỉ khác bốn ký tự, nên đây là chỗ một lần chép nhầm sẽ đưa lượt deploy
+    // của ViGov vào CỤM CỦA DỰ ÁN KHÁC — và `kubectl set image` trên một Deployment không tồn
+    // tại thì đỏ, nhưng trên một Deployment TRÙNG TÊN thì không.
+    //
+    // Stage 'Kiểm công cụ' đọc thử tệp và in `kubectl config current-context` ra log trước khi
+    // chạm bất cứ gì: thiếu tệp thì dừng ngay, và sai cụm thì có một dòng đọc được để nhận ra.
+    KUBECONFIG = '/u01/rancher/rancher-vigov.yaml'
 
     // Tên ẢNH mang tiền tố `vigov-service-` cho dịch vụ Go, `vigov-` cho web.
     // Tên TÀI NGUYÊN k8s là tên NGHIỆP VỤ trần (`platform`, `identity`) — ADR 0016 §2.

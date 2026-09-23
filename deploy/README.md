@@ -96,9 +96,11 @@ và dùng chung với dự án khác:
 - **Harbor** — phiên `docker login` sẵn của user `jenkins` (`~jenkins/.docker/config.json`).
   `skopeo` đọc cùng tệp ấy qua `--authfile`.
 - **kubeconfig** — **tệp trên đĩa máy chủ**, hằng số `KUBECONFIG` ở đầu `deploy/Jenkinsfile`.
-  Giá trị hiện tại `/u01/rancher/rancher-omi.yaml` **lấy từ dự án `omicrm` trên chính máy chủ
-  ấy; chưa ai xác nhận ViGov dùng cùng cụm** — cụm khác thì sửa đúng dòng đó. Stage đầu đọc
-  thử tệp và **dừng** nếu không có, nên sai đường dẫn đỏ ngay chứ không đỏ giữa lượt.
+  `/u01/rancher/rancher-vigov.yaml` — **chủ dự án chỉ, 23/09/2026**. KHÔNG phải
+  `rancher-omi.yaml` của dự án `omicrm` nằm cùng thư mục: hai tệp chỉ khác bốn ký tự, nên đây
+  là chỗ một lần chép nhầm đưa lượt deploy của ViGov vào cụm của dự án khác. Stage đầu đọc thử
+  tệp và **dừng** nếu không có, đồng thời in `kubectl config current-context` ra log — thiếu
+  tệp thì đỏ ngay, sai cụm thì có một dòng đọc được để nhận ra.
 
 Trong cụm k8s vẫn có một Secret **tên** `harbor-vigov` (`imagePullSecrets`). Trùng tên, khác
 vật — đừng gộp.
@@ -400,8 +402,8 @@ danh sách** — xoá sạch bảng sinh ra, và `kustomize` không kêu một t
 | Việc | Trạng thái |
 |---|---|
 | 10 job Jenkins | **chưa dựng lần nào.** `buf`, `node`, `npm`, `python3` chưa từng được chứng minh có trên máy chủ này — `go`, `docker`, `make`, `gcc` thì đã, qua lượt chạy thật 21/09/2026 của kho `vihat-miniapp` |
+| Cụm mà kubeconfig trỏ tới | **chưa ai chạy `kubectl` với nó.** Đường dẫn `/u01/rancher/rancher-vigov.yaml` đã được chủ dự án xác nhận, nhưng lượt `vigov-deploy` đầu tiên vẫn là lần đầu biết nó mở được cụm nào — đọc dòng `current-context` ở stage đầu |
 | `deploy/Jenkinsfile` | **chưa máy nào phân tích cú pháp.** Không có Jenkins ở máy trạm, và `tools/check_build.py` chỉ soi 8 Jenkinsfile của dịch vụ |
 | Manifest qua API server thật | **chưa.** `kubectl kustomize` chỉ chứng minh YAML dựng được, không chứng minh máy chủ chấp nhận. Mục 4 là lần đầu biết |
-| Đường dẫn kubeconfig | **giả định** — lấy từ `omicrm` trên cùng máy chủ, chưa ai xác nhận ViGov dùng cùng cụm |
 | Redis ở prod | **chưa có DSN thật.** Thiếu nó thì sáu đường dẫn `POST` ở mục 3 trả 503 trong khi pod xanh |
 | Đóng êm khi `SIGTERM` | **xong 22/09/2026** — cả sáu dịch vụ Go `signal.Notify` + `srv.Shutdown`, `terminationGracePeriodSeconds: 45` > ngữ cảnh 20 giây |
