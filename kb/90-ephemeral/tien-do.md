@@ -26,7 +26,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 28 |
 | chưa làm | 14 |
 | treo | 12 |
-| xong | 111 |
+| xong | 112 |
 
 ## `_chung`
 
@@ -98,7 +98,7 @@ Cập nhật 2026-09-22 · 11 mục
 
 ## `deploy`
 
-Cập nhật 2026-09-23 · 13 mục
+Cập nhật 2026-09-23 · 14 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -147,6 +147,15 @@ CỔNG NÀY KHÔNG KIỂM NỘI DUNG cột 'k8s cấp bằng' — không gì quy
 (2) Số tuyến REST. Bản cũ ghi identity 15 · finance 3 · petitions 3 · documents 1 · comms 1 = 23. Thực tế hôm nay 82. Con số ấy quyết định thứ tự deploy và độ rủi ro của từng lượt, nên để nó cũ là để người vận hành đánh giá sai việc mình đang làm.
 
 BÀI HỌC GIỮ LẠI: một tài liệu triển khai chép số từ lần viết trước là tài liệu sẽ lệch trong vài ngày. Mọi con số trong bản này đều đếm lại từ `kb/20-contracts/openapi.json` và từ mã tại thời điểm viết, và có ghi NGÀY ĐẾM ngay cạnh. |
+| `ra-toan-bo-nguon-cau-hinh` — Rà TOÀN BỘ nguồn đọc biến môi trường, và khai tên + key chính xác của từng đối tượng k8s | xong | Chủ dự án yêu cầu 23/09/2026: 'đây là deploy thật chứ không phải tài liệu dập khuôn'. Quét cả kho, KHÔNG chỉ core/config: (a) không có os.Getenv/os.LookupEnv nào trong mã Go ngoài core/config và tools/; (b) web-admin/src KHÔNG có process.env nào — nó gọi API bằng đường dẫn TƯƠNG ĐỐI /api/v1/… nên không cần địa chỉ backend, và đó là lý do nó không có envFrom; (c) web-admin có 4 biến của máy chủ Next nhưng đã nằm trong ảnh (NODE_ENV, NEXT_TELEMETRY_DISABLED nung ở Dockerfile; PORT, HOSTNAME ở deployment.yaml); (d) platform-admin đọc NEXT_PUBLIC_PLATFORM_API nhưng chưa có Dockerfile nên chưa triển khai; (e) citizen-app 0. Tổng thứ cụm phải cấp: 16 biến, chỉ cho 6 pod Go. deploy/README.md mục 3 nay có bảng đối tượng k8s: loại · TÊN · KEY · ai tạo. | — | BA CÁI BẪY TÌM RA TRONG LÚC RÀ, cả ba đều hỏng im lặng:
+
+(1) KEY PHẢI VIẾT GẠCH DƯỚI, không phải gạch ngang. Luật 11 bất biến 4 nói key ConfigMap/Secret viết CÓ-GẠCH-NGANG — đúng, NHƯNG chỉ khi env var được ánh xạ tường minh bằng valueFrom.secretKeyRef. Cả 7 Deployment ở đây dùng envFrom, mà envFrom lấy CHÍNH KEY làm tên biến. Key `DATABASE-DSN` không phải định danh shell hợp lệ nên k8s BỎ QUA TRONG IM LẶNG (chỉ còn một Event InvalidVariableNames), rồi pod chết với 'thiếu biến môi trường bắt buộc: DATABASE_DSN' — đúng cái tên người vận hành đang nhìn thấy trong Secret.
+
+(2) TÊN SECRET TLS KHÁC NHAU GIỮA HAI MÔI TRƯỜNG: vigov-staging-tls (overlays/staging/ingress-moi-truong.yaml:16) vs vigov-wildcard-tls (overlays/prod/…:27), host *.staging.vigov.vn vs *.vigov.vn. Khối lệnh cài lần đầu trước đây chỉ có tên của prod kèm câu 'chạy cho staging trước rồi lặp lại y hệt' — tức nó dạy chép nhầm. Chép nhầm thì Ingress lên bình thường và CHỈ HTTPS ĐỨT.
+
+(3) ConfigMap cau-hinh-chung KHÔNG được tạo tay: kustomize sinh nó kèm hậu tố băm (cau-hinh-chung-679b259276) để đổi giá trị là đổi tên, ép pod khởi động lại. Một ConfigMap trùng tên tạo tay là một đối tượng không Deployment nào trỏ tới.
+
+SỐ SECRET `bi-mat-*` LÀ SÁU, KHÔNG PHẢI BẢY: web-admin không đọc biến nào nên không có Secret riêng. |
 
 ## `platform-admin`
 

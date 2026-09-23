@@ -211,18 +211,50 @@ NetworkPolicy chỉ mở 8080/3000 từ ingress. Hai thứ gãy cùng lúc và c
 dịch vụ không khởi động được trên máy chưa đặt thêm bốn giá trị, để bảo vệ đoạn mã chưa tồn
 tại. Năm biến RabbitMQ/Elasticsearch **cố ý** không bắt buộc: chưa mã nào nối tới chúng.
 
-### Hôm nay thực tế có bao nhiêu khoá
+### Rà toàn bộ nguồn — ai đọc biến môi trường, và đọc bao nhiêu
 
-| Nơi | Khoá | Ai tạo |
+Quét cả kho ngày 23/09/2026, không chỉ `core/config`:
+
+| Nơi đọc | Số biến | Ghi chú |
 |---|---|---|
-| ConfigMap `cau-hinh-chung` | **1**: `ENV` | `configMapGenerator` ở `overlays/<mt>/kustomization.yaml` |
-| Secret `bi-mat-platform` | **3**: `DATABASE_DSN` · `GRPC_CALLER_KEY` · `SESSION_SIGNING_KEYS` | `kubectl create secret` bằng tay, mục 4 |
-| Secret `bi-mat-<năm dịch vụ kia>` | **4**: ba khoá trên **+ `REDIS_DSN`** | ″ |
-| `env: value:` trong `deployment.yaml` | `LISTEN_ADDR` · `PLATFORM_GRPC_ADDR` · `IDENTITY_GRPC_ADDR` | nằm trong kho, đi qua review |
-| `web-admin` | **không có `envFrom`** | Next.js không dùng `core/config`; nó đọc cấu hình theo tên miền **tại runtime** (luật 1, bất biến 10) |
+| `core/config` — **7 dịch vụ Go** | **16** | Gói DUY NHẤT gọi `os.Getenv`. Quét cả kho: **không có `os.Getenv`/`os.LookupEnv` nào khác** trong mã Go ngoài `tools/` (chạy ở máy trạm, không thành pod) |
+| `web-admin` — **mã ứng dụng** | **0** | Không một `process.env` nào trong `web-admin/src`. Nó gọi API bằng đường dẫn **tương đối** `/api/v1/…` trên cùng tên miền, nên không cần địa chỉ backend — và đó là lý do nó **không có `envFrom`** |
+| `web-admin` — máy chủ Next standalone | 4, **đã nằm trong ảnh** | `NODE_ENV` · `NEXT_TELEMETRY_DISABLED` nung trong `Dockerfile`; `PORT=3000` · `HOSTNAME=0.0.0.0` đặt lại ở `deployment.yaml` |
+| `platform-admin` | 1 — `NEXT_PUBLIC_PLATFORM_API` | **chưa triển khai**: không có `Dockerfile`, nên chưa có ảnh. Ngày dựng nó thì đây là một `NEXT_PUBLIC_*`, tức **ship trong bundle trình duyệt** — không bao giờ chứa bí mật (luật 8, bất biến 4) |
+| `citizen-app` | 0 | Chạy trong Zalo Mini App, không thành pod |
 
-Bảy biến còn lại không nằm ở đâu cả, và đó là trạng thái đúng — bốn biến lấy mặc định của mã,
-ba biến chờ ngày RabbitMQ/Elasticsearch được nối.
+**Tổng cộng, thứ cụm phải cấp: đúng 16 biến, và chỉ cho 6 pod Go.** `web-admin` không cần một
+khoá nào.
+
+### Đối tượng k8s phải tạo — tên và key chính xác
+
+Giá trị anh tự điền. Tên và key thì **không được đổi**: manifest tham chiếu đúng những chuỗi này.
+
+| Loại | Tên đối tượng | Key | Ai tạo |
+|---|---|---|---|
+| ConfigMap | `cau-hinh-chung` | `ENV` | **kustomize sinh — ĐỪNG tạo tay.** Nó mang hậu tố băm (`cau-hinh-chung-679b259276`) để đổi giá trị là đổi tên, ép pod khởi động lại. Sửa giá trị ở `overlays/<mt>/kustomization.yaml` |
+| Secret | `bi-mat-platform` | `DATABASE_DSN` · `GRPC_CALLER_KEY` · `SESSION_SIGNING_KEYS` | người, mục 4 |
+| Secret | `bi-mat-identity` | bốn khoá: ba khoá trên **+ `REDIS_DSN`** | ″ |
+| Secret | `bi-mat-documents` | ″ | ″ |
+| Secret | `bi-mat-finance` | ″ | ″ |
+| Secret | `bi-mat-petitions` | ″ | ″ |
+| Secret | `bi-mat-comms` | ″ | ″ |
+| Secret (`docker-registry`) | `harbor-vigov` | k8s tự đặt `.dockerconfigjson` | ″ — `imagePullSecrets` của cả 7 Deployment |
+| Secret (`tls`) | **`vigov-staging-tls`** ở staging · **`vigov-wildcard-tls`** ở prod | `tls.crt` · `tls.key` | ″ |
+
+⚠ **Hai môi trường dùng HAI TÊN Secret TLS khác nhau** —
+`overlays/staging/ingress-moi-truong.yaml:16` và `overlays/prod/ingress-moi-truong.yaml:27`.
+Chép lệnh của prod sang staging là Ingress lên bình thường và **chỉ HTTPS đứt**. Host cũng
+khác: `*.staging.vigov.vn` với `*.vigov.vn`.
+
+⚠ **KEY PHẢI VIẾT GẠCH DƯỚI, KHÔNG PHẢI GẠCH NGANG — vì manifest dùng `envFrom`.**
+Bảng "một tên, hai cách viết" ở đầu mục này nói key ConfigMap/Secret viết `CÓ-GẠCH-NGANG`, và
+điều đó chỉ đúng khi env var được ánh xạ **tường minh** bằng `valueFrom.secretKeyRef` — nơi
+tên biến được khai riêng. Ở đây cả 7 Deployment dùng `envFrom`, mà `envFrom` lấy **chính key
+làm tên biến**. Một key `DATABASE-DSN` không phải định danh shell hợp lệ, nên k8s **bỏ qua nó
+trong im lặng** (chỉ còn một Event `InvalidVariableNames` mà không ai đọc) — rồi pod chết với
+`thiếu biến môi trường bắt buộc: DATABASE_DSN`, đúng cái tên người vận hành đang nhìn thấy
+trong Secret. Ngày nào đổi sang `secretKeyRef` thì key mới được viết gạch ngang.
 
 ### Kafka chưa có biến nào
 
@@ -282,10 +314,18 @@ for s in identity documents finance petitions comms; do
     --from-literal=REDIS_DSN='redis://...'
 done
 
+# TÊN SECRET TLS KHÁC NHAU GIỮA HAI MÔI TRƯỜNG — chép nhầm thì Ingress lên bình thường và
+# CHỈ HTTPS ĐỨT. Tên do overlay quy định, không đổi được ở đây:
+#   staging -> vigov-staging-tls   (*.staging.vigov.vn)
+#   prod    -> vigov-wildcard-tls  (*.vigov.vn)
 kubectl -n vigov-prod create secret tls vigov-wildcard-tls --cert=... --key=...
 
 kubectl apply -k deploy/overlays/prod
 ```
+
+**ConfigMap `cau-hinh-chung` KHÔNG có trong khối lệnh trên, có chủ ý:** kustomize sinh nó từ
+`overlays/<mt>/kustomization.yaml` với một hậu tố băm. Tạo tay một ConfigMap trùng tên là tạo
+ra một đối tượng không Deployment nào trỏ tới.
 
 **`GRPC_CALLER_KEY` bắt buộc ở MỌI dịch vụ** — `config.Load` không khởi động khi nó rỗng: một
 cổng gRPC không có khoá gọi là một cổng trả lời **bất kỳ ai** chạm tới nó (ADR 0025).
@@ -295,8 +335,9 @@ cổng gRPC không có khoá gọi là một cổng trả lời **bất kỳ ai*
 `apply -k` dựng Deployment với thẻ `CHUA-TRIEN-KHAI-LAN-NAO`, tức **bảy pod ngồi
 `ImagePullBackOff`** — đúng như thiết kế, không phải lỗi. Mục 5 đặt thẻ thật.
 
-**Xanh khi:** `kubectl -n vigov-prod get secret` liệt kê đủ `harbor-vigov`,
-`vigov-wildcard-tls`, và `bi-mat-{platform,identity,comms,documents,finance,petitions}`.
+**Xanh khi:** `kubectl -n vigov-prod get secret` liệt kê đủ `harbor-vigov`, `vigov-wildcard-tls`
+(staging: `vigov-staging-tls`), và `bi-mat-{platform,identity,comms,documents,finance,petitions}` — **sáu**, không phải bảy: `web-admin`
+không đọc biến nào nên không có Secret của riêng nó.
 
 Ba thứ dễ sót, cả ba đều hỏng ở chỗ cách xa nguyên nhân:
 
@@ -304,7 +345,7 @@ Ba thứ dễ sót, cả ba đều hỏng ở chỗ cách xa nguyên nhân:
 |---|---|
 | Secret `harbor-vigov` | `ImagePullBackOff`, không nói gì về quyền |
 | `GRPC_CALLER_KEY` / `SESSION_SIGNING_KEYS` | `CrashLoopBackOff` — `core/config.Load` gom đủ tên còn thiếu rồi thoát |
-| Secret TLS | Ingress lên bình thường, chỉ HTTPS đứt |
+| Secret TLS, **hoặc đặt đúng tên nhưng sai môi trường** | Ingress lên bình thường, chỉ HTTPS đứt |
 
 Bí mật vào cụm hôm nay bằng `kubectl create secret` tay. Bước kế tiếp khi thấy phiền:
 **External Secrets Operator**. Manifest trong kho này khi ấy vẫn chỉ chứa **tên** khoá.
