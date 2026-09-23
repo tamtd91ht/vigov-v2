@@ -155,7 +155,12 @@ func dungMayChuThongBao(t *testing.T) *mayChuThongBao {
 		GhiLoaiTaiNguyen: &ghiDanhMucGia{},
 		ThongBao:         so,
 		GhiThongBao:      ghi,
-		Log:              im,
+		// Same again for the four Mini App content dependencies — see noi_dung_mini_app_test.go.
+		NoiDung:           &soNoiDungGia{},
+		GhiNoiDung:        &ghiNoiDungGia{},
+		DanhMucNoiDung:    &soDanhMucNDGia{},
+		GhiDanhMucNoiDung: &ghiDanhMucNDGia{},
+		Log:               im,
 	})
 
 	// The real edge chain in the real order. idem.Middleware sits INSIDE TenantMiddleware because

@@ -36,6 +36,7 @@ import (
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
+	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 )
 
 // LoaiTaiNguyenDanhMuc is the commune's map-asset-type catalogue, for GET /api/v1/map-asset-types.
@@ -110,6 +111,45 @@ type GhiThongBao interface {
 	PhatHanh(ctx context.Context, yc domain.YeuCauSoanThongBao, nguoi audit.Actor) (domain.ThongBaoNoiBo, error)
 }
 
+// --- Mini App content (docs/ui-ux/11-noi-dung-mini-app.md) ----------------------------------------
+//
+// FOUR INTERFACES FOR TWO TABLES, split the same way as the two above: reads on one side, writes on
+// the other. The reads are store calls; each write opens a TRANSACTION and puts an audit entry
+// inside it (rule 6, invariant 3). Behind one interface a future caller would reach for whichever
+// method was nearest and could end up writing the row outside a transaction, which is the exact
+// defect core/audit was shaped to make impossible. Declared at the POINT OF USE so the routes stay
+// testable without a PostgreSQL — a test that needs infrastructure is a test that stops being run.
+
+// NoiDungMiniAppDoc is the READ half of the content register.
+//
+// TWO METHODS AND NOT ONE, because the list does NOT carry the article body and the detail does —
+// see store.cotNoiDungMiniApp for the figures. They answer two different questions.
+type NoiDungMiniAppDoc interface {
+	DanhSach(ctx context.Context, loc commsstore.LocNoiDung, yc page.Request) (
+		page.Result[domain.NoiDungMiniApp], error)
+	TheoID(ctx context.Context, id string) (domain.NoiDungMiniApp, error)
+}
+
+// GhiNoiDungMiniApp is the WRITE half of the content register.
+type GhiNoiDungMiniApp interface {
+	Them(ctx context.Context, yc domain.YeuCauThemNoiDung, nguoi audit.Actor) (domain.NoiDungMiniApp, error)
+	Sua(ctx context.Context, id string, yc domain.YeuCauSuaNoiDung, nguoi audit.Actor) (domain.NoiDungMiniApp, error)
+}
+
+// DanhMucMiniAppDoc is the READ half of the commune's Mini App category tree. NO page.Request
+// PARAMETER: this route returns the whole tree on purpose, and the bound that replaces the missing
+// `limit` is store.TranDanhMucMiniApp.
+type DanhMucMiniAppDoc interface {
+	DanhSach(ctx context.Context) ([]domain.DanhMucMiniApp, error)
+}
+
+// GhiDanhMucMiniApp is the WRITE half of the category tree. ONE METHOD: §9 lists GET and POST, and
+// editing or removing a category is not shipped — internal/store says why, and the reason for the
+// edit route in particular is that RE-PARENTING can create a cycle no CHECK constraint can refuse.
+type GhiDanhMucMiniApp interface {
+	Them(ctx context.Context, yc domain.YeuCauThemDanhMuc, nguoi audit.Actor) (domain.DanhMucMiniApp, error)
+}
+
 type Deps struct {
 	// Checker WAS unused and deliberately outside the refusal switch, and the comment here said so:
 	// no mounted route declared authz.RequirePermission. The three catalogue WRITE routes below do,
@@ -124,6 +164,13 @@ type Deps struct {
 	// thong_bao_noi_bo.go for what is shipped, what is not, and which question blocks the rest.
 	ThongBao    ThongBaoDanhSach
 	GhiThongBao GhiThongBao
+
+	// Mini App content (docs/ui-ux/11-noi-dung-mini-app.md) — see internal/http/noi_dung_mini_app.go
+	// for what is shipped, what is not, and which question blocks the rest.
+	NoiDung           NoiDungMiniAppDoc
+	GhiNoiDung        GhiNoiDungMiniApp
+	DanhMucNoiDung    DanhMucMiniAppDoc
+	GhiDanhMucNoiDung GhiDanhMucMiniApp
 
 	Log *slog.Logger
 }
@@ -149,8 +196,20 @@ func Register(mux *http.ServeMux, d Deps) {
 	if d.GhiThongBao == nil {
 		panic("comms/http: thiếu use case phát hành thông báo — POST /api/v1/announcements sẽ panic khi có người gọi")
 	}
+	if d.NoiDung == nil {
+		panic("comms/http: thiếu kho nội dung Mini App — GET /api/v1/content-items sẽ panic khi có người gọi")
+	}
+	if d.GhiNoiDung == nil {
+		panic("comms/http: thiếu use case ghi nội dung Mini App — POST/PATCH /api/v1/content-items sẽ panic khi có người gọi")
+	}
+	if d.DanhMucNoiDung == nil {
+		panic("comms/http: thiếu kho danh mục Mini App — GET /api/v1/content-categories sẽ panic khi có người gọi")
+	}
+	if d.GhiDanhMucNoiDung == nil {
+		panic("comms/http: thiếu use case ghi danh mục Mini App — POST /api/v1/content-categories sẽ panic khi có người gọi")
+	}
 	if d.Checker == nil {
-		panic("comms/http: thiếu authz.Checker — năm tuyến có khai quyền sẽ không kiểm được quyền")
+		panic("comms/http: thiếu authz.Checker — mười một tuyến có khai quyền sẽ không kiểm được quyền")
 	}
 
 	h := NewHandler(d)
@@ -385,4 +444,178 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "announcement.create")(
 			idem.Required(idem.DongKhiHong)(
 				http.HandlerFunc(h.PhatHanhThongBao))))
+
+	// --- the commune's Mini App content register ------------------------------------------------
+	//
+	// `content-items` AND `content-categories` — THE NOUNS WERE TAKEN FROM THE RUNNING SIBLING
+	// IMPLEMENTATION, NOT TRANSLATED, and they are the ONE thing in this module still owed a
+	// decision. kb/00-foundation/ubiquitous-language.md §Tên tài nguyên trên URL has NO ROW for any
+	// concept in chapter 11, and its own instruction for that case is "dừng lại và hỏi" (:219-221).
+	// The full argument, the evidence (`../vigov-require/apps/api/app/modules/content/router.py:54,
+	// 66, 186`) and what is still owed are at the top of internal/http/noi_dung_mini_app.go. §9's own
+	// `/api/mini-app/noi-dung` and `/api/cong/…` sketches cannot ship at all.
+	//
+	// `content.read` AND `content.update` ARE THE SPECIFICATION'S OWN KEYS (§10.5) AND BOTH EXIST —
+	// service-identity/migrations/0001_init.sql:292-293, group `NỘI DUNG MINI APP`. NO NEW KEY WAS
+	// INVENTED, and that is rule 5, invariant 3c: a key no migration seeds is a right nobody can
+	// grant, so the route would answer 403 to every account forever while the tests stayed green.
+	// There is no `content.create` in the table and none was added — composing and editing are both
+	// `content.update`, which is how §10.5 itself divides the surface.
+	//
+	// THE KEYS ARE LITERALS AT EVERY CALL SITE AND NOT CONSTANTS, although QuyenDocNoiDung and
+	// QuyenSuaNoiDung exist for the prose to refer to: tools/apidoc resolves the key from the
+	// authz.RequirePermission call and refuses anything that is not a string literal there — "khóa
+	// quyền không phải hằng chuỗi — không ghi vào hợp đồng được". A route whose key it cannot read is
+	// a route absent from kb/20-contracts/openapi.json, which is the contract web-admin builds
+	// against (ADR 0014).
+	//
+	// @summary  Sổ nội dung Mini App của xã — một trang của bảng §6, lọc theo loại, danh mục và tiêu đề
+	// @screen   11-noi-dung-mini-app §6
+	// 400 covers three refusals of what the client sent: a `type` outside §5's six codes, a search
+	// term past the bound, and page.Parse refusing a cursor, a sort key or a limit. THE BODY OF EACH
+	// ITEM IS NOT IN THIS RESPONSE — see noiDungRa.Body and the detail route below.
+	// @reply    200 page.Result[noiDungRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/content-items",
+		authz.RequirePermission(d.Checker, "content.read")(
+			http.HandlerFunc(h.DanhSachNoiDung)))
+
+	// --- one item, with its body ------------------------------------------------------------------
+	//
+	// IT EXISTS BECAUSE THE LIST DOES NOT CARRY THE BODY, not as a second way of asking one question:
+	// a hundred articles at domain.ThanNoiDungToiDa is twenty million runes in one response, and §6's
+	// table shows a title and one line of summary.
+	//
+	// 404 COVERS "NO SUCH ITEM" AND "ANOTHER COMMUNE'S ITEM", indistinguishably and on purpose. The
+	// store binds the commune to $1, so another authority's id is simply not there; telling the two
+	// apart would confirm what that authority holds (rule 4, forbidden #2 on the commune axis).
+	//
+	// @summary  Một mục nội dung Mini App kèm toàn văn — dùng cho modal sửa ở §7
+	// @screen   11-noi-dung-mini-app §7
+	// @reply    200 noiDungRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/content-items/{id}",
+		authz.RequirePermission(d.Checker, "content.read")(
+			http.HandlerFunc(h.MotNoiDung)))
+
+	// --- the commune composes an item --------------------------------------------------------------
+	//
+	// THE PROVENANCE IS A LITERAL IN THE INSERT, not a parameter: `nguon` is written as `'thu-cong'`
+	// and `nguon_id_ngoai` / `nguon_url` / `da_sua_tay` are bound nowhere, so there is no value any
+	// layer above could pass and no field a client could fill. That is what keeps §10.4's protection
+	// — a hand-edited portal article survives the next sync — from being reachable by a request.
+	//
+	// idem.Required(DongKhiHong), AND THE CHOICE IS THE SAME AS THE ANNOUNCEMENT'S AND THE OPPOSITE OF
+	// THE CATEGORY'S BELOW. There is NO unique key underneath this write — an item has no code, and
+	// two articles with the same title are two legitimate rows — so a Redis outage with MoKhiHong
+	// would let a double-submitted form publish the same article twice to every resident of the
+	// commune, with no way to say which copy is the real one. The idempotency key is the ONLY layer
+	// here, so it cannot be allowed to fail open.
+	//
+	// 409 AND NOT 400 for a category that is not there: the body is well-formed and the caller holds
+	// the permission; what is refused is this value against the state of the data, usually a screen
+	// somebody left open while a colleague retired the category.
+	//
+	// @summary  Soạn một mục nội dung cho Mini App — chưa bật `publish` thì bà con chưa thấy
+	// @screen   11-noi-dung-mini-app §7
+	// @request  themNoiDungVao
+	// @reply    201 noiDungRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/content-items",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ThemNoiDung))))
+
+	// --- the commune edits one item ----------------------------------------------------------------
+	//
+	// PATCH AND NOT PUT: every field §7's modal collects has a meaningful zero, so a full replacement
+	// cannot tell "not mentioned" from "cleared" — and a screen editing only the title would silently
+	// unpublish the article and drop it out of its category. See suaNoiDungVao.
+	//
+	// THIS IS ALSO WHERE §10.4 IS RECORDED. Editing an item whose provenance is the portal sets
+	// `da_sua_tay`, which migration 0006 then refuses to clear: the commune is promised that the
+	// correction survives the next synchronisation.
+	//
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua compares
+	// the row it read against the row it would write and, when nothing moved, writes NOTHING — no
+	// UPDATE, no audit entry, and no `da_sua_tay`. So the same request sent twice leaves one row in
+	// one state and one entry in the ledger. Were that comparison removed, this declaration would
+	// become a lie and the second request would file an entry saying nothing changed.
+	//
+	// @summary  Sửa một mục nội dung Mini App — sửa bài đồng bộ về sẽ khoá không cho lượt đồng bộ sau ghi đè
+	// @screen   11-noi-dung-mini-app §6, §7
+	// @request  suaNoiDungVao
+	// @reply    200 noiDungRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/content-items/{id}",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng, đúng một vết, và không đặt cờ da_sua_tay")(
+				http.HandlerFunc(h.SuaNoiDung))))
+
+	// --- the commune's Mini App category tree --------------------------------------------------------
+	//
+	// `content.read` AND NOT AnyAuthenticated, WHICH IS THE OPPOSITE CALL FROM GET /map-asset-types
+	// ABOVE — and the difference is which screens the list feeds. The eight reference catalogues fill
+	// a selector on nearly every screen in the system, so a configuration permission there would empty
+	// those screens for everybody who is not an administrator. This tree appears on exactly one
+	// screen, the one §10.5 already gates with `content.read`. Using the key the specification names
+	// costs nothing here and keeps the routes of this module answering the same question the same way.
+	//
+	// NOT PAGINATED ON PURPOSE — store.DanhMucMiniAppStore.DanhSach gives the three reasons, and the
+	// bound that replaces the missing `limit` is store.TranDanhMucMiniApp. Past it the route REFUSES
+	// with a 500 rather than truncating: a silently short tree is a category that has disappeared from
+	// §7's select, so articles get filed under the wrong one and the screen looks entirely normal.
+	//
+	// @summary  Danh mục tin nội bộ của Mini App — cây phẳng, dùng cho ô chọn ở §7 và bộ lọc ở §6
+	// @screen   11-noi-dung-mini-app §6
+	// @reply    200 danhSachDanhMucRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/content-categories",
+		authz.RequirePermission(d.Checker, "content.read")(
+			http.HandlerFunc(h.DanhSachDanhMucNoiDung)))
+
+	// --- the commune adds a category ------------------------------------------------------------------
+	//
+	// idem.Required(MoKhiHong), AND WHICH LAYER IS ACTUALLY PROTECTING THIS — the question
+	// skills/rest-api-design §4 says to answer at the route. The real guard is
+	// `UNIQUE (tenant_id, slug)`, which counts soft-deleted rows: a second category with the same slug
+	// CANNOT EXIST, whatever happens to Redis. The idempotency key is the second, independent layer —
+	// it is what stops a double-submitted form from producing one row and one confusing 409 instead of
+	// one row and a replayed 201.
+	//
+	// MoKhiHong and not DongKhiHong for exactly that reason, and it is the opposite call from the two
+	// content-item writes above: with the unique key underneath, a cache outage cannot produce a
+	// duplicate category, so refusing a member of staff mid-configuration would be paying with an
+	// outage for a risk that is already covered.
+	//
+	// @summary  Thêm một danh mục tin của riêng xã vào cây danh mục Mini App
+	// @screen   11-noi-dung-mini-app §6
+	// @request  themDanhMucVao
+	// @reply    201 danhMucRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/content-categories",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.ThemDanhMucNoiDung))))
 }

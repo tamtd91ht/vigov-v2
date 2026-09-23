@@ -165,7 +165,12 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		// which needs a real idempotency store because its POST declares DongKhiHong.
 		ThongBao:    &soThongBaoGia{},
 		GhiThongBao: &ghiThongBaoGia{},
-		Log:         im,
+		// Same again for the four Mini App content dependencies — see noi_dung_mini_app_test.go.
+		NoiDung:           &soNoiDungGia{},
+		GhiNoiDung:        &ghiNoiDungGia{},
+		DanhMucNoiDung:    &soDanhMucNDGia{},
+		GhiDanhMucNoiDung: &ghiDanhMucNDGia{},
+		Log:               im,
 	})
 
 	var h http.Handler = mux

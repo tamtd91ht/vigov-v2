@@ -157,7 +157,14 @@ func dungMayChu(t *testing.T) *mayChu {
 			// their own four-case permission suite in thong_bao_noi_bo_test.go.
 			ThongBao:    &soThongBaoGia{},
 			GhiThongBao: &ghiThongBaoGia{},
-			Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+			// And the same for the four Mini App content dependencies: present because Register
+			// refuses a nil one at construction, called by nothing here — their four-case permission
+			// suite is in noi_dung_mini_app_test.go.
+			NoiDung:           &soNoiDungGia{},
+			GhiNoiDung:        &ghiNoiDungGia{},
+			DanhMucNoiDung:    &soDanhMucNDGia{},
+			GhiDanhMucNoiDung: &ghiDanhMucNDGia{},
+			Log:               slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 	}
 

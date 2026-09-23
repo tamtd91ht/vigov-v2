@@ -126,7 +126,14 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// in internal/http/thong_bao_noi_bo_test.go.
 		ThongBao:    commsstore.NewThongBaoNoiBoStore(nil),
 		GhiThongBao: commsapp.NewSoanThongBaoNoiBo(nil, nil),
-		Log:         log,
+		// The Mini App content register, on a nil *store.DB for the same reason and with the same
+		// consequence: NOTHING IN THIS FILE CALLS ANY OF THE FOUR. Its own four-case permission suite
+		// — six routes, twenty-four cases — is in internal/http/noi_dung_mini_app_test.go.
+		NoiDung:           commsstore.NewNoiDungMiniAppStore(nil),
+		GhiNoiDung:        commsapp.NewSoanNoiDungMiniApp(nil, nil, nil),
+		DanhMucNoiDung:    commsstore.NewDanhMucMiniAppStore(nil),
+		GhiDanhMucNoiDung: commsapp.NewDanhMucNoiDungMiniApp(nil, nil),
+		Log:               log,
 	})
 
 	danhBa := thuMucGia{

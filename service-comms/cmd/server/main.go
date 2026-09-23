@@ -147,12 +147,24 @@ func main() {
 	// query, the write goes through the use case that owns the transaction its audit entry shares.
 	thongBao := commsstore.NewThongBaoNoiBoStore(kho)
 
+	// Mini App content (migration 0006). TWO stores for two tables, and the content write use case
+	// takes BOTH: composing an item has to check that the category it is filed under is a live
+	// category of this commune, which is a read of the other table inside the SAME transaction
+	// (rule 6, invariant 3 — the audit entry shares it).
+	noiDung := commsstore.NewNoiDungMiniAppStore(kho)
+	danhMucNoiDung := commsstore.NewDanhMucMiniAppStore(kho)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:       staffauth.Checker{},
 		LoaiTaiNguyen: loaiTaiNguyen,
 		ThongBao:      thongBao,
 		GhiThongBao:   commsapp.NewSoanThongBaoNoiBo(kho, thongBao),
+
+		NoiDung:           noiDung,
+		GhiNoiDung:        commsapp.NewSoanNoiDungMiniApp(kho, noiDung, danhMucNoiDung),
+		DanhMucNoiDung:    danhMucNoiDung,
+		GhiDanhMucNoiDung: commsapp.NewDanhMucNoiDungMiniApp(kho, danhMucNoiDung),
 		// The write use case owns the transaction the business write and its audit entry share
 		// (rule 6, invariant 3). It is given *store.DB rather than a transaction because opening one
 		// is precisely what it is for.
