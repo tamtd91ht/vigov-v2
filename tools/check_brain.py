@@ -318,8 +318,24 @@ report(not stray, "6. No documentation in the wrong place", f"{len(stray)} stray
 # nowhere; an agent absent from the map is one nobody will ever reach.
 routing = rd(os.path.join(AGENT_DIR, "ROUTING.md"))
 on_disk_agents = {f[:-3] for f in agent_files}
-# Names in ROUTING that look like an agent handle
-looks_agent = set(re.findall(r"`([a-z][a-z0-9]*(?:-[a-z0-9]+)*-(?:builder|designer|reviewer|keeper|expert))`", routing))
+# Names in ROUTING that look like an agent handle.
+#
+# THE SUFFIX LIST IS THE VOCABULARY OF AGENT ROLES, and it is closed on purpose: a name that
+# ends in none of these is not recognised as an agent, so an agent added under an invented
+# suffix shows up as "never routed to" rather than passing unnoticed. That is the check doing
+# its job, and the fix is to decide which role the new agent has — not to widen the pattern
+# until everything matches.
+#
+# `watcher` was added on 2026-09-23 for `require-watcher`, and the decision is written here
+# because the alternative was to mislabel it. It writes, so `reviewer` and `expert` are wrong
+# — both mean READ ONLY everywhere else in this brain, and a name that lies about write access
+# is worse than a new word. It builds no code (`builder`) and owns no inter-service contract
+# (`designer`). `keeper` was the near miss: it does maintain one kb/ tier. What separates it is
+# the SOURCE — every other agent reads this repository, this one watches a DIFFERENT repository
+# and reports what moved there. That is a distinct role, so it gets a distinct word.
+looks_agent = set(re.findall(
+    r"`([a-z][a-z0-9]*(?:-[a-z0-9]+)*-(?:builder|designer|reviewer|keeper|expert|watcher))`",
+    routing))
 routing_gaps = []
 for a in sorted(looks_agent - on_disk_agents):
     routing_gaps.append(f"ROUTING.md names '{a}' but .claude/agents/{a}.md does not exist")

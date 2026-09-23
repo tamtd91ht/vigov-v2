@@ -8,12 +8,12 @@
 # Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
 
 version: 1
-generated_at: 2026-09-22T18:35:41Z   # `make kb` điền
-from_commit: ab6b897   # `make kb` điền
+generated_at: 2026-09-23T01:27:24Z   # `make kb` điền
+from_commit: 683a45c   # `make kb` điền
 
 budget:
   always_load_max: 27000  # token — trần do người dùng chốt 21/09/2026 (20000 -> 25000 -> 27000)
-  in_use: 26680   # `make kb` đo
+  in_use: 26913   # `make kb` đo
 
 always_load:                 # T0 — nạp mọi phiên, không hỏi
   - kb/00-foundation/domain-boundaries.md
@@ -83,6 +83,14 @@ load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾ
     load_when: "trước khi động vào một module — module ấy đã làm gì, chưa làm gì, nợ khách câu nào"
     warning: "không sửa tay — sửa `kb/90-ephemeral/tien-do/<module>.json` rồi `make kb`. Thủ tục: `/progress`"
 
+  # Tầng DUY NHẤT trong kb/ mô tả KHO KHÁC — nên `require-watcher` sở hữu nó, không phải
+  # `knowledge-keeper`. Ghi chú + neo do `/doi-chieu-require` sinh; đừng sửa tay.
+  - id: doi-chieu-tang
+    file: kb/50-doi-chieu/README.md
+    tier: T2
+    source: CURATED
+    load_when: "chạy `/doi-chieu-require`, đọc/viết ghi chú đối chiếu, hoặc bị `require_sync_guard` chặn"
+
   # KHO ANH EM, KHÔNG PHẢI KHO NÀY. `../vigov-require` là bản cài đặt ĐANG CHẠY mà `docs/ui-ux/`
   # của kho này đã chép ra (README của nó khai ngày 16/09/2026). Tệp dưới đo mức lệch giữa đặc tả
   # bên ấy và kho này — ĐỌC TÀI LIỆU, chưa đọc mã bên ấy.
@@ -104,6 +112,7 @@ faq_routes:       # định tuyến thẳng — tiết kiệm nhiều token nh�
   "đặt tên tài nguyên URL":   kb/00-foundation/ubiquitous-language.md   # vì sao: ADR 0011
   "vì sao làm thế này":       kb/10-decisions/
   "khách đã chốt chưa":       kb/00-foundation/open-questions.json
+  "BA/PM đã đổi gì":          kb/50-doi-chieu/   # "bên kia có gì MỚI" thì phải chạy `/doi-chieu-require`
   # "đang cháy, làm gì" → kb/40-runbooks/ CHƯA tồn tại: chưa có sự cố vận hành nào.
   #   Tạo runbook đầu tiên khi có sự cố thật, đừng tạo thư mục rỗng cho đủ bộ.
 

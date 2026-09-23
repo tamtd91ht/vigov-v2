@@ -6,7 +6,7 @@
 > again. Any design where one agent "coordinates the others" does not run — v1 had exactly
 > that design and it could never have worked.
 
-Ten agents: **seven that write, three read-only** (`isolation-reviewer`, `domain-expert`,
+Eleven agents: **eight that write, three read-only** (`isolation-reviewer`, `domain-expert`,
 `progress-reviewer`). Each has a **write boundary**; two agents never own the
 same path.
 
@@ -58,6 +58,7 @@ top to bottom; **the first match wins**.
 | 12 | An **invariant, boundary, or decision changed** | `knowledge-keeper` |
 | 13 | Preparing a **release / UAT / handover** | §5.3 release sequence |
 | 14 | The progress ledger looks wrong — an item vanished, `xong` with nothing behind it, a module gone quiet | `progress-reviewer` (read-only) |
+| 15 | **`../vigov-require` has moved** — BA/PM changed the requirement, or `require_sync_guard` blocked a write | `require-watcher` |
 
 ### Events that route to `domain-expert` FIRST, always
 
@@ -99,7 +100,8 @@ is the compensation?** Undecided → `contract-designer`, and if it is a busines
 | Schema and data | `data-migration-builder` | `*/migrations/**`, backfills |
 | Staff web + platform console | `admin-web-builder` | `web-admin/**`, `platform-admin/**` |
 | Citizen app | `citizen-app-builder` | `citizen-app/**` |
-| Knowledge | `knowledge-keeper` | `kb/` curated tiers, `*/README.md` |
+| Knowledge | `knowledge-keeper` | `kb/` curated tiers **except `kb/50-doi-chieu/`**, `*/README.md` |
+| Requirement sync | `require-watcher` | `kb/50-doi-chieu/**` — **the one carve-out from `knowledge-keeper`** |
 | Tests | `test-designer` | test files anywhere |
 | Web work queue | `admin-web-builder` | `tasks/web/claimed/**`, `tasks/web/done/**` — **never `open/` or `stale/`** |
 | Progress ledger | **the agent that owns the module** | `kb/90-ephemeral/tien-do/<its own module>.json` — that one file, never another module's |
@@ -330,6 +332,7 @@ Dispatching costs a context switch and loses the thread. Do it directly when:
 | `citizen-app-builder` | write | Citizen-facing Mini App |
 | `test-designer` | write | Test strategy and tests, prioritised by cost of being wrong |
 | `knowledge-keeper` | write | `kb/` curated tiers, ADRs, documentation discipline |
+| `require-watcher` | write | `kb/50-doi-chieu/**` only — what BA/PM changed in `../vigov-require`, and which module here must answer it |
 | `isolation-reviewer` | **read only** | Three isolation dimensions, including cross-file relations |
 | `domain-expert` | **read only** | Vietnamese public administration business correctness |
 | `progress-reviewer` | **read only** | The progress ledger as a record: lost items, `xong` without evidence, modules gone quiet |

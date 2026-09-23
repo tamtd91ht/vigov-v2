@@ -756,6 +756,42 @@ CASES = [
                  "no_confirm": [], "tiep_theo": "—"})),
     ("progress_guard", "mã thường không liên quan tới tầng tiến độ", PASS,
      w("service-comms/internal/app/zns.go", "func Send(ctx context.Context) error { return nil }")),
+
+    # ---- tầng đối chiếu kho yêu cầu · require_sync_guard ----------------------
+    #
+    # HAI NHÓM CA, kiểm hai thứ khác hẳn nhau: hình dạng của chính tầng `kb/50-doi-chieu/`,
+    # và đường thoát của lần chặn.
+    #
+    # CA "CHẶN LÚC SẮP VIẾT MÃ" KHÔNG NẰM Ở ĐÂY, và đó là một quyết định chứ không phải chỗ
+    # còn thiếu. Nó chỉ chặn khi trên đĩa ĐANG CÓ một ghi chú chưa tiếp nhận, nên viết nó thành
+    # ca payload đòi tạo một ghi chú thật rồi dọn đi — và ghi chú sót lại sẽ chặn MỌI phiên sau
+    # cho tới khi có người tìm ra vì sao. Phần thuần của nó (`module_cua`, `chua_tiep_nhan`)
+    # kiểm riêng ở `chay_thuan()`, đúng cách `stop_verify_guard.is_code()` đã đi.
+    ("require_sync_guard", "ghi chú đối chiếu không có frontmatter", BLOCK,
+     w("kb/50-doi-chieu/2026-09-23-main.md", "# Doi chieu main\n\nba commit moi.\n")),
+    ("require_sync_guard", "ghi chú thiếu khoá bằng chứng (sha_tu, anh_huong)", BLOCK,
+     w("kb/50-doi-chieu/2026-09-23-main.md",
+       "---\nid: x\ntier: T2\nsource: CURATED\nowner: architecture\n"
+       "branch: main\nsha_den: abc1234\nngay_review: 2026-09-23\n---\n\n# Doi chieu\n")),
+    ("require_sync_guard", "SHA bịa, không phải dạng hex", BLOCK,
+     w("kb/50-doi-chieu/2026-09-23-main.md",
+       "---\nid: x\ntier: T2\nsource: CURATED\nowner: architecture\nbranch: main\n"
+       "sha_tu: lan-truoc\nsha_den: moi-nhat\nngay_review: 2026-09-23\n"
+       "anh_huong: []\n---\n\n# Doi chieu\n")),
+    ("require_sync_guard", "sổ neo thiếu sha_den", BLOCK,
+     w("kb/50-doi-chieu/neo.json", '{"branches": {"main": {"ngay_review": "2026-09-23"}}}')),
+    ("require_sync_guard", "ghi chú đủ bằng chứng", PASS,
+     w("kb/50-doi-chieu/2026-09-23-main.md",
+       "---\nid: doi-chieu-2026-09-23-main\ntier: T2\nsource: CURATED\n"
+       "owner: architecture\nexpires: null\nbranch: main\nsha_tu: b159f0e\n"
+       "sha_den: c0ffee1\nngay_review: 2026-09-23\nanh_huong: []\n"
+       "owns_facts:\n  - \"doi chieu main 23/09/2026\"\n---\n\n# Doi chieu main\n")),
+    ("require_sync_guard", "sổ neo đúng hình dạng", PASS,
+     w("kb/50-doi-chieu/neo.json",
+       '{"branches": {"main": {"sha_den": "b159f0e", "ngay_review": "2026-09-23"}}}')),
+    ("require_sync_guard", "sổ tiến độ — ĐƯỜNG THOÁT của lần chặn, không bao giờ bị chặn", PASS,
+     w("kb/90-ephemeral/tien-do/core.json",
+       '{"module": "core", "cap_nhat": "2026-09-23", "muc": []}')),
 ]
 
 

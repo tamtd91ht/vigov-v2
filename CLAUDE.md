@@ -172,10 +172,10 @@ own: if you see a risk, **state the risk**, then do what was asked.
 | Location | Contents |
 |---|---|
 | `rules/critical/` | **11 rules**, always loaded (below). Each names an enforcing hook |
-| `hooks/` | **20 hooks**: 13 rule hooks + 7 cross-cutting |
+| `hooks/` | **21 hooks**: 13 rule hooks + 8 cross-cutting |
 | `skills/` | Skills, lazily loaded by keyword |
 | `commands/` | Procedures invoked as `/command-name` |
-| `agents/` | **10 agents** — 5 build, 5 review. Entry point: `agents/ROUTING.md` |
+| `agents/` | **11 agents** — 5 build, 5 review, 1 theo dõi kho yêu cầu. Entry point: `agents/ROUTING.md` |
 | `logs/guard.jsonl` | Guard log — evidence the enforcement layer actually ran |
 
 **Brain invariants.** Every rule names at least one enforcing hook: a rule you cannot write a
