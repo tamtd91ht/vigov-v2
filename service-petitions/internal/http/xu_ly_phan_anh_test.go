@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/vihat/vigov/core/audit"
@@ -105,12 +106,24 @@ type xuLyPhieuGia struct {
 	// WHICH FACT is handed down and whether it is read from the right key.
 	quyenCaXa app.QuyenXuLyCaXa
 
+	// hanChe is the fact ALL FOUR write routes hand down: does the caller hold
+	// `feedback.restricted`? Recorded rather than acted on, for the same reason as quyenCaXa — which
+	// petitions it refuses is app.duocChamPhieuHanChe's and is proved over the real store.
+	hanChe app.QuyenXemHanChe
+
+	// linhVuc is the field of the petition this fake answers with. IT EXISTS FOR ONE CASE ONLY: the
+	// SECOND layer in traPhieu, which is unreachable while the use case refuses properly. Setting it
+	// to `can-bo` is how a test plays the fifth write route that forgot to hand the fact down.
+	linhVuc string
+
 	loi error
 }
 
-func (x *xuLyPhieuGia) ghi(ctx context.Context, viec, ma string, nguoi audit.Actor) {
+func (x *xuLyPhieuGia) ghi(ctx context.Context, viec, ma string, nguoi audit.Actor,
+	hanChe app.QuyenXemHanChe) {
+
 	x.goi++
-	x.viec, x.maDa, x.nguoi = viec, ma, nguoi
+	x.viec, x.maDa, x.nguoi, x.hanChe = viec, ma, nguoi, hanChe
 	x.xa = tenant.MustFrom(ctx)
 }
 
@@ -118,10 +131,14 @@ func (x *xuLyPhieuGia) tra() (domain.PhieuPhanAnh, error) {
 	if x.loi != nil {
 		return domain.PhieuPhanAnh{}, x.loi
 	}
+	linhVuc := x.linhVuc
+	if linhVuc == "" {
+		linhVuc = "rac-thai"
+	}
 	return domain.PhieuPhanAnh{
 		MaTraCuu: maPhieuThuong, Kenh: domain.KenhZaloMiniApp, CongDanID: "cd-001",
 		NoiDung: "Đống rác ở đầu ngõ đã ba ngày chưa ai dọn.",
-		LinhVuc: "rac-thai", TrangThai: domain.DangPhanLoai,
+		LinhVuc: linhVuc, TrangThai: domain.DangPhanLoai,
 		// ASSIGNED TO THE OFFICER THE FIXTURE PRINCIPAL IS, by the BUSINESS CODE the column holds
 		// (rule 6, invariant 8). The holding-rule cases below read as what they claim to be only if
 		// this petition really is the one that officer was handed.
@@ -132,33 +149,33 @@ func (x *xuLyPhieuGia) tra() (domain.PhieuPhanAnh, error) {
 }
 
 func (x *xuLyPhieuGia) ChotLinhVuc(ctx context.Context, ma string, yc app.YeuCauChotLinhVuc,
-	nguoi audit.Actor) (domain.PhieuPhanAnh, error) {
+	nguoi audit.Actor, hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
-	x.ghi(ctx, "phan-loai", ma, nguoi)
+	x.ghi(ctx, "phan-loai", ma, nguoi, hanChe)
 	x.ycLinhVuc = yc
 	return x.tra()
 }
 
 func (x *xuLyPhieuGia) PhanCong(ctx context.Context, ma string, yc app.YeuCauPhanCong,
-	nguoi audit.Actor) (domain.PhieuPhanAnh, error) {
+	nguoi audit.Actor, hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
-	x.ghi(ctx, "phan-cong", ma, nguoi)
+	x.ghi(ctx, "phan-cong", ma, nguoi, hanChe)
 	x.ycPhanCong = yc
 	return x.tra()
 }
 
 func (x *xuLyPhieuGia) TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor,
-	quyen app.QuyenXuLyCaXa) (domain.PhieuPhanAnh, error) {
+	quyen app.QuyenXuLyCaXa, hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
-	x.ghi(ctx, "tien", ma, nguoi)
+	x.ghi(ctx, "tien", ma, nguoi, hanChe)
 	x.quyenCaXa = quyen
 	return x.tra()
 }
 
-func (x *xuLyPhieuGia) Dong(ctx context.Context, ma, ketQua string, nguoi audit.Actor) (
-	domain.PhieuPhanAnh, error) {
+func (x *xuLyPhieuGia) Dong(ctx context.Context, ma, ketQua string, nguoi audit.Actor,
+	hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
-	x.ghi(ctx, "dong", ma, nguoi)
+	x.ghi(ctx, "dong", ma, nguoi, hanChe)
 	x.ketQua = ketQua
 	return x.tra()
 }
@@ -525,6 +542,171 @@ func TestTienTrangThaiKhongPhaiNguoiDuocGiaoThi403(t *testing.T) {
 	doiMa(t, w, http.StatusForbidden)
 	if loiTra(t, w).Code != "forbidden" {
 		t.Errorf("mã lỗi = %q, muốn forbidden", loiTra(t, w).Code)
+	}
+}
+
+// --- the restricted field on the FOUR WRITE ROUTES ---------------------------------------------------
+//
+// The leak these close was measured on 2026-09-23: both READ paths refused a caller without
+// `feedback.restricted`, all four WRITE paths asked nothing, and all four return the whole petition on
+// success — so one POST read a report about a member of staff out to a colleague of that person.
+//
+// WHICH HALF LIVES WHERE. The refusal itself is app.duocChamPhieuHanChe's, inside the transaction, and
+// is proved over the real store in internal/app — including that it writes nothing. What only this
+// layer can prove, and what would be silently wrong if nobody did: the fact handed down is read from
+// `feedback.restricted` and from no neighbouring key, the refusal becomes a 404 and not a 403, and the
+// response body carries nothing about the petition.
+
+// tuyenGhi is the four write routes as a case needs them: a path and the key that opens its gate.
+// DERIVED FROM caCacTuyen SO THE TWO CANNOT DRIFT — a route added there and forgotten here would
+// silently stop being covered by everything below.
+func tuyenGhi() []caTuyen {
+	var ra []caTuyen
+	for _, ca := range caCacTuyen() {
+		if ca.method == http.MethodPost {
+			ra = append(ra, ca)
+		}
+	}
+	return ra
+}
+
+// TestBonTuyenGhiTruyenXuongSuThatVeQuyenHanChe — the handler answers ONE question and hands the
+// answer down. Both directions are asserted, because a `true` that never varies and a `false` that
+// never varies are both wrong and both look right in half the suite.
+func TestBonTuyenGhiTruyenXuongSuThatVeQuyenHanChe(t *testing.T) {
+	for _, ca := range tuyenGhi() {
+		t.Run(ca.ten+"/không có quyền hạn chế", func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, ca.khoa)
+
+			w := m.goiThan(t, ca.method, hostA, ca.duong, canBoCuaXa(xaA), ca.than)
+
+			doiMa(t, w, http.StatusOK)
+			if m.xuLy.hanChe {
+				t.Error("tuyến báo xuống là CÓ quyền xem lĩnh vực hạn chế dù tài khoản không có " +
+					"feedback.restricted — một `true` ở đây mở đơn tố cáo cán bộ cho chính đồng nghiệp họ")
+			}
+		})
+		t.Run(ca.ten+"/có quyền hạn chế", func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, ca.khoa, QuyenHanChe)
+
+			w := m.goiThan(t, ca.method, hostA, ca.duong, canBoCuaXa(xaA), ca.than)
+
+			doiMa(t, w, http.StatusOK)
+			if !m.xuLy.hanChe {
+				t.Error("tuyến báo xuống là KHÔNG có quyền dù tài khoản có feedback.restricted — " +
+					"quyền cấp ra mà không mở gì là một ô tích không làm gì trong màn Phân quyền")
+			}
+		})
+	}
+}
+
+// TestBonTuyenGhiKhongDocTuKhoaQuyenLangGieng — the fact must come from `feedback.restricted` and from
+// nothing that merely sits beside it in the same group (rule 5, invariant 3b: these rights are not a
+// Cartesian product).
+//
+// WITHOUT THIS CASE a handler reading `feedback.resolve` would pass every other test here: the closing
+// route's own gate is that key, so the flag would read `true` on exactly the route where the tests
+// grant it.
+func TestBonTuyenGhiKhongDocTuKhoaQuyenLangGieng(t *testing.T) {
+	for _, khoa := range []authz.Perm{"feedback.resolve", "feedback.assign", "feedback.classify",
+		"feedback.unmask"} {
+		for _, ca := range tuyenGhi() {
+			t.Run(ca.ten+"/"+string(khoa), func(t *testing.T) {
+				m := dungMayChu(t)
+				m.capQuyen(t, ca.khoa, khoa)
+
+				w := m.goiThan(t, ca.method, hostA, ca.duong, canBoCuaXa(xaA), ca.than)
+
+				doiMa(t, w, http.StatusOK)
+				if m.xuLy.hanChe {
+					t.Errorf("khoá %q mở lĩnh vực hạn chế — nó không phải feedback.restricted", khoa)
+				}
+			})
+		}
+	}
+}
+
+// TestBonTuyenGhiPhieuHanCheThi404ChuKhongPhai403 is the status-code half, and it is the assertion the
+// whole shape turns on.
+//
+// A 403 HERE WOULD CONFIRM THAT A REPORT ABOUT A MEMBER OF STAFF EXISTS UNDER THIS CODE, to a
+// colleague of that person, and the existence of such a report is precisely what the restriction
+// protects. It is the same sentence Handler.khongTimThay already says for the read route — four causes,
+// one answer — and this is the fifth cause folded in.
+//
+// THE BODY IS ASSERTED TOO, AND NOT AS AN EXTRA: a 404 whose body names the field, quotes the petition
+// or spells `can-bo` would leak through the very response that was supposed to say nothing.
+//
+// ĐỘT BIẾN: đổi 404 thành 403 ở nhánh ErrPhieuHanChe trong traLoiLoiXuLy và ca này ĐỎ.
+func TestBonTuyenGhiPhieuHanCheThi404ChuKhongPhai403(t *testing.T) {
+	for _, ca := range tuyenGhi() {
+		t.Run(ca.ten, func(t *testing.T) {
+			m := dungMayChu(t)
+			// The account holds this route's key and NOT `feedback.restricted` — the account the leak
+			// was measured on.
+			m.capQuyen(t, ca.khoa)
+			m.xuLy.loi = app.ErrPhieuHanChe
+
+			w := m.goiThan(t, ca.method, hostA, ca.duong, canBoCuaXa(xaA), ca.than)
+
+			doiMa(t, w, http.StatusNotFound)
+			if e := loiTra(t, w); e.Code != "not_found" {
+				t.Errorf("mã lỗi = %q, muốn not_found — khác với mã một phiếu không tồn tại trả về là "+
+					"phân biệt được hai nguyên nhân", e.Code)
+			}
+			than := w.Body.String()
+			for _, cam := range []string{domain.LinhVucHanChe, "cán bộ tiếp dân", "tác phong",
+				"Đống rác", "0900000000", "hạn chế"} {
+				if strings.Contains(strings.ToLower(than), strings.ToLower(cam)) {
+					t.Errorf("thân phản hồi 404 mang %q: %s", cam, than)
+				}
+			}
+		})
+	}
+}
+
+// TestTraPhieuLopThuHaiChePhieuHanChe exercises the SECOND layer, in Handler.traPhieu.
+//
+// It is unreachable through the four routes today — the use case refuses first — so the only way to
+// reach it is what this case does: a use case that ANSWERS SUCCESSFULLY with a `can-bo` petition,
+// which is precisely what a fifth write route written next year would produce if it forgot to hand
+// the permission down.
+//
+// WHAT IT PROVES AND WHAT IT DOES NOT. It proves the record is withheld. It does NOT prove the act was
+// refused — by this point the write has committed — and that limit is stated on traPhieu rather than
+// implied here.
+//
+// ĐỘT BIẾN: xoá phép kiểm ở đầu traPhieu và ca này ĐỎ.
+func TestTraPhieuLopThuHaiChePhieuHanChe(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.classify"))
+	m.xuLy.linhVuc = domain.LinhVucHanChe
+
+	w := m.goiThan(t, http.MethodPost, hostA, duongPhanLoai(maPhieuThuong), canBoCuaXa(xaA),
+		phanLoaiVao{Field: domain.LinhVucHanChe})
+
+	doiMa(t, w, http.StatusNotFound)
+	if strings.Contains(w.Body.String(), domain.LinhVucHanChe) {
+		t.Errorf("thân phản hồi mang lĩnh vực hạn chế: %s", w.Body.String())
+	}
+}
+
+// TestTraPhieuCoQuyenHanCheThiVanTraPhieu is the other half, and without it the case above would pass
+// against a handler that answered 404 to EVERY `can-bo` petition — including for the officer whose key
+// exists to open them.
+func TestTraPhieuCoQuyenHanCheThiVanTraPhieu(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.classify"), QuyenHanChe)
+	m.xuLy.linhVuc = domain.LinhVucHanChe
+
+	w := m.goiThan(t, http.MethodPost, hostA, duongPhanLoai(maPhieuThuong), canBoCuaXa(xaA),
+		phanLoaiVao{Field: domain.LinhVucHanChe})
+
+	doiMa(t, w, http.StatusOK)
+	if ra := docPhieu(t, w.Body.Bytes()); ra.Field != domain.LinhVucHanChe {
+		t.Errorf("lĩnh vực = %q, muốn %q", ra.Field, domain.LinhVucHanChe)
 	}
 }
 

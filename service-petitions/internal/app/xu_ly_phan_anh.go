@@ -211,6 +211,72 @@ func duocTienTrangThai(p domain.PhieuPhanAnh, nguoi audit.Actor, quyen QuyenXuLy
 	return nil
 }
 
+// --- the restricted field: a report ABOUT a member of staff ---------------------------------------
+
+// QuyenXemHanChe is the answer to ONE question, asked at the edge and carried down as a FACT rather
+// than as a decision: does this principal hold `feedback.restricted`, the key that opens the field
+// `can-bo` — "Thái độ / tác phong cán bộ", which is a report ABOUT a member of staff?
+//
+// IT IS A NAMED TYPE AND NOT A BARE bool, for the same reason QuyenXuLyCaXa is one: a bare bool at a
+// call site reads as nothing at all, and the wrong literal there opens precisely what this
+// restriction protects — the ordinary readers of this register are the COLLEAGUES of the person
+// being reported on.
+//
+// THE DECISION IS NOT MADE WHERE THIS VALUE IS PRODUCED. The handler may only answer "does this
+// account hold the key"; whether the act is allowed is duocChamPhieuHanChe's, below.
+type QuyenXemHanChe bool
+
+// ErrPhieuHanChe refuses a staff act on a petition in `can-bo` by somebody without
+// `feedback.restricted`.
+//
+// # WHY THE ACT IS REFUSED AND NOT MERELY THE RESPONSE BODY
+//
+// Withholding the reply would leave the thing that actually matters untouched: a colleague of the
+// person being reported on would still be CLASSIFYING, ASSIGNING, ADVANCING and CLOSING the
+// complaint about them. The READ path has refused such a caller since it was written
+// (internal/http/phieu_phan_anh.go, and the list excludes them inside the WHERE clause); the four
+// WRITE paths did not, so one successful POST returned the whole record to an account holding
+// `feedback.resolve` and nothing else.
+//
+// # IT BECOMES A 404 AND NOT A 403 — the same sentence the read path already says
+//
+// A 403 here would confirm that a report about a member of staff exists under this code, TO A
+// COLLEAGUE OF THAT PERSON, and the existence of such a report is exactly what the restriction
+// protects. Fail closed, and answer the same thing an unknown code answers. The mapping lives at
+// internal/http.traLoiLoiXuLy, beside the other refusals.
+//
+// ⚠ THE CONSEQUENCE, STATED RATHER THAN BURIED: in a commune where NOBODY holds
+// `feedback.restricted`, a `can-bo` petition can be processed by nobody at all. That is fail closed
+// and it is the right direction — it has been true of the READ path from the first day (no such
+// account can list one or open one), and the alternative is a petition somebody may act on but
+// nobody may read. It is a configuration finding for the commune, not a defect to patch out here.
+var ErrPhieuHanChe = errors.New(
+	"xu_ly_phan_anh: phiếu thuộc lĩnh vực hạn chế và người thực hiện không có quyền xem lĩnh vực đó")
+
+// duocChamPhieuHanChe decides it, on the row that was just read.
+//
+// CALLED INSIDE THE TRANSACTION, ON THE LOCKED ROW, for the reason duocTienTrangThai gives and one
+// more of its own: the field is a property of the row, so it is knowable only after the read, and a
+// classification racing this act can make a petition restricted in exactly the window between an
+// unlocked read and the UPDATE. Refusing here writes NOTHING — no UPDATE, no audit entry, no outbox
+// row — and the transaction rolls back empty.
+//
+// IT COMPARES THE FIELD THE ROW HOLDS, which is the same value the read path compares
+// (internal/http/phieu_phan_anh.go) — one rule, one source, and the write path following the read
+// path rather than the other way round.
+//
+// ⚠ WHAT IT DELIBERATELY DOES NOT LOOK AT: the field an officer is SETTING in this request.
+// Classifying a petition INTO `can-bo` discloses nothing — the row was readable to that officer a
+// moment earlier, unrestricted — and refusing it would mean nobody but a holder of the key could
+// ever mark a report as being about a colleague. Whether that act should itself need the key is the
+// owner's call and is raised as a finding, not decided here.
+func duocChamPhieuHanChe(p domain.PhieuPhanAnh, quyen QuyenXemHanChe) error {
+	if p.LinhVuc == domain.LinhVucHanChe && !quyen {
+		return ErrPhieuHanChe
+	}
+	return nil
+}
+
 // ErrChuaAnDinhDuocHanXuLy means the commune's resolve commitment could not be established, so the
 // petition was NOT classified.
 //
@@ -315,7 +381,7 @@ func (uc *XuLyPhanAnh) nayHoac() time.Time {
 // and `han_phan_loai` likewise. Asking for the acknowledge clock here would produce a second answer
 // to a question already answered — and stored.
 func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChotLinhVuc,
-	nguoi audit.Actor) (domain.PhieuPhanAnh, error) {
+	nguoi audit.Actor, hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
 	linhVuc, err := domain.KiemLinhVuc(yc.LinhVuc)
 	if err != nil {
@@ -331,6 +397,23 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 	if err != nil {
 		return domain.PhieuPhanAnh{}, bocPhieu(ctx, "phân loại", err)
 	}
+
+	// THE RESTRICTED FIELD, BEFORE THE LIFECYCLE CHECK AND BEFORE IDENTITY IS ASKED — and the ORDER
+	// is the correctness here, not the check. The refusal below this line is a 409 saying "this
+	// petition has already moved", which is a statement ABOUT THE RECORD: answering it to somebody
+	// who may not touch the record at all confirms that a report about a member of staff exists under
+	// this code. The same argument TienTrangThai makes for putting the holding rule before its
+	// lifecycle check.
+	//
+	// It also keeps a refused act off identity's RPC, which is the lesser reason and is why it is
+	// second in this comment.
+	//
+	// THIS IS NOT THE CHECK THAT DECIDES. The row was read WITHOUT the lock, so it may already be
+	// stale; the one that decides is inside the transaction, below, on the locked row.
+	if err := duocChamPhieuHanChe(truoc, hanChe); err != nil {
+		return domain.PhieuPhanAnh{}, bocPhieu(ctx, "phân loại", err)
+	}
+
 	if !truoc.TrangThai.ChuyenSangDuoc(domain.DangPhanLoai) {
 		// The petition has already been read by somebody, or it has gone down a branch. Re-settling
 		// the field AFTER the first time is a different act — ADR 0027 decision C makes the deadline
@@ -349,6 +432,12 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		p, err := uc.kho.TheoMaTraCuuDeSua(ctx, tx, ma)
 		if err != nil {
+			return err
+		}
+		// THE CHECK THAT DECIDES, on the locked row. The unlocked one above refuses early and asks
+		// identity nothing; this one is the one that cannot be raced, because between the two reads
+		// another officer can classify the petition INTO `can-bo`.
+		if err := duocChamPhieuHanChe(p, hanChe); err != nil {
 			return err
 		}
 		if !p.TrangThai.ChuyenSangDuoc(domain.DangPhanLoai) {
@@ -449,7 +538,7 @@ func (uc *XuLyPhanAnh) hanXuLyXong(ctx context.Context, linhVuc string, gocDemHa
 // WHETHER IT MOVES THE STATUS depends on where the petition is — see domain.SauKhiPhanCong, which
 // carries the reasoning and the ⚠ about reconciling §8.5 with ADR 0027's map.
 func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCong,
-	nguoi audit.Actor) (domain.PhieuPhanAnh, error) {
+	nguoi audit.Actor, hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
 	boPhan, canBo, err := domain.KiemPhanCong(yc.BoPhan, yc.CanBo)
 	if err != nil {
@@ -465,6 +554,13 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		p, err := uc.kho.TheoMaTraCuuDeSua(ctx, tx, ma)
 		if err != nil {
+			return err
+		}
+		// BEFORE THE LIFECYCLE CHECK. Handing a report about a member of staff to a department is the
+		// act that decides who reads it next, and a caller who may not see the petition may not decide
+		// that. Refusing first also keeps the answer identical to an unknown code — a 409 about the
+		// state would say the record exists.
+		if err := duocChamPhieuHanChe(p, hanChe); err != nil {
 			return err
 		}
 		sangTrangThai, err := domain.SauKhiPhanCong(p.TrangThai)
@@ -553,7 +649,7 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 // authorisation decision made against nothing. Refusing here writes no business row, no audit entry
 // and no outbox row — the transaction rolls back with nothing in it.
 func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor,
-	quyen QuyenXuLyCaXa) (domain.PhieuPhanAnh, error) {
+	quyen QuyenXuLyCaXa, hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
 	if err := coCanBoThucHien(nguoi); err != nil {
 		return domain.PhieuPhanAnh{}, err
@@ -565,6 +661,17 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		p, err := uc.kho.TheoMaTraCuuDeSua(ctx, tx, ma)
 		if err != nil {
+			return err
+		}
+
+		// THE RESTRICTED FIELD BEFORE THE HOLDING RULE, AND BOTH BEFORE THE LIFECYCLE CHECK.
+		//
+		// This order is not arbitrary: the two refusals answer differently (404 for the field, 403 for
+		// the holding rule), and the weaker disclosure has to win. Somebody who is the named assignee
+		// of a `can-bo` petition but holds no `feedback.restricted` must be told the same thing an
+		// unknown code is told — a 403 would say "there IS a report here about a colleague, you simply
+		// may not move it".
+		if err := duocChamPhieuHanChe(p, hanChe); err != nil {
 			return err
 		}
 
@@ -638,7 +745,10 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit
 
 // Dong closes the petition, recording a result the CITIZEN can read. Permission: `feedback.resolve`.
 //
-// ⚠ IT TAKES NO QuyenXuLyCaXa AND MUST NOT GROW ONE. The holding rule of 2026-09-23 widened the
+// ⚠ IT TAKES NO QuyenXuLyCaXa AND MUST NOT GROW ONE — and the QuyenXemHanChe it DOES take is not
+// that parameter wearing another name. The two facts pull in opposite directions: QuyenXuLyCaXa can
+// only ever WIDEN who may act, while QuyenXemHanChe can only ever NARROW it, and no value of it lets
+// anybody close anything they could not close before. The holding rule of 2026-09-23 widened the
 // WORKING path (TienTrangThai) and deliberately left this one alone: closing is what open question #7
 // settled on 2026-09-16 — "`feedback.resolve` quyết định ai đóng được" — and the other repository's
 // five lowered routes are all working routes, none of them the closing. The absence of the parameter
@@ -658,8 +768,8 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit
 // this act cannot check it. Writing a hardcoded TRUE would block every closing in every commune on a
 // table that does not exist; writing FALSE would silently drop a rule the customer stated. Neither is
 // chosen — it is reported as the gap it is.
-func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi audit.Actor) (
-	domain.PhieuPhanAnh, error) {
+func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi audit.Actor,
+	hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
 	ketQua, err := domain.KiemKetQua(ketQuaTho)
 	if err != nil {
@@ -675,6 +785,13 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi aud
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		p, err := uc.kho.TheoMaTraCuuDeSua(ctx, tx, ma)
 		if err != nil {
+			return err
+		}
+		// THE HEAVIEST OF THE FOUR TO GET WRONG, which is why the check is here as well and not only
+		// on the three acts above: closing is what records the RESULT A CITIZEN READS (rule 10,
+		// invariant 6) and ends the matter. A colleague of the person being reported on writing the
+		// final word on a complaint about them is the whole reason `feedback.restricted` exists.
+		if err := duocChamPhieuHanChe(p, hanChe); err != nil {
 			return err
 		}
 		if err := domain.DongDuoc(p.TrangThai); err != nil {

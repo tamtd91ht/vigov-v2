@@ -127,17 +127,25 @@ type (
 	//
 	// THE PERMISSIONS ARE NOT IN THE INTERFACE, deliberately: they are declared per route below, at
 	// the one place rbac_guard and tools/apidoc both read.
+	//
+	// ALL FOUR TAKE app.QuyenXemHanChe, AND THE UNIFORMITY IS THE DEFENCE. It is the caller's answer
+	// to "does this account hold `feedback.restricted`", and the use case refuses the ACT on a
+	// petition in `can-bo` when it is false (app.duocChamPhieuHanChe). A method here without that
+	// parameter would be a write path that cannot refuse — which is exactly what all four were until
+	// 2026-09-23, while the two READ paths had refused from the day they were written.
 	XuLyPhieuPhanAnh interface {
-		ChotLinhVuc(ctx context.Context, ma string, yc app.YeuCauChotLinhVuc, nguoi audit.Actor) (
-			domain.PhieuPhanAnh, error)
-		PhanCong(ctx context.Context, ma string, yc app.YeuCauPhanCong, nguoi audit.Actor) (
-			domain.PhieuPhanAnh, error)
+		ChotLinhVuc(ctx context.Context, ma string, yc app.YeuCauChotLinhVuc, nguoi audit.Actor,
+			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
+		PhanCong(ctx context.Context, ma string, yc app.YeuCauPhanCong, nguoi audit.Actor,
+			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
 		// TienTrangThai TAKES THE COMMUNE-WIDE RIGHT AS AN ARGUMENT AND Dong DOES NOT — see
 		// app.QuyenXuLyCaXa. The holding rule of 2026-09-23 widened the WORKING path only, and the
 		// asymmetry in this interface is what makes the closing path impossible to widen by accident.
-		TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor, quyen app.QuyenXuLyCaXa) (
-			domain.PhieuPhanAnh, error)
-		Dong(ctx context.Context, ma, ketQua string, nguoi audit.Actor) (domain.PhieuPhanAnh, error)
+		// The restricted fact beside it is a DIFFERENT KIND of argument: it can only ever narrow.
+		TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor, quyen app.QuyenXuLyCaXa,
+			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
+		Dong(ctx context.Context, ma, ketQua string, nguoi audit.Actor,
+			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
 	}
 )
 
@@ -442,6 +450,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	// assign it, move it or close it. Every petition that arrived stayed where it landed, with a
 	// deadline running and a person watching. The reasoning for each route, its URL noun and the two
 	// findings raised for open question #27 are on internal/http/xu_ly_phan_anh.go.
+	//
+	// ONE THING IS TRUE OF ALL FOUR WRITE ROUTES AND IS SAID HERE ONCE (rule 9, invariant 2): a
+	// petition in the field `can-bo` — a report ABOUT a member of staff — is refused to a caller
+	// without `feedback.restricted`, and the answer is the 404 each block already declares, identical
+	// to an unknown code. THE ACT IS REFUSED, not merely the body: nothing is written, no audit entry
+	// is filed and no event is recorded. The decision is app.duocChamPhieuHanChe's, inside the
+	// transaction; the route permissions below are unchanged and no key was added.
 
 	// @summary  Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn
 	// @screen   09-phan-anh-nguoi-dan §2, §4

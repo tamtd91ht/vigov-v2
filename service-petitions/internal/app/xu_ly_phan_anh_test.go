@@ -44,7 +44,7 @@ func TestChotLinhVucHoiDungCauHoi(t *testing.T) {
 	k, han := khoPhieuMau(), hanXuLyThu()
 	uc, ctx := dungXuLy(t, k, han)
 
-	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "an-ninh"}, canBoThu()); err != nil {
+	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "an-ninh"}, canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("ChotLinhVuc: %v", err)
 	}
 
@@ -80,7 +80,7 @@ func TestChotLinhVucHoiHanTruocKhiMoGiaoDich(t *testing.T) {
 	k, han := khoPhieuMau(), hanXuLyThu()
 	uc, ctx := dungXuLy(t, k, han)
 
-	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu()); err != nil {
+	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("ChotLinhVuc: %v", err)
 	}
 
@@ -108,7 +108,7 @@ func TestChotLinhVucLuuDungHanIdentityTra(t *testing.T) {
 	k, han := khoPhieuMau(), hanXuLyThu()
 	uc, ctx := dungXuLy(t, k, han)
 
-	sau, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu())
+	sau, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu(), khongQuyenHanChe)
 	if err != nil {
 		t.Fatalf("ChotLinhVuc: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestChotLinhVucKhongCauHinhSLAThiKhongGhiGi(t *testing.T) {
 	han.loi = errors.New("FailedPrecondition: xã chưa cấu hình bảng thời hạn xử lý")
 	uc, ctx := dungXuLy(t, k, han)
 
-	_, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu())
+	_, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu(), khongQuyenHanChe)
 	if !errors.Is(err, ErrChuaAnDinhDuocHanXuLy) {
 		t.Fatalf("lỗi = %v, muốn ErrChuaAnDinhDuocHanXuLy", err)
 	}
@@ -176,7 +176,7 @@ func TestChotLinhVucLinhVucRongThiTuChoiTruocMoiThu(t *testing.T) {
 			k, han := khoPhieuMau(), hanXuLyThu()
 			uc, ctx := dungXuLy(t, k, han)
 
-			if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: vao}, canBoThu()); err == nil {
+			if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: vao}, canBoThu(), khongQuyenHanChe); err == nil {
 				t.Fatal("chấp nhận một mã lĩnh vực không hợp lệ")
 			}
 			if han.goi != 0 || len(k.lenh) != 0 {
@@ -199,7 +199,7 @@ func TestChotLinhVucGhiBaThuTrongCUNGMotGiaoDich(t *testing.T) {
 	k, han := khoPhieuMau(), hanXuLyThu()
 	uc, ctx := dungXuLy(t, k, han)
 
-	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu()); err != nil {
+	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("ChotLinhVuc: %v", err)
 	}
 
@@ -229,7 +229,7 @@ func TestChotLinhVucSuKienHongThiKhongCoGiDuoc(t *testing.T) {
 	k.loiSau = "INSERT INTO su_kien_di"
 	uc, ctx := dungXuLy(t, k, han)
 
-	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu()); err == nil {
+	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu(), khongQuyenHanChe); err == nil {
 		t.Fatal("ChotLinhVuc thành công dù dòng sự kiện hỏng")
 	}
 	if k.daCommit != 0 || k.daRollback != 1 {
@@ -244,7 +244,7 @@ func TestChotLinhVucVetMangMaCanBo(t *testing.T) {
 	k, han := khoPhieuMau(), hanXuLyThu()
 	uc, ctx := dungXuLy(t, k, han)
 
-	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu()); err != nil {
+	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("ChotLinhVuc: %v", err)
 	}
 	vet := k.cau("INSERT INTO audit_log")[0]
@@ -275,7 +275,7 @@ func TestChotLinhVucThieuMaCanBoThiTuChoi(t *testing.T) {
 			uc, ctx := dungXuLy(t, k, han)
 
 			if _, err := uc.ChotLinhVuc(ctx, maPhieuThu,
-				YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, nguoi); err == nil {
+				YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, nguoi, khongQuyenHanChe); err == nil {
 				t.Fatal("ghi được dù vết không gọi tên được người làm")
 			}
 			if len(k.lenh) != 0 {
@@ -389,7 +389,7 @@ func TestTienTrangThaiGhiSuKienVaLoiNhan(t *testing.T) {
 	})
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	sau, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), coQuyenCaXa)
+	sau, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), coQuyenCaXa, khongQuyenHanChe)
 	if err != nil {
 		t.Fatalf("TienTrangThai: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestPhanLoaiKhongGuiLoiNhanChoDan(t *testing.T) {
 	k, han := khoPhieuMau(), hanXuLyThu()
 	uc, ctx := dungXuLy(t, k, han)
 
-	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu()); err != nil {
+	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("ChotLinhVuc: %v", err)
 	}
 	than := thanSuKien(t, k.cau("INSERT INTO su_kien_di")[0].args)
@@ -477,7 +477,7 @@ func TestDongPhieuKhongCoKetQuaThiTuChoiTruocMoiThu(t *testing.T) {
 			k.hang = dongPhieuMau(map[string]any{"trang_thai": string(domain.ChoDanXacNhan)})
 			uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-			if _, err := uc.Dong(ctx, maPhieuThu, ketQua, canBoThu()); err == nil {
+			if _, err := uc.Dong(ctx, maPhieuThu, ketQua, canBoThu(), khongQuyenHanChe); err == nil {
 				t.Fatal("đóng được phiếu mà người dân không đọc được gì")
 			}
 			if len(k.lenh) != 0 {
@@ -498,7 +498,7 @@ func TestDongPhieuGhiKetQuaVaBaoChoDan(t *testing.T) {
 	})
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	sau, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu())
+	sau, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe)
 	if err != nil {
 		t.Fatalf("Dong: %v", err)
 	}
@@ -548,7 +548,7 @@ func TestDongPhieuSaiBuocThiTuChoi(t *testing.T) {
 			k.hang = dongPhieuMau(map[string]any{"trang_thai": string(tt)})
 			uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-			if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu()); !errors.Is(err, domain.ErrDongSaiLuc) {
+			if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe); !errors.Is(err, domain.ErrDongSaiLuc) {
 				t.Fatalf("lỗi = %v, muốn ErrDongSaiLuc", err)
 			}
 			if k.coCau("UPDATE phieu_phan_anh") {
@@ -573,7 +573,7 @@ func TestPhanCongLanDauChuyenSangDaChuyenXuLy(t *testing.T) {
 	})
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	sau, err := uc.PhanCong(ctx, maPhieuThu, YeuCauPhanCong{BoPhan: "bp-001", CanBo: "CB-00999"}, canBoThu())
+	sau, err := uc.PhanCong(ctx, maPhieuThu, YeuCauPhanCong{BoPhan: "bp-001", CanBo: "CB-00999"}, canBoThu(), khongQuyenHanChe)
 	if err != nil {
 		t.Fatalf("PhanCong: %v", err)
 	}
@@ -596,7 +596,7 @@ func TestPhanCongLaiKhongDoiTrangThaiVaKhongPhatSuKien(t *testing.T) {
 	})
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	sau, err := uc.PhanCong(ctx, maPhieuThu, YeuCauPhanCong{BoPhan: "bp-002"}, canBoThu())
+	sau, err := uc.PhanCong(ctx, maPhieuThu, YeuCauPhanCong{BoPhan: "bp-002"}, canBoThu(), khongQuyenHanChe)
 	if err != nil {
 		t.Fatalf("PhanCong: %v", err)
 	}
@@ -619,7 +619,7 @@ func TestPhanCongChuaPhanLoaiThiTuChoi(t *testing.T) {
 	k := khoPhieuMau() // the fixture is `da-tiep-nhan`
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	if _, err := uc.PhanCong(ctx, maPhieuThu, YeuCauPhanCong{BoPhan: "bp-001"}, canBoThu()); !errors.Is(err, domain.ErrPhanCongSaiLuc) {
+	if _, err := uc.PhanCong(ctx, maPhieuThu, YeuCauPhanCong{BoPhan: "bp-001"}, canBoThu(), khongQuyenHanChe); !errors.Is(err, domain.ErrPhanCongSaiLuc) {
 		t.Fatalf("lỗi = %v, muốn ErrPhanCongSaiLuc", err)
 	}
 	if k.coCau("UPDATE phieu_phan_anh") {
@@ -636,7 +636,7 @@ func TestPhieuDaChuyenTrangThiTuChoiChuKhongGhiDe(t *testing.T) {
 	k.doiDong = 0 // the database saw the row move between the locking read and the write
 	uc, ctx := dungXuLy(t, k, han)
 
-	_, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu())
+	_, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu(), khongQuyenHanChe)
 	if !errors.Is(err, petstore.ErrPhieuDaChuyenTrang) {
 		t.Fatalf("lỗi = %v, muốn ErrPhieuDaChuyenTrang", err)
 	}
@@ -712,7 +712,7 @@ func TestTienTrangThaiBonOCuaLuatNamGiu(t *testing.T) {
 			k.hang = phieuDaGiaoCho(ca.giaoCho)
 			uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-			sau, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), ca.quyen)
+			sau, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), ca.quyen, khongQuyenHanChe)
 
 			if ca.tienDuoc {
 				if err != nil {
@@ -752,7 +752,8 @@ func TestTienTrangThaiSoBangMaCanBoChuKhongPhaiIdNoiBo(t *testing.T) {
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
 	_, err := uc.TienTrangThai(ctx, maPhieuThu,
-		audit.Actor{ID: idCanBoNoiBoThu, Kind: "staff", IP: "10.0.0.7"}, khongQuyenCaXa)
+		audit.Actor{ID: idCanBoNoiBoThu, Kind: "staff", IP: "10.0.0.7"}, khongQuyenCaXa,
+		khongQuyenHanChe)
 
 	if !errors.Is(err, ErrKhongPhaiNguoiDuocGiao) {
 		t.Fatalf("lỗi = %v, muốn ErrKhongPhaiNguoiDuocGiao — id nội bộ KHÔNG phải mã cán bộ, và hai "+
@@ -776,7 +777,7 @@ func TestTienTrangThaiPhieuChuaGiaoThiChuoiRongKhongKhopVoiAi(t *testing.T) {
 	// The actor carries a REAL business code — so what is being proved is that an UNASSIGNED petition
 	// matches nobody, not that an empty actor is refused (coCanBoThucHien already does that, and it is
 	// asserted separately).
-	_, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), khongQuyenCaXa)
+	_, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), khongQuyenCaXa, khongQuyenHanChe)
 	if !errors.Is(err, ErrKhongPhaiNguoiDuocGiao) {
 		t.Fatalf("lỗi = %v, muốn ErrKhongPhaiNguoiDuocGiao — phiếu chưa giao cho ai thì không khớp "+
 			"với ai", err)
@@ -800,11 +801,192 @@ func TestDongKhongNhanQuyenNguoiDuocGiao(t *testing.T) {
 	k.hang["trang_thai"] = string(domain.ChoDanXacNhan)
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	// FOUR ARGUMENTS, NOT FIVE. The assignment on the row above is irrelevant to this act by
-	// construction.
-	var dong func(context.Context, string, string, audit.Actor) (domain.PhieuPhanAnh, error) = uc.Dong
-	if _, err := dong(ctx, maPhieuThu, ketQuaThat, canBoThu()); err != nil {
+	// NO QuyenXuLyCaXa ANYWHERE IN THE SIGNATURE. The fifth argument is QuyenXemHanChe, which is the
+	// OPPOSITE kind of fact: it can only ever narrow who may close a petition, and no value of it
+	// lets an assignee without `feedback.resolve` close anything. Naming both types here is what makes
+	// this assertion survive a later parameter being added — it fails to compile if the one that
+	// WIDENS appears.
+	//
+	// The assignment on the row above is irrelevant to this act by construction.
+	var dong func(context.Context, string, string, audit.Actor, QuyenXemHanChe) (
+		domain.PhieuPhanAnh, error) = uc.Dong
+	if _, err := dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("Dong: %v", err)
+	}
+}
+
+// --- the restricted field: a report ABOUT a member of staff ------------------------------------------
+//
+// THE LEAK THIS CLOSES WAS MEASURED, NOT SUSPECTED. Both READ paths refused a caller without
+// `feedback.restricted` — the detail route answers 404 and the list excludes the rows inside the
+// WHERE clause — while all four WRITE paths asked nothing, and all four return the whole petition on
+// success. So one POST read out a report about a member of staff to a colleague of that person.
+//
+// WHAT IS PROVED BELOW is the harder half: the ACT is refused, not merely the body. A refusal writes
+// no UPDATE, files no audit entry, records no notification, and commits nothing.
+
+// The two values of QuyenXemHanChe, named so a case reads as the fact it is setting rather than as a
+// bare literal — the same reason coQuyenCaXa and khongQuyenCaXa are named above, and it matters more
+// here: the wrong literal at one call site opens exactly what this restriction protects.
+const (
+	coQuyenHanChe    QuyenXemHanChe = true
+	khongQuyenHanChe QuyenXemHanChe = false
+)
+
+// phieuLinhVuc is one petition at a chosen point of the lifecycle, in a chosen field.
+//
+// EVERY CASE BELOW RUNS THE SAME PETITION TWICE — once in `rac-thai`, once in `can-bo` — so the only
+// difference between "refused" and "allowed" is the field. A fixture that differed in anything else
+// would let a bug in the lifecycle checks pass as the restriction doing its job.
+func phieuLinhVuc(tt domain.TrangThai, linhVuc string) map[string]driver.Value {
+	return dongPhieuMau(map[string]any{
+		"trang_thai":      string(tt),
+		"linh_vuc":        linhVuc,
+		"han_xu_ly_xong":  mocXuLyXongThu,
+		"phan_loai_luc":   mocThaoTac,
+		"bo_phan_id":      "bp-001",
+		"can_bo_xu_ly_id": maCanBoThu,
+	})
+}
+
+// hanhViPhieu is one of the four staff acts, with the status its fixture must start from.
+//
+// `quyenCaXa` IS TRUE ON THE ADVANCE ACT ON PURPOSE. The caller of that act therefore holds
+// `feedback.resolve`, the commune-wide right to work on ANY petition — the widest account this
+// service has — and is STILL refused on a `can-bo` petition. Anything narrower would leave the
+// question "does the commune-wide right also open the restricted field" unanswered, and that is the
+// account most likely to be used on this route.
+type hanhViPhieu struct {
+	trangThai domain.TrangThai
+	chay      func(uc *XuLyPhanAnh, ctx context.Context, hanChe QuyenXemHanChe) error
+}
+
+func bonHanhVi() map[string]hanhViPhieu {
+	return map[string]hanhViPhieu{
+		"phân loại": {domain.DaTiepNhan, func(uc *XuLyPhanAnh, ctx context.Context, q QuyenXemHanChe) error {
+			// THE FIELD BEING SETTLED IS `rac-thai`, WHICH IS THE INTERESTING DIRECTION: re-filing a
+			// report about a member of staff under an ordinary field would make it visible to the whole
+			// register. The refusal reads the field the ROW holds, not the one the request names.
+			_, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu(), q)
+			return err
+		}},
+		"phân công": {domain.DangPhanLoai, func(uc *XuLyPhanAnh, ctx context.Context, q QuyenXemHanChe) error {
+			_, err := uc.PhanCong(ctx, maPhieuThu, YeuCauPhanCong{BoPhan: "bp-002"}, canBoThu(), q)
+			return err
+		}},
+		"chuyển trạng thái": {domain.DaChuyenXuLy, func(uc *XuLyPhanAnh, ctx context.Context, q QuyenXemHanChe) error {
+			_, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), coQuyenCaXa, q)
+			return err
+		}},
+		"đóng phiếu": {domain.ChoDanXacNhan, func(uc *XuLyPhanAnh, ctx context.Context, q QuyenXemHanChe) error {
+			_, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), q)
+			return err
+		}},
+	}
+}
+
+// TestBonHanhViVaLinhVucHanChe is the four-cell table, on all four acts — sixteen cases.
+//
+//	phiếu là `can-bo` | có feedback.restricted | mong đợi
+//	không             | không                  | như cũ        ← the negative half: a patch that
+//	không             | có                     | như cũ          locked the whole commune turns these red
+//	CÓ                | KHÔNG                  | TỪ CHỐI, KHÔNG GHI GÌ  ← the leak this closes
+//	có                | có                     | như cũ
+//
+// THE THIRD CELL ASSERTS THE COUNTS AND NOT ONLY THE ERROR. A refusal that had already written the
+// UPDATE and then rolled back would be correct today and would stop being correct the first time
+// somebody moved the check below a write — and no error-only assertion could tell the two apart.
+//
+// ĐỘT BIẾN: xoá lời gọi duocChamPhieuHanChe ở tầng app và ô thứ ba ĐỎ trên cả bốn hành vi.
+func TestBonHanhViVaLinhVucHanChe(t *testing.T) {
+	for tenHanhVi, hv := range bonHanhVi() {
+		for tenO, ca := range map[string]struct {
+			linhVuc string
+			quyen   QuyenXemHanChe
+			lamDuoc bool
+		}{
+			"lĩnh vực thường + không quyền hạn chế": {"rac-thai", khongQuyenHanChe, true},
+			"lĩnh vực thường + có quyền hạn chế":    {"rac-thai", coQuyenHanChe, true},
+			"LĨNH VỰC HẠN CHẾ + KHÔNG quyền":        {domain.LinhVucHanChe, khongQuyenHanChe, false},
+			"lĩnh vực hạn chế + có quyền":           {domain.LinhVucHanChe, coQuyenHanChe, true},
+		} {
+			t.Run(tenHanhVi+"/"+tenO, func(t *testing.T) {
+				k := khoPhieuMau()
+				k.hang = phieuLinhVuc(hv.trangThai, ca.linhVuc)
+				uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+				err := hv.chay(uc, ctx, ca.quyen)
+
+				if ca.lamDuoc {
+					if err != nil {
+						t.Fatalf("%s: %v — phép kiểm lĩnh vực hạn chế khoá cả những phiếu nó không "+
+							"được phép khoá, và một xã không xử lý được phiếu nào là hỏng nặng hơn "+
+							"cái nó vá", tenHanhVi, err)
+					}
+					return
+				}
+				if !errors.Is(err, ErrPhieuHanChe) {
+					t.Fatalf("lỗi = %v, muốn ErrPhieuHanChe — đồng nghiệp của người bị nêu tên đang "+
+						"xử lý chính đơn tố cáo về người ấy", err)
+				}
+				if k.coCau("UPDATE phieu_phan_anh") || k.coCau("INSERT INTO audit_log") ||
+					k.coCau("INSERT INTO su_kien_di") {
+					t.Error("đã ghi dù từ chối — từ chối phải KHÔNG ghi gì: không câu UPDATE, không " +
+						"vết kiểm toán, không sự kiện")
+				}
+				if k.daCommit != 0 {
+					t.Errorf("commit=%d, muốn 0", k.daCommit)
+				}
+			})
+		}
+	}
+}
+
+// TestPhanLoaiPhieuHanCheKhongHoiIdentity — the refusal happens BEFORE the gRPC call, and the ORDER
+// is what this case pins rather than the refusal itself.
+//
+// Two things ride on it. The lesser: a refused act must not become load on another service. The one
+// that matters: the check below the identity call is a 409 answering "xã chưa cấu hình thời hạn" —
+// the ORDINARY answer in every commune today — and that sentence is a statement about a record
+// existing under this code. Said to a colleague of the person being reported on, it is the
+// disclosure the 404 exists to prevent.
+func TestPhanLoaiPhieuHanCheKhongHoiIdentity(t *testing.T) {
+	k, han := khoPhieuMau(), hanXuLyThu()
+	k.hang = phieuLinhVuc(domain.DaTiepNhan, domain.LinhVucHanChe)
+	uc, ctx := dungXuLy(t, k, han)
+
+	_, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"},
+		canBoThu(), khongQuyenHanChe)
+
+	if !errors.Is(err, ErrPhieuHanChe) {
+		t.Fatalf("lỗi = %v, muốn ErrPhieuHanChe", err)
+	}
+	if han.goi != 0 {
+		t.Errorf("hỏi identity %d lần dù sẽ từ chối", han.goi)
+	}
+	if k.batDau != 0 {
+		t.Errorf("mở %d giao dịch dù sẽ từ chối", k.batDau)
+	}
+}
+
+// TestTienTrangThaiPhieuHanCheTraLoiHanCheChuKhongPhaiKhongDuocGiao pins WHICH refusal wins when two
+// apply at once.
+//
+// The caller is neither the assignee nor a holder of the commune-wide right, AND the petition is
+// restricted. Both rules refuse — but they answer differently at the edge: ErrKhongPhaiNguoiDuocGiao
+// becomes a 403 that names the reason, ErrPhieuHanChe becomes a 404 identical to an unknown code.
+// The weaker disclosure has to win, or the restriction leaks through the more talkative refusal.
+func TestTienTrangThaiPhieuHanCheTraLoiHanCheChuKhongPhaiKhongDuocGiao(t *testing.T) {
+	k := khoPhieuMau()
+	k.hang = phieuLinhVuc(domain.DaChuyenXuLy, domain.LinhVucHanChe)
+	k.hang["can_bo_xu_ly_id"] = "CB-99999" // giao cho người khác
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+	_, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), khongQuyenCaXa, khongQuyenHanChe)
+
+	if !errors.Is(err, ErrPhieuHanChe) {
+		t.Fatalf("lỗi = %v, muốn ErrPhieuHanChe — 403 'phiếu không được giao cho bạn' xác nhận rằng "+
+			"CÓ một phiếu dưới mã này, nói với chính đồng nghiệp của người bị nêu tên", err)
 	}
 }
 
@@ -817,7 +999,7 @@ func TestXuLyTheoXaTrongContext(t *testing.T) {
 	k, han := khoPhieuMau(), hanXuLyThu()
 	uc, _ := dungXuLy(t, k, han)
 
-	if _, err := uc.ChotLinhVuc(ctxXa(xaKia), maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu()); err != nil {
+	if _, err := uc.ChotLinhVuc(ctxXa(xaKia), maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("ChotLinhVuc: %v", err)
 	}
 	for _, l := range k.lenh {
@@ -836,7 +1018,7 @@ func TestXuLyTheoXaTrongContext(t *testing.T) {
 func TestKhongUpdateNaoChamCotBatBien(t *testing.T) {
 	k, han := khoPhieuMau(), hanXuLyThu()
 	uc, ctx := dungXuLy(t, k, han)
-	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu()); err != nil {
+	if _, err := uc.ChotLinhVuc(ctx, maPhieuThu, YeuCauChotLinhVuc{LinhVuc: "rac-thai"}, canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("ChotLinhVuc: %v", err)
 	}
 

@@ -28,6 +28,17 @@ package http
 // settled on 2026-09-16: "`feedback.resolve` quyết định ai đóng được". The five routes the other
 // repository lowered are all WORKING routes; none of them is the closing.
 //
+// # THE RESTRICTED FIELD, ON ALL FOUR WRITE ROUTES SINCE 2026-09-23
+//
+// A petition in `can-bo` — a report ABOUT a member of staff — is refused to a caller without
+// `feedback.restricted`, AND THE ACT IS REFUSED, not just the response body: the real problem was a
+// colleague of the person being reported on classifying, assigning and CLOSING the complaint about
+// them. The refusal answers 404, identical to an unknown code, for the reason DocPhieuPhanAnh gives.
+//
+// Each of the four routes reads ONE fact here — `coQuyenHanChe` — and app.duocChamPhieuHanChe
+// decides, inside the transaction, on the locked row. THE ROUTE PERMISSIONS ABOVE ARE UNCHANGED, and
+// no key was added: `feedback.restricted` is seeded at service-identity/migrations/0001_init.sql:294.
+//
 // ⚠ STILL A FINDING, AND UNCHANGED BY THE ABOVE: the `quyen` table has no key meaning "move the work
 // along". Open question #27 is still the place that is answered, and inventing a key here would
 // produce a route that answers 403 to EVERY account forever while every test stayed green, because a
@@ -48,6 +59,7 @@ package http
 //	                 forbids.
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -74,6 +86,24 @@ import (
 // not inside authz.RequirePermission: tools/apidoc reads the ROUTE declarations and refuses anything
 // there that is not a string literal, which is why routes.go spells its keys out and this does not.
 const QuyenXuLyCaXa authz.Perm = "feedback.resolve"
+
+// coQuyenHanChe answers the ONE question the four write use cases ask about the caller: does this
+// account hold `feedback.restricted`, the key that opens the field `can-bo`?
+//
+// IT ANSWERS AND DECIDES NOTHING. Which petitions that fact refuses is app.duocChamPhieuHanChe's,
+// inside the transaction, on the row read under the lock — the field is a property of the ROW, and a
+// decision made here would be made against a row this layer has not read and cannot lock.
+//
+// FAIL CLOSED: no principal in the context means `false`, never `true`. There is always one behind
+// authz.RequirePermission, so this is a precondition rather than a case — but the safe value of a
+// permission fact is the one that grants nothing.
+func (h *Handler) coQuyenHanChe(ctx context.Context) app.QuyenXemHanChe {
+	principal, ok := authz.From(ctx)
+	if !ok {
+		return false
+	}
+	return app.QuyenXemHanChe(h.d.Checker.Allows(ctx, principal, QuyenHanChe))
+}
 
 // --- request bodies ---------------------------------------------------------------------------
 
@@ -160,9 +190,10 @@ func (h *Handler) DanhSachPhieu(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
 		return
 	}
-	if principal, ok := authz.From(ctx); ok {
-		loc.ChoPhepHanChe = h.d.Checker.Allows(ctx, principal, QuyenHanChe)
-	}
+	// THE SAME FACT THE FOUR WRITE ROUTES HAND DOWN, read through the same helper (rule 9,
+	// invariant 2). Two readings of one permission are two readings that can end up consulting two
+	// keys, and the one that would drift is whichever is edited second.
+	loc.ChoPhepHanChe = bool(h.coQuyenHanChe(ctx))
 
 	kq, err := h.d.DanhSachPhieu.DanhSach(ctx, loc, yc)
 	if err != nil {
@@ -275,6 +306,10 @@ var (
 
 // PhanLoaiPhieu settles the field and fixes the resolve deadline.
 // POST /api/v1/citizen-reports/{maTraCuu}/classification
+//
+// THE RESTRICTED FACT GOES DOWN WITH EVERY ONE OF THE FOUR ACTS, and this one is the act where its
+// absence bit hardest: without it, an account holding `feedback.classify` could re-file a report
+// about a member of staff under any other field and make it visible to the whole register.
 func (h *Handler) PhanLoaiPhieu(w http.ResponseWriter, r *http.Request) {
 	var vao phanLoaiVao
 	if !docThan(w, r, &vao) {
@@ -285,8 +320,9 @@ func (h *Handler) PhanLoaiPhieu(w http.ResponseWriter, r *http.Request) {
 		h.thieuChuTheXuLy(w, r)
 		return
 	}
-	sau, err := h.d.XuLyPhieu.ChotLinhVuc(r.Context(), r.PathValue("maTraCuu"),
-		app.YeuCauChotLinhVuc{LinhVuc: vao.Field}, nguoi)
+	ctx := r.Context()
+	sau, err := h.d.XuLyPhieu.ChotLinhVuc(ctx, r.PathValue("maTraCuu"),
+		app.YeuCauChotLinhVuc{LinhVuc: vao.Field}, nguoi, h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "phân loại", err)
 		return
@@ -306,8 +342,9 @@ func (h *Handler) PhanCongPhieu(w http.ResponseWriter, r *http.Request) {
 		h.thieuChuTheXuLy(w, r)
 		return
 	}
-	sau, err := h.d.XuLyPhieu.PhanCong(r.Context(), r.PathValue("maTraCuu"),
-		app.YeuCauPhanCong{BoPhan: vao.Unit, CanBo: vao.Assignee}, nguoi)
+	ctx := r.Context()
+	sau, err := h.d.XuLyPhieu.PhanCong(ctx, r.PathValue("maTraCuu"),
+		app.YeuCauPhanCong{BoPhan: vao.Unit, CanBo: vao.Assignee}, nguoi, h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "phân công", err)
 		return
@@ -346,7 +383,8 @@ func (h *Handler) TienTrangThaiPhieu(w http.ResponseWriter, r *http.Request) {
 	if principal, co := authz.From(ctx); co {
 		quyen = app.QuyenXuLyCaXa(h.d.Checker.Allows(ctx, principal, QuyenXuLyCaXa))
 	}
-	sau, err := h.d.XuLyPhieu.TienTrangThai(ctx, r.PathValue("maTraCuu"), nguoi, quyen)
+	sau, err := h.d.XuLyPhieu.TienTrangThai(ctx, r.PathValue("maTraCuu"), nguoi, quyen,
+		h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "chuyển trạng thái", err)
 		return
@@ -366,7 +404,9 @@ func (h *Handler) DongPhieu(w http.ResponseWriter, r *http.Request) {
 		h.thieuChuTheXuLy(w, r)
 		return
 	}
-	sau, err := h.d.XuLyPhieu.Dong(r.Context(), r.PathValue("maTraCuu"), vao.Result, nguoi)
+	ctx := r.Context()
+	sau, err := h.d.XuLyPhieu.Dong(ctx, r.PathValue("maTraCuu"), vao.Result, nguoi,
+		h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "đóng phiếu", err)
 		return
@@ -386,8 +426,28 @@ func (h *Handler) DongPhieu(w http.ResponseWriter, r *http.Request) {
 // citizen's details, and ADR 0030 attaches an audit entry to every exercise of it — a write route
 // returning them unmasked would be a disclosure with no entry, on a path nobody would think to look
 // at. An officer who needs the number opens the petition.
+//
+// # THE RESTRICTED FIELD IS CHECKED HERE TOO, AND THIS IS THE SECOND LAYER, NOT THE FIRST
+//
+// app.duocChamPhieuHanChe refuses the ACT, inside the transaction, on the locked row, so for the four
+// routes above this branch is unreachable today: a caller without `feedback.restricted` never gets a
+// petition back to render. It is written anyway because a FIFTH write route added next year can
+// forget to hand the fact down — and on that day this is the only thing left standing between a
+// report about a member of staff and one of that person's colleagues.
+//
+// WHAT IT CAN AND CANNOT DO, SAID PLAINLY RATHER THAN IMPLIED: it withholds the RECORD, not the act.
+// A route that forgot to pass the fact down has already committed its write by the time execution
+// reaches here. This is damage limitation and is never a substitute for the check in internal/app.
+//
+// IT ALSO FIRES ON ONE REAL PATH: an officer without the key who CLASSIFIES a petition INTO
+// `can-bo`. That act is allowed — see app.duocChamPhieuHanChe — and it succeeds; the answer is 404
+// because the record the response would carry is one that officer may no longer read.
 func (h *Handler) traPhieu(w http.ResponseWriter, r *http.Request, p domain.PhieuPhanAnh) {
 	ctx := r.Context()
+	if p.LinhVuc == LinhVucHanChe && !h.coQuyenHanChe(ctx) {
+		h.khongTimThay(w)
+		return
+	}
 	nhan := ""
 	if p.LinhVuc != "" {
 		var err error
@@ -418,6 +478,17 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 	case errors.Is(err, petstore.ErrPhieuKhongTonTai):
 		// THE SAME ANSWER AS AN UNKNOWN CODE, AN OTHER COMMUNE'S CODE AND A SOFT-DELETED PETITION —
 		// see Handler.khongTimThay. Telling them apart tells somebody trying codes how close they are.
+		h.khongTimThay(w)
+	case errors.Is(err, app.ErrPhieuHanChe):
+		// 404 AND NOT 403 — THE FIFTH CAUSE FOLDED INTO THE ONE ANSWER, and it is the same sentence
+		// the read route already says (internal/http/phieu_phan_anh.go, on DocPhieuPhanAnh): a 403
+		// here would confirm that a report about a member of staff exists under this code, TO A
+		// COLLEAGUE OF THAT PERSON, and the existence of such a report is precisely what the
+		// restriction protects. Fail closed, and answer what an unknown code answers.
+		//
+		// IT IS DELIBERATELY NOT GROUPED WITH ErrKhongPhaiNguoiDuocGiao BELOW, which is a 403. That
+		// one refuses a caller who may SEE the petition and may not move it, so naming the refusal
+		// discloses nothing new. This one refuses a caller who may not know the petition is there.
 		h.khongTimThay(w)
 	case errors.Is(err, petstore.ErrPhieuDaChuyenTrang):
 		httpx.WriteError(w, http.StatusConflict, "petition_state",
