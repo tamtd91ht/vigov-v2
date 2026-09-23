@@ -61,7 +61,7 @@ export const NHOM_MENU: readonly NhomMenu[] = [
       { nhan: "Biên bản họp", duong: null, khoa: null },
       { nhan: "Văn bản & Đơn thư", duong: "/van-ban", khoa: QUYEN_CHUYEN_VAN_BAN },
       { nhan: "Giải ngân", duong: "/giai-ngan", khoa: QUYEN_XEM_GIAI_NGAN },
-      { nhan: "Thu - Chi ngân sách", duong: null, khoa: null },
+      { nhan: "Thu - Chi ngân sách", duong: "/giai-ngan/thu-chi", khoa: QUYEN_XEM_GIAI_NGAN },
       { nhan: "Thông báo", duong: null, khoa: null },
       { nhan: "Phản ánh người dân", duong: "/phan-anh", khoa: QUYEN_XEM_PHAN_ANH },
       { nhan: "Bản đồ kinh tế số", duong: null, khoa: null },

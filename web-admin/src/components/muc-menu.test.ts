@@ -25,16 +25,24 @@ describe("locMenu", () => {
     expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(14);
   });
 
-  it("KHÔNG quyền nào: năm mục có màn biến mất, chín mục chưa có màn Ở LẠI", () => {
+  it("KHÔNG quyền nào: sáu mục có màn biến mất, tám mục chưa có màn Ở LẠI", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, []));
 
-    // Năm mục có màn đều mở ra dữ liệu thật, nên chúng đi theo quyền.
-    for (const n of ["Văn bản & Đơn thư", "Giải ngân", "Phản ánh người dân", "Danh bạ cán bộ", "Cấu hình"]) {
+    // Sáu mục có màn đều mở ra dữ liệu thật, nên chúng đi theo quyền. `Thu - Chi ngân sách` vào
+    // danh sách này ngày 23/09/2026, khi màn `/giai-ngan/thu-chi` ra đời.
+    for (const n of [
+      "Văn bản & Đơn thư",
+      "Giải ngân",
+      "Thu - Chi ngân sách",
+      "Phản ánh người dân",
+      "Danh bạ cán bộ",
+      "Cấu hình",
+    ]) {
       expect(ten).not.toContain(n);
     }
-    // Chín mục chưa có màn không mở ra dữ liệu nào cả — không có gì để rò rỉ, và lọc chúng theo
+    // Tám mục chưa có màn không mở ra dữ liệu nào cả — không có gì để rò rỉ, và lọc chúng theo
     // quyền sẽ buộc phải ĐOÁN một khoá cho một màn chưa tồn tại.
-    expect(ten).toHaveLength(9);
+    expect(ten).toHaveLength(8);
     expect(ten).toContain("Nhiệm vụ");
     expect(ten).toContain("Báo cáo");
   });
