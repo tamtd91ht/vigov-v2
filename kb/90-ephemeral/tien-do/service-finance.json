@@ -62,8 +62,8 @@
     {
       "id": "giai-ngan-tuyen-ghi",
       "viec": "Tuyến GHI: nhập giải ngân (§10) và ghi nhận khoản chi (§8.2)",
-      "trang_thai": "chua_lam",
-      "bang_chung": "không có tuyến POST/PATCH nào cho giải ngân trong service-finance/internal/http/routes.go — kiểm 2026-09-20",
+      "trang_thai": "xong",
+      "bang_chung": "ĐO LẠI 2026-09-23: **đã xong**, và dòng bằng chứng cũ đã hết đúng. Bản cũ viết 'không có tuyến POST/PATCH nào cho giải ngân — kiểm 2026-09-20'; hôm nay `service-finance/internal/http/routes.go` khai 23 tuyến, trong đó SÁU tuyến ghi đúng phần việc này: `POST /api/v1/disbursements` (:696) · `PATCH /disbursements/{id}` (:735) · `DELETE /disbursements/{id}` (:778) · `POST /disbursements/{id}/confirmation` (:803) · `POST` và `DELETE /disbursements/{id}/lockout` (:834, :878). Đối chiếu `kb/20-contracts/openapi.json`: cả sáu có mặt. Một mục khai `chua_lam` trong khi việc đã xong ba ngày là mục khiến lượt sau đi làm lại từ đầu — cùng loại sai với một chú thích nói 'chỗ này còn thiếu' khi nó không còn thiếu.",
       "no_confirm": [],
       "tiep_theo": "Hết giờ, và còn câu chưa rõ: ai được mở khoá chứng từ ngoài budget.confirm, chứng từ hoàn/âm có tồn tại không (schema đang CHECK so_tien > 0), và ngưỡng cảnh báo chậm theo năm (bảng nam_ngan_sach §11) chưa dựng nên đang là hằng số trong domain"
     },
