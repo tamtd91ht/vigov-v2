@@ -347,6 +347,20 @@ func (t *txVBGia) Rollback() error {
 // hanGia answers ResolveDeadlines. IT RECORDS WHAT WAS ASKED FOR, because the three arguments are
 // decisions ADR 0028 makes about this act: which work kind, which field row, which clock.
 type hanGia struct {
+	// mu GIỮ BỐN TRƯỜNG GHI DƯỚI ĐÂY, và nó có mặt vì một ca kiểm thật chứ không phòng xa.
+	//
+	// `TestCapSo_HaiLuotSongSongRaHaiSoKhacNhau` cố ý chạy HAI goroutine qua cùng một use case
+	// để chứng minh khoá dòng của sổ số hoạt động. Cả hai đi qua `HanXuLy`, nên bốn phép gán
+	// dưới là ghi-ghi đồng thời trên một bộ đếm không khoá — `go test -race` bắt đúng chỗ ấy.
+	//
+	// ĐÂY LÀ LỖI CỦA BỘ ĐỒ THỬ, KHÔNG PHẢI CỦA MÃ NGHIỆP VỤ. Nhưng nó làm `make check` ĐỎ, và
+	// một cổng đỏ vì lý do không ai sửa là cổng người ta học cách bỏ qua — rồi lần đỏ thật
+	// tiếp theo cũng trôi qua cùng cách. Khoá ở đây rẻ hơn hẳn cái giá ấy.
+	//
+	// CHỈ KHOÁ ĐƯỜNG GHI. Các ca khác đọc thẳng `han.goi`, `han.loai`, … sau khi goroutine đã
+	// kết thúc, nên chúng happens-after và không cần khoá; bọc thêm accessor chỉ để "cho đủ
+	// đối xứng" sẽ bắt sửa mười chỗ đang đúng.
+	mu   sync.Mutex
 	tra  time.Time
 	loi  error
 	goi  int
@@ -359,8 +373,10 @@ type hanGia struct {
 func (h *hanGia) HanXuLy(_ context.Context, loaiViec identityv1.WorkKind, linhVuc string,
 	tuLuc time.Time, can []identityv1.DeadlineKind) (map[identityv1.DeadlineKind]time.Time, error) {
 
+	h.mu.Lock()
 	h.goi++
 	h.loai, h.linh, h.tu, h.can = loaiViec, linhVuc, tuLuc, can
+	h.mu.Unlock()
 	if h.loi != nil {
 		return nil, h.loi
 	}
