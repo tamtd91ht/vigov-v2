@@ -194,17 +194,21 @@ export const CANH_BAO_KHONG_PHAI_KE_TOAN =
 /** Trạng thái rỗng: năm ngân sách chưa có dự án nào. Bình thường, không phải lỗi. */
 export function nhanNamRong(nam: number): string {
   return (
-    `Năm ngân sách ${nam} chưa có dự án nào. Màn hình này chỉ xem — thêm dự án và nhập giải ` +
-    "ngân chưa mở."
+    `Năm ngân sách ${nam} chưa có dự án nào. Thêm dự án bằng nút ở trên (cần quyền ` +
+    "budget.update)."
   );
 }
 
 /**
- * Ghi chú đầu màn: vì sao không có nút thêm, sửa, nhập Excel nào.
+ * Ghi chú đầu màn: phần nào của bản thiết kế đã có đường ghi thật, phần nào chưa.
  *
- * Lý do đến từ máy chủ, không từ đây: cả hai thao tác ghi vào hồ sơ lưu trữ nên cần bản ghi
- * nghiệp vụ và vết kiểm toán trong CÙNG một giao dịch, và `service-finance` chưa có tầng ấy.
+ * ⚠ CÂU CŨ Ở ĐÂY — *"Màn hình hiện chỉ xem. Thêm dự án, ghi nhận khoản chi … chưa mở"* — ĐÃ SAI TỪ
+ * 24/09/2026, khi chín tuyến ghi của phân hệ được nối vào. Nó được viết lại chứ không gỡ đi, vì một
+ * câu đầu màn nói sai về việc cán bộ làm được gì là câu họ tin và làm theo.
+ *
+ * NHẬP EXCEL VẪN CHƯA CÓ, và đó là sự thật của hợp đồng: không tuyến nào nhận tệp. Chi tiết từng
+ * phần chưa dựng nằm ở `PHAN_CHUA_DUNG_GHI` trong `nhan-ghi-giai-ngan.ts`, hiện ra trên màn.
  */
 export const GHI_CHU_CHI_XEM_GIAI_NGAN =
-  "Màn hình hiện chỉ xem. Thêm dự án, ghi nhận khoản chi và nhập giải ngân từ Excel chưa mở vì " +
-  "mỗi thao tác ấy ghi vào hồ sơ lưu trữ và phải để lại vết kiểm toán trong cùng một giao dịch.";
+  "Thêm dự án, sửa dự án và ghi nhận khoản chi đã mở, mỗi thao tác đứng sau đúng khoá quyền của " +
+  "nó. Nhập giải ngân từ Excel chưa có tuyến nào phía sau nên chưa mở.";

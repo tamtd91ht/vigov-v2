@@ -4,12 +4,16 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { ChonNam } from "@/components/chon-nam";
+import { usePhien } from "@/features/phien/phien-hien-tai";
 import { layDanhSachDuAn } from "@/lib/api/du-an";
 import { layHangMucKeHoachVon } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 import type { finance_danhSachDuAnRa, finance_hangMucRa } from "@/lib/api/schema.gen";
 import { namTheoDongHoMay } from "@/lib/nam";
+import { coQuyen, QUYEN_GHI_NGAN_SACH } from "@/lib/quyen";
 
+import { KhoiThemDuAn } from "./ghi-du-an";
+import { KhoiChuaDungGhi } from "./khoi-chua-dung-ghi";
 import {
   CANH_BAO_KHONG_PHAI_KE_TOAN,
   GHI_CHU_CHI_XEM_GIAI_NGAN,
@@ -27,17 +31,21 @@ import {
 } from "./nhan-du-an";
 
 /**
- * Bảng dự án đầu tư của một năm ngân sách — `docs/ui-ux/06-giai-ngan.md §7`.
+ * Bảng dự án đầu tư của một năm ngân sách — `docs/ui-ux/06-giai-ngan.md §7`, cộng nút `+ Thêm dự
+ * án` của §9.
  *
  * NHỮNG GÌ ĐẶC TẢ VẼ MÀ ĐÂY KHÔNG DỰNG, và vì sao — đọc trước khi thêm vào:
  *
  *   4 thẻ KPI · biểu đồ luỹ kế · bảng tiến độ theo hạng mục · khối tiến độ theo nguồn vốn ·
  *   chip nguồn vốn trên từng dòng · cột "Vướng mắc mới nhất" · cột "Đơn vị / phụ trách" bằng TÊN
  *
- * Không thứ nào trong số đó có tuyến phía sau trong hợp đồng REST. Nguồn vốn, chứng từ và vướng
- * mắc chưa có tuyến nào; `org_unit_id` và `assignee_id` về dưới dạng ID nội bộ, và tra chúng
- * thành tên người là việc của tuyến khác dưới quyền khác. Vẽ ra một ô rỗng gắn nhãn "0 vướng
- * mắc" là nói với lãnh đạo một con số không ai đo.
+ * Không thứ nào trong số đó có tuyến phía sau trong hợp đồng REST. Nguồn vốn và vướng mắc chưa có
+ * tuyến nào; `org_unit_id` và `assignee_id` về dưới dạng ID nội bộ, và tra chúng thành tên người
+ * là việc của tuyến khác dưới quyền khác. Vẽ ra một ô rỗng gắn nhãn "0 vướng mắc" là nói với lãnh
+ * đạo một con số không ai đo.
+ *
+ * ⚠ CHỨNG TỪ NAY CÓ SÁU TUYẾN GHI (nhưng vẫn không có tuyến ĐỌC danh sách) — xem
+ * `chung-tu-du-an.tsx` và `PHAN_CHUA_DUNG_GHI`.
  *
  * KHÔNG GỘP THEO HẠNG MỤC (đặc tả bật mặc định): gộp cần tổng theo nhóm, và tổng ấy phải cộng ở
  * máy chủ trên nguyên tập dự án. Cộng ở trình duyệt trên danh sách đã lọc là một tổng đúng cho
@@ -68,7 +76,17 @@ export function BangDuAn() {
   const [daTai, datDaTai] = useState<{ khoa: string; kq: KetQua<finance_danhSachDuAnRa> } | null>(
     null,
   );
-  const khoa = `${nam}|${hangMucId}`;
+
+  /**
+   * Bộ đếm lần tải. Mỗi lần THÊM DỰ ÁN xong thì tăng một, và danh sách đọc lại từ máy chủ.
+   *
+   * ĐỌC LẠI CẢ DANH SÁCH, KHÔNG VÁ HÀNG MỚI VÀO: phản hồi của tuyến thêm (`duAnGhiRa`) cố ý KHÔNG
+   * mang `disbursed_amount`, `disbursed_ratio`, `delay_score` hay `is_delayed` — tuyến ghi không
+   * đọc chúng. Vá một hàng dựng từ phản hồi ấy sẽ đặt bốn ô trống hoặc bốn số 0 vào một bảng mà
+   * mọi hàng khác đang mang số thật, và chúng trông y hệt nhau.
+   */
+  const [lanTai, datLanTai] = useState(0);
+  const khoa = `${nam}|${hangMucId}|${lanTai}`;
 
   useEffect(() => {
     let bo = false;
@@ -103,6 +121,18 @@ export function BangDuAn() {
     };
   }, []);
 
+  /**
+   * FAIL CLOSED: chưa đọc xong phiên, hoặc đọc hỏng, thì KHÔNG có quyền nào — "chưa rõ" không được
+   * hành xử như "có" (luật 1, cấm #1).
+   *
+   * CHỈ ĐỌC `budget.update` Ở MÀN NÀY. Bốn thao tác `budget.confirm` của phân hệ (xác nhận, khoá,
+   * mở khoá, gỡ) đều nằm ở trang chi tiết, và đọc sẵn khoá ấy ở đây là để lại một biến mà chỗ dùng
+   * duy nhất của nó là chỗ ai đó sẽ gắn nhầm một cái nút vào.
+   */
+  const phien = usePhien();
+  const dsQuyen: readonly string[] = phien !== null && phien.ok ? phien.duLieu.permissions : [];
+  const coGhi = coQuyen(dsQuyen, QUYEN_GHI_NGAN_SACH);
+
   return (
     <section className="man-giai-ngan" aria-labelledby="tieu-de-du-an">
       <h2 id="tieu-de-du-an">Dự án đầu tư</h2>
@@ -111,6 +141,15 @@ export function BangDuAn() {
           một sự kiện vừa xảy ra. */}
       <p className="canh-bao-pham-vi">{CANH_BAO_KHONG_PHAI_KE_TOAN}</p>
       <p className="ghi-chu">{GHI_CHU_CHI_XEM_GIAI_NGAN}</p>
+
+      <KhoiChuaDungGhi />
+
+      <KhoiThemDuAn
+        nam={nam}
+        danhMuc={danhMuc}
+        coGhi={coGhi}
+        daGhiXong={() => datLanTai((n) => n + 1)}
+      />
 
       <div className="hang-loc">
         <ChonNam id="nam-ngan-sach" nhan="Năm ngân sách" nam={nam} namGoc={namGoc} datNam={datNam} />

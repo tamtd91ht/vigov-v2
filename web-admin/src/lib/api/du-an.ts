@@ -6,23 +6,22 @@
  * `schema.gen.ts`. Không tệp nào trong ứng dụng này mô tả lại mười tám trường của một dự án.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * HỢP ĐỒNG CÒN THIẾU HAI THAM SỐ TRUY VẤN CỦA TUYẾN DANH SÁCH, VÀ CHỖ NÀY LÀ NƠI PHẢI NÓI RA.
+ * ✔ HAI KHIẾM KHUYẾT KHỐI NÀY TỪNG TẢ ĐỀU ĐÃ ĐÓNG, 24/09/2026. Giữ lại vì chúng là hai bài học
+ * khác nhau, không phải vì còn đúng.
  *
- * `kb/20-contracts/openapi.json` không khai `parameters` nào cho `GET /api/v1/investment-projects`,
- * trong khi handler Go đọc **`year` (BẮT BUỘC)** và `category` (tuỳ chọn) —
- * `service-finance/internal/http/du_an.go:165,176`. Bộ sinh kiểu có hỗ trợ tham số truy vấn
- * (`scripts/gen-api-types.mjs`, khối "THAM SỐ TRUY VẤN"), và một tuyến khác của hợp đồng —
- * `GET /api/v1/staff` — có đủ bốn tham số của nó. Vậy lỗ hổng nằm ở `tools/apidoc`, không ở đây.
+ * 1. "Hợp đồng không khai `parameters` nào cho `GET /api/v1/investment-projects`" — ĐÃ SAI.
+ *    `tools/apidoc` nay đọc tham số truy vấn thẳng từ AST handler (commit 5772109, mở rộng ở
+ *    f5b6c63). Đo lại: hợp đồng khai `year` với `required: true` và `category` với
+ *    `required: false`, đúng như `service-finance/internal/http/du_an.go` cư xử.
  *
- * HỆ QUẢ ĐO ĐƯỢC: `finance_get_investment_projects["truyVan"]` là `{}` rỗng, nên `tsc` KHÔNG
- * canh được hai tên tham số này. Chúng là chuỗi thường trong tệp này cho tới khi hợp đồng khai
- * chúng — đã báo lên, KHÔNG chép thầm vào một hằng số rồi để đó. Sửa ở `tools/apidoc` rồi
- * `make kb`, không sửa `openapi.json` bằng tay (luật 9, bất biến 8).
+ * 2. "Máy chủ cũng không có tuyến ghi" — ĐÃ SAI, và sai theo chiều đắt hơn: CHÍN tuyến ghi của
+ *    phân hệ này có thật, và màn đã nối hết vào từ 24/09/2026 — xem `lib/api/giai-ngan.ts`.
+ *    Tệp NÀY vẫn chỉ giữ hai tuyến ĐỌC, và đó là phân chia có chủ ý chứ không phải thiếu sót.
+ *
+ * VÌ SAO KHÔNG XOÁ TRẮNG: câu thứ hai là loại nguy hiểm nhất trong kho này — nó nói "thứ ấy
+ * không tồn tại", nên người đọc tin nó sẽ đi DỰNG LẠI một thứ đã có, hoặc tệ hơn là kết luận
+ * rằng phân hệ này chỉ đọc được. Phiên 23-24/09 gặp đúng lớp ấy sáu lần, và đây là lần thứ sáu.
  * ─────────────────────────────────────────────────────────────────────────────────────────
- *
- * KHÔNG CÓ HÀM GHI NÀO, và không có khung để về sau điền vào. Máy chủ cũng không có tuyến ghi:
- * "Nhập giải ngân" và "Ghi nhận khoản chi" đều ghi vào hồ sơ lưu trữ nên cần bản ghi nghiệp vụ
- * và vết kiểm toán trong CÙNG một giao dịch (`du_an.go`, khối đầu tệp).
  */
 
 import { docJSON, type KetQua } from "./goi";
