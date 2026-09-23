@@ -100,6 +100,22 @@
       "tiep_theo": "MIGRATION NÀY CHƯA TỪNG CHẠY TRÊN MỘT MÁY CHỦ NÀO: `VIGOV_TEST_DSN` không đặt nên MỌI ca trong `thong_bao_noi_bo_pg_test.go` SKIP mà gói vẫn in `ok` — xanh ở đó nghĩa là tệp BIÊN DỊCH ĐƯỢC, không hơn. Chưa được kiểm chứng: bốn CHECK, hai trigger bất biến, khoá ngoại hợp thành, đường đọc loại dòng đã xoá mềm, và danh sách cột đối chiếu lược đồ thật. GỬI THEO BỘ PHẬN TRẢ 501 CÓ CHỦ Ý — §9.3 bắt nở `bo_phan` thành cán bộ tại lúc phát hành, đó là dữ liệu của `identity` và `IdentityService` không có RPC nào làm việc đó (điều kiện dừng luật 2 #2). Lối còn lại, ghi bộ phận rồi không gửi cho ai, không lỗi ở đâu cả và người soạn tin là xã đã được báo. ĐỂ LẠI LƯỢT SAU, ghi rõ trong mã: gửi thư điện tử (cột đã có, `trang_thai_thu` luôn `chua-gui`) · `Lưu nháp` §5 · tuyến chi tiết §7 · `xác nhận`/`đã mở` và `Gỡ` §4 · `hop_thu_thong_bao` §8 (3/4 loại mục do `service-petitions` sinh ⇒ hợp đồng liên service) · ghim lên đầu §3 (`core/page` mang ĐÚNG MỘT cột sắp xếp + `id`, nên `ORDER BY ghim DESC, tao_luc DESC` không diễn đạt được bằng con trỏ của kho này; xấp xỉ sẽ làm trang hai vừa lặp vừa sót, im lặng)."
     },
     {
+      "id": "ma-nguoi-nhan-khong-doi-chieu-danh-ba",
+      "viec": "Mã cán bộ người nhận thông báo chỉ được kiểm HÌNH DẠNG, không bao giờ đối chiếu danh bạ — nên `{y}` của §3 đếm CHUỖI chứ không đếm NGƯỜI",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Bản rà cách ly 2026-09-24. `domain/thong_bao_noi_bo.go:189 ChuanHoaDanhSachMaCanBo` chỉ kiểm khác rỗng, một token, không quá dài; `store/thong_bao_noi_bo.go:338 ChenNguoiNhan` ghi thẳng chuỗi ấy. KHÔNG PHẢI RÒ RỈ và bản rà nói rõ vì sao: dòng người nhận mang `tenant_id` của xã gửi, `Gửi cho tôi` chưa ship, và ngày nó ship thì câu lọc vẫn mang `tenant_id = $1` — một mã của xã khác nằm trong bảng xã này vẫn không đọc được gì.",
+      "no_confirm": [],
+      "tiep_theo": "CÁI SAI LÀ CON SỐ HỨA VỚI NGƯỜI SOẠN. Cán bộ gõ nhầm `CB-2026-7K3M9Q` thành `CB-2026-7K3M90`, phát hành, màn báo `12 người nhận` — 11 người được báo, người thứ 12 không tồn tại, và KHÔNG có gì đỏ ở đâu. Với một phân hệ mà cả lý do tồn tại là `xã có báo hay không`, đây đúng loại sai nó dựng ra để tránh. VÌ SAO KHÔNG VÁ ĐƯỢC TẠI `service-comms`: dịch vụ ĐÃ có kết nối gRPC tới identity (`cmd/server/main.go:117`) và `core/identityclient.TenCanBoTheoMa` nhận đúng MÃ, chỉ trả trong phạm vi `x-tenant-id` — nhưng chú thích của chính RPC ấy (`core/identityclient/ten_can_bo.go:55-57`) CẤM đọc sự có mặt như `đây là cán bộ`, còn RPC trả lời được câu ấy (`BatchGetStaff`) lại khoá theo ID NỘI BỘ chứ không theo mã (`proto/identity.proto:266`). Tức hợp đồng hôm nay KHÔNG có đường nào trả lời `mã này có phải cán bộ đang tại chức của xã này không`. Món nợ hợp đồng, việc của `contract-designer`."
+    },
+    {
+      "id": "chieu-chi-muc-thong-bao-chua-do-duoc",
+      "viec": "Chỉ mục `thong_bao_so` dựng `(tenant_id, tao_luc DESC, id)` trong khi `core/page` sinh `ORDER BY tao_luc DESC, id DESC` — không chiều nào khớp",
+      "trang_thai": "treo",
+      "bang_chung": "Bản rà cách ly 2026-09-24: `migrations/0005_thong_bao_noi_bo.sql:271-272` so với `core/store/page.go:172`. Trong một nhóm `tenant_id`, chỉ mục cho thứ tự `(tao_luc DESC, id ASC)`; quét ngược cho `(tao_luc ASC, id DESC)`. Không chiều nào là thứ tự câu hỏi cần, nên nhiều khả năng có một bước sắp xếp thêm. KHÔNG ảnh hưởng tính đúng đắn của phân trang — thứ tự nằm trong SQL, không nằm trong chỉ mục.",
+      "no_confirm": [],
+      "tiep_theo": "TREO VÌ KHÔNG ĐO ĐƯỢC Ở ĐÂY, không phải vì chưa tới lượt: kết luận đòi một `EXPLAIN` trên PostgreSQL thật, mà máy này không có `VIGOV_TEST_DSN`. Nêu ra thay vì im vì chính migration ấy (`:84-88`) dùng lý lẽ `một chỉ mục không ai đọc là sự yên tâm giả rằng câu nào đó rẻ` — và một chỉ mục sai chiều cũng là đúng sự yên tâm giả ấy. Gộp vào lượt chạy `sql-0004-chua-chay` và `sql-chua-chay`: khi có một CSDL thật thì đo cả ba cùng lúc, đừng dựng môi trường hai lần."
+    },
+    {
       "id": "khoa-doc-so-thong-bao-chua-co",
       "viec": "Nhóm quyền THÔNG BÁO có ĐÚNG MỘT khoá `announcement.create` — không có khoá ĐỌC, nên bộ lọc `Gửi cho tôi` không ship được",
       "trang_thai": "treo",
