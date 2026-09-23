@@ -129,7 +129,11 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// present because Register refuses a nil dependency at construction.
 		GhiChungTu: app.NewChungTuGiaiNgan(nil, nil),
 		Nguong:     nguongTrong{},
-		Log:        log,
+		// The budget board, same reasoning again: built on a nil *store.DB and never called from this
+		// file, present because Register refuses a nil dependency at construction.
+		NganSach:    khoNganSachTrong{},
+		GhiNganSach: app.NewNganSach(nil, nil),
+		Log:         log,
 	})
 
 	danhBa := thuMucGia{
@@ -349,4 +353,13 @@ type nguongTrong struct{}
 
 func (nguongTrong) NguongCanhBaoCham(context.Context, int) (domain.NguongCanhBaoCham, error) {
 	return domain.MacDinhCuaPhanMem(), nil
+}
+
+// khoNganSachTrong answers "this commune has no such sheet" — the state of every commune today,
+// since nothing seeds `bang_ngan_sach`. No case in this file reads it; it is here because Register
+// refuses to start without one, deliberately (see routes.go).
+type khoNganSachTrong struct{}
+
+func (khoNganSachTrong) BangDayDu(context.Context, int, domain.LoaiBang) (domain.BangDayDu, error) {
+	return domain.BangDayDu{}, fistore.ErrKhongThayBangNganSach
 }

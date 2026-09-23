@@ -215,8 +215,15 @@ func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
 		// a commune has chosen its own figure lives beside the fake, in chung_tu_giai_ngan_test.go.
 		GhiChungTu: &ghiChungTuGia{},
 		Nguong:     nguongMacDinh(),
-		Nay:        func() time.Time { return lucDaQua7096 },
-		Log:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// The budget board, so Register accepts the Deps. NOTHING IN THIS FILE CALLS EITHER: the
+		// eight budget routes have their own suite in thu_chi_ngan_sach_test.go, with fakes that
+		// record the commune and the acting person. Register refuses a nil dependency at
+		// construction, so both have to be present here — and a fake that is never invoked cannot
+		// answer anything wrongly.
+		NganSach:    &nganSachGia{},
+		GhiNganSach: &ghiNganSachGia{},
+		Nay:         func() time.Time { return lucDaQua7096 },
+		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
 	mux := http.NewServeMux()

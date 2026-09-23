@@ -425,6 +425,32 @@ func (c ChungTuGiaiNgan) ChoMoKhoa(maCanBo string) error {
 	return nil
 }
 
+// TrangThaiSauKhiSua is where a voucher lands after its figures are corrected.
+//
+// EDITING A CONFIRMED VOUCHER SENDS IT BACK TO `Kế toán nhập`, and the sentence that decides it is
+// the customer's own: *"lãnh đạo xác nhận những con số kia, không phải những con số này"*. Measured
+// in `../vigov-require` commit `c3f4d6a` and recorded at
+// kb/50-doi-chieu/2026-09-23-feat-m8-multitenant-foundation.md §M3.
+//
+// WHY IT IS NOT A CONTRADICTION OF OPEN QUESTIONS #29 AND #30. Those two settled UNLOCKING (a reason
+// is mandatory, the person who locked it may not reopen it) and REFUNDS (a separate voucher, never a
+// sign change). Neither says anything about what happens to a CONFIRMATION when the figures beneath
+// it move — this fills exactly that gap and takes nothing back from either.
+//
+// A LOCKED VOUCHER NEVER REACHES HERE. ChoSua refuses it first and the `chung_tu_da_khoa` trigger
+// refuses the same UPDATE underneath, so the only way to correct a frozen figure is still to unlock
+// it — with a reason, by somebody else — and that path is unchanged.
+//
+// THE OTHER TWO STATES ARE UNTOUCHED, and the switch is written out rather than defaulted so that a
+// fourth state cannot silently inherit this behaviour: `Kế toán nhập` is already where this would
+// send it, and `Đã khoá` cannot get here at all.
+func TrangThaiSauKhiSua(truoc TrangThaiChungTu) TrangThaiChungTu {
+	if truoc == ChungTuDaXacNhan {
+		return ChungTuKeToanNhap
+	}
+	return truoc
+}
+
 // TrangThaiSauKhiMoKhoa is where an unlocked voucher lands: back in `Đã xác nhận`.
 //
 // EXACT RATHER THAN CHOSEN. ChoKhoa only admits a lock from `Đã xác nhận`, so that IS the state the

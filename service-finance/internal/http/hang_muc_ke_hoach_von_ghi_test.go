@@ -166,8 +166,11 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		// touches a voucher — the disbursement write routes have their own suite next door.
 		GhiChungTu: &ghiChungTuGia{},
 		Nguong:     nguongMacDinh(),
-		Nay:        func() time.Time { return lucDaQua7096 },
-		Log:        im,
+		// Present so Register accepts the Deps; never called from this file. See routes_test.go.
+		NganSach:    &nganSachGia{},
+		GhiNganSach: &ghiNganSachGia{},
+		Nay:         func() time.Time { return lucDaQua7096 },
+		Log:         im,
 	})
 
 	var h http.Handler = mux

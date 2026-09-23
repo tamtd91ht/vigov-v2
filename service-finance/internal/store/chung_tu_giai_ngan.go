@@ -245,6 +245,39 @@ func (s *ChungTuGiaiNganStore) CapNhat(ctx context.Context, tx *store.ScopedTx,
 	return doiMotDongChungTu(kq, "cập nhật")
 }
 
+// veNhapSauKhiSua sends a CONFIRMED voucher back to `Kế toán nhập` because its figures just changed
+// — *"lãnh đạo xác nhận những con số kia, không phải những con số này"* (ADR-less customer rule,
+// `../vigov-require` commit `c3f4d6a`; see domain.TrangThaiSauKhiSua).
+//
+// A SECOND STATEMENT AND NOT A COLUMN ON capNhatChungTu, and the reason is the one 0004:132-135
+// gives for the trigger's allowlist: one UPDATE that moved both the amount and the state would be a
+// single row change out of which nobody could read WHICH of the two happened. Two statements in one
+// transaction are two facts, and the audit entry names both.
+//
+// `nguoi_xac_nhan_id = NULL` IS PART OF IT AND IS NOT ERASING HISTORY. Leaving the code there would
+// leave the row asserting that a named officer confirmed figures they have never seen — which is
+// precisely the claim this rule exists to stop. Who HAD confirmed it, and when it was undone, are in
+// the append-only entry that shares this transaction; the column describes the row's CURRENT state,
+// and the row is currently unconfirmed.
+//
+// THE ROW IS NEVER LOCKED WHEN THIS RUNS: domain.ChoSua refuses a locked voucher before any UPDATE
+// is attempted, and `chung_tu_da_khoa` refuses it underneath. So this statement cannot be the way a
+// frozen figure is quietly reopened.
+const veNhapSauKhiSua = `UPDATE chung_tu_giai_ngan
+	SET trang_thai = 'ke-toan-nhap', nguoi_xac_nhan_id = NULL, cap_nhat_luc = now()
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+// VeNhapSauKhiSua returns one corrected voucher to the first state of the lifecycle.
+func (s *ChungTuGiaiNganStore) VeNhapSauKhiSua(ctx context.Context, tx *store.ScopedTx,
+	id string) error {
+
+	kq, err := tx.Exec(ctx, veNhapSauKhiSua, string(tx.TenantID()), id)
+	if err != nil {
+		return fmt.Errorf("chung_tu_giai_ngan: về nháp sau khi sửa: %w", err)
+	}
+	return doiMotDongChungTu(kq, "về nháp sau khi sửa")
+}
+
 // XacNhan moves a voucher from `Kế toán nhập` to `Đã xác nhận`, recording who.
 const xacNhanChungTu = `UPDATE chung_tu_giai_ngan
 	SET trang_thai = 'da-xac-nhan', nguoi_xac_nhan_id = $3, cap_nhat_luc = now()

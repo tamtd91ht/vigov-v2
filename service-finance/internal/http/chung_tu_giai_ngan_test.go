@@ -261,8 +261,11 @@ func dungMayChuChungTuVoi(t *testing.T, khoIdem idem.Store) *mayChuChungTu {
 		DuAn:       duAnMau(),
 		GhiChungTu: ghi,
 		Nguong:     nguongMau(),
-		Nay:        func() time.Time { return lucDaQua7096 },
-		Log:        im,
+		// Present so Register accepts the Deps; never called from this file. See routes_test.go.
+		NganSach:    &nganSachGia{},
+		GhiNganSach: &ghiNganSachGia{},
+		Nay:         func() time.Time { return lucDaQua7096 },
+		Log:         im,
 	})
 
 	var h http.Handler = mux
@@ -809,5 +812,44 @@ func TestDanhSachDuAn_XaChuaKhaiThiNoiRaLaMacDinh(t *testing.T) {
 	if ra.DelayThresholdSource != string(domain.NguongTuMacDinh) {
 		t.Errorf("delay_threshold_source = %q, muốn %q — xã B chưa khai gì",
 			ra.DelayThresholdSource, domain.NguongTuMacDinh)
+	}
+}
+
+func TestPATCHTraVeTrangThaiUseCaseTraRa_veNhapThiThanNoiRa(t *testing.T) {
+	// THE RULE ITSELF IS PROVED IN internal/app (TestSuaChungTuDaXacNhanThiVeNhapVaXoaNguoiXacNhan),
+	// where the SQL and the transaction are. WHAT IS PROVED HERE is the half that layer cannot see:
+	// the state and the (now empty) confirmer reach the CLIENT.
+	//
+	// It matters because the screen draws its buttons from this body. A handler that kept sending
+	// `da-xac-nhan` — or that let `confirmed_by` survive through `omitempty` on the wrong field —
+	// would leave the accountant looking at a voucher the server considers a draft while the screen
+	// offers `Khoá`, and every test in internal/app would stay green.
+	m := dungMayChuChungTu(t)
+	m.capQuyen(xaA, "budget.update")
+	m.ghi.ra = domain.ChungTuGiaiNgan{
+		ID: idChungTuMau, DuAnID: "01JDUANCUAXAA000000000000",
+		NgayChi: time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC),
+		SoTien:  31_000_000, NoiDung: "Thanh toán đợt 3",
+		// What app.Sua returns for a voucher that WAS `Đã xác nhận` and has just been corrected.
+		TrangThai: domain.ChungTuKeToanNhap, NguoiNhapID: maCanBoGhi, NguoiXacNhanID: "",
+	}
+
+	w := m.goi(t, http.MethodPatch, hostA, duongChungTuMot(""), canBoGhi(xaA), `{"amount":31000000}`)
+	doiMa(t, w, http.StatusOK)
+
+	var ra chungTuRa
+	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+		t.Fatalf("thân không phải JSON: %v", err)
+	}
+	if ra.Status != string(domain.ChungTuKeToanNhap) {
+		t.Fatalf("`status` = %q, muốn %q — sửa một chứng từ đã xác nhận thì nó VỀ NHÁP",
+			ra.Status, domain.ChungTuKeToanNhap)
+	}
+	if ra.ConfirmedBy != "" {
+		t.Fatalf("`confirmed_by` = %q, muốn rỗng — dòng không được khai một lãnh đạo đã duyệt "+
+			"những con số họ chưa từng thấy", ra.ConfirmedBy)
+	}
+	if strings.Contains(w.Body.String(), "da-xac-nhan") {
+		t.Fatalf("thân vẫn mang `da-xac-nhan`: %s", w.Body.String())
 	}
 }

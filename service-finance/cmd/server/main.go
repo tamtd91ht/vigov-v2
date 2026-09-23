@@ -130,6 +130,7 @@ func main() {
 
 	hangMuc := fistore.NewHangMucKeHoachVonStore(kho)
 	chungTu := fistore.NewChungTuGiaiNganStore(kho)
+	nganSach := fistore.NewNganSachStore(kho)
 
 	svchttp.Register(mux, svchttp.Deps{
 		Checker: staffauth.Checker{},
@@ -147,7 +148,12 @@ func main() {
 		// without it, because a nil store would mean every commune silently judged by the vendor's
 		// 10 points with nothing on the screen saying so (migration 0005, open question #31).
 		Nguong: fistore.NewCauHinhGiaiNganStore(kho),
-		Log:    log,
+		// The budget board. ONE STORE BEHIND BOTH the read interface and the write use case, exactly
+		// as the catalogue is wired: the transaction the use case opens is the transaction the store
+		// writes in, and a second handle would be a second pool.
+		NganSach:    nganSach,
+		GhiNganSach: app.NewNganSach(kho, nganSach),
+		Log:         log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

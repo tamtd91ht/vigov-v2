@@ -574,3 +574,133 @@ func TestMoiLoiGhiDeuDoiNguoiThucHien(t *testing.T) {
 		t.Errorf("mở %d giao dịch mà không có chủ thể, muốn 0", k.batDau)
 	}
 }
+
+// --- sửa một chứng từ ĐÃ XÁC NHẬN thì nó về nháp ---------------------------------------------------
+//
+// The customer's rule, measured in `../vigov-require` commit `c3f4d6a` and taken up on 23/09/2026:
+// *"lãnh đạo xác nhận những con số kia, không phải những con số này"*. It fills a gap open questions
+// #29 and #30 left — they settled UNLOCKING and REFUNDS and say nothing about a confirmation whose
+// figures moved — and contradicts neither.
+
+func TestSuaChungTuDaXacNhanThiVeNhapVaXoaNguoiXacNhan(t *testing.T) {
+	truoc := hangOTrangThai(domain.ChungTuDaXacNhan)
+	truoc.nguoiXacNhan = maLanhDao
+	k := &khoCTGia{maDuAn: maDuAnMau, hang: truoc}
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	so := domain.Dong(31_000_000)
+	sau, err := uc.Sua(ctx, idChungTu, YeuCauSuaChungTu{SoTien: &so}, canBoCT(maKeToan))
+	if err != nil {
+		t.Fatalf("Sua lỗi: %v", err)
+	}
+	if sau.TrangThai != domain.ChungTuKeToanNhap {
+		t.Fatalf("trạng thái sau khi sửa = %q, muốn %q", sau.TrangThai, domain.ChungTuKeToanNhap)
+	}
+	if sau.NguoiXacNhanID != "" {
+		t.Fatalf("người xác nhận còn %q — dòng vẫn khai một lãnh đạo đã duyệt những con số họ "+
+			"chưa từng thấy", sau.NguoiXacNhanID)
+	}
+
+	// TWO STATEMENTS, ONE TRANSACTION. The figures and the state move separately so that a reader of
+	// the row can tell WHICH of the two happened — the same reason 0004:132-135 gives for the
+	// trigger's column allowlist.
+	ve := k.cau("trang_thai = 'ke-toan-nhap'")
+	if len(ve) != 1 {
+		t.Fatalf("có %d câu đưa về nháp, muốn 1", len(ve))
+	}
+	if !strings.Contains(ve[0].sql, "nguoi_xac_nhan_id = NULL") {
+		t.Fatalf("câu về nháp không xoá người xác nhận: %s", ve[0].sql)
+	}
+	if k.batDau != 1 || k.daCommit != 1 || k.daRollback != 0 {
+		t.Fatalf("giao dịch: mở %d commit %d rollback %d, muốn 1/1/0",
+			k.batDau, k.daCommit, k.daRollback)
+	}
+
+	// WHO HAD CONFIRMED IT IS IN THE ENTRY, and only there: the column has just been nulled, so the
+	// append-only ledger is the one place that still answers "whose confirmation did this edit undo".
+	vet := k.cau("INSERT INTO audit_log")
+	if len(vet) != 1 {
+		t.Fatalf("có %d dòng vết, muốn 1", len(vet))
+	}
+	than := thanVet(t, vet[0])
+	if !strings.Contains(than, "mat_xac_nhan") {
+		t.Fatalf("vết không ghi việc mất xác nhận: %s", than)
+	}
+	if !strings.Contains(than, maLanhDao) {
+		t.Fatalf("vết không ghi NGƯỜI đã xác nhận trước đó: %s", than)
+	}
+}
+
+func TestSuaChungTuChuaXacNhanThiTrangThaiKhongDoi(t *testing.T) {
+	// The other two states are untouched. A voucher already in `Kế toán nhập` must not pick up a
+	// second, pointless state write — it would appear in the trail as a change that did not happen.
+	k := &khoCTGia{maDuAn: maDuAnMau, hang: hangOTrangThai(domain.ChungTuKeToanNhap)}
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	so := domain.Dong(31_000_000)
+	sau, err := uc.Sua(ctx, idChungTu, YeuCauSuaChungTu{SoTien: &so}, canBoCT(maKeToan))
+	if err != nil {
+		t.Fatalf("Sua lỗi: %v", err)
+	}
+	if sau.TrangThai != domain.ChungTuKeToanNhap {
+		t.Fatalf("trạng thái = %q, muốn %q", sau.TrangThai, domain.ChungTuKeToanNhap)
+	}
+	if k.coCau("trang_thai = 'ke-toan-nhap'") {
+		t.Fatal("chứng từ chưa xác nhận mà vẫn ghi lại trạng thái")
+	}
+}
+
+func TestSuaChungTuDaKhoaVanTuChoiChuKhongVeNhap(t *testing.T) {
+	// THE RULE ADDED THIS TURN MUST NOT BECOME A WAY AROUND THE LOCK. A locked voucher is refused
+	// before any UPDATE is attempted — ChoSua first, and the `chung_tu_da_khoa` trigger underneath —
+	// so the only path to a frozen figure is still the unlock route, with a reason, by somebody else.
+	k := &khoCTGia{maDuAn: maDuAnMau, hang: hangDaKhoa(maLanhDao)}
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	so := domain.Dong(31_000_000)
+	_, err := uc.Sua(ctx, idChungTu, YeuCauSuaChungTu{SoTien: &so}, canBoCT(maKeToan))
+	if !errors.Is(err, domain.ErrChungTuDaKhoa) {
+		t.Fatalf("lỗi = %v, muốn ErrChungTuDaKhoa", err)
+	}
+	if k.coCau("trang_thai = 'ke-toan-nhap'") {
+		t.Fatal("chứng từ đã khoá mà vẫn bị đưa về nháp")
+	}
+	if k.daCommit != 0 || k.daRollback != 1 {
+		t.Fatalf("commit %d rollback %d, muốn 0/1", k.daCommit, k.daRollback)
+	}
+}
+
+func TestSuaChungTuDaXacNhanMaKhongDoiGiThiGiuNguyenXacNhan(t *testing.T) {
+	// THE NO-OP BRANCH PROTECTS A LEADER'S ACT. `idem.KhongCan` on the PATCH route claims a repeat is
+	// harmless; without this, a second identical request would strip a confirmation off a voucher
+	// nobody edited.
+	truoc := hangOTrangThai(domain.ChungTuDaXacNhan)
+	truoc.nguoiXacNhan = maLanhDao
+	k := &khoCTGia{maDuAn: maDuAnMau, hang: truoc}
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	noi := "Thanh toán đợt 3" // exactly what the row already holds
+	sau, err := uc.Sua(ctx, idChungTu, YeuCauSuaChungTu{NoiDung: &noi}, canBoCT(maKeToan))
+	if err != nil {
+		t.Fatalf("Sua lỗi: %v", err)
+	}
+	if sau.TrangThai != domain.ChungTuDaXacNhan || sau.NguoiXacNhanID != maLanhDao {
+		t.Fatalf("không đổi gì mà xác nhận bị gỡ: trạng thái %q, người %q",
+			sau.TrangThai, sau.NguoiXacNhanID)
+	}
+	if k.coCau("trang_thai = 'ke-toan-nhap'") || k.coCau("INSERT INTO audit_log") {
+		t.Fatal("không đổi gì mà vẫn ghi")
+	}
+}
+
+// thanVet returns the JSON delta of one audit statement as text.
+func thanVet(t *testing.T, l lenhGhi) string {
+	t.Helper()
+	for _, a := range l.args {
+		if b, ok := a.([]byte); ok {
+			return string(b)
+		}
+	}
+	t.Fatalf("câu vết không mang delta: %v", l.args)
+	return ""
+}

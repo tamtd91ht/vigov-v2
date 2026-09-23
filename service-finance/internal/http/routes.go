@@ -146,13 +146,52 @@ type NguongCham interface {
 	NguongCanhBaoCham(ctx context.Context, nam int) (domain.NguongCanhBaoCham, error)
 }
 
+// NganSachDoc is the commune's budget board, for GET /api/v1/budget-sheets and
+// GET /api/v1/budget-indicators.
+//
+// AN INTERFACE DECLARED AT THE POINT OF USE, like the reads above and for the same reason: the
+// properties these routes exist to hold — the permission declaration, the commune check ahead of
+// any read, and above all a MISSING FIGURE ARRIVING AS A SENTENCE RATHER THAN AS 0 — have to be
+// testable without a PostgreSQL, or they get tested once and then never again. There is none
+// reachable from this repository's build environment.
+//
+// ONE METHOD, AND THE INDICATOR ROUTE CALLS IT TWICE. `Cân đối thu - chi` is the revenue sheet's
+// `Thu xã hưởng` minus the expenditure sheet's `Chi ngân sách` (ADR 0035 #32), so it needs both
+// sheets of one year. A dedicated store method would put that subtraction in SQL, where the ADR's
+// reasoning could not be read and the two candidate revenue columns are one edit apart.
+type NganSachDoc interface {
+	BangDayDu(ctx context.Context, nam int, loai domain.LoaiBang) (domain.BangDayDu, error)
+}
+
+// GhiNganSach is the WRITE half of the budget board, and it is its own interface rather than more
+// methods on NganSachDoc — the same reason GhiChungTu is separate from DuAnTienDo.
+//
+// The reads are store calls; each of these six opens a TRANSACTION and writes an audit entry inside
+// it (rule 6, invariant 3). Behind one interface a future caller would reach for whichever method
+// was nearest and could end up writing the row outside a transaction.
+//
+// SIX METHODS AND NOT ONE `Sua(op)`: the caller names the act at the call site, so a seventh cannot
+// silently fall into a default branch that allows it. It is also what lets each route declare the
+// permission that act deserves — and DatDongTong in particular is NOT an edit: it decides which row
+// the commune's reported total is read from (ADR 0035 §A).
+type GhiNganSach interface {
+	TaoBang(ctx context.Context, yc app.YeuCauTaoBang, nguoi audit.Actor) (domain.BangNganSach, error)
+	GoBang(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+	ThemKhoanMuc(ctx context.Context, yc app.YeuCauThemKhoanMuc, nguoi audit.Actor) (domain.KhoanMucNganSach, error)
+	SuaKhoanMuc(ctx context.Context, id string, yc app.YeuCauSuaKhoanMuc, nguoi audit.Actor) (domain.KhoanMucNganSach, error)
+	GoKhoanMuc(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+	DatDongTong(ctx context.Context, id string, nguoi audit.Actor) (domain.KhoanMucNganSach, error)
+}
+
 type Deps struct {
-	Checker    authz.Checker
-	HangMuc    HangMucKeHoachVonDanhMuc
-	GhiHangMuc GhiHangMuc
-	DuAn       DuAnTienDo
-	GhiChungTu GhiChungTu
-	Nguong     NguongCham
+	Checker     authz.Checker
+	HangMuc     HangMucKeHoachVonDanhMuc
+	GhiHangMuc  GhiHangMuc
+	DuAn        DuAnTienDo
+	GhiChungTu  GhiChungTu
+	Nguong      NguongCham
+	NganSach    NganSachDoc
+	GhiNganSach GhiNganSach
 
 	// Nay is the clock the derived disbursement figures are computed against. NIL IN PRODUCTION,
 	// where Handler.nay falls back to time.Now — see the reason there. It exists so the delay
@@ -199,6 +238,12 @@ func Register(mux *http.ServeMux, d Deps) {
 		// silently on the vendor's number, with nothing on the screen saying so. A process that
 		// refuses to start is a deployment that fails visibly.
 		panic("finance/http: thiếu kho cấu hình giải ngân — ngưỡng cảnh báo chậm sẽ im lặng về mặc định của phần mềm")
+	}
+	if d.NganSach == nil {
+		panic("finance/http: thiếu kho bảng thu-chi ngân sách — các tuyến /api/v1/budget-sheets sẽ panic khi có người gọi")
+	}
+	if d.GhiNganSach == nil {
+		panic("finance/http: thiếu use case ghi thu-chi ngân sách — các tuyến ghi ngân sách sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -483,13 +528,22 @@ func Register(mux *http.ServeMux, d Deps) {
 	// không sửa, không gỡ — phải mở khoá trước (quyền `budget.confirm`)". The trigger is the floor,
 	// this is the sentence, and the sentence arrives first.
 	//
+	// ⚠ EDITING A CONFIRMED VOUCHER SENDS IT BACK TO `Kế toán nhập`, AND THE 200 SAYS SO — the
+	// response carries `status: "ke-toan-nhap"` and an empty `confirmed_by`. The customer's sentence
+	// is the whole argument: *"lãnh đạo xác nhận những con số kia, không phải những con số này"*
+	// (`../vigov-require` commit `c3f4d6a`). It fills a gap open questions #29 and #30 left — they
+	// settled unlocking and refunds and say nothing about a confirmation whose figures moved — and
+	// takes nothing back from either. A LOCKED voucher is still refused outright (409); the only way
+	// to a frozen figure is still the unlock route, with a reason, by somebody else.
+	//
 	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
 	// compares the voucher it read against the voucher it would write and, when nothing moved,
-	// writes NOTHING — no UPDATE and no audit entry. So the same request sent twice leaves one row
-	// in one state and one entry in the ledger. Were that comparison removed, this declaration would
-	// become a lie and the second request would file an entry saying nothing changed.
+	// writes NOTHING — no UPDATE, no state change and no audit entry. So the same request sent twice
+	// leaves one row in one state and one entry in the ledger. Were that comparison removed, this
+	// declaration would become a lie AND a repeated PATCH would strip a leader's confirmation off a
+	// voucher nobody actually edited.
 	//
-	// @summary  Sửa ngày chi, số tiền, nội dung, đối tác hoặc số chứng từ của một chứng từ chưa khoá
+	// @summary  Sửa ngày chi, số tiền, nội dung, đối tác hoặc số chứng từ của một chứng từ chưa khoá — chứng từ đã xác nhận sẽ về nháp
 	// @screen   06-giai-ngan §8.2
 	// @request  suaChungTuVao
 	// @reply    200 chungTuRa
@@ -646,4 +700,248 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("mở khoá lần thứ hai gặp chứng từ đã ở `da-xac-nhan` và trả 409 mà không ghi gì — `so_lan_mo_khoa` không tăng hai lần vì một lần thử lại")(
 				http.HandlerFunc(h.MoKhoaChungTu))))
+
+	// --- the commune's revenue/expenditure budget board (07-thu-chi-ngan-sach) --------------------
+	//
+	// THE URL NOUNS ARE THIS SESSION'S AND ARE A FINDING, NOT A DECISION. ADR 0011 says to ASK rather
+	// than translate on the spot, and kb/00-foundation/ubiquitous-language.md has no row for
+	// `bang_ngan_sach` or `khoan_muc_ngan_sach`. `budget-sheets` / `budget-lines` /
+	// `budget-indicators` are used here because the permission group is already `budget.*` and
+	// because the screen is a sheet of lines; they are still free to change, since no commune is live
+	// on this path. The alternative — waiting — would have left eight routes unbuildable.
+	//
+	// `budget-lines` IS TOP LEVEL AND NOT NESTED UNDER `budget-sheets/{id}`, and the reason is the one
+	// that already rejected `disbursements/projects`: the three routes below act on ONE line by its
+	// own id, and nesting would put a sheet id in every one of them that nothing reads and nothing
+	// checks. A segment the server ignores is a segment a client will eventually get wrong and nobody
+	// will notice. The sheet is a FIELD of the create body, validated against this commune's live
+	// sheets.
+	//
+	// THE THREE PERMISSION KEYS ARE THE SPECIFICATION'S OWN, checked rather than assumed:
+	// docs/ui-ux/07-thu-chi-ngan-sach.md:236 — "Quyền: xem/sửa theo nhóm GIẢI NGÂN (`budget.read`,
+	// `budget.update`, `budget.confirm`)". All three are seeded at
+	// service-identity/migrations/0001_init.sql:282-284, so a commune administrator can actually tick
+	// them. NO NEW KEY WAS INVENTED (rule 5, invariant 3c): a key no migration seeds is a right
+	// nobody can grant, so the route would answer 403 to every account forever while every test
+	// stayed green. Written out as string literals at every call site because tools/apidoc refuses
+	// anything that is not one there.
+	//
+	// ⚠ THE SPECIFICATION ASSIGNS THE GROUP AND NOT THE ACTS. Which of the three guards WHICH button
+	// is this session's reading, and the two that are not obvious are written out at their routes:
+	// removing a line and moving the star both take `budget.confirm`.
+
+	// `budget.read` — reading the commune's own budget figures. NOT AnyAuthenticated, unlike the
+	// catalogue route above, and the difference is the data: this is how much the commune plans to
+	// take in and spend, line by line, before it is published anywhere.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Bảng thu hoặc chi của một năm ngân sách: cột, cây khoản mục, số liệu và ô tóm tắt
+	// @screen   07-thu-chi-ngan-sach §2 §4
+	// @reply    200 bangDayDuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/budget-sheets",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.DocBangNganSach)))
+
+	// ITS OWN ROUTE BECAUSE `Cân đối thu - chi` NEEDS BOTH SHEETS (ADR 0035 #32: revenue's
+	// `Thu xã hưởng` minus expenditure's `Chi ngân sách`), so it cannot be a field on either sheet's
+	// response without that route quietly reading the other one. This is the block §9 rule 6 feeds to
+	// `/tong-quan` and `/bao-cao`.
+	//
+	// IT ANSWERS 200 WITH REASONS WHEN THE DATA IS INCOMPLETE, never 404 and never 0. A commune that
+	// has not entered its expenditure sheet has no balance, and that is a fact about the data rather
+	// than a failure of the request — ADR 0035 §A: "để trống kèm lý do, không đặt mặc định".
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Ba chỉ số ngân sách của một năm: thu đạt dự toán, chi đạt dự toán, cân đối thu - chi
+	// @screen   07-thu-chi-ngan-sach §9 quy tắc 6
+	// @reply    200 chiSoNamRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/budget-indicators",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.DocChiSoNganSach)))
+
+	// `budget.update` — creating the year's sheet with its columns is data entry by the accountant,
+	// which is what §9 rule 7 assigns this key to.
+	//
+	// idem.Required(DongKhiHong), AND IT EARNS IT FOR THE REASON THE VOUCHER POST DOES. There is no
+	// unique key that could tell a double-submitted form from a deliberate second sheet — `lan` makes
+	// the second one legitimate by construction, because a commune really does reload a year after a
+	// `🗑 Gỡ`. With nothing underneath, a cache outage plus a double click is TWO live sheets for one
+	// year, which is the state `CoBangConSong` refuses and which a retry would otherwise create by
+	// racing it. A 503 costs a commune one retry on an act performed twice a year.
+	//
+	// @summary  Tạo bảng thu hoặc chi cho một năm ngân sách, kèm bộ cột của biểu
+	// @screen   07-thu-chi-ngan-sach §3 §7
+	// @request  taoBangVao
+	// @reply    201 bangRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/budget-sheets",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.TaoBangNganSach))))
+
+	// `budget.confirm` ON §6's `🗑 Gỡ`, AND THE SPECIFICATION ASSIGNS NONE — the screen's own dialog
+	// calls it irreversible. It takes a whole year of figures off every report in one act, including
+	// figures already quoted upward, which is the same class of act as freezing a voucher. Chosen in
+	// the direction that can be LOOSENED later with one line and cannot be tightened later at all:
+	// widening it to `budget.update` the day the customer says so costs one edit, while narrowing it
+	// afterwards means every removal already made was made under the wrong authority.
+	//
+	// A BODY ON A DELETE, and the alternative was worse: the reason is mandatory (rule 7, invariant 1
+	// names `delete_reason`), and the query string would put free text about a public authority's
+	// budget into every access log and proxy cache.
+	//
+	// idem.KhongCan — removing an already-removed sheet is a 404 either way, and the second request
+	// cannot overwrite who removed it or why: the UPDATE carries `AND deleted_at IS NULL`.
+	//
+	// @summary  Gỡ mềm cả bảng ngân sách của một năm, kèm lý do bắt buộc
+	// @screen   07-thu-chi-ngan-sach §6
+	// @request  goVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/budget-sheets/{id}",
+		authz.RequirePermission(d.Checker, "budget.confirm")(
+			idem.KhongCan("gỡ một bảng đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
+				http.HandlerFunc(h.GoBangNganSach))))
+
+	// `budget.update` — `＋ Thêm khoản mục con` and `⊞ Thêm khoản mục cấp cao nhất` (§4.3).
+	//
+	// idem.Required(DongKhiHong), AND THE COST IS STATED: with no Redis, adding a line answers 503 and
+	// the accountant cannot enter data. It is chosen anyway because there is no unique key that could
+	// tell a double-submitted form from two genuinely similar lines — two rows both named
+	// "Chi quốc phòng" under one parent are a real thing in these forms — so a cache outage plus a
+	// double click is a duplicated line inside a parent's total, which is a figure on a report.
+	// `MoKhiHong` would be the choice if a uniqueness constraint existed underneath; there is none,
+	// and rest-api-design reserves DongKhiHong for exactly this.
+	//
+	// @summary  Thêm một khoản mục vào cây của bảng ngân sách
+	// @screen   07-thu-chi-ngan-sach §4.1 §4.3
+	// @request  themDongVao
+	// @reply    201 dongRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/budget-lines",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ThemKhoanMucNganSach))))
+
+	// PATCH AND NOT PUT: `no` is optional and its empty string is a meaningful value, so a full
+	// replacement cannot tell "not mentioned" from "cleared" — and the same holds cell by cell, which
+	// is why `values` is a map whose `null` CLEARS (§9 rule 4).
+	//
+	// A FIGURE TYPED INTO A LINE THAT HAS CHILDREN ANSWERS 409 WITH THE CUSTOMER'S OWN RULE. That is
+	// this route's real job: anh Hà settled on 06/09/2026 that a parent always sums its children, and
+	// blocking it on the screen only leaves it open to an import script written next year. The price
+	// the customer accepted comes with it and is written into migration 0006 — on the rows where a
+	// real form has a parent that is NOT the sum of its children (khoản mục ngoài cân đối, the
+	// `Trong đó:` lines), the number on the screen will differ from the paper the commune signed.
+	//
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.SuaKhoanMuc
+	// compares what it read against what it would write and, when nothing moved, writes NOTHING — no
+	// UPDATE, no cell, no audit entry. So the same request sent twice leaves one row in one state and
+	// one entry in the ledger.
+	//
+	// @summary  Sửa số thứ tự, tên hoặc các ô số của một khoản mục chưa có dòng con
+	// @screen   07-thu-chi-ngan-sach §4.1
+	// @request  suaDongVao
+	// @reply    200 dongRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/budget-lines/{id}",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.SuaKhoanMuc không ghi gì khi không có trường và không có ô nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaKhoanMucNganSach))))
+
+	// `budget.confirm` ON `🗑 Gỡ khoản mục`, for the same reason the sheet's removal takes it and
+	// chosen the same way — tight now, loosened later with one line if the customer says so. A line's
+	// figure is inside the summary card and inside both indicators from the moment it is entered, so
+	// removing one CHANGES A FIGURE THAT HAS ALREADY BEEN READ off a screen.
+	//
+	// ⚠ THE COST IS REAL AND IS STATED RATHER THAN DISCOVERED: a commune with one accountant cannot
+	// take back a line they have just added without somebody holding `budget.confirm`. They can edit
+	// it, which covers the ordinary typo. If the customer finds that too tight, the correction is one
+	// literal on this line.
+	//
+	// A LINE WITH CHILDREN ANSWERS 409, not a cascade. A cascade takes a whole branch off every total
+	// in one click, and these rows are archival — "undo" is not a button, it is re-entering them.
+	//
+	// idem.KhongCan — removing an already-removed line is a 404 either way, and the second request
+	// cannot overwrite who removed it or why.
+	//
+	// @summary  Gỡ mềm một khoản mục chưa có dòng con, kèm lý do bắt buộc
+	// @screen   07-thu-chi-ngan-sach §4.1
+	// @request  goVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/budget-lines/{id}",
+		authz.RequirePermission(d.Checker, "budget.confirm")(
+			idem.KhongCan("gỡ một khoản mục đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
+				http.HandlerFunc(h.GoKhoanMucNganSach))))
+
+	// --- the star: the most consequential route on this screen ------------------------------------
+	//
+	// `headline` IS A NOMINALISED SUB-RESOURCE, NOT A VERB IN A PATH — the shape `lockout` already
+	// uses. POST creates the state on one row; the store clears it from every other row of the sheet
+	// in the same transaction, which is what makes the mark a RADIO.
+	//
+	// `budget.confirm` AND NOT `budget.update`, AND THIS IS THE DECISION TO READ TWICE. Marking a row
+	// does not change one figure: it changes WHICH ROW EVERY SUMMARY CELL AND BOTH INDICATORS ARE
+	// READ FROM, and those are the numbers that go into a document sent to a higher authority. ADR
+	// 0035 §A exists because getting it wrong is not visible — the thu sheet has two nested top-level
+	// rows and the chi sheet has `Tổng số` beside A…E, so a wrong star produces a complete, plausible,
+	// double-counted report. That is the weight of a confirmation, not of data entry.
+	//
+	// NO DELETE ROUTE, DELIBERATELY. §4.1 draws the star as something that MOVES ("bấm ngôi sao ở đầu
+	// một dòng khác để đổi"); a sheet that HAD a total and then deliberately had none is a state
+	// nothing on that screen asks for. A sheet loses its total only by the marked row being removed,
+	// which releases the flag — and the summary card then says so in a sentence rather than showing 0.
+	//
+	// idem.KhongCan — marking the same row twice leaves the same one row marked and writes the same
+	// state; the second entry in the ledger records an act that really was performed twice.
+	//
+	// @summary  Đánh dấu một khoản mục là dòng tổng của bảng — số tóm tắt và chỉ số đọc từ dòng này
+	// @screen   07-thu-chi-ngan-sach §4.1 §5 quy tắc 5
+	// @reply    200 dongRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/budget-lines/{id}/headline",
+		authz.RequirePermission(d.Checker, "budget.confirm")(
+			idem.KhongCan("đánh dấu lại đúng dòng đang là dòng tổng để lại đúng một dòng được đánh dấu và đúng trạng thái ấy")(
+				http.HandlerFunc(h.DatDongTongNganSach))))
 }

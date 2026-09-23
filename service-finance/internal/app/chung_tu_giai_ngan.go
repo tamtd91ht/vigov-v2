@@ -73,6 +73,7 @@ type KhoChungTu interface {
 	Chen(ctx context.Context, tx *store.ScopedTx, ct domain.ChungTuGiaiNgan) error
 	CapNhat(ctx context.Context, tx *store.ScopedTx, ct domain.ChungTuGiaiNgan) error
 	XacNhan(ctx context.Context, tx *store.ScopedTx, id, maCanBo string) error
+	VeNhapSauKhiSua(ctx context.Context, tx *store.ScopedTx, id string) error
 	Khoa(ctx context.Context, tx *store.ScopedTx, id, maCanBo string, luc time.Time) error
 	MoKhoa(ctx context.Context, tx *store.ScopedTx, id string,
 		trangThaiVe domain.TrangThaiChungTu, maCanBo, lyDo string, luc time.Time) error
@@ -345,6 +346,26 @@ func (uc *ChungTuGiaiNgan) Sua(ctx context.Context, id string, yc YeuCauSuaChung
 			return err
 		}
 
+		// A CONFIRMED VOUCHER GOES BACK TO `Kế toán nhập` BECAUSE ITS FIGURES JUST MOVED.
+		// *"Lãnh đạo xác nhận những con số kia, không phải những con số này."* The customer's rule,
+		// measured in `../vigov-require` commit `c3f4d6a`; domain.TrangThaiSauKhiSua owns the decision
+		// and this is the only caller.
+		//
+		// IT RUNS ONLY WHEN SOMETHING REALLY CHANGED. The no-op branch above has already returned, so
+		// a repeat of an identical PATCH cannot strip a confirmation off a voucher nobody edited —
+		// which would make `idem.KhongCan` on that route a lie AND undo a leader's act for nothing.
+		veNhap := domain.TrangThaiSauKhiSua(truoc.TrangThai) != truoc.TrangThai
+		if veNhap {
+			if err := uc.kho.VeNhapSauKhiSua(ctx, tx, truoc.ID); err != nil {
+				return err
+			}
+			sau.TrangThai = domain.TrangThaiSauKhiSua(truoc.TrangThai)
+			// The column is cleared with the state, so the row stops naming somebody as the confirmer
+			// of figures they have not seen. Who HAD confirmed it is in the entry below, which is
+			// append-only.
+			sau.NguoiXacNhanID = ""
+		}
+
 		// BEFORE AND AFTER, AND ONLY THE FIELDS THAT MOVED (rule 6, invariant 5). A delta carrying
 		// every column on every edit makes the one field somebody actually changed impossible to
 		// find in a ledger that is never deleted.
@@ -354,11 +375,23 @@ func (uc *ChungTuGiaiNgan) Sua(ctx context.Context, id string, yc YeuCauSuaChung
 		// refund is editing an old voucher DOWN to a smaller figure. That edit is legitimate as a
 		// correction and indistinguishable from the detour on the row itself; the only thing that
 		// tells them apart afterwards is this pair of numbers in an append-only ledger.
-		delta, err := json.Marshal(map[string]any{
+		than := map[string]any{
 			"chung_tu_id": sau.ID,
 			"truoc":       tomTatDoiChungTu(truoc, sau, true),
 			"sau":         tomTatDoiChungTu(truoc, sau, false),
-		})
+		}
+		if veNhap {
+			// RECORDED AS ITS OWN FACT, NOT FOLDED INTO `truoc`/`sau`. Losing a confirmation is not a
+			// field the accountant edited — it is a consequence of the edit, and it undoes a named
+			// person's act. `nguoi_xac_nhan_id` is nulled on the row, so this entry is the ONLY place
+			// that still answers "who had confirmed these figures before they were changed".
+			than["mat_xac_nhan"] = map[string]any{
+				"truoc_trang_thai":  string(truoc.TrangThai),
+				"sau_trang_thai":    string(sau.TrangThai),
+				"nguoi_xac_nhan_cu": truoc.NguoiXacNhanID,
+			}
+		}
+		delta, err := json.Marshal(than)
 		if err != nil {
 			return fmt.Errorf("chung_tu_giai_ngan: mã hoá delta: %w", err)
 		}

@@ -8,6 +8,784 @@
   },
   "x-vigov-source": "*/internal/ — chú thích @summary/@screen/@request/@reply ngay trên câu lệnh đăng ký route",
   "paths": {
+    "/api/v1/budget-indicators": {
+      "get": {
+        "summary": "Ba chỉ số ngân sách của một năm: thu đạt dự toán, chi đạt dự toán, cân đối thu - chi",
+        "operationId": "finance_get_budget_indicators",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §9 quy tắc 6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "532dfe0b0eeb",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.chiSoNamRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/budget-lines": {
+      "post": {
+        "summary": "Thêm một khoản mục vào cây của bảng ngân sách",
+        "operationId": "finance_post_budget_lines",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §4.1 §4.3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "37bd46057dbe",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.themDongVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.dongRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/budget-lines/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Gỡ mềm một khoản mục chưa có dòng con, kèm lý do bắt buộc",
+        "operationId": "finance_delete_budget_lines_by_id",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §4.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.confirm"
+        },
+        "x-vigov-task": "6d8084b0a1f1",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.goVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa số thứ tự, tên hoặc các ô số của một khoản mục chưa có dòng con",
+        "operationId": "finance_patch_budget_lines_by_id",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §4.1",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "efa06efbff87",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.suaDongVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.dongRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/budget-lines/{id}/headline": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Đánh dấu một khoản mục là dòng tổng của bảng — số tóm tắt và chỉ số đọc từ dòng này",
+        "operationId": "finance_post_budget_lines_by_id_headline",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §4.1 §5 quy tắc 5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.confirm"
+        },
+        "x-vigov-task": "4bf2903eef2b",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.dongRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/budget-sheets": {
+      "get": {
+        "summary": "Bảng thu hoặc chi của một năm ngân sách: cột, cây khoản mục, số liệu và ô tóm tắt",
+        "operationId": "finance_get_budget_sheets",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §2 §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "ccb000294264",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.bangDayDuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Tạo bảng thu hoặc chi cho một năm ngân sách, kèm bộ cột của biểu",
+        "operationId": "finance_post_budget_sheets",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §3 §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "a59d05b87269",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.taoBangVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.bangRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/budget-sheets/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Gỡ mềm cả bảng ngân sách của một năm, kèm lý do bắt buộc",
+        "operationId": "finance_delete_budget_sheets_by_id",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.confirm"
+        },
+        "x-vigov-task": "71501542f104",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.goVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/capital-plan-categories": {
       "get": {
         "summary": "Danh mục hạng mục kế hoạch vốn của xã — dùng cho ô phân loại dòng kế hoạch và bộ lọc",
@@ -1143,7 +1921,7 @@
         }
       },
       "patch": {
-        "summary": "Sửa ngày chi, số tiền, nội dung, đối tác hoặc số chứng từ của một chứng từ chưa khoá",
+        "summary": "Sửa ngày chi, số tiền, nội dung, đối tác hoặc số chứng từ của một chứng từ chưa khoá — chứng từ đã xác nhận sẽ về nháp",
         "operationId": "finance_patch_disbursements_by_id",
         "tags": [
           "finance"
@@ -7525,6 +8303,142 @@
         ],
         "additionalProperties": false
       },
+      "finance.bangDayDuRa": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "$ref": "#/components/schemas/finance.bangRa"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.cotRa"
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.dongRa"
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/finance.tomTatRa"
+          }
+        },
+        "required": [
+          "columns",
+          "lines",
+          "sheet",
+          "summary"
+        ],
+        "additionalProperties": false
+      },
+      "finance.bangRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "\"NS-2026-CHI-01\" — the business code the audit trail is filed under"
+          },
+          "year": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`thu` | `chi`"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "description": "\"Triệu đồng\" — what the SCREEN prints. The wire carries đồng."
+          },
+          "cumulative_to": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "source_file": {
+            "type": "string"
+          },
+          "loaded_at": {
+            "type": "string",
+            "description": "RFC 3339"
+          }
+        },
+        "required": [
+          "code",
+          "id",
+          "kind",
+          "revision",
+          "title",
+          "unit",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.chiSoNamRa": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "revenue_achievement": {
+            "$ref": "#/components/schemas/finance.chiSoRa",
+            "description": "Thu đạt dự toán"
+          },
+          "expenditure_achievement": {
+            "$ref": "#/components/schemas/finance.chiSoRa",
+            "description": "Chi đạt dự toán"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/finance.soTienRa",
+            "description": "Cân đối thu - chi"
+          },
+          "revenue_totals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.oTongRa"
+            }
+          }
+        },
+        "required": [
+          "balance",
+          "expenditure_achievement",
+          "revenue_achievement",
+          "revenue_totals",
+          "year"
+        ],
+        "additionalProperties": false
+      },
+      "finance.chiSoRa": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "basis_points": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "unavailable_reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "basis_points",
+          "name"
+        ],
+        "additionalProperties": false
+      },
       "finance.chungTuRa": {
         "type": "object",
         "properties": {
@@ -7596,6 +8510,66 @@
         ],
         "additionalProperties": false
       },
+      "finance.cotRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string",
+            "description": "`so` | `phan_tram`"
+          },
+          "formula": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "order",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "finance.cotVao": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string",
+            "description": "`so` | `phan_tram`"
+          },
+          "formula": {
+            "type": "string",
+            "description": "required for `phan_tram`, refused on `so`"
+          },
+          "role": {
+            "type": "string",
+            "description": "one of the six; empty for an ordinary column"
+          }
+        },
+        "required": [
+          "name",
+          "order",
+          "type"
+        ],
+        "additionalProperties": false
+      },
       "finance.danhSachDuAnRa": {
         "type": "object",
         "properties": {
@@ -7636,6 +8610,57 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "finance.dongRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "no": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "method": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer"
+          },
+          "is_headline": {
+            "type": "boolean"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "description": "columnID -> đồng, or null for an empty cell"
+          }
+        },
+        "required": [
+          "id",
+          "is_headline",
+          "level",
+          "method",
+          "name",
+          "no",
+          "order",
+          "values"
         ],
         "additionalProperties": false
       },
@@ -7753,6 +8778,18 @@
         ],
         "additionalProperties": false
       },
+      "finance.goVao": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
       "finance.hangMucRa": {
         "type": "object",
         "properties": {
@@ -7808,6 +8845,53 @@
         ],
         "additionalProperties": false
       },
+      "finance.oTongRa": {
+        "type": "object",
+        "properties": {
+          "column_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        },
+        "required": [
+          "column_id",
+          "name",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "finance.soTienRa": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "đồng"
+          },
+          "unavailable_reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount"
+        ],
+        "additionalProperties": false
+      },
       "finance.suaChungTuVao": {
         "type": "object",
         "properties": {
@@ -7851,6 +8935,70 @@
           "status": {
             "type": [
               "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "finance.suaDongVao": {
+        "type": "object",
+        "properties": {
+          "no": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          },
+          "sheet_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "method": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "level": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "is_headline": {
+            "type": [
+              "boolean",
               "null"
             ]
           }
@@ -7905,6 +9053,48 @@
         },
         "additionalProperties": false
       },
+      "finance.taoBangVao": {
+        "type": "object",
+        "properties": {
+          "year": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "cumulative_to": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.cotVao"
+            }
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "present only so it can be refused"
+          }
+        },
+        "required": [
+          "columns",
+          "kind",
+          "title",
+          "unit",
+          "year"
+        ],
+        "additionalProperties": false
+      },
       "finance.themChungTuVao": {
         "type": "object",
         "properties": {
@@ -7944,6 +9134,50 @@
         ],
         "additionalProperties": false
       },
+      "finance.themDongVao": {
+        "type": "object",
+        "properties": {
+          "sheet_id": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "no": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "integer"
+          },
+          "method": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "level": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "is_headline": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "order",
+          "sheet_id"
+        ],
+        "additionalProperties": false
+      },
       "finance.themHangMucVao": {
         "type": "object",
         "properties": {
@@ -7975,6 +9209,31 @@
         "required": [
           "code",
           "label"
+        ],
+        "additionalProperties": false
+      },
+      "finance.tomTatRa": {
+        "type": "object",
+        "properties": {
+          "headline_line_id": {
+            "type": "string"
+          },
+          "unavailable_reason": {
+            "type": "string"
+          },
+          "cells": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.oTongRa"
+            }
+          },
+          "indicator": {
+            "$ref": "#/components/schemas/finance.chiSoRa"
+          }
+        },
+        "required": [
+          "cells",
+          "indicator"
         ],
         "additionalProperties": false
       },
