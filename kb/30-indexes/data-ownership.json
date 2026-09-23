@@ -5,6 +5,27 @@
   "_warnings": null,
   "entities": [
     {
+      "entity": "Announcement",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "thong_bao",
+      "source": "service-comms/migrations/0005_thong_bao_noi_bo.sql:156"
+    },
+    {
+      "entity": "AnnouncementOrgUnit",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "thong_bao_bo_phan",
+      "source": "service-comms/migrations/0005_thong_bao_noi_bo.sql:358"
+    },
+    {
+      "entity": "AnnouncementRecipient",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "thong_bao_nguoi_nhan",
+      "source": "service-comms/migrations/0005_thong_bao_noi_bo.sql:417"
+    },
+    {
       "entity": "BudgetColumn",
       "service": "finance",
       "scope": "tenant",

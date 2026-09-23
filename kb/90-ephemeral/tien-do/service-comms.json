@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-09-22",
+  "cap_nhat": "2026-09-23",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -90,6 +90,22 @@
       "bang_chung": "`internal/http/danh_muc_ghi.go:71` đổi `p.ID` -> `p.Ma`, và điều kiện canh đổi sang `p.Ma == \"\"` — rỗng thì TỪ CHỐI (500), không lùi về id nội bộ. Bài kiểm khẳng định trên GIÁ TRỊ THẬT: vết phải mang `CB-00123` VÀ phải KHÁC ULID (hai vế, vì vế đầu một mình vẫn xanh nếu hai hằng bị làm cho bằng nhau). Bộ đồ thử `internal/app` trước đây chốt `\"nd-01JINTERNALIDCUACANBO\"` làm chủ thể cán bộ — đã đổi sang mã nghiệp vụ. ĐỘT BIẾN: đổi về `p.ID` -> 3 ca ĐỎ và cổng `check_audit_actor` exit 1 đúng dòng 71; hoàn nguyên bằng bản chụp tệp.",
       "no_confirm": [],
       "tiep_theo": ""
+    },
+    {
+      "id": "thong-bao-noi-bo",
+      "viec": "Thông báo nội bộ (ch.08): ba bảng + hai tuyến `GET`/`POST /api/v1/announcements`, phát hành tới cán bộ chọn đích danh",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Commit 68e84ba, 10 tệp mới + 5 tệp đấu dây. Danh từ `announcements` tra trong `kb/00-foundation/ubiquitous-language.md:151`, không tự dịch — `/api/thong-bao` của §7 không ship được vì `thong-bao` là đoạn `rest_api_guard` chặn. SÁU CHỖ LỆCH VỚI §6, mỗi chỗ vì một luật: enum gạch nối (ADR 0011 chốt DẠNG, không chốt dấu phân cách) · `nguoi_soan_ma`/`nguoi_nhan_ma` là MÃ CÁN BỘ chứ không uuid (luật 6 #8) · `thu_loi_ma` chứ không `thu_loi` (câu lỗi SMTP trích lại phong bì, phong bì là địa chỉ người ta — luật 3) · KHÔNG cột `so_nguoi_nhan` (bộ đếm suy ra, cùng lý do luật 10 #3 cấm `is_overdue`) · xoá mềm chỉ trên `thong_bao` (§9.3 đóng băng danh sách người nhận) · phân trang theo `tao_luc` chứ không `phat_hanh_luc` (cột sắp xếp phải NOT NULL, nếu không mọi bản nháp biến mất khỏi trang hai TRONG IM LẶNG). ĐỘT BIẾN: bỏ `tenant_id = $1` khỏi câu đếm người nhận → ĐỎ; `p.ID` thay `p.Ma` → ĐỎ hai lớp. XÁC MINH TOÀN KHO, cây đứng yên 2026-09-23: 7 cổng python xanh · gofmt/vet/build sạch · `go test -race -count=1` 54 gói ok · standalone `GOWORK=off` 9/9 · `buf lint`/`buf breaking` sạch.",
+      "no_confirm": [],
+      "tiep_theo": "MIGRATION NÀY CHƯA TỪNG CHẠY TRÊN MỘT MÁY CHỦ NÀO: `VIGOV_TEST_DSN` không đặt nên MỌI ca trong `thong_bao_noi_bo_pg_test.go` SKIP mà gói vẫn in `ok` — xanh ở đó nghĩa là tệp BIÊN DỊCH ĐƯỢC, không hơn. Chưa được kiểm chứng: bốn CHECK, hai trigger bất biến, khoá ngoại hợp thành, đường đọc loại dòng đã xoá mềm, và danh sách cột đối chiếu lược đồ thật. GỬI THEO BỘ PHẬN TRẢ 501 CÓ CHỦ Ý — §9.3 bắt nở `bo_phan` thành cán bộ tại lúc phát hành, đó là dữ liệu của `identity` và `IdentityService` không có RPC nào làm việc đó (điều kiện dừng luật 2 #2). Lối còn lại, ghi bộ phận rồi không gửi cho ai, không lỗi ở đâu cả và người soạn tin là xã đã được báo. ĐỂ LẠI LƯỢT SAU, ghi rõ trong mã: gửi thư điện tử (cột đã có, `trang_thai_thu` luôn `chua-gui`) · `Lưu nháp` §5 · tuyến chi tiết §7 · `xác nhận`/`đã mở` và `Gỡ` §4 · `hop_thu_thong_bao` §8 (3/4 loại mục do `service-petitions` sinh ⇒ hợp đồng liên service) · ghim lên đầu §3 (`core/page` mang ĐÚNG MỘT cột sắp xếp + `id`, nên `ORDER BY ghim DESC, tao_luc DESC` không diễn đạt được bằng con trỏ của kho này; xấp xỉ sẽ làm trang hai vừa lặp vừa sót, im lặng)."
+    },
+    {
+      "id": "khoa-doc-so-thong-bao-chua-co",
+      "viec": "Nhóm quyền THÔNG BÁO có ĐÚNG MỘT khoá `announcement.create` — không có khoá ĐỌC, nên bộ lọc `Gửi cho tôi` không ship được",
+      "trang_thai": "treo",
+      "bang_chung": "Đối chiếu `service-identity/migrations/0001_init.sql:279` ngày 2026-09-23: nhóm THÔNG BÁO gieo đúng một dòng, `announcement.create`. §2 của chương 08 đòi hai bộ lọc. `Cả sổ thông báo` ĐÃ SHIP, gác tạm bằng chính khoá ấy — cấp THIẾU chứ không cấp THỪA (ai soạn được thì đọc được), tức fail-closed, hệ quả là tài khoản thường nhận 403 và nhìn thấy rõ. `Gửi cho tôi` KHÔNG SHIP: mọi cán bộ đều cần đọc thông báo gửi cho mình.",
+      "no_confirm": [],
+      "tiep_theo": "TREO CHỨ KHÔNG PHẢI CHƯA LÀM, và không được tự gỡ. Câu hỏi #27 đã DECIDED 22/09/2026, và chính quyết định ấy là thứ chặn: `CHỈ NẠP KHOÁ NÀO CÓ TUYẾN THẬT CẦN, không bịa đủ tám`, kèm `ask_before: thêm bất kỳ khoá quyền mới nào vào migration`. Luật 5 bất biến 3c nói cùng điều mạnh hơn: cần một khoá bảng `quyen` chưa có là một PHÁT HIỆN, không bao giờ là một `INSERT` mới — vì một khoá không migration nào gieo là một tuyến trả 403 cho MỌI tài khoản vĩnh viễn, trong khi bộ đồ thử giả cấp bất kỳ chuỗi nào nên phép kiểm vẫn xanh. HAI LỐI, CHỦ DỰ ÁN CHỌN: (a) thêm `announcement.read` vào một migration mới — rẻ về kỹ thuật (tiền lệ 0007), đắt nếu đặt sai tên vì sau khi một xã đã gán khoá cho vai trò thì đổi tên là migration trên dữ liệu phân quyền đang chạy; (b) `authz.AnyAuthenticated` cho riêng tuyến `Gửi cho tôi` — chính là điều kiện dừng #1 của luật 5, và nó đúng nghĩa hơn vẻ ngoài: thông báo gửi cho một người thì người ấy đọc, không cần ai cấp quyền. Chỉ mục `(tenant_id, nguoi_nhan_ma)` CỐ Ý chưa tạo — một chỉ mục không ai đọc là chi phí ghi cộng một lời trấn an sai; tạo cùng lúc tuyến ấy ra đời."
     }
   ]
 }

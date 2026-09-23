@@ -4,6 +4,49 @@
   "_contract": "kb/20-contracts/openapi.json",
   "routes": [
     {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/announcements",
+      "operation_id": "comms_get_announcements",
+      "task_id": "22a96621ab5d",
+      "summary": "Sổ thông báo nội bộ của xã — một trang thẻ, mới nhất ở trên, kèm bộ đếm xác nhận",
+      "screen": "08-thong-bao §2, §3",
+      "permission_kind": "permission",
+      "permission": "announcement.create",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_comms.thongBaoRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/announcements",
+      "operation_id": "comms_post_announcements",
+      "task_id": "9f3ca942fc49",
+      "summary": "Phát hành một thông báo nội bộ tới các cán bộ được chọn đích danh",
+      "screen": "08-thong-bao §5",
+      "permission_kind": "permission",
+      "permission": "announcement.create",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "request_schema": "comms.phatHanhThongBaoVao",
+      "reply_schemas": {
+        "201": "comms.thongBaoRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error",
+        "501": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
       "service": "finance",
       "method": "GET",
       "path": "/api/v1/budget-indicators",

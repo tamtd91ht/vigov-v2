@@ -11,22 +11,22 @@
  * trôi (luật 9, cấm #2). Xem `PHAN_CHUA_DUNG` trong `features/bien-ban/nhan-bien-ban.ts`.
  *
  * ══════════════════════════════════════════════════════════════════════════════════════════
- * HAI KIỂU THÂN YÊU CẦU Ở TỆP NÀY LÀ BẢN CHÉP TAY TẠM THỜI, VÀ ĐÓ LÀ MỘT KHIẾM KHUYẾT ĐÃ BÁO
- * LÊN chứ không phải một lựa chọn thiết kế.
+ * BẢN CHÉP TAY ĐÃ XOÁ 23/09/2026 — và khối này ở lại để nói vì sao nó từng tồn tại.
  *
- * `src/lib/api/schema.gen.ts` ĐANG LỆCH khỏi `kb/20-contracts/openapi.json`: hợp đồng CÓ
- * `petitions.taoBienBanVao` và `petitions.themKetLuanVao`, tệp sinh thì KHÔNG — nó mới chỉ có
- * `petitions_bienBanRa`, `petitions_ketLuanRa` và tuyến GET. `npm run check:api` đỏ từ trước
- * lượt làm này, tức `make web` cũng đang đỏ vì đúng lý do ấy.
+ * Hai kiểu thân yêu cầu ở đây TỪNG là bản chép tay, vì `schema.gen.ts` lệch khỏi
+ * `kb/20-contracts/openapi.json`: hợp đồng đã có `petitions.taoBienBanVao` và
+ * `petitions.themKetLuanVao`, tệp sinh thì chưa — `npm run check:api` đỏ từ TRƯỚC lượt dựng màn
+ * này, tức không phải nợ của người dựng màn. Lượt ấy có ba agent chạy song song nên không ai
+ * được ghi vào `schema.gen.ts`; chạy bộ sinh giữa lúc agent đang viết là đo một cây đang động.
  *
- * Sửa đúng là MỘT LỆNH: `npm run gen:api`. Lượt này không được ghi vào `schema.gen.ts` (ba agent
- * chạy song song), nên hai kiểu dưới đây đứng tạm ở đây. NGÀY LỆNH ẤY CHẠY THÌ XOÁ CHÚNG và
- * `import type { petitions_taoBienBanVao, petitions_themKetLuanVao }` — không phải "để đó cho
- * gọn": một hình dạng hợp đồng chép tay là hình dạng sẽ trôi mà không bài kiểm nào đỏ.
+ * `npm run gen:api` đã chạy, `check:api` đã xanh, và hai kiểu dưới nay là BÍ DANH của kiểu sinh
+ * ra — một hình dạng, một nguồn.
  *
- * ĐỂ SỰ TRÔI ẤY KHÔNG IM LẶNG, `bien-ban.test.ts` ĐỌC THẲNG `kb/20-contracts/openapi.json` và
- * so từng tên trường của hai kiểu này với lược đồ trong hợp đồng. Hợp đồng đổi một trường thì
- * bài kiểm ấy đỏ ngay, thay vì đợi tới lúc máy chủ trả 400 trên máy của một xã.
+ * ĐIỀU ĐÁNG GIỮ LẠI: bản chép tay ấy không trôi được trong im lặng, vì `bien-ban.test.ts` ĐỌC
+ * THẲNG `kb/20-contracts/openapi.json` và so từng tên trường thật sự đi trên dây với lược đồ
+ * trong hợp đồng. Bài kiểm ấy KHÔNG bị xoá cùng bản chép tay: nó canh một thứ khác và vẫn còn
+ * đúng — bí danh chỉ bảo đảm hai kiểu khớp nhau, còn nó bảo đảm thứ hàm này THẬT SỰ GỬI ĐI khớp
+ * với hợp đồng.
  * ══════════════════════════════════════════════════════════════════════════════════════════
  */
 
@@ -36,6 +36,8 @@ import type {
   petitions_bienBanRa,
   petitions_get_meetings,
   petitions_ketLuanRa,
+  petitions_taoBienBanVao,
+  petitions_themKetLuanVao,
 } from "./schema.gen";
 
 /**
@@ -81,7 +83,10 @@ export function laySoBienBan(
 }
 
 /**
- * Thân của `POST /api/v1/meetings` — §4. **Bản chép tay tạm thời**, xem khối đầu tệp.
+ * Thân của `POST /api/v1/meetings` — §4. Bí danh của kiểu SINH RA từ hợp đồng, không phải một
+ * hình dạng viết tay: `held_on` là NGÀY LỊCH `2026-08-05` chứ không phải một mốc thời gian (xem
+ * `nhanNgayHop`), và `chaired_by` là MÃ NGHIỆP VỤ của cán bộ (`CB-2026-7K3M9Q`), không phải id
+ * nội bộ, không phải họ tên.
  *
  * `chaired_by` KHÔNG TUỲ CHỌN TRONG HỢP ĐỒNG dù §4 để "Chủ trì" là trường tuỳ chọn: máy chủ khai
  * nó là `string` thường (không `omitempty`), nên khoá luôn có mặt trên dây và giá trị rỗng là
@@ -91,23 +96,10 @@ export function laySoBienBan(
  * người tạo là chủ thể của phiên (một yêu cầu tự khai tác giả là một yêu cầu giả được vết kiểm
  * toán), còn kho chưa có nơi lưu tệp nên một danh sách đính kèm trên dây là lời hứa không ai giữ.
  */
-export type TaoBienBanVao = {
-  title: string;
-  /** NGÀY LỊCH `2026-08-05`, không phải một mốc thời gian. Xem `nhanNgayHop`. */
-  held_on: string;
-  reference_no?: string;
-  location?: string;
-  /** MÃ NGHIỆP VỤ của cán bộ (`CB-2026-7K3M9Q`), không phải id nội bộ, không phải họ tên. */
-  chaired_by: string;
-  content?: string;
-  attendees?: string[];
-  conclusions?: string[];
-};
+export type TaoBienBanVao = petitions_taoBienBanVao;
 
-/** Thân của `POST …/conclusions`. **Bản chép tay tạm thời**, xem khối đầu tệp. */
-export type ThemKetLuanVao = {
-  content: string;
-};
+/** Thân của `POST …/conclusions`. */
+export type ThemKetLuanVao = petitions_themKetLuanVao;
 
 /**
  * Đọc thân của một lần ghi thành kiểu của tuyến.

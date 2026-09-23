@@ -23,6 +23,16 @@ export type comms_loaiTaiNguyenRa = {
   "tier": number;
 };
 
+export type comms_phatHanhThongBaoVao = {
+  "title": string;
+  "body": string;
+  "org_unit_ids"?: Array<string>;
+  "recipient_codes"?: Array<string>;
+  "pinned"?: boolean;
+  "ack_required"?: boolean;
+  "email_requested"?: boolean;
+};
+
 export type comms_suaLoaiTaiNguyenVao = {
   "label"?: string | null;
   "order"?: number | null;
@@ -40,6 +50,22 @@ export type comms_themLoaiTaiNguyenVao = {
   "is_default"?: boolean;
   "source"?: string | null;
   "tier"?: number | null;
+};
+
+export type comms_thongBaoRa = {
+  "id": string;
+  "title": string;
+  "body": string;
+  "status": string;
+  "pinned": boolean;
+  "ack_required": boolean;
+  "email_requested": boolean;
+  "email_status": string;
+  "author_code": string;
+  "recipient_count": number;
+  "ack_count": number;
+  "issued_at": string | null;
+  "created_at": string;
 };
 
 export type comms_xoaLoaiTaiNguyenVao = {
@@ -300,6 +326,25 @@ export type finance_dongRa = {
   "values": Record<string, number | null>;
 };
 
+export type finance_duAnGhiRa = {
+  "id": string;
+  "code": string;
+  "year": number;
+  "category_id": string;
+  "name": string;
+  "description"?: string;
+  "planned_amount": number;
+  "approved_amount": number;
+  "approved_amount_set": boolean;
+  "org_unit_id"?: string;
+  "assignee_id"?: string;
+  "start_date"?: string;
+  "completion_date"?: string;
+  "disbursement_deadline": string;
+  "funding_allocations"?: Array<finance_phanBoRa>;
+  "funding_allocated_total": number;
+};
+
 export type finance_duAnRa = {
   "id": string;
   /** `ma` — issued once, never reissued */
@@ -362,6 +407,18 @@ export type finance_oTongRa = {
   "value": number | null;
 };
 
+export type finance_phanBoRa = {
+  "id": string;
+  "funding_source_id": string;
+  "amount": number;
+};
+
+export type finance_phanBoVao = {
+  "funding_source_id": string;
+  /** đồng */
+  "amount": number;
+};
+
 export type finance_soTienRa = {
   /** đồng */
   "amount": number | null;
@@ -389,6 +446,21 @@ export type finance_suaDongVao = {
   "method"?: string | null;
   "level"?: number | null;
   "is_headline"?: boolean | null;
+};
+
+export type finance_suaDuAnVao = {
+  "category_id"?: string | null;
+  "name"?: string | null;
+  "description"?: string | null;
+  "planned_amount"?: number | null;
+  "approved_amount"?: number | null;
+  "org_unit_id"?: string | null;
+  "assignee_id"?: string | null;
+  "start_date"?: string | null;
+  "completion_date"?: string | null;
+  "disbursement_deadline"?: string | null;
+  "code"?: string | null;
+  "year"?: number | null;
 };
 
 export type finance_suaHangMucVao = {
@@ -437,6 +509,27 @@ export type finance_themDongVao = {
   "is_headline"?: boolean | null;
 };
 
+export type finance_themDuAnVao = {
+  "code": string;
+  "year": number;
+  "category_id": string;
+  "name": string;
+  "description"?: string;
+  /** `ke_hoach_von_nam`, đồng */
+  "planned_amount": number;
+  /** 0 = "same as this year's plan" (§9) */
+  "approved_amount"?: number;
+  "org_unit_id"?: string;
+  "assignee_id"?: string;
+  /** YYYY-MM-DD */
+  "start_date"?: string;
+  /** YYYY-MM-DD */
+  "completion_date"?: string;
+  /** YYYY-MM-DD */
+  "disbursement_deadline"?: string;
+  "funding_allocations"?: Array<finance_phanBoVao>;
+};
+
 export type finance_themHangMucVao = {
   "code": string;
   "label": string;
@@ -451,6 +544,10 @@ export type finance_tomTatRa = {
   "unavailable_reason"?: string;
   "cells": Array<finance_oTongRa>;
   "indicator": finance_chiSoRa;
+};
+
+export type finance_xoaDuAnVao = {
+  "reason": string;
 };
 
 export type finance_xoaHangMucVao = {
@@ -811,6 +908,13 @@ export type identity_xoaLichVao = {
   "reason": string;
 };
 
+export type page_Result_comms_thongBaoRa = {
+  "items": Array<comms_thongBaoRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
 export type page_Result_documents_vanBanDenRa = {
   "items": Array<documents_vanBanDenRa>;
   /** empty when has_more is false */
@@ -928,7 +1032,7 @@ export type petitions_ketLuanRa = {
 };
 
 export type petitions_loaiNhiemVuRa = {
-  /** ULID — what a task record references */
+  /** ULID of THIS lookup row */
   "id": string;
   /** slug: "theo-van-ban" */
   "code": string;
@@ -1071,6 +1175,34 @@ export type petitions_suaNhiemVuVao = {
   "parent"?: string | null;
 };
 
+export type petitions_tachKetLuanVao = {
+  "code"?: string;
+  "auto_code": boolean;
+  "type": string;
+  "bloc"?: string;
+  "title": string;
+  "description"?: string;
+  "priority"?: string;
+  "unit"?: string;
+  "assignee"?: string;
+  "assigner"?: string;
+  "lead_unit"?: string;
+  "monitor"?: string;
+  "due_at"?: string | null;
+  "parent"?: string;
+};
+
+export type petitions_taoBienBanVao = {
+  "title": string;
+  "held_on": string;
+  "reference_no"?: string;
+  "location"?: string;
+  "chaired_by": string;
+  "content"?: string;
+  "attendees"?: Array<string>;
+  "conclusions"?: Array<string>;
+};
+
 export type petitions_taoNhiemVuVao = {
   "code"?: string;
   "auto_code": boolean;
@@ -1088,6 +1220,10 @@ export type petitions_taoNhiemVuVao = {
   "monitor"?: string;
   "due_at"?: string | null;
   "parent"?: string;
+};
+
+export type petitions_themKetLuanVao = {
+  "content": string;
 };
 
 export type petitions_themLoaiNhiemVuVao = {
@@ -1118,6 +1254,47 @@ export type petitions_xoaMucUuTienVao = {
 
 export type petitions_xoaNhiemVuVao = {
   "reason": string;
+};
+
+/** GET /api/v1/announcements — Sổ thông báo nội bộ của xã — một trang thẻ, mới nhất ở trên, kèm bộ đếm xác nhận */
+export type comms_get_announcements = {
+  duongDan: "/api/v1/announcements";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "created_at";
+    "order"?: "asc" | "desc";
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_comms_thongBaoRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/announcements — Phát hành một thông báo nội bộ tới các cán bộ được chọn đích danh */
+export type comms_post_announcements = {
+  duongDan: "/api/v1/announcements";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_phatHanhThongBaoVao;
+  phanHoi: {
+    201: comms_thongBaoRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    501: httpx_Error;
+  };
 };
 
 /** GET /api/v1/budget-indicators — Ba chỉ số ngân sách của một năm: thu đạt dự toán, chi đạt dự toán, cân đối thu - chi */
@@ -1367,6 +1544,17 @@ export type petitions_get_citizen_reports = {
   thamSo: {
   };
   truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "booked_at" | "created_at";
+    "order"?: "asc" | "desc";
+    "channel"?: string;
+    "field"?: string;
+    "hamlet"?: string;
+    "late"?: string;
+    "q"?: string;
+    "status"?: string;
+    "unit"?: string;
   };
   than: never;
   phanHoi: {
@@ -1701,6 +1889,10 @@ export type documents_get_incoming_documents = {
   thamSo: {
   };
   truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "number" | "created_at";
+    "order"?: "asc" | "desc";
     "document_type"?: string;
     "holding_unit"?: string;
     "q"?: string;
@@ -1818,6 +2010,26 @@ export type finance_get_investment_projects = {
   };
 };
 
+/** POST /api/v1/investment-projects — Thêm một dự án đầu tư cho năm ngân sách, kèm phân bổ nguồn vốn nếu xã khai */
+export type finance_post_investment_projects = {
+  duongDan: "/api/v1/investment-projects";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: finance_themDuAnVao;
+  phanHoi: {
+    201: finance_duAnGhiRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/investment-projects/{id} — Chi tiết một dự án đầu tư: kế hoạch vốn, đã giải ngân, tỷ lệ và điểm chậm */
 export type finance_get_investment_projects_by_id = {
   duongDan: "/api/v1/investment-projects/{id}";
@@ -1834,6 +2046,47 @@ export type finance_get_investment_projects_by_id = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/investment-projects/{id} — Sửa hạng mục, tên, mô tả, kế hoạch vốn, đơn vị, cán bộ phụ trách hoặc các mốc thời gian của một dự án đầu tư */
+export type finance_patch_investment_projects_by_id = {
+  duongDan: "/api/v1/investment-projects/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_suaDuAnVao;
+  phanHoi: {
+    200: finance_duAnGhiRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/investment-projects/{id} — Xoá mềm một dự án đầu tư kèm lý do bắt buộc — từ chối khi dự án còn chứng từ giải ngân */
+export type finance_delete_investment_projects_by_id = {
+  duongDan: "/api/v1/investment-projects/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: finance_xoaDuAnVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -1922,6 +2175,10 @@ export type petitions_get_meetings = {
   thamSo: {
   };
   truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "created_at";
+    "order"?: "asc" | "desc";
   };
   than: never;
   phanHoi: {
@@ -1929,6 +2186,66 @@ export type petitions_get_meetings = {
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/meetings — Nhập một biên bản họp, kèm các kết luận đã gõ trên biểu mẫu — kết luận đánh số ① ② ③ theo thứ tự nhập */
+export type petitions_post_meetings = {
+  duongDan: "/api/v1/meetings";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: petitions_taoBienBanVao;
+  phanHoi: {
+    201: petitions_bienBanRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/meetings/{id}/conclusions — Thêm một kết luận vào biên bản đã có — số thứ tự nối tiếp số ĐÃ CẤP, kể cả khi kết luận mang số đó đã bị xoá */
+export type petitions_post_meetings_by_id_conclusions = {
+  duongDan: "/api/v1/meetings/{id}/conclusions";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: petitions_themKetLuanVao;
+  phanHoi: {
+    201: petitions_ketLuanRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/meetings/{id}/conclusions/{stt}/task — Tách một kết luận họp thành một nhiệm vụ — nhiệm vụ giữ liên kết ngược về kết luận gốc qua cặp nguồn giao */
+export type petitions_post_meetings_by_id_conclusions_by_stt_task = {
+  duongDan: "/api/v1/meetings/{id}/conclusions/{stt}/task";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+    "stt": string;
+  };
+  truyVan: {
+  };
+  than: petitions_tachKetLuanVao;
+  phanHoi: {
+    201: petitions_nhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -1993,6 +2310,10 @@ export type documents_get_outgoing_documents = {
   thamSo: {
   };
   truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "number" | "created_at";
+    "order"?: "asc" | "desc";
     "document_type"?: string;
     "q"?: string;
     "year"?: string;
@@ -2790,6 +3111,21 @@ export type petitions_get_tasks = {
   thamSo: {
   };
   truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "created_at" | "code";
+    "order"?: "asc" | "desc";
+    "assignee"?: string;
+    "bloc"?: string;
+    "late"?: string;
+    "priority"?: string;
+    "q"?: string;
+    "scope"?: string;
+    "soon"?: string;
+    "source"?: string;
+    "status"?: string;
+    "type"?: string;
+    "unit"?: string;
   };
   than: never;
   phanHoi: {
