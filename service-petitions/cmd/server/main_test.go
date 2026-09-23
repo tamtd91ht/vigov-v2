@@ -138,6 +138,18 @@ func (khoNhiemVu) DanhSach(ctx context.Context, _ petstore.LocNhiemVu, _ page.Re
 	return page.NewResult[domain.NhiemVu](), nil
 }
 
+// khoBienBan stands in for the MEETING MINUTES register, present for the same reason as the stores
+// above: Register refuses incomplete Deps at construction. It asserts the one thing this file can
+// assert about a store — that the commune reached it.
+type khoBienBan struct{}
+
+func (khoBienBan) DanhSach(ctx context.Context, _ page.Request) (
+	page.Result[domain.BienBanHop], error) {
+
+	_ = tenant.MustFrom(ctx)
+	return page.NewResult[domain.BienBanHop](), nil
+}
+
 type khoNhanLinhVuc struct{}
 
 func (khoNhanLinhVuc) DanhSach(ctx context.Context) ([]domain.NhanLinhVuc, error) {
@@ -291,6 +303,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		XuLyPhieu:       app.NewXuLyPhanAnh(nil, nil, nil, nil),
 		NhiemVu:         khoNhiemVu{},
 		DanhSachNhiemVu: khoNhiemVu{},
+		DanhSachBienBan: khoBienBan{},
 		Log:             log,
 	})
 

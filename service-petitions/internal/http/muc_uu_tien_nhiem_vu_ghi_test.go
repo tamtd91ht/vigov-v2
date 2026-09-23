@@ -173,6 +173,7 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		// nothing in this file calls them — their own suite is nhiem_vu_test.go.
 		NhiemVu:         nhiemVuMau(),
 		DanhSachNhiemVu: nhiemVuMau(),
+		DanhSachBienBan: bienBanMau(),
 		Log:             im,
 	})
 

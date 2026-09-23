@@ -210,6 +210,7 @@ type mayChu struct {
 	danhSach *danhSachPhieuGia
 	xuLy     *xuLyPhieuGia
 	nhiemVu  *nhiemVuGia
+	bienBan  *bienBanGia
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -229,6 +230,11 @@ func dungMayChu(t *testing.T) *mayChu {
 	// cmd/server gives to both Deps fields, so a test cannot accidentally prove that two different
 	// registers agree with each other.
 	nhiemVu := nhiemVuMau()
+	// The meeting register. Its fixtures are SEPARATE from the task register's on purpose: the
+	// counters on a card arrive already aggregated from the store, so a harness that derived them
+	// from nhiemVuMau() would be asserting that two fakes agree with each other rather than that the
+	// route renders what the store returned.
+	bienBan := bienBanMau()
 
 	m := &mayChu{
 		d: Deps{
@@ -262,6 +268,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			XuLyPhieu:       xuLy,
 			NhiemVu:         nhiemVu,
 			DanhSachNhiemVu: nhiemVu,
+			DanhSachBienBan: bienBan,
 			Log:             slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		thuMuc:   thuMucMau(),
@@ -273,6 +280,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		danhSach: danhSach,
 		xuLy:     xuLy,
 		nhiemVu:  nhiemVu,
+		bienBan:  bienBan,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -357,6 +365,7 @@ func depsDay() Deps {
 		// BOTH TASK FIELDS, from ONE fake — the same shape cmd/server wires.
 		NhiemVu:         nhiemVuMau(),
 		DanhSachNhiemVu: nhiemVuMau(),
+		DanhSachBienBan: bienBanMau(),
 	}
 }
 
@@ -389,6 +398,9 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// not one screen: it is Nhiệm vụ, Sổ tay lãnh đạo, Biên bản họp and half of Tổng quan.
 		"thiếu kho nhiệm vụ":                 func(d *Deps) { d.NhiemVu = nil },
 		"thiếu đường đọc danh sách nhiệm vụ": func(d *Deps) { d.DanhSachNhiemVu = nil },
+		// The meeting register. A nil here is the Biên bản họp screen, and with it the only place a
+		// commune can see WHERE its tasks came from.
+		"thiếu đường đọc danh sách biên bản": func(d *Deps) { d.DanhSachBienBan = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {

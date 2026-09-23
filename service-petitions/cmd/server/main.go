@@ -178,6 +178,10 @@ func chay(log *slog.Logger) error {
 	// route is given, never a second object holding the same pool.
 	nhiemVu := petstore.NewNhiemVuStore(kho)
 
+	// THE MEETING MINUTES REGISTER (migration 0007) — where a large part of the register above comes
+	// from. One store, one read route in this pass.
+	bienBan := petstore.NewBienBanHopStore(kho)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware
@@ -211,6 +215,11 @@ func chay(log *slog.Logger) error {
 		// layer here would carry nothing.
 		NhiemVu:         nhiemVu,
 		DanhSachNhiemVu: nhiemVu,
+		// The meeting-minutes read route. No use case either, and for the same reason — with one
+		// thing worth naming: the two task counters on every card are computed by the STORE's
+		// query, not by a layer here, so the figure the badge shows and the rows the task register
+		// returns come from one place and cannot disagree.
+		DanhSachBienBan: bienBan,
 		Log:             log,
 	})
 

@@ -131,6 +131,18 @@ type (
 			page.Result[domain.NhiemVu], error)
 	}
 
+	// BienBanDanhSach is the paginated read of the meeting-minutes register, for
+	// GET /api/v1/meetings — each meeting already carrying its conclusions and their task counters.
+	//
+	// ONE METHOD, AND THE COUNTERS ARE INSIDE IT rather than a second method the handler would call
+	// and add up. §7.5's badge is a SUM over the conclusions of one meeting, and a handler holding
+	// two halves of that sum is a handler that can pair the wrong ones: the aggregation belongs to
+	// the query that already visits both tables, and domain.BienBanHop.TienDoNhiemVu is the only
+	// arithmetic left above it.
+	BienBanDanhSach interface {
+		DanhSach(ctx context.Context, yc page.Request) (page.Result[domain.BienBanHop], error)
+	}
+
 	// XuLyPhieuPhanAnh is the four STAFF acts, each of which opens a transaction and writes the
 	// business change, the audit entry and the notification obligation inside it (rule 6, invariant
 	// 3; rule 10, invariant 5).
@@ -240,6 +252,11 @@ type Deps struct {
 	NhiemVu         NhiemVuDoc
 	DanhSachNhiemVu NhiemVuDanhSach
 
+	// The MEETING MINUTES register — one read path in this pass (migration 0007). It is the ORIGIN
+	// of the tasks above: a conclusion is split into a task and the task keeps a permanent back-link
+	// to it through `nguon_giao`/`nguon_id`, which is why both registers live in this service.
+	DanhSachBienBan BienBanDanhSach
+
 	// Vet writes the trail for a full-view read. Required, not optional — see the panic switch.
 	Vet VetXemNguoiGui
 
@@ -289,6 +306,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu kho nhiệm vụ — GET /api/v1/tasks/{ma} sẽ panic khi có người gọi")
 	case d.DanhSachNhiemVu == nil:
 		panic("petitions/http: thiếu đường đọc danh sách nhiệm vụ — GET /api/v1/tasks sẽ panic khi có người gọi")
+	case d.DanhSachBienBan == nil:
+		panic("petitions/http: thiếu đường đọc danh sách biên bản họp — GET /api/v1/meetings sẽ panic khi có người gọi")
 	case d.Vet == nil:
 		// THE MOST DANGEROUS OF THE FIVE TO LEAVE OUT, because a nil here does not crash a screen:
 		// it crashes the ONE path that discloses a citizen's name and number, and only when
@@ -681,6 +700,48 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/tasks/{ma}",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DocNhiemVu)))
+
+	// --- MEETING MINUTES AND THEIR CONCLUSIONS. ONE READ ROUTE, AND NO WRITE ROUTE --------------
+	//
+	// `meetings` IS NOT FROM kb/00-foundation/ubiquitous-language.md — that table has no row for
+	// `bien_ban_hop` — and it is not translated on the spot either (ADR 0011 forbids both). It is
+	// the noun the RUNNING sibling implementation serves at
+	// `apps/api/app/modules/tasks/router.py:45`, read under the project owner's instruction of
+	// 2026-09-23. The missing row is REPORTED as a finding for the session that owns that file,
+	// never written from a route. The full reasoning is on internal/http/bien_ban_hop.go.
+	//
+	// `task.read`, THE SAME KEY AS THE TASK REGISTER, and no `meeting.*` key is invented: the
+	// `quyen` table has none (service-identity/migrations/0001_init.sql:273-305) and a key no
+	// migration seeds is a right no administrator can grant — 403 to every account, forever, with
+	// the tests still green (rule 5, invariant 3c). Everything this screen shows is either the
+	// origin of a task or a count of tasks. Whether a commune wants the two rights separated is a
+	// question for the customer (#27), not for this file.
+	//
+	// WHY THE WRITE ROUTES OF §3 AND §4 ARE ABSENT: recording minutes and adding a conclusion are
+	// the next pass; SPLITTING A CONCLUSION INTO A TASK is blocked on what blocks POST
+	// /api/v1/tasks — creating a task fixes a deadline counted in WORKING HOURS and identity
+	// publishes no contract that returns them (ADR 0029 §118) — which §3 makes sharper, not softer,
+	// by asking for the date to be guessed out of the sentence ("báo cáo trước ngày 20/8"). And
+	// EDITING a conclusion that tasks already point at is an open question this pass refused to
+	// answer in a trigger (migration 0007).
+
+	// @summary  Danh sách biên bản họp của xã — mỗi biên bản kèm các kết luận và bộ đếm nhiệm vụ đã tách / đã xong
+	// @screen   04-bien-ban-hop §2, §5
+	// NO FILTER AND NO SEARCH PARAMETER, because §2's screen has neither: one vertical list of
+	// cards, newest first. The only query parameters are the page cursor's.
+	//
+	// 400 is page.Parse refusing a cursor or a sort key; the body never echoes what was sent.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @reply    200 page.Result[bienBanRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/meetings",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.DanhSachBienBan)))
 
 	// --- the commune adds a task type of its own -------------------------------------------
 	//
