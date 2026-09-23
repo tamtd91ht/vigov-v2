@@ -59,6 +59,12 @@ CREATE INDEX IF NOT EXISTS audit_log_lookup
 -- name: Vietnam reorganises commune-level units periodically, and an identifier carrying
 -- meaning would force rewriting foreign keys across archival records at the first merger
 -- (rule 1, invariant 2).
+--
+-- @scope:  platform
+-- Added 23/09/2026 with the token, not the reasoning: the reasoning is the four paragraphs
+-- above and predates it. tools/check_khoa_duy_nhat.py only learned to inspect PRIMARY KEY that
+-- day, so `id TEXT PRIMARY KEY` here had never been examined — which is not the same thing as
+-- having been approved.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tenant (
     id             TEXT        PRIMARY KEY,           -- ULID, 26 chars, opaque
@@ -80,6 +86,10 @@ CREATE TABLE IF NOT EXISTS tenant (
 -- host is globally unique WITHOUT tenant_id, and that is correct rather than a violation of
 -- rule 1: a host that resolved to two communes would make the isolation undecidable at the
 -- edge. This uniqueness is what MAKES the isolation work.
+--
+-- @scope:  platform
+-- The paragraph above is the argument; this line is the same argument in a form a gate can
+-- read. Added 23/09/2026 — see the note on `tenant`.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tenant_domain (
     host        TEXT        PRIMARY KEY,             -- "tanphu.vigov.vn", lower-case, no port

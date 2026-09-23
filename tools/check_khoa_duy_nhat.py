@@ -73,6 +73,38 @@ MAU_BANG = re.compile(r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z_][\w.
 MAU_CHI_MUC = re.compile(r'CREATE\s+UNIQUE\s+INDEX[^;]*;', re.I | re.S)
 MAU_UNIQUE_TRONG_BANG = re.compile(r'UNIQUE\s*\(([^)]*)\)', re.I)
 
+# ---------------------------------------------------------------------------------------------
+# KHOÁ CHÍNH — thêm 23/09/2026, và sự VẮNG MẶT của nó cho tới hôm ấy là một cổng kiểm số không.
+#
+# `PRIMARY KEY` LÀ MỘT KHOÁ DUY NHẤT. Postgres cài nó bằng đúng một chỉ mục duy nhất, nên mọi câu
+# ở đầu tệp này về "xã thứ hai không onboard được" áp nguyên vẹn. Vậy mà hai mẫu trên chỉ bắt
+# `UNIQUE (…)` và `CREATE UNIQUE INDEX`; `PRIMARY KEY (…)` không nằm trong tập nào cả.
+#
+# ĐO ĐƯỢC, KHÔNG PHẢI LO XA: 63 khai báo khoá chính đi qua cổng này mà không ai nhìn — NHIỀU HƠN
+# 57 khai báo nó có đọc. Và `0005_thong_bao_noi_bo.sql` không có lấy một `UNIQUE (…)` nào, đúng
+# thiết kế (thông báo không có số hiệu cấp phát), nên với TOÀN BỘ tệp ấy cổng đang kiểm số không.
+#
+# Lộ ra bằng một phép đột biến: gỡ `tenant_id` khỏi `PRIMARY KEY (tenant_id, id)` của `thong_bao`
+# — đúng thứ luật 1 bất biến 6 cấm — mà cổng vẫn in `[PASS] … 0 khoá thiếu tenant_id`, và SO
+# KHAI BÁO KHÔNG ĐỔI (57), nên cả ngưỡng `SO_KHAI_BAO_TOI_THIEU` cũng không hé một lời. Đây đúng
+# hình dạng khiếm khuyết đắt nhất của kho này: một rào trông như đang canh, đã chết.
+#
+# HAI CÁCH VIẾT, CẢ HAI PHẢI BẮT:
+#   mức bảng  `PRIMARY KEY (tenant_id, id)`   — hợp thành, dạng đúng của bảng thuộc xã
+#   mức cột   `ma TEXT PRIMARY KEY`           — khoá MỘT CỘT, tức luật 1 cấm #4 ngay khi bảng
+#                                               thuộc xã: xã thứ hai đụng mã xã thứ nhất
+#
+# `(?!\s*\()` ở mẫu mức cột để `PRIMARY KEY (` mức bảng không bị đếm hai lần.
+MAU_PK_BANG = re.compile(r'PRIMARY\s+KEY\s*\(([^)]*)\)', re.I)
+MAU_PK_COT = re.compile(r'^\s*([A-Za-z_]\w*)\s+[^,\n]*?\bPRIMARY\s+KEY\b(?!\s*\()', re.I | re.M)
+
+# BỎ CHÚ THÍCH `--` TRƯỚC KHI QUÉT KHOÁ CHÍNH. Chính tệp này đã ghi cái bẫy ấy ở `SO_KHAI_BAO_TOI_THIEU`:
+# một lần `grep 'UNIQUE ('` cho ra 59 thay vì 49 vì mười chỗ nằm trong lời văn GIẢI THÍCH về khoá.
+# Migration của kho này chú thích rất dày, nên đếm lời văn nói về khoá thành khoá là chuyện gần
+# như chắc chắn xảy ra — và nó sai theo chiều nguy hiểm: một con số khai báo phồng lên làm ngưỡng
+# dưới trông vẫn lành khi phép quét thật đã hụt.
+MAU_CHU_THICH_DONG = re.compile(r'--[^\n]*')
+
 # Số khai báo duy nhất THẬT, đo ngày 22/09/2026: **49**. Ngưỡng đặt dưới nó một khoảng.
 #
 # Nó ở đây vì một biểu thức chính quy đọc hụt thân bảng là một cổng in [PASS] mà không kiểm gì —
@@ -84,7 +116,12 @@ MAU_UNIQUE_TRONG_BANG = re.compile(r'UNIQUE\s*\(([^)]*)\)', re.I)
 # viết `-- (1) UNIQUE (tenant_id, ma) COUNTS SOFT-DELETED ROWS TOO…` để giải thích vì sao khoá
 # ấy cố ý không từng phần. Đếm cả chúng là đếm lời văn nói về khoá thành khoá. Ngưỡng đầu tiên
 # của tệp này đặt theo con số 59 ấy và làm chính nó đỏ ngay lần chạy đầu.
-SO_KHAI_BAO_TOI_THIEU = 45
+#
+# NÂNG 45 → 105 ngày 23/09/2026, cùng lúc thêm nhánh `PRIMARY KEY`. Số thật nhảy 57 → 115, và
+# 45 khi ấy thôi là một ngưỡng: nếu nhánh khoá chính chết hoàn toàn, số tụt về 57 — VẪN TRÊN 45,
+# nên cổng sẽ in [PASS] và ngưỡng không hé một lời. Một ngưỡng thấp hơn hẳn số thật không bảo vệ
+# gì cả; nó chỉ trông như đang bảo vệ, đúng thứ nhánh mới này vừa được thêm vào để chữa.
+SO_KHAI_BAO_TOI_THIEU = 105
 
 
 def than_bang(s: str, tu: int) -> str:
@@ -162,6 +199,38 @@ def kiem() -> tuple[list[str], int]:
                         f"và lúc ấy sửa là migration trên dữ liệu đang chạy (luật 1 bất biến 6).\n"
                         f"        → Nếu bảng này THẬT SỰ thuộc tầng nền tảng, khai "
                         f"`-- @scope:  cross-tenant` trong chú thích ngay trên CREATE TABLE."
+                    )
+
+        # 1b. PRIMARY KEY bên trong CREATE TABLE — xem khối lý do ở `MAU_PK_BANG`
+        for m in MAU_BANG.finditer(s):
+            ten_bang = m.group(1)
+            than = MAU_CHU_THICH_DONG.sub('', than_bang(s, m.end() - 1))
+            cross = khai_ngoai_xa(s, m.start())
+            dong_bang = s[:m.end()].count('\n') + 1
+
+            for u in MAU_PK_BANG.finditer(than):
+                dem += 1
+                cot = [c.strip().lower() for c in u.group(1).split(',')]
+                if 'tenant_id' not in cot and not cross:
+                    loi.append(
+                        f"{ngan}:{dong_bang} bảng `{ten_bang}` — PRIMARY KEY "
+                        f"({', '.join(cot)}) KHÔNG hợp thành với `tenant_id`\n"
+                        f"        → Khoá chính LÀ một khoá duy nhất: Postgres cài nó bằng đúng "
+                        f"một chỉ mục duy nhất. Xã thứ hai không onboard được (luật 1 bất biến 6).\n"
+                        f"        → Bảng thật sự thuộc tầng nền tảng thì khai "
+                        f"`-- @scope:  platform` trong chú thích ngay trên CREATE TABLE."
+                    )
+
+            for u in MAU_PK_COT.finditer(than):
+                dem += 1
+                if not cross:
+                    loi.append(
+                        f"{ngan}:{dong_bang} bảng `{ten_bang}` — cột `{u.group(1)}` khai "
+                        f"PRIMARY KEY MỘT CỘT\n"
+                        f"        → Khoá duy nhất một cột trên dữ liệu nghiệp vụ là luật 1 cấm #4: "
+                        f"xã thứ hai đụng mã xã thứ nhất ngay ở dòng đầu tiên họ ghi.\n"
+                        f"        → Dạng đúng là `PRIMARY KEY (tenant_id, {u.group(1)})`. Bảng "
+                        f"thuộc tầng nền tảng thì khai `-- @scope:  platform`."
                     )
 
         # 2. CREATE UNIQUE INDEX — chỗ duy nhất `WHERE` xuất hiện được

@@ -51,6 +51,13 @@ CREATE INDEX IF NOT EXISTS audit_log_lookup
 --
 -- `ma` is the flat key the Phân quyền screen shows and the code passes to
 -- authz.RequirePermission — one string, no translation layer to drift.
+--
+-- @scope:  platform
+-- The prose above has said this since the table was written; the token is what a MACHINE can
+-- read. Added 23/09/2026, when tools/check_khoa_duy_nhat.py learned to inspect PRIMARY KEY at
+-- all — until then it read UNIQUE only, so this single-column key went unexamined rather than
+-- approved. A rule stated in prose and enforced nowhere is a rule that survives exactly as long
+-- as the people who remember it.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS quyen (
     ma      TEXT PRIMARY KEY,           -- "task.extend"
