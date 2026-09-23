@@ -1207,3 +1207,71 @@ body {
     width: auto;
   }
 }
+
+/* ---- bảng Kanban của màn Nhiệm vụ — 02-nhiem-vu §4.1 --------------------------------------- */
+
+/* NĂM CỘT XẾP DỌC TRÊN ĐIỆN THOẠI, NẰM NGANG TỪ 768px. Đây không phải sở thích bố cục.
+ * `.bang-kanban` nằm trong `.bang-cuon`, vốn đã `overflow-x: auto`, nên để `flex` ngay từ 320px
+ * là một bảng năm cột phải kéo ngang trên điện thoại. Kéo ngang một danh sách thẻ là thao tác
+ * cán bộ lớn tuổi hay trượt nhất, và trượt ở đây nghĩa là mất chỗ đang đọc
+ * (`skills/accessibility-elderly`). Xếp dọc thì mọi thẻ vẫn đọc được bằng cách cuộn một chiều —
+ * chiều mà mọi người đều đã quen. */
+.bang-kanban {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.cot-kanban {
+  background: var(--nen);
+  border: 1px solid var(--xam-vien);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.cot-kanban h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+}
+
+.danh-sach-the {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* Viền trái đậm để tách hai thẻ liền nhau khi chúng cùng nền trắng. MỘT MÀU DUY NHẤT, không tô
+ * theo mức ưu tiên hay theo tình trạng hạn: mức ưu tiên và chữ "Trễ N ngày" đã nằm THÀNH CHỮ
+ * trên thẻ, và thêm một tầng màu mang nghĩa riêng là làm màu thành tín hiệu mà người không phân
+ * biệt được màu sẽ mất (a11y §8 — màu không bao giờ là tín hiệu duy nhất). */
+.the-nhiem-vu {
+  background: #fff;
+  border: 1px solid var(--xam-vien);
+  border-left: 4px solid var(--xanh);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+}
+
+/* §4.1 đòi tiêu đề tối đa ba dòng. `-webkit-line-clamp` vẫn là cách duy nhất chạy trên mọi
+ * trình duyệt kho này nhắm tới; `line-clamp` chuẩn để kèm cho ngày tiền tố ấy bị bỏ. */
+.tieu-de-the {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  .bang-kanban {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .cot-kanban {
+    min-width: 15rem;
+    flex: 0 0 auto;
+  }
+}

@@ -40,15 +40,20 @@ import type {
 
 import {
   CANH_BAO_HAN_MOT_LAN,
+  CAU_LOC_TRANG_THAI_KHONG_CO_COT,
   CHI_QUA_HAN_NHAN,
   CHUA_GIAO_BO_PHAN,
   CHUA_PHAN_CONG,
   CHUA_XAC_DINH,
   CHU_THICH_HAI_O_TICK,
+  COT_RONG,
   DANG_TAI_SO,
+  GHI_CHU_DEM_COT,
   GHI_CHU_HAN_VIEC_CON,
+  GHI_CHU_KANBAN_RE_NHANH,
   GHI_CHU_LANH_DAO_GIAO_VIEC,
   GHI_CHU_LUI_HAN,
+  GHI_CHU_THIEU_SO_THEO_DOI,
   GHI_CHU_TU_SINH_MA,
   MOI_BO_PHAN_NHAN,
   MOI_KHOI_NHAN,
@@ -59,6 +64,8 @@ import {
   MOI_TRANG_THAI,
   MOI_TRANG_THAI_NHAN,
   MO_TA_FORM_GIAO_VIEC,
+  NHAN_CHE_DO_DANH_SACH,
+  NHAN_CHE_DO_KANBAN,
   O_TRONG,
   PHAM_VI_CUA_TOI,
   PHAM_VI_TOAN_XA,
@@ -69,20 +76,27 @@ import {
   TRANG_THAI_RE_NHANH,
   cauGiaiThichTrangThai,
   chuyenSangDuoc,
+  cotPhaiDoc,
   hoanThanhTreHan,
   mocCuoiNgay,
   nhanBoDem,
+  nhanCotKanban,
+  nhanDemCot,
   nhanHanThe,
   nhanNgay,
   nhanNguonGiao,
   nhanTrangThai,
   oHan,
   quyetDinhDuyetLuiHan,
+  type TrangThaiNhiemVu,
 } from "./nhan-nhiem-vu";
 
 /**
- * Sổ Quản lý nhiệm vụ — `docs/ui-ux/02-nhiem-vu.md` §2 (bố cục), §3 (bộ lọc), §4.2 (bảng danh
- * sách), §5 (drawer chi tiết), §6 (vòng đời) và §7 (form Giao việc mới).
+ * Sổ Quản lý nhiệm vụ — `docs/ui-ux/02-nhiem-vu.md` §2 (bố cục), §3 (bộ lọc), §4.1 (bảng Kanban),
+ * §4.2 (bảng danh sách), §5 (drawer chi tiết), §6 (vòng đời) và §7 (form Giao việc mới).
+ *
+ * Chế độ xem thứ ba của §4 — `Sổ theo dõi` §4.3 — KHÔNG có ở đây: nó lấy quá nửa số cột từ bảng
+ * `nhiem_vu_van_ban` chưa tồn tại. Xem `PHAN_CHUA_DUNG`.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * BỐN LẦN TỪ CHỐI CỦA MÁY CHỦ MÀ MÀN HÌNH PHẢI NÓI ĐÚNG, và chúng là lý do màn này không có một
@@ -106,15 +120,32 @@ import {
  * ADR 0038, vì nó KHÔNG phải một khoá quyền: nó là phép so mã cán bộ với cột trên bản ghi, và nó
  * vẫn chạy đầy đủ ở đây.
  *
- * KHÔNG GẮN LỚP CSS MỚI: `globals.css` chưa có lớp cho màn này (`.man-nhiem-vu` không tồn tại) và
- * lượt này không được thêm CSS. Mượn lớp của màn khác sẽ trông gần đúng hôm nay rồi lệch hẳn vào
- * ngày lớp ấy đổi vì cái nó thật sự phục vụ. Tên lớp cần thêm đã báo về.
+ * LỚP CSS: `.man-nhiem-vu` NAY ĐÃ CÓ — `globals.css:920-929`, thêm 23/09/2026 cùng lúc mở mục
+ * menu. Khối này trước viết "`.man-nhiem-vu` không tồn tại", đúng lúc viết và hết đúng vài giờ
+ * sau; sửa vì một chú thích nói thiếu thứ không còn thiếu là chú thích đẩy người sau đi thêm lần
+ * hai. Lý do gốc vẫn giữ nguyên và vẫn đúng: KHÔNG mượn lớp của màn khác — nó trông gần đúng hôm
+ * nay rồi lệch hẳn vào ngày lớp ấy đổi vì cái nó thật sự phục vụ.
+ *
+ * CÒN THIẾU THẬT, cho bảng Kanban §4.1: `.bang-kanban` · `.cot-kanban` · `.danh-sach-the` ·
+ * `.the-nhiem-vu`. Chưa có chúng thì năm cột xếp DỌC thay vì nằm cạnh nhau — đọc được và dùng
+ * được, chỉ không phải hình dạng đặc tả vẽ.
  */
 
 /** Bao nhiêu dòng một trang. */
 const SO_DONG_MOI_TRANG = 20;
 
-type TrangThaiTai<T> =
+/**
+ * Bao nhiêu thẻ đọc cho MỘT cột Kanban.
+ *
+ * Kanban KHÔNG có phân trang từng cột — năm ngăn xếp con trỏ song song là năm chỗ để lạc, và đặc
+ * tả không vẽ nút trang nào trên bảng. Cột đầy thì đầu cột hiện `20+` và cán bộ sang Danh sách.
+ */
+const SO_THE_MOI_COT = 20;
+
+/** Hai chế độ xem dựng được (§2, §4). Kanban là MẶC ĐỊNH, đúng tiêu đề §4.1. */
+type CheDoXem = "kanban" | "danh-sach";
+
+export type TrangThaiTai<T> =
   | { pha: "dangTai" }
   | { pha: "loi"; thongBao: string }
   | { pha: "xong"; duLieu: T };
@@ -124,6 +155,22 @@ function taiTu<T>(daTai: { khoa: string; kq: KetQua<T> } | null, khoa: string): 
   return daTai.kq.ok
     ? { pha: "xong", duLieu: daTai.kq.duLieu }
     : { pha: "loi", thongBao: daTai.kq.thongBao };
+}
+
+/** Năm câu trả lời của năm cột Kanban, đọc trong cùng một lượt. */
+type DaTaiKanban = {
+  khoa: string;
+  cot: readonly { ma: TrangThaiNhiemVu; kq: KetQua<page_Result_petitions_nhiemVuRa> }[];
+};
+
+/** Lấy pha của MỘT cột ra khỏi lượt đọc chung. Cùng phép so khoá với `taiTu`, nên gọi lại nó. */
+function taiCot(
+  daTai: DaTaiKanban | null,
+  khoa: string,
+  ma: TrangThaiNhiemVu,
+): TrangThaiTai<page_Result_petitions_nhiemVuRa> {
+  const c = daTai !== null && daTai.khoa === khoa ? daTai.cot.find((x) => x.ma === ma) : undefined;
+  return taiTu(c === undefined ? null : { khoa, kq: c.kq }, khoa);
 }
 
 /** Bộ lọc đang chọn trên màn hình. Cùng hình dạng với `LocNhiemVu`, trừ phân trang. */
@@ -155,11 +202,13 @@ export function SoNhiemVu() {
   const [tim, datTim] = useState("");
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
   const [lanTai, datLanTai] = useState(0);
+  const [cheDoXem, datCheDoXem] = useState<CheDoXem>("kanban");
 
   const [daTai, datDaTai] = useState<{
     khoa: string;
     kq: KetQua<page_Result_petitions_nhiemVuRa>;
   } | null>(null);
+  const [daTaiKanban, datDaTaiKanban] = useState<DaTaiKanban | null>(null);
   const [danhMuc, datDanhMuc] = useState<DanhMucNhiemVu>(KHONG_DANH_MUC);
 
   const [dangMo, datDangMo] = useState<petitions_nhiemVuRa | null>(null);
@@ -168,8 +217,14 @@ export function SoNhiemVu() {
   const [moFormTao, datMoFormTao] = useState(false);
 
   const khoa = `${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}`;
+  // Kanban KHÔNG mang con trỏ: nó không phân trang, nên bộ lọc và lần ghi gần nhất là tất cả những
+  // gì làm câu trả lời cũ hết hiệu lực.
+  const khoaKanban = `${JSON.stringify(loc)}|${lanTai}`;
 
   useEffect(() => {
+    // CHỈ ĐỌC CHẾ ĐỘ ĐANG XEM. Không có dòng này thì mỗi lần đổi bộ lọc trên Kanban là SÁU lời gọi
+    // thay vì năm, và lời gọi thứ sáu đọc một trang không ai vẽ ra.
+    if (cheDoXem !== "danh-sach") return;
     let bo = false;
     laySoNhiemVu({ ...loc, limit: SO_DONG_MOI_TRANG, cursor: nganXep.hienTai }).then((kq) => {
       if (!bo) datDaTai({ khoa, kq });
@@ -177,7 +232,33 @@ export function SoNhiemVu() {
     return () => {
       bo = true;
     };
-  }, [loc, nganXep.hienTai, khoa]);
+  }, [loc, nganXep.hienTai, khoa, cheDoXem]);
+
+  /**
+   * KANBAN ĐỌC CÙNG TUYẾN VÀ CÙNG BỘ LỌC VỚI DANH SÁCH — qua đúng `laySoNhiemVu`, nên mười tên
+   * tham số truy vấn vẫn nằm ở một chỗ duy nhất (`themLocVaoTruyVan`). Hai chỗ ghép truy vấn là
+   * hai chỗ sẽ trôi khỏi nhau, và cái trôi sẽ là cái không ai mở ra đọc.
+   *
+   * KHÁC ĐÚNG MỘT ĐIỀU: mỗi cột một lời gọi, mang thêm `status=<mã cột>`. Một trang 20 dòng chung
+   * cho cả năm cột sẽ cho ra những cột rỗng chỉ vì trang ấy chưa tới lượt chúng — một cột rỗng vì
+   * phân trang trông y hệt một cột rỗng vì xã không có việc nào.
+   */
+  useEffect(() => {
+    if (cheDoXem !== "kanban") return;
+    let bo = false;
+    const ds = cotPhaiDoc(loc.trangThai);
+    Promise.all(
+      ds.map(async (ma) => ({
+        ma,
+        kq: await laySoNhiemVu({ ...loc, trangThai: ma, limit: SO_THE_MOI_COT }),
+      })),
+    ).then((cot) => {
+      if (!bo) datDaTaiKanban({ khoa: khoaKanban, cot });
+    });
+    return () => {
+      bo = true;
+    };
+  }, [loc, khoaKanban, cheDoXem]);
 
   // BỐN DANH MỤC, ĐỌC MỘT LẦN CHO CẢ MÀN. Một danh mục hỏng thì ô lọc tương ứng rỗng — KHÔNG làm
   // hỏng quyển sổ: bốn câu trả lời rời nhau, mỗi cái nói chuyện của nó.
@@ -208,6 +289,10 @@ export function SoNhiemVu() {
   const maNguoiDangNhap = phien !== null && phien.ok ? phien.duLieu.staff.code : "";
 
   const so = taiTu(daTai, khoa);
+  const cotKanban: readonly CotKanban[] = cotPhaiDoc(loc.trangThai).map((ma) => ({
+    ma,
+    tai: taiCot(daTaiKanban, khoaKanban, ma),
+  }));
   const tenBoPhan = new Map(danhMuc.boPhan.map((b) => [b.id, b.name]));
 
   /** Đổi bộ lọc là về trang đầu: con trỏ của bộ lọc cũ không có nghĩa với bộ lọc mới. */
@@ -283,14 +368,49 @@ export function SoNhiemVu() {
 
       <HangLoc loc={loc} tim={tim} datTim={datTim} datLoc={datLocMoi} danhMuc={danhMuc} />
 
-      {so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
-      {so.pha === "loi" && (
+      {/* CỤM CHỌN CHẾ ĐỘ XEM — §2, bên phải hàng lọc 2. HAI nút chứ không phải ba: `Sổ theo dõi`
+          §4.3 lấy quá nửa số cột từ một bảng chưa tồn tại, xem `PHAN_CHUA_DUNG`. */}
+      <div className="o-chon" role="group" aria-label="Chế độ xem">
+        <button
+          type="button"
+          className="nut-phu"
+          aria-pressed={cheDoXem === "kanban"}
+          onClick={() => datCheDoXem("kanban")}
+        >
+          {NHAN_CHE_DO_KANBAN}
+        </button>
+        <button
+          type="button"
+          className="nut-phu"
+          aria-pressed={cheDoXem === "danh-sach"}
+          onClick={() => datCheDoXem("danh-sach")}
+        >
+          {NHAN_CHE_DO_DANH_SACH}
+        </button>
+      </div>
+      <p className="ghi-chu">{GHI_CHU_THIEU_SO_THEO_DOI}</p>
+
+      {cheDoXem === "kanban" && (
+        <BangKanban
+          cot={cotKanban}
+          danhMuc={danhMuc}
+          bayGio={new Date()}
+          maDangMo={dangMo?.code ?? null}
+          moNhiemVu={(n) => {
+            datDangMo(n);
+            datLoiGhi(null);
+          }}
+        />
+      )}
+
+      {cheDoXem === "danh-sach" && so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
+      {cheDoXem === "danh-sach" && so.pha === "loi" && (
         <p className="thong-bao-loi" role="alert">
           {so.thongBao}
         </p>
       )}
 
-      {so.pha === "xong" && (
+      {cheDoXem === "danh-sach" && so.pha === "xong" && (
         <>
           <BangNhiemVu
             nhiemVu={so.duLieu.items}
@@ -592,6 +712,171 @@ export function HangLoc({
         </label>
       </div>
     </div>
+  );
+}
+
+/** Một cột của bảng Kanban: mã trạng thái, và pha đọc của riêng nó. */
+export type CotKanban = {
+  readonly ma: TrangThaiNhiemVu;
+  readonly tai: TrangThaiTai<page_Result_petitions_nhiemVuRa>;
+};
+
+/**
+ * Bảng Kanban §4.1 — năm cột ứng với năm trạng thái CHÍNH.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ * KHÔNG CÓ KÉO-THẢ, VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH VỀ KHẢ NĂNG TIẾP CẬN, KHÔNG PHẢI MỘT VIỆC CÒN DANG DỞ.
+ *
+ * Kéo-thả HTML5 không có lối bàn phím tương đương. Một bảng chỉ đổi được trạng thái bằng cách kéo
+ * là một bảng mà cán bộ dùng bàn phím — hoặc cầm chuột không vững, cụ thể là phần lớn người dùng
+ * lớn tuổi của màn này — KHÔNG thao tác được (`skills/accessibility-elderly`). Nên thẻ mở drawer,
+ * và drawer có nguyên khối `Chuyển trạng thái` §6: CÙNG một tuyến `POST /api/v1/tasks/{ma}/status`,
+ * cùng một chỗ in NGUYÊN VĂN câu từ chối của máy chủ — kể cả câu liệt kê mã việc con còn lại. Kanban
+ * vì thế không đổi trạng thái tệ hơn Danh sách; nó đổi ở đúng chỗ Danh sách đổi.
+ *
+ * Sự vắng mặt ấy ra tới màn hình qua `PHAN_CHUA_DUNG`, không nằm lại trong chú thích này.
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * KHÔNG GẮN LỚP CSS MỚI (xem khối đầu tệp), nên hôm nay năm cột XẾP DỌC thay vì nằm cạnh nhau, và
+ * KHÔNG CÓ chấm màu đầu cột lẫn viền trái tô theo mức ưu tiên. Hai thứ ấy là màu, và màu không bao
+ * giờ là tín hiệu duy nhất (a11y): mức ưu tiên hiện thành CHỮ trên thẻ, tình trạng trễ hiện thành
+ * chữ `Trễ N ngày`. Tên lớp cần thêm đã báo về.
+ *
+ * KHÔNG CÓ Ô TICK CHỌN HÀNG LOẠT, cùng lý do bảng §4.2 không có: `Xoá đã chọn` không có tuyến nào.
+ */
+export function BangKanban({
+  cot,
+  danhMuc,
+  bayGio,
+  maDangMo,
+  moNhiemVu,
+}: {
+  cot: readonly CotKanban[];
+  danhMuc: DanhMucNhiemVu;
+  bayGio: Date;
+  maDangMo: string | null;
+  moNhiemVu: (n: petitions_nhiemVuRa) => void;
+}) {
+  // Bộ lọc Trạng thái đang chọn một trạng thái rẽ nhánh (hoặc một mã lạ): KHÔNG cột nào khớp. Vẽ
+  // năm cột rỗng ở đây là nói với cán bộ rằng xã không có việc nào — đúng điều ngược lại.
+  if (cot.length === 0) {
+    return <p className="trang-thai-rong">{CAU_LOC_TRANG_THAI_KHONG_CO_COT}</p>;
+  }
+
+  const soThe = cot.reduce(
+    (tong, c) => tong + (c.tai.pha === "xong" ? c.tai.duLieu.items.length : 0),
+    0,
+  );
+
+  return (
+    <>
+      <div className="bang-cuon" role="region" aria-label="Bảng Kanban nhiệm vụ" tabIndex={0}>
+        <div className="bang-kanban">
+          {cot.map((c) => (
+            <section key={c.ma} className="cot-kanban" aria-labelledby={`cot-kanban-${c.ma}`}>
+              <h3 id={`cot-kanban-${c.ma}`}>
+                {/* NHÃN CỘT KHÁC NHÃN §6 Ở ĐÚNG MỘT Ô: `moi-giao` lên bảng là "Chưa thực hiện". */}
+                {nhanCotKanban(c.ma)}{" "}
+                {c.tai.pha === "xong" && (
+                  <span className="chip chip-ngung">
+                    {nhanDemCot(c.tai.duLieu.items.length, c.tai.duLieu.has_more)}
+                  </span>
+                )}
+              </h3>
+
+              {/* NĂM CỘT LÀ NĂM CÂU TRẢ LỜI RỜI NHAU. Một cột hỏng thì bốn cột kia vẫn là sổ —
+                  và câu hỏng của nó hiện nguyên văn ở đúng cột ấy, không nuốt thành một lỗi chung. */}
+              {c.tai.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
+              {c.tai.pha === "loi" && (
+                <p className="thong-bao-loi" role="alert">
+                  {c.tai.thongBao}
+                </p>
+              )}
+              {c.tai.pha === "xong" && c.tai.duLieu.items.length === 0 && (
+                <p className="trang-thai-rong">{COT_RONG}</p>
+              )}
+              {c.tai.pha === "xong" && c.tai.duLieu.items.length > 0 && (
+                <ul className="danh-sach-the">
+                  {c.tai.duLieu.items.map((n) => (
+                    <li key={n.code}>
+                      <TheNhiemVu
+                        nhiemVu={n}
+                        danhMuc={danhMuc}
+                        bayGio={bayGio}
+                        maDangMo={maDangMo}
+                        moNhiemVu={moNhiemVu}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
+      </div>
+
+      <p className="ghi-chu">{nhanBoDem(soThe)}</p>
+      <p className="ghi-chu">{GHI_CHU_DEM_COT}</p>
+      {/* Chỗ một cán bộ tìm lại việc "biến mất" của mình: một việc vừa sang `tam-dung` rời khỏi
+          Kanban hoàn toàn, và §4.1 muốn thế. Không nói ra thì người giao việc kết luận nó đã bị xoá. */}
+      <p className="ghi-chu">{GHI_CHU_KANBAN_RE_NHANH}</p>
+    </>
+  );
+}
+
+/**
+ * Một thẻ nhiệm vụ §4.1.
+ *
+ * MỨC ƯU TIÊN HIỆN THÀNH CHỮ. Đặc tả mã hoá nó bằng màu viền trái, mà màu một mình thì người không
+ * phân biệt được màu đọc ra bằng không (a11y). Khi lớp CSS viền trái được thêm, nó là tín hiệu THỨ
+ * HAI chồng lên chữ này chứ không thay chữ này.
+ *
+ * KHÔNG CÓ CHIP `{n} việc con`: phản hồi không mang số việc con — xem `PHAN_CHUA_DUNG`.
+ */
+export function TheNhiemVu({
+  nhiemVu,
+  danhMuc,
+  bayGio,
+  maDangMo,
+  moNhiemVu,
+}: {
+  nhiemVu: petitions_nhiemVuRa;
+  danhMuc: DanhMucNhiemVu;
+  bayGio: Date;
+  maDangMo: string | null;
+  moNhiemVu: (n: petitions_nhiemVuRa) => void;
+}) {
+  const treHan = oHan(nhiemVu.due_at, bayGio).phanTre !== "";
+
+  return (
+    <article className="the-nhiem-vu" aria-labelledby={`the-nhiem-vu-${nhiemVu.code}`}>
+      <p className="ma-muc">{nhiemVu.code}</p>
+      <p id={`the-nhiem-vu-${nhiemVu.code}`} className="tieu-de-the">
+        {nhiemVu.title}
+      </p>
+      {/* `Trễ 87 ngày` · `Hạn 20/12/2026` · `Hạn —` — cùng một hàm với dải hạn của drawer. */}
+      <p className={treHan ? "nhan-lech" : "dong-phu"}>
+        <span aria-hidden="true">⏱ </span>
+        {nhanHanThe(nhiemVu.due_at, bayGio)}
+      </p>
+      <p className="dong-phu">
+        {nhiemVu.assignee === "" ? CHUA_PHAN_CONG : nhiemVu.assignee} ·{" "}
+        {nhanDanhMuc(danhMuc.mucUuTien, nhiemVu.priority)}
+      </p>
+      {hoanThanhTreHan(nhiemVu.completed_at, nhiemVu.original_due_at) && (
+        <p>
+          <span className="chip chip-hoat-dong">Hoàn thành trễ hạn</span>
+        </p>
+      )}
+      <button
+        type="button"
+        className="nut-phu"
+        onClick={() => moNhiemVu(nhiemVu)}
+        aria-expanded={nhiemVu.code === maDangMo}
+      >
+        {nhiemVu.code === maDangMo ? "Đang mở" : `Mở ${nhiemVu.code}`}
+      </button>
+    </article>
   );
 }
 

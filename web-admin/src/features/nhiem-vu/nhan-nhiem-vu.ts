@@ -577,6 +577,68 @@ export function ngayChoONhap(mocISO: string | null): string {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
+ * BẢNG KANBAN §4.1 — CÂU CHỮ VÀ HAI PHÉP QUYẾT ĐỊNH
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Hai chế độ xem DỰNG ĐƯỢC. Chế độ thứ ba (`Sổ theo dõi` §4.3) — xem `PHAN_CHUA_DUNG`. */
+export const NHAN_CHE_DO_KANBAN = "▦ Kanban";
+export const NHAN_CHE_DO_DANH_SACH = "☰ Danh sách";
+
+/** Đặt cạnh cụm chọn chế độ xem, để cán bộ không đi tìm cái nút thứ ba của đặc tả. */
+export const GHI_CHU_THIEU_SO_THEO_DOI =
+  "Đặc tả có chế độ xem thứ ba — Sổ theo dõi (§4.3) — và nó chưa dựng được. Lý do nằm ở phần " +
+  "chưa dựng được đầu màn.";
+
+/**
+ * Cột Kanban nào còn phải đọc, sau khi tính bộ lọc `Trạng thái` của §3.
+ *
+ * ĐÂY LÀ PHÉP AND CỦA MÁY CHỦ ĐƯỢC NÓI RA Ở MÀN HÌNH, không phải một sự tối ưu. Kanban đọc mỗi
+ * cột bằng một lời gọi mang `status=<mã cột>`; nếu cán bộ đang lọc `status=cho-duyet` thì bốn cột
+ * kia CHẮC CHẮN rỗng — gửi bốn lời gọi nữa chỉ để nhận về bốn trang rỗng là bốn lời gọi thừa, và
+ * một cột rỗng vì bộ lọc trông y hệt một cột rỗng vì xã không có việc nào.
+ *
+ * MỘT TRẠNG THÁI RẼ NHÁNH HOẶC MỘT MÃ LẠ CHO RA MẢNG RỖNG, và đó là câu trả lời đúng: §4.1 cố ý
+ * không cho `tam-dung` và `chuyen-tiep` một cột nào. Màn hình phải NÓI RA điều ấy
+ * (`CAU_LOC_TRANG_THAI_KHONG_CO_COT`) chứ không vẽ năm cột rỗng — năm cột rỗng đọc lên là "xã
+ * không có việc nào", đúng điều ngược lại với sự thật.
+ */
+export function cotPhaiDoc(trangThaiDangLoc: string | undefined): readonly TrangThaiNhiemVu[] {
+  if (trangThaiDangLoc === undefined || trangThaiDangLoc === "") return TRANG_THAI_CHINH;
+  return TRANG_THAI_CHINH.filter((ma) => ma === trangThaiDangLoc);
+}
+
+/** Hiện khi bộ lọc Trạng thái chọn một trạng thái mà Kanban không có cột. */
+export const CAU_LOC_TRANG_THAI_KHONG_CO_COT =
+  "Bộ lọc Trạng thái đang chọn một trạng thái không có cột trên Kanban. Chuyển sang chế độ Danh " +
+  "sách để xem những nhiệm vụ ấy.";
+
+/**
+ * Câu đứng dưới bảng, và nó là chỗ một cán bộ tìm ra việc của mình khi việc ấy "biến mất".
+ *
+ * Một việc vừa chuyển sang `tam-dung` rời khỏi Kanban HOÀN TOÀN — không phải lỗi, mà là §4.1. Không
+ * nói ra thì người giao việc kết luận nhiệm vụ đã bị xoá.
+ */
+export const GHI_CHU_KANBAN_RE_NHANH =
+  "Hai trạng thái rẽ nhánh — Tạm dừng và Chuyển tiếp — không có cột riêng trên Kanban (§4.1), nên " +
+  "việc đang ở hai trạng thái ấy không hiện ở bảng này. Xem chúng ở chế độ Danh sách.";
+
+/**
+ * Con số trên đầu cột — **SỐ THẺ ĐÃ TẢI VỀ**, không phải tổng số việc của cột.
+ *
+ * `page.Result` của tuyến đọc sổ chỉ mang `items` · `next_cursor` · `has_more`: **KHÔNG CÓ TỔNG
+ * SỐ**. Nên một con số trần ở đây sẽ đọc ra là "cột này có 20 việc" trong khi sự thật là "cột này
+ * có ít nhất 20 việc", và con số ấy đi thẳng vào một câu báo cáo miệng với lãnh đạo. Dấu `+` là
+ * toàn bộ phần trung thực của nhãn này; `GHI_CHU_DEM_COT` nói nốt phần còn lại.
+ */
+export function nhanDemCot(soThe: number, conNua: boolean): string {
+  return conNua ? `${soThe}+` : String(soThe);
+}
+
+export const GHI_CHU_DEM_COT =
+  "Số trên đầu mỗi cột là số thẻ đã tải về cột ấy; dấu + nghĩa là còn nữa. Tuyến đọc sổ trả về " +
+  "từng trang và không trả tổng số, nên đây không phải tổng số việc của cột.";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
  *
  * Không giấu trong chú thích, không vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` màn
@@ -702,6 +764,32 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "cùng khuôn `document.read` đã chọn. Lớp chặn thật không đổi (máy chủ kiểm từng yêu cầu); " +
       "thứ thiếu là sự tiện dụng. RIÊNG lớp hai của ADR 0038 vẫn chạy: nút duyệt vẫn ẩn với người " +
       "không phải lãnh đạo giao việc ghi trên bản ghi.",
+  },
+  {
+    ten: "KÉO-THẢ thẻ giữa các cột Kanban (§4.1)",
+    viSao:
+      "Không dựng, và lý do là KHẢ NĂNG TIẾP CẬN chứ không phải công sức: kéo-thả HTML5 không có " +
+      "lối bàn phím tương đương, nên một bảng chỉ đổi được trạng thái bằng cách kéo là một bảng " +
+      "cán bộ dùng bàn phím — hoặc dùng chuột không vững — không thao tác được " +
+      "(`skills/accessibility-elderly`). Đổi trạng thái trên Kanban đi qua drawer: bấm `Mở NV…` " +
+      "trên thẻ, dùng khối `Chuyển trạng thái` §6. ĐÓ LÀ CÙNG MỘT TUYẾN " +
+      "(`POST /api/v1/tasks/{ma}/status`) và cùng chỗ in NGUYÊN VĂN câu từ chối của máy chủ — kể " +
+      "cả câu liệt kê mã việc con còn lại khi hoàn thành việc cha.",
+  },
+  {
+    ten: "SỐ LƯỢNG THẬT của mỗi cột Kanban (§4.1)",
+    viSao:
+      "`page.Result` chỉ mang `items` · `next_cursor` · `has_more` — KHÔNG có tổng số. Nên đầu cột " +
+      "hiện số thẻ đã tải kèm dấu `+` khi còn nữa, chứ không hiện một con số trần: `20` đọc ra là " +
+      "`cột này có 20 việc`, trong khi sự thật là `ít nhất 20`, và con số ấy đi thẳng vào một câu " +
+      "báo cáo với lãnh đạo. Kanban cũng vì thế không có phân trang từng cột — xem tiếp ở Danh sách.",
+  },
+  {
+    ten: "Chế độ xem `Sổ theo dõi` (§4.3)",
+    viSao:
+      "Cụm chọn chế độ xem có HAI nút chứ không phải ba. Bảng §4.3 lấy quá nửa số cột từ bảng " +
+      "`nhiem_vu_van_ban` chưa tồn tại (xem mục §5.4 ở trên), nên dựng ra sẽ là một quyển sổ công " +
+      "văn chỉ đạo thiếu đúng phần văn bản chỉ đạo.",
   },
 ];
 
