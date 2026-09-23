@@ -247,6 +247,223 @@ func Register(mux *http.ServeMux, h *Handler) {
 	}
 }
 
+// Tham số đọc qua một CLOSURE TRUY CẬP dựng ngay trong hàm lọc — hình dạng của `GET /tasks` và
+// `GET /citizen-reports`, hai sổ lớn nhất của kho.
+//
+// LỖ HỔNG ĐÃ ĐO: trước bản vá này cả hai tuyến sinh ra `parameters` RỖNG, dù máy chủ đọc 11 và 7
+// tên. Khoá nằm trong `q[k]` là một BIẾN nên không đọc được ở đó; tên thật nằm ở chỗ gọi.
+func TestThamSoTruyVanQuaBoTruyCapCucBo(t *testing.T) {
+	goc := khoThu(t, `package http
+
+import (
+	"net/http"
+
+	"vd.test/core/authz"
+)
+
+type Handler struct{}
+
+type Loc struct {
+	TrangThai string
+	Thon      string
+}
+
+func locTuQuery(q map[string][]string) (Loc, error) {
+	lay := func(k string) string {
+		if v, ok := q[k]; ok && len(v) > 0 {
+			return v[0]
+		}
+		return ""
+	}
+	var loc Loc
+	if s := lay("status"); s != "" {
+		loc.TrangThai = s
+	}
+	loc.Thon = lay("hamlet")
+	return loc, nil
+}
+
+func (h *Handler) DanhSach(w http.ResponseWriter, r *http.Request) {
+	thamSo := r.URL.Query()
+	loc, err := locTuQuery(thamSo)
+	if err != nil {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	_ = loc
+}
+
+func Register(mux *http.ServeMux, h *Handler) {
+	// @summary  Danh sách
+	// @reply    200 -
+	mux.Handle("GET /api/v1/so", authz.Public("lý do")(http.HandlerFunc(h.DanhSach)))
+}
+`)
+	ds := thamSoCua(t, goc, "/api/v1/so", "get")
+	for _, ten := range []string{"status", "hamlet"} {
+		p := timThamSo(ds, ten)
+		if p == nil {
+			t.Fatalf("mất tham số %q đọc qua closure truy cập: %v", ten, ds)
+		}
+		if p["in"] != "query" {
+			t.Errorf("%q phải là tham số truy vấn: %v", ten, p)
+		}
+		// Hàm lọc TRẢ VỀ LỖI chứ không tự trả 400, nên không tham số nào ở đây bắt buộc — và đó
+		// là phía an toàn: `tsc` vẫn canh TÊN, không ép máy khách gửi thứ máy chủ không đòi.
+		if p["required"] != false {
+			t.Errorf("%q không có nhánh 400 nào nhắc tới nó nên phải required=false: %v", ten, p)
+		}
+	}
+	if len(ds) != 2 {
+		t.Errorf("chờ đúng 2 tham số, có %d: %v", len(ds), ds)
+	}
+}
+
+// Một closure KHÔNG đọc query thì không phải bộ truy cập, và lời gọi nó không được bơm chuỗi vào
+// hợp đồng.
+//
+// VÌ SAO CÓ CA NÀY: nhận diện theo TÊN biến (`lay`, `get`) là cách rẻ nhất và cũng là cách sai —
+// một tên sai trong hợp đồng tệ hơn một tên thiếu, vì `tsc` canh đúng cái sai ấy và người viết
+// màn tin theo.
+func TestClosureKhongDocQueryKhongPhaiBoTruyCap(t *testing.T) {
+	goc := khoThu(t, `package http
+
+import (
+	"net/http"
+	"strings"
+
+	"vd.test/core/authz"
+)
+
+type Handler struct{}
+
+func (h *Handler) DanhSach(w http.ResponseWriter, r *http.Request) {
+	thamSo := r.URL.Query()
+	lay := func(k string) string { return strings.TrimSpace(k) }
+	_ = lay("khong-phai-tham-so")
+	_ = thamSo.Get("status")
+}
+
+func Register(mux *http.ServeMux, h *Handler) {
+	// @summary  Danh sách
+	// @reply    200 -
+	mux.Handle("GET /api/v1/so", authz.Public("lý do")(http.HandlerFunc(h.DanhSach)))
+}
+`)
+	ds := thamSoCua(t, goc, "/api/v1/so", "get")
+	if timThamSo(ds, "khong-phai-tham-so") != nil {
+		t.Errorf("chuỗi trao cho một closure KHÔNG đọc query đã lọt vào hợp đồng: %v", ds)
+	}
+	if timThamSo(ds, "status") == nil {
+		t.Errorf("mất `status` đọc thẳng: %v", ds)
+	}
+}
+
+// Bộ truy cập nhận khoá ở đối số THỨ HAI — vị trí phải đọc từ chỗ khai, không ghim vào 0.
+//
+// Ghim vị trí 0 thì ca này lấy nhầm đối số đầu và bơm một chuỗi KHÔNG phải tên tham số vào hợp
+// đồng, trong im lặng.
+func TestBoTruyCapKhoaKhongONhat(t *testing.T) {
+	goc := khoThu(t, `package http
+
+import (
+	"net/http"
+	"net/url"
+
+	"vd.test/core/authz"
+)
+
+type Handler struct{}
+
+func (h *Handler) DanhSach(w http.ResponseWriter, r *http.Request) {
+	thamSo := r.URL.Query()
+	lay := func(macDinh string, k string) string {
+		if v := thamSo.Get(k); v != "" {
+			return v
+		}
+		return macDinh
+	}
+	_ = lay("MAC-DINH", "status")
+	var _ url.Values = thamSo
+}
+
+func Register(mux *http.ServeMux, h *Handler) {
+	// @summary  Danh sách
+	// @reply    200 -
+	mux.Handle("GET /api/v1/so", authz.Public("lý do")(http.HandlerFunc(h.DanhSach)))
+}
+`)
+	ds := thamSoCua(t, goc, "/api/v1/so", "get")
+	if timThamSo(ds, "MAC-DINH") != nil {
+		t.Errorf("lấy nhầm đối số: giá trị mặc định đã vào hợp đồng như một tên tham số: %v", ds)
+	}
+	if timThamSo(ds, "status") == nil {
+		t.Errorf("mất `status` ở đối số thứ hai của bộ truy cập: %v", ds)
+	}
+}
+
+// Hai tuyến thật, hai màn hình thật. Không phải golden file: thứ cần ghim là hợp đồng nói ĐÚNG
+// những tên máy chủ đọc, và danh sách ấy đọc từ chính `service-petitions`.
+//
+// `soon` VÀ `scope` CÓ MẶT DÙ MÁY CHỦ TỪ CHỐI CHÚNG, có chủ ý: máy chủ BIẾT hai tên này và trả
+// 400 cho `soon` (ngưỡng "sắp đến hạn" là số giờ của từng xã, identity chưa có RPC trả về) và cho
+// `scope=related`. Giấu chúng khỏi hợp đồng là để người viết màn gửi đi rồi tự dò 400 mà không
+// có chỗ nào tra.
+func TestHaiSoLonCoDuThamSoLoc(t *testing.T) {
+	goc, err := timGoc()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tuyens, err := quetTuyen(goc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gm, err := moGiaiMa(goc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	theoKhoa := map[string]tuyen{}
+	for _, x := range tuyens {
+		theoKhoa[x.Method+" "+x.Path] = x
+	}
+
+	for _, tr := range []struct {
+		khoa string
+		ten  []string
+	}{
+		{"GET /api/v1/tasks", []string{
+			"assignee", "bloc", "late", "priority", "q", "scope", "soon", "source", "status",
+			"type", "unit"}},
+		{"GET /api/v1/citizen-reports", []string{
+			"channel", "field", "hamlet", "late", "q", "status", "unit"}},
+	} {
+		x, ok := theoKhoa[tr.khoa]
+		if !ok {
+			t.Errorf("không trích được %s", tr.khoa)
+			continue
+		}
+		ts, err := gm.thamSoTruyVanCua(x.pkgDir, x.Handler)
+		if err != nil {
+			t.Errorf("%s: %v", tr.khoa, err)
+			continue
+		}
+		var ten []string
+		for _, p := range ts {
+			ten = append(ten, p.Ten)
+		}
+		if len(ten) != len(tr.ten) {
+			t.Errorf("%s: chờ %v, gặp %v", tr.khoa, tr.ten, ten)
+			continue
+		}
+		for i := range ten {
+			if ten[i] != tr.ten[i] {
+				t.Errorf("%s: chờ %v, gặp %v", tr.khoa, tr.ten, ten)
+				break
+			}
+		}
+	}
+}
+
 // Ba tuyến thật của kho, đọc từ chính mã nguồn. Không phải golden file: golden file phải sửa tay
 // mỗi lần đổi hợp pháp, còn thứ cần ghim ở đây là hợp đồng nói ĐÚNG cái handler làm.
 func TestBaTuyenThatCoThamSoNam(t *testing.T) {

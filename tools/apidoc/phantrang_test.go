@@ -122,3 +122,232 @@ func TestPageTroSaiThiDungChuKhongImLang(t *testing.T) {
 		t.Error("nhận một bí danh import không tồn tại")
 	}
 }
+
+// khoThuPhanTrang dựng một kho giả có `core/page` THẬT-ĐỦ-DÙNG và một tệp route, để chạy trọn bộ
+// sinh trên nó — khác `moduleGiaPhanTrang` ở chỗ có tuyến, nên đo được cả phần openapi.
+func khoThuPhanTrang(t *testing.T, tepRoute string) string {
+	t.Helper()
+	goc := t.TempDir()
+	viet := func(rel, noiDung string) {
+		p := filepath.Join(goc, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(noiDung), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	viet("core/go.mod", "module vd.test/core\n\ngo 1.26.0\n")
+	viet("core/page/page.go", "package page\n\n"+
+		"const (\n\tDefaultLimit = 20\n\tMaxLimit     = 100\n)\n\n"+
+		"type Dir string\n\nconst (\n\tAsc  Dir = \"asc\"\n\tDesc Dir = \"desc\"\n)\n\n"+
+		"type Kind string\n\nconst (\n\tKindText Kind = \"text\"\n\tKindTime Kind = \"time\"\n)\n\n"+
+		"type Column struct{}\ntype Allowlist struct{}\ntype Request struct{}\n\n"+
+		"func Col(a, b string, k Kind) Column { return Column{} }\n"+
+		"func NewAllowlist(d Dir, c Column, r ...Column) Allowlist { return Allowlist{} }\n"+
+		"func Parse(q map[string][]string, a Allowlist) (Request, error) { return Request{}, nil }\n")
+	viet("thu/go.mod", "module vd.test/thu\n\ngo 1.26.0\n")
+	viet("thu/cmd/server/main.go", "package main\n")
+	viet("thu/internal/store/kho.go", khoSapXep)
+	viet("thu/internal/http/routes.go", tepRoute)
+	return goc
+}
+
+// PHÂN TRANG SUY TỪ `page.Parse`, KHÔNG ĐÒI `@page`.
+//
+// LỖ HỔNG ĐÃ ĐO 23/09/2026: sáu tuyến của kho gọi `page.Parse`, đúng MỘT có dòng `@page`. Năm
+// tuyến còn lại phân trang thật mà hợp đồng im về `limit · cursor · sort · order` — kể cả DANH
+// SÁCH CỘT được phép sắp xếp, thứ web đã từng phải gõ tay.
+func TestPhanTrangSuyTuLoiGoiParse(t *testing.T) {
+	goc := khoThuPhanTrang(t, `package http
+
+import (
+	"net/http"
+
+	"vd.test/core/authz"
+	"vd.test/core/page"
+	"vd.test/thu/internal/store"
+)
+
+type Handler struct{}
+
+func (h *Handler) DanhSach(w http.ResponseWriter, r *http.Request) {
+	yc, err := page.Parse(r.URL.Query(), store.SapXep)
+	if err != nil {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	_ = yc
+}
+
+func Register(mux *http.ServeMux, h *Handler) {
+	// @summary  Danh sách
+	// @reply    200 -
+	mux.Handle("GET /api/v1/so", authz.Public("lý do")(http.HandlerFunc(h.DanhSach)))
+}
+`)
+	ds := thamSoCua(t, goc, "/api/v1/so", "get")
+	for _, ten := range []string{"limit", "cursor", "sort", "order"} {
+		if timThamSo(ds, ten) == nil {
+			t.Fatalf("tuyến gọi page.Parse mà hợp đồng thiếu %q: %v", ten, ds)
+		}
+	}
+	// `sort` phải mang ĐÚNG danh sách cột của biến Go — đó là toàn bộ điểm của việc suy từ mã.
+	s, _ := timThamSo(ds, "sort")["schema"].(*om)
+	if s == nil {
+		t.Fatalf("`sort` không có schema: %v", ds)
+	}
+	enum, _ := s.gt["enum"].([]any)
+	if len(enum) != 2 || enum[0] != "code" || enum[1] != "created_at" {
+		t.Errorf("`sort` không mang danh sách cột thật của store.SapXep: %v", enum)
+	}
+}
+
+// Hai danh sách trắng KHÁC NHAU cùng với tới được từ một handler là một mâu thuẫn thật — chọn bừa
+// một bên là công bố một danh sách cột có thể sai, nên bộ sinh DỪNG và nói khai `@page`.
+func TestHaiDanhSachTrangThiDungChuKhongChonBua(t *testing.T) {
+	goc := khoThuPhanTrang(t, `package http
+
+import (
+	"net/http"
+
+	"vd.test/core/authz"
+	"vd.test/core/page"
+	"vd.test/thu/internal/store"
+)
+
+type Handler struct{}
+
+func (h *Handler) DanhSach(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("kieu") == "khac" {
+		yc, _ := page.Parse(r.URL.Query(), store.SapXepKhac)
+		_ = yc
+		return
+	}
+	yc, _ := page.Parse(r.URL.Query(), store.SapXep)
+	_ = yc
+}
+
+func Register(mux *http.ServeMux, h *Handler) {
+	// @summary  Danh sách
+	// @reply    200 -
+	mux.Handle("GET /api/v1/so", authz.Public("lý do")(http.HandlerFunc(h.DanhSach)))
+}
+`)
+	// Biến thứ hai, để hai lời gọi trỏ vào hai danh sách thật khác nhau.
+	p := filepath.Join(goc, "thu", "internal", "store", "kho2.go")
+	noi := "package store\n\nimport \"vd.test/core/page\"\n\n" +
+		"var SapXepKhac = page.NewAllowlist(page.Desc, page.Col(\"updated_at\", \"sua_luc\", page.KindTime))\n"
+	if err := os.WriteFile(p, []byte(noi), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tuyens, err := quetTuyen(goc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gm, err := moGiaiMa(goc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := dungTaiLieu(tuyens, gm); err == nil {
+		t.Fatal("bộ sinh chọn bừa một trong hai danh sách trắng thay vì dừng")
+	} else if !strings.Contains(err.Error(), "@page") {
+		t.Errorf("thông báo không chỉ ra cách sửa (khai `@page`): %v", err)
+	}
+}
+
+// `@page` THẮNG khi có mặt: nó là con trỏ do người viết đặt, và một suy luận âm thầm sửa hộ là
+// một hợp đồng không ai giải thích được.
+func TestPageKhaiTayThangSuyLuan(t *testing.T) {
+	goc := khoThuPhanTrang(t, `package http
+
+import (
+	"net/http"
+
+	"vd.test/core/authz"
+	"vd.test/core/page"
+	"vd.test/thu/internal/store"
+)
+
+type Handler struct{}
+
+func (h *Handler) DanhSach(w http.ResponseWriter, r *http.Request) {
+	yc, _ := page.Parse(r.URL.Query(), store.SapXep)
+	_ = yc
+}
+
+func Register(mux *http.ServeMux, h *Handler) {
+	// @summary  Danh sách
+	// @page     store.SapXepKhac
+	// @reply    200 -
+	mux.Handle("GET /api/v1/so", authz.Public("lý do")(http.HandlerFunc(h.DanhSach)))
+}
+`)
+	p := filepath.Join(goc, "thu", "internal", "store", "kho2.go")
+	noi := "package store\n\nimport \"vd.test/core/page\"\n\n" +
+		"var SapXepKhac = page.NewAllowlist(page.Desc, page.Col(\"updated_at\", \"sua_luc\", page.KindTime))\n"
+	if err := os.WriteFile(p, []byte(noi), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ds := thamSoCua(t, goc, "/api/v1/so", "get")
+	s, _ := timThamSo(ds, "sort")["schema"].(*om)
+	if s == nil {
+		t.Fatalf("`sort` không có schema: %v", ds)
+	}
+	enum, _ := s.gt["enum"].([]any)
+	if len(enum) != 1 || enum[0] != "updated_at" {
+		t.Errorf("suy luận đã đè lên `@page` do người viết đặt: %v", enum)
+	}
+}
+
+// Sáu tuyến THẬT của kho gọi `page.Parse`, và cả sáu phải có đủ bốn tham số phân trang — kể cả
+// năm tuyến không có dòng `@page` nào.
+func TestSauTuyenThatCoDuThamSoPhanTrang(t *testing.T) {
+	goc, err := timGoc()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tuyens, err := quetTuyen(goc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gm, err := moGiaiMa(goc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	theoKhoa := map[string]tuyen{}
+	for _, x := range tuyens {
+		theoKhoa[x.Method+" "+x.Path] = x
+	}
+	for khoa, sapXep := range map[string]string{
+		"GET /api/v1/tasks":              "petstore.SapXepNhiemVu",
+		"GET /api/v1/citizen-reports":    "petstore.SapXepPhieu",
+		"GET /api/v1/meetings":           "petstore.SapXepBienBan",
+		"GET /api/v1/incoming-documents": "docstore.SapXepVanBanDen",
+		"GET /api/v1/outgoing-documents": "docstore.SapXepVanBanDi",
+		"GET /api/v1/staff":              "idstore.SapXepCanBo",
+	} {
+		x, ok := theoKhoa[khoa]
+		if !ok {
+			t.Errorf("không trích được %s", khoa)
+			continue
+		}
+		ten := x.Page
+		if ten == "" {
+			ten, err = gm.sapXepSuyTuMa(x.pkgDir, x.Handler)
+			if err != nil {
+				t.Errorf("%s: %v", khoa, err)
+				continue
+			}
+		}
+		if ten != sapXep {
+			t.Errorf("%s: chờ danh sách trắng %q, gặp %q", khoa, sapXep, ten)
+			continue
+		}
+		if _, err := gm.docPhanTrang(x.pkgDir, ten); err != nil {
+			t.Errorf("%s: không đọc được %s: %v", khoa, ten, err)
+		}
+	}
+}

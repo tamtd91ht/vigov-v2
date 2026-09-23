@@ -202,8 +202,19 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 				set("schema", newOM().set("type", "string")))
 			op.set("x-vigov-idempotency", idemJSON(t.Idem))
 		}
-		if t.Page != "" {
-			pt, err := gm.docPhanTrang(t.pkgDir, t.Page)
+		// PHÂN TRANG: `@page` nếu tuyến có khai, NGƯỢC LẠI suy từ chính lời gọi `page.Parse`
+		// trong handler. phantrang.go:sapXepSuyTuMa nói vì sao một chú thích viết tay không
+		// đóng được lớp lỗi này — năm trong sáu tuyến phân trang của kho đã trôi mất dòng ấy.
+		tenSapXep := t.Page
+		if tenSapXep == "" {
+			suy, err := gm.sapXepSuyTuMa(t.pkgDir, t.Handler)
+			if err != nil {
+				return nil, nil, fmt.Errorf("apidoc: %s: %s %s: %w", t.File, t.Method, t.Path, err)
+			}
+			tenSapXep = suy
+		}
+		if tenSapXep != "" {
+			pt, err := gm.docPhanTrang(t.pkgDir, tenSapXep)
 			if err != nil {
 				return nil, nil, fmt.Errorf("apidoc: %s: %s %s: %w", t.File, t.Method, t.Path, err)
 			}

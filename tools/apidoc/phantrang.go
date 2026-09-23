@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -99,6 +100,83 @@ func (g *giaiMa) docPhanTrang(pkgDir, ten string) (phanTrang, error) {
 	}
 
 	return phanTrang{Cot: cot, ChieuMacD: chieuRa, LimitMacD: mac, LimitMax: max}, nil
+}
+
+// sapXepSuyTuMa finds the sort allowlist a route really paginates with, by reading the
+// `page.Parse(<query>, <allowlist>)` call in its handler.
+//
+// VÌ SAO SUY THAY VÌ ĐÒI MỘT CHÚ THÍCH `@page`. Đo 23/09/2026: SÁU tuyến của kho gọi `page.Parse`,
+// và đúng MỘT (`GET /api/v1/staff`) có dòng `@page`. Năm tuyến còn lại —
+// `/tasks` · `/citizen-reports` · `/meetings` · `/incoming-documents` · `/outgoing-documents` —
+// phân trang thật mà hợp đồng không khai `limit` · `cursor` · `sort` · `order`, nên `tsc` ở web
+// không canh được một chữ nào, kể cả DANH SÁCH CỘT được phép sắp xếp.
+//
+// Một chú thích viết tay không đóng được lớp lỗi ấy: nó đóng năm tuyến hôm nay và mở lại ở tuyến
+// thứ bảy, vì không gì bắt người viết route nhớ nó — đúng cách năm tuyến này đã trôi. Lời gọi
+// `page.Parse` thì KHÔNG quên được: bỏ nó đi là tuyến hết phân trang. Cùng lối với quyền, `idem`
+// và tham số truy vấn — đọc từ mã, không khai lại (luật 9, cấm #2).
+//
+// `@page` VẪN THẮNG khi có mặt: nó là một con trỏ do người viết đặt, và một con trỏ trỏ sai phải
+// làm bộ sinh DỪNG chứ không bị một suy luận âm thầm sửa hộ.
+//
+// KHÔNG SUY ĐƯỢC THÌ IM, KHÔNG ĐOÁN: đối số thứ hai không phải một tên (dựng tại chỗ, chọn theo
+// nhánh) thì tuyến ấy vắng phần phân trang khỏi hợp đồng — cùng hình dạng thiếu sót như hôm nay,
+// không tệ hơn. Còn hai danh sách trắng KHÁC NHAU cùng với tới được từ một handler là một mâu
+// thuẫn thật: nó DỪNG, vì chọn bừa một bên là công bố một danh sách cột có thể sai.
+func (g *giaiMa) sapXepSuyTuMa(pkgDir string, handlers []string) (string, error) {
+	p, err := g.nap(pkgDir)
+	if err != nil {
+		return "", err
+	}
+	thay := map[string]bool{}
+	if err := g.diTuHandler(pkgDir, handlers, func(fd *ast.FuncDecl) {
+		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			c, ok := n.(*ast.CallExpr)
+			if !ok || !laGoi(c.Fun, "Parse") || len(c.Args) != 2 {
+				return true
+			}
+			if ten := tenBienSapXep(c.Args[1], p.imports); ten != "" {
+				thay[ten] = true
+			}
+			return true
+		})
+	}); err != nil {
+		return "", err
+	}
+	switch len(thay) {
+	case 0:
+		return "", nil
+	case 1:
+		for t := range thay {
+			return t, nil
+		}
+	}
+	ten := make([]string, 0, len(thay))
+	for t := range thay {
+		ten = append(ten, t)
+	}
+	sort.Strings(ten)
+	return "", fmt.Errorf(
+		"handler %v gọi page.Parse với %d danh sách trắng khác nhau (%s) — apidoc không chọn hộ "+
+			"một bên; khai `@page <tên>` trên tuyến để nói rõ tuyến này sắp xếp theo cái nào",
+		handlers, len(ten), strings.Join(ten, ", "))
+}
+
+// tenBienSapXep names the allowlist argument, or returns "" when it is not a plain name.
+func tenBienSapXep(e ast.Expr, imports map[string]string) string {
+	switch x := e.(type) {
+	case *ast.Ident:
+		return x.Name
+	case *ast.SelectorExpr:
+		// `petstore.SapXepNhiemVu` — chỉ nhận khi vế trái là một BÍ DANH IMPORT. `h.sapXep` hay
+		// `cfg.SapXep` là một trường, và `timBien` không phân giải được nó.
+		id, ok := x.X.(*ast.Ident)
+		if !ok || imports[id.Name] == "" {
+			return ""
+		}
+		return id.Name + "." + x.Sel.Name
+	}
+	return ""
 }
 
 // callNewAllowlist checks the value really is a page.NewAllowlist call with a default sort.

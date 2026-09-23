@@ -81,20 +81,22 @@ func tenHandler(call *ast.CallExpr) []string {
 	return ra
 }
 
-// thamSoTruyVanCua resolves the query parameters of one route, starting from its handlers.
-func (g *giaiMa) thamSoTruyVanCua(pkgDir string, handlers []string) ([]thamSoTruyVan, error) {
+// diTuHandler walks the call graph out of a route's handlers, inside the declaring package only,
+// and hands every function body it reaches to `tham`.
+//
+// MỘT PHÉP ĐI BỘ, HAI CÂU HỎI. Tham số truy vấn và danh sách trắng sắp xếp đều được trả lời bằng
+// cùng một phép đi: từ câu lệnh route sang handler, rồi một nấc sang hàm phụ cùng gói. Viết hai
+// bản là để hai bản trôi khỏi nhau — và bản trôi sẽ là bản im lặng bỏ sót, đúng lớp lỗi tệp này
+// sinh ra để đóng.
+func (g *giaiMa) diTuHandler(pkgDir string, handlers []string, tham func(*ast.FuncDecl)) error {
 	if len(handlers) == 0 {
-		return nil, nil
+		return nil
 	}
 	p, err := g.nap(pkgDir)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	co := map[string]bool{}      // tham số đọc được
-	batBuoc := map[string]bool{} // và nó có bắt buộc không
 	daXem := map[string]bool{}
-
 	var di func(ten string, sau int)
 	di = func(ten string, sau int) {
 		if sau > sauToiDa || daXem[ten] {
@@ -105,10 +107,7 @@ func (g *giaiMa) thamSoTruyVanCua(pkgDir string, handlers []string) ([]thamSoTru
 			if fd.Body == nil {
 				continue
 			}
-			for t, bb := range docThanHam(fd) {
-				co[t] = true
-				batBuoc[t] = batBuoc[t] || bb
-			}
+			tham(fd)
 			for _, goi := range goiCungGoi(fd.Body, p.imports) {
 				di(goi, sau+1)
 			}
@@ -116,6 +115,22 @@ func (g *giaiMa) thamSoTruyVanCua(pkgDir string, handlers []string) ([]thamSoTru
 	}
 	for _, h := range handlers {
 		di(h, 0)
+	}
+	return nil
+}
+
+// thamSoTruyVanCua resolves the query parameters of one route, starting from its handlers.
+func (g *giaiMa) thamSoTruyVanCua(pkgDir string, handlers []string) ([]thamSoTruyVan, error) {
+	co := map[string]bool{}      // tham số đọc được
+	batBuoc := map[string]bool{} // và nó có bắt buộc không
+
+	if err := g.diTuHandler(pkgDir, handlers, func(fd *ast.FuncDecl) {
+		for t, bb := range docThanHam(fd) {
+			co[t] = true
+			batBuoc[t] = batBuoc[t] || bb
+		}
+	}); err != nil {
+		return nil, err
 	}
 
 	ten := make([]string, 0, len(co))
@@ -175,6 +190,30 @@ func docThanHam(fd *ast.FuncDecl) map[string]bool {
 		bienQuery[ts] = true
 	}
 
+	// BỘ TRUY CẬP CỤC BỘ — tên biến giữ closure -> vị trí đối số mang TÊN tham số.
+	//
+	// Đo được 23/09/2026: `GET /api/v1/tasks` đọc 10 tham số và `GET /api/v1/citizen-reports` đọc
+	// 7, không tuyến nào có một chữ trong hợp đồng. Cả hai đọc qua đúng một hình dạng mà phép đi
+	// bộ không thấy — một closure một dòng dựng ngay đầu hàm lọc:
+	//
+	//	lay := func(k string) string {
+	//	    if v, ok := q[k]; ok && len(v) > 0 { return v[0] }
+	//	    return ""
+	//	}
+	//	...
+	//	loc.ThonID = lay("hamlet")
+	//
+	// `q[k]` có khoá là BIẾN nên không đọc được tên ở đó — đúng như tệp này từ chối `q.Get(ten)`.
+	// Nhưng tên KHÔNG mất: nó nằm ở chỗ GỌI, `lay("hamlet")`, và chỗ ấy đọc được. Thiếu nấc này
+	// thì hai sổ lớn nhất của kho sinh ra `truyVan: {}`, và người viết màn gõ `hamlet_id` thay
+	// `hamlet` không có gì đỏ — máy chủ bỏ qua trong im lặng và trả cả quyển sổ.
+	//
+	// NHẬN DIỆN THEO THÂN CLOSURE, KHÔNG THEO TÊN. Một closure được coi là bộ truy cập khi thân
+	// nó lập chỉ mục một biến query bằng chính THAM SỐ của nó (`q[k]`, `q.Get(k)`). Nhận theo
+	// tên (`lay`, `get`, `param`) là đoán, và một hàm tên `lay` làm việc khác sẽ bơm vào hợp đồng
+	// những tên không phải tham số truy vấn.
+	truyCap := map[string]int{}
+
 	nhiem := map[string]map[string]bool{} // tham số -> tên biến mang giá trị của nó
 	co := map[string]bool{}               // tham số đọc được
 	batBuoc := map[string]bool{}
@@ -204,7 +243,17 @@ func docThanHam(fd *ast.FuncDecl) map[string]bool {
 				}
 				return true
 			}
-			for ts := range phuThuocVao(s.Rhs, bienQuery, nhiem) {
+			// `lay := func(k string) string { ... q[k] ... }` — ghi nhận bộ truy cập và KHÔNG chạy
+			// phép lần vết trên phép gán này: thân closure đọc bằng khoá BIẾN nên không có tên nào
+			// để lấy, và lần vết ở đây chỉ có thể làm bẩn `lay` bằng một tham số nó không giữ.
+			//
+			// Vẫn đi TIẾP vào thân (không `return false`): một closure vừa làm bộ truy cập vừa đọc
+			// thẳng một tên viết sẵn thì tên ấy còn được nhánh chung ở cuối bắt.
+			if bt, vt := boTruyCapCua(s, bienQuery); bt != "" {
+				truyCap[bt] = vt
+				break
+			}
+			for ts := range phuThuocVao(s.Rhs, bienQuery, nhiem, truyCap) {
 				co[ts] = true
 				ghiNhiem(ts, s.Lhs)
 			}
@@ -212,13 +261,13 @@ func docThanHam(fd *ast.FuncDecl) map[string]bool {
 			if !coBadRequest(s.Body) {
 				return true
 			}
-			for ts := range phuThuocVao([]ast.Expr{s.Cond}, bienQuery, nhiem) {
+			for ts := range phuThuocVao([]ast.Expr{s.Cond}, bienQuery, nhiem, truyCap) {
 				co[ts] = true
 				batBuoc[ts] = true
 			}
 		}
 		// Mọi lần đọc khác — tham số chảy thẳng vào một lời gọi, không qua biến nào.
-		if ts, ok := docThamSo(n, bienQuery); ok {
+		if ts, ok := docThamSo(n, bienQuery, truyCap); ok {
 			co[ts] = true
 		}
 		return true
@@ -231,16 +280,122 @@ func docThanHam(fd *ast.FuncDecl) map[string]bool {
 	return ra
 }
 
+// boTruyCapCua recognises an assignment that builds a LOCAL QUERY ACCESSOR, and reports the
+// variable it lands in together with the argument position that carries the parameter name.
+//
+// Hình dạng duy nhất nó nhận: một phép gán MỘT vế trái, MỘT vế phải, vế phải là hàm literal có
+// thân lập chỉ mục một biến query bằng chính tham số của nó. Một hàm ở mức gói làm đúng việc ấy
+// KHÔNG được nhận ở đây — `goiCungGoi` đã đi theo lời gọi sang hàm cùng gói, và ở đó tham số
+// `url.Values` được `thamSoKieuQuery` nhận ra; thêm một lối thứ hai cho cùng hình dạng là hai
+// nguồn cho một sự thật.
+func boTruyCapCua(s *ast.AssignStmt, bienQuery map[string]bool) (string, int) {
+	if len(s.Lhs) != 1 || len(s.Rhs) != 1 {
+		return "", 0
+	}
+	id, ok := s.Lhs[0].(*ast.Ident)
+	if !ok || id.Name == "_" {
+		return "", 0
+	}
+	fl, ok := s.Rhs[0].(*ast.FuncLit)
+	if !ok {
+		return "", 0
+	}
+	vt, ok := laBoTruyCap(fl, bienQuery)
+	if !ok {
+		return "", 0
+	}
+	return id.Name, vt
+}
+
+// laBoTruyCap reports whether a function literal reads a query map keyed by one of its own
+// parameters, and at which position that parameter sits.
+//
+// VỊ TRÍ, KHÔNG PHẢI "đối số đầu tiên": hai hàm lọc của kho đều khai `func(k string) string`, nên
+// vị trí 0 là câu trả lời hôm nay — nhưng ghim con số ấy vào mã là để một closure
+// `func(q url.Values, k string)` lặng lẽ lấy nhầm đối số, tức bơm một chuỗi KHÔNG phải tên tham
+// số vào hợp đồng. Một tên sai trong hợp đồng tệ hơn một tên thiếu: `tsc` canh đúng cái sai ấy.
+func laBoTruyCap(fl *ast.FuncLit, bienQuery map[string]bool) (int, bool) {
+	if fl.Type == nil || fl.Type.Params == nil || fl.Body == nil {
+		return 0, false
+	}
+	viTri := map[string]int{}
+	i := 0
+	for _, f := range fl.Type.Params.List {
+		// Một trường không tên (`func(string) string`) vẫn chiếm một vị trí đối số — bỏ qua tên
+		// nhưng KHÔNG bỏ qua chỗ, nếu không mọi vị trí sau nó lệch một.
+		if len(f.Names) == 0 {
+			i++
+			continue
+		}
+		for _, n := range f.Names {
+			if n.Name != "_" && laChuoi(f.Type) {
+				viTri[n.Name] = i
+			}
+			i++
+		}
+	}
+	if len(viTri) == 0 {
+		return 0, false
+	}
+
+	laNguon := func(e ast.Expr) bool {
+		if laGoiQuery(e) {
+			return true
+		}
+		x, ok := e.(*ast.Ident)
+		return ok && bienQuery[x.Name]
+	}
+	khoa := func(e ast.Expr) (int, bool) {
+		x, ok := e.(*ast.Ident)
+		if !ok {
+			return 0, false
+		}
+		v, ok := viTri[x.Name]
+		return v, ok
+	}
+
+	ra, thay := 0, false
+	ast.Inspect(fl.Body, func(n ast.Node) bool {
+		if thay {
+			return false
+		}
+		switch x := n.(type) {
+		case *ast.IndexExpr: // q[k]
+			if !laNguon(x.X) {
+				return true
+			}
+			if v, ok := khoa(x.Index); ok {
+				ra, thay = v, true
+			}
+		case *ast.CallExpr: // q.Get(k)
+			sel, ok := x.Fun.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Get" || len(x.Args) != 1 || !laNguon(sel.X) {
+				return true
+			}
+			if v, ok := khoa(x.Args[0]); ok {
+				ra, thay = v, true
+			}
+		}
+		return true
+	})
+	return ra, thay
+}
+
+func laChuoi(e ast.Expr) bool {
+	id, ok := e.(*ast.Ident)
+	return ok && id.Name == "string"
+}
+
 // phuThuocVao returns the query parameters an expression tree reads, directly or through a
 // variable already tainted by one.
-func phuThuocVao(es []ast.Expr, bienQuery map[string]bool, nhiem map[string]map[string]bool) map[string]bool {
+func phuThuocVao(es []ast.Expr, bienQuery map[string]bool, nhiem map[string]map[string]bool, truyCap map[string]int) map[string]bool {
 	ra := map[string]bool{}
 	for _, e := range es {
 		if e == nil {
 			continue
 		}
 		ast.Inspect(e, func(n ast.Node) bool {
-			if ts, ok := docThamSo(n, bienQuery); ok {
+			if ts, ok := docThamSo(n, bienQuery, truyCap); ok {
 				ra[ts] = true
 				return true
 			}
@@ -259,8 +414,9 @@ func phuThuocVao(es []ast.Expr, bienQuery map[string]bool, nhiem map[string]map[
 	return ra
 }
 
-// docThamSo recognises one read of a named query parameter: `q.Get("x")` or `q["x"]`.
-func docThamSo(n ast.Node, bienQuery map[string]bool) (string, bool) {
+// docThamSo recognises one read of a named query parameter: `q.Get("x")`, `q["x"]`, or a call to
+// a local accessor closure, `lay("x")`.
+func docThamSo(n ast.Node, bienQuery map[string]bool, truyCap map[string]int) (string, bool) {
 	laNguon := func(e ast.Expr) bool {
 		if laGoiQuery(e) {
 			return true
@@ -270,6 +426,16 @@ func docThamSo(n ast.Node, bienQuery map[string]bool) (string, bool) {
 	}
 	switch x := n.(type) {
 	case *ast.CallExpr:
+		// `lay("hamlet")` — bộ truy cập cục bộ. Xét TRƯỚC dạng `.Get`, vì nó là một lời gọi qua
+		// tên trần chứ không qua selector, nên hai nhánh không giẫm nhau.
+		if id, ok := x.Fun.(*ast.Ident); ok {
+			if vt, co := truyCap[id.Name]; co {
+				if vt >= len(x.Args) {
+					return "", false
+				}
+				return chuoiLit(x.Args[vt])
+			}
+		}
 		sel, ok := x.Fun.(*ast.SelectorExpr)
 		if !ok || sel.Sel.Name != "Get" || len(x.Args) != 1 || !laNguon(sel.X) {
 			return "", false
