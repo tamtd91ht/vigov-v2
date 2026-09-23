@@ -38,7 +38,20 @@ function moiTepNguon(): { duongDan: string; noiDung: string }[] {
       const day = join(thuMuc, muc.name);
       if (muc.isDirectory()) {
         duyet(day);
-      } else if ([".ts", ".tsx", ".css"].includes(extname(muc.name)) && !muc.name.endsWith(".test.ts")) {
+        // `.test.tsx` CŨNG BỊ LOẠI, và việc nó từng KHÔNG bị loại là một khiếm khuyết có sẵn.
+        // Khối chú thích đầu tệp đã khai "Tệp test bị loại khỏi phạm vi quét" từ ngày đầu, nhưng
+        // mã chỉ loại `.test.ts` — nên mọi tệp `.test.tsx` của kho vẫn bị quét suốt, và một ca
+        // kiểm KHẲNG ĐỊNH một chuỗi bị cấm không có mặt sẽ tự tố cáo chính nó. Lộ ra 24/09/2026
+        // ngay lượt chạy đầu của lệnh cấm `dangerouslySetInnerHTML`:
+        // `features/noi-dung/so-noi-dung.test.tsx` đỏ vì nó viết đúng chuỗi ấy để tìm chuỗi ấy.
+        //
+        // Bốn lệnh cấm cũ không đỏ chỉ vì chưa tệp `.test.tsx` nào tình cờ viết `document.cookie`
+        // hay `vigov.vn` — tức lời khai và mã đã lệch nhau từ lâu mà không ai thấy.
+      } else if (
+        [".ts", ".tsx", ".css"].includes(extname(muc.name)) &&
+        !muc.name.endsWith(".test.ts") &&
+        !muc.name.endsWith(".test.tsx")
+      ) {
         ra.push({
           duongDan: relative(GOC, day).replace(/\\/g, "/"),
           noiDung: boChuThich(readFileSync(day, "utf8")),
@@ -89,5 +102,25 @@ describe("ranh giới của mã nguồn web quản trị", () => {
     // Một host trong mã là một xã trong mã. Kể cả `.vigov.vn` dùng làm miền cookie — đúng cái
     // một dòng làm cookie của xã này đi tới mọi tên miền con của xã khác (luật 1, cấm #3).
     expect(viPham(/vigov\.vn/)).toEqual([]);
+  });
+
+  it("KHÔNG nơi nào trong toàn ứng dụng chèn HTML thô vào trang", () => {
+    // MÁY CHỦ KHÔNG LÀM SẠCH HTML, và đó là điều đã đo chứ không phải lo xa: `noi_dung` của
+    // chương 11 được khai là HTML, còn kho thì không có bộ làm sạch nào — ghi thẳng trong
+    // `service-comms/internal/domain/noi_dung_mini_app.go`. Nên hôm nay, thứ duy nhất đứng giữa
+    // một cán bộ có `content.update` và một `<script>` chạy trên điện thoại của mọi cư dân xã
+    // là QUYỀN. Một lần `dangerouslySetInnerHTML` ở bất kỳ đâu trong ứng dụng này sẽ gỡ nốt lớp
+    // ấy — và gỡ trong im lặng, vì trang vẫn hiện đúng như người viết mong đợi.
+    //
+    // QUÉT CẢ `src/`, KHÔNG CHỈ MÀN NỘI DUNG. `features/noi-dung/ranh-gioi-html.test.ts` đã canh
+    // bốn tệp của màn ấy và vẫn giữ nguyên giá trị: nó đỏ đúng chỗ người sửa màn ấy đang đứng.
+    // Ca NÀY canh một thứ khác — ngày mai một màn khác nhận chuỗi từ cùng cái API ấy, hoặc một
+    // màn cũ được thêm ô "xem trước". Chữ HTML không ở lại trong màn sinh ra nó.
+    //
+    // BA MẪU, VÌ CÓ BA ĐƯỜNG: thuộc tính của React, thuộc tính DOM trần, và `document.write`.
+    // Cấm một đường rồi để hở hai đường kia là cấm cho có.
+    expect(viPham(/dangerouslySetInnerHTML/)).toEqual([]);
+    expect(viPham(/\.\s*innerHTML\s*=/)).toEqual([]);
+    expect(viPham(/document\s*\.\s*write\s*\(/)).toEqual([]);
   });
 });
