@@ -84,6 +84,35 @@ sử riêng. Gộp tám đơn vị vào một job thì tám mốc chen nhau tron
 tìm ngược sẽ nhặt phải mốc của dịch vụ khác rồi kết luận "không có gì đổi" cho một dịch vụ
 vừa bị sửa. Một job cho mỗi dịch vụ là **nơi lưu trạng thái** của cơ chế, không phải để UI gọn.
 
+### Vì sao `Pipeline` chứ không phải `Multibranch Pipeline`
+
+Câu hỏi đúng, và câu trả lời **phụ thuộc vào quyết định nhánh ở mục 1** — không phải vào việc
+loại job nào tốt hơn:
+
+| | `Pipeline` (đang dùng) | `Multibranch Pipeline` |
+|---|---|---|
+| Nó giải bài toán gì | một job = một `Jenkinsfile` cố định trên `main` | **tự phát hiện nhánh** và tạo một job con cho mỗi nhánh |
+| Với kho một nhánh | vừa đủ | sinh đúng **một** job con, cộng thêm một tầng quét — trả tiền cho một tính năng không dùng |
+| Với `dev`/`stg`/`master` như mẫu omicrm | phải tạo tay từng job cho từng nhánh | **đây mới là lựa chọn đúng** |
+
+ViGov chốt **main-only** (mục 1), nên Multibranch không mua được gì. Hai lý do cụ thể hơn,
+mỗi cái ứng với một cơ chế đang chạy:
+
+1. **Mốc dựng lại nằm trong LỊCH SỬ BUILD của job.** `mocDaDongAnh()` đi ngược
+   `currentBuild.previousBuild` tìm dòng `anh-tu-commit:` trong `description`
+   (`service-*/Jenkinsfile`, cuối tệp). Một job `Pipeline` là hạng mục cấp cao nhất, lịch sử
+   của nó không ai dọn. Job con của Multibranch thì gắn vào **nhánh**: đổi tên nhánh, hoặc
+   chính sách *orphaned item* dọn nó, là mất lịch sử — và mất mốc nghĩa là **dựng lại cả tám
+   ảnh**. Hỏng về phía an toàn, nhưng toàn bộ việc lọc biến mất mà không ai được báo.
+2. **`vigov-deploy` KHÔNG ĐƯỢC tự chạy.** Multibranch build ngay khi phát hiện nhánh và mỗi
+   lần push, nên muốn nó im thì phải thêm một thuộc tính chặn trigger. Một job triển khai mà
+   mặc định là *tự chạy rồi chặn lại* thì cái sai nằm ở phía nguy hiểm: quên một ô là cụm bị
+   đụng mà không ai bấm. Job `Pipeline` không khai trigger thì **không bao giờ tự chạy** —
+   và kiểm "ai bấm" ở stage `Kiểm tham số` dựa đúng vào tính chất ấy.
+
+**Ngày nào đổi sang nhánh-là-môi-trường thì đổi luôn sang Multibranch** — lúc ấy nó đúng, và
+mục 1 phải sửa cùng lượt. Đừng đổi một nửa.
+
 ### Credentials — **một** mục duy nhất
 
 | ID | Kiểu | Dùng ở |
