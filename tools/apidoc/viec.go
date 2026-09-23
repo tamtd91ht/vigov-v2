@@ -22,8 +22,10 @@ var thuMucViec = []string{"done", "claimed", "open", "stale"}
 
 // cachNhanViec ships inside every task file, because the one place a reader of a task is
 // certainly looking is the task.
-const cachNhanViec = "Nhận việc = ĐỔI TÊN tệp này sang tasks/web/claimed/, xong thì sang tasks/web/done/. " +
+const cachNhanViec = "Nhận việc = ĐỔI TÊN tệp này sang tasks/web/claimed/. " +
 	"os.Rename là khóa: hai agent cùng nhận một việc thì một thành công, một nhận ENOENT. " +
+	"XONG THÌ KHÔNG PHẢI ĐỔI TÊN: bộ sinh tự chuyển sang tasks/web/done/ khi thấy lời gọi trong " +
+	"web-admin/src/lib/api/** (xem `manhinh.go`) — một dấu hiệu phải nhớ gõ là một dấu hiệu sẽ trôi. " +
 	"Đừng thêm cờ trạng thái, tệp khóa hay bản ghi nào khác — thư mục đã là nguồn duy nhất. " +
 	"Nếu route biến mất khỏi mã nguồn, bộ sinh chuyển việc đang ở open/ sang tasks/web/stale/ " +
 	"(chuyển chứ không xoá — \"vì sao nó biến mất\" là câu sẽ có người hỏi); route quay lại thì " +
@@ -56,8 +58,9 @@ type viec struct {
 	DeclaredIn  string `json:"declared_in"`
 }
 
-// moCoiDaNhan is a task somebody is BUILDING RIGHT NOW for a route that no longer exists.
-type moCoiDaNhan struct {
+// viecNgan names a task by its id AND the route it was for, because a hash alone is unreadable
+// in a message a person has to act on.
+type viecNgan struct {
 	ID     string
 	Method string
 	Path   string
@@ -68,7 +71,10 @@ type ketQuaViec struct {
 	Moi     int
 	Stale   int
 	HoiSinh int
-	MoCoi   []moCoiDaNhan
+	// MoCoi: claimed right now, for a route that no longer exists.
+	MoCoi []viecNgan
+	// DaCoManHinh: moved open/ -> done/ because the client call already exists.
+	DaCoManHinh []viecNgan
 }
 
 // maViec is the identity of a route, for as long as the route exists.
@@ -99,6 +105,14 @@ func maViec(service, method, path string) string {
 //	stale/    -> open/      the route came back with the same id. The SAME file goes back, not a
 //	                        new one, so any note somebody left on it survives.
 //
+// A FIFTH MOVE, AND IT IS NOT ABOUT A DISAPPEARED ROUTE:
+//
+//	open/     -> done/      the admin web already calls this route. That used to be a manual
+//	                        rename; it stopped happening, and the queue then spent weeks
+//	                        declaring finished work unstarted. manhinh.go holds the reasoning
+//	                        and the limits, step 3 below holds what keeps a VANISHED route out
+//	                        of this move.
+//
 // TWO SAFETY NETS, because one run over a half-written tree could otherwise sweep the whole
 // board into stale/ and the next run sweep it back — noise that ends with nobody trusting the
 // queue at all:
@@ -111,7 +125,7 @@ func maViec(service, method, path string) string {
 //
 // Deliberately NO percentage threshold. A number like "stop if more than half vanish" is a
 // number nobody can justify, and it is wrong on exactly the run where it matters.
-func dongBoViec(goc string, tuyens []tuyen) (ketQuaViec, error) {
+func dongBoViec(goc string, tuyens []tuyen, mh manHinh) (ketQuaViec, error) {
 	var kq ketQuaViec
 
 	// SAFETY NET 2.
@@ -146,8 +160,13 @@ func dongBoViec(goc string, tuyens []tuyen) (ketQuaViec, error) {
 	// from the source" (ADR 0014). Filing a live route there is a confident answer to a question
 	// nobody asked, which is worse than the misfiling it would be fixing.
 	hienTai := map[string]bool{}
+	// theoMa answers a THIRD question the two maps below cannot: given a task id already on the
+	// board, which route is it, so the screen detector has something to look for.
+	theoMa := map[string]tuyen{}
 	for _, t := range tuyens {
-		hienTai[maViec(t.Service, t.Method, t.Path)] = true
+		id := maViec(t.Service, t.Method, t.Path)
+		hienTai[id] = true
+		theoMa[id] = t
 	}
 
 	// 1. Revive or create.
@@ -200,7 +219,51 @@ func dongBoViec(goc string, tuyens []tuyen) (ketQuaViec, error) {
 		}
 	}
 
-	// 3. claimed/ orphans -> report only, touch nothing.
+	// 3. open/ tasks whose screen already exists -> done/.
+	//
+	// A ROUTE THAT NO LONGER EXISTS MUST NEVER LAND HERE: `stale/` is the true statement about it,
+	// and a client call still lying around in the web is evidence of dead code, not of finished
+	// work. TWO INDEPENDENT THINGS STOP IT, and the redundancy is stated because it was measured
+	// rather than assumed — a mutation run on 2026-09-24 removed each one separately and the
+	// suite stayed green both times, then went red when both went:
+	//
+	//	the order    step 2 has already swept vanished tasks out of open/, so they are not in
+	//	             the list this loop reads.
+	//	theoMa       a task id with no live route has no tuyen to ask daDung about, and the loop
+	//	             skips it.
+	//
+	// Neither is decoration and neither is load-bearing alone. TestRouteBienMatThiStaleThangHon-
+	// DaCoManHinh is what actually holds the invariant; do not delete one of the two on the
+	// grounds that the tests still pass.
+	//
+	// ONLY open/ IS READ HERE, and the three directories left out are each left out for a reason:
+	//
+	//	claimed/  somebody is on it RIGHT NOW. Moving the file out from under them destroys their
+	//	          context, and it is admin-web-builder's directory, not this generator's
+	//	          (ROUTING §3). A "you already built this" note would also be permanent noise:
+	//	          it stays true until they rename, which is exactly what they are about to do.
+	//	done/     nothing to do.
+	//	stale/    the route does not exist; step 1 revives it first if it comes back.
+	//
+	// A BRAND-NEW ROUTE THAT ALREADY HAS A SCREEN passes through open/ within this same run:
+	// step 1 creates the file, this step moves it. It is counted in both Moi and DaCoManHinh,
+	// and that is the honest description of what happened rather than a special case that would
+	// need its own branch and its own test.
+	for _, id := range maTrong(goc, "open") {
+		t, co := theoMa[id]
+		if !co || !mh.daDung(t) {
+			continue
+		}
+		ok, err := chuyen(goc, "open", "done", id)
+		if err != nil {
+			return kq, err
+		}
+		if ok {
+			kq.DaCoManHinh = append(kq.DaCoManHinh, viecNgan{ID: id, Method: t.Method, Path: t.Path})
+		}
+	}
+
+	// 4. claimed/ orphans -> report only, touch nothing.
 	for _, id := range maTrong(goc, "claimed") {
 		if hienTai[id] {
 			continue
@@ -208,7 +271,7 @@ func dongBoViec(goc string, tuyens []tuyen) (ketQuaViec, error) {
 		kq.MoCoi = append(kq.MoCoi, docMoCoi(goc, "claimed", id))
 	}
 
-	// 4. done/ orphans: deliberately silent. Reporting them would turn correct history into a
+	// 5. done/ orphans: deliberately silent. Reporting them would turn correct history into a
 	//    permanent warning, and a warning that can never be cleared is a warning people learn
 	//    to scroll past.
 
@@ -291,8 +354,8 @@ func maTrong(goc, thuMuc string) []string {
 
 // docMoCoi recovers the route a claimed task was for, so the warning can name the path
 // somebody is currently building against instead of only a hash.
-func docMoCoi(goc, thuMuc, id string) moCoiDaNhan {
-	m := moCoiDaNhan{ID: id}
+func docMoCoi(goc, thuMuc, id string) viecNgan {
+	m := viecNgan{ID: id}
 	b, err := os.ReadFile(filepath.Join(goc, thuMuc, id+".json"))
 	if err != nil {
 		return m

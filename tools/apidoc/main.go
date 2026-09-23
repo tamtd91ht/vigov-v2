@@ -77,7 +77,9 @@
 // When a route DISAPPEARS the answer depends on where its task sits, and dongBoViec documents
 // why the four cases cannot be treated alike. The short version: open/ is moved to stale/
 // (moved, never deleted), claimed/ is left alone and shouted about, done/ is left in peace, and
-// a route that comes back moves its own file from stale/ straight back to open/.
+// a route that comes back moves its own file from stale/ straight back to open/. NOTHING IS
+// EVER DELETED — a task that leaves a directory is a task that arrived in another one, because
+// "why did this vanish" is a question somebody will ask.
 //
 // CLAIMING A TASK IS `os.Rename` BETWEEN TWO DIRECTORIES, AND NOTHING ELSE. The operating
 // system is the lock: two agents renaming the same file, one succeeds and the other gets
@@ -85,7 +87,19 @@
 // second source for a fact the filesystem already holds, and the copy that drifts is the one
 // that decides two agents are both working on the same route.
 //
-//	open/<id>.json  --rename-->  claimed/<id>.json  --rename-->  done/<id>.json
+//	open/<id>.json  --rename-->  claimed/<id>.json  --this generator-->  done/<id>.json
+//
+// THE LAST STEP IS NOT A RENAME ANY MORE, AND THAT IS THE ONE CHANGE OF MIND IN THIS DESIGN.
+// "Finished" is derived from the source: a route the admin web calls in
+// `web-admin/src/lib/api/**` is a route with a screen. It was a manual rename until 2026-09-24,
+// and the measurement that ended it is blunt — all 36 tasks then in open/ already had client
+// code. Every entry in the queue was wrong, and nothing said so, because a signal you have to
+// REMEMBER TO TYPE is a signal that drifts silently. Same reasoning, same day as the switch
+// from `@page` annotations to reading `page.Parse` out of the handler.
+//
+// `manhinh.go` holds the two signals it reads, and — just as important — the five things it
+// deliberately cannot see. All five err the same way: a finished task left in open/, never an
+// unbuilt one moved to done/.
 //
 // Only the admin web is queued here. The Zalo Mini App resolves its commune differently and
 // its surface is not designed yet; an empty tasks/citizen/ would be a promise about work
@@ -148,8 +162,16 @@ func main() {
 			m.ID, m.Method, m.Path)
 	}
 
-	fmt.Printf("apidoc: %d route · %d việc mới · %d chuyển sang stale · %d hồi sinh · %d mồ côi đang ở claimed\n",
-		n, kq.Moi, kq.Stale, kq.HoiSinh, len(kq.MoCoi))
+	// NAMED, NOT COUNTED. A move from open/ to done/ is the generator deciding a piece of work is
+	// finished; a bare number gives nobody a way to disagree with it, and the one thing this
+	// inference can get wrong is which route it was about.
+	for _, v := range kq.DaCoManHinh {
+		fmt.Fprintf(os.Stderr, "apidoc: ĐÃ CÓ MÀN HÌNH → done/ — việc %s (%s %s)\n", v.ID, v.Method, v.Path)
+	}
+
+	fmt.Printf("apidoc: %d route · %d việc mới · %d đã có màn hình → done · %d chuyển sang stale · "+
+		"%d hồi sinh · %d mồ côi đang ở claimed\n",
+		n, kq.Moi, len(kq.DaCoManHinh), kq.Stale, kq.HoiSinh, len(kq.MoCoi))
 }
 
 // chay is the whole command. Returns the number of routes documented and what the queue did.
@@ -172,6 +194,18 @@ func chay(c cauHinh) (int, ketQuaViec, error) {
 		return 0, kq, err
 	}
 
+	// READ AFTER quetTuyen, WRITTEN BEFORE THE FIRST vietJSON, AND BOTH HALVES MATTER.
+	//
+	// After: a source tree that does not parse must fail with the parse error, not with "no
+	// web-admin here" — a fixture-shaped repository would otherwise turn safety net 1's test
+	// green for the wrong reason, which is the way a guard dies quietly.
+	// Before: if the client layer cannot be read, nothing is written at all. A run that emitted
+	// the contract and then skipped the queue would leave the queue wrong and look successful.
+	mh, err := docManHinh(c.Root)
+	if err != nil {
+		return 0, kq, err
+	}
+
 	doc, surface, err := dungTaiLieu(tuyens, gm)
 	if err != nil {
 		return 0, kq, err
@@ -184,7 +218,7 @@ func chay(c cauHinh) (int, ketQuaViec, error) {
 		return 0, kq, err
 	}
 
-	kq, err = dongBoViec(c.TasksDir, tuyens)
+	kq, err = dongBoViec(c.TasksDir, tuyens, mh)
 	if err != nil {
 		return 0, kq, err
 	}

@@ -27,10 +27,12 @@ var (
 	maPhien    = maViec("identity", "POST", "/api/v1/sessions")
 )
 
-// dongBo runs one synchronisation and fails the test on error.
+// dongBo runs one synchronisation against a web layer that calls NOTHING, and fails the test on
+// error. The screen inference is exercised on its own in manhinh_test.go; every case here is
+// about the four directories, so an empty client layer keeps them saying what they used to say.
 func dongBo(t *testing.T, goc string, ts []tuyen) ketQuaViec {
 	t.Helper()
-	kq, err := dongBoViec(goc, ts)
+	kq, err := dongBoViec(goc, ts, manHinh{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +266,7 @@ func TestChuyenGapENOENTThiBoQuaEm(t *testing.T) {
 func TestKhongCoRouteThiKhongChuyenGi(t *testing.T) {
 	goc := hangDoi(t, "open")
 
-	kq, err := dongBoViec(goc, nil)
+	kq, err := dongBoViec(goc, nil, manHinh{})
 	if err == nil {
 		t.Fatal("quét 0 route phải là lỗi, không phải một lượt dọn sạch hàng đợi")
 	}
