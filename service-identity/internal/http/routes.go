@@ -1251,14 +1251,19 @@ func Register(mux *http.ServeMux, d Deps) {
 	// permission to fail, so 403 is a status these handlers never return. A declared status the
 	// handler cannot produce is a contract the admin web writes dead code for.
 	//
-	// ⚠ STATED GAP — `?year=` DOES NOT REACH THE CONTRACT. The two date routes take a MANDATORY
-	// `year` query parameter, and apidoc's vocabulary has no annotation for a query parameter: it
-	// derives path parameters from the template, adds Idempotency-Key from idem.*, and adds
-	// paging from @page (tools/apidoc/openapi.go:168-213). So kb/20-contracts/openapi.json will
-	// describe these two routes WITHOUT the one parameter a caller must send, and a client
-	// generated from it gets 400 until somebody reads this file. The honest fix is a `@query`
-	// annotation in apidoc, which is a change to the contract tooling (ADR 0014) and not
-	// something these routes may decide on their own. Said out loud rather than papered over.
+	// ✔ KHOẢNG TRỐNG NÀY ĐÃ ĐÓNG 23/09/2026 — `?year=` NAY CÓ TRONG HỢP ĐỒNG. Khối này giữ lại
+	// thay vì xoá sạch, vì bản thân nó là thứ đáng đọc hơn thứ nó từng tả.
+	//
+	// Khối này TỪNG viết: "`?year=` DOES NOT REACH THE CONTRACT … apidoc's vocabulary has no
+	// annotation for a query parameter". Câu ấy đúng lúc viết và hết đúng khi `tools/apidoc` học
+	// đọc tham số truy vấn bằng cách ĐI AST từ câu lệnh route xuống thân handler, thay vì chờ một
+	// chú thích `@query` ai đó phải nhớ gõ — `tools/apidoc/truyvan.go`. Đo lại: openapi.json khai
+	// `year` với `required: true` cho CẢ HAI tuyến `/api/v1/public-holidays` và `/swap-working-days`.
+	//
+	// VÌ SAO GHI RA THAY VÌ XOÁ IM LẶNG: một chú thích nói "chỗ này còn thiếu" khi nó không còn
+	// thiếu là chú thích đẩy người sau đi vá LẦN HAI — và bản vá thứ hai ấy sẽ đúng là cái `@query`
+	// viết tay mà bộ sinh vừa thôi cần. Bài học rộng hơn: một câu "chưa làm được" viết trong mã
+	// KHÔNG tự hết hạn. Nó sống đúng bằng trí nhớ của người viết ra nó, và ở đây trí nhớ ấy là hai ngày.
 
 	// @summary  Lịch làm việc thông thường của xã — mỗi dòng là một CA, nghỉ trưa là khoảng hở giữa hai ca
 	// @screen   14-cau-hinh §8
