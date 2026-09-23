@@ -1,5 +1,6 @@
 import { CauHinhXaProvider, phanHienThi } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
+import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { TabDanhMuc } from "@/features/cau-hinh/tab-danh-muc";
 import { TabNguoiDung } from "@/features/cau-hinh/tab-nguoi-dung";
@@ -67,6 +68,8 @@ export default async function TrangCauHinh() {
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
+        <div className="khung-trang">
+        <ThanhBen />
         <DauTrang />
         <main className="than-trang">
           <h1>Cấu hình hệ thống</h1>
@@ -82,6 +85,7 @@ export default async function TrangCauHinh() {
           <TabDanhMuc />
           <TabThoiHanXuLy />
         </main>
+        </div>
       </PhienProvider>
     </CauHinhXaProvider>
   );

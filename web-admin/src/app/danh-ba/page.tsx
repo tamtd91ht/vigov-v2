@@ -1,5 +1,6 @@
 import { CauHinhXaProvider, phanHienThi } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
+import { ThanhBen } from "@/components/thanh-ben";
 import { DanhBaLienHe } from "@/features/danh-ba/danh-ba-lien-he";
 import { CAU_THIEU_QUYEN, MO_TA_TRANG, TIEU_DE_TRANG } from "@/features/danh-ba/nhan-danh-ba";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
@@ -45,6 +46,8 @@ export default async function TrangDanhBa() {
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
+        <div className="khung-trang">
+        <ThanhBen />
         <DauTrang />
         <main className="than-trang">
           <h1>{TIEU_DE_TRANG}</h1>
@@ -53,6 +56,7 @@ export default async function TrangDanhBa() {
             <DanhBaLienHe />
           </CongQuyen>
         </main>
+        </div>
       </PhienProvider>
     </CauHinhXaProvider>
   );

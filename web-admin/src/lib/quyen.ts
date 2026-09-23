@@ -44,10 +44,32 @@ export const QUYEN_PHAN_QUYEN = "admin.role";
  * `kb/20-contracts/openapi.json`, sinh từ `service-finance/internal/http/routes.go`).
  *
  * `budget.read` MỞ MÀN ĐỌC, KHÔNG MỞ GÌ KHÁC. Đặc tả §8.2 liệt kê `budget.update` (nhập, sửa
- * chứng từ) và `budget.confirm` (xác nhận, khoá) là hai khoá RIÊNG — chúng không có tuyến nào
- * trong hợp đồng hôm nay, và không khoá nào trong ba suy ra được từ khoá kia.
+ * chứng từ) và `budget.confirm` (xác nhận, khoá) là hai khoá RIÊNG, và không khoá nào trong ba
+ * suy ra được từ khoá kia.
+ *
+ * ⚠ CÂU "chúng không có tuyến nào trong hợp đồng hôm nay" ĐÃ SAI TỪ 23/09/2026 — gỡ đi rồi để
+ * lại dấu vết này, vì một chú thích nói sai về phân quyền là thứ người sau đọc rồi dựng cổng
+ * theo. Tám tuyến ngân sách nay khai đủ ba khoá; xem hai hằng ngay dưới.
  */
 export const QUYEN_XEM_GIAI_NGAN = "budget.read";
+
+/**
+ * Nhập và sửa — `budget.update`. Tuyến khai nó (`x-vigov-permission.key` trong
+ * `kb/20-contracts/openapi.json`): `POST /budget-sheets` · `POST /budget-lines` ·
+ * `PATCH /budget-lines/{id}` · `POST /disbursements` · `PATCH /disbursements/{id}`.
+ */
+export const QUYEN_GHI_NGAN_SACH = "budget.update";
+
+/**
+ * Xác nhận, khoá, GỠ, và chọn dòng tổng — `budget.confirm`.
+ *
+ * XOÁ ĐỨNG SAU KHOÁ NÀY, KHÔNG SAU `budget.update`, và đó là chỗ dễ gắn cổng nhầm nhất:
+ * `DELETE /budget-sheets/{id}` gỡ cả một bảng ngân sách, `DELETE /budget-lines/{id}` gỡ một
+ * khoản mục, và `POST /budget-lines/{id}/headline` chọn dòng nào là CON SỐ TỔNG của cả bảng —
+ * ba thao tác đổi thứ lãnh đạo đã đọc, nên chúng đi cùng quyền xác nhận chứ không cùng quyền
+ * nhập liệu. Cũng là khoá của `POST/DELETE /disbursements/{id}/lockout`.
+ */
+export const QUYEN_XAC_NHAN_NGAN_SACH = "budget.confirm";
 
 /**
  * Khoá quyền của màn "Phản ánh của người dân" — `feedback.read`, cùng chuỗi máy chủ khai trên

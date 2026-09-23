@@ -2,6 +2,7 @@ import { CauHinhXaProvider, phanHienThi } from "@/components/cau-hinh-xa";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
 import { DauTrang } from "@/components/dau-trang";
+import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 
 /**
@@ -41,11 +42,14 @@ export default async function TrangChu() {
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
       <PhienProvider>
+        <div className="khung-trang">
+        <ThanhBen />
         <DauTrang />
         <main className="than-trang">
           <h1>Trang chủ</h1>
           <p>Các phân hệ khác chưa được dựng trong bản này.</p>
         </main>
+        </div>
       </PhienProvider>
     </CauHinhXaProvider>
   );
