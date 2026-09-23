@@ -132,7 +132,11 @@ type (
 			domain.PhieuPhanAnh, error)
 		PhanCong(ctx context.Context, ma string, yc app.YeuCauPhanCong, nguoi audit.Actor) (
 			domain.PhieuPhanAnh, error)
-		TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor) (domain.PhieuPhanAnh, error)
+		// TienTrangThai TAKES THE COMMUNE-WIDE RIGHT AS AN ARGUMENT AND Dong DOES NOT — see
+		// app.QuyenXuLyCaXa. The holding rule of 2026-09-23 widened the WORKING path only, and the
+		// asymmetry in this interface is what makes the closing path impossible to widen by accident.
+		TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor, quyen app.QuyenXuLyCaXa) (
+			domain.PhieuPhanAnh, error)
 		Dong(ctx context.Context, ma, ketQua string, nguoi audit.Actor) (domain.PhieuPhanAnh, error)
 	}
 )
@@ -520,10 +524,19 @@ func Register(mux *http.ServeMux, d Deps) {
 	// CHUYỂN TRẠNG THÁI — one step along the main flow, and the target is deliberately not a
 	// parameter. See the handler.
 	//
-	// ⚠ `feedback.resolve` GUARDS THIS AND THE CLOSING ROUTE, WHICH IS A FINDING FOR OPEN QUESTION
-	// #27 RATHER THAN A CHOICE. The `quyen` table has no key for "move the work along", and inventing
-	// one would produce a route that answers 403 to EVERY account forever while every test stayed
-	// green (rule 5, invariant 3c).
+	// ⚠ `feedback.read` GUARDS THIS ROUTE AND `feedback.resolve` STILL GUARDS THE CLOSING ROUTE BELOW.
+	// That difference is the holding rule the owner decided on 2026-09-23 ("theo require"), and it is
+	// not a relaxation of rule 5: the declaration here is an explicit, seeded key, so an account
+	// without `feedback.read` is refused at this gate before anything is read. The condition that
+	// actually decides — `feedback.resolve` OR being the officer this petition was assigned to — lives
+	// in app.duocTienTrangThai, inside the transaction, on the row read under the lock. A hamlet leader
+	// handed one petition can move it; giving them `feedback.resolve` instead would let them close the
+	// neighbouring hamlet's petitions too.
+	//
+	// NO KEY WAS INVENTED (rule 5, invariant 3c): `feedback.read` is seeded at
+	// service-identity/migrations/0001_init.sql. The older note here raised the missing "move the work
+	// along" key as a finding for open question #27; that finding still stands — this change answers
+	// WHO may advance a petition, not whether advancing deserves a key of its own.
 	//
 	// idem.KhongCan: the UPDATE carries the expected status, so a double click advances the petition
 	// exactly one step and the second request answers 409.
@@ -537,7 +550,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/status",
-		authz.RequirePermission(d.Checker, "feedback.resolve")(
+		authz.RequirePermission(d.Checker, "feedback.read")(
 			idem.KhongCan("câu UPDATE mang trạng thái đang chờ, nên bấm hai lần vẫn chỉ tiến đúng một bước và lần thứ hai trả 409")(
 				http.HandlerFunc(h.TienTrangThaiPhieu))))
 

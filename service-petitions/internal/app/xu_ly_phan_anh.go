@@ -141,6 +141,76 @@ const (
 	loiChuTheKhongPhaiCanBo = "xu_ly_phan_anh: chủ thể không phải cán bộ"
 )
 
+// --- the holding rule: who may move a petition along ----------------------------------------------
+
+// QuyenXuLyCaXa is the answer to ONE question, asked at the edge and carried down as a FACT rather
+// than as a decision: does this principal hold `feedback.resolve`, the commune-wide right to work on
+// ANY petition of this commune?
+//
+// IT IS A NAMED TYPE AND NOT A BARE bool, because a bare bool at a call site reads as nothing at all
+// and the wrong literal there opens every petition in the commune to every account holding
+// `feedback.read`.
+//
+// THE DECISION IS NOT MADE WHERE THIS VALUE IS PRODUCED. The handler may only answer "does this
+// person hold the key"; whether the act is allowed is duocTienTrangThai's, below, in this layer —
+// which is what keeps the rule provable without an HTTP request and impossible to bypass by adding a
+// second caller.
+type QuyenXuLyCaXa bool
+
+// ErrKhongPhaiNguoiDuocGiao refuses an advance by somebody who neither holds the commune-wide right
+// nor is the officer this petition was handed to.
+//
+// # WHY THIS BRANCH EXISTS AT ALL — the owner decided it on 2026-09-23 ("theo require")
+//
+// `feedback.resolve` is the right to work on EVERY petition of the commune. A hamlet leader handed
+// one petition about their own hamlet needs to move it along, and granting them the commune-wide key
+// just for that would let them close the neighbouring hamlet's petitions too. So the ROUTE declares
+// `feedback.read` (rule 5, invariant 1 — an explicit key, never AnyAuthenticated) and the real
+// condition is this: the commune-wide right OR being the named assignee.
+//
+// ⚠ IT WIDENS THE WORKING PATH AND NOT THE CLOSING PATH. `Dong` deliberately has no such branch:
+// closing records a RESULT THE CITIZEN READS (rule 10, invariant 6) and is the act open question #7
+// settled on 2026-09-16 — "`feedback.resolve` quyết định ai đóng được". The five routes the other
+// repository lowered are all WORKING routes; none of them is the closing. Widening `Dong` with this
+// rule would silently overturn a decision the customer made.
+var ErrKhongPhaiNguoiDuocGiao = errors.New(
+	"xu_ly_phan_anh: phiếu này không được giao cho người thực hiện, và người thực hiện không có " +
+		"quyền xử lý phiếu của cả xã")
+
+// duocTienTrangThai decides the holding rule. Called INSIDE the transaction, on the row read under
+// the lock, so the assignee it compares against is the one the database holds now — not one read
+// before another officer reassigned the petition.
+//
+// # THE COMPARISON IS BETWEEN TWO STAFF BUSINESS CODES, AND THAT IS THE WHOLE CORRECTNESS OF IT
+//
+// `phieu_phan_anh.can_bo_xu_ly_id` holds a staff BUSINESS CODE (`CB-00123` — domain.CanBoToiDa says
+// so, and it is the same value the assignment act writes), and audit.Actor.ID holds the same kind of
+// value for a staff actor (rule 6, invariant 8; the handler builds it from authz.Principal.Ma).
+// Comparing an internal id (`authz.Principal.ID`, a ULID) against this column compares two DIFFERENT
+// KINDS of identifier: it never matches, every officer falls into the "not the assignee" branch, and
+// the feature simply does not work — with nothing red anywhere, because both values are non-empty
+// strings that look plausible.
+//
+// # AN UNASSIGNED PETITION MATCHES NOBODY, AND THAT IS CHECKED EXPLICITLY
+//
+// `can_bo_xu_ly_id` is NULL — empty here — whenever a department was told to assign internally
+// ("— Để bộ phận phân công —" is a real answer on the screen). An empty actor code can also reach
+// this layer if identity is older than the `ma` field. Without the two guards below, `"" == ""` would
+// be true and EVERY account holding `feedback.read` could advance EVERY unassigned petition in the
+// commune — the widest possible failure, produced by the narrowest possible omission.
+func duocTienTrangThai(p domain.PhieuPhanAnh, nguoi audit.Actor, quyen QuyenXuLyCaXa) error {
+	if quyen {
+		return nil
+	}
+	if nguoi.ID == "" || p.CanBoXuLyID == "" {
+		return ErrKhongPhaiNguoiDuocGiao
+	}
+	if nguoi.ID != p.CanBoXuLyID {
+		return ErrKhongPhaiNguoiDuocGiao
+	}
+	return nil
+}
+
 // ErrChuaAnDinhDuocHanXuLy means the commune's resolve commitment could not be established, so the
 // petition was NOT classified.
 //
@@ -454,7 +524,9 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 
 // --- 3. moving along the main flow -------------------------------------------------------------------
 
-// TienTrangThai advances the petition ONE step along the main flow. Permission: `feedback.resolve`.
+// TienTrangThai advances the petition ONE step along the main flow. Route permission:
+// `feedback.read`; the real condition is duocTienTrangThai — `feedback.resolve` OR being the named
+// assignee.
 //
 // # ONE STEP, AND THE TARGET IS NOT A PARAMETER
 //
@@ -463,15 +535,25 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 // ever working on it — and every intermediate state would then be optional in practice while looking
 // mandatory in the map.
 //
-// ⚠ `feedback.resolve` GUARDS THIS ROUTE AND THE CLOSING ROUTE, WHICH IS A FINDING RATHER THAN A
-// CHOICE. The `quyen` table has five keys for this subsystem plus the two ADR 0030 added, and none of
-// them names "move the work along". A commune may well want the officer who processes a petition to
-// be unable to CLOSE one — that is a different right and it would need a key seeded by a migration.
-// Inventing one here would produce a route that answers 403 to EVERY account forever while every test
-// stayed green, because a fake checker grants any string (rule 5, invariant 3c). It is raised for open
-// question #27 instead.
-func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor) (
-	domain.PhieuPhanAnh, error) {
+// # WHY THE ROUTE'S KEY IS NOT THE WHOLE ANSWER HERE
+//
+// This route used to declare `feedback.resolve` and stop there, and the note in its place recorded
+// that as a FINDING for open question #27: the `quyen` table has no key meaning "move the work
+// along". The owner settled the working half on 2026-09-23 ("theo require") without adding a key:
+// the route declares `feedback.read` — still an explicit declaration, so an account without it is
+// refused at the gate — and this layer holds the condition that actually decides. No key was
+// invented (rule 5, invariant 3c); both strings are seeded in `quyen`.
+//
+// ⚠ THE CLOSING ROUTE WAS NOT WIDENED WITH IT. See ErrKhongPhaiNguoiDuocGiao and Dong.
+//
+// # THE CHECK IS INSIDE THE TRANSACTION, ON THE LOCKED ROW
+//
+// Not on a read taken beforehand: between an unlocked read and the UPDATE, another officer can
+// reassign the petition, and an authorisation decision made against a row that has since moved is an
+// authorisation decision made against nothing. Refusing here writes no business row, no audit entry
+// and no outbox row — the transaction rolls back with nothing in it.
+func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor,
+	quyen QuyenXuLyCaXa) (domain.PhieuPhanAnh, error) {
 
 	if err := coCanBoThucHien(nguoi); err != nil {
 		return domain.PhieuPhanAnh{}, err
@@ -485,6 +567,15 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit
 		if err != nil {
 			return err
 		}
+
+		// BEFORE THE LIFECYCLE CHECK, NOT AFTER. Somebody who may not act on this petition must not
+		// learn from the answer which state it is in: a 409 saying "this petition has already moved"
+		// is a statement about the record, and it is not owed to a caller who is about to be refused
+		// anyway.
+		if err := duocTienTrangThai(p, nguoi, quyen); err != nil {
+			return err
+		}
+
 		sangTrangThai, co := domain.TienTrinhChinh(p.TrangThai)
 		if !co {
 			// `da-tiep-nhan` (classify first), `dang-phan-loai` (assign first), `cho-dan-xac-nhan`
@@ -546,6 +637,14 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit
 // --- 4. closing ---------------------------------------------------------------------------------------
 
 // Dong closes the petition, recording a result the CITIZEN can read. Permission: `feedback.resolve`.
+//
+// ⚠ IT TAKES NO QuyenXuLyCaXa AND MUST NOT GROW ONE. The holding rule of 2026-09-23 widened the
+// WORKING path (TienTrangThai) and deliberately left this one alone: closing is what open question #7
+// settled on 2026-09-16 — "`feedback.resolve` quyết định ai đóng được" — and the other repository's
+// five lowered routes are all working routes, none of them the closing. The absence of the parameter
+// is the enforcement: there is no value a caller could pass that would let an assignee without
+// `feedback.resolve` close a petition, so the negative cannot be lost to a one-line edit that looks
+// like consistency.
 //
 // THE RESULT IS MANDATORY AND THAT IS RULE 10, INVARIANT 6, NOT A FORM PREFERENCE: "closing a
 // petition records a result the citizen can read. Never close silently." domain.KiemKetQua refuses an

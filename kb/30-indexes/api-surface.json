@@ -213,7 +213,7 @@
       "summary": "Chuyển phiếu phản ánh sang bước kế tiếp của luồng chính (máy trạng thái quyết định bước nào)",
       "screen": "09-phan-anh-nguoi-dan §8.2",
       "permission_kind": "permission",
-      "permission": "feedback.resolve",
+      "permission": "feedback.read",
       "idempotency": "khong-can",
       "idempotency_reason": "câu UPDATE mang trạng thái đang chờ, nên bấm hai lần vẫn chỉ tiến đúng một bước và lần thứ hai trả 409",
       "reply_schemas": {

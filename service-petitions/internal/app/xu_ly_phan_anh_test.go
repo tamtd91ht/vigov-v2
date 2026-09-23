@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
@@ -388,7 +389,7 @@ func TestTienTrangThaiGhiSuKienVaLoiNhan(t *testing.T) {
 	})
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	sau, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu())
+	sau, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), coQuyenCaXa)
 	if err != nil {
 		t.Fatalf("TienTrangThai: %v", err)
 	}
@@ -641,6 +642,169 @@ func TestPhieuDaChuyenTrangThiTuChoiChuKhongGhiDe(t *testing.T) {
 	}
 	if k.daCommit != 0 || k.daRollback != 1 {
 		t.Errorf("commit=%d rollback=%d, muốn 0/1", k.daCommit, k.daRollback)
+	}
+}
+
+// --- the holding rule: who may advance a petition ---------------------------------------------------
+//
+// Decided by the owner on 2026-09-23 ("theo require"). THE THIRD CELL IS THE REASON THE CHANGE EXISTS
+// and the fourth is what keeps it from being "everybody with feedback.read"; the negative half — that
+// the CLOSING path was not widened with it — is pinned at the route, in
+// internal/http/xu_ly_phan_anh_test.go, because that is the layer that decides it.
+
+// The two values of app.QuyenXuLyCaXa, named so a case reads as the fact it is setting rather than as
+// a bare literal at a call site.
+const (
+	coQuyenCaXa    QuyenXuLyCaXa = true
+	khongQuyenCaXa QuyenXuLyCaXa = false
+)
+
+// idCanBoNoiBoThu is the INTERNAL id of the same officer whose business code is maCanBoThu.
+//
+// IT EXISTS ONLY TO BE REFUSED. `authz.Principal` carries both identifiers and they are
+// indistinguishable on sight; this fixture is what makes "the comparison is between BUSINESS CODES"
+// an assertion instead of a comment.
+const idCanBoNoiBoThu = "nd-01JCANBONOIBOCUAXA"
+
+// phieuDaGiaoCho is the fixture every case below starts from: a petition sitting at
+// `da-chuyen-xu-ly`, ready to advance, ASSIGNED to whoever the argument names. An empty string is the
+// unassigned petition — a real state, not an edge case: "— Để bộ phận phân công —" is a choice on the
+// assignment screen.
+func phieuDaGiaoCho(canBo string) map[string]driver.Value {
+	var giao any
+	if canBo != "" {
+		giao = canBo
+	}
+	return dongPhieuMau(map[string]any{
+		"trang_thai":      string(domain.DaChuyenXuLy),
+		"linh_vuc":        "rac-thai",
+		"han_xu_ly_xong":  mocXuLyXongThu,
+		"phan_loai_luc":   mocThaoTac,
+		"bo_phan_id":      "bp-001",
+		"can_bo_xu_ly_id": giao,
+	})
+}
+
+// TestTienTrangThaiBonOCuaLuatNamGiu is the four-cell table the decision was recorded with.
+//
+//	feedback.resolve | là người được giao | mong đợi
+//	có               | có                 | tiến được
+//	có               | không              | tiến được   — quyền của cả xã, đúng như trước
+//	KHÔNG            | CÓ                 | TIẾN ĐƯỢC   ← ô mới, cả thay đổi này tồn tại vì nó
+//	không            | không              | TỪ CHỐI
+//
+// ĐỘT BIẾN: đổi phép so trong duocTienTrangThai sang một định danh khác loại (id nội bộ) và ô thứ ba
+// ĐỎ — trưởng thôn cầm phiếu của chính thôn mình vẫn bị báo là không được giao, im lặng, không gì khác
+// đỏ theo.
+func TestTienTrangThaiBonOCuaLuatNamGiu(t *testing.T) {
+	for ten, ca := range map[string]struct {
+		quyen    QuyenXuLyCaXa
+		giaoCho  string
+		tienDuoc bool
+	}{
+		"có quyền cả xã + là người được giao":            {coQuyenCaXa, maCanBoThu, true},
+		"có quyền cả xã + KHÔNG phải người được giao":    {coQuyenCaXa, "CB-99999", true},
+		"KHÔNG quyền cả xã + LÀ người được giao":         {khongQuyenCaXa, maCanBoThu, true},
+		"không quyền cả xã + không phải người được giao": {khongQuyenCaXa, "CB-99999", false},
+	} {
+		t.Run(ten, func(t *testing.T) {
+			k := khoPhieuMau()
+			k.hang = phieuDaGiaoCho(ca.giaoCho)
+			uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+			sau, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), ca.quyen)
+
+			if ca.tienDuoc {
+				if err != nil {
+					t.Fatalf("TienTrangThai: %v", err)
+				}
+				if sau.TrangThai != domain.DangXuLy {
+					t.Fatalf("trạng thái = %q, muốn dang-xu-ly", sau.TrangThai)
+				}
+				return
+			}
+			if !errors.Is(err, ErrKhongPhaiNguoiDuocGiao) {
+				t.Fatalf("lỗi = %v, muốn ErrKhongPhaiNguoiDuocGiao", err)
+			}
+			// NOTHING COMMITTED, and the count is the assertion: a refusal that had already written the
+			// UPDATE and rolled back would be correct today and would stop being correct the first time
+			// somebody moved the check after a write.
+			if k.coCau("UPDATE phieu_phan_anh") || k.coCau("INSERT INTO audit_log") ||
+				k.coCau("INSERT INTO su_kien_di") {
+				t.Error("đã ghi dù từ chối — một lần ghi nghiệp vụ của người không được phép")
+			}
+			if k.daCommit != 0 {
+				t.Errorf("commit=%d, muốn 0", k.daCommit)
+			}
+		})
+	}
+}
+
+// TestTienTrangThaiSoBangMaCanBoChuKhongPhaiIdNoiBo pins rule 6, invariant 8 AT THE COMPARISON.
+//
+// The petition is assigned to `CB-00123` and the actor arrives carrying `nd-01J…` — the INTERNAL id of
+// the same person. It must be refused: matching those two would mean the column and the actor hold
+// interchangeable values, and the day a caller hands the internal id down, every officer would fall
+// into the "not the assignee" branch with nothing red anywhere.
+func TestTienTrangThaiSoBangMaCanBoChuKhongPhaiIdNoiBo(t *testing.T) {
+	k := khoPhieuMau()
+	k.hang = phieuDaGiaoCho(maCanBoThu)
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+	_, err := uc.TienTrangThai(ctx, maPhieuThu,
+		audit.Actor{ID: idCanBoNoiBoThu, Kind: "staff", IP: "10.0.0.7"}, khongQuyenCaXa)
+
+	if !errors.Is(err, ErrKhongPhaiNguoiDuocGiao) {
+		t.Fatalf("lỗi = %v, muốn ErrKhongPhaiNguoiDuocGiao — id nội bộ KHÔNG phải mã cán bộ, và hai "+
+			"loại định danh khớp nhau là dấu hiệu cột người xử lý đang giữ cả hai", err)
+	}
+}
+
+// TestTienTrangThaiPhieuChuaGiaoThiChuoiRongKhongKhopVoiAi is the `"" == ""` case.
+//
+// `can_bo_xu_ly_id` IS NULL WHENEVER A DEPARTMENT WAS TOLD TO ASSIGN INTERNALLY, which is an ordinary
+// state of an ordinary petition. Without the explicit guard, an actor with an empty code — which a
+// service-identity older than the `ma` field can produce — would match it, and EVERY account holding
+// `feedback.read` could advance EVERY unassigned petition in the commune.
+//
+// ĐỘT BIẾN: bỏ vế `p.CanBoXuLyID == ""` khỏi duocTienTrangThai và ca này ĐỎ.
+func TestTienTrangThaiPhieuChuaGiaoThiChuoiRongKhongKhopVoiAi(t *testing.T) {
+	k := khoPhieuMau()
+	k.hang = phieuDaGiaoCho("")
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+	// The actor carries a REAL business code — so what is being proved is that an UNASSIGNED petition
+	// matches nobody, not that an empty actor is refused (coCanBoThucHien already does that, and it is
+	// asserted separately).
+	_, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), khongQuyenCaXa)
+	if !errors.Is(err, ErrKhongPhaiNguoiDuocGiao) {
+		t.Fatalf("lỗi = %v, muốn ErrKhongPhaiNguoiDuocGiao — phiếu chưa giao cho ai thì không khớp "+
+			"với ai", err)
+	}
+	if k.coCau("UPDATE phieu_phan_anh") {
+		t.Error("đã ghi dù phiếu chưa giao cho ai")
+	}
+}
+
+// TestDongKhongNhanQuyenNguoiDuocGiao is the NEGATIVE HALF, asserted at the only place this layer can
+// assert it: the SHAPE of the closing use case.
+//
+// `Dong` takes no QuyenXuLyCaXa, so there is no value any caller could pass that would let an assignee
+// without `feedback.resolve` close a petition. This test fails to COMPILE if somebody gives it one —
+// which is the point: open question #7 was settled on 2026-09-16 ("`feedback.resolve` quyết định ai
+// đóng được") and the holding rule of 2026-09-23 widened the WORKING path only. The route-level half
+// of this negative is in internal/http/xu_ly_phan_anh_test.go.
+func TestDongKhongNhanQuyenNguoiDuocGiao(t *testing.T) {
+	k := khoPhieuMau()
+	k.hang = phieuDaGiaoCho(maCanBoThu)
+	k.hang["trang_thai"] = string(domain.ChoDanXacNhan)
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+	// FOUR ARGUMENTS, NOT FIVE. The assignment on the row above is irrelevant to this act by
+	// construction.
+	var dong func(context.Context, string, string, audit.Actor) (domain.PhieuPhanAnh, error) = uc.Dong
+	if _, err := dong(ctx, maPhieuThu, ketQuaThat, canBoThu()); err != nil {
+		t.Fatalf("Dong: %v", err)
 	}
 }
 

@@ -8,7 +8,7 @@ package http
 //	GET    /api/v1/citizen-reports                        feedback.read
 //	POST   /api/v1/citizen-reports/{maTraCuu}/classification  feedback.classify
 //	POST   /api/v1/citizen-reports/{maTraCuu}/assignment      feedback.assign
-//	POST   /api/v1/citizen-reports/{maTraCuu}/status          feedback.resolve
+//	POST   /api/v1/citizen-reports/{maTraCuu}/status          feedback.read    + the holding rule
 //	POST   /api/v1/citizen-reports/{maTraCuu}/closure         feedback.resolve
 //
 // The first five keys are seeded at service-identity/migrations/0001_init.sql:288-294 and the two
@@ -16,11 +16,22 @@ package http
 // invariant 3c) — `tools/check_quyen.py` scans the whole repository against the table on every
 // `make check`.
 //
-// ⚠ FINDING, NOT A DECISION: `feedback.resolve` GUARDS TWO ROUTES. The `quyen` table has no key for
-// "move the work along", so advancing a petition and closing it are guarded by the same right. A
-// commune may well want the officer who processes a petition to be unable to CLOSE one. Inventing a
-// key here would produce a route that answers 403 to EVERY account forever while every test stayed
-// green, because a fake checker grants any string. It is raised for open question #27 instead.
+// # THE HOLDING RULE, DECIDED BY THE OWNER ON 2026-09-23 ("theo require")
+//
+// `…/status` declares `feedback.read` and the condition that decides lives in
+// app.duocTienTrangThai: `feedback.resolve` OR being the officer this petition was assigned to. A
+// hamlet leader handed one petition must be able to move it, and granting them the commune-wide key
+// for that would let them close the neighbouring hamlet's petitions as well.
+//
+// ⚠ `…/closure` WAS NOT WIDENED WITH IT, AND THE TWO LINES ABOVE DIFFERING IS THE POINT. Closing
+// records a result the citizen reads (rule 10, invariant 6) and is exactly what open question #7
+// settled on 2026-09-16: "`feedback.resolve` quyết định ai đóng được". The five routes the other
+// repository lowered are all WORKING routes; none of them is the closing.
+//
+// ⚠ STILL A FINDING, AND UNCHANGED BY THE ABOVE: the `quyen` table has no key meaning "move the work
+// along". Open question #27 is still the place that is answered, and inventing a key here would
+// produce a route that answers 403 to EVERY account forever while every test stayed green, because a
+// fake checker grants any string.
 //
 // # THE THREE URL NOUNS, AND WHERE EACH COMES FROM
 //
@@ -48,6 +59,21 @@ import (
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
+
+// QuyenXuLyCaXa is the COMMUNE-WIDE right to work on any petition of this commune. It is the key
+// `…/closure` is guarded by at the route, and the key `…/status` consults as ONE HALF of the holding
+// rule — see app.duocTienTrangThai for the other half.
+//
+// The key exists in `quyen` and is not invented here — service-identity/migrations/0001_init.sql:293
+// seeds it, and the label an administrator reads on the Phân quyền screen is "KẾT THÚC xử lý phản
+// ánh". That wording is worth reading twice: the key the customer named is about ENDING the work, so
+// gating "move the work along" with it was a mismatch between the string and what the tick box says
+// it grants. The holding rule narrows the gap without inventing a key.
+//
+// It is a constant rather than a literal because it is used with Checker.Allows and
+// not inside authz.RequirePermission: tools/apidoc reads the ROUTE declarations and refuses anything
+// there that is not a string literal, which is why routes.go spells its keys out and this does not.
+const QuyenXuLyCaXa authz.Perm = "feedback.resolve"
 
 // --- request bodies ---------------------------------------------------------------------------
 
@@ -296,13 +322,31 @@ func (h *Handler) PhanCongPhieu(w http.ResponseWriter, r *http.Request) {
 // jump a petition to `da-xu-ly` without anybody working on it — and the intermediate states would
 // then be optional in practice while looking mandatory in the lifecycle map. The server holds the
 // map; the caller says "advance".
+//
+// # THIS HANDLER ANSWERS ONE QUESTION AND DECIDES NOTHING
+//
+// The route's gate already refused anyone without `feedback.read`. What is read here is whether the
+// caller ALSO holds `feedback.resolve`, the commune-wide right, and that single fact is handed to the
+// use case. Whether the act is permitted — the commune-wide right OR being the named assignee — is
+// app.duocTienTrangThai's, inside the transaction, on the row read under the lock. Deciding it here
+// would mean deciding against an assignee read before the lock, and would leave the rule unreachable
+// to every caller that is not an HTTP request.
+//
+// FAIL CLOSED: no principal in the context means `false`, never `true`. There is always one behind
+// authz.RequirePermission, so this is a precondition rather than a case — but the safe value of a
+// permission fact is the one that grants nothing.
 func (h *Handler) TienTrangThaiPhieu(w http.ResponseWriter, r *http.Request) {
 	nguoi, ok := nguoiThucHien(r)
 	if !ok {
 		h.thieuChuTheXuLy(w, r)
 		return
 	}
-	sau, err := h.d.XuLyPhieu.TienTrangThai(r.Context(), r.PathValue("maTraCuu"), nguoi)
+	ctx := r.Context()
+	var quyen app.QuyenXuLyCaXa
+	if principal, co := authz.From(ctx); co {
+		quyen = app.QuyenXuLyCaXa(h.d.Checker.Allows(ctx, principal, QuyenXuLyCaXa))
+	}
+	sau, err := h.d.XuLyPhieu.TienTrangThai(ctx, r.PathValue("maTraCuu"), nguoi, quyen)
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "chuyển trạng thái", err)
 		return
@@ -385,6 +429,18 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")
 	case errors.Is(err, domain.ErrKhongConCamKet):
 		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")
+	case errors.Is(err, app.ErrKhongPhaiNguoiDuocGiao):
+		// 403 AND NOT 409, WHICH IS THE OPPOSITE CALL FROM EVERY CASE AROUND IT. The three above
+		// refuse an act by somebody who HOLDS the right; this one refuses the caller themselves. A 409
+		// would tell an officer to reload a petition they were never allowed to move, and would hide a
+		// permission problem behind a sentence about state.
+		//
+		// THE SENTENCE NAMES NEITHER THE ASSIGNEE NOR THE STATUS. Who is holding a petition is
+		// routing information, and telling a caller who was refused exactly who has it invites going
+		// round the refusal by asking that person — the point of the rule is that the record decides.
+		httpx.WriteError(w, http.StatusForbidden, "forbidden",
+			"Phiếu này không được phân công cho bạn, và tài khoản của bạn không có quyền xử lý "+
+				"phản ánh của cả xã.", "")
 	case errors.Is(err, app.ErrChuaAnDinhDuocHanXuLy):
 		// 409, AND THE SENTENCE NAMES THE SCREEN THAT FIXES IT. This is the ordinary answer in every
 		// commune today: `sla` is empty everywhere and the onboarding step that fills it does not

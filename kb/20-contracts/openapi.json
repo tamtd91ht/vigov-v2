@@ -836,7 +836,7 @@
         "x-vigov-screen": "09-phan-anh-nguoi-dan §8.2",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "feedback.resolve"
+          "key": "feedback.read"
         },
         "x-vigov-task": "8dadab015da6",
         "responses": {

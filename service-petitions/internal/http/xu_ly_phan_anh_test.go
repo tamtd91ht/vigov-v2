@@ -98,6 +98,13 @@ type xuLyPhieuGia struct {
 	ycPhanCong app.YeuCauPhanCong
 	ketQua     string
 
+	// quyenCaXa is the fact the ADVANCE route hands down: does the caller hold `feedback.resolve`?
+	//
+	// RECORDED RATHER THAN ACTED ON. The holding rule is app.duocTienTrangThai's and is proved over the
+	// real store in internal/app; what this layer can get wrong — and what is asserted here — is
+	// WHICH FACT is handed down and whether it is read from the right key.
+	quyenCaXa app.QuyenXuLyCaXa
+
 	loi error
 }
 
@@ -115,6 +122,10 @@ func (x *xuLyPhieuGia) tra() (domain.PhieuPhanAnh, error) {
 		MaTraCuu: maPhieuThuong, Kenh: domain.KenhZaloMiniApp, CongDanID: "cd-001",
 		NoiDung: "Đống rác ở đầu ngõ đã ba ngày chưa ai dọn.",
 		LinhVuc: "rac-thai", TrangThai: domain.DangPhanLoai,
+		// ASSIGNED TO THE OFFICER THE FIXTURE PRINCIPAL IS, by the BUSINESS CODE the column holds
+		// (rule 6, invariant 8). The holding-rule cases below read as what they claim to be only if
+		// this petition really is the one that officer was handed.
+		BoPhanID: "bp-001", CanBoXuLyID: maCanBo,
 		GocDemHan: mocGui, VaoSoLuc: mocVaoSo,
 		HanTiepNhan: mocTiepNh, HanXuLyXong: mocXuLy,
 	}, nil
@@ -136,10 +147,11 @@ func (x *xuLyPhieuGia) PhanCong(ctx context.Context, ma string, yc app.YeuCauPha
 	return x.tra()
 }
 
-func (x *xuLyPhieuGia) TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor) (
-	domain.PhieuPhanAnh, error) {
+func (x *xuLyPhieuGia) TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor,
+	quyen app.QuyenXuLyCaXa) (domain.PhieuPhanAnh, error) {
 
 	x.ghi(ctx, "tien", ma, nguoi)
+	x.quyenCaXa = quyen
 	return x.tra()
 }
 
@@ -233,8 +245,12 @@ func caCacTuyen() []caTuyen {
 			authz.Perm("feedback.classify"), authz.Perm("feedback.assign")},
 		{"phân công", http.MethodPost, duongPhanCong(maPhieuThuong), phanCongVao{Unit: "bp-001"},
 			authz.Perm("feedback.assign"), authz.Perm("feedback.classify")},
+		// `feedback.read` AND NOT `feedback.resolve` SINCE 2026-09-23 — the holding rule. The gate is
+		// still a real, explicit key: an account holding `feedback.assign` and nothing else is refused
+		// here exactly as before, which is what keeps this from being AnyAuthenticated wearing a
+		// declaration.
 		{"chuyển trạng thái", http.MethodPost, duongTienTrang(maPhieuThuong), nil,
-			authz.Perm("feedback.resolve"), authz.Perm("feedback.assign")},
+			authz.Perm("feedback.read"), authz.Perm("feedback.assign")},
 		{"đóng phiếu", http.MethodPost, duongDong(maPhieuThuong), dongPhieuVao{Result: ketQuaThat},
 			authz.Perm("feedback.resolve"), authz.Perm("feedback.assign")},
 	}
@@ -360,6 +376,155 @@ func TestTuyenXuLyKhongCoMaCanBoThi500(t *testing.T) {
 	if m.xuLy.goi != 0 {
 		t.Error("đã gọi use case dù không có mã cán bộ — luật 6 không cho một lần ghi nghiệp vụ mà " +
 			"vết không gọi tên được người làm")
+	}
+}
+
+// --- the holding rule at the route, and the negative half that carries the whole change ------------
+//
+// Decided by the owner on 2026-09-23 ("theo require"). THE FOUR CELLS OF THE RULE ITSELF are proved
+// over the real store in internal/app — the use case is what decides them. What only this layer can
+// prove, and what would be silently wrong if nobody did:
+//
+//	the ADVANCE route lets an account holding ONLY `feedback.read` through its gate
+//	the CLOSING route does NOT, for the same account, EVEN WHEN THAT ACCOUNT IS THE ASSIGNEE
+//	the fact handed down is read from `feedback.resolve` and from no neighbouring key
+//	the value compared against `can_bo_xu_ly_id` is the BUSINESS CODE, not the internal id
+
+// TestTienTrangThaiChiCoFeedbackReadThiQuaCongVoiQuyenCaXaLaFalse is the THIRD CELL at the route: the
+// hamlet leader who was handed one petition and holds nothing but `feedback.read`.
+//
+// THREE ASSERTIONS AND EACH IS A DIFFERENT DEFECT. The status proves the gate let them through; the
+// recorded flag proves the handler did not quietly grant the commune-wide right (a `true` here opens
+// every petition in the commune to every reader); the actor's ID proves the value the use case will
+// compare against `can_bo_xu_ly_id` is `CB-00123` and not `nd-01J…` — two identifiers that are
+// indistinguishable on sight and never match each other.
+//
+// ĐỘT BIẾN: đổi `p.Ma` thành `p.ID` ở nguoiThucHien và ca này ĐỎ — mọi cán bộ rơi vào nhánh "không
+// phải người được giao", tính năng không chạy, và không gì khác báo.
+func TestTienTrangThaiChiCoFeedbackReadThiQuaCongVoiQuyenCaXaLaFalse(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.read"))
+
+	w := m.goiThan(t, http.MethodPost, hostA, duongTienTrang(maPhieuThuong), canBoCuaXa(xaA), nil)
+
+	doiMa(t, w, http.StatusOK)
+	if m.xuLy.goi != 1 {
+		t.Fatalf("gọi use case %d lần, muốn 1 — cổng chặn mất người được giao thì tính năng này "+
+			"không tồn tại", m.xuLy.goi)
+	}
+	if m.xuLy.quyenCaXa {
+		t.Error("tuyến báo xuống là CÓ quyền xử lý cả xã dù tài khoản chỉ có feedback.read — " +
+			"một `true` ở đây mở mọi phiếu của xã cho mọi người đọc được sổ")
+	}
+	if m.xuLy.nguoi.ID != maCanBo {
+		t.Errorf("chủ thể xuống use case = %q, muốn MÃ cán bộ %q — cột `can_bo_xu_ly_id` giữ mã cán "+
+			"bộ, nên so bằng id nội bộ thì KHÔNG AI khớp và không gì đỏ", m.xuLy.nguoi.ID, maCanBo)
+	}
+}
+
+// TestTienTrangThaiCoFeedbackResolveThiQuyenCaXaLaTrue — cells one and two. The commune-wide right
+// still works exactly as it did, whoever the petition was assigned to.
+func TestTienTrangThaiCoFeedbackResolveThiQuyenCaXaLaTrue(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.read"), QuyenXuLyCaXa)
+
+	w := m.goiThan(t, http.MethodPost, hostA, duongTienTrang(maPhieuThuong), canBoCuaXa(xaA), nil)
+
+	doiMa(t, w, http.StatusOK)
+	if !m.xuLy.quyenCaXa {
+		t.Error("tuyến báo xuống là KHÔNG có quyền cả xã dù tài khoản có feedback.resolve — quyền " +
+			"cấp ra mà không mở gì là một ô tích không làm gì trong màn Phân quyền")
+	}
+}
+
+// TestTienTrangThaiKhongDocTuKhoaQuyenLangGieng — the flag must come from `feedback.resolve` and from
+// nothing that merely sits next to it in the same group.
+//
+// WITHOUT THIS CASE, a handler reading `feedback.assign` or `feedback.classify` would pass every other
+// test in this file: the route opens on `feedback.read`, so the flag is the only thing that differs,
+// and a wrong key produces a plausible `false` in exactly the cases that are supposed to be `true`.
+func TestTienTrangThaiKhongDocTuKhoaQuyenLangGieng(t *testing.T) {
+	for _, khoa := range []authz.Perm{"feedback.assign", "feedback.classify", "feedback.restricted"} {
+		t.Run(string(khoa), func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("feedback.read"), khoa)
+
+			w := m.goiThan(t, http.MethodPost, hostA, duongTienTrang(maPhieuThuong), canBoCuaXa(xaA), nil)
+
+			doiMa(t, w, http.StatusOK)
+			if m.xuLy.quyenCaXa {
+				t.Errorf("khoá %q mở quyền xử lý cả xã — luật 5 bất biến 3b: các quyền này KHÔNG phải "+
+					"tích Đề-các, và một khoá mở thay khoá khác là một ô tích cấp ra thứ nó không nói",
+					khoa)
+			}
+		})
+	}
+}
+
+// TestNguoiDuocGiaoTienDuocNhungKhongDongDuoc IS THE NEGATIVE HALF OF THIS WHOLE CHANGE.
+//
+// ONE ACCOUNT, ONE PETITION, TWO ROUTES. The account holds only `feedback.read` and IS the officer the
+// fixture petition was assigned to — the exact person the holding rule was widened for. The advance
+// route must let them through; the closing route must refuse them at the gate, and the use case must
+// not be reached at all.
+//
+// WHY IT IS WORTH A TEST OF ITS OWN: closing records a RESULT THE CITIZEN READS (rule 10, invariant 6)
+// and is precisely what open question #7 settled on 2026-09-16 — "`feedback.resolve` quyết định ai
+// đóng được". The five routes the other repository lowered are all WORKING routes and none of them is
+// the closing. Without this case, one line copied from the route above in the name of consistency
+// would hand the closing of a commitment to a citizen to every account that can read the register,
+// and nothing anywhere would turn red.
+//
+// ĐỘT BIẾN: đổi `/closure` sang `feedback.read` trong routes.go và ca này ĐỎ.
+func TestNguoiDuocGiaoTienDuocNhungKhongDongDuoc(t *testing.T) {
+	// The fixture petition is assigned to this very officer — see xuLyPhieuGia.tra.
+	if m := dungMayChu(t); m.xuLy.quyenCaXa {
+		t.Fatal("bộ đồ nghề khởi tạo sai")
+	}
+
+	t.Run("tiến trạng thái thì ĐƯỢC", func(t *testing.T) {
+		m := dungMayChu(t)
+		m.capQuyen(t, authz.Perm("feedback.read"))
+
+		w := m.goiThan(t, http.MethodPost, hostA, duongTienTrang(maPhieuThuong), canBoCuaXa(xaA), nil)
+
+		doiMa(t, w, http.StatusOK)
+		if m.xuLy.goi != 1 {
+			t.Errorf("gọi use case %d lần, muốn 1", m.xuLy.goi)
+		}
+	})
+
+	t.Run("đóng phiếu thì KHÔNG", func(t *testing.T) {
+		m := dungMayChu(t)
+		m.capQuyen(t, authz.Perm("feedback.read"))
+
+		w := m.goiThan(t, http.MethodPost, hostA, duongDong(maPhieuThuong), canBoCuaXa(xaA),
+			dongPhieuVao{Result: ketQuaThat})
+
+		doiMa(t, w, http.StatusForbidden)
+		if m.xuLy.goi != 0 {
+			t.Errorf("đã gọi use case đóng phiếu %d lần dù tài khoản không có feedback.resolve — "+
+				"người được giao đóng được phiếu là lật câu hỏi mở #7 khách đã chốt 16/09/2026",
+				m.xuLy.goi)
+		}
+	})
+}
+
+// TestTienTrangThaiKhongPhaiNguoiDuocGiaoThi403 — the fourth cell as it reaches a client.
+//
+// The use case refuses; what this layer decides is the STATUS CODE, and it is 403 rather than the 409
+// every other refusal on this route maps to. A 409 would tell an officer to reload a petition they
+// were never allowed to move, hiding a permission problem behind a sentence about state.
+func TestTienTrangThaiKhongPhaiNguoiDuocGiaoThi403(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.read"))
+	m.xuLy.loi = app.ErrKhongPhaiNguoiDuocGiao
+
+	w := m.goiThan(t, http.MethodPost, hostA, duongTienTrang(maPhieuThuong), canBoCuaXa(xaA), nil)
+
+	doiMa(t, w, http.StatusForbidden)
+	if loiTra(t, w).Code != "forbidden" {
+		t.Errorf("mã lỗi = %q, muốn forbidden", loiTra(t, w).Code)
 	}
 }
 
