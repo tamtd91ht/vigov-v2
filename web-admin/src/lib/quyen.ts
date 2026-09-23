@@ -228,6 +228,20 @@ export const QUYEN_XEM_NHIEM_VU = "task.read";
 export const QUYEN_SOAN_THONG_BAO = "announcement.create";
 
 /**
+ * Khoá quyền XEM sổ Nội dung Mini App — `content.read`, "Xem nội dung Mini App"
+ * (`service-identity/migrations/0001_init.sql:292`).
+ *
+ * ĐÚNG khoá tuyến đọc khai, không phải một khoá gần đúng — cùng lập luận với `QUYEN_XEM_NHIEM_VU`
+ * ngay trên. Dùng ở đúng MỘT chỗ: mục menu. Màn `/noi-dung` không bọc `<CongQuyen>`, tài khoản
+ * thiếu khoá vẫn nhận 403 nguyên văn từ máy chủ.
+ *
+ * KHÔNG THÊM HẰNG CHO `content.update`, dù khoá ấy có thật và ba tuyến ghi đang đứng sau nó: hôm
+ * nay không chỗ nào ở client canh nó. Một hằng không ai dùng là một hằng không ai thấy khi nó
+ * sai — thêm vào lúc lắp cổng thật, không phải trước.
+ */
+export const QUYEN_XEM_NOI_DUNG = "content.read";
+
+/**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
  *
  * TỪNG NẰM RIÊNG TRONG `features/cau-hinh/quyen-tab.ts` VÀ NAY Ở ĐÂY, vì nó có người dùng thứ

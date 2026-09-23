@@ -286,7 +286,7 @@ export function SoNoiDung() {
   }
 
   return (
-    <section aria-labelledby="tieu-de-so-noi-dung">
+    <section className="man-noi-dung" aria-labelledby="tieu-de-so-noi-dung">
       <h2 id="tieu-de-so-noi-dung">Sổ nội dung Mini App</h2>
 
       <KhoiChuaDung />

@@ -6,6 +6,7 @@ import {
   QUYEN_SOAN_THONG_BAO,
   QUYEN_XEM_GIAI_NGAN,
   QUYEN_XEM_NHIEM_VU,
+  QUYEN_XEM_NOI_DUNG,
   QUYEN_XEM_PHAN_ANH,
 } from "@/lib/quyen";
 
@@ -72,7 +73,7 @@ export const NHOM_MENU: readonly NhomMenu[] = [
   {
     ten: "QUẢN TRỊ",
     muc: [
-      { nhan: "Nội dung Mini App", duong: null, khoa: null },
+      { nhan: "Nội dung Mini App", duong: "/noi-dung", khoa: QUYEN_XEM_NOI_DUNG },
       { nhan: "Danh bạ cán bộ", duong: "/danh-ba", khoa: QUYEN_QUAN_LY_NGUOI_DUNG },
       { nhan: "Báo cáo", duong: null, khoa: null },
       { nhan: "Cấu hình", duong: "/cau-hinh", khoa: QUYEN_QUAN_LY_DANH_MUC },
