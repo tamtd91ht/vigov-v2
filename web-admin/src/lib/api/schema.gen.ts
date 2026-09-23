@@ -1797,6 +1797,9 @@ export type comms_get_content_items = {
     "cursor"?: string;
     "sort"?: "created_at";
     "order"?: "asc" | "desc";
+    "category": string;
+    "q": string;
+    "type": string;
   };
   than: never;
   phanHoi: {

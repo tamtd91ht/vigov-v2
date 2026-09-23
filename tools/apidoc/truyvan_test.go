@@ -319,6 +319,110 @@ func Register(mux *http.ServeMux, h *Handler) {
 	}
 }
 
+// Bộ truy cập khai ở MỨC GÓI — cùng hình dạng closure trên, khác đúng chỗ khai.
+//
+// VÌ SAO CÓ CA NÀY, đo ngày 24/09/2026: `GET /api/v1/content-items` đọc `type` · `category` · `q`
+// qua `thamSoLoc(q, "type")` — một hàm cấp gói nhận TÊN LÀM ĐỐI SỐ — và hợp đồng khai ZERO trong
+// ba tên ấy. Phép đi bộ có sang hàm cùng gói, nhưng tới nơi thì khoá là một biến (`q.Get(ten)`),
+// đúng thứ tệp này cố ý từ chối. Tên nằm ở CHỖ GỌI và chỗ ấy đọc được.
+//
+// Chua hơn: `thamSoLoc` ra đời để `rbac_guard` và `tenant_scope_guard` thôi báo động nhầm trên
+// `q.Get("literal")`. Tức một bản vá cho hai rào chắn đã âm thầm mở lại đúng lỗ mà bản vá hôm
+// trước của tệp này vừa đóng — và không có gì đỏ ở đâu.
+func TestThamSoTruyVanQuaBoTruyCapCapGoi(t *testing.T) {
+	goc := khoThu(t, `package http
+
+import (
+	"net/http"
+	"net/url"
+
+	"vd.test/core/authz"
+)
+
+type Handler struct{}
+
+type Loc struct {
+	Loai    string
+	DanhMuc string
+	Tim     string
+}
+
+// Hình dạng thật của service-comms: tên tham số đi vào làm ĐỐI SỐ.
+func thamSoLoc(q url.Values, ten string) string {
+	return q.Get(ten)
+}
+
+func (h *Handler) DanhSach(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var loc Loc
+	loc.Loai = thamSoLoc(q, "type")
+	loc.DanhMuc = thamSoLoc(q, "category")
+	loc.Tim = thamSoLoc(q, "q")
+	_ = loc
+}
+
+func Register(mux *http.ServeMux, h *Handler) {
+	// @summary  Danh sách
+	// @reply    200 -
+	mux.Handle("GET /api/v1/so", authz.Public("lý do")(http.HandlerFunc(h.DanhSach)))
+}
+`)
+	ds := thamSoCua(t, goc, "/api/v1/so", "get")
+	for _, ten := range []string{"type", "category", "q"} {
+		if timThamSo(ds, ten) == nil {
+			t.Fatalf("mất tham số %q đọc qua bộ truy cập CẤP GÓI: %v", ten, ds)
+		}
+	}
+	if len(ds) != 3 {
+		t.Errorf("chờ đúng 3 tham số, có %d: %v", len(ds), ds)
+	}
+}
+
+// Một hàm cấp gói KHÔNG đọc query bằng chính tham số của nó thì không phải bộ truy cập — kể cả
+// khi nó nhận `url.Values`. Thiếu ca này thì mọi lời gọi tới mọi hàm nhận `url.Values` đều bơm
+// đối số chuỗi đầu tiên của nó vào hợp đồng, và một TÊN SAI tệ hơn một tên thiếu: `tsc` canh
+// đúng cái sai ấy và người viết màn tin theo.
+func TestHamCapGoiKhongDocQueryKhongPhaiBoTruyCap(t *testing.T) {
+	goc := khoThu(t, `package http
+
+import (
+	"net/http"
+	"net/url"
+
+	"vd.test/core/authz"
+)
+
+type Handler struct{}
+
+// Nhận url.Values nhưng KHÔNG lập chỉ mục nó bằng tham số của mình.
+func ghiNhat(q url.Values, nhan string) string {
+	if len(q) == 0 {
+		return nhan
+	}
+	return ""
+}
+
+func (h *Handler) DanhSach(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	_ = ghiNhat(q, "khong-phai-tham-so")
+	_ = q.Get("status")
+}
+
+func Register(mux *http.ServeMux, h *Handler) {
+	// @summary  Danh sách
+	// @reply    200 -
+	mux.Handle("GET /api/v1/so", authz.Public("lý do")(http.HandlerFunc(h.DanhSach)))
+}
+`)
+	ds := thamSoCua(t, goc, "/api/v1/so", "get")
+	if timThamSo(ds, "khong-phai-tham-so") != nil {
+		t.Errorf("bơm một chuỗi KHÔNG phải tên tham số vào hợp đồng: %v", ds)
+	}
+	if timThamSo(ds, "status") == nil {
+		t.Errorf("mất tham số đọc thẳng `q.Get(\"status\")`: %v", ds)
+	}
+}
+
 // Một closure KHÔNG đọc query thì không phải bộ truy cập, và lời gọi nó không được bơm chuỗi vào
 // hợp đồng.
 //

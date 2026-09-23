@@ -124,8 +124,15 @@ func (g *giaiMa) thamSoTruyVanCua(pkgDir string, handlers []string) ([]thamSoTru
 	co := map[string]bool{}      // tham số đọc được
 	batBuoc := map[string]bool{} // và nó có bắt buộc không
 
+	// Bản đồ HÀM CẤP GÓI làm bộ truy cập, tính MỘT LẦN cho cả gói rồi gieo vào mỗi thân hàm —
+	// `g.nap` có bộ nhớ đệm nên đây không phải một lượt đọc đĩa thứ hai.
+	boGoi, err := g.boTruyCapCapGoi(pkgDir)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := g.diTuHandler(pkgDir, handlers, func(fd *ast.FuncDecl) {
-		for t, bb := range docThanHam(fd) {
+		for t, bb := range docThanHam(fd, boGoi) {
 			co[t] = true
 			batBuoc[t] = batBuoc[t] || bb
 		}
@@ -165,7 +172,7 @@ func (g *giaiMa) thamSoTruyVanCua(pkgDir string, handlers []string) ([]thamSoTru
 // đáng lẽ bắt buộc thì `tsc` vẫn canh đúng TÊN — thứ đang thiếu hoàn toàn hôm nay. Ngược lại,
 // bịa ra `required: true` cho một tham số thật sự tùy chọn là ép mọi máy khách gửi một thứ máy
 // chủ không đòi.
-func docThanHam(fd *ast.FuncDecl) map[string]bool {
+func docThanHam(fd *ast.FuncDecl, boGoi map[string]int) map[string]bool {
 	than := fd.Body
 	bienQuery := map[string]bool{} // biến giữ `r.URL.Query()`
 
@@ -212,7 +219,15 @@ func docThanHam(fd *ast.FuncDecl) map[string]bool {
 	// nó lập chỉ mục một biến query bằng chính THAM SỐ của nó (`q[k]`, `q.Get(k)`). Nhận theo
 	// tên (`lay`, `get`, `param`) là đoán, và một hàm tên `lay` làm việc khác sẽ bơm vào hợp đồng
 	// những tên không phải tham số truy vấn.
+	//
+	// GIEO SẴN BẢN ĐỒ HÀM CẤP GÓI: `boTruyCapCapGoi` đã quét cả gói và tìm ra những hàm làm đúng
+	// việc closure trên làm, chỉ khác chỗ khai. Gieo vào cùng một `map` chứ không dựng nhánh thứ
+	// hai, vì phép đọc ở CHỖ GỌI (`docThamSo`) không cần biết tên ấy là biến hay là hàm — nó chỉ
+	// cần biết đối số thứ mấy mang tên tham số.
 	truyCap := map[string]int{}
+	for ten, vt := range boGoi {
+		truyCap[ten] = vt
+	}
 
 	nhiem := map[string]map[string]bool{} // tham số -> tên biến mang giá trị của nó
 	co := map[string]bool{}               // tham số đọc được
@@ -315,12 +330,82 @@ func boTruyCapCua(s *ast.AssignStmt, bienQuery map[string]bool) (string, int) {
 // `func(q url.Values, k string)` lặng lẽ lấy nhầm đối số, tức bơm một chuỗi KHÔNG phải tên tham
 // số vào hợp đồng. Một tên sai trong hợp đồng tệ hơn một tên thiếu: `tsc` canh đúng cái sai ấy.
 func laBoTruyCap(fl *ast.FuncLit, bienQuery map[string]bool) (int, bool) {
-	if fl.Type == nil || fl.Type.Params == nil || fl.Body == nil {
+	return laBoTruyCapChung(fl.Type, fl.Body, bienQuery)
+}
+
+// boTruyCapCapGoi names the PACKAGE-LEVEL functions that are query accessors, and the argument
+// position where each one takes the parameter name.
+//
+// VÌ SAO CẦN NẤC NÀY DÙ `diTuHandler` ĐÃ ĐI SANG HÀM CÙNG GÓI. Phép đi bộ ấy đọc được một hàm phụ
+// tự viết ra tên (`docNamTruyVan` gọi `q.Get("year")` ngay trong thân nó). Nó KHÔNG đọc được hàm
+// phụ nhận tên làm ĐỐI SỐ:
+//
+//	func thamSoLoc(q url.Values, ten string) string { ... q.Get(ten) ... }
+//	...
+//	loc.Loai = thamSoLoc(q, "type")
+//
+// Đi vào thân `thamSoLoc` thì khoá là một biến, đúng thứ tệp này cố ý từ chối. Tên không mất —
+// nó nằm ở CHỖ GỌI, và chỗ ấy đọc được. Cùng hình dạng, cùng cách chữa như bộ truy cập cục bộ ở
+// `boTruyCapCua`; khác đúng một chỗ: closure khai trong thân handler, hàm này khai ở mức gói.
+//
+// ĐO ĐƯỢC 24/09/2026: `GET /api/v1/content-items` đọc `type` · `category` · `q` qua đúng hình
+// dạng ấy (`service-comms/internal/http/noi_dung_mini_app.go:267`) và hợp đồng khai ZERO trong
+// ba tên. Chua hơn cả: hàm `thamSoLoc` ra đời để `rbac_guard` và `tenant_scope_guard` thôi báo
+// động nhầm trên `q.Get("literal")` — tức một bản vá cho hai rào chắn đã âm thầm mở lại đúng lỗ
+// mà bản vá hôm trước của tệp này vừa đóng. Màn `/noi-dung` chứng minh hệ quả: đổi `"type"` thành
+// `"loai"` làm đỏ hai ca đọc-mã-nguồn, còn `npm run typecheck` vẫn XANH.
+//
+// KHÔNG nhận hàm có tên sẵn trong danh sách nào: nhận diện theo THÂN HÀM, y hệt closure — một
+// hàm chỉ là bộ truy cập khi nó lập chỉ mục một biến query bằng chính tham số string của nó.
+func (g *giaiMa) boTruyCapCapGoi(pkgDir string) (map[string]int, error) {
+	p, err := g.nap(pkgDir)
+	if err != nil {
+		return nil, err
+	}
+	ra := map[string]int{}
+	for ten, fds := range p.ham {
+		for _, fd := range fds {
+			if fd.Body == nil {
+				continue
+			}
+			// Biến query của một hàm cấp gói chỉ có thể là THAM SỐ của chính nó — nó không thấy
+			// `r` của handler. Dùng lại đúng phép suy theo kiểu mà `docThanHam` dùng.
+			bienQuery := map[string]bool{}
+			for _, ts := range thamSoKieuQuery(fd) {
+				bienQuery[ts] = true
+			}
+			// GIỚI HẠN CÓ CHỦ Ý, VÀ ĐỘT BIẾN KHÔNG BẮT ĐƯỢC NÓ — nói ra thay vì để trống.
+			//
+			// Dòng này thu hẹp phạm vi xuống các hàm NHẬN `url.Values`. Một hàm phụ nhận
+			// `*http.Request` rồi tự gọi `r.URL.Query().Get(k)` cũng là một bộ truy cập hợp lệ,
+			// và ở đây nó KHÔNG được nhận.
+			//
+			// Gỡ dòng này ra thì không ca kiểm nào đỏ (đo 24/09/2026) — không phải vì bộ kiểm
+			// thủng mà vì hình dạng ấy chưa tồn tại trong kho. Giữ lại vì nó bám đúng phép suy
+			// THEO KIỂU đã ghi ở `docThanHam`: một hàm nhận `url.Values` thì theo định nghĩa
+			// đang nhận tham số truy vấn. Nới ra cho `*http.Request` là mở một lối thứ hai cho
+			// cùng một câu hỏi, và nên làm vào ngày có một hàm thật cần nó — kèm ca kiểm của
+			// chính ngày ấy.
+			if len(bienQuery) == 0 {
+				continue
+			}
+			if vt, ok := laBoTruyCapChung(fd.Type, fd.Body, bienQuery); ok {
+				ra[ten] = vt
+			}
+		}
+	}
+	return ra, nil
+}
+
+// laBoTruyCapChung là phần chung của hai lối khai — closure trong thân handler, và hàm cấp gói.
+// MỘT BẢN, không hai: hai bản là hai bản sẽ trôi khỏi nhau, và bản trôi sẽ là bản im lặng bỏ sót.
+func laBoTruyCapChung(ft *ast.FuncType, than *ast.BlockStmt, bienQuery map[string]bool) (int, bool) {
+	if ft == nil || ft.Params == nil || than == nil {
 		return 0, false
 	}
 	viTri := map[string]int{}
 	i := 0
-	for _, f := range fl.Type.Params.List {
+	for _, f := range ft.Params.List {
 		// Một trường không tên (`func(string) string`) vẫn chiếm một vị trí đối số — bỏ qua tên
 		// nhưng KHÔNG bỏ qua chỗ, nếu không mọi vị trí sau nó lệch một.
 		if len(f.Names) == 0 {
@@ -355,7 +440,7 @@ func laBoTruyCap(fl *ast.FuncLit, bienQuery map[string]bool) (int, bool) {
 	}
 
 	ra, thay := 0, false
-	ast.Inspect(fl.Body, func(n ast.Node) bool {
+	ast.Inspect(than, func(n ast.Node) bool {
 		if thay {
 			return false
 		}
