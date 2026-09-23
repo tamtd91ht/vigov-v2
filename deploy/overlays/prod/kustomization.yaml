@@ -20,9 +20,10 @@ configMapGenerator:
   - name: cau-hinh-chung
     literals:
       - ENV=prod
-      # Thời gian một thay đổi tên miền cần để có hiệu lực trên mọi pod. Dài hơn 1 phút thì
-      # `config.CanhBao()` kêu — onboard một xã mới sẽ chờ lâu không giải thích được.
-      - TENANT_CACHE_TTL=30s
+      # MỘT KHOÁ, và đó là con số đúng. `TENANT_CACHE_TTL` đã rời khỏi đây ngày 23/09/2026:
+      # nó bằng nhau ở cả hai môi trường, nên khai nó vào ConfigMap chỉ là chép lại mặc định
+      # của `config.Load` ra một chỗ thứ hai — và chỗ thứ hai là chỗ sẽ lệch. 30s, cố định
+      # trong mã. Một xã mới không sinh ra nhanh tới mức 30 giây thành vấn đề.
       # DANGEROUS_AUTH_BYPASS KHÔNG xuất hiện ở đây, có chủ ý: `config.Load` TỪ CHỐI khởi
       # động nếu nó bật ở ENV=prod (luật 8 bất biến 7). Không khai là cách chắc chắn nhất.
 

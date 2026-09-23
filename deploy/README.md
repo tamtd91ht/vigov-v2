@@ -232,13 +232,14 @@ giữa chín khoá không quan trọng.
 | `RABBITMQ_DSN` | không | **Secret**, ngày bật | DSN |
 | `ELASTICSEARCH_API_KEY` | không | **Secret**, ngày bật | chuỗi khoá |
 | `ENV` | **có, mọi môi trường** | **ConfigMap** `cau-hinh-chung` | `dev` · `staging` · `prod`. Khác ba giá trị này là `config.Load` từ chối |
-| `TENANT_CACHE_TTL` | không | **ConfigMap** `cau-hinh-chung` | **đang khác nhau thật**: staging `10s`, prod `30s`. Mặc định của mã là `30s`; dài hơn 1 phút thì `config.CanhBao()` kêu |
+
 | `ELASTICSEARCH_ADDRS` | không | **ConfigMap**, ngày bật | **danh sách phẩy** `http://host:9200,http://host:9200` — địa chỉ cụm khác nhau giữa hai môi trường |
 | `RABBITMQ_EXCHANGE` | không | **ConfigMap** *nếu* hai môi trường đặt tên khác nhau; giống nhau thì để mặc định | tên exchange |
 | `LISTEN_ADDR` | không | `env: value:` trong `deployment.yaml` | `:8080`. **Bốn dịch vụ BẮT BUỘC phải có dòng này** — xem cảnh báo dưới bảng |
 | `PLATFORM_GRPC_ADDR` | không, nhưng **từ chối tại chỗ dùng** | `env: value:` trong `deployment.yaml` | `platform:9090` — DNS nội cụm, giống nhau mọi môi trường |
 | `IDENTITY_GRPC_ADDR` | không, nhưng **từ chối tại chỗ dùng** | `env: value:` trong `deployment.yaml` | `identity:9090` — DNS nội cụm, giống nhau mọi môi trường |
 | `GRPC_LISTEN_ADDR` | không | **không khai ở đâu cả** | mặc định `:9090` trong `config.Load` |
+| `TENANT_CACHE_TTL` | không | **không khai ở đâu cả** | mặc định `30s` trong `config.Load`. Dài hơn 1 phút thì `config.CanhBao()` kêu |
 | `ELASTICSEARCH_INDEX_PREFIX` | không | **không khai ở đâu cả** | mặc định rỗng |
 | `DANGEROUS_AUTH_BYPASS` | không | **không khai ở đâu cả, có chủ ý** | `config.Load` **từ chối khởi động** nếu nó bật ở `ENV=prod` (luật 8, bất biến 7). Không khai là cách chắc nhất |
 
@@ -256,14 +257,20 @@ nối tới chúng, và cái đầu tiên thật sự cần sẽ **từ chối t
 
 | Nơi | Khoá | Ai tạo |
 |---|---|---|
-| ConfigMap `cau-hinh-chung` | **2**: `ENV` · `TENANT_CACHE_TTL` | `configMapGenerator` ở `overlays/<mt>/kustomization.yaml` |
+| ConfigMap `cau-hinh-chung` | **1**: `ENV` | `configMapGenerator` ở `overlays/<mt>/kustomization.yaml` |
 | Secret `bi-mat-platform` | **4**: `DATABASE_DSN` · `REDIS_DSN` · `GRPC_CALLER_KEY` · `SESSION_SIGNING_KEYS` | `kubectl create secret` bằng tay, mục 4 |
 | Secret `bi-mat-<sáu dịch vụ kia>` | **3**: `DATABASE_DSN` · `GRPC_CALLER_KEY` · `SESSION_SIGNING_KEYS` | ″ |
 | `env: value:` trong `deployment.yaml` | `LISTEN_ADDR` · `PLATFORM_GRPC_ADDR` · `IDENTITY_GRPC_ADDR` | nằm trong kho, đi qua review |
 | `web-admin` | **không có `envFrom`** | Next.js không dùng `core/config`; nó đọc cấu hình theo tên miền **tại runtime** (luật 1, bất biến 10) |
 
-Sáu biến còn lại không nằm ở đâu cả, và đó là trạng thái đúng — ba biến lấy mặc định của mã,
+Bảy biến còn lại không nằm ở đâu cả, và đó là trạng thái đúng — bốn biến lấy mặc định của mã,
 ba biến chờ ngày RabbitMQ/Elasticsearch được nối.
+
+**`TENANT_CACHE_TTL` rời ConfigMap ngày 23/09/2026.** Nó từng là `10s` ở staging và `30s` ở
+prod, với lý do "onboard xã thử nghiệm phải thấy ngay". Lý do ấy không đứng vững: một xã
+không được tạo ra ở nhịp mà 30 giây thành vấn đề. Hai hệ quả, cả hai đều tốt — ConfigMap còn
+đúng **một** khoá, và staging thôi chạy một con số mà prod không chạy, tức nó bắt đầu chứng
+minh được hành vi của prod thay vì chứng minh hành vi của chính nó.
 
 ### Hai lỗ phải biết TRƯỚC khi bật RabbitMQ / Elasticsearch
 

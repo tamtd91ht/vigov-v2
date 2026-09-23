@@ -12,7 +12,10 @@ configMapGenerator:
   - name: cau-hinh-chung
     literals:
       - ENV=staging
-      - TENANT_CACHE_TTL=10s     # ngắn hơn prod: onboard xã thử nghiệm phải thấy ngay
+      # `TENANT_CACHE_TTL=10s` đã gỡ ngày 23/09/2026. Lý do cũ — "onboard xã thử nghiệm phải
+      # thấy ngay" — không đứng vững: một xã không được tạo ra ở nhịp mà 30 giây thành vấn đề.
+      # Và một giá trị chỉ staging mới có là một giá trị staging KHÔNG CÒN chứng minh được
+      # hành vi của prod.
 
 # Cùng 3 node với prod, nên staging chạy 1 replica mỗi thứ. Đây là đánh đổi có ý thức:
 # staging KHÔNG chứng minh được hành vi rolling update maxUnavailable:0. Muốn chứng minh

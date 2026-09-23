@@ -38,7 +38,7 @@
 //	IDENTITY_GRPC_ADDR          ConfigMap   optional here, refused by name at Dial
 //	LISTEN_ADDR                 ConfigMap   optional — default :8080
 //	GRPC_LISTEN_ADDR            ConfigMap   optional — default :9090
-//	TENANT_CACHE_TTL            ConfigMap   optional — default 30s
+//	TENANT_CACHE_TTL            —           optional — default 30s, not set in the cluster
 //	RABBITMQ_DSN                Secret      optional — refused by name at connect time
 //	RABBITMQ_EXCHANGE           ConfigMap   optional — refused by name at connect time
 //	ELASTICSEARCH_ADDRS         ConfigMap   optional — refused by name at connect time
