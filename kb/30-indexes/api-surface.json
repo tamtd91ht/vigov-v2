@@ -469,6 +469,135 @@
       "declared_in": "service-identity/internal/http/routes.go"
     },
     {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/content-categories",
+      "operation_id": "comms_get_content_categories",
+      "task_id": "a67786d0f3cc",
+      "summary": "Danh mục tin nội bộ của Mini App — cây phẳng, dùng cho ô chọn ở §7 và bộ lọc ở §6",
+      "screen": "11-noi-dung-mini-app §6",
+      "permission_kind": "permission",
+      "permission": "content.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.danhSachDanhMucRa",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/content-categories",
+      "operation_id": "comms_post_content_categories",
+      "task_id": "45f34f2621fe",
+      "summary": "Thêm một danh mục tin của riêng xã vào cây danh mục Mini App",
+      "screen": "11-noi-dung-mini-app §6",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "comms.themDanhMucVao",
+      "reply_schemas": {
+        "201": "comms.danhMucRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/content-items",
+      "operation_id": "comms_get_content_items",
+      "task_id": "96238ee7c551",
+      "summary": "Sổ nội dung Mini App của xã — một trang của bảng §6, lọc theo loại, danh mục và tiêu đề",
+      "screen": "11-noi-dung-mini-app §6",
+      "permission_kind": "permission",
+      "permission": "content.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_comms.noiDungRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/content-items",
+      "operation_id": "comms_post_content_items",
+      "task_id": "3e6d22c13313",
+      "summary": "Soạn một mục nội dung cho Mini App — chưa bật `publish` thì bà con chưa thấy",
+      "screen": "11-noi-dung-mini-app §7",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "request_schema": "comms.themNoiDungVao",
+      "reply_schemas": {
+        "201": "comms.noiDungRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/content-items/{id}",
+      "operation_id": "comms_get_content_items_by_id",
+      "task_id": "d3f5b21161a6",
+      "summary": "Một mục nội dung Mini App kèm toàn văn — dùng cho modal sửa ở §7",
+      "screen": "11-noi-dung-mini-app §7",
+      "permission_kind": "permission",
+      "permission": "content.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.noiDungRa",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "PATCH",
+      "path": "/api/v1/content-items/{id}",
+      "operation_id": "comms_patch_content_items_by_id",
+      "task_id": "c49ec59ef6a6",
+      "summary": "Sửa một mục nội dung Mini App — sửa bài đồng bộ về sẽ khoá không cho lượt đồng bộ sau ghi đè",
+      "screen": "11-noi-dung-mini-app §6, §7",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; app.Sua không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng, đúng một vết, và không đặt cờ da_sua_tay",
+      "request_schema": "comms.suaNoiDungVao",
+      "reply_schemas": {
+        "200": "comms.noiDungRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
       "service": "finance",
       "method": "POST",
       "path": "/api/v1/disbursements",

@@ -5,6 +5,19 @@
 //
 // Hợp đồng: ViGov — REST API cho web quản trị v1
 
+export type comms_danhMucRa = {
+  "id": string;
+  "name": string;
+  "slug": string;
+  "parent_id": string;
+  "order": number;
+  "created_at": string;
+};
+
+export type comms_danhSachDanhMucRa = {
+  "items": Array<comms_danhMucRa>;
+};
+
 export type comms_danhSachLoaiTaiNguyenRa = {
   "items": Array<comms_loaiTaiNguyenRa>;
 };
@@ -21,6 +34,27 @@ export type comms_loaiTaiNguyenRa = {
   "order": number;
   "source": string;
   "tier": number;
+};
+
+export type comms_noiDungRa = {
+  "id": string;
+  "type": string;
+  "category_id": string;
+  "title": string;
+  "summary": string;
+  "body"?: string | null;
+  "image_url": string;
+  "has_image": boolean;
+  "published_on": string;
+  "view_count": number;
+  "status": string;
+  "source": string;
+  "source_url": string;
+  "source_ref": string;
+  "hand_edited": boolean;
+  "author_code": string;
+  "created_at": string;
+  "updated_at": string;
 };
 
 export type comms_phatHanhThongBaoVao = {
@@ -43,6 +77,23 @@ export type comms_suaLoaiTaiNguyenVao = {
   "tier"?: number | null;
 };
 
+export type comms_suaNoiDungVao = {
+  "type"?: string | null;
+  "category_id"?: string | null;
+  "title"?: string | null;
+  "summary"?: string | null;
+  "body"?: string | null;
+  "image_url"?: string | null;
+  "publish"?: boolean | null;
+};
+
+export type comms_themDanhMucVao = {
+  "name": string;
+  "slug": string;
+  "parent_id"?: string;
+  "order"?: number;
+};
+
 export type comms_themLoaiTaiNguyenVao = {
   "code": string;
   "label": string;
@@ -50,6 +101,16 @@ export type comms_themLoaiTaiNguyenVao = {
   "is_default"?: boolean;
   "source"?: string | null;
   "tier"?: number | null;
+};
+
+export type comms_themNoiDungVao = {
+  "type": string;
+  "title": string;
+  "category_id"?: string;
+  "summary"?: string;
+  "body"?: string;
+  "image_url"?: string;
+  "publish"?: boolean;
 };
 
 export type comms_thongBaoRa = {
@@ -908,6 +969,13 @@ export type identity_xoaLichVao = {
   "reason": string;
 };
 
+export type page_Result_comms_noiDungRa = {
+  "items": Array<comms_noiDungRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
 export type page_Result_comms_thongBaoRa = {
   "items": Array<comms_thongBaoRa>;
   /** empty when has_more is false */
@@ -1679,6 +1747,123 @@ export type identity_get_communes_current = {
   than: never;
   phanHoi: {
     200: identity_thongTinXa;
+  };
+};
+
+/** GET /api/v1/content-categories — Danh mục tin nội bộ của Mini App — cây phẳng, dùng cho ô chọn ở §7 và bộ lọc ở §6 */
+export type comms_get_content_categories = {
+  duongDan: "/api/v1/content-categories";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_danhSachDanhMucRa;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/content-categories — Thêm một danh mục tin của riêng xã vào cây danh mục Mini App */
+export type comms_post_content_categories = {
+  duongDan: "/api/v1/content-categories";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_themDanhMucVao;
+  phanHoi: {
+    201: comms_danhMucRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/content-items — Sổ nội dung Mini App của xã — một trang của bảng §6, lọc theo loại, danh mục và tiêu đề */
+export type comms_get_content_items = {
+  duongDan: "/api/v1/content-items";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "created_at";
+    "order"?: "asc" | "desc";
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_comms_noiDungRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/content-items — Soạn một mục nội dung cho Mini App — chưa bật `publish` thì bà con chưa thấy */
+export type comms_post_content_items = {
+  duongDan: "/api/v1/content-items";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_themNoiDungVao;
+  phanHoi: {
+    201: comms_noiDungRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/content-items/{id} — Một mục nội dung Mini App kèm toàn văn — dùng cho modal sửa ở §7 */
+export type comms_get_content_items_by_id = {
+  duongDan: "/api/v1/content-items/{id}";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_noiDungRa;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/content-items/{id} — Sửa một mục nội dung Mini App — sửa bài đồng bộ về sẽ khoá không cho lượt đồng bộ sau ghi đè */
+export type comms_patch_content_items_by_id = {
+  duongDan: "/api/v1/content-items/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_suaNoiDungVao;
+  phanHoi: {
+    200: comms_noiDungRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
   };
 };
 

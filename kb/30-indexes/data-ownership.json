@@ -89,6 +89,20 @@
       "source": "service-identity/migrations/0004_kenh_cong_dan.sql:348"
     },
     {
+      "entity": "ContentCategory",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "danh_muc_mini_app",
+      "source": "service-comms/migrations/0006_noi_dung_mini_app.sql:135"
+    },
+    {
+      "entity": "ContentItem",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "noi_dung_mini_app",
+      "source": "service-comms/migrations/0006_noi_dung_mini_app.sql:236"
+    },
+    {
       "entity": "DisbursementSettings",
       "service": "finance",
       "scope": "tenant",
