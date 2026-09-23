@@ -31,7 +31,12 @@ import (
 // third is the ORDER, which this response carries as the order of `items` and must not also carry
 // as a number — see danhSachLoaiNhiemVuRa.
 type loaiNhiemVuRa struct {
-	ID   string `json:"id"`   // ULID — what a task record references
+	// ⚠ NOT what a task record references, although this comment said so until 23/09/2026. The real
+	// foreign key is `(tenant_id, loai) REFERENCES loai_nhiem_vu (tenant_id, ma)`
+	// (`migrations/0006_nhiem_vu.sql:331`), so a task holds the CODE below, never this ULID. A
+	// client that believed the old line would send `id` as `loai` and get a foreign-key violation
+	// the admin web cannot explain. Kept as an identifier for this row itself, nothing more.
+	ID   string `json:"id"`   // ULID of THIS lookup row
 	Code string `json:"code"` // slug: "theo-van-ban"
 
 	// Label is `nhan` — "Theo văn bản".

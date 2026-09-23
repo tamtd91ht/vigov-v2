@@ -123,8 +123,17 @@ type taoNhiemVuVao struct {
 	// deadline can never be given one. That consequence is reported rather than worked around.
 	DueAt *time.Time `json:"due_at,omitempty"`
 
-	// Parent makes this a sub-task (§5.10). It carries the parent's INTERNAL id, which is what the
-	// drawer already holds for the task it is open on.
+	// Parent makes this a sub-task (§5.10). It carries the parent's INTERNAL id.
+	//
+	// ⚠ AND NO CLIENT CAN SUPPLY IT TODAY. This comment used to end "…which is what the drawer
+	// already holds for the task it is open on"; that was measured false on 23/09/2026. `nhiemVuRa`
+	// (`nhiem_vu.go:73-165`) emits `code` and `parent` and NEVER its own `id`, so a drawer open on
+	// NV19 knows NV19's parent and never NV19 itself. §5.10 "Thêm việc con" therefore cannot form a
+	// request at all, and the admin web reports that on screen rather than drawing a dead button.
+	//
+	// Two ways out, and neither may be picked here: emit `id` on `nhiemVuRa`, or let `parent` take
+	// the business code — the same shape `loai` already uses, which the `loai_nhiem_vu` foreign key
+	// settles in favour of codes. It changes a published contract, so it is the owner's call.
 	Parent string `json:"parent,omitempty"`
 }
 
