@@ -229,6 +229,18 @@ type NhiemVu struct {
 
 	TienDo int
 
+	// NhiemVuChaID is the task this one hangs off — §5.10's "Nhiệm vụ con", the column migration
+	// 0008 added after ADR 0037 answered the four questions a self-referencing tree forces.
+	//
+	// EMPTY IS A ROOT TASK and is the ordinary case. The tree has NO DEPTH LIMIT (decision 1), which
+	// is what makes a CYCLE representable and is why the write path walks upward before accepting a
+	// parent — see domain.ErrChuTrinhCayNhiemVu.
+	//
+	// ⚠ THERE IS NO INHERITED DEADLINE ANYWHERE NEAR THIS FIELD (decision 2). A sub-task has a
+	// deadline OF ITS OWN or none at all, so a child may fall overdue while its parent has not —
+	// which is correct business and is stated in ADR 0037 rather than discovered from a screen.
+	NhiemVuChaID string
+
 	TomTatKetQua string
 	GhiChu       string
 

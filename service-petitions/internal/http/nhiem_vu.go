@@ -149,6 +149,18 @@ type nhiemVuRa struct {
 	LeaderApproved       bool `json:"leader_approved"`
 	SuperiorAcknowledged bool `json:"superior_acknowledged"`
 
+	// Parent is `nhiem_vu_cha_id` — the task this one hangs off (§5.10), EMPTY for a root task.
+	//
+	// IT IS AN INTERNAL id AND NOT A REGISTER NUMBER, unlike `code` above, and the two are not
+	// interchangeable here: the drawer sends this value straight back when it re-parents a task, and
+	// a register number would have to be resolved to a row on every such call — a second lookup that
+	// can fail, on the one field whose wrong value builds a cycle.
+	//
+	// ⚠ NOTHING ABOUT THE PARENT'S DEADLINE IS ON THIS RESPONSE, and that is ADR 0037 decision 2: a
+	// sub-task has a deadline OF ITS OWN or none, so a child may be overdue while its parent is not.
+	// A screen showing one red dot on the parent would be showing a fact nobody recorded.
+	Parent string `json:"parent"`
+
 	CreatedBy string    `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -180,6 +192,7 @@ func nhiemVuRaNgoai(n domain.NhiemVu) nhiemVuRa {
 		Note:                 n.GhiChu,
 		LeaderApproved:       n.LanhDaoPheDuyetHoanThanh,
 		SuperiorAcknowledged: n.CapTrenCongNhanHoanThanh,
+		Parent:               n.NhiemVuChaID,
 		CreatedBy:            n.NguoiTaoMa,
 		CreatedAt:            n.TaoLuc,
 	}

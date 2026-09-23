@@ -63,7 +63,7 @@ const cotNhiemVu = `id, ma, loai, khoi, tieu_de, mo_ta, trang_thai, muc_uu_tien,
 	han_xu_ly, han_ban_dau, ngay_hoan_thanh,
 	tien_do, tom_tat_ket_qua, ghi_chu,
 	lanh_dao_phe_duyet_hoan_thanh, cap_tren_cong_nhan_hoan_thanh,
-	nguoi_tao_ma, tao_luc`
+	nguoi_tao_ma, tao_luc, nhiem_vu_cha_id`
 
 // SapXepNhiemVu is the closed set of sorts GET /api/v1/tasks offers.
 //
@@ -314,6 +314,10 @@ func quetNhiemVu(r quangKiem) (domain.NhiemVu, error) {
 		coQuanChuTri, chuyenVien          sql.NullString
 		tomTat, ghiChu                    sql.NullString
 		hanXuLy, hanBanDau, ngayHoanThanh sql.NullTime
+
+		// `nhiem_vu_cha_id` — migration 0008. NULL is a ROOT TASK and is the ordinary case, so it is
+		// read through a NULL type like every other nullable column here.
+		nhiemVuCha sql.NullString
 	)
 
 	dich := []any{
@@ -324,7 +328,11 @@ func quetNhiemVu(r quangKiem) (domain.NhiemVu, error) {
 		&hanXuLy, &hanBanDau, &ngayHoanThanh,
 		&n.TienDo, &tomTat, &ghiChu,
 		&n.LanhDaoPheDuyetHoanThanh, &n.CapTrenCongNhanHoanThanh,
-		&n.NguoiTaoMa, &n.TaoLuc,
+		// APPENDED AT THE TAIL, NEVER INSERTED. database/sql binds by POSITION, and a destination
+		// inserted anywhere but the end silently shifts every column after it — the columns it would
+		// shift here are the three adjacent TIMESTAMPTZs whose confusion produces a wrong figure
+		// rather than an error.
+		&n.NguoiTaoMa, &n.TaoLuc, &nhiemVuCha,
 	}
 	if err := r.Scan(dich...); err != nil {
 		return domain.NhiemVu{}, fmt.Errorf("nhiem_vu: đọc dòng: %w", err)
@@ -344,6 +352,7 @@ func quetNhiemVu(r quangKiem) (domain.NhiemVu, error) {
 	n.ChuyenVienTheoDoiMa = chuyenVien.String
 	n.TomTatKetQua = tomTat.String
 	n.GhiChu = ghiChu.String
+	n.NhiemVuChaID = nhiemVuCha.String
 	// NULL -> the zero time.Time. All three zeros mean ONE thing here — "this instant was never
 	// recorded" — which is the opposite of the petition register, where two adjacent NULLs mean two
 	// opposite things. Say it out loud precisely because the two files sit side by side.

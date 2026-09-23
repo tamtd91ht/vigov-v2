@@ -142,11 +142,39 @@ def main() -> None:
     L.append("")
 
     # Nợ confirm gom lên đầu: đó là thứ duy nhất phiên sau KHÔNG tự giải được.
+    #
+    # `no_confirm` CHỈ NHẬN SỐ HIỆU CÂU HỎI, và chỗ này gọi tên khiếm khuyết thay vì đổ bằng
+    # traceback. VÌ SAO PHÉP KIỂM NÀY PHẢI CÓ Ở ĐÂY dù `hooks/progress_guard.py` đã kiểm cùng
+    # một thứ: hook gắn vào `Edit|Write|MultiEdit`, nên một lần ghi sổ bằng
+    # `python -c "...json.dump..."` qua `Bash` KHÔNG đi qua nó. Đo ngày 23/09/2026: năm mục văn
+    # xuôi vào được `no_confirm` đúng theo đường ấy, và thứ phát hiện ra chúng là bộ sinh này —
+    # bằng một `ValueError` không ai đọc ra nguyên nhân.
+    #
+    # Cùng lý do luật 5 #3c và luật 6 #8 mỗi luật cần HAI hình dạng: hook thấy một tệp và không
+    # bao giờ đọc lại thứ đã nằm trên đĩa; chỉ một lần quét toàn kho mới trả lời được câu "hôm
+    # nay cả kho còn mục nào hỏng không".
     no: dict[int, list[str]] = {}
+    hong: list[str] = []
     for m in mods:
         for x in m.get("muc", []):
             for q in x.get("no_confirm", []) or []:
-                no.setdefault(int(q), []).append(f"{m['module']}/{x['id']}")
+                try:
+                    qi = int(q)
+                except (TypeError, ValueError):
+                    hong.append(
+                        f"  {m['module']}/{x['id']}: `no_confirm` chứa {type(q).__name__} "
+                        f"{str(q)[:70]!r}"
+                    )
+                    continue
+                no.setdefault(qi, []).append(f"{m['module']}/{x['id']}")
+    if hong:
+        print("[tien_do] ĐỎ — `no_confirm` chỉ nhận SỐ HIỆU câu hỏi trong "
+              "kb/00-foundation/open-questions.json:", file=sys.stderr)
+        print("\n".join(hong), file=sys.stderr)
+        print("\n  Văn xuôi thuộc về `tiep_theo`. `no_confirm` là LIÊN KẾT tới nguồn chuẩn — "
+              "chép nội dung câu hỏi\n  vào đây là bản sao thứ hai sẽ trôi khỏi bản gốc "
+              "(luật 9).", file=sys.stderr)
+        sys.exit(1)
     if no:
         L.append("## Nợ khách chốt — chặn thật, không tự quyết được")
         L.append("")

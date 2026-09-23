@@ -74,6 +74,10 @@ func dongNhiemVu(sua map[string]driver.Value) map[string]driver.Value {
 		"cap_tren_cong_nhan_hoan_thanh": false,
 		"nguoi_tao_ma":                  "CB-00123",
 		"tao_luc":                       mocTaoNVThu,
+		// `nhiem_vu_cha_id` — migration 0008. NON-NULL IN THE FIXTURE ON PURPOSE: NULL is the
+		// ordinary case, so a Scan that dropped this column would still pass every assertion if the
+		// sample were nil. A root task is covered by the case that overrides it.
+		"nhiem_vu_cha_id": "nv-cha-001",
 	}
 	for k, v := range sua {
 		d[k] = v

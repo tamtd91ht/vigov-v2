@@ -3645,6 +3645,73 @@
         }
       }
     },
+    "/api/v1/meetings": {
+      "get": {
+        "summary": "Danh sách biên bản họp của xã — mỗi biên bản kèm các kết luận và bộ đếm nhiệm vụ đã tách / đã xong",
+        "operationId": "petitions_get_meetings",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "04-bien-ban-hop §2, §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.read"
+        },
+        "x-vigov-task": "97c68fa90240",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_petitions.bienBanRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/my-citizen-reports": {
       "post": {
         "summary": "Công dân gửi một phiếu phản ánh — trả MÃ TRA CỨU ngay khi tiếp nhận",
@@ -7255,6 +7322,763 @@
         }
       }
     },
+    "/api/v1/tasks": {
+      "get": {
+        "summary": "Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn",
+        "operationId": "petitions_get_tasks",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §3, §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.read"
+        },
+        "x-vigov-task": "cc3579e36137",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_petitions.nhiemVuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Giao việc mới — tạo một nhiệm vụ, tự sinh mã theo dãy NV của xã hoặc nhận mã tự nhập",
+        "operationId": "petitions_post_tasks",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §7",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.create"
+        },
+        "x-vigov-task": "8f2ddaa7d5a4",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "MoKhiHong",
+          "on_store_failure_effect": "Store không tới được -> cho qua và ghi cảnh báo"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.taoNhiemVuVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.nhiemVuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{ma}": {
+      "parameters": [
+        {
+          "name": "ma",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Xoá mềm một nhiệm vụ khỏi sổ, kèm lý do bắt buộc — từ chối khi còn việc con chưa xoá",
+        "operationId": "petitions_delete_tasks_by_ma",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §11",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.delete"
+        },
+        "x-vigov-task": "76cf50d65596",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.xoaNhiemVuVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Một nhiệm vụ, tra theo mã nhiệm vụ của xã (NV19)",
+        "operationId": "petitions_get_tasks_by_ma",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.read"
+        },
+        "x-vigov-task": "0e2b4ab0fc33",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.nhiemVuRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa thông tin mô tả của một nhiệm vụ — không đụng tới hạn, trạng thái hay phân công",
+        "operationId": "petitions_patch_tasks_by_ma",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §5.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.update"
+        },
+        "x-vigov-task": "aee8d171aa28",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.suaNhiemVuVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.nhiemVuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{ma}/extensions": {
+      "parameters": [
+        {
+          "name": "ma",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Gửi đề nghị lùi hạn cho một nhiệm vụ — hạn mới phải muộn hơn hạn đang có, kèm lý do bắt buộc",
+        "operationId": "petitions_post_tasks_by_ma_extensions",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §5.8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.update"
+        },
+        "x-vigov-task": "211081491a63",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.deNghiLuiHanVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.deNghiLuiHanRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{ma}/extensions/{deNghiID}/decision": {
+      "parameters": [
+        {
+          "name": "ma",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "deNghiID",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Lãnh đạo giao việc duyệt hoặc từ chối một đề nghị lùi hạn — duyệt thì đổi hạn xử lý, hạn ban đầu giữ nguyên",
+        "operationId": "petitions_post_tasks_by_ma_extensions_by_deNghiID_decision",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §5.8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.extend"
+        },
+        "x-vigov-task": "03b065a089a6",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.quyetDinhLuiHanVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.deNghiLuiHanRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{ma}/status": {
+      "parameters": [
+        {
+          "name": "ma",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong",
+        "operationId": "petitions_post_tasks_by_ma_status",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.update"
+        },
+        "x-vigov-task": "bf5719ad43c6",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.doiTrangThaiVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.nhiemVuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/working-hours": {
       "get": {
         "summary": "Lịch làm việc thông thường của xã — mỗi dòng là một CA, nghỉ trưa là khoảng hở giữa hai ca",
@@ -10602,6 +11426,54 @@
         ],
         "additionalProperties": false
       },
+      "page.Result_petitions.bienBanRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.bienBanRa"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "page.Result_petitions.nhiemVuRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.nhiemVuRa"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
       "page.Result_petitions.phieuPhanAnhRa": {
         "type": "object",
         "properties": {
@@ -10623,6 +11495,62 @@
           "has_more",
           "items",
           "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.bienBanRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "held_on": {
+            "type": "string"
+          },
+          "reference_no": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "chaired_by": {
+            "type": "string"
+          },
+          "conclusions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.ketLuanRa"
+            }
+          },
+          "task_count": {
+            "type": "integer"
+          },
+          "task_done_count": {
+            "type": "integer"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "chaired_by",
+          "conclusions",
+          "created_at",
+          "created_by",
+          "held_on",
+          "id",
+          "location",
+          "reference_no",
+          "task_count",
+          "task_done_count",
+          "title"
         ],
         "additionalProperties": false
       },
@@ -10653,6 +11581,83 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.deNghiLuiHanRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "decided_by": {
+            "type": "string"
+          },
+          "new_due_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decided_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "decided_at",
+          "id",
+          "new_due_at",
+          "reason",
+          "requested_at",
+          "requested_by",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.deNghiLuiHanVao": {
+        "type": "object",
+        "properties": {
+          "new_due_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "new_due_at",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.doiTrangThaiVao": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
         ],
         "additionalProperties": false
       },
@@ -10766,6 +11771,39 @@
         ],
         "additionalProperties": false
       },
+      "petitions.ketLuanRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ordinal": {
+            "type": "integer"
+          },
+          "content": {
+            "type": "string"
+          },
+          "task_count": {
+            "type": "integer"
+          },
+          "task_done_count": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "content",
+          "created_at",
+          "id",
+          "ordinal",
+          "task_count",
+          "task_done_count"
+        ],
+        "additionalProperties": false
+      },
       "petitions.loaiNhiemVuRa": {
         "type": "object",
         "properties": {
@@ -10847,6 +11885,127 @@
           "order",
           "source",
           "tier"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.nhiemVuRa": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "bloc": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "assignee": {
+            "type": "string"
+          },
+          "assigner": {
+            "type": "string"
+          },
+          "lead_unit": {
+            "type": "string"
+          },
+          "monitor": {
+            "type": "string"
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "original_due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "progress": {
+            "type": "integer"
+          },
+          "result_summary": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "leader_approved": {
+            "type": "boolean"
+          },
+          "superior_acknowledged": {
+            "type": "boolean"
+          },
+          "parent": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "assignee",
+          "assigner",
+          "bloc",
+          "code",
+          "completed_at",
+          "created_at",
+          "created_by",
+          "description",
+          "due_at",
+          "lead_unit",
+          "leader_approved",
+          "monitor",
+          "note",
+          "original_due_at",
+          "parent",
+          "priority",
+          "progress",
+          "result_summary",
+          "source",
+          "source_id",
+          "status",
+          "superior_acknowledged",
+          "title",
+          "type",
+          "unit"
         ],
         "additionalProperties": false
       },
@@ -11052,6 +12211,21 @@
         ],
         "additionalProperties": false
       },
+      "petitions.quyetDinhLuiHanVao": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "additionalProperties": false
+      },
       "petitions.suaLoaiNhiemVuVao": {
         "type": "object",
         "properties": {
@@ -11148,6 +12322,135 @@
         },
         "additionalProperties": false
       },
+      "petitions.suaNhiemVuVao": {
+        "type": "object",
+        "properties": {
+          "bloc": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "priority": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "progress": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "result_summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "leader_approved": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "superior_acknowledged": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "parent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "petitions.taoNhiemVuVao": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "auto_code": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "bloc": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_id": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "assignee": {
+            "type": "string"
+          },
+          "assigner": {
+            "type": "string"
+          },
+          "lead_unit": {
+            "type": "string"
+          },
+          "monitor": {
+            "type": "string"
+          },
+          "due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "parent": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "auto_code",
+          "title",
+          "type"
+        ],
+        "additionalProperties": false
+      },
       "petitions.themLoaiNhiemVuVao": {
         "type": "object",
         "properties": {
@@ -11229,6 +12532,18 @@
         "additionalProperties": false
       },
       "petitions.xoaMucUuTienVao": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.xoaNhiemVuVao": {
         "type": "object",
         "properties": {
           "reason": {

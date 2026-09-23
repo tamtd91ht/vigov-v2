@@ -131,6 +131,20 @@
       "source": "service-comms/migrations/0003_danh_muc_loai_tai_nguyen_ban_do.sql:205"
     },
     {
+      "entity": "Meeting",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "bien_ban_hop",
+      "source": "service-petitions/migrations/0007_bien_ban.sql:162"
+    },
+    {
+      "entity": "MeetingConclusion",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "ket_luan_hop",
+      "source": "service-petitions/migrations/0007_bien_ban.sql:270"
+    },
+    {
       "entity": "OutboxEvent",
       "service": "petitions",
       "scope": "tenant",
@@ -215,11 +229,32 @@
       "source": "service-identity/migrations/0006_lich_lam_viec.sql:259"
     },
     {
+      "entity": "Task",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "nhiem_vu",
+      "source": "service-petitions/migrations/0006_nhiem_vu.sql:174"
+    },
+    {
       "entity": "TaskBloc",
       "service": "identity",
       "scope": "tenant",
       "table": "khoi_nhiem_vu",
       "source": "service-identity/migrations/0005_don_vi_dan_cu_va_danh_muc.sql:295"
+    },
+    {
+      "entity": "TaskExtensionRequest",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "de_nghi_lui_han",
+      "source": "service-petitions/migrations/0006_nhiem_vu.sql:555"
+    },
+    {
+      "entity": "TaskLogEntry",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "nhat_ky_nhiem_vu",
+      "source": "service-petitions/migrations/0006_nhiem_vu.sql:417"
     },
     {
       "entity": "TaskPriority",

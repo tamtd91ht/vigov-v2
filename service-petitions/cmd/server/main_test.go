@@ -303,6 +303,11 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		XuLyPhieu:       app.NewXuLyPhanAnh(nil, nil, nil, nil),
 		NhiemVu:         khoNhiemVu{},
 		DanhSachNhiemVu: khoNhiemVu{},
+		// The six task WRITE acts, built on a nil *store.DB for the same reason as every use case
+		// above: this file is about the EDGE CHAIN, it asserts on a read route, and Register refuses
+		// a nil dependency at construction. A use case that is never invoked cannot dereference the
+		// nil handle. Its own four-case suite lives in internal/http/nhiem_vu_ghi_test.go.
+		GhiNhiemVu:      app.NewGhiNhiemVu(nil, nil, nil),
 		DanhSachBienBan: khoBienBan{},
 		Log:             log,
 	})

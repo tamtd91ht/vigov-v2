@@ -495,7 +495,14 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 			"Phiếu đã chuyển sang trạng thái khác trong lúc bạn đang mở màn hình. "+
 				"Hãy tải lại phiếu rồi thao tác lại.", "")
 	case errors.Is(err, domain.ErrPhanCongSaiLuc):
-		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "unit")
+		// THAM SỐ THỨ NĂM LÀ `traceID`, KHÔNG PHẢI TÊN TRƯỜNG. Chỗ này từng truyền `"unit"`, nên
+		// chuỗi ấy đi ra dây trong `trace_id` — trường người trực dùng để tìm lại một yêu cầu
+		// trong nhật ký lúc có sự cố. Một `trace_id` bằng `"unit"` không tìm được gì, và tệ hơn
+		// là nó TRÔNG NHƯ một trace id thật nên người tìm sẽ tin rồi đi tìm.
+		//
+		// `httpx.Error` hiện KHÔNG có trường `field`. Muốn trả tên trường cho biểu mẫu thì đó là
+		// một thay đổi ở `core/httpx` cho cả tám dịch vụ, không phải một đối số truyền lén ở đây.
+		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")
 	case errors.Is(err, domain.ErrDongSaiLuc):
 		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")
 	case errors.Is(err, domain.ErrKhongConCamKet):
@@ -519,7 +526,9 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 		// so the honest thing is to say which configuration is missing.
 		httpx.WriteError(w, http.StatusConflict, "sla_chua_cau_hinh",
 			"Xã chưa cấu hình thời hạn xử lý cho lĩnh vực này, nên chưa phân loại được. "+
-				"Vào Cấu hình → Thời hạn xử lý để đặt số giờ, rồi phân loại lại.", "field")
+				// `""` chứ không `"field"` — tham số thứ năm là `traceID`, xem ghi chú ở nhánh
+				// `ErrPhanCongSaiLuc` bên trên.
+				"Vào Cấu hình → Thời hạn xử lý để đặt số giờ, rồi phân loại lại.", "")
 	case domain.LaLoiXuLyPhanAnh(err):
 		// The domain's own sentence is returned: it names the field and the rule, holds no personal
 		// data and no internal detail, and a second sentence written here would drift from it.

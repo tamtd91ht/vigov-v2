@@ -8,7 +8,7 @@
 # VÌ SAO KHÔNG CÒN MỘT DÒNG `/api/v1` → identity: dòng ấy đúng 100% vào ngày nó được
 # viết, khi mọi tài nguyên REST đều thuộc identity. Nay hợp đồng có
 #
-#     63 tuyến của 5 dịch vụ — identity 28 · finance 14 · petitions 12 · documents 7 · comms 2
+#     69 tuyến của 5 dịch vụ — identity 28 · petitions 18 · finance 14 · documents 7 · comms 2
 #
 # nên dòng gộp ấy đưa mọi tuyến không phải của identity tới identity và trả 404 — 404
 # trên một tuyến hành chính thật. Chủ dự án chốt lối (b), SINH Ingress từ openapi.json,
@@ -18,7 +18,7 @@
 # (deploy/overlays/<mt>/ingress-moi-truong.yaml). Bảng định tuyến thì giống nhau ở mọi
 # môi trường nên nó thuộc base — đúng ranh giới base/overlay kho này đang dùng.
 #
-# 27 luật định tuyến cho 63 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
+# 29 luật định tuyến cho 69 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -226,6 +226,13 @@ spec:
               service:
                 name: identity
                 port: { name: rest }
+          # petitions — 1 tuyến: /api/v1/meetings
+          - path: /api/v1/meetings
+            pathType: Prefix
+            backend:
+              service:
+                name: petitions
+                port: { name: rest }
           # identity — 3 tuyến: /api/v1/sessions · /api/v1/sessions/current · /api/v1/sessions/{sid}
           - path: /api/v1/sessions
             pathType: Prefix
@@ -248,6 +255,14 @@ spec:
             backend:
               service:
                 name: identity
+                port: { name: rest }
+          # petitions — 5 tuyến: /api/v1/tasks · /api/v1/tasks/{ma} · /api/v1/tasks/{ma}/extensions
+          #   /api/v1/tasks/{ma}/extensions/{deNghiID}/decision · /api/v1/tasks/{ma}/status
+          - path: /api/v1/tasks
+            pathType: Prefix
+            backend:
+              service:
+                name: petitions
                 port: { name: rest }
           # identity — 3 tuyến: /api/v1/sla · /api/v1/sla/defaults · /api/v1/sla/{id}
           - path: /api/v1/sla

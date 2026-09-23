@@ -178,6 +178,13 @@ func chay(log *slog.Logger) error {
 	// route is given, never a second object holding the same pool.
 	nhiemVu := petstore.NewNhiemVuStore(kho)
 
+	// THE EXTENSION REQUESTS (§5.8). A SEPARATE store from the register, unlike the progress log
+	// which sits on NhiemVuStore, because this table has a LIFECYCLE OF ITS OWN: filed by the
+	// officer doing the work, decided by the leader named on the task, under two different
+	// permissions. The use case takes both so the decision and the deadline it moves are written in
+	// ONE transaction (rule 6, invariant 3).
+	deNghiLuiHan := petstore.NewDeNghiLuiHanStore(kho)
+
 	// THE MEETING MINUTES REGISTER (migration 0007) — where a large part of the register above comes
 	// from. One store, one read route in this pass.
 	bienBan := petstore.NewBienBanHopStore(kho)
@@ -215,6 +222,16 @@ func chay(log *slog.Logger) error {
 		// layer here would carry nothing.
 		NhiemVu:         nhiemVu,
 		DanhSachNhiemVu: nhiemVu,
+		// THE SIX WRITE ACTS. It is given *store.DB rather than a transaction because opening one is
+		// precisely what it is for: every act writes the business change, the timeline row (§5.9) and
+		// the audit entry inside it. It also owns the two tree walks of ADR 0037 — the recursive
+		// completion check and the upward cycle check — both of which must run on rows read under the
+		// lock, which is only possible inside the transaction this use case opens.
+		//
+		// NO identity CLIENT HERE, unlike XuLyPhieu above, and that is not an omission: §7.1 has a
+		// leader TYPE the task's deadline, so nothing on this path derives one. See the header of
+		// internal/app/nhiem_vu.go.
+		GhiNhiemVu: app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan),
 		// The meeting-minutes read route. No use case either, and for the same reason — with one
 		// thing worth naming: the two task counters on every card are computed by the STORE's
 		// query, not by a layer here, so the figure the badge shows and the rows the task register

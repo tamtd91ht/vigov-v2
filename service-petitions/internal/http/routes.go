@@ -131,6 +131,36 @@ type (
 			page.Result[domain.NhiemVu], error)
 	}
 
+	// GhiNhiemVuUseCase is the six STAFF acts on a task, each of which opens a transaction and
+	// writes the business change, the timeline row and the audit entry inside it (rule 6,
+	// invariant 3).
+	//
+	// ONE INTERFACE FOR THE SIX, unlike the two catalogue writers above, and the reason is the
+	// opposite of theirs: those are DIFFERENT CATALOGUES, so one shared interface would need to be
+	// told which table to write. These six are six acts on ONE record — they share the locking
+	// read, the tree walks and the timeline — and splitting them would be six wiring lines that can
+	// disagree about which use case instance, and therefore which transaction boundary, is in play.
+	//
+	// THE PERMISSIONS ARE NOT IN THE INTERFACE, deliberately: they are declared per route below, at
+	// the one place rbac_guard and tools/apidoc both read.
+	//
+	// ⚠ ONLY DoiTrangThai TAKES app.QuyenDuyetHoanThanh, AND THE ASYMMETRY IS THE DEFENCE. It is
+	// the caller's answer to "does this account hold `task.approve`", and it can only ever NARROW —
+	// no value of it lets anybody do something they could not otherwise do. A second method growing
+	// the same parameter would be a second act that could be signed off by the wrong key.
+	GhiNhiemVuUseCase interface {
+		Tao(ctx context.Context, yc app.YeuCauTaoNhiemVu, nguoi audit.Actor) (domain.NhiemVu, error)
+		Sua(ctx context.Context, ma string, sua petstore.SuaNhiemVu, nguoi audit.Actor) (
+			domain.NhiemVu, error)
+		DoiTrangThai(ctx context.Context, ma string, yc app.YeuCauDoiTrangThai, nguoi audit.Actor,
+			duyet app.QuyenDuyetHoanThanh) (domain.NhiemVu, error)
+		Xoa(ctx context.Context, ma, lyDo string, nguoi audit.Actor) error
+		DeNghiLuiHan(ctx context.Context, ma string, yc app.YeuCauDeNghiLuiHan, nguoi audit.Actor) (
+			domain.DeNghiLuiHan, error)
+		QuyetDinhLuiHan(ctx context.Context, ma, deNghiID string, yc app.YeuCauQuyetDinhLuiHan,
+			nguoi audit.Actor) (domain.DeNghiLuiHan, error)
+	}
+
 	// BienBanDanhSach is the paginated read of the meeting-minutes register, for
 	// GET /api/v1/meetings — each meeting already carrying its conclusions and their task counters.
 	//
@@ -247,10 +277,16 @@ type Deps struct {
 	DanhSachPhieu PhieuPhanAnhDanhSach
 	XuLyPhieu     XuLyPhieuPhanAnh
 
-	// The TASK register — read paths only in this pass (migration 0006). Two fields for two
-	// interfaces over one store, see NhiemVuDoc.
+	// The TASK register — two read paths over one store, see NhiemVuDoc.
 	NhiemVu         NhiemVuDoc
 	DanhSachNhiemVu NhiemVuDanhSach
+
+	// The SIX WRITE acts on a task (migrations 0006 and 0008). A THIRD field rather than methods on
+	// either interface above, and for the reason the catalogue pair states: a read is a store call,
+	// while each of these opens a TRANSACTION and writes an audit entry inside it. Behind one
+	// interface a future caller would reach for whichever method was nearest, and could end up
+	// writing the row outside a transaction — the exact defect core/audit was shaped to prevent.
+	GhiNhiemVu GhiNhiemVuUseCase
 
 	// The MEETING MINUTES register — one read path in this pass (migration 0007). It is the ORIGIN
 	// of the tasks above: a conclusion is split into a task and the task keeps a permanent back-link
@@ -306,6 +342,12 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu kho nhiệm vụ — GET /api/v1/tasks/{ma} sẽ panic khi có người gọi")
 	case d.DanhSachNhiemVu == nil:
 		panic("petitions/http: thiếu đường đọc danh sách nhiệm vụ — GET /api/v1/tasks sẽ panic khi có người gọi")
+	case d.GhiNhiemVu == nil:
+		// THE SIX WRITE ROUTES AT ONCE. A nil here does not break one screen: it breaks giao việc,
+		// sửa, chuyển trạng thái, xoá and both halves of lùi hạn — which puts the task register back
+		// in the state it was in before this pass, readable and unchangeable, while four other
+		// subsystems stand on it.
+		panic("petitions/http: thiếu use case ghi nhiệm vụ — sáu tuyến giao việc/sửa/chuyển trạng thái/xoá/lùi hạn sẽ panic khi có người gọi")
 	case d.DanhSachBienBan == nil:
 		panic("petitions/http: thiếu đường đọc danh sách biên bản họp — GET /api/v1/meetings sẽ panic khi có người gọi")
 	case d.Vet == nil:
@@ -637,23 +679,39 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("câu UPDATE mang `trang_thai = 'cho-dan-xac-nhan'`, nên lần gửi thứ hai không khớp dòng nào — đúng một lần đóng, đúng một kết quả, đúng một vết")(
 				http.HandlerFunc(h.DongPhieu))))
 
-	// --- THE TASK REGISTER. TWO READ ROUTES, AND NO WRITE ROUTE ---------------------------------
+	// --- THE TASK REGISTER. TWO READ ROUTES AND SIX WRITE ROUTES ---------------------------------
 	//
 	// `tasks` is the settled URL noun for `nhiem_vu` (kb/00-foundation/ubiquitous-language.md:144),
 	// not translated on the spot (ADR 0011).
 	//
-	// `task.read` ON BOTH, AND NOT AnyAuthenticated, unlike the two catalogue reads above. The
+	// `task.read` ON BOTH READS, AND NOT AnyAuthenticated, unlike the two catalogue reads above. The
 	// catalogues are the WORDS a commune sorts its work with and fill a picker on nearly every
 	// screen; this is the work itself — who was told to do what, by when, and who has not. The
 	// specification gives it a key of its own for that reason (§6), and the key is seeded at
 	// service-identity/migrations/0001_init.sql:304. NO KEY WAS INVENTED (rule 5, invariant 3c).
 	//
-	// WHY THE WRITE ROUTES OF §10 ARE ABSENT — the reasoning, in full, is on internal/http/nhiem_vu.go.
-	// In one line each: creating a task fixes a deadline counted in WORKING HOURS and identity
-	// publishes no contract that returns the hours (ADR 0029 §118), and approving an extension needs
-	// the holding-rule answer that kb/50-doi-chieu/2026-09-23-feat-m8-multitenant-foundation.md
-	// §Mâu thuẫn says explicitly not to pick a side on. The sub-task tree of §5.10 is a third,
-	// separate stop condition and migration 0006 states why it created no column for it.
+	// THE THREE REASONS THIS BLOCK ONCE GAVE FOR HAVING NO WRITE ROUTE ARE ANSWERED, and they are
+	// marked answered rather than deleted: a reader who arrives through ADR 0029 §118 or through the
+	// progress ledger needs to see that the reason MOVED, not that it vanished.
+	//
+	//	the sub-task tree        ANSWERED — ADR 0037 (2026-09-23) decided all four questions, and
+	//	                         migration 0008 added the column. The three rules that do not fit in
+	//	                         a CHECK live in internal/app, plus a FIFTH the specification never
+	//	                         raised: a cycle across two or more rows.
+	//	who approves an extension  ANSWERED — ADR 0038 (2026-09-23): the leader named ON THE RECORD,
+	//	                         compared by staff business code, as a SECOND layer under
+	//	                         `task.extend`. The empty-column case fails CLOSED.
+	//	the deadline              NOT THE SAME QUESTION AS THE PETITION INTAKE'S. §7.1 puts "Hạn hoàn
+	//	                         thành" on the form as a date a leader types, so creating a task
+	//	                         derives no deadline and calls identity not at all — see the header of
+	//	                         internal/app/nhiem_vu.go. (For completeness: identity's
+	//	                         ResolveDeadlines does now cover `WORK_KIND_NHIEM_VU`, so the paths
+	//	                         that WOULD need a computed deadline — §8's Excel import, splitting a
+	//	                         meeting conclusion — have a contract to call when they are built.)
+	//
+	// STILL ABSENT, AND DELIBERATELY: §10's `giao-viec`. Assignment is `task.assign`'s act and PATCH
+	// cannot move `bo_phan_id` or `nguoi_thuc_hien_ma` — folding it in would hand assignment to every
+	// holder of `task.update`. Reported as a finding.
 
 	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn
 	// @screen   02-nhiem-vu §3, §4
@@ -700,6 +758,190 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/tasks/{ma}",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DocNhiemVu)))
+
+	// GIAO VIỆC MỚI (§7) — `task.create`, seeded at 0001_init.sql:301 ("Tạo nhiệm vụ").
+	//
+	// idem.Required(MoKhiHong), AND WHICH LAYER IS ACTUALLY PROTECTING THIS — the question
+	// skills/rest-api-design §4 says to answer at the route. The real guard is
+	// `UNIQUE (tenant_id, ma)`, which counts soft-deleted rows: two tasks carrying one register
+	// number CANNOT EXIST, whatever happens to Redis. The idempotency key is the second, independent
+	// layer — it is what stops a double-submitted form from producing two tasks with two DIFFERENT
+	// minted numbers, which the unique key cannot see anything wrong with.
+	//
+	// MoKhiHong AND NOT DongKhiHong: with the unique key underneath, a cache outage cannot produce a
+	// duplicate NUMBER, and refusing a commune mid-morning would pay with an outage for a risk that
+	// is largely covered. THE RESIDUAL RISK IS STATED RATHER THAN GLOSSED: while the cache is down, a
+	// double submit can mint NV20 and NV21 for one piece of work, and the spare is soft-deleted by
+	// hand — a visible, recoverable nuisance, unlike a refused register.
+	//
+	// 409 COVERS TWO DIFFERENT THINGS and the code in the body tells them apart: `code_taken` (a
+	// hand-typed number already issued, soft-deleted rows included) and `task_tree` (the named parent
+	// is gone, or the move would close a cycle).
+	//
+	// @summary  Giao việc mới — tạo một nhiệm vụ, tự sinh mã theo dãy NV của xã hoặc nhận mã tự nhập
+	// @screen   02-nhiem-vu §7
+	// @request  taoNhiemVuVao
+	// @reply    201 nhiemVuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/tasks",
+		authz.RequirePermission(d.Checker, "task.create")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.TaoNhiemVu))))
+
+	// SỬA THÔNG TIN (§5.4's ✎ Sửa) — `task.update`, seeded at 0001_init.sql:305 ("Cập nhật tiến độ").
+	//
+	// PATCH AND NOT PUT: four editable fields have a meaningful zero, so a full replacement cannot
+	// tell "not mentioned" from "set to zero" — see suaNhiemVuVao.
+	//
+	// ⚠ IT CANNOT MOVE THE DEADLINE AND IT CANNOT REWRITE "Lãnh đạo giao việc". The first is the
+	// extension flow's act, decided by the leader; the second IS the approver under ADR 0038, so a
+	// holder of this key able to rewrite it could name themselves the approver of their own
+	// extension requests. Both absences are enforced by petstore.SuaNhiemVu having no such field.
+	//
+	// idem.KhongCan, AND THE REASON IS A PROPERTY OF THE USE CASE RATHER THAN A HOPE: app.Sua
+	// compares the row it read against the row it would write and, when nothing moved, writes
+	// NOTHING — no UPDATE and no audit entry. Were that comparison removed, this declaration would
+	// become a lie and the second request would file an entry saying nothing changed.
+	//
+	// @summary  Sửa thông tin mô tả của một nhiệm vụ — không đụng tới hạn, trạng thái hay phân công
+	// @screen   02-nhiem-vu §5.4
+	// @request  suaNhiemVuVao
+	// @reply    200 nhiemVuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/tasks/{ma}",
+		authz.RequirePermission(d.Checker, "task.update")(
+			idem.KhongCan("app.Sua so dòng đọc được với dòng sắp ghi và KHÔNG ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaNhiemVu))))
+
+	// CHUYỂN TRẠNG THÁI (§6) — `task.update` at the gate, `task.approve` for the last step.
+	//
+	// ⚠ TWO KEYS, ONE ROUTE, AND THAT IS RULE 5 INVARIANT 3b RATHER THAN A RELAXATION OF IT. §6 names
+	// both: `task.update` is "Cập nhật tiến độ" and `task.approve` is "Duyệt hoàn thành" — an officer
+	// reports progress on their own work and somebody else signs it off. A route declares ONE
+	// permission, so the gate is the broader key (an account without it is refused here, before
+	// anything is read) and the narrower one is consulted in the handler and decided in
+	// app.duocHoanThanh, inside the transaction. NEITHER KEY IS INVENTED; both are seeded.
+	//
+	// THE TARGET IS ON THE WIRE, unlike the petition path's `…/status`. §6's lifecycle BRANCHES at
+	// every state, so there is no single "next" for the server to choose — what the server owns is
+	// the MAP, and a move the diagram does not draw is refused with a 409.
+	//
+	// idem.KhongCan: the UPDATE carries the expected status, so a double click moves the task exactly
+	// one step and the second request answers 409.
+	//
+	// @summary  Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong
+	// @screen   02-nhiem-vu §6
+	// @request  doiTrangThaiVao
+	// @reply    200 nhiemVuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/tasks/{ma}/status",
+		authz.RequirePermission(d.Checker, "task.update")(
+			idem.KhongCan("câu UPDATE mang trạng thái đang chờ, nên bấm hai lần vẫn chỉ chuyển đúng một bước và lần thứ hai trả 409")(
+				http.HandlerFunc(h.DoiTrangThaiNhiemVu))))
+
+	// XOÁ (§11.5) — `task.delete`, seeded at 0001_init.sql:302 ("Xoá nhiệm vụ khỏi sổ").
+	//
+	// THIS IS A SOFT DELETE AND THE METHOD IS THE ONLY THING THAT SAYS OTHERWISE. The row stays with
+	// `deleted_at`, `deleted_by` and `delete_reason` (rule 7, invariant 1), its number stays taken
+	// for ever, and its timeline survives — §11.5 asks for exactly that ("nên xoá mềm để giữ nhật
+	// ký"). DELETE is still the right method: the resource is gone from every read path.
+	//
+	// ⚠ IT ANSWERS 409 WHILE THE TASK STILL HAS LIVE CHILDREN. That is ADR 0037 decision 3, and the
+	// body says how many — refusing without saying what is in the way sends an officer hunting.
+	//
+	// A BODY ON A DELETE, and the alternative was worse: the reason is mandatory, and the query
+	// string would put free text about a government record into every access log and proxy cache.
+	//
+	// idem.KhongCan — deleting an already-deleted task is a 404 either way, and the second request
+	// cannot overwrite who deleted it or why: the UPDATE carries `AND deleted_at IS NULL`.
+	//
+	// @summary  Xoá mềm một nhiệm vụ khỏi sổ, kèm lý do bắt buộc — từ chối khi còn việc con chưa xoá
+	// @screen   02-nhiem-vu §11
+	// @request  xoaNhiemVuVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/tasks/{ma}",
+		authz.RequirePermission(d.Checker, "task.delete")(
+			idem.KhongCan("xoá một nhiệm vụ đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.XoaNhiemVu))))
+
+	// ĐỀ NGHỊ LÙI HẠN (§5.8) — `task.update`, NOT `task.extend`.
+	//
+	// ⚠ THAT CHOICE IS ADR 0038'S WHOLE POINT. `task.extend` is labelled "Duyệt gia hạn" in the
+	// `quyen` table — it is the right to DECIDE. Guarding this route with it would mean only people
+	// who can approve an extension may ask for one, which is the opposite of §5.8: the box sits on
+	// the drawer of the officer doing the work.
+	//
+	// idem.KhongCan: at most one request may be pending per task —
+	// `UNIQUE (tenant_id, nhiem_vu_id, moc_cho_duyet)` — so a double submit answers 409 rather than
+	// filing a second request the leader could approve twice.
+	//
+	// @summary  Gửi đề nghị lùi hạn cho một nhiệm vụ — hạn mới phải muộn hơn hạn đang có, kèm lý do bắt buộc
+	// @screen   02-nhiem-vu §5.8
+	// @request  deNghiLuiHanVao
+	// @reply    201 deNghiLuiHanRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/tasks/{ma}/extensions",
+		authz.RequirePermission(d.Checker, "task.update")(
+			idem.KhongCan("mỗi nhiệm vụ chỉ có một đề nghị đang chờ duyệt — khoá duy nhất `(tenant_id, nhiem_vu_id, moc_cho_duyet)` làm lần gửi thứ hai trả 409 chứ không sinh đề nghị thứ hai")(
+				http.HandlerFunc(h.DeNghiLuiHanNhiemVu))))
+
+	// QUYẾT ĐỊNH LÙI HẠN (§5.8, ADR 0038) — `task.extend`, seeded at 0001_init.sql:303.
+	//
+	// ⚠ THE KEY IS THE FIRST OF TWO LAYERS AND IS NOT THE WHOLE ANSWER. Rule 5 checks
+	// `(tenant_id, role, permission)` and has no "which record" dimension, so holding `task.extend`
+	// says only that this account may touch extensions AT ALL. Whether it may decide THIS one —
+	// `Principal.Ma == nhiem_vu.lanh_dao_giao_viec_ma`, compared as two STAFF BUSINESS CODES — is
+	// decided in domain.DuocDuyetLuiHan, inside the transaction, on the task row read under the lock.
+	// Drop the gate and anybody may call the route; drop the second layer and every leader holding
+	// the key decides every task in the commune.
+	//
+	// A TASK THAT NAMES NO LEADER IS REFUSED, not routed to `nguoi_tao_ma`. That is ADR 0038's open
+	// question failing CLOSED, and the sentence names what is missing — the only thing the commune
+	// can act on. 403 covers it, together with the independent rule that nobody decides their own
+	// request.
+	//
+	// idem.KhongCan: the UPDATE carries `trang_thai = 'cho-duyet'`, so one request gets one decision
+	// and the second attempt answers 409.
+	//
+	// @summary  Lãnh đạo giao việc duyệt hoặc từ chối một đề nghị lùi hạn — duyệt thì đổi hạn xử lý, hạn ban đầu giữ nguyên
+	// @screen   02-nhiem-vu §5.8
+	// @request  quyetDinhLuiHanVao
+	// @reply    200 deNghiLuiHanRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/tasks/{ma}/extensions/{deNghiID}/decision",
+		authz.RequirePermission(d.Checker, "task.extend")(
+			idem.KhongCan("câu UPDATE mang `trang_thai = 'cho-duyet'`, nên lần gửi thứ hai không khớp dòng nào — đúng một đề nghị, đúng một quyết định, đúng một vết")(
+				http.HandlerFunc(h.QuyetDinhLuiHanNhiemVu))))
 
 	// --- MEETING MINUTES AND THEIR CONCLUSIONS. ONE READ ROUTE, AND NO WRITE ROUTE --------------
 	//

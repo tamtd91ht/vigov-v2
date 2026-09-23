@@ -199,18 +199,19 @@ func (c checkerGia) Allows(ctx context.Context, p authz.Principal, perm authz.Pe
 // --- harness ------------------------------------------------------------------------------------
 
 type mayChu struct {
-	h        http.Handler
-	d        Deps // kept so a test can rebuild the chain with ONE dependency swapped — see dungLai
-	thuMuc   thuMucGia
-	loai     *loaiNhiemVuGia
-	uuTien   *mucUuTienGia
-	phieu    *phieuGia
-	nhan     *nhanLinhVucGia
-	vet      *vetXemGia
-	danhSach *danhSachPhieuGia
-	xuLy     *xuLyPhieuGia
-	nhiemVu  *nhiemVuGia
-	bienBan  *bienBanGia
+	h          http.Handler
+	d          Deps // kept so a test can rebuild the chain with ONE dependency swapped — see dungLai
+	thuMuc     thuMucGia
+	loai       *loaiNhiemVuGia
+	uuTien     *mucUuTienGia
+	phieu      *phieuGia
+	nhan       *nhanLinhVucGia
+	vet        *vetXemGia
+	danhSach   *danhSachPhieuGia
+	xuLy       *xuLyPhieuGia
+	nhiemVu    *nhiemVuGia
+	ghiNhiemVu *ghiNhiemVuGia
+	bienBan    *bienBanGia
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -230,6 +231,10 @@ func dungMayChu(t *testing.T) *mayChu {
 	// cmd/server gives to both Deps fields, so a test cannot accidentally prove that two different
 	// registers agree with each other.
 	nhiemVu := nhiemVuMau()
+	// The SIX write acts. A SEPARATE fake from the read one, exactly as the Deps field is separate:
+	// a read is a store call and each of these opens a transaction, so one object answering both
+	// would let a test prove that a write route "worked" by reading.
+	ghiNhiemVu := &ghiNhiemVuGia{}
 	// The meeting register. Its fixtures are SEPARATE from the task register's on purpose: the
 	// counters on a card arrive already aggregated from the store, so a harness that derived them
 	// from nhiemVuMau() would be asserting that two fakes agree with each other rather than that the
@@ -268,19 +273,21 @@ func dungMayChu(t *testing.T) *mayChu {
 			XuLyPhieu:       xuLy,
 			NhiemVu:         nhiemVu,
 			DanhSachNhiemVu: nhiemVu,
+			GhiNhiemVu:      ghiNhiemVu,
 			DanhSachBienBan: bienBan,
 			Log:             slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
-		thuMuc:   thuMucMau(),
-		loai:     loai,
-		uuTien:   uuTien,
-		phieu:    phieu,
-		nhan:     nhan,
-		vet:      vet,
-		danhSach: danhSach,
-		xuLy:     xuLy,
-		nhiemVu:  nhiemVu,
-		bienBan:  bienBan,
+		thuMuc:     thuMucMau(),
+		loai:       loai,
+		uuTien:     uuTien,
+		phieu:      phieu,
+		nhan:       nhan,
+		vet:        vet,
+		danhSach:   danhSach,
+		xuLy:       xuLy,
+		nhiemVu:    nhiemVu,
+		ghiNhiemVu: ghiNhiemVu,
+		bienBan:    bienBan,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -365,6 +372,7 @@ func depsDay() Deps {
 		// BOTH TASK FIELDS, from ONE fake — the same shape cmd/server wires.
 		NhiemVu:         nhiemVuMau(),
 		DanhSachNhiemVu: nhiemVuMau(),
+		GhiNhiemVu:      &ghiNhiemVuGia{},
 		DanhSachBienBan: bienBanMau(),
 	}
 }
