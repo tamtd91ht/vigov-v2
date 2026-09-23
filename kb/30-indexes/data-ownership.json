@@ -5,6 +5,34 @@
   "_warnings": null,
   "entities": [
     {
+      "entity": "BudgetColumn",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "cot_ngan_sach",
+      "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:214"
+    },
+    {
+      "entity": "BudgetLine",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "khoan_muc_ngan_sach",
+      "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:302"
+    },
+    {
+      "entity": "BudgetLineValue",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "gia_tri_khoan_muc",
+      "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:370"
+    },
+    {
+      "entity": "BudgetSheet",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "bang_ngan_sach",
+      "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:127"
+    },
+    {
       "entity": "CapitalPlanCategory",
       "service": "finance",
       "scope": "tenant",

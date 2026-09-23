@@ -8,7 +8,7 @@
 # VÌ SAO KHÔNG CÒN MỘT DÒNG `/api/v1` → identity: dòng ấy đúng 100% vào ngày nó được
 # viết, khi mọi tài nguyên REST đều thuộc identity. Nay hợp đồng có
 #
-#     57 tuyến của 5 dịch vụ — identity 28 · petitions 12 · finance 8 · documents 7 · comms 2
+#     63 tuyến của 5 dịch vụ — identity 28 · finance 14 · petitions 12 · documents 7 · comms 2
 #
 # nên dòng gộp ấy đưa mọi tuyến không phải của identity tới identity và trả 404 — 404
 # trên một tuyến hành chính thật. Chủ dự án chốt lối (b), SINH Ingress từ openapi.json,
@@ -18,7 +18,7 @@
 # (deploy/overlays/<mt>/ingress-moi-truong.yaml). Bảng định tuyến thì giống nhau ở mọi
 # môi trường nên nó thuộc base — đúng ranh giới base/overlay kho này đang dùng.
 #
-# 24 luật định tuyến cho 57 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
+# 27 luật định tuyến cho 63 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -100,6 +100,13 @@ spec:
               service:
                 name: documents
                 port: { name: rest }
+          # finance — 1 tuyến: /api/v1/budget-indicators
+          - path: /api/v1/budget-indicators
+            pathType: Prefix
+            backend:
+              service:
+                name: finance
+                port: { name: rest }
           # identity — 1 tuyến: /api/v1/residential-units
           - path: /api/v1/residential-units
             pathType: Prefix
@@ -160,6 +167,13 @@ spec:
               service:
                 name: documents
                 port: { name: rest }
+          # finance — 2 tuyến: /api/v1/budget-sheets · /api/v1/budget-sheets/{id}
+          - path: /api/v1/budget-sheets
+            pathType: Prefix
+            backend:
+              service:
+                name: finance
+                port: { name: rest }
           # finance — 4 tuyến: /api/v1/disbursements · /api/v1/disbursements/{id}
           #   /api/v1/disbursements/{id}/confirmation · /api/v1/disbursements/{id}/lockout
           - path: /api/v1/disbursements
@@ -175,6 +189,14 @@ spec:
             backend:
               service:
                 name: identity
+                port: { name: rest }
+          # finance — 3 tuyến: /api/v1/budget-lines · /api/v1/budget-lines/{id}
+          #   /api/v1/budget-lines/{id}/headline
+          - path: /api/v1/budget-lines
+            pathType: Prefix
+            backend:
+              service:
+                name: finance
                 port: { name: rest }
           # identity — 1 tuyến: /api/v1/task-blocs
           - path: /api/v1/task-blocs
