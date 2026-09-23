@@ -1,14 +1,17 @@
 /**
- * Ba tuyến của màn "Biên bản và kết luận họp" (`docs/ui-ux/04-bien-ban-hop.md`).
+ * Bốn tuyến của màn "Biên bản và kết luận họp" (`docs/ui-ux/04-bien-ban-hop.md`).
  *
  *   GET  /api/v1/meetings                        `task.read`    — §2 danh sách thẻ
  *   POST /api/v1/meetings                        `task.create`  — §4 modal Nhập biên bản
  *   POST /api/v1/meetings/{id}/conclusions       `task.create`  — §2 hàng thêm kết luận
+ *   POST …/conclusions/{stt}/task                `task.create`  — §3 Tách thành nhiệm vụ
  *
- * Tuyến thứ tư của chương — `POST …/conclusions/{stt}/task` (§3 "Tách thành nhiệm vụ") — CỐ Ý
- * không có hàm nào ở đây. Nó dùng lại nguyên biểu mẫu "Giao việc mới" của `02-nhiem-vu.md` §7,
- * biểu mẫu ấy đang được dựng ở `features/nhiem-vu/`, và một bản thứ hai của nó là một bản sao sẽ
- * trôi (luật 9, cấm #2). Xem `PHAN_CHUA_DUNG` trong `features/bien-ban/nhan-bien-ban.ts`.
+ * Tuyến thứ tư ĐẾN 24/09/2026, sau ba tuyến kia. Khối này trước viết rằng nó "cố ý không có hàm
+ * nào ở đây", vì nó dùng lại nguyên biểu mẫu "Giao việc mới" của `02-nhiem-vu.md` §7 và biểu mẫu
+ * ấy khi đó đang được dựng ở `features/nhiem-vu/`. Biểu mẫu ấy nay đã có và ĐÃ XUẤT RA
+ * (`features/nhiem-vu/so-nhiem-vu.tsx` → `FormGiaoViec`), nên chỗ này là một lần import chứ không
+ * phải một bản thứ hai (luật 9, cấm #2). Phần §3 CÒN THIẾU — điền sẵn nội dung kết luận vào ô tiêu
+ * đề — vẫn ở `PHAN_CHUA_DUNG` của `features/bien-ban/nhan-bien-ban.ts`, kèm lý do.
  *
  * ══════════════════════════════════════════════════════════════════════════════════════════
  * BẢN CHÉP TAY ĐÃ XOÁ 23/09/2026 — và khối này ở lại để nói vì sao nó từng tồn tại.
@@ -36,6 +39,8 @@ import type {
   petitions_bienBanRa,
   petitions_get_meetings,
   petitions_ketLuanRa,
+  petitions_nhiemVuRa,
+  petitions_tachKetLuanVao,
   petitions_taoBienBanVao,
   petitions_themKetLuanVao,
 } from "./schema.gen";
@@ -100,6 +105,18 @@ export type TaoBienBanVao = petitions_taoBienBanVao;
 
 /** Thân của `POST …/conclusions`. */
 export type ThemKetLuanVao = petitions_themKetLuanVao;
+
+/**
+ * Thân của `POST …/conclusions/{stt}/task` — §3. Bí danh của kiểu SINH RA từ hợp đồng.
+ *
+ * NÓ LÀ NGUYÊN BỘ TRƯỜNG CỦA BIỂU MẪU "Giao việc mới", TRỪ ĐÚNG HAI: `source` và `source_id`
+ * KHÔNG có mặt, và sự vắng mặt ấy CHÍNH LÀ tính chất an ninh của tuyến. §3 vẽ "Nguồn giao = Từ
+ * kết luận họp" là ô KHOÁ; máy chủ thể hiện điều đó bằng cách không nhận cặp ấy trên dây và tự
+ * điền nó từ kết luận nêu trong ĐƯỜNG DẪN (`http/bien_ban_hop_ghi.go:137-143`). Một trường phải
+ * đi kiểm là một trường có ngày ai đó quên kiểm — ở đây không có gì để quên, vì không có gì client
+ * gửi lên mà trỏ được nhiệm vụ về một bản ghi nó tự chọn.
+ */
+export type TachKetLuanVao = petitions_tachKetLuanVao;
 
 /**
  * Đọc thân của một lần ghi thành kiểu của tuyến.
@@ -180,5 +197,55 @@ export function themKetLuan(
 
   return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(
     docThanGhi<petitions_ketLuanRa>,
+  );
+}
+
+/**
+ * POST /api/v1/meetings/{id}/conclusions/{stt}/task — §3. 201, trả về NHIỆM VỤ vừa lập, kèm số sổ
+ * máy chủ vừa cấp (`NV12`) — thứ bên gọi không thể biết trước.
+ *
+ * ⚠ NHẬN CẢ DÒNG KẾT LUẬN, KHÔNG NHẬN MỘT CON SỐ, và đó là toàn bộ lý do hàm này có chữ ký như
+ * vậy. `{stt}` trên đường dẫn phải là `ordinal` MÁY CHỦ TRẢ; §7.2 nối tiếp số ĐÃ CẤP, nên một biên
+ * bản từng gỡ kết luận ② mang các số ①③④ và "vị trí thứ hai trong mảng" là số **3**, không phải 2.
+ * Gửi vị trí thay cho số đã cấp thì lời gọi thành công, trả về 201, và lập một nhiệm vụ gắn vào
+ * MỘT KẾT LUẬN KHÁC — giao cho người khác, về việc khác, trong một quyển sổ không xoá được.
+ *
+ * Một tham số `thuTu: number` sẽ nhận `viTri + 1` mà không có gì đỏ ở đâu. Nhận nguyên dòng kết
+ * luận thì con số ấy đọc từ chính bản ghi máy chủ trả, và không còn chỗ nào để truyền một con số
+ * khác vào.
+ *
+ * DỰNG TỪNG TRƯỜNG, KHÔNG `...than`: nó là chỗ `source`/`source_id` bị chặn lại. Biểu mẫu dùng
+ * chung khai kiểu `petitions_taoNhiemVuVao` — kiểu ấy CÓ hai trường ấy, và TypeScript cho gán sang
+ * `TachKetLuanVao` vì nó chỉ thừa chứ không thiếu. Một phép trải ở đây đưa thẳng chúng lên dây.
+ */
+export function tachKetLuanThanhNhiemVu(
+  bienBanID: string,
+  ketLuan: petitions_ketLuanRa,
+  than: TachKetLuanVao,
+  khoaChongTrung: string,
+): Promise<KetQua<petitions_nhiemVuRa>> {
+  const goc: petitions_get_meetings["duongDan"] = "/api/v1/meetings";
+  const duongDan =
+    `${goc}/${encodeURIComponent(bienBanID)}/conclusions/${String(ketLuan.ordinal)}/task`;
+
+  const thanGui: TachKetLuanVao = {
+    code: than.code,
+    auto_code: than.auto_code,
+    type: than.type,
+    bloc: than.bloc,
+    title: than.title,
+    description: than.description,
+    priority: than.priority,
+    unit: than.unit,
+    assignee: than.assignee,
+    assigner: than.assigner,
+    lead_unit: than.lead_unit,
+    monitor: than.monitor,
+    due_at: than.due_at,
+    parent: than.parent,
+  };
+
+  return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(
+    docThanGhi<petitions_nhiemVuRa>,
   );
 }

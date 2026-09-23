@@ -10,12 +10,21 @@ import {
   veTrangTruoc,
   type NganXepConTro,
 } from "@/features/cau-hinh/ngan-xep-con-tro";
+import { FormGiaoViec, type DanhMucNhiemVu } from "@/features/nhiem-vu/so-nhiem-vu";
 import {
   laySoBienBan,
+  tachKetLuanThanhNhiemVu,
   taoBienBan,
   themKetLuan,
+  type TachKetLuanVao,
   type TaoBienBanVao,
 } from "@/lib/api/bien-ban";
+import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
+import {
+  layKhoiNhiemVu,
+  layLoaiNhiemVu,
+  layMucUuTienNhiemVu,
+} from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   page_Result_petitions_bienBanRa,
@@ -24,16 +33,20 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import {
-  CHO_NUT_TACH,
+  cauDaTach,
+  CHUA_DIEN_SAN,
   DANG_TAI_SO,
   DIA_DIEM_TOI_DA,
   dongMeta,
   KET_LUAN_MOI_LAN_TOI_DA,
+  NGUON_GIAO_KHOA,
   NHAN_NUT_HUY,
   NHAN_NUT_LUU,
   NHAN_NUT_NHAP_BIEN_BAN,
+  NHAN_NUT_TACH,
   NHAN_NUT_THEM_KET_LUAN,
   nhanBadge,
+  nhanNutTach,
   nhanTienDoKetLuan,
   NOI_DUNG_BIEN_BAN_TOI_DA,
   NOI_DUNG_KET_LUAN_TOI_DA,
@@ -74,6 +87,43 @@ import {
 /** Bao nhiêu thẻ một trang. Mỗi thẻ mang cả danh sách kết luận, nên trang mỏng hơn quyển sổ phản ánh. */
 const SO_THE_MOI_TRANG = 10;
 
+/** Chưa đọc được danh mục nào thì các ô chọn của biểu mẫu Giao việc rỗng — xem `PhepTach`. */
+const KHONG_DANH_MUC: DanhMucNhiemVu = { loai: [], mucUuTien: [], khoi: [], boPhan: [] };
+
+/**
+ * Mọi thứ luồng "Tách thành nhiệm vụ" (§3) cần, gom thành MỘT đối tượng đi qua ba tầng thành phần.
+ *
+ * GOM LẠI VÌ ĐƯỜNG ĐI DÀI: `SoBienBan` → `DanhSachBienBan` → `TheBienBan` → `DongKetLuan`. Bảy
+ * prop rời nhau đi qua ba chặng là bảy chỗ để một chặng quên truyền một cái, và cái bị quên sẽ là
+ * cái ít dùng nhất.
+ *
+ * MỘT HỘP GIAO VIỆC MỘT LÚC TRÊN CẢ MÀN (`moOKetLuan` là một id, không phải một tập). §3 gọi nó là
+ * modal, và hai biểu mẫu mở cùng lúc là hai khoá chống trùng sống song song trên cùng một màn —
+ * chưa kể chữ đã gõ ở hộp kia không ai nhìn thấy để mà lưu.
+ */
+export type PhepTach = {
+  /** Bốn danh mục đổ vào ô chọn của biểu mẫu Giao việc. */
+  readonly danhMuc: DanhMucNhiemVu;
+  readonly dangGui: boolean;
+  /** Id của kết luận đang mở hộp, hoặc `null`. */
+  readonly moOKetLuan: string | null;
+  readonly loi: { readonly ketLuanID: string; readonly thongBao: string } | null;
+  readonly daXong: { readonly ketLuanID: string; readonly maNhiemVu: string } | null;
+  readonly mo: (ketLuanID: string) => void;
+  readonly dong: () => void;
+  /**
+   * ⚠ NHẬN CẢ DÒNG KẾT LUẬN, KHÔNG NHẬN MỘT CON SỐ. `{stt}` trên đường dẫn phải là `ordinal` máy
+   * chủ trả; một tham số `thuTu: number` ở đây là chỗ `viTri + 1` đi lọt vào mà không có gì đỏ.
+   * Xem `tachKetLuanThanhNhiemVu` trong `lib/api/bien-ban.ts`.
+   */
+  readonly gui: (
+    bienBanID: string,
+    ketLuan: petitions_ketLuanRa,
+    than: TachKetLuanVao,
+    khoaChongTrung: string,
+  ) => void;
+};
+
 type TrangThaiTai<T> =
   | { pha: "dangTai" }
   | { pha: "loi"; thongBao: string }
@@ -107,6 +157,13 @@ export function SoBienBan() {
   // giữ nguyên khoá cũ, đúng điều `Idempotency-Key` sinh ra để làm.
   const [lanGhiXong, datLanGhiXong] = useState(0);
 
+  // §3 — luồng Tách. Bốn mẩu trạng thái, tất cả mang ID KẾT LUẬN: một câu từ chối của kết luận này
+  // hiện trên dòng kết luận khác là nói với cán bộ rằng họ vừa làm hỏng một việc họ không đụng tới.
+  const [danhMuc, datDanhMuc] = useState<DanhMucNhiemVu>(KHONG_DANH_MUC);
+  const [moTachO, datMoTachO] = useState<string | null>(null);
+  const [loiTach, datLoiTach] = useState<{ ketLuanID: string; thongBao: string } | null>(null);
+  const [daTach, datDaTach] = useState<{ ketLuanID: string; maNhiemVu: string } | null>(null);
+
   const khoa = `${nganXep.hienTai ?? ""}|${lanTai}`;
 
   useEffect(() => {
@@ -118,6 +175,36 @@ export function SoBienBan() {
       bo = true;
     };
   }, [nganXep.hienTai, khoa]);
+
+  /**
+   * BỐN DANH MỤC CỦA BIỂU MẪU GIAO VIỆC, đọc một lần cho cả màn. Một danh mục hỏng thì ô chọn
+   * tương ứng rỗng — KHÔNG làm hỏng quyển sổ: bốn câu trả lời rời nhau.
+   *
+   * ĐỌC NGAY LÚC MỞ MÀN CHỨ KHÔNG ĐỢI TỚI LÚC BẤM TÁCH, dù đó là bốn lời gọi cho một hộp nhiều lần
+   * xem không ai mở. Đợi tới lúc bấm thì `Loại nhiệm vụ` còn rỗng trong khoảnh khắc đầu, mà loại là
+   * trường BẮT BUỘC — cán bộ mở hộp ra và thấy nút Giao việc mờ đi, không kèm lý do nào. Tách nhiệm
+   * vụ là việc §1 nói màn này sinh ra để làm, không phải một tính năng bên lề.
+   */
+  useEffect(() => {
+    let bo = false;
+    Promise.all([
+      layLoaiNhiemVu(),
+      layMucUuTienNhiemVu(),
+      layKhoiNhiemVu(),
+      layDanhMucBoPhan(),
+    ]).then(([loai, uuTien, khoiNV, boPhan]) => {
+      if (bo) return;
+      datDanhMuc({
+        loai: loai.ok ? loai.duLieu.items : [],
+        mucUuTien: uuTien.ok ? uuTien.duLieu.items : [],
+        khoi: khoiNV.ok ? khoiNV.duLieu.items : [],
+        boPhan: boPhan.ok ? boPhan.duLieu.items : [],
+      });
+    });
+    return () => {
+      bo = true;
+    };
+  }, []);
 
   const so = taiTu(daTai, khoa);
 
@@ -140,6 +227,60 @@ export function SoBienBan() {
       datLanTai((n) => n + 1);
     });
   }
+
+  /**
+   * §3 — tách một kết luận thành một nhiệm vụ.
+   *
+   * KHÔNG TỰ SUY MỘT CON SỐ NÀO: `ketLuan` đi nguyên xuống lớp gọi, và `{stt}` trên đường dẫn đọc
+   * từ `ordinal` của chính bản ghi ấy.
+   *
+   * GHI XONG THÌ ĐÓNG HỘP VÀ ĐỌC LẠI CẢ TRANG. Đóng hộp vì lần mở sau phải sinh một khoá chống
+   * trùng mới — biểu mẫu giữ khoá theo đời của nó, nên đóng là huỷ khoá cũ. Đọc lại vì bộ đếm
+   * `x/y` ở dòng kết luận và ở badge của thẻ do MÁY CHỦ cộng; cộng thêm một ở client là dựng con số
+   * thứ hai của cùng một sự thật (luật 9, cấm #2).
+   */
+  function guiTach(
+    bienBanID: string,
+    ketLuan: petitions_ketLuanRa,
+    than: TachKetLuanVao,
+    khoaChongTrung: string,
+  ): void {
+    datDangGui(true);
+    tachKetLuanThanhNhiemVu(bienBanID, ketLuan, than, khoaChongTrung).then((kq) => {
+      datDangGui(false);
+      if (!kq.ok) {
+        // NGUYÊN VĂN câu máy chủ. Ở tuyến này nó mang những thứ không dựng lại được ở client: mã
+        // việc cha còn dở, tên hai trạng thái của một bước không có trong §6, hay câu 404 nói kết
+        // luận này không có trong biên bản.
+        datLoiTach({ ketLuanID: ketLuan.id, thongBao: kq.thongBao });
+        return;
+      }
+      datLoiTach(null);
+      datDaTach({ ketLuanID: ketLuan.id, maNhiemVu: kq.duLieu.code });
+      datMoTachO(null);
+      datLanGhiXong((n) => n + 1);
+      datLanTai((n) => n + 1);
+    });
+  }
+
+  const phepTach: PhepTach = {
+    danhMuc,
+    dangGui,
+    moOKetLuan: moTachO,
+    loi: loiTach,
+    daXong: daTach,
+    mo: (ketLuanID) => {
+      // Mở hộp khác là bỏ câu lỗi và câu báo xong của hộp trước: chúng nói về một kết luận khác.
+      datMoTachO((dang) => (dang === ketLuanID ? null : ketLuanID));
+      datLoiTach(null);
+      datDaTach(null);
+    },
+    dong: () => {
+      datMoTachO(null);
+      datLoiTach(null);
+    },
+    gui: guiTach,
+  };
 
   function luuBienBan(than: TaoBienBanVao, khoaChongTrung: string): void {
     datDangGui(true);
@@ -208,6 +349,7 @@ export function SoBienBan() {
             dangGui={dangGui}
             loiKetLuan={loiKetLuan}
             guiKetLuan={guiKetLuan}
+            tach={phepTach}
           />
           <nav className="dieu-huong-trang" aria-label="Phân trang danh sách biên bản">
             <button
@@ -268,12 +410,14 @@ export function DanhSachBienBan({
   dangGui,
   loiKetLuan,
   guiKetLuan,
+  tach,
 }: {
   bienBan: readonly petitions_bienBanRa[];
   lanGhiXong: number;
   dangGui: boolean;
   loiKetLuan: { bienBanID: string; thongBao: string } | null;
   guiKetLuan: (bienBanID: string, noiDung: string, khoaChongTrung: string) => void;
+  tach: PhepTach;
 }) {
   if (bienBan.length === 0) return <p className="trang-thai-rong">{SO_RONG}</p>;
 
@@ -289,6 +433,7 @@ export function DanhSachBienBan({
             dangGui={dangGui}
             loiKetLuan={loiKetLuan?.bienBanID === bb.id ? loiKetLuan.thongBao : null}
             guiKetLuan={guiKetLuan}
+            tach={tach}
           />
         </li>
       ))}
@@ -303,12 +448,14 @@ export function TheBienBan({
   dangGui,
   loiKetLuan,
   guiKetLuan,
+  tach,
 }: {
   bienBan: petitions_bienBanRa;
   lanGhiXong: number;
   dangGui: boolean;
   loiKetLuan: string | null;
   guiKetLuan: (bienBanID: string, noiDung: string, khoaChongTrung: string) => void;
+  tach: PhepTach;
 }) {
   return (
     <div className="khoi-chi-tiet">
@@ -328,9 +475,12 @@ export function TheBienBan({
         <p className="trang-thai-rong">Biên bản này chưa ghi kết luận nào.</p>
       ) : (
         <ol aria-label={`Các kết luận của biên bản ${bienBan.title}`}>
+          {/* ⚠ KHÔNG LẤY CHỈ SỐ CỦA `map` RA DÙNG, ở đây hay ở bất kỳ đâu dưới nó. Số hiện trong ô
+              tròn và số đi trên đường dẫn `{stt}` của tuyến Tách đều là `ordinal` MÁY CHỦ TRẢ —
+              xem `DongKetLuan` và `soThuTuKetLuan`. */}
           {bienBan.conclusions.map((kl) => (
             <li key={kl.id}>
-              <DongKetLuan ketLuan={kl} />
+              <DongKetLuan bienBanID={bienBan.id} ketLuan={kl} tach={tach} />
             </li>
           ))}
         </ol>
@@ -355,12 +505,30 @@ export function TheBienBan({
 }
 
 /**
- * Một dòng kết luận §2: số thứ tự trong ô tròn · nội dung · dòng phụ đếm nhiệm vụ · chỗ của nút
- * `✂ Tách thành nhiệm vụ`.
+ * Một dòng kết luận §2: số thứ tự trong ô tròn · nội dung · dòng phụ đếm nhiệm vụ · nút
+ * `✂ Tách thành nhiệm vụ` (§3).
  *
- * SỐ THỨ TỰ LẤY TỪ `ordinal`, KHÔNG TỪ VỊ TRÍ TRONG MẢNG — xem `soThuTuKetLuan`.
+ * SỐ THỨ TỰ LẤY TỪ `ordinal`, KHÔNG TỪ VỊ TRÍ TRONG MẢNG — xem `soThuTuKetLuan`. Ở dòng này con số
+ * ấy đi HAI đường: vào ô tròn, và vào `{stt}` của tuyến Tách. Thành phần này cố ý KHÔNG nhận chỉ
+ * số của mảng, nên không có sẵn một con số sai nào để lỡ tay dùng.
+ *
+ * BIỂU MẪU MỞ NGAY DƯỚI DÒNG, KHÔNG PHẢI MỘT LỚP PHỦ. §3 gọi nó là modal; lớp CSS cho một lớp phủ
+ * chưa có trong `globals.css` và lượt này không thêm CSS — cùng lý do biểu mẫu §4 nằm nối tiếp
+ * trong trang. Xem `PHAN_CHUA_DUNG`.
  */
-export function DongKetLuan({ ketLuan }: { ketLuan: petitions_ketLuanRa }) {
+export function DongKetLuan({
+  bienBanID,
+  ketLuan,
+  tach,
+}: {
+  bienBanID: string;
+  ketLuan: petitions_ketLuanRa;
+  tach: PhepTach;
+}) {
+  const dangMo = tach.moOKetLuan === ketLuan.id;
+  const loi = tach.loi?.ketLuanID === ketLuan.id ? tach.loi.thongBao : null;
+  const daXong = tach.daXong?.ketLuanID === ketLuan.id ? tach.daXong.maNhiemVu : null;
+
   return (
     <div>
       {/* Ô tròn xanh nhạt của §2 cần một lớp CSS chưa có; `chip` là lớp sẵn có gần nhất và nó
@@ -368,8 +536,61 @@ export function DongKetLuan({ ketLuan }: { ketLuan: petitions_ketLuanRa }) {
       <span className="chip">{soThuTuKetLuan(ketLuan)}</span>{" "}
       <span>{ketLuan.content}</span>
       <p className="dong-phu">{nhanTienDoKetLuan(ketLuan)}</p>
-      {/* CHỖ CỦA NÚT TÁCH — một ô trống có nhãn nói rõ vì sao chưa có, không phải một nút mờ. */}
-      <p className="ghi-chu">{CHO_NUT_TACH}</p>
+
+      {/* KHÔNG CÓ CỔNG QUYỀN Ở ĐÂY: nút hiện với mọi tài khoản, và tài khoản thiếu `task.create`
+          nhận nguyên câu 403 của máy chủ ngay dưới biểu mẫu. Ẩn một nút chưa bao giờ là biện pháp
+          (luật 5, cấm #1) — xem `PHAN_CHUA_DUNG`. */}
+      <button
+        type="button"
+        className="nut-phu"
+        // Tên đọc được mang số thứ tự: một thẻ có nhiều dòng kết luận, và không có nó thì các nút
+        // liền nhau mang cùng một tên.
+        aria-label={nhanNutTach(ketLuan)}
+        aria-expanded={dangMo}
+        // Khoá lúc đang gửi, kể cả lần gửi của một hộp khác: bấm đóng giữa chừng là huỷ khoá chống
+        // trùng của lời gọi đang bay.
+        disabled={tach.dangGui}
+        onClick={() => tach.mo(ketLuan.id)}
+      >
+        {NHAN_NUT_TACH}
+      </button>
+
+      {daXong !== null && (
+        // SỐ SỔ MÁY CHỦ VỪA CẤP. Đó là thứ cán bộ không thể biết trước và là thứ họ cần để đi tìm
+        // nhiệm vụ vừa lập ở màn `/nhiem-vu`.
+        <p className="ghi-chu" role="status">
+          {cauDaTach(daXong)}
+        </p>
+      )}
+
+      {dangMo && (
+        // KHÔNG BỌC THÊM MỘT `khoi-chi-tiet` NỮA. `form-danh-muc` đã tự có viền và vạch xanh bên
+        // trái, còn ở 320px thì mỗi lớp hộp lồng nhau ăn thêm 2rem bề ngang: thẻ biên bản 1rem +
+        // hộp này 1rem + biểu mẫu 1rem chỉ còn lại 224px cho chữ.
+        <div>
+          {/* KẾT LUẬN GỐC ĐỨNG NGAY TRÊN BIỂU MẪU, và đó không phải trang trí: ô "Nội dung nhiệm
+              vụ" chưa điền sẵn được, nên đây là chỗ cán bộ chép từ. */}
+          <p>
+            <span className="chip">{soThuTuKetLuan(ketLuan)}</span> {ketLuan.content}
+          </p>
+          <p className="ghi-chu">{NGUON_GIAO_KHOA}</p>
+          <p className="ghi-chu">{CHUA_DIEN_SAN}</p>
+
+          {/* DÙNG LẠI NGUYÊN BIỂU MẪU CỦA `02-nhiem-vu.md` §7 — §3 nói rõ là dùng lại, và một bản
+              thứ hai ở đây là hai biểu mẫu cùng gửi một tuyến rồi trôi khỏi nhau (luật 9, cấm #2).
+              Khoá chống trùng do chính biểu mẫu giữ, sinh lúc MỞ: bấm lại sau một lỗi mạng dùng
+              lại đúng khoá ấy, còn đóng hộp rồi mở lại là một khoá mới. */}
+          <FormGiaoViec
+            danhMuc={tach.danhMuc}
+            dangGui={tach.dangGui}
+            loi={loi}
+            huy={tach.dong}
+            giaoViec={(than, khoaChongTrung) =>
+              tach.gui(bienBanID, ketLuan, than, khoaChongTrung)
+            }
+          />
+        </div>
+      )}
     </div>
   );
 }

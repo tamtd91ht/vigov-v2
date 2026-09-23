@@ -4,9 +4,12 @@ import { describe, expect, it } from "vitest";
 import type { petitions_bienBanRa, petitions_ketLuanRa } from "@/lib/api/schema.gen";
 
 import {
-  CHO_NUT_TACH,
+  cauDaTach,
+  CHUA_DIEN_SAN,
   CHUA_TACH_NHIEM_VU,
+  NGUON_GIAO_KHOA,
   NHAN_NUT_LUU,
+  NHAN_NUT_TACH,
   NHAN_NUT_THEM_KET_LUAN,
   PHAN_CHUA_DUNG,
   PLACEHOLDER_KET_LUAN,
@@ -19,6 +22,7 @@ import {
   HangThemKetLuan,
   KhoiChuaDung,
   TheBienBan,
+  type PhepTach,
 } from "./so-bien-ban";
 
 /**
@@ -70,7 +74,27 @@ function bienBan(sua: Partial<petitions_bienBanRa> = {}): petitions_bienBanRa {
   };
 }
 
-function veThe(bb: petitions_bienBanRa): string {
+/**
+ * Luồng Tách ở trạng thái nghỉ: không hộp nào mở, không lỗi, không câu báo xong.
+ *
+ * Danh mục để RỖNG cố ý — nó không phải thứ nhóm nào dưới đây canh, và một danh mục giả đầy đủ chỉ
+ * làm các ca khó đọc hơn.
+ */
+function phepTach(sua: Partial<PhepTach> = {}): PhepTach {
+  return {
+    danhMuc: { loai: [], mucUuTien: [], khoi: [], boPhan: [] },
+    dangGui: false,
+    moOKetLuan: null,
+    loi: null,
+    daXong: null,
+    mo: () => {},
+    dong: () => {},
+    gui: () => {},
+    ...sua,
+  };
+}
+
+function veThe(bb: petitions_bienBanRa, tach: PhepTach = phepTach()): string {
   return renderToStaticMarkup(
     <TheBienBan
       bienBan={bb}
@@ -78,8 +102,13 @@ function veThe(bb: petitions_bienBanRa): string {
       dangGui={false}
       loiKetLuan={null}
       guiKetLuan={() => {}}
+      tach={tach}
     />,
   );
+}
+
+function veDong(kl: petitions_ketLuanRa, tach: PhepTach = phepTach()): string {
+  return renderToStaticMarkup(<DongKetLuan bienBanID="01JBB1" ketLuan={kl} tach={tach} />);
 }
 
 describe("thẻ biên bản §2", () => {
@@ -119,6 +148,7 @@ describe("thẻ biên bản §2", () => {
         dangGui={false}
         loiKetLuan="Bạn không có quyền tạo nhiệm vụ."
         guiKetLuan={() => {}}
+        tach={phepTach()}
       />,
     );
 
@@ -149,41 +179,117 @@ describe("SỐ THỨ TỰ KẾT LUẬN — nối tiếp số đã cấp, không 
   });
 
   it("nội dung đi CÙNG đúng con số của nó, không lệch một dòng", () => {
-    const html = renderToStaticMarkup(<DongKetLuan ketLuan={ketLuan({ ordinal: 4 })} />);
+    const html = veDong(ketLuan({ ordinal: 4 }));
 
     expect(html).toContain('<span class="chip">4</span>');
     expect(html).not.toContain('<span class="chip">1</span>');
   });
 
   it("dòng phụ nói `Chưa tách thành nhiệm vụ nào` khi chưa có nhiệm vụ nào", () => {
-    const html = renderToStaticMarkup(<DongKetLuan ketLuan={ketLuan({ task_count: 0 })} />);
-    expect(html).toContain(CHUA_TACH_NHIEM_VU);
+    expect(veDong(ketLuan({ task_count: 0 }))).toContain(CHUA_TACH_NHIEM_VU);
   });
 
   it("có nhiệm vụ rồi thì là hai con số, không còn câu `Chưa tách…`", () => {
-    const html = renderToStaticMarkup(
-      <DongKetLuan ketLuan={ketLuan({ task_count: 1, task_done_count: 1 })} />,
-    );
+    const html = veDong(ketLuan({ task_count: 1, task_done_count: 1 }));
 
     expect(html).toContain("1/1 nhiệm vụ đã hoàn thành");
     expect(html).not.toContain(CHUA_TACH_NHIEM_VU);
   });
+
+  /* ⚠ CA QUAN TRỌNG NHẤT CỦA CẢ TỆP. Con số trong tên đọc được của nút và con số đi trên đường dẫn
+   * `{stt}` cùng đọc `ketLuan.ordinal`; lời gọi thì không kiểm được bằng `renderToStaticMarkup`,
+   * nên tên nút là chỗ DUY NHẤT con số ấy quan sát được ở đây. Vẽ sai nó là dấu hiệu gửi sai nó. */
+  it("TÊN ĐỌC ĐƯỢC CỦA NÚT TÁCH mang số ĐÃ CẤP, không mang vị trí trong mảng", () => {
+    const html = veThe(CO_KHOANG_TRONG);
+
+    expect(html).toContain('aria-label="Tách thành nhiệm vụ — kết luận số 1"');
+    expect(html).toContain('aria-label="Tách thành nhiệm vụ — kết luận số 3"');
+    expect(html).toContain('aria-label="Tách thành nhiệm vụ — kết luận số 4"');
+    // Kết luận ở VỊ TRÍ THỨ HAI mang số 3. Một nút mang "số 2" nghĩa là màn đang đếm lại theo vị
+    // trí — và con số ấy đi thẳng lên đường dẫn, tách nhầm kết luận.
+    expect(html).not.toContain('aria-label="Tách thành nhiệm vụ — kết luận số 2"');
+  });
 });
 
-describe("nút `Tách thành nhiệm vụ` — KHÔNG dựng lượt này, và màn nói ra điều đó", () => {
-  it("chỗ ấy là một dòng chữ giải thích, KHÔNG phải một nút", () => {
-    const html = renderToStaticMarkup(<DongKetLuan ketLuan={ketLuan()} />);
+/**
+ * §3 — luồng Tách.
+ *
+ * NHÓM NÀY THAY CHO NHÓM CŨ "chỗ ấy là một dòng chữ, KHÔNG phải một nút". Ca ấy đúng cho tới
+ * 24/09/2026: biểu mẫu "Giao việc mới" chưa có nên chỗ này là một dòng chữ nói rõ màn chưa dựng.
+ * Biểu mẫu nay đã có và được dùng lại nguyên bản, nên hành vi đổi và ca kiểm đổi theo — KHÔNG gỡ
+ * đi: mỗi điều ca cũ canh đều có một ca mới canh điều tương ứng ở hành vi mới.
+ */
+describe("nút `✂ Tách thành nhiệm vụ` §3", () => {
+  it("chỗ ấy NAY LÀ MỘT NÚT THẬT, mang đúng nhãn đặc tả vẽ", () => {
+    const html = veDong(ketLuan());
 
-    expect(html).toContain(nhuTrongHTML(CHO_NUT_TACH));
-    // Không một `<button>` nào trong một dòng kết luận: một nút mờ nói "bạn không có quyền", và
-    // đó là một câu khác hẳn với "màn hình chưa dựng".
-    expect(html).not.toContain("<button");
+    expect(html).toContain("<button");
+    expect(html).toContain(nhuTrongHTML(NHAN_NUT_TACH));
   });
 
-  it("lý do nằm trong khối chưa dựng được ở đầu màn, không chỉ trong chú thích mã", () => {
+  it("hộp Giao việc chỉ hiện khi chính kết luận NÀY đang mở", () => {
+    const dong = ketLuan({ id: "k7" });
+
+    // Chưa mở: không có biểu mẫu nào trên dòng.
+    expect(veDong(dong)).not.toContain("Giao việc mới");
+    // Mở ở một kết luận KHÁC: dòng này vẫn không có biểu mẫu. Một hộp một lúc trên cả màn.
+    expect(veDong(dong, phepTach({ moOKetLuan: "k9" }))).not.toContain("Giao việc mới");
+    // Mở ở chính nó.
+    expect(veDong(dong, phepTach({ moOKetLuan: "k7" }))).toContain("Giao việc mới");
+  });
+
+  it("hộp mở thì dùng LẠI biểu mẫu Giao việc của `02-nhiem-vu.md` §7, không dựng bản thứ hai", () => {
+    const html = veDong(ketLuan({ id: "k7" }), phepTach({ moOKetLuan: "k7" }));
+
+    // Ba ô chỉ có ở biểu mẫu ấy. Một bản chép tay ở `features/bien-ban/` sẽ trôi khỏi bản gốc, và
+    // ngày một bên thêm một trường thì bên kia vẫn xanh (luật 9, cấm #2).
+    expect(html).toContain("giao-tieu-de");
+    expect(html).toContain("giao-tu-sinh-ma");
+    expect(html).toContain("giao-han");
+  });
+
+  it("hộp mở thì nói ra ba điều: kết luận gốc, nguồn giao KHOÁ, và ô chưa điền sẵn", () => {
+    const html = veDong(
+      ketLuan({ id: "k7", ordinal: 3, content: "Giao Tài chính đối chiếu số liệu." }),
+      phepTach({ moOKetLuan: "k7" }),
+    );
+
+    // Nội dung kết luận đứng ngay trên biểu mẫu — đó là chỗ cán bộ chép từ, vì ô "Nội dung nhiệm
+    // vụ" chưa điền sẵn được.
+    expect(html).toContain("Giao Tài chính đối chiếu số liệu.");
+    expect(html).toContain(nhuTrongHTML(NGUON_GIAO_KHOA));
+    expect(html).toContain(nhuTrongHTML(CHUA_DIEN_SAN));
+  });
+
+  it("câu từ chối của máy chủ hiện NGUYÊN VĂN, và chỉ trên dòng kết luận bị từ chối", () => {
+    const tach = phepTach({
+      moOKetLuan: "k7",
+      loi: { ketLuanID: "k7", thongBao: "Bạn không có quyền tạo nhiệm vụ." },
+    });
+
+    expect(veDong(ketLuan({ id: "k7" }), tach)).toContain("Bạn không có quyền tạo nhiệm vụ.");
+    // Kết luận khác: câu ấy không nói về nó.
+    expect(veDong(ketLuan({ id: "k9" }), tach)).not.toContain(
+      "Bạn không có quyền tạo nhiệm vụ.",
+    );
+  });
+
+  it("tách xong thì báo SỐ SỔ máy chủ vừa cấp, trên đúng dòng kết luận ấy", () => {
+    const tach = phepTach({ daXong: { ketLuanID: "k7", maNhiemVu: "NV12" } });
+
+    expect(veDong(ketLuan({ id: "k7" }), tach)).toContain(cauDaTach("NV12"));
+    expect(veDong(ketLuan({ id: "k9" }), tach)).not.toContain("NV12");
+  });
+
+  it("đang gửi thì nút khoá — bấm đóng giữa chừng là huỷ khoá chống trùng đang bay", () => {
+    expect(veDong(ketLuan(), phepTach({ dangGui: true }))).toContain("disabled");
+  });
+
+  it("phần §3 CÒN THIẾU nằm trong khối chưa dựng được ở đầu màn, không chỉ trong chú thích mã", () => {
     const html = renderToStaticMarkup(<KhoiChuaDung />);
 
-    expect(html).toContain("Tách thành nhiệm vụ");
+    // Thứ còn thiếu là ĐIỀN SẴN, không còn là cả cái nút.
+    expect(html).toContain("ĐIỀN SẴN");
     expect(html).toContain(String(PHAN_CHUA_DUNG.length));
     // Cổng quyền client cũng phải được nói ra — nó là thứ người đọc màn sẽ đi tìm.
     expect(html).toContain("task.create");
@@ -199,6 +305,7 @@ describe("danh sách thẻ", () => {
         dangGui={false}
         loiKetLuan={null}
         guiKetLuan={() => {}}
+        tach={phepTach()}
       />,
     );
 
@@ -215,6 +322,7 @@ describe("danh sách thẻ", () => {
         dangGui={false}
         loiKetLuan={{ bienBanID: "01JBB2", thongBao: "Thiếu nội dung kết luận." }}
         guiKetLuan={() => {}}
+        tach={phepTach()}
       />,
     );
 

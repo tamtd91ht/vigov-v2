@@ -56,12 +56,56 @@ export const DANG_TAI_SO = "Đang tải danh sách biên bản…";
 export const CHUA_TACH_NHIEM_VU = "Chưa tách thành nhiệm vụ nào";
 
 /**
- * Chỗ đáng lẽ là nút `✂ Tách thành nhiệm vụ` (§3).
+ * Nút `✂ Tách thành nhiệm vụ` (§2, §3) — nguyên văn nhãn đặc tả vẽ.
  *
- * KHÔNG VẼ MỘT NÚT MỜ, KHÔNG VẼ MỘT NÚT BẤM ĐƯỢC. Một nút mờ nói "bạn không có quyền"; sự thật
- * là màn hình chưa dựng, và hai câu ấy không được lẫn vào nhau.
+ * TỪ 24/09/2026 ĐÂY LÀ MỘT NÚT THẬT. Trước đó chỗ này là một dòng chữ `CHO_NUT_TACH` nói rằng màn
+ * chưa dựng, vì biểu mẫu "Giao việc mới" của `02-nhiem-vu.md` §7 chưa có; nay nó có và được dùng
+ * lại nguyên bản. Phần §3 CÒN THIẾU là điền sẵn — xem `PHAN_CHUA_DUNG`.
  */
-export const CHO_NUT_TACH = "✂ Tách thành nhiệm vụ — chưa dựng, xem phần chưa dựng được ở đầu màn";
+export const NHAN_NUT_TACH = "✂ Tách thành nhiệm vụ";
+
+/**
+ * Tên đọc được của nút Tách, mang SỐ THỨ TỰ CỦA KẾT LUẬN.
+ *
+ * KHÔNG PHẢI MỘT CHI TIẾT TRỢ NĂNG. Một thẻ biên bản có nhiều dòng kết luận, và không có con số
+ * này thì ba nút liền nhau mang cùng một tên — trình đọc màn hình đọc "Tách thành nhiệm vụ" ba
+ * lần, và người dùng nó không có cách nào biết mình đang bấm vào kết luận nào.
+ *
+ * Nó còn là chỗ DUY NHẤT con số ấy ra tới trang: `{stt}` thật đi trên đường dẫn của lời gọi, mà
+ * một lời gọi thì không kiểm được bằng `renderToStaticMarkup`. Hai chỗ cùng đọc `ketLuan.ordinal`,
+ * nên vẽ sai số ở đây là dấu hiệu gửi sai số ở kia.
+ *
+ * MỞ ĐẦU BẰNG ĐÚNG CHỮ HIỆN TRÊN NÚT, không phải một câu viết lại: tên đọc được của một nút phải
+ * CHỨA nhãn nhìn thấy được, nếu không thì người điều khiển bằng giọng nói đọc đúng chữ trên màn mà
+ * không bấm được nút ấy (WCAG 2.5.3). Chỉ dấu kéo `✂` là trang trí nên không vào tên.
+ */
+export function nhanNutTach(kl: petitions_ketLuanRa): string {
+  return `Tách thành nhiệm vụ — kết luận số ${soThuTuKetLuan(kl)}`;
+}
+
+/**
+ * Dòng "Nguồn giao" KHOÁ của §3.
+ *
+ * §3 vẽ nó là một ô khoá, không sửa. Ở đây nó là một CÂU chứ không phải một ô bị vô hiệu hoá, vì
+ * không có gì để chọn: hợp đồng không có trường `source`/`source_id` trên tuyến này, máy chủ tự
+ * điền cặp ấy từ kết luận nêu trong đường dẫn. Một ô `select` bị `disabled` sẽ nói rằng có một giá
+ * trị được gửi đi — không có.
+ */
+export const NGUON_GIAO_KHOA = "Nguồn giao: Từ kết luận họp — khoá, không sửa được";
+
+/**
+ * Câu nói ra rằng ô "Nội dung nhiệm vụ" KHÔNG được điền sẵn, và chỉ chỗ chép.
+ *
+ * Nói thẳng thay vì để cán bộ mở biểu mẫu ra thấy ô trống rồi tự hỏi mình bấm nhầm chỗ nào.
+ */
+export const CHUA_DIEN_SAN =
+  "Ô “Nội dung nhiệm vụ” chưa tự điền sẵn — chép nội dung kết luận ở ngay trên. Xem phần chưa " +
+  "dựng được ở đầu màn.";
+
+/** Câu báo đã tách xong. Mang SỐ SỔ máy chủ vừa cấp — thứ cán bộ không thể biết trước. */
+export function cauDaTach(maNhiemVu: string): string {
+  return `Đã tách thành nhiệm vụ ${maNhiemVu}.`;
+}
 
 /* ── Phép định dạng ────────────────────────────────────────────────────────────────────────── */
 
@@ -142,6 +186,11 @@ export function nhanTienDoKetLuan(kl: petitions_ketLuanRa): string {
  *
  * Hàm này tồn tại để chỗ ấy có MỘT tên gọi và MỘT bài kiểm, thay vì một `{i + 1}` nằm lẫn trong
  * JSX — nơi không ai đọc lại.
+ *
+ * TỪ 24/09/2026 CON SỐ ẤY CÒN ĐI MỘT ĐƯỜNG THỨ HAI: nó là `{stt}` trên đường dẫn của tuyến Tách
+ * (`POST …/conclusions/{stt}/task`). Vẽ sai thì cán bộ thấy sai; GỬI sai thì không ai thấy gì cả —
+ * lời gọi trả 201 và một nhiệm vụ gắn vào kết luận khác, giao cho người khác, trong một quyển sổ
+ * không xoá được. Vì thế `tachKetLuanThanhNhiemVu` nhận cả DÒNG kết luận chứ không nhận một số.
  */
 export function soThuTuKetLuan(kl: petitions_ketLuanRa): number {
   return kl.ordinal;
@@ -187,14 +236,19 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Nút `✂ Tách thành nhiệm vụ` (§3)",
+    ten: "Dữ liệu ĐIỀN SẴN của biểu mẫu Tách (§3) — nút thì đã dựng",
     viSao:
-      "Tuyến `POST /api/v1/meetings/{id}/conclusions/{stt}/task` ĐÃ CÓ và nhận nguyên biểu mẫu " +
-      "“Giao việc mới” của `02-nhiem-vu.md` §7 — §3 nói rõ là DÙNG LẠI biểu mẫu ấy, không dựng " +
-      "biểu mẫu thứ hai. Biểu mẫu ấy đang được dựng ở `features/nhiem-vu/` trong cùng đợt này. " +
-      "Dựng bản thứ hai ở đây là tạo đúng bản sao sẽ trôi: hai biểu mẫu cùng gửi một tuyến, và " +
-      "ngày một bên thêm một trường thì bên kia vẫn xanh (luật 9, cấm #2). Xong biểu mẫu ấy thì " +
-      "chỗ này là một lần import.",
+      "Nút `✂ Tách thành nhiệm vụ` NAY ĐÃ CÓ và mở đúng biểu mẫu “Giao việc mới” của " +
+      "`02-nhiem-vu.md` §7, dùng lại nguyên `FormGiaoViec` chứ không dựng bản thứ hai. Thứ CHƯA " +
+      "có là bảng điền sẵn của §3: nội dung kết luận vào ô “Nội dung nhiệm vụ”, và hạn gợi ý từ " +
+      "ngày nêu trong câu kết luận (`báo cáo trước ngày 20/8` → 20/8). Biểu mẫu ấy giữ từng ô " +
+      "bằng `useState(\"\")` của chính nó và KHÔNG nhận giá trị ban đầu từ ngoài, nên điền sẵn đòi " +
+      "thêm một prop vào `features/nhiem-vu/so-nhiem-vu.tsx` — tệp lượt này không được ghi. Chép " +
+      "biểu mẫu sang đây để điền sẵn được là dựng đúng bản sao sẽ trôi (luật 9, cấm #2): hai biểu " +
+      "mẫu cùng gửi một tuyến, và ngày một bên thêm một trường thì bên kia vẫn xanh. Thay vào đó " +
+      "nội dung kết luận hiện NGAY TRÊN biểu mẫu để chép. Hai ô “Nguồn giao” và `nguon_id` của " +
+      "bảng §3 thì không thiếu gì cả: hợp đồng không có trường nào cho chúng, máy chủ suy cặp ấy " +
+      "từ kết luận nêu trong đường dẫn.",
   },
   {
     ten: "Ô chọn `Chủ trì` (§4, combobox cán bộ)",
@@ -257,7 +311,8 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
     viSao:
       "`globals.css` chưa có lớp nào cho danh sách thẻ, cho ô tròn xanh nhạt của số thứ tự, hay " +
       "cho một lớp phủ modal, và lượt này không được thêm CSS. Màn dùng lại các lớp sẵn có " +
-      "(`khoi-chi-tiet`, `chip`) và biểu mẫu §4 dựng NỐI TIẾP trong trang thay vì làm lớp phủ. " +
+      "(`khoi-chi-tiet`, `chip`), còn hai biểu mẫu — Nhập biên bản §4 và Giao việc §3 — dựng NỐI " +
+      "TIẾP trong trang thay vì làm lớp phủ như hai chữ “modal” của đặc tả. " +
       "Mượn một lớp của thứ khác cho đúng hình hôm nay sẽ lệch hẳn vào ngày lớp ấy đổi vì cái nó " +
       "thật sự phục vụ; tên lớp cần thêm đã báo về.",
   },

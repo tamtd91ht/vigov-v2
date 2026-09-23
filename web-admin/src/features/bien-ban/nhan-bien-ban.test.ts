@@ -148,7 +148,19 @@ describe("phần chưa dựng được", () => {
     }
   });
 
-  it("nút `Tách thành nhiệm vụ` nằm trong danh sách ấy — nó là phần cố ý chưa dựng", () => {
-    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Tách thành nhiệm vụ"))).toBe(true);
+  /**
+   * CA NÀY TRƯỚC ĐÒI "nút `Tách thành nhiệm vụ` nằm trong danh sách". Nó đúng cho tới 24/09/2026,
+   * khi biểu mẫu "Giao việc mới" chưa có. Nút nay đã dựng; thứ còn thiếu là bảng ĐIỀN SẴN của §3.
+   * Ca đổi theo hành vi chứ không bị gỡ: nếu một ngày ai đó dựng nốt phần điền sẵn mà quên xoá mục
+   * này, hoặc ngược lại xoá mục mà chưa dựng, thì đúng ca này đỏ.
+   */
+  it("thứ CÒN THIẾU của §3 là ĐIỀN SẴN, và lý do nêu đúng chỗ không sửa được lượt này", () => {
+    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("ĐIỀN SẴN"));
+
+    expect(muc).toBeDefined();
+    // Lý do phải chỉ ĐÍCH DANH biểu mẫu dùng chung: người đọc sau cần biết sửa ở đâu, và biết vì
+    // sao không được chép nó sang đây.
+    expect(muc?.viSao).toContain("FormGiaoViec");
+    expect(muc?.viSao).toContain("features/nhiem-vu/so-nhiem-vu.tsx");
   });
 });

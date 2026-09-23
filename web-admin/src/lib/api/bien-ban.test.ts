@@ -5,13 +5,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   duongDanSoBienBan,
   laySoBienBan,
+  tachKetLuanThanhNhiemVu,
   taoBienBan,
   themKetLuan,
+  type TachKetLuanVao,
   type TaoBienBanVao,
 } from "./bien-ban";
+import type { petitions_ketLuanRa } from "./schema.gen";
 
 /**
- * Ba tuyến của màn Biên bản họp.
+ * Bốn tuyến của màn Biên bản họp.
  *
  * NHÓM QUAN TRỌNG NHẤT Ở TỆP NÀY LÀ NHÓM "SO VỚI HỢP ĐỒNG", và nó có mặt vì một khiếm khuyết đã
  * biết: `schema.gen.ts` đang LỆCH khỏi `kb/20-contracts/openapi.json`, nên hai kiểu thân yêu cầu
@@ -170,6 +173,119 @@ describe("POST /api/v1/meetings/{id}/conclusions — thêm một kết luận", 
   });
 });
 
+describe("POST …/conclusions/{stt}/task — tách một kết luận thành nhiệm vụ (§3)", () => {
+  function ketLuan(sua: Partial<petitions_ketLuanRa> = {}): petitions_ketLuanRa {
+    return {
+      id: "01JKL3",
+      ordinal: 3,
+      content: "Giao Tài chính – Kế toán đối chiếu số liệu giải ngân sáu tháng đầu năm.",
+      task_count: 0,
+      task_done_count: 0,
+      created_at: "2026-08-05T02:00:00Z",
+      ...sua,
+    };
+  }
+
+  const THAN_TACH: TachKetLuanVao = {
+    auto_code: true,
+    type: "theo-van-ban",
+    title: "Đối chiếu số liệu giải ngân sáu tháng đầu năm.",
+  };
+
+  /* ⚠ NHÓM QUAN TRỌNG NHẤT CỦA TUYẾN NÀY. Số trên đường dẫn là `ordinal` MÁY CHỦ TRẢ; gửi vị trí
+   * trong mảng thì lời gọi vẫn 201 và vẫn lập một nhiệm vụ — chỉ là gắn vào kết luận khác, giao
+   * cho người khác, trong một quyển sổ không xoá được. Dữ liệu mẫu ở đây CỐ Ý lệch giữa vị trí và
+   * số đã cấp: một ca dùng ①③④ liên tục sẽ xanh với cả hai cách viết. */
+  it("số trên đường dẫn là `ordinal` của kết luận, KHÔNG phải vị trí trong mảng", async () => {
+    const gia = batFetch(traJSON(201, { code: "NV12" }));
+    const ds = [ketLuan({ id: "k1", ordinal: 1 }), ketLuan({ id: "k3", ordinal: 3 })];
+
+    // Kết luận ở VỊ TRÍ THỨ HAI (index 1) mang số ĐÃ CẤP là 3 — ② đã bị gỡ khỏi biên bản.
+    const kl = ds[1] as petitions_ketLuanRa;
+    await tachKetLuanThanhNhiemVu("01JBB", kl, THAN_TACH, "k");
+
+    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/meetings/01JBB/conclusions/3/task");
+    expect(loiGoi(gia, 0).duongDan).not.toContain("/conclusions/2/task");
+  });
+
+  it("đọc `ordinal` từ chính dòng kết luận — số nào trên bản ghi, số ấy lên đường dẫn", async () => {
+    const gia = batFetch(traJSON(201, {}));
+    await tachKetLuanThanhNhiemVu("01JBB", ketLuan({ ordinal: 47 }), THAN_TACH, "k");
+
+    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/meetings/01JBB/conclusions/47/task");
+  });
+
+  it("mã hoá id biên bản vào đường dẫn thay vì ghép thẳng", async () => {
+    const gia = batFetch(traJSON(201, {}));
+    await tachKetLuanThanhNhiemVu("01J BB/2026", ketLuan(), THAN_TACH, "k");
+
+    expect(loiGoi(gia, 0).duongDan).toBe(
+      "/api/v1/meetings/01J%20BB%2F2026/conclusions/3/task",
+    );
+  });
+
+  it("KHÔNG gửi `source`/`source_id` — cặp nguồn giao là của máy chủ, suy từ đường dẫn", async () => {
+    // Biểu mẫu dùng chung khai kiểu `petitions_taoNhiemVuVao`, kiểu ấy CÓ hai trường này, và
+    // TypeScript cho gán sang `TachKetLuanVao` vì nó chỉ thừa chứ không thiếu. Nếu hàm trải
+    // `...than` thì hai trường ấy lên dây, và §3 nói ô "Nguồn giao" là ô KHOÁ.
+    const gia = batFetch(traJSON(201, {}));
+    const thanCoThua = {
+      ...THAN_TACH,
+      source: "tu-nhap",
+      source_id: "01JMOT-BAN-GHI-KHAC",
+    } as TachKetLuanVao;
+
+    await tachKetLuanThanhNhiemVu("01JBB", ketLuan(), thanCoThua, "k");
+
+    const than = JSON.parse(String(loiGoi(gia, 0).tuyChon.body)) as Record<string, unknown>;
+    expect(than).not.toHaveProperty("source");
+    expect(than).not.toHaveProperty("source_id");
+    expect(than).not.toHaveProperty("tenant_id");
+  });
+
+  it("trường bỏ trống thì VẮNG khỏi thân, không thành chuỗi rỗng", async () => {
+    // `due_at` là con trỏ ở máy chủ và "không có hạn" là một trạng thái thật. Một chuỗi rỗng ở đây
+    // là một mốc thời gian không phân giải được, tức 400 thay vì một nhiệm vụ không hạn.
+    const gia = batFetch(traJSON(201, {}));
+    await tachKetLuanThanhNhiemVu("01JBB", ketLuan(), THAN_TACH, "k");
+
+    const than = JSON.parse(String(loiGoi(gia, 0).tuyChon.body)) as Record<string, unknown>;
+    expect(Object.keys(than).sort()).toEqual(["auto_code", "title", "type"]);
+  });
+
+  it("mang `Idempotency-Key`, và lần bấm lại dùng LẠI đúng khoá ấy", async () => {
+    // Hai lần bấm Tách không được sinh hai nhiệm vụ: lần gửi đầu CÓ THỂ đã cấp một số sổ.
+    const gia = batFetch(traJSON(500, { code: "internal", message: "Đã xảy ra lỗi." }));
+
+    await tachKetLuanThanhNhiemVu("01JBB", ketLuan(), THAN_TACH, "k-cua-lan-mo-nay");
+    await tachKetLuanThanhNhiemVu("01JBB", ketLuan(), THAN_TACH, "k-cua-lan-mo-nay");
+
+    expect(loiGoi(gia, 0).header.get("Idempotency-Key")).toBe("k-cua-lan-mo-nay");
+    expect(loiGoi(gia, 1).header.get("Idempotency-Key")).toBe("k-cua-lan-mo-nay");
+  });
+
+  it("404 của máy chủ ra nguyên văn — kết luận không có thì nói đúng câu ấy", async () => {
+    batFetch(
+      traJSON(404, {
+        code: "not_found",
+        message: "Không tìm thấy kết luận này trong biên bản.",
+      }),
+    );
+
+    const kq = await tachKetLuanThanhNhiemVu("01JBB", ketLuan(), THAN_TACH, "k");
+    expect(kq.ok).toBe(false);
+    if (!kq.ok) expect(kq.thongBao).toBe("Không tìm thấy kết luận này trong biên bản.");
+  });
+
+  it("201 thì đọc thân thành nhiệm vụ — SỐ SỔ là thứ bên gọi không biết trước", async () => {
+    batFetch(traJSON(201, { code: "NV12", title: "Đối chiếu số liệu giải ngân." }));
+
+    const kq = await tachKetLuanThanhNhiemVu("01JBB", ketLuan(), THAN_TACH, "k");
+    expect(kq.ok).toBe(true);
+    if (kq.ok) expect(kq.duLieu.code).toBe("NV12");
+  });
+});
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * SO VỚI HỢP ĐỒNG — đọc thẳng `kb/20-contracts/openapi.json`
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
@@ -218,7 +334,50 @@ describe("thân yêu cầu khớp hợp đồng — canh bản chép tay của `
     );
   });
 
-  it("ba tuyến vẫn đứng sau `task.read` / `task.create` như màn đang giả định", () => {
+  it("`POST …/{stt}/task` gửi ĐÚNG bộ trường của `petitions.tachKetLuanVao`", async () => {
+    const luocDo = hopDong().components.schemas["petitions.tachKetLuanVao"];
+    expect(luocDo).toBeDefined();
+
+    // Thân đầy đủ: mọi trường tuỳ chọn đều có giá trị, nên bộ key gửi đi phải trùng KHÍT bộ key
+    // của hợp đồng. Thừa một trường là gửi thứ máy chủ không nhận — và ở tuyến này, thừa `source`
+    // là đúng thứ §3 khoá lại.
+    const thanDayDu: TachKetLuanVao = {
+      code: "NV99",
+      auto_code: false,
+      type: "theo-van-ban",
+      bloc: "kinh-te",
+      title: "Đối chiếu số liệu giải ngân sáu tháng đầu năm.",
+      description: "Theo kết luận ③ của biên bản giao ban tháng 8.",
+      priority: "cao",
+      unit: "01JBOPHAN",
+      assignee: "CB-2026-7K3M9Q",
+      assigner: "CB-2026-1A2B3C",
+      lead_unit: "01JBOPHAN2",
+      monitor: "CB-2026-9Z8Y7X",
+      due_at: "2026-08-20T16:59:59Z",
+      parent: "01JNV-CHA",
+    };
+
+    const keys = await keyDaGui(() =>
+      tachKetLuanThanhNhiemVu(
+        "01JBB",
+        {
+          id: "01JKL3",
+          ordinal: 3,
+          content: "x",
+          task_count: 0,
+          task_done_count: 0,
+          created_at: "2026-08-05T02:00:00Z",
+        },
+        thanDayDu,
+        "k",
+      ),
+    );
+
+    expect(keys).toEqual(Object.keys(luocDo?.properties ?? {}).sort());
+  });
+
+  it("bốn tuyến vẫn đứng sau `task.read` / `task.create` như màn đang giả định", () => {
     // MÀN NÀY KHÔNG CÓ CỔNG QUYỀN Ở CLIENT (xem `PHAN_CHUA_DUNG`), nên không có hằng nào trong
     // `lib/quyen.ts` để canh. Bài kiểm này là chỗ duy nhất phát hiện được ngày máy chủ tách một
     // khoá `meeting.*` riêng — hôm ấy `PHAN_CHUA_DUNG` và thanh menu đều phải sửa theo.
@@ -227,6 +386,9 @@ describe("thân yêu cầu khớp hợp đồng — canh bản chép tay của `
     expect(p["/api/v1/meetings"]?.["post"]?.["x-vigov-permission"]?.key).toBe("task.create");
     expect(
       p["/api/v1/meetings/{id}/conclusions"]?.["post"]?.["x-vigov-permission"]?.key,
+    ).toBe("task.create");
+    expect(
+      p["/api/v1/meetings/{id}/conclusions/{stt}/task"]?.["post"]?.["x-vigov-permission"]?.key,
     ).toBe("task.create");
   });
 });
