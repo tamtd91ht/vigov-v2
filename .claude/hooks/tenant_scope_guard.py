@@ -49,12 +49,47 @@ DB_CALL = re.compile(
 # request's headers behind a scoped repository — advice that cannot be followed. The author's
 # only way forward is to turn the hook off, and rule 1's only BLOCK goes with it.
 #
-# Not covered on purpose: `url.Values.Get` reached through a local variable (`q := r.URL.Query()`
-# then `q.Get("x")`). The receiver is gone by then, and widening to bare `q.Get(` would swallow
-# every single-letter repository handle in the codebase.
+# ĐI QUA MỘT BIẾN CỤC BỘ THÌ NAY CŨNG ĐƯỢC MIỄN — nhưng chỉ ĐÚNG TÊN BIẾN ĐÃ ĐƯỢC GÁN, không
+# phải mọi `x.Get(`. Xem `bien_query()` bên dưới.
+#
+# Bản trước ghi "cố ý không phủ", với lý do đúng: nới thành `q.Get(` trần sẽ nuốt mọi tay cầm kho
+# dữ liệu một chữ cái trong kho mã. Nhưng cái giá của việc KHÔNG phủ đã đo được ngày 23/09/2026:
+# `thamSo := r.URL.Query()` rồi `thamSo.Get("year")` là KHUÔN NHÀ của kho này — `du_an.go:199`
+# viết thế từ trước, và cả `service-documents` lẫn `service-finance` đều theo. Nên hook tố cáo
+# một lần sửa vô can ở gần như mọi tệp `internal/http`, và một lần nó còn CHẶN PreToolUse một
+# thay đổi đang đi ĐÚNG khuôn ấy.
+#
+# ĐÓ LÀ CÁCH MỘT LỜI KHAI QUYỀN THIẾU THẬT BỊ BỎ QUA. Một cổng kêu oan ở chỗ vô hại dạy người đọc
+# lướt qua nó — rồi lướt qua cả lần nó kêu đúng. Lớp lỗi ấy đắt hơn hẳn lỗ hổng nó để lại.
 KHONG_PHAI_KHO = re.compile(
     r"\.\s*(?:Header|Trailer|Form|PostForm|MultipartForm|Cookie|Values|"
     r"(?:URL\s*\.\s*)?Query\s*\(\s*\))\s*\.\s*Get\s*\(")
+
+# `r.URL.Query()` ĐỨNG MỘT MÌNH cũng không phải một lời gọi kho — nó chỉ lấy bảng tham số ra.
+# Thiếu dòng này thì chính phép gán mở đầu mọi handler đọc (`thamSo := r.URL.Query()`) bị báo là
+# "truy vấn không có phạm vi xã", và lời khuyên kèm theo — đưa nó qua một kho đã gắn xã — không
+# ai làm theo được.
+LAY_BANG_THAM_SO = re.compile(r"\.\s*URL\s*\.\s*Query\s*\(\s*\)")
+
+# Tên biến được gán từ `r.URL.Query()` / `.Query()` — bắt cả `q := …` lẫn `var q = …`.
+#
+# HẸP CÓ CHỦ Ý: chỉ miễn cho ĐÚNG những tên tìm thấy trong chính nội dung đang chấm. Một tay cầm
+# kho dữ liệu tên `q` ở một tệp khác không hề được miễn, vì tệp ấy không có dòng gán nào.
+GAN_QUERY = re.compile(
+    r"(?:var\s+)?([A-Za-z_]\w*)\s*(?::=|=)\s*[A-Za-z_]\w*\s*(?:\.\s*URL)?\s*\.\s*Query\s*\(\s*\)")
+
+
+def bien_query(content: str):
+    """Biểu thức khớp `<tên>.Get(` cho những tên THẬT SỰ giữ `url.Values` trong nội dung này.
+
+    Trả `None` khi không có tên nào — để chỗ gọi khỏi phải dựng một biểu thức không bao giờ khớp.
+    """
+    ten = {m.group(1) for m in GAN_QUERY.finditer(content)}
+    if not ten:
+        return None
+    return re.compile(
+        r"\b(?:" + "|".join(re.escape(x) for x in sorted(ten)) + r")\s*\.\s*Get\s*\(")
+
 
 # The RIGHT path — a repository already scoped from context
 SCOPED_OK = re.compile(
@@ -217,7 +252,7 @@ def hang_sql_co_tenant(content: str) -> set[str]:
     return {m.group(1) for m in CONST_SQL.finditer(content) if "tenant_id" in m.group(2)}
 
 
-def chi_la_doc_http(line: str) -> bool:
+def chi_la_doc_http(line: str, qua_bien=None) -> bool:
     """True when EVERY store-looking call on this line is really HTTP request plumbing.
 
     Span-based, not "the line contains a header read": a line holding both an unscoped query
@@ -229,6 +264,12 @@ def chi_la_doc_http(line: str) -> bool:
     if not goi:
         return False
     vung = [m.span() for m in KHONG_PHAI_KHO.finditer(line)]
+    vung += [m.span() for m in LAY_BANG_THAM_SO.finditer(line)]
+    # `qua_bien` MỞ RỘNG TẬP MIỄN THEO ĐÚNG TÊN, không theo hình dạng: nó do `bien_query()` dựng
+    # từ chính nội dung đang chấm. Phép span ở dưới giữ nguyên, nên một dòng VỪA đọc tham số VỪA
+    # gọi kho vẫn bị báo — miễn trừ không thành chỗ giấu một truy vấn.
+    if qua_bien is not None:
+        vung += [m.span() for m in qua_bien.finditer(line)]
     return all(any(a <= m.start() and m.end() <= b for a, b in vung) for m in goi)
 
 
@@ -236,12 +277,13 @@ def scan(content: str) -> list[str]:
     hits: list[str] = []
     lines = content.splitlines()
     hang_tenant = hang_sql_co_tenant(content)
+    qua_bien = bien_query(content)
 
     for i, line in enumerate(lines):
         # Filters often wrap across lines — look at a small window around the call
         ctx = "\n".join(lines[max(0, i - 2): i + 4])
 
-        if DB_CALL.search(line) and not chi_la_doc_http(line):
+        if DB_CALL.search(line) and not chi_la_doc_http(line, qua_bien):
             if not (SCOPED_OK.search(ctx) or HAS_TENANT.search(ctx)
                     or any(ten in ctx for ten in hang_tenant)
                     or ESCAPE.search(khoi_chu_thich_tren(lines, i))):

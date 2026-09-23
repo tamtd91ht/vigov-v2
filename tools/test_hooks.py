@@ -104,6 +104,25 @@ CASES = [
     ("tenant_scope_guard", "goes through a scoped repository", PASS,
      w("donthu/internal/app/list.go",
        "func (s *Svc) List(ctx context.Context) {\n\trepo := s.scoped(ctx)\n\trows, err := repo.Find(ctx, filter)\n}")),
+    # KHUÔN NHÀ ĐỌC THAM SỐ TRUY VẤN — `thamSo := r.URL.Query()` rồi `thamSo.Get("year")`.
+    #
+    # Trước 23/09/2026 hook báo CẢ HAI dòng là "truy vấn không có phạm vi xã", ở gần như mọi tệp
+    # `internal/http` của kho, và một lần còn CHẶN PreToolUse một thay đổi đang đi ĐÚNG khuôn ấy.
+    # Một cổng kêu oan ở chỗ vô hại dạy người đọc lướt qua nó — rồi lướt qua cả lần nó kêu đúng.
+    ("tenant_scope_guard", "đọc tham số truy vấn qua biến cục bộ", PASS,
+     w("donthu/internal/http/list.go",
+       "func (h *H) List(w http.ResponseWriter, r *http.Request) {\n"
+       "\tthamSo := r.URL.Query()\n\tnam := thamSo.Get(\"year\")\n\t_ = nam\n}")),
+    # VẾ ĐỐI XỨNG, và nó là thứ giữ cho miễn trừ trên khỏi thành một lỗ: miễn trừ chỉ áp cho ĐÚNG
+    # tên biến được gán từ `r.URL.Query()` TRONG CHÍNH nội dung ấy. Một tay cầm kho dữ liệu cũng
+    # tên `q` thì KHÔNG được miễn.
+    #
+    # Ca này chuyển sang PASS nghĩa là miễn trừ đã nới theo HÌNH DẠNG thay vì theo TÊN — và lúc ấy
+    # mọi `q.Get(` trong kho đi qua trong im lặng, gồm cả những lần đọc kho thật.
+    ("tenant_scope_guard", "biến tên q nhưng KHÔNG gán từ Query", BLOCK,
+     w("donthu/internal/store/doc.go",
+       "func (s *Svc) Doc(ctx context.Context, id string) error {\n"
+       "\tq := s.repo\n\treturn q.Get(&x, \"SELECT * FROM don_thu WHERE id = $1\", id)\n}")),
     ("tenant_scope_guard", "single-column unique key", BLOCK,
      w("donthu/internal/store/schema.go",
        "// UNIQUE (code)\nconst ddl = `CREATE TABLE don_thu (code text, UNIQUE (code))`")),
