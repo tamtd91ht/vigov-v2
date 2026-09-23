@@ -16,7 +16,7 @@ package http
 // # THE PERMISSION, AND THE PART OF IT THAT IS A STOP CONDITION
 //
 // §9.1 names the key for composing and issuing: `announcement.create`. It EXISTS and is seeded —
-// service-identity/migrations/0001_init.sql:279, group `THÔNG BÁO`, "Soạn và gửi thông báo" — so
+// service-identity/migrations/0001_init.sql:286, group `THÔNG BÁO`, "Soạn và gửi thông báo" — so
 // the write route below is guarded by the key the specification itself names, and no key was
 // invented (rule 5, invariant 3c).
 //
@@ -67,7 +67,7 @@ import (
 )
 
 // QuyenThongBao guards both routes. It is `announcement.create`, seeded at
-// service-identity/migrations/0001_init.sql:279, and NOT a `announcement.read` key — which does not
+// service-identity/migrations/0001_init.sql:286, and NOT a `announcement.read` key — which does not
 // exist in the `quyen` table and is not invented here (rule 5, invariant 3c). See the note at the
 // top for what that costs and what it is waiting on.
 //

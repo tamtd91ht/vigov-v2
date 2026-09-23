@@ -414,7 +414,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// --- the commune issues an announcement to named staff ---------------------------------------
 	//
 	// `announcement.create` IS THE KEY THE SPECIFICATION ITSELF NAMES — §9.1, "Quyền soạn & phát
-	// hành: announcement.create" — and it is seeded at service-identity/migrations/0001_init.sql:279,
+	// hành: announcement.create" — and it is seeded at service-identity/migrations/0001_init.sql:286,
 	// so a commune administrator can actually tick it. NO NEW KEY WAS INVENTED (rule 5, invariant
 	// 3c): a key no migration seeds is a right nobody can grant, so the route would answer 403 to
 	// every account forever while the tests stayed green.

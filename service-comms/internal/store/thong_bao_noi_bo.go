@@ -17,8 +17,23 @@ package store
 //  2. NOTHING HERE OPENS A TRANSACTION. The write methods take a *store.ScopedTx, because the
 //     audit entry has to share it (rule 6, invariant 3) and a method that opened its own would
 //     make that impossible for its caller. internal/app opens it.
-//  3. EVERY READ OF `thong_bao` EXCLUDES SOFT-DELETED ROWS (rule 7, invariant 2) — including the
-//     counter read, which joins nothing and therefore has to carry the predicate itself.
+//  3. EVERY READ OF `thong_bao` EXCLUDES SOFT-DELETED ROWS (rule 7, invariant 2).
+//
+//     ⚠ AND THE COUNTER READ IS SAFE BY A DIFFERENT MECHANISM — this clause used to end "…
+//     including the counter read, which joins nothing and therefore has to carry the predicate
+//     itself", and both halves of that were false (measured 24/09/2026). `cauDemNguoiNhan` does
+//     not read `thong_bao` at all; it reads `thong_bao_nguoi_nhan`, which DELIBERATELY has no
+//     soft-delete column (0005_thong_bao_noi_bo.sql:423-429), so it could not carry the predicate
+//     even if it wanted to. What keeps it correct is that the id list it is handed comes from
+//     QueryPage, which already filtered `deleted_at IS NULL` — a deleted announcement is never
+//     present to be counted.
+//
+//     WHY THE DISTINCTION IS WORTH THESE LINES: the `Gửi cho tôi` filter still owed by §2 is a
+//     JOIN from `thong_bao_nguoi_nhan` back to `thong_bao`. Whoever writes it reads this block
+//     first. Believing the old sentence, they would write a read that carries soft-deleted rows —
+//     an announcement the commune has withdrawn from the register still sitting in a staff
+//     member's bell. ANY read that touches `thong_bao_nguoi_nhan` WITHOUT going through an
+//     already-filtered page must join `thong_bao` and carry `deleted_at IS NULL` itself.
 //  4. EVERY VALUE IS A BOUND PARAMETER. The multi-row inserts generate `$n` placeholders from the
 //     COUNT of their input and bind the values; nothing from a request is concatenated into SQL.
 //
