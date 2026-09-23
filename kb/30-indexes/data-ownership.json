@@ -89,6 +89,13 @@
       "source": "service-comms/migrations/0003_danh_muc_loai_tai_nguyen_ban_do.sql:205"
     },
     {
+      "entity": "OutboxEvent",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "su_kien_di",
+      "source": "service-petitions/migrations/0005_duong_xu_ly_phan_anh.sql:126"
+    },
+    {
       "entity": "OutgoingDocument",
       "service": "documents",
       "scope": "tenant",

@@ -16,6 +16,10 @@ __pycache__/
 /bin/
 /dist/
 vendor/
+# Nhị phân dựng tại chỗ. `go run ./tools/apidoc` trên Windows để lại `tools/apidoc.exe` ngay
+# cạnh mã nguồn — không phải tệp ai viết, và commit nó là commit một tệp nhị phân 8 MB mà lần
+# dựng sau đã khác.
+*.exe
 
 # Generated from .proto — run `make proto`.
 # Nằm trong core/ vì mã sinh từ proto là HỢP ĐỒNG dùng chung, cùng tầng với core;

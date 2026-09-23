@@ -8,7 +8,7 @@
 # VÌ SAO KHÔNG CÒN MỘT DÒNG `/api/v1` → identity: dòng ấy đúng 100% vào ngày nó được
 # viết, khi mọi tài nguyên REST đều thuộc identity. Nay hợp đồng có
 #
-#     32 tuyến của 5 dịch vụ — identity 17 · petitions 7 · finance 4 · comms 2 · documents 2
+#     57 tuyến của 5 dịch vụ — identity 28 · petitions 12 · finance 8 · documents 7 · comms 2
 #
 # nên dòng gộp ấy đưa mọi tuyến không phải của identity tới identity và trả 404 — 404
 # trên một tuyến hành chính thật. Chủ dự án chốt lối (b), SINH Ingress từ openapi.json,
@@ -18,7 +18,7 @@
 # (deploy/overlays/<mt>/ingress-moi-truong.yaml). Bảng định tuyến thì giống nhau ở mọi
 # môi trường nên nó thuộc base — đúng ranh giới base/overlay kho này đang dùng.
 #
-# 20 luật định tuyến cho 32 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
+# 24 luật định tuyến cho 57 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -78,12 +78,27 @@ spec:
               service:
                 name: finance
                 port: { name: rest }
+          # documents — 3 tuyến: /api/v1/incoming-documents · /api/v1/incoming-documents/{id}
+          #   /api/v1/incoming-documents/{id}/routings
+          - path: /api/v1/incoming-documents
+            pathType: Prefix
+            backend:
+              service:
+                name: documents
+                port: { name: rest }
           # petitions — 2 tuyến: /api/v1/my-citizen-reports · /api/v1/my-citizen-reports/{maTraCuu}
           - path: /api/v1/my-citizen-reports
             pathType: Prefix
             backend:
               service:
                 name: petitions
+                port: { name: rest }
+          # documents — 2 tuyến: /api/v1/outgoing-documents · /api/v1/outgoing-documents/{id}
+          - path: /api/v1/outgoing-documents
+            pathType: Prefix
+            backend:
+              service:
+                name: documents
                 port: { name: rest }
           # identity — 1 tuyến: /api/v1/residential-units
           - path: /api/v1/residential-units
@@ -92,7 +107,7 @@ spec:
               service:
                 name: identity
                 port: { name: rest }
-          # identity — 1 tuyến: /api/v1/swap-working-days
+          # identity — 2 tuyến: /api/v1/swap-working-days · /api/v1/swap-working-days/{id}
           - path: /api/v1/swap-working-days
             pathType: Prefix
             backend:
@@ -106,7 +121,10 @@ spec:
               service:
                 name: identity
                 port: { name: rest }
-          # petitions — 1 tuyến: /api/v1/citizen-reports/{maTraCuu}
+          # petitions — 6 tuyến: /api/v1/citizen-reports · /api/v1/citizen-reports/{maTraCuu}
+          #   /api/v1/citizen-reports/{maTraCuu}/assignment
+          #   /api/v1/citizen-reports/{maTraCuu}/classification
+          #   /api/v1/citizen-reports/{maTraCuu}/closure · /api/v1/citizen-reports/{maTraCuu}/status
           - path: /api/v1/citizen-reports
             pathType: Prefix
             backend:
@@ -120,7 +138,8 @@ spec:
               service:
                 name: comms
                 port: { name: rest }
-          # identity — 1 tuyến: /api/v1/public-holidays
+          # identity — 3 tuyến: /api/v1/public-holidays · /api/v1/public-holidays/defaults
+          #   /api/v1/public-holidays/{id}
           - path: /api/v1/public-holidays
             pathType: Prefix
             backend:
@@ -141,7 +160,16 @@ spec:
               service:
                 name: documents
                 port: { name: rest }
-          # identity — 1 tuyến: /api/v1/working-hours
+          # finance — 4 tuyến: /api/v1/disbursements · /api/v1/disbursements/{id}
+          #   /api/v1/disbursements/{id}/confirmation · /api/v1/disbursements/{id}/lockout
+          - path: /api/v1/disbursements
+            pathType: Prefix
+            backend:
+              service:
+                name: finance
+                port: { name: rest }
+          # identity — 3 tuyến: /api/v1/working-hours · /api/v1/working-hours/defaults
+          #   /api/v1/working-hours/{id}
           - path: /api/v1/working-hours
             pathType: Prefix
             backend:
@@ -190,9 +218,17 @@ spec:
               service:
                 name: identity
                 port: { name: rest }
-          # identity — 4 tuyến: /api/v1/staff · /api/v1/staff/{id} · /api/v1/staff/{id}/lockout
+          # identity — 7 tuyến: /api/v1/staff · /api/v1/staff/current/password · /api/v1/staff/{id}
+          #   /api/v1/staff/{id}/account · /api/v1/staff/{id}/lockout · /api/v1/staff/{id}/password
           #   /api/v1/staff/{id}/role
           - path: /api/v1/staff
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+          # identity — 3 tuyến: /api/v1/sla · /api/v1/sla/defaults · /api/v1/sla/{id}
+          - path: /api/v1/sla
             pathType: Prefix
             backend:
               service:
