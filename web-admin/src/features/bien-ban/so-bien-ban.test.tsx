@@ -5,7 +5,6 @@ import type { petitions_bienBanRa, petitions_ketLuanRa } from "@/lib/api/schema.
 
 import {
   cauDaTach,
-  CHUA_DIEN_SAN,
   CHUA_TACH_NHIEM_VU,
   NGUON_GIAO_KHOA,
   NHAN_NUT_LUU,
@@ -248,17 +247,28 @@ describe("nút `✂ Tách thành nhiệm vụ` §3", () => {
     expect(html).toContain("giao-han");
   });
 
-  it("hộp mở thì nói ra ba điều: kết luận gốc, nguồn giao KHOÁ, và ô chưa điền sẵn", () => {
+  it("hộp mở thì kết luận gốc Ở LẠI dù ô đã điền sẵn, và nguồn giao là câu KHOÁ", () => {
     const html = veDong(
       ketLuan({ id: "k7", ordinal: 3, content: "Giao Tài chính đối chiếu số liệu." }),
       phepTach({ moOKetLuan: "k7" }),
     );
 
-    // Nội dung kết luận đứng ngay trên biểu mẫu — đó là chỗ cán bộ chép từ, vì ô "Nội dung nhiệm
-    // vụ" chưa điền sẵn được.
+    // KẾT LUẬN GỐC PHẢI CÒN, và lý do đã ĐỔI kể từ 24/09/2026. Trước: ô "Nội dung nhiệm vụ" chưa
+    // điền sẵn được nên đây là chỗ chép từ. Nay `tieuDeCoSan` đã điền sẵn — nhưng ô ấy là thứ cán
+    // bộ SẼ SỬA thành một câu giao việc đọc được, nên câu gốc phải còn để đối chiếu. Xoá nó đi thì
+    // sau lần sửa đầu tiên không còn chỗ nào trên màn nói kết luận ban đầu viết gì.
     expect(html).toContain("Giao Tài chính đối chiếu số liệu.");
     expect(html).toContain(nhuTrongHTML(NGUON_GIAO_KHOA));
-    expect(html).toContain(nhuTrongHTML(CHUA_DIEN_SAN));
+    // Ô ĐÃ ĐIỀN SẴN: nội dung kết luận có mặt TRONG chính thuộc tính `value` của ô nhập, không chỉ
+    // ở câu nhắc phía trên. So cả `id="giao-tieu-de"` để phép so không xanh nhờ câu nhắc ấy —
+    // cùng chuỗi, hai chỗ, và chỉ một trong hai là thứ ca này canh.
+    // Cắt từ `id="giao-tieu-de"` tới dấu đóng thẻ rồi mới so, thay vì ghim nguyên một chuỗi thẻ:
+    // thứ tự thuộc tính do React quyết và nó đổi được mà không ai đụng vào màn này — một ca ghim
+    // thứ tự sẽ đỏ vì lý do sai, và lần đỏ vì lý do sai đầu tiên là lần người ta bắt đầu bỏ qua nó.
+    const o = html.slice(html.indexOf('id="giao-tieu-de"'));
+    expect(o.slice(0, o.indexOf("/>"))).toContain(
+      'value="Giao Tài chính đối chiếu số liệu."',
+    );
   });
 
   it("câu từ chối của máy chủ hiện NGUYÊN VĂN, và chỉ trên dòng kết luận bị từ chối", () => {

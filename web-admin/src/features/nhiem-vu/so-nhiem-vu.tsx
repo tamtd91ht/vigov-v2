@@ -1409,6 +1409,7 @@ export function FormGiaoViec({
   huy,
   giaoViec,
   maChaCoSan,
+  tieuDeCoSan,
 }: {
   danhMuc: DanhMucNhiemVu;
   dangGui: boolean;
@@ -1417,13 +1418,26 @@ export function FormGiaoViec({
   giaoViec: (than: petitions_taoNhiemVuVao, khoaChongTrung: string) => void;
   /** Id nội bộ của việc cha, khi có. Hôm nay KHÔNG BAO GIỜ có — xem `PHAN_CHUA_DUNG`. */
   maChaCoSan?: string;
+  /**
+   * Điền sẵn ô `Nội dung nhiệm vụ` — `04-bien-ban-hop.md` §3, khi biểu mẫu này mở từ một kết
+   * luận họp. Rỗng hoặc vắng là không điền.
+   *
+   * MỘT PROP THÊM VÀO, KHÔNG PHẢI MỘT BIỂU MẪU THỨ HAI. Màn Biên bản dùng LẠI chính biểu mẫu
+   * này (`features/bien-ban/so-bien-ban.tsx`); chép một bản sang bên ấy sẽ điền sẵn được ngay
+   * và sẽ là hai biểu mẫu cùng gửi một tuyến — ngày một bên thêm trường thì bên kia vẫn xanh
+   * (luật 9, cấm #2). Ba dòng ở đây rẻ hơn hẳn cái giá ấy.
+   *
+   * CHỈ LÀ GIÁ TRỊ BAN ĐẦU, không phải một ô khoá: §3 muốn cán bộ sửa lại câu kết luận thành
+   * một câu giao việc đọc được, chứ không chép nguyên văn.
+   */
+  tieuDeCoSan?: string;
 }) {
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
   const [tuSinhMa, datTuSinhMa] = useState(true);
   const [ma, datMa] = useState("");
   const [loai, datLoai] = useState("");
   const [khoi, datKhoi] = useState("");
-  const [tieuDe, datTieuDe] = useState("");
+  const [tieuDe, datTieuDe] = useState(tieuDeCoSan ?? "");
   const [moTa, datMoTa] = useState("");
   const [mucUuTien, datMucUuTien] = useState("");
   const [boPhan, datBoPhan] = useState("");

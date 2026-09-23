@@ -34,7 +34,6 @@ import type {
 
 import {
   cauDaTach,
-  CHUA_DIEN_SAN,
   DANG_TAI_SO,
   DIA_DIEM_TOI_DA,
   dongMeta,
@@ -568,13 +567,13 @@ export function DongKetLuan({
         // trái, còn ở 320px thì mỗi lớp hộp lồng nhau ăn thêm 2rem bề ngang: thẻ biên bản 1rem +
         // hộp này 1rem + biểu mẫu 1rem chỉ còn lại 224px cho chữ.
         <div>
-          {/* KẾT LUẬN GỐC ĐỨNG NGAY TRÊN BIỂU MẪU, và đó không phải trang trí: ô "Nội dung nhiệm
-              vụ" chưa điền sẵn được, nên đây là chỗ cán bộ chép từ. */}
+          {/* KẾT LUẬN GỐC ĐỨNG NGAY TRÊN BIỂU MẪU, và nó Ở LẠI kể cả khi ô đã tự điền: ô kia là
+              thứ cán bộ SẼ SỬA thành một câu giao việc đọc được, nên câu gốc phải còn để đối
+              chiếu. §3 muốn một nhiệm vụ đọc được, không phải một bản chép nguyên văn. */}
           <p>
             <span className="chip">{soThuTuKetLuan(ketLuan)}</span> {ketLuan.content}
           </p>
           <p className="ghi-chu">{NGUON_GIAO_KHOA}</p>
-          <p className="ghi-chu">{CHUA_DIEN_SAN}</p>
 
           {/* DÙNG LẠI NGUYÊN BIỂU MẪU CỦA `02-nhiem-vu.md` §7 — §3 nói rõ là dùng lại, và một bản
               thứ hai ở đây là hai biểu mẫu cùng gửi một tuyến rồi trôi khỏi nhau (luật 9, cấm #2).
@@ -588,6 +587,7 @@ export function DongKetLuan({
             giaoViec={(than, khoaChongTrung) =>
               tach.gui(bienBanID, ketLuan, than, khoaChongTrung)
             }
+            tieuDeCoSan={ketLuan.content}
           />
         </div>
       )}

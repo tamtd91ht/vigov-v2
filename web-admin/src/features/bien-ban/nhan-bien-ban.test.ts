@@ -149,18 +149,26 @@ describe("phần chưa dựng được", () => {
   });
 
   /**
-   * CA NÀY TRƯỚC ĐÒI "nút `Tách thành nhiệm vụ` nằm trong danh sách". Nó đúng cho tới 24/09/2026,
-   * khi biểu mẫu "Giao việc mới" chưa có. Nút nay đã dựng; thứ còn thiếu là bảng ĐIỀN SẴN của §3.
-   * Ca đổi theo hành vi chứ không bị gỡ: nếu một ngày ai đó dựng nốt phần điền sẵn mà quên xoá mục
-   * này, hoặc ngược lại xoá mục mà chưa dựng, thì đúng ca này đỏ.
+   * CA NÀY ĐÃ ĐỔI HAI LẦN TRONG MỘT NGÀY, và cả hai lần đều đổi theo HÀNH VI chứ không bị gỡ:
+   *
+   *   bản 1  đòi "nút `Tách thành nhiệm vụ`" nằm trong danh sách — đúng tới khi nút được dựng
+   *   bản 2  đòi "ĐIỀN SẴN" nằm trong danh sách — đúng được vài giờ, tới khi `tieuDeCoSan` ra đời
+   *   bản 3  (đây) đòi HẠN GỢI Ý, và đòi lý do nói rõ đó là CÂU CHỜ KHÁCH chứ không phải việc nợ
+   *
+   * Nhịp ấy chính là điều ca này tồn tại để giữ: mỗi lần một mảnh §3 được dựng, danh sách
+   * chưa-dựng-được phải co lại theo. Ai dựng nốt hạn gợi ý mà quên xoá mục này, hoặc xoá mục mà
+   * chưa dựng, thì đúng ca này đỏ.
    */
-  it("thứ CÒN THIẾU của §3 là ĐIỀN SẴN, và lý do nêu đúng chỗ không sửa được lượt này", () => {
-    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("ĐIỀN SẴN"));
+  it("thứ CÒN THIẾU của §3 là HẠN GỢI Ý, và lý do nói rõ đó là câu chờ khách", () => {
+    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("HẠN GỢI Ý"));
 
     expect(muc).toBeDefined();
-    // Lý do phải chỉ ĐÍCH DANH biểu mẫu dùng chung: người đọc sau cần biết sửa ở đâu, và biết vì
-    // sao không được chép nó sang đây.
-    expect(muc?.viSao).toContain("FormGiaoViec");
-    expect(muc?.viSao).toContain("features/nhiem-vu/so-nhiem-vu.tsx");
+    // ĐIỀN SẴN đã dựng xong (`tieuDeCoSan`), nên nó KHÔNG được còn nằm trong danh sách như một
+    // thứ chưa có — một danh sách kể tên thứ đã dựng là danh sách khiến người sau dựng lần hai.
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("ĐIỀN SẴN"))).toBe(false);
+    // Lý do phải dẫn ĐÚNG CHỖ máy chủ đã từ chối tự suy ngày, kèm số đo. Thiếu nó thì mục này
+    // đọc ra như một việc chưa ai làm, và người sau sẽ làm — ở client, nơi không ai kiểm được.
+    expect(muc?.viSao).toContain("bien_ban_hop_ghi.go");
+    expect(muc?.viSao).toContain("ba trên bốn lần");
   });
 });

@@ -93,15 +93,6 @@ export function nhanNutTach(kl: petitions_ketLuanRa): string {
  */
 export const NGUON_GIAO_KHOA = "Nguồn giao: Từ kết luận họp — khoá, không sửa được";
 
-/**
- * Câu nói ra rằng ô "Nội dung nhiệm vụ" KHÔNG được điền sẵn, và chỉ chỗ chép.
- *
- * Nói thẳng thay vì để cán bộ mở biểu mẫu ra thấy ô trống rồi tự hỏi mình bấm nhầm chỗ nào.
- */
-export const CHUA_DIEN_SAN =
-  "Ô “Nội dung nhiệm vụ” chưa tự điền sẵn — chép nội dung kết luận ở ngay trên. Xem phần chưa " +
-  "dựng được ở đầu màn.";
-
 /** Câu báo đã tách xong. Mang SỐ SỔ máy chủ vừa cấp — thứ cán bộ không thể biết trước. */
 export function cauDaTach(maNhiemVu: string): string {
   return `Đã tách thành nhiệm vụ ${maNhiemVu}.`;
@@ -236,17 +227,17 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Dữ liệu ĐIỀN SẴN của biểu mẫu Tách (§3) — nút thì đã dựng",
+    ten: "HẠN GỢI Ý của biểu mẫu Tách (§3) — nút và điền sẵn thì đã dựng",
     viSao:
-      "Nút `✂ Tách thành nhiệm vụ` NAY ĐÃ CÓ và mở đúng biểu mẫu “Giao việc mới” của " +
-      "`02-nhiem-vu.md` §7, dùng lại nguyên `FormGiaoViec` chứ không dựng bản thứ hai. Thứ CHƯA " +
-      "có là bảng điền sẵn của §3: nội dung kết luận vào ô “Nội dung nhiệm vụ”, và hạn gợi ý từ " +
-      "ngày nêu trong câu kết luận (`báo cáo trước ngày 20/8` → 20/8). Biểu mẫu ấy giữ từng ô " +
-      "bằng `useState(\"\")` của chính nó và KHÔNG nhận giá trị ban đầu từ ngoài, nên điền sẵn đòi " +
-      "thêm một prop vào `features/nhiem-vu/so-nhiem-vu.tsx` — tệp lượt này không được ghi. Chép " +
-      "biểu mẫu sang đây để điền sẵn được là dựng đúng bản sao sẽ trôi (luật 9, cấm #2): hai biểu " +
-      "mẫu cùng gửi một tuyến, và ngày một bên thêm một trường thì bên kia vẫn xanh. Thay vào đó " +
-      "nội dung kết luận hiện NGAY TRÊN biểu mẫu để chép. Hai ô “Nguồn giao” và `nguon_id` của " +
+      "Nút `✂ Tách thành nhiệm vụ` đã có, mở đúng biểu mẫu “Giao việc mới” của `02-nhiem-vu.md` " +
+      "§7 (dùng lại nguyên `FormGiaoViec`, không bản thứ hai), và ô “Nội dung nhiệm vụ” NAY ĐÃ " +
+      "ĐIỀN SẴN nội dung kết luận. Thứ còn thiếu là HẠN GỢI Ý: §3 muốn đọc ngày từ chính câu kết " +
+      "luận (`báo cáo trước ngày 20/8` → 20/8). Đây KHÔNG phải một việc chưa tới lượt mà là một " +
+      "câu chờ khách chốt — máy chủ CỐ Ý không suy ngày, và " +
+      "`service-petitions/internal/http/bien_ban_hop_ghi.go:130-135` ghi số đo của bản cài đặt " +
+      "anh em: đúng ba trên bốn lần, lần thứ tư để lại một nhiệm vụ SAI HẠN trong một quyển sổ " +
+      "không xoá được, chỉ thu hồi được. Dựng bộ đoán ngày ở client là dựng lại đúng thứ máy chủ " +
+      "vừa từ chối, chỉ khác là ở chỗ không ai kiểm được. Hai ô “Nguồn giao” và `nguon_id` của " +
       "bảng §3 thì không thiếu gì cả: hợp đồng không có trường nào cho chúng, máy chủ suy cặp ấy " +
       "từ kết luận nêu trong đường dẫn.",
   },
