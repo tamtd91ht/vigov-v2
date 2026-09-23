@@ -70,6 +70,11 @@ import (
 type KhoChungTu interface {
 	TheoIDDeSua(ctx context.Context, tx *store.ScopedTx, id string) (domain.ChungTuGiaiNgan, error)
 	MaDuAnConSong(ctx context.Context, tx *store.ScopedTx, duAnID string) (string, error)
+	// NguonVonConSong takes the TRANSACTION for the reason every method here does: there is no
+	// foreign key under `chung_tu_giai_ngan.nguon_von_id` (0007:102-113), so this check IS the
+	// constraint — and a constraint asked outside the transaction that writes the row is a
+	// constraint that can already be stale when the write lands.
+	NguonVonConSong(ctx context.Context, tx *store.ScopedTx, nguonVonID string) error
 	Chen(ctx context.Context, tx *store.ScopedTx, ct domain.ChungTuGiaiNgan) error
 	CapNhat(ctx context.Context, tx *store.ScopedTx, ct domain.ChungTuGiaiNgan) error
 	XacNhan(ctx context.Context, tx *store.ScopedTx, id, maCanBo string) error
@@ -146,6 +151,13 @@ type YeuCauThemChungTu struct {
 	NoiDung   string
 	DoiTac    string
 	SoChungTu string
+
+	// NguonVonID is OPTIONAL, and empty is a legitimate answer rather than an omission: §13 rule 6
+	// says a voucher with no funding source still counts toward "đã giải ngân" and is reported
+	// separately as "đã chi nhưng chưa ghi rút từ nguồn nào" — §6 prints that as a real figure on a
+	// real commune. Nothing here may start requiring it: refusing the entry would refuse exactly the
+	// operation the specification permits, at the moment a payment has already left the account.
+	NguonVonID string
 }
 
 // YeuCauSuaChungTu is a PARTIAL edit: a nil pointer means "leave this alone".
@@ -166,6 +178,22 @@ type YeuCauSuaChungTu struct {
 	NoiDung   *string
 	DoiTac    *string
 	SoChungTu *string
+
+	// NguonVonID follows the same convention as the two optional strings above, and it carries THREE
+	// distinct meanings that a plain string could only carry two of:
+	//
+	//	nil    leave the voucher's funding source exactly as it is
+	//	""     DETACH it — the column goes to NULL and the voucher rejoins §6's "đã chi nhưng chưa
+	//	       ghi rút từ nguồn nào" warning. A real correction: the accountant attributed a payment
+	//	       to the wrong source and the right one is not yet known.
+	//	"01J…" attach it to that source, which must be a LIVE source OF THIS COMMUNE (rule 1).
+	//
+	// "" IS NORMALISED TO NULL IN THIS LAYER AND NEVER TRAVELS DOWNWARD AS A BLANK. The column
+	// carries `CHECK (nguon_von_id IS NULL OR btrim(nguon_von_id) <> '')` (0007:274-277), so an empty
+	// string is refused by the database — and if that CHECK were ever dropped, the voucher would fall
+	// out of the warning while belonging to no source either: money missing from both sides of one
+	// screen, with every row looking filled in.
+	NguonVonID *string
 }
 
 // Them records one payment against one project.
@@ -196,6 +224,10 @@ func (uc *ChungTuGiaiNgan) Them(ctx context.Context, yc YeuCauThemChungTu,
 	if err != nil {
 		return domain.ChungTuGiaiNgan{}, err
 	}
+	nguonVonID, err := domain.ChuanHoaNguonVonID(yc.NguonVonID)
+	if err != nil {
+		return domain.ChungTuGiaiNgan{}, err
+	}
 	if err := coNguoiThucHien(nguoi); err != nil {
 		return domain.ChungTuGiaiNgan{}, err
 	}
@@ -213,6 +245,9 @@ func (uc *ChungTuGiaiNgan) Them(ctx context.Context, yc YeuCauThemChungTu,
 		NoiDung:   noiDung,
 		DoiTac:    doiTac,
 		SoChungTu: soChungTu,
+		// EMPTY IS CARRIED THROUGH AS EMPTY and becomes NULL in the store (rongThanhNil). It is the
+		// value §6's "đã chi nhưng chưa ghi rút từ nguồn nào" counts, not an absence to be filled in.
+		NguonVonID: nguonVonID,
 		// Set here only so the value this function RETURNS describes the row that was written. The
 		// store does not read it: it writes 'ke-toan-nhap' as a literal.
 		TrangThai: domain.ChungTuKeToanNhap,
@@ -231,6 +266,18 @@ func (uc *ChungTuGiaiNgan) Them(ctx context.Context, yc YeuCauThemChungTu,
 		maDuAn, err := uc.kho.MaDuAnConSong(ctx, tx, moi.DuAnID)
 		if err != nil {
 			return err
+		}
+		// THE SOURCE IS CHECKED ONLY WHEN ONE WAS NAMED. A voucher with no source is the state §13
+		// rule 6 defines, so an empty value has nothing to verify — asking anyway would turn "no
+		// source" into an error and refuse the operation the specification permits.
+		//
+		// INSIDE THE TRANSACTION, because with no foreign key underneath (0007:102-113) this check IS
+		// the constraint. An id naming nothing, or naming another commune's source, would put the
+		// money on no card of §6 AND out of the "chưa ghi rút từ nguồn nào" warning at the same time.
+		if moi.NguonVonID != "" {
+			if err := uc.kho.NguonVonConSong(ctx, tx, moi.NguonVonID); err != nil {
+				return err
+			}
 		}
 		if err := uc.kho.Chen(ctx, tx, moi); err != nil {
 			return err
@@ -286,7 +333,7 @@ func (uc *ChungTuGiaiNgan) Sua(ctx context.Context, id string, yc YeuCauSuaChung
 			return domain.ChungTuGiaiNgan{}, err
 		}
 	}
-	var noiDung, doiTac, soChungTu string
+	var noiDung, doiTac, soChungTu, nguonVonID string
 	var err error
 	if yc.NoiDung != nil {
 		if noiDung, err = domain.ChuanHoaNoiDung(*yc.NoiDung); err != nil {
@@ -300,6 +347,15 @@ func (uc *ChungTuGiaiNgan) Sua(ctx context.Context, id string, yc YeuCauSuaChung
 	}
 	if yc.SoChungTu != nil {
 		if soChungTu, err = domain.ChuanHoaSoChungTu(*yc.SoChungTu); err != nil {
+			return domain.ChungTuGiaiNgan{}, err
+		}
+	}
+	if yc.NguonVonID != nil {
+		// TRIMMED HERE, SO "   " AND "" BECOME ONE ANSWER before anything compares them. Without it,
+		// a client clearing the field with spaces would produce a value that differs from "" — so the
+		// no-op comparison below would see a change, the voucher would be written, and a CONFIRMED
+		// voucher would lose its confirmation over an edit that changed nothing (ADR 0036).
+		if nguonVonID, err = domain.ChuanHoaNguonVonID(*yc.NguonVonID); err != nil {
 			return domain.ChungTuGiaiNgan{}, err
 		}
 	}
@@ -333,6 +389,9 @@ func (uc *ChungTuGiaiNgan) Sua(ctx context.Context, id string, yc YeuCauSuaChung
 		if yc.SoChungTu != nil {
 			sau.SoChungTu = soChungTu
 		}
+		if yc.NguonVonID != nil {
+			sau.NguonVonID = nguonVonID
+		}
 
 		if khongDoiChungTu(truoc, sau) {
 			return nil
@@ -341,6 +400,21 @@ func (uc *ChungTuGiaiNgan) Sua(ctx context.Context, id string, yc YeuCauSuaChung
 		maDuAn, err := uc.kho.MaDuAnConSong(ctx, tx, truoc.DuAnID)
 		if err != nil {
 			return err
+		}
+		// CHECKED ONLY WHEN THE SOURCE ACTUALLY MOVES TO A NEW ONE, and both halves of that are
+		// deliberate:
+		//
+		//	unchanged     a correction of the description must not fail because the source this
+		//	              voucher has always named was removed from the catalogue afterwards. The row
+		//	              is the historical fact; refusing to edit anything else would strand it.
+		//	moved to ""   detaching needs nothing to exist. It is the state §13 rule 6 defines.
+		//
+		// What IS refused is attaching money to a source that does not exist in this commune — the
+		// case rule 1 is made for, and the case no foreign key is underneath to catch.
+		if sau.NguonVonID != truoc.NguonVonID && sau.NguonVonID != "" {
+			if err := uc.kho.NguonVonConSong(ctx, tx, sau.NguonVonID); err != nil {
+				return err
+			}
 		}
 		if err := uc.kho.CapNhat(ctx, tx, sau); err != nil {
 			return err
@@ -676,14 +750,15 @@ func bocChungTu(ctx context.Context, viec string, err error) error {
 // decision for the customer rather than something to accommodate here.
 func tomTatChungTu(c domain.ChungTuGiaiNgan) map[string]any {
 	return map[string]any{
-		"chung_tu_id": c.ID,
-		"du_an_id":    c.DuAnID,
-		"ngay_chi":    c.NgayChi.Format("2006-01-02"),
-		"so_tien":     int64(c.SoTien),
-		"noi_dung":    c.NoiDung,
-		"doi_tac":     c.DoiTac,
-		"so_chung_tu": c.SoChungTu,
-		"trang_thai":  string(c.TrangThai),
+		"chung_tu_id":  c.ID,
+		"du_an_id":     c.DuAnID,
+		"ngay_chi":     c.NgayChi.Format("2006-01-02"),
+		"so_tien":      int64(c.SoTien),
+		"noi_dung":     c.NoiDung,
+		"doi_tac":      c.DoiTac,
+		"so_chung_tu":  c.SoChungTu,
+		"nguon_von_id": c.NguonVonID,
+		"trang_thai":   string(c.TrangThai),
 	}
 }
 
@@ -705,15 +780,31 @@ func tomTatDoiChungTu(truoc, sau domain.ChungTuGiaiNgan, ben bool) map[string]an
 	if truoc.SoChungTu != sau.SoChungTu {
 		ra["so_chung_tu"] = chon(ben, truoc.SoChungTu, sau.SoChungTu)
 	}
+	// *"AI CHUYỂN CHỨNG TỪ NÀY SANG NGUỒN KHÁC"* IS A QUESTION AN INSPECTION ASKS BY NAME, and the
+	// row cannot answer it: the column holds only where the money is attributed NOW. Moving a payment
+	// between two sources moves it between two cards of §6 — two figures already read off a screen —
+	// and detaching it moves it into the "đã chi nhưng chưa ghi rút từ nguồn nào" warning. Both sides
+	// of the pair are recorded, and an empty string on either side is the unattached state, not a
+	// missing value.
+	if truoc.NguonVonID != sau.NguonVonID {
+		ra["nguon_von_id"] = chon(ben, truoc.NguonVonID, sau.NguonVonID)
+	}
 	return ra
 }
 
 // khongDoiChungTu reports whether the edit would change nothing. The state and the four staff codes
 // are not compared because no path through Sua can change them.
+//
+// ⚠ EVERY EDITABLE FIELD MUST BE LISTED HERE, AND A MISSING ONE FAILS IN SILENCE. Sua returns early
+// when this says "nothing moved" — so a field that is editable but unlisted is a field whose edit
+// writes NO row, leaves NO audit entry, and does NOT send a confirmed voucher back to `Kế toán nhập`
+// (ADR 0036). The request answers 200 with the OLD values and nothing anywhere is red. `nguon_von_id`
+// was the sixth field to be added and is the first one this note existed for.
 func khongDoiChungTu(truoc, sau domain.ChungTuGiaiNgan) bool {
 	return truoc.NgayChi.Equal(sau.NgayChi) &&
 		truoc.SoTien == sau.SoTien &&
 		truoc.NoiDung == sau.NoiDung &&
 		truoc.DoiTac == sau.DoiTac &&
-		truoc.SoChungTu == sau.SoChungTu
+		truoc.SoChungTu == sau.SoChungTu &&
+		truoc.NguonVonID == sau.NguonVonID
 }

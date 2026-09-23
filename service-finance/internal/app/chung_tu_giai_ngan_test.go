@@ -693,6 +693,279 @@ func TestSuaChungTuDaXacNhanMaKhongDoiGiThiGiuNguyenXacNhan(t *testing.T) {
 	}
 }
 
+// --- (10) the funding source of a payment (§8.2's `NGUỒN VỐN` column, migration 0007) --------------
+//
+// FOUR PROPERTIES, and the first is the one that fails in COMPLETE SILENCE:
+//
+//  1. an edit that moves ONLY the funding source is a real edit — it writes, it audits, and it sends
+//     a confirmed voucher back to `Kế toán nhập` (ADR 0036);
+//  2. "no source" reaches the column as NULL and never as '' — the two spellings are the difference
+//     between §6's warning counting a voucher and losing it;
+//  3. the source must be a LIVE source OF THIS COMMUNE, checked inside the transaction because there
+//     is no foreign key underneath (0007:102-113);
+//  4. the audit delta carries the move, because *"ai chuyển chứng từ này sang nguồn khác"* is a
+//     question an inspection asks and the row can only ever answer where the money sits NOW.
+
+const (
+	idNguonVonCu  = "01JNGUONVONNGANSACHXA0000"
+	idNguonVonMoi = "01JNGUONVONXAHOIHOA000000"
+)
+
+// khoCoNguonVon builds a store holding both sample sources of this commune.
+func khoCoNguonVon(hang *hangCT) *khoCTGia {
+	return &khoCTGia{
+		maDuAn:     maDuAnMau,
+		hang:       hang,
+		nguonVonCo: map[string]bool{idNguonVonCu: true, idNguonVonMoi: true},
+	}
+}
+
+func TestSuaChungTu_ChiDoiNguonVon_VanLaMotLanSuaThatSu(t *testing.T) {
+	// ⚠ THE TRAP THIS TEST EXISTS FOR, AND IT IS INVISIBLE WITHOUT EXACTLY THIS CASE. `khongDoiChungTu`
+	// compares the editable fields and Sua RETURNS EARLY when it reports "nothing moved". A field that
+	// is editable but missing from that comparison is a field whose edit writes no row, leaves no audit
+	// entry and does NOT send a confirmed voucher back to `Kế toán nhập` — while the request answers
+	// 200 with the old values. Nothing is red anywhere.
+	//
+	// SO THE EDIT HERE TOUCHES THE FUNDING SOURCE AND NOTHING ELSE. Every other assertion about
+	// `nguon_von_id` in this file changes a second field as well, and every one of them would stay
+	// green with the comparison left unfixed.
+	truoc := hangOTrangThai(domain.ChungTuDaXacNhan)
+	truoc.nguonVonID = idNguonVonCu
+	truoc.nguoiXacNhan = maLanhDao
+	k := khoCoNguonVon(truoc)
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	moi := idNguonVonMoi
+	sau, err := uc.Sua(ctx, idChungTu, YeuCauSuaChungTu{NguonVonID: &moi}, canBoCT(maKeToan))
+	if err != nil {
+		t.Fatalf("Sua lỗi: %v", err)
+	}
+	if sau.NguonVonID != idNguonVonMoi {
+		t.Fatalf("nguồn vốn sau khi sửa = %q, muốn %q", sau.NguonVonID, idNguonVonMoi)
+	}
+
+	// (a) IT WRITES. A voucher that changed source and was never written is money still counted on the
+	// old card of §6, with the screen showing the new one.
+	capNhat := k.cau("UPDATE chung_tu_giai_ngan")
+	if len(capNhat) == 0 {
+		t.Fatal("đổi RIÊNG nguồn vốn mà không gửi câu UPDATE nào — `khongDoiChungTu` đang coi đây là " +
+			"không đổi gì")
+	}
+	if got := capNhat[0].args[7]; got != idNguonVonMoi {
+		t.Errorf("nguon_von_id vào câu cập nhật = %v, muốn %q", got, idNguonVonMoi)
+	}
+
+	// (b) IT COSTS THE CONFIRMATION (ADR 0036). Moving a payment to another funding source moves it
+	// between two cards of §6 — the leader confirmed the figures on the old one.
+	if sau.TrangThai != domain.ChungTuKeToanNhap || sau.NguoiXacNhanID != "" {
+		t.Fatalf("trạng thái %q, người xác nhận %q — sửa một chứng từ đã xác nhận thì phải VỀ NHÁP",
+			sau.TrangThai, sau.NguoiXacNhanID)
+	}
+	if len(k.cau("trang_thai = 'ke-toan-nhap'")) != 1 {
+		t.Fatal("không có câu đưa về nháp")
+	}
+
+	// (c) IT LEAVES A TRAIL NAMING BOTH SOURCES, in the same transaction.
+	if k.batDau != 1 || k.daCommit != 1 || k.daRollback != 0 {
+		t.Fatalf("giao dịch: mở %d commit %d rollback %d, muốn 1/1/0",
+			k.batDau, k.daCommit, k.daRollback)
+	}
+	vet := k.cau("INSERT INTO audit_log")
+	if len(vet) != 1 {
+		t.Fatalf("có %d dòng vết, muốn 1", len(vet))
+	}
+	than := thanVet(t, vet[0])
+	for _, muon := range []string{idNguonVonCu, idNguonVonMoi} {
+		if !strings.Contains(than, muon) {
+			t.Errorf("vết thiếu %q — không trả lời được *ai chuyển chứng từ này sang nguồn khác*:\n%s",
+				muon, than)
+		}
+	}
+}
+
+func TestThemChungTu_ChuaGanNguonThiGhiNULLChuKhongPhaiChuoiRong(t *testing.T) {
+	// §13 rule 6: a voucher with no funding source is a state the specification DEFINES and §6 REPORTS
+	// ("Còn 3,4 tỷ đã chi nhưng chưa ghi rút từ nguồn nào"). The column carries
+	// `CHECK (nguon_von_id IS NULL OR btrim(nguon_von_id) <> '')` (0007:274-277), so '' is refused
+	// outright by the database — and if that CHECK were ever dropped, the voucher would fall out of the
+	// warning while belonging to no source either: money missing from BOTH sides of one screen.
+	for ten, gui := range map[string]string{"bỏ trống": "", "toàn khoảng trắng": "   "} {
+		t.Run(ten, func(t *testing.T) {
+			k := khoCoNguonVon(nil)
+			uc, ctx := dungUseCaseChungTu(t, k)
+
+			yc := themChungTuMau()
+			yc.NguonVonID = gui
+			if _, err := uc.Them(ctx, yc, canBoCT(maKeToan)); err != nil {
+				t.Fatalf("Them lỗi: %v", err)
+			}
+			chen := k.cau("INSERT INTO chung_tu_giai_ngan")
+			if len(chen) != 1 {
+				t.Fatalf("có %d câu chèn, muốn 1", len(chen))
+			}
+			if got := chen[0].args[8]; got != nil {
+				t.Fatalf("nguon_von_id vào câu chèn = %#v, muốn NULL", got)
+			}
+			// AND NOTHING WAS ASKED OF THE CATALOGUE. "No source" has nothing to verify; a lookup here
+			// would turn the specification's own state into an error.
+			if k.coCau("FROM nguon_von") {
+				t.Error("không gắn nguồn mà vẫn đi hỏi bảng nguồn vốn")
+			}
+		})
+	}
+}
+
+func TestSuaChungTu_GoKhoiNguon_GhiNULLVaKhongHoiDanhMuc(t *testing.T) {
+	// `""` MEANS DETACH, and it is the middle of the three answers the pointer carries: nil leaves the
+	// source alone, "" puts the voucher back into §6's "đã chi nhưng chưa ghi rút từ nguồn nào", an id
+	// attaches it. A real correction — the accountant attributed a payment to the wrong source and the
+	// right one is not yet known.
+	truoc := hangOTrangThai(domain.ChungTuKeToanNhap)
+	truoc.nguonVonID = idNguonVonCu
+	k := khoCoNguonVon(truoc)
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	go_ := ""
+	sau, err := uc.Sua(ctx, idChungTu, YeuCauSuaChungTu{NguonVonID: &go_}, canBoCT(maKeToan))
+	if err != nil {
+		t.Fatalf("Sua lỗi: %v", err)
+	}
+	if sau.NguonVonID != "" {
+		t.Fatalf("nguồn vốn = %q, muốn rỗng", sau.NguonVonID)
+	}
+	capNhat := k.cau("UPDATE chung_tu_giai_ngan")
+	if len(capNhat) != 1 {
+		t.Fatalf("có %d câu cập nhật, muốn 1", len(capNhat))
+	}
+	if got := capNhat[0].args[7]; got != nil {
+		t.Fatalf("nguon_von_id vào câu cập nhật = %#v, muốn NULL — '' bị CSDL từ chối, và nếu "+
+			"CHECK bị gỡ thì chứng từ rơi khỏi cả cảnh báo §6 lẫn mọi thẻ nguồn", got)
+	}
+	// DETACHING VERIFIES NOTHING. There is no source to look up, and demanding one would make the
+	// state §13 rule 6 defines unreachable from the edit path.
+	if k.coCau("FROM nguon_von") {
+		t.Error("gỡ khỏi nguồn mà vẫn đi hỏi bảng nguồn vốn")
+	}
+}
+
+func TestThemChungTu_NguonVonKhongCoTrongXaThiTuChoiVaKhongGhiGi(t *testing.T) {
+	// RULE 1, AND THERE IS NO FOREIGN KEY UNDERNEATH TO CATCH IT (0007:102-113). An id naming another
+	// commune's source is indistinguishable from one that never existed, because the statement binds
+	// tenant_id = $1 — and either way the money would sit on no card of §6 while ALSO being absent from
+	// the "chưa ghi rút từ nguồn nào" warning, which counts NULL.
+	k := &khoCTGia{maDuAn: maDuAnMau, nguonVonCo: map[string]bool{}}
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	yc := themChungTuMau()
+	yc.NguonVonID = idNguonVonMoi
+	_, err := uc.Them(ctx, yc, canBoCT(maKeToan))
+	if !errors.Is(err, fistore.ErrKhongThayNguonVonCuaChungTu) {
+		t.Fatalf("lỗi = %v, muốn ErrKhongThayNguonVonCuaChungTu", err)
+	}
+	if k.coCau("INSERT INTO chung_tu_giai_ngan") {
+		t.Error("nguồn vốn không có trong xã mà vẫn chèn chứng từ")
+	}
+	if k.coCau("INSERT INTO audit_log") {
+		t.Error("từ chối mà vẫn ghi vết")
+	}
+	if k.daCommit != 0 || k.daRollback != 1 {
+		t.Fatalf("commit %d, rollback %d — muốn 0/1", k.daCommit, k.daRollback)
+	}
+}
+
+func TestSuaChungTu_GanSangNguonKhongCoTrongXaThiTuChoi(t *testing.T) {
+	// The same refusal on the edit path, and it is NOT redundant with the create one: the two call
+	// sites are different branches, and the edit path is the one where the check is conditional.
+	truoc := hangOTrangThai(domain.ChungTuKeToanNhap)
+	truoc.nguonVonID = idNguonVonCu
+	k := &khoCTGia{maDuAn: maDuAnMau, hang: truoc, nguonVonCo: map[string]bool{idNguonVonCu: true}}
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	lac := "01JNGUONVONCUAXAKHAC00000"
+	_, err := uc.Sua(ctx, idChungTu, YeuCauSuaChungTu{NguonVonID: &lac}, canBoCT(maKeToan))
+	if !errors.Is(err, fistore.ErrKhongThayNguonVonCuaChungTu) {
+		t.Fatalf("lỗi = %v, muốn ErrKhongThayNguonVonCuaChungTu", err)
+	}
+	if k.coCau("UPDATE chung_tu_giai_ngan") {
+		t.Error("nguồn vốn của xã khác mà vẫn gửi câu cập nhật")
+	}
+	if k.daCommit != 0 || k.daRollback != 1 {
+		t.Fatalf("commit %d, rollback %d — muốn 0/1", k.daCommit, k.daRollback)
+	}
+}
+
+func TestSuaChungTu_KhongDoiNguonThiKhongDoiHoiNguonConTonTai(t *testing.T) {
+	// THE CHECK IS ABOUT THE MOVE, NOT ABOUT THE ROW. A voucher recorded last year against a source the
+	// commune has since removed from its catalogue is a historical fact; refusing to correct its
+	// DESCRIPTION because of that would strand the record with no way to fix a typo. What is refused is
+	// attaching money to a source that is not there — which this edit does not do.
+	truoc := hangOTrangThai(domain.ChungTuKeToanNhap)
+	truoc.nguonVonID = idNguonVonCu
+	k := &khoCTGia{maDuAn: maDuAnMau, hang: truoc, nguonVonCo: map[string]bool{}} // nguồn đã bị gỡ
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	noi := "Thanh toán đợt 4"
+	sau, err := uc.Sua(ctx, idChungTu, YeuCauSuaChungTu{NoiDung: &noi}, canBoCT(maKeToan))
+	if err != nil {
+		t.Fatalf("Sua lỗi: %v", err)
+	}
+	if sau.NguonVonID != idNguonVonCu {
+		t.Errorf("nguồn vốn = %q, muốn giữ nguyên %q", sau.NguonVonID, idNguonVonCu)
+	}
+	if k.coCau("FROM nguon_von") {
+		t.Error("không đụng tới nguồn vốn mà vẫn đi hỏi bảng nguồn vốn")
+	}
+	if k.daCommit != 1 {
+		t.Errorf("commit %d, muốn 1", k.daCommit)
+	}
+}
+
+func TestSuaChungTu_GuiLaiDungNguonDangCoThiKhongGhiGi(t *testing.T) {
+	// THE NO-OP BRANCH, WITH THE NEW FIELD. A screen that resends the whole form must not strip a
+	// leader's confirmation off a voucher nobody changed — that is what `idem.KhongCan` on the PATCH
+	// route claims, and this is the claim with `nguon_von_id` in the body.
+	truoc := hangOTrangThai(domain.ChungTuDaXacNhan)
+	truoc.nguonVonID = idNguonVonCu
+	truoc.nguoiXacNhan = maLanhDao
+	k := khoCoNguonVon(truoc)
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	nhu := idNguonVonCu // exactly what the row already holds
+	sau, err := uc.Sua(ctx, idChungTu, YeuCauSuaChungTu{NguonVonID: &nhu}, canBoCT(maKeToan))
+	if err != nil {
+		t.Fatalf("Sua lỗi: %v", err)
+	}
+	if sau.TrangThai != domain.ChungTuDaXacNhan || sau.NguoiXacNhanID != maLanhDao {
+		t.Fatalf("không đổi gì mà xác nhận bị gỡ: %q / %q", sau.TrangThai, sau.NguoiXacNhanID)
+	}
+	if k.coCau("UPDATE chung_tu_giai_ngan") || k.coCau("INSERT INTO audit_log") {
+		t.Error("gửi lại đúng nguồn đang có mà vẫn ghi")
+	}
+}
+
+func TestSuaChungTu_ChungTuDaKhoaThiKhongDoiDuocNguonVon(t *testing.T) {
+	// 0007 ADDED `nguon_von_id` TO THE `chung_tu_da_khoa` TRIGGER'S FROZEN LIST (0007:329), because
+	// without it the funding source would have been the ONLY business fact of a locked voucher anybody
+	// could rewrite — moving money between two cards of §6 after the figure was signed off, leaving the
+	// voucher itself looking untouched. This asserts the half that arrives FIRST: ChoSua refuses before
+	// any UPDATE is sent, in Vietnamese, naming the way out.
+	k := khoCoNguonVon(hangDaKhoa(maLanhDao))
+	uc, ctx := dungUseCaseChungTu(t, k)
+
+	moi := idNguonVonMoi
+	_, err := uc.Sua(ctx, idChungTu, YeuCauSuaChungTu{NguonVonID: &moi}, canBoCT(maKeToan))
+	if !errors.Is(err, domain.ErrChungTuDaKhoa) {
+		t.Fatalf("lỗi = %v, muốn ErrChungTuDaKhoa", err)
+	}
+	if k.coCau("UPDATE chung_tu_giai_ngan") {
+		t.Error("chứng từ đã khoá mà vẫn gửi câu cập nhật nguồn vốn")
+	}
+	if k.daCommit != 0 || k.daRollback != 1 {
+		t.Fatalf("commit %d, rollback %d — muốn 0/1", k.daCommit, k.daRollback)
+	}
+}
+
 // thanVet returns the JSON delta of one audit statement as text.
 func thanVet(t *testing.T, l lenhGhi) string {
 	t.Helper()

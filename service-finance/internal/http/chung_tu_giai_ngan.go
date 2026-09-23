@@ -65,6 +65,20 @@ type chungTuRa struct {
 	Counterparty string `json:"counterparty,omitempty"`
 	VoucherNo    string `json:"voucher_no,omitempty"`
 
+	// FundingSourceID is `nguon_von.id` — which funding source this payment was drawn from (§8.2's
+	// `NGUỒN VỐN` column, migration 0007).
+	//
+	// `omitempty`, AND ITS ABSENCE IS A MEANINGFUL ANSWER rather than a field the server forgot: a
+	// voucher with no source is the state §13 rule 6 defines and §6 reports as "đã chi nhưng chưa
+	// ghi rút từ nguồn nào". The screen draws `—` in that column, which is exactly what §8.2's own
+	// sample rows show.
+	//
+	// THE NAME IS `funding_source_id` AND IT IS NOT A URL NOUN. ADR 0011 governs resource names in
+	// paths and `kb/00-foundation/ubiquitous-language.md` has no row for `nguon_von`; this is a FIELD,
+	// and `FundingSource` is the entity name migration 0007 already carries (`@entity: FundingSource`,
+	// 0007:134). No CRUD route for the catalogue is created here — that noun still has to be asked for.
+	FundingSourceID string `json:"funding_source_id,omitempty"`
+
 	// Status is `ke-toan-nhap` | `da-xac-nhan` | `da-khoa` — Vietnamese without diacritics, which
 	// is ADR 0011: only the surrounding contract is English. OUTPUT ONLY; a request carrying it is
 	// refused with 400, because the state is what the four lifecycle routes are FOR.
@@ -94,22 +108,23 @@ func lucRa(t time.Time) string {
 
 func chungTuRaNgoai(c domain.ChungTuGiaiNgan) chungTuRa {
 	return chungTuRa{
-		ID:           c.ID,
-		ProjectID:    c.DuAnID,
-		PaymentDate:  ngayRa(c.NgayChi),
-		Amount:       int64(c.SoTien),
-		Description:  c.NoiDung,
-		Counterparty: c.DoiTac,
-		VoucherNo:    c.SoChungTu,
-		Status:       string(c.TrangThai),
-		EnteredBy:    c.NguoiNhapID,
-		ConfirmedBy:  c.NguoiXacNhanID,
-		LockedBy:     c.NguoiKhoaID,
-		LockedAt:     lucRa(c.ThoiDiemKhoa),
-		UnlockedBy:   c.NguoiMoKhoaID,
-		UnlockedAt:   lucRa(c.ThoiDiemMoKhoa),
-		UnlockReason: c.LyDoMoKhoa,
-		UnlockCount:  c.SoLanMoKhoa,
+		ID:              c.ID,
+		ProjectID:       c.DuAnID,
+		PaymentDate:     ngayRa(c.NgayChi),
+		Amount:          int64(c.SoTien),
+		Description:     c.NoiDung,
+		Counterparty:    c.DoiTac,
+		VoucherNo:       c.SoChungTu,
+		FundingSourceID: c.NguonVonID,
+		Status:          string(c.TrangThai),
+		EnteredBy:       c.NguoiNhapID,
+		ConfirmedBy:     c.NguoiXacNhanID,
+		LockedBy:        c.NguoiKhoaID,
+		LockedAt:        lucRa(c.ThoiDiemKhoa),
+		UnlockedBy:      c.NguoiMoKhoaID,
+		UnlockedAt:      lucRa(c.ThoiDiemMoKhoa),
+		UnlockReason:    c.LyDoMoKhoa,
+		UnlockCount:     c.SoLanMoKhoa,
 	}
 }
 
@@ -129,13 +144,19 @@ func chungTuRaNgoai(c domain.ChungTuGiaiNgan) chungTuRa {
 // THERE IS NO `entered_by` FIELD AND THERE MUST NEVER BE ONE. Who entered the voucher is the acting
 // principal from the session; a field would be a client naming somebody else as the author of a
 // financial record (rule 1, forbidden #2, applied to a person instead of a commune).
+//
+// `funding_source_id` IS OPTIONAL AND MUST STAY OPTIONAL. §13 rule 6 makes "chi rồi nhưng chưa ghi
+// nguồn" a state the system holds and reports, so requiring it here would refuse the operation the
+// specification permits — and refuse it at the moment a payment has already left the commune's
+// account, which is when refusing is most expensive.
 type themChungTuVao struct {
-	ProjectID    string `json:"project_id"`
-	PaymentDate  string `json:"payment_date"` // YYYY-MM-DD
-	Amount       int64  `json:"amount"`       // đồng
-	Description  string `json:"description"`
-	Counterparty string `json:"counterparty,omitempty"`
-	VoucherNo    string `json:"voucher_no,omitempty"`
+	ProjectID       string `json:"project_id"`
+	PaymentDate     string `json:"payment_date"` // YYYY-MM-DD
+	Amount          int64  `json:"amount"`       // đồng
+	Description     string `json:"description"`
+	Counterparty    string `json:"counterparty,omitempty"`
+	VoucherNo       string `json:"voucher_no,omitempty"`
+	FundingSourceID string `json:"funding_source_id,omitempty"`
 
 	Status *string `json:"status,omitempty"`
 }
@@ -151,12 +172,23 @@ type themChungTuVao struct {
 // `ProjectID` IS REFUSED, NOT IGNORED. Moving a voucher between projects moves money between two
 // reported totals with nothing on either screen saying so; the operation for one filed against the
 // wrong project is to remove it with a reason and enter it again — two events, both audited.
+//
+// `funding_source_id` CARRIES THREE ANSWERS, which is the whole reason it is a pointer here too:
+// absent leaves the source alone, `""` DETACHES the voucher — putting it back into §6's "đã chi
+// nhưng chưa ghi rút từ nguồn nào" warning — and an id attaches it to that source. A body of plain
+// values could not express the middle one, so a commune that attributed a payment to the wrong
+// source would have no way to say "not this one" short of removing the voucher entirely.
+//
+// `null` READS AS ABSENT, NOT AS DETACH, because that is what a `*string` does in encoding/json and
+// it is the convention `counterparty` and `voucher_no` already set on this very body. The clearing
+// spelling is `""` for all three, so a client does not have to remember which field takes which.
 type suaChungTuVao struct {
-	PaymentDate  *string `json:"payment_date,omitempty"`
-	Amount       *int64  `json:"amount,omitempty"`
-	Description  *string `json:"description,omitempty"`
-	Counterparty *string `json:"counterparty,omitempty"`
-	VoucherNo    *string `json:"voucher_no,omitempty"`
+	PaymentDate     *string `json:"payment_date,omitempty"`
+	Amount          *int64  `json:"amount,omitempty"`
+	Description     *string `json:"description,omitempty"`
+	Counterparty    *string `json:"counterparty,omitempty"`
+	VoucherNo       *string `json:"voucher_no,omitempty"`
+	FundingSourceID *string `json:"funding_source_id,omitempty"`
 
 	ProjectID *string `json:"project_id,omitempty"`
 	Status    *string `json:"status,omitempty"`
@@ -228,12 +260,13 @@ func (h *Handler) ThemChungTu(w http.ResponseWriter, r *http.Request) {
 	}
 
 	moi, err := h.d.GhiChungTu.Them(r.Context(), app.YeuCauThemChungTu{
-		DuAnID:    vao.ProjectID,
-		NgayChi:   ngay,
-		SoTien:    domain.Dong(vao.Amount),
-		NoiDung:   vao.Description,
-		DoiTac:    vao.Counterparty,
-		SoChungTu: vao.VoucherNo,
+		DuAnID:     vao.ProjectID,
+		NgayChi:    ngay,
+		SoTien:     domain.Dong(vao.Amount),
+		NoiDung:    vao.Description,
+		DoiTac:     vao.Counterparty,
+		SoChungTu:  vao.VoucherNo,
+		NguonVonID: vao.FundingSourceID,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiChungTu(w, r, "thêm", err)
@@ -266,6 +299,10 @@ func (h *Handler) SuaChungTu(w http.ResponseWriter, r *http.Request) {
 		NoiDung:   vao.Description,
 		DoiTac:    vao.Counterparty,
 		SoChungTu: vao.VoucherNo,
+		// THE POINTER IS PASSED THROUGH UNTOUCHED, including a pointer to "". Dereferencing it here to
+		// "decide" whether the client meant it would collapse "leave alone" and "detach" into one
+		// value at the only layer that can still tell them apart.
+		NguonVonID: vao.FundingSourceID,
 	}
 	if vao.PaymentDate != nil {
 		ngay, ok := ngayVao(*vao.PaymentDate)
@@ -415,6 +452,17 @@ func (h *Handler) traLoiLoiChungTu(w http.ResponseWriter, r *http.Request, viec 
 		// it at all (rule 4, forbidden #2, applied between communes).
 		httpx.WriteError(w, http.StatusNotFound, "not_found",
 			"Không tìm thấy dự án cho chứng từ này.", "project_id")
+	case errors.Is(err, fistore.ErrKhongThayNguonVonCuaChungTu):
+		// 404 NAMING THE FIELD, exactly as the project case above and for both of its reasons. A
+		// funding source of ANOTHER commune is indistinguishable from one that does not exist, because
+		// the query cannot reach it at all (rule 1) — so this one answer must cover both, or the status
+		// code itself would tell a caller which communes hold which sources.
+		//
+		// 404 RATHER THAN 400 even on PATCH, where the voucher itself exists: what is missing is a
+		// resource the body names, which is the same shape as `project_id`. One rule for both fields
+		// means a client does not have to learn which referenced id answers which status.
+		httpx.WriteError(w, http.StatusNotFound, "not_found",
+			"Không tìm thấy nguồn vốn này trong xã.", "funding_source_id")
 	case errors.Is(err, domain.ErrChungTuDaKhoa),
 		errors.Is(err, domain.ErrChungTuChuaKhoa),
 		errors.Is(err, domain.ErrChungTuDaXacNhan),
@@ -448,7 +496,7 @@ func laLoiDauVaoChungTu(err error) bool {
 		domain.ErrSoTienKhongDuong, domain.ErrSoTienQuaLon,
 		domain.ErrThieuNgayChi, domain.ErrNgayChiNgoaiLich,
 		domain.ErrThieuNoiDung, domain.ErrNoiDungQuaDai,
-		domain.ErrDoiTacQuaDai, domain.ErrSoChungTuQuaDai,
+		domain.ErrDoiTacQuaDai, domain.ErrSoChungTuQuaDai, domain.ErrNguonVonIDSai,
 		domain.ErrThieuLyDoMoKhoa, domain.ErrLyDoMoKhoaQuaDai,
 		domain.ErrThieuLyDoGo, domain.ErrLyDoGoQuaDai,
 	} {

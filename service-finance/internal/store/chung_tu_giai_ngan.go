@@ -62,6 +62,27 @@ var (
 	// vouchers, and no row looks wrong. There is no foreign key in the database to catch it
 	// (0004:182-190 says why), so this check is the only one there is.
 	ErrKhongThayDuAnCuaChungTu = errors.New("chung_tu_giai_ngan: không có dự án này trong xã")
+
+	// ErrKhongThayNguonVonCuaChungTu — the funding source a voucher is being attached to does not
+	// exist in this commune, or has been removed from its catalogue.
+	//
+	// WHY THE APPLICATION HAS TO ASK AT ALL: migration 0007 declares NO foreign key from
+	// `chung_tu_giai_ngan.nguon_von_id` to `nguon_von`, and it says so outright rather than leaving
+	// the absence to be discovered — a real FK between two HASH-partitioned tables is accepted by
+	// PostgreSQL 13, but no PostgreSQL is reachable from this repository's build environment and a
+	// migration that fails at startup stops the service (0007:102-113, following 0004:182-190).
+	//
+	// SO THIS CHECK IS THE ONLY ONE THERE IS, AND IT GUARDS TWO DIFFERENT FAILURES AT ONCE:
+	//
+	//	an id that matches nothing   the voucher's money would belong to no card on §6 while the row
+	//	                             looks filled in — and it would ALSO be missing from the "đã chi
+	//	                             nhưng chưa ghi rút từ nguồn nào" warning, because that warning
+	//	                             counts NULL. Money gone from both sides of the screen.
+	//	a source of ANOTHER commune  rule 1. The statement binds tenant_id = $1, so such an id is
+	//	                             indistinguishable from one that does not exist — which is the
+	//	                             answer this error carries, and it leaks nothing about what
+	//	                             another authority holds.
+	ErrKhongThayNguonVonCuaChungTu = errors.New("chung_tu_giai_ngan: không có nguồn vốn này trong xã")
 )
 
 // cotChungTu IS READ BY POSITION in the scans below, and the list has two groups that swap with no
@@ -81,7 +102,7 @@ var (
 // sql.NullString per field. The two timestamps cannot be COALESCEd to anything honest — there is
 // no "zero" instant — so they are scanned through sql.NullTime.
 const cotChungTu = `id, du_an_id, ngay_chi, so_tien, noi_dung, ` +
-	`COALESCE(doi_tac, ''), COALESCE(so_chung_tu, ''), trang_thai, ` +
+	`COALESCE(doi_tac, ''), COALESCE(so_chung_tu, ''), COALESCE(nguon_von_id, ''), trang_thai, ` +
 	`nguoi_nhap_id, COALESCE(nguoi_xac_nhan_id, ''), ` +
 	`COALESCE(nguoi_khoa_id, ''), COALESCE(nguoi_mo_khoa_id, ''), ` +
 	`thoi_diem_khoa, thoi_diem_mo_khoa, ` +
@@ -98,7 +119,7 @@ func docMotDongChungTu(quet func(...any) error) (domain.ChungTuGiaiNgan, error) 
 		trangThai string
 	)
 	err := quet(&ct.ID, &ct.DuAnID, &ct.NgayChi, &soTien, &ct.NoiDung,
-		&ct.DoiTac, &ct.SoChungTu, &trangThai,
+		&ct.DoiTac, &ct.SoChungTu, &ct.NguonVonID, &trangThai,
 		&ct.NguoiNhapID, &ct.NguoiXacNhanID,
 		&ct.NguoiKhoaID, &ct.NguoiMoKhoaID,
 		&khoa, &moKhoa,
@@ -178,6 +199,39 @@ func (s *ChungTuGiaiNganStore) MaDuAnConSong(ctx context.Context, tx *store.Scop
 	return ma, nil
 }
 
+// NguonVonConSong refuses a funding source that is not a live source OF THIS COMMUNE.
+//
+// IT LIVES HERE AND NOT ON NguonVonStore, AND THE REASON IS THE TRANSACTION. Every method of this
+// file takes the caller's *store.ScopedTx; NguonVonStore reads through db.For(ctx), which is a
+// connection of its own. Checking through that one would ask the question OUTSIDE the transaction
+// holding the voucher's row lock — so the answer could already be stale by the time the UPDATE runs,
+// and a voucher could be attached to a source removed in between. One transaction, one answer
+// (rule 6, invariant 3 applied to the check that decides the write).
+//
+// NOT `FOR UPDATE`, for the same reason MaDuAnConSong is not: this reads a fact about a row nothing
+// here writes, and locking the catalogue row would serialise every commune's voucher entry behind
+// whoever last touched a funding source.
+//
+// IT RETURNS ONLY AN ERROR. There is no `ma` column on `nguon_von` (§11 gives it a name and no
+// code), so unlike MaDuAnConSong there is no business code to hand back for the audit subject — the
+// subject stays the PROJECT's code and the source id is named inside the delta.
+func (s *ChungTuGiaiNganStore) NguonVonConSong(ctx context.Context, tx *store.ScopedTx,
+	nguonVonID string) error {
+
+	const stmt = `SELECT 1 FROM nguon_von ` +
+		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+	var mot int
+	err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), nguonVonID).Scan(&mot)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrKhongThayNguonVonCuaChungTu
+	}
+	if err != nil {
+		return fmt.Errorf("chung_tu_giai_ngan: kiểm nguồn vốn: %w", err)
+	}
+	return nil
+}
+
 // chenChungTu — `trang_thai` IS A LITERAL AND NOT A PARAMETER.
 //
 // Read that as the property it is, not as a shortcut. A new voucher is `Kế toán nhập`, always:
@@ -191,10 +245,16 @@ func (s *ChungTuGiaiNganStore) MaDuAnConSong(ctx context.Context, tx *store.Scop
 //
 // `so_lan_mo_khoa` IS ABSENT AND TAKES ITS DEFAULT 0. A voucher that has never been unlocked has
 // been unlocked zero times, which is a fact rather than an absence (0005:145-148).
+//
+// `nguon_von_id` IS BOUND THROUGH rongThanhNil LIKE THE OTHER TWO OPTIONAL COLUMNS, and here that is
+// not tidiness: `CHECK (nguon_von_id IS NULL OR btrim(nguon_von_id) <> ”)` (0007:274-277) REFUSES an
+// empty string outright, so a voucher entered with no source would fail the INSERT — and with it the
+// audit entry sharing the transaction. NULL is the value §6's "đã chi nhưng chưa ghi rút từ nguồn
+// nào" counts.
 const chenChungTu = `INSERT INTO chung_tu_giai_ngan
 	(tenant_id, id, du_an_id, ngay_chi, so_tien, noi_dung, doi_tac, so_chung_tu,
-	 trang_thai, nguoi_nhap_id)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ke-toan-nhap', $9)`
+	 nguon_von_id, trang_thai, nguoi_nhap_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'ke-toan-nhap', $10)`
 
 // Chen adds one voucher, in the first state of the lifecycle.
 //
@@ -206,7 +266,8 @@ func (s *ChungTuGiaiNganStore) Chen(ctx context.Context, tx *store.ScopedTx,
 
 	_, err := tx.Exec(ctx, chenChungTu, string(tx.TenantID()),
 		ct.ID, ct.DuAnID, ct.NgayChi, int64(ct.SoTien), ct.NoiDung,
-		rongThanhNil(ct.DoiTac), rongThanhNil(ct.SoChungTu), ct.NguoiNhapID)
+		rongThanhNil(ct.DoiTac), rongThanhNil(ct.SoChungTu), rongThanhNil(ct.NguonVonID),
+		ct.NguoiNhapID)
 	if err != nil {
 		return fmt.Errorf("chung_tu_giai_ngan: chèn: %w", err)
 	}
@@ -226,19 +287,26 @@ func (s *ChungTuGiaiNganStore) Chen(ctx context.Context, tx *store.ScopedTx,
 // THE TRIGGER REFUSES THE SAME FIELDS ON A LOCKED ROW UNDERNEATH (0004:148-159), and both layers
 // are meant: the trigger is the floor that holds against every writer, and the application refuses
 // first with a sentence an accountant can act on.
+//
+// `nguon_von_id` IS IN THIS STATEMENT AND IS THE SIXTH EDITABLE FIELD. Moving a payment from one
+// source to another is a correction a commune really makes — the accountant typed it before the
+// source list was agreed — and it is also the change an inspection asks about by name, which is why
+// the audit delta carries it. A LOCKED voucher never reaches here: ChoSua refuses first, and 0007
+// added this very column to the `chung_tu_da_khoa` trigger's frozen list underneath (0007:329), so
+// the floor refuses it too.
 const capNhatChungTu = `UPDATE chung_tu_giai_ngan
 	SET ngay_chi = $3, so_tien = $4, noi_dung = $5, doi_tac = $6, so_chung_tu = $7,
-	    cap_nhat_luc = now()
+	    nguon_von_id = $8, cap_nhat_luc = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
-// CapNhat writes the five fields a member of staff may correct on an UNLOCKED voucher. The caller
+// CapNhat writes the six fields a member of staff may correct on an UNLOCKED voucher. The caller
 // has already read the row with TheoIDDeSua and asked domain.ChungTuGiaiNgan.ChoSua.
 func (s *ChungTuGiaiNganStore) CapNhat(ctx context.Context, tx *store.ScopedTx,
 	ct domain.ChungTuGiaiNgan) error {
 
 	kq, err := tx.Exec(ctx, capNhatChungTu, string(tx.TenantID()),
 		ct.ID, ct.NgayChi, int64(ct.SoTien), ct.NoiDung,
-		rongThanhNil(ct.DoiTac), rongThanhNil(ct.SoChungTu))
+		rongThanhNil(ct.DoiTac), rongThanhNil(ct.SoChungTu), rongThanhNil(ct.NguonVonID))
 	if err != nil {
 		return fmt.Errorf("chung_tu_giai_ngan: cập nhật: %w", err)
 	}

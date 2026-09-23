@@ -64,8 +64,6 @@ const (
 //	tenant_id     never a field. It rides in context.Context and is bound by the scoped
 //	              repository (rule 1, invariant 4). A field would be a value somebody can pass.
 //	deleted_at    a soft-deleted voucher never leaves the store (rule 7, invariant 2).
-//	nguon_von_id  the funding-source table does not exist yet (0004's header says why), and §13
-//	              rule 6 already says a voucher with no source still counts toward the total.
 //
 // EVERY `…ID` FIELD HERE HOLDS A STAFF BUSINESS CODE (`CB-2026-7K3M9Q`), never an internal ULID —
 // the same value `audit_log.actor_id` holds, for the same reason (rule 6, invariant 8): the column
@@ -86,6 +84,20 @@ type ChungTuGiaiNgan struct {
 	NoiDung   string
 	DoiTac    string // "Công ty ABC" — a company, not a person. Nothing here is personal data.
 	SoChungTu string
+
+	// NguonVonID is which funding source this payment was drawn from (`nguon_von.id`, migration
+	// 0007). OPTIONAL, AND ITS EMPTINESS IS A STATE THE SPECIFICATION DEFINES rather than a gap to
+	// be closed: §13 rule 6 says a voucher with no source still counts toward "đã giải ngân" and is
+	// reported separately as "đã chi nhưng chưa ghi rút từ nguồn nào" — a figure §6 prints on a real
+	// commune's screen.
+	//
+	// "" HERE IS `NULL` IN THE DATABASE, never the empty string. The column carries
+	// `CHECK (nguon_von_id IS NULL OR btrim(nguon_von_id) <> '')` (0007:274-277) precisely because ''
+	// would drop a voucher out of that warning while attaching it to no source either — money missing
+	// from both sides of the screen with every row looking filled in. The store spells the conversion
+	// (rongThanhNil) and this layer never sends a blank downward.
+	NguonVonID string
+
 	TrangThai TrangThaiChungTu
 
 	NguoiNhapID    string
@@ -183,6 +195,7 @@ var (
 	ErrNoiDungQuaDai    = errors.New("chung_tu: `description` quá dài")
 	ErrDoiTacQuaDai     = errors.New("chung_tu: `counterparty` quá dài")
 	ErrSoChungTuQuaDai  = errors.New("chung_tu: `voucher_no` quá dài")
+	ErrNguonVonIDSai    = errors.New("chung_tu: `funding_source_id` không phải một mã nguồn vốn hợp lệ")
 	ErrThieuLyDoMoKhoa  = errors.New("chung_tu: thiếu lý do mở khoá — mở khoá một con số đã có người ký thì phải giải thích được")
 	ErrLyDoMoKhoaQuaDai = errors.New("chung_tu: lý do mở khoá quá dài")
 	ErrThieuLyDoGo      = errors.New("chung_tu: thiếu lý do gỡ chứng từ")
@@ -196,10 +209,16 @@ const (
 	NoiDungChungTuToiDa = 1000
 	DoiTacToiDa         = 300
 	SoChungTuToiDa      = 100
-	LyDoMoKhoaToiDa     = 500
-	LyDoGoChungTuToiDa  = 500
-	NamChungTuSom       = 2000
-	NamChungTuMuon      = 2100
+
+	// NguonVonIDToiDa bounds the funding-source id a client may send. A ULID is 26 characters, so
+	// this is twice over and is not a format check: what it refuses is an unbounded client string
+	// being carried into a query parameter. The value is looked up against this commune's live
+	// sources anyway (store.NguonVonConSong), and that lookup — not this bound — is the real check.
+	NguonVonIDToiDa    = 64
+	LyDoMoKhoaToiDa    = 500
+	LyDoGoChungTuToiDa = 500
+	NamChungTuSom      = 2000
+	NamChungTuMuon     = 2100
 
 	// SoTienToiDa is one hundred thousand billion đồng (10^17), and it is a TYPO GUARD, not a
 	// business ceiling.
@@ -304,6 +323,33 @@ func ChuanHoaSoChungTu(s string) (string, error) {
 		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrSoChungTuQuaDai, SoChungTuToiDa)
 	case coKyTuDieuKhien(s):
 		return "", ErrSoChungTuQuaDai
+	}
+	return s, nil
+}
+
+// ChuanHoaNguonVonID trims and bounds the funding-source id a client sent.
+//
+// THE EMPTY RESULT IS A MEANINGFUL ANSWER AND NOT AN ERROR: "this payment is not recorded against
+// any source" is the state §13 rule 6 defines and §6 reports, so a blank is returned as a blank and
+// the store turns it into `NULL`. That is why this function does not refuse "" the way
+// ChuanHoaLyDoGo does.
+//
+// WHITESPACE IS TRIMMED TO "" ON PURPOSE. A value of "   " would otherwise reach the column and be
+// refused by `chung_tu_giai_ngan_nguon_von_khong_rong` (0007:274-277) as a PostgreSQL exception, when
+// what the client meant — and what the screen sent — is "no source". Trimming here makes the two
+// spellings of nothing into one, which is the whole point of that CHECK.
+//
+// IT DOES NOT VALIDATE THE FORMAT, and must not start to: `nguon_von.id` is a ULID today, and a
+// format assertion here would be a second, silent copy of that decision that nothing regenerates.
+// Whether the id names a LIVE source OF THIS COMMUNE is the question that actually matters, and it
+// is answered inside the transaction (rule 1 — there is no foreign key, 0007:102-113 says why).
+func ChuanHoaNguonVonID(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	switch {
+	case len([]rune(s)) > NguonVonIDToiDa:
+		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrNguonVonIDSai, NguonVonIDToiDa)
+	case coKyTuDieuKhien(s):
+		return "", ErrNguonVonIDSai
 	}
 	return s, nil
 }

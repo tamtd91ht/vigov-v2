@@ -691,6 +691,133 @@ func TestThemChungTu_201TraVeChungTuVuaGhi(t *testing.T) {
 	}
 }
 
+// --- the funding source of a payment (§8.2's `NGUỒN VỐN` column, migration 0007) ---------------------
+//
+// WHAT THIS LAYER CAN PROVE AND THE app LAYER CANNOT: that the field survives the JSON boundary in
+// both directions, and above all that PATCH's THREE ANSWERS stay three. The use case distinguishes
+// "leave alone" from "detach" by a nil pointer; a handler that dereferenced it, or that dropped the
+// field, would collapse the two at the last layer able to tell them apart — and every test in
+// internal/app would stay green.
+
+const idNguonVonHTTP = "01JNGUONVONNGANSACHXA0000"
+
+func TestThemChungTu_NguonVonDiQuaThanVaTroLaiTrongDapAn(t *testing.T) {
+	m := dungMayChuChungTu(t)
+	m.capQuyen(xaA, "budget.update")
+	m.ghi.ra.NguonVonID = idNguonVonHTTP
+
+	w := m.goi(t, http.MethodPost, hostA, duongChungTu, canBoGhi(xaA),
+		`{"project_id":"01JDUANCUAXAA000000000000","payment_date":"2026-09-07","amount":30000000,`+
+			`"description":"Thanh toán đợt 3","funding_source_id":"`+idNguonVonHTTP+`"}`)
+	doiMa(t, w, http.StatusCreated)
+
+	if m.ghi.themCuoi.NguonVonID != idNguonVonHTTP {
+		t.Errorf("use case nhận nguồn vốn %q, muốn %q", m.ghi.themCuoi.NguonVonID, idNguonVonHTTP)
+	}
+	var ra chungTuRa
+	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+		t.Fatalf("thân không phải JSON: %q", w.Body.String())
+	}
+	if ra.FundingSourceID != idNguonVonHTTP {
+		t.Errorf("`funding_source_id` = %q, muốn %q", ra.FundingSourceID, idNguonVonHTTP)
+	}
+}
+
+func TestThemChungTu_ChuaGanNguonThiTuyenVanNhan(t *testing.T) {
+	// §13 rule 6 IS A STATE, NOT A GAP. A voucher with no source counts toward "đã giải ngân" and is
+	// reported at §6 as "đã chi nhưng chưa ghi rút từ nguồn nào". A route that required the field would
+	// refuse a payment that has ALREADY LEFT THE COMMUNE'S ACCOUNT — and the accountant would have
+	// nothing to type.
+	m := dungMayChuChungTu(t)
+	m.capQuyen(xaA, "budget.update")
+
+	w := m.goi(t, http.MethodPost, hostA, duongChungTu, canBoGhi(xaA), thanThemChungTu)
+	doiMa(t, w, http.StatusCreated)
+	if m.ghi.themCuoi.NguonVonID != "" {
+		t.Errorf("handler tự bịa nguồn vốn %q", m.ghi.themCuoi.NguonVonID)
+	}
+	// AND THE REPLY DOES NOT CARRY THE FIELD AT ALL. `—` is what §8.2's own sample rows show in that
+	// column; `omitempty` is what makes the body say so.
+	if strings.Contains(w.Body.String(), `"funding_source_id"`) {
+		t.Errorf("chứng từ chưa gắn nguồn mà đáp án vẫn mang `funding_source_id`: %s", w.Body.String())
+	}
+}
+
+func TestSuaChungTu_BaCauTraLoiCuaNguonVonKhongBiGopLai(t *testing.T) {
+	// THE THREE ANSWERS, EACH SENT AS THE CLIENT WOULD SEND IT:
+	//
+	//	field absent   nil   -> the use case leaves the voucher's source exactly as it is
+	//	`""`           ptr   -> DETACH, back into §6's "đã chi nhưng chưa ghi rút từ nguồn nào"
+	//	an id          ptr   -> attach
+	//
+	// A HANDLER THAT DROPPED THE MIDDLE ONE would leave a commune unable to say "not this source"
+	// about a payment it attributed wrongly — short of removing the voucher entirely, which is a
+	// different act with a different permission and a different entry in the ledger.
+	for _, tc := range []struct {
+		ten   string
+		than  string
+		coTro bool
+		gia   string
+	}{
+		{"không nhắc tới thì để nguyên", `{"description":"Thanh toán đợt 4"}`, false, ""},
+		{"chuỗi rỗng là GỠ khỏi nguồn", `{"funding_source_id":""}`, true, ""},
+		{"mã thật là gắn vào nguồn", `{"funding_source_id":"` + idNguonVonHTTP + `"}`, true,
+			idNguonVonHTTP},
+	} {
+		t.Run(tc.ten, func(t *testing.T) {
+			m := dungMayChuChungTu(t)
+			m.capQuyen(xaA, "budget.update")
+
+			doiMa(t, m.goi(t, http.MethodPatch, hostA, duongChungTuMot(""), canBoGhi(xaA), tc.than),
+				http.StatusOK)
+
+			got := m.ghi.suaCuoi.NguonVonID
+			if !tc.coTro {
+				if got != nil {
+					t.Fatalf("thân không nhắc `funding_source_id` mà use case nhận con trỏ tới %q — "+
+						"\"để nguyên\" và \"gỡ khỏi nguồn\" đã bị gộp làm một", *got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("thân có `funding_source_id` mà use case nhận nil")
+			}
+			if *got != tc.gia {
+				t.Fatalf("use case nhận %q, muốn %q", *got, tc.gia)
+			}
+		})
+	}
+}
+
+func TestChungTu_NguonVonKhongCoTrongXaThi404(t *testing.T) {
+	// 404 ON BOTH ROUTES THAT CARRY THE FIELD, and the same answer for "no such source" and "another
+	// commune's source": the query binds tenant_id = $1, so this service cannot tell them apart and
+	// must not appear to (rule 1). A different status for the two would let a caller probe which
+	// commune holds which sources.
+	for _, tc := range []struct {
+		ten    string
+		method string
+		duong  string
+		than   string
+	}{
+		{"POST", http.MethodPost, duongChungTu, thanThemChungTu},
+		{"PATCH", http.MethodPatch, duongChungTuMot(""),
+			`{"funding_source_id":"01JNGUONVONCUAXAKHAC00000"}`},
+	} {
+		t.Run(tc.ten, func(t *testing.T) {
+			m := dungMayChuChungTu(t)
+			m.capQuyen(xaA, "budget.update")
+			m.ghi.loi = fistore.ErrKhongThayNguonVonCuaChungTu
+
+			w := m.goi(t, tc.method, hostA, tc.duong, canBoGhi(xaA), tc.than)
+			doiMa(t, w, http.StatusNotFound)
+			if e := loiTra(t, w); !strings.Contains(e.Message, "nguồn vốn") {
+				t.Errorf("thông báo không nói về nguồn vốn: %q", e.Message)
+			}
+		})
+	}
+}
+
 func TestThemChungTu_KhongCoRedisThi503_DongKhiHong(t *testing.T) {
 	// THE DECLARATION, EXERCISED. `POST /api/v1/disbursements` is the only route in this service
 	// that declares idem.Required(idem.DongKhiHong), and the reason is written at the route: there

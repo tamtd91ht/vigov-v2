@@ -49,6 +49,7 @@ type hangCT struct {
 	noiDung      string
 	doiTac       string
 	soChungTu    string
+	nguonVonID   string
 	trangThai    string
 	nguoiNhap    string
 	nguoiXacNhan string
@@ -71,6 +72,13 @@ type khoCTGia struct {
 	// maDuAn is what `SELECT ma FROM du_an` answers. EMPTY MEANS NO SUCH LIVE PROJECT, which is the
 	// case ErrKhongThayDuAnCuaChungTu exists for — money filed against a project that totals nowhere.
 	maDuAn string
+
+	// nguonVonCo is the set of LIVE funding sources of this commune, and it is a SET rather than a
+	// boolean on purpose: the case worth separating is "this id names nothing here" from "no source
+	// exists at all". The first is what a voucher attached to another commune's source looks like
+	// from inside this one — the query binds tenant_id = $1, so such a row is simply not there
+	// (rule 1) — and it is the case with no foreign key underneath to catch it (0007:102-113).
+	nguonVonCo map[string]bool
 
 	loi error
 
@@ -166,6 +174,14 @@ func (c *connCTGia) QueryContext(_ context.Context, q string, args []driver.Name
 			return &rowsGia{cot: []string{"ma"}}, nil
 		}
 		return &rowsGia{cot: []string{"ma"}, hang: [][]driver.Value{{c.k.maDuAn}}}, nil
+	case strings.Contains(q, "FROM nguon_von"):
+		// NO ROW IS THE ANSWER FOR AN ID THIS COMMUNE DOES NOT HOLD, which is exactly what PostgreSQL
+		// would return: the statement binds tenant_id = $1, so another commune's source and a source
+		// that never existed are one answer here (store.ErrKhongThayNguonVonCuaChungTu).
+		if len(args) < 2 || !c.k.nguonVonCo[fmt.Sprint(args[1].Value)] {
+			return &rowsGia{cot: []string{"?column?"}}, nil
+		}
+		return &rowsGia{cot: []string{"?column?"}, hang: [][]driver.Value{{int64(1)}}}, nil
 	case strings.Contains(q, "FOR UPDATE"):
 		if c.k.hang == nil {
 			return &rowsGia{cot: cotCT()}, nil
@@ -173,7 +189,7 @@ func (c *connCTGia) QueryContext(_ context.Context, q string, args []driver.Name
 		h := *c.k.hang
 		return &rowsGia{cot: cotCT(), hang: [][]driver.Value{{
 			h.id, h.duAnID, h.ngayChi, h.soTien, h.noiDung,
-			h.doiTac, h.soChungTu, h.trangThai,
+			h.doiTac, h.soChungTu, h.nguonVonID, h.trangThai,
 			h.nguoiNhap, h.nguoiXacNhan, h.nguoiKhoa, h.nguoiMoKhoa,
 			gioHoacNil(h.thoiDiemKhoa), gioHoacNil(h.thoiDiemMo),
 			h.lyDoMoKhoa, h.soLanMoKhoa,
@@ -196,7 +212,7 @@ func gioHoacNil(t *time.Time) driver.Value {
 func cotCT() []string {
 	return []string{
 		"id", "du_an_id", "ngay_chi", "so_tien", "noi_dung",
-		"doi_tac", "so_chung_tu", "trang_thai",
+		"doi_tac", "so_chung_tu", "nguon_von_id", "trang_thai",
 		"nguoi_nhap_id", "nguoi_xac_nhan_id", "nguoi_khoa_id", "nguoi_mo_khoa_id",
 		"thoi_diem_khoa", "thoi_diem_mo_khoa", "ly_do_mo_khoa", "so_lan_mo_khoa",
 	}
