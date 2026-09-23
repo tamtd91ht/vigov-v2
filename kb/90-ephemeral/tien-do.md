@@ -26,7 +26,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 28 |
 | chưa làm | 14 |
 | treo | 12 |
-| xong | 109 |
+| xong | 111 |
 
 ## `_chung`
 
@@ -98,7 +98,7 @@ Cập nhật 2026-09-22 · 11 mục
 
 ## `deploy`
 
-Cập nhật 2026-09-23 · 12 mục
+Cập nhật 2026-09-23 · 13 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -140,6 +140,13 @@ HAI CHỖ CÒN HỞ, đã ghi vào chính mục 5 chứ không để người sa
 (2) KAFKA CHƯA CÓ BIẾN NÀO. ADR 0010 chốt Kafka mang sự kiện giữa service, nhưng `core/events.Publisher` còn là interface thuần nên không có dòng nào trong .env.example và không có trường nào trong config.Config. Đặt tên cho nó là STOP CONDITION của luật 11 câu 1 — tên nói VAI TRÒ (KAFKA_EVENT_ADDRESS) chứ không nói cụm (KAFKA_02_ADDRESS), và ai cấp là quyết định của chủ cụm. ĐỪNG viết os.Getenv("KAFKA_…") trước khi hỏi.
 
 CỔNG NÀY KHÔNG KIỂM NỘI DUNG cột 'k8s cấp bằng' — không gì quyết được điều đó từ mã. Nó kiểm đúng phần quyết được: bảng có đủ và chỉ những biến core/config đọc, và biến bắt buộc tại Load có được đánh dấu bắt buộc không. Đừng đọc nó như một bảo đảm rộng hơn. |
+| `so-tay-final-va-lo-redis` — deploy/README.md thành SỔ TAY chạy được — và hai chỗ nó đang dạy sai đã lộ ra khi đối chiếu lại mã | xong | Viết lại 10 mục theo thứ tự thao tác: 0 đọc trước · 1 git · 2 Jenkins · 3 biến môi trường (ĐƯA LÊN TRƯỚC mục tạo Secret) · 4 cài lần đầu · 5 bảy lượt deploy · 6 kiểm sau khi lên · 7 bẫy apply -k · 8 bốn điều dễ hiểu sai · 9 Ingress · 10 chưa chứng minh. Mọi con số đếm lại từ đĩa ngày 23/09/2026: 82 tuyến REST (identity 37 · petitions 16 · documents 13 · finance 12 · comms 4 — bản cũ ghi 23 tuyến, đã lệch hẳn), 26 luật Ingress, ConfigMap 1 khoá. Kiểm: check_env_map PASS · check_build PASS · test_hooks 222/222 · check_brain 7/7 · kubectl kustomize cả hai overlay dựng sạch. | — | HAI CHỖ TÀI LIỆU + MANIFEST ĐANG DẠY SAI, tìm ra vì đối chiếu lại mã chứ không vì ai báo:
+
+(1) REDIS_DSN. `bi-mat-platform` được chú giải là có REDIS_DSN, nhưng `service-platform` KHÔNG đọc `cfg.RedisDSN` ở bất cứ đâu — trong khi NĂM dịch vụ đọc nó (identity/documents/finance/petitions/comms) thì khối lệnh cài lần đầu lại không cấp. Hậu quả nếu deploy theo bản cũ: `idemStore` nil ở cả năm, và BẢY lời gọi `idem.Required(idem.DongKhiHong)` trên SÁU đường dẫn trả 503 — POST /api/v1/{staff,disbursements,budget-sheets,budget-lines,incoming-documents,outgoing-documents}. Tiền, số văn bản đã phát hành, tài khoản cán bộ. Pod xanh, probe xanh, tuyến chết. Đã sửa cả README lẫn sáu chú giải trong deploy/base/*/deployment.yaml.
+
+(2) Số tuyến REST. Bản cũ ghi identity 15 · finance 3 · petitions 3 · documents 1 · comms 1 = 23. Thực tế hôm nay 82. Con số ấy quyết định thứ tự deploy và độ rủi ro của từng lượt, nên để nó cũ là để người vận hành đánh giá sai việc mình đang làm.
+
+BÀI HỌC GIỮ LẠI: một tài liệu triển khai chép số từ lần viết trước là tài liệu sẽ lệch trong vài ngày. Mọi con số trong bản này đều đếm lại từ `kb/20-contracts/openapi.json` và từ mã tại thời điểm viết, và có ghi NGÀY ĐẾM ngay cạnh. |
 
 ## `platform-admin`
 
@@ -245,7 +252,7 @@ Cập nhật 2026-09-23 · 20 mục
 
 ## `service-petitions`
 
-Cập nhật 2026-09-23 · 12 mục
+Cập nhật 2026-09-23 · 13 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -321,6 +328,29 @@ CÒN THIẾU Ở TẦNG THÔNG BÁO: luật 10 bất biến 5 đòi mỗi lần 
 
 GIẢ ĐỊNH CẦN KHÁCH XÁC NHẬN, không chặn mã: bốn trần độ dài (nội dung 4000 · địa chỉ 500 · họ tên 200 · số điện thoại 32 ký tự) do tôi đặt vì lược đồ không có ràng buộc nào và tài liệu không nêu số. Định dạng số điện thoại CỐ Ý không kiểm — xã nào nhận dạng số nào là luật nghiệp vụ chưa ai phát biểu, và một regex bịa ra sẽ từ chối số thật của người dân thật đúng lúc họ cần báo việc. |
 | `vet-ghi-ma-can-bo` — Tuyến ghi để lại vết mang mã cán bộ — kể cả dòng vết ĐỌC ĐẦY ĐỦ NGƯỜI GỬI | xong | HAI chỗ, không phải một. (1) `internal/http/danh_muc_ghi.go:71` đổi `p.ID` -> `p.Ma`. (2) `internal/http/phieu_phan_anh.go:302` — CHỖ THỨ SÁU MÀ SỔ _chung ĐẾM THIẾU: dòng vết ghi lại việc một cán bộ đọc HỌ TÊN + SỐ ĐIỆN THOẠI đầy đủ của người gửi (luật 6 bất biến 7) cũng nạp `principal.ID`. Đổi sang `principal.Ma`, VÀ đưa `Ma != ""` vào chính điều kiện tiết lộ: không có mã để quy trách nhiệm thì cán bộ KHÔNG nhận được số đầy đủ, phản hồi vẫn che — đóng theo chiều an toàn chứ không tiết lộ rồi ghi hụt. (3) GIỮ NGUYÊN `gui_phan_anh.go:226`: chủ thể ở đó là CÔNG DÂN, không có mã cán bộ, và đổi nó sẽ làm mọi phản ánh của công dân ngừng được tiếp nhận — lý do đã viết dài tại chỗ để không ai 'dọn cho nhất quán'. `xem_nguoi_gui_test.go` trước đây chốt ULID làm chủ thể, nay chốt mã. go vet sạch · test xanh. | — | — |
+| `linh-vuc-han-che-tren-tuyen-ghi` — Lĩnh vực hạn chế `can-bo` trên BỐN TUYẾN GHI — từ chối cả hành vi, trả 404 giống mã không tồn tại | xong | LỖ RÒ CÓ THẬT, ĐÃ ĐO TRƯỚC KHI VÁ 23/09/2026: hai đường ĐỌC đã chặn từ đầu (chi tiết trả 404 tại internal/http/phieu_phan_anh.go:300-306; danh sách loại khỏi cả SỐ ĐẾM ngay trong WHERE, internal/store/xu_ly_phan_anh.go), còn CẢ BỐN tuyến GHI không hỏi `feedback.restricted` và cả bốn trả NGUYÊN THÂN PHIẾU qua `traPhieu` — nên một tài khoản có `feedback.resolve` mà không có `feedback.restricted` đọc được nội dung một phiếu `can-bo` bằng một lần POST thành công. `can-bo` là "Thái độ / tác phong cán bộ", tức đơn tố cáo về chính cán bộ.
+
+HÌNH DẠNG BẢN VÁ — TỪ CHỐI HÀNH VI, KHÔNG CHỈ GIẤU THÂN. Che phản hồi không giải quyết gì: vấn đề thật là đồng nghiệp của người bị nêu tên đang phân loại, phân công và ĐÓNG đơn tố cáo về người ấy. Theo đúng khuôn luật nắm giữ vừa dựng cùng ngày: handler trả lời MỘT sự thật (`Handler.coQuyenHanChe`, internal/http/xu_ly_phan_anh.go), tầng `internal/app` ra quyết định BÊN TRONG GIAO DỊCH trên dòng đọc dưới khoá (`app.duocChamPhieuHanChe`), sau câu đọc và trước mọi câu ghi. Kiểu CÓ TÊN `app.QuyenXemHanChe`, không truyền bool trần. Bốn use case ChotLinhVuc/PhanCong/TienTrangThai/Dong đều nhận tham số ấy, và giao diện `XuLyPhieuPhanAnh` trong routes.go khai đủ bốn — một phương thức thiếu tham số là một đường ghi không từ chối được.
+
+THỨ TỰ CÁC PHÉP TỪ CHỐI LÀ MỘT PHẦN CỦA TÍNH ĐÚNG, không phải sắp xếp: phép kiểm hạn chế đứng TRƯỚC phép kiểm vòng đời (409 'phiếu đã chuyển trạng thái' là câu nói VỀ BẢN GHI) và TRƯỚC luật nắm giữ (403 'phiếu không được giao cho bạn' cũng vậy). Ở ChotLinhVuc còn thêm một phép kiểm trên lần đọc KHÔNG khoá, trước lời gọi identity — vì nhánh dưới nó trả 409 `sla_chua_cau_hinh`, là câu trả lời THƯỜNG GẶP ở mọi xã hôm nay và cũng xác nhận phiếu tồn tại.
+
+404 CHỨ KHÔNG 403, cùng một câu mà đường đọc đã viết sẵn (phieu_phan_anh.go:293-299): 403 ở đây xác nhận rằng CÓ một đơn về một cán bộ tồn tại dưới mã này, nói với chính đồng nghiệp của người ấy. Ánh xạ ở `traLoiLoiXuLy` gọi `khongTimThay` — nguyên nhân THỨ NĂM gộp vào một câu trả lời.
+
+LỚP THỨ HAI ở `traPhieu`, và chú thích nói rõ nó là lớp thứ hai: một tuyến ghi THỨ NĂM viết sau này có thể quên truyền quyền xuống. Nói thẳng giới hạn của nó: nó giữ lại BẢN GHI, không giữ lại HÀNH VI — tới lúc chạy tới đó thì lệnh ghi đã commit.
+
+KHÔNG THÊM KHOÁ QUYỀN NÀO, không đổi khai báo quyền của tuyến nào: `feedback.restricted` đã gieo tại service-identity/migrations/0001_init.sql:294. `python tools/check_quyen.py` PASS — 35 khoá trong bảng, 0 chỗ dùng khoá không tồn tại. `go run ./tools/apidoc`: 82 route, openapi.json KHÔNG đổi (bốn tuyến đã khai sẵn 404).
+
+PHÉP KIỂM — bốn ô × bốn hành vi. internal/app/xu_ly_phan_anh_test.go TestBonHanhViVaLinhVucHanChe: 16 ca con, ô thứ ba (phiếu `can-bo` + KHÔNG quyền) khẳng định errors.Is(ErrPhieuHanChe) VÀ 0 câu `UPDATE phieu_phan_anh` · 0 `INSERT INTO audit_log` · 0 `INSERT INTO su_kien_di` · commit == 0, chạy trên store THẬT qua driver database/sql giả. Hai vế phủ định nằm ngay trong bảng: phiếu `rac-thai` + không quyền vẫn làm được cả bốn hành vi — thiếu ca ấy thì một bản vá quá tay khoá cả xã mà không gì đỏ. Thêm TestPhanLoaiPhieuHanCheKhongHoiIdentity (han.goi == 0, batDau == 0) và TestTienTrangThaiPhieuHanCheTraLoiHanCheChuKhongPhaiKhongDuocGiao (khi hai luật cùng từ chối thì phép tiết lộ YẾU HƠN thắng). internal/http/xu_ly_phan_anh_test.go thêm 4 bài / 28 ca con: sự thật truyền xuống đúng hai chiều trên cả bốn tuyến · KHÔNG đọc từ khoá láng giềng (resolve/assign/classify/unmask) · 404 chứ không 403 kèm khẳng định thân phản hồi không chứa `can-bo`, không chứa nội dung phiếu, không chứa chữ 'hạn chế' · lớp thứ hai ở traPhieu che phiếu, và vế ngược lại vẫn trả phiếu cho người CÓ khoá.
+
+HAI ĐỘT BIẾN ĐÃ CHẠY, phục hồi bằng BẢN CHỤP TỆP (cp trước/cp lại sau, KHÔNG git restore): (a) bỏ phép kiểm trong `duocChamPhieuHanChe` -> ĐỎ ô thứ ba trên CẢ BỐN hành vi (4 dòng lỗi) + 2 bài kia; (b) đổi 404 thành 403 ở nhánh ErrPhieuHanChe -> ĐỎ cả 4 ca con của TestBonTuyenGhiPhieuHanCheThi404ChuKhongPhai403.
+
+CỔNG KIỂM ĐÃ CHẠY THẬT: `gofmt -l service-petitions` rỗng · `go vet ./...` sạch · `go test -count=1 -p 1 ./...` XANH 5/5 gói có test · check_quyen PASS · check_audit_actor PASS (462 tệp Go, 0 chỗ nạp định danh nội bộ) · apidoc 82 route, 0 việc web mới. | — | HỆ QUẢ PHẢI NÓI TO, không giấu: một xã KHÔNG có ai cầm `feedback.restricted` thì phiếu `can-bo` KHÔNG AI XỬ LÝ ĐƯỢC — không phân loại, không phân công, không tiến, không đóng. Đó là hỏng-đóng và là điều đúng: đường ĐỌC đã như thế từ trước (không ai liệt kê hay mở được chúng), nên lựa chọn còn lại là một phiếu có người tác động được mà không ai đọc được. Đây là việc CẤU HÌNH của xã (gán khoá cho ít nhất một người), không phải lỗi để vá lại.
+
+MỘT ĐIỂM CỐ Ý KHÔNG QUYẾT, cần chủ dự án trả lời: phép kiểm soi LĨNH VỰC DÒNG ĐANG GIỮ, không soi lĩnh vực người gọi ĐANG ĐẶT. Nên một cán bộ không có `feedback.restricted` VẪN phân loại được một phiếu chưa có lĩnh vực THÀNH `can-bo` — hành vi thành công, và phản hồi trả 404 (lớp thứ hai ở traPhieu) vì bản ghi ấy họ không còn đọc được nữa. Lý do không chặn: phiếu ấy vốn đã đọc được với họ một giây trước đó nên không lộ thêm gì, và chặn thì CHỈ người giữ khoá mới đánh dấu được một đơn là 'về cán bộ' — mà chính người nhận đơn ở bàn tiếp dân mới là người biết điều đó. Nếu khách muốn siết, đó là một dòng trong `duocChamPhieuHanChe` (so thêm `linhVuc` đầu vào) cộng một ca kiểm.
+
+CHƯA KIỂM ĐƯỢC: Docker tắt nên toàn bộ ca `*_pg_test.go` SKIP — phép từ chối này chỉ được chứng minh ở tầng ứng dụng trên driver giả, CSDL không có lớp cưỡng chế nào cho lĩnh vực hạn chế (và cũng không nên có: đây là luật phân quyền, không phải ràng buộc dữ liệu).
+
+CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân hệ này chưa tồn tại; ngày nó ra đời thì nó là đường ĐỌC HÀNG LOẠT và phải hỏi cùng khoá này ngay trong WHERE như danh sách, chứ không lọc sau. |
 
 ## `service-platform`
 

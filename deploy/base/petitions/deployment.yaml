@@ -119,6 +119,10 @@ spec:
             # Ba khoá này là điều kiện KHỞI ĐỘNG, không phải tuỳ chọn: `core/config.Load` gom
             # đủ tên còn thiếu rồi thoát (config.go:321-352). SESSION_SIGNING_KEYS nằm trong
             # danh sách kể cả khi dịch vụ này không tự phát phiên — Load đòi nó ở staging/prod.
+            # ⚠ THÊM `REDIS_DSN` Ở STAGING/PROD. `config.Load` KHÔNG đòi nó, nên thiếu nó
+            # không có gì đỏ — `idemStore` thành nil và mỗi tuyến hành xử theo `CheDoHong` nó
+            # khai. Bảy lời gọi `idem.Required(idem.DongKhiHong)` trong kho trả 503: tiền, số
+            # văn bản đã phát hành, tài khoản cán bộ. Pod xanh, probe xanh, tuyến chết.
             - secretRef: { name: bi-mat-petitions }
 
           # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý (`main.go:171`): nó trả lời "tiến

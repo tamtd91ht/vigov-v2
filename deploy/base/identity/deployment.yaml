@@ -80,6 +80,10 @@ spec:
               value: platform:9090
           envFrom:
             - configMapRef: { name: cau-hinh-chung }
+            # ⚠ THÊM `REDIS_DSN` Ở STAGING/PROD. `config.Load` KHÔNG đòi nó, nên thiếu nó
+            # không có gì đỏ — `idemStore` thành nil và mỗi tuyến hành xử theo `CheDoHong` nó
+            # khai. Bảy lời gọi `idem.Required(idem.DongKhiHong)` trong kho trả 503: tiền, số
+            # văn bản đã phát hành, tài khoản cán bộ. Pod xanh, probe xanh, tuyến chết.
             - secretRef:    { name: bi-mat-identity }
 
           startupProbe:

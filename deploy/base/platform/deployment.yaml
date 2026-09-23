@@ -66,7 +66,12 @@ spec:
 
           envFrom:
             - configMapRef: { name: cau-hinh-chung }
-            - secretRef:    { name: bi-mat-platform }   # DATABASE_DSN · REDIS_DSN · SESSION_SIGNING_KEYS
+            # BA khoá: DATABASE_DSN · GRPC_CALLER_KEY · SESSION_SIGNING_KEYS.
+            # KHÔNG có REDIS_DSN, và đó là sửa ngày 23/09/2026 chứ không phải chỗ sót: dịch vụ
+            # này không đọc `cfg.RedisDSN` ở bất cứ đâu. Năm dịch vụ kia thì có — chúng dựng
+            # kho chống trùng `core/idem` từ nó. Một khoá thừa trong Secret là một dòng người
+            # vận hành phải đọc rồi tự hỏi mình có quên đặt không.
+            - secretRef:    { name: bi-mat-platform }
 
           # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý
           # (`service-platform/cmd/server/main.go:138`). Nó trả lời "tiến trình này còn sống",
