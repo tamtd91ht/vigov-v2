@@ -116,20 +116,32 @@ Ghi `sha_den` mới + `ngay_review` vào `neo.json`. **Chỉ sau khi ghi chú đ
 neo trước mà ghi chú hỏng giữa chừng thì lần sau bắt đầu từ sau khoảng vừa mất — và không ai
 biết là đã mất.
 
-## BƯỚC 7 — báo cho agent đang chạy
+## BƯỚC 7 — báo cho những gì đang chạy
 
 ```
-ListAgents  →  agent nào đang sống?
+ListAgents  →  ai đang sống?
 ```
 
-Có → `SendMessage` tới từng agent, ngắn gọn: tệp ghi chú nào, `anh_huong` gồm module nào.
+`ListAgents` trả về **hai loại, và lần chạy đầu 23/09/2026 cho thấy loại thứ hai mới là loại
+gặp thật**:
 
-**Lớp này yếu, phải nói thẳng khi báo cáo:** agent đã kết thúc thì không nhận được gì, agent
-đang chạy giữa chừng thì nhận được nhưng không chắc đổi hướng. Lớp giữ lời hứa là **rào chặn ở
-`PreToolUse`**, không phải tin nhắn này.
+| Loại | Báo không | Vì sao |
+|---|---|---|
+| **Subagent** của chính phiên này | Chỉ khi nó đang làm một module trong `anh_huong` | `require-watcher` vừa viết ghi chú thì báo lại nó là vô nghĩa |
+| **Phiên ngang hàng** (`peer session`) | **CÓ — đây là loại quan trọng** | Nó có người dùng riêng, hàng đợi riêng, và **không thấy** ghi chú vừa ghi. Lần chạy đầu tiên gặp đúng ca này: một phiên đang sửa `service-petitions`, và `service-petitions` nằm trong `anh_huong` |
 
-Không có agent nào đang chạy → **không làm gì.** Banner `SessionStart` và rào chặn đã lo phần
-còn lại.
+**Báo SAU khi đã biết `anh_huong`, không trước.** Báo lúc chưa biết là báo bừa.
+
+Nội dung tin: tệp ghi chú · khoảng commit · `anh_huong` · **đường thoát** (mở việc + trích tên
+tệp) · và **nêu thẳng mọi mâu thuẫn với quyết định đã chốt**, kèm `file:line` hai bên. Phiên
+kia có thể đang viết đúng đoạn mã mâu thuẫn ấy.
+
+**Lớp này yếu, phải nói thẳng khi báo cáo.** Tin nhắn tới phiên khác **xếp hàng chờ người dùng
+bên ấy duyệt** nếu phiên ấy chạy ở chế độ quyền khác, và có thể bị từ chối hoặc hết hạn. Gửi
+thành công nghĩa là **đã tới phiên ấy**, không nghĩa là Claude bên ấy đã đọc. Lớp giữ lời hứa
+là **rào chặn ở `PreToolUse`**, không phải tin nhắn này.
+
+Không có ai đang chạy → **không làm gì.** Banner `SessionStart` và rào chặn đã lo phần còn lại.
 
 ## BƯỚC 8 — báo cáo, rồi DỪNG
 

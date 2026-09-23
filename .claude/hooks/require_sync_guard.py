@@ -154,20 +154,67 @@ def chua_tiep_nhan(root: str) -> list[tuple[str, list[str]]]:
     return ra
 
 
+def neo_lech(root: str) -> list[str]:
+    """Branch nào có ghi chú mới hơn neo — tức ĐÃ GHI CHÚ MÀ QUÊN DỜI NEO.
+
+    LỖ NÀY LỘ RA KHI CHẠY THẬT, KHÔNG PHẢI KHI THIẾT KẾ. Ghi chú (bước 5) và dời neo (bước 6)
+    là HAI thao tác, nên phiên chết giữa hai bước để lại một neo cũ hơn thứ đã đọc — và lần
+    review sau đọc lại đúng khoảng vừa đọc. Trùng lặp thì tốn, nhưng cái đắt hơn là người đọc
+    ghi chú thứ hai không phân biệt được nó là phần MỚI hay phần đã đọc rồi.
+
+    Suy ra, không nuôi cờ: so `sha_den` của ghi chú mới nhất mỗi branch với `sha_den` trong
+    `neo.json`. Khớp thì im. Hai con số cho một câu hỏi thì phải có chỗ đối chiếu chúng, nếu
+    không cái lệch là cái không ai thấy.
+    """
+    try:
+        with open(os.path.join(root, NEO.replace("/", os.sep)), encoding="utf-8") as f:
+            br = (json.load(f) or {}).get("branches") or {}
+    except Exception:
+        return []
+
+    # Ghi chú mới nhất của mỗi branch, theo `ngay_review` rồi tên tệp (tên mang ngày ở đầu).
+    moi: dict[str, tuple[str, str, str]] = {}
+    for ten, fm in ghi_chu(root):
+        b, s = fm.get("branch", "").strip(), fm.get("sha_den", "").strip().strip("\"'")
+        if not b or not s:
+            continue
+        khoa = (fm.get("ngay_review", ""), ten)
+        if b not in moi or khoa > (moi[b][0], moi[b][1]):
+            moi[b] = (khoa[0], ten, s)
+
+    ra = []
+    for b, (_, ten, sha) in sorted(moi.items()):
+        neo_sha = str((br.get(b) or {}).get("sha_den", "")).strip()
+        if neo_sha and neo_sha != sha:
+            ra.append(f"{b}: ghi chú `{ten}` đọc tới {sha}, neo còn ở {neo_sha}")
+        elif not neo_sha:
+            ra.append(f"{b}: có ghi chú `{ten}` (tới {sha}) nhưng neo CHƯA CÓ branch này")
+    return ra
+
+
 # --------------------------------------------------------------------------
 # SessionStart — im lặng khi sạch
 # --------------------------------------------------------------------------
 
 def bao_dau_phien(root: str) -> None:
     no = chua_tiep_nhan(root)
-    if not no:
+    lech = neo_lech(root)
+    if not no and not lech:
         return                                    # SẠCH -> không in gì, không tốn token
-    print(f"[ViGov] {len(no)} ghi chú đối chiếu `../vigov-require` CHƯA ĐƯỢC TIẾP NHẬN:")
-    for ten, mods in no[:4]:
-        print(f"[ViGov]   {TANG}/{ten} -> chưa mở việc cho: {', '.join(mods)}")
-    if len(no) > 4:
-        print(f"[ViGov]   ... còn {len(no) - 4} ghi chú nữa")
-    print("[ViGov] Đọc ghi chú RỒI mở việc vào sổ module ấy trước khi viết mã cho nó.")
+
+    if no:
+        print(f"[ViGov] {len(no)} ghi chú đối chiếu `../vigov-require` CHƯA ĐƯỢC TIẾP NHẬN:")
+        for ten, mods in no[:4]:
+            print(f"[ViGov]   {TANG}/{ten} -> chưa mở việc cho: {', '.join(mods)}")
+        if len(no) > 4:
+            print(f"[ViGov]   ... còn {len(no) - 4} ghi chú nữa")
+        print("[ViGov] Đọc ghi chú RỒI mở việc vào sổ module ấy trước khi viết mã cho nó.")
+
+    if lech:
+        print("[ViGov] NEO LỆCH — lần đối chiếu sau sẽ ĐỌC TRÙNG khoảng đã đọc:")
+        for d in lech[:3]:
+            print(f"[ViGov]   {d}")
+        print(f"[ViGov] Dời `sha_den` trong {NEO} cho khớp ghi chú mới nhất.")
 
 
 # --------------------------------------------------------------------------

@@ -789,6 +789,11 @@ CASES = [
     ("require_sync_guard", "sổ neo đúng hình dạng", PASS,
      w("kb/50-doi-chieu/neo.json",
        '{"branches": {"main": {"sha_den": "b159f0e", "ngay_review": "2026-09-23"}}}')),
+    # Neo lệch chỉ CẢNH BÁO ở SessionStart, không chặn lần ghi — nên ca payload của nó là ca
+    # PASS. Phần quyết định (`neo_lech`) là hàm thuần, kiểm ở `chay_thuan()`.
+    ("require_sync_guard", "dời neo — không bao giờ bị chặn vì lệch", PASS,
+     w("kb/50-doi-chieu/neo.json",
+       '{"branches": {"feat/x": {"sha_den": "0000abc", "ngay_review": "2026-09-23"}}}')),
     ("require_sync_guard", "sổ tiến độ — ĐƯỜNG THOÁT của lần chặn, không bao giờ bị chặn", PASS,
      w("kb/90-ephemeral/tien-do/core.json",
        '{"module": "core", "cap_nhat": "2026-09-23", "muc": []}')),
