@@ -1,5 +1,6 @@
 ---
 description: Rewrite the single session-handover note so another session, on another machine, can carry on
+group: Tiến độ & bàn giao
 argument-hint: "(none) — this command reads the repository, not your memory"
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write
 ---

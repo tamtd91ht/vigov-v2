@@ -1,5 +1,6 @@
 ---
 description: Measure the health of the kb/ knowledge layer — dead links, orphans, expired, budget
+group: Bộ não
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

@@ -1,5 +1,6 @@
 ---
 description: Continue developing one business menu on the citizen Zalo Mini App — discovery, tagged proposal, confirmation, per-task commits, per-menu ledger
+group: Phát triển
 argument-hint: "<menu> — bắt buộc, ví dụ: Phản ánh người dân"
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent, AskUserQuestion
 ---

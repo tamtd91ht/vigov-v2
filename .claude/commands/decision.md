@@ -1,5 +1,6 @@
 ---
 description: Record an architectural decision as an ADR under kb/10-decisions/
+group: Yêu cầu & quyết định
 argument-hint: "<decision name, e.g. tenant_id is an opaque ULID>"
 allowed-tools: Read, Grep, Glob, Bash, Write
 ---

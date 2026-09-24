@@ -1,5 +1,6 @@
 ---
 description: Verify the brain's hooks — each one gets a must-block case and a must-pass case
+group: Bộ não
 allowed-tools: Read, Bash, Glob
 ---
 

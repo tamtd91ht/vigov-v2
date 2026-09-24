@@ -242,6 +242,14 @@
       "bang_chung": ".claude/commands/develop-feature.md; skills/develop-menu (mô tả + §5) và ROUTING §0 trỏ tới. check_brain 7/7 (227 tham chiếu, 0 chết). Cổng bàn giao dùng lệnh có thật: make kb → web-admin `npm run gen:api` (package.json:12) → make check (check:api).",
       "no_confirm": [],
       "tiep_theo": "Chưa chạy thật lần nào. Tập nền tảng tham gia LUÔN là xác nhận #1 với người dùng. Pha D (web ‖ miniapp) là chỗ song song duy nhất; A→B→C của backend là tuần tự."
+    },
+    {
+      "id": "lenh-vigov-help",
+      "viec": "Lệnh /vigov-help [lệnh] — danh mục lệnh / của dự án, cú pháp + chức năng, gom nhóm; SINH từ frontmatter chứ không viết tay",
+      "trang_thai": "xong",
+      "bang_chung": "tools/vigov_help.py + .claude/commands/vigov-help.md; khoá `group:` thêm vào 15 tệp lệnh (mỗi tệp đúng +1 dòng); check_brain bất biến 4 đòi `group`. Kiểm: danh mục 16 lệnh 5 nhóm exit 0; /develop-feature → chi tiết exit 0; 'review' → exit 2 liệt kê hai ứng viên; bỏ `group` khỏi vigov-help.md → check_brain FAIL, khôi phục → PASS. make -k check EXIT=0.",
+      "no_confirm": [],
+      "tiep_theo": "Mô tả lệnh in NGUYÊN VĂN `description` — lệnh cũ viết tiếng Anh nên bảng trộn Anh/Việt. Muốn bảng thuần Việt thì sửa description trong từng tệp lệnh, không dịch ở công cụ (hai bản của một câu sẽ lệch)."
     }
   ]
 }

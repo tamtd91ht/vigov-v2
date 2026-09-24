@@ -1,5 +1,6 @@
 ---
 description: Develop one feature of a business menu end to end in ONE run — backend API, Web Admin and Mini App, each only if the feature touches it
+group: Phát triển
 argument-hint: "<menu>[: <chức năng>] — ví dụ: Nhiệm vụ: gắn văn bản vào nhiệm vụ"
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent, AskUserQuestion
 ---

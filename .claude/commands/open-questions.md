@@ -1,5 +1,6 @@
 ---
 description: Check whether the code is silently deciding one of the customer's open questions
+group: Yêu cầu & quyết định
 argument-hint: "[question number, empty = all]"
 allowed-tools: Read, Bash, Glob, Grep
 ---

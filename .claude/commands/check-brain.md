@@ -1,5 +1,6 @@
 ---
 description: Check the 7 structural invariants of the .claude brain — anti-drift
+group: Bộ não
 allowed-tools: Read, Bash, Glob, Grep
 ---
 

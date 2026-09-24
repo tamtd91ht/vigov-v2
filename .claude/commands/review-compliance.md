@@ -1,5 +1,6 @@
 ---
 description: Compliance review — administrative terminology, Vietnamese, accessibility, legal duties
+group: Rà soát
 argument-hint: "[scope: diff | service | all] — empty means diff"
 allowed-tools: Read, Grep, Glob, Bash
 ---

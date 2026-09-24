@@ -1,5 +1,6 @@
 ---
 description: Đối chiếu kho yêu cầu ../vigov-require — BA/PM đã cập nhật gì từ lần review trước, ghi thành ngữ cảnh cho phiên sau
+group: Yêu cầu & quyết định
 argument-hint: "[branch] — bỏ trống để xem mọi branch rồi chọn"
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent, ListAgents, SendMessage
 ---

@@ -1,5 +1,6 @@
 ---
 description: Review all three isolation dimensions across the source — commune, citizen, role
+group: Rà soát
 argument-hint: "[scope: diff | service | all] — empty means diff"
 allowed-tools: Read, Grep, Glob, Bash
 ---

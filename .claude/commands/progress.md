@@ -1,5 +1,6 @@
 ---
 description: Read and update the per-module progress ledger — what is done, what is not, what is waiting on the customer
+group: Tiến độ & bàn giao
 argument-hint: "[module] — omit to see everything"
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write
 ---

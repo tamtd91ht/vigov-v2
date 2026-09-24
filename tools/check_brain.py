@@ -241,6 +241,11 @@ for f in os.listdir(os.path.join(CLAUDE, "commands")):
     head = rd(os.path.join(CLAUDE, "commands", f))[:1200]
     if not re.search(r"^description:", head, re.M):
         fm_gaps.append(f"commands/{f}: missing description")
+    # `group` is what `/vigov-help` (tools/vigov_help.py) files the command under. Missing, the
+    # command still shows — under "Chưa xếp nhóm" — but a help page that grows an unsorted pile
+    # is a help page people stop reading, so it is required here, where it costs one line.
+    if not re.search(r"^group:\s*\S", head, re.M):
+        fm_gaps.append(f"commands/{f}: missing group (read by /vigov-help)")
 
 # Agents, excluding ROUTING.md — it is a decision table, not an agent definition
 AGENT_DIR = os.path.join(CLAUDE, "agents")

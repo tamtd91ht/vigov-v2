@@ -1,5 +1,6 @@
 ---
 description: In bảng tiến độ theo PHÂN HỆ SẢN PHẨM — lọc được theo bề mặt và phân hệ, bỏ trống là toàn bộ
+group: Tiến độ & bàn giao
 argument-hint: "[API|WebAdmin|Miniapp][-<phân hệ>] — ví dụ API-Nhiệm vụ, WebAdmin-Giải ngân, Miniapp, 02. Bỏ trống = toàn bộ"
 allowed-tools: Read, Bash
 ---
