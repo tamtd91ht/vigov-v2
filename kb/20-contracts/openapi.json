@@ -1925,6 +1925,220 @@
         }
       }
     },
+    "/api/v1/citizen-reports/{maTraCuu}/referral": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Chuyển phiếu phản ánh lên/sang cơ quan có thẩm quyền — kèm lý do và cơ quan tiếp nhận",
+        "operationId": "petitions_post_citizen_reports_by_maTraCuu_referral",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.classify"
+        },
+        "x-vigov-task": "6f0b0028165d",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.chuyenCapTrenVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.phieuPhanAnhRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/citizen-reports/{maTraCuu}/rejection": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Không tiếp nhận phiếu phản ánh — kèm lý do người dân đọc được",
+        "operationId": "petitions_post_citizen_reports_by_maTraCuu_rejection",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.classify"
+        },
+        "x-vigov-task": "1dd36d57a365",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.khongTiepNhanVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.phieuPhanAnhRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/citizen-reports/{maTraCuu}/status": {
       "parameters": [
         {
@@ -15985,6 +16199,22 @@
         ],
         "additionalProperties": false
       },
+      "petitions.chuyenCapTrenVao": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "receiving_body": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "receiving_body"
+        ],
+        "additionalProperties": false
+      },
       "petitions.danhSachLoaiNhiemVuRa": {
         "type": "object",
         "properties": {
@@ -16247,6 +16477,18 @@
           "ordinal",
           "task_count",
           "task_done_count"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.khongTiepNhanVao": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },
@@ -16578,6 +16820,12 @@
           },
           "result": {
             "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "receiving_body": {
+            "type": "string"
           }
         },
         "required": [
@@ -16670,6 +16918,19 @@
           },
           "result": {
             "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "receiving_body": {
+            "type": "string"
+          },
+          "branch_ended_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           },
           "public": {
             "type": "boolean"

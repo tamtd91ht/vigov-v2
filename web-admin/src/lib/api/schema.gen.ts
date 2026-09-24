@@ -1160,6 +1160,11 @@ export type petitions_bienBanRa = {
   "created_at": string;
 };
 
+export type petitions_chuyenCapTrenVao = {
+  "reason": string;
+  "receiving_body": string;
+};
+
 export type petitions_danhSachLoaiNhiemVuRa = {
   "items": Array<petitions_loaiNhiemVuRa>;
 };
@@ -1222,6 +1227,10 @@ export type petitions_ketLuanRa = {
   "task_count": number;
   "task_done_count": number;
   "created_at": string;
+};
+
+export type petitions_khongTiepNhanVao = {
+  "reason": string;
 };
 
 export type petitions_loaiNhiemVuRa = {
@@ -1314,6 +1323,8 @@ export type petitions_phieuCuaToiRa = {
   "acknowledge_due": string | null;
   "resolve_due": string | null;
   "result": string;
+  "reason"?: string;
+  "receiving_body"?: string;
 };
 
 export type petitions_phieuPhanAnhRa = {
@@ -1337,6 +1348,9 @@ export type petitions_phieuPhanAnhRa = {
   "unit": string;
   "assignee": string;
   "result": string;
+  "reason"?: string;
+  "receiving_body"?: string;
+  "branch_ended_at"?: string | null;
   "public": boolean;
 };
 
@@ -1868,6 +1882,48 @@ export type petitions_post_citizen_reports_by_maTraCuu_closure = {
   truyVan: {
   };
   than: petitions_dongPhieuVao;
+  phanHoi: {
+    200: petitions_phieuPhanAnhRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/referral — Chuyển phiếu phản ánh lên/sang cơ quan có thẩm quyền — kèm lý do và cơ quan tiếp nhận */
+export type petitions_post_citizen_reports_by_maTraCuu_referral = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/referral";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_chuyenCapTrenVao;
+  phanHoi: {
+    200: petitions_phieuPhanAnhRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/rejection — Không tiếp nhận phiếu phản ánh — kèm lý do người dân đọc được */
+export type petitions_post_citizen_reports_by_maTraCuu_rejection = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/rejection";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_khongTiepNhanVao;
   phanHoi: {
     200: petitions_phieuPhanAnhRa;
     400: httpx_Error;

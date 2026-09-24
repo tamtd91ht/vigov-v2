@@ -376,6 +376,12 @@ const KHOA_PHIEU_MONG_DOI = [
   "unit",
   "assignee",
   "result",
+  // BA TRƯỜNG CỦA HAI NHÁNH RẼ, thêm 25/09/2026 (27aed64): lý do không tiếp nhận / chuyển cấp
+  // trên, cơ quan nhận, lúc rẽ nhánh. Cả ba là thứ công dân ĐƯỢC đọc (tuyến riêng của họ cũng trả
+  // `reason`/`receiving_body`), không phải ghi chú nội bộ; chỉ có mặt khi phiếu ở hai nhánh ấy.
+  "reason",
+  "receiving_body",
+  "branch_ended_at",
 ] as const satisfies readonly KhoaPhieu[];
 
 /** Hợp đồng mọc thêm một trường mà danh sách trên không có → đỏ ngay tại đây. */
