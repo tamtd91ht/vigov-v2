@@ -23,7 +23,7 @@
 //   dịch vụ sở hữu ảnh của nó  ·  kho sở hữu bất biến của kho.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 //
-// MÁY CHỦ BUILD CẦN: go (1.26+), buf, node (22+), python3 (3.8+), và một trình biên dịch C —
+// MÁY CHỦ BUILD CẦN: go (1.26+), buf, node (22+), Python 3.8+ (tên `python3.X` hoặc `python3`, stage đầu tự chọn), và một trình biên dịch C —
 // `go test -race` cần cgo. KHÔNG cần docker: tệp này không đóng ảnh.
 
 pipeline {
@@ -49,7 +49,7 @@ pipeline {
         sh '''
           set -eu
           thieu=""
-          for cc in go buf node npm python3 make gcc; do
+          for cc in go buf node npm make gcc; do
             command -v "$cc" >/dev/null 2>&1 || thieu="$thieu $cc"
           done
           if [ -n "$thieu" ]; then
@@ -59,17 +59,33 @@ pipeline {
             echo ""
             exit 1
           fi
-          go version; buf --version; node --version; python3 --version
-          # `python3` CÓ MẶT chưa đủ. CentOS/RHEL 7 cài sẵn 3.6, mà `tools/*.py` cần 3.8+
-          # (`:=` ở check_env_map.py). Thiếu phép này thì lỗi hiện ra giữa `make check` như
-          # một tệp hỏng cú pháp — đúng cái đã xảy ra 24/09/2026 với `python` là bản 2.7.
-          python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' || {
-            echo ""
-            echo "MÁY CHỦ BUILD CÓ python3 NHƯNG QUÁ CŨ: tools/*.py cần Python 3.8 trở lên."
-            echo ""
-            exit 1
-          }
+          go version; buf --version; node --version
         '''
+        // CHỌN TRÌNH THÔNG DỊCH PYTHON — `tools/*.py` cần 3.8+ (`:=` ở check_env_map.py).
+        //
+        // Không gọi `python3` trần: máy build là CentOS/RHEL 7, `python3` ở đó là 3.6.8 của hệ
+        // điều hành và không được thay (gói hệ thống cần nó). Bản mới cài SONG SONG dưới tên
+        // có số phụ — ngày 24/09/2026 là `/usr/local/bin/python3.9`. Cũng không ghi cứng tên
+        // ấy: lần nâng cấp sau thành một lần sửa mã. Dò tên mới nhất trước, lấy bản đầu tiên
+        // đạt 3.8, và `python3` chỉ là phương án cuối cho máy nào để nó là bản đủ mới.
+        //
+        // Thiếu phép này thì lỗi hiện ra giữa `make check` như một tệp hỏng cú pháp — đúng cái
+        // đã xảy ra 24/09/2026 khi `python` là 2.7.
+        script {
+          env.PYTHON = sh(returnStdout: true, script: '''
+            for py in python3.14 python3.13 python3.12 python3.11 python3.10 python3.9 python3.8 python3; do
+              command -v "$py" >/dev/null 2>&1 || continue
+              if "$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)'; then
+                command -v "$py"; exit 0
+              fi
+            done
+            echo "" >&2
+            echo "MÁY CHỦ BUILD KHÔNG CÓ PYTHON 3.8+ TRONG PATH: tools/*.py cần Python 3.8 trở lên." >&2
+            echo "PATH=$PATH" >&2
+            exit 1
+          ''').trim()
+        }
+        sh '"$PYTHON" --version; echo "PYTHON=$PYTHON"'
       }
     }
 
@@ -100,8 +116,9 @@ pipeline {
         // MỘT ĐỊNH NGHĨA DUY NHẤT của "đã kiểm": `make check`. Pipeline cố ý KHÔNG liệt kê
         // lại từng bước — hai danh sách sẽ lệch, và bản lỏng hơn là bản chạy trên CI trong
         // khi mọi người tin vào bản chặt hơn (luật 9).
-        // `PYTHON=python3`: trên máy build `python` là Python 2.7 (xem đầu Makefile).
-        sh 'make check PYTHON=python3'
+        // `PYTHON` do stage 'Kiểm công cụ' chọn. Trên máy build `python` là 2.7 và `python3`
+        // là 3.6 — cả hai đều không chạy được `tools/*.py` (xem đầu Makefile).
+        sh 'make check PYTHON="$PYTHON"'
       }
     }
   }
