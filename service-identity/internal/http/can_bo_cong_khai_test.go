@@ -251,4 +251,11 @@ func TestSuaCanBoHasZalo(t *testing.T) {
 	if z := m.ghiDanhBa.suaCuoi.CoZalo; z != nil {
 		t.Errorf("has_zalo không gửi mà tới use case là %v — sẽ ghi đè", *z)
 	}
+
+	// null is "unchanged" too — the contract types it nullable, so a client may send it.
+	tg.than = `{"has_zalo":null}`
+	doiMa(t, m.goiGhi(t, tg, hostA, tok), http.StatusOK)
+	if z := m.ghiDanhBa.suaCuoi.CoZalo; z != nil {
+		t.Errorf("has_zalo=null mà tới use case là %v — sẽ ghi đè", *z)
+	}
 }

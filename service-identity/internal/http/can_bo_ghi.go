@@ -90,7 +90,14 @@ type suaCanBoVao struct {
 	// HasZalo — "Có Zalo" (migration 0010 §1). Contact information about the mobile, so it is a
 	// profile correction under `admin.user`, and it publishes nothing: publication is
 	// PUT .../publication under `content.update`. null/absent = unchanged, like every field here.
-	HasZalo *bool `json:"has_zalo"`
+	//
+	// `omitempty` is for the CONTRACT, not the decoder: tools/apidoc marks a field optional only
+	// when it carries omitempty (tools/apidoc/schema.go:723). This field was added after the
+	// contract was published, so without it every existing client would be told to send a field
+	// it has never heard of. Decoding is unaffected — absent/null leave the pointer nil, false
+	// still arrives as a non-nil false. The six fields above stay "required, nullable" because
+	// that is the contract already published; do not "tidy" them to match.
+	HasZalo *bool `json:"has_zalo,omitempty"`
 }
 
 // datCongKhaiVao is the whole body of PUT /api/v1/staff/{id}/publication — the Mini App
