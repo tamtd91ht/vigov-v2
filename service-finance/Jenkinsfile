@@ -45,7 +45,24 @@ pipeline {
         // `go test -race`, mà `-race` cần cgo, tức cần một trình biên dịch C. Thiếu nó thì
         // lỗi rơi vào giữa cổng kiểm dưới dạng "race is only supported ... with cgo" — một
         // dòng trông như mã hỏng chứ không phải như máy chủ thiếu công cụ.
-        sh 'command -v go && command -v buf && command -v docker && command -v gcc'
+        //
+        // Kiểm TỪNG công cụ và in ra cái thiếu. Bản cũ `command -v go && command -v buf && …`
+        // dừng ở công cụ thiếu đầu tiên với exit 1 và không một dòng nào nói thiếu gì — cùng
+        // lớp lỗi mà `Jenkinsfile` gốc gặp ở lượt chạy thật đầu tiên (23/09/2026).
+        sh '''
+          set -eu
+          thieu=""
+          for cc in go buf docker gcc; do
+            command -v "$cc" >/dev/null 2>&1 || thieu="$thieu $cc"
+          done
+          if [ -n "$thieu" ]; then
+            echo ""
+            echo "MÁY CHỦ BUILD THIẾU:$thieu"
+            echo "Dừng ở đây thay vì đổ giữa chừng với một lỗi không đọc được."
+            echo ""
+            exit 1
+          fi
+        '''
         // Để lượt build tự làm chứng về môi trường nó chạy. Docker phải >= 18.09 (ngưỡng có
         // BuildKit) vì Dockerfile dùng `--mount=type=cache`; docker 1.13.1 của CentOS 7 thì
         // không, và stage đóng ảnh sẽ đỏ SAU KHI cổng kiểm đã xanh.

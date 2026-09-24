@@ -36,7 +36,22 @@ pipeline {
 
     stage('Chuẩn bị') {
       steps {
-        sh 'command -v node && command -v npm && command -v docker'
+        // Kiểm TỪNG công cụ và in ra cái thiếu. Bản cũ `command -v node && …` dừng ở công cụ
+        // thiếu đầu tiên với exit 1 và không một dòng nào nói thiếu gì.
+        sh '''
+          set -eu
+          thieu=""
+          for cc in node npm docker; do
+            command -v "$cc" >/dev/null 2>&1 || thieu="$thieu $cc"
+          done
+          if [ -n "$thieu" ]; then
+            echo ""
+            echo "MÁY CHỦ BUILD THIẾU:$thieu"
+            echo "Dừng ở đây thay vì đổ giữa chừng với một lỗi không đọc được."
+            echo ""
+            exit 1
+          fi
+        '''
         // Để lượt build tự làm chứng về môi trường nó chạy. Docker phải >= 18.09 (ngưỡng có
         // BuildKit) vì Dockerfile dùng `--mount=type=cache`; docker 1.13.1 của CentOS 7 thì
         // không, và stage đóng ảnh sẽ đỏ SAU KHI cổng kiểm đã xanh.
@@ -67,19 +82,25 @@ pipeline {
 
     stage('Cổng kiểm của ứng dụng') {
       steps {
-        dir('web-admin') {
-          // `npm ci` chứ không `npm install`: ci cài ĐÚNG những gì lock ghi và đổ nếu lock
-          // lệch package.json.
-          sh 'npm ci'
-          sh 'npm run lint'
-          sh 'npm run typecheck'
-          sh 'npm test'
-          // check:api sinh lại src/lib/api/schema.gen.ts từ kb/20-contracts/openapi.json và
-          // đỏ khi hai bên lệch. Đây là phép kiểm DUY NHẤT bắt được một thay đổi hợp đồng
-          // REST mà web chưa sinh lại kiểu — nghĩa là web gọi một hình dạng máy chủ không
-          // còn trả nữa, và TypeScript vẫn xanh vì nó đang tin vào bản sinh cũ.
-          sh 'npm run check:api'
-        }
+        // `cd` trong shell thay cho bước `dir('web-admin')`: `dir()` để lại `web-admin@tmp/`
+        // trong workspace (xem .dockerignore).
+        //
+        // `npm ci` chứ không `npm install`: ci cài ĐÚNG những gì lock ghi và đổ nếu lock
+        // lệch package.json.
+        //
+        // check:api sinh lại src/lib/api/schema.gen.ts từ kb/20-contracts/openapi.json và
+        // đỏ khi hai bên lệch. Đây là phép kiểm DUY NHẤT bắt được một thay đổi hợp đồng
+        // REST mà web chưa sinh lại kiểu — nghĩa là web gọi một hình dạng máy chủ không
+        // còn trả nữa, và TypeScript vẫn xanh vì nó đang tin vào bản sinh cũ.
+        sh '''
+          set -eu
+          cd web-admin
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run check:api
+        '''
       }
     }
 
