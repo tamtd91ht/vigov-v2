@@ -3,242 +3,191 @@ id: ban-giao-phien
 tier: T5
 source: CURATED
 owner: architecture
-derived_from_commit: ec80994
-expires: 2026-12-21
+derived_from_commit: d4a9c18
+expires: 2026-12-23
 owns_facts:
-  - "quyết định đã chốt với khách, cạm bẫy đã gặp, và phạm vi các phiên song song"
+  - "quyết định đã chốt với người dùng/khách, cạm bẫy đã gặp, và câu đang chờ người dùng — tại 24/09/2026"
 ---
 
-# Bàn giao phiên — cập nhật 2026-09-22
+# Bàn giao phiên — cập nhật 2026-09-24
 
-**Đọc tệp này SAU `kb/INDEX.yaml` và tầng `always_load`, không thay thế chúng.**
-Nó chỉ trả lời: *đã quyết gì, đang kẹt ở ai, và cạm bẫy nào đã tốn thời gian của người trước.*
+**Đọc tệp này SAU `kb/INDEX.yaml` và tầng `always_load`, không thay thế chúng.** Nó chỉ trả lời:
+*đã quyết gì, đang chờ ai, và cạm bẫy nào đã tốn thời gian của người trước.*
 
-Viết bằng `/handover`. **MỘT tệp, ghi đè trọn vẹn mỗi lần** — tên tệp không mang ngày, vì một
-tên mang ngày mời gọi đúng một thứ: tệp bàn giao thứ hai, và hai tệp bàn giao là hai tệp mâu
-thuẫn mà người đọc không biết tin cái nào.
+Viết bằng `/handover`. **MỘT tệp, ghi đè trọn vẹn mỗi lần** — tên không mang ngày, ngày nằm bên
+trong. Hết hạn **2026-12-23**; sau ngày đó tin `git log`, đừng tin tệp này.
 
-Hết hạn **2026-12-21**. Sau ngày đó tin `git log`, đừng tin tệp này.
+Mọi dòng giữ lại từ bản 22/09 (`ec80994`) đã được đối chiếu với đĩa ngày 24/09; dòng nào đã sai
+thì đã bỏ, không giữ "cho đủ".
 
 ---
 
-## 1. Đã làm
+## 1. Đã làm — chỉ những gì `git log` không nói
 
-**Không có danh sách commit ở đây.** `git log --oneline b22684a..HEAD` trả lời câu đó chính xác
-hơn và không bao giờ lệch. Dưới đây chỉ những thứ `git log` không trả lời được.
+**Không có danh sách commit ở đây.** `git log --oneline ec80994..HEAD` trả lời chính xác hơn.
 
-### Quyết định đã chốt với người dùng — và nơi ghi
+### Quyết định đã chốt — và nơi ghi
 
-ADR `0001`–`0032` nằm trong `kb/10-decisions/`, mỗi tệp tự nói nó quyết gì. **Đừng chép lại vào
-đây** — một bảng tóm tắt ADR là một bảng sẽ lệch với ADR. Chỉ những quyết định **chưa thành ADR**
-mới cần chỗ này:
+Quyết định đã thành ADR thì chỉ trỏ, không chép. Quyết định chưa thành ADR thì nơi ghi là mục sổ
+tiến độ tương ứng (khoá `tiep_theo`/`bang_chung`).
 
-| Quyết định | Ngày | Ghi ở |
-|---|---|---|
-| Tiền tố **`vigov`** cho tên ảnh và module; người dùng đổi tên dự án sau khi v2 thay được bản gốc | — | — |
-| Jenkins dùng **docker CLI trên agent**, không Kaniko | — | — |
-| Phạm vi hạ tầng dừng ở **Dockerfile + Jenkinsfile**; cụm k8s do đội devops | — | — |
-| Trần `always_load` nâng lên **27000 token** | 21/09 | `kb/INDEX.yaml:15` |
-| **Miễn xã** cho `ResolveCitizenSession` — điều kiện dừng ADR 0012 quyết định 1, hỏi và được trả lời | 21/09 | `core/grpcx/grpcx.go`, khối trên `methodsWithoutTenant` |
-| **Ingress SINH từ `openapi.json`** (lối b trong ba lối ra viết sẵn), không liệt kê tay, không gateway | 21/09 | `deploy/README.md` · bộ sinh ở `tools/ingress/` |
-| Nối hai khoá `feedback.classify` / `feedback.unmask` vào tuyến | 21/09 | ADR 0030 là căn cứ; `unmask` đã làm, `classify` còn chặn |
-| Dựng rào đối chiếu khoá quyền trong mã với bảng `quyen` | 21/09 | luật 5 bất biến **3c** |
+| Quyết định | Ngày | Ai quyết | Ghi ở |
+|---|---|---|---|
+| Tiền tố **`vigov`** cho tên ảnh và module | — | người dùng | `service-identity/Jenkinsfile` |
+| Jenkins dùng **docker CLI trên agent**, không Kaniko | — | người dùng | Jenkinsfile từng dịch vụ |
+| Hạ tầng dừng ở **Dockerfile + Jenkinsfile**; cụm k8s do devops (nay có hướng dẫn Rancher ở `deploy/README.md` §9, §11) | — | người dùng | `deploy/README.md` |
+| Trần `always_load` **27000 token** — đừng nâng (xem §5) | 21/09 | người dùng | `kb/INDEX.yaml:15` |
+| **Miễn xã** cho `ResolveCitizenSession`; `ListTenants`/`ResolveTenantSuccession` vẫn ngoài danh sách | 21/09 | người dùng | chú thích `core/grpcx/grpcx.go:158-177` (chưa có ADR — §3) |
+| **Ingress SINH từ `openapi.json`**, không liệt kê tay | 21/09 | người dùng | `deploy/README.md`, `tools/ingress/` |
+| Sổ **đơn thư công dân** (`don_thu`) thuộc **`documents`** | 24/09 | người dùng | ADR 0039 |
+| Ô cấp quyền `vai_tro_quyen` là **cấu hình**: gỡ quyền = xoá cứng ô ấy kèm vết trước/sau đầy đủ; CHỈ bảng này | 24/09 | người dùng | ADR 0040 |
+| **#12 là quyết định của KHÁCH (22/09)**, không phải đề xuất nhà cung cấp — sổ từng ghi sai | 24/09 | người dùng xác nhận | `service-identity/che-so-di-dong-can-bo` |
+| Đồng ý công khai số lên Mini App, **bản gọn**: quản trị bật TỪNG người + tick "đã hỏi ý", máy chủ lưu thời điểm + mã người ghi; rút công khai xoá dấu đồng ý; khoá `content.update` | 24/09 | người dùng | `service-identity/danh-ba-can-bo-con-thieu` |
+| Xoá dòng danh bạ **có tài khoản** → từ chối; tìm cán bộ theo tên/SĐT đi trong **thân POST**, không lên URL | 24/09 | người dùng | cùng mục trên |
+| Nút `+ Thêm cán bộ` **giữ ở Cấu hình**, không đưa vào `/danh-ba` | 24/09 | người dùng | `web-admin/danh-ba-man-rieng` |
+| Nhiệm vụ §7.2: mỗi văn bản = textarea Trích yếu bắt buộc + hai ô tuỳ chọn; `Ghi chú` ẩn ở form tạo; Sổ theo dõi §4.3 **dựng backend trước** | 24/09 | người dùng | `web-admin/man-nhiem-vu`, `service-petitions/so-theo-doi-can-tuyen-may-chu` |
+| Mục menu Văn bản & Đơn thư canh bằng `document.read` | 24/09 | người dùng | commit b1da756 |
+| Phân quyền: **cấm** lưu cột của vai trò mình đang giữ (#14); chặn lượt lưu làm xã mất người giữ `admin.user` **hoặc** `admin.role` (mở rộng #13); tuyến `PUT /api/v1/roles/{id}/permissions` | 24/09 | người dùng | `service-identity/cau-hinh-bon-chuc-nang-24-09` |
+| Sơ đồ tổ chức: khoá `admin.org`, **chưa có Xoá**, nhận cả khối ngoài UBND | 24/09 | người dùng | cùng mục trên |
+| `Loại đơn vị dân cư` và `Khối nhiệm vụ` là **danh mục đầy đủ**; Khối nhiệm vụ coi là khái niệm RIÊNG — trong khi câu ấy vẫn "phải hỏi anh Hà" (§3) | 24/09 | người dùng | cùng mục trên |
+| Nhãn trạng thái nhiệm vụ: màn Nhiệm vụ đọc từ máy chủ, **một nguồn** | 24/09 | người dùng | `service-petitions/nhan-trang-thai-nhiem-vu-theo-xa` |
+| Hợp đồng đổi làm web đỏ → **sửa hai phía nhỏ nhất**: trường PATCH mới phải tuỳ chọn; web chỉ sửa fixture | 24/09 | người dùng | commit 24dade9, ff4aaf2 |
 
-**`ResolveCitizenSession` đáng đọc kỹ hơn một dòng bảng.** Nó là lời gọi THIẾT LẬP xã cho kênh
-công dân — Mini App không có tên miền, nên tới khi nó trả lời thì không có gì để suy ra xã. Lý do
-nó **không nới lỗ** nằm ở hợp đồng chứ không ở lời hứa: yêu cầu chỉ mang `session_token`, không có
-trường xã, nên bên gọi không hỏi được *"phiên này có hợp lệ ở xã X không"*; xã đi về trong **phản
-hồi**. `ListTenants` và `ResolveTenantSuccession` **vẫn nằm ngoài** danh sách — câu của chúng khác
-và chưa ai đặt ra với người dùng.
-
-### Thứ cố ý KHÔNG dựng, và vì sao
-
-Thứ chưa dựng và lý do chưa dựng nằm cùng chỗ với tiến độ: `kb/90-ephemeral/tien-do.md`, khoá
-`tiep_theo` của từng mục. Giữ hai bản là giữ hai bản sẽ lệch.
-
-Riêng một quyết định KHÔNG thuộc module nào, nên nó ở lại đây:
-
-| Không dựng | Vì sao |
-|---|---|
-| **CHECK `co_tai_khoan => mat_khau_hash <> ''`** | Lập luận đầy đủ ở `service-identity/migrations/0003_…sql:189–217`. Viết ràng buộc ấy bây giờ làm **một trong ba phương án của câu mở #9 không cài đặt được nữa** — tức quyết hộ khách. Giá đảo ngược bất đối xứng: thêm sau là một dòng migration, gỡ sau là `ALTER TABLE` trên bảng đang chạy. *Đọc kèm §5: đúng khối chú thích này là thứ `drift_guard` từng buộc tội nhầm.* |
+**Cần biết về 34 câu trong `open-questions.json`:** cả 34 đều DECIDED, nhưng nhiều câu (#21, #27 và
+mười ba câu khác) là **đề xuất của nhà cung cấp** ghi ở ADR 0035, không phải trả lời của khách. Đọc
+bảng "cái gì đỏ nếu một mục bị phủ quyết" ở cuối ADR 0035 trước khi dựa vào một câu như thế.
 
 ---
 
 ## 2. Việc kế tiếp
 
-**Không nằm ở đây.** Việc kế tiếp theo từng module ở `kb/90-ephemeral/tien-do.md` — sinh ra từ
-`kb/90-ephemeral/tien-do/<module>.json`, mỗi agent ghi đúng tệp module của mình.
-
-Tách ra vì lý do rất cụ thể: hai tệp cùng liệt kê việc kế tiếp là hai tệp sẽ lệch, và bản lệch là
-bản phiên sau đọc (luật 9, bất biến 2). Tệp bàn giao giữ đúng thứ `tien-do` không giữ.
-
-Ghi bằng `/progress`. Soát bằng `progress-reviewer`.
+**Không nằm ở đây.** `kb/90-ephemeral/tien-do.md` (theo module) và `python tools/tien_do.py --menu
+"<menu>"` (theo menu). Ngày 24/09 `progress-reviewer` đã soát và 18 mục được thêm dòng "SỬA 24/09"
+ở đầu `tiep_theo` — đọc dòng ấy trước phần còn lại của mục.
 
 ---
 
 ## 3. Đang bị chặn — và chặn bởi ai
 
-Nguồn chuẩn là `kb/00-foundation/open-questions.json`. **Câu nào đang chặn việc nào** thì đọc bảng
-*"Nợ khách chốt"* ở đầu `kb/90-ephemeral/tien-do.md`: bảng ấy **sinh ra** từ khoá `no_confirm` của
-từng mục nên không lệch được với tiến độ — khác hẳn một bảng chép tay, thứ đúng vào ngày viết rồi
-im lặng sai dần.
+Bảng *"Nợ khách chốt"* ở đầu `tien-do.md` sinh từ `no_confirm`; hôm nay nó RỖNG vì mọi câu trong
+`open-questions.json` đã DECIDED. Những câu dưới đây **không có trong tệp ấy** — chúng chờ NGƯỜI DÙNG
+(hoặc người dùng chuyển cho khách), và chưa ai trả lời lúc viết:
 
-**Bốn câu đang chặn mà KHÔNG nằm trong `open-questions.json`**, vì chúng là câu hỏi cho người dùng
-chứ không phải cho khách hàng — hỏi ngày 21/09, chưa có trả lời lúc viết tệp này:
+| Câu | Chặn gì | Chi tiết ở |
+|---|---|---|
+| **web-admin ra ngoài bằng đường nào** — A `node:http` + gốc nội bộ · B mở 443 · C biên đọc `X-Forwarded-Host` | **BLOCKER PHÁT HÀNH**: mọi trang web-admin 500. Kiểm lại 24/09: KHÔNG commit nào đụng `edge.go`, `netpol.yaml`, `tenant-config.ts` | `web-admin/goc-api-noi-bo` (treo) · §5 |
+| Xã mới lấy **người quản trị, vai trò và quyền đầu tiên** bằng cách nào (ADR 0003 cấm nhà cung cấp đụng dữ liệu nghiệp vụ; #13 cấm lối khôi phục của nhà cung cấp) | Ở một xã thật **không tài khoản nào cầm khoá nào** → ~97 tuyến 403, kể cả nút gieo SLA | `service-identity/xa-moi-khong-co-vai-tro-va-quyen` — cần ADR |
+| `/api/v1/<chưa định tuyến>` trả **404 HTML của web** hay **404 JSON** | hình dạng hiện tại là HTML | `deploy/base/mang/ingress.yaml:304-306` |
+| Miễn xã cho `ResolveCitizenSession` có cần **ADR riêng** không | không chặn mã | chú thích `core/grpcx/grpcx.go:158` |
+| **Khối nhiệm vụ** có phải "khối đơn vị" của danh bạ không (hỏi anh Hà) | người dùng đã quyết tạm là KHÁC; nếu anh Hà nói CÙNG thì phải xem lại F2 | `kb/50-doi-chieu/2026-09-23-feat-m8-multitenant-foundation.md:98` |
+| Phạm vi đồng ý #12: đổi số di động của người **đang** công khai có phải hỏi lại; **khoá** người đang công khai có rút công khai; cán bộ có tự ghi đồng ý cho mình | số mới lên kênh công khai dưới đồng ý cũ; người đã nghỉ vẫn hiện số | `service-identity/danh-ba-can-bo-con-thieu` |
+| Cột đầu Kanban mặc định **"Mới giao"** hay **"Chưa thực hiện"** (spec 02 §6 có hai tên cho một mã) | nay hiện "Mới giao" | `web-admin/cau-hinh-bon-chuc-nang-web` |
+| Mục menu `/cau-hinh` chỉ canh `admin.lookup` | người cầm `admin.org`/`admin.role`/`admin.sla` không vào được | cùng mục trên |
+| Hai câu ở `deploy/README.md` mục 11.0 (dải CIDR netpol, KUBECONFIG theo môi trường) | phiên CI/deploy chờ để sửa `netpol.yaml`, `deploy/Jenkinsfile` | `deploy/README.md` §11.0 |
 
-| Câu | Chặn cái gì |
-|---|---|
-| **Xã sửa được DANH SÁCH MÃ hay chỉ NHÃN + THỨ TỰ** của các danh mục? | ba tuyến ghi ở ba service (`documents` loại văn bản · `finance` hạng mục vốn · `petitions` hai danh mục nhiệm vụ). Một câu mở khoá cả ba |
-| **web-admin ra ngoài bằng đường nào** — A `node:http` + gốc nội bộ · B mở 443 · C biên đọc `X-Forwarded-Host` | **BLOCKER PHÁT HÀNH**: mọi trang web-admin 500. Xem `tien-do/web-admin.json`, mục `goc-api-noi-bo` (`treo`) và §5 dưới đây |
-| `/api/v1/<chưa định tuyến>` nên trả **404 HTML của web** hay **404 JSON**? | hình dạng hiện tại là HTML — sai an toàn nhưng khó đọc. `tien-do/deploy.json` |
-| Quyết định miễn xã cho `ResolveCitizenSession` có cần **ADR riêng** không? | hiện ghi ở chú thích `core/grpcx/grpcx.go` + sổ. Không chặn mã |
-
-Một câu còn OPEN là một việc **không ai được tự quyết thay khách** (ROUTING §8). `drift_guard`
-cảnh báo khi mã đang lặng lẽ quyết một câu như thế.
+Và **mười hai xung đột yêu cầu** của sổ đơn thư (C2–C13) cùng **tám** của danh bạ (U1–U8) — ghi
+nguyên hai phía ở `service-documents/so-don-thu-cong-dan` và `service-identity/danh-ba-can-bo-con-thieu`;
+chúng là câu của cổng `/develop-backend-api` lượt sau, chưa ai quyết.
 
 ---
 
 ## 4. Phiên song song
 
-Ngày 21/09 có **ít nhất một phiên khác** chạy cùng kho — phiên tự xưng `vigov-v2-3c`, đã đẩy và
-quét manifest `deploy/` của phiên này vào commit của họ (không mất gì, không force-push). **Không
-biết nó còn mở hay không lúc viết tệp này** — phiên sau phải tự kiểm, đừng tin dòng này.
-
-Trong phiên này còn có **bốn agent chạy song song trong cùng một phiên**, và đó là hình dạng sẽ
-lặp lại. Hai bài học trả bằng thời gian thật:
-
-- **Ảnh chụp `git status` đầu phiên sai giữa chừng.** Agent nào đọc nó rồi kết luận "cây sạch" là
-  kết luận sai: cây có thay đổi chưa commit của agent khác. Đọc lại `git status` ngay trước khi ghi.
-- **`go run ./tools/kb` chạy giữa lúc agent khác đang sửa mã sẽ sinh tầng GENERATED trên nền việc
-  dang dở của họ.** Hai agent làm đúng thế trong phiên này. Cách xử: sinh lại **một lần cuối** sau
-  khi mọi agent xong, trước khi commit.
-
-Ba quy ước chia việc, sinh ra từ ba lần suýt giẫm chân chứ không từ lý thuyết, vẫn đúng: phạm vi
-tuyên bố **bằng đường dẫn** và nhắc lại mỗi lần đổi · phát hiện trong vùng người khác thì **báo kèm
-bằng chứng, không tự sửa** · `git add` theo đường dẫn **tường minh**, không bao giờ `-A`.
-
-> **Mục này phải xoá hẳn khi phiên sau chỉ có một mình**, chứ không để lại. Một mục §4 trỏ vào
-> những phiên đã kết thúc còn tệ hơn không có mục §4.
+Ngày 24/09 có bốn phiên cùng chạy kho này (`vigov-v2-6d`, `-0b`, `-ca`, `-f9`). **Lúc viết, cả ba phiên
+kia đã kết thúc và không giữ đường dẫn nào**, không việc dở chưa commit (hỏi trực tiếp từng phiên).
+Phiên CI/deploy (`-f9`) có thể quay lại sửa `deploy/base/mang/netpol.yaml` và `deploy/Jenkinsfile` sau
+khi người dùng trả lời §11.0. Phiên sau tự kiểm lại bằng ListAgents — đừng tin dòng này.
 
 ---
 
 ## 5. Cạm bẫy đã gặp — đọc để khỏi mất thời gian lại
 
-Một nửa bảng này có chung một hình dạng: **thứ trông như biện pháp mà không phải biện pháp.** Gặp
-cái tiếp theo cùng dạng thì đừng vá riêng nó — hỏi cả lớp đó còn ở đâu nữa.
+Một nửa bảng này có chung một hình dạng: **thứ trông như biện pháp mà không phải biện pháp** — một
+phép kiểm xanh vì lý do sai. Gặp cái tiếp theo cùng dạng thì hỏi cả lớp ấy còn ở đâu.
 
-**Ngày 21/09 lớp ấy trúng đúng tầng rào chắn.** Rà 18 hook tìm ra **sáu** cái hỏi đúng câu nhưng
-đọc sai thứ, và cái nặng nhất là rào **BLOCK duy nhất của luật 3**: `_common.PII_TOKEN` dùng mẫu
-`hoTen`/`soDienThoai` **camelCase, phân biệt hoa thường**, trong khi trường Go xuất khẩu của kho
-là `HoTen`/`DienThoai`/`MatKhauHash` (`service-identity/internal/domain/can_bo.go:13,18,19`). Nó
-không hỏng — **nó chưa từng canh được đúng thứ nó sinh ra để canh**, và mọi phiên trước đều thấy
-nó xanh. Cùng mẻ: `audit_guard` chỉ biết `.Exec(` nên lọt `tx.ExecContext(...)` · `citizen_scope_guard`
-đòi `Header()` **có ngoặc** (hình dạng bên *phản hồi*) nên lọt `r.Header.Get("citizen_id")` ·
-`service_boundary_guard` so DSN với **tên thư mục** thay vì tên nghiệp vụ — **ca thứ chín** của
-lớp lỗi ấy.
-
-**Bố cục phẳng (ADR 0015/0016) sinh ra cả một mẻ, và không cái nào kêu.** Mọi cơ chế nhận diện mã
-theo **tên thư mục** câm đi cùng lúc: sáu hook khớp theo đoạn `/services/` · `drift_guard` quét
-danh sách trắng bảy thư mục mà sau đó chỉ còn **một** tồn tại · `.dockerignore` loại trừ `apps` ·
-`check_brain` đếm tên hook thay vì đường dẫn · `stop_verify_guard.CODE_DIR` thiếu `/tools/`.
-**Năm ca.** Bài học chung, đắt hơn từng ca riêng lẻ: **danh sách trắng tên thư mục là hình dạng
-sai cho kho này.** Dùng **danh sách loại trừ** — nó hỏng theo chiều ngược lại, tức quét thừa vài
-mili giây thay vì quét thiếu.
-
-### Máy này — bốn cạm bẫy đều TRÔNG như lỗi mã
+### Rào chắn và công cụ sinh
 
 | Triệu chứng | Sự thật |
 |---|---|
-| `mingw32-make check` **đỏ ở mục `build`** với một trang stack trace của `cmd/link` | **Hết bộ nhớ, không phải mã.** `go build $(MODULES)` dựng cả 9 module một lượt và làm sập trình liên kết ở khâu sinh ký hiệu DWARF. Từng module dựng riêng thì **cả 9 đều OK** — đã kiểm 22/09. Đừng đi sửa Go |
-| `tools/test_hooks.py` báo **thất bại** với `expected exit=2, got exit=3221225773` | Cũng hết bộ nhớ. `3221225773` = `0xC000013D`, `3221225794` = `0xC0000142` — **mã sập tiến trình của Windows**, không phải hook trả lời sai. Chạy lại khi máy rảnh: 196/196. **Đây là một cổng kiểm biết nói dối theo chiều ĐỎ**, và một cổng đỏ sai còn nguy hơn xanh sai: người ta sẽ đi "vá" một rào không hỏng |
-| `go test -race` đổ ở khâu link, hoặc `ThreadSanitizer failed to allocate … (error code: 1455)` | Cùng nguyên nhân. `1455` là `ERROR_COMMITMENT_LIMIT`. **Luôn dùng `-p 1`** trên máy này |
-| `docker ps` trả `Internal Server Error for API route` | Một lượt OOM đã **hạ cả Docker Desktop**. Không phải cấu hình Docker sai |
+| `make kb` in `ĐÃ CÓ MÀN HÌNH → done/` cho một tuyến web **chưa hề gọi** | `tools/apidoc` khớp ĐƯỜNG DẪN mà mù PHƯƠNG THỨC: web gọi `PATCH /staff/{id}` là `DELETE /staff/{id}` bị coi là xong. Mỗi lần `make kb` nó sinh lại `tasks/web/done/c5eb6691f6de.json` — **đừng commit tệp ấy**, dời ra rồi mới sinh `tien-do-san-pham.md` (báo cáo đếm từ đĩa). `_chung/apidoc-khop-man-hinh-mu-phuong-thuc` |
+| Thêm một trường vào thân PATCH, Go xanh, rồi **web-admin vỡ bản dựng** lúc `gen:api` | `*T` không kèm `omitempty` → apidoc khai trường **bắt buộc** (tools/apidoc/schema.go:723): vừa thêm một trường bắt buộc vào hợp đồng đã công bố. Trường mới: luôn `omitempty`. Trường mới trong PHẢN HỒI thì làm đỏ fixture kiểm thử web — sửa fixture trong cùng commit hợp đồng |
+| `data_safety_guard` chặn một tệp **.md** | Nó quét cả văn xuôi; câu TRÍCH luật 7 cũng bị chặn. Ngược lại, câu xoá cứng thật trong Go có thể **im lặng** chỉ vì không có chữ nghiệp vụ trong ~150 ký tự quanh nó. Phán quyết là may rủi của chữ, không phải quyết định. `_chung/data-safety-guard-chan-cau-trich-trong-md` — **đừng đổi chữ để lách** |
+| `workflow_guard` nêu tên phiên ở mọi lần dừng, kể cả lượt chỉ `git log` | Nó đếm tệp theo cả cửa sổ phiên. `_chung/workflow-guard-dem-ca-cua-so-phien` |
+| codegraph trả ký hiệu thật nhưng **không phải của kho này** | MCP toàn cục trỏ dự án khác. **Luôn truyền `projectPath`**; kiểm `codegraph_status` phải có go + typescript, không java. Hook `codegraph_sync` giữ chỉ mục mới sau commit |
+| Tầng always_load ~26980/27000 | Mục kế tiếp đăng ký vào `kb/INDEX.yaml` sẽ đỏ `check_brain` #5. **Đừng nâng trần**; nhường chỗ bằng cách bỏ chữ trùng. `_chung/tang-luon-nap-da-day` |
+| IDE báo hàng chục lỗi biên dịch Go/TS ngay sau khi agent sửa | Chẩn đoán của language server chụp GIỮA chừng. Tin `go vet`/`go test`/`tsc`, không tin bảng lỗi IDE |
+| Commit 1145971 sửa chú thích trong hai migration **0001 đã áp** | `core/migrate/migrate.go:325` băm cả tệp → CSDL nào đã áp sẽ lệch checksum. `_chung/migration-0001-da-ap-bi-sua-chu-thich` |
 
-### web-admin gọi ra ngoài — ba số đo, mỗi số tự nó đủ để dừng
+### Máy này (Windows, bộ nhớ hạn chế)
 
-Blocker phát hành, và cách sửa "hiển nhiên" **không chạy được**:
+| Triệu chứng | Sự thật |
+|---|---|
+| `mingw32-make check` đỏ ở `build` với stack trace của `cmd/link` | Hết bộ nhớ khi dựng 9 module MỘT lượt (`Makefile:119-120`). Dựng **từng module** thì xanh (24/09: cả 9 OK) |
+| `tools/test_hooks.py` báo thất bại `exit=3221225773`/`3221225794` | Mã sập tiến trình Windows (hết bộ nhớ), không phải hook sai. Chạy lại khi máy rảnh. **Cổng đỏ sai lý do** — đừng đi vá rào không hỏng |
+| `go test -race` đổ ở link, `error code 1455` | `ERROR_COMMITMENT_LIMIT`. Luôn `-p 1`; không quá 2 agent biên dịch Go cùng lúc, 1 là an toàn |
+| Ca `_pg_test` "xanh" | Là **SKIP** (`VIGOV_TEST_DSN` trống) — gói vẫn in `ok`. Nhận ra bằng thời gian: ~0,02 s là bỏ qua, vài giây là chạy thật. Docker Desktop hay tắt/đổ trên máy này |
+| `sed -i`, `awk`, `find` bị từ chối trong Bash | Chính sách quyền của phiên. Sửa JSON bằng python, tìm bằng Grep/Glob |
 
-1. **`fetch` của Node KHÔNG gửi được `Host` do người gọi đặt.** `host` là forbidden header;
-   undici ghi đè bằng host của URL. Đã thử bốn đường (`{Host:}`, `{host:}`, `Headers`, `Request`)
-   — cả bốn ra host của origin. `node:http` thì tôn trọng.
-2. **`core/httpx/edge.go:24` chỉ đọc `r.Host`**, không đọc `X-Forwarded-Host`. Nên đổi gốc mà bỏ
-   `Host` → biên nhận `Host: identity` → không xã nào → **404 trên mọi trang**. Tệ hơn 500, vì 404
-   là câu trả lời *hợp lệ* nên không ai nghi cấu hình sai. Và nếu người vận hành "chữa" bằng cách
-   đăng ký host nội bộ thành một xã, **mọi tên miền xã sẽ in ra tên của đúng xã ấy** — rò dữ liệu
-   giữa hai cơ quan nhà nước (luật 1).
-3. **REST của identity là 8080** (`deploy/base/identity/service.yaml`) nhưng `netpol.yaml` chỉ mở
-   **9090** ra pod. Nên một gốc nội bộ bị chặn **y hệt** 443. **Không phương án nào tránh được một
-   dòng egress** — điều mà đề xuất ban đầu tưởng là tránh được.
+### Máy build (CentOS 7) và triển khai
 
-**Và cạm bẫy đi kèm, đúng hình dạng "phép kiểm xanh sai lý do":** bộ kiểm hiện tại soi lời gọi
-bằng cách thay `globalThis.fetch` rồi đọc `mock.calls[0]`, mà đối tượng `Headers` **giữ** giá trị
-`Host`. Nên một bài kiểm *"vẫn mang `Host` của xã"* sẽ **XANH** — kể cả đột biến bỏ `Host` cũng bắt
-được — trong khi sản xuất gửi host sai. **Rào chết ngay từ lúc sinh ra.**
+| Triệu chứng | Sự thật |
+|---|---|
+| Cổng kiểm trên Jenkins đổ ngay mục đầu với `SyntaxError: Non-ASCII character` | `python` là 2.7, `python3` là 3.6.8; 3.9 ở `/usr/local/bin`. `PYTHON ?= python` + Jenkinsfile tự chọn (006037d, c506d1b, 0918e23) |
+| Ca kiểm hook xanh ở máy trạm, đỏ trên CI | Hệ tệp Windows không phân biệt hoa thường che lỗi đường dẫn viết thường (47f5bf0). Ca phụ thuộc đĩa thật là ca không chạy như nhau ở hai nơi |
+| Thư mục `<tên>@tmp/` lọt vào ngữ cảnh docker build | `dir()` của Jenkins để lại nó; `.dockerignore` có `*@tmp`, Jenkinsfile dùng `cd` (e0e1236, 29f8742) |
+| Rancher/RKE2 | netpol nhận REST chỉ từ namespace `ingress-nginx` nhưng RKE2 để controller ở `kube-system`; chỉ có flannel thì NetworkPolicy **không được cưỡng chế**; Import YAML không chạy kustomize; kubeconfig tải từ Rancher mang quyền người tải. `deploy/README.md` §11 |
+| Ingress dựng tay | Tuyến quên khai rơi về `/` và nhận 404 của web-admin; không bao giờ ghi lại Host; không mở 9090. `deploy/README.md` §9 |
+| `deploy/README.md:270` nói web-admin gọi `/api/v1` tương đối, "không cần địa chỉ backend" | **Sai với phía máy chủ**: `tenant-config.ts:121` gọi `https://<Host>/api/v1/communes/current` mỗi trang → cần egress mà netpol không cho. Câu README che mất blocker |
 
-### Bảng cũ — vẫn đúng, đã kiểm lại 22/09
+### web-admin gọi ra ngoài — ba số đo (kiểm lại 24/09: vẫn đúng cả ba)
+
+1. `fetch` của Node **không gửi được `Host`** do người gọi đặt (forbidden header; undici ghi đè). `node:http` thì được. Mã vẫn dùng `fetch` (`web-admin/src/lib/tenant-config.ts:121-129`).
+2. `core/httpx/edge.go:24` **chỉ đọc `r.Host`**, không `X-Forwarded-Host`. Đổi gốc mà bỏ Host → 404 mọi trang (404 hợp lệ nên không ai nghi). "Chữa" bằng cách đăng ký host nội bộ thành một xã → mọi tên miền in tên đúng xã ấy: **rò giữa hai cơ quan** (luật 1).
+3. REST identity là **8080** (`deploy/base/identity/service.yaml:8`), `netpol.yaml` chỉ mở **9090** và 443 thì không. Không phương án nào tránh được một dòng egress.
+
+Kèm theo: bộ kiểm hiện tại thay `globalThis.fetch` rồi đọc `mock.calls[0]`, mà `Headers` GIỮ `Host` — nên ca "vẫn mang Host của xã" XANH trong khi sản xuất gửi host sai.
+
+### Vẫn đúng từ bản trước (đã kiểm lại)
 
 | Vấn đề | Cách xử |
 |---|---|
-| **Test tích hợp SKIP nhưng cả gói vẫn báo `ok`** | Dạng nặng nhất, và ngày 21/09 nó lộ ra quy mô thật: **159 ca** của 6 service chưa từng chạy một lần nào. Nay có `tools/schema-smoke` — **thiếu DSN thì thoát mã 2, không bỏ qua**. Với một suite bất kỳ khác: trước khi tin "có test canh chỗ này", **gỡ thử dòng đó ra và xem có đỏ không** |
-| **Kết quả grep âm tính KHÔNG phải bằng chứng vắng mặt** | Một agent báo "grep không có kết quả" ⇒ kết luận web không gọi tuyến ấy ⇒ **bảng thuật ngữ bị sửa yếu đi theo**. Thực tế có gọi: một chỗ là template literal có nội suy, một chỗ gán qua biến có kiểu sinh. Loại sai này không ai soi ra **vì nó trông như thận trọng** |
-| **Bản vá cho lỗi X rất dễ chính là một thể hiện mới của X** | Chuỗi ba lần đã xảy ra với `drift_guard`. Và 21/09 lặp lại: bản vá `pii_guard` cho lời gọi nhiều dòng lập tức **buộc tội một chú thích giải thích chính sách riêng tư**. Bắt được bằng **hiệu chuẩn trên 710 tệp thật**, không bằng suy đoán — đó là thói quen cần giữ: **sau khi vá một hook, chạy nó trên kho thật và mở từng tệp nó tố cáo** |
-| **`git checkout --` / `git restore` để hoàn tác sau đột biến** | Một agent xoá **529 dòng chưa commit của người khác** bằng đúng lệnh đó. Phục hồi bằng **bản chụp tệp** ra thư mục tạm, không bao giờ bằng git. Mọi agent trong phiên này đều được dặn, và đều tuân |
-| **`--build-arg` cho một `ARG` không khai bị Docker bỏ qua lặng lẽ** | Một lượt "đột biến" để thử rào chắn sẽ **xanh** và trông như rào đã bắn. Muốn thử thật thì sửa `ENV` trong chính Dockerfile |
-| **Rào chắn đứng thành `RUN` riêng chỉ đo môi trường tại thời điểm ấy** | Rào `NEXT_PUBLIC_*` từng đứng trên `npm run build`; một dòng `ENV` chen vào giữa thì nó không thấy. Gộp vào **cùng một `RUN`** với lệnh nó bảo vệ |
-| **Heredoc `<<'PY'` trong công cụ Bash vẫn nuốt dấu thoát** | `\n` ra thành xuống dòng thật, `\b` ra thành ký tự backspace nằm trong regex. Dựng dấu thoát bằng `chr(92)`, hoặc dùng Edit/Write |
-| **`/tmp/...` bị MSYS đổi đường dẫn khi truyền cho `docker -f`** | Báo *"no such file"*, tức `rc=1` **trông y hệt rào chắn vừa bắn**. Đặt tệp tạm trong thư mục ngữ cảnh, dùng đường dẫn tương đối |
-| `gofmt -l .` **in tên tệp chưa định dạng rồi thoát mã 0** | Một cổng báo rồi cho qua không phải cổng. Đã vá (`buf lint` cũng từng bị nuốt lỗi vì tiền tố `-`) |
-| `SET search_path` là trạng thái **SESSION** | Trên pool chỉ áp cho kết nối đã phục vụ câu lệnh đó. `core/migrate` ghim kết nối riêng nên là kết nối **thứ hai**, nằm ở `public`. Hai suite tích hợp phải `SetMaxOpenConns(1)` |
-| Trigger gắn trên bảng cha mà **không bắn** khi gõ thẳng tên partition | Mức **câu lệnh** không nhân bản xuống partition, mức **dòng** thì có. Hỏng **im lặng**. 21/09 đã truy `pg_catalog` và xác nhận trigger append-only **có mặt đúng hình dạng ADR 0013** — nhưng **chưa ai bắn thử nó từ chối một lệnh xoá**. Viết ca ấy vướng `data_safety_guard`: một bài kiểm chứng minh sổ không xoá được lại bị chặn vì trông giống lệnh xoá sổ |
-| **Index con của bảng phân mảnh không drop riêng lẻ được** | Drop index **cha** kéo theo cả 32 con. Không bao giờ viết thao tác index theo từng mảnh |
-| **Hai cột `bool` cạnh nhau, đọc theo vị trí trong `Scan`** | Hoán đổi hai con trỏ là **lỗi im lặng đối xứng**: biên dịch được, test thường vẫn xanh, chỉ sai nghĩa. Ca duy nhất bắt được là `(false, true)` |
-| **Lọc ở Go thay vì lọc trong SQL** | Hai nhánh tốn thời gian khác nhau ⇒ **kênh biên thời gian** cho biết một email có tồn tại hay không. Điều kiện phân biệt người dùng phải nằm trong `WHERE` |
-| `fmt` **không gọi `String()`** cho `%d %c %U %b %o` | Phải cài `fmt.Formatter`, không phải `Stringer`. → `core/secret` |
-| `PARTITION BY HASH` mà quên tạo mảnh | INSERT lỗi, và vì vết đi cùng giao dịch nên **bản ghi nghiệp vụ rollback toàn bộ**. `tenant_scope_guard` chặn ngay lúc gõ `.sql` |
-| `buf lint STANDARD` ép tên message theo tên RPC | Kiểu trả về phải **bọc**, không trả thẳng message nghiệp vụ |
-| Hook báo nhầm | Đã vá nhiều lần. Nếu gặp lần nữa: **sửa hook + thêm ca test, đừng đi vòng** — hook nhiễu là hook bị tắt |
+| **Kết quả grep âm tính không phải bằng chứng vắng mặt** (template literal, gán qua biến) | Mở tệp, không kết luận từ grep |
+| **Bản vá cho lỗi X dễ là một thể hiện mới của X** | Sau khi vá một hook, chạy nó trên kho thật và mở từng tệp nó tố cáo |
+| **`git checkout --` / `git restore` để hoàn tác đột biến** xoá việc chưa commit của phiên khác | Chụp tệp ra thư mục tạm, hoặc Go `-overlay` — agent hôm nay đều làm vậy |
+| `SET search_path` là trạng thái SESSION | Suite tích hợp phải `SetMaxOpenConns(1)` |
+| Trigger chỉ-thêm của `audit_log` **chưa từng bị bắn thử** từ chối một lệnh xoá | Vẫn chưa ca nào (`_chung.json`, rào đối chiếu) |
+| Hai cột `bool` cạnh nhau, đọc theo vị trí trong `Scan` | Lỗi im lặng đối xứng; ca bắt được là giá trị KHÁC nhau. Hôm nay test-designer thêm driver đối chiếu `cột = $n` với đối số n |
+| `fmt` không gọi `String()` cho `%d %c %U %b %o` | `core/secret` cài `fmt.Formatter` |
+| `buf lint STANDARD` ép tên message theo RPC | Kiểu trả về phải bọc |
+| Hàng đợi việc sửa tay đã sai 36/36 lần | Để `tools/apidoc` suy từ mã — nhưng xem dòng đầu §5 về bộ khớp mù phương thức |
 
 ---
 
 ## 6. Cổng kiểm
 
 ```
-mingw32-make check
+mingw32-make check      # hoặc, trên máy này: build/vet/test TỪNG module với -p 1
 ```
 
-`make` không có trên Windows; `mingw32-make` **thì có** (đã kiểm 22/09). Không có nó thì chạy thẳng
-các lệnh dưới từng mục của `Makefile`.
+**24/09, chạy thật** ở `d4a9c18`: cả 9 module Go build + vet + `go test -count=1 -p 1` xanh (từng
+module, không một lượt); web-admin tsc · lint · vitest · `check:api` xanh; `check_brain`,
+`test_hooks`, `check_quyen`, `check_audit_actor`, `check_khoa_duy_nhat`, `check_env_map`,
+`check_build` đều PASS. **Không có số liệu ở đây, cố ý** — con số sai trông y hệt con số đúng.
 
-**Không có bảng số liệu ở đây, cố ý.** Mọi con số chép vào tệp này đều sai trong vòng vài commit,
-và một con số sai trông y hệt một con số đúng.
-
-**Thứ cổng kiểm KHÔNG phủ trên máy này** — đọc kỹ, đây là phần quyết định "xanh" nghĩa là gì:
+**Thứ cổng KHÔNG phủ — đọc kỹ, đây là thứ quyết định "xanh" nghĩa là gì:**
 
 | Không phủ | Hệ quả |
 |---|---|
-| **Mục `build` không chạy nổi** | Sập trình liên kết vì hết bộ nhớ (§5). Nên `mingw32-make check` **không đi hết được** trên máy này. Thay bằng: `go build ./...` trong **từng** module, và `go test -count=1 -p 1 ./...` trong từng module |
-| **`golangci-lint`** | Không có trên máy này; mục `lint` bỏ qua nó bằng tiền tố `-`. Chưa từng chạy ở đây |
-| **`platform-admin/`** | Thiếu `node_modules`. Mã TypeScript của nó **không được kiểm** |
-| **Jenkins cho ViGov** | Lượt build thật đầu tiên của **dự án** đã xanh — nhưng ở **kho anh em `vihat-miniapp`**, không phải ViGov. Mười tệp của ViGov cùng hình dạng với tệp đã xanh, vẫn **chưa lượt nào chạy**. `buf` thiếu trên máy chủ Jenkins, mà `core/gen` bị gitignore ⇒ đó là thứ chặn lượt đầu |
-| **k8s theo lược đồ máy chủ** | `kubectl kustomize` chứng minh YAML **dựng được và trộn đúng**, KHÔNG chứng minh API server chấp nhận. `--dry-run=client` cần API discovery, máy này không có cụm. Chưa lượt deploy nào chạy thật |
-| **Vết kiểm toán đọc lại từ bảng thật** | `TestPgVetXemDayDuDocLaiDuocTuBang` là ca duy nhất đọc lại dòng từ `audit_log` thật, và nó SKIP vì Docker đã sập. Dựng lại Docker rồi chạy nó là việc rẻ nhất còn lại |
-| **Việc một hook có NHÌN THẤY gì không** | `check_brain` kiểm mỗi luật có **nêu tên** một hook — **không** kiểm hook ấy đọc được tệp nào. Sáu hook mù suốt nhiều tháng mà cổng vẫn 7/7 (§5). Phép kiểm duy nhất đáng tin là **đột biến**: sửa một dòng nó đáng lẽ phải chặn, rồi xem nó có chặn không |
-| **Việc một cảnh báo có ĐÚNG không** | Không gì kiểm điều đó. Cảnh báo là **chỗ đáng nhìn**, không phải phán quyết: đi kiểm tận nơi trước khi sửa mã theo nó |
-
-**Nay ĐÃ phủ, khác với bản bàn giao trước:** lược đồ CSDL **đã chạy thật** — 30 tệp migration của
-7 service áp xanh trên PostgreSQL 16.10, `PARTITION BY HASH` 32 mảnh có thật, và truy toàn bộ
-`pg_index` xác nhận **không bảng nghiệp vụ nào có khoá duy nhất đơn cột**. Dựng lại bằng
-`go run ./tools/schema-smoke` (cần Docker). `tools/check_quyen.py` nay đối chiếu mọi khoá quyền
-trong mã Go với bảng `quyen`.
+| **PostgreSQL thật** | Mọi `*_pg_test.go` SKIP ở máy này (Docker tắt). Tức CHECK/trigger/khoá duy nhất/FOR UPDATE của mọi migration và đường ghi mới hôm nay **chưa được máy chủ thật thi hành**. Riêng `PUT /api/v1/roles/{id}/permissions` **không có ca pg nào**, kể cả ca SKIP. Dựng lại bằng `go run ./tools/schema-smoke` (thiếu DSN thì thoát 2) |
+| **`golangci-lint`** | Không có trên máy này lẫn máy Jenkins; `lint` bỏ qua nó bằng tiền tố `-` |
+| **Jenkins cho ViGov** | Cổng kiểm đã chạy thật trên máy build (c8973ce; lượt 6 phần Go xanh). Người dùng báo ảnh đã lên Harbor — **chưa ai đọc số build hay tag**. `vigov-deploy` chưa từng chạm cụm |
+| **k8s** | `kubectl kustomize` chứng minh YAML dựng được, KHÔNG chứng minh API server nhận. Chưa lượt deploy nào |
+| **Trình duyệt** | Không ai mở màn web ở 320px, không kiểm tiêu điểm/Esc; vitest chạy node không DOM — effect, handler click, luồng async chỉ được phủ qua hàm thuần. Ca kiểm "đọc mã nguồn" chỉ bắt HÌNH DẠNG cú pháp |
+| **Hook có NHÌN THẤY gì không · cảnh báo có ĐÚNG không** | `check_brain` kiểm luật có nêu tên hook, không kiểm hook đọc được gì. Phép thử duy nhất đáng tin là đột biến. Cảnh báo là chỗ đáng nhìn, không phải phán quyết |
 
 ---
 
-## 7. Việc treo — không ai chặn, ta chọn chưa làm
+## 7. Việc treo
 
-**Không nằm ở đây.** Mỗi việc treo nằm ở module của nó với `trang_thai: "treo"`, kèm lý do đã chọn
-chưa làm — `kb/90-ephemeral/tien-do.md`.
-
-Phân biệt hai thứ dễ lẫn: **`treo`** là *không ai chặn, ta chọn chưa làm*; **bị chặn** là
-`no_confirm` đang trỏ một câu còn OPEN. Cái thứ hai không tự gỡ được, cái thứ nhất thì được.
-
----
+**Không nằm ở đây.** Mỗi việc treo ở module của nó với `trang_thai: "treo"` — `kb/90-ephemeral/tien-do.md`.
+Phân biệt: **`treo`** là *không ai chặn, ta chọn chưa làm*; **bị chặn** là chờ một câu ở §3.

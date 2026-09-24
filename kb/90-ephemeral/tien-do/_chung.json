@@ -266,6 +266,22 @@
       "bang_chung": "24/09/2026, knowledge-keeper viết ADR 0040: lần Write đầu bị chặn 'no filter, affects EVERY row' vì EMPTY_FILTER (.claude/hooks/data_safety_guard.py:78-81) khớp câu TRÍCH luật trong văn xuôi; hook quét cả .md. Agent đổi thành 'câu xoá cứng' rồi ghi được — không dữ liệu nào bị đụng, nhưng đúng hình dạng 'đi vòng rào' mà CLAUDE.md cấm và ban-giao-phien §5 dặn 'sửa hook + thêm ca test, đừng đi vòng — hook nhiễu là hook bị tắt'. Cùng lượt: builder F1 báo phán quyết của hook trên câu SQL thật của tuyến lưu cột Phân quyền phụ thuộc chữ quanh câu lệnh (:139-147, BUSINESS :83-85), không phụ thuộc quyết định ADR 0040.",
       "no_confirm": [],
       "tiep_theo": "Việc của người giữ .claude/: (1) không áp EMPTY_FILTER lên văn xuôi trong kb/**.md và .claude/**.md (hoặc chỉ trong khối mã); (2) ca kiểm cố ý cho câu xoá cứng có lọc tenant+vai trò+tập khoá trên `vai_tro_quyen` theo ADR 0040 — phán quyết phải là quyết định, không phải may rủi của chữ quanh câu; (3) hiệu chuẩn trên kho thật sau khi vá (thói quen ở ban-giao-phien §5)."
+    },
+    {
+      "id": "migration-0001-da-ap-bi-sua-chu-thich",
+      "viec": "Commit 1145971 sửa CHÚ THÍCH trong hai migration 0001 ĐÃ ÁP (service-platform, service-identity) — core/migrate băm cả tệp nên mọi CSDL đã áp 0001 sẽ lệch checksum",
+      "trang_thai": "chua_lam",
+      "bang_chung": "progress-reviewer 24/09/2026: core/migrate/migrate.go:325 tính checksum trên TOÀN tệp; 1145971 thêm chú thích vào service-platform/migrations/0001_init.sql và service-identity/migrations/0001_init.sql; không sổ nào ghi. Tiền lệ: ledger service-identity/ma-can-bo-va-dien-thoai đã sửa 0003 và ghi 'KHÔNG lấy làm tiền lệ; lần sau phải kiểm lại bằng chứng'.",
+      "no_confirm": [],
+      "tiep_theo": "Chủ 1145971 kiểm: đã có CSDL nào (máy dev, schema-smoke giữ lại, môi trường thật) áp 0001 chưa. Nếu CÓ: hoàn nguyên chú thích hoặc có quy trình cập nhật checksum. Nếu KHÔNG: ghi rõ bằng chứng như lần 0003. Đồng thời cân nhắc một rào chặn sửa migration đã commit."
+    },
+    {
+      "id": "workflow-guard-dem-ca-cua-so-phien",
+      "viec": "hooks/workflow_guard.py đếm tệp đã sửa theo CẢ cửa sổ phiên — một phiên dài bắc qua lúc hook ra đời bị nêu tên ở MỌI lần dừng, kể cả lượt chỉ chạy git log",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Phiên vigov-v2-ca báo 24/09/2026: bị nêu ba lần liên tiếp vì lịch sử trước khi hook có mặt (311a84e).",
+      "no_confirm": [],
+      "tiep_theo": "Người giữ .claude/: chỉ tính tệp sửa SAU khi hook có mặt, hoặc chỉ từ lần dừng gần nhất; thêm ca kiểm. Cảnh báo lặp mãi là cảnh báo người ta học cách bỏ qua."
     }
   ]
 }
