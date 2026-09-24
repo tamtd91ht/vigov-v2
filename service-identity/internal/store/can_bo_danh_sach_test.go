@@ -649,6 +649,10 @@ var (
 	dsReCoTaiKhoan   = regexp.MustCompile(`AND co_tai_khoan\b`)
 	dsReDangHoatDong = regexp.MustCompile(`AND dang_hoat_dong\b`)
 
+	// The assignable-code read (can_bo_giao_viec.go): membership in a bound text[]. MODELLED, so a
+	// dropped or widened key shows up as wrong rows rather than as a skipped conjunct.
+	dsReMaThuoc = regexp.MustCompile(`AND ma = ANY\(\$(\d+)\)`)
+
 	dsReBang    = regexp.MustCompile(`AND id = \$(\d+)`)
 	dsReCap     = regexp.MustCompile(`AND \(([a-z_]+), ([a-z_]+)\) ([<>]) \(\$(\d+), \$(\d+)\)`)
 	dsReThuTu   = regexp.MustCompile(`ORDER BY ([a-z_]+) (ASC|DESC)(?:, ([a-z_]+) (ASC|DESC))?`)
@@ -687,6 +691,22 @@ func dsChay(q string, args []driver.Value) (driver.Rows, error) {
 	if m := dsReBang.FindStringSubmatch(q); m != nil {
 		n, _ := strconv.Atoi(m[1])
 		ra = dsLoc(ra, func(h hangND) bool { return h.id == lay(n) })
+	}
+
+	if m := dsReMaThuoc.FindStringSubmatch(q); m != nil {
+		n, _ := strconv.Atoi(m[1])
+		ds, ok := lay(n).([]string)
+		if !ok {
+			return nil, fmt.Errorf("driver giả: ANY(ma) ràng buộc %T, không phải []string", lay(n))
+		}
+		ra = dsLoc(ra, func(h hangND) bool {
+			for _, hoi := range ds {
+				if h.ma == hoi {
+					return true
+				}
+			}
+			return false
+		})
 	}
 
 	if m := dsReBoPhan.FindStringSubmatch(q); m != nil {
@@ -831,6 +851,7 @@ func dsMenhDeLa(q string) error {
 		dsReCoTaiKhoan,
 		dsReDangHoatDong,
 		dsReBang,
+		dsReMaThuoc,
 		dsReCap,
 		dsReBoPhan,
 		dsReCongKhai,
@@ -935,6 +956,16 @@ func (c *connDS) Prepare(string) (driver.Stmt, error) {
 	return nil, errors.New("driver giả: không hỗ trợ Prepare")
 }
 func (c *connDS) Close() error { return nil }
+
+// CheckNamedValue lets a []string through untouched, as pgx's stdlib driver does, so `ANY($n)` can
+// be modelled. EVERY OTHER TYPE falls back to database/sql's default conversion (ErrSkip) — an int
+// LIMIT must still arrive as int64, which dsChay asserts.
+func (c *connDS) CheckNamedValue(nv *driver.NamedValue) error {
+	if _, ok := nv.Value.([]string); ok {
+		return nil
+	}
+	return driver.ErrSkip
+}
 func (c *connDS) Begin() (driver.Tx, error) {
 	return nil, errors.New("driver giả: không có giao dịch")
 }

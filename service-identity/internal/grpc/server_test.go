@@ -116,8 +116,11 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		// The name read behind ResolveStaffNames. Its fake lives in ten_can_bo_test.go, beside the
 		// handler it exercises — and it answers NOTHING by default, so a test about that RPC has to
 		// say out loud which records it put in the directory and which it removed from it.
-		Ten:   &tenGia{},
-		Quyen: quyenGia{quyen: []authz.Perm{"admin.user", "task.extend"}},
+		Ten: &tenGia{},
+		// The assignable-code read. Its fake lives in giao_viec_test.go and answers NOTHING by
+		// default, so a test has to say which codes it made assignable.
+		GiaoViec: &giaoViecGia{},
+		Quyen:    quyenGia{quyen: []authz.Perm{"admin.user", "task.extend"}},
 		// The citizen session registry — a default that answers successfully, like every other
 		// collaborator here, so a test about ResolveCitizenSession overrides only the one thing it
 		// is about. Its fakes live in phien_cong_dan_test.go, beside the handler they exercise.
@@ -568,6 +571,7 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 			CanBo:        canBoGia{},
 			Lo:           &loGia{},
 			Ten:          &tenGia{},
+			GiaoViec:     &giaoViecGia{},
 			Quyen:        quyenGia{},
 			PhienCongDan: &phienCongDanGia{},
 			Lich:         &lichGia{},
@@ -588,6 +592,8 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		// bare code where the handler's name belongs (ADR 0034).
 		"thiếu kho tên cán bộ": func(d *Deps) { d.Ten = nil },
 		"thiếu quyền":          func(d *Deps) { d.Quyen = nil },
+		// Missing it is every assignment write in the calling services answering 503.
+		"thiếu kho giao việc": func(d *Deps) { d.GiaoViec = nil },
 		// Missing it is not "one RPC unavailable": every OTHER service's citizen edge is built on
 		// this one lookup, so the whole citizen channel of the platform goes with it.
 		"thiếu sổ phiên công dân": func(d *Deps) { d.PhienCongDan = nil },

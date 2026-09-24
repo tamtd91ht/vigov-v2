@@ -160,6 +160,12 @@ type Deps struct {
 	// was taken off the directory, with nothing turning red.
 	Ten CanBoTen
 
+	// The assignable-code read behind ResolveAssignableStaff — the FOURTH staff field and the fourth
+	// question: "may this code be handed NEW work today". Its predicate is the picker's, not Lo's
+	// (Lo answers locked and account-less people as present) and not Ten's (Ten answers removed
+	// records on purpose). Declared in giao_viec.go, at the point of use.
+	GiaoViec CanBoGiaoViec
+
 	// The CITIZEN session registry, read by ResolveCitizenSession and by nothing else here.
 	//
 	// A SEPARATE FIELD FROM Phien, AND THE TWO MUST NEVER BE MERGED — the same discipline
@@ -224,6 +230,8 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho đọc cán bộ theo lô — BatchGetStaff sẽ panic khi có người gọi")
 	case d.Ten == nil:
 		panic("identity/grpc: thiếu kho đọc tên cán bộ — ResolveStaffNames sẽ panic, và hồ sơ lưu trữ hiện mã trần ở chỗ tên người xử lý")
+	case d.GiaoViec == nil:
+		panic("identity/grpc: thiếu kho kiểm cán bộ giao việc được — ResolveAssignableStaff sẽ panic, và mọi tuyến giao việc phải trả 503")
 	case d.Quyen == nil:
 		panic("identity/grpc: thiếu kho quyền — ResolveStaffPrincipal sẽ trả principal rỗng quyền, không phân biệt được với người thật sự không có quyền")
 	case d.PhienCongDan == nil:

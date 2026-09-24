@@ -457,6 +457,10 @@ func run(log *slog.Logger) error {
 		// readable when an archival record names it (ADR 0034), and must stay invisible to the two
 		// paths above, where "this person exists today" is what is being asked.
 		Ten: canBo,
+		// GiaoViec is the read behind ResolveAssignableStaff — the FOURTH field on the same
+		// *CanBoStore, whose predicate is the picker's (locChonNguoi) by shared constant, so the
+		// codes the assignee dropdown offers and the codes an assignment write accepts cannot drift.
+		GiaoViec: canBo,
 		// The SAME *idstore.Checker that guards every route, through its QuyenCua method. One
 		// grant predicate for the guard and for the principal: a second one would drift, and
 		// drift in either direction is a defect with no error attached.

@@ -63,6 +63,7 @@ type (
 	canBoGia        struct{}
 	loGia           struct{}
 	tenGia          struct{}
+	giaoViecGia     struct{}
 	quyenGia        struct{}
 	phienCongDanGia struct{}
 	lichGia         struct{}
@@ -100,6 +101,8 @@ func (tenGia) TenTheoNhieuMa(_ context.Context, ma []string) ([]domain.TenCanBo,
 	}
 	return ra, nil
 }
+
+func (giaoViecGia) GiaoViecDuoc(_ context.Context, ma []string) ([]string, error) { return ma, nil }
 
 func (quyenGia) QuyenCua(context.Context, authz.Principal) ([]authz.Perm, error) {
 	return []authz.Perm{"admin.user"}, nil
@@ -142,7 +145,10 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		CanBo:  canBoGia{},
 		Lo:     loGia{},
 		Ten:    tenGia{},
-		Quyen:  quyenGia{},
+		// Answers every code asked as assignable — the predicate is defended in internal/store; this
+		// only needs the RPC reachable through the real interceptor chain.
+		GiaoViec: giaoViecGia{},
+		Quyen:    quyenGia{},
 		// Required, or NewServer refuses to build: every OTHER service's citizen edge is built on
 		// this one lookup (svcgrpc.Deps.PhienCongDan).
 		PhienCongDan: phienCongDanGia{},
@@ -235,6 +241,13 @@ func TestCongGRPCDoiXaDuDaCoKhoa(t *testing.T) {
 				&identityv1.ResolveStaffPrincipalRequest{SessionToken: "bat-ky"})
 			return err
 		},
+		// NOT EXEMPT (identity.proto, ResolveAssignableStaff): "x-tenant-id" is what makes another
+		// commune's code absent. On methodsWithoutTenant it would answer "belongs to SOME commune".
+		"ResolveAssignableStaff": func(ctx context.Context) error {
+			_, err := cl.ResolveAssignableStaff(ctx,
+				&identityv1.ResolveAssignableStaffRequest{Ma: []string{"CB001"}})
+			return err
+		},
 	} {
 		t.Run(ten, func(t *testing.T) {
 			if err := goi(context.Background()); status.Code(err) != codes.InvalidArgument {
@@ -274,6 +287,16 @@ func TestCongGRPCChoQuaKhiDungCaHaiDieuKien(t *testing.T) {
 	}
 	if pr.GetPrincipal() != nil {
 		t.Errorf("token rác vẫn dựng được principal: %+v", pr.GetPrincipal())
+	}
+
+	// ResolveAssignableStaff reachable through the full chain with key and commune.
+	gv, errGV := cl.ResolveAssignableStaff(ctx,
+		&identityv1.ResolveAssignableStaffRequest{Ma: []string{"CB001"}})
+	if errGV != nil {
+		t.Fatalf("ResolveAssignableStaff với khoá và xã đầy đủ vẫn bị từ chối: %v", errGV)
+	}
+	if len(gv.GetAssignableMa()) != 1 || gv.GetAssignableMa()[0] != "CB001" {
+		t.Errorf("ResolveAssignableStaff trả %v, muốn [CB001]", gv.GetAssignableMa())
 	}
 
 	// UNAUTHENTICATED belongs to the caller-key interceptor and means the DEPLOYMENT is
