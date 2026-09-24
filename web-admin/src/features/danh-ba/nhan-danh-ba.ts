@@ -204,13 +204,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Không có tuyến nào trong hợp đồng. Một bản nhập khớp theo email hoặc họ tên + khối còn cần " +
       "một quy tắc gộp bản ghi mà máy chủ phải là nơi quyết định, không phải trình duyệt.",
   },
-  {
-    ten: "Nút Xoá khỏi danh bạ (§4)",
-    viSao:
-      "Câu mở #10 tách XOÁ khỏi KHOÁ và cho xoá một quyền riêng; bảng quyen chưa có khoá ấy, nên " +
-      "tuyến xoá chưa tồn tại. Cán bộ nghỉ hưu hoặc chuyển công tác thì khoá tài khoản ở màn Cấu " +
-      "hình, không xoá — hồ sơ đã xử lý phải còn đọc được tên người thực hiện.",
-  },
 ];
 
 /** Tiêu đề của khối giải thích trên. */

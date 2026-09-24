@@ -18,7 +18,7 @@ import {
 } from "@/features/cau-hinh/ngan-xep-con-tro";
 import { bangTraTuKetQua, type BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import { usePhien } from "@/features/phien/phien-hien-tai";
-import { datCongKhaiCanBo, docTrangDanhBa, suaCanBo } from "@/lib/api/can-bo";
+import { datCongKhaiCanBo, docTrangDanhBa, suaCanBo, xoaCanBo } from "@/lib/api/can-bo";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type {
   identity_canBoTomTat,
@@ -38,6 +38,8 @@ import {
   type BanCongKhai,
 } from "./cong-khai";
 import { HopCongKhai, type DangMoCongKhai } from "./hop-cong-khai";
+import { HopXoa } from "./hop-xoa";
+import { daXoa, duocXoaTheoPhien, yeuCauXoa } from "./xoa-dong";
 import {
   GOI_Y_O_TIM,
   LUA_CHON_HIEN_THI,
@@ -78,16 +80,17 @@ import {
  * đếm được, hàng lọc (`loc-danh-ba.ts`), hộp công khai Mini App (`cong-khai.ts`), và danh sách nói
  * rõ phần nào chưa mở.
  *
- * HAI THAO TÁC GHI THUỘC VỀ MÀN DANH BẠ: `PATCH /api/v1/staff/{id}` (sửa chức vụ, khối/đơn vị, số
- * liên hệ, Có Zalo) và `PUT .../publication` (công khai MỘT người lên Mini App, #12). Bốn tuyến còn
+ * BA THAO TÁC GHI THUỘC VỀ MÀN DANH BẠ: `PATCH /api/v1/staff/{id}` (sửa chức vụ, khối/đơn vị, số
+ * liên hệ, Có Zalo), `PUT .../publication` (công khai MỘT người lên Mini App, #12, `content.update`)
+ * và `DELETE /api/v1/staff/{id}` (xoá một dòng NHẬP TRÙNG, #10, `admin.user.delete`). Bốn tuyến còn
  * lại đổi THẨM QUYỀN hoặc đường đăng nhập của một người — thêm, đổi vai trò, khoá, mở khoá — và
  * chúng ở lại đúng chỗ đặc tả §1 đặt chúng: tab `Cấu hình → Người dùng`. Bày cùng một nút Khoá tài
  * khoản ở hai màn hình là hai chỗ để một thao tác có hậu quả nặng bị bấm nhầm.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * CỔNG CỦA CẢ MÀN nằm ở `app/danh-ba/page.tsx` (`CongQuyen` + `admin.user`). Hai nút Mini App thì
- * cần THÊM `content.update` và ẩn theo khoá ấy (`QUYEN_CONG_KHAI_DANH_BA`). Cả hai lớp đều chỉ là
- * tiện dụng: lớp chặn THẬT ở máy chủ, trên TỪNG yêu cầu (luật 5, cấm #1).
+ * CỔNG CỦA CẢ MÀN nằm ở `app/danh-ba/page.tsx` (`CongQuyen` + `admin.user`). Hai nút Mini App cần
+ * THÊM `content.update`, nút 🗑 cần THÊM `admin.user.delete`, và mỗi nút ẩn theo đúng khoá của nó.
+ * Mọi lớp ẩn đều chỉ là tiện dụng: lớp chặn THẬT ở máy chủ, trên TỪNG yêu cầu (luật 5, cấm #1).
  */
 
 /** Trạng thái một lần đọc danh sách. Ba nhánh rời nhau. */
@@ -119,7 +122,14 @@ export function DanhBaLienHe() {
    * Phiên có `content.update` hay không — quyết định có vẽ hai nút Mini App. Phiên CHƯA ĐỌC XONG
    * hay đọc hỏng thì coi như KHÔNG (fail closed, `quyetDinhTheoKhoa`).
    */
-  const duocCongKhai = duocCongKhaiTheoPhien(usePhien());
+  const phien = usePhien();
+  const duocCongKhai = duocCongKhaiTheoPhien(phien);
+
+  /** Hộp xoá dòng nhập trùng đang mở, và lý do đang gõ. Ba hộp không bao giờ mở cùng lúc. */
+  const [dangXoa, datDangXoa] = useState<identity_canBoTomTat | null>(null);
+  const [lyDoXoa, datLyDoXoa] = useState("");
+  /** Phiên có `admin.user.delete` — quyết định có vẽ nút 🗑. Chưa đọc xong / hỏng → không. */
+  const duocXoa = duocXoaTheoPhien(phien);
 
   /**
    * MỘT DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT KHI MỞ MÀN HÌNH — `[]` ở cuối effect là phần quan trọng nhất
@@ -191,6 +201,7 @@ export function DanhBaLienHe() {
     datDangSua(null);
     datBan(BAN_TRONG);
     datDangMoCK(null);
+    datDangXoa(null);
     datLoiMayChu("");
     datTruyVan(tinh);
   }, []);
@@ -209,6 +220,7 @@ export function DanhBaLienHe() {
   /** Mở biểu mẫu sửa: nạp giá trị đang có vào bản nháp, dọn mọi thông báo của lần trước. */
   const moSua = useCallback((cb: identity_canBoTomTat) => {
     datDangMoCK(null);
+    datDangXoa(null);
     datDangSua(cb);
     datBan(banTuCanBo(cb));
     datLoiMayChu("");
@@ -219,6 +231,7 @@ export function DanhBaLienHe() {
   const moCongKhai = useCallback((dm: DangMoCongKhai) => {
     datDangSua(null);
     datBan(BAN_TRONG);
+    datDangXoa(null);
     datDangMoCK(dm);
     datBanCK(banCongKhaiTu(dm.canBo));
     datLoiMayChu("");
@@ -227,6 +240,23 @@ export function DanhBaLienHe() {
 
   const dongCongKhai = useCallback(() => {
     datDangMoCK(null);
+    datLoiMayChu("");
+  }, []);
+
+  /** Mở hộp xoá cho MỘT dòng. Lý do luôn bắt đầu trống — mỗi lần xoá một lý do của riêng nó. */
+  const moXoa = useCallback((cb: identity_canBoTomTat) => {
+    datDangSua(null);
+    datBan(BAN_TRONG);
+    datDangMoCK(null);
+    datDangXoa(cb);
+    datLyDoXoa("");
+    datLoiMayChu("");
+    datCauDaXong("");
+  }, []);
+
+  const dongXoa = useCallback(() => {
+    datDangXoa(null);
+    datLyDoXoa("");
     datLoiMayChu("");
   }, []);
 
@@ -247,6 +277,8 @@ export function DanhBaLienHe() {
     datDangSua(null);
     datBan(BAN_TRONG);
     datDangMoCK(null);
+    datDangXoa(null);
+    datLyDoXoa("");
     datLoiMayChu("");
     datCauDaXong(cau);
     datLanDoc((n) => n + 1);
@@ -298,6 +330,33 @@ export function DanhBaLienHe() {
       })
       .finally(() => datDangGui(false));
   }, [banCK, dangGui, dangMoCK, ghiXong]);
+
+  /**
+   * Gửi xoá. Dòng có tài khoản, lý do rỗng hay quá dài dừng TẠI ĐÂY (`yeuCauXoa`), không gọi mạng.
+   *
+   * SAU 204: `ghiXong` đọc lại trang bằng cách tăng `lanDoc` và KHÔNG đụng `truyVan`, nên lần đọc
+   * lại mang đúng chữ tìm, bộ lọc và con trỏ đang áp — người đang xem kết quả tìm "Nguyễn Văn" vẫn
+   * thấy kết quả ấy, trừ đúng dòng vừa xoá.
+   */
+  const guiXoa = useCallback(() => {
+    if (dangXoa === null || dangGui) return;
+    const kq = yeuCauXoa(dangXoa, lyDoXoa);
+    if ("loi" in kq) {
+      datLoiMayChu(kq.loi);
+      return;
+    }
+
+    datLoiMayChu("");
+    datCauDaXong("");
+    datDangGui(true);
+    const hoTen = dangXoa.full_name;
+    void xoaCanBo(dangXoa.id, kq.lyDo)
+      .then((ketQua) => {
+        if (ketQua.ok) ghiXong(daXoa(hoTen));
+        else datLoiMayChu(ketQua.thongBao);
+      })
+      .finally(() => datDangGui(false));
+  }, [dangGui, dangXoa, ghiXong, lyDoXoa]);
 
   const hanhDongCongKhai = useMemo(
     () =>
@@ -376,6 +435,18 @@ export function DanhBaLienHe() {
         />
       )}
 
+      {dangXoa !== null && (
+        <HopXoa
+          canBo={dangXoa}
+          lyDo={lyDoXoa}
+          datLyDo={datLyDoXoa}
+          loiMayChu={loiMayChu}
+          dangGui={dangGui}
+          onGui={guiXoa}
+          onHuy={dongXoa}
+        />
+      )}
+
       {trangThai.pha === "dangTai" && <p role="status">Đang tải danh bạ…</p>}
 
       {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải. Mọi mã lỗi — kể cả 401, 403, 404 —
@@ -399,6 +470,7 @@ export function DanhBaLienHe() {
             traBoPhan={traBoPhan}
             onSua={moSua}
             congKhai={hanhDongCongKhai}
+            onXoa={duocXoa ? moXoa : undefined}
           />
           <p className="ghi-chu">{GHI_CHU_SO_DIEN_THOAI}</p>
           <DieuHuongTrang

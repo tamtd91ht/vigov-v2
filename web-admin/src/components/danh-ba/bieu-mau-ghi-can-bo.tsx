@@ -49,7 +49,8 @@ import {
  * trong lúc phát triển — "máy chủ vừa từ chối" và "biểu mẫu đang gửi" — kết xuất được bằng
  * `react-dom/server` mà không cần trình duyệt giả lập.
  *
- * KHÔNG CÓ NHÁNH NÀO CHO XOÁ. Xem `VI_SAO_KHONG_CO_NUT_XOA` trong `nhan-ghi-danh-ba.ts`.
+ * KHÔNG CÓ NHÁNH NÀO CHO XOÁ: xoá dòng trùng mang quyền riêng và có hộp riêng ở màn `/danh-ba`
+ * (`features/danh-ba/hop-xoa.tsx`). Xem `VI_SAO_KHONG_CO_NUT_XOA` trong `nhan-ghi-danh-ba.ts`.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 

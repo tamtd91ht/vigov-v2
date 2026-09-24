@@ -1,5 +1,5 @@
 /**
- * Gọi chín tuyến của danh bạ cán bộ — ba tuyến đọc và **sáu tuyến ghi**.
+ * Gọi mười tuyến của danh bạ cán bộ — ba tuyến đọc và **bảy tuyến ghi**.
  *
  * BA TUYẾN ĐỌC: `GET /api/v1/staff` (một trang, lọc theo `unit` / `published` trên URL),
  * `GET /api/v1/staff/{id}`, và `POST /api/v1/staff/searches` — tìm theo chữ, CHỮ ĐI TRONG THÂN
@@ -10,7 +10,7 @@
  * mười ba trường của một cán bộ — có bản thứ hai là có hai bản sẽ trôi (luật 9).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * SÁU TUYẾN GHI, KHÔNG PHẢI MỘT — và sự tách ấy là của máy chủ, tệp này chỉ theo đúng nó
+ * BẢY TUYẾN GHI, KHÔNG PHẢI MỘT — và sự tách ấy là của máy chủ, tệp này chỉ theo đúng nó
  * (`service-identity/internal/http/can_bo_ghi.go`, chú thích đầu tệp):
  *
  *   POST   /api/v1/staff                   thêm một dòng danh bạ
@@ -19,17 +19,15 @@
  *   DELETE /api/v1/staff/{id}/lockout      quay lại làm việc
  *   PUT    /api/v1/staff/{id}/role         chuyển vai trò (#13, #14)
  *   PUT    /api/v1/staff/{id}/publication  công khai / rút khỏi danh bạ Mini App (#12), `content.update`
+ *   DELETE /api/v1/staff/{id}              xoá mềm một dòng NHẬP TRÙNG (#10), `admin.user.delete`
  *
  * Gộp lại thành một hàm `luuCanBo(...)` ở đây là dựng lại đúng thứ máy chủ vừa tách ra: một
  * lời gọi mang cả "sửa số điện thoại" lẫn "đưa người này vào vai trò điều hành xã" thì vết
  * kiểm toán chỉ còn một động từ, và một cuộc thanh tra phải tự đoán ra ý định từ delta.
  *
- * KHÔNG CÓ TUYẾN XOÁ, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT PHÁT HIỆN CHỨ KHÔNG PHẢI MỘT THIẾU SÓT. Câu mở
- * #10 chốt XOÁ MỀM là thao tác riêng, mang quyền riêng; bảng `quyen` không có khoá nào nghĩa
- * là "xoá một dòng danh bạ nhập trùng", và dùng tạm `admin.user` cho nó chính là hình dạng #10
- * vừa từ chối — một quyền cho hai việc. Đây là phát hiện cho câu mở #27, không phải một dòng
- * `INSERT INTO quyen` (luật 5, bất biến 3c). Vì vậy tệp này không có `xoaCanBo`, và màn hình
- * không có nút Xoá.
+ * XOÁ MANG QUYỀN RIÊNG, KHÔNG MƯỢN `admin.user`. Câu mở #10 chốt xoá mềm là thao tác riêng; khoá
+ * `admin.user.delete` được gieo ở migration 0010 (ADR 0035, trả lời #27). Người nghỉ hưu hay chuyển
+ * công tác thì KHOÁ (`datKhoaCanBo`), không xoá.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
@@ -38,6 +36,7 @@ import type {
   identity_canBoTomTat,
   identity_datCongKhaiVao,
   identity_datVaiTroVao,
+  identity_delete_staff_by_id,
   identity_delete_staff_by_id_lockout,
   identity_get_staff,
   identity_get_staff_by_id,
@@ -50,6 +49,7 @@ import type {
   identity_suaCanBoVao,
   identity_themCanBoVao,
   identity_timCanBoVao,
+  identity_xoaCanBoVao,
   page_Result_identity_canBoTomTat,
 } from "./schema.gen";
 
@@ -491,6 +491,55 @@ export function datCongKhaiCanBo(
   return goiGhiCanBo(duongDanMotCanBo(mau, id), "PUT", thanCongKhai(yc), 200);
 }
 
+/* ---- xoá một dòng nhập trùng --------------------------------------------------------------- */
+
+/**
+ * Giới hạn lý do xoá, tính bằng KÝ TỰ (điểm mã) — cùng con số với `tranLyDoXoa`
+ * (`service-identity/internal/domain/danh_ba_ghi.go:58`). Ký tự chứ không byte hay đơn vị UTF-16,
+ * cùng lý do với `TU_KHOA_TIM_TOI_DA`: một chữ Việt có dấu là hai, ba byte.
+ *
+ * Bản ở client chỉ để từ chối TẠI CHỖ, trước khi gửi. Máy chủ vẫn là nơi quyết định — lệch nhau thì
+ * câu của máy chủ hiện nguyên văn.
+ */
+export const LY_DO_XOA_TOI_DA = 500;
+
+/** Lý do đã cắt và hợp lệ. Chỉ `chuanHoaLyDoXoa` dựng ra được kiểu này. */
+export type LyDoXoaHopLe = { readonly loai: "hopLe"; readonly lyDo: string };
+
+export type LyDoXoa = { readonly loai: "rong" } | { readonly loai: "quaDai" } | LyDoXoaHopLe;
+
+/**
+ * Chuẩn hoá lý do xoá ĐÚNG như máy chủ (`domain.ChuanHoaLyDoXoa`): cắt hai đầu — KHÔNG gộp khoảng
+ * trắng bên trong, vì máy chủ không gộp và lý do là văn bản lưu vào hồ sơ — rồi đếm ký tự.
+ */
+export function chuanHoaLyDoXoa(tho: string): LyDoXoa {
+  const lyDo = tho.trim();
+  if (lyDo === "") return { loai: "rong" };
+  if (Array.from(lyDo).length > LY_DO_XOA_TOI_DA) return { loai: "quaDai" };
+  return { loai: "hopLe", lyDo };
+}
+
+/**
+ * DELETE /api/v1/staff/{id} — xoá mềm MỘT dòng danh bạ nhập trùng. 204, KHÔNG THÂN: dòng đã rời mọi
+ * đường đọc, nên không có gì để vẽ lại từ câu trả lời — màn hình đọc lại trang.
+ *
+ * LÝ DO ĐI TRONG THÂN, KHÔNG TRÊN URL: nó là chữ tự do về một hồ sơ công vụ, và chuỗi truy vấn đi vào
+ * mọi log truy cập (`can_bo_ghi.go`, `xoaCanBoVao`). Nhận `LyDoXoaHopLe` chứ không nhận `string`,
+ * nên không chỗ gọi nào gửi được một lý do rỗng hay quá dài — `tsc` chặn trước máy chủ.
+ *
+ * KHÔNG RẼ NHÁNH THEO `code`. Năm lần từ chối về tới người dùng NGUYÊN VĂN câu máy chủ:
+ * 409 `staff_has_account` (dòng có tài khoản đăng nhập), 403 `self_target_forbidden`, 409
+ * `last_admin`, 404 `staff_not_found`, 400 `invalid_request`.
+ *
+ * MÃ CÁN BỘ CỦA DÒNG BỊ XOÁ KHÔNG BAO GIỜ ĐƯỢC CẤP LẠI (luật 7, bất biến 3).
+ */
+export async function xoaCanBo(id: string, lyDo: LyDoXoaHopLe): Promise<KetQua<null>> {
+  const mau: identity_delete_staff_by_id["duongDan"] = "/api/v1/staff/{id}";
+  const thanGui: identity_xoaCanBoVao = { reason: lyDo.lyDo };
+  const kq = await goiGhi(duongDanMotCanBo(mau, id), "DELETE", thanGui, 204);
+  return kq.ok ? { ok: true, duLieu: null } : kq;
+}
+
 /**
  * Khoá (`POST`) hoặc mở khoá (`DELETE`) tài khoản một cán bộ. 200 ở CẢ HAI chiều.
  *
@@ -499,7 +548,7 @@ export function datCongKhaiCanBo(
  *
  * KHOÁ KHÔNG PHẢI XOÁ (#10). Người bị khoá VẪN CÒN trong danh bạ, vẫn hiện trên mọi hồ sơ cũ, chỉ
  * là không đăng nhập được nữa — đó là điều xảy ra khi một cán bộ nghỉ hưu hay chuyển công tác.
- * Xoá mềm một dòng nhập trùng là việc khác, và tuyến cho nó chưa tồn tại (xem đầu tệp).
+ * Xoá mềm một dòng nhập trùng là việc khác, quyền khác — xem `xoaCanBo`.
  */
 export function datKhoaCanBo(id: string, khoa: boolean): Promise<KetQua<identity_canBoTomTat>> {
   const mauKhoa: identity_post_staff_by_id_lockout["duongDan"] = "/api/v1/staff/{id}/lockout";

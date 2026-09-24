@@ -9,7 +9,9 @@ import {
 } from "@/features/cau-hinh/ngan-xep-con-tro";
 
 import {
+  LY_DO_XOA_TOI_DA,
   TU_KHOA_TIM_TOI_DA,
+  chuanHoaLyDoXoa,
   chuanHoaTuKhoaTim,
   datCongKhaiCanBo,
   datKhoaCanBo,
@@ -23,6 +25,8 @@ import {
   thanTimCanBo,
   themCanBo,
   timCanBo,
+  xoaCanBo,
+  type LyDoXoaHopLe,
   type TuKhoaHopLe,
 } from "./can-bo";
 import type { identity_canBoTomTat } from "./schema.gen";
@@ -572,6 +576,106 @@ describe("PUT /api/v1/staff/{id}/publication — công khai một người (#12)
       const kq = await datCongKhaiCanBo("01JABC", { congKhai: true, daXacNhanDongY: true, thuTu: null });
       expect(kq).toEqual({ ok: false, thongBao: cau });
     }
+  });
+});
+
+describe("chuẩn hoá lý do xoá — giống máy chủ, đếm KÝ TỰ", () => {
+  it("cắt hai đầu, GIỮ khoảng trắng bên trong (máy chủ không gộp)", () => {
+    expect(chuanHoaLyDoXoa("  nhập  trùng \n")).toEqual({ loai: "hopLe", lyDo: "nhập  trùng" });
+  });
+
+  it("rỗng hoặc toàn khoảng trắng → `rong`", () => {
+    expect(chuanHoaLyDoXoa("")).toEqual({ loai: "rong" });
+    expect(chuanHoaLyDoXoa(" \t\n ")).toEqual({ loai: "rong" });
+  });
+
+  it("500 chữ có dấu được nhận (1500 byte), 501 bị từ chối", () => {
+    const tu = "ễ".repeat(LY_DO_XOA_TOI_DA);
+    expect(new TextEncoder().encode(tu).length).toBe(1500);
+    expect(chuanHoaLyDoXoa(tu).loai).toBe("hopLe");
+    expect(chuanHoaLyDoXoa(tu + "ễ").loai).toBe("quaDai");
+  });
+
+  it("đếm điểm mã, không đơn vị UTF-16", () => {
+    const tu = "𝐀".repeat(LY_DO_XOA_TOI_DA);
+    expect(tu.length).toBe(1000);
+    expect(chuanHoaLyDoXoa(tu).loai).toBe("hopLe");
+  });
+});
+
+describe("DELETE /api/v1/staff/{id} — xoá một dòng nhập trùng", () => {
+  function lyDo(tho: string): LyDoXoaHopLe {
+    const kq = chuanHoaLyDoXoa(tho);
+    if (kq.loai !== "hopLe") throw new Error("lý do mẫu phải hợp lệ");
+    return kq;
+  }
+
+  it("DELETE, id mã hoá vào đường dẫn, thân ĐÚNG `{reason}` đã cắt, lý do không lên URL", async () => {
+    const gia = ghiGia(204, null);
+    await xoaCanBo("a/b", lyDo("  Nhập trùng với dòng CB-00123  "));
+
+    const { duongDan, tuyChon, header } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/staff/a%2Fb");
+    expect(tuyChon.method).toBe("DELETE");
+    expect(header.get("Content-Type")).toBe("application/json");
+    expect(JSON.parse(String(tuyChon.body))).toEqual({ reason: "Nhập trùng với dòng CB-00123" });
+    expect(duongDan).not.toMatch(/\?|reason|Nh/);
+  });
+
+  it("chỉ nhận lý do ĐÃ chuẩn hoá — chuỗi thô hay `rong` không qua được `tsc`", () => {
+    ghiGia(204, null);
+    // @ts-expect-error — `xoaCanBo` nhận `LyDoXoaHopLe`, không nhận chuỗi.
+    void xoaCanBo("01JABC", "");
+    // @ts-expect-error — lý do rỗng không bao giờ tới được lời gọi mạng.
+    void xoaCanBo("01JABC", { loai: "rong" });
+    expect(true).toBe(true);
+  });
+
+  it("204 không thân là THÀNH CÔNG; 200 thì không — hợp đồng nói 204", async () => {
+    ghiGia(204, null);
+    expect(await xoaCanBo("01JABC", lyDo("trùng"))).toEqual({ ok: true, duLieu: null });
+    ghiGia(200, canBo(1, null));
+    expect((await xoaCanBo("01JABC", lyDo("trùng"))).ok).toBe(false);
+  });
+
+  it("năm lần từ chối về tới giao diện NGUYÊN VĂN, không lộ mã, không lộ trace_id", async () => {
+    for (const [ma, code, cau] of [
+      [409, "staff_has_account", "Cán bộ này đang có tài khoản đăng nhập nên không xoá được."],
+      [403, "self_target_forbidden", "Không thao tác được lên chính tài khoản của mình."],
+      [409, "last_admin", "Xã phải luôn còn ít nhất một người quản trị."],
+      [404, "staff_not_found", "Không tìm thấy cán bộ."],
+      [400, "invalid_request", "Lý do xoá quá dài (tối đa 500 ký tự)."],
+    ] as const) {
+      ghiGia(ma, { code, message: cau, trace_id: "01JTRACE" });
+      const kq = await xoaCanBo("01JABC", lyDo("trùng"));
+      expect(kq).toEqual({ ok: false, thongBao: cau });
+      if (!kq.ok) expect(kq.thongBao).not.toMatch(new RegExp(`${code}|01JTRACE|${ma}`));
+    }
+  });
+
+  it("sau 204, đọc lại với CÙNG chữ tìm và bộ lọc: dòng vừa xoá biến mất, điều kiện giữ nguyên", async () => {
+    // Màn hình đọc lại bằng `docTrangDanhBa(truyVan.loc.tuKhoa, thamSoDoc(truyVan))` với ĐÚNG
+    // `truyVan` đang áp (`ghiXong` chỉ tăng `lanDoc`). Ca này chạy đúng chuỗi ấy trên máy chủ giả.
+    let conLai = NAM_NGUOI.filter(() => true);
+    const tim = mayChuTimGia(conLai);
+    const tu = hopLe("Huỳnh Văn");
+    const loc = { boPhan: "BP-LE", congKhai: null, cursor: null };
+
+    const truoc = await docTrangDanhBa(tu, loc);
+    expect(truoc.ok && truoc.duLieu.items.map((x) => x.code)).toEqual(["CB001", "CB003"]);
+
+    // Xoá CB003 — máy chủ giả thứ hai cho lời gọi DELETE, rồi dựng lại máy chủ tìm không còn dòng ấy.
+    ghiGia(204, null);
+    expect((await xoaCanBo("id-CB003", lyDo("nhập trùng"))).ok).toBe(true);
+    conLai = conLai.filter((x) => x.code !== "CB003");
+    const timSau = mayChuTimGia(conLai);
+
+    const sau = await docTrangDanhBa(tu, loc);
+    expect(sau.ok && sau.duLieu.items.map((x) => x.code)).toEqual(["CB001", "CB005"]);
+    const thanTruoc = JSON.parse(String((tim.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    const thanSau = JSON.parse(String((timSau.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(thanSau).toEqual(thanTruoc);
+    expect(thanSau).toMatchObject({ q: "Huỳnh Văn", unit: "BP-LE", published: null, cursor: "" });
   });
 });
 

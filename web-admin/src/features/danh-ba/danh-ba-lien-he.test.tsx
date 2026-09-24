@@ -5,6 +5,7 @@ import { PhienProvider } from "@/features/phien/phien-hien-tai";
 
 import { NUT_RUT_MINI_APP, NUT_THEM_MINI_APP } from "./cong-khai";
 import { DanhBaLienHe, HangLoc } from "./danh-ba-lien-he";
+import { NUT_XOA_DONG } from "./xoa-dong";
 import { GOI_Y_O_TIM, TAT_CA_KHOI, TRUY_VAN_DAU } from "./loc-danh-ba";
 import { PHAN_CHUA_DUNG, TIEU_DE_PHAN_CHUA_DUNG } from "./nhan-danh-ba";
 
@@ -58,6 +59,7 @@ describe("màn danh bạ — không thao tác hàng loạt nào, và nút Mini A
     expect(html).not.toMatch(/đã chọn|Chọn tất cả/);
     expect(html).not.toContain(NUT_THEM_MINI_APP);
     expect(html).not.toContain(NUT_RUT_MINI_APP);
+    expect(html).not.toContain(NUT_XOA_DONG);
   });
 });
 

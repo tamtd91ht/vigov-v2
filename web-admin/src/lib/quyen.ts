@@ -281,6 +281,24 @@ export const QUYEN_XEM_NOI_DUNG = "content.read";
 export const QUYEN_CONG_KHAI_DANH_BA = "content.update";
 
 /**
+ * Khoá quyền của nút xoá một dòng danh bạ NHẬP TRÙNG — `admin.user.delete`, "Xoá dòng danh bạ nhập
+ * trùng".
+ *
+ * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên `DELETE /api/v1/staff/{id}`
+ * (`x-vigov-permission.key` trong `kb/20-contracts/openapi.json`) và đúng chuỗi migration gieo vào
+ * bảng `quyen` (`service-identity/migrations/0010_danh_ba_mini_app_va_khoa_xoa_dong_trung.sql:267`,
+ * thứ tự 36). Migration ấy KHÔNG cấp khoá cho vai trò nào: cho tới khi quản trị viên của xã tick nó
+ * ở màn Phân quyền, nút này ẩn với mọi tài khoản — và đó là chủ ý.
+ *
+ * KHÔNG SUY RA TỪ `admin.user` (câu mở #10, ADR 0035): sửa hồ sơ và khoá tài khoản là một việc, gỡ
+ * một dòng khỏi danh bạ là việc khác. Cán bộ nghỉ hưu hay chuyển công tác thì KHOÁ, không xoá —
+ * hồ sơ đã xử lý phải còn đọc được tên người thực hiện (luật 5, bất biến 3b).
+ *
+ * ẨN NÚT LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP — máy chủ kiểm khoá này trên từng lời gọi (luật 5, cấm #1).
+ */
+export const QUYEN_XOA_DONG_DANH_BA = "admin.user.delete";
+
+/**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
  *
  * TỪNG NẰM RIÊNG TRONG `features/cau-hinh/quyen-tab.ts` VÀ NAY Ở ĐÂY, vì nó có người dùng thứ

@@ -65,20 +65,20 @@ export const NUT_XAC_NHAN_KHOA = "Xác nhận khoá";
 export const NUT_XAC_NHAN_MO_KHOA = "Xác nhận mở khoá";
 
 /**
- * MÀN HÌNH NÀY KHÔNG CÓ NÚT XOÁ, và đây là hằng ghi lại lý do ở chỗ người ta sẽ đi tìm nó.
+ * TAB `Cấu hình → Người dùng` KHÔNG CÓ NÚT XOÁ, và đây là hằng ghi lại lý do ở chỗ người ta sẽ đi
+ * tìm nó.
  *
  * Câu mở #10 (chốt 22/09/2026) tách KHOÁ khỏi XOÁ: nghỉ hưu / chuyển công tác là KHOÁ, người vẫn
- * còn trong danh bạ; xoá một dòng nhập trùng là XOÁ MỀM và mang QUYỀN RIÊNG. Bảng `quyen` không
- * có khoá nào mang nghĩa ấy, nên tuyến xoá chưa tồn tại — và mượn tạm `admin.user` cho nó chính
- * là hình dạng #10 vừa từ chối (luật 5, bất biến 3c). Đó là phát hiện cho câu mở #27.
+ * còn trong danh bạ; xoá một dòng nhập trùng là XOÁ MỀM và mang QUYỀN RIÊNG (`admin.user.delete`,
+ * gieo ở migration 0010, ADR 0035). Nút xoá dòng trùng nằm ở màn `/danh-ba`, sau quyền ấy — không ở
+ * tab này, nơi mọi nút đều đứng sau `admin.user`.
  *
- * Vẽ một nút `🗑 Xoá khỏi danh bạ` như đặc tả (`docs/ui-ux/12-danh-ba-can-bo.md:61`) là một lời
- * hứa suông: người quản trị bấm, nhận 404 hoặc 403, và kết luận hệ thống hỏng — trong khi thứ
- * đang thiếu là một quyết định của khách.
+ * Câu dưới hiện trên tab ấy, nên phải nói đúng chỗ việc xoá được làm: "chưa mở" đã sai từ 24/09/2026.
  */
 export const VI_SAO_KHONG_CO_NUT_XOA =
   "Cán bộ nghỉ hưu hoặc chuyển công tác thì khoá tài khoản, không xoá: hồ sơ đã xử lý phải còn " +
-  "đọc được tên người thực hiện. Việc xoá một dòng nhập trùng là thao tác khác và chưa mở.";
+  "đọc được tên người thực hiện. Dòng nhập trùng (không có tài khoản đăng nhập) được xoá ở màn " +
+  "Danh bạ cán bộ, bởi người có quyền riêng cho việc ấy.";
 
 /* ---- tiêu đề và câu giải thích của từng biểu mẫu -------------------------------------------- */
 

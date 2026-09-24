@@ -12,6 +12,7 @@ import {
   NUT_RUT_MINI_APP,
   NUT_THEM_MINI_APP,
 } from "./cong-khai";
+import { NHAN_XOA_DONG, NUT_XOA_DONG } from "./xoa-dong";
 import { CAU_THIEU_QUYEN, NUT_SUA_THONG_TIN } from "./nhan-danh-ba";
 
 /**
@@ -105,9 +106,9 @@ describe("bảng danh bạ — cái ra tới trang", () => {
     expect(html).toContain("Di động cá nhân");
   });
 
-  it("KHÔNG có ô chọn dòng, KHÔNG có thanh hàng loạt, KHÔNG có nút xoá — kể cả khi được công khai", () => {
+  it("KHÔNG có ô chọn dòng, KHÔNG có thanh hàng loạt; nút xoá ẩn khi không truyền `onXoa`", () => {
     // #12 do khách chốt: công khai từng người một, không thao tác hàng loạt ở bất kỳ đâu. Ô chọn
-    // dòng chỉ phục vụ đúng thao tác ấy. Nút xoá thuộc thẻ việc khác.
+    // dòng chỉ phục vụ đúng thao tác ấy. Nút xoá đứng sau khoá riêng — xem khối dưới.
     const html = dungCK([canBo(), canBo({ id: "b", full_name: "Trần Thị B", published: true })]);
 
     expect(html).not.toContain('type="checkbox"');
@@ -182,6 +183,37 @@ describe("cột Trên Mini App, dòng phụ Có Zalo, và hai nút theo dòng", 
     expect(html).toContain(`aria-label="${NUT_RUT_MINI_APP}: Trần Thị B"`);
     expect(html).not.toContain(`aria-label="${NUT_RUT_MINI_APP}: Nguyễn Văn A"`);
     expect(html).not.toContain(`aria-label="${NUT_THEM_MINI_APP}: Trần Thị B"`);
+  });
+});
+
+describe("nút 🗑 xoá dòng nhập trùng", () => {
+  function dungXoa(danhSach: readonly identity_canBoTomTat[]): string {
+    return renderToStaticMarkup(
+      <BangLienHe
+        danhSach={danhSach}
+        traBoPhan={TRA_XONG}
+        onSua={() => undefined}
+        onXoa={() => undefined}
+      />,
+    );
+  }
+
+  it("KHÔNG có `admin.user.delete` (không truyền `onXoa`) → không một nút 🗑 nào (ca bị từ chối)", () => {
+    const html = dung([canBo(), canBo({ id: "b", full_name: "Trần Thị B" })]);
+    expect(html).not.toContain(NUT_XOA_DONG);
+    expect(html).not.toContain(NHAN_XOA_DONG);
+  });
+
+  it("CÓ khoá → mỗi dòng một nút 🗑, nhãn trợ năng 'Xoá khỏi danh bạ: <tên>'", () => {
+    const html = dungXoa([canBo(), canBo({ id: "b", full_name: "Trần Thị B" })]);
+    expect(html).toContain(`aria-label="${NHAN_XOA_DONG}: Nguyễn Văn A"`);
+    expect(html).toContain(`aria-label="${NHAN_XOA_DONG}: Trần Thị B"`);
+  });
+
+  it("dòng CÓ tài khoản VẪN có nút — hộp mở ra để nói vì sao không xoá được", () => {
+    const html = dungXoa([canBo({ has_account: true })]);
+    expect(html).toContain(`aria-label="${NHAN_XOA_DONG}: Nguyễn Văn A"`);
+    expect(html).not.toMatch(/<button[^>]*disabled[^>]*>🗑/);
   });
 });
 

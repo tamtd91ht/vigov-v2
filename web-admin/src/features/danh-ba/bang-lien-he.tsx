@@ -13,6 +13,7 @@ import {
   ariaThemMiniApp,
   dongYGhiLuc,
 } from "./cong-khai";
+import { NUT_XOA_DONG, ariaXoaDong } from "./xoa-dong";
 
 import {
   ariaSua,
@@ -56,6 +57,7 @@ export function BangLienHe({
   traBoPhan,
   onSua,
   congKhai,
+  onXoa,
 }: {
   danhSach: readonly identity_canBoTomTat[];
   /** Bảng tra đã dựng sẵn, đi XUỐNG như tham số — không dòng nào tự đi hỏi máy chủ. */
@@ -69,6 +71,12 @@ export function BangLienHe({
     onThem: (cb: identity_canBoTomTat) => void;
     onRut: (cb: identity_canBoTomTat) => void;
   };
+  /**
+   * Mở hộp xoá dòng nhập trùng. `undefined` = phiên KHÔNG có `admin.user.delete` (hoặc chưa đọc xong)
+   * → không vẽ nút. Dòng có tài khoản VẪN có nút: hộp mở ra để nói vì sao không xoá được và chỉ sang
+   * việc khoá — người bấm đang đi tìm lối, không nên gặp một nút mờ không lời giải thích.
+   */
+  onXoa?: (cb: identity_canBoTomTat) => void;
 }) {
   return (
     // `role="region"` + `tabIndex` để vùng cuộn ngang tới được bằng bàn phím. Dưới 768px bảng cuộn
@@ -126,7 +134,6 @@ export function BangLienHe({
               </td>
               <td>
                 <span className="o-thao-tac">
-                  {/* Đặc tả §4 còn vẽ 🗑 (xoá) — chưa mở, xem phần chưa mở ở `nhan-danh-ba.ts`. */}
                   <button
                     type="button"
                     className="nut-phu"
@@ -155,6 +162,16 @@ export function BangLienHe({
                         {NUT_THEM_MINI_APP}
                       </button>
                     ))}
+                  {onXoa !== undefined && (
+                    <button
+                      type="button"
+                      className="nut-phu nut-xoa"
+                      aria-label={ariaXoaDong(cb.full_name)}
+                      onClick={() => onXoa(cb)}
+                    >
+                      {NUT_XOA_DONG}
+                    </button>
+                  )}
                 </span>
               </td>
             </tr>

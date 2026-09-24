@@ -93,7 +93,8 @@ describe("danh sách phần chưa mở", () => {
     expect(tatCa).toContain("TỔNG SỐ CÁN BỘ");
     expect(tatCa).toContain("Mini App");
     expect(tatCa).toContain("Excel");
-    expect(tatCa).toContain("Xoá khỏi danh bạ");
+    // Nút xoá dòng trùng ĐÃ dựng (TASK-03) — không còn dòng "chưa mở" nào nói về nó.
+    expect(tatCa).not.toContain("Xoá khỏi danh bạ");
   });
 
   it("nút Mini App và dòng Có Zalo ĐÃ dựng — không còn dòng 'chưa mở' nào nói về chúng", () => {
