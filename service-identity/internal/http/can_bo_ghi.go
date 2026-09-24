@@ -3,14 +3,17 @@ package http
 // The WRITE routes of the staff register — the first write surface this service exposes that is
 // not a session.
 //
-// FIVE ROUTES AND NOT ONE FORM. The specification draws a single dialog carrying name, position,
-// department, role and status (14-cau-hinh.md §3), and this deliberately does NOT mirror it:
+// SEPARATE ROUTES AND NOT ONE FORM. The specification draws a single dialog carrying name,
+// position, department, role and status (14-cau-hinh.md §3), and this deliberately does NOT
+// mirror it:
 //
-//	POST   /api/v1/staff                 add a directory entry
-//	PATCH  /api/v1/staff/{id}            correct the profile — no authority changes hands
-//	POST   /api/v1/staff/{id}/lockout    the person has retired or transferred (#10)
-//	DELETE /api/v1/staff/{id}/lockout    they are back
-//	PUT    /api/v1/staff/{id}/role       move them to a role (#13, #14)
+//	POST   /api/v1/staff                   add a directory entry
+//	PATCH  /api/v1/staff/{id}              correct the profile — no authority changes hands
+//	POST   /api/v1/staff/{id}/lockout      the person has retired or transferred (#10)
+//	DELETE /api/v1/staff/{id}/lockout      they are back
+//	PUT    /api/v1/staff/{id}/role         move them to a role (#13, #14)
+//	PUT    /api/v1/staff/{id}/publication  the Mini App directory (#12), `content.update`
+//	DELETE /api/v1/staff/{id}              soft-delete a DUPLICATED row (#10), `admin.user.delete`
 //
 // WHY THE SPLIT COSTS THE WEB A SECOND REQUEST AND IS STILL RIGHT. The customer settled on
 // 2026-09-22 that locking somebody and deleting them are DIFFERENT operations with DIFFERENT
@@ -21,15 +24,12 @@ package http
 // number was corrected" and "this person was moved into the role that runs the commune" are the
 // same entry cannot answer an inspection without somebody interpreting every delta.
 //
-// THE SOFT DELETE OF #10 IS ABSENT, AND ITS ABSENCE IS A FINDING RATHER THAN AN OVERSIGHT.
-// #10 says the delete carries its own permission, separate from the lock. The `quyen` table holds
-// 35 keys (migration 0001 + 0007) and NOT ONE of them means "remove a duplicated staff row":
-// `admin.user` is "Quản lý người dùng", which is the key these five routes already declare, so
-// using it for the delete would be exactly the shape #10 refused — one permission for two
-// operations. Rule 5, invariant 3c forbids inventing the missing key here: a key no migration
-// seeds is a right no administrator can grant, and the route would answer 403 to every account
-// forever while its tests stayed green (a fake checker grants any string). It is a finding for
-// open question #27 — the eight permission keys the specification counts but never lists.
+// THE SOFT DELETE OF #10 CARRIES ITS OWN KEY, `admin.user.delete`. #10 says the delete is a
+// different operation from the lock, with a different permission; `admin.user` ("Quản lý người
+// dùng") for both would be exactly the shape #10 refused. The key was absent from the `quyen`
+// table until migration 0010 §4 seeded it (ADR 0035, #27: "seed a key only when a real route needs
+// it"), and until then the route was deliberately not written — rule 5 invariant 3c: a key no
+// migration seeds is a right no administrator can grant.
 
 import (
 	"encoding/json"
@@ -115,6 +115,16 @@ type datCongKhaiVao struct {
 // nothing).
 type datVaiTroVao struct {
 	RoleID string `json:"role_id"`
+}
+
+// xoaCanBoVao is the body of DELETE /api/v1/staff/{id}.
+//
+// A BODY ON A DELETE, the convention DELETE /api/v1/tasks/{ma} set in service-petitions: the reason
+// is mandatory (rule 7, invariant 1), and a query string would put free text about a government
+// record into every access log and proxy cache. Trimmed, required and bounded by the use case
+// (domain.ChuanHoaLyDoXoa), so the rule has one owner.
+type xoaCanBoVao struct {
+	Reason string `json:"reason"`
 }
 
 // docThanCanBo decodes a JSON body, answering 400 itself on failure.
@@ -316,6 +326,28 @@ func (h *Handler) DatCongKhaiCanBo(w http.ResponseWriter, r *http.Request) {
 	vietJSON(w, http.StatusOK, raNgoai(cb))
 }
 
+// XoaCanBo soft-deletes one duplicated directory row. DELETE /api/v1/staff/{id}
+//
+// 204 AND NO BODY: the row is gone from every read path, so there is nothing for the screen to
+// redraw — the same answer DELETE /api/v1/tasks/{ma} gives.
+func (h *Handler) XoaCanBo(w http.ResponseWriter, r *http.Request) {
+	nguoi, ok := nguoiThucHienCanBo(r)
+	if !ok {
+		h.thieuNguoiThucHien(w, r)
+		return
+	}
+	var than xoaCanBoVao
+	if !docThanCanBo(w, r, &than) {
+		return
+	}
+
+	if err := h.d.GhiDanhBa.Xoa(r.Context(), r.PathValue("id"), than.Reason, nguoi); err != nil {
+		h.traLoiLoiGhiCanBo(w, r, "xoá dòng danh bạ nhập trùng", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // thieuNguoiThucHien answers a request whose principal cannot audit a write.
 //
 // 500 AND NOT 401: these routes sit behind authz.RequirePermission, which has already refused
@@ -332,7 +364,7 @@ func (h *Handler) thieuNguoiThucHien(w http.ResponseWriter, r *http.Request) {
 
 // traLoiLoiGhiCanBo maps one use-case failure onto a status and a sentence.
 //
-// ONE FUNCTION FOR ALL FIVE ROUTES: five copies of this mapping would drift, and the copy that
+// ONE FUNCTION FOR EVERY WRITE ROUTE: seven copies of this mapping would drift, and the copy that
 // drifts answers 500 where it meant 409 — which reads to an operator as a broken server rather
 // than as a rule doing its job.
 func (h *Handler) traLoiLoiGhiCanBo(w http.ResponseWriter, r *http.Request, viec string, err error) {
@@ -393,6 +425,19 @@ func (h *Handler) traLoiLoiGhiCanBo(w http.ResponseWriter, r *http.Request, viec
 				"Zalo Mini App là công khai dữ liệu cá nhân (Nghị định 13/2023/NĐ-CP), cần có sự "+
 				"đồng ý của người đó cho từng lần công khai.", "")
 
+	case errors.Is(err, app.ErrCanBoCoTaiKhoan):
+		// 409 AND NOT 403, for the same reason as last_admin: the caller holds the key. What is
+		// refused is the operation against the STATE of this row. The sentence names BOTH ways
+		// forward, because the person pressing the button is in one of two situations and the
+		// answer differs: a retirement is a lock (the row stays), a genuine duplicate needs its
+		// account revoked first — an act this system does not offer yet (`admin.user.revoke`,
+		// ADR 0035), which is said plainly rather than sending them to look for it.
+		httpx.WriteError(w, http.StatusConflict, "staff_has_account",
+			"Cán bộ này đang có tài khoản đăng nhập nên không xoá được — xoá chỉ dành cho dòng danh bạ "+
+				"nhập trùng không có tài khoản. Nếu người này nghỉ hưu hoặc chuyển công tác, hãy khoá "+
+				"tài khoản thay vì xoá. Nếu đây đúng là dòng nhập trùng, cần thu hồi tài khoản trước; "+
+				"chức năng thu hồi tài khoản chưa có trên hệ thống.", "")
+
 	case errors.Is(err, idstore.ErrEmailDaDung):
 		httpx.WriteError(w, http.StatusConflict, "email_taken",
 			"Thư điện tử này đã được dùng cho một cán bộ khác trong xã.", "")
@@ -426,6 +471,7 @@ func laLoiDauVaoCanBo(err error) bool {
 		domain.ErrSoDienThoaiSai, domain.ErrSoDienThoaiQuaDai,
 		domain.ErrIDThamChieuQuaDai,
 		domain.ErrThuTuDanhBaAm, domain.ErrThuTuDanhBaQuaLon,
+		domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
 	} {
 		if errors.Is(err, mot) {
 			return true

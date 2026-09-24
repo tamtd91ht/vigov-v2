@@ -23,13 +23,11 @@ package app
 //
 // WHAT THIS FILE DELIBERATELY DOES NOT DO, and each absence is a decision rather than an omission:
 //
-//	THE SOFT DELETE OF #10   there is no permission key in the `quyen` table that means "remove a
-//	                         duplicated staff row", and #10 states the delete carries its OWN
-//	                         permission, distinct from the lock. Rule 5, invariant 3c forbids
-//	                         inventing one: a key no migration seeds is a right no administrator
-//	                         can grant, so the route would answer 403 to every account forever
-//	                         while its tests stayed green. It is a finding for open question #27.
-//	ISSUING AN ACCOUNT       #9/#17/#18 — a separate flow (`cap-tai-khoan-can-bo`). Nothing here
+//	REVOKING AN ACCOUNT      `admin.user.revoke` (ADR 0035 #27) is not seeded and not built. Xoa
+//	                         below therefore REFUSES a row that has an account rather than revoking
+//	                         it on the way: the soft delete of #10 is for a duplicated directory
+//	                         row, under its own key `admin.user.delete` (migration 0010 §4).
+//	ISSUING AN ACCOUNT      #9/#17/#18 — a separate flow (`cap-tai-khoan-can-bo`). Nothing here
 //	                         writes `co_tai_khoan` or `mat_khau_hash`; the store has no parameter
 //	                         for either.
 //	A PUBLIC DIRECTORY READ  DatCongKhai below WRITES the Mini App publication (#12, migration
@@ -70,6 +68,7 @@ type KhoDanhBaCanBo interface {
 	DatKhoa(ctx context.Context, tx *store.ScopedTx, id string, dangHoatDong bool) error
 	DatVaiTro(ctx context.Context, tx *store.ScopedTx, id, vaiTroID string) error
 	DatCongKhai(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error
+	XoaMem(ctx context.Context, tx *store.ScopedTx, id, xoaBoi, lyDo string, luc time.Time) error
 	QuanTriDangHoatDong(ctx context.Context, tx *store.ScopedTx) ([]string, error)
 	QuyenCuaVaiTro(ctx context.Context, tx *store.ScopedTx, vaiTroID string) ([]string, bool, error)
 	QuyenDangGiu(ctx context.Context, tx *store.ScopedTx, canBoID string) ([]string, error)
@@ -133,6 +132,13 @@ var (
 	// administrator CONFIRMS, per request, that they asked and the person agreed. No confirmation,
 	// no publication — and nothing is written.
 	ErrChuaXacNhanDongY = errors.New("danh_ba_can_bo: công khai lên Mini App cần xác nhận đã được người này đồng ý")
+
+	// ErrCanBoCoTaiKhoan — the soft delete of #10 is for a DUPLICATED DIRECTORY ROW, and a row
+	// carrying a sign-in account is not that (user decision 2026-09-24). Revoking the account is
+	// its own act under its own key (`admin.user.revoke`, ADR 0035 — not built); retiring somebody
+	// is the lock. Deleting the row here would leave a credential attached to a record every screen
+	// has stopped showing.
+	ErrCanBoCoTaiKhoan = errors.New("danh_ba_can_bo: dòng danh bạ này đang có tài khoản đăng nhập, không xoá được")
 )
 
 // LoiTraoQuyenKhongCam names the keys that were refused.
@@ -172,6 +178,10 @@ const (
 	HanhViCongKhaiMiniApp    = "cong_khai_mini_app"
 	HanhViRutCongKhaiMiniApp = "rut_cong_khai_mini_app"
 	HanhViDoiThuTuDanhBa     = "doi_thu_tu_danh_ba"
+
+	// The soft delete of #10. The verb names the ONLY situation it exists for, so an inspection
+	// reading the ledger cannot mistake it for a retirement (which is `khoa_tai_khoan_can_bo`).
+	HanhViXoaCanBoNhapTrung = "xoa_can_bo_nhap_trung"
 )
 
 // soLanThuMa is how many codes are minted before giving up.
@@ -187,7 +197,8 @@ const (
 // of codes, or a constraint violation this code misread, into a request that never returns.
 const soLanThuMa = 3
 
-// DanhBaCanBo owns adding, editing, locking and reassigning one commune's staff.
+// DanhBaCanBo owns adding, editing, locking, reassigning, publishing and — for a duplicated row
+// only — soft-deleting one commune's staff directory entries.
 type DanhBaCanBo struct {
 	db  *store.DB
 	kho KhoDanhBaCanBo
@@ -780,6 +791,104 @@ func saoChepSo(p *int) *int {
 	}
 	v := *p
 	return &v
+}
+
+// Xoa soft-deletes one DUPLICATED directory row — open question #10's second situation.
+//
+// WHAT #10 AND THE USER'S 2026-09-24 DECISION FIXED, AND WHERE EACH PART IS ENFORCED:
+//
+//	ONLY A DUPLICATE          retiring or transferring somebody is the LOCK (DatKhoa), never this.
+//	                          The route carries its own key, `admin.user.delete` (migration 0010 §4).
+//	NO ACCOUNT ON THE ROW     a row with `co_tai_khoan = true` is refused with ErrCanBoCoTaiKhoan,
+//	                          INSIDE the transaction on the row read FOR UPDATE — so an account
+//	                          issued a second earlier cannot slip between the check and the write.
+//	NOT ONESELF (#14)         refused before anything is read, like every other write here.
+//	NEVER THE LAST ADMIN (#13) see below — defensive, and stated as such.
+//	REASON REQUIRED           rule 7 invariant 1; shape-checked before the transaction opens.
+//	UNPUBLISHED WITH IT       the store's UPDATE clears the Mini App flag and both consent marks
+//	                          as literals (store.xoaMemCanBo), so a deleted row can never stay public.
+//	TRAIL                     one entry, same transaction, actor = the staff code.
+//
+// #13 IS NATURALLY SATISFIED AND STILL CHECKED. An administrator is somebody who can EXERCISE
+// `admin.user`, and `dieuKienGiuQuyen` requires `co_tai_khoan` for that — so the account refusal
+// above already excludes every administrator. The check is kept because that reasoning spans two
+// files and one shared SQL fragment: the day the predicate changes (an account-less holder, a new
+// way to administer), this line is what still stands between a delete and a commune nobody can
+// administer, and ADR 0003 leaves the vendor no way back in. It costs the same locked read DatKhoa
+// already takes, in the same order (administrator set first, then the target), so the two
+// operations cannot deadlock each other.
+//
+// ALREADY DELETED, ANOTHER COMMUNE'S ID, OR AN INVENTED ONE: ErrCanBoKhongTonTai, one answer for
+// all three (rule 4, forbidden #2). TheoIDDeGhi is scoped and excludes deleted rows, and that is
+// also what makes a second DELETE unable to overwrite who removed the row, or why.
+func (uc *DanhBaCanBo) Xoa(ctx context.Context, id, lyDoTho string, nguoi NguoiThucHien) error {
+	if err := nguoi.hopLe(); err != nil {
+		return err
+	}
+	if id == "" {
+		return idstore.ErrCanBoKhongTonTai
+	}
+	lyDo, err := domain.ChuanHoaLyDoXoa(lyDoTho)
+	if err != nil {
+		return err
+	}
+	if id == nguoi.ID {
+		return ErrTuThaoTacChinhMinh
+	}
+
+	return uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		quanTri, err := uc.kho.QuanTriDangHoatDong(ctx, tx)
+		if err != nil {
+			return err
+		}
+		truoc, err := uc.kho.TheoIDDeGhi(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if truoc.CoTaiKhoan {
+			return ErrCanBoCoTaiKhoan
+		}
+		if laNguoiQuanTriCuoiCung(quanTri, truoc.ID) {
+			return ErrQuanTriCuoiCung
+		}
+
+		luc := uc.bayGio()
+		// `deleted_by` IS THE STAFF CODE (rule 6, invariant 8) — nguoi.Vet.ID, which hopLe has
+		// already refused when empty. NEVER nguoi.ID.
+		if err := uc.kho.XoaMem(ctx, tx, truoc.ID, nguoi.Vet.ID, lyDo, luc); err != nil {
+			return err
+		}
+
+		sau := truoc
+		sau.HienTrenMiniApp = false
+		sau.DongYCongKhaiLuc = nil
+		sau.DongYCongKhaiGhiBoi = ""
+
+		// THE REASON TEXT IS NOT IN THE DELTA, ITS LENGTH IS — the convention service-petitions'
+		// task delete set. It is free text about a record; `audit_log` is append-only and never
+		// deleted, so a copy there is a second permanent store of it. The reason itself lives in
+		// `delete_reason` on the row, which is kept for ever too.
+		truocVet := tomTatCanBo(truoc)
+		for k, v := range tomTatCongKhai(truoc) {
+			truocVet[k] = v
+		}
+		truocVet["da_xoa"] = false
+		truocVet["co_tai_khoan"] = truoc.CoTaiKhoan
+		sauVet := tomTatCongKhai(sau)
+		sauVet["da_xoa"] = true
+
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor:   nguoi.Vet,
+			Action:  HanhViXoaCanBoNhapTrung,
+			Subject: truoc.Ma,
+			Delta: deltaCanBo(map[string]any{
+				"truoc":        truocVet,
+				"sau":          sauVet,
+				"do_dai_ly_do": len([]rune(lyDo)),
+				"xoa_luc":      luc.UTC().Format(time.RFC3339),
+			}),
+		})
+	})
 }
 
 // laNguoiQuanTriCuoiCung reports whether removing this person's administrative rights would leave

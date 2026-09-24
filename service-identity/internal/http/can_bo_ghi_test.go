@@ -60,6 +60,7 @@ type ghiDanhBaGia struct {
 	themCuoi   app.YeuCauThemCanBo
 	suaCuoi    app.YeuCauSuaCanBo
 	congKhai   app.YeuCauCongKhai
+	lyDoXoa    string
 
 	kq  domain.CanBoTomTat
 	loi error
@@ -117,6 +118,12 @@ func (g *ghiDanhBaGia) DatCongKhai(ctx context.Context, id string, yc app.YeuCau
 	g.ghiNhan(ctx, nguoi)
 	g.idCuoi, g.congKhai = id, yc
 	return g.kq, g.loi
+}
+
+func (g *ghiDanhBaGia) Xoa(ctx context.Context, id, lyDo string, nguoi app.NguoiThucHien) error {
+	g.ghiNhan(ctx, nguoi)
+	g.idCuoi, g.lyDoXoa = id, lyDo
+	return g.loi
 }
 
 // --- the in-memory idempotency store ----------------------------------------------------------
@@ -536,8 +543,9 @@ func TestGhiCanBoTraVeCungHinhDangVoiTuyenDoc(t *testing.T) {
 
 // POST /api/v1/staff REFUSES A REQUEST WITH NO Idempotency-Key. There is no natural unique key
 // underneath — the staff code is random by design (#15) and a name is not a key — so this header is
-// the ONLY thing standing between a double-submitted form and two permanent directory rows that no
-// route can remove (#10's delete has no permission key yet).
+// the ONLY thing standing between a double-submitted form and two permanent directory rows — #10's
+// soft delete can hide the second one, but only as an audited act under its own key, and the row
+// and its code stay in the table for ever.
 func TestThemCanBoThieuIdempotencyKeyBiTuChoi(t *testing.T) {
 	m := dungMayChu(t)
 	tok := m.tokenCho(t, xaA, sidA)

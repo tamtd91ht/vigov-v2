@@ -97,7 +97,15 @@ type khoGia struct {
 	// congKhaiCuoi is the row DatCongKhai was handed — what the UPDATE would write.
 	congKhaiCuoi *domain.CanBoTomTat
 
+	// xoa is what XoaMem was handed; nil = never called.
+	xoa *xoaDaGhi
+
 	loi error
+}
+
+type xoaDaGhi struct {
+	id, xoaBoi, lyDo string
+	luc              time.Time
 }
 
 func (k *khoGia) TheoIDDeGhi(ctx context.Context, tx *store.ScopedTx, id string) (domain.CanBoTomTat, error) {
@@ -143,6 +151,14 @@ func (k *khoGia) DatCongKhai(ctx context.Context, tx *store.ScopedTx, cb domain.
 	k.congKhaiCuoi = &cb
 	_, err := tx.Exec(ctx, "UPDATE nguoi_dung SET cong-khai", cb.ID, cb.HienTrenMiniApp,
 		cb.DongYCongKhaiLuc, cb.DongYCongKhaiGhiBoi, cb.ThuTuDanhBa)
+	return err
+}
+
+// XoaMem records what the soft delete would write — deleted_by above all, which is where rule 6
+// invariant 8 is decided for this route.
+func (k *khoGia) XoaMem(ctx context.Context, tx *store.ScopedTx, id, xoaBoi, lyDo string, luc time.Time) error {
+	k.xoa = &xoaDaGhi{id: id, xoaBoi: xoaBoi, lyDo: lyDo, luc: luc}
+	_, err := tx.Exec(ctx, "UPDATE nguoi_dung SET xoa-mem", id, xoaBoi, lyDo, luc)
 	return err
 }
 

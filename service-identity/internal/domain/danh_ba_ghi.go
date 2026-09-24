@@ -40,6 +40,10 @@ var (
 	ErrIDThamChieuQuaDai = errors.New("can_bo: mã tham chiếu quá dài")
 	ErrThuTuDanhBaAm     = errors.New("can_bo: thứ tự hiển thị trong danh bạ không được âm")
 	ErrThuTuDanhBaQuaLon = errors.New("can_bo: thứ tự hiển thị trong danh bạ quá lớn")
+
+	// The reason of a soft delete (#10) — rule 7, invariant 1 makes `delete_reason` mandatory.
+	ErrThieuLyDoXoa  = errors.New("can_bo: thiếu lý do xoá — danh bạ là hồ sơ lưu trữ, xoá mềm phải ghi vì sao")
+	ErrLyDoXoaQuaDai = errors.New("can_bo: lý do xoá quá dài")
 )
 
 const (
@@ -48,7 +52,30 @@ const (
 	tranEmail       = 254 // RFC 5321 §4.5.3.1.3 — the longest address a server must accept
 	tranSoDienThoai = 32
 	tranIDThamChieu = 64 // a ULID is 26; a slug the commune types is shorter still
+
+	// tranLyDoXoa — "nhập trùng với CB-2026-7K3M9Q, do nhập Excel hai lần" fits in a tenth of it.
+	// The ceiling refuses a payload, not an explanation.
+	tranLyDoXoa = 500
 )
+
+// ChuanHoaLyDoXoa trims and bounds the reason for soft-deleting a duplicated directory row (#10).
+//
+// REQUIRED, because rule 7 invariant 1 makes `delete_reason` part of what a soft delete IS: a row
+// removed from every screen with no recorded reason is a record that vanished, and the next person
+// who asks why has nobody to ask. Counted in RUNES, not bytes — Vietnamese is up to three bytes per
+// accented character, so a byte bound would cut a Vietnamese sentence at a third of the length.
+//
+// Internal whitespace is kept as typed: this is prose, not a key anything sorts or matches on.
+func ChuanHoaLyDoXoa(tho string) (string, error) {
+	lyDo := strings.TrimSpace(tho)
+	if lyDo == "" {
+		return "", ErrThieuLyDoXoa
+	}
+	if utf8.RuneCountInString(lyDo) > tranLyDoXoa {
+		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrLyDoXoaQuaDai, tranLyDoXoa)
+	}
+	return lyDo, nil
+}
 
 // ChuanHoaHoTen trims and collapses the runs of whitespace a copy-paste from Excel leaves behind.
 //

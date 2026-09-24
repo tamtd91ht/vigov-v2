@@ -136,3 +136,31 @@ func TestKiemTraThuTuDanhBa(t *testing.T) {
 		t.Errorf("2^31: lỗi = %v, muốn ErrThuTuDanhBaQuaLon", err)
 	}
 }
+
+// THE REASON OF A SOFT DELETE IS REQUIRED, TRIMMED, AND BOUNDED IN RUNES (rule 7, invariant 1).
+//
+// THE BOUND IS COUNTED IN RUNES: 500 accented Vietnamese characters are ~1500 bytes, and a byte
+// bound would refuse an honest Vietnamese sentence at a third of the length of an English one.
+func TestChuanHoaLyDoXoaBatBuocCatKhoangTrangVaDemTheoKyTu(t *testing.T) {
+	got, err := ChuanHoaLyDoXoa("  Nhập trùng với CB-2026-7K3M9Q  ")
+	if err != nil {
+		t.Fatalf("lỗi: %v", err)
+	}
+	if got != "Nhập trùng với CB-2026-7K3M9Q" {
+		t.Errorf("= %q, muốn bản đã cắt khoảng trắng hai đầu", got)
+	}
+
+	for _, tho := range []string{"", "   ", "\t\n"} {
+		if _, err := ChuanHoaLyDoXoa(tho); !errors.Is(err, ErrThieuLyDoXoa) {
+			t.Errorf("%q: lỗi = %v, muốn ErrThieuLyDoXoa", tho, err)
+		}
+	}
+
+	// Exactly at the ceiling, in multi-byte runes: accepted.
+	if _, err := ChuanHoaLyDoXoa(strings.Repeat("ệ", tranLyDoXoa)); err != nil {
+		t.Errorf("%d ký tự có dấu bị từ chối — trần đang đếm BYTE chứ không đếm ký tự: %v", tranLyDoXoa, err)
+	}
+	if _, err := ChuanHoaLyDoXoa(strings.Repeat("ệ", tranLyDoXoa+1)); !errors.Is(err, ErrLyDoXoaQuaDai) {
+		t.Errorf("lý do quá dài không bị từ chối: %v", err)
+	}
+}

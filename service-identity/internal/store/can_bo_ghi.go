@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/service-identity/internal/domain"
@@ -210,6 +211,43 @@ func (s *CanBoStore) DatKhoa(ctx context.Context, tx *store.ScopedTx, id string,
 		return dichLoiGhiCanBo("đặt khoá", err)
 	}
 	return doiMotDong(kq, "đặt khoá")
+}
+
+// xoaMemCanBo soft-deletes one DUPLICATED directory row (#10) — and takes it off the Mini App in
+// the SAME row version.
+//
+// THE THREE PUBLICATION COLUMNS ARE LITERALS, NOT PARAMETERS, and that is the property: no caller
+// can soft-delete a row and leave it published, whatever it passes. The read paths exclude
+// deleted rows, so a published deleted row would not show today — but "every read path remembers
+// `deleted_at IS NULL`" is a promise about code not yet written (the public Mini App directory
+// route has not been built), and a personal mobile on a public channel is not something to rest on
+// a promise. Clearing BOTH consent marks with the flag is what 0010 §3's
+// `nguoi_dung_rut_cong_khai_xoa_dong_y` demands: an unpublished row carries no consent marks.
+//
+// `thu_tu_danh_ba` IS LEFT ALONE: it grants nothing on its own, and a soft delete keeps data.
+//
+// WHAT IS ABSENT IS THE CONTRACT, the same way as every UPDATE in this file: `ma` (never reissued,
+// rule 7 invariant 3 — `UNIQUE (tenant_id, ma)` is not partial, so the code stays taken) and
+// `ho_ten` (ResolveStaffNames keeps printing it beside old records, ADR 0034) are not in the SET.
+//
+// `AND deleted_at IS NULL` MEANS A SECOND DELETE CANNOT OVERWRITE THE FIRST: who removed the row,
+// when and why are recorded once. The caller has already read the row FOR UPDATE, so in practice
+// the predicate never excludes anything; doiMotDong reports it if it ever does.
+const xoaMemCanBo = `UPDATE nguoi_dung
+	SET deleted_at = $3, deleted_by = $4, delete_reason = $5,
+	    hien_tren_mini_app = false, dong_y_cong_khai_luc = NULL, dong_y_cong_khai_ghi_boi = '',
+	    cap_nhat_luc = now()
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+// XoaMem soft-deletes one row. `xoaBoi` is the STAFF CODE of whoever did it (rule 6, invariant 8 —
+// `deleted_by` is read years later by a person, and a ULID names nobody); the caller has already
+// refused an empty one. `luc` is the use case's clock, so the row and the audit entry agree.
+func (s *CanBoStore) XoaMem(ctx context.Context, tx *store.ScopedTx, id, xoaBoi, lyDo string, luc time.Time) error {
+	kq, err := tx.Exec(ctx, xoaMemCanBo, string(tx.TenantID()), id, luc, xoaBoi, lyDo)
+	if err != nil {
+		return dichLoiGhiCanBo("xoá mềm", err)
+	}
+	return doiMotDong(kq, "xoá mềm")
 }
 
 // DatVaiTro moves one person to a role, or to no role at all (”).

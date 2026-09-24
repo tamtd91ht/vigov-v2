@@ -21,8 +21,9 @@ import (
 // "what a staff record looks like on the wire" a single decision: a write route returning a shape
 // of its own is how a screen ends up rendering two different versions of one row.
 //
-// ONE WRITE PATH IS STILL ABSENT ON PURPOSE — the soft delete of #10. It carries its own
-// permission, and no key in the `quyen` table means it. See the header of can_bo_ghi.go.
+// THE SOFT DELETE OF #10 (DELETE /api/v1/staff/{id}) IS ALSO IN can_bo_ghi.go, under its own key
+// `admin.user.delete` (migration 0010 §4). A deleted row disappears from both routes here: their
+// store reads filter `deleted_at IS NULL` (store.locTomTat).
 
 // canBoTomTat is one staff record as it leaves the API. JSON field names are English
 // (rest-api-design §1); the values are whatever the commune typed, in Vietnamese.

@@ -125,9 +125,10 @@ type (
 	// would make those refusals conditionals inside one function, where the one that is missing
 	// looks exactly like the one that is there.
 	//
-	// NO `Xoa` METHOD. #10's soft delete carries its own permission and the `quyen` table holds no
-	// key that means it — see the header of can_bo_ghi.go. An unused method here would be the
-	// scaffolding that makes the absence look like an oversight.
+	// Xoa (on CanBoGhiDanhBa below) IS #10's SOFT DELETE OF A DUPLICATED ROW. It exists only since
+	// its own key `admin.user.delete` was seeded (migration 0010 §4), and its route declares that
+	// key, not `admin.user` — one permission for two operations is the shape #10 refused.
+	//
 	// TaiKhoanCanBoUC is the CREDENTIAL surface — issuing an account, resetting a password, and a
 	// person changing their own (open questions #9, #17).
 	//
@@ -156,6 +157,7 @@ type (
 		// is a use case over the same row with the same transaction-plus-audit shape; guarded by a
 		// DIFFERENT permission (`content.update`) at the route.
 		DatCongKhai(ctx context.Context, id string, yc app.YeuCauCongKhai, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
+		Xoa(ctx context.Context, id, lyDo string, nguoi app.NguoiThucHien) error
 	}
 
 	// SLADoc reads the commune's processing-deadline table, for GET /api/v1/sla.
@@ -706,7 +708,7 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// --- the staff register: the WRITE routes ---------------------------------------------------
 	//
-	// ALL FIVE DECLARE `admin.user`, AND THAT WAS CHECKED AGAINST THE `quyen` TABLE RATHER THAN
+	// THE FIVE BELOW DECLARE `admin.user`, AND THAT WAS CHECKED AGAINST THE `quyen` TABLE RATHER THAN
 	// ASSUMED. It is the key the Cấu hình → Người dùng tab is specified with (14-cau-hinh.md
 	// §12.8), it is already seeded (migration 0001:278, "Quản lý người dùng"), and it is what the
 	// two read routes above declare — so a commune that granted somebody the staff screen granted
@@ -718,10 +720,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	// routes here touches that surface; PUT /api/v1/staff/{id}/publication below does, and it is
 	// the one staff route that declares `content.update`.
 	//
-	// THE ONE ROUTE THAT IS NOT HERE is the soft delete of #10. It carries a permission of its own
-	// by the customer's decision, no key in the table means it, and rule 5 invariant 3c forbids
-	// inventing one — the full argument is in the header of can_bo_ghi.go. Declaring it with
-	// `admin.user` would collapse two operations the customer deliberately separated.
+	// TWO STAFF WRITE ROUTES DECLARE A DIFFERENT KEY, each by a decision: PUT .../publication
+	// (`content.update`, #12) and DELETE /api/v1/staff/{id} (`admin.user.delete`, #10 — seeded by
+	// migration 0010 §4). Declaring the delete with `admin.user` would collapse two operations the
+	// customer deliberately separated.
 
 	// Adding somebody to the register. POST /api/v1/staff
 	//
@@ -733,11 +735,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// all three. So a double-submitted form produces TWO rows with TWO permanent codes.
 	//
 	// DongKhiHong AND NOT MoKhiHong, which is the stricter of the two and needs its reason stated:
-	// rule 7 forbids hard delete, so the duplicate row is permanent, and the operation that would
-	// retire it — #10's soft delete — CANNOT BE BUILT YET for want of a permission key. A duplicate
-	// created during a Redis outage would therefore sit in the commune's directory with no route
-	// able to remove it. Refusing to add a member of staff for the minutes a cache is down is the
-	// cheaper failure by a wide margin.
+	// rule 7 forbids hard delete, so the duplicate row is permanent. #10's soft delete
+	// (DELETE /api/v1/staff/{id}) now removes it from every screen — but only as an audited act,
+	// under a separate key a commune may give to few people, leaving the row and its code in the
+	// table for ever. Refusing to add a member of staff for the minutes a cache is down is still the
+	// cheaper failure. Relaxing to MoKhiHong is a user decision, not a consequence of the delete.
 	//
 	// @summary  Thêm một cán bộ vào danh bạ của xã — mã cán bộ do hệ thống sinh, không có ô nhập
 	// @screen   12-danh-ba-can-bo §5
@@ -811,7 +813,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// transfers is LOCKED and STAYS IN THE DIRECTORY, because their name is what makes years of
 	// administrative records readable — BatchGetStaff resolving a name is the whole reason #10
 	// attached a mandatory requirement to its own decision. Deleting them is the other situation
-	// (a duplicated row), and that route is absent for want of its own permission key.
+	// (a duplicated row): DELETE /api/v1/staff/{id}, under `admin.user.delete`.
 	//
 	// #13 IS ENFORCED HERE, INSIDE THE TRANSACTION, NOT ON THE SCREEN: locking the last account
 	// that can administer this commune answers 409 and writes nothing. A warning would not do —
@@ -939,6 +941,57 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "content.update")(
 			idem.KhongCan("PUT mang trạng thái tuyệt đối: công khai người đã công khai (giữ nguyên dấu đồng ý gốc) hay thôi công khai người chưa công khai thì use case không ghi gì, nên lần gửi thứ hai để lại đúng một trạng thái và đúng một vết")(
 				http.HandlerFunc(h.DatCongKhaiCanBo))))
+
+	// Removing a DUPLICATED directory row. DELETE /api/v1/staff/{id}
+	//
+	// OPEN QUESTION #10 (decided 2026-09-22; route shape decided by the user on 2026-09-24): a soft
+	// delete is ONLY for a row entered twice. Retiring or transferring somebody is POST
+	// .../lockout, and their row stays. THE METHOD IS THE ONLY THING THAT SAYS "DELETE": the row
+	// keeps `deleted_at`, `deleted_by` (the remover's STAFF CODE) and `delete_reason` (rule 7,
+	// invariant 1), its code stays taken for ever — `UNIQUE (tenant_id, ma)` is not partial — and
+	// ResolveStaffNames keeps printing the name beside the old records that quote it (ADR 0034).
+	//
+	// `admin.user.delete` AND NOT `admin.user`, because #10 gave the delete a permission of its own.
+	// Seeded by migration 0010 §4 ("Xoá dòng danh bạ nhập trùng") and granted to NO role there, so
+	// this route answers 403 to everyone until a commune administrator ticks the key.
+	//
+	// WHAT IS REFUSED, each inside the transaction on the row read FOR UPDATE:
+	//
+	//	409 staff_has_account   the row carries a sign-in account. Revoking it is its own act
+	//	                        (`admin.user.revoke`, ADR 0035 — not built); retiring is the lock.
+	//	409 last_admin          #13, defensive — unreachable while being an administrator needs an
+	//	                        account, and kept so that stays true if that ever changes.
+	//	403 self_target_forbidden  #14.
+	//	404 staff_not_found     already deleted, another commune's id, or invented — one answer
+	//	                        (rule 4, forbidden #2).
+	//
+	// THE ROW LEAVES THE MINI APP IN THE SAME UPDATE: the publication flag and both consent marks are
+	// cleared as literals, so a deleted row can never stay public.
+	//
+	// A BODY ON A DELETE, the convention DELETE /api/v1/tasks/{ma} set: the reason is mandatory, and a
+	// query string would put free text about a government record into every access log and proxy.
+	//
+	// 204, NO BODY, like that route: the resource is gone from every read path, so there is no row
+	// for the screen to redraw.
+	//
+	// idem.KhongCan — deleting an already-deleted row is a 404 either way, and the second request
+	// cannot overwrite who deleted it or why: both the locked read and the UPDATE carry
+	// `AND deleted_at IS NULL`.
+	//
+	// @summary  Xoá mềm một dòng danh bạ NHẬP TRÙNG, kèm lý do bắt buộc — từ chối dòng đang có tài khoản đăng nhập
+	// @screen   12-danh-ba-can-bo §4
+	// @request  xoaCanBoVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/staff/{id}",
+		authz.RequirePermission(d.Checker, "admin.user.delete")(
+			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: lượt đọc khoá dòng và câu UPDATE đều mang `AND deleted_at IS NULL`, nên lần thứ hai trả 404 và không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.XoaCanBo))))
 
 	// --- the staff register: the CREDENTIAL routes (#9, #17, #18) --------------------------------
 	//
