@@ -622,6 +622,14 @@ export type httpx_Error = {
   "trace_id": string;
 };
 
+export type identity_boPhanDaGhiRa = {
+  "id": string;
+  "code": string;
+  "name": string;
+  "parent_id": string;
+  "order": number;
+};
+
 export type identity_boPhanRa = {
   /** ULID — what other records reference */
   "id": string;
@@ -629,6 +637,8 @@ export type identity_boPhanRa = {
   "code": string;
   "name": string;
   "parent_id": string;
+  "order": number;
+  "staff_count": number;
 };
 
 export type identity_caLamBuRa = {
@@ -689,6 +699,12 @@ export type identity_capTaiKhoanRa = {
   "staff": identity_canBoTomTat;
   /** ⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — Mật khẩu tạm dùng MỘT LẦN, khách chốt 22/09/2026 (câu mở #9): quản trị viên đọc lại cho cán bộ, máy chủ không giữ bản trần và không trả lại lần thứ hai. Đổi ở lần đăng nhập đầu là bắt buộc. */
   "temporary_password": string;
+};
+
+export type identity_cotPhanQuyenRa = {
+  "role_id": string;
+  /** sắp theo thứ tự chữ; `[]` khi vai trò không giữ quyền nào */
+  "permissions": Array<string>;
 };
 
 export type identity_danhSachBoPhanRa = {
@@ -783,6 +799,9 @@ export type identity_khoiNhiemVuRa = {
   /** the row a form pre-selects; at most one per commune */
   "is_default": boolean;
   "active": boolean;
+  "order": number;
+  "source": string;
+  "tier": number;
 };
 
 export type identity_loaiDonViDanCuRa = {
@@ -794,6 +813,13 @@ export type identity_loaiDonViDanCuRa = {
   "label": string;
   "is_default": boolean;
   "active": boolean;
+  "order": number;
+  "source": string;
+  "tier": number;
+};
+
+export type identity_luuPhanQuyenVao = {
+  "permissions": Array<string> | null;
 };
 
 export type identity_maTranQuyenRa = {
@@ -837,6 +863,13 @@ export type identity_quyenMucRa = {
   "label": string;
 };
 
+export type identity_suaBoPhanVao = {
+  "name"?: string | null;
+  "parent_id"?: string | null;
+  "order"?: number | null;
+  "code"?: string | null;
+};
+
 export type identity_suaCaLamViecVao = {
   "weekday": number | null;
   "start": string | null;
@@ -852,6 +885,16 @@ export type identity_suaCanBoVao = {
   "office_phone": string | null;
   "mobile": string | null;
   "has_zalo"?: boolean | null;
+};
+
+export type identity_suaDanhMucVao = {
+  "label"?: string | null;
+  "order"?: number | null;
+  "active"?: boolean | null;
+  "is_default"?: boolean | null;
+  "code"?: string | null;
+  "source"?: string | null;
+  "tier"?: number | null;
 };
 
 export type identity_suaNgayLamBuVao = {
@@ -879,6 +922,13 @@ export type identity_thanDangNhap = {
   "password": string;
 };
 
+export type identity_themBoPhanVao = {
+  "name": string;
+  "parent_id"?: string;
+  "order"?: number | null;
+  "code"?: string;
+};
+
 export type identity_themCaLamViecVao = {
   "weekday": number;
   "start": string;
@@ -893,6 +943,15 @@ export type identity_themCanBoVao = {
   "org_unit_id": string;
   "office_phone": string;
   "mobile": string;
+};
+
+export type identity_themDanhMucVao = {
+  "code": string;
+  "label": string;
+  "order"?: number;
+  "is_default"?: boolean;
+  "source"?: string | null;
+  "tier"?: number | null;
 };
 
 export type identity_themNgayLamBuVao = {
@@ -988,6 +1047,10 @@ export type identity_xoaCanBoVao = {
   "reason": string;
 };
 
+export type identity_xoaDanhMucVao = {
+  "reason": string;
+};
+
 export type identity_xoaLichVao = {
   "reason": string;
 };
@@ -1068,6 +1131,10 @@ export type petitions_danhSachLoaiNhiemVuRa = {
 
 export type petitions_danhSachMucUuTienRa = {
   "items": Array<petitions_mucUuTienRa>;
+};
+
+export type petitions_danhSachTrangThaiNhiemVuRa = {
+  "items": Array<petitions_trangThaiNhiemVuRa>;
 };
 
 export type petitions_deNghiLuiHanRa = {
@@ -1277,6 +1344,13 @@ export type petitions_suaNhiemVuVao = {
   "documents"?: Array<petitions_vanBanNhiemVuVao> | null;
 };
 
+export type petitions_suaTrangThaiNhiemVuVao = {
+  "label"?: string | null;
+  "order"?: number | null;
+  "code"?: string | null;
+  "active"?: boolean | null;
+};
+
 export type petitions_tachKetLuanVao = {
   "code"?: string;
   "auto_code": boolean;
@@ -1345,6 +1419,16 @@ export type petitions_themMucUuTienVao = {
   "is_default"?: boolean;
   "source"?: string | null;
   "tier"?: number | null;
+};
+
+export type petitions_trangThaiNhiemVuRa = {
+  "code": string;
+  "label": string;
+  "order": number;
+  "role": string;
+  "default_label": string;
+  "default_order": number;
+  "customised": boolean;
 };
 
 export type petitions_vanBanNhiemVuVao = {
@@ -2534,6 +2618,46 @@ export type identity_get_org_units = {
   };
 };
 
+/** POST /api/v1/org-units — Thêm một bộ phận vào sơ đồ tổ chức của xã — mã tự sinh từ tên nếu không nhập */
+export type identity_post_org_units = {
+  duongDan: "/api/v1/org-units";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_themBoPhanVao;
+  phanHoi: {
+    201: identity_boPhanDaGhiRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/org-units/{id} — Sửa tên, dời bộ phận cha, đổi thứ tự một bộ phận — mã đã cấp không đổi */
+export type identity_patch_org_units_by_id = {
+  duongDan: "/api/v1/org-units/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_suaBoPhanVao;
+  phanHoi: {
+    200: identity_boPhanDaGhiRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/outgoing-documents — Danh sách sổ văn bản đi, phân trang theo con trỏ, lọc theo năm · loại văn bản */
 export type documents_get_outgoing_documents = {
   duongDan: "/api/v1/outgoing-documents";
@@ -2733,6 +2857,67 @@ export type identity_get_residential_unit_types = {
   };
 };
 
+/** POST /api/v1/residential-unit-types — Thêm một loại đơn vị dân cư của riêng xã vào danh mục */
+export type identity_post_residential_unit_types = {
+  duongDan: "/api/v1/residential-unit-types";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_themDanhMucVao;
+  phanHoi: {
+    201: identity_loaiDonViDanCuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/residential-unit-types/{id} — Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một loại đơn vị dân cư */
+export type identity_patch_residential_unit_types_by_id = {
+  duongDan: "/api/v1/residential-unit-types/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_suaDanhMucVao;
+  phanHoi: {
+    200: identity_loaiDonViDanCuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/residential-unit-types/{id} — Xoá mềm một loại đơn vị dân cư do xã tự thêm, kèm lý do bắt buộc */
+export type identity_delete_residential_unit_types_by_id = {
+  duongDan: "/api/v1/residential-unit-types/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_xoaDanhMucVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/residential-units — Danh sách thôn / tổ dân phố của xã — kèm nhãn loại đơn vị, dùng cho ô chọn địa bàn và bộ lọc */
 export type identity_get_residential_units = {
   duongDan: "/api/v1/residential-units";
@@ -2778,6 +2963,27 @@ export type identity_get_roles = {
   phanHoi: {
     200: identity_danhSachVaiTroRa;
     401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/roles/{id}/permissions — Lưu phân quyền của MỘT vai trò (một cột ma trận) — gửi toàn bộ danh sách quyền */
+export type identity_put_roles_by_id_permissions = {
+  duongDan: "/api/v1/roles/{id}/permissions";
+  phuongThuc: "PUT";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_luuPhanQuyenVao;
+  phanHoi: {
+    200: identity_cotPhanQuyenRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -3242,6 +3448,67 @@ export type identity_get_task_blocs = {
   };
 };
 
+/** POST /api/v1/task-blocs — Thêm một khối nhiệm vụ của riêng xã vào danh mục */
+export type identity_post_task_blocs = {
+  duongDan: "/api/v1/task-blocs";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_themDanhMucVao;
+  phanHoi: {
+    201: identity_khoiNhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/task-blocs/{id} — Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một khối nhiệm vụ */
+export type identity_patch_task_blocs_by_id = {
+  duongDan: "/api/v1/task-blocs/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_suaDanhMucVao;
+  phanHoi: {
+    200: identity_khoiNhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/task-blocs/{id} — Xoá mềm một khối nhiệm vụ do xã tự thêm, kèm lý do bắt buộc */
+export type identity_delete_task_blocs_by_id = {
+  duongDan: "/api/v1/task-blocs/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_xoaDanhMucVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/task-priorities — Danh mục mức ưu tiên nhiệm vụ của xã, theo đúng thứ tự thang — dùng cho ô chọn và bộ lọc */
 export type petitions_get_task_priorities = {
   duongDan: "/api/v1/task-priorities";
@@ -3315,6 +3582,42 @@ export type petitions_delete_task_priorities_by_id = {
     403: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/task-statuses — Bảy trạng thái nhiệm vụ với nhãn và thứ tự của xã (mặc định nếu xã chưa sửa) — cột Kanban, bộ lọc, màn hình cấu hình */
+export type petitions_get_task_statuses = {
+  duongDan: "/api/v1/task-statuses";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_danhSachTrangThaiNhiemVuRa;
+    401: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/task-statuses/{code} — Sửa nhãn và/hoặc thứ tự hiển thị của một trạng thái nhiệm vụ trong xã (không thêm, xoá hay tắt mã) */
+export type petitions_patch_task_statuses_by_code = {
+  duongDan: "/api/v1/task-statuses/{code}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: petitions_suaTrangThaiNhiemVuVao;
+  phanHoi: {
+    200: petitions_trangThaiNhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
     500: httpx_Error;
   };
 };

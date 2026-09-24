@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: ff4aaf2
+derived_from_commit: 7aa0127
 expires: 2026-12-23
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -30,7 +30,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 |---|---|---|---|
 | **00** ViGov — Tổng quan hệ thống | — | — | — |
 | **01** Tổng quan điều hành | — | — | — |
-| **02** Quản lý nhiệm vụ | 8 | 8/8 | ✓ |
+| **02** Quản lý nhiệm vụ | 9 | 8/9 | ✓ |
 | **03** Sổ tay lãnh đạo | — | — | — |
 | **04** Biên bản và kết luận họp | 4 | 4/4 | ✓ |
 | **05** Văn bản đến & Đơn thư | 5 | 5/5 | ✓ |
@@ -42,10 +42,10 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **11** Quản trị nội dung Mini App | 6 | 6/6 | ✓ |
 | **12** Danh bạ cán bộ | 5 | 2/4 +1 ngoài web | ✓ |
 | **13** Báo cáo điều hành | — | — | — |
-| **14** Cấu hình hệ thống | 49 | 49/49 | ✓ |
+| **14** Cấu hình hệ thống | 59 | 49/58 +1 ngoài web | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 5 | 5/5 | ✓ |
 
-Tổng **116 tuyến** trong hợp đồng. **4** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **127 tuyến** trong hợp đồng. **4** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -101,7 +101,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
-| `_chung` | 20 | 2 | 5 | 5 |
+| `_chung` | 20 | 2 | 6 | 5 |
 | `citizen-app` | 11 | 2 | 4 | 0 |
 | `core` | 9 | 0 | 1 | 1 |
 | `deploy` | 13 | 0 | 1 | 0 |
@@ -110,8 +110,8 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-comms` | 7 | 3 | 2 | 4 |
 | `service-documents` | 5 | 1 | 3 | 0 |
 | `service-finance` | 13 | 3 | 0 | 0 |
-| `service-identity` | 13 | 7 | 0 | 1 |
-| `service-petitions` | 10 | 7 | 4 | 0 |
+| `service-identity` | 13 | 8 | 1 | 1 |
+| `service-petitions` | 10 | 8 | 4 | 0 |
 | `service-platform` | 3 | 1 | 0 | 1 |
 | `service-reporting` | 0 | 0 | 1 | 0 |
 | `tools` | 14 | 0 | 0 | 0 |

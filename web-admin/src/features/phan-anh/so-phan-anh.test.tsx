@@ -63,7 +63,7 @@ function phieu(sua: Partial<petitions_phieuPhanAnhRa> = {}): petitions_phieuPhan
 }
 
 const BO_PHAN: identity_boPhanRa[] = [
-  { id: "01JBOPHAN", code: "vp-dang-uy", name: "VĂN PHÒNG ĐẢNG ỦY", parent_id: "" },
+  { id: "01JBOPHAN", code: "vp-dang-uy", name: "VĂN PHÒNG ĐẢNG ỦY", parent_id: "", order: 0, staff_count: 0 },
 ];
 const TEN_BO_PHAN = new Map(BO_PHAN.map((b) => [b.id, b.name]));
 

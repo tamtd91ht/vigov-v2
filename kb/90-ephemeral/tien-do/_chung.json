@@ -258,6 +258,14 @@
       "bang_chung": "Phát hiện 24/09/2026, lượt /develop-backend-api Danh bạ cán bộ: `make kb` sau 86f9534 in 'ĐÃ CÓ MÀN HÌNH → done/ — việc c5eb6691f6de (DELETE /api/v1/staff/{id})', trong khi web-admin/src/lib/api/can-bo.ts chỉ có `PATCH /api/v1/staff/{id}` (:277) và DELETE .../lockout (:292-302), KHÔNG có lời gọi DELETE nào vào /staff/{id}. Tệp tasks/web/done/c5eb6691f6de.json KHÔNG được commit ở lượt ấy (để khỏi ghi một lời nói dối vào kho) — `make kb` lần sau sẽ sinh lại nó cho tới khi bộ khớp được sửa. Cùng lớp lỗi với `_chung/hang-doi-viec-man-hinh-noi-doi` (hàng đợi nói dối tệ hơn không có hàng đợi).",
       "no_confirm": [],
       "tiep_theo": "Sửa tools/apidoc (manhinh.go): khớp cặp (PHƯƠNG THỨC, đường dẫn) — đọc phương thức từ lời gọi thật (`goiGhi(..., \"DELETE\", ...)`, kiểu `identity_delete_staff_by_id`, hay đối số phuongThuc) chứ không chỉ chuỗi đường dẫn; thêm ca: hai phương thức cùng đường dẫn, web gọi một → chỉ một việc done. Kiểm lại MỌI việc hiện ở tasks/web/done/ xem còn việc nào done nhờ trùng đường dẫn. Web thật của DELETE /staff/{id} nằm ở `web-admin/danh-ba-dung-tuyen-moi`."
+    },
+    {
+      "id": "data-safety-guard-chan-cau-trich-trong-md",
+      "viec": "`data_safety_guard` chặn một TỆP .md chỉ vì văn xuôi trích nguyên văn chữ của luật 7 cấm #1 — và lối thoát duy nhất agent tìm được là đổi chữ, tức đi vòng một rào chắn",
+      "trang_thai": "chua_lam",
+      "bang_chung": "24/09/2026, knowledge-keeper viết ADR 0040: lần Write đầu bị chặn 'no filter, affects EVERY row' vì EMPTY_FILTER (.claude/hooks/data_safety_guard.py:78-81) khớp câu TRÍCH luật trong văn xuôi; hook quét cả .md. Agent đổi thành 'câu xoá cứng' rồi ghi được — không dữ liệu nào bị đụng, nhưng đúng hình dạng 'đi vòng rào' mà CLAUDE.md cấm và ban-giao-phien §5 dặn 'sửa hook + thêm ca test, đừng đi vòng — hook nhiễu là hook bị tắt'. Cùng lượt: builder F1 báo phán quyết của hook trên câu SQL thật của tuyến lưu cột Phân quyền phụ thuộc chữ quanh câu lệnh (:139-147, BUSINESS :83-85), không phụ thuộc quyết định ADR 0040.",
+      "no_confirm": [],
+      "tiep_theo": "Việc của người giữ .claude/: (1) không áp EMPTY_FILTER lên văn xuôi trong kb/**.md và .claude/**.md (hoặc chỉ trong khối mã); (2) ca kiểm cố ý cho câu xoá cứng có lọc tenant+vai trò+tập khoá trên `vai_tro_quyen` theo ADR 0040 — phán quyết phải là quyết định, không phải may rủi của chữ quanh câu; (3) hiệu chuẩn trên kho thật sau khi vá (thói quen ở ban-giao-phien §5)."
     }
   ]
 }

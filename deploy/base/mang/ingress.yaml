@@ -8,7 +8,7 @@
 # VÌ SAO KHÔNG CÒN MỘT DÒNG `/api/v1` → identity: dòng ấy đúng 100% vào ngày nó được
 # viết, khi mọi tài nguyên REST đều thuộc identity. Nay hợp đồng có
 #
-#     77 tuyến của 5 dịch vụ — identity 30 · petitions 20 · finance 14 · documents 7 · comms 6
+#     83 tuyến của 5 dịch vụ — identity 34 · petitions 22 · finance 14 · documents 7 · comms 6
 #
 # nên dòng gộp ấy đưa mọi tuyến không phải của identity tới identity và trả 404 — 404
 # trên một tuyến hành chính thật. Chủ dự án chốt lối (b), SINH Ingress từ openapi.json,
@@ -18,7 +18,7 @@
 # (deploy/overlays/<mt>/ingress-moi-truong.yaml). Bảng định tuyến thì giống nhau ở mọi
 # môi trường nên nó thuộc base — đúng ranh giới base/overlay kho này đang dùng.
 #
-# 32 luật định tuyến cho 77 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
+# 33 luật định tuyến cho 83 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -64,7 +64,7 @@ spec:
               service:
                 name: finance
                 port: { name: rest }
-          # identity — 1 tuyến: /api/v1/residential-unit-types
+          # identity — 2 tuyến: /api/v1/residential-unit-types · /api/v1/residential-unit-types/{id}
           - path: /api/v1/residential-unit-types
             pathType: Prefix
             backend:
@@ -203,6 +203,13 @@ spec:
               service:
                 name: finance
                 port: { name: rest }
+          # petitions — 2 tuyến: /api/v1/task-statuses · /api/v1/task-statuses/{code}
+          - path: /api/v1/task-statuses
+            pathType: Prefix
+            backend:
+              service:
+                name: petitions
+                port: { name: rest }
           # identity — 3 tuyến: /api/v1/working-hours · /api/v1/working-hours/defaults
           #   /api/v1/working-hours/{id}
           - path: /api/v1/working-hours
@@ -219,7 +226,7 @@ spec:
               service:
                 name: finance
                 port: { name: rest }
-          # identity — 1 tuyến: /api/v1/task-blocs
+          # identity — 2 tuyến: /api/v1/task-blocs · /api/v1/task-blocs/{id}
           - path: /api/v1/task-blocs
             pathType: Prefix
             backend:
@@ -233,7 +240,7 @@ spec:
               service:
                 name: petitions
                 port: { name: rest }
-          # identity — 1 tuyến: /api/v1/org-units
+          # identity — 2 tuyến: /api/v1/org-units · /api/v1/org-units/{id}
           - path: /api/v1/org-units
             pathType: Prefix
             backend:
@@ -262,7 +269,7 @@ spec:
               service:
                 name: identity
                 port: { name: rest }
-          # identity — 1 tuyến: /api/v1/roles
+          # identity — 2 tuyến: /api/v1/roles · /api/v1/roles/{id}/permissions
           - path: /api/v1/roles
             pathType: Prefix
             backend:

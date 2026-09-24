@@ -306,6 +306,13 @@
       "source": "service-petitions/migrations/0003_danh_muc_nhiem_vu.sql:284"
     },
     {
+      "entity": "TaskStatusLabel",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "nhan_trang_thai_nhiem_vu",
+      "source": "service-petitions/migrations/0010_nhan_trang_thai_nhiem_vu.sql:168"
+    },
+    {
       "entity": "TaskType",
       "service": "petitions",
       "scope": "tenant",

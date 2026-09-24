@@ -1279,13 +1279,60 @@
       "operation_id": "identity_get_org_units",
       "task_id": "04cee977078e",
       "summary": "Danh mục bộ phận của xã — cây tổ chức, dùng cho ô phân công, luồng văn bản và bộ lọc",
-      "screen": "14-cau-hinh §3",
+      "screen": "14-cau-hinh §1",
       "permission_kind": "any-authenticated",
       "permission_reason": "tên bộ phận xuất hiện ở ô phân công nhiệm vụ, luồng văn bản, danh bạ và mọi bộ lọc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: sơ đồ tổ chức lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
       "idempotency": "",
       "reply_schemas": {
         "200": "identity.danhSachBoPhanRa",
         "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/org-units",
+      "operation_id": "identity_post_org_units",
+      "task_id": "4983d0a05945",
+      "summary": "Thêm một bộ phận vào sơ đồ tổ chức của xã — mã tự sinh từ tên nếu không nhập",
+      "screen": "14-cau-hinh §1",
+      "permission_kind": "permission",
+      "permission": "admin.org",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "request_schema": "identity.themBoPhanVao",
+      "reply_schemas": {
+        "201": "identity.boPhanDaGhiRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "PATCH",
+      "path": "/api/v1/org-units/{id}",
+      "operation_id": "identity_patch_org_units_by_id",
+      "task_id": "941bc0eb89cb",
+      "summary": "Sửa tên, dời bộ phận cha, đổi thứ tự một bộ phận — mã đã cấp không đổi",
+      "screen": "14-cau-hinh §1",
+      "permission_kind": "permission",
+      "permission": "admin.org",
+      "idempotency": "khong-can",
+      "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi tên, cha và thứ tự đều bằng đúng dòng vừa đọc, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "identity.suaBoPhanVao",
+      "reply_schemas": {
+        "200": "identity.boPhanDaGhiRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-identity/internal/http/routes.go"
@@ -1513,6 +1560,77 @@
     },
     {
       "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/residential-unit-types",
+      "operation_id": "identity_post_residential_unit_types",
+      "task_id": "6dd9858c9d78",
+      "summary": "Thêm một loại đơn vị dân cư của riêng xã vào danh mục",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "identity.themDanhMucVao",
+      "reply_schemas": {
+        "201": "identity.loaiDonViDanCuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "DELETE",
+      "path": "/api/v1/residential-unit-types/{id}",
+      "operation_id": "identity_delete_residential_unit_types_by_id",
+      "task_id": "e68cffad7668",
+      "summary": "Xoá mềm một loại đơn vị dân cư do xã tự thêm, kèm lý do bắt buộc",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do",
+      "request_schema": "identity.xoaDanhMucVao",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "PATCH",
+      "path": "/api/v1/residential-unit-types/{id}",
+      "operation_id": "identity_patch_residential_unit_types_by_id",
+      "task_id": "ffe578a15601",
+      "summary": "Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một loại đơn vị dân cư",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "identity.suaDanhMucVao",
+      "reply_schemas": {
+        "200": "identity.loaiDonViDanCuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
       "method": "GET",
       "path": "/api/v1/residential-units",
       "operation_id": "identity_get_residential_units",
@@ -1562,6 +1680,30 @@
       "reply_schemas": {
         "200": "identity.danhSachVaiTroRa",
         "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "PUT",
+      "path": "/api/v1/roles/{id}/permissions",
+      "operation_id": "identity_put_roles_by_id_permissions",
+      "task_id": "386fe13ac34c",
+      "summary": "Lưu phân quyền của MỘT vai trò (một cột ma trận) — gửi toàn bộ danh sách quyền",
+      "screen": "14-cau-hinh §4",
+      "permission_kind": "permission",
+      "permission": "admin.role",
+      "idempotency": "khong-can",
+      "idempotency_reason": "PUT mang tập quyền tuyệt đối: lưu đúng tập vai trò đang giữ thì use case không ghi gì và không để vết, nên lần gửi thứ hai cho cùng một kết quả",
+      "request_schema": "identity.luuPhanQuyenVao",
+      "reply_schemas": {
+        "200": "identity.cotPhanQuyenRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-identity/internal/http/routes.go"
@@ -2085,6 +2227,77 @@
       "declared_in": "service-identity/internal/http/routes.go"
     },
     {
+      "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/task-blocs",
+      "operation_id": "identity_post_task_blocs",
+      "task_id": "824cd81fd3b5",
+      "summary": "Thêm một khối nhiệm vụ của riêng xã vào danh mục",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "identity.themDanhMucVao",
+      "reply_schemas": {
+        "201": "identity.khoiNhiemVuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "DELETE",
+      "path": "/api/v1/task-blocs/{id}",
+      "operation_id": "identity_delete_task_blocs_by_id",
+      "task_id": "21ffb7edd478",
+      "summary": "Xoá mềm một khối nhiệm vụ do xã tự thêm, kèm lý do bắt buộc",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do",
+      "request_schema": "identity.xoaDanhMucVao",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "PATCH",
+      "path": "/api/v1/task-blocs/{id}",
+      "operation_id": "identity_patch_task_blocs_by_id",
+      "task_id": "7e7b7e4c2984",
+      "summary": "Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một khối nhiệm vụ",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "identity.suaDanhMucVao",
+      "reply_schemas": {
+        "200": "identity.khoiNhiemVuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
       "service": "petitions",
       "method": "GET",
       "path": "/api/v1/task-priorities",
@@ -2169,6 +2382,47 @@
         "403": "httpx.Error",
         "404": "httpx.Error",
         "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/task-statuses",
+      "operation_id": "petitions_get_task_statuses",
+      "task_id": "d103c816315a",
+      "summary": "Bảy trạng thái nhiệm vụ với nhãn và thứ tự của xã (mặc định nếu xã chưa sửa) — cột Kanban, bộ lọc, màn hình cấu hình",
+      "screen": "02-nhiem-vu §6",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "nhãn trạng thái là tiêu đề cột Kanban và giá trị bộ lọc trạng thái của mọi màn hình nhiệm vụ — đòi một quyền cấu hình sẽ làm mất tên cột cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: cách gọi trạng thái của xã lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "petitions.danhSachTrangThaiNhiemVuRa",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "PATCH",
+      "path": "/api/v1/task-statuses/{code}",
+      "operation_id": "petitions_patch_task_statuses_by_code",
+      "task_id": "a04e65f5a29a",
+      "summary": "Sửa nhãn và/hoặc thứ tự hiển thị của một trạng thái nhiệm vụ trong xã (không thêm, xoá hay tắt mã)",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "upsert ghi giá trị tuyệt đối và use case không ghi, không để vết khi không trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "petitions.suaTrangThaiNhiemVuVao",
+      "reply_schemas": {
+        "200": "petitions.trangThaiNhiemVuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"

@@ -14,7 +14,7 @@ const VT_CHU_TICH = "01J0000000000000000000VT1";
 /** Thân 200 của hai tuyến danh mục — kiểu lấy từ hợp đồng, không gõ tay hình dạng ở đây. */
 const BO_PHAN_RA: identity_danhSachBoPhanRa = {
   items: [
-    { id: BP_LANH_DAO, code: "lanh-dao", name: "LÃNH ĐẠO ỦY BAN NHÂN DÂN XÃ", parent_id: "" },
+    { id: BP_LANH_DAO, code: "lanh-dao", name: "LÃNH ĐẠO ỦY BAN NHÂN DÂN XÃ", parent_id: "", order: 0, staff_count: 0 },
   ],
 };
 
@@ -77,7 +77,7 @@ describe("id không tra được — một trạng thái THẬT, không phải l
 
   it("một mục có tên rỗng cũng là 'không tra được', không phải một ô trống", () => {
     const tenRong: identity_danhSachBoPhanRa = {
-      items: [{ id: KHONG_CO, code: "x", name: "", parent_id: "" }],
+      items: [{ id: KHONG_CO, code: "x", name: "", parent_id: "", order: 0, staff_count: 0 }],
     };
     const danhMuc = bangTraTuKetQua({ ok: true, duLieu: tenRong });
     expect(traTen(danhMuc, KHONG_CO)).toEqual({ loai: "khongTraDuoc" });

@@ -225,13 +225,19 @@ describe("cột Nguồn và cột Thứ tự", () => {
   });
 
   it("nhóm KHÔNG có đường ghi: không cột Nguồn, không cột hành động, và nói rõ là chỉ xem", () => {
-    // Hai danh mục ấy không phát ra `source`; một cột `Nguồn` cho chúng sẽ phải bịa ra nội dung.
+    // Read-only is decided by the group having NO write descriptor (`null` below), not by the row
+    // shape: since 7aa0127 the identity catalogues emit `order`/`source`/`tier` like every other
+    // group, so this row is write-shaped and the guarantee must hold anyway. This is the one place
+    // the read-only guarantee is asserted (`tang-danh-muc.test.ts` points here).
     const chiDoc: MucDanhMuc = {
       id: "01JH-x",
       code: "thon",
       label: "Thôn",
       active: true,
       is_default: false,
+      order: 1,
+      source: "don-vi",
+      tier: 1,
     };
     const html = ve(nhomCoMuc([chiDoc], null));
 

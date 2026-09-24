@@ -104,7 +104,7 @@ function nhiemVu(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
 }
 
 const BO_PHAN: identity_boPhanRa[] = [
-  { id: "01JBOPHAN", code: "vp-dang-uy", name: "VĂN PHÒNG ĐẢNG ỦY", parent_id: "" },
+  { id: "01JBOPHAN", code: "vp-dang-uy", name: "VĂN PHÒNG ĐẢNG ỦY", parent_id: "", order: 0, staff_count: 0 },
 ];
 
 const DANH_MUC: DanhMucNhiemVu = {
@@ -133,7 +133,16 @@ const DANH_MUC: DanhMucNhiemVu = {
     },
   ],
   khoi: [
-    { id: "01JKHOI", code: "khoi-dang", label: "Khối Đảng", is_default: false, active: true },
+    {
+      id: "01JKHOI",
+      code: "khoi-dang",
+      label: "Khối Đảng",
+      is_default: false,
+      active: true,
+      order: 1,
+      source: "don-vi",
+      tier: 1,
+    },
   ],
   boPhan: BO_PHAN,
 };

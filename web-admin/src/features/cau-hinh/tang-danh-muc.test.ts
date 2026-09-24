@@ -41,9 +41,22 @@ function muc(tier: number, active = true): MucDanhMuc {
   };
 }
 
-/** Một mục của hai danh mục CHỈ ĐỌC — hợp đồng không phát ra `order`, `source`, `tier`. */
-function mucChiDoc(): MucDanhMuc {
-  return { id: "01JH-x", code: "thon", label: "Thôn", active: true, is_default: false };
+/**
+ * A row of one of the two `identity` catalogues (residential-unit types, task blocs). Since
+ * commit 7aa0127 both have write routes and the contract emits `order`, `source`, `tier` on every
+ * row — this is what the server sends for a row the commune added itself.
+ */
+function mucDanhMucDinhDanh(): MucDanhMuc {
+  return {
+    id: "01JH-x",
+    code: "thon",
+    label: "Thôn",
+    active: true,
+    is_default: false,
+    order: 1,
+    source: "don-vi",
+    tier: 1,
+  };
 }
 
 describe("thao tác được phép theo tầng", () => {
@@ -77,11 +90,16 @@ describe("mục nào có đường ghi", () => {
     expect(laMucGhi(muc(TANG_DON_VI))).toBe(true);
   });
 
-  it("mục của hai danh mục chỉ đọc KHÔNG có tầng, nên không có thao tác nào", () => {
-    // Hai danh mục ấy không có tuyến ghi nào trong hợp đồng. Phép thử hỏi đúng thứ nó cần biết —
-    // "hợp đồng có nói tầng của dòng này không" — chứ không hỏi tên nhóm.
-    expect(laMucGhi(mucChiDoc())).toBe(false);
-    expect(thaoTacCuaMuc(mucChiDoc())).toEqual({ doiNhan: false, tat: false, xoa: false });
+  it("mục của hai danh mục `identity` giờ cũng mang tầng — nhận ra là mục ghi, tầng 1 đủ ba thao tác", () => {
+    // The test asks the row "does the contract state your tier", never the group's name — so the
+    // day both identity catalogues started emitting `tier` (7aa0127), their rows became
+    // write-shaped with no code change here. That is the intended behaviour of the shape check.
+    expect(laMucGhi(mucDanhMucDinhDanh())).toBe(true);
+    expect(thaoTacCuaMuc(mucDanhMucDinhDanh())).toEqual({ doiNhan: true, tat: true, xoa: true });
+    // Whether buttons are actually DRAWN for a group is no longer decided by the row shape but by
+    // whether the group has a write descriptor wired. A group with none still renders read-only:
+    // that guarantee is asserted in `tab-danh-muc.test.tsx`, "nhóm KHÔNG có đường ghi…" (the
+    // `nhomCoMuc([...], null)` case), and is deliberately not duplicated here.
   });
 });
 
