@@ -61,6 +61,7 @@
         "matcher": "",
         "hooks": [
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stop_verify_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/workflow_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/progress_guard.py\"" }
         ]
       }

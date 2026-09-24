@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "_chung",
-  "cap_nhat": "2026-09-23",
+  "cap_nhat": "2026-09-24",
   "muc": [
     {
       "id": "rao-doi-chieu-khoa-quyen",
@@ -202,6 +202,14 @@
       "bang_chung": "⚠ ĐỌC DÒNG NÀY TRƯỚC: **container ấy KHÔNG còn chạy**. Docker daemon tắt cùng ngày, sau lần đo dưới đây. Một lượt sau đọc mục này đã đi kiểm lại thay vì tin — và đó là hành vi ĐÚNG, nên dòng cảnh báo này đứng đây để lần sau không ai mất thời gian tìm một cổng đã đóng. Bật lại: xem lệnh `docker run` trong `.env.example`, mục `VIGOV_TEST_DSN`. ĐIỀU ĐÃ ĐO, và nó vẫn đúng như một sự kiện của quá khứ — 23/09/2026, `go run ./tools/schema-smoke` với `VIGOV_TEST_DSN` trỏ vào `vigov-schema-test` (PostgreSQL 16.15, cổng 55432): **0 dịch vụ HỎNG**. Comms 4 · documents 4 · finance 5 · identity 9 · petitions 5 · platform 4 · reporting 2 tệp đều ÁP xanh. Rồi `go test -count=1 -p 1` cùng DSN: identity (store 6,25s · crosstenant 5,62s · app 6,42s) · documents (store 1,82s) · finance (store 2,20s) · comms (store 2,42s) — tất cả `ok`. BẰNG CHỨNG CA PG THẬT SỰ CHẠY LÀ **THỜI GIAN**, không phải chữ `ok`: cùng gói `internal/store` của identity chạy 0,025s khi bỏ qua và 6,25s khi chạy thật.",
       "no_confirm": [],
       "tiep_theo": "⚠ NHỮNG THỨ DỰNG SAU LẦN ĐO ẤY CHƯA HỀ ĐƯỢC POSTGRESQL CHẤP NHẬN, và danh sách này dài thêm mỗi lượt: `service-finance/migrations/0006_thu_chi_ngan_sach.sql` (4 bảng, 128 phân mảnh, 4 trigger, 7 CHECK) và `service-petitions/migrations/0005_duong_xu_ly_phan_anh.sql`. Chạy lại `schema-smoke` là việc ĐẦU TIÊN khi docker bật lại, TRƯỚC khi tin bất kỳ bộ test nào in `ok`. VÌ SAO MỤC NÀY ĐÁNG GHI: đêm 22-23/09/2026, SÁU lượt liên tiếp viết 'VIGOV_TEST_DSN trống → ca pg bỏ qua' rồi đi tiếp, trong khi container ĐÃ CHẠY suốt 15 giờ. Không ai nhìn, vì một bộ test bỏ qua in ra chữ `ok` — đúng cái chữ một bộ test đã chạy in ra. Đã vá chỗ phát hiện: `.env.example` ghi cách phân biệt bằng THỜI GIAN chạy, lệnh dựng container, và câu 'chạy `schema-smoke` TRƯỚC khi tin bất kỳ bộ test nào in ok'. `service-platform` vẫn chưa có bộ test tích hợp nào, nên 4 migration của nó mới chỉ được `schema-smoke` áp, chưa ca nghiệp vụ nào đọc lại."
+    },
+    {
+      "id": "quy-trinh-routing-0",
+      "viec": "Quy trình phát triển nhiều agent (ROUTING §0): hai scout khám phá, cổng dừng-hỏi, thẻ việc, commit từng việc, rào workflow_guard",
+      "trang_thai": "xong",
+      "bang_chung": "ROUTING.md §0.0–§0.9; .claude/agents/context-scout.md, cross-context-scout.md; .claude/hooks/workflow_guard.py (Stop, cảnh báo một lần) + 8 ca WORKFLOW_CASES trong tools/test_hooks.py (4 BẮN, 4 IM). Đo trước khi bật: 6/6 phiên cũ có sửa mã sẽ bị cảnh báo, cả 6 vì vùng rủi ro. Chạy đầu-cuối trên transcript thật: exit=2, stop_hook_active: exit=0. Chạy thử hai scout song song trên yêu cầu 'khối văn bản nhiệm vụ web-admin': cả hai tìm ra cùng CONFLICT §7.2↔§9 và vigov-require parse_reference (đã có sẵn ở service-petitions.json, không ghi lại).",
+      "no_confirm": [],
+      "tiep_theo": "CẠM BẪY ĐÃ ĐO 24/09/2026: codegraph MCP gọi KHÔNG có projectPath trả chỉ mục của DỰ ÁN KHÁC (5476 tệp Java) — không lỗi, ký hiệu thật, sai kho. ROUTING §0.1 và hai scout đã bắt buộc projectPath + phép kiểm go/ts/không java. Lượt chạy thử đầu: cross-context-scout bỏ qua codegraph hoàn toàn — định nghĩa đã siết thành bắt buộc thử; lần chạy thật kế tiếp phải xem Evidence có dòng codegraph không."
     }
   ]
 }

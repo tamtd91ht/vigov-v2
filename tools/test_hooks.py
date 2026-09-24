@@ -844,6 +844,26 @@ IS_CODE_CASES = [
 ]
 
 
+# ---- pure-function cases: when workflow_guard SPEAKS -------------------------------------
+#
+# Same exemption as stop_verify_guard (it needs a real transcript), same answer: the decision is
+# a pure function of (files edited, scouts dispatched), so it is tested here. The case that
+# matters most is the SILENT one — a guard that fires on a one-file label fix is a guard someone
+# disables, and then ROUTING §0 has no check at all.
+_SCOUTS = {"context-scout", "cross-context-scout"}
+WORKFLOW_CASES = [
+    (["service-petitions/internal/http/routes.go"], set(), True, "route sửa mà không khám phá"),
+    (["service-identity/migrations/0009_x.sql"], {"context-scout"}, True, "migration, mới một scout"),
+    (["core/authz/check.go"], set(), True, "mã dùng chung"),
+    (["web-admin/src/a.ts", "web-admin/src/b.ts", "web-admin/src/c.tsx"], set(), True,
+     "ba tệp mã — hết là 'một hai tệp'"),
+    (["service-petitions/internal/http/routes.go"], _SCOUTS, False, "đủ hai scout — im"),
+    (["web-admin/src/app/nhan.tsx"], set(), False, "một tệp giao diện — để lý do N/A tự nói"),
+    (["tools/check_brain.py"], set(), False, "một tệp công cụ, ngoài vùng rủi ro"),
+    (["kb/10-decisions/0033-x.md"], set(), False, "tài liệu, không phải mã"),
+]
+
+
 # ---- pure-function cases: what drift_guard READS, and when it speaks -----------------------
 #
 # Same exemption, same trap, second hook. drift_guard is the only mechanism watching for the
@@ -1052,6 +1072,7 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
     sys.path.insert(0, HOOKS)
     sys.path.insert(0, os.path.join(ROOT, "tools"))
     import stop_verify_guard as svg  # noqa: E402
+    import workflow_guard as wfg  # noqa: E402
     import drift_guard as dg  # noqa: E402
     import env_contract_guard as ecg  # noqa: E402
     import quyen_keys as qk  # noqa: E402
@@ -1101,6 +1122,15 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         print(f"{mark} [{want}] {'stop_verify_guard.is_code':24s} {nhan}")
         if not ok:
             sai.append((duong, nhan, mong, duoc))
+
+    for tep, scouts, mong, nhan in WORKFLOW_CASES:
+        duoc = wfg.can_canh_bao(tep, scouts)
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        want = "BẮN " if mong else "IM   "
+        print(f"{mark} [{want}] {'workflow_guard.can_canh_bao':24s} {nhan}")
+        if not ok:
+            sai.append((str(tep), nhan, mong, duoc))
 
     for duong, mong, nhan in DUOC_QUET_CASES:
         duoc = dg.duoc_quet(duong)
@@ -1155,7 +1185,8 @@ if __name__ == "__main__":
     # SO_CUM_CASES chạy trong `chay_thuan()` nhưng KHÔNG được cộng vào đây, nên con số báo ra
     # thiếu bảy ca. Một bộ đếm thiếu không làm ca nào đỏ — nó chỉ làm người đọc tưởng mình
     # biết kho đã canh bao nhiêu, và sổ `_chung` đã một lần ghi nhầm vì đúng chuyện này.
-    tong = (len(CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(DUOC_QUET_CASES)
+    tong = (len(CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(WORKFLOW_CASES)
+            + len(DUOC_QUET_CASES)
             + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES)
             + len(VET_ACTOR_CASES))
     hong = len(fails) + len(sai_thuan)

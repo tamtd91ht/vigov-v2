@@ -17,6 +17,15 @@ same record, the export. And the requirement itself may already have moved in
 `dang_lam`. None of that is visible from the module the request names — which is why this is
 a separate agent from `context-scout`, not a second paragraph of its brief.
 
+## codegraph: mandatory attempt, always with `projectPath`
+
+Every codegraph call carries `projectPath` = the repo root (`git rev-parse --show-toplevel`);
+without it the server answers from another project's index, silently (ROUTING §0.1). Start
+with `codegraph_status` on that path — it must list go and typescript and no java. You MUST
+attempt the domain walk below with codegraph and report in `Evidence` what it returned; going
+straight to grep is not allowed (the first dry run did exactly that). grep is for what the
+graph does not hold: SQL, YAML, Markdown, the requirement repo.
+
 ## Walk the domain, not the feature name
 
 Searching for the feature's name finds the feature. What it misses is everything else built

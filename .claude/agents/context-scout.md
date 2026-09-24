@@ -18,6 +18,13 @@ they were "found the file, did not see what was moving around it".
 Its partner `cross-context-scout` looks **sideways** (other modules, the requirement repo,
 earlier sessions). This agent looks **straight down** at the area the request names.
 
+## codegraph: always pass `projectPath`
+
+Every codegraph call carries `projectPath` = the repo root (`git rev-parse --show-toplevel`).
+Without it the server answers from another project's index — real symbols, wrong repository,
+no error (ROUTING §0.1). First call is `codegraph_status` with that path; it must list go and
+typescript and no java, or report `CODEGRAPH: WRONG INDEX` and fall back.
+
 ## Source order
 
 | # | Source | Answers | Note |

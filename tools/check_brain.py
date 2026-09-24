@@ -144,7 +144,9 @@ for hook, kind in cases:
 # as code at all, it needs no environment whatever — and it went untested until a missing
 # `/tools/` made every edit to the contract generator invisible to the gate. Whatever part of an
 # exempt hook is pure is testable, and `tools/test_hooks.py` now carries those cases separately.
-EXEMPT = {"session_start", "drift_guard", "stop_verify_guard"}
+# `workflow_guard` (2026-09-24) reads the same transcript; its decision `can_canh_bao` is pure
+# and carried in WORKFLOW_CASES.
+EXEMPT = {"session_start", "drift_guard", "stop_verify_guard", "workflow_guard"}
 gaps = []
 for h in sorted(on_disk - EXEMPT):
     d = tally.get(h, {"BLOCK": 0, "PASS": 0})

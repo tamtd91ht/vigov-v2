@@ -20,7 +20,7 @@ Validate → Commit → Document.** No code is edited before §0.3 has passed.
 ```
 user request
    │
-   ├─ 0.0 Small and obvious (§6)? ─── yes ──► do it directly; discovery = NOT APPLICABLE (say why)
+   ├─ 0.0 Exempt by the TEST below? ─── yes ──► do it directly; discovery = NOT APPLICABLE (say why)
    │
    ├─ 0.1 codegraph ready?  ── no ──► codegraph init (below), then continue
    │
@@ -28,7 +28,7 @@ user request
    │        context-scout        (straight down: files, symbols, recent commits, behaviour)
    │        cross-context-scout  (sideways: other modules, ../vigov-require, earlier sessions)
    │
-   ├─ 0.3 SYNTHESIZE + GATE — the main session ("agent 3")
+   ├─ 0.3 SYNTHESIZE (Plan agent when large) + GATE (main session, always)
    │        any gate item below  ──► STOP · explain · concrete options · ask · WAIT
    │
    ├─ 0.4 DECOMPOSE into task cards · catch the EVENT (§1) per card · owner per §3
@@ -46,9 +46,35 @@ Dispatching is explicit and the main session keeps the thread; agents return fin
 diffs, never further dispatches. Several agents go out in **one message** only when §3 and
 `.claude/skills/parallel-agents/SKILL.md` say their boundaries and shared state are disjoint.
 
+### 0.0 The exemption is a TEST, not a judgement
+
+"Small and obvious" judged by the agent making the change is the one judgement this workflow
+exists not to trust: a two-line change that breaks a contract looks small to the agent that
+wrote it. So the exemption is decided by what the change touches, and **both** must hold:
+
+| # | Condition |
+|---|---|
+| 1 | Touches none of: `proto/**` · `*/migrations/**` · `core/**` · `*/internal/http/**` · `*/internal/grpc/**` · `*/internal/event/**` · anything under `authz/` · a type or field another service or client reads |
+| 2 | Changes only comments, labels, user-visible text, or documentation — no control flow, no data shape |
+
+Either fails → full workflow. Exempt → say so in one line, naming which of the two held.
+`hooks/workflow_guard.py` checks condition 1 (and a ≥3-code-file edit) at Stop and speaks
+once if neither scout ran; condition 2 is not machine-decidable and stays the agent's stated
+reason.
+
 ### 0.1 codegraph first
 
-Call `codegraph_status`. "Not initialized" → run `codegraph init .` in the repo root (Windows:
+**Every codegraph call passes `projectPath` = the repo root** (`git rev-parse --show-toplevel`).
+Without it the MCP server answers from **whatever project it was started for** — measured on
+2026-09-24: `codegraph_status` with no path returned 5 476 Java files of another company
+project, with `projectPath` it returned this repo's 535 Go / 164 TS. It fails SILENTLY: the
+queries succeed, the symbols are real, they are just not ours. The dry run of `context-scout`
+is what caught it.
+
+Sanity check before trusting any answer: `codegraph_status` must list **go and typescript**
+and **no java**. Anything else → wrong index; say so and fall back.
+
+"Not initialized" → run `codegraph init .` in the repo root (Windows:
 `cmd //c "codegraph.cmd init ."`), then `codegraph_status` again. `.codegraph/` is per machine
 and gitignored. "Could grep instead" is not a reason to skip it; grep is the fallback for what
 the graph does not index (SQL, YAML, string literals).
@@ -56,15 +82,26 @@ the graph does not index (SQL, YAML, string literals).
 codegraph answers **what calls what** and **what breaks**. It does not answer **who owns** an
 entity or **why** — those stay `kb/30-indexes/data-ownership.json` and `kb/10-decisions/`.
 
-### 0.2 Why discovery is two agents and synthesis is not an agent
+### 0.2 "Agent 3" is split in two: drafting, and deciding
 
-A subagent cannot dispatch, and cannot ask the user mid-flight. Synthesis must do both — it
-decides whether to ask, then dispatches builders — so **"agent 3" is the main session**. Giving
-it to a subagent would reproduce the v1 orchestrator that could never orchestrate (§10).
+The proposal's agent 3 does two different jobs, and only one of them needs the main session:
+
+| Job | Who | Why |
+|---|---|---|
+| **Draft** the synthesis and the task cards from the two reports | built-in `Plan` agent, **when large** | A fresh context reads the reports without the main session's first reading of the request — the anchoring it has to catch. And the two long reports land in its context, not the main one |
+| **Decide**: run the gate, ask the user, dispatch builders | **main session, always** | A subagent cannot dispatch and cannot ask the user mid-flight |
+
+A drafting subagent is **not** the v1 orchestrator (§10): that one's job was to dispatch, which
+cannot work. This one dispatches nothing and returns a document.
+
+**Large** = the scouts report more than one module affected, or the draft would hold three or
+more task cards. Otherwise the main session drafts it itself — a `Plan` round trip for one card
+costs more than it saves. Brief the `Plan` agent with both reports **verbatim** and the output
+headings below; it must list every `CONFLICT` and `UNKNOWN` unresolved, never pick a side.
 
 ### 0.3 Synthesis, and the gate
 
-From the two reports, the main session writes (to the user, not to a file):
+The synthesis (drafted per §0.2, always shown to the user, never written to a file):
 
 ```
 Requirement Summary · Current System Behavior · Expected Behavior · Affected Components
@@ -112,6 +149,22 @@ in passing.
 (measured, `skills/parallel-agents`). Sequential whenever a card depends on another, two
 cards touch the same critical file, or merge risk exists.
 
+**What that leaves in practice — stated so nobody expects the proposal's picture.** Its
+diagram fans one feature out as TASK-01 domain ‖ TASK-02 repository ‖ TASK-03 API. Here that
+is forbidden (§3, cross-layer changes): each layer's output is the next one's input, so one
+feature's backend cards are **sequential**. Add `go-service ∩ migration` and `test-designer`
+being sequential with every writer, and real implementation parallelism is mostly:
+
+| Runs in parallel | Why it is safe |
+|---|---|
+| `admin-web-builder` / `citizen-app-builder` ‖ one Go builder | Disjoint trees, and the Node toolchain is cheap — after the contract card has landed |
+| Any builder ‖ read-only agents (scouts, reviewers, `domain-expert`) | They write nothing |
+| Two Go builders on **unrelated** requests, different services, no `core/**`, no new dependency | The rare case; still ≤2 |
+
+The Go cap was measured on **one** machine on 22/09/2026. It is a floor for that machine, not
+a constant: on a machine with more memory it may be raised, but only by measuring there —
+never by assuming.
+
 ### 0.6 Validation
 
 `compile → unit tests → relevant integration tests → static/architecture checks (make check)
@@ -139,7 +192,26 @@ so each question goes to its owning place:
 | What assumptions were made · what the customer confirmed | ledger item + `ban-giao-phien.md` §1 |
 | Traps · parallel sessions · next steps pointer | `kb/90-ephemeral/ban-giao-phien.md` (`/handover`), rewritten in full |
 | Requirement repo moved | `kb/50-doi-chieu/` via `require-watcher` |
+| **The requirement tags** `cross-context-scout` produced (below) | the module's ledger item |
 | What changed, which commits, which tests | `git log` — never copied into a document |
+
+**The scouts' reports are discarded on purpose — except their tags.** Most of a report is
+rebuildable from the code (rule 9's test says: do not write it). The tags are not: that a
+requirement is `PARTIALLY DONE`, or in `CONFLICT` with `../vigov-require`, took a whole agent
+to establish. They go into the ledger item of the module they belong to, in the fields that
+already exist:
+
+| Tag | Where it lands |
+|---|---|
+| `PARTIALLY DONE` | `tiep_theo` — what exists, what is missing, with `file:line` |
+| `CONFLICT` · `UNKNOWN` the user has not yet answered | `no_confirm` names the open question, or `tiep_theo` states the conflict with both sides quoted — never resolved in the ledger |
+| `ALREADY DONE` | nothing new — the existing `xong` item is the record |
+| `NEW` · `CHANGED` that become work | a new item, `trang_thai: "chua_lam"` |
+
+**Only the ledger is enforced** (`progress_guard`). `ban-giao-phien.md` is written only when
+`/handover` runs, and nothing forces it. So: a session that settled a decision with the user,
+or hit a trap that cost real time, runs `/handover` before ending. A session with neither
+leaves it alone — rewriting it for nothing is how it fills with stale rows.
 
 A dated session folder is a session log (rule 9, forbidden #3): worthless after a day, never
 deleted. The next session reads, in this order: `ban-giao-phien.md` → `tien-do.md` → the
@@ -425,8 +497,10 @@ main session         → /review-compliance · /review-isolation · make check
 
 Dispatching costs a context switch and loses the thread. Do it directly when:
 
-- the change is one or two files and the location is already known
-- it is a typo, a label, a constant, a comment
+- the change passes the **§0.0 test** — both conditions, not "it feels small". A one-file
+  change to a route or a migration is not exempt; it runs the scouts even if it then needs no
+  builder
+- it is a typo, a label, a comment (which is §0.0 condition 2)
 - the user asked a question rather than for a change
 - you are reading to understand — `kb/` is for that, not an agent
 

@@ -121,7 +121,7 @@ Read **`.claude/agents/ROUTING.md`** and dispatch. That file is the entry point 
 agent. Its **§0 is the development workflow** (discover → gate → task cards → parallel
 builders → validate → commit per task → document); no code is edited before its gate passes.
 
-- Small, obvious, location already known → **do it directly**, no agent (ROUTING §6)
+- Passes the ROUTING §0.0 test (a test, not a feeling) → **do it directly**, no agent
 - Anything else → ROUTING §0, then §1 names the agent per task
 - A STOP CONDITION or a §0.3 gate item fires → **ask the user first**, dispatch nothing
 - "Done" = ROUTING §0.9 ticked, or NOT APPLICABLE with a reason
@@ -175,7 +175,7 @@ own: if you see a risk, **state the risk**, then do what was asked.
 | Location | Contents |
 |---|---|
 | `rules/critical/` | **11 rules**, always loaded (below). Each names an enforcing hook |
-| `hooks/` | **21 hooks**: 13 rule hooks + 8 cross-cutting |
+| `hooks/` | **22 hooks**: 13 rule hooks + 9 cross-cutting |
 | `skills/` | Skills, lazily loaded by keyword |
 | `commands/` | Procedures invoked as `/command-name` |
 | `agents/` | **13 agents** — 5 build, 5 review, 2 discovery scouts, 1 theo dõi kho yêu cầu. Entry point: `agents/ROUTING.md` |
