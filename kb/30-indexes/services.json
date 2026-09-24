@@ -12,7 +12,7 @@
       "name": "documents",
       "path": "service-documents",
       "has_main": true,
-      "summary": "Văn thư — Incoming and outgoing documents, per-authority numbering, routing between units."
+      "summary": "Văn thư — Incoming and outgoing documents, the citizen letter register (`don_thu`, ADR 0039), per-authority numbering, routing between units."
     },
     {
       "name": "finance",
@@ -30,7 +30,7 @@
       "name": "petitions",
       "path": "service-petitions",
       "has_main": true,
-      "summary": "Tiếp dân — Feedback, complaints and denunciations — three legally distinct things — plus the tasks that arise from handling them, and their SLA."
+      "summary": "Tiếp dân — Citizen feedback (phản ánh), the tasks that arise from it and from meeting conclusions, and their SLA. Citizen letters (`don_thu`: complaints, denunciations, proposals, requests) are NOT here — they belong to `documents` (ADR 0039)."
     },
     {
       "name": "platform",

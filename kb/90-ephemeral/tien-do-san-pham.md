@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 47f5bf0
+derived_from_commit: b1da756
 expires: 2026-12-23
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -59,7 +59,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 18 |
 | 3 | Sổ tay lãnh đạo | — | — | ✗ | |
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 9 |
-| 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_CHUYEN_VAN_BAN` | ✓ | **không khai** |
+| 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | **không khai** |
 | 6 | Giải ngân | `/giai-ngan` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 7 |
 | 7 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 5 |
 | 8 | Thông báo | `/thong-bao` | `QUYEN_SOAN_THONG_BAO` | ✓ | 12 |
@@ -101,14 +101,14 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
-| `_chung` | 17 | 2 | 4 | 5 |
+| `_chung` | 18 | 2 | 4 | 5 |
 | `citizen-app` | 11 | 2 | 4 | 0 |
 | `core` | 9 | 0 | 1 | 1 |
 | `deploy` | 13 | 0 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
 | `proto` | 8 | 0 | 0 | 0 |
 | `service-comms` | 7 | 3 | 2 | 4 |
-| `service-documents` | 5 | 1 | 0 | 0 |
+| `service-documents` | 5 | 1 | 3 | 0 |
 | `service-finance` | 13 | 3 | 0 | 0 |
 | `service-identity` | 13 | 6 | 0 | 1 |
 | `service-petitions` | 10 | 7 | 4 | 0 |
