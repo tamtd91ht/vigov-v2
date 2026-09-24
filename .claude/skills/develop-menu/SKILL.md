@@ -1,11 +1,13 @@
 ---
 name: develop-menu
-description: The shared procedure behind /develop-web-admin, /develop-backend-api and /develop-miniapp — continue building one existing business menu on one platform, from recovered knowledge through discovery, a tagged proposal, a confirmation gate, per-task commits and per-menu documentation. Triggers on: develop menu, phát triển tiếp, menu nghiệp vụ, develop-web-admin, develop-backend-api, develop-miniapp, tiếp tục menu, làm tiếp nhiệm vụ, BACKEND DEPENDENCY, [EVIDENCE], [RECOMMENDATION].
+description: The shared procedure behind /develop-web-admin, /develop-backend-api, /develop-miniapp and /develop-feature (all three platforms in one run) — continue building one existing business menu on one platform, from recovered knowledge through discovery, a tagged proposal, a confirmation gate, per-task commits and per-menu documentation. Triggers on: develop menu, phát triển tiếp, menu nghiệp vụ, develop-web-admin, develop-backend-api, develop-miniapp, tiếp tục menu, làm tiếp nhiệm vụ, BACKEND DEPENDENCY, [EVIDENCE], [RECOMMENDATION].
 ---
 
 # Skill: Continue developing one business menu
 
-The three `/develop-*` commands differ **only** in platform scope. Everything else is this
+The three single-platform `/develop-*` commands differ **only** in platform scope;
+`/develop-feature` runs all three for one feature and adds the platform decision, the phase
+order and the backend→client handoff gate (its own file). Everything else is this
 file — three copies of one procedure are three copies that drift (rule 9). The workflow itself
 is `.claude/agents/ROUTING.md` §0; this file adds what a **menu** needs on top of it and never
 relaxes a gate there.
@@ -115,6 +117,8 @@ A card outside the command's platform is **not implemented**. It is marked
 `BACKEND DEPENDENCY` (or `WEB DEPENDENCY` / `MINIAPP DEPENDENCY` / `CONTRACT DEPENDENCY`),
 written as a `chua_lam` ledger item in the module that owns it, tagged with this `menu`, and
 reported. The commands' scope is a promise to the user about which tree changes.
+Under `/develop-feature` such a card **is** built, and the mark becomes an ordering edge
+(`develop-feature.md` §2).
 
 Split by layer and never as one card per feature ("Implement Nhiệm vụ" is not a card).
 

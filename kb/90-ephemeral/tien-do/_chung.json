@@ -234,6 +234,14 @@
       "bang_chung": ".claude/hooks/codegraph_sync.py, đăng ký SessionStart và PostToolUse Bash|Monitor; 9 ca CAN_SYNC_CASES. Kiểm SỐNG hai chiều bằng tệp thử riêng chưa theo dõi: thêm → hook → codegraph_search thấy; xoá → hook → không thấy. Nhánh an toàn: không có binary (PATH=/usr/bin) và không có .codegraph/ đều exit 0, im lặng. Đo: ~0,5–1,1 s mỗi lần sync.",
       "no_confirm": [],
       "tiep_theo": "GỐC CHƯA SỬA (phương án D, cần người dùng quyết): ~/.claude.json khai server MCP codegraph TOÀN CỤC với --path trỏ dự án omicx, nên watcher không canh kho này và mọi lệnh gọi phải có projectPath. `codegraph status` báo 'up to date' trên chỉ mục cũ — đừng dùng nó làm phép kiểm độ mới."
+    },
+    {
+      "id": "lenh-develop-feature",
+      "viec": "Lệnh /develop-feature <menu>[: <chức năng>] — một chức năng chạy trọn cả backend, Web Admin và Mini App trong một lượt, nền tảng nào liên quan mới làm",
+      "trang_thai": "xong",
+      "bang_chung": ".claude/commands/develop-feature.md; skills/develop-menu (mô tả + §5) và ROUTING §0 trỏ tới. check_brain 7/7 (227 tham chiếu, 0 chết). Cổng bàn giao dùng lệnh có thật: make kb → web-admin `npm run gen:api` (package.json:12) → make check (check:api).",
+      "no_confirm": [],
+      "tiep_theo": "Chưa chạy thật lần nào. Tập nền tảng tham gia LUÔN là xác nhận #1 với người dùng. Pha D (web ‖ miniapp) là chỗ song song duy nhất; A→B→C của backend là tuần tự."
     }
   ]
 }

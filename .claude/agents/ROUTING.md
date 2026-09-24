@@ -20,7 +20,9 @@ Validate → Commit → Document.** No code is edited before §0.3 has passed.
 Continuing one existing business menu on one platform has its own entry points —
 `/develop-web-admin` · `/develop-backend-api` · `/develop-miniapp` `<menu>` — which run this
 workflow with menu resolution, per-menu knowledge and platform scope added
-(`.claude/skills/develop-menu/SKILL.md`).
+(`.claude/skills/develop-menu/SKILL.md`). `/develop-feature <menu>[: <chức năng>]` runs all
+three for one feature, backend first, then both clients in parallel after a contract handoff
+gate.
 
 ```
 user request
