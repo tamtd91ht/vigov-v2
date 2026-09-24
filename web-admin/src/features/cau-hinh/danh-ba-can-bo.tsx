@@ -348,7 +348,7 @@ export function DanhBaCanBo() {
             kq.ok ? ghiXong(daThem(kq.duLieu.full_name)) : datLoiMayChu(kq.thongBao),
           )
         : dangMo.kieu === "sua"
-          ? suaCanBo(dangMo.canBo.id, thanSua(ban)).then((kq) =>
+          ? suaCanBo(dangMo.canBo.id, thanSua(ban, dangMo.canBo)).then((kq) =>
               kq.ok ? ghiXong(daLuuHoSo(kq.duLieu.full_name)) : datLoiMayChu(kq.thongBao),
             )
           : dangMo.kieu === "vaiTro"

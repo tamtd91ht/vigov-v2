@@ -25,14 +25,13 @@ export const TIEU_DE_TRANG = "Danh bạ cán bộ";
  *
  * NỬA ĐẦU LÀ NGUYÊN VĂN ĐẶC TẢ, NỬA SAU THÌ KHÔNG — VÀ ĐÓ LÀ CHỦ Ý. Đặc tả (§1, §2) viết:
  * *"Toàn bộ cán bộ của xã. Chọn người cần công khai rồi bấm 'Thêm vào danh bạ Mini App' để bà con
- * gọi được."* Vế thứ hai mô tả một nút mà màn hình này KHÔNG có và không được có: câu mở #12 (chốt
- * 22/09/2026) đã bỏ hẳn thao tác bật hàng loạt, và lược đồ chưa có cột nào giữ sự đồng ý của từng
- * người. In nguyên vế ấy ra là hứa với cán bộ một nút họ sẽ đi tìm và không thấy — tệ hơn hẳn việc
- * nói thẳng nó chưa mở.
+ * gọi được."* "Chọn người" là thao tác HÀNG LOẠT, và câu mở #12 do khách chốt đã bỏ hẳn nó: công
+ * khai số di động cá nhân làm cho TỪNG người, sau khi hỏi ý và được đồng ý. Câu dưới nói đúng cách
+ * làm ấy thay vì hứa một ô chọn không tồn tại.
  */
 export const MO_TA_TRANG =
-  "Toàn bộ cán bộ của xã: chức vụ, khối/đơn vị và số liên hệ. Việc công khai số lên Zalo Mini " +
-  "App chưa mở — xem phần giải thích bên dưới.";
+  "Toàn bộ cán bộ của xã: chức vụ, khối/đơn vị và số liên hệ. Công khai số lên Zalo Mini App làm " +
+  "cho từng người, sau khi đã hỏi ý và được chính người đó đồng ý.";
 
 /**
  * Câu hiện khi tài khoản thiếu `admin.user`.
@@ -178,24 +177,26 @@ export type PhanChuaDung = { readonly ten: string; readonly viSao: string };
  */
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Thẻ TỔNG SỐ CÁN BỘ (§2) và bộ đếm {đang hiện}/{tổng} cạnh mỗi khối trong ô lọc (§3)",
+    ten: "Thẻ TỔNG SỐ CÁN BỘ, thẻ ĐANG HIỆN TRÊN MINI APP (§2) và bộ đếm cạnh mỗi khối (§3)",
     viSao:
       "Hợp đồng cố ý không trả tổng số: máy chủ đọc theo mốc (keyset) và không chạy COUNT(*) trên " +
       "bảng đã phân mảnh. Đếm số dòng của trang đang mở rồi gọi đó là tổng là báo một con số " +
       "không ai tính. Danh mục khối / đơn vị cũng không trả số người đang hiện trên Mini App của " +
-      "từng khối, nên ô lọc chỉ ghi tên khối.",
+      "từng khối, nên ô lọc chỉ ghi tên khối. Muốn biết ai đang hiện, dùng ô lọc “Đang hiện trên " +
+      "Mini App”.",
   },
   {
-    ten: "Thẻ ĐANG HIỆN TRÊN MINI APP, cột Trên Mini App, và hai nút thêm/rút khỏi danh bạ (§2, §4)",
+    ten: "Bà con xem danh bạ cán bộ trên Zalo Mini App",
     viSao:
-      "Lược đồ không có trường hien_tren_mini_app, và câu mở #12 (chốt 22/09/2026) đã bỏ hẳn thao " +
-      "tác bật hàng loạt: công khai số di động ra kênh công khai phải HỎI Ý từng người và LƯU LẠI " +
-      "sự đồng ý kèm thời điểm. Chưa có chỗ nào giữ bằng chứng ấy, và phần đã công khai thì không " +
-      "thu lại được.",
+      "Màn này ghi nhận ai được công khai, thứ tự hiển thị và thời điểm ghi nhận đồng ý. Tuyến để " +
+      "Zalo Mini App đọc danh bạ ấy chưa có trong hợp đồng, nên bà con chưa thấy thay đổi nào cho " +
+      "tới khi tuyến ấy được mở.",
   },
   {
-    ten: "Dòng phụ Có Zalo, ảnh đại diện, thứ tự hiển thị (§4, §5)",
-    viSao: "Không có trường nào tương ứng trong hợp đồng REST (identity.canBoTomTat).",
+    ten: "Ảnh đại diện (§4, §5)",
+    viSao:
+      "Không có trường nào tương ứng trong hợp đồng REST (identity.canBoTomTat) và chưa có tuyến " +
+      "tải ảnh lên.",
   },
   {
     ten: "Nhập từ Excel và tải mẫu Excel (§6)",

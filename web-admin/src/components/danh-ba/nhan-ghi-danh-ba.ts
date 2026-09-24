@@ -43,6 +43,11 @@ export const O_VAI_TRO = "Vai trò";
 export const O_MAY_BAN = "Máy bàn cơ quan";
 export const O_DI_DONG = "Di động cá nhân";
 
+/** Ô tick "Có Zalo" (đặc tả §5) và câu nói rõ nó KHÔNG công khai gì. */
+export const O_CO_ZALO = "Số di động này có dùng Zalo";
+export const MO_TA_CO_ZALO =
+  "Chỉ ghi nhận để đồng nghiệp biết có thể liên hệ qua Zalo. Việc này không đưa số lên Zalo Mini App.";
+
 /** Mục "không chọn gì" của hai ô chọn. `""` là một giá trị THẬT của hợp đồng, không phải chỗ trống. */
 export const CHON_KHONG_BO_PHAN = "— Chưa phân bộ phận —";
 export const CHON_KHONG_VAI_TRO = "— Không giữ vai trò nào —";
@@ -141,17 +146,21 @@ export function daDatKhoa(hoTen: string, khoa: boolean): string {
 /* ---- bản nháp của biểu mẫu ------------------------------------------------------------------ */
 
 /**
- * Sáu ô của biểu mẫu thêm/sửa — và đúng sáu, không hơn.
+ * Bảy ô của biểu mẫu thêm/sửa — sáu ô hồ sơ và ô "Có Zalo" (chỉ hiện ở biểu mẫu SỬA).
  *
  * KHÔNG CÓ `ma`, KHÔNG CÓ `vaiTro`, KHÔNG CÓ `dangHoatDong`. Ba thứ ấy vắng mặt vì ba lý do khác
  * nhau và không lý do nào là "chưa làm tới": mã do hệ thống sinh (#15); vai trò đi qua tuyến
  * riêng mang hai ràng buộc của #14; trạng thái khoá đi qua tuyến riêng mang phép chặn của #13.
  * Thêm một trường vào kiểu này là mở lại đúng một trong ba cánh cửa ấy.
  *
- * KHÔNG CÓ Ô BẬT/TẮT CÔNG KHAI LÊN MINI APP, và sự vắng mặt ấy là có chủ ý: câu mở #12 chốt phải
- * HỎI Ý từng người và LƯU LẠI sự đồng ý kèm thời điểm, mà lược đồ chưa có cột nào giữ nó. Một ô
- * tick ở đây sẽ công khai số di động cá nhân của một người ra kênh công khai mà không có bằng
- * chứng nào cho thấy người ấy đã đồng ý — và phần đã công khai thì không thu lại được.
+ * KHÔNG CÓ Ô BẬT/TẮT CÔNG KHAI LÊN MINI APP, dù nay tuyến ấy đã có: công khai là
+ * `PUT .../publication`, mang quyền RIÊNG (`content.update`, không phải `admin.user`) và bắt buộc
+ * tick xác nhận đã hỏi ý từng người (#12). Một ô tick lẫn trong biểu mẫu sửa hồ sơ sẽ gộp hai quyền
+ * vào một lần Lưu — và một lần sửa số điện thoại có thể công khai luôn số ấy.
+ *
+ * `coZalo` KHÔNG CÔNG KHAI GÌ: nó chỉ ghi nhận số di động có dùng Zalo, là thông tin liên hệ
+ * (`can_bo_ghi.go`: `HasZalo` thuộc `admin.user`). Không có trong thân THÊM vì hợp đồng
+ * `identity_themCanBoVao` không có trường ấy.
  */
 export type BanNhapCanBo = {
   hoTen: string;
@@ -160,6 +169,7 @@ export type BanNhapCanBo = {
   boPhanID: string;
   mayBanCoQuan: string;
   diDongCaNhan: string;
+  coZalo: boolean;
 };
 
 export const BAN_TRONG: BanNhapCanBo = {
@@ -169,6 +179,7 @@ export const BAN_TRONG: BanNhapCanBo = {
   boPhanID: "",
   mayBanCoQuan: "",
   diDongCaNhan: "",
+  coZalo: false,
 };
 
 /**
@@ -193,6 +204,7 @@ export function banTuCanBo(cb: identity_canBoTomTat): BanNhapCanBo {
     boPhanID: cb.department_id,
     mayBanCoQuan: cb.phone,
     diDongCaNhan: cb.mobile,
+    coZalo: cb.has_zalo,
   };
 }
 
@@ -220,9 +232,14 @@ export function thanThem(ban: BanNhapCanBo): identity_themCanBoVao {
  * `null` của hợp đồng vẫn có nghĩa "không đổi" (máy chủ đọc sáu con trỏ), nhưng biểu mẫu này
  * không có trạng thái ấy: `""` là "ô này trống", một giá trị hợp lệ với chức danh, bộ phận và hai
  * số điện thoại.
+ *
+ * `has_zalo` THÌ NGƯỢC LẠI: CHỈ GỬI KHI ĐỔI so với dòng gốc `goc`. Nó là trường TUỲ CHỌN của hợp
+ * đồng (vắng = không đổi), và một ô tick không có ca "xoá trắng" để lẫn với "không đổi" như ô chữ.
+ * Gửi nó ở mọi lần Lưu thì một lần sửa chức danh ghi đè cờ Zalo mà người khác vừa đặt, và vết kiểm
+ * toán ghi một thay đổi không ai làm.
  */
-export function thanSua(ban: BanNhapCanBo): identity_suaCanBoVao {
-  return {
+export function thanSua(ban: BanNhapCanBo, goc: identity_canBoTomTat): identity_suaCanBoVao {
+  const than: identity_suaCanBoVao = {
     full_name: ban.hoTen,
     position: ban.chucDanh,
     email: ban.email,
@@ -230,6 +247,8 @@ export function thanSua(ban: BanNhapCanBo): identity_suaCanBoVao {
     office_phone: ban.mayBanCoQuan,
     mobile: ban.diDongCaNhan,
   };
+  if (ban.coZalo !== goc.has_zalo) than.has_zalo = ban.coZalo;
+  return than;
 }
 
 /**

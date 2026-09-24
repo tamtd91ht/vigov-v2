@@ -1,5 +1,5 @@
 /**
- * Gọi tám tuyến của danh bạ cán bộ — ba tuyến đọc và **năm tuyến ghi**.
+ * Gọi chín tuyến của danh bạ cán bộ — ba tuyến đọc và **sáu tuyến ghi**.
  *
  * BA TUYẾN ĐỌC: `GET /api/v1/staff` (một trang, lọc theo `unit` / `published` trên URL),
  * `GET /api/v1/staff/{id}`, và `POST /api/v1/staff/searches` — tìm theo chữ, CHỮ ĐI TRONG THÂN
@@ -10,14 +10,15 @@
  * mười ba trường của một cán bộ — có bản thứ hai là có hai bản sẽ trôi (luật 9).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * NĂM TUYẾN GHI, KHÔNG PHẢI MỘT — và sự tách ấy là của máy chủ, tệp này chỉ theo đúng nó
+ * SÁU TUYẾN GHI, KHÔNG PHẢI MỘT — và sự tách ấy là của máy chủ, tệp này chỉ theo đúng nó
  * (`service-identity/internal/http/can_bo_ghi.go`, chú thích đầu tệp):
  *
- *   POST   /api/v1/staff                 thêm một dòng danh bạ
- *   PATCH  /api/v1/staff/{id}            sửa hồ sơ — KHÔNG đổi thẩm quyền của ai
- *   POST   /api/v1/staff/{id}/lockout    nghỉ hưu / chuyển công tác (#10)
- *   DELETE /api/v1/staff/{id}/lockout    quay lại làm việc
- *   PUT    /api/v1/staff/{id}/role       chuyển vai trò (#13, #14)
+ *   POST   /api/v1/staff                   thêm một dòng danh bạ
+ *   PATCH  /api/v1/staff/{id}              sửa hồ sơ — KHÔNG đổi thẩm quyền của ai
+ *   POST   /api/v1/staff/{id}/lockout      nghỉ hưu / chuyển công tác (#10)
+ *   DELETE /api/v1/staff/{id}/lockout      quay lại làm việc
+ *   PUT    /api/v1/staff/{id}/role         chuyển vai trò (#13, #14)
+ *   PUT    /api/v1/staff/{id}/publication  công khai / rút khỏi danh bạ Mini App (#12), `content.update`
  *
  * Gộp lại thành một hàm `luuCanBo(...)` ở đây là dựng lại đúng thứ máy chủ vừa tách ra: một
  * lời gọi mang cả "sửa số điện thoại" lẫn "đưa người này vào vai trò điều hành xã" thì vết
@@ -35,6 +36,7 @@
 import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./goi";
 import type {
   identity_canBoTomTat,
+  identity_datCongKhaiVao,
   identity_datVaiTroVao,
   identity_delete_staff_by_id_lockout,
   identity_get_staff,
@@ -43,6 +45,7 @@ import type {
   identity_post_staff,
   identity_post_staff_by_id_lockout,
   identity_post_staff_searches,
+  identity_put_staff_by_id_publication,
   identity_put_staff_by_id_role,
   identity_suaCanBoVao,
   identity_themCanBoVao,
@@ -429,8 +432,63 @@ export function suaCanBo(
     office_phone: than.office_phone,
     mobile: than.mobile,
   };
+  // `has_zalo` là trường TUỲ CHỌN của hợp đồng: vắng = không đổi. Chỉ chép lên khi bên gọi đặt nó
+  // (`thanSua` chỉ đặt khi ô "Có Zalo" thật sự đổi), để một lần sửa chức danh không ghi đè cờ Zalo
+  // mà người khác vừa đặt.
+  if (than.has_zalo !== undefined && than.has_zalo !== null) thanGui.has_zalo = than.has_zalo;
 
   return goiGhiCanBo(duongDanMotCanBo(mau, id), "PATCH", thanGui, 200);
+}
+
+/**
+ * Một yêu cầu đổi trạng thái công khai của MỘT người trên danh bạ Zalo Mini App (#12).
+ *
+ * `thuTu` KHÔNG TUỲ CHỌN Ở ĐÂY dù hợp đồng cho `null`: tuyến là PUT, thân mang TOÀN BỘ trạng thái,
+ * nên `display_order` vắng hoặc `null` nghĩa là XOÁ thứ tự đang đặt (`can_bo_ghi.go`,
+ * `datCongKhaiVao`). Buộc bên gọi truyền giá trị là buộc họ nghĩ tới nó — rút một người khỏi danh bạ
+ * mà quên truyền thứ tự đang có thì người ấy mất luôn vị trí, và không ai được báo.
+ */
+export type YeuCauCongKhai = {
+  readonly congKhai: boolean;
+  /** Người quản trị đã tick "đã hỏi ý và người này đồng ý" CHO LẦN NÀY. */
+  readonly daXacNhanDongY: boolean;
+  readonly thuTu: number | null;
+};
+
+/**
+ * Thân `PUT /api/v1/staff/{id}/publication` — dựng TỪNG TRƯỜNG theo `identity_datCongKhaiVao`.
+ *
+ * `consent_confirmed` CHỈ `true` KHI VỪA CÔNG KHAI VỪA ĐÃ TICK. Rút khỏi danh bạ luôn gửi `false`:
+ * máy chủ bỏ qua trường ấy khi `published` là `false`, nhưng một thân nói "đã xác nhận đồng ý" cho
+ * một lần rút là một dòng kiểm toán nói điều không ai làm.
+ *
+ * `published` LUÔN CÓ MẶT: máy chủ từ chối thân thiếu nó (400) thay vì đọc là `false`, vì rút nhầm
+ * là xoá dấu đồng ý — và người ấy phải được hỏi lại từ đầu.
+ */
+export function thanCongKhai(yc: YeuCauCongKhai): identity_datCongKhaiVao {
+  return {
+    published: yc.congKhai,
+    consent_confirmed: yc.congKhai && yc.daXacNhanDongY,
+    display_order: yc.thuTu,
+  };
+}
+
+/**
+ * PUT /api/v1/staff/{id}/publication — công khai hoặc rút một cán bộ khỏi danh bạ Zalo Mini App.
+ * 200, trả về dòng danh bạ sau khi đổi (kèm `consent_recorded_at`). Quyền `content.update`.
+ *
+ * MỘT NGƯỜI MỘT LẦN, KHÔNG CÓ BIẾN THỂ HÀNG LOẠT — câu mở #12 do khách chốt: công khai số di động
+ * cá nhân phải hỏi ý TỪNG người. Một hàm nhận danh sách id ở đây là đường vòng qua quyết định ấy.
+ *
+ * Ba lần từ chối về tới giao diện NGUYÊN VĂN câu máy chủ: 400 `consent_required` (chưa xác nhận
+ * đồng ý), 400 `invalid_request` (thứ tự âm, thân hỏng), 404 `staff_not_found`.
+ */
+export function datCongKhaiCanBo(
+  id: string,
+  yc: YeuCauCongKhai,
+): Promise<KetQua<identity_canBoTomTat>> {
+  const mau: identity_put_staff_by_id_publication["duongDan"] = "/api/v1/staff/{id}/publication";
+  return goiGhiCanBo(duongDanMotCanBo(mau, id), "PUT", thanCongKhai(yc), 200);
 }
 
 /**

@@ -1,6 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { PhienProvider } from "@/features/phien/phien-hien-tai";
+
+import { NUT_RUT_MINI_APP, NUT_THEM_MINI_APP } from "./cong-khai";
 import { DanhBaLienHe, HangLoc } from "./danh-ba-lien-he";
 import { GOI_Y_O_TIM, TAT_CA_KHOI, TRUY_VAN_DAU } from "./loc-danh-ba";
 import { PHAN_CHUA_DUNG, TIEU_DE_PHAN_CHUA_DUNG } from "./nhan-danh-ba";
@@ -14,9 +17,22 @@ import { PHAN_CHUA_DUNG, TIEU_DE_PHAN_CHUA_DUNG } from "./nhan-danh-ba";
  * Dựng tĩnh: effect không chạy khi dựng phía máy chủ, nên không có lời gọi API nào đi ra — khối
  * phần chưa mở không phụ thuộc dữ liệu và luôn có mặt.
  */
+/**
+ * Màn đọc phiên qua `usePhien` (để quyết định hai nút Mini App), nên phải có `PhienProvider` bao
+ * ngoài. Dựng tĩnh thì effect của provider không chạy: phiên ở trạng thái CHƯA ĐỌC XONG, tức hai nút
+ * Mini App ẩn — đúng nhánh fail closed.
+ */
+function veMan(): string {
+  return renderToStaticMarkup(
+    <PhienProvider>
+      <DanhBaLienHe />
+    </PhienProvider>,
+  );
+}
+
 describe("khối phần chưa mở — cái ra tới trang", () => {
   it("hiện tiêu đề và TỪNG mục, cả tên lẫn lý do", () => {
-    const html = renderToStaticMarkup(<DanhBaLienHe />);
+    const html = veMan();
 
     expect(html).toContain(TIEU_DE_PHAN_CHUA_DUNG);
     expect(PHAN_CHUA_DUNG.length).toBeGreaterThan(0);
@@ -27,11 +43,21 @@ describe("khối phần chưa mở — cái ra tới trang", () => {
   });
 
   it("KHÔNG còn dòng 'chưa mở' nào cho ô tìm hay bộ lọc — chúng đã có trên màn hình", () => {
-    const html = renderToStaticMarkup(<DanhBaLienHe />);
+    const html = veMan();
     expect(html).toContain(GOI_Y_O_TIM);
     for (const p of PHAN_CHUA_DUNG) {
       expect(p.ten).not.toMatch(/Ô tìm|Bộ lọc theo khối/);
     }
+  });
+});
+
+describe("màn danh bạ — không thao tác hàng loạt nào, và nút Mini App fail closed", () => {
+  it("không ô tick chọn dòng, không thanh hàng loạt, không nút Mini App khi phiên chưa đọc xong", () => {
+    const html = veMan();
+    expect(html).not.toContain('type="checkbox"');
+    expect(html).not.toMatch(/đã chọn|Chọn tất cả/);
+    expect(html).not.toContain(NUT_THEM_MINI_APP);
+    expect(html).not.toContain(NUT_RUT_MINI_APP);
   });
 });
 

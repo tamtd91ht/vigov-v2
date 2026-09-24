@@ -45,11 +45,12 @@ describe("thẻ KPI số khối / đơn vị", () => {
 });
 
 describe("câu mô tả trang không hứa thứ màn hình không có", () => {
-  it("KHÔNG nhắc tới nút Thêm vào danh bạ Mini App", () => {
+  it("KHÔNG hứa thao tác chọn nhiều người — nói công khai làm cho TỪNG người", () => {
     // Đặc tả §2 viết nguyên văn "Chọn người cần công khai rồi bấm 'Thêm vào danh bạ Mini App'".
-    // Câu mở #12 (chốt 22/09/2026) đã bỏ hẳn thao tác ấy, nên in nguyên vế đó ra là hứa với cán
-    // bộ một nút họ sẽ đi tìm và không thấy.
-    expect(MO_TA_TRANG).not.toContain("Thêm vào danh bạ Mini App");
+    // "Chọn người" là thao tác hàng loạt mà #12 đã bỏ.
+    expect(MO_TA_TRANG).not.toContain("Chọn người");
+    expect(MO_TA_TRANG).toContain("từng người");
+    expect(MO_TA_TRANG).toContain("đồng ý");
     // Nửa đầu của đặc tả thì giữ: màn này đúng là toàn bộ cán bộ của xã.
     expect(MO_TA_TRANG).toContain("Toàn bộ cán bộ của xã");
   });
@@ -95,13 +96,16 @@ describe("danh sách phần chưa mở", () => {
     expect(tatCa).toContain("Xoá khỏi danh bạ");
   });
 
-  it("ca Mini App viện dẫn đúng quyết định #12, không viện một lý do kỹ thuật suông", () => {
-    // Nếu lý do chỉ là "chưa có trường trong lược đồ" thì người sau sẽ thêm một cột và bật nút —
-    // trong khi thứ chặn thật là một quyết định về dữ liệu cá nhân: phải hỏi ý từng người và lưu
-    // lại sự đồng ý kèm thời điểm (Nghị định 13/2023/NĐ-CP).
-    const mucMiniApp = PHAN_CHUA_DUNG.find((p) => p.ten.includes("MINI APP"));
-    expect(mucMiniApp).toBeDefined();
-    expect(mucMiniApp?.viSao).toContain("#12");
-    expect(mucMiniApp?.viSao).toContain("đồng ý");
+  it("nút Mini App và dòng Có Zalo ĐÃ dựng — không còn dòng 'chưa mở' nào nói về chúng", () => {
+    for (const p of PHAN_CHUA_DUNG) {
+      expect(p.ten).not.toMatch(/nút thêm\/rút|Có Zalo|thứ tự hiển thị/i);
+    }
+  });
+
+  it("nói thật rằng bà con CHƯA thấy danh bạ trên Mini App — tuyến đọc công khai chưa có", () => {
+    // Người quản trị vừa bấm công khai sẽ mở Mini App ra xem. Không nói trước thì họ kết luận
+    // thao tác hỏng, hoặc tệ hơn, tưởng số đã lên kênh công khai trong khi chưa.
+    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Bà con xem danh bạ"));
+    expect(muc?.viSao).toContain("chưa có trong hợp đồng");
   });
 });

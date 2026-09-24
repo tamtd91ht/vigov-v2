@@ -5,6 +5,13 @@ import { KhungQuyen } from "@/features/quyen/cong-quyen";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
 import { BangLienHe } from "./bang-lien-he";
+import {
+  CHIP_CHUA_HIEN,
+  CHIP_DANG_HIEN,
+  COT_MINI_APP,
+  NUT_RUT_MINI_APP,
+  NUT_THEM_MINI_APP,
+} from "./cong-khai";
 import { CAU_THIEU_QUYEN, NUT_SUA_THONG_TIN } from "./nhan-danh-ba";
 
 /**
@@ -53,6 +60,18 @@ function dung(danhSach: readonly identity_canBoTomTat[]): string {
   );
 }
 
+/** Như `dung`, nhưng phiên CÓ `content.update` — hai nút Mini App được vẽ. */
+function dungCK(danhSach: readonly identity_canBoTomTat[]): string {
+  return renderToStaticMarkup(
+    <BangLienHe
+      danhSach={danhSach}
+      traBoPhan={TRA_XONG}
+      onSua={() => undefined}
+      congKhai={{ onThem: () => undefined, onRut: () => undefined }}
+    />,
+  );
+}
+
 describe("bảng danh bạ — cái ra tới trang", () => {
   it("dựng đủ năm cột dữ liệu của một dòng", () => {
     const html = dung([canBo()]);
@@ -86,14 +105,13 @@ describe("bảng danh bạ — cái ra tới trang", () => {
     expect(html).toContain("Di động cá nhân");
   });
 
-  it("KHÔNG có ô chọn dòng, KHÔNG có chip Mini App, KHÔNG có nút xoá", () => {
-    // Ba thứ đặc tả vẽ (§2, §4) mà ba lý do khác nhau chặn: ô chọn chỉ phục vụ thao tác bật hàng
-    // loạt mà #12 đã bỏ; chip Mini App không có trường nào trong hợp đồng; nút xoá không có tuyến
-    // và cần một khoá quyền bảng `quyen` chưa có (#10, phát hiện cho #27).
-    const html = dung([canBo()]);
+  it("KHÔNG có ô chọn dòng, KHÔNG có thanh hàng loạt, KHÔNG có nút xoá — kể cả khi được công khai", () => {
+    // #12 do khách chốt: công khai từng người một, không thao tác hàng loạt ở bất kỳ đâu. Ô chọn
+    // dòng chỉ phục vụ đúng thao tác ấy. Nút xoá thuộc thẻ việc khác.
+    const html = dungCK([canBo(), canBo({ id: "b", full_name: "Trần Thị B", published: true })]);
 
     expect(html).not.toContain('type="checkbox"');
-    expect(html).not.toContain("Mini App");
+    expect(html).not.toMatch(/đã chọn|Chọn tất cả|hàng loạt/i);
     expect(html).not.toContain("Xoá khỏi danh bạ");
     expect(html).not.toContain("Khoá tài khoản");
   });
@@ -118,6 +136,52 @@ describe("bảng danh bạ — cái ra tới trang", () => {
 
   it("chưa phân bộ phận là một câu riêng, không lẫn với ca trên", () => {
     expect(dung([canBo({ department_id: "" })])).toContain("Chưa phân bộ phận");
+  });
+});
+
+describe("cột Trên Mini App, dòng phụ Có Zalo, và hai nút theo dòng", () => {
+  it("cột 'Trên Mini App' với hai chip, nguyên văn đặc tả §4", () => {
+    const html = dung([canBo(), canBo({ id: "b", full_name: "Trần Thị B", published: true })]);
+    expect(html).toContain(`<th scope="col">${COT_MINI_APP}</th>`);
+    expect(html).toContain(CHIP_CHUA_HIEN);
+    expect(html).toContain(CHIP_DANG_HIEN);
+  });
+
+  it("người đang hiện có dòng 'Đồng ý ghi lúc dd/mm/yyyy hh:mm' — giờ Việt Nam", () => {
+    const html = dung([
+      canBo({ published: true, consent_recorded_at: "2026-09-24T07:05:00Z" }),
+    ]);
+    expect(html).toContain("Đồng ý ghi lúc 24/09/2026 14:05");
+  });
+
+  it("người chưa hiện KHÔNG có dòng đồng ý nào", () => {
+    expect(dung([canBo()])).not.toContain("Đồng ý ghi lúc");
+  });
+
+  it("'Có Zalo' là dòng phụ dưới số di động, chỉ khi `has_zalo`", () => {
+    expect(dung([canBo({ has_zalo: true })])).toMatch(
+      /0900000001<span class="dong-phu">Có Zalo<\/span>/,
+    );
+    expect(dung([canBo()])).not.toContain("Có Zalo");
+  });
+
+  it("KHÔNG có `content.update` → không một nút Mini App nào (ca bị từ chối)", () => {
+    const html = dung([canBo(), canBo({ id: "b", published: true })]);
+    expect(html).not.toContain(NUT_THEM_MINI_APP);
+    expect(html).not.toContain(NUT_RUT_MINI_APP);
+    // Chip và cột vẫn hiện: xem trạng thái không cần khoá ghi.
+    expect(html).toContain(CHIP_DANG_HIEN);
+  });
+
+  it("CÓ `content.update` → mỗi dòng ĐÚNG MỘT nút, theo trạng thái của chính dòng ấy", () => {
+    const html = dungCK([
+      canBo(),
+      canBo({ id: "b", full_name: "Trần Thị B", published: true }),
+    ]);
+    expect(html).toContain(`aria-label="${NUT_THEM_MINI_APP}: Nguyễn Văn A"`);
+    expect(html).toContain(`aria-label="${NUT_RUT_MINI_APP}: Trần Thị B"`);
+    expect(html).not.toContain(`aria-label="${NUT_RUT_MINI_APP}: Nguyễn Văn A"`);
+    expect(html).not.toContain(`aria-label="${NUT_THEM_MINI_APP}: Trần Thị B"`);
   });
 });
 

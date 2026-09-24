@@ -259,11 +259,26 @@ export const QUYEN_SOAN_THONG_BAO = "announcement.create";
  * ngay trên. Dùng ở đúng MỘT chỗ: mục menu. Màn `/noi-dung` không bọc `<CongQuyen>`, tài khoản
  * thiếu khoá vẫn nhận 403 nguyên văn từ máy chủ.
  *
- * KHÔNG THÊM HẰNG CHO `content.update`, dù khoá ấy có thật và ba tuyến ghi đang đứng sau nó: hôm
- * nay không chỗ nào ở client canh nó. Một hằng không ai dùng là một hằng không ai thấy khi nó
- * sai — thêm vào lúc lắp cổng thật, không phải trước.
+ * `content.update` NAY CÓ HẰNG RIÊNG ngay dưới (24/09/2026), vì đã có chỗ ở client canh nó.
  */
 export const QUYEN_XEM_NOI_DUNG = "content.read";
+
+/**
+ * Khoá quyền của nút công khai / rút một cán bộ khỏi danh bạ Zalo Mini App — `content.update`,
+ * "Sửa nội dung và danh bạ Mini App".
+ *
+ * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên `PUT /api/v1/staff/{id}/publication`
+ * (`x-vigov-permission.key` trong `kb/20-contracts/openapi.json`) và đúng chuỗi migration gieo vào
+ * bảng `quyen` (`service-identity/migrations/0001_init.sql:293`).
+ *
+ * KHÔNG PHẢI `admin.user`, dù màn `/danh-ba` mở bằng `admin.user`: người sửa hồ sơ cán bộ chưa chắc
+ * được đưa số di động cá nhân của ai ra kênh công khai, và câu mở #12 đặt việc ấy dưới khoá nội
+ * dung Mini App chứ không dưới khoá quản lý người dùng (luật 5, bất biến 3b). Tài khoản có
+ * `admin.user` mà thiếu khoá này vẫn xem được cột "Trên Mini App", chỉ không thấy hai nút.
+ *
+ * ẨN NÚT LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP — máy chủ kiểm khoá này trên từng lời gọi (luật 5, cấm #1).
+ */
+export const QUYEN_CONG_KHAI_DANH_BA = "content.update";
 
 /**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.

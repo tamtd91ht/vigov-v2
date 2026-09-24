@@ -57,7 +57,13 @@ describe("nạp một dòng danh bạ vào bản nháp", () => {
     // mang phép chặn của #13. Một trường của chúng lọt vào bản nháp sửa hồ sơ là lối đi vòng qua
     // cả hai phép chặn, và là lối không ai nhìn thấy vì nó nằm trong một kiểu chứ trong một nút.
     expect(Object.keys(banTuCanBo(CAN_BO)).sort()).toEqual(Object.keys(BAN_TRONG).sort());
-    expect(Object.keys(BAN_TRONG)).toHaveLength(6);
+    expect(Object.keys(BAN_TRONG)).toHaveLength(7);
+    expect(banTuCanBo(CAN_BO)).not.toHaveProperty("published");
+  });
+
+  it("`has_zalo` về ô Có Zalo", () => {
+    expect(banTuCanBo(CAN_BO).coZalo).toBe(false);
+    expect(banTuCanBo({ ...CAN_BO, has_zalo: true }).coZalo).toBe(true);
   });
 });
 
@@ -87,7 +93,7 @@ describe("thân yêu cầu dùng ĐÚNG tên trường của hợp đồng ghi",
     // Chuỗi rỗng là "ô này trống", một giá trị hợp lệ. Nếu chỗ này đổi rỗng thành `null` (nghĩa
     // "không đổi" của máy chủ) thì việc xoá một số điện thoại lặng lẽ không xảy ra, mà màn hình
     // vẫn báo đã lưu.
-    const than = thanSua({ ...banTuCanBo(CAN_BO), diDongCaNhan: "" });
+    const than = thanSua({ ...banTuCanBo(CAN_BO), diDongCaNhan: "" }, CAN_BO);
 
     expect(than.mobile).toBe("");
     expect(than.office_phone).toBe(MAY_BAN);
@@ -99,6 +105,21 @@ describe("thân yêu cầu dùng ĐÚNG tên trường của hợp đồng ghi",
       "org_unit_id",
       "position",
     ]);
+  });
+
+  it("`has_zalo` CHỈ có mặt khi ô Có Zalo ĐỔI so với dòng gốc — cả hai chiều", () => {
+    // Trường tuỳ chọn: vắng = không đổi. Gửi nó ở mọi lần Lưu là ghi đè cờ người khác vừa đặt.
+    expect(thanSua(banTuCanBo(CAN_BO), CAN_BO)).not.toHaveProperty("has_zalo");
+
+    const coZalo = { ...CAN_BO, has_zalo: true };
+    expect(thanSua(banTuCanBo(coZalo), coZalo)).not.toHaveProperty("has_zalo");
+
+    expect(thanSua({ ...banTuCanBo(CAN_BO), coZalo: true }, CAN_BO).has_zalo).toBe(true);
+    expect(thanSua({ ...banTuCanBo(coZalo), coZalo: false }, coZalo).has_zalo).toBe(false);
+  });
+
+  it("thân THÊM không bao giờ mang `has_zalo` — hợp đồng tạo mới không có trường ấy", () => {
+    expect(thanThem({ ...banTuCanBo(CAN_BO), coZalo: true })).not.toHaveProperty("has_zalo");
   });
 });
 

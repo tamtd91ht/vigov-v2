@@ -6,12 +6,14 @@ import {
   CHON_KHONG_BO_PHAN,
   CHON_KHONG_VAI_TRO,
   GIAI_THICH_THEM,
+  MO_TA_CO_ZALO,
   NUT_HUY,
   NUT_LUU,
   NUT_XAC_NHAN_KHOA,
   NUT_XAC_NHAN_MO_KHOA,
   O_BO_PHAN,
   O_CHUC_DANH,
+  O_CO_ZALO,
   O_DI_DONG,
   O_EMAIL,
   O_HO_TEN,
@@ -161,6 +163,28 @@ export function BieuMauGhiCanBo({
             moTa="Số di động cá nhân. Đây là dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP."
           />
         </>
+      )}
+
+      {/* "CÓ ZALO" CHỈ Ở BIỂU MẪU SỬA: thân thêm (`identity_themCanBoVao`) không có trường ấy, nên
+          một ô tick ở biểu mẫu thêm là một giá trị người dùng tick rồi mất lặng lẽ. Nó cũng không
+          công khai gì — công khai là tuyến riêng, quyền riêng (`MO_TA_CO_ZALO`). */}
+      {dangMo.kieu === "sua" && (
+        <div className="o-nhap">
+          <label htmlFor="o-co-zalo-can-bo">
+            <input
+              id="o-co-zalo-can-bo"
+              name="o-co-zalo-can-bo"
+              type="checkbox"
+              checked={ban.coZalo}
+              aria-describedby="o-co-zalo-can-bo-mo-ta"
+              onChange={(e) => datBan({ ...ban, coZalo: e.target.checked })}
+            />{" "}
+            {O_CO_ZALO}
+          </label>
+          <p className="ghi-chu" id="o-co-zalo-can-bo-mo-ta">
+            {MO_TA_CO_ZALO}
+          </p>
+        </div>
       )}
 
       {dangMo.kieu === "vaiTro" && (

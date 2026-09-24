@@ -88,6 +88,28 @@ const FORM_VAI_TRO: DangMoGhi = { kieu: "vaiTro", canBo: CAN_BO };
 const FORM_KHOA: DangMoGhi = { kieu: "khoa", canBo: CAN_BO, khoa: true };
 const BON_BIEU_MAU: readonly DangMoGhi[] = [FORM_THEM, FORM_SUA, FORM_VAI_TRO, FORM_KHOA];
 
+describe("ô 'Có Zalo' — chỉ ở biểu mẫu SỬA, dùng chung cho cả hai màn", () => {
+  it("biểu mẫu sửa có ô tick, nạp đúng giá trị đang có", () => {
+    const chua = ve(FORM_SUA, { ban: banTuCanBo(CAN_BO) });
+    const oChua = /<input[^>]*id="o-co-zalo-can-bo"[^>]*>/.exec(chua)?.[0] ?? "";
+    expect(oChua).toContain('type="checkbox"');
+    expect(oChua).not.toContain("checked");
+
+    const co = ve(FORM_SUA, { ban: banTuCanBo({ ...CAN_BO, has_zalo: true }) });
+    expect(/<input[^>]*id="o-co-zalo-can-bo"[^>]*>/.exec(co)?.[0]).toContain('checked=""');
+  });
+
+  it("nói rõ ô ấy KHÔNG đưa số lên Mini App", () => {
+    expect(ve(FORM_SUA, { ban: banTuCanBo(CAN_BO) })).toContain("không đưa số lên Zalo Mini App");
+  });
+
+  it("biểu mẫu thêm, đổi vai trò, khoá: KHÔNG có ô ấy — hợp đồng tạo mới không có trường", () => {
+    for (const dm of [FORM_THEM, FORM_VAI_TRO, FORM_KHOA]) {
+      expect(ve(dm, { ban: banTuCanBo(CAN_BO) })).not.toContain("o-co-zalo-can-bo");
+    }
+  });
+});
+
 describe("#15 — form thêm KHÔNG có ô Mã", () => {
   it("năm ô nhập, và không ô nào là Mã", () => {
     const ten = tenONhap(ve(FORM_THEM));

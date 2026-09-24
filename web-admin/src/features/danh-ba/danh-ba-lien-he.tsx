@@ -17,7 +17,8 @@ import {
   type NganXepConTro,
 } from "@/features/cau-hinh/ngan-xep-con-tro";
 import { bangTraTuKetQua, type BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
-import { docTrangDanhBa, suaCanBo } from "@/lib/api/can-bo";
+import { usePhien } from "@/features/phien/phien-hien-tai";
+import { datCongKhaiCanBo, docTrangDanhBa, suaCanBo } from "@/lib/api/can-bo";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type {
   identity_canBoTomTat,
@@ -27,6 +28,16 @@ import type {
 import type { KetQua } from "@/lib/api/goi";
 
 import { BangLienHe } from "./bang-lien-he";
+import {
+  banCongKhaiTu,
+  daCongKhai,
+  daRut,
+  duocCongKhaiTheoPhien,
+  yeuCauCongKhai,
+  yeuCauRut,
+  type BanCongKhai,
+} from "./cong-khai";
+import { HopCongKhai, type DangMoCongKhai } from "./hop-cong-khai";
 import {
   GOI_Y_O_TIM,
   LUA_CHON_HIEN_THI,
@@ -61,21 +72,22 @@ import {
  * Màn **Danh bạ cán bộ** — `docs/ui-ux/12-danh-ba-can-bo.md`, đường dẫn `/danh-ba`.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * KHÔNG TỆP NÀO Ở ĐÂY DỰNG LẠI MỘT LỜI GỌI ĐÃ CÓ. Năm tuyến ghi và hai tuyến đọc của danh bạ đã
- * có chủ ở `lib/api/can-bo.ts`; biểu mẫu sửa, câu chữ và phép đổi hình dạng bản nháp đã có chủ ở
+ * KHÔNG TỆP NÀO Ở ĐÂY DỰNG LẠI MỘT LỜI GỌI ĐÃ CÓ. Các tuyến ghi và đọc của danh bạ đã có chủ ở
+ * `lib/api/can-bo.ts`; biểu mẫu sửa, câu chữ và phép đổi hình dạng bản nháp đã có chủ ở
  * `components/danh-ba/`. Màn này chỉ thêm đúng thứ nó sở hữu: bố cục của một trang riêng, thẻ KPI
- * đếm được, hàng lọc (`loc-danh-ba.ts`), và danh sách nói rõ phần nào chưa mở.
+ * đếm được, hàng lọc (`loc-danh-ba.ts`), hộp công khai Mini App (`cong-khai.ts`), và danh sách nói
+ * rõ phần nào chưa mở.
  *
- * MỘT THAO TÁC GHI, KHÔNG NĂM. `PATCH /api/v1/staff/{id}` là tuyến duy nhất thuộc về một màn danh
- * bạ: sửa chức vụ, khối/đơn vị, số liên hệ. Bốn tuyến còn lại đổi THẨM QUYỀN hoặc đường đăng nhập
- * của một người — thêm, đổi vai trò, khoá, mở khoá — và chúng ở lại đúng chỗ đặc tả §1 đặt chúng:
- * tab `Cấu hình → Người dùng`. Bày cùng một nút Khoá tài khoản ở hai màn hình là hai chỗ để một
- * thao tác có hậu quả nặng bị bấm nhầm, và về sau là hai chỗ phải sửa khi quy tắc #13 đổi.
+ * HAI THAO TÁC GHI THUỘC VỀ MÀN DANH BẠ: `PATCH /api/v1/staff/{id}` (sửa chức vụ, khối/đơn vị, số
+ * liên hệ, Có Zalo) và `PUT .../publication` (công khai MỘT người lên Mini App, #12). Bốn tuyến còn
+ * lại đổi THẨM QUYỀN hoặc đường đăng nhập của một người — thêm, đổi vai trò, khoá, mở khoá — và
+ * chúng ở lại đúng chỗ đặc tả §1 đặt chúng: tab `Cấu hình → Người dùng`. Bày cùng một nút Khoá tài
+ * khoản ở hai màn hình là hai chỗ để một thao tác có hậu quả nặng bị bấm nhầm.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * KHÔNG CÓ CỔNG QUYỀN Ở ĐÂY: cổng nằm ở `app/danh-ba/page.tsx` (`CongQuyen` + `admin.user`), một
- * lần cho cả màn. Và lớp chặn THẬT vẫn ở máy chủ, trên TỪNG yêu cầu (luật 5, cấm #1) — ẩn một màn
- * chỉ để cán bộ khỏi bấm vào thứ chắc chắn trả 403.
+ * CỔNG CỦA CẢ MÀN nằm ở `app/danh-ba/page.tsx` (`CongQuyen` + `admin.user`). Hai nút Mini App thì
+ * cần THÊM `content.update` và ẩn theo khoá ấy (`QUYEN_CONG_KHAI_DANH_BA`). Cả hai lớp đều chỉ là
+ * tiện dụng: lớp chặn THẬT ở máy chủ, trên TỪNG yêu cầu (luật 5, cấm #1).
  */
 
 /** Trạng thái một lần đọc danh sách. Ba nhánh rời nhau. */
@@ -98,6 +110,16 @@ export function DanhBaLienHe() {
   const [cauDaXong, datCauDaXong] = useState("");
   /** Tăng sau mỗi lần ghi thành công — buộc đọc lại trang đang xem. Xem `ghiXong`. */
   const [lanDoc, datLanDoc] = useState(0);
+
+  /** Hộp công khai / rút Mini App đang mở. Không bao giờ mở cùng lúc với biểu mẫu sửa. */
+  const [dangMoCK, datDangMoCK] = useState<DangMoCongKhai | null>(null);
+  const [banCK, datBanCK] = useState<BanCongKhai>({ daHoiY: false, thuTu: "" });
+
+  /**
+   * Phiên có `content.update` hay không — quyết định có vẽ hai nút Mini App. Phiên CHƯA ĐỌC XONG
+   * hay đọc hỏng thì coi như KHÔNG (fail closed, `quyetDinhTheoKhoa`).
+   */
+  const duocCongKhai = duocCongKhaiTheoPhien(usePhien());
 
   /**
    * MỘT DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT KHI MỞ MÀN HÌNH — `[]` ở cuối effect là phần quan trọng nhất
@@ -168,6 +190,7 @@ export function DanhBaLienHe() {
     datTrangThai({ pha: "dangTai" });
     datDangSua(null);
     datBan(BAN_TRONG);
+    datDangMoCK(null);
     datLoiMayChu("");
     datTruyVan(tinh);
   }, []);
@@ -185,10 +208,26 @@ export function DanhBaLienHe() {
 
   /** Mở biểu mẫu sửa: nạp giá trị đang có vào bản nháp, dọn mọi thông báo của lần trước. */
   const moSua = useCallback((cb: identity_canBoTomTat) => {
+    datDangMoCK(null);
     datDangSua(cb);
     datBan(banTuCanBo(cb));
     datLoiMayChu("");
     datCauDaXong("");
+  }, []);
+
+  /** Mở hộp công khai hoặc rút cho MỘT người. Đóng biểu mẫu sửa nếu đang mở. */
+  const moCongKhai = useCallback((dm: DangMoCongKhai) => {
+    datDangSua(null);
+    datBan(BAN_TRONG);
+    datDangMoCK(dm);
+    datBanCK(banCongKhaiTu(dm.canBo));
+    datLoiMayChu("");
+    datCauDaXong("");
+  }, []);
+
+  const dongCongKhai = useCallback(() => {
+    datDangMoCK(null);
+    datLoiMayChu("");
   }, []);
 
   const dongSua = useCallback(() => {
@@ -207,6 +246,7 @@ export function DanhBaLienHe() {
   const ghiXong = useCallback((cau: string) => {
     datDangSua(null);
     datBan(BAN_TRONG);
+    datDangMoCK(null);
     datLoiMayChu("");
     datCauDaXong(cau);
     datLanDoc((n) => n + 1);
@@ -222,13 +262,53 @@ export function DanhBaLienHe() {
     // KHÔNG KIỂM ĐỘ DÀI, KHUÔN THƯ ĐIỆN TỬ HAY KÝ TỰ SỐ ĐIỆN THOẠI Ở ĐÂY. Máy chủ kiểm cả ba, mỗi
     // thứ kèm một câu tiếng Việt nói rõ phải sửa gì (`domain/danh_ba_ghi.go`); chép chúng xuống
     // client là dựng bản sao thứ hai của một bộ quy tắc nghiệp vụ (luật 9, cấm #2).
-    void suaCanBo(dangSua.id, thanSua(ban))
+    void suaCanBo(dangSua.id, thanSua(ban, dangSua))
       .then((kq) => {
         if (kq.ok) ghiXong(daLuuHoSo(kq.duLieu.full_name));
         else datLoiMayChu(kq.thongBao);
       })
       .finally(() => datDangGui(false));
   }, [ban, dangGui, dangSua, ghiXong]);
+
+  const guiCongKhai = useCallback(() => {
+    if (dangMoCK === null || dangGui) return;
+
+    // Công khai: chưa tick hay thứ tự sai thì dừng TẠI ĐÂY, không gọi mạng. Rút: luôn gửi lại thứ
+    // tự đang có, vì PUT thiếu `display_order` là xoá nó (`yeuCauRut`).
+    let yc;
+    if (dangMoCK.kieu === "congKhai") {
+      const kq = yeuCauCongKhai(banCK);
+      if ("loi" in kq) {
+        datLoiMayChu(kq.loi);
+        return;
+      }
+      yc = kq.yeuCau;
+    } else {
+      yc = yeuCauRut(dangMoCK.canBo);
+    }
+
+    datLoiMayChu("");
+    datCauDaXong("");
+    datDangGui(true);
+    const congKhai = dangMoCK.kieu === "congKhai";
+    void datCongKhaiCanBo(dangMoCK.canBo.id, yc)
+      .then((kq) => {
+        if (kq.ok) ghiXong(congKhai ? daCongKhai(kq.duLieu.full_name) : daRut(kq.duLieu.full_name));
+        else datLoiMayChu(kq.thongBao);
+      })
+      .finally(() => datDangGui(false));
+  }, [banCK, dangGui, dangMoCK, ghiXong]);
+
+  const hanhDongCongKhai = useMemo(
+    () =>
+      duocCongKhai
+        ? {
+            onThem: (cb: identity_canBoTomTat) => moCongKhai({ kieu: "congKhai", canBo: cb }),
+            onRut: (cb: identity_canBoTomTat) => moCongKhai({ kieu: "rut", canBo: cb }),
+          }
+        : undefined,
+    [duocCongKhai, moCongKhai],
+  );
 
   return (
     <section className="man-danh-ba" aria-labelledby="tieu-de-danh-ba-lien-he">
@@ -284,6 +364,18 @@ export function DanhBaLienHe() {
         />
       )}
 
+      {dangMoCK !== null && (
+        <HopCongKhai
+          dangMo={dangMoCK}
+          ban={banCK}
+          datBan={datBanCK}
+          loiMayChu={loiMayChu}
+          dangGui={dangGui}
+          onGui={guiCongKhai}
+          onHuy={dongCongKhai}
+        />
+      )}
+
       {trangThai.pha === "dangTai" && <p role="status">Đang tải danh bạ…</p>}
 
       {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải. Mọi mã lỗi — kể cả 401, 403, 404 —
@@ -302,7 +394,12 @@ export function DanhBaLienHe() {
 
       {trangThai.pha === "xong" && trangThai.trang.items.length > 0 && (
         <>
-          <BangLienHe danhSach={trangThai.trang.items} traBoPhan={traBoPhan} onSua={moSua} />
+          <BangLienHe
+            danhSach={trangThai.trang.items}
+            traBoPhan={traBoPhan}
+            onSua={moSua}
+            congKhai={hanhDongCongKhai}
+          />
           <p className="ghi-chu">{GHI_CHU_SO_DIEN_THOAI}</p>
           <DieuHuongTrang
             nganXep={truyVan.nganXep}

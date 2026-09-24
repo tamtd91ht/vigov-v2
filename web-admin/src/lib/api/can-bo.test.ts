@@ -11,6 +11,7 @@ import {
 import {
   TU_KHOA_TIM_TOI_DA,
   chuanHoaTuKhoaTim,
+  datCongKhaiCanBo,
   datKhoaCanBo,
   docTrangDanhBa,
   doiVaiTroCanBo,
@@ -18,6 +19,7 @@ import {
   layChiTietCanBo,
   layDanhSachCanBo,
   suaCanBo,
+  thanCongKhai,
   thanTimCanBo,
   themCanBo,
   timCanBo,
@@ -493,6 +495,83 @@ describe("PATCH /api/v1/staff/{id} — sửa hồ sơ", () => {
       office_phone: null,
       mobile: "",
     });
+  });
+});
+
+describe("PATCH /api/v1/staff/{id} — `has_zalo` tuỳ chọn", () => {
+  const SAU_TRUONG = {
+    full_name: "Huỳnh Văn B",
+    position: null,
+    email: null,
+    org_unit_id: null,
+    office_phone: null,
+    mobile: null,
+  };
+
+  it("không đặt `has_zalo` → thân KHÔNG có khoá ấy (vắng = không đổi)", async () => {
+    const gia = ghiGia(200, canBo(1, null));
+    await suaCanBo("01JABC", SAU_TRUONG);
+    expect(JSON.parse(String(loiGoi(gia, 0).tuyChon.body))).not.toHaveProperty("has_zalo");
+  });
+
+  it("đặt `has_zalo: false` → đi lên `false`, không bị coi là vắng", async () => {
+    const gia = ghiGia(200, canBo(1, null));
+    await suaCanBo("01JABC", { ...SAU_TRUONG, has_zalo: false });
+    expect(JSON.parse(String(loiGoi(gia, 0).tuyChon.body))).toHaveProperty("has_zalo", false);
+  });
+
+  it("đặt `has_zalo: true` → đi lên `true`", async () => {
+    const gia = ghiGia(200, canBo(1, null));
+    await suaCanBo("01JABC", { ...SAU_TRUONG, has_zalo: true });
+    expect(JSON.parse(String(loiGoi(gia, 0).tuyChon.body))).toHaveProperty("has_zalo", true);
+  });
+});
+
+describe("PUT /api/v1/staff/{id}/publication — công khai một người (#12)", () => {
+  it("PUT, id mã hoá vào đường dẫn, thân đúng ba trường", async () => {
+    const gia = ghiGia(200, { ...canBo(1, null), published: true });
+    await datCongKhaiCanBo("a/b", { congKhai: true, daXacNhanDongY: true, thuTu: 5 });
+
+    const { duongDan, tuyChon, header } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/staff/a%2Fb/publication");
+    expect(tuyChon.method).toBe("PUT");
+    expect(header.get("Idempotency-Key")).toBeNull();
+    expect(JSON.parse(String(tuyChon.body))).toEqual({
+      published: true,
+      consent_confirmed: true,
+      display_order: 5,
+    });
+  });
+
+  it("`display_order: null` VẪN có mặt trong JSON gửi đi — vắng là xoá, null cũng là xoá, nhưng phải có chủ ý", async () => {
+    const gia = ghiGia(200, canBo(1, null));
+    await datCongKhaiCanBo("01JABC", { congKhai: false, daXacNhanDongY: false, thuTu: null });
+    const than = JSON.parse(String(loiGoi(gia, 0).tuyChon.body)) as Record<string, unknown>;
+    expect(Object.keys(than).sort()).toEqual(["consent_confirmed", "display_order", "published"]);
+  });
+
+  it("công khai mà CHƯA xác nhận → `consent_confirmed: false`, không bao giờ tự thành true", () => {
+    expect(
+      thanCongKhai({ congKhai: true, daXacNhanDongY: false, thuTu: null }).consent_confirmed,
+    ).toBe(false);
+  });
+
+  it("200 trả về dòng sau khi đổi, kèm `consent_recorded_at`", async () => {
+    ghiGia(200, { ...canBo(1, null), published: true, consent_recorded_at: "2026-09-24T07:05:00Z" });
+    const kq = await datCongKhaiCanBo("01JABC", { congKhai: true, daXacNhanDongY: true, thuTu: null });
+    expect(kq.ok && kq.duLieu.consent_recorded_at).toBe("2026-09-24T07:05:00Z");
+  });
+
+  it("400 consent_required · 400 invalid_request · 404 staff_not_found — câu máy chủ NGUYÊN VĂN", async () => {
+    for (const [ma, code, cau] of [
+      [400, "consent_required", "Chưa xác nhận đã hỏi ý và được chính người này đồng ý."],
+      [400, "invalid_request", "Thứ tự hiển thị không hợp lệ."],
+      [404, "staff_not_found", "Không tìm thấy cán bộ."],
+    ] as const) {
+      ghiGia(ma, { code, message: cau, trace_id: "01JTRACE" });
+      const kq = await datCongKhaiCanBo("01JABC", { congKhai: true, daXacNhanDongY: true, thuTu: null });
+      expect(kq).toEqual({ ok: false, thongBao: cau });
+    }
   });
 });
 

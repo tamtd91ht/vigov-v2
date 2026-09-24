@@ -3,6 +3,18 @@ import { traTen, type BangTraDanhMuc, type KetTra } from "@/features/cau-hinh/tr
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
 import {
+  CHIP_CHUA_HIEN,
+  CHIP_DANG_HIEN,
+  COT_MINI_APP,
+  DONG_PHU_CO_ZALO,
+  NUT_RUT_MINI_APP,
+  NUT_THEM_MINI_APP,
+  ariaRutMiniApp,
+  ariaThemMiniApp,
+  dongYGhiLuc,
+} from "./cong-khai";
+
+import {
   ariaSua,
   COT_CHUC_VU,
   COT_DI_DONG,
@@ -31,9 +43,10 @@ import {
  * bản sẽ trôi (luật 9, cấm #2) — và bản trôi sẽ là bản nói sai về một bộ phận đã bị xoá mềm.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * KHÔNG CÓ CỘT CHECKBOX, và sự vắng mặt ấy không phải quên. Ô chọn của đặc tả (§2, §4) chỉ phục
- * vụ ĐÚNG MỘT việc: thanh hành động hàng loạt `Thêm / Rút khỏi danh bạ Mini App`. Câu mở #12 đã bỏ
- * hẳn thao tác hàng loạt ấy, nên một cột checkbox ở đây là hai mươi ô tick không chọn cho việc gì.
+ * KHÔNG CÓ CỘT CHECKBOX VÀ KHÔNG CÓ THANH HÀNH ĐỘNG HÀNG LOẠT, và sự vắng mặt ấy không phải quên.
+ * Ô chọn của đặc tả (§2, §4) chỉ phục vụ ĐÚNG MỘT việc: bật/tắt Mini App cho nhiều người một lúc.
+ * Câu mở #12 do khách chốt: công khai số di động cá nhân phải hỏi ý TỪNG người — nên hai nút
+ * `Thêm vào / Rút khỏi danh bạ Mini App` nằm trên TỪNG DÒNG, mỗi lần một người.
  *
  * THUẦN TRÌNH BÀY: không đọc mạng, không giữ state. Nhờ vậy kết xuất được bằng `react-dom/server`
  * trong Node và bài kiểm hỏi thẳng được "dòng này có RA TỚI TRANG không".
@@ -42,11 +55,20 @@ export function BangLienHe({
   danhSach,
   traBoPhan,
   onSua,
+  congKhai,
 }: {
   danhSach: readonly identity_canBoTomTat[];
   /** Bảng tra đã dựng sẵn, đi XUỐNG như tham số — không dòng nào tự đi hỏi máy chủ. */
   traBoPhan: BangTraDanhMuc;
   onSua: (cb: identity_canBoTomTat) => void;
+  /**
+   * Hai hành động Mini App. `undefined` = phiên KHÔNG có `content.update` (hoặc chưa đọc xong
+   * phiên) → không vẽ nút nào. Ẩn là tiện dụng: máy chủ kiểm khoá ấy trên từng lời gọi.
+   */
+  congKhai?: {
+    onThem: (cb: identity_canBoTomTat) => void;
+    onRut: (cb: identity_canBoTomTat) => void;
+  };
 }) {
   return (
     // `role="region"` + `tabIndex` để vùng cuộn ngang tới được bằng bàn phím. Dưới 768px bảng cuộn
@@ -55,7 +77,8 @@ export function BangLienHe({
     <div className="bang-cuon" role="region" aria-label="Danh bạ cán bộ của đơn vị" tabIndex={0}>
       <table className="bang-can-bo">
         <caption className="an-thi-giac">
-          Danh bạ cán bộ của đơn vị: họ tên, chức vụ, khối/đơn vị và số liên hệ.
+          Danh bạ cán bộ của đơn vị: họ tên, chức vụ, khối/đơn vị, số liên hệ và trạng thái trên
+          Zalo Mini App.
         </caption>
         <thead>
           <tr>
@@ -67,6 +90,7 @@ export function BangLienHe({
                 và dữ liệu cá nhân dưới cùng một cái tên. */}
             <th scope="col">{COT_MAY_BAN}</th>
             <th scope="col">{COT_DI_DONG}</th>
+            <th scope="col">{COT_MINI_APP}</th>
             <th scope="col">
               <span className="an-thi-giac">Hành động</span>
             </th>
@@ -93,12 +117,16 @@ export function BangLienHe({
                   chưa tồn tại. Định dạng lại thành `0900 000 001` như ví dụ đặc tả thì số copy ra
                   không gọi được và không tìm lại được. */}
               <td>{cb.phone}</td>
-              <td>{cb.mobile}</td>
+              <td>
+                {cb.mobile}
+                {cb.has_zalo && <span className="dong-phu">{DONG_PHU_CO_ZALO}</span>}
+              </td>
+              <td>
+                <OMiniApp cb={cb} />
+              </td>
               <td>
                 <span className="o-thao-tac">
-                  {/* MỘT HÀNH ĐỘNG, KHÔNG BA. Đặc tả §4 vẽ ✕ (rút khỏi Mini App), ✎ (sửa) và 🗑
-                      (xoá); hai cái ngoài cùng không có tuyến nào trong hợp đồng và mỗi cái còn bị
-                      một quyết định đã chốt chặn (#12 và #10). Xem phần chưa mở ở `nhan-danh-ba.ts`. */}
+                  {/* Đặc tả §4 còn vẽ 🗑 (xoá) — chưa mở, xem phần chưa mở ở `nhan-danh-ba.ts`. */}
                   <button
                     type="button"
                     className="nut-phu"
@@ -107,6 +135,26 @@ export function BangLienHe({
                   >
                     {NUT_SUA_THONG_TIN}
                   </button>
+                  {congKhai !== undefined &&
+                    (cb.published ? (
+                      <button
+                        type="button"
+                        className="nut-phu"
+                        aria-label={ariaRutMiniApp(cb.full_name)}
+                        onClick={() => congKhai.onRut(cb)}
+                      >
+                        {NUT_RUT_MINI_APP}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="nut-phu"
+                        aria-label={ariaThemMiniApp(cb.full_name)}
+                        onClick={() => congKhai.onThem(cb)}
+                      >
+                        {NUT_THEM_MINI_APP}
+                      </button>
+                    ))}
                 </span>
               </td>
             </tr>
@@ -114,6 +162,21 @@ export function BangLienHe({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * Ô cột "Trên Mini App": chip trạng thái, và với người đang hiện thì thêm thời điểm ghi nhận đồng ý
+ * — bằng chứng #12 đòi, hiện ngay cạnh trạng thái nó bảo chứng.
+ */
+function OMiniApp({ cb }: { cb: identity_canBoTomTat }) {
+  if (!cb.published) return <span className="chip chip-ngung">{CHIP_CHUA_HIEN}</span>;
+  const dongY = dongYGhiLuc(cb.consent_recorded_at);
+  return (
+    <>
+      <span className="chip chip-hoat-dong">{CHIP_DANG_HIEN}</span>
+      {dongY !== null && <span className="dong-phu">{dongY}</span>}
+    </>
   );
 }
 
