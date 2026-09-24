@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 8e17c6a
+derived_from_commit: 56d3224
 expires: 2026-12-24
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -35,7 +35,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **04** Biên bản và kết luận họp | 4 | 4/4 | ✓ |
 | **05** Văn bản đến & Đơn thư | 7 | 7/7 | ✓ |
 | **06** Theo dõi giải ngân | 11 | 11/11 | ✓ |
-| **07** Thu – Chi ngân sách xã | 12 | 9/12 | ✓ |
+| **07** Thu – Chi ngân sách xã | 12 | 12/12 | ✓ |
 | **08** Thông báo | 2 | 2/2 | ✓ |
 | **09** Phản ánh của người dân | 10 | 8/8 +2 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
@@ -61,7 +61,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 9 |
 | 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | **không khai** |
 | 6 | Giải ngân | `/giai-ngan` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 6 |
-| 7 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 5 |
+| 7 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 2 |
 | 8 | Thông báo | `/thong-bao` | `QUYEN_SOAN_THONG_BAO` | ✓ | 12 |
 | 9 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 10 |
 | 10 | Bản đồ kinh tế số | — | — | ✗ | |
@@ -70,7 +70,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 13 | Báo cáo | — | — | ✗ | |
 | 14 | Cấu hình | `/cau-hinh` | `QUYEN_QUAN_LY_DANH_MUC` | ✓ | 10 |
 
-**10/14** mục menu có màn thật. **84** phần chưa dựng đang hiện trên các màn ấy.
+**10/14** mục menu có màn thật. **81** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần

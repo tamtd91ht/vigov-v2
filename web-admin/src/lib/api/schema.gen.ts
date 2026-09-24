@@ -416,6 +416,7 @@ export type finance_dongRa = {
   "is_headline": boolean;
   /** columnID -> đồng, or null for an empty cell */
   "values": Record<string, number | null>;
+  "unavailable_reasons"?: Record<string, string>;
 };
 
 export type finance_dotRa = {
@@ -429,6 +430,7 @@ export type finance_dotRa = {
   /** RFC 3339; absent on the 201 of a create */
   "recorded_at"?: string;
   "values": Record<string, number | null>;
+  "unavailable_reasons"?: Record<string, string>;
 };
 
 export type finance_duAnGhiRa = {
@@ -519,6 +521,7 @@ export type finance_oTongRa = {
   "name": string;
   "role"?: string;
   "value": number | null;
+  "unavailable_reason"?: string;
 };
 
 export type finance_phanBoRa = {

@@ -80,7 +80,7 @@
     },
     "app.DatDongTong": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:1021"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:1043"
     },
     "app.DatKhoa": {
       "kind": "func",
@@ -164,15 +164,15 @@
     },
     "app.GoBang": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:284"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:285"
     },
     "app.GoDot": {
       "kind": "func",
-      "at": "service-finance/internal/app/dot_thu_chi.go:182"
+      "at": "service-finance/internal/app/dot_thu_chi.go:192"
     },
     "app.GoKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:913"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:921"
     },
     "app.Gui": {
       "kind": "func",
@@ -476,7 +476,7 @@
     },
     "app.NewNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:103"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:104"
     },
     "app.NewNhanTrangThaiNhiemVu": {
       "kind": "func",
@@ -528,7 +528,7 @@
     },
     "app.NganSach": {
       "kind": "type",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:95"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:96"
     },
     "app.NguoiThucHien": {
       "kind": "type",
@@ -592,7 +592,7 @@
     },
     "app.SuaBang": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:352"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:353"
     },
     "app.SuaCa": {
       "kind": "func",
@@ -600,7 +600,7 @@
     },
     "app.SuaKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:612"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:613"
     },
     "app.SuaLamBu": {
       "kind": "func",
@@ -624,7 +624,7 @@
     },
     "app.TaoBang": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:155"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:156"
     },
     "app.TaoBienBan": {
       "kind": "func",
@@ -648,7 +648,7 @@
     },
     "app.ThemKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:466"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:467"
     },
     "app.ThemLamBu": {
       "kind": "func",
@@ -756,7 +756,7 @@
     },
     "app.YeuCauSuaBang": {
       "kind": "type",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:331"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:332"
     },
     "app.YeuCauSuaBoPhan": {
       "kind": "type",
@@ -788,7 +788,7 @@
     },
     "app.YeuCauSuaKhoanMuc": {
       "kind": "type",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:577"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:578"
     },
     "app.YeuCauSuaLamBu": {
       "kind": "type",
@@ -832,7 +832,7 @@
     },
     "app.YeuCauTaoBang": {
       "kind": "type",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:140"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:141"
     },
     "app.YeuCauTaoBienBan": {
       "kind": "type",
@@ -876,7 +876,7 @@
     },
     "app.YeuCauThemKhoanMuc": {
       "kind": "type",
-      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:448"
+      "at": "service-finance/internal/app/thu_chi_ngan_sach.go:449"
     },
     "app.YeuCauThemLamBu": {
       "kind": "type",
@@ -1048,7 +1048,7 @@
     },
     "domain.BangDayDu": {
       "kind": "type",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:599"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:622"
     },
     "domain.BangNganSach": {
       "kind": "type",
@@ -1116,7 +1116,7 @@
     },
     "domain.CanDoiThuChi": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:903"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:1019"
     },
     "domain.CapChongNhau": {
       "kind": "type",
@@ -1128,11 +1128,11 @@
     },
     "domain.CapTheoCha": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:945"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:1067"
     },
     "domain.ChiSoDatDuToan": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:828"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:943"
     },
     "domain.ChoChuyen": {
       "kind": "func",
@@ -1140,11 +1140,11 @@
     },
     "domain.ChoGhiGiaTri": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:928"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:1050"
     },
     "domain.ChoGo": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:936"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:1058"
     },
     "domain.ChoKhoa": {
       "kind": "func",
@@ -1196,7 +1196,7 @@
     },
     "domain.ChuanHoaCongThuc": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:535"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:558"
     },
     "domain.ChuanHoaDanhSachMaCanBo": {
       "kind": "func",
@@ -1216,7 +1216,7 @@
     },
     "domain.ChuanHoaDonViCaNhan": {
       "kind": "func",
-      "at": "service-finance/internal/domain/dot_thu_chi.go:140"
+      "at": "service-finance/internal/domain/dot_thu_chi.go:155"
     },
     "domain.ChuanHoaEmail": {
       "kind": "func",
@@ -1260,7 +1260,7 @@
     },
     "domain.ChuanHoaLyDoXoaNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:528"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:551"
     },
     "domain.ChuanHoaMa": {
       "kind": "func",
@@ -1316,7 +1316,7 @@
     },
     "domain.ChuanHoaNoiDungDot": {
       "kind": "func",
-      "at": "service-finance/internal/domain/dot_thu_chi.go:125"
+      "at": "service-finance/internal/domain/dot_thu_chi.go:140"
     },
     "domain.ChuanHoaNoiDungThongBao": {
       "kind": "func",
@@ -1336,7 +1336,7 @@
     },
     "domain.ChuanHoaSoChungTuDot": {
       "kind": "func",
-      "at": "service-finance/internal/domain/dot_thu_chi.go:145"
+      "at": "service-finance/internal/domain/dot_thu_chi.go:160"
     },
     "domain.ChuanHoaSoDienThoai": {
       "kind": "func",
@@ -1344,7 +1344,7 @@
     },
     "domain.ChuanHoaTT": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:548"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:571"
     },
     "domain.ChuanHoaTapQuyen": {
       "kind": "func",
@@ -1356,7 +1356,7 @@
     },
     "domain.ChuanHoaTenCot": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:520"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:543"
     },
     "domain.ChuanHoaTenDanhMuc": {
       "kind": "func",
@@ -1368,7 +1368,7 @@
     },
     "domain.ChuanHoaTenKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:524"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:547"
     },
     "domain.ChuanHoaTenLich": {
       "kind": "func",
@@ -1384,7 +1384,7 @@
     },
     "domain.ChuanHoaTieuDeBang": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:444"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:467"
     },
     "domain.ChuanHoaTieuDeNoiDung": {
       "kind": "func",
@@ -1432,7 +1432,7 @@
     },
     "domain.CoCon": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:632"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:662"
     },
     "domain.CoGiDoi": {
       "kind": "func",
@@ -1460,7 +1460,7 @@
     },
     "domain.ConTrucTiep": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:619"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:649"
     },
     "domain.CotNganSach": {
       "kind": "type",
@@ -1468,7 +1468,7 @@
     },
     "domain.CotTheoVaiTro": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:700"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:810"
     },
     "domain.CuaXa": {
       "kind": "func",
@@ -1520,7 +1520,7 @@
     },
     "domain.DocDonViTinhDaLuu": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:515"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:538"
     },
     "domain.DocGioTrongNgay": {
       "kind": "func",
@@ -1540,7 +1540,7 @@
     },
     "domain.DonViTinh": {
       "kind": "type",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:464"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:487"
     },
     "domain.Dong": {
       "kind": "type",
@@ -1568,7 +1568,7 @@
     },
     "domain.DongTong": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:734"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:844"
     },
     "domain.DotCuaKhoanMuc": {
       "kind": "type",
@@ -1600,7 +1600,7 @@
     },
     "domain.GiaTri": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:653"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:696"
     },
     "domain.GieoCaLamViec": {
       "kind": "type",
@@ -1812,7 +1812,7 @@
     },
     "domain.KiemTraBoCot": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:421"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:444"
     },
     "domain.KiemTraCaLamBu": {
       "kind": "func",
@@ -1824,15 +1824,15 @@
     },
     "domain.KiemTraCachTinhChon": {
       "kind": "func",
-      "at": "service-finance/internal/domain/dot_thu_chi.go:103"
+      "at": "service-finance/internal/domain/dot_thu_chi.go:118"
     },
     "domain.KiemTraCot": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:373"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:396"
     },
     "domain.KiemTraDonViTinh": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:487"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:510"
     },
     "domain.KiemTraDongSLA": {
       "kind": "func",
@@ -1840,7 +1840,11 @@
     },
     "domain.KiemTraGiaTri": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:570"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:593"
+    },
+    "domain.KiemTraGiaTriDaLuu": {
+      "kind": "func",
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:792"
     },
     "domain.KiemTraGio": {
       "kind": "func",
@@ -1860,7 +1864,7 @@
     },
     "domain.KiemTraLoaiBang": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:360"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:383"
     },
     "domain.KiemTraMatKhauMoi": {
       "kind": "func",
@@ -1872,7 +1876,7 @@
     },
     "domain.KiemTraNamNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:353"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:376"
     },
     "domain.KiemTraNgayChi": {
       "kind": "func",
@@ -1880,7 +1884,7 @@
     },
     "domain.KiemTraNgayDot": {
       "kind": "func",
-      "at": "service-finance/internal/domain/dot_thu_chi.go:112"
+      "at": "service-finance/internal/domain/dot_thu_chi.go:127"
     },
     "domain.KiemTraNgayDuAn": {
       "kind": "func",
@@ -1916,7 +1920,7 @@
     },
     "domain.KiemTraThuTuNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:559"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:582"
     },
     "domain.KiemTraThuTuTrangThai": {
       "kind": "func",
@@ -1928,7 +1932,7 @@
     },
     "domain.KiemTraVaiTro": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:393"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:416"
     },
     "domain.KiemVanBanNhiemVuVao": {
       "kind": "func",
@@ -2144,7 +2148,7 @@
     },
     "domain.Nhan": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:482"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:505"
     },
     "domain.NhanLinhVuc": {
       "kind": "type",
@@ -2256,11 +2260,11 @@
     },
     "domain.SoTien": {
       "kind": "type",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:799"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:914"
     },
     "domain.SoTong": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:756"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:866"
     },
     "domain.SoTrongMaNhiemVu": {
       "kind": "func",
@@ -2300,7 +2304,7 @@
     },
     "domain.TheoID": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:690"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:800"
     },
     "domain.ThonToDanPho": {
       "kind": "type",
@@ -2448,7 +2452,7 @@
     },
     "domain.TyLe": {
       "kind": "type",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:809"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:924"
     },
     "domain.TyLeDaPhanBo": {
       "kind": "func",
@@ -2456,7 +2460,7 @@
     },
     "domain.TyLeDong": {
       "kind": "func",
-      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:865"
+      "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:981"
     },
     "domain.TyLeGiaiNgan": {
       "kind": "func",
@@ -2872,7 +2876,7 @@
     },
     "http.DatDongTongNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:769"
+      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:797"
     },
     "http.DatLaiMatKhauCanBo": {
       "kind": "func",
@@ -2892,15 +2896,15 @@
     },
     "http.DocBangNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:445"
+      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:467"
     },
     "http.DocChiSoNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:469"
+      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:491"
     },
     "http.DocDotThuChi": {
       "kind": "func",
-      "at": "service-finance/internal/http/dot_thu_chi.go:97"
+      "at": "service-finance/internal/http/dot_thu_chi.go:111"
     },
     "http.DocNhiemVu": {
       "kind": "func",
@@ -2944,7 +2948,7 @@
     },
     "http.GhiDotThuChi": {
       "kind": "func",
-      "at": "service-finance/internal/http/dot_thu_chi.go:114"
+      "at": "service-finance/internal/http/dot_thu_chi.go:128"
     },
     "http.GhiDuAn": {
       "kind": "type",
@@ -3012,7 +3016,7 @@
     },
     "http.GoBangNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:599"
+      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:627"
     },
     "http.GoChungTu": {
       "kind": "func",
@@ -3020,11 +3024,11 @@
     },
     "http.GoDotThuChi": {
       "kind": "func",
-      "at": "service-finance/internal/http/dot_thu_chi.go:156"
+      "at": "service-finance/internal/http/dot_thu_chi.go:170"
     },
     "http.GoKhoanMucNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:738"
+      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:766"
     },
     "http.GoVanBanDen": {
       "kind": "func",
@@ -3252,7 +3256,7 @@
     },
     "http.SuaBangNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:621"
+      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:649"
     },
     "http.SuaBoPhan": {
       "kind": "func",
@@ -3280,7 +3284,7 @@
     },
     "http.SuaKhoanMucNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:688"
+      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:716"
     },
     "http.SuaKhoiNhiemVu": {
       "kind": "func",
@@ -3348,7 +3352,7 @@
     },
     "http.TaoBangNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:548"
+      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:576"
     },
     "http.TaoBienBan": {
       "kind": "func",
@@ -3392,7 +3396,7 @@
     },
     "http.ThemKhoanMucNganSach": {
       "kind": "func",
-      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:657"
+      "at": "service-finance/internal/http/thu_chi_ngan_sach.go:685"
     },
     "http.ThemKhoiNhiemVu": {
       "kind": "func",
@@ -3996,15 +4000,15 @@
     },
     "store.BangDayDuTrongGiaoDich": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:335"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:336"
     },
     "store.BangIDCuaKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:794"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:800"
     },
     "store.BangTheoIDDeSua": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:309"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:310"
     },
     "store.BangTheoNamLoai": {
       "kind": "func",
@@ -4060,7 +4064,7 @@
     },
     "store.CapNhatBang": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:586"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:592"
     },
     "store.CapNhatGio": {
       "kind": "func",
@@ -4072,7 +4076,7 @@
     },
     "store.CapNhatKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:638"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:644"
     },
     "store.CapSo": {
       "kind": "func",
@@ -4104,19 +4108,19 @@
     },
     "store.ChenBang": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:515"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:521"
     },
     "store.ChenCot": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:535"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:541"
     },
     "store.ChenDot": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:281"
+      "at": "service-finance/internal/store/dot_thu_chi.go:317"
     },
     "store.ChenKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:612"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:618"
     },
     "store.ChenLichSuChuyen": {
       "kind": "func",
@@ -4132,7 +4136,7 @@
     },
     "store.ChenSoTienDot": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:295"
+      "at": "service-finance/internal/store/dot_thu_chi.go:331"
     },
     "store.ChiTiet": {
       "kind": "func",
@@ -4160,11 +4164,11 @@
     },
     "store.CoBangConSong": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:493"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:499"
     },
     "store.CoDotConSong": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:261"
+      "at": "service-finance/internal/store/dot_thu_chi.go:281"
     },
     "store.CoGiDoi": {
       "kind": "func",
@@ -4176,7 +4180,7 @@
     },
     "store.CotCuaBang": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:176"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:177"
     },
     "store.CuaCongDanTheoMaTraCuu": {
       "kind": "func",
@@ -4208,7 +4212,7 @@
     },
     "store.DatCachTinh": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:659"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:665"
     },
     "store.DatCongKhai": {
       "kind": "func",
@@ -4216,7 +4220,7 @@
     },
     "store.DatDongTong": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:689"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:695"
     },
     "store.DatKhoa": {
       "kind": "func",
@@ -4250,6 +4254,10 @@
       "kind": "func",
       "at": "service-petitions/internal/store/muc_uu_tien_nhiem_vu.go:168"
     },
+    "store.DemDotSong": {
+      "kind": "func",
+      "at": "service-finance/internal/store/dot_thu_chi.go:299"
+    },
     "store.Directory": {
       "kind": "type",
       "at": "service-platform/internal/store/directory.go:26"
@@ -4272,11 +4280,11 @@
     },
     "store.DotCuaKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:109"
+      "at": "service-finance/internal/store/dot_thu_chi.go:129"
     },
     "store.DotTheoIDTrongGiaoDich": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:231"
+      "at": "service-finance/internal/store/dot_thu_chi.go:251"
     },
     "store.DuAnGhiStore": {
       "kind": "type",
@@ -4308,7 +4316,7 @@
     },
     "store.GhiGiaTri": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:742"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:748"
     },
     "store.GhiKetQua": {
       "kind": "func",
@@ -4328,7 +4336,7 @@
     },
     "store.GiaTriCuaBang": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:263"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:264"
     },
     "store.GiaoViecDuoc": {
       "kind": "func",
@@ -4372,7 +4380,7 @@
     },
     "store.KhoanMucCuaBang": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:216"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:217"
     },
     "store.KhoiNhiemVuStore": {
       "kind": "type",
@@ -4388,7 +4396,7 @@
     },
     "store.LanKeTiep": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:476"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:482"
     },
     "store.LichLamViecStore": {
       "kind": "type",
@@ -5028,15 +5036,15 @@
     },
     "store.XoaMemBang": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:563"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:569"
     },
     "store.XoaMemDot": {
       "kind": "func",
-      "at": "service-finance/internal/store/dot_thu_chi.go:311"
+      "at": "service-finance/internal/store/dot_thu_chi.go:347"
     },
     "store.XoaMemKhoanMuc": {
       "kind": "func",
-      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:716"
+      "at": "service-finance/internal/store/thu_chi_ngan_sach.go:722"
     },
     "store.XoaMemPhanBoCuaDuAn": {
       "kind": "func",

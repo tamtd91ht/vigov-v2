@@ -13825,6 +13825,12 @@
               "format": "int64"
             },
             "description": "columnID -> đồng, or null for an empty cell"
+          },
+          "unavailable_reasons": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -13873,6 +13879,12 @@
                 "null"
               ],
               "format": "int64"
+            }
+          },
+          "unavailable_reasons": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
             }
           }
         },
@@ -14190,6 +14202,9 @@
               "null"
             ],
             "format": "int64"
+          },
+          "unavailable_reason": {
+            "type": "string"
           }
         },
         "required": [

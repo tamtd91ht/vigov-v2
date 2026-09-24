@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 8e17c6a
+derived_from_commit: 56d3224
 expires: 2026-12-24
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
