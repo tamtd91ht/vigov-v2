@@ -194,9 +194,11 @@ func run(log *slog.Logger) error {
 		GhiLoaiVanBan: ghiLoaiVanBan,
 		VanBanDen:     vanBanDen,
 		GhiVanBanDen:  ghiVanBanDen,
-		VanBanDi:      vanBanDi,
-		GhiVanBanDi:   ghiVanBanDi,
-		Log:           log,
+		// The same use case: it owns the transaction the drawer's two reads share.
+		ChiTietVanBanDen: ghiVanBanDen,
+		VanBanDi:         vanBanDi,
+		GhiVanBanDi:      ghiVanBanDi,
+		Log:              log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

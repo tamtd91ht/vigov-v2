@@ -1,10 +1,10 @@
 package http
 
-// WHAT THIS FILE IS FOR: the NINE routes of the two document registers.
+// WHAT THIS FILE IS FOR: the ELEVEN routes of the two document registers.
 //
 // FIVE THINGS, each of which fails silently if it stops holding:
 //
-//  1. the four cases of rule 5, invariant 7, on EVERY one of the nine routes — and the third case
+//  1. the four cases of rule 5, invariant 7, on EVERY one of the eleven routes — and the third case
 //     is the one that is easy to fake, see TestVanBan_403DungQuyenSaiXa;
 //  2. each route asks for the key it is SUPPOSED to ask for, compared against a literal rather than
 //     against a constant this file also defines — the only assertion here a fake checker cannot
@@ -58,7 +58,7 @@ const thanVaoSo = `{"received_date":"2026-09-22","issuing_body":"Huyện uỷ",`
 const thanCapSoDi = `{"document_date":"2026-09-22","document_type":"cong-van",` +
 	`"summary":"Trả lời đơn của công dân","recipient":"UBND huyện"}`
 
-// motTuyenVanBan is one of the nine routes, so the four permission cases are asserted on ALL of
+// motTuyenVanBan is one of the eleven routes, so the four permission cases are asserted on ALL of
 // them rather than on whichever one was written first.
 type motTuyenVanBan struct {
 	ten    string
@@ -69,7 +69,7 @@ type motTuyenVanBan struct {
 	ok     int        // the status a correctly-permitted call returns
 }
 
-func chinTuyenVanBan() []motTuyenVanBan {
+func cacTuyenVanBan() []motTuyenVanBan {
 	return []motTuyenVanBan{
 		{"POST đến", http.MethodPost, duongVanBanDen, thanVaoSo, QuyenTaoVanBan, http.StatusCreated},
 		{"PATCH đến", http.MethodPatch, duongVanBanDen + "/vbd-a-001", `{"summary":"Sửa trích yếu"}`,
@@ -80,6 +80,10 @@ func chinTuyenVanBan() []motTuyenVanBan {
 			`{"to_unit":"bp-dia-chinh","reason":"Thuộc thẩm quyền bộ phận Địa chính"}`,
 			QuyenChuyenVanBan, http.StatusOK},
 		{"GET đến", http.MethodGet, duongVanBanDen, "", QuyenDocVanBan, http.StatusOK},
+		{"GET chi tiết đến", http.MethodGet, duongVanBanDen + "/vbd-a-001", "", QuyenDocVanBan,
+			http.StatusOK},
+		{"GET lịch sử chuyển", http.MethodGet, duongVanBanDen + "/vbd-a-001/routings", "",
+			QuyenDocVanBan, http.StatusOK},
 
 		{"POST đi", http.MethodPost, duongVanBanDi, thanCapSoDi, QuyenTaoVanBan, http.StatusCreated},
 		{"PATCH đi", http.MethodPatch, duongVanBanDi + "/vbdi-a-001", `{"summary":"Sửa trích yếu"}`,
@@ -91,7 +95,7 @@ func chinTuyenVanBan() []motTuyenVanBan {
 }
 
 func (m *mayChu) tongGoiVanBan() int { return m.ghiDen.tongGoi() + m.ghiDi.tongGoi() }
-func (m *mayChu) tongDocVanBan() int { return m.den.goi + m.di.goi }
+func (m *mayChu) tongDocVanBan() int { return m.den.goi + m.di.goi + m.chiTiet.tongGoi() }
 
 // --- (2) the permission keys themselves --------------------------------------------------------
 
@@ -109,7 +113,7 @@ func TestVanBan_KhoaQuyenDungChuoiCuaBangQuyen(t *testing.T) {
 	// the permission matrix at docs/ui-ux/14-cau-hinh.md:122-124. tools/check_quyen.py scans the
 	// whole repository against that table on every `make check` and is the guard a fixture cannot
 	// fool; this is the cheap half that turns red in `go test` too.
-	for _, tc := range chinTuyenVanBan() {
+	for _, tc := range cacTuyenVanBan() {
 		t.Run(tc.ten, func(t *testing.T) {
 			m := dungMayChu(t)
 			m.goiThan(t, tc.method, hostA, tc.duong, canBoCua(xaA), tc.than)
@@ -131,7 +135,7 @@ func TestVanBan_KhoaQuyenDungChuoiCuaBangQuyen(t *testing.T) {
 // --- (1) the four cases of rule 5, invariant 7 --------------------------------------------------
 
 func TestVanBan_401KhongPhien(t *testing.T) {
-	for _, tc := range chinTuyenVanBan() {
+	for _, tc := range cacTuyenVanBan() {
 		t.Run(tc.ten, func(t *testing.T) {
 			m := dungMayChu(t)
 			m.capQuyen(xaA, tc.khoa) // granted, and still refused: there is nobody to grant it to
@@ -149,7 +153,7 @@ func TestVanBan_403SaiQuyen(t *testing.T) {
 	// deliberately a real key of this service — the failure being guarded against is not "an account
 	// with nothing", it is an administrator who may manage the type catalogue being able to book, to
 	// remove, or to read the commune's correspondence.
-	for _, tc := range chinTuyenVanBan() {
+	for _, tc := range cacTuyenVanBan() {
 		t.Run(tc.ten, func(t *testing.T) {
 			m := dungMayChu(t)
 			m.capQuyen(xaA, "admin.lookup")
@@ -178,7 +182,7 @@ func TestVanBan_403DungQuyenSaiXa(t *testing.T) {
 	// That is rule 5, invariant 3 in one sentence: a permission missing its commune is cross-commune
 	// escalation, not a lesser bug. And it answers 403 rather than 401 because the session is
 	// perfectly valid — it is the authority that is absent.
-	for _, tc := range chinTuyenVanBan() {
+	for _, tc := range cacTuyenVanBan() {
 		t.Run(tc.ten, func(t *testing.T) {
 			m := dungMayChu(t)
 			m.capQuyen(xaA, tc.khoa)
@@ -198,7 +202,7 @@ func TestVanBan_401PhienCuaXaKhac(t *testing.T) {
 	// not 403 — a browser does not send a cookie across hosts, so this is never an ordinary user
 	// error. Asserted so that nobody "corrects" it to 403 and turns a deliberate probe into something
 	// that reads like a permissions problem.
-	for _, tc := range chinTuyenVanBan() {
+	for _, tc := range cacTuyenVanBan() {
 		t.Run(tc.ten, func(t *testing.T) {
 			m := dungMayChu(t)
 			m.capQuyen(xaA, tc.khoa)
@@ -214,7 +218,7 @@ func TestVanBan_401PhienCuaXaKhac(t *testing.T) {
 }
 
 func TestVanBan_DungQuyenDungXa(t *testing.T) {
-	for _, tc := range chinTuyenVanBan() {
+	for _, tc := range cacTuyenVanBan() {
 		t.Run(tc.ten, func(t *testing.T) {
 			m := dungMayChuCoIdem(t)
 			m.capQuyen(xaA, tc.khoa)
@@ -605,5 +609,120 @@ func TestVanBan_KhongCoRedisThiTuyenCapSoDong(t *testing.T) {
 		t.Run(ten, func(t *testing.T) {
 			doiMa(t, m.goiThan(t, tc.method, hostA, tc.duong, canBoCua(xaA), tc.than), tc.muon)
 		})
+	}
+}
+
+// --- the detail drawer: one document and its routing timeline ------------------------------------
+
+func TestVanBanDen_ChiTietTraCungDangVoiMotDongDanhSach(t *testing.T) {
+	// ONE SHAPE FOR ONE ROW. The drawer is opened from a list row; a second shape would be a second
+	// contract the web side has to keep in step with the first.
+	m := dungMayChu(t)
+	m.capQuyen(xaA, QuyenDocVanBan)
+
+	w := m.goi(t, http.MethodGet, hostA, duongVanBanDen+"/vbd-a-001", canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
+
+	var ra vanBanDenRa
+	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+		t.Fatalf("thân không phải JSON: %q", w.Body.String())
+	}
+	if ra.ID != "vbd-a-001" || ra.Number != 1 || ra.IssuingBody != "UBND huyện" {
+		t.Fatalf("chi tiết sai dòng: %+v", ra)
+	}
+	if m.chiTiet.xaCuoi != xaA {
+		t.Fatalf("đọc trong xã %q, muốn %q — xã phải lấy từ Host, không từ nơi nào khác",
+			m.chiTiet.xaCuoi, xaA)
+	}
+}
+
+func TestVanBanDen_ChiTietVaLichSu404MotCauChoBaTruongHop(t *testing.T) {
+	// THREE CAUSES, ONE ANSWER, BYTE FOR BYTE. An id that never existed, a document removed from the
+	// register (rule 7, invariant 2) and a document of ANOTHER COMMUNE (rule 1). If any of the three
+	// answered differently — a different status, code or sentence — a caller could probe which ids
+	// another authority holds, or learn that a document was removed.
+	for _, duoi := range []string{"", "/routings"} {
+		t.Run("tuyến"+duoi, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(xaA, QuyenDocVanBan)
+			m.chiTiet.daGo["vbd-a-002"] = true
+
+			var mau string
+			for ten, id := range map[string]string{
+				"không tồn tại": "vbd-khong-co",
+				"xã khác":       "vbd-b-001",
+				"đã gỡ":         "vbd-a-002",
+			} {
+				w := m.goi(t, http.MethodGet, hostA, duongVanBanDen+"/"+id+duoi, canBoCua(xaA))
+				doiMa(t, w, http.StatusNotFound)
+				than := w.Body.String()
+				if strings.Contains(than, "Sở Nội vụ xã B") || strings.Contains(than, id) {
+					t.Fatalf("%s: thân 404 mang dữ liệu hoặc mã của văn bản: %s", ten, than)
+				}
+				if mau == "" {
+					mau = than
+				} else if than != mau {
+					t.Fatalf("%s: thân 404 khác các trường hợp kia — lộ sự tồn tại của văn bản:\n%s\nvs\n%s",
+						ten, than, mau)
+				}
+			}
+		})
+	}
+}
+
+func TestVanBanDen_LichSuChuyenCuNhatTruocVaDuCot(t *testing.T) {
+	// OLDEST FIRST, as the use case hands it over — the handler must not reorder. The SQL's
+	// `ORDER BY thoi_diem ASC, id ASC` is asserted in the app tests; this pins that nothing between
+	// the store and the wire undoes it.
+	m := dungMayChu(t)
+	m.capQuyen(xaA, QuyenDocVanBan)
+
+	w := m.goi(t, http.MethodGet, hostA, duongVanBanDen+"/vbd-a-001/routings", canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
+
+	var ra danhSachLichSuChuyenRa
+	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+		t.Fatalf("thân không phải JSON: %q", w.Body.String())
+	}
+	if len(ra.Items) != 2 || ra.Items[0].ID != "ls-1" || ra.Items[1].ID != "ls-2" {
+		t.Fatalf("thứ tự lịch sử sai, muốn ls-1 rồi ls-2: %+v", ra.Items)
+	}
+	hai := ra.Items[1]
+	muon := lichSuChuyenRa{
+		ID: "ls-2", DocumentID: "vbd-a-001", RoutedAt: "2026-09-23T09:00:00Z", RoutedBy: "CB-00002",
+		Status: "dang-xu-ly", FromUnit: "bp-van-phong", ToUnit: "bp-dia-chinh", Assignee: "CB-00003",
+		Reason: "Thuộc thẩm quyền bộ phận Địa chính",
+	}
+	if hai != muon {
+		t.Fatalf("dòng lịch sử = %+v, muốn %+v", hai, muon)
+	}
+	if strings.Contains(w.Body.String(), "tenant") {
+		t.Fatalf("phản hồi mang mã xã — người gọi đã là xã đó rồi: %s", w.Body.String())
+	}
+}
+
+func TestVanBanDen_LichSuChuyenRongLaMangRong(t *testing.T) {
+	// A document booked and never routed has a timeline of nothing — `items: []`, never `null`, and
+	// never a 404: the document IS visible.
+	m := dungMayChu(t)
+	m.capQuyen(xaA, QuyenDocVanBan)
+
+	w := m.goi(t, http.MethodGet, hostA, duongVanBanDen+"/vbd-a-002/routings", canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
+	if !strings.Contains(w.Body.String(), `"items":[]`) {
+		t.Fatalf("`items` không phải mảng rỗng: %s", w.Body.String())
+	}
+}
+
+func TestVanBanDen_LichSuChuyenVuotTranThi500KhongCatBot(t *testing.T) {
+	// The ceiling refusal reaches the client as a plain 500 — never a short list that reads as whole.
+	m := dungMayChu(t)
+	m.capQuyen(xaA, QuyenDocVanBan)
+	m.chiTiet.loi = docstore.ErrQuaNhieuLichSuChuyen
+
+	w := m.goi(t, http.MethodGet, hostA, duongVanBanDen+"/vbd-a-001/routings", canBoCua(xaA))
+	doiMa(t, w, http.StatusInternalServerError)
+	if strings.Contains(w.Body.String(), "items") {
+		t.Fatalf("vượt trần mà vẫn trả danh sách: %s", w.Body.String())
 	}
 }

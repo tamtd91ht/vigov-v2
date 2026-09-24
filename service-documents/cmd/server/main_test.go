@@ -130,12 +130,13 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// dependency at construction — a route mounted without the thing behind it would accept
 		// requests it cannot honour, and the first person to find out would be a clerk registering a
 		// document. Their stores and use cases are built on a nil *store.DB and a nil identity
-		// client; nothing in this file calls them, and the four-case permission suite for all nine
+		// client; nothing in this file calls them, and the four-case permission suite for all eleven
 		// routes lives in internal/http, over fakes that record what was written.
-		VanBanDen:    docstore.NewVanBanDenStore(nil),
-		GhiVanBanDen: app.NewVanBanDen(nil, nil, nil, nil),
-		VanBanDi:     docstore.NewVanBanDiStore(nil),
-		GhiVanBanDi:  app.NewVanBanDi(nil, nil, nil),
+		VanBanDen:        docstore.NewVanBanDenStore(nil),
+		GhiVanBanDen:     app.NewVanBanDen(nil, nil, nil, nil),
+		ChiTietVanBanDen: app.NewVanBanDen(nil, nil, nil, nil),
+		VanBanDi:         docstore.NewVanBanDiStore(nil),
+		GhiVanBanDi:      app.NewVanBanDi(nil, nil, nil),
 
 		Log: log,
 	})

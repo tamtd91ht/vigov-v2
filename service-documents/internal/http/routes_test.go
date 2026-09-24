@@ -238,10 +238,11 @@ type mayChu struct {
 	checker *checkerGia
 
 	// The two registers — see van_ban_gia_test.go.
-	den    *vanBanDenGia
-	ghiDen *ghiVanBanDenGia
-	di     *vanBanDiGia
-	ghiDi  *ghiVanBanDiGia
+	den     *vanBanDenGia
+	ghiDen  *ghiVanBanDenGia
+	chiTiet *chiTietVanBanDenGia
+	di      *vanBanDiGia
+	ghiDi   *ghiVanBanDiGia
 
 	// khoIdem is nil BY DEFAULT, and that is deliberate: a nil store is a valid deployment (local
 	// development with no Redis) and it is what makes the CheDoHong each route DECLARED the thing
@@ -263,6 +264,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		DangDung: true, Nguon: domain.NguonDonVi,
 	}}
 	den := vanBanDenMau()
+	chiTiet := chiTietVanBanDenMau()
 	di := vanBanDiMau()
 	// The rows the write use cases hand back. They carry a NUMBER AND A YEAR the request never sent,
 	// which is what lets a test assert that the register issues them rather than echoing the client.
@@ -283,17 +285,19 @@ func dungMayChu(t *testing.T) *mayChu {
 		checker: checker,
 		den:     den,
 		ghiDen:  ghiDen,
+		chiTiet: chiTiet,
 		di:      di,
 		ghiDi:   ghiDi,
 		d: Deps{
-			Checker:       checker,
-			LoaiVanBan:    loai,
-			GhiLoaiVanBan: ghi,
-			VanBanDen:     den,
-			GhiVanBanDen:  ghiDen,
-			VanBanDi:      di,
-			GhiVanBanDi:   ghiDi,
-			Log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
+			Checker:          checker,
+			LoaiVanBan:       loai,
+			GhiLoaiVanBan:    ghi,
+			VanBanDen:        den,
+			GhiVanBanDen:     ghiDen,
+			ChiTietVanBanDen: chiTiet,
+			VanBanDi:         di,
+			GhiVanBanDi:      ghiDi,
+			Log:              slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 	}
 	m.dungLai(t, nil)
@@ -407,23 +411,25 @@ func TestRegisterTuChoiDepsThieuCheckerVaUseCaseGhi(t *testing.T) {
 	// request time, which is a panic turned into a 500 on the very screen a member of staff uses —
 	// long after the deployment that caused it.
 	for ten, bo := range map[string]func(d *Deps){
-		"thiếu use case ghi danh mục":    func(d *Deps) { d.GhiLoaiVanBan = nil },
-		"thiếu kho danh mục":             func(d *Deps) { d.LoaiVanBan = nil },
-		"thiếu kho sổ văn bản đến":       func(d *Deps) { d.VanBanDen = nil },
-		"thiếu use case ghi văn bản đến": func(d *Deps) { d.GhiVanBanDen = nil },
-		"thiếu kho sổ văn bản đi":        func(d *Deps) { d.VanBanDi = nil },
-		"thiếu use case ghi văn bản đi":  func(d *Deps) { d.GhiVanBanDi = nil },
-		"thiếu Checker":                  func(d *Deps) { d.Checker = nil },
+		"thiếu use case ghi danh mục":             func(d *Deps) { d.GhiLoaiVanBan = nil },
+		"thiếu kho danh mục":                      func(d *Deps) { d.LoaiVanBan = nil },
+		"thiếu kho sổ văn bản đến":                func(d *Deps) { d.VanBanDen = nil },
+		"thiếu use case ghi văn bản đến":          func(d *Deps) { d.GhiVanBanDen = nil },
+		"thiếu use case đọc chi tiết văn bản đến": func(d *Deps) { d.ChiTietVanBanDen = nil },
+		"thiếu kho sổ văn bản đi":                 func(d *Deps) { d.VanBanDi = nil },
+		"thiếu use case ghi văn bản đi":           func(d *Deps) { d.GhiVanBanDi = nil },
+		"thiếu Checker":                           func(d *Deps) { d.Checker = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			d := Deps{
-				Checker:       &checkerGia{},
-				LoaiVanBan:    loaiVanBanMau(),
-				GhiLoaiVanBan: &ghiLoaiVanBanGia{},
-				VanBanDen:     vanBanDenMau(),
-				GhiVanBanDen:  &ghiVanBanDenGia{},
-				VanBanDi:      vanBanDiMau(),
-				GhiVanBanDi:   &ghiVanBanDiGia{},
+				Checker:          &checkerGia{},
+				LoaiVanBan:       loaiVanBanMau(),
+				GhiLoaiVanBan:    &ghiLoaiVanBanGia{},
+				VanBanDen:        vanBanDenMau(),
+				GhiVanBanDen:     &ghiVanBanDenGia{},
+				ChiTietVanBanDen: chiTietVanBanDenMau(),
+				VanBanDi:         vanBanDiMau(),
+				GhiVanBanDi:      &ghiVanBanDiGia{},
 			}
 			bo(&d)
 			defer func() {

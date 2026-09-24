@@ -63,6 +63,11 @@ type KhoVanBanDen interface {
 		trangThai domain.TrangThaiVanBanDen) error
 	ChenLichSuChuyen(ctx context.Context, tx *store.ScopedTx, c domain.ChuyenVanBan) error
 	XoaMem(ctx context.Context, tx *store.ScopedTx, id, boi, lyDo string) error
+
+	// The detail drawer's two reads. They take the transaction too, for the reason above: the
+	// timeline must only be read after the document was found visible, in the same transaction.
+	TheoID(ctx context.Context, tx *store.ScopedTx, id string) (domain.VanBanDen, error)
+	LichSuChuyen(ctx context.Context, tx *store.ScopedTx, vanBanDenID string) ([]domain.ChuyenVanBan, error)
 }
 
 // KhoDaySo allocates register numbers. A SEPARATE INTERFACE from the one above, and not three more
@@ -569,6 +574,57 @@ func (uc *VanBanDen) Chuyen(ctx context.Context, id string, yc YeuCauChuyenVanBa
 		return domain.VanBanDen{}, bocVanBan(ctx, "chuyển văn bản đến", err)
 	}
 	return sau, nil
+}
+
+// --- the detail drawer (§3.5) --------------------------------------------------------------------
+//
+// READS, SO NO AUDIT ENTRY: rule 6, invariant 7 audits reading FULL personal data or reading ACROSS
+// communes, and these do neither — the register carries no masked citizen field, and the commune is
+// bound from the context.
+
+// ChiTiet reads one live document of this commune.
+//
+// A TRANSACTION FOR ONE SELECT only so the store has one signature shape (KhoVanBanDen). An empty id
+// is the same not-found as any other: nothing distinguishes "no such id" from "not yours".
+func (uc *VanBanDen) ChiTiet(ctx context.Context, id string) (domain.VanBanDen, error) {
+	if id == "" {
+		return domain.VanBanDen{}, docstore.ErrKhongThayVanBanDen
+	}
+	var v domain.VanBanDen
+	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		var err error
+		v, err = uc.kho.TheoID(ctx, tx, id)
+		return err
+	})
+	if err != nil {
+		return domain.VanBanDen{}, bocVanBan(ctx, "đọc văn bản đến", err)
+	}
+	return v, nil
+}
+
+// LichSuChuyen reads one document's routing timeline, oldest first.
+//
+// THE DOCUMENT IS READ FIRST, AND THAT READ IS THE ISOLATION. `lich_su_chuyen_van_ban` has no
+// soft-delete columns and no foreign key, so without it a removed document's timeline would still
+// be served (rule 7, invariant 2), and an unknown id would answer 200 with an empty list instead of
+// the 404 the document route gives — two answers for one fact.
+func (uc *VanBanDen) LichSuChuyen(ctx context.Context, id string) ([]domain.ChuyenVanBan, error) {
+	if id == "" {
+		return nil, docstore.ErrKhongThayVanBanDen
+	}
+	var ra []domain.ChuyenVanBan
+	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		v, err := uc.kho.TheoID(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		ra, err = uc.kho.LichSuChuyen(ctx, tx, v.ID)
+		return err
+	})
+	if err != nil {
+		return nil, bocVanBan(ctx, "đọc lịch sử chuyển văn bản đến", err)
+	}
+	return ra, nil
 }
 
 // --- shape ---------------------------------------------------------------------------------------

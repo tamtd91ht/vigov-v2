@@ -207,6 +207,99 @@ var mocVanBanDen = store.NewMoc[domain.VanBanDen](SapXepVanBanDen,
 		"created_at": func(v domain.VanBanDen) page.Key { return page.TimeKey(v.TaoLuc) },
 	})
 
+// --- the detail drawer ------------------------------------------------------------------------
+
+// TranLichSuChuyen is the hard upper bound on one document's routing timeline.
+//
+// A CEILING AND NOT PAGINATION, for the reason TranDanhMucLoaiVanBan gives: the drawer needs the
+// WHOLE timeline to be correct at all — a history missing its first page is a history that says
+// the document started somewhere it did not — so the bound cannot be a `limit` parameter. One
+// process serves every commune, so an unbounded read is still forbidden (skills/rest-api-design
+// §5, forbidden #4).
+//
+// 500 IS NOT AN ESTIMATE. A document is routed a handful of times; five hundred routings of ONE
+// document is a loop or an import gone wrong, and past that point the rows are not a timeline.
+const TranLichSuChuyen = 500
+
+// ErrQuaNhieuLichSuChuyen says the ceiling was reached. The caller answers 500 and refuses rather
+// than returning a truncated history — a short timeline reads as a complete one, and it is the
+// record of who was made responsible for a document.
+var ErrQuaNhieuLichSuChuyen = errors.New("van_ban_den: lịch sử chuyển vượt trần")
+
+// TheoID reads one live entry for display.
+//
+// NOT `FOR UPDATE` — nothing is decided on it, so locking would only queue a routing behind a
+// clerk opening a drawer. `deleted_at IS NULL` IS in the predicate (rule 7, invariant 2), and the
+// commune is $1: a removed entry, another commune's entry and an id that never existed are one
+// answer, ErrKhongThayVanBanDen, because the query cannot tell them apart.
+func (s *VanBanDenStore) TheoID(ctx context.Context, tx *store.ScopedTx,
+	id string) (domain.VanBanDen, error) {
+
+	const stmt = `SELECT ` + cotVanBanDen + ` FROM van_ban_den ` +
+		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+	v, err := docMotDongVanBanDen(
+		tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), id).Scan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.VanBanDen{}, ErrKhongThayVanBanDen
+	}
+	if err != nil {
+		return domain.VanBanDen{}, fmt.Errorf("van_ban_den: đọc văn bản: %w", err)
+	}
+	return v, nil
+}
+
+// cotLichSuChuyen IS READ BY POSITION in LichSuChuyen. `tu_bo_phan_id` and `den_bo_phan_id` are
+// adjacent TEXT columns: swapped, the timeline says the file travelled backwards and nothing
+// errors.
+const cotLichSuChuyen = `id, van_ban_den_id, thoi_diem, nguoi_ma, trang_thai_tai_thoi_diem, ` +
+	`COALESCE(tu_bo_phan_id, ''), den_bo_phan_id, COALESCE(can_bo_xu_ly_ma, ''), noi_dung, tao_luc`
+
+// LichSuChuyen reads one document's routing timeline, OLDEST FIRST.
+//
+// IT DOES NOT CHECK THE DOCUMENT. The caller reads it with TheoID in the same transaction first;
+// this table has no soft-delete columns and no foreign key, so on its own it would hand back the
+// timeline of a removed document.
+//
+// ORDER BY thoi_diem, then `id`: two routings in the same instant must not swap places between two
+// reads of an append-only history. The index `lich_su_chuyen_theo_van_ban` is on
+// (tenant_id, van_ban_den_id, thoi_diem DESC); PostgreSQL scans it backwards for ASC.
+func (s *VanBanDenStore) LichSuChuyen(ctx context.Context, tx *store.ScopedTx,
+	vanBanDenID string) ([]domain.ChuyenVanBan, error) {
+
+	// LIMIT is the ceiling PLUS ONE, so "too many" is detectable rather than a silent cut.
+	const stmt = `SELECT ` + cotLichSuChuyen + ` FROM lich_su_chuyen_van_ban ` +
+		`WHERE tenant_id = $1 AND van_ban_den_id = $2 ORDER BY thoi_diem ASC, id ASC LIMIT $3`
+
+	rows, err := tx.Underlying().QueryContext(ctx, stmt, string(tx.TenantID()), vanBanDenID,
+		TranLichSuChuyen+1)
+	if err != nil {
+		return nil, fmt.Errorf("van_ban_den: đọc lịch sử chuyển: %w", err)
+	}
+	defer rows.Close()
+
+	ra := make([]domain.ChuyenVanBan, 0, 8)
+	for rows.Next() {
+		var (
+			c         domain.ChuyenVanBan
+			trangThai string
+		)
+		if err := rows.Scan(&c.ID, &c.VanBanDenID, &c.ThoiDiem, &c.NguoiMa, &trangThai,
+			&c.TuBoPhan, &c.DenBoPhan, &c.CanBoXuLyMa, &c.NoiDung, &c.TaoLuc); err != nil {
+			return nil, fmt.Errorf("van_ban_den: đọc dòng lịch sử chuyển: %w", err)
+		}
+		c.TrangThaiTaiThoiDiem = domain.TrangThaiVanBanDen(trangThai)
+		ra = append(ra, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("van_ban_den: duyệt lịch sử chuyển: %w", err)
+	}
+	if len(ra) > TranLichSuChuyen {
+		return nil, ErrQuaNhieuLichSuChuyen
+	}
+	return ra, nil
+}
+
 // --- the write path ---------------------------------------------------------------------------
 
 // TheoIDDeSua reads one live entry inside the transaction and holds it until the transaction ends.

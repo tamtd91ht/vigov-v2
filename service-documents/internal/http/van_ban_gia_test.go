@@ -107,6 +107,69 @@ func (g *ghiVanBanDenGia) tongGoi() int {
 	return g.themGoi + g.suaGoi + g.goGoi + g.chuyenGoi
 }
 
+// chiTietVanBanDenGia stands in for the detail drawer's two reads, KEYED BY COMMUNE.
+//
+// IT MODELS WHAT THE STORE'S PREDICATE DOES, so the handler's 404 is exercised on all three causes:
+// a row of another commune is simply absent from this commune's map, and a row in `daGo` is present
+// but removed — both return docstore.ErrKhongThayVanBanDen, exactly as `tenant_id = $1 AND
+// deleted_at IS NULL` would. The SQL itself is asserted in the app tests.
+type chiTietVanBanDenGia struct {
+	theo   map[tenant.ID][]domain.VanBanDen
+	daGo   map[string]bool
+	lichSu map[string][]domain.ChuyenVanBan // by document id; stored oldest first
+	loi    error
+
+	chiTietGoi, lichSuGoi int
+	xaCuoi                tenant.ID
+}
+
+func (k *chiTietVanBanDenGia) tim(ctx context.Context, id string) (domain.VanBanDen, error) {
+	k.xaCuoi = tenant.MustFrom(ctx)
+	if k.loi != nil {
+		return domain.VanBanDen{}, k.loi
+	}
+	for _, v := range k.theo[tenant.MustFrom(ctx)] {
+		if v.ID == id && !k.daGo[id] {
+			return v, nil
+		}
+	}
+	return domain.VanBanDen{}, docstore.ErrKhongThayVanBanDen
+}
+
+func (k *chiTietVanBanDenGia) ChiTiet(ctx context.Context, id string) (domain.VanBanDen, error) {
+	k.chiTietGoi++
+	return k.tim(ctx, id)
+}
+
+func (k *chiTietVanBanDenGia) LichSuChuyen(ctx context.Context, id string) ([]domain.ChuyenVanBan, error) {
+	k.lichSuGoi++
+	v, err := k.tim(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return k.lichSu[v.ID], nil
+}
+
+func (k *chiTietVanBanDenGia) tongGoi() int { return k.chiTietGoi + k.lichSuGoi }
+
+func chiTietVanBanDenMau() *chiTietVanBanDenGia {
+	return &chiTietVanBanDenGia{
+		theo: vanBanDenMau().theo,
+		daGo: map[string]bool{},
+		lichSu: map[string][]domain.ChuyenVanBan{
+			"vbd-a-001": {
+				{ID: "ls-1", VanBanDenID: "vbd-a-001", ThoiDiem: time.Date(2026, 9, 22, 8, 0, 0, 0, time.UTC),
+					NguoiMa: "CB-00001", TrangThaiTaiThoiDiem: domain.VanBanDaPhanCong,
+					DenBoPhan: "bp-van-phong", NoiDung: "Chuyển văn phòng xem xét"},
+				{ID: "ls-2", VanBanDenID: "vbd-a-001", ThoiDiem: time.Date(2026, 9, 23, 9, 0, 0, 0, time.UTC),
+					NguoiMa: "CB-00002", TrangThaiTaiThoiDiem: domain.VanBanDangXuLy,
+					TuBoPhan: "bp-van-phong", DenBoPhan: "bp-dia-chinh", CanBoXuLyMa: "CB-00003",
+					NoiDung: "Thuộc thẩm quyền bộ phận Địa chính"},
+			},
+		},
+	}
+}
+
 // vanBanDiGia is the outgoing register's READ half, KEYED BY COMMUNE.
 type vanBanDiGia struct {
 	theo map[tenant.ID][]domain.VanBanDi

@@ -151,6 +151,10 @@ type ChuyenVanBan struct {
 	DenBoPhan            string
 	CanBoXuLyMa          string // optional — "— Để bộ phận tự phân công —"
 	NoiDung              string
+
+	// TaoLuc is read back only. The INSERT leaves it to the column default, so on the write path
+	// it is zero; ThoiDiem is the instant of the act.
+	TaoLuc time.Time
 }
 
 // --- derived facts ----------------------------------------------------------------------------

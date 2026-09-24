@@ -117,6 +117,14 @@ type GhiVanBanDen interface {
 	Chuyen(ctx context.Context, id string, yc app.YeuCauChuyenVanBan, nguoi audit.Actor) (domain.VanBanDen, error)
 }
 
+// ChiTietVanBanDen is the detail drawer's two reads (§3.5). A THIRD interface rather than two more
+// methods on GhiVanBanDen, because that one's contract is "each method writes an audit entry in its
+// transaction" and these write nothing. *app.VanBanDen satisfies it.
+type ChiTietVanBanDen interface {
+	ChiTiet(ctx context.Context, id string) (domain.VanBanDen, error)
+	LichSuChuyen(ctx context.Context, id string) ([]domain.ChuyenVanBan, error)
+}
+
 // VanBanDiDanhSach and GhiVanBanDi are the same split for the outgoing register.
 type VanBanDiDanhSach interface {
 	DanhSach(ctx context.Context, loc docstore.LocVanBanDi, yc page.Request) (page.Result[domain.VanBanDi], error)
@@ -140,10 +148,11 @@ type Deps struct {
 
 	// The two registers this service exists for. Each is refused at construction when missing, for
 	// the reason the switch in Register states.
-	VanBanDen    VanBanDenDanhSach
-	GhiVanBanDen GhiVanBanDen
-	VanBanDi     VanBanDiDanhSach
-	GhiVanBanDi  GhiVanBanDi
+	VanBanDen        VanBanDenDanhSach
+	GhiVanBanDen     GhiVanBanDen
+	ChiTietVanBanDen ChiTietVanBanDen
+	VanBanDi         VanBanDiDanhSach
+	GhiVanBanDi      GhiVanBanDi
 
 	Log *slog.Logger
 }
@@ -165,6 +174,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("documents/http: thiếu kho sổ văn bản đến — GET /api/v1/incoming-documents sẽ panic khi có người gọi")
 	case d.GhiVanBanDen == nil:
 		panic("documents/http: thiếu use case ghi sổ văn bản đến — các tuyến vào sổ / sửa / gỡ / chuyển sẽ panic")
+	case d.ChiTietVanBanDen == nil:
+		panic("documents/http: thiếu use case đọc chi tiết văn bản đến — GET /api/v1/incoming-documents/{id} và /routings sẽ panic")
 	case d.VanBanDi == nil:
 		panic("documents/http: thiếu kho sổ văn bản đi — GET /api/v1/outgoing-documents sẽ panic khi có người gọi")
 	case d.GhiVanBanDi == nil:
@@ -461,6 +472,49 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/incoming-documents",
 		authz.RequirePermission(d.Checker, "document.read")(
 			http.HandlerFunc(h.DanhSachVanBanDen)))
+
+	// ONE DOCUMENT, for the detail drawer. `document.read` for the reason the list gives. The item
+	// is the SAME shape as one list item (vanBanDenRa) — a second shape would be a second contract
+	// for one row.
+	//
+	// 404 IS ONE ANSWER FOR THREE CASES: an id that never existed, one removed from the register
+	// (rule 7, invariant 2) and one belonging to another commune (rule 1). The query binds the
+	// commune from the context and excludes removed rows, so it cannot tell them apart — and a
+	// different body for any of them would tell a caller what another authority holds.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Một văn bản đến của xã, cùng dạng với một dòng của danh sách — dùng cho ngăn chi tiết
+	// @screen   05-van-ban-don-thu §3.5
+	// @reply    200 vanBanDenRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/incoming-documents/{id}",
+		authz.RequirePermission(d.Checker, "document.read")(
+			http.HandlerFunc(h.ChiTietVanBanDen)))
+
+	// THE ROUTING TIMELINE of one document, oldest first — "Dòng thời gian chuyển tiếp". Read-only;
+	// the table is append-only (rule 7, forbidden #5). `document.read` and not `document.route`:
+	// seeing who holds a document is reading the register, not routing it.
+	//
+	// NOT PAGINATED, BOUNDED: the whole timeline or a refusal (500) past docstore.TranLichSuChuyen —
+	// a history missing its first page reads as complete.
+	//
+	// 404 identical to the route above when the document is not visible: the use case reads the
+	// document first, in the same transaction.
+	//
+	// @summary  Dòng thời gian chuyển xử lý của một văn bản đến, cũ nhất trước — chỉ đọc
+	// @screen   05-van-ban-don-thu §3.5
+	// @reply    200 danhSachLichSuChuyenRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/incoming-documents/{id}/routings",
+		authz.RequirePermission(d.Checker, "document.read")(
+			http.HandlerFunc(h.LichSuChuyenVanBanDen)))
 
 	// --- SỔ VĂN BẢN ĐI --------------------------------------------------------------------------
 	//

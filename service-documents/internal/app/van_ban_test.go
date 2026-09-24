@@ -424,8 +424,9 @@ func TestChuyen_BaViecMotGiaoDichVaLichSuChiThem(t *testing.T) {
 
 func TestChuyen_DangSuaMotDongLichSuThiKhongCoDuongNao(t *testing.T) {
 	// THE "EDIT A ROUTING ENTRY → REFUSED" CASE, ASSERTED WHERE IT CAN ACTUALLY BE ASSERTED WITHOUT A
-	// SERVER: there is no code path that reaches it. The store exposes exactly one method touching
-	// that table and it INSERTs; the use case calls it once per routing. An edit would need a method
+	// SERVER: there is no code path that reaches it. The store exposes exactly one method WRITING
+	// that table and it INSERTs (the other, LichSuChuyen, only SELECTs); the use case calls it once
+	// per routing. An edit would need a method
 	// that does not exist, and the trigger `lich_su_chuyen_chi_them` refuses one underneath even if
 	// somebody writes it (that half needs PostgreSQL — VIGOV_TEST_DSN is unset here).
 	//
@@ -660,4 +661,160 @@ func max2(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// --- the detail drawer ----------------------------------------------------------------------------
+
+func hangDenMau() *hangVBD {
+	return &hangVBD{
+		id: "vbd-001", soVaoSo: 7, nam: 2026, ngayDen: lucVaoSo, coQuan: "Huyện uỷ",
+		loai: "cong-van", trichYeu: "x", han: hanMau, trangThai: string(domain.VanBanDaPhanCong),
+		nguoiTao: "CB-00001",
+	}
+}
+
+func hangLSMau(id string, luc time.Time) []driver.Value {
+	return []driver.Value{id, "vbd-001", luc, "CB-00002", string(domain.VanBanDangXuLy),
+		"bp-van-phong", "bp-dia-chinh", "CB-00003", "Thuộc thẩm quyền Địa chính", luc}
+}
+
+// khongGhiGi asserts a read wrote nothing — no business write, no audit entry. Reading a register
+// that holds no masked citizen field, inside one commune, is not audited (rule 6, invariant 7).
+func khongGhiGi(t *testing.T, k *khoVBGia) {
+	t.Helper()
+	for _, l := range k.lenh {
+		s := strings.ToUpper(l.sql)
+		if strings.Contains(s, "INSERT ") || strings.Contains(s, "UPDATE ") || strings.Contains(s, "DELETE ") {
+			t.Fatalf("tuyến đọc phát ra câu ghi:\n%s", l.sql)
+		}
+	}
+}
+
+func TestChiTiet_DocTheoXaBoDongDaGoVaKhongKhoa(t *testing.T) {
+	// THE PREDICATE IS THE ISOLATION: `tenant_id = $1` bound from the context (rule 1) and
+	// `deleted_at IS NULL` (rule 7, invariant 2). Without either, the 404 the handler promises for
+	// "another commune's" and "removed" would be a 200. And NO `FOR UPDATE`: opening a drawer must not
+	// queue a routing behind it.
+	k := khoVBMau()
+	k.hangDen = hangDenMau()
+	uc, _, ctx := dungUseCaseVanBanDen(t, k, 1)
+
+	v, err := uc.ChiTiet(ctx, "vbd-001")
+	if err != nil {
+		t.Fatalf("ChiTiet: %v", err)
+	}
+	if v.ID != "vbd-001" || v.SoVaoSo != 7 {
+		t.Fatalf("đọc sai dòng: %+v", v)
+	}
+	cau := k.cau("FROM van_ban_den")
+	if len(cau) != 1 {
+		t.Fatalf("có %d câu đọc văn bản, muốn 1", len(cau))
+	}
+	for _, can := range []string{"tenant_id = $1", "id = $2", "deleted_at IS NULL"} {
+		if !strings.Contains(cau[0].sql, can) {
+			t.Errorf("câu đọc thiếu %q:\n%s", can, cau[0].sql)
+		}
+	}
+	if strings.Contains(cau[0].sql, "FOR UPDATE") {
+		t.Error("câu đọc chi tiết khoá dòng — mở ngăn chi tiết không được chặn việc chuyển")
+	}
+	if cau[0].args[0] != string(xaA) {
+		t.Errorf("$1 = %v, muốn xã của ngữ cảnh %q", cau[0].args[0], xaA)
+	}
+	khongGhiGi(t, k)
+}
+
+func TestChiTiet_KhongThayThiMotLoiDuyNhat(t *testing.T) {
+	// No row — whether it never existed, was removed, or is another commune's — is ONE sentinel. The
+	// handler maps it to one 404 body.
+	k := khoVBMau()
+	uc, _, ctx := dungUseCaseVanBanDen(t, k, 1)
+
+	for _, id := range []string{"vbd-khong-co", ""} {
+		if _, err := uc.ChiTiet(ctx, id); !errors.Is(err, docstore.ErrKhongThayVanBanDen) {
+			t.Fatalf("id %q: lỗi = %v, muốn ErrKhongThayVanBanDen", id, err)
+		}
+	}
+}
+
+func TestLichSuChuyen_DocVanBanTruocRoiLichSuCuNhatTruoc(t *testing.T) {
+	// THE DOCUMENT IS READ FIRST, in the same transaction — the timeline table has no soft-delete
+	// column, so that read is what keeps a removed document's history off the wire. Then the rows,
+	// OLDEST FIRST, bounded by the ceiling plus one.
+	k := khoVBMau()
+	k.hangDen = hangDenMau()
+	cu := time.Date(2026, 9, 22, 8, 0, 0, 0, time.UTC)
+	k.hangLichSu = [][]driver.Value{hangLSMau("ls-1", cu), hangLSMau("ls-2", cu.Add(time.Hour))}
+	uc, _, ctx := dungUseCaseVanBanDen(t, k, 1)
+
+	ds, err := uc.LichSuChuyen(ctx, "vbd-001")
+	if err != nil {
+		t.Fatalf("LichSuChuyen: %v", err)
+	}
+	if len(ds) != 2 || ds[0].ID != "ls-1" || ds[1].ID != "ls-2" {
+		t.Fatalf("lịch sử = %+v, muốn ls-1 rồi ls-2", ds)
+	}
+	if ds[1].TuBoPhan != "bp-van-phong" || ds[1].DenBoPhan != "bp-dia-chinh" ||
+		ds[1].CanBoXuLyMa != "CB-00003" || ds[1].TrangThaiTaiThoiDiem != domain.VanBanDangXuLy {
+		t.Fatalf("cột đọc lệch vị trí: %+v", ds[1])
+	}
+	if k.batDau != 1 || k.daCommit != 1 {
+		t.Fatalf("begin=%d commit=%d, muốn 1/1 — hai câu đọc trong MỘT giao dịch", k.batDau, k.daCommit)
+	}
+
+	thuTu := -1
+	for i, l := range k.lenh {
+		if strings.Contains(l.sql, "FROM van_ban_den") && thuTu == -1 {
+			thuTu = i
+		}
+		if strings.Contains(l.sql, "FROM lich_su_chuyen_van_ban") && thuTu == -1 {
+			t.Fatal("đọc lịch sử TRƯỚC khi kiểm văn bản còn thấy được")
+		}
+	}
+	ls := k.cau("FROM lich_su_chuyen_van_ban")
+	if len(ls) != 1 {
+		t.Fatalf("có %d câu đọc lịch sử, muốn 1", len(ls))
+	}
+	for _, can := range []string{"tenant_id = $1", "van_ban_den_id = $2", "ORDER BY thoi_diem ASC, id ASC", "LIMIT $3"} {
+		if !strings.Contains(ls[0].sql, can) {
+			t.Errorf("câu đọc lịch sử thiếu %q:\n%s", can, ls[0].sql)
+		}
+	}
+	if ls[0].args[0] != string(xaA) || ls[0].args[1] != "vbd-001" ||
+		ls[0].args[2] != int64(docstore.TranLichSuChuyen+1) {
+		t.Errorf("tham số = %v, muốn [%s vbd-001 %d]", ls[0].args, xaA, docstore.TranLichSuChuyen+1)
+	}
+	khongGhiGi(t, k)
+}
+
+func TestLichSuChuyen_VanBanKhongThayThiKhongDocLichSu(t *testing.T) {
+	// Removed / another commune's / unknown: the same sentinel as ChiTiet, and the timeline is never
+	// even queried.
+	k := khoVBMau()
+	k.hangLichSu = [][]driver.Value{hangLSMau("ls-1", lucVaoSo)}
+	uc, _, ctx := dungUseCaseVanBanDen(t, k, 1)
+
+	if _, err := uc.LichSuChuyen(ctx, "vbd-001"); !errors.Is(err, docstore.ErrKhongThayVanBanDen) {
+		t.Fatalf("lỗi = %v, muốn ErrKhongThayVanBanDen", err)
+	}
+	if k.coCau("FROM lich_su_chuyen_van_ban") {
+		t.Fatal("văn bản không thấy được mà vẫn đọc lịch sử chuyển của nó")
+	}
+}
+
+func TestLichSuChuyen_VuotTranThiTuChoiChuKhongCatBot(t *testing.T) {
+	k := khoVBMau()
+	k.hangDen = hangDenMau()
+	for i := 0; i <= docstore.TranLichSuChuyen; i++ {
+		k.hangLichSu = append(k.hangLichSu, hangLSMau("ls", lucVaoSo))
+	}
+	uc, _, ctx := dungUseCaseVanBanDen(t, k, 1)
+
+	ds, err := uc.LichSuChuyen(ctx, "vbd-001")
+	if !errors.Is(err, docstore.ErrQuaNhieuLichSuChuyen) {
+		t.Fatalf("lỗi = %v, muốn ErrQuaNhieuLichSuChuyen", err)
+	}
+	if ds != nil {
+		t.Fatal("vượt trần mà vẫn trả một danh sách — lịch sử cụt đọc như lịch sử đủ")
+	}
 }

@@ -442,6 +442,81 @@ func (h *Handler) DanhSachVanBanDen(w http.ResponseWriter, r *http.Request) {
 	vietJSON(w, http.StatusOK, ra)
 }
 
+// ChiTietVanBanDen serves one document for the detail drawer. GET /api/v1/incoming-documents/{id}
+//
+// THE 404 GOES THROUGH traLoiLoiVanBan, the same sentence the write routes give for a missing
+// document, so "removed", "another commune's" and "never existed" are byte-identical.
+func (h *Handler) ChiTietVanBanDen(w http.ResponseWriter, r *http.Request) {
+	v, err := h.d.ChiTietVanBanDen.ChiTiet(r.Context(), r.PathValue("id"))
+	if err != nil {
+		h.traLoiLoiVanBan(w, r, "đọc chi tiết", err)
+		return
+	}
+	vietJSON(w, http.StatusOK, vanBanDenRaNgoai(v))
+}
+
+// lichSuChuyenRa is one line of the routing timeline as it leaves the API — every column
+// `lich_su_chuyen_van_ban` stores except `tenant_id`, which the caller already is.
+//
+// FIELD NAMES MATCH chuyenVanBanVao (`to_unit`, `assignee`, `reason`), so the line a routing writes
+// reads back under the names it was sent with. Units are identity's `bo_phan.id` and people are
+// STAFF BUSINESS CODES; no display name is resolved here — the table holds none.
+//
+// ⚠ `Reason` IS FREE TEXT (a leader's instruction) and may name a citizen (rule 3). Returned to the
+// commune's own staff unmasked, as the drawer renders it; never logged, never in an error.
+type lichSuChuyenRa struct {
+	ID         string `json:"id"`
+	DocumentID string `json:"document_id"`
+	RoutedAt   string `json:"routed_at"`           // RFC 3339 — the instant of the act
+	RoutedBy   string `json:"routed_by"`           // staff business code of who routed it
+	Status     string `json:"status"`              // the state the document moved INTO by this act
+	FromUnit   string `json:"from_unit,omitempty"` // empty on the first routing: nobody held it
+	ToUnit     string `json:"to_unit"`
+	Assignee   string `json:"assignee,omitempty"` // empty = "Để bộ phận tự phân công"
+	Reason     string `json:"reason"`
+	CreatedAt  string `json:"created_at"` // RFC 3339 — when the row was written
+}
+
+// danhSachLichSuChuyenRa wraps the timeline in an object, like danhSachLoaiVanBanRa and for the same
+// reason. NO next_cursor AND NO has_more: the route returns the whole timeline or refuses.
+type danhSachLichSuChuyenRa struct {
+	Items []lichSuChuyenRa `json:"items"`
+}
+
+func lichSuChuyenRaNgoai(c domain.ChuyenVanBan) lichSuChuyenRa {
+	return lichSuChuyenRa{
+		ID:         c.ID,
+		DocumentID: c.VanBanDenID,
+		RoutedAt:   lucRa(c.ThoiDiem),
+		RoutedBy:   c.NguoiMa,
+		Status:     string(c.TrangThaiTaiThoiDiem),
+		FromUnit:   c.TuBoPhan,
+		ToUnit:     c.DenBoPhan,
+		Assignee:   c.CanBoXuLyMa,
+		Reason:     c.NoiDung,
+		CreatedAt:  lucRa(c.TaoLuc),
+	}
+}
+
+// LichSuChuyenVanBanDen serves one document's routing timeline, oldest first.
+// GET /api/v1/incoming-documents/{id}/routings
+//
+// THE ORDER IS THE STORE'S (ORDER BY thoi_diem, id) and is kept as-is: sorting again here would be
+// a second copy of that decision.
+func (h *Handler) LichSuChuyenVanBanDen(w http.ResponseWriter, r *http.Request) {
+	ds, err := h.d.ChiTietVanBanDen.LichSuChuyen(r.Context(), r.PathValue("id"))
+	if err != nil {
+		h.traLoiLoiVanBan(w, r, "đọc lịch sử chuyển", err)
+		return
+	}
+	// make(..., 0, ...): a document never routed has `items: []`, never `null`.
+	ra := danhSachLichSuChuyenRa{Items: make([]lichSuChuyenRa, 0, len(ds))}
+	for _, c := range ds {
+		ra.Items = append(ra.Items, lichSuChuyenRaNgoai(c))
+	}
+	vietJSON(w, http.StatusOK, ra)
+}
+
 // locVanBanDenTuQuery validates the filters. EVERY VALUE BECOMES A BOUND PARAMETER in the store;
 // nothing here builds SQL.
 //

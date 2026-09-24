@@ -96,6 +96,10 @@ type khoVBGia struct {
 	hangDen *hangVBD
 	hangDi  *hangVBDi
 
+	// hangLichSu answers `SELECT … FROM lich_su_chuyen_van_ban`, IN THE ORDER GIVEN — the fake does
+	// not sort, so the ORDER BY is asserted on the statement text, not on the result.
+	hangLichSu [][]driver.Value
+
 	// loaiCoTrongDanhMuc answers `SELECT 1 FROM loai_van_ban …`. FALSE IS A REAL CASE: a type the
 	// commune retired between the form loading and the clerk pressing save.
 	loaiCoTrongDanhMuc bool
@@ -261,6 +265,9 @@ func (c *connVBGia) QueryContext(_ context.Context, q string, args []driver.Name
 		}
 		return &rowsGia{cot: []string{"?column?"}, hang: [][]driver.Value{{int64(1)}}}, nil
 
+	case strings.Contains(q, "FROM lich_su_chuyen_van_ban"):
+		return &rowsGia{cot: cotLSC(), hang: c.k.hangLichSu}, nil
+
 	case strings.Contains(q, "FROM van_ban_den"):
 		if c.k.hangDen == nil {
 			return &rowsGia{cot: cotVBD()}, nil
@@ -299,6 +306,15 @@ func cotVBD() []string {
 		"co_quan_ban_hanh", "loai_van_ban", "trich_yeu", "do_khan",
 		"bo_phan_dang_giu_id", "can_bo_xu_ly_ma",
 		"han_xu_ly_xong", "trang_thai", "nguoi_tao_ma", "tao_luc", "cap_nhat_luc",
+	}
+}
+
+// cotLSC mirrors docstore's cotLichSuChuyen ORDER — `tu_bo_phan_id` and `den_bo_phan_id` are
+// adjacent TEXT columns, and a swap reads as the file travelling backwards.
+func cotLSC() []string {
+	return []string{
+		"id", "van_ban_den_id", "thoi_diem", "nguoi_ma", "trang_thai_tai_thoi_diem",
+		"tu_bo_phan_id", "den_bo_phan_id", "can_bo_xu_ly_ma", "noi_dung", "tao_luc",
 	}
 }
 
