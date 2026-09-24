@@ -195,6 +195,8 @@ func chay(log *slog.Logger) error {
 	// transaction boundary and one place every rule about a task lives (app.GhiBienBanHop).
 	ghiNhiemVu := app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan)
 
+	nhanTrangThai := petstore.NewNhanTrangThaiNhiemVuStore(kho)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware
@@ -210,8 +212,12 @@ func chay(log *slog.Logger) error {
 		// one is precisely what it is for.
 		GhiLoaiNhiemVu: app.NewDanhMucLoaiNhiemVu(kho, loaiNhiemVu),
 		GhiMucUuTien:   app.NewDanhMucMucUuTien(kho, mucUuTien),
-		Phieu:          phieu,
-		NhanLinhVuc:    petstore.NewNhanLinhVucStore(kho),
+		// The task-status wording (migration 0010, #21). ONE store behind the read and the write, so
+		// the GET merges exactly the rows the PATCH wrote.
+		TrangThaiNhiemVu:    nhanTrangThai,
+		GhiTrangThaiNhiemVu: app.NewNhanTrangThaiNhiemVu(kho, nhanTrangThai),
+		Phieu:               phieu,
+		NhanLinhVuc:         petstore.NewNhanLinhVucStore(kho),
 		// The register list, and the four staff acts that finally make a petition processable. Each
 		// act opens a transaction and writes the change, the audit entry and the notification
 		// obligation inside it, which is why the use case takes *store.DB rather than a transaction.

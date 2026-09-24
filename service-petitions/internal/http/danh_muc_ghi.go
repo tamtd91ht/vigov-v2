@@ -127,6 +127,7 @@ func laLoiDauVao(err error) bool {
 		domain.ErrThuTuNgoaiKhoang,
 		domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
 		domain.ErrMaBatBien, domain.ErrNguonDoTuClient,
+		domain.ErrKhongTatDuocTrangThai,
 	} {
 		if errors.Is(err, mot) {
 			return true

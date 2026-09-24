@@ -30,10 +30,9 @@ import (
 // of every filter, and nothing on the screen would say so.
 //
 // The codes are Vietnamese without diacritics, kebab-case: enum VALUES are never translated into
-// English (ADR 0011). The LABELS are deliberately NOT copied here — the commune owns them (#21),
-// and a second copy of a display string is a second copy that drifts. `docs/ui-ux/02-nhiem-vu.md`
-// §6 is where the shipped wording lives, including the fact that the Kanban board calls `moi-giao`
-// "Chưa thực hiện".
+// English (ADR 0011). The LABELS are not on these constants — the commune owns them (#21). The
+// shipped DEFAULT wording and order live in ONE table, nhan_trang_thai_nhiem_vu.go, transcribed from
+// `docs/ui-ux/02-nhiem-vu.md` §6; a commune's own wording is a row of migration 0010.
 type TrangThaiNhiemVu string
 
 const (

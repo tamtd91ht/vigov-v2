@@ -269,19 +269,23 @@ func dungMayChu(t *testing.T) *mayChu {
 			// records the commune and the acting person. Register refuses a nil dependency at
 			// construction, so both have to be present — and a fake nothing invokes cannot answer
 			// anything wrongly.
-			GhiLoaiNhiemVu:  &ghiDanhMucGia{},
-			GhiMucUuTien:    &ghiDanhMucGiaUuTien{},
-			Phieu:           phieu,
-			NhanLinhVuc:     nhan,
-			Vet:             vet,
-			DanhSachPhieu:   danhSach,
-			XuLyPhieu:       xuLy,
-			NhiemVu:         nhiemVu,
-			DanhSachNhiemVu: nhiemVu,
-			GhiNhiemVu:      ghiNhiemVu,
-			DanhSachBienBan: bienBan,
-			GhiBienBan:      ghiBienBan,
-			Log:             slog.New(slog.NewTextHandler(io.Discard, nil)),
+			GhiLoaiNhiemVu: &ghiDanhMucGia{},
+			GhiMucUuTien:   &ghiDanhMucGiaUuTien{},
+			// Task-status wording: own suite in trang_thai_nhiem_vu_test.go; present because
+			// Register refuses a nil dependency.
+			TrangThaiNhiemVu:    docTrangThaiMau(),
+			GhiTrangThaiNhiemVu: &ghiTrangThaiGia{},
+			Phieu:               phieu,
+			NhanLinhVuc:         nhan,
+			Vet:                 vet,
+			DanhSachPhieu:       danhSach,
+			XuLyPhieu:           xuLy,
+			NhiemVu:             nhiemVu,
+			DanhSachNhiemVu:     nhiemVu,
+			GhiNhiemVu:          ghiNhiemVu,
+			DanhSachBienBan:     bienBan,
+			GhiBienBan:          ghiBienBan,
+			Log:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		thuMuc:     thuMucMau(),
 		loai:       loai,
@@ -371,11 +375,14 @@ func depsDay() Deps {
 		MucUuTien:      mucUuTienMau(),
 		GhiLoaiNhiemVu: &ghiDanhMucGia{},
 		GhiMucUuTien:   &ghiDanhMucGiaUuTien{},
-		Phieu:          phieuMau(),
-		NhanLinhVuc:    nhanLinhVucMau(),
-		Vet:            &vetXemGia{},
-		DanhSachPhieu:  danhSachTuPhieuMau(phieuMau()),
-		XuLyPhieu:      &xuLyPhieuGia{},
+		// The task-status wording, read and write.
+		TrangThaiNhiemVu:    docTrangThaiMau(),
+		GhiTrangThaiNhiemVu: &ghiTrangThaiGia{},
+		Phieu:               phieuMau(),
+		NhanLinhVuc:         nhanLinhVucMau(),
+		Vet:                 &vetXemGia{},
+		DanhSachPhieu:       danhSachTuPhieuMau(phieuMau()),
+		XuLyPhieu:           &xuLyPhieuGia{},
 		// BOTH TASK FIELDS, from ONE fake — the same shape cmd/server wires.
 		NhiemVu:         nhiemVuMau(),
 		DanhSachNhiemVu: nhiemVuMau(),
@@ -395,8 +402,12 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 	// does, and authz.RequirePermission(nil, …) panics when a member of staff CALLS it rather
 	// than at startup.
 	for ten, bo := range map[string]func(d *Deps){
-		"thiếu kho loại nhiệm vụ":         func(d *Deps) { d.LoaiNhiemVu = nil },
-		"thiếu kho mức ưu tiên":           func(d *Deps) { d.MucUuTien = nil },
+		"thiếu kho loại nhiệm vụ": func(d *Deps) { d.LoaiNhiemVu = nil },
+		"thiếu kho mức ưu tiên":   func(d *Deps) { d.MucUuTien = nil },
+		// The task-status wording: a nil read is every Kanban header gone; a nil write is the
+		// configuration screen's only save button panicking on a staff member's screen.
+		"thiếu kho nhãn trạng thái nhiệm vụ": func(d *Deps) { d.TrangThaiNhiemVu = nil },
+		"thiếu use case ghi nhãn trạng thái": func(d *Deps) { d.GhiTrangThaiNhiemVu = nil },
 		"thiếu Checker":                   func(d *Deps) { d.Checker = nil },
 		"thiếu kho phiếu":                 func(d *Deps) { d.Phieu = nil },
 		"thiếu kho nhãn lĩnh vực":         func(d *Deps) { d.NhanLinhVuc = nil },

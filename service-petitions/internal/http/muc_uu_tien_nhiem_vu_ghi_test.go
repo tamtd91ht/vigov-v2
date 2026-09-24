@@ -162,9 +162,12 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		MucUuTien:      mucUuTienMau(),
 		GhiLoaiNhiemVu: &ghiDanhMucGia{},
 		GhiMucUuTien:   ghi,
-		Phieu:          phieuMau(),
-		NhanLinhVuc:    nhanLinhVucMau(),
-		Vet:            &vetXemGia{},
+		// Never called here; Register refuses a nil. Own suite: trang_thai_nhiem_vu_test.go.
+		TrangThaiNhiemVu:    docTrangThaiMau(),
+		GhiTrangThaiNhiemVu: &ghiTrangThaiGia{},
+		Phieu:               phieuMau(),
+		NhanLinhVuc:         nhanLinhVucMau(),
+		Vet:                 &vetXemGia{},
 		// Present because Register refuses incomplete Deps at construction, and never called here —
 		// see the same note in loai_nhiem_vu_ghi_test.go.
 		DanhSachPhieu: danhSachTuPhieuMau(phieuMau()),

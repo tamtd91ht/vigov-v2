@@ -298,9 +298,13 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// present, and a use case that is never invoked cannot dereference the nil handle.
 		GhiLoaiNhiemVu: app.NewDanhMucLoaiNhiemVu(nil, nil),
 		GhiMucUuTien:   app.NewDanhMucMucUuTien(nil, nil),
-		Phieu:          khoPhieu{},
-		NhanLinhVuc:    khoNhanLinhVuc{},
-		Vet:            vetGia{},
+		// Task-status wording: never invoked here (Register refuses nil). Own suite:
+		// internal/http/trang_thai_nhiem_vu_test.go.
+		TrangThaiNhiemVu:    petstore.NewNhanTrangThaiNhiemVuStore(nil),
+		GhiTrangThaiNhiemVu: app.NewNhanTrangThaiNhiemVu(nil, nil),
+		Phieu:               khoPhieu{},
+		NhanLinhVuc:         khoNhanLinhVuc{},
+		Vet:                 vetGia{},
 		// The register list and the four staff acts, built on a nil *store.DB for the same reason as
 		// the two catalogue writers above: this file is about the EDGE CHAIN, it asserts on a read
 		// route, and Register refuses a nil dependency at construction. A use case that is never

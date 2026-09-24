@@ -138,6 +138,11 @@ type mayChuGhi struct {
 	h       http.Handler
 	ghi     *ghiDanhMucGia
 	checker *checkerDanhMucGia
+
+	// The task-status wording fakes — asserted in trang_thai_nhiem_vu_test.go, which shares this
+	// harness because it needs the same commune-keyed checker.
+	docTT *docTrangThaiGia
+	ghiTT *ghiTrangThaiGia
 }
 
 // dungMayChuGhi mounts the REAL routes through Register, behind the REAL edge chain in the real
@@ -154,17 +159,20 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 	}}
 	checker := &checkerDanhMucGia{}
 	im := slog.New(slog.NewTextHandler(io.Discard, nil))
+	docTT, ghiTT := docTrangThaiMau(), &ghiTrangThaiGia{}
 
 	mux := http.NewServeMux()
 	Register(mux, Deps{
-		Checker:        checker,
-		LoaiNhiemVu:    loaiNhiemVuMau(),
-		MucUuTien:      mucUuTienMau(),
-		GhiLoaiNhiemVu: ghi,
-		GhiMucUuTien:   &ghiDanhMucGiaUuTien{},
-		Phieu:          phieuMau(),
-		NhanLinhVuc:    nhanLinhVucMau(),
-		Vet:            &vetXemGia{},
+		Checker:             checker,
+		LoaiNhiemVu:         loaiNhiemVuMau(),
+		MucUuTien:           mucUuTienMau(),
+		GhiLoaiNhiemVu:      ghi,
+		GhiMucUuTien:        &ghiDanhMucGiaUuTien{},
+		TrangThaiNhiemVu:    docTT,
+		GhiTrangThaiNhiemVu: ghiTT,
+		Phieu:               phieuMau(),
+		NhanLinhVuc:         nhanLinhVucMau(),
+		Vet:                 &vetXemGia{},
 		// Present because Register refuses incomplete Deps at construction. NOTHING IN THIS FILE
 		// CALLS THEM — it is about the catalogue write routes, and the five petition processing
 		// routes have their own four-case suites in xu_ly_phan_anh_test.go.
@@ -187,7 +195,7 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 
-	return &mayChuGhi{h: h, ghi: ghi, checker: checker}
+	return &mayChuGhi{h: h, ghi: ghi, checker: checker, docTT: docTT, ghiTT: ghiTT}
 }
 
 // capQuyen grants permissions INSIDE ONE COMMUNE. It rebuilds nothing: the checker reads the map

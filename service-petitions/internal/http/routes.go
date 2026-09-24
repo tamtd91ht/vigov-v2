@@ -71,6 +71,13 @@ type (
 		DanhSach(ctx context.Context) ([]domain.MucUuTienNhiemVu, error)
 	}
 
+	// TrangThaiNhiemVuDoc is the commune's OVERRIDES of the seven task-status labels (migration
+	// 0010), for GET /api/v1/task-statuses. It returns only the rows that exist; the handler merges
+	// them over domain.MacDinhTrangThaiNhiemVu, so a code with no row is the default, never missing.
+	TrangThaiNhiemVuDoc interface {
+		DanhSach(ctx context.Context) ([]domain.NhanTrangThaiNhiemVu, error)
+	}
+
 	// PhieuPhanAnhDoc is the read side of the petition register, for
 	// GET /api/v1/citizen-reports/{maTraCuu}.
 	//
@@ -282,6 +289,13 @@ type GhiMucUuTien interface {
 	Xoa(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
 }
 
+// GhiTrangThaiNhiemVu is the ONE write on task-status wording. There is no Them and no Xoa, and that
+// absence is open question #21's answer (ADR 0035 §C): the code list is closed and has no `Tắt`.
+type GhiTrangThaiNhiemVu interface {
+	Sua(ctx context.Context, ma string, yc app.YeuCauSuaNhanTrangThai, nguoi audit.Actor) (
+		domain.TrangThaiHienThi, error)
+}
+
 type Deps struct {
 	// Checker decides permissions. IT IS NOW LOAD-BEARING: GET /api/v1/citizen-reports/{maTraCuu}
 	// declares authz.RequirePermission, and the handler consults the Checker TWICE more — once
@@ -300,6 +314,11 @@ type Deps struct {
 	// make impossible.
 	GhiLoaiNhiemVu GhiLoaiNhiemVu
 	GhiMucUuTien   GhiMucUuTien
+
+	// The task-status wording: a read of the overrides, and the one write that opens a transaction
+	// and audits inside it. Two fields for the reason the catalogue pairs above give.
+	TrangThaiNhiemVu    TrangThaiNhiemVuDoc
+	GhiTrangThaiNhiemVu GhiTrangThaiNhiemVu
 
 	Phieu       PhieuPhanAnhDoc
 	NhanLinhVuc NhanLinhVucDanhMuc
@@ -364,6 +383,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu use case ghi danh mục loại nhiệm vụ — POST/PATCH/DELETE /api/v1/task-types sẽ panic khi có người gọi")
 	case d.GhiMucUuTien == nil:
 		panic("petitions/http: thiếu use case ghi danh mục mức ưu tiên — POST/PATCH/DELETE /api/v1/task-priorities sẽ panic khi có người gọi")
+	case d.TrangThaiNhiemVu == nil:
+		panic("petitions/http: thiếu kho nhãn trạng thái nhiệm vụ — GET /api/v1/task-statuses sẽ panic khi có người gọi")
+	case d.GhiTrangThaiNhiemVu == nil:
+		panic("petitions/http: thiếu use case ghi nhãn trạng thái nhiệm vụ — PATCH /api/v1/task-statuses/{code} sẽ panic khi có người gọi")
 	case d.Checker == nil:
 		panic("petitions/http: thiếu Checker — GET /api/v1/citizen-reports/{maTraCuu} khai quyền feedback.read, " +
 			"và một Checker rỗng sẽ panic lúc có cán bộ gọi chứ không phải lúc khởi động")
@@ -414,9 +437,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// so the table, the Go type and the URL all say the same thing about the same data. Nothing is
 	// translated on the spot here.
 	//
-	// A THIRD CATALOGUE IN THAT MIGRATION WOULD HAVE BEEN MOUNTED HERE AND IS NOT THERE: there is
-	// no task-STATUS table in 0003, and none is served. Open question #21 governs the task
-	// lifecycle, and a status list is the lifecycle's alphabet.
+	// The task-STATUS wording is not a 0003 catalogue: #21 (ADR 0035 §C) closed its code list, so it
+	// is an override table (migration 0010) with a read and a single PATCH — see task-statuses below.
 	//
 	// AnyAuthenticated ON BOTH, AND THE REASON IS THE SHAPE OF THE DATA'S USE — the same reading
 	// service-identity states on GET /api/v1/org-units and GET /api/v1/roles. These names fill the
@@ -479,6 +501,49 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/task-priorities",
 		authz.AnyAuthenticated("tên mức ưu tiên xuất hiện ở ô chọn trên biểu mẫu nhiệm vụ và ở bộ lọc của hầu hết màn hình nhiệm vụ — đòi một quyền cấu hình sẽ làm rỗng những ô đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: thang ưu tiên của xã lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachMucUuTien)))
+
+	// --- the commune's wording and order for the seven task statuses (#21, ADR 0035 §C) ----------
+	//
+	// ALL SEVEN CODES, ALWAYS: the commune's override where it has one, the default
+	// (domain.MacDinhTrangThaiNhiemVu) where it has not. Sorted by effective order, ties by default
+	// order. AnyAuthenticated for the reason the two catalogue reads above give: these labels are the
+	// Kanban column headers and the status filter of every task screen.
+	//
+	// 500 when the overrides cannot be read — REFUSED rather than answered with the defaults, which
+	// would silently show a commune wording it replaced. 401, no 403: there is no permission to fail.
+	//
+	// @summary  Bảy trạng thái nhiệm vụ với nhãn và thứ tự của xã (mặc định nếu xã chưa sửa) — cột Kanban, bộ lọc, màn hình cấu hình
+	// @screen   02-nhiem-vu §6
+	// @reply    200 danhSachTrangThaiNhiemVuRa
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/task-statuses",
+		authz.AnyAuthenticated("nhãn trạng thái là tiêu đề cột Kanban và giá trị bộ lọc trạng thái của mọi màn hình nhiệm vụ — đòi một quyền cấu hình sẽ làm mất tên cột cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: cách gọi trạng thái của xã lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
+			http.HandlerFunc(h.DanhSachTrangThaiNhiemVu)))
+
+	// Re-word or re-order ONE status. `admin.lookup` — the same key as the six catalogue writes (see
+	// the block above Register): this is the same `Danh mục` configuration of the commune.
+	//
+	// 404 for a code outside the seven — the list is closed (#21). 400 for a blank label, a label
+	// over 100 characters (counted in characters, as the CHECK counts), an order below 1, or a body
+	// naming `code` or `active` (no rename, no `Tắt`).
+	//
+	// idem.KhongCan: the use case writes nothing and audits nothing when neither field moves, and the
+	// upsert stores absolute values — so the same request sent twice leaves one row, one entry.
+	//
+	// @summary  Sửa nhãn và/hoặc thứ tự hiển thị của một trạng thái nhiệm vụ trong xã (không thêm, xoá hay tắt mã)
+	// @screen   14-cau-hinh §5
+	// @request  suaTrangThaiNhiemVuVao
+	// @reply    200 trangThaiNhiemVuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/task-statuses/{code}",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("upsert ghi giá trị tuyệt đối và use case không ghi, không để vết khi không trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaTrangThaiNhiemVu))))
 
 	// --- the petition register. ONE READ ROUTE, AND THREE WRITE ROUTES THAT ARE NOT HERE ------
 	//
