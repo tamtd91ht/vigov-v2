@@ -1754,6 +1754,52 @@
     },
     {
       "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/staff/searches",
+      "operation_id": "identity_post_staff_searches",
+      "task_id": "828593561dd1",
+      "summary": "Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ hoặc số điện thoại — từ khoá đi trong THÂN, không lên URL",
+      "screen": "12-danh-ba-can-bo §3",
+      "permission_kind": "permission",
+      "permission": "admin.user",
+      "idempotency": "khong-can",
+      "idempotency_reason": "tìm kiếm chỉ đọc, không đổi trạng thái nào — gửi lại chỉ là đọc lại, không sinh dòng, mã hay vết thứ hai",
+      "request_schema": "identity.timCanBoVao",
+      "reply_schemas": {
+        "200": "page.Result_identity.canBoTomTat",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "DELETE",
+      "path": "/api/v1/staff/{id}",
+      "operation_id": "identity_delete_staff_by_id",
+      "task_id": "c5eb6691f6de",
+      "summary": "Xoá mềm một dòng danh bạ NHẬP TRÙNG, kèm lý do bắt buộc — từ chối dòng đang có tài khoản đăng nhập",
+      "screen": "12-danh-ba-can-bo §4",
+      "permission_kind": "permission",
+      "permission": "admin.user.delete",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xoá một dòng đã xoá cho cùng một kết quả: lượt đọc khoá dòng và câu UPDATE đều mang `AND deleted_at IS NULL`, nên lần thứ hai trả 404 và không ghi đè được người xoá và lý do",
+      "request_schema": "identity.xoaCanBoVao",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
       "method": "GET",
       "path": "/api/v1/staff/{id}",
       "operation_id": "identity_get_staff_by_id",
@@ -1879,6 +1925,29 @@
         "403": "httpx.Error",
         "404": "httpx.Error",
         "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "PUT",
+      "path": "/api/v1/staff/{id}/publication",
+      "operation_id": "identity_put_staff_by_id_publication",
+      "task_id": "a79797b8bfa3",
+      "summary": "Công khai / thôi công khai một cán bộ lên danh bạ Zalo Mini App — bắt buộc xác nhận đã được người đó đồng ý (#12)",
+      "screen": "12-danh-ba-can-bo §9.4",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "PUT mang trạng thái tuyệt đối: công khai người đã công khai (giữ nguyên dấu đồng ý gốc) hay thôi công khai người chưa công khai thì use case không ghi gì, nên lần gửi thứ hai để lại đúng một trạng thái và đúng một vết",
+      "request_schema": "identity.datCongKhaiVao",
+      "reply_schemas": {
+        "200": "identity.canBoTomTat",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-identity/internal/http/routes.go"

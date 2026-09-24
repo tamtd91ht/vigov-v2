@@ -7062,6 +7062,22 @@
               ],
               "default": "asc"
             }
+          },
+          {
+            "name": "published",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -7279,6 +7295,83 @@
         }
       }
     },
+    "/api/v1/staff/searches": {
+      "post": {
+        "summary": "Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ hoặc số điện thoại — từ khoá đi trong THÂN, không lên URL",
+        "operationId": "identity_post_staff_searches",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "12-danh-ba-can-bo §3",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user"
+        },
+        "x-vigov-task": "828593561dd1",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.timCanBoVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_identity.canBoTomTat"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/staff/{id}": {
       "parameters": [
         {
@@ -7290,6 +7383,94 @@
           }
         }
       ],
+      "delete": {
+        "summary": "Xoá mềm một dòng danh bạ NHẬP TRÙNG, kèm lý do bắt buộc — từ chối dòng đang có tài khoản đăng nhập",
+        "operationId": "identity_delete_staff_by_id",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "12-danh-ba-can-bo §4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.user.delete"
+        },
+        "x-vigov-task": "c5eb6691f6de",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.xoaCanBoVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "summary": "Chi tiết một cán bộ trong xã",
         "operationId": "identity_get_staff_by_id",
@@ -7772,6 +7953,103 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/staff/{id}/publication": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "summary": "Công khai / thôi công khai một cán bộ lên danh bạ Zalo Mini App — bắt buộc xác nhận đã được người đó đồng ý (#12)",
+        "operationId": "identity_put_staff_by_id_publication",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "12-danh-ba-can-bo §9.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "a79797b8bfa3",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/identity.datCongKhaiVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.canBoTomTat"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
             "content": {
               "application/json": {
                 "schema": {
@@ -12656,21 +12934,44 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "has_zalo": {
+            "type": "boolean"
+          },
+          "published": {
+            "type": "boolean"
+          },
+          "display_order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "consent_recorded_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         },
         "required": [
           "active",
           "code",
+          "consent_recorded_at",
           "created_at",
           "department_id",
+          "display_order",
           "email",
           "full_name",
           "has_account",
+          "has_zalo",
           "id",
           "last_login_at",
           "mobile",
           "phone",
           "position",
+          "published",
           "role_id"
         ],
         "additionalProperties": false
@@ -12862,6 +13163,32 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "identity.datCongKhaiVao": {
+        "type": "object",
+        "properties": {
+          "published": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "consent_confirmed": {
+            "type": "boolean"
+          },
+          "display_order": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "consent_confirmed",
+          "display_order",
+          "published"
         ],
         "additionalProperties": false
       },
@@ -13283,6 +13610,12 @@
               "string",
               "null"
             ]
+          },
+          "has_zalo": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         },
         "required": [
@@ -13578,6 +13911,40 @@
         ],
         "additionalProperties": false
       },
+      "identity.timCanBoVao": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "published": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "limit": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cursor",
+          "limit",
+          "published",
+          "q",
+          "unit"
+        ],
+        "additionalProperties": false
+      },
       "identity.vaiTroCotRa": {
         "type": "object",
         "properties": {
@@ -13735,6 +14102,18 @@
           "kind",
           "message",
           "work_kind"
+        ],
+        "additionalProperties": false
+      },
+      "identity.xoaCanBoVao": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },

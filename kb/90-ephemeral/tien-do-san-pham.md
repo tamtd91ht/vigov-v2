@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 01f95a4
+derived_from_commit: ff4aaf2
 expires: 2026-12-23
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -40,12 +40,12 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **09** Phản ánh của người dân | 8 | 6/6 +2 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
 | **11** Quản trị nội dung Mini App | 6 | 6/6 | ✓ |
-| **12** Danh bạ cán bộ | 2 | 2/2 | ✓ |
+| **12** Danh bạ cán bộ | 5 | 2/4 +1 ngoài web | ✓ |
 | **13** Báo cáo điều hành | — | — | — |
 | **14** Cấu hình hệ thống | 49 | 49/49 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 5 | 5/5 | ✓ |
 
-Tổng **113 tuyến** trong hợp đồng. **4** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **116 tuyến** trong hợp đồng. **4** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -101,7 +101,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
-| `_chung` | 19 | 2 | 4 | 5 |
+| `_chung` | 20 | 2 | 5 | 5 |
 | `citizen-app` | 11 | 2 | 4 | 0 |
 | `core` | 9 | 0 | 1 | 1 |
 | `deploy` | 13 | 0 | 1 | 0 |
@@ -110,10 +110,10 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-comms` | 7 | 3 | 2 | 4 |
 | `service-documents` | 5 | 1 | 3 | 0 |
 | `service-finance` | 13 | 3 | 0 | 0 |
-| `service-identity` | 13 | 6 | 1 | 1 |
+| `service-identity` | 13 | 7 | 0 | 1 |
 | `service-petitions` | 10 | 7 | 4 | 0 |
 | `service-platform` | 3 | 1 | 0 | 1 |
 | `service-reporting` | 0 | 0 | 1 | 0 |
-| `tools` | 13 | 0 | 0 | 0 |
-| `web-admin` | 1 | 16 | 3 | 2 |
+| `tools` | 14 | 0 | 0 | 0 |
+| `web-admin` | 1 | 16 | 4 | 2 |
 

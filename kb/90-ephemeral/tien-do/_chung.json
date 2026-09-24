@@ -250,6 +250,14 @@
       "bang_chung": "tools/vigov_help.py + .claude/commands/vigov-help.md; khoá `group:` thêm vào 15 tệp lệnh (mỗi tệp đúng +1 dòng); check_brain bất biến 4 đòi `group`. Kiểm: danh mục 16 lệnh 5 nhóm exit 0; /develop-feature → chi tiết exit 0; 'review' → exit 2 liệt kê hai ứng viên; bỏ `group` khỏi vigov-help.md → check_brain FAIL, khôi phục → PASS. make -k check EXIT=0.",
       "no_confirm": [],
       "tiep_theo": "Mô tả lệnh in NGUYÊN VĂN `description` — lệnh cũ viết tiếng Anh nên bảng trộn Anh/Việt. Muốn bảng thuần Việt thì sửa description trong từng tệp lệnh, không dịch ở công cụ (hai bản của một câu sẽ lệch)."
+    },
+    {
+      "id": "apidoc-khop-man-hinh-mu-phuong-thuc",
+      "viec": "tools/apidoc chuyển việc web sang done/ khi thấy ĐƯỜNG DẪN trong web-admin/src/lib/api/** mà KHÔNG xét PHƯƠNG THỨC — DELETE /api/v1/staff/{id} bị đánh dấu 'đã có màn hình' chỉ vì web gọi PATCH cùng đường dẫn",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Phát hiện 24/09/2026, lượt /develop-backend-api Danh bạ cán bộ: `make kb` sau 86f9534 in 'ĐÃ CÓ MÀN HÌNH → done/ — việc c5eb6691f6de (DELETE /api/v1/staff/{id})', trong khi web-admin/src/lib/api/can-bo.ts chỉ có `PATCH /api/v1/staff/{id}` (:277) và DELETE .../lockout (:292-302), KHÔNG có lời gọi DELETE nào vào /staff/{id}. Tệp tasks/web/done/c5eb6691f6de.json KHÔNG được commit ở lượt ấy (để khỏi ghi một lời nói dối vào kho) — `make kb` lần sau sẽ sinh lại nó cho tới khi bộ khớp được sửa. Cùng lớp lỗi với `_chung/hang-doi-viec-man-hinh-noi-doi` (hàng đợi nói dối tệ hơn không có hàng đợi).",
+      "no_confirm": [],
+      "tiep_theo": "Sửa tools/apidoc (manhinh.go): khớp cặp (PHƯƠNG THỨC, đường dẫn) — đọc phương thức từ lời gọi thật (`goiGhi(..., \"DELETE\", ...)`, kiểu `identity_delete_staff_by_id`, hay đối số phuongThuc) chứ không chỉ chuỗi đường dẫn; thêm ca: hai phương thức cùng đường dẫn, web gọi một → chỉ một việc done. Kiểm lại MỌI việc hiện ở tasks/web/done/ xem còn việc nào done nhờ trùng đường dẫn. Web thật của DELETE /staff/{id} nằm ở `web-admin/danh-ba-dung-tuyen-moi`."
     }
   ]
 }
