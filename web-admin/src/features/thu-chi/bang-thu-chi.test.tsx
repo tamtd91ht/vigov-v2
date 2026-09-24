@@ -27,6 +27,7 @@ import {
   CANH_BAO_GO_BANG,
   cauQuyDoi,
   CAU_THIEU_QUYEN_XEM,
+  docSoNhap,
   donViCuaBang,
   DOT_TRONG,
   GHI_CHU_CHENH_LECH,
@@ -442,6 +443,35 @@ describe("biểu mẫu ghi", () => {
     expect(html).not.toContain('type="number" step="1" value');
   });
 
+  it("giá trị máy chủ gửi mà JS không đọc chính xác được: ô sửa điền NGUYÊN chữ số, không điền rỗng", () => {
+    // Ô rỗng lúc "Lưu khoản mục" nghĩa là XOÁ TRẮNG ô ấy (`values[cot] = null`). Điền rỗng cho một giá
+    // trị đọc hỏng thì một lần sửa TÊN khoản mục lặng lẽ xoá một con số ngân sách đang lưu. Chữ số thô
+    // bị `docSoNhap` từ chối kèm một câu, nên lần lưu dừng lại và cán bộ thấy có chuyện.
+    const html = renderToStaticMarkup(
+      <table>
+        <tbody>
+          <FormSuaDong
+            dong={dong({ method: "manual", values: { C1: 9007199254740994, C2: null } })}
+            cot={[COT[0]!, COT[1]!]}
+            donVi={donViCuaBang(bang().sheet)}
+            soCotBang={7}
+            dangGui={false}
+            huy={() => {}}
+            luu={() => {}}
+          />
+        </tbody>
+      </table>,
+    );
+
+    const giaTriO = (id: string) =>
+      new RegExp(`name="gia:${id}"[^>]*value="([^"]*)"`).exec(html)?.[1];
+    expect(giaTriO("C1")).toBe("9007199254740994");
+    // Ô thật sự trống (máy chủ gửi `null`) thì vẫn điền rỗng — đó là "trống", không phải "hỏng".
+    expect(giaTriO("C2")).toBe("");
+    // Và chữ số thô ấy KHÔNG lọt qua ô đọc như một con số (đơn vị bảng là triệu đồng).
+    expect(docSoNhap("9007199254740994", "trieu-dong").loai).toBe("loi");
+  });
+
   it("dòng `entries` không có ô số nào để gõ, và nói ra rằng số lấy từ các đợt", () => {
     const html = renderToStaticMarkup(
       <table>
@@ -520,6 +550,30 @@ describe("thẻ chỉ số — `Chênh lệch thu – chi luỹ kế`", () => {
 
   it("số tiền của thẻ in bằng ĐỒNG kèm chữ 'đồng' — thẻ đọc từ cả hai bảng", () => {
     expect(renderToStaticMarkup(<TheChiSoNam chiSo={CHI_SO} />)).toContain("853.304.000.000 đồng");
+  });
+
+  it("HAI số thu cũng in bằng đồng, và chênh lệch ÂM in dấu âm — không số nào mượn đơn vị của một bảng", () => {
+    // Thẻ nằm ngoài hai tab: bảng thu có thể là triệu đồng trong khi bảng chi là đồng. Một số thu in
+    // theo đơn vị của bảng thu đặt cạnh chênh lệch in theo đồng là hai con số lệch nhau 10⁶ lần trên
+    // cùng một thẻ lãnh đạo đọc.
+    const html = renderToStaticMarkup(
+      <TheChiSoNam
+        chiSo={{
+          ...CHI_SO,
+          balance: { amount: -1500000 },
+          revenue_totals: [
+            { column_id: "T1", name: "Thu ngân sách NSNN", role: "thu-nsnn", value: 4316764000000 },
+            { column_id: "T2", name: "Thu ngân sách Thu xã hưởng", role: "thu-xa-huong", value: null },
+          ],
+        }}
+      />,
+    );
+
+    expect(html).toContain("4.316.764.000.000 đồng");
+    expect(html).toContain("-1.500.000 đồng");
+    // Số thu vắng là `—`, không phải "— đồng" và không phải "0 đồng".
+    expect(html).not.toContain("— đồng");
+    expect(html).not.toContain(">0 đồng<");
   });
 });
 

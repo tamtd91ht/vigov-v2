@@ -73,6 +73,9 @@ type khoNSGia struct {
 	// dotConSong is what CoDotConSong answers; dot is the live batch DotTheoIDTrongGiaoDich finds
 	// (nil = none).
 	giaDot     map[string]map[string]domain.Dong
+	// tongDotTho OVERRIDES giaDot with the raw text the SUM(...)::text column hands back — the only
+	// way to present a sum that does not fit int64, which is the case quetTongDot must refuse.
+	tongDotTho map[string]map[string]string
 	dotConSong bool
 	dot        *domain.DotThuChi
 
@@ -174,6 +177,10 @@ func (c *connNSGia) QueryContext(_ context.Context, q string, args []driver.Name
 		var hang [][]driver.Value
 		for _, k := range c.k.khoanMuc {
 			for _, cot := range c.k.cot {
+				if tho, co := c.k.tongDotTho[k.ID][cot.ID]; co {
+					hang = append(hang, []driver.Value{k.ID, cot.ID, tho})
+					continue
+				}
 				if g, co := c.k.giaDot[k.ID][cot.ID]; co {
 					hang = append(hang, []driver.Value{k.ID, cot.ID, fmt.Sprint(int64(g))})
 				}
@@ -185,6 +192,18 @@ func (c *connNSGia) QueryContext(_ context.Context, q string, args []driver.Name
 		return &rowsGia{cot: []string{"exists"}, hang: [][]driver.Value{{c.k.dotConSong}}}, nil
 
 	case strings.Contains(q, "g.dot_id = $2"):
+		var hang [][]driver.Value
+		if d := c.k.dot; d != nil {
+			for _, cot := range c.k.cot {
+				if g, co := d.GiaTri[cot.ID]; co {
+					hang = append(hang, []driver.Value{d.ID, cot.ID, int64(g)})
+				}
+			}
+		}
+		return &rowsGia{cot: []string{"dot_id", "cot_id", "gia_tri"}, hang: hang}, nil
+
+	// The `⇄` list's amounts (store.soTienDotCuaKhoanMuc) — every amount of the one live batch.
+	case strings.Contains(q, "d.khoan_muc_id = $2"):
 		var hang [][]driver.Value
 		if d := c.k.dot; d != nil {
 			for _, cot := range c.k.cot {
