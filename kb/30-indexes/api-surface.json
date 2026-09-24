@@ -48,6 +48,29 @@
     },
     {
       "service": "finance",
+      "method": "DELETE",
+      "path": "/api/v1/budget-entries/{id}",
+      "operation_id": "finance_delete_budget_entries_by_id",
+      "task_id": "ce220913c483",
+      "summary": "Gỡ mềm một đợt thu, chi, kèm lý do bắt buộc",
+      "screen": "07-thu-chi-ngan-sach §5",
+      "permission_kind": "permission",
+      "permission": "budget.confirm",
+      "idempotency": "khong-can",
+      "idempotency_reason": "gỡ một đợt đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do",
+      "request_schema": "finance.goVao",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
       "method": "GET",
       "path": "/api/v1/budget-indicators",
       "operation_id": "finance_get_budget_indicators",
@@ -121,7 +144,7 @@
       "path": "/api/v1/budget-lines/{id}",
       "operation_id": "finance_patch_budget_lines_by_id",
       "task_id": "efa06efbff87",
-      "summary": "Sửa số thứ tự, tên hoặc các ô số của một khoản mục chưa có dòng con",
+      "summary": "Sửa số thứ tự, tên, cách tính (manual/entries) hoặc các ô số của một khoản mục chưa có dòng con",
       "screen": "07-thu-chi-ngan-sach §4.1",
       "permission_kind": "permission",
       "permission": "budget.update",
@@ -136,6 +159,51 @@
         "404": "httpx.Error",
         "409": "httpx.Error",
         "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "GET",
+      "path": "/api/v1/budget-lines/{id}/entries",
+      "operation_id": "finance_get_budget_lines_by_id_entries",
+      "task_id": "7442ab3c06bd",
+      "summary": "Các đợt thu, chi đã ghi của một khoản mục, mới nhất trước, kèm số tiền theo từng cột số",
+      "screen": "07-thu-chi-ngan-sach §5",
+      "permission_kind": "permission",
+      "permission": "budget.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "finance.danhSachDotRa",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "POST",
+      "path": "/api/v1/budget-lines/{id}/entries",
+      "operation_id": "finance_post_budget_lines_by_id_entries",
+      "task_id": "bfb4d32b3640",
+      "summary": "Ghi một đợt thu, chi vào một khoản mục lá",
+      "screen": "07-thu-chi-ngan-sach §5",
+      "permission_kind": "permission",
+      "permission": "budget.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "request_schema": "finance.ghiDotVao",
+      "reply_schemas": {
+        "201": "finance.dotRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-finance/internal/http/routes.go"
     },
@@ -221,6 +289,29 @@
       "request_schema": "finance.goVao",
       "reply_schemas": {
         "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-finance/internal/http/routes.go"
+    },
+    {
+      "service": "finance",
+      "method": "PATCH",
+      "path": "/api/v1/budget-sheets/{id}",
+      "operation_id": "finance_patch_budget_sheets_by_id",
+      "task_id": "c52580dd72cb",
+      "summary": "Sửa tiêu đề, đơn vị tính hiển thị hoặc mốc luỹ kế của một bảng ngân sách",
+      "screen": "07-thu-chi-ngan-sach §1 §2",
+      "permission_kind": "permission",
+      "permission": "budget.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; app.SuaBang không ghi gì khi không trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "finance.suaBangVao",
+      "reply_schemas": {
+        "200": "finance.bangRa",
         "400": "httpx.Error",
         "401": "httpx.Error",
         "403": "httpx.Error",

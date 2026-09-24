@@ -33,6 +33,20 @@
       "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:214"
     },
     {
+      "entity": "BudgetEntry",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "dot_thu_chi",
+      "source": "service-finance/migrations/0008_dot_thu_chi.sql:236"
+    },
+    {
+      "entity": "BudgetEntryAmount",
+      "service": "finance",
+      "scope": "tenant",
+      "table": "gia_tri_dot",
+      "source": "service-finance/migrations/0008_dot_thu_chi.sql:328"
+    },
+    {
       "entity": "BudgetLine",
       "service": "finance",
       "scope": "tenant",

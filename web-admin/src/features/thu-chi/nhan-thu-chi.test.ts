@@ -186,6 +186,7 @@ describe("thẻ tiêu đề báo cáo", () => {
       revision: 1,
       title: "BÁO CÁO CHI NGÂN SÁCH",
       unit: "Triệu đồng",
+      unit_label: "Triệu đồng",
       cumulative_to: "2026-08-25",
     };
     expect(dongPhuTieuDe(bang, 59)).toBe("Đơn vị tính: Triệu đồng · Luỹ kế đến 25/8/2026 · 59 khoản mục");
@@ -200,6 +201,7 @@ describe("thẻ tiêu đề báo cáo", () => {
       revision: 1,
       title: "THU NGÂN SÁCH",
       unit: "Triệu đồng",
+      unit_label: "Triệu đồng",
     };
     expect(dongPhuTieuDe(bang, 52)).toBe("Đơn vị tính: Triệu đồng · 52 khoản mục");
   });

@@ -81,6 +81,7 @@ function bang(sua: Partial<finance_bangDayDuRa> = {}): finance_bangDayDuRa {
       revision: 1,
       title: "BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC NĂM 2026",
       unit: "Triệu đồng",
+      unit_label: "Triệu đồng",
       cumulative_to: "2026-08-25",
     },
     columns: COT,

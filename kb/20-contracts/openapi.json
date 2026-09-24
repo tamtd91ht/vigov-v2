@@ -225,6 +225,96 @@
         }
       }
     },
+    "/api/v1/budget-entries/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Gỡ mềm một đợt thu, chi, kèm lý do bắt buộc",
+        "operationId": "finance_delete_budget_entries_by_id",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.confirm"
+        },
+        "x-vigov-task": "ce220913c483",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.goVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/budget-indicators": {
       "get": {
         "summary": "Ba chỉ số ngân sách của một năm: thu đạt dự toán, chi đạt dự toán, cân đối thu - chi",
@@ -525,7 +615,7 @@
         }
       },
       "patch": {
-        "summary": "Sửa số thứ tự, tên hoặc các ô số của một khoản mục chưa có dòng con",
+        "summary": "Sửa số thứ tự, tên, cách tính (manual/entries) hoặc các ô số của một khoản mục chưa có dòng con",
         "operationId": "finance_patch_budget_lines_by_id",
         "tags": [
           "finance"
@@ -609,6 +699,204 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/budget-lines/{id}/entries": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Các đợt thu, chi đã ghi của một khoản mục, mới nhất trước, kèm số tiền theo từng cột số",
+        "operationId": "finance_get_budget_lines_by_id_entries",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.read"
+        },
+        "x-vigov-task": "7442ab3c06bd",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.danhSachDotRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Ghi một đợt thu, chi vào một khoản mục lá",
+        "operationId": "finance_post_budget_lines_by_id_entries",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "bfb4d32b3640",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.ghiDotVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.dotRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -949,6 +1237,91 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa tiêu đề, đơn vị tính hiển thị hoặc mốc luỹ kế của một bảng ngân sách",
+        "operationId": "finance_patch_budget_sheets_by_id",
+        "tags": [
+          "finance"
+        ],
+        "x-vigov-screen": "07-thu-chi-ngan-sach §1 §2",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "budget.update"
+        },
+        "x-vigov-task": "c52580dd72cb",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/finance.suaBangVao"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/finance.bangRa"
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad Request",
@@ -13126,8 +13499,13 @@
             "type": "string"
           },
           "unit": {
-            "type": "string",
-            "description": "\"Triệu đồng\" — what the SCREEN prints. The wire carries đồng."
+            "type": "string"
+          },
+          "unit_label": {
+            "type": "string"
+          },
+          "unit_warning": {
+            "type": "string"
           },
           "cumulative_to": {
             "type": "string",
@@ -13148,6 +13526,7 @@
           "revision",
           "title",
           "unit",
+          "unit_label",
           "year"
         ],
         "additionalProperties": false
@@ -13342,6 +13721,30 @@
         ],
         "additionalProperties": false
       },
+      "finance.danhSachDotRa": {
+        "type": "object",
+        "properties": {
+          "line_id": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.dotRa"
+            },
+            "description": "newest first: date DESC, then recording time DESC"
+          }
+        },
+        "required": [
+          "entries",
+          "line_id",
+          "method"
+        ],
+        "additionalProperties": false
+      },
       "finance.danhSachDuAnRa": {
         "type": "object",
         "properties": {
@@ -13432,6 +13835,52 @@
           "name",
           "no",
           "order",
+          "values"
+        ],
+        "additionalProperties": false
+      },
+      "finance.dotRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "line_id": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "content": {
+            "type": "string"
+          },
+          "counterparty": {
+            "type": "string"
+          },
+          "document_no": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string",
+            "description": "RFC 3339; absent on the 201 of a create"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          }
+        },
+        "required": [
+          "content",
+          "date",
+          "id",
+          "line_id",
           "values"
         ],
         "additionalProperties": false
@@ -13610,6 +14059,40 @@
         ],
         "additionalProperties": false
       },
+      "finance.ghiDotVao": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD"
+          },
+          "content": {
+            "type": "string"
+          },
+          "counterparty": {
+            "type": "string"
+          },
+          "document_no": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          }
+        },
+        "required": [
+          "content",
+          "date",
+          "values"
+        ],
+        "additionalProperties": false
+      },
       "finance.goChungTuVao": {
         "type": "object",
         "properties": {
@@ -13773,6 +14256,56 @@
         "required": [
           "amount"
         ],
+        "additionalProperties": false
+      },
+      "finance.suaBangVao": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cumulative_to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "YYYY-MM-DD, or \"\" to clear"
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`dong` | `nghin-dong` | `trieu-dong`"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/finance.cotVao"
+            }
+          }
+        },
         "additionalProperties": false
       },
       "finance.suaChungTuVao": {
@@ -14035,7 +14568,8 @@
             "type": "string"
           },
           "unit": {
-            "type": "string"
+            "type": "string",
+            "description": "`dong` | `nghin-dong` | `trieu-dong` — display only, figures stay đồng"
           },
           "cumulative_to": {
             "type": "string",

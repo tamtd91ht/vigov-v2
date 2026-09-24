@@ -8,7 +8,7 @@
 # VÌ SAO KHÔNG CÒN MỘT DÒNG `/api/v1` → identity: dòng ấy đúng 100% vào ngày nó được
 # viết, khi mọi tài nguyên REST đều thuộc identity. Nay hợp đồng có
 #
-#     86 tuyến của 5 dịch vụ — identity 35 · petitions 24 · finance 14 · documents 7 · comms 6
+#     88 tuyến của 5 dịch vụ — identity 35 · petitions 24 · finance 16 · documents 7 · comms 6
 #
 # nên dòng gộp ấy đưa mọi tuyến không phải của identity tới identity và trả 404 — 404
 # trên một tuyến hành chính thật. Chủ dự án chốt lối (b), SINH Ingress từ openapi.json,
@@ -18,7 +18,7 @@
 # (deploy/overlays/<mt>/ingress-moi-truong.yaml). Bảng định tuyến thì giống nhau ở mọi
 # môi trường nên nó thuộc base — đúng ranh giới base/overlay kho này đang dùng.
 #
-# 34 luật định tuyến cho 86 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
+# 35 luật định tuyến cho 88 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -175,6 +175,13 @@ spec:
               service:
                 name: petitions
                 port: { name: rest }
+          # finance — 1 tuyến: /api/v1/budget-entries/{id}
+          - path: /api/v1/budget-entries
+            pathType: Prefix
+            backend:
+              service:
+                name: finance
+                port: { name: rest }
           # documents — 2 tuyến: /api/v1/document-types · /api/v1/document-types/{id}
           - path: /api/v1/document-types
             pathType: Prefix
@@ -226,8 +233,8 @@ spec:
               service:
                 name: identity
                 port: { name: rest }
-          # finance — 3 tuyến: /api/v1/budget-lines · /api/v1/budget-lines/{id}
-          #   /api/v1/budget-lines/{id}/headline
+          # finance — 4 tuyến: /api/v1/budget-lines · /api/v1/budget-lines/{id}
+          #   /api/v1/budget-lines/{id}/entries · /api/v1/budget-lines/{id}/headline
           - path: /api/v1/budget-lines
             pathType: Prefix
             backend:
