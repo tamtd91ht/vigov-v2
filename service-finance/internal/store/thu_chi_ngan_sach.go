@@ -155,15 +155,16 @@ func (s *NganSachStore) bangDayDuTheoBang(ctx context.Context,
 	if err != nil {
 		return domain.BangDayDu{}, err
 	}
-	rows, err := s.db.For(ctx).QueryJoin(ctx, tongDotCuaBang, bang.ID)
+	rows, err := s.db.For(ctx).QueryJoin(ctx, tongDotCuaBang, bang.ID, string(domain.TinhTheoDot))
 	if err != nil {
 		return domain.BangDayDu{}, fmt.Errorf("ngan_sach: đọc tổng đợt: %w", err)
 	}
-	giaDot, err := quetTongDot(rows)
+	giaDot, vuot, err := quetTongDot(rows)
 	if err != nil {
 		return domain.BangDayDu{}, err
 	}
-	return domain.BangDayDu{Bang: bang, Cot: cot, KhoanMuc: khoanMuc, Gia: gia, GiaDot: giaDot}, nil
+	return domain.BangDayDu{Bang: bang, Cot: cot, KhoanMuc: khoanMuc, Gia: gia,
+		GiaDot: giaDot, GiaDotVuotMuc: vuot}, nil
 }
 
 const cotCot = `id, bang_id, ten, thu_tu, kieu, COALESCE(cong_thuc, ''), COALESCE(vai_tro, '')`
@@ -350,15 +351,20 @@ func (s *NganSachStore) BangDayDuTrongGiaoDich(ctx context.Context, tx *store.Sc
 	// THE BATCH SUMS ARE READ UNDER THE SAME LOCK AS THE TREE, because the entries -> manual switch
 	// copies them into the line's cells (§9.1): a sum read outside the transaction could be one batch
 	// behind the figure the screen showed.
-	rows, err := tx.Underlying().QueryContext(ctx, tongDotCuaBang, string(tx.TenantID()), bang.ID)
+	//
+	// AN OVERSIZED SUM DOES NOT FAIL THIS READ (quetTongDot): every write reads the sheet here, so a
+	// failure would lock them all, GoDot — the remedy — included.
+	rows, err := tx.Underlying().QueryContext(ctx, tongDotCuaBang, string(tx.TenantID()), bang.ID,
+		string(domain.TinhTheoDot))
 	if err != nil {
 		return domain.BangDayDu{}, fmt.Errorf("ngan_sach: đọc tổng đợt trong giao dịch: %w", err)
 	}
-	giaDot, err := quetTongDot(rows)
+	giaDot, vuot, err := quetTongDot(rows)
 	if err != nil {
 		return domain.BangDayDu{}, err
 	}
-	return domain.BangDayDu{Bang: bang, Cot: cot, KhoanMuc: khoanMuc, Gia: gia, GiaDot: giaDot}, nil
+	return domain.BangDayDu{Bang: bang, Cot: cot, KhoanMuc: khoanMuc, Gia: gia,
+		GiaDot: giaDot, GiaDotVuotMuc: vuot}, nil
 }
 
 func (s *NganSachStore) cotTrongGiaoDich(ctx context.Context, tx *store.ScopedTx,

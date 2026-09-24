@@ -237,6 +237,17 @@ var (
 	ErrThuTuNgoaiKhoangNS = errors.New("ngan_sach: `order` ngoài khoảng cho phép")
 	ErrGiaTriQuaLon       = errors.New("ngan_sach: giá trị vượt mức một dòng ngân sách cấp xã có thể có")
 
+	// ErrTongVuotMuc — a parent's sum (or the balance) leaves GiaTriToiDa or int64. A READ-SIDE
+	// reason, never a write refusal: the cell is shown unavailable with this sentence instead of a
+	// wrapped or clamped figure. The sentence never quotes a figure (it travels into logs).
+	ErrTongVuotMuc = errors.New(
+		"ngan_sach: tổng cộng ra vượt mức một con số ngân sách hiển thị chính xác được — không tính được; kiểm tra các số quá lớn ở các dòng bên dưới")
+
+	// ErrGiaTriDaLuuVuotMuc — a value STORED before GiaTriToiDa was lowered (25/09/2026) lies past
+	// it. Read and flagged, never refused on read.
+	ErrGiaTriDaLuuVuotMuc = errors.New(
+		"ngan_sach: số đang lưu vượt mức một con số ngân sách hiển thị chính xác được — gõ lại số đúng hoặc gỡ đợt ghi nhầm")
+
 	// ErrTruongBangKhongSua — a PATCH on a sheet named a field that identifies it. REFUSED RATHER THAN
 	// IGNORED: `year`/`kind` decide which report the figures belong to and `code` is the handle the
 	// audit trail is filed under; a client watching them vanish silently would believe it had moved a
@@ -336,16 +347,28 @@ const (
 	// larger, and the point past which the thing being loaded is not a budget report.
 	SoCotToiDa = 30
 
-	// GiaTriToiDa is one hundred thousand billion đồng (10^17) in absolute value — a TYPO GUARD, not
-	// a business ceiling, exactly as SoTienToiDa is for a voucher. The specification's whole commune
-	// plans 3,99 × 10^12 đồng of revenue for a year (§3.2), so this is five orders of magnitude
-	// above anything real. What it catches is a figure pasted with its separators stripped, or one
-	// meant in triệu đồng typed as đồng — which would drag the commune's headline total to a number
-	// leadership reads and acts on.
+	// GiaTriToiDa is 2^53 − 1 đồng (≈ 9,007 × 10^15) in absolute value — JavaScript's
+	// Number.MAX_SAFE_INTEGER, the largest integer the browser reads from JSON EXACTLY. It bounds
+	// every typed cell, every batch amount, AND every figure this service computes (a parent's sum,
+	// an entries leaf's batch sum, the balance): a computed figure past it comes back UNAVAILABLE
+	// with a reason (BangDayDu.GiaTri), never clamped and never sent.
+	//
+	// WHY THIS NUMBER AND NOT 10^17 (the value until 25/09/2026): above 2^53 a JSON number silently
+	// rounds to the nearest representable double in the browser — 9 007 199 254 740 993 arrives as
+	// …992 — so a figure the server holds exactly would be shown one đồng off, and the web client
+	// fails closed on such values rather than draw them. A ceiling the server accepts but the only
+	// client cannot display is a cell nobody can see. Real figures are far below it: the
+	// specification's whole commune plans 3,99 × 10^12 đồng of revenue a year (§3.2), three orders
+	// of magnitude under. It is still a TYPO GUARD first — a figure pasted with its separators
+	// stripped, or triệu đồng typed as đồng — exactly as SoTienToiDa is for a voucher.
+	//
+	// ROWS STORED UNDER THE OLD CEILING ARE STILL READ: a stored value past this bound is shown as
+	// unavailable with ErrGiaTriDaLuuVuotMuc, never refused on read — refusing would lock the whole
+	// sheet, including the edit that fixes the cell.
 	//
 	// IT APPLIES IN BOTH DIRECTIONS because a budget value may legitimately be NEGATIVE (§9 rule 4),
 	// unlike a disbursement voucher.
-	GiaTriToiDa Dong = 100_000_000_000_000_000
+	GiaTriToiDa Dong = 9_007_199_254_740_991
 )
 
 // --- validation ---------------------------------------------------------------------------------
@@ -609,6 +632,13 @@ type BangDayDu struct {
 	// an absent key is EMPTY (`—`) and never 0 (§9 rule 4). Read for a leaf in `entries` mode only;
 	// a line in any other mode keeps its batches in the table and they count nowhere.
 	GiaDot map[string]map[string]Dong
+
+	// GiaDotVuotMuc is khoanMucID -> cotID -> true where the batch SUM does not fit int64 at all
+	// (SUM(BIGINT) is NUMERIC in PostgreSQL and can exceed it). The sum cannot sit in GiaDot, and
+	// failing the whole sheet read for it would lock every write — GoDot included, which is the only
+	// way to remove the offending batch. So the fact is carried here and GiaTri turns that ONE cell
+	// into a figure with a reason.
+	GiaDotVuotMuc map[string]map[string]bool
 }
 
 // ConTrucTiep returns the DIRECT children of one line, in display order.
@@ -642,21 +672,45 @@ func (b BangDayDu) CoCon(id string) bool {
 // its live batches for an `entries` leaf, summed from the direct children for a parent — so a parent
 // over an `entries` leaf picks the batch sum up through the same recursion.
 //
-// ok IS false FOR AN EMPTY CELL, and it is a second return value rather than a zero on purpose —
-// §9 rule 4 again. A parent all of whose children are empty is EMPTY, not 0: a commune that has
+// AN EMPTY CELL IS Co == false, never a zero — §9 rule 4 again. A parent all of whose children are empty is EMPTY, not 0: a commune that has
 // not yet entered a section must not see that section reported as nil spending.
 //
 // THE RECURSION CANNOT HANG. Nothing in the database stops a cycle in `cha_id` (migration 0006
 // states that cost), and a read must survive one that somehow exists — so the walk carries the set
 // of lines already visited and treats a revisit as an empty branch. It refuses rather than looping,
 // which is a wrong figure the screen can show; looping is a request that never returns.
-func (b BangDayDu) GiaTri(khoanMucID, cotID string) (Dong, bool) {
-	return b.giaTri(khoanMucID, cotID, map[string]struct{}{})
+//
+// THREE OUTCOMES, NOT TWO, in one SoTien:
+//
+//	Co == true                 a figure
+//	Co == false, LyDo == ""    an EMPTY cell (`—`)
+//	Co == false, LyDo != ""    a figure that CANNOT BE COMPUTED — shown as the reason, never as a
+//	                           number and never as empty
+//
+// The third exists because a sum can leave what int64 holds, or what the browser reads exactly
+// (GiaTriToiDa). `tong += g` unchecked wraps to a plausible negative figure on a parent row; a
+// clamp prints a number nobody entered. Both reach a report as a healthy-looking figure. A figure
+// with a reason is a job for the commune ("gỡ đợt nhập sai"), and it is ISOLATED: only the cells
+// that depend on it — the line and its ancestors in that column — are unavailable; the rest of the
+// sheet reads and every write still works (the write that fixes it included).
+func (b BangDayDu) GiaTri(khoanMucID, cotID string) SoTien {
+	g, co, err := b.giaTri(khoanMucID, cotID, map[string]struct{}{})
+	switch {
+	case err != nil:
+		return soTienKhong(err)
+	case co:
+		return soTienCo(g)
+	default:
+		return SoTien{}
+	}
 }
 
-func (b BangDayDu) giaTri(khoanMucID, cotID string, daQua map[string]struct{}) (Dong, bool) {
+// giaTri returns (figure, present, why-not-computable). err != nil means UNAVAILABLE and wins over
+// everything: a parent with one unavailable child is unavailable, because summing the others would
+// print a total that silently leaves a line out.
+func (b BangDayDu) giaTri(khoanMucID, cotID string, daQua map[string]struct{}) (Dong, bool, error) {
 	if _, lap := daQua[khoanMucID]; lap {
-		return 0, false
+		return 0, false, nil
 	}
 	daQua[khoanMucID] = struct{}{}
 
@@ -665,25 +719,81 @@ func (b BangDayDu) giaTri(khoanMucID, cotID string, daQua map[string]struct{}) (
 		// THE MODE DECIDES THE SOURCE, and only for a leaf: a line with children sums them whatever
 		// its stored mode says (the tree wins, CachTinhTheoCay). The typed figures of an `entries`
 		// leaf stay stored and are NOT shown — §9.1's "giá trị nhập tay bị khoá".
-		if k, co := b.TheoID(khoanMucID); co && k.CachTinh == TinhTheoDot {
+		k, coK := b.TheoID(khoanMucID)
+		if coK && k.CachTinh == TinhTheoDot {
+			if b.GiaDotVuotMuc[khoanMucID][cotID] {
+				return 0, false, fmt.Errorf("%w (dòng %q)", ErrTongDotVuotMuc, k.Ten)
+			}
 			g, coSo := b.GiaDot[khoanMucID][cotID]
-			return g, coSo
+			if coSo && vuotGiaTriToiDa(g) {
+				return 0, false, fmt.Errorf("%w (dòng %q)", ErrTongDotVuotMuc, k.Ten)
+			}
+			return g, coSo, nil
 		}
 		g, co := b.Gia[khoanMucID][cotID]
-		return g, co
+		if co && vuotGiaTriToiDa(g) {
+			// A row stored under the old ceiling (10^17). READ, never refused: refusing would fail the
+			// whole sheet and lock the very PATCH that corrects this cell.
+			return 0, false, fmt.Errorf("%w (dòng %q)", ErrGiaTriDaLuuVuotMuc, k.Ten)
+		}
+		return g, co, nil
 	}
 
 	var tong Dong
 	var coGiNao bool
 	for _, c := range con {
-		g, co := b.giaTri(c.ID, cotID, daQua)
+		g, co, err := b.giaTri(c.ID, cotID, daQua)
+		if err != nil {
+			// The child's own reason, unchanged: it names the line that has to be fixed, which is
+			// the only line where fixing is possible. Every ancestor repeats it rather than
+			// stacking "dòng con của dòng con của…".
+			return 0, false, err
+		}
 		if !co {
 			continue
 		}
-		tong += g
+		moi, tran := congKiemTra(tong, g)
+		if tran {
+			return 0, false, b.loiTongVuotMuc(khoanMucID)
+		}
+		tong = moi
 		coGiNao = true
 	}
-	return tong, coGiNao
+	// Checked at the END and not per step: a positive and a negative child may legitimately pass
+	// through a larger partial sum on the way to a total that is fine. Overflow of int64 itself is
+	// caught per step above, because past that point the partial sum is no longer a number at all.
+	if coGiNao && vuotGiaTriToiDa(tong) {
+		return 0, false, b.loiTongVuotMuc(khoanMucID)
+	}
+	return tong, coGiNao, nil
+}
+
+func (b BangDayDu) loiTongVuotMuc(khoanMucID string) error {
+	k, _ := b.TheoID(khoanMucID)
+	return fmt.Errorf("%w (dòng %q)", ErrTongVuotMuc, k.Ten)
+}
+
+// vuotGiaTriToiDa — past the bound every figure on this board must respect, in either direction.
+func vuotGiaTriToiDa(g Dong) bool { return g > GiaTriToiDa || g < -GiaTriToiDa }
+
+// congKiemTra adds two amounts and reports int64 overflow instead of wrapping. Two operands of the
+// same sign whose sum has the other sign are exactly the wrapped cases.
+func congKiemTra(a, b Dong) (Dong, bool) {
+	s := a + b
+	if (a > 0 && b > 0 && s < 0) || (a < 0 && b < 0 && s >= 0) {
+		return 0, true
+	}
+	return s, false
+}
+
+// KiemTraGiaTriDaLuu classifies a STORED amount on the way OUT (a batch amount on the `⇄` list).
+// Past GiaTriToiDa it is not sent as a number — the browser would round it — but flagged with
+// ErrGiaTriDaLuuVuotMuc so the accountant can find the batch and remove it.
+func KiemTraGiaTriDaLuu(g Dong) error {
+	if vuotGiaTriToiDa(g) {
+		return ErrGiaTriDaLuuVuotMuc
+	}
+	return nil
 }
 
 // TheoID finds one line of this sheet.
@@ -762,7 +872,12 @@ func (b BangDayDu) SoTong(v VaiTroCot) (Dong, bool, error) {
 	if !co {
 		return 0, false, fmt.Errorf("%w (`%s`)", ErrChuaGanVaiTroCot, v)
 	}
-	g, coSo := b.GiaTri(dong.ID, cot.ID)
+	g, coSo, err := b.giaTri(dong.ID, cot.ID, map[string]struct{}{})
+	if err != nil {
+		// A fifth way to have no number: the figure exists but cannot be computed. Its own sentence
+		// names the line to fix; an indicator built on it would be as wrong as the figure.
+		return 0, false, err
+	}
 	if !coSo {
 		return 0, false, fmt.Errorf("%w (cột `%s`)", ErrDongTongChuaCoSo, cot.Ten)
 	}
@@ -858,8 +973,9 @@ func ChiSoDatDuToan(b BangDayDu) (string, TyLe) {
 // multiple of the denominator. Rounding is to nearest rather than toward zero so that 108,14% and
 // 108,16% are not the same printed figure — the specification prints two decimals of a percentage.
 //
-// OVERFLOW IS NOT REACHABLE HERE: GiaTriToiDa is 10^17 and 10^17 × 10^4 = 10^21 would overflow
-// int64 — so the multiplication is done in a wider path by dividing the numerator when it is large.
+// OVERFLOW IS NOT REACHABLE HERE: SoTong never hands out a figure past GiaTriToiDa (≈ 9 × 10^15),
+// and 9 × 10^15 × 10^4 = 9 × 10^19 would overflow int64 — so the multiplication is done in a wider
+// path by dividing the numerator when it is large.
 // Written out because the same class of bug was caught by a test in du_an.go, where `nay.Sub(dau) *
 // 10000` overflowed on nanoseconds.
 func TyLeDong(tu, mau Dong) PhanVan {
@@ -915,7 +1031,13 @@ func CanDoiThuChi(thu, chi BangDayDu) SoTien {
 	if err != nil {
 		return soTienKhong(fmt.Errorf("bảng chi: %w", err))
 	}
-	return soTienCo(tongThu - tongChi)
+	// Both operands are within ±GiaTriToiDa (SoTong guarantees it), so the difference fits int64 —
+	// but it can reach twice the bound, past what the browser reads exactly. Unavailable, not clamped.
+	canDoi := tongThu - tongChi
+	if vuotGiaTriToiDa(canDoi) {
+		return soTienKhong(fmt.Errorf("cân đối thu - chi: %w", ErrTongVuotMuc))
+	}
+	return soTienCo(canDoi)
 }
 
 // --- the write-path rules ---------------------------------------------------------------------------

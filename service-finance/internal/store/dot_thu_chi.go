@@ -27,20 +27,25 @@ import (
 // that looks missing while it is still counted in the line's figure.
 var ErrQuaNhieuDot = errors.New("ngan_sach: khoản mục vượt trần số đợt thu chi")
 
-// TranDotMotKhoanMuc is the hard upper bound on one line's live batches. Migration 0008 expects "a few
-// dozen per leaf line per year"; 2000 is far past that and short of anything that is still a list a
-// person reads. Approaching it means paging, not a bigger constant.
-const TranDotMotKhoanMuc = 2000
+// TranDotMotKhoanMuc — the domain's ceiling (domain.TranDotMotKhoanMuc), named here too because the
+// list read below enforces it. One value: the write refuses at the same number the read does.
+const TranDotMotKhoanMuc = domain.TranDotMotKhoanMuc
 
-// tongDotCuaBang sums the LIVE batches of every live line of one sheet, per line and column.
+// tongDotCuaBang sums the LIVE batches of every live LEAF line in `entries` mode of one sheet, per
+// line and column.
+//
+// ONLY `entries` LEAVES ($3 = 'entries', no live child): those are the only lines whose displayed
+// figure is the batch sum (BangDayDu.GiaTri). Summing every line's batches cost a scan for figures
+// nobody reads — and, before the sum stopped failing the read, let one oversized sum on a `manual`
+// line lock the whole sheet over a number that counts nowhere.
 //
 // `d.deleted_at IS NULL` IS THE CLAUSE THAT CAUSES INCIDENTS WHEN MISSING (0008, question 4a).
 // `g.gia_tri IS NOT NULL` + GROUP BY means a (line, column) with no stated amount produces NO ROW, so
 // the domain reads it as empty (`—`), never 0 (§9 rule 4).
 //
 // `::text` BECAUSE SUM(BIGINT) IS NUMERIC in PostgreSQL. The text is parsed with strconv.ParseInt, so a
-// sum that does not fit int64 is a named refusal (domain.ErrTongDotVuotMuc) rather than whatever a
-// driver does with an oversize numeric.
+// sum that does not fit int64 is detected (strconv.ErrRange) rather than whatever a driver does with an
+// oversize numeric — and it becomes THAT cell's reason, not the sheet's failure (quetTongDot).
 //
 // tenant_id IS BOUND ON EVERY TABLE OF THE JOIN (rule 1): joining on ids alone would match another
 // commune's row wherever ids collide.
@@ -52,21 +57,36 @@ const tongDotCuaBang = `SELECT d.khoan_muc_id, g.cot_id, SUM(g.gia_tri)::text
 	  ON k.tenant_id = d.tenant_id AND k.id = d.khoan_muc_id
 	WHERE g.tenant_id = $1 AND k.bang_id = $2
 	  AND k.deleted_at IS NULL AND d.deleted_at IS NULL AND g.gia_tri IS NOT NULL
+	  AND k.cach_tinh = $3
+	  AND NOT EXISTS (SELECT 1 FROM khoan_muc_ngan_sach c
+	                   WHERE c.tenant_id = k.tenant_id AND c.cha_id = k.id AND c.deleted_at IS NULL)
 	GROUP BY d.khoan_muc_id, g.cot_id`
 
-func quetTongDot(rows *sql.Rows) (map[string]map[string]domain.Dong, error) {
+// quetTongDot returns the sums that fit int64, and SEPARATELY the (line, column) pairs whose sum does
+// not. An oversized sum is NOT an error of the read: failing here failed the whole sheet, which locked
+// every write — GoDot included, the one act that removes the offending batch. The domain turns the
+// flag into that one cell's reason (domain.ErrTongDotVuotMuc). Any OTHER parse failure is not a size
+// and still fails: a sum column that is not a number is a defect, not a figure.
+func quetTongDot(rows *sql.Rows) (map[string]map[string]domain.Dong, map[string]map[string]bool, error) {
 	defer rows.Close()
 	ra := map[string]map[string]domain.Dong{}
+	vuot := map[string]map[string]bool{}
 	for rows.Next() {
 		var khoanMucID, cotID, tong string
 		if err := rows.Scan(&khoanMucID, &cotID, &tong); err != nil {
-			return nil, fmt.Errorf("ngan_sach: đọc dòng tổng đợt: %w", err)
+			return nil, nil, fmt.Errorf("ngan_sach: đọc dòng tổng đợt: %w", err)
 		}
 		g, err := strconv.ParseInt(tong, 10, 64)
+		if errors.Is(err, strconv.ErrRange) {
+			if vuot[khoanMucID] == nil {
+				vuot[khoanMucID] = map[string]bool{}
+			}
+			vuot[khoanMucID][cotID] = true
+			continue
+		}
 		if err != nil {
-			// The figure is not quoted: the operator needs the commune (added by the caller) and the
-			// fact, not a number from the commune's budget.
-			return nil, domain.ErrTongDotVuotMuc
+			// The text is not quoted: it is a figure from the commune's budget.
+			return nil, nil, fmt.Errorf("ngan_sach: tổng đợt không phải số nguyên: %w", strconv.ErrSyntax)
 		}
 		if ra[khoanMucID] == nil {
 			ra[khoanMucID] = map[string]domain.Dong{}
@@ -74,9 +94,9 @@ func quetTongDot(rows *sql.Rows) (map[string]map[string]domain.Dong, error) {
 		ra[khoanMucID][cotID] = domain.Dong(g)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("ngan_sach: duyệt tổng đợt: %w", err)
+		return nil, nil, fmt.Errorf("ngan_sach: duyệt tổng đợt: %w", err)
 	}
-	return ra, nil
+	return ra, vuot, nil
 }
 
 // --- reads outside a transaction (GET /api/v1/budget-lines/{id}/entries) ---------------------------
@@ -267,6 +287,22 @@ func (s *NganSachStore) CoDotConSong(ctx context.Context, tx *store.ScopedTx,
 		return false, fmt.Errorf("ngan_sach: kiểm đợt còn sống: %w", err)
 	}
 	return co, nil
+}
+
+const demDotSong = `SELECT count(*) FROM dot_thu_chi
+	WHERE tenant_id = $1 AND khoan_muc_id = $2 AND deleted_at IS NULL`
+
+// DemDotSong counts one line's LIVE batches, inside the write transaction — the number the batch
+// ceiling (domain.TranDotMotKhoanMuc) is checked against before an insert. It runs AFTER the sheet's
+// FOR UPDATE lock (every batch write and removal takes that lock first), so two concurrent writes
+// cannot both see 1999 and both insert.
+func (s *NganSachStore) DemDotSong(ctx context.Context, tx *store.ScopedTx, khoanMucID string) (int, error) {
+	var n int
+	err := tx.Underlying().QueryRowContext(ctx, demDotSong, string(tx.TenantID()), khoanMucID).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("ngan_sach: đếm đợt còn sống: %w", err)
+	}
+	return n, nil
 }
 
 // --- writes --------------------------------------------------------------------------------------------

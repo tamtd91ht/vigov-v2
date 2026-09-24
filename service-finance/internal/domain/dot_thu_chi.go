@@ -92,11 +92,26 @@ var (
 	// batch, and a batch whose line or sheet was removed are one answer: the query reaches none of them.
 	ErrKhongThayDot = errors.New("ngan_sach: không có đợt thu chi này trong xã")
 
-	// ErrTongDotVuotMuc — the sum of a line's batches in one column does not fit in int64 đồng. NOT
-	// REACHABLE WITH REAL DATA (each amount is bounded by GiaTriToiDa); it exists so that an
-	// impossible sum is a refusal the operator sees, never a wrapped-around figure on a report.
-	ErrTongDotVuotMuc = errors.New("ngan_sach: tổng các đợt của một khoản mục vượt phạm vi số nguyên")
+	// ErrTongDotVuotMuc — the sum of a line's batches in one column is past GiaTriToiDa, or past
+	// int64 altogether. REACHABLE: two batches at the ceiling already exceed it, and 2000 of them
+	// exceed int64. On READ it makes THAT line's figure unavailable with this sentence (BangDayDu
+	// .GiaTri) — never the whole sheet, because GoDot, the remedy, reads the sheet too. On the
+	// entries -> manual switch it is a refusal (409): the sum cannot become a typed figure.
+	ErrTongDotVuotMuc = errors.New(
+		"ngan_sach: tổng các đợt của khoản mục vượt mức một con số ngân sách có thể có — gỡ đợt ghi nhầm để tính lại")
+
+	// ErrKhoanMucDaDuDot — recording one more batch would pass TranDotMotKhoanMuc. REFUSED AT THE
+	// WRITE, because the `⇄` list refuses to read past the same ceiling: a batch accepted beyond it is
+	// counted in the figure yet can never be listed, reconciled or removed.
+	ErrKhoanMucDaDuDot = errors.New(
+		"ngan_sach: khoản mục đã đủ số đợt thu chi tối đa — không ghi thêm được; gỡ bớt đợt ghi nhầm trước")
 )
+
+// TranDotMotKhoanMuc is the hard upper bound on one line's live batches, enforced on the write
+// (ErrKhoanMucDaDuDot) and on the list read (store.ErrQuaNhieuDot) alike. Migration 0008 expects "a
+// few dozen per leaf line per year"; 2000 is far past that and short of anything that is still a list
+// a person reads. Approaching it means paging, not a bigger constant.
+const TranDotMotKhoanMuc = 2000
 
 // KiemTraCachTinhChon accepts the two modes a CLIENT may choose for a leaf: `manual` and `entries`.
 // `children` is refused here with the same sentence as before — it follows the tree.

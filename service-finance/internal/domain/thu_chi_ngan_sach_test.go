@@ -350,12 +350,12 @@ func TestKhoanMucChaCongTuDongCon_chiConTrucTiep(t *testing.T) {
 		},
 	}
 
-	if g, co := b.GiaTri("cha", "c"); !co || g != 42 {
+	if g, co := giaVaCo(t, b, "cha", "c"); !co || g != 42 {
 		t.Fatalf("cha = (%d,%v), muốn (42,true)", g, co)
 	}
 	// The grandparent has ONE direct child, whose value is 42. A walk that also added the
 	// grandchildren would produce 84.
-	if g, co := b.GiaTri("ong", "c"); !co || g != 42 {
+	if g, co := giaVaCo(t, b, "ong", "c"); !co || g != 42 {
 		t.Fatalf("ông = (%d,%v), muốn (42,true) — 84 nghĩa là đang cộng cả cháu", g, co)
 	}
 }
@@ -372,7 +372,7 @@ func TestChaKhongCoConNaoCoSoThiTRONGChuKhongPhaiKhongDong(t *testing.T) {
 		},
 		Gia: map[string]map[string]Dong{},
 	}
-	if g, co := b.GiaTri("cha", "c"); co {
+	if g, co := giaVaCo(t, b, "cha", "c"); co {
 		t.Fatalf("cha = (%d,true), muốn TRỐNG", g)
 	}
 }
@@ -386,7 +386,7 @@ func TestSoKHONGLaMotGiaTriThatChuKhongPhaiOTrong(t *testing.T) {
 		KhoanMuc: []KhoanMucNganSach{{ID: "k", BangID: "b", Ten: "1.1", ThuTu: 1}},
 		Gia:      map[string]map[string]Dong{"k": {"c": 0}},
 	}
-	if g, co := b.GiaTri("k", "c"); !co || g != 0 {
+	if g, co := giaVaCo(t, b, "k", "c"); !co || g != 0 {
 		t.Fatalf("ô ghi 0 đọc ra (%d,%v), muốn (0,true)", g, co)
 	}
 }

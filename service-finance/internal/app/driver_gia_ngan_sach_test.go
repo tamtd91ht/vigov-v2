@@ -72,12 +72,14 @@ type khoNSGia struct {
 	// arithmetic and no filtering, so "removed batches are excluded" is asserted on the SQL text.
 	// dotConSong is what CoDotConSong answers; dot is the live batch DotTheoIDTrongGiaoDich finds
 	// (nil = none).
-	giaDot     map[string]map[string]domain.Dong
+	giaDot map[string]map[string]domain.Dong
 	// tongDotTho OVERRIDES giaDot with the raw text the SUM(...)::text column hands back — the only
 	// way to present a sum that does not fit int64, which is the case quetTongDot must refuse.
 	tongDotTho map[string]map[string]string
 	dotConSong bool
 	dot        *domain.DotThuChi
+	// soDotSong is what DemDotSong answers — the live batch count the write ceiling is checked against.
+	soDotSong int
 
 	loi error
 
@@ -116,6 +118,17 @@ func (k *khoNSGia) cau(tu string) []lenhGhi {
 }
 
 func (k *khoNSGia) coCau(tu string) bool { return len(k.cau(tu)) > 0 }
+
+// coConSong mirrors the NOT EXISTS of store.tongDotCuaBang: whether any line of the fake names id as
+// its parent.
+func (k *khoNSGia) coConSong(id string) bool {
+	for _, x := range k.khoanMuc {
+		if x.ChaID == id && x.ID != id {
+			return true
+		}
+	}
+	return false
+}
 
 func (k *khoNSGia) kiemLoi(q string) error {
 	if k.loi != nil {
@@ -174,8 +187,18 @@ func (c *connNSGia) QueryContext(_ context.Context, q string, args []driver.Name
 	// THE BATCH STATEMENTS COME FIRST: the sum names `khoan_muc_ngan_sach` and the EXISTS names
 	// `SELECT EXISTS`, both of which a later case would otherwise answer.
 	case strings.Contains(q, "SUM(g.gia_tri)"):
+		// THE FAKE APPLIES THE MODE AND LEAF FILTER the statement binds ($3 and the NOT EXISTS), so a
+		// test can prove that a `manual` line's oversized sum is never even read. With no $3 bound
+		// (an older statement) nothing would be filtered and that test would turn red.
+		cheDo := ""
+		if len(args) >= 3 {
+			cheDo, _ = args[2].Value.(string)
+		}
 		var hang [][]driver.Value
 		for _, k := range c.k.khoanMuc {
+			if string(k.CachTinh) != cheDo || c.k.coConSong(k.ID) {
+				continue
+			}
 			for _, cot := range c.k.cot {
 				if tho, co := c.k.tongDotTho[k.ID][cot.ID]; co {
 					hang = append(hang, []driver.Value{k.ID, cot.ID, tho})
@@ -190,6 +213,9 @@ func (c *connNSGia) QueryContext(_ context.Context, q string, args []driver.Name
 
 	case strings.Contains(q, "SELECT EXISTS (SELECT 1 FROM dot_thu_chi"):
 		return &rowsGia{cot: []string{"exists"}, hang: [][]driver.Value{{c.k.dotConSong}}}, nil
+
+	case strings.Contains(q, "count(*) FROM dot_thu_chi"):
+		return &rowsGia{cot: []string{"count"}, hang: [][]driver.Value{{int64(c.k.soDotSong)}}}, nil
 
 	case strings.Contains(q, "g.dot_id = $2"):
 		var hang [][]driver.Value

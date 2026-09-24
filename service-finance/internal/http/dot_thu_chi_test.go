@@ -188,6 +188,14 @@ func TestDot_TuChoiRaDungMaVaKhongNhacDonVi(t *testing.T) {
 		{domain.ErrNgayDotNgoaiLich, http.StatusBadRequest},
 		{domain.ErrDotKhongCoSoTienNao, http.StatusBadRequest},
 		{domain.ErrKhongThayKhoanMuc, http.StatusNotFound},
+		// The batch ceiling at the write: the caller holds the right; the LINE is full.
+		{domain.ErrKhoanMucDaDuDot, http.StatusConflict},
+		// entries -> manual with an oversized sum: remove a batch, not resend the body. Wrapped with
+		// ErrGiaTriQuaLon (app.chepTongDotVaoO) and must still be 409, never the 400 of the typo guard.
+		{domain.ErrTongDotVuotMuc, http.StatusConflict},
+		{fmt.Errorf("%w: %w", domain.ErrTongDotVuotMuc, domain.ErrGiaTriQuaLon), http.StatusConflict},
+		// A typed amount past the new ceiling (2^53 − 1).
+		{domain.ErrGiaTriQuaLon, http.StatusBadRequest},
 	} {
 		t.Run(tc.loi.Error(), func(t *testing.T) {
 			m := dungMayChuNganSach(t)
@@ -259,6 +267,75 @@ func TestSuaDong_MethodChildrenHoacLaTra400(t *testing.T) {
 	// POST still refuses `method` of any value: a new line is always a `manual` leaf.
 	doiMa(t, m.goi(t, http.MethodPost, hostA, duongDong, canBoGhi(xaA),
 		`{"sheet_id":"`+idBangChi+`","name":"X","order":1,"method":"entries"}`), http.StatusBadRequest)
+}
+
+func TestDocBang_OKhongTinhDuocLaNullKemLyDoChuKhongPhaiSo(t *testing.T) {
+	// The wire half of "a figure that cannot be computed comes back with a reason, never 0": the
+	// entries leaf's batch sum did not fit int64. Its cell and its parent's cell are `null` WITH a key
+	// in `unavailable_reasons`; an ordinary empty cell stays `null` with NO key; the summary card says
+	// why instead of a blank; everything else on the sheet is a number as before. 200, not 500.
+	m := dungMayChuNganSach(t)
+	m.capQuyen(xaA, "budget.read")
+
+	b := bangChiCuaXaA()
+	b.KhoanMuc[0].CachTinh = domain.TinhTheoCon
+	b.KhoanMuc[1].ChaID = idDongChi
+	b.KhoanMuc[1].CachTinh = domain.TinhTheoDot
+	b.GiaDotVuotMuc = map[string]map[string]bool{"k-a": {"c-chi": true}}
+	m.doc.theo[xaA][khoaBang(2026, domain.BangChi)] = b
+
+	w := m.goi(t, http.MethodGet, hostA, duongBang+"?year=2026&kind=chi", canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
+	var ra bangDayDuRa
+	docJSON(t, w, &ra)
+	if !strings.Contains(w.Body.String(), `"unavailable_reasons"`) {
+		t.Fatalf("thân không có khoá `unavailable_reasons`: %s", w.Body.String())
+	}
+	for _, d := range ra.Lines {
+		if v, co := d.Values["c-chi"]; !co || v != nil {
+			t.Fatalf("dòng %s c-chi = %v (có khoá %v), muốn null", d.ID, v, co)
+		}
+		if !strings.Contains(d.UnavailableReasons["c-chi"], domain.ErrTongDotVuotMuc.Error()) {
+			t.Fatalf("dòng %s thiếu lý do: %+v", d.ID, d.UnavailableReasons)
+		}
+		// c-dt of the entries leaf is simply EMPTY (no batch stated it): null and NO reason.
+		if _, co := d.UnavailableReasons["c-dt"]; co {
+			t.Fatalf("dòng %s: ô trống bị gắn lý do như ô không tính được", d.ID)
+		}
+	}
+	var oChi *oTongRa
+	for i := range ra.Summary.Cells {
+		if ra.Summary.Cells[i].ColumnID == "c-chi" {
+			oChi = &ra.Summary.Cells[i]
+		}
+	}
+	if oChi == nil || oChi.Value != nil || !strings.Contains(oChi.UnavailableReason, domain.ErrTongDotVuotMuc.Error()) {
+		t.Fatalf("ô tổng c-chi = %+v, muốn null kèm lý do", oChi)
+	}
+	if ra.Summary.Indicator.BasisPoints != nil || ra.Summary.Indicator.UnavailableReason == "" {
+		t.Fatalf("chỉ số = %+v, muốn không có số và có lý do", ra.Summary.Indicator)
+	}
+}
+
+func TestDot_SoTienDaLuuVuotTranMoiLaNullKemLyDo(t *testing.T) {
+	// A batch amount stored under the old 10^17 ceiling. The list must still READ — it is how the
+	// accountant finds the batch to remove — but the amount is not sent as a number the browser would
+	// round.
+	d := dotCuaXaA().Dot[0]
+	d.GiaTri = map[string]domain.Dong{"c-chi": 50_000_000_000_000_000, "c-dt": domain.GiaTriToiDa}
+	ra := dotRaNgoai(d, bangChiCuaXaA().Cot)
+	if v, co := ra.Values["c-chi"]; !co || v != nil {
+		t.Fatalf("c-chi = %v, muốn null", v)
+	}
+	if !strings.Contains(ra.UnavailableReasons["c-chi"], domain.ErrGiaTriDaLuuVuotMuc.Error()) {
+		t.Fatalf("thiếu lý do: %+v", ra.UnavailableReasons)
+	}
+	if v := ra.Values["c-dt"]; v == nil || *v != int64(domain.GiaTriToiDa) {
+		t.Fatalf("c-dt đúng trần = %v, muốn nguyên số", v)
+	}
+	if _, co := ra.UnavailableReasons["c-dt"]; co {
+		t.Fatal("số đúng trần bị gắn lý do")
+	}
 }
 
 func TestDocBang_LaTheoDotHienTongDotVaChaCongVao(t *testing.T) {

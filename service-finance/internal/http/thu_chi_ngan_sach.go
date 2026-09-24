@@ -128,6 +128,12 @@ type dongRa struct {
 	IsHeadline bool `json:"is_headline"`
 
 	Values map[string]*int64 `json:"values"` // columnID -> đồng, or null for an empty cell
+
+	// UnavailableReasons is columnID -> the sentence explaining why that cell's figure CANNOT BE
+	// COMPUTED (a sum past the exact range, a stored value past the ceiling — domain.BangDayDu.GiaTri).
+	// Such a cell is `null` in Values AND has a key here; an EMPTY cell is `null` with no key here.
+	// Omitted when every cell of the line is a figure or empty — the ordinary case.
+	UnavailableReasons map[string]string `json:"unavailable_reasons,omitempty"`
 }
 
 // oTongRa is one summary cell: the marked row's figure in one numeric column (§2's "Hàng ô tóm tắt
@@ -137,6 +143,10 @@ type oTongRa struct {
 	Name     string `json:"name"`
 	Role     string `json:"role,omitempty"`
 	Value    *int64 `json:"value"`
+
+	// UnavailableReason is set when Value is null because the figure cannot be computed (or, on
+	// `revenue_totals`, cannot be read from the marked row) — never set beside a number.
+	UnavailableReason string `json:"unavailable_reason,omitempty"`
 }
 
 // chiSoRa is one indicator: a ratio, or the reason there is not one.
@@ -226,6 +236,7 @@ func bangDayDuRaNgoai(d domain.BangDayDu) bangDayDuRa {
 	ra.Lines = make([]dongRa, 0, len(d.KhoanMuc))
 	for _, k := range d.KhoanMuc {
 		gia := make(map[string]*int64, len(d.Cot))
+		var lyDo map[string]string
 		for _, c := range d.Cot {
 			if c.Kieu != domain.CotSo {
 				// A percentage column carries no stored figure at all (§9 rule 3). Omitting it here
@@ -233,16 +244,25 @@ func bangDayDuRaNgoai(d domain.BangDayDu) bangDayDuRa {
 				// from looking the same on the wire.
 				continue
 			}
-			if g, co := d.GiaTri(k.ID, c.ID); co {
-				v := int64(g)
+			s := d.GiaTri(k.ID, c.ID)
+			switch {
+			case s.Co:
+				v := int64(s.Gia)
 				gia[c.ID] = &v
-			} else {
+			case s.LyDo != "":
+				gia[c.ID] = nil
+				if lyDo == nil {
+					lyDo = map[string]string{}
+				}
+				lyDo[c.ID] = s.LyDo
+			default:
 				gia[c.ID] = nil
 			}
 		}
 		ra.Lines = append(ra.Lines, dongRa{
 			ID: k.ID, ParentID: k.ChaID, No: k.TT, Name: k.Ten, Order: k.ThuTu,
 			Method: string(k.CachTinh), Level: k.Cap, IsHeadline: k.LaDongTong, Values: gia,
+			UnavailableReasons: lyDo,
 		})
 	}
 
@@ -271,9 +291,11 @@ func tomTatRaNgoai(d domain.BangDayDu) tomTatRa {
 			continue
 		}
 		o := oTongRa{ColumnID: c.ID, Name: c.Ten, Role: string(c.VaiTro)}
-		if g, co := d.GiaTri(dong.ID, c.ID); co {
-			v := int64(g)
+		if s := d.GiaTri(dong.ID, c.ID); s.Co {
+			v := int64(s.Gia)
 			o.Value = &v
+		} else {
+			o.UnavailableReason = s.LyDo // "" for an empty cell
 		}
 		ra.Cells = append(ra.Cells, o)
 	}
@@ -500,7 +522,13 @@ func (h *Handler) DocChiSoNganSach(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			o := oTongRa{ColumnID: cot.ID, Name: cot.Ten, Role: string(vai)}
-			if g, co, _ := thu.SoTong(vai); co {
+			g, co, err := thu.SoTong(vai)
+			switch {
+			case err != nil:
+				// The sentence and not a bare null: the figure is unavailable for a reason the
+				// commune can act on (no marked row, an empty cell, a sum past the exact range).
+				o.UnavailableReason = err.Error()
+			case co:
 				v := int64(g)
 				o.Value = &v
 			}
@@ -847,7 +875,11 @@ func (h *Handler) traLoiLoiNganSach(w http.ResponseWriter, r *http.Request, viec
 		errors.Is(err, domain.ErrDotChiGhiVaoLa),
 		errors.Is(err, domain.ErrKhoanMucTheoDotKhongGoThang),
 		errors.Is(err, domain.ErrKhoanMucTheoDotConDot),
-		errors.Is(err, domain.ErrKhoanMucChaKhongDoiCachTinh):
+		errors.Is(err, domain.ErrKhoanMucChaKhongDoiCachTinh),
+		errors.Is(err, domain.ErrKhoanMucDaDuDot),
+		// Checked BEFORE the 400 list: on entries -> manual it is wrapped together with
+		// ErrGiaTriQuaLon, and the act that fixes it is removing a batch, not resending the body.
+		errors.Is(err, domain.ErrTongDotVuotMuc):
 		// The domain sentence names the rule and the way out. None of these carries a figure or
 		// any batch text — `counterparty` never reaches an error (rule 3, forbidden #3).
 		httpx.WriteError(w, http.StatusConflict, "budget_tree", err.Error(), "")

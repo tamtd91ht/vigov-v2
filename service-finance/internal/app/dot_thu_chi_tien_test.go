@@ -222,3 +222,156 @@ func TestDanhSachDotQuaStoreThatChiThayDotSongCuaKhoanMucSongTrongBangSong(t *te
 		}
 	}
 }
+
+// --- (5) one oversized batch sum never locks the sheet --------------------------------------------------
+//
+// Before 25/09/2026 the sheet read computed the batch sum of EVERY line and failed on the first that
+// did not fit int64 — so one bad sum refused every write on the board, GoDot included, and GoDot is
+// the only act that removes the batch that caused it.
+
+const tongVuotInt64 = "9223372036854775808" // 2^63: SUM(BIGINT) is NUMERIC and can reach it
+
+func khoCoTongDotVuot() *khoNSGia {
+	k := khoMau()
+	k.khoanMuc[1].CachTinh = domain.TinhTheoDot
+	k.tongDotTho = map[string]map[string]string{idDongKia: {"c-chi": tongVuotInt64}}
+	return k
+}
+
+func TestTongDotVuotInt64GoDotVanChay(t *testing.T) {
+	k := khoCoTongDotVuot()
+	k.dot = dotSong() // a batch of the offending line
+	uc, ctx := dungUseCaseNganSach(t, k)
+
+	if err := uc.GoDot(ctx, k.dot.ID, "ghi nhầm số tiền", nguoiGhi()); err != nil {
+		t.Fatalf("gỡ đợt gây ra tổng vượt mức bị chặn: %v", err)
+	}
+	if !k.coCau("UPDATE dot_thu_chi") || !k.coCau("INSERT INTO audit_log") || k.daCommit != 1 {
+		t.Fatalf("gỡ đợt không ghi đủ: commit %d", k.daCommit)
+	}
+}
+
+func TestTongDotVuotInt64CacGhiKhacVanChay(t *testing.T) {
+	t.Run("gõ số vào dòng khác", func(t *testing.T) {
+		k := khoCoTongDotVuot()
+		uc, ctx := dungUseCaseNganSach(t, k)
+		_, err := uc.SuaKhoanMuc(ctx, idDongMau,
+			YeuCauSuaKhoanMuc{GiaTri: map[string]*domain.Dong{"c-chi": dong(6_000_000)}}, nguoiGhi())
+		if err != nil {
+			t.Fatalf("ghi ô dòng khác bị chặn bởi tổng đợt của dòng kia: %v", err)
+		}
+		if k.daCommit != 1 {
+			t.Fatalf("commit %d, muốn 1", k.daCommit)
+		}
+	})
+	t.Run("ghi thêm đợt vào chính dòng đó", func(t *testing.T) {
+		k := khoCoTongDotVuot()
+		uc, ctx := dungUseCaseNganSach(t, k)
+		if _, err := uc.GhiDot(ctx, yeuCauDotMau(), nguoiGhi()); err != nil {
+			t.Fatalf("ghi đợt bị chặn: %v", err)
+		}
+	})
+}
+
+func TestTongDotVuotInt64DocBangVanRaVaChiDongDoKhongTinhDuoc(t *testing.T) {
+	// Through the REAL store's non-transactional read (GET /budget-sheets).
+	k := khoCoTongDotVuot()
+	db := sql.OpenDB(k)
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
+	_, ctx := dungUseCaseNganSach(t, khoMau())
+	s := fistore.NewNganSachStore(store.New(db))
+
+	day, err := s.BangDayDu(ctx, 2026, domain.BangChi)
+	if err != nil {
+		t.Fatalf("đọc bảng thất bại vì một tổng đợt: %v", err)
+	}
+	if !day.GiaDotVuotMuc[idDongKia]["c-chi"] {
+		t.Fatalf("không đánh dấu tổng vượt mức: %+v", day.GiaDotVuotMuc)
+	}
+	if o := day.GiaTri(idDongKia, "c-chi"); o.Co || !strings.Contains(o.LyDo, domain.ErrTongDotVuotMuc.Error()) {
+		t.Fatalf("ô vượt mức = %+v, muốn không tính được kèm lý do", o)
+	}
+	if o := day.GiaTri(idDongMau, "c-chi"); !o.Co || o.Gia != 5_000_000 {
+		t.Fatalf("dòng khác = %+v, muốn 5000000", o)
+	}
+	// The statement binds `entries` as $3 — the only mode whose figure is the batch sum.
+	tong := k.cau("SUM(g.gia_tri)")
+	if len(tong) != 1 || !coGiaTri(tong[0], string(domain.TinhTheoDot)) || !strings.Contains(tong[0].sql, "NOT EXISTS") {
+		t.Fatalf("câu tổng đợt không lọc theo lá `entries`: %+v", tong)
+	}
+}
+
+func TestTongDotChiDocChoLaTheoDot(t *testing.T) {
+	// A MANUAL line whose batch "sum" is not even a number. If the sheet read summed that line, the
+	// write would fail on it; it must not be read at all. Then the same text on an ENTRIES line does
+	// fail — proving the filter, not a lenient parser, is what let the first case through.
+	k := khoMau()
+	k.tongDotTho = map[string]map[string]string{idDongKia: {"c-chi": "khong-phai-so"}}
+	uc, ctx := dungUseCaseNganSach(t, k)
+	if _, err := uc.GhiDot(ctx, yeuCauDotMau(), nguoiGhi()); err != nil {
+		t.Fatalf("dòng `manual` vẫn bị đọc tổng đợt: %v", err)
+	}
+
+	k2 := khoMau()
+	k2.khoanMuc[1].CachTinh = domain.TinhTheoDot
+	k2.tongDotTho = map[string]map[string]string{idDongKia: {"c-chi": "khong-phai-so"}}
+	uc2, ctx2 := dungUseCaseNganSach(t, k2)
+	if _, err := uc2.GhiDot(ctx2, yeuCauDotMau(), nguoiGhi()); err == nil {
+		t.Fatal("tổng đợt không phải số trên dòng `entries` mà vẫn ghi — phép kiểm trên xanh vô nghĩa")
+	}
+	if k2.daCommit != 0 {
+		t.Fatalf("commit %d, muốn 0", k2.daCommit)
+	}
+}
+
+// --- (6) the batch ceiling holds at the write --------------------------------------------------------------
+
+func TestGhiDotThu2001BiTuChoiKhongGhiGi(t *testing.T) {
+	k := khoMau()
+	k.soDotSong = domain.TranDotMotKhoanMuc
+	uc, ctx := dungUseCaseNganSach(t, k)
+
+	_, err := uc.GhiDot(ctx, yeuCauDotMau(), nguoiGhi())
+	if !errors.Is(err, domain.ErrKhoanMucDaDuDot) {
+		t.Fatalf("đợt thứ %d = %v, muốn ErrKhoanMucDaDuDot", domain.TranDotMotKhoanMuc+1, err)
+	}
+	if k.coCau("INSERT INTO dot_thu_chi") || k.coCau("INSERT INTO gia_tri_dot") || k.coCau("INSERT INTO audit_log") {
+		t.Fatal("vượt trần đợt mà vẫn ghi")
+	}
+	if k.daCommit != 0 {
+		t.Fatalf("commit %d, muốn 0", k.daCommit)
+	}
+	// Counted UNDER the sheet lock, so two writers cannot both see 1999.
+	khoa, dem0 := k.thuTuCua("FOR UPDATE"), k.thuTuCua("count(*) FROM dot_thu_chi")
+	if khoa < 0 || dem0 < 0 || khoa > dem0 {
+		t.Fatal("đếm đợt trước khi khoá bảng")
+	}
+	dem := k.cau("count(*) FROM dot_thu_chi")
+	if len(dem) != 1 || !strings.Contains(dem[0].sql, "deleted_at IS NULL") || !coGiaTri(dem[0], idDongKia) {
+		t.Fatalf("câu đếm đợt sai: %+v", dem)
+	}
+
+	// The 2000th is still accepted.
+	k2 := khoMau()
+	k2.soDotSong = domain.TranDotMotKhoanMuc - 1
+	uc2, ctx2 := dungUseCaseNganSach(t, k2)
+	if _, err := uc2.GhiDot(ctx2, yeuCauDotMau(), nguoiGhi()); err != nil {
+		t.Fatalf("đợt thứ %d bị từ chối: %v", domain.TranDotMotKhoanMuc, err)
+	}
+}
+
+// --- (7) the new ceiling on a typed cell ----------------------------------------------------------------------
+
+func TestGoSoVuotTranMoiBiTuChoiKhongMoGiaoDich(t *testing.T) {
+	k := khoMau()
+	uc, ctx := dungUseCaseNganSach(t, k)
+	_, err := uc.SuaKhoanMuc(ctx, idDongMau,
+		YeuCauSuaKhoanMuc{GiaTri: map[string]*domain.Dong{"c-chi": dong(int64(domain.GiaTriToiDa) + 1)}}, nguoiGhi())
+	if !errors.Is(err, domain.ErrGiaTriQuaLon) {
+		t.Fatalf("= %v, muốn ErrGiaTriQuaLon", err)
+	}
+	if k.coCau("INSERT INTO gia_tri_khoan_muc") || k.daCommit != 0 {
+		t.Fatal("số vượt trần mà vẫn ghi")
+	}
+}

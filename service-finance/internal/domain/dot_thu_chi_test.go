@@ -35,31 +35,42 @@ func bangTheoDot() BangDayDu {
 	}
 }
 
+// giaVaCo reads one cell as (figure, present) and FAILS the test when the cell is unavailable — so a
+// test written for a figure cannot pass on an unavailable cell by reading its zero value.
+func giaVaCo(t *testing.T, b BangDayDu, khoanMucID, cotID string) (Dong, bool) {
+	t.Helper()
+	s := b.GiaTri(khoanMucID, cotID)
+	if s.LyDo != "" {
+		t.Fatalf("ô %s/%s không tính được: %s", khoanMucID, cotID, s.LyDo)
+	}
+	return s.Gia, s.Co
+}
+
 func TestGiaTri_LaTheoDotDocTongDotKhongDocOGoTay(t *testing.T) {
 	b := bangTheoDot()
-	if g, co := b.GiaTri("dot", "c-chi"); !co || g != 600 {
+	if g, co := giaVaCo(t, b, "dot", "c-chi"); !co || g != 600 {
 		t.Fatalf("lá `entries` = %d,%v — muốn tổng đợt 600", g, co)
 	}
 	// EMPTY, NOT 0 AND NOT THE STALE 9 999 999 (§9 rule 4, §9.1).
-	if g, co := b.GiaTri("dot", "c-dt"); co {
+	if g, co := giaVaCo(t, b, "dot", "c-dt"); co {
 		t.Fatalf("lá `entries` không có đợt nào ở c-dt mà vẫn ra %d", g)
 	}
 }
 
 func TestGiaTri_LaNhapTayBoQuaTongDot(t *testing.T) {
 	b := bangTheoDot()
-	if g, co := b.GiaTri("tay", "c-chi"); !co || g != 400 {
+	if g, co := giaVaCo(t, b, "tay", "c-chi"); !co || g != 400 {
 		t.Fatalf("lá `manual` = %d,%v — muốn số gõ tay 400, không phải tổng đợt", g, co)
 	}
 }
 
 func TestGiaTri_ChaCongCaLaTheoDot(t *testing.T) {
 	b := bangTheoDot()
-	if g, co := b.GiaTri("tong", "c-chi"); !co || g != 1_000 {
+	if g, co := giaVaCo(t, b, "tong", "c-chi"); !co || g != 1_000 {
 		t.Fatalf("cha = %d,%v — muốn 400 (tay) + 600 (tổng đợt) = 1000", g, co)
 	}
 	// c-dt: the manual leaf's 1000 + the entries leaf's EMPTY = 1000. Not 1000 + 9 999 999.
-	if g, co := b.GiaTri("tong", "c-dt"); !co || g != 1_000 {
+	if g, co := giaVaCo(t, b, "tong", "c-dt"); !co || g != 1_000 {
 		t.Fatalf("cha c-dt = %d,%v — muốn 1000; số gõ tay đã khoá của lá `entries` lọt vào tổng", g, co)
 	}
 }
@@ -84,8 +95,148 @@ func TestGiaTri_KhoanMucCoConThiCongConDuCachTinhLuu(t *testing.T) {
 	b := bangTheoDot()
 	b.KhoanMuc[0].CachTinh = TinhTheoDot
 	b.GiaDot["tong"] = map[string]Dong{"c-chi": 5}
-	if g, _ := b.GiaTri("tong", "c-chi"); g != 1_000 {
+	if g, _ := giaVaCo(t, b, "tong", "c-chi"); g != 1_000 {
 		t.Fatalf("cha mang nhãn `entries` = %d — muốn tổng con 1000", g)
+	}
+}
+
+// --- figures that cannot be computed: a reason, never a wrapped or clamped number ---------------------
+
+func TestTranGiaTriLaSoNguyenAnToanCuaTrinhDuyet(t *testing.T) {
+	// Pinned as a literal: 2^53 − 1 is what JSON.parse reads exactly. A value past it arrives in the
+	// browser rounded, so the ceiling moving up again would re-open a one-đồng-off display.
+	if GiaTriToiDa != 9_007_199_254_740_991 || int64(GiaTriToiDa) != 1<<53-1 {
+		t.Fatalf("GiaTriToiDa = %d, muốn 2^53-1", int64(GiaTriToiDa))
+	}
+	if err := KiemTraGiaTri(GiaTriToiDa); err != nil {
+		t.Fatalf("đúng trần bị từ chối: %v", err)
+	}
+	if err := KiemTraGiaTri(-GiaTriToiDa); err != nil {
+		t.Fatalf("đúng trần âm bị từ chối: %v", err)
+	}
+	// The old ceiling (10^17) is now a refusal on write.
+	if err := KiemTraGiaTri(100_000_000_000_000_000); !errors.Is(err, ErrGiaTriQuaLon) {
+		t.Fatalf("10^17 = %v, muốn ErrGiaTriQuaLon", err)
+	}
+}
+
+func TestGiaTri_ChaVuotTranThiKhongTinhDuocChuKhongRaSoAm(t *testing.T) {
+	// Two children each AT the ceiling: each is a legal figure, their sum is not one the browser can
+	// read. The old `tong += g` returned a plausible figure here (and wrapped to a NEGATIVE one once
+	// the operands were large enough); now the cell carries a reason.
+	b := bangTheoDot()
+	b.Gia["tay"]["c-chi"] = GiaTriToiDa
+	b.GiaDot["dot"]["c-chi"] = GiaTriToiDa
+
+	s := b.GiaTri("tong", "c-chi")
+	if s.Co || s.Gia != 0 {
+		t.Fatalf("cha vượt trần = %+v, muốn KHÔNG có số", s)
+	}
+	if !strings.Contains(s.LyDo, ErrTongVuotMuc.Error()) || !strings.Contains(s.LyDo, "Tổng số") {
+		t.Fatalf("lý do = %q, muốn câu ErrTongVuotMuc kèm tên dòng", s.LyDo)
+	}
+	// ISOLATED: the children themselves and the other column still read.
+	if g, co := giaVaCo(t, b, "tay", "c-chi"); !co || g != GiaTriToiDa {
+		t.Fatalf("lá tay = %d,%v", g, co)
+	}
+	if g, co := giaVaCo(t, b, "tong", "c-dt"); !co || g != 1_000 {
+		t.Fatalf("cột khác của cha = %d,%v, muốn 1000", g, co)
+	}
+	// Everything built on the unavailable figure is unavailable with the same sentence — never a
+	// ratio of a wrong number.
+	if _, _, err := b.SoTong(VaiTroChiNganSach); !errors.Is(err, ErrTongVuotMuc) {
+		t.Fatalf("SoTong = %v, muốn ErrTongVuotMuc", err)
+	}
+	if _, ty := ChiSoDatDuToan(b); ty.Co || !strings.Contains(ty.LyDo, ErrTongVuotMuc.Error()) {
+		t.Fatalf("chỉ số = %+v, muốn không tính được", ty)
+	}
+}
+
+func TestGiaTri_TongAmDuongQuaTranGiuaChungVanDung(t *testing.T) {
+	// A large positive and a large negative child: the partial sum passes the ceiling, the total does
+	// not. Checking per step would refuse a correct figure.
+	b := bangTheoDot()
+	b.Gia["tay"]["c-chi"] = GiaTriToiDa
+	b.GiaDot["dot"]["c-chi"] = -GiaTriToiDa + 5
+	b.KhoanMuc = append(b.KhoanMuc, KhoanMucNganSach{ID: "them", ChaID: "tong", Ten: "Chi khác", ThuTu: 4, Cap: 1})
+	b.Gia["them"] = map[string]Dong{"c-chi": 10}
+	if g, co := giaVaCo(t, b, "tong", "c-chi"); !co || g != 15 {
+		t.Fatalf("cha = %d,%v, muốn 15", g, co)
+	}
+}
+
+func TestCongKiemTraBaoTranInt64(t *testing.T) {
+	const max = Dong(1<<63 - 1)
+	if _, tran := congKiemTra(max, 1); !tran {
+		t.Fatal("max+1 không báo tràn")
+	}
+	if _, tran := congKiemTra(-max-1, -1); !tran {
+		t.Fatal("min-1 không báo tràn")
+	}
+	if s, tran := congKiemTra(max, -max); tran || s != 0 {
+		t.Fatalf("max-max = %d,%v", s, tran)
+	}
+}
+
+func TestGiaTri_TongDotKhongVuaInt64ChiKhoaDongDo(t *testing.T) {
+	// The store could not fit the SUM into int64 and flagged it. That line and its ancestors in that
+	// column are unavailable with the batch sentence; the other lines and columns are untouched.
+	b := bangTheoDot()
+	delete(b.GiaDot["dot"], "c-chi")
+	b.GiaDotVuotMuc = map[string]map[string]bool{"dot": {"c-chi": true}}
+
+	for _, id := range []string{"dot", "tong"} {
+		s := b.GiaTri(id, "c-chi")
+		if s.Co || !strings.Contains(s.LyDo, ErrTongDotVuotMuc.Error()) || !strings.Contains(s.LyDo, "Chi sự nghiệp") {
+			t.Fatalf("%s = %+v, muốn lý do tổng đợt kèm tên dòng lá", id, s)
+		}
+	}
+	if g, co := giaVaCo(t, b, "tay", "c-chi"); !co || g != 400 {
+		t.Fatalf("dòng nhập tay bên cạnh = %d,%v, muốn 400", g, co)
+	}
+	// A sum that fits int64 but is past the ceiling is the same sentence.
+	b.GiaDotVuotMuc = nil
+	b.GiaDot["dot"]["c-chi"] = GiaTriToiDa + 1
+	if s := b.GiaTri("dot", "c-chi"); s.Co || !strings.Contains(s.LyDo, ErrTongDotVuotMuc.Error()) {
+		t.Fatalf("tổng đợt vượt trần = %+v", s)
+	}
+}
+
+func TestGiaTri_SoDaLuuVuotTranMoiVanDocDuocVaBaoLyDo(t *testing.T) {
+	// A cell stored under the old 10^17 ceiling. The sheet READS; that cell is flagged.
+	b := bangTheoDot()
+	b.Gia["tay"]["c-chi"] = 50_000_000_000_000_000
+	s := b.GiaTri("tay", "c-chi")
+	if s.Co || !strings.Contains(s.LyDo, ErrGiaTriDaLuuVuotMuc.Error()) {
+		t.Fatalf("ô cũ vượt trần = %+v, muốn lý do ErrGiaTriDaLuuVuotMuc", s)
+	}
+	if err := KiemTraGiaTriDaLuu(-50_000_000_000_000_000); !errors.Is(err, ErrGiaTriDaLuuVuotMuc) {
+		t.Fatalf("KiemTraGiaTriDaLuu âm = %v", err)
+	}
+	if err := KiemTraGiaTriDaLuu(GiaTriToiDa); err != nil {
+		t.Fatalf("KiemTraGiaTriDaLuu đúng trần = %v", err)
+	}
+}
+
+func TestCanDoiVuotTranThiKhongTinhDuoc(t *testing.T) {
+	// Each side within the ceiling, the difference up to twice it — not a figure the browser reads.
+	cot := func(id string, v VaiTroCot) CotNganSach { return CotNganSach{ID: id, Ten: id, Kieu: CotSo, VaiTro: v} }
+	mot := func(loai LoaiBang, c CotNganSach, g Dong) BangDayDu {
+		return BangDayDu{
+			Bang:     BangNganSach{Loai: loai},
+			Cot:      []CotNganSach{c},
+			KhoanMuc: []KhoanMucNganSach{{ID: "t", Ten: "Tổng", LaDongTong: true}},
+			Gia:      map[string]map[string]Dong{"t": {c.ID: g}},
+		}
+	}
+	thu := mot(BangThu, cot("xh", VaiTroThuXaHuong), GiaTriToiDa)
+	chi := mot(BangChi, cot("cn", VaiTroChiNganSach), -GiaTriToiDa)
+	if s := CanDoiThuChi(thu, chi); s.Co || !strings.Contains(s.LyDo, ErrTongVuotMuc.Error()) {
+		t.Fatalf("cân đối vượt trần = %+v", s)
+	}
+	chi = mot(BangChi, cot("cn", VaiTroChiNganSach), 1)
+	if s := CanDoiThuChi(thu, chi); !s.Co || s.Gia != GiaTriToiDa-1 {
+		t.Fatalf("cân đối bình thường = %+v", s)
 	}
 }
 

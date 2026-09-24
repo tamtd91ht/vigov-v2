@@ -117,6 +117,16 @@ func (uc *NganSach) GhiDot(ctx context.Context, yc YeuCauGhiDot,
 		if day.CoCon(k.ID) {
 			return domain.ErrDotChiGhiVaoLa
 		}
+		// THE LIST'S CEILING, AT THE WRITE. The `⇄` read refuses past TranDotMotKhoanMuc rather than
+		// truncate; a batch accepted beyond it would count in the figure and never be listable, so it
+		// could never be reconciled or removed. Counted under the sheet lock khoaVaDocCay just took.
+		daCo, err := uc.kho.DemDotSong(ctx, tx, k.ID)
+		if err != nil {
+			return err
+		}
+		if daCo >= domain.TranDotMotKhoanMuc {
+			return fmt.Errorf("%w (tối đa %d đợt)", domain.ErrKhoanMucDaDuDot, domain.TranDotMotKhoanMuc)
+		}
 
 		// EVERY MENTIONED COLUMN MUST BE A LIVE NUMBER COLUMN OF THIS SHEET — checked for all of
 		// them before the first insert, in the sheet's column order so the delta reads the same way

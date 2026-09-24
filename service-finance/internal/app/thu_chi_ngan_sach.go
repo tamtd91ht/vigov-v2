@@ -85,6 +85,7 @@ type KhoNganSach interface {
 
 	// The batches (migration 0008) — dot_thu_chi.go in this package.
 	CoDotConSong(ctx context.Context, tx *store.ScopedTx, khoanMucID string) (bool, error)
+	DemDotSong(ctx context.Context, tx *store.ScopedTx, khoanMucID string) (int, error)
 	DotTheoIDTrongGiaoDich(ctx context.Context, tx *store.ScopedTx, id string) (domain.DotThuChi, error)
 	ChenDot(ctx context.Context, tx *store.ScopedTx, d domain.DotThuChi) error
 	ChenSoTienDot(ctx context.Context, tx *store.ScopedTx, dotID, cotID string, gia domain.Dong) error
@@ -780,13 +781,20 @@ func (uc *NganSach) chepTongDotVaoO(ctx context.Context, tx *store.ScopedTx, day
 		if cot.Kieu != domain.CotSo {
 			continue
 		}
+		if day.GiaDotVuotMuc[khoanMucID][cot.ID] {
+			// The sum does not even fit int64. It cannot become a typed figure; the way out is to
+			// remove the batch recorded in error, which GoDot still allows.
+			return nil, domain.ErrTongDotVuotMuc
+		}
 		tong, coTong := day.GiaDot[khoanMucID][cot.ID]
 		var moi *domain.Dong
 		if coTong {
 			// The typo guard every typed cell passes. A batch sum beyond it is not a budget figure,
 			// and copying it would put into a manual cell what no person could have typed there.
+			// Wrapped in BOTH sentinels: it is the batch sum that is wrong (409, remove a batch), and
+			// the reason is the same bound a typed cell meets.
 			if err := domain.KiemTraGiaTri(tong); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("%w: %w", domain.ErrTongDotVuotMuc, err)
 			}
 			g := tong
 			moi = &g
@@ -944,13 +952,23 @@ func (uc *NganSach) GoKhoanMuc(ctx context.Context, id, lyDoTho string, nguoi au
 		var traLai []map[string]any
 		chaVeTinhTay := truoc.ChaID != "" && len(day.ConTrucTiep(truoc.ChaID)) == 1
 		giuLai := map[string]domain.Dong{}
+		// khongTinhDuoc lists the columns whose parent figure was UNAVAILABLE (domain.BangDayDu.GiaTri)
+		// at the moment of removal. Nothing is written for them — there is no honest number to keep —
+		// and the entry says so, so an empty parent cell afterwards is explained rather than looking
+		// like "nobody entered this". The removal itself is NOT refused: removing the offending child
+		// may be exactly the fix.
+		var khongTinhDuoc []string
 		if chaVeTinhTay {
 			for _, cot := range day.Cot {
 				if cot.Kieu != domain.CotSo {
 					continue
 				}
-				if g, co := day.GiaTri(truoc.ChaID, cot.ID); co {
-					giuLai[cot.ID] = g
+				s := day.GiaTri(truoc.ChaID, cot.ID)
+				switch {
+				case s.Co:
+					giuLai[cot.ID] = s.Gia
+				case s.LyDo != "":
+					khongTinhDuoc = append(khongTinhDuoc, cot.ID)
 				}
 			}
 		}
@@ -986,10 +1004,14 @@ func (uc *NganSach) GoKhoanMuc(ctx context.Context, id, lyDoTho string, nguoi au
 			"xoa_mem":      true,
 		}
 		if chaVeTinhTay {
-			than["cha_ve_nhap_tay"] = map[string]any{
+			chaVe := map[string]any{
 				"khoan_muc_id": truoc.ChaID,
 				"giu_lai":      traLai,
 			}
+			if len(khongTinhDuoc) > 0 {
+				chaVe["cot_khong_tinh_duoc"] = khongTinhDuoc
+			}
+			than["cha_ve_nhap_tay"] = chaVe
 		}
 		delta, err := json.Marshal(than)
 		if err != nil {

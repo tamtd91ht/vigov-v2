@@ -47,6 +47,12 @@ type dotRa struct {
 	// when this batch left it empty — the same shape dongRa.Values has. On the 201 of a create only
 	// the stated amounts appear; the client refetches the list, as it refetches the sheet.
 	Values map[string]*int64 `json:"values"`
+
+	// UnavailableReasons is columnID -> sentence, for an amount STORED before the ceiling was lowered
+	// (domain.GiaTriToiDa, 25/09/2026) that the browser could not read exactly. Such an amount is
+	// `null` in Values and keyed here, so the accountant can find the batch and remove it. Omitted in
+	// the ordinary case.
+	UnavailableReasons map[string]string `json:"unavailable_reasons,omitempty"`
 }
 
 // danhSachDotRa is the dialog's list.
@@ -87,6 +93,14 @@ func dotRaNgoai(d domain.DotThuChi, cot []domain.CotNganSach) dotRa {
 		ra.Values[c.ID] = nil
 	}
 	for cotID, g := range d.GiaTri {
+		if err := domain.KiemTraGiaTriDaLuu(g); err != nil {
+			ra.Values[cotID] = nil
+			if ra.UnavailableReasons == nil {
+				ra.UnavailableReasons = map[string]string{}
+			}
+			ra.UnavailableReasons[cotID] = err.Error()
+			continue
+		}
 		v := int64(g)
 		ra.Values[cotID] = &v
 	}
