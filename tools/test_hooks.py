@@ -229,8 +229,7 @@ CASES = [
     # trên máy đã clone, tức xanh vì lý do sai đúng nửa số máy.
     ("miniapp_sibling_guard", "bản sao đặt ở chỗ khác, không cùng cấp", BLOCK,
      w(KHO_KHAC + "/vihat-miniapp/internal/httpapi/api.go", "package httpapi\n")),
-    ("miniapp_sibling_guard", "sửa citizen-app khi kho ấy có mặt đúng chỗ", PASS,
-     w("citizen-app/src/content/company-profile.ts", "export const COMPANY = {} as const\n")),
+    # Hai ca "có kho / thiếu kho" nằm ở HOP_CAT_CASES, chạy trong một cây thư mục dựng tạm.
     ("miniapp_sibling_guard", "tệp ViGov bình thường, không thuộc chủ đề Mini App", PASS,
      w("service-petitions/internal/app/a.go", "package app\n")),
 
@@ -1198,11 +1197,55 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
     return sai
 
 
-def run(hook: str, payload: dict) -> int:
-    p = os.path.join(HOOKS, hook + ".py")
+def run(hook: str, payload: dict, hooks: str = HOOKS, cwd: str = ROOT) -> int:
+    p = os.path.join(hooks, hook + ".py")
     r = subprocess.run([sys.executable, p], input=json.dumps(payload, ensure_ascii=False),
-                       capture_output=True, text=True, encoding="utf-8", cwd=ROOT)
+                       capture_output=True, text=True, encoding="utf-8", cwd=cwd)
     return r.returncode
+
+
+# ---- Ca HỘP CÁT: hook chạy trong một cây thư mục dựng tạm --------------------
+#
+# `miniapp_sibling_guard` phán theo ĐĨA THẬT: `../vihat-miniapp/.git` có hay không. Ca "có kho"
+# từng chạy trên đĩa thật, nên nó xanh trên máy trạm đã clone và ĐỎ trên Jenkins, nơi cạnh
+# `workspace/vigov-gate` không có kho nào (24/09/2026). Ca "thiếu kho" thì chưa từng có, vì nó
+# sẽ đỏ trên đúng những máy mà ca kia xanh. Một phép kiểm mà màu phụ thuộc máy chạy không nói
+# gì về hook.
+#
+# Hộp cát chép hook + `_common.py` vào `<tạm>/vigov-v2/.claude/hooks/`, và chỉ tạo
+# `<tạm>/vihat-miniapp/.git` cho ca "có kho". Hook suy đường dẫn từ vị trí tệp của nó nên
+# nó thấy cây tạm, không thấy máy. Tên thư mục tạm có CHỮ HOA có chủ ý: trên Linux đó là ca
+# từng hỏng, khi hook dựng đường dẫn từ một chuỗi đã hạ chữ thường.
+HOP_CAT_CASES = [
+    # (hook, nhãn, mong đợi, có kho bên cạnh?, payload)
+    ("miniapp_sibling_guard", "sửa citizen-app khi kho ấy có mặt đúng chỗ", PASS, True,
+     w("citizen-app/src/content/company-profile.ts", "export const COMPANY = {} as const\n")),
+    ("miniapp_sibling_guard", "sửa citizen-app khi THIẾU kho ấy bên cạnh", BLOCK, False,
+     w("citizen-app/src/content/company-profile.ts", "export const COMPANY = {} as const\n")),
+]
+
+
+def chay_hop_cat() -> list[tuple[str, str, int, int]]:
+    import shutil
+    import tempfile
+
+    sai = []
+    for hook, nhan, mong, co_kho, payload in HOP_CAT_CASES:
+        with tempfile.TemporaryDirectory(prefix="HopCat-") as tam:
+            goc = os.path.join(tam, "VigovGoc", "vigov-v2")
+            hooks = os.path.join(goc, ".claude", "hooks")
+            os.makedirs(hooks)
+            for ten in (hook + ".py", "_common.py"):
+                shutil.copy(os.path.join(HOOKS, ten), hooks)
+            if co_kho:
+                os.makedirs(os.path.join(tam, "VigovGoc", "vihat-miniapp", ".git"))
+            duoc = run(hook, payload, hooks=hooks, cwd=goc)
+        ok = duoc == mong
+        want = "BLOCK" if mong == BLOCK else "PASS "
+        print(f"{'  OK   ' if ok else '  FAIL '} [{want}] {hook:24s} {nhan} (hộp cát)")
+        if not ok:
+            sai.append((hook, nhan, mong, duoc))
+    return sai
 
 
 if __name__ == "__main__":
@@ -1215,13 +1258,14 @@ if __name__ == "__main__":
         print(f"{mark} [{want}] {hook:24s} {label}")
         if not ok:
             fails.append((hook, label, expect, got))
+    fails += chay_hop_cat()
 
     sai_thuan = chay_thuan()
 
     # SO_CUM_CASES chạy trong `chay_thuan()` nhưng KHÔNG được cộng vào đây, nên con số báo ra
     # thiếu bảy ca. Một bộ đếm thiếu không làm ca nào đỏ — nó chỉ làm người đọc tưởng mình
     # biết kho đã canh bao nhiêu, và sổ `_chung` đã một lần ghi nhầm vì đúng chuyện này.
-    tong = (len(CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(WORKFLOW_CASES)
+    tong = (len(CASES) + len(HOP_CAT_CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(WORKFLOW_CASES)
             + len(TIM_MENU_CASES)
             + len(DUOC_QUET_CASES)
             + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES)

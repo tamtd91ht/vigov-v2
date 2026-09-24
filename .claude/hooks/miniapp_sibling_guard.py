@@ -37,7 +37,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _common import (  # noqa: E402
-    GOC_DU_AN, block, input_of, la_vo_shell, path_of, read_input, tool_of, utf8_streams,
+    block, input_of, la_vo_shell, path_of, read_input, tool_of, utf8_streams,
 )
 
 # Tên thư mục kho, và nó là tên GIT của kho — đổi tên thư mục lúc clone là tự tạo ra đúng
@@ -46,10 +46,16 @@ TEN_KHO = "vihat-miniapp"
 
 REMOTE = "https://github.com/tamtd91ht/vihat-miniapp"
 
-# Thư mục cha của kho này. `GOC_DU_AN` suy từ vị trí của `_common.py`, KHÔNG từ biến môi
-# trường — xem chú thích ở đó: một biến thiếu hoặc sai một ký tự sẽ tắt lặng lẽ cả lớp cưỡng
-# chế, và đó là kiểu hỏng tệ nhất vì mọi thứ vẫn trông bình thường.
-GOC_CHA = os.path.dirname(GOC_DU_AN).replace("\\", "/").rstrip("/")
+# Thư mục cha của kho này, suy từ vị trí của CHÍNH TỆP NÀY (<gốc>/.claude/hooks/…), KHÔNG từ
+# biến môi trường — cùng lý do với `GOC_DU_AN` trong `_common.py`: một biến thiếu hoặc sai một
+# ký tự sẽ tắt lặng lẽ cả lớp cưỡng chế.
+#
+# KHÔNG dựng từ `GOC_DU_AN`: chuỗi ấy đã bị HẠ CHỮ THƯỜNG để so sánh, còn ở đây nó được đưa cho
+# `os.path.isdir`. Trên Linux tên thư mục phân biệt hoa thường, nên một kho nằm dưới
+# `/home/TamTD/…` sẽ luôn bị báo "thiếu" dù đã clone đúng chỗ. Windows không phân biệt nên lỗi
+# ấy không lộ ra trên máy trạm. Phép SO SÁNH ở `sai_cho` vẫn hạ chữ thường cả hai vế.
+GOC_CHA = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))).replace("\\", "/").rstrip("/")
 
 # Chỗ DUY NHẤT hợp lệ.
 DUONG_CHUAN = f"{GOC_CHA}/{TEN_KHO}"
