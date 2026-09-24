@@ -105,6 +105,7 @@ type danhBaGia struct {
 	loi           error
 	soLanGoi      int
 	yeuCauCuoi    page.Request
+	locCuoi       domain.LocCanBo
 	principalCuoi string
 	xaCuoi        tenant.ID
 }
@@ -117,9 +118,13 @@ func (d *danhBaGia) ghiNhan(ctx context.Context) {
 	}
 }
 
-func (d *danhBaGia) DanhSach(ctx context.Context, yc page.Request) (page.Result[domain.CanBoTomTat], error) {
+// THE FILTER IS RECORDED, NOT APPLIED. What the rows look like under a filter is proven against the
+// real predicate in store/can_bo_tim_test.go; here the property is that the handler hands the store
+// exactly the filter the request carried — and nothing it did not.
+func (d *danhBaGia) DanhSach(ctx context.Context, loc domain.LocCanBo, yc page.Request) (page.Result[domain.CanBoTomTat], error) {
 	d.ghiNhan(ctx)
 	d.yeuCauCuoi = yc
+	d.locCuoi = loc
 	kq := page.NewResult[domain.CanBoTomTat]()
 	if d.loi != nil {
 		return kq, d.loi

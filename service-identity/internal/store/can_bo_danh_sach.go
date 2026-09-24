@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
@@ -102,14 +103,27 @@ const locTomTat = `AND deleted_at IS NULL`
 // only in the public directory. One `nguoi_dung` table serves two screens (migration 0003), and
 // `co_tai_khoan` is returned as a FIELD so each screen decides for itself. Filtering here would
 // answer, on behalf of one screen, a question the customer has not been asked.
-func (s *CanBoStore) DanhSach(ctx context.Context, yc page.Request) (page.Result[domain.CanBoTomTat], error) {
+//
+// `loc` IS THE ONLY WAY A CLIENT NARROWS THE PAGE, and every value in it reaches the statement as
+// a BOUND PARAMETER — see menhDeLocCanBo. The zero LocCanBo is the whole register, which is what
+// GET /api/v1/staff with no filter has always returned.
+//
+// THE CURSOR DOES NOT ENCODE THE FILTER, following core/page (its cursor carries sort, direction,
+// key and id, nothing else) and service-comms' filtered list. A cursor replayed under a different
+// filter set is therefore NOT refused: it anchors at the same (sort key, id) position and returns
+// the rows after it that match the NEW filter. Nothing is repeated or skipped within that filter,
+// because the order is the same total order whatever the filter; what the client loses is only the
+// rows before the anchor, which is what "continue from here" means.
+func (s *CanBoStore) DanhSach(ctx context.Context, loc domain.LocCanBo, yc page.Request) (page.Result[domain.CanBoTomTat], error) {
+	menhDe, thamSo := menhDeLocCanBo(loc)
 	// Cột sắp xếp KHÔNG còn được đọc ở đây. `mocCanBo` đã buộc sẵn mỗi cột với cách đọc mốc
 	// của nó, và QueryPage chọn hàm đúng theo cột nó đang sắp xếp — nên callback quét không
 	// cần biết gì về cột nữa, và cũng không còn cách nào chọn nhầm.
 	return store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
 		Columns: cotTomTat,
 		Table:   "nguoi_dung",
-		Filter:  locTomTat,
+		Filter:  locTomTat + menhDe,
+		Args:    thamSo,
 	}, yc, mocCanBo, func(rows *sql.Rows) (domain.CanBoTomTat, string, error) {
 		// quetTomTat, NOT motTomTat: QueryPage has already advanced the cursor to this row, and a
 		// second Next() here would hand back every other row and drop the ones in between.
@@ -119,6 +133,63 @@ func (s *CanBoStore) DanhSach(ctx context.Context, yc page.Request) (page.Result
 		}
 		return cb, cb.ID, nil
 	})
+}
+
+// thoatLike escapes the three characters LIKE treats specially, so the administrator's text is
+// matched LITERALLY: "50%" finds "50%", not every value starting with "50", and "_" is an
+// underscore rather than "any one character". PostgreSQL's default LIKE escape character is `\`,
+// so no ESCAPE clause is needed — and `\` itself is escaped first, or a trailing backslash typed
+// by somebody would escape the closing `%` this code adds.
+//
+// A COPY OF service-comms' thoatLike (internal/store/noi_dung_mini_app.go), NOT AN IMPORT: rule 2
+// forbids importing another service's internal/, and core/ is outside this change.
+var thoatLike = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// menhDeLocCanBo builds the extra predicate of one register read, and its arguments.
+//
+// PLACEHOLDERS START AT $2: $1 is the commune, always, bound by Scoped.Query from the context. No
+// value from `loc` is ever concatenated into the statement text — only the placeholder numbers are.
+//
+// THE TEXT SEARCH covers the four columns the Danh bạ search box names — name, position, office
+// number, personal mobile — with ILIKE on one escaped, bound pattern. When the text looks like a
+// telephone number (domain.ChuSoTimSoDienThoai) it ALSO compares its digits against each number's
+// digits, so "0900 000 001" finds "0900000001" whatever spacing either side was typed with.
+//
+// NO INDEX SERVES ANY OF THIS, and that is stated rather than hoped about: `ILIKE '%x%'` and a
+// `regexp_replace` on the column both force a scan. The scan is of ONE commune's register — the
+// partition and `tenant_id = $1` bound it — which is tens to a few hundred rows (the customer's own
+// directory lists 26, 12-danh-ba-can-bo.md §7). If a commune ever holds thousands, the answer is a
+// trigram index added by a migration, not a change here.
+//
+// ACCENT-INSENSITIVE SEARCH IS NOT PROVIDED: "nguyen" does not find "Nguyễn". That needs the
+// `unaccent` extension, which is an infrastructure decision (ADR 0010) and was not asked for.
+func menhDeLocCanBo(loc domain.LocCanBo) (string, []any) {
+	var b strings.Builder
+	var args []any
+	so := func(v any) int { // appends v and returns its placeholder number
+		args = append(args, v)
+		return len(args) + 1
+	}
+
+	if loc.BoPhanID != "" {
+		fmt.Fprintf(&b, " AND bo_phan_id = $%d", so(loc.BoPhanID))
+	}
+	if loc.CongKhai != nil {
+		fmt.Fprintf(&b, " AND hien_tren_mini_app = $%d", so(*loc.CongKhai))
+	}
+	if loc.TuKhoa != "" {
+		p := so("%" + thoatLike.Replace(loc.TuKhoa) + "%")
+		fmt.Fprintf(&b, " AND (ho_ten ILIKE $%d OR chuc_vu ILIKE $%d"+
+			" OR dien_thoai_co_quan ILIKE $%d OR di_dong_ca_nhan ILIKE $%d", p, p, p, p)
+		if chuSo := domain.ChuSoTimSoDienThoai(loc.TuKhoa); chuSo != "" {
+			// Digits only, so there is nothing for LIKE to misread and nothing to escape.
+			c := so("%" + chuSo + "%")
+			fmt.Fprintf(&b, " OR regexp_replace(dien_thoai_co_quan, '[^0-9]', '', 'g') LIKE $%d"+
+				" OR regexp_replace(di_dong_ca_nhan, '[^0-9]', '', 'g') LIKE $%d", c, c)
+		}
+		b.WriteString(")")
+	}
+	return b.String(), args
 }
 
 // ChiTiet reads one staff record by internal id.

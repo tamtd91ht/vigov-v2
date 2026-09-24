@@ -101,8 +101,13 @@ type (
 	// this one runs on one screen and filters only `deleted_at IS NULL`, because the register
 	// must show the people who have no account at all. Widening CanBoDoc to carry both would put
 	// the register's looser predicate one careless edit away from the authentication path.
+	//
+	// ONE DanhSach FOR THE LIST AND THE SEARCH: GET /api/v1/staff passes the URL filters, POST
+	// /api/v1/staff/searches passes the same filters plus the text. One store method means one
+	// predicate, one soft-delete clause and one keyset walk for both — two would be two places for
+	// `deleted_at IS NULL` to be forgotten.
 	CanBoDanhBa interface {
-		DanhSach(ctx context.Context, yc page.Request) (page.Result[domain.CanBoTomTat], error)
+		DanhSach(ctx context.Context, loc domain.LocCanBo, yc page.Request) (page.Result[domain.CanBoTomTat], error)
 		ChiTiet(ctx context.Context, id string) (domain.CanBoTomTat, error)
 	}
 
@@ -657,6 +662,32 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/staff",
 		authz.RequirePermission(d.Checker, "admin.user")(
 			http.HandlerFunc(h.DanhSachCanBo)))
+
+	// Searching the register by free text. POST /api/v1/staff/searches
+	//
+	// A POST FOR A READ, because the text is usually a name or a telephone number and a URL is
+	// written into access logs, proxies and browser history (rule 3, forbidden #4; user decision
+	// 2026-09-24). The full argument is on TimCanBo in can_bo_tim.go.
+	//
+	// `admin.user`, THE SAME KEY AS THE LIST IT MIRRORS: it returns the same rows in the same shape,
+	// so a different key would let somebody find, by searching, the people they may not list — or
+	// the reverse. Already seeded (migration 0001:278); no key invented (rule 5, invariant 3c).
+	//
+	// idem.KhongCan AND NOT Required: nothing is written, so a repeated request cannot leave a second
+	// row, a second code or a second audit entry — it simply reads again.
+	//
+	// @summary  Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ hoặc số điện thoại — từ khoá đi trong THÂN, không lên URL
+	// @screen   12-danh-ba-can-bo §3
+	// @request  timCanBoVao
+	// @reply    200 page.Result[canBoTomTat]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/staff/searches",
+		authz.RequirePermission(d.Checker, "admin.user")(
+			idem.KhongCan("tìm kiếm chỉ đọc, không đổi trạng thái nào — gửi lại chỉ là đọc lại, không sinh dòng, mã hay vết thứ hai")(
+				http.HandlerFunc(h.TimCanBo))))
 
 	// 404 and not 403 for an id belonging to another commune: the existence of another
 	// authority's record is itself information (rule 4, forbidden #2). Same reading as the sid on

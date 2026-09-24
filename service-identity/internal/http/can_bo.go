@@ -3,6 +3,8 @@ package http
 import (
 	"errors"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/httpx"
@@ -154,14 +156,37 @@ func raNgoai(cb domain.CanBoTomTat) canBoTomTat {
 // → STATED FOR THE CUSTOMER RATHER THAN DECIDED HERE: #11 settled the masking and said nothing
 // about the trail. Rule 6, stop condition #1 is "a new operation where it is unclear whether it
 // must be audited". This turn kept the existing behaviour — it did not choose it.
+//
+// TWO FILTERS ON THE URL SINCE 2026-09-24 (user decision): `unit` (a department id →
+// `bo_phan_id`) and `published` (`true`/`false` → `hien_tren_mini_app`). Neither is personal data,
+// so the URL is the right place for them. THE FREE-TEXT SEARCH IS DELIBERATELY NOT HERE — it is
+// POST /api/v1/staff/searches, because the text is usually a name or a number (rule 3, forbidden #4).
 func (h *Handler) DanhSachCanBo(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
 	// The commune is fixed by httpx.TenantMiddleware from Host; page.Parse reads only
 	// limit/cursor/sort/order, and a cursor carries no commune by construction. A client naming
 	// its own commune is a client granting itself access — nothing here reads tenant_id from the
 	// query string (rule 1, forbidden #2).
 	thamSo := r.URL.Query()
+
+	// Both filters are validated BEFORE the store is touched, like the page request below.
+	loc := domain.LocCanBo{BoPhanID: thamSoLoc(thamSo, "unit")}
+	if !kiemBoPhanLoc(w, loc.BoPhanID) {
+		return
+	}
+	switch thamSoLoc(thamSo, "published") {
+	case "":
+	case "true":
+		loc.CongKhai = ptrBool(true)
+	case "false":
+		loc.CongKhai = ptrBool(false)
+	default:
+		// ONLY the two literal spellings. strconv.ParseBool would also take "1", "t", "TRUE" — a
+		// wider contract than the one published, and the next client would come to depend on it.
+		// The value is not echoed back: nothing the client sent is repeated into an error.
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Tham số `published` chỉ nhận true hoặc false.", "")
+		return
+	}
 
 	// Parsed BEFORE the store is touched: a rejected page request must run no statement at all.
 	yc, err := page.Parse(thamSo, idstore.SapXepCanBo)
@@ -174,11 +199,61 @@ func (h *Handler) DanhSachCanBo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	kq, err := h.d.DanhBa.DanhSach(ctx, yc)
+	h.traTrangCanBo(w, r, "danh sách cán bộ", loc, yc)
+}
+
+// thamSoLoc reads one filter parameter off the query string, trimmed: url.Values' own single-value
+// accessor plus a TrimSpace, indexing the map rather than calling that method.
+//
+// THE SAME SHAPE AS service-comms' thamSoLoc (internal/http/noi_dung_mini_app.go), for the same two
+// reasons, and neither is cosmetic:
+//
+//   - rbac_guard and tenant_scope_guard both key on the NAME of url.Values' accessor method called
+//     with a string literal, reading it as a mounted route and as a database call respectively.
+//     Both are false alarms on a filter read; indexing the map avoids them without weakening either.
+//   - tools/apidoc recognises a PACKAGE-LEVEL function taking url.Values and a string key that it
+//     indexes the map with, and reads the parameter name from each CALL SITE — which is how `unit`
+//     and `published` reach openapi.json (ledger `_chung/apidoc-ham-cap-goi-doc-tham-so`). A helper
+//     taking *http.Request instead would drop both from the contract silently.
+func thamSoLoc(q url.Values, ten string) string {
+	v, co := q[ten]
+	if !co || len(v) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(v[0])
+}
+
+// kiemBoPhanLoc validates a department id used as a FILTER, answering 400 itself.
+//
+// domain.KiemTraIDThamChieu IS THE REPO'S VALIDATOR FOR A CLIENT-SUPPLIED DEPARTMENT ID, and it is
+// reused rather than a stricter one invented: it bounds the length, and nothing more, because no
+// code path in this repository fixes the FORMAT of `bo_phan.id` — there is no ULID validator in
+// core/, and no insert into `bo_phan` exists yet to say ids are ULIDs rather than slugs. A strict
+// ULID check here would refuse real departments the day they are provisioned with another shape.
+// The value reaches SQL only as a bound parameter, so its characters cannot matter to safety; a
+// well-formed id that names no department simply matches nobody, which is the honest answer.
+func kiemBoPhanLoc(w http.ResponseWriter, id string) bool {
+	if err := domain.KiemTraIDThamChieu(id); err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Mã bộ phận dùng để lọc không hợp lệ.", "")
+		return false
+	}
+	return true
+}
+
+func ptrBool(v bool) *bool { return &v }
+
+// traTrangCanBo runs one register read and writes the page. SHARED BY THE LIST AND THE SEARCH so
+// the two cannot drift in the one place they must agree: the shape on the wire and what a failure
+// is allowed to say.
+func (h *Handler) traTrangCanBo(w http.ResponseWriter, r *http.Request, viec string, loc domain.LocCanBo, yc page.Request) {
+	ctx := r.Context()
+	kq, err := h.d.DanhBa.DanhSach(ctx, loc, yc)
 	if err != nil {
 		// The wrapped error carries the store failure. It does NOT carry a name, an email or a
-		// phone number, and it never reaches the client (rule 3, forbidden #3).
-		h.d.Log.Error("danh sách cán bộ: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
+		// phone number, and it never reaches the client (rule 3, forbidden #3). `loc` is NOT
+		// logged: on the search route it holds the text the administrator typed.
+		h.d.Log.Error(viec+": lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal",
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return

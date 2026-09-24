@@ -87,7 +87,9 @@ var dsDuLieu = []hangND{
 		dienThoaiCoQuan: "0900000004", diDongCaNhan: "0300000004", coTaiKhoan: true, dangHoatDong: true,
 		taoLuc: dsMoc.Add(3 * time.Minute), daXoa: true},
 	{xa: xaMau, id: "nd-05", ma: "CB-005", hoTen: "Đỗ Văn E", email: "e@example.gov.vn",
-		dienThoaiCoQuan: "0900000005", diDongCaNhan: "0300000005", coTaiKhoan: true, dangHoatDong: true,
+		// The mobile is stored FORMATTED, with dots — the one row that proves the digit search strips
+		// the COLUMN as well as the text typed (TestTimCanBoSoDienThoaiSoChuSo).
+		dienThoaiCoQuan: "0900000005", diDongCaNhan: "0300.000.005", coTaiKhoan: true, dangHoatDong: true,
 		taoLuc: dsMoc.Add(4 * time.Minute)},
 
 	{xa: dsXaB, id: "ndb-01", ma: "CB-900", hoTen: "Vũ Thị F", email: "f@example.gov.vn",
@@ -129,7 +131,7 @@ func (b *banThuDS) trang(t *testing.T, xa, truyVan string) (page.Result[canBoRa]
 		// The handler's own shape: a rejected request runs no statement at all.
 		return page.Result[canBoRa]{}, err
 	}
-	kq, err := b.kho.DanhSach(ctxXa(xa), yc)
+	kq, err := b.kho.DanhSach(ctxXa(xa), domain.LocCanBo{}, yc)
 	return doiKieu(kq), err
 }
 
@@ -336,7 +338,7 @@ func TestKhongCoXaThiPanicChuKhongDocMoXa(t *testing.T) {
 			t.Errorf("đã chạy %d câu lệnh dù không biết xã nào", n)
 		}
 	}()
-	_, _ = b.kho.DanhSach(context.Background(), yc)
+	_, _ = b.kho.DanhSach(context.Background(), domain.LocCanBo{}, yc)
 }
 
 // --- what the statement selects -----------------------------------------------------------------
@@ -422,7 +424,7 @@ func TestSoCoQuanVaSoDiDongKhongDoiChoChoNhau(t *testing.T) {
 			ct.DienThoaiCoQuan, ct.DiDongCaNhan, mau.dienThoaiCoQuan, mau.diDongCaNhan)
 	}
 
-	kq, err := b.kho.DanhSach(ctxXa(xaMau), yeuCauTrang(t, "limit=100"))
+	kq, err := b.kho.DanhSach(ctxXa(xaMau), domain.LocCanBo{}, yeuCauTrang(t, "limit=100"))
 	if err != nil {
 		t.Fatalf("DanhSach: %v", err)
 	}
@@ -632,6 +634,15 @@ func (g *ghiLenhDS) chua(manh string) *lenhDS {
 }
 
 var (
+	// The three filters of menhDeLocCanBo. Each is MODELLED, not ignored: dsMenhDeLa refuses a
+	// conjunct the engine does not understand, so a changed filter cannot pass by being skipped.
+	dsReBoPhan   = regexp.MustCompile(`AND bo_phan_id = \$(\d+)`)
+	dsReCongKhai = regexp.MustCompile(`AND hien_tren_mini_app = \$(\d+)`)
+	dsReTim      = regexp.MustCompile(`AND \(ho_ten ILIKE \$(\d+) OR chuc_vu ILIKE \$(\d+)` +
+		` OR dien_thoai_co_quan ILIKE \$(\d+) OR di_dong_ca_nhan ILIKE \$(\d+)` +
+		`(?: OR regexp_replace\(dien_thoai_co_quan, '\[\^0-9\]', '', 'g'\) LIKE \$(\d+)` +
+		` OR regexp_replace\(di_dong_ca_nhan, '\[\^0-9\]', '', 'g'\) LIKE \$(\d+))?\)`)
+
 	dsReBang    = regexp.MustCompile(`AND id = \$(\d+)`)
 	dsReCap     = regexp.MustCompile(`AND \(([a-z_]+), ([a-z_]+)\) ([<>]) \(\$(\d+), \$(\d+)\)`)
 	dsReThuTu   = regexp.MustCompile(`ORDER BY ([a-z_]+) (ASC|DESC)(?:, ([a-z_]+) (ASC|DESC))?`)
@@ -664,6 +675,54 @@ func dsChay(q string, args []driver.Value) (driver.Rows, error) {
 	if m := dsReBang.FindStringSubmatch(q); m != nil {
 		n, _ := strconv.Atoi(m[1])
 		ra = dsLoc(ra, func(h hangND) bool { return h.id == lay(n) })
+	}
+
+	if m := dsReBoPhan.FindStringSubmatch(q); m != nil {
+		n, _ := strconv.Atoi(m[1])
+		ra = dsLoc(ra, func(h hangND) bool { return h.boPhan == lay(n) })
+	}
+	if m := dsReCongKhai.FindStringSubmatch(q); m != nil {
+		n, _ := strconv.Atoi(m[1])
+		v, ok := lay(n).(bool)
+		if !ok {
+			return nil, fmt.Errorf("driver giả: hien_tren_mini_app so với %T, không phải bool", lay(n))
+		}
+		ra = dsLoc(ra, func(h hangND) bool { return h.hienMiniApp == v })
+	}
+	if m := dsReTim.FindStringSubmatch(q); m != nil {
+		// The four ILIKE placeholders must be ONE value: a search that bound a different pattern
+		// per column would be a different search on each.
+		mau, ok := lay(dsSoNguyen(m[1])).(string)
+		if !ok {
+			return nil, errors.New("driver giả: mẫu ILIKE không phải chuỗi")
+		}
+		for _, k := range m[2:5] {
+			if lay(dsSoNguyen(k)) != mau {
+				return nil, errors.New("driver giả: bốn cột ILIKE ràng buộc bốn mẫu khác nhau")
+			}
+		}
+		khop := dsLikeRegexp(mau, true)
+		var khopSo *regexp.Regexp
+		if m[5] != "" {
+			s, _ := lay(dsSoNguyen(m[5])).(string)
+			khopSo = dsLikeRegexp(s, false)
+		}
+		boChuSo := regexp.MustCompile(`[^0-9]`)
+		ra = dsLoc(ra, func(h hangND) bool {
+			for _, c := range []string{h.hoTen, h.chucVu, h.dienThoaiCoQuan, h.diDongCaNhan} {
+				if khop.MatchString(c) {
+					return true
+				}
+			}
+			if khopSo != nil {
+				for _, c := range []string{h.dienThoaiCoQuan, h.diDongCaNhan} {
+					if khopSo.MatchString(boChuSo.ReplaceAllString(c, "")) {
+						return true
+					}
+				}
+			}
+			return false
+		})
 	}
 
 	if m := dsReCap.FindStringSubmatch(q); m != nil {
@@ -759,6 +818,9 @@ func dsMenhDeLa(q string) error {
 		regexp.MustCompile(`deleted_at IS NULL`),
 		dsReBang,
 		dsReCap,
+		dsReBoPhan,
+		dsReCongKhai,
+		dsReTim,
 	} {
 		menh = hieu.ReplaceAllString(menh, "")
 	}
@@ -768,6 +830,44 @@ func dsMenhDeLa(q string) error {
 			"bổ sung engine thay vì bỏ qua, nếu không bài kiểm sẽ xanh trước một bộ lọc đã đổi", con)
 	}
 	return nil
+}
+
+func dsSoNguyen(s string) int {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		panic("driver giả: số placeholder hỏng: " + s)
+	}
+	return n
+}
+
+// dsLikeRegexp turns a PostgreSQL LIKE pattern into a regexp with PostgreSQL's semantics: `%` is
+// any run, `_` is any ONE character, and `\` escapes the next character (the default escape).
+// Modelling the escape is the point — it is what lets an unescaped `%` or `_` in the store show up
+// here as extra rows rather than pass unnoticed. `hoa` = ILIKE (case-insensitive, Unicode).
+func dsLikeRegexp(mau string, hoa bool) *regexp.Regexp {
+	var b strings.Builder
+	if hoa {
+		b.WriteString("(?i)")
+	}
+	b.WriteString("(?s)^")
+	r := []rune(mau)
+	for i := 0; i < len(r); i++ {
+		switch r[i] {
+		case '\\':
+			if i+1 < len(r) {
+				i++
+				b.WriteString(regexp.QuoteMeta(string(r[i])))
+			}
+		case '%':
+			b.WriteString(".*")
+		case '_':
+			b.WriteString(".")
+		default:
+			b.WriteString(regexp.QuoteMeta(string(r[i])))
+		}
+	}
+	b.WriteString("$")
+	return regexp.MustCompile(b.String())
 }
 
 func dsLoc(in []hangND, giu func(hangND) bool) []hangND {
@@ -903,7 +1003,7 @@ func TestCotMiniAppVeDungChoCuaNo(t *testing.T) {
 		kiem("ChiTiet", ct)
 	}
 
-	kq, err := b.kho.DanhSach(ctxXa(xaMau), yeuCauTrang(t, "limit=100"))
+	kq, err := b.kho.DanhSach(ctxXa(xaMau), domain.LocCanBo{}, yeuCauTrang(t, "limit=100"))
 	if err != nil {
 		t.Fatalf("DanhSach: %v", err)
 	}
