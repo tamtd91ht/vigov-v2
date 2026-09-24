@@ -660,7 +660,13 @@ def main(argv: list[str]) -> int:
               file=sys.stderr)
         return 3
 
-    ghi_xlsx(duong, du_lieu)
+    try:
+        ghi_xlsx(duong, du_lieu)
+    except PermissionError:
+        # Windows khoá tệp đang mở trong Excel. Người chạy lệnh này thường vừa mở bản hôm nay.
+        print(f"[xuat_tien_do] ĐỎ — không ghi được {duong}: tệp đang mở (thường là trong Excel). "
+              "Đóng tệp rồi chạy lại, hoặc truyền một đường dẫn khác.", file=sys.stderr)
+        return 1
     print(f"[xuat_tien_do] {os.path.relpath(duong, ROOT) if git_bo_qua(duong) is not None else duong}"
           f" — format v{PHIEN_BAN_FORMAT} · " + " · ".join(
               f"{t} {len(du_lieu[t])}" for t, _c in SHEETS))
