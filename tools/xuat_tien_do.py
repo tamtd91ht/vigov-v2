@@ -200,6 +200,14 @@ def thu_thap() -> dict[str, list[list]]:
     try:
         commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
                                 text=True, cwd=ROOT, timeout=10).stdout.strip()
+        # Số liệu đọc từ CÂY LÀM VIỆC, không từ commit. Cây có thay đổi chưa commit — kể cả tệp
+        # chưa theo dõi như một `tasks/web/done/*.json` vừa sinh — thì sheet chứa dữ liệu KHÔNG
+        # commit nào tái tạo được. Ghi trơn mã commit ở đây là khai một nguồn gốc sai: đo được
+        # 24/09/2026, khi một tệp done/ sinh sai của phiên song song làm lệch một ô `Da_goi`.
+        ban = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True,
+                             cwd=ROOT, timeout=10).stdout.splitlines()
+        if ban:
+            commit += f" + {len(ban)} tệp chưa commit — số liệu MỚI HƠN commit này"
     except Exception:
         pass
     tt = [["Ngay_xuat", datetime.datetime.now().strftime("%Y-%m-%d %H:%M")],
