@@ -22,19 +22,16 @@
  * `page_Result_petitions_nhiemVuRa` đều đến từ `schema.gen.ts`.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * ⚠ HỢP ĐỒNG KHÔNG KHAI MỘT THAM SỐ TRUY VẤN NÀO CHO TUYẾN DANH SÁCH, VÀ HANDLER THẬT ĐỌC MƯỜI.
+ * THAM SỐ TRUY VẤN CỦA TUYẾN DANH SÁCH NAY ĐÃ ĐƯỢC HỢP ĐỒNG KHAI: `petitions_get_tasks["truyVan"]`
+ * (`schema.gen.ts`) có `status` · `source` · `type` · `bloc` · `priority` · `unit` · `assignee` ·
+ * `q` · `late` · `scope` · `soon` cùng `limit` · `cursor` · `sort` · `order`. Khối này từng viết
+ * rằng đối tượng ấy RỖNG — đúng lúc viết, hết đúng khi tuyến có chú thích `@query`.
  *
- * `petitions_get_tasks["truyVan"]` sinh ra một đối tượng RỖNG, trong khi `locNhiemVuTuQuery`
- * (`service-petitions/internal/http/nhiem_vu.go:333-414`) đọc và kiểm `status` · `source` ·
- * `type` · `bloc` · `priority` · `unit` · `assignee` · `q` · `late` · `scope`, còn `page.Parse`
- * đọc `limit` · `cursor` · `sort` · `order`. Nguyên nhân là `tools/apidoc` chưa có chú thích
- * `@query` trên tuyến ấy, chứ không phải máy chủ không nhận.
- *
- * Hệ quả có thật và được nói ra chứ không giấu: **bộ lọc §3 không có kiểu nào của hợp đồng canh
- * giúp** — gõ sai một tên tham số ở đây thì `tsc` im lặng và máy chủ trả cả quyển sổ trong khi
- * cán bộ tin mình đang xem một lát cắt. Vì thế MƯỜI cái tên ấy nằm trong ĐÚNG MỘT hàm
- * (`themLocVaoTruyVan`) và có bài kiểm đọc lại từng tên. Khi hợp đồng có `parameters`, đó là chỗ
- * duy nhất phải sửa. Đã báo về để khai `@query` trên tuyến.
+ * ⚠ ĐIỀU VẪN CÒN ĐÚNG: `themLocVaoTruyVan` ghép tên tham số bằng CHUỖI TRẦN vào `URLSearchParams`,
+ * nên `tsc` CHƯA đối chiếu những cái tên ấy với kiểu `truyVan` — gõ sai một tên thì máy chủ bỏ
+ * qua nó và trả cả quyển sổ trong khi cán bộ tin mình đang xem một lát cắt. Vì thế mười cái tên
+ * nằm trong ĐÚNG MỘT hàm và có bài kiểm đọc lại từng tên; nối chúng vào kiểu `truyVan` là việc
+ * nên làm tiếp, ở đúng hàm ấy.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
  * HAI BỘ LỌC CỦA §3 KHÔNG CÓ MẶT Ở ĐÂY VÀ SỰ VẮNG MẶT LÀ CHỦ Ý — máy chủ **TỪ CHỐI** chúng bằng

@@ -5,22 +5,22 @@
  * đồng hồ hệ thống.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * VÌ SAO TỆP NÀY ĐỨNG MỘT MÌNH, KHÔNG KÈM `lib/api/nhiem-vu.ts` VÀ KHÔNG KÈM MÀN HÌNH
+ * VÌ SAO TỆP NÀY TÁCH KHỎI `lib/api/nhiem-vu.ts` VÀ KHỎI MÀN HÌNH
  *
- * Tám tuyến Nhiệm vụ ĐÃ CÓ trong `kb/20-contracts/openapi.json`, nhưng `src/lib/api/schema.gen.ts`
- * chưa được sinh lại kể từ khi chúng vào hợp đồng: mười một kiểu mà tầng gọi cần —
- * `petitions_nhiemVuRa`, `petitions_taoNhiemVuVao`, `petitions_doiTrangThaiVao`,
- * `petitions_deNghiLuiHanVao`, `petitions_quyetDinhLuiHanVao`, `page_Result_petitions_nhiemVuRa`
- * và năm kiểu tuyến — KHÔNG TỒN TẠI trong tệp sinh hiện tại. `node scripts/gen-api-types.mjs
- * --check` thoát mã 1.
+ * Tệp này được viết lúc `src/lib/api/schema.gen.ts` CHƯA có các kiểu Nhiệm vụ, nên nó chỉ nhận
+ * giá trị vô hướng (chuỗi, số, `Date`). Các kiểu ấy NAY ĐÃ CÓ trong tệp sinh (`petitions_nhiemVuRa`,
+ * `petitions_nhiemVuVanBanRa`, `page_Result_petitions_nhiemVuRa`…) và `lib/api/nhiem-vu.ts` dùng
+ * thẳng chúng. Tệp này vẫn tách riêng vì một lý do khác: câu chữ và phép quyết định thuần kiểm
+ * được mà không dựng DOM.
  *
- * Gõ tay các hình dạng ấy ở đây là dựng đúng cái hỏng mà `scripts/gen-api-types.mjs` được viết ra
- * để chặn — ba bản chép tay của một hình dạng, trôi dần, và bản sai là bản chạy thật (luật 9,
- * cấm #2; bất biến 6 của agent này). Nên mọi thứ trong tệp này CỐ Ý chỉ nhận **giá trị vô hướng**
- * (chuỗi, số, `Date`), không nhận và không mô tả lại một bản ghi nhiệm vụ nào. Khi tệp sinh có
- * các kiểu ấy, tầng gọi và màn hình lắp lên trên tệp này mà không phải sửa một dòng nào ở đây.
+ * Chỗ nào ở đây cần hình dạng một bản ghi thì `import type` từ tệp sinh — KHÔNG gõ tay lại. Gõ
+ * tay là dựng đúng cái hỏng mà `scripts/gen-api-types.mjs` được viết ra để chặn: nhiều bản chép
+ * của một hình dạng, trôi dần, và bản sai là bản chạy thật (luật 9, cấm #2; bất biến 6 của agent
+ * này).
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
+
+import type { petitions_nhiemVuVanBanRa } from "@/lib/api/schema.gen";
 
 /** Ô rỗng. Chưa có gì để tính thì **dấu gạch**, không bao giờ `0` và không bao giờ `0%`. */
 export const O_TRONG = "—";
@@ -577,6 +577,135 @@ export function ngayChoONhap(mocISO: string | null): string {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
+ * KHỐI "SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO" §5.4 — BA NHÓM VĂN BẢN, CHỈ ĐỌC
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Mã loại nhiệm vụ DUY NHẤT có khối §5.4 (*"chỉ với loại `Theo văn bản`"*).
+ *
+ * Gõ thẳng mã này vào trình duyệt là HỢP LỆ, khác hẳn nhãn của nó: `theo-van-ban` là mã TẦNG 3 —
+ * mã nguồn rẽ nhánh trên đúng chuỗi ấy (`service-petitions/migrations/0003_danh_muc_nhiem_vu.sql:
+ * 205-215`). Xã đổi được NHÃN `Theo văn bản`, không đổi được mã.
+ */
+export const LOAI_THEO_VAN_BAN = "theo-van-ban";
+
+/** Loại nhiệm vụ này có khối §5.4 hay không. */
+export function coKhoiVanBanChiDao(loai: string): boolean {
+  return loai === LOAI_THEO_VAN_BAN;
+}
+
+/** Tiêu đề khối — chữ của §5.4, viết hoa đầu câu như mọi tiêu đề khối khác trong drawer. */
+export const TIEU_DE_KHOI_VAN_BAN = "Sổ theo dõi văn bản chỉ đạo";
+
+/**
+ * Ba nhóm, DANH SÁCH ĐÓNG: đúng ba giá trị `CHECK nhiem_vu_van_ban_nhom_hop_le` cho phép
+ * (`service-petitions/migrations/0009_nhiem_vu_van_ban.sql:266`). Thứ tự mảng là thứ tự §5.4 vẽ.
+ */
+export type NhomVanBan = "cap-tren-giao" | "chi-dao-dang-uy" | "san-pham-dau-ra";
+
+export const MOI_NHOM_VAN_BAN: readonly NhomVanBan[] = [
+  "cap-tren-giao",
+  "chi-dao-dang-uy",
+  "san-pham-dau-ra",
+];
+
+/** Nhãn nguyên văn §5.4. `uỷ` viết đúng như đặc tả. */
+const NHAN_NHOM_VAN_BAN: Readonly<Record<NhomVanBan, string>> = {
+  "cap-tren-giao": "Văn bản cấp trên giao",
+  "chi-dao-dang-uy": "Văn bản chỉ đạo của Đảng uỷ",
+  "san-pham-dau-ra": "Văn bản sản phẩm đầu ra",
+};
+
+function laNhomVanBan(ma: string): ma is NhomVanBan {
+  return (MOI_NHOM_VAN_BAN as readonly string[]).includes(ma);
+}
+
+/** Nhãn nhóm. Mã lạ hiện NGUYÊN VĂN — cùng quy tắc `nhanTrangThai`. */
+export function nhanNhomVanBan(ma: string): string {
+  return laNhomVanBan(ma) ? NHAN_NHOM_VAN_BAN[ma] : ma;
+}
+
+/** Văn bản không ghi số, ký hiệu — chữ §4.3 dùng cho đúng tình huống này. */
+export const KHONG_SO = "Không số";
+
+/** Đang đọc chi tiết. `role="status"`. */
+export const DANG_TAI_VAN_BAN = "Đang tải các văn bản chỉ đạo…";
+
+/**
+ * Đứng TRƯỚC câu lỗi của máy chủ khi không đọc được khối.
+ *
+ * Câu này tồn tại vì một khối trống ở đây đọc ra là "nhiệm vụ không có văn bản nào" — một điều
+ * chưa ai ghi. Không đọc được thì phải NÓI là không đọc được.
+ */
+export const KHONG_DOC_DUOC_VAN_BAN =
+  "Không đọc được các văn bản chỉ đạo của nhiệm vụ này — điều đó KHÔNG có nghĩa là nhiệm vụ " +
+  "không có văn bản.";
+
+/**
+ * Tuyến chi tiết trả về nhiệm vụ mà THIẾU hẳn trường `documents`.
+ *
+ * Hợp đồng nói tuyến chi tiết LUÔN trả một mảng (có thể rỗng); vắng mặt chỉ đúng trên tuyến sổ.
+ * Gặp vắng mặt ở đây là hợp đồng bị vi phạm, và câu trả lời an toàn là báo lỗi — đọc nó thành
+ * "không có văn bản" là nói dối đúng điều `documents` được thiết kế để phân biệt.
+ */
+export const CHI_TIET_THIEU_VAN_BAN = "Máy chủ trả chi tiết nhiệm vụ nhưng không kèm khối văn bản.";
+
+/**
+ * Ngày văn bản `YYYY-MM-DD` → `9/6/2026`. Rỗng → rỗng.
+ *
+ * KHÔNG ĐỆM SỐ 0, cùng khuôn `nhanNgay` và đúng ví dụ §5.4 (`1742-CV/BTCTU · 9/6/2026`).
+ *
+ * TÁCH CHUỖI, KHÔNG `Date.parse`: đây là một NGÀY, không phải một mốc. `Date.parse("2026-06-09")`
+ * đọc thành nửa đêm UTC, và định dạng theo một múi giờ phía tây UTC sẽ ra ngày 8 — một văn bản
+ * ghi sai ngày ban hành. Chuỗi sai khuôn hiện NGUYÊN VĂN, cùng lý do `nhanNgay` làm thế.
+ */
+export function ngayVanBan(ngay: string): string {
+  if (ngay === "") return "";
+  const k = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ngay);
+  if (k === null) return ngay;
+  return `${Number(k[3])}/${Number(k[2])}/${k[1]}`;
+}
+
+/**
+ * Dòng đầu của một văn bản: `{số, ký hiệu} · {ngày}`.
+ *
+ * Số rỗng ⇒ `Không số` (hợp lệ ở máy chủ: văn bản không số có thật). Ngày rỗng ⇒ BỎ HẲN phần
+ * ngày, không in `· —`: dấu gạch sau dấu chấm giữa đọc ra như một ngày bị xoá.
+ */
+export function dongVanBan(soKyHieu: string, ngay: string): string {
+  const so = soKyHieu === "" ? KHONG_SO : soKyHieu;
+  const n = ngayVanBan(ngay);
+  return n === "" ? so : `${so} · ${n}`;
+}
+
+export type NhomVanBanDaChia = {
+  readonly ma: string;
+  readonly nhan: string;
+  readonly vanBan: readonly petitions_nhiemVuVanBanRa[];
+};
+
+/**
+ * Chia các dòng về ba nhóm §5.4 — luôn đủ BA nhóm, kể cả nhóm rỗng (để vẽ `—`).
+ *
+ * GIỮ NGUYÊN THỨ TỰ MÁY CHỦ GỬI trong mỗi nhóm; KHÔNG sắp lại theo `position`. `position` là số
+ * thứ tự đã cấp, có thể có lỗ hổng hợp lệ, và máy chủ đã xếp sẵn (nhóm, rồi vị trí).
+ *
+ * MỘT MÃ NHÓM LẠ KHÔNG BỊ BỎ RƠI: nó thành một nhóm thứ tư mang nhãn nguyên văn, xếp sau ba nhóm
+ * kia. Lọc im lặng thì một văn bản biến khỏi màn hình mà không ai biết nó từng có.
+ */
+export function chiaNhomVanBan(ds: readonly petitions_nhiemVuVanBanRa[]): readonly NhomVanBanDaChia[] {
+  const maLa: string[] = [];
+  for (const v of ds) {
+    if (!laNhomVanBan(v.group) && !maLa.includes(v.group)) maLa.push(v.group);
+  }
+  return [...MOI_NHOM_VAN_BAN, ...maLa].map((ma) => ({
+    ma,
+    nhan: nhanNhomVanBan(ma),
+    vanBan: ds.filter((v) => v.group === ma),
+  }));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
  * BẢNG KANBAN §4.1 — CÂU CHỮ VÀ HAI PHÉP QUYẾT ĐỊNH
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -704,13 +833,12 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "trên màn hôm nay là chữ của đặc tả, giống nhau ở mọi xã.",
   },
   {
-    ten: "Khối `SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO` (§5.4) và ba danh sách văn bản ở form (§7.2)",
+    ten: "Nút `✎ Sửa` của khối `SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO` (§5.4) và ba danh sách văn bản ở form giao việc (§7.2)",
     viSao:
-      "Bảng `nhiem_vu_van_ban` CHƯA TỒN TẠI (migration 0006 ghi rõ sự vắng mặt), nên " +
-      "`petitions.nhiemVuRa` không có trường nào cho ba nhóm văn bản và `petitions.taoNhiemVuVao` " +
-      "không nhận chúng. Đây là chỗ phải cẩn thận khi đọc: KHÔNG có trường rỗng để hiểu thành " +
-      "`chưa có văn bản nào` — không có trường. Vẽ một danh sách rỗng là nói với cán bộ một điều " +
-      "chưa ai ghi. Cột `Sổ theo dõi` của §4.3 cũng thiếu đúng phần này.",
+      "Khối §5.4 nay HIỆN ĐƯỢC ba nhóm văn bản của một nhiệm vụ `Theo văn bản` — chỉ đọc, đọc từ " +
+      "tuyến chi tiết `GET /api/v1/tasks/{ma}` mỗi lần mở drawer. Hai phần còn lại chưa dựng: nút " +
+      "`✎ Sửa` để sửa khối ấy, và ba danh sách văn bản động trong form `Giao việc mới`. Cho tới khi " +
+      "có chúng, văn bản chỉ đạo của một nhiệm vụ chưa nhập hay sửa được từ màn hình này.",
   },
   {
     ten: "Sửa `Hạn hoàn thành` ở form sửa (§5.4, §5.6)",
@@ -787,9 +915,12 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
     ten: "Chế độ xem `Sổ theo dõi` (§4.3)",
     viSao:
-      "Cụm chọn chế độ xem có HAI nút chứ không phải ba. Bảng §4.3 lấy quá nửa số cột từ bảng " +
-      "`nhiem_vu_van_ban` chưa tồn tại (xem mục §5.4 ở trên), nên dựng ra sẽ là một quyển sổ công " +
-      "văn chỉ đạo thiếu đúng phần văn bản chỉ đạo.",
+      "Cụm chọn chế độ xem có HAI nút chứ không phải ba. Bảng §4.3 lấy quá nửa số cột từ ba nhóm " +
+      "văn bản chỉ đạo, mà tuyến đọc sổ `GET /api/v1/tasks` CỐ Ý không trả `documents` — trên sổ, " +
+      "trường ấy vắng mặt nghĩa là `không phục vụ ở đây`, không phải `không có văn bản`. Đọc chi " +
+      "tiết từng dòng để ghép bảng là một lời gọi cho mỗi dòng của mỗi trang. Nút xuất Excel giữ " +
+      "đúng thứ tự cột cũng chưa có tuyến (`xuat-so-theo-doi` không có trong hợp đồng). Cả hai là " +
+      "phần việc của máy chủ.",
   },
 ];
 

@@ -6,6 +6,7 @@ import type {
   identity_boPhanRa,
   petitions_deNghiLuiHanRa,
   petitions_nhiemVuRa,
+  petitions_nhiemVuVanBanRa,
 } from "@/lib/api/schema.gen";
 
 import {
@@ -13,11 +14,16 @@ import {
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
   CANH_BAO_HAN_MOT_LAN,
   CHUA_PHAN_CONG,
+  CHI_TIET_THIEU_VAN_BAN,
   CHU_THICH_HAI_O_TICK,
+  DANG_TAI_VAN_BAN,
   GHI_CHU_LUI_HAN,
+  KHONG_DOC_DUOC_VAN_BAN,
+  KHONG_SO,
   O_TRONG,
   PHAN_CHUA_DUNG,
   SO_RONG,
+  TIEU_DE_KHOI_VAN_BAN,
   mocCuoiNgay,
   ngayChoONhap,
   quyetDinhDuyetLuiHan,
@@ -28,7 +34,10 @@ import {
   FormGiaoViec,
   KhoiChuaDung,
   KhoiLuiHan,
+  chuyenDrawer,
   type DanhMucNhiemVu,
+  type DrawerNhiemVu,
+  type TrangThaiTai,
 } from "./so-nhiem-vu";
 
 /**
@@ -128,10 +137,17 @@ const BAY_GIO = new Date("2026-09-15T03:00:00Z");
 const KHONG_GOI = (): Promise<KetQua<petitions_deNghiLuiHanRa>> =>
   Promise.resolve({ ok: false, thongBao: "không gọi trong bài kiểm" });
 
-function veChiTiet(sua: Partial<petitions_nhiemVuRa> = {}, maNguoiDangNhap = LANH_DAO): string {
+type TaiVanBan = TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
+
+function veChiTiet(
+  sua: Partial<petitions_nhiemVuRa> = {},
+  maNguoiDangNhap = LANH_DAO,
+  vanBan: TaiVanBan = { pha: "dangTai" },
+): string {
   return renderToStaticMarkup(
     <ChiTietNhiemVu
       nhiemVu={nhiemVu(sua)}
+      vanBan={vanBan}
       danhMuc={DANH_MUC}
       tenBoPhan={TEN_BO_PHAN}
       bayGio={BAY_GIO}
@@ -254,6 +270,7 @@ describe("câu từ chối của máy chủ vẽ THẲNG, không nuốt thành '
     const html = renderToStaticMarkup(
       <ChiTietNhiemVu
         nhiemVu={nhiemVu({ status: "cho-duyet" })}
+        vanBan={{ pha: "dangTai" }}
         danhMuc={DANH_MUC}
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
@@ -446,9 +463,11 @@ describe("form Giao việc mới §7", () => {
     expect(html).toContain("không ai duyệt được đề nghị lùi hạn");
   });
 
-  it("KHÔNG vẽ ba danh sách văn bản của §7.2 — bảng `nhiem_vu_van_ban` chưa tồn tại", () => {
-    // Một danh sách động rỗng ở đây mời cán bộ gõ vào một chỗ không đi tới đâu: hợp đồng không
-    // nhận ba nhóm văn bản, nên chữ gõ vào sẽ biến mất không dấu vết.
+  it("form CHƯA vẽ ba danh sách văn bản của §7.2 — phần việc chưa dựng, khai ở `PHAN_CHUA_DUNG`", () => {
+    // SỬA CÓ CHỦ Ý 24/09/2026: bài này từng nói "bảng `nhiem_vu_van_ban` chưa tồn tại". Bảng đã
+    // có (migration 0009) và `taoNhiemVuVao` nay nhận `documents`, nên LÝ DO ấy sai. Phép kiểm vẫn
+    // đúng vì form thật sự chưa có ba danh sách; bài này phải đổi chiều vào ngày chúng được dựng —
+    // đỏ lúc ấy là đúng, không phải một bài giòn.
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
@@ -487,5 +506,238 @@ describe("phần chưa dựng được — ra tới màn hình, không giấu tr
     expect(html).toContain("KHÔNG phát ra `id`");
     expect(html).toContain("admin.user");
     expect(html).toContain("task.extend");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * §5.4 — KHỐI "SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO", CHỈ ĐỌC
+ *
+ * Ca nặng nhất ở đây là ca KHÔNG ai thấy lúc phát triển: dòng của sổ vắng `documents` có chủ ý, và
+ * một drawer vẽ từ dòng ấy sẽ hiện ba nhóm `—` — "nhiệm vụ này không có văn bản" — cho một nhiệm
+ * vụ có ba văn bản. Mọi bài dưới đây canh để câu ấy chỉ xuất hiện khi TUYẾN CHI TIẾT đã nói thế.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+function vb(sua: Partial<petitions_nhiemVuVanBanRa> = {}): petitions_nhiemVuVanBanRa {
+  return {
+    id: "01JVANBAN1",
+    group: "cap-tren-giao",
+    reference: "1742-CV/BTCTU",
+    date: "2026-06-09",
+    summary: "Công văn của Ban Tổ chức Thành uỷ",
+    position: 1,
+    ...sua,
+  };
+}
+
+const BA_VAN_BAN: petitions_nhiemVuVanBanRa[] = [
+  vb(),
+  vb({
+    id: "01JVANBAN2",
+    group: "san-pham-dau-ra",
+    reference: "324-BC/ĐU",
+    date: "2026-06-15",
+    summary: "Báo cáo của Ban Thường vụ Đảng uỷ",
+    position: 1,
+  }),
+];
+
+/** Dòng của sổ như tuyến `GET /api/v1/tasks` trả: KHÔNG có trường `documents`. */
+function dongSo(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
+  const n = nhiemVu(sua);
+  delete n.documents;
+  return n;
+}
+
+const NHAN_BA_NHOM = [
+  "Văn bản cấp trên giao",
+  "Văn bản chỉ đạo của Đảng uỷ",
+  "Văn bản sản phẩm đầu ra",
+];
+
+function veTuDrawer(d: DrawerNhiemVu | null): string {
+  if (d === null) throw new Error("drawer phải đang mở");
+  return veChiTiet(d.nhiemVu, LANH_DAO, d.vanBan);
+}
+
+describe("§5.4 — drawer đọc TUYẾN CHI TIẾT, không đọc dòng của sổ", () => {
+  it("mở từ một dòng sổ (vắng `documents`): khối ĐANG TẢI, KHÔNG bao giờ là ba nhóm rỗng", () => {
+    const d = chuyenDrawer(null, { loai: "mo", nhiemVu: dongSo() });
+    expect(d?.vanBan).toEqual({ pha: "dangTai" });
+    expect(d?.luotDoc).toBe(1);
+
+    const html = veTuDrawer(d);
+    expect(html).toContain(nhuTrongHTML(DANG_TAI_VAN_BAN));
+    for (const nhan of NHAN_BA_NHOM) expect(html).not.toContain(nhuTrongHTML(nhan));
+  });
+
+  it("`mo` không tin `documents` của dòng được bấm, kể cả khi dòng ấy mang một mảng", () => {
+    // Nguồn duy nhất của khối là tuyến chi tiết. Một ngày tuyến sổ đổi hình dạng thì drawer vẫn
+    // đọc lại, thay vì âm thầm vẽ thứ tuyến sổ chưa từng hứa.
+    const d = chuyenDrawer(null, { loai: "mo", nhiemVu: nhiemVu({ documents: [] }) });
+    expect(d?.vanBan).toEqual({ pha: "dangTai" });
+  });
+
+  it("chi tiết về: ba nhóm hiện đủ, theo đúng nhãn §5.4, và trường vô hướng lấy theo chi tiết", () => {
+    const mo = chuyenDrawer(null, { loai: "mo", nhiemVu: dongSo() });
+    const d = chuyenDrawer(mo, {
+      loai: "chiTietVe",
+      ma: "NV19",
+      luotDoc: 1,
+      kq: { ok: true, duLieu: nhiemVu({ documents: BA_VAN_BAN, note: "Ghi chú từ chi tiết" }) },
+    });
+    expect(d?.vanBan).toEqual({ pha: "xong", duLieu: BA_VAN_BAN });
+    expect(d?.nhiemVu.note).toBe("Ghi chú từ chi tiết");
+
+    const html = veTuDrawer(d);
+    expect(html).toContain(nhuTrongHTML(TIEU_DE_KHOI_VAN_BAN));
+    for (const nhan of NHAN_BA_NHOM) expect(html).toContain(nhuTrongHTML(nhan));
+    expect(html).toContain("1742-CV/BTCTU · 9/6/2026");
+    expect(html).toContain(nhuTrongHTML("Công văn của Ban Tổ chức Thành uỷ"));
+    expect(html).toContain("324-BC/ĐU · 15/6/2026");
+    // Nhóm giữa rỗng thật — máy chủ ĐÃ nói thế — nên nó là dấu gạch.
+    expect(html).toContain("Văn bản chỉ đạo của Đảng uỷ</dt><dd>—</dd>");
+  });
+
+  it("đọc chi tiết HỎNG: câu lỗi hiện ra, và KHÔNG có nhóm nào — không một danh sách rỗng", () => {
+    const mo = chuyenDrawer(null, { loai: "mo", nhiemVu: dongSo() });
+    const d = chuyenDrawer(mo, {
+      loai: "chiTietVe",
+      ma: "NV19",
+      luotDoc: 1,
+      kq: { ok: false, thongBao: "Không tìm thấy nhiệm vụ." },
+    });
+    expect(d?.vanBan).toEqual({ pha: "loi", thongBao: "Không tìm thấy nhiệm vụ." });
+
+    const html = veTuDrawer(d);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain(nhuTrongHTML(KHONG_DOC_DUOC_VAN_BAN));
+    expect(html).toContain(nhuTrongHTML("Không tìm thấy nhiệm vụ."));
+    for (const nhan of NHAN_BA_NHOM) expect(html).not.toContain(nhuTrongHTML(nhan));
+  });
+
+  it("chi tiết về mà THIẾU `documents`: hợp đồng bị vỡ — báo lỗi, không đọc thành rỗng", () => {
+    const mo = chuyenDrawer(null, { loai: "mo", nhiemVu: dongSo() });
+    const d = chuyenDrawer(mo, {
+      loai: "chiTietVe",
+      ma: "NV19",
+      luotDoc: 1,
+      kq: { ok: true, duLieu: dongSo() },
+    });
+    expect(d?.vanBan).toEqual({ pha: "loi", thongBao: CHI_TIET_THIEU_VAN_BAN });
+  });
+
+  it("câu trả lời của một lượt ĐÃ CŨ, hoặc của nhiệm vụ khác, bị bỏ", () => {
+    const mo = chuyenDrawer(null, { loai: "mo", nhiemVu: dongSo() });
+    const cu = chuyenDrawer(mo, {
+      loai: "chiTietVe",
+      ma: "NV19",
+      luotDoc: 0,
+      kq: { ok: true, duLieu: nhiemVu({ documents: BA_VAN_BAN }) },
+    });
+    expect(cu).toBe(mo);
+    const khac = chuyenDrawer(mo, {
+      loai: "chiTietVe",
+      ma: "NV20",
+      luotDoc: 1,
+      kq: { ok: true, duLieu: nhiemVu({ code: "NV20", documents: BA_VAN_BAN }) },
+    });
+    expect(khac).toBe(mo);
+  });
+});
+
+describe("§5.4 — một lần đổi trạng thái KHÔNG làm rơi khối văn bản", () => {
+  function daDocXong(): DrawerNhiemVu | null {
+    const mo = chuyenDrawer(null, { loai: "mo", nhiemVu: dongSo() });
+    return chuyenDrawer(mo, {
+      loai: "chiTietVe",
+      ma: "NV19",
+      luotDoc: 1,
+      kq: { ok: true, duLieu: nhiemVu({ documents: BA_VAN_BAN }) },
+    });
+  }
+
+  it("phản hồi `…/status` (vắng `documents`): trạng thái mới, văn bản CŨ vẫn hiện, và đọc lại", () => {
+    const truoc = daDocXong();
+    const sau = chuyenDrawer(truoc, {
+      loai: "ghiXong",
+      nhiemVu: dongSo({ status: "cho-duyet" }),
+    });
+    expect(sau?.nhiemVu.status).toBe("cho-duyet");
+    expect(sau?.vanBan).toEqual({ pha: "xong", duLieu: BA_VAN_BAN });
+    // Lượt tăng ⇒ hiệu ứng đọc lại chi tiết.
+    expect(sau?.luotDoc).toBe((truoc?.luotDoc ?? 0) + 1);
+
+    const html = veTuDrawer(sau);
+    expect(html).toContain("1742-CV/BTCTU · 9/6/2026");
+    expect(html).not.toContain(nhuTrongHTML(DANG_TAI_VAN_BAN));
+  });
+
+  it("lượt đọc GỬI TRƯỚC lần ghi mà về SAU bị bỏ — không đè trạng thái cũ lên trạng thái mới", () => {
+    const mo = chuyenDrawer(null, { loai: "mo", nhiemVu: dongSo() });
+    const sau = chuyenDrawer(mo, { loai: "ghiXong", nhiemVu: dongSo({ status: "cho-duyet" }) });
+    const muon = chuyenDrawer(sau, {
+      loai: "chiTietVe",
+      ma: "NV19",
+      luotDoc: 1,
+      kq: { ok: true, duLieu: nhiemVu({ status: "dang-thuc-hien", documents: BA_VAN_BAN }) },
+    });
+    expect(muon?.nhiemVu.status).toBe("cho-duyet");
+  });
+
+  it("phản hồi mang mảng (tuyến tạo): lấy thẳng, không phải chờ", () => {
+    const d = chuyenDrawer(null, {
+      loai: "ghiXong",
+      nhiemVu: nhiemVu({ code: "NV34", documents: [] }),
+    });
+    expect(d?.vanBan).toEqual({ pha: "xong", duLieu: [] });
+  });
+
+  it("đóng drawer là hết trạng thái", () => {
+    expect(chuyenDrawer(daDocXong(), { loai: "dong" })).toBeNull();
+  });
+});
+
+describe("§5.4 — chỉ với loại `Theo văn bản`, và câu chữ của từng dòng", () => {
+  const XONG: TaiVanBan = { pha: "xong", duLieu: BA_VAN_BAN };
+
+  it("loại `co-ban`: KHÔNG vẽ khối, kể cả khi đã có văn bản trong tay", () => {
+    const html = veChiTiet({ type: "co-ban" }, LANH_DAO, XONG);
+    expect(html).not.toContain(nhuTrongHTML(TIEU_DE_KHOI_VAN_BAN));
+    for (const nhan of NHAN_BA_NHOM) expect(html).not.toContain(nhuTrongHTML(nhan));
+    expect(html).not.toContain("1742-CV/BTCTU");
+    // Các trường §5.4 vô hướng vẫn giữ nguyên, cùng chú thích bắt buộc.
+    expect(html).toContain(nhuTrongHTML(CHU_THICH_HAI_O_TICK));
+  });
+
+  it("loại `theo-van-ban` với cùng dữ liệu: khối CÓ — bài trên không xanh vì lý do sai", () => {
+    expect(veChiTiet({}, LANH_DAO, XONG)).toContain("1742-CV/BTCTU");
+  });
+
+  it("số ký hiệu rỗng ⇒ `Không số`; ngày rỗng ⇒ bỏ hẳn phần ngày", () => {
+    const html = veChiTiet({}, LANH_DAO, {
+      pha: "xong",
+      duLieu: [vb({ reference: "", date: "" })],
+    });
+    expect(html).toContain(`<li>${KHONG_SO}<span`);
+    expect(html).not.toContain(`${KHONG_SO} · `);
+  });
+
+  it("chi tiết trả mảng RỖNG: lúc này ba nhóm `—` là đúng — máy chủ đã nói không có dòng nào", () => {
+    const html = veChiTiet({}, LANH_DAO, { pha: "xong", duLieu: [] });
+    for (const nhan of NHAN_BA_NHOM) {
+      expect(html).toContain(`${nhuTrongHTML(nhan)}</dt><dd>—</dd>`);
+    }
+  });
+
+  it("thứ tự trong nhóm là thứ tự MÁY CHỦ GỬI, không sắp lại theo `position`", () => {
+    const html = veChiTiet({}, LANH_DAO, {
+      pha: "xong",
+      duLieu: [
+        vb({ id: "a", reference: "90-TB/TU", position: 3 }),
+        vb({ id: "b", reference: "12-CV/UBND", position: 1 }),
+      ],
+    });
+    expect(html.indexOf("90-TB/TU")).toBeGreaterThan(-1);
+    expect(html.indexOf("90-TB/TU")).toBeLessThan(html.indexOf("12-CV/UBND"));
   });
 });

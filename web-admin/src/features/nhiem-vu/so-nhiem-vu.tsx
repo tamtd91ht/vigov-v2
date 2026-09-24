@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useReducer, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import {
@@ -21,6 +21,7 @@ import type { KetQua } from "@/lib/api/goi";
 import {
   deNghiLuiHan,
   doiTrangThaiNhiemVu,
+  layNhiemVu,
   laySoNhiemVu,
   quyetDinhLuiHan,
   taoNhiemVu,
@@ -35,6 +36,7 @@ import type {
   petitions_loaiNhiemVuRa,
   petitions_mucUuTienRa,
   petitions_nhiemVuRa,
+  petitions_nhiemVuVanBanRa,
   petitions_taoNhiemVuVao,
 } from "@/lib/api/schema.gen";
 
@@ -42,12 +44,14 @@ import {
   CANH_BAO_HAN_MOT_LAN,
   CAU_LOC_TRANG_THAI_KHONG_CO_COT,
   CHI_QUA_HAN_NHAN,
+  CHI_TIET_THIEU_VAN_BAN,
   CHUA_GIAO_BO_PHAN,
   CHUA_PHAN_CONG,
   CHUA_XAC_DINH,
   CHU_THICH_HAI_O_TICK,
   COT_RONG,
   DANG_TAI_SO,
+  DANG_TAI_VAN_BAN,
   GHI_CHU_DEM_COT,
   GHI_CHU_HAN_VIEC_CON,
   GHI_CHU_KANBAN_RE_NHANH,
@@ -55,6 +59,7 @@ import {
   GHI_CHU_LUI_HAN,
   GHI_CHU_THIEU_SO_THEO_DOI,
   GHI_CHU_TU_SINH_MA,
+  KHONG_DOC_DUOC_VAN_BAN,
   MOI_BO_PHAN_NHAN,
   MOI_KHOI_NHAN,
   MOI_LOAI_NHAN,
@@ -71,12 +76,16 @@ import {
   PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
   SO_RONG,
+  TIEU_DE_KHOI_VAN_BAN,
   TIM_PLACEHOLDER,
   TRANG_THAI_CHINH,
   TRANG_THAI_RE_NHANH,
   cauGiaiThichTrangThai,
+  chiaNhomVanBan,
   chuyenSangDuoc,
+  coKhoiVanBanChiDao,
   cotPhaiDoc,
+  dongVanBan,
   hoanThanhTreHan,
   mocCuoiNgay,
   nhanBoDem,
@@ -95,8 +104,9 @@ import {
  * Sổ Quản lý nhiệm vụ — `docs/ui-ux/02-nhiem-vu.md` §2 (bố cục), §3 (bộ lọc), §4.1 (bảng Kanban),
  * §4.2 (bảng danh sách), §5 (drawer chi tiết), §6 (vòng đời) và §7 (form Giao việc mới).
  *
- * Chế độ xem thứ ba của §4 — `Sổ theo dõi` §4.3 — KHÔNG có ở đây: nó lấy quá nửa số cột từ bảng
- * `nhiem_vu_van_ban` chưa tồn tại. Xem `PHAN_CHUA_DUNG`.
+ * Chế độ xem thứ ba của §4 — `Sổ theo dõi` §4.3 — KHÔNG có ở đây: nó lấy quá nửa số cột từ ba
+ * nhóm văn bản chỉ đạo, mà tuyến đọc sổ cố ý không trả `documents` và chưa có tuyến xuất. Xem
+ * `PHAN_CHUA_DUNG`.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * BỐN LẦN TỪ CHỐI CỦA MÁY CHỦ MÀ MÀN HÌNH PHẢI NÓI ĐÚNG, và chúng là lý do màn này không có một
@@ -126,9 +136,9 @@ import {
  * hai. Lý do gốc vẫn giữ nguyên và vẫn đúng: KHÔNG mượn lớp của màn khác — nó trông gần đúng hôm
  * nay rồi lệch hẳn vào ngày lớp ấy đổi vì cái nó thật sự phục vụ.
  *
- * CÒN THIẾU THẬT, cho bảng Kanban §4.1: `.bang-kanban` · `.cot-kanban` · `.danh-sach-the` ·
- * `.the-nhiem-vu`. Chưa có chúng thì năm cột xếp DỌC thay vì nằm cạnh nhau — đọc được và dùng
- * được, chỉ không phải hình dạng đặc tả vẽ.
+ * Bốn lớp của bảng Kanban §4.1 — `.bang-kanban` · `.cot-kanban` · `.danh-sach-the` ·
+ * `.the-nhiem-vu` — CŨNG ĐÃ CÓ (`globals.css:1213-1279`): năm cột xếp dọc trên điện thoại và nằm
+ * cạnh nhau từ 768px, có chủ ý — lý do ghi ngay tại chỗ trong `globals.css`.
  */
 
 /** Bao nhiêu dòng một trang. */
@@ -197,6 +207,76 @@ function nhanDanhMuc(
   return ds.find((m) => m.code === ma)?.label ?? ma;
 }
 
+/**
+ * Drawer đang mở: nhiệm vụ để vẽ, khối văn bản §5.4, và LƯỢT ĐỌC chi tiết đang chờ.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ * VÌ SAO DRAWER ĐỌC TUYẾN CHI TIẾT, KHÔNG DÙNG DÒNG CỦA SỔ
+ *
+ * Tuyến sổ `GET /api/v1/tasks` CỐ Ý không trả `documents` (`service-petitions/internal/http/
+ * nhiem_vu.go:167-185`): trên sổ, trường vắng mặt nghĩa là "không phục vụ ở đây", KHÔNG phải
+ * "không có văn bản". Vẽ khối §5.4 từ dòng của sổ là báo một khối rỗng cho một nhiệm vụ có ba văn
+ * bản. Nên `mo` KHÔNG BAO GIỜ lấy `documents` từ dòng được bấm: khối vào pha `dangTai` và tuyến
+ * chi tiết (luôn trả một mảng, có thể rỗng) là nguồn duy nhất của nó.
+ *
+ * SAU MỘT LẦN GHI: ĐỌC LẠI, KHÔNG GỘP TAY. Phản hồi của `…/status` không mang `documents`
+ * (`service-petitions/internal/app/nhiem_vu.go:862`). `ghiXong` lấy ngay các trường vô hướng của
+ * phản hồi, GIỮ NGUYÊN khối văn bản đang hiện (một lần đổi trạng thái không đụng tới văn bản), và
+ * tăng `luotDoc` để đọc lại chi tiết — câu trả lời ấy thay cả hai. Tăng lượt còn làm một việc thứ
+ * hai: một lượt đọc chi tiết GỬI TRƯỚC lần ghi mà về SAU nó sẽ bị bỏ, thay vì đè trạng thái cũ lên
+ * trạng thái máy chủ vừa trả.
+ * ─────────────────────────────────────────────────────────────────────────────────────────
+ */
+export type DrawerNhiemVu = {
+  readonly nhiemVu: petitions_nhiemVuRa;
+  readonly vanBan: TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
+  /** Tăng ở mỗi lần phải đọc lại chi tiết. Câu trả lời mang lượt cũ bị bỏ. */
+  readonly luotDoc: number;
+};
+
+export type ViecDrawer =
+  /** Bấm `Mở NV…` trên thẻ hoặc dòng — `nhiemVu` là DÒNG CỦA SỔ, không có `documents`. */
+  | { readonly loai: "mo"; readonly nhiemVu: petitions_nhiemVuRa }
+  /** Tuyến chi tiết trả lời lượt `luotDoc` của nhiệm vụ `ma`. */
+  | {
+      readonly loai: "chiTietVe";
+      readonly ma: string;
+      readonly luotDoc: number;
+      readonly kq: KetQua<petitions_nhiemVuRa>;
+    }
+  /** Một tuyến ghi trả về nhiệm vụ (tạo, đổi trạng thái). */
+  | { readonly loai: "ghiXong"; readonly nhiemVu: petitions_nhiemVuRa }
+  | { readonly loai: "dong" };
+
+export function chuyenDrawer(s: DrawerNhiemVu | null, v: ViecDrawer): DrawerNhiemVu | null {
+  switch (v.loai) {
+    case "dong":
+      return null;
+    case "mo":
+      return { nhiemVu: v.nhiemVu, vanBan: { pha: "dangTai" }, luotDoc: (s?.luotDoc ?? 0) + 1 };
+    case "ghiXong": {
+      const docs = v.nhiemVu.documents;
+      const cungViec = s !== null && s.nhiemVu.code === v.nhiemVu.code;
+      const vanBan: DrawerNhiemVu["vanBan"] = Array.isArray(docs)
+        ? { pha: "xong", duLieu: docs }
+        : cungViec
+          ? s.vanBan
+          : { pha: "dangTai" };
+      return { nhiemVu: v.nhiemVu, vanBan, luotDoc: (s?.luotDoc ?? 0) + 1 };
+    }
+    case "chiTietVe": {
+      if (s === null || s.nhiemVu.code !== v.ma || s.luotDoc !== v.luotDoc) return s;
+      if (!v.kq.ok) return { ...s, vanBan: { pha: "loi", thongBao: v.kq.thongBao } };
+      const docs = v.kq.duLieu.documents;
+      // Hợp đồng hứa một MẢNG ở tuyến này. Vắng mặt là hứa bị vỡ — báo lỗi, không đọc thành rỗng.
+      if (!Array.isArray(docs)) {
+        return { ...s, nhiemVu: v.kq.duLieu, vanBan: { pha: "loi", thongBao: CHI_TIET_THIEU_VAN_BAN } };
+      }
+      return { ...s, nhiemVu: v.kq.duLieu, vanBan: { pha: "xong", duLieu: docs } };
+    }
+  }
+}
+
 export function SoNhiemVu() {
   const [loc, datLoc] = useState<BoLoc>(KHONG_LOC);
   const [tim, datTim] = useState("");
@@ -211,7 +291,7 @@ export function SoNhiemVu() {
   const [daTaiKanban, datDaTaiKanban] = useState<DaTaiKanban | null>(null);
   const [danhMuc, datDanhMuc] = useState<DanhMucNhiemVu>(KHONG_DANH_MUC);
 
-  const [dangMo, datDangMo] = useState<petitions_nhiemVuRa | null>(null);
+  const [drawer, guiDrawer] = useReducer(chuyenDrawer, null);
   const [loiGhi, datLoiGhi] = useState<string | null>(null);
   const [dangGui, datDangGui] = useState(false);
   const [moFormTao, datMoFormTao] = useState(false);
@@ -283,6 +363,21 @@ export function SoNhiemVu() {
     };
   }, []);
 
+  // CHI TIẾT CỦA DRAWER — xem `chuyenDrawer`. Chạy lại ở mỗi lượt đọc mới (mở, hoặc sau một lần
+  // ghi); `ma` và `luotDoc` đi kèm câu trả lời để reducer bỏ câu trả lời của lượt đã cũ.
+  const maDrawer = drawer?.nhiemVu.code ?? null;
+  const luotDoc = drawer?.luotDoc ?? 0;
+  useEffect(() => {
+    if (maDrawer === null) return;
+    let bo = false;
+    layNhiemVu(maDrawer).then((kq) => {
+      if (!bo) guiDrawer({ loai: "chiTietVe", ma: maDrawer, luotDoc, kq });
+    });
+    return () => {
+      bo = true;
+    };
+  }, [maDrawer, luotDoc]);
+
   const phien = usePhien();
   // FAIL CLOSED: chưa đọc xong phiên, hoặc đọc hỏng, thì KHÔNG có mã cán bộ — và không có mã thì
   // không so được với `lanh_dao_giao_viec_ma`, nên nút duyệt lùi hạn ẩn (luật 1, cấm #1).
@@ -311,7 +406,7 @@ export function SoNhiemVu() {
       return;
     }
     datLoiGhi(null);
-    datDangMo(kq.duLieu);
+    guiDrawer({ loai: "ghiXong", nhiemVu: kq.duLieu });
     datLanTai((n) => n + 1);
   }
 
@@ -359,7 +454,7 @@ export function SoNhiemVu() {
               }
               datLoiGhi(null);
               datMoFormTao(false);
-              datDangMo(kq.duLieu);
+              guiDrawer({ loai: "ghiXong", nhiemVu: kq.duLieu });
               datLanTai((n) => n + 1);
             });
           }}
@@ -369,7 +464,7 @@ export function SoNhiemVu() {
       <HangLoc loc={loc} tim={tim} datTim={datTim} datLoc={datLocMoi} danhMuc={danhMuc} />
 
       {/* CỤM CHỌN CHẾ ĐỘ XEM — §2, bên phải hàng lọc 2. HAI nút chứ không phải ba: `Sổ theo dõi`
-          §4.3 lấy quá nửa số cột từ một bảng chưa tồn tại, xem `PHAN_CHUA_DUNG`. */}
+          §4.3 cần `documents` trên tuyến đọc sổ, và tuyến ấy cố ý không trả — xem `PHAN_CHUA_DUNG`. */}
       <div className="o-chon" role="group" aria-label="Chế độ xem">
         <button
           type="button"
@@ -395,9 +490,9 @@ export function SoNhiemVu() {
           cot={cotKanban}
           danhMuc={danhMuc}
           bayGio={new Date()}
-          maDangMo={dangMo?.code ?? null}
+          maDangMo={maDrawer}
           moNhiemVu={(n) => {
-            datDangMo(n);
+            guiDrawer({ loai: "mo", nhiemVu: n });
             datLoiGhi(null);
           }}
         />
@@ -417,9 +512,9 @@ export function SoNhiemVu() {
             danhMuc={danhMuc}
             tenBoPhan={tenBoPhan}
             bayGio={new Date()}
-            maDangMo={dangMo?.code ?? null}
+            maDangMo={maDrawer}
             moNhiemVu={(n) => {
-              datDangMo(n);
+              guiDrawer({ loai: "mo", nhiemVu: n });
               datLoiGhi(null);
             }}
           />
@@ -447,9 +542,10 @@ export function SoNhiemVu() {
         </>
       )}
 
-      {dangMo !== null && (
+      {drawer !== null && (
         <ChiTietNhiemVu
-          nhiemVu={dangMo}
+          nhiemVu={drawer.nhiemVu}
+          vanBan={drawer.vanBan}
           danhMuc={danhMuc}
           tenBoPhan={tenBoPhan}
           bayGio={new Date()}
@@ -457,15 +553,15 @@ export function SoNhiemVu() {
           dangGui={dangGui}
           loiGhi={loiGhi}
           dong={() => {
-            datDangMo(null);
+            guiDrawer({ loai: "dong" });
             datLoiGhi(null);
           }}
           doiTrangThai={(trangThai, ghiChu) =>
-            chay(doiTrangThaiNhiemVu(dangMo.code, trangThai, ghiChu))
+            chay(doiTrangThaiNhiemVu(drawer.nhiemVu.code, trangThai, ghiChu))
           }
           xoa={(lyDo) => {
             datDangGui(true);
-            xoaNhiemVu(dangMo.code, lyDo).then((kq) => {
+            xoaNhiemVu(drawer.nhiemVu.code, lyDo).then((kq) => {
               datDangGui(false);
               if (!kq.ok) {
                 // ĐÂY LÀ CHỖ CÂU "còn 3 việc con chưa xoá — xử lý hoặc xoá các việc con trước" RA
@@ -474,13 +570,13 @@ export function SoNhiemVu() {
                 return;
               }
               datLoiGhi(null);
-              datDangMo(null);
+              guiDrawer({ loai: "dong" });
               datLanTai((n) => n + 1);
             });
           }}
-          guiDeNghiLuiHan={(hanMoi, lyDo) => deNghiLuiHan(dangMo.code, hanMoi, lyDo)}
+          guiDeNghiLuiHan={(hanMoi, lyDo) => deNghiLuiHan(drawer.nhiemVu.code, hanMoi, lyDo)}
           quyetDinh={(deNghiID, duyet, ghiChu) =>
-            quyetDinhLuiHan(dangMo.code, deNghiID, duyet, ghiChu)
+            quyetDinhLuiHan(drawer.nhiemVu.code, deNghiID, duyet, ghiChu)
           }
         />
       )}
@@ -737,10 +833,9 @@ export type CotKanban = {
  * Sự vắng mặt ấy ra tới màn hình qua `PHAN_CHUA_DUNG`, không nằm lại trong chú thích này.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * KHÔNG GẮN LỚP CSS MỚI (xem khối đầu tệp), nên hôm nay năm cột XẾP DỌC thay vì nằm cạnh nhau, và
- * KHÔNG CÓ chấm màu đầu cột lẫn viền trái tô theo mức ưu tiên. Hai thứ ấy là màu, và màu không bao
- * giờ là tín hiệu duy nhất (a11y): mức ưu tiên hiện thành CHỮ trên thẻ, tình trạng trễ hiện thành
- * chữ `Trễ N ngày`. Tên lớp cần thêm đã báo về.
+ * Năm cột xếp dọc dưới 768px và nằm cạnh nhau từ 768px (xem khối đầu tệp). KHÔNG CÓ chấm màu đầu
+ * cột lẫn viền trái tô theo mức ưu tiên: hai thứ ấy là màu, và màu không bao giờ là tín hiệu duy
+ * nhất (a11y) — mức ưu tiên hiện thành CHỮ trên thẻ, tình trạng trễ hiện thành chữ `Trễ N ngày`.
  *
  * KHÔNG CÓ Ô TICK CHỌN HÀNG LOẠT, cùng lý do bảng §4.2 không có: `Xoá đã chọn` không có tuyến nào.
  */
@@ -977,6 +1072,7 @@ export function BangNhiemVu({
  */
 export function ChiTietNhiemVu({
   nhiemVu,
+  vanBan,
   danhMuc,
   tenBoPhan,
   bayGio,
@@ -990,6 +1086,11 @@ export function ChiTietNhiemVu({
   quyetDinh,
 }: {
   nhiemVu: petitions_nhiemVuRa;
+  /**
+   * Khối văn bản §5.4, đọc từ TUYẾN CHI TIẾT — không bao giờ từ `nhiemVu.documents` của một dòng
+   * sổ, vì ở đó trường ấy vắng mặt có chủ ý. Xem `chuyenDrawer`.
+   */
+  vanBan: TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
   danhMuc: DanhMucNhiemVu;
   tenBoPhan: ReadonlyMap<string, string>;
   bayGio: Date;
@@ -1145,6 +1246,10 @@ export function ChiTietNhiemVu({
       </dl>
       <p className="ghi-chu">{CHU_THICH_HAI_O_TICK}</p>
 
+      {/* §5.4 — CHỈ với loại `Theo văn bản`. Rẽ nhánh trên MÃ, không trên nhãn: xem
+          `LOAI_THEO_VAN_BAN`. */}
+      {coKhoiVanBanChiDao(nhiemVu.type) && <KhoiVanBanChiDao tai={vanBan} />}
+
       {loiGhi !== null && (
         <p className="thong-bao-loi" role="alert">
           {loiGhi}
@@ -1225,6 +1330,59 @@ export function ChiTietNhiemVu({
           Xoá nhiệm vụ
         </button>
       </form>
+    </div>
+  );
+}
+
+/**
+ * Ba nhóm văn bản của §5.4 — CHỈ ĐỌC.
+ *
+ * BA PHA, BA MÀN HÌNH KHÁC NHAU, và nhập hai pha đầu vào pha thứ ba là nói dối:
+ *
+ *   dangTai   câu `Đang tải…` — chưa biết gì
+ *   loi       câu lỗi + câu máy chủ nguyên văn — KHÔNG vẽ ba nhóm, vì ba nhóm `—` đọc ra là
+ *             "nhiệm vụ không có văn bản", điều chưa ai ghi
+ *   xong      đủ ba nhóm; nhóm rỗng là `—` — lúc này máy chủ ĐÃ NÓI nhóm ấy rỗng
+ *
+ * Mỗi văn bản: `{số, ký hiệu} · {ngày}` rồi trích yếu ở dòng phụ, đúng §5.4.
+ */
+export function KhoiVanBanChiDao({
+  tai,
+}: {
+  tai: TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
+}) {
+  return (
+    <div className="form-danh-muc" aria-labelledby="tieu-de-khoi-van-ban">
+      <h4 id="tieu-de-khoi-van-ban">{TIEU_DE_KHOI_VAN_BAN}</h4>
+      {tai.pha === "dangTai" && <p role="status">{DANG_TAI_VAN_BAN}</p>}
+      {tai.pha === "loi" && (
+        <p className="thong-bao-loi" role="alert">
+          {KHONG_DOC_DUOC_VAN_BAN} {tai.thongBao}
+        </p>
+      )}
+      {tai.pha === "xong" && (
+        <dl className="danh-sach-truong">
+          {chiaNhomVanBan(tai.duLieu).map((nhom) => (
+            <div key={nhom.ma}>
+              <dt>{nhom.nhan}</dt>
+              <dd>
+                {nhom.vanBan.length === 0 ? (
+                  O_TRONG
+                ) : (
+                  <ul>
+                    {nhom.vanBan.map((v) => (
+                      <li key={v.id}>
+                        {dongVanBan(v.reference, v.date)}
+                        {v.summary !== "" && <span className="dong-phu">{v.summary}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }
@@ -1391,9 +1549,9 @@ export function KhoiLuiHan({
 /**
  * Form `Giao việc mới` §7.
  *
- * HAI LOẠI, HAI BỘ TRƯỜNG (§7.2 / §7.3) — nhưng BA NHÓM VĂN BẢN CỦA §7.2 KHÔNG DỰNG ĐƯỢC: bảng
- * `nhiem_vu_van_ban` chưa tồn tại và `petitions.taoNhiemVuVao` không nhận chúng. Vẽ ba danh sách
- * động rỗng là mời cán bộ gõ vào một chỗ không đi tới đâu. Xem `PHAN_CHUA_DUNG`.
+ * HAI LOẠI, HAI BỘ TRƯỜNG (§7.2 / §7.3) — nhưng BA NHÓM VĂN BẢN CỦA §7.2 CHƯA DỰNG Ở ĐÂY. Bảng
+ * `nhiem_vu_van_ban` đã có và drawer đã hiện chúng (chỉ đọc); ba danh sách động của form là phần
+ * việc chưa làm, không phải một bức tường của hợp đồng. Xem `PHAN_CHUA_DUNG`.
  *
  * `Tự sinh mã` MẶC ĐỊNH BẬT, đúng §7.1: mã do máy chủ cấp theo dãy `NV01, NV02…`, và một mã đã
  * cấp thì không bao giờ cấp lại kể cả sau xoá mềm (luật 7, bất biến 3).

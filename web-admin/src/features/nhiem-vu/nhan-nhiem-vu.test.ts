@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
+  KHONG_SO,
+  MOI_NHOM_VAN_BAN,
   MOI_TRANG_THAI,
+  chiaNhomVanBan,
+  coKhoiVanBanChiDao,
+  dongVanBan,
+  ngayVanBan,
+  nhanNhomVanBan,
   O_TRONG,
   PHAN_CHUA_DUNG,
   TRANG_THAI_CHINH,
@@ -226,5 +233,82 @@ describe("phần chưa dựng được", () => {
     expect(moiLyDo).toContain("Sắp đến hạn");
     expect(moiLyDo).toContain("task.assign");
     expect(moiLyDo).toContain("chuyen-tiep");
+  });
+
+  it("hai mục về văn bản chỉ đạo nói ĐÚNG thứ còn thiếu hôm nay, không còn nói bảng chưa có", () => {
+    // SỬA CÓ CHỦ Ý 24/09/2026: hai mục này từng viết "bảng `nhiem_vu_van_ban` chưa tồn tại". Bảng
+    // đã có từ migration 0009; một lý do sai trên màn là lý do đẩy người sau đi dựng lại thứ đã có.
+    const muc54 = PHAN_CHUA_DUNG.find((p) => p.ten.includes("SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO"));
+    const muc43 = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Sổ theo dõi` (§4.3)"));
+    expect(muc54).toBeDefined();
+    expect(muc43).toBeDefined();
+    for (const p of [muc54, muc43]) {
+      expect(p?.viSao).not.toContain("CHƯA TỒN TẠI");
+      expect(p?.viSao).not.toContain("chưa tồn tại");
+    }
+    expect(muc54?.ten).toContain("✎ Sửa");
+    expect(muc54?.viSao).toContain("GET /api/v1/tasks/{ma}");
+    expect(muc43?.viSao).toContain("`GET /api/v1/tasks`");
+    expect(muc43?.viSao).toContain("documents");
+    expect(muc43?.viSao).toContain("xuat-so-theo-doi");
+  });
+});
+
+describe("§5.4 — câu chữ của khối văn bản chỉ đạo", () => {
+  it("chỉ loại `theo-van-ban` có khối", () => {
+    expect(coKhoiVanBanChiDao("theo-van-ban")).toBe(true);
+    expect(coKhoiVanBanChiDao("co-ban")).toBe(false);
+    expect(coKhoiVanBanChiDao("")).toBe(false);
+  });
+
+  it("ba nhãn nhóm NGUYÊN VĂN §5.4, đúng thứ tự; mã lạ hiện nguyên văn", () => {
+    expect(MOI_NHOM_VAN_BAN.map(nhanNhomVanBan)).toEqual([
+      "Văn bản cấp trên giao",
+      "Văn bản chỉ đạo của Đảng uỷ",
+      "Văn bản sản phẩm đầu ra",
+    ]);
+    expect(nhanNhomVanBan("nhom-la")).toBe("nhom-la");
+  });
+
+  it("ngày văn bản không đệm số 0, không lệch ngày dưới TZ=UTC; sai khuôn hiện nguyên văn", () => {
+    expect(ngayVanBan("2026-06-09")).toBe("9/6/2026");
+    expect(ngayVanBan("2026-11-30")).toBe("30/11/2026");
+    expect(ngayVanBan("")).toBe("");
+    expect(ngayVanBan("09/06/2026")).toBe("09/06/2026");
+  });
+
+  it("dòng văn bản: `{số} · {ngày}`, `Không số` khi thiếu số, bỏ phần ngày khi thiếu ngày", () => {
+    expect(dongVanBan("90-TB/TU", "2026-11-30")).toBe("90-TB/TU · 30/11/2026");
+    expect(dongVanBan("", "2026-11-30")).toBe(`${KHONG_SO} · 30/11/2026`);
+    expect(dongVanBan("90-TB/TU", "")).toBe("90-TB/TU");
+    expect(dongVanBan("", "")).toBe(KHONG_SO);
+    expect(KHONG_SO).toBe("Không số");
+  });
+
+  it("chia nhóm: luôn đủ ba nhóm, giữ thứ tự máy chủ, và KHÔNG bỏ rơi một mã nhóm lạ", () => {
+    const dong = (id: string, group: string, position: number) => ({
+      id,
+      group,
+      reference: id,
+      date: "",
+      summary: "Trích yếu",
+      position,
+    });
+    const nhom = chiaNhomVanBan([
+      dong("c", "san-pham-dau-ra", 5),
+      dong("a", "cap-tren-giao", 2),
+      dong("b", "cap-tren-giao", 1),
+      dong("x", "nhom-moi", 1),
+    ]);
+    expect(nhom.map((n) => n.ma)).toEqual([
+      "cap-tren-giao",
+      "chi-dao-dang-uy",
+      "san-pham-dau-ra",
+      "nhom-moi",
+    ]);
+    expect(nhom[0]?.vanBan.map((v) => v.id)).toEqual(["a", "b"]);
+    expect(nhom[1]?.vanBan).toEqual([]);
+    expect(nhom[3]?.nhan).toBe("nhom-moi");
+    expect(chiaNhomVanBan([]).map((n) => n.vanBan.length)).toEqual([0, 0, 0]);
   });
 });
