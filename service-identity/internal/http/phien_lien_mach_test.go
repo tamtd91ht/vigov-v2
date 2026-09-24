@@ -101,6 +101,7 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		Quyen:     quyenMau(),
 		VaiTro:    vaiTroMau(),
 		BoPhan:    boPhanMau(),
+		GhiBoPhan: ghiBoPhanMau(),
 		VaiTroMuc: vaiTroMucMau(),
 		MaTran:    maTranMau(),
 		// Mounted by Register, so wired; nothing in this file calls it.

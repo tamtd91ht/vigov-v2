@@ -9,7 +9,7 @@ import (
 	"github.com/vihat/vigov/service-identity/internal/domain"
 )
 
-// BoPhanStore reads the commune's organisational chart.
+// BoPhanStore reads the commune's organisational chart. Its write paths are in bo_phan_ghi.go.
 type BoPhanStore struct {
 	db *store.DB
 }
@@ -39,11 +39,42 @@ const TranDanhMucBoPhan = 500
 // second (fail closed).
 var ErrQuaNhieuBoPhan = errors.New("bo_phan: vượt trần danh mục")
 
-// cotBoPhan IS READ BY POSITION in DanhSach. `ma` and `ten` are adjacent TEXT columns: swapping
-// them here — or there — produces no error at all, and the screen shows slugs where names belong.
-const cotBoPhan = `id, ma, ten, coalesce(cha_id,'')`
+// truyVanBoPhanKemSoCanBo reads the commune's whole org chart WITH the staff count of each unit.
+//
+// ONE STATEMENT, ONE ROUND TRIP (skills/load-data-once) — the shape truyVanVaiTroKemSoCanBo in
+// quyen.go already uses for roles, and every trap it names applies here:
+//
+//   - count(nd.id) AND NOT count(*): this is a LEFT JOIN, so a unit nobody sits in still produces
+//     one row with every `nd.*` NULL. count(*) would print "1 cán bộ" against every empty unit.
+//   - THE STAFF CONDITIONS SIT IN THE JOIN, NOT IN THE WHERE. In the WHERE they would drop the UNIT
+//     whenever it has no live member — an empty unit would vanish from the org chart and from every
+//     assignment box, which is the silent truncation this route refuses everywhere else.
+//   - THE JOIN REPEATS THE COMMUNE (`nd.tenant_id = bp.tenant_id`), not merely the unit id. Joining
+//     on id alone would count another commune's staff wherever ids collide (rule 1) — a leak no
+//     single-commune test shows.
+//
+// WHO IS COUNTED is argued on domain.BoPhan.SoCanBo: not soft-deleted, not locked; having a sign-in
+// account is not a condition. Nothing about a person is selected, so nothing personal can reach the
+// response (rule 3).
+//
+// COLUMNS ARE READ BY POSITION in DanhSach. `ma` and `ten` are adjacent TEXT columns, `thu_tu` and
+// the count adjacent integers: swapping either pair produces no error at all.
+const truyVanBoPhanKemSoCanBo = `
+SELECT bp.id, bp.ma, bp.ten, coalesce(bp.cha_id,''), bp.thu_tu,
+       count(nd.id) AS so_can_bo
+FROM bo_phan bp
+LEFT JOIN nguoi_dung nd
+       ON nd.tenant_id  = bp.tenant_id
+      AND nd.bo_phan_id = bp.id
+      AND nd.deleted_at IS NULL
+      AND nd.dang_hoat_dong
+WHERE bp.tenant_id = $1
+  AND bp.deleted_at IS NULL
+GROUP BY bp.id, bp.ma, bp.ten, bp.cha_id, bp.thu_tu
+ORDER BY bp.thu_tu, bp.ten
+LIMIT $2`
 
-// DanhSach reads the commune's whole org chart, ordered.
+// DanhSach reads the commune's whole org chart, ordered, with each unit's staff count.
 //
 // NOT PAGINATED, AND THAT IS A DECISION WITH A REASON, not an omission. Every other list in this
 // system is cursor-paginated by default and this one deliberately is not:
@@ -65,15 +96,14 @@ const cotBoPhan = `id, ma, ten, coalesce(cha_id,'')`
 // makes a client-side diff flicker on every reload and makes any test of this compare sets by
 // accident.
 //
-// THE COMMUNE IS NOT A PARAMETER AND CANNOT BE ONE: Scoped.Query binds it to $1 from the context,
-// so this can only ever read the org chart of the commune the request arrived in (rule 1).
+// THE COMMUNE IS NOT A PARAMETER AND CANNOT BE ONE: QueryJoin binds it to $1 from the context, so
+// this can only ever read the org chart of the commune the request arrived in (rule 1).
 func (s *BoPhanStore) DanhSach(ctx context.Context) ([]domain.BoPhan, error) {
 	// LIMIT is the ceiling PLUS ONE, which is what makes "there are too many" detectable at all.
 	// Selecting exactly the ceiling would return a full page that is indistinguishable from a
 	// complete list of exactly that size — the truncation this route refuses to perform, performed
 	// by the bound meant to prevent it.
-	rows, err := s.db.For(ctx).Query(ctx, cotBoPhan, "bo_phan",
-		`AND deleted_at IS NULL ORDER BY thu_tu, ten LIMIT $2`, TranDanhMucBoPhan+1)
+	rows, err := s.db.For(ctx).QueryJoin(ctx, truyVanBoPhanKemSoCanBo, TranDanhMucBoPhan+1)
 	if err != nil {
 		return nil, fmt.Errorf("bo_phan: đọc danh mục: %w", err)
 	}
@@ -82,9 +112,8 @@ func (s *BoPhanStore) DanhSach(ctx context.Context) ([]domain.BoPhan, error) {
 	ra := make([]domain.BoPhan, 0, 16)
 	for rows.Next() {
 		var bp domain.BoPhan
-		// POSITIONAL — in lockstep with cotBoPhan. See the note there on the two adjacent TEXT
-		// columns.
-		if err := rows.Scan(&bp.ID, &bp.Ma, &bp.Ten, &bp.ChaID); err != nil {
+		// POSITIONAL — in lockstep with truyVanBoPhanKemSoCanBo.
+		if err := rows.Scan(&bp.ID, &bp.Ma, &bp.Ten, &bp.ChaID, &bp.ThuTu, &bp.SoCanBo); err != nil {
 			return nil, fmt.Errorf("bo_phan: đọc dòng: %w", err)
 		}
 		ra = append(ra, bp)

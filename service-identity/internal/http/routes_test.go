@@ -292,8 +292,10 @@ func (b *boPhanGia) DanhSach(ctx context.Context) ([]domain.BoPhan, error) {
 func boPhanMau() *boPhanGia {
 	return &boPhanGia{theo: map[tenant.ID][]domain.BoPhan{
 		xaA: {
-			{ID: "bp-001", Ma: "van-phong-dang-uy", Ten: "VĂN PHÒNG ĐẢNG ỦY"},
-			{ID: "bp-002", Ma: "to-mot-cua", Ten: "TỔ MỘT CỬA", ChaID: "bp-001"},
+			// ThuTu and SoCanBo DIFFER from each other on every row, so a swap of the two adjacent
+			// integers in the response mapping shows up. The second unit has NOBODY: 0 must be printed.
+			{ID: "bp-001", Ma: "van-phong-dang-uy", Ten: "VĂN PHÒNG ĐẢNG ỦY", ThuTu: 1, SoCanBo: 3},
+			{ID: "bp-002", Ma: "to-mot-cua", Ten: "TỔ MỘT CỬA", ChaID: "bp-001", ThuTu: 2, SoCanBo: 0},
 		},
 		xaB: {
 			{ID: "bp-b-001", Ma: "van-phong-hdnd", Ten: "VĂN PHÒNG HĐND XÃ B"},
@@ -661,6 +663,7 @@ type mayChu struct {
 	quyen     *quyenGia
 	vaiTro    *vaiTroGia
 	boPhan    *boPhanGia
+	ghiBoPhan *ghiBoPhanGia // the org chart's write use case — bo_phan_ghi_test.go
 	vaiTroMuc *vaiTroMucGia
 	maTran    *maTranGia
 	// ghiPhanQuyen is the column save of the same matrix — a use case. See phanQuyenGhiGia.
@@ -715,6 +718,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	quyen := quyenMau()
 	vaiTro := vaiTroMau()
 	boPhan := boPhanMau()
+	ghiBoPhan := ghiBoPhanMau()
 	vaiTroMuc := vaiTroMucMau()
 	maTran := maTranMau()
 	ghiPhanQuyen := phanQuyenGhiMau()
@@ -738,6 +742,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		Quyen:     quyen,
 		VaiTro:    vaiTro,
 		BoPhan:    boPhan,
+		GhiBoPhan: ghiBoPhan,
 		VaiTroMuc: vaiTroMuc,
 		MaTran:    maTran,
 		// The column save. Register panics without it.
@@ -803,6 +808,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		quyen:     quyen,
 		vaiTro:    vaiTro,
 		boPhan:    boPhan,
+		ghiBoPhan: ghiBoPhan,
 		vaiTroMuc: vaiTroMuc,
 		maTran:    maTran,
 

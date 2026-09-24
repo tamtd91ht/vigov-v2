@@ -244,6 +244,11 @@ func run(log *slog.Logger) error {
 	// case over its own store: it locks the holders of `admin.user` and `admin.role`, then the role,
 	// and writes the grant change and its audit entry in one transaction.
 	ghiPhanQuyen := app.NewPhanQuyenVaiTro(kho, idstore.NewPhanQuyenStore(kho))
+	// The WRITE surface of the org chart: POST and PATCH /api/v1/org-units, under `admin.org` (user
+	// decision 2026-09-24). Given the SAME *idstore.BoPhanStore as the read field: the move's cycle
+	// check reads the rows it then writes, under locks, inside one transaction. No delete — see
+	// app.SoDoToChuc.
+	ghiBoPhan := app.NewSoDoToChuc(kho, boPhan)
 
 	// 7. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
 	//    cache — and the routes then behave per the CheDoHong each one declared. A service must
@@ -278,6 +283,9 @@ func run(log *slog.Logger) error {
 		// description (rule 5, forbidden #3).
 		VaiTro: vaiTro,
 		BoPhan: boPhan,
+		// Sơ đồ tổ chức: một kho ĐỌC (kèm số cán bộ mỗi bộ phận), một use case GHI (thêm, đổi tên, dời,
+		// đổi thứ tự) dưới khoá `admin.org`. Chưa có tuyến xoá — lý lẽ ở app/so_do_to_chuc.go.
+		GhiBoPhan: ghiBoPhan,
 		// Cùng một *VaiTroStore, hai trường: một trả lời "vai trò của người gọi", một trả
 		// lời "xã này có những vai trò nào". Hai câu hỏi, hai interface hẹp.
 		VaiTroMuc: vaiTro,

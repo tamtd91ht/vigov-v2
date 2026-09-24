@@ -219,6 +219,18 @@ type (
 		DanhSach(ctx context.Context) ([]domain.BoPhan, error)
 	}
 
+	// BoPhanGhi is the WRITE surface of the org chart: POST /api/v1/org-units and
+	// PATCH /api/v1/org-units/{id}, under `admin.org`.
+	//
+	// A USE CASE, NOT A STORE, and separate from BoPhanDanhMuc for the reason CanBoGhiDanhBa is
+	// separate from CanBoDanhBa: every method opens the transaction the write and its audit entry
+	// share (rule 6, invariant 3), and the move carries the cycle check (app.SoDoToChuc.Sua). NO Xoa:
+	// a delete needs a cross-service contract that does not exist (rule 2, stop condition #2).
+	BoPhanGhi interface {
+		Them(ctx context.Context, yc app.YeuCauThemBoPhan, nguoi app.NguoiThucHien) (domain.BoPhan, error)
+		Sua(ctx context.Context, id string, yc app.YeuCauSuaBoPhan, nguoi app.NguoiThucHien) (domain.BoPhan, error)
+	}
+
 	// VaiTroDanhMuc is the commune's role catalogue, for GET /api/v1/roles.
 	//
 	// SEPARATE FROM VaiTroDoc ON PURPOSE, even though one store implements both. That one answers
@@ -397,10 +409,12 @@ type (
 
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
 type Deps struct {
-	Checker   authz.Checker
-	Quyen     QuyenDoc
-	VaiTro    VaiTroDoc
-	BoPhan    BoPhanDanhMuc
+	Checker authz.Checker
+	Quyen   QuyenDoc
+	VaiTro  VaiTroDoc
+	BoPhan  BoPhanDanhMuc
+	// GhiBoPhan — the write surface of the same chart. A use case: see BoPhanGhi.
+	GhiBoPhan BoPhanGhi
 	VaiTroMuc VaiTroDanhMuc
 	MaTran    MaTranQuyenDoc
 	// GhiPhanQuyen — the column save behind the same matrix. A use case: see PhanQuyenGhi.
@@ -485,6 +499,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho vai trò — GET /api/v1/sessions/current sẽ panic khi có người gọi")
 	case d.BoPhan == nil:
 		panic("identity/http: thiếu kho bộ phận — GET /api/v1/org-units sẽ panic khi có người gọi")
+	case d.GhiBoPhan == nil:
+		panic("identity/http: thiếu use case ghi sơ đồ tổ chức — POST và PATCH /api/v1/org-units sẽ panic khi có người gọi")
 	case d.VaiTroMuc == nil:
 		panic("identity/http: thiếu kho danh mục vai trò — GET /api/v1/roles sẽ panic khi có người gọi")
 	case d.MaTran == nil:
@@ -1167,7 +1183,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
 	// @summary  Danh mục bộ phận của xã — cây tổ chức, dùng cho ô phân công, luồng văn bản và bộ lọc
-	// @screen   14-cau-hinh §3
+	// @screen   14-cau-hinh §1
 	// 500 covers two different causes and says so honestly: an ordinary store failure, and the
 	// commune's org chart exceeding idstore.TranDanhMucBoPhan — which this route REFUSES rather
 	// than truncating, because a silently short list is a unit missing from an assignment box.
@@ -1178,6 +1194,70 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/org-units",
 		authz.AnyAuthenticated("tên bộ phận xuất hiện ở ô phân công nhiệm vụ, luồng văn bản, danh bạ và mọi bộ lọc — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: sơ đồ tổ chức lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachBoPhan)))
+
+	// --- the org chart, WRITE. TWO ROUTES, BOTH `admin.org` -------------------------------------
+	//
+	// `admin.org` WAS DECIDED BY THE USER ON 2026-09-24 and it exists in the `quyen` table (migration
+	// 0001:282, "Quản lý sơ đồ tổ chức") — no key is invented (rule 5, invariant 3c). The READ above
+	// stays AnyAuthenticated, and the asymmetry is deliberate: unit names fill boxes on every screen,
+	// reshaping the chart is one job.
+	//
+	// NO DELETE ROUTE. Refusing to remove a unit that still holds staff OR records in documents,
+	// petitions or comms needs a cross-service contract (rule 2, stop condition #2); a delete that
+	// checked only the staff half would orphan the other three silently.
+
+	// Adding a unit. POST /api/v1/org-units
+	//
+	// idem.Required(idem.DongKhiHong), THE SAME CALL AS POST /api/v1/staff, AND FOR THE SAME REASON:
+	// there is no natural key underneath a DERIVED code. A double-submitted "VĂN PHÒNG" is not refused
+	// by `UNIQUE (tenant_id, ma)` — the second request finds `van-phong` taken and issues
+	// `van-phong-2`, a second unit with a second PERMANENT code (rule 7: no hard delete, and this run
+	// has no soft delete either). A typed code would be a natural key, but one route has one mode.
+	// DongKhiHong: refusing to add a unit for the minutes a cache is down is the cheaper failure.
+	//
+	// @summary  Thêm một bộ phận vào sơ đồ tổ chức của xã — mã tự sinh từ tên nếu không nhập
+	// @screen   14-cau-hinh §1
+	// 400 is a blank or over-long name, a malformed typed code, a name nothing can be derived from, a
+	// negative or over-large order, or `parent_not_found` — a parent that is not a live unit of this
+	// commune (another commune's id included).
+	// 409 is `org_unit_code_taken`: a typed code already issued in this commune, INCLUDING to a
+	// soft-deleted unit.
+	//
+	// @request  themBoPhanVao
+	// @reply    201 boPhanDaGhiRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/org-units",
+		authz.RequirePermission(d.Checker, "admin.org")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ThemBoPhan))))
+
+	// Renaming, moving or re-ranking a unit. PATCH /api/v1/org-units/{id}
+	//
+	// THE CODE IS NOT EDITABLE — a body naming `code` is refused with 400 `code_not_editable`.
+	// `parent_id: ""` moves the unit to the root; absent or null leaves it where it is.
+	//
+	// @summary  Sửa tên, dời bộ phận cha, đổi thứ tự một bộ phận — mã đã cấp không đổi
+	// @screen   14-cau-hinh §1
+	// 404 is an id matching no live unit OF THIS COMMUNE — one answer for an invented id, a
+	// soft-deleted unit and another commune's unit.
+	// 409 is `org_unit_cycle`: the new parent is the unit itself or one of its descendants.
+	//
+	// @request  suaBoPhanVao
+	// @reply    200 boPhanDaGhiRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/org-units/{id}",
+		authz.RequirePermission(d.Checker, "admin.org")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi tên, cha và thứ tự đều bằng đúng dòng vừa đọc, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaBoPhan))))
 
 	// The commune's role catalogue. GET /api/v1/roles
 	//
