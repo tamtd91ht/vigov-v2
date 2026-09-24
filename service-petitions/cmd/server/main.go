@@ -273,7 +273,10 @@ func chay(log *slog.Logger) error {
 		// calendar (ADR 0007, ADR 0029). THE SAME *identityclient.Client the staff path uses: a second
 		// dial would be a second connection with its own view of identity's health, and the two would
 		// disagree at the exact moment that matters.
-		GuiPhieu: app.NewGuiPhanAnh(kho, phieu, dinhDanh),
+		//
+		// `suKien` is the SAME outbox store the staff acts write through: the intake records its
+		// `da-tiep-nhan` notification in the transaction that creates the row (rule 10, invariant 5).
+		GuiPhieu: app.NewGuiPhanAnh(kho, phieu, suKien, dinhDanh),
 		// THE SAME label catalogue the staff routes read. Sharing is right here and only here: the
 		// commune's wording for a field code is its public vocabulary, and two readers of one
 		// catalogue are two things to keep in step.

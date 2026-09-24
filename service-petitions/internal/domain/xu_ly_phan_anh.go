@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -111,44 +112,142 @@ func NhanTrangThai(t TrangThai) string { return nhanTrangThai[t] }
 
 // --- what the citizen is told -------------------------------------------------------------------
 
-// vietTiepTheo is the PROCEDURAL sentence that travels as `CitizenMessage.next_step`.
+// loiNhanChoDan is THE table of which transitions owe the citizen a message, and what the message
+// says. Each entry composes the PROCEDURAL sentence that travels as `CitizenMessage.next_step`.
 //
-// ONLY THREE TRANSITIONS HAVE ONE, AND THE ABSENCES ARE THE DECISION. `skills/petition-lifecycle`
-// settles which acts owe the citizen a message: intake, entering processing, and closing.
-// Classification, assignment and field acceptance are INTERNAL steps — the citizen sees status and
-// result, never staff notes or routing history (rule 4, forbidden #5). An absent sentence makes the
-// event carry no `citizen_message`, and `comms` then writes no ledger row and sends nothing; that
-// is a fact, not a failure, and its consumer says so at the point it checks.
+// # SIX ENTRIES, DECIDED BY THE OWNER ON 2026-09-24 — AND THE THREE ABSENCES ARE PART OF THE DECISION
 //
-// EVERY SENTENCE IS THE SAME FOR EVERY CITIZEN AT THAT TRANSITION, and that is the constraint the
-// event contract states in full: free text a member of staff wrote about a specific case will
-// eventually name the reporter, quote their complaint or give their address, and from that moment a
-// commune's personal data is in the queue, in its backups and in the notification ledger. The
-// readable result of a closing (rule 10, invariant 6) therefore stays in `ket_qua_xu_ly`, where the
-// citizen reaches it with their lookup code behind an authenticated read — it is NEVER forwarded
-// here.
+//	da-tiep-nhan       intake: the acknowledge deadline + the 113/114/115 reminder
+//	da-chuyen-xu-ly    handed to a department: the resolve deadline
+//	cho-dan-xac-nhan   the work is done: the citizen is invited to confirm and rate
+//	da-dong            closed: where to read the result
+//	khong-tiep-nhan    NO ROUTE REACHES IT YET — listed so the day it is built it already owes a word
+//	chuyen-cap-tren    NO ROUTE REACHES IT YET — same
 //
-// NO DEADLINE IS NAMED IN ANY OF THEM. At intake the resolve deadline does not exist yet (ADR 0028),
-// and a sentence that mentioned one would have to invent it — which is the thing rule 10, forbidden
-// #3 exists to stop.
-var vietTiepTheo = map[TrangThai]string{
-	DaTiepNhan: "Xã đã nhận được phản ánh và sẽ xem trong thời hạn tiếp nhận. " +
-		"Giữ mã tra cứu để theo dõi.",
-	DangXuLy: "Phản ánh đang được bộ phận chuyên môn xử lý. " +
-		"Dùng mã tra cứu để xem tiến độ.",
-	DaDong: "Phản ánh đã được đóng. " +
-		"Dùng mã tra cứu để xem kết quả xử lý xã đã ghi.",
+// `dang-phan-loai`, `dang-xu-ly` and `da-xu-ly` are NOT here. The first is internal; the second used to
+// be here and was removed on purpose — the department-and-deadline message belongs to the moment the
+// petition is HANDED OVER (`da-chuyen-xu-ly`), and saying it twice is how a channel becomes noise
+// people mute; the third is followed at once by `cho-dan-xac-nhan`, which carries the message.
+//
+// An absent entry makes the event carry no `citizen_message`, and `comms` then writes no ledger row
+// and sends nothing; that is a fact, not a failure, and its consumer says so at the point it checks.
+//
+// # WHAT THE SENTENCES MAY DRAW ON — AND WHY THE ARGUMENT IS THE WHOLE PETITION ANYWAY
+//
+// The function receives the petition because the two deadlines live on it. It may read EXACTLY two
+// fields, `HanTiepNhan` and `HanXuLyXong`, and nothing else. Both are software-computed instants the
+// commune has ALREADY COMMITTED TO by the time the message is composed — `han_tiep_nhan` at intake,
+// `han_xu_ly_xong` at classification, which ADR 0028 decision E places strictly before any department
+// is named — so naming them invents nothing (rule 10, forbidden #3 is about inventing a promise, not
+// repeating one). Neither is personal data, and a deadline is on the list the owner allowed to reach
+// ZNS (rule 3, invariant 6: code, status, short result, deadline).
+//
+// NEVER, IN ANY ENTRY: the reporter, the text of the petition, the address, a photograph, the officer's
+// name or number, internal notes, routing history — and NOT THE RESULT TEXT `ket_qua_xu_ly` either.
+// That text is free text a member of staff wrote about ONE case; it will eventually name the reporter
+// or quote them, and the event contract (proto/vigov/petitions/v1/events.proto, CitizenMessage) forbids
+// forwarding it. The citizen reads it with their lookup code behind an authenticated read.
+//
+// # THE DEPARTMENT IS NOT NAMED, AND THAT IS A CONTRACT GAP RATHER THAN A CHOICE
+//
+// This service stores `bo_phan_id` only; the NAME lives in service-identity. Asking identity for it
+// inside the write transaction would hold the row lock for a network round trip, and the event
+// contract has no field to carry a unit id for `comms` to resolve. So the sentence says "bộ phận
+// chuyên môn" and the gap is reported, not papered over.
+var loiNhanChoDan = map[TrangThai]func(p PhieuPhanAnh) string{
+	DaTiepNhan: func(p PhieuPhanAnh) string {
+		return "Xã đã tiếp nhận phản ánh. " +
+			hanHoacKhong(p.HanTiepNhan, "Phản ánh sẽ được cán bộ xem trước %s. ",
+				"Phản ánh sẽ được cán bộ xem trong thời hạn tiếp nhận của xã. ") +
+			"Giữ mã tra cứu để theo dõi. " +
+			"Việc khẩn cấp, xin gọi ngay 113 (công an), 114 (cứu nạn, cứu hộ, chữa cháy) " +
+			"hoặc 115 (cấp cứu y tế)."
+	},
+	DaChuyenXuLy: func(p PhieuPhanAnh) string {
+		return "Phản ánh đã được chuyển bộ phận chuyên môn xử lý. " +
+			hanHoacKhong(p.HanXuLyXong, "Hạn xử lý xong: trước %s. ", "") +
+			"Dùng mã tra cứu để xem tiến độ."
+	},
+	ChoDanXacNhan: func(PhieuPhanAnh) string {
+		return "Xã đã xử lý xong phản ánh. " +
+			"Mời ông/bà mở ứng dụng, dùng mã tra cứu để xem kết quả, xác nhận và đánh giá."
+	},
+	DaDong: func(PhieuPhanAnh) string {
+		return "Phản ánh đã được đóng. " +
+			"Dùng mã tra cứu để xem kết quả xử lý xã đã ghi."
+	},
+	// ⚠ THE TWO BELOW HAVE NO ROUTE, and the owner's decision asks them to carry the REASON, the
+	// RECEIVING BODY and WHERE TO GO NEXT. None of those three exists as a column today, so the
+	// sentences point at the lookup code. Whoever builds either transition decides where those three
+	// facts are stored and whether any of them may travel — this entry must then be revisited, not
+	// left as the answer.
+	KhongTiepNhan: func(PhieuPhanAnh) string {
+		return "Xã không tiếp nhận phản ánh này. " +
+			"Dùng mã tra cứu để xem lý do và nơi ông/bà có thể liên hệ tiếp."
+	},
+	ChuyenCapTren: func(PhieuPhanAnh) string {
+		return "Phản ánh đã được chuyển lên cơ quan cấp trên có thẩm quyền. " +
+			"Dùng mã tra cứu để xem cơ quan tiếp nhận và việc ông/bà cần làm tiếp."
+	},
 }
 
-// ViecTiepTheo returns that sentence, or "" when this transition owes the citizen nothing.
-func ViecTiepTheo(t TrangThai) string { return vietTiepTheo[t] }
+// loiNhanHanChe is what a citizen is told about a petition in the RESTRICTED field `can-bo`, at any of
+// the transitions above: the lookup code and the status label travel beside it, and nothing else.
+//
+// NO DEADLINE, NO DEPARTMENT, NO RESULT. The owner's decision of 2026-09-24 limits these to code +
+// status. A report ABOUT a member of staff passes through a third party (ZNS) and a notification
+// ledger read by the commune's own staff — the colleagues of the person reported on — and "which
+// department took it" is exactly the routing detail that tells them who is handling the complaint.
+const loiNhanHanChe = "Dùng mã tra cứu để xem tiến độ trong ứng dụng."
+
+// muiGioChoDan is the zone a deadline is written in for a citizen.
+//
+// A FIXED +07:00 AND NOT time.LoadLocation("Asia/Ho_Chi_Minh"). The two agree for every instant since
+// 1975 (Vietnam has no daylight saving), and the fixed zone cannot fail: LoadLocation reads a zone
+// database the container image may not carry, and a failure there would either refuse a status change
+// because a SENTENCE could not be formatted or fall back to UTC — seven hours off, in a promise told
+// to a citizen. service-identity names the zone (`domain.MuiGioHanhChinh`) because it combines
+// wall-clock SESSION times with dates; this only renders an instant, which needs the offset alone.
+var muiGioChoDan = time.FixedZone("ICT", 7*3600)
+
+// hanHoacKhong renders a deadline into `mau`, or returns `khongCo` when the deadline is the zero time.
+//
+// THE ZERO CASE IS UNREACHABLE on today's paths (the citizen channel always stores `han_tiep_nhan`,
+// and `han_xu_ly_xong` is fixed before a department can be named) and is handled anyway: a zero here
+// rendered as "trước 07:00 ngày 01/01/0001" would be a promise in the year 1, and an EMPTY sentence
+// would drop the whole message at the consumer — a citizen silently not told.
+func hanHoacKhong(han time.Time, mau, khongCo string) string {
+	if han.IsZero() {
+		return khongCo
+	}
+	return fmt.Sprintf(mau, han.In(muiGioChoDan).Format("15:04 ngày 02/01/2006"))
+}
+
+// ViecTiepTheo returns the sentence owed to the citizen when petition `p` enters status `moi`, or ""
+// when that transition owes them nothing. `p` is the petition AFTER the change.
+//
+// THE RESTRICTED FIELD IS DECIDED HERE, NOT BY EACH CALLER, so no publisher can forget it: a `can-bo`
+// petition that owes a message gets loiNhanHanChe and nothing more.
+func ViecTiepTheo(p PhieuPhanAnh, moi TrangThai) string {
+	soan, co := loiNhanChoDan[moi]
+	if !co {
+		return ""
+	}
+	if p.LinhVuc == LinhVucHanChe {
+		return loiNhanHanChe
+	}
+	return soan(p)
+}
 
 // BaoChoDan reports whether this transition owes the citizen a message (rule 10, invariant 5).
 //
-// IT IS DERIVED FROM vietTiepTheo AND NOT FROM A SECOND LIST. Two lists would be two answers, and
+// IT IS DERIVED FROM loiNhanChoDan AND NOT FROM A SECOND LIST. Two lists would be two answers, and
 // the one that drifts is the one that quietly stops telling somebody — which from inside the system
 // is indistinguishable from correct behaviour, because nothing errors when a message is not owed.
-func BaoChoDan(t TrangThai) bool { return vietTiepTheo[t] != "" }
+func BaoChoDan(t TrangThai) bool {
+	_, co := loiNhanChoDan[t]
+	return co
+}
 
 // --- moving along the main flow ------------------------------------------------------------------
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The staff-side vocabulary and shape checks — pure functions over values, tested without a database,
@@ -43,48 +44,157 @@ func TestChinLabelDayDuVaKhongTrung(t *testing.T) {
 	}
 }
 
-// TestChiBaBuocBaoChoDan — `skills/petition-lifecycle` settles which acts owe the citizen a message:
-// intake, entering processing, and closing. The other six are internal steps, and the citizen sees
-// status and result, never staff notes or routing history (rule 4, forbidden #5).
+// The instants a notification may name. +07:00 on purpose: 02:30Z is 09:30 in Vietnam, so a sentence
+// rendered in UTC would read "09:30" wrong by seven hours and this file would catch it.
+var (
+	hanTiepNhanMau = time.Date(2026, 9, 23, 2, 30, 0, 0, time.UTC) // 09:30 ngày 23/09/2026 giờ VN
+	hanXuLyXongMau = time.Date(2026, 9, 30, 4, 20, 0, 0, time.UTC) // 11:20 ngày 30/09/2026 giờ VN
+)
+
+func phieuBaoMau(linhVuc string) PhieuPhanAnh {
+	return PhieuPhanAnh{
+		MaTraCuu:    "PA-9WDN-3HQK-72FM",
+		LinhVuc:     linhVuc,
+		NoiDung:     "Đống rác ở đầu ngõ đã ba ngày chưa ai dọn.",
+		DiaChi:      "Đầu ngõ thôn Hà Lam",
+		BoPhanID:    "bp-001",
+		CanBoXuLyID: "CB-00999",
+		KetQuaXuLy:  "Đội vệ sinh đã thu gom toàn bộ rác tại đầu ngõ.",
+		HanTiepNhan: hanTiepNhanMau,
+		HanXuLyXong: hanXuLyXongMau,
+	}
+}
+
+// TestBangBaoChoDanDungQuyetDinh2409 — the owner's decision of 2026-09-24, over ALL NINE codes: which
+// transitions owe the citizen a message and which do not. One table, so BaoChoDan and ViecTiepTheo
+// must agree with it and with each other.
 //
-// ĐỘT BIẾN: thêm `DangPhanLoai` vào vietTiepTheo và ca này ĐỎ — phân loại là bước nội bộ, và một tin
-// nhắn cho mỗi bước nội bộ là cách một kênh thông báo trở thành thứ người dân tắt đi.
-func TestChiBaBuocBaoChoDan(t *testing.T) {
-	baoTin := map[TrangThai]bool{DaTiepNhan: true, DangXuLy: true, DaDong: true}
-	for _, t2 := range []TrangThai{
-		DaTiepNhan, DangPhanLoai, DaChuyenXuLy, DangXuLy, DaXuLy,
-		ChoDanXacNhan, DaDong, KhongTiepNhan, ChuyenCapTren,
-	} {
-		if BaoChoDan(t2) != baoTin[t2] {
-			t.Errorf("BaoChoDan(%q) = %v, muốn %v", t2, BaoChoDan(t2), baoTin[t2])
+// ĐỘT BIẾN: thêm lại `DangXuLy` vào loiNhanChoDan, hoặc bỏ `ChoDanXacNhan`, và ca này ĐỎ.
+func TestBangBaoChoDanDungQuyetDinh2409(t *testing.T) {
+	muon := map[TrangThai]bool{
+		DaTiepNhan:    true,
+		DangPhanLoai:  false,
+		DaChuyenXuLy:  true,
+		DangXuLy:      false, // REMOVED 2026-09-24 — the unit+deadline message moved to da-chuyen-xu-ly
+		DaXuLy:        false, // da-xu-ly -> cho-dan-xac-nhan carries the message
+		ChoDanXacNhan: true,
+		DaDong:        true,
+		KhongTiepNhan: true, // no route yet; listed so it owes a message the day it is built
+		ChuyenCapTren: true, // same
+	}
+	if len(muon) != 9 {
+		t.Fatalf("bảng thử có %d mã, muốn đủ 9", len(muon))
+	}
+	p := phieuBaoMau("rac-thai")
+	for t2, bao := range muon {
+		if BaoChoDan(t2) != bao {
+			t.Errorf("BaoChoDan(%q) = %v, muốn %v", t2, BaoChoDan(t2), bao)
 		}
-		viec := ViecTiepTheo(t2)
-		if baoTin[t2] {
-			if viec == "" {
-				t.Errorf("%q phải báo cho dân nhưng không có câu việc tiếp theo", t2)
+		viec := ViecTiepTheo(p, t2)
+		if !bao {
+			if viec != "" {
+				t.Errorf("%q không được báo cho dân nhưng vẫn mang câu: %q", t2, viec)
 			}
-			// THE RECEIVING SIDE REFUSES A `next_step` THAT MERELY REPEATS THE LABEL. A notification
-			// naming a state and no consequence — "Đã xử lý." — tells the citizen nothing they can act
-			// on, and a channel that answers like that is a channel people stop reading.
-			if strings.TrimSpace(viec) == strings.TrimSpace(NhanTrangThai(t2)) {
-				t.Errorf("%q: việc tiếp theo chỉ lặp lại nhãn", t2)
-			}
-		} else if viec != "" {
-			t.Errorf("%q là bước nội bộ nhưng vẫn mang câu cho dân: %q", t2, viec)
+			continue
+		}
+		if strings.TrimSpace(viec) == "" {
+			t.Errorf("%q phải báo cho dân nhưng câu rỗng — bên nhận bỏ tin, người dân không được báo", t2)
+		}
+		// THE RECEIVING SIDE REFUSES A `next_step` THAT MERELY REPEATS THE LABEL.
+		if strings.EqualFold(strings.TrimSpace(viec), strings.TrimSpace(NhanTrangThai(t2))) {
+			t.Errorf("%q: việc tiếp theo chỉ lặp lại nhãn", t2)
+		}
+	}
+	if BaoChoDan(TrangThai("received")) || ViecTiepTheo(p, TrangThai("received")) != "" {
+		t.Error("một mã không thuộc chín trạng thái lại được báo cho dân")
+	}
+}
+
+// TestDangXuLyKhongConSinhLoiNhan — the one entry REMOVED by the decision, asserted on its own so the
+// removal cannot be undone by a table edit that keeps the count right.
+func TestDangXuLyKhongConSinhLoiNhan(t *testing.T) {
+	if v := ViecTiepTheo(phieuBaoMau("rac-thai"), DangXuLy); v != "" {
+		t.Errorf("dang-xu-ly vẫn sinh lời nhắn %q — quyết định 24/09 chuyển lời nhắn bộ phận + hạn sang "+
+			"da-chuyen-xu-ly", v)
+	}
+}
+
+// TestLoiNhanTiepNhanMangHanVaSoKhanCap — intake names the ACKNOWLEDGE deadline, in Vietnam time, and
+// reminds the citizen that emergencies go to 113/114/115 (ADR 0028: the 2-hour fields are unreachable
+// on this channel).
+func TestLoiNhanTiepNhanMangHanVaSoKhanCap(t *testing.T) {
+	v := ViecTiepTheo(phieuBaoMau(""), DaTiepNhan)
+	for _, can := range []string{"09:30 ngày 23/09/2026", "113", "114", "115", "mã tra cứu"} {
+		if !strings.Contains(v, can) {
+			t.Errorf("lời nhắn tiếp nhận thiếu %q: %q", can, v)
+		}
+	}
+	if strings.Contains(v, "02:30") {
+		t.Errorf("hạn viết theo giờ UTC chứ không theo giờ Việt Nam: %q", v)
+	}
+	// THE RESOLVE DEADLINE DOES NOT EXIST AT INTAKE (ADR 0028 decision E) — naming it would invent it.
+	if strings.Contains(v, "30/09/2026") {
+		t.Errorf("lời nhắn tiếp nhận nêu hạn xử lý xong: %q", v)
+	}
+}
+
+// TestLoiNhanChuyenXuLyMangHanXuLyXongKhongTenBoPhan — handed to a department: the resolve deadline,
+// and "bộ phận chuyên môn" rather than an id (this service stores bo_phan_id only; see loiNhanChoDan).
+func TestLoiNhanChuyenXuLyMangHanXuLyXongKhongTenBoPhan(t *testing.T) {
+	v := ViecTiepTheo(phieuBaoMau("rac-thai"), DaChuyenXuLy)
+	if !strings.Contains(v, "11:20 ngày 30/09/2026") {
+		t.Errorf("thiếu hạn xử lý xong theo giờ Việt Nam: %q", v)
+	}
+	if !strings.Contains(v, "bộ phận chuyên môn") {
+		t.Errorf("không nói phiếu đã chuyển bộ phận: %q", v)
+	}
+	if strings.Contains(v, "bp-001") || strings.Contains(v, "CB-00999") {
+		t.Errorf("lời nhắn mang định danh nội bộ của bộ phận / cán bộ: %q", v)
+	}
+}
+
+// TestLoiNhanHanDeTrongKhongInNamMot — a zero deadline must never render as the year 1, and must never
+// empty the sentence (an empty sentence drops the whole message at the consumer).
+func TestLoiNhanHanDeTrongKhongInNamMot(t *testing.T) {
+	p := phieuBaoMau("rac-thai")
+	p.HanTiepNhan, p.HanXuLyXong = time.Time{}, time.Time{}
+	for _, t2 := range []TrangThai{DaTiepNhan, DaChuyenXuLy} {
+		v := ViecTiepTheo(p, t2)
+		if v == "" || strings.Contains(v, "0001") {
+			t.Errorf("%q với hạn rỗng: %q", t2, v)
 		}
 	}
 }
 
-// TestViecTiepTheoKhongHuaMotNgayNao — at intake no resolve deadline exists yet (ADR 0028), so a
-// sentence that named a date would have to invent it. Rule 10, forbidden #3.
-func TestViecTiepTheoKhongHuaMotNgayNao(t *testing.T) {
-	for _, t2 := range []TrangThai{DaTiepNhan, DangXuLy, DaDong} {
-		viec := ViecTiepTheo(t2)
-		for _, cam := range []string{"ngày", "/20", "giờ nữa", "trước ngày"} {
-			if strings.Contains(viec, cam) {
-				t.Errorf("%q: câu cho dân chứa %q — một ngày hẹn hiện ra rồi đổi là đúng thứ "+
-					"ADR 0027 quyết định C tồn tại để chặn, chỉ khác là nó xảy ra ở tầng giao diện",
-					t2, cam)
+// TestLoiNhanLinhVucCanBoChiMaVaTrangThai — a report ABOUT a member of staff: code + status only. No
+// deadline, no department, no result — at EVERY transition that owes a message.
+//
+// ĐỘT BIẾN: bỏ nhánh `LinhVucHanChe` khỏi ViecTiepTheo và ca này ĐỎ.
+func TestLoiNhanLinhVucCanBoChiMaVaTrangThai(t *testing.T) {
+	p := phieuBaoMau(LinhVucHanChe)
+	for _, t2 := range []TrangThai{DaTiepNhan, DaChuyenXuLy, ChoDanXacNhan, DaDong, KhongTiepNhan, ChuyenCapTren} {
+		v := ViecTiepTheo(p, t2)
+		if v != loiNhanHanChe {
+			t.Errorf("%q, lĩnh vực can-bo: %q, muốn đúng câu trung tính %q", t2, v, loiNhanHanChe)
+		}
+		for _, cam := range []string{"bộ phận", "bp-001", "CB-00999", "thu gom", "kết quả", "2026", "trước"} {
+			if strings.Contains(v, cam) {
+				t.Errorf("%q, lĩnh vực can-bo: lời nhắn mang %q", t2, cam)
+			}
+		}
+	}
+}
+
+// TestLoiNhanKhongMangDuLieuCaNhanHayKetQua — no entry may draw on anything but the two deadlines: not
+// the petition text, the address, the officer, the department id, or the staff-written result (the
+// event contract forbids forwarding it; rule 3, invariant 6).
+func TestLoiNhanKhongMangDuLieuCaNhanHayKetQua(t *testing.T) {
+	p := phieuBaoMau("rac-thai")
+	for t2 := range loiNhanChoDan {
+		v := ViecTiepTheo(p, t2)
+		for _, cam := range []string{"Đống rác", "Hà Lam", "bp-001", "CB-00999", "thu gom", "PA-9WDN"} {
+			if strings.Contains(v, cam) {
+				t.Errorf("%q: lời nhắn mang %q: %q", t2, cam, v)
 			}
 		}
 	}

@@ -495,7 +495,7 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 		}
 
 		// CLASSIFICATION OWES THE CITIZEN NOTHING, and the event still goes out. It is an INTERNAL
-		// step (`skills/petition-lifecycle`; rule 4, forbidden #5 keeps routing history away from the
+		// step (owner's decision of 2026-09-24; rule 4, forbidden #5 keeps routing history away from the
 		// citizen), so domain.ViecTiepTheo returns "" and the message carries no `citizen_message`.
 		// The FACT is published anyway because the event is named after the fact — a consumer counting
 		// time-in-status must not discover that three of the nine transitions were never emitted.
@@ -856,7 +856,7 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi aud
 //
 // # WHAT IS IN THE MESSAGE, AND WHAT MAY NEVER BE
 //
-// Four scalars and, on the three transitions that owe the citizen a word, two composed sentences. The
+// Four scalars and, on the transitions that owe the citizen a word, two composed sentences. The
 // contract's header closes the list: no phone number, no name, no address, no national ID, no
 // coordinates, NO TEXT OF THE PETITION, no photograph, at any nesting depth. A queue is persisted,
 // replicated, backed up and read during debugging, and deleting a field later does not recall the
@@ -875,6 +875,17 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi aud
 // decides how.
 func (uc *XuLyPhanAnh) ghiSuKien(ctx context.Context, tx *store.ScopedTx,
 	p domain.PhieuPhanAnh, moi domain.TrangThai, luc time.Time) error {
+	return ghiSuKienDoiTrangThai(ctx, tx, uc.suKien, uc.sinhID, p, moi, luc)
+}
+
+// ghiSuKienDoiTrangThai is the ONE builder of the `petitions.status_changed.v1` outbox row, shared by
+// the staff acts above and the citizen intake (gui_phan_anh.go).
+//
+// A PACKAGE FUNCTION AND NOT A METHOD, because two use cases publish the same fact and a second copy
+// of this body in the intake would be a second place where the message shape, the occurrence rule and
+// the "no recipient, no row" rule could drift apart. `p` is the petition AFTER the change.
+func ghiSuKienDoiTrangThai(ctx context.Context, tx *store.ScopedTx, suKien KhoSuKien,
+	sinhID func() (string, error), p domain.PhieuPhanAnh, moi domain.TrangThai, luc time.Time) error {
 
 	if p.CongDanID == "" {
 		return nil
@@ -892,8 +903,11 @@ func (uc *XuLyPhanAnh) ghiSuKien(ctx context.Context, tx *store.ScopedTx,
 	}
 
 	// PRESENT ONLY WHEN THIS TRANSITION OWES A MESSAGE. Absence is a fact, not an omission — see
-	// domain.ViecTiepTheo for which three do and why the other six do not.
-	if viec := domain.ViecTiepTheo(moi); viec != "" {
+	// domain.loiNhanChoDan for which six do and why the other three do not. The deadline, where one
+	// is named, travels INSIDE the composed sentence: CitizenMessage has no structured deadline field,
+	// and the contract says timing is phrased by the publisher, the only service that knows which of
+	// the two clocks has been set.
+	if viec := domain.ViecTiepTheo(p, moi); viec != "" {
 		tin.CitizenMessage = &petitionsv1.CitizenMessage{
 			StatusLabel: domain.NhanTrangThai(moi),
 			NextStep:    viec,
@@ -908,12 +922,12 @@ func (uc *XuLyPhanAnh) ghiSuKien(ctx context.Context, tx *store.ScopedTx,
 		return fmt.Errorf("xu_ly_phan_anh: mã hoá sự kiện: %w", err)
 	}
 
-	id, err := uc.sinhID()
+	id, err := sinhID()
 	if err != nil {
 		return fmt.Errorf("xu_ly_phan_anh: sinh mã sự kiện: %w", err)
 	}
 
-	return uc.suKien.Chen(ctx, tx, petstore.SuKienDi{
+	return suKien.Chen(ctx, tx, petstore.SuKienDi{
 		ID:       id,
 		Ten:      tenSuKienDoiTrangThai,
 		DoiTuong: p.MaTraCuu,

@@ -14,6 +14,7 @@ import (
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
+	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
 
 // The CITIZEN intake use case — the act rule 10 exists for.
@@ -150,8 +151,18 @@ func ycThu() YeuCauGuiPhanAnh {
 
 // dungGui builds the use case with BOTH generators and the clock pinned, so every assertion below
 // is about the decision and not about randomness.
+//
+// THE OUTBOX IS THE REAL petstore.SuKienDiStore on the same fake driver, so its INSERT is a statement
+// the driver saw inside (or outside) the transaction — not a boolean a fake set.
 func dungGui(k *khoGia, kho *khoPhieuGia, han HanTiepNhanDoc) *GuiPhanAnh {
-	uc := NewGuiPhanAnh(pkgstore.New(sql.OpenDB(k)), kho, han)
+	db := pkgstore.New(sql.OpenDB(k))
+	return dungGuiVoiSuKien(db, kho, petstore.NewSuKienDiStore(db), han)
+}
+
+func dungGuiVoiSuKien(db *pkgstore.DB, kho *khoPhieuGia, suKien KhoSuKien,
+	han HanTiepNhanDoc) *GuiPhanAnh {
+
+	uc := NewGuiPhanAnh(db, kho, suKien, han)
 	uc.sinhID = func() (string, error) { return idCoDinh, nil }
 	uc.sinhMa = func() (string, error) { return maCoDinh, nil }
 	uc.luc = func() time.Time { return mocGuiThu }
@@ -344,14 +355,17 @@ func TestGuiGhiDongVaVetTrongCUNGMotGiaoDich(t *testing.T) {
 		t.Fatalf("Gui: %v", err)
 	}
 
-	if len(k.lenh) != 2 {
-		t.Fatalf("chạy %d câu lệnh, muốn 2 (dòng nghiệp vụ + vết): %v", len(k.lenh), k.lenh)
+	if len(k.lenh) != 3 {
+		t.Fatalf("chạy %d câu lệnh, muốn 3 (dòng nghiệp vụ + vết + sự kiện đi): %v", len(k.lenh), k.lenh)
 	}
 	if !strings.Contains(k.lenh[0].sql, "INSERT INTO phieu_phan_anh") {
 		t.Errorf("câu lệnh đầu không phải ghi phiếu: %q", k.lenh[0].sql)
 	}
 	if !strings.Contains(k.lenh[1].sql, "INSERT INTO audit_log") {
-		t.Errorf("câu lệnh sau không phải ghi vết: %q", k.lenh[1].sql)
+		t.Errorf("câu lệnh thứ hai không phải ghi vết: %q", k.lenh[1].sql)
+	}
+	if !strings.Contains(k.lenh[2].sql, "INSERT INTO su_kien_di") {
+		t.Errorf("câu lệnh thứ ba không phải ghi sự kiện đi: %q", k.lenh[2].sql)
 	}
 	for i, l := range k.lenh {
 		if !l.trongGiaoDich {
@@ -382,6 +396,154 @@ func TestGuiVetHongThiKhongCoPhieu(t *testing.T) {
 	}
 	if k.rollback != 1 {
 		t.Errorf("rollback %d lần, muốn 1", k.rollback)
+	}
+}
+
+// --- sự kiện tiếp nhận: cùng giao dịch, đúng một dòng, không dữ liệu cá nhân ---------------------
+
+// TestGuiGhiDungMotSuKienTiepNhan — owner's decision of 2026-09-24: intake is the first transition
+// that notifies the citizen. Exactly one `petitions.status_changed.v1` row, inside the transaction,
+// carrying the lookup code, `da-tiep-nhan`, occurrence 1, the opaque citizen id, and a sentence that
+// names the ACKNOWLEDGE deadline in Vietnam time.
+//
+// ĐỘT BIẾN: bỏ lời gọi ghiSuKienDoiTrangThai khỏi Gui và ca này ĐỎ.
+func TestGuiGhiDungMotSuKienTiepNhan(t *testing.T) {
+	k, kho, han := &khoGia{}, &khoPhieuGia{}, hanThu()
+
+	if _, err := dungGui(k, kho, han).Gui(ctxXa(xaThu), ycThu(), congDanThu()); err != nil {
+		t.Fatalf("Gui: %v", err)
+	}
+
+	var su []lenhGia
+	for _, l := range k.lenh {
+		if strings.Contains(l.sql, "INSERT INTO su_kien_di") {
+			su = append(su, l)
+		}
+	}
+	if len(su) != 1 {
+		t.Fatalf("có %d dòng sự kiện, muốn đúng 1", len(su))
+	}
+	if !su[0].trongGiaoDich {
+		t.Error("dòng sự kiện ghi NGOÀI giao dịch — phiếu có thể tồn tại mà lời báo cho dân thì mất")
+	}
+	if k.commit != 1 || k.rollback != 0 {
+		t.Errorf("commit=%d rollback=%d, muốn 1/0", k.commit, k.rollback)
+	}
+	if su[0].args[2] != "petitions.status_changed.v1" || su[0].args[3] != maCoDinh {
+		t.Errorf("tên / đối tượng sự kiện = %v / %v", su[0].args[2], su[0].args[3])
+	}
+
+	raw, ok := su[0].args[4].([]byte)
+	if !ok {
+		t.Fatalf("thân sự kiện = %T, muốn []byte", su[0].args[4])
+	}
+	var than map[string]any
+	if err := json.Unmarshal(raw, &than); err != nil {
+		t.Fatalf("thân sự kiện không phải JSON: %q", raw)
+	}
+	if than["status"] != string(domain.DaTiepNhan) || than["lookup_code"] != maCoDinh ||
+		than["citizen_id"] != idCongDan || than["occurrence"] != float64(1) {
+		t.Errorf("thân sự kiện sai: %s", raw)
+	}
+	tin, co := than["citizen_message"].(map[string]any)
+	if !co {
+		t.Fatalf("tiếp nhận KHÔNG mang lời nhắn cho dân: %s", raw)
+	}
+	if tin["status_label"] != domain.NhanTrangThai(domain.DaTiepNhan) {
+		t.Errorf("nhãn = %v", tin["status_label"])
+	}
+	viec, _ := tin["next_step"].(string)
+	// mocHanThu = 02:30Z = 09:30 giờ Việt Nam.
+	for _, can := range []string{"09:30 ngày 23/09/2026", "113", "114", "115"} {
+		if !strings.Contains(viec, can) {
+			t.Errorf("lời nhắn tiếp nhận thiếu %q: %q", can, viec)
+		}
+	}
+}
+
+// TestGuiSuKienKhongMangDuLieuCaNhan — rule 3, asserted on the SERIALIZED payload: not the name, the
+// number, the text, the address — not even the field names that would hold them.
+func TestGuiSuKienKhongMangDuLieuCaNhan(t *testing.T) {
+	k, kho, han := &khoGia{}, &khoPhieuGia{}, hanThu()
+	if _, err := dungGui(k, kho, han).Gui(ctxXa(xaThu), ycThu(), congDanThu()); err != nil {
+		t.Fatalf("Gui: %v", err)
+	}
+	var raw string
+	for _, l := range k.lenh {
+		if strings.Contains(l.sql, "INSERT INTO su_kien_di") {
+			raw = string(l.args[4].([]byte))
+		}
+	}
+	if raw == "" {
+		t.Fatal("không có dòng sự kiện")
+	}
+	for _, cam := range []string{"Nguyễn Văn An", "0900000000", "Đống rác", "Hà Lam", "Đầu ngõ",
+		"ho_ten", "dien_thoai", "noi_dung", "dia_chi", idCoDinh} {
+		if strings.Contains(raw, cam) {
+			t.Errorf("thân sự kiện mang %q: %s", cam, raw)
+		}
+	}
+}
+
+// suKienHong runs the REAL outbox INSERT, so the driver sees it inside the transaction, and then
+// fails — the shape of a constraint violation on `su_kien_di`.
+type suKienHong struct{ that KhoSuKien }
+
+func (s suKienHong) Chen(ctx context.Context, tx *pkgstore.ScopedTx, e petstore.SuKienDi) error {
+	if err := s.that.Chen(ctx, tx, e); err != nil {
+		return err
+	}
+	return errors.New("pg: su_kien_di vi phạm ràng buộc")
+}
+
+// TestGuiSuKienHongThiKhongCoPhieu — the outbox row is the LAST write, so a failure there is what
+// proves the petition and its trail go down with it. No petition without its event; no code handed
+// to the citizen.
+func TestGuiSuKienHongThiKhongCoPhieu(t *testing.T) {
+	k, kho, han := &khoGia{}, &khoPhieuGia{}, hanThu()
+	db := pkgstore.New(sql.OpenDB(k))
+	uc := dungGuiVoiSuKien(db, kho, suKienHong{petstore.NewSuKienDiStore(db)}, han)
+
+	p, err := uc.Gui(ctxXa(xaThu), ycThu(), congDanThu())
+	if err == nil {
+		t.Fatal("Gui thành công dù dòng sự kiện hỏng — phiếu tồn tại mà người dân không bao giờ được báo")
+	}
+	if k.commit != 0 || k.rollback != 1 {
+		t.Errorf("commit=%d rollback=%d, muốn 0/1", k.commit, k.rollback)
+	}
+	if p.MaTraCuu != "" {
+		t.Errorf("trả mã tra cứu %q cho một lượt tiếp nhận đã rollback", p.MaTraCuu)
+	}
+	// The three statements were all attempted INSIDE the one transaction that rolled back.
+	if len(k.lenh) != 3 {
+		t.Fatalf("chạy %d câu lệnh, muốn 3", len(k.lenh))
+	}
+	for i, l := range k.lenh {
+		if !l.trongGiaoDich {
+			t.Errorf("câu lệnh %d chạy ngoài giao dịch: %q", i, l.sql)
+		}
+	}
+}
+
+// TestSuKienPhieuKhongCongDanKhongGhiGi — the shared builder's "no recipient, no row" rule, which is
+// what keeps a staff-booked petition (no citizen account) from putting a guaranteed dead letter on
+// the queue. The citizen intake never reaches it (it refuses a non-citizen principal first), so it is
+// asserted on the builder itself.
+func TestSuKienPhieuKhongCongDanKhongGhiGi(t *testing.T) {
+	k := &khoGia{}
+	db := pkgstore.New(sql.OpenDB(k))
+	ctx := ctxXa(xaThu)
+	err := db.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		return ghiSuKienDoiTrangThai(ctx, tx, petstore.NewSuKienDiStore(db),
+			func() (string, error) { return idCoDinh, nil },
+			domain.PhieuPhanAnh{MaTraCuu: maCoDinh, TrangThai: domain.DaTiepNhan, HanTiepNhan: mocHanThu},
+			domain.DaTiepNhan, mocGuiThu)
+	})
+	if err != nil {
+		t.Fatalf("ghiSuKienDoiTrangThai: %v", err)
+	}
+	if len(k.lenh) != 0 {
+		t.Errorf("ghi %d câu lệnh cho phiếu không có công dân: %v", len(k.lenh), k.lenh)
 	}
 }
 
@@ -530,11 +692,11 @@ func TestGuiTheoXaTrongContext(t *testing.T) {
 			t.Fatalf("Gui cho %s: %v", xa, err)
 		}
 	}
-	if len(k.lenh) != 4 {
-		t.Fatalf("chạy %d câu lệnh, muốn 4", len(k.lenh))
+	if len(k.lenh) != 6 {
+		t.Fatalf("chạy %d câu lệnh, muốn 6", len(k.lenh))
 	}
-	// lenh[0..1] = commune A's row and entry, lenh[2..3] = commune B's.
-	for i, muon := range map[int]tenant.ID{0: xaThu, 1: xaThu, 2: xaKia, 3: xaKia} {
+	// lenh[0..2] = commune A's row, entry and outbox row; lenh[3..5] = commune B's.
+	for i, muon := range map[int]tenant.ID{0: xaThu, 1: xaThu, 2: xaThu, 3: xaKia, 4: xaKia, 5: xaKia} {
 		if k.lenh[i].args[0] != string(muon) {
 			t.Errorf("tenant_id của câu lệnh %d = %v, muốn %q", i, k.lenh[i].args[0], muon)
 		}

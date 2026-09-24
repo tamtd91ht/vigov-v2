@@ -371,20 +371,20 @@ func TestPhieuVuotTranChuaPhanLoaiDocRaLaTre(t *testing.T) {
 
 // --- the notification obligation ----------------------------------------------------------------------
 
-// TestTienTrangThaiGhiSuKienVaLoiNhan — rule 10, invariant 5. Entering processing is one of the three
-// transitions the citizen is told about, and the obligation is recorded in the SAME transaction as
-// the change.
+// TestTienTrangThaiGhiSuKienVaLoiNhan — rule 10, invariant 5. `da-xu-ly` -> `cho-dan-xac-nhan` is one
+// of the transitions the citizen is told about (owner's decision of 2026-09-24), and the obligation is
+// recorded in the SAME transaction as the change.
 //
-// ĐỘT BIẾN: xoá dòng `DangXuLy` khỏi domain.vietTiepTheo và ca này ĐỎ — một người dân không được báo
-// thì không phân biệt được "đang xử lý" với "bị bỏ quên".
+// ĐỘT BIẾN: xoá dòng `ChoDanXacNhan` khỏi domain.loiNhanChoDan và ca này ĐỎ — người dân không được mời
+// xác nhận thì phiếu nằm mãi ở bước chờ.
 func TestTienTrangThaiGhiSuKienVaLoiNhan(t *testing.T) {
 	k := khoPhieuMau()
-	// `da-chuyen-xu-ly` -> `dang-xu-ly`: the transition the citizen IS told about.
 	k.hang = dongPhieuMau(map[string]any{
-		"trang_thai":     string(domain.DaChuyenXuLy),
+		"trang_thai":     string(domain.DaXuLy),
 		"linh_vuc":       "rac-thai",
 		"han_xu_ly_xong": mocXuLyXongThu,
 		"phan_loai_luc":  mocThaoTac,
+		"xu_ly_xong_luc": mocThaoTac,
 		"bo_phan_id":     "bp-001",
 	})
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
@@ -393,8 +393,8 @@ func TestTienTrangThaiGhiSuKienVaLoiNhan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TienTrangThai: %v", err)
 	}
-	if sau.TrangThai != domain.DangXuLy {
-		t.Fatalf("trạng thái = %q, muốn dang-xu-ly", sau.TrangThai)
+	if sau.TrangThai != domain.ChoDanXacNhan {
+		t.Fatalf("trạng thái = %q, muốn cho-dan-xac-nhan", sau.TrangThai)
 	}
 
 	su := k.cau("INSERT INTO su_kien_di")
@@ -403,8 +403,8 @@ func TestTienTrangThaiGhiSuKienVaLoiNhan(t *testing.T) {
 			len(su))
 	}
 	than := thanSuKien(t, su[0].args)
-	if than["status"] != string(domain.DangXuLy) {
-		t.Errorf("sự kiện mang trạng thái %v, muốn dang-xu-ly", than["status"])
+	if than["status"] != string(domain.ChoDanXacNhan) {
+		t.Errorf("sự kiện mang trạng thái %v, muốn cho-dan-xac-nhan", than["status"])
 	}
 	if than["lookup_code"] != maPhieuThu {
 		t.Errorf("sự kiện mang mã %v, muốn mã tra cứu", than["lookup_code"])
@@ -422,7 +422,7 @@ func TestTienTrangThaiGhiSuKienVaLoiNhan(t *testing.T) {
 	if !co {
 		t.Fatalf("bước này KHÔNG mang lời nhắn cho dân: %v", than)
 	}
-	if tin["status_label"] != domain.NhanTrangThai(domain.DangXuLy) {
+	if tin["status_label"] != domain.NhanTrangThai(domain.ChoDanXacNhan) {
 		t.Errorf("nhãn = %v", tin["status_label"])
 	}
 	if tin["next_step"] == "" || tin["next_step"] == tin["status_label"] {
@@ -432,11 +432,115 @@ func TestTienTrangThaiGhiSuKienVaLoiNhan(t *testing.T) {
 	// NOT ONE CHARACTER OF THE PETITION, THE REPORTER OR THE RESULT (rule 3; the event contract closes
 	// the list at four scalars plus two composed sentences).
 	raw := string(su[0].args[4].([]byte))
-	for _, cam := range []string{"Đống rác", "Nguyễn Văn An", "0900000000", "Đầu ngõ"} {
+	for _, cam := range []string{"Đống rác", "Nguyễn Văn An", "0900000000", "Đầu ngõ", "bp-001"} {
 		if strings.Contains(raw, cam) {
 			t.Errorf("thân sự kiện mang dữ liệu cá nhân %q — hàng đợi được sao lưu, nhân bản và đọc "+
 				"lúc gỡ lỗi, và xoá trường về sau không thu hồi được bản sao", cam)
 		}
+	}
+}
+
+// TestVaoDangXuLyKhongConLoiNhan — `da-chuyen-xu-ly` -> `dang-xu-ly` publishes the FACT and owes the
+// citizen nothing any more (owner's decision of 2026-09-24: the department-and-deadline message moved
+// to `da-chuyen-xu-ly`, so saying it again here would be a second message for one handover).
+func TestVaoDangXuLyKhongConLoiNhan(t *testing.T) {
+	k := khoPhieuMau()
+	k.hang = phieuDaGiaoCho(maCanBoThu)
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+	if _, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), coQuyenCaXa, khongQuyenHanChe); err != nil {
+		t.Fatalf("TienTrangThai: %v", err)
+	}
+	su := k.cau("INSERT INTO su_kien_di")
+	if len(su) != 1 {
+		t.Fatalf("có %d dòng sự kiện, muốn 1 — SỰ THẬT vẫn phải phát đi", len(su))
+	}
+	than := thanSuKien(t, su[0].args)
+	if than["status"] != string(domain.DangXuLy) {
+		t.Errorf("sự kiện mang trạng thái %v, muốn dang-xu-ly", than["status"])
+	}
+	if _, co := than["citizen_message"]; co {
+		t.Errorf("dang-xu-ly vẫn mang lời nhắn cho dân: %v", than["citizen_message"])
+	}
+}
+
+// TestPhanCongLanDauBaoBoPhanVaHan — the first routing enters `da-chuyen-xu-ly`, which now carries the
+// message: handed to a department, and the RESOLVE deadline fixed at classification.
+func TestPhanCongLanDauBaoBoPhanVaHan(t *testing.T) {
+	k := khoPhieuMau()
+	k.hang = dongPhieuMau(map[string]any{
+		"trang_thai": string(domain.DangPhanLoai), "linh_vuc": "rac-thai",
+		"han_xu_ly_xong": mocXuLyXongThu, "phan_loai_luc": mocThaoTac,
+	})
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+	if _, err := uc.PhanCong(ctx, maPhieuThu, YeuCauPhanCong{BoPhan: "bp-001", CanBo: "CB-00999"},
+		canBoThu(), khongQuyenHanChe); err != nil {
+		t.Fatalf("PhanCong: %v", err)
+	}
+	su := k.cau("INSERT INTO su_kien_di")
+	if len(su) != 1 {
+		t.Fatalf("có %d dòng sự kiện, muốn 1", len(su))
+	}
+	than := thanSuKien(t, su[0].args)
+	tin, co := than["citizen_message"].(map[string]any)
+	if !co {
+		t.Fatalf("da-chuyen-xu-ly KHÔNG mang lời nhắn cho dân: %v", than)
+	}
+	viec, _ := tin["next_step"].(string)
+	// mocXuLyXongThu = 04:20Z = 11:20 giờ Việt Nam.
+	if !strings.Contains(viec, "11:20 ngày 30/09/2026") || !strings.Contains(viec, "bộ phận chuyên môn") {
+		t.Errorf("lời nhắn thiếu bộ phận hoặc hạn xử lý xong: %q", viec)
+	}
+	// THE OFFICER AND THE DEPARTMENT ID NEVER TRAVEL.
+	raw := string(su[0].args[4].([]byte))
+	for _, cam := range []string{"bp-001", "CB-00999", maCanBoThu} {
+		if strings.Contains(raw, cam) {
+			t.Errorf("thân sự kiện mang %q: %s", cam, raw)
+		}
+	}
+}
+
+// TestPhanCongPhieuCanBoChiMaVaTrangThai — the restricted field: the message carries no deadline and
+// no department, only the neutral sentence.
+func TestPhanCongPhieuCanBoChiMaVaTrangThai(t *testing.T) {
+	k := khoPhieuMau()
+	k.hang = dongPhieuMau(map[string]any{
+		"trang_thai": string(domain.DangPhanLoai), "linh_vuc": domain.LinhVucHanChe,
+		"han_xu_ly_xong": mocXuLyXongThu, "phan_loai_luc": mocThaoTac,
+	})
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+	if _, err := uc.PhanCong(ctx, maPhieuThu, YeuCauPhanCong{BoPhan: "bp-001"}, canBoThu(), coQuyenHanChe); err != nil {
+		t.Fatalf("PhanCong: %v", err)
+	}
+	raw := string(k.cau("INSERT INTO su_kien_di")[0].args[4].([]byte))
+	for _, cam := range []string{"bộ phận", "bp-001", "30/09/2026", "trước"} {
+		if strings.Contains(raw, cam) {
+			t.Errorf("phiếu can-bo: thân sự kiện mang %q: %s", cam, raw)
+		}
+	}
+	if !strings.Contains(raw, `"citizen_message"`) {
+		t.Errorf("phiếu can-bo vẫn phải được báo (mã + trạng thái): %s", raw)
+	}
+}
+
+// TestPhieuKhongCongDanThiKhongGhiSuKien — a staff-booked petition has no citizen account behind it:
+// the act commits, and no outbox row is written (there is nobody to tell).
+func TestPhieuKhongCongDanThiKhongGhiSuKien(t *testing.T) {
+	k := khoPhieuMau()
+	k.hang = phieuDaGiaoCho(maCanBoThu)
+	k.hang["cong_dan_id"] = nil
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+	if _, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), coQuyenCaXa, khongQuyenHanChe); err != nil {
+		t.Fatalf("TienTrangThai: %v", err)
+	}
+	if k.coCau("INSERT INTO su_kien_di") {
+		t.Error("ghi dòng sự kiện cho phiếu không có công dân — tin chắc chắn vào hàng thư chết")
+	}
+	if k.daCommit != 1 {
+		t.Errorf("commit=%d, muốn 1", k.daCommit)
 	}
 }
 

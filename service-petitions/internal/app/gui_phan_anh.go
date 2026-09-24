@@ -8,7 +8,8 @@ package app
 //
 //	1. ASK identity for the acknowledge deadline     — may refuse, and a refusal ends the intake
 //	2. MINT the lookup code                          — only once step 1 has succeeded
-//	3. ONE TRANSACTION: the row and its audit entry  — rule 6, invariant 3
+//	3. ONE TRANSACTION: the row, its audit entry     — rule 6, invariant 3
+//	   and the `petitions.status_changed.v1` outbox row  — rule 10, invariant 5; rule 2, invariant 6
 //
 // # WHY STEP 1 COMES BEFORE STEP 2, AND WHY THAT IS NOT A DETAIL
 //
@@ -162,8 +163,13 @@ type GuiPhanAnh struct {
 	kho KhoPhieuGhi
 	han HanTiepNhanDoc
 
+	// suKien records the intake's `petitions.status_changed.v1` (into `da-tiep-nhan`) in the SAME
+	// transaction as the row and its audit entry. The same KhoSuKien the staff acts write through —
+	// see ghiSuKienDoiTrangThai.
+	suKien KhoSuKien
+
 	// sinhID and sinhMa are injected so a test can pin both values. In production they are
-	// ulid.Moi and domain.SinhMaTraCuu.
+	// ulid.Moi and domain.SinhMaTraCuu. sinhID mints BOTH the petition id and the outbox row id.
 	sinhID func() (string, error)
 	sinhMa func() (string, error)
 
@@ -172,9 +178,9 @@ type GuiPhanAnh struct {
 	luc func() time.Time
 }
 
-func NewGuiPhanAnh(db *store.DB, kho KhoPhieuGhi, han HanTiepNhanDoc) *GuiPhanAnh {
+func NewGuiPhanAnh(db *store.DB, kho KhoPhieuGhi, suKien KhoSuKien, han HanTiepNhanDoc) *GuiPhanAnh {
 	return &GuiPhanAnh{
-		db: db, kho: kho, han: han,
+		db: db, kho: kho, suKien: suKien, han: han,
 		sinhID: ulid.Moi,
 		sinhMa: domain.SinhMaTraCuu,
 		luc:    func() time.Time { return time.Now().UTC() },
@@ -387,16 +393,29 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		// one fact that decides which commune the entry belongs to.
 		//
 		// Subject is the BUSINESS CODE the citizen holds, never the internal ULID.
-		return audit.Write(ctx, tx, audit.Entry{
+		if err := audit.Write(ctx, tx, audit.Entry{
 			Actor:   congDan,
 			Action:  HanhViGuiPhanAnh,
 			Subject: moi.MaTraCuu,
 			Delta:   delta,
-		})
+		}); err != nil {
+			return err
+		}
+
+		// THE THIRD WRITE — the citizen is owed a word (rule 10, invariant 5; owner's decision of
+		// 2026-09-24: intake is the first transition that notifies). Inside the SAME transaction, so
+		// there is no committed petition whose notification was never recorded: a failure here rolls
+		// back the row and the trail too, and the citizen is told the report was not received (rule 2,
+		// invariant 6). The row is drained after commit by the relay, never published from in here.
+		//
+		// `moi.CongDanID` is never empty on THIS route (refused at the top), so the helper's "no
+		// recipient, no row" branch is the staff-booked channel's, not this one's. Occurrence is 1:
+		// `so_lan_mo_lai` is 0 on a row that was just created.
+		return ghiSuKienDoiTrangThai(ctx, tx, uc.suKien, uc.sinhID, moi, domain.DaTiepNhan, bayGio)
 	})
 	if err != nil {
-		// Nothing was committed: no row, no trail. The two states agree, and the citizen is told the
-		// report was not received — which is true.
+		// Nothing was committed: no row, no trail, no outbox row. The three states agree, and the
+		// citizen is told the report was not received — which is true.
 		//
 		// NEITHER THE CODE, THE CONTENT, THE REPORTER NOR THE CITIZEN IDENTIFIER IS IN THE MESSAGE.
 		// The code is the one string that opens a citizen's petition and the identifier ties a pile
