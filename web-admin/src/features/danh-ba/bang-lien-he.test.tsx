@@ -34,6 +34,10 @@ function canBo(ghiDe: Partial<identity_canBoTomTat> = {}): identity_canBoTomTat 
     active: true,
     last_login_at: null,
     created_at: "2026-09-01T02:00:00Z",
+    has_zalo: false,
+    published: false,
+    display_order: null,
+    consent_recorded_at: null,
     ...ghiDe,
   };
 }

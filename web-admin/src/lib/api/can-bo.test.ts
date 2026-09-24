@@ -63,6 +63,10 @@ function canBo(n: number, dangNhapGanNhat: string | null): identity_canBoTomTat 
     active: true,
     last_login_at: dangNhapGanNhat,
     created_at: `2026-09-${String(n).padStart(2, "0")}T04:10:38Z`,
+    has_zalo: false,
+    published: false,
+    display_order: null,
+    consent_recorded_at: null,
   };
 }
 

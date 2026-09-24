@@ -42,6 +42,10 @@ const CAN_BO: identity_canBoTomTat = {
   active: true,
   last_login_at: null,
   created_at: "2026-09-22T08:00:00Z",
+  has_zalo: false,
+  published: false,
+  display_order: null,
+  consent_recorded_at: null,
 };
 
 const BO_PHAN: readonly MucChon[] = [{ id: "01J0000000000000000BOPHAN", name: "Văn phòng" }];

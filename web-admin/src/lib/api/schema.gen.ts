@@ -673,6 +673,10 @@ export type identity_canBoTomTat = {
   "active": boolean;
   "last_login_at": string | null;
   "created_at": string;
+  "has_zalo": boolean;
+  "published": boolean;
+  "display_order": number | null;
+  "consent_recorded_at": string | null;
 };
 
 export type identity_capQuyenRa = {
@@ -724,6 +728,12 @@ export type identity_danhSachThonToDanPhoRa = {
 
 export type identity_danhSachVaiTroRa = {
   "items": Array<identity_vaiTroMucRa>;
+};
+
+export type identity_datCongKhaiVao = {
+  "published": boolean | null;
+  "consent_confirmed": boolean;
+  "display_order": number | null;
 };
 
 export type identity_datVaiTroVao = {
@@ -841,6 +851,7 @@ export type identity_suaCanBoVao = {
   "org_unit_id": string | null;
   "office_phone": string | null;
   "mobile": string | null;
+  "has_zalo"?: boolean | null;
 };
 
 export type identity_suaNgayLamBuVao = {
@@ -916,6 +927,14 @@ export type identity_thongTinXa = {
   "province": string;
 };
 
+export type identity_timCanBoVao = {
+  "q": string;
+  "unit": string;
+  "published": boolean | null;
+  "limit": number | null;
+  "cursor": string;
+};
+
 export type identity_vaiTroCotRa = {
   /** ULID — what `grants` and `staff.role_id` reference */
   "id": string;
@@ -963,6 +982,10 @@ export type identity_vanDeSLARa = {
   "kind": string;
   "work_kind": string;
   "message": string;
+};
+
+export type identity_xoaCanBoVao = {
+  "reason": string;
 };
 
 export type identity_xoaLichVao = {
@@ -2876,6 +2899,8 @@ export type identity_get_staff = {
     "cursor"?: string;
     "sort"?: "code" | "created_at";
     "order"?: "asc" | "desc";
+    "published"?: string;
+    "unit"?: string;
   };
   than: never;
   phanHoi: {
@@ -2923,6 +2948,24 @@ export type identity_put_staff_current_password = {
   };
 };
 
+/** POST /api/v1/staff/searches — Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ hoặc số điện thoại — từ khoá đi trong THÂN, không lên URL */
+export type identity_post_staff_searches = {
+  duongDan: "/api/v1/staff/searches";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_timCanBoVao;
+  phanHoi: {
+    200: page_Result_identity_canBoTomTat;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/staff/{id} — Chi tiết một cán bộ trong xã */
 export type identity_get_staff_by_id = {
   duongDan: "/api/v1/staff/{id}";
@@ -2954,6 +2997,27 @@ export type identity_patch_staff_by_id = {
   than: identity_suaCanBoVao;
   phanHoi: {
     200: identity_canBoTomTat;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/staff/{id} — Xoá mềm một dòng danh bạ NHẬP TRÙNG, kèm lý do bắt buộc — từ chối dòng đang có tài khoản đăng nhập */
+export type identity_delete_staff_by_id = {
+  duongDan: "/api/v1/staff/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_xoaCanBoVao;
+  phanHoi: {
+    204: void;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
@@ -3038,6 +3102,26 @@ export type identity_put_staff_by_id_password = {
     403: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/staff/{id}/publication — Công khai / thôi công khai một cán bộ lên danh bạ Zalo Mini App — bắt buộc xác nhận đã được người đó đồng ý (#12) */
+export type identity_put_staff_by_id_publication = {
+  duongDan: "/api/v1/staff/{id}/publication";
+  phuongThuc: "PUT";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_datCongKhaiVao;
+  phanHoi: {
+    200: identity_canBoTomTat;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
     500: httpx_Error;
   };
 };
