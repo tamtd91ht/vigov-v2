@@ -58,32 +58,65 @@ function duongDanMot(mau: string, id: string): string {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * BỘ LỌC VÀ PHÂN TRANG
+ * BỘ LỌC, TÌM CHỮ, SẮP XẾP VÀ PHÂN TRANG — TÊN THAM SỐ LẤY TỪ HỢP ĐỒNG
  *
- * ⚠ HAI TUYẾN ĐỌC KHÔNG KHAI THAM SỐ TRUY VẤN NÀO TRONG HỢP ĐỒNG, và đó là một PHÁT HIỆN chứ
- * không phải một chỗ để bịa. `kb/20-contracts/openapi.json` không có `parameters` cho
- * `GET /api/v1/incoming-documents` lẫn `GET /api/v1/outgoing-documents`, nên `schema.gen.ts` sinh
- * ra `truyVan: {}` — trong khi handler THẬT SỰ đọc năm bộ lọc và bốn tham số trang
- * (`service-documents/internal/http/van_ban_den.go:450` `locVanBanDenTuQuery`, `:400` `page.Parse`;
- * `van_ban_di.go:260` `locVanBanDiTuQuery`). Nguyên nhân: hai tuyến ấy thiếu chú thích `@page`
- * mà `tools/apidoc` đọc — `GET /api/v1/staff` có nó nên phát đủ `limit/cursor/sort/order`.
+ * Hai tuyến đọc khai đủ tham số trong hợp đồng: `documents_get_incoming_documents["truyVan"]` và
+ * `documents_get_outgoing_documents["truyVan"]` (`schema.gen.ts`, sinh từ `openapi.json` mà
+ * `tools/apidoc` dò ra từ chính handler). MỌI tham số dưới đây đi qua `thamSoTheoHopDong<T>`, và tên
+ * phải là một khoá của `T` — máy chủ đổi tên `holding_unit` thì `tsc` đỏ ở đúng dòng gửi nó, thay vì
+ * máy chủ lặng lẽ bỏ qua một tham số lạ và trả CẢ quyển sổ trong khi cán bộ tin mình đang xem một
+ * lát cắt. Giá trị cũng bị đối chiếu: `sort`/`order` chỉ nhận đúng enum của hợp đồng.
  *
- * Hệ quả, và nó được nói ra chứ không giấu đi: tên năm bộ lọc dưới đây LẤY TỪ MÃ NGUỒN TUYẾN,
- * không từ hợp đồng, nên `tsc` KHÔNG đỏ vào ngày máy chủ đổi tên một tham số. Đã ghi vào báo cáo
- * để lượt backend bổ sung chú thích; khi có, kiểu ở đây rút về `…["truyVan"]` như `can-bo.ts`.
- *
- * KHÔNG GỬI `sort` VÀ `order`. Danh sách trắng khoá sắp xếp (`docstore.SapXepVanBanDen`) cũng
- * không có trong hợp đồng, nên một khoá gõ tay ở đây là đúng bản chép mà `can-bo.ts` đã phải gỡ
- * bỏ một lần: thêm hay bớt một cột ở máy chủ thì không bài kiểm nào đỏ, chỉ có một màn hình nhận
- * 400 mà cán bộ đọc ra là "không tải được". Không gửi thì máy chủ áp mặc định của nó — số vào sổ
- * giảm dần, đúng thứ tự `05-van-ban-don-thu §3.1` vẽ.
+ * `sort`/`order` CHỈ ĐI LÊN KHI MÀN HÌNH CHỌN. Không gửi thì máy chủ áp mặc định của nó — số vào
+ * sổ giảm dần (`docstore.SapXepVanBanDen`, `page.NewAllowlist(page.Desc, number…)`), đúng thứ tự
+ * `05-van-ban-don-thu §3.1` vẽ. Ứng dụng web không giữ bản sao thứ hai của mặc định ấy.
  * ══════════════════════════════════════════════════════════════════════════════════════════
  */
+
+type TruyVanDen = documents_get_incoming_documents["truyVan"];
+type TruyVanDi = documents_get_outgoing_documents["truyVan"];
+
+/**
+ * Phần chung của hai tuyến: khoá có ở CẢ HAI, giá trị phải hợp lệ cho CẢ HAI. Một bên đổi tên hay
+ * thu hẹp enum thì kiểu này co lại và `themPhanChung` đỏ.
+ */
+type TruyVanChung = {
+  [K in keyof TruyVanDen & keyof TruyVanDi]: TruyVanDen[K] & TruyVanDi[K];
+};
+
+/** Khoá sắp xếp và chiều mà CẢ HAI quyển sổ nhận — suy từ hợp đồng, không gõ tay. */
+export type KhoaSapXepVanBan = NonNullable<TruyVanChung["sort"]>;
+export type ChieuSapXepVanBan = NonNullable<TruyVanChung["order"]>;
+
+/**
+ * Trả về hàm đặt MỘT tham số truy vấn, tên và kiểu giá trị lấy từ hợp đồng `T`.
+ *
+ * HAI TẦNG HÀM, KHÔNG MỘT: TypeScript không suy được `K` khi `T` đã ghi tay, nên một hàm phẳng
+ * `datThamSo<T>(…, "sort", x)` chỉ kiểm TÊN mà để lọt mọi chuỗi vào `sort`. Tầng trong suy `K` từ
+ * tên, nên giá trị bị đối chiếu với đúng trường ấy.
+ *
+ * Vắng mặt, `null` hay chuỗi rỗng thì KHÔNG đặt: chuỗi rỗng nghĩa là "không lọc", và máy chủ từ
+ * chối một `status=` hay `cursor=` rỗng thay vì bỏ qua (400 ngay lần mở màn hình đầu tiên).
+ *
+ * Xuất ra CHỈ để bài kiểm chứng được rằng một tên ngoài hợp đồng làm `tsc` đỏ (`@ts-expect-error`).
+ */
+export function thamSoTheoHopDong<T extends object>(truyVan: URLSearchParams) {
+  return <K extends Extract<keyof T, string>>(
+    ten: K,
+    giaTri: NonNullable<T[K]> | null | undefined,
+  ): void => {
+    if (giaTri === undefined || giaTri === null || giaTri === "") return;
+    truyVan.set(ten, String(giaTri));
+  };
+}
 
 /** Một yêu cầu trang. `cursor` là chuỗi MỜ ĐỤC máy chủ phát ra, client chỉ chuyền lại nguyên văn. */
 export type ThamSoTrangVanBan = {
   limit?: number;
   cursor?: string | null;
+  /** Vắng mặt = mặc định của máy chủ (số vào sổ giảm dần). */
+  sort?: KhoaSapXepVanBan;
+  order?: ChieuSapXepVanBan;
 };
 
 /** Năm bộ lọc của sổ văn bản đến — `van_ban_den.go:450`. Trường vắng mặt nghĩa là KHÔNG lọc. */
@@ -96,7 +129,11 @@ export type LocVanBanDen = ThamSoTrangVanBan & {
   loaiVanBan?: string;
   /** `holding_unit` — id bộ phận đang giữ hồ sơ. */
   boPhanDangGiu?: string;
-  /** `q` — tìm chữ; máy chủ từ chối chuỗi dài quá 200 ký tự. */
+  /**
+   * `q` — máy chủ tìm (ILIKE, không phân biệt hoa thường) trong TRÍCH YẾU và SỐ, KÝ HIỆU
+   * (`store/van_ban_den.go:188`). Máy chủ từ chối chuỗi dài quá 200 BYTE (`len` của Go), không
+   * phải 200 ký tự: chữ có dấu tốn 2–3 byte.
+   */
   tim?: string;
 };
 
@@ -104,6 +141,7 @@ export type LocVanBanDen = ThamSoTrangVanBan & {
 export type LocVanBanDi = ThamSoTrangVanBan & {
   nam?: number;
   loaiVanBan?: string;
+  /** `q` — máy chủ tìm trong TRÍCH YẾU và NƠI NHẬN (`store/van_ban_di.go:119`). Giới hạn như sổ đến. */
   tim?: string;
 };
 
@@ -114,17 +152,18 @@ export type LocVanBanDi = ThamSoTrangVanBan & {
  * ứng dụng web giữ một bản sao thứ hai của các mặc định ấy rồi trôi khỏi bản của máy chủ.
  */
 function themPhanChung(truyVan: URLSearchParams, loc: LocVanBanDi): void {
-  if (loc.nam !== undefined) truyVan.set("year", String(loc.nam));
-  if (loc.loaiVanBan !== undefined && loc.loaiVanBan !== "") {
-    truyVan.set("document_type", loc.loaiVanBan);
-  }
-  if (loc.tim !== undefined && loc.tim !== "") truyVan.set("q", loc.tim);
-  if (loc.limit !== undefined) truyVan.set("limit", String(loc.limit));
-  // Con trỏ rỗng nghĩa là trang đầu. Gửi `cursor=` rỗng thì máy chủ trả 400 "con trỏ không hợp
-  // lệ" — đúng vào lần mở màn hình đầu tiên.
-  if (loc.cursor !== undefined && loc.cursor !== null && loc.cursor !== "") {
-    truyVan.set("cursor", loc.cursor);
-  }
+  const dat = thamSoTheoHopDong<TruyVanChung>(truyVan);
+
+  dat("year", loc.nam === undefined ? undefined : String(loc.nam));
+  dat("document_type", loc.loaiVanBan);
+  // CẮT KHOẢNG TRẮNG Ở ĐÂY, không ở ô nhập: ô toàn dấu cách là "không tìm". Máy chủ không cắt
+  // (`http/van_ban_den.go:471`), nên `q=%20` thành phép lọc `% %` — một lát cắt không ai yêu cầu.
+  dat("q", loc.tim?.trim());
+  dat("sort", loc.sort);
+  dat("order", loc.order);
+  dat("limit", loc.limit);
+  // Con trỏ rỗng nghĩa là trang đầu — `dat` bỏ qua nó, vì `cursor=` rỗng là 400.
+  dat("cursor", loc.cursor);
 }
 
 /** Dựng đường dẫn sổ văn bản đến. Tách khỏi lời gọi mạng để kiểm được mà không cần thay `fetch`. */
@@ -133,10 +172,9 @@ export function duongDanSoVanBanDen(loc: LocVanBanDen = {}): string {
   const truyVan = new URLSearchParams();
 
   themPhanChung(truyVan, loc);
-  if (loc.trangThai !== undefined && loc.trangThai !== "") truyVan.set("status", loc.trangThai);
-  if (loc.boPhanDangGiu !== undefined && loc.boPhanDangGiu !== "") {
-    truyVan.set("holding_unit", loc.boPhanDangGiu);
-  }
+  const dat = thamSoTheoHopDong<TruyVanDen>(truyVan);
+  dat("status", loc.trangThai);
+  dat("holding_unit", loc.boPhanDangGiu);
 
   const chuoi = truyVan.toString();
   return chuoi === "" ? duongDan : `${duongDan}?${chuoi}`;

@@ -78,6 +78,14 @@ import {
   trangThaiHanVanBan,
   type BanChuyen,
 } from "./nhan-van-ban";
+import {
+  ChonThuTu,
+  GOI_Y_TIM_DEN,
+  OTimVanBan,
+  doiLocVeTrangDau,
+  sapXepTheoThuTu,
+  type MaThuTu,
+} from "./loc-so-van-ban";
 import { guiChuyenVanBan, guiGoVanBanDen } from "./thao-tac-van-ban";
 
 /**
@@ -177,6 +185,8 @@ export function SoVanBanDen() {
   const [trangThai, datTrangThai] = useState("");
   const [loaiLoc, datLoaiLoc] = useState("");
   const [boPhanLoc, datBoPhanLoc] = useState("");
+  const [tim, datTim] = useState("");
+  const [thuTu, datThuTu] = useState<MaThuTu>("");
 
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
   /** Tăng sau mỗi lần ghi thành công để ĐỌC LẠI từ máy chủ, không vá mảng tại chỗ. */
@@ -214,9 +224,11 @@ export function SoVanBanDen() {
       trangThai,
       loaiVanBan: loaiLoc,
       boPhanDangGiu: boPhanLoc,
+      tim,
+      ...sapXepTheoThuTu(thuTu),
       cursor: nganXep.hienTai,
     }),
-    [nam, trangThai, loaiLoc, boPhanLoc, nganXep],
+    [nam, trangThai, loaiLoc, boPhanLoc, tim, thuTu, nganXep],
   );
 
   useEffect(() => {
@@ -251,11 +263,8 @@ export function SoVanBanDen() {
     };
   }, []);
 
-  /** Đổi một bộ lọc là về TRANG ĐẦU: con trỏ cũ thuộc về một truy vấn khác và máy chủ sẽ từ chối. */
-  const doiLoc = useCallback((dat: () => void) => {
-    dat();
-    datNganXep(TRANG_DAU);
-  }, []);
+  /** Đổi một bộ lọc, ô tìm hay thứ tự là về TRANG ĐẦU — `doiLocVeTrangDau`. */
+  const doiLoc = useCallback((dat: () => void) => doiLocVeTrangDau(dat, datNganXep), []);
 
   const mo = useCallback((m: DangMoDen, banDau: BanNhapDen) => {
     datDangMo(m);
@@ -361,6 +370,10 @@ export function SoVanBanDen() {
       datLoaiLoc={(v) => doiLoc(() => datLoaiLoc(v))}
       boPhanLoc={boPhanLoc}
       datBoPhanLoc={(v) => doiLoc(() => datBoPhanLoc(v))}
+      tim={tim}
+      datTim={(v) => doiLoc(() => datTim(v))}
+      thuTu={thuTu}
+      datThuTu={(v) => doiLoc(() => datThuTu(v))}
       traLoai={loai}
       traBoPhan={boPhan}
       coQuyenGhi={quyetDinhGhi !== null && quyetDinhGhi.hien}
@@ -413,6 +426,10 @@ export function ManSoVanBanDen({
   datLoaiLoc,
   boPhanLoc,
   datBoPhanLoc,
+  tim,
+  datTim,
+  thuTu,
+  datThuTu,
   traLoai,
   traBoPhan,
   coQuyenGhi,
@@ -438,6 +455,10 @@ export function ManSoVanBanDen({
   datLoaiLoc: (v: string) => void;
   boPhanLoc: string;
   datBoPhanLoc: (v: string) => void;
+  tim: string;
+  datTim: (v: string) => void;
+  thuTu: MaThuTu;
+  datThuTu: (v: MaThuTu) => void;
   traLoai: BangTraDanhMuc;
   traBoPhan: BangTraDanhMuc;
   coQuyenGhi: boolean;
@@ -488,6 +509,10 @@ export function ManSoVanBanDen({
         datLoaiLoc={datLoaiLoc}
         boPhanLoc={boPhanLoc}
         datBoPhanLoc={datBoPhanLoc}
+        tim={tim}
+        datTim={datTim}
+        thuTu={thuTu}
+        datThuTu={datThuTu}
         traLoai={traLoai}
         traBoPhan={traBoPhan}
       />
@@ -500,6 +525,7 @@ export function ManSoVanBanDen({
         coQuyenGhi={coQuyenGhi}
         coQuyenChuyen={coQuyenChuyen}
         thaoTac={thaoTac}
+        soCuTruoc={thuTu === "so-tang"}
       />
 
       {kq !== null && kq.ok && (
@@ -514,7 +540,7 @@ export function ManSoVanBanDen({
   );
 }
 
-/** Hàng lọc. Bốn ô, đúng bốn tham số tuyến nhận (`van_ban_den.go:450`) trừ ô tìm chữ — xem dưới. */
+/** Hàng lọc: năm · trạng thái · loại · bộ phận · tìm chữ · thứ tự — đúng các tham số tuyến nhận. */
 function LocSoVanBanDen({
   nam,
   namGoc,
@@ -525,6 +551,10 @@ function LocSoVanBanDen({
   datLoaiLoc,
   boPhanLoc,
   datBoPhanLoc,
+  tim,
+  datTim,
+  thuTu,
+  datThuTu,
   traLoai,
   traBoPhan,
 }: {
@@ -537,6 +567,10 @@ function LocSoVanBanDen({
   datLoaiLoc: (v: string) => void;
   boPhanLoc: string;
   datBoPhanLoc: (v: string) => void;
+  tim: string;
+  datTim: (v: string) => void;
+  thuTu: MaThuTu;
+  datThuTu: (v: MaThuTu) => void;
   traLoai: BangTraDanhMuc;
   traBoPhan: BangTraDanhMuc;
 }) {
@@ -585,6 +619,10 @@ function LocSoVanBanDen({
             ))}
         </select>
       </p>
+
+      <ChonThuTu id="thu-tu-so-den" thuTu={thuTu} datThuTu={datThuTu} />
+
+      <OTimVanBan id="tim-van-ban-den" goiY={GOI_Y_TIM_DEN} tim={tim} datTim={datTim} />
     </div>
   );
 }
@@ -605,6 +643,7 @@ export function BangVanBanDen({
   coQuyenGhi,
   coQuyenChuyen,
   thaoTac,
+  soCuTruoc = false,
 }: {
   kq: KetQua<page_Result_documents_vanBanDenRa> | null;
   bayGio: Date;
@@ -613,6 +652,8 @@ export function BangVanBanDen({
   coQuyenGhi: boolean;
   coQuyenChuyen: boolean;
   thaoTac: ThaoTacDen;
+  /** Chú thích bảng nói đúng thứ tự đang xem — một câu "số mới nhất trước" trên bảng xếp tăng là sai. */
+  soCuTruoc?: boolean;
 }) {
   if (kq === null) return <p role="status">Đang tải sổ văn bản đến…</p>;
   if (!kq.ok) {
@@ -631,7 +672,7 @@ export function BangVanBanDen({
     <div className="bang-cuon" role="region" aria-label="Sổ văn bản đến" tabIndex={0}>
       <table className="bang-danh-muc bang-van-ban">
         <caption className="an-thi-giac">
-          Các văn bản đến đã vào sổ, số mới nhất trước
+          Các văn bản đến đã vào sổ, {soCuTruoc ? "số cũ nhất trước" : "số mới nhất trước"}
         </caption>
         <thead>
           <tr>

@@ -9,10 +9,15 @@ import {
   goVanBanDi,
   suaVanBanDen,
   suaVanBanDi,
+  thamSoTheoHopDong,
   vaoSoVanBanDen,
   type SuaVanBanDenVao,
   type VaoSoVanBanDenVao,
 } from "./van-ban";
+import type {
+  documents_get_incoming_documents,
+  documents_get_outgoing_documents,
+} from "./schema.gen";
 
 /**
  * Chín tuyến của hai quyển sổ, và tệp này canh những thứ một lần sửa MỘT DÒNG phá được mà không
@@ -344,12 +349,67 @@ describe("bộ lọc và phân trang — đúng tên tham số tuyến đọc", 
     expect(d).not.toContain("holding_unit");
   });
 
-  it("KHÔNG gửi `sort` và `order` — danh sách trắng khoá sắp xếp không có trong hợp đồng", () => {
-    // Một khoá sắp xếp gõ tay ở client là đúng bản chép mà `can-bo.ts` đã phải gỡ bỏ một lần: đổi
-    // cột ở máy chủ thì không bài kiểm nào đỏ, chỉ có một màn hình nhận 400.
-    const d = duongDanSoVanBanDen({ nam: 2026 });
-    expect(d).not.toContain("sort");
-    expect(d).not.toContain("order");
+  it("không chọn thứ tự thì KHÔNG gửi `sort` và `order` — máy chủ giữ mặc định số giảm dần", () => {
+    // Mặc định là của máy chủ (`docstore.SapXepVanBanDen`). Gửi `sort=number&order=desc` ở đây là
+    // giữ bản sao thứ hai của mặc định ấy, và nó trôi vào ngày máy chủ đổi.
+    for (const d of [duongDanSoVanBanDen({ nam: 2026 }), duongDanSoVanBanDi({ nam: 2026 })]) {
+      expect(d).not.toContain("sort");
+      expect(d).not.toContain("order");
+    }
+  });
+
+  it("chọn thứ tự: `sort` và `order` đi lên ĐÚNG giá trị của enum hợp đồng, ở cả hai sổ", () => {
+    for (const d of [
+      duongDanSoVanBanDen({ sort: "number", order: "asc" }),
+      duongDanSoVanBanDi({ sort: "number", order: "asc" }),
+    ]) {
+      const truyVan = new URLSearchParams(d.split("?")[1]);
+      expect(truyVan.getAll("sort")).toEqual(["number"]);
+      expect(truyVan.getAll("order")).toEqual(["asc"]);
+    }
+  });
+
+  it("tìm chữ: `q` được cắt khoảng trắng hai đầu, giữ nguyên chữ ở giữa, ở cả hai sổ", () => {
+    for (const d of [
+      duongDanSoVanBanDen({ tim: "  rà soát hồ sơ " }),
+      duongDanSoVanBanDi({ tim: "  rà soát hồ sơ " }),
+    ]) {
+      expect(new URLSearchParams(d.split("?")[1]).getAll("q")).toEqual(["rà soát hồ sơ"]);
+    }
+  });
+
+  it("ô tìm rỗng hoặc toàn dấu cách KHÔNG gửi `q`", () => {
+    // Máy chủ không cắt `q` (`http/van_ban_den.go:471`): `q=%20` sẽ thành phép lọc `% %` — một lát
+    // cắt cán bộ không hề yêu cầu.
+    for (const tim of ["", "   "]) {
+      expect(duongDanSoVanBanDen({ tim })).toBe("/api/v1/incoming-documents");
+      expect(duongDanSoVanBanDi({ tim })).toBe("/api/v1/outgoing-documents");
+    }
+  });
+});
+
+describe("tên tham số bị ĐỐI CHIẾU với hợp đồng lúc biên dịch", () => {
+  // Các dòng `@ts-expect-error` dưới đây LÀ phép kiểm, và `npm run typecheck` chạy nó: nếu một dòng
+  // thôi lỗi — tức kiểu đã nới ra nhận một tên hay giá trị ngoài hợp đồng — thì chính chỉ thị ấy
+  // thành lỗi "unused @ts-expect-error" và `tsc` đỏ. Vitest không kiểm kiểu; phần chạy chỉ để tệp
+  // có một ca xanh mang tên điều nó canh.
+  it("tên ngoài `truyVan` và giá trị ngoài enum không biên dịch được", () => {
+    const q = new URLSearchParams();
+    const datDen = thamSoTheoHopDong<documents_get_incoming_documents["truyVan"]>(q);
+    const datDi = thamSoTheoHopDong<documents_get_outgoing_documents["truyVan"]>(q);
+
+    // Một lần máy chủ đổi tên `holding_unit` là đúng hình dạng này ở dòng gửi nó.
+    // @ts-expect-error — `holding_units` không phải tham số của tuyến sổ đến.
+    datDen("holding_units", "x");
+    // @ts-expect-error — sổ đi không có trạng thái; hợp đồng không khai `status` cho nó.
+    datDi("status", "moi-vao-so");
+    // @ts-expect-error — `received_date` không nằm trong danh sách trắng sắp xếp của máy chủ.
+    datDen("sort", "received_date");
+    // @ts-expect-error — cùng điều ấy ở tầng bộ lọc mà màn hình dùng.
+    duongDanSoVanBanDen({ sort: "received_date" });
+
+    datDen("holding_unit", "01JBOPHAN");
+    expect(q.get("holding_unit")).toBe("01JBOPHAN");
   });
 });
 

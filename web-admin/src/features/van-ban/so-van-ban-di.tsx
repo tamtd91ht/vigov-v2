@@ -41,6 +41,14 @@ import {
   nhanNgayCoThe,
   nhanSoVaoSo,
 } from "./nhan-van-ban";
+import {
+  ChonThuTu,
+  GOI_Y_TIM_DI,
+  OTimVanBan,
+  doiLocVeTrangDau,
+  sapXepTheoThuTu,
+  type MaThuTu,
+} from "./loc-so-van-ban";
 import { DieuHuongTrang } from "./so-van-ban-den";
 import { guiGoVanBanDi } from "./thao-tac-van-ban";
 
@@ -120,6 +128,8 @@ export function SoVanBanDi() {
   const [namGoc] = useState(namTheoDongHoMay);
   const [nam, datNam] = useState(namGoc);
   const [loaiLoc, datLoaiLoc] = useState("");
+  const [tim, datTim] = useState("");
+  const [thuTu, datThuTu] = useState<MaThuTu>("");
 
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
   const [lanDoc, datLanDoc] = useState(0);
@@ -141,8 +151,14 @@ export function SoVanBanDi() {
   const quyetDinhGhi = phien === null ? null : quyetDinhTheoKhoa(phien, QUYEN_GHI_SO_VAN_BAN);
 
   const loc = useMemo<LocVanBanDi>(
-    () => ({ nam, loaiVanBan: loaiLoc, cursor: nganXep.hienTai }),
-    [nam, loaiLoc, nganXep],
+    () => ({
+      nam,
+      loaiVanBan: loaiLoc,
+      tim,
+      ...sapXepTheoThuTu(thuTu),
+      cursor: nganXep.hienTai,
+    }),
+    [nam, loaiLoc, tim, thuTu, nganXep],
   );
 
   useEffect(() => {
@@ -174,10 +190,7 @@ export function SoVanBanDi() {
     };
   }, []);
 
-  const doiLoc = useCallback((dat: () => void) => {
-    dat();
-    datNganXep(TRANG_DAU);
-  }, []);
+  const doiLoc = useCallback((dat: () => void) => doiLocVeTrangDau(dat, datNganXep), []);
 
   const mo = useCallback((m: DangMoDi, banDau: BanNhapDi) => {
     datDangMo(m);
@@ -266,6 +279,10 @@ export function SoVanBanDi() {
       datNam={(n) => doiLoc(() => datNam(n))}
       loaiLoc={loaiLoc}
       datLoaiLoc={(v) => doiLoc(() => datLoaiLoc(v))}
+      tim={tim}
+      datTim={(v) => doiLoc(() => datTim(v))}
+      thuTu={thuTu}
+      datThuTu={(v) => doiLoc(() => datThuTu(v))}
       traLoai={loai}
       coQuyenGhi={quyetDinhGhi !== null && quyetDinhGhi.hien}
       thieuQuyenGhi={
@@ -303,6 +320,10 @@ export function ManSoVanBanDi({
   datNam,
   loaiLoc,
   datLoaiLoc,
+  tim,
+  datTim,
+  thuTu,
+  datThuTu,
   traLoai,
   coQuyenGhi,
   thieuQuyenGhi,
@@ -319,6 +340,10 @@ export function ManSoVanBanDi({
   datNam: (n: number) => void;
   loaiLoc: string;
   datLoaiLoc: (v: string) => void;
+  tim: string;
+  datTim: (v: string) => void;
+  thuTu: MaThuTu;
+  datThuTu: (v: MaThuTu) => void;
   traLoai: BangTraDanhMuc;
   coQuyenGhi: boolean;
   thieuQuyenGhi: boolean;
@@ -371,6 +396,10 @@ export function ManSoVanBanDi({
               ))}
           </select>
         </p>
+
+        <ChonThuTu id="thu-tu-so-di" thuTu={thuTu} datThuTu={datThuTu} />
+
+        <OTimVanBan id="tim-van-ban-di" goiY={GOI_Y_TIM_DI} tim={tim} datTim={datTim} />
       </div>
 
       <BangVanBanDi
@@ -378,6 +407,7 @@ export function ManSoVanBanDi({
         traLoai={traLoai}
         coQuyenGhi={coQuyenGhi}
         thaoTac={thaoTac}
+        soCuTruoc={thuTu === "so-tang"}
       />
 
       {kq !== null && kq.ok && (
@@ -405,11 +435,14 @@ export function BangVanBanDi({
   traLoai,
   coQuyenGhi,
   thaoTac,
+  soCuTruoc = false,
 }: {
   kq: KetQua<page_Result_documents_vanBanDiRa> | null;
   traLoai: BangTraDanhMuc;
   coQuyenGhi: boolean;
   thaoTac: ThaoTacDi;
+  /** Chú thích bảng nói đúng thứ tự đang xem — xem `BangVanBanDen`. */
+  soCuTruoc?: boolean;
 }) {
   if (kq === null) return <p role="status">Đang tải sổ văn bản đi…</p>;
   if (!kq.ok) {
@@ -424,7 +457,9 @@ export function BangVanBanDi({
   return (
     <div className="bang-cuon" role="region" aria-label="Sổ văn bản đi" tabIndex={0}>
       <table className="bang-danh-muc bang-van-ban">
-        <caption className="an-thi-giac">Các văn bản xã đã phát hành, số mới nhất trước</caption>
+        <caption className="an-thi-giac">
+          Các văn bản xã đã phát hành, {soCuTruoc ? "số cũ nhất trước" : "số mới nhất trước"}
+        </caption>
         <thead>
           <tr>
             <th scope="col">Số đi</th>

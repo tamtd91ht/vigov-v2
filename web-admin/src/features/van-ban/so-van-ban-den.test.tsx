@@ -9,6 +9,7 @@ import type {
   page_Result_documents_vanBanDenRa,
 } from "@/lib/api/schema.gen";
 
+import { GOI_Y_TIM_DEN, type MaThuTu } from "./loc-so-van-ban";
 import { CANH_BAO_GO_KHONG_TRA_SO, NHAN_DUONG_TOI_CAU_HINH } from "./nhan-van-ban";
 import {
   BAN_DEN_TRONG,
@@ -300,7 +301,10 @@ describe("khối chuyển xử lý — KHÔNG có nút sửa hay xoá nào", () 
 
 /* ---- cả màn hình --------------------------------------------------------------------------- */
 
-function veMan(quyen: { ghi: boolean; thieuGhi: boolean; chuyen: boolean }) {
+function veMan(
+  quyen: { ghi: boolean; thieuGhi: boolean; chuyen: boolean },
+  loc: { tim?: string; thuTu?: MaThuTu } = {},
+) {
   return renderToStaticMarkup(
     <ManSoVanBanDen
       kq={trang([dong()])}
@@ -314,6 +318,10 @@ function veMan(quyen: { ghi: boolean; thieuGhi: boolean; chuyen: boolean }) {
       datLoaiLoc={() => {}}
       boPhanLoc=""
       datBoPhanLoc={() => {}}
+      tim={loc.tim ?? ""}
+      datTim={() => {}}
+      thuTu={loc.thuTu ?? ""}
+      datThuTu={() => {}}
       traLoai={TRA_LOAI}
       traBoPhan={TRA_BO_PHAN}
       coQuyenGhi={quyen.ghi}
@@ -355,5 +363,31 @@ describe("màn sổ văn bản đến", () => {
 
     expect(html).not.toContain("Vào sổ văn bản đến");
     expect(html).not.toMatch(/không có quyền/);
+  });
+
+  it("có ô tìm văn bản, gợi ý nói ĐÚNG hai cột máy chủ tìm ở sổ đến", () => {
+    // `store/van_ban_den.go:188`: trích yếu và số, ký hiệu. Gợi ý nhắc "cơ quan ban hành" sẽ là một
+    // lời hứa máy chủ không giữ — cán bộ gõ đúng tên cơ quan và nhận một sổ rỗng.
+    const html = veMan({ ghi: true, thieuGhi: false, chuyen: true }, { tim: "rà soát" });
+
+    expect(html).toContain('role="search"');
+    expect(html).toContain("Tìm văn bản");
+    expect(html).toContain(`placeholder="${GOI_Y_TIM_DEN}"`);
+    expect(GOI_Y_TIM_DEN).toMatch(/Trích yếu/);
+    expect(GOI_Y_TIM_DEN).toMatch(/số, ký hiệu/);
+    expect(GOI_Y_TIM_DEN).not.toMatch(/cơ quan|nơi nhận/i);
+    // Ô giữ chữ đang tìm sau khi vẽ lại — không thì cán bộ không biết bảng đang lọc theo gì.
+    expect(html).toContain('value="rà soát"');
+  });
+
+  it("có ô thứ tự; chú thích bảng nói đúng thứ tự đang xem", () => {
+    const macDinh = veMan({ ghi: true, thieuGhi: false, chuyen: true });
+    const cuTruoc = veMan({ ghi: true, thieuGhi: false, chuyen: true }, { thuTu: "so-tang" });
+
+    expect(macDinh).toContain("Thứ tự");
+    expect(macDinh).toContain("Số mới nhất trước");
+    expect(macDinh).toContain("Số cũ nhất trước");
+    expect(macDinh).toMatch(/<caption[^>]*>[^<]*số mới nhất trước/);
+    expect(cuTruoc).toMatch(/<caption[^>]*>[^<]*số cũ nhất trước/);
   });
 });

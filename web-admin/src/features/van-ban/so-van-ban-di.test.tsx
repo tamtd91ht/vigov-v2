@@ -9,6 +9,7 @@ import type {
   page_Result_documents_vanBanDiRa,
 } from "@/lib/api/schema.gen";
 
+import { GOI_Y_TIM_DI, type MaThuTu } from "./loc-so-van-ban";
 import { CANH_BAO_GO_KHONG_TRA_SO } from "./nhan-van-ban";
 import {
   BAN_DI_TRONG,
@@ -166,7 +167,7 @@ describe("biểu mẫu sổ văn bản đi", () => {
 });
 
 describe("màn sổ văn bản đi", () => {
-  function veMan(coQuyenGhi: boolean, thieuQuyenGhi: boolean) {
+  function veMan(coQuyenGhi: boolean, thieuQuyenGhi: boolean, thuTu: MaThuTu = "") {
     return renderToStaticMarkup(
       <ManSoVanBanDi
         kq={trang([dong()])}
@@ -175,6 +176,10 @@ describe("màn sổ văn bản đi", () => {
         datNam={() => {}}
         loaiLoc=""
         datLoaiLoc={() => {}}
+        tim=""
+        datTim={() => {}}
+        thuTu={thuTu}
+        datThuTu={() => {}}
         traLoai={TRA_LOAI}
         coQuyenGhi={coQuyenGhi}
         thieuQuyenGhi={thieuQuyenGhi}
@@ -209,5 +214,22 @@ describe("màn sổ văn bản đi", () => {
     expect(html).toMatch(/không có quyền cấp số/);
     expect(html).toContain("UBND huyện Thăng Bình");
     expect(html).not.toContain("Cấp số văn bản đi");
+  });
+
+  it("có ô tìm văn bản, gợi ý nói ĐÚNG hai cột máy chủ tìm ở sổ đi", () => {
+    // `store/van_ban_di.go:119`: trích yếu và nơi nhận — KHÔNG phải số, ký hiệu như sổ đến. Chép
+    // gợi ý của sổ đến sang đây là hứa một cột máy chủ không tìm.
+    const html = veMan(true, false);
+
+    expect(html).toContain('role="search"');
+    expect(html).toContain(`placeholder="${GOI_Y_TIM_DI}"`);
+    expect(GOI_Y_TIM_DI).toMatch(/Trích yếu/);
+    expect(GOI_Y_TIM_DI).toMatch(/nơi nhận/);
+    expect(GOI_Y_TIM_DI).not.toMatch(/ký hiệu/);
+  });
+
+  it("có ô thứ tự; chú thích bảng nói đúng thứ tự đang xem", () => {
+    expect(veMan(true, false)).toMatch(/<caption[^>]*>[^<]*số mới nhất trước/);
+    expect(veMan(true, false, "so-tang")).toMatch(/<caption[^>]*>[^<]*số cũ nhất trước/);
   });
 });
