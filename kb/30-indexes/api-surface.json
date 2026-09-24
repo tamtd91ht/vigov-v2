@@ -324,7 +324,7 @@
       "path": "/api/v1/citizen-reports",
       "operation_id": "petitions_get_citizen_reports",
       "task_id": "db9a4ae6ade1",
-      "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn",
+      "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên)",
       "screen": "09-phan-anh-nguoi-dan §2, §4",
       "permission_kind": "permission",
       "permission": "feedback.read",
@@ -1909,6 +1909,24 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/staff-directory",
+      "operation_id": "identity_get_staff_directory",
+      "task_id": "8cb874693096",
+      "summary": "Danh bạ chọn người nhận việc của xã — mã cán bộ, họ tên, chức vụ, bộ phận; chỉ người có tài khoản đang hoạt động, không số điện thoại, không email",
+      "permission_kind": "any-authenticated",
+      "permission_reason": "mọi cán bộ của xã phải chọn được đồng nghiệp để giao phản ánh, nhiệm vụ, thông báo, văn bản — người dùng duyệt 24/09/2026; chỉ trả mã cán bộ, họ tên, chức vụ, bộ phận, KHÔNG số điện thoại, email hay dữ liệu tài khoản; không chéo xã vì Scoped buộc tenant_id",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.danhBaChonNguoiRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-identity/internal/http/routes.go"

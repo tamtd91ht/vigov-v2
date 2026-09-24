@@ -126,7 +126,8 @@
       "trang_thai": "xong",
       "bang_chung": "service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql — migration RIÊNG, không sửa 0001 (ADR 0013: đã chạy thì không sửa). `go test -count=1 ./...` xanh — kiểm 2026-09-20. Người dùng chốt cùng ngày.",
       "no_confirm": [],
-      "tiep_theo": "KHÔNG GÁN KHOÁ CHO VAI TRÒ NÀO — khoá tồn tại để quản trị xã tick trên màn Phân quyền; tự gán là tự quyết ai trong một cơ quan nhà nước được hứa thay cơ quan ấy. HAI ĐIỀU LƯỢC ĐỒ KHÔNG CƯỠNG CHẾ ĐƯỢC, thuộc tầng use case: (1) mỗi lần đọc ĐẦY ĐỦ dữ liệu cá nhân phải ghi vết (luật 6 bất biến 7) — thiếu nó thì feedback.unmask là một cửa hậu im lặng vào dữ liệu cá nhân của cả xã; (2) feedback.classify canh hành vi ẤN ĐỊNH HẠN, nên tuyến phân loại phải kiểm nó chứ không kiểm feedback.assign. CÒN THIẾU, ĐÃ ĐO: docs/ui-ux/14-cau-hinh.md:104 ghi 43 quyền/11 nhóm, nay nạp 35 khoá/10 nhóm — TÁM KHOÁ VÀ TRỌN MỘT NHÓM vẫn thiếu, người dùng cố ý chỉ chốt hai khoá cần ngay. Đừng bịa tám khoá còn lại cho đủ số. CHƯA CHẠY trên PostgreSQL thật."
+      "tiep_theo": "KHÔNG GÁN KHOÁ CHO VAI TRÒ NÀO — khoá tồn tại để quản trị xã tick trên màn Phân quyền; tự gán là tự quyết ai trong một cơ quan nhà nước được hứa thay cơ quan ấy. HAI ĐIỀU LƯỢC ĐỒ KHÔNG CƯỠNG CHẾ ĐƯỢC, thuộc tầng use case: (1) mỗi lần đọc ĐẦY ĐỦ dữ liệu cá nhân phải ghi vết (luật 6 bất biến 7) — thiếu nó thì feedback.unmask là một cửa hậu im lặng vào dữ liệu cá nhân của cả xã; (2) feedback.classify canh hành vi ẤN ĐỊNH HẠN, nên tuyến phân loại phải kiểm nó chứ không kiểm feedback.assign. CÒN THIẾU, ĐÃ ĐO: docs/ui-ux/14-cau-hinh.md:104 ghi 43 quyền/11 nhóm, nay nạp 35 khoá/10 nhóm — TÁM KHOÁ VÀ TRỌN MỘT NHÓM vẫn thiếu, người dùng cố ý chỉ chốt hai khoá cần ngay. Đừng bịa tám khoá còn lại cho đủ số. CHƯA CHẠY trên PostgreSQL thật.",
+      "menu": "phan-anh-nguoi-dan"
     },
     {
       "id": "bang-sla",

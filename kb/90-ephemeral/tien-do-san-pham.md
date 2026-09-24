@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 177dbf2
+derived_from_commit: 43250a9
 expires: 2026-12-23
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -45,7 +45,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **14** Cấu hình hệ thống | 59 | 59/59 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 5 | 5/5 | ✓ |
 
-Tổng **129 tuyến** trong hợp đồng. **4** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **130 tuyến** trong hợp đồng. **5** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -82,16 +82,16 @@ một lời trấn an không có gì đứng sau.
 | | |
 |---|---|
 | Tuyến ViGov dành riêng kênh công dân (`citizen-only`) | 2 |
-| Trong đó `citizen-app` đang gọi | 0 |
+| Trong đó `citizen-app` đang gọi | 1 |
 | Thư mục tính năng trong `citizen-app/src/features/` | 7 |
 
 | | Tuyến | `citizen-app` gọi chưa |
 |---|---|---|
-| POST | `/api/v1/my-citizen-reports` | ✗ |
+| POST | `/api/v1/my-citizen-reports` | ✓ |
 | GET | `/api/v1/my-citizen-reports/{maTraCuu}` | ✗ |
 
 ⚠ **`citizen-app` hôm nay chưa gọi một tuyến ViGov nào**, và đó không phải thiếu sót của nó: nó đang
-gọi `/api/v1/requests`, `/api/v1/sessions` — bề mặt của **kho anh em**
+gọi `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions` — bề mặt của **kho anh em**
 `vihat-miniapp`, không phải của ViGov (CLAUDE.md, mục hai kho). Giai đoạn 2 — màn nghiệp vụ xã —
 bị chặn ở `service-identity`, xem `kb/90-ephemeral/tien-do/citizen-app.json`.
 
@@ -102,7 +102,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 20 | 2 | 8 | 6 |
-| `citizen-app` | 11 | 2 | 4 | 0 |
+| `citizen-app` | 11 | 2 | 5 | 0 |
 | `core` | 9 | 0 | 1 | 1 |
 | `deploy` | 13 | 0 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |

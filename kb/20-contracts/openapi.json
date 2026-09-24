@@ -1348,7 +1348,7 @@
     },
     "/api/v1/citizen-reports": {
       "get": {
-        "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn",
+        "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên)",
         "operationId": "petitions_get_citizen_reports",
         "tags": [
           "petitions"
@@ -1442,6 +1442,14 @@
           },
           {
             "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
             "in": "query",
             "required": false,
             "schema": {
@@ -7976,6 +7984,72 @@
         }
       }
     },
+    "/api/v1/staff-directory": {
+      "get": {
+        "summary": "Danh bạ chọn người nhận việc của xã — mã cán bộ, họ tên, chức vụ, bộ phận; chỉ người có tài khoản đang hoạt động, không số điện thoại, không email",
+        "operationId": "identity_get_staff_directory",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-permission": {
+          "kind": "any-authenticated",
+          "reason": "mọi cán bộ của xã phải chọn được đồng nghiệp để giao phản ánh, nhiệm vụ, thông báo, văn bản — người dùng duyệt 24/09/2026; chỉ trả mã cán bộ, họ tên, chức vụ, bộ phận, KHÔNG số điện thoại, email hay dữ liệu tài khoản; không chéo xã vì Scoped buộc tenant_id"
+        },
+        "x-vigov-task": "8cb874693096",
+        "parameters": [
+          {
+            "name": "unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.danhBaChonNguoiRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/staff/current/password": {
       "put": {
         "summary": "Cán bộ tự đổi mật khẩu của chính mình — bắt buộc ở lần đăng nhập đầu, và là đường DUY NHẤT gỡ cờ bắt đổi",
@@ -14148,6 +14222,31 @@
         ],
         "additionalProperties": false
       },
+      "identity.canBoChonNguoiRa": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "department_id": {
+            "type": "string",
+            "description": "\"\" when the person sits in no unit"
+          }
+        },
+        "required": [
+          "code",
+          "department_id",
+          "full_name",
+          "position"
+        ],
+        "additionalProperties": false
+      },
       "identity.canBoGon": {
         "type": "object",
         "properties": {
@@ -14311,6 +14410,21 @@
         "required": [
           "permissions",
           "role_id"
+        ],
+        "additionalProperties": false
+      },
+      "identity.danhBaChonNguoiRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.canBoChonNguoiRa"
+            }
+          }
+        },
+        "required": [
+          "items"
         ],
         "additionalProperties": false
       },

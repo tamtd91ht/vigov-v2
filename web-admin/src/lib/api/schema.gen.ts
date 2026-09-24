@@ -682,6 +682,14 @@ export type identity_caLamViecRa = {
   "note": string;
 };
 
+export type identity_canBoChonNguoiRa = {
+  "code": string;
+  "full_name": string;
+  "position": string;
+  /** "" when the person sits in no unit */
+  "department_id": string;
+};
+
 export type identity_canBoGon = {
   /** cb.Ma — the business code, the one the audit trail shows */
   "code": string;
@@ -728,6 +736,10 @@ export type identity_cotPhanQuyenRa = {
   "role_id": string;
   /** sắp theo thứ tự chữ; `[]` khi vai trò không giữ quyền nào */
   "permissions": Array<string>;
+};
+
+export type identity_danhBaChonNguoiRa = {
+  "items": Array<identity_canBoChonNguoiRa>;
 };
 
 export type identity_danhSachBoPhanRa = {
@@ -1755,7 +1767,7 @@ export type finance_delete_capital_plan_categories_by_id = {
   };
 };
 
-/** GET /api/v1/citizen-reports — Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn */
+/** GET /api/v1/citizen-reports — Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên) */
 export type petitions_get_citizen_reports = {
   duongDan: "/api/v1/citizen-reports";
   phuongThuc: "GET";
@@ -1771,6 +1783,7 @@ export type petitions_get_citizen_reports = {
     "hamlet"?: string;
     "late"?: string;
     "q"?: string;
+    "scope"?: string;
     "status"?: string;
     "unit"?: string;
   };
@@ -3194,6 +3207,24 @@ export type identity_post_staff = {
     401: httpx_Error;
     403: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/staff-directory — Danh bạ chọn người nhận việc của xã — mã cán bộ, họ tên, chức vụ, bộ phận; chỉ người có tài khoản đang hoạt động, không số điện thoại, không email */
+export type identity_get_staff_directory = {
+  duongDan: "/api/v1/staff-directory";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "unit"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: identity_danhBaChonNguoiRa;
+    400: httpx_Error;
+    401: httpx_Error;
     500: httpx_Error;
   };
 };

@@ -539,7 +539,7 @@ func TestHaiSoLonCoDuThamSoLoc(t *testing.T) {
 			"assignee", "bloc", "late", "priority", "q", "scope", "soon", "source", "status",
 			"type", "unit"}},
 		{"GET /api/v1/citizen-reports", []string{
-			"channel", "field", "hamlet", "late", "q", "status", "unit"}},
+			"channel", "field", "hamlet", "late", "q", "scope", "status", "unit"}},
 	} {
 		x, ok := theoKhoa[tr.khoa]
 		if !ok {

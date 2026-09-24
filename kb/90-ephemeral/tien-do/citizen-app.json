@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "citizen-app",
-  "cap_nhat": "2026-09-22",
+  "cap_nhat": "2026-09-24",
   "_luu_y_lan_ghi_nay": "GHI 22/09/2026 LAN BA (HO SO XIN QUYEN ZALO). `make kb` KHONG chay (co phien khac dang lam do). Muc moi `ho-so-zalo-khoi-roi-khoi-may`. CANH BAO: HAI CAU SAI DA NAM TRONG HO SO PHAP LY VA DA DUOC GO — doc muc ay truoc khi sua `content/ket-xuat-ho-so.ts` hoac `scripts/ho-so-zalo.mjs`. --- GHI 22/09/2026 LAN HAI (GIAI DOAN B - be mat yeu cau, noi tuyen may chu). `make kb` KHONG chay trong luot nay (phien chinh chay o cuoi). Muc moi `be-mat-yeu-cau-tu-van-bao-gia`. ⚠ DOC MUC AY TRUOC KHI SUA `phase1-collects-nothing.test.ts`: hai day bay vua duoc THU HEP lan dau tien ke tu khi chung ra doi, va `chi_trong` doi tu mot CHUOI sang mot DANH SACH TEP. --- GHI 22/09/2026 (GIAI ĐOẠN A của việc thiết kế lại màn chủ) — `make kb` KHÔNG chạy trong lượt này (phiên chính sẽ chạy ở cuối), nên `kb/90-ephemeral/tien-do.md` còn là bản sinh của lần trước. Mục mới `man-chu-viec-cua-khach-khong-phai-quyen`. Không mục nào bị xoá, không `trang_thai` nào bị hạ. --- BỔ SUNG 21/09/2026 (khuya): mục `man-chu-khop-hero-tab-ban-mau` mới, và `make kb` CŨNG KHÔNG chạy trong lượt ấy (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vẫn là bản sinh của lần trước. Mục mới ấy khai một SỰ CỐ MẤT MÃ NGUỒN đã khôi phục: đọc `tiep_theo` của nó trước khi tin bất cứ dòng chú thích nào trong citizen-app/src/styles.css. --- Ghi chiều 21/09/2026. `make kb` CHƯA chạy trong phiên này (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vì thế còn là bản sinh của lần trước. Hai lần ghi tối 21/09 (mục `ho-so-zalo-sinh-tu-nguon` và `man-chu-theo-ban-mau-pm`) cũng KHÔNG chạy `make kb`. Lần ghi cuối còn dọn một chỗ sai lược đồ có SẴN: `no_confirm` của `ho-so-zalo-sinh-tu-nguon` chứa văn xuôi thay vì số hiệu câu hỏi, và `progress_guard` chặn mọi lần ghi vào tệp này cho tới khi nó được dọn; hai đoạn văn ấy CHUYỂN NGUYÊN VĂN xuống `tiep_theo` của chính mục đó, không xoá chữ nào.",
   "muc": [
     {
@@ -106,7 +106,8 @@
       "trang_thai": "chua_lam",
       "bang_chung": "citizen-app/src/features/ chưa có tính năng kênh công dân nào — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "chờ kho đọc + route ở service-identity (xem tien-do/service-identity.json, mục kho-doc-kenh-cong-dan)"
+      "tiep_theo": "chờ kho đọc + route ở service-identity (xem tien-do/service-identity.json, mục kho-doc-kenh-cong-dan)",
+      "menu": "phan-anh-nguoi-dan"
     },
     {
       "id": "man-chu-viec-cua-khach-khong-phai-quyen",
@@ -139,6 +140,15 @@
       "bang_chung": "`citizen-app/src/features/yeu-cau/trang-thai.ts:54` gọi `luc.toLocaleString(\"vi-VN\")` KHÔNG kèm `timeZone`, nên kết quả theo múi giờ của máy đang mở Mini App. Đối chiếu `web-admin/src/features/thong-bao/nhan-thong-bao.ts:118` ghim `timeZone: MUI_GIO`. KHÔNG PHẢI ca xanh-vì-lý-do-sai: đã kiểm, không ca nào so ĐẦU RA đã định dạng của hàm này — `yeu-cau.test.tsx:345-346` chỉ so hai nhánh rỗng và giá trị lạ. Tức chỗ này đơn giản là KHÔNG ĐƯỢC PHỦ, khác với khiếm khuyết `TZ` vừa chữa ở web-admin (commit e917ef0), nơi ca kiểm có phủ nhưng phủ sai.",
       "no_confirm": [],
       "tiep_theo": "KHÔNG TỰ SỬA, vì đây là quyết định sản phẩm chứ không phải lỗi mã: công dân nên thấy giờ MÁY MÌNH hay giờ CỦA XÃ? Với gần hết người dùng thì hai cái trùng nhau và không ai thấy gì. Nó chỉ lệch với máy đặt sai múi giờ hoặc người đang ở nước ngoài — và lúc ấy cái lệch là giữa màn hình công dân với BẢN GHI CỦA XÃ, tức công dân đối chiếu với giấy hẹn sẽ thấy hai giờ khác nhau. Lập luận nghiêng về ghim +07 như `web-admin`, vì mốc ấy là mốc trên hồ sơ hành chính chứ không phải một sự kiện lịch cá nhân; nhưng đó là câu của chủ dự án. Sửa thì là một dòng cộng một ca kiểm."
+    },
+    {
+      "id": "cau-phien-cong-dan-vigov",
+      "viec": "CẦU PHIÊN: công dân đăng nhập Mini App qua vihat-miniapp nhưng KHÔNG có đường nào ra CitizenSession của ViGov — mọi tuyến CitizenOnly (my-citizen-reports…) không công dân thật nào gọi được",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Phát hiện 24/09/2026 (/develop-feature Phản ánh người dân): citizen-app/src/features/dang-nhap/hop-dong.ts gọi POST /api/v1/sessions của vihat-miniapp (ADR 0032:42-44) và nhận token THƯƠNG MẠI; core/httpx/citizen.go:102-139 đòi Bearer token do identity ViGov giải (ADR 0020/0022); identity không có tuyến phát phiên công dân (routes.go chỉ có POST /api/v1/sessions của CÁN BỘ :584); service-identity/kho-doc-kenh-cong-dan ghi 'tuyến đăng nhập công dân còn thiếu'.",
+      "no_confirm": [],
+      "tiep_theo": "Cần ADR + contract-designer, xuyên hai kho (luật 1, luật 4): vihat-miniapp chuyển SĐT đã xác thực cho identity ViGov bằng gì (ký bằng khoá nào — khoá thương mại KHÔNG vào kho bí mật nhà nước, ADR 0032 hệ quả a), xã vào phiên bằng hành động tường minh của công dân (ADR 0005/0022), vết đăng nhập chưa thuộc xã (câu #25). Cho tới khi có: nguồn phiên ViGov ở citizen-app (cong-dan/api) FAIL CLOSED, màn phản ánh ẩn khỏi bản nộp Zalo.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
