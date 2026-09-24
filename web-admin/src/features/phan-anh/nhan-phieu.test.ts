@@ -4,6 +4,15 @@ import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
 
 import {
   buocLuongChinh,
+  buocReNhanh,
+  CO_QUAN_TOI_DA,
+  demKyTu,
+  dongDuocTrenManHinh,
+  loiCoQuan,
+  loiLyDo,
+  LY_DO_TOI_DA,
+  LY_DO_TOI_THIEU,
+  reNhanhDuoc,
   cauGiaiThichTrangThai,
   conBuocKeTiep,
   danhBaTheoMa,
@@ -11,6 +20,7 @@ import {
   linhVucPhanAnh,
   lopHan,
   LUONG_CHINH,
+  MOI_KENH,
   MOI_TRANG_THAI,
   nhanBoPhan,
   nhanCanBoXuLy,
@@ -328,5 +338,79 @@ describe("phần chưa dựng được — không còn liệt kê những gì Đ
   it("`Liên quan đến tôi` VẪN nằm trong danh sách — máy chủ trả 400 cho `scope=related`", () => {
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Liên quan đến tôi"))).toBe(true);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Giao cho tôi"))).toBe(false);
+  });
+});
+
+describe("hai nhánh rẽ — điểm rời, giới hạn, ô trên thanh bước", () => {
+  it("chỉ rời được từ `dang-phan-loai`", () => {
+    for (const ma of MOI_TRANG_THAI) {
+      expect(reNhanhDuoc(ma), ma).toBe(ma === "dang-phan-loai");
+    }
+  });
+
+  it("hai ô rẽ nhánh sáng ĐÚNG ô của trạng thái, và không ô nào khi phiếu trên luồng chính", () => {
+    expect(buocReNhanh("khong-tiep-nhan").map((o) => o.vaiTro)).toEqual(["dangODay", "chuaToi"]);
+    expect(buocReNhanh("chuyen-cap-tren").map((o) => o.vaiTro)).toEqual(["chuaToi", "dangODay"]);
+    expect(buocReNhanh("dang-phan-loai").every((o) => o.vaiTro === "chuaToi")).toBe(true);
+    expect(buocReNhanh("khong-tiep-nhan").map((o) => o.nhan)).toEqual([
+      "Không tiếp nhận",
+      "Chuyển cấp trên",
+    ]);
+  });
+
+  it("giới hạn đúng số của máy chủ", () => {
+    expect([LY_DO_TOI_THIEU, LY_DO_TOI_DA, CO_QUAN_TOI_DA]).toEqual([10, 2000, 200]);
+  });
+
+  it("đếm KÝ TỰ chữ Việt như rune của Go, trên chuỗi đã cắt khoảng trắng", () => {
+    expect(demKyTu("  Đường ngập  ")).toBe(10);
+    // Một biểu tượng ngoài mặt phẳng cơ bản là HAI đơn vị UTF-16 nhưng MỘT rune.
+    expect("😀".length).toBe(2);
+    expect(demKyTu("😀")).toBe(1);
+  });
+
+  it("lý do: 9 ký tự bị từ chối, 10 được; 2000 được, 2001 bị từ chối", () => {
+    expect(loiLyDo("Ngập ước!")).not.toBeNull(); // 9
+    expect(loiLyDo("Ngập nước!")).toBeNull(); // 10
+    expect(loiLyDo("   Ngập ước!   ")).not.toBeNull(); // khoảng trắng không được đếm
+    expect(loiLyDo("ữ".repeat(2000))).toBeNull();
+    expect(loiLyDo("ữ".repeat(2001))).not.toBeNull();
+  });
+
+  it("cơ quan tiếp nhận: bắt buộc (rỗng hay toàn khoảng trắng bị từ chối), tối đa 200", () => {
+    expect(loiCoQuan("")).not.toBeNull();
+    expect(loiCoQuan("   ")).not.toBeNull();
+    expect(loiCoQuan("Công an xã")).toBeNull();
+    expect(loiCoQuan("ở".repeat(200))).toBeNull();
+    expect(loiCoQuan("ở".repeat(201))).not.toBeNull();
+  });
+});
+
+describe("Đóng phiếu — hai điểm đóng, điểm `da-xu-ly` suy từ kênh nhập hộ", () => {
+  function p(status: string, channel: string): petitions_phieuPhanAnhRa {
+    return { status, channel } as petitions_phieuPhanAnhRa;
+  }
+
+  it("`cho-dan-xac-nhan` đóng được ở mọi kênh", () => {
+    for (const k of MOI_KENH) expect(dongDuocTrenManHinh(p("cho-dan-xac-nhan", k)), k).toBe(true);
+  });
+
+  it("`da-xu-ly` chỉ đóng được khi kênh là `can-bo-nhap-ho`", () => {
+    for (const k of MOI_KENH) {
+      expect(dongDuocTrenManHinh(p("da-xu-ly", k)), k).toBe(k === "can-bo-nhap-ho");
+    }
+  });
+
+  it("mọi trạng thái khác: không", () => {
+    for (const ma of MOI_TRANG_THAI.filter((m) => m !== "cho-dan-xac-nhan" && m !== "da-xu-ly")) {
+      expect(dongDuocTrenManHinh(p(ma, "can-bo-nhap-ho")), ma).toBe(false);
+    }
+  });
+});
+
+describe("phần chưa dựng được — hai ô rẽ nhánh đã rời danh sách", () => {
+  it("không còn mục nào về hai nhánh rẽ", () => {
+    const tatCa = PHAN_CHUA_DUNG.map((x) => `${x.ten} ${x.viSao}`).join(" ");
+    expect(tatCa).not.toMatch(/rẽ nhánh|Không tiếp nhận|Chuyển cấp trên/);
   });
 });

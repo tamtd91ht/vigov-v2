@@ -31,7 +31,7 @@ import { ChiTietPhieu } from "./so-phan-anh";
  * out seeded initial values in call order, and `ChiTietPhieu` is called as a function to get its element
  * tree. That tree is then read (option values) and driven (the form's `onSubmit`) directly.
  *
- * THE SEEDING IS BY CALL ORDER — linhVucChon, boPhanChon, canBoChon, ketQua. A reorder of those hooks
+ * THE SEEDING IS BY CALL ORDER — linhVucChon, boPhanChon, canBoChon, ketQua (then reNhanhMo, unseeded). A reorder of those hooks
  * makes the seeded unit land elsewhere and this file turns RED, never silently green: the assertions
  * require the officer select to be populated.
  */
@@ -126,6 +126,8 @@ function dung(boPhanChon: string, canBoChon: string) {
     },
     tienTrangThai: () => {},
     dongPhieuLai: () => {},
+    khongTiepNhan: () => {},
+    chuyenCapTren: () => {},
   });
   expect(hat.gieo, "ChiTietPhieu không còn gọi useState đủ bốn lần theo thứ tự đã gieo").toEqual([]);
 

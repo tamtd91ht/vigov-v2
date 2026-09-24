@@ -14,8 +14,10 @@ import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type { KetQua } from "@/lib/api/goi";
 import {
+  chuyenCapTrenPhieu,
   chuyenXuLyPhieu,
   dongPhieu,
+  khongTiepNhanPhieu,
   laySoPhanAnh,
   phanLoaiPhieu,
   tienTrangThaiPhieu,
@@ -33,21 +35,30 @@ import { coQuyen } from "@/lib/quyen";
 
 import {
   buocLuongChinh,
+  buocReNhanh,
+  CANH_BAO_RE_NHANH,
   CAU_THIEU_QUYEN_DONG,
   CAU_THIEU_QUYEN_PHAN_CONG,
   CAU_THIEU_QUYEN_PHAN_LOAI,
   CHI_TRE_HAN_NHAN,
+  CO_QUAN_TOI_DA,
   cauGiaiThichTrangThai,
   conBuocKeTiep,
   congThaoTac,
   DANG_TAI_SO,
   danhBaTheoMa,
   DE_BO_PHAN_PHAN_CONG,
+  demKyTu,
+  dongDuocTrenManHinh,
   GHI_CHU_O_KET_QUA,
+  GOI_Y_CO_QUAN,
   GHI_CHU_TIEN_TRANG_THAI,
   LINH_VUC_PHAN_ANH,
   linhVucPhanAnh,
+  loiCoQuan,
+  loiLyDo,
   lopHan,
+  LY_DO_TOI_DA,
   MOI_BO_PHAN_NHAN,
   MOI_DIA_BAN_NHAN,
   MOI_KENH,
@@ -56,7 +67,11 @@ import {
   MOI_TRANG_THAI,
   MOI_TRANG_THAI_NHAN,
   NHAN_CHON_CAN_BO,
+  NHAN_CHUYEN_CAP_TREN,
+  NHAN_KHONG_TIEP_NHAN,
+  NHAN_O_CO_QUAN,
   NHAN_O_KET_QUA,
+  NHAN_O_LY_DO,
   NHAN_TIEN_TRANG_THAI,
   nhanBoPhan,
   nhanCanBoXuLy,
@@ -72,6 +87,8 @@ import {
   PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
   phanLoaiDuoc,
+  RE_NHANH,
+  reNhanhDuoc,
   SO_RONG,
   TIM_PLACEHOLDER,
   trangThaiHan,
@@ -283,6 +300,9 @@ export function SoPhanAnh() {
 
       {dangMo !== null && (
         <ChiTietPhieu
+          // KHOÁ THEO MÃ PHIẾU: mở phiếu khác là dựng lại khối từ đầu. Không có khoá thì lý do vừa gõ
+          // cho phiếu A vẫn nằm trong ô khi cán bộ mở phiếu B — và một lần bấm gửi nó cho phiếu B.
+          key={dangMo.code}
           phieu={dangMo}
           bayGio={new Date()}
           cong={cong}
@@ -301,6 +321,8 @@ export function SoPhanAnh() {
           }
           tienTrangThai={() => chay(tienTrangThaiPhieu(dangMo.code))}
           dongPhieuLai={(ketQua) => chay(dongPhieu(dangMo.code, ketQua))}
+          khongTiepNhan={(lyDo) => chay(khongTiepNhanPhieu(dangMo.code, lyDo))}
+          chuyenCapTren={(lyDo, coQuan) => chay(chuyenCapTrenPhieu(dangMo.code, lyDo, coQuan))}
         />
       )}
     </section>
@@ -620,6 +642,8 @@ export function ChiTietPhieu({
   chuyenXuLy,
   tienTrangThai,
   dongPhieuLai,
+  khongTiepNhan,
+  chuyenCapTren,
 }: {
   phieu: petitions_phieuPhanAnhRa;
   bayGio: Date;
@@ -636,11 +660,15 @@ export function ChiTietPhieu({
   chuyenXuLy: (boPhanID: string, maCanBo?: string) => void;
   tienTrangThai: () => void;
   dongPhieuLai: (ketQua: string) => void;
+  khongTiepNhan: (lyDo: string) => void;
+  chuyenCapTren: (lyDo: string, coQuanTiepNhan: string) => void;
 }) {
   const [linhVucChon, datLinhVucChon] = useState("");
   const [boPhanChon, datBoPhanChon] = useState("");
   const [canBoChon, datCanBoChon] = useState("");
   const [ketQua, datKetQua] = useState("");
+  // SAU bốn hook trên, không trước: `chon-can-bo.test.tsx` gieo giá trị theo THỨ TỰ gọi hook.
+  const [reNhanhMo, datReNhanhMo] = useState<"khong-tiep-nhan" | "chuyen-cap-tren" | null>(null);
 
   const bangDanhBa = danhBa !== null && danhBa.ok ? danhBaTheoMa(danhBa.duLieu.items) : null;
   // Chỉ người thuộc ĐÚNG bộ phận đang chọn — cùng phép so khớp `?unit=` của máy chủ. Người chưa
@@ -667,8 +695,8 @@ export function ChiTietPhieu({
         </button>
       </div>
 
-      {/* StatusStepper §8.2 — BẢY Ô LUỒNG CHÍNH. Hai ô rẽ nhánh không vẽ: tuyến `…/status` không
-          nhận trạng thái đích, nên chúng sẽ là hai nút không có gì đứng sau (`PHAN_CHUA_DUNG`). */}
+      {/* StatusStepper §8.2 — bảy ô luồng chính, rồi hai ô rẽ nhánh sáng theo trạng thái. Không ô
+          nào bấm được: hai nhánh đi qua biểu mẫu riêng bên dưới vì phải mang lý do (`buocReNhanh`). */}
       <ol aria-label="Các bước xử lý phiếu">
         {buocLuongChinh(phieu.status).map((o) => (
           <li key={o.ma}>
@@ -676,6 +704,16 @@ export function ChiTietPhieu({
               {o.nhan}
             </span>{" "}
             {o.vaiTro === "dangODay" ? "đang ở đây" : o.vaiTro === "daQua" ? "đã qua" : "—"}
+          </li>
+        ))}
+      </ol>
+      <ol aria-label="Rẽ nhánh">
+        {buocReNhanh(phieu.status).map((o) => (
+          <li key={o.ma}>
+            <span className={o.vaiTro === "dangODay" ? "chip chip-hoat-dong" : "chip chip-ngung"}>
+              {o.nhan}
+            </span>{" "}
+            {o.vaiTro === "dangODay" ? "đang ở đây" : "—"}
           </li>
         ))}
       </ol>
@@ -728,6 +766,29 @@ export function ChiTietPhieu({
             <dd>{phieu.result}</dd>
           </>
         )}
+
+        {/* LÝ DO VÀ CƠ QUAN NHẬN CHỈ CÓ Ở HAI NHÁNH RẼ. Ở trạng thái khác hai trường không tồn tại —
+            vẽ ô trống là vẽ một trường trông như chưa điền. */}
+        {RE_NHANH.includes(phieu.status) && (
+          <>
+            <dt>Lý do</dt>
+            <dd>{nhanTruongNhanh(phieu.reason)}</dd>
+
+            {phieu.status === "chuyen-cap-tren" && (
+              <>
+                <dt>Cơ quan tiếp nhận</dt>
+                <dd>{nhanTruongNhanh(phieu.receiving_body)}</dd>
+              </>
+            )}
+
+            <dt>{phieu.status === "chuyen-cap-tren" ? "Chuyển lúc" : "Kết thúc lúc"}</dt>
+            <dd>
+              {phieu.branch_ended_at === undefined || phieu.branch_ended_at === null
+                ? KHONG_CO_TRONG_PHAN_HOI
+                : nhanThoiDiem(phieu.branch_ended_at)}
+            </dd>
+          </>
+        )}
       </dl>
 
       {loiGhi !== null && (
@@ -777,6 +838,40 @@ export function ChiTietPhieu({
         )
       ) : (
         <p className="trang-thai-rong">{CAU_THIEU_QUYEN_PHAN_LOAI}</p>
+      )}
+
+      {/* ── 1b. HAI NHÁNH RẼ — cùng cổng `feedback.classify`, chỉ ở `dang-phan-loai` ──────────── */}
+      {cong.phanLoai && reNhanhDuoc(phieu.status) && (
+        <div className="cum-nut">
+          <button
+            type="button"
+            className="nut-phu"
+            aria-pressed={reNhanhMo === "khong-tiep-nhan"}
+            onClick={() => datReNhanhMo(reNhanhMo === "khong-tiep-nhan" ? null : "khong-tiep-nhan")}
+          >
+            {NHAN_KHONG_TIEP_NHAN}
+          </button>
+          <button
+            type="button"
+            className="nut-phu"
+            aria-pressed={reNhanhMo === "chuyen-cap-tren"}
+            onClick={() => datReNhanhMo(reNhanhMo === "chuyen-cap-tren" ? null : "chuyen-cap-tren")}
+          >
+            {NHAN_CHUYEN_CAP_TREN}
+          </button>
+        </div>
+      )}
+      {cong.phanLoai && reNhanhDuoc(phieu.status) && reNhanhMo !== null && (
+        <BieuMauReNhanh
+          // Khoá theo nhánh: đổi nhánh là ô trống lại, không mang lý do của nhánh kia sang.
+          key={reNhanhMo}
+          loai={reNhanhMo}
+          dangGui={dangGui}
+          gui={(lyDo, coQuan) =>
+            reNhanhMo === "khong-tiep-nhan" ? khongTiepNhan(lyDo) : chuyenCapTren(lyDo, coQuan)
+          }
+          huy={() => datReNhanhMo(null)}
+        />
       )}
 
       {/* ── 2. CHUYỂN XỬ LÝ (§8.5) ───────────────────────────────────────────────────────── */}
@@ -859,7 +954,10 @@ export function ChiTietPhieu({
       )}
 
       {/* ── 4. ĐÓNG PHIẾU — CỔNG `feedback.resolve`, KHÔNG NỚI THEO LUẬT NẮM GIỮ ─────────── */}
+      {/* Chỉ ở hai điểm máy chủ cho đóng (`dongDuocTrenManHinh`) — điểm `da-xu-ly` suy từ kênh
+          `can-bo-nhap-ho` vì hợp đồng không trả cờ "có công dân"; xem chú thích hàm ấy. */}
       {cong.dongPhieu ? (
+        dongDuocTrenManHinh(phieu) && (
         <form
           className="form-danh-muc"
           onSubmit={(e) => {
@@ -883,9 +981,111 @@ export function ChiTietPhieu({
             Đóng phiếu
           </button>
         </form>
+        )
       ) : (
         <p className="trang-thai-rong">{CAU_THIEU_QUYEN_DONG}</p>
       )}
     </div>
+  );
+}
+
+const KHONG_CO_TRONG_PHAN_HOI = "Máy chủ không trả trường này";
+
+/** Trường tuỳ chọn của nhánh rẽ: vắng hay rỗng thì NÓI RA, không để ô trống hay chữ `undefined`. */
+function nhanTruongNhanh(giaTri: string | undefined): string {
+  return giaTri === undefined || giaTri === "" ? KHONG_CO_TRONG_PHAN_HOI : giaTri;
+}
+
+/**
+ * Biểu mẫu của MỘT nhánh rẽ. Tách ra để kiểm được bằng HTML tĩnh: ở trong `ChiTietPhieu` nó chỉ
+ * hiện sau một cú bấm, thứ `renderToStaticMarkup` không bấm được.
+ *
+ * LÝ DO CHỈ SỐNG TRONG STATE CỦA KHỐI NÀY rồi đi vào thân POST. Không lưu nháp vào bộ nhớ trình
+ * duyệt, không ghi console: đó là chữ về việc của một công dân (luật 3).
+ *
+ * Nút gửi bị khoá khi giới hạn phía client chưa đạt — nhưng giới hạn thật ở máy chủ, và câu 400
+ * của nó vẫn ra nguyên văn nếu hai bên lệch nhau.
+ */
+export function BieuMauReNhanh({
+  loai,
+  dangGui,
+  gui,
+  huy,
+  lyDoBanDau = "",
+  coQuanBanDau = "",
+}: {
+  loai: "khong-tiep-nhan" | "chuyen-cap-tren";
+  dangGui: boolean;
+  /** `coQuanTiepNhan` là chuỗi rỗng ở nhánh `khong-tiep-nhan` và bị bỏ qua. */
+  gui: (lyDo: string, coQuanTiepNhan: string) => void;
+  huy: () => void;
+  /** Chỉ để kiểm: giá trị ban đầu của hai ô. */
+  lyDoBanDau?: string;
+  coQuanBanDau?: string;
+}) {
+  const [lyDo, datLyDo] = useState(lyDoBanDau);
+  const [coQuan, datCoQuan] = useState(coQuanBanDau);
+
+  const chuyenCap = loai === "chuyen-cap-tren";
+  const loiO1 = loiLyDo(lyDo);
+  const loiO2 = chuyenCap ? loiCoQuan(coQuan) : null;
+  const hopLe = loiO1 === null && loiO2 === null;
+  const idLyDo = `ly-do-${loai}`;
+  const idCoQuan = `co-quan-${loai}`;
+
+  return (
+    <form
+      className="form-danh-muc"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (hopLe) gui(lyDo, chuyenCap ? coQuan : "");
+      }}
+    >
+      <h4>{chuyenCap ? NHAN_CHUYEN_CAP_TREN : NHAN_KHONG_TIEP_NHAN}</h4>
+      <p className="thong-bao-loi">{CANH_BAO_RE_NHANH}</p>
+
+      <div className="o-nhap">
+        <label htmlFor={idLyDo}>{NHAN_O_LY_DO}</label>
+        <textarea
+          id={idLyDo}
+          name={idLyDo}
+          rows={4}
+          value={lyDo}
+          onChange={(e) => datLyDo(e.target.value)}
+          aria-describedby={`${idLyDo}-dem`}
+        />
+        <p className="ghi-chu" id={`${idLyDo}-dem`} aria-live="polite">
+          {demKyTu(lyDo)}/{LY_DO_TOI_DA} ký tự{loiO1 !== null && lyDo !== "" ? ` · ${loiO1}` : ""}
+        </p>
+      </div>
+
+      {chuyenCap && (
+        <div className="o-nhap">
+          <label htmlFor={idCoQuan}>{NHAN_O_CO_QUAN}</label>
+          <input
+            id={idCoQuan}
+            name={idCoQuan}
+            value={coQuan}
+            placeholder={GOI_Y_CO_QUAN}
+            autoComplete="off"
+            onChange={(e) => datCoQuan(e.target.value)}
+            aria-describedby={`${idCoQuan}-dem`}
+          />
+          <p className="ghi-chu" id={`${idCoQuan}-dem`} aria-live="polite">
+            {demKyTu(coQuan)}/{CO_QUAN_TOI_DA} ký tự
+            {loiO2 !== null && coQuan !== "" ? ` · ${loiO2}` : ""}
+          </p>
+        </div>
+      )}
+
+      <div className="cum-nut">
+        <button type="submit" className="nut-chinh" disabled={dangGui || !hopLe}>
+          {chuyenCap ? "Xác nhận chuyển cấp trên" : "Xác nhận không tiếp nhận"}
+        </button>
+        <button type="button" className="nut-phu" onClick={huy} disabled={dangGui}>
+          Huỷ
+        </button>
+      </div>
+    </form>
   );
 }

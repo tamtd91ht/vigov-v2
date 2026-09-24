@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  chuyenCapTrenPhieu,
   chuyenXuLyPhieu,
   dongPhieu,
   duongDanSoPhanAnh,
+  khongTiepNhanPhieu,
   layPhieuPhanAnh,
   phanLoaiPhieu,
   tienTrangThaiPhieu,
@@ -441,5 +443,81 @@ describe("phạm vi của phiếu trả về cho CÔNG DÂN", () => {
     const _khongLo: KhongDuocLo = true;
     void _khongLo;
     expect(_khongLo).toBe(true);
+  });
+});
+
+describe("hai nhánh rẽ — …/rejection và …/referral", () => {
+  const PHIEU_SAU = new Response(JSON.stringify({ code: "PA-2026-0021", status: "khong-tiep-nhan" }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+  const LY_DO = "  Nội dung thuộc thẩm quyền ngành điện, không thuộc xã.  ";
+
+  it("rejection: POST đúng tuyến, thân ĐÚNG MỘT khoá `reason`, đã cắt khoảng trắng", async () => {
+    const gia = batFetch(PHIEU_SAU.clone());
+    const kq = await khongTiepNhanPhieu("PA-2026-0021", LY_DO);
+
+    expect(kq.ok).toBe(true);
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/citizen-reports/PA-2026-0021/rejection");
+    const tuyChon = gia.mock.calls[0]?.[1];
+    expect(tuyChon?.method).toBe("POST");
+    expect(JSON.parse(String(tuyChon?.body))).toEqual({ reason: LY_DO.trim() });
+  });
+
+  it("referral: thân ĐÚNG HAI khoá `reason` và `receiving_body`, cả hai đã cắt", async () => {
+    const gia = batFetch(PHIEU_SAU.clone());
+    await chuyenCapTrenPhieu("PA-2026-0021", LY_DO, "  Công ty điện lực  ");
+
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/citizen-reports/PA-2026-0021/referral");
+    const than = JSON.parse(String(gia.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
+    expect(Object.keys(than).sort()).toEqual(["reason", "receiving_body"]);
+    expect(than).toEqual({ reason: LY_DO.trim(), receiving_body: "Công ty điện lực" });
+  });
+
+  it("không gửi Idempotency-Key — hai tuyến không đòi (như …/closure)", async () => {
+    const gia = batFetch(PHIEU_SAU.clone());
+    await khongTiepNhanPhieu("PA-2026-0021", LY_DO);
+    const header = new Headers(gia.mock.calls[0]?.[1]?.headers);
+    expect(header.has("Idempotency-Key")).toBe(false);
+  });
+
+  it("lý do KHÔNG lên URL và KHÔNG ra console, kể cả khi máy chủ từ chối", async () => {
+    const soi = [
+      vi.spyOn(console, "log"),
+      vi.spyOn(console, "info"),
+      vi.spyOn(console, "warn"),
+      vi.spyOn(console, "error"),
+      vi.spyOn(console, "debug"),
+    ];
+    const gia = batFetch(
+      new Response(
+        JSON.stringify({ code: "petition_state", message: "Phiếu đã chuyển trạng thái.", trace_id: "x" }),
+        { status: 409, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    await chuyenCapTrenPhieu("PA-2026-0021", LY_DO, "Công an xã");
+
+    const duong = decodeURIComponent(String(gia.mock.calls[0]?.[0]));
+    expect(duong).not.toContain("thẩm quyền");
+    expect(duong).not.toContain("Công an");
+    expect(duong).not.toContain("?");
+    for (const s of soi) expect(s).not.toHaveBeenCalled();
+  });
+
+  it("409 `petition_state`: câu của máy chủ ra NGUYÊN VĂN", async () => {
+    batFetch(
+      new Response(
+        JSON.stringify({
+          code: "petition_state",
+          message: "Chỉ từ chối tiếp nhận hoặc chuyển cấp trên được phiếu đang ở bước phân loại.",
+          trace_id: "01JTRACE",
+        }),
+        { status: 409, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    expect(await khongTiepNhanPhieu("PA-2026-0021", LY_DO)).toEqual({
+      ok: false,
+      thongBao: "Chỉ từ chối tiếp nhận hoặc chuyển cấp trên được phiếu đang ở bước phân loại.",
+    });
   });
 });

@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -10,19 +14,33 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import {
+  CANH_BAO_RE_NHANH,
   CAU_THIEU_QUYEN_DONG,
   CAU_THIEU_QUYEN_PHAN_CONG,
   CAU_THIEU_QUYEN_PHAN_LOAI,
   congThaoTac,
   DE_BO_PHAN_PHAN_CONG,
+  NHAN_CHUYEN_CAP_TREN,
+  NHAN_KHONG_TIEP_NHAN,
+  NHAN_O_CO_QUAN,
   NHAN_O_KET_QUA,
+  NHAN_O_LY_DO,
   NHAN_TIEN_TRANG_THAI,
   PHAM_VI_GIAO_CHO_TOI,
   PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
   SO_RONG,
 } from "./nhan-phieu";
-import { ChiTietPhieu, DanhSachThe, HangLoc, KhoiChuaDung, ThePhieu } from "./so-phan-anh";
+import {
+  BieuMauReNhanh,
+  ChiTietPhieu,
+  DanhSachThe,
+  HangLoc,
+  KhoiChuaDung,
+  ThePhieu,
+} from "./so-phan-anh";
+
+const THU_MUC = fileURLToPath(new URL(".", import.meta.url));
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không.
@@ -107,6 +125,8 @@ function veChiTiet(
       chuyenXuLy={() => {}}
       tienTrangThai={() => {}}
       dongPhieuLai={() => {}}
+      khongTiepNhan={() => {}}
+      chuyenCapTren={() => {}}
     />,
   );
 }
@@ -135,7 +155,7 @@ describe("HAI CỔNG KHÁC NHAU — nút tiến trạng thái và nút Đóng ph
   });
 
   it("có `feedback.resolve`: biểu mẫu đóng phiếu ra tới trang, kèm ô kết quả người dân đọc", () => {
-    const html = veChiTiet(congThaoTac(false, false, true));
+    const html = veChiTiet(congThaoTac(false, false, true), phieu({ status: "cho-dan-xac-nhan" }));
 
     expect(html).toContain(O_KET_QUA);
     expect(html).toContain(nhuTrongHTML(NHAN_O_KET_QUA));
@@ -338,6 +358,221 @@ describe("phần chưa dựng được — ra tới màn hình, không giấu tr
     expect(html).toContain("bat_buoc_anh_nghiem_thu");
     for (const p of PHAN_CHUA_DUNG) {
       expect(html).toContain(nhuTrongHTML(p.ten));
+    }
+  });
+});
+
+/**
+ * HAI NHÁNH RẼ (`Không tiếp nhận`, `Chuyển cấp trên`) — ai thấy, ở đâu, và biểu mẫu nói gì.
+ *
+ * Canh cả CA BỊ TỪ CHỐI, không chỉ ca được phép: tài khoản người viết mã có mọi khoá, nên một nút
+ * lọt ra ngoài cổng là thứ không ai thấy trong lúc phát triển.
+ */
+describe("hai nhánh rẽ — chỉ ở `dang-phan-loai`, chỉ với `feedback.classify`", () => {
+  const NUT_KHONG_TIEP_NHAN = `>${NHAN_KHONG_TIEP_NHAN}</button>`;
+  const NUT_CHUYEN_CAP_TREN = `>${NHAN_CHUYEN_CAP_TREN}</button>`;
+
+  it("có `feedback.classify` và phiếu ở `dang-phan-loai`: hai nút có mặt", () => {
+    const html = veChiTiet(congThaoTac(true, false, false), phieu({ status: "dang-phan-loai" }));
+    expect(html).toContain(NUT_KHONG_TIEP_NHAN);
+    expect(html).toContain(NUT_CHUYEN_CAP_TREN);
+  });
+
+  it("THIẾU `feedback.classify`: không nút nào, và câu thiếu quyền nói đúng tên khoá", () => {
+    const html = veChiTiet(congThaoTac(false, true, true), phieu({ status: "dang-phan-loai" }));
+    expect(html).not.toContain(NUT_KHONG_TIEP_NHAN);
+    expect(html).not.toContain(NUT_CHUYEN_CAP_TREN);
+    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_PHAN_LOAI));
+    expect(html).toContain("feedback.classify");
+  });
+
+  it("có khoá nhưng phiếu ở trạng thái khác: không nút nào — máy chủ sẽ trả 409", () => {
+    for (const status of [
+      "da-tiep-nhan",
+      "da-chuyen-xu-ly",
+      "dang-xu-ly",
+      "da-xu-ly",
+      "cho-dan-xac-nhan",
+      "da-dong",
+      "khong-tiep-nhan",
+      "chuyen-cap-tren",
+    ]) {
+      const html = veChiTiet(congThaoTac(true, true, true), phieu({ status }));
+      expect(html, status).not.toContain(NUT_KHONG_TIEP_NHAN);
+      expect(html, status).not.toContain(NUT_CHUYEN_CAP_TREN);
+    }
+  });
+});
+
+describe("biểu mẫu nhánh rẽ", () => {
+  function veBieuMau(
+    loai: "khong-tiep-nhan" | "chuyen-cap-tren",
+    lyDo = "",
+    coQuan = "",
+  ): string {
+    return renderToStaticMarkup(
+      <BieuMauReNhanh
+        loai={loai}
+        dangGui={false}
+        gui={() => {}}
+        huy={() => {}}
+        lyDoBanDau={lyDo}
+        coQuanBanDau={coQuan}
+      />,
+    );
+  }
+
+  /** Nút gửi là nút `type="submit"`; lấy riêng thẻ ấy để đọc `disabled`. */
+  function nutGui(html: string): string {
+    return html.match(/<button type="submit"[^>]*>/)?.[0] ?? "";
+  }
+
+  it("nhãn ô lý do nói người dân đọc được, và cảnh báo không hoàn tác + người dân được báo", () => {
+    const html = veBieuMau("khong-tiep-nhan");
+    expect(html).toContain(nhuTrongHTML(NHAN_O_LY_DO));
+    expect(html).toContain(nhuTrongHTML(CANH_BAO_RE_NHANH));
+    expect(CANH_BAO_RE_NHANH).toContain("không hoàn tác");
+    expect(CANH_BAO_RE_NHANH).toContain("Người dân được thông báo");
+  });
+
+  it("`Không tiếp nhận` KHÔNG có ô cơ quan; `Chuyển cấp trên` CÓ", () => {
+    expect(veBieuMau("khong-tiep-nhan")).not.toContain(nhuTrongHTML(NHAN_O_CO_QUAN));
+    const html = veBieuMau("chuyen-cap-tren");
+    expect(html).toContain(nhuTrongHTML(NHAN_O_CO_QUAN));
+  });
+
+  it("bộ đếm ký tự trực tiếp: 9 ký tự chữ Việt thì khoá nút, 10 thì mở", () => {
+    const chin = "Ngập ước!"; // 9 điểm mã
+    const muoi = "Ngập nước!"; // 10 điểm mã
+    expect(nutGui(veBieuMau("khong-tiep-nhan", chin))).toContain("disabled");
+    const html = veBieuMau("khong-tiep-nhan", muoi);
+    expect(nutGui(html)).not.toContain("disabled");
+    expect(html).toMatch(/10(<!-- -->)?\/(<!-- -->)?2000(<!-- -->)? ký tự/);
+  });
+
+  it("2000 ký tự chữ Việt thì mở, 2001 thì khoá", () => {
+    expect(nutGui(veBieuMau("khong-tiep-nhan", "ệ".repeat(2000)))).not.toContain("disabled");
+    expect(nutGui(veBieuMau("khong-tiep-nhan", "ệ".repeat(2001)))).toContain("disabled");
+  });
+
+  it("`Chuyển cấp trên` thiếu cơ quan tiếp nhận thì khoá nút, dù lý do hợp lệ", () => {
+    const lyDo = "Vượt thẩm quyền của xã, thuộc ngành điện.";
+    expect(nutGui(veBieuMau("chuyen-cap-tren", lyDo, ""))).toContain("disabled");
+    expect(nutGui(veBieuMau("chuyen-cap-tren", lyDo, "   "))).toContain("disabled");
+    expect(nutGui(veBieuMau("chuyen-cap-tren", lyDo, "Công ty điện lực"))).not.toContain(
+      "disabled",
+    );
+    expect(nutGui(veBieuMau("chuyen-cap-tren", lyDo, "đ".repeat(201)))).toContain("disabled");
+  });
+});
+
+describe("chi tiết phiếu ở nhánh rẽ — lý do, cơ quan, thời điểm", () => {
+  const LY_DO = "Nội dung không thuộc địa bàn xã quản lý.";
+  const CO_QUAN = "Công ty điện lực";
+
+  it("`khong-tiep-nhan`: hiện lý do và thời điểm theo giờ Việt Nam, KHÔNG hiện ô cơ quan", () => {
+    const html = veChiTiet(
+      congThaoTac(true, true, true),
+      phieu({
+        status: "khong-tiep-nhan",
+        reason: LY_DO,
+        branch_ended_at: "2026-09-10T03:05:00Z",
+      }),
+    );
+    expect(html).toContain("<dt>Lý do</dt>");
+    expect(html).toContain(LY_DO);
+    // 03:05Z = 10:05 giờ Việt Nam.
+    expect(html).toContain("10:05");
+    expect(html).not.toContain("<dt>Cơ quan tiếp nhận</dt>");
+  });
+
+  it("`chuyen-cap-tren`: hiện lý do, cơ quan tiếp nhận và thời điểm", () => {
+    const html = veChiTiet(
+      congThaoTac(false, false, false),
+      phieu({
+        status: "chuyen-cap-tren",
+        reason: LY_DO,
+        receiving_body: CO_QUAN,
+        branch_ended_at: "2026-09-10T03:05:00Z",
+      }),
+    );
+    expect(html).toContain(LY_DO);
+    expect(html).toContain("<dt>Cơ quan tiếp nhận</dt>");
+    expect(html).toContain(CO_QUAN);
+    expect(html).toContain("10:05");
+  });
+
+  it("trạng thái khác: KHÔNG có ô lý do hay cơ quan, dù phản hồi lỡ mang theo", () => {
+    for (const status of ["dang-phan-loai", "dang-xu-ly", "da-dong"]) {
+      const html = veChiTiet(
+        congThaoTac(true, true, true),
+        phieu({ status, reason: LY_DO, receiving_body: CO_QUAN }),
+      );
+      expect(html, status).not.toContain("<dt>Lý do</dt>");
+      expect(html, status).not.toContain("<dt>Cơ quan tiếp nhận</dt>");
+      expect(html, status).not.toContain(LY_DO);
+    }
+  });
+
+  it("thanh bước: ô rẽ nhánh đúng trạng thái là `đang ở đây`, luồng chính không ô nào", () => {
+    const html = veChiTiet(congThaoTac(false, false, false), phieu({ status: "chuyen-cap-tren" }));
+    expect(html.match(/đang ở đây/g)?.length).toBe(1);
+    expect(html).toMatch(/Chuyển cấp trên<\/span> (<!-- -->)?đang ở đây/);
+  });
+});
+
+describe("Đóng phiếu — hai điểm đóng", () => {
+  it("`cho-dan-xac-nhan`: có biểu mẫu đóng, kênh nào cũng vậy", () => {
+    expect(
+      veChiTiet(congThaoTac(false, false, true), phieu({ status: "cho-dan-xac-nhan" })),
+    ).toContain(O_KET_QUA);
+  });
+
+  it("`da-xu-ly` kênh `can-bo-nhap-ho` (không có công dân để xác nhận): có biểu mẫu đóng", () => {
+    const html = veChiTiet(
+      congThaoTac(false, false, true),
+      phieu({ status: "da-xu-ly", channel: "can-bo-nhap-ho" }),
+    );
+    expect(html).toContain(O_KET_QUA);
+  });
+
+  it("`da-xu-ly` kênh công dân: KHÔNG có biểu mẫu đóng — phải qua bước chờ dân xác nhận", () => {
+    for (const channel of ["zalo-mini-app", "zalo-oa", "web-xa"]) {
+      const html = veChiTiet(
+        congThaoTac(false, false, true),
+        phieu({ status: "da-xu-ly", channel }),
+      );
+      expect(html, channel).not.toContain(O_KET_QUA);
+    }
+  });
+
+  it("`da-xu-ly` nhập hộ nhưng THIẾU `feedback.resolve`: không biểu mẫu, câu thiếu quyền", () => {
+    const html = veChiTiet(
+      congThaoTac(true, true, false),
+      phieu({ status: "da-xu-ly", channel: "can-bo-nhap-ho" }),
+    );
+    expect(html).not.toContain(O_KET_QUA);
+    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DONG));
+  });
+
+  it("các trạng thái khác: không có biểu mẫu đóng", () => {
+    for (const status of ["da-tiep-nhan", "dang-phan-loai", "dang-xu-ly", "da-dong", "khong-tiep-nhan"]) {
+      const html = veChiTiet(
+        congThaoTac(true, true, true),
+        phieu({ status, channel: "can-bo-nhap-ho" }),
+      );
+      expect(html, status).not.toContain(O_KET_QUA);
+    }
+  });
+});
+
+describe("lý do nhánh rẽ không rời khỏi thân POST", () => {
+  it("mã nguồn màn hình không đụng tới bộ nhớ trình duyệt hay console", () => {
+    // Lý do là chữ cán bộ gõ về việc của một công dân (luật 3). Nó chỉ được đi vào thân POST.
+    for (const tep of ["so-phan-anh.tsx", "nhan-phieu.ts"]) {
+      const nguon = readFileSync(join(THU_MUC, tep), "utf-8");
+      expect(nguon, tep).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie/);
+      expect(nguon, tep).not.toMatch(/console\./);
     }
   });
 });

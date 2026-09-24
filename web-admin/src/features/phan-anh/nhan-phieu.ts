@@ -311,6 +311,23 @@ export function buocLuongChinh(trangThai: string): readonly OBuoc[] {
 }
 
 /**
+ * Hai ô RẼ NHÁNH của §8.2 (`Không tiếp nhận`, `Chuyển cấp trên`), sáng theo TRẠNG THÁI của phiếu.
+ *
+ * Ô KHÔNG BẤM ĐƯỢC. Đặc tả vẽ nhãn `chuyển sang` (bấm để chuyển), nhưng hai nhánh này là hành vi
+ * KẾT THÚC phiếu và phải mang một lý do người dân đọc được — nên chúng là hai biểu mẫu riêng bên
+ * dưới (`BieuMauReNhanh`), không phải một cú bấm trên thanh bước.
+ *
+ * Không có `daQua`: hai nhánh là trạng thái cuối, không phiếu nào đi QUA chúng.
+ */
+export function buocReNhanh(trangThai: string): readonly OBuoc[] {
+  return RE_NHANH.map((ma) => ({
+    ma,
+    nhan: nhanTrangThai(ma),
+    vaiTro: ma === trangThai ? "dangODay" : "chuaToi",
+  }));
+}
+
+/**
  * Câu giải thích trạng thái hiện tại (§8.2, dòng dưới stepper).
  *
  * ĐẶC TẢ CHO ĐÚNG MỘT CÂU TRONG CHÍN, và tám câu còn lại **không được bịa ra ở đây**: đó là chữ
@@ -369,6 +386,86 @@ export function phanLoaiDuoc(trangThai: string): boolean {
   return trangThai === "da-tiep-nhan";
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * HAI NHÁNH RẼ — `Không tiếp nhận`, `Chuyển cấp trên` (POST …/rejection, …/referral)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Hai nhánh chỉ rời được từ `dang-phan-loai` — bước một người đọc phiếu lần đầu và quyết xã có
+ * nhận việc này không (`domain.KetThucNhanhDuoc`). Nơi khác máy chủ trả 409; ẩn biểu mẫu là nói
+ * ra điều ấy trước, không phải dựng thêm một luật.
+ */
+export function reNhanhDuoc(trangThai: string): boolean {
+  return trangThai === "dang-phan-loai";
+}
+
+/** Giới hạn của máy chủ (`service-petitions`, 400 `invalid_request` khi vượt). */
+export const LY_DO_TOI_THIEU = 10;
+export const LY_DO_TOI_DA = 2000;
+export const CO_QUAN_TOI_DA = 200;
+
+/**
+ * Đếm KÝ TỰ như máy chủ đếm: số điểm mã Unicode (rune của Go) của chuỗi ĐÃ CẮT khoảng trắng.
+ *
+ * KHÔNG dùng `.length`: `.length` đếm đơn vị UTF-16, nên một ký tự ngoài mặt phẳng cơ bản (biểu
+ * tượng cảm xúc cán bộ dán từ Zalo) đếm thành hai, và bộ đếm trên màn hình lệch khỏi con số máy
+ * chủ dùng để từ chối. Chữ Việt dựng sẵn (`ệ`, `ữ`) là một điểm mã, đúng như người đọc thấy.
+ */
+export function demKyTu(s: string): number {
+  return Array.from(s.trim()).length;
+}
+
+/** Câu lỗi của ô lý do, hoặc `null` khi hợp lệ. */
+export function loiLyDo(lyDo: string): string | null {
+  const n = demKyTu(lyDo);
+  if (n < LY_DO_TOI_THIEU) {
+    return `Lý do cần ít nhất ${LY_DO_TOI_THIEU} ký tự (hiện có ${n}).`;
+  }
+  if (n > LY_DO_TOI_DA) {
+    return `Lý do không được quá ${LY_DO_TOI_DA} ký tự (hiện có ${n}).`;
+  }
+  return null;
+}
+
+/** Câu lỗi của ô cơ quan tiếp nhận, hoặc `null` khi hợp lệ. */
+export function loiCoQuan(coQuan: string): string | null {
+  const n = demKyTu(coQuan);
+  if (n === 0) return "Cần ghi tên cơ quan tiếp nhận.";
+  if (n > CO_QUAN_TOI_DA) {
+    return `Tên cơ quan tiếp nhận không được quá ${CO_QUAN_TOI_DA} ký tự (hiện có ${n}).`;
+  }
+  return null;
+}
+
+export const NHAN_KHONG_TIEP_NHAN = "Không tiếp nhận";
+export const NHAN_CHUYEN_CAP_TREN = "Chuyển cấp trên";
+export const NHAN_O_LY_DO = "Lý do (người dân sẽ đọc được)";
+export const NHAN_O_CO_QUAN = "Cơ quan tiếp nhận";
+export const GOI_Y_CO_QUAN = "Ví dụ: Công ty điện lực, Công an xã, Sở Xây dựng…";
+
+export const CANH_BAO_RE_NHANH =
+  "Thao tác này kết thúc xử lý phiếu tại xã và không hoàn tác được. Người dân được thông báo và " +
+  "đọc được lý do này khi tra cứu phiếu của mình.";
+
+/**
+ * Nút `Đóng phiếu` có nghĩa ở phiếu này không — HAI ĐIỂM, cùng hai điểm `domain.DongDuoc` của máy
+ * chủ, nhưng điểm thứ hai được SUY RA TỪ KÊNH chứ không từ đúng điều kiện máy chủ dùng:
+ *
+ *   cho-dan-xac-nhan                         luồng thường
+ *   da-xu-ly  VÀ  kênh `can-bo-nhap-ho`      phiếu không có công dân nào để xác nhận
+ *
+ * ⚠ ĐIỀU KIỆN THẬT CỦA MÁY CHỦ LÀ `cong_dan_id` RỖNG, và hợp đồng KHÔNG trả trường ấy hay cờ nào
+ * tương đương (`petitions_phieuPhanAnhRa`). Kênh `can-bo-nhap-ho` là phiếu cán bộ vào sổ thay dân,
+ * nên không có tài khoản công dân — đó là tín hiệu DUY NHẤT màn hình đọc được. Sai lệch nếu có
+ * chỉ theo một chiều an toàn: một phiếu kênh khác mà không có công dân sẽ THIẾU nút ở `da-xu-ly`
+ * (máy chủ vẫn cho đóng), chứ không bao giờ có nút mà máy chủ từ chối vì lý do này. Đã báo về để
+ * hợp đồng trả một cờ.
+ */
+export function dongDuocTrenManHinh(phieu: petitions_phieuPhanAnhRa): boolean {
+  if (phieu.status === "cho-dan-xac-nhan") return true;
+  return phieu.status === "da-xu-ly" && phieu.channel === "can-bo-nhap-ho";
+}
+
 /** Phiếu đã đóng hoặc đã rẽ nhánh thì không còn bước kế tiếp trên luồng chính. */
 export function conBuocKeTiep(trangThai: string): boolean {
   const viTri = LUONG_CHINH.indexOf(trangThai);
@@ -382,7 +479,8 @@ export const CAU_THIEU_QUYEN_DONG =
 
 export const CAU_THIEU_QUYEN_PHAN_LOAI =
   "Tài khoản của bạn không có quyền chốt lĩnh vực phản ánh (feedback.classify), nên không có ô " +
-  "phân loại. Chốt lĩnh vực là hành vi ấn định hạn xử lý xong của xã.";
+  "phân loại và không có hai thao tác Không tiếp nhận, Chuyển cấp trên. Chốt lĩnh vực là hành vi " +
+  "ấn định hạn xử lý xong của xã.";
 
 export const CAU_THIEU_QUYEN_PHAN_CONG =
   "Tài khoản của bạn không có quyền chuyển xử lý phản ánh (feedback.assign), nên không có khối " +
@@ -529,12 +627,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
     viSao:
       "Hợp đồng không trả `diem_hai_long` và không có tuyến ghi đánh giá. Cơ chế 1–2 sao tự mở lại " +
       "phiếu do ba cờ cấu hình của ADR 0008 điều khiển, và không bảng nào trong kho này giữ chúng.",
-  },
-  {
-    ten: "Hai ô rẽ nhánh của StatusStepper: `Không tiếp nhận`, `Chuyển cấp trên` (§8.2)",
-    viSao:
-      "Tuyến `…/status` cố ý KHÔNG nhận trạng thái đích — máy chủ giữ bản đồ vòng đời và chỉ tiến " +
-      "một bước trên luồng chính. Vẽ hai ô bấm được là vẽ hai nút không có tuyến nào đứng sau.",
   },
   {
     ten: "Nút `👁 Cho hiện công khai` / `🚫 Ẩn khỏi trang công khai` (§8.3)",

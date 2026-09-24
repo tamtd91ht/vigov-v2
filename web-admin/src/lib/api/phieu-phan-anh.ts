@@ -1,5 +1,5 @@
 /**
- * Sáu tuyến của sổ Phản ánh người dân (`docs/ui-ux/09-phan-anh-nguoi-dan.md`), đúng bộ tuyến
+ * Tám tuyến của sổ Phản ánh người dân (`docs/ui-ux/09-phan-anh-nguoi-dan.md`), đúng bộ tuyến
  * `service-petitions/internal/http/routes.go:529-680` khai — không nhiều hơn, không ít hơn.
  *
  *   GET  /api/v1/citizen-reports                            feedback.read
@@ -8,6 +8,8 @@
  *   POST /api/v1/citizen-reports/{maTraCuu}/assignment      feedback.assign
  *   POST /api/v1/citizen-reports/{maTraCuu}/status          feedback.read + LUẬT NẮM GIỮ
  *   POST /api/v1/citizen-reports/{maTraCuu}/closure         feedback.resolve
+ *   POST /api/v1/citizen-reports/{maTraCuu}/rejection       feedback.classify
+ *   POST /api/v1/citizen-reports/{maTraCuu}/referral        feedback.classify
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `petitions_phieuPhanAnhRa`, `petitions_phanLoaiVao`,
  * `petitions_phanCongVao`, `petitions_dongPhieuVao` đều đến từ `schema.gen.ts`.
@@ -39,15 +41,19 @@
 
 import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
 import type {
+  petitions_chuyenCapTrenVao,
   petitions_dongPhieuVao,
   petitions_get_citizen_reports,
   petitions_get_citizen_reports_by_maTraCuu,
+  petitions_khongTiepNhanVao,
   petitions_phanCongVao,
   petitions_phanLoaiVao,
   petitions_phieuPhanAnhRa,
   petitions_post_citizen_reports_by_maTraCuu_assignment,
   petitions_post_citizen_reports_by_maTraCuu_classification,
   petitions_post_citizen_reports_by_maTraCuu_closure,
+  petitions_post_citizen_reports_by_maTraCuu_referral,
+  petitions_post_citizen_reports_by_maTraCuu_rejection,
   petitions_post_citizen_reports_by_maTraCuu_status,
   page_Result_petitions_phieuPhanAnhRa,
 } from "./schema.gen";
@@ -174,9 +180,9 @@ export function laySoPhanAnh(
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * BỐN THAO TÁC GHI
+ * BỐN THAO TÁC GHI CỦA LUỒNG CHÍNH (hai nhánh rẽ ở cuối tệp)
  *
- * CẢ BỐN TRẢ VỀ 200 KÈM NGUYÊN PHIẾU SAU KHI GHI, và màn hình dùng đúng phiếu ấy thay vì vá tại
+ * CẢ SÁU TUYẾN GHI TRẢ VỀ 200 KÈM NGUYÊN PHIẾU SAU KHI GHI, và màn hình dùng đúng phiếu ấy thay vì vá tại
  * chỗ: trạng thái vừa tới và hạn vừa được ấn định quyết định lần sau vẽ nút nào.
  *
  * 409 LÀ CÂU TRẢ LỜI BÌNH THƯỜNG CỦA BA TUYẾN, không phải sự cố — "phiếu đã chuyển trạng thái
@@ -268,6 +274,9 @@ export function tienTrangThaiPhieu(
  * ⚠ TUYẾN NÀY ĐỨNG SAU `feedback.resolve` VÀ **KHÔNG** ĐƯỢC NỚI THEO LUẬT NẮM GIỮ Ở `…/status`.
  * Hai dòng ấy khác nhau chính là điểm chính: câu hỏi mở #7 chốt ngày 16/09/2026 —
  * *"`feedback.resolve` quyết định ai đóng được"*.
+ *
+ * HAI ĐIỂM ĐÓNG, MÁY CHỦ QUYẾT (`domain.DongDuoc`): `cho-dan-xac-nhan`, và `da-xu-ly` khi phiếu
+ * KHÔNG có tài khoản công dân nào đứng sau (không ai để xác nhận — quyết định ngày 24/09/2026).
  */
 export function dongPhieu(
   maTraCuu: string,
@@ -276,6 +285,53 @@ export function dongPhieu(
   const mau: petitions_post_citizen_reports_by_maTraCuu_closure["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/closure";
   const than: petitions_dongPhieuVao = { result: ketQua };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * HAI NHÁNH RẼ — `khong-tiep-nhan` và `chuyen-cap-tren`
+ *
+ * CHỈ TỪ `dang-phan-loai`, và cả hai là TRẠNG THÁI CUỐI: không tuyến nào đưa phiếu ra khỏi chúng
+ * (`domain.chuyenDuocSang`). Nơi khác là **409** — câu của máy chủ ra thẳng màn hình.
+ *
+ * `reason` LÀ CÂU NGƯỜI DÂN ĐỌC khi tra phiếu của mình, cùng vai trò với `result` của …/closure.
+ * Nó chỉ đi trong THÂN POST — không lên URL, không vào bộ nhớ trình duyệt, không vào console: đó
+ * là chữ cán bộ gõ về việc của một công dân, và có thể nhắc tên hay địa chỉ người ấy (luật 3).
+ *
+ * CẮT KHOẢNG TRẮNG Ở ĐÂY chứ không để màn hình tự nhớ: máy chủ đếm trên chuỗi đã cắt, nên gửi đi
+ * đúng chuỗi được đếm là cách duy nhất để bộ đếm ký tự trên màn hình nói cùng một con số.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** POST …/rejection — `Không tiếp nhận`. Đúng một trường. */
+export function khongTiepNhanPhieu(
+  maTraCuu: string,
+  lyDo: string,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const mau: petitions_post_citizen_reports_by_maTraCuu_rejection["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/rejection";
+  const than: petitions_khongTiepNhanVao = { reason: lyDo.trim() };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
+  );
+}
+
+/**
+ * POST …/referral — `Chuyển cấp trên`. `receiving_body` là TÊN cơ quan nhận, chữ tự do: không có
+ * danh mục cơ quan nào trong hợp đồng, và từ 7/2025 không còn cấp huyện để chọn sẵn.
+ */
+export function chuyenCapTrenPhieu(
+  maTraCuu: string,
+  lyDo: string,
+  coQuanTiepNhan: string,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const mau: petitions_post_citizen_reports_by_maTraCuu_referral["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/referral";
+  const than: petitions_chuyenCapTrenVao = {
+    reason: lyDo.trim(),
+    receiving_body: coQuanTiepNhan.trim(),
+  };
   return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
   );
