@@ -58,6 +58,7 @@ tiến độ tương ứng (khoá `tiep_theo`/`bang_chung`).
 | **Báo công dân theo bảng** (6 chuyển trạng thái, không báo dang-phan-loai/dang-xu-ly/da-xu-ly, không bao giờ gửi tên cán bộ/nội dung/ảnh) | 24/09 | người dùng | ADR 0041 |
 | Phản ánh: cờ ảnh nghiệm thu **giữ #7 mặc định BẬT**; **gia hạn** có (lãnh đạo duyệt, hạn gốc giữ); **tự đóng** phiếu chờ dân sau N ngày; 1–2 sao vào **hàng lãnh đạo xem**; ranh giới với đơn thư theo nội dung + hình thức (tố cáo cán bộ sang sổ đơn thư). Chưa dựng | 24/09 | người dùng (chọn đề xuất) | `service-petitions/vong-doi-phieu-phan-anh` |
 | Tên URL danh bạ hẹp: **`staff-directory`** | 24/09 | người dùng | `ubiquitous-language.md` |
+| Thu chi ngân sách: **số lưu đồng, web quy đổi theo đơn vị bảng** (đơn vị đóng dong/nghin-dong/trieu-dong); **dựng đợt thu chi theo đặc tả** (khác khuyến nghị domain-expert — sổ thứ hai cạnh Kho bạc); URL `budget-entries`, ghi `budget.update`, gỡ `budget.confirm`; KPI cân đối **hỏi khách**, nhãn tạm "Chênh lệch thu – chi luỹ kế" | 25/09 | người dùng | `service-finance/thu-chi-ngan-sach-82` |
 | Hai nhánh phiếu: **`…/rejection` · `…/referral`**, khoá **`feedback.classify`**; máy chủ **kiểm người được giao** qua identity (RPC mới `ResolveAssignableStaff`) | 25/09 | người dùng | `ubiquitous-language.md` · `service-petitions/duong-xu-ly-phan-anh-phia-can-bo` |
 | Mini App phản ánh: **dựng màn, nguồn phiên ViGov fail closed**, ẩn khỏi bản nộp — chưa có cầu phiên vihat-miniapp → ViGov | 24/09 | người dùng | `citizen-app/cau-phien-cong-dan-vigov` (cần ADR) |
 
@@ -93,6 +94,7 @@ Bảng *"Nợ khách chốt"* ở đầu `tien-do.md` sinh từ `no_confirm`; h�
 | Mục menu `/cau-hinh` chỉ canh `admin.lookup` | người cầm `admin.org`/`admin.role`/`admin.sla` không vào được | cùng mục trên |
 | Hai câu ở `deploy/README.md` mục 11.0 (dải CIDR netpol, KUBECONFIG theo môi trường) | phiên CI/deploy chờ để sửa `netpol.yaml`, `deploy/Jenkinsfile` | `deploy/README.md` §11.0 |
 | **Cờ ảnh nghiệm thu phản ánh**: vigov-require `b9a9718` mặc định TẮT, câu #7 (ADR 0008) chốt mặc định BẬT — mâu thuẫn với câu KHÁCH đã chốt | cờ chưa dựng; ai dựng phải hỏi trước | `service-petitions/doi-chieu-24-09-nhiem-vu-phan-anh` |
+| **Thu chi: biểu mẫu thật của xã** (tệp mẫu của đặc tả có vẻ của HUYỆN) · KPI cân đối dòng B hay #32 · "cha = tổng con" quyết lại · chốt kỳ/quyết toán/người duyệt · công khai ngân sách | nhập Excel, số liệu nộp lên cấp trên | `service-finance/thu-chi-ngan-sach-82` |
 | **Cầu phiên công dân**: đăng nhập Mini App (vihat-miniapp) không ra được CitizenSession ViGov — không công dân thật nào gọi được tuyến CitizenOnly | cả kênh công dân | `citizen-app/cau-phien-cong-dan-vigov` |
 | **Bộ trạng thái riêng của VĂN BẢN ĐẾN** (C2; domain-expert đề xuất theo NĐ 30/2020) | tuyến đổi trạng thái văn bản đến | `service-documents/van-ban-den-tuyen-con-thieu` |
 | Ngày làm việc hay ngày lịch cho hạn KN Đ.28 / TC Đ.29 — **hỏi pháp chế**; và cần ADR vì ADR 0007 tính GIỜ | gieo số SLA đơn thư | `service-documents/so-don-thu-cong-dan` |
