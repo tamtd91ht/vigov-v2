@@ -90,7 +90,37 @@ export type PhieuCuaToi = {
   /** `null` = CHƯA CÓ (phiếu chưa được phân loại). Hai `null` nghĩa trái nhau — đừng gộp. */
   readonly han_xu_ly_xong: string | null;
   readonly ket_qua: string;
+  /**
+   * Lý do xã KHÔNG TIẾP NHẬN hoặc CHUYỂN CẤP TRÊN — viết CHO công dân (migration 0011). RỖNG ở mọi
+   * trạng thái khác, kể cả khi máy chủ lỡ gửi: `docPhieu` bỏ nó đi (xem `laNhanhKetThuc`).
+   */
+  readonly ly_do: string;
+  /** Cơ quan nhận phiếu — chỉ có ở `chuyen-cap-tren`, RỖNG ở mọi trạng thái khác. */
+  readonly co_quan_nhan: string;
 };
+
+/**
+ * Giới hạn hai trường của hai nhánh kết thúc — CHÉP từ `service-petitions/internal/domain/
+ * xu_ly_phan_anh.go` (`LyDoToiDa`, `CoQuanNhanToiDa`), đếm theo KÝ TỰ như `utf8.RuneCountInString`.
+ * Ở chiều ĐỌC, vượt giới hạn nghĩa là máy chủ trả thứ nó không bao giờ ghi được — sai khuôn, không
+ * phải một câu dài để cắt bớt.
+ */
+export const DO_DAI_NHANH_KET_THUC = {
+  ly_do: 2000,
+  co_quan_nhan: 200,
+} as const;
+
+/**
+ * Hai trạng thái mang `reason`/`receiving_body`. Máy chủ tự kiểm điều kiện này trước khi gửi
+ * (`phieu_cua_toi.go`); client kiểm LẠI vì đây là chỗ chữ cán bộ viết tới tay người dân — một lý do
+ * từ chối hiện trên phiếu đang xử lý là một câu sai do cơ quan nhà nước nói ra.
+ */
+export function laNhanhKetThuc(trang_thai: string): boolean {
+  return trang_thai === "khong-tiep-nhan" || trang_thai === "chuyen-cap-tren";
+}
+
+/** Số KÝ TỰ (code point), không phải số đơn vị UTF-16: "ă" tổ hợp hay emoji không bị đếm đôi. */
+const soKyTu = (s: string): number => [...s].length;
 
 /**
  * Thân trả lời → `PhieuCuaToi`, hoặc `null` nếu sai khuôn.
@@ -118,6 +148,13 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
   const han_tiep_nhan = chuoiHoacNull("acknowledge_due");
   const han_xu_ly = chuoiHoacNull("resolve_due");
   const an_danh = t["anonymous"];
+  // Hai trường TUỲ CHỌN (`omitempty`): vắng mặt là "", có mặt thì phải là chuỗi trong giới hạn.
+  const tuyChon = (k: string, toi_da: number): string | null => {
+    if (t[k] === undefined) return "";
+    return typeof t[k] === "string" && soKyTu(t[k] as string) <= toi_da ? (t[k] as string) : null;
+  };
+  const ly_do = tuyChon("reason", DO_DAI_NHANH_KET_THUC.ly_do);
+  const co_quan_nhan = tuyChon("receiving_body", DO_DAI_NHANH_KET_THUC.co_quan_nhan);
 
   if (
     ma === null ||
@@ -133,10 +170,14 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
     ket_qua === null ||
     han_tiep_nhan === undefined ||
     han_xu_ly === undefined ||
-    typeof an_danh !== "boolean"
+    typeof an_danh !== "boolean" ||
+    ly_do === null ||
+    co_quan_nhan === null
   ) {
     return null;
   }
+
+  const nhanh = laNhanhKetThuc(trang_thai);
 
   return {
     ma_tra_cuu: ma,
@@ -152,6 +193,9 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
     han_tiep_nhan,
     han_xu_ly_xong: han_xu_ly,
     ket_qua,
+    ly_do: nhanh ? ly_do : "",
+    // Cơ quan nhận chỉ có nghĩa khi phiếu ĐƯỢC CHUYỂN; ở `khong-tiep-nhan` không ai nhận cả.
+    co_quan_nhan: trang_thai === "chuyen-cap-tren" ? co_quan_nhan : "",
   };
 }
 

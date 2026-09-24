@@ -2777,7 +2777,8 @@ body {
 }
 
 .cd-phieu__van-ban,
-.cd-phieu__ket-qua {
+.cd-phieu__ket-qua,
+.cd-phieu__ly-do {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

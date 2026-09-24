@@ -47,6 +47,47 @@ function Dong({ nhan, children }: { nhan: string; children: ReactNode }) {
   );
 }
 
+/** Chữ cán bộ viết cho người dân, hoặc câu "chưa ghi" — một ô trống im lặng không nói gì với ai. */
+function ChuCanBo({ chu }: { chu: string }) {
+  return chu !== "" ? (
+    <span className="cd-phieu__ly-do">{chu}</span>
+  ) : (
+    <span className="cd-phieu__phu">{THE_PHIEU.chua_ghi}</span>
+  );
+}
+
+/**
+ * LÝ DO VÀ CƠ QUAN NHẬN CỦA HAI NHÁNH KẾT THÚC — đặt NGAY SAU tình trạng, vì đó là câu trả lời người
+ * dân mở phiếu để đọc. Quyết định vẽ dựa trên TRẠNG THÁI, không dựa trên việc chuỗi có rỗng không:
+ * ở trạng thái khác thẻ không có ô nào cho hai trường này (`docPhieu` cũng đã bỏ chúng đi).
+ *
+ * Chữ dài XUỐNG DÒNG, không cắt (`cd-phieu__ly-do`): lý do từ chối bị cắt giữa câu là một quyết định
+ * hành chính người dân chỉ đọc được một nửa.
+ */
+function NhanhKetThuc({ phieu }: { phieu: PhieuCuaToi }) {
+  if (phieu.trang_thai === "khong-tiep-nhan") {
+    return (
+      <Dong nhan={THE_PHIEU.ly_do_khong_tiep_nhan}>
+        <ChuCanBo chu={phieu.ly_do} />
+      </Dong>
+    );
+  }
+  if (phieu.trang_thai === "chuyen-cap-tren") {
+    return (
+      <>
+        <Dong nhan={THE_PHIEU.co_quan_tiep_nhan}>
+          <ChuCanBo chu={phieu.co_quan_nhan} />
+          {phieu.co_quan_nhan !== "" && <span className="cd-phieu__phu">{THE_PHIEU.lien_he_co_quan}</span>}
+        </Dong>
+        <Dong nhan={THE_PHIEU.ly_do_chuyen}>
+          <ChuCanBo chu={phieu.ly_do} />
+        </Dong>
+      </>
+    );
+  }
+  return null;
+}
+
 /**
  * MỘT PHIẾU, CHỈ NHỮNG GÌ `phieuCuaToiRa` TRẢ VỀ. Không có ghi chú cán bộ, lịch sử chuyển hay tên
  * người xử lý — máy chủ không gửi, và thẻ này không có ô nào chờ chúng (luật 10, bất biến 7).
@@ -74,6 +115,7 @@ export function ThePhieu({ phieu }: { phieu: PhieuCuaToi }) {
         <strong className="cd-phieu__trang-thai">{nhanTrangThai(phieu.trang_thai)}</strong>
         {giai_thich !== null && <span className="cd-phieu__phu">{giai_thich}</span>}
       </Dong>
+      <NhanhKetThuc phieu={phieu} />
       <Dong nhan={THE_PHIEU.linh_vuc}>{linh_vuc}</Dong>
       <Dong nhan={THE_PHIEU.gui_luc}>
         {moc(phieu.goc_dem_han)} {THE_PHIEU.gio_vn}

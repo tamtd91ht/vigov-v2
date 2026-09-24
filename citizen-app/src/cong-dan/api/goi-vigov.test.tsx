@@ -20,11 +20,18 @@ vi.mock("./dia-chi-vigov", () => ({
 }));
 
 import { KetQuaGui } from "../man/GuiPhanAnhScreen";
-import { GUI, TRA_CUU } from "../man/noi-dung";
+import { GUI, THE_PHIEU, TRA_CUU, TRANG_THAI } from "../man/noi-dung";
 import { KetQuaTraCuu } from "../man/TraCuuPhieuScreen";
 
 import { guiPhanAnh, traCuuPhieu } from "./goi-vigov";
-import { DUONG_DAN_PHAN_ANH_CUA_TOI, type PhanAnhMoi, thanGuiPhanAnh, TRUONG_DUOC_NHAN } from "./hop-dong-phan-anh";
+import {
+  DO_DAI_NHANH_KET_THUC,
+  docPhieu,
+  DUONG_DAN_PHAN_ANH_CUA_TOI,
+  type PhanAnhMoi,
+  thanGuiPhanAnh,
+  TRUONG_DUOC_NHAN,
+} from "./hop-dong-phan-anh";
 import { taoLanGui } from "./lan-gui";
 
 type LoiGoi = { dia_chi: string; tuy_chon: RequestInit };
@@ -252,5 +259,136 @@ describe("tra cứu phiếu", () => {
     );
     expect(html).toContain("Gửi ẩn danh");
     expect(html).not.toContain("09****");
+  });
+});
+
+/**
+ * HAI NHÁNH KẾT THÚC — `reason` và `receiving_body` (migration 0011, `phieu_cua_toi.go`). Hai trường
+ * TUỲ CHỌN, chỉ có nghĩa ở `khong-tiep-nhan` (lý do) và `chuyen-cap-tren` (lý do + cơ quan nhận).
+ */
+describe("tra cứu phiếu — lý do và cơ quan nhận của hai nhánh kết thúc", () => {
+  const LY_DO = "Việc thuộc thẩm quyền của Ban quản lý khu công nghiệp.";
+  const CO_QUAN = "Ban quản lý các khu công nghiệp tỉnh";
+
+  async function veTra(than: unknown): Promise<string> {
+    datFetch(traLoi(200, than));
+    const kq = await traCuuPhieu("PA7K2QX9M4TD");
+    expect(kq.kieu).toBe("xong");
+    return renderToStaticMarkup(createElement(KetQuaTraCuu, { kq }));
+  }
+
+  it("parser nhận hai trường khi có, và coi vắng mặt là rỗng", () => {
+    const tu_choi = docPhieu({ ...PHIEU_RA, status: "khong-tiep-nhan", reason: LY_DO });
+    expect(tu_choi?.ly_do).toBe(LY_DO);
+    expect(tu_choi?.co_quan_nhan).toBe("");
+
+    const chuyen = docPhieu({ ...PHIEU_RA, status: "chuyen-cap-tren", reason: LY_DO, receiving_body: CO_QUAN });
+    expect(chuyen?.ly_do).toBe(LY_DO);
+    expect(chuyen?.co_quan_nhan).toBe(CO_QUAN);
+
+    // Phiếu cũ, không có hai khoá: vẫn là một phiếu hợp lệ.
+    const cu = docPhieu(PHIEU_RA);
+    expect(cu).not.toBeNull();
+    expect(cu?.ly_do).toBe("");
+    expect(cu?.co_quan_nhan).toBe("");
+  });
+
+  it("parser từ chối sai kiểu, kể cả ở trạng thái không phải nhánh", () => {
+    for (const status of ["khong-tiep-nhan", "chuyen-cap-tren", "da-tiep-nhan"]) {
+      for (const sai of [null, 42, true, ["x"], { vi: "x" }]) {
+        expect(docPhieu({ ...PHIEU_RA, status, reason: sai }), `${status} reason=${String(sai)}`).toBeNull();
+        expect(docPhieu({ ...PHIEU_RA, status, receiving_body: sai }), `${status} body=${String(sai)}`).toBeNull();
+      }
+    }
+  });
+
+  it("giới hạn đếm theo KÝ TỰ: 2000 / 200 ký tự có dấu nhận, thêm một ký tự là sai khuôn", () => {
+    expect(DO_DAI_NHANH_KET_THUC).toEqual({ ly_do: 2000, co_quan_nhan: 200 });
+    const base = { ...PHIEU_RA, status: "chuyen-cap-tren" };
+    // "ệ" là một ký tự; đếm theo byte UTF-8 sẽ là ba và từ chối oan.
+    expect(docPhieu({ ...base, reason: "ệ".repeat(2000) })?.ly_do).toHaveLength(2000);
+    expect(docPhieu({ ...base, reason: "ệ".repeat(2001) })).toBeNull();
+    expect(docPhieu({ ...base, receiving_body: "ệ".repeat(200) })?.co_quan_nhan).toHaveLength(200);
+    expect(docPhieu({ ...base, receiving_body: "ệ".repeat(201) })).toBeNull();
+    // Ký tự ngoài BMP là HAI đơn vị UTF-16 nhưng MỘT ký tự — như `utf8.RuneCountInString`.
+    expect(docPhieu({ ...base, receiving_body: "𠀀".repeat(200) })).not.toBeNull();
+  });
+
+  it("trạng thái khác: hai trường bị bỏ đi và KHÔNG hiện, dù máy chủ lỡ gửi", async () => {
+    for (const status of Object.keys(TRANG_THAI).filter((s) => s !== "khong-tiep-nhan" && s !== "chuyen-cap-tren")) {
+      const than = { ...PHIEU_RA, status, reason: LY_DO, receiving_body: CO_QUAN };
+      const p = docPhieu(than);
+      expect(p?.ly_do, status).toBe("");
+      expect(p?.co_quan_nhan, status).toBe("");
+      const html = await veTra(than);
+      expect(html, status).not.toContain(LY_DO);
+      expect(html, status).not.toContain(CO_QUAN);
+      expect(html, status).not.toContain(THE_PHIEU.ly_do_khong_tiep_nhan);
+      expect(html, status).not.toContain(THE_PHIEU.co_quan_tiep_nhan);
+      expect(html, status).not.toContain(THE_PHIEU.ly_do_chuyen);
+    }
+  });
+
+  it("không tiếp nhận: hiện lý do, KHÔNG hiện cơ quan nhận (không ai nhận cả)", async () => {
+    const html = await veTra({ ...PHIEU_RA, status: "khong-tiep-nhan", reason: LY_DO, receiving_body: CO_QUAN });
+    expect(html).toContain("Không tiếp nhận");
+    expect(html).toContain(TRANG_THAI["khong-tiep-nhan"]!.giai_thich!);
+    expect(html).toContain(THE_PHIEU.ly_do_khong_tiep_nhan);
+    expect(html).toContain(LY_DO);
+    expect(html).not.toContain(THE_PHIEU.co_quan_tiep_nhan);
+    expect(html).not.toContain(CO_QUAN);
+    expect(html).not.toContain(THE_PHIEU.lien_he_co_quan);
+  });
+
+  it("chuyển cấp trên: cơ quan tiếp nhận, lý do chuyển, và việc làm tiếp", async () => {
+    const html = await veTra({ ...PHIEU_RA, status: "chuyen-cap-tren", reason: LY_DO, receiving_body: CO_QUAN });
+    expect(html).toContain("Chuyển cấp trên");
+    expect(html).toContain(TRANG_THAI["chuyen-cap-tren"]!.giai_thich!);
+    expect(html).toContain(THE_PHIEU.co_quan_tiep_nhan);
+    expect(html).toContain(CO_QUAN);
+    expect(html).toContain(THE_PHIEU.ly_do_chuyen);
+    expect(html).toContain(LY_DO);
+    expect(html).toContain(THE_PHIEU.lien_he_co_quan);
+    // Cơ quan trước, lý do sau — cùng thứ tự câu dòng phụ trạng thái chỉ xuống.
+    expect(html.indexOf(CO_QUAN)).toBeLessThan(html.indexOf(LY_DO));
+  });
+
+  it("nhánh kết thúc mà máy chủ không gửi chữ: nói việc cần làm, không để ô trống", async () => {
+    const html = await veTra({ ...PHIEU_RA, status: "chuyen-cap-tren" });
+    expect(html).toContain(THE_PHIEU.co_quan_tiep_nhan);
+    expect(html).toContain(THE_PHIEU.chua_ghi);
+    // Không có tên cơ quan thì không mời "liên hệ cơ quan ở trên".
+    expect(html).not.toContain(THE_PHIEU.lien_he_co_quan);
+  });
+
+  it("lý do dài hiện ĐỦ, trong lớp xuống dòng, không bị cắt", async () => {
+    const dai = `${"Xã đã xác minh tại hiện trường và nhận thấy ".repeat(40)}HẾT.\nDòng hai của lý do.`;
+    expect([...dai].length).toBeLessThanOrEqual(2000);
+    const html = await veTra({ ...PHIEU_RA, status: "khong-tiep-nhan", reason: dai });
+    expect(html).toContain(`<span class="cd-phieu__ly-do">${dai}</span>`);
+
+    const nodeFs = "node:fs";
+    const { readFileSync } = (await import(/* @vite-ignore */ nodeFs)) as {
+      readFileSync: (path: URL, encoding: "utf8") => string;
+    };
+    const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+    const khoi = /\.cd-phieu__ly-do\s*\{([^}]*)\}/.exec(css);
+    expect(khoi, "styles.css không còn khối nào cho .cd-phieu__ly-do").not.toBeNull();
+    expect(khoi![1]).toMatch(/white-space:\s*pre-wrap/);
+    expect(khoi![1]).toMatch(/overflow-wrap:\s*anywhere/);
+    // Không một luật nào ở bất kỳ đâu cắt chữ của lớp này.
+    for (const m of css.matchAll(/([^{}]*cd-phieu__ly-do[^{}]*)\{([^}]*)\}/g)) {
+      expect(m[2]).not.toMatch(/text-overflow|line-clamp|max-height|overflow:\s*hidden|nowrap/);
+    }
+  });
+
+  it("đọc và vẽ hai nhánh không ghi gì ra console (luật 3)", async () => {
+    const goi = (["log", "info", "warn", "error", "debug"] as const).map((k) => vi.spyOn(console, k));
+    await veTra({ ...PHIEU_RA, status: "chuyen-cap-tren", reason: LY_DO, receiving_body: CO_QUAN });
+    docPhieu({ ...PHIEU_RA, status: "khong-tiep-nhan", reason: 42 });
+    for (const s of goi) {
+      expect(s).not.toHaveBeenCalled();
+      s.mockRestore();
+    }
   });
 });

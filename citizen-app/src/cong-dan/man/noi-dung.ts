@@ -14,12 +14,15 @@
  * Mã lạ không hiện nguyên mã (một chuỗi `dang-xu-ly` vô nghĩa với người dân) mà hiện một câu trung
  * tính kèm việc cần làm.
  *
- * `giai_thich` là DÒNG PHỤ cho người dân, không thay nhãn. Chỉ hai dòng có câu:
+ * `giai_thich` là DÒNG PHỤ cho người dân, không thay nhãn. Bốn dòng có câu:
  *   `da-tiep-nhan`   "Đã gửi, đang chờ cán bộ xã xem." — theo góp ý nghiệp vụ của lượt này: phần mềm
  *                    tự sinh trạng thái ấy, chưa ai ở xã đọc phiếu, nên "đã tiếp nhận" trần dễ bị
  *                    hiểu là xã đã nhận việc.
  *   `dang-phan-loai` câu duy nhất đặc tả cho (`docs/ui-ux/09` §8.2).
- * Bảy dòng còn lại để `null` — không bịa câu chưa ai duyệt, đúng khuôn `cauGiaiThichTrangThai`.
+ *   `khong-tiep-nhan`, `chuyen-cap-tren` — hai nhánh KẾT THÚC: phiếu dừng ở xã, và người dân không
+ *                    có bước nào khác trên ứng dụng. Câu chỉ nói sự việc và chỉ xuống lý do / cơ quan
+ *                    nhận mà thẻ phiếu hiện ngay bên dưới (migration 0011). Chưa qua khách duyệt câu chữ.
+ * Năm dòng còn lại để `null` — không bịa câu chưa ai duyệt, đúng khuôn `cauGiaiThichTrangThai`.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 export const TRANG_THAI: Readonly<Record<string, { nhan: string; giai_thich: string | null }>> = {
   "da-tiep-nhan": { nhan: "Đã tiếp nhận", giai_thich: "Đã gửi, đang chờ cán bộ xã xem." },
@@ -32,8 +35,15 @@ export const TRANG_THAI: Readonly<Record<string, { nhan: string; giai_thich: str
   "da-xu-ly": { nhan: "Đã xử lý", giai_thich: null },
   "cho-dan-xac-nhan": { nhan: "Chờ dân xác nhận", giai_thich: null },
   "da-dong": { nhan: "Đã đóng", giai_thich: null },
-  "khong-tiep-nhan": { nhan: "Không tiếp nhận", giai_thich: null },
-  "chuyen-cap-tren": { nhan: "Chuyển cấp trên", giai_thich: null },
+  "khong-tiep-nhan": {
+    nhan: "Không tiếp nhận",
+    giai_thich: "Ủy ban nhân dân xã không tiếp nhận phản ánh này. Lý do ghi ở dưới.",
+  },
+  "chuyen-cap-tren": {
+    nhan: "Chuyển cấp trên",
+    giai_thich:
+      "Ủy ban nhân dân xã đã chuyển phản ánh tới cơ quan có thẩm quyền. Tên cơ quan ghi ở dưới.",
+  },
 };
 
 export const TRANG_THAI_CHUA_CO_NHAN =
@@ -200,4 +210,16 @@ export const THE_PHIEU = {
   khong_ghi_ten: "Không ghi họ tên",
   ket_qua: "Kết quả xử lý của xã",
   gio_vn: "(giờ Việt Nam)",
+  /* Hai nhánh kết thúc (`khong-tiep-nhan`, `chuyen-cap-tren`) — chữ do cán bộ viết CHO người dân. */
+  ly_do_khong_tiep_nhan: "Lý do xã không tiếp nhận",
+  co_quan_tiep_nhan: "Cơ quan tiếp nhận",
+  ly_do_chuyen: "Lý do chuyển",
+  /** Việc làm tiếp: phiếu đã rời xã, ứng dụng không theo được nó tới cơ quan kia. */
+  lien_he_co_quan:
+    "Bạn có thể liên hệ trực tiếp cơ quan tiếp nhận ở trên để hỏi tiếp về phản ánh này.",
+  /**
+   * Máy chủ không gửi lý do / tên cơ quan dù phiếu ở nhánh kết thúc — lẽ ra không xảy ra (máy chủ bắt
+   * buộc hai ô ấy khi cán bộ bấm). Không để ô trống im lặng: nói việc người dân làm được.
+   */
+  chua_ghi: "Ứng dụng chưa nhận được thông tin này. Bạn hãy liên hệ Ủy ban nhân dân xã để hỏi.",
 } as const;
