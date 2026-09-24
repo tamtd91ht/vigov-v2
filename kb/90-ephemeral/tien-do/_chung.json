@@ -210,6 +210,14 @@
       "bang_chung": "ROUTING.md §0.0–§0.9; .claude/agents/context-scout.md, cross-context-scout.md; .claude/hooks/workflow_guard.py (Stop, cảnh báo một lần) + 8 ca WORKFLOW_CASES trong tools/test_hooks.py (4 BẮN, 4 IM). Đo trước khi bật: 6/6 phiên cũ có sửa mã sẽ bị cảnh báo, cả 6 vì vùng rủi ro. Chạy đầu-cuối trên transcript thật: exit=2, stop_hook_active: exit=0. Chạy thử hai scout song song trên yêu cầu 'khối văn bản nhiệm vụ web-admin': cả hai tìm ra cùng CONFLICT §7.2↔§9 và vigov-require parse_reference (đã có sẵn ở service-petitions.json, không ghi lại).",
       "no_confirm": [],
       "tiep_theo": "CẠM BẪY ĐÃ ĐO 24/09/2026: codegraph MCP gọi KHÔNG có projectPath trả chỉ mục của DỰ ÁN KHÁC (5476 tệp Java) — không lỗi, ký hiệu thật, sai kho. ROUTING §0.1 và hai scout đã bắt buộc projectPath + phép kiểm go/ts/không java. Lượt chạy thử đầu: cross-context-scout bỏ qua codegraph hoàn toàn — định nghĩa đã siết thành bắt buộc thử; lần chạy thật kế tiếp phải xem Evidence có dòng codegraph không."
+    },
+    {
+      "id": "lenh-develop-menu",
+      "viec": "Ba lệnh /develop-web-admin · /develop-backend-api · /develop-miniapp <menu> và skill develop-menu dùng chung, theo tmp/command.md",
+      "trang_thai": "xong",
+      "bang_chung": ".claude/commands/develop-{web-admin,backend-api,miniapp}.md; .claude/skills/develop-menu/SKILL.md; progress_guard R8 (khoá `menu` phải là slug docs/ui-ux) + 2 ca payload BLOCK/PASS; commands/progress.md thêm dòng lược đồ. check_brain 7/7 (23 skills · 13 commands).",
+      "no_confirm": [],
+      "tiep_theo": "LỆCH CỐ Ý so với tmp/command.md, người dùng chưa chốt rõ: không tạo docs/ai-context/menus/ và sessions/ — dùng lại đặc tả docs/ui-ux + sổ cắt theo menu (§23 của chính đề xuất cho phép). Lệnh CHƯA chạy thật lần nào; lượt đầu nên là /develop-web-admin Nhiệm vụ, nơi hai scout đã tìm sẵn một CONFLICT §7.2↔§9."
     }
   ]
 }

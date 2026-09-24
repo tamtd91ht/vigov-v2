@@ -17,6 +17,11 @@ agents never own the same path.
 **Analyze → Discover (parallel) → Synthesize → Gate → Decompose → Implement (parallel) →
 Validate → Commit → Document.** No code is edited before §0.3 has passed.
 
+Continuing one existing business menu on one platform has its own entry points —
+`/develop-web-admin` · `/develop-backend-api` · `/develop-miniapp` `<menu>` — which run this
+workflow with menu resolution, per-menu knowledge and platform scope added
+(`.claude/skills/develop-menu/SKILL.md`).
+
 ```
 user request
    │
