@@ -191,6 +191,82 @@ describe("kết thúc lưu", () => {
   });
 });
 
+/**
+ * HAI CỘT CÙNG LÚC. Mỗi ca ở trên chỉ có MỘT cột đang lưu, nên một `ketThucLuu` viết `new Set()` /
+ * `new Map()` thay vì bỏ đúng một khoá vẫn xanh. Trên màn hình, cán bộ bấm Lưu cột A rồi cột B trước
+ * khi A trả lời là chuyện bình thường; phản hồi của A mà xoá trạng thái của B thì:
+ *   - B hết "đang lưu" → ô của B bấm được giữa lúc lần ghi của B còn trên dây, rồi phản hồi của B
+ *     về đè mất những ô vừa bấm;
+ *   - câu từ chối của B biến mất → cán bộ tưởng B đã lưu, trong khi máy chủ đã từ chối nó.
+ */
+describe("phản hồi của một cột không động tới trạng thái của cột khác", () => {
+  function haiCotDangLuu(): BanSua {
+    let b = batTatO(moi(), "vt-1", "admin.role");
+    b = batTatO(b, "vt-2", "budget.read");
+    return batDauLuu(batDauLuu(b, "vt-1"), "vt-2");
+  }
+
+  it("A trả 200 trong lúc B còn trên dây: B vẫn đang lưu, vẫn khoá, phần sửa của B còn nguyên", () => {
+    const sau = ketThucLuu(haiCotDangLuu(), "vt-1", {
+      ok: true,
+      duLieu: { role_id: "vt-1", permissions: ["admin.role"] },
+    });
+    expect(sau.dangLuu.has("vt-1")).toBe(false);
+    expect(sau.dangLuu.has("vt-2")).toBe(true);
+    // Ô của B vẫn không bấm được — phản hồi của B sắp về sẽ thay cả cột.
+    expect(batTatO(sau, "vt-2", "task.read")).toBe(sau);
+    expect(tap(sau, "vt-2")).toEqual(["admin.user", "budget.read"]);
+  });
+
+  it("A bị từ chối trong lúc B còn trên dây: B vẫn đang lưu, bản máy chủ của B không đổi", () => {
+    const sau = ketThucLuu(haiCotDangLuu(), "vt-1", { ok: false, thongBao: "Không tìm thấy vai trò." });
+    expect(sau.dangLuu.has("vt-2")).toBe(true);
+    expect([...(sau.goc.get("vt-2") ?? [])]).toEqual(["admin.user"]);
+    expect(sau.loi.has("vt-2")).toBe(false);
+  });
+
+  const TU_CHOI_B =
+    "Bạn không thêm hay bỏ được quyền mà tài khoản của bạn không có: budget.read. Hãy nhờ người có đủ quyền thực hiện.";
+
+  function bDaBiTuChoi(): BanSua {
+    const b = ketThucLuu(haiCotDangLuu(), "vt-2", { ok: false, thongBao: TU_CHOI_B });
+    expect(b.loi.get("vt-2")).toBe(TU_CHOI_B);
+    return b;
+  }
+
+  it("B đã bị từ chối, rồi A trả 200: câu từ chối của B VẪN hiện", () => {
+    const sau = ketThucLuu(bDaBiTuChoi(), "vt-1", {
+      ok: true,
+      duLieu: { role_id: "vt-1", permissions: ["admin.role"] },
+    });
+    expect(sau.loi.get("vt-2")).toBe(TU_CHOI_B);
+    expect(cotDaSua(sau, "vt-2")).toBe(true);
+  });
+
+  it("B đã bị từ chối, rồi A cũng bị từ chối: HAI câu, mỗi câu dưới cột của nó", () => {
+    const sau = ketThucLuu(bDaBiTuChoi(), "vt-1", { ok: false, thongBao: "Không tìm thấy vai trò." });
+    expect(sau.loi.get("vt-1")).toBe("Không tìm thấy vai trò.");
+    expect(sau.loi.get("vt-2")).toBe(TU_CHOI_B);
+  });
+
+  it("B đã bị từ chối, rồi A trả 200 cho NHẦM vai trò: câu của B vẫn còn", () => {
+    const sau = ketThucLuu(bDaBiTuChoi(), "vt-1", {
+      ok: true,
+      duLieu: { role_id: "vt-9", permissions: [] },
+    });
+    expect(sau.loi.get("vt-1")).toBe(LOI_SAI_VAI_TRO);
+    expect(sau.loi.get("vt-2")).toBe(TU_CHOI_B);
+  });
+
+  it("Huỷ hay bấm Lưu lại cột A không xoá câu từ chối của cột B", () => {
+    let b = ketThucLuu(bDaBiTuChoi(), "vt-1", { ok: false, thongBao: "Không tìm thấy vai trò." });
+    expect(huyCot(b, "vt-1").loi.get("vt-2")).toBe(TU_CHOI_B);
+    b = batDauLuu(b, "vt-1");
+    expect(b.loi.get("vt-2")).toBe(TU_CHOI_B);
+    expect(b.loi.has("vt-1")).toBe(false);
+  });
+});
+
 describe("tiện dụng từ phiên: ai được thấy ô bấm, cột nào là của chính mình", () => {
   const phien = (quyen: string[], vaiTro: string | null) => ({
     ok: true as const,

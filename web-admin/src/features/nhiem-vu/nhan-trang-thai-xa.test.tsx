@@ -280,6 +280,80 @@ describe("màn Nhiệm vụ dùng NHÃN CỦA XÃ ở mọi chỗ hiện trạng
   });
 });
 
+/**
+ * BẢNG MÀ CẢ BẢY NHÃN ĐỀU ĐÃ ĐỔI. Các ca ở trên chỉ đổi hai nhãn (`moi-giao`, `tam-dung`), nên một
+ * chỗ vẽ đọc nhãn MẶC ĐỊNH cho năm mã kia vẫn in ra đúng chữ mà ca mong đợi — xanh sai lý do. Ở
+ * đây không một nhãn mặc định nào còn đúng, nên chữ mặc định xuất hiện ở bất kỳ đâu là một chỗ vẽ
+ * đã bỏ qua bảng của xã.
+ */
+function bangDoiHet(): BangNhanTrangThai {
+  const items = bayDong().map((d) => ({ ...d, label: `Xã đặt ${d.code}`, customised: true }));
+  const { bang, canhBao } = docBangNhanTrangThai({ ok: true, duLieu: { items } });
+  expect(canhBao).toBeNull();
+  return bang;
+}
+
+/** Nhãn mặc định đứng một mình như chữ của một phần tử — `>Tạm dừng<`, hoặc sau "Chuyển sang ". */
+function chuMacDinhLot(html: string): string[] {
+  return Object.values(BANG_NHAN_MAC_DINH.nhan).filter(
+    (nhan) => html.includes(`>${nhan}<`) || html.includes(`sang ${nhan}<`) || html.includes(`— ${nhan} `),
+  );
+}
+
+describe("không chỗ vẽ nào còn đọc nhãn mặc định khi xã đã đổi CẢ BẢY", () => {
+  it("hàng Rẽ nhánh trong drawer dùng nhãn xã — và chip sáng đúng trạng thái hiện tại", () => {
+    // Ca "dải bước" ở trên chỉ nhìn `Chuyển sang Tạm hoãn` — chữ của NÚT. Hàng `Rẽ nhánh:` là chỗ
+    // vẽ thứ hai của cùng mã ấy, và trước ca này nó có thể đọc bảng mặc định mà không gì đỏ.
+    const html = veChiTiet(bangXa(), "tam-dung");
+    expect(html).toContain('class="chip chip-hoat-dong">Tạm hoãn</span>');
+    expect(html).not.toContain(">Tạm dừng<");
+  });
+
+  for (const ma of ["moi-giao", "da-tiep-nhan", "dang-thuc-hien", "cho-duyet", "hoan-thanh", "tam-dung", "chuyen-tiep"]) {
+    it(`drawer ở trạng thái ${ma}: dải bước, hàng Rẽ nhánh, nút chuyển — không một nhãn mặc định`, () => {
+      const html = veChiTiet(bangDoiHet(), ma);
+      expect(chuMacDinhLot(html)).toEqual([]);
+      expect(html).toContain(`class="chip chip-hoat-dong">Xã đặt ${ma}</span>`);
+    });
+  }
+
+  it("Kanban: năm tiêu đề cột và câu rẽ nhánh — không một nhãn mặc định", () => {
+    const html = veKanban(bangDoiHet());
+    expect(chuMacDinhLot(html)).toEqual([]);
+    for (const ma of TRANG_THAI_CHINH) expect(html).toContain(`Xã đặt ${ma}`);
+    expect(html).toContain("Xã đặt tam-dung");
+    expect(html).toContain("Xã đặt chuyen-tiep");
+  });
+
+  it("bảng Danh sách: chip của MỖI mã, không chỉ `moi-giao`", () => {
+    const bang = bangDoiHet();
+    const ma7 = bang.thuTu;
+    const html = renderToStaticMarkup(
+      <BangNhiemVu
+        nhiemVu={ma7.map((status, i) => nhiemVu({ code: `NV${i + 1}`, status }))}
+        danhMuc={DANH_MUC}
+        nhanTT={bang}
+        tenBoPhan={new Map()}
+        bayGio={BAY_GIO}
+        maDangMo={null}
+        moNhiemVu={() => {}}
+      />,
+    );
+    expect(chuMacDinhLot(html)).toEqual([]);
+    for (const ma of ma7) expect(html).toContain(`>Xã đặt ${ma}</span>`);
+  });
+
+  it("ô lọc: bảy lựa chọn đều là nhãn xã", () => {
+    const html = renderToStaticMarkup(
+      <HangLoc loc={{}} tim="" datTim={() => {}} datLoc={() => {}} danhMuc={DANH_MUC} nhanTT={bangDoiHet()} />,
+    );
+    expect(chuMacDinhLot(html)).toEqual([]);
+    for (const ma of BANG_NHAN_MAC_DINH.thuTu) {
+      expect(html).toContain(`<option value="${ma}">Xã đặt ${ma}</option>`);
+    }
+  });
+});
+
 describe("phần chưa dựng được — mục danh mục trạng thái đã dựng nên BIẾN KHỎI danh sách", () => {
   it("không còn mục nói hợp đồng thiếu tuyến trạng thái", () => {
     const moi = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" ");
