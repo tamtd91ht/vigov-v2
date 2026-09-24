@@ -889,6 +889,32 @@ CAN_SYNC_CASES = [
 ]
 
 
+# ---- tools/xuat_tien_do.py — the Excel the whole team imports into one Google Sheet --------
+#
+# FORMAT LOCK. The team builds formulas, filters and VLOOKUPs on these names; renaming or
+# reordering one breaks them with no error. This frozen copy is DELIBERATELY a second copy: its
+# only job is to go red when `SHEETS` changes without `PHIEN_BAN_FORMAT` moving with it. Changing
+# the format = append columns at the end, bump the version, update this list, tell the team.
+FORMAT_XLSX = {1: [
+    ("Tong_quan", ["Ma_chuong", "Phan_he", "Tong_tuyen", "Tuyen_web", "Da_goi", "Ngoai_web",
+                   "Man_web", "Dang_lam", "Chua_lam", "Treo", "Xong"]),
+    ("Menu_web", ["STT", "Muc_menu", "Duong_dan", "Khoa_quyen", "Co_man", "Chua_dung"]),
+    ("Hang_muc", ["Ma", "Module", "Menu", "Viec", "Trang_thai", "No_cau_hoi", "Buoc_ke_tiep",
+                  "Cap_nhat"]),
+    ("Cho_khach", ["So_cau", "Trang_thai", "Cau_hoi", "Dang_chan"]),
+    ("Thong_tin", ["Khoa", "Gia_tri"]),
+]}
+
+# The last gate before project data leaves for a shared Google Sheet (rule 3).
+CA_NHAN_XLSX_CASES = [
+    ("gọi 0912345678 để hỏi", True, "số di động thật, văn bản trần"),
+    ("CCCD 012345678901", True, "CCCD 12 số"),
+    ("số giả 0900000000", False, "số giả đã thống nhất — phải qua"),
+    ("mã 20260924 · commit 0918e23", False, "ngày và sha không phải số điện thoại"),
+    ("tuyến 113 · 208 mục", False, "số đếm"),
+]
+
+
 # ---- pure-function cases: which menu a person MEANT (`/develop-* <menu>`) -----------------
 #
 # Resolved against the REAL docs/ui-ux/ on disk. An empty catalogue must go red here, not turn
@@ -1172,6 +1198,23 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         if not ok:
             sai.append((str(tep), nhan, mong, duoc))
 
+    import xuat_tien_do as xtd  # noqa: E402
+    mong_fmt = FORMAT_XLSX.get(xtd.PHIEN_BAN_FORMAT)
+    that_fmt = [(t, [ct for ct, _w, _y in cot]) for t, cot in xtd.SHEETS]
+    ok = mong_fmt == that_fmt
+    print(f"{'  OK   ' if ok else '  FAIL '} [FORMAT] {'xuat_tien_do.SHEETS':24s} "
+          f"format v{xtd.PHIEN_BAN_FORMAT} khớp bản khoá")
+    if not ok:
+        sai.append(("SHEETS", "đổi cột mà không tăng PHIEN_BAN_FORMAT / không cập nhật FORMAT_XLSX",
+                    mong_fmt, that_fmt))
+    for s, mong, nhan in CA_NHAN_XLSX_CASES:
+        duoc = xtd.co_du_lieu_ca_nhan(s)
+        ok = duoc == mong
+        print(f"{'  OK   ' if ok else '  FAIL '} [{'CHẶN' if mong else 'QUA '}] "
+              f"{'xuat_tien_do.co_du_lieu_ca_nhan':24s} {nhan}")
+        if not ok:
+            sai.append((s, nhan, mong, duoc))
+
     import codegraph_sync as cgs  # noqa: E402
     for lenh, mong, nhan in CAN_SYNC_CASES:
         duoc = cgs.can_sync_sau(lenh)
@@ -1293,7 +1336,7 @@ if __name__ == "__main__":
     # thiếu bảy ca. Một bộ đếm thiếu không làm ca nào đỏ — nó chỉ làm người đọc tưởng mình
     # biết kho đã canh bao nhiêu, và sổ `_chung` đã một lần ghi nhầm vì đúng chuyện này.
     tong = (len(CASES) + len(HOP_CAT_CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(WORKFLOW_CASES)
-            + len(TIM_MENU_CASES) + len(CAN_SYNC_CASES)
+            + len(TIM_MENU_CASES) + len(CAN_SYNC_CASES) + 1 + len(CA_NHAN_XLSX_CASES)
             + len(DUOC_QUET_CASES)
             + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES)
             + len(VET_ACTOR_CASES))

@@ -317,7 +317,55 @@ def so_tien_do() -> dict[str, dict[str, int]]:
     return ra
 
 
+# ---------------------------------------------------------------------------------------------
+# PHÉP TÍNH của hai bảng, tách khỏi phần in. `tools/xuat_tien_do.py` (bản Excel cho Google Sheet)
+# đọc CÙNG các dòng này — hai công thức cho một con số là hai con số sẽ lệch, và công thức mẫu
+# số "chỉ tuyến web" ở đây là thứ đã một lần tính sai (xem `viec_da_xong`).
+def dong_chuong(chuong, theo_chuong, xong, biet_web) -> list[dict]:
+    ra = []
+    for so_ch, slug, tieu_de in chuong:
+        ds = theo_chuong.get(slug, [])
+        # MẪU SỐ CHỈ GỒM TUYẾN THUỘC BỀ MẶT WEB — xem `viec_da_xong`. Tuyến kênh công dân không
+        # có tệp việc màn hình nào, và đếm chúng vào đây là trừ điểm web vì việc của app khác.
+        web = [t for t in ds if t["viec"] in biet_web]
+        ra.append({
+            "so": so_ch,
+            "slug": slug,
+            # Tiêu đề `# ` của chương đã tự mang số ("02 — Quản lý nhiệm vụ"), nên in cả hai là
+            # in số hai lần. Cắt tiền tố, giữ nguyên phần chữ.
+            "ten": re.sub(r"^\d{2}\s*[—-]\s*", "", tieu_de or slug),
+            "tuyen": len(ds),
+            "web": len(web),
+            "da_goi": sum(1 for t in web if t["viec"] in xong),
+            "ngoai_web": len(ds) - len(web),
+        })
+    return ra
+
+
+def dong_menu(menu) -> list[dict]:
+    """`chua_dung` là None khi màn KHÔNG KHAI khối — khác 0, xem `so_chua_dung`."""
+    ra = []
+    for i, (nhan, duong, khoa) in enumerate(menu, 1):
+        d = {"stt": i, "nhan": nhan, "duong": duong, "khoa": khoa, "co_man": False,
+             "chua_dung": None}
+        if duong is not None:
+            d["co_man"] = co_trang(duong)
+            co_khai = [x for x in (so_chua_dung(f) for f in feature_cua_trang(duong))
+                       if x is not None]
+            d["chua_dung"] = sum(co_khai) if co_khai else None
+        ra.append(d)
+    return ra
+
+
 def main() -> int:
+    # `--excel [đường-dẫn]`: bản .xlsx format cố định cho Google Sheet của team. Tách tệp riêng
+    # (tools/xuat_tien_do.py) vì đó là một ĐẦU RA khác, không phải một bộ lọc — nhưng nó đọc
+    # đúng `dong_chuong`/`dong_menu` ở trên, nên hai bản không thể ra hai con số.
+    if len(sys.argv) > 1 and sys.argv[1] == "--excel":
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import xuat_tien_do
+        return xuat_tien_do.main(sys.argv[2:])
+
     if not os.path.exists(HOP_DONG):
         print("[tien_do_san_pham] ĐỎ — thiếu kb/20-contracts/openapi.json. Chạy `make kb` trước.",
               file=sys.stderr)
@@ -410,22 +458,13 @@ def main() -> int:
             for ft in feature_cua_trang(duong):
                 trang_theo_feature.setdefault(ft, duong)
 
-    for so_ch, slug, tieu_de in chuong:
-        ds = theo_chuong.get(slug, [])
-        n = len(ds)
-        # MẪU SỐ CHỈ GỒM TUYẾN THUỘC BỀ MẶT WEB — xem `viec_da_xong`. Tuyến kênh công dân không
-        # có tệp việc màn hình nào, và đếm chúng vào đây là trừ điểm web vì việc của app khác.
-        web = [t for t in ds if t["viec"] in biet_web]
-        khac = n - len(web)
-        da = sum(1 for t in web if t["viec"] in xong)
-        ty = (f"{da}/{len(web)}" if web else "—") + (f" +{khac} ngoài web" if khac else "")
+    for r in dong_chuong(chuong, theo_chuong, xong, biet_web):
+        n, da, khac = r["tuyen"], r["da_goi"], r["ngoai_web"]
+        ty = (f"{da}/{r['web']}" if r["web"] else "—") + (f" +{khac} ngoài web" if khac else "")
         # Màn web: chương có tuyến nào đã được gọi thì chắc chắn có mã client; không tuyến nào
         # thì chưa. Suy từ ĐO, không từ một bảng ánh xạ viết tay.
-        man = "✓" if da else ("✗" if web else "—")
-        # Tiêu đề `# ` của chương đã tự mang số ("02 — Quản lý nhiệm vụ"), nên in cả hai là in
-        # số hai lần. Cắt tiền tố, giữ nguyên phần chữ.
-        ten = re.sub(r"^\d{2}\s*[—-]\s*", "", tieu_de or slug)
-        L.append(f"| **{so_ch}** {ten} | {n or '—'} | {ty} | {man} |")
+        man = "✓" if da else ("✗" if r["web"] else "—")
+        L.append(f"| **{r['so']}** {r['ten']} | {n or '—'} | {ty} | {man} |")
     L.append("")
     L.append(f"Tổng **{tong_tuyen} tuyến** trong hợp đồng. "
              f"**{khong_khai}** tuyến chưa khai `@screen` nên không gom được vào chương nào — "
@@ -447,24 +486,20 @@ def main() -> int:
     co_man = 0
     tong_chua = 0
     khong_khai_man = 0
-    for i, (nhan, duong, khoa) in enumerate(menu, 1):
-        if duong is None:
-            L.append(f"| {i} | {nhan} | — | — | ✗ | |")
+    for r in dong_menu(menu):
+        if r["duong"] is None:
+            L.append(f"| {r['stt']} | {r['nhan']} | — | — | ✗ | |")
             continue
-        that = co_trang(duong)
-        if that:
+        if r["co_man"]:
             co_man += 1
-        dem = [so_chua_dung(f) for f in feature_cua_trang(duong)]
-        co_khai = [x for x in dem if x is not None]
-        if co_khai:
-            n = sum(co_khai)
-            tong_chua += n
-            o_chua = str(n)
+        if r["chua_dung"] is not None:
+            tong_chua += r["chua_dung"]
+            o_chua = str(r["chua_dung"])
         else:
             o_chua = "**không khai**"
             khong_khai_man += 1
-        L.append(f"| {i} | {nhan} | `{duong}` | `{khoa or '—'}` | {'✓' if that else '⚠'} | "
-                 f"{o_chua} |")
+        L.append(f"| {r['stt']} | {r['nhan']} | `{r['duong']}` | `{r['khoa'] or '—'}` | "
+                 f"{'✓' if r['co_man'] else '⚠'} | {o_chua} |")
     L.append("")
     L.append(f"**{co_man}/{len(menu)}** mục menu có màn thật. **{tong_chua}** phần chưa dựng đang "
              "hiện trên các màn ấy.")
