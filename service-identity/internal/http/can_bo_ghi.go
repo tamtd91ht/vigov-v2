@@ -86,6 +86,27 @@ type suaCanBoVao struct {
 	OrgUnitID   *string `json:"org_unit_id"`
 	OfficePhone *string `json:"office_phone"`
 	Mobile      *string `json:"mobile"`
+
+	// HasZalo — "Có Zalo" (migration 0010 §1). Contact information about the mobile, so it is a
+	// profile correction under `admin.user`, and it publishes nothing: publication is
+	// PUT .../publication under `content.update`. null/absent = unchanged, like every field here.
+	HasZalo *bool `json:"has_zalo"`
+}
+
+// datCongKhaiVao is the whole body of PUT /api/v1/staff/{id}/publication — the Mini App
+// publication state of ONE person (open question #12).
+//
+//	published          REQUIRED. A pointer so that an absent field is refused rather than read as
+//	                   false: an accidental unpublish is not harmless — it clears the consent
+//	                   marks, and the person then has to be asked again.
+//	consent_confirmed  the administrator's confirmation, for THIS request, that the person was
+//	                   asked and agreed. Must be true when published is true; ignored otherwise.
+//	display_order      position in the directory, >= 0; null or absent = no explicit order. PUT
+//	                   carries the WHOLE state, so omitting it clears a position that was set.
+type datCongKhaiVao struct {
+	Published        *bool `json:"published"`
+	ConsentConfirmed bool  `json:"consent_confirmed"`
+	DisplayOrder     *int  `json:"display_order"`
 }
 
 // datVaiTroVao is the whole body of the role route. PUT, so it carries the WHOLE state of the
@@ -193,6 +214,7 @@ func (h *Handler) SuaCanBo(w http.ResponseWriter, r *http.Request) {
 		BoPhanID:        than.OrgUnitID,
 		DienThoaiCoQuan: than.OfficePhone,
 		DiDongCaNhan:    than.Mobile,
+		CoZalo:          than.HasZalo,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhiCanBo(w, r, "sửa hồ sơ cán bộ", err)
@@ -254,6 +276,41 @@ func (h *Handler) DoiVaiTroCanBo(w http.ResponseWriter, r *http.Request) {
 	cb, err := h.d.GhiDanhBa.DoiVaiTro(r.Context(), r.PathValue("id"), than.RoleID, nguoi)
 	if err != nil {
 		h.traLoiLoiGhiCanBo(w, r, "đổi vai trò cán bộ", err)
+		return
+	}
+	vietJSON(w, http.StatusOK, raNgoai(cb))
+}
+
+// DatCongKhaiCanBo publishes one person to the Mini App directory, or takes them off it.
+// PUT /api/v1/staff/{id}/publication
+//
+// THE ACTOR IS BUILT BY nguoiThucHienCanBo LIKE EVERY OTHER WRITE HERE, and for this route that is
+// the whole of rule 6 invariant 8 AND of #12's "who recorded the consent": the use case writes
+// nguoi.Vet.ID — the staff code p.Ma — into `dong_y_cong_khai_ghi_boi`. An empty p.Ma answers 500
+// before the use case runs; there is no fallback to p.ID.
+func (h *Handler) DatCongKhaiCanBo(w http.ResponseWriter, r *http.Request) {
+	nguoi, ok := nguoiThucHienCanBo(r)
+	if !ok {
+		h.thieuNguoiThucHien(w, r)
+		return
+	}
+	var than datCongKhaiVao
+	if !docThanCanBo(w, r, &than) {
+		return
+	}
+	if than.Published == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Thiếu trường published: phải nói rõ công khai (true) hay không công khai (false).", "")
+		return
+	}
+
+	cb, err := h.d.GhiDanhBa.DatCongKhai(r.Context(), r.PathValue("id"), app.YeuCauCongKhai{
+		CongKhai:       *than.Published,
+		DaXacNhanDongY: than.ConsentConfirmed,
+		ThuTu:          than.DisplayOrder,
+	}, nguoi)
+	if err != nil {
+		h.traLoiLoiGhiCanBo(w, r, "đặt công khai Mini App", err)
 		return
 	}
 	vietJSON(w, http.StatusOK, raNgoai(cb))
@@ -328,6 +385,14 @@ func (h *Handler) traLoiLoiGhiCanBo(w http.ResponseWriter, r *http.Request, viec
 		httpx.WriteError(w, http.StatusBadRequest, "org_unit_not_found",
 			"Bộ phận được chọn không còn trong xã. Hãy tải lại sơ đồ tổ chức.", "")
 
+	case errors.Is(err, app.ErrChuaXacNhanDongY):
+		// 400 WITH ITS OWN CODE, so the screen can point at the consent checkbox rather than at the
+		// form in general. The sentence names the requirement and its legal basis (#12).
+		httpx.WriteError(w, http.StatusBadRequest, "consent_required",
+			"Chưa xác nhận đã hỏi ý và được chính người này đồng ý. Công khai số điện thoại lên "+
+				"Zalo Mini App là công khai dữ liệu cá nhân (Nghị định 13/2023/NĐ-CP), cần có sự "+
+				"đồng ý của người đó cho từng lần công khai.", "")
+
 	case errors.Is(err, idstore.ErrEmailDaDung):
 		httpx.WriteError(w, http.StatusConflict, "email_taken",
 			"Thư điện tử này đã được dùng cho một cán bộ khác trong xã.", "")
@@ -360,6 +425,7 @@ func laLoiDauVaoCanBo(err error) bool {
 		domain.ErrThieuEmail, domain.ErrEmailSaiDinhDang, domain.ErrEmailQuaDai,
 		domain.ErrSoDienThoaiSai, domain.ErrSoDienThoaiQuaDai,
 		domain.ErrIDThamChieuQuaDai,
+		domain.ErrThuTuDanhBaAm, domain.ErrThuTuDanhBaQuaLon,
 	} {
 		if errors.Is(err, mot) {
 			return true

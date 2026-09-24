@@ -74,10 +74,19 @@ var SapXepCanBo = page.NewAllowlist(page.Asc,
 // directory while the personal mobile goes out in an unmasked export. Pinned by a test that
 // gives the two fixture rows DIFFERENT numbers; equal values cannot tell a swap from a correct
 // read.
+//
+// THE FIVE MINI APP COLUMNS OF MIGRATION 0010 GO AT THE END, and the two new BOOLEANs are
+// deliberately NOT adjacent: `thu_tu_danh_ba` sits between `co_zalo` and `hien_tren_mini_app`.
+// Swapped, those two would publish a person because they have Zalo — the exact unconsented
+// publication open question #12 forbids — so the list is laid out to make that swap a visible
+// edit rather than a neighbour transposition, and the test gives the fixture rows opposite pairs
+// (true,false) / (false,true) so it cannot survive either way.
 const cotTomTat = `id, ma, ho_ten, email, chuc_vu,
                    coalesce(bo_phan_id,''), coalesce(vai_tro_id,''),
                    dien_thoai_co_quan, di_dong_ca_nhan, co_tai_khoan, dang_hoat_dong,
-                   dang_nhap_gan_nhat, tao_luc`
+                   dang_nhap_gan_nhat, tao_luc,
+                   co_zalo, thu_tu_danh_ba, hien_tren_mini_app,
+                   dong_y_cong_khai_luc, dong_y_cong_khai_ghi_boi`
 
 // locTomTat is the ONE predicate both read paths share.
 //
@@ -164,12 +173,24 @@ func motTomTat(rows quetDuoc) (domain.CanBoTomTat, error) {
 // listing precisely the accounts an administrator opened it to find.
 func quetTomTat(rows quetDuoc) (domain.CanBoTomTat, error) {
 	var cb domain.CanBoTomTat
-	err := rows.Scan(&cb.ID, &cb.Ma, &cb.HoTen, &cb.Email, &cb.ChucVu,
-		&cb.BoPhanID, &cb.VaiTroID, &cb.DienThoaiCoQuan, &cb.DiDongCaNhan,
-		&cb.CoTaiKhoan, &cb.DangHoatDong,
-		&cb.DangNhapGanNhat, &cb.TaoLuc)
-	if err != nil {
+	if err := rows.Scan(dichQuetTomTat(&cb)...); err != nil {
 		return domain.CanBoTomTat{}, fmt.Errorf("can_bo: đọc dòng: %w", err)
 	}
 	return cb, nil
+}
+
+// dichQuetTomTat is THE ONE list of Scan targets for cotTomTat, shared by quetTomTat (the register)
+// and quetMotDong (the row a write decides on).
+//
+// ONE LIST BECAUSE THERE USED TO BE TWO, each a positional copy of the other, and migration 0010
+// adds five columns to both — two copies of eighteen positions is two places for the same silent
+// swap. &cb.ThuTuDanhBa and &cb.DongYCongKhaiLuc are pointer-to-pointer for the same reason as
+// &cb.DangNhapGanNhat: SQL NULL is a legitimate answer ("no explicit order", "no consent").
+func dichQuetTomTat(cb *domain.CanBoTomTat) []any {
+	return []any{&cb.ID, &cb.Ma, &cb.HoTen, &cb.Email, &cb.ChucVu,
+		&cb.BoPhanID, &cb.VaiTroID, &cb.DienThoaiCoQuan, &cb.DiDongCaNhan,
+		&cb.CoTaiKhoan, &cb.DangHoatDong,
+		&cb.DangNhapGanNhat, &cb.TaoLuc,
+		&cb.CoZalo, &cb.ThuTuDanhBa, &cb.HienTrenMiniApp,
+		&cb.DongYCongKhaiLuc, &cb.DongYCongKhaiGhiBoi}
 }

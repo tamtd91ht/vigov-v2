@@ -32,9 +32,9 @@ package app
 //	ISSUING AN ACCOUNT       #9/#17/#18 — a separate flow (`cap-tai-khoan-can-bo`). Nothing here
 //	                         writes `co_tai_khoan` or `mat_khau_hash`; the store has no parameter
 //	                         for either.
-//	THE MINI APP FLAGS       #12 requires the person's own recorded consent before their mobile is
-//	                         published, and no column holds it yet. A schema question, not this
-//	                         one.
+//	A PUBLIC DIRECTORY READ  DatCongKhai below WRITES the Mini App publication (#12, migration
+//	                         0010). Nothing in this service READS it for a citizen yet: a public
+//	                         Mini App route is rule 4 stop condition #2 and has not been decided.
 
 import (
 	"context"
@@ -69,6 +69,7 @@ type KhoDanhBaCanBo interface {
 	CapNhatHoSo(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error
 	DatKhoa(ctx context.Context, tx *store.ScopedTx, id string, dangHoatDong bool) error
 	DatVaiTro(ctx context.Context, tx *store.ScopedTx, id, vaiTroID string) error
+	DatCongKhai(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error
 	QuanTriDangHoatDong(ctx context.Context, tx *store.ScopedTx) ([]string, error)
 	QuyenCuaVaiTro(ctx context.Context, tx *store.ScopedTx, vaiTroID string) ([]string, bool, error)
 	QuyenDangGiu(ctx context.Context, tx *store.ScopedTx, canBoID string) ([]string, error)
@@ -126,6 +127,12 @@ var (
 
 	// ErrKhongSinhDuocMa is the retry loop giving up. See Them.
 	ErrKhongSinhDuocMa = errors.New("danh_ba_can_bo: không sinh được mã cán bộ chưa dùng")
+
+	// ErrChuaXacNhanDongY — open question #12. Publishing a personal mobile to the public Mini App
+	// needs the person's own consent, and the lean form decided on 2026-09-24 is that the
+	// administrator CONFIRMS, per request, that they asked and the person agreed. No confirmation,
+	// no publication — and nothing is written.
+	ErrChuaXacNhanDongY = errors.New("danh_ba_can_bo: công khai lên Mini App cần xác nhận đã được người này đồng ý")
 )
 
 // LoiTraoQuyenKhongCam names the keys that were refused.
@@ -158,6 +165,13 @@ const (
 	HanhViKhoaCanBo   = "khoa_tai_khoan_can_bo"
 	HanhViMoKhoaCanBo = "mo_khoa_tai_khoan_can_bo"
 	HanhViDoiVaiTro   = "doi_vai_tro_can_bo"
+
+	// THREE MORE FOR THE MINI APP PUBLICATION (#12), for the same reason: "this person's mobile was
+	// put on a public channel", "it was taken off" and "their position in the list moved" are three
+	// different facts, and the first is the one an inspection or a complaint will ask about.
+	HanhViCongKhaiMiniApp    = "cong_khai_mini_app"
+	HanhViRutCongKhaiMiniApp = "rut_cong_khai_mini_app"
+	HanhViDoiThuTuDanhBa     = "doi_thu_tu_danh_ba"
 )
 
 // soLanThuMa is how many codes are minted before giving up.
@@ -305,6 +319,10 @@ type YeuCauSuaCanBo struct {
 	BoPhanID        *string
 	DienThoaiCoQuan *string
 	DiDongCaNhan    *string
+
+	// CoZalo — "Có Zalo" (migration 0010 §1). A pointer for the same reason as the rest: false is
+	// a meaningful value, so only nil can mean "not mentioned".
+	CoZalo *bool
 }
 
 // Sua applies a partial edit to one person's profile.
@@ -419,6 +437,10 @@ func chuanHoaSua(yc YeuCauSuaCanBo) (func(*domain.CanBoTomTat), error) {
 			return nil, err
 		}
 		dat = append(dat, func(cb *domain.CanBoTomTat) { cb.DiDongCaNhan = v })
+	}
+	if yc.CoZalo != nil {
+		v := *yc.CoZalo
+		dat = append(dat, func(cb *domain.CanBoTomTat) { cb.CoZalo = v })
 	}
 
 	return func(cb *domain.CanBoTomTat) {
@@ -607,6 +629,159 @@ func (uc *DanhBaCanBo) DoiVaiTro(ctx context.Context, id, vaiTroID string,
 	return sau, nil
 }
 
+// YeuCauCongKhai is the WHOLE publication state of one person, as PUT carries it.
+//
+//	CongKhai        publish (true) or unpublish (false).
+//	DaXacNhanDongY  the administrator confirms THIS request: "đã hỏi ý và người này đồng ý".
+//	                Required when CongKhai is true; ignored when false.
+//	ThuTu           explicit position in the directory; nil = no explicit order. PUT semantics:
+//	                nil CLEARS a position that was set, it does not mean "unchanged".
+type YeuCauCongKhai struct {
+	CongKhai       bool
+	DaXacNhanDongY bool
+	ThuTu          *int
+}
+
+// DatCongKhai publishes one person to the public Zalo Mini App directory, or takes them off it,
+// and sets their position in it — open question #12.
+//
+// WHAT #12 DECIDED, AND WHERE EACH PART IS ENFORCED:
+//
+//	PER PERSON, NEVER BULK       the signature takes one id. There is no list form.
+//	RECORDED CONSENT             publishing without DaXacNhanDongY is refused BEFORE the
+//	                             transaction opens. The marks written are WHEN (this service's
+//	                             clock) and WHO (nguoi.Vet.ID — the STAFF CODE, rule 6 invariant 8;
+//	                             an empty one is refused by hopLe, never replaced by the internal id).
+//	UNPUBLISH CLEARS THE MARKS   in the SAME UPDATE as the flag (store.datCongKhaiCanBo). The next
+//	                             publish must therefore confirm consent again.
+//	HISTORY                      one audit entry per change, in the same transaction.
+//
+// PUBLISHING SOMEBODY ALREADY PUBLISHED KEEPS THE ORIGINAL CONSENT MARKS. Consent is still
+// required on the request (one rule, no branch), but the evidence on the row is the record of the
+// act that put the number on the public channel; overwriting it with every repeat would replace
+// "who asked the person, and when" with "who last pressed the button". It is also what makes the
+// route idempotent: the same PUT twice writes nothing the second time.
+//
+// NO #14 SELF-CHECK. #14 is about PRIVILEGE, and publishing a directory entry grants none. Whether a
+// staff member may record their OWN consent is not decided anywhere; it is reported, not decided
+// here.
+func (uc *DanhBaCanBo) DatCongKhai(ctx context.Context, id string, yc YeuCauCongKhai,
+	nguoi NguoiThucHien) (domain.CanBoTomTat, error) {
+
+	if err := nguoi.hopLe(); err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	if id == "" {
+		return domain.CanBoTomTat{}, idstore.ErrCanBoKhongTonTai
+	}
+	if err := domain.KiemTraThuTuDanhBa(yc.ThuTu); err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	// #12 — THE CONSENT GATE. Before the transaction, so a refusal holds no row lock and writes
+	// nothing.
+	if yc.CongKhai && !yc.DaXacNhanDongY {
+		return domain.CanBoTomTat{}, ErrChuaXacNhanDongY
+	}
+
+	var sau domain.CanBoTomTat
+	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		truoc, err := uc.kho.TheoIDDeGhi(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+
+		sau = truoc
+		sau.ThuTuDanhBa = saoChepSo(yc.ThuTu)
+		switch {
+		case yc.CongKhai && !truoc.HienTrenMiniApp:
+			luc := uc.bayGio()
+			sau.HienTrenMiniApp = true
+			sau.DongYCongKhaiLuc = &luc
+			sau.DongYCongKhaiGhiBoi = nguoi.Vet.ID
+		case !yc.CongKhai:
+			sau.HienTrenMiniApp = false
+			sau.DongYCongKhaiLuc = nil
+			sau.DongYCongKhaiGhiBoi = ""
+		}
+
+		hanhVi := hanhViCongKhai(truoc, sau)
+		if hanhVi == "" {
+			return nil // nothing moved: no UPDATE, no entry
+		}
+		if err := uc.kho.DatCongKhai(ctx, tx, sau); err != nil {
+			return err
+		}
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor:   nguoi.Vet,
+			Action:  hanhVi,
+			Subject: truoc.Ma,
+			Delta: deltaCanBo(map[string]any{
+				"truoc": tomTatCongKhai(truoc),
+				"sau":   tomTatCongKhai(sau),
+			}),
+		})
+	})
+	if err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	return sau, nil
+}
+
+// hanhViCongKhai names the change, or "" when there is none. A publication transition wins over an
+// order change in the same request: one request, one entry, and the delta carries both.
+func hanhViCongKhai(truoc, sau domain.CanBoTomTat) string {
+	switch {
+	case !truoc.HienTrenMiniApp && sau.HienTrenMiniApp:
+		return HanhViCongKhaiMiniApp
+	case truoc.HienTrenMiniApp && !sau.HienTrenMiniApp:
+		return HanhViRutCongKhaiMiniApp
+	case !cungSo(truoc.ThuTuDanhBa, sau.ThuTuDanhBa):
+		return HanhViDoiThuTuDanhBa
+	}
+	return ""
+}
+
+// tomTatCongKhai is the audit view of one publication state.
+//
+// THE MOBILE IS NAMED, MASKED (rule 6, forbidden #4). "Which number went onto the public channel"
+// is a question the entry must answer; the digits are not needed to answer it, and an audit log
+// holding them would be a personal-data store outside every erasure rule. The recorder is a staff
+// code, and the consent time is a time — neither is personal data of the person published.
+func tomTatCongKhai(cb domain.CanBoTomTat) map[string]any {
+	var luc any
+	if cb.DongYCongKhaiLuc != nil {
+		luc = cb.DongYCongKhaiLuc.UTC().Format(time.RFC3339)
+	}
+	var thuTu any
+	if cb.ThuTuDanhBa != nil {
+		thuTu = *cb.ThuTuDanhBa
+	}
+	return map[string]any{
+		"hien_tren_mini_app":       cb.HienTrenMiniApp,
+		"dong_y_cong_khai_luc":     luc,
+		"dong_y_cong_khai_ghi_boi": cb.DongYCongKhaiGhiBoi,
+		"thu_tu_danh_ba":           thuTu,
+		"di_dong_ca_nhan":          privacy.MaskPhone(cb.DiDongCaNhan),
+		"co_zalo":                  cb.CoZalo,
+	}
+}
+
+func cungSo(a, b *int) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+// saoChepSo copies the value so the returned record does not alias the caller's request.
+func saoChepSo(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
 // laNguoiQuanTriCuoiCung reports whether removing this person's administrative rights would leave
 // the commune with nobody.
 //
@@ -651,7 +826,8 @@ func khongCam(can, dangCam []string) []string {
 func doiHoSo(truoc, sau domain.CanBoTomTat) bool {
 	return truoc.HoTen != sau.HoTen || truoc.ChucVu != sau.ChucVu ||
 		truoc.Email != sau.Email || truoc.BoPhanID != sau.BoPhanID ||
-		truoc.DienThoaiCoQuan != sau.DienThoaiCoQuan || truoc.DiDongCaNhan != sau.DiDongCaNhan
+		truoc.DienThoaiCoQuan != sau.DienThoaiCoQuan || truoc.DiDongCaNhan != sau.DiDongCaNhan ||
+		truoc.CoZalo != sau.CoZalo
 }
 
 // tomTatCanBo is the audit delta's view of one whole row, WITH PERSONAL DATA ALREADY MASKED.
@@ -707,6 +883,14 @@ func tomTatDoiHoSo(truoc, sau domain.CanBoTomTat, ben bool) map[string]any {
 	}
 	if truoc.DiDongCaNhan != sau.DiDongCaNhan {
 		ra["di_dong_ca_nhan"] = privacy.MaskPhone(chon(ben, truoc.DiDongCaNhan, sau.DiDongCaNhan))
+	}
+	if truoc.CoZalo != sau.CoZalo {
+		// A flag, not personal data in itself: recorded as is.
+		if ben {
+			ra["co_zalo"] = truoc.CoZalo
+		} else {
+			ra["co_zalo"] = sau.CoZalo
+		}
 	}
 	return ra
 }

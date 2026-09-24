@@ -104,10 +104,7 @@ func (s *CanBoStore) TheoIDDeGhi(ctx context.Context, tx *store.ScopedTx, id str
 // quetMotDong is quetTomTat's shape for a QueryRow — same list, same order, one place.
 func quetMotDong(quet func(...any) error) (domain.CanBoTomTat, error) {
 	var cb domain.CanBoTomTat
-	err := quet(&cb.ID, &cb.Ma, &cb.HoTen, &cb.Email, &cb.ChucVu,
-		&cb.BoPhanID, &cb.VaiTroID, &cb.DienThoaiCoQuan, &cb.DiDongCaNhan,
-		&cb.CoTaiKhoan, &cb.DangHoatDong,
-		&cb.DangNhapGanNhat, &cb.TaoLuc)
+	err := quet(dichQuetTomTat(&cb)...)
 	return cb, err
 }
 
@@ -151,20 +148,51 @@ func (s *CanBoStore) Chen(ctx context.Context, tx *store.ScopedTx, cb domain.Can
 // `mat_khau_hash` (the account flow), `vai_tro_id` (its own route, its own guards) and
 // `dang_hoat_dong` (its own route, its own guard) appear nowhere in this statement, so the profile
 // screen cannot reach any of them however its request body is shaped.
+//
+// NOR ARE THE MINI APP COLUMNS HERE — `hien_tren_mini_app`, the two consent marks and
+// `thu_tu_danh_ba` belong to the publication surface (DatCongKhai, `content.update`), not to the
+// profile form (`admin.user`). `co_zalo` IS here: it is contact information about the mobile, a
+// correction of the profile, and publishes nothing by itself.
 const capNhatHoSoCanBo = `UPDATE nguoi_dung
 	SET ho_ten = $3, email = $4, chuc_vu = $5, bo_phan_id = nullif($6,''),
-	    dien_thoai_co_quan = $7, di_dong_ca_nhan = $8, cap_nhat_luc = now()
+	    dien_thoai_co_quan = $7, di_dong_ca_nhan = $8, co_zalo = $9, cap_nhat_luc = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
-// CapNhatHoSo writes the six fields the Sửa thông tin cán bộ form owns.
+// CapNhatHoSo writes the seven fields the Sửa thông tin cán bộ form owns.
 func (s *CanBoStore) CapNhatHoSo(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error {
 	kq, err := tx.Exec(ctx, capNhatHoSoCanBo, string(tx.TenantID()),
 		cb.ID, cb.HoTen, cb.Email, cb.ChucVu, cb.BoPhanID,
-		cb.DienThoaiCoQuan, cb.DiDongCaNhan)
+		cb.DienThoaiCoQuan, cb.DiDongCaNhan, cb.CoZalo)
 	if err != nil {
 		return dichLoiGhiCanBo("cập nhật hồ sơ", err)
 	}
 	return doiMotDong(kq, "cập nhật hồ sơ")
+}
+
+// datCongKhaiCanBo writes the publication state — open question #12 — in ONE statement.
+//
+// THE FOUR COLUMNS MOVE TOGETHER, and that is why this is one UPDATE and not three: the database
+// CHECKs of migration 0010 §3 make "published" and "consent recorded" a biconditional, and a
+// statement that set the flag and left the marks for a second statement would be refused half-way
+// (or, worse, accepted by a future schema that dropped a CHECK). Unpublishing therefore clears
+// both marks HERE, in the same row version that clears the flag.
+//
+// NOTHING ELSE IS WRITTEN. The mobile, the name, the role — none of them is reachable from the
+// publication route however its body is shaped.
+const datCongKhaiCanBo = `UPDATE nguoi_dung
+	SET hien_tren_mini_app = $3, dong_y_cong_khai_luc = $4, dong_y_cong_khai_ghi_boi = $5,
+	    thu_tu_danh_ba = $6, cap_nhat_luc = now()
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+// DatCongKhai writes cb's publication state. The caller has already decided the consent marks —
+// set on publish, cleared on unpublish; this method writes what it is given.
+func (s *CanBoStore) DatCongKhai(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error {
+	kq, err := tx.Exec(ctx, datCongKhaiCanBo, string(tx.TenantID()),
+		cb.ID, cb.HienTrenMiniApp, cb.DongYCongKhaiLuc, cb.DongYCongKhaiGhiBoi, cb.ThuTuDanhBa)
+	if err != nil {
+		return dichLoiGhiCanBo("đặt công khai Mini App", err)
+	}
+	return doiMotDong(kq, "đặt công khai Mini App")
 }
 
 // DatKhoa opens or shuts one account. `dang_hoat_dong` and NOTHING else.

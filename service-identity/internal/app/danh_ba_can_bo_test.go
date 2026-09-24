@@ -94,6 +94,9 @@ type khoGia struct {
 	soLanChen int
 	maDaThu   []string
 
+	// congKhaiCuoi is the row DatCongKhai was handed — what the UPDATE would write.
+	congKhaiCuoi *domain.CanBoTomTat
+
 	loi error
 }
 
@@ -133,6 +136,13 @@ func (k *khoGia) DatKhoa(ctx context.Context, tx *store.ScopedTx, id string, dan
 
 func (k *khoGia) DatVaiTro(ctx context.Context, tx *store.ScopedTx, id, vaiTroID string) error {
 	_, err := tx.Exec(ctx, "UPDATE nguoi_dung SET vai_tro_id", id, vaiTroID)
+	return err
+}
+
+func (k *khoGia) DatCongKhai(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error {
+	k.congKhaiCuoi = &cb
+	_, err := tx.Exec(ctx, "UPDATE nguoi_dung SET cong-khai", cb.ID, cb.HienTrenMiniApp,
+		cb.DongYCongKhaiLuc, cb.DongYCongKhaiGhiBoi, cb.ThuTuDanhBa)
 	return err
 }
 

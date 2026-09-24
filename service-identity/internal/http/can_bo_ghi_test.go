@@ -59,6 +59,7 @@ type ghiDanhBaGia struct {
 	vaiTroCuoi string
 	themCuoi   app.YeuCauThemCanBo
 	suaCuoi    app.YeuCauSuaCanBo
+	congKhai   app.YeuCauCongKhai
 
 	kq  domain.CanBoTomTat
 	loi error
@@ -109,6 +110,12 @@ func (g *ghiDanhBaGia) DatKhoa(ctx context.Context, id string, khoa bool, nguoi 
 func (g *ghiDanhBaGia) DoiVaiTro(ctx context.Context, id, vaiTroID string, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error) {
 	g.ghiNhan(ctx, nguoi)
 	g.idCuoi, g.vaiTroCuoi = id, vaiTroID
+	return g.kq, g.loi
+}
+
+func (g *ghiDanhBaGia) DatCongKhai(ctx context.Context, id string, yc app.YeuCauCongKhai, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error) {
+	g.ghiNhan(ctx, nguoi)
+	g.idCuoi, g.congKhai = id, yc
 	return g.kq, g.loi
 }
 

@@ -40,6 +40,10 @@ import (
 
 var dsMoc = time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
 
+// dsMocDongY is the consent time on the one published fixture row — different from every other
+// timestamp in the dataset, so a swap with tao_luc or dang_nhap_gan_nhat is visible.
+var dsMocDongY = time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
+
 const dsXaB = "01J0000000000000000000000B"
 
 // dsDuLieu is one `nguoi_dung` table across two communes.
@@ -68,15 +72,17 @@ var dsDuLieu = []hangND{
 	{xa: xaMau, id: "nd-01", ma: "CB-001", hoTen: "Nguyễn Văn A", email: "a@example.gov.vn",
 		chucVu: "Chủ tịch UBND xã", boPhan: "bp-001", vaiTro: "vt-001",
 		dienThoaiCoQuan: "0900000001", diDongCaNhan: "0300000001",
-		coTaiKhoan: true, dangHoatDong: true, dangNhap: &dsMoc, taoLuc: dsMoc.Add(1 * time.Minute)},
+		coTaiKhoan: true, dangHoatDong: true, dangNhap: &dsMoc, taoLuc: dsMoc.Add(1 * time.Minute),
+		coZalo: true, hienMiniApp: false},
 	{xa: xaMau, id: "nd-02", ma: "CB-002", hoTen: "Trần Thị B", email: "b@example.gov.vn",
 		chucVu: "Trưởng thôn", boPhan: "bp-002",
 		dienThoaiCoQuan: "0900000002", diDongCaNhan: "0300000002",
-		coTaiKhoan: false, dangHoatDong: true, taoLuc: dsMoc.Add(2 * time.Minute)},
+		coTaiKhoan: false, dangHoatDong: true, taoLuc: dsMoc.Add(2 * time.Minute),
+		coZalo: false, hienMiniApp: true, thuTu: dsSo(3), dongYLuc: &dsMocDongY, dongYGhiBoi: "CB-2026-GHI001"},
 	{xa: xaMau, id: "nd-03", ma: "CB-003", hoTen: "Lê Văn C", email: "c@example.gov.vn",
 		chucVu: "Kế toán", boPhan: "bp-001", vaiTro: "vt-002",
 		dienThoaiCoQuan: "0900000003", diDongCaNhan: "0300000003",
-		coTaiKhoan: true, dangHoatDong: false, taoLuc: dsMoc.Add(2 * time.Minute)},
+		coTaiKhoan: true, dangHoatDong: false, taoLuc: dsMoc.Add(2 * time.Minute), thuTu: dsSo(0)},
 	{xa: xaMau, id: "nd-04", ma: "CB-004", hoTen: "Phạm Thị D", email: "d@example.gov.vn",
 		dienThoaiCoQuan: "0900000004", diDongCaNhan: "0300000004", coTaiKhoan: true, dangHoatDong: true,
 		taoLuc: dsMoc.Add(3 * time.Minute), daXoa: true},
@@ -540,7 +546,16 @@ type hangND struct {
 	dangNhap                      *time.Time
 	taoLuc                        time.Time
 	daXoa                         bool
+
+	// The five Mini App columns of migration 0010. Fixtures give coZalo and hienMiniApp OPPOSITE
+	// values on the rows asserted, and thuTu both nil and 0, so a Scan swap cannot pass.
+	coZalo, hienMiniApp bool
+	thuTu               *int
+	dongYLuc            *time.Time
+	dongYGhiBoi         string
 }
+
+func dsSo(v int) *int { return &v }
 
 func (h hangND) giaTri(cot string) driver.Value {
 	switch cot {
@@ -573,6 +588,22 @@ func (h hangND) giaTri(cot string) driver.Value {
 		return *h.dangNhap
 	case "tao_luc":
 		return h.taoLuc
+	case "co_zalo":
+		return h.coZalo
+	case "thu_tu_danh_ba":
+		if h.thuTu == nil {
+			return nil // SQL NULL — no explicit order
+		}
+		return int64(*h.thuTu)
+	case "hien_tren_mini_app":
+		return h.hienMiniApp
+	case "dong_y_cong_khai_luc":
+		if h.dongYLuc == nil {
+			return nil
+		}
+		return *h.dongYLuc
+	case "dong_y_cong_khai_ghi_boi":
+		return h.dongYGhiBoi
 	case "tenant_id":
 		return h.xa
 	default:
@@ -818,4 +849,72 @@ func (r *rowsDS) Next(dest []driver.Value) error {
 	copy(dest, r.hang[r.i])
 	r.i++
 	return nil
+}
+
+// THE MINI APP COLUMNS OF MIGRATION 0010 COME BACK IN THEIR OWN PLACES, on BOTH read paths.
+//
+// The pair that matters most is (co_zalo, hien_tren_mini_app): two BOOLEANs, and a swap would
+// PUBLISH a person because they have Zalo — the unconsented publication open question #12 forbids —
+// with nothing erroring anywhere. nd-01 is (true, false) and nd-02 is (false, true), so a swap in
+// either direction flips both rows. thu_tu_danh_ba is nil on nd-01 and 0 on nd-03, because 0 is a
+// real position and must not collapse into "no order".
+//
+// MUTATION THAT MUST TURN THIS RED: swap &cb.CoZalo and &cb.HienTrenMiniApp in dichQuetTomTat.
+func TestCotMiniAppVeDungChoCuaNo(t *testing.T) {
+	b := moBanThuDS(t)
+
+	type muonMiniApp struct {
+		coZalo, hien bool
+		thuTu        *int
+		dongYLuc     *time.Time
+		ghiBoi       string
+	}
+	muon := map[string]muonMiniApp{
+		"nd-01": {coZalo: true, hien: false},
+		"nd-02": {coZalo: false, hien: true, thuTu: dsSo(3), dongYLuc: &dsMocDongY, ghiBoi: "CB-2026-GHI001"},
+		"nd-03": {thuTu: dsSo(0)},
+	}
+	kiem := func(duong string, cb domain.CanBoTomTat) {
+		t.Helper()
+		m := muon[cb.ID]
+		if cb.CoZalo != m.coZalo || cb.HienTrenMiniApp != m.hien {
+			t.Errorf("%s %s: (CoZalo=%v, HienTrenMiniApp=%v), muốn (%v, %v) — "+
+				"hai cột bool bị hoán đổi: CÔNG KHAI người chỉ vì họ có Zalo (#12)",
+				duong, cb.ID, cb.CoZalo, cb.HienTrenMiniApp, m.coZalo, m.hien)
+		}
+		if (cb.ThuTuDanhBa == nil) != (m.thuTu == nil) ||
+			(cb.ThuTuDanhBa != nil && *cb.ThuTuDanhBa != *m.thuTu) {
+			t.Errorf("%s %s: ThuTuDanhBa = %v, muốn %v", duong, cb.ID, cb.ThuTuDanhBa, m.thuTu)
+		}
+		if (cb.DongYCongKhaiLuc == nil) != (m.dongYLuc == nil) ||
+			(cb.DongYCongKhaiLuc != nil && !cb.DongYCongKhaiLuc.Equal(*m.dongYLuc)) {
+			t.Errorf("%s %s: DongYCongKhaiLuc = %v, muốn %v", duong, cb.ID, cb.DongYCongKhaiLuc, m.dongYLuc)
+		}
+		if cb.DongYCongKhaiGhiBoi != m.ghiBoi {
+			t.Errorf("%s %s: DongYCongKhaiGhiBoi = %q, muốn %q", duong, cb.ID, cb.DongYCongKhaiGhiBoi, m.ghiBoi)
+		}
+	}
+
+	for id := range muon {
+		ct, err := b.kho.ChiTiet(ctxXa(xaMau), id)
+		if err != nil {
+			t.Fatalf("ChiTiet %s: %v", id, err)
+		}
+		kiem("ChiTiet", ct)
+	}
+
+	kq, err := b.kho.DanhSach(ctxXa(xaMau), yeuCauTrang(t, "limit=100"))
+	if err != nil {
+		t.Fatalf("DanhSach: %v", err)
+	}
+	thay := 0
+	for _, cb := range kq.Items {
+		if _, co := muon[cb.ID]; co {
+			thay++
+			kiem("DanhSach", cb)
+		}
+	}
+	if thay != len(muon) {
+		t.Fatalf("chỉ thấy %d/%d bản ghi mẫu trong danh sách — bài kiểm không kiểm đủ", thay, len(muon))
+	}
 }

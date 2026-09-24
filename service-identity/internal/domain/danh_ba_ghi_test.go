@@ -119,3 +119,20 @@ func TestKiemTraIDThamChieuChiChanDoDaiChuKhongKiemTonTai(t *testing.T) {
 		t.Errorf("id quá dài không bị từ chối: %v", err)
 	}
 }
+
+// THU_TU_DANH_BA: nil and 0 are both legitimate and DIFFERENT (0 is a real position, nil is "no
+// explicit order"); a negative value is refused, and so is a value past the INTEGER column.
+func TestKiemTraThuTuDanhBa(t *testing.T) {
+	so := func(v int) *int { return &v }
+	for _, ok := range []*int{nil, so(0), so(7), so(1<<31 - 1)} {
+		if err := KiemTraThuTuDanhBa(ok); err != nil {
+			t.Errorf("giá trị hợp lệ %v bị từ chối: %v", ok, err)
+		}
+	}
+	if err := KiemTraThuTuDanhBa(so(-1)); !errors.Is(err, ErrThuTuDanhBaAm) {
+		t.Errorf("-1: lỗi = %v, muốn ErrThuTuDanhBaAm", err)
+	}
+	if err := KiemTraThuTuDanhBa(so(1 << 31)); !errors.Is(err, ErrThuTuDanhBaQuaLon) {
+		t.Errorf("2^31: lỗi = %v, muốn ErrThuTuDanhBaQuaLon", err)
+	}
+}

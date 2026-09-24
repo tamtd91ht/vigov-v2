@@ -38,6 +38,8 @@ var (
 	ErrSoDienThoaiSai    = errors.New("can_bo: số điện thoại chứa ký tự không dùng được")
 	ErrSoDienThoaiQuaDai = errors.New("can_bo: số điện thoại quá dài")
 	ErrIDThamChieuQuaDai = errors.New("can_bo: mã tham chiếu quá dài")
+	ErrThuTuDanhBaAm     = errors.New("can_bo: thứ tự hiển thị trong danh bạ không được âm")
+	ErrThuTuDanhBaQuaLon = errors.New("can_bo: thứ tự hiển thị trong danh bạ quá lớn")
 )
 
 const (
@@ -166,6 +168,28 @@ func ChuanHoaSoDienThoai(tho string) (string, error) {
 func KiemTraIDThamChieu(id string) error {
 	if utf8.RuneCountInString(id) > tranIDThamChieu {
 		return fmt.Errorf("%w (tối đa %d ký tự)", ErrIDThamChieuQuaDai, tranIDThamChieu)
+	}
+	return nil
+}
+
+// thuTuDanhBaToiDa is the ceiling of `thu_tu_danh_ba`, which is a PostgreSQL INTEGER. It is the
+// column's own range, not a business limit: past it the server refuses the write with an overflow
+// error that would reach the person as a 500.
+const thuTuDanhBaToiDa = 1<<31 - 1
+
+// KiemTraThuTuDanhBa checks an explicit directory position. NIL IS LEGITIMATE and means "no
+// explicit order" (migration 0010 §1). Negative values have no meaning on a form asking for a
+// display position, and the database refuses them too (`nguoi_dung_thu_tu_danh_ba_khong_am`);
+// refusing here produces a sentence instead of a constraint violation.
+func KiemTraThuTuDanhBa(thuTu *int) error {
+	if thuTu == nil {
+		return nil
+	}
+	if *thuTu < 0 {
+		return ErrThuTuDanhBaAm
+	}
+	if *thuTu > thuTuDanhBaToiDa {
+		return fmt.Errorf("%w (tối đa %d)", ErrThuTuDanhBaQuaLon, thuTuDanhBaToiDa)
 	}
 	return nil
 }

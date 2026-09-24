@@ -147,6 +147,10 @@ type (
 		Sua(ctx context.Context, id string, yc app.YeuCauSuaCanBo, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
 		DatKhoa(ctx context.Context, id string, khoa bool, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
 		DoiVaiTro(ctx context.Context, id, vaiTroID string, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
+		// DatCongKhai — the Mini App publication of ONE person (#12). On this interface because it
+		// is a use case over the same row with the same transaction-plus-audit shape; guarded by a
+		// DIFFERENT permission (`content.update`) at the route.
+		DatCongKhai(ctx context.Context, id string, yc app.YeuCauCongKhai, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
 	}
 
 	// SLADoc reads the commune's processing-deadline table, for GET /api/v1/sla.
@@ -679,8 +683,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// WHY NOT `content.update`, which the OTHER screen specifies (12-danh-ba-can-bo.md §9.4): that
 	// key is "Sửa nội dung và danh bạ Mini App" and it governs what the CITIZEN-FACING directory
-	// shows — the publication flag and the ordering, i.e. open question #12, which needs a consent
-	// column that does not exist. None of the five routes here touches that surface.
+	// shows — the publication flag and the ordering, i.e. open question #12. None of the five
+	// routes here touches that surface; PUT /api/v1/staff/{id}/publication below does, and it is
+	// the one staff route that declares `content.update`.
 	//
 	// THE ONE ROUTE THAT IS NOT HERE is the soft delete of #10. It carries a permission of its own
 	// by the customer's decision, no key in the table means it, and rule 5 invariant 3c forbids
@@ -859,6 +864,50 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.user")(
 			idem.KhongCan("PUT mang trạng thái tuyệt đối: gán đúng vai trò đang có thì use case không ghi gì, nên lần gửi thứ hai cho cùng một kết quả")(
 				http.HandlerFunc(h.DoiVaiTroCanBo))))
+
+	// Publishing somebody to the Zalo Mini App directory. PUT /api/v1/staff/{id}/publication
+	//
+	// OPEN QUESTION #12 (decided 2026-09-22; lean consent form and this route's shape decided by the
+	// user on 2026-09-24): putting a personal mobile on a public channel is publication of personal
+	// data under Decree 13/2023/NĐ-CP. PER PERSON, never bulk — one {id} per request, and there is no
+	// list form. Publishing REQUIRES `consent_confirmed: true` in the body; the server records WHEN
+	// and WHO (the recorder's staff code, never an internal id). Unpublishing clears both marks in
+	// the same UPDATE, so publishing again later asks again. Every change is one audit entry in the
+	// same transaction.
+	//
+	// `content.update` AND NOT `admin.user` — user decision 2026-09-24, and it is the key the Danh bạ
+	// screen specifies for the Mini App directory (12-danh-ba-can-bo.md §9.4). Seeded by migration
+	// 0001:293 ("Sửa nội dung và danh bạ Mini App"). Managing accounts and deciding what the public
+	// sees are different authorities; a commune may give them to different people.
+	//
+	// `publication` IS THE NOUN rest_api_guard.py itself proposes for the verb `publish`. It has no
+	// row in kb/00-foundation/ubiquitous-language.md yet — the same standing `lockout` has (ADR
+	// 0011): written so the work is testable, reported as an open naming decision.
+	//
+	// `display_order` IS ON THIS ROUTE and not on the PATCH: the position in the citizen-facing
+	// directory belongs to the publication surface (user decision 2026-09-24).
+	//
+	// 404 FOR ANOTHER COMMUNE'S ID AND FOR A SOFT-DELETED PERSON — TheoIDDeGhi is scoped and
+	// excludes deleted rows, so neither can be told from an invented id (rule 4, forbidden #2).
+	//
+	// idem.KhongCan — PUT carries an absolute state, and the use case writes NOTHING when nothing
+	// moves: publishing somebody already published keeps the original consent marks, and
+	// unpublishing somebody unpublished is a no-op. The same request twice leaves one row state and
+	// one entry.
+	//
+	// @summary  Công khai / thôi công khai một cán bộ lên danh bạ Zalo Mini App — bắt buộc xác nhận đã được người đó đồng ý (#12)
+	// @screen   12-danh-ba-can-bo §9.4
+	// @request  datCongKhaiVao
+	// @reply    200 canBoTomTat
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/staff/{id}/publication",
+		authz.RequirePermission(d.Checker, "content.update")(
+			idem.KhongCan("PUT mang trạng thái tuyệt đối: công khai người đã công khai (giữ nguyên dấu đồng ý gốc) hay thôi công khai người chưa công khai thì use case không ghi gì, nên lần gửi thứ hai để lại đúng một trạng thái và đúng một vết")(
+				http.HandlerFunc(h.DatCongKhaiCanBo))))
 
 	// --- the staff register: the CREDENTIAL routes (#9, #17, #18) --------------------------------
 	//

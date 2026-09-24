@@ -113,6 +113,28 @@ type CanBoTomTat struct {
 	DangNhapGanNhat *time.Time
 
 	TaoLuc time.Time
+
+	// CoZalo — the personal mobile is reachable on Zalo (migration 0010 §1). It describes
+	// DiDongCaNhan, so it is shown where that number is shown and nowhere else.
+	CoZalo bool
+
+	// ThuTuDanhBa — explicit position in the directory. NIL IS "no explicit order", NOT 0: zero is a
+	// real position, and a default of 0 would tie every unordered person at the top (0010 §1).
+	ThuTuDanhBa *int
+
+	// The Mini App publication and its consent evidence — open question #12 (decided 2026-09-22,
+	// lean form 2026-09-24). The three move TOGETHER or not at all, and the database refuses any
+	// other combination (0010 §3):
+	//
+	//	HienTrenMiniApp true   ⇒ DongYCongKhaiLuc set AND DongYCongKhaiGhiBoi non-empty
+	//	HienTrenMiniApp false  ⇒ DongYCongKhaiLuc nil AND DongYCongKhaiGhiBoi ""
+	//
+	// DongYCongKhaiGhiBoi is the STAFF CODE of the administrator who recorded the consent, never an
+	// internal id — the same reason as rule 6, invariant 8: it is read years later by somebody asking
+	// "căn cứ nào để đưa số tôi lên", and a ULID names nobody.
+	HienTrenMiniApp     bool
+	DongYCongKhaiLuc    *time.Time
+	DongYCongKhaiGhiBoi string
 }
 
 // CanBoVaiTro is one staff member as the INTER-SERVICE contract sees them, and it is

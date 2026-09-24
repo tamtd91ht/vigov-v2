@@ -60,6 +60,19 @@ type canBoTomTat struct {
 	LastLoginAt *time.Time `json:"last_login_at"`
 
 	CreatedAt time.Time `json:"created_at"`
+
+	// HasZalo — "Có Zalo" under the mobile (migration 0010 §1). It describes `mobile`, so it is on
+	// this surface for the same reason `mobile` is (#11).
+	HasZalo bool `json:"has_zalo"`
+
+	// The Mini App publication (#12). What the staff screen needs to draw the toggle and the
+	// "đã ghi nhận đồng ý lúc …" line. Null on either nullable field is meaningful:
+	//
+	//	display_order        null = no explicit order (0 is a real position).
+	//	consent_recorded_at  null = no consent on record — always the case when published is false.
+	Published         bool       `json:"published"`
+	DisplayOrder      *int       `json:"display_order"`
+	ConsentRecordedAt *time.Time `json:"consent_recorded_at"`
 }
 
 // soRaManHinhNoiBo decides what a staff telephone number looks like on the way out of THIS
@@ -77,8 +90,9 @@ type canBoTomTat struct {
 //
 // WHAT #11 DID NOT OPEN, AND WHAT THIS FUNCTION'S NAME IS FOR: the same decision keeps the mask on
 // EXCEL EXPORTS and on anything published outside the authority (rule 3, invariant 4), and #12
-// keeps the mobile off the Mini App until that person's own consent is recorded — a column that
-// does not exist yet. Neither of those surfaces exists in this service today. When one is written
+// keeps the mobile off the Mini App until that person's own consent is recorded (migration 0010;
+// written by PUT /api/v1/staff/{id}/publication). Neither the export nor a public Mini App READ
+// exists in this service today. When one is written
 // it must NOT reuse this function; the name says which surface this is, so that reuse has to be a
 // decision somebody takes rather than an import somebody copies.
 //
@@ -112,6 +126,11 @@ func raNgoai(cb domain.CanBoTomTat) canBoTomTat {
 		Active:       cb.DangHoatDong,
 		LastLoginAt:  cb.DangNhapGanNhat,
 		CreatedAt:    cb.TaoLuc,
+
+		HasZalo:           cb.CoZalo,
+		Published:         cb.HienTrenMiniApp,
+		DisplayOrder:      cb.ThuTuDanhBa,
+		ConsentRecordedAt: cb.DongYCongKhaiLuc,
 	}
 }
 
