@@ -121,8 +121,8 @@ func NhanTrangThai(t TrangThai) string { return nhanTrangThai[t] }
 //	da-chuyen-xu-ly    handed to a department: the resolve deadline
 //	cho-dan-xac-nhan   the work is done: the citizen is invited to confirm and rate
 //	da-dong            closed: where to read the result
-//	khong-tiep-nhan    NO ROUTE REACHES IT YET — listed so the day it is built it already owes a word
-//	chuyen-cap-tren    NO ROUTE REACHES IT YET — same
+//	khong-tiep-nhan    refused: where to read the reason (POST …/rejection)
+//	chuyen-cap-tren    referred: where to read the reason and the receiving body (POST …/referral)
 //
 // `dang-phan-loai`, `dang-xu-ly` and `da-xu-ly` are NOT here. The first is internal; the second used to
 // be here and was removed on purpose — the department-and-deadline message belongs to the moment the
@@ -176,11 +176,14 @@ var loiNhanChoDan = map[TrangThai]func(p PhieuPhanAnh) string{
 		return "Phản ánh đã được đóng. " +
 			"Dùng mã tra cứu để xem kết quả xử lý xã đã ghi."
 	},
-	// ⚠ THE TWO BELOW HAVE NO ROUTE, and the owner's decision asks them to carry the REASON, the
-	// RECEIVING BODY and WHERE TO GO NEXT. None of those three exists as a column today, so the
-	// sentences point at the lookup code. Whoever builds either transition decides where those three
-	// facts are stored and whether any of them may travel — this entry must then be revisited, not
-	// left as the answer.
+	// THE TWO BRANCHES POINT AT THE LOOKUP CODE AND CARRY NEITHER THE REASON NOR THE RECEIVING BODY.
+	// Both are now stored (migration 0011, `ly_do_ket_thuc_nhanh` and `co_quan_nhan`) and both are
+	// free text a member of staff typed about ONE case — the same standing as `ket_qua_xu_ly`, which
+	// the event contract forbids forwarding (proto/vigov/petitions/v1/events.proto, CitizenMessage).
+	// The citizen reads them behind the authenticated GET /api/v1/my-citizen-reports/{maTraCuu}.
+	//
+	// ⚠ STILL OPEN: the owner's decision also asked for WHERE TO GO NEXT. No column holds it; the
+	// reason text is where staff write it today. A structured field is a decision, not a spelling.
 	KhongTiepNhan: func(PhieuPhanAnh) string {
 		return "Xã không tiếp nhận phản ánh này. " +
 			"Dùng mã tra cứu để xem lý do và nơi ông/bà có thể liên hệ tiếp."
@@ -341,6 +344,35 @@ func DongDuoc(t TrangThai) error {
 	return nil
 }
 
+// ErrKetThucNhanhSaiLuc is returned when a petition is not at the one point the two terminal branches
+// leave from.
+var ErrKetThucNhanhSaiLuc = errors.New(
+	"phan_anh: chỉ từ chối tiếp nhận hoặc chuyển cấp trên được phiếu đang ở bước phân loại")
+
+// KetThucNhanhDuoc reports whether petition status `t` may take the terminal branch `nhanh`
+// (`khong-tiep-nhan` or `chuyen-cap-tren`).
+//
+// `dang-phan-loai` AND NOTHING ELSE, which is what chuyenDuocSang allows (docs/ui-ux/09 §6): that is
+// the step where a human first reads the report and decides whether the commune takes it at all, and
+// both branches are OUTCOMES OF THAT DECISION (ADR 0030 — which is why both routes are guarded by
+// `feedback.classify`). A referral out of `dang-xu-ly` — work already begun, then handed up — is a
+// different edge of the lifecycle that the owner has NOT decided (rule 10, stop condition #2), so it
+// is refused here rather than let through by a wider check.
+//
+// BOTH CONDITIONS ARE CHECKED, and the second is not redundant: `t == DangPhanLoai` is this act's own
+// narrowing, ChuyenSangDuoc is the lifecycle map. Checking only the first would let a target that is
+// not a branch at all (a caller passing `da-dong`) through; checking only the second would widen the
+// day somebody adds a branch edge from another status to the map.
+func KetThucNhanhDuoc(t, nhanh TrangThai) error {
+	if nhanh != KhongTiepNhan && nhanh != ChuyenCapTren {
+		return ErrKetThucNhanhSaiLuc
+	}
+	if t != DangPhanLoai || !t.ChuyenSangDuoc(nhanh) {
+		return ErrKetThucNhanhSaiLuc
+	}
+	return nil
+}
+
 // --- shape checks for the four staff acts ---------------------------------------------------------
 
 const (
@@ -365,6 +397,25 @@ const (
 	// that make a closing look recorded while telling the citizen nothing — and accepts any real
 	// sentence. Raising it later is cheap; lowering it after communes have closed petitions is not.
 	KetQuaToiThieu = 10
+
+	// LyDoToiThieu and LyDoToiDa bound the reason a petition was refused or referred — the sentence
+	// the citizen reads INSTEAD of a result (rule 10, invariant 6 in spirit: never end silently).
+	//
+	// THE SAME TWO NUMBERS AS THE CLOSING RESULT, BY DEFINITION RATHER THAN BY COINCIDENCE. Same kind
+	// of text, same reader, same screen. The maximum is ALSO the database's: migration 0011's CHECK
+	// `phieu_phan_anh_ly_do_ket_thuc_nhanh_toi_da` refuses more than 2000 characters, and validating
+	// the same number here in RUNES is what turns an oversized reason into a 400 instead of a 500.
+	// The minimum inherits KetQuaToiThieu's ⚠: it is this session's number, not the customer's.
+	LyDoToiThieu = KetQuaToiThieu
+	LyDoToiDa    = KetQuaToiDa
+
+	// CoQuanNhanToiDa bounds the receiving body of a referral — the database's number (migration
+	// 0011, `phieu_phan_anh_co_quan_nhan_toi_da`), repeated here for the same 400-not-500 reason.
+	//
+	// NO MINIMUM BEYOND NON-BLANK. It is the NAME of an authority, and real ones are short ("Công an
+	// xã", "Điện lực"): a ten-rune floor would refuse a correct answer. That is an assumption of this
+	// session and is reported.
+	CoQuanNhanToiDa = 200
 )
 
 var (
@@ -389,6 +440,18 @@ var (
 	ErrThieuKetQua   = errors.New("phan_anh: `result` trống — không đóng phiếu mà không có kết quả cho người dân đọc")
 	ErrKetQuaQuaNgan = errors.New("phan_anh: `result` quá ngắn — người dân phải đọc được xã đã làm gì")
 	ErrKetQuaQuaDai  = errors.New("phan_anh: `result` quá dài")
+
+	// ErrThieuLyDo / ErrLyDoQuaNgan / ErrLyDoQuaDai — refusing or referring with nothing the citizen
+	// can read. A petition that leaves the commune with no reason is ended SILENTLY, which is exactly
+	// what the database's CHECK (migration 0011) and rule 10, invariant 6 forbid.
+	ErrThieuLyDo   = errors.New("phan_anh: `reason` trống — người dân phải đọc được vì sao")
+	ErrLyDoQuaNgan = errors.New("phan_anh: `reason` quá ngắn — người dân phải đọc được vì sao")
+	ErrLyDoQuaDai  = errors.New("phan_anh: `reason` quá dài")
+
+	// ErrThieuCoQuanNhan / ErrCoQuanNhanQuaDai — a referral must name WHERE the petition went. A
+	// citizen told "đã chuyển cấp trên" and not to whom has nobody to follow up with.
+	ErrThieuCoQuanNhan  = errors.New("phan_anh: `receiving_body` trống — phải ghi cơ quan tiếp nhận")
+	ErrCoQuanNhanQuaDai = errors.New("phan_anh: `receiving_body` quá dài")
 
 	// ErrKhongConCamKet — the petition is in a terminal status, so there is no commitment left to
 	// act on. Editing it would be editing an archival record (rule 7, forbidden #5).
@@ -496,6 +559,40 @@ func KiemKetQua(s string) (string, error) {
 	return s, nil
 }
 
+// KiemLyDoKetThucNhanh trims and bounds the reason of a refusal or a referral, in RUNES.
+//
+// Trimmed before it is measured for the reason KiemKetQua gives: a textarea of newlines is a petition
+// ended silently. Counted in runes because Vietnamese diacritics are two or three bytes each, and the
+// database's `char_length` counts characters — a byte count here would refuse a reason PostgreSQL
+// accepts, and a smaller one would pass a reason it refuses with a 500.
+func KiemLyDoKetThucNhanh(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	switch n := utf8.RuneCountInString(s); {
+	case s == "":
+		return "", ErrThieuLyDo
+	case n < LyDoToiThieu:
+		return "", fmt.Errorf("%w (tối thiểu %d ký tự)", ErrLyDoQuaNgan, LyDoToiThieu)
+	case n > LyDoToiDa:
+		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrLyDoQuaDai, LyDoToiDa)
+	}
+	return s, nil
+}
+
+// KiemCoQuanNhan trims and bounds the receiving body of a referral, in RUNES.
+//
+// FREE TEXT BY THE USER'S DECISION (migration 0011's header): since 7/2025 a transfer goes sideways
+// as often as up, so there is no catalogue of "the level above" to validate against.
+func KiemCoQuanNhan(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	switch {
+	case s == "":
+		return "", ErrThieuCoQuanNhan
+	case utf8.RuneCountInString(s) > CoQuanNhanToiDa:
+		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrCoQuanNhanQuaDai, CoQuanNhanToiDa)
+	}
+	return s, nil
+}
+
 // LaLoiXuLyPhanAnh reports whether this is a refusal of what the caller sent, as opposed to a
 // failure of the system.
 //
@@ -508,7 +605,10 @@ func LaLoiXuLyPhanAnh(err error) bool {
 		ErrThieuLinhVuc, ErrLinhVucSaiDang,
 		ErrThieuBoPhan, ErrBoPhanQuaDai, ErrCanBoQuaDai,
 		ErrThieuKetQua, ErrKetQuaQuaNgan, ErrKetQuaQuaDai,
-		// ErrPhanCongSaiLuc, ErrDongSaiLuc AND ErrKhongConCamKet ARE DELIBERATELY NOT IN THIS LIST.
+		ErrThieuLyDo, ErrLyDoQuaNgan, ErrLyDoQuaDai,
+		ErrThieuCoQuanNhan, ErrCoQuanNhanQuaDai,
+		// ErrPhanCongSaiLuc, ErrDongSaiLuc, ErrKetThucNhanhSaiLuc AND ErrKhongConCamKet ARE
+		// DELIBERATELY NOT IN THIS LIST.
 		// They are refusals about the STATE OF THE RECORD, not about what the caller typed, and the
 		// handler answers them 409 — the same split service-documents makes. A 400 there would tell
 		// an officer to fix a form that is perfectly correct.

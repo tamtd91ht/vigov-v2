@@ -53,7 +53,8 @@ const cotPhieu = `id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vu
 	trang_thai, bo_phan_id, can_bo_xu_ly_id,
 	goc_dem_han, vao_so_luc, han_tiep_nhan, han_xu_ly_xong, han_phan_loai,
 	phan_loai_luc, xu_ly_xong_luc, dong_luc, ket_qua_xu_ly,
-	hien_cong_khai, so_lan_mo_lai`
+	hien_cong_khai, so_lan_mo_lai,
+	ly_do_ket_thuc_nhanh, co_quan_nhan, ket_thuc_nhanh_luc`
 
 // TheoMaTraCuu reads one petition by the code the citizen was handed.
 //
@@ -198,10 +199,10 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		// others, and the second of those is how `han_tiep_nhan IS NULL` quietly becomes a
 		// deadline in year 1.
 		congDan, linhVuc, diaChi, thon, hoTen, dienThoai, boPhan, canBo sql.NullString
-		ketQua                                                          sql.NullString
+		ketQua, lyDoKetThuc, coQuanNhan                                 sql.NullString
 		lat, lng                                                        sql.NullFloat64
 		hanTiepNhan, hanXuLyXong, hanPhanLoai                           sql.NullTime
-		phanLoaiLuc, xuLyXongLuc, dongLuc                               sql.NullTime
+		phanLoaiLuc, xuLyXongLuc, dongLuc, ketThucNhanhLuc              sql.NullTime
 	)
 
 	// POSITIONAL — in lockstep with cotPhieu. See the note there.
@@ -212,6 +213,7 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		&p.GocDemHan, &p.VaoSoLuc, &hanTiepNhan, &hanXuLyXong, &hanPhanLoai,
 		&phanLoaiLuc, &xuLyXongLuc, &dongLuc, &ketQua,
 		&p.HienCongKhai, &p.SoLanMoLai,
+		&lyDoKetThuc, &coQuanNhan, &ketThucNhanhLuc,
 	}
 	if err := r.Scan(append(dich, them...)...); err != nil {
 		return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: đọc dòng: %w", err)
@@ -228,6 +230,10 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 	p.BoPhanID = boPhan.String
 	p.CanBoXuLyID = canBo.String
 	p.KetQuaXuLy = ketQua.String
+	// NULL on every status but the two branches (migration 0011's CHECK binds them to `trang_thai`).
+	p.LyDoKetThucNhanh = lyDoKetThuc.String
+	p.CoQuanNhan = coQuanNhan.String
+	p.KetThucNhanhLuc = ketThucNhanhLuc.Time
 	if lat.Valid {
 		v := lat.Float64
 		p.Lat = &v

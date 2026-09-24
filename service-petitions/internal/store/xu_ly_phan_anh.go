@@ -303,7 +303,7 @@ func (s *PhieuPhanAnhStore) TheoMaTraCuuDeSua(ctx context.Context, tx *store.Sco
 	return p, nil
 }
 
-// --- the three writes that move the lifecycle -----------------------------------------------------
+// --- the writes that move the lifecycle -----------------------------------------------------------
 
 // PhanCong records who is answerable for the petition, and the status that act lands it in.
 //
@@ -378,6 +378,52 @@ func (s *PhieuPhanAnhStore) Dong(ctx context.Context, tx *store.ScopedTx,
 		return fmt.Errorf("phieu_phan_anh: đóng phiếu: %w", err)
 	}
 	return doiMotDongPhieu(kq, "đóng phiếu")
+}
+
+// KhongTiepNhan puts the petition in the terminal branch `khong-tiep-nhan`, with the reason the
+// CITIZEN reads and the instant of the act.
+//
+// TWO METHODS AND NOT ONE `KetThucNhanh(…, sangTrangThai)`, for the reason Dong gives: THE STATUS IS
+// A LITERAL, so no layer above can pass a status to a method named after one branch, and each
+// statement can only ever produce its own branch. `co_quan_nhan` is not in this statement at all, so
+// it stays NULL — which migration 0011's CHECK requires of this branch.
+//
+// THE DATABASE IS THE FLOOR UNDER BOTH (migration 0011): the CHECK refuses a blank reason, a missing
+// instant, an instant before `phan_loai_luc` and an oversized reason, and the trigger refuses ever
+// rewriting the three columns once set. The use case refuses first, in Vietnamese.
+func (s *PhieuPhanAnhStore) KhongTiepNhan(ctx context.Context, tx *store.ScopedTx,
+	id string, tuTrangThai domain.TrangThai, lyDo string, luc time.Time) error {
+
+	const stmt = `UPDATE phieu_phan_anh
+		SET trang_thai = 'khong-tiep-nhan', ly_do_ket_thuc_nhanh = $3, ket_thuc_nhanh_luc = $4,
+		    cap_nhat_luc = now()
+		WHERE tenant_id = $1 AND id = $2 AND trang_thai = $5 AND deleted_at IS NULL`
+
+	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, lyDo, luc, string(tuTrangThai))
+	if err != nil {
+		// NOT the reason text: free text about one citizen's case (rule 3, forbidden #3).
+		return fmt.Errorf("phieu_phan_anh: không tiếp nhận: %w", err)
+	}
+	return doiMotDongPhieu(kq, "không tiếp nhận")
+}
+
+// ChuyenCapTren puts the petition in the terminal branch `chuyen-cap-tren`, with the reason, the
+// receiving body and the instant of the act. The status is a literal — see KhongTiepNhan.
+func (s *PhieuPhanAnhStore) ChuyenCapTren(ctx context.Context, tx *store.ScopedTx,
+	id string, tuTrangThai domain.TrangThai, lyDo, coQuanNhan string, luc time.Time) error {
+
+	const stmt = `UPDATE phieu_phan_anh
+		SET trang_thai = 'chuyen-cap-tren', ly_do_ket_thuc_nhanh = $3, co_quan_nhan = $4,
+		    ket_thuc_nhanh_luc = $5, cap_nhat_luc = now()
+		WHERE tenant_id = $1 AND id = $2 AND trang_thai = $6 AND deleted_at IS NULL`
+
+	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, lyDo, coQuanNhan, luc,
+		string(tuTrangThai))
+	if err != nil {
+		// NOT the reason or the body: free text about one citizen's case (rule 3, forbidden #3).
+		return fmt.Errorf("phieu_phan_anh: chuyển cấp trên: %w", err)
+	}
+	return doiMotDongPhieu(kq, "chuyển cấp trên")
 }
 
 // doiMotDongPhieu turns "no row matched" into the sentinel the caller answers 409 for.

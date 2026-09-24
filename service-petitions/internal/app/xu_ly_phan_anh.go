@@ -82,6 +82,10 @@ type KhoPhieuXuLy interface {
 		tuTrangThai, sangTrangThai domain.TrangThai, xuLyXongLuc time.Time) error
 	Dong(ctx context.Context, tx *store.ScopedTx, id string, tuTrangThai domain.TrangThai,
 		ketQua string, dongLuc time.Time) error
+	KhongTiepNhan(ctx context.Context, tx *store.ScopedTx, id string, tuTrangThai domain.TrangThai,
+		lyDo string, luc time.Time) error
+	ChuyenCapTren(ctx context.Context, tx *store.ScopedTx, id string, tuTrangThai domain.TrangThai,
+		lyDo, coQuanNhan string, luc time.Time) error
 }
 
 // KhoSuKien records the obligation to tell the citizen, in the SAME transaction as the change.
@@ -131,14 +135,18 @@ type DocHanXuLyXong interface {
 // for by name: it is the act that ISSUED THE COMMUNE'S PROMISE about when the matter would be
 // settled, and the entry carries the deadline it fixed.
 const (
-	HanhViPhanLoaiPhanAnh   = "phan_loai_phan_anh"
-	HanhViPhanCongPhanAnh   = "phan_cong_phan_anh"
-	HanhViChuyenTrangPhieu  = "chuyen_trang_thai_phan_anh"
-	HanhViDongPhanAnh       = "dong_phan_anh"
-	tenSuKienDoiTrangThai   = "petitions.status_changed.v1"
-	chuThePhaiLaCanBo       = "staff"
-	loiThieuChuThe          = "xu_ly_phan_anh: thiếu mã cán bộ thực hiện"
-	loiChuTheKhongPhaiCanBo = "xu_ly_phan_anh: chủ thể không phải cán bộ"
+	HanhViPhanLoaiPhanAnh  = "phan_loai_phan_anh"
+	HanhViPhanCongPhanAnh  = "phan_cong_phan_anh"
+	HanhViChuyenTrangPhieu = "chuyen_trang_thai_phan_anh"
+	HanhViDongPhanAnh      = "dong_phan_anh"
+	// The two terminal branches. Two verbs and not one `ket_thuc_nhanh`: an inspection asks "which
+	// petitions did this commune REFUSE" and "which did it pass on" as two different questions.
+	HanhViKhongTiepNhanPhanAnh = "khong_tiep_nhan_phan_anh"
+	HanhViChuyenCapTrenPhanAnh = "chuyen_cap_tren_phan_anh"
+	tenSuKienDoiTrangThai      = "petitions.status_changed.v1"
+	chuThePhaiLaCanBo          = "staff"
+	loiThieuChuThe             = "xu_ly_phan_anh: thiếu mã cán bộ thực hiện"
+	loiChuTheKhongPhaiCanBo    = "xu_ly_phan_anh: chủ thể không phải cán bộ"
 )
 
 // --- the holding rule: who may move a petition along ----------------------------------------------
@@ -837,6 +845,159 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi aud
 	})
 	if err != nil {
 		return domain.PhieuPhanAnh{}, bocPhieu(ctx, "đóng phiếu", err)
+	}
+	return sau, nil
+}
+
+// --- 5. the two terminal branches ----------------------------------------------------------------------
+
+// YeuCauChuyenCapTren is one referral as it arrives from the handler. Both fields are mandatory — see
+// domain.KiemLyDoKetThucNhanh and domain.KiemCoQuanNhan.
+type YeuCauChuyenCapTren struct {
+	LyDo       string
+	CoQuanNhan string
+}
+
+// KhongTiepNhan refuses the petition: the commune does not take it, and says why. Permission:
+// `feedback.classify` (user decision 25/09/2026).
+//
+// # WHY THE CLASSIFY KEY AND NOT A NEW ONE
+//
+// Both branches leave from `dang-phan-loai` and from nowhere else (domain.KetThucNhanhDuoc). They are
+// the two other ANSWERS to the question classification asks — "does the commune take this, and under
+// which field" (docs/ui-ux/09 §8.2) — so they are outcomes of the act ADR 0030 gave its own key. No
+// key was invented (rule 5, invariant 3c).
+//
+// # WHAT IT SHARES WITH Dong, AND WHY
+//
+// A mandatory text the citizen reads (rule 10, invariant 6 in spirit: never end silently), the text
+// NEVER in the audit delta and NEVER on the event, the restricted-field refusal inside the
+// transaction, and one transaction for the three writes.
+func (uc *XuLyPhanAnh) KhongTiepNhan(ctx context.Context, ma, lyDoTho string, nguoi audit.Actor,
+	hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
+
+	lyDo, err := domain.KiemLyDoKetThucNhanh(lyDoTho)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+	return uc.ketThucNhanh(ctx, ma, domain.KhongTiepNhan, lyDo, "", nguoi, hanChe)
+}
+
+// ChuyenCapTren refers the petition to another body: the commune stops owning it, names who received
+// it, and says why. Permission: `feedback.classify` — see KhongTiepNhan.
+//
+// ⚠ ONLY FROM `dang-phan-loai`. A referral of work already begun (`dang-xu-ly` -> `chuyen-cap-tren`)
+// is not in the lifecycle map and is undecided with the owner (rule 10, stop condition #2); it is not
+// built here and must not be added by widening domain.KetThucNhanhDuoc.
+func (uc *XuLyPhanAnh) ChuyenCapTren(ctx context.Context, ma string, yc YeuCauChuyenCapTren,
+	nguoi audit.Actor, hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
+
+	lyDo, err := domain.KiemLyDoKetThucNhanh(yc.LyDo)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+	coQuanNhan, err := domain.KiemCoQuanNhan(yc.CoQuanNhan)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+	return uc.ketThucNhanh(ctx, ma, domain.ChuyenCapTren, lyDo, coQuanNhan, nguoi, hanChe)
+}
+
+// ketThucNhanh is the shared body of the two branch acts. `lyDo` and `coQuanNhan` are ALREADY
+// validated; `coQuanNhan` is "" for a refusal.
+//
+// ONE BODY FOR TWO ACTS, unlike the four acts above, because these two differ in ONE column and one
+// verb and are otherwise the same act with the same obligations. Two copies would be two places where
+// "the reason is not in the delta" could be kept in one and lost in the other.
+func (uc *XuLyPhanAnh) ketThucNhanh(ctx context.Context, ma string, nhanh domain.TrangThai,
+	lyDo, coQuanNhan string, nguoi audit.Actor, hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
+
+	viec, hanhVi := "không tiếp nhận", HanhViKhongTiepNhanPhanAnh
+	if nhanh == domain.ChuyenCapTren {
+		viec, hanhVi = "chuyển cấp trên", HanhViChuyenCapTrenPhanAnh
+	}
+	if err := coCanBoThucHien(nguoi); err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+
+	// THE SAME CLOCK EVERY OTHER ACT USES. It becomes `ket_thuc_nhanh_luc`, which migration 0011
+	// requires to be at or after `phan_loai_luc` — both come from this seam, so they cannot disagree.
+	bayGio := uc.nayHoac()
+	var sau domain.PhieuPhanAnh
+
+	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		p, err := uc.kho.TheoMaTraCuuDeSua(ctx, tx, ma)
+		if err != nil {
+			return err
+		}
+		// BEFORE THE LIFECYCLE CHECK, for the reason Dong gives: refusing a report about a member of
+		// staff — or passing it to another body — is writing the final word on it, and a 409 about
+		// the state would tell a colleague of that person that the record exists.
+		if err := duocChamPhieuHanChe(p, hanChe); err != nil {
+			return err
+		}
+		if err := domain.KetThucNhanhDuoc(p.TrangThai, nhanh); err != nil {
+			return err
+		}
+
+		switch nhanh {
+		case domain.KhongTiepNhan:
+			err = uc.kho.KhongTiepNhan(ctx, tx, p.ID, p.TrangThai, lyDo, bayGio)
+		default:
+			err = uc.kho.ChuyenCapTren(ctx, tx, p.ID, p.TrangThai, lyDo, coQuanNhan, bayGio)
+		}
+		if err != nil {
+			return err
+		}
+
+		sau = p
+		sau.TrangThai = nhanh
+		sau.LyDoKetThucNhanh = lyDo
+		sau.CoQuanNhan = coQuanNhan
+		sau.KetThucNhanhLuc = bayGio
+
+		// THE REASON AND THE RECEIVING BODY ARE NOT IN THE DELTA; THEIR LENGTHS ARE.
+		//
+		// Same argument as Dong makes for `ket_qua_xu_ly`: free text a member of staff typed about ONE
+		// case will eventually name the reporter or a third person, and `audit_log` is append-only and
+		// never deleted — a copy there is a second permanent store of personal data (rule 6,
+		// forbidden #4). Nothing is lost: migration 0011's trigger freezes both columns once written,
+		// so the record itself is the tamper-proof copy, and the entry says a reason WAS recorded,
+		// by whom and when.
+		//
+		// ⚠ THE RECEIVING BODY IS NORMALLY AN AUTHORITY'S NAME, NOT PERSONAL DATA, and excluding it is
+		// the conservative reading of this session — reported, not buried. If an inspection needs it
+		// in the trail itself, that is one line here and the owner's call.
+		delta := map[string]any{
+			"truoc":                  map[string]any{"trang_thai": string(p.TrangThai)},
+			"sau":                    map[string]any{"trang_thai": string(nhanh)},
+			"do_dai_ly_do":           len([]rune(lyDo)),
+			"co_ly_do_doc":           true,
+			"ket_thuc_nhanh_luc_ghi": lucRaVet(bayGio),
+		}
+		if nhanh == domain.ChuyenCapTren {
+			delta["do_dai_co_quan_nhan"] = len([]rune(coQuanNhan))
+		}
+		than, err := json.Marshal(delta)
+		if err != nil {
+			return fmt.Errorf("xu_ly_phan_anh: mã hoá delta: %w", err)
+		}
+		if err := audit.Write(ctx, tx, audit.Entry{
+			Actor:   nguoi,
+			Action:  hanhVi,
+			Subject: p.MaTraCuu,
+			Delta:   than,
+		}); err != nil {
+			return err
+		}
+
+		// THE EVENT CARRIES THE STATUS AND THE FIXED SENTENCE OF domain.loiNhanChoDan — NEVER THE
+		// REASON OR THE BODY (events.proto forbids staff-written text). A staff-booked petition has no
+		// recipient and gets no row, as on every other act (ghiSuKienDoiTrangThai).
+		return uc.ghiSuKien(ctx, tx, sau, nhanh, bayGio)
+	})
+	if err != nil {
+		return domain.PhieuPhanAnh{}, bocPhieu(ctx, viec, err)
 	}
 	return sau, nil
 }

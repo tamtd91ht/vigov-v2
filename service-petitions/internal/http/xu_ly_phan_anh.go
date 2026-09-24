@@ -10,6 +10,12 @@ package http
 //	POST   /api/v1/citizen-reports/{maTraCuu}/assignment      feedback.assign
 //	POST   /api/v1/citizen-reports/{maTraCuu}/status          feedback.read    + the holding rule
 //	POST   /api/v1/citizen-reports/{maTraCuu}/closure         feedback.resolve
+//	POST   /api/v1/citizen-reports/{maTraCuu}/rejection       feedback.classify  (-> khong-tiep-nhan)
+//	POST   /api/v1/citizen-reports/{maTraCuu}/referral        feedback.classify  (-> chuyen-cap-tren)
+//
+// `rejection` and `referral` are nouns the USER chose on 25/09/2026 (ubiquitous-language.md), and the
+// key is `feedback.classify` because both branches leave only from `dang-phan-loai` — they are the
+// other outcomes of classification (ADR 0030).
 //
 // The first five keys are seeded at service-identity/migrations/0001_init.sql:288-294 and the two
 // ADR 0030 added at 0007_quyen_phan_loai_va_xem_day_du.sql:58-59. NO KEY WAS INVENTED (rule 5,
@@ -135,6 +141,23 @@ type phanCongVao struct {
 // that was handled from one that was quietly filed away.
 type dongPhieuVao struct {
 	Result string `json:"result"`
+}
+
+// khongTiepNhanVao is the body of POST …/{maTraCuu}/rejection.
+//
+// `Reason` IS MANDATORY AND THE SERVER ENFORCES IT: it is what the citizen reads instead of a result,
+// and migration 0011 refuses the status without it.
+type khongTiepNhanVao struct {
+	Reason string `json:"reason"`
+}
+
+// chuyenCapTrenVao is the body of POST …/{maTraCuu}/referral. BOTH fields are mandatory: a citizen
+// told their report was passed on must be told WHY and TO WHOM.
+type chuyenCapTrenVao struct {
+	Reason string `json:"reason"`
+	// ReceivingBody is free text — "Điện lực …", "Công an …" — by the user's decision: transfers go
+	// sideways as often as up, so there is no catalogue to pick from.
+	ReceivingBody string `json:"receiving_body"`
 }
 
 // --- the register list --------------------------------------------------------------------------
@@ -458,6 +481,51 @@ func (h *Handler) DongPhieu(w http.ResponseWriter, r *http.Request) {
 	h.traPhieu(w, r, sau)
 }
 
+// KhongTiepNhanPhieu refuses the petition with a reason the citizen can read.
+// POST /api/v1/citizen-reports/{maTraCuu}/rejection
+func (h *Handler) KhongTiepNhanPhieu(w http.ResponseWriter, r *http.Request) {
+	var vao khongTiepNhanVao
+	if !docThan(w, r, &vao) {
+		return
+	}
+	nguoi, ok := nguoiThucHien(r)
+	if !ok {
+		h.thieuChuTheXuLy(w, r)
+		return
+	}
+	ctx := r.Context()
+	sau, err := h.d.XuLyPhieu.KhongTiepNhan(ctx, r.PathValue("maTraCuu"), vao.Reason, nguoi,
+		h.coQuyenHanChe(ctx))
+	if err != nil {
+		h.traLoiLoiXuLy(w, r, "không tiếp nhận", err)
+		return
+	}
+	h.traPhieu(w, r, sau)
+}
+
+// ChuyenCapTrenPhieu refers the petition to another body, naming it and saying why.
+// POST /api/v1/citizen-reports/{maTraCuu}/referral
+func (h *Handler) ChuyenCapTrenPhieu(w http.ResponseWriter, r *http.Request) {
+	var vao chuyenCapTrenVao
+	if !docThan(w, r, &vao) {
+		return
+	}
+	nguoi, ok := nguoiThucHien(r)
+	if !ok {
+		h.thieuChuTheXuLy(w, r)
+		return
+	}
+	ctx := r.Context()
+	sau, err := h.d.XuLyPhieu.ChuyenCapTren(ctx, r.PathValue("maTraCuu"),
+		app.YeuCauChuyenCapTren{LyDo: vao.Reason, CoQuanNhan: vao.ReceivingBody}, nguoi,
+		h.coQuyenHanChe(ctx))
+	if err != nil {
+		h.traLoiLoiXuLy(w, r, "chuyển cấp trên", err)
+		return
+	}
+	h.traPhieu(w, r, sau)
+}
+
 // --- shared -------------------------------------------------------------------------------------
 
 // traPhieu writes the petition back after a successful act.
@@ -548,6 +616,8 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 		// một thay đổi ở `core/httpx` cho cả tám dịch vụ, không phải một đối số truyền lén ở đây.
 		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")
 	case errors.Is(err, domain.ErrDongSaiLuc):
+		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")
+	case errors.Is(err, domain.ErrKetThucNhanhSaiLuc):
 		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")
 	case errors.Is(err, domain.ErrKhongConCamKet):
 		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")

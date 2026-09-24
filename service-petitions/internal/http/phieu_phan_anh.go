@@ -152,6 +152,17 @@ type phieuPhanAnhRa struct {
 	// told them.
 	Result string `json:"result"`
 
+	// Reason, ReceivingBody and BranchEndedAt are the two terminal branches (migration 0011):
+	// `ly_do_ket_thuc_nhanh`, `co_quan_nhan`, `ket_thuc_nhanh_luc`. ABSENT ON EVERY OTHER STATUS.
+	//
+	// OMITEMPTY, AND THE POINTER IS OMITEMPTY TOO, ON PURPOSE: tools/apidoc declares a field without
+	// omitempty REQUIRED, and a required field that seven of nine statuses never carry breaks every
+	// web-admin and citizen fixture that was right yesterday. BranchEndedAt is deliberately NOT
+	// ClosedAt: a refused petition is not a resolved one (migration 0011's header).
+	Reason        string     `json:"reason,omitempty"`
+	ReceivingBody string     `json:"receiving_body,omitempty"`
+	BranchEndedAt *time.Time `json:"branch_ended_at,omitempty"`
+
 	Public bool `json:"public"`
 }
 
@@ -206,6 +217,14 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 	if !p.TranPhanLoaiKhongApDung() {
 		t := p.HanPhanLoai
 		ra.ClassifyDue = &t
+	}
+	// Carried as the row holds them. The database binds the three to the two branch statuses, so on
+	// any other status they are empty and omitted.
+	ra.Reason = p.LyDoKetThucNhanh
+	ra.ReceivingBody = p.CoQuanNhan
+	if !p.KetThucNhanhLuc.IsZero() {
+		t := p.KetThucNhanhLuc
+		ra.BranchEndedAt = &t
 	}
 	return ra
 }

@@ -77,6 +77,10 @@ func dongPhieu(sua map[string]driver.Value) map[string]driver.Value {
 		"ket_qua_xu_ly":  nil,
 		"hien_cong_khai": false,
 		"so_lan_mo_lai":  int64(0),
+		// The branch columns (migration 0011) are NULL on every status but the two branches.
+		"ly_do_ket_thuc_nhanh": nil,
+		"co_quan_nhan":         nil,
+		"ket_thuc_nhanh_luc":   nil,
 		// Only cotPhieuCoTaoLuc asks for it; the map is shared by both shapes, and a value the SELECT
 		// did not ask for is simply not read.
 		"tao_luc": mocVaoSo,

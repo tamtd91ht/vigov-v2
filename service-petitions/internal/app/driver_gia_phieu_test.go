@@ -131,6 +131,9 @@ func dongPhieuMau(sua map[string]any) map[string]driver.Value {
 		"ket_qua_xu_ly":        nil,
 		"hien_cong_khai":       false,
 		"so_lan_mo_lai":        int64(0),
+		"ly_do_ket_thuc_nhanh": nil,
+		"co_quan_nhan":         nil,
+		"ket_thuc_nhanh_luc":   nil,
 		"tao_luc":              mocGocThu,
 	}
 	for k, v := range sua {

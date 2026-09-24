@@ -185,6 +185,17 @@ type phieuCuaToiRa struct {
 	// authenticated read, because a queue is persisted, replicated and backed up and this text is
 	// about one named case (proto/vigov/petitions/v1/events.proto, §CitizenMessage).
 	Result string `json:"result"`
+
+	// Reason and ReceivingBody are what the citizen is told when the commune REFUSED the petition
+	// (`khong-tiep-nhan`) or PASSED IT ON (`chuyen-cap-tren`) — the branch's equivalent of Result, and
+	// on this surface for the same rule-10 reason: a petition must never end silently. Written FOR the
+	// citizen (migration 0011), so they are not staff notes (rule 4, forbidden #5).
+	//
+	// OMITEMPTY so they are absent — not `""` — on the seven statuses that never carry them, and so
+	// tools/apidoc does not declare them required. The instant of the act is NOT here: nobody decided
+	// the citizen screen shows it, and ClockFrom plus the status already explain the petition.
+	Reason        string `json:"reason,omitempty"`
+	ReceivingBody string `json:"receiving_body,omitempty"`
 }
 
 // phieuCuaToiRaNgoai builds the citizen response.
@@ -224,6 +235,14 @@ func phieuCuaToiRaNgoai(p domain.PhieuPhanAnh, nhan string) phieuCuaToiRa {
 	if !p.ChuaChotHanXuLy() {
 		t := p.HanXuLyXong
 		ra.ResolveDue = &t
+	}
+	// GATED ON THE STATUS HERE AS WELL AS BY THE DATABASE'S CHECK (migration 0011). This is the one
+	// surface where staff-written text reaches a member of the public, so it states its own condition
+	// rather than trusting that the columns are empty elsewhere: a row that ever violated the CHECK
+	// (a restore, a manual fix) must not put a refusal reason on a petition that is being processed.
+	if p.TrangThai == domain.KhongTiepNhan || p.TrangThai == domain.ChuyenCapTren {
+		ra.Reason = p.LyDoKetThucNhanh
+		ra.ReceivingBody = p.CoQuanNhan
 	}
 	return ra
 }

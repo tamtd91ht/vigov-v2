@@ -261,9 +261,8 @@ type PhieuPhanAnh struct {
 	// refused petition count as a resolved one. All three are empty on every other status, and the
 	// database refuses otherwise (CHECK `phieu_phan_anh_ket_thuc_nhanh_du_truong`).
 	//
-	// ⚠ NOT YET READ OR WRITTEN BY THE STORE: its column list is unchanged, so these are zero on every
-	// row read today — which is also correct today, because no route puts a petition in either branch.
-	// The card that adds the routes must add the three columns to the store's SELECT and scan.
+	// Written by store.KhongTiepNhan / store.ChuyenCapTren (POST …/rejection, …/referral) and read by
+	// every SELECT of cotPhieu.
 	LyDoKetThucNhanh string
 	CoQuanNhan       string
 	KetThucNhanhLuc  time.Time

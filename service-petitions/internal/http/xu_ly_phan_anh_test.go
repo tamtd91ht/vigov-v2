@@ -103,6 +103,8 @@ type xuLyPhieuGia struct {
 	ycLinhVuc  app.YeuCauChotLinhVuc
 	ycPhanCong app.YeuCauPhanCong
 	ketQua     string
+	lyDo       string
+	ycChuyen   app.YeuCauChuyenCapTren
 
 	// quyenCaXa is the fact the ADVANCE route hands down: does the caller hold `feedback.resolve`?
 	//
@@ -185,6 +187,22 @@ func (x *xuLyPhieuGia) Dong(ctx context.Context, ma, ketQua string, nguoi audit.
 	return x.tra()
 }
 
+func (x *xuLyPhieuGia) KhongTiepNhan(ctx context.Context, ma, lyDo string, nguoi audit.Actor,
+	hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
+
+	x.ghi(ctx, "khong-tiep-nhan", ma, nguoi, hanChe)
+	x.lyDo = lyDo
+	return x.tra()
+}
+
+func (x *xuLyPhieuGia) ChuyenCapTren(ctx context.Context, ma string, yc app.YeuCauChuyenCapTren,
+	nguoi audit.Actor, hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
+
+	x.ghi(ctx, "chuyen-cap-tren", ma, nguoi, hanChe)
+	x.ycChuyen = yc
+	return x.tra()
+}
+
 // --- fixtures ------------------------------------------------------------------------------------
 
 // The four write routes, named once so a case cannot drift from the route it is testing.
@@ -192,6 +210,9 @@ func duongPhanLoai(ma string) string  { return duong(ma) + "/classification" }
 func duongPhanCong(ma string) string  { return duong(ma) + "/assignment" }
 func duongTienTrang(ma string) string { return duong(ma) + "/status" }
 func duongDong(ma string) string      { return duong(ma) + "/closure" }
+
+func duongKhongTiepNhan(ma string) string { return duong(ma) + "/rejection" }
+func duongChuyenCapTren(ma string) string { return duong(ma) + "/referral" }
 
 const duongDanhSach = "/api/v1/citizen-reports"
 
@@ -279,6 +300,15 @@ func caCacTuyen() []caTuyen {
 			authz.Perm("feedback.read"), authz.Perm("feedback.assign")},
 		{"đóng phiếu", http.MethodPost, duongDong(maPhieuThuong), dongPhieuVao{Result: ketQuaThat},
 			authz.Perm("feedback.resolve"), authz.Perm("feedback.assign")},
+		// THE TWO BRANCHES (25/09/2026). `feedback.classify` opens them; `feedback.read` — the key
+		// every reader of the register holds — must not, and neither must `feedback.resolve`, the
+		// commune-wide working right: refusing a petition is a classification outcome, not work on it.
+		{"không tiếp nhận", http.MethodPost, duongKhongTiepNhan(maPhieuThuong),
+			khongTiepNhanVao{Reason: lyDoThatHTTP},
+			authz.Perm("feedback.classify"), authz.Perm("feedback.read")},
+		{"chuyển cấp trên", http.MethodPost, duongChuyenCapTren(maPhieuThuong),
+			chuyenCapTrenVao{Reason: lyDoThatHTTP, ReceivingBody: coQuanThatHTTP},
+			authz.Perm("feedback.classify"), authz.Perm("feedback.resolve")},
 	}
 }
 

@@ -244,6 +244,12 @@ type (
 			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
 		Dong(ctx context.Context, ma, ketQua string, nguoi audit.Actor,
 			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
+		// The two terminal branches (user decisions 24-25/09/2026). Same uniformity: both take the
+		// restricted fact, so neither can end a report about a member of staff for a colleague.
+		KhongTiepNhan(ctx context.Context, ma, lyDo string, nguoi audit.Actor,
+			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
+		ChuyenCapTren(ctx context.Context, ma string, yc app.YeuCauChuyenCapTren, nguoi audit.Actor,
+			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
 	}
 )
 
@@ -640,7 +646,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			http.HandlerFunc(h.DocPhieuPhanAnh)))
 
-	// --- THE STAFF PROCESSING PATH. FIVE ROUTES, and until today there were NONE ------------------
+	// --- THE STAFF PROCESSING PATH. SEVEN ROUTES (the two branches added 25/09/2026) --------------
 	//
 	// A citizen could file a petition and look it up, and no member of staff could classify it,
 	// assign it, move it or close it. Every petition that arrived stayed where it landed, with a
@@ -788,6 +794,53 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "feedback.resolve")(
 			idem.KhongCan("câu UPDATE mang `trang_thai = 'cho-dan-xac-nhan'`, nên lần gửi thứ hai không khớp dòng nào — đúng một lần đóng, đúng một kết quả, đúng một vết")(
 				http.HandlerFunc(h.DongPhieu))))
+
+	// KHÔNG TIẾP NHẬN — the first of the two terminal branches (user decisions 24-25/09/2026).
+	//
+	// `rejection` IS THE USER'S URL NOUN (25/09/2026, kb/00-foundation/ubiquitous-language.md), not
+	// translated on the spot. `feedback.classify` because the branch leaves only from
+	// `dang-phan-loai`: it is an outcome of classification (ADR 0030). No key was invented.
+	//
+	// idem.KhongCan for closure's mechanical reason: the UPDATE carries `trang_thai = 'dang-phan-loai'`,
+	// so a second identical request matches no row and answers 409 — one refusal, one reason, one
+	// entry. Migration 0011's trigger additionally refuses rewriting the reason once set.
+	//
+	// @summary  Không tiếp nhận phiếu phản ánh — kèm lý do người dân đọc được
+	// @screen   09-phan-anh-nguoi-dan §8.2
+	// @request  khongTiepNhanVao
+	// @reply    200 phieuPhanAnhRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/rejection",
+		authz.RequirePermission(d.Checker, "feedback.classify")(
+			idem.KhongCan("câu UPDATE mang `trang_thai = 'dang-phan-loai'`, nên lần gửi thứ hai không khớp dòng nào và trả 409 — đúng một lần từ chối, đúng một lý do, đúng một vết")(
+				http.HandlerFunc(h.KhongTiepNhanPhieu))))
+
+	// CHUYỂN CẤP TRÊN — the second terminal branch: the petition leaves the commune for another body,
+	// which is NAMED, with a reason the citizen reads.
+	//
+	// `referral` IS THE USER'S URL NOUN (25/09/2026). Same key and same idempotency reasoning as
+	// `rejection` above. ⚠ ONLY FROM `dang-phan-loai`: a referral of work already begun is undecided
+	// with the owner and is refused 409, not built.
+	//
+	// @summary  Chuyển phiếu phản ánh lên/sang cơ quan có thẩm quyền — kèm lý do và cơ quan tiếp nhận
+	// @screen   09-phan-anh-nguoi-dan §8.2
+	// @request  chuyenCapTrenVao
+	// @reply    200 phieuPhanAnhRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/referral",
+		authz.RequirePermission(d.Checker, "feedback.classify")(
+			idem.KhongCan("câu UPDATE mang `trang_thai = 'dang-phan-loai'`, nên lần gửi thứ hai không khớp dòng nào và trả 409 — đúng một lần chuyển, đúng một cơ quan nhận, đúng một vết")(
+				http.HandlerFunc(h.ChuyenCapTrenPhieu))))
 
 	// --- THE TASK REGISTER. TWO READ ROUTES AND SIX WRITE ROUTES ---------------------------------
 	//
