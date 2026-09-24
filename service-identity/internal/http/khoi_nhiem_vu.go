@@ -18,14 +18,14 @@ import (
 // The consumer is the task form in `petitions`, which reads this over the service contract and
 // stores the CODE as a value (rule 2, invariant 3).
 //
-// THERE IS NO WRITE ROUTE — open question #21, same as the other catalogue.
+// THE WRITE ROUTES ARE IN danh_muc_ghi.go (POST / PATCH / DELETE, `admin.lookup`) — user decision
+// 2026-09-24: a full catalogue, and a concept SEPARATE from the directory's "khối đơn vị".
 
 // khoiNhiemVuRa is one catalogue entry as it leaves the API.
 //
 // NOTHING HERE IS PERSONAL DATA (rule 3): a bloc names an arm of the apparatus, not a person.
 //
-// `nguon` AND `ma_nguon_re_nhanh` ARE DELIBERATELY ABSENT — they answer "what may be done to this
-// row", and nothing may be done to it through this API. Same reading as loaiDonViDanCuRa.
+// THE FIELD SET IS THE SIBLINGS', NAME FOR NAME — same reading as loaiDonViDanCuRa.
 type khoiNhiemVuRa struct {
 	ID   string `json:"id"`   // ULID
 	Code string `json:"code"` // slug: "khoi-uy-ban" — the value a task record in `petitions` holds
@@ -42,6 +42,11 @@ type khoiNhiemVuRa struct {
 	// one half of it. Two spellings of `dang_dung` across one contract make a client writing a
 	// single catalogue reader branch on which service answered.
 	Active bool `json:"active"`
+
+	// Order, Source, Tier — same meaning and same rules as on loaiDonViDanCuRa.
+	Order  int    `json:"order"`
+	Source string `json:"source"`
+	Tier   int    `json:"tier"`
 }
 
 // danhSachKhoiNhiemVuRa wraps the list in an OBJECT rather than a bare JSON array — same reasoning
@@ -53,6 +58,7 @@ type danhSachKhoiNhiemVuRa struct {
 func khoiNhiemVuRaNgoai(k domain.KhoiNhiemVu) khoiNhiemVuRa {
 	return khoiNhiemVuRa{
 		ID: k.ID, Code: k.Ma, Label: k.Nhan, IsDefault: k.LaMacDinh, Active: k.DangDung,
+		Order: k.ThuTu, Source: k.Nguon, Tier: int(k.Tang()),
 	}
 }
 

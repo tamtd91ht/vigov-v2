@@ -123,24 +123,17 @@ func TestKhoiNhiemVuKhongVuotSangXaKhac(t *testing.T) {
 // --- the exact field set ------------------------------------------------------------------------
 
 func TestKhoiNhiemVuTraDungNhungTruongCuaHopDong(t *testing.T) {
-	// THE FIELDS THAT ARE ABSENT ARE THE DESIGN, so their absence is asserted rather than assumed.
-	// Decoding into the response struct — which every other test here does — cannot see this: the
-	// handler encodes from that same struct, so the two agree whatever the struct says. A field
-	// added tomorrow ships; a field dropped ships a hole; the suite stays green either way.
+	// THE EXACT FIELD SET, asserted on the raw JSON — decoding into the response struct cannot see a
+	// field added or dropped, because the handler encodes from that same struct.
 	//
-	//	tenant_id    never leaves this service — it is not data, it is the dimension every row is
-	//	             already filtered by (rule 1, invariant 4)
-	//	thu_tu       the sort key, not data. Exposing it invites a client to re-sort, which is a
-	//	             client overruling the commune on its own catalogue
-	//	nguon,       they answer "what may be DONE to this row" — the three tiers of ADR 0024 §6.
-	//	ma_nguon_    Only a configuration surface asks that, and open question #21 has not settled
-	//	re_nhanh     who may do anything at all. Publishing the tier now would describe buttons
-	//	             nobody has decided to allow
-	//	deleted_at   a soft-deleted row never leaves the store, so no reader needs to ask
+	// EIGHT FIELDS, THE SIBLINGS' EIGHT (service-petitions loaiNhiemVuRa): `order`, `source` and
+	// `tier` joined on 2026-09-24 with the write routes — the admin web detects that a catalogue is
+	// writable by their presence. What stays absent: tenant_id (the dimension every row is filtered
+	// by), the raw `ma_nguon_re_nhanh` (folded into `tier`), deleted_at (a soft-deleted row never
+	// leaves the store).
 	//
 	// THIS IS A CONTRACT, NOT A SNAPSHOT. When it goes red the question is whether the ROUTE should
-	// have changed, not whether the list needs updating — `make kb` regenerates
-	// kb/20-contracts/openapi.json from these types, and web-admin's types from that.
+	// have changed.
 	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongKhoiNhiemVu, "", m.tokenCho(t, xaA, sidA))
@@ -162,7 +155,8 @@ func TestKhoiNhiemVuTraDungNhungTruongCuaHopDong(t *testing.T) {
 	// `label`, NOT `name` — the field is `nhan`. Every ADR 0024 catalogue in this system answers
 	// `label`; entities with a `ten` column answer `name`. `active` beside `is_default` is the same
 	// pair the four sibling services ship; the asymmetry is deliberate (khoiNhiemVuRa.Active).
-	muon := map[string]bool{"id": true, "code": true, "label": true, "is_default": true, "active": true}
+	muon := map[string]bool{"id": true, "code": true, "label": true, "is_default": true, "active": true,
+		"order": true, "source": true, "tier": true}
 	for _, mot := range tho.Items {
 		for khoa := range mot {
 			if !muon[khoa] {
@@ -174,6 +168,22 @@ func TestKhoiNhiemVuTraDungNhungTruongCuaHopDong(t *testing.T) {
 		if len(mot) != len(muon) {
 			t.Errorf("thiếu trường: có %v, muốn %v", mot, muon)
 		}
+	}
+}
+
+// ORDER, SOURCE AND TIER ARE READ, NOT CONSTANTS. The fixture gives the two rows different values of
+// all three (tier 2 `he-thong` and tier 1 `don-vi`), so a mapping that dropped any of them shows.
+func TestKhoiNhiemVuTraThuTuNguonVaTang(t *testing.T) {
+	m := dungMayChu(t)
+	w := m.goi(t, "GET", hostA, duongKhoiNhiemVu, "", m.tokenCho(t, xaA, sidA))
+	doiMa(t, w, http.StatusOK)
+
+	ra := docKhoiNhiemVu(t, w.Body.Bytes())
+	if a := ra.Items[0]; a.Order != 1 || a.Source != "he-thong" || a.Tier != 2 {
+		t.Errorf("mục hệ thống: order=%d source=%q tier=%d, muốn 1 / he-thong / 2", a.Order, a.Source, a.Tier)
+	}
+	if b := ra.Items[1]; b.Order != 2 || b.Source != "don-vi" || b.Tier != 1 {
+		t.Errorf("mục của xã: order=%d source=%q tier=%d, muốn 2 / don-vi / 1", b.Order, b.Source, b.Tier)
 	}
 }
 

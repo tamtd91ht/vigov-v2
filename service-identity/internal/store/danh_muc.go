@@ -13,14 +13,14 @@ import (
 // 0005 gives every catalogue in this service ONE trigger function with the reason spelled out at
 // line 124: "the tiers are a property of the SHAPE, not of one catalogue. A copy per table is a
 // copy that gets fixed in two places and forgotten in the third." The read side has exactly the
-// same shape — same five columns, same soft-delete predicate, same order, same ceiling-plus-one
+// same shape — same columns, same soft-delete predicate, same order, same ceiling-plus-one
 // refusal — so the same reasoning applies to it. The part that must not be forgotten in the third
 // copy is `deleted_at IS NULL` and the refusal; both live here once.
 //
 // WHY IT IS NOT BoPhanStore / VaiTroStore's SHAPE, which duplicate a similar query between them:
 // those two read DIFFERENT columns from differently-shaped tables (`cha_id` on one, `la_lanh_dao`
 // on the other) and were written before there was a catalogue shape to share. These two read the
-// same five columns from two tables the migration deliberately declared identically.
+// same columns from two tables the migration deliberately declared identically.
 //
 // WHEN TO SPLIT IT AGAIN, so the next person does not have to decide from scratch: the day one
 // catalogue needs a column the other does not have. At that point this stops being one shape and
@@ -40,13 +40,27 @@ type dongDanhMuc struct {
 	Nhan      string
 	LaMacDinh bool
 	DangDung  bool
+
+	// The three columns the configuration screen needs since the write routes exist (user decision
+	// 2026-09-24): the order it edits, and the two facts the tier is derived from.
+	ThuTu          int
+	Nguon          string
+	MaNguonReNhanh bool
 }
 
-// cotDanhMuc IS READ BY POSITION in docDanhMuc. `ma` and `nhan` are adjacent TEXT columns and
+// cotDanhMuc IS READ BY POSITION in quetDongDanhMuc. `ma` and `nhan` are adjacent TEXT columns and
 // `la_mac_dinh` and `dang_dung` are adjacent BOOLEANs: swapping either pair — here or in the Scan —
 // produces no error at all. The first swap shows slugs where labels belong; the second pre-selects
-// a row the commune has taken out of use.
-const cotDanhMuc = `id, ma, nhan, la_mac_dinh, dang_dung`
+// a row the commune has taken out of use. The write path (danh_muc_ghi.go) reads the same list
+// through the same Scan, so the two cannot drift apart.
+const cotDanhMuc = `id, ma, nhan, la_mac_dinh, dang_dung, thu_tu, nguon, ma_nguon_re_nhanh`
+
+// quetDongDanhMuc is the ONE Scan of cotDanhMuc — positional, in lockstep with it.
+func quetDongDanhMuc(quet func(...any) error) (dongDanhMuc, error) {
+	var d dongDanhMuc
+	err := quet(&d.ID, &d.Ma, &d.Nhan, &d.LaMacDinh, &d.DangDung, &d.ThuTu, &d.Nguon, &d.MaNguonReNhanh)
+	return d, err
+}
 
 // docDanhMuc reads one commune's whole catalogue from `bang`, ordered, bounded by `tran`.
 //
@@ -87,9 +101,9 @@ func docDanhMuc(ctx context.Context, db *store.DB, bang string, tran int, quaNhi
 
 	ra := make([]dongDanhMuc, 0, 16)
 	for rows.Next() {
-		var d dongDanhMuc
 		// POSITIONAL — in lockstep with cotDanhMuc. See the note there on the two adjacent pairs.
-		if err := rows.Scan(&d.ID, &d.Ma, &d.Nhan, &d.LaMacDinh, &d.DangDung); err != nil {
+		d, err := quetDongDanhMuc(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("%s: đọc dòng: %w", bang, err)
 		}
 		ra = append(ra, d)

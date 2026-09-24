@@ -313,6 +313,25 @@ type (
 		DanhSach(ctx context.Context) ([]domain.KhoiNhiemVu, error)
 	}
 
+	// LoaiDonViDanCuGhi and KhoiNhiemVuGhi are the WRITE surfaces of the two catalogues above —
+	// POST / PATCH / DELETE under `admin.lookup` (user decision 2026-09-24: both are full catalogues).
+	//
+	// USE CASES, NOT STORES, and separate from the read interfaces for the reason CanBoGhiDanhBa is
+	// separate from CanBoDanhBa: every method opens the transaction its audit entry shares (rule 6,
+	// invariant 3) and carries the three-tier refusals. TWO INTERFACES, not one: the residential-unit
+	// handler must not be able to write a task bloc. In production *app.DanhMucGhi[T] satisfies each.
+	LoaiDonViDanCuGhi interface {
+		Them(ctx context.Context, yc app.YeuCauThemDanhMuc, nguoi app.NguoiThucHien) (domain.LoaiDonViDanCu, error)
+		Sua(ctx context.Context, id string, yc app.YeuCauSuaDanhMuc, nguoi app.NguoiThucHien) (domain.LoaiDonViDanCu, error)
+		Xoa(ctx context.Context, id, lyDo string, nguoi app.NguoiThucHien) error
+	}
+
+	KhoiNhiemVuGhi interface {
+		Them(ctx context.Context, yc app.YeuCauThemDanhMuc, nguoi app.NguoiThucHien) (domain.KhoiNhiemVu, error)
+		Sua(ctx context.Context, id string, yc app.YeuCauSuaDanhMuc, nguoi app.NguoiThucHien) (domain.KhoiNhiemVu, error)
+		Xoa(ctx context.Context, id, lyDo string, nguoi app.NguoiThucHien) error
+	}
+
 	// The commune's working calendar (migration 0006). THREE INTERFACES, THREE TABLES, and the
 	// same discipline as the three reference reads above: an interface is the list of things a
 	// handler CAN do, so the holiday handler must not be able to reach the weekly calendar.
@@ -424,6 +443,9 @@ type Deps struct {
 	ThonToDanPho   ThonToDanPhoDanhSach
 	LoaiDonViDanCu LoaiDonViDanCuDanhMuc
 	KhoiNhiemVu    KhoiNhiemVuDanhMuc
+	// The write surfaces of the two catalogues. Use cases — see LoaiDonViDanCuGhi.
+	GhiLoaiDonViDanCu LoaiDonViDanCuGhi
+	GhiKhoiNhiemVu    KhoiNhiemVuGhi
 	// The commune's working calendar (migration 0006) — GET /api/v1/working-hours,
 	// /api/v1/public-holidays, /api/v1/swap-working-days.
 	LichLamViec LichLamViecDoc
@@ -513,6 +535,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho loại đơn vị dân cư — GET /api/v1/residential-unit-types sẽ panic khi có người gọi")
 	case d.KhoiNhiemVu == nil:
 		panic("identity/http: thiếu kho khối nhiệm vụ — GET /api/v1/task-blocs sẽ panic khi có người gọi")
+	case d.GhiLoaiDonViDanCu == nil:
+		panic("identity/http: thiếu use case ghi danh mục loại đơn vị dân cư — POST/PATCH/DELETE /api/v1/residential-unit-types sẽ panic khi có người gọi")
+	case d.GhiKhoiNhiemVu == nil:
+		panic("identity/http: thiếu use case ghi danh mục khối nhiệm vụ — POST/PATCH/DELETE /api/v1/task-blocs sẽ panic khi có người gọi")
 	case d.LichLamViec == nil:
 		panic("identity/http: thiếu kho lịch làm việc — GET /api/v1/working-hours sẽ panic khi có người gọi")
 	case d.NgayNghiLe == nil:
@@ -1377,7 +1403,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("PUT mang tập quyền tuyệt đối: lưu đúng tập vai trò đang giữ thì use case không ghi gì và không để vết, nên lần gửi thứ hai cho cùng một kết quả")(
 				http.HandlerFunc(h.LuuPhanQuyenVaiTro))))
 
-	// --- the three reference reads of migration 0005. THREE READ ROUTES, DELIBERATELY NO WRITE ---
+	// --- the three reference reads of migration 0005 ---------------------------------------------
 	//
 	// The resource nouns come from kb/00-foundation/ubiquitous-language.md:159-161, which already
 	// fixed the ENTITY names (ADR 0024) — `ResidentialUnit`, `ResidentialUnitType`, `TaskBloc` —
@@ -1386,13 +1412,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	// the obvious English word asserts something false, so the mapping gets looked up even when the
 	// obvious word turns out to be right.
 	//
-	// NO WRITE ROUTE ON ANY OF THE THREE, and the reason is one unanswered question rather than an
-	// oversight: open question #21 — whether a commune may edit the CODE LIST itself or only the
-	// labels and the order — is still open. A half-written write path looks like a decision
-	// somebody made. The database already refuses the dangerous half (migration 0005's trigger
-	// refuses six operations); what nobody has settled is who may add a row.
+	// WRITE ROUTES: the two CATALOGUES (`residential-unit-types`, `task-blocs`) have them since the
+	// user's decision of 2026-09-24 — full catalogues, under `admin.lookup`, mounted below the reads.
+	// The sentence that stood here blamed open question #21; that was wrong twice over — #21 was
+	// DECIDED on 2026-09-22, and it concerns TASK STATUSES only (ADR 0035 §C), not these lists.
+	// `residential-units` (the hamlets themselves) still has no write route: nobody has asked for one.
 	//
-	// ALL THREE ARE AnyAuthenticated, SAME CALL AND SAME REASON AS /org-units AND /roles ABOVE.
+	// ALL THREE READS ARE AnyAuthenticated, SAME CALL AND SAME REASON AS /org-units AND /roles ABOVE.
 	// These lists fill pickers and filters on nearly every screen in the system — the `Loại` column
 	// on the residential-unit list, the address picker on a petition, the bloc field on a task form
 	// in another service. Requiring a configuration permission would not protect anything; it would
@@ -1431,6 +1457,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// idstore.TranDanhMucLoaiDonViDanCu — REFUSED rather than truncated, because a missing
 	// classification is a unit filed under the wrong one.
 	//
+	// Each item carries `order`, `source` and `tier` since the write routes exist — the same eight
+	// fields as the sibling catalogues; the admin web detects write-ability by their presence.
+	//
 	// @reply    200 danhSachLoaiDonViDanCuRa
 	// @reply    401 httpx.Error
 	// @reply    500 httpx.Error
@@ -1450,6 +1479,116 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/task-blocs",
 		authz.AnyAuthenticated("nhãn khối nhiệm vụ xuất hiện ở ô chọn khối trên biểu mẫu nhiệm vụ, ở nhãn dòng và ở bộ lọc danh sách nhiệm vụ — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachKhoiNhiemVu)))
+
+	// --- the two catalogues, WRITE. SIX ROUTES, ALL `admin.lookup` ----------------------------------
+	//
+	// USER DECISION 2026-09-24: both are FULL catalogues — add, relabel, reorder, disable/enable,
+	// soft-delete commune-added rows — the same shape as the five catalogues already writable in
+	// documents, finance, comms and petitions. The CONTRACT IS THEIRS, field for field and status for
+	// status (internal/http/danh_muc_ghi.go states it in one table), so the admin web drives all seven
+	// with one piece of generic code. Khối nhiệm vụ is a concept SEPARATE from the directory's "khối
+	// đơn vị" (same decision) and links to nothing in `bo_phan`.
+	//
+	// `admin.lookup` — "Quản lý danh mục", seeded at migration 0001:281 and the key every sibling
+	// catalogue declares. No key is invented (rule 5, invariant 3c). The READS stay AnyAuthenticated.
+	//
+	// THE THREE TIERS (ADR 0024 §6; trigger migration 0005:157): a `don-vi` row may be relabelled,
+	// disabled and soft-deleted; a `he-thong` row may not be deleted (409 system_row); a row the code
+	// branches on may not be disabled either (409 code_branch_row). The use case refuses first; the
+	// trigger is the floor. `source` / `tier` in any body → 400; `code` in a PATCH → 400.
+	//
+	// POST idem.Required(MoKhiHong), PATCH / DELETE idem.KhongCan — the siblings' choices, for their
+	// reasons: `UNIQUE (tenant_id, ma)` counting soft-deleted rows means a cache outage cannot produce
+	// a duplicate row, so refusing mid-configuration would buy nothing; PATCH writes nothing when
+	// nothing moved; a second DELETE is a 404 and cannot rewrite who deleted the row.
+
+	// @summary  Thêm một loại đơn vị dân cư của riêng xã vào danh mục
+	// @screen   14-cau-hinh §5
+	// @request  themDanhMucVao
+	// @reply    201 loaiDonViDanCuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/residential-unit-types",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.ThemLoaiDonViDanCu))))
+
+	// @summary  Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một loại đơn vị dân cư
+	// @screen   14-cau-hinh §5
+	// @request  suaDanhMucVao
+	// @reply    200 loaiDonViDanCuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/residential-unit-types/{id}",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaLoaiDonViDanCu))))
+
+	// @summary  Xoá mềm một loại đơn vị dân cư do xã tự thêm, kèm lý do bắt buộc
+	// @screen   14-cau-hinh §5
+	// @request  xoaDanhMucVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/residential-unit-types/{id}",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.XoaLoaiDonViDanCu))))
+
+	// @summary  Thêm một khối nhiệm vụ của riêng xã vào danh mục
+	// @screen   14-cau-hinh §5
+	// @request  themDanhMucVao
+	// @reply    201 khoiNhiemVuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/task-blocs",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.ThemKhoiNhiemVu))))
+
+	// @summary  Sửa nhãn, thứ tự, trạng thái dùng hoặc đặt mặc định cho một khối nhiệm vụ
+	// @screen   14-cau-hinh §5
+	// @request  suaDanhMucVao
+	// @reply    200 khoiNhiemVuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/task-blocs/{id}",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaKhoiNhiemVu))))
+
+	// @summary  Xoá mềm một khối nhiệm vụ do xã tự thêm, kèm lý do bắt buộc
+	// @screen   14-cau-hinh §5
+	// @request  xoaDanhMucVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/task-blocs/{id}",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.XoaKhoiNhiemVu))))
 
 	// --- the commune's working calendar. THREE READ ROUTES, DELIBERATELY NO WRITE ROUTE --------
 	//

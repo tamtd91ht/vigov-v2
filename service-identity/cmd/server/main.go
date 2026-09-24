@@ -249,6 +249,12 @@ func run(log *slog.Logger) error {
 	// check reads the rows it then writes, under locks, inside one transaction. No delete — see
 	// app.SoDoToChuc.
 	ghiBoPhan := app.NewSoDoToChuc(kho, boPhan)
+	// The WRITE surfaces of the two reference catalogues: POST / PATCH / DELETE on
+	// /api/v1/residential-unit-types and /api/v1/task-blocs, under `admin.lookup` (user decision
+	// 2026-09-24: full catalogues). Given the SAME stores as the read fields; each use case locks the
+	// row, derives its tier, and writes the change and its audit entry in one transaction.
+	ghiLoaiDonViDanCu := app.NewDanhMucLoaiDonViDanCu(kho, loaiDonViDanCu)
+	ghiKhoiNhiemVu := app.NewDanhMucKhoiNhiemVu(kho, khoiNhiemVu)
 
 	// 7. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
 	//    cache — and the routes then behave per the CheDoHong each one declared. A service must
@@ -294,11 +300,14 @@ func run(log *slog.Logger) error {
 		// internal/http/quyen.go và app/phan_quyen_vai_tro.go.
 		MaTran:       maTranQuyen,
 		GhiPhanQuyen: ghiPhanQuyen,
-		// Ba tuyến đọc tham chiếu của migration 0005 — CHỈ ĐỌC. Không có tuyến ghi nào: câu hỏi
-		// mở #21 (xã được sửa DANH SÁCH MÃ hay chỉ nhãn và thứ tự) chưa có lời đáp.
-		ThonToDanPho:   thonToDanPho,
-		LoaiDonViDanCu: loaiDonViDanCu,
-		KhoiNhiemVu:    khoiNhiemVu,
+		// Ba tuyến đọc tham chiếu của migration 0005. Hai danh mục (loại đơn vị dân cư, khối nhiệm
+		// vụ) có thêm tuyến GHI dưới khoá `admin.lookup` — người dùng quyết 24/09/2026: danh mục đầy đủ.
+		// Danh sách thôn/tổ dân phố vẫn chỉ đọc.
+		ThonToDanPho:      thonToDanPho,
+		LoaiDonViDanCu:    loaiDonViDanCu,
+		KhoiNhiemVu:       khoiNhiemVu,
+		GhiLoaiDonViDanCu: ghiLoaiDonViDanCu,
+		GhiKhoiNhiemVu:    ghiKhoiNhiemVu,
 		// Lịch làm việc của xã (migration 0006) — BA KHO ĐỌC và MỘT USE CASE GHI đứng sau ba trường
 		// ghi. Câu "ai sửa được lịch của xã" đã có lời đáp không bịa ra khoá nào: `admin.sla`, đúng
 		// khoá migration 0001:277 gieo cho "Cấu hình thời hạn xử lý" — vì lịch làm việc chính là nửa

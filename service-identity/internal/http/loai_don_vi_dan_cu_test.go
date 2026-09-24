@@ -150,39 +150,32 @@ func TestLoaiDonViDanCuMangCoMacDinhVaDangDung(t *testing.T) {
 	}
 }
 
-func TestLoaiDonViDanCuKhongPhoiRaNguonVaCoReNhanh(t *testing.T) {
-	// `nguon` and `ma_nguon_re_nhanh` answer "what may be DONE to this row", and nothing may be
-	// done to it through this API — there is no write route (open question #21). Publishing them
-	// would describe a write surface that does not exist, and the first client to grey out a button
-	// from them would be enforcing in the browser a rule the server is the one enforcing.
+func TestLoaiDonViDanCuTraThuTuNguonVaTang(t *testing.T) {
+	// SINCE 2026-09-24 THE READ CARRIES `order`, `source` AND `tier` — the siblings' fields, which the
+	// admin web reads to know the catalogue is writable and which buttons to draw. The fixture gives
+	// the two rows different values of all three (tier 3 `thon`, tier 1 `to-dan-pho`), so a mapping
+	// that hard-coded any of them shows. The raw `ma_nguon_re_nhanh` stays folded into `tier`.
 	m := dungMayChu(t)
 
 	w := m.goi(t, "GET", hostA, duongLoaiDonViDanCu, "", m.tokenCho(t, xaA, sidA))
 	doiMa(t, w, http.StatusOK)
 
-	than := w.Body.String()
-	for _, cam := range []string{"nguon", "source", "re_nhanh", "ma_nguon", "he-thong", "don-vi"} {
-		if strings.Contains(than, cam) {
-			t.Errorf("phản hồi danh mục chứa %q: %s", cam, than)
+	ra := docLoaiDonViDanCu(t, w.Body.Bytes())
+	if a := ra.Items[0]; a.Order != 1 || a.Source != "he-thong" || a.Tier != 3 {
+		t.Errorf("thôn: order=%d source=%q tier=%d, muốn 1 / he-thong / 3", a.Order, a.Source, a.Tier)
+	}
+	if b := ra.Items[1]; b.Order != 2 || b.Source != "don-vi" || b.Tier != 1 {
+		t.Errorf("tổ dân phố: order=%d source=%q tier=%d, muốn 2 / don-vi / 1", b.Order, b.Source, b.Tier)
+	}
+	for _, cam := range []string{"re_nhanh", "ma_nguon", "tenant_id", "deleted"} {
+		if strings.Contains(w.Body.String(), cam) {
+			t.Errorf("phản hồi chứa %q: %s", cam, w.Body.String())
 		}
 	}
 }
 
 func TestLoaiDonViDanCuTraDungNhungTruongCuaHopDong(t *testing.T) {
-	// THE FIELDS THAT ARE ABSENT ARE THE DESIGN, asserted rather than assumed. The test one function
-	// up forbids a few substrings; this one pins the WHOLE set, which is what catches a field nobody
-	// thought to forbid — and a field REMOVED, which no substring check can see.
-	//
-	//	tenant_id    never leaves this service — not data, but the dimension every row is already
-	//	             filtered by (rule 1, invariant 4)
-	//	thu_tu       the sort key, not data. `items` already carries the order; the number is only
-	//	             of use to a screen that edits it, and exposing it invites a client to re-sort
-	//	             and overrule the commune on its own catalogue
-	//	nguon,       they answer "what may be DONE to this row" — the three tiers of ADR 0024 §6.
-	//	ma_nguon_    There is no write route (open question #21), so publishing the tier would
-	//	re_nhanh     describe buttons nobody has decided to allow
-	//	deleted_at   a soft-deleted row never leaves the store, so no reader needs to ask
-	//
+	// THE EXACT FIELD SET, on the raw JSON — the siblings' eight (service-petitions loaiNhiemVuRa).
 	// THIS IS A CONTRACT, NOT A SNAPSHOT: when it goes red, the question is whether the ROUTE should
 	// have changed.
 	m := dungMayChu(t)
@@ -196,15 +189,13 @@ func TestLoaiDonViDanCuTraDungNhungTruongCuaHopDong(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &tho); err != nil {
 		t.Fatalf("thân không phải JSON: %q", w.Body.String())
 	}
-	// NON-EMPTY FIRST: on an empty list the loop below checks nothing and passes — and empty is what
-	// every commune answers today, because migration 0005 seeds nothing.
+	// NON-EMPTY FIRST: on an empty list the loop below checks nothing and passes.
 	if len(tho.Items) == 0 {
 		t.Fatal("dữ liệu mẫu rỗng — phép kiểm sẽ xanh mà không kiểm gì")
 	}
 
-	// The same five as the four sibling services' catalogues: `label` not `name` (the column is
-	// `nhan`), and `active` beside `is_default` — the asymmetry is shared on purpose.
-	muon := map[string]bool{"id": true, "code": true, "label": true, "is_default": true, "active": true}
+	muon := map[string]bool{"id": true, "code": true, "label": true, "is_default": true, "active": true,
+		"order": true, "source": true, "tier": true}
 	for _, mot := range tho.Items {
 		for khoa := range mot {
 			if !muon[khoa] {

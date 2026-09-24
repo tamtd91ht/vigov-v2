@@ -7,13 +7,12 @@ package domain
 // kb/00-foundation/ubiquitous-language.md (ADR 0024). That file owns the mapping; this comment
 // points at it rather than restating the table (rule 9).
 //
-// ⚠ WHETHER THIS SHOULD BE A CATALOGUE AT ALL IS AN OPEN QUESTION, AND IT IS NOT SETTLED BY THIS
-// TYPE EXISTING. If `thon` and `to-dan-pho` are fixed by law, the right model is an enum column on
-// thon_to_dan_pho, because a catalogue is by definition something a commune can switch off —
-// switching off `thon` is the failure shape open question #21 describes. The migration's tier-3
-// flag (`ma_nguon_re_nhanh`) closes the disable path; it does not answer the modelling question.
-// Nothing here resolves it, and nothing here should be "tidied" as if it had been: the read route
-// is the same read route either way, and a read route is what was asked for.
+// IT IS A FULL CATALOGUE — user decision 2026-09-24: the commune adds rows, relabels, reorders,
+// disables/enables, and soft-deletes the rows it added, the same shape as the five catalogues that
+// were already writable. The migration's own worry (0005:220-227: "if the kinds are fixed by law,
+// this should be an enum") is answered by the TIER, not by the model: the shipped `thon` /
+// `to-dan-pho` rows are meant to carry `ma_nguon_re_nhanh`, so they can be relabelled but never
+// disabled or deleted (danh_muc_ba_tang.go; trigger at 0005:157).
 //
 // THIS TYPE AND KhoiNhiemVu HAVE THE SAME FIELDS AND ARE DELIBERATELY TWO TYPES. They are two
 // concepts with two entity names and two tables; one shared "catalogue item" type would let a
@@ -47,4 +46,13 @@ type LoaiDonViDanCu struct {
 	//
 	// Soft-deleted rows are a different case and never come back at all (rule 7, invariant 2).
 	DangDung bool
+
+	// ThuTu is `thu_tu`, the order the commune arranged its catalogue in. Carried because the
+	// configuration screen shows and edits it.
+	ThuTu int
+
+	// Nguon and MaNguonReNhanh decide the tier (Tang()). Read from the database, NEVER from a
+	// request: the store writes them as literals on insert and names them in no UPDATE.
+	Nguon          string
+	MaNguonReNhanh bool
 }

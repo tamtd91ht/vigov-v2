@@ -13,11 +13,8 @@ import (
 // The read route behind the commune's residential-unit-type catalogue.
 // GET /api/v1/residential-unit-types
 //
-// THERE IS NO WRITE ROUTE, and no scaffolding for one is left here. Whether a commune may edit the
-// CODE LIST at all — or only the labels and the order — is open question #21 and nobody has
-// answered it. The migration already refuses the dangerous half in the database (a tier-3 row
-// cannot be disabled or deleted); what it does not do is decide who may add a row, and a
-// half-written write path looks like a decision somebody made.
+// THE WRITE ROUTES ARE IN danh_muc_ghi.go (POST / PATCH / DELETE, `admin.lookup`) — user decision
+// 2026-09-24: a full catalogue, with the same contract as the five sibling catalogues.
 
 // loaiDonViDanCuRa is one catalogue entry as it leaves the API.
 //
@@ -25,21 +22,11 @@ import (
 // commune organises its territory, not a person. That is what makes the route's AnyAuthenticated
 // declaration a question about convenience rather than about privacy — see the reason on the route.
 //
-// WHAT IS DELIBERATELY ABSENT, AND THE GAP IS STATED RATHER THAN GLOSSED:
-//
-//	nguon, ma_nguon_re_nhanh   they answer "what may be DONE to this row" (migration 0005:76), and
-//	                           nothing may be done to it through this API — there is no write
-//	                           route. Publishing them would describe a write surface that does not
-//	                           exist, and a client greying out a button from them would be
-//	                           enforcing in the browser a rule the server is the one enforcing
-//	                           (rule 5, forbidden #1).
-//	thu_tu                     the order is already carried, by the order of `items`. The NUMBER is
-//	                           only of use to a screen that edits it.
-//
-// THE Danh mục TAB (docs/ui-ux/14-cau-hinh.md §5) SHOWS BOTH OF THOSE AS COLUMNS, so the day the
-// write route exists it will want them. Adding a field to this object then is additive and breaks
-// no client; publishing it now, for a screen that cannot act on it, is a field that has to be kept
-// correct forever for nobody.
+// THE FIELD SET IS THE SIBLINGS', NAME FOR NAME — service-petitions/internal/http/loai_nhiem_vu.go
+// loaiNhiemVuRa: id · code · label · is_default · active · order · source · tier. The admin web
+// detects that a catalogue is WRITABLE by the presence of `source`/`tier` and drives every catalogue
+// with one piece of generic code; one field spelled differently here is a branch there. The server
+// still enforces every tier rule — the tier on the wire only saves drawing a button it would refuse.
 type loaiDonViDanCuRa struct {
 	ID   string `json:"id"`   // ULID — what a later reference would point at
 	Code string `json:"code"` // slug: "thon" — the value thon_to_dan_pho.loai holds
@@ -67,6 +54,16 @@ type loaiDonViDanCuRa struct {
 	// across one contract forces a client writing a single catalogue reader to branch on which
 	// service answered — the drift that cost four services a rename today.
 	Active bool `json:"active"`
+
+	// Order is `thu_tu`. The list is ALREADY in this order; the number is for the screen that edits it.
+	Order int `json:"order"`
+
+	// Source is `nguon` — `don-vi` or `he-thong`. OUTPUT ONLY: a request carrying it is refused 400.
+	Source string `json:"source"`
+
+	// Tier is 1, 2 or 3 (domain.Tang) — tier 3 has no `Tắt`, tiers 2 and 3 have no `Xoá`. DERIVED,
+	// never stored.
+	Tier int `json:"tier"`
 }
 
 // danhSachLoaiDonViDanCuRa wraps the list in an OBJECT rather than returning a bare JSON array —
@@ -79,6 +76,7 @@ type danhSachLoaiDonViDanCuRa struct {
 func loaiDonViDanCuRaNgoai(l domain.LoaiDonViDanCu) loaiDonViDanCuRa {
 	return loaiDonViDanCuRa{
 		ID: l.ID, Code: l.Ma, Label: l.Nhan, IsDefault: l.LaMacDinh, Active: l.DangDung,
+		Order: l.ThuTu, Source: l.Nguon, Tier: int(l.Tang()),
 	}
 }
 

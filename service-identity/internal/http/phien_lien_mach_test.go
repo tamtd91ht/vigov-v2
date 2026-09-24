@@ -113,6 +113,9 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		ThonToDanPho:   thonToDanPhoMau(),
 		LoaiDonViDanCu: loaiDonViDanCuMau(),
 		KhoiNhiemVu:    khoiNhiemVuMau(),
+		// The catalogue write routes are mounted by Register, so wired; nothing here calls them.
+		GhiLoaiDonViDanCu: ghiLoaiDonViDanCuMau(),
+		GhiKhoiNhiemVu:    ghiKhoiNhiemVuMau(),
 		// The three calendar stores AND the write use case behind their eleven write routes, for the
 		// same reason: Register refuses incomplete Deps whatever it mounts, and nothing in this file
 		// calls a calendar route.

@@ -8,12 +8,13 @@ import (
 	"github.com/vihat/vigov/service-identity/internal/domain"
 )
 
-// LoaiDonViDanCuStore reads the commune's residential-unit-type catalogue. GET
-// /api/v1/residential-unit-types
+// LoaiDonViDanCuStore reads and writes the commune's residential-unit-type catalogue.
+// GET / POST / PATCH / DELETE /api/v1/residential-unit-types
 //
-// IT DECIDES NOTHING AND IT WRITES NOTHING. There is no write path here on purpose: whether a
-// commune may edit the CODE LIST at all, or only its labels and order, is open question #21 and is
-// unanswered. A half-written write path looks like a decision somebody made.
+// A FULL CATALOGUE since the user's decision of 2026-09-24. The write methods are thin typed
+// wrappers over danh_muc_ghi.go, which holds the statements once for both catalogues — the same
+// argument danh_muc.go makes for the read. IT DECIDES NOTHING: the tier rules live in the use case
+// (app/danh_muc_ghi.go) and, underneath, in the trigger.
 type LoaiDonViDanCuStore struct {
 	db *store.DB
 }
@@ -69,9 +70,57 @@ func (s *LoaiDonViDanCuStore) DanhSach(ctx context.Context) ([]domain.LoaiDonViD
 
 	ra := make([]domain.LoaiDonViDanCu, 0, len(dong))
 	for _, d := range dong {
-		ra = append(ra, domain.LoaiDonViDanCu{
-			ID: d.ID, Ma: d.Ma, Nhan: d.Nhan, LaMacDinh: d.LaMacDinh, DangDung: d.DangDung,
-		})
+		ra = append(ra, loaiDonViDanCuTuDong(d))
 	}
 	return ra, nil
+}
+
+func loaiDonViDanCuTuDong(d dongDanhMuc) domain.LoaiDonViDanCu {
+	return domain.LoaiDonViDanCu{
+		ID: d.ID, Ma: d.Ma, Nhan: d.Nhan, LaMacDinh: d.LaMacDinh, DangDung: d.DangDung,
+		ThuTu: d.ThuTu, Nguon: d.Nguon, MaNguonReNhanh: d.MaNguonReNhanh,
+	}
+}
+
+// dongTuLoaiDonViDanCu — Nguon and MaNguonReNhanh are copied only so the shape is complete; NO
+// write statement reads them (danh_muc_ghi.go: literals on insert, absent from every UPDATE).
+func dongTuLoaiDonViDanCu(l domain.LoaiDonViDanCu) dongDanhMuc {
+	return dongDanhMuc{
+		ID: l.ID, Ma: l.Ma, Nhan: l.Nhan, LaMacDinh: l.LaMacDinh, DangDung: l.DangDung,
+		ThuTu: l.ThuTu, Nguon: l.Nguon, MaNguonReNhanh: l.MaNguonReNhanh,
+	}
+}
+
+// --- the write path: typed wrappers, statements in danh_muc_ghi.go --------------------------------
+
+func (s *LoaiDonViDanCuStore) TheoIDDeSua(ctx context.Context, tx *store.ScopedTx, id string) (domain.LoaiDonViDanCu, error) {
+	d, err := khoaDongDanhMuc(ctx, tx, bangLoaiDonViDanCu, id)
+	if err != nil {
+		return domain.LoaiDonViDanCu{}, err
+	}
+	return loaiDonViDanCuTuDong(d), nil
+}
+
+func (s *LoaiDonViDanCuStore) MaDaDung(ctx context.Context, tx *store.ScopedTx, ma string) (bool, error) {
+	return maDanhMucDaDung(ctx, tx, bangLoaiDonViDanCu, ma)
+}
+
+func (s *LoaiDonViDanCuStore) DemDangSong(ctx context.Context, tx *store.ScopedTx) (int, error) {
+	return demDanhMucDangSong(ctx, tx, bangLoaiDonViDanCu)
+}
+
+func (s *LoaiDonViDanCuStore) Chen(ctx context.Context, tx *store.ScopedTx, l domain.LoaiDonViDanCu) error {
+	return chenDanhMuc(ctx, tx, bangLoaiDonViDanCu, dongTuLoaiDonViDanCu(l))
+}
+
+func (s *LoaiDonViDanCuStore) BoMacDinhKhac(ctx context.Context, tx *store.ScopedTx, trongID string) error {
+	return boMacDinhDanhMucKhac(ctx, tx, bangLoaiDonViDanCu, trongID)
+}
+
+func (s *LoaiDonViDanCuStore) CapNhat(ctx context.Context, tx *store.ScopedTx, l domain.LoaiDonViDanCu) error {
+	return capNhatDanhMuc(ctx, tx, bangLoaiDonViDanCu, dongTuLoaiDonViDanCu(l))
+}
+
+func (s *LoaiDonViDanCuStore) XoaMem(ctx context.Context, tx *store.ScopedTx, id, boi, lyDo string) error {
+	return xoaMemDanhMuc(ctx, tx, bangLoaiDonViDanCu, id, boi, lyDo)
 }

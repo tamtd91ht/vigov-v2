@@ -388,8 +388,11 @@ func (l *loaiDonViDanCuGia) DanhSach(ctx context.Context) ([]domain.LoaiDonViDan
 func loaiDonViDanCuMau() *loaiDonViDanCuGia {
 	return &loaiDonViDanCuGia{theo: map[tenant.ID][]domain.LoaiDonViDanCu{
 		xaA: {
-			{ID: "ldv-001", Ma: "thon", Nhan: "Thôn", LaMacDinh: true, DangDung: true},
-			{ID: "ldv-002", Ma: "to-dan-pho", Nhan: "Tổ dân phố"},
+			// DIFFERENT TIERS ON THE TWO ROWS (3 and 1) and different orders, so the read tests can tell
+			// "source/tier/order are read" from "they are constants".
+			{ID: "ldv-001", Ma: "thon", Nhan: "Thôn", LaMacDinh: true, DangDung: true,
+				ThuTu: 1, Nguon: domain.NguonHeThong, MaNguonReNhanh: true},
+			{ID: "ldv-002", Ma: "to-dan-pho", Nhan: "Tổ dân phố", ThuTu: 2, Nguon: domain.NguonDonVi},
 		},
 		xaB: {
 			{ID: "ldv-b-001", Ma: "to-dan-pho", Nhan: "Tổ dân phố xã B", DangDung: true},
@@ -416,8 +419,10 @@ func (k *khoiNhiemVuGia) DanhSach(ctx context.Context) ([]domain.KhoiNhiemVu, er
 func khoiNhiemVuMau() *khoiNhiemVuGia {
 	return &khoiNhiemVuGia{theo: map[tenant.ID][]domain.KhoiNhiemVu{
 		xaA: {
-			{ID: "knv-001", Ma: "khoi-uy-ban", Nhan: "Khối Uỷ ban", LaMacDinh: true, DangDung: true},
-			{ID: "knv-002", Ma: "khoi-dang", Nhan: "Khối Đảng"},
+			// Tier 2 and tier 1 — the complement of loaiDonViDanCuMau's tiers 3 and 1.
+			{ID: "knv-001", Ma: "khoi-uy-ban", Nhan: "Khối Uỷ ban", LaMacDinh: true, DangDung: true,
+				ThuTu: 1, Nguon: domain.NguonHeThong},
+			{ID: "knv-002", Ma: "khoi-dang", Nhan: "Khối Đảng", ThuTu: 2, Nguon: domain.NguonDonVi},
 		},
 		xaB: {
 			{ID: "knv-b-001", Ma: "khac", Nhan: "Khác — xã B", DangDung: true},
@@ -672,6 +677,9 @@ type mayChu struct {
 	thonToDanPho   *thonToDanPhoGia
 	loaiDonViDanCu *loaiDonViDanCuGia
 	khoiNhiemVu    *khoiNhiemVuGia
+	// The write use cases of the two catalogues — danh_muc_ghi_test.go.
+	ghiLoaiDonViDanCu *ghiDanhMucGia[domain.LoaiDonViDanCu]
+	ghiKhoiNhiemVu    *ghiDanhMucGia[domain.KhoiNhiemVu]
 	// The commune's working calendar (migration 0006). FOUR FAKES FOR THREE TABLES: three read
 	// stores and ONE write use case sitting behind all three write fields, exactly as cmd/server
 	// wires it. See ghiLichGia in lich_ghi_test.go.
@@ -725,6 +733,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	thonToDanPho := thonToDanPhoMau()
 	loaiDonViDanCu := loaiDonViDanCuMau()
 	khoiNhiemVu := khoiNhiemVuMau()
+	ghiLoaiDonViDanCu := ghiLoaiDonViDanCuMau()
+	ghiKhoiNhiemVu := ghiKhoiNhiemVuMau()
 	lichLamViec := lichLamViecMau()
 	ngayNghiLe := ngayNghiLeMau()
 	ngayLamBu := ngayLamBuMau()
@@ -752,6 +762,9 @@ func dungMayChu(t *testing.T) *mayChu {
 		ThonToDanPho:   thonToDanPho,
 		LoaiDonViDanCu: loaiDonViDanCu,
 		KhoiNhiemVu:    khoiNhiemVu,
+		// The six catalogue write routes. Register panics without them.
+		GhiLoaiDonViDanCu: ghiLoaiDonViDanCu,
+		GhiKhoiNhiemVu:    ghiKhoiNhiemVu,
 		// Wired although no route is mounted: Register refuses an incomplete Deps whatever it
 		// mounts, so the turn that adds the three paths has nothing left to remember.
 		LichLamViec: lichLamViec,
@@ -817,6 +830,9 @@ func dungMayChu(t *testing.T) *mayChu {
 		thonToDanPho:   thonToDanPho,
 		loaiDonViDanCu: loaiDonViDanCu,
 		khoiNhiemVu:    khoiNhiemVu,
+
+		ghiLoaiDonViDanCu: ghiLoaiDonViDanCu,
+		ghiKhoiNhiemVu:    ghiKhoiNhiemVu,
 
 		lichLamViec: lichLamViec,
 		ngayNghiLe:  ngayNghiLe,

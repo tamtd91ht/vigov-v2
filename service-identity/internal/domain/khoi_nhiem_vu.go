@@ -15,6 +15,12 @@ package domain
 // nhiệm vụ). That is exactly why `Ma` matters more here than `ID`: the code is what the other
 // service's rows carry, and it is why migration 0005's trigger refuses to let a commune edit it.
 //
+// A FULL CATALOGUE (user decision 2026-09-24), same shape as LoaiDonViDanCu.
+//
+// NOT THE DIRECTORY'S "khối đơn vị". The user decided on 2026-09-24 that a task bloc is a concept
+// separate from any grouping of `bo_phan`; nothing here links to the org chart, and nothing should
+// until that decision is revisited (see migration 0005:313 for when the name would have to move).
+//
 // SAME FIELDS AS LoaiDonViDanCu, DELIBERATELY A SECOND TYPE — see the note there.
 type KhoiNhiemVu struct {
 	ID string // ULID
@@ -29,4 +35,9 @@ type KhoiNhiemVu struct {
 	// DangDung is false for a row taken out of use. Out-of-use rows are RETURNED, not filtered —
 	// reason on LoaiDonViDanCu.DangDung.
 	DangDung bool
+
+	// ThuTu, Nguon, MaNguonReNhanh — reasons on LoaiDonViDanCu.
+	ThuTu          int
+	Nguon          string
+	MaNguonReNhanh bool
 }
