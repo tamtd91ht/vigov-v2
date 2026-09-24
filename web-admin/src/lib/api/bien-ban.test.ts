@@ -243,6 +243,21 @@ describe("POST …/conclusions/{stt}/task — tách một kết luận thành nh
     expect(than).not.toHaveProperty("tenant_id");
   });
 
+  it("KHÔNG gửi `documents` — `petitions.tachKetLuanVao` không có trường ấy", async () => {
+    // Biểu mẫu dùng chung khai kiểu `petitions_taoNhiemVuVao`, và từ TASK-02 kiểu ấy mang được ba
+    // nhóm văn bản §7.2. Form ở màn Biên bản không vẽ chúng; đây là lớp thứ hai, ở chỗ dựng thân.
+    const gia = batFetch(traJSON(201, {}));
+    const thanCoVanBan = {
+      ...THAN_TACH,
+      documents: [{ group: "cap-tren-giao", summary: "Thông báo giả" }],
+    } as TachKetLuanVao;
+
+    await tachKetLuanThanhNhiemVu("01JBB", ketLuan(), thanCoVanBan, "k");
+
+    const than = JSON.parse(String(loiGoi(gia, 0).tuyChon.body)) as Record<string, unknown>;
+    expect(than).not.toHaveProperty("documents");
+  });
+
   it("trường bỏ trống thì VẮNG khỏi thân, không thành chuỗi rỗng", async () => {
     // `due_at` là con trỏ ở máy chủ và "không có hạn" là một trạng thái thật. Một chuỗi rỗng ở đây
     // là một mốc thời gian không phân giải được, tức 400 thay vì một nhiệm vụ không hạn.

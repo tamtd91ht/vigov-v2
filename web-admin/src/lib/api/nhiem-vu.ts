@@ -58,6 +58,7 @@ import type {
   petitions_quyetDinhLuiHanVao,
   petitions_suaNhiemVuVao,
   petitions_taoNhiemVuVao,
+  petitions_vanBanNhiemVuVao,
   petitions_xoaNhiemVuVao,
 } from "./schema.gen";
 
@@ -243,6 +244,18 @@ export function taoNhiemVu(
     thanGui.due_at = than.due_at;
   }
   if (than.parent !== undefined && than.parent !== "") thanGui.parent = than.parent;
+  // BA NHÓM VĂN BẢN §7.2 — cũng dựng từng trường, từng dòng. Chỉ bốn trường hợp đồng nhận cho một
+  // dòng MỚI: không `id` (lúc tạo mọi dòng đều mới; một `id` gửi kèm là một dòng máy chủ không
+  // tìm thấy), không `position` (số thứ tự do sổ cấp). Mảng rỗng thì VẮNG MẶT: lúc tạo, rỗng và vắng cùng nghĩa, và vắng thì thân
+  // của loại `Nhiệm vụ cơ bản` không mang một khoá thuộc §7.2.
+  if (than.documents !== undefined && than.documents.length > 0) {
+    thanGui.documents = than.documents.map((d) => {
+      const dong: petitions_vanBanNhiemVuVao = { group: d.group, summary: d.summary };
+      if (d.reference !== undefined && d.reference !== "") dong.reference = d.reference;
+      if (d.date !== undefined && d.date !== "") dong.date = d.date;
+      return dong;
+    });
+  }
 
   return docThanLoiGoi<petitions_nhiemVuRa>(
     goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }),

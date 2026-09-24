@@ -28,6 +28,12 @@ import {
   oHan,
   quyetDinhDuyetLuiHan,
   tinhTrangHan,
+  canhBaoVanBan,
+  nhanNutGoVanBan,
+  nhanOTieuDe,
+  thanGiaoViec,
+  type DongVanBanNhap,
+  type FormGiaoViecNhap,
 } from "./nhan-nhiem-vu";
 
 /**
@@ -310,5 +316,165 @@ describe("§5.4 — câu chữ của khối văn bản chỉ đạo", () => {
     expect(nhom[1]?.vanBan).toEqual([]);
     expect(nhom[3]?.nhan).toBe("nhom-moi");
     expect(chiaNhomVanBan([]).map((n) => n.vanBan.length)).toEqual([0, 0, 0]);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * FORM `GIAO VIỆC MỚI` §7.2 / §7.3 — THÂN YÊU CẦU
+ *
+ * Ca đắt nhất ở đây là ca KHÔNG NHÌN THẤY: cán bộ gõ cơ quan chủ trì và ba văn bản, rồi đổi sang
+ * `Nhiệm vụ cơ bản`. Các ô biến khỏi màn — và nếu chúng vẫn lên dây thì bản ghi (không xoá cứng
+ * được) mang thứ người giao việc tin là đã bỏ. Mọi dữ liệu dưới đây là dữ liệu giả.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+function dongVB(sua: Partial<DongVanBanNhap> & Pick<DongVanBanNhap, "khoa" | "nhom">): DongVanBanNhap {
+  return { trichYeu: "", soKyHieu: "", ngay: "", ...sua };
+}
+
+/** Form ĐÃ GÕ ĐỦ mọi ô, kể cả ba ô chỉ `Theo văn bản` mới có. */
+function formDay(sua: Partial<FormGiaoViecNhap> = {}): FormGiaoViecNhap {
+  return {
+    tuSinhMa: true,
+    ma: "",
+    loai: "theo-van-ban",
+    khoi: "",
+    tieuDe: "  Báo cáo sơ kết công tác tháng 9  ",
+    moTa: "",
+    mucUuTien: "",
+    boPhan: "",
+    nguoiThucHien: "",
+    lanhDaoGiaoViec: "",
+    coQuanChuTri: "01JBOPHANGIA",
+    chuyenVien: "CB-2026-GIA001",
+    han: "",
+    vanBan: [
+      // CỐ Ý XEN KẼ NHÓM theo thứ tự bấm: thân phải gom theo nhóm §5.4 mà giữ thứ tự trong nhóm.
+      dongVB({ khoa: "a", nhom: "san-pham-dau-ra", trichYeu: "Báo cáo giả số một" }),
+      dongVB({
+        khoa: "b",
+        nhom: "cap-tren-giao",
+        trichYeu: "  Thông báo giả về ý kiến chỉ đạo  ",
+        soKyHieu: " 90-TB/GIA ",
+        ngay: "2026-01-30",
+      }),
+      dongVB({ khoa: "c", nhom: "cap-tren-giao", trichYeu: "Kế hoạch giả thứ hai", soKyHieu: "   " }),
+      dongVB({ khoa: "d", nhom: "chi-dao-dang-uy", trichYeu: "Công văn giả", ngay: "2026-06-15" }),
+    ],
+    ...sua,
+  };
+}
+
+describe("§7.2 / §7.3 — nhãn ô tiêu đề theo loại", () => {
+  it("`theo-van-ban` ⇒ `Nội dung nhiệm vụ / Trích yếu văn bản`; loại khác ⇒ `Tên nhiệm vụ`", () => {
+    expect(nhanOTieuDe("theo-van-ban")).toBe("Nội dung nhiệm vụ / Trích yếu văn bản");
+    expect(nhanOTieuDe("co-ban")).toBe("Tên nhiệm vụ");
+    expect(nhanOTieuDe("")).toBe("Tên nhiệm vụ");
+  });
+});
+
+describe("thân `Giao việc mới` — ba nhóm văn bản", () => {
+  it("`theo-van-ban`: `documents` mang ĐÚNG group/summary/reference/date, gom theo nhóm, giữ thứ tự trên màn", () => {
+    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: true });
+    expect(than.documents).toEqual([
+      {
+        group: "cap-tren-giao",
+        summary: "Thông báo giả về ý kiến chỉ đạo",
+        reference: "90-TB/GIA",
+        date: "2026-01-30",
+      },
+      { group: "cap-tren-giao", summary: "Kế hoạch giả thứ hai" },
+      { group: "chi-dao-dang-uy", summary: "Công văn giả", date: "2026-06-15" },
+      { group: "san-pham-dau-ra", summary: "Báo cáo giả số một" },
+    ]);
+    expect(than.lead_unit).toBe("01JBOPHANGIA");
+    expect(than.monitor).toBe("CB-2026-GIA001");
+    expect(than.title).toBe("Báo cáo sơ kết công tác tháng 9");
+  });
+
+  it("ô tuỳ chọn bỏ trống KHÔNG thành rác: không `reference: \"\"`, không `date: \"\"`, không `id`/`position`", () => {
+    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: true });
+    for (const d of than.documents ?? []) {
+      expect(Object.keys(d).every((k) => ["group", "summary", "reference", "date"].includes(k))).toBe(true);
+      expect(Object.values(d)).not.toContain("");
+    }
+    // Dòng `c` gõ toàn khoảng trắng vào ô số ⇒ vắng hẳn.
+    expect(than.documents?.[1]).not.toHaveProperty("reference");
+    expect(than.documents?.[1]).not.toHaveProperty("date");
+  });
+
+  it("ngày văn bản đi NGUYÊN `YYYY-MM-DD`, không bao giờ là một mốc RFC 3339", () => {
+    // Máy chủ TỪ CHỐI RFC 3339 có chủ ý (`nhiem_vu_ghi.go:335-337`): múi giờ trình duyệt không
+    // được quyết văn bản ký ngày nào. Ghim TZ=UTC nên một phép đi vòng qua `Date` sẽ lộ ra.
+    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: true });
+    const ngay = (than.documents ?? []).flatMap((d) => (d.date === undefined ? [] : [d.date]));
+    expect(ngay).toEqual(["2026-01-30", "2026-06-15"]);
+    for (const n of ngay) expect(n).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("KHÔNG có dòng nào ⇒ `documents` vắng mặt, không gửi mảng rỗng", () => {
+    expect(thanGiaoViec(formDay({ vanBan: [] }), { coDanhSachVanBan: true })).not.toHaveProperty(
+      "documents",
+    );
+  });
+
+  it("gỡ một dòng giữa ⇒ đúng dòng ấy biến khỏi thân, các dòng còn lại giữ thứ tự", () => {
+    const f = formDay();
+    const sauKhiGo = formDay({ vanBan: f.vanBan.filter((d) => d.khoa !== "b") });
+    const than = thanGiaoViec(sauKhiGo, { coDanhSachVanBan: true });
+    expect(than.documents?.map((d) => d.summary)).toEqual([
+      "Kế hoạch giả thứ hai",
+      "Công văn giả",
+      "Báo cáo giả số một",
+    ]);
+  });
+});
+
+describe("thân `Giao việc mới` — trường ĐANG ẨN không lên dây", () => {
+  it("`co-ban` SAU KHI đã gõ cơ quan chủ trì, chuyên viên và ba văn bản: không `documents`/`lead_unit`/`monitor`", () => {
+    // Đúng thao tác thật: gõ đủ ở `Theo văn bản` rồi mới đổi loại. State vẫn giữ chữ đã gõ (đổi
+    // lại thì hiện lại) — nên chỗ cắt PHẢI là hàm dựng thân này.
+    const than = thanGiaoViec(formDay({ loai: "co-ban" }), { coDanhSachVanBan: true }) as Record<
+      string,
+      unknown
+    >;
+    expect(than).not.toHaveProperty("documents");
+    expect(than).not.toHaveProperty("lead_unit");
+    expect(than).not.toHaveProperty("monitor");
+    expect(than.type).toBe("co-ban");
+  });
+
+  it("màn Biên bản (`coDanhSachVanBan: false`) KHÔNG gửi `documents` kể cả với loại `theo-van-ban`", () => {
+    // `petitions.tachKetLuanVao` không có `documents`. Cơ quan chủ trì và chuyên viên thì CÓ, nên
+    // hai ô ấy vẫn đi — hành vi màn Biên bản không đổi.
+    const than = thanGiaoViec(formDay(), { coDanhSachVanBan: false });
+    expect(than).not.toHaveProperty("documents");
+    expect(than.lead_unit).toBe("01JBOPHANGIA");
+    expect(than.monitor).toBe("CB-2026-GIA001");
+  });
+});
+
+describe("chặn nút `Giao việc` vì ba danh sách", () => {
+  it("dòng chưa có trích yếu CHẶN và nói đúng dòng nào — không bị lọc bỏ lặng lẽ", () => {
+    const cau = canhBaoVanBan([
+      dongVB({ khoa: "a", nhom: "chi-dao-dang-uy", trichYeu: "Có nội dung" }),
+      dongVB({ khoa: "b", nhom: "chi-dao-dang-uy", trichYeu: "   " }),
+    ]);
+    expect(cau).toContain("Văn bản thứ 2 của nhóm Văn bản chỉ đạo của Đảng uỷ");
+    expect(canhBaoVanBan(formDay().vanBan)).toBeNull();
+    expect(canhBaoVanBan([])).toBeNull();
+  });
+
+  it("quá 100 dòng một lần ⇒ chặn, nói con số (giới hạn của máy chủ)", () => {
+    const nhieu = Array.from({ length: 101 }, (_, i) =>
+      dongVB({ khoa: String(i), nhom: "cap-tren-giao", trichYeu: "x" }),
+    );
+    expect(canhBaoVanBan(nhieu)).toContain("tối đa 100");
+    expect(canhBaoVanBan(nhieu.slice(0, 100))).toBeNull();
+  });
+
+  it("tên nút `✕` nói dòng thứ mấy của nhóm nào", () => {
+    expect(nhanNutGoVanBan("san-pham-dau-ra", 3)).toBe(
+      "Gỡ văn bản thứ 3 khỏi nhóm Văn bản sản phẩm đầu ra",
+    );
   });
 });

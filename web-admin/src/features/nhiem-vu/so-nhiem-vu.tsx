@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer, useState, type FormEvent } from "react";
+import { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import {
@@ -55,6 +55,7 @@ import {
   GHI_CHU_DEM_COT,
   GHI_CHU_HAN_VIEC_CON,
   GHI_CHU_KANBAN_RE_NHANH,
+  GHI_CHU_KHONG_CO_O_GHI_CHU,
   GHI_CHU_LANH_DAO_GIAO_VIEC,
   GHI_CHU_LUI_HAN,
   GHI_CHU_THIEU_SO_THEO_DOI,
@@ -66,25 +67,31 @@ import {
   MOI_MUC_UU_TIEN_NHAN,
   MOI_NGUON_GIAO,
   MOI_NGUON_GIAO_NHAN,
+  MOI_NHOM_VAN_BAN,
   MOI_TRANG_THAI,
   MOI_TRANG_THAI_NHAN,
   MO_TA_FORM_GIAO_VIEC,
   NHAN_CHE_DO_DANH_SACH,
   NHAN_CHE_DO_KANBAN,
+  NHAN_THEM_VAN_BAN,
   O_TRONG,
   PHAM_VI_CUA_TOI,
   PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
+  SO_KY_HIEU_VAN_BAN_TOI_DA,
   SO_RONG,
   TIEU_DE_KHOI_VAN_BAN,
   TIM_PLACEHOLDER,
   TRANG_THAI_CHINH,
   TRANG_THAI_RE_NHANH,
+  TRICH_YEU_VAN_BAN_TOI_DA,
+  canhBaoVanBan,
   cauGiaiThichTrangThai,
   chiaNhomVanBan,
   chuyenSangDuoc,
   coKhoiVanBanChiDao,
   cotPhaiDoc,
+  dongCuaNhom,
   dongVanBan,
   hoanThanhTreHan,
   mocCuoiNgay,
@@ -94,9 +101,16 @@ import {
   nhanHanThe,
   nhanNgay,
   nhanNguonGiao,
+  nhanNhomVanBan,
+  nhanNutGoVanBan,
+  nhanOTieuDe,
   nhanTrangThai,
   oHan,
+  placeholderNhomVanBan,
   quyetDinhDuyetLuiHan,
+  thanGiaoViec,
+  type DongVanBanNhap,
+  type NhomVanBan,
   type TrangThaiNhiemVu,
 } from "./nhan-nhiem-vu";
 
@@ -438,6 +452,8 @@ export function SoNhiemVu() {
       {moFormTao && (
         <FormGiaoViec
           danhMuc={danhMuc}
+          // `POST /api/v1/tasks` nhận `documents`; màn Biên bản thì không — xem prop.
+          coDanhSachVanBan
           dangGui={dangGui}
           loi={loiGhi}
           huy={() => {
@@ -1549,9 +1565,10 @@ export function KhoiLuiHan({
 /**
  * Form `Giao việc mới` §7.
  *
- * HAI LOẠI, HAI BỘ TRƯỜNG (§7.2 / §7.3) — nhưng BA NHÓM VĂN BẢN CỦA §7.2 CHƯA DỰNG Ở ĐÂY. Bảng
- * `nhiem_vu_van_ban` đã có và drawer đã hiện chúng (chỉ đọc); ba danh sách động của form là phần
- * việc chưa làm, không phải một bức tường của hợp đồng. Xem `PHAN_CHUA_DUNG`.
+ * HAI LOẠI, HAI BỘ TRƯỜNG (§7.2 / §7.3), rẽ nhánh trên MÃ `theo-van-ban` (mã tầng 3, xem
+ * `LOAI_THEO_VAN_BAN`). Loại nào khác thì ô tiêu đề thành `Tên nhiệm vụ`, và cơ quan chủ trì /
+ * chuyên viên / ba nhóm văn bản BIẾN KHỎI MÀN và KHÔNG LÊN DÂY — phần "không lên dây" ở
+ * `thanGiaoViec`, nơi có bài kiểm. Ô `Ghi chú` của §7.2 không có: `taoNhiemVuVao` không nhận `note`.
  *
  * `Tự sinh mã` MẶC ĐỊNH BẬT, đúng §7.1: mã do máy chủ cấp theo dãy `NV01, NV02…`, và một mã đã
  * cấp thì không bao giờ cấp lại kể cả sau xoá mềm (luật 7, bất biến 3).
@@ -1562,6 +1579,7 @@ export function KhoiLuiHan({
  */
 export function FormGiaoViec({
   danhMuc,
+  coDanhSachVanBan = false,
   dangGui,
   loi,
   huy,
@@ -1570,6 +1588,15 @@ export function FormGiaoViec({
   tieuDeCoSan,
 }: {
   danhMuc: DanhMucNhiemVu;
+  /**
+   * Vẽ và gửi ba danh sách văn bản §7.2. CHỈ màn Nhiệm vụ bật.
+   *
+   * MẶC ĐỊNH TẮT, VÀ ĐÓ LÀ CHIỀU AN TOÀN: màn Biên bản dùng lại form này để gửi
+   * `…/conclusions/{stt}/task`, mà `petitions.tachKetLuanVao` không có `documents`. Bên gọi nào
+   * quên prop thì nhận một form không có ba danh sách — không phải một form để cán bộ gõ văn bản
+   * rồi thấy chúng mất, hoặc bị 400.
+   */
+  coDanhSachVanBan?: boolean;
   dangGui: boolean;
   loi: string | null;
   huy: () => void;
@@ -1604,35 +1631,65 @@ export function FormGiaoViec({
   const [coQuanChuTri, datCoQuanChuTri] = useState("");
   const [chuyenVien, datChuyenVien] = useState("");
   const [han, datHan] = useState("");
+  const [vanBan, datVanBan] = useState<readonly DongVanBanNhap[]>([]);
+  const demKhoaVanBan = useRef(0);
+  // Id ô cần nhận tiêu điểm SAU lần vẽ kế tiếp: dòng vừa thêm chưa có trong DOM lúc bấm nút.
+  const oCanTieuDiem = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (oCanTieuDiem.current === null) return;
+    document.getElementById(oCanTieuDiem.current)?.focus();
+    oCanTieuDiem.current = null;
+  }, [vanBan]);
 
   // Loại mặc định lấy từ DANH MỤC CỦA XÃ (`is_default`), không gõ cứng `theo-van-ban`: §7.1 nói
   // loại `Theo văn bản` là mặc định, nhưng đó là một dòng danh mục xã sửa được.
   const loaiMacDinh = danhMuc.loai.find((l) => l.is_default)?.code ?? "";
   const loaiChon = loai === "" ? loaiMacDinh : loai;
+  const theoVanBan = coKhoiVanBanChiDao(loaiChon);
+  const hienVanBan = theoVanBan && coDanhSachVanBan;
+  const chanVanBan = hienVanBan ? canhBaoVanBan(vanBan) : null;
+
+  function themVanBan(nhom: NhomVanBan) {
+    demKhoaVanBan.current += 1;
+    const khoa = `vb${demKhoaVanBan.current}`;
+    oCanTieuDiem.current = `giao-van-ban-${khoa}`;
+    datVanBan((ds) => [...ds, { khoa, nhom, trichYeu: "", soKyHieu: "", ngay: "" }]);
+  }
+
+  function goVanBan(dong: DongVanBanNhap) {
+    // Dòng vừa gỡ mang theo tiêu điểm; trả nó về nút thêm của cùng nhóm thay vì để rơi về đầu trang.
+    oCanTieuDiem.current = `giao-them-van-ban-${dong.nhom}`;
+    datVanBan((ds) => ds.filter((d) => d.khoa !== dong.khoa));
+  }
+
+  function suaVanBan(khoa: string, sua: Partial<Omit<DongVanBanNhap, "khoa" | "nhom">>) {
+    datVanBan((ds) => ds.map((d) => (d.khoa === khoa ? { ...d, ...sua } : d)));
+  }
 
   function gui(e: FormEvent) {
     e.preventDefault();
-    if (tieuDe.trim() === "" || loaiChon === "") return;
+    if (tieuDe.trim() === "" || loaiChon === "" || chanVanBan !== null) return;
 
-    const than: petitions_taoNhiemVuVao = {
-      auto_code: tuSinhMa,
-      type: loaiChon,
-      title: tieuDe.trim(),
-    };
-    if (!tuSinhMa && ma.trim() !== "") than.code = ma.trim();
-    if (khoi !== "") than.bloc = khoi;
-    if (moTa.trim() !== "") than.description = moTa.trim();
-    if (mucUuTien !== "") than.priority = mucUuTien;
-    if (boPhan !== "") than.unit = boPhan;
-    if (nguoiThucHien.trim() !== "") than.assignee = nguoiThucHien.trim();
-    if (lanhDaoGiaoViec.trim() !== "") than.assigner = lanhDaoGiaoViec.trim();
-    if (coQuanChuTri !== "") than.lead_unit = coQuanChuTri;
-    if (chuyenVien.trim() !== "") than.monitor = chuyenVien.trim();
-    // HẠN: ô ngày → mốc cuối ngày theo giờ Việt Nam. Bỏ trống thì trường VẮNG MẶT HẲN, không gửi
-    // chuỗi rỗng — `due_at` là con trỏ ở máy chủ và "không có hạn" là một trạng thái thật (§4.1
-    // vẽ nó thành `Hạn —`).
-    if (han !== "") than.due_at = mocCuoiNgay(han);
-    if (maChaCoSan !== undefined && maChaCoSan !== "") than.parent = maChaCoSan;
+    const than: petitions_taoNhiemVuVao = thanGiaoViec(
+      {
+        tuSinhMa,
+        ma,
+        loai: loaiChon,
+        khoi,
+        tieuDe,
+        moTa,
+        mucUuTien,
+        boPhan,
+        nguoiThucHien,
+        lanhDaoGiaoViec,
+        coQuanChuTri,
+        chuyenVien,
+        han,
+        vanBan,
+      },
+      { coDanhSachVanBan, maCha: maChaCoSan },
+    );
 
     giaoViec(than, khoaChongTrung);
   }
@@ -1693,11 +1750,12 @@ export function FormGiaoViec({
       )}
 
       <div className="o-nhap">
-        <label htmlFor="giao-tieu-de">Nội dung nhiệm vụ / Trích yếu văn bản</label>
+        <label htmlFor="giao-tieu-de">{nhanOTieuDe(loaiChon)}</label>
         <input
           id="giao-tieu-de"
           name="giao-tieu-de"
           value={tieuDe}
+          required
           autoComplete="off"
           onChange={(e) => datTieuDe(e.target.value)}
         />
@@ -1742,21 +1800,25 @@ export function FormGiaoViec({
         </select>
       </div>
 
-      <div className="o-chon">
-        <label htmlFor="giao-co-quan-chu-tri">Cơ quan chủ trì tham mưu</label>
-        <select
-          id="giao-co-quan-chu-tri"
-          value={coQuanChuTri}
-          onChange={(e) => datCoQuanChuTri(e.target.value)}
-        >
-          <option value="">{CHUA_XAC_DINH}</option>
-          {danhMuc.boPhan.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* §7.3 BỎ TOÀN BỘ ô này ở loại khác `Theo văn bản`. Ẩn ở đây là phần nhìn; phần không gửi
+          nằm ở `thanGiaoViec`. */}
+      {theoVanBan && (
+        <div className="o-chon">
+          <label htmlFor="giao-co-quan-chu-tri">Cơ quan chủ trì tham mưu</label>
+          <select
+            id="giao-co-quan-chu-tri"
+            value={coQuanChuTri}
+            onChange={(e) => datCoQuanChuTri(e.target.value)}
+          >
+            <option value="">{CHUA_XAC_DINH}</option>
+            {danhMuc.boPhan.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* BA Ô GÕ MÃ CÁN BỘ, KHÔNG PHẢI BA Ô CHỌN — danh bạ đứng sau `admin.user`, xem
           `PHAN_CHUA_DUNG`. Giá trị là MÃ NGHIỆP VỤ `CB-…`, đúng loại định danh ba cột kia giữ:
@@ -1793,17 +1855,35 @@ export function FormGiaoViec({
         này, và ô này không sửa lại được sau khi tạo.
       </p>
 
-      <div className="o-nhap">
-        <label htmlFor="giao-chuyen-vien">Chuyên viên Văn phòng tham mưu / theo dõi (mã cán bộ)</label>
-        <input
-          id="giao-chuyen-vien"
-          name="giao-chuyen-vien"
-          value={chuyenVien}
-          placeholder="CB-…"
-          autoComplete="off"
-          onChange={(e) => datChuyenVien(e.target.value)}
-        />
-      </div>
+      {theoVanBan && (
+        <div className="o-nhap">
+          <label htmlFor="giao-chuyen-vien">Chuyên viên Văn phòng tham mưu / theo dõi (mã cán bộ)</label>
+          <input
+            id="giao-chuyen-vien"
+            name="giao-chuyen-vien"
+            value={chuyenVien}
+            placeholder="CB-…"
+            autoComplete="off"
+            onChange={(e) => datChuyenVien(e.target.value)}
+          />
+        </div>
+      )}
+
+      {hienVanBan && (
+        <>
+          {MOI_NHOM_VAN_BAN.map((nhom) => (
+            <NhomVanBanNhap
+              key={nhom}
+              nhom={nhom}
+              dong={dongCuaNhom(vanBan, nhom)}
+              them={() => themVanBan(nhom)}
+              go={goVanBan}
+              sua={suaVanBan}
+            />
+          ))}
+          <p className="ghi-chu">{GHI_CHU_KHONG_CO_O_GHI_CHU}</p>
+        </>
+      )}
 
       <div className="o-nhap">
         <label htmlFor="giao-han">Hạn hoàn thành</label>
@@ -1820,6 +1900,11 @@ export function FormGiaoViec({
         <p className="ghi-chu">{GHI_CHU_HAN_VIEC_CON}</p>
       )}
 
+      {/* KHÔNG `role="alert"`: câu này hiện ngay khi bấm `+ Thêm văn bản` (dòng mới còn trống), và
+          một vùng thông báo khẩn sẽ cắt ngang đúng lúc tiêu điểm vừa sang ô trích yếu. Nó là lý do
+          nút `Giao việc` đang khoá, nên đứng ngay trên nút ấy. */}
+      {chanVanBan !== null && <p className="thong-bao-loi">{chanVanBan}</p>}
+
       {loi !== null && (
         <p className="thong-bao-loi" role="alert">
           {loi}
@@ -1833,11 +1918,101 @@ export function FormGiaoViec({
         <button
           type="submit"
           className="nut-chinh"
-          disabled={dangGui || tieuDe.trim() === "" || loaiChon === ""}
+          disabled={dangGui || tieuDe.trim() === "" || loaiChon === "" || chanVanBan !== null}
         >
           Giao việc
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Một trong ba danh sách văn bản động của §7.2: tiêu đề nhóm · các dòng · `+ Thêm văn bản`.
+ *
+ * MỖI DÒNG LÀ MỘT Ô TRÍCH YẾU BẮT BUỘC VÀ HAI Ô NHỎ TUỲ CHỌN (`Số, ký hiệu`, `Ngày văn bản`). Không
+ * tách số và ngày ra khỏi câu trích yếu bằng máy: đoán số hiệu từ một câu tiếng Việt là in ra một
+ * số văn bản không tồn tại (`nhiem_vu_van_ban.go:77-80`). Ai muốn điền riêng thì điền; bỏ trống thì
+ * drawer ghi `Không số`, đúng như văn bản không số có thật.
+ *
+ * `role="group"` + tiêu đề thay cho `<fieldset>`: `fieldset` mặc định rộng tối thiểu bằng nội dung,
+ * và ở 320px một placeholder dài đẩy nó tràn ngang — mà lượt này không thêm CSS.
+ */
+function NhomVanBanNhap({
+  nhom,
+  dong,
+  them,
+  go,
+  sua,
+}: {
+  nhom: NhomVanBan;
+  dong: readonly DongVanBanNhap[];
+  them: () => void;
+  go: (dong: DongVanBanNhap) => void;
+  sua: (khoa: string, sua: Partial<Omit<DongVanBanNhap, "khoa" | "nhom">>) => void;
+}) {
+  const idTieuDe = `giao-nhom-van-ban-${nhom}`;
+  return (
+    <div role="group" aria-labelledby={idTieuDe}>
+      <h5 id={idTieuDe}>{nhanNhomVanBan(nhom)}</h5>
+      {dong.map((d, i) => {
+        const id = `giao-van-ban-${d.khoa}`;
+        return (
+          <div key={d.khoa} role="group" aria-label={`${nhanNhomVanBan(nhom)} — văn bản thứ ${i + 1}`}>
+            <div className="o-nhap">
+              <label htmlFor={id}>Trích yếu (văn bản thứ {i + 1})</label>
+              <textarea
+                id={id}
+                name={id}
+                rows={2}
+                required
+                maxLength={TRICH_YEU_VAN_BAN_TOI_DA}
+                placeholder={placeholderNhomVanBan(nhom)}
+                value={d.trichYeu}
+                onChange={(e) => sua(d.khoa, { trichYeu: e.target.value })}
+              />
+            </div>
+            <div className="o-nhap">
+              <label htmlFor={`${id}-so`}>Số, ký hiệu (không bắt buộc)</label>
+              <input
+                id={`${id}-so`}
+                name={`${id}-so`}
+                maxLength={SO_KY_HIEU_VAN_BAN_TOI_DA}
+                autoComplete="off"
+                value={d.soKyHieu}
+                onChange={(e) => sua(d.khoa, { soKyHieu: e.target.value })}
+              />
+            </div>
+            <div className="o-nhap">
+              <label htmlFor={`${id}-ngay`}>Ngày văn bản (không bắt buộc)</label>
+              <input
+                id={`${id}-ngay`}
+                name={`${id}-ngay`}
+                type="date"
+                value={d.ngay}
+                onChange={(e) => sua(d.khoa, { ngay: e.target.value })}
+              />
+            </div>
+            <button
+              type="button"
+              className="nut-phu"
+              aria-label={nhanNutGoVanBan(nhom, i + 1)}
+              onClick={() => go(d)}
+            >
+              ✕
+            </button>
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        id={`giao-them-van-ban-${nhom}`}
+        className="nut-phu"
+        aria-label={`${NHAN_THEM_VAN_BAN} vào nhóm ${nhanNhomVanBan(nhom)}`}
+        onClick={them}
+      >
+        {NHAN_THEM_VAN_BAN}
+      </button>
+    </div>
   );
 }

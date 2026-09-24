@@ -176,6 +176,48 @@ describe("thân của sáu tuyến ghi", () => {
     expect(gui).not.toHaveProperty("original_due_at");
   });
 
+  it("tạo nhiệm vụ: `documents` CÓ trong danh sách dựng từng trường — từng dòng, đúng bốn trường", async () => {
+    // Trước TASK-02 hàm này BỎ RƠI `documents` im lặng: form gửi ba nhóm văn bản, máy chủ nhận một
+    // nhiệm vụ không có văn bản nào, và không có gì đỏ ở đâu.
+    const gia = batFetch(
+      new Response("{}", { status: 201, headers: { "Content-Type": "application/json" } }),
+    );
+
+    await taoNhiemVu(
+      {
+        auto_code: true,
+        type: "theo-van-ban",
+        title: "Báo cáo giả",
+        documents: [
+          {
+            group: "cap-tren-giao",
+            summary: "Thông báo giả",
+            reference: "90-TB/GIA",
+            date: "2026-01-30",
+            // Hai thứ hợp đồng không nhận cho một dòng MỚI — không được lọt lên dây.
+            id: "01JDONGLA",
+            position: 7,
+          } as never,
+          { group: "san-pham-dau-ra", summary: "Báo cáo giả", reference: "", date: "" },
+        ],
+      },
+      "khoa-gia",
+    );
+
+    expect((than(gia) as Record<string, unknown>).documents).toEqual([
+      { group: "cap-tren-giao", summary: "Thông báo giả", reference: "90-TB/GIA", date: "2026-01-30" },
+      { group: "san-pham-dau-ra", summary: "Báo cáo giả" },
+    ]);
+  });
+
+  it("tạo nhiệm vụ: `documents` rỗng ⇒ VẮNG MẶT", async () => {
+    const gia = batFetch(
+      new Response("{}", { status: 201, headers: { "Content-Type": "application/json" } }),
+    );
+    await taoNhiemVu({ auto_code: true, type: "co-ban", title: "Việc giả", documents: [] }, "k");
+    expect(than(gia)).not.toHaveProperty("documents");
+  });
+
   it("đổi trạng thái: TRẠNG THÁI ĐÍCH ĐI TRÊN DÂY, ghi chú rỗng thì vắng mặt", async () => {
     const gia = batFetch(OK_JSON());
     await doiTrangThaiNhiemVu("NV19", "da-tiep-nhan", "");

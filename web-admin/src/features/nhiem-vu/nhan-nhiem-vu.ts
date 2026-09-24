@@ -20,7 +20,11 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import type { petitions_nhiemVuVanBanRa } from "@/lib/api/schema.gen";
+import type {
+  petitions_nhiemVuVanBanRa,
+  petitions_taoNhiemVuVao,
+  petitions_vanBanNhiemVuVao,
+} from "@/lib/api/schema.gen";
 
 /** Ô rỗng. Chưa có gì để tính thì **dấu gạch**, không bao giờ `0` và không bao giờ `0%`. */
 export const O_TRONG = "—";
@@ -706,6 +710,184 @@ export function chiaNhomVanBan(ds: readonly petitions_nhiemVuVanBanRa[]): readon
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
+ * FORM `GIAO VIỆC MỚI` §7 — ĐỔI TRƯỜNG THEO LOẠI (§7.2 / §7.3) VÀ BA DANH SÁCH VĂN BẢN ĐỘNG
+ *
+ * Thân yêu cầu được dựng Ở ĐÂY, trong một hàm thuần, chứ không trong trình xử lý `onSubmit`: môi
+ * trường kiểm là Node không DOM (`vitest.config.mts`), nên một quy tắc chỉ sống trong thành phần
+ * là quy tắc không bài nào chạy tới — kể cả quy tắc đắt nhất của form này: trường đang ẨN thì
+ * KHÔNG được gửi.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Nhãn ô tiêu đề theo loại — §7.2 và §7.3. Cả hai đều bắt buộc. */
+export const NHAN_TIEU_DE_THEO_VAN_BAN = "Nội dung nhiệm vụ / Trích yếu văn bản";
+export const NHAN_TIEU_DE_CO_BAN = "Tên nhiệm vụ";
+
+export function nhanOTieuDe(loai: string): string {
+  return coKhoiVanBanChiDao(loai) ? NHAN_TIEU_DE_THEO_VAN_BAN : NHAN_TIEU_DE_CO_BAN;
+}
+
+/** Placeholder từng nhóm — NGUYÊN VĂN §7.2 (`02-nhiem-vu.md:263-265`). */
+const PLACEHOLDER_NHOM_VAN_BAN: Readonly<Record<NhomVanBan, string>> = {
+  "cap-tren-giao": "Ví dụ: Thông báo số 90-TB/TU ngày 30/01/2026 về ý kiến chỉ đạo…",
+  "chi-dao-dang-uy": "Ví dụ: Công văn số 416-CV/ĐU ngày 15/6/2026 về tham mưu báo cáo…",
+  "san-pham-dau-ra": "Ví dụ: Báo cáo số 335-BC/ĐU ngày 29/6/2026",
+};
+
+export function placeholderNhomVanBan(nhom: NhomVanBan): string {
+  return PLACEHOLDER_NHOM_VAN_BAN[nhom];
+}
+
+export const NHAN_THEM_VAN_BAN = "+ Thêm văn bản";
+
+/**
+ * Tên đọc được của nút `✕`. Mỗi nhóm có nhiều nút `✕` liền nhau; không có số thứ tự và tên nhóm
+ * thì trình đọc màn hình đọc mười lần cùng một chữ "xoá", và cán bộ không biết mình vừa gỡ dòng nào.
+ */
+export function nhanNutGoVanBan(nhom: NhomVanBan, soThuTu: number): string {
+  return `Gỡ văn bản thứ ${soThuTu} khỏi nhóm ${nhanNhomVanBan(nhom)}`;
+}
+
+/**
+ * Ba giới hạn của máy chủ (`service-petitions/internal/domain/nhiem_vu_van_ban.go:123,127,136`).
+ * Chép ở đây để ô nhập DỪNG ĐÚNG CHỖ thay vì để cán bộ gõ xong một nghìn chữ rồi nhận 400. Máy chủ
+ * vẫn là nơi quyết; hai số này lệch khỏi máy chủ thì câu từ chối của máy chủ vẫn ra nguyên văn.
+ */
+export const SO_KY_HIEU_VAN_BAN_TOI_DA = 100;
+export const TRICH_YEU_VAN_BAN_TOI_DA = 1000;
+export const VAN_BAN_MOT_LAN_TOI_DA = 100;
+
+/**
+ * Ô `Ghi chú` của §7.2 KHÔNG có ở form tạo: `petitions.taoNhiemVuVao` không nhận `note`. Vẽ ô ấy
+ * ra thì chữ cán bộ gõ vào sẽ mất lặng lẽ; tạo rồi `PATCH` thêm là hai hành vi ghi cho một lần bấm.
+ * Câu này đứng trong form để người tìm ô ấy biết nó ở đâu.
+ */
+export const GHI_CHU_KHONG_CO_O_GHI_CHU =
+  "Ô Ghi chú (§7.2) không có ở đây: yêu cầu tạo nhiệm vụ không nhận ghi chú. Ghi chú sẽ nhập " +
+  "được ở nút Sửa trong khung chi tiết nhiệm vụ — phần ấy chưa dựng, xem phần chưa dựng được ở " +
+  "đầu màn.";
+
+/**
+ * Một dòng văn bản ĐANG NHẬP. `khoa` chỉ để React giữ đúng ô khi một dòng giữa bị gỡ — KHÔNG lên
+ * dây: dòng mới không có `id` (hợp đồng: `id` rỗng nghĩa là dòng mới).
+ */
+export type DongVanBanNhap = {
+  readonly khoa: string;
+  readonly nhom: NhomVanBan;
+  readonly trichYeu: string;
+  readonly soKyHieu: string;
+  /** Giá trị của `<input type="date">`: `YYYY-MM-DD` hoặc rỗng. */
+  readonly ngay: string;
+};
+
+/** Mọi ô của form, kể cả những ô ĐANG ẨN vì loại nhiệm vụ. */
+export type FormGiaoViecNhap = {
+  readonly tuSinhMa: boolean;
+  readonly ma: string;
+  readonly loai: string;
+  readonly khoi: string;
+  readonly tieuDe: string;
+  readonly moTa: string;
+  readonly mucUuTien: string;
+  readonly boPhan: string;
+  readonly nguoiThucHien: string;
+  readonly lanhDaoGiaoViec: string;
+  readonly coQuanChuTri: string;
+  readonly chuyenVien: string;
+  /** `YYYY-MM-DD` hoặc rỗng. */
+  readonly han: string;
+  readonly vanBan: readonly DongVanBanNhap[];
+};
+
+/**
+ * Các dòng đang nhập của MỘT nhóm, đúng thứ tự trên màn — `+ Thêm văn bản` nối vào cuối.
+ */
+export function dongCuaNhom(ds: readonly DongVanBanNhap[], nhom: NhomVanBan): DongVanBanNhap[] {
+  return ds.filter((d) => d.nhom === nhom);
+}
+
+/**
+ * Câu chặn nút `Giao việc` vì ba danh sách văn bản, hoặc `null` khi không có gì chặn.
+ *
+ * DÒNG TRỐNG CHẶN CHỨ KHÔNG BỊ BỎ LẶNG LẼ: cán bộ đã bấm `+ Thêm văn bản`, tức đã nói có một văn
+ * bản. Lọc bỏ dòng ấy lúc gửi là một văn bản biến mất khỏi bản ghi mà không ai được báo; máy chủ
+ * cũng từ chối đúng ca này (`ErrThieuTrichYeuVanBan`).
+ */
+export function canhBaoVanBan(ds: readonly DongVanBanNhap[]): string | null {
+  if (ds.length > VAN_BAN_MOT_LAN_TOI_DA) {
+    return `Một lần giao việc nhận tối đa ${VAN_BAN_MOT_LAN_TOI_DA} dòng văn bản — hiện có ${ds.length}.`;
+  }
+  for (const nhom of MOI_NHOM_VAN_BAN) {
+    const dong = dongCuaNhom(ds, nhom);
+    const i = dong.findIndex((d) => d.trichYeu.trim() === "");
+    if (i >= 0) {
+      return (
+        `Văn bản thứ ${i + 1} của nhóm ${nhanNhomVanBan(nhom)} chưa có trích yếu — nhập trích yếu ` +
+        "hoặc bấm ✕ để gỡ dòng ấy."
+      );
+    }
+  }
+  return null;
+}
+
+/**
+ * Dựng thân `POST /api/v1/tasks` (và thân Tách kết luận của màn Biên bản) từ các ô của form.
+ *
+ * TRƯỜNG ĐANG ẨN KHÔNG ĐƯỢC GỬI — CẮT LÚC GỬI, KHÔNG XOÁ LÚC ĐỔI LOẠI. Cán bộ gõ `Cơ quan chủ trì`
+ * rồi đổi sang `Nhiệm vụ cơ bản`: ô ấy biến khỏi màn, và một giá trị không còn nhìn thấy mà vẫn lên
+ * dây là một bản ghi mang thứ người giao việc tin là đã bỏ. Cắt ở ĐÂY — một chỗ, có bài kiểm — thay
+ * vì dọn state trong trình xử lý đổi loại, nơi mỗi ô thêm sau này là một lần phải nhớ dọn. Đổi lại
+ * về `Theo văn bản` thì chữ đã gõ hiện lại, và lúc ấy nó ĐANG NHÌN THẤY nên gửi là đúng.
+ *
+ * `coDanhSachVanBan` LÀ QUYẾT ĐỊNH CỦA BÊN GỌI, KHÔNG PHẢI CỦA LOẠI: màn Biên bản dùng lại form này
+ * để gửi `…/conclusions/{stt}/task`, và `petitions.tachKetLuanVao` KHÔNG có `documents`. Ở đó dù
+ * loại là `Theo văn bản` cũng không có `documents`.
+ *
+ * DÒNG VĂN BẢN: `summary` cắt khoảng trắng; `reference` và `date` VẮNG MẶT khi bỏ trống — không gửi
+ * `""`. `date` đi NGUYÊN chuỗi `YYYY-MM-DD` của ô ngày, không bao giờ qua `Date`: máy chủ từ chối
+ * RFC 3339 có chủ ý (`nhiem_vu_ghi.go:335-337`), vì múi giờ trình duyệt không được quyết văn bản ký
+ * ngày nào. Thứ tự: theo nhóm §5.4, trong mỗi nhóm đúng thứ tự trên màn.
+ */
+export function thanGiaoViec(
+  f: FormGiaoViecNhap,
+  tuyChon: { readonly coDanhSachVanBan: boolean; readonly maCha?: string },
+): petitions_taoNhiemVuVao {
+  const theoVanBan = coKhoiVanBanChiDao(f.loai);
+  const than: petitions_taoNhiemVuVao = {
+    auto_code: f.tuSinhMa,
+    type: f.loai,
+    title: f.tieuDe.trim(),
+  };
+  if (!f.tuSinhMa && f.ma.trim() !== "") than.code = f.ma.trim();
+  if (f.khoi !== "") than.bloc = f.khoi;
+  if (f.moTa.trim() !== "") than.description = f.moTa.trim();
+  if (f.mucUuTien !== "") than.priority = f.mucUuTien;
+  if (f.boPhan !== "") than.unit = f.boPhan;
+  if (f.nguoiThucHien.trim() !== "") than.assignee = f.nguoiThucHien.trim();
+  if (f.lanhDaoGiaoViec.trim() !== "") than.assigner = f.lanhDaoGiaoViec.trim();
+  if (theoVanBan) {
+    if (f.coQuanChuTri !== "") than.lead_unit = f.coQuanChuTri;
+    if (f.chuyenVien.trim() !== "") than.monitor = f.chuyenVien.trim();
+  }
+  // HẠN: ô ngày → mốc cuối ngày theo giờ Việt Nam. Bỏ trống thì trường VẮNG MẶT HẲN, không gửi
+  // chuỗi rỗng — `due_at` là con trỏ ở máy chủ và "không có hạn" là một trạng thái thật (§4.1 vẽ
+  // nó thành `Hạn —`).
+  if (f.han !== "") than.due_at = mocCuoiNgay(f.han);
+  if (tuyChon.maCha !== undefined && tuyChon.maCha !== "") than.parent = tuyChon.maCha;
+
+  if (theoVanBan && tuyChon.coDanhSachVanBan && f.vanBan.length > 0) {
+    than.documents = MOI_NHOM_VAN_BAN.flatMap((nhom) =>
+      dongCuaNhom(f.vanBan, nhom).map((d) => {
+        const dong: petitions_vanBanNhiemVuVao = { group: d.nhom, summary: d.trichYeu.trim() };
+        if (d.soKyHieu.trim() !== "") dong.reference = d.soKyHieu.trim();
+        if (d.ngay !== "") dong.date = d.ngay;
+        return dong;
+      }),
+    );
+  }
+  return than;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
  * BẢNG KANBAN §4.1 — CÂU CHỮ VÀ HAI PHÉP QUYẾT ĐỊNH
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
@@ -833,12 +1015,12 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "trên màn hôm nay là chữ của đặc tả, giống nhau ở mọi xã.",
   },
   {
-    ten: "Nút `✎ Sửa` của khối `SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO` (§5.4) và ba danh sách văn bản ở form giao việc (§7.2)",
+    ten: "Nút `✎ Sửa` của khối `SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO` (§5.4)",
     viSao:
-      "Khối §5.4 nay HIỆN ĐƯỢC ba nhóm văn bản của một nhiệm vụ `Theo văn bản` — chỉ đọc, đọc từ " +
-      "tuyến chi tiết `GET /api/v1/tasks/{ma}` mỗi lần mở drawer. Hai phần còn lại chưa dựng: nút " +
-      "`✎ Sửa` để sửa khối ấy, và ba danh sách văn bản động trong form `Giao việc mới`. Cho tới khi " +
-      "có chúng, văn bản chỉ đạo của một nhiệm vụ chưa nhập hay sửa được từ màn hình này.",
+      "Ba nhóm văn bản NHẬP ĐƯỢC lúc giao việc (form `Giao việc mới` §7.2) và HIỆN ĐƯỢC ở drawer — " +
+      "đọc từ tuyến chi tiết `GET /api/v1/tasks/{ma}` mỗi lần mở. Phần còn lại là nút `✎ Sửa`: cho " +
+      "tới khi có nó, văn bản của một nhiệm vụ đã tạo KHÔNG thêm, sửa hay gỡ được từ màn này, và ô " +
+      "`Ghi chú` của §7.2 cũng chưa nhập được ở đâu — yêu cầu tạo nhiệm vụ không nhận ghi chú.",
   },
   {
     ten: "Sửa `Hạn hoàn thành` ở form sửa (§5.4, §5.6)",

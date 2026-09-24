@@ -17,6 +17,7 @@ import {
   CHI_TIET_THIEU_VAN_BAN,
   CHU_THICH_HAI_O_TICK,
   DANG_TAI_VAN_BAN,
+  GHI_CHU_KHONG_CO_O_GHI_CHU,
   GHI_CHU_LUI_HAN,
   KHONG_DOC_DUOC_VAN_BAN,
   KHONG_SO,
@@ -127,6 +128,23 @@ const DANH_MUC: DanhMucNhiemVu = {
     { id: "01JKHOI", code: "khoi-dang", label: "Khối Đảng", is_default: false, active: true },
   ],
   boPhan: BO_PHAN,
+};
+
+/** Xã có loại mặc định là `co-ban` — để vẽ được nhánh §7.3 mà không cần sự kiện DOM. */
+const DANH_MUC_CO_BAN: DanhMucNhiemVu = {
+  ...DANH_MUC,
+  loai: [
+    {
+      id: "01JLOAICOBAN",
+      code: "co-ban",
+      label: "Nhiệm vụ cơ bản",
+      is_default: true,
+      active: true,
+      order: 2,
+      source: "he-thong",
+      tier: 1,
+    },
+  ],
 };
 
 const TEN_BO_PHAN = new Map(BO_PHAN.map((b) => [b.id, b.name]));
@@ -463,11 +481,54 @@ describe("form Giao việc mới §7", () => {
     expect(html).toContain("không ai duyệt được đề nghị lùi hạn");
   });
 
-  it("form CHƯA vẽ ba danh sách văn bản của §7.2 — phần việc chưa dựng, khai ở `PHAN_CHUA_DUNG`", () => {
-    // SỬA CÓ CHỦ Ý 24/09/2026: bài này từng nói "bảng `nhiem_vu_van_ban` chưa tồn tại". Bảng đã
-    // có (migration 0009) và `taoNhiemVuVao` nay nhận `documents`, nên LÝ DO ấy sai. Phép kiểm vẫn
-    // đúng vì form thật sự chưa có ba danh sách; bài này phải đổi chiều vào ngày chúng được dựng —
-    // đỏ lúc ấy là đúng, không phải một bài giòn.
+  it("màn Nhiệm vụ, loại `theo-van-ban`: vẽ BA danh sách văn bản §7.2, mỗi nhóm một nút thêm", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 24/09/2026 (TASK-02): bài này từng canh "form CHƯA vẽ ba danh sách" và
+    // tự ghi là phải đỏ vào ngày chúng được dựng. Hôm nay là ngày ấy.
+    const html = renderToStaticMarkup(
+      <FormGiaoViec
+        danhMuc={DANH_MUC}
+        coDanhSachVanBan
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+      />,
+    );
+    expect(html).toContain("Văn bản cấp trên giao");
+    expect(html).toContain(nhuTrongHTML("Văn bản chỉ đạo của Đảng uỷ"));
+    expect(html).toContain("Văn bản sản phẩm đầu ra");
+    expect(html.split("+ Thêm văn bản</button>").length - 1).toBe(3);
+    expect(html).toContain('id="giao-them-van-ban-cap-tren-giao"');
+    expect(html).toContain("Nội dung nhiệm vụ / Trích yếu văn bản");
+    expect(html).toContain('id="giao-co-quan-chu-tri"');
+    expect(html).toContain('id="giao-chuyen-vien"');
+    // Ô `Ghi chú` KHÔNG có (hợp đồng tạo không nhận `note`), và form NÓI ra điều ấy.
+    expect(html).toContain(nhuTrongHTML(GHI_CHU_KHONG_CO_O_GHI_CHU));
+  });
+
+  it("loại `co-ban`: ô tiêu đề thành `Tên nhiệm vụ`; cơ quan chủ trì, chuyên viên, ba danh sách BIẾN MẤT", () => {
+    const html = renderToStaticMarkup(
+      <FormGiaoViec
+        danhMuc={DANH_MUC_CO_BAN}
+        coDanhSachVanBan
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+      />,
+    );
+    expect(html).toContain(">Tên nhiệm vụ</label>");
+    expect(html).not.toContain("Trích yếu văn bản");
+    expect(html).not.toContain('id="giao-co-quan-chu-tri"');
+    expect(html).not.toContain('id="giao-chuyen-vien"');
+    expect(html).not.toContain("Thêm văn bản");
+    expect(html).not.toContain("Văn bản cấp trên giao");
+  });
+
+  it("màn Biên bản (không truyền prop): loại `theo-van-ban` mà KHÔNG có ba danh sách", () => {
+    // Đúng cách `features/bien-ban/so-bien-ban.tsx` gọi form: không có `coDanhSachVanBan`.
+    // `petitions.tachKetLuanVao` không có `documents` — vẽ ba danh sách ở đó là để cán bộ gõ văn
+    // bản rồi thấy chúng mất. Hai ô `lead_unit`/`monitor` thì tuyến ấy có, nên vẫn hiện.
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
@@ -475,10 +536,13 @@ describe("form Giao việc mới §7", () => {
         loi={null}
         huy={() => {}}
         giaoViec={() => {}}
+        tieuDeCoSan="Kết luận giả của cuộc họp"
       />,
     );
     expect(html).not.toContain("Thêm văn bản");
     expect(html).not.toContain("Văn bản cấp trên giao");
+    expect(html).toContain('id="giao-co-quan-chu-tri"');
+    expect(html).toContain('id="giao-chuyen-vien"');
   });
 });
 
