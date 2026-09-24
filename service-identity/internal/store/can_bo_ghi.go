@@ -291,8 +291,13 @@ func (s *CanBoStore) DatVaiTro(ctx context.Context, tx *store.ScopedTx, id, vaiT
 // join: `FOR UPDATE` with no `OF` locks the row of every table in the FROM list, so the grant that
 // makes these people administrators is held as well. That is the FOURTH path #13 names — clearing
 // `admin.user` from the last role that carries it, on the Phân quyền screen, without touching a
-// single person. The write route for that screen does not exist yet; when it is written it must
-// take the same lock, and this comment is where it will be looked for.
+// single person. PUT /api/v1/roles/{id}/permissions (vai_tro_quyen_ghi.go, app/phan_quyen_vai_tro.go)
+// takes THIS lock first, through this very text, and then the same lock for `admin.role`
+// (truyVanPhanQuyenDeGhi) — see there for the full order.
+//
+// IT SELECTS `vt.id` BESIDE `nd.id` because the Phân quyền write has to know which holders reach the
+// key THROUGH the role being edited: those are the ones the save can take away. The staff routes
+// read only the ids (QuanTriDangHoatDong).
 //
 // STATED LIMIT, because a guard that looks complete and is not is worse than none: a transaction
 // that INSERTS a brand-new administrator concurrently is not blocked by these locks — a row that
@@ -302,37 +307,57 @@ func (s *CanBoStore) DatVaiTro(ctx context.Context, tx *store.ScopedTx, id, vaiT
 // ORDERED BY id SO EVERY CALLER TAKES THE LOCKS IN THE SAME SEQUENCE. Two transactions acquiring
 // the same rows in opposite orders deadlock; PostgreSQL detects it and aborts one, which is safe
 // but reaches a commune as an unexplained failure.
-const truyVanQuanTriDeGhi = `
-SELECT nd.id
+const truyVanQuanTriDeGhi = truyVanGiuQuyenDeGhiDau + QuyenQuanTriNguoiDung + truyVanGiuQuyenDeGhiDuoi
+
+// truyVanGiuQuyenDeGhiDau / Duoi are the two halves every "who holds key K, locked" query is built
+// from. THE KEY IS SPLICED IN AS A CONSTANT, NEVER BOUND — the reason is on QuyenQuanTriNguoiDung.
+// Two halves and not a function because each query must stay a const: a query assembled at run
+// time from a parameter is exactly the "some caller counts the wrong key" shape the constant
+// exists to prevent.
+const (
+	truyVanGiuQuyenDeGhiDau = `
+SELECT nd.id, vt.id
 FROM nguoi_dung nd
 JOIN vai_tro       vt ON vt.tenant_id = nd.tenant_id AND vt.id         = nd.vai_tro_id
 JOIN vai_tro_quyen vq ON vq.tenant_id = nd.tenant_id AND vq.vai_tro_id = vt.id
 WHERE nd.tenant_id = $1
-  AND vq.quyen_ma = '` + QuyenQuanTriNguoiDung + `'` + dieuKienGiuQuyen + `
+  AND vq.quyen_ma = '`
+	truyVanGiuQuyenDeGhiDuoi = `'` + dieuKienGiuQuyen + `
 ORDER BY nd.id
 FOR UPDATE`
+)
 
 // QuanTriDangHoatDong returns the internal ids of everybody who can exercise `admin.user` in this
 // commune right now, and holds every row the answer rests on until the transaction ends.
 func (s *CanBoStore) QuanTriDangHoatDong(ctx context.Context, tx *store.ScopedTx) ([]string, error) {
-	rows, err := tx.Underlying().QueryContext(ctx, truyVanQuanTriDeGhi, string(tx.TenantID()))
+	ds, err := docNguoiGiuDeGhi(ctx, tx, truyVanQuanTriDeGhi)
 	if err != nil {
 		return nil, fmt.Errorf("can_bo: đọc danh sách quản trị viên: %w", err)
 	}
-	defer rows.Close()
-
-	var ra []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("can_bo: đọc dòng quản trị viên: %w", err)
-		}
-		ra = append(ra, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("can_bo: duyệt danh sách quản trị viên: %w", err)
+	ra := make([]string, 0, len(ds))
+	for _, n := range ds {
+		ra = append(ra, n.CanBoID)
 	}
 	return ra, nil
+}
+
+// docNguoiGiuDeGhi runs one of the locked holder queries and returns (person, role) pairs.
+func docNguoiGiuDeGhi(ctx context.Context, tx *store.ScopedTx, stmt string) ([]domain.NguoiGiuQuyen, error) {
+	rows, err := tx.Underlying().QueryContext(ctx, stmt, string(tx.TenantID()))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ra []domain.NguoiGiuQuyen
+	for rows.Next() {
+		var n domain.NguoiGiuQuyen
+		if err := rows.Scan(&n.CanBoID, &n.VaiTroID); err != nil {
+			return nil, err
+		}
+		ra = append(ra, n)
+	}
+	return ra, rows.Err()
 }
 
 // QuyenCuaVaiTro lists the permission keys one role grants, and says whether the role is there at

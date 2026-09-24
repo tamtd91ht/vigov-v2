@@ -3,41 +3,31 @@ package http
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-identity/internal/app"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
 
-// The read route behind the Phân quyền matrix. GET /api/v1/role-permissions
+// The two routes behind the Phân quyền matrix:
 //
-// THERE IS NO WRITE ROUTE, AND NO SCAFFOLDING FOR ONE IS LEFT HERE — NOT EVEN AN EMPTY HANDLER.
-// This is the place the next person will reach for when adding `PUT /api/v1/roles/{id}/permissions`
-// (the spec's "Lưu cả cột", §11 and §12.5), so the reason it is absent is written HERE rather than
-// in a commit message:
+//	GET /api/v1/role-permissions        the whole matrix, read
+//	PUT /api/v1/roles/{id}/permissions  ONE role's column, saved (spec §12.5 "Lưu" per column)
 //
-//	Saving one role's column is the operation that decides WHO MAY GRANT WHAT, and two questions
-//	the customer has not answered sit directly underneath it
-//	(kb/00-foundation/open-questions.json):
+// THE WRITE ROUTE WAS HELD BACK UNTIL #13 AND #14 WERE ANSWERED, and both were, on 2026-09-22 —
+// with the refinements for this route decided by the user on 2026-09-24. What each one means here
+// is stated once, on app.PhanQuyenVaiTro (app/phan_quyen_vai_tro.go):
 //
-//	  #13  is a commune to be stopped from removing its LAST administrator — by lock, by delete, or
-//	       by taking `admin.user` off the last role that has it? Saving a column is the third of
-//	       those three paths, and it is the one nobody thinks of: untick one cell, press Lưu, and
-//	       the commune can no longer administer itself. Nobody inside it can undo that, and the
-//	       vendor is not permitted to (ADR 0003). It is a procedural dead end, not a defect with a
-//	       hotfix.
-//	  #14  may a holder of `admin.user` act on THEMSELVES — grant their own role the strongest set
-//	       of keys? If not constrained, `admin.user` in practice subsumes every other key, and the
-//	       33-key model the commune's leadership signed off describes something the software does
-//	       not actually do.
+//	#13  refused if the save leaves nobody active holding `admin.user` OR `admin.role` → 409.
+//	     Unticking one cell is the path to a locked-out commune nobody thinks of.
+//	#14  the actor may not save the column of their OWN role, and may not add or remove a key they
+//	     do not hold → 403.
 //
-//	Both are decisions for the authority, not for whoever writes the handler. A half-written write
-//	path looks like a decision somebody made, and the audit trail it leaves cannot afterwards
-//	distinguish a legitimate grant from a self-elevation.
-//
-// The READ side has no such question attached: showing an administrator the grants as they stand
-// changes nothing and can be un-shown.
+// ONE COLUMN PER REQUEST, NEVER THE WHOLE MATRIX (§12.5): a whole-matrix save would make every
+// administrator's press of Lưu a write over every other role, including columns they did not look at.
 
 // quyenMucRa is one permission key as it leaves the API — one ROW of the matrix.
 //
@@ -178,9 +168,8 @@ func gomTheoNhom(danhMuc []domain.Quyen) []nhomQuyenRa {
 // the context on both scoped queries. An entry every time an administrator opens a configuration
 // tab would bury the entries that carry legal weight under thousands that carry none.
 //
-// WHAT WILL NEED AN ENTRY is the write this route deliberately does not have: changing a grant is a
-// privilege change, and rule 6, invariant 5 requires it audited in the same transaction. See the
-// note at the top of this file for why that route is not here yet.
+// WHAT DOES WRITE AN ENTRY is the column save below (LuuPhanQuyenVaiTro): changing a grant is a
+// privilege change, and rule 6, invariant 5 requires it audited in the same transaction.
 //
 // NO idem.* DECLARATION: a GET changes no state.
 func (h *Handler) MaTranQuyen(w http.ResponseWriter, r *http.Request) {
@@ -234,4 +223,99 @@ func (h *Handler) MaTranQuyen(w http.ResponseWriter, r *http.Request) {
 		ra.Grants = append(ra.Grants, capQuyenRa{RoleID: g.VaiTroID, Permission: g.QuyenMa})
 	}
 	vietJSON(w, http.StatusOK, ra)
+}
+
+// luuPhanQuyenVao is the body of PUT /api/v1/roles/{id}/permissions — the WHOLE set of keys the role
+// is to hold afterwards. Duplicates collapse; order does not matter; `[]` empties the column.
+//
+// A POINTER-TO-SLICE SO THAT AN ABSENT FIELD IS REFUSED rather than read as "hold nothing". Emptying
+// a role is a legitimate save, and it must be something the client SAID — a body that forgot the
+// field is not a request to strip a role of every right.
+type luuPhanQuyenVao struct {
+	Permissions *[]string `json:"permissions"`
+}
+
+// cotPhanQuyenRa is the column as saved: the role and its keys, sorted. The same two names the GET
+// matrix uses for a cell (`role_id`, `permission`), pluralised — the screen redraws one column from
+// it without a second read.
+type cotPhanQuyenRa struct {
+	RoleID      string   `json:"role_id"`
+	Permissions []string `json:"permissions"` // sắp theo thứ tự chữ; `[]` khi vai trò không giữ quyền nào
+}
+
+// LuuPhanQuyenVaiTro saves one role's column. PUT /api/v1/roles/{id}/permissions
+func (h *Handler) LuuPhanQuyenVaiTro(w http.ResponseWriter, r *http.Request) {
+	nguoi, ok := nguoiThucHienCanBo(r)
+	if !ok {
+		h.thieuNguoiThucHien(w, r)
+		return
+	}
+	var than luuPhanQuyenVao
+	if !docThanCanBo(w, r, &than) {
+		return
+	}
+	if than.Permissions == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Thiếu trường permissions: phải gửi TOÀN BỘ danh sách quyền của vai trò (gửi [] nếu vai trò không giữ quyền nào).", "")
+		return
+	}
+
+	id := r.PathValue("id")
+	ds, err := h.d.GhiPhanQuyen.Luu(r.Context(), id, *than.Permissions, nguoi)
+	if err != nil {
+		h.traLoiLoiPhanQuyen(w, r, err)
+		return
+	}
+	vietJSON(w, http.StatusOK, cotPhanQuyenRa{RoleID: id, Permissions: ds})
+}
+
+// traLoiLoiPhanQuyen maps one refusal of the column save onto a status and a sentence.
+func (h *Handler) traLoiLoiPhanQuyen(w http.ResponseWriter, r *http.Request, err error) {
+	var thieuQuyen *app.LoiTraoQuyenKhongCam
+	var khongCo *app.LoiKhoaQuyenKhongTonTai
+	var khongConAi *app.LoiKhongConNguoiGiu
+
+	switch {
+	case errors.Is(err, idstore.ErrVaiTroKhongTonTaiDeGhi):
+		// 404 for absent, soft-deleted and ANOTHER COMMUNE'S role alike — every read is scoped, so
+		// the three are one answer and none can be told apart by trying (rule 4, forbidden #2).
+		httpx.WriteError(w, http.StatusNotFound, "role_not_found", "Không tìm thấy vai trò.", "")
+
+	case errors.Is(err, app.ErrTuThaoTacChinhMinh):
+		// #14 first constraint. The sentence must not send them to ask for another permission:
+		// no permission changes this answer.
+		httpx.WriteError(w, http.StatusForbidden, "self_target_forbidden",
+			"Không lưu được phân quyền cho vai trò mà chính bạn đang giữ. "+
+				"Hãy nhờ một người quản trị khác của xã thực hiện.", "")
+
+	case errors.As(err, &thieuQuyen):
+		httpx.WriteError(w, http.StatusForbidden, "permission_escalation",
+			"Bạn không thêm hay bỏ được quyền mà tài khoản của bạn không có: "+
+				strings.Join(thieuQuyen.Thieu, ", ")+". Hãy nhờ người có đủ quyền thực hiện.", "")
+
+	case errors.As(err, &khongCo):
+		// Rule 5, invariant 3c: a key the catalogue lacks is a right no route checks.
+		httpx.WriteError(w, http.StatusBadRequest, "permission_not_found",
+			"Quyền không có trong danh mục của hệ thống: "+strings.Join(khongCo.Thieu, ", ")+
+				". Hãy tải lại ma trận phân quyền.", "")
+
+	case errors.As(err, &khongConAi):
+		// 409, like last_admin on the staff routes: the caller holds the key; what is refused is the
+		// operation against the STATE of the commune.
+		httpx.WriteError(w, http.StatusConflict, "last_holder",
+			"Xã phải luôn còn ít nhất một cán bộ đang hoạt động giữ quyền "+khongConAi.Khoa+
+				". Hãy cấp quyền này cho một vai trò khác có cán bộ đang hoạt động trước, rồi lưu lại.", "")
+
+	case errors.Is(err, domain.ErrKhoaQuyenSaiDangThuc), errors.Is(err, domain.ErrQuaNhieuKhoaQuyen),
+		errors.Is(err, domain.ErrIDThamChieuQuaDai):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+
+	default:
+		// The wrapped error carries the store failure and holds no personal data; it never reaches
+		// the client. The commune is the only thing an operator can act on.
+		h.d.Log.Error("lưu phân quyền vai trò: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(r.Context())), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+	}
 }

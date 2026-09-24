@@ -663,6 +663,8 @@ type mayChu struct {
 	boPhan    *boPhanGia
 	vaiTroMuc *vaiTroMucGia
 	maTran    *maTranGia
+	// ghiPhanQuyen is the column save of the same matrix — a use case. See phanQuyenGhiGia.
+	ghiPhanQuyen *phanQuyenGhiGia
 	// The three reference reads of migration 0005.
 	thonToDanPho   *thonToDanPhoGia
 	loaiDonViDanCu *loaiDonViDanCuGia
@@ -715,6 +717,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	boPhan := boPhanMau()
 	vaiTroMuc := vaiTroMucMau()
 	maTran := maTranMau()
+	ghiPhanQuyen := phanQuyenGhiMau()
 	thonToDanPho := thonToDanPhoMau()
 	loaiDonViDanCu := loaiDonViDanCuMau()
 	khoiNhiemVu := khoiNhiemVuMau()
@@ -737,6 +740,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		BoPhan:    boPhan,
 		VaiTroMuc: vaiTroMuc,
 		MaTran:    maTran,
+		// The column save. Register panics without it.
+		GhiPhanQuyen: ghiPhanQuyen,
 		// Three fields, three fakes — Register panics if any of them is missing, which is how an
 		// unwired route is caught at construction rather than by the first person to call it.
 		ThonToDanPho:   thonToDanPho,
@@ -800,6 +805,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		boPhan:    boPhan,
 		vaiTroMuc: vaiTroMuc,
 		maTran:    maTran,
+
+		ghiPhanQuyen: ghiPhanQuyen,
 
 		thonToDanPho:   thonToDanPho,
 		loaiDonViDanCu: loaiDonViDanCu,

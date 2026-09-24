@@ -103,6 +103,8 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		BoPhan:    boPhanMau(),
 		VaiTroMuc: vaiTroMucMau(),
 		MaTran:    maTranMau(),
+		// Mounted by Register, so wired; nothing in this file calls it.
+		GhiPhanQuyen: phanQuyenGhiMau(),
 		// The three reference reads are wired here for one reason only: Register REFUSES incomplete
 		// Deps at construction, so this harness cannot build the real route table without them.
 		// Nothing in this file calls those routes — it is about the session staying readable across

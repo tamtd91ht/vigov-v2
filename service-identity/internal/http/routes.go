@@ -251,6 +251,15 @@ type (
 		MaTran(ctx context.Context) (domain.MaTranQuyen, error)
 	}
 
+	// PhanQuyenGhi saves ONE role's column of that matrix, for PUT /api/v1/roles/{id}/permissions.
+	//
+	// A USE CASE, NOT A STORE, and separate from MaTranQuyenDoc for the reason CanBoGhiDanhBa is
+	// separate from CanBoDanhBa: the method opens the transaction the grant change and its audit
+	// entry share (rule 6, invariant 3), and it carries the #13/#14 refusals (app.PhanQuyenVaiTro).
+	PhanQuyenGhi interface {
+		Luu(ctx context.Context, vaiTroID string, dsQuyen []string, nguoi app.NguoiThucHien) ([]string, error)
+	}
+
 	// The three reference reads of migration 0005 (ADR 0024). THREE INTERFACES AND NOT ONE WIDE
 	// READER, although all three have the identical method signature and two of them are satisfied
 	// by stores built the same way.
@@ -394,6 +403,8 @@ type Deps struct {
 	BoPhan    BoPhanDanhMuc
 	VaiTroMuc VaiTroDanhMuc
 	MaTran    MaTranQuyenDoc
+	// GhiPhanQuyen — the column save behind the same matrix. A use case: see PhanQuyenGhi.
+	GhiPhanQuyen PhanQuyenGhi
 	// The three reference reads of migration 0005. Three fields, three interfaces — see the note
 	// above them.
 	ThonToDanPho   ThonToDanPhoDanhSach
@@ -478,6 +489,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho danh mục vai trò — GET /api/v1/roles sẽ panic khi có người gọi")
 	case d.MaTran == nil:
 		panic("identity/http: thiếu kho ma trận phân quyền — GET /api/v1/role-permissions sẽ panic khi có người gọi")
+	case d.GhiPhanQuyen == nil:
+		panic("identity/http: thiếu use case lưu phân quyền — PUT /api/v1/roles/{id}/permissions sẽ panic khi có người gọi")
 	case d.ThonToDanPho == nil:
 		panic("identity/http: thiếu kho thôn/tổ dân phố — GET /api/v1/residential-units sẽ panic khi có người gọi")
 	case d.LoaiDonViDanCu == nil:
@@ -1229,10 +1242,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// §12.8 declares the tab with this key; the route declares the same key, so the tab and the data
 	// behind it cannot drift apart.
 	//
-	// THE MATRIX IS READ, NEVER WRITTEN, BY THIS SERVICE'S HTTP SURFACE. The write side — the
-	// spec's `Lưu` button per column (§12.5) — is missing on purpose; open questions #13 and #14 sit
-	// underneath it, and the full argument is at the top of internal/http/quyen.go, which is where
-	// the next person will be standing when they add it.
+	// THE WRITE SIDE — the spec's `Lưu` button per column (§12.5) — is the next route,
+	// PUT /api/v1/roles/{id}/permissions, under the same key.
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
@@ -1249,6 +1260,42 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/role-permissions",
 		authz.RequirePermission(d.Checker, "admin.role")(
 			http.HandlerFunc(h.MaTranQuyen)))
+
+	// Saving ONE column of that matrix. PUT /api/v1/roles/{id}/permissions
+	//
+	// PUT WITH THE WHOLE SET, NOT A PATCH OF CELLS (user decision 2026-09-24): the body is every key
+	// the role holds afterwards. The screen already holds the whole column when Lưu is pressed, and a
+	// set is idempotent where a list of toggles is not.
+	//
+	// `roles/{id}/permissions` — the permissions OF one role, a collection under the role. The
+	// resource the GET reads is the whole relation (`role-permissions`); this one is one column of it.
+	//
+	// RequirePermission("admin.role") — the key the GET and the tab (§12.8) declare, so reading and
+	// writing the matrix cannot drift onto two keys. On top of the key, the use case refuses:
+	//
+	//	403 self_target_forbidden   the actor's own role (#14, first)
+	//	403 permission_escalation   adding OR removing a key the actor does not hold (#14, second)
+	//	409 last_holder             leaving nobody active holding `admin.user` or `admin.role` (#13)
+	//	400 permission_not_found    a key absent from `quyen` (rule 5, inv 3c)
+	//	404 role_not_found          absent, soft-deleted, or another commune's role — one answer
+	//
+	// idem.KhongCan — PUT carries an absolute set: the second identical request finds the column
+	// already as asked, so the use case writes nothing and audits nothing.
+	//
+	// @summary  Lưu phân quyền của MỘT vai trò (một cột ma trận) — gửi toàn bộ danh sách quyền
+	// @screen   14-cau-hinh §4
+	// @request  luuPhanQuyenVao
+	// @reply    200 cotPhanQuyenRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/roles/{id}/permissions",
+		authz.RequirePermission(d.Checker, "admin.role")(
+			idem.KhongCan("PUT mang tập quyền tuyệt đối: lưu đúng tập vai trò đang giữ thì use case không ghi gì và không để vết, nên lần gửi thứ hai cho cùng một kết quả")(
+				http.HandlerFunc(h.LuuPhanQuyenVaiTro))))
 
 	// --- the three reference reads of migration 0005. THREE READ ROUTES, DELIBERATELY NO WRITE ---
 	//

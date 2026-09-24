@@ -240,6 +240,10 @@ func run(log *slog.Logger) error {
 	// so the holiday handler cannot move a working session, one type because the rules that matter
 	// SPAN the three tables (app/lich_lam_viec.go).
 	ghiLich := app.NewLich(kho, lichLamViec, ngayNghiLe, ngayLamBu)
+	// The column save of the Phân quyền matrix: PUT /api/v1/roles/{id}/permissions (#13, #14). A use
+	// case over its own store: it locks the holders of `admin.user` and `admin.role`, then the role,
+	// and writes the grant change and its audit entry in one transaction.
+	ghiPhanQuyen := app.NewPhanQuyenVaiTro(kho, idstore.NewPhanQuyenStore(kho))
 
 	// 7. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
 	//    cache — and the routes then behave per the CheDoHong each one declared. A service must
@@ -277,9 +281,11 @@ func run(log *slog.Logger) error {
 		// Cùng một *VaiTroStore, hai trường: một trả lời "vai trò của người gọi", một trả
 		// lời "xã này có những vai trò nào". Hai câu hỏi, hai interface hẹp.
 		VaiTroMuc: vaiTro,
-		// Ma trận phân quyền — chỉ ĐỌC. Không có tuyến ghi nào, và lý do nằm ở đầu tệp
-		// internal/http/quyen.go: lưu một cột vai trò chạm đúng câu hỏi mở #13 và #14.
-		MaTran: maTranQuyen,
+		// Ma trận phân quyền: một kho ĐỌC cả ma trận, một use case LƯU từng cột vai trò. Tuyến ghi
+		// có từ khi câu #13 và #14 đã chốt (22/09/2026, tinh chỉnh 24/09/2026) — lý lẽ ở đầu tệp
+		// internal/http/quyen.go và app/phan_quyen_vai_tro.go.
+		MaTran:       maTranQuyen,
+		GhiPhanQuyen: ghiPhanQuyen,
 		// Ba tuyến đọc tham chiếu của migration 0005 — CHỈ ĐỌC. Không có tuyến ghi nào: câu hỏi
 		// mở #21 (xã được sửa DANH SÁCH MÃ hay chỉ nhãn và thứ tự) chưa có lời đáp.
 		ThonToDanPho:   thonToDanPho,
