@@ -55,6 +55,10 @@ tiến độ tương ứng (khoá `tiep_theo`/`bang_chung`).
 | **Sổ đơn thư — 15 câu C3–C19** (bộ trạng thái theo TT 05/2021, 4 loại đơn, hai hạn theo SLA xã tính ngày làm việc, **che danh tính người tố cáo theo loại đơn + khoá riêng**, luật người đang giữ chỉ cho đơn thư, nhiệm vụ sinh từ đơn hạn 17:00 và cấm với tố cáo…). Chưa dựng — lượt sau dựng đúng theo đó, không hỏi lại | 24/09 | người dùng (chọn đề xuất) | `service-documents/so-don-thu-cong-dan` |
 | Tuyến **danh bạ cán bộ hẹp** (AnyAuthenticated, không SĐT/email) cho ô chọn cán bộ ở 4 menu | 24/09 | người dùng | `service-identity/tuyen-danh-ba-can-bo-hep` |
 | Đơn thư từ **Mini App**: hoãn | 24/09 | người dùng | `service-documents/don-thu-tu-mini-app` |
+| **Báo công dân theo bảng** (6 chuyển trạng thái, không báo dang-phan-loai/dang-xu-ly/da-xu-ly, không bao giờ gửi tên cán bộ/nội dung/ảnh) | 24/09 | người dùng | ADR 0041 |
+| Phản ánh: cờ ảnh nghiệm thu **giữ #7 mặc định BẬT**; **gia hạn** có (lãnh đạo duyệt, hạn gốc giữ); **tự đóng** phiếu chờ dân sau N ngày; 1–2 sao vào **hàng lãnh đạo xem**; ranh giới với đơn thư theo nội dung + hình thức (tố cáo cán bộ sang sổ đơn thư). Chưa dựng | 24/09 | người dùng (chọn đề xuất) | `service-petitions/vong-doi-phieu-phan-anh` |
+| Tên URL danh bạ hẹp: **`staff-directory`** | 24/09 | người dùng | `ubiquitous-language.md` |
+| Mini App phản ánh: **dựng màn, nguồn phiên ViGov fail closed**, ẩn khỏi bản nộp — chưa có cầu phiên vihat-miniapp → ViGov | 24/09 | người dùng | `citizen-app/cau-phien-cong-dan-vigov` (cần ADR) |
 
 **Cần biết về 34 câu trong `open-questions.json`:** cả 34 đều DECIDED, nhưng nhiều câu (#21, #27 và
 mười ba câu khác) là **đề xuất của nhà cung cấp** ghi ở ADR 0035, không phải trả lời của khách. Đọc
@@ -88,6 +92,8 @@ Bảng *"Nợ khách chốt"* ở đầu `tien-do.md` sinh từ `no_confirm`; h�
 | Mục menu `/cau-hinh` chỉ canh `admin.lookup` | người cầm `admin.org`/`admin.role`/`admin.sla` không vào được | cùng mục trên |
 | Hai câu ở `deploy/README.md` mục 11.0 (dải CIDR netpol, KUBECONFIG theo môi trường) | phiên CI/deploy chờ để sửa `netpol.yaml`, `deploy/Jenkinsfile` | `deploy/README.md` §11.0 |
 | **Cờ ảnh nghiệm thu phản ánh**: vigov-require `b9a9718` mặc định TẮT, câu #7 (ADR 0008) chốt mặc định BẬT — mâu thuẫn với câu KHÁCH đã chốt | cờ chưa dựng; ai dựng phải hỏi trước | `service-petitions/doi-chieu-24-09-nhiem-vu-phan-anh` |
+| **Cầu phiên công dân**: đăng nhập Mini App (vihat-miniapp) không ra được CitizenSession ViGov — không công dân thật nào gọi được tuyến CitizenOnly | cả kênh công dân | `citizen-app/cau-phien-cong-dan-vigov` |
+| Petitions **không kiểm `assignee`** có thật trong xã — mã sai lưu được, im lặng | luật nắm giữ, Giao cho tôi | `service-petitions/duong-xu-ly-phan-anh-phia-can-bo` |
 | **Bộ trạng thái riêng của VĂN BẢN ĐẾN** (C2; domain-expert đề xuất theo NĐ 30/2020) | tuyến đổi trạng thái văn bản đến | `service-documents/van-ban-den-tuyen-con-thieu` |
 | Ngày làm việc hay ngày lịch cho hạn KN Đ.28 / TC Đ.29 — **hỏi pháp chế**; và cần ADR vì ADR 0007 tính GIỜ | gieo số SLA đơn thư | `service-documents/so-don-thu-cong-dan` |
 
