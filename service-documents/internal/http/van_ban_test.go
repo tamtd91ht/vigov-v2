@@ -20,6 +20,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -752,11 +753,22 @@ func TestVanBanDen_LichSuChuyenVuotTranThi500KhongCatBot(t *testing.T) {
 	// The ceiling refusal reaches the client as a plain 500 — never a short list that reads as whole.
 	m := dungMayChu(t)
 	m.capQuyen(xaA, QuyenDocVanBan)
-	m.chiTiet.loi = docstore.ErrQuaNhieuLichSuChuyen
+	// WRAPPED EXACTLY AS app.bocVanBan WRAPS IT — the commune's ULID and the store's own sentence ride
+	// inside err.Error(). A bare sentinel here would let a handler that echoes err.Error() pass.
+	m.chiTiet.loi = fmt.Errorf("van_ban: đọc lịch sử chuyển văn bản đến cho xã %s: %w",
+		xaA, docstore.ErrQuaNhieuLichSuChuyen)
 
 	w := m.goi(t, http.MethodGet, hostA, duongVanBanDen+"/vbd-a-001/routings", canBoCua(xaA))
 	doiMa(t, w, http.StatusInternalServerError)
-	if strings.Contains(w.Body.String(), "items") {
-		t.Fatalf("vượt trần mà vẫn trả danh sách: %s", w.Body.String())
+	than := w.Body.String()
+	if strings.Contains(than, "items") {
+		t.Fatalf("vượt trần mà vẫn trả danh sách: %s", than)
+	}
+	// THE INTERNAL SENTENCE STAYS ON THE SERVER. The ceiling is a server-side fault, not something the
+	// clerk can act on, and the wrapped text names the commune's internal id and the store's wording.
+	for _, lo := range []string{"vượt trần", "van_ban", string(xaA)} {
+		if strings.Contains(than, lo) {
+			t.Fatalf("thân 500 mang chữ nội bộ %q: %s", lo, than)
+		}
 	}
 }

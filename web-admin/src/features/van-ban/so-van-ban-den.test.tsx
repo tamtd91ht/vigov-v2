@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -341,6 +343,42 @@ describe("mở ngăn chi tiết từ một dòng", () => {
     );
 
     expect(html).toContain("ngăn-giả-của-bài-kiểm");
+  });
+});
+
+describe("sau một lần chuyển thành công, ngăn và sổ ĐỌC LẠI — nối dây trong SoVanBanDen", () => {
+  /**
+   * VÌ SAO CA NÀY ĐỌC MÃ NGUỒN THAY VÌ BẤM NÚT: môi trường test là Node không DOM (xem
+   * `vitest.config.mts`), nên `useEffect` và `useCallback` của `SoVanBanDen` không chạy được ở đây.
+   * Đây là GIỚI HẠN của ca, nói thẳng: nó canh HÌNH DẠNG của đường nối, không canh hành vi lúc chạy.
+   * Một phép thử bằng trình duyệt thật (Playwright) mới canh được trọn.
+   *
+   * VÌ SAO VẪN ĐÁNG VIẾT: bỏ dòng `datLanDocNgan(...)` khỏi nhánh thành công của `guiChuyen` thì
+   * `tsc` sạch, `eslint` sạch (`thucHien` vẫn dùng `datLanDocNgan`, nên `no-unused-vars` không kêu),
+   * và mọi ca khác xanh — đã đo 24/09/2026 trên một bản sao. (Bỏ `lanDocNgan` khỏi mảng phụ thuộc
+   * của effect thì `no-unused-vars` ĐÃ bắt, nên không viết ca cho vế ấy.) Hậu quả: cán bộ vừa chuyển
+   * vẫn nhìn dòng thời gian CŨ, không thấy lần chuyển mình vừa ghi, và bấm lần nữa — một dòng lịch
+   * sử thứ hai KHÔNG sửa, KHÔNG xoá được (trigger `lich_su_chuyen_chi_them`; tuyến ấy cố ý không có
+   * Idempotency-Key, `van-ban.test.ts`).
+   */
+  const nguon = readFileSync(new URL("./so-van-ban-den.tsx", import.meta.url), "utf8")
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+
+  it("nhánh thành công của guiChuyen đọc lại CẢ ngăn LẪN sổ; nhánh lỗi thì không", () => {
+    const than = /const guiChuyen = useCallback\(([\s\S]*?)\n {2}\}, \[/.exec(nguon)?.[1];
+    expect(than, "không tìm thấy guiChuyen trong so-van-ban-den.tsx").toBeDefined();
+    // Khối chuyển gửi id của văn bản ĐANG MỞ trong ngăn và bản nháp của CHÍNH khối ấy — cùng hàm
+    // `guiChuyenVanBan` biểu mẫu trang gọi trước lần dời (e3732fd^), không một bản sao thứ hai.
+    expect(than).toMatch(/guiChuyenVanBan\(xem\.id, banChuyen\)/);
+
+    const [loi, thanhCong] = (than as string).split(/if \(!k\.ok\) \{[\s\S]*?return;\s*\}/);
+    expect(thanhCong, "không tách được nhánh lỗi khỏi nhánh thành công").toBeDefined();
+    expect(thanhCong).toMatch(/datLanDocNgan\(/);
+    expect(thanhCong).toMatch(/datLanDoc\(/);
+    // Nhánh lỗi không đọc lại: câu từ chối phải đứng yên dưới tay người đang sửa bản nháp.
+    expect(loi).not.toMatch(/datLanDoc/);
   });
 });
 

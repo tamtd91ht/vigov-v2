@@ -422,6 +422,58 @@ func TestChuyen_BaViecMotGiaoDichVaLichSuChiThem(t *testing.T) {
 	}
 }
 
+func TestChuyen_DongLichSuGhiTrangThaiDaChuyenVaoVaHaiBoPhanDungCho(t *testing.T) {
+	// THE ROW THE DRAWER NOW READS BACK, ASSERTED ON THE INSERT ARGUMENTS. The test above proves an
+	// INSERT happens; nothing proved WHAT it records. GET .../routings serves `status` as "the state
+	// the document moved INTO by this act" and `from_unit → to_unit` as the direction of travel —
+	// and the table is append-only (trigger `lich_su_chuyen_chi_them`), so a wrong value written
+	// here is wrong forever, on the record a complaint is answered from.
+	//
+	// `moi-vao-so` IS THE ONLY STARTING STATE WHERE BEFORE AND AFTER DIFFER (TrangThaiSauKhiChuyen),
+	// so it is the only fixture in which writing `truoc.TrangThai` instead of the new state turns red.
+	// The holder is set so that swapping $7 and $8 turns red too.
+	k := khoVBMau()
+	k.hangDen = &hangVBD{
+		id: "vbd-001", soVaoSo: 7, nam: 2026, ngayDen: lucVaoSo,
+		coQuan: "Huyện uỷ", loai: "cong-van", trichYeu: "x", boPhan: "bp-van-phong",
+		han: hanMau, trangThai: string(domain.VanBanMoiVaoSo), nguoiTao: "CB-00001",
+	}
+	uc, _, ctx := dungUseCaseVanBanDen(t, k, 1)
+
+	if _, err := uc.Chuyen(ctx, "vbd-001", YeuCauChuyenVanBan{
+		DenBoPhan: "bp-dia-chinh",
+		LyDo:      "Thuộc thẩm quyền của bộ phận Địa chính",
+	}, nguoiMau); err != nil {
+		t.Fatalf("Chuyen: %v", err)
+	}
+
+	ls := k.cau("INSERT INTO lich_su_chuyen_van_ban")
+	if len(ls) != 1 {
+		t.Fatalf("có %d dòng lịch sử được chèn, muốn 1", len(ls))
+	}
+	a := ls[0].args
+	if len(a) != 10 {
+		t.Fatalf("câu chèn lịch sử có %d tham số, muốn 10: %v", len(a), a)
+	}
+	for _, c := range []struct {
+		ten      string
+		co, muon driver.Value
+	}{
+		{"$1 tenant_id — xã của ngữ cảnh", a[0], string(xaA)},
+		{"$3 van_ban_den_id", a[2], "vbd-001"},
+		{"$5 nguoi_ma — MÃ cán bộ, không phải id nội bộ (luật 6, bất biến 8)", a[4], "CB-00123"},
+		{"$6 trang_thai_tai_thoi_diem — trạng thái ĐÃ CHUYỂN VÀO, không phải trạng thái cũ", a[5],
+			string(domain.VanBanDaPhanCong)},
+		{"$7 tu_bo_phan_id — bộ phận đang giữ TRƯỚC lần chuyển", a[6], "bp-van-phong"},
+		{"$8 den_bo_phan_id — bộ phận nhận", a[7], "bp-dia-chinh"},
+		{"$9 can_bo_xu_ly_ma — để trống thì NULL, không phải chuỗi rỗng", a[8], nil},
+	} {
+		if c.co != c.muon {
+			t.Errorf("%s = %v, muốn %v", c.ten, c.co, c.muon)
+		}
+	}
+}
+
 func TestChuyen_DangSuaMotDongLichSuThiKhongCoDuongNao(t *testing.T) {
 	// THE "EDIT A ROUTING ENTRY → REFUSED" CASE, ASSERTED WHERE IT CAN ACTUALLY BE ASSERTED WITHOUT A
 	// SERVER: there is no code path that reaches it. The store exposes exactly one method WRITING
