@@ -3,8 +3,8 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 43250a9
-expires: 2026-12-23
+derived_from_commit: d92d104
+expires: 2026-12-24
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
 ---
@@ -17,7 +17,7 @@ không dòng nào viết tay (luật 9, bất biến 1).
 Trục ở đây là **phân hệ sản phẩm**. Trục theo **module kho mã** nằm ở `kb/90-ephemeral/tien-do.md`;
 hai tệp trả lời hai câu khác nhau và không chép của nhau.
 
-Sinh ngày **2026-09-24** · hết hạn **2026-12-23**.
+Sinh ngày **2026-09-25** · hết hạn **2026-12-24**.
 
 ## 1 · Theo chương đặc tả
 
@@ -102,7 +102,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 20 | 2 | 8 | 6 |
-| `citizen-app` | 11 | 2 | 5 | 0 |
+| `citizen-app` | 11 | 3 | 4 | 0 |
 | `core` | 9 | 0 | 1 | 1 |
 | `deploy` | 13 | 0 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
@@ -110,7 +110,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-comms` | 7 | 3 | 2 | 4 |
 | `service-documents` | 5 | 2 | 4 | 0 |
 | `service-finance` | 13 | 3 | 0 | 0 |
-| `service-identity` | 14 | 7 | 2 | 1 |
+| `service-identity` | 15 | 7 | 1 | 1 |
 | `service-petitions` | 11 | 7 | 5 | 0 |
 | `service-platform` | 3 | 1 | 0 | 1 |
 | `service-reporting` | 0 | 0 | 1 | 0 |

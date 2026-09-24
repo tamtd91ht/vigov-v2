@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-09-24",
+  "cap_nhat": "2026-09-25",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -202,10 +202,10 @@
     {
       "id": "tuyen-danh-ba-can-bo-hep",
       "viec": "Tuyến đọc danh bạ cán bộ HẸP cho ô chọn cán bộ — id, họ tên, chức danh, bộ phận; không SĐT/email",
-      "trang_thai": "chua_lam",
-      "bang_chung": "cross-context-scout 24/09/2026: GET /api/v1/staff đòi admin.user (internal/http/routes.go:719) nên văn thư không chọn được cán bộ; nợ chung Nhiệm vụ (web nhan-nhiem-vu.ts:1441), Phản ánh (nhan-phieu.ts:433,508), Thông báo (nhan-thong-bao.ts:337), Văn bản & đơn thư (so-van-ban-den.tsx:1020).",
+      "trang_thai": "xong",
+      "bang_chung": "8ba677c (24/09/2026): GET /api/v1/staff-directory (danh từ người dùng chốt, dòng mới ở ubiquitous-language.md), AnyAuthenticated, trả {items:[{code, full_name, position, department_id}]} — code là MÃ cán bộ (nguoi_dung.ma), không ULID, không SĐT/email; chỉ người co_tai_khoan AND dang_hoat_dong AND chưa xoá mềm; lọc `unit`; trần 500 thì từ chối. Ingress sinh luật mới (644673b). service-identity go test -race -p 1 xanh; make check xanh (build từng module). || cross-context-scout 24/09/2026: GET /api/v1/staff đòi admin.user (internal/http/routes.go:719) nên văn thư không chọn được cán bộ; nợ chung Nhiệm vụ (web nhan-nhiem-vu.ts:1441), Phản ánh (nhan-phieu.ts:433,508), Thông báo (nhan-thong-bao.ts:337), Văn bản & đơn thư (so-van-ban-den.tsx:1020).",
       "no_confirm": [],
-      "tiep_theo": "NGƯỜI DÙNG CHỌN 24/09/2026: tuyến mới, AnyAuthenticated có lý do (luật 5 đk dừng #1 — người dùng đã quyết), trong một xã, không trường dữ liệu cá nhân nhạy cảm. Chưa dựng — lượt sau (go-service-builder identity), rồi web thay ô chọn ở bốn menu.",
+      "tiep_theo": "SỬA 25/09/2026: tuyến ĐÃ DỰNG. Web Phản ánh đã dùng (0c48552). CÒN: Nhiệm vụ (so-nhiem-vu.tsx:709,:2254; nhan-nhiem-vu.ts:1441), Văn bản (nhan-van-ban.ts:313; ngan-van-ban-den.tsx:345), Thông báo (so-thong-bao.tsx:398; nhan-thong-bao.ts:337), Biên bản (nhan-bien-ban.ts:248) vẫn dựng quanh GET /staff (admin.user) — chuyển sang staff-directory ở lượt của từng menu. Không có ca PG thật. || NGƯỜI DÙNG CHỌN 24/09/2026: tuyến mới, AnyAuthenticated có lý do (luật 5 đk dừng #1 — người dùng đã quyết), trong một xã, không trường dữ liệu cá nhân nhạy cảm. Chưa dựng — lượt sau (go-service-builder identity), rồi web thay ô chọn ở bốn menu.",
       "menu": "van-ban-don-thu"
     }
   ]
