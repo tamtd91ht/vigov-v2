@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CAU_THIEU_QUYEN,
-  KHONG_DUNG_DUOC,
+  PHAN_CHUA_DUNG,
   MO_TA_TRANG,
   demSoKhoi,
   nhanSoKhoi,
@@ -72,15 +72,15 @@ describe("danh sách phần chưa mở", () => {
   it("mỗi mục nói cả VIỆC lẫn LÝ DO, không mục nào rỗng", () => {
     // Một mục chỉ có tên việc là một mục nói "cái này không có" mà không nói cái gì mở khoá nó —
     // tức lần sau vẫn phải ngồi suy lại từ đầu.
-    expect(KHONG_DUNG_DUOC.length).toBeGreaterThan(0);
-    for (const p of KHONG_DUNG_DUOC) {
-      expect(p.viec.trim()).not.toBe("");
-      expect(p.vi.trim().length).toBeGreaterThan(40);
+    expect(PHAN_CHUA_DUNG.length).toBeGreaterThan(0);
+    for (const p of PHAN_CHUA_DUNG) {
+      expect(p.ten.trim()).not.toBe("");
+      expect(p.viSao.trim().length).toBeGreaterThan(40);
     }
   });
 
   it("nêu đủ bốn thứ đặc tả vẽ mà hợp đồng hoặc khách chưa cho phép", () => {
-    const tatCa = KHONG_DUNG_DUOC.map((p) => `${p.viec} ${p.vi}`).join(" ");
+    const tatCa = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" ");
     expect(tatCa).toContain("tìm kiếm");
     expect(tatCa).toContain("Mini App");
     expect(tatCa).toContain("Excel");
@@ -91,9 +91,9 @@ describe("danh sách phần chưa mở", () => {
     // Nếu lý do chỉ là "chưa có trường trong lược đồ" thì người sau sẽ thêm một cột và bật nút —
     // trong khi thứ chặn thật là một quyết định về dữ liệu cá nhân: phải hỏi ý từng người và lưu
     // lại sự đồng ý kèm thời điểm (Nghị định 13/2023/NĐ-CP).
-    const mucMiniApp = KHONG_DUNG_DUOC.find((p) => p.viec.includes("MINI APP"));
+    const mucMiniApp = PHAN_CHUA_DUNG.find((p) => p.ten.includes("MINI APP"));
     expect(mucMiniApp).toBeDefined();
-    expect(mucMiniApp?.vi).toContain("#12");
-    expect(mucMiniApp?.vi).toContain("đồng ý");
+    expect(mucMiniApp?.viSao).toContain("#12");
+    expect(mucMiniApp?.viSao).toContain("đồng ý");
   });
 });

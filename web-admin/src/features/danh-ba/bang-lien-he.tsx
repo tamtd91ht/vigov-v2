@@ -98,7 +98,7 @@ export function BangLienHe({
                 <span className="o-thao-tac">
                   {/* MỘT HÀNH ĐỘNG, KHÔNG BA. Đặc tả §4 vẽ ✕ (rút khỏi Mini App), ✎ (sửa) và 🗑
                       (xoá); hai cái ngoài cùng không có tuyến nào trong hợp đồng và mỗi cái còn bị
-                      một quyết định đã chốt chặn (#12 và #10). Xem `KHONG_DUNG_DUOC`. */}
+                      một quyết định đã chốt chặn (#12 và #10). Xem phần chưa mở ở `nhan-danh-ba.ts`. */}
                   <button
                     type="button"
                     className="nut-phu"

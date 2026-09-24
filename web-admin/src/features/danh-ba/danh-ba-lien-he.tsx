@@ -31,9 +31,9 @@ import { BangLienHe } from "./bang-lien-he";
 import {
   DANH_BA_RONG,
   GHI_CHU_SO_DIEN_THOAI,
-  KHONG_DUNG_DUOC,
+  PHAN_CHUA_DUNG,
   NHAN_SO_KHOI,
-  TIEU_DE_KHONG_DUNG_DUOC,
+  TIEU_DE_PHAN_CHUA_DUNG,
   demSoKhoi,
   nhanSoKhoi,
 } from "./nhan-danh-ba";
@@ -203,7 +203,7 @@ export function DanhBaLienHe() {
         Danh sách cán bộ
       </h2>
 
-      {/* MỘT THẺ KPI, KHÔNG BA — xem `KHONG_DUNG_DUOC`. Dựng bằng `dl` chứ không bằng một thẻ
+      {/* MỘT THẺ KPI, KHÔNG BA — xem `PHAN_CHUA_DUNG`. Dựng bằng `dl` chứ không bằng một thẻ
           trang trí: nhãn và con số phải đi liền nhau cả với trình đọc màn hình. */}
       <dl className="danh-sach-truong">
         <dt>{NHAN_SO_KHOI}</dt>
@@ -292,11 +292,11 @@ export function DanhBaLienHe() {
 function KhoiChuaMo() {
   return (
     <aside className="khoi-chua-khai" aria-labelledby="tieu-de-danh-ba-chua-mo">
-      <h3 id="tieu-de-danh-ba-chua-mo">{TIEU_DE_KHONG_DUNG_DUOC}</h3>
+      <h3 id="tieu-de-danh-ba-chua-mo">{TIEU_DE_PHAN_CHUA_DUNG}</h3>
       <ul>
-        {KHONG_DUNG_DUOC.map((p) => (
-          <li key={p.viec}>
-            <strong>{p.viec}</strong> — {p.vi}
+        {PHAN_CHUA_DUNG.map((p) => (
+          <li key={p.ten}>
+            <strong>{p.ten}</strong> — {p.viSao}
           </li>
         ))}
       </ul>

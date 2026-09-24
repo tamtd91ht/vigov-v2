@@ -6,7 +6,7 @@
  * module thuần kiểm được bằng một phép so chuỗi, còn cùng quyết định ấy viết thẳng trong JSX thì
  * chỉ kiểm được bằng cách kết xuất cả cây. Cùng khuôn với `components/danh-ba/nhan-ghi-danh-ba.ts`.
  *
- * MÀN NÀY ÍT HƠN ĐẶC TẢ RẤT NHIỀU, VÀ TỪNG PHẦN VẮNG MẶT ĐỀU CÓ LÝ DO Ở ĐÂY — `KHONG_DUNG_DUOC`
+ * MÀN NÀY ÍT HƠN ĐẶC TẢ RẤT NHIỀU, VÀ TỪNG PHẦN VẮNG MẶT ĐỀU CÓ LÝ DO Ở ĐÂY — `PHAN_CHUA_DUNG`
  * đưa đúng danh sách ấy RA MÀN HÌNH chứ không giấu trong chú thích. Một cán bộ mở `/danh-ba` và
  * không thấy ô tìm kiếm mà đặc tả vẽ sẽ kết luận hệ thống hỏng, rồi gọi lên tỉnh; thứ thật sự
  * thiếu là một tuyến API và hai quyết định của khách.
@@ -64,7 +64,7 @@ export type SoKhoi =
  * Đếm số khối / đơn vị từ kết quả đọc `GET /api/v1/org-units`.
  *
  * ĐẾM ĐƯỢC VÌ TUYẾN ẤY TRẢ NGUYÊN DANH SÁCH, KHÔNG PHÂN TRANG (`lib/api/danh-muc.ts`). Đó cũng
- * chính là lý do hai thẻ KPI kia KHÔNG dựng được: xem `KHONG_DUNG_DUOC`.
+ * chính là lý do hai thẻ KPI kia KHÔNG dựng được: xem `PHAN_CHUA_DUNG`.
  */
 export function demSoKhoi(kq: KetQua<{ items: readonly unknown[] }> | null): SoKhoi {
   if (kq === null) return { pha: "dangDoc" };
@@ -145,8 +145,15 @@ export const GHI_CHU_SO_DIEN_THOAI =
 
 /* ---- những phần đặc tả vẽ mà màn này KHÔNG dựng --------------------------------------------- */
 
-/** Một mục của danh sách "đặc tả có, ở đây không". `vi` phải nói cả CÁI GÌ MỞ KHOÁ nó. */
-export type PhanChuaDung = { readonly viec: string; readonly vi: string };
+/**
+ * Một mục của danh sách "đặc tả có, ở đây không". `viSao` phải nói cả CÁI GÌ MỞ KHOÁ nó.
+ *
+ * CÙNG TÊN HẰNG, CÙNG HAI KHOÁ `ten` / `viSao` như các màn khác (`nhiem-vu`, `bien-ban`), vì
+ * `tools/tien_do_san_pham.py` đếm đúng hình ấy: tìm chữ `PHAN_CHUA_DUNG` rồi đếm mọi dòng
+ * `ten: "` tới HẾT TỆP. Đặt tên khác là báo cáo tiến độ in "không khai" trong khi màn vẫn hiện đủ
+ * bảy dòng — và vì thế mảng dưới đây phải là khối CUỐI CÙNG có dòng `ten:` trong tệp này.
+ */
+export type PhanChuaDung = { readonly ten: string; readonly viSao: string };
 
 /**
  * Bảy phần đặc tả vẽ mà hợp đồng hoặc một quyết định của khách chưa cho phép dựng.
@@ -159,47 +166,47 @@ export type PhanChuaDung = { readonly viec: string; readonly vi: string };
  * trong lược đồ VÀ bị chặn bởi một quyết định đã chốt; dòng cuối thiếu một khoá quyền mà bảng
  * `quyen` không có.
  */
-export const KHONG_DUNG_DUOC: readonly PhanChuaDung[] = [
+export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    viec: "Ô tìm theo tên, chức vụ, số điện thoại (§3)",
-    vi:
+    ten: "Ô tìm theo tên, chức vụ, số điện thoại (§3)",
+    viSao:
       "GET /api/v1/staff không nhận tham số tìm kiếm nào — hợp đồng chỉ có limit, cursor, sort, " +
       "order. Lọc tại trình duyệt chỉ lọc được 20 dòng của trang đang mở, nên gõ tên một người ở " +
       "trang sau sẽ ra danh sách rỗng và người tìm kết luận sai rằng người đó không có trong hệ " +
       "thống. Mở khoá bằng một tham số truy vấn mới trên tuyến ấy.",
   },
   {
-    viec: "Bộ lọc theo khối / đơn vị và theo trạng thái hiển thị (§3)",
-    vi: "Cùng tuyến, cùng lý do, cùng cách mở khoá như ô tìm kiếm.",
+    ten: "Bộ lọc theo khối / đơn vị và theo trạng thái hiển thị (§3)",
+    viSao: "Cùng tuyến, cùng lý do, cùng cách mở khoá như ô tìm kiếm.",
   },
   {
-    viec: "Thẻ TỔNG SỐ CÁN BỘ (§2)",
-    vi:
+    ten: "Thẻ TỔNG SỐ CÁN BỘ (§2)",
+    viSao:
       "Hợp đồng cố ý không trả tổng số: máy chủ đọc theo mốc (keyset) và không chạy COUNT(*) trên " +
       "bảng đã phân mảnh. Đếm số dòng của trang đang mở rồi gọi đó là tổng là báo một con số " +
       "không ai tính.",
   },
   {
-    viec: "Thẻ ĐANG HIỆN TRÊN MINI APP, cột Trên Mini App, và hai nút thêm/rút khỏi danh bạ (§2, §4)",
-    vi:
+    ten: "Thẻ ĐANG HIỆN TRÊN MINI APP, cột Trên Mini App, và hai nút thêm/rút khỏi danh bạ (§2, §4)",
+    viSao:
       "Lược đồ không có trường hien_tren_mini_app, và câu mở #12 (chốt 22/09/2026) đã bỏ hẳn thao " +
       "tác bật hàng loạt: công khai số di động ra kênh công khai phải HỎI Ý từng người và LƯU LẠI " +
       "sự đồng ý kèm thời điểm. Chưa có chỗ nào giữ bằng chứng ấy, và phần đã công khai thì không " +
       "thu lại được.",
   },
   {
-    viec: "Dòng phụ Có Zalo, ảnh đại diện, thứ tự hiển thị (§4, §5)",
-    vi: "Không có trường nào tương ứng trong hợp đồng REST (identity.canBoTomTat).",
+    ten: "Dòng phụ Có Zalo, ảnh đại diện, thứ tự hiển thị (§4, §5)",
+    viSao: "Không có trường nào tương ứng trong hợp đồng REST (identity.canBoTomTat).",
   },
   {
-    viec: "Nhập từ Excel và tải mẫu Excel (§6)",
-    vi:
+    ten: "Nhập từ Excel và tải mẫu Excel (§6)",
+    viSao:
       "Không có tuyến nào trong hợp đồng. Một bản nhập khớp theo email hoặc họ tên + khối còn cần " +
       "một quy tắc gộp bản ghi mà máy chủ phải là nơi quyết định, không phải trình duyệt.",
   },
   {
-    viec: "Nút Xoá khỏi danh bạ (§4)",
-    vi:
+    ten: "Nút Xoá khỏi danh bạ (§4)",
+    viSao:
       "Câu mở #10 tách XOÁ khỏi KHOÁ và cho xoá một quyền riêng; bảng quyen chưa có khoá ấy, nên " +
       "tuyến xoá chưa tồn tại. Cán bộ nghỉ hưu hoặc chuyển công tác thì khoá tài khoản ở màn Cấu " +
       "hình, không xoá — hồ sơ đã xử lý phải còn đọc được tên người thực hiện.",
@@ -207,4 +214,4 @@ export const KHONG_DUNG_DUOC: readonly PhanChuaDung[] = [
 ];
 
 /** Tiêu đề của khối giải thích trên. */
-export const TIEU_DE_KHONG_DUNG_DUOC = "Những phần chưa mở trên màn hình này";
+export const TIEU_DE_PHAN_CHUA_DUNG = "Những phần chưa mở trên màn hình này";
