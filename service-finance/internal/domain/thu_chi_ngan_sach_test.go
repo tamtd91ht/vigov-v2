@@ -510,3 +510,56 @@ func TestTyLeDongLamTronVeGanNhatVaKhongTran(t *testing.T) {
 		t.Errorf("trần/trần = %d phần vạn, muốn 10000 (100%%) — số âm ở đây là tràn int64", got)
 	}
 }
+
+// --- the sheet's unit: a closed list, and legacy text read back without guessing ------------------
+
+func TestDonViTinhGhiChiNhanDungBaMa(t *testing.T) {
+	for _, ma := range []string{"dong", "nghin-dong", "trieu-dong"} {
+		d, err := KiemTraDonViTinh(ma)
+		if err != nil || string(d) != ma || d.Nhan() == "" {
+			t.Errorf("%q: = %q, %v — muốn nhận và có nhãn", ma, d, err)
+		}
+	}
+	// A LABEL IS REFUSED ON A WRITE even though the read path recognises it: one input vocabulary.
+	for _, sai := range []string{"Triệu đồng", "trieu_dong", "TRIEU-DONG", "tỷ đồng", "nghin"} {
+		if _, err := KiemTraDonViTinh(sai); !errors.Is(err, ErrDonViTinhSai) {
+			t.Errorf("%q: = %v, muốn ErrDonViTinhSai", sai, err)
+		}
+	}
+	if _, err := KiemTraDonViTinh("  "); !errors.Is(err, ErrThieuDonViTinh) {
+		t.Errorf("rỗng: = %v, muốn ErrThieuDonViTinh", err)
+	}
+}
+
+func TestNhanTrieuDongTrungMacDinhCuaMigration0006(t *testing.T) {
+	// A legacy row holding the column default and a new row written as `trieu-dong` must be the
+	// same bytes, or the column would hold two shapes for one unit.
+	if DonViTrieuDong.Nhan() != "Triệu đồng" {
+		t.Fatalf("nhãn = %q, muốn đúng mặc định 'Triệu đồng' của migration 0006", DonViTrieuDong.Nhan())
+	}
+}
+
+func TestDocDonViTinhCuKhongDoan(t *testing.T) {
+	for luu, muon := range map[string]DonViTinh{
+		"Triệu đồng":      DonViTrieuDong,
+		"  TRIỆU   ĐỒNG ": DonViTrieuDong,
+		"trđ":             DonViTrieuDong,
+		"Nghìn đồng":      DonViNghinDong,
+		"ngàn đồng":       DonViNghinDong,
+		"1.000 đồng":      DonViNghinDong,
+		"Đồng":            DonViDong,
+		"VNĐ":             DonViDong,
+		"trieu-dong":      DonViTrieuDong,
+	} {
+		if d, co := DocDonViTinhDaLuu(luu); !co || d != muon {
+			t.Errorf("%q: = %q/%v, muốn %q", luu, d, co, muon)
+		}
+	}
+	// NOT GUESSED: a scale outside the list, a bare word, a typo. Each would make the whole sheet
+	// display a thousand times off if mapped wrongly.
+	for _, luu := range []string{"Tỷ đồng", "triệu", "Triệu đòng", "", "USD"} {
+		if d, co := DocDonViTinhDaLuu(luu); co {
+			t.Errorf("%q: đoán thành %q — phải báo không nhận ra", luu, d)
+		}
+	}
+}

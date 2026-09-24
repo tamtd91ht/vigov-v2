@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -73,16 +74,17 @@ type ghiNganSachGia struct {
 	raBang domain.BangNganSach
 	loi    error
 
-	taoBangGoi, goBangGoi            int
-	themGoi, suaGoi, goGoi, tongGoiN int
+	taoBangGoi, goBangGoi, suaBangGoi int
+	themGoi, suaGoi, goGoi, tongGoiN  int
 
-	xaCuoi    tenant.ID
-	nguoiCuoi audit.Actor
-	taoCuoi   app.YeuCauTaoBang
-	themCuoi  app.YeuCauThemKhoanMuc
-	suaCuoi   app.YeuCauSuaKhoanMuc
-	idCuoi    string
-	lyDoCuoi  string
+	xaCuoi      tenant.ID
+	nguoiCuoi   audit.Actor
+	taoCuoi     app.YeuCauTaoBang
+	themCuoi    app.YeuCauThemKhoanMuc
+	suaCuoi     app.YeuCauSuaKhoanMuc
+	suaBangCuoi app.YeuCauSuaBang
+	idCuoi      string
+	lyDoCuoi    string
 }
 
 func (g *ghiNganSachGia) ghiNhan(ctx context.Context, nguoi audit.Actor) {
@@ -106,6 +108,17 @@ func (g *ghiNganSachGia) GoBang(ctx context.Context, id, lyDo string, nguoi audi
 	g.idCuoi, g.lyDoCuoi = id, lyDo
 	g.ghiNhan(ctx, nguoi)
 	return g.loi
+}
+
+func (g *ghiNganSachGia) SuaBang(ctx context.Context, id string, yc app.YeuCauSuaBang,
+	nguoi audit.Actor) (domain.BangNganSach, error) {
+	g.suaBangGoi++
+	g.idCuoi, g.suaBangCuoi = id, yc
+	g.ghiNhan(ctx, nguoi)
+	if g.loi != nil {
+		return domain.BangNganSach{}, g.loi
+	}
+	return g.raBang, nil
 }
 
 func (g *ghiNganSachGia) ThemKhoanMuc(ctx context.Context, yc app.YeuCauThemKhoanMuc,
@@ -149,7 +162,7 @@ func (g *ghiNganSachGia) DatDongTong(ctx context.Context, id string,
 }
 
 func (g *ghiNganSachGia) tongGoi() int {
-	return g.taoBangGoi + g.goBangGoi + g.themGoi + g.suaGoi + g.goGoi + g.tongGoiN
+	return g.taoBangGoi + g.goBangGoi + g.suaBangGoi + g.themGoi + g.suaGoi + g.goGoi + g.tongGoiN
 }
 
 // --- fixtures ------------------------------------------------------------------------------------
@@ -343,7 +356,7 @@ const (
 	duongBang   = "/api/v1/budget-sheets"
 	duongChiSo  = "/api/v1/budget-indicators"
 	duongDong   = "/api/v1/budget-lines"
-	thanTaoBang = `{"year":2027,"kind":"chi","title":"BÁO CÁO CHI NGÂN SÁCH 2027","unit":"Triệu đồng",` +
+	thanTaoBang = `{"year":2027,"kind":"chi","title":"BÁO CÁO CHI NGÂN SÁCH 2027","unit":"trieu-dong",` +
 		`"columns":[{"name":"Dự toán năm","order":1,"type":"so","role":"du-toan-nam"},` +
 		`{"name":"Chi ngân sách","order":2,"type":"so","role":"chi-ngan-sach"}]}`
 	thanThemDong = `{"sheet_id":"01JBANGCHI0000000000000000","parent_id":"k-a","no":"1.1",` +
@@ -379,6 +392,8 @@ func tamTuyenNganSach() []motTuyenNganSach {
 			}},
 		{"POST bang", http.MethodPost, duongBang, thanTaoBang,
 			"budget.update", http.StatusCreated, func(m *mayChuNganSach) int { return m.ghi.taoBangGoi }},
+		{"PATCH bang", http.MethodPatch, duongBang + "/" + idBangChi, `{"title":"BÁO CÁO CHI (đã sửa)"}`,
+			"budget.update", http.StatusOK, func(m *mayChuNganSach) int { return m.ghi.suaBangGoi }},
 		{"DELETE bang", http.MethodDelete, duongBang + "/" + idBangChi, `{"reason":"nạp lại từ tệp đã sửa"}`,
 			"budget.confirm", http.StatusNoContent, func(m *mayChuNganSach) int { return m.ghi.goBangGoi }},
 		{"POST dong", http.MethodPost, duongDong, thanThemDong,
@@ -850,6 +865,137 @@ func TestThieuNamHoacLoaiThiTuChoiChuKhongMacDinh(t *testing.T) {
 	}
 	if m.doc.goi != 0 {
 		t.Errorf("kho chạy %d lần với tham số đã bị từ chối", m.doc.goi)
+	}
+}
+
+// --- PATCH /api/v1/budget-sheets/{id} and the closed unit list -----------------------------------------
+
+func TestSuaBang_MoiTruongDeuTuyChon(t *testing.T) {
+	// EACH FIELD ALONE reaches the use case alone: a nil pointer is "leave it", so a body naming only
+	// the title must not blank the unit or the cut-off date.
+	for _, tc := range []struct {
+		ten, than            string
+		tieuDe, donVi, luyKe bool
+		luyKeRong            bool
+	}{
+		{"title", `{"title":"BÁO CÁO CHI (đã sửa)"}`, true, false, false, false},
+		{"unit", `{"unit":"nghin-dong"}`, false, true, false, false},
+		{"cumulative_to", `{"cumulative_to":"2026-09-30"}`, false, false, true, false},
+		{"cumulative_to rỗng là bỏ mốc", `{"cumulative_to":""}`, false, false, true, true},
+		{"cumulative_to null là để nguyên", `{"cumulative_to":null}`, false, false, false, false},
+		{"rỗng", `{}`, false, false, false, false},
+	} {
+		t.Run(tc.ten, func(t *testing.T) {
+			m := dungMayChuNganSach(t)
+			m.capQuyen(xaA, "budget.update")
+			doiMa(t, m.goi(t, http.MethodPatch, hostA, duongBang+"/"+idBangChi, canBoGhi(xaA), tc.than),
+				http.StatusOK)
+			yc := m.ghi.suaBangCuoi
+			if (yc.TieuDe != nil) != tc.tieuDe || (yc.DonViTinh != nil) != tc.donVi ||
+				(yc.LuyKeDen != nil) != tc.luyKe {
+				t.Fatalf("trường tới use case: title=%v unit=%v cumulative_to=%v",
+					yc.TieuDe != nil, yc.DonViTinh != nil, yc.LuyKeDen != nil)
+			}
+			if tc.luyKe && yc.LuyKeDen.IsZero() != tc.luyKeRong {
+				t.Fatalf("cumulative_to = %v, muốn rỗng=%v", *yc.LuyKeDen, tc.luyKeRong)
+			}
+			if m.ghi.idCuoi != idBangChi {
+				t.Fatalf("id tới use case = %q", m.ghi.idCuoi)
+			}
+		})
+	}
+}
+
+func TestSuaBang_TruongDinhDanhVaNgaySaiBiTuChoi(t *testing.T) {
+	// REFUSED, NOT IGNORED: the decoder accepts unknown fields, so a `year` that silently vanished
+	// would leave the client believing it had moved a year's budget.
+	m := dungMayChuNganSach(t)
+	m.capQuyen(xaA, "budget.update")
+	for _, than := range []string{
+		`{"year":2027}`, `{"kind":"thu"}`, `{"code":"NS-2026-CHI-09"}`, `{"columns":[]}`,
+		`{"cumulative_to":"30/09/2026"}`,
+	} {
+		t.Run(than, func(t *testing.T) {
+			doiMa(t, m.goi(t, http.MethodPatch, hostA, duongBang+"/"+idBangChi, canBoGhi(xaA), than),
+				http.StatusBadRequest)
+		})
+	}
+	if m.ghi.suaBangGoi != 0 {
+		t.Errorf("use case chạy %d lần với thân đã bị từ chối", m.ghi.suaBangGoi)
+	}
+}
+
+func TestSuaBang_DonViSaiTra400(t *testing.T) {
+	// The closed list is enforced in internal/domain (the app tests prove the real refusal opens no
+	// transaction); this proves the refusal reaches the client as 400 with the domain's sentence.
+	m := dungMayChuNganSach(t)
+	m.capQuyen(xaA, "budget.update")
+	m.ghi.loi = fmt.Errorf("ngan_sach: sửa bảng cho xã x: %w", domain.ErrDonViTinhSai)
+
+	w := m.goi(t, http.MethodPatch, hostA, duongBang+"/"+idBangChi, canBoGhi(xaA), `{"unit":"Triệu đồng"}`)
+	doiMa(t, w, http.StatusBadRequest)
+	if e := loiTra(t, w); !strings.Contains(e.Message, "trieu-dong") {
+		t.Fatalf("câu trả về không liệt kê các mã hợp lệ: %q", e.Message)
+	}
+}
+
+func TestSuaBang_BangDaGoHoacXaKhacTra404CungMotThan(t *testing.T) {
+	// A removed sheet and another commune's sheet are the SAME store answer (the locked read excludes
+	// deleted rows and is scoped by tenant_id), so they must be the same bytes on the wire.
+	m := dungMayChuNganSach(t)
+	m.capQuyen(xaA, "budget.update")
+	m.ghi.loi = fmt.Errorf("ngan_sach: sửa bảng cho xã x: %w", fistore.ErrKhongThayBangNganSach)
+
+	a := m.goi(t, http.MethodPatch, hostA, duongBang+"/"+idBangChi, canBoGhi(xaA), `{"title":"X"}`)
+	b := m.goi(t, http.MethodPatch, hostA, duongBang+"/01JBANGCUAXAKHAC000000000", canBoGhi(xaA), `{"title":"X"}`)
+	doiMa(t, a, http.StatusNotFound)
+	doiMa(t, b, http.StatusNotFound)
+	if a.Body.String() != b.Body.String() {
+		t.Fatalf("hai thân 404 khác nhau:\n%s\n%s", a.Body.String(), b.Body.String())
+	}
+}
+
+func TestSuaBang_TraBangVoiMaDonVi(t *testing.T) {
+	m := dungMayChuNganSach(t)
+	m.capQuyen(xaA, "budget.update")
+
+	var ra bangRa
+	docJSON(t, m.goi(t, http.MethodPatch, hostA, duongBang+"/"+idBangChi, canBoGhi(xaA),
+		`{"unit":"trieu-dong"}`), &ra)
+	if ra.Unit != "trieu-dong" || ra.UnitLabel != "Triệu đồng" || ra.UnitWarning != "" {
+		t.Fatalf("unit=%q label=%q warning=%q", ra.Unit, ra.UnitLabel, ra.UnitWarning)
+	}
+}
+
+func TestDocDonViTinhCuThanhMaHoacCanhBao(t *testing.T) {
+	// A sheet created before 25/09/2026 holds free text. Mapped when unambiguous; otherwise `unit` is
+	// EMPTY, the stored text is printed verbatim, and a warning says so. Never a guessed code: a wrong
+	// one displays every figure a thousand times off.
+	for _, tc := range []struct {
+		luu, ma, nhan string
+		canhBao       bool
+	}{
+		{"Triệu đồng", "trieu-dong", "Triệu đồng", false},
+		{"ngàn đồng", "nghin-dong", "Nghìn đồng", false},
+		{"Tỷ đồng", "", "Tỷ đồng", true},
+	} {
+		t.Run(tc.luu, func(t *testing.T) {
+			m := dungMayChuNganSach(t)
+			m.capQuyen(xaA, "budget.read")
+			b := bangChiCuaXaA()
+			b.Bang.DonViTinh = tc.luu
+			m.doc.theo[xaA][khoaBang(2026, domain.BangChi)] = b
+
+			var ra bangDayDuRa
+			docJSON(t, m.goi(t, http.MethodGet, hostA, duongBang+"?year=2026&kind=chi", canBoGhi(xaA), ""), &ra)
+			if ra.Sheet.Unit != tc.ma || ra.Sheet.UnitLabel != tc.nhan || (ra.Sheet.UnitWarning != "") != tc.canhBao {
+				t.Fatalf("unit=%q label=%q warning=%q", ra.Sheet.Unit, ra.Sheet.UnitLabel, ra.Sheet.UnitWarning)
+			}
+			// The figures are untouched by the unit: still đồng.
+			if v := ra.Lines[0].Values["c-chi"]; v == nil || *v != int64(trieuDong(34_634_592)) {
+				t.Fatalf("số liệu bị đổi theo đơn vị: %v", v)
+			}
+		})
 	}
 }
 

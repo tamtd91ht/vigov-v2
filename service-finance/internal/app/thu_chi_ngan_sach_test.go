@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/service-finance/internal/domain"
@@ -451,7 +452,7 @@ func TestTaoBangDatMaTheoLanVaChenDuCotTrongMotGiaoDich(t *testing.T) {
 
 	moi, err := uc.TaoBang(ctx, YeuCauTaoBang{
 		Nam: 2026, Loai: domain.BangChi,
-		TieuDe: "BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC XÃ THĂNG BÌNH NĂM 2026", DonViTinh: "Triệu đồng",
+		TieuDe: "BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC XÃ THĂNG BÌNH NĂM 2026", DonViTinh: "trieu-dong",
 		Cot: []domain.CotNganSach{
 			{Ten: "Dự toán năm", ThuTu: 1, Kieu: domain.CotSo, VaiTro: domain.VaiTroDuToanNam},
 			{Ten: "Chi ngân sách", ThuTu: 2, Kieu: domain.CotSo, VaiTro: domain.VaiTroChiNganSach},
@@ -477,6 +478,12 @@ func TestTaoBangDatMaTheoLanVaChenDuCotTrongMotGiaoDich(t *testing.T) {
 	// An ordinary column's role goes in as NULL and not ''. `UNIQUE (tenant_id, bang_id, vai_tro)`
 	// lets any number of NULLs coexist; two '' would COLLIDE, and every sheet would then be limited
 	// to one column without a role — which is every sheet.
+	// THE COLUMN STORES THE LABEL, not the wire code — the same bytes as migration 0006's default, so
+	// legacy and new rows are one shape (domain.DonViTinh).
+	chenBang := k.cau("INSERT INTO bang_ngan_sach")[0]
+	if !coGiaTri(chenBang, "Triệu đồng") || coGiaTri(chenBang, "trieu-dong") {
+		t.Fatalf("don_vi_tinh lưu không phải nhãn 'Triệu đồng': %v", chenBang.args)
+	}
 	phanTram := k.cau("INSERT INTO cot_ngan_sach")[2]
 	if phanTram.args[7] != nil {
 		t.Fatalf("vai trò của cột thường ghi %v thay vì NULL", phanTram.args[7])
@@ -490,7 +497,7 @@ func TestDaCoBangConSongThiTuChoiVaKhongChenGi(t *testing.T) {
 	uc, ctx := dungUseCaseNganSach(t, k)
 
 	_, err := uc.TaoBang(ctx, YeuCauTaoBang{
-		Nam: 2026, Loai: domain.BangChi, TieuDe: "X", DonViTinh: "Triệu đồng",
+		Nam: 2026, Loai: domain.BangChi, TieuDe: "X", DonViTinh: "trieu-dong",
 		Cot: []domain.CotNganSach{{Ten: "Chi ngân sách", ThuTu: 1, Kieu: domain.CotSo}},
 	}, nguoiGhi())
 	if !errors.Is(err, fistore.ErrBangDaTonTai) {
@@ -508,7 +515,7 @@ func TestHaiCotCungVaiTroBiTuChoiTruocKhiMoGiaoDich(t *testing.T) {
 	uc, ctx := dungUseCaseNganSach(t, k)
 
 	_, err := uc.TaoBang(ctx, YeuCauTaoBang{
-		Nam: 2026, Loai: domain.BangThu, TieuDe: "X", DonViTinh: "Triệu đồng",
+		Nam: 2026, Loai: domain.BangThu, TieuDe: "X", DonViTinh: "trieu-dong",
 		Cot: []domain.CotNganSach{
 			{Ten: "Thu xã hưởng", ThuTu: 1, Kieu: domain.CotSo, VaiTro: domain.VaiTroThuXaHuong},
 			{Ten: "Thu xã hưởng (điều chỉnh)", ThuTu: 2, Kieu: domain.CotSo, VaiTro: domain.VaiTroThuXaHuong},
@@ -562,6 +569,173 @@ func TestThieuNguoiThucHienThiKhongMoGiaoDich(t *testing.T) {
 	}
 	if k.batDau != 0 {
 		t.Fatalf("mở %d giao dịch, muốn 0", k.batDau)
+	}
+}
+
+// --- (8) editing a sheet's header: title, display unit, cut-off date -------------------------------------------
+
+func chuoi(s string) *string { return &s }
+
+func TestSuaBangGhiVaVetTrongCUNGGiaoDich(t *testing.T) {
+	k := khoMau()
+	uc, ctx := dungUseCaseNganSach(t, k)
+
+	luyKe := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	sau, err := uc.SuaBang(ctx, idBangMau, YeuCauSuaBang{
+		TieuDe: chuoi("BÁO CÁO CHI (đã sửa)"), DonViTinh: chuoi("nghin-dong"), LuyKeDen: &luyKe,
+	}, nguoiGhi())
+	if err != nil {
+		t.Fatalf("SuaBang lỗi: %v", err)
+	}
+	if k.batDau != 1 || k.daCommit != 1 || k.daRollback != 0 {
+		t.Fatalf("giao dịch: mở %d commit %d rollback %d, muốn 1/1/0", k.batDau, k.daCommit, k.daRollback)
+	}
+	sua := k.cau("UPDATE bang_ngan_sach")
+	if len(sua) != 1 {
+		t.Fatalf("có %d câu cập nhật bảng, muốn 1", len(sua))
+	}
+	for _, manh := range []string{"tenant_id = $1", "deleted_at IS NULL"} {
+		if !strings.Contains(sua[0].sql, manh) {
+			t.Errorf("câu cập nhật bảng thiếu %q: %s", manh, sua[0].sql)
+		}
+	}
+	// THE LABEL IS STORED, the code is what the client sent.
+	if !coGiaTri(sua[0], "Nghìn đồng") || !coGiaTri(sua[0], "BÁO CÁO CHI (đã sửa)") {
+		t.Fatalf("giá trị cập nhật sai: %v", sua[0].args)
+	}
+	if sau.DonViTinh != "Nghìn đồng" || !sau.LuyKeDen.Equal(luyKe) {
+		t.Fatalf("bảng trả về: đơn vị %q, luỹ kế %v", sau.DonViTinh, sau.LuyKeDen)
+	}
+	// The locked read excludes removed sheets and is tenant-scoped.
+	doc := k.cau("FOR UPDATE")
+	if len(doc) == 0 || !strings.Contains(doc[0].sql, "deleted_at IS NULL") ||
+		!strings.Contains(doc[0].sql, "tenant_id = $1") {
+		t.Fatalf("câu đọc khoá bảng không loại bảng đã gỡ / không mang tenant_id: %v", doc)
+	}
+
+	vet := k.cau("INSERT INTO audit_log")
+	if len(vet) != 1 {
+		t.Fatalf("có %d vết, muốn 1", len(vet))
+	}
+	if k.thuTuCua("UPDATE bang_ngan_sach") > k.thuTuCua("INSERT INTO audit_log") {
+		t.Fatal("vết ghi trước câu cập nhật")
+	}
+	if !coGiaTri(vet[0], "NS-2026-CHI-01") || !coGiaTri(vet[0], maCanBo) || !coGiaTri(vet[0], HanhViSuaBangNganSach) {
+		t.Fatalf("vết không mang mã bảng / mã cán bộ / hành vi: %v", vet[0].args)
+	}
+	// Before AND after of the unit, as the column holds it.
+	for _, muon := range []string{`"truoc"`, `"sau"`, "Triệu đồng", "Nghìn đồng", "2026-09-30"} {
+		if !coChuoiTrongDelta(vet[0], muon) {
+			t.Errorf("delta thiếu %q", muon)
+		}
+	}
+}
+
+func TestSuaBangVetHongThiKhongGiCon(t *testing.T) {
+	k := khoMau()
+	k.loiSau = "INSERT INTO audit_log"
+	uc, ctx := dungUseCaseNganSach(t, k)
+
+	if _, err := uc.SuaBang(ctx, idBangMau, YeuCauSuaBang{TieuDe: chuoi("X")}, nguoiGhi()); err == nil {
+		t.Fatal("vết hỏng mà SuaBang vẫn báo thành công")
+	}
+	if k.daCommit != 0 || k.daRollback != 1 {
+		t.Fatalf("giao dịch: commit %d rollback %d, muốn 0/1", k.daCommit, k.daRollback)
+	}
+}
+
+func TestSuaBangKhongDoiGiThiKhongGhiVaKhongCoVet(t *testing.T) {
+	// The same values the sheet already holds — including `trieu-dong` against a stored
+	// "Triệu đồng" — and an empty request: neither is an event.
+	for ten, yc := range map[string]YeuCauSuaBang{
+		"cùng giá trị": {TieuDe: chuoi("BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC XÃ THĂNG BÌNH NĂM 2026"),
+			DonViTinh: chuoi("trieu-dong"), LuyKeDen: &time.Time{}},
+		"rỗng": {},
+	} {
+		t.Run(ten, func(t *testing.T) {
+			k := khoMau()
+			uc, ctx := dungUseCaseNganSach(t, k)
+			if _, err := uc.SuaBang(ctx, idBangMau, yc, nguoiGhi()); err != nil {
+				t.Fatalf("SuaBang lỗi: %v", err)
+			}
+			if k.coCau("UPDATE bang_ngan_sach") || k.coCau("INSERT INTO audit_log") {
+				t.Fatal("không có gì đổi mà vẫn ghi")
+			}
+			if k.daCommit != 1 {
+				t.Fatalf("commit %d, muốn 1", k.daCommit)
+			}
+		})
+	}
+}
+
+func TestSuaBangDonViSaiHoacTieuDeRongKhongMoGiaoDich(t *testing.T) {
+	for ten, tc := range map[string]struct {
+		yc   YeuCauSuaBang
+		muon error
+	}{
+		"nhãn thay vì mã": {YeuCauSuaBang{DonViTinh: chuoi("Triệu đồng")}, domain.ErrDonViTinhSai},
+		"tỷ đồng":         {YeuCauSuaBang{DonViTinh: chuoi("ty-dong")}, domain.ErrDonViTinhSai},
+		"tiêu đề rỗng":    {YeuCauSuaBang{TieuDe: chuoi("  ")}, domain.ErrThieuTieuDe},
+	} {
+		t.Run(ten, func(t *testing.T) {
+			k := khoMau()
+			uc, ctx := dungUseCaseNganSach(t, k)
+			if _, err := uc.SuaBang(ctx, idBangMau, tc.yc, nguoiGhi()); !errors.Is(err, tc.muon) {
+				t.Fatalf("= %v, muốn %v", err, tc.muon)
+			}
+			if k.batDau != 0 {
+				t.Fatalf("mở %d giao dịch cho yêu cầu sai hình dạng, muốn 0", k.batDau)
+			}
+		})
+	}
+}
+
+func TestSuaBangDaGoHoacKhongCoThiKhongGhiGi(t *testing.T) {
+	k := khoMau()
+	k.bang = nil // the locked read found no LIVE sheet of this commune
+	uc, ctx := dungUseCaseNganSach(t, k)
+
+	_, err := uc.SuaBang(ctx, idBangMau, YeuCauSuaBang{TieuDe: chuoi("X")}, nguoiGhi())
+	if !errors.Is(err, fistore.ErrKhongThayBangNganSach) {
+		t.Fatalf("= %v, muốn ErrKhongThayBangNganSach", err)
+	}
+	if k.coCau("UPDATE bang_ngan_sach") || k.coCau("INSERT INTO audit_log") {
+		t.Fatal("bảng không tồn tại mà vẫn ghi")
+	}
+}
+
+func TestSuaBangChiTieuDeThiGiuDonViVaLuyKe(t *testing.T) {
+	k := khoMau()
+	uc, ctx := dungUseCaseNganSach(t, k)
+
+	if _, err := uc.SuaBang(ctx, idBangMau, YeuCauSuaBang{TieuDe: chuoi("TIÊU ĐỀ MỚI")}, nguoiGhi()); err != nil {
+		t.Fatalf("SuaBang lỗi: %v", err)
+	}
+	sua := k.cau("UPDATE bang_ngan_sach")
+	if len(sua) != 1 {
+		t.Fatalf("có %d câu cập nhật, muốn 1", len(sua))
+	}
+	// args: tenant, id, tieu_de, don_vi_tinh, luy_ke_den
+	if sua[0].args[3] != "Triệu đồng" || sua[0].args[4] != nil {
+		t.Fatalf("sửa tiêu đề mà đơn vị/luỹ kế đổi theo: %v", sua[0].args)
+	}
+}
+
+func TestSuaBangChuTuDoCuSangMaThiGhiVaGiuChuCuTrongVet(t *testing.T) {
+	// A legacy sheet holding free text set to a code DOES change — its column becomes the label and
+	// the screen prints differently from that moment — so it is written and the old text recorded.
+	k := khoMau()
+	k.bang.donViTinh = "tr.đồng"
+	uc, ctx := dungUseCaseNganSach(t, k)
+
+	if _, err := uc.SuaBang(ctx, idBangMau, YeuCauSuaBang{DonViTinh: chuoi("trieu-dong")}, nguoiGhi()); err != nil {
+		t.Fatalf("SuaBang lỗi: %v", err)
+	}
+	if !k.coCau("UPDATE bang_ngan_sach") {
+		t.Fatal("chữ cũ đổi sang nhãn chuẩn mà không ghi")
+	}
+	if !coChuoiTrongDelta(k.cau("INSERT INTO audit_log")[0], "tr.đồng") {
+		t.Fatal("vết không giữ chữ đơn vị cũ")
 	}
 }
 

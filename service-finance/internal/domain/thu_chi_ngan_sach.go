@@ -217,21 +217,28 @@ var (
 	ErrThuaCongThuc          = errors.New("ngan_sach: cột `so` không mang `formula`")
 	ErrVaiTroTrungTrongBang  = errors.New("ngan_sach: một vai trò chỉ gán được cho MỘT cột trong bảng")
 
-	ErrThieuTieuDe     = errors.New("ngan_sach: thiếu `title` của bảng")
-	ErrTieuDeQuaDai    = errors.New("ngan_sach: `title` quá dài")
-	ErrThieuDonViTinh  = errors.New("ngan_sach: thiếu `unit`")
-	ErrDonViTinhQuaDai = errors.New("ngan_sach: `unit` quá dài")
-	ErrThieuTenCot     = errors.New("ngan_sach: thiếu `name` của cột")
-	ErrTenCotQuaDai    = errors.New("ngan_sach: `name` của cột quá dài")
-	ErrCongThucQuaDai  = errors.New("ngan_sach: `formula` quá dài")
-	ErrKhongCoCotNao   = errors.New("ngan_sach: bảng phải có ít nhất một cột")
-	ErrQuaNhieuCot     = errors.New("ngan_sach: bảng vượt số cột tối đa")
+	ErrThieuTieuDe    = errors.New("ngan_sach: thiếu `title` của bảng")
+	ErrTieuDeQuaDai   = errors.New("ngan_sach: `title` quá dài")
+	ErrThieuDonViTinh = errors.New("ngan_sach: thiếu `unit`")
+	ErrDonViTinhSai   = errors.New("ngan_sach: `unit` phải là `dong`, `nghin-dong` hoặc `trieu-dong`")
+	ErrThieuTenCot    = errors.New("ngan_sach: thiếu `name` của cột")
+	ErrTenCotQuaDai   = errors.New("ngan_sach: `name` của cột quá dài")
+	ErrCongThucQuaDai = errors.New("ngan_sach: `formula` quá dài")
+	ErrKhongCoCotNao  = errors.New("ngan_sach: bảng phải có ít nhất một cột")
+	ErrQuaNhieuCot    = errors.New("ngan_sach: bảng vượt số cột tối đa")
 
 	ErrThieuTenKhoanMuc   = errors.New("ngan_sach: thiếu `name` của khoản mục")
 	ErrTenKhoanMucQuaDai  = errors.New("ngan_sach: `name` của khoản mục quá dài")
 	ErrTTQuaDai           = errors.New("ngan_sach: `no` của khoản mục quá dài")
 	ErrThuTuNgoaiKhoangNS = errors.New("ngan_sach: `order` ngoài khoảng cho phép")
 	ErrGiaTriQuaLon       = errors.New("ngan_sach: giá trị vượt mức một dòng ngân sách cấp xã có thể có")
+
+	// ErrTruongBangKhongSua — a PATCH on a sheet named a field that identifies it. REFUSED RATHER THAN
+	// IGNORED: `year`/`kind` decide which report the figures belong to and `code` is the handle the
+	// audit trail is filed under; a client watching them vanish silently would believe it had moved a
+	// year's budget. Columns are not editable at all (see the header of internal/app's budget file).
+	ErrTruongBangKhongSua = errors.New(
+		"ngan_sach: `year`, `kind`, `code` và `columns` của bảng không sửa được — sai năm hoặc loại thì gỡ bảng và tạo lại")
 
 	ErrThieuLyDoXoaNganSach  = errors.New("ngan_sach: thiếu lý do gỡ")
 	ErrLyDoXoaNganSachQuaDai = errors.New("ngan_sach: lý do gỡ quá dài")
@@ -306,7 +313,6 @@ var (
 // stops being a budget field and starts being a mistake or an attack.
 const (
 	TieuDeBangToiDa      = 300
-	DonViTinhToiDa       = 50
 	TenCotToiDa          = 200
 	CongThucToiDa        = 300
 	TenKhoanMucToiDa     = 500
@@ -431,8 +437,76 @@ func ChuanHoaTieuDeBang(s string) (string, error) {
 	return chuanHoaBatBuoc(s, TieuDeBangToiDa, ErrThieuTieuDe, ErrTieuDeQuaDai)
 }
 
-func ChuanHoaDonViTinh(s string) (string, error) {
-	return chuanHoaBatBuoc(s, DonViTinhToiDa, ErrThieuDonViTinh, ErrDonViTinhQuaDai)
+// --- the sheet's unit: a CLOSED list (the customer's decision of 25/09/2026) ------------------------
+//
+// DonViTinh is the unit the SCREEN prints the sheet's figures in, and NOTHING ELSE. Every stored
+// figure is BIGINT đồng (migration 0006's MONEY block) and stays đồng whatever this says: the web
+// converts what the accountant types into đồng before sending, and divides by the factor when it
+// draws. Changing a sheet's unit therefore changes how its numbers are DISPLAYED and never rescales
+// one of them — a unit that rewrote stored figures would silently multiply a public authority's
+// budget by a thousand.
+//
+// THE WIRE CODE AND THE STORED TEXT ARE DIFFERENT ON PURPOSE. The wire carries the ASCII code
+// (kebab-case, like the column roles); the column `don_vi_tinh` keeps the Vietnamese label, because
+// that is what every row written before 25/09/2026 already holds (the column default is
+// 'Triệu đồng'), and writing the label keeps the column one shape instead of two. Validation lives
+// HERE and not in a CHECK: 0006 cannot be edited (its checksum is recorded), and a new CHECK would
+// first have to decide what happens to legacy free-text rows — a rewrite of populated archival data
+// that is not this change's to make.
+type DonViTinh string
+
+const (
+	DonViDong      DonViTinh = "dong"
+	DonViNghinDong DonViTinh = "nghin-dong"
+	DonViTrieuDong DonViTinh = "trieu-dong"
+)
+
+// nhanDonViTinh is the label written to `don_vi_tinh` and printed on the screen. "Triệu đồng" is
+// spelled exactly as migration 0006's default, so a legacy row holding the default and a new row are
+// the same bytes.
+var nhanDonViTinh = map[DonViTinh]string{
+	DonViDong:      "Đồng",
+	DonViNghinDong: "Nghìn đồng",
+	DonViTrieuDong: "Triệu đồng",
+}
+
+// Nhan is the label for this unit, "" for a value outside the closed list.
+func (d DonViTinh) Nhan() string { return nhanDonViTinh[d] }
+
+// KiemTraDonViTinh accepts EXACTLY one of the three codes on a write. A label ("Triệu đồng") is
+// refused here even though the read path recognises it: one input vocabulary is a contract, two
+// is a guessing game that grows a third spelling every time a client is written.
+func KiemTraDonViTinh(ma string) (DonViTinh, error) {
+	if strings.TrimSpace(ma) == "" {
+		return "", ErrThieuDonViTinh
+	}
+	d := DonViTinh(ma)
+	if _, co := nhanDonViTinh[d]; !co {
+		return "", ErrDonViTinhSai
+	}
+	return d, nil
+}
+
+// donViTinhCu maps the free text a sheet created before 25/09/2026 may hold onto a code, after
+// lower-casing and collapsing whitespace. EVERY ENTRY NAMES ONE SCALE WITHOUT DOUBT — "ngàn" is the
+// southern spelling of "nghìn", "1.000 đồng" is how Vietnamese budget forms write the thousand unit,
+// "trđ" is the standard abbreviation of triệu đồng. Anything else ("tỷ đồng", "triệu", a typo) is NOT
+// guessed: DocDonViTinhDaLuu answers false and the screen warns, because a wrong guess here makes
+// every figure on the sheet display a thousand times too large or too small.
+var donViTinhCu = map[string]DonViTinh{
+	"đồng": DonViDong, "vnđ": DonViDong, "vnd": DonViDong, "đ": DonViDong, "dong": DonViDong,
+	"nghìn đồng": DonViNghinDong, "ngàn đồng": DonViNghinDong,
+	"1.000 đồng": DonViNghinDong, "1000 đồng": DonViNghinDong, "nghin-dong": DonViNghinDong,
+	"triệu đồng": DonViTrieuDong, "trđ": DonViTrieuDong,
+	"1.000.000 đồng": DonViTrieuDong, "trieu-dong": DonViTrieuDong,
+}
+
+// DocDonViTinhDaLuu reads what `don_vi_tinh` holds back into a code. false means the stored text is
+// not one of the three units unambiguously — the caller reports it, it never substitutes a default.
+// A text that is not NFC-normalised will not match and is reported too: that is the safe direction.
+func DocDonViTinhDaLuu(luu string) (DonViTinh, bool) {
+	d, co := donViTinhCu[strings.Join(strings.Fields(strings.ToLower(luu)), " ")]
+	return d, co
 }
 
 func ChuanHoaTenCot(s string) (string, error) {

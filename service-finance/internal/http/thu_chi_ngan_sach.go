@@ -2,7 +2,7 @@ package http
 
 // The READ and WRITE routes of the commune's budget board (docs/ui-ux/07-thu-chi-ngan-sach.md).
 //
-// EIGHT ROUTES, THREE PERMISSIONS, and the split is the one §9 rule 7 names — `budget.read`,
+// NINE ROUTES, THREE PERMISSIONS, and the split is the one §9 rule 7 names — `budget.read`,
 // `budget.update`, `budget.confirm`. Which act sits under which is set out at each route in
 // routes.go; two of them are this session's decision rather than the specification's and are written
 // up as findings rather than buried.
@@ -10,6 +10,7 @@ package http
 //	GET    /api/v1/budget-sheets?year=&kind=      the whole sheet: columns, tree, figures, summary
 //	GET    /api/v1/budget-indicators?year=        the three figures §9 rule 6 sends to /tong-quan
 //	POST   /api/v1/budget-sheets                  create one year+kind sheet with its columns
+//	PATCH  /api/v1/budget-sheets/{id}             title, display unit, cut-off date
 //	DELETE /api/v1/budget-sheets/{id}             §6's `🗑 Gỡ`, soft, with a mandatory reason
 //	POST   /api/v1/budget-lines                   `＋` / `⊞ Thêm khoản mục cấp cao nhất`
 //	PATCH  /api/v1/budget-lines/{id}              rename, renumber, and type figures in
@@ -27,8 +28,8 @@ package http
 //
 // ---------------------------------------------------------------------------
 // AMOUNTS. Every figure is a JSON NUMBER OF ĐỒNG, never a formatted string and never "triệu đồng" —
-// the same contract chungTuRa states. The sheet's `unit` field carries the unit the SCREEN prints
-// ("Triệu đồng", §1); the wire carries đồng so that a consumer can add two of them up without
+// the same contract chungTuRa states. The sheet's `unit` field carries the CODE of the unit the SCREEN
+// prints (`trieu-dong`, §1; closed list since 25/09/2026); the wire carries đồng so that a consumer can add two of them up without
 // parsing. A percentage is `basis_points` (phần vạn) for the reason domain.PhanVan gives: the screen
 // prints two decimals, and integers of that unit compare exactly.
 
@@ -59,7 +60,19 @@ type bangRa struct {
 	Revision int `json:"revision"`
 
 	Title string `json:"title"`
-	Unit  string `json:"unit"` // "Triệu đồng" — what the SCREEN prints. The wire carries đồng.
+
+	// Unit is the DISPLAY unit's code — `dong` | `nghin-dong` | `trieu-dong` (domain.DonViTinh). The
+	// figures on the wire are đồng whatever it says; the client divides when it draws.
+	//
+	// EMPTY WHEN THE STORED TEXT IS NOT ONE OF THE THREE, and then UnitWarning says so. A sheet created
+	// before the list was closed may hold free text; it is mapped when the mapping is unambiguous and
+	// NEVER guessed otherwise, because a wrong guess displays every figure a thousand times off.
+	Unit string `json:"unit"`
+
+	// UnitLabel is what the screen prints beside "Đơn vị tính:" — the canonical label, or the stored
+	// text verbatim when it is not recognised.
+	UnitLabel   string `json:"unit_label"`
+	UnitWarning string `json:"unit_warning,omitempty"`
 
 	CumulativeTo string `json:"cumulative_to,omitempty"` // YYYY-MM-DD
 	SourceFile   string `json:"source_file,omitempty"`
@@ -180,11 +193,19 @@ type chiSoNamRa struct {
 // --- mapping ---------------------------------------------------------------------------------------
 
 func bangRaNgoai(b domain.BangNganSach) bangRa {
-	return bangRa{
+	ra := bangRa{
 		ID: b.ID, Code: b.Ma, Year: b.Nam, Kind: string(b.Loai), Revision: b.Lan,
-		Title: b.TieuDe, Unit: b.DonViTinh,
+		Title:        b.TieuDe,
 		CumulativeTo: ngayRa(b.LuyKeDen), SourceFile: b.NguonTep, LoadedAt: lucRa(b.NapLuc),
 	}
+	if d, co := domain.DocDonViTinhDaLuu(b.DonViTinh); co {
+		ra.Unit, ra.UnitLabel = string(d), d.Nhan()
+	} else {
+		ra.UnitLabel = b.DonViTinh
+		ra.UnitWarning = "Đơn vị tính đang lưu không thuộc danh sách đồng / nghìn đồng / triệu đồng — " +
+			"chọn lại đơn vị cho bảng. Số liệu vẫn lưu bằng đồng và không bị quy đổi."
+	}
+	return ra
 }
 
 func bangDayDuRaNgoai(d domain.BangDayDu) bangDayDuRa {
@@ -301,12 +322,33 @@ type taoBangVao struct {
 	Year  int    `json:"year"`
 	Kind  string `json:"kind"`
 	Title string `json:"title"`
-	Unit  string `json:"unit"`
+	Unit  string `json:"unit"` // `dong` | `nghin-dong` | `trieu-dong` — display only, figures stay đồng
 
 	CumulativeTo string   `json:"cumulative_to,omitempty"` // YYYY-MM-DD
 	Columns      []cotVao `json:"columns"`
 
 	Code *string `json:"code,omitempty"` // present only so it can be refused
+}
+
+// suaBangVao is the body of PATCH /api/v1/budget-sheets/{id}. The field names are the create body's
+// own, so one client model serves both.
+//
+// EVERY FIELD IS AN `omitempty` POINTER: absent (or null) leaves the field alone, and tools/apidoc
+// declares all of them optional. `cumulative_to: ""` CLEARS the cut-off date — "not stated" is a real
+// state of that column — while an empty `title` or `unit` is refused, since neither may be blank.
+//
+// `year`, `kind`, `code` AND `columns` ARE HERE ONLY SO THEY CAN BE REFUSED (domain
+// .ErrTruongBangKhongSua): the decoder does not reject unknown fields, so without them a client
+// sending `year` would watch it vanish and believe it had moved a year's budget.
+type suaBangVao struct {
+	Title        *string `json:"title,omitempty"`
+	CumulativeTo *string `json:"cumulative_to,omitempty"` // YYYY-MM-DD, or "" to clear
+	Unit         *string `json:"unit,omitempty"`          // `dong` | `nghin-dong` | `trieu-dong`
+
+	Year    *int     `json:"year,omitempty"`
+	Kind    *string  `json:"kind,omitempty"`
+	Code    *string  `json:"code,omitempty"`
+	Columns []cotVao `json:"columns,omitempty"`
 }
 
 // goVao is the body of both DELETE routes.
@@ -564,6 +606,46 @@ func (h *Handler) GoBangNganSach(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// SuaBangNganSach edits one sheet's title, display unit and cut-off date.
+// PATCH /api/v1/budget-sheets/{id}
+//
+// Changing `unit` changes only how the figures are DISPLAYED; every stored figure is đồng and none
+// is converted (domain.DonViTinh).
+func (h *Handler) SuaBangNganSach(w http.ResponseWriter, r *http.Request) {
+	var vao suaBangVao
+	if !docThan(w, r, &vao) {
+		return
+	}
+	if vao.Year != nil || vao.Kind != nil || vao.Code != nil || vao.Columns != nil {
+		h.traLoiLoiNganSach(w, r, "sửa bảng", domain.ErrTruongBangKhongSua)
+		return
+	}
+
+	yc := app.YeuCauSuaBang{TieuDe: vao.Title, DonViTinh: vao.Unit}
+	if vao.CumulativeTo != nil {
+		// ngayVao maps "" to the zero time, which is exactly "clear the cut-off date".
+		luyKe, ok := ngayVao(*vao.CumulativeTo)
+		if !ok {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+				"`cumulative_to` phải theo dạng YYYY-MM-DD, ví dụ 2026-08-25, hoặc chuỗi rỗng để bỏ mốc.", "")
+			return
+		}
+		yc.LuyKeDen = &luyKe
+	}
+
+	nguoi, ok := nguoiThucHien(r)
+	if !ok {
+		h.thieuChuThe(w, r)
+		return
+	}
+	sau, err := h.d.GhiNganSach.SuaBang(r.Context(), r.PathValue("id"), yc, nguoi)
+	if err != nil {
+		h.traLoiLoiNganSach(w, r, "sửa bảng", err)
+		return
+	}
+	vietJSON(w, http.StatusOK, bangRaNgoai(sau))
+}
+
 // ThemKhoanMucNganSach adds one line. POST /api/v1/budget-lines
 func (h *Handler) ThemKhoanMucNganSach(w http.ResponseWriter, r *http.Request) {
 	var vao themDongVao
@@ -717,7 +799,7 @@ func khongDuocDat(coMethod, coLevel, coHeadline bool) error {
 
 // traLoiLoiNganSach maps one use-case failure onto a status and a sentence.
 //
-// ONE FUNCTION FOR ALL EIGHT ROUTES, because eight copies of this mapping would drift and the copy
+// ONE FUNCTION FOR ALL NINE ROUTES, because nine copies of this mapping would drift and the copy
 // that drifts is the one answering 500 where it meant 409 — which reads to an operator as a broken
 // server rather than as a rule doing its job.
 //
@@ -779,7 +861,7 @@ func laLoiDauVaoNganSach(err error) bool {
 		domain.ErrVaiTroTrenCotPhanTram, domain.ErrThieuCongThuc, domain.ErrThuaCongThuc,
 		domain.ErrVaiTroTrungTrongBang,
 		domain.ErrThieuTieuDe, domain.ErrTieuDeQuaDai,
-		domain.ErrThieuDonViTinh, domain.ErrDonViTinhQuaDai,
+		domain.ErrThieuDonViTinh, domain.ErrDonViTinhSai, domain.ErrTruongBangKhongSua,
 		domain.ErrThieuTenCot, domain.ErrTenCotQuaDai, domain.ErrCongThucQuaDai,
 		domain.ErrKhongCoCotNao, domain.ErrQuaNhieuCot,
 		domain.ErrThieuTenKhoanMuc, domain.ErrTenKhoanMucQuaDai, domain.ErrTTQuaDai,

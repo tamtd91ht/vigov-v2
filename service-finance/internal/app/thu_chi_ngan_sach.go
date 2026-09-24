@@ -77,6 +77,7 @@ type KhoNganSach interface {
 	ChenBang(ctx context.Context, tx *store.ScopedTx, b domain.BangNganSach) error
 	ChenCot(ctx context.Context, tx *store.ScopedTx, c domain.CotNganSach) error
 	XoaMemBang(ctx context.Context, tx *store.ScopedTx, id, boi, lyDo string) error
+	CapNhatBang(ctx context.Context, tx *store.ScopedTx, b domain.BangNganSach) error
 
 	ChenKhoanMuc(ctx context.Context, tx *store.ScopedTx, k domain.KhoanMucNganSach) error
 	CapNhatKhoanMuc(ctx context.Context, tx *store.ScopedTx, k domain.KhoanMucNganSach) error
@@ -110,6 +111,7 @@ func NewNganSach(db *store.DB, kho KhoNganSach) *NganSach {
 const (
 	HanhViTaoBangNganSach     = "tao_bang_ngan_sach"
 	HanhViGoBangNganSach      = "go_bang_ngan_sach"
+	HanhViSuaBangNganSach     = "sua_bang_ngan_sach"
 	HanhViThemKhoanMuc        = "them_khoan_muc_ngan_sach"
 	HanhViSuaKhoanMuc         = "sua_khoan_muc_ngan_sach"
 	HanhViGoKhoanMuc          = "go_khoan_muc_ngan_sach"
@@ -133,7 +135,7 @@ type YeuCauTaoBang struct {
 	Nam       int
 	Loai      domain.LoaiBang
 	TieuDe    string
-	DonViTinh string
+	DonViTinh string    // one of the three wire codes — domain.KiemTraDonViTinh
 	LuyKeDen  time.Time // zero when the commune has not stated it
 
 	// Cot carries Ten, ThuTu, Kieu, CongThuc and VaiTro. ID and BangID are filled here.
@@ -157,7 +159,7 @@ func (uc *NganSach) TaoBang(ctx context.Context, yc YeuCauTaoBang,
 	if err != nil {
 		return domain.BangNganSach{}, err
 	}
-	donVi, err := domain.ChuanHoaDonViTinh(yc.DonViTinh)
+	donVi, err := domain.KiemTraDonViTinh(yc.DonViTinh)
 	if err != nil {
 		return domain.BangNganSach{}, err
 	}
@@ -195,7 +197,8 @@ func (uc *NganSach) TaoBang(ctx context.Context, yc YeuCauTaoBang,
 
 	moi := domain.BangNganSach{
 		ID: id, Nam: yc.Nam, Loai: yc.Loai,
-		TieuDe: tieuDe, DonViTinh: donVi, LuyKeDen: yc.LuyKeDen,
+		// The LABEL is what the column stores — see domain.DonViTinh for why code and stored text differ.
+		TieuDe: tieuDe, DonViTinh: donVi.Nhan(), LuyKeDen: yc.LuyKeDen,
 	}
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
@@ -312,6 +315,115 @@ func (uc *NganSach) GoBang(ctx context.Context, id, lyDoTho string, nguoi audit.
 		return bocNganSach(ctx, "gỡ bảng", err)
 	}
 	return nil
+}
+
+// YeuCauSuaBang is a PARTIAL edit of a sheet's header: a nil pointer means "leave this alone".
+//
+// THREE FIELDS AND NO MORE. `Nam`, `Loai`, `Ma`, `Lan` decide which report the figures belong to and
+// the code the trail is filed under; the columns decide which figure an indicator reads (ADR 0035
+// §A). None of them is an edit of this act.
+type YeuCauSuaBang struct {
+	TieuDe *string
+
+	// LuyKeDen non-nil and ZERO clears the cut-off date — "the commune has not stated it" is a real
+	// state of this column (store.ngayHoacNil writes it as NULL).
+	LuyKeDen *time.Time
+
+	// DonViTinh is one of the three wire codes. CHANGING IT CHANGES ONLY HOW THE FIGURES ARE
+	// DISPLAYED: every stored figure is đồng and none is rescaled here (domain.DonViTinh).
+	DonViTinh *string
+}
+
+// SuaBang edits one sheet's title, display unit and cut-off date.
+//
+// A NO-OP WRITES NOTHING AND AUDITS NOTHING, the same property SuaKhoanMuc holds and for the same
+// two reasons: an entry saying nothing changed buries the ones carrying legal weight, and it is what
+// makes the route's idem.KhongCan declaration true.
+//
+// THE UNIT IS COMPARED AS THE STORED LABEL. A legacy sheet holding free text ("tr.đồng") that is set
+// to `trieu-dong` DOES change — its column becomes the canonical label — and that is recorded, with
+// the old text in `truoc`, because the screen will print its figures differently from that moment.
+func (uc *NganSach) SuaBang(ctx context.Context, id string, yc YeuCauSuaBang,
+	nguoi audit.Actor) (domain.BangNganSach, error) {
+
+	if id == "" {
+		return domain.BangNganSach{}, fistore.ErrKhongThayBangNganSach
+	}
+	// Shape first, outside the transaction: a request that fails its shape must never hold the
+	// sheet's row lock while doing so.
+	var tieuDe, donVi string
+	var err error
+	if yc.TieuDe != nil {
+		if tieuDe, err = domain.ChuanHoaTieuDeBang(*yc.TieuDe); err != nil {
+			return domain.BangNganSach{}, err
+		}
+	}
+	if yc.DonViTinh != nil {
+		d, err := domain.KiemTraDonViTinh(*yc.DonViTinh)
+		if err != nil {
+			return domain.BangNganSach{}, err
+		}
+		donVi = d.Nhan()
+	}
+	if err := coNguoiThucHien(nguoi); err != nil {
+		return domain.BangNganSach{}, err
+	}
+
+	var sau domain.BangNganSach
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		// FOR UPDATE, and it excludes soft-deleted rows: a removed sheet and another commune's sheet
+		// both answer ErrKhongThayBangNganSach, which the handler turns into one 404 body.
+		truoc, err := uc.kho.BangTheoIDDeSua(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		sau = truoc
+		if yc.TieuDe != nil {
+			sau.TieuDe = tieuDe
+		}
+		if yc.DonViTinh != nil {
+			sau.DonViTinh = donVi
+		}
+		if yc.LuyKeDen != nil {
+			sau.LuyKeDen = *yc.LuyKeDen
+		}
+
+		if truoc.TieuDe == sau.TieuDe && truoc.DonViTinh == sau.DonViTinh &&
+			truoc.LuyKeDen.Equal(sau.LuyKeDen) {
+			return nil
+		}
+		if err := uc.kho.CapNhatBang(ctx, tx, sau); err != nil {
+			return err
+		}
+
+		// BEFORE AND AFTER OF ALL THREE FIELDS (rule 6, invariant 5). Three short values, none of
+		// them personal data; recording all three rather than only the moved ones lets an inspector
+		// read the sheet's whole header at that instant from one entry.
+		delta, err := json.Marshal(map[string]any{
+			"bang_id": truoc.ID,
+			"truoc":   dauBang(truoc),
+			"sau":     dauBang(sau),
+		})
+		if err != nil {
+			return fmt.Errorf("ngan_sach: mã hoá delta: %w", err)
+		}
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor: nguoi, Action: HanhViSuaBangNganSach, Subject: truoc.Ma, Delta: delta,
+		})
+	})
+	if err != nil {
+		return domain.BangNganSach{}, bocNganSach(ctx, "sửa bảng", err)
+	}
+	return sau, nil
+}
+
+// dauBang is the audit delta's view of a sheet's editable header.
+func dauBang(b domain.BangNganSach) map[string]any {
+	var luyKe any
+	if !b.LuyKeDen.IsZero() {
+		luyKe = b.LuyKeDen.Format(time.DateOnly)
+	}
+	return map[string]any{"tieu_de": b.TieuDe, "don_vi_tinh": b.DonViTinh, "luy_ke_den": luyKe}
 }
 
 // --- the lines -------------------------------------------------------------------------------------

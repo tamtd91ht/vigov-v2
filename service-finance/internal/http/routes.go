@@ -189,13 +189,14 @@ type NganSachDoc interface {
 // it (rule 6, invariant 3). Behind one interface a future caller would reach for whichever method
 // was nearest and could end up writing the row outside a transaction.
 //
-// SIX METHODS AND NOT ONE `Sua(op)`: the caller names the act at the call site, so a seventh cannot
+// SEVEN METHODS AND NOT ONE `Sua(op)`: the caller names the act at the call site, so an eighth cannot
 // silently fall into a default branch that allows it. It is also what lets each route declare the
 // permission that act deserves — and DatDongTong in particular is NOT an edit: it decides which row
 // the commune's reported total is read from (ADR 0035 §A).
 type GhiNganSach interface {
 	TaoBang(ctx context.Context, yc app.YeuCauTaoBang, nguoi audit.Actor) (domain.BangNganSach, error)
 	GoBang(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+	SuaBang(ctx context.Context, id string, yc app.YeuCauSuaBang, nguoi audit.Actor) (domain.BangNganSach, error)
 	ThemKhoanMuc(ctx context.Context, yc app.YeuCauThemKhoanMuc, nguoi audit.Actor) (domain.KhoanMucNganSach, error)
 	SuaKhoanMuc(ctx context.Context, id string, yc app.YeuCauSuaKhoanMuc, nguoi audit.Actor) (domain.KhoanMucNganSach, error)
 	GoKhoanMuc(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
@@ -1001,6 +1002,34 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("gỡ một bảng đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
 				http.HandlerFunc(h.GoBangNganSach))))
+
+	// `budget.update` — correcting a sheet's title, its cut-off date (`Luỹ kế đến`) and its DISPLAY
+	// unit is data entry by the accountant, the same weight as editing a line (§9 rule 7).
+	//
+	// THE UNIT IS A CLOSED LIST (the customer's decision of 25/09/2026): `dong` | `nghin-dong` |
+	// `trieu-dong`, validated in internal/domain. Changing it changes only how the figures are
+	// DISPLAYED — every stored figure is đồng and none is converted.
+	//
+	// idem.KhongCan, FOR THE REASON THE LINE PATCH HAS IT: app.SuaBang compares what it read against
+	// what it would write and, when nothing moved, writes nothing — no UPDATE, no audit entry. The
+	// same request sent twice leaves one row in one state and one entry in the ledger.
+	//
+	// A REMOVED SHEET AND ANOTHER COMMUNE'S SHEET ANSWER THE SAME 404 BODY: the locked read excludes
+	// soft-deleted rows and is scoped by tenant_id, so neither is reachable at all.
+	//
+	// @summary  Sửa tiêu đề, đơn vị tính hiển thị hoặc mốc luỹ kế của một bảng ngân sách
+	// @screen   07-thu-chi-ngan-sach §1 §2
+	// @request  suaBangVao
+	// @reply    200 bangRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/budget-sheets/{id}",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.SuaBang không ghi gì khi không trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaBangNganSach))))
 
 	// `budget.update` — `＋ Thêm khoản mục con` and `⊞ Thêm khoản mục cấp cao nhất` (§4.3).
 	//

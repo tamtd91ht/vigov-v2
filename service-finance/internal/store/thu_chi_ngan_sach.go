@@ -551,6 +551,30 @@ func (s *NganSachStore) XoaMemBang(ctx context.Context, tx *store.ScopedTx,
 	return doiMotDongNganSach(kq, "xoá mềm bảng", ErrKhongThayBangNganSach)
 }
 
+// capNhatBang writes the three editable fields of a sheet's header.
+//
+// `nam`, `loai`, `lan`, `ma`, `nguon_tep` AND `nap_luc` APPEAR NOWHERE IN THIS STATEMENT. The first
+// four identify which report the figures belong to and the code the audit trail is filed under;
+// the last two record an import that happened. None of them is an edit.
+//
+// `AND deleted_at IS NULL` MAKES A REMOVED SHEET A 404 rather than a silent rewrite of a record
+// that is off every screen (rule 7, forbidden #5).
+const capNhatBang = `UPDATE bang_ngan_sach
+	SET tieu_de = $3, don_vi_tinh = $4, luy_ke_den = $5, cap_nhat_luc = now()
+	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+
+// CapNhatBang updates one sheet's title, display unit and cut-off date.
+func (s *NganSachStore) CapNhatBang(ctx context.Context, tx *store.ScopedTx,
+	b domain.BangNganSach) error {
+
+	kq, err := tx.Exec(ctx, capNhatBang, string(tx.TenantID()),
+		b.ID, b.TieuDe, b.DonViTinh, ngayHoacNil(b.LuyKeDen))
+	if err != nil {
+		return fmt.Errorf("ngan_sach: cập nhật bảng: %w", err)
+	}
+	return doiMotDongNganSach(kq, "cập nhật bảng", ErrKhongThayBangNganSach)
+}
+
 // chenKhoanMuc — `is_headline` IS ABSENT AND TAKES ITS DEFAULT false.
 //
 // Read that as the property it is, not as a shortcut. A new line is not the commune's total until
