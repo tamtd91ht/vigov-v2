@@ -68,6 +68,14 @@ type khoNSGia struct {
 	daCoBangConSong bool
 	lanKeTiep       int
 
+	// The batches (migration 0008). giaDot is what the per-line SUM answers — the fake does no
+	// arithmetic and no filtering, so "removed batches are excluded" is asserted on the SQL text.
+	// dotConSong is what CoDotConSong answers; dot is the live batch DotTheoIDTrongGiaoDich finds
+	// (nil = none).
+	giaDot     map[string]map[string]domain.Dong
+	dotConSong bool
+	dot        *domain.DotThuChi
+
 	loi error
 
 	// loiSau fails the FIRST statement containing this substring, and only that one.
@@ -160,6 +168,42 @@ func (c *connNSGia) QueryContext(_ context.Context, q string, args []driver.Name
 		return nil, err
 	}
 	switch {
+	// THE BATCH STATEMENTS COME FIRST: the sum names `khoan_muc_ngan_sach` and the EXISTS names
+	// `SELECT EXISTS`, both of which a later case would otherwise answer.
+	case strings.Contains(q, "SUM(g.gia_tri)"):
+		var hang [][]driver.Value
+		for _, k := range c.k.khoanMuc {
+			for _, cot := range c.k.cot {
+				if g, co := c.k.giaDot[k.ID][cot.ID]; co {
+					hang = append(hang, []driver.Value{k.ID, cot.ID, fmt.Sprint(int64(g))})
+				}
+			}
+		}
+		return &rowsGia{cot: []string{"khoan_muc_id", "cot_id", "sum"}, hang: hang}, nil
+
+	case strings.Contains(q, "SELECT EXISTS (SELECT 1 FROM dot_thu_chi"):
+		return &rowsGia{cot: []string{"exists"}, hang: [][]driver.Value{{c.k.dotConSong}}}, nil
+
+	case strings.Contains(q, "g.dot_id = $2"):
+		var hang [][]driver.Value
+		if d := c.k.dot; d != nil {
+			for _, cot := range c.k.cot {
+				if g, co := d.GiaTri[cot.ID]; co {
+					hang = append(hang, []driver.Value{d.ID, cot.ID, int64(g)})
+				}
+			}
+		}
+		return &rowsGia{cot: []string{"dot_id", "cot_id", "gia_tri"}, hang: hang}, nil
+
+	case strings.Contains(q, "FROM dot_thu_chi WHERE"):
+		if c.k.dot == nil {
+			return &rowsGia{cot: cotDotNS()}, nil
+		}
+		d := c.k.dot
+		return &rowsGia{cot: cotDotNS(), hang: [][]driver.Value{{
+			d.ID, d.KhoanMucID, d.Ngay, d.NoiDung, d.DonViCaNhan, d.SoChungTu, d.NguoiGhiMa, d.TaoLuc,
+		}}}, nil
+
 	case strings.Contains(q, "FROM gia_tri_khoan_muc"):
 		var hang [][]driver.Value
 		for _, k := range c.k.khoanMuc {
@@ -230,6 +274,11 @@ func cotBangNS() []string {
 
 func cotCotNS() []string {
 	return []string{"id", "bang_id", "ten", "thu_tu", "kieu", "cong_thuc", "vai_tro"}
+}
+
+func cotDotNS() []string {
+	return []string{"id", "khoan_muc_id", "ngay", "noi_dung", "don_vi_ca_nhan",
+		"so_chung_tu", "nguoi_ghi_ma", "tao_luc"}
 }
 
 func cotKM() []string {

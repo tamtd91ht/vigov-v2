@@ -2,7 +2,7 @@ package http
 
 // The READ and WRITE routes of the commune's budget board (docs/ui-ux/07-thu-chi-ngan-sach.md).
 //
-// NINE ROUTES, THREE PERMISSIONS, and the split is the one §9 rule 7 names — `budget.read`,
+// TWELVE ROUTES (the last three — the batches — are in dot_thu_chi.go), THREE PERMISSIONS, and the split is the one §9 rule 7 names — `budget.read`,
 // `budget.update`, `budget.confirm`. Which act sits under which is set out at each route in
 // routes.go; two of them are this session's decision rather than the specification's and are written
 // up as findings rather than buried.
@@ -16,6 +16,9 @@ package http
 //	PATCH  /api/v1/budget-lines/{id}              rename, renumber, and type figures in
 //	DELETE /api/v1/budget-lines/{id}              `🗑 Gỡ khoản mục`, soft, with a mandatory reason
 //	POST   /api/v1/budget-lines/{id}/headline     the `☆` — which row the reported total comes from
+//	GET    /api/v1/budget-lines/{id}/entries      the `⇄` dialog's list of batches
+//	POST   /api/v1/budget-lines/{id}/entries      `+ Ghi đợt`
+//	DELETE /api/v1/budget-entries/{id}            remove one batch, soft, with a mandatory reason
 //
 // ---------------------------------------------------------------------------
 // EVERY FIGURE THIS FILE EMITS IS EITHER A NUMBER OR A SENTENCE, NEVER A ZERO STANDING IN FOR ONE.
@@ -112,8 +115,9 @@ type dongRa struct {
 	Name  string `json:"name"`
 	Order int    `json:"order"`
 
-	// Method is `manual` | `children`. OUTPUT ONLY — it follows from the tree, and a request carrying
-	// it is refused with 400 (domain.ErrCachTinhDoTuClient).
+	// Method is `manual` | `entries` | `children`. `children` follows from the tree. A LEAF may be
+	// switched between `manual` and `entries` through PATCH (user decision 25/09/2026); POST refuses
+	// the field with 400 (domain.ErrCachTinhDoTuClient) — a new line is always a `manual` leaf.
 	Method string `json:"method"`
 
 	// Level is the indent depth. OUTPUT ONLY, derived from the parent.
@@ -393,6 +397,9 @@ type themDongVao struct {
 // `sheet_id` AND `parent_id` ARE REFUSED, NOT IGNORED. Moving a line moves its figure between two
 // totals that have already been read off a screen; the operation for a line in the wrong place is to
 // remove it with a reason and enter it again — two events, both audited.
+//
+// `method` IS ACCEPTED: `manual` or `entries`, for a leaf only (app.YeuCauSuaKhoanMuc.CachTinh says
+// what each direction does to the stored figures). `level` and `is_headline` stay refused.
 type suaDongVao struct {
 	No    *string `json:"no,omitempty"`
 	Name  *string `json:"name,omitempty"`
@@ -683,7 +690,7 @@ func (h *Handler) SuaKhoanMucNganSach(w http.ResponseWriter, r *http.Request) {
 	if !docThan(w, r, &vao) {
 		return
 	}
-	if err := khongDuocDat(vao.Method != nil, vao.Level != nil, vao.IsHeadline != nil); err != nil {
+	if err := khongDuocDat(false, vao.Level != nil, vao.IsHeadline != nil); err != nil {
 		h.traLoiLoiNganSach(w, r, "sửa khoản mục", err)
 		return
 	}
@@ -708,9 +715,18 @@ func (h *Handler) SuaKhoanMucNganSach(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sau, err := h.d.GhiNganSach.SuaKhoanMuc(r.Context(), r.PathValue("id"), app.YeuCauSuaKhoanMuc{
-		TT: vao.No, Ten: vao.Name, ThuTu: vao.Order, GiaTri: gia,
-	}, nguoi)
+	yc := app.YeuCauSuaKhoanMuc{TT: vao.No, Ten: vao.Name, ThuTu: vao.Order, GiaTri: gia}
+	if vao.Method != nil {
+		// Refused HERE, before the use case, as well as in it: `children` or any other value is the
+		// client naming something that follows the tree, and the answer is the same 400 either way.
+		ct := domain.CachTinh(*vao.Method)
+		if err := domain.KiemTraCachTinhChon(ct); err != nil {
+			h.traLoiLoiNganSach(w, r, "sửa khoản mục", err)
+			return
+		}
+		yc.CachTinh = &ct
+	}
+	sau, err := h.d.GhiNganSach.SuaKhoanMuc(r.Context(), r.PathValue("id"), yc, nguoi)
 	if err != nil {
 		h.traLoiLoiNganSach(w, r, "sửa khoản mục", err)
 		return
@@ -820,17 +836,26 @@ func (h *Handler) traLoiLoiNganSach(w http.ResponseWriter, r *http.Request, viec
 	case errors.Is(err, domain.ErrKhongThayKhoanMuc):
 		httpx.WriteError(w, http.StatusNotFound, "not_found",
 			"Không tìm thấy khoản mục này.", "")
+	case errors.Is(err, domain.ErrKhongThayDot):
+		httpx.WriteError(w, http.StatusNotFound, "not_found",
+			"Không tìm thấy đợt thu, chi này.", "")
 	case errors.Is(err, fistore.ErrBangDaTonTai):
 		httpx.WriteError(w, http.StatusConflict, "sheet_exists", err.Error(), "")
 	case errors.Is(err, domain.ErrKhoanMucChaKhongGoThang),
 		errors.Is(err, domain.ErrConGiuKhoanMucCon),
-		errors.Is(err, domain.ErrNhieuDongTong):
+		errors.Is(err, domain.ErrNhieuDongTong),
+		errors.Is(err, domain.ErrDotChiGhiVaoLa),
+		errors.Is(err, domain.ErrKhoanMucTheoDotKhongGoThang),
+		errors.Is(err, domain.ErrKhoanMucTheoDotConDot),
+		errors.Is(err, domain.ErrKhoanMucChaKhongDoiCachTinh):
+		// The domain sentence names the rule and the way out. None of these carries a figure or
+		// any batch text — `counterparty` never reaches an error (rule 3, forbidden #3).
 		httpx.WriteError(w, http.StatusConflict, "budget_tree", err.Error(), "")
-	case errors.Is(err, fistore.ErrQuaNhieuKhoanMuc):
+	case errors.Is(err, fistore.ErrQuaNhieuKhoanMuc), errors.Is(err, fistore.ErrQuaNhieuDot):
 		// 500 AND NOT 409, because this is not something the caller did: the sheet in the database is
 		// past a bound this service refuses to truncate, and the person in front of the screen has no
 		// act available. It names itself in the log, which is where the operator will look.
-		h.d.Log.Error("ngân sách: bảng vượt trần khoản mục",
+		h.d.Log.Error("ngân sách: vượt trần khoản mục hoặc trần đợt",
 			"xa", string(tenant.MustFrom(r.Context())), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal",
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
@@ -870,6 +895,9 @@ func laLoiDauVaoNganSach(err error) bool {
 		domain.ErrCachTinhDoTuClient, domain.ErrCapDoTuClient, domain.ErrDongTongQuaTuyenRieng,
 		domain.ErrChaKhongCungBang, domain.ErrChaLaChinhNo, domain.ErrChaTaoVongLap,
 		domain.ErrCotKhongThuocBang, domain.ErrCotKhongPhaiCotSo,
+		domain.ErrThieuNgayDot, domain.ErrNgayDotNgoaiLich,
+		domain.ErrThieuNoiDungDot, domain.ErrNoiDungDotQuaDai,
+		domain.ErrDonViCaNhanQuaDai, domain.ErrSoChungTuDotQuaDai, domain.ErrDotKhongCoSoTienNao,
 	} {
 		if errors.Is(err, mot) {
 			return true

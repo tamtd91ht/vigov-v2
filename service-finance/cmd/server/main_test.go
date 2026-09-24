@@ -364,3 +364,7 @@ type khoNganSachTrong struct{}
 func (khoNganSachTrong) BangDayDu(context.Context, int, domain.LoaiBang) (domain.BangDayDu, error) {
 	return domain.BangDayDu{}, fistore.ErrKhongThayBangNganSach
 }
+
+func (khoNganSachTrong) DotCuaKhoanMuc(context.Context, string) (domain.DotCuaKhoanMuc, error) {
+	return domain.DotCuaKhoanMuc{}, domain.ErrKhongThayKhoanMuc
+}

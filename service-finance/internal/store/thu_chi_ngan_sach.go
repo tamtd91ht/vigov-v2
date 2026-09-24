@@ -155,7 +155,15 @@ func (s *NganSachStore) bangDayDuTheoBang(ctx context.Context,
 	if err != nil {
 		return domain.BangDayDu{}, err
 	}
-	return domain.BangDayDu{Bang: bang, Cot: cot, KhoanMuc: khoanMuc, Gia: gia}, nil
+	rows, err := s.db.For(ctx).QueryJoin(ctx, tongDotCuaBang, bang.ID)
+	if err != nil {
+		return domain.BangDayDu{}, fmt.Errorf("ngan_sach: đọc tổng đợt: %w", err)
+	}
+	giaDot, err := quetTongDot(rows)
+	if err != nil {
+		return domain.BangDayDu{}, err
+	}
+	return domain.BangDayDu{Bang: bang, Cot: cot, KhoanMuc: khoanMuc, Gia: gia, GiaDot: giaDot}, nil
 }
 
 const cotCot = `id, bang_id, ten, thu_tu, kieu, COALESCE(cong_thuc, ''), COALESCE(vai_tro, '')`
@@ -339,7 +347,18 @@ func (s *NganSachStore) BangDayDuTrongGiaoDich(ctx context.Context, tx *store.Sc
 	if err != nil {
 		return domain.BangDayDu{}, err
 	}
-	return domain.BangDayDu{Bang: bang, Cot: cot, KhoanMuc: khoanMuc, Gia: gia}, nil
+	// THE BATCH SUMS ARE READ UNDER THE SAME LOCK AS THE TREE, because the entries -> manual switch
+	// copies them into the line's cells (§9.1): a sum read outside the transaction could be one batch
+	// behind the figure the screen showed.
+	rows, err := tx.Underlying().QueryContext(ctx, tongDotCuaBang, string(tx.TenantID()), bang.ID)
+	if err != nil {
+		return domain.BangDayDu{}, fmt.Errorf("ngan_sach: đọc tổng đợt trong giao dịch: %w", err)
+	}
+	giaDot, err := quetTongDot(rows)
+	if err != nil {
+		return domain.BangDayDu{}, err
+	}
+	return domain.BangDayDu{Bang: bang, Cot: cot, KhoanMuc: khoanMuc, Gia: gia, GiaDot: giaDot}, nil
 }
 
 func (s *NganSachStore) cotTrongGiaoDich(ctx context.Context, tx *store.ScopedTx,

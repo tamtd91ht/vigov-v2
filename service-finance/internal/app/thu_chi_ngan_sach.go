@@ -19,7 +19,7 @@ package app
 // THE DATABASE IS THE FLOOR AND THIS LAYER IS THE SENTENCE — said once, here:
 //
 //	the two sheet kinds, the six roles   migration 0006's CHECK constraints
-//	`manual` | `children` and no third   the same file
+//	`manual` | `entries` | `children`    migration 0008 (widened 0006's CHECK)
 //	one live sheet per year+kind         `UNIQUE (tenant_id, nam, loai, lan)` plus CoBangConSong
 //	hard DELETE refused outright         `ho_so_luu_tru_cam_xoa_cung`
 //
@@ -36,10 +36,7 @@ package app
 //	the Excel import (§6)   `nguon_tep` / `nap_luc` are the columns it will fill, and TaoBang takes
 //	                        the column set as data for exactly that reason — the parser is a turn of
 //	                        its own and it is what fills them.
-//	the batch dialog (§5)   `dot_thu_chi` and the `entries` calculation mode. A mode with no table
-//	                        behind it reports 0 for every line set to it while looking like a
-//	                        working feature.
-//	editing a COLUMN        a sheet's columns come from the Phòng Tài chính's file. Renaming one, or
+//	editing a COLUMN       a sheet's columns come from the Phòng Tài chính's file. Renaming one, or
 //	                        moving a role from one column to another, changes which figure an
 //	                        indicator reads — which is ADR 0035 §A territory and needs its own
 //	                        decision about what happens to the periods already reported.
@@ -85,6 +82,13 @@ type KhoNganSach interface {
 	DatDongTong(ctx context.Context, tx *store.ScopedTx, bangID, id string) error
 	XoaMemKhoanMuc(ctx context.Context, tx *store.ScopedTx, id, boi, lyDo string) error
 	GhiGiaTri(ctx context.Context, tx *store.ScopedTx, khoanMucID, cotID string, gia *domain.Dong) error
+
+	// The batches (migration 0008) — dot_thu_chi.go in this package.
+	CoDotConSong(ctx context.Context, tx *store.ScopedTx, khoanMucID string) (bool, error)
+	DotTheoIDTrongGiaoDich(ctx context.Context, tx *store.ScopedTx, id string) (domain.DotThuChi, error)
+	ChenDot(ctx context.Context, tx *store.ScopedTx, d domain.DotThuChi) error
+	ChenSoTienDot(ctx context.Context, tx *store.ScopedTx, dotID, cotID string, gia domain.Dong) error
+	XoaMemDot(ctx context.Context, tx *store.ScopedTx, id, boi, lyDo string) error
 }
 
 // NganSach owns creating, removing, and editing one commune's budget board.
@@ -116,6 +120,8 @@ const (
 	HanhViSuaKhoanMuc         = "sua_khoan_muc_ngan_sach"
 	HanhViGoKhoanMuc          = "go_khoan_muc_ngan_sach"
 	HanhViDatDongTongNganSach = "dat_dong_tong_ngan_sach"
+	HanhViGhiDotThuChi        = "ghi_dot_thu_chi"
+	HanhViGoDotThuChi         = "go_dot_thu_chi"
 )
 
 // --- creating a sheet ------------------------------------------------------------------------------
@@ -504,6 +510,19 @@ func (uc *NganSach) ThemKhoanMuc(ctx context.Context, yc YeuCauThemKhoanMuc,
 				// one year's line under another year's tree and total them together.
 				return domain.ErrChaKhongCungBang
 			}
+			// A PARENT IN `entries` MODE WITH LIVE BATCHES IS REFUSED, not flipped (decided 25/09/2026
+			// under the user's "follow the recommendations"; migration 0008 question 4b left it open).
+			// Flipped, it would become `children` and every batch in its dialog would silently stop
+			// counting. Without live batches it flips below exactly like a `manual` leaf.
+			if cha.CachTinh == domain.TinhTheoDot {
+				conDot, err := uc.kho.CoDotConSong(ctx, tx, cha.ID)
+				if err != nil {
+					return err
+				}
+				if conDot {
+					return domain.ErrKhoanMucTheoDotConDot
+				}
+			}
 		}
 		// A NEW LINE IS ALWAYS A LEAF, so its calculation mode is `manual` and its depth is the
 		// parent's plus one. Both derived here and never taken from the request.
@@ -528,7 +547,7 @@ func (uc *NganSach) ThemKhoanMuc(ctx context.Context, yc YeuCauThemKhoanMuc,
 			// stopped accepting typed figures is the single most confusing thing this screen can do,
 			// and the entry is what lets somebody answer "why did that row stop being editable".
 			than["cha_chuyen_sang_cong_tu_dong_con"] = map[string]any{
-				"khoan_muc_id": cha.ID, "ten": cha.Ten,
+				"khoan_muc_id": cha.ID, "ten": cha.Ten, "cach_tinh_truoc": string(cha.CachTinh),
 			}
 		}
 		delta, err := json.Marshal(than)
@@ -552,13 +571,26 @@ func (uc *NganSach) ThemKhoanMuc(ctx context.Context, yc YeuCauThemKhoanMuc,
 // tell "the client did not mention this" from "the client cleared it", and a dialog editing only the
 // name would wipe the reference off a budget line.
 //
-// `BangID`, `ChaID`, `CachTinh`, `Cap` AND `LaDongTong` ARE ABSENT AND NONE IS AN OVERSIGHT. Moving
-// a line between sheets or under another parent moves its figure between two totals that have
-// already been read off a screen; the other three are derived or have their own act.
+// `BangID`, `ChaID`, `Cap` AND `LaDongTong` ARE ABSENT AND NONE IS AN OVERSIGHT. Moving a line
+// between sheets or under another parent moves its figure between two totals that have already been
+// read off a screen; the other two are derived or have their own act.
 type YeuCauSuaKhoanMuc struct {
 	TT    *string
 	Ten   *string
 	ThuTu *int
+
+	// CachTinh is the LEAF's choice between `manual` and `entries` (user decision 25/09/2026, §4.2).
+	// `children` is never accepted — it follows the tree — and a line WITH children refuses both.
+	//
+	// WHAT A SWITCH DOES TO THE STORED FIGURES (§9.1), stated because the two directions differ:
+	//
+	//	manual  -> entries   the typed cells are LEFT UNTOUCHED and simply stop being displayed.
+	//	entries -> manual    every number cell is OVERWRITTEN with the batch sum that was on the
+	//	                     screen (NULL where the sum was empty), in the same transaction, audited.
+	//
+	// So the typed figures from before an entries period never come back: switching back to manual
+	// shows what the batches added up to, which is §9.1's "giữ giá trị vừa tính làm giá trị khởi đầu".
+	CachTinh *domain.CachTinh
 
 	// GiaTri is cotID -> figure, and a nil VALUE means "clear this cell" (§9 rule 4: empty is a state
 	// the screen draws as `—`, not the absence of a record). A cotID that is absent from the map is
@@ -609,6 +641,11 @@ func (uc *NganSach) SuaKhoanMuc(ctx context.Context, id string, yc YeuCauSuaKhoa
 			return domain.KhoanMucNganSach{}, err
 		}
 	}
+	if yc.CachTinh != nil {
+		if err := domain.KiemTraCachTinhChon(*yc.CachTinh); err != nil {
+			return domain.KhoanMucNganSach{}, err
+		}
+	}
 	if err := coNguoiThucHien(nguoi); err != nil {
 		return domain.KhoanMucNganSach{}, err
 	}
@@ -639,6 +676,36 @@ func (uc *NganSach) SuaKhoanMuc(ctx context.Context, id string, yc YeuCauSuaKhoa
 			sau.ThuTu = *yc.ThuTu
 		}
 
+		// THE MODE, DECIDED BEFORE ANY WRITE so every refusal below leaves nothing behind.
+		cachTinhDoi := yc.CachTinh != nil && *yc.CachTinh != truoc.CachTinh
+		if yc.CachTinh != nil && day.CoCon(truoc.ID) {
+			return domain.ErrKhoanMucChaKhongDoiCachTinh
+		}
+		if cachTinhDoi {
+			sau.CachTinh = *yc.CachTinh
+		}
+		// §4.2: an `entries` line's cells are read-only. Judged on the mode AFTER this request, so
+		// "switch to manual and type a figure" in one PATCH is accepted and "switch to entries and
+		// type a figure" is not.
+		if len(yc.GiaTri) > 0 && sau.CachTinh == domain.TinhTheoDot && !day.CoCon(truoc.ID) {
+			return domain.ErrKhoanMucTheoDotKhongGoThang
+		}
+
+		var soTuDot []map[string]any
+		if cachTinhDoi {
+			if truoc.CachTinh == domain.TinhTheoDot && sau.CachTinh == domain.TinhTay {
+				if day.Gia == nil {
+					day.Gia = map[string]map[string]domain.Dong{}
+				}
+				if soTuDot, err = uc.chepTongDotVaoO(ctx, tx, day, truoc.ID); err != nil {
+					return err
+				}
+			}
+			if err := uc.kho.DatCachTinh(ctx, tx, truoc.ID, sau.CachTinh); err != nil {
+				return err
+			}
+		}
+
 		// THE FIGURES, AND THE CUSTOMER'S RULE IN FRONT OF THEM. The check is on the LINE, not on
 		// each cell: a parent is a parent for every column at once.
 		oDoi, err := uc.ghiCacO(ctx, tx, day, truoc, yc.GiaTri)
@@ -647,7 +714,7 @@ func (uc *NganSach) SuaKhoanMuc(ctx context.Context, id string, yc YeuCauSuaKhoa
 		}
 
 		vanBanDoi := truoc.TT != sau.TT || truoc.Ten != sau.Ten || truoc.ThuTu != sau.ThuTu
-		if !vanBanDoi && len(oDoi) == 0 {
+		if !vanBanDoi && len(oDoi) == 0 && !cachTinhDoi {
 			return nil
 		}
 		if vanBanDoi {
@@ -668,6 +735,16 @@ func (uc *NganSach) SuaKhoanMuc(ctx context.Context, id string, yc YeuCauSuaKhoa
 		if len(oDoi) > 0 {
 			than["o"] = oDoi
 		}
+		if cachTinhDoi {
+			// THE SWITCH IS RECORDED WITH WHAT IT DID TO THE CELLS. entries -> manual rewrites the
+			// line's figures from the batch sums, and "why did these cells change" is answered only here.
+			than["cach_tinh"] = map[string]any{
+				"truoc": string(truoc.CachTinh), "sau": string(sau.CachTinh),
+			}
+			if len(soTuDot) > 0 {
+				than["o_lay_tu_tong_dot"] = soTuDot
+			}
+		}
 		delta, err := json.Marshal(than)
 		if err != nil {
 			return fmt.Errorf("ngan_sach: mã hoá delta: %w", err)
@@ -680,6 +757,58 @@ func (uc *NganSach) SuaKhoanMuc(ctx context.Context, id string, yc YeuCauSuaKhoa
 		return domain.KhoanMucNganSach{}, bocNganSach(ctx, "sửa khoản mục", err)
 	}
 	return sau, nil
+}
+
+// chepTongDotVaoO is §9.1's entries -> manual hand-over: every NUMBER cell of the line becomes the
+// batch sum that was on the screen a moment ago — the sum, or NULL where the sum was empty.
+//
+// NULL AND NOT "LEAVE THE OLD TYPED FIGURE": a typed figure from before the entries period would
+// otherwise reappear in a column the screen showed as `—`, and the commune would see a number nobody
+// entered for this period. Only cells that actually change are written.
+//
+// It UPDATES day.Gia for the line, so a `values` map in the same request is compared against the
+// figures the line holds after the hand-over, not before.
+func (uc *NganSach) chepTongDotVaoO(ctx context.Context, tx *store.ScopedTx, day domain.BangDayDu,
+	khoanMucID string) ([]map[string]any, error) {
+
+	// day.Gia is non-nil (the caller guarantees it), so this inner map is shared with the caller's copy.
+	if day.Gia[khoanMucID] == nil {
+		day.Gia[khoanMucID] = map[string]domain.Dong{}
+	}
+	var doi []map[string]any
+	for _, cot := range day.Cot {
+		if cot.Kieu != domain.CotSo {
+			continue
+		}
+		tong, coTong := day.GiaDot[khoanMucID][cot.ID]
+		var moi *domain.Dong
+		if coTong {
+			// The typo guard every typed cell passes. A batch sum beyond it is not a budget figure,
+			// and copying it would put into a manual cell what no person could have typed there.
+			if err := domain.KiemTraGiaTri(tong); err != nil {
+				return nil, err
+			}
+			g := tong
+			moi = &g
+		}
+		cu, coCu := day.Gia[khoanMucID][cot.ID]
+		if khongDoiO(cu, coCu, moi) {
+			continue
+		}
+		if err := uc.kho.GhiGiaTri(ctx, tx, khoanMucID, cot.ID, moi); err != nil {
+			return nil, err
+		}
+		doi = append(doi, map[string]any{
+			"cot_id": cot.ID, "cot": cot.Ten,
+			"truoc": soHoacNil(cu, coCu), "sau": soHoacNilCon(moi),
+		})
+		if coTong {
+			day.Gia[khoanMucID][cot.ID] = tong
+		} else {
+			delete(day.Gia[khoanMucID], cot.ID)
+		}
+	}
+	return doi, nil
 }
 
 // ghiCacO writes the cells this request mentions and returns a before/after record of the ones that

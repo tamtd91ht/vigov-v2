@@ -180,6 +180,9 @@ type NguongCham interface {
 // reasoning could not be read and the two candidate revenue columns are one edit apart.
 type NganSachDoc interface {
 	BangDayDu(ctx context.Context, nam int, loai domain.LoaiBang) (domain.BangDayDu, error)
+
+	// DotCuaKhoanMuc is the `⇄` dialog's list (GET /api/v1/budget-lines/{id}/entries).
+	DotCuaKhoanMuc(ctx context.Context, khoanMucID string) (domain.DotCuaKhoanMuc, error)
 }
 
 // GhiNganSach is the WRITE half of the budget board, and it is its own interface rather than more
@@ -201,6 +204,8 @@ type GhiNganSach interface {
 	SuaKhoanMuc(ctx context.Context, id string, yc app.YeuCauSuaKhoanMuc, nguoi audit.Actor) (domain.KhoanMucNganSach, error)
 	GoKhoanMuc(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
 	DatDongTong(ctx context.Context, id string, nguoi audit.Actor) (domain.KhoanMucNganSach, error)
+	GhiDot(ctx context.Context, yc app.YeuCauGhiDot, nguoi audit.Actor) (domain.DotThuChi, error)
+	GoDot(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
 }
 
 type Deps struct {
@@ -1073,7 +1078,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	// UPDATE, no cell, no audit entry. So the same request sent twice leaves one row in one state and
 	// one entry in the ledger.
 	//
-	// @summary  Sửa số thứ tự, tên hoặc các ô số của một khoản mục chưa có dòng con
+	// `method` IS ACCEPTED HERE, AND ONLY `manual` OR `entries`, FOR A LEAF (user decision 25/09/2026,
+	// §4.2). `children` is refused with 400 — it follows the tree — and a line with children answers
+	// 409. entries -> manual copies the batch sums into the cells in the same transaction (§9.1);
+	// manual -> entries leaves the typed cells stored and undisplayed. A figure typed into a line whose
+	// mode is `entries` after the request answers 409.
+	//
+	// @summary  Sửa số thứ tự, tên, cách tính (manual/entries) hoặc các ô số của một khoản mục chưa có dòng con
 	// @screen   07-thu-chi-ngan-sach §4.1
 	// @request  suaDongVao
 	// @reply    200 dongRa
@@ -1152,4 +1163,83 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("đánh dấu lại đúng dòng đang là dòng tổng để lại đúng một dòng được đánh dấu và đúng trạng thái ấy")(
 				http.HandlerFunc(h.DatDongTongNganSach))))
+
+	// --- the batches: the `⇄ Các đợt thu, chi` dialog (§5, migration 0008) ----------------------------
+	//
+	// `entries` UNDER A LINE for the list and the create — both act on ONE line, whose id is the
+	// segment and is checked (live line, live sheet, this commune). `budget-entries/{id}` AT TOP LEVEL
+	// for the removal, for the reason `budget-lines` is not nested under `budget-sheets`: the act
+	// names one batch by its own id, and a line segment would be one nothing reads or checks. URL
+	// noun `budget-entries` chosen by the user, 25/09/2026.
+	//
+	// THE SAME THREE KEYS, SPLIT THE WAY THE LINE ROUTES SPLIT THEM: reading is `budget.read`,
+	// recording a batch is data entry (`budget.update`), removing one takes a figure that may already
+	// have been read off a screen out of a total (`budget.confirm`, as removing a line does).
+
+	// `budget.read` — the batches of one line of the commune's own budget. The list carries
+	// `counterparty` ("Đơn vị, cá nhân"), which may name a person, so it is MASKED
+	// (privacy.MaskName) for every caller — no full-view key exists (rule 3 stop condition #1,
+	// open question #27). See internal/http/dot_thu_chi.go for the stated costs. Never logged.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Các đợt thu, chi đã ghi của một khoản mục, mới nhất trước, kèm số tiền theo từng cột số
+	// @screen   07-thu-chi-ngan-sach §5
+	// @reply    200 danhSachDotRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/budget-lines/{id}/entries",
+		authz.RequirePermission(d.Checker, "budget.read")(
+			http.HandlerFunc(h.DocDotThuChi)))
+
+	// `budget.update` — `+ Ghi đợt` is data entry by the accountant.
+	//
+	// idem.Required(DongKhiHong), FOLLOWING POST /api/v1/budget-lines AND FOR THE SAME REASON: 0008
+	// deliberately has no unique key beyond the primary key (two instalments of one fee on one day
+	// are a real case), so a cache outage plus a double click is a batch counted twice in a figure
+	// that goes upward. A 503 costs the accountant one retry.
+	//
+	// A LINE WITH CHILDREN ANSWERS 409. Writing a batch does NOT switch the line to `entries`; the
+	// user chooses the mode through PATCH /api/v1/budget-lines/{id} (§4.2).
+	//
+	// @summary  Ghi một đợt thu, chi vào một khoản mục lá
+	// @screen   07-thu-chi-ngan-sach §5
+	// @request  ghiDotVao
+	// @reply    201 dotRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/budget-lines/{id}/entries",
+		authz.RequirePermission(d.Checker, "budget.update")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.GhiDotThuChi))))
+
+	// `budget.confirm` — removing a batch changes the figure of a line in `entries` mode, which may
+	// already have been read off a screen; the same weight, and the same key, as removing a line.
+	// Loosening it to `budget.update` is one literal if the customer asks.
+	//
+	// A BODY ON A DELETE for the reason goVao gives: the reason is mandatory (rule 7, invariant 1).
+	//
+	// idem.KhongCan — removing an already-removed batch is a 404 either way, and the second request
+	// cannot overwrite who removed it or why (`AND deleted_at IS NULL`, plus 0008's trigger).
+	//
+	// @summary  Gỡ mềm một đợt thu, chi, kèm lý do bắt buộc
+	// @screen   07-thu-chi-ngan-sach §5
+	// @request  goVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/budget-entries/{id}",
+		authz.RequirePermission(d.Checker, "budget.confirm")(
+			idem.KhongCan("gỡ một đợt đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
+				http.HandlerFunc(h.GoDotThuChi))))
 }

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -46,8 +47,22 @@ import (
 // wrong-commune case pass while proving nothing.
 type nganSachGia struct {
 	theo map[tenant.ID]map[string]domain.BangDayDu
-	loi  error
-	goi  int
+	// dot is the `⇄` list, keyed by commune and line id — same discipline as `theo`.
+	dot map[tenant.ID]map[string]domain.DotCuaKhoanMuc
+	loi error
+	goi int
+}
+
+func (n *nganSachGia) DotCuaKhoanMuc(ctx context.Context, khoanMucID string) (domain.DotCuaKhoanMuc, error) {
+	n.goi++
+	if n.loi != nil {
+		return domain.DotCuaKhoanMuc{}, n.loi
+	}
+	d, co := n.dot[tenant.MustFrom(ctx)][khoanMucID]
+	if !co {
+		return domain.DotCuaKhoanMuc{}, domain.ErrKhongThayKhoanMuc
+	}
+	return d, nil
 }
 
 func khoaBang(nam int, loai domain.LoaiBang) string {
@@ -76,6 +91,9 @@ type ghiNganSachGia struct {
 
 	taoBangGoi, goBangGoi, suaBangGoi int
 	themGoi, suaGoi, goGoi, tongGoiN  int
+	ghiDotGoi, goDotGoi               int
+	raDot                             domain.DotThuChi
+	ghiDotCuoi                        app.YeuCauGhiDot
 
 	xaCuoi      tenant.ID
 	nguoiCuoi   audit.Actor
@@ -161,8 +179,27 @@ func (g *ghiNganSachGia) DatDongTong(ctx context.Context, id string,
 	return g.ra, nil
 }
 
+func (g *ghiNganSachGia) GhiDot(ctx context.Context, yc app.YeuCauGhiDot,
+	nguoi audit.Actor) (domain.DotThuChi, error) {
+	g.ghiDotGoi++
+	g.ghiDotCuoi = yc
+	g.ghiNhan(ctx, nguoi)
+	if g.loi != nil {
+		return domain.DotThuChi{}, g.loi
+	}
+	return g.raDot, nil
+}
+
+func (g *ghiNganSachGia) GoDot(ctx context.Context, id, lyDo string, nguoi audit.Actor) error {
+	g.goDotGoi++
+	g.idCuoi, g.lyDoCuoi = id, lyDo
+	g.ghiNhan(ctx, nguoi)
+	return g.loi
+}
+
 func (g *ghiNganSachGia) tongGoi() int {
-	return g.taoBangGoi + g.goBangGoi + g.suaBangGoi + g.themGoi + g.suaGoi + g.goGoi + g.tongGoiN
+	return g.taoBangGoi + g.goBangGoi + g.suaBangGoi + g.themGoi + g.suaGoi + g.goGoi + g.tongGoiN +
+		g.ghiDotGoi + g.goDotGoi
 }
 
 // --- fixtures ------------------------------------------------------------------------------------
@@ -253,13 +290,48 @@ func nganSachMau() *nganSachGia {
 	bDangChi.Gia = map[string]map[string]domain.Dong{
 		idDongChi: {"c-dt": trieuDong(1_000_000), "c-chi": trieuDong(500_000)},
 	}
-	return &nganSachGia{theo: map[tenant.ID]map[string]domain.BangDayDu{
-		xaA: {
-			khoaBang(2026, domain.BangChi): bangChiCuaXaA(),
-			khoaBang(2026, domain.BangThu): bangThuCuaXaA(),
+	dotB := dotCuaXaA()
+	dotB.Dot = dotB.Dot[:1]
+	dotB.Dot[0].NoiDung = "Thu phí chợ BÌNH DƯƠNG"
+	return &nganSachGia{
+		theo: map[tenant.ID]map[string]domain.BangDayDu{
+			xaA: {
+				khoaBang(2026, domain.BangChi): bangChiCuaXaA(),
+				khoaBang(2026, domain.BangThu): bangThuCuaXaA(),
+			},
+			xaB: {khoaBang(2026, domain.BangChi): bDangChi},
 		},
-		xaB: {khoaBang(2026, domain.BangChi): bDangChi},
-	}}
+		dot: map[tenant.ID]map[string]domain.DotCuaKhoanMuc{
+			xaA: {"k-a": dotCuaXaA()},
+			xaB: {"k-a": dotB},
+		},
+	}
+}
+
+// donViMauHTTP stands for what a commune types into "Đơn vị, cá nhân" — possibly a person's name.
+const donViMauHTTP = "Hộ bà Trần Thị Mẫu"
+
+// dotCuaXaA is the `⇄` list of commune A's line `k-a`, in `entries` mode: two live batches, newest
+// first, the second leaving `c-dt` empty.
+func dotCuaXaA() domain.DotCuaKhoanMuc {
+	b := bangChiCuaXaA()
+	k := b.KhoanMuc[1]
+	k.CachTinh = domain.TinhTheoDot
+	return domain.DotCuaKhoanMuc{
+		KhoanMuc: k,
+		Cot:      b.Cot,
+		Dot: []domain.DotThuChi{
+			{ID: "01JDOTMOINHAT0000000000000", KhoanMucID: "k-a",
+				Ngay: time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC), NoiDung: "Chi hỗ trợ đợt 2",
+				DonViCaNhan: donViMauHTTP, SoChungTu: "PC-0102", NguoiGhiMa: maCanBoGhi,
+				TaoLuc: time.Date(2026, 8, 20, 9, 0, 0, 0, time.UTC),
+				GiaTri: map[string]domain.Dong{"c-dt": 0, "c-chi": 2_000_000}},
+			{ID: "01JDOTCUHON00000000000000", KhoanMucID: "k-a",
+				Ngay: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), NoiDung: "Chi hỗ trợ đợt 1",
+				NguoiGhiMa: maCanBoGhi, TaoLuc: time.Date(2026, 7, 1, 8, 0, 0, 0, time.UTC),
+				GiaTri: map[string]domain.Dong{"c-chi": -150_000}},
+		},
+	}
 }
 
 // --- harness -------------------------------------------------------------------------------------
@@ -273,6 +345,10 @@ type mayChuNganSach struct {
 	doc     *nganSachGia
 	ghi     *ghiNganSachGia
 	checker *checkerDanhMucGia
+
+	// nhatKy captures everything the handler logs, so a test can assert what NEVER reaches a log line
+	// (rule 3 — the batch counterparty).
+	nhatKy *bytes.Buffer
 }
 
 func dungMayChuNganSach(t *testing.T) *mayChuNganSach {
@@ -290,7 +366,8 @@ func dungMayChuNganSach(t *testing.T) *mayChuNganSach {
 		},
 	}
 	checker := &checkerDanhMucGia{}
-	im := slog.New(slog.NewTextHandler(io.Discard, nil))
+	nhatKy := &bytes.Buffer{}
+	im := slog.New(slog.NewTextHandler(nhatKy, nil))
 
 	mux := http.NewServeMux()
 	Register(mux, Deps{
@@ -314,7 +391,7 @@ func dungMayChuNganSach(t *testing.T) *mayChuNganSach {
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
 
-	return &mayChuNganSach{h: h, doc: doc, ghi: ghi, checker: checker}
+	return &mayChuNganSach{h: h, doc: doc, ghi: ghi, checker: checker, nhatKy: nhatKy}
 }
 
 func (m *mayChuNganSach) capQuyen(xa tenant.ID, perm ...authz.Perm) {
@@ -361,6 +438,9 @@ const (
 		`{"name":"Chi ngân sách","order":2,"type":"so","role":"chi-ngan-sach"}]}`
 	thanThemDong = `{"sheet_id":"01JBANGCHI0000000000000000","parent_id":"k-a","no":"1.1",` +
 		`"name":"Chi quốc phòng","order":10}`
+	duongDot   = "/api/v1/budget-entries"
+	thanGhiDot = `{"date":"2026-08-20","content":"Chi hỗ trợ đợt 3","counterparty":"` + donViMauHTTP +
+		`","document_no":"PC-0103","values":{"c-chi":2500000,"c-dt":null}}`
 )
 
 // motTuyenNganSach is one of the eight routes, with the key §9 rule 7's group assigns to it.
@@ -404,6 +484,12 @@ func tamTuyenNganSach() []motTuyenNganSach {
 			"budget.confirm", http.StatusNoContent, func(m *mayChuNganSach) int { return m.ghi.goGoi }},
 		{"POST dong tong", http.MethodPost, duongDong + "/" + idDongChi + "/headline", "",
 			"budget.confirm", http.StatusOK, func(m *mayChuNganSach) int { return m.ghi.tongGoiN }},
+		{"GET dot", http.MethodGet, duongDong + "/k-a/entries", "",
+			"budget.read", http.StatusOK, func(m *mayChuNganSach) int { return m.doc.goi }},
+		{"POST dot", http.MethodPost, duongDong + "/k-a/entries", thanGhiDot,
+			"budget.update", http.StatusCreated, func(m *mayChuNganSach) int { return m.ghi.ghiDotGoi }},
+		{"DELETE dot", http.MethodDelete, duongDot + "/01JDOTMOINHAT0000000000000", `{"reason":"ghi nhầm số chứng từ"}`,
+			"budget.confirm", http.StatusNoContent, func(m *mayChuNganSach) int { return m.ghi.goDotGoi }},
 	}
 }
 

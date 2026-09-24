@@ -114,11 +114,12 @@ var vaiTroCuaLoai = map[LoaiBang][]VaiTroCot{
 // batches of `dot_thu_chi` (migration 0008, user decision 25/09/2026).
 //
 // A LINE WITH CHILDREN IS ALWAYS `children` and that is not chosen by a client: it follows from the
-// tree (customer decision 06/09/2026, CachTinhTheoCay). A LEAF chooses `manual` or `entries`.
+// tree (customer decision 06/09/2026, CachTinhTheoCay). A LEAF chooses `manual` or `entries`
+// (KiemTraCachTinhChon, dot_thu_chi.go) — through PATCH /api/v1/budget-lines/{id}, never on create.
 //
-// ⚠ TinhTheoDot IS DECLARED AHEAD OF ITS WRITER. As of migration 0008 no use case sets it and no read
-// path sums batches; until that card lands, nothing may write it — a line in `entries` mode with no
-// summing read path shows every figure as empty while looking like a working feature.
+// THE READER AND THE WRITER OF `entries` LANDED TOGETHER: BangDayDu.GiaTri reads GiaDot for a leaf
+// in that mode, and internal/app.SuaKhoanMuc is the only writer of the value. One without the other
+// is a line whose figures all read empty while looking like a working feature.
 type CachTinh string
 
 const (
@@ -246,13 +247,17 @@ var (
 	ErrThieuLyDoXoaNganSach  = errors.New("ngan_sach: thiếu lý do gỡ")
 	ErrLyDoXoaNganSachQuaDai = errors.New("ngan_sach: lý do gỡ quá dài")
 
-	// ErrCachTinhDoTuClient — a request tried to set `cach_tinh` itself.
+	// ErrCachTinhDoTuClient — a request tried to set `cach_tinh` to something a client may not choose:
+	// any value on CREATE (a new line is always a `manual` leaf), or anything but `manual` / `entries`
+	// on an edit.
 	//
-	// REFUSED RATHER THAN IGNORED, and the difference is what the client learns. `cach_tinh` follows
+	// REFUSED RATHER THAN IGNORED, and the difference is what the client learns. `children` follows
 	// from whether the line has children (CachTinhTheoCay), which is the customer's decision of
 	// 06/09/2026 expressed as a property. A client that could set it would be a client that could
-	// mark a parent `manual` — which is precisely the direct entry the decision forbids.
-	ErrCachTinhDoTuClient = errors.New("ngan_sach: `method` không do client đặt — khoản mục có dòng con thì luôn cộng từ dòng con")
+	// mark a parent `manual` — which is precisely the direct entry the decision forbids. Choosing
+	// between `manual` and `entries` on a LEAF is the user's decision of 25/09/2026 (§4.2).
+	ErrCachTinhDoTuClient = errors.New(
+		"ngan_sach: `method` không đặt khi thêm khoản mục; khi sửa chỉ nhận `manual` hoặc `entries` cho khoản mục lá — `children` suy ra từ cây")
 
 	// ErrCapDoTuClient — a request tried to set `cap`. It is derived from the parent.
 	ErrCapDoTuClient = errors.New("ngan_sach: `level` không do client đặt — độ sâu suy ra từ khoản mục cha")
@@ -598,6 +603,12 @@ type BangDayDu struct {
 
 	// Gia is khoanMucID -> cotID -> value. Only cells with a non-NULL `gia_tri` appear.
 	Gia map[string]map[string]Dong
+
+	// GiaDot is khoanMucID -> cotID -> the SUM of that line's LIVE batches (migration 0008). Same
+	// convention as Gia: a key appears only when at least one live batch stated an amount there, so
+	// an absent key is EMPTY (`—`) and never 0 (§9 rule 4). Read for a leaf in `entries` mode only;
+	// a line in any other mode keeps its batches in the table and they count nowhere.
+	GiaDot map[string]map[string]Dong
 }
 
 // ConTrucTiep returns the DIRECT children of one line, in display order.
@@ -627,8 +638,9 @@ func (b BangDayDu) CoCon(id string) bool {
 	return false
 }
 
-// GiaTri is the figure of one cell as the screen shows it: typed in for a leaf, summed from the
-// direct children for a parent.
+// GiaTri is the figure of one cell as the screen shows it: typed in for a `manual` leaf, the sum of
+// its live batches for an `entries` leaf, summed from the direct children for a parent — so a parent
+// over an `entries` leaf picks the batch sum up through the same recursion.
 //
 // ok IS false FOR AN EMPTY CELL, and it is a second return value rather than a zero on purpose —
 // §9 rule 4 again. A parent all of whose children are empty is EMPTY, not 0: a commune that has
@@ -650,6 +662,13 @@ func (b BangDayDu) giaTri(khoanMucID, cotID string, daQua map[string]struct{}) (
 
 	con := b.ConTrucTiep(khoanMucID)
 	if len(con) == 0 {
+		// THE MODE DECIDES THE SOURCE, and only for a leaf: a line with children sums them whatever
+		// its stored mode says (the tree wins, CachTinhTheoCay). The typed figures of an `entries`
+		// leaf stay stored and are NOT shown — §9.1's "giá trị nhập tay bị khoá".
+		if k, co := b.TheoID(khoanMucID); co && k.CachTinh == TinhTheoDot {
+			g, coSo := b.GiaDot[khoanMucID][cotID]
+			return g, coSo
+		}
 		g, co := b.Gia[khoanMucID][cotID]
 		return g, co
 	}
