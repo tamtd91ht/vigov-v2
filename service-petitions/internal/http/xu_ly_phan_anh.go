@@ -185,10 +185,26 @@ func (h *Handler) DanhSachPhieu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loc, err := locPhieuTuQuery(thamSo)
+	loc, chiGiaoChoToi, err := locPhieuTuQuery(thamSo)
 	if err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
 		return
+	}
+	// "GIAO CHO TÔI" — THE CODE COMES FROM THE SESSION, NEVER FROM THE REQUEST. The query said only
+	// "my petitions"; WHO "my" is, is `Principal.Ma`, the same business code the holding rule compares
+	// against `can_bo_xu_ly_id` (app.duocTienTrangThai).
+	//
+	// FAIL CLOSED ON AN EMPTY CODE: dropping the filter would answer "Giao cho tôi" with the whole
+	// register, a screen showing every petition under a tab that claims to be one officer's workload.
+	// An empty `Ma` is identity older than the field — a deployment fault, answered as the write
+	// routes answer it (thieuChuTheXuLy), and the store is not reached.
+	if chiGiaoChoToi {
+		p, ok := authz.From(ctx)
+		if !ok || p.Ma == "" {
+			h.thieuChuTheXuLy(w, r)
+			return
+		}
+		loc.CanBoXuLyID = p.Ma
 	}
 	// THE SAME FACT THE FOUR WRITE ROUTES HAND DOWN, read through the same helper (rule 9,
 	// invariant 2). Two readings of one permission are two readings that can end up consulting two
@@ -252,7 +268,15 @@ func (h *Handler) DanhSachPhieu(w http.ResponseWriter, r *http.Request) {
 // lives in service `platform` and the other two in `identity`, and neither is readable from here
 // (ADR 0026 stop condition #2; rule 2, forbidden #2). A code that matches nothing returns an empty
 // page, which is a true answer.
-func locPhieuTuQuery(q map[string][]string) (petstore.LocPhieu, error) {
+//
+// `scope` IS A SWITCH AND CARRIES NO IDENTITY. `mine` returns chiGiaoChoToi=true and the HANDLER
+// fills the code from the session; this function never sets LocPhieu.CanBoXuLyID and reads no key
+// that could name an officer, so `?assignee=CB-…` or any other invented parameter never reaches the
+// store. UNLIKE THE TASK LIST, which accepts `assignee` as a plain filter: this route exposes no
+// "pick an officer" filter, and adding one is a product decision, not a spelling. Absent or `all`
+// means the whole commune ("Toàn xã"). Any other value is refused: silently widening a tab labelled
+// "Giao cho tôi" to the whole register is the dropped-filter failure described above.
+func locPhieuTuQuery(q map[string][]string) (loc petstore.LocPhieu, chiGiaoChoToi bool, err error) {
 	lay := func(k string) string {
 		if v, ok := q[k]; ok && len(v) > 0 {
 			return v[0]
@@ -260,16 +284,15 @@ func locPhieuTuQuery(q map[string][]string) (petstore.LocPhieu, error) {
 		return ""
 	}
 
-	var loc petstore.LocPhieu
 	if s := lay("status"); s != "" {
 		if !domain.TrangThai(s).HopLe() {
-			return loc, errTrangThaiPhieuKhongHopLe
+			return loc, false, errTrangThaiPhieuKhongHopLe
 		}
 		loc.TrangThai = s
 	}
 	if s := lay("channel"); s != "" {
 		if !domain.KenhTiepNhan(s).HopLe() {
-			return loc, errKenhKhongHopLe
+			return loc, false, errKenhKhongHopLe
 		}
 		loc.Kenh = s
 	}
@@ -278,7 +301,7 @@ func locPhieuTuQuery(q map[string][]string) (petstore.LocPhieu, error) {
 	loc.BoPhanID = lay("unit")
 	loc.Tim = lay("q")
 	if len(loc.Tim) > petstore.TimPhieuToiDa {
-		return loc, petstore.ErrTimPhieuQuaDai
+		return loc, false, petstore.ErrTimPhieuQuaDai
 	}
 
 	// `late=true` IS THE ONLY ACCEPTED SPELLING, and anything else is refused rather than read as
@@ -286,11 +309,27 @@ func locPhieuTuQuery(q map[string][]string) (petstore.LocPhieu, error) {
 	// the whole register while the box on their screen is ticked.
 	if s := lay("late"); s != "" {
 		if s != "true" {
-			return loc, errLocTreHanKhongHopLe
+			return loc, false, errLocTreHanKhongHopLe
 		}
 		loc.ChiTreHan = true
 	}
-	return loc, nil
+
+	// §4's scope tabs, SPELLED AS GET /api/v1/tasks SPELLS THEM (locNhiemVuTuQuery): one screen
+	// family, one vocabulary, so the web client does not learn two words for "Giao cho tôi". `all` is
+	// the default and needs no predicate.
+	switch s := lay("scope"); s {
+	case "", "all":
+	case "mine":
+		chiGiaoChoToi = true
+	case "related":
+		// REFUSED, WITH THE REASON. Who counts as "related" to a petition — and whether a related
+		// person may only log and not act — is undecided with the customer. Answering with a guess
+		// would put petitions on an officer's screen under a rule nobody made.
+		return loc, false, errPhamViLienQuanChuaCo
+	default:
+		return loc, false, errPhamViKhongHopLe
+	}
+	return loc, chiGiaoChoToi, nil
 }
 
 var (
@@ -300,6 +339,11 @@ var (
 		"`channel` không phải một trong bốn kênh tiếp nhận")
 	errLocTreHanKhongHopLe = errors.New(
 		"`late` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc theo trễ hạn")
+	// errPhamViKhongHopLe (the unknown-`scope` refusal) is SHARED with the task list — nhiem_vu.go —
+	// because the accepted values are the same two words.
+	errPhamViLienQuanChuaCo = errors.New(
+		"`scope=related` chưa dùng được với phiếu phản ánh: thế nào là \"liên quan\" và người liên quan " +
+			"được làm gì chưa được chốt")
 )
 
 // --- the four acts ---------------------------------------------------------------------------------

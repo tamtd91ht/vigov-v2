@@ -154,6 +154,35 @@ func TestDanhSachLocTreHanLaSUYRA(t *testing.T) {
 	}
 }
 
+// TestDanhSachLocGiaoChoToiLaThamSoRangBuoc — the "Giao cho tôi" code is a BOUND parameter against
+// `can_bo_xu_ly_id`, composes with the restricted-field exclusion and the commune, and is absent from
+// the statement entirely when not asked for.
+func TestDanhSachLocGiaoChoToiLaThamSoRangBuoc(t *testing.T) {
+	const ma = "CB-00123"
+	l := chayDanhSach(t, LocPhieu{CanBoXuLyID: ma})
+
+	if !strings.Contains(l.sql, "can_bo_xu_ly_id = $") {
+		t.Fatalf("thiếu vị từ người được giao: %q", l.sql)
+	}
+	if strings.Contains(l.sql, ma) {
+		t.Errorf("mã cán bộ nằm TRONG câu lệnh thay vì là tham số: %q", l.sql)
+	}
+	if !coThamSoChuoi(l.args, ma) {
+		t.Errorf("mã cán bộ không có trong tham số: %v", l.args)
+	}
+	if !strings.Contains(l.sql, dieuKienHanChe) {
+		t.Errorf("lọc Giao cho tôi làm mất điều kiện loại lĩnh vực hạn chế: %q", l.sql)
+	}
+	if !strings.Contains(l.sql, "WHERE tenant_id = $1") || !strings.Contains(l.sql, "deleted_at IS NULL") {
+		t.Errorf("lọc Giao cho tôi làm mất ràng buộc xã hoặc xoá mềm: %q", l.sql)
+	}
+
+	// The PREDICATE, not the column name: `can_bo_xu_ly_id` is also in the SELECT list.
+	if l := chayDanhSach(t, LocPhieu{}); strings.Contains(l.sql, "can_bo_xu_ly_id = $") {
+		t.Errorf("không yêu cầu mà vẫn lọc theo người được giao: %q", l.sql)
+	}
+}
+
 func coThamSoChuoi(args []driver.Value, muon string) bool {
 	for _, a := range args {
 		if s, ok := a.(string); ok && s == muon {

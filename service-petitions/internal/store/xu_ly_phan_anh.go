@@ -85,6 +85,16 @@ type LocPhieu struct {
 	Kenh      string // "" = every intake channel
 	Tim       string // "" = no text search
 
+	// CanBoXuLyID restricts the page to petitions whose CURRENT assignee is this staff BUSINESS CODE
+	// — the "Giao cho tôi" tab of docs/ui-ux/09 §4. "" = every assignee, including none.
+	//
+	// THE ONLY WRITER IS THE HANDLER, AND IT WRITES `authz.Principal.Ma` — THE CALLER'S OWN CODE FROM
+	// THE SESSION. The query string carries a scope switch and never a code: a code taken from the
+	// request would let any reader of the register list another officer's workload by typing it
+	// (rule 1, forbidden #2 in spirit; rule 4, invariant 2). The column holds a business code, the
+	// same kind of value app.duocTienTrangThai compares against — an internal id here matches nothing.
+	CanBoXuLyID string
+
 	// ChiTreHan restricts the page to petitions whose RESOLVE commitment was missed.
 	//
 	// DERIVED IN SQL, NEVER READ FROM A COLUMN (rule 10, invariant 3). See the predicate in
@@ -159,6 +169,11 @@ func locPhieuThanhSQL(loc LocPhieu) (string, []any) {
 	}
 	if loc.Kenh != "" {
 		them(" AND kenh_tiep_nhan = $%d", loc.Kenh)
+	}
+	if loc.CanBoXuLyID != "" {
+		// Equality on a NULLable column: an unassigned petition (NULL) is not TRUE here, so it is
+		// never "assigned to me" — the same guard app.duocTienTrangThai states explicitly.
+		them(" AND can_bo_xu_ly_id = $%d", loc.CanBoXuLyID)
 	}
 	if loc.Tim != "" {
 		// ILIKE ON THREE COLUMNS — the lookup code a citizen reads down the telephone, the report a

@@ -65,6 +65,11 @@ func (d *danhSachPhieuGia) DanhSach(ctx context.Context, loc petstore.LocPhieu, 
 		if !loc.ChoPhepHanChe && p.LinhVuc == domain.LinhVucHanChe {
 			continue
 		}
+		// Same reason for the "Giao cho tôi" filter: honoured, so a case asserting on the ITEMS fails
+		// if the handler hands down the wrong code, not only if it hands down none.
+		if loc.CanBoXuLyID != "" && p.CanBoXuLyID != loc.CanBoXuLyID {
+			continue
+		}
 		ra.Items = append(ra.Items, p)
 	}
 	return ra, nil
@@ -257,6 +262,10 @@ type caTuyen struct {
 func caCacTuyen() []caTuyen {
 	return []caTuyen{
 		{"danh sách", http.MethodGet, duongDanhSach, nil,
+			authz.Perm("feedback.read"), authz.Perm("feedback.resolve")},
+		// The "Giao cho tôi" tab is the SAME route with the same key — the filter narrows what
+		// `feedback.read` already opens and grants nothing of its own, so it must fail the same way.
+		{"danh sách · giao cho tôi", http.MethodGet, duongDanhSach + "?scope=mine", nil,
 			authz.Perm("feedback.read"), authz.Perm("feedback.resolve")},
 		{"phân loại", http.MethodPost, duongPhanLoai(maPhieuThuong), phanLoaiVao{Field: "rac-thai"},
 			authz.Perm("feedback.classify"), authz.Perm("feedback.assign")},
@@ -942,6 +951,180 @@ func TestDanhSachLocHopLeXuongDungKhoaBoLoc(t *testing.T) {
 	case loc.Tim != "đầu ngõ":
 		t.Errorf("chuỗi tìm = %q", loc.Tim)
 	}
+}
+
+// --- "Giao cho tôi": scope=mine ----------------------------------------------------------------------
+//
+// THE ONE PROPERTY EVERY CASE BELOW TURNS ON: the officer code that filters the register comes from the
+// SESSION (`Principal.Ma`), never from the request. `idCanBo` and `maCanBo` differ in the fixtures, so
+// a handler that handed down the internal id would match nothing and fail here too.
+
+// soGiaoViec is a commune-A register with rows assigned to the caller, to another officer, to nobody,
+// and one `can-bo` petition assigned to the caller — the row the restricted case must still exclude.
+func soGiaoViec(m *mayChu) {
+	m.danhSach.theo = map[tenant.ID][]domain.PhieuPhanAnh{
+		xaA: {
+			{MaTraCuu: "PA-CUA-TOI-1", LinhVuc: "rac-thai", CanBoXuLyID: maCanBo},
+			{MaTraCuu: "PA-CUA-TOI-2", LinhVuc: "", CanBoXuLyID: maCanBo},
+			{MaTraCuu: "PA-NGUOI-KHAC", LinhVuc: "rac-thai", CanBoXuLyID: "CB-00999"},
+			{MaTraCuu: "PA-CHUA-GIAO", LinhVuc: "rac-thai"},
+			{MaTraCuu: "PA-CAN-BO", LinhVuc: domain.LinhVucHanChe, CanBoXuLyID: maCanBo},
+		},
+		xaB: {
+			{MaTraCuu: "PA-XA-B", LinhVuc: "rac-thai", CanBoXuLyID: maCanBo},
+		},
+	}
+}
+
+func maCuaTrang(t *testing.T, than []byte) map[string]bool {
+	t.Helper()
+	ra := map[string]bool{}
+	for _, p := range docTrang(t, than).Items {
+		ra[p.Code] = true
+	}
+	return ra
+}
+
+// TestDanhSachGiaoChoToiChiTraPhieuGiaoChoMaCuaPhien — the filter reaching the store is the caller's
+// BUSINESS CODE, and the page holds only the petitions assigned to it.
+//
+// ĐỘT BIẾN: đổi `p.Ma` thành `p.ID` trong DanhSachPhieu và ca này ĐỎ.
+func TestDanhSachGiaoChoToiChiTraPhieuGiaoChoMaCuaPhien(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.read"))
+	soGiaoViec(m)
+
+	w := m.goiThan(t, http.MethodGet, hostA, duongDanhSach+"?scope=mine", canBoCuaXa(xaA), nil)
+	doiMa(t, w, http.StatusOK)
+
+	if m.danhSach.loc.CanBoXuLyID != maCanBo {
+		t.Fatalf("mã lọc xuống kho = %q, muốn MÃ cán bộ của phiên %q — cột `can_bo_xu_ly_id` giữ mã "+
+			"cán bộ, id nội bộ không khớp dòng nào", m.danhSach.loc.CanBoXuLyID, maCanBo)
+	}
+	co := maCuaTrang(t, w.Body.Bytes())
+	muon := map[string]bool{"PA-CUA-TOI-1": true, "PA-CUA-TOI-2": true}
+	if len(co) != len(muon) {
+		t.Errorf("trang = %v, muốn đúng %v", co, muon)
+	}
+	for ma := range muon {
+		if !co[ma] {
+			t.Errorf("thiếu phiếu %s giao cho chính người gọi", ma)
+		}
+	}
+}
+
+// TestDanhSachKhongScopeThiKhongLocTheoNguoiGiao — "Toàn xã" is unchanged: absent or `all` hands down
+// no assignee filter at all.
+func TestDanhSachKhongScopeThiKhongLocTheoNguoiGiao(t *testing.T) {
+	for ten, truyVan := range map[string]string{"vắng": "", "all": "?scope=all"} {
+		t.Run(ten, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("feedback.read"))
+
+			w := m.goiThan(t, http.MethodGet, hostA, duongDanhSach+truyVan, canBoCuaXa(xaA), nil)
+			doiMa(t, w, http.StatusOK)
+			if m.danhSach.loc.CanBoXuLyID != "" {
+				t.Errorf("toàn xã mà vẫn lọc theo người được giao %q", m.danhSach.loc.CanBoXuLyID)
+			}
+		})
+	}
+}
+
+// TestDanhSachMaCanBoTuTruyVanBiBoQua — a caller naming somebody else's code in the query must not
+// reach the store with it. Every spelling a probe would try, with and without `scope=mine`.
+func TestDanhSachMaCanBoTuTruyVanBiBoQua(t *testing.T) {
+	for ten, ca := range map[string]struct {
+		truyVan string
+		muonLoc string
+	}{
+		"assignee một mình":         {"?assignee=CB-00999", ""},
+		"scope=mine + assignee":     {"?scope=mine&assignee=CB-00999", maCanBo},
+		"scope=mine + can_bo":       {"?scope=mine&can_bo_xu_ly_id=CB-00999", maCanBo},
+		"assignee đứng trước scope": {"?assignee=CB-00999&scope=mine&ma=CB-00999", maCanBo},
+	} {
+		t.Run(ten, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("feedback.read"))
+			soGiaoViec(m)
+
+			w := m.goiThan(t, http.MethodGet, hostA, duongDanhSach+ca.truyVan, canBoCuaXa(xaA), nil)
+			doiMa(t, w, http.StatusOK)
+
+			if m.danhSach.loc.CanBoXuLyID != ca.muonLoc {
+				t.Fatalf("mã lọc xuống kho = %q, muốn %q — mã cán bộ lấy từ truy vấn là một người đọc "+
+					"sổ tự chọn xem việc của ai", m.danhSach.loc.CanBoXuLyID, ca.muonLoc)
+			}
+			if maCuaTrang(t, w.Body.Bytes())["PA-NGUOI-KHAC"] && ca.muonLoc != "" {
+				t.Error("phiếu giao cho CB-00999 lọt vào tab Giao cho tôi")
+			}
+		})
+	}
+}
+
+// TestDanhSachScopeKhongHopLeThi400 — `related` is undecided with the customer and refused with its
+// reason; anything else is refused as unknown. Neither reaches the store.
+func TestDanhSachScopeKhongHopLeThi400(t *testing.T) {
+	for _, truyVan := range []string{"?scope=related", "?scope=assigned", "?scope=MINE", "?scope=CB-00123"} {
+		t.Run(truyVan, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("feedback.read"))
+
+			w := m.goiThan(t, http.MethodGet, hostA, duongDanhSach+truyVan, canBoCuaXa(xaA), nil)
+
+			doiMa(t, w, http.StatusBadRequest)
+			if m.danhSach.goi != 0 {
+				t.Error("đã chạy truy vấn dù `scope` bị từ chối")
+			}
+		})
+	}
+}
+
+// TestDanhSachGiaoChoToiKhongCoMaCanBoThiTuChoi — FAIL CLOSED. Dropping the filter would answer the
+// "Giao cho tôi" tab with the whole commune register.
+func TestDanhSachGiaoChoToiKhongCoMaCanBoThiTuChoi(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.read"))
+
+	p := canBoCuaXa(xaA)
+	p.Ma = ""
+	w := m.goiThan(t, http.MethodGet, hostA, duongDanhSach+"?scope=mine", p, nil)
+
+	doiMa(t, w, http.StatusInternalServerError)
+	if m.danhSach.goi != 0 {
+		t.Error("đã đọc sổ dù phiên không có mã cán bộ — tab Giao cho tôi sẽ hiện cả sổ của xã")
+	}
+}
+
+// TestDanhSachGiaoChoToiVanLoaiLinhVucHanChe — the two filters compose: a `can-bo` petition assigned to
+// the caller still does not appear without `feedback.restricted`, and does with it.
+func TestDanhSachGiaoChoToiVanLoaiLinhVucHanChe(t *testing.T) {
+	t.Run("không có feedback.restricted", func(t *testing.T) {
+		m := dungMayChu(t)
+		m.capQuyen(t, authz.Perm("feedback.read"))
+		soGiaoViec(m)
+
+		w := m.goiThan(t, http.MethodGet, hostA, duongDanhSach+"?scope=mine", canBoCuaXa(xaA), nil)
+		doiMa(t, w, http.StatusOK)
+
+		if m.danhSach.loc.ChoPhepHanChe {
+			t.Error("scope=mine mở lĩnh vực hạn chế cho tài khoản không có feedback.restricted")
+		}
+		if maCuaTrang(t, w.Body.Bytes())["PA-CAN-BO"] {
+			t.Error("phiếu lĩnh vực can-bo lọt vào tab Giao cho tôi")
+		}
+	})
+	t.Run("có feedback.restricted", func(t *testing.T) {
+		m := dungMayChu(t)
+		m.capQuyen(t, authz.Perm("feedback.read"), QuyenHanChe)
+		soGiaoViec(m)
+
+		w := m.goiThan(t, http.MethodGet, hostA, duongDanhSach+"?scope=mine", canBoCuaXa(xaA), nil)
+		doiMa(t, w, http.StatusOK)
+
+		if !maCuaTrang(t, w.Body.Bytes())["PA-CAN-BO"] {
+			t.Error("không thấy phiếu can-bo giao cho mình dù có feedback.restricted")
+		}
+	})
 }
 
 // docTrang decodes one page of the register.

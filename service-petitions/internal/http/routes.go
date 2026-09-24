@@ -654,7 +654,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// is filed and no event is recorded. The decision is app.duocChamPhieuHanChe's, inside the
 	// transaction; the route permissions below are unchanged and no key was added.
 
-	// @summary  Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn
+	// @summary  Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên)
 	// @screen   09-phan-anh-nguoi-dan §2, §4
 	// `feedback.read` and NOT AnyAuthenticated, unlike the two catalogue reads above: this is a
 	// commune's register of what its citizens have reported — names, numbers, addresses and the free
