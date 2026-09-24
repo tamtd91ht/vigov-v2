@@ -532,7 +532,9 @@ Tên thùng là `server` với sáu dịch vụ Go, `web` với `web-admin`.
 ## 9. Ingress sinh từ hợp đồng REST
 
 Bảng định tuyến **được sinh ra** từ `kb/20-contracts/openapi.json`, nên "thêm tuyến trong Go"
-và "tuyến ấy đi tới đúng dịch vụ" không còn là hai việc rời nhau. 82 tuyến → **26 luật**.
+và "tuyến ấy đi tới đúng dịch vụ" không còn là hai việc rời nhau. Số tuyến và số luật hiện tại
+ghi ở đầu `base/mang/ingress.yaml`. Tệp ấy sinh cùng bảng nên không lệch được; con số chép vào
+đây thì đã lệch một lần.
 
 | Tệp | Vai trò |
 |---|---|
@@ -550,6 +552,24 @@ danh sách** — xoá sạch bảng sinh ra, và `kustomize` không kêu một t
 **Một tuyến không xác định được dịch vụ chủ thì bộ sinh DỪNG**, không mặc định về `identity`
 (luật 1: không có mặc định trên đường cách ly). `go test ./tools/ingress` đối chiếu tệp trên
 đĩa với hợp đồng: xoá một luật hay đổi một backend là **đỏ**.
+
+### Khi Ingress được dựng TAY (Rancher, `kubectl edit`) thay vì `kubectl apply -k`
+
+Đội hạ tầng hỏi "cổng của từng service" ngày 24/09/2026 để tự add Ingress. Không có bảng cổng
+nào ở đây, có chủ ý. Cổng nằm trong `base/<đơn vị>/service.yaml`, còn tuyến nằm trong
+`base/mang/ingress.yaml`. Một bảng chép tay sẽ đúng tới lần `make kb` kế tiếp rồi thôi.
+
+| Điều | Vì sao |
+|---|---|
+| **Ưu tiên `kubectl apply -k overlays/<mt>`** | Chỉ lối này mang theo đúng bảng vừa sinh. Dựng tay nghĩa là **mỗi lần hợp đồng đổi, có người phải nhớ chép lại**, và tuyến bị quên không đỏ: nó rơi vào luật bắt hết `/` → `web-admin` và trả 404 của web |
+| **Backend trỏ theo TÊN cổng** (`rest` cho dịch vụ Go, `http` cho `web-admin`) | Đó là cách tệp sinh viết. Số cổng đổi trong `service.yaml` thì tên vẫn đúng |
+| **Không bao giờ đưa cổng `grpc` (9090) ra Ingress** | gRPC nội cụm không TLS, không xác thực. NetworkPolicy là biên duy nhất (mục 8). Một luật Ingress tới 9090 là mở danh bạ xã của toàn hệ thống ra Internet |
+| **Không viết lại `Host`** (không `upstream-vhost`, không rewrite host) | Xã được phân giải từ `Host` ở rìa ngoài cùng (luật 1). Host bị đổi thì mọi yêu cầu nhận 404, hoặc tệ hơn, rơi vào đúng MỘT xã |
+| **Một luật ký tự đại diện cho mọi xã**, không một luật mỗi xã | Thêm xã là thêm DNS + một hàng ở `platform`, không sửa Ingress (mục 8) |
+| **Secret TLS theo đúng môi trường** | `vigov-staging-tls` cho staging, `vigov-wildcard-tls` cho prod (mục 4). Nhầm tên thì Ingress vẫn lên, chỉ HTTPS đứt |
+| **`platform` không có luật nào** | Nó có cổng `rest` nhưng hợp đồng chưa có tuyến công khai nào của nó. Thêm luật cho nó là mở một cổng không ai khai |
+
+Đơn vị chưa có manifest thì cũng chưa có gì để add, xem cuối mục 5.
 
 ## 10. Chưa được chứng minh — đọc trước khi bấm
 
