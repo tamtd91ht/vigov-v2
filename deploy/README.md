@@ -9,6 +9,7 @@ thứ duy nhất chạm cụm.**
 | `base/` | Hình dạng của từng đơn vị — không namespace, không thẻ ảnh |
 | `overlays/<mt>/` | Namespace, cấu hình theo môi trường. Thẻ ảnh ở đây **chỉ dùng cho lần cài đầu** |
 | `Jenkinsfile` | Job triển khai — nơi duy nhất gọi `kubectl` |
+| mục 11 (cuối tệp này) | Cài bằng **giao diện Rancher**: chỉ những chỗ khác `kubectl`, và ba điều kiểm trước (controller Ingress, CNI, danh tính kubeconfig) |
 
 ## 0. Đọc trước khi bấm
 
@@ -575,9 +576,214 @@ nào ở đây, có chủ ý. Cổng nằm trong `base/<đơn vị>/service.yaml
 
 | Việc | Trạng thái |
 |---|---|
-| 10 job Jenkins | **`vigov-gate` đã chạy lần đầu 24/09/2026 và đổ ở `make check`**, vì `python` trên máy chủ là 2.7 (`python3` là 3.6.8; đã sửa: stage đầu tự chọn `python3.9`, bản 3.9.19 cài song song ngày 24/09/2026). **Chưa có lượt nào xanh.** Chín job còn lại chưa chạy lần nào. Máy chủ đã chứng minh có `go`, `buf`, `node`, `npm`, `make`, `gcc`; `docker` được chứng minh qua lượt chạy 21/09/2026 của kho `vihat-miniapp` |
+| 10 job Jenkins | **Người dùng báo ngày 24/09/2026: `vigov-gate` đã xanh, và các job đóng ảnh đã đẩy ảnh lên Harbor.** Lượt `vigov-gate` phải qua sáu vòng sửa (Python 2.7/3.6 → tự chọn `python3.9`; ca hook phụ thuộc đĩa; `web-admin@tmp/`; `npm ci` chỉ cho một app); lịch sử ở sổ `_chung/jenkins-chay-that`. **`vigov-deploy` chưa chạm cụm lần nào**: cụm chưa có namespace (mục 4 chưa làm). `golangci-lint` chưa có trên máy chủ, nên lint Go bị bỏ qua |
 | Cụm mà kubeconfig trỏ tới | **chưa ai chạy `kubectl` với nó.** Đường dẫn `/u01/rancher/rancher-vigov.yaml` đã được chủ dự án xác nhận, nhưng lượt `vigov-deploy` đầu tiên vẫn là lần đầu biết nó mở được cụm nào — đọc dòng `current-context` ở stage đầu |
 | `deploy/Jenkinsfile` | **chưa máy nào phân tích cú pháp.** Không có Jenkins ở máy trạm, và `tools/check_build.py` chỉ soi 8 Jenkinsfile của dịch vụ |
 | Manifest qua API server thật | **chưa.** `kubectl kustomize` chỉ chứng minh YAML dựng được, không chứng minh máy chủ chấp nhận. Mục 4 là lần đầu biết |
 | Redis ở prod | **chưa có DSN thật.** Thiếu nó thì sáu đường dẫn `POST` ở mục 3 trả 503 trong khi pod xanh |
 | Đóng êm khi `SIGTERM` | **xong 22/09/2026** — cả sáu dịch vụ Go `signal.Notify` + `srv.Shutdown`, `terminationGracePeriodSeconds: 45` > ngữ cảnh 20 giây |
+
+## 11. Cài bằng giao diện Rancher
+
+Mục này **không thay** mục 4–7: quy trình, thứ tự, mọi tên Secret, mọi key và hình dạng giá trị
+vẫn ở đó. Ở đây chỉ có những chỗ **Rancher khác `kubectl`**, hoặc vì giao diện làm thay một
+bước, hoặc vì giao diện làm gãy một thứ vốn đúng khi đi bằng dòng lệnh.
+
+**Không có manifest riêng cho Rancher**, có chủ ý. Mọi thứ Rancher nhập đều render từ
+`overlays/<mt>/`. Một bản YAML riêng cho Rancher là bản sao thứ hai, và nó sẽ lệch.
+
+Giả định: Rancher v2.6 trở lên (giao diện Cluster Explorer). Chưa ai kiểm cụm thật đang chạy bản
+nào, nên tên menu có thể lệch đôi chút. Các lệnh `kubectl` bên dưới thì không phụ thuộc bản.
+
+**Làm cho `vigov-staging` trước, rồi lặp lại cho `vigov-prod`** (mục 0).
+
+### 11.0 Ba điều phải kiểm TRƯỚC khi nhập bất cứ thứ gì
+
+Cả ba đều **đúng trên giấy và gãy trên Rancher**, và cả ba gãy mà không có gì đỏ.
+
+#### 11.0.1 Ingress controller chạy trong namespace nào
+
+`base/mang/netpol.yaml` chỉ cho REST (8080/3000) đi vào **từ namespace `ingress-nginx`**.
+Đó là nơi bản cài ingress-nginx thông thường đặt controller. Cụm **RKE2** do Rancher dựng thì
+cài sẵn controller `rke2-ingress-nginx` trong **`kube-system`**.
+
+```sh
+kubectl get pods -A -o wide | grep -i ingress
+kubectl get ingressclass
+```
+
+| Kết quả | Nghĩa là |
+|---|---|
+| controller ở namespace `ingress-nginx` | Đúng như manifest. Đi tiếp |
+| controller ở `kube-system` (RKE2) | **DỪNG.** NetworkPolicy chặn mọi yêu cầu từ controller. Ingress trả 502/504 trong khi pod xanh, probe xanh |
+| `ingressclass` không có tên `nginx` | **DỪNG.** `ingress.yaml` khai `ingressClassName: nginx`, nên không controller nào nhận nó |
+
+Gặp dòng thứ hai thì **đừng sửa NetworkPolicy trong giao diện Rancher**. Hãy báo đội phát triển
+sửa `netpol.yaml` trong kho. Mở rộng `namespaceSelector` thành cả `kube-system` là cho **mọi
+pod hệ thống** gọi vào cổng REST. Cách hẹp hơn là thêm `podSelector` theo nhãn của đúng pod
+controller. Chọn cách nào là quyết định của người sở hữu cụm, không phải của người bấm.
+
+#### 11.0.2 CNI có thực thi NetworkPolicy không
+
+NetworkPolicy là **biên duy nhất** giữ cổng gRPC 9090 (mục 8). Nếu CNI không
+thực thi nó, `kubectl apply` vẫn thành công, đối tượng vẫn hiện trong Rancher, còn 9090 thì mở
+cho mọi pod trong cụm.
+
+```sh
+kubectl -n kube-system get pods | grep -Ei 'canal|calico|cilium|flannel'
+```
+
+| Thấy | Nghĩa là |
+|---|---|
+| `canal` · `calico` · `cilium` | Có thực thi. Đi tiếp |
+| **chỉ** `flannel` | **DỪNG.** Flannel một mình không thực thi NetworkPolicy. Báo người sở hữu cụm |
+
+#### 11.0.3 Kubeconfig của Jenkins mang danh tính của ai
+
+Job `vigov-deploy` đọc `/u01/rancher/rancher-vigov.yaml` (mục 2, Credentials).
+Nút **Download KubeConfig** của Rancher cấp một kubeconfig mang **quyền của người bấm tải**, thường
+là cluster-owner. Như vậy là vượt xa `cluster/rbac-jenkins.yaml`, tệp cố ý không cho Jenkins
+quyền cluster-admin và không cho quyền trên `secrets`.
+
+```sh
+KUBECONFIG=/u01/rancher/rancher-vigov.yaml kubectl auth whoami            # k8s 1.27+
+KUBECONFIG=/u01/rancher/rancher-vigov.yaml kubectl auth can-i get secrets -n vigov-staging
+```
+
+Nếu `can-i get secrets` trả `yes` thì kubeconfig đang **rộng hơn thiết kế**.
+
+⚠ **Chỗ này hiện CHƯA có lời giải trong kho. Đừng tự chọn.** `rbac-jenkins.yaml` tạo **hai**
+ServiceAccount, mỗi namespace một cái, còn `deploy/Jenkinsfile` chỉ có **một** hằng
+`KUBECONFIG` cho cả hai môi trường. Token của một ServiceAccount chỉ vào được namespace của nó,
+nên thiết kế quyền hẹp chưa chạy được với một tệp duy nhất. Đây là một quyết định của chủ dự án:
+hai kubeconfig theo `MT`, hoặc một ServiceAccount có RoleBinding ở cả hai namespace. Cho tới khi
+có quyết định, ghi lại kubeconfig đang dùng mang danh tính nào.
+
+---
+
+### 11.1 Namespace và RBAC
+
+Rancher → cụm ViGov → nút **Import YAML** (biểu tượng mũi tên lên, góc trên bên phải) → dán nội
+dung tệp → **Import**.
+
+| Thứ tự | Tệp | Ghi chú |
+|---|---|---|
+| 1 | `cluster/namespace.yaml` | Tạo `vigov-staging` và `vigov-prod` |
+| 2 | `cluster/rbac-jenkins.yaml` | ServiceAccount + Role + RoleBinding ở cả hai namespace |
+
+**Project của Rancher.** Namespace nhập bằng YAML rơi vào mục **Not in a Project**. Nếu đội dùng
+phân quyền theo Project thì chuyển hai namespace vào Project (menu ⋮ của namespace → **Move**).
+**Không** tạo namespace mới bằng nút Create của Rancher: tên khác một ký tự là overlay trỏ vào
+một namespace không tồn tại.
+
+⚠ **Project có Resource Quota thì Rancher bắt mọi container khai `limits`** cho đúng những tài
+nguyên quota giới hạn. Deployment trong kho khai `limits.memory` nhưng **không khai giới hạn
+CPU**. Một quota có `limits.cpu` sẽ làm pod bị từ chối ngay ở bước admission, và lỗi chỉ hiện
+trong Events của ReplicaSet. Nếu Project có quota CPU, báo đội phát triển thêm giới hạn vào
+`base/*/deployment.yaml`, đừng sửa trong giao diện.
+
+---
+
+### 11.2 Secret — tạo trong giao diện
+
+**Danh sách Secret, tên, key: bảng "Đối tượng k8s phải tạo" ở mục 3.** Hình dạng
+giá trị và cách sinh khoá ở ngay dưới bảng ấy. Tệp này không chép lại danh sách.
+
+Rancher → cụm → **Storage → Secrets → Create**. Chọn **đúng namespace** ở ô Namespace của form,
+không dựa vào bộ lọc namespace trên thanh trên cùng.
+
+| Secret | Kiểu chọn trong Rancher | Lưu ý riêng của giao diện |
+|---|---|---|
+| `harbor-vigov` | **Registry** → Custom → `harbor.omicrm.services` | Tên phải đúng từng ký tự: cả 7 Deployment tham chiếu nó trong `imagePullSecrets` |
+| `bi-mat-<dịch vụ>` × 6 | **Opaque** | Mỗi dòng Key/Value là một biến. **Key viết GẠCH DƯỚI** (`DATABASE_DSN`), vì manifest dùng `envFrom`. Key gạch ngang bị k8s bỏ qua im lặng (mục 3) |
+| TLS | **TLS Certificate** | Dán `fullchain.pem` vào Certificate, `privkey.pem` vào Private Key. **Tên theo môi trường**: `vigov-staging-tls` hoặc `vigov-wildcard-tls` |
+
+- **KHÔNG tạo ConfigMap `cau-hinh-chung`.** Kustomize sinh nó kèm hậu tố băm
+  (`cau-hinh-chung-8t59tmkhc4` ở staging, `cau-hinh-chung-679b259276` ở prod, tính ngày
+  24/09/2026). Một ConfigMap tạo tay trùng tên là một đối tượng không Deployment nào đọc.
+- Người có quyền xem Secret trong Rancher **đọc được giá trị** bằng nút hiện. Giới hạn ai có
+  quyền ấy trên hai namespace này. Trong đó có DSN CSDL chứa dữ liệu công dân (Nghị định 13).
+- Thay giá trị một Secret **không** khởi động lại pod. Pod chỉ đọc `envFrom` lúc khởi động, nên
+  phải chạy lại job `vigov-deploy` cho dịch vụ ấy.
+
+**Xanh khi:** namespace có đủ `harbor-vigov`, Secret TLS đúng tên môi trường, và **sáu**
+`bi-mat-*`. `web-admin` không có Secret riêng (mục 4).
+
+---
+
+### 11.3 Nhập manifest — render trước, KHÔNG nhập thư mục kho
+
+**Import YAML của Rancher không chạy kustomize.** Dán `overlays/staging/kustomization.yaml`
+vào đó là nhập một tệp chỉ dẫn, không phải tài nguyên. Render ở máy trạm trước:
+
+```sh
+kubectl kustomize deploy/overlays/staging > vigov-staging.yaml
+kubectl kustomize deploy/overlays/prod    > vigov-prod.yaml
+```
+
+Đã chạy thử ngày 24/09/2026 với kubectl v1.29.1: mỗi overlay ra **22 đối tượng**, gồm 7
+Deployment · 7 Service · 1 ConfigMap · 1 Ingress · 4 NetworkPolicy · 2 PodDisruptionBudget. Số
+khác đi là overlay đã đổi; hãy đọc lại overlay trước khi nhập.
+
+- **Không commit tệp render.** Nó sinh ra từ overlay, nên một bản nằm trong kho là bản sao sẽ lệch.
+- **Không sửa tệp render.** Có gì phải khác (dải mạng CSDL ở `base/mang/netpol.yaml:76`,
+  NetworkPolicy của mục 11.0.1) thì sửa trong kho rồi render lại. Sửa trên tệp render là sửa một
+  thứ không ai review và lần render sau sẽ mất.
+- Trước lần nhập **đầu tiên**, kiểm `netpol.yaml:76`. Dòng ấy đang là `10.0.0.0/8` kèm chú thích
+  `← SỬA`: đó phải là dải mạng thật của PostgreSQL/Redis. Sai dải thì pod không kết nối được CSDL
+  và chết ở bước di trú.
+
+Rancher → **Import YAML** → chọn namespace `vigov-staging` → dán `vigov-staging.yaml` → **Import**.
+
+**Kết quả đúng:** bảy pod ở trạng thái **`ImagePullBackOff`**, vì thẻ ảnh là
+`CHUA-TRIEN-KHAI-LAN-NAO`. **Đó là thiết kế, không phải lỗi** (mục 4). Thẻ thật
+do bước sau đặt.
+
+---
+
+### 11.4 Đặt ảnh thật — CHỈ bằng job `vigov-deploy`
+
+Bảy lượt, đúng thứ tự ở mục 5: `platform` → `identity` → bốn dịch vụ còn lại →
+`web-admin`. Thẻ là 12 ký tự hex của commit đã đóng ảnh (cột mô tả của lượt build trong Jenkins,
+dạng `anh-tu-commit:<thẻ>`).
+
+**Không đổi ảnh bằng giao diện Rancher** (Edit Config → ô Container Image, hay Redeploy). Job làm
+ba việc mà giao diện không làm:
+
+| Việc | Mất gì nếu đổi tay |
+|---|---|
+| Kiểm ảnh **có thật** trong Harbor trước khi chạm cụm | Gõ sai một ký tự thì `ImagePullBackOff` trên prod |
+| Ghi **ai bấm** và thẻ nào vào lịch sử build | Câu "bản nào chạy lúc đó, ai đưa lên" không còn trả lời được. Với hồ sơ hành chính có giá trị pháp lý, đó là câu phải trả lời được |
+| `rollout undo` tự động khi `rollout status` đỏ | Bản hỏng ở lại cho tới khi có người để ý |
+
+---
+
+### 11.5 Sau khi đã chạy — hai cái bẫy riêng của Rancher
+
+**1. Không "Import YAML" lại để cập nhật.** Tệp render luôn mang thẻ
+`CHUA-TRIEN-KHAI-LAN-NAO`. Nhập lại lên namespace đang chạy là **kéo cả bảy dịch vụ về
+`ImagePullBackOff` cùng lúc**. Quy trình sửa manifest an toàn ở mục 7: ghi thẻ
+đang chạy, áp, đặt lại thẻ.
+
+**2. Không sửa Deployment, Service, Ingress, NetworkPolicy trong giao diện.** Bản sửa tay không
+nằm trong kho. Hoặc lần áp sau xoá nó mà không ai biết, hoặc nó sống mãi mà không ai review.
+Ngoại lệ duy nhất là **Secret**: chúng sống trong cụm, không trong kho, theo thiết kế
+(luật 8).
+
+Kiểm sau khi lên: mục 6. Riêng phép kiểm **hai `Host` khác nhau, cùng một tuyến,
+dữ liệu không giao nhau** là phép kiểm cách ly hai xã. Chạy nó ở staging trước khi đụng prod.
+
+---
+
+### 11.6 Triệu chứng hay gặp trên Rancher
+
+| Thấy | Nguyên nhân thường gặp | Xem |
+|---|---|---|
+| Ingress trả 502/504, pod xanh | NetworkPolicy không nhận controller (RKE2 → `kube-system`) | mục 11.0.1 |
+| Ingress có trong Rancher nhưng không địa chỉ nào trả lời | `ingressClassName: nginx` không khớp controller nào | mục 11.0.1 |
+| `ImagePullBackOff` sau khi đã chạy `vigov-deploy` | Thiếu `harbor-vigov`, hoặc tạo ở sai namespace | mục 11.2 |
+| `ImagePullBackOff` đồng loạt cả bảy | Ai đó vừa Import YAML lại | mục 11.5 |
+| `CrashLoopBackOff`, log ghi `thiếu biến môi trường bắt buộc: DATABASE_DSN` dù Secret có key ấy | Key viết gạch ngang, hoặc có khoảng trắng thừa trong ô Key của form | mục 11.2 |
+| Pod không được tạo, Events ghi `must specify limits.cpu` | Resource Quota của Project | mục 11.1 |
+| HTTPS lỗi chứng thư, HTTP vẫn chạy | Secret TLS sai tên môi trường | mục 11.2 |
+| Mọi xã trả 404 | `platform` chưa lên, hoặc xã chưa có hàng trong sổ đăng ký của `platform` | mục 5–6 |
