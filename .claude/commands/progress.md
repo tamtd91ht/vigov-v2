@@ -48,6 +48,7 @@ migrations, cleaning git history, sweeping a whole class of hooks.
 | `bang_chung` | `file:line`, or a command that was run and its result. **Mandatory for `xong`** |
 | `no_confirm` | Question **numbers** from `kb/00-foundation/open-questions.json`. A link, never a copy — and never a question already `DECIDED` |
 | `tiep_theo` | The next concrete step, naming the file to open |
+| `menu` *(optional)* | Slug, or list of slugs, of `docs/ui-ux/NN-<slug>.md`. A link to the spec, checked by `progress_guard` R8 and `tools/tien_do.py`. It is the second axis: `tien-do.md` "Theo menu" gathers every module's items for one menu, and `python tools/tien_do.py --menu "<tên>"` prints one — what `/develop-*` reads first |
 
 **`treo` vs blocked:** `treo` means *we chose not to do it*. Blocked is `no_confirm` being
 non-empty — derived from the link, never a separate flag, for the same reason rule 10 derives

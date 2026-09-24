@@ -91,12 +91,15 @@ def ids_tren_dia(path: str) -> list[str]:
 
 
 TAIL = [
-    "  Lược đồ một mục — năm khoá, không hơn:",
+    "  Lược đồ một mục — năm khoá bắt buộc:",
     "",
     '    {"id": "<kebab>", "viec": "<một dòng>",',
     '     "trang_thai": "chua_lam|dang_lam|xong|treo",',
     '     "bang_chung": "<file:line hoặc lệnh đã chạy — BẮT BUỘC khi xong>",',
     '     "no_confirm": [<id câu hỏi còn OPEN>], "tiep_theo": "<bước kế>"}',
+    "",
+    '  Khoá tuỳ chọn thứ sáu: "menu": "<slug>" hoặc ["<slug>", …] — slug của',
+    "  docs/ui-ux/NN-<slug>.md. Gom mục của nhiều module về một menu (`/develop-*`).",
     "",
     "  → Thủ tục: `/progress` · Luật 9: .claude/rules/critical/9-knowledge-single-source.md",
 ]
@@ -198,6 +201,16 @@ def kiem_ghi(data: dict) -> None:
                 loi.append(f"{nhan}: câu #{qi} không có trong open-questions.json")
             elif tt_cau.get(qi) == "DECIDED":
                 loi.append(f"{nhan}: câu #{qi} đã DECIDED — không còn chặn được gì")
+        # R8 — `menu` (tuỳ chọn) là LIÊN KẾT tới một đặc tả có thật, không phải nhãn tự đặt.
+        # Nó là trục để `tien_do.py` gom mục của NHIỀU module về một menu; một slug gõ sai thì
+        # mục ấy lặng lẽ rơi khỏi mục menu của nó, và phiên sau chạy `/develop-*` không thấy nó.
+        if "menu" in x:
+            ds = x["menu"] if isinstance(x["menu"], list) else [x["menu"]]
+            cac = c.cac_menu(root)
+            for s in ds:
+                if not isinstance(s, str) or (cac and s not in cac):
+                    loi.append(f"{nhan}: `menu` '{s}' không phải slug nào trong {c.MENU_DIR}/ "
+                               f"— có: {', '.join(sorted(cac))}")
 
     if loi:
         c.block(HOOK, f"tiến độ sai lược đồ — {rel}", loi,

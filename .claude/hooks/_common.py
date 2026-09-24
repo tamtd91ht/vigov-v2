@@ -469,3 +469,55 @@ def warn(hook: str, title: str, details: list[str], tail: list[str],
     print("\n".join(msg), file=sys.stderr)
     log_guard(hook, tool, path, title, len(details))
     sys.exit(2)
+
+
+# --------------------------------------------------------------------------
+# Menu catalogue — the `menu` key of a ledger item, and `/develop-* <menu>`
+# --------------------------------------------------------------------------
+#
+# WHY THE CATALOGUE IS `docs/ui-ux/NN-<slug>.md` AND NOT A LIST WRITTEN HERE: those files ARE the
+# menus — each one is the customer's spec of one business area, and a menu without one has no
+# agreed behaviour to build against. A list in code would be a second copy that drifts the day a
+# spec is added (rule 9). The two files that are not menus are named below, with the reason.
+MENU_DIR = "docs/ui-ux"
+KHONG_PHAI_MENU = {
+    "tong-quan-he-thong",       # 00 — system overview, spans every menu
+    "phu-luc-giao-dien-chung",  # 15 — shared UI appendix, spans every menu
+}
+
+
+def khong_dau(s: str) -> str:
+    """'Nhiệm vụ' -> 'nhiem-vu'. The form a menu is compared in, typed with or without accents."""
+    import unicodedata
+    s = (s or "").replace("đ", "d").replace("Đ", "D")
+    s = "".join(ch for ch in unicodedata.normalize("NFD", s) if unicodedata.category(ch) != "Mn")
+    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
+
+
+def cac_menu(root: str | None = None) -> dict[str, str]:
+    """slug -> spec path relative to the repo root. Empty when the spec directory is absent."""
+    root = root or project_root()
+    ra: dict[str, str] = {}
+    try:
+        for ten in sorted(os.listdir(os.path.join(root, MENU_DIR))):
+            m = re.match(r"^\d{2}-([a-z0-9-]+)\.md$", ten)
+            if m and m.group(1) not in KHONG_PHAI_MENU:
+                ra[m.group(1)] = f"{MENU_DIR}/{ten}"
+    except Exception:
+        pass
+    return ra
+
+
+def tim_menu(ten: str, cac: dict[str, str]) -> list[str]:
+    """Candidate slugs for what a person typed. Exactly one = resolved; zero or several = ASK.
+
+    Exact slug first, then every slug that contains the typed words as whole segments — so
+    'Phản ánh' finds `phan-anh-nguoi-dan`, but 'an' does not find every slug with an 'an' in it.
+    Never 'closest match': a guessed menu is work done on the wrong business area.
+    """
+    q = khong_dau(ten)
+    if not q:
+        return []
+    if q in cac:
+        return [q]
+    return [s for s in cac if f"-{q}-" in f"-{s}-"]

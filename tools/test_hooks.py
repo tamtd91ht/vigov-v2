@@ -773,6 +773,14 @@ CASES = [
      td("core", {"id": "ca-kiem-thu-rao", "viec": "ca thử rào",
                  "trang_thai": "chua_lam", "bang_chung": "",
                  "no_confirm": [], "tiep_theo": "—"})),
+    # `menu` là liên kết tới docs/ui-ux/, không phải nhãn tự đặt: gõ sai slug thì mục rơi khỏi
+    # mục menu của nó và `/develop-*` không bao giờ thấy nó nữa.
+    ("progress_guard", "`menu` không phải đặc tả nào", BLOCK,
+     td("core", {"id": "ca-kiem-thu-rao", "viec": "ca thử rào", "trang_thai": "chua_lam",
+                 "bang_chung": "", "menu": "quan-ly-nhiem-vu"})),
+    ("progress_guard", "`menu` là slug có thật, dạng danh sách", PASS,
+     td("core", {"id": "ca-kiem-thu-rao", "viec": "ca thử rào", "trang_thai": "chua_lam",
+                 "bang_chung": "", "menu": ["nhiem-vu", "bien-ban-hop"]})),
     ("progress_guard", "mã thường không liên quan tới tầng tiến độ", PASS,
      w("service-comms/internal/app/zns.go", "func Send(ctx context.Context) error { return nil }")),
 
@@ -861,6 +869,21 @@ WORKFLOW_CASES = [
     (["web-admin/src/app/nhan.tsx"], set(), False, "một tệp giao diện — để lý do N/A tự nói"),
     (["tools/check_brain.py"], set(), False, "một tệp công cụ, ngoài vùng rủi ro"),
     (["kb/10-decisions/0033-x.md"], set(), False, "tài liệu, không phải mã"),
+]
+
+
+# ---- pure-function cases: which menu a person MEANT (`/develop-* <menu>`) -----------------
+#
+# Resolved against the REAL docs/ui-ux/ on disk. An empty catalogue must go red here, not turn
+# every "must find nothing" case green for the wrong reason.
+TIM_MENU_CASES = [
+    ("Nhiệm vụ", ["nhiem-vu"], "có dấu, đúng nhãn menu"),
+    ("nhiem vu", ["nhiem-vu"], "không dấu"),
+    ("Phản ánh", ["phan-anh-nguoi-dan"], "một phần tên, trọn từ"),
+    ("Văn bản & Đơn thư", ["van-ban-don-thu"], "ký tự đặc biệt trong nhãn"),
+    ("an", [], "mẩu chữ — KHÔNG được khớp mọi slug chứa 'an'"),
+    ("Người dùng", [], "không có menu ấy — phải hỏi, không đoán"),
+    ("Tổng quan hệ thống", [], "tổng quan không phải menu"),
 ]
 
 
@@ -1132,6 +1155,19 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         if not ok:
             sai.append((str(tep), nhan, mong, duoc))
 
+    import _common as cm  # noqa: E402
+    cac = cm.cac_menu(ROOT)
+    if len(cac) < 10:
+        print(f"  FAIL  [DANH MỤC] _common.cac_menu            chỉ đọc được {len(cac)} menu từ docs/ui-ux/")
+        sai.append(("cac_menu", "danh mục rỗng", True, False))
+    for ten, mong, nhan in TIM_MENU_CASES:
+        duoc = cm.tim_menu(ten, cac)
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        print(f"{mark} [{'KHỚP' if mong else 'HỎI '}] {'_common.tim_menu':24s} {nhan}")
+        if not ok:
+            sai.append((ten, nhan, mong, duoc))
+
     for duong, mong, nhan in DUOC_QUET_CASES:
         duoc = dg.duoc_quet(duong)
         ok = duoc == mong
@@ -1186,6 +1222,7 @@ if __name__ == "__main__":
     # thiếu bảy ca. Một bộ đếm thiếu không làm ca nào đỏ — nó chỉ làm người đọc tưởng mình
     # biết kho đã canh bao nhiêu, và sổ `_chung` đã một lần ghi nhầm vì đúng chuyện này.
     tong = (len(CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(WORKFLOW_CASES)
+            + len(TIM_MENU_CASES)
             + len(DUOC_QUET_CASES)
             + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES)
             + len(VET_ACTOR_CASES))

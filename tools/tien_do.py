@@ -30,6 +30,10 @@ for _s in (sys.stdout, sys.stderr):
         pass
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# The menu catalogue and the name resolver live in ONE place, shared with progress_guard — two
+# resolvers would be two answers to "which menu did the person mean".
+sys.path.insert(0, os.path.join(ROOT, ".claude", "hooks"))
+import _common as c  # noqa: E402
 NGUON = os.path.join(ROOT, "kb", "90-ephemeral", "tien-do")
 RA = os.path.join(ROOT, "kb", "90-ephemeral", "tien-do.md")
 
@@ -90,11 +94,70 @@ def sap_xep(muc: list[dict]) -> list[dict]:
                   if m.get("trang_thai") in TRANG_THAI else 99)
 
 
+def menu_cua(x: dict) -> list[str]:
+    v = x.get("menu")
+    if v is None:
+        return []
+    return v if isinstance(v, list) else [v]
+
+
+def theo_menu(mods: list[dict]) -> dict[str, list[tuple[str, dict]]]:
+    """slug -> [(module, item)] — the one view a menu has, gathered across every module."""
+    ra: dict[str, list[tuple[str, dict]]] = {}
+    for m in mods:
+        for x in m.get("muc", []):
+            for s in menu_cua(x):
+                ra.setdefault(s, []).append((m["module"], x))
+    return ra
+
+
+def bang_menu(slug: str, spec: str, dong: list[tuple[str, dict]]) -> list[str]:
+    L = [f"### `{slug}` — [{spec}]({'../../' + spec})", ""]
+    if not dong:
+        return L + ["_Chưa có mục nào gắn `menu` này._", ""]
+    L += ["| Module | Mục | Trạng thái | Nợ | Kế tiếp |", "|---|---|---|---|---|"]
+    for mod, x in sorted(dong, key=lambda d: TRANG_THAI.index(d[1].get("trang_thai", "chua_lam"))
+                         if d[1].get("trang_thai") in TRANG_THAI else 99):
+        nc = " ".join(f"#{q}" for q in (x.get("no_confirm") or [])) or "—"
+        L.append(f"| `{mod}` | `{x.get('id', '?')}` — {x.get('viec', '')} | "
+                 f"{NHAN.get(x.get('trang_thai', ''), '?')} | {nc} | {x.get('tiep_theo') or '—'} |")
+    return L + [""]
+
+
+def tra_menu(ten: str, mods: list[dict]) -> int:
+    """`--menu "<tên>"`: print ONE menu's view to stdout, write nothing. Exit 2 when the name does
+    not resolve to exactly one menu — the caller must ask the person, never pick."""
+    cac = c.cac_menu(ROOT)
+    ung = c.tim_menu(ten, cac)
+    if len(ung) != 1:
+        print(f"[tien_do] '{ten}' khớp {len(ung)} menu: {', '.join(ung) or '—'}", file=sys.stderr)
+        print("  Có: " + ", ".join(cac), file=sys.stderr)
+        return 2
+    s = ung[0]
+    print("\n".join(bang_menu(s, cac[s], theo_menu(mods).get(s, []))))
+    return 0
+
+
 def main() -> None:
     mods, loi = nap()
     if loi:
         for x in loi:
             print(f"[tien_do] LỖI {x}", file=sys.stderr)
+        sys.exit(1)
+
+    if len(sys.argv) == 3 and sys.argv[1] == "--menu":
+        sys.exit(tra_menu(sys.argv[2], mods))
+
+    # `menu` là LIÊN KẾT tới docs/ui-ux/, kiểm ở đây vì cùng lý do `no_confirm` được kiểm bên
+    # dưới: một lần ghi sổ qua `Bash` không đi qua progress_guard.
+    cac_menu = c.cac_menu(ROOT)
+    sai_menu = [f"  {m['module']}/{x.get('id')}: `menu` {s!r}"
+                for m in mods for x in m.get("muc", []) for s in menu_cua(x)
+                if not isinstance(s, str) or s not in cac_menu]
+    if sai_menu:
+        print("[tien_do] ĐỎ — `menu` phải là slug của docs/ui-ux/NN-<slug>.md:", file=sys.stderr)
+        print("\n".join(sai_menu), file=sys.stderr)
+        print("  Có: " + ", ".join(cac_menu), file=sys.stderr)
         sys.exit(1)
 
     trang_thai_cau = cau_hoi_mo()
@@ -186,6 +249,21 @@ def main() -> None:
             tt = trang_thai_cau.get(q, "KHÔNG CÓ TRONG open-questions.json")
             L.append(f"| #{q} | {tt} | {' · '.join(sorted(no[q]))} |")
         L.append("")
+
+    # Theo menu — cùng các mục ấy, cắt theo trục thứ hai. Một menu ("Nhiệm vụ") trải trên nhiều
+    # module (web-admin, service-petitions…), nên sổ theo module không trả lời được "menu này còn
+    # nợ gì". Chỉ in menu đã có mục gắn — mười bốn đề mục rỗng là thứ làm người ta thôi đọc.
+    tm = theo_menu(mods)
+    if tm:
+        L.append("## Theo menu")
+        L.append("")
+        L.append("Cùng các mục bên dưới, gom theo khoá `menu`. Luồng nghiệp vụ và tác nhân của menu ở")
+        L.append("đặc tả được trỏ tới — tệp này không chép lại. Tra một menu: "
+                 "`python tools/tien_do.py --menu \"<tên>\"`.")
+        L.append("")
+        for s in cac_menu:
+            if s in tm:
+                L.extend(bang_menu(s, cac_menu[s], tm[s]))
 
     for m in sorted(mods, key=lambda x: x["module"]):
         muc = sap_xep(m.get("muc", []))

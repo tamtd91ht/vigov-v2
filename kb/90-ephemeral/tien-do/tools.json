@@ -98,6 +98,14 @@
       "bang_chung": "tools/check_brain.py — regex looks_agent thêm `scout`, kèm lý do vì sao không dùng reviewer/expert. Kiểm SỐNG: `python tools/check_brain.py` báo '13 agents · 13 routed' (trước khi thêm hậu tố, hai tệp scout sẽ hiện là 'never routed to'). make check EXIT=0 ngày 2026-09-24.",
       "no_confirm": [],
       "tiep_theo": "Ngân sách always-loaded đang ở ~26987/27000 token (99%) sau khi CLAUDE.md trỏ tới ROUTING §0 — lần thêm kế tiếp vào CLAUDE.md hay rule phải BỚT một thứ khác trước, không nâng trần."
+    },
+    {
+      "id": "tien-do-theo-menu",
+      "viec": "tools/tien_do.py cắt sổ theo trục thứ hai là MENU: mục 'Theo menu' trong tien-do.md, chế độ --menu \"<tên>\", và phép kiểm toàn kho cho slug `menu`",
+      "trang_thai": "xong",
+      "bang_chung": "tools/tien_do.py (theo_menu, bang_menu, tra_menu, kiểm sai_menu); danh mục + bộ khớp tên dùng chung ở .claude/hooks/_common.py (cac_menu, tim_menu, khong_dau). Kiểm SỐNG: --menu \"Nhiệm vụ\" → exit 0; --menu \"Người dùng\" → exit 2 kèm danh sách; ghi slug sai qua Bash → tien_do.py exit 1 gọi đúng tên mục, rồi khôi phục bằng git checkout. 7 ca TIM_MENU_CASES trong tools/test_hooks.py, kèm phép kiểm danh mục rỗng phải đỏ.",
+      "no_confirm": [],
+      "tiep_theo": "Mục 'Theo menu' đang RỖNG: chưa mục nào gắn `menu`. Cố ý không gắn hàng loạt cho 193 mục cũ — gắn sai tệ hơn không gắn. Mỗi lần chạy /develop-* gắn các mục scout tìm ra cho menu ấy (skill develop-menu §7), nên mục này đầy dần theo lượt chạy."
     }
   ]
 }
