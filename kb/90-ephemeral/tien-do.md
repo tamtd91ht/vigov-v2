@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 1634e97
+derived_from_commit: 177dbf2
 expires: 2026-12-23
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 43 |
 | chưa làm | 32 |
 | treo | 15 |
-| xong | 132 |
+| xong | 133 |
 
 ## Theo menu
 
@@ -530,7 +530,7 @@ Cập nhật 2026-09-22 · 1 mục
 
 ## `tools`
 
-Cập nhật 2026-09-24 · 14 mục
+Cập nhật 2026-09-24 · 15 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -550,6 +550,7 @@ Cập nhật 2026-09-24 · 14 mục
 | `check-brain-vai-scout` — Thêm hậu tố vai trò `scout` vào từ vựng agent của check_brain (bất biến 7), cho hai agent khám phá context-scout và cross-context-scout của quy trình ROUTING §0 | xong | tools/check_brain.py — regex looks_agent thêm `scout`, kèm lý do vì sao không dùng reviewer/expert. Kiểm SỐNG: `python tools/check_brain.py` báo '13 agents · 13 routed' (trước khi thêm hậu tố, hai tệp scout sẽ hiện là 'never routed to'). make check EXIT=0 ngày 2026-09-24. | — | Ngân sách always-loaded đang ở ~26987/27000 token (99%) sau khi CLAUDE.md trỏ tới ROUTING §0 — lần thêm kế tiếp vào CLAUDE.md hay rule phải BỚT một thứ khác trước, không nâng trần. |
 | `tien-do-theo-menu` — tools/tien_do.py cắt sổ theo trục thứ hai là MENU: mục 'Theo menu' trong tien-do.md, chế độ --menu "<tên>", và phép kiểm toàn kho cho slug `menu` | xong | tools/tien_do.py (theo_menu, bang_menu, tra_menu, kiểm sai_menu); danh mục + bộ khớp tên dùng chung ở .claude/hooks/_common.py (cac_menu, tim_menu, khong_dau). Kiểm SỐNG: --menu "Nhiệm vụ" → exit 0; --menu "Người dùng" → exit 2 kèm danh sách; ghi slug sai qua Bash → tien_do.py exit 1 gọi đúng tên mục, rồi khôi phục bằng git checkout. 7 ca TIM_MENU_CASES trong tools/test_hooks.py, kèm phép kiểm danh mục rỗng phải đỏ. | — | Mục 'Theo menu' đang RỖNG: chưa mục nào gắn `menu`. Cố ý không gắn hàng loạt cho 193 mục cũ — gắn sai tệ hơn không gắn. Mỗi lần chạy /develop-* gắn các mục scout tìm ra cho menu ấy (skill develop-menu §7), nên mục này đầy dần theo lượt chạy. |
 | `xuat-tien-do-excel` — Xuất tiến độ ra .xlsx format cố định cho Google Sheet của team: /tien-do-san-pham --excel [đường-dẫn] | xong | tools/xuat_tien_do.py (5 sheet, chỉ thư viện chuẩn); tools/tien_do_san_pham.py tách dong_chuong/dong_menu dùng chung — tệp .md và ba kiểu lọc so byte TRƯỚC/SAU: giống hệt. Kiểm bằng openpyxl -W error: đọc được, freeze A2, autoFilter, validation E2:E209, số chương 02/09/14 khớp .md. Hai lần xuất giống hệt từng byte. Nhánh từ chối: đường trong kho không ignore → exit 4 không ghi; ô có số thật (tiêm trong bộ nhớ) → exit 3, chỉ in Hang_muc!G5, không ghi. Ghi ra ổ khác (C: khi kho ở D:) → đã sửa lỗi commonpath. test_hooks: ca khoá format v1 + 5 ca dữ liệu cá nhân. | 24/09: ô Commit của Thong_tin ghi thêm '+ N tệp chưa commit — số liệu MỚI HƠN commit này' khi cây bẩn (kể cả tệp chưa theo dõi). Kiểm hai nhánh: cây chung (18 tệp bẩn) → có hậu tố; worktree tách rời sạch → mã trơn df1c2f8. | — | Đẩy lên Google Sheet vẫn THỦ CÔNG (Import → Replace). Tự động qua Sheets API cần khoá service account — bí mật bên thứ ba mới, STOP CONDITION luật 8 + luật 3, chờ người dùng quyết ai giữ khoá. Đổi format: thêm cột cuối SHEETS, tăng PHIEN_BAN_FORMAT, cập nhật FORMAT_XLSX trong test_hooks, báo team. |
+| `xuat-tien-do-excel-v2` — Bản Excel format v2 cho chủ dự án: 3 sheet bằng lời (Tổng quan · Chức năng · Việc còn lại), có % hoàn thành là phép đếm kèm số hạng và dự kiến xong theo tốc độ đo từ git | xong | tools/xuat_tien_do.py viết lại (người dùng chọn 24/09/2026: % = phần xong / tổng phần; dự kiến = phần còn ÷ tốc độ đo được). Tốc độ đếm CHUYỂN TRẠNG THÁI THẬT (việc có ở mốc cũ, chưa xong, nay xong): hiệu số xong thô ra 26 việc/ngày + mốc 7 ngày vì việc ghi bù; đếm chuyển thật ra 4,5 việc/ngày từ 20/09 (sổ trẻ hơn 7 ngày → đo từ commit đầu có sổ, lần đầu ra 0 vì mốc 17/09 chưa có sổ — đã sửa). Màn web tính là một phần: thiếu nó chương 10 (màn chưa bấm được) in 100%. Treo nằm trong mẫu số. Chương chưa tách phần nào in 'Chưa khởi công' 0%. Kiểm: openpyxl -W error mở được, 3 sheet, freeze A2, autoFilter ở Chức năng/Việc còn lại, ô % định dạng 0%; hai lần xuất giống hệt từng byte; test_hooks 257/257 với ca khoá format v2. Kèm SỬA LỖI ĐẾM của tien_do_san_pham.so_chua_dung: đếm mọi `ten:` từ LẦN ĐẦU chữ PHAN_CHUA_DUNG xuất hiện (một chú thích), nên `ten: ""` của biểu mẫu giai-ngan bị đếm — .md in 7 (tổng 86), thật là 6 (tổng 85). Nay đếm trong khối khai báo; bản Excel đối chiếu hai phép đếm và từ chối (exit 1) nếu lệch. | — | v1 → v2 đổi cả tên sheet và tên cột (Hang_muc → 'Việc còn lại', Ma → Mã) — báo team trỏ lại công thức nếu đã dựng trên v1. Giới hạn đã nói trong sheet: 'phần' không đều nhau (một API = một ô màn = một việc sổ), tốc độ chỉ đếm việc sổ, không trừ ngày lễ, 3 chức năng chưa khởi công (01, 03, 13) chưa có trong mốc dự kiến. |
 
 ## `web-admin`
 

@@ -1,7 +1,7 @@
 ---
 description: In bảng tiến độ theo PHÂN HỆ SẢN PHẨM — lọc được theo bề mặt và phân hệ, bỏ trống là toàn bộ
 group: Tiến độ & bàn giao
-argument-hint: "[API|WebAdmin|Miniapp][-<phân hệ>] | --excel [đường-dẫn.xlsx] — ví dụ API-Nhiệm vụ, Miniapp, 02, --excel. Bỏ trống = toàn bộ"
+argument-hint: "[API|WebAdmin|Miniapp][-<phân hệ>] | --excel [đường-dẫn.xlsx] — ví dụ API-Nhiệm vụ, Miniapp, 02, --excel (3 sheet: tổng quan · chức năng · việc còn lại, có % và dự kiến). Bỏ trống = toàn bộ"
 allowed-tools: Read, Bash
 ---
 
@@ -58,45 +58,80 @@ con số đo được biến thành một con số ước lượng.
 
 ---
 
-## `--excel` — TỆP CHO GOOGLE SHEET CỦA TEAM
+## `--excel` — TỆP CHO CHỦ DỰ ÁN VÀ GOOGLE SHEET CỦA TEAM
 
 ```sh
 python tools/tien_do_san_pham.py --excel                 # → tmp/tien-do/vigov-tien-do-<ngày>.xlsx
 python tools/tien_do_san_pham.py --excel D:/share/td.xlsx
 ```
 
-**Luôn là TOÀN BỘ dự án** — bộ lọc không áp vào bản Excel. Sheet chung của cả team phải đủ;
-ai cần một phần thì dùng bộ lọc của chính Google Sheet (dòng tiêu đề đã bật sẵn).
+Trả lời một câu: *"dự án đang ở giai đoạn nào, còn những gì, khi nào xong"* — **bằng lời**,
+không phải bảng số đếm thô. **Luôn là TOÀN BỘ dự án**; bộ lọc không áp vào bản Excel.
 
-Năm sheet, **tên sheet và tên cột cố định** — định nghĩa từng cột in trong sheet `Thong_tin`
-và nằm ở một chỗ duy nhất, `SHEETS` trong `tools/xuat_tien_do.py`:
+Ba sheet (format v2, 24/09/2026). Tên sheet và tên cột nằm ở một chỗ duy nhất, `SHEETS` trong
+`tools/xuat_tien_do.py`:
 
-| Sheet | Mỗi dòng |
+| Sheet | Mỗi dòng | Cột |
+|---|---|---|
+| `Tổng quan` | dòng **TOÀN DỰ ÁN** (giai đoạn, %, mốc dự kiến) · dòng tóm các chức năng · một dòng mỗi khối nền (Backend, Web nền, Mini App, Hạ tầng, Quy trình). Bên dưới: khối **CÁCH ĐỌC** — ngày xuất, commit, tốc độ đo được, cách tính, giới hạn | Hạng mục · Hiện trạng · Còn nội dung gì · % hoàn thành · Dự kiến xong |
+| `Chức năng` | một chương đặc tả `docs/ui-ux/NN-*.md` | Mã · Chức năng · Hiện trạng · Còn nội dung gì · % hoàn thành · Dự kiến xong · **Cách tính %** |
+| `Việc còn lại` | một mục sổ tiến độ chưa xong — cột `Mã` (`module/id`) là **khoá ổn định** | Mã · Thuộc · Việc · Tình trạng · Bước kế tiếp |
+
+### % là một PHÉP ĐẾM, in kèm số hạng
+
+Người dùng quyết 24/09/2026 thêm % vào bản Excel, với điều kiện truy ngược được. Mỗi dòng
+`Chức năng` có cột `Cách tính %` nêu từng số hạng:
+
+| Phần xong | Phần còn |
 |---|---|
-| `Tong_quan` | một chương đặc tả — tuyến, đã gọi, màn web, số hạng mục theo trạng thái |
-| `Menu_web` | một mục menu web-admin — có màn chưa, số phần chưa dựng |
-| `Hang_muc` | một mục sổ tiến độ — cột `Ma` (`module/id`) là **khoá ổn định** |
-| `Cho_khach` | một câu hỏi còn chờ khách chốt, và hạng mục nào đang chờ nó |
-| `Thong_tin` | ngày xuất · commit · **phiên bản format** · ý nghĩa từng cột |
+| màn web đã có trang | màn web chưa có (mục menu chưa bấm được) |
+| API có mã web gọi | API chưa có mã web gọi |
+| API công dân Mini App đã gọi | API công dân Mini App chưa gọi |
+| việc sổ `xong` gắn menu ấy | phần màn tự khai `PHAN_CHUA_DUNG*` · việc sổ đang làm / chưa làm / **treo** |
 
-**Đẩy lên Google Sheet — thủ công, có chủ ý:** File → Import → Tải lên → **Replace
-spreadsheet**. Đẩy tự động qua Google Sheets API cần một khoá service account — một bí mật bên
-thứ ba MỚI và lần đầu gửi dữ liệu dự án ra dịch vụ ngoài (STOP CONDITION luật 8 và luật 3);
-chưa ai quyết ai giữ khoá ấy.
+- **Treo nằm trong mẫu số.** Loại ra thì % tăng đúng bằng những việc chưa ai làm — lỗi 23/09.
+- Chương **chưa tách được phần nào** in `Chưa khởi công` + 0%, **không** 0/0 = 100%.
+- Chương không có menu, không có tuyến, không có việc (chương 00) là tài liệu giới thiệu —
+  không tính vào % dự án.
+- Màn **không khai** `PHAN_CHUA_DUNG` được ghi rõ trong ô *Còn nội dung gì*: % của nó có thể cao
+  hơn thực tế.
+- Mỗi việc sổ đếm **đúng một lần**: vào chương của menu đầu tiên nó gắn, hoặc vào khối nền của
+  module nó.
 
-**Ghi chú của team để ở sheet RIÊNG** (vd `Ghi_chu`), tra sang bằng
-`VLOOKUP(Ma; Hang_muc!A:H; …)`. *Replace* xoá mọi cột team tự thêm vào sheet nhập; sheet riêng
-thì còn nguyên qua mọi lần cập nhật.
+### Dự kiến = phần còn ÷ tốc độ ĐO ĐƯỢC
+
+Tốc độ lấy từ git: số việc **đã có trong sổ ở mốc cũ, lúc ấy chưa xong, nay xong**, trong 7
+ngày lịch gần nhất, chia số ngày làm việc (thứ Hai–Sáu). Sổ trẻ hơn 7 ngày thì đo từ commit đầu
+tiên có sổ — ô tốc độ in ngày mốc.
+
+**Không đếm hiệu số `xong` thô:** việc ghi bù vào sổ ở trạng thái xong cũng thành tốc độ. Đo
+24/09/2026 cách ấy ra 26 việc/ngày và mốc "xong sau 7 ngày"; đếm chuyển trạng thái thật ra 4,5.
+
+Mốc **cả dự án** là dòng TOÀN DỰ ÁN. Dòng từng chức năng giả định dồn sức riêng cho nó — **không
+cộng dồn** các dòng. Mốc CHƯA gồm chức năng chưa khởi công và các bước sau thi công (triển khai,
+Zalo duyệt, nghiệm thu, bàn giao — estimate §5–§8); ô ấy nói thẳng như vậy.
+
+### Đẩy lên Google Sheet — thủ công, có chủ ý
+
+File → Import → Tải lên → **Replace spreadsheet**. Đẩy tự động qua Google Sheets API cần một khoá
+service account — một bí mật bên thứ ba MỚI và lần đầu gửi dữ liệu dự án ra dịch vụ ngoài (STOP
+CONDITION luật 8 và luật 3); chưa ai quyết ai giữ khoá ấy.
+
+**Ghi chú của team để ở sheet RIÊNG**, tra sang bằng `VLOOKUP(Mã; 'Việc còn lại'!A:E; …)`.
+*Replace* xoá mọi cột team tự thêm vào sheet nhập.
+
+⚠ **v1 → v2 đổi cả tên sheet** (`Hang_muc` → `Việc còn lại`, cột `Ma` → `Mã`). Công thức team
+dựng trên bản v1 phải trỏ lại.
 
 | Mã thoát | Nghĩa |
 |---|---|
 | 0 | Ghi xong — in đường dẫn và số dòng từng sheet |
-| 1 | Thiếu nguồn — chạy `make kb` trước |
+| 1 | Thiếu nguồn — chạy `make kb` trước. Hoặc hai phép đếm phần chưa dựng lệch nhau (`.md` vs Excel) — sửa bộ đếm, đừng chọn một bên |
 | 3 | Có ô trông như **số điện thoại / CCCD thật** — KHÔNG ghi tệp, chỉ in toạ độ ô (luật 3). Sửa nguồn |
 | 4 | Đường dẫn nằm trong kho mà git không bỏ qua — tệp nhị phân không vào git |
 
-Đổi format (thêm cột): **chỉ thêm vào cuối** `SHEETS`, tăng `PHIEN_BAN_FORMAT`, và cập nhật ca
-khoá format trong `tools/test_hooks.py` — ca ấy đỏ đúng để không ai đổi format mà quên báo team.
+Đổi format: tăng `PHIEN_BAN_FORMAT` và cập nhật ca khoá format `FORMAT_XLSX` trong
+`tools/test_hooks.py` — ca ấy đỏ đúng để không ai đổi format mà quên báo team.
 
 ---
 
@@ -138,7 +173,9 @@ giữ.
 
 ---
 
-## VÌ SAO KHÔNG CÓ CỘT `% HOÀN THÀNH`
+## VÌ SAO BẢN `.md` KHÔNG CÓ CỘT `% HOÀN THÀNH`
+
+*(Bản Excel có — là một phép đếm in kèm số hạng, xem mục `--excel`.)*
 
 Ngày 23/09/2026 chủ dự án đọc một con số tiến độ rồi nói *"vậy mà tôi tưởng làm xong hết rồi"*.
 Con số ấy đếm **mục việc trong sổ**, không đếm sản phẩm. Một tỷ lệ tự nghĩ ra trông chính xác

@@ -895,14 +895,11 @@ CAN_SYNC_CASES = [
 # reordering one breaks them with no error. This frozen copy is DELIBERATELY a second copy: its
 # only job is to go red when `SHEETS` changes without `PHIEN_BAN_FORMAT` moving with it. Changing
 # the format = append columns at the end, bump the version, update this list, tell the team.
-FORMAT_XLSX = {1: [
-    ("Tong_quan", ["Ma_chuong", "Phan_he", "Tong_tuyen", "Tuyen_web", "Da_goi", "Ngoai_web",
-                   "Man_web", "Dang_lam", "Chua_lam", "Treo", "Xong"]),
-    ("Menu_web", ["STT", "Muc_menu", "Duong_dan", "Khoa_quyen", "Co_man", "Chua_dung"]),
-    ("Hang_muc", ["Ma", "Module", "Menu", "Viec", "Trang_thai", "No_cau_hoi", "Buoc_ke_tiep",
-                  "Cap_nhat"]),
-    ("Cho_khach", ["So_cau", "Trang_thai", "Cau_hoi", "Dang_chan"]),
-    ("Thong_tin", ["Khoa", "Gia_tri"]),
+FORMAT_XLSX = {2: [
+    ("Tổng quan", ["Hạng mục", "Hiện trạng", "Còn nội dung gì", "% hoàn thành", "Dự kiến xong"]),
+    ("Chức năng", ["Mã", "Chức năng", "Hiện trạng", "Còn nội dung gì", "% hoàn thành",
+                   "Dự kiến xong", "Cách tính %"]),
+    ("Việc còn lại", ["Mã", "Thuộc", "Việc", "Tình trạng", "Bước kế tiếp"]),
 ]}
 
 # The last gate before project data leaves for a shared Google Sheet (rule 3).
@@ -1200,7 +1197,7 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
 
     import xuat_tien_do as xtd  # noqa: E402
     mong_fmt = FORMAT_XLSX.get(xtd.PHIEN_BAN_FORMAT)
-    that_fmt = [(t, [ct for ct, _w, _y in cot]) for t, cot in xtd.SHEETS]
+    that_fmt = [(t, [ct for ct, _w in cot]) for t, cot in xtd.SHEETS]
     ok = mong_fmt == that_fmt
     print(f"{'  OK   ' if ok else '  FAIL '} [FORMAT] {'xuat_tien_do.SHEETS':24s} "
           f"format v{xtd.PHIEN_BAN_FORMAT} khớp bản khoá")

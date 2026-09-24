@@ -137,6 +137,16 @@ def la_cong_dan(t: dict) -> bool:
     return t["kind"] == "citizen-only"
 
 
+def tuyen_app_goi() -> list[str]:
+    """Đường dẫn `/api/v1/...` mà mã `citizen-app` có nhắc tới — bảng .md và bản Excel cùng đọc."""
+    return sorted(set(re.findall(
+        r'"(/api/v1/[a-z0-9/{}-]+)"',
+        "".join(doc(os.path.join(g, t))
+                for g, _d, tp in os.walk(os.path.join(ROOT, "citizen-app", "src"))
+                for t in tp if t.endswith((".ts", ".tsx")) and not t.endswith(".test.ts")),
+    )))
+
+
 # ---------------------------------------------------------------------------------------------
 # NGUỒN 3 — việc màn hình đã xong. `tools/apidoc` suy trạng thái TỪ MÃ (có hàm gọi trong
 # `web-admin/src/lib/api/**`) chứ không từ một thao tác đổi tên tệp thủ công — xem
@@ -184,7 +194,31 @@ def cac_muc_menu() -> list[tuple[str, str | None, str | None]]:
 # Đếm từ `PHAN_CHUA_DUNG` chứ không từ một danh sách trong tài liệu, vì mảng ấy là thứ RA TỚI
 # TRANG: mỗi màn có một ca kiểm đòi từng mục phải có trong HTML. Tức con số này là số câu mà cán
 # bộ thật sự đọc được trên màn, không phải số việc ai đó nhớ ra lúc viết tài liệu.
-MAU_TEN = re.compile(r"^\s*ten:\s*\"", re.M)
+# Khối khai báo, tới dấu `];` đầu dòng. Hậu tố tên được phép (`PHAN_CHUA_DUNG_GHI` của giai-ngan).
+# Một khối viết khác hình này thì màn đọc thành `không khai` — hiện ra, không tụt về 0 im lặng.
+MAU_KHOI_CHUA_DUNG = re.compile(
+    r"(?:export\s+)?const\s+PHAN_CHUA_DUNG\w*\b[^=]*=\s*\[(.*?)\n\];", re.S)
+MAU_TEN_CHUA_DUNG = re.compile(r'^\s*ten:\s*"((?:[^"\\]|\\.)*)"', re.M)
+
+
+def phan_chua_dung(thu_muc: str) -> list[str] | None:
+    """Tên từng phần chưa dựng của một thư mục `features/` — cho bản Excel, cần CÂU chứ không cần số.
+
+    `None` khi màn không khai khối nào, cùng nghĩa với `so_chua_dung`.
+    """
+    thu = os.path.join(ROOT, "web-admin", "src", "features", thu_muc)
+    if not os.path.isdir(thu):
+        return None
+    ra: list[str] = []
+    thay = False
+    for goc, _d, tep in os.walk(thu):
+        for t in sorted(tep):
+            if not t.endswith((".ts", ".tsx")) or t.endswith((".test.ts", ".test.tsx")):
+                continue
+            for m in MAU_KHOI_CHUA_DUNG.finditer(doc(os.path.join(goc, t))):
+                thay = True
+                ra.extend(MAU_TEN_CHUA_DUNG.findall(m.group(1)))
+    return ra if thay else None
 
 
 def so_chua_dung(thu_muc: str) -> int | None:
@@ -197,23 +231,13 @@ def so_chua_dung(thu_muc: str) -> int | None:
 
     Quét MỌI tệp nguồn trong thư mục, không chỉ `nhan-*.ts`: chỗ đặt hằng số là quy ước, và một
     quy ước không có rào nào canh thì một màn đặt chỗ khác là con số ở đây tụt về 0 trong im lặng.
+
+    Đếm TRONG KHỐI khai báo (`phan_chua_dung`), không đếm mọi `ten:` từ lần đầu chữ ấy xuất hiện:
+    bản cũ cắt từ một câu chú thích nhắc tên hằng, nên `ten: ""` của một biểu mẫu nằm sau đó bị
+    đếm vào — giai-ngan in 7 trong khi màn hiện 6. Đo 24/09/2026 khi bản Excel đọc từng câu.
     """
-    thu = os.path.join(ROOT, "web-admin", "src", "features", thu_muc)
-    if not os.path.isdir(thu):
-        return None
-    tong = 0
-    thay = False
-    for goc, _d, tep in os.walk(thu):
-        for t in sorted(tep):
-            if not t.endswith((".ts", ".tsx")) or t.endswith((".test.ts", ".test.tsx")):
-                continue
-            s = doc(os.path.join(goc, t))
-            i = s.find("PHAN_CHUA_DUNG")
-            if i < 0:
-                continue
-            thay = True
-            tong += len(MAU_TEN.findall(s[i:]))
-    return tong if thay else None
+    ds = phan_chua_dung(thu_muc)
+    return None if ds is None else len(ds)
 
 
 # Một trang gọi vào những thư mục `features/` nào — đọc từ chính câu `import`, nên một màn đổi
@@ -526,12 +550,7 @@ def main() -> int:
         d for d in os.listdir(os.path.join(ROOT, "citizen-app", "src", "features"))
         if os.path.isdir(os.path.join(ROOT, "citizen-app", "src", "features", d))
     ) if os.path.isdir(os.path.join(ROOT, "citizen-app", "src", "features")) else []
-    goi_vigov = sorted(set(re.findall(
-        r'"(/api/v1/[a-z0-9/{}-]+)"',
-        "".join(doc(os.path.join(g, t))
-                for g, _d, tp in os.walk(os.path.join(ROOT, "citizen-app", "src"))
-                for t in tp if t.endswith((".ts", ".tsx")) and not t.endswith(".test.ts")),
-    )))
+    goi_vigov = tuyen_app_goi()
     L.append("| | |")
     L.append("|---|---|")
     L.append(f"| Tuyến ViGov dành riêng kênh công dân (`citizen-only`) | "
