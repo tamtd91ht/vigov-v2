@@ -7,7 +7,7 @@ package domain
 //	the two sheet kinds                 migrations/0006, `bang_ngan_sach_loai_hop_le`
 //	the two column kinds                the same file, `cot_ngan_sach_kieu_hop_le`
 //	the SIX column roles                the same file, `cot_ngan_sach_vai_tro_hop_le`
-//	`manual` | `children` and no third  the same file, `khoan_muc_ngan_sach_cach_tinh_hop_le`
+//	`manual` | `entries` | `children`   migrations/0008 (widened 0006's `khoan_muc_ngan_sach_cach_tinh_hop_le`)
 //	hard DELETE refused outright        the same file, `ho_so_luu_tru_cam_xoa_cung`
 //
 // Those are the floor and they hold against every writer. What they cannot do is explain themselves
@@ -110,17 +110,20 @@ var vaiTroCuaLoai = map[LoaiBang][]VaiTroCot{
 
 // CachTinh is how a line's figure is produced.
 //
-// TWO VALUES, AND §4.2 DRAWS THREE. `entries` — "Cộng theo đợt", the `⇄` dialog of §5 — is NOT
-// here and is not an oversight: `dot_thu_chi` does not exist, so a line set to it would report 0
-// for every column while looking like a working feature. Migration 0006 admits the same two.
+// THREE VALUES, as §4.2 draws. `entries` — "Cộng theo đợt", the `⇄` dialog of §5 — sums the live
+// batches of `dot_thu_chi` (migration 0008, user decision 25/09/2026).
 //
-// IT IS NOT CHOSEN BY A CLIENT. It follows from the tree: a line with children sums its children, a
-// line without them is typed into. That is the customer's decision of 06/09/2026 expressed as a
-// property instead of as a field somebody has to keep consistent — see ChoGhiGiaTri.
+// A LINE WITH CHILDREN IS ALWAYS `children` and that is not chosen by a client: it follows from the
+// tree (customer decision 06/09/2026, CachTinhTheoCay). A LEAF chooses `manual` or `entries`.
+//
+// ⚠ TinhTheoDot IS DECLARED AHEAD OF ITS WRITER. As of migration 0008 no use case sets it and no read
+// path sums batches; until that card lands, nothing may write it — a line in `entries` mode with no
+// summing read path shows every figure as empty while looking like a working feature.
 type CachTinh string
 
 const (
 	TinhTay     CachTinh = "manual"
+	TinhTheoDot CachTinh = "entries"
 	TinhTheoCon CachTinh = "children"
 )
 
