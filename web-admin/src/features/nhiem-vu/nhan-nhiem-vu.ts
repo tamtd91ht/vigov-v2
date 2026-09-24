@@ -20,6 +20,7 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
+import type { KetQua } from "@/lib/api/goi";
 import type {
   petitions_nhiemVuRa,
   petitions_nhiemVuVanBanRa,
@@ -1166,6 +1167,27 @@ export function vanBanDaDoiOMayChu(
       moi.summary !== cu.summary
     );
   });
+}
+
+/**
+ * Câu chặn lần lưu sau khi ĐỌC LẠI chi tiết, hoặc `null` khi được gửi PATCH.
+ *
+ * Tách khỏi `FormSuaKhoiVanBan` để ba nhánh từ chối kiểm được không cần DOM — mỗi nhánh là một lần
+ * PATCH thay cả tập từ một tập máy chủ vừa KHÔNG xác nhận được:
+ *   đọc hỏng           câu máy chủ nguyên văn
+ *   thiếu `documents`   hợp đồng vỡ — đọc thành `[]` thì mọi dòng người khác vừa thêm đều "không đổi"
+ *                       so với… không gì cả, và lần lưu gỡ chúng
+ *   tập đã khác         `VAN_BAN_VUA_BI_DOI`
+ */
+export function loiSauKhiDocLai(
+  moi: KetQua<petitions_nhiemVuRa>,
+  bienChup: readonly petitions_nhiemVuVanBanRa[],
+): string | null {
+  if (!moi.ok) return moi.thongBao;
+  const docs = moi.duLieu.documents;
+  if (!Array.isArray(docs)) return CHI_TIET_THIEU_VAN_BAN;
+  if (vanBanDaDoiOMayChu(bienChup, docs)) return VAN_BAN_VUA_BI_DOI;
+  return null;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

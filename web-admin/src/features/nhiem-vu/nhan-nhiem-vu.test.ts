@@ -45,6 +45,8 @@ import {
   thanSuaNhiemVu,
   vanBanDaDoiOMayChu,
   canDocLaiTruocKhiLuu,
+  CHI_TIET_THIEU_VAN_BAN,
+  loiSauKhiDocLai,
   VAN_BAN_VUA_BI_DOI,
   type DongVanBanNhap,
   type DongVanBanSua,
@@ -627,6 +629,30 @@ describe("✎ Sửa — thân PATCH chỉ mang thứ đã đổi", () => {
     ]);
   });
 
+  it("CHỈ xoá số ký hiệu của một dòng (kèm sửa ghi chú) ⇒ `documents` VẪN đi, dòng ấy thiếu `reference`", () => {
+    // Không phát hiện được thay đổi này thì thân chỉ còn `note`: lưu "thành công", cán bộ tưởng đã
+    // xoá số ký hiệu, còn sổ vẫn giữ số cũ. Máy chủ đọc `reference` vắng mặt trên dòng có `id` là
+    // chuỗi rỗng (`SoSanhVanBan`, `domain/nhiem_vu_van_ban.go`), nên vắng mặt là đúng hình dạng.
+    const f = formGoc();
+    const than = thanSuaNhiemVu(
+      {
+        ...f,
+        ghiChu: "Ghi chú giả",
+        vanBan: f.vanBan.map((d) => (d.id === "01JVB1" ? { ...d, soKyHieu: "" } : d)),
+      },
+      chiTiet(),
+      VB_GOC,
+    );
+    expect(than?.note).toBe("Ghi chú giả");
+    const dong = than?.documents?.find((d) => d.id === "01JVB1");
+    expect(dong).toEqual({
+      id: "01JVB1",
+      group: "cap-tren-giao",
+      summary: "Công văn giả của cấp trên",
+      date: "2026-06-09",
+    });
+  });
+
   it("gỡ một dòng ⇒ dòng ấy VẮNG khỏi thân, dòng kia vẫn đi kèm `id`", () => {
     const f = formGoc();
     const than = thanSuaNhiemVu(
@@ -786,6 +812,49 @@ describe("✎ Sửa — đọc lại trước khi lưu: không gỡ lặng lẽ 
     expect(goHet && canDocLaiTruocKhiLuu(goHet)).toBe(true);
     expect(voHuong && canDocLaiTruocKhiLuu(voHuong)).toBe(false);
     expect(canDocLaiTruocKhiLuu({ documents: null })).toBe(false);
+  });
+
+  /*
+   * `loiSauKhiDocLai` — quyết định của lần `Lưu` trong `FormSuaKhoiVanBan`, tách ra để kiểm không
+   * cần DOM. Mỗi ca dưới đây là một PATCH thay cả tập sẽ chạy từ một tập máy chủ KHÔNG xác nhận được.
+   */
+  const DONG_NGUOI_KHAC: petitions_nhiemVuVanBanRa = {
+    id: "01JVB9",
+    group: "chi-dao-dang-uy",
+    reference: "",
+    date: "",
+    summary: "Công văn giả người khác vừa thêm",
+    position: 1,
+  };
+
+  it("đọc lại: cùng tập ⇒ `null` (gửi); tập khác ⇒ chặn bằng `VAN_BAN_VUA_BI_DOI`", () => {
+    const ok = (docs: petitions_nhiemVuVanBanRa[]) =>
+      ({ ok: true, duLieu: chiTiet({ documents: docs }) }) as const;
+    expect(loiSauKhiDocLai(ok(VB_GOC.map((v) => ({ ...v }))), VB_GOC)).toBeNull();
+    expect(loiSauKhiDocLai(ok([...VB_GOC, DONG_NGUOI_KHAC]), VB_GOC)).toBe(VAN_BAN_VUA_BI_DOI);
+  });
+
+  it("đọc lại HỎNG ⇒ chặn bằng câu máy chủ nguyên văn — không bao giờ `null`", () => {
+    expect(loiSauKhiDocLai({ ok: false, thongBao: "Máy chủ giả đang bận." }, VB_GOC)).toBe(
+      "Máy chủ giả đang bận.",
+    );
+  });
+
+  it("đọc lại về mà THIẾU `documents` ⇒ chặn, không đọc thành tập rỗng", () => {
+    // Bản chụp RỖNG là ca đắt: đọc `undefined` thành `[]` thì "giống bản chụp", lần lưu đi tiếp,
+    // và mọi dòng người khác vừa thêm bị gỡ.
+    const thieu = { ok: true, duLieu: chiTiet() } as const;
+    expect(loiSauKhiDocLai(thieu, [])).toBe(CHI_TIET_THIEU_VAN_BAN);
+    expect(loiSauKhiDocLai(thieu, VB_GOC)).toBe(CHI_TIET_THIEU_VAN_BAN);
+  });
+
+  it("trọn luồng `gỡ hết`: thân `[]` ⇒ phải đọc lại ⇒ người khác vừa thêm một dòng ⇒ KHÔNG gửi", () => {
+    // Đây là ca một lần bấm xoá mềm cả dòng cán bộ chưa từng thấy nếu bất cứ mắt xích nào hỏng.
+    const than = thanSuaNhiemVu({ ...formGoc(), vanBan: [] }, chiTiet(), VB_GOC);
+    expect(than).toEqual({ documents: [] });
+    expect(than !== null && canDocLaiTruocKhiLuu(than)).toBe(true);
+    const docLai = { ok: true, duLieu: chiTiet({ documents: [...VB_GOC, DONG_NGUOI_KHAC] }) } as const;
+    expect(loiSauKhiDocLai(docLai, VB_GOC)).toBe(VAN_BAN_VUA_BI_DOI);
   });
 
   it("câu báo nói rõ CHƯA LƯU GÌ và cán bộ phải làm gì", () => {

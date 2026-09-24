@@ -21,6 +21,7 @@ import {
   GHI_CHU_LUI_HAN,
   KHOA_SUA_DANG_TAI,
   KHOA_SUA_LOI,
+  KHOA_SUA_NHOM_LA,
   KHONG_DOC_DUOC_VAN_BAN,
   KHONG_SO,
   LY_DO_KHONG_SUA_CHU_TRI,
@@ -770,6 +771,19 @@ describe("§5.4 — một lần đổi trạng thái KHÔNG làm rơi khối vă
     expect(d?.vanBan).toEqual({ pha: "xong", duLieu: [] });
   });
 
+  it("`ghiXong` của MỘT NHIỆM VỤ KHÁC (vắng `documents`): KHÔNG mượn văn bản của việc đang mở", () => {
+    // Giữ khối cũ chỉ đúng khi cùng mã. Mượn nó sang việc khác là vẽ văn bản của NV19 dưới tên
+    // NV34 — và mở luôn `✎ Sửa` trên một tập không phải của NV34.
+    const truoc = daDocXong();
+    const sau = chuyenDrawer(truoc, { loai: "ghiXong", nhiemVu: dongSo({ code: "NV34" }) });
+    expect(sau?.nhiemVu.code).toBe("NV34");
+    expect(sau?.vanBan).toEqual({ pha: "dangTai" });
+
+    const html = veTuDrawer(sau);
+    expect(html).not.toContain("1742-CV/BTCTU");
+    expect(theNutSua(html)).toContain('disabled=""');
+  });
+
   it("đóng drawer là hết trạng thái", () => {
     expect(chuyenDrawer(daDocXong(), { loai: "dong" })).toBeNull();
   });
@@ -859,6 +873,16 @@ describe("§5.4 — nút `✎ Sửa`: chỉ `Theo văn bản`, và KHOÁ khi ch�
     const html = veChiTiet({}, LANH_DAO, { pha: "loi", thongBao: "Không tìm thấy nhiệm vụ." });
     expect(theNutSua(html)).toContain('disabled=""');
     expect(html).toContain(nhuTrongHTML(KHOA_SUA_LOI));
+  });
+
+  it("khối ĐÃ ĐỌC XONG nhưng có một mã nhóm lạ: nút VẪN KHOÁ, lý do ra trang, dòng lạ vẫn hiện", () => {
+    // Pha `xong` là pha duy nhất hai ca trên không phủ: một nút chỉ khoá theo pha sẽ mở ở đây, và
+    // lần lưu đầu tiên gỡ mất dòng form không có chỗ vẽ.
+    const la = vb({ id: "01JVANBANLA", group: "nhom-moi-gia", reference: "77-TB/GIA" });
+    const html = veChiTiet({}, LANH_DAO, { pha: "xong", duLieu: [...BA_VAN_BAN, la] });
+    expect(theNutSua(html)).toContain('disabled=""');
+    expect(html).toContain(nhuTrongHTML(KHOA_SUA_NHOM_LA));
+    expect(html).toContain("77-TB/GIA");
   });
 });
 

@@ -97,7 +97,6 @@ import {
   TRANG_THAI_CHINH,
   TRANG_THAI_RE_NHANH,
   TRICH_YEU_VAN_BAN_TOI_DA,
-  VAN_BAN_VUA_BI_DOI,
   canDocLaiTruocKhiLuu,
   canhBaoSua,
   canhBaoVanBan,
@@ -109,6 +108,7 @@ import {
   dongCuaNhom,
   dongVanBan,
   formSuaTuChiTiet,
+  loiSauKhiDocLai,
   lyDoKhoaSua,
   hoanThanhTreHan,
   mocCuoiNgay,
@@ -127,7 +127,6 @@ import {
   quyetDinhDuyetLuiHan,
   thanGiaoViec,
   thanSuaNhiemVu,
-  vanBanDaDoiOMayChu,
   type DongVanBanNhap,
   type DongVanBanSua,
   type FormSuaNhiemVu,
@@ -1618,21 +1617,12 @@ export function FormSuaKhoiVanBan({
     // THÂN CÓ `documents` THÌ ĐỌC LẠI TRƯỚC. Đọc hỏng, hoặc khối đã đổi ở máy chủ: KHÔNG gửi, giữ
     // nguyên chữ đã gõ, nói ra. Không tự gộp.
     if (canDocLaiTruocKhiLuu(than)) {
-      const moi = await docLai();
-      if (!moi.ok) {
+      // So với BẢN CHỤP lúc mở (`goc`), không với `vanBan` mới nhất của drawer: một dòng người khác
+      // thêm mà drawer đã đọc lại giữa chừng thì CÓ trong `vanBan`, nhưng KHÔNG có trong form.
+      const lyDoChan = loiSauKhiDocLai(await docLai(), goc.vanBan);
+      if (lyDoChan !== null) {
         datDangLuu(false);
-        datLoi(moi.thongBao);
-        return;
-      }
-      const docs = moi.duLieu.documents;
-      if (!Array.isArray(docs)) {
-        datDangLuu(false);
-        datLoi(CHI_TIET_THIEU_VAN_BAN);
-        return;
-      }
-      if (vanBanDaDoiOMayChu(goc.vanBan, docs)) {
-        datDangLuu(false);
-        datLoi(VAN_BAN_VUA_BI_DOI);
+        datLoi(lyDoChan);
         return;
       }
     }
