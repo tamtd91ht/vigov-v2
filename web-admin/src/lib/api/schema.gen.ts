@@ -149,12 +149,35 @@ export type documents_chuyenVanBanVao = {
   "reason": string;
 };
 
+export type documents_danhSachLichSuChuyenRa = {
+  "items": Array<documents_lichSuChuyenRa>;
+};
+
 export type documents_danhSachLoaiVanBanRa = {
   "items": Array<documents_loaiVanBanRa>;
 };
 
 export type documents_goVanBanVao = {
   "reason": string;
+};
+
+export type documents_lichSuChuyenRa = {
+  "id": string;
+  "document_id": string;
+  /** RFC 3339 — the instant of the act */
+  "routed_at": string;
+  /** staff business code of who routed it */
+  "routed_by": string;
+  /** the state the document moved INTO by this act */
+  "status": string;
+  /** empty on the first routing: nobody held it */
+  "from_unit"?: string;
+  "to_unit": string;
+  /** empty = "Để bộ phận tự phân công" */
+  "assignee"?: string;
+  "reason": string;
+  /** RFC 3339 — when the row was written */
+  "created_at": string;
 };
 
 export type documents_loaiVanBanRa = {
@@ -2243,6 +2266,25 @@ export type documents_post_incoming_documents = {
   };
 };
 
+/** GET /api/v1/incoming-documents/{id} — Một văn bản đến của xã, cùng dạng với một dòng của danh sách — dùng cho ngăn chi tiết */
+export type documents_get_incoming_documents_by_id = {
+  duongDan: "/api/v1/incoming-documents/{id}";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: documents_vanBanDenRa;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** PATCH /api/v1/incoming-documents/{id} — Sửa thông tin một văn bản đến đã vào sổ (số đến, trạng thái và hạn xử lý không sửa được) */
 export type documents_patch_incoming_documents_by_id = {
   duongDan: "/api/v1/incoming-documents/{id}";
@@ -2277,6 +2319,25 @@ export type documents_delete_incoming_documents_by_id = {
   phanHoi: {
     204: void;
     400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/incoming-documents/{id}/routings — Dòng thời gian chuyển xử lý của một văn bản đến, cũ nhất trước — chỉ đọc */
+export type documents_get_incoming_documents_by_id_routings = {
+  duongDan: "/api/v1/incoming-documents/{id}/routings";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: documents_danhSachLichSuChuyenRa;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;

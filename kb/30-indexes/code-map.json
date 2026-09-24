@@ -14,6 +14,10 @@
       "kind": "func",
       "at": "service-identity/internal/app/dang_nhap.go:220"
     },
+    "app.ChiTiet": {
+      "kind": "func",
+      "at": "service-documents/internal/app/van_ban_den.go:589"
+    },
     "app.ChotLinhVuc": {
       "kind": "func",
       "at": "service-petitions/internal/app/xu_ly_phan_anh.go:383"
@@ -24,7 +28,7 @@
     },
     "app.Chuyen": {
       "kind": "func",
-      "at": "service-documents/internal/app/van_ban_den.go:478"
+      "at": "service-documents/internal/app/van_ban_den.go:483"
     },
     "app.DangNhap": {
       "kind": "type",
@@ -172,7 +176,7 @@
     },
     "app.HanXuLyDoc": {
       "kind": "type",
-      "at": "service-documents/internal/app/van_ban_den.go:87"
+      "at": "service-documents/internal/app/van_ban_den.go:92"
     },
     "app.Is": {
       "kind": "func",
@@ -228,7 +232,7 @@
     },
     "app.KhoDaySo": {
       "kind": "type",
-      "at": "service-documents/internal/app/van_ban_den.go:73"
+      "at": "service-documents/internal/app/van_ban_den.go:78"
     },
     "app.KhoDeNghiLuiHan": {
       "kind": "type",
@@ -358,6 +362,10 @@
       "kind": "type",
       "at": "service-identity/internal/app/lich_lam_viec.go:126"
     },
+    "app.LichSuChuyen": {
+      "kind": "func",
+      "at": "service-documents/internal/app/van_ban_den.go:611"
+    },
     "app.LoiKhoaQuyenKhongTonTai": {
       "kind": "type",
       "at": "service-identity/internal/app/phan_quyen_vai_tro.go:74"
@@ -484,7 +492,7 @@
     },
     "app.NewVanBanDen": {
       "kind": "func",
-      "at": "service-documents/internal/app/van_ban_den.go:205"
+      "at": "service-documents/internal/app/van_ban_den.go:210"
     },
     "app.NewVanBanDi": {
       "kind": "func",
@@ -632,7 +640,7 @@
     },
     "app.VanBanDen": {
       "kind": "type",
-      "at": "service-documents/internal/app/van_ban_den.go:186"
+      "at": "service-documents/internal/app/van_ban_den.go:191"
     },
     "app.VanBanDi": {
       "kind": "type",
@@ -676,7 +684,7 @@
     },
     "app.YeuCauChuyenVanBan": {
       "kind": "type",
-      "at": "service-documents/internal/app/van_ban_den.go:179"
+      "at": "service-documents/internal/app/van_ban_den.go:184"
     },
     "app.YeuCauCongKhai": {
       "kind": "type",
@@ -780,7 +788,7 @@
     },
     "app.YeuCauSuaVanBanDen": {
       "kind": "type",
-      "at": "service-documents/internal/app/van_ban_den.go:168"
+      "at": "service-documents/internal/app/van_ban_den.go:173"
     },
     "app.YeuCauSuaVanBanDi": {
       "kind": "type",
@@ -860,7 +868,7 @@
     },
     "app.YeuCauVaoSoVanBanDen": {
       "kind": "type",
-      "at": "service-documents/internal/app/van_ban_den.go:151"
+      "at": "service-documents/internal/app/van_ban_den.go:156"
     },
     "audit.Actor": {
       "kind": "type",
@@ -1088,7 +1096,7 @@
     },
     "domain.ChoChuyen": {
       "kind": "func",
-      "at": "service-documents/internal/domain/van_ban.go:362"
+      "at": "service-documents/internal/domain/van_ban.go:366"
     },
     "domain.ChoGhiGiaTri": {
       "kind": "func",
@@ -1144,7 +1152,7 @@
     },
     "domain.ChuanHoaChuoi": {
       "kind": "func",
-      "at": "service-documents/internal/domain/van_ban.go:265"
+      "at": "service-documents/internal/domain/van_ban.go:269"
     },
     "domain.ChuanHoaCongThuc": {
       "kind": "func",
@@ -1340,7 +1348,7 @@
     },
     "domain.ChuanHoaTuyChon": {
       "kind": "func",
-      "at": "service-documents/internal/domain/van_ban.go:279"
+      "at": "service-documents/internal/domain/van_ban.go:283"
     },
     "domain.ChuanHoaURL": {
       "kind": "func",
@@ -1656,7 +1664,7 @@
     },
     "domain.KiemDoKhan": {
       "kind": "func",
-      "at": "service-documents/internal/domain/van_ban.go:291"
+      "at": "service-documents/internal/domain/van_ban.go:295"
     },
     "domain.KiemGocDemHan": {
       "kind": "func",
@@ -1684,15 +1692,15 @@
     },
     "domain.KiemNgayDen": {
       "kind": "func",
-      "at": "service-documents/internal/domain/van_ban.go:306"
+      "at": "service-documents/internal/domain/van_ban.go:310"
     },
     "domain.KiemNgayVanBanDen": {
       "kind": "func",
-      "at": "service-documents/internal/domain/van_ban.go:323"
+      "at": "service-documents/internal/domain/van_ban.go:327"
     },
     "domain.KiemNgayVanBanDi": {
       "kind": "func",
-      "at": "service-documents/internal/domain/van_ban.go:336"
+      "at": "service-documents/internal/domain/van_ban.go:340"
     },
     "domain.KiemNoiDungKetLuan": {
       "kind": "func",
@@ -1976,11 +1984,11 @@
     },
     "domain.MaVanBanDen": {
       "kind": "func",
-      "at": "service-documents/internal/domain/van_ban.go:184"
+      "at": "service-documents/internal/domain/van_ban.go:188"
     },
     "domain.MaVanBanDi": {
       "kind": "func",
-      "at": "service-documents/internal/domain/van_ban.go:187"
+      "at": "service-documents/internal/domain/van_ban.go:191"
     },
     "domain.MacDinhCuaPhanMem": {
       "kind": "func",
@@ -2308,7 +2316,7 @@
     },
     "domain.TrangThaiSauKhiChuyen": {
       "kind": "func",
-      "at": "service-documents/internal/domain/van_ban.go:377"
+      "at": "service-documents/internal/domain/van_ban.go:381"
     },
     "domain.TrangThaiSauKhiMoKhoa": {
       "kind": "func",
@@ -2608,7 +2616,7 @@
     },
     "http.CapSoVanBanDi": {
       "kind": "func",
-      "at": "service-documents/internal/http/van_ban_di.go:107"
+      "at": "service-documents/internal/http/van_ban_di.go:108"
     },
     "http.CapTaiKhoanCanBo": {
       "kind": "func",
@@ -2622,9 +2630,13 @@
       "kind": "func",
       "at": "service-finance/internal/http/du_an.go:275"
     },
+    "http.ChiTietVanBanDen": {
+      "kind": "func",
+      "at": "service-documents/internal/http/van_ban_den.go:450"
+    },
     "http.ChuyenVanBanDen": {
       "kind": "func",
-      "at": "service-documents/internal/http/van_ban_den.go:367"
+      "at": "service-documents/internal/http/van_ban_den.go:368"
     },
     "http.DangNhap": {
       "kind": "func",
@@ -2740,11 +2752,11 @@
     },
     "http.DanhSachVanBanDen": {
       "kind": "func",
-      "at": "service-documents/internal/http/van_ban_den.go:390"
+      "at": "service-documents/internal/http/van_ban_den.go:391"
     },
     "http.DanhSachVanBanDi": {
       "kind": "func",
-      "at": "service-documents/internal/http/van_ban_di.go:210"
+      "at": "service-documents/internal/http/van_ban_di.go:211"
     },
     "http.DatCongKhaiCanBo": {
       "kind": "func",
@@ -2868,7 +2880,7 @@
     },
     "http.GhiVanBanDi": {
       "kind": "type",
-      "at": "service-documents/internal/http/routes.go:125"
+      "at": "service-documents/internal/http/routes.go:133"
     },
     "http.GieoCaLamViecMacDinh": {
       "kind": "func",
@@ -2896,11 +2908,11 @@
     },
     "http.GoVanBanDen": {
       "kind": "func",
-      "at": "service-documents/internal/http/van_ban_den.go:344"
+      "at": "service-documents/internal/http/van_ban_den.go:345"
     },
     "http.GoVanBanDi": {
       "kind": "func",
-      "at": "service-documents/internal/http/van_ban_di.go:192"
+      "at": "service-documents/internal/http/van_ban_di.go:193"
     },
     "http.GuiPhanAnhCongDan": {
       "kind": "type",
@@ -2945,6 +2957,10 @@
     "http.LichLamViecGhi": {
       "kind": "type",
       "at": "service-identity/internal/http/routes.go:392"
+    },
+    "http.LichSuChuyenVanBanDen": {
+      "kind": "func",
+      "at": "service-documents/internal/http/van_ban_den.go:507"
     },
     "http.LoaiDonViDanCuDanhMuc": {
       "kind": "type",
@@ -3188,11 +3204,11 @@
     },
     "http.SuaVanBanDen": {
       "kind": "func",
-      "at": "service-documents/internal/http/van_ban_den.go:284"
+      "at": "service-documents/internal/http/van_ban_den.go:285"
     },
     "http.SuaVanBanDi": {
       "kind": "func",
-      "at": "service-documents/internal/http/van_ban_di.go:147"
+      "at": "service-documents/internal/http/van_ban_di.go:148"
     },
     "http.TachKetLuanThanhNhiemVu": {
       "kind": "func",
@@ -3288,7 +3304,7 @@
     },
     "http.ThemVanBanDen": {
       "kind": "func",
-      "at": "service-documents/internal/http/van_ban_den.go:232"
+      "at": "service-documents/internal/http/van_ban_den.go:233"
     },
     "http.ThonToDanPhoDanhSach": {
       "kind": "type",
@@ -3328,7 +3344,7 @@
     },
     "http.VanBanDiDanhSach": {
       "kind": "type",
-      "at": "service-documents/internal/http/routes.go:121"
+      "at": "service-documents/internal/http/routes.go:129"
     },
     "http.VetXemNguoiGui": {
       "kind": "type",
@@ -3964,7 +3980,7 @@
     },
     "store.ChenLichSuChuyen": {
       "kind": "func",
-      "at": "service-documents/internal/store/van_ban_den.go:357"
+      "at": "service-documents/internal/store/van_ban_den.go:450"
     },
     "store.ChenNguoiNhan": {
       "kind": "func",
@@ -3988,7 +4004,7 @@
     },
     "store.ChuyenBoPhan": {
       "kind": "func",
-      "at": "service-documents/internal/store/van_ban_den.go:335"
+      "at": "service-documents/internal/store/van_ban_den.go:428"
     },
     "store.CoBangConSong": {
       "kind": "func",
@@ -4205,6 +4221,10 @@
     "store.LichLamViecStore": {
       "kind": "type",
       "at": "service-identity/internal/store/lich_lam_viec.go:22"
+    },
+    "store.LichSuChuyen": {
+      "kind": "func",
+      "at": "service-documents/internal/store/van_ban_den.go:267"
     },
     "store.LoaiDonViDanCuStore": {
       "kind": "type",

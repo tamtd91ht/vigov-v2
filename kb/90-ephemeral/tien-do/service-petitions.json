@@ -188,6 +188,15 @@
       "no_confirm": [],
       "tiep_theo": "Web (D4): nhóm thứ tám ở tab Danh mục + màn Nhiệm vụ ĐỌC nhãn/thứ tự từ GET /task-statuses, nhãn gõ cứng ở nhan-nhiem-vu.ts:92 chỉ còn là dự phòng khi đọc hỏng — người dùng chốt làm trọn vẹn. JSON dùng `order` (khớp năm tuyến danh mục anh em), không `position`. Không có tuyến reset: PATCH lại default_label/default_order. Chú thích đầu migration 0010 nói mặc định nằm 'ở web' — nay nằm ở domain; không sửa được tại chỗ (checksum). Chưa có dòng TaskStatusLabel trong ubiquitous-language.md. Đua hai lần ghi ĐẦU TIÊN cùng mã: bảng đúng nhưng vết thứ hai ghi 'trước' là mặc định (store.TheoMaDeSua).",
       "menu": "cau-hinh"
+    },
+    {
+      "id": "doi-chieu-24-09-nhiem-vu-phan-anh",
+      "viec": "Bốn câu từ đối chiếu vigov-require 24/09 chạm Nhiệm vụ và Phản ánh — CHƯA AI QUYẾT",
+      "trang_thai": "chua_lam",
+      "bang_chung": "kb/50-doi-chieu/2026-09-24-feat-m8-multitenant-foundation.md (require-watcher, b159f0e..233f57f).",
+      "no_confirm": [],
+      "tiep_theo": "(1) MÂU THUẪN VỚI CÂU ĐÃ CHỐT: b9a9718 đặt cờ bắt buộc ảnh nghiệm thu khi đóng phiếu phản ánh MẶC ĐỊNH TẮT; câu #7 (ADR 0008) chốt bat_buoc_anh_nghiem_thu mặc định TRUE — khách quyết, không tự chọn; cờ chưa dựng ở kho này. (2) Luật người đang giữ cho NHIỆM VỤ (a37ec96: người được giao làm mọi thứ, người liên quan chỉ ghi nhật ký) — kho này khai task.update (routes.go:961-962); người dùng 24/09 chỉ quyết luật ấy cho ĐƠN THƯ, ADR 0038 cấm áp chéo. (3) e1d0204: chủ trì ≡ thực hiện, chuyên viên ≡ người thực hiện chính — kho này giữ hai cặp rời; Giao cho tôi chỉ đọc nguoi_thuc_hien_ma (store/nhiem_vu.go:185-186). (4) b9a9718 hạn nhiệm vụ có giờ, điền sẵn +7 ngày 17:00 — kho này chọn 23:59 (web nhan-nhiem-vu.ts:624-639). Người dùng đã chọn 17:00 cho nhiệm vụ SINH TỪ ĐƠN THƯ (service-documents/so-don-thu-cong-dan C9) — hai lựa chọn phải khớp khi dựng.",
+      "menu": "nhiem-vu"
     }
   ]
 }

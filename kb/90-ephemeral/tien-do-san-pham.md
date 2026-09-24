@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: d4a9c18
+derived_from_commit: a0d10a6
 expires: 2026-12-23
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -33,19 +33,19 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **02** Quản lý nhiệm vụ | 9 | 9/9 | ✓ |
 | **03** Sổ tay lãnh đạo | — | — | — |
 | **04** Biên bản và kết luận họp | 4 | 4/4 | ✓ |
-| **05** Văn bản đến & Đơn thư | 5 | 5/5 | ✓ |
+| **05** Văn bản đến & Đơn thư | 7 | 7/7 | ✓ |
 | **06** Theo dõi giải ngân | 11 | 11/11 | ✓ |
 | **07** Thu – Chi ngân sách xã | 8 | 8/8 | ✓ |
 | **08** Thông báo | 2 | 2/2 | ✓ |
 | **09** Phản ánh của người dân | 8 | 6/6 +2 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
 | **11** Quản trị nội dung Mini App | 6 | 6/6 | ✓ |
-| **12** Danh bạ cán bộ | 5 | 2/4 +1 ngoài web | ✓ |
+| **12** Danh bạ cán bộ | 5 | 5/5 | ✓ |
 | **13** Báo cáo điều hành | — | — | — |
 | **14** Cấu hình hệ thống | 59 | 59/59 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 5 | 5/5 | ✓ |
 
-Tổng **127 tuyến** trong hợp đồng. **4** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **129 tuyến** trong hợp đồng. **4** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -66,11 +66,11 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 9 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 11 |
 | 10 | Bản đồ kinh tế số | — | — | ✗ | |
 | 11 | Nội dung Mini App | `/noi-dung` | `QUYEN_XEM_NOI_DUNG` | ✓ | 11 |
-| 12 | Danh bạ cán bộ | `/danh-ba` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 7 |
+| 12 | Danh bạ cán bộ | `/danh-ba` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 4 |
 | 13 | Báo cáo | — | — | ✗ | |
 | 14 | Cấu hình | `/cau-hinh` | `QUYEN_QUAN_LY_DANH_MUC` | ✓ | 10 |
 
-**10/14** mục menu có màn thật. **89** phần chưa dựng đang hiện trên các màn ấy.
+**10/14** mục menu có màn thật. **86** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -101,19 +101,19 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
-| `_chung` | 20 | 2 | 8 | 5 |
+| `_chung` | 20 | 2 | 8 | 6 |
 | `citizen-app` | 11 | 2 | 4 | 0 |
 | `core` | 9 | 0 | 1 | 1 |
 | `deploy` | 13 | 0 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
 | `proto` | 8 | 0 | 0 | 0 |
 | `service-comms` | 7 | 3 | 2 | 4 |
-| `service-documents` | 5 | 1 | 3 | 0 |
+| `service-documents` | 5 | 2 | 4 | 0 |
 | `service-finance` | 13 | 3 | 0 | 0 |
-| `service-identity` | 14 | 7 | 1 | 1 |
-| `service-petitions` | 11 | 7 | 4 | 0 |
+| `service-identity` | 14 | 7 | 2 | 1 |
+| `service-petitions` | 11 | 7 | 5 | 0 |
 | `service-platform` | 3 | 1 | 0 | 1 |
 | `service-reporting` | 0 | 0 | 1 | 0 |
 | `tools` | 14 | 0 | 0 | 0 |
-| `web-admin` | 2 | 16 | 4 | 2 |
+| `web-admin` | 3 | 16 | 3 | 2 |
 

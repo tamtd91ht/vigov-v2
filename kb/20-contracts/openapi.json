@@ -3869,6 +3869,71 @@
           }
         }
       },
+      "get": {
+        "summary": "Một văn bản đến của xã, cùng dạng với một dòng của danh sách — dùng cho ngăn chi tiết",
+        "operationId": "documents_get_incoming_documents_by_id",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.read"
+        },
+        "x-vigov-task": "18fcb84a6040",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.vanBanDenRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "patch": {
         "summary": "Sửa thông tin một văn bản đến đã vào sổ (số đến, trạng thái và hạn xử lý không sửa được)",
         "operationId": "documents_patch_incoming_documents_by_id",
@@ -3976,6 +4041,71 @@
           }
         }
       ],
+      "get": {
+        "summary": "Dòng thời gian chuyển xử lý của một văn bản đến, cũ nhất trước — chỉ đọc",
+        "operationId": "documents_get_incoming_documents_by_id_routings",
+        "tags": [
+          "documents"
+        ],
+        "x-vigov-screen": "05-van-ban-don-thu §3.5",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "document.read"
+        },
+        "x-vigov-task": "a4fb0c1ac4fb",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/documents.danhSachLichSuChuyenRa"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "summary": "Chuyển văn bản đến cho một bộ phận xử lý, kèm ý kiến chỉ đạo — ghi vào dòng thời gian không sửa được",
         "operationId": "documents_post_incoming_documents_by_id_routings",
@@ -12131,6 +12261,21 @@
         ],
         "additionalProperties": false
       },
+      "documents.danhSachLichSuChuyenRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/documents.lichSuChuyenRa"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
       "documents.danhSachLoaiVanBanRa": {
         "type": "object",
         "properties": {
@@ -12155,6 +12300,58 @@
         },
         "required": [
           "reason"
+        ],
+        "additionalProperties": false
+      },
+      "documents.lichSuChuyenRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "routed_at": {
+            "type": "string",
+            "description": "RFC 3339 — the instant of the act"
+          },
+          "routed_by": {
+            "type": "string",
+            "description": "staff business code of who routed it"
+          },
+          "status": {
+            "type": "string",
+            "description": "the state the document moved INTO by this act"
+          },
+          "from_unit": {
+            "type": "string",
+            "description": "empty on the first routing: nobody held it"
+          },
+          "to_unit": {
+            "type": "string"
+          },
+          "assignee": {
+            "type": "string",
+            "description": "empty = \"Để bộ phận tự phân công\""
+          },
+          "reason": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "description": "RFC 3339 — when the row was written"
+          }
+        },
+        "required": [
+          "created_at",
+          "document_id",
+          "id",
+          "reason",
+          "routed_at",
+          "routed_by",
+          "status",
+          "to_unit"
         ],
         "additionalProperties": false
       },

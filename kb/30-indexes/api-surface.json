@@ -894,6 +894,26 @@
     },
     {
       "service": "documents",
+      "method": "GET",
+      "path": "/api/v1/incoming-documents/{id}",
+      "operation_id": "documents_get_incoming_documents_by_id",
+      "task_id": "18fcb84a6040",
+      "summary": "Một văn bản đến của xã, cùng dạng với một dòng của danh sách — dùng cho ngăn chi tiết",
+      "screen": "05-van-ban-don-thu §3.5",
+      "permission_kind": "permission",
+      "permission": "document.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "documents.vanBanDenRa",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
       "method": "PATCH",
       "path": "/api/v1/incoming-documents/{id}",
       "operation_id": "documents_patch_incoming_documents_by_id",
@@ -912,6 +932,26 @@
         "403": "httpx.Error",
         "404": "httpx.Error",
         "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes.go"
+    },
+    {
+      "service": "documents",
+      "method": "GET",
+      "path": "/api/v1/incoming-documents/{id}/routings",
+      "operation_id": "documents_get_incoming_documents_by_id_routings",
+      "task_id": "a4fb0c1ac4fb",
+      "summary": "Dòng thời gian chuyển xử lý của một văn bản đến, cũ nhất trước — chỉ đọc",
+      "screen": "05-van-ban-don-thu §3.5",
+      "permission_kind": "permission",
+      "permission": "document.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "documents.danhSachLichSuChuyenRa",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-documents/internal/http/routes.go"

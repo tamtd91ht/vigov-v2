@@ -197,6 +197,15 @@
       "no_confirm": [],
       "tiep_theo": "LƯỢT ĐÃ XONG CẢ BỐN CHỨC NĂNG ở máy chủ và web (web: web-admin/cau-hinh-bon-chuc-nang-web). CHƯA CHẠY POSTGRESQL THẬT: PUT /roles/{id}/permissions KHÔNG có ca pg nào (kể cả SKIP) — FOR UPDATE thật, FK quyen_ma, cách pgx gắn ANY($3) chưa từng chạy; org-units và hai danh mục có ca pg nhưng SKIP ở máy này. Việc treo sinh ra: xa-moi-khong-co-vai-tro-va-quyen (cần ADR); Xoá bộ phận (hợp đồng xuyên service); tạo vai trò mới.",
       "menu": "cau-hinh"
+    },
+    {
+      "id": "tuyen-danh-ba-can-bo-hep",
+      "viec": "Tuyến đọc danh bạ cán bộ HẸP cho ô chọn cán bộ — id, họ tên, chức danh, bộ phận; không SĐT/email",
+      "trang_thai": "chua_lam",
+      "bang_chung": "cross-context-scout 24/09/2026: GET /api/v1/staff đòi admin.user (internal/http/routes.go:719) nên văn thư không chọn được cán bộ; nợ chung Nhiệm vụ (web nhan-nhiem-vu.ts:1441), Phản ánh (nhan-phieu.ts:433,508), Thông báo (nhan-thong-bao.ts:337), Văn bản & đơn thư (so-van-ban-den.tsx:1020).",
+      "no_confirm": [],
+      "tiep_theo": "NGƯỜI DÙNG CHỌN 24/09/2026: tuyến mới, AnyAuthenticated có lý do (luật 5 đk dừng #1 — người dùng đã quyết), trong một xã, không trường dữ liệu cá nhân nhạy cảm. Chưa dựng — lượt sau (go-service-builder identity), rồi web thay ô chọn ở bốn menu.",
+      "menu": "van-ban-don-thu"
     }
   ]
 }
