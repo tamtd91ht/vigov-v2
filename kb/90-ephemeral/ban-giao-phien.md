@@ -58,6 +58,7 @@ tiến độ tương ứng (khoá `tiep_theo`/`bang_chung`).
 | **Báo công dân theo bảng** (6 chuyển trạng thái, không báo dang-phan-loai/dang-xu-ly/da-xu-ly, không bao giờ gửi tên cán bộ/nội dung/ảnh) | 24/09 | người dùng | ADR 0041 |
 | Phản ánh: cờ ảnh nghiệm thu **giữ #7 mặc định BẬT**; **gia hạn** có (lãnh đạo duyệt, hạn gốc giữ); **tự đóng** phiếu chờ dân sau N ngày; 1–2 sao vào **hàng lãnh đạo xem**; ranh giới với đơn thư theo nội dung + hình thức (tố cáo cán bộ sang sổ đơn thư). Chưa dựng | 24/09 | người dùng (chọn đề xuất) | `service-petitions/vong-doi-phieu-phan-anh` |
 | Tên URL danh bạ hẹp: **`staff-directory`** | 24/09 | người dùng | `ubiquitous-language.md` |
+| Hai nhánh phiếu: **`…/rejection` · `…/referral`**, khoá **`feedback.classify`**; máy chủ **kiểm người được giao** qua identity (RPC mới `ResolveAssignableStaff`) | 25/09 | người dùng | `ubiquitous-language.md` · `service-petitions/duong-xu-ly-phan-anh-phia-can-bo` |
 | Mini App phản ánh: **dựng màn, nguồn phiên ViGov fail closed**, ẩn khỏi bản nộp — chưa có cầu phiên vihat-miniapp → ViGov | 24/09 | người dùng | `citizen-app/cau-phien-cong-dan-vigov` (cần ADR) |
 
 **Cần biết về 34 câu trong `open-questions.json`:** cả 34 đều DECIDED, nhưng nhiều câu (#21, #27 và
@@ -93,7 +94,6 @@ Bảng *"Nợ khách chốt"* ở đầu `tien-do.md` sinh từ `no_confirm`; h�
 | Hai câu ở `deploy/README.md` mục 11.0 (dải CIDR netpol, KUBECONFIG theo môi trường) | phiên CI/deploy chờ để sửa `netpol.yaml`, `deploy/Jenkinsfile` | `deploy/README.md` §11.0 |
 | **Cờ ảnh nghiệm thu phản ánh**: vigov-require `b9a9718` mặc định TẮT, câu #7 (ADR 0008) chốt mặc định BẬT — mâu thuẫn với câu KHÁCH đã chốt | cờ chưa dựng; ai dựng phải hỏi trước | `service-petitions/doi-chieu-24-09-nhiem-vu-phan-anh` |
 | **Cầu phiên công dân**: đăng nhập Mini App (vihat-miniapp) không ra được CitizenSession ViGov — không công dân thật nào gọi được tuyến CitizenOnly | cả kênh công dân | `citizen-app/cau-phien-cong-dan-vigov` |
-| Petitions **không kiểm `assignee`** có thật trong xã — mã sai lưu được, im lặng | luật nắm giữ, Giao cho tôi | `service-petitions/duong-xu-ly-phan-anh-phia-can-bo` |
 | **Bộ trạng thái riêng của VĂN BẢN ĐẾN** (C2; domain-expert đề xuất theo NĐ 30/2020) | tuyến đổi trạng thái văn bản đến | `service-documents/van-ban-den-tuyen-con-thieu` |
 | Ngày làm việc hay ngày lịch cho hạn KN Đ.28 / TC Đ.29 — **hỏi pháp chế**; và cần ADR vì ADR 0007 tính GIỜ | gieo số SLA đơn thư | `service-documents/so-don-thu-cong-dan` |
 
@@ -127,6 +127,7 @@ phép kiểm xanh vì lý do sai. Gặp cái tiếp theo cùng dạng thì hỏi
 | `workflow_guard` nêu tên phiên ở mọi lần dừng, kể cả lượt chỉ `git log` | Nó đếm tệp theo cả cửa sổ phiên. `_chung/workflow-guard-dem-ca-cua-so-phien` |
 | codegraph trả ký hiệu thật nhưng **không phải của kho này** | MCP toàn cục trỏ dự án khác. **Luôn truyền `projectPath`**; kiểm `codegraph_status` phải có go + typescript, không java. Hook `codegraph_sync` giữ chỉ mục mới sau commit |
 | Tầng always_load ~26980/27000 | Mục kế tiếp đăng ký vào `kb/INDEX.yaml` sẽ đỏ `check_brain` #5. **Đừng nâng trần**; nhường chỗ bằng cách bỏ chữ trùng. `_chung/tang-luon-nap-da-day` |
+| `make web` / vitest đổ `Fatal process out of memory: Zone`, "Tests 357 passed (422)" | Worker chết vì bộ nhớ, không phải ca đỏ. `npx vitest run --maxWorkers=2` thì xanh; đừng chạy song song với một lượt biên dịch Go |
 | `make check` đổ ở `envmap` với `UnicodeEncodeError: 'charmap'` | Console Windows cp1252, không phải lỗi mã. Chạy `PYTHONIOENCODING=utf-8 mingw32-make check` |
 | `tools/apidoc` không sinh được `enum` cho trường | Chỉ có enum cho sort/dir của `@page`. `service-documents/apidoc-sinh-enum-cho-truong` |
 | IDE báo hàng chục lỗi biên dịch Go/TS ngay sau khi agent sửa | Chẩn đoán của language server chụp GIỮA chừng. Tin `go vet`/`go test`/`tsc`, không tin bảng lỗi IDE |
