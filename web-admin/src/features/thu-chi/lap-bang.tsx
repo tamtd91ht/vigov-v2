@@ -5,9 +5,17 @@ import { useState } from "react";
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import type { KetQua } from "@/lib/api/goi";
 import type { finance_cotVao } from "@/lib/api/schema.gen";
-import { taoBang, type LoaiBang } from "@/lib/api/thu-chi";
+import { taoBang, type LoaiBang, type TaoBangVao } from "@/lib/api/thu-chi";
 
-import { boCotKhoiDiem, nhanLoaiBang, vaiTroChoLoai } from "./nhan-thu-chi";
+import {
+  boCotKhoiDiem,
+  DON_VI_KHOI_DIEM,
+  DON_VI_TINH,
+  laMaDonVi,
+  nhanLoaiBang,
+  vaiTroChoLoai,
+  type KetQuaDung,
+} from "./nhan-thu-chi";
 
 /**
  * Biểu mẫu **Lập bảng ngân sách** — thứ thay cho `⬆ Nạp từ Excel` của §6.
@@ -22,12 +30,14 @@ import { boCotKhoiDiem, nhanLoaiBang, vaiTroChoLoai } from "./nhan-thu-chi";
  * CỘT LÀ DỮ LIỆU, KHÔNG PHẢI LƯỢC ĐỒ (§3, kết luận thiết kế) — nên bộ cột dưới đây **sửa được,
  * thêm được, bớt được**. Giá trị điền sẵn chỉ là biểu mẫu thường gặp của §3.1 và §3.2.
  *
- * TIÊU ĐỀ VÀ ĐƠN VỊ TÍNH DO NGƯỜI LẬP GÕ, KHÔNG ĐIỀN SẴN. `BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC XÃ
- * THĂNG BÌNH NĂM 2026` là chữ của MỘT xã, và một chuỗi như thế điền sẵn trong bundle là đúng thứ
- * luật 1 bất biến 10 cấm: một bundle phục vụ mọi xã.
+ * TIÊU ĐỀ DO NGƯỜI LẬP GÕ, KHÔNG ĐIỀN SẴN. `BÁO CÁO CHI NGÂN SÁCH NHÀ NƯỚC XÃ THĂNG BÌNH NĂM
+ * 2026` là chữ của MỘT xã, và một chuỗi như thế điền sẵn trong bundle là đúng thứ luật 1 bất biến
+ * 10 cấm: một bundle phục vụ mọi xã.
  *
- * MỐC LUỸ KẾ CHỈ ĐẶT ĐƯỢC Ở ĐÂY. Hợp đồng không có tuyến sửa bảng, nên đổi `Luỹ kế đến` về sau
- * nghĩa là gỡ cả bảng kèm lý do rồi lập lại — nói ra trên màn hình, không giấu trong chú thích.
+ * ĐƠN VỊ TÍNH LÀ MỘT Ô CHỌN BA MÃ, không phải chữ tự do: máy chủ chỉ nhận `dong` | `nghin-dong` |
+ * `trieu-dong` và trả 400 cho mọi chữ khác, kể cả "Triệu đồng" (`domain.KiemTraDonViTinh`). Đơn vị
+ * là hằng của nền tảng, không phải giá trị riêng của xã. Mốc luỹ kế và đơn vị sửa được về sau ở
+ * "Sửa thông tin bảng".
  */
 export function LapBang({
   nam,
@@ -54,6 +64,7 @@ export function LapBang({
    * `CoBangConSong` từ chối.
    */
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
+  const [loi, datLoi] = useState<string | null>(null);
 
   if (!mo) {
     return (
@@ -71,31 +82,21 @@ export function LapBang({
       onSubmit={(e) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
-        const luyKe = String(fd.get("cumulative_to") ?? "").trim();
-
+        const dung = dungThanTaoBang({
+          nam,
+          loai,
+          tieuDe: String(fd.get("title") ?? ""),
+          donVi: String(fd.get("unit") ?? ""),
+          luyKe: String(fd.get("cumulative_to") ?? ""),
+          cot,
+        });
+        if (!dung.ok) {
+          datLoi(dung.thongBao);
+          return;
+        }
+        datLoi(null);
         datDangGui(true);
-        taoBang(
-          {
-            year: nam,
-            kind: loai,
-            title: String(fd.get("title") ?? ""),
-            unit: String(fd.get("unit") ?? ""),
-            // Chuỗi rỗng KHÔNG được gửi: máy chủ phân giải `cumulative_to` theo khuôn YYYY-MM-DD và
-            // một chuỗi rỗng đi vào đó là 400, ngay ở lần lập bảng đầu tiên của xã.
-            cumulative_to: luyKe === "" ? undefined : luyKe,
-            columns: cot.map((c, i) => ({
-              name: c.name,
-              order: i + 1,
-              type: c.type,
-              // Máy chủ đòi `formula` trên cột `phan_tram` và TỪ CHỐI nó trên cột `so`; `role` thì
-              // ngược lại (`KiemTraCot`, `ErrVaiTroTrenCotPhanTram`). Dựng đúng hình dạng ấy ở đây
-              // để cán bộ không phải học hai quy tắc của máy chủ qua hai lần 400.
-              formula: c.type === "phan_tram" ? c.formula : undefined,
-              role: c.type === "so" && c.role !== "" ? c.role : undefined,
-            })),
-          },
-          khoaChongTrung,
-        ).then(xong);
+        taoBang(dung.than, khoaChongTrung).then(xong);
       }}
     >
       <div className="dau-khoi-chi-tiet">
@@ -125,15 +126,21 @@ export function LapBang({
 
       <p>
         <label htmlFor="lap-unit">Đơn vị tính</label>{" "}
-        <input id="lap-unit" name="unit" className="o-nhap" type="text" required maxLength={50} />
+        <select id="lap-unit" name="unit" required defaultValue={DON_VI_KHOI_DIEM}>
+          {DON_VI_TINH.map((d) => (
+            <option key={d.ma} value={d.ma}>
+              {d.nhan}
+            </option>
+          ))}
+        </select>
       </p>
       <p className="ghi-chu">
-        Đơn vị tính là NHÃN in cạnh các con số. Hệ thống không quy đổi theo nhãn này — số nhập vào
-        và số hiện ra là cùng một con số.
+        Số liệu luôn lưu bằng đồng. Đơn vị tính chỉ quyết định cách hiện và cách gõ số trên bảng, và
+        đổi được về sau mà không con số nào bị quy đổi.
       </p>
 
       <p>
-        <label htmlFor="lap-cumulative">Luỹ kế đến (đặt một lần, không sửa lại được)</label>{" "}
+        <label htmlFor="lap-cumulative">Luỹ kế đến (sửa được về sau)</label>{" "}
         <input id="lap-cumulative" name="cumulative_to" className="o-nhap" type="date" />
       </p>
 
@@ -230,6 +237,12 @@ export function LapBang({
         </button>
       </p>
 
+      {loi !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {loi}
+        </p>
+      )}
+
       <button type="submit" className="nut-chinh" disabled={dangGui || cot.length === 0}>
         Lập bảng
       </button>{" "}
@@ -255,4 +268,44 @@ function doiCot(
   sua: Partial<finance_cotVao>,
 ): readonly finance_cotVao[] {
   return cot.map((c, i) => (i === chiSo ? { ...c, ...sua } : c));
+}
+
+/**
+ * Dựng thân `POST /budget-sheets` từ biểu mẫu.
+ *
+ * ĐƠN VỊ PHẢI LÀ MỘT TRONG BA MÃ, và một giá trị khác bị TỪ CHỐI chứ không bị thay bằng mã khởi
+ * điểm: thay thầm là chọn hệ số chia cho mọi con số của bảng thay cán bộ.
+ */
+export function dungThanTaoBang(nhap: {
+  nam: number;
+  loai: LoaiBang;
+  tieuDe: string;
+  donVi: string;
+  luyKe: string;
+  cot: readonly finance_cotVao[];
+}): KetQuaDung<TaoBangVao> {
+  if (!laMaDonVi(nhap.donVi)) return { ok: false, thongBao: "Chọn đơn vị tính của bảng." };
+  const luyKe = nhap.luyKe.trim();
+  return {
+    ok: true,
+    than: {
+      year: nhap.nam,
+      kind: nhap.loai,
+      title: nhap.tieuDe,
+      unit: nhap.donVi,
+      // Chuỗi rỗng KHÔNG được gửi: máy chủ phân giải `cumulative_to` theo khuôn YYYY-MM-DD và
+      // một chuỗi rỗng đi vào đó là 400, ngay ở lần lập bảng đầu tiên của xã.
+      cumulative_to: luyKe === "" ? undefined : luyKe,
+      columns: nhap.cot.map((c, i) => ({
+        name: c.name,
+        order: i + 1,
+        type: c.type,
+        // Máy chủ đòi `formula` trên cột `phan_tram` và TỪ CHỐI nó trên cột `so`; `role` thì
+        // ngược lại (`KiemTraCot`, `ErrVaiTroTrenCotPhanTram`). Dựng đúng hình dạng ấy ở đây
+        // để cán bộ không phải học hai quy tắc của máy chủ qua hai lần 400.
+        formula: c.type === "phan_tram" ? c.formula : undefined,
+        role: c.type === "so" && c.role !== "" ? c.role : undefined,
+      })),
+    },
+  };
 }

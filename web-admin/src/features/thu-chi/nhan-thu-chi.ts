@@ -15,16 +15,10 @@ import type {
   finance_cotRa,
   finance_cotVao,
   finance_dongRa,
+  finance_ghiDotVao,
   finance_soTienRa,
 } from "@/lib/api/schema.gen";
-import type { LoaiBang } from "@/lib/api/thu-chi";
-
-/**
- * Định dạng số theo `vi-VN`, GHIM chứ không theo cài đặt của máy: dấu phân cách hàng nghìn khác
- * nhau giữa các miền địa phương làm `3.794.740` đọc thành ba triệu ở máy này và thành ba phẩy ở
- * máy khác.
- */
-const DINH_DANG_SO = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
+import type { LoaiBang, SuaBangVao } from "@/lib/api/thu-chi";
 
 /** Hai chữ số thập phân, đúng đơn vị đặc tả in ra cho phần trăm: `108,11%`. */
 const DINH_DANG_PHAN_VAN = new Intl.NumberFormat("vi-VN", {
@@ -35,25 +29,132 @@ const DINH_DANG_PHAN_VAN = new Intl.NumberFormat("vi-VN", {
 /** Ô rỗng, §9 quy tắc 4: giá trị trống hiện `—`, **không bao giờ** hiện `0`. */
 export const O_TRONG = "—";
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * ĐƠN VỊ TÍNH — MÁY CHỦ GIỮ ĐỒNG, MÀN HÌNH CHIA KHI VẼ VÀ NHÂN KHI NHẬN
+ *
+ * Quyết định của khách 25/09/2026: tiền trên dây là SỐ NGUYÊN ĐỒNG (`int64`), và bảng mang một
+ * đơn vị hiển thị đóng — `dong` | `nghin-dong` | `trieu-dong`. Trước đó màn hình in số đồng thô
+ * cạnh nhãn "Triệu đồng": lệch 10⁶ lần.
+ *
+ * KHÔNG MỘT PHÉP NHÂN HAY CHIA SỐ THỰC NÀO. `1,005 × 1e6` trong JS là `1004999.9999999999`: một
+ * phép quy đổi bằng số thực làm mất một đồng ở đúng những con số trông tròn nhất. Cả hai chiều ở
+ * đây là phép DỜI DẤU PHẨY trên chuỗi chữ số (và `BigInt` cho phép dựng lại số nguyên), nên một
+ * giá trị đồng đi ra màn hình rồi quay lại là ĐÚNG giá trị ấy.
+ *
+ * SỐ CHỮ SỐ LẺ = log10(hệ số): triệu nhận tới 6, nghìn tới 3, đồng 0. Đủ để MỌI giá trị đồng viết
+ * được trong đơn vị của bảng, và không hơn — chữ số thứ 7 sau dấu phẩy của "triệu" là phần lẻ của
+ * một đồng, thứ không có. HIỂN THỊ cũng CHÍNH XÁC (bỏ số 0 cuối), không làm tròn về 2 chữ số: một
+ * con số công bị làm tròn trên màn hình là một con số khác con số đang lưu, và ô sửa điền sẵn phải
+ * đọc lại đúng giá trị ấy để "Lưu" mà không sửa gì không đổi con số nào.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Ba mã đơn vị máy chủ nhận (`domain.KiemTraDonViTinh`). */
+export type MaDonVi = "dong" | "nghin-dong" | "trieu-dong";
+
 /**
- * ─────────────────────────────────────────────────────────────────────────────────────────
- * IN THẲNG SỐ MÁY CHỦ TRẢ, KHÔNG QUY ĐỔI — VÀ ĐÂY LÀ MỘT CÂU KHÁCH CHƯA CHỐT.
+ * Ba đơn vị kèm nhãn — cho Ô CHỌN của biểu mẫu lập và sửa bảng.
  *
- * `bang.unit` là **chuỗi tự do** mô tả thứ màn hình in ("Triệu đồng"). Hợp đồng không kèm hệ số
- * quy đổi nào, và không có ánh xạ nào từ chữ ấy sang một số chia. Nên hàm này in đúng con số máy
- * chủ gửi và màn hình hiện `unit` thành nhãn bên cạnh.
- *
- * Chia cho 1e6 mỗi khi chuỗi tình cờ đọc là "Triệu đồng" sẽ là một quyết định THẦM về cách in một
- * con số công: một xã ghi `unit` khác đi sẽ thấy số lệch **một triệu lần**, và không bài kiểm nào
- * đỏ. Đã ghi vào báo cáo để khách chốt.
- * ─────────────────────────────────────────────────────────────────────────────────────────
+ * Nhãn chép đúng `domain.nhanDonViTinh`. Đây là hằng của NỀN TẢNG, không phải của một xã; bảng đã
+ * có thì màn hình in `unit_label` máy chủ gửi, không in nhãn này.
  */
-export function nhanSoTien(gia: number | null): string {
+export const DON_VI_TINH: readonly { ma: MaDonVi; nhan: string }[] = [
+  { ma: "dong", nhan: "Đồng" },
+  { ma: "nghin-dong", nhan: "Nghìn đồng" },
+  { ma: "trieu-dong", nhan: "Triệu đồng" },
+];
+
+/** Đơn vị điền sẵn khi lập bảng: biểu của Phòng Tài chính in triệu đồng (§2). */
+export const DON_VI_KHOI_DIEM: MaDonVi = "trieu-dong";
+
+const SO_CHU_SO_LE: Readonly<Record<MaDonVi, number>> = {
+  dong: 0,
+  "nghin-dong": 3,
+  "trieu-dong": 6,
+};
+
+/** Chuỗi có phải một trong ba mã không. Không đoán từ nhãn ("Triệu đồng" KHÔNG phải mã). */
+export function laMaDonVi(tho: string): tho is MaDonVi {
+  return tho === "dong" || tho === "nghin-dong" || tho === "trieu-dong";
+}
+
+/** Đơn vị màn hình dùng để vẽ và nhận số của MỘT bảng. */
+export type DonViHien = {
+  readonly ma: MaDonVi;
+  readonly nhan: string;
+  /** Có câu này thì màn hình KHÔNG quy đổi, và phải hiện câu ấy nổi bật. */
+  readonly canhBao: string | null;
+  /** Chữ đơn vị cũ đang lưu, khi máy chủ không ánh xạ được nó. */
+  readonly nhanCu: string | null;
+};
+
+/**
+ * Đơn vị của một bảng.
+ *
+ * FAIL CLOSED VỀ ĐỒNG, KHÔNG VỀ MỘT HỆ SỐ ĐOÁN: bảng lập trước khi danh sách đóng lại có thể giữ
+ * chữ tự do; máy chủ khi ấy gửi `unit` rỗng, `unit_label` là chữ cũ và `unit_warning`. Chia cho
+ * một hệ số đoán từ chữ ấy là hiện mọi con số lệch một nghìn hay một triệu lần. In đồng thô kèm
+ * nhãn "đồng" thì đúng — chỉ khó đọc — và câu cảnh báo nói việc phải làm.
+ */
+export function donViCuaBang(bang: finance_bangRa): DonViHien {
+  const canhBao = (bang.unit_warning ?? "").trim();
+  if (canhBao === "" && laMaDonVi(bang.unit)) {
+    const nhan = bang.unit_label.trim() !== "" ? bang.unit_label : nhanMaDonVi(bang.unit);
+    return { ma: bang.unit, nhan, canhBao: null, nhanCu: null };
+  }
+  return {
+    ma: "dong",
+    nhan: "đồng",
+    canhBao:
+      canhBao !== ""
+        ? canhBao
+        : `Mã đơn vị tính "${bang.unit}" không thuộc danh sách đồng / nghìn đồng / triệu đồng — ` +
+          "số hiện theo đồng, không quy đổi.",
+    nhanCu: bang.unit_label.trim() !== "" ? bang.unit_label : null,
+  };
+}
+
+function nhanMaDonVi(ma: MaDonVi): string {
+  return DON_VI_TINH.find((d) => d.ma === ma)?.nhan ?? ma;
+}
+
+/**
+ * Số nguyên đồng → chữ theo đơn vị, kiểu `vi-VN`: `3463459200000` (triệu) ⇒ `3.463.459,2`.
+ *
+ * Dời dấu phẩy trên chuỗi chữ số; không chia. `String()` của một số nguyên an toàn không bao giờ
+ * ra dạng mũ (chỉ từ 1e21 trở lên), nên chuỗi chữ số là chính xác.
+ */
+export function dongSangChuoi(dong: number, donVi: MaDonVi): string {
+  const soLe = SO_CHU_SO_LE[donVi];
+  const am = dong < 0;
+  const chu = String(Math.abs(dong)).padStart(soLe + 1, "0");
+  const nguyen = chu.slice(0, chu.length - soLe);
+  const le = chu.slice(chu.length - soLe).replace(/0+$/, "");
+  const nhom = nguyen.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${am ? "-" : ""}${nhom}${le === "" ? "" : `,${le}`}`;
+}
+
+/**
+ * Một ô tiền. `null` là ô trống (`—`), KHÔNG PHẢI 0 (§9 quy tắc 4).
+ *
+ * Giá trị không phải số nguyên an toàn là hợp đồng hỏng (máy chủ gửi `int64` đồng), không phải
+ * một trạng thái nghiệp vụ: nó nói ra bằng một câu KHÁC thay vì làm tròn hay in "NaN".
+ */
+export function nhanSoTien(gia: number | null, donVi: MaDonVi): string {
   if (gia === null) return O_TRONG;
-  // Ca "có giá trị nhưng không phải số hữu hạn" là hợp đồng hỏng, không phải một trạng thái
-  // nghiệp vụ, nên nó nói ra bằng một câu KHÁC thay vì hiện chữ "NaN".
-  if (!Number.isFinite(gia)) return "Không đọc được";
-  return DINH_DANG_SO.format(gia);
+  if (!Number.isSafeInteger(gia)) return "Không đọc được";
+  return dongSangChuoi(gia, donVi);
+}
+
+/** Câu nói ra cách con số được quy đổi — hiện cạnh đơn vị tính, không nằm trong chú thích mã. */
+export function cauQuyDoi(donVi: DonViHien): string {
+  if (donVi.ma === "dong") {
+    return "Số liệu lưu bằng đồng và hiện bằng đồng, không quy đổi.";
+  }
+  const heSo = donVi.ma === "nghin-dong" ? "1.000" : "1.000.000";
+  return (
+    `Số liệu lưu bằng đồng; màn hình chia cho ${heSo} để hiện theo ${donVi.nhan.toLowerCase()}. ` +
+    `Số gõ vào ô cũng được hiểu theo ${donVi.nhan.toLowerCase()}.`
+  );
 }
 
 /**
@@ -80,30 +181,25 @@ export function nhanChiSo(c: finance_chiSoRa): string {
 }
 
 /** Một số tiền của thẻ chỉ số: hoặc con số, hoặc NGUYÊN câu máy chủ nói vì sao không có. */
-export function nhanSoTienChiSo(s: finance_soTienRa): string {
-  if (s.amount !== null) return nhanSoTien(s.amount);
+export function nhanSoTienChiSo(s: finance_soTienRa, donVi: MaDonVi): string {
+  if (s.amount !== null) return nhanSoTien(s.amount, donVi);
   return s.unavailable_reason !== undefined && s.unavailable_reason !== ""
     ? s.unavailable_reason
     : O_TRONG;
 }
 
 /**
- * `Cách tính` — HAI giá trị, không ba, và **không ai chọn nó**.
+ * `Cách tính` — ba chế độ của §4.2, nhưng CHỈ HAI là lựa chọn.
  *
- * §4.2 vẽ một ô chọn ba giá trị. Cả hai điều ấy đã sai ở máy chủ đang chạy:
- *
- *   - `entries` ("Cộng theo đợt") KHÔNG TỒN TẠI: bảng `dot_thu_chi` không có, tuyến đợt không có,
- *     nên một dòng đặt chế độ ấy sẽ báo 0 ở mọi cột trong khi trông như một tính năng đang chạy
- *     (`domain.CachTinh`, migration 0006).
- *   - Client gửi `method` lên nhận **400** (`ErrCachTinhDoTuClient`). Máy suy nó từ CÂY:
- *     `CachTinhTheoCay(coCon)` — có con thì cộng con, không con thì nhập tay.
- *
- * Nên cột này ở màn hình là CHỮ CHỈ ĐỌC, không phải ô chọn. Nhãn giữ nguyên văn của §4.2.
+ * `children` do CÂY quyết định (có con thì cộng con), gửi lên là 400. Dòng LÁ chọn giữa `manual`
+ * và `entries` (quyết định của khách 25/09/2026). Nhãn giữ nguyên văn của §4.2.
  */
 export function nhanCachTinh(method: string): string {
   switch (method) {
     case "manual":
       return "Nhập trực tiếp";
+    case "entries":
+      return "Cộng theo đợt";
     case "children":
       return "Cộng khoản mục con";
     default:
@@ -112,31 +208,285 @@ export function nhanCachTinh(method: string): string {
   }
 }
 
-/** Ô số có sửa được không: dòng có con thì con số là TỔNG của các con, gõ vào đó là 409. */
+/** Hai lựa chọn của ô chọn `Cách tính` trên một dòng lá. */
+export const CACH_TINH_CHON: readonly { ma: "manual" | "entries"; nhan: string }[] = [
+  { ma: "manual", nhan: "Nhập trực tiếp" },
+  { ma: "entries", nhan: "Cộng theo đợt" },
+];
+
+/**
+ * Dòng này có ĐƯỢC CHỌN cách tính không: dòng lá đang ở một trong hai chế độ chọn được.
+ *
+ * Xét CẢ cây lẫn mã máy chủ gửi: một dòng có con trên cây đang vẽ, hay một dòng máy chủ nói là
+ * `children`, đều không có ô chọn — gửi `method` cho nó là 409 hoặc 400.
+ */
+export function chonDuocCachTinh(method: string, coCon: boolean): method is "manual" | "entries" {
+  return !coCon && (method === "manual" || method === "entries");
+}
+
+/**
+ * Câu cảnh báo TRƯỚC khi đổi cách tính — nói đúng điều máy chủ sẽ làm với con số.
+ *
+ * `entries → manual`: máy chủ CHÉP tổng các đợt vào ô số trong cùng giao dịch. `manual →
+ * entries`: số gõ tay được GIỮ nhưng không hiện nữa. Cả hai đổi con số đang hiện trên bảng và
+ * trong hai chỉ số của năm, nên không đổi bằng một lần chọn im lặng.
+ */
+export function canhBaoDoiCachTinh(den: "manual" | "entries"): string {
+  if (den === "manual") {
+    return (
+      "Chuyển về Nhập trực tiếp: hệ thống chép tổng các đợt hiện có vào các ô số của khoản mục, " +
+      "rồi từ đó con số được gõ tay. Các đợt đã ghi vẫn được giữ nhưng không còn được cộng."
+    );
+  }
+  return (
+    "Chuyển sang Cộng theo đợt: con số của khoản mục sẽ là tổng các đợt ghi ở hộp ⇄. Số đang gõ " +
+    "tay được giữ lại nhưng không hiện nữa, và ô số không sửa được cho tới khi chuyển về Nhập " +
+    "trực tiếp."
+  );
+}
+
+/** Ô số có sửa được không: chỉ dòng `manual`. Dòng có con cộng con; dòng `entries` cộng đợt. */
 export function suaDuocOSo(method: string): boolean {
   return method === "manual";
 }
 
 /**
- * Một ô số vừa gõ đọc thành gì — BA kết quả, và gộp bất kỳ hai cái nào là mất dữ liệu.
+ * Một ô tiền vừa gõ đọc thành gì — BA kết quả, và gộp bất kỳ hai cái nào là mất dữ liệu.
  *
  *   `trong` → ô để trống, nghĩa là **XOÁ TRẮNG** ô ấy (`values[cot] = null`, §9 quy tắc 4). Đây là
  *             lý do nó không được gộp với `loi`: một lần gõ hỏng mà bị đọc thành "trống" sẽ lặng lẽ
  *             xoá một con số ngân sách đang có.
- *   `so`    → số NGUYÊN. Giá trị đi trên dây là `int64` đồng (`domain.Dong`); một số lẻ gửi lên sẽ
- *             bị phân giải thành thứ khác ở phía Go, nên nó bị chặn ở đây kèm câu giải thích thay
- *             vì làm tròn thầm.
- *   `loi`   → mọi thứ còn lại. Không đoán, không làm tròn, không bỏ qua.
+ *   `so`    → số NGUYÊN ĐỒNG, đã quy đổi từ đơn vị của bảng — đúng thứ đi trên dây.
+ *   `loi`   → mọi thứ còn lại, kèm câu nói vì sao. Không đoán, không làm tròn, không bỏ qua.
  */
-export type SoNhap = { loai: "trong" } | { loai: "so"; gia: number } | { loai: "loi" };
+export type SoNhap = { loai: "trong" } | { loai: "so"; gia: number } | { loai: "loi"; viSao: string };
 
-export function docSoNhap(tho: string): SoNhap {
+/** `3463459,2` — không nhóm hàng nghìn. */
+const KHUON_KHONG_NHOM = /^(-?)(\d+)(?:,(\d+))?$/;
+/** `3.463.459,2` — dấu chấm ngăn ĐÚNG từng nhóm ba chữ số. */
+const KHUON_CO_NHOM = /^(-?)(\d{1,3}(?:\.\d{3})+)(?:,(\d+))?$/;
+
+const CAU_SAI_KHUON =
+  "viết số theo kiểu Việt Nam: dấu chấm ngăn hàng nghìn, dấu phẩy trước phần lẻ (ví dụ 3.463.459,2).";
+
+/**
+ * Chữ gõ theo đơn vị của bảng → số nguyên đồng.
+ *
+ * `1.5` BỊ TỪ CHỐI, không đoán: ở `vi-VN` dấu chấm là dấu nhóm hàng nghìn, nên `1.500` là một nghìn
+ * năm trăm; `1.5` không khớp khuôn nhóm nào và đọc nó thành một phẩy năm là đoán theo thói quen
+ * của một bàn phím khác — lệch một nghìn lần.
+ *
+ * Quy đổi bằng NỐI CHUỖI: phần nguyên + phần lẻ đệm đủ số chữ số của đơn vị, rồi `BigInt`. Không
+ * số thực nào đi qua, nên `1,005` triệu là đúng `1005000` đồng.
+ */
+export function docSoNhap(tho: string, donVi: MaDonVi): SoNhap {
   const sach = tho.trim();
   if (sach === "") return { loai: "trong" };
-  const n = Number(sach);
-  if (!Number.isFinite(n) || !Number.isInteger(n)) return { loai: "loi" };
-  return { loai: "so", gia: n };
+
+  const khop = KHUON_KHONG_NHOM.exec(sach) ?? KHUON_CO_NHOM.exec(sach);
+  if (khop === null) return { loai: "loi", viSao: `Hãy ${CAU_SAI_KHUON}` };
+
+  const dau = khop[1] ?? "";
+  const nguyen = (khop[2] ?? "").replaceAll(".", "");
+  const le = khop[3] ?? "";
+  const soLe = SO_CHU_SO_LE[donVi];
+
+  if (le.length > soLe) {
+    return {
+      loai: "loi",
+      viSao:
+        soLe === 0
+          ? "Đơn vị đồng không có phần lẻ sau dấu phẩy."
+          : `Đơn vị ${nhanMaDonVi(donVi).toLowerCase()} nhận tối đa ${soLe} chữ số sau dấu phẩy ` +
+            "(đủ để ghi tới từng đồng).",
+    };
+  }
+
+  let dong = BigInt(nguyen + le.padEnd(soLe, "0"));
+  if (dau === "-") dong = -dong;
+
+  const tran = BigInt(Number.MAX_SAFE_INTEGER);
+  if (dong > tran || dong < -tran) {
+    return { loai: "loi", viSao: "Số quá lớn để ghi." };
+  }
+  // `+ 0` gộp `-0` về `0`: "-0" là một cách gõ số 0, không phải một giá trị khác.
+  return { loai: "so", gia: Number(dong) + 0 };
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * HỘP "CÁC ĐỢT THU, CHI" (§5) VÀ BIỂU MẪU SỬA BẢNG (§6)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Nhãn a11y của nút `⇄`, nguyên văn §4.1. */
+export function nhanNutDot(ten: string): string {
+  return `Các đợt thu, chi của ${ten}`;
+}
+
+/** Tiêu đề hộp: tên khoản mục VIẾT HOA (§5). `vi-VN` để `đ` thành `Đ`. */
+export function tieuDeHopDot(ten: string): string {
+  return ten.toLocaleUpperCase("vi-VN");
+}
+
+/** Câu mô tả của §5, nguyên văn. */
+export const MO_TA_HOP_DOT =
+  "Ghi từng đợt thu, chi rồi hệ thống cộng lại. Con số của khoản mục này lấy từ tổng các đợt bên " +
+  "dưới, không gõ thẳng nữa.";
+
+export const DOT_TRONG = "Chưa ghi đợt nào.";
+
+/**
+ * Câu nói ra ĐIỀU KIỆN để đợt được cộng. Ghi đợt KHÔNG tự chuyển dòng sang `entries`
+ * (`routes.go:1204`), nên một cán bộ ghi đợt vào dòng đang `manual` sẽ không thấy con số đổi — và
+ * phải được biết vì sao trước khi nghĩ rằng hệ thống hỏng.
+ */
+export function cauDieuKienDot(method: string): string {
+  const dang = `Khoản mục đang tính theo: ${nhanCachTinh(method)}.`;
+  return method === "entries"
+    ? `Các đợt chỉ được cộng vào khoản mục khi Cách tính là "Cộng theo đợt". ${dang}`
+    : `Các đợt chỉ được cộng vào khoản mục khi Cách tính là "Cộng theo đợt". ${dang} ` +
+        "Các đợt ghi lúc này được lưu nhưng chưa được cộng.";
+}
+
+/** Giới hạn độ dài máy chủ đặt cho ba trường chữ của một đợt. */
+export const DO_DAI_TOI_DA_DOT = { content: 1000, counterparty: 300, document_no: 100 } as const;
+
+/** Thứ biểu mẫu ghi đợt đọc được, còn là chữ thô. */
+export type NhapDot = {
+  ngay: string;
+  noiDung: string;
+  doiTac: string;
+  soChungTu: string;
+  /** mã cột → chữ gõ trong ô, theo đơn vị của bảng */
+  gia: Readonly<Record<string, string>>;
+};
+
+export type KetQuaDung<T> = { ok: true; than: T } | { ok: false; thongBao: string };
+
+/** Độ dài theo KÝ TỰ, không theo đơn vị UTF-16: chữ Việt tổ hợp không được tính gấp đôi. */
+function doDai(s: string): number {
+  return [...s].length;
+}
+
+/**
+ * Dựng thân `POST …/entries` từ biểu mẫu.
+ *
+ * CHỈ CỘT SỐ: cột phần trăm không lưu giá trị (§9 quy tắc 3) — lọc lại ở đây dù phía gọi đã lọc,
+ * vì một cột `%` lọt vào thân là 400 ở mọi lần ghi. Cột để trống đi lên thành `null` (ô trống),
+ * không phải 0. Phải có ÍT NHẤT một số tiền: một đợt không có số nào là một dòng vô nghĩa trong
+ * sổ, và máy chủ từ chối nó.
+ */
+export function dungThanDot(
+  nhap: NhapDot,
+  cot: readonly finance_cotRa[],
+  donVi: MaDonVi,
+): KetQuaDung<finance_ghiDotVao> {
+  const ngay = nhap.ngay.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ngay)) {
+    return { ok: false, thongBao: "Chọn ngày của đợt." };
+  }
+  const noiDung = nhap.noiDung.trim();
+  if (noiDung === "") return { ok: false, thongBao: "Nhập nội dung của đợt." };
+  if (doDai(noiDung) > DO_DAI_TOI_DA_DOT.content) {
+    return { ok: false, thongBao: `Nội dung dài quá ${DO_DAI_TOI_DA_DOT.content} ký tự.` };
+  }
+  const doiTac = nhap.doiTac.trim();
+  if (doDai(doiTac) > DO_DAI_TOI_DA_DOT.counterparty) {
+    return {
+      ok: false,
+      thongBao: `Đơn vị, cá nhân dài quá ${DO_DAI_TOI_DA_DOT.counterparty} ký tự.`,
+    };
+  }
+  const soChungTu = nhap.soChungTu.trim();
+  if (doDai(soChungTu) > DO_DAI_TOI_DA_DOT.document_no) {
+    return {
+      ok: false,
+      thongBao: `Số chứng từ dài quá ${DO_DAI_TOI_DA_DOT.document_no} ký tự.`,
+    };
+  }
+
+  const values: Record<string, number | null> = {};
+  let coSo = false;
+  for (const c of cot) {
+    if (c.type !== "so") continue;
+    const doc = docSoNhap(nhap.gia[c.id] ?? "", donVi);
+    if (doc.loai === "loi") return { ok: false, thongBao: `Ô "${c.name}": ${doc.viSao}` };
+    if (doc.loai === "so") {
+      values[c.id] = doc.gia;
+      coSo = true;
+    } else {
+      values[c.id] = null;
+    }
+  }
+  if (!coSo) return { ok: false, thongBao: "Nhập ít nhất một số tiền cho đợt." };
+
+  const than: finance_ghiDotVao = { date: ngay, content: noiDung, values };
+  if (doiTac !== "") than.counterparty = doiTac;
+  if (soChungTu !== "") than.document_no = soChungTu;
+  return { ok: true, than };
+}
+
+/**
+ * Khoá chống trùng cho lần gửi KẾ TIẾP.
+ *
+ * Thành công → khoá MỚI (đợt sau là một đợt khác). Thất bại → GIỮ khoá: một lần gửi lại sau lỗi
+ * mạng mà mang khoá mới là một đợt thứ hai nếu lần đầu thực ra đã tới máy chủ — đúng cái cộng đôi
+ * `Idempotency-Key` sinh ra để chặn.
+ */
+export function khoaSauLanGhi(khoaHienTai: string, thanhCong: boolean, sinh: () => string): string {
+  return thanhCong ? sinh() : khoaHienTai;
+}
+
+/** Thứ biểu mẫu sửa bảng đọc được. */
+export type NhapSuaBang = { tieuDe: string; luyKe: string; donVi: string };
+
+/**
+ * Dựng thân `PATCH /budget-sheets/{id}` — CHỈ những trường thật sự đổi.
+ *
+ * Gửi cả ba mỗi lần thì một lần sửa tiêu đề cũng "đặt lại" mốc luỹ kế và đơn vị bằng đúng giá trị
+ * cũ — vô hại với máy chủ, nhưng một vết ghi không nói được người ta đã đổi CÁI GÌ. Luỹ kế để
+ * trống khi bảng đang có mốc là `""` — BỎ mốc, hợp đồng nói thế.
+ */
+export function dungThanSuaBang(bang: finance_bangRa, nhap: NhapSuaBang): KetQuaDung<SuaBangVao> {
+  const tieuDe = nhap.tieuDe.trim();
+  if (tieuDe === "") return { ok: false, thongBao: "Tiêu đề bảng không được để trống." };
+  if (!laMaDonVi(nhap.donVi)) return { ok: false, thongBao: "Chọn đơn vị tính của bảng." };
+  const luyKe = nhap.luyKe.trim();
+  if (luyKe !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(luyKe)) {
+    return { ok: false, thongBao: "Ngày luỹ kế không đúng khuôn năm-tháng-ngày." };
+  }
+
+  const than: SuaBangVao = {};
+  if (tieuDe !== bang.title) than.title = tieuDe;
+  if (luyKe !== (bang.cumulative_to ?? "")) than.cumulative_to = luyKe;
+  if (nhap.donVi !== bang.unit) than.unit = nhap.donVi;
+
+  if (Object.keys(than).length === 0) {
+    return { ok: false, thongBao: "Chưa có gì thay đổi." };
+  }
+  return { ok: true, than };
+}
+
+/** Câu gợi ý cạnh ô đơn vị tính — nói ra rằng đổi đơn vị không đổi con số nào. */
+export const GOI_Y_DOI_DON_VI =
+  "Đổi đơn vị tính chỉ đổi cách hiển thị: số liệu vẫn lưu bằng đồng, không con số nào bị quy đổi " +
+  "hay làm tròn.";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * THẺ CHỈ SỐ — `Chênh lệch thu – chi luỹ kế`
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Tên con số chênh lệch, NGUYÊN VĂN quyết định của khách 25/09/2026.
+ *
+ * KHÔNG gọi nó là cân đối, bội chi hay thâm hụt: đó là những thuật ngữ ngân sách có định nghĩa
+ * pháp lý, và con số này chỉ là một phép trừ giữa hai cột đã đánh dấu. Gọi nó bằng tên của một
+ * chỉ tiêu pháp định là báo cáo lên trên một chỉ tiêu xã chưa từng tính.
+ */
+export const NHAN_CHENH_LECH = "Chênh lệch thu – chi luỹ kế";
+
+export const GHI_CHU_CHENH_LECH =
+  'Tính bằng cột "Thu xã hưởng" trên dòng được đánh sao của bảng thu trừ cột "Chi ngân sách" ' +
+  "trên dòng được đánh sao của bảng chi. Tên gọi và cách tính này đang chờ khách hàng xác nhận.";
 
 /**
  * Ngày `YYYY-MM-DD` của hợp đồng → `25/8/2026`.
@@ -317,24 +667,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "khoản mục nhập từng dòng.",
   },
   {
-    ten: "⇄ Các đợt thu, chi (§5)",
-    viSao:
-      "Không có bảng `dot_thu_chi`, không có tuyến đợt, và chế độ tính `Cộng theo đợt` không tồn " +
-      "tại ở máy chủ. Dựng hộp thoại ấy là dựng một tính năng luôn báo số 0.",
-  },
-  {
-    ten: "Ô chọn `Cách tính` trên từng dòng (§4.2)",
-    viSao:
-      "Máy chủ suy cách tính từ cây — có khoản mục con thì cộng con, không có thì nhập tay — và " +
-      "trả 400 cho client nào tự đặt. Cột `Cách tính` ở bảng dưới là chữ chỉ đọc.",
-  },
-  {
-    ten: "Sửa `Luỹ kế đến` (§6)",
-    viSao:
-      "Mốc luỹ kế chỉ đặt được LÚC LẬP BẢNG. Hợp đồng không có tuyến sửa bảng, nên đổi mốc ấy hôm " +
-      "nay nghĩa là gỡ cả bảng kèm lý do rồi lập lại.",
-  },
-  {
     ten: "Cột phần trăm trên từng dòng (§3, §9 quy tắc 3)",
     viSao:
       "Cột `phan_tram` mang một chuỗi `formula` mà máy chủ CỐ Ý không diễn giải, và chuỗi ấy trỏ " +
@@ -343,13 +675,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "DÒNG TỔNG vẫn có thật: máy chủ tính và gửi trong `summary.indicator`.",
   },
 ];
-
-/**
- * Câu nói ra rằng con số in nguyên, không quy đổi theo `unit` — xem khối chú thích trên
- * `nhanSoTien`. Nó hiện cạnh đơn vị tính chứ không nằm trong chú thích mã.
- */
-export const CAU_KHONG_QUY_DOI =
-  "Số hiện đúng như máy chủ trả, không quy đổi. Đơn vị tính là nhãn của bảng do đơn vị tự ghi.";
 
 /**
  * Câu cảnh báo trước khi gỡ cả bảng (§6: "cảnh báo không hoàn tác"), nói đúng hậu quả có thật.
@@ -459,7 +784,9 @@ export function cotSo(cot: readonly finance_cotRa[]): readonly finance_cotRa[] {
  * luật 1 bất biến 10 cấm. Nó do người lập bảng gõ và máy chủ lưu.
  */
 export function dongPhuTieuDe(bang: finance_bangRa, soKhoanMuc: number): string {
-  const phan: string[] = [`Đơn vị tính: ${bang.unit}`];
+  // Nhãn của đơn vị ĐANG DÙNG ĐỂ VẼ, không phải `unit` (một mã máy) và không phải chữ cũ chưa ánh
+  // xạ được — với bảng ấy số đang hiện là đồng, và dòng phụ phải nói đúng điều đó.
+  const phan: string[] = [`Đơn vị tính: ${donViCuaBang(bang).nhan}`];
   const luyKe = nhanNgayLuyKe(bang.cumulative_to ?? "");
   if (luyKe !== "") phan.push(`Luỹ kế đến ${luyKe}`);
   phan.push(`${soKhoanMuc} khoản mục`);

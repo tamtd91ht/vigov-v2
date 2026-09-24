@@ -1,6 +1,6 @@
 /**
- * Tám tuyến của màn "Thu - Chi ngân sách" (`docs/ui-ux/07-thu-chi-ngan-sach.md`), đúng bộ tuyến
- * `service-finance/internal/http/routes.go:747-946` khai — không nhiều hơn, không ít hơn.
+ * Các tuyến của màn "Thu - Chi ngân sách" (`docs/ui-ux/07-thu-chi-ngan-sach.md`), đúng bộ tuyến
+ * `service-finance/internal/http/routes.go` khai — không nhiều hơn, không ít hơn.
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: mọi hình dạng thân và phản hồi đến từ `schema.gen.ts`.
  * Không tệp nào trong ứng dụng này mô tả lại một bảng ngân sách (luật 9, cấm #2).
@@ -18,16 +18,18 @@
  *     `unavailable_reason` cho từng chỉ số (`thu_chi_ngan_sach.go:415-475`). Đó là lý do thẻ KPI
  *     ở màn hình không được biến mất và **không được đọc `null` thành `0`** — xem `nhan-thu-chi.ts`.
  *
- *  3. Ba trường `method` · `level` · `is_headline` CÓ trong kiểu thân sinh ra, và chúng ở đó
- *     *"present only so it can be refused"* (`thu_chi_ngan_sach.go:324`): gửi lên là **400**.
- *     Nên chúng bị `Omit` khỏi kiểu tham số của hai hàm ghi dưới đây — một lời gọi gửi chúng
- *     không biên dịch được, thay vì hỏng lúc chạy.
+ *  3. Nhiều trường CÓ trong kiểu thân sinh ra chỉ để bị từ chối: `method` · `level` ·
+ *     `is_headline` khi thêm dòng, `year` · `kind` · `code` · `columns` khi sửa bảng. Gửi lên là
+ *     **400**. Nên chúng bị loại khỏi kiểu tham số của các hàm ghi dưới đây — một lời gọi gửi
+ *     chúng không biên dịch được, thay vì hỏng lúc chạy. `method` chỉ đi lên qua MỘT hàm riêng
+ *     (`doiCachTinh`) với đúng hai giá trị máy chủ nhận.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * KHÔNG CÓ TUYẾN NẠP EXCEL VÀ KHÔNG CÓ TUYẾN ĐỢT THU CHI, và hai chỗ trống ấy là **sự thật của
- * hợp đồng**, không phải việc còn lại của tệp này: `POST /api/ngan-sach/nap-excel` (§6) và
- * `GET/POST /api/khoan-muc/:id/dot` (§5) không tồn tại ở bất kỳ đâu trong `openapi.json`, và
- * `dot_thu_chi` không có bảng. Màn hình nói thẳng điều đó ra chứ không giấu trong chú thích.
+ * TIỀN TRÊN DÂY LUÔN LÀ SỐ NGUYÊN ĐỒNG (`int64`), cả chiều đọc lẫn chiều ghi. Đơn vị tính của
+ * bảng (`unit`) chỉ đổi cách HIỂN THỊ; phép quy đổi nằm ở `nhan-thu-chi.ts`, không ở tệp này.
+ *
+ * KHÔNG CÓ TUYẾN NẠP EXCEL, và chỗ trống ấy là **sự thật của hợp đồng**: không có tuyến nhận tệp
+ * nào trong `openapi.json` (§6). Màn hình nói thẳng điều đó ra chứ không giấu trong chú thích.
  */
 
 import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
@@ -35,16 +37,24 @@ import type {
   finance_bangDayDuRa,
   finance_bangRa,
   finance_chiSoNamRa,
+  finance_danhSachDotRa,
+  finance_delete_budget_entries_by_id,
   finance_delete_budget_lines_by_id,
   finance_delete_budget_sheets_by_id,
   finance_dongRa,
+  finance_dotRa,
   finance_get_budget_indicators,
+  finance_get_budget_lines_by_id_entries,
   finance_get_budget_sheets,
+  finance_ghiDotVao,
   finance_goVao,
   finance_patch_budget_lines_by_id,
+  finance_patch_budget_sheets_by_id,
   finance_post_budget_lines,
+  finance_post_budget_lines_by_id_entries,
   finance_post_budget_lines_by_id_headline,
   finance_post_budget_sheets,
+  finance_suaBangVao,
   finance_suaDongVao,
   finance_taoBangVao,
   finance_themDongVao,
@@ -184,9 +194,8 @@ export async function goBang(id: string, lyDo: string): Promise<KetQua<null>> {
 /**
  * Thân thêm khoản mục, TRỪ ba trường máy chủ từ chối.
  *
- * `method` KHÔNG PHẢI LỰA CHỌN CỦA NGƯỜI DÙNG — máy suy nó từ CÂY (`CachTinhTheoCay(coCon)`): có
- * con thì cộng con, không con thì nhập tay. §4.2 vẽ một ô chọn ba giá trị; hai trong ba điều ấy
- * đã sai (chỉ còn HAI chế độ, và không ai chọn).
+ * `method` KHÔNG GỬI LÚC THÊM: một khoản mục mới luôn là dòng lá `manual`
+ * (`ErrCachTinhDoTuClient`). Đổi sang `entries` là một lần PATCH riêng — `doiCachTinh`.
  */
 export type ThemDongVao = Omit<finance_themDongVao, "method" | "level" | "is_headline">;
 
@@ -290,4 +299,108 @@ export function datDongTong(id: string): Promise<KetQua<finance_dongRa>> {
   // "ai", mà cả hai đã nằm trong đường dẫn và trong phiên. Gửi `{}` là tuyên bố có một thân —
   // thứ mời người sau điền vào.
   return docThanLoiGoi<finance_dongRa>(goiGhi(duongDanMot(mau, id), "POST", undefined, 200));
+}
+
+/**
+ * Thân sửa bảng — ĐÚNG BA trường máy chủ nhận.
+ *
+ * `finance_suaBangVao` còn khai `year` · `kind` · `code` · `columns`, và máy chủ trả **400** cho
+ * cả bốn: đổi năm hay loại là đổi bảng này thành một bảng khác, đổi cột là đổi nghĩa của mọi con
+ * số đã nhập. Chúng không có trong kiểu này, nên không gõ được.
+ *
+ * `cumulative_to`: `"YYYY-MM-DD"` đặt mốc, `""` BỎ mốc, vắng mặt thì để nguyên.
+ */
+export type SuaBangVao = Pick<finance_suaBangVao, "title" | "cumulative_to" | "unit">;
+
+/**
+ * PATCH /api/v1/budget-sheets/{id} — sửa tiêu đề, mốc luỹ kế, đơn vị tính hiển thị. 200.
+ *
+ * ĐỔI ĐƠN VỊ KHÔNG ĐỔI CON SỐ NÀO: số liệu lưu bằng đồng, `unit` chỉ nói màn hình chia cho bao
+ * nhiêu khi vẽ. Không cần `Idempotency-Key` (`idem.KhongCan`, `routes.go:1036`): gửi hai lần cùng
+ * một thân để lại đúng một trạng thái.
+ */
+export function suaBang(id: string, than: SuaBangVao): Promise<KetQua<finance_bangRa>> {
+  const mau: finance_patch_budget_sheets_by_id["duongDan"] = "/api/v1/budget-sheets/{id}";
+
+  // DỰNG TỪNG TRƯỜNG VÀ BỎ TRƯỜNG VẮNG: một phép trải là đường để `year` hay `columns` đi lên vào
+  // ngày có người truyền vào nguyên một `bangRa`.
+  const thanGui: SuaBangVao = {};
+  if (than.title !== undefined) thanGui.title = than.title;
+  if (than.cumulative_to !== undefined) thanGui.cumulative_to = than.cumulative_to;
+  if (than.unit !== undefined) thanGui.unit = than.unit;
+
+  return docThanLoiGoi<finance_bangRa>(goiGhi(duongDanMot(mau, id), "PATCH", thanGui, 200));
+}
+
+/** Hai chế độ một dòng LÁ được chọn (§4.2). `children` do cây quyết định — gửi lên là 400. */
+export type CachTinhChon = "manual" | "entries";
+
+/**
+ * PATCH /api/v1/budget-lines/{id} với ĐÚNG MỘT trường `method`. 200.
+ *
+ * Tách khỏi `suaKhoanMuc` có chủ ý: biểu mẫu sửa dòng gửi `values`, và một thân mang cả `method`
+ * lẫn `values` là hai quyết định trong một lần bấm. Dòng có con trả **409**.
+ *
+ * `entries → manual` thì máy chủ chép tổng các đợt vào ô số trong cùng giao dịch; `manual →
+ * entries` thì số gõ tay được giữ nhưng không hiện. Màn hình cảnh báo cả hai TRƯỚC khi gửi.
+ */
+export function doiCachTinh(id: string, method: CachTinhChon): Promise<KetQua<finance_dongRa>> {
+  const mau: finance_patch_budget_lines_by_id["duongDan"] = "/api/v1/budget-lines/{id}";
+  const thanGui: Pick<finance_suaDongVao, "method"> = { method };
+  return docThanLoiGoi<finance_dongRa>(goiGhi(duongDanMot(mau, id), "PATCH", thanGui, 200));
+}
+
+/** GET /api/v1/budget-lines/{id}/entries — các đợt của một khoản mục, mới nhất trước. */
+export function layDot(khoanMucId: string): Promise<KetQua<finance_danhSachDotRa>> {
+  const mau: finance_get_budget_lines_by_id_entries["duongDan"] =
+    "/api/v1/budget-lines/{id}/entries";
+  return docJSON<finance_danhSachDotRa>(duongDanMot(mau, khoanMucId));
+}
+
+/**
+ * POST /api/v1/budget-lines/{id}/entries — `+ Ghi đợt`. 201.
+ *
+ * `Idempotency-Key` BẮT BUỘC (`routes.go:1220`): không có khoá duy nhất nào ngoài khoá chính (hai
+ * đợt của cùng một khoản thu trong một ngày là chuyện có thật), nên một lần bấm hai lần là một
+ * đợt bị cộng hai lần vào con số đi lên cấp trên. Khoá do BIỂU MẪU giữ: dùng lại khi gửi lại sau
+ * lỗi, thay mới sau một lần thành công (`khoaSauLanGhi`). Máy chủ nhả khoá khi trả 4xx/5xx
+ * (`core/idem/idem.go:378`), nên gửi lại một thân đã sửa bằng cùng khoá là hợp lệ.
+ *
+ * `counterparty` có thể là DỮ LIỆU CÁ NHÂN (tên người nộp): đi trong THÂN, không bao giờ trong URL.
+ */
+export function ghiDot(
+  khoanMucId: string,
+  than: finance_ghiDotVao,
+  khoaChongTrung: string,
+): Promise<KetQua<finance_dotRa>> {
+  const mau: finance_post_budget_lines_by_id_entries["duongDan"] =
+    "/api/v1/budget-lines/{id}/entries";
+
+  const thanGui: finance_ghiDotVao = {
+    date: than.date,
+    content: than.content,
+    values: { ...than.values },
+  };
+  if (than.counterparty !== undefined) thanGui.counterparty = than.counterparty;
+  if (than.document_no !== undefined) thanGui.document_no = than.document_no;
+
+  return docThanLoiGoi<finance_dotRa>(
+    goiGhi(duongDanMot(mau, khoanMucId), "POST", thanGui, 201, {
+      "Idempotency-Key": khoaChongTrung,
+    }),
+  );
+}
+
+/**
+ * DELETE /api/v1/budget-entries/{id} — gỡ mềm một đợt. 204, `reason` BẮT BUỘC trong thân.
+ *
+ * Đứng sau `budget.confirm` (`routes.go:1242`): gỡ một đợt đổi con số của một dòng `entries`, con
+ * số có thể đã được đọc trên màn hình và báo lên trên.
+ */
+export async function goDot(dotId: string, lyDo: string): Promise<KetQua<null>> {
+  const mau: finance_delete_budget_entries_by_id["duongDan"] = "/api/v1/budget-entries/{id}";
+  const thanGui: finance_goVao = { reason: lyDo };
+
+  const kq = await goiGhi(duongDanMot(mau, dotId), "DELETE", thanGui, 204);
+  return kq.ok ? { ok: true, duLieu: null } : kq;
 }

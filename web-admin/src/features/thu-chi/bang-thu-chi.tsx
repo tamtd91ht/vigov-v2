@@ -17,34 +17,47 @@ import type {
 } from "@/lib/api/schema.gen";
 import {
   datDongTong,
+  doiCachTinh,
   goBang,
   goKhoanMuc,
   layBang,
   layChiSoNganSach,
+  suaBang,
   suaKhoanMuc,
   themKhoanMuc,
+  type CachTinhChon,
   type LoaiBang,
   type SuaDongVao,
 } from "@/lib/api/thu-chi";
 import { namTheoDongHoMay } from "@/lib/nam";
 import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH } from "@/lib/quyen";
 
+import { HopDotThuChi } from "./dot-thu-chi";
+import { FormGoKemLyDo } from "./form-go-ly-do";
 import { LapBang } from "./lap-bang";
 import {
+  CACH_TINH_CHON,
   CANH_BAO_GO_BANG,
   CANH_BAO_GO_KHOAN_MUC,
-  CAU_KHONG_QUY_DOI,
+  canhBaoDoiCachTinh,
+  cauQuyDoi,
+  chonDuocCachTinh,
   cotSo,
   docSoNhap,
+  donViCuaBang,
   dongPhuTieuDe,
+  dongSangChuoi,
   dungCay,
+  GHI_CHU_CHENH_LECH,
   moiDongCoCon,
+  NHAN_CHENH_LECH,
   nhanBoDem,
   nhanCachTinh,
   nhanChiSo,
   nhanChuaCoBang,
   nhanDatDongTong,
   nhanGoKhoanMuc,
+  nhanNutDot,
   nhanSoTien,
   nhanSoTienChiSo,
   nhanTab,
@@ -55,13 +68,18 @@ import {
   PHAN_CHUA_DUNG,
   suaDuocOSo,
   type DongHien,
+  type DonViHien,
 } from "./nhan-thu-chi";
+import { FormSuaBang } from "./sua-bang";
+
+// Giữ đường nhập cũ cho phía gọi và bài kiểm: hộp gỡ nay nằm ở tệp riêng vì hộp `⇄` cũng dùng nó.
+export { FormGoKemLyDo };
 
 /**
  * Màn "Thu - Chi ngân sách" (`docs/ui-ux/07-thu-chi-ngan-sach.md`).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * ĐẶC TẢ CỦA CHƯƠNG NÀY ĐÃ LỖI THỜI Ở NĂM CHỖ, VÀ MÀN HÌNH NÓI RA TỪNG CHỖ THAY VÌ DỰNG THEO.
+ * ĐẶC TẢ CỦA CHƯƠNG NÀY CÒN VÀI CHỖ HỢP ĐỒNG CHƯA ĐỠ, VÀ MÀN HÌNH NÓI RA TỪNG CHỖ THAY VÌ DỰNG THEO.
  * Danh sách nằm ở `PHAN_CHUA_DUNG` và **hiện lên đầu màn**, không giấu trong chú thích mã. Cái
  * quyết định ở mọi chỗ hai bên lệch là HỢP ĐỒNG và handler thật, không phải bản vẽ (luật 2 bất
  * biến 7).
@@ -92,7 +110,12 @@ function trangThaiTu<T>(
 type DangMo =
   | { kieu: "them"; chaId: string; tenCha: string; thuTuGoiY: number }
   | { kieu: "goDong"; dong: finance_dongRa }
-  | { kieu: "goBang" };
+  | { kieu: "goBang" }
+  | { kieu: "suaBang" }
+  | { kieu: "cachTinh"; dong: finance_dongRa; den: CachTinhChon }
+  // Hộp `⇄` GIỮ cột và đơn vị lúc mở: sau mỗi lần ghi đợt bảng được đọc lại, và trong lúc đọc lại
+  // hộp không được biến mất cùng thông báo "Đã ghi đợt" của nó.
+  | { kieu: "dot"; dong: finance_dongRa; cot: readonly finance_cotRa[]; donVi: DonViHien };
 
 export function BangThuChi() {
   // Năm neo đọc MỘT lần khi component gắn vào: đọc lại sẽ làm danh sách năm nhảy ngay giữa phiên
@@ -218,7 +241,7 @@ export function BangThuChi() {
         ))}
       </div>
 
-      {/* THẺ BA CHỈ SỐ NẰM NGOÀI TAB, có chủ ý: `Cân đối thu - chi` cần CẢ HAI bảng, nên đặt nó
+      {/* THẺ BA CHỈ SỐ NẰM NGOÀI TAB, có chủ ý: con số chênh lệch cần CẢ HAI bảng, nên đặt nó
           trong một tab sẽ nói rằng con số ấy thuộc về tab ấy. */}
       {chiSo.pha === "dangTai" && <p role="status">Đang tải chỉ số ngân sách…</p>}
       {chiSo.pha === "loi" && (
@@ -285,6 +308,65 @@ export function BangThuChi() {
               datDongTong(dong.id).then(xong);
             }}
             moGoBang={() => datDangMo({ kieu: "goBang" })}
+            moSuaBang={() => {
+              datDangSuaDong(null);
+              datDangMo({ kieu: "suaBang" });
+            }}
+            moCachTinh={(dong, den) => {
+              datDangSuaDong(null);
+              datDangMo({ kieu: "cachTinh", dong, den });
+            }}
+            moDot={(dong) => {
+              datDangSuaDong(null);
+              datLoiGhi(null);
+              datDangMo({
+                kieu: "dot",
+                dong,
+                cot: cotSo(bang.duLieu.columns),
+                donVi: donViCuaBang(bang.duLieu.sheet),
+              });
+            }}
+          />
+        )}
+
+        {dangMo !== null && dangMo.kieu === "suaBang" && bang.pha === "xong" && (
+          <FormSuaBang
+            bang={bang.duLieu.sheet}
+            dangGui={dangGui}
+            huy={() => datDangMo(null)}
+            luu={(than) => {
+              datDangGui(true);
+              suaBang(bang.duLieu.sheet.id, than).then(xong);
+            }}
+          />
+        )}
+
+        {dangMo !== null && dangMo.kieu === "cachTinh" && (
+          <FormDoiCachTinh
+            ten={dangMo.dong.name}
+            den={dangMo.den}
+            dangGui={dangGui}
+            huy={() => datDangMo(null)}
+            luu={() => {
+              datDangGui(true);
+              doiCachTinh(dangMo.dong.id, dangMo.den).then(xong);
+            }}
+          />
+        )}
+
+        {dangMo !== null && dangMo.kieu === "dot" && (
+          <HopDotThuChi
+            // Đổi khoản mục thì dựng lại hộp: danh sách, khoá chống trùng và biểu mẫu là của MỘT dòng.
+            key={dangMo.dong.id}
+            khoanMucId={dangMo.dong.id}
+            tenKhoanMuc={dangMo.dong.name}
+            method={dangMo.dong.method}
+            cot={dangMo.cot}
+            donVi={dangMo.donVi}
+            coGhi={coGhi}
+            coXacNhan={coXacNhan}
+            dong={() => datDangMo(null)}
+            daDoiSoLieu={() => datLanTai((n) => n + 1)}
           />
         )}
 
@@ -369,7 +451,9 @@ export function BangThuChi() {
 export function KhoiChuaDung() {
   return (
     <details className="khoi-chua-khai">
-      <summary>Năm phần của bản thiết kế chưa dựng được — bấm để xem lý do</summary>
+      <summary>
+        Những phần của bản thiết kế chưa dựng được ({PHAN_CHUA_DUNG.length}) — bấm để xem lý do
+      </summary>
       <ul>
         {PHAN_CHUA_DUNG.map((p) => (
           <li key={p.ten}>
@@ -390,6 +474,10 @@ export function KhoiChuaDung() {
  *
  * CẢ HAI SỐ THU ĐỀU HIỆN, MỖI SỐ GỌI ĐÚNG TÊN (ADR 0035 §A): xã cần một số để báo cáo thu ngân
  * sách, và một số để biết mình còn được giữ bao nhiêu.
+ *
+ * SỐ TIỀN Ở THẺ NÀY IN BẰNG ĐỒNG, kèm chữ "đồng": thẻ nằm NGOÀI hai tab và con số chênh lệch đọc từ
+ * CẢ HAI bảng, hai bảng có thể mang hai đơn vị khác nhau. Chọn đơn vị của một bảng để in một con
+ * số của cả hai là ngầm nói con số ấy thuộc bảng đó.
  */
 export function TheChiSoNam({ chiSo }: { chiSo: finance_chiSoNamRa }) {
   return (
@@ -401,18 +489,26 @@ export function TheChiSoNam({ chiSo }: { chiSo: finance_chiSoNamRa }) {
         <OChiSo chi={chiSo.revenue_achievement} />
         <OChiSo chi={chiSo.expenditure_achievement} />
         <div>
-          <dt>Cân đối thu - chi</dt>
-          <dd>{nhanSoTienChiSo(chiSo.balance)}</dd>
+          <dt>{NHAN_CHENH_LECH}</dt>
+          <dd>{soTienDong(nhanSoTienChiSo(chiSo.balance, "dong"), chiSo.balance.amount !== null)}</dd>
         </div>
         {chiSo.revenue_totals.map((o) => (
           <div key={o.column_id}>
             <dt>{o.name}</dt>
-            <dd>{nhanSoTien(o.value)}</dd>
+            <dd>{soTienDong(nhanSoTien(o.value, "dong"), o.value !== null)}</dd>
           </div>
         ))}
       </dl>
+      <p className="ghi-chu">
+        {NHAN_CHENH_LECH}: {GHI_CHU_CHENH_LECH}
+      </p>
     </div>
   );
+}
+
+/** Gắn chữ "đồng" sau một con số — không gắn sau `—` hay sau một câu lý do của máy chủ. */
+function soTienDong(chu: string, coSo: boolean): string {
+  return coSo && chu !== "Không đọc được" ? `${chu} đồng` : chu;
 }
 
 function OChiSo({ chi }: { chi: finance_chiSoRa }) {
@@ -442,6 +538,9 @@ export function BangDayDu({
   moGoDong,
   datTong,
   moGoBang,
+  moSuaBang,
+  moCachTinh,
+  moDot,
 }: {
   duLieu: finance_bangDayDuRa;
   thuGon: ReadonlySet<string>;
@@ -457,14 +556,23 @@ export function BangDayDu({
   moGoDong: (dong: finance_dongRa) => void;
   datTong: (dong: finance_dongRa) => void;
   moGoBang: () => void;
+  moSuaBang: () => void;
+  moCachTinh: (dong: finance_dongRa, den: CachTinhChon) => void;
+  moDot: (dong: finance_dongRa) => void;
 }) {
   const cay = dungCay(duLieu.lines);
   const dongHien = phangCay(cay, thuGon);
   const cot = cotSo(duLieu.columns);
+  const donVi = donViCuaBang(duLieu.sheet);
 
   return (
     <>
-      <TheTomTat bang={duLieu.sheet} tomTat={duLieu.summary} soKhoanMuc={duLieu.lines.length} />
+      <TheTomTat
+        bang={duLieu.sheet}
+        tomTat={duLieu.summary}
+        soKhoanMuc={duLieu.lines.length}
+        donVi={donVi}
+      />
 
       <div className="hang-loc">
         <button
@@ -486,6 +594,11 @@ export function BangDayDu({
             onClick={() => moThem("", "cấp cao nhất", thuTuKeTiep(duLieu.lines, ""))}
           >
             ⊞ Thêm khoản mục cấp cao nhất
+          </button>
+        )}
+        {coGhi && (
+          <button type="button" className="nut-phu" disabled={dangGui} onClick={moSuaBang}>
+            ✎ Sửa thông tin bảng
           </button>
         )}
         {coXacNhan && (
@@ -518,6 +631,7 @@ export function BangDayDu({
                   key={d.dong.id}
                   dong={d.dong}
                   cot={cot}
+                  donVi={donVi}
                   soCotBang={duLieu.columns.length + 4}
                   dangGui={dangGui}
                   huy={huySua}
@@ -528,6 +642,7 @@ export function BangDayDu({
                   key={d.dong.id}
                   hien={d}
                   cot={duLieu.columns}
+                  donVi={donVi}
                   dongTongId={duLieu.summary.headline_line_id ?? ""}
                   coGhi={coGhi}
                   coXacNhan={coXacNhan}
@@ -544,6 +659,8 @@ export function BangDayDu({
                   }
                   go={() => moGoDong(d.dong)}
                   datTong={() => datTong(d.dong)}
+                  doiCachTinh={(den) => moCachTinh(d.dong, den)}
+                  moDot={() => moDot(d.dong)}
                 />
               ),
             )}
@@ -576,10 +693,12 @@ export function TheTomTat({
   bang,
   tomTat,
   soKhoanMuc,
+  donVi,
 }: {
   bang: finance_bangRa;
   tomTat: finance_tomTatRa;
   soKhoanMuc: number;
+  donVi: DonViHien;
 }) {
   return (
     <div className="khoi-chi-tiet">
@@ -587,7 +706,15 @@ export function TheTomTat({
         <h3>{bang.title}</h3>
       </div>
       <p className="ghi-chu">{dongPhuTieuDe(bang, soKhoanMuc)}</p>
-      <p className="ghi-chu">{CAU_KHONG_QUY_DOI}</p>
+      {/* ĐƠN VỊ CŨ CHƯA ÁNH XẠ ĐƯỢC: nói NỔI BẬT, vì số đang in bằng đồng trong khi tờ giấy của
+          xã in theo đơn vị khác — người đọc so hai bản sẽ thấy lệch hàng nghìn lần. */}
+      {donVi.canhBao !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {donVi.canhBao}
+          {donVi.nhanCu !== null && ` Đơn vị đang lưu: "${donVi.nhanCu}".`}
+        </p>
+      )}
+      <p className="ghi-chu">{cauQuyDoi(donVi)}</p>
       <p className="ghi-chu">
         Con số tổng lấy từ dòng được đánh sao. Bấm ngôi sao ở đầu một dòng khác để đổi.
       </p>
@@ -599,7 +726,7 @@ export function TheTomTat({
           {tomTat.cells.map((o) => (
             <div key={o.column_id}>
               <dt>{o.name}</dt>
-              <dd>{nhanSoTien(o.value)}</dd>
+              <dd>{nhanSoTien(o.value, donVi.ma)}</dd>
             </div>
           ))}
           <div>
@@ -616,6 +743,7 @@ export function TheTomTat({
 export function DongKhoanMuc({
   hien,
   cot,
+  donVi,
   dongTongId,
   coGhi,
   coXacNhan,
@@ -625,9 +753,12 @@ export function DongKhoanMuc({
   them,
   go,
   datTong,
+  doiCachTinh,
+  moDot,
 }: {
   hien: DongHien;
   cot: readonly finance_cotRa[];
+  donVi: DonViHien;
   dongTongId: string;
   coGhi: boolean;
   coXacNhan: boolean;
@@ -637,9 +768,14 @@ export function DongKhoanMuc({
   them: () => void;
   go: () => void;
   datTong: () => void;
+  doiCachTinh: (den: CachTinhChon) => void;
+  moDot: () => void;
 }) {
   const d = hien.dong;
   const laDongTong = d.id === dongTongId;
+  // Dòng LÁ: không có con trên cây đang vẽ và máy chủ không nói nó cộng con. Chỉ dòng lá có ô
+  // chọn cách tính và có hộp đợt — dòng có con thì cả hai là 409 (`routes.go:1081`, `:1204`).
+  const laLa = !hien.coCon && d.method !== "children";
 
   return (
     <tr>
@@ -696,7 +832,7 @@ export function DongKhoanMuc({
 
       {cot.map((c) =>
         c.type === "so" ? (
-          <td key={c.id}>{nhanSoTien(d.values[c.id] ?? null)}</td>
+          <td key={c.id}>{nhanSoTien(d.values[c.id] ?? null, donVi.ma)}</td>
         ) : (
           // Cột phần trăm: xem `PHAN_CHUA_DUNG`. Công thức là chuỗi máy chủ không diễn giải, và
           // đoán ánh xạ `col_N` sang mã cột là in một tỷ lệ sai trông y hệt một tỷ lệ đúng.
@@ -706,9 +842,43 @@ export function DongKhoanMuc({
         ),
       )}
 
-      <td className="nhan-trong">{nhanCachTinh(d.method)}</td>
+      <td className="nhan-trong">
+        {coGhi && chonDuocCachTinh(d.method, hien.coCon) ? (
+          // CHỌN KHÔNG GỬI NGAY: đổi cách tính đổi con số đang hiện, nên lựa chọn mở một hộp cảnh
+          // báo (`FormDoiCachTinh`) và chỉ gửi khi cán bộ xác nhận. Ô chọn vẫn hiện chế độ ĐANG LƯU
+          // cho tới khi bảng được đọc lại.
+          <select
+            aria-label={`Cách tính của ${d.name}`}
+            value={d.method}
+            disabled={dangGui}
+            onChange={(e) => {
+              const den = e.target.value;
+              if ((den === "manual" || den === "entries") && den !== d.method) doiCachTinh(den);
+            }}
+          >
+            {CACH_TINH_CHON.map((c) => (
+              <option key={c.ma} value={c.ma}>
+                {c.nhan}
+              </option>
+            ))}
+          </select>
+        ) : (
+          nhanCachTinh(d.method)
+        )}
+      </td>
 
       <td className="o-thao-tac">
+        {laLa && (
+          <button
+            type="button"
+            className="nut-phu"
+            aria-label={nhanNutDot(d.name)}
+            disabled={dangGui}
+            onClick={moDot}
+          >
+            ⇄
+          </button>
+        )}
         {coGhi && (
           <button
             type="button"
@@ -750,6 +920,7 @@ export function DongKhoanMuc({
 export function FormSuaDong({
   dong,
   cot,
+  donVi,
   soCotBang,
   dangGui,
   huy,
@@ -758,6 +929,7 @@ export function FormSuaDong({
   dong: finance_dongRa;
   /** CHỈ cột `so` — cột phần trăm không lưu giá trị nào (§9 quy tắc 3). */
   cot: readonly finance_cotRa[];
+  donVi: DonViHien;
   soCotBang: number;
   dangGui: boolean;
   huy: () => void;
@@ -782,10 +954,10 @@ export function FormSuaDong({
             if (moO) {
               const gia: Record<string, number | null> = {};
               for (const c of cot) {
-                const doc = docSoNhap(String(fd.get(`gia:${c.id}`) ?? ""));
+                const doc = docSoNhap(String(fd.get(`gia:${c.id}`) ?? ""), donVi.ma);
                 if (doc.loai === "loi") {
                   datLoiO(
-                    `Ô "${c.name}" phải là số nguyên. Để trống nếu muốn xoá con số trong ô ấy.`,
+                    `Ô "${c.name}": ${doc.viSao} Để trống nếu muốn xoá con số trong ô ấy.`,
                   );
                   return;
                 }
@@ -836,17 +1008,28 @@ export function FormSuaDong({
           {moO ? (
             cot.map((c) => (
               <p key={c.id}>
-                <label htmlFor={`sua-gia-${dong.id}-${c.id}`}>{c.name}</label>{" "}
+                <label htmlFor={`sua-gia-${dong.id}-${c.id}`}>
+                  {c.name} ({donVi.nhan.toLowerCase()})
+                </label>{" "}
+                {/* Ô CHỮ, không `type="number"`: ô số của trình duyệt không đọc được `3.463.459,2`.
+                    Điền sẵn ĐÚNG chuỗi màn hình in, và chuỗi ấy đọc ngược lại ra đúng số đồng cũ —
+                    nên "Lưu" mà không sửa gì không đổi con số nào. */}
                 <input
                   id={`sua-gia-${dong.id}-${c.id}`}
                   name={`gia:${c.id}`}
                   className="o-nhap"
-                  type="number"
-                  step={1}
-                  defaultValue={dong.values[c.id] ?? ""}
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  defaultValue={giaDienSan(dong.values[c.id] ?? null, donVi)}
                 />
               </p>
             ))
+          ) : dong.method === "entries" ? (
+            <p className="ghi-chu">
+              Khoản mục này đang Cộng theo đợt: con số của nó là tổng các đợt ghi ở hộp ⇄, không gõ
+              thẳng vào đây. Muốn gõ tay, đổi Cách tính về Nhập trực tiếp.
+            </p>
           ) : (
             <p className="ghi-chu">
               Khoản mục này có khoản mục con nên con số của nó là tổng các con — máy chủ từ chối số
@@ -912,8 +1095,8 @@ export function FormThemKhoanMuc({
         <h3>Thêm khoản mục dưới {tenCha}</h3>
       </div>
       <p className="ghi-chu">
-        Cách tính của khoản mục mới do máy chủ suy ra từ cây, không chọn ở đây: dòng chưa có con thì
-        nhập số trực tiếp, và thành dòng cộng con ngay khi có khoản mục con đầu tiên.
+        Khoản mục mới bắt đầu ở Nhập trực tiếp. Khi chưa có khoản mục con, có thể đổi sang Cộng theo
+        đợt ở cột Cách tính; khi có khoản mục con đầu tiên, nó thành dòng cộng con.
       </p>
       <p>
         <label htmlFor="them-no">Số thứ tự (TT)</label>{" "}
@@ -945,41 +1128,51 @@ export function FormThemKhoanMuc({
 }
 
 /**
- * Hộp xác nhận GỠ — **có ô lý do**, và ô ấy không phải để cho đẹp.
+ * Chuỗi điền sẵn vào ô tiền của biểu mẫu sửa dòng.
  *
- * §6 chỉ vẽ "hộp xác nhận"; máy chủ đòi `reason` trong thân và từ chối 400 khi thiếu (luật 7 bất
- * biến 1 kể tên `delete_reason`). Một hộp chỉ có nút Đồng ý sẽ nhận 400 ở mọi lần bấm.
+ * Giá trị hỏng (không phải số nguyên an toàn) điền NGUYÊN chữ số thô, không điền rỗng: ô rỗng lúc
+ * lưu là XOÁ TRẮNG ô ấy, nên điền rỗng cho một giá trị đọc hỏng là lặng lẽ xoá một con số ngân
+ * sách. Chữ thô sẽ bị `docSoNhap` từ chối kèm một câu, và cán bộ thấy có chuyện.
  */
-export function FormGoKemLyDo({
-  tieuDe,
-  canhBao,
+function giaDienSan(gia: number | null, donVi: DonViHien): string {
+  if (gia === null) return "";
+  if (!Number.isSafeInteger(gia)) return String(gia);
+  return dongSangChuoi(gia, donVi.ma);
+}
+
+/**
+ * Hộp xác nhận ĐỔI CÁCH TÍNH (§4.2) — nói đúng điều máy chủ sẽ làm với con số trước khi gửi.
+ *
+ * Không có ô lý do: đây là một lần sửa (`budget.update`), không phải một lần gỡ, và máy chủ ghi
+ * vết của nó như mọi lần sửa khoản mục.
+ */
+export function FormDoiCachTinh({
+  ten,
+  den,
   dangGui,
   huy,
   luu,
 }: {
-  tieuDe: string;
-  canhBao: string;
+  ten: string;
+  den: CachTinhChon;
   dangGui: boolean;
   huy: () => void;
-  luu: (lyDo: string) => void;
+  luu: () => void;
 }) {
   return (
     <form
       className="khoi-chua-khai"
       onSubmit={(e) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
-        luu(String(fd.get("reason") ?? ""));
+        luu();
       }}
     >
-      <h3>{tieuDe}</h3>
-      <p className="hau-qua">{canhBao}</p>
-      <p>
-        <label htmlFor="go-reason">Lý do gỡ (bắt buộc, được lưu cùng bản ghi)</label>{" "}
-        <input id="go-reason" name="reason" className="o-nhap" type="text" required maxLength={500} />
-      </p>
+      <h3>
+        Đổi cách tính của {ten} sang {nhanCachTinh(den)}
+      </h3>
+      <p className="hau-qua">{canhBaoDoiCachTinh(den)}</p>
       <button type="submit" className="nut-chinh" disabled={dangGui}>
-        Gỡ
+        Đổi cách tính
       </button>{" "}
       <button type="button" className="nut-phu" disabled={dangGui} onClick={huy}>
         Huỷ

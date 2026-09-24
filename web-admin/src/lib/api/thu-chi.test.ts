@@ -2,15 +2,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   datDongTong,
+  doiCachTinh,
   duongDanBang,
   duongDanChiSo,
+  ghiDot,
   goBang,
+  goDot,
   goKhoanMuc,
   layBang,
   layChiSoNganSach,
+  layDot,
+  suaBang,
   suaKhoanMuc,
   taoBang,
   themKhoanMuc,
+  type SuaBangVao,
 } from "./thu-chi";
 
 /**
@@ -150,7 +156,7 @@ describe("lập bảng", () => {
         year: 2026,
         kind: "chi",
         title: "BÁO CÁO CHI NGÂN SÁCH",
-        unit: "Triệu đồng",
+        unit: "trieu-dong",
         columns: [{ name: "Dự toán năm", order: 1, type: "so", role: "du-toan-nam" }],
       },
       "khoa-cua-bai-kiem",
@@ -161,13 +167,15 @@ describe("lập bảng", () => {
     // vì `UNIQUE (tenant_id, ma)` đếm cả dòng đã xoá mềm.
     expect(than(goi)).not.toHaveProperty("code");
     expect(than(goi)["kind"]).toBe("chi");
+    // Đơn vị là MÃ — máy chủ trả 400 cho chữ tự do, kể cả "Triệu đồng".
+    expect(than(goi)["unit"]).toBe("trieu-dong");
   });
 
   it("409 'bảng đã tồn tại': câu máy chủ ra thẳng màn hình", async () => {
     batFetch(loi(409, "ngan_sach: xã đã có bảng ngân sách đang dùng cho năm và loại này"));
 
     const kq = await taoBang(
-      { year: 2026, kind: "chi", title: "T", unit: "Triệu đồng", columns: [] },
+      { year: 2026, kind: "chi", title: "T", unit: "trieu-dong", columns: [] },
       "k",
     );
     expect(kq).toEqual({
@@ -281,6 +289,141 @@ describe("đánh dấu dòng tổng", () => {
     batFetch(loi(403, "Bạn không có quyền thực hiện thao tác này."));
 
     expect(await datDongTong("01JDONG")).toEqual({
+      ok: false,
+      thongBao: "Bạn không có quyền thực hiện thao tác này.",
+    });
+  });
+});
+
+describe("sửa bảng", () => {
+  it("PATCH chỉ mang ba trường được phép — `year`/`kind`/`code`/`columns` bị máy chủ trả 400", async () => {
+    const goi = batFetch(traJSON({ id: "01JBANG" }, 200));
+
+    // Một đối tượng rộng hơn kiểu tham số (như nguyên một `bangRa`) vẫn KHÔNG được mang trường
+    // thừa lên dây — hàm dựng từng trường.
+    const rong = {
+      title: "TIÊU ĐỀ MỚI",
+      cumulative_to: "",
+      unit: "nghin-dong",
+      year: 2027,
+      kind: "thu",
+      code: "NS-X",
+      columns: [],
+    };
+    await suaBang("01JBANG", rong as SuaBangVao);
+
+    expect(goi.mock.calls[0]?.[0]).toBe("/api/v1/budget-sheets/01JBANG");
+    expect(goi.mock.calls[0]?.[1]?.method).toBe("PATCH");
+    expect(than(goi)).toEqual({ title: "TIÊU ĐỀ MỚI", cumulative_to: "", unit: "nghin-dong" });
+  });
+
+  it("trường vắng thì KHÔNG có mặt — vắng là 'để nguyên', `\"\"` là 'bỏ mốc'", async () => {
+    const goi = batFetch(traJSON({ id: "01JBANG" }, 200));
+
+    await suaBang("01JBANG", { unit: "dong" });
+
+    expect(than(goi)).toEqual({ unit: "dong" });
+  });
+});
+
+describe("đổi cách tính", () => {
+  it("PATCH mang ĐÚNG MỘT trường `method`, không kèm `values`", async () => {
+    const goi = batFetch(traJSON({ id: "01JDONG", method: "entries" }, 200));
+
+    await doiCachTinh("01JDONG", "entries");
+
+    expect(goi.mock.calls[0]?.[0]).toBe("/api/v1/budget-lines/01JDONG");
+    expect(goi.mock.calls[0]?.[1]?.method).toBe("PATCH");
+    expect(than(goi)).toEqual({ method: "entries" });
+  });
+
+  it("409 'dòng có con' là câu của máy chủ", async () => {
+    batFetch(loi(409, "ngan_sach: khoản mục có dòng con thì cách tính là cộng con"));
+
+    expect(await doiCachTinh("01JCHA", "manual")).toEqual({
+      ok: false,
+      thongBao: "ngan_sach: khoản mục có dòng con thì cách tính là cộng con",
+    });
+  });
+});
+
+describe("các đợt thu, chi", () => {
+  it("đọc danh sách: GET đúng đường dẫn, id mã hoá", async () => {
+    const goi = batFetch(traJSON({ line_id: "a/b", method: "entries", entries: [] }, 200));
+
+    const kq = await layDot("a/b");
+
+    expect(goi.mock.calls[0]?.[0]).toBe("/api/v1/budget-lines/a%2Fb/entries");
+    expect(kq.ok).toBe(true);
+  });
+
+  it("ghi đợt: POST mang `Idempotency-Key`, và thân đúng hình dạng `ghiDotVao`", async () => {
+    const goi = batFetch(traJSON({ id: "01JDOT" }, 201));
+
+    await ghiDot(
+      "01JDONG",
+      {
+        date: "2026-09-25",
+        content: "Thu tiền sử dụng đất đợt 2",
+        document_no: "PT-12",
+        values: { C1: null, C2: 3463459200000 },
+      },
+      "khoa-lan-gui-1",
+    );
+
+    expect(goi.mock.calls[0]?.[0]).toBe("/api/v1/budget-lines/01JDONG/entries");
+    expect(goi.mock.calls[0]?.[1]?.method).toBe("POST");
+    expect(header(goi)["Idempotency-Key"]).toBe("khoa-lan-gui-1");
+    expect(than(goi)).toEqual({
+      date: "2026-09-25",
+      content: "Thu tiền sử dụng đất đợt 2",
+      document_no: "PT-12",
+      values: { C1: null, C2: 3463459200000 },
+    });
+    // Trường tuỳ chọn vắng thì không có mặt.
+    expect(than(goi)).not.toHaveProperty("counterparty");
+  });
+
+  it("gửi lại CÙNG một lần gửi sau lỗi mang CÙNG khoá", async () => {
+    const goi = vi.fn(async (_duongDan: string, _tuyChon?: RequestInit) =>
+      loi(503, "Hệ thống tạm thời không nhận được, vui lòng thử lại."),
+    );
+    vi.stubGlobal("fetch", goi);
+    const thanDot = { date: "2026-09-25", content: "Đợt 1", values: { C1: 5 } };
+
+    await ghiDot("01JDONG", thanDot, "khoa-giu");
+    await ghiDot("01JDONG", thanDot, "khoa-giu");
+
+    const khoa = goi.mock.calls.map((c) => (c[1]?.headers as Record<string, string>)["Idempotency-Key"]);
+    expect(khoa).toEqual(["khoa-giu", "khoa-giu"]);
+  });
+
+  it("`counterparty` đi trong THÂN, không bao giờ trong URL", async () => {
+    const goi = batFetch(traJSON({ id: "01JDOT" }, 201));
+
+    await ghiDot(
+      "01JDONG",
+      { date: "2026-09-25", content: "x", counterparty: "Nguyễn Văn A", values: { C1: 1 } },
+      "k",
+    );
+
+    expect(goi.mock.calls[0]?.[0]).not.toContain("Nguy");
+    expect(than(goi)["counterparty"]).toBe("Nguyễn Văn A");
+  });
+
+  it("gỡ đợt: DELETE với `reason` trong thân, 204 không thân", async () => {
+    const goi = batFetch(new Response(null, { status: 204 }));
+
+    expect(await goDot("01JDOT", "ghi trùng")).toEqual({ ok: true, duLieu: null });
+    expect(goi.mock.calls[0]?.[0]).toBe("/api/v1/budget-entries/01JDOT");
+    expect(goi.mock.calls[0]?.[1]?.method).toBe("DELETE");
+    expect(than(goi)).toEqual({ reason: "ghi trùng" });
+  });
+
+  it("gỡ đợt thiếu `budget.confirm`: 403 là câu của máy chủ", async () => {
+    batFetch(loi(403, "Bạn không có quyền thực hiện thao tác này."));
+
+    expect(await goDot("01JDOT", "x")).toEqual({
       ok: false,
       thongBao: "Bạn không có quyền thực hiện thao tác này.",
     });
