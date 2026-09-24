@@ -105,9 +105,22 @@ pipeline {
         // TypeScript khi không có node_modules — nó báo to, nhưng vẫn là bỏ qua, và một cổng
         // kiểm có thể bỏ qua chính là thứ dự án này liên tục gặp: thứ trông như biện pháp mà
         // không phải biện pháp. Cài trước thì nó không còn đường bỏ qua.
-        dir('web-admin') {
-          sh 'npm ci'
-        }
+        //
+        // MỌI thư mục cấp một có package.json — ĐÚNG quy tắc dò của mục `web` trong Makefile,
+        // không phải một danh sách tên. Bản cũ chỉ cài `web-admin`, nên lượt 24/09/2026 10:16
+        // đi trọn go test -race rồi đổ ở `citizen-app/ ... chưa có node_modules`: hai nơi dò
+        // app theo hai cách là hai danh sách sẽ lệch, và bên hẹp hơn luôn là bên cài.
+        //
+        // `cd` trong shell thay cho bước `dir()`: `dir()` để lại `<tên>@tmp/` trong workspace
+        // (xem .dockerignore).
+        sh '''
+          set -eu
+          for app in */; do
+            [ -f "$app/package.json" ] || continue
+            echo "npm ci $app"
+            (cd "$app" && npm ci)
+          done
+        '''
       }
     }
 
