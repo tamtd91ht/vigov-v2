@@ -8,12 +8,12 @@
 # Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
 
 version: 1
-generated_at: 2026-09-24T02:46:24Z   # `make kb` điền
-from_commit: 74b34dd   # `make kb` điền
+generated_at: 2026-09-24T03:01:06Z   # `make kb` điền
+from_commit: 0918e23   # `make kb` điền
 
 budget:
   always_load_max: 27000  # token — trần do người dùng chốt 21/09/2026 (20000 -> 25000 -> 27000)
-  in_use: 27048   # `make kb` đo
+  in_use: 26980   # `make kb` đo
 
 always_load:                 # T0 — nạp mọi phiên, không hỏi
   - kb/00-foundation/domain-boundaries.md
@@ -71,10 +71,7 @@ load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾ
     load_when: "mở phiên mới hoặc sang máy khác — quyết định đã chốt, ai đang chặn, cạm bẫy đã gặp"
     warning: "hết hạn 21/12/2026. Sau đó tin `git log`, không tin tệp này"
 
-  # MỘT tệp để ĐỌC, NHIỀU tệp để GHI — và đó không phải mâu thuẫn, đó là chỗ duy nhất giải được
-  # cả hai đòi hỏi. Mỗi agent ghi đúng `tien-do/<module>.json` của mình nên không ai chạm tệp
-  # ai, không cần khoá, không có khoá kẹt lại khi một agent chết giữa chừng. Một tệp GHI chung
-  # cho nhiều agent là hình dạng `ROUTING.md` §3 cấm: lần ghi sau âm thầm xoá lần ghi trước.
+  # MỘT tệp ĐỌC, NHIỀU tệp GHI — vì sao: docstring `tools/tien_do.py`. Đừng chép lại vào đây.
   - id: tien-do
     file: kb/90-ephemeral/tien-do.md
     tier: T5
@@ -82,6 +79,14 @@ load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾ
     expires: 2026-12-19    # tính từ lần cập nhật module MỚI NHẤT, không phải lần sinh tệp
     load_when: "trước khi động vào một module — module ấy đã làm gì, chưa làm gì, nợ khách câu nào"
     warning: "không sửa tay — sửa `kb/90-ephemeral/tien-do/<module>.json` rồi `make kb`. Thủ tục: `/progress`"
+
+  - id: tien-do-san-pham
+    file: kb/90-ephemeral/tien-do-san-pham.md
+    tier: T5
+    source: GENERATED
+    expires: 2026-12-23
+    load_when: "hỏi phân hệ nào dùng được — theo chương đặc tả và theo mục menu"
+    warning: "sinh ra. Thủ tục: `/tien-do-san-pham`"
 
   # Tầng DUY NHẤT trong kb/ mô tả KHO KHÁC — nên `require-watcher` sở hữu nó, không phải
   # `knowledge-keeper`. Ghi chú + neo do `/doi-chieu-require` sinh; đừng sửa tay.

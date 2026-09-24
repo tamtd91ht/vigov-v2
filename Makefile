@@ -27,7 +27,7 @@ MODULES  := $(addsuffix /...,$(MOD_DIRS))
 # được. Trên máy build Linux thì ngược lại: CentOS/RHEL 7 để `python` là Python 2.7, và ngày
 # 24/09/2026 cổng kiểm đổ ở mục đầu tiên với "SyntaxError: Non-ASCII character" — trông như
 # tệp hỏng mã hoá chứ không như gọi nhầm trình thông dịch. Shebang `python3` trong tệp không
-# cứu được: gọi `python <tệp>` là bỏ qua shebang. Jenkinsfile truyền `PYTHON=python3`.
+# cứu được: gọi `python <tệp>` là bỏ qua shebang. Jenkinsfile tự chọn bản 3.8+ rồi truyền `PYTHON=…`.
 PYTHON ?= python
 
 
@@ -199,6 +199,13 @@ kb:                             ## Regenerate the GENERATED tiers of kb/ from so
 	@# viết ngay trên: thứ phải nhớ chạy riêng là thứ sẽ có ngày không ai chạy, và một
 	@# `tien-do.md` cũ hơn các tệp module là tệp nói dối về việc gì đã xong.
 	VIGOV_COMMIT=$$(git rev-parse --short HEAD) $(PYTHON) tools/tien_do.py
+	@# Tầng tiến độ theo SẢN PHẨM, trục khác hẳn tệp ngay trên: `tien-do.md` xếp theo MODULE kho
+	@# mã, tệp này xếp theo PHÂN HỆ đặc tả và theo mục menu. Người hỏi "màn Nhiệm vụ xong chưa"
+	@# không đọc được câu trả lời từ một bảng xếp theo `service-petitions`.
+	@#
+	@# SAU `apidoc`, và thứ tự ấy BẮT BUỘC: nó đọc `x-vigov-screen` cùng `x-vigov-task` của từng
+	@# thao tác trong `kb/20-contracts/openapi.json`, nên chạy trước thì nó đo bản hợp đồng cũ.
+	VIGOV_COMMIT=$$(git rev-parse --short HEAD) $(PYTHON) tools/tien_do_san_pham.py
 	@# Bản estimate gửi khách sinh từ bản nội bộ. Hai tệp estimate chép tay là hai tệp sẽ lệch,
 	@# và bản lệch là bản có người gửi ra ngoài.
 	$(PYTHON) tools/estimate_khach.py
