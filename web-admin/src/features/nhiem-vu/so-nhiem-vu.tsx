@@ -24,6 +24,7 @@ import {
   layNhiemVu,
   laySoNhiemVu,
   quyetDinhLuiHan,
+  suaNhiemVu,
   taoNhiemVu,
   xoaNhiemVu,
   type LocNhiemVu,
@@ -37,6 +38,7 @@ import type {
   petitions_mucUuTienRa,
   petitions_nhiemVuRa,
   petitions_nhiemVuVanBanRa,
+  petitions_suaNhiemVuVao,
   petitions_taoNhiemVuVao,
 } from "@/lib/api/schema.gen";
 
@@ -54,6 +56,7 @@ import {
   DANG_TAI_VAN_BAN,
   GHI_CHU_DEM_COT,
   GHI_CHU_HAN_VIEC_CON,
+  GHI_CHU_NHIEM_VU_TOI_DA,
   GHI_CHU_KANBAN_RE_NHANH,
   GHI_CHU_KHONG_CO_O_GHI_CHU,
   GHI_CHU_LANH_DAO_GIAO_VIEC,
@@ -61,6 +64,9 @@ import {
   GHI_CHU_THIEU_SO_THEO_DOI,
   GHI_CHU_TU_SINH_MA,
   KHONG_DOC_DUOC_VAN_BAN,
+  LY_DO_KHONG_SUA_CHU_TRI,
+  LY_DO_KHONG_SUA_HAN,
+  LY_DO_KHONG_SUA_MA,
   MOI_BO_PHAN_NHAN,
   MOI_KHOI_NHAN,
   MOI_LOAI_NHAN,
@@ -73,7 +79,11 @@ import {
   MO_TA_FORM_GIAO_VIEC,
   NHAN_CHE_DO_DANH_SACH,
   NHAN_CHE_DO_KANBAN,
+  NHAN_NUT_HUY,
+  NHAN_NUT_LUU,
+  NHAN_NUT_SUA,
   NHAN_THEM_VAN_BAN,
+  NHAN_TIEU_DE_THEO_VAN_BAN,
   O_TRONG,
   PHAM_VI_CUA_TOI,
   PHAM_VI_TOAN_XA,
@@ -81,10 +91,15 @@ import {
   SO_KY_HIEU_VAN_BAN_TOI_DA,
   SO_RONG,
   TIEU_DE_KHOI_VAN_BAN,
+  TIEU_DE_NHIEM_VU_TOI_DA,
   TIM_PLACEHOLDER,
+  TOM_TAT_KET_QUA_TOI_DA,
   TRANG_THAI_CHINH,
   TRANG_THAI_RE_NHANH,
   TRICH_YEU_VAN_BAN_TOI_DA,
+  VAN_BAN_VUA_BI_DOI,
+  canDocLaiTruocKhiLuu,
+  canhBaoSua,
   canhBaoVanBan,
   cauGiaiThichTrangThai,
   chiaNhomVanBan,
@@ -93,6 +108,8 @@ import {
   cotPhaiDoc,
   dongCuaNhom,
   dongVanBan,
+  formSuaTuChiTiet,
+  lyDoKhoaSua,
   hoanThanhTreHan,
   mocCuoiNgay,
   nhanBoDem,
@@ -109,7 +126,11 @@ import {
   placeholderNhomVanBan,
   quyetDinhDuyetLuiHan,
   thanGiaoViec,
+  thanSuaNhiemVu,
+  vanBanDaDoiOMayChu,
   type DongVanBanNhap,
+  type DongVanBanSua,
+  type FormSuaNhiemVu,
   type NhomVanBan,
   type TrangThaiNhiemVu,
 } from "./nhan-nhiem-vu";
@@ -594,6 +615,21 @@ export function SoNhiemVu() {
           quyetDinh={(deNghiID, duyet, ghiChu) =>
             quyetDinhLuiHan(drawer.nhiemVu.code, deNghiID, duyet, ghiChu)
           }
+          // §5.4 `✎ Sửa`. Thành công: phản hồi PATCH MANG `documents` (`app/nhiem_vu.go:696-741`),
+          // nên `ghiXong` thay cả trường vô hướng lẫn khối văn bản, rồi đọc lại sổ như mọi lần ghi
+          // khác. Hỏng: trả `KetQua` nguyên vẹn về form, để form GIỮ chữ cán bộ đã gõ và in câu máy
+          // chủ — không đóng form, không xoá gì.
+          suaKhoiVanBan={(than) =>
+            suaNhiemVu(drawer.nhiemVu.code, than).then((kq) => {
+              if (kq.ok) {
+                datLoiGhi(null);
+                guiDrawer({ loai: "ghiXong", nhiemVu: kq.duLieu });
+                datLanTai((n) => n + 1);
+              }
+              return kq;
+            })
+          }
+          docLaiChiTiet={() => layNhiemVu(drawer.nhiemVu.code)}
         />
       )}
     </section>
@@ -1100,6 +1136,8 @@ export function ChiTietNhiemVu({
   xoa,
   guiDeNghiLuiHan,
   quyetDinh,
+  suaKhoiVanBan,
+  docLaiChiTiet,
 }: {
   nhiemVu: petitions_nhiemVuRa;
   /**
@@ -1123,6 +1161,10 @@ export function ChiTietNhiemVu({
     duyet: boolean,
     ghiChu?: string,
   ) => Promise<KetQua<petitions_deNghiLuiHanRa>>;
+  /** PATCH /api/v1/tasks/{ma} của nút `✎ Sửa` §5.4. Bên gọi cập nhật drawer khi thành công. */
+  suaKhoiVanBan: (than: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
+  /** GET /api/v1/tasks/{ma} — đọc lại ngay trước một lần lưu CÓ `documents`. */
+  docLaiChiTiet: () => Promise<KetQua<petitions_nhiemVuRa>>;
 }) {
   const [ghiChuChuyen, datGhiChuChuyen] = useState("");
   const [lyDoXoa, datLyDoXoa] = useState("");
@@ -1264,7 +1306,18 @@ export function ChiTietNhiemVu({
 
       {/* §5.4 — CHỈ với loại `Theo văn bản`. Rẽ nhánh trên MÃ, không trên nhãn: xem
           `LOAI_THEO_VAN_BAN`. */}
-      {coKhoiVanBanChiDao(nhiemVu.type) && <KhoiVanBanChiDao tai={vanBan} />}
+      {/* `key` theo mã: mở một nhiệm vụ KHÁC khi đang sửa thì form sửa phải biến mất, không được
+          hiện ra trên nhiệm vụ mới với chế độ sửa còn bật. */}
+      {coKhoiVanBanChiDao(nhiemVu.type) && (
+        <KhoiVanBanChiDao
+          key={nhiemVu.code}
+          tai={vanBan}
+          nhiemVu={nhiemVu}
+          tenBoPhan={tenBoPhan}
+          luu={suaKhoiVanBan}
+          docLai={docLaiChiTiet}
+        />
+      )}
 
       {loiGhi !== null && (
         <p className="thong-bao-loi" role="alert">
@@ -1361,15 +1414,89 @@ export function ChiTietNhiemVu({
  *   xong      đủ ba nhóm; nhóm rỗng là `—` — lúc này máy chủ ĐÃ NÓI nhóm ấy rỗng
  *
  * Mỗi văn bản: `{số, ký hiệu} · {ngày}` rồi trích yếu ở dòng phụ, đúng §5.4.
+ *
+ * NÚT `✎ SỬA` Ở GÓC KHỐI, và nó KHOÁ ở hai pha đầu kèm lý do (`lyDoKhoaSua`): `documents` trên PATCH
+ * là THAY CẢ TẬP, nên sửa từ một tập chưa đọc xong là gỡ mất những dòng cán bộ chưa từng thấy.
+ * Tiêu điểm trở về nút ấy sau `Lưu` lẫn `Huỷ` — form biến mất, và tiêu điểm không được rơi về đầu
+ * trang.
  */
 export function KhoiVanBanChiDao({
   tai,
+  nhiemVu,
+  tenBoPhan,
+  luu,
+  docLai,
 }: {
   tai: TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
+  nhiemVu: petitions_nhiemVuRa;
+  tenBoPhan: ReadonlyMap<string, string>;
+  luu: (than: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
+  docLai: () => Promise<KetQua<petitions_nhiemVuRa>>;
 }) {
+  const [dangSua, datDangSua] = useState(false);
+  const nutSua = useRef<HTMLButtonElement>(null);
+  const traTieuDiem = useRef(false);
+
+  useEffect(() => {
+    if (dangSua || !traTieuDiem.current) return;
+    traTieuDiem.current = false;
+    nutSua.current?.focus();
+  }, [dangSua]);
+
+  const lyDoKhoa = lyDoKhoaSua(tai);
+  // PHẢI CÓ ĐỦ BA ĐIỀU cùng lúc. Khối rời pha `xong` giữa chừng (đọc lại hỏng) thì form tự ẩn —
+  // không sửa tiếp trên một tập máy chủ vừa không xác nhận được.
+  const hienForm = dangSua && tai.pha === "xong" && lyDoKhoa === null;
+
+  function thoatSua() {
+    traTieuDiem.current = true;
+    datDangSua(false);
+  }
+
   return (
     <div className="form-danh-muc" aria-labelledby="tieu-de-khoi-van-ban">
-      <h4 id="tieu-de-khoi-van-ban">{TIEU_DE_KHOI_VAN_BAN}</h4>
+      <div className="dau-khoi-chi-tiet">
+        <h4 id="tieu-de-khoi-van-ban">{TIEU_DE_KHOI_VAN_BAN}</h4>
+        {!hienForm && (
+          <button
+            ref={nutSua}
+            type="button"
+            className="nut-phu"
+            aria-label={`Sửa ${TIEU_DE_KHOI_VAN_BAN.toLowerCase()}`}
+            aria-describedby={lyDoKhoa !== null ? "ly-do-khoa-sua-van-ban" : undefined}
+            disabled={lyDoKhoa !== null}
+            onClick={() => datDangSua(true)}
+          >
+            {NHAN_NUT_SUA}
+          </button>
+        )}
+      </div>
+      {!hienForm && lyDoKhoa !== null && (
+        <p id="ly-do-khoa-sua-van-ban" className="ghi-chu">
+          {lyDoKhoa}
+        </p>
+      )}
+
+      {hienForm && tai.pha === "xong" && (
+        <FormSuaKhoiVanBan
+          nhiemVu={nhiemVu}
+          vanBan={tai.duLieu}
+          tenBoPhan={tenBoPhan}
+          luu={luu}
+          docLai={docLai}
+          xong={thoatSua}
+        />
+      )}
+
+      {!hienForm && <DocKhoiVanBan tai={tai} />}
+    </div>
+  );
+}
+
+/** Ba pha đọc của khối §5.4 — xem `KhoiVanBanChiDao`. */
+function DocKhoiVanBan({ tai }: { tai: TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]> }) {
+  return (
+    <>
       {tai.pha === "dangTai" && <p role="status">{DANG_TAI_VAN_BAN}</p>}
       {tai.pha === "loi" && (
         <p className="thong-bao-loi" role="alert">
@@ -1399,7 +1526,256 @@ export function KhoiVanBanChiDao({
           ))}
         </dl>
       )}
-    </div>
+    </>
+  );
+}
+
+/** Nút `Lưu` khoá vì form chưa khác gì chi tiết đã đọc. Nói ra để cán bộ không tưởng nút hỏng. */
+const CHUA_CO_GI_DOI = "Chưa có gì thay đổi để lưu.";
+
+/**
+ * Form `✎ Sửa` của khối §5.4.
+ *
+ * BẮT ĐẦU TỪ CHI TIẾT, VÀ CHỤP LẠI CHI TIẾT ẤY LÚC MỞ (`goc`). Thân PATCH so form với BẢN CHỤP, không
+ * với chi tiết mới nhất: "không đổi" nghĩa là cán bộ chưa đụng tới, nên một lần đọc lại chi tiết giữa
+ * chừng (sau một lần đổi trạng thái) không được biến những ô cán bộ để yên thành "đã đổi".
+ *
+ * KHÔNG CÓ KHOÁ LẠC QUAN: hợp đồng không có trường phiên bản hay `etag`. Nếu người khác vừa lưu, lần
+ * lưu này thắng ở đúng những trường nó gửi — và chỉ gửi trường đã đổi là để phạm vi ấy nhỏ nhất.
+ *
+ * Dòng văn bản dùng LẠI `NhomVanBanNhap` của form tạo: cùng ô, cùng giới hạn, cùng cách kiểm (quyết
+ * định của người dùng 24/09/2026). Không có thao tác chuyển dòng sang nhóm khác — máy chủ từ chối
+ * (`ErrDoiNhomVanBan`); muốn đổi nhóm thì `✕` rồi `+ Thêm văn bản` ở nhóm mới.
+ */
+export function FormSuaKhoiVanBan({
+  nhiemVu,
+  vanBan,
+  tenBoPhan,
+  luu,
+  docLai,
+  xong,
+}: {
+  nhiemVu: petitions_nhiemVuRa;
+  vanBan: readonly petitions_nhiemVuVanBanRa[];
+  tenBoPhan: ReadonlyMap<string, string>;
+  luu: (than: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
+  /**
+   * Đọc lại chi tiết NGAY TRƯỚC một lần lưu có `documents` — xem `vanBanDaDoiOMayChu`. Thu hẹp khe
+   * hở gỡ nhầm văn bản người khác vừa thêm; KHÔNG đóng được nó khi hợp đồng chưa có phiên bản.
+   */
+  docLai: () => Promise<KetQua<petitions_nhiemVuRa>>;
+  /** Rời chế độ sửa — sau khi lưu thành công, hoặc khi bấm `Huỷ`. */
+  xong: () => void;
+}) {
+  const [goc] = useState(() => ({ nhiemVu, vanBan }));
+  const [f, datF] = useState<FormSuaNhiemVu>(() => formSuaTuChiTiet(nhiemVu, vanBan));
+  const [dangLuu, datDangLuu] = useState(false);
+  const [loi, datLoi] = useState<string | null>(null);
+  const demKhoaVanBan = useRef(0);
+  // Mở form thì tiêu điểm vào ô đầu tiên sửa được; sau đó là ô vừa thêm / nút thêm của nhóm vừa gỡ.
+  const oCanTieuDiem = useRef<string | null>("sua-tieu-de");
+
+  useEffect(() => {
+    if (oCanTieuDiem.current === null) return;
+    document.getElementById(oCanTieuDiem.current)?.focus();
+    oCanTieuDiem.current = null;
+  }, [f.vanBan]);
+
+  const than = thanSuaNhiemVu(f, goc.nhiemVu, goc.vanBan);
+  const chan = canhBaoSua(f);
+
+  function doi(sua: Partial<FormSuaNhiemVu>) {
+    datF((cu) => ({ ...cu, ...sua }));
+  }
+
+  function themVanBan(nhom: NhomVanBan) {
+    demKhoaVanBan.current += 1;
+    const khoa = `moi${demKhoaVanBan.current}`;
+    oCanTieuDiem.current = `sua-van-ban-${khoa}`;
+    datF((cu) => ({
+      ...cu,
+      vanBan: [...cu.vanBan, { khoa, id: "", nhom, trichYeu: "", soKyHieu: "", ngay: "" }],
+    }));
+  }
+
+  function goVanBan(dong: DongVanBanNhap) {
+    oCanTieuDiem.current = `sua-them-van-ban-${dong.nhom}`;
+    datF((cu) => ({ ...cu, vanBan: cu.vanBan.filter((d) => d.khoa !== dong.khoa) }));
+  }
+
+  function suaVanBan(khoa: string, sua: Partial<Omit<DongVanBanNhap, "khoa" | "nhom">>) {
+    datF((cu) => ({
+      ...cu,
+      vanBan: cu.vanBan.map((d): DongVanBanSua => (d.khoa === khoa ? { ...d, ...sua } : d)),
+    }));
+  }
+
+  async function gui(e: FormEvent) {
+    e.preventDefault();
+    if (than === null || chan !== null || dangLuu) return;
+    datDangLuu(true);
+
+    // THÂN CÓ `documents` THÌ ĐỌC LẠI TRƯỚC. Đọc hỏng, hoặc khối đã đổi ở máy chủ: KHÔNG gửi, giữ
+    // nguyên chữ đã gõ, nói ra. Không tự gộp.
+    if (canDocLaiTruocKhiLuu(than)) {
+      const moi = await docLai();
+      if (!moi.ok) {
+        datDangLuu(false);
+        datLoi(moi.thongBao);
+        return;
+      }
+      const docs = moi.duLieu.documents;
+      if (!Array.isArray(docs)) {
+        datDangLuu(false);
+        datLoi(CHI_TIET_THIEU_VAN_BAN);
+        return;
+      }
+      if (vanBanDaDoiOMayChu(goc.vanBan, docs)) {
+        datDangLuu(false);
+        datLoi(VAN_BAN_VUA_BI_DOI);
+        return;
+      }
+    }
+
+    luu(than).then((kq) => {
+      datDangLuu(false);
+      if (!kq.ok) {
+        // Ở LẠI chế độ sửa, giữ nguyên chữ đã gõ, in NGUYÊN VĂN câu máy chủ — kể cả câu 409 "gỡ dòng
+        // ấy rồi thêm lại ở nhóm mới" hay "dòng không còn thuộc nhiệm vụ này".
+        datLoi(kq.thongBao);
+        return;
+      }
+      datLoi(null);
+      xong();
+    });
+  }
+
+  const tenCoQuanChuTri =
+    nhiemVu.lead_unit === "" ? O_TRONG : (tenBoPhan.get(nhiemVu.lead_unit) ?? nhiemVu.lead_unit);
+
+  return (
+    <form onSubmit={gui} aria-labelledby="tieu-de-sua-khoi-van-ban">
+      <h5 id="tieu-de-sua-khoi-van-ban">Sửa {TIEU_DE_KHOI_VAN_BAN.toLowerCase()}</h5>
+
+      {/* HAI Ô CHỈ ĐỌC ĐẦU TIÊN, đúng thứ tự bảng §5.4, mỗi ô kèm lý do không sửa được. */}
+      <dl className="danh-sach-truong">
+        <dt>Mã nhiệm vụ</dt>
+        <dd>
+          {nhiemVu.code}
+          <span className="dong-phu">{LY_DO_KHONG_SUA_MA}</span>
+        </dd>
+      </dl>
+
+      <div className="o-nhap">
+        <label htmlFor="sua-tieu-de">{NHAN_TIEU_DE_THEO_VAN_BAN}</label>
+        <input
+          id="sua-tieu-de"
+          name="sua-tieu-de"
+          value={f.tieuDe}
+          required
+          maxLength={TIEU_DE_NHIEM_VU_TOI_DA}
+          autoComplete="off"
+          onChange={(e) => doi({ tieuDe: e.target.value })}
+        />
+      </div>
+
+      <dl className="danh-sach-truong">
+        <dt>Hạn xử lý</dt>
+        <dd>
+          {nhanNgay(nhiemVu.due_at)}
+          <span className="dong-phu">{LY_DO_KHONG_SUA_HAN}</span>
+        </dd>
+        <dt>Cơ quan chủ trì tham mưu</dt>
+        <dd>{tenCoQuanChuTri}</dd>
+        <dt>Chuyên viên Văn phòng tham mưu / theo dõi</dt>
+        <dd>{nhiemVu.monitor === "" ? O_TRONG : nhiemVu.monitor}</dd>
+      </dl>
+      <p className="ghi-chu">{LY_DO_KHONG_SUA_CHU_TRI}</p>
+
+      {MOI_NHOM_VAN_BAN.map((nhom) => (
+        <NhomVanBanNhap
+          key={nhom}
+          tienTo="sua"
+          nhom={nhom}
+          dong={dongCuaNhom(f.vanBan, nhom)}
+          them={() => themVanBan(nhom)}
+          go={goVanBan}
+          sua={suaVanBan}
+        />
+      ))}
+
+      <div className="o-nhap">
+        <label htmlFor="sua-tom-tat-ket-qua">Tóm tắt kết quả thực hiện</label>
+        <textarea
+          id="sua-tom-tat-ket-qua"
+          name="sua-tom-tat-ket-qua"
+          rows={3}
+          maxLength={TOM_TAT_KET_QUA_TOI_DA}
+          value={f.tomTatKetQua}
+          onChange={(e) => doi({ tomTatKetQua: e.target.value })}
+        />
+      </div>
+
+      <div className="o-nhap">
+        <label htmlFor="sua-ghi-chu">Ghi chú</label>
+        <textarea
+          id="sua-ghi-chu"
+          name="sua-ghi-chu"
+          rows={3}
+          maxLength={GHI_CHU_NHIEM_VU_TOI_DA}
+          value={f.ghiChu}
+          onChange={(e) => doi({ ghiChu: e.target.value })}
+        />
+      </div>
+
+      <div className="o-chon">
+        <label htmlFor="sua-lanh-dao-phe-duyet">
+          <input
+            id="sua-lanh-dao-phe-duyet"
+            type="checkbox"
+            checked={f.lanhDaoPheDuyet}
+            onChange={(e) => doi({ lanhDaoPheDuyet: e.target.checked })}
+          />{" "}
+          Lãnh đạo xã đã phê duyệt hoàn thành
+        </label>
+      </div>
+      <div className="o-chon">
+        <label htmlFor="sua-cap-tren-cong-nhan">
+          <input
+            id="sua-cap-tren-cong-nhan"
+            type="checkbox"
+            checked={f.capTrenCongNhan}
+            onChange={(e) => doi({ capTrenCongNhan: e.target.checked })}
+          />{" "}
+          Cấp trên đã công nhận hoàn thành
+        </label>
+      </div>
+      {/* §5.4 — chú thích BẮT BUỘC, và ở chế độ sửa nó càng phải có: đây là lúc cán bộ tick. */}
+      <p className="ghi-chu">{CHU_THICH_HAI_O_TICK}</p>
+
+      {/* Lý do nút `Lưu` khoá — KHÔNG `role="alert"`, cùng lý do form tạo (xem `FormGiaoViec`). */}
+      {chan !== null && <p className="thong-bao-loi">{chan}</p>}
+      {chan === null && than === null && <p className="ghi-chu">{CHUA_CO_GI_DOI}</p>}
+
+      {loi !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {loi}
+        </p>
+      )}
+
+      <div className="cum-nut">
+        <button type="button" className="nut-phu" onClick={xong} disabled={dangLuu}>
+          {NHAN_NUT_HUY}
+        </button>
+        <button
+          type="submit"
+          className="nut-chinh"
+          disabled={dangLuu || than === null || chan !== null}
+        >
+          {NHAN_NUT_LUU}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -1939,24 +2315,30 @@ export function FormGiaoViec({
  * và ở 320px một placeholder dài đẩy nó tràn ngang — mà lượt này không thêm CSS.
  */
 function NhomVanBanNhap({
+  tienTo = "giao",
   nhom,
   dong,
   them,
   go,
   sua,
 }: {
+  /**
+   * Tiền tố của mọi `id` trong nhóm. Form tạo và form `✎ Sửa` có thể CÙNG MỞ trên một trang; chung
+   * tiền tố thì hai ô mang cùng `id`, và `<label htmlFor>` trỏ nhầm sang ô của form kia.
+   */
+  tienTo?: "giao" | "sua";
   nhom: NhomVanBan;
   dong: readonly DongVanBanNhap[];
   them: () => void;
   go: (dong: DongVanBanNhap) => void;
   sua: (khoa: string, sua: Partial<Omit<DongVanBanNhap, "khoa" | "nhom">>) => void;
 }) {
-  const idTieuDe = `giao-nhom-van-ban-${nhom}`;
+  const idTieuDe = `${tienTo}-nhom-van-ban-${nhom}`;
   return (
     <div role="group" aria-labelledby={idTieuDe}>
       <h5 id={idTieuDe}>{nhanNhomVanBan(nhom)}</h5>
       {dong.map((d, i) => {
-        const id = `giao-van-ban-${d.khoa}`;
+        const id = `${tienTo}-van-ban-${d.khoa}`;
         return (
           <div key={d.khoa} role="group" aria-label={`${nhanNhomVanBan(nhom)} — văn bản thứ ${i + 1}`}>
             <div className="o-nhap">
@@ -2006,7 +2388,7 @@ function NhomVanBanNhap({
       })}
       <button
         type="button"
-        id={`giao-them-van-ban-${nhom}`}
+        id={`${tienTo}-them-van-ban-${nhom}`}
         className="nut-phu"
         aria-label={`${NHAN_THEM_VAN_BAN} vào nhóm ${nhanNhomVanBan(nhom)}`}
         onClick={them}

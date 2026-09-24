@@ -21,7 +21,9 @@
  */
 
 import type {
+  petitions_nhiemVuRa,
   petitions_nhiemVuVanBanRa,
+  petitions_suaNhiemVuVao,
   petitions_taoNhiemVuVao,
   petitions_vanBanNhiemVuVao,
 } from "@/lib/api/schema.gen";
@@ -762,9 +764,8 @@ export const VAN_BAN_MOT_LAN_TOI_DA = 100;
  * Câu này đứng trong form để người tìm ô ấy biết nó ở đâu.
  */
 export const GHI_CHU_KHONG_CO_O_GHI_CHU =
-  "Ô Ghi chú (§7.2) không có ở đây: yêu cầu tạo nhiệm vụ không nhận ghi chú. Ghi chú sẽ nhập " +
-  "được ở nút Sửa trong khung chi tiết nhiệm vụ — phần ấy chưa dựng, xem phần chưa dựng được ở " +
-  "đầu màn.";
+  "Ô Ghi chú (§7.2) không có ở đây: yêu cầu tạo nhiệm vụ không nhận ghi chú. Giao việc xong, mở " +
+  "nhiệm vụ và bấm ✎ Sửa ở khối Sổ theo dõi văn bản chỉ đạo để nhập ghi chú.";
 
 /**
  * Một dòng văn bản ĐANG NHẬP. `khoa` chỉ để React giữ đúng ô khi một dòng giữa bị gỡ — KHÔNG lên
@@ -801,7 +802,7 @@ export type FormGiaoViecNhap = {
 /**
  * Các dòng đang nhập của MỘT nhóm, đúng thứ tự trên màn — `+ Thêm văn bản` nối vào cuối.
  */
-export function dongCuaNhom(ds: readonly DongVanBanNhap[], nhom: NhomVanBan): DongVanBanNhap[] {
+export function dongCuaNhom<T extends DongVanBanNhap>(ds: readonly T[], nhom: NhomVanBan): T[] {
   return ds.filter((d) => d.nhom === nhom);
 }
 
@@ -812,9 +813,13 @@ export function dongCuaNhom(ds: readonly DongVanBanNhap[], nhom: NhomVanBan): Do
  * bản. Lọc bỏ dòng ấy lúc gửi là một văn bản biến mất khỏi bản ghi mà không ai được báo; máy chủ
  * cũng từ chối đúng ca này (`ErrThieuTrichYeuVanBan`).
  */
-export function canhBaoVanBan(ds: readonly DongVanBanNhap[]): string | null {
+export function canhBaoVanBan(
+  ds: readonly DongVanBanNhap[],
+  /** Chủ ngữ của câu giới hạn: form tạo là một lần GIAO VIỆC, form `✎ Sửa` là một lần LƯU. */
+  lanGui = "Một lần giao việc",
+): string | null {
   if (ds.length > VAN_BAN_MOT_LAN_TOI_DA) {
-    return `Một lần giao việc nhận tối đa ${VAN_BAN_MOT_LAN_TOI_DA} dòng văn bản — hiện có ${ds.length}.`;
+    return `${lanGui} nhận tối đa ${VAN_BAN_MOT_LAN_TOI_DA} dòng văn bản — hiện có ${ds.length}.`;
   }
   for (const nhom of MOI_NHOM_VAN_BAN) {
     const dong = dongCuaNhom(ds, nhom);
@@ -885,6 +890,282 @@ export function thanGiaoViec(
     );
   }
   return than;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * NÚT `✎ SỬA` CỦA KHỐI §5.4 — THÂN `PATCH /api/v1/tasks/{ma}`
+ *
+ * NHỮNG Ô SỬA ĐƯỢC LÀ GIAO CỦA HAI TẬP: các trường §5.4 vẽ, và các trường
+ * `petitions_suaNhiemVuVao` nhận. Ra năm ô và ba danh sách: `title` · `result_summary` · `note` ·
+ * `leader_approved` · `superior_acknowledged` · `documents`. Bốn trường §5.4 còn lại HIỆN mà
+ * KHÔNG SỬA ĐƯỢC, mỗi trường một lý do ra tới màn:
+ *
+ *   Mã nhiệm vụ          mã đã cấp — trigger `nhiem_vu_bat_bien`, luật 7 bất biến 3
+ *   Hạn xử lý            PATCH không có `due_at` — hạn chỉ dịch qua đề nghị lùi hạn (§5.8)
+ *   Cơ quan chủ trì      PATCH không có `lead_unit`
+ *   Chuyên viên          PATCH không có `monitor`
+ *
+ * `description`, `priority`, `bloc`, `progress`, `parent` hợp đồng CÓ nhận nhưng §5.4 KHÔNG vẽ, nên
+ * không có ô ở đây: nút `✎ Sửa` nằm ở góc khối §5.4 và sửa đúng khối ấy.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Giới hạn của máy chủ (`service-petitions/internal/domain/nhiem_vu_ghi.go:30,46-47`). */
+export const TIEU_DE_NHIEM_VU_TOI_DA = 500;
+export const TOM_TAT_KET_QUA_TOI_DA = 5000;
+export const GHI_CHU_NHIEM_VU_TOI_DA = 5000;
+
+export const NHAN_NUT_SUA = "✎ Sửa";
+export const NHAN_NUT_LUU = "Lưu";
+export const NHAN_NUT_HUY = "Huỷ";
+
+/** Mã sổ là mã ĐÃ CẤP: không đổi, không cấp lại (luật 7, bất biến 3; trigger `nhiem_vu_bat_bien`). */
+export const LY_DO_KHONG_SUA_MA =
+  "Mã nhiệm vụ đã cấp thì giữ nguyên suốt đời hồ sơ, không sửa và không cấp lại.";
+
+/**
+ * Vì sao `Hạn xử lý` không sửa được. MỘT câu, dùng ở HAI chỗ — mục `PHAN_CHUA_DUNG` và dòng chỉ
+ * đọc trong form `✎ Sửa` — để hai chỗ không trôi khỏi nhau (luật 9, cấm #2).
+ */
+export const LY_DO_KHONG_SUA_HAN =
+  "`PATCH /api/v1/tasks/{ma}` không nhận `due_at`. Hạn ấn định MỘT LẦN lúc tạo việc và sau đó " +
+  "chỉ dịch được qua đường đề nghị lùi hạn có người duyệt (§5.8) — cố ý, vì hạn là cam kết đã " +
+  "đưa ra, và `han_ban_dau` bị trigger `nhiem_vu_bat_bien` cấm ghi lại sau khi tạo. Một ô ngày " +
+  "sửa trực tiếp ở form sẽ là đường vòng qua đúng vòng duyệt ấy.";
+
+/** Vì sao `Cơ quan chủ trì` và `Chuyên viên` không sửa được. Cùng quy tắc một câu hai chỗ. */
+export const LY_DO_KHONG_SUA_CHU_TRI =
+  "`PATCH /api/v1/tasks/{ma}` không nhận `lead_unit` và `monitor`, nên cơ quan chủ trì tham mưu " +
+  "và chuyên viên theo dõi chỉ đặt được lúc giao việc. Sửa được chúng cần máy chủ mở thêm hai " +
+  "trường ấy trên tuyến sửa.";
+
+/** `✎ Sửa` khoá khi khối văn bản còn đang tải. */
+export const KHOA_SUA_DANG_TAI =
+  "Chưa sửa được: các văn bản chỉ đạo còn đang tải. Sửa khi chưa thấy đủ văn bản sẽ gỡ mất những " +
+  "dòng chưa hiện ra.";
+
+/** `✎ Sửa` khoá khi không đọc được khối văn bản. */
+export const KHOA_SUA_LOI =
+  "Chưa sửa được: không đọc được các văn bản chỉ đạo. Sửa khi chưa thấy đủ văn bản sẽ gỡ mất những " +
+  "dòng chưa hiện ra — đóng rồi mở lại nhiệm vụ để đọc lại.";
+
+/** `✎ Sửa` khoá khi máy chủ gửi một mã nhóm màn hình không biết. */
+export const KHOA_SUA_NHOM_LA =
+  "Chưa sửa được: có văn bản thuộc một nhóm màn hình này không biết, và form sửa chỉ vẽ ba nhóm " +
+  "§5.4 — lưu lại sẽ gỡ mất văn bản ấy.";
+
+/**
+ * Lý do `✎ Sửa` phải KHOÁ, hoặc `null` khi mở được.
+ *
+ * `documents` TRÊN PATCH LÀ THAY CẢ TẬP: dòng nào không gửi lại là dòng bị gỡ. Nên form sửa CHỈ được
+ * bắt đầu từ một khối ĐÃ ĐỌC XONG — mở form khi khối đang tải hay đọc hỏng là mở từ một tập rỗng,
+ * và lần `Lưu` đầu tiên sẽ xoá mềm mọi văn bản cán bộ chưa từng thấy. Một mã nhóm lạ cũng khoá, cùng
+ * lý do: form không có chỗ vẽ dòng ấy, nên nó sẽ không được gửi lại.
+ */
+export function lyDoKhoaSua(
+  tai:
+    | { readonly pha: "dangTai" }
+    | { readonly pha: "loi" }
+    | { readonly pha: "xong"; readonly duLieu: readonly petitions_nhiemVuVanBanRa[] },
+): string | null {
+  if (tai.pha === "dangTai") return KHOA_SUA_DANG_TAI;
+  if (tai.pha === "loi") return KHOA_SUA_LOI;
+  if (tai.duLieu.some((v) => !laNhomVanBan(v.group))) return KHOA_SUA_NHOM_LA;
+  return null;
+}
+
+/**
+ * Một dòng văn bản ở form `✎ Sửa`: đúng dòng của form tạo, cộng `id`.
+ *
+ * `id` RỖNG NGHĨA LÀ DÒNG MỚI (`+ Thêm văn bản`) — đúng quy ước của hợp đồng. Dòng đã có mang `id`
+ * của nó, và PHẢI mang nó lên dây: thiếu `id` thì máy chủ đọc dòng ấy là một dòng mới VÀ gỡ dòng
+ * cũ — một văn bản bị xoá mềm rồi chép lại, nhật ký ghi hai hành vi cho một lần không ai đụng tới.
+ */
+export type DongVanBanSua = DongVanBanNhap & { readonly id: string };
+
+/** Mọi ô sửa được của form `✎ Sửa`. */
+export type FormSuaNhiemVu = {
+  readonly tieuDe: string;
+  readonly tomTatKetQua: string;
+  readonly ghiChu: string;
+  readonly lanhDaoPheDuyet: boolean;
+  readonly capTrenCongNhan: boolean;
+  readonly vanBan: readonly DongVanBanSua[];
+};
+
+/**
+ * Điền form `✎ Sửa` từ CHI TIẾT vừa đọc. Thứ tự dòng là thứ tự máy chủ gửi.
+ *
+ * `khoa` của dòng đã có dựng từ `id`, không từ chỉ số: gỡ một dòng giữa thì các dòng sau không đổi
+ * khoá, và React không đem chữ của dòng này sang ô của dòng kia.
+ */
+export function formSuaTuChiTiet(
+  n: petitions_nhiemVuRa,
+  ds: readonly petitions_nhiemVuVanBanRa[],
+): FormSuaNhiemVu {
+  return {
+    tieuDe: n.title,
+    tomTatKetQua: n.result_summary,
+    ghiChu: n.note,
+    lanhDaoPheDuyet: n.leader_approved,
+    capTrenCongNhan: n.superior_acknowledged,
+    vanBan: ds.flatMap((v) =>
+      laNhomVanBan(v.group)
+        ? [
+            {
+              khoa: `id-${v.id}`,
+              id: v.id,
+              nhom: v.group,
+              trichYeu: v.summary,
+              soKyHieu: v.reference,
+              ngay: v.date,
+            },
+          ]
+        : [],
+    ),
+  };
+}
+
+const KHUON_NGAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Ba danh sách có khác tập đã đọc hay không — so theo `id`, sau khi cắt khoảng trắng. */
+function vanBanDaDoi(
+  ds: readonly DongVanBanSua[],
+  goc: readonly petitions_nhiemVuVanBanRa[],
+): boolean {
+  if (ds.length !== goc.length) return true;
+  return ds.some((d) => {
+    if (d.id === "") return true;
+    const cu = goc.find((v) => v.id === d.id);
+    return (
+      cu === undefined ||
+      d.trichYeu.trim() !== cu.summary ||
+      d.soKyHieu.trim() !== cu.reference ||
+      d.ngay !== cu.date
+    );
+  });
+}
+
+/**
+ * Dựng thân `PATCH /api/v1/tasks/{ma}` — hoặc `null` khi KHÔNG CÓ GÌ ĐỔI (nút `Lưu` khoá).
+ *
+ * CHỈ GỬI TRƯỜNG CÁN BỘ ĐÃ ĐỔI, so với CHI TIẾT lúc mở form. Mọi trường là con trỏ ở máy chủ: vắng
+ * mặt là "không đụng tới". Gửi lại nguyên giá trị cũ của một trường không ai sửa là ghi đè lên bất
+ * cứ thay đổi nào người khác vừa lưu vào trường ấy.
+ *
+ * DỰNG TỪNG TRƯỜNG, KHÔNG TRẢI FORM HAY BẢN GHI. Không bao giờ có `code`, `due_at`, `assigner`,
+ * `position` — trường thứ nhất là mã đã cấp, hai trường sau hợp đồng cố ý không nhận, trường cuối
+ * do sổ cấp.
+ *
+ * `documents` — THAY CẢ TẬP, ba trường hợp:
+ *   không đổi   VẮNG MẶT, để máy chủ giữ nguyên khối
+ *   gỡ hết      `[]` — phải diễn đạt được; gộp nó vào "vắng mặt" là giữ lại những dòng cán bộ đã gỡ
+ *   còn lại     MỌI dòng còn giữ, mỗi dòng cũ KÈM `id`; dòng mới không có `id`; dòng đã gỡ thì
+ *               không có mặt — đó là cách `✕` tới được máy chủ
+ * `group` của dòng cũ là nhóm ĐÃ LƯU (form không cho đổi nhóm, máy chủ từ chối `ErrDoiNhomVanBan`).
+ * `date` đi nguyên `YYYY-MM-DD`, không qua `Date` — xem `thanGiaoViec`.
+ */
+export function thanSuaNhiemVu(
+  f: FormSuaNhiemVu,
+  goc: petitions_nhiemVuRa,
+  gocVanBan: readonly petitions_nhiemVuVanBanRa[],
+): petitions_suaNhiemVuVao | null {
+  const than: petitions_suaNhiemVuVao = {};
+  const tieuDe = f.tieuDe.trim();
+  if (tieuDe !== goc.title) than.title = tieuDe;
+  const tomTat = f.tomTatKetQua.trim();
+  if (tomTat !== goc.result_summary) than.result_summary = tomTat;
+  const ghiChu = f.ghiChu.trim();
+  if (ghiChu !== goc.note) than.note = ghiChu;
+  if (f.lanhDaoPheDuyet !== goc.leader_approved) than.leader_approved = f.lanhDaoPheDuyet;
+  if (f.capTrenCongNhan !== goc.superior_acknowledged) {
+    than.superior_acknowledged = f.capTrenCongNhan;
+  }
+
+  if (vanBanDaDoi(f.vanBan, gocVanBan)) {
+    than.documents = MOI_NHOM_VAN_BAN.flatMap((nhom) =>
+      dongCuaNhom(f.vanBan, nhom).map((d) => {
+        const dong: petitions_vanBanNhiemVuVao = { group: d.nhom, summary: d.trichYeu.trim() };
+        if (d.id !== "") dong.id = d.id;
+        if (d.soKyHieu.trim() !== "") dong.reference = d.soKyHieu.trim();
+        if (d.ngay !== "") dong.date = d.ngay;
+        return dong;
+      }),
+    );
+  }
+
+  return Object.keys(than).length === 0 ? null : than;
+}
+
+/**
+ * Câu chặn nút `Lưu`, hoặc `null`. Cùng phép kiểm dòng văn bản với form tạo (`canhBaoVanBan`),
+ * cộng hai điều chỉ form sửa gặp: tiêu đề bị xoá trắng, và một ngày văn bản sai khuôn đọc từ máy chủ.
+ */
+export function canhBaoSua(f: FormSuaNhiemVu): string | null {
+  if (f.tieuDe.trim() === "") {
+    return `Ô ${NHAN_TIEU_DE_THEO_VAN_BAN} không được để trống.`;
+  }
+  const i = f.vanBan.findIndex((d) => d.ngay !== "" && !KHUON_NGAY.test(d.ngay));
+  if (i >= 0) {
+    const d = f.vanBan[i] as DongVanBanSua;
+    const thu = dongCuaNhom(f.vanBan, d.nhom).indexOf(d) + 1;
+    return (
+      `Ngày của văn bản thứ ${thu} nhóm ${nhanNhomVanBan(d.nhom)} không đúng khuôn ngày — chọn lại ` +
+      "ngày hoặc xoá trống ô ấy."
+    );
+  }
+  return canhBaoVanBan(f.vanBan, "Một lần lưu");
+}
+
+/* ── ĐỌC LẠI TRƯỚC KHI LƯU: chặn việc gỡ lặng lẽ văn bản người khác vừa thêm ──────────────────
+ *
+ * `documents` là THAY CẢ TẬP. Form gửi lại đúng những dòng cán bộ đã THẤY lúc mở; một dòng người khác
+ * thêm trong lúc ấy không có trong thân, nên máy chủ xoá mềm nó — không ai được báo. Vì thế, NGAY
+ * TRƯỚC khi gửi một thân CÓ `documents`, màn hình đọc lại chi tiết và so với bản chụp lúc mở form;
+ * khác thì KHÔNG gửi, giữ nguyên chữ cán bộ đã gõ, và nói ra. Không tự gộp: gộp hai lần sửa của hai
+ * người trên một hồ sơ hành chính là một quyết định của người, không phải của trình duyệt.
+ *
+ * ⚠ ĐIỀU NÀY THU HẸP KHE HỞ, KHÔNG ĐÓNG NÓ. Giữa lần đọc lại và lần PATCH vẫn còn một khoảng — ngắn,
+ * nhưng có thật — trong đó một lần lưu khác lọt vào được. Hợp đồng không có phiên bản hay `etag`
+ * (`petitions_nhiemVuRa`), nên trình duyệt không có gì để máy chủ đối chiếu. Đóng hẳn khe hở là việc
+ * của MÁY CHỦ: một trường phiên bản trên phản hồi và trên thân PATCH, từ chối 409 khi lệch.
+ *
+ * Thân KHÔNG có `documents` bỏ qua bước này: trường vô hướng không xoá mềm thứ gì.
+ */
+
+/** Câu hiện khi khối văn bản đã đổi ở máy chủ kể từ lúc mở form. */
+export const VAN_BAN_VUA_BI_DOI =
+  "Văn bản chỉ đạo của nhiệm vụ này vừa được người khác thay đổi. Chưa lưu gì. Bấm Huỷ rồi mở lại " +
+  "nhiệm vụ để xem bản mới trước khi sửa.";
+
+/** Thân này có phải đọc lại chi tiết trước khi gửi không — đúng khi và chỉ khi nó mang `documents`. */
+export function canDocLaiTruocKhiLuu(than: petitions_suaNhiemVuVao): boolean {
+  return than.documents !== undefined && than.documents !== null;
+}
+
+/**
+ * Khối văn bản ở máy chủ có khác bản chụp lúc mở form không. So năm trường của từng dòng: `id`,
+ * `group`, `reference`, `date`, `summary`.
+ *
+ * SO THEO TẬP, KHÔNG THEO THỨ TỰ: chỉ khác thứ tự thì coi là GIỐNG. Thứ tự dòng do sổ quyết
+ * (nhóm, rồi `position` — số đã cấp không đổi), nên một thứ tự khác không có nghĩa là có dòng nào
+ * được thêm, gỡ hay sửa; và thân PATCH không mang thứ tự, nên nó không đổi được gì ở đây. Đọc thứ tự
+ * lệch thành "người khác vừa sửa" là chặn cán bộ vì một điều không xảy ra.
+ */
+export function vanBanDaDoiOMayChu(
+  bienChup: readonly petitions_nhiemVuVanBanRa[],
+  hienTai: readonly petitions_nhiemVuVanBanRa[],
+): boolean {
+  if (bienChup.length !== hienTai.length) return true;
+  return bienChup.some((cu) => {
+    const moi = hienTai.find((v) => v.id === cu.id);
+    return (
+      moi === undefined ||
+      moi.group !== cu.group ||
+      moi.reference !== cu.reference ||
+      moi.date !== cu.date ||
+      moi.summary !== cu.summary
+    );
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -1015,20 +1296,20 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "trên màn hôm nay là chữ của đặc tả, giống nhau ở mọi xã.",
   },
   {
-    ten: "Nút `✎ Sửa` của khối `SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO` (§5.4)",
+    ten: "Ô `Ghi chú` ở form `Giao việc mới` (§7.2)",
     viSao:
-      "Ba nhóm văn bản NHẬP ĐƯỢC lúc giao việc (form `Giao việc mới` §7.2) và HIỆN ĐƯỢC ở drawer — " +
-      "đọc từ tuyến chi tiết `GET /api/v1/tasks/{ma}` mỗi lần mở. Phần còn lại là nút `✎ Sửa`: cho " +
-      "tới khi có nó, văn bản của một nhiệm vụ đã tạo KHÔNG thêm, sửa hay gỡ được từ màn này, và ô " +
-      "`Ghi chú` của §7.2 cũng chưa nhập được ở đâu — yêu cầu tạo nhiệm vụ không nhận ghi chú.",
+      "`petitions.taoNhiemVuVao` không nhận `note`, nên form tạo không có ô Ghi chú. Ghi chú nhập " +
+      "được ngay sau khi giao việc, bằng nút `✎ Sửa` của khối SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO trong " +
+      "khung chi tiết. Tạo rồi tự gửi thêm một lần sửa sau lưng cán bộ là hai hành vi ghi cho một " +
+      "lần bấm, nên màn này không làm thế.",
+  },
+  {
+    ten: "Sửa `Cơ quan chủ trì tham mưu` và `Chuyên viên theo dõi` ở form sửa (§5.4)",
+    viSao: LY_DO_KHONG_SUA_CHU_TRI,
   },
   {
     ten: "Sửa `Hạn hoàn thành` ở form sửa (§5.4, §5.6)",
-    viSao:
-      "`PATCH /api/v1/tasks/{ma}` không nhận `due_at`. Hạn ấn định MỘT LẦN lúc tạo việc và sau đó " +
-      "chỉ dịch được qua đường đề nghị lùi hạn có người duyệt (§5.8) — cố ý, vì hạn là cam kết đã " +
-      "đưa ra, và `han_ban_dau` bị trigger `nhiem_vu_bat_bien` cấm ghi lại sau khi tạo. Một ô ngày " +
-      "sửa trực tiếp ở form sẽ là đường vòng qua đúng vòng duyệt ấy.",
+    viSao: LY_DO_KHONG_SUA_HAN,
   },
   {
     ten: "⬆ Nhập từ Excel (§8) · 🗑 Xoá đã chọn (§2) · Xuất Sổ theo dõi (§4.3)",

@@ -6,6 +6,7 @@ import {
   duongDanSoNhiemVu,
   layNhiemVu,
   quyetDinhLuiHan,
+  suaNhiemVu,
   taoNhiemVu,
   xoaNhiemVu,
 } from "./nhiem-vu";
@@ -216,6 +217,48 @@ describe("thân của sáu tuyến ghi", () => {
     );
     await taoNhiemVu({ auto_code: true, type: "co-ban", title: "Việc giả", documents: [] }, "k");
     expect(than(gia)).not.toHaveProperty("documents");
+  });
+
+  it("sửa nhiệm vụ: PATCH đúng đường dẫn, DỰNG TỪNG TRƯỜNG — `due_at`/`code`/`assigner` không lọt", async () => {
+    const gia = batFetch(OK_JSON());
+    await suaNhiemVu("NV19", {
+      note: "Ghi chú giả",
+      leader_approved: false,
+      due_at: "2030-01-01T00:00:00+07:00",
+      code: "NV99",
+      assigner: "CB-00001",
+    } as never);
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/tasks/NV19");
+    expect(gia.mock.calls[0]?.[1]?.method).toBe("PATCH");
+    // `false` là MỘT GIÁ TRỊ (bỏ tick), không phải vắng mặt.
+    expect(than(gia)).toEqual({ note: "Ghi chú giả", leader_approved: false });
+  });
+
+  it("sửa nhiệm vụ: `documents: []` SỐNG SÓT (gỡ hết), `id` giữ nguyên, `position` không đi", async () => {
+    const gia = batFetch(OK_JSON());
+    await suaNhiemVu("NV19", { documents: [] });
+    expect(than(gia)).toEqual({ documents: [] });
+
+    vi.unstubAllGlobals();
+    const gia2 = batFetch(OK_JSON());
+    await suaNhiemVu("NV19", {
+      documents: [
+        { id: "01JVB1", group: "cap-tren-giao", summary: "Giả", position: 3 } as never,
+        { group: "san-pham-dau-ra", summary: "Mới giả", date: "2026-07-01" },
+      ],
+    });
+    expect(than(gia2)).toEqual({
+      documents: [
+        { id: "01JVB1", group: "cap-tren-giao", summary: "Giả" },
+        { group: "san-pham-dau-ra", summary: "Mới giả", date: "2026-07-01" },
+      ],
+    });
+  });
+
+  it("sửa nhiệm vụ: `null` bị bỏ — với máy chủ nó cùng nghĩa với vắng mặt", async () => {
+    const gia = batFetch(OK_JSON());
+    await suaNhiemVu("NV19", { title: null, documents: null, note: "" });
+    expect(than(gia)).toEqual({ note: "" });
   });
 
   it("đổi trạng thái: TRẠNG THÁI ĐÍCH ĐI TRÊN DÂY, ghi chú rỗng thì vắng mặt", async () => {

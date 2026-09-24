@@ -19,8 +19,14 @@ import {
   DANG_TAI_VAN_BAN,
   GHI_CHU_KHONG_CO_O_GHI_CHU,
   GHI_CHU_LUI_HAN,
+  KHOA_SUA_DANG_TAI,
+  KHOA_SUA_LOI,
   KHONG_DOC_DUOC_VAN_BAN,
   KHONG_SO,
+  LY_DO_KHONG_SUA_CHU_TRI,
+  LY_DO_KHONG_SUA_HAN,
+  LY_DO_KHONG_SUA_MA,
+  NHAN_NUT_SUA,
   O_TRONG,
   PHAN_CHUA_DUNG,
   SO_RONG,
@@ -33,6 +39,7 @@ import {
   BangNhiemVu,
   ChiTietNhiemVu,
   FormGiaoViec,
+  FormSuaKhoiVanBan,
   KhoiChuaDung,
   KhoiLuiHan,
   chuyenDrawer,
@@ -155,6 +162,9 @@ const BAY_GIO = new Date("2026-09-15T03:00:00Z");
 const KHONG_GOI = (): Promise<KetQua<petitions_deNghiLuiHanRa>> =>
   Promise.resolve({ ok: false, thongBao: "không gọi trong bài kiểm" });
 
+const KHONG_SUA = (): Promise<KetQua<petitions_nhiemVuRa>> =>
+  Promise.resolve({ ok: false, thongBao: "không gọi trong bài kiểm" });
+
 type TaiVanBan = TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
 
 function veChiTiet(
@@ -177,6 +187,8 @@ function veChiTiet(
       xoa={() => {}}
       guiDeNghiLuiHan={KHONG_GOI}
       quyetDinh={KHONG_GOI}
+      suaKhoiVanBan={KHONG_SUA}
+      docLaiChiTiet={KHONG_SUA}
     />,
   );
 }
@@ -300,6 +312,8 @@ describe("câu từ chối của máy chủ vẽ THẲNG, không nuốt thành '
         xoa={() => {}}
         guiDeNghiLuiHan={KHONG_GOI}
         quyetDinh={KHONG_GOI}
+        suaKhoiVanBan={KHONG_SUA}
+        docLaiChiTiet={KHONG_SUA}
       />,
     );
     expect(html).toContain(nhuTrongHTML(cau));
@@ -803,5 +817,146 @@ describe("§5.4 — chỉ với loại `Theo văn bản`, và câu chữ của t
     });
     expect(html.indexOf("90-TB/TU")).toBeGreaterThan(-1);
     expect(html.indexOf("90-TB/TU")).toBeLessThan(html.indexOf("12-CV/UBND"));
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * §5.4 — NÚT `✎ SỬA`
+ *
+ * Ca nặng nhất là ca bị TỪ CHỐI, không phải ca mở được: `documents` trên PATCH là thay cả tập, nên
+ * một nút `✎ Sửa` bấm được lúc khối còn đang tải là một nút gỡ mất mọi văn bản cán bộ chưa thấy.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Thẻ mở của nút `✎ Sửa`, hoặc `null` khi trang không có nút ấy. */
+function theNutSua(html: string): string | null {
+  const k = /<button[^>]*aria-label="Sửa sổ theo dõi văn bản chỉ đạo"[^>]*>/.exec(html);
+  return k === null ? null : k[0];
+}
+
+describe("§5.4 — nút `✎ Sửa`: chỉ `Theo văn bản`, và KHOÁ khi chưa đọc đủ văn bản", () => {
+  it("`theo-van-ban`, khối đã đọc xong: nút có mặt và BẤM ĐƯỢC", () => {
+    const html = veChiTiet({}, LANH_DAO, { pha: "xong", duLieu: BA_VAN_BAN });
+    const nut = theNutSua(html);
+    expect(nut).not.toBeNull();
+    expect(nut).not.toContain("disabled");
+    expect(html).toContain(`${NHAN_NUT_SUA}</button>`);
+  });
+
+  it("loại `co-ban`: KHÔNG có nút, kể cả khi đã có văn bản trong tay", () => {
+    const html = veChiTiet({ type: "co-ban" }, LANH_DAO, { pha: "xong", duLieu: BA_VAN_BAN });
+    expect(theNutSua(html)).toBeNull();
+    expect(html).not.toContain(NHAN_NUT_SUA);
+  });
+
+  it("khối ĐANG TẢI: nút KHOÁ, và lý do khoá ra tới trang", () => {
+    const html = veChiTiet({}, LANH_DAO, { pha: "dangTai" });
+    expect(theNutSua(html)).toContain('disabled=""');
+    expect(theNutSua(html)).toContain('aria-describedby="ly-do-khoa-sua-van-ban"');
+    expect(html).toContain(nhuTrongHTML(KHOA_SUA_DANG_TAI));
+  });
+
+  it("khối đọc HỎNG: nút KHOÁ, và lý do khoá ra tới trang", () => {
+    const html = veChiTiet({}, LANH_DAO, { pha: "loi", thongBao: "Không tìm thấy nhiệm vụ." });
+    expect(theNutSua(html)).toContain('disabled=""');
+    expect(html).toContain(nhuTrongHTML(KHOA_SUA_LOI));
+  });
+});
+
+describe("§5.4 — phản hồi PATCH cập nhật drawer", () => {
+  it("`ghiXong` với phản hồi PATCH (mang `documents`): trường vô hướng VÀ khối văn bản lấy theo phản hồi", () => {
+    const mo = chuyenDrawer(null, { loai: "mo", nhiemVu: dongSo() });
+    const truoc = chuyenDrawer(mo, {
+      loai: "chiTietVe",
+      ma: "NV19",
+      luotDoc: 1,
+      kq: { ok: true, duLieu: nhiemVu({ documents: BA_VAN_BAN }) },
+    });
+    const conMot = [BA_VAN_BAN[1] as petitions_nhiemVuVanBanRa];
+    const sau = chuyenDrawer(truoc, {
+      loai: "ghiXong",
+      nhiemVu: nhiemVu({ note: "Ghi chú giả sau khi sửa", leader_approved: true, documents: conMot }),
+    });
+    expect(sau?.nhiemVu.note).toBe("Ghi chú giả sau khi sửa");
+    expect(sau?.nhiemVu.leader_approved).toBe(true);
+    expect(sau?.vanBan).toEqual({ pha: "xong", duLieu: conMot });
+    // Lượt tăng ⇒ đọc lại chi tiết, như mọi lần ghi khác.
+    expect(sau?.luotDoc).toBe((truoc?.luotDoc ?? 0) + 1);
+
+    const html = veTuDrawer(sau);
+    expect(html).not.toContain("1742-CV/BTCTU");
+    expect(html).toContain("324-BC/ĐU · 15/6/2026");
+  });
+
+  it("phản hồi PATCH gỡ hết văn bản (`documents: []`): khối là ba nhóm `—`, không phải khối cũ", () => {
+    const mo = chuyenDrawer(null, { loai: "mo", nhiemVu: dongSo() });
+    const truoc = chuyenDrawer(mo, {
+      loai: "chiTietVe",
+      ma: "NV19",
+      luotDoc: 1,
+      kq: { ok: true, duLieu: nhiemVu({ documents: BA_VAN_BAN }) },
+    });
+    const sau = chuyenDrawer(truoc, { loai: "ghiXong", nhiemVu: nhiemVu({ documents: [] }) });
+    expect(sau?.vanBan).toEqual({ pha: "xong", duLieu: [] });
+  });
+});
+
+describe("§5.4 — form `✎ Sửa`", () => {
+  function veForm(sua: Partial<petitions_nhiemVuRa> = {}): string {
+    return renderToStaticMarkup(
+      <FormSuaKhoiVanBan
+        nhiemVu={nhiemVu({ lead_unit: "01JBOPHAN", monitor: "CB-00001", ...sua })}
+        vanBan={BA_VAN_BAN}
+        tenBoPhan={TEN_BO_PHAN}
+        luu={KHONG_SUA}
+        docLai={KHONG_SUA}
+        xong={() => {}}
+      />,
+    );
+  }
+
+  it("Mã, Hạn, Cơ quan chủ trì, Chuyên viên HIỆN mà KHÔNG có ô nhập — mỗi thứ kèm lý do", () => {
+    const html = veForm();
+    expect(html).toContain("NV19");
+    expect(html).toContain(nhuTrongHTML(LY_DO_KHONG_SUA_MA));
+    expect(html).toContain("20/6/2026");
+    expect(html).toContain(nhuTrongHTML(LY_DO_KHONG_SUA_HAN));
+    expect(html).toContain("VĂN PHÒNG ĐẢNG ỦY");
+    expect(html).toContain("CB-00001");
+    expect(html).toContain(nhuTrongHTML(LY_DO_KHONG_SUA_CHU_TRI));
+    // Không ô ngày nào cho hạn, không ô mã, không ô chọn bộ phận — `type="date"` còn lại chỉ là
+    // ngày của từng văn bản.
+    expect(html).not.toContain('id="sua-ma"');
+    expect(html).not.toContain('id="sua-han"');
+    expect(html).not.toContain("<select");
+    expect(html.split('type="date"').length - 1).toBe(BA_VAN_BAN.length);
+  });
+
+  it("năm ô sửa được có nhãn thật, và chú thích BẮT BUỘC của hai ô tick vẫn hiện", () => {
+    const html = veForm();
+    expect(html).toContain('<label for="sua-tieu-de">Nội dung nhiệm vụ / Trích yếu văn bản</label>');
+    expect(html).toContain('id="sua-tom-tat-ket-qua"');
+    expect(html).toContain('<label for="sua-ghi-chu">Ghi chú</label>');
+    expect(html).toContain('id="sua-lanh-dao-phe-duyet"');
+    expect(html).toContain('id="sua-cap-tren-cong-nhan"');
+    expect(html).toContain(nhuTrongHTML(CHU_THICH_HAI_O_TICK));
+  });
+
+  it("mọi dòng đã có hiện ra để sửa, dùng CÙNG ô của form tạo; không có lối chuyển nhóm", () => {
+    const html = veForm();
+    expect(html).toContain('id="sua-van-ban-id-01JVANBAN1"');
+    expect(html).toContain('id="sua-van-ban-id-01JVANBAN2"');
+    expect(html).toContain("Công văn của Ban Tổ chức Thành uỷ");
+    expect(html).toContain('value="1742-CV/BTCTU"');
+    expect(html).toContain('value="2026-06-09"');
+    expect(html.split("+ Thêm văn bản</button>").length - 1).toBe(3);
+    // Id không đụng form tạo khi hai form cùng mở.
+    expect(html).not.toContain('id="giao-');
+  });
+
+  it("vừa mở, chưa đổi gì: nút `Lưu` KHOÁ và câu nói vì sao", () => {
+    const html = veForm();
+    expect(html).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Lưu<\/button>/);
+    expect(html).toContain("Chưa có gì thay đổi để lưu.");
+    expect(html).toContain(">Huỷ</button>");
   });
 });

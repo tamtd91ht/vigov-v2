@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import type { petitions_nhiemVuRa, petitions_nhiemVuVanBanRa } from "@/lib/api/schema.gen";
+
 import {
   CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
@@ -32,8 +34,22 @@ import {
   nhanNutGoVanBan,
   nhanOTieuDe,
   thanGiaoViec,
+  KHOA_SUA_DANG_TAI,
+  KHOA_SUA_LOI,
+  KHOA_SUA_NHOM_LA,
+  LY_DO_KHONG_SUA_CHU_TRI,
+  LY_DO_KHONG_SUA_HAN,
+  canhBaoSua,
+  formSuaTuChiTiet,
+  lyDoKhoaSua,
+  thanSuaNhiemVu,
+  vanBanDaDoiOMayChu,
+  canDocLaiTruocKhiLuu,
+  VAN_BAN_VUA_BI_DOI,
   type DongVanBanNhap,
+  type DongVanBanSua,
   type FormGiaoViecNhap,
+  type FormSuaNhiemVu,
 } from "./nhan-nhiem-vu";
 
 /**
@@ -244,16 +260,21 @@ describe("phần chưa dựng được", () => {
   it("hai mục về văn bản chỉ đạo nói ĐÚNG thứ còn thiếu hôm nay, không còn nói bảng chưa có", () => {
     // SỬA CÓ CHỦ Ý 24/09/2026: hai mục này từng viết "bảng `nhiem_vu_van_ban` chưa tồn tại". Bảng
     // đã có từ migration 0009; một lý do sai trên màn là lý do đẩy người sau đi dựng lại thứ đã có.
-    const muc54 = PHAN_CHUA_DUNG.find((p) => p.ten.includes("SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO"));
+    //
+    // ĐỔI CHIỀU CÓ CHỦ Ý 24/09/2026 (TASK-03): mục `Nút ✎ Sửa của khối SỔ THEO DÕI…` đã dựng xong
+    // nên BIẾN KHỎI danh sách; phần còn thiếu của nó thu lại đúng một điều — ô Ghi chú ở form TẠO.
+    const mucSua = PHAN_CHUA_DUNG.find((p) => p.ten.includes("✎ Sửa"));
+    const mucGhiChu = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Ghi chú` ở form `Giao việc mới`"));
     const muc43 = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Sổ theo dõi` (§4.3)"));
-    expect(muc54).toBeDefined();
+    expect(mucSua).toBeUndefined();
+    expect(mucGhiChu).toBeDefined();
     expect(muc43).toBeDefined();
-    for (const p of [muc54, muc43]) {
+    for (const p of [mucGhiChu, muc43]) {
       expect(p?.viSao).not.toContain("CHƯA TỒN TẠI");
       expect(p?.viSao).not.toContain("chưa tồn tại");
     }
-    expect(muc54?.ten).toContain("✎ Sửa");
-    expect(muc54?.viSao).toContain("GET /api/v1/tasks/{ma}");
+    expect(mucGhiChu?.viSao).toContain("taoNhiemVuVao");
+    expect(mucGhiChu?.viSao).toContain("✎ Sửa");
     expect(muc43?.viSao).toContain("`GET /api/v1/tasks`");
     expect(muc43?.viSao).toContain("documents");
     expect(muc43?.viSao).toContain("xuat-so-theo-doi");
@@ -476,5 +497,300 @@ describe("chặn nút `Giao việc` vì ba danh sách", () => {
     expect(nhanNutGoVanBan("san-pham-dau-ra", 3)).toBe(
       "Gỡ văn bản thứ 3 khỏi nhóm Văn bản sản phẩm đầu ra",
     );
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * NÚT `✎ SỬA` §5.4 — THÂN `PATCH /api/v1/tasks/{ma}`
+ *
+ * Ca đắt nhất ở đây là ca KHÔNG NHÌN THẤY: `documents` trên PATCH là THAY CẢ TẬP. Một dòng cũ lên
+ * dây thiếu `id` là một văn bản bị xoá mềm rồi chép lại; `documents` gửi kèm khi cán bộ không đụng
+ * tới khối là ghi đè lên bất cứ dòng nào người khác vừa thêm. Cả hai đều xanh trên màn hình.
+ * Dữ liệu giả, mã cán bộ giả `CB-00001`.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+function chiTiet(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
+  return {
+    code: "NV19",
+    type: "theo-van-ban",
+    bloc: "",
+    priority: "",
+    title: "Báo cáo giả về công tác cán bộ",
+    description: "",
+    status: "dang-thuc-hien",
+    source: "truc-tiep",
+    source_id: "",
+    unit: "",
+    assignee: "",
+    assigner: "CB-00001",
+    lead_unit: "01JBOPHANGIA",
+    monitor: "CB-00001",
+    due_at: "2026-06-20T23:59:59+07:00",
+    original_due_at: "2026-06-20T23:59:59+07:00",
+    completed_at: null,
+    progress: 0,
+    result_summary: "",
+    note: "",
+    leader_approved: false,
+    superior_acknowledged: false,
+    parent: "",
+    created_by: "CB-00001",
+    created_at: "2026-06-01T02:00:00Z",
+    ...sua,
+  };
+}
+
+const VB_GOC: petitions_nhiemVuVanBanRa[] = [
+  {
+    id: "01JVB1",
+    group: "cap-tren-giao",
+    reference: "1742-CV/GIA",
+    date: "2026-06-09",
+    summary: "Công văn giả của cấp trên",
+    position: 1,
+  },
+  {
+    id: "01JVB2",
+    group: "san-pham-dau-ra",
+    reference: "",
+    date: "",
+    summary: "Báo cáo giả đầu ra",
+    position: 1,
+  },
+];
+
+function formGoc(): FormSuaNhiemVu {
+  return formSuaTuChiTiet(chiTiet(), VB_GOC);
+}
+
+describe("✎ Sửa — form bắt đầu từ chi tiết", () => {
+  it("điền đủ năm ô và mọi dòng, dòng cũ mang `id` của nó", () => {
+    const f = formSuaTuChiTiet(chiTiet({ note: "Ghi chú giả", leader_approved: true }), VB_GOC);
+    expect(f.tieuDe).toBe("Báo cáo giả về công tác cán bộ");
+    expect(f.ghiChu).toBe("Ghi chú giả");
+    expect(f.lanhDaoPheDuyet).toBe(true);
+    expect(f.vanBan.map((d) => d.id)).toEqual(["01JVB1", "01JVB2"]);
+    expect(f.vanBan[0]).toMatchObject({
+      nhom: "cap-tren-giao",
+      trichYeu: "Công văn giả của cấp trên",
+      soKyHieu: "1742-CV/GIA",
+      ngay: "2026-06-09",
+    });
+  });
+});
+
+describe("✎ Sửa — thân PATCH chỉ mang thứ đã đổi", () => {
+  it("form KHÔNG ĐỔI ⇒ `null` (nút Lưu khoá), kể cả khi chỉ gõ thêm khoảng trắng", () => {
+    expect(thanSuaNhiemVu(formGoc(), chiTiet(), VB_GOC)).toBeNull();
+    const f = { ...formGoc(), tieuDe: "  Báo cáo giả về công tác cán bộ  " };
+    expect(thanSuaNhiemVu(f, chiTiet(), VB_GOC)).toBeNull();
+  });
+
+  it("đổi MỘT trường vô hướng ⇒ thân có ĐÚNG trường ấy", () => {
+    expect(thanSuaNhiemVu({ ...formGoc(), ghiChu: " Ghi chú giả mới " }, chiTiet(), VB_GOC)).toEqual({
+      note: "Ghi chú giả mới",
+    });
+    expect(thanSuaNhiemVu({ ...formGoc(), capTrenCongNhan: true }, chiTiet(), VB_GOC)).toEqual({
+      superior_acknowledged: true,
+    });
+    expect(thanSuaNhiemVu({ ...formGoc(), tomTatKetQua: "Đã xong giả" }, chiTiet(), VB_GOC)).toEqual({
+      result_summary: "Đã xong giả",
+    });
+  });
+
+  it("xoá trắng ghi chú là MỘT THAY ĐỔI — gửi chuỗi rỗng, không bỏ qua", () => {
+    const f = { ...formSuaTuChiTiet(chiTiet({ note: "Cũ" }), VB_GOC), ghiChu: "" };
+    expect(thanSuaNhiemVu(f, chiTiet({ note: "Cũ" }), VB_GOC)).toEqual({ note: "" });
+  });
+
+  it("không đụng tới văn bản ⇒ `documents` VẮNG MẶT", () => {
+    const than = thanSuaNhiemVu({ ...formGoc(), tieuDe: "Tiêu đề giả mới" }, chiTiet(), VB_GOC);
+    expect(than).toEqual({ title: "Tiêu đề giả mới" });
+    expect(than).not.toHaveProperty("documents");
+  });
+
+  it("sửa chữ một dòng ⇒ gửi LẠI MỌI dòng còn giữ, mỗi dòng cũ KÈM `id`", () => {
+    const f = formGoc();
+    const sua: FormSuaNhiemVu = {
+      ...f,
+      vanBan: f.vanBan.map((d) => (d.id === "01JVB2" ? { ...d, trichYeu: "Báo cáo giả đã sửa" } : d)),
+    };
+    expect(thanSuaNhiemVu(sua, chiTiet(), VB_GOC)?.documents).toEqual([
+      {
+        id: "01JVB1",
+        group: "cap-tren-giao",
+        summary: "Công văn giả của cấp trên",
+        reference: "1742-CV/GIA",
+        date: "2026-06-09",
+      },
+      { id: "01JVB2", group: "san-pham-dau-ra", summary: "Báo cáo giả đã sửa" },
+    ]);
+  });
+
+  it("gỡ một dòng ⇒ dòng ấy VẮNG khỏi thân, dòng kia vẫn đi kèm `id`", () => {
+    const f = formGoc();
+    const than = thanSuaNhiemVu(
+      { ...f, vanBan: f.vanBan.filter((d) => d.id !== "01JVB1") },
+      chiTiet(),
+      VB_GOC,
+    );
+    expect(than?.documents?.map((d) => d.id)).toEqual(["01JVB2"]);
+  });
+
+  it("thêm một dòng ⇒ dòng mới KHÔNG có `id`, dòng cũ vẫn có", () => {
+    const f = formGoc();
+    const moi: DongVanBanSua = {
+      khoa: "moi1",
+      id: "",
+      nhom: "chi-dao-dang-uy",
+      trichYeu: "Công văn giả mới",
+      soKyHieu: "",
+      ngay: "2026-07-01",
+    };
+    const ds = thanSuaNhiemVu({ ...f, vanBan: [...f.vanBan, moi] }, chiTiet(), VB_GOC)?.documents ?? [];
+    expect(ds).toHaveLength(3);
+    const dongMoi = ds.find((d) => d.summary === "Công văn giả mới");
+    expect(dongMoi).toEqual({ group: "chi-dao-dang-uy", summary: "Công văn giả mới", date: "2026-07-01" });
+    expect(dongMoi).not.toHaveProperty("id");
+    expect(ds.filter((d) => d.id !== undefined).map((d) => d.id)).toEqual(["01JVB1", "01JVB2"]);
+  });
+
+  it("gỡ HẾT mọi dòng ⇒ `documents: []`, không phải vắng mặt", () => {
+    expect(thanSuaNhiemVu({ ...formGoc(), vanBan: [] }, chiTiet(), VB_GOC)).toEqual({ documents: [] });
+  });
+
+  it("không bao giờ có `code`, `due_at`, `assigner`, `lead_unit`, `monitor`, `position`", () => {
+    const f: FormSuaNhiemVu = {
+      tieuDe: "Tiêu đề giả khác",
+      tomTatKetQua: "Kết quả giả",
+      ghiChu: "Ghi chú giả",
+      lanhDaoPheDuyet: true,
+      capTrenCongNhan: true,
+      vanBan: [],
+    };
+    const than = thanSuaNhiemVu(f, chiTiet(), VB_GOC) as Record<string, unknown>;
+    for (const k of ["code", "due_at", "original_due_at", "assigner", "lead_unit", "monitor"]) {
+      expect(than).not.toHaveProperty(k);
+    }
+    const coVanBan = thanSuaNhiemVu(
+      { ...formGoc(), vanBan: formGoc().vanBan.slice(0, 1) },
+      chiTiet(),
+      VB_GOC,
+    );
+    expect(coVanBan?.documents).toHaveLength(1);
+    for (const d of coVanBan?.documents ?? []) expect(d).not.toHaveProperty("position");
+  });
+
+  it("ngày văn bản đi NGUYÊN `YYYY-MM-DD`", () => {
+    const f = formGoc();
+    const than = thanSuaNhiemVu(
+      { ...f, vanBan: f.vanBan.map((d) => ({ ...d, ngay: "2026-12-31" })) },
+      chiTiet(),
+      VB_GOC,
+    );
+    expect(than?.documents).toHaveLength(2);
+    for (const d of than?.documents ?? []) expect(d.date).toBe("2026-12-31");
+  });
+});
+
+describe("✎ Sửa — khi nào nút mở, khi nào Lưu khoá", () => {
+  it("khối đang tải hoặc đọc hỏng ⇒ KHOÁ kèm lý do; đọc xong ⇒ mở", () => {
+    expect(lyDoKhoaSua({ pha: "dangTai" })).toBe(KHOA_SUA_DANG_TAI);
+    expect(lyDoKhoaSua({ pha: "loi" })).toBe(KHOA_SUA_LOI);
+    expect(lyDoKhoaSua({ pha: "xong", duLieu: VB_GOC })).toBeNull();
+    expect(lyDoKhoaSua({ pha: "xong", duLieu: [] })).toBeNull();
+  });
+
+  it("một mã nhóm lạ ⇒ KHOÁ: form không vẽ được dòng ấy, lưu lại là gỡ mất nó", () => {
+    const la = { ...(VB_GOC[0] as petitions_nhiemVuVanBanRa), id: "01JVBLA", group: "nhom-moi" };
+    expect(lyDoKhoaSua({ pha: "xong", duLieu: [...VB_GOC, la] })).toBe(KHOA_SUA_NHOM_LA);
+  });
+
+  it("tiêu đề xoá trắng, dòng thiếu trích yếu ⇒ chặn Lưu và nói vì sao", () => {
+    expect(canhBaoSua({ ...formGoc(), tieuDe: "   " })).toContain("không được để trống");
+    const f = formGoc();
+    const cau = canhBaoSua({
+      ...f,
+      vanBan: f.vanBan.map((d) => (d.id === "01JVB2" ? { ...d, trichYeu: " " } : d)),
+    });
+    expect(cau).toContain("Văn bản thứ 1 của nhóm Văn bản sản phẩm đầu ra");
+    expect(canhBaoSua(formGoc())).toBeNull();
+  });
+
+  it("ngày sai khuôn ⇒ chặn Lưu, không lặng lẽ bỏ ngày", () => {
+    const f = formGoc();
+    const cau = canhBaoSua({
+      ...f,
+      vanBan: f.vanBan.map((d) => (d.id === "01JVB1" ? { ...d, ngay: "09/06/2026" } : d)),
+    });
+    expect(cau).toContain("không đúng khuôn ngày");
+  });
+
+  it("lý do không sửa được Hạn và Cơ quan chủ trì là MỘT câu, dùng chung với phần chưa dựng", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => p.viSao === LY_DO_KHONG_SUA_HAN)).toBe(true);
+    expect(PHAN_CHUA_DUNG.some((p) => p.viSao === LY_DO_KHONG_SUA_CHU_TRI)).toBe(true);
+    expect(LY_DO_KHONG_SUA_CHU_TRI).toContain("lead_unit");
+    expect(LY_DO_KHONG_SUA_CHU_TRI).toContain("monitor");
+  });
+});
+
+describe("✎ Sửa — đọc lại trước khi lưu: không gỡ lặng lẽ văn bản người khác vừa thêm", () => {
+  it("cùng một tập ⇒ KHÔNG đổi, được lưu", () => {
+    expect(vanBanDaDoiOMayChu(VB_GOC, VB_GOC.map((v) => ({ ...v })))).toBe(false);
+    expect(vanBanDaDoiOMayChu([], [])).toBe(false);
+  });
+
+  it("máy chủ có THÊM một dòng ⇒ ĐÃ ĐỔI — đúng ca lần lưu sẽ gỡ mất dòng ấy", () => {
+    const them: petitions_nhiemVuVanBanRa = {
+      id: "01JVB3",
+      group: "chi-dao-dang-uy",
+      reference: "",
+      date: "",
+      summary: "Công văn giả người khác vừa thêm",
+      position: 1,
+    };
+    expect(vanBanDaDoiOMayChu(VB_GOC, [...VB_GOC, them])).toBe(true);
+  });
+
+  it("máy chủ GỠ một dòng, hoặc thay một dòng bằng dòng khác cùng số lượng ⇒ ĐÃ ĐỔI", () => {
+    expect(vanBanDaDoiOMayChu(VB_GOC, VB_GOC.slice(0, 1))).toBe(true);
+    const thay = [VB_GOC[0], { ...(VB_GOC[1] as petitions_nhiemVuVanBanRa), id: "01JVBKHAC" }];
+    expect(vanBanDaDoiOMayChu(VB_GOC, thay as petitions_nhiemVuVanBanRa[])).toBe(true);
+  });
+
+  it("sửa trích yếu, số ký hiệu, ngày hoặc nhóm của một dòng ⇒ ĐÃ ĐỔI", () => {
+    const sua = (k: Partial<petitions_nhiemVuVanBanRa>) =>
+      VB_GOC.map((v) => (v.id === "01JVB1" ? { ...v, ...k } : v));
+    expect(vanBanDaDoiOMayChu(VB_GOC, sua({ summary: "Trích yếu giả đã sửa" }))).toBe(true);
+    expect(vanBanDaDoiOMayChu(VB_GOC, sua({ reference: "1743-CV/GIA" }))).toBe(true);
+    expect(vanBanDaDoiOMayChu(VB_GOC, sua({ date: "2026-06-10" }))).toBe(true);
+    expect(vanBanDaDoiOMayChu(VB_GOC, sua({ group: "san-pham-dau-ra" }))).toBe(true);
+  });
+
+  it("CHỈ khác thứ tự ⇒ coi là KHÔNG đổi (quyết định có chủ ý: thứ tự do sổ cấp, thân không mang nó)", () => {
+    expect(vanBanDaDoiOMayChu(VB_GOC, [...VB_GOC].reverse())).toBe(false);
+  });
+
+  it("`position` đổi không tính — nó không nằm trong năm trường so", () => {
+    expect(vanBanDaDoiOMayChu(VB_GOC, VB_GOC.map((v) => ({ ...v, position: v.position + 5 })))).toBe(
+      false,
+    );
+  });
+
+  it("thân CÓ `documents` (kể cả `[]`) ⇒ phải đọc lại; thân chỉ có trường vô hướng ⇒ KHÔNG", () => {
+    const f = formGoc();
+    const coVanBan = thanSuaNhiemVu({ ...f, vanBan: f.vanBan.slice(0, 1) }, chiTiet(), VB_GOC);
+    const goHet = thanSuaNhiemVu({ ...f, vanBan: [] }, chiTiet(), VB_GOC);
+    const voHuong = thanSuaNhiemVu({ ...f, ghiChu: "Ghi chú giả" }, chiTiet(), VB_GOC);
+    expect(coVanBan && canDocLaiTruocKhiLuu(coVanBan)).toBe(true);
+    expect(goHet && canDocLaiTruocKhiLuu(goHet)).toBe(true);
+    expect(voHuong && canDocLaiTruocKhiLuu(voHuong)).toBe(false);
+    expect(canDocLaiTruocKhiLuu({ documents: null })).toBe(false);
+  });
+
+  it("câu báo nói rõ CHƯA LƯU GÌ và cán bộ phải làm gì", () => {
+    expect(VAN_BAN_VUA_BI_DOI).toContain("vừa được người khác thay đổi");
+    expect(VAN_BAN_VUA_BI_DOI).toContain("Chưa lưu gì");
+    expect(VAN_BAN_VUA_BI_DOI).toContain("Huỷ");
   });
 });

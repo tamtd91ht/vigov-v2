@@ -272,14 +272,52 @@ export function taoNhiemVu(
  * sót: hạn dịch được đúng một đường — đề nghị lùi hạn có người duyệt (§5.8); còn `assigner`
  * CHÍNH LÀ người duyệt theo ADR 0038, nên một tài khoản `task.update` sửa được cột ấy là một tài
  * khoản tự đặt mình làm người duyệt đề nghị của chính mình.
+ *
+ * DỰNG TỪNG TRƯỜNG, KHÔNG GỬI THẲNG `than` — cùng lý do `taoNhiemVu`: một đối tượng mang thêm
+ * `due_at` hay `code` vẫn qua được `tsc` (kiểu cấu trúc), và đi thẳng lên dây. Chỉ trường có giá trị
+ * mới có mặt; `null` bị bỏ, vì với máy chủ nó cùng nghĩa với vắng mặt.
+ *
+ * ⚠ `documents: []` PHẢI SỐNG SÓT QUA ĐÂY. Trên tuyến này mảng rỗng là "gỡ hết mọi dòng" — khác hẳn
+ * vắng mặt ("không đụng tới khối"). Mỗi dòng cũng dựng lại từng trường: `id` giữ nguyên (thiếu nó là
+ * dòng cũ bị gỡ rồi thêm lại), `position` không bao giờ đi (số thứ tự do sổ cấp).
  */
 export function suaNhiemVu(
   ma: string,
   than: petitions_suaNhiemVuVao,
 ): Promise<KetQua<petitions_nhiemVuRa>> {
   const mau: petitions_patch_tasks_by_ma["duongDan"] = "/api/v1/tasks/{ma}";
+
+  const thanGui: petitions_suaNhiemVuVao = {};
+  if (than.bloc !== undefined && than.bloc !== null) thanGui.bloc = than.bloc;
+  if (than.title !== undefined && than.title !== null) thanGui.title = than.title;
+  if (than.description !== undefined && than.description !== null) {
+    thanGui.description = than.description;
+  }
+  if (than.priority !== undefined && than.priority !== null) thanGui.priority = than.priority;
+  if (than.progress !== undefined && than.progress !== null) thanGui.progress = than.progress;
+  if (than.result_summary !== undefined && than.result_summary !== null) {
+    thanGui.result_summary = than.result_summary;
+  }
+  if (than.note !== undefined && than.note !== null) thanGui.note = than.note;
+  if (than.leader_approved !== undefined && than.leader_approved !== null) {
+    thanGui.leader_approved = than.leader_approved;
+  }
+  if (than.superior_acknowledged !== undefined && than.superior_acknowledged !== null) {
+    thanGui.superior_acknowledged = than.superior_acknowledged;
+  }
+  if (than.parent !== undefined && than.parent !== null) thanGui.parent = than.parent;
+  if (than.documents !== undefined && than.documents !== null) {
+    thanGui.documents = than.documents.map((d) => {
+      const dong: petitions_vanBanNhiemVuVao = { group: d.group, summary: d.summary };
+      if (d.id !== undefined && d.id !== "") dong.id = d.id;
+      if (d.reference !== undefined && d.reference !== "") dong.reference = d.reference;
+      if (d.date !== undefined && d.date !== "") dong.date = d.date;
+      return dong;
+    });
+  }
+
   return docThanLoiGoi<petitions_nhiemVuRa>(
-    goiGhi(duongDanNhiemVu(mau, ma), "PATCH", than, 200),
+    goiGhi(duongDanNhiemVu(mau, ma), "PATCH", thanGui, 200),
   );
 }
 
