@@ -160,7 +160,8 @@ biên dịch C (`go test -race` cần cgo) · `docker` có BuildKit. Riêng `vig
 lần đỏ rải rác.
 
 Lượt `vigov-gate` ngày 24/09/2026 (commit `30aa72d`) đã chứng minh máy chủ có `go` 1.26.5,
-`buf` 1.73.0, `node` 22.23.2, `npm` và `python3`. Phiên bản `python3` thì chưa ai đọc được.
+`buf` 1.73.0, `node` 22.23.2, `npm` và `python3`. Lượt 09:23 cùng ngày (commit `006037d`)
+đọc được phiên bản: **`python3` là 3.6.8**, quá cũ — máy chủ PHẢI cài 3.8+ trước khi cổng xanh được.
 Lượt đó đổ ở `make check` vì **`python` trên máy chủ là Python 2.7**: lỗi `SyntaxError:
 Non-ASCII character` ở `tools/check_brain.py` là lỗi chỉ Python 2 báo. Vì vậy `Jenkinsfile`
 gọi `make check PYTHON=python3` và dừng ở stage đầu nếu `python3` cũ hơn 3.8. CentOS/RHEL 7
@@ -550,7 +551,7 @@ danh sách** — xoá sạch bảng sinh ra, và `kustomize` không kêu một t
 
 | Việc | Trạng thái |
 |---|---|
-| 10 job Jenkins | **`vigov-gate` đã chạy lần đầu 24/09/2026 và đổ ở `make check`**, vì `python` trên máy chủ là 2.7 (đã sửa: `PYTHON=python3`). Chín job còn lại chưa chạy lần nào. Máy chủ đã chứng minh có `go`, `buf`, `node`, `npm`, `python3`, `make`, `gcc`; `docker` được chứng minh qua lượt chạy 21/09/2026 của kho `vihat-miniapp`. **Phiên bản `python3` chưa được đọc** |
+| 10 job Jenkins | **`vigov-gate` đã chạy lần đầu 24/09/2026 và đổ ở `make check`**, vì `python` trên máy chủ là 2.7 (đã sửa: `PYTHON=python3`). Chín job còn lại chưa chạy lần nào. Máy chủ đã chứng minh có `go`, `buf`, `node`, `npm`, `python3`, `make`, `gcc`; `docker` được chứng minh qua lượt chạy 21/09/2026 của kho `vihat-miniapp`. **`python3` là 3.6.8 — chặn ở stage đầu cho tới khi máy chủ cài 3.8+** |
 | Cụm mà kubeconfig trỏ tới | **chưa ai chạy `kubectl` với nó.** Đường dẫn `/u01/rancher/rancher-vigov.yaml` đã được chủ dự án xác nhận, nhưng lượt `vigov-deploy` đầu tiên vẫn là lần đầu biết nó mở được cụm nào — đọc dòng `current-context` ở stage đầu |
 | `deploy/Jenkinsfile` | **chưa máy nào phân tích cú pháp.** Không có Jenkins ở máy trạm, và `tools/check_build.py` chỉ soi 8 Jenkinsfile của dịch vụ |
 | Manifest qua API server thật | **chưa.** `kubectl kustomize` chỉ chứng minh YAML dựng được, không chứng minh máy chủ chấp nhận. Mục 4 là lần đầu biết |
