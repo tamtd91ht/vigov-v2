@@ -9,7 +9,7 @@ import { dangChon, locMenu, NHOM_MENU } from "./muc-menu";
  */
 
 const DU_QUYEN = [
-  "document.route",
+  "document.read",
   "budget.read",
   "feedback.read",
   "admin.user",
@@ -67,6 +67,22 @@ describe("locMenu", () => {
     // `admin.lookup` là khoá của Cấu hình. Một phép khớp tiền tố `admin.*` sẽ mở luôn màn ấy —
     // đúng điều luật 5 bất biến 3b cấm, và `coQuyen` so chuỗi chính xác để chặn.
     expect(ten).not.toContain("Cấu hình");
+  });
+
+  it("chỉ có `document.read`: THẤY mục Văn bản & Đơn thư", () => {
+    // Hai tuyến đọc sổ (`GET /api/v1/incoming-documents` · `outgoing-documents`) đòi đúng khoá
+    // này. Máy chủ trả sổ cho người ấy, nên menu không được giấu lối vào.
+    const ten = tenMuc(locMenu(NHOM_MENU, ["document.read"]));
+    expect(ten).toContain("Văn bản & Đơn thư");
+    expect(ten).toHaveLength(5);
+  });
+
+  it("chỉ có `document.route` (KHÔNG có `document.read`): KHÔNG thấy mục Văn bản & Đơn thư", () => {
+    // `document.route` là khoá GHI — chuyển xử lý. Người thiếu khoá đọc bấm vào sẽ gặp 403 ngay ở
+    // lượt đọc, nên một mục menu dẫn tới đó là hứa một chức năng không dùng được.
+    const ten = tenMuc(locMenu(NHOM_MENU, ["document.route", "document.create"]));
+    expect(ten).not.toContain("Văn bản & Đơn thư");
+    expect(ten).toHaveLength(4);
   });
 
   it("nhóm rỗng thì biến mất, không để lại một nhãn nhóm trống", () => {

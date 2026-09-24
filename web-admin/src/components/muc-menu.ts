@@ -1,6 +1,5 @@
 import { coQuyen } from "@/lib/quyen";
 import {
-  QUYEN_CHUYEN_VAN_BAN,
   QUYEN_QUAN_LY_DANH_MUC,
   QUYEN_QUAN_LY_NGUOI_DUNG,
   QUYEN_SOAN_THONG_BAO,
@@ -8,6 +7,7 @@ import {
   QUYEN_XEM_NHIEM_VU,
   QUYEN_XEM_NOI_DUNG,
   QUYEN_XEM_PHAN_ANH,
+  QUYEN_XEM_VAN_BAN,
 } from "@/lib/quyen";
 
 /**
@@ -62,7 +62,7 @@ export const NHOM_MENU: readonly NhomMenu[] = [
       { nhan: "Nhiệm vụ", duong: "/nhiem-vu", khoa: QUYEN_XEM_NHIEM_VU },
       { nhan: "Sổ tay lãnh đạo", duong: null, khoa: null },
       { nhan: "Biên bản họp", duong: "/nhiem-vu/bien-ban", khoa: QUYEN_XEM_NHIEM_VU },
-      { nhan: "Văn bản & Đơn thư", duong: "/van-ban", khoa: QUYEN_CHUYEN_VAN_BAN },
+      { nhan: "Văn bản & Đơn thư", duong: "/van-ban", khoa: QUYEN_XEM_VAN_BAN },
       { nhan: "Giải ngân", duong: "/giai-ngan", khoa: QUYEN_XEM_GIAI_NGAN },
       { nhan: "Thu - Chi ngân sách", duong: "/giai-ngan/thu-chi", khoa: QUYEN_XEM_GIAI_NGAN },
       { nhan: "Thông báo", duong: "/thong-bao", khoa: QUYEN_SOAN_THONG_BAO },

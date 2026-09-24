@@ -175,31 +175,39 @@ export const QUYEN_GHI_SO_VAN_BAN = "document.create";
 export const QUYEN_CHUYEN_VAN_BAN = "document.route";
 
 /**
- * KHÔNG CÓ HẰNG NÀO CHO `document.read`, VÀ SỰ VẮNG MẶT ẤY LÀ CHỦ Ý.
+ * Khoá quyền XEM hai quyển sổ văn bản — `document.read`, "Xem văn bản"
+ * (`service-identity/migrations/0001_init.sql:295`), đúng chuỗi `x-vigov-permission.key` của
+ * `GET /api/v1/incoming-documents` và `GET /api/v1/outgoing-documents` trong
+ * `kb/20-contracts/openapi.json`.
  *
- * Hai tuyến đọc sổ đòi `document.read` thật, nhưng màn hình KHÔNG dựng cổng quyền ở client cho
- * chúng: tài khoản thiếu khoá nhận 403 ngay ở lượt đọc và màn hình hiện NGUYÊN câu của máy chủ —
- * cùng khuôn với `GET /api/v1/sla` ở tab Thời hạn xử lý. Dựng thêm một cổng đoán trước điều ấy chỉ
- * thêm một chỗ có thể lệch với máy chủ, và khi nó lệch thì nó ẩn mất một quyển sổ mà máy chủ đang
- * phục vụ bình thường.
+ * CHỈ DÙNG CHO MỤC MENU, KHÔNG BAO GIỜ LÀ CỔNG THÂN MÀN. Thân màn `/van-ban` cố ý KHÔNG dựng cổng
+ * quyền ở client: tài khoản thiếu khoá nhận 403 ngay ở lượt đọc và màn hình hiện NGUYÊN câu của
+ * máy chủ — cùng khuôn với `GET /api/v1/sla` ở tab Thời hạn xử lý. Dựng thêm một cổng đoán trước
+ * điều ấy chỉ thêm một chỗ có thể lệch với máy chủ, và khi nó lệch thì nó ẩn mất một quyển sổ mà
+ * máy chủ đang phục vụ bình thường. Lý do mục menu vẫn cần một khoá nằm ở khối `task.read` dưới.
+ *
+ * VÌ SAO KHÔNG DÙNG `QUYEN_CHUYEN_VAN_BAN` CHO MỤC MENU (như trước 24/09/2026): `document.route`
+ * là khoá GHI, không phải khoá tuyến đọc khai. Canh bằng nó thì cán bộ chỉ có `document.read`
+ * không thấy nổi quyển sổ máy chủ sẵn sàng trả cho họ, còn người chỉ có `document.route` thấy một
+ * mục dẫn thẳng vào 403.
  */
+export const QUYEN_XEM_VAN_BAN = "document.read";
 
 /**
  * Khoá quyền XEM sổ nhiệm vụ — `task.read`, "Xem nhiệm vụ"
  * (`service-identity/migrations/0001_init.sql:304`).
  *
- * MỘT HẰNG CHO MỘT KHOÁ ĐỌC — VÀ ĐIỀU ẤY KHÔNG MÂU THUẪN VỚI KHỐI `document.read` NGAY TRÊN.
- * Khối ấy từ chối dựng cổng trong THÂN MÀN. Hằng này không dùng cho thân màn: `/nhiem-vu` và
+ * MỘT HẰNG CHO MỘT KHOÁ ĐỌC — CÙNG KHUÔN `QUYEN_XEM_VAN_BAN` NGAY TRÊN: không cổng trong
+ * THÂN MÀN, chỉ canh mục menu. Hằng này không dùng cho thân màn: `/nhiem-vu` và
  * `/nhiem-vu/bien-ban` đều KHÔNG có `<CongQuyen>`, tài khoản thiếu khoá vẫn nhận 403 nguyên văn
  * từ máy chủ, đúng khuôn `/van-ban`. Nó chỉ quyết định MỤC MENU có hiện hay không.
  *
  * VÌ SAO MỤC MENU CẦN MỘT KHOÁ, VÀ VÌ SAO PHẢI LÀ ĐÚNG KHOÁ NÀY: `muc-menu.ts` đã từ chối vẽ
  * chín mục chưa có màn thành liên kết, vì "vẽ ra thứ không bấm được là hứa một chức năng không
  * tồn tại". Một mục menu dẫn thẳng vào 403 là cùng lời hứa ấy. Nhưng khoá canh mục menu phải là
- * ĐÚNG khoá tuyến đọc khai, không phải một khoá gần đúng: mục `Văn bản & Đơn thư` đang canh bằng
- * `document.route` — một khoá GHI — nên cán bộ chỉ có `document.read` không thấy nổi quyển sổ mà
- * máy chủ sẵn sàng trả cho họ. Đó đúng là kiểu lệch khối trên cảnh báo, và lấy `task.create` canh
- * mục Nhiệm vụ sẽ chép lại nó.
+ * ĐÚNG khoá tuyến đọc khai, không phải một khoá gần đúng: mục `Văn bản & Đơn thư` từng canh bằng
+ * `document.route` — một khoá GHI — và đã phải đổi sang `document.read` (24/09/2026). Lấy
+ * `task.create` canh mục Nhiệm vụ sẽ chép lại đúng lỗi ấy.
  *
  * SÁU KHOÁ `task.*` CÒN LẠI CỐ Ý KHÔNG CÓ HẰNG: `task.create` · `update` · `approve` · `extend`
  * · `delete` · `assign` đều có thật trong bảng `quyen` (`0001_init.sql:299-305`) và tuyến đã
@@ -213,7 +221,7 @@ export const QUYEN_XEM_NHIEM_VU = "task.read";
  * (`service-identity/migrations/0001_init.sql:286`).
  *
  * TÊN HẰNG NÓI `SOẠN` NHƯNG NÓ CŨNG CANH ĐƯỜNG ĐỌC, và điều ấy KHÔNG phải lỗi lặp lại của mục
- * `Văn bản & Đơn thư`. Ở đó mục menu canh bằng `document.route` trong khi tuyến đọc đòi
+ * `Văn bản & Đơn thư`. Ở đó mục menu từng canh bằng `document.route` trong khi tuyến đọc đòi
  * `document.read` — hai khoá khác nhau, nên cán bộ chỉ có khoá đọc mất luôn lối vào. Ở đây
  * `GET /api/v1/announcements` VÀ `POST` **cùng đòi đúng một khoá này**, vì nhóm THÔNG BÁO trong
  * bảng `quyen` chỉ có một dòng duy nhất. Nên canh mục menu bằng nó là canh bằng CHÍNH khoá tuyến
