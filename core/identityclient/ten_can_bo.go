@@ -54,7 +54,8 @@ type TenCanBo struct {
 //
 // A code that resolves may have resolved PRECISELY BECAUSE the record was removed. Never read a
 // present item as "this is staff", "this person can be assigned work", or "this account exists" —
-// that question is BatchGetStaff's, and it has the predicate that answers it.
+// "can be assigned" is CanBoGiaoViecDuoc's (ResolveAssignableStaff), which has the predicate that
+// answers it; membership of the register is BatchGetStaff's.
 //
 // # ONLY STAFF CODES BELONG HERE
 //

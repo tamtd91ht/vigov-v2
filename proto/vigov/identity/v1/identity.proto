@@ -308,7 +308,9 @@ service IdentityService {
   // A CALLER MUST NOT DECIDE ANYTHING FROM IT — not "this id is valid staff", not "this person can
   // be assigned", not "this account exists". Deciding from this RPC treats a name that is here
   // PRECISELY BECAUSE the record was removed as evidence that the record is there. The membership
-  // question has an RPC of its own, with the predicate that belongs to it: BatchGetStaff.
+  // question has an RPC of its own, with the predicate that belongs to it: BatchGetStaff. The
+  // "can this person be assigned" question has ANOTHER, because BatchGetStaff's predicate answers
+  // locked and account-less people as present: ResolveAssignableStaff.
   //
   // # WHY A SECOND RPC AND NOT A FLAG — the decision this contract exists to record
   //
@@ -456,6 +458,100 @@ service IdentityService {
   //                       a person then reads as fact. Say the names could not be loaded, or fail
   //                       the page.
   rpc ResolveStaffNames(ResolveStaffNamesRequest) returns (ResolveStaffNamesResponse);
+
+  // ResolveAssignableStaff answers ONE question about staff codes a caller is about to WRITE onto a
+  // record as the holder of work: may this person be handed NEW work in this commune, today?
+  //
+  // WHY IT EXISTS (user decision 2026-09-25): `POST /api/v1/citizen-reports/{ma}/assignment` in
+  // service-petitions stores an assignee's business code, and every later holder check compares
+  // that code with a signed-in Principal.Ma. The assignee code arrives in the request body — it is
+  // CLIENT-SUPPLIED — so the server must verify it before writing, or a crafted body hands a
+  // citizen's petition to a code of another commune, a locked former employee, or a directory-only
+  // person with no account, and the work then sits with nobody, forever. Tasks and documents will
+  // need the same check for the same reason, which is why it is a contract and not a petitions
+  // helper.
+  //
+  // NEITHER EXISTING RPC CAN ANSWER IT, and both were measured rather than assumed:
+  //
+  //   BatchGetStaff       keyed by the INTERNAL id, and its predicate is the register's (not
+  //                       deleted) — a LOCKED or ACCOUNT-LESS person is answered as present
+  //                       (service-identity/internal/store/can_bo_lo.go). Deciding assignment from
+  //                       it would offer exactly the people this check exists to refuse.
+  //   ResolveStaffNames   answers REMOVED records on purpose and forbids deciding anything from it.
+  //
+  // # THE PREDICATE — the whole of what "assignable" means, and it is the picker's
+  //
+  // A code is ASSIGNABLE when its `nguoi_dung` row, in the commune named by "x-tenant-id":
+  //
+  //   deleted_at IS NULL   a soft-deleted row is a duplicate kept for the trail (#10, rule 7 inv 2)
+  //   co_tai_khoan         a directory-only person can never sign in, so can never be the
+  //                        Principal.Ma a holder check compares with
+  //   dang_hoat_dong       a locked account is somebody retired, moved or suspended (#10) — still
+  //                        on old records, never a NEW assignee
+  //
+  // EXACTLY the predicate of GET /api/v1/staff-directory (locChonNguoi in
+  // service-identity/internal/store/can_bo_chon_nguoi.go). THE TWO MUST NEVER DIVERGE: a code the
+  // picker offers and this RPC refuses is a dropdown whose choice always fails, and a code this RPC
+  // accepts and the picker hides is a body-crafted assignment the screen could never produce. Whoever
+  // changes one changes both, in the same commit.
+  //
+  // # UNLIKE ResolveStaffNames, A CALLER MAY DECIDE FROM THIS
+  //
+  // That is its purpose: a code absent from the answer MUST be refused by the caller (fail closed),
+  // and a code present in it may be written as an assignee. The answer is a point-in-time fact —
+  // an account locked a millisecond after the call is not seen — and that window is accepted: the
+  // lock itself is what stops the person acting, and the holder check runs again against a live
+  // principal on every later act. It is NEVER cached across requests for the same reason
+  // ResolveStaffPrincipal is not.
+  //
+  // # IT CARRIES NO PERSONAL DATA
+  //
+  // The request and the response hold staff business codes only — the same codes the caller sent,
+  // or a subset of them. No name, no position, no contact detail, no internal id, no role. It is
+  // therefore safe to reason about in a log line by COUNT; the codes themselves still identify a
+  // person to anyone holding the directory, so log how many, not which.
+  //
+  // WHAT IS NOT HERE, ON PURPOSE: a reason per refused code. "Locked" vs "no account" vs "deleted"
+  // vs "another commune" vs "does not exist" collapse into ONE answer — absent. Telling "another
+  // commune" apart from "does not exist" would leak that a code exists in a commune the caller may
+  // not read (rule 1); telling "locked" apart would publish an employment fact about a person to
+  // every service that can call this. The caller's message to its user is one sentence: "cán bộ
+  // này không nhận được việc".
+  //
+  // # A LOOKUP BY CODES THE CALLER ALREADY HOLDS — NEVER A LIST
+  //
+  // The request has exactly one field and it is a list of codes. An empty list answers empty, never
+  // "every assignable person" — the picker is GET /api/v1/staff-directory, a staff-facing route
+  // with its own permission, and a second path to the roster here would be one without it. The
+  // response never carries a code that was not requested.
+  //
+  // # The commune travels in metadata, and this RPC is not a candidate for exemption
+  //
+  // "x-tenant-id" is what makes a code of another commune absent. Putting this method on
+  // core/grpcx.methodsWithoutTenant would turn "belongs to the caller's commune" into "belongs to
+  // some commune", which is the leak — a STOP CONDITION (ADR 0012, decision 1).
+  //
+  // # Reading this is NOT audited — the ASSIGNMENT is
+  //
+  // It is a read of codes, no personal data, and this service cannot name the "who" (ADR 0025's
+  // one caller key names no service and no principal). The audited act is the caller's write of
+  // the assignee, inside the caller's own transaction — the same shape as AdvanceWorkingHours.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more codes. FEWER THAN REQUESTED IS ORDINARY — it is the answer
+  //                       "not assignable", and it is the whole point.
+  //   INVALID_ARGUMENT    more than 50 codes in one call. Never a silent truncation: a clamped batch
+  //                       would silently turn real, assignable codes into "not assignable".
+  //   NOT_FOUND           NEVER produced. A code that is not assignable is an ABSENT code.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor
+  //                       (ADR 0025) and means the DEPLOYMENT is misconfigured.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "not assignable" and NOT "assignable":
+  //                       the caller must refuse the write with a retryable error (503), never
+  //                       fall back to writing the code unchecked.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ResolveAssignableStaff(ResolveAssignableStaffRequest) returns (ResolveAssignableStaffResponse);
 
   rpc ListCitizenCommunes(ListCitizenCommunesRequest) returns (ListCitizenCommunesResponse);
 
@@ -1391,8 +1487,9 @@ enum StaffRecordStanding {
   // The record is in this commune's staff directory today.
   //
   // IT SAYS NOTHING ABOUT WHETHER THE ACCOUNT IS USABLE. A locked account is still IN the
-  // directory (question #10), and a caller needing "may this person sign in, or be assigned work"
-  // asks BatchGetStaff, whose predicate is the one that answers it.
+  // directory (question #10), and a caller needing "may this person be assigned work" asks
+  // ResolveAssignableStaff, whose predicate is the one that answers it. (NOT BatchGetStaff: its
+  // predicate is the register's, and it answers locked and account-less people as present.)
   STAFF_RECORD_STANDING_IN_DIRECTORY = 1;
 
   // The record has been removed from the directory — `nguoi_dung.deleted_at` is set. The row itself
@@ -1403,6 +1500,48 @@ enum StaffRecordStanding {
   // WHAT IT MAY NOT SAY: that the person left, retired, or was dismissed. See the comment on this
   // enum for why the data does not support that sentence.
   STAFF_RECORD_STANDING_REMOVED_FROM_DIRECTORY = 2;
+}
+
+message ResolveAssignableStaffRequest {
+  // THE STAFF CODES the caller is about to write as holders of work — `nguoi_dung.ma`, spelled
+  // `CB-00123`, the value Principal.Ma carries and every holder check compares with. NOT the
+  // internal id: the record being written stores the code, so the code is what has to be verified.
+  //
+  // `ma` AND NOT `codes`, for the reason ResolveStaffNamesRequest.ma gives: the same string
+  // `nguoi_dung.ma` stores and StaffPrincipal.ma carries (ADR 0011).
+  //
+  // Duplicates are collapsed by the server; order carries no meaning. A blank string matches no row
+  // and is simply absent from the answer.
+  //
+  // AT MOST 50 codes per call. More is INVALID_ARGUMENT, never a silent truncation — a clamped
+  // batch would answer real, assignable people as "not assignable" with nothing reporting it.
+  //
+  // 50 IS DERIVED FROM THE CALLERS, not from BatchGetStaff's 200: this is asked at the moment of an
+  // ASSIGNMENT, and one assignment names one assignee (a petition) or a handful of co-handlers (a
+  // task, a document). 50 is an order of magnitude over that and still bounds the query on the
+  // receiver. A caller that genuinely needs more is doing something that is not an assignment —
+  // listing the assignable roster, which is GET /api/v1/staff-directory's job.
+  //
+  // AN EMPTY LIST IS A VALID REQUEST AND ANSWERS EMPTY. It is NOT "everyone assignable" and there is
+  // no spelling of this request that means that.
+  //
+  // THERE IS NO SECOND FIELD, AND THAT IS THE DESIGN. No department, no role, no cursor: a predicate
+  // here turns a verification into a roster listing with no permission guarding it.
+  repeated string ma = 1;
+}
+
+// Wrapped, not a bare repeated string: adding a field later must not change the RPC signature.
+message ResolveAssignableStaffResponse {
+  // The requested codes that satisfy the predicate on the RPC comment — a SUBSET of the request,
+  // each at most once, in no meaningful order. The caller checks membership by value.
+  //
+  // A CODE IS ABSENT when it does not exist, is soft deleted, has no account, is locked, or belongs
+  // to ANOTHER COMMUNE than the one in "x-tenant-id". The five are deliberately indistinguishable,
+  // and the caller treats every one of them the same way: refuse the assignment.
+  //
+  // THE RESPONSE NEVER CARRIES A CODE THAT WAS NOT REQUESTED. A caller should treat one as a contract
+  // fault, not as an extra assignee.
+  repeated string assignable_ma = 1;
 }
 
 message ListCitizenCommunesRequest { string citizen_id = 1; }
