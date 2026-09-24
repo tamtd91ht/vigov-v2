@@ -131,6 +131,17 @@ describe("text and targets stay usable for an ageing eye", () => {
     expect(styles).toMatch(/\.hang-tieu-de__them\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
   });
 
+  it("kênh công dân: mọi đích chạm và ô nhập cao ít nhất 48px", () => {
+    // Người dùng hai màn này thường lớn tuổi, đứng ngoài trời, một tay cầm máy; bấm trượt ở bước
+    // xác nhận là gửi nhầm việc. Đọc cả con số từ CSS: hạ `--tap-min` thì ca này đỏ theo.
+    for (const lop of [".cd-nut", ".cd-nut-phu", ".cd-cong-tac", ".cd-o__nhap"]) {
+      expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
+        new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
+      );
+    }
+    expect(pixels("tap-min") + 4).toBeGreaterThanOrEqual(48);
+  });
+
   it("animates nothing outside a reduced-motion guard", () => {
     // Motion is decoration here — a drifting constellation behind a dark panel. For a citizen
     // with a vestibular disorder or a migraine it is not decoration, and the phone already
@@ -466,6 +477,28 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["a wizard option label where its card gradient ends", token("ink"), token("surface-tint")],
     ["the answer summary label", token("ink-muted"), token("surface")],
     ["the answer summary value", token("ink"), token("surface")],
+
+    /**
+     * KÊNH CÔNG DÂN (24/09/2026) — "Gửi phản ánh" · "Tra cứu phiếu". Không màu mới; liệt kê riêng
+     * vì một cặp màu chỉ được bảo vệ khi có TÊN NÓ ở đây. Đây là chữ quyết định phiếu đi tới xã nào,
+     * và mã tra cứu là thứ duy nhất người dân có để hỏi lại.
+     */
+    ["the commune name of the session on every citizen screen", token("navy"), token("surface")],
+    ["the commune name being confirmed before sending", token("navy"), token("surface")],
+    ["the emergency-numbers notice", token("ink"), token("surface")],
+    ["a citizen field label", token("navy"), token("surface-alt")],
+    ["a citizen field hint", token("ink-muted"), token("surface-alt")],
+    ["text typed into a citizen field", token("ink"), token("surface")],
+    ["the send button label", "#ffffff", token("navy")],
+    ["the send button label while sending", "#ffffff", token("navy-deep")],
+    ["the edit / retry secondary button label", token("navy"), token("surface")],
+    ["the anonymous toggle and its state word", token("navy"), token("surface")],
+    ["a citizen error sentence", token("ink"), token("surface-alt")],
+    ["the lookup code after sending", token("navy"), token("surface")],
+    ["a petition card label", token("ink-muted"), token("surface")],
+    ["a petition card value", token("ink"), token("surface")],
+    ["the status word on a petition card", token("navy"), token("surface")],
+    ["the channel-not-open notice", token("ink"), token("surface")],
 
     ["card text where the card gradient ends green", token("ink"), token("surface-tint-green")],
     [

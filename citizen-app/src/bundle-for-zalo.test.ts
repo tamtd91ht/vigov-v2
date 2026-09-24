@@ -52,6 +52,9 @@ import {
 import { NHAN_KHAM_PHA } from "./features/kham-pha/index";
 import { LOI_NHAN, nhanNguon } from "./features/kham-pha/goi-y";
 import { LOI_NHAN_DANG_LAM } from "./features/kham-pha/TrangXaScreen";
+import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
+import { NHAN_KENH_CONG_DAN } from "./cong-dan/man/KenhCongDan";
+import { KENH_CHUA_MO, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
 
 /**
  * WHAT THIS CATCHES THAT NOTHING ELSE DOES:
@@ -406,13 +409,16 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
       ).toBeGreaterThan(0);
     }
 
-    // HAI BẢN PHẢI GIỐNG NHAU Ở ĐIỂM NÀY. Khối đăng nhập không còn cửa biến thể; một chênh lệch
-    // nghĩa là ai đó vừa dựng lại một cửa, và lần ấy bản nộp sẽ khác bản đã thử.
+    // CHÊNH ĐÚNG MỘT, VÀ MỘT ẤY CÓ TÊN — 24/09/2026. Trước ngày này hai bản phải bằng nhau (khối
+    // đăng nhập không còn cửa biến thể). Nay kênh công dân đứng sau `bien-the/cong-dan` và mang
+    // ĐÚNG MỘT `fetch(` (`cong-dan/api/goi-vigov.ts`) chỉ ở bản `day-du`. Chênh 0 = kênh công dân
+    // lọt vào bản nộp hoặc biến mất khỏi bản thử; chênh 2 = ai đó dựng thêm một cửa có lời gọi mạng.
+    // Ca "tuyến ViGov chỉ ở bản thử" ngay dưới trả lời CÁI MỘT ẤY là gì.
     const demGoi = (ban: string) => (ban.match(/fetch\s*\(/g) ?? []).length;
     expect(
       demGoi(day_du) - demGoi(goc),
-      "hai biến thể chênh nhau một lời gọi mạng — khối đăng nhập phải giống hệt nhau ở cả hai",
-    ).toBe(0);
+      "hai biến thể phải chênh nhau ĐÚNG MỘT lời gọi mạng — client ViGov của kênh công dân",
+    ).toBe(1);
   });
 
   /**
@@ -507,6 +513,26 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
       for (const dich of DICH_MO_RA_NGOAI) {
         expect(ban, `bản ${ten} không khai đích "${dich.ma}"`).toContain(dich.trong_chinh_sach);
       }
+    }
+  });
+
+  /**
+   * KÊNH CÔNG DÂN (24/09/2026) — CHỈ Ở BẢN THỬ, cho tới ngày cầu phiên ViGov có thật.
+   *
+   * Hai vế, như mọi ca ở tệp này: bản `day-du` PHẢI mang (nếu không, ca "bản nộp không chứa" xanh vì
+   * không bản nào chứa), bản `goc` KHÔNG được mang. Đường dẫn tuyến và tên tiêu đề chống trùng là
+   * hai neo chắc nhất: `zmp-sdk` không thể tình cờ chứa chúng.
+   */
+  it("tuyến ViGov và hai màn của kênh công dân CHỈ có ở bản thử, không có ở bản nộp", () => {
+    const dem = (ban: string, chuoi: string) => ban.split(chuoi).length - 1;
+    expect(dem(day_du, DUONG_DAN_PHAN_ANH_CUA_TOI), "bản thử phải nhắc tuyến ViGov đúng một lần").toBe(1);
+    expect(dem(goc, DUONG_DAN_PHAN_ANH_CUA_TOI), "bản NỘP mang tuyến ViGov của kênh công dân").toBe(0);
+    expect(day_du).toContain("Idempotency-Key");
+    expect(goc, "bản NỘP mang tiêu đề chống gửi trùng của tuyến ViGov").not.toContain("Idempotency-Key");
+
+    for (const chuoi of [KENH_CHUA_MO.tieu_de, KHAN_CAP, TRA_CUU.khong_thay, NHAN_KENH_CONG_DAN]) {
+      expect(day_du, `bản thử thiếu: ${chuoi}`).toContain(chuoi);
+      expect(goc, `bản NỘP vẫn chứa: ${chuoi}`).not.toContain(chuoi);
     }
   });
 

@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 
 import { LaunchParamsPanel } from "bien-the/chan-doan";
+import { CO_KENH_CONG_DAN, KenhCongDan, NutVaoKenhCongDan } from "bien-the/cong-dan";
 import {
   ChonXaScreen,
   CO_LOP_KHAM_PHA,
@@ -161,6 +162,12 @@ export function App() {
   const [xaDaChon, setXaDaChon] = useState<XaDemo | null>(null);
   const [dangChonXa, setDangChonXa] = useState(false);
   const [boQuaKhamPha, setBoQuaKhamPha] = useState(false);
+  /**
+   * Đang mở kênh công dân (gửi / tra cứu phản ánh). Chỉ có nghĩa ở bản `day-du`: ở bản `goc`,
+   * `CO_KENH_CONG_DAN` là `false` và cả kênh là bản rỗng (`bien-the/cong-dan`, `vite.config.ts`).
+   * App.tsx KHÔNG nhập client ViGov — chỉ mở màn của nửa nhà nước (`ranh-gioi-hai-nua.test.ts`).
+   */
+  const [moKenhCongDan, setMoKenhCongDan] = useState(false);
 
   const p = thamSoLaunch(thamSo);
 
@@ -191,7 +198,9 @@ export function App() {
   let noiDung: ReactNode = (
     <Screen key={`${currentId}:${vi_tri.moc ?? ""}:${vi_tri.lan}`} moc={vi_tri.moc} onDi={di} />
   );
-  if (dangChonXa) {
+  if (CO_KENH_CONG_DAN && moKenhCongDan) {
+    noiDung = <KenhCongDan onDong={() => setMoKenhCongDan(false)} />;
+  } else if (dangChonXa) {
     // Công dân tự bấm "Đổi xã": không cần giải thích gì, chính họ vừa yêu cầu.
     noiDung = (
       <ChonXaScreen
@@ -234,7 +243,12 @@ export function App() {
      *   Cách này giữ đúng một đường: bấm tab đầu là về trang xã, luôn luôn, kể cả sau khi công
      *   dân đi xem phần giới thiệu. Không có ngõ cụt nào mở ra.
      */
-    noiDung = <TrangXaScreen xa={xaDaChon} />;
+    noiDung = (
+      <>
+        <TrangXaScreen xa={xaDaChon} />
+        {CO_KENH_CONG_DAN && <NutVaoKenhCongDan onBam={() => setMoKenhCongDan(true)} />}
+      </>
+    );
   }
 
   return (

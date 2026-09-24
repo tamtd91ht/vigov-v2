@@ -164,6 +164,9 @@ function tenModuleNhap(ma: string): string[] {
 function giaiDuongDan(tu_tep: string, ten: string): string | null {
   if (ten.startsWith("bien-the/kham-pha")) return "./features/kham-pha/index.ts";
   if (ten.startsWith("bien-the/chan-doan")) return "./features/diagnostics/index.ts";
+  // Cửa thứ ba (24/09/2026). Không quy nó thì `App.tsx` nhập kênh công dân qua alias mà ranh giới
+  // KHÔNG nhìn thấy — `null` ở đây là "gói ngoài, không thuộc nửa nào", tức một điểm mù.
+  if (ten.startsWith("bien-the/cong-dan")) return "./cong-dan/index.ts";
   if (ten.startsWith("@/")) return `./${ten.slice(2)}`;
   if (!ten.startsWith(".")) return null;
 
@@ -273,6 +276,8 @@ describe("3a — ranh giới hai nửa, cấm cả hai chiều", () => {
       { path: "./features/company-intro/HomeScreen.tsx", code: 'import { X } from "../../cong-dan/phien";' },
       { path: "./content/company-profile.ts", code: 'const x = await import("../cong-dan/xa");' },
       { path: "./features/tinh-nang/zalo-api.ts", code: 'const x = require("@/cong-dan/phien");' },
+      // Qua alias cũng là nhập nửa nhà nước — cửa `bien-the/cong-dan` không phải lối tắt.
+      { path: "./features/company-intro/HomeScreen.tsx", code: 'import { KenhCongDan } from "bien-the/cong-dan";' },
       // nhà nước -> thương mại
       { path: "./cong-dan/TrangXa.tsx", code: 'import { COMPANY } from "../content/company-profile";' },
       { path: "./cong-dan/api/vigov.ts", code: 'import { thanYeuCau } from "@/features/dang-nhap/hop-dong";' },
@@ -289,6 +294,7 @@ describe("3a — ranh giới hai nửa, cấm cả hai chiều", () => {
     const HOP_LE: readonly TepNguon[] = [
       { path: "./App.tsx", code: 'import { COMPANY } from "./content/company-profile";' },
       { path: "./App.tsx", code: 'import { X } from "./cong-dan/index";' },
+      { path: "./App.tsx", code: 'import { KenhCongDan } from "bien-the/cong-dan";' },
       { path: "./features/tinh-nang/zalo-api.ts", code: 'const sdk = await import("zmp-sdk");' },
       { path: "./features/company-intro/HomeScreen.tsx", code: 'import { useState } from "react";' },
       { path: "./cong-dan/index.ts", code: 'import { thamSo } from "../lib/launch-params";' },

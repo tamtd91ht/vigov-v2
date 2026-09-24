@@ -2496,3 +2496,288 @@ body {
   color: var(--navy);
   font-weight: 700;
 }
+
+/* =============================================================================================
+   KÊNH CÔNG DÂN — "Gửi phản ánh" · "Tra cứu phiếu" (24/09/2026, nửa nhà nước, sau `bien-the/cong-dan`)
+
+   KHÔNG MỘT MÀU MỚI NÀO: chữ `--ink` / `--ink-muted` / `--navy` trên `--surface` / `--surface-alt`,
+   nút chính trắng trên `--navy` — đúng những cặp `accessibility.test.ts` đã đo, và liệt kê lại dưới
+   tên riêng ở đó.
+
+   ĐÍCH CHẠM 48px, CAO HƠN `--tap-min` (44px) MỘT BẬC: người dùng màn này thường lớn tuổi, đứng
+   ngoài trời, một tay cầm máy, và bấm trượt ở bước xác nhận là gửi nhầm việc hoặc không gửi được.
+   Viết bằng `calc(var(--tap-min) + 4px)` để hạ `--tap-min` thì các nút này hạ theo và phép kiểm
+   ở `accessibility.test.ts` thấy.
+   ============================================================================================= */
+.cd-man {
+  font-size: var(--text-body);
+  color: var(--ink);
+}
+
+.cd-tieu-de {
+  margin: 8px 0 14px;
+  font-size: 24px;
+  line-height: 1.3;
+  color: var(--navy);
+}
+
+.cd-tieu-de-phu {
+  margin: 0 0 10px;
+  font-size: 21px;
+  line-height: 1.3;
+  color: var(--navy);
+}
+
+.cd-cau {
+  margin: 0 0 12px;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.cd-ghi-chu {
+  margin: 0 0 14px;
+  font-size: var(--text-small);
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+/* Tên xã của phiên — đầu mỗi màn. Viền trái + chữ đậm, không chỉ màu. */
+.cd-xa {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-left: 4px solid var(--navy);
+  border-radius: 0 10px 10px 0;
+  background: var(--surface);
+  font-size: var(--text-body);
+  color: var(--ink-muted);
+}
+
+.cd-xa__nhan {
+  display: block;
+  font-size: var(--text-small);
+}
+
+.cd-xa__ten {
+  display: block;
+  font-size: 20px;
+  color: var(--navy);
+}
+
+.cd-xa-xac-nhan {
+  margin: 0 0 12px;
+  padding: 14px;
+  border: 2px solid var(--navy);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.cd-khan-cap {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--navy);
+  border-radius: 0 10px 10px 0;
+  background: var(--surface);
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.cd-dong {
+  padding: 16px;
+  border: 1px dashed var(--ink-muted);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.cd-dong__tieu-de {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: var(--navy);
+}
+
+.cd-dong__cau {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.cd-o {
+  margin: 0 0 16px;
+}
+
+.cd-o__nhan {
+  display: block;
+  margin: 0 0 4px;
+  font-size: var(--text-body);
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.cd-o__goi-y {
+  margin: 0 0 6px;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+.cd-o__nhap {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 10px 12px;
+  border: 2px solid var(--ink-muted);
+  border-radius: 10px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+}
+
+.cd-o__nhap--doan {
+  min-height: calc((var(--tap-min) + 4px) * 3);
+  resize: vertical;
+}
+
+.cd-o__nhap:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.cd-nut {
+  display: block;
+  width: 100%;
+  min-height: calc(var(--tap-min) + 4px);
+  margin: 0 0 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--navy);
+  border-radius: 12px;
+  background: var(--navy);
+  font: inherit;
+  font-size: 19px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.cd-nut:disabled {
+  background: var(--navy-deep);
+  border-color: var(--navy-deep);
+}
+
+.cd-nut-phu {
+  display: block;
+  width: 100%;
+  min-height: calc(var(--tap-min) + 4px);
+  margin: 0 0 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--navy);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.cd-cong-tac {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: calc(var(--tap-min) + 4px);
+  margin: 0 0 6px;
+  padding: 10px 14px;
+  border: 2px solid var(--navy);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.cd-cong-tac[aria-pressed="true"] {
+  border-width: 3px;
+}
+
+.cd-cong-tac__trang-thai {
+  font-weight: 700;
+}
+
+.cd-nut:focus-visible,
+.cd-nut-phu:focus-visible,
+.cd-cong-tac:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+/* Câu lỗi: viền trái + chữ, không màu đỏ — trạng thái không bao giờ chỉ bằng màu. */
+.cd-loi {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--navy);
+  border-radius: 0 10px 10px 0;
+  background: var(--surface-alt);
+  font-size: var(--text-body);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+/* Mã tra cứu — thứ to nhất màn hình (luật 10, bất biến 1). Chữ đơn cách để đọc từng ký tự. */
+.cd-ma-tra-cuu {
+  margin: 0 0 10px;
+  padding: 14px;
+  border: 2px solid var(--navy);
+  border-radius: 12px;
+  background: var(--surface);
+  font-family: ui-monospace, "Courier New", monospace;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  word-break: break-all;
+  color: var(--navy);
+}
+
+.cd-phieu {
+  margin: 14px 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.cd-phieu__dong {
+  margin: 0 0 12px;
+}
+
+.cd-phieu__nhan {
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+.cd-phieu__gia-tri {
+  margin: 2px 0 0;
+  font-size: var(--text-body);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.cd-phieu__trang-thai {
+  display: block;
+  color: var(--navy);
+}
+
+.cd-phieu__phu {
+  display: block;
+  color: var(--ink);
+}
+
+.cd-phieu__van-ban,
+.cd-phieu__ket-qua {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

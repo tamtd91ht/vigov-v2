@@ -23,8 +23,11 @@ import indexHtmlRaw from "../index.html?raw";
  *   luôn kèm một ca chứng minh nó còn bắt được ở ngoài phạm vi mới:
  *
  *     `zmp-sdk` + 10 lời gọi nền tảng  →  miễn ĐÚNG MỘT THƯ MỤC (`features/tinh-nang/`)
- *     `fetch`/XHR/WebSocket/…          →  miễn ĐÚNG HAI TỆP ĐƯỢC KÊ TÊN (22/09/2026)
- *     `<form|input|textarea|select>`   →  miễn ĐÚNG MỘT TỆP ĐƯỢC KÊ TÊN (22/09/2026)
+ *     `fetch`/XHR/WebSocket/…          →  miễn ĐÚNG BA TỆP ĐƯỢC KÊ TÊN (22/09 · 24/09/2026)
+ *     `<form|input|textarea|select>`   →  miễn ĐÚNG HAI TỆP ĐƯỢC KÊ TÊN (22/09 · 24/09/2026)
+ *
+ *   ⚠ TỆP THỨ BA VÀ TỆP THỨ HAI (24/09/2026) thuộc KÊNH CÔNG DÂN, đứng sau `bien-the/cong-dan` —
+ *   không có mặt trong bản nộp, và hôm nay không gọi mạng (cầu phiên ViGov chưa có).
  *     `getUserInfo`/`getSetting`/`authorize` · lưu trữ · `serverUploadUrl` · geolocation
  *                                      →  KHÔNG miễn cho gì cả, không một dòng nào
  *
@@ -144,6 +147,16 @@ const THU_MUC_TINH_NANG = "./features/tinh-nang/";
 const TEP_GOI_MANG: readonly string[] = [
   "./features/dang-nhap/goi-may-chu.ts",
   "./api/goi-may-chu.ts",
+  /**
+   * ⚠ TỆP THỨ BA, 24/09/2026 — client ViGov của NỬA NHÀ NƯỚC (`/api/v1/my-citizen-reports`).
+   *
+   *   Khác hai tệp trên ở hai điểm, và cả hai phải đọc được từ đây: (1) nó đứng sau
+   *   `bien-the/cong-dan`, nên KHÔNG có mặt trong bản nộp (`bundle-for-zalo.test.ts` đo điều đó);
+   *   (2) hôm nay nó KHÔNG BAO GIỜ gọi mạng — hai cổng đóng (phiên ViGov `null`, địa chỉ ViGov rỗng)
+   *   đứng trước `fetch`, và `cong-dan.test.ts` khẳng định không một lời gọi nào đi ra.
+   *   `cong-dan/api/hop-dong-phan-anh.ts` nằm NGAY CẠNH và vẫn bị cấm — ca "SÁT BÊN" ở dưới.
+   */
+  "./cong-dan/api/goi-vigov.ts",
 ];
 
 /**
@@ -165,6 +178,15 @@ const TEP_GOI_MANG: readonly string[] = [
  *   khoá hai chiều với văn bản, xem `content/chinh-sach.test.ts`.
  */
 const TEP_O_GHI_CHU = "./features/yeu-cau/OGhiChu.tsx";
+
+/**
+ * TỆP THỨ HAI ĐƯỢC CÓ Ô NHẬP — 24/09/2026, kênh công dân (nửa nhà nước).
+ *
+ * "Gửi phản ánh" cần nội dung, nơi xảy ra, họ tên, số điện thoại; "Tra cứu phiếu" cần mã. Mọi ô ấy đi
+ * qua ĐÚNG MỘT TỆP, và tệp ấy đứng sau `bien-the/cong-dan` nên không có mặt trong bản nộp. Hai màn
+ * dùng nó (`GuiPhanAnhScreen.tsx`, `TraCuuPhieuScreen.tsx`) vẫn bị cấm — ca "SÁT BÊN" ở dưới.
+ */
+const TEP_O_NHAP_CONG_DAN = "./cong-dan/man/o-nhap.tsx";
 
 /** Tệp vi phạm một dây bẫy: khớp mẫu, và KHÔNG nằm trong thư mục được miễn. */
 function viPham(
@@ -325,10 +347,10 @@ const TRIPWIRES: readonly Tripwire[] = [
     // nói "phase 1 has none" trên một lệnh cấm đã có ngoại lệ là một câu làm người đọc báo cáo
     // lỗi tin sai.
     what:
-      'an input control outside "src/features/yeu-cau/OGhiChu.tsx" — that ONE file holds the ' +
-      "only field in this app that takes text the user typed",
+      'an input control outside "src/features/yeu-cau/OGhiChu.tsx" and "src/cong-dan/man/o-nhap.tsx" — ' +
+      "those TWO named files hold every field in this app that takes text the user typed",
     pattern: /<(form|input|textarea|select)[\s/>]/,
-    chi_trong: [TEP_O_GHI_CHU],
+    chi_trong: [TEP_O_GHI_CHU, TEP_O_NHAP_CONG_DAN],
   },
 ];
 
@@ -346,7 +368,7 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     expect(paths).toContain(`${THU_MUC_TINH_NANG}zalo-api.ts`);
     // Cùng lý do, cho ba ngoại lệ hẹp nhất trong tệp này: một tệp được miễn mà lượt quét không hề
     // đọc tới thì "miễn" và "không tồn tại" là một, và ngày nó đổi tên sẽ không có gì báo.
-    for (const tep of [...TEP_GOI_MANG, TEP_O_GHI_CHU]) {
+    for (const tep of [...TEP_GOI_MANG, TEP_O_GHI_CHU, TEP_O_NHAP_CONG_DAN]) {
       expect(paths, `tệp được miễn không nằm trong lượt quét: ${tep}`).toContain(tep);
     }
   });
@@ -444,6 +466,12 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
       { path: "./lib/launch-params.ts", code: 'navigator.sendBeacon("/do", d);' },
       { path: "./components/TabBar.tsx", code: 'new WebSocket("wss://vidu.vn");' },
       { path: "./main.tsx", code: "import axios from 'axios';" },
+      // SÁT BÊN tệp được miễn thứ ba (24/09/2026): hợp đồng ViGov và nguồn phiên nằm cùng thư mục
+      // `cong-dan/api/` với `goi-vigov.ts`, và KHÔNG được gọi mạng. Sửa `chi_trong` thành thư mục
+      // là hai dòng này đỏ.
+      { path: "./cong-dan/api/hop-dong-phan-anh.ts", code: 'await fetch("https://vidu.vn/a");' },
+      { path: "./cong-dan/api/phien-vigov.ts", code: 'await fetch("https://vidu.vn/a");' },
+      { path: "./cong-dan/man/GuiPhanAnhScreen.tsx", code: "new XMLHttpRequest();" },
 
       // Ô NHẬP — NGOẠI LỆ MỚI NHẤT, và bốn dòng dưới chứng minh nó hẹp đúng bằng MỘT TỆP.
       // Dòng thứ hai nằm NGAY CẠNH tệp được miễn, trong cùng thư mục `features/yeu-cau/`: đó là
@@ -454,6 +482,10 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
       { path: "./features/goi-y-giai-phap/GoiYGiaiPhapScreen.tsx", code: '<input type="radio" />' },
       { path: "./features/company-intro/ContactScreen.tsx", code: "<select>" },
       { path: "./main.tsx", code: "<form onSubmit={gui}>" },
+      // SÁT BÊN tệp ô nhập của kênh công dân: hai màn cùng thư mục `cong-dan/man/` dùng nó, và tự
+      // chúng KHÔNG được mở ô nhập. Sửa `chi_trong` thành `"./cong-dan/man/"` là hai dòng này đỏ.
+      { path: "./cong-dan/man/GuiPhanAnhScreen.tsx", code: "<textarea />" },
+      { path: "./cong-dan/man/TraCuuPhieuScreen.tsx", code: '<input type="text" />' },
     ];
     for (const tep of VI_PHAM) {
       const bat = co_pham_vi.some((day) => viPham(day, [tep]).length === 1);
@@ -470,6 +502,7 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "const ma = await sdk.getAccessToken();" },
       ...TEP_GOI_MANG.map((path) => ({ path, code: 'await fetch(dia_chi, { method: "POST" });' })),
       { path: TEP_O_GHI_CHU, code: "<textarea value={ghi_chu} onChange={doi} />" },
+      { path: TEP_O_NHAP_CONG_DAN, code: "<textarea value={noi_dung} onChange={doi} />" },
     ];
     for (const tep of TRONG) {
       for (const day of co_pham_vi) {

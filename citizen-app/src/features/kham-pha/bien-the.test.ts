@@ -7,6 +7,8 @@ import viteConfigRaw from "../../../vite.config.ts?raw";
 import dungRaw from "../../../scripts/dung.mjs?raw";
 import * as ChanDoanDayDu from "../diagnostics/index";
 import * as ChanDoanRong from "../diagnostics/index.rong";
+import * as CongDanDayDu from "../../cong-dan/index";
+import * as CongDanRong from "../../cong-dan/index.rong";
 import * as DayDu from "./index";
 import * as Rong from "./index.rong";
 
@@ -32,6 +34,19 @@ describe("bản rỗng khai đúng bề mặt của bản đầy đủ", () => {
     // biến thể của một app.
     expect(Object.keys(Rong).sort()).toEqual(Object.keys(DayDu).sort());
     expect(Object.keys(ChanDoanRong).sort()).toEqual(Object.keys(ChanDoanDayDu).sort());
+    expect(Object.keys(CongDanRong).sort()).toEqual(Object.keys(CongDanDayDu).sort());
+  });
+
+  it("kênh công dân: bản rỗng nói nó KHÔNG có mặt và không vẽ gì", () => {
+    // `App.tsx` đọc cờ này trước khi mở kênh. Cờ sai ở bản `goc` là một nút bấm mở ra màn trắng.
+    expect(CongDanDayDu.CO_KENH_CONG_DAN).toBe(true);
+    expect(CongDanRong.CO_KENH_CONG_DAN).toBe(false);
+    expect(
+      renderToStaticMarkup(createElement(CongDanRong.KenhCongDan, { onDong: () => {} })),
+    ).toBe("");
+    expect(
+      renderToStaticMarkup(createElement(CongDanRong.NutVaoKenhCongDan, { onBam: () => {} })),
+    ).toBe("");
   });
 
   it("nói ra rằng lớp khám phá KHÔNG có mặt", () => {
@@ -100,6 +115,7 @@ describe("alias là cửa DUY NHẤT vào hai phần gỡ được", () => {
   const NGOAI = (duong: string) =>
     !duong.startsWith("./") &&
     !duong.includes("/diagnostics/") &&
+    !duong.includes("/cong-dan/") &&
     !duong.includes(".test.");
 
   it("quét đúng cây mã thật — một lượt quét rỗng cũng xanh, và xanh sai lý do", () => {
@@ -118,7 +134,11 @@ describe("alias là cửa DUY NHẤT vào hai phần gỡ được", () => {
       if (!NGOAI(duong)) continue;
       for (const khop of khongChuThich(ma).matchAll(/["'`]([^"'`\n]*)["'`]/g)) {
         const chuoi = khop[1] ?? "";
-        if (/features\/(kham-pha|diagnostics)\//.test(chuoi)) vi_pham.push(`${duong}: ${chuoi}`);
+        // `cong-dan/` THÊM VÀO 24/09/2026: cửa thứ ba. Một `import … from "./cong-dan/index"` trong
+        // `App.tsx` đi vòng qua alias và đưa cả kênh công dân lẫn client ViGov vào BẢN NỘP.
+        if (/features\/(kham-pha|diagnostics)\/|(^|\/)cong-dan\//.test(chuoi)) {
+          vi_pham.push(`${duong}: ${chuoi}`);
+        }
       }
     }
     expect(

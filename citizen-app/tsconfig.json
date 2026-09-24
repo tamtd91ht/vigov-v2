@@ -23,6 +23,9 @@
       ],
       "bien-the/chan-doan": [
         "./src/features/diagnostics/index.ts"
+      ],
+      "bien-the/cong-dan": [
+        "./src/cong-dan/index.ts"
       ]
     }
   },

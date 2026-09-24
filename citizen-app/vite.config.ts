@@ -83,6 +83,12 @@ function aliasTheoBienThe(): Record<string, string> {
     "bien-the/chan-doan": duongDan(
       day_du ? "./src/features/diagnostics/index.ts" : "./src/features/diagnostics/index.rong.ts",
     ),
+    // CỬA THỨ BA (24/09/2026): kênh công dân — hai màn "Gửi phản ánh" / "Tra cứu phiếu" và client
+    // ViGov. Cầu phiên công dân ViGov chưa có (`src/cong-dan/api/phien-vigov.ts`), nên bản NỘP
+    // không mang chúng. `bundle-for-zalo.test.ts` dựng thật và khẳng định tuyến ViGov vắng ở `goc`.
+    "bien-the/cong-dan": duongDan(
+      day_du ? "./src/cong-dan/index.ts" : "./src/cong-dan/index.rong.ts",
+    ),
     // KHÔNG CÓ CỬA CHO KHỐI ĐĂNG NHẬP, VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH ĐÃ ĐẢO NGƯỢC MỘT LẦN — 20/09.
     // Bản đầu đặt lời gọi máy chủ sau một cửa `bien-the/dang-nhap` để bản nộp không gọi mạng.
     // Nay CẢ HAI biến thể gọi thật, nên không còn gì để tách; giữ lại cái cửa khi hai bên nó

@@ -132,7 +132,7 @@ Dựng ngày 21/09/2026, **trước khi `src/cong-dan/` có tệp nghiệp vụ 
 | Nửa | Ở đâu |
 |---|---|
 | Thương mại (khách hàng doanh nghiệp) | `src/content/` · `src/features/company-intro/` · `src/features/tinh-nang/` · `src/features/dang-nhap/` |
-| **Nhà nước (công dân)** | **`src/cong-dan/`** — còn rỗng, có tệp giữ chỗ để lượt quét đọc tới nó |
+| **Nhà nước (công dân)** | **`src/cong-dan/`** — hai màn "Gửi phản ánh" · "Tra cứu phiếu" (24/09/2026), sau cửa `bien-the/cong-dan`: **chỉ ở bản `day-du`**, không có trong bản nộp. Hôm nay luôn nói "kênh chưa mở" và không gọi mạng — cầu phiên công dân ViGov chưa có (`src/cong-dan/api/phien-vigov.ts`) |
 | Lớp vỏ trung lập | `App.tsx` · `main.tsx` · `components/` · `lib/` · `features/kham-pha/` · `features/diagnostics/` |
 
 1. **Ranh giới hai chiều.** Nửa này không nhập tệp của nửa kia — cả hai chiều. Và **không tệp nào
