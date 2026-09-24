@@ -151,13 +151,21 @@ Không xác định được người bấm ⇒ `vigov-deploy` **dừng** ở st
 chạm cụm. Job không có trigger tự động nên mọi lượt hợp lệ đều do một người đã đăng nhập bấm
 — gặp lần đỏ ấy thì kiểm xem có job/timer/script nào gọi hộ không, đừng nới hàm.
 
-**Công cụ trên máy chủ:** `go` 1.26+ · `buf` · `node` 22+ · `npm` · `python3` · một trình
+**Công cụ trên máy chủ:** `go` 1.26+ · `buf` · `node` 22+ · `npm` · `python3` **3.8+** · một trình
 biên dịch C (`go test -race` cần cgo) · `docker` có BuildKit. Riêng `vigov-deploy` thêm
 `kubectl` và `skopeo`. Mỗi pipeline tự kiểm ở stage đầu và **dừng ngay** nếu thiếu.
 
 **Chạy `vigov-gate` TRƯỚC mọi job khác.** Nó là job duy nhất kiểm cả 7 công cụ và chạy
 `make check`, nên nó biến "máy chủ build thiếu gì" thành **một** lần đỏ đọc được thay vì tám
-lần đỏ rải rác. `buf`, `node`, `npm`, `python3` chưa từng được chứng minh có trên máy chủ này.
+lần đỏ rải rác.
+
+Lượt `vigov-gate` ngày 24/09/2026 (commit `30aa72d`) đã chứng minh máy chủ có `go` 1.26.5,
+`buf` 1.73.0, `node` 22.23.2, `npm` và `python3`. Phiên bản `python3` thì chưa ai đọc được.
+Lượt đó đổ ở `make check` vì **`python` trên máy chủ là Python 2.7**: lỗi `SyntaxError:
+Non-ASCII character` ở `tools/check_brain.py` là lỗi chỉ Python 2 báo. Vì vậy `Jenkinsfile`
+gọi `make check PYTHON=python3` và dừng ở stage đầu nếu `python3` cũ hơn 3.8. CentOS/RHEL 7
+cài sẵn 3.6. Gặp lần đỏ ấy thì cài bản mới hơn (vd. `python38`/`rh-python38`) và cho
+`python3` trỏ tới nó. Đừng hạ yêu cầu của `tools/`.
 
 **Lượt chạy đầu tiên:** tám job đóng ảnh báo *"Chưa lượt build nào ghi mốc đã đóng ảnh —
 dựng"* và đóng cả tám ảnh. Đúng, không phải lỗi. `vigov-deploy` khai tham số bên trong
@@ -542,7 +550,7 @@ danh sách** — xoá sạch bảng sinh ra, và `kustomize` không kêu một t
 
 | Việc | Trạng thái |
 |---|---|
-| 10 job Jenkins | **chưa dựng lần nào.** `buf`, `node`, `npm`, `python3` chưa từng được chứng minh có trên máy chủ này — `go`, `docker`, `make`, `gcc` thì đã, qua lượt chạy thật 21/09/2026 của kho `vihat-miniapp` |
+| 10 job Jenkins | **`vigov-gate` đã chạy lần đầu 24/09/2026 và đổ ở `make check`**, vì `python` trên máy chủ là 2.7 (đã sửa: `PYTHON=python3`). Chín job còn lại chưa chạy lần nào. Máy chủ đã chứng minh có `go`, `buf`, `node`, `npm`, `python3`, `make`, `gcc`; `docker` được chứng minh qua lượt chạy 21/09/2026 của kho `vihat-miniapp`. **Phiên bản `python3` chưa được đọc** |
 | Cụm mà kubeconfig trỏ tới | **chưa ai chạy `kubectl` với nó.** Đường dẫn `/u01/rancher/rancher-vigov.yaml` đã được chủ dự án xác nhận, nhưng lượt `vigov-deploy` đầu tiên vẫn là lần đầu biết nó mở được cụm nào — đọc dòng `current-context` ở stage đầu |
 | `deploy/Jenkinsfile` | **chưa máy nào phân tích cú pháp.** Không có Jenkins ở máy trạm, và `tools/check_build.py` chỉ soi 8 Jenkinsfile của dịch vụ |
 | Manifest qua API server thật | **chưa.** `kubectl kustomize` chỉ chứng minh YAML dựng được, không chứng minh máy chủ chấp nhận. Mục 4 là lần đầu biết |

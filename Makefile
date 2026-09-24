@@ -21,14 +21,23 @@
 MOD_DIRS := $(shell go list -m -f '{{.Dir}}' | tr '\134' '/')
 MODULES  := $(addsuffix /...,$(MOD_DIRS))
 
+# Trình thông dịch cho mọi `tools/*.py` — CẦN PYTHON 3.8+ (`tools/check_env_map.py` dùng `:=`).
+#
+# Mặc định `python` vì trên Windows `python3` thường là lối tắt Microsoft Store, không chạy
+# được. Trên máy build Linux thì ngược lại: CentOS/RHEL 7 để `python` là Python 2.7, và ngày
+# 24/09/2026 cổng kiểm đổ ở mục đầu tiên với "SyntaxError: Non-ASCII character" — trông như
+# tệp hỏng mã hoá chứ không như gọi nhầm trình thông dịch. Shebang `python3` trong tệp không
+# cứu được: gọi `python <tệp>` là bỏ qua shebang. Jenkinsfile truyền `PYTHON=python3`.
+PYTHON ?= python
+
 
 check: brain hooks quyen vet-actor khoaduynhat envmap buildfiles lint build standalone test web   ## Full verification — run before saying it is done
 
 brain:                          ## 7 structural invariants of the brain — anti-drift
-	python tools/check_brain.py
+	$(PYTHON) tools/check_brain.py
 
 hooks:                          ## Hook self-test: one block case + one pass case each
-	python tools/test_hooks.py
+	$(PYTHON) tools/test_hooks.py
 
 quyen:                          ## Mọi khoá quyền trong mã Go có thật trong bảng `quyen` chưa
 	@# LỚP LỖI IM LẶNG NHẤT CỦA LUẬT 5. Một chuỗi trao cho `authz.RequirePermission` mà bảng
@@ -39,7 +48,7 @@ quyen:                          ## Mọi khoá quyền trong mã Go có thật t
 	@# `.claude/hooks/quyen_key_guard.py` chặn cùng lớp lỗi lúc GHI, nhưng nó chỉ thấy MỘT tệp
 	@# và không bao giờ đọc lại thứ đã nằm sẵn trên đĩa — đúng chỗ ba khoá ấy đã sống. Chỉ lần
 	@# quét toàn kho này trả lời được câu "hôm nay cả kho còn khoá bịa nào không".
-	python tools/check_quyen.py
+	$(PYTHON) tools/check_quyen.py
 
 vet-actor:                      ## Chủ thể mọi dòng vết là MÃ CÁN BỘ, không phải id nội bộ
 	@# LỚP LỖI CÙNG HÌNH DẠNG VỚI `quyen` Ở TRÊN, khác cột. `audit_log.actor_id` trả lời câu
@@ -49,7 +58,7 @@ vet-actor:                      ## Chủ thể mọi dòng vết là MÃ CÁN B�
 	@#
 	@# `.claude/hooks/audit_actor_guard.py` chặn cùng lớp lỗi lúc GHI, nhưng chỉ thấy MỘT tệp.
 	@# Năm trong sáu khiếm khuyết ấy đã nằm sẵn trên đĩa trước khi có rào nào.
-	python tools/check_audit_actor.py
+	$(PYTHON) tools/check_audit_actor.py
 
 khoaduynhat:                    ## Khoá duy nhất hợp thành với `tenant_id`, và không tính sót dòng đã xoá mềm
 	@# HAI LUẬT ĐANG ĐÚNG MÀ KHÔNG GÌ KIỂM — luật 1 bất biến 6 và luật 7 bất biến 3. Cả hai
@@ -64,21 +73,21 @@ khoaduynhat:                    ## Khoá duy nhất hợp thành với `tenant_i
 	@#
 	@# Cổng này dựng lúc cả 49 khai báo đều ĐÚNG, tức nó GIỮ một tính chất chứ không dọn một
 	@# đống đã hỏng — đúng lúc rẻ nhất.
-	python tools/check_khoa_duy_nhat.py
+	$(PYTHON) tools/check_khoa_duy_nhat.py
 
 envmap:                         ## Bảng map biến môi trường ở deploy/README.md còn khớp mã không
 	@# `deploy/README.md` mục 5 là nơi DUY NHẤT trả lời "biến này do ConfigMap hay Secret cấp".
 	@# `core/config` chỉ biết đọc, `.env.example` chỉ giữ chỗ, và `env_contract_guard` nói thẳng
 	@# rằng nó KHÔNG kiểm chỗ ràng buộc. Một fact viết tay cạnh một danh sách mọc từ mã là đúng
 	@# hình dạng sẽ trôi — và lúc trôi, người vận hành đọc bảng rồi tin là đã khai đủ.
-	python tools/check_env_map.py
+	$(PYTHON) tools/check_env_map.py
 
 buildfiles:                     ## Dockerfile + Jenkinsfile của từng dịch vụ, và phần chung không ai đánh rơi
 	@# Mỗi dịch vụ tự dựng và tự đóng gói: nó quyết build cái gì, khi nào, ra ảnh nào.
 	@# Cái giá là chín bản sao sẽ trôi — và phần trôi trước tiên luôn là phần KHÔNG gây lỗi
 	@# ngay: chạy bằng root, thiếu zoneinfo, hoặc đánh rơi `core/**` khỏi đường kích hoạt để
 	@# rồi một bản vá trong mã dùng chung không kích hoạt dịch vụ nào cả.
-	python tools/check_build.py
+	$(PYTHON) tools/check_build.py
 
 lint:
 	@# gofmt -l PRINTS unformatted files and still EXITS 0, so for as long as this target
@@ -189,10 +198,10 @@ kb:                             ## Regenerate the GENERATED tiers of kb/ from so
 	@# Tầng tiến độ: tệp ĐỌC sinh từ các tệp GHI theo module. Nằm cùng mục `kb` vì lý do đã
 	@# viết ngay trên: thứ phải nhớ chạy riêng là thứ sẽ có ngày không ai chạy, và một
 	@# `tien-do.md` cũ hơn các tệp module là tệp nói dối về việc gì đã xong.
-	VIGOV_COMMIT=$$(git rev-parse --short HEAD) python tools/tien_do.py
+	VIGOV_COMMIT=$$(git rev-parse --short HEAD) $(PYTHON) tools/tien_do.py
 	@# Bản estimate gửi khách sinh từ bản nội bộ. Hai tệp estimate chép tay là hai tệp sẽ lệch,
 	@# và bản lệch là bản có người gửi ra ngoài.
-	python tools/estimate_khach.py
+	$(PYTHON) tools/estimate_khach.py
 
 proto:                        ## Regenerate Go code from .proto (requires buf)
 	buf generate
