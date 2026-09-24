@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: b1da756
+derived_from_commit: 01f95a4
 expires: 2026-12-23
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -66,13 +66,13 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 9 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 11 |
 | 10 | Bản đồ kinh tế số | — | — | ✗ | |
 | 11 | Nội dung Mini App | `/noi-dung` | `QUYEN_XEM_NOI_DUNG` | ✓ | 11 |
-| 12 | Danh bạ cán bộ | `/danh-ba` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | **không khai** |
+| 12 | Danh bạ cán bộ | `/danh-ba` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 7 |
 | 13 | Báo cáo | — | — | ✗ | |
 | 14 | Cấu hình | `/cau-hinh` | `QUYEN_QUAN_LY_DANH_MUC` | ✓ | **không khai** |
 
-**10/14** mục menu có màn thật. **73** phần chưa dựng đang hiện trên các màn ấy.
+**10/14** mục menu có màn thật. **80** phần chưa dựng đang hiện trên các màn ấy.
 
-⚠ **3 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
+⚠ **2 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
 đặc tả đã dựng. `không khai` nghĩa là **chưa ai nói màn ấy còn thiếu gì**, nên con số 0 ở đó sẽ là
 một lời trấn an không có gì đứng sau.
@@ -101,7 +101,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
-| `_chung` | 18 | 2 | 4 | 5 |
+| `_chung` | 19 | 2 | 4 | 5 |
 | `citizen-app` | 11 | 2 | 4 | 0 |
 | `core` | 9 | 0 | 1 | 1 |
 | `deploy` | 13 | 0 | 1 | 0 |
@@ -110,7 +110,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-comms` | 7 | 3 | 2 | 4 |
 | `service-documents` | 5 | 1 | 3 | 0 |
 | `service-finance` | 13 | 3 | 0 | 0 |
-| `service-identity` | 13 | 6 | 0 | 1 |
+| `service-identity` | 13 | 6 | 1 | 1 |
 | `service-petitions` | 10 | 7 | 4 | 0 |
 | `service-platform` | 3 | 1 | 0 | 1 |
 | `service-reporting` | 0 | 0 | 1 | 0 |
