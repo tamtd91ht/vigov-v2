@@ -134,6 +134,7 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		// Same reason again: the five write routes of the register are mounted by Register, so the
 		// use case behind them has to be wired even though nothing in this file calls them.
 		GhiDanhBa: ghiDanhBaMau(),
+		ChonNguoi: chonNguoiMau(),
 		TaiKhoan:  taiKhoanMau(),
 		DangNhap:  &dangNhapKyThat{ky: kySigner, sid: sidA, hetHan: hetHan},
 		DangXuat:  &dangXuatGia{},

@@ -111,6 +111,18 @@ type (
 		ChiTiet(ctx context.Context, id string) (domain.CanBoTomTat, error)
 	}
 
+	// DanhBaChonNguoi is the staff PICKER, for GET /api/v1/staff-directory.
+	//
+	// SEPARATE FROM CanBoDanhBa ON PURPOSE, although *idstore.CanBoStore satisfies both. That one
+	// returns both telephone numbers and the account flags behind `admin.user`; this one runs for
+	// EVERY account of the commune. A handler holding CanBoDanhBa could hand the register out on an
+	// AnyAuthenticated route with a one-word edit; a handler holding only this cannot — an interface
+	// is the list of things a handler CAN do. The predicate and the narrow row are argued on
+	// idstore.CanBoStore.ChonNguoi and domain.CanBoChonNguoi.
+	DanhBaChonNguoi interface {
+		ChonNguoi(ctx context.Context, boPhanID string) ([]domain.CanBoChonNguoi, error)
+	}
+
 	// CanBoGhiDanhBa is the WRITE surface of the register — five use cases, one interface.
 	//
 	// SEPARATE FROM CanBoDanhBa ON PURPOSE, although both describe the same table and the same
@@ -477,6 +489,8 @@ type Deps struct {
 	CanBo     CanBoDoc
 	DanhBa    CanBoDanhBa
 	GhiDanhBa CanBoGhiDanhBa
+	// ChonNguoi — the narrow picker behind GET /api/v1/staff-directory. See DanhBaChonNguoi.
+	ChonNguoi DanhBaChonNguoi
 	// TaiKhoan is the credential surface: POST /api/v1/staff/{id}/account,
 	// PUT /api/v1/staff/{id}/password and PUT /api/v1/staff/current/password. A use case, not a
 	// store — every method opens the transaction the write and its audit entry share.
@@ -505,6 +519,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho danh bạ cán bộ — hai tuyến đọc cán bộ sẽ panic khi có người gọi")
 	case d.GhiDanhBa == nil:
 		panic("identity/http: thiếu use case ghi danh bạ cán bộ — năm tuyến ghi cán bộ sẽ panic khi có người gọi")
+	case d.ChonNguoi == nil:
+		panic("identity/http: thiếu kho danh bạ chọn người — GET /api/v1/staff-directory sẽ panic khi có người gọi, và mọi ô phân công sẽ trống")
 	case d.TaiKhoan == nil:
 		// Refused at construction, like every other dependency here — and this one has a second
 		// consequence worth naming: without the three credential routes, an account whose
@@ -760,6 +776,34 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/staff/{id}",
 		authz.RequirePermission(d.Checker, "admin.user")(
 			http.HandlerFunc(h.ChiTietCanBo)))
+
+	// --- the staff PICKER. One read route, a SEPARATE RESOURCE from `staff` -----------------------
+	//
+	// `staff-directory` IS THE USER'S NOUN (2026-09-24), and it is not `staff?view=picker`: the two
+	// differ in contract (four fields, no id, no numbers, no flags), in permission (every account vs
+	// `admin.user`) and in WHO IS LISTED (only people who can act on assigned work vs the whole
+	// register). One path carrying two permissions by query string is a path whose protection
+	// depends on a parameter the client chooses. See kb/00-foundation/ubiquitous-language.md.
+	//
+	// AnyAuthenticated, APPROVED BY THE USER on 2026-09-24 (rule 5, stop condition #1): every member
+	// of staff must be able to pick a colleague to hand a petition, a task, a notice or a document
+	// to, and those screens belong to far more roles than `admin.user` does. What makes that safe is
+	// the narrow row, not the declaration — no phone, no email, no account data (domain.CanBoChonNguoi)
+	// — and the commune bound by Scoped from the context, so the list never crosses communes.
+	//
+	// NO 403 IN @reply: an AnyAuthenticated route has no permission to be wrong about. A token of
+	// another commune is refused as 401 `tenant_mismatch` before any handler runs.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Danh bạ chọn người nhận việc của xã — mã cán bộ, họ tên, chức vụ, bộ phận; chỉ người có tài khoản đang hoạt động, không số điện thoại, không email
+	// @reply    200 danhBaChonNguoiRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/staff-directory",
+		authz.AnyAuthenticated("mọi cán bộ của xã phải chọn được đồng nghiệp để giao phản ánh, nhiệm vụ, thông báo, văn bản — người dùng duyệt 24/09/2026; chỉ trả mã cán bộ, họ tên, chức vụ, bộ phận, KHÔNG số điện thoại, email hay dữ liệu tài khoản; không chéo xã vì Scoped buộc tenant_id")(
+			http.HandlerFunc(h.DanhBaChonNguoi)))
 
 	// --- the staff register: the WRITE routes ---------------------------------------------------
 	//

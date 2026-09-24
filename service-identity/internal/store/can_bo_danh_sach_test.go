@@ -643,6 +643,12 @@ var (
 		`(?: OR regexp_replace\(dien_thoai_co_quan, '\[\^0-9\]', '', 'g'\) LIKE \$(\d+)` +
 		` OR regexp_replace\(di_dong_ca_nhan, '\[\^0-9\]', '', 'g'\) LIKE \$(\d+))?\)`)
 
+	// The picker's two account conditions (can_bo_chon_nguoi.go). MODELLED like the rest, so the
+	// register cannot gain either one silently: its tests list the directory-only CB-002 and the
+	// locked CB-003, and would lose them.
+	dsReCoTaiKhoan   = regexp.MustCompile(`AND co_tai_khoan\b`)
+	dsReDangHoatDong = regexp.MustCompile(`AND dang_hoat_dong\b`)
+
 	dsReBang    = regexp.MustCompile(`AND id = \$(\d+)`)
 	dsReCap     = regexp.MustCompile(`AND \(([a-z_]+), ([a-z_]+)\) ([<>]) \(\$(\d+), \$(\d+)\)`)
 	dsReThuTu   = regexp.MustCompile(`ORDER BY ([a-z_]+) (ASC|DESC)(?:, ([a-z_]+) (ASC|DESC))?`)
@@ -670,6 +676,12 @@ func dsChay(q string, args []driver.Value) (driver.Rows, error) {
 	// come back, which is the failure a test can name.
 	if strings.Contains(q, "deleted_at IS NULL") {
 		ra = dsLoc(ra, func(h hangND) bool { return !h.daXoa })
+	}
+	if dsReCoTaiKhoan.MatchString(q) {
+		ra = dsLoc(ra, func(h hangND) bool { return h.coTaiKhoan })
+	}
+	if dsReDangHoatDong.MatchString(q) {
+		ra = dsLoc(ra, func(h hangND) bool { return h.dangHoatDong })
 	}
 
 	if m := dsReBang.FindStringSubmatch(q); m != nil {
@@ -816,6 +828,8 @@ func dsMenhDeLa(q string) error {
 	for _, hieu := range []*regexp.Regexp{
 		regexp.MustCompile(`tenant_id = \$1`),
 		regexp.MustCompile(`deleted_at IS NULL`),
+		dsReCoTaiKhoan,
+		dsReDangHoatDong,
 		dsReBang,
 		dsReCap,
 		dsReBoPhan,

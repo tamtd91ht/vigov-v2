@@ -440,6 +440,7 @@ func TestBatDoiMatKhauThiMoiTuyenKHACDeuBiTuChoi(t *testing.T) {
 		{http.MethodGet, "/api/v1/staff", ""},
 		{http.MethodGet, "/api/v1/staff/" + idNoiBo, ""},
 		{http.MethodGet, "/api/v1/org-units", ""},
+		{http.MethodGet, "/api/v1/staff-directory", ""},
 		{http.MethodGet, "/api/v1/roles", ""},
 		{http.MethodPost, duongCapTaiKhoan, ""},
 		{http.MethodPut, duongDatLaiMK, ""},

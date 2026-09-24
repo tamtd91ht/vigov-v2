@@ -195,3 +195,23 @@ type TenCanBo struct {
 	// therefore `true` here: `dang_hoat_dong` is deliberately not read.
 	ConTrongDanhBa bool
 }
+
+// CanBoChonNguoi is one person a member of staff may PICK to hand work to — the row behind
+// GET /api/v1/staff-directory, shared by the assignee boxes of Phản ánh, Nhiệm vụ, Thông báo and
+// Văn bản & đơn thư.
+//
+// A FIFTH STAFF TYPE, AND IT MUST STAY THIS NARROW. The route is AnyAuthenticated (user decision
+// 2026-09-24): every account of the commune reads it. CanBoTomTat would put both telephone numbers,
+// the email and the account flags in hand on a path every role reaches; a type with no field for
+// them cannot send them, whatever a later edit to the handler does.
+//
+// NO INTERNAL ID. Ma is the value every assignment route compares — service-petitions matches
+// `can_bo_xu_ly_id` against Principal.Ma — so the picker hands back exactly what the next request
+// must carry. Returning the ULID beside it would invite a client to send the wrong one, and the
+// holder check would then refuse the assignee for ever with nothing saying why.
+type CanBoChonNguoi struct {
+	Ma       string // `nguoi_dung.ma`, the staff business code (CB-00123)
+	HoTen    string
+	ChucVu   string
+	BoPhanID string // "" when the person sits in no unit
+}

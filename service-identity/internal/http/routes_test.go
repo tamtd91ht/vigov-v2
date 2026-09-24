@@ -659,6 +659,8 @@ type mayChu struct {
 	// a separate fake from danhBa even though one *CanBoStore sits behind both in production. See
 	// CanBoGhiDanhBa.
 	ghiDanhBa *ghiDanhBaGia
+	// chonNguoi is the staff picker — see chonNguoiGia in danh_ba_chon_nguoi_test.go.
+	chonNguoi *chonNguoiGia
 	// taiKhoan is the CREDENTIAL surface: the two administrator routes and the self-change route.
 	// See taiKhoanGia in tai_khoan_can_bo_test.go.
 	taiKhoan *taiKhoanGia
@@ -722,6 +724,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	canBo := &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}}
 	danhBa := danhBaMau()
 	ghiDanhBa := ghiDanhBaMau()
+	chonNguoi := chonNguoiMau()
 	taiKhoan := taiKhoanMau()
 	quyen := quyenMau()
 	vaiTro := vaiTroMau()
@@ -788,6 +791,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		// The five write routes. Register panics without it, which is how an unwired write surface
 		// is caught at construction rather than by the first administrator who tries to use it.
 		GhiDanhBa: ghiDanhBa,
+		// The staff picker — danh_ba_chon_nguoi_test.go.
+		ChonNguoi: chonNguoi,
 		// The three credential routes (#9, #17). Register panics without it, and the panic says why:
 		// an account under the forced change would have no route by which to clear the flag.
 		TaiKhoan: taiKhoan,
@@ -816,6 +821,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		canBo:     canBo,
 		danhBa:    danhBa,
 		ghiDanhBa: ghiDanhBa,
+		chonNguoi: chonNguoi,
 		taiKhoan:  taiKhoan,
 		idem:      khoIdemMau(),
 		quyen:     quyen,

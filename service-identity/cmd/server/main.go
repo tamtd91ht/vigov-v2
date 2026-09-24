@@ -348,6 +348,10 @@ func run(log *slog.Logger) error {
 		// built. Register panics without it, so an unwired write surface fails at startup rather
 		// than at the first administrator who tries to add a member of staff.
 		GhiDanhBa: ghiDanhBa,
+		// The staff PICKER (GET /api/v1/staff-directory). The same store a third time, behind its own
+		// narrow interface: this route is AnyAuthenticated, and a field typed CanBoDanhBa would hand
+		// it the register's phone numbers. See the note on DanhBaChonNguoi.
+		ChonNguoi: canBo,
 		// The three credential routes. Register panics without it, and the panic says why: an
 		// account carrying a temporary password would have no route by which to clear the flag, so
 		// the forced-change gate in XacThuc would refuse that person everything, permanently.
