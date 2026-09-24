@@ -41,6 +41,7 @@ That test already removed two things from the rule tier:
 | `stop_verify_guard` | **Stop** | Code changed but never verified → block the session from ending |
 | `drift_guard` | SessionStart | Detect the code **silently deciding a customer's open question** |
 | `rest_api_guard` | PreToolUse **and** PostToolUse | Vietnamese in a URL path (BLOCK) · missing duplicate-request declaration, verb as a path segment (advisory) |
+| `codegraph_sync` | SessionStart **and** PostToolUse shell | **Side effect, not a guard**: `codegraph sync` at session start and after git commands that move the tree, because the MCP server watches another project and `codegraph status` was measured reporting a stale index as fresh. Never blocks; no-op without `.codegraph/` or the binary (Jenkins); a failure is reported once and logged |
 | `workflow_guard` | **Stop** | Code changed on a path ROUTING §0.0 can never exempt (or ≥3 code files) and the two discovery scouts never ran → speak once (advisory). Measured before enabling: fired on 6 of the 6 past sessions that edited code, every one of them on a risky path — sessions that predate the workflow, so the expected signal, not noise |
 
 ### A hook may enforce a SKILL, not only a rule

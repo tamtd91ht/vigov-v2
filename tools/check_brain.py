@@ -146,7 +146,9 @@ for hook, kind in cases:
 # exempt hook is pure is testable, and `tools/test_hooks.py` now carries those cases separately.
 # `workflow_guard` (2026-09-24) reads the same transcript; its decision `can_canh_bao` is pure
 # and carried in WORKFLOW_CASES.
-EXEMPT = {"session_start", "drift_guard", "stop_verify_guard", "workflow_guard"}
+# `codegraph_sync` (2026-09-24) is a SIDE-EFFECT hook that never blocks by design, so a BLOCK
+# payload case cannot exist; when it runs (`can_sync_sau`) is pure and carried in CAN_SYNC_CASES.
+EXEMPT = {"session_start", "drift_guard", "stop_verify_guard", "workflow_guard", "codegraph_sync"}
 gaps = []
 for h in sorted(on_disk - EXEMPT):
     d = tally.get(h, {"BLOCK": 0, "PASS": 0})

@@ -226,6 +226,14 @@
       "bang_chung": ".claude/commands/develop-{web-admin,backend-api,miniapp}.md; .claude/skills/develop-menu/SKILL.md; progress_guard R8 (khoá `menu` phải là slug docs/ui-ux) + 2 ca payload BLOCK/PASS; commands/progress.md thêm dòng lược đồ. check_brain 7/7 (23 skills · 13 commands).",
       "no_confirm": [],
       "tiep_theo": "LỆCH CỐ Ý so với tmp/command.md, người dùng chưa chốt rõ: không tạo docs/ai-context/menus/ và sessions/ — dùng lại đặc tả docs/ui-ux + sổ cắt theo menu (§23 của chính đề xuất cho phép). Lệnh CHƯA chạy thật lần nào; lượt đầu nên là /develop-web-admin Nhiệm vụ, nơi hai scout đã tìm sẵn một CONFLICT §7.2↔§9."
+    },
+    {
+      "id": "codegraph-sync-tu-dong",
+      "viec": "Giữ chỉ mục codegraph của kho này luôn mới: hook codegraph_sync (SessionStart + sau lệnh git đổi cây) và ROUTING §0.1",
+      "trang_thai": "xong",
+      "bang_chung": ".claude/hooks/codegraph_sync.py, đăng ký SessionStart và PostToolUse Bash|Monitor; 9 ca CAN_SYNC_CASES. Kiểm SỐNG hai chiều bằng tệp thử riêng chưa theo dõi: thêm → hook → codegraph_search thấy; xoá → hook → không thấy. Nhánh an toàn: không có binary (PATH=/usr/bin) và không có .codegraph/ đều exit 0, im lặng. Đo: ~0,5–1,1 s mỗi lần sync.",
+      "no_confirm": [],
+      "tiep_theo": "GỐC CHƯA SỬA (phương án D, cần người dùng quyết): ~/.claude.json khai server MCP codegraph TOÀN CỤC với --path trỏ dự án omicx, nên watcher không canh kho này và mọi lệnh gọi phải có projectPath. `codegraph status` báo 'up to date' trên chỉ mục cũ — đừng dùng nó làm phép kiểm độ mới."
     }
   ]
 }

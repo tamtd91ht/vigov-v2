@@ -79,6 +79,14 @@ is what caught it.
 Sanity check before trusting any answer: `codegraph_status` must list **go and typescript**
 and **no java**. Anything else → wrong index; say so and fall back.
 
+**Freshness: never trust `codegraph status`** — measured 2026-09-24, it printed "Index is up
+to date" while two functions added after init were missing. `hooks/codegraph_sync.py` syncs
+at SessionStart and after every git command that moves the tree (commit, pull, merge,
+checkout, rebase…), ~1 s, never blocking. What it cannot see is **uncommitted** edits: if this
+session has changed code since its last git command, run `codegraph sync .` (Windows:
+`cmd //c "codegraph.cmd sync ."`) in the main session before dispatching the scouts. Never in
+a builder — the index is shared state, like `make kb`.
+
 "Not initialized" → run `codegraph init .` in the repo root (Windows:
 `cmd //c "codegraph.cmd init ."`), then `codegraph_status` again. `.codegraph/` is per machine
 and gitignored. "Could grep instead" is not a reason to skip it; grep is the fallback for what

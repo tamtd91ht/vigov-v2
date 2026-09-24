@@ -175,7 +175,7 @@ own: if you see a risk, **state the risk**, then do what was asked.
 | Location | Contents |
 |---|---|
 | `rules/critical/` | **11 rules**, always loaded (below). Each names an enforcing hook |
-| `hooks/` | **22 hooks**: 13 rule hooks + 9 cross-cutting |
+| `hooks/` | **23 hooks**: 13 rule hooks + 10 cross-cutting |
 | `skills/` | Skills, lazily loaded by keyword |
 | `commands/` | Procedures invoked as `/command-name` |
 | `agents/` | **13 agents** — 5 build, 5 review, 2 discovery scouts, 1 theo dõi kho yêu cầu. Entry point: `agents/ROUTING.md` |

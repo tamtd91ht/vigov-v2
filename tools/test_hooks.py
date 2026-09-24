@@ -871,6 +871,24 @@ WORKFLOW_CASES = [
 ]
 
 
+# ---- pure-function cases: which shell commands make codegraph_sync run --------------------
+#
+# The hook never blocks, so it has no BLOCK case; what can be wrong is WHEN it runs. Too narrow
+# and the index goes stale after a pull (the case that motivated it); too wide and every
+# `git status` costs a sync.
+CAN_SYNC_CASES = [
+    ("git commit -m 'feat: x'", True, "commit"),
+    ("git pull --rebase origin main", True, "pull — code từ máy khác chỉ tới đường này"),
+    ("git -C ../vigov-v2 checkout main", True, "checkout có -C"),
+    ("git stash pop", True, "stash pop đổi cây"),
+    ("git add a.go && git commit -q -F -", True, "commit trong chuỗi lệnh"),
+    ("git status --short", False, "chỉ đọc"),
+    ("git log --oneline -5", False, "chỉ đọc"),
+    ("git fetch -q origin", False, "fetch không đổi cây làm việc"),
+    ("echo 'git commit'", True, "chấp nhận dương tính giả: sync thừa 1 giây, không hại"),
+]
+
+
 # ---- pure-function cases: which menu a person MEANT (`/develop-* <menu>`) -----------------
 #
 # Resolved against the REAL docs/ui-ux/ on disk. An empty catalogue must go red here, not turn
@@ -1154,6 +1172,15 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         if not ok:
             sai.append((str(tep), nhan, mong, duoc))
 
+    import codegraph_sync as cgs  # noqa: E402
+    for lenh, mong, nhan in CAN_SYNC_CASES:
+        duoc = cgs.can_sync_sau(lenh)
+        ok = duoc == mong
+        mark = "  OK   " if ok else "  FAIL "
+        print(f"{mark} [{'SYNC' if mong else 'BỎ  '}] {'codegraph_sync.can_sync_sau':24s} {nhan}")
+        if not ok:
+            sai.append((lenh, nhan, mong, duoc))
+
     import _common as cm  # noqa: E402
     cac = cm.cac_menu(ROOT)
     if len(cac) < 10:
@@ -1266,7 +1293,7 @@ if __name__ == "__main__":
     # thiếu bảy ca. Một bộ đếm thiếu không làm ca nào đỏ — nó chỉ làm người đọc tưởng mình
     # biết kho đã canh bao nhiêu, và sổ `_chung` đã một lần ghi nhầm vì đúng chuyện này.
     tong = (len(CASES) + len(HOP_CAT_CASES) + len(SO_CUM_CASES) + len(IS_CODE_CASES) + len(WORKFLOW_CASES)
-            + len(TIM_MENU_CASES)
+            + len(TIM_MENU_CASES) + len(CAN_SYNC_CASES)
             + len(DUOC_QUET_CASES)
             + len(BO_CHU_THICH_CASES) + len(NEN_CANH_BAO_CASES) + len(KHOA_QUYEN_CASES)
             + len(VET_ACTOR_CASES))

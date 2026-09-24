@@ -9,7 +9,8 @@
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session_start.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/drift_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/progress_guard.py\"" },
-          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require_sync_guard.py\"" }
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require_sync_guard.py\"" },
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/codegraph_sync.py\"" }
         ]
       }
     ],
@@ -52,6 +53,12 @@
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/rbac_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/rest_api_guard.py\"" },
           { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/audit_guard.py\"" }
+        ]
+      },
+      {
+        "matcher": "Bash|Monitor",
+        "hooks": [
+          { "type": "command", "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/codegraph_sync.py\"" }
         ]
       }
     ],
