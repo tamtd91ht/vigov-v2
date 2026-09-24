@@ -57,3 +57,6 @@ docs/ui-ux/*.zip
 # Có tên riêng chứ không phải /tmp của hệ điều hành: hai phiên agent dùng chung một cây làm
 # việc, và một tệp nháp không bị bỏ qua là một tệp sẽ bị 'git add -A' của người khác cuốn vào.
 tmp/
+
+# codegraph index — per machine, rebuilt by `codegraph init .` (ROUTING §0.1)
+.codegraph/

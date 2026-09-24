@@ -32,9 +32,14 @@ All four clear → dispatch together, in one message. Any one unclear → sequen
 
 ## ALWAYS SAFE
 
-**Read-only agents.** `isolation-reviewer`, `domain-expert` and `progress-reviewer` hold no
-`Write` or `Edit` tool, so they can run alongside anything, including each other and a builder.
-This is the cheapest parallelism available and it is usually the one worth taking.
+**Read-only agents.** `context-scout`, `cross-context-scout`, `isolation-reviewer`,
+`domain-expert` and `progress-reviewer` hold no `Write` or `Edit` tool, so they can run
+alongside anything, including each other and a builder. This is the cheapest parallelism
+available and it is usually the one worth taking — which is why the discovery step of the
+workflow (ROUTING §0.2) is always the two scouts in one message.
+
+**Implementation fan-out (ROUTING §0.5)** is "2–3 builders" only where every question below
+passes, and the Go cap in the next-but-one section always wins over that number.
 
 **Several builders writing progress at once.** Each writes only
 `kb/90-ephemeral/tien-do/<its own module>.json`, so the ledger adds no shared state — the
@@ -99,7 +104,7 @@ Why it is worse than any conflict in the table above:
 
 ```
 [ ] Go-compiling agents: 1 concurrent, 2 at the absolute most
-[ ] Read-only agents (isolation-reviewer, domain-expert, progress-reviewer): cheap, parallel is fine
+[ ] Read-only agents (the two scouts, isolation-reviewer, domain-expert, progress-reviewer): cheap, parallel is fine
 [ ] Web agents (tsc/vitest): 2 is fine — the Node toolchain costs far less than Go's
 [ ] NEVER run a Go build in the main session while a Go agent is working
 [ ] Long agent + valuable partial work → tell it in the brief: "if a command is killed, COMMIT what

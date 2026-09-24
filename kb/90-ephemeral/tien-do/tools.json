@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "tools",
-  "cap_nhat": "2026-09-23",
+  "cap_nhat": "2026-09-24",
   "muc": [
     {
       "id": "bo-sinh-tien-do",
@@ -90,6 +90,14 @@
       "bang_chung": "tools/check_env_map.py, mục `envmap` trong Makefile (đã nằm trong danh sách phụ thuộc của `check` và trong .PHONY). Kiểm SỐNG chứ không chỉ chạy xanh: xoá một dòng bảng -> rc=1 · hạ GRPC_CALLER_KEY xuống không bắt buộc -> rc=1 · bản thật -> rc=0. 16 biến, 4 bắt buộc tại Load.",
       "no_confirm": [],
       "tiep_theo": "PHẠM VI HẸP CÓ CHỦ Ý: nó KHÔNG kiểm nội dung cột 'k8s cấp bằng' (ConfigMap hay Secret) — không gì quyết được điều đó từ mã, và `hooks/env_contract_guard.py` cũng nói thẳng như vậy trong phần WHAT IT DELIBERATELY DOES NOT CHECK. Nó kiểm ba thứ quyết được: bảng ⊇ biến core/config đọc · bảng không có dòng chết · biến trong danh sách `thieu` của config.Load được đánh dấu bắt buộc. Đừng mở rộng nó thành một lời hứa nó không giữ được."
+    },
+    {
+      "id": "check-brain-vai-scout",
+      "viec": "Thêm hậu tố vai trò `scout` vào từ vựng agent của check_brain (bất biến 7), cho hai agent khám phá context-scout và cross-context-scout của quy trình ROUTING §0",
+      "trang_thai": "xong",
+      "bang_chung": "tools/check_brain.py — regex looks_agent thêm `scout`, kèm lý do vì sao không dùng reviewer/expert. Kiểm SỐNG: `python tools/check_brain.py` báo '13 agents · 13 routed' (trước khi thêm hậu tố, hai tệp scout sẽ hiện là 'never routed to'). make check EXIT=0 ngày 2026-09-24.",
+      "no_confirm": [],
+      "tiep_theo": "Ngân sách always-loaded đang ở ~26987/27000 token (99%) sau khi CLAUDE.md trỏ tới ROUTING §0 — lần thêm kế tiếp vào CLAUDE.md hay rule phải BỚT một thứ khác trước, không nâng trần."
     }
   ]
 }

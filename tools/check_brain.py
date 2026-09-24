@@ -333,8 +333,14 @@ on_disk_agents = {f[:-3] for f in agent_files}
 # (`designer`). `keeper` was the near miss: it does maintain one kb/ tier. What separates it is
 # the SOURCE — every other agent reads this repository, this one watches a DIFFERENT repository
 # and reports what moved there. That is a distinct role, so it gets a distinct word.
+#
+# `scout` was added on 2026-09-24 for `context-scout` and `cross-context-scout`, the two
+# discovery agents of ROUTING §0.2. They are read only, but `reviewer` would lie in the other
+# direction: a reviewer judges finished work against a rule, a scout maps an area BEFORE any
+# work exists and judges nothing. `expert` means business authority (`domain-expert`), which
+# a scout must not claim — its whole contract is to report conflicts without picking a side.
 looks_agent = set(re.findall(
-    r"`([a-z][a-z0-9]*(?:-[a-z0-9]+)*-(?:builder|designer|reviewer|keeper|expert|watcher))`",
+    r"`([a-z][a-z0-9]*(?:-[a-z0-9]+)*-(?:builder|designer|reviewer|keeper|expert|watcher|scout))`",
     routing))
 routing_gaps = []
 for a in sorted(looks_agent - on_disk_agents):

@@ -83,8 +83,10 @@ done while tests are red" is a **more common** failure than "wrote a secret into
 
 ## Agents — `agents/ROUTING.md` is the entry point
 
-Nine agents: seven that write, two read-only. The main session reads `agents/ROUTING.md`, catches the
-event, dispatches, and runs the mandatory follow-up.
+Thirteen agents: eight that write, five read-only. The main session reads `agents/ROUTING.md`,
+runs the development workflow of its §0 (discover → synthesize → gate → decompose → implement →
+validate → commit → document), catches the event, dispatches, and runs the mandatory follow-up.
+The table below lists the original nine; the full index is ROUTING §9.
 
 | Agent | Mode | Owns |
 |---|---|---|
@@ -97,6 +99,8 @@ event, dispatches, and runs the mandatory follow-up.
 | `knowledge-keeper` | write | `kb/` curated tiers, ADRs, documentation discipline |
 | `isolation-reviewer` | **read only** | Three isolation dimensions, including cross-file relations |
 | `domain-expert` | **read only** | Vietnamese public administration business correctness |
+| `context-scout` | **read only** | Discovery 1: the request's own area, codegraph first, recent commits |
+| `cross-context-scout` | **read only** | Discovery 2: other modules, `../vigov-require`, earlier sessions |
 
 Two design decisions worth stating, both taken from measured failures of v1:
 

@@ -6,34 +6,172 @@
 > again. Any design where one agent "coordinates the others" does not run — v1 had exactly
 > that design and it could never have worked.
 
-Eleven agents: **eight that write, three read-only** (`isolation-reviewer`, `domain-expert`,
-`progress-reviewer`). Each has a **write boundary**; two agents never own the
-same path.
+Thirteen agents: **eight that write, five read-only** (`context-scout`, `cross-context-scout`,
+`isolation-reviewer`, `domain-expert`, `progress-reviewer`). Each has a **write boundary**; two
+agents never own the same path.
 
 ---
 
-## 0. How to use this file
+## 0. THE DEVELOPMENT WORKFLOW — every request that writes code
+
+**Analyze → Discover (parallel) → Synthesize → Gate → Decompose → Implement (parallel) →
+Validate → Commit → Document.** No code is edited before §0.3 has passed.
 
 ```
 user request
    │
-   ├─ 1. Is this small and obvious?  ──────────────► do it directly, no agent (§6)
+   ├─ 0.0 Small and obvious (§6)? ─── yes ──► do it directly; discovery = NOT APPLICABLE (say why)
    │
-   ├─ 2. Catch the EVENT (§1)  ─────────────────────► the trigger decides the entry agent
+   ├─ 0.1 codegraph ready?  ── no ──► codegraph init (below), then continue
    │
-   ├─ 3. Check the THREE QUESTIONS (§2)  ───────────► any unanswered = STOP, ask the user
+   ├─ 0.2 DISCOVER — ONE message, two read-only agents in parallel
+   │        context-scout        (straight down: files, symbols, recent commits, behaviour)
+   │        cross-context-scout  (sideways: other modules, ../vigov-require, earlier sessions)
    │
-   ├─ 4. Dispatch to the entry agent (§3, §4)
+   ├─ 0.3 SYNTHESIZE + GATE — the main session ("agent 3")
+   │        any gate item below  ──► STOP · explain · concrete options · ask · WAIT
    │
-   └─ 5. Run the MANDATORY FOLLOW-UP (§5)  ─────────► never optional
+   ├─ 0.4 DECOMPOSE into task cards · catch the EVENT (§1) per card · owner per §3
+   │
+   ├─ 0.5 IMPLEMENT — 2–3 builders in parallel where §3 + skills/parallel-agents allow
+   │
+   ├─ 0.6 VALIDATE — main session alone, after every builder has returned (§5.1)
+   │
+   ├─ 0.7 COMMIT — one commit per validated task
+   │
+   └─ 0.8 DOCUMENT — ledger · kb tier · handover (§0.8)
 ```
 
-Dispatching is explicit, and **sequential by default**: the main session keeps the thread, and
-agents return findings and diffs, never further dispatches.
+Dispatching is explicit and the main session keeps the thread; agents return findings and
+diffs, never further dispatches. Several agents go out in **one message** only when §3 and
+`.claude/skills/parallel-agents/SKILL.md` say their boundaries and shared state are disjoint.
 
-Several agents may go out in **one message** when their write boundaries are disjoint and
-neither needs the other's output — §3 lists which pairs conflict.
-→ `.claude/skills/parallel-agents/SKILL.md`
+### 0.1 codegraph first
+
+Call `codegraph_status`. "Not initialized" → run `codegraph init .` in the repo root (Windows:
+`cmd //c "codegraph.cmd init ."`), then `codegraph_status` again. `.codegraph/` is per machine
+and gitignored. "Could grep instead" is not a reason to skip it; grep is the fallback for what
+the graph does not index (SQL, YAML, string literals).
+
+codegraph answers **what calls what** and **what breaks**. It does not answer **who owns** an
+entity or **why** — those stay `kb/30-indexes/data-ownership.json` and `kb/10-decisions/`.
+
+### 0.2 Why discovery is two agents and synthesis is not an agent
+
+A subagent cannot dispatch, and cannot ask the user mid-flight. Synthesis must do both — it
+decides whether to ask, then dispatches builders — so **"agent 3" is the main session**. Giving
+it to a subagent would reproduce the v1 orchestrator that could never orchestrate (§10).
+
+### 0.3 Synthesis, and the gate
+
+From the two reports, the main session writes (to the user, not to a file):
+
+```
+Requirement Summary · Current System Behavior · Expected Behavior · Affected Components
+Risks · Unknowns · Requirement Conflicts · Implementation Tasks · Dependencies
+```
+
+**STOP and ask before any code** when any of these holds — this list extends the STOP
+CONDITIONS of rules 1–11 and §2; it never relaxes them:
+
+| Gate | |
+|---|---|
+| Requirement unclear, or more than one reasonable implementation | |
+| Conflict: requirement ↔ code · old requirement ↔ new · request ↔ `../vigov-require` | Never pick a side |
+| Existing behaviour changes | |
+| API contract · event/message contract · DB schema · data migration · backward compatibility | |
+| Authentication / authorisation · money / disbursement logic | |
+| Impact on another module · high production risk · a destructive operation | |
+| A business assumption nobody has confirmed | |
+| An open question in `kb/00-foundation/open-questions.json` is touched | §1 row 2 |
+
+Ask with **concrete options**, recommended one first (AskUserQuestion). Then **wait** — a
+gated request is not started "while waiting".
+
+### 0.4 Task cards
+
+Each independent task is one card, stated to the user before dispatch and passed verbatim as
+the builder's brief:
+
+```
+TASK-NN · Title
+Goal · Scope (in / out) · Files/Modules · Owner agent (§3)
+Dependencies (TASK-xx) · Input · Expected Output · Validation (the exact command) · Risk
+```
+
+A card whose owner is unclear, or that needs another card's output, is not parallel.
+
+### 0.5 Implementation agents stay in their card
+
+A builder implements its card and nothing else: no scope growth, no unrelated fix, no large
+refactor, no architecture or public-API change outside the card. Anything found outside it is
+returned as `OUT-OF-SCOPE: <what> · <file:line>` for the main session to route — never fixed
+in passing.
+
+**Parallel cap:** 2–3 builders, but **at most 2 that compile Go, and 1 is the safe number**
+(measured, `skills/parallel-agents`). Sequential whenever a card depends on another, two
+cards touch the same critical file, or merge risk exists.
+
+### 0.6 Validation
+
+`compile → unit tests → relevant integration tests → static/architecture checks (make check)
+→ review the diff`. A failure goes back to the card's builder, then the gate re-runs. Never
+commit what could have been validated and was not; if a step cannot run on this machine, say
+so and name it.
+
+### 0.7 Commit — one per validated task
+
+Straight to `main` (GIT section of CLAUDE.md). Small, one scope, no unrelated hunks, staged
+**by explicit path** — never `git add -A`, which sweeps up a parallel session's work. Message
+`type(scope): …` (`feat` · `fix` · `refactor` · `test` · `docs` · `chore`). Independent tasks
+are not folded into one commit.
+
+### 0.8 Documentation — into the tiers that already exist
+
+The proposal behind this section drew a `docs/` tree and a `sessions/YYYY-MM-DD/` folder. Both
+already exist here under other names, and a second system beside them is forbidden by rule 9 —
+so each question goes to its owning place:
+
+| Question the session must leave answered | Owning place |
+|---|---|
+| What moved in this module · what remains · what is owed to the customer | `kb/90-ephemeral/tien-do/<module>.json` → `make kb` (`/progress`) |
+| Why it changed · what was decided | ADR in `kb/10-decisions/` (`/decision`) — only when an invariant, boundary or contract moved |
+| What assumptions were made · what the customer confirmed | ledger item + `ban-giao-phien.md` §1 |
+| Traps · parallel sessions · next steps pointer | `kb/90-ephemeral/ban-giao-phien.md` (`/handover`), rewritten in full |
+| Requirement repo moved | `kb/50-doi-chieu/` via `require-watcher` |
+| What changed, which commits, which tests | `git log` — never copied into a document |
+
+A dated session folder is a session log (rule 9, forbidden #3): worthless after a day, never
+deleted. The next session reads, in this order: `ban-giao-phien.md` → `tien-do.md` → the
+related requirement note → recent commits → codegraph → source.
+
+### 0.9 Done means every line is ticked or marked NOT APPLICABLE with a reason
+
+```
+[ ] codegraph checked (0.1)            [ ] recent commits checked (context-scout)
+[ ] cross-context checked              [ ] ../vigov-require checked, if related
+[ ] requirement confirmed (0.3 gate)   [ ] task cards stated (0.4)
+[ ] independent cards parallelised, within the cap
+[ ] implemented                        [ ] validation run — make check green (0.6)
+[ ] diff reviewed                      [ ] each task committed (0.7)
+[ ] ledger + kb tier updated (0.8)     [ ] remaining work recorded in the ledger
+```
+
+Priorities, when two pull apart: **correctness > speed · context > assumption · confirmation >
+guessing · independent tasks > one monolithic task · reusable knowledge > session-only
+knowledge.**
+
+---
+
+## 0b. How the rest of this file is used by §0
+
+```
+0.0 small?              → §6
+0.4 owner per card      → §1 (event) · §3 (layer) · §4 (symptom)
+0.3 gate                → also §2 (the three questions)
+0.5 parallel            → §3 pair table · skills/parallel-agents
+0.6–0.8 follow-up       → §5, never optional
+```
 
 ---
 
@@ -209,9 +347,9 @@ Go and runs no repo-wide command can still go alongside it.
 and `petitions/**` are disjoint, but both may write `go.mod` and `go.sum`. Parallel
 only when neither touches `core/**` or adds a dependency.
 
-The three **read-only** agents (`isolation-reviewer`, `domain-expert`, `progress-reviewer`)
-hold no write tool and conflict with nothing — they run alongside anything, including each
-other.
+The five **read-only** agents (`context-scout`, `cross-context-scout`, `isolation-reviewer`,
+`domain-expert`, `progress-reviewer`) hold no write tool and conflict with nothing — they run
+alongside anything, including each other.
 
 → Decision procedure, shared state, and why verification stays serial:
 `.claude/skills/parallel-agents/SKILL.md`
@@ -336,6 +474,8 @@ Dispatching costs a context switch and loses the thread. Do it directly when:
 | `isolation-reviewer` | **read only** | Three isolation dimensions, including cross-file relations |
 | `domain-expert` | **read only** | Vietnamese public administration business correctness |
 | `progress-reviewer` | **read only** | The progress ledger as a record: lost items, `xong` without evidence, modules gone quiet |
+| `context-scout` | **read only** | Discovery 1 (§0.2): the request's own area — symbols, call paths, recent commits, current behaviour |
+| `cross-context-scout` | **read only** | Discovery 2 (§0.2): other modules, `../vigov-require`, earlier sessions — tags each requirement NEW · CHANGED · DONE · PARTIAL · CONFLICT · UNKNOWN |
 
 ---
 

@@ -3,8 +3,8 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 
-expires: 2026-12-22
+derived_from_commit: 50210d9
+expires: 2026-12-23
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
 ---
@@ -17,7 +17,7 @@ owns_facts:
 Tệp này trả lời đúng một câu: **module nào còn nợ gì.** Vì sao làm thế → `kb/10-decisions/`.
 Đã làm gì → `git log`. Cạm bẫy và quyết định đã chốt → `kb/90-ephemeral/ban-giao-phien.md`.
 
-Cập nhật gần nhất **2026-09-23** · hết hạn **2026-12-22**. Hạn đo lần cuối có người cập nhật
+Cập nhật gần nhất **2026-09-24** · hết hạn **2026-12-23**. Hạn đo lần cuối có người cập nhật
 một module, không phải lần cuối sinh tệp — quá hạn nghĩa là 90 ngày không ai chạm tới,
 tức tin `git log` chứ đừng tin tệp này.
 
@@ -26,7 +26,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 41 |
 | chưa làm | 17 |
 | treo | 14 |
-| xong | 120 |
+| xong | 121 |
 
 ## `_chung`
 
@@ -419,7 +419,7 @@ Cập nhật 2026-09-22 · 1 mục
 
 ## `tools`
 
-Cập nhật 2026-09-23 · 11 mục
+Cập nhật 2026-09-24 · 12 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -436,6 +436,7 @@ Cập nhật 2026-09-23 · 11 mục
 ', 40)` trả phần tử ĐẦU là toàn bộ phần còn lại của tệp, nên nó khớp một `@scope: platform` cách đó bốn trăm dòng ở bảng khác → nhánh `tenant_id` chết hoàn toàn, mà cổng vẫn in [PASS]. Sửa thành `split('
 ')[-40:]`. (2) ngưỡng 'đọc hụt' đặt theo 59 lấy từ `grep 'UNIQUE ('` cả tệp; con số thật là 49, vì mười chỗ kia nằm trong CHÚ THÍCH của chính các migration giải thích vì sao khoá cố ý không từng phần. Cả hai cùng lớp với `kiem_dong_em` trong `check_build.py`: LẦN CHẠY XANH ĐẦU TIÊN KHÔNG PHÂN BIỆT ĐƯỢC VỚI MỘT CỔNG ĐÃ CHẾT. ĐÃ ĐO, CHƯA DỰNG CỔNG — dữ liệu cá nhân trong log: quét 212 tệp Go (bỏ `_test.go` và `core/gen`) cho 2 chỗ nghi vấn và CẢ HAI ĐỀU ĐÚNG: `dang_nhap.go:186` ghi `vanTay(yc.Email)` tức SHA-256 cắt 12 ký tự (đúng luật 3 bất biến 2), và `grpc/server.go:336` khớp chữ `address` nằm trong CHÚ THÍCH. Tức 0 vi phạm thật. CHƯA dựng cổng vì một phép quét ngây thơ kêu oan ở hai chỗ ấy, và một cổng kêu oan là một cổng bị gỡ; muốn dựng thì phải bỏ chú thích và hiểu các hàm bọc (`vanTay`, `Mask*`) trước. `pii_guard` vẫn chặn lúc GHI. |
 | `check-env-map` — Cổng đối chiếu bảng map biến môi trường của deploy/README.md với core/config và .env.example | xong | tools/check_env_map.py, mục `envmap` trong Makefile (đã nằm trong danh sách phụ thuộc của `check` và trong .PHONY). Kiểm SỐNG chứ không chỉ chạy xanh: xoá một dòng bảng -> rc=1 · hạ GRPC_CALLER_KEY xuống không bắt buộc -> rc=1 · bản thật -> rc=0. 16 biến, 4 bắt buộc tại Load. | — | PHẠM VI HẸP CÓ CHỦ Ý: nó KHÔNG kiểm nội dung cột 'k8s cấp bằng' (ConfigMap hay Secret) — không gì quyết được điều đó từ mã, và `hooks/env_contract_guard.py` cũng nói thẳng như vậy trong phần WHAT IT DELIBERATELY DOES NOT CHECK. Nó kiểm ba thứ quyết được: bảng ⊇ biến core/config đọc · bảng không có dòng chết · biến trong danh sách `thieu` của config.Load được đánh dấu bắt buộc. Đừng mở rộng nó thành một lời hứa nó không giữ được. |
+| `check-brain-vai-scout` — Thêm hậu tố vai trò `scout` vào từ vựng agent của check_brain (bất biến 7), cho hai agent khám phá context-scout và cross-context-scout của quy trình ROUTING §0 | xong | tools/check_brain.py — regex looks_agent thêm `scout`, kèm lý do vì sao không dùng reviewer/expert. Kiểm SỐNG: `python tools/check_brain.py` báo '13 agents · 13 routed' (trước khi thêm hậu tố, hai tệp scout sẽ hiện là 'never routed to'). make check EXIT=0 ngày 2026-09-24. | — | Ngân sách always-loaded đang ở ~26987/27000 token (99%) sau khi CLAUDE.md trỏ tới ROUTING §0 — lần thêm kế tiếp vào CLAUDE.md hay rule phải BỚT một thứ khác trước, không nâng trần. |
 
 ## `web-admin`
 

@@ -98,7 +98,8 @@ repo has no `core/authz` and no `kb/`. Read such a report, do **not** route arou
 
 1. `kb/INDEX.yaml` (~3 KB) — what exists · where · **what is deliberately not here**
 2. The `always_load` entries (~14 KB) — what this system is, which invariants hold
-3. "Where is X" → `kb/30-indexes/code-map.json` — **do NOT grep the repo**
+3. "Where is X" → `kb/30-indexes/code-map.json` — **do NOT grep the repo**;
+   "what calls / breaks X" → codegraph (ROUTING §0.1)
 4. "Who owns X" → `kb/30-indexes/data-ownership.json` — **do NOT read every schema**
 5. "Why is it like this" → `kb/10-decisions/` — **do NOT infer it from the code**
 6. **Only when you need to know HOW** → read the exact file step 3 pointed to
@@ -117,11 +118,13 @@ Not found in `kb/`: check the `not_here` section first.
 ### Before doing the work — route it
 
 Read **`.claude/agents/ROUTING.md`** and dispatch. That file is the entry point to every
-agent: it catches the event, names the entry agent, and lists the mandatory follow-up.
+agent. Its **§0 is the development workflow** (discover → gate → task cards → parallel
+builders → validate → commit per task → document); no code is edited before its gate passes.
 
 - Small, obvious, location already known → **do it directly**, no agent (ROUTING §6)
-- Anything else → ROUTING §1 catches the event and names the agent
-- A STOP CONDITION fires → **ask the user first**, dispatch nothing
+- Anything else → ROUTING §0, then §1 names the agent per task
+- A STOP CONDITION or a §0.3 gate item fires → **ask the user first**, dispatch nothing
+- "Done" = ROUTING §0.9 ticked, or NOT APPLICABLE with a reason
 
 **Routing is the main session's job.** A subagent cannot dispatch another subagent, so you
 keep the thread: dispatch, take the result, dispatch the next. Never ask an agent to
@@ -161,7 +164,7 @@ brain — is in **English**.
 
 ## GIT — `main` ONLY
 
-Commit and push straight to `main`. Branch **only** when the user decides to, or when the
+Commit and push straight to `main`, **one commit per validated task** (ROUTING §0.7). Branch **only** when the user decides to, or when the
 agent proposes it and the user **agrees**. "To be safe" is not a reason to branch on your
 own: if you see a risk, **state the risk**, then do what was asked.
 
@@ -175,7 +178,7 @@ own: if you see a risk, **state the risk**, then do what was asked.
 | `hooks/` | **21 hooks**: 13 rule hooks + 8 cross-cutting |
 | `skills/` | Skills, lazily loaded by keyword |
 | `commands/` | Procedures invoked as `/command-name` |
-| `agents/` | **11 agents** — 5 build, 5 review, 1 theo dõi kho yêu cầu. Entry point: `agents/ROUTING.md` |
+| `agents/` | **13 agents** — 5 build, 5 review, 2 discovery scouts, 1 theo dõi kho yêu cầu. Entry point: `agents/ROUTING.md` |
 | `logs/guard.jsonl` | Guard log — evidence the enforcement layer actually ran |
 
 **Brain invariants.** Every rule names at least one enforcing hook: a rule you cannot write a
