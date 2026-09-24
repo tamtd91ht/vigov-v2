@@ -78,8 +78,8 @@ thuộc phạm vi hợp đồng. Bằng chứng khảo sát và đường quay l
 |---|---|
 | `platform` | Nền tảng — nhà cung cấp vận hành, **chỉ siêu dữ liệu** |
 | `identity` | Tổ chức – cán bộ, định danh công dân toàn nền tảng, và **đơn vị dân cư** (thôn / tổ dân phố) |
-| `documents` | Văn thư — văn bản đến/đi |
-| `petitions` | Tiếp dân — phản ánh, khiếu nại, tố cáo, và nhiệm vụ phát sinh |
+| `documents` | Văn thư — văn bản đến/đi, đơn thư (ADR 0039) |
+| `petitions` | Tiếp dân — phản ánh và nhiệm vụ phát sinh |
 | `finance` | Tài chính – kế toán — dự toán, giải ngân |
 | `comms` | Thông tin – truyền thông — tin bài, truyền thanh, bản đồ, thông báo |
 | `reporting` | Read model — **không sở hữu dữ liệu gốc nào** |

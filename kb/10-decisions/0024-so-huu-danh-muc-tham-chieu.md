@@ -214,6 +214,10 @@ theo cùng một chiều, tức bộ mã đóng cộng nhãn theo xã.
 người cấp số. Viết migration cho ô này khi (b) chưa có trả lời vẫn là quyết hộ khách, y như
 trước 2026-09-20.
 
+**Cập nhật 2026-09-24: (b) đã có trả lời — văn thư (`documents`)**, người dùng chốt; xem **ADR
+0039** (`kb/10-decisions/0039-so-don-thu-thuoc-van-thu.md`). Ô này **vẫn chưa đủ để viết
+migration**: chủ bộ mã đóng và số mục (4 hay 5) chưa chốt — ADR 0039 §Hệ quả cho ADR 0024 §2.
+
 ### 3. `Trạng thái nhiệm vụ` (7 mục) — chờ một **câu hỏi MỚI**, chưa có trong `open-questions.json`
 
 | | |

@@ -15,6 +15,10 @@ owns_facts:
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-09-15 · **Sửa bảng tên service:** 2026-09-16
 
+> **Dòng `petitions` ở §Quyết định ("xử lý đơn thư") ĐÃ BỊ ADR 0039 SỬA (2026-09-24):** sổ đơn
+> thư `don_thu` thuộc `documents`. Bảng dưới giữ nguyên văn ngày 15/09; sự thật hiện hành về đơn
+> thư thuộc về `kb/10-decisions/0039-so-don-thu-thuoc-van-thu.md`.
+
 ## Bối cảnh
 
 Đề xuất ban đầu của chủ đầu tư là `admin-service · auth-service · report-service ·

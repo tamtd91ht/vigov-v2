@@ -1,6 +1,6 @@
 # petitions
 
-**Tiếp dân** — Feedback, complaints and denunciations — three legally distinct things — plus the tasks that arise from handling them, and their SLA.
+**Tiếp dân** — Citizen feedback (phản ánh), the tasks that arise from it and from meeting conclusions, and their SLA. Citizen letters (`don_thu`: complaints, denunciations, proposals, requests) are NOT here — they belong to `documents` (ADR 0039).
 
 ## Owns
 

@@ -1,6 +1,6 @@
 # documents
 
-**Văn thư** — Incoming and outgoing documents, per-authority numbering, routing between units.
+**Văn thư** — Incoming and outgoing documents, the citizen letter register (`don_thu`, ADR 0039), per-authority numbering, routing between units.
 
 ## Owns
 
