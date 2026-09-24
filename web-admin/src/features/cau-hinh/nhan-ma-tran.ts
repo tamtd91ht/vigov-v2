@@ -87,3 +87,50 @@ export function nhanChuaCauHinh(thieu: ThieuTruc): string {
       );
   }
 }
+
+/** Hướng dẫn đầu tab khi tài khoản sửa được — nguyên câu của đặc tả §4. */
+export const HUONG_DAN_SUA =
+  "Bấm vào ô để bật hoặc tắt quyền, sau đó bấm Lưu ở đầu cột của vai trò đó.";
+
+/**
+ * Câu khi tài khoản chỉ xem được ma trận. Không xảy ra qua cổng tab hôm nay (tab đòi đúng khoá
+ * sửa), nhưng bảng vẫn dựng được ở chế độ xem, và một bảng không có ô bấm mà không nói vì sao thì
+ * cán bộ sẽ tưởng màn hình hỏng.
+ */
+export const GHI_CHU_CHI_XEM = "Bảng chỉ để xem. Tài khoản của bạn không có quyền phân quyền.";
+
+export const NUT_LUU = "Lưu";
+export const NUT_DANG_LUU = "Đang lưu…";
+export const NUT_HUY = "Huỷ";
+
+/**
+ * Tên đọc được của một ô bấm: "{nhãn quyền} — {tên vai trò}". Trình đọc màn hình đọc riêng ô ấy,
+ * không kèm tiêu đề hàng và cột, nên thiếu một nửa là cán bộ tick mà không biết mình đang cấp
+ * quyền gì cho ai.
+ */
+export function nhanOBatTat(nhanQuyen: string, tenVaiTro: string): string {
+  return `${nhanQuyen} — ${tenVaiTro}`;
+}
+
+/** Tên đọc được của hai nút đầu cột — chữ "Lưu" đứng một mình thì tám cột nghe như nhau. */
+export function nhanNutLuu(tenVaiTro: string): string {
+  return `Lưu phân quyền của vai trò ${tenVaiTro}`;
+}
+
+export function nhanNutHuy(tenVaiTro: string): string {
+  return `Huỷ thay đổi chưa lưu của vai trò ${tenVaiTro}`;
+}
+
+/**
+ * Lý do cột của CHÍNH vai trò người đang đăng nhập không bấm được — câu #14 (open-questions),
+ * cùng ý với câu máy chủ trả ở 403 `self_target_forbidden` (`service-identity/internal/http/quyen.go`).
+ * Khoá cột chỉ là tiện dụng: máy chủ vẫn từ chối dù màn hình có khoá hay không.
+ */
+export const LY_DO_KHONG_TU_SUA =
+  "Bạn đang giữ vai trò này nên không tự sửa phân quyền của nó được. Hãy nhờ một người quản trị khác của xã thực hiện.";
+
+/** Chú thích bảng cho trình đọc màn hình — hai chế độ, hai câu. */
+export const CHU_THICH_BANG_XEM =
+  "Ma trận phân quyền của đơn vị: mỗi hàng là một quyền, mỗi cột là một vai trò. Bảng chỉ để xem.";
+export const CHU_THICH_BANG_SUA =
+  "Ma trận phân quyền của đơn vị: mỗi hàng là một quyền, mỗi cột là một vai trò. Mỗi cột được lưu riêng bằng nút Lưu ở đầu cột.";

@@ -38,8 +38,8 @@ export function quyetDinhTabNguoiDung(ketQua: KetQua<identity_phienHienTaiRa>): 
 /**
  * Tab "Phân quyền" — `admin.role`. Cùng quy tắc, cùng nhánh FAIL CLOSED, khác đúng một khoá.
  *
- * Tab này CHỈ ĐỌC ma trận; không có tuyến ghi nào phía sau nó, nên `admin.role` ở đây mở ra một
- * màn hình xem chứ không mở ra quyền cấp phát (xem `ma-tran-phan-quyen.tsx`).
+ * Cùng một khoá mở cả việc XEM lẫn việc SỬA: máy chủ khai `admin.role` cho cả
+ * `GET /api/v1/role-permissions` lẫn `PUT /api/v1/roles/{id}/permissions` (xem `coTheSuaPhanQuyen`).
  */
 export function quyetDinhTabPhanQuyen(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
   return theoKhoaQuyen(ketQua, QUYEN_PHAN_QUYEN);
@@ -51,4 +51,27 @@ export function quyetDinhTabPhanQuyen(ketQua: KetQua<identity_phienHienTaiRa>): 
  */
 function theoKhoaQuyen(ketQua: KetQua<identity_phienHienTaiRa>, khoa: string): QuyetDinhTab {
   return quyetDinhTheoKhoa(ketQua, khoa);
+}
+
+/**
+ * Ô ma trận có thành ô bấm được không — đúng khoá `admin.role`, tức khoá máy chủ kiểm ở `PUT`.
+ *
+ * TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP (luật 5, cấm #1): trả `true` sai thì cán bộ bấm Lưu và nhận nguyên
+ * câu 403 của máy chủ. Không đọc được phiên thì `false` — đóng khi không chắc.
+ */
+export function coTheSuaPhanQuyen(ketQua: KetQua<identity_phienHienTaiRa>): boolean {
+  return quyetDinhTheoKhoa(ketQua, QUYEN_PHAN_QUYEN).hien;
+}
+
+/**
+ * Mã vai trò (`vai_tro.ma`) của người đang đăng nhập, hoặc `null`.
+ *
+ * Phiên không phát id vai trò, chỉ phát `role.code`. Mã ấy là `UNIQUE (tenant_id, ma)`
+ * (`service-identity/migrations/0001_init.sql:120`) và phiên với ma trận là của cùng một xã, nên
+ * so mã với `code` của cột là so đúng một vai trò, không phải đoán. Dùng để khoá sẵn cột của chính
+ * mình (#14) — máy chủ vẫn là bên từ chối (403 `self_target_forbidden`).
+ */
+export function maVaiTroCuaToi(ketQua: KetQua<identity_phienHienTaiRa>): string | null {
+  if (!ketQua.ok) return null;
+  return ketQua.duLieu.role?.code ?? null;
 }

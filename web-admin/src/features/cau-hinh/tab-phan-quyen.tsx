@@ -3,7 +3,12 @@
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { MaTranPhanQuyen } from "./ma-tran-phan-quyen";
-import { quyetDinhTabPhanQuyen, type QuyetDinhTab } from "./quyen-tab";
+import {
+  coTheSuaPhanQuyen,
+  maVaiTroCuaToi,
+  quyetDinhTabPhanQuyen,
+  type QuyetDinhTab,
+} from "./quyen-tab";
 
 /**
  * Cổng ẩn/hiện tab "Phân quyền" — `docs/ui-ux/14-cau-hinh.md §12.8`: "Tab nào thiếu quyền thì ẩn
@@ -33,9 +38,8 @@ export function TabPhanQuyen() {
   const phien = usePhien();
 
   // `null` là "chưa đọc xong", không phải "không có quyền". Ba trạng thái, không hai.
-  const quyetDinh: QuyetDinhTab | null = phien === null ? null : quyetDinhTabPhanQuyen(phien);
-
-  if (quyetDinh === null) return <p role="status">Đang kiểm tra quyền truy cập…</p>;
+  if (phien === null) return <p role="status">Đang kiểm tra quyền truy cập…</p>;
+  const quyetDinh: QuyetDinhTab = quyetDinhTabPhanQuyen(phien);
 
   // KHÔNG ĐOÁN KHI KHÔNG ĐỌC ĐƯỢC QUYỀN: không dựng ma trận, và hiện đúng câu của máy chủ (thường
   // là "Phiên làm việc đã hết hạn" — nhưng chữ ấy do máy chủ viết, không do đây đoán).
@@ -56,5 +60,9 @@ export function TabPhanQuyen() {
     );
   }
 
-  return <MaTranPhanQuyen />;
+  // Hai giá trị dưới chỉ là tiện dụng:
+  // `PUT /api/v1/roles/{id}/permissions` tự kiểm `admin.role` và #14 trên từng lần lưu.
+  return (
+    <MaTranPhanQuyen choSua={coTheSuaPhanQuyen(phien)} maVaiTroCuaToi={maVaiTroCuaToi(phien)} />
+  );
 }

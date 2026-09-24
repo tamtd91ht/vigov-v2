@@ -2,6 +2,7 @@ import { CauHinhXaProvider, phanHienThi } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { KhoiChuaDung } from "@/features/cau-hinh/khoi-chua-dung";
 import { TabDanhMuc } from "@/features/cau-hinh/tab-danh-muc";
 import { TabNguoiDung } from "@/features/cau-hinh/tab-nguoi-dung";
 import { TabPhanQuyen } from "@/features/cau-hinh/tab-phan-quyen";
@@ -84,6 +85,9 @@ export default async function TrangCauHinh() {
           <TabPhanQuyen />
           <TabDanhMuc />
           <TabThoiHanXuLy />
+          {/* Những phần của đặc tả chưa dựng, kèm lý do — ở CUỐI trang để không chen giữa các tab
+              đang dùng được (`features/cau-hinh/nhan-cau-hinh.ts`). */}
+          <KhoiChuaDung />
         </main>
         </div>
       </PhienProvider>

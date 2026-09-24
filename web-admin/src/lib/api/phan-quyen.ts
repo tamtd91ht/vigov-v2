@@ -14,23 +14,24 @@
  * ấy đúng cho MỌI tuyến và được nói một lần ở `goi.ts`. Đọc tệp ấy trước khi sửa gì ở đây.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * KHÔNG CÓ HÀM GHI Ở ĐÂY, VÀ KHÔNG CÓ KHUNG ĐỂ VỀ SAU ĐIỀN VÀO.
+ * MỘT HÀM GHI, VÀ NÓ GHI ĐÚNG MỘT CỘT: `PUT /api/v1/roles/{id}/permissions`.
  *
- * Hợp đồng REST không có tuyến nào đổi một ô của ma trận. Nút `Lưu` ở đầu mỗi cột mà đặc tả vẽ
- * (§4 và §12.5) nằm trên hai câu khách chưa chốt (`kb/00-foundation/open-questions.json`):
- *
- *   #13  có chặn thao tác làm xã mất người quản trị CUỐI CÙNG không. Gỡ khoá `admin.user` khỏi
- *        vai trò cuối cùng còn giữ nó là đúng một lần bấm trên màn hình này, và sau lần bấm ấy
- *        không ai trong xã mở lại được — nhà cung cấp cũng không được phép chạm vào (ADR 0003).
- *   #14  người giữ `admin.user` có được thao tác lên CHÍNH MÌNH không.
- *
- * Một hàm ghi viết dở trông y hệt một quyết định đã có người ra. Xem thêm chú thích đầu
- * `service-identity/internal/http/quyen.go` — lập luận đầy đủ nằm ở phía máy chủ, một chỗ.
+ * Tuyến ấy mọc ở `service-identity` sau khi #13 và #14 được chốt (commit 85e6e84): máy chủ từ chối
+ * thao tác làm xã mất người giữ `admin.user`/`admin.role` cuối cùng (409 `last_holder`), từ chối
+ * người sửa chính vai trò mình đang giữ (403 `self_target_forbidden`), và từ chối cấp HOẶC gỡ một
+ * khoá mà người sửa không giữ (403 `permission_escalation`). Cả ba là quy tắc CỦA MÁY CHỦ; màn
+ * hình không dựng bản sao nào của chúng, chỉ hiện nguyên câu máy chủ viết.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import { docJSON, type KetQua } from "./goi";
-import type { identity_get_role_permissions, identity_maTranQuyenRa } from "./schema.gen";
+import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
+import type {
+  identity_cotPhanQuyenRa,
+  identity_get_role_permissions,
+  identity_luuPhanQuyenVao,
+  identity_maTranQuyenRa,
+  identity_put_roles_by_id_permissions,
+} from "./schema.gen";
 
 /**
  * GET /api/v1/role-permissions — nhóm quyền, vai trò kèm hai số đếm, và các ô đã cấp của xã.
@@ -46,4 +47,25 @@ import type { identity_get_role_permissions, identity_maTranQuyenRa } from "./sc
 export function layMaTranQuyen(): Promise<KetQua<identity_maTranQuyenRa>> {
   const duongDan: identity_get_role_permissions["duongDan"] = "/api/v1/role-permissions";
   return docJSON<identity_maTranQuyenRa>(duongDan);
+}
+
+/**
+ * PUT /api/v1/roles/{id}/permissions — lưu MỘT cột của ma trận (`docs/ui-ux/14-cau-hinh.md §12.5`).
+ *
+ * THÂN LÀ TOÀN BỘ tập quyền của vai trò ấy, không phải phần chênh lệch: khoá nào không có trong
+ * `permissions` là khoá máy chủ GỠ. `[]` hợp lệ và nghĩa là gỡ hết; `null`/thiếu trường là 400.
+ * Vì vậy thân do bên gọi dựng từ đúng tập của một cột (`thanLuuCot` trong
+ * `features/cau-hinh/sua-phan-quyen.ts`) — hàm này không tự gộp, không tự lọc, không gửi cột nào khác.
+ *
+ * 200 trả tập quyền ĐÃ LƯU, sắp theo chữ. Màn hình thay cột bằng tập ấy chứ không bằng thứ nó đã
+ * gửi: câu trả lời của máy chủ là trạng thái thật, còn thứ gửi đi chỉ là một đề nghị.
+ */
+export function luuPhanQuyenVaiTro(
+  vaiTroId: string,
+  than: identity_luuPhanQuyenVao,
+): Promise<KetQua<identity_cotPhanQuyenRa>> {
+  const mau: identity_put_roles_by_id_permissions["duongDan"] = "/api/v1/roles/{id}/permissions";
+  return docThanLoiGoi<identity_cotPhanQuyenRa>(
+    goiGhi(mau.replace("{id}", encodeURIComponent(vaiTroId)), "PUT", than, 200),
+  );
 }

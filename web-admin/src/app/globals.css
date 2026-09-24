@@ -744,10 +744,11 @@ body {
   font-weight: 700;
 }
 
-/* HAI Ô TRẠNG THÁI — VÀ KHÔNG Ô NÀO MỜI BẤM.
+/* HAI Ô TRẠNG THÁI Ở CHẾ ĐỘ XEM — VÀ Ở CHẾ ĐỘ ẤY KHÔNG Ô NÀO MỜI BẤM.
  *
- * Không `cursor: pointer`, không hiệu ứng rê chuột, không viền hội tụ: màn hình này chỉ đọc, và
- * một ô trông như bấm được mà không lưu được là một lời hứa suông (`ma-tran-phan-quyen.tsx`).
+ * Không `cursor: pointer`, không hiệu ứng rê chuột, không viền hội tụ trên chính ô: một ô trông như
+ * bấm được mà không lưu được là một lời hứa suông. Ở chế độ sửa, thứ bấm được là `<input>` bên
+ * trong ô (`.o-bat-tat` bên dưới), không phải ô (`ma-tran-phan-quyen.tsx`).
  *
  * Màu KHÔNG phải tín hiệu duy nhất: dấu `✓` và `–` khác nhau về hình dạng, và mỗi ô mang một câu
  * đầy đủ cho trình đọc màn hình ("Đã cấp" / "Chưa cấp"). */
@@ -767,6 +768,53 @@ body {
  * tương phản 4.5:1 (`skills/accessibility-elderly`, ngưỡng 3). */
 .bang-phan-quyen .o-chua-cap {
   color: var(--xam-chu);
+}
+
+/* CHẾ ĐỘ SỬA của ma trận — lưu theo từng cột (§12.5).
+ *
+ * Ô tích 1.25rem chứ không cỡ mặc định của trình duyệt: người dùng là cán bộ xã, nhiều người lớn
+ * tuổi, và bấm trượt sang ô bên cạnh ở đây là cấp nhầm một quyền cho một vai trò
+ * (`skills/accessibility-elderly`). `.o-da-doi` đánh dấu ô đã khác bản máy chủ, để cán bộ thấy mình
+ * đã đổi những ô nào trước khi bấm Lưu — nền nhạt, dấu tích vẫn là tín hiệu chính. */
+.bang-phan-quyen .o-bat-tat {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: var(--xanh);
+  cursor: pointer;
+}
+
+.bang-phan-quyen .o-bat-tat:disabled {
+  cursor: not-allowed;
+}
+
+.bang-phan-quyen .o-da-doi {
+  background: #fef9c3;
+}
+
+/* Hàng nút `Lưu` · `Huỷ` ở đầu cột: xuống dòng được, vì cột vai trò chỉ rộng 9rem ở 320px. */
+.nut-cot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.375rem;
+}
+
+.nut-cot .nut-phu {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+}
+
+.nut-cot .nut-phu:disabled {
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+/* Câu lỗi của máy chủ dưới nút của CHÍNH cột ấy. `display: block` vì nó nằm trong `<th>`. */
+.loi-cot {
+  display: block;
+  margin: 0.25rem 0 0;
+  font-weight: 400;
 }
 
 /* ---- màn cấu hình · tab Thôn/Tổ dân phố và tab Danh mục -------------------------------- */
