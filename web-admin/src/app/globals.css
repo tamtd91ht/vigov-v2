@@ -820,8 +820,71 @@ body {
 /* ---- màn cấu hình · tab Thôn/Tổ dân phố và tab Danh mục -------------------------------- */
 
 .tab-thon-to-dan-pho,
-.tab-danh-muc {
+.tab-danh-muc,
+.tab-so-do-to-chuc {
   margin-top: 2.5rem;
+}
+
+/* SƠ ĐỒ TỔ CHỨC — cây bằng `<ul>` lồng. Mỗi cấp thụt 1rem và kẻ một đường dọc bên trái để thấy
+ * được con thuộc cha nào; ở 320px ba cấp mất 3rem, vẫn còn chỗ cho tên. Không `nowrap` ở đâu: tên
+ * bộ phận viết hoa rất dài ("THƯỜNG TRỰC HỘI ĐỒNG NHÂN DÂN") và phải xuống dòng được. */
+.cay-bo-phan {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cay-bo-phan .cay-bo-phan {
+  margin-left: 1rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--xam-vien);
+}
+
+.the-bo-phan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--xam-vien);
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.the-bo-phan-than {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.the-bo-phan-ten {
+  font-weight: 600;
+}
+
+/* Mã và số cán bộ nhẹ hơn tên nhưng vẫn là chữ — tương phản 4.5:1 (`--xam-chu`). */
+.the-bo-phan-ma,
+.the-bo-phan-so {
+  font-size: 0.875rem;
+  color: var(--xam-chu);
+}
+
+.the-bo-phan .nut-phu {
+  min-height: 2.75rem;
+}
+
+/* Ô chọn bộ phận cha — cùng kích thước ô nhập bên cạnh. Chỉ trong biểu mẫu này, để không đổi ô
+ * chọn của màn khác. */
+.form-bo-phan select {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #9ca3af;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-family: inherit;
+  background: #fff;
 }
 
 /* MỖI NHÓM DANH MỤC LÀ MỘT KHỐI RIÊNG, CÁCH NHAU RÕ. Bảy bảng nhỏ nối nhau mà không có khoảng

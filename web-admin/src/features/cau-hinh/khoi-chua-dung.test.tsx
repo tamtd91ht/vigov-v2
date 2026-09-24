@@ -21,4 +21,10 @@ describe("khối phần chưa dựng của màn Cấu hình", () => {
   it("không còn mục nói tab Phân quyền chưa lưu được — phần ấy đã dựng", () => {
     expect(PHAN_CHUA_DUNG.some((p) => /Lưu.*Phân quyền|Phân quyền.*Lưu/i.test(p.ten))).toBe(false);
   });
+
+  it("Sơ đồ tổ chức: không còn mục thêm/sửa bộ phận — đã dựng; mục xoá bộ phận vẫn còn", () => {
+    const soDo = PHAN_CHUA_DUNG.filter((p) => /Sơ đồ tổ chức/.test(p.ten));
+    expect(soDo.some((p) => /thêm|sửa/i.test(p.ten))).toBe(false);
+    expect(soDo.some((p) => /xoá bộ phận/i.test(p.ten))).toBe(true);
+  });
 });

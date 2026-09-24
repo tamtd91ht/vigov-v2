@@ -127,6 +127,22 @@ export const QUYEN_DONG_PHAN_ANH = "feedback.resolve";
 export const QUYEN_QUAN_LY_DANH_MUC = "admin.lookup";
 
 /**
+ * Khoá quyền của hai thao tác GHI ở tab "Sơ đồ tổ chức" — `admin.org`, "Quản lý sơ đồ tổ chức".
+ *
+ * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên `POST /api/v1/org-units` và
+ * `PATCH /api/v1/org-units/{id}` (`x-vigov-permission.key` trong `kb/20-contracts/openapi.json`),
+ * và đúng chuỗi migration gieo vào bảng `quyen` (`service-identity/migrations/0001_init.sql:282`).
+ *
+ * KHOÁ NÀY KHÔNG CHE PHẦN ĐỌC — cùng bất đối xứng với `admin.lookup` ngay trên, và cũng do máy chủ
+ * đặt: `GET /api/v1/org-units` khai `any-authenticated` vì tên bộ phận có ở ô phân công và bộ lọc
+ * của mọi màn. Cây vì vậy hiện cho mọi tài khoản; chỉ nút `Thêm` và `Sửa` ẩn theo khoá này.
+ *
+ * KHÔNG SUY RA TỪ `admin.lookup`: người sửa được danh mục nghiệp vụ chưa chắc được dựng lại bộ máy
+ * của đơn vị, và ngược lại (luật 5, bất biến 3b).
+ */
+export const QUYEN_QUAN_LY_SO_DO = "admin.org";
+
+/**
  * Khoá quyền của mọi thao tác GHI trên tab Thời hạn xử lý & Lịch làm việc — `admin.sla`,
  * "Cấu hình thời hạn xử lý".
  *

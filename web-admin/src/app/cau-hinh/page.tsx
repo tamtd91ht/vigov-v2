@@ -6,6 +6,7 @@ import { KhoiChuaDung } from "@/features/cau-hinh/khoi-chua-dung";
 import { TabDanhMuc } from "@/features/cau-hinh/tab-danh-muc";
 import { TabNguoiDung } from "@/features/cau-hinh/tab-nguoi-dung";
 import { TabPhanQuyen } from "@/features/cau-hinh/tab-phan-quyen";
+import { TabSoDoToChuc } from "@/features/cau-hinh/tab-so-do-to-chuc";
 import { TabThoiHanXuLy } from "@/features/cau-hinh/tab-thoi-han-xu-ly";
 import { TabThonToDanPho } from "@/features/cau-hinh/tab-thon-to-dan-pho";
 import { layCauHinhXa } from "@/lib/tenant.server";
@@ -19,9 +20,9 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  * đoạn đường dẫn đã chạy thật ở một xã thì không có lần sửa nào rẻ nữa. Nên tab mở ngay trong
  * trang này; đặt tên đoạn đường dẫn là việc của khách, không phải của lượt này.
  *
- * MƯỜI TAB CỦA §0, Ở ĐÂY CÓ NĂM. Năm tab còn lại — Sơ đồ tổ chức, Trường bản đồ, Lời hệ thống,
- * Tự động hoá, Máy chủ thư — chưa có tuyến nào trong hợp đồng REST. Một thanh mười tab mà năm tab
- * bấm vào không ra gì là năm lần hứa hẹn suông, nên thanh tab chỉ mọc thêm khi tuyến mọc thêm.
+ * MƯỜI TAB CỦA §0, Ở ĐÂY CÓ SÁU. Bốn tab còn lại — Trường bản đồ, Lời hệ thống, Tự động hoá, Máy
+ * chủ thư — chưa có tuyến nào trong hợp đồng REST. Một thanh mười tab mà bốn tab bấm vào không ra
+ * gì là bốn lần hứa hẹn suông, nên thanh tab chỉ mọc thêm khi tuyến mọc thêm.
  *
  * TAB THỜI HẠN XỬ LÝ (§8) NAY ĐỦ CẢ BỐN BẢNG, VÀ ĐÓ LÀ TAB GẤP NHẤT TRONG NĂM. Bảng thời hạn —
  * số giờ tiếp nhận và xử lý xong — đã có tuyến (`/api/v1/sla`), cùng ba bảng lịch mà §8 nêu ở
@@ -39,7 +40,7 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  * kiểm câu có còn đúng hay không. Một lời khai sai mà không cổng nào đỏ là thứ chỉ gỡ được bằng
  * cách xoá nguồn của nó.
  *
- * VÀ Ở ĐÂY CHƯA CÓ THANH TAB NÀO: năm phần dựng nối tiếp trong trang, theo đúng thứ tự tab của
+ * VÀ Ở ĐÂY CHƯA CÓ THANH TAB NÀO: sáu phần dựng nối tiếp trong trang, theo đúng thứ tự tab của
  * đặc tả §0. Chưa dựng thanh chuyển tab vì nó đặt ra một câu chưa ai trả lời: tài khoản chỉ mở
  * được MỘT tab thì thanh ấy hiện một nút đứng trơ, hay không hiện? Đó là quyết định về giao diện
  * của khách, và đoán hộ thì phải đoán lại khi tab thứ năm mọc lên. Dựng nối tiếp không mất gì:
@@ -77,9 +78,10 @@ export default async function TrangCauHinh() {
           <p className="mo-ta-trang">
             Tổ chức, phân quyền, danh mục nghiệp vụ và thời hạn xử lý của đơn vị.
           </p>
-          {/* Thứ tự tab của đặc tả §0, giữ nguyên: Thôn/Tổ dân phố · Người dùng · Phân quyền ·
-              Danh mục · Thời hạn xử lý. Sắp lại theo thứ tự dựng xong sẽ làm cán bộ đã quen màn
-              hình cũ phải đi tìm lại từng phần. */}
+          {/* Thứ tự tab của đặc tả §0, giữ nguyên: Sơ đồ tổ chức · Thôn/Tổ dân phố · Người dùng ·
+              Phân quyền · Danh mục · Thời hạn xử lý. Sắp lại theo thứ tự dựng xong sẽ làm cán bộ đã
+              quen màn hình cũ phải đi tìm lại từng phần. */}
+          <TabSoDoToChuc />
           <TabThonToDanPho />
           <TabNguoiDung />
           <TabPhanQuyen />

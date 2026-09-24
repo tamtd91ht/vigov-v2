@@ -31,12 +31,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "hay không hiện. Lý do đầy đủ ghi ở đầu `app/cau-hinh/page.tsx`.",
   },
   {
-    ten: "Tab Sơ đồ tổ chức — thêm, sửa bộ phận (§1)",
-    viSao:
-      "Máy chủ đã có hai tuyến ghi (`POST /api/v1/org-units`, `PATCH /api/v1/org-units/{id}`, " +
-      "khoá `admin.org`), nhưng màn quản trị chưa dựng biểu mẫu nào gọi tới chúng.",
-  },
-  {
     ten: "Tab Sơ đồ tổ chức — xoá bộ phận (§1, §12.4)",
     viSao:
       "Hợp đồng chưa có tuyến xoá bộ phận. §12.4 đòi chặn khi bộ phận còn cán bộ HOẶC còn hồ sơ " +
