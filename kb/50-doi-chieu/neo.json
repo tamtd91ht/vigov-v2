@@ -2,10 +2,10 @@
   "ghi_chu": "Neo doi chieu ../vigov-require. sha_den = commit DA DOC TOI. Lan sau chay `git log <sha_den>..origin/<branch>` — khoang nua mo, nen sha_den KHONG bi doc lai va khong commit nao bi bo sot. Dat bang /doi-chieu-require, dung sua tay.",
   "branches": {
     "feat/m8-multitenant-foundation": {
-      "sha_den": "233f57f",
-      "ngay_review": "2026-09-24",
-      "ghi_chu": "kb/50-doi-chieu/2026-09-24-feat-m8-multitenant-foundation.md"
+      "sha_den": "0053854",
+      "ngay_review": "2026-09-25",
+      "ghi_chu": "kb/50-doi-chieu/2026-09-25-feat-m8-multitenant-foundation.md"
     }
   },
-  "lan_kiem_cuoi": "2026-09-24"
+  "lan_kiem_cuoi": "2026-09-25"
 }
