@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -490,6 +491,39 @@ func TestVanBanDen_LocHopLeDiXuongKhoNguyenVen(t *testing.T) {
 	}
 	if m.den.locCuo != muon {
 		t.Fatalf("bộ lọc xuống kho = %+v, muốn %+v", m.den.locCuo, muon)
+	}
+}
+
+// THE `q` CEILING IS 200 CHARACTERS, NOT 200 BYTES. "ệ" is three bytes in UTF-8, so 200 of them are
+// 600 bytes: a byte cap refuses this search, and it refused anything past ~70 Vietnamese letters.
+// Both registers, because both parse `q` and a fix on one is the copy that drifts.
+func TestVanBan_TranTimDemKyTuKhongDemByte(t *testing.T) {
+	for _, s := range []struct {
+		ten, duong string
+		soKyTu     int
+		muon       int
+	}{
+		{"đến 200 ký tự nhận", duongVanBanDen, 200, http.StatusOK},
+		{"đến 201 ký tự từ chối", duongVanBanDen, 201, http.StatusBadRequest},
+		{"đi 200 ký tự nhận", duongVanBanDi, 200, http.StatusOK},
+		{"đi 201 ký tự từ chối", duongVanBanDi, 201, http.StatusBadRequest},
+	} {
+		t.Run(s.ten, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(xaA, QuyenDocVanBan)
+
+			tim := strings.Repeat("ệ", s.soKyTu)
+			doiMa(t, m.goi(t, http.MethodGet, hostA, s.duong+"?q="+url.QueryEscape(tim), canBoCua(xaA)),
+				s.muon)
+
+			goi := m.den.goi + m.di.goi
+			if s.muon == http.StatusOK && goi != 1 {
+				t.Fatalf("`q` hợp lệ mà kho được gọi %d lần, muốn 1", goi)
+			}
+			if s.muon == http.StatusBadRequest && goi != 0 {
+				t.Fatal("`q` quá trần mà vẫn chạy câu truy vấn")
+			}
+		})
 	}
 }
 

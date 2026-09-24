@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
@@ -269,7 +270,8 @@ func locVanBanDiTuQuery(q url.Values) (docstore.LocVanBanDi, error) {
 	}
 	loc.LoaiVanBan = q.Get("document_type")
 	loc.Tim = q.Get("q")
-	if len(loc.Tim) > 200 {
+	// Runes, not bytes — the same reason as locVanBanDenTuQuery.
+	if utf8.RuneCountInString(loc.Tim) > 200 {
 		return loc, errTimQuaDai
 	}
 	return loc, nil

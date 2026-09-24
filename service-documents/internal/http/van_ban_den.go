@@ -31,6 +31,7 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
@@ -544,7 +545,10 @@ func locVanBanDenTuQuery(q url.Values) (docstore.LocVanBanDen, error) {
 	loc.LoaiVanBan = q.Get("document_type")
 	loc.BoPhan = q.Get("holding_unit")
 	loc.Tim = q.Get("q")
-	if len(loc.Tim) > 200 {
+	// RUNES, NOT BYTES. `len` counts UTF-8 bytes, and a Vietnamese letter with a tone mark is 2-3
+	// bytes — so a byte cap of 200 refused a search of ~70 characters while the limit is meant in
+	// characters, the unit domain.ChuanHoaChuoi counts in.
+	if utf8.RuneCountInString(loc.Tim) > 200 {
 		return loc, errTimQuaDai
 	}
 	return loc, nil
