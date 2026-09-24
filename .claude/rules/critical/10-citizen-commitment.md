@@ -18,7 +18,7 @@ hours to acknowledge**: no count in days can express that, which is why the unit
 | 2 | Each deadline is computed **once, at the act that FIXES it**, and stored — `han_tiep_nhan` when the row is created, `han_xu_ly_xong` when the field is settled (ADR 0028). Never recomputed on read |
 | 3 | **Overdue is DERIVED** from `sla_deadline` vs now — never a hand-set column or flag |
 | 4 | Deadlines count **working hours**, from **per-commune** configuration (rule 1, invariant 10) — see ADR 0007 |
-| 5 | Every status transition **notifies the citizen** and leaves an audit entry (rule 6) |
+| 5 | Every transition in ADR 0041's table **notifies the citizen**; every transition is audited (rule 6) |
 | 6 | Closing a petition records a **result the citizen can read**. Never close silently |
 | 7 | The citizen sees their **own** petition's progress only — staff notes and routing history stay internal (rule 4) |
 
@@ -32,9 +32,9 @@ wrong the moment the job is late, the clock skews, or a holiday is added. Two so
 fact drift, and the stale one is what reaches the report going upward. Derive it and it
 cannot drift.
 
-**Why invariant #5 matters more than it looks:** a citizen who is not told cannot tell the
-difference between "being processed" and "ignored". Silence is how trust in the channel dies,
-and a channel nobody trusts stops receiving the reports the commune actually needs.
+**Why invariant #5 matters more than it looks:** a citizen who is not told cannot tell "being
+processed" from "ignored". Silence is how trust in the channel dies, and a channel nobody
+trusts stops receiving the reports the commune needs.
 
 ## STRICTLY FORBIDDEN
 
@@ -43,14 +43,14 @@ and a channel nobody trusts stops receiving the reports the commune actually nee
 | 1 | An `is_overdue` / `overdue` column or struct field that is written to | Duplicates a derivable fact (invariant 3) |
 | 2 | Counting a deadline in wall-clock time (`AddDate(0, 0, n)`, `n * time.Hour`) — **anywhere but `identity`** | Nights, weekends, `ngay_nghi_le` **and `ngay_lam_bu`** are not working hours. Ask `identity.AdvanceWorkingHours`; it owns all three tables (ADR 0007) |
 | 3 | A commune's SLA figures hardcoded in source | One codebase serves many communes (rule 1) |
-| 4 | Changing status without notifying the citizen | The commitment is the notification |
+| 4 | A transition in that table without its message | The commitment is the notification |
 | 5 | A lookup code that is sequential or short enough to enumerate | Rule 4, invariant 4 |
 
 ## STOP CONDITIONS — ask the user, never decide alone
 
 1. Changing how a deadline is calculated, or the SLA for any field
 2. Adding or removing a **status** in the petition lifecycle
-3. Closing a petition **without** notifying the citizen, for any reason
+3. Changing the notification table (ADR 0041) — closing silently included
 4. Who owns the `Lĩnh vực phản ánh` catalogue — open **#4**, ADR 0024
 
 **#6, #7 and #8 are DECIDED** (2026-09-16) — and all three were decided as **per-commune

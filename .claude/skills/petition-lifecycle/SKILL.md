@@ -10,15 +10,19 @@ commune is judged on. Rule 10 states the invariants; this is how to implement th
 
 ## The seven steps
 
-| # | Step | Vietnamese | Who | Citizen notified | Audit |
-|---|---|---|---|---|---|
-| 1 | Intake | `tiep_nhan` | receptionist / auto from Mini App | **yes** — lookup code. On the citizen channel there is **no resolve date yet**: say *"sẽ được xem trong N giờ làm việc"*, never invent one (ADR 0028) | yes |
-| 2 | Classify | `phan_loai` | officer, **`feedback.classify`** | no | yes — **and this is where `han_xu_ly_xong` is fixed** |
-| 3 | Assign | `phan_cong` | leader / officer | no | yes |
-| 4 | Process | `dang_xu_ly` | assigned officer | **yes** — on entering | yes |
-| 5 | Field acceptance | `nghiem_thu` | officer (usually with a photo) | no | yes |
-| 6 | Close | `da_dong` | officer / leader | **yes** — with the result | yes |
-| 7 | Citizen rating | `danh_gia` | citizen | — | yes |
+| # | Step | Vietnamese | Who | Audit |
+|---|---|---|---|---|
+| 1 | Intake | `tiep_nhan` | receptionist / auto from Mini App | yes |
+| 2 | Classify | `phan_loai` | officer, **`feedback.classify`** | yes — **and this is where `han_xu_ly_xong` is fixed** |
+| 3 | Assign | `phan_cong` | leader / officer | yes |
+| 4 | Process | `dang_xu_ly` | assigned officer | yes |
+| 5 | Field acceptance | `nghiem_thu` | officer (usually with a photo) | yes |
+| 6 | Close | `da_dong` | officer / leader | yes |
+| 7 | Citizen rating | `danh_gia` | citizen | yes |
+
+Who is notified at which step: see "Notifying the citizen" below — not this table. At intake on
+the citizen channel there is **no resolve date yet**: say *"sẽ được xem trong N giờ làm việc"*,
+never invent one (ADR 0028).
 
 **The deadline clock starts at step 1**, not at step 3. A petition sitting unassigned is
 already consuming the commitment made to the citizen.
@@ -156,8 +160,10 @@ deliberately settled only these two — open question **#27** holds the measured
 
 ## Notifying the citizen
 
-Steps 1, 4 and 6 must notify. The notification carries: **what changed**, **what happens
-next**, and **the lookup code**. It is written for a citizen, not a clerk — see
+Which transitions notify — and which deliberately do not — is **ADR 0041**; the rows live in
+one place, `loiNhanChoDan` (`service-petitions/internal/domain/xu_ly_phan_anh.go`). Do not
+copy that list here. The notification carries: **what changed**, **what happens next**, and
+**the lookup code**. It is written for a citizen, not a clerk — see
 `skills/administrative-language` and `skills/accessibility-elderly`.
 
 Closing with no readable result is forbidden (rule 10, invariant 6). "Đã xử lý" alone is not
@@ -221,6 +227,6 @@ a citizen (C, D).
 
 → Rule 10: `.claude/rules/critical/10-citizen-commitment.md`
 → Open questions — **#4 · #26 · #27 still open**, #22 · #23 · #24 now decided: `kb/00-foundation/open-questions.json`
-→ Decisions: `kb/10-decisions/0007-sla-working-hours.md` · `0008-petition-lifecycle-config.md`
+→ Decisions: `kb/10-decisions/0007-sla-working-hours.md` · `0008-petition-lifecycle-config.md` · `0041-bang-bao-cong-dan-theo-chuyen-trang-thai.md`
 → Decisions of 2026-09-20: `kb/10-decisions/0026-linh-vuc-phan-anh-hai-tang.md` · `kb/10-decisions/0027-trang-thai-va-dong-ho-phieu-phan-anh.md` · `kb/10-decisions/0028-moc-dat-han-hai-dong-ho.md` · `kb/10-decisions/0029-so-huu-bang-sla.md` · `kb/10-decisions/0030-hai-khoa-quyen-phan-anh.md`
 → Terminology, and the nine status codes: `kb/00-foundation/ubiquitous-language.md`
