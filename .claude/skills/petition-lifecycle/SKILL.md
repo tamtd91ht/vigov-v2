@@ -72,9 +72,15 @@ the 56-hour ceiling ADR 0028 just removed, **while believing it is obeying the r
 // Derive, never store. A stored flag is wrong the moment a job is late or a
 // holiday is added, and the stale copy is the one that reaches a report.
 func (p Petition) IsOverdue(now time.Time) bool {
-    return p.ClosedAt.IsZero() && now.After(p.SLADeadline)
+    if !p.WorkDoneAt.IsZero() { // entering da-xu-ly, NOT closing
+        return p.WorkDoneAt.After(p.SLADeadline)
+    }
+    return now.After(p.SLADeadline)
 }
 ```
+
+The resolve clock stops when the **work** is done (`xu_ly_xong_luc`), not at closing: time spent
+waiting for the citizen to confirm is not staff lateness. Real code: `domain.PhieuPhanAnh.QuaHan`.
 
 Statutory periods counted in **calendar** days (complaints, denunciations) are the exception
 and must be declared: `// @sla-ok: <which law, which article>`.

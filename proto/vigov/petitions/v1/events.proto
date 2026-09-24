@@ -154,11 +154,10 @@ message PetitionStatusChanged {
 
   // WHAT THE CITIZEN IS TOLD — PRESENT ONLY WHEN THIS TRANSITION OWES THEM A MESSAGE.
   //
-  // ABSENCE IS A FACT, NOT AN OMISSION: it says this transition has no citizen-facing wording,
-  // because it is an internal step (`skills/petition-lifecycle`: classify, assign and field
-  // acceptance are internal; the citizen sees status and result, never staff notes or routing
-  // history — rule 4, forbidden #5). A consumer does no work for such an event; `comms` writes
-  // no ledger row and sends nothing.
+  // ABSENCE IS A FACT, NOT AN OMISSION: it says the publisher decided this transition owes the
+  // citizen no message (see the last paragraph below for where that decision lives; the citizen
+  // sees status and result, never staff notes or routing history — rule 4, forbidden #5). A
+  // consumer does no work for such an event; `comms` writes no ledger row and sends nothing.
   //
   // WHY THE WORDING TRAVELS INSTEAD OF BEING LOOKED UP BY STATUS: the alternative is `comms`
   // holding a status -> sentence table, which is a copy of a list `petitions` owns living on the
@@ -168,9 +167,12 @@ message PetitionStatusChanged {
   //
   // WHY THE DECISION "WHICH TRANSITIONS CARRY THIS" IS NOT ENCODED IN THE CONTRACT: it is a
   // promise to citizens (rule 10), so it belongs to the publisher and to the customer, not to a
-  // wire format. Settled today by `skills/petition-lifecycle`: intake, entering processing, and
-  // closing. NOT settled for `cho-dan-xac-nhan`, `khong-tiep-nhan` and `chuyen-cap-tren` — see
-  // the note on CitizenMessage.
+  // wire format. The decision is ADR 0041 (keyed on the status ENTERED, six notified and three
+  // deliberately silent), and its one executable source is the `loiNhanChoDan` table in
+  // service-petitions/internal/domain/xu_ly_phan_anh.go — read the table, do not copy it here: a
+  // list in this comment would be a second answer on the far side of the boundary, and the one
+  // that drifts is the one that says a citizen is told when they are not (rule 9, invariant 2).
+  // Adding a status to or removing one from that table changes no field of this contract.
   CitizenMessage citizen_message = 5;
 }
 
@@ -193,6 +195,11 @@ message PetitionStatusChanged {
 // have a lawful basis to hold it (Decree 13/2023). The readable result stays where the citizen
 // reaches it by their lookup code, behind an authenticated read (rule 4). What travels is the
 // procedural sentence that is the same for every citizen at that transition.
+//
+// THE SAME HOLDS FOR THE REASON a petition is not accepted (`khong-tiep-nhan`) or is referred to a
+// higher body (`chuyen-cap-tren`). That reason is written by a member of staff for the citizen to
+// read, which makes it exactly the kind of text the paragraph above keeps off the wire: it is
+// read on the lookup screen, and no field is added here to carry it.
 //
 // The receiving side refuses an empty value for either field, and refuses a `next_step` that
 // merely repeats `status_label` (`domain.ThamSoThongBao.KiemTra`). That refusal is deliberate:
