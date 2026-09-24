@@ -52,6 +52,9 @@ tiến độ tương ứng (khoá `tiep_theo`/`bang_chung`).
 | `Loại đơn vị dân cư` và `Khối nhiệm vụ` là **danh mục đầy đủ**; Khối nhiệm vụ coi là khái niệm RIÊNG — trong khi câu ấy vẫn "phải hỏi anh Hà" (§3) | 24/09 | người dùng | cùng mục trên |
 | Nhãn trạng thái nhiệm vụ: màn Nhiệm vụ đọc từ máy chủ, **một nguồn** | 24/09 | người dùng | `service-petitions/nhan-trang-thai-nhiem-vu-theo-xa` |
 | Hợp đồng đổi làm web đỏ → **sửa hai phía nhỏ nhất**: trường PATCH mới phải tuỳ chọn; web chỉ sửa fixture | 24/09 | người dùng | commit 24dade9, ff4aaf2 |
+| **Sổ đơn thư — 15 câu C3–C19** (bộ trạng thái theo TT 05/2021, 4 loại đơn, hai hạn theo SLA xã tính ngày làm việc, **che danh tính người tố cáo theo loại đơn + khoá riêng**, luật người đang giữ chỉ cho đơn thư, nhiệm vụ sinh từ đơn hạn 17:00 và cấm với tố cáo…). Chưa dựng — lượt sau dựng đúng theo đó, không hỏi lại | 24/09 | người dùng (chọn đề xuất) | `service-documents/so-don-thu-cong-dan` |
+| Tuyến **danh bạ cán bộ hẹp** (AnyAuthenticated, không SĐT/email) cho ô chọn cán bộ ở 4 menu | 24/09 | người dùng | `service-identity/tuyen-danh-ba-can-bo-hep` |
+| Đơn thư từ **Mini App**: hoãn | 24/09 | người dùng | `service-documents/don-thu-tu-mini-app` |
 
 **Cần biết về 34 câu trong `open-questions.json`:** cả 34 đều DECIDED, nhưng nhiều câu (#21, #27 và
 mười ba câu khác) là **đề xuất của nhà cung cấp** ghi ở ADR 0035, không phải trả lời của khách. Đọc
@@ -84,6 +87,9 @@ Bảng *"Nợ khách chốt"* ở đầu `tien-do.md` sinh từ `no_confirm`; h�
 | Cột đầu Kanban mặc định **"Mới giao"** hay **"Chưa thực hiện"** (spec 02 §6 có hai tên cho một mã) | nay hiện "Mới giao" | `web-admin/cau-hinh-bon-chuc-nang-web` |
 | Mục menu `/cau-hinh` chỉ canh `admin.lookup` | người cầm `admin.org`/`admin.role`/`admin.sla` không vào được | cùng mục trên |
 | Hai câu ở `deploy/README.md` mục 11.0 (dải CIDR netpol, KUBECONFIG theo môi trường) | phiên CI/deploy chờ để sửa `netpol.yaml`, `deploy/Jenkinsfile` | `deploy/README.md` §11.0 |
+| **Cờ ảnh nghiệm thu phản ánh**: vigov-require `b9a9718` mặc định TẮT, câu #7 (ADR 0008) chốt mặc định BẬT — mâu thuẫn với câu KHÁCH đã chốt | cờ chưa dựng; ai dựng phải hỏi trước | `service-petitions/doi-chieu-24-09-nhiem-vu-phan-anh` |
+| **Bộ trạng thái riêng của VĂN BẢN ĐẾN** (C2; domain-expert đề xuất theo NĐ 30/2020) | tuyến đổi trạng thái văn bản đến | `service-documents/van-ban-den-tuyen-con-thieu` |
+| Ngày làm việc hay ngày lịch cho hạn KN Đ.28 / TC Đ.29 — **hỏi pháp chế**; và cần ADR vì ADR 0007 tính GIỜ | gieo số SLA đơn thư | `service-documents/so-don-thu-cong-dan` |
 
 Và **mười hai xung đột yêu cầu** của sổ đơn thư (C2–C13) cùng **tám** của danh bạ (U1–U8) — ghi
 nguyên hai phía ở `service-documents/so-don-thu-cong-dan` và `service-identity/danh-ba-can-bo-con-thieu`;
@@ -115,6 +121,8 @@ phép kiểm xanh vì lý do sai. Gặp cái tiếp theo cùng dạng thì hỏi
 | `workflow_guard` nêu tên phiên ở mọi lần dừng, kể cả lượt chỉ `git log` | Nó đếm tệp theo cả cửa sổ phiên. `_chung/workflow-guard-dem-ca-cua-so-phien` |
 | codegraph trả ký hiệu thật nhưng **không phải của kho này** | MCP toàn cục trỏ dự án khác. **Luôn truyền `projectPath`**; kiểm `codegraph_status` phải có go + typescript, không java. Hook `codegraph_sync` giữ chỉ mục mới sau commit |
 | Tầng always_load ~26980/27000 | Mục kế tiếp đăng ký vào `kb/INDEX.yaml` sẽ đỏ `check_brain` #5. **Đừng nâng trần**; nhường chỗ bằng cách bỏ chữ trùng. `_chung/tang-luon-nap-da-day` |
+| `make check` đổ ở `envmap` với `UnicodeEncodeError: 'charmap'` | Console Windows cp1252, không phải lỗi mã. Chạy `PYTHONIOENCODING=utf-8 mingw32-make check` |
+| `tools/apidoc` không sinh được `enum` cho trường | Chỉ có enum cho sort/dir của `@page`. `service-documents/apidoc-sinh-enum-cho-truong` |
 | IDE báo hàng chục lỗi biên dịch Go/TS ngay sau khi agent sửa | Chẩn đoán của language server chụp GIỮA chừng. Tin `go vet`/`go test`/`tsc`, không tin bảng lỗi IDE |
 | Commit 1145971 sửa chú thích trong hai migration **0001 đã áp** | `core/migrate/migrate.go:325` băm cả tệp → CSDL nào đã áp sẽ lệch checksum. `_chung/migration-0001-da-ap-bi-sua-chu-thich` |
 
