@@ -1,5 +1,5 @@
 /**
- * Chín tuyến của **sổ văn bản đến** và **sổ văn bản đi** — `service-documents`.
+ * Mười một tuyến của **sổ văn bản đến** và **sổ văn bản đi** — `service-documents`.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * SỐ ĐẾN VÀ SỐ ĐI LÀ THỨ KHÔNG LẤY LẠI ĐƯỢC. Máy chủ cấp số dưới một khoá dòng và KHÔNG BAO GIỜ
@@ -33,9 +33,12 @@ import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "
 import type {
   documents_capSoVanBanDiVao,
   documents_chuyenVanBanVao,
+  documents_danhSachLichSuChuyenRa,
   documents_delete_incoming_documents_by_id,
   documents_delete_outgoing_documents_by_id,
   documents_get_incoming_documents,
+  documents_get_incoming_documents_by_id,
+  documents_get_incoming_documents_by_id_routings,
   documents_get_outgoing_documents,
   documents_goVanBanVao,
   documents_patch_incoming_documents_by_id,
@@ -189,6 +192,33 @@ export function laySoVanBanDen(
   loc: LocVanBanDen = {},
 ): Promise<KetQua<page_Result_documents_vanBanDenRa>> {
   return docJSON<page_Result_documents_vanBanDenRa>(duongDanSoVanBanDen(loc));
+}
+
+/**
+ * GET /api/v1/incoming-documents/{id} — một văn bản đến, cùng dạng một dòng của sổ. Dùng cho ngăn
+ * chi tiết, đọc lại sau mỗi lần chuyển xử lý.
+ *
+ * 404 LÀ MỘT CÂU CHO BA CA — không có, đã gỡ khỏi sổ, hay thuộc xã khác — và màn hình hiện nguyên
+ * câu ấy. Không rẽ nhánh: tách ba ca ra là kể cho người ngoài biết một id có tồn tại ở xã khác.
+ */
+export function layVanBanDen(id: string): Promise<KetQua<documents_vanBanDenRa>> {
+  const mau: documents_get_incoming_documents_by_id["duongDan"] = "/api/v1/incoming-documents/{id}";
+  return docJSON<documents_vanBanDenRa>(duongDanMot(mau, id));
+}
+
+/**
+ * GET /api/v1/incoming-documents/{id}/routings — dòng thời gian chuyển xử lý, CŨ NHẤT TRƯỚC.
+ *
+ * TRẢ NGUYÊN THỨ TỰ MÁY CHỦ GỬI, không sắp lại ở đây: máy chủ trả cả dòng thời gian hoặc 500, không
+ * bao giờ một phần, và thứ tự ấy là thứ tự các lần chuyển thật đã xảy ra. `reason` là chữ tự do có
+ * thể nhắc tên một công dân — không đi vào log, URL hay bộ nhớ trình duyệt (luật 3).
+ */
+export function layLichSuChuyenVanBanDen(
+  id: string,
+): Promise<KetQua<documents_danhSachLichSuChuyenRa>> {
+  const mau: documents_get_incoming_documents_by_id_routings["duongDan"] =
+    "/api/v1/incoming-documents/{id}/routings";
+  return docJSON<documents_danhSachLichSuChuyenRa>(duongDanMot(mau, id));
 }
 
 /**

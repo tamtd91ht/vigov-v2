@@ -286,19 +286,51 @@ export const DAN_CHUYEN_XU_LY =
   "Mỗi lần chuyển ghi một dòng lịch sử KHÔNG sửa được và KHÔNG xoá được. Bấm hai lần là hai lần " +
   "chuyển, không phải một lần gửi lại.";
 
+/* ---- ngăn chi tiết văn bản đến -------------------------------------------------------------- */
+
 /**
- * ⚠ PHÁT HIỆN, KHÔNG PHẢI MỘT THIẾU SÓT CỦA MÀN HÌNH: hợp đồng hôm nay KHÔNG có tuyến nào ĐỌC dòng
- * thời gian chuyển tiếp. Bảng `lich_su_chuyen_van_ban` có thật và được ghi trong cùng giao dịch,
- * nhưng chỉ có `POST .../routings`; không có `GET`. Nên màn hình hiện được bộ phận ĐANG GIỮ (máy
- * chủ trả về trong `holding_unit`) chứ không dựng được dòng thời gian §3.5 vẽ.
+ * Tiêu đề ngăn chi tiết: `Văn bản đến số 7/2026 · nhận ngày 22/09/2026`.
  *
- * VẼ MỘT DÒNG THỜI GIAN TỪ NHỮNG LẦN BẤM TRONG PHIÊN NÀY LÀ ĐIỀU KHÔNG ĐƯỢC LÀM: nó sẽ trống trơn
- * khi mở lại màn hình, nên nó nói rằng văn bản chưa từng được chuyển — sai, và sai theo chiều
- * người đọc tin được.
+ * SỐ VÀ NGÀY, KHÔNG TRÍCH YẾU: tiêu đề này đi vào `aria-labelledby` — tức vào cây trợ năng — còn
+ * trích yếu là chữ tự do có thể nhắc tên một công dân (luật 3, cấm #4). Ngày dùng `nhanNgay` như cột
+ * "Ngày đến" của bảng, để một văn bản không mang hai cách viết ngày trên cùng một màn hình.
  */
-export const CHUA_CO_DUONG_DOC_LICH_SU =
-  "Màn hình chỉ hiện bộ phận đang giữ văn bản. Dòng thời gian chuyển tiếp đã được ghi lại đầy đủ " +
-  "trong hệ thống nhưng chưa có đường đọc ra màn hình.";
+export function nhanTieuDeVanBanDen(so: number, nam: number, ngayDenISO: string): string {
+  return `Văn bản đến số ${nhanSoVaoSo(so, nam)} · nhận ngày ${nhanNgayCoThe(ngayDenISO)}`;
+}
+
+/**
+ * Bộ phận chuyển ĐI của một dòng lịch sử. Rỗng ở lần chuyển đầu — chưa bộ phận nào giữ văn bản —
+ * và câu ấy khác câu "Chưa chuyển bộ phận nào" của ô đang giữ: dòng này CHÍNH LÀ một lần chuyển.
+ */
+export function nhanTuBoPhan(ket: KetTra): string {
+  return ket.loai === "chuaGan" ? "Chưa bộ phận nào giữ" : nhanBoPhanDangGiu(ket);
+}
+
+/**
+ * Cán bộ được giao, hiện bằng MÃ CÁN BỘ (`CB-00123`), không bằng họ tên.
+ *
+ * KHÔNG TRA TÊN, có chủ ý: danh bạ cán bộ đòi `admin.user`, và một người có `document.read` chưa
+ * chắc đọc được danh bạ — cùng lẽ ô "Cán bộ xử lý" của khối chuyển là ô chữ. Tuyến danh bạ hẹp là
+ * việc của backend (`service-identity/tuyen-danh-ba-can-bo-hep`); đến lúc ấy chỉ hàm này đổi.
+ */
+export function nhanCanBo(ma: string): string {
+  return ma === "" ? "Để bộ phận tự phân công" : ma;
+}
+
+export const TIEU_DE_DONG_THOI_GIAN = "Dòng thời gian chuyển tiếp";
+export const TIEU_DE_KHOI_CHUYEN = "Chuyển cho bộ phận khác";
+
+/**
+ * Dòng thời gian rỗng là một CÂU TRẢ LỜI của máy chủ (`items: []`), không phải thiếu dữ liệu — và
+ * nó phải nói ra thành chữ. Một danh sách trống trơn không phân biệt được "chưa chuyển lần nào"
+ * với "chưa tải xong" hay "tải hỏng".
+ */
+export const LICH_SU_RONG = "Chưa chuyển xử lý lần nào.";
+export const DANG_TAI_CHI_TIET = "Đang tải văn bản…";
+export const DANG_TAI_LICH_SU = "Đang tải dòng thời gian chuyển tiếp…";
+export const NUT_DONG_CHI_TIET = "Đóng chi tiết văn bản";
+export const NUT_XEM = "Xem chi tiết";
 
 /** Câu dẫn của ô hạn xử lý trên biểu mẫu vào sổ — nói rõ hạn KHÔNG do người nhập đặt. */
 export const DAN_HAN_DO_MAY_CHU_AN_DINH =

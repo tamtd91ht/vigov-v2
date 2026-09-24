@@ -21,11 +21,14 @@ import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import { layLoaiVanBan } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 import type {
+  documents_danhSachLichSuChuyenRa,
   documents_vanBanDenRa,
   page_Result_documents_vanBanDenRa,
 } from "@/lib/api/schema.gen";
 import {
+  layLichSuChuyenVanBanDen,
   laySoVanBanDen,
+  layVanBanDen,
   suaVanBanDen,
   vaoSoVanBanDen,
   type LocVanBanDen,
@@ -36,13 +39,10 @@ import { QUYEN_CHUYEN_VAN_BAN, QUYEN_GHI_SO_VAN_BAN, quyetDinhTheoKhoa } from "@
 import {
   BAN_CHUYEN_TRONG,
   CANH_BAO_GO_KHONG_TRA_SO,
-  CHUA_CO_DUONG_DOC_LICH_SU,
-  DAN_CHUYEN_XU_LY,
   DAN_DUONG_TOI_CAU_HINH,
   DAN_HAN_DO_MAY_CHU_AN_DINH,
   DAN_SO_DEN,
   GIAI_THICH_LY_DO_GO,
-  LOI_THIEU_LY_DO_CHUYEN,
   LOI_THIEU_LY_DO_GO,
   MA_DO_KHAN,
   MA_TRANG_THAI,
@@ -53,14 +53,11 @@ import {
   NUT_LUU,
   NUT_SUA,
   NUT_VAO_SO,
-  NUT_XAC_NHAN_CHUYEN,
   NUT_XAC_NHAN_GO,
-  O_CAN_BO_XU_LY,
+  NUT_XEM,
   O_CO_QUAN_BAN_HANH,
-  O_DEN_BO_PHAN,
   O_DO_KHAN,
   O_LOAI_VAN_BAN,
-  O_LY_DO_CHUYEN,
   O_LY_DO_GO,
   O_NGAY_DEN,
   O_NGAY_VAN_BAN,
@@ -86,6 +83,7 @@ import {
   sapXepTheoThuTu,
   type MaThuTu,
 } from "./loc-so-van-ban";
+import { NganVanBanDen } from "./ngan-van-ban-den";
 import { guiChuyenVanBan, guiGoVanBanDen } from "./thao-tac-van-ban";
 
 /**
@@ -111,6 +109,10 @@ import { guiChuyenVanBan, guiGoVanBanDen } from "./thao-tac-van-ban";
  * KHÔNG CÓ NÚT NÀO SỬA HAY XOÁ MỘT DÒNG LỊCH SỬ CHUYỂN XỬ LÝ, và vế phủ định ấy là vế chịu lực:
  * bảng lịch sử chỉ-thêm ở tầng CSDL (trigger `lich_su_chuyen_chi_them`), hợp đồng không có tuyến
  * nào sửa hay xoá nó, và một nút như thế sẽ là một nút gọi vào hư không (luật 7, cấm #5).
+ *
+ * CHUYỂN XỬ LÝ NẰM TRONG NGĂN CHI TIẾT (`ngan-van-ban-den.tsx`), không trong biểu mẫu của trang:
+ * người chuyển cần thấy dòng thời gian đã có TRƯỚC khi viết thêm một dòng không sửa được. Ba biểu
+ * mẫu vào sổ / sửa / gỡ vẫn mở trong luồng trang như cũ.
  */
 
 /* ---- trạng thái ---------------------------------------------------------------------------- */
@@ -120,7 +122,6 @@ export type DangMoDen =
   | { kieu: "them"; khoaChongTrung: string }
   | { kieu: "sua"; vb: documents_vanBanDenRa }
   | { kieu: "go"; vb: documents_vanBanDenRa }
-  | { kieu: "chuyen"; vb: documents_vanBanDenRa }
   | null;
 
 /** Bản nháp đang gõ. Chuỗi hết — ô nhập của trình duyệt trả về chuỗi. */
@@ -133,7 +134,6 @@ export type BanNhapDen = {
   trichYeu: string;
   doKhan: string;
   lyDoGo: string;
-  chuyen: BanChuyen;
 };
 
 export const BAN_DEN_TRONG: BanNhapDen = {
@@ -145,16 +145,26 @@ export const BAN_DEN_TRONG: BanNhapDen = {
   trichYeu: "",
   doKhan: "",
   lyDoGo: "",
-  chuyen: BAN_CHUYEN_TRONG,
 };
 
-/** Bốn thao tác một dòng hoặc thanh nút có thể yêu cầu. */
+/** Năm thao tác một dòng hoặc thanh nút có thể yêu cầu. */
 export type ThaoTacDen = {
   readonly them: () => void;
   readonly sua: (vb: documents_vanBanDenRa) => void;
   readonly go: (vb: documents_vanBanDenRa) => void;
+  /** Mở ngăn chi tiết, tiêu điểm vào ô bộ phận của khối chuyển xử lý. */
   readonly chuyen: (vb: documents_vanBanDenRa) => void;
+  /** Mở ngăn chi tiết, tiêu điểm vào tiêu đề ngăn. */
+  readonly xem: (vb: documents_vanBanDenRa) => void;
 };
+
+/**
+ * `id` DOM của nút "Xem chi tiết" trên một dòng — chỗ tiêu điểm quay về khi ngăn đóng.
+ * Chỉ mang id văn bản (ULID mờ đục), không mang trích yếu hay cơ quan ban hành (luật 3, cấm #4).
+ */
+export function idNutXem(id: string): string {
+  return `xem-van-ban-den-${id}`;
+}
 
 /** Ngày hôm nay dạng `YYYY-MM-DD` — giá trị mặc định của ô "Ngày đến". */
 function homNay(): string {
@@ -212,6 +222,28 @@ export function SoVanBanDen() {
   const [dangGui, datDangGui] = useState(false);
   const [cauDaXong, datCauDaXong] = useState("");
 
+  /**
+   * NGĂN CHI TIẾT ĐANG MỞ — chỉ id văn bản, không gì khác. Không đẩy lên URL, không cất vào bộ nhớ
+   * trình duyệt: không có gì trong ngăn cần sống qua một lần tải lại trang.
+   */
+  const [xem, datXem] = useState<{ id: string; tieuDiemChuyen: boolean } | null>(null);
+  /** Tăng sau mỗi lần chuyển (hay sửa) thành công để ĐỌC LẠI văn bản và dòng thời gian. */
+  const [lanDocNgan, datLanDocNgan] = useState(0);
+  /**
+   * Câu trả lời của hai tuyến đọc, giữ KÈM id đã sinh ra nó. Đổi sang văn bản khác thì id lệch và
+   * ngăn hiện "đang tải"; đọc lại CÙNG văn bản sau một lần chuyển thì dữ liệu cũ đứng yên tới khi
+   * dữ liệu mới về — khối chuyển không bị gỡ ra rồi dựng lại dưới tay người đang dùng.
+   */
+  const [ngan, datNgan] = useState<{
+    id: string;
+    vb: KetQua<documents_vanBanDenRa>;
+    lichSu: KetQua<documents_danhSachLichSuChuyenRa>;
+  } | null>(null);
+  const [banChuyen, datBanChuyen] = useState<BanChuyen>(BAN_CHUYEN_TRONG);
+  const [loiChuyen, datLoiChuyen] = useState("");
+  const [dangGuiChuyen, datDangGuiChuyen] = useState(false);
+  const [cauChuyenXong, datCauChuyenXong] = useState("");
+
   const phien = usePhien();
   // BA TRẠNG THÁI, KHÔNG HAI: chưa đọc xong phiên thì chưa vẽ nút ghi nào. "Chưa biết" không được
   // hành xử như "có quyền", và cũng không được hành xử như "thiếu quyền".
@@ -263,6 +295,61 @@ export function SoVanBanDen() {
     };
   }, []);
 
+  const idXem = xem?.id ?? null;
+  useEffect(() => {
+    if (idXem === null) return;
+    let bo = false;
+    // HAI TUYẾN, MỘT LẦN GÁN: ngăn hiện văn bản và dòng thời gian của CÙNG một lượt đọc, không bao
+    // giờ văn bản sau lần chuyển cạnh dòng thời gian trước lần chuyển.
+    Promise.all([layVanBanDen(idXem), layLichSuChuyenVanBanDen(idXem)]).then(([vb, lichSu]) => {
+      if (!bo) datNgan({ id: idXem, vb, lichSu });
+    });
+    return () => {
+      bo = true;
+    };
+  }, [idXem, lanDocNgan]);
+
+  const moNgan = useCallback((vb: documents_vanBanDenRa, tieuDiemChuyen: boolean) => {
+    datXem({ id: vb.id, tieuDiemChuyen });
+    datBanChuyen(BAN_CHUYEN_TRONG);
+    datLoiChuyen("");
+    datCauChuyenXong("");
+  }, []);
+
+  const dongNgan = useCallback(() => {
+    const id = xem?.id;
+    datXem(null);
+    // BẢN NHÁP LÝ DO BỎ ĐI CÙNG NGĂN — nó chỉ từng sống trong trạng thái này (luật 3).
+    datBanChuyen(BAN_CHUYEN_TRONG);
+    datLoiChuyen("");
+    datCauChuyenXong("");
+    // TIÊU ĐIỂM VỀ ĐÚNG DÒNG VỪA MỞ, sau khi ngăn đã rời khỏi DOM. Dòng không còn trên trang (đã đổi
+    // bộ lọc) thì thôi — không đoán một chỗ khác.
+    if (id !== undefined) {
+      requestAnimationFrame(() => document.getElementById(idNutXem(id))?.focus());
+    }
+  }, [xem]);
+
+  const guiChuyen = useCallback(() => {
+    if (xem === null || dangGuiChuyen) return;
+    datLoiChuyen("");
+    datCauChuyenXong("");
+    datDangGuiChuyen(true);
+    // PHÉP KIỂM BỘ PHẬN VÀ LÝ DO NẰM TRONG `guiChuyenVanBan` — xem `thao-tac-van-ban.ts`.
+    void guiChuyenVanBan(xem.id, banChuyen).then((k) => {
+      datDangGuiChuyen(false);
+      if (!k.ok) {
+        datLoiChuyen(k.thongBao);
+        return;
+      }
+      datBanChuyen(BAN_CHUYEN_TRONG);
+      datCauChuyenXong("Đã chuyển và ghi vào dòng thời gian.");
+      // ĐỌC LẠI CẢ BA: văn bản, dòng thời gian, và dòng của sổ (bộ phận đang giữ vừa đổi).
+      datLanDocNgan((n) => n + 1);
+      datLanDoc((n) => n + 1);
+    });
+  }, [banChuyen, dangGuiChuyen, xem]);
+
   /** Đổi một bộ lọc, ô tìm hay thứ tự là về TRANG ĐẦU — `doiLocVeTrangDau`. */
   const doiLoc = useCallback((dat: () => void) => doiLocVeTrangDau(dat, datNganXep), []);
 
@@ -285,12 +372,17 @@ export function SoVanBanDen() {
     them: () => mo({ kieu: "them", khoaChongTrung: crypto.randomUUID() }, { ...BAN_DEN_TRONG, ngayDen: homNay() }),
     sua: (vb) => mo({ kieu: "sua", vb }, banTuDong(vb)),
     go: (vb) => mo({ kieu: "go", vb }, BAN_DEN_TRONG),
-    chuyen: (vb) => mo({ kieu: "chuyen", vb }, BAN_DEN_TRONG),
+    chuyen: (vb) => moNgan(vb, true),
+    xem: (vb) => moNgan(vb, false),
   };
 
   /** Một lượt ghi: dọn thông báo cũ, gửi, rồi hoặc nói đã làm gì và ĐỌC LẠI, hoặc hiện NGUYÊN câu
    *  máy chủ viết. Không rẽ nhánh theo `code`, không hiện `trace_id`, không hiện số hiệu HTTP. */
-  const thucHien = useCallback(function <T>(goi: Promise<KetQua<T>>, cau: string) {
+  const thucHien = useCallback(function <T>(
+    goi: Promise<KetQua<T>>,
+    cau: string,
+    sauKhiXong?: () => void,
+  ) {
     datLoi("");
     datCauDaXong("");
     datDangGui(true);
@@ -304,6 +396,9 @@ export function SoVanBanDen() {
       datBan(BAN_DEN_TRONG);
       datCauDaXong(cau);
       datLanDoc((n) => n + 1);
+      // Ngăn chi tiết đang mở đọc lại luôn: một lần sửa đổi đúng những ô ngăn đang hiện.
+      datLanDocNgan((n) => n + 1);
+      sauKhiXong?.();
     });
   }, []);
 
@@ -345,17 +440,20 @@ export function SoVanBanDen() {
           "Đã lưu thay đổi.",
         );
         return;
-      case "go":
+      default: {
         // PHÉP KIỂM LÝ DO NẰM TRONG `guiGoVanBanDen`, không ở đây — xem `thao-tac-van-ban.ts`.
+        const idGo = dangMo.vb.id;
         thucHien(
-          guiGoVanBanDen(dangMo.vb.id, ban.lyDoGo),
+          guiGoVanBanDen(idGo, ban.lyDoGo),
           "Đã gỡ văn bản khỏi sổ. Số đến của văn bản ấy không được cấp lại.",
+          // Ngăn đang mở đúng văn bản vừa gỡ thì đóng: đọc lại nó chỉ còn ra câu "không tìm thấy".
+          () => datXem((x) => (x !== null && x.id === idGo ? null : x)),
         );
-        return;
-      default:
-        thucHien(guiChuyenVanBan(dangMo.vb.id, ban.chuyen), "Đã chuyển và ghi vào lịch sử.");
+      }
     }
   }, [ban, dangGui, dangMo, thucHien]);
+
+  const nganHienTai = ngan !== null && ngan.id === idXem ? ngan : null;
 
   return (
     <ManSoVanBanDen
@@ -386,6 +484,29 @@ export function SoVanBanDen() {
       loiNgoaiForm={dangMo === null ? loi : ""}
       nganXep={nganXep}
       diToiTrang={datNganXep}
+      idDangXem={idXem}
+      ngan={
+        xem === null ? null : (
+          // `key` theo id: mở văn bản khác là một ngăn MỚI — tiêu điểm về tiêu đề, bản nháp sạch.
+          <NganVanBanDen
+            key={xem.id}
+            vb={nganHienTai?.vb ?? null}
+            lichSu={nganHienTai?.lichSu ?? null}
+            bayGio={new Date()}
+            traLoai={loai}
+            traBoPhan={boPhan}
+            coQuyenChuyen={quyetDinhChuyen !== null && quyetDinhChuyen.hien}
+            ban={banChuyen}
+            datBan={datBanChuyen}
+            loi={loiChuyen}
+            dangGui={dangGuiChuyen}
+            cauDaXong={cauChuyenXong}
+            tieuDiemChuyen={xem.tieuDiemChuyen}
+            onGui={guiChuyen}
+            onDong={dongNgan}
+          />
+        )
+      }
       form={
         dangMo === null ? null : (
           <BieuMauVanBanDen
@@ -393,7 +514,6 @@ export function SoVanBanDen() {
             ban={ban}
             datBan={datBan}
             traLoai={loai}
-            traBoPhan={boPhan}
             loi={loi}
             dangGui={dangGui}
             onGui={guiBieuMau}
@@ -440,6 +560,8 @@ export function ManSoVanBanDen({
   loiNgoaiForm,
   nganXep,
   diToiTrang,
+  idDangXem = null,
+  ngan = null,
   form,
 }: {
   kq: KetQua<page_Result_documents_vanBanDenRa> | null;
@@ -469,6 +591,10 @@ export function ManSoVanBanDen({
   loiNgoaiForm: string;
   nganXep: NganXepConTro;
   diToiTrang: (toi: NganXepConTro) => void;
+  /** Id văn bản đang mở trong ngăn chi tiết — nút của dòng ấy mang `aria-expanded="true"`. */
+  idDangXem?: string | null;
+  /** Ngăn chi tiết, dựng sẵn bởi bên gọi (`NganVanBanDen`). */
+  ngan?: ReactNode;
   form: ReactNode;
 }) {
   return (
@@ -526,6 +652,7 @@ export function ManSoVanBanDen({
         coQuyenChuyen={coQuyenChuyen}
         thaoTac={thaoTac}
         soCuTruoc={thuTu === "so-tang"}
+        idDangXem={idDangXem}
       />
 
       {kq !== null && kq.ok && (
@@ -536,6 +663,8 @@ export function ManSoVanBanDen({
           diToiTrang={diToiTrang}
         />
       )}
+
+      {ngan}
     </section>
   );
 }
@@ -644,6 +773,7 @@ export function BangVanBanDen({
   coQuyenChuyen,
   thaoTac,
   soCuTruoc = false,
+  idDangXem = null,
 }: {
   kq: KetQua<page_Result_documents_vanBanDenRa> | null;
   bayGio: Date;
@@ -654,6 +784,7 @@ export function BangVanBanDen({
   thaoTac: ThaoTacDen;
   /** Chú thích bảng nói đúng thứ tự đang xem — một câu "số mới nhất trước" trên bảng xếp tăng là sai. */
   soCuTruoc?: boolean;
+  idDangXem?: string | null;
 }) {
   if (kq === null) return <p role="status">Đang tải sổ văn bản đến…</p>;
   if (!kq.ok) {
@@ -698,9 +829,30 @@ export function BangVanBanDen({
             // SUY RA LÚC VẼ, mỗi dòng một lần. Không có trường nào được lưu lại (luật 10, bất biến 3).
             const han = trangThaiHanVanBan(vb.due_at, bayGio);
             const so = nhanSoVaoSo(vb.number, vb.year);
+            const dangXem = vb.id === idDangXem;
             return (
-              <tr key={vb.id}>
-                <td>{so}</td>
+              <tr
+                key={vb.id}
+                // BẤM MỘT DÒNG LÀ MỞ NGĂN (§3.1) — lối tắt cho chuột. Lối cho bàn phím và trình đọc
+                // màn hình là nút ở ô "Số đến"; bấm trúng một nút hay ô nhập trong dòng thì để nút
+                // ấy làm việc của nó, không mở ngăn chồng lên.
+                onClick={(e) => {
+                  if ((e.target as Element).closest("button, a, input, select, textarea")) return;
+                  thaoTac.xem(vb);
+                }}
+              >
+                <td>
+                  <button
+                    type="button"
+                    id={idNutXem(vb.id)}
+                    className="nut-phu"
+                    aria-expanded={dangXem}
+                    aria-label={`${NUT_XEM} văn bản đến số ${so}`}
+                    onClick={() => thaoTac.xem(vb)}
+                  >
+                    {so}
+                  </button>
+                </td>
                 <td>{nhanNgayCoThe(vb.received_date)}</td>
                 <td>{vb.reference_no === undefined || vb.reference_no === "" ? "Không ghi" : vb.reference_no}</td>
                 <td>{vb.issuing_body}</td>
@@ -795,11 +947,10 @@ const TIEU_DE_DEN: Record<NonNullable<DangMoDen>["kieu"], string> = {
   them: "Vào sổ văn bản đến",
   sua: "Sửa văn bản đến",
   go: "Gỡ văn bản đến khỏi sổ",
-  chuyen: "Chuyển văn bản đến cho bộ phận xử lý",
 };
 
 /**
- * Một biểu mẫu cho cả bốn thao tác.
+ * Một biểu mẫu cho cả ba thao tác vào sổ / sửa / gỡ. Chuyển xử lý nằm trong ngăn chi tiết.
  *
  * THUẦN TRÌNH BÀY: mọi giá trị đi vào qua `ban`, mọi thay đổi đi ra qua `datBan`, phép kiểm nằm ở
  * `thao-tac-van-ban.ts`. Tách như vậy để ba nhánh KHÔNG ai nhìn thấy trong lúc phát triển — "còn
@@ -811,7 +962,6 @@ export function BieuMauVanBanDen({
   ban,
   datBan,
   traLoai,
-  traBoPhan,
   loi,
   dangGui,
   onGui,
@@ -821,7 +971,6 @@ export function BieuMauVanBanDen({
   ban: BanNhapDen;
   datBan: (b: BanNhapDen) => void;
   traLoai: BangTraDanhMuc;
-  traBoPhan: BangTraDanhMuc;
   /**
    * MỘT VÙNG LỖI, KHÔNG HAI — khác `BieuMauThoiHan` ở tab Cấu hình, và sự khác nhau ấy có lý do:
    * ở đó phép kiểm tại chỗ và câu từ chối của máy chủ có thể cùng có mặt, còn ở đây phép kiểm
@@ -992,63 +1141,6 @@ export function BieuMauVanBanDen({
         </>
       )}
 
-      {dangMo.kieu === "chuyen" && (
-        <>
-          <p className="canh-bao-pham-vi">{DAN_CHUYEN_XU_LY}</p>
-
-          <div className="o-nhap">
-            <label htmlFor="o-den-bo-phan">{O_DEN_BO_PHAN}</label>
-            <select
-              id="o-den-bo-phan"
-              name="denBoPhan"
-              value={ban.chuyen.denBoPhan}
-              onChange={(e) => datBan({ ...ban, chuyen: { ...ban.chuyen, denBoPhan: e.target.value } })}
-            >
-              <option value="">— Chọn bộ phận —</option>
-              {traBoPhan.pha === "xong" &&
-                [...traBoPhan.ten].map(([id, ten]) => (
-                  <option key={id} value={id}>
-                    {ten}
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          <div className="o-nhap">
-            <label htmlFor="o-can-bo-xu-ly">{O_CAN_BO_XU_LY}</label>
-            {/* Ô CHỮ, KHÔNG PHẢI Ô CHỌN CÁN BỘ: hợp đồng nhận `assignee` là MÃ CÁN BỘ (`CB-00123`),
-                và danh bạ cán bộ đòi khoá `admin.user` — một người có `document.route` chưa chắc
-                đọc được danh bạ. Vẽ một ô chọn rỗng cho họ là vẽ một ô không bao giờ dùng được. */}
-            <input
-              id="o-can-bo-xu-ly"
-              name="canBoXuLy"
-              value={ban.chuyen.canBoXuLy}
-              onChange={(e) => datBan({ ...ban, chuyen: { ...ban.chuyen, canBoXuLy: e.target.value } })}
-              placeholder="Để trống nếu để bộ phận tự phân công"
-            />
-          </div>
-
-          <div className="o-nhap">
-            <label htmlFor="o-ly-do-chuyen">{O_LY_DO_CHUYEN}</label>
-            <input
-              id="o-ly-do-chuyen"
-              name="lyDoChuyen"
-              required
-              value={ban.chuyen.lyDo}
-              onChange={(e) => datBan({ ...ban, chuyen: { ...ban.chuyen, lyDo: e.target.value } })}
-              aria-invalid={loi === LOI_THIEU_LY_DO_CHUYEN}
-            />
-          </div>
-
-          {/* KHÔNG CÓ NÚT SỬA VÀ KHÔNG CÓ NÚT XOÁ Ở BẤT KỲ ĐÂU TRONG KHỐI NÀY. Xem
-              `CHUA_CO_DUONG_DOC_LICH_SU`: dòng lịch sử chỉ-thêm, và hợp đồng chưa có đường đọc ra. */}
-          <p className="ghi-chu">{CHUA_CO_DUONG_DOC_LICH_SU}</p>
-          <p className="ghi-chu">
-            Bộ phận đang giữ: {nhanBoPhanDangGiu(traTen(traBoPhan, dangMo.vb.holding_unit ?? ""))}
-          </p>
-        </>
-      )}
-
       {/* CÂU TỪ CHỐI RA NGUYÊN VĂN, dù nó đến từ phép kiểm ở client hay từ máy chủ. Không rẽ
           nhánh theo `code`, không hiện `trace_id`, không hiện số hiệu HTTP — trong đó có câu 409
           nói xã chưa cấu hình thời hạn xử lý, và câu ấy do máy chủ viết. */}
@@ -1060,11 +1152,7 @@ export function BieuMauVanBanDen({
 
       <div className="cum-nut">
         <button type="submit" className="nut-chinh" disabled={dangGui}>
-          {dangMo.kieu === "go"
-            ? NUT_XAC_NHAN_GO
-            : dangMo.kieu === "chuyen"
-              ? NUT_XAC_NHAN_CHUYEN
-              : NUT_LUU}
+          {dangMo.kieu === "go" ? NUT_XAC_NHAN_GO : NUT_LUU}
         </button>
         <button type="button" className="nut-phu" onClick={onHuy} disabled={dangGui}>
           {NUT_HUY}

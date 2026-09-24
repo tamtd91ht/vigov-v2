@@ -7,6 +7,8 @@ import {
   duongDanSoVanBanDi,
   goVanBanDen,
   goVanBanDi,
+  layLichSuChuyenVanBanDen,
+  layVanBanDen,
   suaVanBanDen,
   suaVanBanDi,
   thamSoTheoHopDong,
@@ -443,5 +445,39 @@ describe("không một tuyến nào tự khai xã, và không một tuyến nào
       expect(d).not.toMatch(/tenant/i);
       expect(d).not.toMatch(/^https?:/);
     }
+  });
+});
+
+describe("hai tuyến đọc của ngăn chi tiết", () => {
+  it("GET một văn bản: đúng đường dẫn, id được mã hoá, không thân, không tenant", async () => {
+    const gia = ghiGia(200, DONG_DEN);
+    const kq = await layVanBanDen("01J/lạ?");
+
+    expect(kq).toEqual({ ok: true, duLieu: DONG_DEN });
+    const { duongDan, tuyChon } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/incoming-documents/01J%2Fl%E1%BA%A1%3F");
+    expect(tuyChon.method).toBe("GET");
+    expect(tuyChon.body).toBeUndefined();
+    expect(duongDan).not.toMatch(/tenant/i);
+  });
+
+  it("GET một văn bản: 404 trả NGUYÊN câu máy chủ, không số hiệu", async () => {
+    const cau = "Không tìm thấy văn bản đến này.";
+    ghiGia(404, { code: "khong_tim_thay", message: cau, trace_id: "t" });
+
+    expect(await layVanBanDen(DONG_DEN.id)).toEqual({ ok: false, thongBao: cau });
+  });
+
+  it("GET dòng thời gian: đúng đường dẫn, trả nguyên mảng theo thứ tự máy chủ", async () => {
+    const items = [
+      { id: "b", routed_at: "2026-09-23T00:00:00Z" },
+      { id: "a", routed_at: "2026-09-22T00:00:00Z" },
+    ];
+    const gia = ghiGia(200, { items });
+    const kq = await layLichSuChuyenVanBanDen(DONG_DEN.id);
+
+    expect(loiGoi(gia, 0).duongDan).toBe(`/api/v1/incoming-documents/${DONG_DEN.id}/routings`);
+    expect(loiGoi(gia, 0).tuyChon.method).toBe("GET");
+    expect(kq.ok && kq.duLieu.items.map((d) => d.id)).toEqual(["b", "a"]);
   });
 });

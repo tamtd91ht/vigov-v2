@@ -38,6 +38,7 @@ const KHONG_LAM_GI: ThaoTacDen = {
   sua: () => {},
   go: () => {},
   chuyen: () => {},
+  xem: () => {},
 };
 
 const TRA_LOAI: BangTraDanhMuc = { pha: "xong", ten: new Map([["cong-van", "Công văn"]]) };
@@ -199,7 +200,6 @@ function veForm(
       ban={ban}
       datBan={() => {}}
       traLoai={TRA_LOAI}
-      traBoPhan={TRA_BO_PHAN}
       loi={loi}
       dangGui={false}
       onGui={() => {}}
@@ -265,37 +265,82 @@ describe("409 chưa cấu hình thời hạn — nguyên văn, kèm đường t�
   });
 });
 
-describe("khối chuyển xử lý — KHÔNG có nút sửa hay xoá nào", () => {
-  it("không một nút Sửa, Xoá hay biểu tượng thùng rác nào trong khối", () => {
-    // VẾ PHỦ ĐỊNH LÀ VẾ CHỊU LỰC. Bảng `lich_su_chuyen_van_ban` chỉ-thêm ở tầng CSDL (trigger
-    // `lich_su_chuyen_chi_them`) và hợp đồng không có tuyến nào sửa hay xoá một dòng của nó. Một
-    // nút như thế là một nút gọi vào hư không — cán bộ bấm, nhận lỗi, kết luận hệ thống hỏng —
-    // trong khi điều thật sự đúng là dòng ấy KHÔNG ĐƯỢC PHÉP sửa (luật 7, cấm #5).
-    const html = veForm({ kieu: "chuyen", vb: dong() });
+describe("chuyển xử lý rời khỏi biểu mẫu của trang", () => {
+  it("biểu mẫu sửa không mang ô nào của khối chuyển — khối ấy nay ở ngăn chi tiết", () => {
+    // Khối chuyển và các ca kiểm của nó ở `ngan-van-ban-den.test.tsx`. Ca này canh vế còn lại: một
+    // bản sao thứ hai của ba ô chuyển mà còn sót trong biểu mẫu trang là hai đường ghi một dòng
+    // lịch sử không sửa được.
+    const html = veForm({ kieu: "sua", vb: dong() });
 
-    expect(html).not.toContain("🗑");
-    expect(html).not.toContain("nut-xoa");
-    expect(html).not.toMatch(/>\s*Xoá\s*</);
-    expect(html).not.toMatch(/>\s*Sửa\s*</);
-    expect(html).not.toMatch(/aria-label="[^"]*(Sửa|Xoá)[^"]*lịch sử/i);
+    expect(html).not.toContain("Lý do chuyển");
+    expect(html).not.toContain("Chuyển và ghi vết");
+    expect(html).not.toMatch(/chưa có đường đọc/);
+  });
+});
+
+describe("mở ngăn chi tiết từ một dòng", () => {
+  it("ô Số đến là một nút mở ngăn, nhãn trợ năng dùng SỐ ĐẾN, không dùng trích yếu", () => {
+    const html = veBang(trang([dong()]), TRUOC_HAN, { ghi: false, chuyen: false });
+
+    // Lối cho bàn phím có mặt kể cả khi tài khoản không có quyền ghi nào: xem là quyền ĐỌC.
+    expect(html).toContain('aria-label="Xem chi tiết văn bản đến số 7/2026"');
+    expect(html).toContain('id="xem-van-ban-den-01JVBDEN0000000000000001"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toMatch(/aria-label="[^"]*rà soát/);
   });
 
-  it("nói ra rằng mỗi lần chuyển ghi một dòng KHÔNG sửa được, và bấm hai lần là hai lần chuyển", () => {
-    const html = veForm({ kieu: "chuyen", vb: dong() });
+  it("dòng đang mở mang aria-expanded=true, dòng khác thì không", () => {
+    const html = renderToStaticMarkup(
+      <BangVanBanDen
+        kq={trang([dong(), dong({ id: "01JVBDEN0000000000000002", number: 8 })])}
+        bayGio={TRUOC_HAN}
+        traLoai={TRA_LOAI}
+        traBoPhan={TRA_BO_PHAN}
+        coQuyenGhi={false}
+        coQuyenChuyen={false}
+        thaoTac={KHONG_LAM_GI}
+        idDangXem="01JVBDEN0000000000000002"
+      />,
+    );
 
-    expect(html).toMatch(/KHÔNG sửa được/);
-    expect(html).toMatch(/hai lần chuyển/);
-    expect(html).toContain("Lý do chuyển");
-    expect(html).toContain("Chuyển và ghi vết");
+    expect(html).toMatch(/aria-expanded="false"[^>]*aria-label="Xem chi tiết văn bản đến số 7\/2026"/);
+    expect(html).toMatch(/aria-expanded="true"[^>]*aria-label="Xem chi tiết văn bản đến số 8\/2026"/);
   });
 
-  it("nói ra rằng dòng thời gian chưa có đường đọc, thay vì vẽ một danh sách rỗng", () => {
-    // Hợp đồng hôm nay chỉ có `POST .../routings`, không có `GET`. Một danh sách rỗng ở đây sẽ nói
-    // rằng văn bản chưa từng được chuyển — sai, và sai theo chiều người đọc tin được.
-    const html = veForm({ kieu: "chuyen", vb: dong({ holding_unit: "01JBOPHAN" }) });
+  it("ngăn do bên gọi dựng ra tới trang", () => {
+    const html = renderToStaticMarkup(
+      <ManSoVanBanDen
+        kq={trang([dong()])}
+        bayGio={TRUOC_HAN}
+        nam={2026}
+        namGoc={2026}
+        datNam={() => {}}
+        trangThai=""
+        datTrangThai={() => {}}
+        loaiLoc=""
+        datLoaiLoc={() => {}}
+        boPhanLoc=""
+        datBoPhanLoc={() => {}}
+        tim=""
+        datTim={() => {}}
+        thuTu=""
+        datThuTu={() => {}}
+        traLoai={TRA_LOAI}
+        traBoPhan={TRA_BO_PHAN}
+        coQuyenGhi={false}
+        thieuQuyenGhi={false}
+        coQuyenChuyen={false}
+        thaoTac={KHONG_LAM_GI}
+        cauDaXong=""
+        loiNgoaiForm=""
+        nganXep={TRANG_DAU}
+        diToiTrang={() => {}}
+        ngan={<p>ngăn-giả-của-bài-kiểm</p>}
+        form={null}
+      />,
+    );
 
-    expect(html).toMatch(/chưa có đường đọc/);
-    expect(html).toContain("VĂN PHÒNG ĐẢNG UỶ");
+    expect(html).toContain("ngăn-giả-của-bài-kiểm");
   });
 });
 
