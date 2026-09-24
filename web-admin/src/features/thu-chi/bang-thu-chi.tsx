@@ -43,12 +43,13 @@ import {
   cauQuyDoi,
   chonDuocCachTinh,
   cotSo,
-  docSoNhap,
   donViCuaBang,
   dongPhuTieuDe,
   dongSangChuoi,
   dungCay,
+  dungGiaSuaDong,
   GHI_CHU_CHENH_LECH,
+  lyDoKhongTinh,
   moiDongCoCon,
   NHAN_CHENH_LECH,
   nhanBoDem,
@@ -63,6 +64,7 @@ import {
   nhanTab,
   nhanThemCon,
   NHAN_SUA_TEN,
+  O_KHONG_TINH_DUOC,
   O_TRONG,
   phangCay,
   PHAN_CHUA_DUNG,
@@ -70,6 +72,7 @@ import {
   type DongHien,
   type DonViHien,
 } from "./nhan-thu-chi";
+import { DanhSachKhongTinh, OTien } from "./o-tien";
 import { FormSuaBang } from "./sua-bang";
 
 // Giữ đường nhập cũ cho phía gọi và bài kiểm: hộp gỡ nay nằm ở tệp riêng vì hộp `⇄` cũng dùng nó.
@@ -492,10 +495,19 @@ export function TheChiSoNam({ chiSo }: { chiSo: finance_chiSoNamRa }) {
           <dt>{NHAN_CHENH_LECH}</dt>
           <dd>{soTienDong(nhanSoTienChiSo(chiSo.balance, "dong"), chiSo.balance.amount !== null)}</dd>
         </div>
+        {/* TỔNG THU mang câu lý do cho MỌI trường hợp không đưa ra được con số (chưa có dòng tổng,
+            cột trống, tổng quá lớn) — nên `null` kèm câu là "không tính được", còn `null` không câu
+            vẫn là `—`. */}
         {chiSo.revenue_totals.map((o) => (
           <div key={o.column_id}>
             <dt>{o.name}</dt>
-            <dd>{soTienDong(nhanSoTien(o.value, "dong"), o.value !== null)}</dd>
+            <dd>
+              <OTien
+                chu={soTienDong(nhanSoTien(o.value, "dong"), o.value !== null)}
+                lyDo={lyDoKhongTinh(o.unavailable_reason)}
+                hienLyDo
+              />
+            </dd>
           </div>
         ))}
       </dl>
@@ -667,8 +679,27 @@ export function BangDayDu({
           </tbody>
         </table>
       </div>
+      <DanhSachKhongTinh tieuDe="Ô không tính được con số" o={oKhongTinhCuaCay(duLieu)} />
     </>
   );
+}
+
+/**
+ * Mọi ô không tính được của bảng, theo thứ tự máy chủ gửi dòng và thứ tự cột. Đọc từ `lines`, không
+ * từ cây đang vẽ: một dòng đang thu gọn vẫn phải được nói ra, vì tổng của cha nó vừa hiện "Không
+ * tính được" và người đọc cần biết phải mở dòng nào.
+ */
+function oKhongTinhCuaCay(duLieu: finance_bangDayDuRa): { khoa: string; noi: string; lyDo: string }[] {
+  const ra: { khoa: string; noi: string; lyDo: string }[] = [];
+  for (const d of duLieu.lines) {
+    for (const c of duLieu.columns) {
+      const lyDo = lyDoKhongTinh(d.unavailable_reasons?.[c.id]);
+      if (lyDo === null) continue;
+      const ten = d.no === "" ? d.name : `${d.no}. ${d.name}`;
+      ra.push({ khoa: `${d.id}|${c.id}`, noi: `${ten} — ${c.name}`, lyDo });
+    }
+  }
+  return ra;
 }
 
 /** Thứ tự gợi ý cho dòng mới: sau dòng cuối cùng cùng cha. Người nhập vẫn sửa được. */
@@ -726,7 +757,13 @@ export function TheTomTat({
           {tomTat.cells.map((o) => (
             <div key={o.column_id}>
               <dt>{o.name}</dt>
-              <dd>{nhanSoTien(o.value, donVi.ma)}</dd>
+              <dd>
+                <OTien
+                  chu={nhanSoTien(o.value, donVi.ma)}
+                  lyDo={lyDoKhongTinh(o.unavailable_reason)}
+                  hienLyDo
+                />
+              </dd>
             </div>
           ))}
           <div>
@@ -832,7 +869,12 @@ export function DongKhoanMuc({
 
       {cot.map((c) =>
         c.type === "so" ? (
-          <td key={c.id}>{nhanSoTien(d.values[c.id] ?? null, donVi.ma)}</td>
+          <td key={c.id}>
+            <OTien
+              chu={nhanSoTien(d.values[c.id] ?? null, donVi.ma)}
+              lyDo={lyDoKhongTinh(d.unavailable_reasons?.[c.id])}
+            />
+          </td>
         ) : (
           // Cột phần trăm: xem `PHAN_CHUA_DUNG`. Công thức là chuỗi máy chủ không diễn giải, và
           // đoán ánh xạ `col_N` sang mã cột là in một tỷ lệ sai trông y hệt một tỷ lệ đúng.
@@ -952,19 +994,14 @@ export function FormSuaDong({
             };
 
             if (moO) {
-              const gia: Record<string, number | null> = {};
-              for (const c of cot) {
-                const doc = docSoNhap(String(fd.get(`gia:${c.id}`) ?? ""), donVi.ma);
-                if (doc.loai === "loi") {
-                  datLoiO(
-                    `Ô "${c.name}": ${doc.viSao} Để trống nếu muốn xoá con số trong ô ấy.`,
-                  );
-                  return;
-                }
-                // `null` XOÁ TRẮNG ô, không phải số 0 (§9 quy tắc 4).
-                gia[c.id] = doc.loai === "trong" ? null : doc.gia;
+              const tho: Record<string, string> = {};
+              for (const c of cot) tho[c.id] = String(fd.get(`gia:${c.id}`) ?? "");
+              const gia = dungGiaSuaDong(tho, cot, dong.unavailable_reasons, donVi.ma);
+              if (!gia.ok) {
+                datLoiO(gia.thongBao);
+                return;
               }
-              than.values = gia;
+              than.values = gia.than;
             }
 
             datLoiO(null);
@@ -1006,25 +1043,40 @@ export function FormSuaDong({
           </p>
 
           {moO ? (
-            cot.map((c) => (
-              <p key={c.id}>
-                <label htmlFor={`sua-gia-${dong.id}-${c.id}`}>
-                  {c.name} ({donVi.nhan.toLowerCase()})
-                </label>{" "}
-                {/* Ô CHỮ, không `type="number"`: ô số của trình duyệt không đọc được `3.463.459,2`.
-                    Điền sẵn ĐÚNG chuỗi màn hình in, và chuỗi ấy đọc ngược lại ra đúng số đồng cũ —
-                    nên "Lưu" mà không sửa gì không đổi con số nào. */}
-                <input
-                  id={`sua-gia-${dong.id}-${c.id}`}
-                  name={`gia:${c.id}`}
-                  className="o-nhap"
-                  type="text"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  defaultValue={giaDienSan(dong.values[c.id] ?? null, donVi)}
-                />
-              </p>
-            ))
+            cot.map((c) => {
+              const lyDo = lyDoKhongTinh(dong.unavailable_reasons?.[c.id]);
+              const idGoiY = `sua-gia-goi-y-${dong.id}-${c.id}`;
+              return (
+                <p key={c.id}>
+                  <label htmlFor={`sua-gia-${dong.id}-${c.id}`}>
+                    {c.name} ({donVi.nhan.toLowerCase()})
+                  </label>{" "}
+                  {/* Ô CHỮ, không `type="number"`: ô số của trình duyệt không đọc được `3.463.459,2`.
+                      Điền sẵn ĐÚNG chuỗi màn hình in, và chuỗi ấy đọc ngược lại ra đúng số đồng cũ —
+                      nên "Lưu" mà không sửa gì không đổi con số nào. Ô KHÔNG TÍNH ĐƯỢC điền chữ
+                      `O_KHONG_TINH_DUOC`, không điền rỗng — xem `dungGiaSuaDong`. */}
+                  <input
+                    id={`sua-gia-${dong.id}-${c.id}`}
+                    name={`gia:${c.id}`}
+                    className="o-nhap"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    aria-describedby={lyDo === null ? undefined : idGoiY}
+                    defaultValue={
+                      lyDo === null ? giaDienSan(dong.values[c.id] ?? null, donVi) : O_KHONG_TINH_DUOC
+                    }
+                  />
+                  {lyDo !== null && (
+                    <span id={idGoiY} className="ghi-chu">
+                      {" "}
+                      ⚠ Ô này không tính được: {lyDo}. Để nguyên chữ “{O_KHONG_TINH_DUOC}” thì con
+                      số đang lưu được giữ nguyên; gõ số mới để thay; xoá trắng ô để xoá con số.
+                    </span>
+                  )}
+                </p>
+              );
+            })
           ) : dong.method === "entries" ? (
             <p className="ghi-chu">
               Khoản mục này đang Cộng theo đợt: con số của nó là tổng các đợt ghi ở hộp ⇄, không gõ

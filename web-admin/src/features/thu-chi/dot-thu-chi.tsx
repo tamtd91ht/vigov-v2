@@ -14,6 +14,7 @@ import {
   DOT_TRONG,
   dungThanDot,
   khoaSauLanGhi,
+  lyDoKhongTinh,
   MO_TA_HOP_DOT,
   nhanNgayLuyKe,
   nhanSoTien,
@@ -22,6 +23,7 @@ import {
   type DonViHien,
   type NhapDot,
 } from "./nhan-thu-chi";
+import { DanhSachKhongTinh, OTien } from "./o-tien";
 
 /**
  * Hộp "Các đợt thu, chi" (§5) của MỘT khoản mục lá.
@@ -261,7 +263,12 @@ export function NoiDungHopDot({
                   <td>{d.counterparty !== undefined && d.counterparty !== "" ? d.counterparty : O_TRONG}</td>
                   <td>{d.document_no !== undefined && d.document_no !== "" ? d.document_no : O_TRONG}</td>
                   {cot.map((c) => (
-                    <td key={c.id}>{nhanSoTien(d.values[c.id] ?? null, donVi.ma)}</td>
+                    <td key={c.id}>
+                      <OTien
+                        chu={nhanSoTien(d.values[c.id] ?? null, donVi.ma)}
+                        lyDo={lyDoKhongTinh(d.unavailable_reasons?.[c.id])}
+                      />
+                    </td>
                   ))}
                   {coXacNhan && (
                     <td className="o-thao-tac">
@@ -281,6 +288,21 @@ export function NoiDungHopDot({
             </tbody>
           </table>
         </div>
+      )}
+      {/* Số tiền của một đợt ghi TRƯỚC khi trần hạ xuống 2^53 − 1 có thể vượt trần: máy chủ gửi
+          `null` kèm câu, và đợt ấy phải TÌM ĐƯỢC để gỡ — nên nói ra ngày và cột của nó. */}
+      {danhSach.pha === "xong" && (
+        <DanhSachKhongTinh
+          tieuDe="Số tiền không đọc chính xác được"
+          o={danhSach.duLieu.entries.flatMap((d) =>
+            cot.flatMap((c) => {
+              const lyDo = lyDoKhongTinh(d.unavailable_reasons?.[c.id]);
+              return lyDo === null
+                ? []
+                : [{ khoa: `${d.id}|${c.id}`, noi: `Đợt ngày ${nhanNgayLuyKe(d.date)} — ${c.name}`, lyDo }];
+            }),
+          )}
+        />
       )}
     </>
   );

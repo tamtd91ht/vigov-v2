@@ -145,6 +145,28 @@ export function nhanSoTien(gia: number | null, donVi: MaDonVi): string {
   return dongSangChuoi(gia, donVi);
 }
 
+/**
+ * Chữ của một ô KHÔNG TÍNH ĐƯỢC — khác hẳn ô trống `—`.
+ *
+ * Máy chủ gửi `null` cho CẢ HAI: ô trống, và ô mà con số không tính ra được (tổng tràn, số đang lưu
+ * vượt trần, tổng các đợt quá lớn). Cái phân biệt là câu lý do đi kèm (`unavailable_reasons[cot]`
+ * của dòng và của đợt, `unavailable_reason` của ô tóm tắt và ô tổng thu). Vẽ cả hai thành `—` là
+ * nói với người đọc rằng xã chưa khai con số ấy — một câu SAI về một con số công.
+ */
+export const O_KHONG_TINH_DUOC = "Không tính được";
+
+/**
+ * Câu lý do của một ô, hoặc `null` khi ô ấy không phải "không tính được".
+ *
+ * Câu có mặt thì ô là KHÔNG TÍNH ĐƯỢC, kể cả khi `values` lại mang một số: hợp đồng nói hai thứ ấy
+ * không đi cùng nhau, và khi chúng đi cùng thì tin câu "không tính được" chứ không in một con số
+ * mà chính máy chủ vừa nói là không tin được (fail closed).
+ */
+export function lyDoKhongTinh(lyDo: string | undefined): string | null {
+  const s = (lyDo ?? "").trim();
+  return s === "" ? null : s;
+}
+
 /** Câu nói ra cách con số được quy đổi — hiện cạnh đơn vị tính, không nằm trong chú thích mã. */
 export function cauQuyDoi(donVi: DonViHien): string {
   if (donVi.ma === "dong") {
@@ -305,6 +327,10 @@ export function docSoNhap(tho: string, donVi: MaDonVi): SoNhap {
   let dong = BigInt(nguyen + le.padEnd(soLe, "0"));
   if (dau === "-") dong = -dong;
 
+  // TRẦN NÀY PHẢI BẰNG `domain.GiaTriToiDa` của service-finance (9_007_199_254_740_991 đồng = 2^53 − 1,
+  // `internal/domain/thu_chi_ngan_sach.go`). Máy chủ hạ trần xuống đúng số này để mọi con số nó
+  // nhận đều về lại trình duyệt CHÍNH XÁC. Lệch nhau thì hoặc web chặn một số máy chủ nhận, hoặc
+  // web gửi một số máy chủ trả 400 — và không bài kiểm nào ở một phía một mình thấy được.
   const tran = BigInt(Number.MAX_SAFE_INTEGER);
   if (dong > tran || dong < -tran) {
     return { loai: "loi", viSao: "Số quá lớn để ghi." };
@@ -423,6 +449,45 @@ export function dungThanDot(
   if (doiTac !== "") than.counterparty = doiTac;
   if (soChungTu !== "") than.document_no = soChungTu;
   return { ok: true, than };
+}
+
+/**
+ * `values` của `PATCH /budget-lines/{id}` từ các ô tiền của biểu mẫu sửa dòng (mã cột → chữ gõ).
+ *
+ * Hợp đồng là BA TRẠNG THÁI (`thu_chi_ngan_sach.go`, `suaDongVao`): mã cột kèm số thì GHI, kèm
+ * `null` thì XOÁ TRẮNG, VẮNG MẶT thì để nguyên. Ô KHÔNG TÍNH ĐƯỢC dùng đúng trạng thái thứ ba:
+ *
+ *   - Ô ấy được điền sẵn chữ `O_KHONG_TINH_DUOC`, KHÔNG điền rỗng — rỗng lúc lưu là xoá trắng, nên
+ *     một lần sửa TÊN khoản mục sẽ lặng lẽ xoá một con số ngân sách đang lưu. Cùng lý do với
+ *     `giaDienSan` điền nguyên chữ số thô cho một giá trị đọc hỏng.
+ *   - Chữ ấy còn nguyên lúc lưu thì mã cột VẮNG MẶT trong `values`: con số đang lưu được giữ đúng
+ *     như cũ, và phần còn lại của biểu mẫu (TT, tên, thứ tự) lưu được. Khác `giaDienSan` ở chỗ này,
+ *     có chủ ý: chữ số thô là một giá trị ĐỌC ĐƯỢC mà sai, phải dừng lại; còn ở đây màn hình không
+ *     cầm giá trị nào để mà gửi, và "không nhắc tới" là đúng điều cán bộ đã làm.
+ *   - Cán bộ gõ số mới thì ghi số ấy; xoá trắng thì xoá — đúng như mọi ô khác.
+ */
+export function dungGiaSuaDong(
+  tho: Readonly<Record<string, string>>,
+  cot: readonly finance_cotRa[],
+  lyDo: Readonly<Record<string, string>> | undefined,
+  donVi: MaDonVi,
+): KetQuaDung<Record<string, number | null>> {
+  const gia: Record<string, number | null> = {};
+  for (const c of cot) {
+    if (c.type !== "so") continue;
+    const chu = tho[c.id] ?? "";
+    if (lyDoKhongTinh(lyDo?.[c.id]) !== null && chu.trim() === O_KHONG_TINH_DUOC) continue;
+    const doc = docSoNhap(chu, donVi);
+    if (doc.loai === "loi") {
+      return {
+        ok: false,
+        thongBao: `Ô "${c.name}": ${doc.viSao} Để trống nếu muốn xoá con số trong ô ấy.`,
+      };
+    }
+    // `null` XOÁ TRẮNG ô, không phải số 0 (§9 quy tắc 4).
+    gia[c.id] = doc.loai === "trong" ? null : doc.gia;
+  }
+  return { ok: true, than: gia };
 }
 
 /**

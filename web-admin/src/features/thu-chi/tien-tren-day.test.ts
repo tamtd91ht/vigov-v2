@@ -103,9 +103,10 @@ describe("một con số triệu đồng đi trọn vòng qua các hàm gọi TH
   }
 
   it("máy chủ gửi một số VƯỢT trần chính xác của JS: màn hình nói 'Không đọc được', không in một số đã bị làm tròn", async () => {
-    // `GiaTriToiDa` của máy chủ là 10^17 đồng, lớn hơn 2^53. `JSON.parse` của 9007199254740993 ra
-    // 9007199254740992 — một số TRÔNG hợp lệ lệch một đồng. Nó không phải số nguyên an toàn, và đó
-    // là thứ duy nhất màn hình còn dựa vào để không in nó ra như một con số thật.
+    // Từ 56d3224 `GiaTriToiDa` của máy chủ là 2^53 − 1 và một số đã lưu vượt trần về thành `null`
+    // kèm câu lý do — nên ca này là HỢP ĐỒNG HỎNG, không còn là đường bình thường. Vẫn canh: `JSON.parse`
+    // của 9007199254740993 ra 9007199254740992 — một số TRÔNG hợp lệ lệch một đồng. Nó không phải số
+    // nguyên an toàn, và đó là thứ duy nhất màn hình còn dựa vào để không in nó ra như một con số thật.
     batFetch(() => phanHoiDanhSach("9007199254740993"));
     const kq = await layDot("L1");
     expect(kq.ok).toBe(true);

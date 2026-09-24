@@ -345,6 +345,16 @@ describe("đổi cách tính", () => {
       thongBao: "ngan_sach: khoản mục có dòng con thì cách tính là cộng con",
     });
   });
+
+  it("409 'tổng các đợt quá lớn để chép' (entries → manual) ra NGUYÊN câu máy chủ", async () => {
+    // `domain.ErrTongDotVuotMuc` (56d3224): tổng không thể thành một số gõ tay. Câu nói việc phải
+    // làm — gỡ đợt ghi nhầm — và một câu do web viết lại sẽ trôi khỏi quy tắc thật.
+    const cau =
+      "ngan_sach: tổng các đợt của khoản mục vượt mức một con số ngân sách có thể có — gỡ đợt ghi nhầm để tính lại";
+    batFetch(traJSON({ code: "budget_tree", message: cau, trace_id: "01JTRACE" }, 409));
+
+    expect(await doiCachTinh("01JLA", "manual")).toEqual({ ok: false, thongBao: cau });
+  });
 });
 
 describe("các đợt thu, chi", () => {
@@ -409,6 +419,15 @@ describe("các đợt thu, chi", () => {
 
     expect(goi.mock.calls[0]?.[0]).not.toContain("Nguy");
     expect(than(goi)["counterparty"]).toBe("Nguyễn Văn A");
+  });
+
+  it("409 'khoản mục đã đủ 2000 đợt' ra NGUYÊN câu máy chủ, không kèm mã hay trace_id", async () => {
+    const cau =
+      "ngan_sach: khoản mục đã đủ số đợt thu chi tối đa — không ghi thêm được; gỡ bớt đợt ghi nhầm trước";
+    batFetch(traJSON({ code: "budget_tree", message: cau, trace_id: "01JTRACE" }, 409));
+
+    const kq = await ghiDot("01JDONG", { date: "2026-09-25", content: "x", values: { C1: 1 } }, "k");
+    expect(kq).toEqual({ ok: false, thongBao: cau });
   });
 
   it("gỡ đợt: DELETE với `reason` trong thân, 204 không thân", async () => {
