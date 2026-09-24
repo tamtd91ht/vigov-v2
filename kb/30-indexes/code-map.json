@@ -20,7 +20,7 @@
     },
     "app.ChotLinhVuc": {
       "kind": "func",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:391"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:427"
     },
     "app.ChungTuGiaiNgan": {
       "kind": "type",
@@ -32,7 +32,7 @@
     },
     "app.ChuyenCapTren": {
       "kind": "func",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:909"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:980"
     },
     "app.DangNhap": {
       "kind": "type",
@@ -112,7 +112,7 @@
     },
     "app.Dong": {
       "kind": "func",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:784"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:855"
     },
     "app.DuAn": {
       "kind": "type",
@@ -344,7 +344,11 @@
     },
     "app.KhongTiepNhan": {
       "kind": "func",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:893"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:964"
+    },
+    "app.KiemCanBoGiaoViec": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:140"
     },
     "app.KyToken": {
       "kind": "type",
@@ -512,7 +516,7 @@
     },
     "app.NewXuLyPhanAnh": {
       "kind": "func",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:354"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:389"
     },
     "app.NganSach": {
       "kind": "type",
@@ -528,7 +532,7 @@
     },
     "app.PhanCong": {
       "kind": "func",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:548"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:584"
     },
     "app.PhanQuyenVaiTro": {
       "kind": "type",
@@ -544,11 +548,11 @@
     },
     "app.QuyenXemHanChe": {
       "kind": "type",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:235"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:266"
     },
     "app.QuyenXuLyCaXa": {
       "kind": "type",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:166"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:197"
     },
     "app.QuyetDinhLuiHan": {
       "kind": "func",
@@ -644,7 +648,7 @@
     },
     "app.TienTrangThai": {
       "kind": "func",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:659"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:730"
     },
     "app.VanBanDen": {
       "kind": "type",
@@ -680,7 +684,7 @@
     },
     "app.XuLyPhanAnh": {
       "kind": "type",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:335"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:366"
     },
     "app.YeuCauCapSoVanBanDi": {
       "kind": "type",
@@ -688,11 +692,11 @@
     },
     "app.YeuCauChotLinhVuc": {
       "kind": "type",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:320"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:351"
     },
     "app.YeuCauChuyenCapTren": {
       "kind": "type",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:873"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:944"
     },
     "app.YeuCauChuyenVanBan": {
       "kind": "type",
@@ -728,7 +732,7 @@
     },
     "app.YeuCauPhanCong": {
       "kind": "type",
-      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:329"
+      "at": "service-petitions/internal/app/xu_ly_phan_anh.go:360"
     },
     "app.YeuCauQuyetDinhLuiHan": {
       "kind": "type",
@@ -2516,11 +2520,15 @@
     },
     "grpc.BatchGetStaff": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:459"
+      "at": "service-identity/internal/grpc/server.go:467"
     },
     "grpc.CanBoDoc": {
       "kind": "type",
       "at": "service-identity/internal/grpc/server.go:117"
+    },
+    "grpc.CanBoGiaoViec": {
+      "kind": "type",
+      "at": "service-identity/internal/grpc/giao_viec.go:21"
     },
     "grpc.CanBoLo": {
       "kind": "type",
@@ -2570,6 +2578,10 @@
       "kind": "type",
       "at": "service-identity/internal/grpc/server.go:134"
     },
+    "grpc.ResolveAssignableStaff": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/giao_viec.go:45"
+    },
     "grpc.ResolveCitizenSession": {
       "kind": "func",
       "at": "service-identity/internal/grpc/phien_cong_dan.go:79"
@@ -2588,7 +2600,7 @@
     },
     "grpc.ResolveStaffPrincipal": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/server.go:299"
+      "at": "service-identity/internal/grpc/server.go:307"
     },
     "grpc.SLADoc": {
       "kind": "type",
@@ -3606,6 +3618,10 @@
       "kind": "func",
       "at": "core/idem/idem.go:562"
     },
+    "identityclient.CanBoGiaoViecDuoc": {
+      "kind": "func",
+      "at": "core/identityclient/giao_viec.go:45"
+    },
     "identityclient.Client": {
       "kind": "type",
       "at": "core/identityclient/identityclient.go:60"
@@ -3644,7 +3660,7 @@
     },
     "identityclient.TenCanBoTheoMa": {
       "kind": "func",
-      "at": "core/identityclient/ten_can_bo.go:84"
+      "at": "core/identityclient/ten_can_bo.go:85"
     },
     "identityclient.TienGioLamViec": {
       "kind": "func",
@@ -4213,6 +4229,10 @@
     "store.GiaTriCuaBang": {
       "kind": "func",
       "at": "service-finance/internal/store/thu_chi_ngan_sach.go:255"
+    },
+    "store.GiaoViecDuoc": {
+      "kind": "func",
+      "at": "service-identity/internal/store/can_bo_giao_viec.go:34"
     },
     "store.HangCho": {
       "kind": "type",

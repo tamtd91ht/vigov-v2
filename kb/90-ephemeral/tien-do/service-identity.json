@@ -207,6 +207,15 @@
       "no_confirm": [],
       "tiep_theo": "SỬA 25/09/2026: tuyến ĐÃ DỰNG. Web Phản ánh đã dùng (0c48552). CÒN: Nhiệm vụ (so-nhiem-vu.tsx:709,:2254; nhan-nhiem-vu.ts:1441), Văn bản (nhan-van-ban.ts:313; ngan-van-ban-den.tsx:345), Thông báo (so-thong-bao.tsx:398; nhan-thong-bao.ts:337), Biên bản (nhan-bien-ban.ts:248) vẫn dựng quanh GET /staff (admin.user) — chuyển sang staff-directory ở lượt của từng menu. Không có ca PG thật. || NGƯỜI DÙNG CHỌN 24/09/2026: tuyến mới, AnyAuthenticated có lý do (luật 5 đk dừng #1 — người dùng đã quyết), trong một xã, không trường dữ liệu cá nhân nhạy cảm. Chưa dựng — lượt sau (go-service-builder identity), rồi web thay ô chọn ở bốn menu.",
       "menu": "van-ban-don-thu"
+    },
+    {
+      "id": "rpc-can-bo-giao-viec-duoc",
+      "viec": "gRPC ResolveAssignableStaff — mã cán bộ nào giao việc được trong xã (cùng vị từ staff-directory)",
+      "trang_thai": "xong",
+      "bang_chung": "1510ca0 hợp đồng (proto + core/identityclient.CanBoGiaoViecDuoc, trần 50) · c3611d9 cài đặt: store/can_bo_giao_viec.go dùng CHUNG hằng locChonNguoi, `ma = ANY($2)`, xã $1; grpc/giao_viec.go trần kiểm trước khi gộp trùng, rỗng trả rỗng không đọc, lọc câu trả lời; không miễn xã (qua cổng thật thiếu xã bị từ chối). go test -race -p 1 xanh; ca PG viết sẵn, SKIP.",
+      "no_confirm": [],
+      "tiep_theo": "Bên gọi hiện có: petitions /assignment (948772b). Nhiệm vụ, Văn bản nên gọi cùng RPC khi giao việc. Ai đổi locChonNguoi thì RPC đổi theo — cùng một hằng.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

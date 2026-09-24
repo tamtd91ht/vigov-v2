@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "proto",
-  "cap_nhat": "2026-09-22",
+  "cap_nhat": "2026-09-25",
   "muc": [
     {
       "id": "resolve-staff-names",
@@ -66,6 +66,15 @@
       "bang_chung": "`StaffPrincipal.ma = 3`, TÙY CHỌN (luật 2 cấm #4 — message này đã có 4 bên tiêu thụ). `buf lint` · `buf breaking --against '.git#ref=HEAD'` · `buf generate` đều rc=0. Ba chú thích trong cùng tệp đang nói SAI sau quyết định 22/09 đã sửa: khối cảnh báo của `ResolveStaffNames` (ghi 'NEITHER HAS BEEN DECIDED' — nay đã quyết), `StaffName.id` (ghi 'the same value audit_log.actor_id stores' — nay không còn đúng), và dòng 'the same reason StaffPrincipal carries no ma'.",
       "no_confirm": [],
       "tiep_theo": "`ResolveStaffNames` VẪN nhận id nội bộ nên không phân giải được dòng vết nào từ 22/09 trở đi. Chưa có cài đặt và chưa có bên tiêu thụ, nên chưa hỏng gì — nhưng phải CHỐT (đổi nghĩa `ids` hay thêm lời tra cứu thứ hai theo `ma`) TRƯỚC khi ai đó cài nó. Quyết định của contract-designer, không phải của agent dịch vụ."
+    },
+    {
+      "id": "resolve-assignable-staff",
+      "viec": "identity.ResolveAssignableStaff + chú thích events.proto khớp ADR 0041",
+      "trang_thai": "xong",
+      "bang_chung": "1510ca0 RPC cộng thêm (buf lint + breaking qua); 1b1cd66 chú thích petitions events.proto trỏ ADR 0041/loiNhanChoDan, lý do hai nhánh không đi trên dây.",
+      "no_confirm": [],
+      "tiep_theo": "Còn mở: cờ 'có công dân' trên phieuPhanAnhRa (REST, không phải proto) — xem service-petitions/duong-xu-ly-phan-anh-phia-can-bo.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

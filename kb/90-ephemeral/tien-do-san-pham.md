@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 205b3da
+derived_from_commit: 948772b
 expires: 2026-12-24
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -37,7 +37,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **06** Theo dõi giải ngân | 11 | 11/11 | ✓ |
 | **07** Thu – Chi ngân sách xã | 8 | 8/8 | ✓ |
 | **08** Thông báo | 2 | 2/2 | ✓ |
-| **09** Phản ánh của người dân | 10 | 6/8 +2 ngoài web | ✓ |
+| **09** Phản ánh của người dân | 10 | 8/8 +2 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
 | **11** Quản trị nội dung Mini App | 6 | 6/6 | ✓ |
 | **12** Danh bạ cán bộ | 5 | 5/5 | ✓ |
@@ -63,14 +63,14 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 6 | Giải ngân | `/giai-ngan` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 6 |
 | 7 | Thu - Chi ngân sách | `/giai-ngan/thu-chi` | `QUYEN_XEM_GIAI_NGAN` | ✓ | 5 |
 | 8 | Thông báo | `/thong-bao` | `QUYEN_SOAN_THONG_BAO` | ✓ | 12 |
-| 9 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 11 |
+| 9 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 10 |
 | 10 | Bản đồ kinh tế số | — | — | ✗ | |
 | 11 | Nội dung Mini App | `/noi-dung` | `QUYEN_XEM_NOI_DUNG` | ✓ | 11 |
 | 12 | Danh bạ cán bộ | `/danh-ba` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 4 |
 | 13 | Báo cáo | — | — | ✗ | |
 | 14 | Cấu hình | `/cau-hinh` | `QUYEN_QUAN_LY_DANH_MUC` | ✓ | 10 |
 
-**10/14** mục menu có màn thật. **85** phần chưa dựng đang hiện trên các màn ấy.
+**10/14** mục menu có màn thật. **84** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -103,14 +103,14 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 |---|---|---|---|---|
 | `_chung` | 20 | 2 | 8 | 6 |
 | `citizen-app` | 11 | 3 | 4 | 0 |
-| `core` | 9 | 0 | 1 | 1 |
+| `core` | 10 | 0 | 1 | 1 |
 | `deploy` | 13 | 0 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
-| `proto` | 8 | 0 | 0 | 0 |
+| `proto` | 9 | 0 | 0 | 0 |
 | `service-comms` | 7 | 3 | 2 | 4 |
 | `service-documents` | 5 | 2 | 4 | 0 |
 | `service-finance` | 13 | 3 | 0 | 0 |
-| `service-identity` | 15 | 7 | 1 | 1 |
+| `service-identity` | 16 | 7 | 1 | 1 |
 | `service-petitions` | 11 | 7 | 5 | 0 |
 | `service-platform` | 3 | 1 | 0 | 1 |
 | `service-reporting` | 0 | 0 | 1 | 0 |
