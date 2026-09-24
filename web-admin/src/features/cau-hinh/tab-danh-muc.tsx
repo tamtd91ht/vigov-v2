@@ -52,6 +52,7 @@ import {
   type LoiRaCuaNhomRong,
 } from "./nhan-danh-muc";
 import { nhomDanhMuc, type NhomDanhMuc } from "./nhom-danh-muc";
+import { NhomTrangThaiNhiemVu } from "./nhom-trang-thai-nhiem-vu";
 import { choBatLai, kiemLyDoXoa, laMucGhi, thaoTacCuaMuc } from "./tang-danh-muc";
 
 /**
@@ -83,9 +84,10 @@ import { choBatLai, kiemLyDoXoa, laMucGhi, thaoTacCuaMuc } from "./tang-danh-muc
  * "bạn không có quyền xem danh mục" — với người đang đọc đúng danh mục ấy trên năm màn hình
  * khác. Cổng quyền vì vậy đặt đúng chỗ máy chủ đặt nó: quanh ba thao tác GHI.
  *
- * BA NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY. `Lĩnh vực phản ánh` và `Loại đơn thư` chưa có tuyến nào
- * trong hợp đồng REST. `Trạng thái nhiệm vụ` không cùng khuôn thêm · sửa · xoá mềm: câu hỏi #21
- * đã chốt là đơn vị chỉ đổi nhãn và thứ tự của một bộ mã cố định. Xem `nhom-danh-muc.ts`.
+ * HAI NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY: `Lĩnh vực phản ánh` và `Loại đơn thư` chưa có tuyến nào
+ * trong hợp đồng REST. `Trạng thái nhiệm vụ` CÓ, là nhóm thứ tám, nhưng KHÔNG cùng khuôn thêm ·
+ * sửa · xoá mềm: câu hỏi #21 đã chốt là đơn vị chỉ đổi nhãn và thứ tự của một bộ mã cố định, nên
+ * nó là một thành phần riêng — `nhom-trang-thai-nhiem-vu.tsx`.
  *
  * NÚT `⬆ Nhập từ Excel` CỦA ĐẶC TẢ CŨNG KHÔNG CÓ: không có tuyến nào phía sau nó. Một nút bấm
  * vào không có gì xảy ra còn tệ hơn không có nút — cán bộ sẽ tin là mình thao tác sai.
@@ -104,6 +106,11 @@ export function TabDanhMuc() {
   const [lanDoc, datLanDoc] = useState(0);
 
   const [dangMo, datDangMo] = useState<DangMo>(null);
+  /**
+   * Mã trạng thái nhiệm vụ đang mở biểu mẫu sửa ở nhóm thứ tám, hoặc `null`. Giữ Ở TAB, cạnh
+   * `dangMo`, để luật "một biểu mẫu cho cả tab" phủ cả nhóm ấy: mở bên này thì đóng bên kia.
+   */
+  const [maTrangThaiDangSua, datMaTrangThaiDangSua] = useState<string | null>(null);
   const [ban, datBan] = useState<BanNhap>(BAN_TRONG);
   /** Lỗi do chính màn hình phát hiện trước khi gửi. Khác hẳn câu của máy chủ — xem `loiMayChu`. */
   const [loiTaiCho, datLoiTaiCho] = useState("");
@@ -136,6 +143,7 @@ export function TabDanhMuc() {
 
   /** Mở một biểu mẫu: dọn sạch mọi thông báo của lần trước, và nạp giá trị đang có vào bản nháp. */
   const mo = useCallback((m: DangMo, banDau: BanNhap) => {
+    datMaTrangThaiDangSua(null);
     datDangMo(m);
     datBan(banDau);
     datLoiTaiCho("");
@@ -149,6 +157,15 @@ export function TabDanhMuc() {
     datLoiTaiCho("");
     datLoiMayChu("");
   }, []);
+
+  /** Nhóm thứ tám mở biểu mẫu: đóng biểu mẫu của bảy nhóm kia trước (một biểu mẫu cho cả tab). */
+  const moSuaTrangThai = useCallback(
+    (ma: string | null) => {
+      if (ma !== null) dong();
+      datMaTrangThaiDangSua(ma);
+    },
+    [dong],
+  );
 
   /** Sau một lần ghi thành công: đóng biểu mẫu, nói ra đã làm gì, và đọc lại từ máy chủ. */
   const xong = useCallback((cau: string) => {
@@ -291,6 +308,14 @@ export function TabDanhMuc() {
           }
         />
       ))}
+
+      {/* NHÓM THỨ TÁM, KHUÔN RIÊNG (#21): chỉ đổi nhãn và thứ tự, không thêm · tắt · xoá. Nút ghi
+          chỉ vẽ khi đã biết có quyền — `coQuyenGhi` là `false` khi phiên còn đang đọc. */}
+      <NhomTrangThaiNhiemVu
+        coQuyenGhi={coQuyenGhi}
+        maDangSua={maTrangThaiDangSua}
+        moSua={moSuaTrangThai}
+      />
     </section>
   );
 }

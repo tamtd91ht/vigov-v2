@@ -22,6 +22,7 @@
 
 import type { KetQua } from "@/lib/api/goi";
 import type {
+  petitions_danhSachTrangThaiNhiemVuRa,
   petitions_nhiemVuRa,
   petitions_nhiemVuVanBanRa,
   petitions_suaNhiemVuVao,
@@ -79,54 +80,129 @@ export const MOI_TRANG_THAI: readonly TrangThaiNhiemVu[] = [
   ...TRANG_THAI_RE_NHANH,
 ];
 
-/**
- * Nhãn của §6 — chữ được giao hàng.
- *
- * ⚠ ĐÂY LÀ CHỖ SẼ PHẢI ĐỔI KHI XÃ SỬA ĐƯỢC NHÃN. ADR 0035 §C cho phép xã đổi nhãn, nhưng hợp
- * đồng KHÔNG có tuyến nào phát ra danh mục `Trạng thái nhiệm vụ`: có `GET /api/v1/task-types`,
- * `GET /api/v1/task-priorities` và `GET /api/v1/task-blocs`, không có `task-statuses`. Nên hôm
- * nay bảy nhãn này là chữ của đặc tả, và sự vắng mặt ấy được nói ra ở `PHAN_CHUA_DUNG` chứ
- * không giấu trong chú thích.
- */
-const NHAN_TRANG_THAI: Readonly<Record<TrangThaiNhiemVu, string>> = {
-  "moi-giao": "Mới giao",
-  "da-tiep-nhan": "Đã tiếp nhận",
-  "dang-thuc-hien": "Đang thực hiện",
-  "cho-duyet": "Chờ duyệt",
-  "hoan-thanh": "Hoàn thành",
-  "tam-dung": "Tạm dừng",
-  "chuyen-tiep": "Chuyển tiếp",
-};
-
-/**
- * Nhãn cột Kanban — KHÁC nhãn §6 ở đúng một ô: `moi-giao` lên bảng là **"Chưa thực hiện"**.
- *
- * §6 ghi rõ sự lệch ấy (`Mới giao *(Kanban gọi "Chưa thực hiện")*`), và §4.1 lẫn §12 đều đếm
- * "Chưa thực hiện 7". Dùng một nhãn cho cả hai chỗ là làm sai một trong hai màn.
- */
-const NHAN_COT_KANBAN: Readonly<Record<TrangThaiNhiemVu, string>> = {
-  ...NHAN_TRANG_THAI,
-  "moi-giao": "Chưa thực hiện",
-};
-
 /** Mã có phải một trong bảy hay không. Dùng để đọc `status` — hợp đồng khai nó là `string` trơn. */
 export function laTrangThaiNhiemVu(ma: string): ma is TrangThaiNhiemVu {
   return (MOI_TRANG_THAI as readonly string[]).includes(ma);
 }
 
+/* ── NHÃN VÀ THỨ TỰ CỦA XÃ — `GET /api/v1/task-statuses` ─────────────────────────────────────
+ *
+ * MỘT NGUỒN, KHÔNG HAI (quyết định #21, 24/09/2026). Nhãn và thứ tự bảy trạng thái là của TỪNG XÃ
+ * và máy chủ trả về ĐỦ BẢY, đã gộp chữ riêng của xã với chữ mặc định của phần mềm
+ * (`service-petitions/internal/domain/nhan_trang_thai_nhiem_vu.go:50-72`). Màn hình vì vậy không
+ * giữ bản nhãn nào của riêng nó — trừ ĐƯỜNG LUI dưới đây, dùng khi tuyến đọc hỏng.
+ *
+ * VÌ SAO KHÔNG CÒN NHÃN KANBAN RIÊNG ("Chưa thực hiện"): máy chủ cố ý giao `moi-giao` = "Mới giao"
+ * làm mặc định, và coi chữ "Chưa thực hiện" của bảng Kanban là đúng loại chữ riêng mà một xã tự
+ * đặt qua tab Danh mục (chú thích ở `nhan_trang_thai_nhiem_vu.go:57-59`). Giữ một bản nhãn Kanban
+ * thứ hai ở đây là đặt lại đúng bản sao mà quyết định #21 bỏ đi: xã đổi nhãn `moi-giao` xong, cột
+ * Kanban vẫn hiện chữ cũ.
+ */
+
+/** Nhãn và thứ tự bảy trạng thái mà màn hình đang dùng. */
+export type BangNhanTrangThai = {
+  readonly nhan: Readonly<Record<TrangThaiNhiemVu, string>>;
+  /** Đủ bảy mã, theo thứ tự HIỆU LỰC của xã. */
+  readonly thuTu: readonly TrangThaiNhiemVu[];
+};
+
+/**
+ * ĐƯỜNG LUI — chỉ dùng khi chưa đọc xong hoặc đọc hỏng `GET /api/v1/task-statuses`.
+ *
+ * Chép đúng bảng mặc định của máy chủ (`nhan_trang_thai_nhiem_vu.go:64-72`), cả chữ lẫn thứ tự, để
+ * một xã CHƯA đổi gì thấy cùng một màn hình dù tuyến đọc có trả lời hay không. Đây là bản sao duy
+ * nhất còn lại, và nó chỉ lên màn KÈM câu `CANH_BAO_NHAN_MAC_DINH` — không bao giờ lặng lẽ.
+ */
+export const BANG_NHAN_MAC_DINH: BangNhanTrangThai = {
+  nhan: {
+    "moi-giao": "Mới giao",
+    "da-tiep-nhan": "Đã tiếp nhận",
+    "dang-thuc-hien": "Đang thực hiện",
+    "cho-duyet": "Chờ duyệt",
+    "hoan-thanh": "Hoàn thành",
+    "tam-dung": "Tạm dừng",
+    "chuyen-tiep": "Chuyển tiếp",
+  },
+  thuTu: MOI_TRANG_THAI,
+};
+
+/**
+ * Câu hiện khi màn hình đang chạy bằng đường lui. Câu máy chủ đi kèm phía sau, nguyên văn.
+ *
+ * NÓI RA, KHÔNG GIẢ VỜ: một xã đã đổi "Mới giao" thành "Chưa thực hiện" mà màn hình lặng lẽ hiện
+ * "Mới giao" thì cán bộ đọc hai chữ khác nhau cho cùng một việc ở hai màn, và không ai biết vì sao.
+ */
+export const CANH_BAO_NHAN_MAC_DINH =
+  "Không đọc được nhãn trạng thái của xã, nên màn này đang hiện nhãn và thứ tự mặc định của phần " +
+  "mềm. Nhãn xã đã đổi (nếu có) chưa hiện ra.";
+
+/** Kết quả đọc nhãn → bảng để vẽ, và câu cảnh báo khi phải dùng đường lui. */
+export type NhanTrangThaiDaDoc = {
+  readonly bang: BangNhanTrangThai;
+  /** `null` khi đang dùng nhãn của máy chủ, hoặc khi còn đang đọc. */
+  readonly canhBao: string | null;
+};
+
+/**
+ * `null` (chưa đọc xong) → đường lui, KHÔNG cảnh báo: cả màn hình còn đang tải, chưa có gì sai.
+ * Đọc hỏng → đường lui KÈM cảnh báo và câu máy chủ.
+ * Đọc được mà THIẾU một trong bảy mã → đường lui kèm cảnh báo: máy chủ hứa đủ bảy, nên thiếu là hợp
+ * đồng vỡ; ghép nửa chữ xã nửa chữ mặc định sẽ cho ra một bảng không ai đặt ra.
+ * Mã ngoài bảy bị BỎ QUA: danh sách mã là đóng (ADR 0035 §C), vòng đời chỉ biết bảy mã ấy.
+ *
+ * NHÃN VẼ NGUYÊN VĂN chữ máy chủ trả; THỨ TỰ là thứ tự của `items` — máy chủ đã sắp theo thứ tự
+ * hiệu lực, hoà thì theo thứ tự mặc định. Không sắp lại ở đây: phép sắp thứ hai là một bản sao của
+ * quy tắc hoà, và nó trôi.
+ */
+export function docBangNhanTrangThai(
+  kq: KetQua<petitions_danhSachTrangThaiNhiemVuRa> | null,
+): NhanTrangThaiDaDoc {
+  if (kq === null) return { bang: BANG_NHAN_MAC_DINH, canhBao: null };
+  if (!kq.ok) {
+    return { bang: BANG_NHAN_MAC_DINH, canhBao: `${CANH_BAO_NHAN_MAC_DINH} ${kq.thongBao}` };
+  }
+  const nhan: Partial<Record<TrangThaiNhiemVu, string>> = {};
+  const thuTu: TrangThaiNhiemVu[] = [];
+  for (const d of kq.duLieu.items) {
+    if (!laTrangThaiNhiemVu(d.code) || nhan[d.code] !== undefined) continue;
+    nhan[d.code] = d.label;
+    thuTu.push(d.code);
+  }
+  if (thuTu.length !== MOI_TRANG_THAI.length) {
+    return { bang: BANG_NHAN_MAC_DINH, canhBao: CANH_BAO_NHAN_MAC_DINH };
+  }
+  return { bang: { nhan: nhan as Record<TrangThaiNhiemVu, string>, thuTu }, canhBao: null };
+}
+
 /**
  * Nhãn để hiện, kể cả khi máy chủ gửi một mã màn hình chưa biết.
+ *
+ * `bang` BẮT BUỘC, KHÔNG CÓ GIÁ TRỊ MẶC ĐỊNH: một tham số mặc định là đường để một chỗ gọi quên
+ * truyền bảng của xã và lặng lẽ hiện chữ mặc định — đúng lỗi "màn hình bỏ qua nhãn xã đã đổi".
  *
  * MÃ LẠ HIỆN NGUYÊN VĂN, KHÔNG HIỆN DẤU GẠCH và không im lặng bỏ qua: một trạng thái mới ở máy
  * chủ mà màn hình vẽ thành `—` là một hồ sơ trông như chưa có trạng thái.
  */
-export function nhanTrangThai(ma: string): string {
-  return laTrangThaiNhiemVu(ma) ? NHAN_TRANG_THAI[ma] : ma;
+export function nhanTrangThai(bang: BangNhanTrangThai, ma: string): string {
+  return laTrangThaiNhiemVu(ma) ? bang.nhan[ma] : ma;
 }
 
-/** Nhãn cột Kanban (§4.1). Cùng quy tắc "mã lạ hiện nguyên văn". */
-export function nhanCotKanban(ma: string): string {
-  return laTrangThaiNhiemVu(ma) ? NHAN_COT_KANBAN[ma] : ma;
+/**
+ * Xếp một tập mã theo thứ tự hiệu lực của xã. Dùng cho cột Kanban và ô lọc.
+ *
+ * CỘT KANBAN THEO THỨ TỰ CỦA XÃ (quyết định của lượt này): §4.1 cố định NĂM cột chính, còn thứ tự
+ * năm cột ấy lấy theo `order` xã đặt — hợp đồng khai tuyến đọc phục vụ "cột Kanban" và thứ tự là
+ * thứ duy nhất xã đổi được ngoài nhãn. Xã chưa đổi gì thì ra đúng thứ tự vòng đời §6.
+ */
+export function theoThuTuXa<T extends string>(
+  ds: readonly T[],
+  bang: BangNhanTrangThai,
+): T[] {
+  const vi = (ma: string) => {
+    const i = (bang.thuTu as readonly string[]).indexOf(ma);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  return [...ds].sort((a, b) => vi(a) - vi(b));
 }
 
 /**
@@ -1231,10 +1307,17 @@ export const CAU_LOC_TRANG_THAI_KHONG_CO_COT =
  *
  * Một việc vừa chuyển sang `tam-dung` rời khỏi Kanban HOÀN TOÀN — không phải lỗi, mà là §4.1. Không
  * nói ra thì người giao việc kết luận nhiệm vụ đã bị xoá.
+ *
+ * HAI TÊN TRẠNG THÁI TRONG CÂU LẤY TỪ BẢNG NHÃN CỦA XÃ: xã đổi "Tạm dừng" thành "Tạm hoãn" mà câu
+ * này vẫn nói "Tạm dừng" thì cán bộ đi tìm một trạng thái không có trên màn nào.
  */
-export const GHI_CHU_KANBAN_RE_NHANH =
-  "Hai trạng thái rẽ nhánh — Tạm dừng và Chuyển tiếp — không có cột riêng trên Kanban (§4.1), nên " +
-  "việc đang ở hai trạng thái ấy không hiện ở bảng này. Xem chúng ở chế độ Danh sách.";
+export function ghiChuKanbanReNhanh(bang: BangNhanTrangThai): string {
+  return (
+    `Hai trạng thái rẽ nhánh — ${nhanTrangThai(bang, "tam-dung")} và ` +
+    `${nhanTrangThai(bang, "chuyen-tiep")} — không có cột riêng trên Kanban (§4.1), nên việc đang ` +
+    "ở hai trạng thái ấy không hiện ở bảng này. Xem chúng ở chế độ Danh sách."
+  );
+}
 
 /**
  * Con số trên đầu cột — **SỐ THẺ ĐÃ TẢI VỀ**, không phải tổng số việc của cột.
@@ -1309,13 +1392,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "`petitions.nhiemVuRa` có `parent` (mã việc cha) nhưng KHÔNG có số việc con, và không có " +
       "tuyến liệt kê việc con của một mã. Đếm trong trang đang mở sẽ ra một con số phụ thuộc vào " +
       "trang — `2 việc con` ở trang này và `3 việc con` ở trang sau, cho cùng một nhiệm vụ.",
-  },
-  {
-    ten: "Danh mục `Trạng thái nhiệm vụ` xã sửa được (§6)",
-    viSao:
-      "ADR 0035 §C cho xã đổi NHÃN và THỨ TỰ bảy trạng thái, nhưng hợp đồng chỉ có `task-types`, " +
-      "`task-priorities` và `task-blocs` — không có tuyến phát ra danh mục trạng thái. Bảy nhãn " +
-      "trên màn hôm nay là chữ của đặc tả, giống nhau ở mọi xã.",
   },
   {
     ten: "Ô `Ghi chú` ở form `Giao việc mới` (§7.2)",

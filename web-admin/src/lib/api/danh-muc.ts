@@ -237,8 +237,8 @@ export type MoTaDanhMucGhi = {
  * BẢY NHÓM NÀY KHÔNG PHẢI MƯỜI NHÓM CỦA ĐẶC TẢ. `Lĩnh vực phản ánh` và `Loại đơn thư` vắng vì
  * hợp đồng chưa có tuyến nào cho chúng. `Trạng thái nhiệm vụ` vắng vì nó KHÔNG phải một danh mục
  * cùng khuôn: câu hỏi #21 đã chốt là đơn vị chỉ đổi nhãn và thứ tự của một bộ mã cố định, qua
- * tuyến riêng `PATCH /api/v1/task-statuses/{code}` — không thêm, không xoá — nên nó không có chỗ
- * trong bảng thêm · sửa · xoá mềm này.
+ * tuyến riêng `PATCH /api/v1/task-statuses/{code}` — không thêm, không xoá — nên đường gọi của nó
+ * ở `trang-thai-nhiem-vu.ts`, không trong bảng thêm · sửa · xoá mềm này.
  */
 export const BAY_DANH_MUC_GHI: readonly MoTaDanhMucGhi[] = [
   {

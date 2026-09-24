@@ -29,10 +29,12 @@ import {
   xoaNhiemVu,
   type LocNhiemVu,
 } from "@/lib/api/nhiem-vu";
+import { layTrangThaiNhiemVu } from "@/lib/api/trang-thai-nhiem-vu";
 import type {
   identity_boPhanRa,
   identity_khoiNhiemVuRa,
   page_Result_petitions_nhiemVuRa,
+  petitions_danhSachTrangThaiNhiemVuRa,
   petitions_deNghiLuiHanRa,
   petitions_loaiNhiemVuRa,
   petitions_mucUuTienRa,
@@ -57,7 +59,6 @@ import {
   GHI_CHU_DEM_COT,
   GHI_CHU_HAN_VIEC_CON,
   GHI_CHU_NHIEM_VU_TOI_DA,
-  GHI_CHU_KANBAN_RE_NHANH,
   GHI_CHU_KHONG_CO_O_GHI_CHU,
   GHI_CHU_LANH_DAO_GIAO_VIEC,
   GHI_CHU_LUI_HAN,
@@ -105,15 +106,16 @@ import {
   chuyenSangDuoc,
   coKhoiVanBanChiDao,
   cotPhaiDoc,
+  docBangNhanTrangThai,
   dongCuaNhom,
   dongVanBan,
   formSuaTuChiTiet,
+  ghiChuKanbanReNhanh,
   loiSauKhiDocLai,
   lyDoKhoaSua,
   hoanThanhTreHan,
   mocCuoiNgay,
   nhanBoDem,
-  nhanCotKanban,
   nhanDemCot,
   nhanHanThe,
   nhanNgay,
@@ -127,6 +129,8 @@ import {
   quyetDinhDuyetLuiHan,
   thanGiaoViec,
   thanSuaNhiemVu,
+  theoThuTuXa,
+  type BangNhanTrangThai,
   type DongVanBanNhap,
   type DongVanBanSua,
   type FormSuaNhiemVu,
@@ -324,6 +328,10 @@ export function SoNhiemVu() {
   } | null>(null);
   const [daTaiKanban, datDaTaiKanban] = useState<DaTaiKanban | null>(null);
   const [danhMuc, datDanhMuc] = useState<DanhMucNhiemVu>(KHONG_DANH_MUC);
+  /** `null` = chưa đọc xong. Xem `docBangNhanTrangThai` cho ba nhánh. */
+  const [kqNhanTT, datKqNhanTT] = useState<KetQua<petitions_danhSachTrangThaiNhiemVuRa> | null>(
+    null,
+  );
 
   const [drawer, guiDrawer] = useReducer(chuyenDrawer, null);
   const [loiGhi, datLoiGhi] = useState<string | null>(null);
@@ -374,8 +382,10 @@ export function SoNhiemVu() {
     };
   }, [loc, khoaKanban, cheDoXem]);
 
-  // BỐN DANH MỤC, ĐỌC MỘT LẦN CHO CẢ MÀN. Một danh mục hỏng thì ô lọc tương ứng rỗng — KHÔNG làm
-  // hỏng quyển sổ: bốn câu trả lời rời nhau, mỗi cái nói chuyện của nó.
+  // NĂM DANH MỤC, ĐỌC MỘT LẦN CHO CẢ MÀN. Một danh mục hỏng thì ô lọc tương ứng rỗng — KHÔNG làm
+  // hỏng quyển sổ: năm câu trả lời rời nhau, mỗi cái nói chuyện của nó. Riêng nhãn trạng thái
+  // hỏng thì KHÔNG rỗng mà lui về nhãn mặc định KÈM một câu cảnh báo (`docBangNhanTrangThai`):
+  // một cột Kanban không tên thì không ai đọc được.
   useEffect(() => {
     let bo = false;
     Promise.all([
@@ -383,7 +393,8 @@ export function SoNhiemVu() {
       layMucUuTienNhiemVu(),
       layKhoiNhiemVu(),
       layDanhMucBoPhan(),
-    ]).then(([loai, uuTien, khoiNV, boPhan]) => {
+      layTrangThaiNhiemVu(),
+    ]).then(([loai, uuTien, khoiNV, boPhan, nhanTT]) => {
       if (bo) return;
       datDanhMuc({
         loai: loai.ok ? loai.duLieu.items : [],
@@ -391,6 +402,7 @@ export function SoNhiemVu() {
         khoi: khoiNV.ok ? khoiNV.duLieu.items : [],
         boPhan: boPhan.ok ? boPhan.duLieu.items : [],
       });
+      datKqNhanTT(nhanTT);
     });
     return () => {
       bo = true;
@@ -423,6 +435,7 @@ export function SoNhiemVu() {
     tai: taiCot(daTaiKanban, khoaKanban, ma),
   }));
   const tenBoPhan = new Map(danhMuc.boPhan.map((b) => [b.id, b.name]));
+  const { bang: nhanTT, canhBao: canhBaoNhanTT } = docBangNhanTrangThai(kqNhanTT);
 
   /** Đổi bộ lọc là về trang đầu: con trỏ của bộ lọc cũ không có nghĩa với bộ lọc mới. */
   function datLocMoi(moi: BoLoc): void {
@@ -454,6 +467,8 @@ export function SoNhiemVu() {
       <h2 id="tieu-de-so-nhiem-vu">Sổ nhiệm vụ của xã</h2>
 
       <KhoiChuaDung />
+
+      <CanhBaoNhanTrangThai canhBao={canhBaoNhanTT} />
 
       <div className="cum-nut">
         <button
@@ -497,7 +512,14 @@ export function SoNhiemVu() {
         />
       )}
 
-      <HangLoc loc={loc} tim={tim} datTim={datTim} datLoc={datLocMoi} danhMuc={danhMuc} />
+      <HangLoc
+        loc={loc}
+        tim={tim}
+        datTim={datTim}
+        datLoc={datLocMoi}
+        danhMuc={danhMuc}
+        nhanTT={nhanTT}
+      />
 
       {/* CỤM CHỌN CHẾ ĐỘ XEM — §2, bên phải hàng lọc 2. HAI nút chứ không phải ba: `Sổ theo dõi`
           §4.3 cần `documents` trên tuyến đọc sổ, và tuyến ấy cố ý không trả — xem `PHAN_CHUA_DUNG`. */}
@@ -525,6 +547,7 @@ export function SoNhiemVu() {
         <BangKanban
           cot={cotKanban}
           danhMuc={danhMuc}
+          nhanTT={nhanTT}
           bayGio={new Date()}
           maDangMo={maDrawer}
           moNhiemVu={(n) => {
@@ -546,6 +569,7 @@ export function SoNhiemVu() {
           <BangNhiemVu
             nhiemVu={so.duLieu.items}
             danhMuc={danhMuc}
+            nhanTT={nhanTT}
             tenBoPhan={tenBoPhan}
             bayGio={new Date()}
             maDangMo={maDrawer}
@@ -583,6 +607,7 @@ export function SoNhiemVu() {
           nhiemVu={drawer.nhiemVu}
           vanBan={drawer.vanBan}
           danhMuc={danhMuc}
+          nhanTT={nhanTT}
           tenBoPhan={tenBoPhan}
           bayGio={new Date()}
           maNguoiDangNhap={maNguoiDangNhap}
@@ -636,6 +661,20 @@ export function SoNhiemVu() {
 }
 
 /**
+ * Nhãn trạng thái đang là nhãn MẶC ĐỊNH vì không đọc được của xã — nói ra, một lần, đầu màn.
+ * `role="status"` chứ không `alert`: sổ vẫn dùng được, chỉ chữ có thể khác chữ xã đặt. Xuất ra để
+ * bài kiểm kết xuất được: `SoNhiemVu` đọc mạng trong `useEffect`, thứ `renderToStaticMarkup` không chạy.
+ */
+export function CanhBaoNhanTrangThai({ canhBao }: { canhBao: string | null }) {
+  if (canhBao === null) return null;
+  return (
+    <p className="canh-bao-pham-vi" role="status">
+      {canhBao}
+    </p>
+  );
+}
+
+/**
  * Những phần đặc tả đòi mà hợp đồng không có — HIỆN LÊN ĐẦU MÀN, không giấu trong chú thích mã.
  *
  * `<details>` chứ không phải một khối luôn mở: danh sách dài hơn quyển sổ ở những ngày đầu, và một
@@ -676,12 +715,15 @@ export function HangLoc({
   datTim,
   datLoc,
   danhMuc,
+  nhanTT,
 }: {
   loc: BoLoc;
   tim: string;
   datTim: (s: string) => void;
   datLoc: (moi: BoLoc) => void;
   danhMuc: DanhMucNhiemVu;
+  /** Nhãn và thứ tự bảy trạng thái của xã — ô lọc hiện đúng chữ và thứ tự xã đặt. */
+  nhanTT: BangNhanTrangThai;
 }) {
   function timNgay(e: FormEvent) {
     e.preventDefault();
@@ -743,9 +785,9 @@ export function HangLoc({
           onChange={(e) => datLoc({ ...loc, trangThai: e.target.value || undefined })}
         >
           <option value="">{MOI_TRANG_THAI_NHAN}</option>
-          {MOI_TRANG_THAI.map((ma) => (
+          {nhanTT.thuTu.map((ma) => (
             <option key={ma} value={ma}>
-              {nhanTrangThai(ma)}
+              {nhanTrangThai(nhanTT, ma)}
             </option>
           ))}
         </select>
@@ -893,12 +935,19 @@ export type CotKanban = {
 export function BangKanban({
   cot,
   danhMuc,
+  nhanTT,
   bayGio,
   maDangMo,
   moNhiemVu,
 }: {
   cot: readonly CotKanban[];
   danhMuc: DanhMucNhiemVu;
+  /**
+   * Nhãn và thứ tự của xã: tên cột VÀ thứ tự cột. §4.1 cố định năm cột chính; thứ tự năm cột ấy
+   * theo `order` xã đặt (`theoThuTuXa`). Xếp Ở ĐÂY chứ không ở chỗ gọi, để thứ tự vẽ ra kiểm được
+   * bằng một lần kết xuất.
+   */
+  nhanTT: BangNhanTrangThai;
   bayGio: Date;
   maDangMo: string | null;
   moNhiemVu: (n: petitions_nhiemVuRa) => void;
@@ -909,6 +958,12 @@ export function BangKanban({
     return <p className="trang-thai-rong">{CAU_LOC_TRANG_THAI_KHONG_CO_COT}</p>;
   }
 
+  const viTri = theoThuTuXa(
+    cot.map((c) => c.ma),
+    nhanTT,
+  );
+  const cotSap = [...cot].sort((a, b) => viTri.indexOf(a.ma) - viTri.indexOf(b.ma));
+
   const soThe = cot.reduce(
     (tong, c) => tong + (c.tai.pha === "xong" ? c.tai.duLieu.items.length : 0),
     0,
@@ -918,11 +973,12 @@ export function BangKanban({
     <>
       <div className="bang-cuon" role="region" aria-label="Bảng Kanban nhiệm vụ" tabIndex={0}>
         <div className="bang-kanban">
-          {cot.map((c) => (
+          {cotSap.map((c) => (
             <section key={c.ma} className="cot-kanban" aria-labelledby={`cot-kanban-${c.ma}`}>
               <h3 id={`cot-kanban-${c.ma}`}>
-                {/* NHÃN CỘT KHÁC NHÃN §6 Ở ĐÚNG MỘT Ô: `moi-giao` lên bảng là "Chưa thực hiện". */}
-                {nhanCotKanban(c.ma)}{" "}
+                {/* NHÃN CỘT LÀ NHÃN CỦA XÃ — cùng một chữ với chip và ô lọc. Chữ "Chưa thực hiện"
+                    của §4.1 là thứ xã tự đặt cho `moi-giao` ở tab Danh mục (xem `nhan-nhiem-vu.ts`). */}
+                {nhanTrangThai(nhanTT, c.ma)}{" "}
                 {c.tai.pha === "xong" && (
                   <span className="chip chip-ngung">
                     {nhanDemCot(c.tai.duLieu.items.length, c.tai.duLieu.has_more)}
@@ -965,7 +1021,7 @@ export function BangKanban({
       <p className="ghi-chu">{GHI_CHU_DEM_COT}</p>
       {/* Chỗ một cán bộ tìm lại việc "biến mất" của mình: một việc vừa sang `tam-dung` rời khỏi
           Kanban hoàn toàn, và §4.1 muốn thế. Không nói ra thì người giao việc kết luận nó đã bị xoá. */}
-      <p className="ghi-chu">{GHI_CHU_KANBAN_RE_NHANH}</p>
+      <p className="ghi-chu">{ghiChuKanbanReNhanh(nhanTT)}</p>
     </>
   );
 }
@@ -1038,6 +1094,7 @@ export function TheNhiemVu({
 export function BangNhiemVu({
   nhiemVu,
   danhMuc,
+  nhanTT,
   tenBoPhan,
   bayGio,
   maDangMo,
@@ -1045,6 +1102,7 @@ export function BangNhiemVu({
 }: {
   nhiemVu: readonly petitions_nhiemVuRa[];
   danhMuc: DanhMucNhiemVu;
+  nhanTT: BangNhanTrangThai;
   tenBoPhan: ReadonlyMap<string, string>;
   bayGio: Date;
   maDangMo: string | null;
@@ -1089,7 +1147,7 @@ export function BangNhiemVu({
                   {o.phanTre !== "" && <span className="nhan-lech"> {o.phanTre}</span>}
                 </td>
                 <td>
-                  <span className="chip chip-ngung">{nhanTrangThai(n.status)}</span>
+                  <span className="chip chip-ngung">{nhanTrangThai(nhanTT, n.status)}</span>
                   {hoanThanhTreHan(n.completed_at, n.original_due_at) && (
                     <span className="chip chip-hoat-dong">Hoàn thành trễ hạn</span>
                   )}
@@ -1125,6 +1183,7 @@ export function ChiTietNhiemVu({
   nhiemVu,
   vanBan,
   danhMuc,
+  nhanTT,
   tenBoPhan,
   bayGio,
   maNguoiDangNhap,
@@ -1145,6 +1204,12 @@ export function ChiTietNhiemVu({
    */
   vanBan: TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
   danhMuc: DanhMucNhiemVu;
+  /**
+   * Nhãn của xã cho dải bước và nút chuyển. DẢI BƯỚC GIỮ THỨ TỰ VÒNG ĐỜI §6, không theo `order`:
+   * nó vẽ một đường đi (mới giao → … → hoàn thành), và xếp lại nó theo sở thích trình bày là vẽ
+   * một vòng đời không có thật.
+   */
+  nhanTT: BangNhanTrangThai;
   tenBoPhan: ReadonlyMap<string, string>;
   bayGio: Date;
   /** `phien.staff.code` — mã nghiệp vụ `CB-…`, rỗng khi chưa đọc được phiên. */
@@ -1209,7 +1274,7 @@ export function ChiTietNhiemVu({
             <span
               className={ma === nhiemVu.status ? "chip chip-hoat-dong" : "chip chip-ngung"}
             >
-              {nhanTrangThai(ma)}
+              {nhanTrangThai(nhanTT, ma)}
             </span>{" "}
             {O_TRONG}
           </li>
@@ -1222,7 +1287,7 @@ export function ChiTietNhiemVu({
             <span
               className={ma === nhiemVu.status ? "chip chip-hoat-dong" : "chip chip-ngung"}
             >
-              {nhanTrangThai(ma)}
+              {nhanTrangThai(nhanTT, ma)}
             </span>{" "}
             {O_TRONG}{" "}
           </span>
@@ -1352,7 +1417,7 @@ export function ChiTietNhiemVu({
               disabled={dangGui}
               onClick={() => doiTrangThai(t, ghiChuChuyen.trim())}
             >
-              Chuyển sang {nhanTrangThai(t)}
+              Chuyển sang {nhanTrangThai(nhanTT, t)}
             </button>
           ))}
         </div>

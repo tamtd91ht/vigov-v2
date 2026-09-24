@@ -78,7 +78,8 @@ export type NhomDanhMuc = {
  * chưa có tuyến nào trong hợp đồng REST (`kb/20-contracts/openapi.json`). `Trạng thái nhiệm vụ`
  * thì CÓ tuyến, nhưng không cùng khuôn: câu hỏi #21 đã chốt là đơn vị chỉ đổi nhãn và thứ tự của
  * một bộ mã cố định (`PATCH /api/v1/task-statuses/{code}`, không thêm, không xoá), nên nó không
- * phải một nhóm thêm · sửa · xoá mềm của bảng này.
+ * phải một nhóm thêm · sửa · xoá mềm của bảng này — tab vẽ nó bằng thành phần riêng
+ * `nhom-trang-thai-nhiem-vu.tsx`.
  *
  * VÌ SAO CÓ CỜ `thuTuLaThangBac` THAY VÌ MỘT NHÁNH `if (khoa === "mucUuTienNhiemVu")` rải trong
  * component: thứ tự của `items` ở mức ưu tiên LÀ thang bậc của đơn vị, không phải sở thích trình

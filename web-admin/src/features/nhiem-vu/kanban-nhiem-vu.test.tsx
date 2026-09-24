@@ -4,15 +4,15 @@ import { describe, expect, it } from "vitest";
 import type { page_Result_petitions_nhiemVuRa, petitions_nhiemVuRa } from "@/lib/api/schema.gen";
 
 import {
+  BANG_NHAN_MAC_DINH,
   CAU_LOC_TRANG_THAI_KHONG_CO_COT,
   CHUA_PHAN_CONG,
   COT_RONG,
   GHI_CHU_DEM_COT,
-  GHI_CHU_KANBAN_RE_NHANH,
   PHAN_CHUA_DUNG,
   TRANG_THAI_CHINH,
   cotPhaiDoc,
-  nhanCotKanban,
+  ghiChuKanbanReNhanh,
   nhanDemCot,
 } from "./nhan-nhiem-vu";
 import { BangKanban, TheNhiemVu, type CotKanban, type DanhMucNhiemVu } from "./so-nhiem-vu";
@@ -109,6 +109,7 @@ function veBang(cot: readonly CotKanban[]): string {
     <BangKanban
       cot={cot}
       danhMuc={DANH_MUC}
+      nhanTT={BANG_NHAN_MAC_DINH}
       bayGio={BAY_GIO}
       maDangMo={null}
       moNhiemVu={() => {}}
@@ -116,7 +117,7 @@ function veBang(cot: readonly CotKanban[]): string {
   );
 }
 
-describe("năm cột §4.1 — và nhãn cột KHÁC nhãn §6 ở đúng một ô", () => {
+describe("năm cột §4.1", () => {
   it("đủ năm cột chính, không có cột nào cho hai trạng thái rẽ nhánh", () => {
     const html = veBang(namCot());
     for (const ma of TRANG_THAI_CHINH) {
@@ -126,19 +127,19 @@ describe("năm cột §4.1 — và nhãn cột KHÁC nhãn §6 ở đúng một 
     expect(html).not.toContain('id="cot-kanban-chuyen-tiep"');
   });
 
-  it("cột đầu tiên tên `Chưa thực hiện`, KHÔNG phải `Mới giao`", () => {
-    // §6 ghi thẳng sự lệch ấy, và §4.1 lẫn §12 đều đếm "Chưa thực hiện". Dùng một nhãn cho cả hai
-    // chỗ là làm sai một trong hai màn — mà cả hai vẫn chạy, nên không có gì đỏ ngoài bài này.
+  it("tên cột là nhãn của BẢNG NHÃN truyền vào — không còn nhãn Kanban riêng", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 24/09/2026 (#21): bài này từng canh "Chưa thực hiện" nung trong màn hình.
+    // Nay chữ ấy là thứ xã tự đặt cho `moi-giao`; với bảng mặc định cột đầu là "Mới giao". Ca xã đã
+    // đổi nhãn nằm ở `nhan-trang-thai-xa.test.tsx`.
     const html = veBang(namCot());
-    expect(html).toContain("Chưa thực hiện");
-    expect(html).not.toContain("Mới giao");
-    expect(nhanCotKanban("moi-giao")).toBe("Chưa thực hiện");
+    expect(html).toContain("Mới giao");
+    expect(html).not.toContain("Chưa thực hiện");
   });
 
   it("câu nói ra rằng Tạm dừng và Chuyển tiếp không hiện ở bảng này", () => {
     // Không có câu này thì một việc vừa sang `tam-dung` biến mất khỏi Kanban không dấu vết, và
     // người giao việc kết luận nhiệm vụ đã bị xoá.
-    expect(veBang(namCot())).toContain(nhuTrongHTML(GHI_CHU_KANBAN_RE_NHANH));
+    expect(veBang(namCot())).toContain(nhuTrongHTML(ghiChuKanbanReNhanh(BANG_NHAN_MAC_DINH)));
   });
 });
 

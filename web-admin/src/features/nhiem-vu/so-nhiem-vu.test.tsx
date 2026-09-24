@@ -10,6 +10,7 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import {
+  BANG_NHAN_MAC_DINH,
   CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
   CANH_BAO_HAN_MOT_LAN,
@@ -187,6 +188,7 @@ function veChiTiet(
       nhiemVu={nhiemVu(sua)}
       vanBan={vanBan}
       danhMuc={DANH_MUC}
+      nhanTT={BANG_NHAN_MAC_DINH}
       tenBoPhan={TEN_BO_PHAN}
       bayGio={BAY_GIO}
       maNguoiDangNhap={maNguoiDangNhap}
@@ -312,6 +314,7 @@ describe("câu từ chối của máy chủ vẽ THẲNG, không nuốt thành '
         nhiemVu={nhiemVu({ status: "cho-duyet" })}
         vanBan={{ pha: "dangTai" }}
         danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maNguoiDangNhap={LANH_DAO}
@@ -349,6 +352,7 @@ describe("bảng danh sách §4.2", () => {
       <BangNhiemVu
         nhiemVu={[nhiemVu()]}
         danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
@@ -367,6 +371,7 @@ describe("bảng danh sách §4.2", () => {
       <BangNhiemVu
         nhiemVu={[nhiemVu({ assignee: "" })]}
         danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
@@ -390,6 +395,7 @@ describe("bảng danh sách §4.2", () => {
           }),
         ]}
         danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
@@ -404,6 +410,7 @@ describe("bảng danh sách §4.2", () => {
       <BangNhiemVu
         nhiemVu={[nhiemVu()]}
         danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
@@ -418,6 +425,7 @@ describe("bảng danh sách §4.2", () => {
       <BangNhiemVu
         nhiemVu={[]}
         danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}

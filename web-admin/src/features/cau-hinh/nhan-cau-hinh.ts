@@ -38,12 +38,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "tuyến xoá.",
   },
   {
-    ten: "Đặt nhãn và thứ tự Trạng thái nhiệm vụ",
-    viSao:
-      "Máy chủ đã có `GET /api/v1/task-statuses` và `PATCH /api/v1/task-statuses/{code}`, nhưng " +
-      "màn quản trị chưa dựng chỗ nào để đơn vị đổi nhãn hay thứ tự.",
-  },
-  {
     ten: "Tab Trường bản đồ (§6)",
     viSao:
       "Hợp đồng chưa có tuyến nào. Đặc tả cũng chưa tự khớp: §6 vẽ ba thao tác `✎` · `Tắt` · `🗑` " +

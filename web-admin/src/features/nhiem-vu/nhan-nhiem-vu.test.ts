@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { petitions_nhiemVuRa, petitions_nhiemVuVanBanRa } from "@/lib/api/schema.gen";
 
 import {
+  BANG_NHAN_MAC_DINH,
   CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
   KHONG_SO,
@@ -22,7 +23,6 @@ import {
   ketThuc,
   laTrangThaiNhiemVu,
   nhanBoDem,
-  nhanCotKanban,
   nhanHanThe,
   nhanNgay,
   nhanNguonGiao,
@@ -132,16 +132,19 @@ describe("bảy trạng thái — §6", () => {
     expect(new Set(MOI_TRANG_THAI).size).toBe(7);
   });
 
-  it("`moi-giao` trên Kanban gọi là `Chưa thực hiện`, ở chỗ khác là `Mới giao`", () => {
-    // §6 ghi thẳng sự lệch này. Dùng một nhãn cho cả hai chỗ là làm sai một trong hai màn.
-    expect(nhanCotKanban("moi-giao")).toBe("Chưa thực hiện");
-    expect(nhanTrangThai("moi-giao")).toBe("Mới giao");
+  it("đường lui = đúng bảng mặc định của máy chủ: `moi-giao` là `Mới giao`, thứ tự vòng đời", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 24/09/2026 (#21): bài này từng canh nhãn Kanban riêng "Chưa thực hiện".
+    // Máy chủ giao "Mới giao" làm mặc định và coi "Chưa thực hiện" là chữ XÃ tự đặt
+    // (`nhan_trang_thai_nhiem_vu.go:57-59`); một bản nhãn Kanban thứ hai ở màn hình là bản sao
+    // quyết định #21 bỏ đi.
+    expect(nhanTrangThai(BANG_NHAN_MAC_DINH, "moi-giao")).toBe("Mới giao");
+    expect(BANG_NHAN_MAC_DINH.thuTu).toEqual(MOI_TRANG_THAI);
   });
 
   it("mã lạ hiện NGUYÊN VĂN, không thành dấu gạch", () => {
     // Một trạng thái mới ở máy chủ mà màn hình vẽ thành `—` là hồ sơ trông như chưa có trạng thái.
     expect(laTrangThaiNhiemVu("da-ban-giao")).toBe(false);
-    expect(nhanTrangThai("da-ban-giao")).toBe("da-ban-giao");
+    expect(nhanTrangThai(BANG_NHAN_MAC_DINH, "da-ban-giao")).toBe("da-ban-giao");
   });
 
   it("vòng đời: chỉ có bước §6 vẽ ra", () => {
