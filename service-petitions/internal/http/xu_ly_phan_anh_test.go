@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -889,6 +890,23 @@ func TestTuyenXuLyPhieuDaChuyenTrangThi409(t *testing.T) {
 
 	w := m.goiThan(t, http.MethodPost, hostA, duongPhanLoai(maPhieuThuong), canBoCuaXa(xaA),
 		phanLoaiVao{Field: "rac-thai"})
+
+	doiMa(t, w, http.StatusConflict)
+	if loiTra(t, w).Code != "petition_state" {
+		t.Errorf("mã lỗi = %q, muốn petition_state", loiTra(t, w).Code)
+	}
+}
+
+// TestDongSaiBuocThi409 — closing a petition WITH a citizen from `da-xu-ly` (or any status the
+// lifecycle does not close from) is a refusal about the STATE of the record: 409, never 400 or 403.
+// Which petitions DongDuoc refuses is proved over the real store in internal/app.
+func TestDongSaiBuocThi409(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.resolve"))
+	m.xuLy.loi = fmt.Errorf("xu_ly_phan_anh: đóng phiếu cho xã %s: %w", xaA, domain.ErrDongSaiLuc)
+
+	w := m.goiThan(t, http.MethodPost, hostA, duongDong(maPhieuThuong), canBoCuaXa(xaA),
+		dongPhieuVao{Result: ketQuaThat})
 
 	doiMa(t, w, http.StatusConflict)
 	if loiTra(t, w).Code != "petition_state" {

@@ -665,6 +665,114 @@ func TestDongPhieuSaiBuocThiTuChoi(t *testing.T) {
 	}
 }
 
+// deltaDong reads the audit delta of the one closing entry as a map.
+func deltaDong(t *testing.T, k *khoPhieuXuLyGia) map[string]any {
+	t.Helper()
+	vet := k.cau("INSERT INTO audit_log")
+	if len(vet) != 1 {
+		t.Fatalf("có %d vết, muốn 1", len(vet))
+	}
+	for _, a := range vet[0].args {
+		b, ok := a.([]byte)
+		if !ok {
+			continue
+		}
+		var d map[string]any
+		if json.Unmarshal(b, &d) == nil {
+			if _, co := d["truoc"]; co {
+				return d
+			}
+		}
+	}
+	t.Fatalf("không tìm thấy delta trong vết: %v", vet[0].args)
+	return nil
+}
+
+// TestDongTuDaXuLyKhiKhongCoCongDan — OWNER'S DECISION OF 2026-09-24. A petition with nobody who can
+// confirm it (no citizen account behind it) closes straight from `da-xu-ly`: the act commits, the
+// audit entry says the confirmation was skipped, and NO outbox row is written (no recipient).
+//
+// ĐỘT BIẾN: bỏ nhánh `DaXuLy && CongDanID == ""` khỏi domain.DongDuoc và ca này ĐỎ; bỏ cạnh
+// `DaXuLy -> DaDong` khỏi chuyenDuocSang và ca này cũng ĐỎ.
+func TestDongTuDaXuLyKhiKhongCoCongDan(t *testing.T) {
+	k := khoPhieuMau()
+	k.hang = dongPhieuMau(map[string]any{
+		"trang_thai":     string(domain.DaXuLy),
+		"linh_vuc":       "rac-thai",
+		"han_xu_ly_xong": mocXuLyXongThu,
+		"xu_ly_xong_luc": mocThaoTac,
+		"cong_dan_id":    nil,
+	})
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+	sau, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe)
+	if err != nil {
+		t.Fatalf("Dong: %v", err)
+	}
+	if sau.TrangThai != domain.DaDong || sau.KetQuaXuLy != ketQuaThat {
+		t.Fatalf("trạng thái=%q kết quả=%q", sau.TrangThai, sau.KetQuaXuLy)
+	}
+	// THE RESOLVE CLOCK STAYS WHERE THE WORK FINISHED — `xu_ly_xong_luc` was stamped on entering
+	// `da-xu-ly`, and closing does not move it.
+	if !sau.XuLyXongLuc.Equal(mocThaoTac) {
+		t.Errorf("xu_ly_xong_luc = %v, muốn %v", sau.XuLyXongLuc, mocThaoTac)
+	}
+	up := k.cau("UPDATE phieu_phan_anh")
+	if len(up) != 1 || !coThamSo(up[0].args, string(domain.DaXuLy)) {
+		t.Errorf("câu UPDATE không mang trạng thái nguồn da-xu-ly: %v", up)
+	}
+	if k.coCau("INSERT INTO su_kien_di") {
+		t.Error("ghi dòng sự kiện cho phiếu không có công dân — tin chắc chắn vào hàng thư chết")
+	}
+	if k.daCommit != 1 {
+		t.Errorf("commit=%d, muốn 1", k.daCommit)
+	}
+	d := deltaDong(t, k)
+	if d["dong_khong_qua_xac_nhan"] != true {
+		t.Errorf("delta không ghi dong_khong_qua_xac_nhan=true: %v", d)
+	}
+}
+
+// TestDongTuChoDanXacNhanGhiCoFalse — the ordinary closing records the flag as FALSE, so the key is
+// always present and one query answers "closed without confirmation".
+func TestDongTuChoDanXacNhanGhiCoFalse(t *testing.T) {
+	k := khoPhieuMau()
+	k.hang = dongPhieuMau(map[string]any{
+		"trang_thai":     string(domain.ChoDanXacNhan),
+		"xu_ly_xong_luc": mocThaoTac,
+	})
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+	if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe); err != nil {
+		t.Fatalf("Dong: %v", err)
+	}
+	if d := deltaDong(t, k); d["dong_khong_qua_xac_nhan"] != false {
+		t.Errorf("delta phải ghi dong_khong_qua_xac_nhan=false: %v", d)
+	}
+}
+
+// TestDongPhieuKhongCongDanSaiBuocThiTuChoi — the no-citizen widening is `da-xu-ly` ONLY. Every other
+// status of a petition without a citizen is still refused.
+func TestDongPhieuKhongCongDanSaiBuocThiTuChoi(t *testing.T) {
+	for _, tt := range []domain.TrangThai{
+		domain.DaTiepNhan, domain.DangPhanLoai, domain.DaChuyenXuLy,
+		domain.DangXuLy, domain.DaDong, domain.KhongTiepNhan, domain.ChuyenCapTren,
+	} {
+		t.Run(string(tt), func(t *testing.T) {
+			k := khoPhieuMau()
+			k.hang = dongPhieuMau(map[string]any{"trang_thai": string(tt), "cong_dan_id": nil})
+			uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+			if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe); !errors.Is(err, domain.ErrDongSaiLuc) {
+				t.Fatalf("lỗi = %v, muốn ErrDongSaiLuc", err)
+			}
+			if k.coCau("UPDATE phieu_phan_anh") || k.coCau("INSERT INTO audit_log") {
+				t.Error("đã ghi dù bước không cho đóng")
+			}
+		})
+	}
+}
+
 // --- assignment -------------------------------------------------------------------------------------
 
 // TestPhanCongLanDauChuyenSangDaChuyenXuLy — the first routing IS the transition into

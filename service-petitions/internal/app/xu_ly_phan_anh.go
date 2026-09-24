@@ -753,6 +753,11 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit
 
 // Dong closes the petition, recording a result the CITIZEN can read. Permission: `feedback.resolve`.
 //
+// FROM `cho-dan-xac-nhan`, OR FROM `da-xu-ly` WHEN NOBODY CAN CONFIRM (no citizen account — owner's
+// decision of 2026-09-24, domain.DongDuoc). The second case writes no outbox row, by the existing "no
+// recipient, no row" rule of ghiSuKienDoiTrangThai, and its audit entry says the confirmation was
+// skipped (`dong_khong_qua_xac_nhan`).
+//
 // ⚠ IT TAKES NO QuyenXuLyCaXa AND MUST NOT GROW ONE — and the QuyenXemHanChe it DOES take is not
 // that parameter wearing another name. The two facts pull in opposite directions: QuyenXuLyCaXa can
 // only ever WIDEN who may act, while QuyenXemHanChe can only ever NARROW it, and no value of it lets
@@ -802,7 +807,15 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi aud
 		if err := duocChamPhieuHanChe(p, hanChe); err != nil {
 			return err
 		}
-		if err := domain.DongDuoc(p.TrangThai); err != nil {
+		// ON THE LOCKED ROW, because the answer depends on the petition and not only its status: from
+		// `da-xu-ly` a closing is allowed only when no citizen account stands behind the petition
+		// (owner's decision of 2026-09-24; domain.DongDuoc carries the reasoning).
+		//
+		// `xu_ly_xong_luc` IS ALREADY SET on a petition in `da-xu-ly` — TienTrangThai stamps it on the
+		// step that enters that status — so closing from there leaves the resolve clock where the work
+		// actually finished, exactly as a closing from `cho-dan-xac-nhan` does.
+		boQuaXacNhan, err := domain.DongDuoc(p)
+		if err != nil {
 			return err
 		}
 		if err := uc.kho.Dong(ctx, tx, p.ID, p.TrangThai, ketQua, bayGio); err != nil {
@@ -829,6 +842,10 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi aud
 			"tre_han":         sau.QuaHan(bayGio),
 			"co_ket_qua_doc":  true,
 			"dong_luc_da_ghi": lucRaVet(bayGio),
+			// WHETHER THIS CLOSING SKIPPED THE CITIZEN'S CONFIRMATION. Always present, true or false,
+			// so an inspection asking "which petitions were closed without anybody confirming" can
+			// query one key rather than infer it from the `truoc` status.
+			"dong_khong_qua_xac_nhan": boQuaXacNhan,
 		})
 		if err != nil {
 			return fmt.Errorf("xu_ly_phan_anh: mã hoá delta: %w", err)

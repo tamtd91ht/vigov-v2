@@ -65,12 +65,18 @@ const (
 // and this map does not answer that. A transition being SHAPED correctly and a transition being
 // PERMITTED are two questions; conflating them would hard-code a flag ADR 0008 created to be a
 // flag.
+//
+// `da-xu-ly -> da-dong` WAS ADDED BY THE OWNER'S DECISION OF 2026-09-24: a petition with NOBODY WHO
+// CAN CONFIRM IT — no citizen account behind it (`cong_dan_id` empty: staff-booked, `can-bo-nhap-ho`)
+// — may be closed straight from `da-xu-ly`, with the closing result as the record. The edge being
+// SHAPED here does not make it PERMITTED for every petition: domain.DongDuoc allows it only when
+// `cong_dan_id` is empty, and a petition WITH a citizen still closes only from `cho-dan-xac-nhan`.
 var chuyenDuocSang = map[TrangThai][]TrangThai{
 	DaTiepNhan:    {DangPhanLoai},
 	DangPhanLoai:  {DaChuyenXuLy, KhongTiepNhan, ChuyenCapTren},
 	DaChuyenXuLy:  {DangXuLy},
 	DangXuLy:      {DaXuLy},
-	DaXuLy:        {ChoDanXacNhan},
+	DaXuLy:        {ChoDanXacNhan, DaDong},
 	ChoDanXacNhan: {DaDong, DangXuLy},
 	DaDong:        {DangXuLy},
 	KhongTiepNhan: {},

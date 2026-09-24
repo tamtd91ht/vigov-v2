@@ -55,6 +55,7 @@ func TestChuyenTrangThaiChiTheoDungDuongDaChot(t *testing.T) {
 		{DaChuyenXuLy, DangXuLy},
 		{DangXuLy, DaXuLy},
 		{DaXuLy, ChoDanXacNhan},
+		{DaXuLy, DaDong}, // chỉ khi không có công dân để xác nhận — quyết định 2026-09-24, DongDuoc
 		{ChoDanXacNhan, DaDong},
 		{ChoDanXacNhan, DangXuLy}, // mở lại vì đánh giá thấp
 		{DaDong, DangXuLy},        // mở lại vì đánh giá thấp

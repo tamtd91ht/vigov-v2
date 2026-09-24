@@ -263,6 +263,7 @@ func BaoChoDan(t TrangThai) bool {
 //	da-tiep-nhan   -> dang-phan-loai   settles `linh_vuc` AND FIXES `han_xu_ly_xong` — feedback.classify
 //	dang-phan-loai -> da-chuyen-xu-ly  names the department answerable for it       — feedback.assign
 //	cho-dan-xac-nhan -> da-dong        records a result the citizen can read        — feedback.resolve
+//	                                   (also da-xu-ly -> da-dong when nobody can confirm — DongDuoc)
 //	cho-dan-xac-nhan / da-dong -> dang-xu-ly   REOPENING, governed by three per-commune flags of
 //	                                   ADR 0008 that no table in this repository holds yet
 //
@@ -329,19 +330,41 @@ func SauKhiPhanCong(t TrangThai) (TrangThai, error) {
 
 // ErrDongSaiLuc is returned when the petition is not at the point the lifecycle closes from.
 var ErrDongSaiLuc = errors.New(
-	"phan_anh: chưa đóng được — chỉ đóng phiếu đang ở bước chờ dân xác nhận")
+	"phan_anh: chưa đóng được — chỉ đóng phiếu đang chờ dân xác nhận, hoặc phiếu đã xử lý mà không " +
+		"có người dân nào để xác nhận")
 
-// DongDuoc reports whether the petition may be closed now.
+// DongDuoc reports whether petition `p` may be closed now, and whether that closing SKIPS the
+// citizen's confirmation.
 //
-// `cho-dan-xac-nhan` AND NOTHING ELSE, which is exactly what the lifecycle map allows into `da-dong`
-// (ADR 0027). Widening it — "close from anywhere, the officer knows best" — would let a petition be
-// closed before the citizen was ever asked to confirm, and adding or removing an edge of that map is
-// rule 10, stop condition #2.
-func DongDuoc(t TrangThai) error {
-	if t != ChoDanXacNhan {
-		return ErrDongSaiLuc
+// # TWO POINTS, DECIDED ON THE PETITION AND NOT ON THE STATUS ALONE
+//
+//	cho-dan-xac-nhan                     the ordinary closing (ADR 0027)
+//	da-xu-ly  AND  cong_dan_id empty     OWNER'S DECISION OF 2026-09-24: nobody can confirm, so the
+//	                                     petition closes straight from `da-xu-ly` and the closing
+//	                                     itself — with its mandatory readable result — is the reason
+//
+// THE CITIZEN TEST IS WHAT KEEPS THE SECOND POINT NARROW. A petition WITH a citizen account behind it
+// is still refused from `da-xu-ly`: closing it there would end the matter before the citizen was ever
+// asked to confirm, which is what the `cho-dan-xac-nhan` step exists to prevent. Widening further —
+// "close from anywhere, the officer knows best" — is rule 10, stop condition #2.
+//
+// BOTH CONDITIONS ARE CHECKED AGAINST THE LIFECYCLE MAP TOO (ChuyenSangDuoc), so this function can
+// never allow an edge the map does not have, whichever of the two declarations drifts.
+//
+// FAIL CLOSED: every other status, and any code that is not one of the nine, is refused.
+func DongDuoc(p PhieuPhanAnh) (boQuaXacNhan bool, err error) {
+	switch {
+	case p.TrangThai == ChoDanXacNhan:
+		boQuaXacNhan = false
+	case p.TrangThai == DaXuLy && p.CongDanID == "":
+		boQuaXacNhan = true
+	default:
+		return false, ErrDongSaiLuc
 	}
-	return nil
+	if !p.TrangThai.ChuyenSangDuoc(DaDong) {
+		return false, ErrDongSaiLuc
+	}
+	return boQuaXacNhan, nil
 }
 
 // ErrKetThucNhanhSaiLuc is returned when a petition is not at the one point the two terminal branches

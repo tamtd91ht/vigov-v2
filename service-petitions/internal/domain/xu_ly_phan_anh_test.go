@@ -248,14 +248,34 @@ func TestSauKhiPhanCong(t *testing.T) {
 	}
 }
 
-func TestDongDuocChiTuChoDanXacNhan(t *testing.T) {
-	if err := DongDuoc(ChoDanXacNhan); err != nil {
-		t.Fatalf("không đóng được từ cho-dan-xac-nhan: %v", err)
+// TestDongDuocTheoPhieu — owner's decision of 2026-09-24: a petition WITH a citizen closes only from
+// `cho-dan-xac-nhan`; a petition with NOBODY to confirm (empty `cong_dan_id`) also closes from
+// `da-xu-ly`, and that closing is reported as skipping the confirmation.
+func TestDongDuocTheoPhieu(t *testing.T) {
+	coDan := func(tt TrangThai) PhieuPhanAnh { return PhieuPhanAnh{TrangThai: tt, CongDanID: "cd-001"} }
+	khongDan := func(tt TrangThai) PhieuPhanAnh { return PhieuPhanAnh{TrangThai: tt} }
+
+	for ten, p := range map[string]PhieuPhanAnh{
+		"có dân, chờ xác nhận":    coDan(ChoDanXacNhan),
+		"không dân, chờ xác nhận": khongDan(ChoDanXacNhan),
+	} {
+		bo, err := DongDuoc(p)
+		if err != nil || bo {
+			t.Errorf("%s: bỏ qua=%v lỗi=%v, muốn false/nil", ten, bo, err)
+		}
 	}
-	for _, tu := range []TrangThai{DaTiepNhan, DangPhanLoai, DaChuyenXuLy, DangXuLy, DaXuLy,
-		DaDong, KhongTiepNhan, ChuyenCapTren} {
-		if err := DongDuoc(tu); !errors.Is(err, ErrDongSaiLuc) {
-			t.Errorf("đóng được từ %q — phiếu bị đóng trước khi người dân được hỏi", tu)
+	if bo, err := DongDuoc(khongDan(DaXuLy)); err != nil || !bo {
+		t.Errorf("không dân, da-xu-ly: bỏ qua=%v lỗi=%v, muốn true/nil", bo, err)
+	}
+	if _, err := DongDuoc(coDan(DaXuLy)); !errors.Is(err, ErrDongSaiLuc) {
+		t.Error("đóng được phiếu CÓ công dân từ da-xu-ly — phiếu bị đóng trước khi người dân được hỏi")
+	}
+	for _, tu := range []TrangThai{DaTiepNhan, DangPhanLoai, DaChuyenXuLy, DangXuLy,
+		DaDong, KhongTiepNhan, ChuyenCapTren, TrangThai("khong-ton-tai")} {
+		for _, p := range []PhieuPhanAnh{coDan(tu), khongDan(tu)} {
+			if _, err := DongDuoc(p); !errors.Is(err, ErrDongSaiLuc) {
+				t.Errorf("đóng được từ %q (công dân=%q)", tu, p.CongDanID)
+			}
 		}
 	}
 }
