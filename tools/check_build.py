@@ -26,6 +26,7 @@ Chạy trong `make check`. Trả về 1 khi có vi phạm.
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import re
 import sys
@@ -122,18 +123,24 @@ def kiem_dockerignore(svcs: list[str], loi: list[str]) -> None:
         return
 
     with open(duong, encoding="utf-8") as f:
-        # Chỉ lấy mẫu là TÊN THƯ MỤC TRẦN. `**/node_modules`, `*.pem`, `!.env.example` là mẫu
-        # tệp — chúng không trả lời được câu hỏi "thư mục cấp một này có bị loại không".
-        loai = {
+        # Chỉ lấy mẫu CẤP MỘT: không có `/` và không phải phủ định `!`. `**/node_modules` và
+        # `!.env.example` không trả lời được câu hỏi "thư mục cấp một này có bị loại không".
+        #
+        # Mẫu có `*` (`*@tmp`) ĐƯỢC tính, và so bằng fnmatch — Docker dùng cùng cú pháp ấy ở
+        # cấp một. Trước 24/09/2026 mọi mẫu có `*` bị bỏ qua, nên thư mục phụ `web-admin@tmp`
+        # của Jenkins không có cách nào khai được ngoài một dòng tên cứng cho TỪNG bước `dir()`.
+        # Mẫu tệp như `*.pem` cũng lọt vào tập này; nó chỉ khớp một thư mục tên đuôi `.pem`,
+        # và thư mục ấy quả thật bị Docker loại, nên kết luận vẫn đúng.
+        mau = {
             d.strip() for d in f
             if d.strip() and not d.startswith("#")
-            and not any(c in d for c in "*!/")
+            and not any(c in d for c in "!/")
         }
 
     for ten in sorted(os.listdir(GOC)):
         if ten.startswith(".") or not os.path.isdir(os.path.join(GOC, ten)):
             continue
-        if ten in svcs or ten in DUOC_DI_THEO or ten in loai:
+        if ten in svcs or ten in DUOC_DI_THEO or any(fnmatch.fnmatchcase(ten, m) for m in mau):
             continue
         loi.append(
             f"thư mục cấp một '{ten}/' không bị .dockerignore loại, và cũng không phải mã của "

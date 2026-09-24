@@ -53,6 +53,14 @@ citizen-app
 # sang trình đóng ảnh, và ảnh chụp màn hình của ai đó vẫn nằm trong tầm với của mọi lệnh COPY.
 tmp
 
+# ---- thư mục phụ của Jenkins: `<tên>@tmp` -------------------------------------------
+#
+# Mỗi bước `dir('web-admin') { sh … }` làm Jenkins tạo `web-admin@tmp/` NGAY TRONG workspace
+# để giữ script tạm của bước ấy. Nó không có trong git, không có trên máy trạm, và chỉ xuất
+# hiện từ lượt build thứ hai trở đi — lượt vigov-gate 24/09/2026 10:08 là lần đầu nó bị thấy.
+# Mẫu thay vì tên: một bước `dir()` mới là một thư mục `@tmp` mới.
+*@tmp
+
 # ---- kết quả build của máy dev, phải sinh lại trong ảnh -----------------------------
 node_modules
 **/node_modules
