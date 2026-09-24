@@ -1,6 +1,6 @@
 ---
-description: In bảng tiến độ theo PHÂN HỆ SẢN PHẨM — chương đặc tả và từng mục menu web-admin
-argument-hint: "[--moi] — thêm --moi để sinh lại hợp đồng trước khi đo"
+description: In bảng tiến độ theo PHÂN HỆ SẢN PHẨM — lọc được theo bề mặt và phân hệ, bỏ trống là toàn bộ
+argument-hint: "[API|WebAdmin|Miniapp][-<phân hệ>] — ví dụ API-Nhiệm vụ, WebAdmin-Giải ngân, Miniapp, 02. Bỏ trống = toàn bộ"
 allowed-tools: Read, Bash
 ---
 
@@ -18,23 +18,57 @@ hai trục, hai người đọc — và chúng **liên kết** với nhau chứ 
 ## CHẠY
 
 ```sh
-python tools/tien_do_san_pham.py     # đọc hợp đồng đang có trên đĩa
+python tools/tien_do_san_pham.py                    # TOÀN BỘ — ghi tệp, bốn phần
+python tools/tien_do_san_pham.py API-Nhiệm vụ       # một phân hệ, một bề mặt
+python tools/tien_do_san_pham.py WebAdmin-Giải ngân
+python tools/tien_do_san_pham.py Miniapp            # một bề mặt, mọi phân hệ
+python tools/tien_do_san_pham.py 02                 # một phân hệ, cả ba bề mặt
 ```
 
-Kết quả ghi vào `kb/90-ephemeral/tien-do-san-pham.md`. Mở tệp ấy và **in nguyên văn hai bảng
-đầu ra cho người dùng** — đừng tóm tắt lại bằng lời, vì tóm tắt là chỗ một con số đo được biến
-thành một con số ước lượng.
+**Bộ lọc là `[BỀ MẶT][-PHÂN HỆ]`, mỗi vế bỏ được.**
 
-**Với `--moi`**, sinh lại hợp đồng trước rồi mới đo. Chỉ cần khi mã Go vừa đổi và `make kb` chưa
-chạy:
+| Vế | Nhận |
+|---|---|
+| Bề mặt | `API` · `WebAdmin` · `Miniapp` — và các cách gọi khác: `backend`, `web`, `admin`, `zalo`, `công dân`… |
+| Phân hệ | số chương (`02`) hoặc tên chương (`Nhiệm vụ`, `nhiem-vu`, `Quản lý nhiệm vụ`) |
+
+Có dấu hay không, hoa hay thường, gạch nối hay khoảng trắng — đều như nhau: bộ lọc bỏ dấu, bỏ
+hoa thường, bỏ mọi ký tự không phải chữ số trước khi so. Tên phân hệ là tiếng Việt có dấu, và
+bắt người gõ đúng từng dấu trên dòng lệnh là bắt họ đi đọc mã.
+
+**Gõ nhầm thì ĐỎ, thoát 1, kèm danh sách giá trị đúng** — không âm thầm in toàn bộ. Một người gõ
+`WebAdim-Nhiem vu` mà nhận được cả bảng sẽ đọc nó như bảng của riêng phân hệ mình hỏi.
+
+---
+
+## KHÔNG LỌC GHI TỆP · CÓ LỌC CHỈ IN RA
+
+| | |
+|---|---|
+| **Không tham số** | ghi `kb/90-ephemeral/tien-do-san-pham.md`, đủ bốn phần. Đây là thứ `make kb` chạy |
+| **Có tham số** | **chỉ in ra màn**, không đụng tệp sinh |
+
+Một bản đã lọc nằm ở đường dẫn của bản toàn cảnh là một tệp **trông như toàn cảnh mà chỉ chứa
+một phân hệ** — loại tài liệu nói dối mà không ai phát hiện được, vì nó không sai ở bất kỳ dòng
+nào, nó chỉ thiếu.
+
+Khi in cho người dùng, **in nguyên văn bảng** — đừng tóm tắt lại bằng lời. Tóm tắt là chỗ một
+con số đo được biến thành một con số ước lượng.
+
+---
+
+## KHI SỐ CÓ THỂ ĐÃ CŨ
+
+Bộ lọc đọc `kb/20-contracts/openapi.json` **đang có trên đĩa**. Mã Go vừa đổi mà `make kb` chưa
+chạy thì sinh lại hợp đồng trước:
 
 ```sh
 go run ./tools/apidoc && python tools/tien_do_san_pham.py
 ```
 
-⚠ **KHÔNG chạy `--moi` khi còn agent đang ghi mã.** `apidoc` đọc cả `web-admin/src/lib/api/**`
-để biết tuyến nào đã có màn gọi; đọc giữa lúc một agent viết dở là đo một cây đang động, và nó
-sẽ chuyển nhầm việc sang `done/`.
+⚠ **KHÔNG làm thế khi còn agent đang ghi mã.** `apidoc` đọc cả `web-admin/src/lib/api/**` để
+biết tuyến nào đã có màn gọi; đọc giữa lúc một agent viết dở là đo một cây đang động, và nó sẽ
+chuyển nhầm việc sang `done/`.
 
 ---
 
@@ -52,6 +86,12 @@ vào mẫu số cho ra `6/8` và đọc thành "còn thiếu hai màn" — sai.
 **`không khai` ≠ `0`.** `0` nghĩa là màn có khai một danh sách phần-chưa-dựng và danh sách ấy
 rỗng. `không khai` nghĩa là **chưa ai nói màn ấy còn thiếu gì**. Ba màn đang ở trạng thái sau,
 và in `0` cho chúng là một lời trấn an không có gì đứng sau.
+
+**Phần Mini App đo hai thứ rời nhau, và khoảng cách giữa chúng mới là tin.** Một bên là tuyến
+ViGov khai `citizen-only` trong hợp đồng; một bên là tuyến `citizen-app` thật sự gọi. Hôm nay là
+`2` và `0` — không phải vì app làm thiếu, mà vì nó đang phục vụ bề mặt của **kho anh em**
+`vihat-miniapp` (CLAUDE.md, mục hai kho). Gộp hai con số ấy làm một là mất đúng thông tin đáng
+giữ.
 
 ---
 
