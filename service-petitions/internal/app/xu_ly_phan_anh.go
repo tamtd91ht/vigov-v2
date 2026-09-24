@@ -126,6 +126,37 @@ type DocHanXuLyXong interface {
 		can []identityv1.DeadlineKind) (map[identityv1.DeadlineKind]time.Time, error)
 }
 
+// KiemCanBoGiaoViec asks identity which staff codes may be handed NEW work in the commune the context
+// carries (identity.ResolveAssignableStaff: not deleted, has an account, not locked — the predicate
+// of the assignee picker).
+//
+// WHY THE ASSIGNMENT ACT ASKS AT ALL (user decision 2026-09-25): the assignee code arrives in the
+// request BODY, so it is client-supplied. Written unchecked, a crafted body hands a citizen's
+// petition to a code of another commune, a locked former employee or a directory-only person — and
+// every later holder check (duocTienTrangThai) compares the stored code with a signed-in
+// Principal.Ma that will never exist, so the work sits with nobody, forever.
+//
+// *identityclient.Client satisfies this as it is.
+type KiemCanBoGiaoViec interface {
+	CanBoGiaoViecDuoc(ctx context.Context, ma []string) (map[string]struct{}, error)
+}
+
+// ErrCanBoKhongNhanDuocViec refuses an assignment whose officer code identity did not answer as
+// assignable.
+//
+// ONE ERROR FOR FIVE REASONS — unknown, deleted, no account, locked, another commune — because the
+// contract collapses them into one answer ("absent") and the user sees one sentence. Telling "another
+// commune" from "unknown" would leak that a code exists elsewhere (rule 1); telling "locked" apart
+// would publish an employment fact about a person.
+var ErrCanBoKhongNhanDuocViec = errors.New("xu_ly_phan_anh: cán bộ được chọn không nhận được việc")
+
+// ErrChuaKiemDuocCanBo means identity could not be asked, so the assignment was NOT written.
+//
+// IT IS NEVER "not assignable" AND NEVER "assignable" (identity.proto, ResolveAssignableStaff status
+// table): the check did not happen. Falling back to writing the code unchecked would re-open exactly
+// the hole the check closes, on the day identity is down. Retryable — the handler answers 503.
+var ErrChuaKiemDuocCanBo = errors.New("xu_ly_phan_anh: chưa kiểm được cán bộ nhận việc")
+
 // The business verbs written into the trail. Vietnamese snake_case, like every other action this
 // system already writes (`dang_nhap`, `cong_dan_gui_phan_anh`, `vao_so_van_ban_den`) — an inspection
 // reads these strings, and a function name would tell them nothing.
@@ -338,6 +369,10 @@ type XuLyPhanAnh struct {
 	suKien KhoSuKien
 	han    DocHanXuLyXong
 
+	// giaoViec verifies a client-supplied assignee code before PhanCong writes it. nil means the
+	// check cannot run, and PhanCong then REFUSES any assignment naming an officer (fail closed).
+	giaoViec KiemCanBoGiaoViec
+
 	// sinhID is injected so a test can pin the outbox row's id. In production it is ulid.Moi.
 	sinhID func() (string, error)
 
@@ -351,8 +386,9 @@ type XuLyPhanAnh struct {
 	nay func() time.Time
 }
 
-func NewXuLyPhanAnh(db *store.DB, kho KhoPhieuXuLy, suKien KhoSuKien, han DocHanXuLyXong) *XuLyPhanAnh {
-	return &XuLyPhanAnh{db: db, kho: kho, suKien: suKien, han: han, sinhID: ulid.Moi}
+func NewXuLyPhanAnh(db *store.DB, kho KhoPhieuXuLy, suKien KhoSuKien, han DocHanXuLyXong,
+	giaoViec KiemCanBoGiaoViec) *XuLyPhanAnh {
+	return &XuLyPhanAnh{db: db, kho: kho, suKien: suKien, han: han, giaoViec: giaoViec, sinhID: ulid.Moi}
 }
 
 // nayHoac is the clock, UTC. `TIMESTAMPTZ` stores an instant rather than a wall reading, so the
@@ -555,6 +591,9 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 	if err := coCanBoThucHien(nguoi); err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
+	if err := uc.kiemCanBoNhanViec(ctx, canBo); err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
 
 	bayGio := uc.nayHoac()
 	var sau domain.PhieuPhanAnh
@@ -624,6 +663,38 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 		return domain.PhieuPhanAnh{}, bocPhieu(ctx, "phân công", err)
 	}
 	return sau, nil
+}
+
+// kiemCanBoNhanViec verifies the officer code an assignment is about to write.
+//
+// BEFORE THE TRANSACTION, for the reason ChotLinhVuc asks identity outside it: a gRPC round trip
+// inside would hold the petition's row lock for a network call, and an identity outage would become
+// a register that hangs rather than one that refuses. The window it leaves — an account locked
+// between this answer and the commit — is the one the contract accepts: the lock itself stops the
+// person acting, and the holding rule runs again against a live principal on every later act.
+//
+// A UNIT-ONLY ASSIGNMENT ASKS NOTHING. "— Để bộ phận tự phân công —" names no officer, so there is
+// no client-supplied code to verify, and making the department-only path depend on identity's
+// health would refuse a valid act for no reason.
+//
+// THE COMMUNE TRAVELS IN THE CONTEXT (rule 1, invariant 4) — core/identityclient lifts it into
+// "x-tenant-id", which is what makes another commune's code absent.
+func (uc *XuLyPhanAnh) kiemCanBoNhanViec(ctx context.Context, canBo string) error {
+	if canBo == "" {
+		return nil
+	}
+	if uc.giaoViec == nil {
+		// FAIL CLOSED: wiring without the check must refuse, never write the code unchecked.
+		return fmt.Errorf("%w: chưa nối dây kiểm cán bộ giao việc", ErrChuaKiemDuocCanBo)
+	}
+	duoc, err := uc.giaoViec.CanBoGiaoViecDuoc(ctx, []string{canBo})
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrChuaKiemDuocCanBo, err)
+	}
+	if _, co := duoc[canBo]; !co {
+		return ErrCanBoKhongNhanDuocViec
+	}
+	return nil
 }
 
 // --- 3. moving along the main flow -------------------------------------------------------------------

@@ -643,6 +643,24 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 				// `""` chứ không `"field"` — tham số thứ năm là `traceID`, xem ghi chú ở nhánh
 				// `ErrPhanCongSaiLuc` bên trên.
 				"Vào Cấu hình → Thời hạn xử lý để đặt số giờ, rồi phân loại lại.", "")
+	case errors.Is(err, app.ErrCanBoKhongNhanDuocViec):
+		// 400, ONE SENTENCE FOR FIVE REASONS — unknown, deleted, no account, locked, another commune.
+		// The contract collapses them (identity.proto, ResolveAssignableStaff) and this must not
+		// re-split them: "another commune" vs "unknown" leaks existence across communes (rule 1), and
+		// "locked" publishes an employment fact. The code itself is not echoed either.
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Cán bộ được chọn không nhận được việc. Hãy chọn cán bộ khác trong danh sách, "+
+				"hoặc để bộ phận tự phân công.", "")
+	case errors.Is(err, app.ErrChuaKiemDuocCanBo):
+		// 503 AND NOT 400 OR 500: the check did not happen, which is neither "bad assignee" nor a fault
+		// in this service. Retryable, and the sentence says plainly that NOTHING was written. WARN, like
+		// the intake path's identity refusal (gui_phan_anh.go traLoiLoiGui): this service is healthy;
+		// the wrapped chain carries the gRPC code core/identityclient already logged, and no staff code.
+		h.d.Log.Warn("CẢNH BÁO: từ chối phân công vì chưa kiểm được cán bộ nhận việc",
+			"xa", string(tenant.MustFrom(r.Context())), "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "assignee_check_unavailable",
+			"Chưa kiểm tra được cán bộ nhận việc nên phiếu CHƯA được phân công. "+
+				"Vui lòng thử lại sau ít phút.", "")
 	case domain.LaLoiXuLyPhanAnh(err):
 		// The domain's own sentence is returned: it names the field and the rule, holds no personal
 		// data and no internal detail, and a second sentence written here would drift from it.

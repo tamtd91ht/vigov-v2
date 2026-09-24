@@ -223,8 +223,10 @@ func chay(log *slog.Logger) error {
 		// obligation inside it, which is why the use case takes *store.DB rather than a transaction.
 		// `dinhDanh` is here because classification ASKS identity for the commune's resolve deadline —
 		// the same client the intake path uses, so the two never disagree about identity's health.
+		// It is passed TWICE, as two roles: the deadline read, and the assignee check that assignment
+		// runs on a client-supplied officer code before writing it (ResolveAssignableStaff).
 		DanhSachPhieu: phieu,
-		XuLyPhieu:     app.NewXuLyPhanAnh(kho, phieu, suKien, dinhDanh),
+		XuLyPhieu:     app.NewXuLyPhanAnh(kho, phieu, suKien, dinhDanh, dinhDanh),
 		// The trail for a full-view read of a reporter's name and number. It takes the same
 		// *store.DB as the repositories because it opens its own transaction: rule 6, invariant 3
 		// admits no audit write outside one, and audit.Write takes only a *store.ScopedTx.

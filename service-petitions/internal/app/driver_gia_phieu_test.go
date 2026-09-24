@@ -393,7 +393,10 @@ func dungXuLy(t *testing.T, k *khoPhieuXuLyGia, han DocHanXuLyXong) (*XuLyPhanAn
 	// ONE *store.DB behind all of them, exactly as cmd/server wires it: the transaction the use case
 	// opens is the transaction the stores write in, and two handles would be two pools.
 	kho := pkgstore.New(db)
-	uc := NewXuLyPhanAnh(kho, petstore.NewPhieuPhanAnhStore(kho), petstore.NewSuKienDiStore(kho), han)
+	// The assignee check answers EVERY asked code as assignable by default, so the tests about the
+	// other acts are not about it; the tests about it replace uc.giaoViec (giao_viec_phan_anh_test.go).
+	uc := NewXuLyPhanAnh(kho, petstore.NewPhieuPhanAnhStore(kho), petstore.NewSuKienDiStore(kho), han,
+		&giaoViecGia{duocTatCa: true})
 	uc.sinhID = func() (string, error) { return idSuKienThu, nil }
 	uc.nay = func() time.Time { return mocThaoTac }
 	return uc, ctxXa(xaThu)

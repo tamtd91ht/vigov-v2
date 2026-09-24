@@ -311,7 +311,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// invoked cannot dereference the nil handle. Their own four-case suites live in
 		// internal/http/xu_ly_phan_anh_test.go.
 		DanhSachPhieu:   khoPhieu{},
-		XuLyPhieu:       app.NewXuLyPhanAnh(nil, nil, nil, nil),
+		XuLyPhieu:       app.NewXuLyPhanAnh(nil, nil, nil, nil, nil),
 		NhiemVu:         khoNhiemVu{},
 		DanhSachNhiemVu: khoNhiemVu{},
 		// The six task WRITE acts, built on a nil *store.DB for the same reason as every use case

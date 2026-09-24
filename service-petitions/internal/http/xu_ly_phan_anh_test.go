@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -945,6 +946,43 @@ func TestTuyenXuLyPhieuKhongTonTaiThi404(t *testing.T) {
 		phanCongVao{Unit: "bp-001"})
 
 	doiMa(t, w, http.StatusNotFound)
+}
+
+// --- the assignee check (user decision 2026-09-25) ------------------------------------------------
+
+// TestPhanCongCanBoKhongNhanDuocViecThi400 — ONE sentence for every reason identity answers "absent",
+// and the sentence neither echoes the code nor names a reason.
+func TestPhanCongCanBoKhongNhanDuocViecThi400(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.assign"))
+	m.xuLy.loi = app.ErrCanBoKhongNhanDuocViec
+
+	w := m.goiThan(t, http.MethodPost, hostA, duongPhanCong(maPhieuThuong), canBoCuaXa(xaA),
+		phanCongVao{Unit: "bp-001", Assignee: "CB-XA-KHAC-01"})
+
+	doiMa(t, w, http.StatusBadRequest)
+	than := w.Body.String()
+	for _, cam := range []string{"CB-XA-KHAC-01", "khoá", "khóa", "xã khác", "tài khoản", "không tồn tại"} {
+		if strings.Contains(than, cam) {
+			t.Errorf("câu trả lời lộ %q — năm lý do phải là MỘT câu: %s", cam, than)
+		}
+	}
+}
+
+// TestPhanCongChuaKiemDuocCanBoThi503 — the check did not happen: retryable, never 400 ("bad
+// assignee") and never 500 (this service is healthy).
+func TestPhanCongChuaKiemDuocCanBoThi503(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.assign"))
+	m.xuLy.loi = fmt.Errorf("%w: %w", app.ErrChuaKiemDuocCanBo, errors.New("rpc error: code = Unavailable"))
+
+	w := m.goiThan(t, http.MethodPost, hostA, duongPhanCong(maPhieuThuong), canBoCuaXa(xaA),
+		phanCongVao{Unit: "bp-001", Assignee: "CB-00999"})
+
+	doiMa(t, w, http.StatusServiceUnavailable)
+	if loiTra(t, w).Code != "assignee_check_unavailable" {
+		t.Errorf("mã lỗi = %q, muốn assignee_check_unavailable", loiTra(t, w).Code)
+	}
 }
 
 // --- the list's filters ---------------------------------------------------------------------------
