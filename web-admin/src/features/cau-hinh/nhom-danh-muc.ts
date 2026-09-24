@@ -36,7 +36,7 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import { NAM_DANH_MUC_GHI, type MoTaDanhMucGhi } from "@/lib/api/danh-muc";
+import { BAY_DANH_MUC_GHI, type MoTaDanhMucGhi } from "@/lib/api/danh-muc";
 import type { BayDanhMuc, MucDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 
@@ -61,10 +61,11 @@ export type NhomDanhMuc = {
   /**
    * Đường ghi của nhóm này, hoặc `null` nếu hợp đồng chưa có tuyến ghi nào cho nó.
    *
-   * `null` KHÔNG PHẢI MỘT MẶC ĐỊNH, NÓ LÀ MỘT SỰ THẬT: hai trong bảy nhóm (`Loại đơn vị dân cư`,
-   * `Khối nhiệm vụ`) hôm nay chỉ có tuyến đọc. Nhóm mang `null` thì màn hình không vẽ nút ghi
-   * nào và nói ra lý do — chứ không vẽ một nút bấm vào không có gì xảy ra, thứ khiến cán bộ tin
-   * rằng mình thao tác sai.
+   * `null` KHÔNG PHẢI MỘT MẶC ĐỊNH, NÓ LÀ MỘT SỰ THẬT: "hợp đồng chưa có tuyến ghi cho nhóm này".
+   * Từ 7aa0127 cả bảy nhóm đều có tuyến ghi, nên hôm nay không nhóm nào mang `null` — nhánh này
+   * vẫn giữ cho nhóm thứ tám nào vào bảng trước tuyến ghi của nó. Nhóm mang `null` thì màn hình
+   * không vẽ nút ghi nào và nói ra lý do — chứ không vẽ một nút bấm vào không có gì xảy ra, thứ
+   * khiến cán bộ tin rằng mình thao tác sai.
    */
   ghi: MoTaDanhMucGhi | null;
   trangThai: TrangThaiNhom;
@@ -73,10 +74,11 @@ export type NhomDanhMuc = {
 /**
  * Bảy nhóm, THEO ĐÚNG THỨ TỰ BẢNG §5 CỦA ĐẶC TẢ — không theo vần chữ cái, không theo tên dịch vụ.
  *
- * BA NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY, và chúng vắng vì không có tuyến chứ không vì ai bỏ sót:
- * `Lĩnh vực phản ánh`, `Loại đơn thư`, `Trạng thái nhiệm vụ` chưa có tuyến nào trong hợp đồng REST
- * (`kb/20-contracts/openapi.json`). Riêng `Trạng thái nhiệm vụ` còn là tâm điểm của câu hỏi mở #21
- * — nó không mọc ra ở đây trước khi khách trả lời.
+ * BA NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY, và không vì ai bỏ sót. `Lĩnh vực phản ánh` và `Loại đơn thư`
+ * chưa có tuyến nào trong hợp đồng REST (`kb/20-contracts/openapi.json`). `Trạng thái nhiệm vụ`
+ * thì CÓ tuyến, nhưng không cùng khuôn: câu hỏi #21 đã chốt là đơn vị chỉ đổi nhãn và thứ tự của
+ * một bộ mã cố định (`PATCH /api/v1/task-statuses/{code}`, không thêm, không xoá), nên nó không
+ * phải một nhóm thêm · sửa · xoá mềm của bảng này.
  *
  * VÌ SAO CÓ CỜ `thuTuLaThangBac` THAY VÌ MỘT NHÁNH `if (khoa === "mucUuTienNhiemVu")` rải trong
  * component: thứ tự của `items` ở mức ưu tiên LÀ thang bậc của đơn vị, không phải sở thích trình
@@ -113,7 +115,7 @@ export function nhomDanhMuc(bay: BayDanhMuc): readonly NhomDanhMuc[] {
 /**
  * Nhóm này có tuyến ghi không, và nếu có thì ở đâu.
  *
- * GHÉP THEO KHOÁ, KHÔNG CHÉP LẠI ĐƯỜNG DẪN. Bảng năm đường ghi có chủ ở `lib/api/danh-muc.ts` và
+ * GHÉP THEO KHOÁ, KHÔNG CHÉP LẠI ĐƯỜNG DẪN. Bảng bảy đường ghi có chủ ở `lib/api/danh-muc.ts` và
  * mỗi đường dẫn ở đó mang một phép kiểm kiểu dựa trên hợp đồng. Một bảng thứ hai ở đây sẽ trôi,
  * và khi nó trôi thì màn hình gửi PATCH tới một đường dẫn không còn tồn tại — hiện ra thành
  * "không lưu được" chứ không thành một lỗi ai đọc được (luật 9, cấm #2).
@@ -122,7 +124,7 @@ export function nhomDanhMuc(bay: BayDanhMuc): readonly NhomDanhMuc[] {
  * ghi", và hệ quả là màn hình vẽ ÍT nút đi, không phải nhiều hơn.
  */
 function duongGhiCua(khoa: KhoaNhom): MoTaDanhMucGhi | null {
-  return NAM_DANH_MUC_GHI.find((m) => m.khoa === khoa) ?? null;
+  return BAY_DANH_MUC_GHI.find((m) => m.khoa === khoa) ?? null;
 }
 
 /**

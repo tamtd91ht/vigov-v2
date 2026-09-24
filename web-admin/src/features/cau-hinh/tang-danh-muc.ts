@@ -47,11 +47,10 @@ const KHONG_THAO_TAC: ThaoTacChoPhep = { doiNhan: false, tat: false, xoa: false 
 /**
  * Một mục có phải mục của danh mục CÓ ĐƯỜNG GHI hay không.
  *
- * HAI DANH MỤC TRONG BẢY KHÔNG CÓ TUYẾN GHI NÀO (`Loại đơn vị dân cư`, `Khối nhiệm vụ`), và
- * chúng cũng không phát ra `tier` với `source`. Phép thử này vì vậy hỏi đúng thứ nó cần biết —
- * "hợp đồng có nói tầng của dòng này không" — chứ không hỏi tên nhóm. Một dòng không nói được
- * tầng của nó thì không nút ghi nào được vẽ, và đó là câu trả lời đúng cho CẢ hai ca: hai danh
- * mục chỉ đọc hôm nay, và một dòng méo hình dạng vì hợp đồng trôi ngày mai.
+ * Từ 7aa0127 cả bảy danh mục đều phát ra `order`, `source`, `tier`. Phép thử vẫn hỏi đúng thứ nó
+ * cần biết — "hợp đồng có nói tầng của dòng này không" — chứ không hỏi tên nhóm: một dòng không
+ * nói được tầng của nó (hợp đồng trôi) thì không nút ghi nào được vẽ. Nhóm CÓ được vẽ nút hay
+ * không là câu hỏi khác, do mô tả đường ghi của nhóm trả lời (`nhom-danh-muc.ts`, trường `ghi`).
  */
 export function laMucGhi(m: MucDanhMuc): m is MucDanhMucGhi {
   return "tier" in m && "source" in m && "order" in m;

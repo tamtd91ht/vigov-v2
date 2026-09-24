@@ -27,4 +27,10 @@ describe("khối phần chưa dựng của màn Cấu hình", () => {
     expect(soDo.some((p) => /thêm|sửa/i.test(p.ten))).toBe(false);
     expect(soDo.some((p) => /xoá bộ phận/i.test(p.ten))).toBe(true);
   });
+
+  it("Danh mục: không còn mục nói Loại đơn vị dân cư / Khối nhiệm vụ chưa ghi được — đã dựng", () => {
+    expect(
+      PHAN_CHUA_DUNG.some((p) => /Loại đơn vị dân cư|Khối nhiệm vụ/i.test(`${p.ten} ${p.viSao}`)),
+    ).toBe(false);
+  });
 });

@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { NAM_DANH_MUC_GHI, type MoTaDanhMucGhi, type MucDanhMucGhi } from "@/lib/api/danh-muc";
-import type { MucDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
+import { BAY_DANH_MUC_GHI, type MoTaDanhMucGhi, type MucDanhMucGhi } from "@/lib/api/danh-muc";
+import type { BayDanhMuc, MucDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
 
 import {
   GHI_CHU_NHOM_CHI_XEM,
@@ -16,7 +16,7 @@ import {
   nhanNhomRong,
   nhanSoMuc,
 } from "@/features/cau-hinh/nhan-danh-muc";
-import type { NhomDanhMuc } from "@/features/cau-hinh/nhom-danh-muc";
+import { nhomDanhMuc, type KhoaNhom, type NhomDanhMuc } from "@/features/cau-hinh/nhom-danh-muc";
 import { BieuMauGhi, NhomMuc, type ThaoTacNhom } from "@/features/cau-hinh/tab-danh-muc";
 import { TANG_DON_VI, TANG_HE_THONG, TANG_RE_NHANH } from "@/features/cau-hinh/tang-danh-muc";
 
@@ -45,7 +45,7 @@ const KHONG_LAM_GI: ThaoTacNhom = {
 };
 
 function duongGhiLoaiVanBan(): MoTaDanhMucGhi {
-  const mo = NAM_DANH_MUC_GHI.find((m) => m.khoa === "loaiVanBan");
+  const mo = BAY_DANH_MUC_GHI.find((m) => m.khoa === "loaiVanBan");
   if (mo === undefined) throw new Error("hợp đồng không còn tuyến ghi cho Loại văn bản");
   return mo;
 }
@@ -226,9 +226,14 @@ describe("cột Nguồn và cột Thứ tự", () => {
 
   it("nhóm KHÔNG có đường ghi: không cột Nguồn, không cột hành động, và nói rõ là chỉ xem", () => {
     // Read-only is decided by the group having NO write descriptor (`null` below), not by the row
-    // shape: since 7aa0127 the identity catalogues emit `order`/`source`/`tier` like every other
-    // group, so this row is write-shaped and the guarantee must hold anyway. This is the one place
-    // the read-only guarantee is asserted (`tang-danh-muc.test.ts` points here).
+    // shape: every catalogue now emits `order`/`source`/`tier`, so this row is write-shaped and the
+    // guarantee must hold anyway. This is the one place the read-only guarantee is asserted
+    // (`tang-danh-muc.test.ts` points here).
+    //
+    // NO RENDERED GROUP IS READ-ONLY TODAY: since the two identity catalogues were wired, all seven
+    // groups carry a descriptor (asserted in "hai danh mục identity" below). The `null` branch stays
+    // because the next catalogue added to `BANG_NHOM` before its write routes exist lands exactly
+    // here — so this case is a synthetic group, deliberately, and guards that branch.
     const chiDoc: MucDanhMuc = {
       id: "01JH-x",
       code: "thon",
@@ -292,4 +297,100 @@ describe("biểu mẫu xoá", () => {
     // Một ô `Mã` trong biểu mẫu sửa/xoá là một ô hứa điều máy chủ sẽ từ chối bằng 400.
     expect(veForm("")).not.toContain('id="o-ma-muc"');
   });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * HAI DANH MỤC IDENTITY ĐÃ CÓ ĐƯỜNG GHI. Dựng qua `nhomDanhMuc` THẬT — không tự ráp một nhóm có
+ * sẵn mô tả ghi — để ca này đỏ nếu bảng đường ghi mất khoá của nhóm, hay `nhomDanhMuc` thôi ghép.
+ * ══════════════════════════════════════════════════════════════════════════════════════════
+ */
+
+function mucIdentity(tier: number, active = true): MucDanhMucGhi {
+  return {
+    id: `01JHT-${tier}-${String(active)}`,
+    code: "khu-pho",
+    label: "Khu phố",
+    active,
+    is_default: false,
+    order: 4,
+    source: tier === TANG_DON_VI ? "don-vi" : "he-thong",
+    tier,
+  };
+}
+
+/** Bảy kết quả đọc, nhóm nào cũng có đúng một dòng — đủ để `nhomDanhMuc` dựng cả bảy nhóm. */
+function bayDanhMuc(dong: MucDanhMucGhi): BayDanhMuc {
+  const kq = { ok: true as const, duLieu: { items: [dong] } };
+  return {
+    loaiTaiNguyenBanDo: kq,
+    hangMucKeHoachVon: kq,
+    loaiVanBan: kq,
+    loaiDonViDanCu: kq,
+    khoiNhiemVu: kq,
+    loaiNhiemVu: kq,
+    mucUuTienNhiemVu: kq,
+  };
+}
+
+function nhomThat(khoa: KhoaNhom, dong: MucDanhMucGhi): NhomDanhMuc {
+  const n = nhomDanhMuc(bayDanhMuc(dong)).find((x) => x.khoa === khoa);
+  if (n === undefined) throw new Error(`nhomDanhMuc không còn nhóm ${khoa}`);
+  return n;
+}
+
+describe("hai danh mục identity: Loại đơn vị dân cư và Khối nhiệm vụ", () => {
+  const HAI_NHOM: readonly { khoa: KhoaNhom; goc: string }[] = [
+    { khoa: "loaiDonViDanCu", goc: "/api/v1/residential-unit-types" },
+    { khoa: "khoiNhiemVu", goc: "/api/v1/task-blocs" },
+  ];
+
+  it("không nhóm nào trong bảy còn thiếu đường ghi", () => {
+    // Nếu ca này đỏ vì có nhóm mang `null`, ca "nhóm KHÔNG có đường ghi" phía trên lại canh một
+    // nhóm có thật — hãy sửa lời chú thích ở đó cho đúng.
+    const bay = nhomDanhMuc(bayDanhMuc(mucIdentity(TANG_DON_VI)));
+    expect(bay).toHaveLength(7);
+    expect(bay.filter((n) => n.ghi === null).map((n) => n.khoa)).toEqual([]);
+  });
+
+  for (const { khoa, goc } of HAI_NHOM) {
+    it(`${khoa}: mô tả ghi trỏ đúng tuyến của hợp đồng`, () => {
+      const ghi = nhomThat(khoa, mucIdentity(TANG_DON_VI)).ghi;
+      expect(ghi?.khoa).toBe(khoa);
+      expect(ghi?.gocThem).toBe(goc);
+      expect(ghi?.mauMuc).toBe(`${goc}/{id}`);
+    });
+
+    it(`${khoa}: tầng 1 + quyền admin.lookup — đủ Thêm, Sửa, Tắt, Xoá, không còn câu "chỉ xem"`, () => {
+      const html = ve(nhomThat(khoa, mucIdentity(TANG_DON_VI)), true);
+
+      expect(html).toContain(NUT_THEM);
+      expect(html).toContain(NUT_SUA);
+      expect(html).toContain(NUT_TAT);
+      expect(html).toContain(NUT_XOA);
+      expect(html).toContain("Nguồn");
+      expect(html).not.toContain(GHI_CHU_NHOM_CHI_XEM);
+    });
+
+    it(`${khoa}: KHÔNG có quyền admin.lookup — không một nút ghi nào, bảng vẫn hiện`, () => {
+      const html = ve(nhomThat(khoa, mucIdentity(TANG_DON_VI)), false);
+
+      expect(html).not.toContain(NUT_THEM);
+      expect(html).not.toContain(NUT_SUA);
+      expect(html).not.toContain(NUT_TAT);
+      expect(html).not.toContain(NUT_XOA);
+      expect(html).toContain("khu-pho");
+    });
+
+    it(`${khoa}: tầng 2 — không Xoá; tầng 3 — không Tắt, không Xoá`, () => {
+      const t2 = ve(nhomThat(khoa, mucIdentity(TANG_HE_THONG)), true);
+      expect(t2).toContain(NUT_SUA);
+      expect(t2).toContain(NUT_TAT);
+      expect(t2).not.toContain(NUT_XOA);
+
+      const t3 = ve(nhomThat(khoa, mucIdentity(TANG_RE_NHANH)), true);
+      expect(t3).toContain(NUT_SUA);
+      expect(t3).not.toContain(NUT_TAT);
+      expect(t3).not.toContain(NUT_XOA);
+    });
+  }
 });

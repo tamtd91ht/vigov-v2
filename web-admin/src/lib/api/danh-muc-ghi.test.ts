@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  NAM_DANH_MUC_GHI,
+  BAY_DANH_MUC_GHI,
   suaMuc,
   themMuc,
   xoaMuc,
@@ -64,7 +64,7 @@ function loiGoi(gia: ReturnType<typeof batFetchGhi>, i = 0) {
 }
 
 function moTa(khoa: string): MoTaDanhMucGhi {
-  const mo = NAM_DANH_MUC_GHI.find((m) => m.khoa === khoa);
+  const mo = BAY_DANH_MUC_GHI.find((m) => m.khoa === khoa);
   if (mo === undefined) throw new Error(`không có nhóm ${khoa}`);
   return mo;
 }
@@ -128,17 +128,19 @@ describe("POST thêm mục", () => {
     expect(loiGoi(gia, 1).header.get("Idempotency-Key")).toBe("k-co-dinh");
   });
 
-  it("năm nhóm gửi tới năm đường dẫn của hợp đồng, không nhóm nào gửi nhầm chỗ", async () => {
+  it("bảy nhóm gửi tới bảy đường dẫn của hợp đồng, không nhóm nào gửi nhầm chỗ", async () => {
     const gia = batFetchGhi(() => taoRa(dongMayChuTraVe()));
 
-    for (const mo of NAM_DANH_MUC_GHI) {
+    for (const mo of BAY_DANH_MUC_GHI) {
       await themMuc(mo, { code: "a-b", label: "A B" }, "k");
     }
 
-    expect(NAM_DANH_MUC_GHI.map((_, i) => loiGoi(gia, i).duongDan)).toEqual([
+    expect(BAY_DANH_MUC_GHI.map((_, i) => loiGoi(gia, i).duongDan)).toEqual([
       "/api/v1/map-asset-types",
       "/api/v1/capital-plan-categories",
       "/api/v1/document-types",
+      "/api/v1/residential-unit-types",
+      "/api/v1/task-blocs",
       "/api/v1/task-types",
       "/api/v1/task-priorities",
     ]);
@@ -283,4 +285,67 @@ describe("mã đúng mà THÂN không đọc được KHÔNG phải là thành c
     if (kq.ok) return;
     expect(kq.thongBao).toBe("Không kết nối được máy chủ. Vui lòng thử lại.");
   });
+});
+
+/**
+ * HAI DANH MỤC CỦA IDENTITY — `Loại đơn vị dân cư` và `Khối nhiệm vụ` — đi qua ĐÚNG ba hàm ghi
+ * chung ở trên, không qua bản thứ hai nào. Các ca dưới đây canh rằng ba điều của đầu tệp cũng
+ * đúng với hai đường dẫn mới: thân dựng từng trường, `code` không đi lên trong PATCH, lý do nằm
+ * trong thân DELETE (`service-identity/internal/http/danh_muc_ghi.go:9-16`).
+ */
+describe("hai danh mục identity: residential-unit-types và task-blocs", () => {
+  const HAI_NHOM = [
+    { khoa: "loaiDonViDanCu", goc: "/api/v1/residential-unit-types" },
+    { khoa: "khoiNhiemVu", goc: "/api/v1/task-blocs" },
+  ] as const;
+
+  for (const n of HAI_NHOM) {
+    it(`${n.khoa}: POST gửi đúng code · label · order · is_default, kèm Idempotency-Key — không source/tier`, async () => {
+      const gia = batFetchGhi(() => taoRa(dongMayChuTraVe()));
+
+      // Truyền vào một dòng đọc từ máy chủ (có `source`, `tier`, `id`, `active`) — lối sai tự
+      // nhiên nhất. Thân gửi đi phải chỉ còn bốn trường của biểu mẫu.
+      await themMuc(
+        moTa(n.khoa),
+        { ...(dongMayChuTraVe() as unknown as ThemMucVao), is_default: true },
+        "k-id",
+      );
+
+      const g = loiGoi(gia);
+      expect(g.duongDan).toBe(n.goc);
+      expect(g.phuongThuc).toBe("POST");
+      expect(g.header.get("Idempotency-Key")).toBe("k-id");
+      expect(g.khoaThan.sort()).toEqual(["code", "is_default", "label", "order"]);
+      expect(g.than).toEqual({ code: "cong-van", label: "Công văn", order: 3, is_default: true });
+    });
+
+    it(`${n.khoa}: PATCH không bao giờ mang code, source, tier`, async () => {
+      const gia = batFetchGhi(() => ok200(dongMayChuTraVe()));
+
+      await suaMuc(moTa(n.khoa), "01JHX1", {
+        ...(dongMayChuTraVe() as unknown as SuaMucVao),
+        label: "Khu phố",
+      });
+
+      const g = loiGoi(gia);
+      expect(g.phuongThuc).toBe("PATCH");
+      expect(g.duongDan).toBe(`${n.goc}/01JHX1`);
+      expect(g.khoaThan).not.toContain("code");
+      expect(g.khoaThan).not.toContain("source");
+      expect(g.khoaThan).not.toContain("tier");
+      expect(g.than.label).toBe("Khu phố");
+    });
+
+    it(`${n.khoa}: DELETE gửi lý do trong thân, tới đúng đường dẫn của mục`, async () => {
+      const gia = batFetchGhi(() => new Response(null, { status: 204 }));
+
+      const kq = await xoaMuc(moTa(n.khoa), "01JHX1", "Trùng với loại Thôn");
+
+      const g = loiGoi(gia);
+      expect(kq.ok).toBe(true);
+      expect(g.phuongThuc).toBe("DELETE");
+      expect(g.duongDan).toBe(`${n.goc}/01JHX1`);
+      expect(g.than).toEqual({ reason: "Trùng với loại Thôn" });
+    });
+  }
 });

@@ -23,10 +23,8 @@
  * lượt khi mở màn hình, và không dòng nào trong bảng tự đi hỏi máy chủ.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * KHÔNG CÓ HÀM GHI NÀO, VÀ KHÔNG ĐỂ SẴN CHỖ CHO MỘT HÀM GHI. Hợp đồng không có tuyến ghi cho
- * bất kỳ danh mục nào trong bảy tuyến này, vì câu hỏi mở #21 chưa được khách chốt: xã được sửa
- * cả DANH SÁCH MÃ hay chỉ được sửa nhãn và thứ tự (`kb/00-foundation/open-questions.json`).
- * Một bề mặt ghi chính là hình dạng trả lời câu ấy, nên nó không mọc ở đây trước.
+ * KHÔNG CÓ HÀM GHI NÀO Ở TỆP NÀY. Đường ghi của cả bảy danh mục có chủ ở `danh-muc.ts` (phần
+ * hai), và dùng lại các hàm đọc dưới đây chứ không viết lần thứ hai.
  */
 
 import { docJSON, type KetQua } from "./goi";

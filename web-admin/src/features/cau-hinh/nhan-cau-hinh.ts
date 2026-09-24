@@ -38,13 +38,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "tuyến xoá.",
   },
   {
-    ten: "Thêm, sửa, xoá mục của hai danh mục Loại đơn vị dân cư và Khối nhiệm vụ (§5)",
-    viSao:
-      "Máy chủ đã có đủ tuyến ghi cho cả hai (`/api/v1/residential-unit-types`, " +
-      "`/api/v1/task-blocs`, khoá `admin.lookup`), nhưng tab Danh mục của màn này mới đọc hai " +
-      "danh mục ấy, chưa có nút ghi nào gọi tới chúng.",
-  },
-  {
     ten: "Đặt nhãn và thứ tự Trạng thái nhiệm vụ",
     viSao:
       "Máy chủ đã có `GET /api/v1/task-statuses` và `PATCH /api/v1/task-statuses/{code}`, nhưng " +

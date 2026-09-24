@@ -55,8 +55,8 @@ import { nhomDanhMuc, type NhomDanhMuc } from "./nhom-danh-muc";
 import { choBatLai, kiemLyDoXoa, laMucGhi, thaoTacCuaMuc } from "./tang-danh-muc";
 
 /**
- * Tab "Danh mục" — `docs/ui-ux/14-cau-hinh.md §5`, bảy danh mục nghiệp vụ của đơn vị, năm trong
- * số đó sửa được từ màn hình.
+ * Tab "Danh mục" — `docs/ui-ux/14-cau-hinh.md §5`, bảy danh mục nghiệp vụ của đơn vị, cả bảy sửa
+ * được từ màn hình.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * ĐÂY LÀ MÀN HÌNH ĐẦU TIÊN CỦA WEB QUẢN TRỊ CÓ ĐƯỜNG GHI. Ba điều dưới đây quyết định nó đúng
@@ -83,9 +83,9 @@ import { choBatLai, kiemLyDoXoa, laMucGhi, thaoTacCuaMuc } from "./tang-danh-muc
  * "bạn không có quyền xem danh mục" — với người đang đọc đúng danh mục ấy trên năm màn hình
  * khác. Cổng quyền vì vậy đặt đúng chỗ máy chủ đặt nó: quanh ba thao tác GHI.
  *
- * BA NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY (`Lĩnh vực phản ánh`, `Loại đơn thư`, `Trạng thái nhiệm vụ`)
- * — chúng chưa có tuyến nào trong hợp đồng REST. Riêng `Trạng thái nhiệm vụ` là tâm điểm câu hỏi
- * mở #21 và không được mọc ra trước khi khách trả lời. Xem `nhom-danh-muc.ts`.
+ * BA NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY. `Lĩnh vực phản ánh` và `Loại đơn thư` chưa có tuyến nào
+ * trong hợp đồng REST. `Trạng thái nhiệm vụ` không cùng khuôn thêm · sửa · xoá mềm: câu hỏi #21
+ * đã chốt là đơn vị chỉ đổi nhãn và thứ tự của một bộ mã cố định. Xem `nhom-danh-muc.ts`.
  *
  * NÚT `⬆ Nhập từ Excel` CỦA ĐẶC TẢ CŨNG KHÔNG CÓ: không có tuyến nào phía sau nó. Một nút bấm
  * vào không có gì xảy ra còn tệ hơn không có nút — cán bộ sẽ tin là mình thao tác sai.
@@ -457,9 +457,8 @@ function loiRaCuaNhom(nhom: NhomDanhMuc, coQuyenGhi: boolean): LoiRaCuaNhomRong 
  * của nó. Máy chủ cũng trả về chúng đúng vì lý do này ("Returned rather than filtered
  * server-side, so the list screen can show it while a picker filters it out").
  *
- * HAI CỘT CUỐI CHỈ MỌC KHI NHÓM CÓ ĐƯỜNG GHI. Hai danh mục chỉ đọc không phát ra `source`, nên
- * một cột `Nguồn` cho chúng sẽ phải bịa ra nội dung — và cột hành động thì không có hành động
- * nào để chứa.
+ * HAI CỘT CUỐI CHỈ MỌC KHI NHÓM CÓ ĐƯỜNG GHI. Một nhóm không có tuyến ghi thì cột hành động
+ * không có hành động nào để chứa, và cột `Nguồn` chỉ có nghĩa cạnh quy tắc ba tầng của đường ghi.
  */
 function BangMuc({
   nhan,
@@ -505,11 +504,11 @@ function BangMuc({
                   thoại, nên `l`/`1` và `O`/`0` phải phân biệt được. */}
               <td className="ma-muc">{m.code}</td>
               <td>{m.label}</td>
-              {/* THỨ TỰ LÀ TRƯỜNG CỦA HỢP ĐỒNG KHI CÓ, VÀ LÀ VỊ TRÍ TRONG MẢNG KHI KHÔNG. Năm
-                  danh mục có đường ghi đều phát ra `order`, và cột này PHẢI hiện đúng con số ấy:
-                  biểu mẫu sửa đổi chính nó, nên một cột hiện vị trí trong mảng sẽ nói "3" sau khi
-                  cán bộ vừa đặt thứ tự 7. Hai danh mục còn lại không phát ra `order`; ở đó vị trí
-                  trong `items` là tất cả những gì hợp đồng nói. */}
+              {/* THỨ TỰ LÀ TRƯỜNG CỦA HỢP ĐỒNG KHI CÓ, VÀ LÀ VỊ TRÍ TRONG MẢNG KHI KHÔNG. Cả bảy
+                  danh mục đều phát ra `order`, và cột này PHẢI hiện đúng con số ấy: biểu mẫu sửa
+                  đổi chính nó, nên một cột hiện vị trí trong mảng sẽ nói "3" sau khi cán bộ vừa
+                  đặt thứ tự 7. Vị trí trong `items` chỉ còn là đường lui cho một dòng méo hình
+                  dạng (hợp đồng trôi) — `laMucGhi` trả `false` cho nó. */}
               <td>{laMucGhi(m) ? m.order : i + 1}</td>
               <td>{nhanMacDinh(m.is_default)}</td>
               {ghi !== null && <td>{laMucGhi(m) ? nhanNguon(m.source) : ""}</td>}

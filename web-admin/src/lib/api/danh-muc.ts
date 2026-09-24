@@ -4,8 +4,8 @@
  *
  *   · PHẦN MỘT (ngay dưới) — hai danh mục ĐỌC để tra một id ra tên trên màn danh bạ: bộ phận và
  *     vai trò. Không có đường ghi nào, và không nên có.
- *   · PHẦN HAI (cuối tệp) — ĐƯỜNG GHI của tab "Danh mục" (`14-cau-hinh §5`): năm danh mục nghiệp
- *     vụ mà đơn vị tự sửa được. Phần đọc của năm danh mục ấy đã có chủ ở
+ *   · PHẦN HAI (cuối tệp) — ĐƯỜNG GHI của tab "Danh mục" (`14-cau-hinh §5`): bảy danh mục nghiệp
+ *     vụ mà đơn vị tự sửa được. Phần đọc của bảy danh mục ấy đã có chủ ở
  *     `danh-muc-nghiep-vu.ts` và được DÙNG LẠI từ đây chứ không viết lần thứ hai.
  *
  * Hai danh mục của xã: bộ phận (`GET /api/v1/org-units`) và vai trò (`GET /api/v1/roles`).
@@ -35,6 +35,8 @@
 
 import {
   layHangMucKeHoachVon,
+  layKhoiNhiemVu,
+  layLoaiDonViDanCu,
   layLoaiNhiemVu,
   layLoaiTaiNguyenBanDo,
   layLoaiVanBan,
@@ -65,8 +67,19 @@ import type {
   finance_xoaHangMucVao,
   identity_danhSachBoPhanRa,
   identity_danhSachVaiTroRa,
+  identity_delete_residential_unit_types_by_id,
+  identity_delete_task_blocs_by_id,
   identity_get_org_units,
   identity_get_roles,
+  identity_khoiNhiemVuRa,
+  identity_loaiDonViDanCuRa,
+  identity_patch_residential_unit_types_by_id,
+  identity_patch_task_blocs_by_id,
+  identity_post_residential_unit_types,
+  identity_post_task_blocs,
+  identity_suaDanhMucVao,
+  identity_themDanhMucVao,
+  identity_xoaDanhMucVao,
   petitions_delete_task_priorities_by_id,
   petitions_delete_task_types_by_id,
   petitions_loaiNhiemVuRa,
@@ -132,8 +145,8 @@ export function docDanhMucDanhBa(): Promise<DanhMucDanhBa> {
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * PHẦN HAI — ĐƯỜNG GHI CỦA TAB "DANH MỤC" (`docs/ui-ux/14-cau-hinh.md §5`)
  *
- * Năm danh mục nghiệp vụ mà đơn vị tự sửa được, mỗi danh mục ba thao tác ghi: thêm · sửa · xoá
- * mềm. Phần ĐỌC của đúng năm danh mục ấy đã có chủ ở `danh-muc-nghiep-vu.ts` và được dùng lại
+ * Bảy danh mục nghiệp vụ mà đơn vị tự sửa được, mỗi danh mục ba thao tác ghi: thêm · sửa · xoá
+ * mềm. Phần ĐỌC của đúng bảy danh mục ấy đã có chủ ở `danh-muc-nghiep-vu.ts` và được dùng lại
  * ở đây — một hàm đọc thứ hai là một bản sao sẽ trôi (luật 9, cấm #2).
  *
  * ──────────────────────────────────────────────────────────────────────────────────────────
@@ -145,7 +158,8 @@ export function docDanhMucDanhBa(): Promise<DanhMucDanhBa> {
  *
  * `source` và `tier` CHỈ ĐI XUỐNG, KHÔNG BAO GIỜ ĐI LÊN. Máy chủ từ chối 400 ngay khi thân yêu
  * cầu NHẮC TỚI một trong hai, kể cả khi giá trị gửi lên đúng bằng giá trị nó vừa trả về
- * (`service-documents/internal/http/loai_van_ban.go:247` và `:284`; bốn dịch vụ kia y hệt).
+ * (`service-documents/internal/http/loai_van_ban.go:247` và `:284`; bốn dịch vụ kia y hệt — identity ở
+ * `service-identity/internal/http/danh_muc_ghi.go:14-15`).
  * Đó không phải sự khắt khe thừa: `nguon` quyết định tầng, nên một client đặt được `nguon` là
  * một client tự xếp dòng của mình vào tầng 2 rồi đi vòng qua mọi rào phía dưới
  * (`service-documents/internal/domain/danh_muc_ba_tang.go:32-36`).
@@ -163,25 +177,30 @@ export function docDanhMucDanhBa(): Promise<DanhMucDanhBa> {
  */
 
 /**
- * Một mục của năm danh mục có đường ghi — hợp của năm kiểu SINH RA, không gõ lại.
+ * Một mục của bảy danh mục có đường ghi — hợp của bảy kiểu SINH RA, không gõ lại.
  *
- * KHÁC `MucDanhMuc` Ở `danh-muc-nghiep-vu.ts`: hợp ấy có BẢY nhánh, gồm hai danh mục của
- * identity không có `order`, `source`, `tier` và cũng không có tuyến ghi nào. Dùng hợp bảy
- * nhánh ở đây thì `m.tier` không biên dịch được — và cách "sửa" gần nhất là ép kiểu, tức là
- * màn hình tự khẳng định một trường mà hợp đồng không hứa.
+ * Kiểu này là kiểu RA của tuyến ghi (thân 201/200), còn `MucDanhMuc` ở `danh-muc-nghiep-vu.ts`
+ * là phần tử của tuyến đọc. Từ 7aa0127 hai hợp trùng hình dạng — cả hai danh mục của identity
+ * cũng phát ra `order`, `source`, `tier` — nhưng chúng vẫn là hai câu hỏi khác nhau: một dòng
+ * đọc về mà thiếu `tier` (hợp đồng trôi) phải rơi vào nhánh "không thao tác" của `laMucGhi`,
+ * không được ép thành mục ghi.
  */
 export type MucDanhMucGhi =
   | comms_loaiTaiNguyenRa
   | documents_loaiVanBanRa
   | finance_hangMucRa
+  | identity_loaiDonViDanCuRa
+  | identity_khoiNhiemVuRa
   | petitions_loaiNhiemVuRa
   | petitions_mucUuTienRa;
 
-/** Khoá năm nhóm của tab. Đây là cách MÀN HÌNH gom nhóm, không phải dữ liệu của hợp đồng. */
+/** Khoá bảy nhóm của tab. Đây là cách MÀN HÌNH gom nhóm, không phải dữ liệu của hợp đồng. */
 export type KhoaDanhMucGhi =
   | "loaiTaiNguyenBanDo"
   | "hangMucKeHoachVon"
   | "loaiVanBan"
+  | "loaiDonViDanCu"
+  | "khoiNhiemVu"
   | "loaiNhiemVu"
   | "mucUuTienNhiemVu";
 
@@ -209,19 +228,19 @@ export type MoTaDanhMucGhi = {
 };
 
 /**
- * Năm nhóm, THEO ĐÚNG THỨ TỰ BẢNG §5 — không theo vần chữ cái, không theo tên dịch vụ.
+ * Bảy nhóm, THEO ĐÚNG THỨ TỰ BẢNG §5 — không theo vần chữ cái, không theo tên dịch vụ.
  *
  * ĐƯỜNG DẪN KHÔNG PHẢI CHUỖI GÕ TAY: mỗi chuỗi mang `satisfies <kiểu sinh ra>["duongDan"]`, nên
  * ngày một tuyến đổi đường dẫn trong hợp đồng thì `tsc` đỏ ngay tại dòng này — chứ không phải
  * lúc chạy, bằng một 404 mà cán bộ đọc thành "không lưu được".
  *
- * NĂM NHÓM NÀY KHÔNG PHẢI MƯỜI NHÓM CỦA ĐẶC TẢ. Năm nhóm còn lại vắng vì KHÔNG CÓ TUYẾN GHI chứ
- * không vì ai bỏ sót: `Loại đơn vị dân cư` và `Khối nhiệm vụ` mới chỉ có tuyến đọc, còn
- * `Lĩnh vực phản ánh`, `Loại đơn thư` và `Trạng thái nhiệm vụ` chưa có tuyến nào. Riêng
- * `Trạng thái nhiệm vụ` là tâm điểm câu hỏi mở #21 và không được mọc ra ở đây trước khi khách
- * trả lời (`kb/00-foundation/open-questions.json`).
+ * BẢY NHÓM NÀY KHÔNG PHẢI MƯỜI NHÓM CỦA ĐẶC TẢ. `Lĩnh vực phản ánh` và `Loại đơn thư` vắng vì
+ * hợp đồng chưa có tuyến nào cho chúng. `Trạng thái nhiệm vụ` vắng vì nó KHÔNG phải một danh mục
+ * cùng khuôn: câu hỏi #21 đã chốt là đơn vị chỉ đổi nhãn và thứ tự của một bộ mã cố định, qua
+ * tuyến riêng `PATCH /api/v1/task-statuses/{code}` — không thêm, không xoá — nên nó không có chỗ
+ * trong bảng thêm · sửa · xoá mềm này.
  */
-export const NAM_DANH_MUC_GHI: readonly MoTaDanhMucGhi[] = [
+export const BAY_DANH_MUC_GHI: readonly MoTaDanhMucGhi[] = [
   {
     khoa: "loaiTaiNguyenBanDo",
     gocThem: "/api/v1/map-asset-types" satisfies comms_post_map_asset_types["duongDan"],
@@ -247,6 +266,22 @@ export const NAM_DANH_MUC_GHI: readonly MoTaDanhMucGhi[] = [
     doc: layLoaiVanBan,
   },
   {
+    khoa: "loaiDonViDanCu",
+    gocThem:
+      "/api/v1/residential-unit-types" satisfies identity_post_residential_unit_types["duongDan"],
+    mauMuc:
+      "/api/v1/residential-unit-types/{id}" satisfies identity_patch_residential_unit_types_by_id["duongDan"] &
+        identity_delete_residential_unit_types_by_id["duongDan"],
+    doc: layLoaiDonViDanCu,
+  },
+  {
+    khoa: "khoiNhiemVu",
+    gocThem: "/api/v1/task-blocs" satisfies identity_post_task_blocs["duongDan"],
+    mauMuc: "/api/v1/task-blocs/{id}" satisfies identity_patch_task_blocs_by_id["duongDan"] &
+      identity_delete_task_blocs_by_id["duongDan"],
+    doc: layKhoiNhiemVu,
+  },
+  {
     khoa: "loaiNhiemVu",
     gocThem: "/api/v1/task-types" satisfies petitions_post_task_types["duongDan"],
     mauMuc: "/api/v1/task-types/{id}" satisfies petitions_patch_task_types_by_id["duongDan"] &
@@ -266,14 +301,15 @@ export const NAM_DANH_MUC_GHI: readonly MoTaDanhMucGhi[] = [
 /**
  * Thân POST mà màn hình được phép gửi — thân của hợp đồng, TRỪ `source` và `tier`.
  *
- * GIAO CỦA NĂM KIỂU SINH RA, KHÔNG PHẢI MỘT KIỂU CHỌN LÀM ĐẠI DIỆN. Năm dịch vụ phát ra năm kiểu
- * riêng, và hôm nay chúng trùng nhau. Chọn một kiểu làm chuẩn thì ngày một dịch vụ đổi hình dạng,
- * bốn lời gọi kia vẫn biên dịch. Phép giao thì không: một trường bắt buộc mới ở bất kỳ dịch vụ
+ * GIAO CỦA CÁC KIỂU SINH RA, KHÔNG PHẢI MỘT KIỂU CHỌN LÀM ĐẠI DIỆN. Năm dịch vụ phát ra sáu kiểu
+ * riêng (hai danh mục identity dùng chung `themDanhMucVao`), và hôm nay chúng trùng nhau. Chọn một
+ * kiểu làm chuẩn thì ngày một dịch vụ đổi hình dạng, các lời gọi kia vẫn biên dịch. Phép giao thì không: một trường bắt buộc mới ở bất kỳ dịch vụ
  * nào cũng hiện ra ở đây và làm đỏ mọi chỗ dựng thân yêu cầu.
  */
 export type ThemMucVao = Omit<comms_themLoaiTaiNguyenVao, "source" | "tier"> &
   Omit<documents_themLoaiVanBanVao, "source" | "tier"> &
   Omit<finance_themHangMucVao, "source" | "tier"> &
+  Omit<identity_themDanhMucVao, "source" | "tier"> &
   Omit<petitions_themLoaiNhiemVuVao, "source" | "tier"> &
   Omit<petitions_themMucUuTienVao, "source" | "tier">;
 
@@ -287,6 +323,7 @@ export type ThemMucVao = Omit<comms_themLoaiTaiNguyenVao, "source" | "tier"> &
 export type SuaMucVao = Omit<comms_suaLoaiTaiNguyenVao, "source" | "tier" | "code"> &
   Omit<documents_suaLoaiVanBanVao, "source" | "tier" | "code"> &
   Omit<finance_suaHangMucVao, "source" | "tier" | "code"> &
+  Omit<identity_suaDanhMucVao, "source" | "tier" | "code"> &
   Omit<petitions_suaLoaiNhiemVuVao, "source" | "tier" | "code"> &
   Omit<petitions_suaMucUuTienVao, "source" | "tier" | "code">;
 
@@ -294,6 +331,7 @@ export type SuaMucVao = Omit<comms_suaLoaiTaiNguyenVao, "source" | "tier" | "cod
 export type XoaMucVao = comms_xoaLoaiTaiNguyenVao &
   documents_xoaLoaiVanBanVao &
   finance_xoaHangMucVao &
+  identity_xoaDanhMucVao &
   petitions_xoaLoaiNhiemVuVao &
   petitions_xoaMucUuTienVao;
 
@@ -376,11 +414,11 @@ export type NhomDaDoc = {
 };
 
 /**
- * Đọc cả năm danh mục — ĐÚNG NĂM lời gọi cho cả màn hình, dù mỗi danh mục có bao nhiêu mục.
+ * Đọc cả bảy danh mục — ĐÚNG BẢY lời gọi cho cả màn hình, dù mỗi danh mục có bao nhiêu mục.
  *
- * NĂM KẾT QUẢ RỜI NHAU, KHÔNG GỘP: bốn dịch vụ đứng sau năm tuyến này, nên một dịch vụ đang khởi
+ * BẢY KẾT QUẢ RỜI NHAU, KHÔNG GỘP: năm dịch vụ đứng sau bảy tuyến này, nên một dịch vụ đang khởi
  * động lại là chuyện có thật và chỉ nên làm im lặng ĐÚNG khối của nó.
  */
-export function docNamDanhMucGhi(): Promise<readonly NhomDaDoc[]> {
-  return Promise.all(NAM_DANH_MUC_GHI.map((mo) => mo.doc().then((kq) => ({ mo, kq }))));
+export function docBayDanhMucGhi(): Promise<readonly NhomDaDoc[]> {
+  return Promise.all(BAY_DANH_MUC_GHI.map((mo) => mo.doc().then((kq) => ({ mo, kq }))));
 }
