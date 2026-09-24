@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { BieuMauGhiCanBo, type MucChon } from "@/components/danh-ba/bieu-mau-ghi-can-bo";
 import {
@@ -14,11 +14,10 @@ import {
   coTrangTruoc,
   sangTrangSau,
   veTrangTruoc,
-  TRANG_DAU,
   type NganXepConTro,
 } from "@/features/cau-hinh/ngan-xep-con-tro";
 import { bangTraTuKetQua, type BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
-import { layDanhSachCanBo, suaCanBo } from "@/lib/api/can-bo";
+import { docTrangDanhBa, suaCanBo } from "@/lib/api/can-bo";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type {
   identity_canBoTomTat,
@@ -29,8 +28,28 @@ import type { KetQua } from "@/lib/api/goi";
 
 import { BangLienHe } from "./bang-lien-he";
 import {
+  GOI_Y_O_TIM,
+  LUA_CHON_HIEN_THI,
+  NHAN_LOC_HIEN_THI,
+  NHAN_LOC_KHOI,
+  NHAN_O_TIM,
+  NUT_TIM,
+  TAT_CA_KHOI,
+  THU_TU_HIEN_THI,
+  TRUY_VAN_DAU,
+  apLoc,
+  dangLoc,
+  ketQuaGuiTim,
+  maBoPhanLoc,
+  maHienThi,
+  thamSoDoc,
+  type LocDanhBa,
+  type TruyVanDanhBa,
+} from "./loc-danh-ba";
+import {
   DANH_BA_RONG,
   GHI_CHU_SO_DIEN_THOAI,
+  KHONG_KHOP_LOC,
   PHAN_CHUA_DUNG,
   NHAN_SO_KHOI,
   TIEU_DE_PHAN_CHUA_DUNG,
@@ -45,7 +64,7 @@ import {
  * KHÔNG TỆP NÀO Ở ĐÂY DỰNG LẠI MỘT LỜI GỌI ĐÃ CÓ. Năm tuyến ghi và hai tuyến đọc của danh bạ đã
  * có chủ ở `lib/api/can-bo.ts`; biểu mẫu sửa, câu chữ và phép đổi hình dạng bản nháp đã có chủ ở
  * `components/danh-ba/`. Màn này chỉ thêm đúng thứ nó sở hữu: bố cục của một trang riêng, thẻ KPI
- * đếm được, và danh sách nói rõ phần nào chưa mở.
+ * đếm được, hàng lọc (`loc-danh-ba.ts`), và danh sách nói rõ phần nào chưa mở.
  *
  * MỘT THAO TÁC GHI, KHÔNG NĂM. `PATCH /api/v1/staff/{id}` là tuyến duy nhất thuộc về một màn danh
  * bạ: sửa chức vụ, khối/đơn vị, số liên hệ. Bốn tuyến còn lại đổi THẨM QUYỀN hoặc đường đăng nhập
@@ -66,7 +85,8 @@ type TrangThaiTrang =
   | { pha: "xong"; trang: page_Result_identity_canBoTomTat };
 
 export function DanhBaLienHe() {
-  const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
+  /** Bộ lọc đang áp + ngăn xếp con trỏ — MỘT state, để đổi lọc không thể quên về trang đầu. */
+  const [truyVan, datTruyVan] = useState<TruyVanDanhBa>(TRUY_VAN_DAU);
   const [trangThai, datTrangThai] = useState<TrangThaiTrang>({ pha: "dangTai" });
   /** `null` là chưa đọc xong danh mục bộ phận — KHÔNG phải "xã không có bộ phận nào". */
   const [boPhan, datBoPhan] = useState<KetQua<identity_danhSachBoPhanRa> | null>(null);
@@ -122,7 +142,8 @@ export function DanhBaLienHe() {
 
     // KHÔNG TRUYỀN `limit`, `sort`, `order`: để máy chủ áp mặc định của chính nó (20 dòng, sắp
     // theo mã, tăng dần). Giữ một bản sao của ba mặc định ấy ở client là giữ một bản sẽ trôi.
-    layDanhSachCanBo({ cursor: nganXep.hienTai }).then((ketQua) => {
+    // Có chữ tìm thì `docTrangDanhBa` đi đường POST, chữ và con trỏ nằm trong thân.
+    docTrangDanhBa(truyVan.loc.tuKhoa, thamSoDoc(truyVan)).then((ketQua) => {
       if (bo) return;
       datTrangThai(
         ketQua.ok ? { pha: "xong", trang: ketQua.duLieu } : { pha: "loi", thongBao: ketQua.thongBao },
@@ -132,23 +153,35 @@ export function DanhBaLienHe() {
     return () => {
       bo = true;
     };
-  }, [nganXep, lanDoc]);
+  }, [truyVan, lanDoc]);
 
   /**
-   * Chuyển trang. `dangTai` đặt Ở ĐÂY, trong sự kiện bấm, chứ không trong thân effect: gọi
-   * setState thẳng trong thân effect kéo theo một lượt render phụ mỗi lần chạy, và lint của React
-   * chặn đúng mẫu ấy. Trạng thái khởi tạo đã là `dangTai` nên lần tải đầu không cần ai đặt gì.
+   * Đổi truy vấn — chuyển trang hoặc đổi bộ lọc. `dangTai` đặt Ở ĐÂY, trong sự kiện, chứ không
+   * trong thân effect: gọi setState thẳng trong thân effect kéo theo một lượt render phụ mỗi lần
+   * chạy, và lint của React chặn đúng mẫu ấy. Trạng thái khởi tạo đã là `dangTai` nên lần tải đầu
+   * không cần ai đặt gì.
    *
-   * ĐÓNG BIỂU MẪU SỬA KHI ĐỔI TRANG. Biểu mẫu giữ bản nháp của một người ở trang vừa rời khỏi; để
+   * ĐÓNG BIỂU MẪU SỬA KHI ĐỔI TRUY VẤN. Biểu mẫu giữ bản nháp của một người ở trang vừa rời khỏi; để
    * nó mở là để trên màn hình một ô Lưu thuộc về một dòng không còn nhìn thấy.
    */
-  const diToiTrang = useCallback((toi: NganXepConTro) => {
+  const doiTruyVan = useCallback((tinh: (cu: TruyVanDanhBa) => TruyVanDanhBa) => {
     datTrangThai({ pha: "dangTai" });
     datDangSua(null);
     datBan(BAN_TRONG);
     datLoiMayChu("");
-    datNganXep(toi);
+    datTruyVan(tinh);
   }, []);
+
+  const diToiTrang = useCallback(
+    (toi: NganXepConTro) => doiTruyVan((cu) => ({ ...cu, nganXep: toi })),
+    [doiTruyVan],
+  );
+
+  /** Đổi bộ lọc — `apLoc` luôn đưa ngăn xếp về trang đầu. */
+  const doiLoc = useCallback(
+    (doi: Partial<LocDanhBa>) => doiTruyVan((cu) => apLoc(cu, doi)),
+    [doiTruyVan],
+  );
 
   /** Mở biểu mẫu sửa: nạp giá trị đang có vào bản nháp, dọn mọi thông báo của lần trước. */
   const moSua = useCallback((cb: identity_canBoTomTat) => {
@@ -218,6 +251,9 @@ export function DanhBaLienHe() {
         </p>
       )}
 
+      {/* Hàng lọc đứng ngay dưới thẻ KPI, trên bảng — đúng bố cục đặc tả §2. */}
+      <HangLoc loc={truyVan.loc} boPhan={mucBoPhan} doiLoc={doiLoc} />
+
       {/* Câu xác nhận sau một lần ghi. `role="status"` chứ không `alert`: không có gì hỏng. */}
       {cauDaXong !== "" && <p role="status">{cauDaXong}</p>}
 
@@ -261,7 +297,7 @@ export function DanhBaLienHe() {
       )}
 
       {trangThai.pha === "xong" && trangThai.trang.items.length === 0 && (
-        <p className="trang-thai-rong">{DANH_BA_RONG}</p>
+        <p className="trang-thai-rong">{dangLoc(truyVan.loc) ? KHONG_KHOP_LOC : DANH_BA_RONG}</p>
       )}
 
       {trangThai.pha === "xong" && trangThai.trang.items.length > 0 && (
@@ -269,7 +305,7 @@ export function DanhBaLienHe() {
           <BangLienHe danhSach={trangThai.trang.items} traBoPhan={traBoPhan} onSua={moSua} />
           <p className="ghi-chu">{GHI_CHU_SO_DIEN_THOAI}</p>
           <DieuHuongTrang
-            nganXep={nganXep}
+            nganXep={truyVan.nganXep}
             conTroTiep={trangThai.trang.next_cursor}
             conTrangSau={trangThai.trang.has_more}
             diToiTrang={diToiTrang}
@@ -279,6 +315,106 @@ export function DanhBaLienHe() {
 
       <KhoiChuaMo />
     </section>
+  );
+}
+
+/**
+ * Hàng lọc — ô tìm, ô khối / đơn vị, ô trạng thái hiển thị (đặc tả §3). Ba bộ lọc kết hợp theo
+ * AND; đổi bất kỳ bộ lọc nào là về trang đầu (`apLoc`).
+ *
+ * Ô TÌM GỬI BẰNG SUBMIT (Enter hoặc nút Tìm), KHÔNG THEO TỪNG PHÍM: mỗi phím là một lời gọi mạng
+ * mang chữ đang gõ dở, và một danh sách nhảy liên tục dưới tay người đang gõ.
+ *
+ * Ô NHẬP KHÔNG CÓ THUỘC TÍNH `name`, VÀ ĐÓ LÀ LỚP CHẶN CHỨ KHÔNG PHẢI SƠ SÓT. Trước khi JavaScript
+ * chạy xong (mạng chậm ở xã, hay một lỗi nạp bundle), bấm Enter trong một `<form>` là trình duyệt
+ * tự gửi form theo kiểu GET — mọi ô CÓ `name` lên URL thành `?ten=chu-da-go`, vào thanh địa chỉ và
+ * lịch sử trình duyệt (luật 3, cấm #4). Ô không có `name` thì không có gì để gửi. `method="post"`
+ * là lớp thứ hai cho cùng ca ấy. Giá trị đọc từ state của React, không từ `FormData`.
+ *
+ * `autoComplete="off"`: trình duyệt nhớ những gì đã gõ vào ô nhập để gợi ý lại — trên một máy dùng
+ * chung, đó là danh sách họ tên và số điện thoại người trước đã tìm.
+ *
+ * KHÔNG CÓ `maxLength`: thuộc tính ấy đếm đơn vị UTF-16, không phải ký tự, nên sẽ cắt sai. Giới hạn
+ * được kiểm lúc gửi, bằng đúng phép đếm máy chủ dùng (`chuanHoaTuKhoaTim`).
+ */
+export function HangLoc({
+  loc,
+  boPhan,
+  doiLoc,
+}: {
+  loc: LocDanhBa;
+  boPhan: readonly MucChon[];
+  doiLoc: (doi: Partial<LocDanhBa>) => void;
+}) {
+  const [oTim, datOTim] = useState("");
+  const [loiTim, datLoiTim] = useState("");
+
+  function gui(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const kq = ketQuaGuiTim(oTim);
+    if ("loi" in kq) {
+      datLoiTim(kq.loi);
+      return;
+    }
+    datLoiTim("");
+    doiLoc(kq.doi);
+  }
+
+  return (
+    <div className="hang-loc">
+      <form className="form-tra-cuu" role="search" method="post" onSubmit={gui}>
+        <div className="o-nhap">
+          <label htmlFor="tim-danh-ba">{NHAN_O_TIM}</label>
+          <input
+            id="tim-danh-ba"
+            type="search"
+            value={oTim}
+            onChange={(e) => datOTim(e.target.value)}
+            placeholder={GOI_Y_O_TIM}
+            autoComplete="off"
+            aria-describedby="loi-tim-danh-ba"
+            aria-invalid={loiTim !== ""}
+          />
+        </div>
+        <button className="nut-phu" type="submit">
+          {NUT_TIM}
+        </button>
+      </form>
+      <p id="loi-tim-danh-ba" className="thong-bao-loi" role="alert">
+        {loiTim}
+      </p>
+
+      <p className="chon-hang-muc">
+        <label htmlFor="loc-khoi-danh-ba">{NHAN_LOC_KHOI}</label>{" "}
+        <select
+          id="loc-khoi-danh-ba"
+          value={loc.boPhan}
+          onChange={(e) => doiLoc({ boPhan: maBoPhanLoc(e.target.value, boPhan) })}
+        >
+          <option value="">{TAT_CA_KHOI}</option>
+          {boPhan.map((bp) => (
+            <option key={bp.id} value={bp.id}>
+              {bp.name}
+            </option>
+          ))}
+        </select>
+      </p>
+
+      <p className="chon-hang-muc">
+        <label htmlFor="loc-hien-thi-danh-ba">{NHAN_LOC_HIEN_THI}</label>{" "}
+        <select
+          id="loc-hien-thi-danh-ba"
+          value={loc.hienThi}
+          onChange={(e) => doiLoc({ hienThi: maHienThi(e.target.value) })}
+        >
+          {THU_TU_HIEN_THI.map((ma) => (
+            <option key={ma} value={ma}>
+              {LUA_CHON_HIEN_THI[ma].nhan}
+            </option>
+          ))}
+        </select>
+      </p>
+    </div>
   );
 }
 

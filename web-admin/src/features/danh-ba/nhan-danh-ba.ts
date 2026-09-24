@@ -8,8 +8,8 @@
  *
  * MÀN NÀY ÍT HƠN ĐẶC TẢ RẤT NHIỀU, VÀ TỪNG PHẦN VẮNG MẶT ĐỀU CÓ LÝ DO Ở ĐÂY — `PHAN_CHUA_DUNG`
  * đưa đúng danh sách ấy RA MÀN HÌNH chứ không giấu trong chú thích. Một cán bộ mở `/danh-ba` và
- * không thấy ô tìm kiếm mà đặc tả vẽ sẽ kết luận hệ thống hỏng, rồi gọi lên tỉnh; thứ thật sự
- * thiếu là một tuyến API và hai quyết định của khách.
+ * không thấy một nút mà đặc tả vẽ sẽ kết luận hệ thống hỏng, rồi gọi lên tỉnh; thứ thật sự thiếu
+ * thường là một tuyến API hoặc một quyết định của khách.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
@@ -128,6 +128,16 @@ export const DANH_BA_RONG =
   "Đơn vị chưa có cán bộ nào trong danh bạ. Khi cán bộ được thêm vào, danh sách sẽ hiện ở đây.";
 
 /**
+ * Câu cho một danh sách rỗng KHI ĐANG TÌM HOẶC LỌC.
+ *
+ * KHÁC `DANH_BA_RONG`, VÀ PHẢI KHÁC: "đơn vị chưa có cán bộ nào" in ra dưới một ô tìm vừa gõ sai
+ * chính tả là một câu khẳng định sai về cả cơ quan. Câu này nói đúng điều đã xảy ra — không ai khớp
+ * điều kiện — và KHÔNG nhắc lại chữ đã tìm (thường là họ tên hoặc số điện thoại).
+ */
+export const KHONG_KHOP_LOC =
+  "Không có cán bộ nào khớp điều kiện tìm kiếm hoặc bộ lọc đang chọn. Thử bỏ bớt điều kiện.";
+
+/**
  * Câu nói rõ số di động ở màn này KHÔNG bị che, và vì sao.
  *
  * ĐÂY LÀ QUYẾT ĐỊNH #11, CHỐT 22/09/2026: không che trong nội bộ xã — cán bộ cùng xã cần gọi nhau
@@ -151,40 +161,29 @@ export const GHI_CHU_SO_DIEN_THOAI =
  * CÙNG TÊN HẰNG, CÙNG HAI KHOÁ `ten` / `viSao` như các màn khác (`nhiem-vu`, `bien-ban`), vì
  * `tools/tien_do_san_pham.py` đếm đúng hình ấy: tìm chữ `PHAN_CHUA_DUNG` rồi đếm mọi dòng
  * `ten: "` tới HẾT TỆP. Đặt tên khác là báo cáo tiến độ in "không khai" trong khi màn vẫn hiện đủ
- * bảy dòng — và vì thế mảng dưới đây phải là khối CUỐI CÙNG có dòng `ten:` trong tệp này.
+ * các dòng — và vì thế mảng dưới đây phải là khối CUỐI CÙNG có dòng `ten:` trong tệp này.
  */
 export type PhanChuaDung = { readonly ten: string; readonly viSao: string };
 
 /**
- * Bảy phần đặc tả vẽ mà hợp đồng hoặc một quyết định của khách chưa cho phép dựng.
+ * Những phần đặc tả vẽ mà hợp đồng hoặc một quyết định của khách chưa cho phép dựng.
  *
  * ĐƯA RA MÀN HÌNH, KHÔNG GIẤU TRONG CHÚ THÍCH. Vẽ ra một điều khiển không chạy được tệ hơn hẳn
  * không vẽ; nhưng KHÔNG vẽ mà cũng không nói gì thì cán bộ đi tìm một thứ đặc tả đã hứa với họ.
- * Mỗi dòng nói luôn cái gì mở khoá nó, để lần sau không ai phải ngồi suy lại.
+ * Mỗi dòng nói luôn cái gì mở khoá nó, để lần sau không ai phải ngồi suy lại. Dựng xong một phần
+ * thì XOÁ dòng của nó ở đây — một dòng "chưa mở" cho thứ đã mở là một câu sai trên màn hình.
  *
- * KHÔNG DÒNG NÀO Ở ĐÂY LÀ "CHƯA LÀM TỚI". Ba dòng đầu thiếu tuyến API; hai dòng giữa thiếu cột
- * trong lược đồ VÀ bị chặn bởi một quyết định đã chốt; dòng cuối thiếu một khoá quyền mà bảng
- * `quyen` không có.
+ * KHÔNG DÒNG NÀO Ở ĐÂY LÀ "CHƯA LÀM TỚI": mỗi dòng thiếu một tuyến API, một cột trong lược đồ, một
+ * quyết định của khách, hoặc một khoá quyền mà bảng `quyen` không có.
  */
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Ô tìm theo tên, chức vụ, số điện thoại (§3)",
-    viSao:
-      "GET /api/v1/staff không nhận tham số tìm kiếm nào — hợp đồng chỉ có limit, cursor, sort, " +
-      "order. Lọc tại trình duyệt chỉ lọc được 20 dòng của trang đang mở, nên gõ tên một người ở " +
-      "trang sau sẽ ra danh sách rỗng và người tìm kết luận sai rằng người đó không có trong hệ " +
-      "thống. Mở khoá bằng một tham số truy vấn mới trên tuyến ấy.",
-  },
-  {
-    ten: "Bộ lọc theo khối / đơn vị và theo trạng thái hiển thị (§3)",
-    viSao: "Cùng tuyến, cùng lý do, cùng cách mở khoá như ô tìm kiếm.",
-  },
-  {
-    ten: "Thẻ TỔNG SỐ CÁN BỘ (§2)",
+    ten: "Thẻ TỔNG SỐ CÁN BỘ (§2) và bộ đếm {đang hiện}/{tổng} cạnh mỗi khối trong ô lọc (§3)",
     viSao:
       "Hợp đồng cố ý không trả tổng số: máy chủ đọc theo mốc (keyset) và không chạy COUNT(*) trên " +
       "bảng đã phân mảnh. Đếm số dòng của trang đang mở rồi gọi đó là tổng là báo một con số " +
-      "không ai tính.",
+      "không ai tính. Danh mục khối / đơn vị cũng không trả số người đang hiện trên Mini App của " +
+      "từng khối, nên ô lọc chỉ ghi tên khối.",
   },
   {
     ten: "Thẻ ĐANG HIỆN TRÊN MINI APP, cột Trên Mini App, và hai nút thêm/rút khỏi danh bạ (§2, §4)",

@@ -1,5 +1,9 @@
 /**
- * Gọi bảy tuyến của danh bạ cán bộ — hai tuyến đọc và **năm tuyến ghi**.
+ * Gọi tám tuyến của danh bạ cán bộ — ba tuyến đọc và **năm tuyến ghi**.
+ *
+ * BA TUYẾN ĐỌC: `GET /api/v1/staff` (một trang, lọc theo `unit` / `published` trên URL),
+ * `GET /api/v1/staff/{id}`, và `POST /api/v1/staff/searches` — tìm theo chữ, CHỮ ĐI TRONG THÂN
+ * (xem `timCanBo`).
  *
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `page_Result_identity_canBoTomTat` và
  * `identity_canBoTomTat` đến từ `schema.gen.ts`. Không tệp nào trong ứng dụng này mô tả lại
@@ -28,7 +32,7 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
+import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./goi";
 import type {
   identity_canBoTomTat,
   identity_datVaiTroVao,
@@ -38,9 +42,11 @@ import type {
   identity_patch_staff_by_id,
   identity_post_staff,
   identity_post_staff_by_id_lockout,
+  identity_post_staff_searches,
   identity_put_staff_by_id_role,
   identity_suaCanBoVao,
   identity_themCanBoVao,
+  identity_timCanBoVao,
   page_Result_identity_canBoTomTat,
 } from "./schema.gen";
 
@@ -106,7 +112,7 @@ void _duKhoaSapXep;
  * màn hình, nên hợp đồng không trả `total` và giao diện không được bịa ra một con số nó không
  * có (`core/page/page.go`, chú thích đầu gói).
  */
-export type ThamSoTrang = {
+export type ThamSoTrang = LocCanBo & {
   limit?: number;
   sort?: KhoaSapXep;
   order?: ChieuSapXep;
@@ -114,27 +120,61 @@ export type ThamSoTrang = {
 };
 
 /**
+ * Hai bộ lọc của danh bạ — MỘT bộ cho cả `GET /api/v1/staff` lẫn `POST /api/v1/staff/searches`,
+ * đúng như máy chủ trao cả hai tuyến cho một `domain.LocCanBo`. Các bộ lọc có mặt kết hợp theo AND.
+ *
+ * Hai trường này KHÔNG phải dữ liệu cá nhân (một id bộ phận và một giá trị đúng/sai), nên chúng
+ * được đi trên URL. Chữ tìm thì không — xem `timCanBo`.
+ */
+export type LocCanBo = {
+  /** `unit` — id bộ phận. Rỗng hoặc vắng = mọi khối, kể cả người chưa thuộc khối nào. */
+  boPhan?: string;
+  /**
+   * `published`. `null` hoặc vắng = cả hai. `false` là một bộ lọc THẬT ("chưa hiện trên Mini
+   * App"), không phải "không lọc" — gộp hai nghĩa ấy làm một là ô "Chưa hiện" trả về cả xã.
+   */
+  congKhai?: boolean | null;
+};
+
+/**
  * Dựng đường dẫn truy vấn. Tách riêng khỏi lời gọi mạng để test được mà không cần thay `fetch`.
+ *
+ * MỌI TÊN THAM SỐ ĐI QUA `thamSoTheoHopDong<identity_get_staff["truyVan"]>`: máy chủ đổi tên
+ * `unit` hay `published` thì `tsc` đỏ ở đúng dòng dưới đây, thay vì máy chủ bỏ qua một tham số lạ
+ * và trả cả danh bạ trong khi cán bộ tin mình đang xem một khối.
  *
  * Tham số nào không đặt thì KHÔNG xuất hiện trong URL — để máy chủ áp mặc định của nó
  * (`limit=20`, `sort=code`, `order=asc`), thay vì ứng dụng web giữ một bản sao thứ hai của các
  * mặc định ấy và trôi khỏi bản của máy chủ.
+ *
+ * KHÔNG CÓ `q` VÀ KHÔNG CÓ CHỖ ĐỂ TRUYỀN NÓ: `ThamSoTrang` không có trường chữ tìm, và hợp đồng của
+ * tuyến này cũng không có (`identity_get_staff["truyVan"]`). Chữ tìm thường là họ tên hoặc số điện
+ * thoại; trên URL nó đi vào log truy cập và lịch sử trình duyệt (luật 3, cấm #4).
  */
 export function duongDanDanhSachCanBo(thamSo: ThamSoTrang = {}): string {
   const duongDan: identity_get_staff["duongDan"] = "/api/v1/staff";
   const truyVan = new URLSearchParams();
+  const dat = thamSoTheoHopDong<TruyVanDanhSach>(truyVan);
 
-  if (thamSo.limit !== undefined) truyVan.set("limit", String(thamSo.limit));
-  if (thamSo.sort !== undefined) truyVan.set("sort", thamSo.sort);
-  if (thamSo.order !== undefined) truyVan.set("order", thamSo.order);
-  // Con trỏ rỗng nghĩa là trang đầu. Gửi `cursor=` rỗng thì máy chủ trả 400 "con trỏ không hợp
-  // lệ" — đúng vào lần mở màn hình đầu tiên.
-  if (thamSo.cursor !== undefined && thamSo.cursor !== null && thamSo.cursor !== "") {
-    truyVan.set("cursor", thamSo.cursor);
-  }
+  dat("limit", thamSo.limit);
+  dat("sort", thamSo.sort);
+  dat("order", thamSo.order);
+  dat("unit", thamSo.boPhan?.trim());
+  // Máy chủ nhận ĐÚNG hai chữ `true` / `false` (`can_bo.go`, không dùng ParseBool). `null` thì không
+  // gửi — cả hai.
+  dat("published", chuCongKhai(thamSo.congKhai));
+  // Con trỏ rỗng nghĩa là trang đầu — `dat` bỏ qua nó, vì `cursor=` rỗng là 400 "con trỏ không hợp
+  // lệ" đúng vào lần mở màn hình đầu tiên.
+  dat("cursor", thamSo.cursor);
 
   const chuoi = truyVan.toString();
   return chuoi === "" ? duongDan : `${duongDan}?${chuoi}`;
+}
+
+function chuCongKhai(congKhai: boolean | null | undefined): "true" | "false" | undefined {
+  if (congKhai === true) return "true";
+  if (congKhai === false) return "false";
+  return undefined;
 }
 
 /** GET /api/v1/staff — một trang của danh bạ. Máy chủ đòi quyền `admin.user`; 403 nếu thiếu. */
@@ -142,6 +182,111 @@ export function layDanhSachCanBo(
   thamSo: ThamSoTrang = {},
 ): Promise<KetQua<page_Result_identity_canBoTomTat>> {
   return docJSON<page_Result_identity_canBoTomTat>(duongDanDanhSachCanBo(thamSo));
+}
+
+/* ---- tìm theo chữ --------------------------------------------------------------------------- */
+
+/**
+ * Giới hạn chữ tìm, tính bằng KÝ TỰ — cùng con số với `domain.TuKhoaTimCanBoToiDa`
+ * (`service-identity/internal/domain/tim_can_bo.go`).
+ *
+ * KÝ TỰ, KHÔNG BYTE VÀ KHÔNG ĐƠN VỊ UTF-16. Một chữ Việt có dấu là hai hoặc ba byte ("ễ" là ba),
+ * nên giới hạn theo byte từ chối một họ tên chừng bảy mươi chữ; còn `String.length` đếm đơn vị
+ * UTF-16, nên một ký tự ngoài mặt phẳng cơ bản bị đếm là hai. Máy chủ đếm rune (điểm mã) —
+ * `Array.from` đếm đúng thứ ấy.
+ *
+ * VÌ SAO CÓ BẢN THỨ HAI Ở CLIENT: để từ chối ngay tại ô nhập, trước khi chữ rời trình duyệt, chứ
+ * không để chuyển cả chuỗi lên rồi nhận 400. Máy chủ VẪN là nơi quyết định — hai con số lệch nhau
+ * thì câu của máy chủ hiện nguyên văn.
+ */
+export const TU_KHOA_TIM_TOI_DA = 200;
+
+/** Chữ tìm đã chuẩn hoá và hợp lệ. Chỉ `chuanHoaTuKhoaTim` dựng ra được một giá trị kiểu này. */
+export type TuKhoaHopLe = { readonly loai: "hopLe"; readonly tu: string };
+
+export type TuKhoaTim = { readonly loai: "rong" } | { readonly loai: "quaDai" } | TuKhoaHopLe;
+
+/**
+ * Chuẩn hoá chữ tìm ĐÚNG như máy chủ làm (`domain.ChuanHoaTuKhoaTimCanBo`): cắt hai đầu, gộp mọi
+ * dãy khoảng trắng bên trong thành một dấu cách, rồi đếm ký tự.
+ *
+ * GỘP KHOẢNG TRẮNG vì họ tên được lưu đã gộp: "Nguyễn  Văn" (hai dấu cách, dán từ Excel) phải được
+ * tìm như "Nguyễn Văn", không thì không ra ai.
+ *
+ * `rong` KHÔNG PHẢI LỖI: ô tìm rỗng là "bỏ tìm, xem cả danh sách" — tức `GET /api/v1/staff`.
+ */
+export function chuanHoaTuKhoaTim(tho: string): TuKhoaTim {
+  const tu = tho.split(/\s+/u).filter((phan) => phan !== "").join(" ");
+  if (tu === "") return { loai: "rong" };
+  if (Array.from(tu).length > TU_KHOA_TIM_TOI_DA) return { loai: "quaDai" };
+  return { loai: "hopLe", tu };
+}
+
+/**
+ * Thân của một lần tìm — dựng TỪNG TRƯỜNG theo `identity_timCanBoVao`.
+ *
+ * ĐỦ NĂM TRƯỜNG, KỂ CẢ KHI RỖNG, vì kiểu sinh từ hợp đồng đòi cả năm, và mỗi giá trị rỗng có nghĩa
+ * đã khai ở máy chủ (`can_bo_tim.go`): `unit: ""` = mọi khối, `published: null` = cả hai,
+ * `limit: null` = mặc định của máy chủ, `cursor: ""` = trang đầu.
+ *
+ * KHÔNG CÓ `sort` / `order`: tìm kiếm luôn phân trang theo thứ tự mặc định của danh bạ (mã, tăng
+ * dần). Hợp đồng không có hai trường ấy, nên `tsc` đỏ nếu ai thêm vào.
+ */
+export function thanTimCanBo(
+  tuKhoa: TuKhoaHopLe,
+  thamSo: LocCanBo & { limit?: number; cursor?: string | null } = {},
+): identity_timCanBoVao {
+  return {
+    q: tuKhoa.tu,
+    unit: thamSo.boPhan?.trim() ?? "",
+    published: thamSo.congKhai ?? null,
+    limit: thamSo.limit ?? null,
+    cursor: thamSo.cursor ?? "",
+  };
+}
+
+/**
+ * POST /api/v1/staff/searches — một trang kết quả tìm. 200, cùng hình dạng trang với
+ * `GET /api/v1/staff`. Quyền `admin.user`, như danh sách.
+ *
+ * `POST` CHO MỘT PHÉP ĐỌC, VÀ ĐÓ LÀ CẢ LÝ DO TUYẾN NÀY TỒN TẠI: chữ tìm thường là họ tên hoặc số
+ * điện thoại của một người. Trên URL, nó đi vào log truy cập của mọi proxy trên đường, lịch sử
+ * trình duyệt của một máy dùng chung ở bộ phận một cửa, và mọi công cụ theo dõi ghi URL (luật 3,
+ * cấm #4). Vì vậy đường dẫn dưới đây là một HẰNG — không có `?`, không có chỗ ghép thêm gì — và chữ
+ * tìm chỉ đi trong thân. Con trỏ của trang sau cũng đi trong thân, nên đi tiếp các trang của một
+ * lần tìm không bao giờ đưa chữ tìm lên URL.
+ *
+ * NHẬN `TuKhoaHopLe`, KHÔNG NHẬN `string`: chỉ `chuanHoaTuKhoaTim` dựng ra được kiểu ấy, nên không
+ * chỗ gọi nào gửi được một chữ chưa cắt, rỗng, hay quá dài — `tsc` chặn trước khi máy chủ phải chặn.
+ *
+ * KHÔNG CẦN `Idempotency-Key`: lần gọi này không tạo gì, gửi lại hai lần là đọc hai lần.
+ *
+ * KHÔNG GHI LOG GÌ, kể cả khi hỏng — thân mang đúng thứ vừa nói ở trên (luật 3, bất biến 1).
+ */
+export function timCanBo(
+  tuKhoa: TuKhoaHopLe,
+  thamSo: LocCanBo & { limit?: number; cursor?: string | null } = {},
+): Promise<KetQua<page_Result_identity_canBoTomTat>> {
+  const duongDan: identity_post_staff_searches["duongDan"] = "/api/v1/staff/searches";
+  return docThanLoiGoi<page_Result_identity_canBoTomTat>(
+    goiGhi(duongDan, "POST", thanTimCanBo(tuKhoa, thamSo), 200),
+  );
+}
+
+/**
+ * Đọc một trang của danh bạ theo bộ lọc đang áp: có chữ tìm thì `POST .../searches`, không thì
+ * `GET /api/v1/staff`. MỘT chỗ quyết định rẽ nhánh, để màn hình không tự viết lại phép ấy.
+ *
+ * `tuKhoa === null` là "không tìm" — không phải chuỗi rỗng, vì tuyến tìm từ chối chữ rỗng (400):
+ * một lần tìm không chữ đã có tuyến của nó, và đó là danh sách.
+ */
+export function docTrangDanhBa(
+  tuKhoa: TuKhoaHopLe | null,
+  thamSo: LocCanBo & { cursor?: string | null } = {},
+): Promise<KetQua<page_Result_identity_canBoTomTat>> {
+  // KHÔNG TRUYỀN `limit`, `sort`, `order`: để máy chủ áp mặc định của chính nó.
+  const loc = { boPhan: thamSo.boPhan, congKhai: thamSo.congKhai, cursor: thamSo.cursor };
+  return tuKhoa === null ? layDanhSachCanBo(loc) : timCanBo(tuKhoa, loc);
 }
 
 /**

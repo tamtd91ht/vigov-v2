@@ -9,13 +9,19 @@ import {
 } from "@/features/cau-hinh/ngan-xep-con-tro";
 
 import {
+  TU_KHOA_TIM_TOI_DA,
+  chuanHoaTuKhoaTim,
   datKhoaCanBo,
+  docTrangDanhBa,
   doiVaiTroCanBo,
   duongDanDanhSachCanBo,
   layChiTietCanBo,
   layDanhSachCanBo,
   suaCanBo,
+  thanTimCanBo,
   themCanBo,
+  timCanBo,
+  type TuKhoaHopLe,
 } from "./can-bo";
 import type { identity_canBoTomTat } from "./schema.gen";
 
@@ -615,3 +621,294 @@ function thanSuaRong() {
     mobile: null,
   };
 }
+
+/* ---- bộ lọc trên URL và tìm theo chữ trong thân --------------------------------------------- */
+
+describe("GET /api/v1/staff — hai bộ lọc `unit` và `published` trên URL", () => {
+  it("`unit` và `published` vào đúng tên tham số của hợp đồng", () => {
+    const d = duongDanDanhSachCanBo({ boPhan: "01J0000000000000000BOPHAN", congKhai: true });
+    const q = new URLSearchParams(d.split("?")[1]);
+    expect(d.startsWith("/api/v1/staff?")).toBe(true);
+    expect(q.get("unit")).toBe("01J0000000000000000BOPHAN");
+    expect(q.get("published")).toBe("true");
+  });
+
+  it("`congKhai: false` là một bộ lọc THẬT — gửi `published=false`, không bỏ qua", () => {
+    // Gộp `false` với "không lọc" thì ô "Chưa hiện" trả về cả xã.
+    expect(duongDanDanhSachCanBo({ congKhai: false })).toBe("/api/v1/staff?published=false");
+  });
+
+  it("`null`, vắng, bộ phận rỗng hay toàn khoảng trắng thì KHÔNG có tham số nào", () => {
+    expect(duongDanDanhSachCanBo({ congKhai: null, boPhan: "" })).toBe("/api/v1/staff");
+    expect(duongDanDanhSachCanBo({ boPhan: "   " })).toBe("/api/v1/staff");
+  });
+
+  it("kết hợp với con trỏ: bộ lọc đi cùng trang sau, con trỏ vẫn đứng cuối", () => {
+    expect(duongDanDanhSachCanBo({ boPhan: "BP", congKhai: false, cursor: "MOC" })).toBe(
+      "/api/v1/staff?unit=BP&published=false&cursor=MOC",
+    );
+  });
+
+  it("không có đường nào đưa chữ tìm vào URL của tuyến danh sách", () => {
+    // @ts-expect-error — `ThamSoTrang` không có trường chữ tìm; thêm vào là `tsc` đỏ ở đây.
+    const d = duongDanDanhSachCanBo({ q: "Huỳnh Văn" });
+    expect(d).toBe("/api/v1/staff");
+  });
+});
+
+describe("chuẩn hoá chữ tìm — giống máy chủ, đếm KÝ TỰ", () => {
+  it("cắt hai đầu, gộp khoảng trắng bên trong", () => {
+    expect(chuanHoaTuKhoaTim("  Huỳnh   Văn \t 1 ")).toEqual({ loai: "hopLe", tu: "Huỳnh Văn 1" });
+  });
+
+  it("rỗng hoặc toàn khoảng trắng là `rong` — bỏ tìm, không phải lỗi", () => {
+    expect(chuanHoaTuKhoaTim("")).toEqual({ loai: "rong" });
+    expect(chuanHoaTuKhoaTim("   \n\t ")).toEqual({ loai: "rong" });
+  });
+
+  it("đúng 200 chữ có dấu được nhận — dù đã là 600 byte", () => {
+    const tu = "ễ".repeat(TU_KHOA_TIM_TOI_DA);
+    expect(new TextEncoder().encode(tu).length).toBe(600);
+    expect(chuanHoaTuKhoaTim(tu)).toEqual({ loai: "hopLe", tu });
+  });
+
+  it("201 ký tự bị từ chối", () => {
+    expect(chuanHoaTuKhoaTim("ễ".repeat(TU_KHOA_TIM_TOI_DA + 1))).toEqual({ loai: "quaDai" });
+    expect(chuanHoaTuKhoaTim("a".repeat(TU_KHOA_TIM_TOI_DA + 1))).toEqual({ loai: "quaDai" });
+  });
+
+  it("đếm điểm mã, không đếm đơn vị UTF-16 — 200 ký tự ngoài mặt phẳng cơ bản vẫn nhận", () => {
+    // "𝐀" là MỘT rune ở máy chủ nhưng `.length` bằng 2. Đếm bằng `.length` là từ chối ở 100 ký tự.
+    const tu = "𝐀".repeat(TU_KHOA_TIM_TOI_DA);
+    expect(tu.length).toBe(400);
+    expect(chuanHoaTuKhoaTim(tu).loai).toBe("hopLe");
+    expect(chuanHoaTuKhoaTim(tu + "𝐀").loai).toBe("quaDai");
+  });
+
+  it("khoảng trắng thừa không bị tính vào giới hạn — đếm SAU khi gộp, như máy chủ", () => {
+    const tu = `  ${"a".repeat(100)}     ${"b".repeat(99)}  `;
+    expect(chuanHoaTuKhoaTim(tu).loai).toBe("hopLe");
+  });
+});
+
+/** Chữ tìm dùng xuyên suốt: có dấu, có khoảng trắng, có ký tự phải mã hoá khi lên URL. */
+const CHU_TIM = "Huỳnh Văn & 0900000000";
+
+function hopLe(tho: string): TuKhoaHopLe {
+  const tu = chuanHoaTuKhoaTim(tho);
+  if (tu.loai !== "hopLe") throw new Error("chữ tìm mẫu phải hợp lệ");
+  return tu;
+}
+
+/**
+ * Mọi hình dạng chữ tìm có thể mang khi lọt lên một URL: nguyên văn, `encodeURIComponent`, và kiểu
+ * `URLSearchParams` (dấu cách thành `+`) — cả cụm lẫn từng từ dài. Chỉ kiểm nguyên văn thì một URL
+ * đã mã hoá vẫn qua.
+ */
+function hinhDangTrenUrl(tu: string): string[] {
+  const tuDai = tu.split(" ").filter((p) => p.length > 3);
+  return [
+    tu,
+    encodeURIComponent(tu),
+    new URLSearchParams({ q: tu }).toString().slice(2),
+    ...tuDai.flatMap((p) => [p, encodeURIComponent(p)]),
+  ];
+}
+
+/**
+ * Máy chủ giả cho CẢ HAI tuyến đọc: GET lọc theo URL, POST tìm theo thân. Đọc con trỏ thật, nên đi
+ * nhiều trang của một lần tìm chỉ xanh khi con trỏ thật sự đi trong thân. Tuyến tìm trả 405 nếu
+ * URL mang bất kỳ chuỗi truy vấn nào.
+ */
+function mayChuTimGia(tatCa: readonly identity_canBoTomTat[]) {
+  function trang(loc: readonly identity_canBoTomTat[], conTro: string, limit: number) {
+    const batDau = conTro === "" ? 0 : loc.findIndex((x) => x.code === conTro) + 1;
+    if (conTro !== "" && batDau === 0) {
+      return loi400("invalid_cursor", "Con trỏ phân trang không hợp lệ. Vui lòng tải lại danh sách.");
+    }
+    const items = loc.slice(batDau, batDau + limit);
+    const conNua = batDau + limit < loc.length;
+    return new Response(
+      JSON.stringify({
+        items,
+        next_cursor: conNua ? (items[items.length - 1]?.code ?? "") : "",
+        has_more: conNua,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const gia = vi.fn(async (duongDan: string, tuyChon?: RequestInit) => {
+    const url = new URL(duongDan, "https://mot-xa.test");
+    if (url.pathname === "/api/v1/staff/searches") {
+      if (tuyChon?.method !== "POST" || url.search !== "") return new Response(null, { status: 405 });
+      const than = JSON.parse(String(tuyChon.body)) as Record<string, unknown>;
+      const q = String(than.q ?? "");
+      if (q === "") return loi400("invalid_request", "Hãy nhập từ khoá tìm kiếm.");
+      const khop = tatCa.filter(
+        (x) =>
+          (x.full_name.includes(q) || x.mobile.includes(q)) &&
+          (than.unit === "" || x.department_id === than.unit) &&
+          (than.published === null || x.published === than.published),
+      );
+      return trang(khop, String(than.cursor ?? ""), 2);
+    }
+    if (url.pathname === "/api/v1/staff" && (tuyChon?.method ?? "GET") === "GET") {
+      const unit = url.searchParams.get("unit");
+      const pub = url.searchParams.get("published");
+      const khop = tatCa.filter(
+        (x) =>
+          (unit === null || x.department_id === unit) &&
+          (pub === null || String(x.published) === pub),
+      );
+      return trang(khop, url.searchParams.get("cursor") ?? "", 2);
+    }
+    return new Response(null, { status: 404 });
+  });
+  vi.stubGlobal("fetch", gia);
+  return gia;
+}
+
+/** Năm người tên "Huỳnh Văn …", hai khối, ba người đầu đã hiện trên Mini App. */
+const NAM_NGUOI: identity_canBoTomTat[] = [1, 2, 3, 4, 5].map((n) => ({
+  ...canBo(n, null),
+  full_name: `Huỳnh Văn ${n}`,
+  department_id: n % 2 === 0 ? "BP-CHAN" : "BP-LE",
+  published: n <= 3,
+}));
+
+describe("POST /api/v1/staff/searches — chữ tìm đi trong THÂN", () => {
+  it("thân mang đúng năm trường của hợp đồng: q · unit · published · limit · cursor", async () => {
+    const gia = ghiGia(200, { items: [], next_cursor: "", has_more: false });
+    await timCanBo(hopLe(`  ${CHU_TIM}  `), { boPhan: "BP-LE", congKhai: false, cursor: "MOC" });
+
+    const { duongDan, tuyChon, header } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/staff/searches");
+    expect(tuyChon.method).toBe("POST");
+    expect(header.get("Content-Type")).toBe("application/json");
+    expect(header.get("Idempotency-Key")).toBeNull();
+    expect(JSON.parse(String(tuyChon.body))).toEqual({
+      q: CHU_TIM,
+      unit: "BP-LE",
+      published: false,
+      limit: null,
+      cursor: "MOC",
+    });
+  });
+
+  it("không bộ lọc, trang đầu: giá trị rỗng đúng nghĩa hợp đồng, không bỏ trường", () => {
+    expect(thanTimCanBo(hopLe("abc"))).toEqual({
+      q: "abc",
+      unit: "",
+      published: null,
+      limit: null,
+      cursor: "",
+    });
+  });
+
+  it("`published: true` đi lên là giá trị đúng/sai, không phải chuỗi", () => {
+    expect(thanTimCanBo(hopLe("abc"), { congKhai: true }).published).toBe(true);
+  });
+
+  it("chỉ nhận chữ ĐÃ chuẩn hoá — một chuỗi thô hay một kết quả `quaDai` không qua được `tsc`", () => {
+    // @ts-expect-error — nhận `TuKhoaHopLe`, không nhận chuỗi.
+    expect(() => thanTimCanBo("abc")).not.toThrow();
+    // @ts-expect-error — một chữ quá dài không bao giờ tới được lời gọi mạng.
+    expect(() => thanTimCanBo({ loai: "quaDai" })).not.toThrow();
+  });
+
+  it("một trường lạ không đi lên máy chủ — thân dựng từng trường", async () => {
+    const gia = ghiGia(200, { items: [], next_cursor: "", has_more: false });
+    await timCanBo(hopLe("abc"), { boPhan: "BP", sort: "code", tenant_id: "X" } as never);
+    const than = JSON.parse(String(loiGoi(gia, 0).tuyChon.body)) as Record<string, unknown>;
+    expect(Object.keys(than).sort()).toEqual(["cursor", "limit", "published", "q", "unit"]);
+  });
+
+  it("400 của máy chủ về tới giao diện nguyên văn", async () => {
+    ghiGia(400, {
+      code: "invalid_request",
+      message: "Từ khoá tìm kiếm quá dài (tối đa 200 ký tự).",
+      trace_id: "01JTRACE",
+    });
+    expect(await timCanBo(hopLe("abc"))).toEqual({
+      ok: false,
+      thongBao: "Từ khoá tìm kiếm quá dài (tối đa 200 ký tự).",
+    });
+  });
+});
+
+describe("docTrangDanhBa — rẽ GET hay POST, và chữ tìm KHÔNG BAO GIỜ lên URL", () => {
+  it("không chữ tìm → GET mang `unit`/`published`, không thân", async () => {
+    const gia = mayChuTimGia(NAM_NGUOI);
+    const kq = await docTrangDanhBa(null, { boPhan: "BP-LE", congKhai: true, cursor: null });
+
+    const [duongDan, tuyChon] = gia.mock.calls[0] as unknown as [string, RequestInit];
+    expect(duongDan).toBe("/api/v1/staff?unit=BP-LE&published=true");
+    expect(tuyChon.method).toBe("GET");
+    expect(tuyChon.body).toBeUndefined();
+    expect(kq.ok && kq.duLieu.items.map((x) => x.code)).toEqual(["CB001", "CB003"]);
+  });
+
+  it("có chữ tìm → POST, bộ lọc cùng đi trong thân, AND với chữ", async () => {
+    const gia = mayChuTimGia(NAM_NGUOI);
+    const kq = await docTrangDanhBa(hopLe("Huỳnh Văn"), { boPhan: "BP-LE", congKhai: false });
+
+    const [duongDan, tuyChon] = gia.mock.calls[0] as unknown as [string, RequestInit];
+    expect(duongDan).toBe("/api/v1/staff/searches");
+    expect(JSON.parse(String(tuyChon.body))).toMatchObject({
+      q: "Huỳnh Văn",
+      unit: "BP-LE",
+      published: false,
+    });
+    expect(kq.ok && kq.duLieu.items.map((x) => x.code)).toEqual(["CB005"]);
+  });
+
+  it("đi hết mọi trang của một lần tìm: con trỏ trong THÂN, URL đứng yên, không lặp không sót", async () => {
+    const gia = mayChuTimGia(NAM_NGUOI);
+    const tu = hopLe("Huỳnh Văn");
+
+    let nganXep = TRANG_DAU;
+    const daThay: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const kq = await docTrangDanhBa(tu, { cursor: nganXep.hienTai });
+      if (!kq.ok) throw new Error(kq.thongBao);
+      daThay.push(...kq.duLieu.items.map((x) => x.code));
+      if (!kq.duLieu.has_more) break;
+      nganXep = sangTrangSau(nganXep, kq.duLieu.next_cursor);
+    }
+
+    expect(daThay).toEqual(NAM_NGUOI.map((x) => x.code));
+    const cacLoiGoi = gia.mock.calls as unknown as [string, RequestInit][];
+    expect(new Set(cacLoiGoi.map(([url]) => url))).toEqual(new Set(["/api/v1/staff/searches"]));
+    const conTro = cacLoiGoi.map(([, tc]) => (JSON.parse(String(tc.body)) as { cursor: string }).cursor);
+    expect(conTro).toEqual(["", "CB002", "CB004"]);
+  });
+
+  it("KHÔNG URL NÀO — tìm, lọc, sang trang, tìm số, bỏ tìm — chứa chữ tìm", async () => {
+    // Chữ tìm thường là họ tên hoặc số điện thoại: trên URL nó vào log truy cập, log proxy, và lịch
+    // sử trình duyệt của máy dùng chung (luật 3, cấm #4). Ca này đi đủ mọi đường màn hình đi.
+    const gia = mayChuTimGia(NAM_NGUOI);
+    const tu = hopLe("Huỳnh Văn");
+
+    const p1 = await docTrangDanhBa(tu, {});
+    expect(p1.ok && p1.duLieu.has_more).toBe(true);
+    await docTrangDanhBa(tu, { cursor: p1.ok ? p1.duLieu.next_cursor : null });
+    await docTrangDanhBa(tu, { boPhan: "BP-LE", congKhai: true });
+    await docTrangDanhBa(hopLe(CHU_TIM), { congKhai: false });
+    await docTrangDanhBa(hopLe("0900000000"), {});
+    await docTrangDanhBa(null, { boPhan: "BP-CHAN" });
+
+    const cacLoiGoi = gia.mock.calls as unknown as [string, RequestInit][];
+    expect(cacLoiGoi.length).toBe(6);
+    for (const [url] of cacLoiGoi) {
+      for (const hinh of [...hinhDangTrenUrl(CHU_TIM), ...hinhDangTrenUrl("Huỳnh Văn")]) {
+        expect(url).not.toContain(hinh);
+      }
+      expect(url).not.toMatch(/[?&]q=/);
+    }
+    // Và máy chủ giả (trả 405 cho tuyến tìm có chuỗi truy vấn) đã trả lời thành công cả sáu.
+    for (const r of gia.mock.results) {
+      expect(((await r.value) as Response).status).toBe(200);
+    }
+  });
+});

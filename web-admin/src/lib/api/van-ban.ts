@@ -29,7 +29,7 @@
  * ấy đúng cho MỌI tuyến và được nói một lần ở `goi.ts`. Đọc tệp ấy trước khi sửa gì ở đây.
  */
 
-import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
+import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./goi";
 import type {
   documents_capSoVanBanDiVao,
   documents_chuyenVanBanVao,
@@ -89,26 +89,10 @@ export type KhoaSapXepVanBan = NonNullable<TruyVanChung["sort"]>;
 export type ChieuSapXepVanBan = NonNullable<TruyVanChung["order"]>;
 
 /**
- * Trả về hàm đặt MỘT tham số truy vấn, tên và kiểu giá trị lấy từ hợp đồng `T`.
- *
- * HAI TẦNG HÀM, KHÔNG MỘT: TypeScript không suy được `K` khi `T` đã ghi tay, nên một hàm phẳng
- * `datThamSo<T>(…, "sort", x)` chỉ kiểm TÊN mà để lọt mọi chuỗi vào `sort`. Tầng trong suy `K` từ
- * tên, nên giá trị bị đối chiếu với đúng trường ấy.
- *
- * Vắng mặt, `null` hay chuỗi rỗng thì KHÔNG đặt: chuỗi rỗng nghĩa là "không lọc", và máy chủ từ
- * chối một `status=` hay `cursor=` rỗng thay vì bỏ qua (400 ngay lần mở màn hình đầu tiên).
- *
- * Xuất ra CHỈ để bài kiểm chứng được rằng một tên ngoài hợp đồng làm `tsc` đỏ (`@ts-expect-error`).
+ * `thamSoTheoHopDong` nay ở `goi.ts` (chuyển 24/09/2026, khi danh bạ cán bộ thành nơi dùng thứ
+ * hai). Xuất lại ở đây để bài kiểm của tệp này vẫn đọc nó từ chỗ cũ.
  */
-export function thamSoTheoHopDong<T extends object>(truyVan: URLSearchParams) {
-  return <K extends Extract<keyof T, string>>(
-    ten: K,
-    giaTri: NonNullable<T[K]> | null | undefined,
-  ): void => {
-    if (giaTri === undefined || giaTri === null || giaTri === "") return;
-    truyVan.set(ten, String(giaTri));
-  };
-}
+export { thamSoTheoHopDong };
 
 /** Một yêu cầu trang. `cursor` là chuỗi MỜ ĐỤC máy chủ phát ra, client chỉ chuyền lại nguyên văn. */
 export type ThamSoTrangVanBan = {

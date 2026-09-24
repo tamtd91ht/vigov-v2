@@ -79,9 +79,17 @@ describe("danh sách phần chưa mở", () => {
     }
   });
 
-  it("nêu đủ bốn thứ đặc tả vẽ mà hợp đồng hoặc khách chưa cho phép", () => {
+  it("ô tìm và hai bộ lọc ĐÃ dựng — không còn dòng 'chưa mở' nào nói về chúng", () => {
+    // Một dòng "chưa mở" cho thứ đang nằm ngay trên màn hình là một câu sai cán bộ đọc mỗi ngày.
+    for (const p of PHAN_CHUA_DUNG) {
+      expect(p.ten).not.toMatch(/Ô tìm|Bộ lọc theo khối/);
+      expect(p.viSao).not.toContain("không nhận tham số tìm kiếm");
+    }
+  });
+
+  it("nêu đủ những thứ đặc tả vẽ mà hợp đồng hoặc khách chưa cho phép", () => {
     const tatCa = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" ");
-    expect(tatCa).toContain("tìm kiếm");
+    expect(tatCa).toContain("TỔNG SỐ CÁN BỘ");
     expect(tatCa).toContain("Mini App");
     expect(tatCa).toContain("Excel");
     expect(tatCa).toContain("Xoá khỏi danh bạ");

@@ -90,6 +90,32 @@ export async function docJSON<T>(duongDan: string): Promise<KetQua<T>> {
 }
 
 /**
+ * Trả về hàm đặt MỘT tham số truy vấn, tên và kiểu giá trị lấy từ hợp đồng `T`
+ * (`<tuyen>["truyVan"]` trong `schema.gen.ts`). Máy chủ đổi tên một tham số thì `tsc` đỏ ở đúng
+ * dòng gửi nó, thay vì máy chủ lặng lẽ bỏ qua một tham số lạ và trả CẢ danh sách trong khi cán bộ
+ * tin mình đang xem một lát cắt.
+ *
+ * HAI TẦNG HÀM, KHÔNG MỘT: TypeScript không suy được `K` khi `T` đã ghi tay, nên một hàm phẳng
+ * `datThamSo<T>(…, "sort", x)` chỉ kiểm TÊN mà để lọt mọi chuỗi vào `sort`. Tầng trong suy `K` từ
+ * tên, nên giá trị bị đối chiếu với đúng trường ấy.
+ *
+ * Vắng mặt, `null` hay chuỗi rỗng thì KHÔNG đặt: chuỗi rỗng nghĩa là "không lọc", và máy chủ từ
+ * chối một `status=` hay `cursor=` rỗng thay vì bỏ qua (400 ngay lần mở màn hình đầu tiên).
+ *
+ * Ở `goi.ts` vì đã có hai nơi dùng — sổ văn bản (`van-ban.ts`, nơi nó ra đời) và danh bạ cán bộ
+ * (`can-bo.ts`). Bản sao thứ hai của phép "bỏ qua chuỗi rỗng" là bản sẽ quên nhánh ấy.
+ */
+export function thamSoTheoHopDong<T extends object>(truyVan: URLSearchParams) {
+  return <K extends Extract<keyof T, string>>(
+    ten: K,
+    giaTri: NonNullable<T[K]> | null | undefined,
+  ): void => {
+    if (giaTri === undefined || giaTri === null || giaTri === "") return;
+    truyVan.set(ten, String(giaTri));
+  };
+}
+
+/**
  * GHI một tuyến, trả về phản hồi thô — bên gọi tự đọc kiểu của mình.
  *
  * NÓ ĐẾN ĐÂY VÌ ĐÃ CÓ HAI BẢN SAO, không vì một nguyên tắc. `lib/api/danh-muc.ts` viết bản đầu
