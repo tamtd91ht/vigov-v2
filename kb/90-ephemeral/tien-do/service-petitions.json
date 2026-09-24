@@ -170,6 +170,15 @@
       "no_confirm": [],
       "tiep_theo": "Thêm `note` tuỳ chọn vào thân tạo (đổi hợp đồng: thêm trường TUỲ CHỌN, không phá bên gọi cũ). Cùng lúc xem `tachKetLuanVao` (tách kết luận họp → nhiệm vụ) có cần như vậy không. Xong thì web hiện lại ô Ghi chú ở form tạo.",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "sua-nhiem-vu-thieu-chu-tri-va-phien-ban",
+      "viec": "BACKEND DEPENDENCY: PATCH /api/v1/tasks/{ma} không nhận `lead_unit`/`monitor`, và nhiệm vụ không mang phiên bản nào để chặn hai người sửa đè nhau",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Phát hiện 2026-09-24 khi dựng `✎ Sửa` §5.4 (lượt /develop-web-admin Nhiệm vụ, TASK-03). (1) `suaNhiemVuVao` (service-petitions/internal/http/nhiem_vu_ghi.go:198-229) không có `lead_unit`, `monitor`, nên `Cơ quan chủ trì tham mưu` và `Chuyên viên theo dõi` của §5.4 (docs/ui-ux/02-nhiem-vu.md:160-179) chỉ đọc được trên màn. (2) `nhiemVuRa` không có version/etag/updated_at, mà `documents` của PATCH là THAY CẢ BỘ: người A mở form, người B thêm một văn bản, A lưu thì dòng của B bị XOÁ MỀM không ai hay. Web đã thu hẹp khe bằng một lần đọc lại chi tiết ngay trước PATCH có `documents` — thu hẹp, KHÔNG đóng.",
+      "no_confirm": [],
+      "tiep_theo": "(1) Thêm `lead_unit`, `monitor` TUỲ CHỌN vào thân sửa — hỏi ở cổng: sửa cơ quan chủ trì/chuyên viên có cần `task.assign` thay vì `task.update` không (PATCH cố ý không đổi bo_phan_id/nguoi_thuc_hien_ma vì lý do ấy, xem `nhiem-vu-tuyen-ghi`). (2) Khoá lạc quan: một cột phiên bản hoặc `updated_at` trả trong phản hồi + điều kiện `If-Match` ở PATCH, trả 409 khi lệch — đổi hợp đồng, việc của contract-designer. Xong (2) thì web thay phép đọc-lại-trước-khi-lưu bằng If-Match.",
+      "menu": "nhiem-vu"
     }
   ]
 }
