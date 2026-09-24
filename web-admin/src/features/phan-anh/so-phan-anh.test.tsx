@@ -2,19 +2,27 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { KhungQuyen } from "@/features/quyen/cong-quyen";
-import type { identity_boPhanRa, petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
+import type { KetQua } from "@/lib/api/goi";
+import type {
+  identity_boPhanRa,
+  identity_danhBaChonNguoiRa,
+  petitions_phieuPhanAnhRa,
+} from "@/lib/api/schema.gen";
 
 import {
   CAU_THIEU_QUYEN_DONG,
   CAU_THIEU_QUYEN_PHAN_CONG,
   CAU_THIEU_QUYEN_PHAN_LOAI,
   congThaoTac,
+  DE_BO_PHAN_PHAN_CONG,
   NHAN_O_KET_QUA,
   NHAN_TIEN_TRANG_THAI,
+  PHAM_VI_GIAO_CHO_TOI,
+  PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
   SO_RONG,
 } from "./nhan-phieu";
-import { ChiTietPhieu, DanhSachThe, KhoiChuaDung, ThePhieu } from "./so-phan-anh";
+import { ChiTietPhieu, DanhSachThe, HangLoc, KhoiChuaDung, ThePhieu } from "./so-phan-anh";
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không.
@@ -69,7 +77,21 @@ const TEN_BO_PHAN = new Map(BO_PHAN.map((b) => [b.id, b.name]));
 
 const BAY_GIO = new Date("2026-09-10T02:00:00Z");
 
-function veChiTiet(cong: ReturnType<typeof congThaoTac>, p = phieu()): string {
+const DANH_BA: KetQua<identity_danhBaChonNguoiRa> = {
+  ok: true,
+  duLieu: {
+    items: [
+      { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "01JBOPHAN" },
+      { code: "CB-00200", full_name: "Lê Văn C", position: "Trưởng thôn", department_id: "01JKHAC" },
+    ],
+  },
+};
+
+function veChiTiet(
+  cong: ReturnType<typeof congThaoTac>,
+  p = phieu(),
+  danhBa: KetQua<identity_danhBaChonNguoiRa> | null = DANH_BA,
+): string {
   return renderToStaticMarkup(
     <ChiTietPhieu
       phieu={p}
@@ -77,6 +99,7 @@ function veChiTiet(cong: ReturnType<typeof congThaoTac>, p = phieu()): string {
       cong={cong}
       tenBoPhan={TEN_BO_PHAN}
       boPhan={BO_PHAN}
+      danhBa={danhBa}
       dangGui={false}
       loiGhi={null}
       dong={() => {}}
@@ -149,9 +172,11 @@ describe("CỔNG QUYỀN — phân loại và chuyển xử lý", () => {
     expect(html).toContain("feedback.classify");
   });
 
-  it("thiếu `feedback.assign`: không có khối Chuyển xử lý", () => {
+  it("thiếu `feedback.assign`: không có khối Chuyển xử lý, và KHÔNG có ô chọn cán bộ", () => {
     const html = veChiTiet(congThaoTac(true, false, true));
     expect(html).not.toContain('id="chon-bo-phan"');
+    expect(html).not.toContain('id="chon-can-bo"');
+    expect(html).not.toContain(nhuTrongHTML(DE_BO_PHAN_PHAN_CONG));
     expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_PHAN_CONG));
     expect(html).toContain("feedback.assign");
   });
@@ -182,6 +207,74 @@ describe("CỔNG QUYỀN — phân loại và chuyển xử lý", () => {
     );
     expect(html).toContain("feedback.read");
     expect(html).not.toContain("PA-2026-0021");
+  });
+});
+
+describe("ô chọn cán bộ xử lý (§8.5) và ô `Đang giao cho` (§8.3)", () => {
+  it("có `feedback.assign`: ô chọn cán bộ có mặt, mặc định `— Để bộ phận phân công —`", () => {
+    const html = veChiTiet(congThaoTac(false, true, false));
+    expect(html).toContain('id="chon-can-bo"');
+    expect(html).toContain(nhuTrongHTML(DE_BO_PHAN_PHAN_CONG));
+    // Chưa chọn bộ phận: ô chọn cán bộ khoá lại và không liệt kê ai — người được liệt kê là người
+    // của bộ phận được chọn.
+    expect(html).not.toContain('value="CB-00123"');
+    expect(html).not.toContain("Lê Văn C");
+  });
+
+  it("ô `Đang giao cho` hiện HỌ TÊN tra từ danh bạ, không hiện mã", () => {
+    const html = veChiTiet(congThaoTac(false, false, false), phieu({ assignee: "CB-00123" }));
+    expect(html).toContain("Trần Thị B");
+    expect(html).not.toContain("CB-00123");
+  });
+
+  it("người giữ phiếu không còn trong danh bạ: hiện mã kèm câu trung tính, không `undefined`", () => {
+    const html = veChiTiet(congThaoTac(false, false, false), phieu({ assignee: "CB-00999" }));
+    expect(html).toContain("CB-00999");
+    expect(html).toContain("không có trong danh bạ");
+    expect(html).not.toContain("undefined");
+  });
+
+  it("danh bạ tải hỏng: vẫn hiện mã người giữ phiếu, và nói ra câu lỗi ở khối chuyển xử lý", () => {
+    const hong: KetQua<identity_danhBaChonNguoiRa> = {
+      ok: false,
+      thongBao: "Đã xảy ra lỗi. Vui lòng thử lại.",
+    };
+    const html = veChiTiet(congThaoTac(false, true, false), phieu({ assignee: "CB-00123" }), hong);
+    expect(html).toContain("CB-00123");
+    expect(html).toContain("Không tải được danh bạ cán bộ");
+    // Chuyển cho bộ phận vẫn làm được — lỗi danh bạ không chặn đường ấy.
+    expect(html).toContain('id="chon-bo-phan"');
+  });
+});
+
+describe("hai tab phạm vi (§4)", () => {
+  function veHangLoc(phamVi?: "all" | "mine"): string {
+    return renderToStaticMarkup(
+      <HangLoc
+        loc={phamVi === undefined ? {} : { phamVi }}
+        tim=""
+        datTim={() => {}}
+        datLoc={() => {}}
+        boPhan={BO_PHAN}
+        thon={[]}
+      />,
+    );
+  }
+
+  it("có `Toàn xã` và `Giao cho tôi`, KHÔNG có `Liên quan đến tôi`", () => {
+    const html = veHangLoc();
+    expect(html).toContain(PHAM_VI_TOAN_XA);
+    expect(html).toContain(PHAM_VI_GIAO_CHO_TOI);
+    expect(html).not.toContain("Liên quan đến tôi");
+  });
+
+  it("đúng MỘT tab được đánh dấu, theo bộ lọc đang chọn", () => {
+    for (const phamVi of [undefined, "mine"] as const) {
+      const html = veHangLoc(phamVi);
+      expect(html.match(/aria-pressed="true"/g)?.length).toBe(1);
+      const nutDangChon = html.match(/aria-pressed="true"[^>]*>([^<]*)</)?.[1];
+      expect(nutDangChon).toBe(phamVi === "mine" ? PHAM_VI_GIAO_CHO_TOI : PHAM_VI_TOAN_XA);
+    }
   });
 });
 

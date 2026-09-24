@@ -10,6 +10,7 @@ import {
   type NganXepConTro,
 } from "@/features/cau-hinh/ngan-xep-con-tro";
 import { usePhien } from "@/features/phien/phien-hien-tai";
+import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type { KetQua } from "@/lib/api/goi";
 import {
@@ -22,6 +23,7 @@ import {
 } from "@/lib/api/phieu-phan-anh";
 import type {
   identity_boPhanRa,
+  identity_danhBaChonNguoiRa,
   identity_thonToDanPhoRa,
   page_Result_petitions_phieuPhanAnhRa,
   petitions_phieuPhanAnhRa,
@@ -39,6 +41,8 @@ import {
   conBuocKeTiep,
   congThaoTac,
   DANG_TAI_SO,
+  danhBaTheoMa,
+  DE_BO_PHAN_PHAN_CONG,
   GHI_CHU_O_KET_QUA,
   GHI_CHU_TIEN_TRANG_THAI,
   LINH_VUC_PHAN_ANH,
@@ -51,17 +55,21 @@ import {
   MOI_LINH_VUC_NHAN,
   MOI_TRANG_THAI,
   MOI_TRANG_THAI_NHAN,
+  NHAN_CHON_CAN_BO,
   NHAN_O_KET_QUA,
   NHAN_TIEN_TRANG_THAI,
   nhanBoPhan,
   nhanCanBoXuLy,
   nhanHan,
+  nhanLuaChonCanBo,
   nhanHienCongKhai,
   nhanKenh,
   nhanLinhVuc,
   nhanNguoiGui,
   nhanThoiDiem,
   nhanTrangThai,
+  PHAM_VI_GIAO_CHO_TOI,
+  PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
   phanLoaiDuoc,
   SO_RONG,
@@ -84,7 +92,7 @@ import {
  *
  *   `Chuyển sang bước kế tiếp`  KHÔNG có cổng ở giao diện. Tuyến khai `feedback.read`, điều kiện
  *                               thật là `feedback.resolve` HOẶC chính là cán bộ được phân công —
- *                               LUẬT NẮM GIỮ. Vế thứ hai giao diện không tính được (xem
+ *                               LUẬT NẮM GIỮ. Vế thứ hai giao diện cố ý không tính lại (xem
  *                               `congThaoTac`), nên nút hiện với mọi người xem được sổ và câu 403
  *                               của máy chủ ra thẳng màn hình.
  *   `Đóng phiếu`                CÓ cổng: `feedback.resolve`, và **không** được nới theo luật nắm
@@ -133,6 +141,9 @@ export function SoPhanAnh() {
   } | null>(null);
   const [daTaiBoPhan, datDaTaiBoPhan] = useState<readonly identity_boPhanRa[]>([]);
   const [daTaiThon, datDaTaiThon] = useState<readonly identity_thonToDanPhoRa[]>([]);
+  // `null` = chưa tải xong. Giữ NGUYÊN `KetQua` chứ không chỉ `items`: ô chọn cán bộ cần nói ra câu
+  // lỗi của máy chủ, còn ô `Đang giao cho` cần biết "chưa có danh bạ" khác "không có trong danh bạ".
+  const [daTaiDanhBa, datDaTaiDanhBa] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
 
   const [dangMo, datDangMo] = useState<petitions_phieuPhanAnhRa | null>(null);
   const [loiGhi, datLoiGhi] = useState<string | null>(null);
@@ -150,9 +161,14 @@ export function SoPhanAnh() {
     };
   }, [loc, nganXep.hienTai, khoa]);
 
-  // HAI DANH MỤC, ĐỌC MỘT LẦN CHO CẢ MÀN. Cả hai tuyến là `any-authenticated`, nên mọi tài khoản
-  // xem được sổ đều đọc được. Danh mục hỏng thì ô lọc tương ứng rỗng — KHÔNG làm hỏng quyển sổ:
-  // hai câu trả lời rời nhau, mỗi cái nói chuyện của nó.
+  // BA DANH MỤC, ĐỌC MỘT LẦN CHO CẢ MÀN. Cả ba tuyến là `any-authenticated`, nên mọi tài khoản
+  // xem được sổ đều đọc được. Danh mục hỏng thì ô tương ứng rỗng — KHÔNG làm hỏng quyển sổ: ba câu
+  // trả lời rời nhau, mỗi cái nói chuyện của nó.
+  //
+  // DANH BẠ CHỌN NGƯỜI ĐỌC CẢ XÃ, KHÔNG THEO BỘ PHẬN: cùng một danh sách vừa tra họ tên người đang
+  // giữ phiếu (người ấy có thể ở bất kỳ bộ phận nào), vừa làm ô chọn cán bộ — lọc theo bộ phận ở
+  // trình duyệt, đúng phép so khớp `department_id` mà `?unit=` của máy chủ làm
+  // (`service-identity/internal/store/can_bo_chon_nguoi.go:77-79`). Một lần gọi, không hai bản.
   useEffect(() => {
     let bo = false;
     layDanhMucBoPhan().then((kq) => {
@@ -160,6 +176,9 @@ export function SoPhanAnh() {
     });
     layDanhSachThonToDanPho().then((kq) => {
       if (!bo && kq.ok) datDaTaiThon(kq.duLieu.items);
+    });
+    layDanhBaChonNguoi().then((kq) => {
+      if (!bo) datDaTaiDanhBa(kq);
     });
     return () => {
       bo = true;
@@ -269,6 +288,7 @@ export function SoPhanAnh() {
           cong={cong}
           tenBoPhan={tenBoPhan}
           boPhan={daTaiBoPhan}
+          danhBa={daTaiDanhBa}
           dangGui={dangGui}
           loiGhi={loiGhi}
           dong={() => {
@@ -276,7 +296,9 @@ export function SoPhanAnh() {
             datLoiGhi(null);
           }}
           phanLoai={(linhVuc) => chay(phanLoaiPhieu(dangMo.code, linhVuc))}
-          chuyenXuLy={(boPhanID) => chay(chuyenXuLyPhieu(dangMo.code, boPhanID))}
+          chuyenXuLy={(boPhanID, maCanBo) =>
+            chay(chuyenXuLyPhieu(dangMo.code, boPhanID, maCanBo))
+          }
           tienTrangThai={() => chay(tienTrangThaiPhieu(dangMo.code))}
           dongPhieuLai={(ketQua) => chay(dongPhieu(dangMo.code, ketQua))}
         />
@@ -309,7 +331,11 @@ export function KhoiChuaDung() {
   );
 }
 
-/** Bộ lọc §4. Bảy ô, đúng bảy tham số máy chủ nhận — không vẽ ô nào không có tuyến đứng sau. */
+/**
+ * Bộ lọc §4: hai tab phạm vi và bảy ô, đúng những tham số máy chủ nhận — không vẽ ô nào không có
+ * tuyến đứng sau. Phạm vi nằm CHUNG `BoLoc` với bảy ô, nên đổi tab giữ nguyên các ô đang chọn và
+ * về trang đầu như mọi bộ lọc khác; cùng cách giữ trạng thái (state của trang, không lên URL).
+ */
 export function HangLoc({
   loc,
   tim,
@@ -333,6 +359,28 @@ export function HangLoc({
 
   return (
     <div className="hang-loc">
+      {/* HAI TAB PHẠM VI, CÙNG KHUÔN SỔ NHIỆM VỤ. `mine` KHÔNG mang danh tính nào — máy chủ lấy mã
+          cán bộ từ PHIÊN. Tab `Liên quan đến tôi` không vẽ: máy chủ trả 400 cho `scope=related`
+          (xem `PHAN_CHUA_DUNG`). */}
+      <div className="o-chon" role="group" aria-label="Phạm vi">
+        <button
+          type="button"
+          className="nut-phu"
+          aria-pressed={loc.phamVi !== "mine"}
+          onClick={() => datLoc({ ...loc, phamVi: undefined })}
+        >
+          {PHAM_VI_TOAN_XA}
+        </button>
+        <button
+          type="button"
+          className="nut-phu"
+          aria-pressed={loc.phamVi === "mine"}
+          onClick={() => datLoc({ ...loc, phamVi: "mine" })}
+        >
+          {PHAM_VI_GIAO_CHO_TOI}
+        </button>
+      </div>
+
       {/* Ô TÌM GỬI BẰNG SUBMIT, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
           đang gõ vào một URL — và chuỗi ấy có thể là tên hay địa chỉ một công dân (luật 3, cấm #4).
           Gõ xong rồi bấm là một lần. */}
@@ -564,6 +612,7 @@ export function ChiTietPhieu({
   cong,
   tenBoPhan,
   boPhan,
+  danhBa,
   dangGui,
   loiGhi,
   dong,
@@ -577,17 +626,29 @@ export function ChiTietPhieu({
   cong: CongThaoTac;
   tenBoPhan: ReadonlyMap<string, string>;
   boPhan: readonly identity_boPhanRa[];
+  /** Danh bạ chọn người của xã. `null` = chưa tải xong. */
+  danhBa: KetQua<identity_danhBaChonNguoiRa> | null;
   dangGui: boolean;
   loiGhi: string | null;
   dong: () => void;
   phanLoai: (linhVuc: string) => void;
-  chuyenXuLy: (boPhanID: string) => void;
+  /** `maCanBo` là MÃ CÁN BỘ (`code` của danh bạ), vắng khi để bộ phận tự phân công. */
+  chuyenXuLy: (boPhanID: string, maCanBo?: string) => void;
   tienTrangThai: () => void;
   dongPhieuLai: (ketQua: string) => void;
 }) {
   const [linhVucChon, datLinhVucChon] = useState("");
   const [boPhanChon, datBoPhanChon] = useState("");
+  const [canBoChon, datCanBoChon] = useState("");
   const [ketQua, datKetQua] = useState("");
+
+  const bangDanhBa = danhBa !== null && danhBa.ok ? danhBaTheoMa(danhBa.duLieu.items) : null;
+  // Chỉ người thuộc ĐÚNG bộ phận đang chọn — cùng phép so khớp `?unit=` của máy chủ. Người chưa
+  // thuộc bộ phận nào không nằm trong ô chọn của bộ phận nào.
+  const canBoCuaBoPhan =
+    danhBa !== null && danhBa.ok && boPhanChon !== ""
+      ? danhBa.duLieu.items.filter((cb) => cb.department_id === boPhanChon)
+      : [];
 
   const linhVuc = linhVucPhanAnh(phieu.field, phieu.field_label);
   const hanTiepNhan = trangThaiHan(phieu.acknowledge_due, "khongApDung", bayGio);
@@ -653,7 +714,7 @@ export function ChiTietPhieu({
 
         <dt>Đang giao cho</dt>
         <dd>
-          {nhanBoPhan(phieu.unit, tenBoPhan)} · {nhanCanBoXuLy(phieu.assignee)}
+          {nhanBoPhan(phieu.unit, tenBoPhan)} · {nhanCanBoXuLy(phieu.assignee, bangDanhBa)}
         </dd>
 
         <dt>Hiển thị với người dân</dt>
@@ -724,7 +785,7 @@ export function ChiTietPhieu({
           className="form-danh-muc"
           onSubmit={(e) => {
             e.preventDefault();
-            if (boPhanChon !== "") chuyenXuLy(boPhanChon);
+            if (boPhanChon !== "") chuyenXuLy(boPhanChon, canBoChon === "" ? undefined : canBoChon);
           }}
         >
           <h4>Chuyển xử lý, không đổi trạng thái</h4>
@@ -733,7 +794,12 @@ export function ChiTietPhieu({
             <select
               id="chon-bo-phan"
               value={boPhanChon}
-              onChange={(e) => datBoPhanChon(e.target.value)}
+              onChange={(e) => {
+                datBoPhanChon(e.target.value);
+                // Đổi bộ phận thì bỏ người đã chọn: người ấy thuộc bộ phận cũ, và một lựa chọn
+                // không còn nằm trong ô chọn là một lựa chọn cán bộ không nhìn thấy mà vẫn gửi đi.
+                datCanBoChon("");
+              }}
             >
               <option value="">— Chọn bộ phận —</option>
               {boPhan.map((b) => (
@@ -743,12 +809,37 @@ export function ChiTietPhieu({
               ))}
             </select>
           </div>
-          {/* Ô CHỌN `Cán bộ xử lý` KHÔNG DỰNG — xem `PHAN_CHUA_DUNG`. Phiếu đi tới bộ phận, đúng
-              lựa chọn mặc định `— Để bộ phận phân công —` mà đặc tả đã ghi. */}
-          <p className="ghi-chu">
-            Phiếu chuyển tới bộ phận; bộ phận tự phân công cán bộ. Ô chọn cán bộ chưa dựng được —
-            xem phần chưa dựng được ở đầu màn.
-          </p>
+          {/* GIÁ TRỊ CỦA MỖI LỰA CHỌN LÀ MÃ CÁN BỘ (`code`), không phải id nội bộ — luật nắm giữ ở
+              máy chủ so đúng mã ấy với phiên của người được giao. Mã chỉ nằm trong thân POST, không
+              lên URL. */}
+          <div className="o-chon">
+            <label htmlFor="chon-can-bo">{NHAN_CHON_CAN_BO}</label>
+            <select
+              id="chon-can-bo"
+              value={canBoChon}
+              disabled={boPhanChon === ""}
+              onChange={(e) => datCanBoChon(e.target.value)}
+            >
+              <option value="">{DE_BO_PHAN_PHAN_CONG}</option>
+              {canBoCuaBoPhan.map((cb) => (
+                <option key={cb.code} value={cb.code}>
+                  {nhanLuaChonCanBo(cb)}
+                </option>
+              ))}
+            </select>
+          </div>
+          {danhBa !== null && !danhBa.ok && (
+            <p className="thong-bao-loi" role="alert">
+              Không tải được danh bạ cán bộ: {danhBa.thongBao} Vẫn chuyển được phiếu cho bộ phận tự
+              phân công.
+            </p>
+          )}
+          {danhBa !== null && danhBa.ok && boPhanChon !== "" && canBoCuaBoPhan.length === 0 && (
+            <p className="ghi-chu">
+              Bộ phận này chưa có cán bộ nào có tài khoản đang hoạt động. Phiếu sẽ để bộ phận tự
+              phân công.
+            </p>
+          )}
           <button type="submit" className="nut-chinh" disabled={dangGui || boPhanChon === ""}>
             Chuyển xử lý
           </button>

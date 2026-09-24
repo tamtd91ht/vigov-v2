@@ -6,6 +6,7 @@ import {
   buocLuongChinh,
   cauGiaiThichTrangThai,
   conBuocKeTiep,
+  danhBaTheoMa,
   LINH_VUC_PHAN_ANH,
   linhVucPhanAnh,
   lopHan,
@@ -17,9 +18,11 @@ import {
   nhanHienCongKhai,
   nhanKenh,
   nhanLinhVuc,
+  nhanLuaChonCanBo,
   nhanNguoiGui,
   nhanThoiDiem,
   nhanTrangThai,
+  PHAN_CHUA_DUNG,
   phanLoaiDuoc,
   RE_NHANH,
   trangThaiHan,
@@ -264,16 +267,66 @@ describe("khi nào vẽ nút nào", () => {
   });
 });
 
-describe("bộ phận và cán bộ đang giữ phiếu — hai ULID, hai câu trả lời khác nhau", () => {
-  it("id không tra được thì nói ra, KHÔNG in id lên màn hình cán bộ", () => {
+describe("bộ phận (ULID) và cán bộ (MÃ CÁN BỘ) đang giữ phiếu — hai cách tra khác nhau", () => {
+  it("id bộ phận không tra được thì nói ra, KHÔNG in id lên màn hình cán bộ", () => {
     const ten = new Map([["01JBOPHAN", "VĂN PHÒNG ĐẢNG ỦY"]]);
     expect(nhanBoPhan("01JBOPHAN", ten)).toBe("VĂN PHÒNG ĐẢNG ỦY");
     expect(nhanBoPhan("", ten)).toBe("Chưa chuyển bộ phận");
     expect(nhanBoPhan("01JKHAC", ten)).not.toContain("01JKHAC");
   });
 
-  it("cán bộ xử lý: không bao giờ in ULID ra màn hình", () => {
-    expect(nhanCanBoXuLy("")).toBe("Chưa phân công cán bộ cụ thể");
-    expect(nhanCanBoXuLy("01JCANBO")).not.toContain("01JCANBO");
+  const DANH_BA = danhBaTheoMa([
+    { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức Văn phòng", department_id: "01JBOPHAN" },
+    { code: "CB-00124", full_name: "", position: "", department_id: "" },
+  ]);
+
+  it("chưa phân công cán bộ cụ thể: câu nói ra điều đó, bất kể danh bạ", () => {
+    expect(nhanCanBoXuLy("", DANH_BA)).toBe("Chưa phân công cán bộ cụ thể");
+    expect(nhanCanBoXuLy("", null)).toBe("Chưa phân công cán bộ cụ thể");
+  });
+
+  it("có trong danh bạ: hiện HỌ TÊN thay cho mã", () => {
+    expect(nhanCanBoXuLy("CB-00123", DANH_BA)).toBe("Trần Thị B");
+  });
+
+  it("không có trong danh bạ (ví dụ tài khoản đã khoá): hiện MÃ kèm câu trung tính", () => {
+    const nhan = nhanCanBoXuLy("CB-00999", DANH_BA);
+    expect(nhan).toContain("CB-00999");
+    expect(nhan).toContain("không có trong danh bạ");
+    expect(nhan).not.toContain("undefined");
+  });
+
+  it("danh bạ chưa tải hoặc tải hỏng: hiện đúng mã, không bao giờ `undefined`", () => {
+    expect(nhanCanBoXuLy("CB-00123", null)).toBe("CB-00123");
+  });
+
+  it("họ tên rỗng trong danh bạ: hiện mã, không một ô trống", () => {
+    expect(nhanCanBoXuLy("CB-00124", DANH_BA)).toBe("CB-00124");
+  });
+
+  it("dòng ô chọn: `Họ tên · Chức danh`, bỏ chức danh khi rỗng", () => {
+    expect(
+      nhanLuaChonCanBo({ code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "" }),
+    ).toBe("Trần Thị B · Công chức");
+    expect(
+      nhanLuaChonCanBo({ code: "CB-00123", full_name: "Trần Thị B", position: "", department_id: "" }),
+    ).toBe("Trần Thị B");
+  });
+});
+
+describe("phần chưa dựng được — không còn liệt kê những gì ĐÃ dựng", () => {
+  it("ô chọn cán bộ, họ tên người đang giữ phiếu và tab `Giao cho tôi` đã rời danh sách", () => {
+    const tatCa = PHAN_CHUA_DUNG.map((p) => `${p.ten}\n${p.viSao}`).join("\n");
+    expect(tatCa).not.toContain("Giao cho tôi` / `Liên quan");
+    expect(tatCa).not.toMatch(/Họ tên — email của cán bộ đang giữ/);
+    expect(tatCa).not.toMatch(/ô chọn `Cán bộ xử lý` của §8\.5 cũng không dựng/);
+    // Niềm tin sai cũ — "`assignee` là ULID nội bộ" — không còn ra tới màn hình.
+    expect(tatCa).not.toMatch(/ULID nội bộ/i);
+    expect(tatCa).not.toContain("admin.user");
+  });
+
+  it("`Liên quan đến tôi` VẪN nằm trong danh sách — máy chủ trả 400 cho `scope=related`", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Liên quan đến tôi"))).toBe(true);
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Giao cho tôi"))).toBe(false);
   });
 });

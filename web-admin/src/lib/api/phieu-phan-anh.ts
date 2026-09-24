@@ -27,15 +27,14 @@
  * ghép lại, đoán lại, hay hiện thêm chữ số nào.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * ⚠ HỢP ĐỒNG KHÔNG KHAI MỘT THAM SỐ TRUY VẤN NÀO CHO TUYẾN DANH SÁCH, VÀ HANDLER THẬT ĐỌC BẢY.
- * `petitions_get_citizen_reports["truyVan"]` sinh ra một đối tượng RỖNG, trong khi
- * `locPhieuTuQuery` (`xu_ly_phan_anh.go:255-294`) đọc và **kiểm** `status` · `channel` · `field` ·
- * `hamlet` · `unit` · `q` · `late`, còn `page.Parse` đọc `limit` · `cursor` · `sort` · `order`.
- * Nguyên nhân là `tools/apidoc` chưa có chú thích `@query` trên tuyến ấy, chứ không phải máy chủ
- * không nhận. Hệ quả có thật và được nói ra chứ không giấu: **bộ lọc §4 không có kiểu nào của hợp
- * đồng canh giúp** — gõ sai một tên tham số ở đây thì `tsc` im lặng và máy chủ trả cả sổ. Vì thế
- * tên tham số được gom vào đúng một chỗ (`themLocVaoTruyVan`) và có bài kiểm đọc lại từng tên.
- * Đã báo về để khai `@query` trên tuyến.
+ * THAM SỐ TRUY VẤN CỦA TUYẾN DANH SÁCH NAY ĐÃ ĐƯỢC HỢP ĐỒNG KHAI: `petitions_get_citizen_reports
+ * ["truyVan"]` có `status` · `channel` · `field` · `hamlet` · `unit` · `q` · `late` · `scope` cùng
+ * `limit` · `cursor` · `sort` · `order`. Khối này từng viết rằng đối tượng ấy RỖNG — đúng lúc viết,
+ * hết đúng khi tuyến có chú thích `@query`.
+ *
+ * ⚠ ĐIỀU VẪN CÒN ĐÚNG: `themLocVaoTruyVan` ghép tên tham số bằng CHUỖI TRẦN, nên gõ sai một tên thì
+ * `tsc` vẫn im lặng và máy chủ trả cả sổ. Tên được gom vào đúng một chỗ và có bài kiểm đọc lại từng
+ * tên (`phieu-phan-anh.test.ts`).
  */
 
 import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
@@ -89,14 +88,20 @@ export function layPhieuPhanAnh(maTraCuu: string): Promise<KetQua<petitions_phie
 }
 
 /**
- * Bộ lọc của sổ phản ánh — ĐÚNG bảy tham số `locPhieuTuQuery` đọc, cộng phân trang.
+ * Bộ lọc của sổ phản ánh — bảy bộ lọc `locPhieuTuQuery` đọc, phạm vi, cộng phân trang.
  *
- * KHÔNG CÓ `pham_vi` (`Toàn xã` · `Giao cho tôi` · `Liên quan đến tôi`, §4) và KHÔNG CÓ
- * `danh_gia_thap`: máy chủ không nhận hai tham số ấy, và một tham số không được nhận thì bị **bỏ
- * qua lặng lẽ** — màn hình sẽ hiện cả sổ trong khi cán bộ tin mình đang xem phần việc của riêng
- * mình. Hai thiếu sót ấy ra tới màn hình, xem `features/phan-anh/nhan-phieu.ts`.
+ * `LIÊN QUAN ĐẾN TÔI` KHÔNG CÓ Ở ĐÂY VÀ KIỂU `phamVi` KHÔNG CHO GỬI NÓ: máy chủ trả **400** cho
+ * `scope=related` (thế nào là "liên quan" chưa được chốt — `xu_ly_phan_anh.go`, `errPhamVi…`), nên
+ * một tab gửi nó là một tab biến quyển sổ thành trang lỗi. `danh_gia_thap` cũng không có: hợp đồng
+ * không trả điểm hài lòng. Cả hai ra tới màn hình qua `PHAN_CHUA_DUNG`.
  */
 export type LocPhanAnh = {
+  /**
+   * §4 tab Phạm vi. `mine` = "Giao cho tôi": phiếu mà người gọi đang là cán bộ được giao, và MÁY
+   * CHỦ tự lấy mã cán bộ từ PHIÊN — `?scope=mine` **không** mang danh tính nào. Một tab gửi
+   * `?assignee=CB-…` của chính mình là client tự khai mình là ai (luật 1, cấm #2).
+   */
+  phamVi?: "all" | "mine";
   /** Một trong chín mã trạng thái. Sai mã là **400**, không phải bị bỏ qua. */
   trangThai?: string;
   /** Một trong bốn mã kênh tiếp nhận. Sai mã là **400**. */
@@ -123,6 +128,10 @@ export type LocPhanAnh = {
  * toàn bình thường — nên chúng đứng một chỗ và có bài kiểm đọc lại từng tên.
  */
 function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocPhanAnh): void {
+  // `scope=all` là mặc định của máy chủ, nên tab "Toàn xã" gửi tham số VẮNG MẶT HẲN — cùng cách
+  // sổ Nhiệm vụ làm (`lib/api/nhiem-vu.ts`).
+  if (loc.phamVi === "mine") truyVan.set("scope", "mine");
+
   if (loc.trangThai !== undefined && loc.trangThai !== "") truyVan.set("status", loc.trangThai);
   if (loc.kenh !== undefined && loc.kenh !== "") truyVan.set("channel", loc.kenh);
   if (loc.linhVuc !== undefined && loc.linhVuc !== "") truyVan.set("field", loc.linhVuc);
@@ -200,17 +209,22 @@ export function phanLoaiPhieu(
  *
  * `assignee` LÀ TUỲ CHỌN VÀ ĐÓ LÀ MỘT LỰA CHỌN CÓ THẬT trên màn hình: `— Để bộ phận phân công —`.
  * Trường vắng mặt hẳn khi không chọn ai, chứ không gửi chuỗi rỗng.
+ *
+ * `assignee` LÀ **MÃ CÁN BỘ** (`code` của `GET /api/v1/staff-directory`, dạng `CB-00123`), KHÔNG
+ * PHẢI ULID NỘI BỘ. Máy chủ ghi nguyên chuỗi ấy vào `can_bo_xu_ly_id`, và luật nắm giữ so cột ấy với
+ * `Principal.Ma` (`service-petitions/internal/app/xu_ly_phan_anh.go:184-212`). Gửi một ULID thì phiếu
+ * vẫn "được giao" trên màn hình, còn người được giao thì không bao giờ tiến được nó.
  */
 export function chuyenXuLyPhieu(
   maTraCuu: string,
   boPhanID: string,
-  canBoID?: string,
+  maCanBo?: string,
 ): Promise<KetQua<petitions_phieuPhanAnhRa>> {
   const mau: petitions_post_citizen_reports_by_maTraCuu_assignment["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/assignment";
   const than: petitions_phanCongVao =
-    canBoID !== undefined && canBoID !== ""
-      ? { unit: boPhanID, assignee: canBoID }
+    maCanBo !== undefined && maCanBo !== ""
+      ? { unit: boPhanID, assignee: maCanBo }
       : { unit: boPhanID };
   return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
@@ -229,9 +243,10 @@ export function chuyenXuLyPhieu(
  *
  * ⚠ TUYẾN NÀY KHAI `feedback.read`, VÀ ĐIỀU KIỆN THẬT NẰM Ở TẦNG NGHIỆP VỤ: `feedback.resolve`
  * **HOẶC** chính là cán bộ được phân công phiếu ấy (`app.duocTienTrangThai`). Trưởng thôn nhận một
- * phiếu phải tiến được phiếu ấy. Giao diện KHÔNG dựng lại phép kiểm đó — nó không thể: phản hồi
- * mang `assignee` là **ULID nội bộ** còn phiên hiện tại chỉ mang mã nghiệp vụ của cán bộ, hai thứ
- * không so được. Nút luôn hiện với người xem được sổ, và câu 403 của máy chủ ra thẳng màn hình.
+ * phiếu phải tiến được phiếu ấy. Giao diện KHÔNG dựng lại phép kiểm đó: `assignee` và `staff.code`
+ * của phiên đều là mã cán bộ nên so được, nhưng một phép so ở giao diện chỉ là một bản sao thứ hai
+ * của luật nắm giữ, và bản sao ấy sẽ lệch vào ngày luật đổi. Nút luôn hiện với người xem được sổ,
+ * và câu 403 của máy chủ ra thẳng màn hình.
  */
 export function tienTrangThaiPhieu(
   maTraCuu: string,

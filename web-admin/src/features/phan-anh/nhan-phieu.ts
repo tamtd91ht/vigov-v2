@@ -5,7 +5,10 @@
  * và ngay sau hạn.
  */
 
-import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
+import type {
+  identity_canBoChonNguoiRa,
+  petitions_phieuPhanAnhRa,
+} from "@/lib/api/schema.gen";
 
 /**
  * Giờ Việt Nam, GHIM chứ không theo cài đặt của máy cán bộ.
@@ -118,11 +121,12 @@ export function nhanLinhVuc(l: LinhVucPhanAnh): string {
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * NGƯỜI GỬI — MÀN HÌNH HIỆN ĐÚNG THỨ MÁY CHỦ GỬI, KHÔNG GHÉP LẠI VÀ KHÔNG "LÀM ĐẸP".
  *
- * `reporter_name` về dạng `Nguyễn V. A.` và `reporter_phone` về dạng `09****5678`: máy chủ che ở
- * đường ra vì hôm nay KHÔNG có khoá quyền nào mở xem đầy đủ. Hệ quả có thật và được nói ra chứ
- * không giấu: cán bộ KHÔNG gọi lại được cho người phản ánh từ màn hình này. Khoá quyền nào mở số
- * đầy đủ là câu hỏi của khách (luật 3, điều kiện dừng #1), và che là câu trả lời đóng-khi-chưa-rõ
- * trong lúc chờ.
+ * `reporter_name` về dạng `Nguyễn V. A.` và `reporter_phone` về dạng `09****5678` — TRỪ MỘT CA:
+ * `GET /api/v1/citizen-reports/{maTraCuu}` trả bản ĐẦY ĐỦ cho tài khoản có `feedback.unmask` (khoá
+ * gieo 20/09/2026), và mỗi lần đọc như thế máy chủ ghi một dòng vết kiểm toán
+ * (`service-petitions/internal/http/phieu_phan_anh.go:240-251`). Tuyến danh sách và bốn tuyến ghi
+ * thì LUÔN che, kể cả với khoá ấy (`xu_ly_phan_anh.go:156`, `:469`). Hàm này không biết và không cần
+ * biết mình đang cầm bản nào: nó hiện đúng thứ máy chủ gửi, và quyết định che hay không nằm ở máy chủ.
  *
  * ẨN DANH THÌ CẢ HAI TRƯỜNG RỖNG, và màn hình KHÔNG được bù vào bằng gì cả: một cái tên đã che
  * vẫn là một cái tên — `Nguyễn V. A.` trong một xã vài nghìn người vẫn chỉ ra một người, và
@@ -330,7 +334,8 @@ export type CongThaoTac = {
   readonly phanLoai: boolean;
   readonly phanCong: boolean;
   /**
-   * Nút `Đóng phiếu`. `feedback.resolve` và **chỉ** khoá ấy — xem `quyen-phan-anh.ts`.
+   * Nút `Đóng phiếu`. `feedback.resolve` và **chỉ** khoá ấy — xem `QUYEN_DONG_PHAN_ANH` ở
+   * `lib/quyen.ts`.
    */
   readonly dongPhieu: boolean;
 };
@@ -340,9 +345,10 @@ export type CongThaoTac = {
  *
  * ⚠ `tienTrangThai` KHÔNG CÓ TRONG KIỂU NÀY, VÀ SỰ VẮNG MẶT ẤY LÀ NỘI DUNG CHÍNH CHỨ KHÔNG PHẢI
  * MỘT CHỖ CÒN THIẾU. Điều kiện thật của `…/status` là `feedback.resolve` **HOẶC** chính là cán bộ
- * được phân công phiếu ấy (LUẬT NẮM GIỮ). Vế thứ hai giao diện **không tính được**: phản hồi mang
- * `assignee` là ULID nội bộ của cán bộ, còn phiên hiện tại chỉ mang `staff.code` — mã nghiệp vụ —
- * và hợp đồng không có đường nối hai thứ ấy cho một tài khoản không có `admin.user`.
+ * được phân công phiếu ấy (LUẬT NẮM GIỮ). `assignee` của phiếu và `staff.code` của phiên đều là
+ * MÃ CÁN BỘ (`CB-00123`) nên về kỹ thuật so được — nhưng giao diện CỐ Ý không so: luật nắm giữ là
+ * của máy chủ (`service-petitions/internal/app/xu_ly_phan_anh.go:184-212`), và một bản sao ở đây
+ * sẽ ẩn nút đúng vào ngày luật ấy được nới mà màn hình chưa biết.
  *
  * Nên nút tiến trạng thái HIỆN VỚI MỌI NGƯỜI XEM ĐƯỢC SỔ, và câu 403 của máy chủ
  * (*"Phiếu này không được phân công cho bạn…"*) ra thẳng màn hình. Gắn nó sau `feedback.resolve`
@@ -426,20 +432,53 @@ export function nhanBoPhan(id: string, tenTheoID: ReadonlyMap<string, string>): 
   return tenTheoID.get(id) ?? "Bộ phận không còn trong danh mục";
 }
 
+/** Danh bạ chọn người, tra theo MÃ CÁN BỘ (`code`). */
+export type DanhBaTheoMa = ReadonlyMap<string, identity_canBoChonNguoiRa>;
+
+/** Dựng bảng tra từ `items` của `GET /api/v1/staff-directory`. */
+export function danhBaTheoMa(items: readonly identity_canBoChonNguoiRa[]): DanhBaTheoMa {
+  return new Map(items.map((cb) => [cb.code, cb]));
+}
+
 /**
  * Ô `ĐANG GIAO CHO` của §8.3 — phần CÁN BỘ.
  *
- * ⚠ KHÔNG HIỆN ĐƯỢC HỌ TÊN VÀ EMAIL như đặc tả vẽ, và lý do nằm ở hợp đồng chứ không ở đây:
- * `assignee` là **ULID nội bộ**, còn tuyến duy nhất tra được ULID → họ tên là `GET /api/v1/staff`,
- * tuyến ấy đòi `admin.user` — một khoá **cấu hình hệ thống**, không liên quan gì tới việc xử lý
- * phản ánh. Gọi nó ở đây sẽ 403 với gần như mọi cán bộ đang trực. Nên màn hình nói ra sự thật ngắn
- * nhất mà nó biết chắc, và phần còn lại nằm ở `PHAN_CHUA_DUNG`.
+ * `assignee` LÀ MÃ CÁN BỘ (`CB-00123`), và họ tên tra bằng danh bạ chọn người
+ * (`GET /api/v1/staff-directory`, mọi cán bộ đăng nhập đọc được). BỐN CA:
+ *
+ *   rỗng                         phiếu giao cho bộ phận, bộ phận tự phân công
+ *   có trong danh bạ             họ tên (họ tên rỗng thì hiện mã — không bao giờ một ô trống)
+ *   danh bạ chưa tải / tải hỏng  hiện MÃ: mã là thứ duy nhất màn hình biết chắc
+ *   không có trong danh bạ       hiện MÃ kèm một câu trung tính. Danh bạ chỉ gồm người có tài khoản
+ *                                đang hoạt động, nên người đã khoá tài khoản (nghỉ hưu, chuyển công
+ *                                tác) rơi vào ca này — và phiếu cũ của họ vẫn phải đọc được
+ *
+ * KHÔNG CÓ EMAIL như đặc tả vẽ (`Họ tên — email`): danh bạ chọn người cố ý không trả email.
  */
-export function nhanCanBoXuLy(assignee: string): string {
-  return assignee === ""
-    ? "Chưa phân công cán bộ cụ thể"
-    : "Đã phân công cho một cán bộ (hợp đồng chỉ trả mã nội bộ, xem phần chưa dựng được)";
+export function nhanCanBoXuLy(assignee: string, danhBa: DanhBaTheoMa | null): string {
+  if (assignee === "") return "Chưa phân công cán bộ cụ thể";
+  if (danhBa === null) return assignee;
+  const cb = danhBa.get(assignee);
+  if (cb === undefined) return `${assignee} (không có trong danh bạ cán bộ đang hoạt động)`;
+  return cb.full_name === "" ? assignee : cb.full_name;
 }
+
+/**
+ * Một dòng của ô chọn `Cán bộ xử lý` (§8.5). Đặc tả vẽ `Họ tên — email · Chức danh`; danh bạ không
+ * có email nên dòng là `Họ tên · Chức danh`, hoặc chỉ họ tên khi chưa có chức danh.
+ */
+export function nhanLuaChonCanBo(cb: identity_canBoChonNguoiRa): string {
+  const ten = cb.full_name === "" ? cb.code : cb.full_name;
+  return cb.position === "" ? ten : `${ten} · ${cb.position}`;
+}
+
+/** Nhãn và lựa chọn mặc định của ô chọn cán bộ — nguyên văn §8.5. */
+export const NHAN_CHON_CAN_BO = "Cán bộ xử lý";
+export const DE_BO_PHAN_PHAN_CONG = "— Để bộ phận phân công —";
+
+/** Hai tab phạm vi của §4. Tab thứ ba — `Liên quan đến tôi` — không vẽ, xem `PHAN_CHUA_DUNG`. */
+export const PHAM_VI_TOAN_XA = "Toàn xã";
+export const PHAM_VI_GIAO_CHO_TOI = "Giao cho tôi";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
@@ -479,10 +518,11 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "TRANG chứ không của cả xã — và đó là con số lãnh đạo đọc rồi báo cáo lên trên.",
   },
   {
-    ten: "Phạm vi `Giao cho tôi` / `Liên quan đến tôi` (§4, phụ lục §5.1)",
+    ten: "Tab phạm vi `Liên quan đến tôi` (§4, phụ lục §5.1)",
     viSao:
-      "Máy chủ chỉ nhận bảy bộ lọc và không có cái nào theo người dùng hiện tại. Một tham số máy " +
-      "chủ không nhận thì bị bỏ qua LẶNG LẼ: tab sẽ sáng lên trong khi danh sách vẫn là cả xã.",
+      "Máy chủ trả 400 cho `scope=related`: thế nào là “liên quan” và người liên quan được làm gì " +
+      "chưa được chốt với khách. Vẽ tab ấy là vẽ một tab biến quyển sổ thành trang lỗi. Hai tab " +
+      "`Toàn xã` và `Giao cho tôi` thì đã có.",
   },
   {
     ten: "Lọc `Bị đánh giá thấp`, ghi nhận đánh giá của người dân (§4, §8.6)",
@@ -503,12 +543,11 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "chữ chỉ đọc.",
   },
   {
-    ten: "Họ tên — email của cán bộ đang giữ phiếu (§8.3, §8.5)",
+    ten: "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",
     viSao:
-      "`assignee` về dạng ULID nội bộ, và tuyến duy nhất tra được nó — `GET /api/v1/staff` — đòi " +
-      "`admin.user`, một khoá cấu hình hệ thống không liên quan tới việc xử lý phản ánh. Vì thế ô " +
-      "chọn `Cán bộ xử lý` của §8.5 cũng không dựng: khối Chuyển xử lý gửi bộ phận, đúng lựa chọn " +
-      "mặc định mà đặc tả đã ghi — `— Để bộ phận phân công —`.",
+      "Danh bạ chọn người (`GET /api/v1/staff-directory`) cố ý chỉ trả mã, tên, chức vụ và bộ " +
+      "phận — không email, không số điện thoại — để mọi cán bộ đăng nhập đọc được nó. Màn hình vì " +
+      "thế hiện `Họ tên · Chức danh` thay cho `Họ tên — email · Chức danh`.",
   },
   {
     ten: "Modal `Nhập hộ phản ánh` (§11)",

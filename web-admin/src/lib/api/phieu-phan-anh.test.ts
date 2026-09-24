@@ -124,11 +124,10 @@ describe("tra phiếu theo mã tra cứu", () => {
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * BẢY TÊN THAM SỐ TRUY VẤN — VÀ ĐÂY LÀ CHỖ DUY NHẤT CANH CHÚNG.
+ * TÊN THAM SỐ TRUY VẤN — VÀ ĐÂY LÀ CHỖ DUY NHẤT CANH CHÚNG.
  *
- * Hợp đồng KHÔNG khai tham số nào cho `GET /api/v1/citizen-reports`
- * (`petitions_get_citizen_reports["truyVan"]` là một đối tượng rỗng), trong khi handler thật đọc
- * và kiểm bảy cái (`xu_ly_phan_anh.go:255-294`). Nên `tsc` không canh giúp một chữ nào ở đây: gõ
+ * Hợp đồng nay đã khai các tham số của `GET /api/v1/citizen-reports`, nhưng
+ * `themLocVaoTruyVan` vẫn ghép tên bằng chuỗi trần, nên `tsc` không canh giúp một chữ nào ở đây: gõ
  * `hamlet_id` thay vì `hamlet` thì máy chủ bỏ qua bộ lọc và trả về CẢ QUYỂN SỔ, còn màn hình trông
  * hoàn toàn bình thường — cán bộ tin mình đang xem một thôn.
  *
@@ -178,6 +177,29 @@ describe("đường dẫn đọc sổ phản ánh", () => {
     expect(new URLSearchParams(duong.slice(duong.indexOf("?") + 1)).get("cursor")).toBe("eyJrIjoi");
   });
 
+  it("tab `Giao cho tôi` gửi `scope=mine`, và KHÔNG kèm danh tính nào", () => {
+    const duong = duongDanSoPhanAnh({ phamVi: "mine", trangThai: "dang-xu-ly" });
+    const truyVan = new URLSearchParams(duong.slice(duong.indexOf("?") + 1));
+    expect(truyVan.get("scope")).toBe("mine");
+    // Các bộ lọc khác đi cùng, không bị tab nuốt mất.
+    expect(truyVan.get("status")).toBe("dang-xu-ly");
+    // Máy chủ lấy mã cán bộ từ PHIÊN. Một `assignee=` do client gửi là client tự khai mình là ai.
+    expect(truyVan.has("assignee")).toBe(false);
+  });
+
+  it("tab `Toàn xã` (vắng hoặc `all`): KHÔNG gửi `scope` — mặc định của máy chủ", () => {
+    expect(duongDanSoPhanAnh({})).toBe("/api/v1/citizen-reports");
+    expect(duongDanSoPhanAnh({ phamVi: "all" })).toBe("/api/v1/citizen-reports");
+  });
+
+  it("`scope=related` không bao giờ được gửi — máy chủ trả 400 cho nó", () => {
+    // Kiểu `phamVi` không cho viết `"related"` (`tsc` đỏ). Bài chạy này canh chiều còn lại: không
+    // bộ lọc nào khác lọt ra thành `related`.
+    for (const phamVi of [undefined, "all", "mine"] as const) {
+      expect(duongDanSoPhanAnh({ phamVi, chiTreHan: true })).not.toContain("related");
+    }
+  });
+
   it("không một chỗ nào mang `tenant_id`", () => {
     // Client tự khai xã là client tự cấp quyền (luật 1, cấm #2). Xã suy từ `Host` ở rìa ngoài cùng.
     const duong = duongDanSoPhanAnh({ trangThai: "da-dong", boPhanID: "01JBOPHAN" });
@@ -214,6 +236,25 @@ describe("bốn thao tác ghi", () => {
     const gia = batGhi();
     return chuyenXuLyPhieu("PA-2026-0021", "01JBOPHAN").then(() => {
       expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/citizen-reports/PA-2026-0021/assignment");
+      expect(JSON.parse(String(gia.mock.calls[0]?.[1]?.body))).toEqual({ unit: "01JBOPHAN" });
+    });
+  });
+
+  it("chuyển xử lý có chọn cán bộ: `assignee` là MÃ CÁN BỘ, không phải id nội bộ", () => {
+    // Luật nắm giữ so `can_bo_xu_ly_id` với `Principal.Ma`. Một ULID ở đây là một phiếu "đã giao"
+    // mà người được giao không bao giờ tiến được.
+    const gia = batGhi();
+    return chuyenXuLyPhieu("PA-2026-0021", "01JBOPHAN", "CB-00123").then(() => {
+      const than = JSON.parse(String(gia.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
+      expect(than).toEqual({ unit: "01JBOPHAN", assignee: "CB-00123" });
+      expect(Object.keys(than)).not.toContain("id");
+      expect(Object.keys(than)).not.toContain("assignee_id");
+    });
+  });
+
+  it("chuyển xử lý với mã cán bộ rỗng: như không chọn ai, không gửi `assignee` rỗng", () => {
+    const gia = batGhi();
+    return chuyenXuLyPhieu("PA-2026-0021", "01JBOPHAN", "").then(() => {
       expect(JSON.parse(String(gia.mock.calls[0]?.[1]?.body))).toEqual({ unit: "01JBOPHAN" });
     });
   });

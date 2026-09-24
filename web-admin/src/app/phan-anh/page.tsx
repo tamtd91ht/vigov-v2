@@ -48,7 +48,7 @@ export default async function TrangPhanAnh() {
             {/* MỘT CỔNG `feedback.read` CHO CẢ HAI, vì cả sáu tuyến của màn này đứng sau nó (hoặc
                 sau một khoá hẹp hơn). Bốn thao tác ghi có cổng RIÊNG bên trong, và một trong bốn
                 — `Đóng phiếu` — cố ý đứng sau khoá khác với nút tiến trạng thái; xem
-                `features/phan-anh/quyen-phan-anh.ts`. */}
+                `QUYEN_DONG_PHAN_ANH` ở `lib/quyen.ts`. */}
             <SoPhanAnh />
             <TraCuuPhieu />
           </CongQuyen>
