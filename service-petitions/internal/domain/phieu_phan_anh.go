@@ -253,6 +253,21 @@ type PhieuPhanAnh struct {
 	// code, behind an authenticated read.
 	KetQuaXuLy string
 
+	// THE TWO TERMINAL BRANCHES — `khong-tiep-nhan` and `chuyen-cap-tren` (migration 0011, user
+	// decisions 24-25/09/2026). Both require LyDoKetThucNhanh, a reason the CITIZEN reads (same
+	// standing as KetQuaXuLy: not a staff note, never on the event). `chuyen-cap-tren` also requires
+	// CoQuanNhan, the receiving body, free text because transfers go sideways as often as up.
+	// KetThucNhanhLuc is the instant of the branch act — deliberately NOT DongLuc, which would make a
+	// refused petition count as a resolved one. All three are empty on every other status, and the
+	// database refuses otherwise (CHECK `phieu_phan_anh_ket_thuc_nhanh_du_truong`).
+	//
+	// ⚠ NOT YET READ OR WRITTEN BY THE STORE: its column list is unchanged, so these are zero on every
+	// row read today — which is also correct today, because no route puts a petition in either branch.
+	// The card that adds the routes must add the three columns to the store's SELECT and scan.
+	LyDoKetThucNhanh string
+	CoQuanNhan       string
+	KetThucNhanhLuc  time.Time
+
 	HienCongKhai bool
 	SoLanMoLai   int
 
