@@ -64,6 +64,13 @@ pipeline {
             error('Jenkins vừa học tham số mới của job — lượt này không có tham số nào.\n' +
                   'Bấm lại bằng "Build with Parameters". Cụm không bị đụng tới.')
           }
+          // Một việc đã GỠ khỏi `choices` vẫn tới được đây qua "Rebuild" một lượt cũ (đo được
+          // 25/09/2026: `sao-chep-tu-staging` chạy xanh mà không stage nào khớp). Xanh-mà-không-làm-
+          // gì là dạng hỏng tệ nhất: người bấm tin là đã xong.
+          if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'nhan-ban-staging'])) {
+            error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
+                  'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
+          }
           env.HANH_DONG = params.HANH_DONG
           env.MT = params.MT
           env.DICH_VU = params.DICH_VU
