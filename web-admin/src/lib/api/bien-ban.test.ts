@@ -3,11 +3,22 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  boDauKhongPhatSinh,
+  danhDauKhongPhatSinh,
   duongDanSoBienBan,
+  kyBienBan,
+  layBienBan,
+  layNhiemVuCuaKetLuan,
   laySoBienBan,
+  suaBienBan,
+  suaKetLuan,
   tachKetLuanThanhNhiemVu,
   taoBienBan,
   themKetLuan,
+  xoaBienBan,
+  xoaKetLuan,
+  type KyBienBanVao,
+  type SuaBienBanVao,
   type TachKetLuanVao,
   type TaoBienBanVao,
 } from "./bien-ban";
@@ -57,6 +68,8 @@ const THAN_DAY_DU: TaoBienBanVao = {
   content: "Toàn văn biên bản.",
   attendees: ["CB-2026-7K3M9Q", "Đại diện thôn Hà Lam"],
   conclusions: ["Giao bộ phận Địa chính rà soát tiến độ tuyến đường."],
+  minutes_taker: "CB-2026-1A2B3C",
+  supplements_id: "01JBBGOC",
 };
 
 describe("GET /api/v1/meetings — đường dẫn", () => {
@@ -82,7 +95,14 @@ describe("GET /api/v1/meetings — đường dẫn", () => {
     );
   });
 
-  it("KHÔNG gửi `sort` hay `order` — mặc định của máy chủ đã là `created_at` giảm dần", () => {
+  it("KHÔNG gửi `sort` hay `order` — mặc định của máy chủ đã là NGÀY HỌP giảm dần", () => {
+    const tham = hopDong().paths["/api/v1/meetings"]?.["get"] as unknown as {
+      parameters: { name: string; schema: { default?: string } }[];
+    };
+    // Canh chính giả định: ngày máy chủ đổi mặc định thì ca này đỏ, không phải màn lặng lẽ sắp khác.
+    expect(tham.parameters.find((p) => p.name === "sort")?.schema.default).toBe("held_on");
+    expect(tham.parameters.find((p) => p.name === "order")?.schema.default).toBe("desc");
+
     const duong = duongDanSoBienBan({ limit: 10, cursor: "MOC-2" });
     expect(duong).not.toContain("sort");
     expect(duong).not.toContain("order");
@@ -181,6 +201,8 @@ describe("POST …/conclusions/{stt}/task — tách một kết luận thành nh
       content: "Giao Tài chính – Kế toán đối chiếu số liệu giải ngân sáu tháng đầu năm.",
       task_count: 0,
       task_done_count: 0,
+      status: "chua-giao",
+      no_task: false,
       created_at: "2026-08-05T02:00:00Z",
       ...sua,
     };
@@ -382,6 +404,8 @@ describe("thân yêu cầu khớp hợp đồng — canh bản chép tay của `
           content: "x",
           task_count: 0,
           task_done_count: 0,
+          status: "chua-giao",
+          no_task: false,
           created_at: "2026-08-05T02:00:00Z",
         },
         thanDayDu,
@@ -392,18 +416,200 @@ describe("thân yêu cầu khớp hợp đồng — canh bản chép tay của `
     expect(keys).toEqual(Object.keys(luocDo?.properties ?? {}).sort());
   });
 
-  it("bốn tuyến vẫn đứng sau `task.read` / `task.create` như màn đang giả định", () => {
-    // MÀN NÀY KHÔNG CÓ CỔNG QUYỀN Ở CLIENT (xem `PHAN_CHUA_DUNG`), nên không có hằng nào trong
-    // `lib/quyen.ts` để canh. Bài kiểm này là chỗ duy nhất phát hiện được ngày máy chủ tách một
-    // khoá `meeting.*` riêng — hôm ấy `PHAN_CHUA_DUNG` và thanh menu đều phải sửa theo.
+  it("mọi tuyến vẫn đứng sau đúng khoá màn đang giả định — và KÝ đứng sau `task.approve`", () => {
+    // Chỉ nút KÝ có cổng ở client (`QUYEN_KY_BIEN_BAN`, cosmetic). Bài kiểm này là chỗ phát hiện
+    // ngày máy chủ tách một khoá `meeting.*` riêng — hôm ấy `PHAN_CHUA_DUNG` và hằng quyền phải sửa.
     const p = hopDong().paths;
-    expect(p["/api/v1/meetings"]?.["get"]?.["x-vigov-permission"]?.key).toBe("task.read");
-    expect(p["/api/v1/meetings"]?.["post"]?.["x-vigov-permission"]?.key).toBe("task.create");
-    expect(
-      p["/api/v1/meetings/{id}/conclusions"]?.["post"]?.["x-vigov-permission"]?.key,
-    ).toBe("task.create");
-    expect(
-      p["/api/v1/meetings/{id}/conclusions/{stt}/task"]?.["post"]?.["x-vigov-permission"]?.key,
-    ).toBe("task.create");
+    const khoa = (duong: string, pt: string) => p[duong]?.[pt]?.["x-vigov-permission"]?.key;
+    expect(khoa("/api/v1/meetings", "get")).toBe("task.read");
+    expect(khoa("/api/v1/meetings", "post")).toBe("task.create");
+    expect(khoa("/api/v1/meetings/{id}", "get")).toBe("task.read");
+    expect(khoa("/api/v1/meetings/{id}", "patch")).toBe("task.create");
+    expect(khoa("/api/v1/meetings/{id}", "delete")).toBe("task.create");
+    expect(khoa("/api/v1/meetings/{id}/signature", "post")).toBe("task.approve");
+    expect(khoa("/api/v1/meetings/{id}/conclusions", "post")).toBe("task.create");
+    expect(khoa("/api/v1/meetings/{id}/conclusions/{stt}", "patch")).toBe("task.create");
+    expect(khoa("/api/v1/meetings/{id}/conclusions/{stt}", "delete")).toBe("task.create");
+    expect(khoa("/api/v1/meetings/{id}/conclusions/{stt}/no-task-marker", "put")).toBe(
+      "task.create",
+    );
+    expect(khoa("/api/v1/meetings/{id}/conclusions/{stt}/no-task-marker", "delete")).toBe(
+      "task.create",
+    );
+    expect(khoa("/api/v1/meetings/{id}/conclusions/{stt}/tasks", "get")).toBe("task.read");
+    expect(khoa("/api/v1/meetings/{id}/conclusions/{stt}/task", "post")).toBe("task.create");
+  });
+
+  it("`PATCH /meetings/{id}` gửi ĐÚNG bộ trường của `petitions.suaBienBanVao` khi đủ trường", async () => {
+    const luocDo = hopDong().components.schemas["petitions.suaBienBanVao"];
+    expect(luocDo).toBeDefined();
+
+    const thanDayDu: SuaBienBanVao = {
+      title: "Giao ban tháng 8",
+      held_on: "2026-08-05",
+      reference_no: "31/BB-UBND",
+      location: "Phòng họp UBND xã",
+      chaired_by: "CB-2026-7K3M9Q",
+      minutes_taker: "CB-2026-1A2B3C",
+      attendees: ["CB-2026-7K3M9Q"],
+      content: "Toàn văn.",
+      notice: { reference_no: "12/TB-UBND", issued_on: "2026-08-07" },
+    };
+    const gia = batFetch(traJSON(200, {}));
+    await suaBienBan("01JBB", thanDayDu);
+    const than = JSON.parse(String(loiGoi(gia, 0).tuyChon.body)) as Record<string, unknown>;
+    expect(Object.keys(than).sort()).toEqual(Object.keys(luocDo?.properties ?? {}).sort());
+  });
+
+  it("`POST …/signature` gửi ĐÚNG bộ trường của `petitions.kyBienBanVao`", async () => {
+    const luocDo = hopDong().components.schemas["petitions.kyBienBanVao"];
+    const gia = batFetch(traJSON(200, {}));
+    await kyBienBan("01JBB", { notice: { reference_no: "12/TB-UBND", issued_on: "2026-08-07" } });
+    const than = JSON.parse(String(loiGoi(gia, 0).tuyChon.body)) as Record<string, unknown>;
+    expect(Object.keys(than).sort()).toEqual(Object.keys(luocDo?.properties ?? {}).sort());
+  });
+
+  it("`DELETE /meetings/{id}` và `DELETE …/{stt}` gửi ĐÚNG bộ trường của `petitions.xoaBienBanVao`", async () => {
+    const cuaHopDong = Object.keys(
+      hopDong().components.schemas["petitions.xoaBienBanVao"]?.properties ?? {},
+    ).sort();
+    const gia = batFetch(new Response(null, { status: 204 }));
+    await xoaBienBan("01JBB", "Nhập trùng.");
+    await xoaKetLuan("01JBB", KL_SO_3, "Ghi nhầm.");
+    for (const n of [0, 1]) {
+      const than = JSON.parse(String(loiGoi(gia, n).tuyChon.body)) as Record<string, unknown>;
+      expect(Object.keys(than).sort()).toEqual(cuaHopDong);
+    }
+  });
+
+  it("`PATCH …/conclusions/{stt}` gửi ĐÚNG bộ trường của `petitions.suaKetLuanVao`", async () => {
+    const luocDo = hopDong().components.schemas["petitions.suaKetLuanVao"];
+    expect(await keyDaGui(() => suaKetLuan("01JBB", KL_SO_3, "Lời mới."))).toEqual(
+      Object.keys(luocDo?.properties ?? {}).sort(),
+    );
+  });
+});
+
+/** Kết luận mang số ĐÃ CẤP 3 — mọi ca có `{stt}` dưới đây kiểm con số ấy lên đường dẫn. */
+const KL_SO_3: petitions_ketLuanRa = {
+  id: "01JKL3",
+  ordinal: 3,
+  content: "Giao Tài chính đối chiếu số liệu.",
+  task_count: 0,
+  task_done_count: 0,
+  status: "chua-giao",
+  no_task: false,
+  created_at: "2026-08-05T02:00:00Z",
+};
+
+describe("GET /api/v1/meetings/{id} — xem biên bản", () => {
+  it("mã hoá id, GET, không `tenant_id`", async () => {
+    const gia = batFetch(traJSON(200, { id: "01J BB" }));
+    const kq = await layBienBan("01J BB/2026");
+    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/meetings/01J%20BB%2F2026");
+    expect(loiGoi(gia, 0).tuyChon.method).toBe("GET");
+    expect(kq.ok).toBe(true);
+  });
+});
+
+describe("PATCH /api/v1/meetings/{id} — sửa nháp, ghi Thông báo", () => {
+  it("trường VẮNG thì vắng khỏi thân — chỉ trường đã đổi đi lên", async () => {
+    const gia = batFetch(traJSON(200, {}));
+    await suaBienBan("01JBB", { location: "" });
+    const { duongDan, tuyChon } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/meetings/01JBB");
+    expect(tuyChon.method).toBe("PATCH");
+    // CHUỖI RỖNG CÓ MẶT: đó là "xoá địa điểm", khác hẳn "không đổi".
+    expect(JSON.parse(String(tuyChon.body))).toEqual({ location: "" });
+  });
+
+  it("chỉ Thông báo: thân chỉ có `notice`, đúng hai trường của nó", async () => {
+    const gia = batFetch(traJSON(200, {}));
+    const thanThua = {
+      notice: { reference_no: "12/TB-UBND", issued_on: "2026-08-07", tenant_id: "x" },
+    } as unknown as SuaBienBanVao;
+    await suaBienBan("01JBB", thanThua);
+    expect(JSON.parse(String(loiGoi(gia, 0).tuyChon.body))).toEqual({
+      notice: { reference_no: "12/TB-UBND", issued_on: "2026-08-07" },
+    });
+  });
+
+  it("409 của máy chủ ra NGUYÊN VĂN", async () => {
+    batFetch(traJSON(409, { code: "meeting_state", message: "biên bản họp đã ký — …" }));
+    const kq = await suaBienBan("01JBB", { title: "x" });
+    expect(kq.ok).toBe(false);
+    if (!kq.ok) expect(kq.thongBao).toBe("biên bản họp đã ký — …");
+  });
+});
+
+describe("DELETE /api/v1/meetings/{id} — gỡ nháp kèm lý do", () => {
+  it("204 là thành công, `duLieu: null` — không đi đọc một thân không có", async () => {
+    const gia = batFetch(new Response(null, { status: 204 }));
+    const kq = await xoaBienBan("01JBB", "Nhập trùng.");
+    expect(loiGoi(gia, 0).tuyChon.method).toBe("DELETE");
+    expect(JSON.parse(String(loiGoi(gia, 0).tuyChon.body))).toEqual({ reason: "Nhập trùng." });
+    expect(kq).toEqual({ ok: true, duLieu: null });
+  });
+});
+
+describe("POST /api/v1/meetings/{id}/signature — ký", () => {
+  it("không kèm Thông báo thì thân là `{}` — hợp đồng đòi thân, không đòi `notice`", async () => {
+    const gia = batFetch(traJSON(200, {}));
+    await kyBienBan("01JBB", {});
+    const { duongDan, tuyChon } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/meetings/01JBB/signature");
+    expect(tuyChon.method).toBe("POST");
+    expect(JSON.parse(String(tuyChon.body))).toEqual({});
+  });
+
+  it("KHÔNG gửi người ký hay thời điểm ký — đó là của phiên và của máy chủ", async () => {
+    const gia = batFetch(traJSON(200, {}));
+    const thanThua = { signed_by: "CB-GIA", signed_at: "2026-01-01T00:00:00Z" } as unknown as KyBienBanVao;
+    await kyBienBan("01JBB", thanThua);
+    const than = JSON.parse(String(loiGoi(gia, 0).tuyChon.body)) as Record<string, unknown>;
+    expect(than).not.toHaveProperty("signed_by");
+    expect(than).not.toHaveProperty("signed_at");
+  });
+});
+
+
+describe("tuyến có `{stt}` — số ĐÃ CẤP lên đường dẫn, không phải vị trí", () => {
+  it("sửa, gỡ, đánh dấu, bỏ dấu, đọc nhiệm vụ: cả năm đều mang `/conclusions/3`", async () => {
+    const gia = batFetch(traJSON(200, { items: [] }));
+    await suaKetLuan("01JBB", KL_SO_3, "Lời mới.");
+    await xoaKetLuan("01JBB", KL_SO_3, "Ghi nhầm.");
+    await danhDauKhongPhatSinh("01JBB", KL_SO_3);
+    await boDauKhongPhatSinh("01JBB", KL_SO_3);
+    await layNhiemVuCuaKetLuan("01JBB", KL_SO_3);
+
+    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/meetings/01JBB/conclusions/3");
+    expect(loiGoi(gia, 0).tuyChon.method).toBe("PATCH");
+    expect(loiGoi(gia, 1).duongDan).toBe("/api/v1/meetings/01JBB/conclusions/3");
+    expect(loiGoi(gia, 1).tuyChon.method).toBe("DELETE");
+    expect(loiGoi(gia, 2).duongDan).toBe("/api/v1/meetings/01JBB/conclusions/3/no-task-marker");
+    expect(loiGoi(gia, 2).tuyChon.method).toBe("PUT");
+    expect(loiGoi(gia, 3).duongDan).toBe("/api/v1/meetings/01JBB/conclusions/3/no-task-marker");
+    expect(loiGoi(gia, 3).tuyChon.method).toBe("DELETE");
+    expect(loiGoi(gia, 4).duongDan).toBe("/api/v1/meetings/01JBB/conclusions/3/tasks");
+    expect(loiGoi(gia, 4).tuyChon.method).toBe("GET");
+  });
+
+  it("đánh dấu / bỏ dấu KHÔNG có thân và KHÔNG có `Content-Type` — hợp đồng không khai thân", async () => {
+    const gia = batFetch(traJSON(200, {}));
+    await danhDauKhongPhatSinh("01JBB", KL_SO_3);
+    await boDauKhongPhatSinh("01JBB", KL_SO_3);
+    for (const n of [0, 1]) {
+      expect(loiGoi(gia, n).tuyChon.body).toBeUndefined();
+      expect(loiGoi(gia, n).header.get("Content-Type")).toBeNull();
+    }
+  });
+
+  it("bỏ dấu thành công bằng 204; đánh dấu thành công bằng 200 kèm kết luận", async () => {
+    batFetch(new Response(null, { status: 204 }));
+    expect(await boDauKhongPhatSinh("01JBB", KL_SO_3)).toEqual({ ok: true, duLieu: null });
+    vi.unstubAllGlobals();
+    batFetch(traJSON(200, { ...KL_SO_3, no_task: true }));
+    const kq = await danhDauKhongPhatSinh("01JBB", KL_SO_3);
+    expect(kq.ok && kq.duLieu.no_task).toBe(true);
   });
 });

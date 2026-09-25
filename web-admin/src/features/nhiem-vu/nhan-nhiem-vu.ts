@@ -309,6 +309,25 @@ export function nhanNguonGiao(ma: string): string {
   return laNguonGiao(ma) ? NHAN_NGUON_GIAO[ma] : ma;
 }
 
+/**
+ * Dòng liên kết ngược về biên bản gốc trong drawer (`04-bien-ban-hop.md` §7.4): `Từ kết luận số 3 —
+ * Giao ban tháng 8`. `null` khi nhiệm vụ không tách từ một kết luận.
+ *
+ * ĐỌC `meeting_id`, KHÔNG ĐỌC `source`: máy chủ chỉ điền bộ ba `meeting_*` khi nó THẬT SỰ nối được
+ * về một biên bản còn đó. Một nhiệm vụ `source = ket-luan-hop` mà thiếu `meeting_id` là nhiệm vụ mà
+ * một đường dẫn dựng từ `source_id` sẽ trỏ vào hư không.
+ *
+ * Số kết luận là số ĐÃ CẤP (`conclusion_no`), đúng con số in trên biên bản giấy. Thiếu nó thì câu
+ * bỏ con số chứ không bịa một con số.
+ */
+export function cauTuKetLuan(nv: petitions_nhiemVuRa): string | null {
+  if (nv.meeting_id === undefined || nv.meeting_id === "") return null;
+  const ten = nv.meeting_title === undefined || nv.meeting_title === "" ? "biên bản họp" : nv.meeting_title;
+  return nv.conclusion_no === undefined
+    ? `Từ kết luận họp — ${ten}`
+    : `Từ kết luận số ${nv.conclusion_no} — ${ten}`;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * HẠN XỬ LÝ — và vì sao "quá hạn" KHÔNG BAO GIỜ là một cột
  * ══════════════════════════════════════════════════════════════════════════════════════════ */

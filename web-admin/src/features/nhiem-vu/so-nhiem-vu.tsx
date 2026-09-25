@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { duongDanBienBan } from "@/features/bien-ban/nhan-bien-ban";
 import {
   coTrangTruoc,
   sangTrangSau,
@@ -102,6 +104,7 @@ import {
   canhBaoSua,
   canhBaoVanBan,
   cauGiaiThichTrangThai,
+  cauTuKetLuan,
   chiaNhomVanBan,
   chuyenSangDuoc,
   coKhoiVanBanChiDao,
@@ -1336,7 +1339,17 @@ export function ChiTietNhiemVu({
         <dd>{nhanDanhMuc(danhMuc.khoi, nhiemVu.bloc)}</dd>
 
         <dt>Nguồn giao</dt>
-        <dd>{nhanNguonGiao(nhiemVu.source)}</dd>
+        <dd>
+          {nhanNguonGiao(nhiemVu.source)}
+          {/* §7.4 — LIÊN KẾT NGƯỢC VỀ BIÊN BẢN GỐC. Chỉ khi máy chủ nối được (`meeting_id`), xem
+              `cauTuKetLuan`. Neo `#bien-ban-{id}` mở đúng biên bản ấy dù nó không ở trang đầu. */}
+          {cauTuKetLuan(nhiemVu) !== null && nhiemVu.meeting_id !== undefined && (
+            <>
+              <br />
+              <Link href={duongDanBienBan(nhiemVu.meeting_id)}>{cauTuKetLuan(nhiemVu)}</Link>
+            </>
+          )}
+        </dd>
 
         <dt>Lãnh đạo giao việc</dt>
         <dd>{nhiemVu.assigner === "" ? O_TRONG : nhiemVu.assigner}</dd>

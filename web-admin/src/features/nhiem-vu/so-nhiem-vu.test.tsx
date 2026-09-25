@@ -465,6 +465,23 @@ describe("drawer §5 — hai hạn cạnh nhau và hai ô tick", () => {
       nhuTrongHTML("Đã giao nhưng người nhận chưa bấm tiếp nhận."),
     );
   });
+
+  it("`04-bien-ban-hop.md` §7.4 — nhiệm vụ tách từ kết luận có LIÊN KẾT NGƯỢC về biên bản gốc", () => {
+    const html = veChiTiet({
+      meeting_id: "01JBB1",
+      meeting_title: "Giao ban tháng 8",
+      conclusion_no: 3,
+    });
+    expect(html).toContain("Từ kết luận số 3 — Giao ban tháng 8");
+    expect(html).toContain('href="/nhiem-vu/bien-ban#bien-ban-01JBB1"');
+  });
+
+  it("không có `meeting_id` thì KHÔNG có liên kết về biên bản nào", () => {
+    // Bản mẫu mặc định mang `source: "ket-luan-hop"` — vẫn không liên kết khi máy chủ không nối được.
+    const html = veChiTiet();
+    expect(html).not.toContain("/nhiem-vu/bien-ban");
+    expect(html).not.toContain("Từ kết luận số");
+  });
 });
 
 describe("form Giao việc mới §7", () => {

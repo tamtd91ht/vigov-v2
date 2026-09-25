@@ -225,12 +225,24 @@ export const QUYEN_XEM_VAN_BAN = "document.read";
  * `document.route` — một khoá GHI — và đã phải đổi sang `document.read` (24/09/2026). Lấy
  * `task.create` canh mục Nhiệm vụ sẽ chép lại đúng lỗi ấy.
  *
- * SÁU KHOÁ `task.*` CÒN LẠI CỐ Ý KHÔNG CÓ HẰNG: `task.create` · `update` · `approve` · `extend`
- * · `delete` · `assign` đều có thật trong bảng `quyen` (`0001_init.sql:299-305`) và tuyến đã
- * khai, nhưng hôm nay không chỗ nào ở client canh chúng. Một hằng không ai dùng là một hằng
- * không ai thấy khi nó sai — thêm nó vào lúc lắp cổng thật, không phải trước.
+ * NĂM KHOÁ `task.*` CÒN LẠI CỐ Ý KHÔNG CÓ HẰNG: `task.create` · `update` · `extend` · `delete` ·
+ * `assign` đều có thật trong bảng `quyen` (`0001_init.sql:299-305`) và tuyến đã khai, nhưng hôm
+ * nay không chỗ nào ở client canh chúng. Một hằng không ai dùng là một hằng không ai thấy khi nó
+ * sai — thêm nó vào lúc lắp cổng thật, không phải trước. `task.approve` có hằng riêng ngay dưới.
  */
 export const QUYEN_XEM_NHIEM_VU = "task.read";
+
+/**
+ * Khoá quyền của nút `Ký biên bản` — `task.approve`, đúng chuỗi máy chủ khai trên
+ * `POST /api/v1/meetings/{id}/signature` (`x-vigov-permission.key` trong
+ * `kb/20-contracts/openapi.json`) và có thật trong bảng `quyen` (`0001_init.sql:299-305`).
+ *
+ * KHÔNG PHẢI `task.create`: người gõ biên bản chưa chắc là người được xác nhận nó — ký là hành vi
+ * KHOÁ một hồ sơ lưu trữ, sau đó mọi sai sót phải đi đường biên bản bổ sung (luật 5, bất biến 3b).
+ *
+ * ẨN NÚT LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP — máy chủ kiểm khoá này trên từng lời gọi (luật 5, cấm #1).
+ */
+export const QUYEN_KY_BIEN_BAN = "task.approve";
 
 /**
  * Khoá quyền của sổ Thông báo nội bộ — `announcement.create`, "Soạn và gửi thông báo"

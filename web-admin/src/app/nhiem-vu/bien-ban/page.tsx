@@ -11,17 +11,17 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  *
  * ĐƯỜNG DẪN ĐÚNG NHƯ ĐẶC TẢ GHI Ở ĐẦU CHƯƠNG, và nó nằm TRONG module Nhiệm vụ có lý do: mọi thứ
  * màn này hiện hoặc là nguồn gốc của một nhiệm vụ, hoặc là một con số đếm nhiệm vụ. Máy chủ khai
- * đúng như vậy — cả ba tuyến đứng sau `task.read` / `task.create`, không sau một khoá `meeting.*`
- * nào (bảng `quyen` không có khoá ấy; xem `service-petitions/internal/http/bien_ban_hop.go`).
+ * đúng như vậy — mọi tuyến đứng sau `task.read` / `task.create`, riêng ký biên bản sau
+ * `task.approve`, không sau một khoá `meeting.*` nào (bảng `quyen` không có khoá ấy; xem
+ * `service-petitions/internal/http/bien_ban_hop.go`).
  *
  * TRANG NÀY KHÔNG TẠO `src/app/nhiem-vu/page.tsx`. Màn `/nhiem-vu` là việc của lượt khác đang
  * chạy song song; một đoạn đường dẫn không có `page.tsx` là hợp lệ trong Next.js và không hứa hẹn
  * gì với ai.
  *
  * KHÔNG CÓ CỔNG QUYỀN Ở ĐÂY, đúng khuôn `/van-ban` đang dùng: `src/proxy.ts` chặn người CHƯA ĐĂNG
- * NHẬP ở phía máy chủ, còn `task.read` và `task.create` do dịch vụ `petitions` kiểm trên TỪNG lời
- * gọi API thật (luật 5, cấm #1). Lý do không dựng thêm cổng ở client nằm trong `PHAN_CHUA_DUNG`,
- * hiện ngay đầu màn.
+ * NHẬP ở phía máy chủ, còn `task.*` do dịch vụ `petitions` kiểm trên TỪNG lời gọi API thật (luật 5,
+ * cấm #1). Trong thân màn chỉ nút Ký ẩn theo `task.approve` — tiện dụng, xem `PHAN_CHUA_DUNG`.
  *
  * XÃ ĐỌC LÚC CHẠY TỪ `Host`, như mọi trang khác: không có giá trị riêng của xã nào nằm trong
  * bundle, và `Host` không khớp xã nào thì trang này là 404 trước khi dựng gì (luật 1, bất biến 3

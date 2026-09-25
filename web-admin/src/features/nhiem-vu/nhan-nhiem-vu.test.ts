@@ -31,6 +31,7 @@ import {
   quyetDinhDuyetLuiHan,
   tinhTrangHan,
   canhBaoVanBan,
+  cauTuKetLuan,
   nhanNutGoVanBan,
   nhanOTieuDe,
   thanGiaoViec,
@@ -236,6 +237,25 @@ describe("câu chữ chung", () => {
     expect(nhanNguonGiao("van-ban-den")).toBe("Từ văn bản đến");
     expect(nhanNguonGiao("ket-luan-hop")).toBe("Từ kết luận họp");
     expect(nhanNguonGiao("nguon-la")).toBe("nguon-la");
+  });
+
+  it("liên kết ngược về biên bản gốc: số kết luận ĐÃ CẤP và tên cuộc họp", () => {
+    const nv = { meeting_id: "01JBB1", meeting_title: "Giao ban tháng 8", conclusion_no: 3 };
+    expect(cauTuKetLuan(nv as petitions_nhiemVuRa)).toBe(
+      "Từ kết luận số 3 — Giao ban tháng 8",
+    );
+  });
+
+  it("không có `meeting_id` thì KHÔNG có liên kết — kể cả khi `source` là kết luận họp", () => {
+    // Máy chủ chỉ điền bộ ba `meeting_*` khi nối được về một biên bản còn đó; dựng liên kết từ
+    // `source_id` là trỏ vào hư không.
+    const nv = { source: "ket-luan-hop", source_id: "01JKL" };
+    expect(cauTuKetLuan(nv as petitions_nhiemVuRa)).toBeNull();
+  });
+
+  it("thiếu số kết luận thì bỏ con số, không bịa một con số", () => {
+    const nv = { meeting_id: "01JBB1", meeting_title: "Giao ban tháng 8" };
+    expect(cauTuKetLuan(nv as petitions_nhiemVuRa)).toBe("Từ kết luận họp — Giao ban tháng 8");
   });
 
   it("chân trang đếm đúng chữ §2", () => {

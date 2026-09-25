@@ -5,7 +5,14 @@
  * một chữ khác đi trên màn của cơ quan nhà nước là một chữ có người phải trả lời.
  */
 
-import type { petitions_bienBanRa, petitions_ketLuanRa } from "@/lib/api/schema.gen";
+import type { SuaBienBanVao, TaoBienBanVao, ThongBaoVao } from "@/lib/api/bien-ban";
+import type {
+  identity_canBoChonNguoiRa,
+  petitions_bienBanRa,
+  petitions_ketLuanRa,
+  petitions_thongBaoKetLuanRa,
+} from "@/lib/api/schema.gen";
+import { nhanLuaChonCanBo, type DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 
 /* ── Trần độ dài, đúng bằng trần máy chủ ────────────────────────────────────────────────────
  *
@@ -24,6 +31,10 @@ export const NOI_DUNG_KET_LUAN_TOI_DA = 5000;
 export const KET_LUAN_MOI_LAN_TOI_DA = 50;
 export const THANH_PHAN_MOT_DONG_TOI_DA = 200;
 export const THANH_PHAN_TOI_DA = 200;
+/** `domain.LyDoXoaBienBanToiDa` — dùng cho cả gỡ biên bản lẫn gỡ kết luận (cùng `xoaBienBanVao`). */
+export const LY_DO_XOA_TOI_DA = 500;
+/** Số, ký hiệu Thông báo kết luận — cùng trần với số hiệu biên bản (`ErrSoThongBaoQuaDai`). */
+export const SO_THONG_BAO_TOI_DA = 64;
 
 /* ── Chữ trên màn ──────────────────────────────────────────────────────────────────────────── */
 
@@ -143,15 +154,25 @@ export function dongMeta(bb: petitions_bienBanRa): string {
 }
 
 /**
- * Badge góc phải của thẻ: `{n} kết luận · {x}/{y} nhiệm vụ xong` (§2, §7.5).
+ * CON SỐ CHÍNH của thẻ: `{x}/{y} kết luận hoàn thành` (quyết định người dùng 25/09/2026 — đo tiến
+ * độ một cuộc họp bằng KẾT LUẬN, không bằng nhiệm vụ; một kết luận "không phát sinh nhiệm vụ" tính
+ * là hoàn thành).
  *
- * `x/y` LÀ TỔNG TRÊN MỌI KẾT LUẬN CỦA BIÊN BẢN, và hai con số ấy do MÁY CHỦ cộng
- * (`bienBanRaNgoai` gọi `domain.TienDoNhiemVu`). Cộng lại ở đây từ mảng `conclusions` sẽ cho
- * đúng số trong hầu hết trường hợp và cho một con số thứ hai của cùng một sự thật — thứ sẽ lệch
- * vào ngày máy chủ đổi cách đếm, lệch lặng lẽ, và con số lệch ấy là con số lãnh đạo đọc (luật 9).
+ * HAI CON SỐ DO MÁY CHỦ ĐẾM (`conclusion_done_count`, `conclusion_count`). Đếm lại ở đây từ mảng
+ * `conclusions` là dựng con số thứ hai của cùng một sự thật — thứ lệch lặng lẽ vào ngày máy chủ đổi
+ * cách suy trạng thái, và con số lệch ấy là con số lãnh đạo đọc (luật 9, cấm #2).
+ */
+export function nhanTienDoBienBan(bb: petitions_bienBanRa): string {
+  return `${bb.conclusion_done_count}/${bb.conclusion_count} kết luận hoàn thành`;
+}
+
+/**
+ * Con số PHỤ của thẻ: `{x}/{y} nhiệm vụ xong` (§2, §7.5) — tổng trên mọi kết luận của biên bản.
+ *
+ * Cũng do MÁY CHỦ cộng (`task_done_count`, `task_count`), cùng lý do với `nhanTienDoBienBan`.
  */
 export function nhanBadge(bb: petitions_bienBanRa): string {
-  return `${bb.conclusions.length} kết luận · ${bb.task_done_count}/${bb.task_count} nhiệm vụ xong`;
+  return `${bb.task_done_count}/${bb.task_count} nhiệm vụ xong`;
 }
 
 /**
@@ -214,6 +235,425 @@ export function tachKetLuan(chu: string): string[] {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
+ * VÒNG ĐỜI: DỰ THẢO → ĐÃ KÝ (migration 0012, quyết định người dùng 25/09/2026)
+ *
+ * MỌI PHÉP ẨN/TẮT DƯỚI ĐÂY LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP. Máy chủ từ chối thật (409 kèm câu nói
+ * cách làm đúng) trên TỪNG lời gọi; các phép này chỉ để cán bộ khỏi bấm vào một thứ chắc chắn bị
+ * từ chối. Và chúng FAIL CLOSED theo trạng thái: một mã trạng thái lạ không phải "dự thảo", nên
+ * không mở nút sửa/gỡ nào — cũng không phải "đã ký", nên không mở nút ghi Thông báo nào.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const TRANG_THAI_DU_THAO = "du-thao";
+export const TRANG_THAI_DA_KY = "da-ky";
+
+export function laDuThao(bb: petitions_bienBanRa): boolean {
+  return bb.status === TRANG_THAI_DU_THAO;
+}
+
+export function laDaKy(bb: petitions_bienBanRa): boolean {
+  return bb.status === TRANG_THAI_DA_KY;
+}
+
+/** Chip trạng thái của thẻ. Mã lạ hiện NGUYÊN VĂN — đoán một nhãn là nói sai tình trạng hồ sơ. */
+export function nhanTrangThaiBienBan(bb: petitions_bienBanRa): string {
+  if (laDuThao(bb)) return "Dự thảo";
+  if (laDaKy(bb)) return "Đã ký";
+  return bb.status;
+}
+
+export function lopChipBienBan(bb: petitions_bienBanRa): string {
+  return laDaKy(bb) ? "chip chip-hoat-dong" : "chip chip-ngung";
+}
+
+/**
+ * Nhãn trạng thái một kết luận — TỪ MÁY CHỦ, không suy ở đây.
+ *
+ * `status` là trạng thái máy chủ SUY RA từ các nhiệm vụ của kết luận (chưa giao · đang thực hiện ·
+ * quá hạn · hoàn thành). Suy lại ở client từ `task_count`/`task_done_count` là dựng bản thứ hai
+ * của một phép so với hạn — và "quá hạn" là thứ luật 10 cấm tính ở hai nơi.
+ *
+ * `no_task` ĐI TRƯỚC: kết luận đánh dấu "không phát sinh nhiệm vụ" được máy chủ tính là hoàn thành,
+ * nhưng cán bộ cần đọc ra LÝ DO nó hoàn thành — một chữ "Hoàn thành" không kèm nhiệm vụ nào trông
+ * như một con số đếm sai.
+ */
+export function nhanTrangThaiKetLuan(kl: petitions_ketLuanRa): string {
+  if (kl.no_task) return "Không phát sinh nhiệm vụ";
+  switch (kl.status) {
+    case "chua-giao":
+      return "Chưa giao";
+    case "dang-thuc-hien":
+      return "Đang thực hiện";
+    case "qua-han":
+      return "Quá hạn";
+    case "hoan-thanh":
+      return "Hoàn thành";
+    default:
+      return kl.status;
+  }
+}
+
+/** Quá hạn là chip ĐỎ — và chữ đã nói rõ, màu không bao giờ là tín hiệu duy nhất (a11y §8). */
+export function lopChipKetLuan(kl: petitions_ketLuanRa): string {
+  if (kl.no_task || kl.status === "hoan-thanh") return "chip chip-hoat-dong";
+  if (kl.status === "qua-han") return "chip chip-cham";
+  return "chip chip-ngung";
+}
+
+/** Một nút: hiện hay không, và nếu hiện mà tắt thì VÌ SAO — câu ấy nằm ngay dưới nút. */
+export type QuyTacNut = {
+  readonly hien: boolean;
+  /** `null` = bấm được. Chuỗi = tắt, kèm câu giải thích cho cán bộ. */
+  readonly viSaoTat: string | null;
+};
+
+const AN: QuyTacNut = { hien: false, viSaoTat: null };
+const MO: QuyTacNut = { hien: true, viSaoTat: null };
+
+/** Câu giải thích khi một kết luận đã có nhiệm vụ — đọc theo câu `ErrKetLuanDaCoNhiemVu` của máy chủ. */
+export const VI_SAO_KET_LUAN_KHOA =
+  "Kết luận đã được tách thành nhiệm vụ — nội dung bị khoá, không gỡ được. Hãy xử lý các nhiệm vụ đó trước.";
+
+/** Câu giải thích khi biên bản còn nhiệm vụ trỏ về một kết luận của nó. */
+export const VI_SAO_BIEN_BAN_CON_NHIEM_VU =
+  "Biên bản còn nhiệm vụ đang trỏ về kết luận — không gỡ được. Hãy xử lý các nhiệm vụ đó trước.";
+
+export type QuyTacKetLuan = {
+  readonly sua: QuyTacNut;
+  readonly go: QuyTacNut;
+  readonly danhDau: QuyTacNut;
+  readonly boDau: QuyTacNut;
+  readonly tach: QuyTacNut;
+};
+
+/**
+ * Nút nào hiện trên MỘT dòng kết luận.
+ *
+ *   Sửa · Gỡ         chỉ biên bản dự thảo; TẮT kèm lý do khi kết luận đã có nhiệm vụ (nhiệm vụ
+ *                    đang trích đúng câu ấy — sửa lời là để chúng trỏ vào một câu không ai giao)
+ *   Đánh dấu         chỉ dự thảo, chỉ khi CHƯA có nhiệm vụ nào và chưa đánh dấu
+ *   Bỏ dấu           chỉ dự thảo, chỉ khi đang đánh dấu
+ *   Tách             cả dự thảo LẪN đã ký — ký khoá LỜI biên bản, không khoá việc giao nhiệm vụ từ
+ *                    nó; ẨN khi đang đánh dấu "không phát sinh" (máy chủ trả 409 cho lần tách ấy)
+ */
+export function quyTacKetLuan(bb: petitions_bienBanRa, kl: petitions_ketLuanRa): QuyTacKetLuan {
+  const nhap = laDuThao(bb);
+  const coNhiemVu = kl.task_count > 0;
+  const khoaVi = coNhiemVu ? { hien: true, viSaoTat: VI_SAO_KET_LUAN_KHOA } : MO;
+
+  return {
+    sua: nhap ? khoaVi : AN,
+    go: nhap ? khoaVi : AN,
+    danhDau: nhap && !coNhiemVu && !kl.no_task ? MO : AN,
+    boDau: nhap && kl.no_task ? MO : AN,
+    tach: kl.no_task ? AN : MO,
+  };
+}
+
+export type QuyTacBienBan = {
+  readonly sua: QuyTacNut;
+  readonly xoa: QuyTacNut;
+  readonly ky: QuyTacNut;
+  readonly ghiThongBao: QuyTacNut;
+  readonly boSung: QuyTacNut;
+  readonly themKetLuan: QuyTacNut;
+};
+
+/**
+ * Nút nào hiện trên MỘT thẻ biên bản.
+ *
+ *   Sửa · Thêm kết luận   chỉ dự thảo — biên bản đã ký không nhận kết luận mới, không đổi một chữ
+ *   Gỡ biên bản           chỉ dự thảo; TẮT kèm lý do khi còn nhiệm vụ trỏ về
+ *   Ký                    chỉ dự thảo, chỉ khi phiên có `task.approve` (cosmetic — xem `QUYEN_KY_BIEN_BAN`)
+ *   Ghi Thông báo         chỉ đã ký VÀ chưa có Thông báo — máy chủ chỉ nhận MỘT lần
+ *   Lập bổ sung           chỉ đã ký — bản nháp thì sửa trực tiếp (máy chủ trả 400 cho bổ sung trỏ về nháp)
+ */
+export function quyTacBienBan(bb: petitions_bienBanRa, coQuyenKy: boolean): QuyTacBienBan {
+  const nhap = laDuThao(bb);
+  const daKy = laDaKy(bb);
+  const chuaCoThongBao = bb.notice === undefined || bb.notice === null;
+
+  return {
+    sua: nhap ? MO : AN,
+    xoa: nhap ? (bb.task_count > 0 ? { hien: true, viSaoTat: VI_SAO_BIEN_BAN_CON_NHIEM_VU } : MO) : AN,
+    ky: nhap && coQuyenKy ? MO : AN,
+    ghiThongBao: daKy && chuaCoThongBao ? MO : AN,
+    boSung: daKy ? MO : AN,
+    themKetLuan: nhap ? MO : AN,
+  };
+}
+
+/* ── Nhãn hành động ─────────────────────────────────────────────────────────────────────────── */
+
+export const NHAN_NUT_XEM_BIEN_BAN = "Xem biên bản";
+export const NHAN_NUT_DONG_BIEN_BAN = "Đóng biên bản";
+export const NHAN_NUT_SUA_BIEN_BAN = "Sửa biên bản";
+export const NHAN_NUT_XOA_BIEN_BAN = "Gỡ biên bản";
+export const NHAN_NUT_KY = "Ký biên bản";
+export const NHAN_NUT_XAC_NHAN_KY = "Xác nhận ký";
+export const NHAN_NUT_GHI_THONG_BAO = "Ghi số Thông báo kết luận";
+export const NHAN_NUT_BO_SUNG = "Lập biên bản bổ sung";
+export const NHAN_NUT_SUA_KL = "Sửa";
+export const NHAN_NUT_GO_KL = "Gỡ";
+export const NHAN_NUT_DANH_DAU = "Đánh dấu “không phát sinh nhiệm vụ”";
+export const NHAN_NUT_BO_DAU = "Bỏ dấu “không phát sinh nhiệm vụ”";
+export const NHAN_NUT_LUU_SUA = "Lưu thay đổi";
+
+/**
+ * Câu xác nhận của hộp Ký. Nói ĐÚNG hệ quả mà máy chủ sẽ áp — câu `ErrBienBanDaKy`: nội dung, kết
+ * luận, chủ trì, thư ký bị khoá; sai sót sau đó đi đường biên bản bổ sung.
+ */
+export const CAU_XAC_NHAN_KY =
+  "Sau khi ký, nội dung, kết luận, chủ trì và thư ký của biên bản bị khoá và biên bản không gỡ được. " +
+  "Sai sót phát hiện sau khi ký được đính chính bằng một biên bản bổ sung trỏ về biên bản này.";
+
+/** Câu dưới biểu mẫu Thông báo khi biên bản đã ký: máy chủ chỉ nhận MỘT lần. */
+export const CAU_THONG_BAO_MOT_LAN =
+  "Số và ngày Thông báo kết luận chỉ ghi được một lần sau khi ký — kiểm tra kỹ trước khi lưu.";
+
+/**
+ * Dòng cảnh báo trên biểu mẫu nhập/sửa biên bản — ĐÃ QUYẾT (25/09/2026): nội dung mật không bao
+ * giờ vào ViGov, nên không có cờ "mật" nào. Dòng này là cách duy nhất màn hình nói điều ấy.
+ */
+export const CANH_BAO_BI_MAT = "Không nhập nội dung thuộc bí mật nhà nước vào hệ thống.";
+
+/** Lựa chọn rỗng của ô chọn Chủ trì / Thư ký — cả hai trường đều tuỳ chọn (§4). */
+export const KHONG_GHI_CAN_BO = "— Không ghi —";
+
+/**
+ * Nút mở/đóng danh sách nhiệm vụ đã tách từ một kết luận (§3). Mang con số máy chủ đếm, để cán bộ
+ * biết trước mình sắp mở bao nhiêu dòng.
+ */
+export function nhanNutXemNhiemVu(kl: petitions_ketLuanRa, dangMo: boolean): string {
+  return dangMo
+    ? `Ẩn ${kl.task_count} nhiệm vụ đã tách`
+    : `Xem ${kl.task_count} nhiệm vụ đã tách`;
+}
+
+/* ── Đọc ra các trường của biên bản ─────────────────────────────────────────────────────────── */
+
+/**
+ * Một mã cán bộ (chủ trì, thư ký, người ký, người tạo) đọc ra thành chữ.
+ *
+ *   rỗng                         "Không ghi"
+ *   danh bạ chưa tải / hỏng      MÃ — thứ duy nhất màn hình biết chắc
+ *   có trong danh bạ             `Họ tên · Chức vụ`
+ *   không có trong danh bạ       MÃ kèm câu trung tính: danh bạ chỉ gồm tài khoản đang hoạt động,
+ *                                và biên bản cũ của người đã nghỉ vẫn phải đọc được
+ */
+export function nhanCanBo(ma: string | undefined, danhBa: DanhBaTheoMa | null): string {
+  if (ma === undefined || ma === "") return "Không ghi";
+  if (danhBa === null) return ma;
+  const cb = danhBa.get(ma);
+  return cb === undefined
+    ? `${ma} (không có trong danh bạ cán bộ đang hoạt động)`
+    : nhanLuaChonCanBo(cb);
+}
+
+/** Một dòng thành phần tham dự: mã có trong danh bạ thì ra họ tên, dòng chữ tự do thì nguyên văn. */
+export function nhanThanhPhan(dong: string, danhBa: DanhBaTheoMa | null): string {
+  const cb = danhBa?.get(dong);
+  return cb === undefined ? dong : nhanLuaChonCanBo(cb);
+}
+
+/** `Số 12/TB-UBND, ngày 7/8/2026`, hoặc "Chưa ghi". Ngày là NGÀY LỊCH — đi qua `nhanNgayHop`. */
+export function nhanThongBao(tb: petitions_thongBaoKetLuanRa | null | undefined): string {
+  if (tb === null || tb === undefined) return "Chưa ghi";
+  return `Số ${tb.reference_no}, ngày ${nhanNgayHop(tb.issued_on)}`;
+}
+
+/* ── Neo và đường dẫn tới một biên bản ─────────────────────────────────────────────────────────
+ *
+ * `id` biên bản là ULID mờ — không phải dữ liệu cá nhân, không mang nghĩa — nên nó đi được vào
+ * URL. Neo `#bien-ban-{id}` chứ không phải `?id=`: phần sau `#` KHÔNG BAO GIỜ rời trình duyệt, nên
+ * không vào log truy cập của proxy nào, và trang không cần đọc tham số truy vấn phía máy chủ.
+ */
+
+const TIEN_TO_NEO = "bien-ban-";
+
+/** `id` của phần tử HTML bọc một thẻ biên bản. */
+export function neoBienBan(id: string): string {
+  return `${TIEN_TO_NEO}${id}`;
+}
+
+/** Đường dẫn TỪ MÀN KHÁC (drawer nhiệm vụ) tới đúng biên bản ấy. */
+export function duongDanBienBan(id: string): string {
+  return `/nhiem-vu/bien-ban#${neoBienBan(id)}`;
+}
+
+/**
+ * `#bien-ban-01JBB…` → `01JBB…`; mọi thứ khác → `null`. Chỉ nhận chữ và số: neo là thứ ai cũng gõ
+ * được vào thanh địa chỉ, và nó đi thẳng vào đường dẫn một lời gọi API.
+ */
+export function idTuNeo(hash: string): string | null {
+  const khop = /^#bien-ban-([0-9A-Za-z]{1,64})$/.exec(hash);
+  return khop === null ? null : (khop[1] ?? null);
+}
+
+/* ── Biểu mẫu nhập / sửa / bổ sung ──────────────────────────────────────────────────────────── */
+
+/** Mọi ô của biểu mẫu, dạng CHUỖI như ô nhập giữ — chuyển sang thân yêu cầu bằng hai hàm dưới. */
+export type GiaTriBieuMau = {
+  readonly ten: string;
+  /** `2026-08-05` từ `<input type="date">` — NGÀY LỊCH, không bao giờ đi qua `new Date`. */
+  readonly ngay: string;
+  readonly soHieu: string;
+  readonly diaDiem: string;
+  /** MÃ cán bộ chủ trì, hoặc rỗng. */
+  readonly chuTri: string;
+  /** MÃ cán bộ thư ký, hoặc rỗng. */
+  readonly thuKy: string;
+  /** MÃ cán bộ đã chọn từ danh bạ, theo thứ tự chọn. */
+  readonly thanhPhanCanBo: readonly string[];
+  /** Ô chữ tự do "mỗi dòng một người" — khách mời, đại diện thôn, người không có tài khoản. */
+  readonly thanhPhanKhac: string;
+  readonly noiDung: string;
+  /** Chỉ có ở biểu mẫu NHẬP MỚI — kết luận của bản nháp sửa từng dòng trên thẻ. */
+  readonly ketLuan: string;
+};
+
+export const BIEU_MAU_TRONG: GiaTriBieuMau = {
+  ten: "",
+  ngay: "",
+  soHieu: "",
+  diaDiem: "",
+  chuTri: "",
+  thuKy: "",
+  thanhPhanCanBo: [],
+  thanhPhanKhac: "",
+  noiDung: "",
+  ketLuan: "",
+};
+
+/**
+ * Điền biểu mẫu SỬA từ một biên bản đã đọc qua tuyến chi tiết.
+ *
+ * THÀNH PHẦN TÁCH HAI NGĂN THEO DANH BẠ: dòng nào là mã có trong danh bạ thì vào ngăn "đã chọn",
+ * còn lại vào ô chữ tự do NGUYÊN VĂN. Danh bạ chưa tải thì mọi dòng vào ô chữ — vẫn gửi lại đúng
+ * chuỗi ấy, nên lần lưu không đổi thành phần của ai.
+ */
+export function giaTriTuBienBan(
+  bb: petitions_bienBanRa,
+  danhBa: DanhBaTheoMa | null,
+): GiaTriBieuMau {
+  const canBo: string[] = [];
+  const khac: string[] = [];
+  for (const dong of bb.attendees ?? []) {
+    if (danhBa?.has(dong) === true) canBo.push(dong);
+    else khac.push(dong);
+  }
+  return {
+    ten: bb.title,
+    ngay: bb.held_on,
+    soHieu: bb.reference_no,
+    diaDiem: bb.location,
+    chuTri: bb.chaired_by,
+    thuKy: bb.minutes_taker ?? "",
+    thanhPhanCanBo: canBo,
+    thanhPhanKhac: khac.join("\n"),
+    noiDung: bb.content ?? "",
+    ketLuan: "",
+  };
+}
+
+/**
+ * Danh sách thành phần GỬI ĐI: cán bộ đã chọn trước, rồi các dòng chữ tự do; dòng trùng bị bỏ (một
+ * người không dự họp hai lần).
+ */
+export function thanhPhanTuBieuMau(gt: GiaTriBieuMau): string[] {
+  const ra: string[] = [];
+  for (const d of [...gt.thanhPhanCanBo, ...tachThanhPhan(gt.thanhPhanKhac)]) {
+    if (!ra.includes(d)) ra.push(d);
+  }
+  return ra;
+}
+
+function rongThanhVang(s: string): string | undefined {
+  const g = s.trim();
+  return g === "" ? undefined : g;
+}
+
+/**
+ * Thân `POST /api/v1/meetings` từ biểu mẫu. Trường rỗng thì VẮNG (`omitempty` ở máy chủ), trừ
+ * `chaired_by` — hợp đồng khai nó là `string` thường, rỗng là trạng thái máy chủ nhận.
+ *
+ * `boSungChoID` là id biên bản ĐÃ KÝ mà biên bản này bổ sung, hoặc `null`.
+ */
+export function thanTaoTuBieuMau(gt: GiaTriBieuMau, boSungChoID: string | null): TaoBienBanVao {
+  const thanhPhan = thanhPhanTuBieuMau(gt);
+  const ketLuan = tachKetLuan(gt.ketLuan);
+  return {
+    title: gt.ten.trim(),
+    held_on: gt.ngay,
+    reference_no: rongThanhVang(gt.soHieu),
+    location: rongThanhVang(gt.diaDiem),
+    chaired_by: gt.chuTri,
+    minutes_taker: rongThanhVang(gt.thuKy),
+    content: gt.noiDung.trim() === "" ? undefined : gt.noiDung,
+    attendees: thanhPhan.length === 0 ? undefined : thanhPhan,
+    conclusions: ketLuan.length === 0 ? undefined : ketLuan,
+    supplements_id: boSungChoID ?? undefined,
+  };
+}
+
+function haiDanhSachBang(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/**
+ * Thân `PATCH /api/v1/meetings/{id}` — CHỈ NHỮNG TRƯỜNG ĐÃ ĐỔI so với bản đã đọc.
+ *
+ * VÌ SAO KHÔNG GỬI CẢ BIỂU MẪU: PATCH đọc "có mặt" là "đặt thành", và mỗi trường gửi đi là một dòng
+ * trước/sau trong vết kiểm toán của một hồ sơ lưu trữ. Gửi lại mười trường không đổi là mười dòng
+ * nói rằng ai đó đã sửa chúng.
+ *
+ * TRƯỜNG BỊ XOÁ TRẮNG THÌ GỬI CHUỖI RỖNG (đặt thành rỗng), không bỏ vắng (không đổi). Ngày họp và
+ * tên không bao giờ rỗng — biểu mẫu tắt nút Lưu trước đó.
+ *
+ * Trả `null` khi KHÔNG CÓ GÌ ĐỔI: một PATCH rỗng không có gì để ghi.
+ */
+export function thanSuaTuBieuMau(gt: GiaTriBieuMau, ban: petitions_bienBanRa): SuaBienBanVao | null {
+  const than: { -readonly [K in keyof SuaBienBanVao]: SuaBienBanVao[K] } = {};
+  const ten = gt.ten.trim();
+  if (ten !== ban.title) than.title = ten;
+  if (gt.ngay !== ban.held_on) than.held_on = gt.ngay;
+  if (gt.soHieu.trim() !== ban.reference_no) than.reference_no = gt.soHieu.trim();
+  if (gt.diaDiem.trim() !== ban.location) than.location = gt.diaDiem.trim();
+  if (gt.chuTri !== ban.chaired_by) than.chaired_by = gt.chuTri;
+  if (gt.thuKy !== (ban.minutes_taker ?? "")) than.minutes_taker = gt.thuKy;
+  const thanhPhan = thanhPhanTuBieuMau(gt);
+  if (!haiDanhSachBang(thanhPhan, ban.attendees ?? [])) than.attendees = thanhPhan;
+  const noiDung = gt.noiDung.trim() === "" ? "" : gt.noiDung;
+  if (noiDung !== (ban.content ?? "")) than.content = noiDung;
+  return Object.keys(than).length === 0 ? null : than;
+}
+
+/**
+ * Cặp Thông báo kết luận từ hai ô. Cả hai trống → `null` (không ghi). Còn lại gửi CẢ CẶP, kể cả khi
+ * một nửa trống: máy chủ trả đúng câu nói nửa nào thiếu, và dựng lại phép kiểm ấy ở đây là bản sao
+ * thứ hai của một quy tắc.
+ */
+export function thanThongBao(so: string, ngay: string): ThongBaoVao | null {
+  if (so.trim() === "" && ngay === "") return null;
+  return { reference_no: so.trim(), issued_on: ngay };
+}
+
+/**
+ * Danh sách chọn của ô Chủ trì / Thư ký: cả danh bạ, CỘNG giá trị đang lưu nếu nó không còn trong
+ * danh bạ (người đã khoá tài khoản). Thiếu dòng ấy thì `<select>` lặng lẽ hiện "Không ghi", và lần
+ * lưu kế tiếp XOÁ chủ trì của một biên bản mà không ai bấm gì.
+ */
+export function luaChonCanBo(
+  danhBa: readonly identity_canBoChonNguoiRa[],
+  dangLuu: string,
+): { readonly ma: string; readonly nhan: string }[] {
+  const ds = danhBa.map((cb) => ({ ma: cb.code, nhan: nhanLuaChonCanBo(cb) }));
+  if (dangLuu !== "" && !danhBa.some((cb) => cb.code === dangLuu)) {
+    ds.unshift({ ma: dangLuu, nhan: `${dangLuu} (không có trong danh bạ cán bộ đang hoạt động)` });
+  }
+  return ds;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
  *
  * Không giấu trong chú thích, không vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` của
@@ -242,15 +682,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "từ kết luận nêu trong đường dẫn.",
   },
   {
-    ten: "Ô chọn `Chủ trì` (§4, combobox cán bộ)",
-    viSao:
-      "Trường `chaired_by` nhận MÃ NGHIỆP VỤ của cán bộ (`CB-2026-7K3M9Q`), và tuyến duy nhất tra " +
-      "được danh sách ấy — `GET /api/v1/staff` — đòi `admin.user`, một khoá quản trị hệ thống " +
-      "không liên quan tới việc gõ biên bản. Một ô text để cán bộ tự gõ mã là một ô sẽ được điền " +
-      "bằng họ tên, và giá trị ấy vào thẳng cột mã trong sổ lưu trữ. Biên bản vì thế lưu với " +
-      "`chaired_by` rỗng — máy chủ chấp nhận trạng thái ấy.",
-  },
-  {
     ten: "Tệp đính kèm — bản scan biên bản (§4)",
     viSao:
       "Kho chưa có nơi lưu tệp và hợp đồng không có tuyến tải lên nào; cột `dinh_kem` giữ nguyên " +
@@ -258,52 +689,22 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "một bản scan vào rồi mất.",
   },
   {
-    ten: "Nội dung biên bản, thành phần tham dự KHI ĐỌC LẠI (§4)",
+    ten: "Cổng quyền `task.read` / `task.create` ở phía giao diện — chỉ nút Ký có cổng",
     viSao:
-      "Hai trường ấy GỬI LÊN được nhưng KHÔNG ĐỌC VỀ được: `GET /api/v1/meetings` cố ý không trả " +
-      "`content`, `attendees` và `dinh_kem` (§2 không vẽ chúng, và toàn văn mọi cuộc họp trên một " +
-      "trang sẽ lấn hết phần còn lại), còn tuyến chi tiết một biên bản thì chưa có. Hệ quả phải " +
-      "nói thẳng với cán bộ: gõ xong biên bản rồi thì màn này KHÔNG mở lại toàn văn ấy được.",
-  },
-  {
-    ten: "Sửa, xoá biên bản và sửa kết luận (§6 của đặc tả)",
-    viSao:
-      "Hợp đồng không có `PATCH`/`DELETE` nào cho biên bản hay kết luận. Đó không phải thiếu sót " +
-      "của lượt này: một kết luận đã có nhiệm vụ trỏ vào thì có được sửa lời hay không là câu hỏi " +
-      "migration 0007 cố ý để ngỏ (§7.1 đòi “không xoá cứng, cảnh báo và giữ liên kết”).",
-  },
-  {
-    ten: "Danh sách nhiệm vụ đã tách ra từ một kết luận (§3)",
-    viSao:
-      "§3 nói dòng kết luận “có thể mở rộng để xem danh sách nhiệm vụ đã sinh ra”. Hợp đồng chỉ " +
-      "trả hai con số đếm, không trả danh sách; tuyến `GET /api/ket-luan/:id/nhiem-vu` mà §6 phác " +
-      "ra chưa tồn tại. Hai con số thì hiện đúng hai con số.",
-  },
-  {
-    ten: "Cổng quyền `task.read` / `task.create` ở phía giao diện",
-    viSao:
-      "`src/lib/quyen.ts` chưa có hằng cho hai khoá ấy và lượt này không được sửa tệp đó (đang có " +
-      "agent khác chạy song song), còn gõ thẳng chuỗi `\"task.create\"` vào màn là dựng bản sao " +
-      "thứ hai của một khoá phân quyền. Vì thế màn này KHÔNG có cổng ở client — đúng khuôn màn " +
-      "Văn bản đang dùng cho `document.read`: dịch vụ `petitions` kiểm quyền trên TỪNG lời gọi, " +
-      "và tài khoản thiếu khoá nhận nguyên câu 403 của máy chủ ra màn hình. Ẩn một nút chưa bao " +
-      "giờ là biện pháp (luật 5, cấm #1); thiếu nó ở đây chỉ tốn một lần bấm.",
-  },
-  {
-    ten: "Thứ tự thẻ theo NGÀY HỌP (§2: “mới nhất ở trên”)",
-    viSao:
-      "Máy chủ phân trang theo `tao_luc` (thời điểm NHẬP), không theo `ngay_hop`, và cố ý: cột " +
-      "`ngay_hop` là DATE, không có chỉ mục, và con trỏ keyset trên một cột DATE chưa kiểm được " +
-      "trong môi trường này (`store/bien_ban_hop.go:52-67`). Hệ quả nhìn thấy được: một biên bản " +
-      "họp tháng 7 nhập muộn sẽ nằm TRÊN biên bản tháng 8 nhập sớm.",
+      "Nút `Ký biên bản` ẩn với phiên thiếu `task.approve` (`QUYEN_KY_BIEN_BAN`) — tiện dụng, " +
+      "không phải biện pháp. Mọi nút khác (nhập, sửa, gỡ, đánh dấu, tách) KHÔNG có cổng theo " +
+      "`task.create` ở client, đúng khuôn màn Văn bản: dịch vụ `petitions` kiểm quyền trên TỪNG " +
+      "lời gọi, và tài khoản thiếu khoá nhận nguyên câu 403 của máy chủ ra màn hình. Ẩn một nút " +
+      "chưa bao giờ là biện pháp (luật 5, cấm #1); thiếu nó ở đây chỉ tốn một lần bấm.",
   },
   {
     ten: "Lớp CSS riêng cho thẻ biên bản và ô tròn số thứ tự (§2)",
     viSao:
       "`globals.css` chưa có lớp nào cho danh sách thẻ, cho ô tròn xanh nhạt của số thứ tự, hay " +
       "cho một lớp phủ modal, và lượt này không được thêm CSS. Màn dùng lại các lớp sẵn có " +
-      "(`khoi-chi-tiet`, `chip`), còn hai biểu mẫu — Nhập biên bản §4 và Giao việc §3 — dựng NỐI " +
-      "TIẾP trong trang thay vì làm lớp phủ như hai chữ “modal” của đặc tả. " +
+      "(`khoi-chi-tiet`, `chip`), còn các biểu mẫu — Nhập/Sửa biên bản §4, Giao việc §3, hộp Ký, " +
+      "Thông báo kết luận, Gỡ — và khung Xem biên bản đều dựng NỐI TIẾP trong trang thay vì làm lớp " +
+      "phủ như chữ “modal” của đặc tả. " +
       "Mượn một lớp của thứ khác cho đúng hình hôm nay sẽ lệch hẳn vào ngày lớp ấy đổi vì cái nó " +
       "thật sự phục vụ; tên lớp cần thêm đã báo về.",
   },

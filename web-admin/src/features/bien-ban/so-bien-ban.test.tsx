@@ -1,11 +1,30 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { petitions_bienBanRa, petitions_ketLuanRa } from "@/lib/api/schema.gen";
+import { danhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
+import type {
+  identity_canBoChonNguoiRa,
+  petitions_bienBanRa,
+  petitions_ketLuanRa,
+  petitions_nhiemVuRa,
+} from "@/lib/api/schema.gen";
 
 import {
+  CANH_BAO_BI_MAT,
+  CAU_XAC_NHAN_KY,
   cauDaTach,
   CHUA_TACH_NHIEM_VU,
+  NHAN_NUT_BO_DAU,
+  NHAN_NUT_BO_SUNG,
+  NHAN_NUT_DANH_DAU,
+  NHAN_NUT_GHI_THONG_BAO,
+  NHAN_NUT_KY,
+  NHAN_NUT_LUU_SUA,
+  NHAN_NUT_SUA_BIEN_BAN,
+  NHAN_NUT_XAC_NHAN_KY,
+  NHAN_NUT_XOA_BIEN_BAN,
+  VI_SAO_BIEN_BAN_CON_NHIEM_VU,
+  VI_SAO_KET_LUAN_KHOA,
   NGUON_GIAO_KHOA,
   NHAN_NUT_LUU,
   NHAN_NUT_TACH,
@@ -15,14 +34,18 @@ import {
   SO_RONG,
 } from "./nhan-bien-ban";
 import {
+  ChiTietBienBan,
   DanhSachBienBan,
   DongKetLuan,
   FormNhapBienBan,
   HangThemKetLuan,
   KhoiChuaDung,
   TheBienBan,
+  type CheBieuMau,
   type PhepTach,
+  type PhepVongDoi,
 } from "./so-bien-ban";
+import { BANG_NHAN_MAC_DINH } from "@/features/nhiem-vu/nhan-nhiem-vu";
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không.
@@ -51,6 +74,8 @@ function ketLuan(sua: Partial<petitions_ketLuanRa> = {}): petitions_ketLuanRa {
     content: "Giao bộ phận Địa chính rà soát tiến độ tuyến đường Hà Lam – Bình Trị.",
     task_count: 0,
     task_done_count: 0,
+    status: "chua-giao",
+    no_task: false,
     created_at: "2026-08-05T02:00:00Z",
     ...sua,
   };
@@ -67,6 +92,9 @@ function bienBan(sua: Partial<petitions_bienBanRa> = {}): petitions_bienBanRa {
     conclusions: [ketLuan()],
     task_count: 3,
     task_done_count: 1,
+    status: "du-thao",
+    conclusion_count: 1,
+    conclusion_done_count: 0,
     created_by: "CB-2026-7K3M9Q",
     created_at: "2026-08-05T02:00:00Z",
     ...sua,
@@ -93,7 +121,43 @@ function phepTach(sua: Partial<PhepTach> = {}): PhepTach {
   };
 }
 
-function veThe(bb: petitions_bienBanRa, tach: PhepTach = phepTach()): string {
+/**
+ * Vòng đời ở trạng thái nghỉ: KHÔNG có quyền ký, không hộp nào mở, không lỗi, danh bạ chưa đọc.
+ * Mặc định KHÔNG quyền ký cố ý — ca "thấy nút Ký" phải tự khai quyền, nên không ca nào xanh nhờ
+ * một mặc định rộng tay.
+ */
+function vongDoi(sua: Partial<PhepVongDoi> = {}): PhepVongDoi {
+  return {
+    dangGui: false,
+    coQuyenKy: false,
+    danhBa: null,
+    nhanTT: BANG_NHAN_MAC_DINH,
+    hop: null,
+    loi: null,
+    chiTiet: null,
+    nhiemVuKL: new Map(),
+    moHop: () => {},
+    dongHop: () => {},
+    dongChiTiet: () => {},
+    moSua: () => {},
+    moBoSung: () => {},
+    ky: () => {},
+    ghiThongBao: () => {},
+    xoa: () => {},
+    suaKL: () => {},
+    goKL: () => {},
+    danhDau: () => {},
+    boDau: () => {},
+    batNhiemVuKL: () => {},
+    ...sua,
+  };
+}
+
+function veThe(
+  bb: petitions_bienBanRa,
+  tach: PhepTach = phepTach(),
+  vd: PhepVongDoi = vongDoi(),
+): string {
   return renderToStaticMarkup(
     <TheBienBan
       bienBan={bb}
@@ -102,12 +166,20 @@ function veThe(bb: petitions_bienBanRa, tach: PhepTach = phepTach()): string {
       loiKetLuan={null}
       guiKetLuan={() => {}}
       tach={tach}
+      vongDoi={vd}
     />,
   );
 }
 
-function veDong(kl: petitions_ketLuanRa, tach: PhepTach = phepTach()): string {
-  return renderToStaticMarkup(<DongKetLuan bienBanID="01JBB1" ketLuan={kl} tach={tach} />);
+function veDong(
+  kl: petitions_ketLuanRa,
+  tach: PhepTach = phepTach(),
+  vd: PhepVongDoi = vongDoi(),
+  bb: petitions_bienBanRa = bienBan(),
+): string {
+  return renderToStaticMarkup(
+    <DongKetLuan bienBan={bb} ketLuan={kl} tach={tach} vongDoi={vd} />,
+  );
 }
 
 describe("thẻ biên bản §2", () => {
@@ -116,7 +188,9 @@ describe("thẻ biên bản §2", () => {
 
     expect(html).toContain("Giao ban Uỷ ban nhân dân xã tháng 8 năm 2026");
     expect(html).toContain("5/8/2026 · 31/BB-UBND · Phòng họp UBND xã");
-    expect(html).toContain("1 kết luận · 1/3 nhiệm vụ xong");
+    // CON SỐ CHÍNH là kết luận hoàn thành, số nhiệm vụ là phụ — cả hai đọc từ máy chủ.
+    expect(html).toContain("<strong>0/1 kết luận hoàn thành</strong>");
+    expect(html).toContain("1/3 nhiệm vụ xong");
   });
 
   it("thiếu số hiệu và địa điểm thì dòng meta chỉ còn ngày — không có dấu chấm bơ vơ", () => {
@@ -127,10 +201,13 @@ describe("thẻ biên bản §2", () => {
   });
 
   it("biên bản chưa có kết luận nào VẪN hiện, và nói ra trạng thái ấy (§7.3)", () => {
-    const html = veThe(bienBan({ conclusions: [], task_count: 0, task_done_count: 0 }));
+    const html = veThe(
+      bienBan({ conclusions: [], task_count: 0, task_done_count: 0, conclusion_count: 0 }),
+    );
 
     expect(html).toContain("Biên bản này chưa ghi kết luận nào.");
-    expect(html).toContain("0 kết luận · 0/0 nhiệm vụ xong");
+    expect(html).toContain("0/0 kết luận hoàn thành");
+    expect(html).toContain("0/0 nhiệm vụ xong");
     // Hàng thêm kết luận vẫn có: "nhập nháp trước, bổ sung sau" là cả điểm của trạng thái này.
     expect(html).toContain(PLACEHOLDER_KET_LUAN);
   });
@@ -148,6 +225,7 @@ describe("thẻ biên bản §2", () => {
         loiKetLuan="Bạn không có quyền tạo nhiệm vụ."
         guiKetLuan={() => {}}
         tach={phepTach()}
+        vongDoi={vongDoi()}
       />,
     );
 
@@ -316,6 +394,7 @@ describe("danh sách thẻ", () => {
         loiKetLuan={null}
         guiKetLuan={() => {}}
         tach={phepTach()}
+        vongDoi={vongDoi()}
       />,
     );
 
@@ -333,6 +412,7 @@ describe("danh sách thẻ", () => {
         loiKetLuan={{ bienBanID: "01JBB2", thongBao: "Thiếu nội dung kết luận." }}
         guiKetLuan={() => {}}
         tach={phepTach()}
+        vongDoi={vongDoi()}
       />,
     );
 
@@ -359,10 +439,27 @@ describe("hàng thêm kết luận", () => {
   });
 });
 
+const DANH_BA: identity_canBoChonNguoiRa[] = [
+  { code: "CB-2026-7K3M9Q", full_name: "Nguyễn Văn An", position: "Chủ tịch UBND", department_id: "" },
+  { code: "CB-2026-1A2B3C", full_name: "Trần Thị Bình", position: "Văn phòng", department_id: "" },
+];
+
 describe("biểu mẫu nhập biên bản §4", () => {
-  function veForm(loi: string | null = null): string {
+  function veForm(
+    loi: string | null = null,
+    che: CheBieuMau = { loai: "tao", boSungCho: null },
+  ): string {
     return renderToStaticMarkup(
-      <FormNhapBienBan dangGui={false} loi={loi} huy={() => {}} luu={() => {}} />,
+      <FormNhapBienBan
+        che={che}
+        danhBa={DANH_BA}
+        loiDanhBa={null}
+        dangGui={false}
+        loi={loi}
+        huy={() => {}}
+        luu={() => {}}
+        sua={() => {}}
+      />,
     );
   }
 
@@ -378,15 +475,15 @@ describe("biểu mẫu nhập biên bản §4", () => {
     expect(html).toContain("Các kết luận");
     // Số hiệu KHÔNG mang dấu sao: nó tuỳ chọn, và nó không phải mã định danh.
     expect(html).not.toContain("Số hiệu biên bản *");
+    expect(html).not.toContain("Chủ trì *");
+    expect(html).not.toContain("Thư ký *");
   });
 
   it("nói thẳng rằng số hiệu KHÔNG phải mã tra cứu", () => {
-    // Số hiệu biên bản Việt Nam lặp lại theo năm (`31/BB-UBND` năm sau lại có). Một cán bộ tưởng
-    // nó là mã sẽ đi tra cứu bằng nó và tìm ra hai biên bản.
     expect(veForm()).toContain("không phải mã tra cứu");
   });
 
-  it("ngày họp là ô `type=\"date\"` — ngày lịch, không mốc thời gian", () => {
+  it('ngày họp là ô `type="date"` — ngày lịch, không mốc thời gian', () => {
     expect(veForm()).toContain('type="date"');
   });
 
@@ -403,10 +500,301 @@ describe("biểu mẫu nhập biên bản §4", () => {
     expect(html).toContain('role="alert"');
   });
 
-  it("KHÔNG có ô Chủ trì và KHÔNG có vùng tệp đính kèm — hai phần đã khai là chưa dựng", () => {
+  it("cảnh báo bí mật nhà nước có mặt — đã quyết: không có cờ “mật” nào", () => {
     const html = veForm();
+    expect(html).toContain(CANH_BAO_BI_MAT);
+    expect(html).not.toMatch(/>\s*Mật\s*</);
+  });
 
-    expect(html).not.toContain(">Chủ trì<");
-    expect(html).not.toContain('type="file"');
+  it("Chủ trì và Thư ký là ô CHỌN từ danh bạ: giá trị là MÃ, chữ hiện là họ tên · chức vụ", () => {
+    const html = veForm();
+    expect(html).toContain(">Chủ trì<");
+    expect(html).toContain(">Thư ký<");
+    // Giá trị gửi đi là MÃ nghiệp vụ; họ tên chỉ là chữ hiện.
+    expect(html).toContain('value="CB-2026-7K3M9Q"');
+    expect(html).toContain("Nguyễn Văn An · Chủ tịch UBND");
+    expect(html).not.toContain('value="Nguyễn Văn An"');
+  });
+
+  it("thành phần: ô chọn cán bộ VÀ ô chữ tự do — khách mời không có tài khoản vẫn ghi được", () => {
+    const html = veForm();
+    expect(html).toContain('id="chon-thanh-phan"');
+    expect(html).toContain('id="thanh-phan-khac"');
+  });
+
+  it("KHÔNG có vùng tệp đính kèm — phần đã khai là chưa dựng", () => {
+    expect(veForm()).not.toContain('type="file"');
+  });
+
+  it("biểu mẫu BỔ SUNG nói nó bổ sung cho biên bản đã ký nào", () => {
+    const goc = bienBan({ status: "da-ky", title: "Giao ban tháng 7" });
+    const html = veForm(null, { loai: "tao", boSungCho: goc });
+    expect(html).toContain("Lập biên bản bổ sung");
+    expect(html).toContain("Giao ban tháng 7");
+  });
+
+  it("biểu mẫu SỬA điền sẵn, KHÔNG có ô “Các kết luận”, nút Lưu tắt khi chưa đổi gì", () => {
+    const ban = bienBan({
+      chaired_by: "CB-2026-7K3M9Q",
+      minutes_taker: "CB-2026-1A2B3C",
+      content: "Toàn văn đã lưu.",
+      attendees: ["CB-2026-7K3M9Q", "Đại diện thôn Hà Lam"],
+    });
+    const html = veForm(null, { loai: "sua", ban });
+    expect(html).toContain("Sửa biên bản (dự thảo)");
+    expect(html).toContain("Toàn văn đã lưu.");
+    expect(html).toContain("Đại diện thôn Hà Lam");
+    expect(html).not.toContain('id="cac-ket-luan"');
+    const nut = html.slice(html.lastIndexOf("<button"), html.lastIndexOf("</button>"));
+    expect(nut).toContain("disabled");
+    expect(nut).toContain(NHAN_NUT_LUU_SUA);
+  });
+});
+
+describe("vòng đời trên thẻ — dự thảo và đã ký", () => {
+  const DA_KY = bienBan({
+    status: "da-ky",
+    signed_by: "CB-2026-7K3M9Q",
+    signed_at: "2026-08-06T03:00:00Z",
+  });
+
+  it("chip trạng thái: “Dự thảo” và “Đã ký”", () => {
+    expect(veThe(bienBan())).toContain(">Dự thảo<");
+    expect(veThe(DA_KY)).toContain(">Đã ký<");
+  });
+
+  it("dự thảo: Sửa · Gỡ · Thêm kết luận có; Ghi Thông báo · Lập bổ sung KHÔNG", () => {
+    const html = veThe(bienBan({ task_count: 0 }));
+    expect(html).toContain(NHAN_NUT_SUA_BIEN_BAN);
+    expect(html).toContain(NHAN_NUT_XOA_BIEN_BAN);
+    expect(html).toContain(PLACEHOLDER_KET_LUAN);
+    expect(html).not.toContain(NHAN_NUT_GHI_THONG_BAO);
+    expect(html).not.toContain(NHAN_NUT_BO_SUNG);
+  });
+
+  it("đã ký: KHÔNG Sửa · Gỡ · Ký · Thêm kết luận; CÓ Lập bổ sung và Ghi Thông báo (khi chưa có)", () => {
+    const html = veThe(DA_KY, phepTach(), vongDoi({ coQuyenKy: true }));
+    expect(html).not.toContain(NHAN_NUT_SUA_BIEN_BAN);
+    expect(html).not.toContain(NHAN_NUT_XOA_BIEN_BAN);
+    expect(html).not.toContain(`>${NHAN_NUT_KY}<`);
+    expect(html).not.toContain(PLACEHOLDER_KET_LUAN);
+    expect(html).toContain(NHAN_NUT_BO_SUNG);
+    expect(html).toContain(NHAN_NUT_GHI_THONG_BAO);
+  });
+
+  it("đã ký VÀ đã có Thông báo: nút Ghi Thông báo biến mất — máy chủ chỉ nhận một lần", () => {
+    const html = veThe(
+      bienBan({
+        status: "da-ky",
+        notice: { reference_no: "12/TB-UBND", issued_on: "2026-08-07" },
+      }),
+    );
+    expect(html).not.toContain(NHAN_NUT_GHI_THONG_BAO);
+  });
+
+  it("nút Ký CHỈ hiện khi phiên có `task.approve` — ca BỊ TỪ CHỐI trước", () => {
+    expect(veThe(bienBan(), phepTach(), vongDoi({ coQuyenKy: false }))).not.toContain(
+      `>${NHAN_NUT_KY}<`,
+    );
+    expect(veThe(bienBan(), phepTach(), vongDoi({ coQuyenKy: true }))).toContain(
+      `>${NHAN_NUT_KY}<`,
+    );
+  });
+
+  it("hộp Ký nói rõ hệ quả và có hai ô Thông báo tuỳ chọn", () => {
+    const html = veThe(
+      bienBan(),
+      phepTach(),
+      vongDoi({ coQuyenKy: true, hop: { dich: "01JBB1", loai: "ky" } }),
+    );
+    expect(html).toContain(CAU_XAC_NHAN_KY);
+    expect(html).toContain(NHAN_NUT_XAC_NHAN_KY);
+    expect(html).toContain("Số, ký hiệu Thông báo kết luận");
+  });
+
+  it("Gỡ biên bản TẮT kèm lý do khi còn nhiệm vụ trỏ về", () => {
+    const html = veThe(bienBan({ task_count: 2 }));
+    expect(html).toContain(VI_SAO_BIEN_BAN_CON_NHIEM_VU);
+    const dau = html.lastIndexOf("<button", html.indexOf('aria-describedby="ly-do-xoa-01JBB1"'));
+    const nut = html.slice(dau, html.indexOf("</button>", dau));
+    expect(nut).toContain("disabled");
+    expect(nut).toContain(NHAN_NUT_XOA_BIEN_BAN);
+  });
+
+  it("hộp Gỡ biên bản đòi lý do — nút tắt khi chưa gõ", () => {
+    const html = veThe(
+      bienBan({ task_count: 0 }),
+      phepTach(),
+      vongDoi({ hop: { dich: "01JBB1", loai: "xoa" } }),
+    );
+    expect(html).toContain("Lý do gỡ biên bản *");
+    expect(html).toContain('<button type="submit" class="nut-xoa" disabled="">');
+  });
+
+  it("câu lỗi vòng đời của MỘT biên bản chỉ hiện trên thẻ ấy", () => {
+    const vd = vongDoi({ loi: { dich: "01JBB2", thongBao: "biên bản họp đã ký — …" } });
+    expect(veThe(bienBan(), phepTach(), vd)).not.toContain("biên bản họp đã ký — …");
+    expect(veThe(bienBan({ id: "01JBB2" }), phepTach(), vd)).toContain("biên bản họp đã ký — …");
+  });
+
+  it("biên bản bổ sung có liên kết về biên bản gốc", () => {
+    expect(veThe(bienBan({ supplements_id: "01JBBGOC" }))).toContain('href="#bien-ban-01JBBGOC"');
+  });
+
+  it("“Xem biên bản” là neo tới chính thẻ — không mang dữ liệu nào ngoài id", () => {
+    expect(veThe(bienBan())).toContain('href="#bien-ban-01JBB1"');
+  });
+});
+
+describe("Xem biên bản — toàn văn, người ký, Thông báo, bổ sung hai chiều", () => {
+  const CHI_TIET = bienBan({
+    status: "da-ky",
+    chaired_by: "CB-2026-7K3M9Q",
+    minutes_taker: "CB-2026-1A2B3C",
+    signed_by: "CB-2026-7K3M9Q",
+    signed_at: "2026-08-06T03:00:00Z",
+    notice: { reference_no: "12/TB-UBND", issued_on: "2026-08-07" },
+    supplements_id: "01JBBGOC",
+    supplemented_by: ["01JBBBS1"],
+    content: "Dòng một.\nDòng hai.",
+    attendees: ["CB-2026-7K3M9Q", "Đại diện thôn Hà Lam"],
+  });
+
+  function veChiTiet(bb: petitions_bienBanRa = CHI_TIET): string {
+    return renderToStaticMarkup(
+      <ChiTietBienBan
+        tai={{ pha: "xong", duLieu: bb }}
+        danhBa={danhBaTheoMa(DANH_BA)}
+        dong={() => {}}
+      />,
+    );
+  }
+
+  it("hiện chủ trì, thư ký bằng HỌ TÊN tra từ danh bạ", () => {
+    const html = veChiTiet();
+    expect(html).toContain("Nguyễn Văn An · Chủ tịch UBND");
+    expect(html).toContain("Trần Thị Bình · Văn phòng");
+  });
+
+  it("thành phần: dòng chữ tự do ra nguyên văn", () => {
+    expect(veChiTiet()).toContain("Đại diện thôn Hà Lam");
+  });
+
+  it("toàn văn giữ xuống dòng", () => {
+    expect(veChiTiet()).toContain("Dòng một.<br/>");
+  });
+
+  it("Thông báo kết luận: số và NGÀY LỊCH d/M/yyyy", () => {
+    expect(veChiTiet()).toContain("Số 12/TB-UBND, ngày 7/8/2026");
+  });
+
+  it("người ký và ngày ký", () => {
+    expect(veChiTiet()).toContain("Nguyễn Văn An · Chủ tịch UBND · ngày 6/8/2026");
+  });
+
+  it("bổ sung HAI CHIỀU: về biên bản gốc và tới biên bản bổ sung", () => {
+    const html = veChiTiet();
+    expect(html).toContain('href="#bien-ban-01JBBGOC"');
+    expect(html).toContain('href="#bien-ban-01JBBBS1"');
+  });
+
+  it("chủ trì không còn trong danh bạ vẫn hiện MÃ kèm câu trung tính, không một ô trống", () => {
+    expect(veChiTiet(bienBan({ chaired_by: "CB-DA-NGHI" }))).toContain(
+      "CB-DA-NGHI (không có trong danh bạ cán bộ đang hoạt động)",
+    );
+  });
+
+  it("đọc hỏng thì câu máy chủ ra nguyên văn", () => {
+    const html = renderToStaticMarkup(
+      <ChiTietBienBan
+        tai={{ pha: "loi", thongBao: "Không tìm thấy biên bản." }}
+        danhBa={null}
+        dong={() => {}}
+      />,
+    );
+    expect(html).toContain("Không tìm thấy biên bản.");
+  });
+});
+
+describe("dòng kết luận — chip trạng thái từ MÁY CHỦ và các nút theo trạng thái", () => {
+  it("chip đọc đúng mã máy chủ; quá hạn là chip ĐỎ", () => {
+    expect(veDong(ketLuan({ status: "chua-giao" }))).toContain(">Chưa giao<");
+    expect(veDong(ketLuan({ status: "dang-thuc-hien", task_count: 1 }))).toContain(
+      ">Đang thực hiện<",
+    );
+    expect(
+      veDong(ketLuan({ status: "hoan-thanh", task_count: 1, task_done_count: 1 })),
+    ).toContain(">Hoàn thành<");
+    expect(veDong(ketLuan({ status: "qua-han", task_count: 1 }))).toContain(
+      '<span class="chip chip-cham">Quá hạn</span>',
+    );
+  });
+
+  it("KHÔNG tự suy trạng thái từ bộ đếm: 1/1 xong mà máy chủ nói “qua-han” thì vẽ Quá hạn", () => {
+    const html = veDong(ketLuan({ status: "qua-han", task_count: 1, task_done_count: 1 }));
+    expect(html).toContain(">Quá hạn<");
+    expect(html).not.toContain(">Hoàn thành<");
+  });
+
+  it("đánh dấu “không phát sinh”: chip nói đúng lý do, nút Tách ẨN, còn Bỏ dấu", () => {
+    const html = veDong(ketLuan({ no_task: true, status: "hoan-thanh" }));
+    expect(html).toContain(">Không phát sinh nhiệm vụ<");
+    expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_TACH));
+    expect(html).toContain(nhuTrongHTML(NHAN_NUT_BO_DAU));
+    expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_DANH_DAU));
+  });
+
+  it("dự thảo, chưa có nhiệm vụ: Sửa · Gỡ bấm được, Đánh dấu có", () => {
+    const html = veDong(ketLuan({ ordinal: 3, task_count: 0 }));
+    expect(html).toContain('aria-label="Sửa kết luận số 3"');
+    expect(html).toContain('aria-label="Gỡ kết luận số 3"');
+    expect(html).toContain(nhuTrongHTML(NHAN_NUT_DANH_DAU));
+    expect(html).not.toContain(VI_SAO_KET_LUAN_KHOA);
+  });
+
+  it("dự thảo, ĐÃ có nhiệm vụ: Sửa · Gỡ TẮT kèm lý do, Đánh dấu ẨN", () => {
+    const html = veDong(ketLuan({ ordinal: 3, task_count: 2, status: "dang-thuc-hien" }));
+    for (const nhan of ["Sửa kết luận số 3", "Gỡ kết luận số 3"]) {
+      const dau = html.lastIndexOf("<button", html.indexOf(`aria-label="${nhan}"`));
+      const nut = html.slice(dau, html.indexOf("</button>", dau));
+      expect(nut).toContain("disabled");
+    }
+    expect(html).toContain(VI_SAO_KET_LUAN_KHOA);
+    expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_DANH_DAU));
+  });
+
+  it("biên bản ĐÃ KÝ: Sửa · Gỡ · Đánh dấu · Bỏ dấu ẨN, còn Tách", () => {
+    const daKy = bienBan({ status: "da-ky" });
+    const html = veDong(ketLuan({ ordinal: 3 }), phepTach(), vongDoi(), daKy);
+    expect(html).not.toContain("Sửa kết luận số 3");
+    expect(html).not.toContain("Gỡ kết luận số 3");
+    expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_DANH_DAU));
+    expect(html).toContain(nhuTrongHTML(NHAN_NUT_TACH));
+  });
+
+  it("có nhiệm vụ thì có nút mở danh sách; mở ra thì mã · tên · trạng thái · hạn", () => {
+    const kl = ketLuan({ id: "k3", ordinal: 3, task_count: 1, status: "dang-thuc-hien" });
+    expect(veDong(kl)).toContain("Xem 1 nhiệm vụ đã tách");
+    const nv = {
+      code: "NV12",
+      title: "Đối chiếu số liệu giải ngân",
+      status: "dang-thuc-hien",
+      due_at: "2026-08-20T16:59:59Z",
+    } as petitions_nhiemVuRa;
+    const html = veDong(
+      kl,
+      phepTach(),
+      vongDoi({ nhiemVuKL: new Map([["k3", { pha: "xong", duLieu: [nv] }]]) }),
+    );
+    expect(html).toContain("NV12");
+    expect(html).toContain("Đối chiếu số liệu giải ngân");
+    expect(html).toContain("Đang thực hiện");
+    expect(html).toContain("Hạn 20/8/2026");
+  });
+
+  it("câu lỗi vòng đời của MỘT kết luận chỉ hiện trên dòng ấy", () => {
+    const vd = vongDoi({ loi: { dich: "k7", thongBao: "kết luận đã được tách — …" } });
+    expect(veDong(ketLuan({ id: "k7" }), phepTach(), vd)).toContain("kết luận đã được tách");
+    expect(veDong(ketLuan({ id: "k9" }), phepTach(), vd)).not.toContain("kết luận đã được tách");
   });
 });
