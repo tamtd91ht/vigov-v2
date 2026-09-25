@@ -110,6 +110,61 @@ type taoBienBanVao struct {
 	//
 	// EMPTY IS A REAL STATE: §7.3 saves minutes with no conclusions ("nhập nháp trước, bổ sung sau").
 	Conclusions []string `json:"conclusions,omitempty"`
+
+	// Secretary is a STAFF BUSINESS CODE (migration 0012), optional — the name GET returns.
+	Secretary string `json:"secretary,omitempty"`
+
+	// SupplementsID makes these SUPPLEMENTARY minutes (user decision 25/09/2026): the id of a live,
+	// SIGNED meeting of this commune. 404 when it names none; 400 when it names a draft (a draft is
+	// corrected by editing it). The new record is an ordinary draft numbering its conclusions from ①.
+	SupplementsID string `json:"supplements_id,omitempty"`
+}
+
+// thongBaoVao is the conclusion notice (Thông báo kết luận) on the wire — the shape GET returns.
+// Both members are required when the object is sent: half a reference is refused.
+type thongBaoVao struct {
+	ReferenceNo string `json:"reference_no"`
+	// IssuedOn is a CALENDAR DAY, `2026-08-12`, like `held_on`.
+	IssuedOn string `json:"issued_on"`
+}
+
+// suaBienBanVao is the body of PATCH /api/v1/meetings/{id}.
+//
+// EVERY FIELD IS A POINTER: absent = not mentioned. For the optional texts `""` CLEARS the value;
+// `title` and `held_on` refuse an empty one. `attendees: []` empties the list; absent leaves it.
+//
+// ON SIGNED MINUTES only `notice` may change, and only while none is recorded — a field sent with
+// the value it already holds is not a change and is accepted, anything else answers 409. There is
+// NO way to clear a recorded notice: after signing it is frozen by the database, and on a draft it
+// can be replaced but not removed through this body (reported, 25/09/2026).
+type suaBienBanVao struct {
+	Title       *string      `json:"title,omitempty"`
+	HeldOn      *string      `json:"held_on,omitempty"`
+	ReferenceNo *string      `json:"reference_no,omitempty"`
+	Location    *string      `json:"location,omitempty"`
+	ChairedBy   *string      `json:"chaired_by,omitempty"`
+	Secretary   *string      `json:"secretary,omitempty"`
+	Attendees   *[]string    `json:"attendees,omitempty"`
+	Content     *string      `json:"content,omitempty"`
+	Notice      *thongBaoVao `json:"notice,omitempty"`
+}
+
+// kyBienBanVao is the OPTIONAL body of POST /api/v1/meetings/{id}/signature — an empty body signs
+// without a notice (it is routinely issued days later, then recorded once through PATCH).
+type kyBienBanVao struct {
+	Notice *thongBaoVao `json:"notice,omitempty"`
+}
+
+// xoaBienBanVao is the body of DELETE /api/v1/meetings/{id} and DELETE …/conclusions/{stt}. A body on
+// a DELETE, for xoaNhiemVuVao's reason: the reason is mandatory, and a query string would put free
+// text about a government record into every access log.
+type xoaBienBanVao struct {
+	Reason string `json:"reason"`
+}
+
+// suaKetLuanVao is the body of PATCH /api/v1/meetings/{id}/conclusions/{stt}.
+type suaKetLuanVao struct {
+	Content string `json:"content"`
 }
 
 // themKetLuanVao is the body of POST /api/v1/meetings/{id}/conclusions — the one-line textarea at
@@ -213,14 +268,16 @@ func (h *Handler) TaoBienBan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bb, err := h.d.GhiBienBan.TaoBienBan(r.Context(), app.YeuCauTaoBienBan{
-		TenCuocHop: vao.Title,
-		NgayHop:    ngay,
-		SoHieu:     vao.ReferenceNo,
-		DiaDiem:    vao.Location,
-		ChuTriMa:   vao.ChairedBy,
-		NoiDung:    vao.Content,
-		ThanhPhan:  vao.Attendees,
-		KetLuan:    vao.Conclusions,
+		TenCuocHop:  vao.Title,
+		NgayHop:     ngay,
+		SoHieu:      vao.ReferenceNo,
+		DiaDiem:     vao.Location,
+		ChuTriMa:    vao.ChairedBy,
+		NoiDung:     vao.Content,
+		ThanhPhan:   vao.Attendees,
+		KetLuan:     vao.Conclusions,
+		ThuKyMa:     vao.Secretary,
+		BoSungChoID: vao.SupplementsID,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiBienBan(w, r, "nhập biên bản họp", err)
@@ -322,6 +379,13 @@ func (h *Handler) TachKetLuanThanhNhiemVu(w http.ResponseWriter, r *http.Request
 				"Không tìm thấy kết luận này trong biên bản.", "")
 			return
 		}
+		if errors.Is(err, domain.ErrKetLuanKhongPhatSinh) {
+			// The one refusal of this door that belongs to the MEETING register: the conclusion is
+			// marked "không phát sinh nhiệm vụ" (decision 4) — unmark it first.
+			httpx.WriteError(w, http.StatusConflict, "conclusion_state",
+				domain.ErrKetLuanKhongPhatSinh.Error(), "")
+			return
+		}
 		// EVERY OTHER REFUSAL IS THE TASK REGISTER'S, AND IT IS MAPPED BY THE TASK REGISTER'S OWN
 		// FUNCTION. A second mapping here would answer the same refusal with a different status
 		// depending on which door the act came through — and the one that drifts is the one nobody
@@ -344,6 +408,7 @@ func (h *Handler) TachKetLuanThanhNhiemVu(w http.ResponseWriter, r *http.Request
 // (internal/http/xu_ly_phan_anh.go), which lands them in `trace_id` on the wire — httpx.Error has
 // three members and none of them names a field.
 func (h *Handler) traLoiLoiBienBan(w http.ResponseWriter, r *http.Request, viec string, err error) {
+	var conNhiemVu *domain.LoiConNhiemVu
 	switch {
 	case errors.Is(err, petstore.ErrBienBanKhongTonTai):
 		httpx.WriteError(w, http.StatusNotFound, "not_found",
@@ -351,11 +416,32 @@ func (h *Handler) traLoiLoiBienBan(w http.ResponseWriter, r *http.Request, viec 
 	case errors.Is(err, petstore.ErrKetLuanKhongTonTai):
 		httpx.WriteError(w, http.StatusNotFound, "not_found",
 			"Không tìm thấy kết luận này trong biên bản.", "")
+	case errors.Is(err, app.ErrBienBanGocKhongTonTai):
+		// `supplements_id` names no live minutes of this commune — one sentence for unknown, another
+		// commune's and removed, for the same reason as the 404 above.
+		httpx.WriteError(w, http.StatusNotFound, "not_found",
+			"Không tìm thấy biên bản gốc được bổ sung.", "")
+
+	// --- 409: about the STATE of the record; the caller holds the right ----------------------------
+	//
+	// THE SENTINEL'S OWN SENTENCE, never err.Error(): a refusal raised inside the transaction arrives
+	// wrapped with the commune (app.bocBienBan), which is the operator's detail, not the clerk's.
+	case errors.Is(err, domain.ErrDaCoThongBao):
+		httpx.WriteError(w, http.StatusConflict, "meeting_state", domain.ErrDaCoThongBao.Error(), "")
+	case errors.Is(err, domain.ErrBienBanDaKy):
+		httpx.WriteError(w, http.StatusConflict, "meeting_state", domain.ErrBienBanDaKy.Error(), "")
+	case errors.As(err, &conNhiemVu):
+		httpx.WriteError(w, http.StatusConflict, "conclusion_tasks", conNhiemVu.Error(), "")
+	case errors.Is(err, domain.ErrKetLuanDaCoNhiemVu):
+		httpx.WriteError(w, http.StatusConflict, "conclusion_tasks",
+			domain.ErrKetLuanDaCoNhiemVu.Error(), "")
 
 	case domain.LaLoiDauVaoBienBan(err):
 		// The domain's own sentence is returned: it names the field and the rule, holds no personal
-		// data and no internal detail, and a second sentence written here would drift from it.
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		// data and no internal detail, and a second sentence written here would drift from it. The
+		// SENTINEL's, not err.Error() — see the 409 note above.
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			domain.LoiDauVaoBienBanGoc(err).Error(), "")
 
 	default:
 		// The wrapped error carries the store failure and never reaches the client (rule 3, forbidden

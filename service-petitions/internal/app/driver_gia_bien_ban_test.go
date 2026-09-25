@@ -58,10 +58,28 @@ type khoBienBanGia struct {
 	// the case §7.2 exists for — a removed ② whose number is never handed out again.
 	thuTuLonNhat int64
 
+	// soNVKetLuan answers "how many LIVE tasks point at this conclusion", keyed by conclusion id;
+	// soNVBienBan answers the same for the whole meeting. Set independently of any task table,
+	// because the fake has none — what is under test is the DECISION taken on the count.
+	soNVKetLuan map[string]int64
+	soNVBienBan int64
+
 	loi    error
 	loiSau string
 	daNo   bool
+
+	// loiTrigger makes the first Exec containing this fragment fail the way migration 0012's triggers
+	// do: SQLSTATE P0001 with the trigger's own message.
+	loiTrigger    string
+	loiTriggerMsg string
 }
+
+// loiPgGia is a driver error carrying a SQLSTATE, the one method the store reads (pgconn.PgError has
+// the same one).
+type loiPgGia struct{ ma, msg string }
+
+func (e *loiPgGia) Error() string    { return "ERROR: " + e.msg + " (SQLSTATE " + e.ma + ")" }
+func (e *loiPgGia) SQLState() string { return e.ma }
 
 // --- fixtures -------------------------------------------------------------------------------------
 
@@ -73,6 +91,8 @@ const (
 	maChuTriBB   = "CB-00007"
 	thuTuKLGoc   = int64(3)
 	tenCuocHopBB = "Giao ban Uỷ ban nhân dân xã tháng 8 năm 2026"
+	noiDungBBGoc = "Toàn văn biên bản: xã bàn về tiến độ tuyến đường thôn Bình Trị."
+	noiDungKLGoc = "Giao bộ phận Địa chính rà soát tiến độ tuyến đường, báo cáo trước ngày 20/8."
 )
 
 var (
@@ -80,6 +100,9 @@ var (
 	// format produces. mocTaoBB is an instant, and the two are deliberately different kinds.
 	mocNgayHopBB = time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC)
 	mocTaoBB     = time.Date(2026, 8, 6, 3, 30, 0, 0, time.UTC)
+	// mocThaoTacBB is the use case's clock in these tests — the instant a signature, a soft delete or
+	// the no-task mark records.
+	mocThaoTacBB = time.Date(2026, 8, 7, 2, 15, 0, 0, time.UTC)
 )
 
 // dongBienBanGia is one `bien_ban_hop` row as the driver hands it back.
@@ -98,6 +121,16 @@ func dongBienBanGia(id string, sua map[string]driver.Value) map[string]driver.Va
 		"chu_tri_ma":   maChuTriBB,
 		"nguoi_tao_ma": maCanBoThu,
 		"tao_luc":      mocTaoBB,
+		// migration 0012 — a DRAFT with no secretary, no notice, not a supplement.
+		"trang_thai":     domain.TrangThaiBienBanDuThao,
+		"ky_luc":         nil,
+		"ky_boi_ma":      nil,
+		"thu_ky_ma":      nil,
+		"tb_so_ky_hieu":  nil,
+		"tb_ngay":        nil,
+		"bo_sung_cho_id": nil,
+		"noi_dung":       noiDungBBGoc,
+		"thanh_phan":     []byte(`["CB-00007","Đại diện Mặt trận Tổ quốc xã"]`),
 	}
 	for k, v := range sua {
 		d[k] = v
@@ -108,11 +141,12 @@ func dongBienBanGia(id string, sua map[string]driver.Value) map[string]driver.Va
 // dongKetLuanGia is one `ket_luan_hop` row.
 func dongKetLuanGia(id, bienBanID string, thuTu int64) map[string]driver.Value {
 	return map[string]driver.Value{
-		"id":          id,
-		"bien_ban_id": bienBanID,
-		"thu_tu":      thuTu,
-		"noi_dung":    "Giao bộ phận Địa chính rà soát tiến độ tuyến đường, báo cáo trước ngày 20/8.",
-		"tao_luc":     mocTaoBB,
+		"id":              id,
+		"bien_ban_id":     bienBanID,
+		"thu_tu":          thuTu,
+		"noi_dung":        noiDungKLGoc,
+		"tao_luc":         mocTaoBB,
+		"khong_phat_sinh": false,
 	}
 }
 
@@ -207,6 +241,12 @@ func (c *connBBGia) ExecContext(_ context.Context, q string, args []driver.Named
 	if err := c.k.kiemLoi(q); err != nil {
 		return nil, err
 	}
+	c.k.mu.Lock()
+	defer c.k.mu.Unlock()
+	if c.k.loiTrigger != "" && strings.Contains(q, c.k.loiTrigger) {
+		c.k.loiTrigger = ""
+		return nil, &loiPgGia{ma: "P0001", msg: c.k.loiTriggerMsg}
+	}
 	return driver.RowsAffected(1), nil
 }
 
@@ -233,8 +273,19 @@ func (c *connBBGia) QueryContext(_ context.Context, q string, args []driver.Name
 	case strings.Contains(q, "MAX("):
 		return &rowsNVGia{cot: []string{"so"}, hang: [][]driver.Value{{c.k.thuTuLonNhat}}}, nil
 
+	// THE TWO COUNTS, before the table routes: the meeting-wide one carries a subquery FROM
+	// ket_luan_hop and would otherwise be answered as a conclusion read.
+	case strings.Contains(q, "count(*) FROM nhiem_vu"):
+		c.k.mu.Lock()
+		defer c.k.mu.Unlock()
+		n := c.k.soNVBienBan
+		if !strings.Contains(q, "bien_ban_id = $3") {
+			n = c.k.soNVKetLuan[fmt.Sprint(gt[2])]
+		}
+		return &rowsNVGia{cot: []string{"n"}, hang: [][]driver.Value{{n}}}, nil
+
 	case strings.Contains(q, "FROM ket_luan_hop"):
-		return c.k.doKetLuan(gt)
+		return c.k.doKetLuan(cot, gt)
 
 	case strings.Contains(q, "FROM bien_ban_hop"):
 		return c.k.doBienBan(cot, gt)
@@ -258,11 +309,13 @@ func (k *khoBienBanGia) doBienBan(cot []string, args []driver.Value) (driver.Row
 // THE PAIR IS MATCHED, NOT JUST THE ORDINAL, and the fake insists on it for the reason the store
 // does: every meeting has a ①, so an ordinal alone would let a test pass while the statement read
 // somebody else's conclusion.
-func (k *khoBienBanGia) doKetLuan(args []driver.Value) (driver.Rows, error) {
+//
+// THE COLUMNS ARE THE ONES THE STATEMENT NAMED, assembled by name from the fixture — so a column the
+// store adds and the fixture lacks panics in dungRows instead of scanning a plausible zero.
+func (k *khoBienBanGia) doKetLuan(cot []string, args []driver.Value) (driver.Rows, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
-	cot := strings.Split(strings.ReplaceAll(cotKetLuanGia, " ", ""), ",")
 	for _, r := range k.ketLuan {
 		if r["bien_ban_id"] == args[1] && fmt.Sprint(r["thu_tu"]) == fmt.Sprint(args[2]) {
 			return dungRows(cot, []map[string]driver.Value{r})
@@ -270,11 +323,6 @@ func (k *khoBienBanGia) doKetLuan(args []driver.Value) (driver.Rows, error) {
 	}
 	return &rowsNVGia{cot: cot}, nil
 }
-
-// cotKetLuanGia mirrors the store's own `cotKetLuan`. It is written out rather than imported because
-// that constant is unexported — and writing it out is what makes a reordering of the real list show
-// up here as wrong data rather than as a plausible zero.
-const cotKetLuanGia = "id,bien_ban_id,thu_tu,noi_dung,tao_luc"
 
 type txBBGia struct{ k *khoBienBanGia }
 
@@ -303,20 +351,45 @@ func (t *txBBGia) Rollback() error {
 // thing that can show a call was made at all. That the real use case then writes the task, the
 // timeline row and the audit entry in ONE transaction is proved over the real store in
 // nhiem_vu_test.go, and proving it twice would mean two places to update when it changes.
+//
+// THE SOURCE CHECK IS RUN FOR REAL, inside a transaction on the same fake database, exactly where
+// GhiNhiemVu.TaoTuNguon runs it (first thing in its transaction). A refusal there means NO task:
+// `daTao` stays false. That the real use case writes nothing on such a refusal is proved over the
+// task store in nhiem_vu_test.go.
 type taoNhiemVuGia struct {
-	goi   int
-	yc    YeuCauTaoNhiemVu
-	nguoi audit.Actor
-	loi   error
+	db *pkgstore.DB
+
+	goi     int
+	coKiem  bool
+	daTao   bool
+	yc      YeuCauTaoNhiemVu
+	nguoi   audit.Actor
+	loi     error
+	loiKiem error
+
+	// truocKhiKiem runs AFTER the split's first read and BEFORE the in-transaction check — another
+	// clerk's act landing in exactly the window that check exists for.
+	truocKhiKiem func()
 }
 
-func (t *taoNhiemVuGia) Tao(_ context.Context, yc YeuCauTaoNhiemVu, nguoi audit.Actor) (
-	domain.NhiemVu, error) {
+func (t *taoNhiemVuGia) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.Actor,
+	kiem KiemNguonTrongGiaoDich) (domain.NhiemVu, error) {
 	t.goi++
 	t.yc, t.nguoi = yc, nguoi
+	if t.truocKhiKiem != nil {
+		t.truocKhiKiem()
+	}
+	if kiem != nil {
+		t.coKiem = true
+		if err := t.db.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error { return kiem(ctx, tx) }); err != nil {
+			t.loiKiem = err
+			return domain.NhiemVu{}, err
+		}
+	}
 	if t.loi != nil {
 		return domain.NhiemVu{}, t.loi
 	}
+	t.daTao = true
 	return domain.NhiemVu{
 		ID: "nv-moi", Ma: "NV20", Loai: yc.Loai, TieuDe: yc.TieuDe,
 		TrangThai: domain.MoiGiao, NguonGiao: domain.NguonGiao(yc.NguonGiao), NguonID: yc.NguonID,
@@ -336,8 +409,9 @@ func dungGhiBienBan(t *testing.T, k *khoBienBanGia) (*GhiBienBanHop, *taoNhiemVu
 	t.Cleanup(func() { db.Close() })
 
 	kho := pkgstore.New(db)
-	nv := &taoNhiemVuGia{}
+	nv := &taoNhiemVuGia{db: kho}
 	uc := NewGhiBienBanHop(kho, petstore.NewBienBanHopStore(kho), nv)
+	uc.nay = func() time.Time { return mocThaoTacBB }
 
 	// IDS ARE HANDED OUT IN ORDER so a test can name the one it expects: the first is the minutes,
 	// the ones after it are the conclusions on the form, in the order they were typed.

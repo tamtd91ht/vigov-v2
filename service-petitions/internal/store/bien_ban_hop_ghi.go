@@ -14,9 +14,9 @@ package store
 //  3. EVERY READ EXCLUDES SOFT-DELETED ROWS (rule 7, invariant 2) — WITH ONE DELIBERATE EXCEPTION,
 //     ThuTuLonNhat, which counts them on purpose. Its own comment says why.
 //  4. THERE IS NO `DELETE` AND NO `UPDATE` IN THIS FILE. Minutes and conclusions are archival
-//     records; a hard delete is refused by the `ho_so_luu_tru_cam_xoa_cung` trigger anyway, and
-//     whether a conclusion may be EDITED once tasks point at it is an open question migration 0007
-//     deliberately left unanswered. Writing an UPDATE here would answer it.
+//     records; a hard delete is refused by the `ho_so_luu_tru_cam_xoa_cung` trigger anyway. The
+//     UPDATEs the lifecycle needs (user decisions 25/09/2026 — edit, sign, soft delete, the no-task
+//     mark) live in bien_ban_hop_sua.go, each guarded by the state it may run in.
 //  5. `thu_tu` IS NEVER RECOMPUTED. §7.2 appends and never renumbers, and rule 7, invariant 3 is the
 //     reason: an issued number is not reissued, even after a soft delete.
 
@@ -69,16 +69,17 @@ const cotKetLuan = `id, bien_ban_id, thu_tu, noi_dung, tao_luc`
 // It also closes the window in which the minutes could be removed between "these minutes exist" and
 // the INSERT that hangs a conclusion off them.
 //
-// THE MINUTES BODY AND THE ATTENDEES ARE NOT SELECTED (cotBienBan). Nothing in the write path needs
+// THE MINUTES BODY AND THE ATTENDEES ARE NOT SELECTED (cotBienBanDoc). Nothing in the write path needs
 // them, and the full text of a meeting has no business being loaded into a transaction that is about
-// to write one short row.
+// to write one short row. The LIFECYCLE columns of migration 0012 ARE selected: every write act
+// decides on `trang_thai` (a signed record is locked) under this very lock.
 func (s *BienBanHopStore) BienBanTheoIDDeSua(ctx context.Context, tx *store.ScopedTx, id string) (
 	domain.BienBanHop, error) {
 
-	const stmt = `SELECT ` + cotBienBan + ` FROM bien_ban_hop
+	const stmt = `SELECT ` + cotBienBanDoc + ` FROM bien_ban_hop
 		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR UPDATE`
 
-	b, err := quetBienBan(tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), id))
+	b, err := quetBienBanDoc(tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), id), false)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.BienBanHop{}, ErrBienBanKhongTonTai
 	}
@@ -107,7 +108,7 @@ func (s *BienBanHopStore) BienBanTheoIDDeSua(ctx context.Context, tx *store.Scop
 func (s *BienBanHopStore) KetLuanTheoThuTu(ctx context.Context, bienBanID string, thuTu int) (
 	domain.KetLuanHop, error) {
 
-	rows, err := s.db.For(ctx).Query(ctx, cotKetLuan, "ket_luan_hop",
+	rows, err := s.db.For(ctx).Query(ctx, cotKetLuanSua, "ket_luan_hop",
 		`AND bien_ban_id = $2 AND thu_tu = $3 AND deleted_at IS NULL`, bienBanID, thuTu)
 	if err != nil {
 		return domain.KetLuanHop{}, fmt.Errorf("ket_luan_hop: đọc kết luận: %w", err)
@@ -169,10 +170,13 @@ func (s *BienBanHopStore) ThuTuLonNhat(ctx context.Context, tx *store.ScopedTx, 
 func (s *BienBanHopStore) TaoBienBan(ctx context.Context, tx *store.ScopedTx,
 	b domain.BienBanHop) error {
 
+	// `thu_ky_ma` and `bo_sung_cho_id` (migration 0012) are written as NULL when empty: the schema's
+	// CHECKs read '' as a broken reference, not as "none". `trang_thai` is NOT written — the column's
+	// DEFAULT 'du-thao' is the one place that says new minutes are drafts.
 	const stmt = `INSERT INTO bien_ban_hop (
 		tenant_id, id, ten_cuoc_hop, ngay_hop, so_hieu, dia_diem, chu_tri_ma,
-		thanh_phan, noi_dung, nguoi_tao_ma)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)`
+		thanh_phan, noi_dung, nguoi_tao_ma, thu_ky_ma, bo_sung_cho_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12)`
 
 	thanhPhan, err := jsonDanhSach(b.ThanhPhan)
 	if err != nil {
@@ -182,7 +186,8 @@ func (s *BienBanHopStore) TaoBienBan(ctx context.Context, tx *store.ScopedTx,
 	_, err = tx.Exec(ctx, stmt,
 		string(tx.TenantID()), b.ID, b.TenCuocHop, b.NgayHop,
 		rongThanhNull(b.SoHieu), rongThanhNull(b.DiaDiem), rongThanhNull(b.ChuTriMa),
-		thanhPhan, rongThanhNull(b.NoiDung), b.NguoiTaoMa)
+		thanhPhan, rongThanhNull(b.NoiDung), b.NguoiTaoMa,
+		rongThanhNull(b.ThuKyMa), rongThanhNull(b.BoSungChoID))
 	if err != nil {
 		// NOT the title and NOT the body. An INSERT error can quote the whole row on some drivers,
 		// and this register's columns hold a commune's minutes (rule 3, forbidden #1).
@@ -207,7 +212,7 @@ func (s *BienBanHopStore) TaoKetLuan(ctx context.Context, tx *store.ScopedTx,
 		string(tx.TenantID()), k.ID, k.BienBanID, k.ThuTu, k.NoiDung)
 	if err != nil {
 		// NOT the content: a conclusion routinely quotes a case (migration 0007).
-		return fmt.Errorf("ket_luan_hop: ghi kết luận: %w", err)
+		return boiTuChoiHoSoDaKy(fmt.Errorf("ket_luan_hop: ghi kết luận: %w", err))
 	}
 	return nil
 }
@@ -241,16 +246,16 @@ func jsonDanhSach(ds []string) (string, error) {
 	return string(b), nil
 }
 
-// quetKetLuan reads one row of cotKetLuan.
+// quetKetLuan reads one row of cotKetLuanSua (cotKetLuan plus the no-task mark).
 //
-// POSITIONAL, IN LOCKSTEP WITH cotKetLuan — database/sql binds by POSITION, so a destination
+// POSITIONAL, IN LOCKSTEP WITH cotKetLuanSua — database/sql binds by POSITION, so a destination
 // inserted or removed anywhere but the tail silently shifts every column after it.
 //
 // THE TWO COUNTERS ARE LEFT AT ZERO and that is honest: this read does not ask the task register
 // anything. A caller that needs `x/y` uses the list read, which aggregates them in SQL.
 func quetKetLuan(r quangKiem) (domain.KetLuanHop, error) {
 	var k domain.KetLuanHop
-	if err := r.Scan(&k.ID, &k.BienBanID, &k.ThuTu, &k.NoiDung, &k.TaoLuc); err != nil {
+	if err := r.Scan(&k.ID, &k.BienBanID, &k.ThuTu, &k.NoiDung, &k.TaoLuc, &k.KhongPhatSinh); err != nil {
 		return domain.KetLuanHop{}, fmt.Errorf("ket_luan_hop: đọc dòng: %w", err)
 	}
 	return k, nil

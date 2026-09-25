@@ -438,6 +438,24 @@ type YeuCauTaoNhiemVu struct {
 // it. See petstore.SoLonNhatDaCap for what that does and does not buy under concurrency.
 func (uc *GhiNhiemVu) Tao(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.Actor) (
 	domain.NhiemVu, error) {
+	return uc.TaoTuNguon(ctx, yc, nguoi, nil)
+}
+
+// KiemNguonTrongGiaoDich is a precondition on the SOURCE RECORD of a task, run INSIDE the transaction
+// that books the task, before anything is written. A non-nil error refuses the whole act: no row, no
+// timeline entry, no audit entry.
+type KiemNguonTrongGiaoDich func(ctx context.Context, tx *store.ScopedTx) error
+
+// TaoTuNguon is Tao with a source check inside the SAME transaction — the closure the meeting
+// register's split needed once conclusions could be removed or marked "không phát sinh nhiệm vụ"
+// (user decisions 25/09/2026). A check made before this transaction opened would decide against a
+// conclusion that another clerk can delete or mark before the INSERT lands; running it here, under
+// the lock it takes, serialises the two acts on the meeting row (app.kiemNguonKetLuan).
+//
+// ONE CREATE PATH STILL: Tao is this with no check, so the number, the tree rules, the deadline, the
+// timeline row and the audit entry have exactly one implementation.
+func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.Actor,
+	kiemNguon KiemNguonTrongGiaoDich) (domain.NhiemVu, error) {
 
 	moi, err := chuanHoaTaoNhiemVu(yc)
 	if err != nil {
@@ -473,6 +491,13 @@ func (uc *GhiNhiemVu) Tao(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.
 	moi.TaoLuc = bayGio
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		if kiemNguon != nil {
+			// FIRST, before any lock of this register is taken: the source check locks the SOURCE's
+			// row (a meeting), and taking it before the task tree's rows keeps one lock order.
+			if err := kiemNguon(ctx, tx); err != nil {
+				return err
+			}
+		}
 		if moi.NhiemVuChaID != "" {
 			// THE PARENT IS VALIDATED FIRST AND UNDER THE LOCK. A cycle cannot be closed by a row
 			// that does not exist yet, and the check runs anyway — see kiemChuTrinh.

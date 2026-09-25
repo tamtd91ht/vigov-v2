@@ -218,6 +218,19 @@ type (
 			nguoi audit.Actor) (domain.KetLuanHop, error)
 		TachKetLuanThanhNhiemVu(ctx context.Context, bienBanID string, thuTu int,
 			yc app.YeuCauTaoNhiemVu, nguoi audit.Actor) (domain.NhiemVu, error)
+
+		// The lifecycle acts (user decisions 25/09/2026) — internal/app/bien_ban_hop_sua.go.
+		SuaBienBan(ctx context.Context, id string, yc app.YeuCauSuaBienBan, nguoi audit.Actor) (
+			domain.BienBanHop, error)
+		XoaBienBan(ctx context.Context, id, lyDo string, nguoi audit.Actor) error
+		KyBienBan(ctx context.Context, id string, yc app.YeuCauKyBienBan, nguoi audit.Actor) (
+			domain.BienBanHop, error)
+		SuaKetLuan(ctx context.Context, bienBanID string, thuTu int, yc app.YeuCauSuaKetLuan,
+			nguoi audit.Actor) (domain.KetLuanHop, error)
+		XoaKetLuan(ctx context.Context, bienBanID string, thuTu int, lyDo string, nguoi audit.Actor) error
+		DanhDauKhongPhatSinh(ctx context.Context, bienBanID string, thuTu int, nguoi audit.Actor) (
+			domain.KetLuanHop, error)
+		BoDanhDauKhongPhatSinh(ctx context.Context, bienBanID string, thuTu int, nguoi audit.Actor) error
 	}
 
 	// XuLyPhieuPhanAnh is the four STAFF acts, each of which opens a transaction and writes the
@@ -1132,11 +1145,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// what the shared key costs and why `document.create` would be worse, is on
 	// internal/http/bien_ban_hop_ghi.go.
 	//
-	// WHAT IS STILL ABSENT, so the absence is not read as unfinished work: there is NO EDIT and NO
-	// DELETE route for minutes or conclusions. Whether a conclusion that tasks already point at may
-	// be reworded is an open question migration 0007 deliberately refused to answer in a trigger,
-	// and §7.1's removal is "không xoá cứng, cảnh báo và giữ liên kết" — a warning flow, not an
-	// UPDATE. Answering either from a route would be deciding it.
+	// THE LIFECYCLE ROUTES (edit, delete, signature, conclusion edit/delete, no-task marker) follow
+	// the split route below; the decisions they carry are the user's of 25/09/2026 (migration 0012).
 	//
 	// ⚠ THE DEADLINE ON A SPLIT TASK IS TYPED, NOT DERIVED. §3 suggests a date when the conclusion's
 	// sentence contains one ("báo cáo trước ngày 20/8") — that suggestion is the SCREEN's, and what
@@ -1295,6 +1305,144 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "task.create")(
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.TachKetLuanThanhNhiemVu))))
+
+	// SỬA BIÊN BẢN NHÁP / GHI THÔNG BÁO KẾT LUẬN SAU KHI KÝ — `task.create`, the key of the other
+	// write routes of this register.
+	//
+	// ONE ROUTE, TWO BEHAVIOURS BY STATE, and that is the least surprising shape rather than a second
+	// URL for one field: on a DRAFT every field of the body is editable; on SIGNED minutes only
+	// `notice`, and only while none is recorded (migration 0012's trigger allows exactly that). A field
+	// sent back with the value it already holds is not a change; any real change answers 409.
+	//
+	// idem.KhongCan: app.SuaBienBan compares the row read under the lock with the row it would write
+	// and writes NOTHING when nothing moved; the notice write carries `tb_so_ky_hieu IS NULL`.
+	//
+	// @summary  Sửa biên bản họp còn nháp; với biên bản đã ký chỉ ghi được số/ngày Thông báo kết luận, một lần
+	// @screen   04-bien-ban-hop §4
+	// @request  suaBienBanVao
+	// @reply    200 bienBanRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/meetings/{id}",
+		authz.RequirePermission(d.Checker, "task.create")(
+			idem.KhongCan("app.SuaBienBan không ghi gì khi không trường nào đổi, và câu ghi thông báo mang `tb_so_ky_hieu IS NULL`, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaBienBan))))
+
+	// XOÁ BIÊN BẢN NHÁP — `task.create`. Soft delete, reason required in the body. 409 when signed
+	// (a correction is supplementary minutes) or while any conclusion still has a live task (the
+	// count is in the sentence — handle the tasks first).
+	//
+	// @summary  Xoá mềm một biên bản họp còn nháp, kèm lý do — từ chối khi đã ký hoặc còn nhiệm vụ trỏ về kết luận
+	// @screen   04-bien-ban-hop §7.1
+	// @request  xoaBienBanVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/meetings/{id}",
+		authz.RequirePermission(d.Checker, "task.create")(
+			idem.KhongCan("câu UPDATE mang `AND deleted_at IS NULL`, nên lần xoá thứ hai trả 404 và không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.XoaBienBan))))
+
+	// KÝ BIÊN BẢN — `task.approve` ("Duyệt hoàn thành", seeded), NOT `task.create`: signing makes the
+	// record final and locks it, and the account that typed the minutes is not thereby the one who
+	// may sign them. Body optional: `{notice?}`. Minutes with no conclusions may be signed (§7.3).
+	//
+	// idem.KhongCan: the UPDATE carries `trang_thai = 'du-thao'`, so a second request answers 409 and
+	// never records a second signer or instant.
+	//
+	// @summary  Ký biên bản họp — chuyển nháp sang đã ký, khoá nội dung và kết luận; có thể kèm Thông báo kết luận
+	// @screen   04-bien-ban-hop §4
+	// @request  kyBienBanVao
+	// @reply    200 bienBanRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/meetings/{id}/signature",
+		authz.RequirePermission(d.Checker, "task.approve")(
+			idem.KhongCan("câu UPDATE mang `trang_thai = 'du-thao'`, nên lần ký thứ hai trả 409 — đúng một chữ ký, đúng một vết")(
+				http.HandlerFunc(h.KyBienBan))))
+
+	// SỬA MỘT KẾT LUẬN — `task.create`. Draft only; 409 while a live task points at it (decision 3:
+	// the tasks quote this sentence). The no-task marker does not lock the text.
+	//
+	// @summary  Sửa nội dung một kết luận của biên bản nháp — khoá khi kết luận đã tách thành nhiệm vụ
+	// @screen   04-bien-ban-hop §2
+	// @request  suaKetLuanVao
+	// @reply    200 ketLuanRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/meetings/{id}/conclusions/{stt}",
+		authz.RequirePermission(d.Checker, "task.create")(
+			idem.KhongCan("app.SuaKetLuan không ghi gì khi nội dung không đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SuaKetLuan))))
+
+	// XOÁ MỘT KẾT LUẬN — `task.create`. Draft only, reason required, 409 while a live task points at
+	// it. The ordinal is never reissued (the high-water mark counts deleted rows).
+	//
+	// @summary  Xoá mềm một kết luận của biên bản nháp, kèm lý do — số thứ tự đã cấp không cấp lại
+	// @screen   04-bien-ban-hop §7.1
+	// @request  xoaBienBanVao
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/meetings/{id}/conclusions/{stt}",
+		authz.RequirePermission(d.Checker, "task.create")(
+			idem.KhongCan("câu UPDATE mang `AND deleted_at IS NULL`, nên lần xoá thứ hai trả 404 và không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.XoaKetLuan))))
+
+	// DẤU "KHÔNG PHÁT SINH NHIỆM VỤ" — `task.create`. PUT sets it (a state, so a sub-resource that PUT
+	// puts and DELETE removes, the `lockout` pattern): draft only, 409 while a live task points at the
+	// conclusion; already set is a no-op 200. While it is set, POST …/task answers 409.
+	//
+	// @summary  Đánh dấu một kết luận "không phát sinh nhiệm vụ" — tính là hoàn thành; từ chối khi đã có nhiệm vụ
+	// @screen   04-bien-ban-hop §2
+	// @reply    200 ketLuanRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/meetings/{id}/conclusions/{stt}/no-task-marker",
+		authz.RequirePermission(d.Checker, "task.create")(
+			idem.KhongCan("PUT đặt một trạng thái tuyệt đối; đã có dấu thì use case không ghi gì, nên lần thứ hai để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.DanhDauKhongPhatSinh))))
+
+	// BỎ DẤU — `task.create`, draft only (after signing the mark is part of the record). Not set is a
+	// no-op 204.
+	//
+	// @summary  Bỏ dấu "không phát sinh nhiệm vụ" của một kết luận thuộc biên bản nháp
+	// @screen   04-bien-ban-hop §2
+	// @reply    204 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("DELETE /api/v1/meetings/{id}/conclusions/{stt}/no-task-marker",
+		authz.RequirePermission(d.Checker, "task.create")(
+			idem.KhongCan("chưa có dấu thì use case không ghi gì, nên lần bỏ dấu thứ hai không để lại vết nào")(
+				http.HandlerFunc(h.BoDanhDauKhongPhatSinh))))
 
 	// --- the commune adds a task type of its own -------------------------------------------
 	//

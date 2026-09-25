@@ -46,10 +46,8 @@ package app
 // ---------------------------------------------------------------------------
 // WHAT THIS FILE DELIBERATELY DOES NOT DO:
 //
-//   - NO EDIT AND NO DELETE ROUTE for minutes or conclusions. Whether a conclusion tasks have
-//     already been split from may still be reworded is a STOP CONDITION (migration 0007 declared no
-//     immutability trigger precisely so the answer stays open), and §7.1 says removing one is "không
-//     xoá cứng, cảnh báo và giữ liên kết" — which needs the warning flow, not just an UPDATE.
+//   - THE EDIT, DELETE, SIGNING AND NO-TASK-MARK ACTS are in bien_ban_hop_sua.go (user decisions
+//     25/09/2026, migration 0012).
 //   - NO LIMIT ON HOW MANY TASKS ONE CONCLUSION PRODUCES. §3 says MANY and counts them `x/y`.
 //   - NO SECOND AUDIT ENTRY ON THE SPLIT. One act leaves one entry — `tao_nhiem_vu`, carrying the
 //     source pair — and an extra entry written outside GhiNhiemVu.Tao's transaction would be exactly
@@ -59,7 +57,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
@@ -67,7 +67,13 @@ import (
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/ulid"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
+	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
+
+// ErrBienBanGocKhongTonTai — `supplements_id` names no live minutes of this commune. One sentinel for
+// unknown, another commune's and soft-deleted, for ErrBienBanKhongTonTai's reason. A different
+// sentinel from that one because the thing missing is not the record in the PATH.
+var ErrBienBanGocKhongTonTai = errors.New("bien_ban_hop: không có biên bản gốc được bổ sung")
 
 // KhoBienBanGhi is the write half of the meeting register as this layer needs it, declared at the
 // point of use.
@@ -87,6 +93,22 @@ type KhoBienBanGhi interface {
 	TaoKetLuan(ctx context.Context, tx *store.ScopedTx, k domain.KetLuanHop) error
 
 	KetLuanTheoThuTu(ctx context.Context, bienBanID string, thuTu int) (domain.KetLuanHop, error)
+
+	// The lifecycle acts (user decisions 25/09/2026) — every one inside the caller's transaction.
+	BienBanDayDuDeSua(ctx context.Context, tx *store.ScopedTx, id string) (domain.BienBanHop, error)
+	KetLuanTheoThuTuDeSua(ctx context.Context, tx *store.ScopedTx, bienBanID string, thuTu int) (
+		domain.KetLuanHop, error)
+	SoNhiemVuSongCuaKetLuan(ctx context.Context, tx *store.ScopedTx, ketLuanID string) (int, error)
+	SoNhiemVuSongCuaBienBan(ctx context.Context, tx *store.ScopedTx, bienBanID string) (int, error)
+	SuaBienBan(ctx context.Context, tx *store.ScopedTx, b domain.BienBanHop) error
+	GhiThongBao(ctx context.Context, tx *store.ScopedTx, id, so string, ngay time.Time) error
+	KyBienBan(ctx context.Context, tx *store.ScopedTx, id string, luc time.Time, boiMa, tbSo string,
+		tbNgay time.Time) error
+	XoaMemBienBan(ctx context.Context, tx *store.ScopedTx, id, boiMa, lyDo string, luc time.Time) error
+	SuaKetLuan(ctx context.Context, tx *store.ScopedTx, id, noiDung string) error
+	XoaMemKetLuan(ctx context.Context, tx *store.ScopedTx, id, boiMa, lyDo string, luc time.Time) error
+	DatKhongPhatSinh(ctx context.Context, tx *store.ScopedTx, id string, luc time.Time, boiMa string) error
+	BoKhongPhatSinh(ctx context.Context, tx *store.ScopedTx, id string) error
 }
 
 // TaoNhiemVuTuNguon is the ONE act this file borrows from the task register: booking a task.
@@ -94,9 +116,14 @@ type KhoBienBanGhi interface {
 // A ONE-METHOD INTERFACE AND NOT *GhiNhiemVu ITSELF. The split may create a task and may do nothing
 // else to one — it must not be able to move a status, grant an extension or remove a row — and a
 // dependency wider than the work requires is how the next person justifies using it for something
-// else. *GhiNhiemVu satisfies this as it is; nothing was changed to accommodate it.
+// else. *GhiNhiemVu satisfies this as it is.
+//
+// THE METHOD TAKES A SOURCE CHECK run inside the task's own transaction (GhiNhiemVu.TaoTuNguon).
+// Since conclusions can be removed and marked "không phát sinh nhiệm vụ" (25/09/2026), a check made
+// before that transaction opens decides against a row another clerk can change before the INSERT.
 type TaoNhiemVuTuNguon interface {
-	Tao(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.Actor) (domain.NhiemVu, error)
+	TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.Actor,
+		kiemNguon KiemNguonTrongGiaoDich) (domain.NhiemVu, error)
 }
 
 // The business verbs written into the trail. Vietnamese snake_case, like every other action this
@@ -180,6 +207,14 @@ type YeuCauTaoBienBan struct {
 	// is a real, supported state: §7.3 saves minutes with no conclusions ("nhập nháp trước, bổ sung
 	// sau"), and the card then shows `0 kết luận`.
 	KetLuan []string
+
+	// ThuKyMa is the secretary, a STAFF BUSINESS CODE (migration 0012). Optional. Shape-checked only,
+	// like ChuTriMa — no directory lookup (caller's decision for minutes, 25/09/2026).
+	ThuKyMa string
+
+	// BoSungChoID makes these SUPPLEMENTARY minutes of an original that must be live and SIGNED in
+	// this commune (decision 1). The new record is an ordinary draft whose conclusions number from ①.
+	BoSungChoID string
 }
 
 // TaoBienBan records one meeting's minutes, with its conclusions, in ONE transaction.
@@ -232,6 +267,21 @@ func (uc *GhiBienBanHop) TaoBienBan(ctx context.Context, yc YeuCauTaoBienBan, ng
 	}
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		if moi.BoSungChoID != "" {
+			// THE ORIGINAL MUST BE LIVE, IN THIS COMMUNE, AND SIGNED — read inside this transaction
+			// (migration 0012 leaves "signed" to the use case; its foreign key checks only existence).
+			// Unknown, another commune's and soft-deleted all answer one 404 sentence.
+			goc, err := uc.kho.BienBanTheoIDDeSua(ctx, tx, moi.BoSungChoID)
+			if errors.Is(err, petstore.ErrBienBanKhongTonTai) {
+				return ErrBienBanGocKhongTonTai
+			}
+			if err != nil {
+				return err
+			}
+			if goc.TrangThai != domain.TrangThaiBienBanDaKy {
+				return domain.ErrBoSungChoBanNhap
+			}
+		}
 		if err := uc.kho.TaoBienBan(ctx, tx, moi); err != nil {
 			return err
 		}
@@ -256,6 +306,8 @@ func (uc *GhiBienBanHop) TaoBienBan(ctx context.Context, yc YeuCauTaoBienBan, ng
 				"so_ket_luan":     len(moi.KetLuan),
 				"so_thanh_phan":   len(moi.ThanhPhan),
 				"do_dai_noi_dung": len([]rune(moi.NoiDung)),
+				"thu_ky_ma":       moi.ThuKyMa,
+				"bo_sung_cho_id":  moi.BoSungChoID,
 			},
 		})
 		if err != nil {
@@ -310,6 +362,10 @@ func chuanHoaTaoBienBan(yc YeuCauTaoBienBan) (domain.BienBanHop, []string, error
 	if err != nil {
 		return moi, nil, err
 	}
+	thuKy, err := domain.KiemVanBanTuyChon(yc.ThuKyMa, domain.ChuTriMaToiDa, domain.ErrThuKyQuaDai)
+	if err != nil {
+		return moi, nil, err
+	}
 
 	if len(yc.KetLuan) > domain.KetLuanMoiLanToiDa {
 		return moi, nil, domain.ErrQuaNhieuKetLuan
@@ -335,6 +391,9 @@ func chuanHoaTaoBienBan(yc YeuCauTaoBienBan) (domain.BienBanHop, []string, error
 		ChuTriMa:   chuTri,
 		NoiDung:    noiDung,
 		ThanhPhan:  thanhPhan,
+		ThuKyMa:    thuKy,
+		// Trimmed; the transaction checks it names a live, signed original of this commune.
+		BoSungChoID: strings.TrimSpace(yc.BoSungChoID),
 	}
 	return moi, ketLuan, nil
 }
@@ -379,6 +438,11 @@ func (uc *GhiBienBanHop) ThemKetLuan(ctx context.Context, bienBanID string, yc Y
 		bb, err := uc.kho.BienBanTheoIDDeSua(ctx, tx, bienBanID)
 		if err != nil {
 			return err
+		}
+		// SIGNED MINUTES TAKE NO NEW CONCLUSION (decision 1). The trigger refuses the INSERT too; this
+		// check is what turns that into a 409 naming the way out (supplementary minutes).
+		if bb.TrangThai == domain.TrangThaiBienBanDaKy {
+			return domain.ErrBienBanDaKy
 		}
 		lonNhat, err := uc.kho.ThuTuLonNhat(ctx, tx, bienBanID)
 		if err != nil {
@@ -434,16 +498,27 @@ func (uc *GhiBienBanHop) ThemKetLuan(ctx context.Context, bienBanID string, yc Y
 // created pointing at a conclusion that does not exist in this commune (migration 0007: such a task
 // is counted SHORT by the badge, silently, for ever).
 //
-// THE WINDOW THAT LEAVES, STATED RATHER THAN DISCOVERED: between this read and that insert, the
-// conclusion could in principle be soft-deleted. It cannot today — no route in this service can
-// remove a conclusion at all — and when §7.1's removal flow is built, the honest closure is a source
-// check INSIDE GhiNhiemVu.Tao's transaction rather than a lock held across two.
+// # THE WINDOW THAT READ LEAVES IS CLOSED INSIDE THE TASK'S TRANSACTION
+//
+// Since 25/09/2026 a conclusion can be soft-deleted and marked "không phát sinh nhiệm vụ", and both
+// acts refuse only while NO live task points at the conclusion. So the precondition is checked AGAIN
+// inside GhiNhiemVu.TaoTuNguon's transaction (kiemNguonKetLuan): the meeting row is locked `FOR
+// UPDATE` — the same lock the delete and the mark take — and the conclusion is re-read under it.
+// Whichever act commits first, the other sees it: a split after a delete finds no conclusion (404); a
+// delete after a split counts the new task (409). No lock is held across two transactions.
+//
+// A SIGNED MEETING'S CONCLUSIONS MAY STILL BE SPLIT. Signing freezes the RECORD; assigning the work
+// it concluded is what happens next, and nothing in the decisions of 25/09/2026 forbids it.
 func (uc *GhiBienBanHop) TachKetLuanThanhNhiemVu(ctx context.Context, bienBanID string, thuTu int,
 	yc YeuCauTaoNhiemVu, nguoi audit.Actor) (domain.NhiemVu, error) {
 
 	k, err := uc.kho.KetLuanTheoThuTu(ctx, bienBanID, thuTu)
 	if err != nil {
 		return domain.NhiemVu{}, bocBienBan(ctx, "tách kết luận thành nhiệm vụ", err)
+	}
+	if k.KhongPhatSinh {
+		// Early and readable; the authoritative check is inside the transaction below.
+		return domain.NhiemVu{}, domain.ErrKetLuanKhongPhatSinh
 	}
 
 	// SET HERE, UNCONDITIONALLY, AND NOT READ FROM THE REQUEST. The HTTP body of this route carries
@@ -456,7 +531,35 @@ func (uc *GhiBienBanHop) TachKetLuanThanhNhiemVu(ctx context.Context, bienBanID 
 	// row and the audit entry in one transaction — is the task register's, unchanged. The error is
 	// returned AS IT IS so the handler maps it exactly as it maps the same refusal from
 	// POST /api/v1/tasks: one act, one set of answers, whichever door it came through.
-	return uc.nhiemVu.Tao(ctx, yc, nguoi)
+	return uc.nhiemVu.TaoTuNguon(ctx, yc, nguoi, uc.kiemNguonKetLuan(bienBanID, thuTu, k.ID))
+}
+
+// kiemNguonKetLuan is the split's precondition, run inside the task's transaction. See
+// TachKetLuanThanhNhiemVu for why it exists.
+//
+// EVERY "NOT THERE" IS ErrKetLuanKhongTonTai — minutes removed since the first read, the conclusion
+// removed, or (defensively) a different row now at that ordinal, which cannot happen because an
+// issued ordinal is never reissued. One 404 sentence, as on every other door of this register.
+func (uc *GhiBienBanHop) kiemNguonKetLuan(bienBanID string, thuTu int, ketLuanID string) KiemNguonTrongGiaoDich {
+	return func(ctx context.Context, tx *store.ScopedTx) error {
+		if _, err := uc.kho.BienBanTheoIDDeSua(ctx, tx, bienBanID); err != nil {
+			if errors.Is(err, petstore.ErrBienBanKhongTonTai) {
+				return petstore.ErrKetLuanKhongTonTai
+			}
+			return err
+		}
+		k, err := uc.kho.KetLuanTheoThuTuDeSua(ctx, tx, bienBanID, thuTu)
+		if err != nil {
+			return err
+		}
+		if k.ID != ketLuanID {
+			return petstore.ErrKetLuanKhongTonTai
+		}
+		if k.KhongPhatSinh {
+			return domain.ErrKetLuanKhongPhatSinh
+		}
+		return nil
+	}
 }
 
 // --- shared ---------------------------------------------------------------------------------------

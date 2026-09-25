@@ -42,8 +42,8 @@ type BienBanHopStore struct {
 
 func NewBienBanHopStore(db *store.DB) *BienBanHopStore { return &BienBanHopStore{db: db} }
 
-// cotBienBan IS READ BY POSITION in quetBienBan. It is the column list of the WRITE path's locking
-// read (BienBanTheoIDDeSua) and is left exactly as that path uses it.
+// cotBienBan is the HEAD of every read list below; quetBienBanDoc reads it by position. It is not read
+// on its own any more — the write path's locking read needs the lifecycle columns too.
 const cotBienBan = `id, ten_cuoc_hop, ngay_hop, so_hieu, dia_diem, chu_tri_ma,
 	nguoi_tao_ma, tao_luc`
 
@@ -513,38 +513,12 @@ func (s *BienBanHopStore) ketLuanTheoBienBan(ctx context.Context, ids []string) 
 	return ra, nil
 }
 
-// quetBienBan reads one row of cotBienBan.
-//
-// POSITIONAL, IN LOCKSTEP WITH cotBienBan. database/sql binds by POSITION, so a destination inserted
-// or removed anywhere but the tail silently shifts every column after it — and the three adjacent
-// nullable TEXT columns here (`so_hieu`, `dia_diem`, `chu_tri_ma`) would shift into each other
-// without any error at all, putting a room name where a chairperson's code belongs.
-// TestPgCotBienBanTrongMaKhopVoiLuocDoThat asserts the list against the real schema BY NAME.
-func quetBienBan(r quangKiem) (domain.BienBanHop, error) {
-	var (
-		b domain.BienBanHop
-
-		// EVERY NULLABLE COLUMN IS READ THROUGH AN EXPLICIT NULL TYPE. Scanning a NULL straight into
-		// a string is a runtime error in some drivers and a zero value in others, and the second is
-		// how "no reference number was recorded" quietly becomes an empty string nobody distrusts.
-		soHieu, diaDiem, chuTri sql.NullString
-	)
-
-	dich := []any{
-		&b.ID, &b.TenCuocHop, &b.NgayHop, &soHieu, &diaDiem, &chuTri,
-		&b.NguoiTaoMa, &b.TaoLuc,
-	}
-	if err := r.Scan(dich...); err != nil {
-		return domain.BienBanHop{}, fmt.Errorf("bien_ban_hop: đọc dòng: %w", err)
-	}
-
-	b.SoHieu = soHieu.String
-	b.DiaDiem = diaDiem.String
-	b.ChuTriMa = chuTri.String
-	return b, nil
-}
-
 // quetBienBanDoc reads one row of cotBienBanDoc — or of cotBienBanChiTiet when chiTiet is true.
+//
+// EVERY NULLABLE COLUMN IS READ THROUGH AN EXPLICIT NULL TYPE. Scanning a NULL straight into a string
+// is a runtime error in some drivers and a zero value in others, and the second is how "no reference
+// number was recorded" quietly becomes an empty string nobody distrusts.
+// TestPgCotBienBanTrongMaKhopVoiLuocDoThat asserts the lists against the real schema BY NAME.
 //
 // POSITIONAL, IN LOCKSTEP WITH THOSE TWO LISTS, and every column 0012 added is APPENDED after
 // cotBienBan's eight, never inserted: a destination inserted in the middle silently shifts every

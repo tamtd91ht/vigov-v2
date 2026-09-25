@@ -48,6 +48,11 @@ type ghiBienBanGia struct {
 	bienBanID string
 	thuTu     int
 
+	ycSua   app.YeuCauSuaBienBan
+	ycKy    app.YeuCauKyBienBan
+	ycSuaKL app.YeuCauSuaKetLuan
+	lyDo    string
+
 	loi error
 }
 
@@ -102,6 +107,56 @@ func (g *ghiBienBanGia) TachKetLuanThanhNhiemVu(ctx context.Context, bienBanID s
 		ID: "nv-moi", Ma: "NV20", Loai: yc.Loai, TieuDe: yc.TieuDe, TrangThai: domain.MoiGiao,
 		NguonGiao: domain.NguonKetLuanHop, NguonID: "kl-1", NguoiTaoMa: nguoi.ID,
 	}, nil
+}
+
+// --- the lifecycle acts (user decisions 25/09/2026) ----------------------------------------------------
+
+func (g *ghiBienBanGia) SuaBienBan(ctx context.Context, id string, yc app.YeuCauSuaBienBan,
+	nguoi audit.Actor) (domain.BienBanHop, error) {
+	g.ghi(ctx, "sua", nguoi)
+	g.bienBanID, g.ycSua = id, yc
+	return domain.BienBanHop{ID: id}, g.loi
+}
+
+func (g *ghiBienBanGia) XoaBienBan(ctx context.Context, id, lyDo string, nguoi audit.Actor) error {
+	g.ghi(ctx, "xoa", nguoi)
+	g.bienBanID, g.lyDo = id, lyDo
+	return g.loi
+}
+
+func (g *ghiBienBanGia) KyBienBan(ctx context.Context, id string, yc app.YeuCauKyBienBan,
+	nguoi audit.Actor) (domain.BienBanHop, error) {
+	g.ghi(ctx, "ky", nguoi)
+	g.bienBanID, g.ycKy = id, yc
+	return domain.BienBanHop{ID: id}, g.loi
+}
+
+func (g *ghiBienBanGia) SuaKetLuan(ctx context.Context, bienBanID string, thuTu int,
+	yc app.YeuCauSuaKetLuan, nguoi audit.Actor) (domain.KetLuanHop, error) {
+	g.ghi(ctx, "sua-ket-luan", nguoi)
+	g.bienBanID, g.thuTu, g.ycSuaKL = bienBanID, thuTu, yc
+	return domain.KetLuanHop{}, g.loi
+}
+
+func (g *ghiBienBanGia) XoaKetLuan(ctx context.Context, bienBanID string, thuTu int, lyDo string,
+	nguoi audit.Actor) error {
+	g.ghi(ctx, "xoa-ket-luan", nguoi)
+	g.bienBanID, g.thuTu, g.lyDo = bienBanID, thuTu, lyDo
+	return g.loi
+}
+
+func (g *ghiBienBanGia) DanhDauKhongPhatSinh(ctx context.Context, bienBanID string, thuTu int,
+	nguoi audit.Actor) (domain.KetLuanHop, error) {
+	g.ghi(ctx, "danh-dau", nguoi)
+	g.bienBanID, g.thuTu = bienBanID, thuTu
+	return domain.KetLuanHop{}, g.loi
+}
+
+func (g *ghiBienBanGia) BoDanhDauKhongPhatSinh(ctx context.Context, bienBanID string, thuTu int,
+	nguoi audit.Actor) error {
+	g.ghi(ctx, "bo-dau", nguoi)
+	g.bienBanID, g.thuTu = bienBanID, thuTu
+	return g.loi
 }
 
 // --- fixtures ----------------------------------------------------------------------------------------
