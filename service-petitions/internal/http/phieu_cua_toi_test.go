@@ -9,12 +9,14 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
@@ -76,8 +78,9 @@ type phieuCuaToiGia struct {
 	// thayCongDan records every identity the handler passed down. It is what proves the value came
 	// from the session: a handler reading it from the query string would record the attacker's
 	// string here, and the assertion would name exactly that.
-	thayCongDan []string
-	thayXa      []tenant.ID
+	thayCongDan   []string
+	thayXa        []tenant.ID
+	thayTrangThai []string
 }
 
 func (p *phieuCuaToiGia) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma string) (
@@ -101,6 +104,73 @@ func (p *phieuCuaToiGia) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, 
 		return domain.PhieuPhanAnh{}, petstore.ErrPhieuKhongTonTai
 	}
 	return pa, nil
+}
+
+// DanhSachCuaCongDan mirrors the real store's list contract IN GO: both axes, the status filter,
+// newest first by (GocDemHan, ID), and a real keyset cursor, so the handler's cursor round-trip is
+// exercised end to end. The SQL itself is asserted in internal/store/phieu_cua_toi_danh_sach_test.go.
+func (p *phieuCuaToiGia) DanhSachCuaCongDan(ctx context.Context, congDanID, trangThai string,
+	yc page.Request) (page.Result[domain.PhieuPhanAnh], error) {
+
+	p.goi++
+	p.thayCongDan = append(p.thayCongDan, congDanID)
+	p.thayXa = append(p.thayXa, tenant.MustFrom(ctx))
+	p.thayTrangThai = append(p.thayTrangThai, trangThai)
+
+	if congDanID == "" {
+		return page.NewResult[domain.PhieuPhanAnh](), petstore.ErrThieuDinhDanhCongDan
+	}
+	if p.loi != nil {
+		return page.NewResult[domain.PhieuPhanAnh](), p.loi
+	}
+	return trangGiaCuaCongDan(p.theo[tenant.MustFrom(ctx)], congDanID, trangThai, yc), nil
+}
+
+// trangGiaCuaCongDan is the in-Go keyset page both citizen fakes share.
+func trangGiaCuaCongDan(theo map[string]domain.PhieuPhanAnh, congDanID, trangThai string,
+	yc page.Request) page.Result[domain.PhieuPhanAnh] {
+
+	var ds []domain.PhieuPhanAnh
+	for _, pa := range theo {
+		if pa.CongDanID != congDanID || pa.CongDanID == "" {
+			continue
+		}
+		if trangThai != "" && string(pa.TrangThai) != trangThai {
+			continue
+		}
+		ds = append(ds, pa)
+	}
+	sau := func(a, b domain.PhieuPhanAnh) bool { // a comes before b in DESC order
+		if !a.GocDemHan.Equal(b.GocDemHan) {
+			return a.GocDemHan.After(b.GocDemHan)
+		}
+		return a.ID > b.ID
+	}
+	sort.Slice(ds, func(i, j int) bool { return sau(ds[i], ds[j]) })
+
+	if moc, co := yc.After(); co {
+		neo := domain.PhieuPhanAnh{GocDemHan: moc.Key.Time(), ID: moc.ID}
+		con := ds[:0:0]
+		for _, pa := range ds {
+			if sau(neo, pa) {
+				con = append(con, pa)
+			}
+		}
+		ds = con
+	}
+
+	kq := page.NewResult[domain.PhieuPhanAnh]()
+	for _, pa := range ds {
+		if len(kq.Items) == yc.Limit() {
+			kq.HasMore = true
+			cuoi := kq.Items[len(kq.Items)-1]
+			kq.NextCursor = page.Encode(yc.Column(), yc.Dir(),
+				page.Anchor{Key: page.TimeKey(cuoi.GocDemHan), ID: cuoi.ID})
+			break
+		}
+		kq.Items = append(kq.Items, pa)
+	}
+	return kq
 }
 
 // phieuCuaToiMau: commune A holds three petitions, commune B holds none.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
@@ -166,6 +167,86 @@ func (s *PhieuPhanAnhStore) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanI
 		return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: duyệt kết quả: %w", err)
 	}
 	return p, nil
+}
+
+// SapXepPhieuCuaToi is the ONE sort GET /api/v1/my-citizen-reports offers: when the citizen pressed
+// send, newest first, the id breaking ties.
+//
+// `goc_dem_han` AND NOT `vao_so_luc`, although the staff register pages on the second and it is the
+// indexed one. A cursor is opaque but not secret — it is base64 JSON carrying the sort key — so the
+// key chosen here is a value the citizen can read. `goc_dem_han` is the instant they already see as
+// `clock_from`; `vao_so_luc` is the internal register instant phieuCuaToiRa deliberately withholds
+// (it differs by up to a week on the staff-booked channel, ADR 0028). Both are NOT NULL, which is
+// what page.QueryPage needs from a sort column.
+//
+// ONE COLUMN AND NO ALTERNATIVE: the list card shows nothing else a citizen would sort by, and a
+// sort offered is a sort somebody has to keep correct.
+var SapXepPhieuCuaToi = page.NewAllowlist(page.Desc,
+	page.Col("received_at", "goc_dem_han", page.KindTime),
+)
+
+var mocPhieuCuaToi = store.NewMoc[domain.PhieuPhanAnh](SapXepPhieuCuaToi,
+	map[string]func(domain.PhieuPhanAnh) page.Key{
+		"received_at": func(p domain.PhieuPhanAnh) page.Key { return page.TimeKey(p.GocDemHan) },
+	})
+
+// DanhSachCuaCongDan reads ONE PAGE of the petitions THIS citizen filed, in THIS commune.
+//
+// # THE SAME TWO AXES AS CuaCongDanTheoMaTraCuu, AND FOR THE SAME REASON A SEPARATE METHOD
+//
+// The commune is $1 from the context (Scoped.Query); the citizen is $2, a BOUND parameter with no
+// value that switches it off. It is not an optional filter on DanhSach: there, "" means "the whole
+// register", and one empty identity would hand a citizen the commune's register. congDanID comes
+// from the session and nowhere else — the whole argument is on CuaCongDanTheoMaTraCuu.
+//
+// # WHAT IS NOT IN THE PAGE
+//
+//	soft-deleted rows             rule 7, invariant 2 — `deleted_at IS NULL`, as on every read path
+//	staff-booked petitions        `cong_dan_id` is NULL on them, and `NULL = $2` is never TRUE. No
+//	                              channel predicate is added: the by-code route decides ownership by
+//	                              `cong_dan_id` alone, and a list that disagreed with it would show
+//	                              a petition the citizen can open but not find, or the reverse
+//	another commune's petitions   $1, from the session's commune (httpx.XaTuPhien)
+//
+// THE RESTRICTED FIELD `can-bo` IS NOT EXCLUDED, exactly as the by-code route does not exclude it:
+// the key protects a report about an officer from that officer's colleagues, and the reader here is
+// the citizen who filed it (see HandlerCongDan.PhieuCuaToi).
+//
+// trangThai "" means every status; otherwise it has been checked against the nine by the handler,
+// and it is bound, never concatenated.
+func (s *PhieuPhanAnhStore) DanhSachCuaCongDan(ctx context.Context, congDanID, trangThai string,
+	yc page.Request) (page.Result[domain.PhieuPhanAnh], error) {
+
+	if congDanID == "" {
+		// FAIL CLOSED, BEFORE THE QUERY — the same refusal and the same sentinel as
+		// CuaCongDanTheoMaTraCuu. A lost session identity is a wiring fault, never "no petitions".
+		return page.NewResult[domain.PhieuPhanAnh](), ErrThieuDinhDanhCongDan
+	}
+
+	loc := `AND cong_dan_id = $2 AND deleted_at IS NULL`
+	args := []any{congDanID}
+	if trangThai != "" {
+		loc += ` AND trang_thai = $3`
+		args = append(args, trangThai)
+	}
+
+	kq, err := store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
+		Columns: cotPhieu,
+		Table:   "phieu_phan_anh",
+		Filter:  loc,
+		Args:    args,
+	}, yc, mocPhieuCuaToi, func(rows *sql.Rows) (domain.PhieuPhanAnh, string, error) {
+		p, err := quetPhieu(rows)
+		if err != nil {
+			return domain.PhieuPhanAnh{}, "", err
+		}
+		return p, p.ID, nil
+	})
+	if err != nil {
+		// THE CITIZEN IDENTIFIER IS NOT IN THE WRAPPED MESSAGE (rule 3, invariants 1 and 2).
+		return page.NewResult[domain.PhieuPhanAnh](), fmt.Errorf("phieu_phan_anh: danh sách phiếu của công dân: %w", err)
+	}
+	return kq, nil
 }
 
 // quangKiem is the row interface both Scan paths satisfy. It exists so quetPhieu can be shared

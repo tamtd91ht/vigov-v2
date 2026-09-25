@@ -104,6 +104,37 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 			httpx.XaTuPhien()(
 				http.HandlerFunc(h.PhieuCuaToi))))
 
+	// --- the citizen's own petitions, newest first ("Phản ánh của tôi") ------------------------
+	//
+	// THE COLLECTION, SERVED ON THE CITIZEN CHAIN BY THE SAME EXACT PATTERN THE POST USES: cmd/server
+	// registers `tapCongDan` with no method, so a GET to it reaches this mux and not the staff one.
+	// The reasoning for everything read and not read from the request is on
+	// HandlerCongDan.DanhSachPhieuCuaToi; the store method binds the commune to $1 and the session
+	// citizen to $2, and neither can be switched off from a call site.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Danh sách phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI trong xã của phiên, mới nhất trước — phân trang theo con trỏ, lọc tuỳ chọn theo trạng thái
+	// @screen   09-phan-anh-nguoi-dan §8
+	// 200 WITH `items: []` IS THE ANSWER FOR "NOTHING TO SHOW", whatever the cause — no petition filed,
+	// petitions only in another commune, petitions only soft-deleted. There is no 404 and no 403: a
+	// list that answered differently for those would say something about records that are not the
+	// caller's (rule 4, forbidden #2). Petitions booked by staff with no citizen account never appear.
+	//
+	// 400 is a bad cursor, limit, sort or order (only `desc` is accepted), or a `status` outside the
+	// nine. The body never echoes what was sent.
+	//
+	// 401 is the same three situations the other citizen routes fold together (ADR 0022).
+	//
+	// @reply    200 page.Result[phieuCuaToiTomTatRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/my-citizen-reports",
+		authz.CitizenOnly()(
+			httpx.XaTuPhien()(
+				http.HandlerFunc(h.DanhSachPhieuCuaToi))))
+
 	// --- the citizen files a petition ---------------------------------------------------------
 	//
 	// THE ACT RULE 10 EXISTS FOR, and the first write a member of the public performs on this

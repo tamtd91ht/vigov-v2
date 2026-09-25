@@ -235,6 +235,23 @@ func (khoPhieuCongDan) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma
 	}, nil
 }
 
+// DanhSachCuaCongDan asserts the same two preconditions: the session's commune and the session's
+// citizen. Anything else gets an empty page — which is also what the real store answers.
+func (khoPhieuCongDan) DanhSachCuaCongDan(ctx context.Context, congDanID, _ string, _ page.Request) (
+	page.Result[domain.PhieuPhanAnh], error) {
+
+	kq := page.NewResult[domain.PhieuPhanAnh]()
+	if congDanID != idCongDan || tenant.MustFrom(ctx) != xaA {
+		return kq, nil
+	}
+	kq.Items = append(kq.Items, domain.PhieuPhanAnh{
+		ID: "pa-001", MaTraCuu: maPhieuCuaToi, Kenh: domain.KenhZaloMiniApp,
+		CongDanID: idCongDan, NoiDung: "Đống rác ở đầu ngõ đã ba ngày chưa ai dọn.",
+		TrangThai: domain.DaTiepNhan, GocDemHan: mocGui, VaoSoLuc: mocGui,
+	})
+	return kq, nil
+}
+
 // guiPhieuGia is the citizen INTAKE use case, and like khoPhieuCongDan it asserts its own
 // preconditions rather than returning a fixture blindly.
 //
@@ -712,5 +729,51 @@ func TestTuyenCanBoKhongPostDuocVaoTapCongDan(t *testing.T) {
 	doiMa(t, w, http.StatusUnauthorized)
 	if m.gui.goi != 0 {
 		t.Errorf("use case tiếp nhận của công dân chạy %d lần cho một yêu cầu của CÁN BỘ", m.gui.goi)
+	}
+}
+
+// --- the citizen LIST reaches the citizen chain, and never the staff one ----------------------
+
+// TestTuyenDanhSachCuaToiDiQuaChuoiCongDan — GET on the bare collection is served by the SAME
+// exact pattern the POST uses (`tapCongDan`, registered with no method). Without it the GET would be
+// redirected to the subtree root, or fall to the staff chain and 404 on Host resolution.
+//
+// ĐỘT BIẾN: đổi `ngoai.Handle(tapCongDan, c)` thành `ngoai.Handle(tapCongDan, h)` và ca này ĐỎ.
+func TestTuyenDanhSachCuaToiDiQuaChuoiCongDan(t *testing.T) {
+	m := dungMayChu(t, canBoXaA())
+
+	w := m.goiCongDan(t, tapCongDan, tokenCongDan)
+	if w.Code >= 300 && w.Code < 400 {
+		t.Fatalf("GET tới tập bị CHUYỂN HƯỚNG %d tới %q", w.Code, w.Header().Get("Location"))
+	}
+	doiMa(t, w, http.StatusOK)
+	if !strings.Contains(w.Body.String(), maPhieuCuaToi) {
+		t.Errorf("danh sách không mang phiếu của chính công dân: %s", w.Body.String())
+	}
+	if m.pg.goi != 0 {
+		t.Errorf("tuyến danh sách của công dân gọi phân giải cán bộ %d lần — nó đang chạy trên chuỗi cán bộ",
+			m.pg.goi)
+	}
+
+	// No session -> 401, at the chain.
+	doiMa(t, m.goiCongDan(t, tapCongDan, ""), http.StatusUnauthorized)
+}
+
+// TestTuyenCanBoKhongDocDuocDanhSachCuaToi — a STAFF request (commune host, staff cookie) to the
+// citizen list lands on the citizen chain by path, finds no citizen session there, and is refused
+// 401 — authz.CitizenOnly's answer. A staff principal never reaches the handler.
+func TestTuyenCanBoKhongDocDuocDanhSachCuaToi(t *testing.T) {
+	m := dungMayChu(t, canBoXaA())
+
+	r := httptest.NewRequest(http.MethodGet, "https://"+hostA+tapCongDan, nil)
+	r.Host = hostA
+	r.RemoteAddr = "10.0.0.7:51000"
+	r.AddCookie(&http.Cookie{Name: staffauth.CookieName, Value: "phien-cua-can-bo"})
+	w := httptest.NewRecorder()
+	m.h.ServeHTTP(w, r)
+
+	doiMa(t, w, http.StatusUnauthorized)
+	if strings.Contains(w.Body.String(), maPhieuCuaToi) {
+		t.Errorf("phiếu của công dân lọt ra cho một yêu cầu của CÁN BỘ: %s", w.Body.String())
 	}
 }

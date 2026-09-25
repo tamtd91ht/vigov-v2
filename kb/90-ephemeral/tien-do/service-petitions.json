@@ -230,6 +230,15 @@
       "tiep_theo": "QUYẾT BỞI NHÀ CUNG CẤP theo khuyến nghị domain-expert (chủ dự án cho làm theo khuyến nghị 26/09, CHƯA ai duyệt từng điểm): (1) danh từ URL `log-entries` TỰ ĐẶT — ubiquitous-language.md §Tên tài nguyên chưa có dòng, ADR 0011 dặn hỏi; (2) ai ghi chú tay: người được giao HOẶC cầm feedback.resolve/assign/classify (khoá tuyến feedback.read) — 'người liên quan'/cùng bộ phận CHƯA QUYẾT (mục A ghi chú đối chiếu 24/09:108); (3) ghi chú được cả trên phiếu đã kết thúc; (4) KHÔNG nạp ngược từ audit_log cho phiếu cũ — việc chủ dự án quyết; (5) không trả tên người ghi (tiền lệ nhật ký nhiệm vụ cũng không), web hiện mã CB-…; (6) ghi chú tay bắt buộc Idempotency-Key (MoKhiHong) vì bảng chỉ thêm, trùng là không gỡ được. CÒN NỢ: tuyến /status nhận `note` nhưng hợp đồng không khai được (apidoc công bố mọi @request là required — tools/apidoc/openapi.go:251); nửa 'người nhận' của /log bên require cần sự kiện mới (luật 2 đk dừng #3); yêu cầu xoá theo NĐ 13 đụng trigger chỉ thêm — CHƯA QUYẾT; đính kèm (dinh_kem) chờ kho tệp; mở lại phiếu khi dựng phải ghi dòng. Ca pg chưa chạy thật.",
       "menu": "phan-anh-nguoi-dan",
       "id": "nhat-ky-xu-ly-phan-anh"
+    },
+    {
+      "viec": "Phản ánh của tôi — GET /api/v1/my-citizen-reports: công dân xem danh sách phiếu CỦA CHÍNH MÌNH ở xã của phiên",
+      "trang_thai": "xong",
+      "bang_chung": "26/09/2026: commit 'Phản ánh của tôi' (git log). go build/vet/test -p 1 service-petitions xanh; ca đột biến cong_dan_id = $2 làm đỏ bộ kiểm; ca _pg_test SKIP (không Docker).",
+      "no_confirm": [],
+      "tiep_theo": "QUYẾT BỞI NHÀ CUNG CẤP (chủ dự án cho làm theo khuyến nghị 26/09): sắp theo goc_dem_han (công dân đã thấy là clock_from) chứ không vao_so_luc; mỗi thẻ là tập con của phieuCuaToiRa (không họ tên/SĐT/địa chỉ/kết quả/lý do); trích nội dung 140 ký tự; có lọc status. Con trỏ trang chứa id nội bộ của phiếu CỦA CHÍNH công dân (như danh sách cán bộ). Lĩnh vực can-bo KHÔNG lọc — y hệt tuyến đọc theo mã. CÒN NỢ: chỉ mục (tenant_id, cong_dan_id, goc_dem_han DESC, id) WHERE deleted_at IS NULL — thẻ migration riêng. Chưa công dân thật nào gọi được: chờ cầu phiên vihat-miniapp (citizen-app/cau-phien-cong-dan-vigov).",
+      "menu": "phan-anh-nguoi-dan",
+      "id": "phan-anh-cua-toi"
     }
   ]
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/privacy"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
@@ -32,13 +33,18 @@ import (
 // Sharing Handler would have cost nothing today and would have put both reads one dot away from
 // each other, in a file where the two responses look almost identical.
 
-// PhieuCuaCongDanDoc reads ONE petition belonging to ONE citizen, in the commune of the session.
+// PhieuCuaCongDanDoc reads the petitions belonging to ONE citizen, in the commune of the session —
+// one by its lookup code, or a page of them.
 //
-// DELIBERATELY NARROWER THAN PhieuPhanAnhDoc, and the narrowness is the isolation. See the note at
-// the top of this file, and the long argument on petstore.CuaCongDanTheoMaTraCuu for why this is a
-// second store method rather than an optional filter on the first.
+// DELIBERATELY NARROWER THAN PhieuPhanAnhDoc, and the narrowness is the isolation. BOTH methods take
+// the citizen identifier as a required argument and neither has a value that switches the filter
+// off, so adding the list did not add a way to reach the unfiltered register. See the note at the top
+// of this file, and the long argument on petstore.CuaCongDanTheoMaTraCuu for why these are separate
+// store methods rather than an optional filter on the staff ones.
 type PhieuCuaCongDanDoc interface {
 	CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma string) (domain.PhieuPhanAnh, error)
+	DanhSachCuaCongDan(ctx context.Context, congDanID, trangThai string, yc page.Request) (
+		page.Result[domain.PhieuPhanAnh], error)
 }
 
 // GuiPhanAnhCongDan receives ONE petition from the citizen filing it.

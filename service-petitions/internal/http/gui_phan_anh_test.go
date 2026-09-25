@@ -18,6 +18,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
@@ -134,6 +135,20 @@ func (s *soPhieuGia) CuaCongDanTheoMaTraCuu(ctx context.Context, congDanID, ma s
 		return domain.PhieuPhanAnh{}, petstore.ErrPhieuKhongTonTai
 	}
 	return p, nil
+}
+
+// DanhSachCuaCongDan is the citizen list, with the same two filters — so a petition filed through
+// this fake is findable in "Phản ánh của tôi" exactly as the real store would find it.
+func (s *soPhieuGia) DanhSachCuaCongDan(ctx context.Context, congDanID, trangThai string,
+	yc page.Request) (page.Result[domain.PhieuPhanAnh], error) {
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if congDanID == "" {
+		return page.NewResult[domain.PhieuPhanAnh](), petstore.ErrThieuDinhDanhCongDan
+	}
+	return trangGiaCuaCongDan(s.theo[tenant.MustFrom(ctx)], congDanID, trangThai, yc), nil
 }
 
 var (
