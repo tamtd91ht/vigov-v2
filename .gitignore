@@ -60,3 +60,6 @@ tmp/
 
 # codegraph index — per machine, rebuilt by `codegraph init .` (ROUTING §0.1)
 .codegraph/
+
+# Log pod kéo về máy để chẩn đoán — có thể chứa dữ liệu cá nhân (luật 3): không vào git.
+k8s-logs/

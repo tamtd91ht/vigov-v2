@@ -90,3 +90,6 @@ __pycache__
 # LƯU Ý: `core/gen/` CỐ Ý KHÔNG nằm trong danh sách này, dù nó nằm trong .gitignore.
 # Mã nguồn import core/gen/, và nó được sinh bằng plugin từ xa nên không sinh được trong ảnh.
 # `make proto` chạy ở máy chủ build, rồi gen/ đi theo ngữ cảnh — xem service-*/Dockerfile.
+
+# Log pod kéo về máy để chẩn đoán — có thể chứa dữ liệu cá nhân (luật 3): không vào ảnh.
+k8s-logs
