@@ -211,6 +211,10 @@ func (uc *GhiBienBanHop) TaoBienBan(ctx context.Context, yc YeuCauTaoBienBan, ng
 
 	bayGio := uc.nayHoac()
 	moi.TaoLuc = bayGio
+	// What the column's DEFAULT writes (migration 0012) — stated on the returned record so the 201
+	// reply says `du-thao` rather than an empty status. The INSERT does not send it: new minutes are
+	// always drafts, and the schema is the one place that says so.
+	moi.TrangThai = domain.TrangThaiBienBanDuThao
 
 	moi.KetLuan = make([]domain.KetLuanHop, 0, len(noiDungKetLuan))
 	for i, nd := range noiDungKetLuan {

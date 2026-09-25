@@ -134,6 +134,10 @@ func nhiemVuMau() *nhiemVuGia {
 				MoTa:      "Tổng hợp số liệu từ các chi bộ trực thuộc.",
 				TrangThai: domain.DangThucHien,
 				NguonGiao: domain.NguonKetLuanHop, NguonID: "klh-007",
+				// The back-link the store resolves for a `ket-luan-hop` task (one batch statement).
+				NguonHop: &domain.LienKetKetLuanHop{
+					BienBanID: "bb-001", TenCuocHop: "Giao ban UBND xã tháng 8", ThuTu: 2,
+				},
 				BoPhanID: "bp-vpdu", NguoiThucHienMa: "CB-00311",
 				LanhDaoGiaoViecMa: "CB-00007", ChuyenVienTheoDoiMa: "CB-00412",
 				HanXuLy: mocHanNVA, HanBanDau: mocHanGocNVA,

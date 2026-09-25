@@ -264,6 +264,14 @@ type NhiemVu struct {
 	// Reading a nil here as "no documents" is therefore how a screen would report an empty block for
 	// a task that has three. The HTTP layer carries the same distinction onto the wire and says so.
 	VanBan []NhiemVuVanBan
+
+	// NguonHop is the meeting and conclusion a `ket-luan-hop` task was split from — the drawer's
+	// back-link. Filled by the register's two READS (store.NhiemVuStore.DanhSach / TheoMa) in ONE
+	// batch statement per call; nil everywhere else.
+	//
+	// nil ALSO WHEN THE MEETING OR THE CONCLUSION WAS SOFT-DELETED (rule 7, invariant 2): the task
+	// keeps its blurred pair, the drawer simply shows no link. It is context, not the link itself.
+	NguonHop *LienKetKetLuanHop
 }
 
 // TreHan DERIVES whether the CURRENT commitment was missed. It is never stored (rule 10, invariant

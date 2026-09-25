@@ -19,9 +19,12 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
@@ -39,43 +42,80 @@ type BienBanHopStore struct {
 
 func NewBienBanHopStore(db *store.DB) *BienBanHopStore { return &BienBanHopStore{db: db} }
 
-// cotBienBan IS READ BY POSITION in the Scan below.
-//
-// THREE COLUMNS OF THE TABLE ARE DELIBERATELY NOT IN IT, and their absence is a decision rather than
-// an oversight: `noi_dung` (the minutes in full), `thanh_phan` and `dinh_kem` are not on the card
-// §2 draws, and the full text of every meeting on a page would be the largest part of the response
-// by far. There is no detail route in this pass, so nothing reads them yet — a client must not read
-// their absence as "this meeting has no minutes body": there is no field.
+// cotBienBan IS READ BY POSITION in quetBienBan. It is the column list of the WRITE path's locking
+// read (BienBanTheoIDDeSua) and is left exactly as that path uses it.
 const cotBienBan = `id, ten_cuoc_hop, ngay_hop, so_hieu, dia_diem, chu_tri_ma,
 	nguoi_tao_ma, tao_luc`
 
+// cotBienBanDoc is what the REGISTER LIST reads: cotBienBan plus the lifecycle columns of migration
+// 0012, APPENDED AT THE TAIL (quetBienBanDoc is positional).
+//
+// `noi_dung`, `thanh_phan` AND `dinh_kem` ARE STILL NOT IN IT: §2's card does not draw them, and the
+// full text of every meeting on a page would be the largest part of the response by far. The detail
+// read adds the first two (cotBienBanChiTiet); `dinh_kem` has no file store behind it yet.
+const cotBienBanDoc = cotBienBan + `, trang_thai, ky_luc, ky_boi_ma, thu_ky_ma,
+	tb_so_ky_hieu, tb_ngay, bo_sung_cho_id`
+
+// cotBienBanChiTiet is what GET /api/v1/meetings/{id} reads: the list's columns plus the minutes body
+// and the attendee list. `thanh_phan` is JSONB and is read as its text form.
+const cotBienBanChiTiet = cotBienBanDoc + `, noi_dung, thanh_phan`
+
 // SapXepBienBan is the closed set of sorts GET /api/v1/meetings offers.
 //
-// ONE COLUMN, AND `ngay_hop` IS DELIBERATELY NOT THE SECOND — although §2 says "mới nhất ở trên"
-// about the MEETINGS and a reader will reach for it. Two independent reasons, either one sufficient:
+// `held_on` IS THE DEFAULT (user decision 5, 25/09/2026): meeting day newest first, same day by entry
+// time, `id` last — exactly the index `bien_ban_hop_theo_ngay_hop (tenant_id, ngay_hop DESC,
+// tao_luc DESC, id)` of migration 0012.
 //
-//	it is a DATE      the cursor compares `(col, id) > ($n, $n+1)` with a bound time.Time, and a
-//	                  DATE compared with a timestamptz is cast through the session's time zone. No
-//	                  PostgreSQL is reachable from this environment (VIGOV_TEST_DSN unset), so that
-//	                  comparison cannot be verified here — and an unverifiable cursor is a page that
-//	                  repeats and skips rows with nothing turning red.
-//	no index          0007 creates none on `ngay_hop`, on purpose: an index nothing reads is a write
-//	                  cost with no reader.
+// ⚠ `held_on` IS NOT SERVED BY store.QueryPage, and its declared Kind (text) is the CURSOR's shape,
+// not the column's. QueryPage pages on ONE column plus `id` and binds the key with the column's own
+// type; this order has THREE keys, and the first is a DATE that must be bound as a DATE (0012 header:
+// a DATE compared with a bound instant is cast through the session time zone). trangTheoNgayHop owns
+// that statement; the anchor travels as one opaque text key `YYYY-MM-DD|<tao_luc RFC 3339>` inside
+// the same versioned, sort-bound cursor every other list uses (page.Encode / page.Decode).
 //
-// `tao_luc` is NOT NULL and indexed (`bien_ban_hop_so`, migration 0007), which is what
-// page.QueryPage needs from a sort column. It is also the key every other register in this
-// repository pages on. Offering `held_at` later is one line here, one index there.
+// `created_at` STAYS ACCEPTED — it was the contract's only sort until this pass, so a client that
+// sends it keeps working. It still pages through QueryPage exactly as before.
 var SapXepBienBan = page.NewAllowlist(page.Desc,
+	page.Col("held_on", "ngay_hop", page.KindText),
 	page.Col("created_at", "tao_luc", page.KindTime),
 )
 
-// mocBienBan BINDS the allowlisted sort column to the way its cursor value is read out of a scanned
-// row. store.NewMoc compares the two lists AT CONSTRUCTION, so a sort added above without a reader
-// here is a panic at startup rather than a wrong page order after release.
+// mocBienBan BINDS each allowlisted sort to the way its cursor value is read out of a scanned row.
+// store.NewMoc compares the two lists AT CONSTRUCTION, so a sort added above without a reader here is
+// a panic at startup rather than a wrong page order after release.
 var mocBienBan = store.NewMoc[domain.BienBanHop](SapXepBienBan,
 	map[string]func(domain.BienBanHop) page.Key{
+		"held_on":    func(b domain.BienBanHop) page.Key { return page.TextKey(mocNgayHop(b)) },
 		"created_at": func(b domain.BienBanHop) page.Key { return page.TimeKey(b.TaoLuc) },
 	})
+
+// dinhDangNgayHop is the calendar-day format of a DATE bound or read as text.
+const dinhDangNgayHop = "2006-01-02"
+
+// mocNgayHop is the held_on cursor key of one row: the meeting DAY as `YYYY-MM-DD` and the entry
+// instant, joined by `|`. The day is formatted from the scanned DATE (midnight UTC from the driver),
+// never converted through a local zone.
+func mocNgayHop(b domain.BienBanHop) string {
+	return b.NgayHop.Format(dinhDangNgayHop) + "|" + b.TaoLuc.UTC().Format(time.RFC3339Nano)
+}
+
+// tachMocNgayHop reverses mocNgayHop. EVERY FAILURE WRAPS page.ErrCursor, so the handler answers the
+// same 400 it answers for any other bad cursor, and never echoes the value.
+func tachMocNgayHop(s string) (ngay string, luc time.Time, err error) {
+	phan := strings.Split(s, "|")
+	if len(phan) != 2 {
+		return "", time.Time{}, fmt.Errorf("%w: mốc ngày họp sai hình dạng", page.ErrCursor)
+	}
+	d, err := time.Parse(dinhDangNgayHop, phan[0])
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("%w: ngày họp trong mốc", page.ErrCursor)
+	}
+	luc, err = time.Parse(time.RFC3339Nano, phan[1])
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("%w: giờ nhập trong mốc", page.ErrCursor)
+	}
+	return d.Format(dinhDangNgayHop), luc, nil
+}
 
 // DanhSach reads ONE PAGE of the commune's meeting minutes, EACH WITH ITS CONCLUSIONS AND COUNTERS.
 //
@@ -95,19 +135,27 @@ var mocBienBan = store.NewMoc[domain.BienBanHop](SapXepBienBan,
 func (s *BienBanHopStore) DanhSach(ctx context.Context, yc page.Request) (
 	page.Result[domain.BienBanHop], error) {
 
-	kq, err := store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
-		Columns: cotBienBan,
-		Table:   "bien_ban_hop",
-		// `deleted_at IS NULL` FIRST AND ALWAYS (rule 7, invariant 2). The partial index
-		// `bien_ban_hop_so` is built on exactly this predicate.
-		Filter: `AND deleted_at IS NULL`,
-	}, yc, mocBienBan, func(rows *sql.Rows) (domain.BienBanHop, string, error) {
-		b, err := quetBienBan(rows)
-		if err != nil {
-			return domain.BienBanHop{}, "", err
-		}
-		return b, b.ID, nil
-	})
+	var (
+		kq  page.Result[domain.BienBanHop]
+		err error
+	)
+	if yc.Column().Param == "held_on" {
+		kq, err = s.trangTheoNgayHop(ctx, yc)
+	} else {
+		kq, err = store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
+			Columns: cotBienBanDoc,
+			Table:   "bien_ban_hop",
+			// `deleted_at IS NULL` FIRST AND ALWAYS (rule 7, invariant 2). The partial index
+			// `bien_ban_hop_so` is built on exactly this predicate.
+			Filter: `AND deleted_at IS NULL`,
+		}, yc, mocBienBan, func(rows *sql.Rows) (domain.BienBanHop, string, error) {
+			b, err := quetBienBanDoc(rows, false)
+			if err != nil {
+				return domain.BienBanHop{}, "", err
+			}
+			return b, b.ID, nil
+		})
+	}
 	if err != nil {
 		return kq, err
 	}
@@ -130,6 +178,244 @@ func (s *BienBanHopStore) DanhSach(ctx context.Context, yc page.Request) (
 		kq.Items[i].KetLuan = theoBienBan[kq.Items[i].ID]
 	}
 	return kq, nil
+}
+
+// trangTheoNgayHop reads one page in the register's order: `ngay_hop DESC, tao_luc DESC, id ASC` —
+// the column order AND directions of index `bien_ban_hop_theo_ngay_hop` (migration 0012), so the
+// planner can walk it forwards (desc) or backwards (asc) without a sort.
+//
+// # WHY THE ANCHOR IS EXPANDED AND NOT A ROW COMPARISON
+//
+// `(a, b, c) < ($x, $y, $z)` only means "after this row" when every key runs in the SAME direction.
+// Here `id` runs opposite to the other two (that is the index), so the predicate is written out:
+//
+//	ngay_hop < d OR (ngay_hop = d AND (tao_luc < t OR (tao_luc = t AND id > i)))      -- desc
+//
+// and every comparison flips for `order=asc`.
+//
+// # THE DAY IS BOUND AS `$2::date` FROM A 'YYYY-MM-DD' STRING
+//
+// Migration 0012's header warning: a DATE compared with a bound time.Time is cast through the
+// session time zone, so a server in UTC+7 would compare against the previous day and the page would
+// repeat or skip a whole day of meetings. A text value cast to DATE carries no zone at all.
+//
+// ALL THREE KEYS ARE NOT NULL (`ngay_hop` and `tao_luc` by 0007's schema, `id` as the key), which is
+// what a keyset walk needs: a NULL key would drop its row from every page after the first.
+func (s *BienBanHopStore) trangTheoNgayHop(ctx context.Context, yc page.Request) (
+	page.Result[domain.BienBanHop], error) {
+
+	out := page.NewResult[domain.BienBanHop]()
+
+	// op compares the two DATE/TIME keys, opID the tie-break, which runs the other way.
+	op, opID, huong, huongID := "<", ">", "DESC", "ASC"
+	if yc.Dir() == page.Asc {
+		op, opID, huong, huongID = ">", "<", "ASC", "DESC"
+	}
+
+	var tail strings.Builder
+	tail.WriteString(`AND deleted_at IS NULL`)
+	args := make([]any, 0, 4)
+	if a, ok := yc.After(); ok {
+		ngay, luc, err := tachMocNgayHop(a.Key.Text())
+		if err != nil {
+			return out, err
+		}
+		fmt.Fprintf(&tail, ` AND (ngay_hop %s $2::date OR (ngay_hop = $2::date AND (tao_luc %s $3 OR (tao_luc = $3 AND id %s $4))))`,
+			op, op, opID)
+		args = append(args, ngay, luc, a.ID)
+	}
+	fmt.Fprintf(&tail, ` ORDER BY ngay_hop %s, tao_luc %s, id %s LIMIT $%d`,
+		huong, huong, huongID, len(args)+2)
+	// limit+1: the extra row only says there is a next page; it is never returned.
+	args = append(args, yc.Limit()+1)
+
+	rows, err := s.db.For(ctx).Query(ctx, cotBienBanDoc, "bien_ban_hop", tail.String(), args...)
+	if err != nil {
+		return out, fmt.Errorf("bien_ban_hop: đọc trang theo ngày họp: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		if len(out.Items) == yc.Limit() {
+			out.HasMore = true
+			break
+		}
+		b, err := quetBienBanDoc(rows, false)
+		if err != nil {
+			return page.NewResult[domain.BienBanHop](), err
+		}
+		out.Items = append(out.Items, b)
+	}
+	if err := rows.Err(); err != nil {
+		return page.NewResult[domain.BienBanHop](), fmt.Errorf("bien_ban_hop: duyệt trang: %w", err)
+	}
+	if out.HasMore {
+		cuoi := out.Items[len(out.Items)-1]
+		out.NextCursor = page.Encode(yc.Column(), yc.Dir(),
+			page.Anchor{Key: page.TextKey(mocNgayHop(cuoi)), ID: cuoi.ID})
+	}
+	return out, nil
+}
+
+// TheoID reads ONE live meeting of this commune with everything the detail screen shows: the list's
+// columns, the minutes body, the attendees, its conclusions with their counters, and the ids of the
+// live supplementary minutes that point at it.
+//
+// ErrBienBanKhongTonTai FOR ALL THREE CAUSES — unknown id, another commune's id, soft-deleted — and
+// the handler answers one identical 404. Telling them apart tells a caller which minutes exist in a
+// register they are not reading.
+//
+// THREE STATEMENTS, EACH BOUNDED, NONE PER CONCLUSION: the meeting, its conclusions with counters
+// (the list's own aggregate, cauKetLuanKemDem), and its supplements.
+func (s *BienBanHopStore) TheoID(ctx context.Context, id string) (domain.BienBanHop, error) {
+	rows, err := s.db.For(ctx).Query(ctx, cotBienBanChiTiet, "bien_ban_hop",
+		`AND id = $2 AND deleted_at IS NULL`, id)
+	if err != nil {
+		return domain.BienBanHop{}, fmt.Errorf("bien_ban_hop: đọc một biên bản: %w", err)
+	}
+	if !rows.Next() {
+		err := rows.Err()
+		rows.Close()
+		if err != nil {
+			return domain.BienBanHop{}, fmt.Errorf("bien_ban_hop: đọc một biên bản: %w", err)
+		}
+		return domain.BienBanHop{}, ErrBienBanKhongTonTai
+	}
+	b, err := quetBienBanDoc(rows, true)
+	rows.Close()
+	if err != nil {
+		return domain.BienBanHop{}, err
+	}
+
+	theo, err := s.ketLuanTheoBienBan(ctx, []string{b.ID})
+	if err != nil {
+		return domain.BienBanHop{}, err
+	}
+	b.KetLuan = theo[b.ID]
+
+	if b.DuocBoSungBoi, err = s.boSungCua(ctx, b.ID); err != nil {
+		return domain.BienBanHop{}, err
+	}
+	return b, nil
+}
+
+// TranBoSungMotBienBan bounds the supplements listed on one meeting. A meeting corrected more than a
+// handful of times is already unusual; past this ceiling the data is wrong, and the read REFUSES
+// rather than truncating — a short list would hide a correction of a signed record.
+const TranBoSungMotBienBan = 100
+
+// ErrQuaNhieuBoSung — the ceiling above was crossed.
+var ErrQuaNhieuBoSung = errors.New("bien_ban_hop: vượt trần số biên bản bổ sung của một biên bản")
+
+// boSungCua lists the LIVE supplementary minutes of one meeting, oldest first. NEVER nil — an empty
+// slice is "nobody supplemented it", which is a different statement from "not read".
+func (s *BienBanHopStore) boSungCua(ctx context.Context, id string) ([]string, error) {
+	rows, err := s.db.For(ctx).Query(ctx, "id", "bien_ban_hop",
+		`AND bo_sung_cho_id = $2 AND deleted_at IS NULL ORDER BY ngay_hop, tao_luc, id LIMIT $3`,
+		id, TranBoSungMotBienBan+1)
+	if err != nil {
+		return nil, fmt.Errorf("bien_ban_hop: đọc biên bản bổ sung: %w", err)
+	}
+	defer rows.Close()
+
+	ra := make([]string, 0, 2)
+	for rows.Next() {
+		var mot string
+		if err := rows.Scan(&mot); err != nil {
+			return nil, fmt.Errorf("bien_ban_hop: đọc dòng bổ sung: %w", err)
+		}
+		ra = append(ra, mot)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("bien_ban_hop: duyệt biên bản bổ sung: %w", err)
+	}
+	if len(ra) > TranBoSungMotBienBan {
+		return nil, ErrQuaNhieuBoSung
+	}
+	return ra, nil
+}
+
+// TranNhiemVuMotKetLuan bounds GET /api/v1/meetings/{id}/conclusions/{stt}/tasks. The route returns
+// the WHOLE list (a conclusion's tasks are one screen, §2's expanded row, not a register one pages
+// through), so the bound is a ceiling the data is measured against. §3 lets a conclusion be split
+// many times; 200 is far past "many" and short of anything a shared process should hand one caller.
+const TranNhiemVuMotKetLuan = 200
+
+// ErrQuaNhieuNhiemVuKetLuan — the ceiling was crossed. The caller REFUSES (500) rather than
+// truncating: a silently short list is a task that vanished from its conclusion's row while the
+// counter beside it still says it exists.
+var ErrQuaNhieuNhiemVuKetLuan = errors.New("nhiem_vu: vượt trần số nhiệm vụ của một kết luận")
+
+// cauKetLuanSong resolves ONE live conclusion of ONE live meeting by its ordinal. The meeting is
+// joined so a conclusion of soft-deleted minutes answers "not found", exactly as the detail route
+// answers for the minutes themselves. Both tables bound to $1 (QueryJoin's contract).
+const cauKetLuanSong = `SELECT k.id FROM ket_luan_hop k
+	JOIN bien_ban_hop b ON b.tenant_id = $1 AND b.id = k.bien_ban_id AND b.deleted_at IS NULL
+	WHERE k.tenant_id = $1 AND k.bien_ban_id = $2 AND k.thu_tu = $3 AND k.deleted_at IS NULL`
+
+// NhiemVuCuaKetLuan reads the LIVE tasks split from one conclusion, in the order they were split.
+//
+// TWO STATEMENTS: resolve the conclusion (ErrKetLuanKhongTonTai for an unknown meeting, another
+// commune's meeting, removed minutes, an unknown or removed conclusion — one answer for all), then
+// the tasks by the blurred pair `nguon_giao = 'ket-luan-hop' AND nguon_id = <conclusion id>`. The
+// source code is a BOUND PARAMETER carrying the domain constant, for cauKetLuanKemDem's reason.
+//
+// The rows are the task register's own rows (cotNhiemVu / quetNhiemVu), so the response can reuse
+// the register's row shape without a second mapping.
+func (s *BienBanHopStore) NhiemVuCuaKetLuan(ctx context.Context, bienBanID string, thuTu int) (
+	[]domain.NhiemVu, error) {
+
+	ketLuanID, err := s.ketLuanSong(ctx, bienBanID, thuTu)
+	if err != nil {
+		return nil, err
+	}
+
+	// `deleted_at IS NULL` — rule 7, invariant 2: a removed task leaves the list, as it leaves `x/y`.
+	rows, err := s.db.For(ctx).Query(ctx, cotNhiemVu, "nhiem_vu",
+		`AND nguon_giao = $2 AND nguon_id = $3 AND deleted_at IS NULL ORDER BY tao_luc, id LIMIT $4`,
+		string(domain.NguonKetLuanHop), ketLuanID, TranNhiemVuMotKetLuan+1)
+	if err != nil {
+		return nil, fmt.Errorf("nhiem_vu: đọc nhiệm vụ của kết luận: %w", err)
+	}
+	defer rows.Close()
+
+	ra := make([]domain.NhiemVu, 0, 4)
+	for rows.Next() {
+		n, err := quetNhiemVu(rows)
+		if err != nil {
+			return nil, err
+		}
+		ra = append(ra, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("nhiem_vu: duyệt nhiệm vụ của kết luận: %w", err)
+	}
+	if len(ra) > TranNhiemVuMotKetLuan {
+		// The rows are DROPPED rather than trimmed and returned — see ErrQuaNhieuNhiemVuKetLuan.
+		return nil, ErrQuaNhieuNhiemVuKetLuan
+	}
+	return ra, nil
+}
+
+// ketLuanSong runs cauKetLuanSong and returns the conclusion's internal id.
+func (s *BienBanHopStore) ketLuanSong(ctx context.Context, bienBanID string, thuTu int) (string, error) {
+	rows, err := s.db.For(ctx).QueryJoin(ctx, cauKetLuanSong, bienBanID, thuTu)
+	if err != nil {
+		return "", fmt.Errorf("ket_luan_hop: đọc kết luận: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return "", fmt.Errorf("ket_luan_hop: đọc kết luận: %w", err)
+		}
+		return "", ErrKetLuanKhongTonTai
+	}
+	var id string
+	if err := rows.Scan(&id); err != nil {
+		return "", fmt.Errorf("ket_luan_hop: đọc dòng: %w", err)
+	}
+	return id, nil
 }
 
 // cauKetLuanKemDem reads the conclusions of several meetings WITH the two task counters of §2.
@@ -162,10 +448,19 @@ func (s *BienBanHopStore) DanhSach(ctx context.Context, yc page.Request) (
 // suite runs on reads the SELECT list as the text between the first `SELECT ` and the first ` FROM `
 // (see driver_gia_test.go); with a newline in front of FROM it cannot find it, and the suite fails
 // with a message about the column list rather than about this query.
-const cauKetLuanKemDem = `SELECT k.id, k.bien_ban_id, k.thu_tu, k.noi_dung, k.tao_luc, n.so_nhiem_vu, n.so_nhiem_vu_xong FROM ket_luan_hop k
+//
+// # THE THIRD COUNTER AND THE MARK (migration 0012, user decision 4)
+//
+// `so_nhiem_vu_tre_han` counts live tasks NOT in `$3` (`hoan-thanh`) that are late by
+// dieuKienTreHan — the one SQL spelling of domain.NhiemVu.TreHan, shared with the task register's
+// "Chỉ việc quá hạn" filter so the two can never disagree. `k.khong_phat_sinh` is the human-set
+// mark. domain.KetLuanHop.TrangThai turns these four inputs into the derived status; nothing here
+// decides a status.
+const cauKetLuanKemDem = `SELECT k.id, k.bien_ban_id, k.thu_tu, k.noi_dung, k.tao_luc, k.khong_phat_sinh, n.so_nhiem_vu, n.so_nhiem_vu_xong, n.so_nhiem_vu_tre_han FROM ket_luan_hop k
 	LEFT JOIN LATERAL (
 		SELECT count(*) AS so_nhiem_vu,
-		       count(*) FILTER (WHERE nv.trang_thai = $3) AS so_nhiem_vu_xong
+		       count(*) FILTER (WHERE nv.trang_thai = $3) AS so_nhiem_vu_xong,
+		       count(*) FILTER (WHERE nv.trang_thai <> $3 AND ` + dieuKienTreHan + `) AS so_nhiem_vu_tre_han
 		FROM nhiem_vu nv
 		WHERE nv.tenant_id = $1
 		  AND nv.nguon_giao = $2
@@ -206,8 +501,8 @@ func (s *BienBanHopStore) ketLuanTheoBienBan(ctx context.Context, ids []string) 
 	ra := make(map[string][]domain.KetLuanHop, len(ids))
 	for rows.Next() {
 		var k domain.KetLuanHop
-		if err := rows.Scan(&k.ID, &k.BienBanID, &k.ThuTu, &k.NoiDung, &k.TaoLuc,
-			&k.SoNhiemVu, &k.SoNhiemVuXong); err != nil {
+		if err := rows.Scan(&k.ID, &k.BienBanID, &k.ThuTu, &k.NoiDung, &k.TaoLuc, &k.KhongPhatSinh,
+			&k.SoNhiemVu, &k.SoNhiemVuXong, &k.SoNhiemVuTreHan); err != nil {
 			return nil, fmt.Errorf("ket_luan_hop: đọc dòng: %w", err)
 		}
 		ra[k.BienBanID] = append(ra[k.BienBanID], k)
@@ -246,5 +541,61 @@ func quetBienBan(r quangKiem) (domain.BienBanHop, error) {
 	b.SoHieu = soHieu.String
 	b.DiaDiem = diaDiem.String
 	b.ChuTriMa = chuTri.String
+	return b, nil
+}
+
+// quetBienBanDoc reads one row of cotBienBanDoc — or of cotBienBanChiTiet when chiTiet is true.
+//
+// POSITIONAL, IN LOCKSTEP WITH THOSE TWO LISTS, and every column 0012 added is APPENDED after
+// cotBienBan's eight, never inserted: a destination inserted in the middle silently shifts every
+// column after it. Four of the new columns are nullable TEXT side by side (`ky_boi_ma`, `thu_ky_ma`,
+// `tb_so_ky_hieu`, `bo_sung_cho_id`); the fake-driver suite gives each a visibly different kind of
+// value so a shift comes back as wrong data.
+func quetBienBanDoc(r quangKiem, chiTiet bool) (domain.BienBanHop, error) {
+	var (
+		b domain.BienBanHop
+
+		soHieu, diaDiem, chuTri       sql.NullString
+		kyBoi, thuKy, tbSo, boSungCho sql.NullString
+		kyLuc, tbNgay                 sql.NullTime
+		noiDung                       sql.NullString
+		thanhPhan                     []byte
+	)
+
+	dich := []any{
+		&b.ID, &b.TenCuocHop, &b.NgayHop, &soHieu, &diaDiem, &chuTri,
+		&b.NguoiTaoMa, &b.TaoLuc,
+		&b.TrangThai, &kyLuc, &kyBoi, &thuKy,
+		&tbSo, &tbNgay, &boSungCho,
+	}
+	if chiTiet {
+		dich = append(dich, &noiDung, &thanhPhan)
+	}
+	if err := r.Scan(dich...); err != nil {
+		return domain.BienBanHop{}, fmt.Errorf("bien_ban_hop: đọc dòng: %w", err)
+	}
+
+	b.SoHieu = soHieu.String
+	b.DiaDiem = diaDiem.String
+	b.ChuTriMa = chuTri.String
+	b.KyLuc = kyLuc.Time
+	b.KyBoiMa = kyBoi.String
+	b.ThuKyMa = thuKy.String
+	b.TbSoKyHieu = tbSo.String
+	b.TbNgay = tbNgay.Time
+	b.BoSungChoID = boSungCho.String
+
+	if chiTiet {
+		b.NoiDung = noiDung.String
+		// NEVER nil ON THE DETAIL READ: the column is NOT NULL DEFAULT '[]', and an empty list is
+		// "nobody recorded attendees", which the response must be able to say.
+		b.ThanhPhan = []string{}
+		if len(thanhPhan) > 0 {
+			if err := json.Unmarshal(thanhPhan, &b.ThanhPhan); err != nil {
+				// NOT the value: the list names people (rule 3, forbidden #3).
+				return domain.BienBanHop{}, fmt.Errorf("bien_ban_hop: đọc thành phần tham dự: %w", err)
+			}
+		}
+	}
 	return b, nil
 }

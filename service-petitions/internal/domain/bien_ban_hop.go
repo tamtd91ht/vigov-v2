@@ -63,8 +63,7 @@ type BienBanHop struct {
 	//
 	// ⚠ NEITHER IS POPULATED BY THE REGISTER LIST. `GET /api/v1/meetings` does not select them and
 	// the card of §2 does not draw them, so an empty value here means "this read did not ask for it",
-	// NOT "this meeting has none". They exist on this struct because the WRITE path carries them;
-	// reading them back needs the detail route, which does not exist yet.
+	// NOT "this meeting has none". The detail read (`GET /api/v1/meetings/{id}`) fills both.
 	//
 	// ⚠ ThanhPhan IS A LIST OF STAFF. Migration 0007 says so on the column: the day somebody writes a
 	// reporter's name and number into it, this table has become a personal-data store (rule 3). And
@@ -75,6 +74,38 @@ type BienBanHop struct {
 
 	NguoiTaoMa string
 	TaoLuc     time.Time
+
+	// --- the lifecycle and the fields of migration 0012 (user decisions 25/09/2026) ---------------
+
+	// TrangThai is TrangThaiBienBanDuThao or TrangThaiBienBanDaKy. Every read that fills this struct
+	// selects it; the column is NOT NULL DEFAULT 'du-thao', so an empty value here means the read did
+	// not ask, never "no status".
+	TrangThai string
+
+	// KyLuc and KyBoiMa record the signing act. BOTH ZERO ON A DRAFT, both set on signed minutes —
+	// the CHECK `bien_ban_hop_ky_du_truong` holds them together. KyBoiMa is a STAFF BUSINESS CODE
+	// (rule 6, invariant 8).
+	KyLuc   time.Time
+	KyBoiMa string
+
+	// ThuKyMa is the secretary, a STAFF BUSINESS CODE. Empty is ordinary: small meetings name none.
+	ThuKyMa string
+
+	// TbSoKyHieu and TbNgay are the conclusion notice (Thông báo kết luận), TRANSCRIBED from the
+	// office clerk's register — never minted here (Decree 30/2020, Art. 15). Both or neither (CHECK
+	// `bien_ban_hop_thong_bao_du_truong`). TbNgay is a CALENDAR DAY, like NgayHop.
+	TbSoKyHieu string
+	TbNgay     time.Time
+
+	// BoSungChoID is the original these SUPPLEMENTARY minutes correct. Empty on ordinary minutes.
+	BoSungChoID string
+
+	// DuocBoSungBoi lists the LIVE supplementary minutes pointing at THIS one, oldest first.
+	//
+	// ⚠ nil MEANS "NOT READ ON THIS SURFACE", NOT "NOBODY SUPPLEMENTED IT" — the same split
+	// NhiemVu.VanBan makes. The register LIST does not read it; the detail read always fills a
+	// non-nil slice, empty when there is none.
+	DuocBoSungBoi []string
 
 	// KetLuan holds the meeting's conclusions IN THE ORDER THE CIRCLES ARE DRAWN — by ThuTu, which
 	// is the order the store reads them in. Empty is a real, supported state: §7.3 says a meeting
@@ -114,6 +145,81 @@ type KetLuanHop struct {
 	// which is the only reading under which the fraction stays true after a removal.
 	SoNhiemVu     int
 	SoNhiemVuXong int
+
+	// SoNhiemVuTreHan counts the live tasks that are NOT `hoan-thanh` AND late by NhiemVu.TreHan's
+	// definition — aggregated in SQL by the store (the one SQL spelling of TreHan,
+	// store.dieuKienTreHan). A count and not a flag: it is read, never written (rule 10, invariant 3).
+	SoNhiemVuTreHan int
+
+	// KhongPhatSinh is the human-set mark "không phát sinh nhiệm vụ" (migration 0012, decision 4).
+	// The ONLY stored input to TrangThai below; nothing can derive a person's judgement.
+	KhongPhatSinh bool
+}
+
+// TrangThaiKetLuan is a conclusion's DERIVED status (user decision 4, 25/09/2026). It is never
+// stored: migration 0012 refuses a status column on `ket_luan_hop` for rule 10, invariant 3's reason
+// — a stored copy is wrong the moment a task moves, and the stale copy is the one a report reads.
+type TrangThaiKetLuan string
+
+const (
+	KetLuanChuaGiao     TrangThaiKetLuan = "chua-giao"
+	KetLuanDangThucHien TrangThaiKetLuan = "dang-thuc-hien"
+	KetLuanQuaHan       TrangThaiKetLuan = "qua-han"
+	KetLuanHoanThanh    TrangThaiKetLuan = "hoan-thanh"
+)
+
+// TrangThai derives the status, in the precedence the user fixed:
+//
+//	khong_phat_sinh set                   -> hoan-thanh (the mark "counts as done")
+//	no live task                          -> chua-giao
+//	any live task not done AND late       -> qua-han
+//	any live task not done                -> dang-thuc-hien
+//	every live task `hoan-thanh`          -> hoan-thanh
+//
+// "DONE" IS `hoan-thanh` AND NOTHING ELSE, the same reading SoNhiemVuXong has. ⚠ A task in
+// `chuyen-tiep` or `tam-dung` therefore counts as NOT done, and a late one makes the conclusion
+// `qua-han`. That is the literal reading of the decision, not a judgement: how those two states
+// should count is an OPEN question for the customer (ledger service-petitions/
+// bien-ban-hop-tang-du-lieu, "đếm nhiệm vụ chuyen-tiep/tam-dung"). Consequence worth knowing: a
+// conclusion whose only task was forwarded (`chuyen-tiep` is terminal) never reaches `hoan-thanh`.
+//
+// THE MARK WINS EVEN IF LIVE TASKS EXIST. The use case refuses to set it while a live task points at
+// the conclusion (decision 4), so the combination should not occur; if it does, the mark is the one
+// act a person recorded, and the precedence above is the user's.
+func (k KetLuanHop) TrangThai() TrangThaiKetLuan {
+	switch {
+	case k.KhongPhatSinh:
+		return KetLuanHoanThanh
+	case k.SoNhiemVu == 0:
+		return KetLuanChuaGiao
+	case k.SoNhiemVuTreHan > 0:
+		return KetLuanQuaHan
+	case k.SoNhiemVuXong < k.SoNhiemVu:
+		return KetLuanDangThucHien
+	default:
+		return KetLuanHoanThanh
+	}
+}
+
+// TienDoKetLuan is the card's main figure, `x/y kết luận hoàn thành` (decision 4; SRS.md:177 of the
+// sibling). Done = TrangThai() == hoan-thanh, which includes the `khong_phat_sinh` mark.
+func (b BienBanHop) TienDoKetLuan() (xong, tong int) {
+	for _, k := range b.KetLuan {
+		if k.TrangThai() == KetLuanHoanThanh {
+			xong++
+		}
+	}
+	return xong, len(b.KetLuan)
+}
+
+// LienKetKetLuanHop is the back-link a task born from a conclusion shows in its drawer: which
+// meeting, which numbered conclusion. READ-ONLY context resolved by the task register's reads — it is
+// not a second copy of the link, which stays the blurred pair `nguon_giao`/`nguon_id` (migration
+// 0006).
+type LienKetKetLuanHop struct {
+	BienBanID  string
+	TenCuocHop string
+	ThuTu      int
 }
 
 // SoKetLuan is `n` in the card badge `{n} kết luận · {x}/{y} nhiệm vụ xong` (§2).

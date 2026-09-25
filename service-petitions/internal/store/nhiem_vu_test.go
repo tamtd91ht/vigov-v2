@@ -78,6 +78,14 @@ func dongNhiemVu(sua map[string]driver.Value) map[string]driver.Value {
 		// ordinary case, so a Scan that dropped this column would still pass every assertion if the
 		// sample were nil. A root task is covered by the case that overrides it.
 		"nhiem_vu_cha_id": "nv-cha-001",
+
+		// The back-link statement's columns (cauNguonHop). The fixture task is `ket-luan-hop`, so the
+		// register's reads run that second statement and the fake answers it from this same map. The
+		// conclusion id matches `nguon_id` above, so the link resolves.
+		"k.id":           "klh-007",
+		"b.id":           "bb-042",
+		"b.ten_cuoc_hop": "Giao ban UBND xã tháng 8",
+		"k.thu_tu":       int64(3),
 	}
 	for k, v := range sua {
 		d[k] = v
@@ -94,8 +102,9 @@ func TestTheoMaBuocXaVaLoaiDongDaXoa(t *testing.T) {
 	if _, err := s.TheoMa(ctxXa(xaThu), maNhiemVuThu); err != nil {
 		t.Fatalf("đọc nhiệm vụ: %v", err)
 	}
-	if len(k.lenh) != 1 {
-		t.Fatalf("chạy %d câu lệnh, muốn 1", len(k.lenh))
+	// TWO statements: the task, then its meeting back-link (the fixture task is `ket-luan-hop`).
+	if len(k.lenh) != 2 {
+		t.Fatalf("chạy %d câu lệnh, muốn 2", len(k.lenh))
 	}
 	l := k.lenh[0]
 
@@ -127,8 +136,19 @@ func TestTheoMaXaTrongContextQuyetDinhChuKhongPhaiThamSo(t *testing.T) {
 	if _, err := s.TheoMa(ctxXa(xaKhac), maNhiemVuThu); err != nil {
 		t.Fatal(err)
 	}
-	if k.lenh[0].args[0] == k.lenh[1].args[0] {
-		t.Fatalf("hai ngữ cảnh khác xã lại gửi cùng $1 = %v", k.lenh[0].args[0])
+	// Two statements per call (task + back-link): [0],[1] are commune A's, [2],[3] commune B's. EVERY
+	// one of B's must carry B — the back-link is a join, the half that could name A's meeting.
+	if len(k.lenh) != 4 {
+		t.Fatalf("chạy %d câu lệnh, muốn 4", len(k.lenh))
+	}
+	for i, l := range k.lenh {
+		muon := string(xaThu)
+		if i >= 2 {
+			muon = string(xaKhac)
+		}
+		if l.args[0] != muon {
+			t.Errorf("câu lệnh %d: $1 = %v, muốn %q", i, l.args[0], muon)
+		}
 	}
 }
 
@@ -255,8 +275,10 @@ func chayDanhSachNhiemVu(t *testing.T, loc LocNhiemVu) lenhGia {
 	if _, err := s.DanhSach(ctxXa(xaThu), loc, yc); err != nil {
 		t.Fatalf("DanhSach: %v", err)
 	}
-	if len(k.lenh) != 1 {
-		t.Fatalf("chạy %d câu lệnh, muốn 1", len(k.lenh))
+	// The page, then ONE back-link statement for the whole page (the fixture task is
+	// `ket-luan-hop`). The page statement is the one these cases inspect.
+	if len(k.lenh) != 2 {
+		t.Fatalf("chạy %d câu lệnh, muốn 2", len(k.lenh))
 	}
 	return k.lenh[0]
 }

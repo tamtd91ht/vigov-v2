@@ -157,6 +157,16 @@ func (khoBienBan) DanhSach(ctx context.Context, _ page.Request) (
 	return page.NewResult[domain.BienBanHop](), nil
 }
 
+func (khoBienBan) TheoID(ctx context.Context, _ string) (domain.BienBanHop, error) {
+	_ = tenant.MustFrom(ctx)
+	return domain.BienBanHop{}, petstore.ErrBienBanKhongTonTai
+}
+
+func (khoBienBan) NhiemVuCuaKetLuan(ctx context.Context, _ string, _ int) ([]domain.NhiemVu, error) {
+	_ = tenant.MustFrom(ctx)
+	return nil, petstore.ErrKetLuanKhongTonTai
+}
+
 type khoNhanLinhVuc struct{}
 
 func (khoNhanLinhVuc) DanhSach(ctx context.Context) ([]domain.NhanLinhVuc, error) {

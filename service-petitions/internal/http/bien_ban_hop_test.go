@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
+	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
 
 // Tests for GET /api/v1/meetings.
@@ -32,8 +34,11 @@ import (
 // as *store.Scoped does. Keyed any other way, the isolation cases would pass while proving nothing.
 type bienBanGia struct {
 	theo map[tenant.ID][]domain.BienBanHop
-	loi  error
-	goi  int
+	// daXoa: ids the store would treat as soft-deleted. nhiemVu: tasks per "<meeting>/<ordinal>".
+	daXoa   map[string]bool
+	nhiemVu map[tenant.ID]map[string][]domain.NhiemVu
+	loi     error
+	goi     int
 }
 
 func (b *bienBanGia) DanhSach(ctx context.Context, _ page.Request) (
@@ -48,12 +53,48 @@ func (b *bienBanGia) DanhSach(ctx context.Context, _ page.Request) (
 	return kq, nil
 }
 
+// TheoID reads ONE meeting of the context's commune; `daXoa` holds soft-deleted ids, which answer
+// exactly like an unknown id — the store's contract (ErrBienBanKhongTonTai for all three causes).
+func (b *bienBanGia) TheoID(ctx context.Context, id string) (domain.BienBanHop, error) {
+	b.goi++
+	if b.loi != nil {
+		return domain.BienBanHop{}, b.loi
+	}
+	if b.daXoa[id] {
+		return domain.BienBanHop{}, petstore.ErrBienBanKhongTonTai
+	}
+	for _, bb := range b.theo[tenant.MustFrom(ctx)] {
+		if bb.ID == id {
+			return bb, nil
+		}
+	}
+	return domain.BienBanHop{}, petstore.ErrBienBanKhongTonTai
+}
+
+// NhiemVuCuaKetLuan returns the tasks recorded under "<meeting id>/<ordinal>" for the context's
+// commune — keyed by commune, so the cross-commune case has something to leak.
+func (b *bienBanGia) NhiemVuCuaKetLuan(ctx context.Context, bienBanID string, thuTu int) (
+	[]domain.NhiemVu, error) {
+
+	b.goi++
+	if b.loi != nil {
+		return nil, b.loi
+	}
+	ds, ok := b.nhiemVu[tenant.MustFrom(ctx)][bienBanID+"/"+strconv.Itoa(thuTu)]
+	if !ok {
+		return nil, petstore.ErrKetLuanKhongTonTai
+	}
+	return ds, nil
+}
+
 // The fixture instants are FIXED, not relative to time.Now(): the one thing these dates must do is
 // come out of the response byte for byte.
 var (
 	mocNgayHopA = time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC)
 	mocTaoBBA   = time.Date(2026, 8, 6, 3, 30, 0, 0, time.UTC)
 	mocTaoKLA   = time.Date(2026, 8, 6, 4, 0, 0, 0, time.UTC)
+	mocKyBBA    = time.Date(2026, 8, 7, 9, 15, 0, 0, time.UTC)
+	mocHanNVKL  = time.Date(2026, 8, 20, 10, 0, 0, 0, time.UTC)
 )
 
 // bienBanMau gives commune A §8's sample meeting — three conclusions with the specification's own
@@ -74,10 +115,23 @@ func bienBanMau() *bienBanGia {
 				ChuTriMa:   "CB-00007",
 				NguoiTaoMa: maCanBo,
 				TaoLuc:     mocTaoBBA,
+				// SIGNED minutes with every 0012 field set, each value visibly different in kind, so
+				// a field mapped onto its neighbour comes back as wrong data.
+				TrangThai:     domain.TrangThaiBienBanDaKy,
+				KyLuc:         mocKyBBA,
+				KyBoiMa:       "CB-00031",
+				ThuKyMa:       "CB-00042",
+				TbSoKyHieu:    "45/TB-UBND",
+				TbNgay:        time.Date(2026, 8, 12, 0, 0, 0, 0, time.UTC),
+				NoiDung:       "Toàn văn biên bản giao ban tháng 8.",
+				ThanhPhan:     []string{"CB-00007", "CB-00042", "Đại diện Mặt trận xã"},
+				DuocBoSungBoi: []string{"bb-003"},
 				KetLuan: []domain.KetLuanHop{
+					// ① one task, running and LATE -> qua-han. ② one task, running -> dang-thuc-hien.
+					// ③ one task, finished -> hoan-thanh.
 					{ID: "kl-1", BienBanID: "bb-001", ThuTu: 1, TaoLuc: mocTaoKLA,
 						NoiDung:   "Giao Địa chính rà soát tiến độ tuyến đường, báo cáo trước ngày 20/8.",
-						SoNhiemVu: 1, SoNhiemVuXong: 0},
+						SoNhiemVu: 1, SoNhiemVuXong: 0, SoNhiemVuTreHan: 1},
 					{ID: "kl-2", BienBanID: "bb-001", ThuTu: 2, TaoLuc: mocTaoKLA,
 						NoiDung:   "Giao Văn hoá – Xã hội hoàn tất hồ sơ hỗ trợ sinh kế đợt 3.",
 						SoNhiemVu: 1, SoNhiemVuXong: 0},
@@ -92,6 +146,7 @@ func bienBanMau() *bienBanGia {
 				NgayHop:    time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC),
 				NguoiTaoMa: maCanBo,
 				TaoLuc:     mocTaoBBA,
+				TrangThai:  domain.TrangThaiBienBanDuThao,
 			},
 		},
 		xaB: {
@@ -101,9 +156,24 @@ func bienBanMau() *bienBanGia {
 				NgayHop:    mocNgayHopA,
 				NguoiTaoMa: maCanBo,
 				TaoLuc:     mocTaoBBA,
+				TrangThai:  domain.TrangThaiBienBanDuThao,
 			},
 		},
-	}}
+	},
+		daXoa: map[string]bool{"bb-da-xoa": true},
+		nhiemVu: map[tenant.ID]map[string][]domain.NhiemVu{
+			xaA: {"bb-001/1": {{
+				ID: "nv-kl-1", Ma: "NV07", Loai: "theo-van-ban", TieuDe: "Rà soát tiến độ tuyến đường",
+				TrangThai: domain.DangThucHien, NguonGiao: domain.NguonKetLuanHop, NguonID: "kl-1",
+				NguoiThucHienMa: "CB-00311", BoPhanID: "bp-dia-chinh",
+				HanXuLy: mocHanNVKL, HanBanDau: mocHanNVKL, NguoiTaoMa: maCanBo, TaoLuc: mocTaoKLA,
+			}}},
+			xaB: {"bb-b-001/1": {{
+				ID: "nv-b-1", Ma: "NV01", TieuDe: "Việc của xã B", TrangThai: domain.MoiGiao,
+				NguonGiao: domain.NguonKetLuanHop, NguonID: "kl-b-1", NguoiTaoMa: maCanBo, TaoLuc: mocTaoKLA,
+			}}},
+		},
+	}
 }
 
 func docTrangBienBan(t *testing.T, than []byte) page.Result[bienBanRa] {

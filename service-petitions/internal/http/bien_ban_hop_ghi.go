@@ -254,9 +254,12 @@ func (h *Handler) ThemKetLuan(w http.ResponseWriter, r *http.Request) {
 	// so a client that guessed `len(conclusions) + 1` would be wrong on any meeting a conclusion has
 	// ever been removed from.
 	vietJSON(w, http.StatusCreated, ketLuanRa{
-		ID:        kl.ID,
-		Ordinal:   kl.ThuTu,
-		Content:   kl.NoiDung,
+		ID:      kl.ID,
+		Ordinal: kl.ThuTu,
+		Content: kl.NoiDung,
+		// A conclusion that did not exist a statement ago has no task and no mark: `chua-giao`,
+		// derived by the same function every read uses rather than spelled here.
+		Status:    string(kl.TrangThai()),
 		CreatedAt: kl.TaoLuc,
 	})
 }

@@ -2,7 +2,9 @@ package http
 
 // The STAFF READ surface of the meeting-minutes register (docs/ui-ux/04-bien-ban-hop.md §2, §5).
 //
-//	GET /api/v1/meetings   task.read
+//	GET /api/v1/meetings                                  task.read
+//	GET /api/v1/meetings/{id}                             task.read
+//	GET /api/v1/meetings/{id}/conclusions/{stt}/tasks     task.read
 //
 // # THE URL NOUN IS `meetings`, AND IT IS NOT IN THE MAPPING TABLE YET
 //
@@ -38,11 +40,13 @@ package http
 // ngày 20/8": §3's suggestion is the SCREEN's, the person confirms a date, and working-hours
 // arithmetic keeps its single implementation in identity (rule 10, forbidden #2; ADR 0007).
 //
-// WHAT IS STILL ABSENT: no detail route, no edit, no delete. Whether a conclusion that tasks already
-// point at may be reworded is an open question migration 0007 deliberately refused to answer.
+// WHAT IS STILL ABSENT on this read surface: nothing reads `dinh_kem` (no file store). Edit, delete
+// and signing are write acts and are not in this file.
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/vihat/vigov/core/authz"
@@ -57,10 +61,9 @@ import (
 //
 // THE FIELD NAMES SAY WHAT THE DATA IS, NOT WHAT THE SCREEN CALLS IT (ADR 0017).
 //
-// THE MINUTES BODY, THE ATTENDEE LIST AND THE ATTACHMENTS ARE NOT ON THIS RESPONSE. §2's card does
-// not draw them, and the full text of every meeting on a page would dwarf everything else on the
-// wire. A client must not read their absence as "this meeting has none" — there is no field, and
-// the detail route that would carry them is a later pass.
+// ONE SHAPE FOR THE LIST, THE DETAIL AND THE CREATE REPLY. The minutes body, the attendee list and
+// the supplements are carried by the DETAIL route only (pointer fields, absent elsewhere — see
+// SupplementedBy); the attachments by no route yet (no file store).
 type bienBanRa struct {
 	// ID is the internal id, and it is on the wire for ONE reason: §3's split flow sends the
 	// CONCLUSION's id back as `nguon_id`, so ids on this surface are load-bearing rather than
@@ -97,8 +100,50 @@ type bienBanRa struct {
 	TaskCount     int `json:"task_count"`
 	TaskDoneCount int `json:"task_done_count"`
 
+	// ConclusionCount and ConclusionDoneCount are the card's MAIN figure since user decision 4
+	// (25/09/2026): `x/y kết luận hoàn thành`. Done = the derived status is `hoan-thanh`, which
+	// includes a conclusion marked "không phát sinh nhiệm vụ". domain.BienBanHop.TienDoKetLuan.
+	ConclusionCount     int `json:"conclusion_count"`
+	ConclusionDoneCount int `json:"conclusion_done_count"`
+
+	// Status is `du-thao` or `da-ky` (migration 0012). Signed minutes are locked; a correction is
+	// supplementary minutes (`supplements_id` on the correction, `supplemented_by` here).
+	Status string `json:"status"`
+
+	// SignedAt and SignedBy record the signing act — absent on a draft. SignedBy is a STAFF BUSINESS
+	// CODE (rule 6, invariant 8).
+	SignedAt *time.Time `json:"signed_at,omitempty"`
+	SignedBy string     `json:"signed_by,omitempty"`
+
+	// Secretary is a STAFF BUSINESS CODE; absent when the meeting named none.
+	Secretary string `json:"secretary,omitempty"`
+
+	// Notice is the conclusion notice (Thông báo kết luận), TRANSCRIBED — absent until recorded. The
+	// number and the day travel together or not at all (the schema's CHECK).
+	Notice *thongBaoKetLuanRa `json:"notice,omitempty"`
+
+	// SupplementsID is the original these supplementary minutes correct — absent on ordinary minutes.
+	SupplementsID string `json:"supplements_id,omitempty"`
+
+	// SupplementedBy, Content and Attendees are ON THE DETAIL ROUTE ONLY.
+	//
+	// ⚠ ABSENT AND EMPTY ARE TWO STATEMENTS, the same split `documents` makes on a task: absent =
+	// "this surface (the list) does not carry it"; `[]` / `""` on the detail route = "none recorded".
+	// A pointer is what lets the contract say so — a bare slice would be declared a required array
+	// by tools/apidoc and be `null` on the list.
+	SupplementedBy *[]string `json:"supplemented_by,omitempty"`
+	Content        *string   `json:"content,omitempty"`
+	Attendees      *[]string `json:"attendees,omitempty"`
+
 	CreatedBy string    `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// thongBaoKetLuanRa is the transcribed reference of the conclusion notice.
+type thongBaoKetLuanRa struct {
+	ReferenceNo string `json:"reference_no"`
+	// IssuedOn is a CALENDAR DAY, `2026-08-12`, like `held_on`.
+	IssuedOn string `json:"issued_on"`
 }
 
 // ketLuanRa is one numbered conclusion (§2's `①` rows).
@@ -119,6 +164,15 @@ type ketLuanRa struct {
 	TaskCount     int `json:"task_count"`
 	TaskDoneCount int `json:"task_done_count"`
 
+	// Status is DERIVED on every read, never stored (user decision 4; migration 0012 refuses a status
+	// column): `chua-giao` · `dang-thuc-hien` · `qua-han` · `hoan-thanh`, precedence and the treatment
+	// of `chuyen-tiep`/`tam-dung` on domain.KetLuanHop.TrangThai.
+	Status string `json:"status"`
+
+	// NoTask is the human-set mark "không phát sinh nhiệm vụ". When true, Status is `hoan-thanh`; the
+	// flag is what tells that `hoan-thanh` apart from "every task finished".
+	NoTask bool `json:"no_task"`
+
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -137,18 +191,37 @@ func ngayHopRa(t time.Time) string { return t.Format("2006-01-02") }
 // the same thing about the columns.
 func bienBanRaNgoai(b domain.BienBanHop) bienBanRa {
 	xong, tong := b.TienDoNhiemVu()
+	klXong, klTong := b.TienDoKetLuan()
 	ra := bienBanRa{
-		ID:            b.ID,
-		Title:         b.TenCuocHop,
-		HeldOn:        ngayHopRa(b.NgayHop),
-		ReferenceNo:   b.SoHieu,
-		Location:      b.DiaDiem,
-		ChairedBy:     b.ChuTriMa,
-		Conclusions:   make([]ketLuanRa, 0, len(b.KetLuan)),
-		TaskCount:     tong,
-		TaskDoneCount: xong,
-		CreatedBy:     b.NguoiTaoMa,
-		CreatedAt:     b.TaoLuc,
+		ID:                  b.ID,
+		Title:               b.TenCuocHop,
+		HeldOn:              ngayHopRa(b.NgayHop),
+		ReferenceNo:         b.SoHieu,
+		Location:            b.DiaDiem,
+		ChairedBy:           b.ChuTriMa,
+		Conclusions:         make([]ketLuanRa, 0, len(b.KetLuan)),
+		TaskCount:           tong,
+		TaskDoneCount:       xong,
+		ConclusionCount:     klTong,
+		ConclusionDoneCount: klXong,
+		Status:              b.TrangThai,
+		SignedBy:            b.KyBoiMa,
+		Secretary:           b.ThuKyMa,
+		SupplementsID:       b.BoSungChoID,
+		CreatedBy:           b.NguoiTaoMa,
+		CreatedAt:           b.TaoLuc,
+	}
+	// A ZERO time.Time BECOMES AN ABSENT FIELD, never `0001-01-01` on the wire.
+	if !b.KyLuc.IsZero() {
+		t := b.KyLuc
+		ra.SignedAt = &t
+	}
+	if b.TbSoKyHieu != "" || !b.TbNgay.IsZero() {
+		tb := thongBaoKetLuanRa{ReferenceNo: b.TbSoKyHieu}
+		if !b.TbNgay.IsZero() {
+			tb.IssuedOn = ngayHopRa(b.TbNgay)
+		}
+		ra.Notice = &tb
 	}
 	for _, k := range b.KetLuan {
 		ra.Conclusions = append(ra.Conclusions, ketLuanRa{
@@ -157,9 +230,30 @@ func bienBanRaNgoai(b domain.BienBanHop) bienBanRa {
 			Content:       k.NoiDung,
 			TaskCount:     k.SoNhiemVu,
 			TaskDoneCount: k.SoNhiemVuXong,
+			Status:        string(k.TrangThai()),
+			NoTask:        k.KhongPhatSinh,
 			CreatedAt:     k.TaoLuc,
 		})
 	}
+	return ra
+}
+
+// bienBanChiTietRaNgoai is the DETAIL response: the card plus the three fields only this route
+// carries, always present (possibly empty) — see the note on SupplementedBy.
+func bienBanChiTietRaNgoai(b domain.BienBanHop) bienBanRa {
+	ra := bienBanRaNgoai(b)
+	noiDung := b.NoiDung
+	ra.Content = &noiDung
+	thanhPhan := b.ThanhPhan
+	if thanhPhan == nil {
+		thanhPhan = []string{}
+	}
+	ra.Attendees = &thanhPhan
+	boSung := b.DuocBoSungBoi
+	if boSung == nil {
+		boSung = []string{}
+	}
+	ra.SupplementedBy = &boSung
 	return ra
 }
 
@@ -195,6 +289,14 @@ func (h *Handler) DanhSachBienBan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	kq, err := h.d.DanhSachBienBan.DanhSach(ctx, yc)
+	if errors.Is(err, page.ErrCursor) {
+		// The `held_on` cursor carries a composite key the STORE decodes (the meeting day must be
+		// bound as a DATE — see petstore.SapXepBienBan), so a malformed one surfaces here rather than
+		// in page.Parse. Same answer as any other bad cursor, same refusal to echo it.
+		status, ma, thongBao := page.HTTPError(err)
+		httpx.WriteError(w, status, ma, thongBao, "")
+		return
+	}
 	if err != nil {
 		// The wrapped error carries the store failure. IT DOES NOT REACH THE CLIENT — and on this
 		// route that is more than a habit: the statement behind it quotes no row, but an error text
@@ -233,3 +335,94 @@ func (h *Handler) DanhSachBienBan(w http.ResponseWriter, r *http.Request) {
 // routes.go spells the key out as a literal, because tools/apidoc refuses anything there that is not
 // one.
 const QuyenDocBienBan authz.Perm = "task.read"
+
+// DocBienBan serves one meeting with everything. GET /api/v1/meetings/{id}
+//
+// ONE 404 BODY FOR THREE CAUSES — unknown id, another commune's id, soft-deleted minutes — because
+// the store answers ErrBienBanKhongTonTai for all three and this handler has one branch for it.
+//
+// NO AUDIT ENTRY, for DanhSachBienBan's reason.
+func (h *Handler) DocBienBan(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := r.PathValue("id")
+	if id == "" {
+		h.khongTimThayBienBan(w)
+		return
+	}
+
+	b, err := h.d.DanhSachBienBan.TheoID(ctx, id)
+	if errors.Is(err, petstore.ErrBienBanKhongTonTai) {
+		h.khongTimThayBienBan(w)
+		return
+	}
+	if err != nil {
+		// Includes petstore.ErrQuaNhieuBoSung — refused, not truncated. The wrapped error never
+		// reaches the client (rule 3, forbidden #3).
+		h.d.Log.Error("đọc một biên bản họp: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	vietJSON(w, http.StatusOK, bienBanChiTietRaNgoai(b))
+}
+
+// khongTimThayBienBan is THE ONE 404 of the meeting read routes — the same sentence the write routes
+// answer (traLoiLoiBienBan), so a caller cannot tell which door told it "no".
+func (h *Handler) khongTimThayBienBan(w http.ResponseWriter) {
+	httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy biên bản họp này.", "")
+}
+
+// nhiemVuKetLuanRa is the body of GET /api/v1/meetings/{id}/conclusions/{stt}/tasks.
+//
+// THE ITEMS ARE THE TASK REGISTER'S OWN ROW SHAPE (nhiemVuRa, built by nhiemVuRaNgoai) — one row
+// representation for one record, whichever list it appears in. That shape deliberately carries NO
+// `overdue` field: overdue is derived by the client from `due_at` / `completed_at`, the reason is on
+// nhiemVuRa, and a second representation here would be the first place the two disagree.
+//
+// NOT PAGINATED — the whole list, bounded by petstore.TranNhiemVuMotKetLuan (see the route).
+type nhiemVuKetLuanRa struct {
+	Items []nhiemVuRa `json:"items"`
+}
+
+// NhiemVuCuaKetLuan serves the live tasks split from one conclusion.
+// GET /api/v1/meetings/{id}/conclusions/{stt}/tasks
+func (h *Handler) NhiemVuCuaKetLuan(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Same parse and same sentence as the split route next door.
+	thuTu, err := strconv.Atoi(r.PathValue("stt"))
+	if err != nil || thuTu < 1 {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Số thứ tự kết luận phải là một số nguyên dương.", "")
+		return
+	}
+
+	ds, err := h.d.DanhSachBienBan.NhiemVuCuaKetLuan(ctx, r.PathValue("id"), thuTu)
+	if errors.Is(err, petstore.ErrKetLuanKhongTonTai) {
+		// ONE ANSWER for an unknown / other-commune / removed meeting and an unknown / removed
+		// conclusion — the split route's sentence.
+		httpx.WriteError(w, http.StatusNotFound, "not_found",
+			"Không tìm thấy kết luận này trong biên bản.", "")
+		return
+	}
+	if err != nil {
+		if errors.Is(err, petstore.ErrQuaNhieuNhiemVuKetLuan) {
+			h.d.Log.Error("nhiệm vụ của một kết luận vượt trần — TỪ CHỐI thay vì cắt bớt",
+				"xa", string(tenant.MustFrom(ctx)), "tran", petstore.TranNhiemVuMotKetLuan)
+		} else {
+			h.d.Log.Error("nhiệm vụ của một kết luận: lỗi hệ thống",
+				"xa", string(tenant.MustFrom(ctx)), "err", err)
+		}
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+
+	// make(…, 0, …): a conclusion nobody has split answers `"items":[]`, never null.
+	ra := nhiemVuKetLuanRa{Items: make([]nhiemVuRa, 0, len(ds))}
+	for _, n := range ds {
+		ra.Items = append(ra.Items, nhiemVuRaNgoai(n))
+	}
+	vietJSON(w, http.StatusOK, ra)
+}

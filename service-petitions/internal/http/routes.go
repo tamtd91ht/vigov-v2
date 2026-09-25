@@ -183,8 +183,15 @@ type (
 	// two halves of that sum is a handler that can pair the wrong ones: the aggregation belongs to
 	// the query that already visits both tables, and domain.BienBanHop.TienDoNhiemVu is the only
 	// arithmetic left above it.
+	//
+	// THE WHOLE READ SURFACE OF THE REGISTER, all three methods on one store and all three under
+	// `task.read`: the page of cards, ONE meeting with everything (GET /api/v1/meetings/{id}), and the
+	// live tasks split from one conclusion (…/conclusions/{stt}/tasks). One interface because they
+	// are three views of one record with one permission; the write acts stay on GhiBienBanUseCase.
 	BienBanDanhSach interface {
 		DanhSach(ctx context.Context, yc page.Request) (page.Result[domain.BienBanHop], error)
+		TheoID(ctx context.Context, id string) (domain.BienBanHop, error)
+		NhiemVuCuaKetLuan(ctx context.Context, bienBanID string, thuTu int) ([]domain.NhiemVu, error)
 	}
 
 	// GhiBienBanUseCase is the three STAFF acts on the meeting register (§3, §4): record the
@@ -1153,6 +1160,50 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/meetings",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DanhSachBienBan)))
+
+	// MỘT BIÊN BẢN, ĐẦY ĐỦ — `task.read`, the list's key, for the list's reason (everything shown is
+	// the origin of a task or a count of tasks; no `meeting.*` key exists and none is invented —
+	// rule 5, invariant 3c; open question #27 for splitting it).
+	//
+	// 404 IS ONE BODY FOR THREE CAUSES — unknown id, another commune's id, soft-deleted minutes.
+	// Telling them apart tells a caller which minutes exist in a register they are not reading.
+	//
+	// NO AUDIT ENTRY: no citizen personal data on the record, no cross-commune read (rule 6,
+	// invariant 7). NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Một biên bản họp đầy đủ — nội dung, thành phần, thư ký, trạng thái ký, thông báo kết luận, biên bản bổ sung, kết luận kèm trạng thái suy ra
+	// @screen   04-bien-ban-hop §2, §5
+	// @reply    200 bienBanRa
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/meetings/{id}",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.DocBienBan)))
+
+	// NHIỆM VỤ TÁCH TỪ MỘT KẾT LUẬN — `task.read`, the key of GET /api/v1/tasks, because the rows ARE
+	// task-register rows (the register's own row shape, nhiemVuRa).
+	//
+	// THE WHOLE LIST, BOUNDED BY petstore.TranNhiemVuMotKetLuan AND REFUSED PAST IT (500), never
+	// truncated: a short list is a task gone from its conclusion while the counter beside it still
+	// counts it. Soft-deleted tasks, another commune's tasks and another conclusion's tasks are
+	// excluded in the store's WHERE clause.
+	//
+	// 400 is a non-numeric or non-positive `{stt}`. 404 is ONE body for an unknown / other-commune /
+	// removed meeting and an unknown / removed conclusion.
+	//
+	// @summary  Các nhiệm vụ còn hiệu lực tách từ một kết luận họp — hàng của sổ nhiệm vụ, theo thứ tự tách
+	// @screen   04-bien-ban-hop §2
+	// @reply    200 nhiemVuKetLuanRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/meetings/{id}/conclusions/{stt}/tasks",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.NhiemVuCuaKetLuan)))
 
 	// NHẬP BIÊN BẢN (§4) — `task.create`, seeded at 0001_init.sql:301 ("Tạo nhiệm vụ").
 	//

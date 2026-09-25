@@ -38,6 +38,8 @@ var (
 	mocTaoBBThu   = time.Date(2026, 8, 5, 3, 30, 0, 0, time.UTC)
 	mocNgayHopThu = time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC)
 	mocTaoKLThu   = time.Date(2026, 8, 6, 4, 0, 0, 0, time.UTC)
+	mocKyBBThu    = time.Date(2026, 8, 7, 9, 15, 0, 0, time.UTC)
+	mocTbNgayThu  = time.Date(2026, 8, 12, 0, 0, 0, 0, time.UTC)
 )
 
 // dongBienBan is ONE fixture serving BOTH statements: the fake assembles every row from the SELECT
@@ -61,15 +63,32 @@ func dongBienBan(sua map[string]driver.Value) map[string]driver.Value {
 		"nguoi_tao_ma": "CB-00123",
 		"tao_luc":      mocTaoBBThu,
 
+		// Migration 0012's columns. The four adjacent nullable TEXT columns hold four visibly
+		// different KINDS of value (two staff codes, a notice number, an id), so a Scan shifted by one
+		// position puts a notice number where the secretary belongs.
+		"trang_thai":     "da-ky",
+		"ky_luc":         mocKyBBThu,
+		"ky_boi_ma":      "CB-00031",
+		"thu_ky_ma":      "CB-00042",
+		"tb_so_ky_hieu":  "45/TB-UBND",
+		"tb_ngay":        mocTbNgayThu,
+		"bo_sung_cho_id": "bb-goc-000",
+
+		// The detail read's two extra columns.
+		"noi_dung":   "Toàn văn biên bản.",
+		"thanh_phan": []byte(`["CB-00007","Đại diện Mặt trận xã"]`),
+
 		// The conclusions of that page, with their counters — aliased, as the joined statement
-		// selects them.
-		"k.id":               "kl-001",
-		"k.bien_ban_id":      "bb-001",
-		"k.thu_tu":           int64(2),
-		"k.noi_dung":         "Giao Địa chính rà soát tiến độ tuyến đường, báo cáo trước ngày 20/8.",
-		"k.tao_luc":          mocTaoKLThu,
-		"n.so_nhiem_vu":      int64(2),
-		"n.so_nhiem_vu_xong": int64(1),
+		// selects them. The three counters and the mark are all DIFFERENT, so a swap shows.
+		"k.id":                  "kl-001",
+		"k.bien_ban_id":         "bb-001",
+		"k.thu_tu":              int64(2),
+		"k.noi_dung":            "Giao Địa chính rà soát tiến độ tuyến đường, báo cáo trước ngày 20/8.",
+		"k.tao_luc":             mocTaoKLThu,
+		"k.khong_phat_sinh":     false,
+		"n.so_nhiem_vu":         int64(3),
+		"n.so_nhiem_vu_xong":    int64(1),
+		"n.so_nhiem_vu_tre_han": int64(2),
 	}
 	for k, v := range sua {
 		d[k] = v
@@ -115,10 +134,10 @@ func TestDanhSachBienBanBuocXaVaLoaiDongDaXoa(t *testing.T) {
 	if !strings.Contains(trang.sql, "deleted_at IS NULL") {
 		t.Errorf("thiếu điều kiện loại dòng đã xoá mềm: %q", trang.sql)
 	}
-	// The order is TOTAL — `id` breaks ties, or two calls can return the same rows in a different
-	// sequence and the cursor both repeats and skips.
-	if !strings.Contains(trang.sql, "ORDER BY tao_luc DESC, id DESC") {
-		t.Errorf("thứ tự không ổn định hoặc không phải mới-nhất-trước: %q", trang.sql)
+	// The order is TOTAL and is the register's (user decision 5): meeting day newest first, same day
+	// by entry time, `id` last — the column order and directions of index bien_ban_hop_theo_ngay_hop.
+	if !strings.Contains(trang.sql, "ORDER BY ngay_hop DESC, tao_luc DESC, id ASC") {
+		t.Errorf("thứ tự không theo ngày họp / không ổn định: %q", trang.sql)
 	}
 }
 
@@ -323,6 +342,7 @@ func TestKetLuanGanDungVaoBienBanCuaNo(t *testing.T) {
 		dongBienBan(map[string]driver.Value{
 			"id": "bb-002", "k.id": "kl-002", "k.bien_ban_id": "bb-002",
 			"k.thu_tu": int64(1), "n.so_nhiem_vu": int64(0), "n.so_nhiem_vu_xong": int64(0),
+			"n.so_nhiem_vu_tre_han": int64(0),
 		}),
 	}}
 	s := NewBienBanHopStore(store.New(moKhoGia(k)))
@@ -339,9 +359,9 @@ func TestKetLuanGanDungVaoBienBanCuaNo(t *testing.T) {
 			t.Errorf("biên bản %s mang kết luận của %s", b.ID, b.KetLuan[0].BienBanID)
 		}
 	}
-	// And the counters survive the trip: 1 of 2 on the first card, nothing split on the second.
-	if xong, tong := kq.Items[0].TienDoNhiemVu(); xong != 1 || tong != 2 {
-		t.Errorf("thẻ 1: %d/%d, muốn 1/2", xong, tong)
+	// And the counters survive the trip: 1 of 3 on the first card, nothing split on the second.
+	if xong, tong := kq.Items[0].TienDoNhiemVu(); xong != 1 || tong != 3 {
+		t.Errorf("thẻ 1: %d/%d, muốn 1/3", xong, tong)
 	}
 	if !kq.Items[1].KetLuan[0].ChuaTachNhiemVu() {
 		t.Error("thẻ 2: kết luận chưa tách lại không báo `chưa tách`")
@@ -376,7 +396,10 @@ func TestSapXepBienBanTuChoiCotNgoaiDanhSachTrang(t *testing.T) {
 			t.Errorf("nhận sắp xếp theo %q mà cột đó không nằm trong danh sách trắng", cot)
 		}
 	}
-	if _, err := page.Parse(url.Values{"sort": {"created_at"}}, SapXepBienBan); err != nil {
-		t.Errorf("từ chối sắp xếp theo `created_at`: %v", err)
+	// `held_on` is the new default; `created_at` stays accepted for clients already sending it.
+	for _, cot := range []string{"held_on", "created_at"} {
+		if _, err := page.Parse(url.Values{"sort": {cot}}, SapXepBienBan); err != nil {
+			t.Errorf("từ chối sắp xếp theo %q: %v", cot, err)
+		}
 	}
 }

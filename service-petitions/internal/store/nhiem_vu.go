@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
@@ -217,12 +218,23 @@ func locNhiemVuThanhSQL(loc LocNhiemVu) (string, []any) {
 		//
 		// `now()` AND NOT A PARAMETER: the database's clock is the one the deadline was stored
 		// against, and a `now` passed from a handler is a second clock that can disagree with it.
-		dieuKien += ` AND han_xu_ly IS NOT NULL AND (
-			(ngay_hoan_thanh IS NULL AND han_xu_ly < now())
-			OR (ngay_hoan_thanh IS NOT NULL AND ngay_hoan_thanh > han_xu_ly))`
+		dieuKien += " AND " + dieuKienTreHan
 	}
 	return dieuKien, args
 }
+
+// dieuKienTreHan is THE ONE SQL SPELLING of domain.NhiemVu.TreHan. Two readers use it: the
+// register's "Chỉ việc quá hạn" filter above, and the meeting register's per-conclusion late count
+// (cauKetLuanKemDem). Before it was a constant it was written inline in the filter; the conclusion
+// count would otherwise have been a THIRD spelling, and the one that drifts is the one on the report.
+//
+// THE COLUMNS ARE UNQUALIFIED ON PURPOSE, so the text is byte-identical in both places. Inside the
+// meeting query it runs in the LATERAL subquery whose only FROM item is `nhiem_vu nv`; SQL resolves
+// an unqualified name against the innermost FROM first, so they bind to `nv` and never to the outer
+// `ket_luan_hop k`.
+const dieuKienTreHan = `han_xu_ly IS NOT NULL AND (
+			(ngay_hoan_thanh IS NULL AND han_xu_ly < now())
+			OR (ngay_hoan_thanh IS NOT NULL AND ngay_hoan_thanh > han_xu_ly))`
 
 // mocNhiemVu BINDS each allowlisted sort column to the way that column's cursor value is read out of
 // a scanned row. store.NewMoc compares the two lists AT CONSTRUCTION, so a sort added to
@@ -246,7 +258,7 @@ func (s *NhiemVuStore) DanhSach(ctx context.Context, loc LocNhiemVu, yc page.Req
 
 	dieuKien, args := locNhiemVuThanhSQL(loc)
 
-	return store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
+	kq, err := store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{
 		Columns: cotNhiemVu,
 		Table:   "nhiem_vu",
 		// `deleted_at IS NULL` FIRST AND ALWAYS (rule 7, invariant 2). The partial index
@@ -260,6 +272,94 @@ func (s *NhiemVuStore) DanhSach(ctx context.Context, loc LocNhiemVu, yc page.Req
 		}
 		return n, n.ID, nil
 	})
+	if err != nil {
+		return kq, err
+	}
+	if err := s.ganNguonHop(ctx, kq.Items); err != nil {
+		return page.NewResult[domain.NhiemVu](), err
+	}
+	return kq, nil
+}
+
+// cauNguonHop resolves, for a batch of conclusion ids, the meeting and ordinal each belongs to — the
+// drawer's back-link. ONE statement for a whole page (never one per task).
+//
+//	JOIN (inner)            a conclusion whose meeting is soft-deleted, or that is soft-deleted itself,
+//	                        yields NO row, so the task simply carries no link (rule 7, invariant 2).
+//	                        Omitting the fields is the answer, not an error: the task is still live.
+//	b.tenant_id = $1        store.Scoped.QueryJoin's contract — the joined table is bound to the
+//	                        commune too, or a colliding id would name another commune's meeting.
+//
+// Same formatting constraint as cauKetLuanKemDem: ` FROM ` stays on the SELECT line (fake driver).
+const cauNguonHop = `SELECT k.id, b.id, b.ten_cuoc_hop, k.thu_tu FROM ket_luan_hop k
+	JOIN bien_ban_hop b ON b.tenant_id = $1 AND b.id = k.bien_ban_id AND b.deleted_at IS NULL
+	WHERE k.tenant_id = $1 AND k.deleted_at IS NULL AND k.id IN (`
+
+// ganNguonHop fills NhiemVu.NguonHop for every `ket-luan-hop` task in ds, in place.
+//
+// NO STATEMENT AT ALL when no task on the page came from a conclusion — the `IN (…)` list would be
+// empty, which is not valid SQL, and most pages of most communes take this branch.
+//
+// THE IDS ARE PLACEHOLDERS. They come from rows just read, and still go in bound: "the values came
+// from our own table" is the argument that lets a concatenated list survive review.
+func (s *NhiemVuStore) ganNguonHop(ctx context.Context, ds []domain.NhiemVu) error {
+	var (
+		ids  []string
+		thay = map[string]bool{}
+	)
+	for _, n := range ds {
+		if n.NguonGiao != domain.NguonKetLuanHop || n.NguonID == "" || thay[n.NguonID] {
+			continue
+		}
+		thay[n.NguonID] = true
+		ids = append(ids, n.NguonID)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	var b strings.Builder
+	b.WriteString(cauNguonHop)
+	args := make([]any, 0, len(ids))
+	for i, id := range ids {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("$" + strconv.Itoa(i+2)) // $1 is the commune
+		args = append(args, id)
+	}
+	b.WriteString(")")
+
+	rows, err := s.db.For(ctx).QueryJoin(ctx, b.String(), args...)
+	if err != nil {
+		return fmt.Errorf("nhiem_vu: đọc liên kết ngược về biên bản họp: %w", err)
+	}
+	defer rows.Close()
+
+	theo := make(map[string]domain.LienKetKetLuanHop, len(ids))
+	for rows.Next() {
+		var (
+			ketLuanID string
+			ng        domain.LienKetKetLuanHop
+		)
+		if err := rows.Scan(&ketLuanID, &ng.BienBanID, &ng.TenCuocHop, &ng.ThuTu); err != nil {
+			return fmt.Errorf("nhiem_vu: đọc dòng liên kết ngược: %w", err)
+		}
+		theo[ketLuanID] = ng
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("nhiem_vu: duyệt liên kết ngược: %w", err)
+	}
+
+	for i := range ds {
+		if ds[i].NguonGiao != domain.NguonKetLuanHop {
+			continue
+		}
+		if ng, ok := theo[ds[i].NguonID]; ok {
+			ds[i].NguonHop = &ng
+		}
+	}
+	return nil
 }
 
 // TheoMa reads one task by the number the commune issued it.
@@ -290,7 +390,14 @@ func (s *NhiemVuStore) TheoMa(ctx context.Context, ma string) (domain.NhiemVu, e
 	if err := rows.Err(); err != nil {
 		return domain.NhiemVu{}, fmt.Errorf("nhiem_vu: duyệt kết quả: %w", err)
 	}
-	return n, nil
+	// Closed before the second statement: one connection, no nested cursor held open.
+	rows.Close()
+
+	mot := []domain.NhiemVu{n}
+	if err := s.ganNguonHop(ctx, mot); err != nil {
+		return domain.NhiemVu{}, err
+	}
+	return mot[0], nil
 }
 
 // quetNhiemVu reads one row of cotNhiemVu.

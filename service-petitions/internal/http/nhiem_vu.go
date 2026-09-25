@@ -183,6 +183,20 @@ type nhiemVuRa struct {
 	// typed about an administrative document; no citizen name, number or address is on the record —
 	// and the day one is, this needs the branch phieuRaNgoai has (rule 3).
 	Documents *[]nhiemVuVanBanRa `json:"documents,omitempty"`
+
+	// MeetingID, MeetingTitle and ConclusionNo are the drawer's back-link for a task split from a
+	// meeting conclusion (`source` = `ket-luan-hop`): the minutes' internal id (what
+	// GET /api/v1/meetings/{id} takes), their title, and the conclusion's ordinal (①②③).
+	//
+	// ABSENT for every other source, AND absent when the meeting or the conclusion has been
+	// soft-deleted — the task keeps `source_id`; there is simply nothing live to link to. Resolved by
+	// the register's two reads in one batch statement; the write replies do not carry it.
+	//
+	// All three are the MINUTES' data (this service owns both tables), not a join into another
+	// service, and none is personal data: a title and an ordinal name a meeting.
+	MeetingID    string `json:"meeting_id,omitempty"`
+	MeetingTitle string `json:"meeting_title,omitempty"`
+	ConclusionNo int    `json:"conclusion_no,omitempty"`
 }
 
 // nhiemVuVanBanRa is ONE line of the block.
@@ -326,6 +340,11 @@ func nhiemVuRaNgoai(n domain.NhiemVu) nhiemVuRa {
 	if !n.NgayHoanThanh.IsZero() {
 		t := n.NgayHoanThanh
 		ra.CompletedAt = &t
+	}
+	if n.NguonGiao == domain.NguonKetLuanHop && n.NguonHop != nil {
+		ra.MeetingID = n.NguonHop.BienBanID
+		ra.MeetingTitle = n.NguonHop.TenCuocHop
+		ra.ConclusionNo = n.NguonHop.ThuTu
 	}
 	return ra
 }

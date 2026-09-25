@@ -3,11 +3,14 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"testing"
 	"time"
 
+	"github.com/vihat/vigov/core/page"
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
 // Integration tests for migration 0007 — the meeting-minutes register and its conclusions.
@@ -68,19 +71,19 @@ func TestPgCotBienBanTrongMaKhopVoiLuocDoThat(t *testing.T) {
 		bang string
 		cot  []string
 	}{
-		{"bien_ban_hop", append(tachCot(cotBienBan),
+		// cotBienBanChiTiet is the widest read list (it contains cotBienBan and cotBienBanDoc).
+		{"bien_ban_hop", append(tachCot(cotBienBanChiTiet),
 			// COLUMNS THAT NEVER APPEAR IN THE SELECT LIST, because the statement is built around
 			// them or because this pass deliberately does not read them.
 			"tenant_id",  // the predicate that keeps two public authorities apart (rule 1)
 			"deleted_at", // the predicate that keeps removed rows out of every read (rule 7)
 			"deleted_by", "delete_reason", "cap_nhat_luc",
-			// The three the card does not draw. They are asserted here because the write path and a
-			// later detail route will read them: a column misspelled today is cheapest to find today.
-			"noi_dung", "thanh_phan", "dinh_kem",
+			"dinh_kem",
 		)},
 		{"ket_luan_hop", []string{
 			"tenant_id", "id", "bien_ban_id", "thu_tu", "noi_dung",
 			"deleted_at", "deleted_by", "delete_reason", "tao_luc", "cap_nhat_luc",
+			"khong_phat_sinh", // migration 0012 — read by cauKetLuanKemDem
 		}},
 	} {
 		for _, c := range tr.cot {
@@ -291,6 +294,175 @@ func themNhiemVuTuKetLuan(t *testing.T, db *sql.DB, xa, id, ma, trangThai, ketLu
 		xa, id, ma, "theo-van-ban", "Việc tách từ kết luận họp.", trangThai, ketLuanID, xong)
 	if err != nil {
 		t.Fatalf("thêm nhiệm vụ %s: %v", id, err)
+	}
+}
+
+// themNhiemVuCoHan books a `ket-luan-hop` task WITH a deadline (both deadline columns, which the
+// schema holds together) and, for `hoan-thanh`, a completion instant.
+func themNhiemVuCoHan(t *testing.T, db *sql.DB, xa, id, ma, trangThai, ketLuanID string,
+	han time.Time, xong any) {
+
+	t.Helper()
+	_, err := db.Exec(
+		`INSERT INTO nhiem_vu (tenant_id, id, ma, loai, tieu_de, trang_thai, nguon_giao, nguon_id,
+		                       han_xu_ly, han_ban_dau, ngay_hoan_thanh, tien_do, nguoi_tao_ma)
+		 VALUES ($1,$2,$3,$4,$5,$6,'ket-luan-hop',$7,$8,$8,$9,0,'CB-00123')`,
+		xa, id, ma, "theo-van-ban", "Việc tách từ kết luận họp.", trangThai, ketLuanID, han, xong)
+	if err != nil {
+		t.Fatalf("thêm nhiệm vụ %s: %v", id, err)
+	}
+}
+
+// TestPgTrangThaiKetLuanKhopTreHanCuaDomain runs the LATE count against a real server and compares it
+// with domain.NhiemVu.TreHan over the same live rows — the two spellings of one rule, side by side.
+//
+// FIXTURE: late+running · future+running · finished late (not counted: done) · `chuyen-tiep` late
+// (counted: not done — the open customer question, literal reading) · soft-deleted late (not live).
+func TestPgTrangThaiKetLuanKhopTreHanCuaDomain(t *testing.T) {
+	db := moKetNoi(t)
+	xa, _ := xaRieng(t)
+	danhMucChoXa(t, db, xa)
+
+	if err := themBienBan(db, xa, "bb-tre", "Giao ban tháng 8", mocNgayHopPg); err != nil {
+		t.Fatalf("thêm biên bản: %v", err)
+	}
+	if err := themKetLuan(db, xa, "kl-tre", "bb-tre", 1, "Kết luận có việc trễ."); err != nil {
+		t.Fatalf("thêm kết luận: %v", err)
+	}
+	qua := time.Now().Add(-48 * time.Hour)
+	toi := time.Now().Add(48 * time.Hour)
+	themNhiemVuCoHan(t, db, xa, "nv-t1", "NV31", "dang-thuc-hien", "kl-tre", qua, nil)
+	themNhiemVuCoHan(t, db, xa, "nv-t2", "NV32", "moi-giao", "kl-tre", toi, nil)
+	themNhiemVuCoHan(t, db, xa, "nv-t3", "NV33", "hoan-thanh", "kl-tre", qua, time.Now())
+	themNhiemVuCoHan(t, db, xa, "nv-t4", "NV34", "chuyen-tiep", "kl-tre", qua, nil)
+	themNhiemVuCoHan(t, db, xa, "nv-t5", "NV35", "dang-thuc-hien", "kl-tre", qua, nil)
+	if _, err := db.Exec(
+		`UPDATE nhiem_vu SET deleted_at = now(), deleted_by = $3, delete_reason = $4
+		 WHERE tenant_id = $1 AND id = $2`, xa, "nv-t5", "CB-00123", "Giao nhầm."); err != nil {
+		t.Fatalf("xoá mềm: %v", err)
+	}
+
+	s := NewBienBanHopStore(pkgstore.New(db))
+	ctx := ctxXa(tenant.ID(xa))
+	theo, err := s.ketLuanTheoBienBan(ctx, []string{"bb-tre"})
+	if err != nil {
+		t.Fatalf("đọc kết luận kèm bộ đếm — câu LATERAL có ba bộ đếm: %v", err)
+	}
+	kl := theo["bb-tre"][0]
+
+	ds, err := s.NhiemVuCuaKetLuan(ctx, "bb-tre", 1)
+	if err != nil {
+		t.Fatalf("NhiemVuCuaKetLuan: %v", err)
+	}
+	var treGo int
+	bayGio := time.Now()
+	for _, n := range ds {
+		if n.TrangThai != domain.HoanThanh && n.TreHan(bayGio) {
+			treGo++
+		}
+	}
+	if kl.SoNhiemVu != 4 || kl.SoNhiemVuXong != 1 || kl.SoNhiemVuTreHan != 2 || treGo != 2 {
+		t.Errorf("bộ đếm SQL %d/%d trễ %d, Go đếm trễ %d — muốn 1/4, trễ 2 ở cả hai",
+			kl.SoNhiemVuXong, kl.SoNhiemVu, kl.SoNhiemVuTreHan, treGo)
+	}
+	if kl.TrangThai() != domain.KetLuanQuaHan {
+		t.Errorf("trạng thái = %q, muốn qua-han", kl.TrangThai())
+	}
+	if len(ds) != 4 {
+		t.Errorf("NhiemVuCuaKetLuan trả %d, muốn 4 (nhiệm vụ đã xoá mềm phải ngoài)", len(ds))
+	}
+}
+
+// TestPgTrangTheoNgayHopConTroQuaTrang walks the register one row per page on a real server: two
+// meetings on the SAME day (distinct entry instants) and one on an earlier day. The expected order is
+// the index's; a cursor that bound the day as an instant would repeat or skip a row here whenever the
+// session time zone is not UTC.
+func TestPgTrangTheoNgayHopConTroQuaTrang(t *testing.T) {
+	db := moKetNoi(t)
+	xa, _ := xaRieng(t)
+	for _, r := range []struct {
+		id   string
+		ngay time.Time
+		tao  time.Time
+	}{
+		{"bb-cu", time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 20, 1, 0, 0, 0, time.UTC)},
+		{"bb-sang", time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 5, 1, 0, 0, 0, time.UTC)},
+		{"bb-chieu", time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 5, 9, 0, 0, 0, time.UTC)},
+	} {
+		if _, err := db.Exec(
+			`INSERT INTO bien_ban_hop (tenant_id, id, ten_cuoc_hop, ngay_hop, nguoi_tao_ma, tao_luc)
+			 VALUES ($1,$2,'Giao ban',$3::date,'CB-00123',$4)`,
+			xa, r.id, r.ngay.Format("2006-01-02"), r.tao); err != nil {
+			t.Fatalf("thêm %s: %v", r.id, err)
+		}
+	}
+
+	s := NewBienBanHopStore(pkgstore.New(db))
+	ctx := ctxXa(tenant.ID(xa))
+	var thuTu []string
+	conTro := ""
+	for i := 0; i < 5; i++ {
+		q := url.Values{"limit": {"1"}}
+		if conTro != "" {
+			q.Set("cursor", conTro)
+		}
+		yc, err := page.Parse(q, SapXepBienBan)
+		if err != nil {
+			t.Fatalf("page.Parse: %v", err)
+		}
+		kq, err := s.DanhSach(ctx, yc)
+		if err != nil {
+			t.Fatalf("trang %d: %v", i+1, err)
+		}
+		for _, b := range kq.Items {
+			thuTu = append(thuTu, b.ID)
+		}
+		if !kq.HasMore {
+			break
+		}
+		conTro = kq.NextCursor
+	}
+	muon := "bb-chieu,bb-sang,bb-cu"
+	if got := fmt.Sprint(thuTu); got != fmt.Sprint([]string{"bb-chieu", "bb-sang", "bb-cu"}) {
+		t.Errorf("thứ tự qua các trang = %v, muốn %s", thuTu, muon)
+	}
+}
+
+// TestPgNguonHopBoQuaBienBanDaXoa — the back-link resolves on a real server, and disappears (without
+// an error) once the draft minutes are soft-deleted.
+func TestPgNguonHopBoQuaBienBanDaXoa(t *testing.T) {
+	db := moKetNoi(t)
+	xa, _ := xaRieng(t)
+	danhMucChoXa(t, db, xa)
+	if err := themBienBan(db, xa, "bb-lk", "Giao ban tháng 8", mocNgayHopPg); err != nil {
+		t.Fatalf("thêm biên bản: %v", err)
+	}
+	if err := themKetLuan(db, xa, "kl-lk", "bb-lk", 2, "Kết luận ②."); err != nil {
+		t.Fatalf("thêm kết luận: %v", err)
+	}
+	themNhiemVuTuKetLuan(t, db, xa, "nv-lk", "NV41", "dang-thuc-hien", "kl-lk")
+
+	s := NewNhiemVuStore(pkgstore.New(db))
+	ctx := ctxXa(tenant.ID(xa))
+	n, err := s.TheoMa(ctx, "NV41")
+	if err != nil {
+		t.Fatalf("TheoMa: %v", err)
+	}
+	if n.NguonHop == nil || n.NguonHop.BienBanID != "bb-lk" || n.NguonHop.ThuTu != 2 {
+		t.Fatalf("liên kết ngược = %+v, muốn bb-lk / ②", n.NguonHop)
+	}
+
+	if _, err := db.Exec(
+		`UPDATE bien_ban_hop SET deleted_at = now(), deleted_by = $3, delete_reason = $4
+		 WHERE tenant_id = $1 AND id = $2`, xa, "bb-lk", "CB-00123", "Nhập trùng."); err != nil {
+		t.Fatalf("xoá mềm biên bản nháp: %v", err)
+	}
+	n, err = s.TheoMa(ctx, "NV41")
+	if err != nil {
+		t.Fatalf("TheoMa sau khi xoá biên bản: %v — nhiệm vụ vẫn sống, không được lỗi", err)
+	}
+	if n.NguonHop != nil {
+		t.Errorf("vẫn trỏ về biên bản đã xoá mềm: %+v", n.NguonHop)
 	}
 }
 
