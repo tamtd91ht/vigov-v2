@@ -26,6 +26,26 @@ này lệch với hai tệp đó thì tin hai tệp đó.
 
 Việc cần làm: tạo Secret, rồi nhập manifest vào `vigov-prod` **một lần duy nhất**.
 
+## Cách nhanh — toàn bộ qua Jenkins, không SSH (từ commit sau `af15a8c`)
+
+Job `vigov-deploy` → **Build with Parameters**, `MT=prod`:
+
+| Lượt | `HANH_DONG` | `XAC_NHAN` | Kết quả |
+|---|---|---|---|
+| 1 | `kiem-tra` | — | In cụm, Deployment, pod, **tên** Secret, và Secret nào còn thiếu |
+| 2 | `sao-chep-tu-staging` | `vigov-prod` | Chép mọi Secret + ConfigMap của staging sang prod. Chỉ tạo mới, không ghi đè. Bỏ qua `cau-hinh-chung`. `vigov-staging-tls` được chép thành `vigov-wildcard-tls` |
+| 3 | `ap-manifest` | `vigov-prod` | Render `deploy/overlays/prod` rồi áp. Thiếu Secret thì từ chối |
+| 4 | — | — | Bấm job dịch vụ theo thứ tự ở bước 4 bên dưới |
+
+⚠ **Sau lượt 2, prod dùng CSDL + Redis + khoá ký phiên của staging** (các giá trị được chép
+nguyên). Muốn prod có dữ liệu riêng thì sửa `DATABASE_DSN` / `REDIS_DSN` trong 6 `bi-mat-*` của
+`vigov-prod` trên Rancher **trước lượt 4**. Chứng chỉ TLS của staging chỉ chạy được cho prod nếu
+nó phủ tên miền prod.
+
+Log pod khi có sự cố: `HANH_DONG=xem-log`, chọn `DICH_VU`.
+
+Các bước tay dưới đây giữ lại làm phương án dự phòng.
+
 ## Bước 0 — chuẩn bị
 
 | Cần có | Ghi chú |

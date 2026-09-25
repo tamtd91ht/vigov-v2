@@ -5,17 +5,19 @@
 **Quy trình từ 25/09/2026 (chủ dự án chốt):** viết mã → commit → push `main` → **vào Jenkins
 bấm job của dịch vụ cần đưa lên** → job đóng ảnh rồi **đặt ảnh lên cụm ngay trong cùng lượt**
 (`kubectl set image` + `rollout status`, đỏ thì tự `rollout undo`). Không job nào tự chạy;
-job `vigov-deploy` riêng đã bỏ. Manifest (NetworkPolicy, Service, cấu hình) vẫn áp tay — mục 7.
+manifest (NetworkPolicy, Service, cấu hình) áp bằng job hạ tầng `vigov-deploy`, việc
+`ap-manifest` — nó giữ nguyên thẻ ảnh đang chạy nên không kéo dịch vụ nào về `ImagePullBackOff`.
 
-Một số đoạn phía dưới còn nhắc `vigov-deploy` và các ô `DICH_VU`/`THE`/`MT` của nó — đọc thành
-"job của dịch vụ ấy". Namespace là hằng số `NS` trong từng Jenkinsfile, hiện là `vigov-prod`.
+Một số đoạn phía dưới còn nhắc `vigov-deploy` với các ô `DICH_VU`/`THE` để đặt ảnh — việc đặt
+ảnh nay là của "job của dịch vụ ấy". Namespace là hằng số `NS` trong từng Jenkinsfile, hiện là `vigov-prod`.
 
 | Thư mục | Nội dung |
 |---|---|
 | `cluster/` | Cài **một lần**: namespace, quyền của Jenkins trên cụm |
 | `base/` | Hình dạng của từng đơn vị — không namespace, không thẻ ảnh |
 | `overlays/<mt>/` | Namespace, cấu hình theo môi trường. Thẻ ảnh ở đây **chỉ dùng cho lần cài đầu** |
-| `service-*/Jenkinsfile`, `web-admin/Jenkinsfile` | Mỗi job đóng ảnh **và** đặt ảnh lên cụm (không còn `deploy/Jenkinsfile`) |
+| `service-*/Jenkinsfile`, `web-admin/Jenkinsfile` | Mỗi job đóng ảnh **và** đặt ảnh lên cụm |
+| `Jenkinsfile` | Job hạ tầng `vigov-deploy`: kiểm cụm, áp manifest, xem log |
 | mục 11 (cuối tệp này) | Cài bằng **giao diện Rancher**: chỉ những chỗ khác `kubectl`, và ba điều kiểm trước (controller Ingress, CNI, danh tính kubeconfig) |
 
 ## 0. Đọc trước khi bấm
@@ -64,7 +66,11 @@ Jenkins **không tự tìm ra** mười `Jenkinsfile` nằm rải trong kho. T�
 | `vigov-svc-reporting` | `service-reporting/Jenkinsfile` | **bấm tay** — chỉ đóng ảnh: chưa có manifest (0 tuyến REST) |
 | `vigov-web-admin` | `web-admin/Jenkinsfile` | **bấm tay** — đóng ảnh + đặt ảnh |
 
-Job `vigov-deploy` cũ: **xoá trên Jenkins** — `deploy/Jenkinsfile` không còn trong kho.
+| `vigov-deploy` | `deploy/Jenkinsfile` | **bấm tay** — job HẠ TẦNG, không đặt ảnh: `kiem-tra` · `ap-manifest` (giữ thẻ đang chạy) · `xem-log` · `sao-chep-tu-staging` (một lần) |
+
+`vigov-deploy` từ 25/09/2026 là job **hạ tầng** thay cho việc SSH vào máy chủ: kiểm cụm, áp
+manifest (lần cài đầu và mỗi lần `deploy/` đổi — thay cho quy trình tay ở mục 7), xem log. Nó
+**không** đặt ảnh (việc của job dịch vụ) và **không** tạo Secret (tạo trong Rancher).
 
 Thứ tự khi đưa nhiều dịch vụ cùng lúc: `platform` → `identity` → bốn dịch vụ còn lại →
 `web-admin`. Bấm lại một job khi không có gì đổi kể từ ảnh đang chạy thì job không dựng, không
