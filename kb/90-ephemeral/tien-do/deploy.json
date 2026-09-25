@@ -4,6 +4,14 @@
   "cap_nhat": "2026-09-25",
   "muc": [
     {
+      "id": "bo-vigov-deploy-job-dich-vu-tu-dat-anh",
+      "viec": "Bỏ job vigov-deploy: mỗi job dịch vụ (6 Go + web-admin) bấm tay, đóng ảnh rồi đặt ảnh lên vigov-prod trong cùng lượt",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Chủ dự án chốt 25/09/2026: 'đã đóng ảnh là deploy', 'build là thủ công', quy trình = code → commit → push main → bấm job. Đã sửa service-{platform,identity,comms,documents,finance,petitions}/Jenkinsfile và web-admin/Jenkinsfile: stage 'Triển khai' (set image + rollout status 6m), post failure rollout undo có cờ DA_DAT, dừng nếu không xác định người bấm, mốc anh-tu-commit ghi SAU khi rollout xanh. deploy/Jenkinsfile đã xoá. service-reporting chỉ đóng ảnh (chưa có manifest). CHƯA chạy trên Jenkins lần nào — chưa máy nào phân tích cú pháp các stage mới.",
+      "no_confirm": [],
+      "tiep_theo": "Người dùng: xoá job vigov-deploy trên Jenkins; bỏ tick Build Triggers ở mọi job; bấm vigov-svc-platform trước, đọc log stage 'Chuẩn bị' (current-context phải là cụm ViGov) và stage 'Triển khai'. Namespace vigov-prod là hằng số NS trong từng Jenkinsfile — đổi môi trường là đổi mã."
+    },
+    {
       "id": "manifest-k8s-ba-don-vi",
       "viec": "Manifest Kubernetes cho platform, identity, web-admin, và lớp mạng",
       "trang_thai": "xong",

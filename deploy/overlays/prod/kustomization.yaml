@@ -30,8 +30,8 @@ configMapGenerator:
 # ════════════════════════════════════════════════════════════════════════════════════════
 # THẺ ẢNH — CHỈ DÙNG CHO LẦN CÀI ĐẦU. Chốt 22/09/2026.
 #
-# Job `vigov-deploy` KHÔNG còn sửa khối này. Nó đặt ảnh bằng `kubectl set image` và nhật ký
-# triển khai nằm ở lịch sử build của job — xem `deploy/Jenkinsfile`, khối đầu tệp.
+# Job của từng dịch vụ KHÔNG sửa khối này. Nó đặt ảnh bằng `kubectl set image` và nhật ký
+# triển khai nằm ở lịch sử build của job — xem khối đầu `service-platform/Jenkinsfile`.
 #
 # Vì thế khối này KHÔNG phản ánh thẻ đang chạy trên cụm. Chạy `kubectl apply -k` lên một
 # namespace đã có dịch vụ sẽ đẩy CẢ BẢY về `CHUA-TRIEN-KHAI-LAN-NAO`, tức ImagePullBackOff

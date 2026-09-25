@@ -1,14 +1,21 @@
 # `deploy/` — sổ tay đưa ViGov lên Kubernetes
 
-Đọc từ trên xuống, làm theo thứ tự. Tám job đóng ảnh dừng ở Harbor; **job `vigov-deploy` là
-thứ duy nhất chạm cụm.**
+Đọc từ trên xuống, làm theo thứ tự.
+
+**Quy trình từ 25/09/2026 (chủ dự án chốt):** viết mã → commit → push `main` → **vào Jenkins
+bấm job của dịch vụ cần đưa lên** → job đóng ảnh rồi **đặt ảnh lên cụm ngay trong cùng lượt**
+(`kubectl set image` + `rollout status`, đỏ thì tự `rollout undo`). Không job nào tự chạy;
+job `vigov-deploy` riêng đã bỏ. Manifest (NetworkPolicy, Service, cấu hình) vẫn áp tay — mục 7.
+
+Một số đoạn phía dưới còn nhắc `vigov-deploy` và các ô `DICH_VU`/`THE`/`MT` của nó — đọc thành
+"job của dịch vụ ấy". Namespace là hằng số `NS` trong từng Jenkinsfile, hiện là `vigov-prod`.
 
 | Thư mục | Nội dung |
 |---|---|
 | `cluster/` | Cài **một lần**: namespace, quyền của Jenkins trên cụm |
 | `base/` | Hình dạng của từng đơn vị — không namespace, không thẻ ảnh |
 | `overlays/<mt>/` | Namespace, cấu hình theo môi trường. Thẻ ảnh ở đây **chỉ dùng cho lần cài đầu** |
-| `Jenkinsfile` | Job triển khai — nơi duy nhất gọi `kubectl` |
+| `service-*/Jenkinsfile`, `web-admin/Jenkinsfile` | Mỗi job đóng ảnh **và** đặt ảnh lên cụm (không còn `deploy/Jenkinsfile`) |
 | mục 11 (cuối tệp này) | Cài bằng **giao diện Rancher**: chỉ những chỗ khác `kubectl`, và ba điều kiểm trước (controller Ingress, CNI, danh tính kubeconfig) |
 
 ## 0. Đọc trước khi bấm
@@ -33,7 +40,7 @@ môi trường sẽ đóng lại cả 8 ảnh cho một thay đổi chạm một
 |---|---|
 | Ảnh này sinh từ mã nào | **thẻ ảnh = commit 12 ký tự** của `main`. Thẻ di động (`latest`, `main`) bị cấm |
 | Bản nào đang chạy trên cụm | `kubectl -n vigov-<mt> get deploy -o wide` — **hỏi cụm**, không hỏi git |
-| Ai đưa bản đó lên, lúc nào | **lịch sử build của job `vigov-deploy`** (`description` mỗi lượt) |
+| Ai đưa bản đó lên, lúc nào | **lịch sử build của job dịch vụ ấy** (tên lượt build: `#N <thẻ> → vigov-prod · <người bấm>`) |
 
 ⚠ **Nhật ký triển khai bị cắt sau 200 lượt** (`buildDiscarder`). Đó là cái giá của việc bỏ
 commit ghim thẻ. Muốn giữ vĩnh viễn thì phải có một sổ ngoài Jenkins — quyết định chưa ai đưa ra.
@@ -47,23 +54,28 @@ Jenkins **không tự tìm ra** mười `Jenkinsfile` nằm rải trong kho. T�
 
 | Tên job | Script Path | Kích hoạt |
 |---|---|---|
-| `vigov-gate` | `Jenkinsfile` | webhook / poll `main` |
-| `vigov-svc-comms` | `service-comms/Jenkinsfile` | ″ |
+| `vigov-gate` | `Jenkinsfile` | **bấm tay** |
+| `vigov-svc-comms` | `service-comms/Jenkinsfile` | **bấm tay** — đóng ảnh + đặt ảnh |
 | `vigov-svc-documents` | `service-documents/Jenkinsfile` | ″ |
 | `vigov-svc-finance` | `service-finance/Jenkinsfile` | ″ |
 | `vigov-svc-identity` | `service-identity/Jenkinsfile` | ″ |
 | `vigov-svc-petitions` | `service-petitions/Jenkinsfile` | ″ |
 | `vigov-svc-platform` | `service-platform/Jenkinsfile` | ″ |
-| `vigov-svc-reporting` | `service-reporting/Jenkinsfile` | ″ |
-| `vigov-web-admin` | `web-admin/Jenkinsfile` | ″ |
-| `vigov-deploy` | `deploy/Jenkinsfile` | **không tự động — chỉ bấm tay** |
+| `vigov-svc-reporting` | `service-reporting/Jenkinsfile` | **bấm tay** — chỉ đóng ảnh: chưa có manifest (0 tuyến REST) |
+| `vigov-web-admin` | `web-admin/Jenkinsfile` | **bấm tay** — đóng ảnh + đặt ảnh |
+
+Job `vigov-deploy` cũ: **xoá trên Jenkins** — `deploy/Jenkinsfile` không còn trong kho.
+
+Thứ tự khi đưa nhiều dịch vụ cùng lúc: `platform` → `identity` → bốn dịch vụ còn lại →
+`web-admin`. Bấm lại một job khi không có gì đổi kể từ ảnh đang chạy thì job không dựng, không
+đặt ảnh.
 
 `New Item` → tên → **Pipeline** → OK, rồi:
 
 | Mục trong form | Điền gì |
 |---|---|
 | General | **bỏ trống**. `timeout`, `buildDiscarder`, `disableConcurrentBuilds` đã khai trong Jenkinsfile — khai lại ở UI là hai nguồn sẽ lệch, và bản lỏng hơn là bản chạy |
-| Build Triggers | ra được Internet → webhook GitHub; không → `Poll SCM` `H/5 * * * *`. `vigov-deploy` **không tick gì** |
+| Build Triggers | **không tick gì, ở mọi job.** Job ghi tên người bấm vào lịch sử và DỪNG nếu lượt chạy không do người bấm |
 | Pipeline → Definition | `Pipeline script from SCM` |
 | SCM | `Git` · URL kho · credential `git-vigov` · Branch `*/main` |
 | Additional Behaviours | **để trống** — xem ba điều cấm dưới |
@@ -467,7 +479,7 @@ kubectl -n vigov-prod get deploy \
 # 2. Áp manifest mới
 kubectl apply -k deploy/overlays/prod
 
-# 3. Đặt lại từng thẻ vừa ghi (hoặc chạy lại vigov-deploy cho từng dịch vụ)
+# 3. Đặt lại từng thẻ vừa ghi
 kubectl -n vigov-prod set image deploy/<tên> server=<ảnh>:<thẻ>
 ```
 
@@ -694,18 +706,17 @@ do bước sau đặt.
 
 ---
 
-### 11.4 Đặt ảnh thật — CHỈ bằng job `vigov-deploy`
+### 11.4 Đặt ảnh thật — CHỈ bằng job của từng dịch vụ
 
-Bảy lượt, đúng thứ tự ở mục 5: `platform` → `identity` → bốn dịch vụ còn lại →
-`web-admin`. Thẻ là 12 ký tự hex của commit đã đóng ảnh (cột mô tả của lượt build trong Jenkins,
-dạng `anh-tu-commit:<thẻ>`).
+Bảy lượt bấm, đúng thứ tự ở mục 5: `platform` → `identity` → bốn dịch vụ còn lại →
+`web-admin`. Không điền gì: thẻ là commit mà lượt bấm đang dựng.
 
 **Không đổi ảnh bằng giao diện Rancher** (Edit Config → ô Container Image, hay Redeploy). Job làm
-ba việc mà giao diện không làm:
+những việc mà giao diện không làm:
 
 | Việc | Mất gì nếu đổi tay |
 |---|---|
-| Kiểm ảnh **có thật** trong Harbor trước khi chạm cụm | Gõ sai một ký tự thì `ImagePullBackOff` trên prod |
+| Thẻ ảnh = đúng commit vừa dựng và vừa đẩy | Gõ sai một ký tự thì `ImagePullBackOff` trên prod |
 | Ghi **ai bấm** và thẻ nào vào lịch sử build | Câu "bản nào chạy lúc đó, ai đưa lên" không còn trả lời được. Với hồ sơ hành chính có giá trị pháp lý, đó là câu phải trả lời được |
 | `rollout undo` tự động khi `rollout status` đỏ | Bản hỏng ở lại cho tới khi có người để ý |
 

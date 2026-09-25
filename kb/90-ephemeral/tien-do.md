@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 87aad34
+derived_from_commit: 48e92df
 expires: 2026-12-25
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -27,7 +27,7 @@ tức tin `git log` chứ đừng tin tệp này.
 
 | | |
 |---|---|
-| ĐANG LÀM | 47 |
+| ĐANG LÀM | 48 |
 | chưa làm | 31 |
 | treo | 14 |
 | xong | 157 |
@@ -274,10 +274,11 @@ Cập nhật 2026-09-25 · 15 mục
 
 ## `deploy`
 
-Cập nhật 2026-09-25 · 15 mục
+Cập nhật 2026-09-25 · 16 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
+| `bo-vigov-deploy-job-dich-vu-tu-dat-anh` — Bỏ job vigov-deploy: mỗi job dịch vụ (6 Go + web-admin) bấm tay, đóng ảnh rồi đặt ảnh lên vigov-prod trong cùng lượt | ĐANG LÀM | Chủ dự án chốt 25/09/2026: 'đã đóng ảnh là deploy', 'build là thủ công', quy trình = code → commit → push main → bấm job. Đã sửa service-{platform,identity,comms,documents,finance,petitions}/Jenkinsfile và web-admin/Jenkinsfile: stage 'Triển khai' (set image + rollout status 6m), post failure rollout undo có cờ DA_DAT, dừng nếu không xác định người bấm, mốc anh-tu-commit ghi SAU khi rollout xanh. deploy/Jenkinsfile đã xoá. service-reporting chỉ đóng ảnh (chưa có manifest). CHƯA chạy trên Jenkins lần nào — chưa máy nào phân tích cú pháp các stage mới. | — | Người dùng: xoá job vigov-deploy trên Jenkins; bỏ tick Build Triggers ở mọi job; bấm vigov-svc-platform trước, đọc log stage 'Chuẩn bị' (current-context phải là cụm ViGov) và stage 'Triển khai'. Namespace vigov-prod là hằng số NS trong từng Jenkinsfile — đổi môi trường là đổi mã. |
 | `cum-chua-chay-that` — Toàn bộ tầng này chưa từng chạm một cụm thật | chưa làm | — | — | Đi cùng `_chung/jenkins-chay-that` nhưng KHÁC nó: mục kia nói mười Jenkinsfile chưa chạy, mục này nói manifest chưa ai `kubectl apply`. Một tệp YAML chưa bao giờ được máy chủ đọc là một tệp chưa ai biết có đúng không — phạm vi kho dừng ở đây, cụm do đội devops phụ trách. Từ 22/09/2026 đã có trình tự thực thi ở mục `phuong-an-dua-len-bon-pha` — đọc nó trước khi chạm cụm, đừng dựng lại thứ tự từ đầu |
 | `manifest-k8s-ba-don-vi` — Manifest Kubernetes cho platform, identity, web-admin, và lớp mạng | xong | deploy/base/{identity,platform,web-admin,mang}/, deploy/cluster/{namespace,rbac-jenkins}.yaml, deploy/overlays/{prod,staging}/{ingress,kustomization}.yaml, deploy/Jenkinsfile. Commit 0e54c51 — 32 tệp, 1524 dòng thêm; cũng vá mốc dựng lại của 9 pipeline — kiểm 2026-09-20 | — | Bố cục có chủ ý: `base/` KHÔNG mang namespace và KHÔNG mang thẻ ảnh; namespace, cấu hình môi trường và thẻ ảnh chỉ nằm ở `overlays/<mt>/`. `deploy/Jenkinsfile` là NƠI DUY NHẤT gọi kubectl — tám job đóng ảnh dừng ở Harbor, không chạm cụm. Thành quả này trước 2026-09-20 không chỗ nào trong sổ ghi là đã có, tức nó là loại kết quả biến mất giữa hai phiên |
 | `thieu-manifest-tam-don-vi` — Tám đơn vị triển khai chưa có manifest nào | xong | deploy/base/{comms,documents,finance,petitions}/{deployment,service,kustomization}.yaml — 12 tệp mới, gom vào deploy/base/kustomization.yaml, ghim thẻ ở cả overlays/prod lẫn overlays/staging. `kubectl kustomize deploy/overlays/{staging,prod}` chạy sạch, 22 tài nguyên và 7 Deployment mỗi môi trường, không còn chuỗi CHUA-GHIM-THE trong bản dựng ra; `python tools/check_build.py` PASS — kiểm 2026-09-21 | — | BỐN chứ không phải tám, và ba đơn vị bị BỎ QUA CÓ LÝ DO — đừng đọc là sót: `reporting` 0 tuyến REST (service-reporting/internal/http/routes.go chưa mount cái nào) nên manifest của nó là một pod không phục vụ gì; `platform-admin` chưa có Dockerfile nên chưa có ảnh; `citizen-app` chạy trong Zalo Mini App, không thành pod. Tiêu chí thêm manifest là số tuyến trong kb/20-contracts/openapi.json: comms 1 · documents 1 · finance 3 · petitions 3. Bốn cái mới chạy 1 replica và KHÔNG có pdb.yaml (1 replica + minAvailable:1 sẽ chặn mọi lượt rút node để giữ một pod chưa ai gọi) — nâng cả hai cùng ngày Ingress có đường vào |

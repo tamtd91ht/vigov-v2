@@ -3,8 +3,10 @@
 //   · build CÁI GÌ    — đúng một ảnh, vigov-web-admin
 //   · build KHI NÀO   — xem `canDungLai()` ở cuối tệp
 //   · đẩy ĐI ĐÂU      — hằng số REGISTRY/PROJECT trong khối `environment` ngay dưới
+//   · chạy lên ĐÂU    — hằng số KUBECONFIG/NS trong cùng khối
 //
-// PHẠM VI DỪNG Ở ẢNH. Việc triển khai lên k8s là của devops.
+// BẤM TAY, KHÔNG TỰ CHẠY — cùng quy trình với sáu dịch vụ Go (lý do đầy đủ ở đầu
+// `service-platform/Jenkinsfile`): push `main` → người bấm → đóng ảnh → đặt ảnh lên cụm.
 
 pipeline {
   agent any
@@ -30,6 +32,13 @@ pipeline {
     PROJECT  = 'ci'
     DOCKER_BUILDKIT = '1'
     UNG_DUNG = 'web-admin'
+
+    // Kubeconfig của ViGov — KHÔNG phải `rancher-omi.yaml` nằm cạnh nó (xem service-platform).
+    KUBECONFIG = '/u01/rancher/rancher-vigov.yaml'
+    NS = 'vigov-prod'
+    TEN_K8S = 'web-admin'
+    // Tên thùng của web là `web`, khác `server` của dịch vụ Go (deploy/base/web-admin).
+    THUNG = 'web'
   }
 
   stages {
@@ -41,7 +50,7 @@ pipeline {
         sh '''
           set -eu
           thieu=""
-          for cc in node npm docker; do
+          for cc in node npm docker kubectl; do
             command -v "$cc" >/dev/null 2>&1 || thieu="$thieu $cc"
           done
           if [ -n "$thieu" ]; then
@@ -71,11 +80,30 @@ pipeline {
             exit 1
           fi
         '''
+        sh '''
+          set -eu
+          if [ ! -r "$KUBECONFIG" ]; then
+            echo ""
+            echo "KHÔNG ĐỌC ĐƯỢC KUBECONFIG: $KUBECONFIG"
+            echo ""
+            exit 1
+          fi
+          echo "cụm: $(kubectl config current-context) · namespace: $NS"
+        '''
         script {
+          env.DA_DAT = 'chua'
+          env.NGUOI_BAM = nguoiBam()
+          if (!env.NGUOI_BAM) {
+            error('KHÔNG XÁC ĐỊNH ĐƯỢC AI BẤM LƯỢT NÀY — dừng trước khi dựng và trước khi chạm cụm.\n' +
+                  'Job này chỉ chạy khi có người đã đăng nhập bấm. Kiểm mục Build Triggers: phải để trống.')
+          }
           env.TAG = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
           if (!env.TAG) { error('Không lấy được commit hiện tại — không có thẻ ảnh nào để đặt.') }
           env.CAN_DUNG = canDungLai() ? 'co' : 'khong'
-          echo "web ${env.UNG_DUNG} · commit ${env.TAG} · cần dựng lại: ${env.CAN_DUNG}"
+          echo "web ${env.UNG_DUNG} · commit ${env.TAG} · cần dựng lại: ${env.CAN_DUNG} · bấm bởi ${env.NGUOI_BAM}"
+          if (env.CAN_DUNG == 'khong') {
+            echo "Không có gì đổi kể từ ảnh đang chạy (${mocDaDongAnh()}) — không dựng, không đặt ảnh."
+          }
         }
       }
     }
@@ -120,10 +148,6 @@ pipeline {
           docker image rm "$ANH" || true
         '''
 
-        // Ghi mốc NGAY SAU khi push thành công (bước `sh` ở trên đỏ thì không tới được đây).
-        // Lượt build sau so với commit này, không so với "lượt build liền trước" — xem
-        // `mocDaDongAnh()` ở cuối tệp.
-        script { currentBuild.description = "${nhanAnh()}${env.TAG}" }
         echo "ĐÃ ĐẨY  ${env.ANH}\n" +
              "  Nghe cổng 3000, chạy dưới UID 1000 — đặt runAsNonRoot: true.\n" +
              "  KHÔNG có biến môi trường nào mang giá trị riêng của xã: tên xã, cơ quan cấp\n" +
@@ -131,7 +155,60 @@ pipeline {
              "  mọi xã, và đó là điều kiện để cách ly giữa các xã còn đúng."
       }
     }
+
+    // Cùng cơ chế với service-platform/Jenkinsfile — lý do từng dòng ở đó.
+    stage('Triển khai') {
+      when { environment name: 'CAN_DUNG', value: 'co' }
+      steps {
+        sh '''
+          set -eu
+          echo "trước lượt này: $(kubectl -n "$NS" get deploy/"$TEN_K8S" \
+              -o jsonpath='{.spec.template.spec.containers[*].image}')"
+        '''
+        script { env.DA_DAT = 'roi' }
+        sh 'kubectl -n "$NS" set image deploy/"$TEN_K8S" "$THUNG=$ANH"'
+        sh 'kubectl -n "$NS" rollout status deploy/"$TEN_K8S" --timeout=6m'
+        // Mốc ghi SAU khi đã chạy trên cụm: lượt đặt ảnh đỏ thì lượt bấm sau dựng và đặt lại.
+        script {
+          currentBuild.description = "${nhanAnh()}${env.TAG}"
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.TAG} → ${env.NS} · ${env.NGUOI_BAM}"
+        }
+        echo "XONG  ${env.ANH} đang chạy ở ${env.NS} — bấm bởi ${env.NGUOI_BAM}"
+      }
+    }
   }
+
+  post {
+    failure {
+      script {
+        if (env.DA_DAT != 'roi') {
+          echo 'Đỏ TRƯỚC khi chạm cụm — không có gì để rút lại, cụm không bị đụng tới.'
+        } else {
+          sh '''
+            set +e
+            echo "THẤT BẠI — quay lại bản trước ở cụm"
+            kubectl -n "$NS" rollout undo deploy/"$TEN_K8S"
+            kubectl -n "$NS" rollout status deploy/"$TEN_K8S" --timeout=5m
+          '''
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ĐỎ ${env.TAG} → ${env.NS} · đã rollout undo · ${env.NGUOI_BAM}"
+        }
+      }
+    }
+  }
+}
+
+// AI BẤM LƯỢT NÀY — cùng hàm với service-platform/Jenkinsfile, lý do ở đó.
+String nguoiBam() {
+  List nn
+  try {
+    nn = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')
+  } catch (Throwable e) {
+    echo "Không đọc được nguyên nhân lượt build (${e.getClass().getSimpleName()})."
+    return ''
+  }
+  if (nn == null || nn.isEmpty()) { return '' }
+  def id = nn[0].userId
+  return id == null ? '' : id.toString().trim()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────────────

@@ -146,7 +146,7 @@ pipeline {
 
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // QUY ƯỚC THẺ ẢNH — nêu MỘT LẦN ở đây, và `tools/check_build.py` giữ cho tám pipeline đóng
-// ảnh kia không ai phá (7 dịch vụ + `web-admin`; `vigov-gate` và `vigov-deploy` không đóng ảnh).
+// ảnh kia không ai phá (7 dịch vụ + `web-admin`; `vigov-gate` không đóng ảnh).
 //
 // Mọi ảnh chỉ mang đúng một thẻ: commit đã sinh ra nó. Không `latest`, không thẻ di động nào.
 //
