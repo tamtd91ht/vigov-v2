@@ -5,7 +5,8 @@
 > ⚠ **CỤM THẬT KHÔNG DỰNG TỪ `base/` + `overlays/` — đo 25/09/2026.** `vigov-staging` được dựng
 > TAY trong Rancher: Deployment `vigov-service-<dịch vụ>` / `vigov-web-admin`, Secret
 > `<dịch vụ>-secrets`, ConfigMap `common-config`, mỗi dịch vụ một Ingress HTTP (`admin.vigov.vn`…).
-> Chủ dự án chọn **prod = nhân bản staging** (job `vigov-deploy`, việc `nhan-ban-staging`), nên
+> Chủ dự án chọn **prod = nhân bản staging** (job `vigov-deploy`, việc `nhan-ban-staging` — đã chạy
+> 25/09/2026: 8 Deployment + 8 Service, chưa có Ingress; việc ấy đã gỡ khỏi job), nên
 > job dịch vụ đặt ảnh vào `vigov-service-<dịch vụ>`. Phần lớn sổ tay dưới đây (tên `platform`,
 > `bi-mat-*`, `apply -k`, Ingress `*.vigov.vn` + TLS) mô tả `base/` — **KHÔNG áp nó lên cụm**:
 > nó tạo bộ Deployment thứ hai và giành tên miền với Ingress đang chạy. Lệch này là nợ, theo dõi

@@ -20,7 +20,7 @@
 // trị nào nhập vào — chỉ chép theo TÊN, dữ liệu đi qua ống, không in ra log.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 //
-// MÁY CHỦ BUILD CẦN: kubectl · python3 (chỉ cho nhan-ban-staging). Stage đầu kiểm.
+// MÁY CHỦ BUILD CẦN: kubectl. Stage đầu kiểm.
 
 pipeline {
   agent any
@@ -33,18 +33,15 @@ pipeline {
   }
 
   parameters {
-    // `nhan-ban-staging` là việc MỘT LẦN: chạy xong thì gỡ khỏi danh sách bằng một commit.
-    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'nhan-ban-staging'],
-           description: 'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
-                        'nhan-ban-staging: chép Deployment + Service từ vigov-staging sang vigov-prod (MT=prod)')
+    // `nhan-ban-staging` (một lần) đã chạy 25/09/2026 và đã gỡ — xem lịch sử git của tệp này.
+    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log'],
+           description: 'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU')
     choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
     choice(name: 'DICH_VU',
            choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
                      'vigov-service-documents', 'vigov-service-finance', 'vigov-service-petitions',
                      'vigov-service-reporting', 'vigov-web-admin'],
            description: 'Chỉ dùng cho xem-log')
-    string(name: 'XAC_NHAN', defaultValue: '',
-           description: 'Cho nhan-ban-staging: gõ đúng vigov-prod. Một cú bấm nhầm không được sửa cụm prod.')
   }
 
   environment {
@@ -67,7 +64,7 @@ pipeline {
           // Một việc đã GỠ khỏi `choices` vẫn tới được đây qua "Rebuild" một lượt cũ (đo được
           // 25/09/2026: `sao-chep-tu-staging` chạy xanh mà không stage nào khớp). Xanh-mà-không-làm-
           // gì là dạng hỏng tệ nhất: người bấm tin là đã xong.
-          if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'nhan-ban-staging'])) {
+          if (!(params.HANH_DONG in ['kiem-tra', 'xem-log'])) {
             error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
                   'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
           }
@@ -98,8 +95,6 @@ pipeline {
 
     stage('Kiểm tra') {
       steps {
-        // Chạy ở MỌI việc: `nhan-ban-staging` cũng in trạng thái TRƯỚC khi đổi, để log của lượt
-        // ấy tự trả lời "trước đó cụm thế nào".
         sh '''
           set -u
           echo "── namespace"
@@ -141,69 +136,6 @@ pipeline {
             echo "✓ đủ 8 Secret + common-config trong ${env.NS}"
           }
         }
-      }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────────────────
-    // VIỆC MỘT LẦN — nhân bản Deployment + Service của staging sang prod.
-    //
-    // Secret + common-config đã chép bằng lượt `sao-chep-tu-staging` ngày 25/09/2026 (việc ấy đã
-    // gỡ). Stage này chép phần còn lại, rồi đặt ENV=prod trong common-config của prod.
-    //
-    // KHÔNG CHÉP INGRESS: staging đang giữ host thật (admin.vigov.vn …). Hai Ingress cùng host
-    // ở hai namespace là nginx chọn một bên theo cách không ai định trước — người dùng thật có
-    // thể rơi vào staging. Tên miền của prod là quyết định của chủ dự án; stage in host hiện có.
-    //
-    // CHỈ TẠO MỚI: thứ prod đã có thì bỏ qua (`deploy/nhan_ban_namespace.py`).
-    // Chạy xong: gỡ `nhan-ban-staging` khỏi `choices` và xoá stage này, bằng một commit.
-    // ─────────────────────────────────────────────────────────────────────────────────────
-    stage('Nhân bản staging') {
-      when { expression { params.HANH_DONG == 'nhan-ban-staging' } }
-      steps {
-        script {
-          if (params.MT != 'prod') { error('nhan-ban-staging chỉ chạy với MT=prod (đích là vigov-prod).') }
-          if (params.XAC_NHAN != 'vigov-prod') {
-            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không chép gì cả.")
-          }
-          if (env.THIEU) {
-            error("vigov-prod còn thiếu: ${env.THIEU} — Deployment chép sang sẽ không khởi động được.")
-          }
-        }
-        sh '''
-          set -eu
-          PY=""
-          for p in python3 python3.12 python3.11 python3.10 python3.9 python3.8; do
-            if command -v "$p" >/dev/null 2>&1; then PY="$p"; break; fi
-          done
-          [ -n "$PY" ] || { echo "MÁY CHỦ BUILD THIẾU: python3"; exit 1; }
-
-          # ENV=prod: bản chép từ staging mang ENV=staging, và `config.Load` chặt hơn ở prod
-          # (luật 8 bất biến 7). Pod nào đỏ vì cấu hình không đạt mức prod thì log nêu tên biến.
-          kubectl -n vigov-prod patch configmap common-config --type merge -p '{"data":{"ENV":"prod"}}'
-
-          da_co=$(kubectl -n vigov-prod get deploy,svc \
-                    -o jsonpath='{range .items[*]}{.kind}/{.metadata.name}{" "}{end}' 2>/dev/null || true)
-
-          kubectl -n vigov-staging get deploy,svc -o json \
-            | "$PY" deploy/nhan_ban_namespace.py vigov-staging vigov-prod $da_co \
-            > nhan-ban.json
-
-          if [ "$("$PY" -c 'import json,sys;print(len(json.load(open(sys.argv[1]))["items"]))' nhan-ban.json)" = "0" ]; then
-            echo "không có gì để tạo — prod đã có đủ"
-          else
-            kubectl -n vigov-prod create -f nhan-ban.json
-          fi
-
-          echo ""
-          echo "── Ingress của staging (KHÔNG chép — host thật đang ở đây)"
-          kubectl -n vigov-staging get ingress -o custom-columns=TEN:.metadata.name,HOST:.spec.rules[*].host --no-headers || true
-          echo ""
-          sleep 20
-          kubectl -n vigov-prod get deploy,pod -o wide || true
-          echo ""
-          echo "⚠ Prod đang dùng CSDL + Redis + khoá ký phiên của staging (Secret chép nguyên)."
-          echo "⚠ Prod CHƯA có Ingress: chưa ai vào được từ ngoài cụm cho tới khi chốt tên miền prod."
-        '''
       }
     }
 
