@@ -302,6 +302,11 @@ ALLOWED = (
     # cho .md rải rác bên trong (luật 9, cấm #1).
     re.compile(r"^[a-z0-9_\-]+[/\\]README\.md$"),
     re.compile(r"^docs[/\\]ui-ux[/\\][^/\\]+\.md$"),
+    # Named exception, chosen by the owner 2026-09-25: the operator who declares ConfigMap and
+    # Secret needs one short page, and deploy/README.md is a ~700-line runbook where that answer
+    # was buried. It OWNS the environment-variable table (tools/check_env_map.py reads it); deploy/README.md
+    # links to it and keeps only the reasons — so it competes with no owning file (rule 9 #2).
+    re.compile(r"^deploy[/\\]cau-hinh[/\\]README\.md$"),
     re.compile(r"^(README|CLAUDE)\.md$"),
 )
 stray = []

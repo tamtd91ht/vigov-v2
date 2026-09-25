@@ -214,26 +214,10 @@ Câu 1 không phải "có nhạy cảm không": một DSN có mật khẩu là *
 địa chỉ. Câu 3 là câu hay bị bỏ qua, và nó có giá: **mỗi dòng thừa trong ConfigMap/Secret là
 một dòng người vận hành phải đọc rồi tự hỏi mình có quên đặt không.**
 
-### Bảng map — 16 biến
+### Bảng map — 20 biến
 
-| Biến | Bắt buộc | Ở đâu | Hình dạng / mặc định |
-|---|---|---|---|
-| `DATABASE_DSN` | **có, mọi môi trường** | **Secret** `bi-mat-<dịch vụ>` | DSN, phần host **được phép nhiều host** |
-| `GRPC_CALLER_KEY` | **có, mọi môi trường** | **Secret** `bi-mat-<dịch vụ>` | chuỗi khoá. Rỗng = cổng gRPC trả lời bất kỳ ai (ADR 0025) |
-| `SESSION_SIGNING_KEYS` | **có ở staging/prod** | **Secret** `bi-mat-<dịch vụ>` | danh sách phẩy, **≥ 2 khoá ở prod** để xoay được mà không đăng xuất toàn bộ cán bộ |
-| `REDIS_DSN` | không ở `config.Load`, **nhưng xem cảnh báo dưới bảng** | **Secret** `bi-mat-<dịch vụ>` | DSN. **Năm** dịch vụ đọc nó — `platform` thì KHÔNG |
-| `RABBITMQ_DSN` | không | **Secret**, ngày bật | DSN |
-| `ELASTICSEARCH_API_KEY` | không | **Secret**, ngày bật | chuỗi khoá |
-| `ENV` | **có, mọi môi trường** | **ConfigMap** `cau-hinh-chung` | `dev` · `staging` · `prod`. Khác ba giá trị này là `config.Load` từ chối |
-| `ELASTICSEARCH_ADDRS` | không | **ConfigMap**, ngày bật | **danh sách phẩy** `http://host:9200,http://host:9200` |
-| `RABBITMQ_EXCHANGE` | không | **ConfigMap** *nếu* hai môi trường đặt tên khác nhau | tên exchange |
-| `LISTEN_ADDR` | không | `env: value:` trong `deployment.yaml` | `:8080`. **Bốn dịch vụ BẮT BUỘC phải có dòng này** — cảnh báo thứ hai dưới bảng |
-| `PLATFORM_GRPC_ADDR` | không, nhưng **từ chối tại chỗ dùng** | `env: value:` trong `deployment.yaml` | `platform:9090` — DNS nội cụm, giống nhau mọi môi trường |
-| `IDENTITY_GRPC_ADDR` | không, nhưng **từ chối tại chỗ dùng** | `env: value:` trong `deployment.yaml` | `identity:9090` — DNS nội cụm, giống nhau mọi môi trường |
-| `GRPC_LISTEN_ADDR` | không | **không khai ở đâu cả** | mặc định `:9090` trong `config.Load` |
-| `TENANT_CACHE_TTL` | không | **không khai ở đâu cả** | mặc định `30s` trong `config.Load`. Dài hơn 1 phút thì `config.CanhBao()` kêu |
-| `ELASTICSEARCH_INDEX_PREFIX` | không | **không khai ở đâu cả** | mặc định rỗng |
-| `DANGEROUS_AUTH_BYPASS` | không | **không khai ở đâu cả, có chủ ý** | `config.Load` **từ chối khởi động** nếu nó bật ở `ENV=prod` (luật 8, bất biến 7) |
+**Ở `deploy/cau-hinh/README.md` mục 4** — tệp ngắn để khai ConfigMap/Secret. Mục này chỉ giữ
+lý do.
 
 ⚠ **`REDIS_DSN` KHÔNG BẮT BUỘC Ở `config.Load` NHƯNG BẮT BUỘC Ở PROD.** Nó là kho chống trùng
 yêu cầu (`core/idem`). Thiếu nó, `idemStore` là `nil` và mỗi tuyến hành xử theo `CheDoHong` nó
@@ -266,30 +250,21 @@ Quét cả kho ngày 23/09/2026, không chỉ `core/config`:
 
 | Nơi đọc | Số biến | Ghi chú |
 |---|---|---|
-| `core/config` — **7 dịch vụ Go** | **16** | Gói DUY NHẤT gọi `os.Getenv`. Quét cả kho: **không có `os.Getenv`/`os.LookupEnv` nào khác** trong mã Go ngoài `tools/` (chạy ở máy trạm, không thành pod) |
+| `core/config` — **7 dịch vụ Go** | **20** (16 ngày quét · `TRUSTED_PROXY_CIDRS` · 3 biến cầu phiên của `identity`, ADR 0045, 25/09/2026) | Gói DUY NHẤT gọi `os.Getenv`. Quét cả kho: **không có `os.Getenv`/`os.LookupEnv` nào khác** trong mã Go ngoài `tools/` (chạy ở máy trạm, không thành pod) |
 | `web-admin` — **mã ứng dụng** | **0** | Không một `process.env` nào trong `web-admin/src`. Nó gọi API bằng đường dẫn **tương đối** `/api/v1/…` trên cùng tên miền, nên không cần địa chỉ backend — và đó là lý do nó **không có `envFrom`** |
 | `web-admin` — máy chủ Next standalone | 4, **đã nằm trong ảnh** | `NODE_ENV` · `NEXT_TELEMETRY_DISABLED` nung trong `Dockerfile`; `PORT=3000` · `HOSTNAME=0.0.0.0` đặt lại ở `deployment.yaml` |
 | `platform-admin` | 1 — `NEXT_PUBLIC_PLATFORM_API` | **chưa triển khai**: không có `Dockerfile`, nên chưa có ảnh. Ngày dựng nó thì đây là một `NEXT_PUBLIC_*`, tức **ship trong bundle trình duyệt** — không bao giờ chứa bí mật (luật 8, bất biến 4) |
 | `citizen-app` | 0 | Chạy trong Zalo Mini App, không thành pod |
 
-**Tổng cộng, thứ cụm phải cấp: đúng 16 biến, và chỉ cho 6 pod Go.** `web-admin` không cần một
+**Tổng cộng: 20 biến cho 6 pod Go — trong đó 3 biến TUỲ CHỌN chỉ cho `identity`, khi bật cầu
+phiên Mini App (ADR 0045).** `web-admin` không cần một
 khoá nào.
 
 ### Đối tượng k8s phải tạo — tên và key chính xác
 
-Giá trị anh tự điền. Tên và key thì **không được đổi**: manifest tham chiếu đúng những chuỗi này.
-
-| Loại | Tên đối tượng | Key | Ai tạo |
-|---|---|---|---|
-| ConfigMap | `cau-hinh-chung` | `ENV` | **kustomize sinh — ĐỪNG tạo tay.** Nó mang hậu tố băm (`cau-hinh-chung-679b259276`) để đổi giá trị là đổi tên, ép pod khởi động lại. Sửa giá trị ở `overlays/<mt>/kustomization.yaml` |
-| Secret | `bi-mat-platform` | `DATABASE_DSN` · `GRPC_CALLER_KEY` · `SESSION_SIGNING_KEYS` | người, mục 4 |
-| Secret | `bi-mat-identity` | bốn khoá: ba khoá trên **+ `REDIS_DSN`** | ″ |
-| Secret | `bi-mat-documents` | ″ | ″ |
-| Secret | `bi-mat-finance` | ″ | ″ |
-| Secret | `bi-mat-petitions` | ″ | ″ |
-| Secret | `bi-mat-comms` | ″ | ″ |
-| Secret (`docker-registry`) | `harbor-vigov` | k8s tự đặt `.dockerconfigjson` | ″ — `imagePullSecrets` của cả 7 Deployment |
-| Secret (`tls`) | **`vigov-staging-tls`** ở staging · **`vigov-wildcard-tls`** ở prod | `tls.crt` · `tls.key` | ″ |
+Bảng tên đối tượng + key: **`deploy/cau-hinh/README.md` mục 1**. ConfigMap `cau-hinh-chung` do
+kustomize sinh kèm hậu tố băm (`cau-hinh-chung-679b259276`) để đổi giá trị là đổi tên, ép pod
+khởi động lại — vì thế không tạo tay.
 
 ⚠ **Hai môi trường dùng HAI TÊN Secret TLS khác nhau** —
 `overlays/staging/ingress-moi-truong.yaml:16` và `overlays/prod/ingress-moi-truong.yaml:27`.
@@ -397,7 +372,7 @@ env:
 | **Cắt danh sách địa chỉ hoặc DSN để giữ một host** | Đúng-trông-như-đúng suốt thời gian còn một node, sai im lặng vào đúng ngày lên HA. Đưa nguyên giá trị cho driver hiểu nhiều host (`pgx` hiểu) |
 | Giá trị **riêng của một xã** trong biến môi trường | Luật 1, bất biến 10: môi trường chỉ mang hằng số **toàn nền tảng**. Giá trị theo xã đọc tại runtime từ sổ đăng ký của `platform` |
 
-Bảng 16 biến ở trên được `tools/check_env_map.py` đối chiếu với `.env.example` và
+Bảng 20 biến ở `deploy/cau-hinh/README.md` được `tools/check_env_map.py` đối chiếu với `.env.example` và
 `core/config/config.go` trong `make check`: thêm một biến mà quên cập nhật bảng là **đỏ**.
 
 ## 4. Cài lần đầu lên cụm
@@ -408,31 +383,8 @@ Chạy cho **`vigov-staging` trước**, rồi lặp lại y hệt cho `vigov-pr
 kubectl apply -f deploy/cluster/namespace.yaml
 kubectl apply -f deploy/cluster/rbac-jenkins.yaml
 
-# Bí mật — TẠO NGOÀI KHO NÀY, không bao giờ commit (luật 8, bất biến 1)
-kubectl -n vigov-prod create secret docker-registry harbor-vigov \
-  --docker-server=harbor.omicrm.services --docker-username=... --docker-password=...
-
-# platform: BA khoá. Nó KHÔNG đọc REDIS_DSN — cảnh báo thứ nhất ở mục 3.
-kubectl -n vigov-prod create secret generic bi-mat-platform \
-  --from-literal=DATABASE_DSN='postgres://...' \
-  --from-literal=GRPC_CALLER_KEY='...' \
-  --from-literal=SESSION_SIGNING_KEYS='<khoa-moi>,<khoa-cu>'
-
-# Năm dịch vụ kia: BỐN khoá. REDIS_DSN không bắt buộc ở config.Load nhưng thiếu nó thì sáu
-# đường dẫn POST trả 503 với pod xanh — cảnh báo thứ nhất ở mục 3.
-for s in identity documents finance petitions comms; do
-  kubectl -n vigov-prod create secret generic bi-mat-$s \
-    --from-literal=DATABASE_DSN='postgres://...' \
-    --from-literal=GRPC_CALLER_KEY='...' \
-    --from-literal=SESSION_SIGNING_KEYS='<khoa-moi>,<khoa-cu>' \
-    --from-literal=REDIS_DSN='redis://...'
-done
-
-# TÊN SECRET TLS KHÁC NHAU GIỮA HAI MÔI TRƯỜNG — chép nhầm thì Ingress lên bình thường và
-# CHỈ HTTPS ĐỨT. Tên do overlay quy định, không đổi được ở đây:
-#   staging -> vigov-staging-tls   (*.staging.vigov.vn)
-#   prod    -> vigov-wildcard-tls  (*.vigov.vn)
-kubectl -n vigov-prod create secret tls vigov-wildcard-tls --cert=... --key=...
+# Bí mật — TẠO NGOÀI KHO NÀY, không bao giờ commit (luật 8, bất biến 1).
+# Lệnh tạo 8 Secret: deploy/cau-hinh/README.md mục 3.
 
 kubectl apply -k deploy/overlays/prod
 ```
@@ -686,8 +638,8 @@ trong Events của ReplicaSet. Nếu Project có quota CPU, báo đội phát tr
 
 ### 11.2 Secret — tạo trong giao diện
 
-**Danh sách Secret, tên, key: bảng "Đối tượng k8s phải tạo" ở mục 3.** Hình dạng
-giá trị và cách sinh khoá ở ngay dưới bảng ấy. Tệp này không chép lại danh sách.
+**Danh sách Secret, tên, key, hình dạng giá trị: `deploy/cau-hinh/README.md` mục 1–2.** Tệp
+này không chép lại danh sách.
 
 Rancher → cụm → **Storage → Secrets → Create**. Chọn **đúng namespace** ở ô Namespace của form,
 không dựa vào bộ lọc namespace trên thanh trên cùng.
@@ -726,12 +678,13 @@ Deployment · 7 Service · 1 ConfigMap · 1 Ingress · 4 NetworkPolicy · 2 PodD
 khác đi là overlay đã đổi; hãy đọc lại overlay trước khi nhập.
 
 - **Không commit tệp render.** Nó sinh ra từ overlay, nên một bản nằm trong kho là bản sao sẽ lệch.
-- **Không sửa tệp render.** Có gì phải khác (dải mạng CSDL ở `base/mang/netpol.yaml:76`,
-  NetworkPolicy của mục 11.0.1) thì sửa trong kho rồi render lại. Sửa trên tệp render là sửa một
-  thứ không ai review và lần render sau sẽ mất.
-- Trước lần nhập **đầu tiên**, kiểm `netpol.yaml:76`. Dòng ấy đang là `10.0.0.0/8` kèm chú thích
-  `← SỬA`: đó phải là dải mạng thật của PostgreSQL/Redis. Sai dải thì pod không kết nối được CSDL
-  và chết ở bước di trú.
+- **Không sửa tệp render.** Có gì phải khác (dải mạng CSDL trong luật `cho-phep-duong-ra` của
+  `base/mang/netpol.yaml`, NetworkPolicy của mục 11.0.1) thì sửa trong kho rồi render lại. Sửa
+  trên tệp render là sửa một thứ không ai review và lần render sau sẽ mất.
+- **Đường ra tới CSDL đang TẠM MỞ `0.0.0.0/0`** (chỉ cổng 5432 / 6379 / 9092) từ 24/09/2026, theo
+  lựa chọn của người dùng, để deploy trước khi biết dải mạng CSDL. Đây là **nợ**, không phải thiết
+  kế. Khi biết dải thật, thay `0.0.0.0/0` bằng dải ấy, render lại, rồi áp **chỉ NetworkPolicy**
+  (`kubectl apply -f` phần NetworkPolicy của bản render). Áp cả bản render là rơi vào bẫy ở mục 11.5.
 
 Rancher → **Import YAML** → chọn namespace `vigov-staging` → dán `vigov-staging.yaml` → **Import**.
 

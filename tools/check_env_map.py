@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Đối chiếu bảng map biến môi trường ở `deploy/README.md` với mã và với sổ đăng ký.
+"""Đối chiếu bảng map biến môi trường ở `deploy/cau-hinh/README.md` với mã và với sổ đăng ký.
 
-LỚP LỖI: bảng ở mục 5 của `deploy/README.md` là thứ DUY NHẤT trong kho trả lời câu "biến này
+LỚP LỖI: bảng ở mục 4 của `deploy/cau-hinh/README.md` là thứ DUY NHẤT trong kho trả lời câu "biến này
 do ConfigMap hay Secret cấp". `core/config` không biết — nó chỉ đọc `os.Getenv`. `.env.example`
 không biết — nó chỉ giữ chỗ. `hooks/env_contract_guard.py` cũng không, và nó nói thẳng điều đó
 trong phần WHAT IT DELIBERATELY DOES NOT CHECK.
@@ -16,7 +16,7 @@ kiểm đúng thứ quyết được: **bảng có đúng những biến mà `co
 **biến bắt buộc ở `config.Load` có được đánh dấu bắt buộc trong bảng không**.
 
 VÌ SAO NÓ ĐỨNG CẠNH `hooks/env_contract_guard.py` chứ không thay: hook chặn lúc GHI và chỉ
-nhìn một tệp. Nó không bao giờ đọc lại `deploy/README.md`, nên một biến thêm hôm nay và một
+nhìn một tệp. Nó không bao giờ đọc lại `deploy/cau-hinh/README.md`, nên một biến thêm hôm nay và một
 bảng quên cập nhật hôm qua là hai tệp nó không bao giờ nhìn cùng lúc.
 
 Chạy:  python tools/check_env_map.py
@@ -34,7 +34,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 CONFIG_GO = os.path.join(ROOT, "core", "config", "config.go")
 ENV_MAU = os.path.join(ROOT, ".env.example")
-README = os.path.join(ROOT, "deploy", "README.md")
+README = os.path.join(ROOT, "deploy", "cau-hinh", "README.md")
 
 # `os.Getenv("X")` / `os.LookupEnv("X")` — cùng biểu thức hook dùng, cố ý: hai nơi đọc cùng
 # một thứ mà bằng hai biểu thức khác nhau là hai câu trả lời sẽ lệch.
@@ -91,7 +91,7 @@ def main() -> int:
 
     for ten in sorted(ma_doc - set(bang)):
         vi_pham.append(
-            f"`core/config` đọc {ten} nhưng bảng map ở deploy/README.md KHÔNG có dòng nào. "
+            f"`core/config` đọc {ten} nhưng bảng map ở deploy/cau-hinh/README.md KHÔNG có dòng nào. "
             f"Người vận hành không biết phải khai nó ở ConfigMap hay Secret."
         )
 
@@ -122,7 +122,7 @@ def main() -> int:
         for v in vi_pham:
             print(f"        {v}")
         print()
-        print("        Sửa ở deploy/README.md mục 5 — và nhớ cột 'k8s cấp bằng': phép thử là")
+        print("        Sửa ở deploy/cau-hinh/README.md mục 4 — và nhớ cột 'k8s cấp bằng': phép thử là")
         print("        'in ra một dòng log thì có đau không', không phải 'có nhạy cảm không'.")
         print("        Một DSN có mật khẩu là Secret dù nó trông như một địa chỉ.")
         print("        Dependency HOÀN TOÀN MỚI (Kafka chẳng hạn) là STOP CONDITION của luật")
@@ -132,7 +132,7 @@ def main() -> int:
     print(
         f"[PASS] map biến môi trường — {len(ma_doc)} biến `core/config` đọc · "
         f"{len(ma_bat_buoc)} bắt buộc tại Load · tất cả có dòng trong `.env.example` "
-        f"và trong bảng map của deploy/README.md"
+        f"và trong bảng map của deploy/cau-hinh/README.md"
     )
     return 0
 
