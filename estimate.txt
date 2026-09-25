@@ -1,0 +1,9 @@
+1. Áp dụng AI coding hoàn toàn + 1 người confirm về các định hướng
+2. Con người xây dựng bộ não AI để làm việc và kiểm soát xuyên suốt dự án
+3. Chia ra các phần việc độc lập
+	- Tìm hiểu nghiệp vụ đầu vào, prototype, các yêu cầu liên quan bao gồm họp và chốt các phương án nghiệp vụ cho triển khai. Phân rã từng hạng mục liên quan
+	- Coding: Estimate theo từng phần, module hoặc nghiệp vụ, chia nhỏ để tăng độ chính xác nhưng lưu ý là AI code 100%, con người chỉ định hướng và confirm phương án
+	- Deployment: Phối hợp với team devops hoặc nhà cung cấp hoặc chủ dự án để sizing hệ thống. Nhận, validate resources. Cài resources, testing. Liên kết hạ tầng vào source code, CI CD, Logs, ingress, domain...
+4. Ứng dụng liên quan nếu có: Mobile app, zalo mini app: trong này gồm 2 phần là coding và review/submit (chuẩn bị các tài liệu, yêu cầu liên quan, phần này cần estimate từng nhiệm vụ và có bổ sung hệ số thêm từ 20% đến 100%)
+4. Testing
+5. Bàn giao
