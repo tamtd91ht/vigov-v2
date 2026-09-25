@@ -235,6 +235,50 @@ func TestTaoNhiemVu_ThieuChuTheThiKhongMoGiaoDich(t *testing.T) {
 	}
 }
 
+// TestTaoNhiemVu_NguonKetLuanHopKhongQuaTachThiTuChoi is the backstop behind the HTTP refusal: Tao
+// has no source check, and only the split's closure proves the conclusion exists, is live and is not
+// marked "không phát sinh". A `ket-luan-hop` task through Tao would point at whatever id it was sent.
+func TestTaoNhiemVu_NguonKetLuanHopKhongQuaTachThiTuChoi(t *testing.T) {
+	k := khoNVMau()
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	yc := taoMau()
+	yc.NguonGiao = string(domain.NguonKetLuanHop)
+	yc.NguonID = "01JKETLUANKHONGCOTRONGSO0"
+
+	_, err := uc.Tao(ctx, yc, canBoThu())
+	if !errors.Is(err, domain.ErrNguonKetLuanPhaiTach) {
+		t.Fatalf("lỗi = %v, muốn ErrNguonKetLuanPhaiTach", err)
+	}
+	if k.batDau != 0 {
+		t.Errorf("mở %d giao dịch cho một nguồn bị từ chối, muốn 0", k.batDau)
+	}
+	khongGhiGi(t, k)
+}
+
+// TestTaoNhiemVu_NguonKhacVanQua pins the refusal's scope: the other three sources still book.
+// ⚠ `van-ban-den` and `phan-anh` are NOT checked against their source record here either — that is
+// a cross-service contract and a separate decision, reported, not closed by this test.
+func TestTaoNhiemVu_NguonKhacVanQua(t *testing.T) {
+	for _, nguon := range []domain.NguonGiao{domain.NguonTrucTiep, domain.NguonVanBanDen, domain.NguonPhanAnh} {
+		t.Run(string(nguon), func(t *testing.T) {
+			k := khoNVMau()
+			k.soLonNhat = 18
+			uc, ctx := dungGhiNhiemVu(t, k)
+
+			yc := taoMau()
+			yc.NguonGiao = string(nguon)
+			yc.NguonID = "01JNGUONKHAC0000000000000"
+			if _, err := uc.Tao(ctx, yc, canBoThu()); err != nil {
+				t.Fatalf("giao việc nguồn %s: %v", nguon, err)
+			}
+			if len(k.cau("INSERT INTO nhiem_vu")) != 1 {
+				t.Error("không ghi dòng nhiệm vụ")
+			}
+		})
+	}
+}
+
 // --- 2. sửa, và LUẬT THỨ NĂM: chặn chu trình ---------------------------------------------------------
 
 func TestSuaNhiemVu_KhongDoiGiThiKhongGhiGi(t *testing.T) {

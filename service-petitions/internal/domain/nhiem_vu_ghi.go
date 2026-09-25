@@ -74,6 +74,19 @@ var (
 	ErrNguonGiaoKhongHopLe = errors.New(
 		"nhiệm vụ: nguồn giao việc không phải một trong bốn nguồn của sổ nhiệm vụ")
 
+	// ErrNguonKetLuanPhaiTach refuses `ket-luan-hop` on the DIRECT create (POST /api/v1/tasks).
+	//
+	// A TASK FROM A MEETING CONCLUSION HAS ONE DOOR: the split route
+	// (POST /api/v1/meetings/{id}/conclusions/{stt}/task). Only that route checks, inside the task's
+	// transaction and under the meeting's lock, that the conclusion exists in this commune, is not
+	// removed, and is not marked "không phát sinh nhiệm vụ" (app.kiemNguonKetLuan). The direct create
+	// took the same code with any `source_id` and checked none of it — a task pointing at a removed
+	// or marked conclusion, or at nothing, with the back-link §3 of chapter 04 exists for pointing
+	// nowhere. The code stays valid in NguonGiao.HopLe: it is still what the split writes.
+	ErrNguonKetLuanPhaiTach = errors.New(
+		"nhiệm vụ: nhiệm vụ từ kết luận họp chỉ tạo được bằng nút \"Tách thành nhiệm vụ\" trên " +
+			"màn hình Biên bản họp — biểu mẫu giao việc trực tiếp không nhận nguồn này")
+
 	ErrMaNhiemVuSaiDinhDang = errors.New(
 		"nhiệm vụ: mã nhiệm vụ chỉ nhận chữ in hoa, chữ số, dấu gạch ngang và dấu gạch dưới")
 	ErrMaNhiemVuQuaDai = fmt.Errorf(
@@ -104,10 +117,15 @@ var (
 // catalogues: a default of "anything I do not recognise is the client's fault" turns a database
 // outage into a 400, and a client that believes its input is wrong retries with different input
 // for ever while nobody is told the server is broken.
-func LaLoiDauVaoNhiemVu(err error) bool {
+func LaLoiDauVaoNhiemVu(err error) bool { return LoiDauVaoNhiemVuGoc(err) != nil }
+
+// LoiDauVaoNhiemVuGoc returns the SENTINEL an input refusal wraps, or nil. The HTTP layer answers
+// with the sentinel's own sentence: a refusal raised inside the transaction arrives wrapped with the
+// operation and the commune id (app.bocNhiemVu), which belong in the operator's log, not on the wire.
+func LoiDauVaoNhiemVuGoc(err error) error {
 	for _, mot := range []error{
 		ErrThieuTieuDeNhiemVu, ErrTieuDeNhiemVuQuaDai, ErrMoTaNhiemVuQuaDai,
-		ErrThieuLoaiNhiemVu, ErrNguonGiaoKhongHopLe,
+		ErrThieuLoaiNhiemVu, ErrNguonGiaoKhongHopLe, ErrNguonKetLuanPhaiTach,
 		ErrMaNhiemVuSaiDinhDang, ErrMaNhiemVuQuaDai,
 		ErrTienDoNgoaiKhoang,
 		ErrThieuLyDoXoaNhiemVu, ErrLyDoNhiemVuQuaDai,
@@ -116,10 +134,10 @@ func LaLoiDauVaoNhiemVu(err error) bool {
 		ErrTrangThaiNhiemVuKhongBiet, ErrThieuLyDoLuiHan, ErrHanMoiKhongLui,
 	} {
 		if errors.Is(err, mot) {
-			return true
+			return mot
 		}
 	}
-	return false
+	return nil
 }
 
 // --- field checks ------------------------------------------------------------------------------
@@ -321,7 +339,30 @@ var (
 // the officer is told they may not delete and has no idea what is in the way; with it they know
 // exactly how much work stands between them and the act.
 func LoiConChuaXoa(n int) error {
-	return fmt.Errorf("%w: còn %d việc con chưa xoá — xử lý hoặc xoá các việc con trước", ErrConChuaXoa, n)
+	return kemChiTiet(ErrConChuaXoa, "còn %d việc con chưa xoá — xử lý hoặc xoá các việc con trước", n)
+}
+
+// LoiKemChiTiet is a refusal whose sentence is its sentinel's PLUS a detail only the call site
+// knows — a count, a list of register numbers. errors.Is still answers the sentinel.
+//
+// A TYPE AND NOT fmt.Errorf("%w: …"), because the HTTP layer must answer with THIS sentence and
+// nothing around it. Once app.bocNhiemVu wraps a refusal with the operation and the commune id, a
+// `%w` chain has no member that holds "sentinel + detail" and not the commune: the sentinel alone
+// drops the detail ADR 0037 decisions 3 and 4 ask for, and err.Error() puts the commune id on the
+// wire. errors.As finds this node wherever it sits in the chain.
+type LoiKemChiTiet struct {
+	goc error
+	cau string
+}
+
+func (e *LoiKemChiTiet) Error() string { return e.cau }
+
+// Is answers the sentinel the refusal was built on, so every errors.Is in the mapping still works.
+func (e *LoiKemChiTiet) Is(dich error) bool { return dich == e.goc }
+
+// kemChiTiet builds "<sentinel>: <detail>" — the same text `%w: …` produced, so no sentence moved.
+func kemChiTiet(goc error, mau string, thamSo ...any) error {
+	return &LoiKemChiTiet{goc: goc, cau: goc.Error() + ": " + fmt.Sprintf(mau, thamSo...)}
 }
 
 // LoiConChuaXong is decision 4's refusal, and it LISTS the unfinished work.
@@ -332,11 +373,11 @@ func LoiConChuaXong(ma []string) error {
 	hien := ma
 	if len(hien) > MuoiMaDauTien {
 		hien = hien[:MuoiMaDauTien]
-		return fmt.Errorf("%w: còn %d việc con (%s, …) — hoàn thành hết việc con rồi mới hoàn thành việc cha",
-			ErrConChuaXong, len(ma), strings.Join(hien, ", "))
+		return kemChiTiet(ErrConChuaXong, "còn %d việc con (%s, …) — hoàn thành hết việc con rồi mới hoàn thành việc cha",
+			len(ma), strings.Join(hien, ", "))
 	}
-	return fmt.Errorf("%w: còn %d việc con (%s) — hoàn thành hết việc con rồi mới hoàn thành việc cha",
-		ErrConChuaXong, len(ma), strings.Join(hien, ", "))
+	return kemChiTiet(ErrConChuaXong, "còn %d việc con (%s) — hoàn thành hết việc con rồi mới hoàn thành việc cha",
+		len(ma), strings.Join(hien, ", "))
 }
 
 // MuoiMaDauTien bounds how many register numbers one refusal quotes.
@@ -507,8 +548,8 @@ func ChuyenTrangThaiDuoc(hienTai, moi, truocTamDung TrangThaiNhiemVu) error {
 			return ErrTiepTucKhongBietTrangThaiTruoc
 		}
 		if !TamDungVeDuoc(truocTamDung) || moi != truocTamDung {
-			return fmt.Errorf("%w: việc đang tạm dừng chỉ tiếp tục về đúng trạng thái trước đó",
-				ErrChuyenTrangThaiNhiemVuSaiLuc)
+			return kemChiTiet(ErrChuyenTrangThaiNhiemVuSaiLuc,
+				"việc đang tạm dừng chỉ tiếp tục về đúng trạng thái trước đó")
 		}
 		return nil
 	}
@@ -700,8 +741,18 @@ func DuocDuyetLuiHan(n NhiemVu, dn DeNghiLuiHan, nguoiMa string) error {
 // LaLoiThamQuyenLuiHan reports whether this refusal is about WHO is acting rather than about the
 // state of the record. The HTTP layer answers 403 for these and 409 for the rest — see the note on
 // the mapping, and ErrChuaGhiLanhDaoGiaoViec's own reason for being in this group.
-func LaLoiThamQuyenLuiHan(err error) bool {
-	return errors.Is(err, ErrKhongPhaiLanhDaoGiaoViec) ||
-		errors.Is(err, ErrTuDuyetDeNghiCuaMinh) ||
-		errors.Is(err, ErrChuaGhiLanhDaoGiaoViec)
+func LaLoiThamQuyenLuiHan(err error) bool { return LoiThamQuyenLuiHanGoc(err) != nil }
+
+// LoiThamQuyenLuiHanGoc returns the SENTINEL such a refusal wraps, or nil — the sentence the HTTP
+// layer answers with, since the refusal is raised inside the transaction and arrives wrapped with
+// the commune id (app.bocNhiemVu).
+func LoiThamQuyenLuiHanGoc(err error) error {
+	for _, mot := range []error{
+		ErrKhongPhaiLanhDaoGiaoViec, ErrTuDuyetDeNghiCuaMinh, ErrChuaGhiLanhDaoGiaoViec,
+	} {
+		if errors.Is(err, mot) {
+			return mot
+		}
+	}
+	return nil
 }

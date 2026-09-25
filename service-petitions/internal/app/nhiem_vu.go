@@ -457,6 +457,14 @@ type KiemNguonTrongGiaoDich func(ctx context.Context, tx *store.ScopedTx) error
 func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi audit.Actor,
 	kiemNguon KiemNguonTrongGiaoDich) (domain.NhiemVu, error) {
 
+	// A CONCLUSION SOURCE WITH NO SOURCE CHECK IS REFUSED. The HTTP handler of POST /api/v1/tasks
+	// refuses it first; this is the same rule for any other caller of Tao, because the conclusion's
+	// existence, its removal and its "không phát sinh" mark are checked ONLY by the split's closure
+	// (kiemNguonKetLuan) — a `ket-luan-hop` task booked without it points at whatever id it was sent.
+	if kiemNguon == nil && domain.NguonGiao(yc.NguonGiao) == domain.NguonKetLuanHop {
+		return domain.NhiemVu{}, domain.ErrNguonKetLuanPhaiTach
+	}
+
 	moi, err := chuanHoaTaoNhiemVu(yc)
 	if err != nil {
 		return domain.NhiemVu{}, err

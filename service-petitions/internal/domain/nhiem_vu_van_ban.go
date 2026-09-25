@@ -190,17 +190,21 @@ var (
 // about the STATE OF THE RECORD — the line is not there any more, or it sits in another group — so
 // the HTTP layer answers 409 and tells the officer to reload, which is a true statement they can act
 // on. Folding them in here would tell them to fix their form.
-func LaLoiDauVaoVanBanNhiemVu(err error) bool {
+func LaLoiDauVaoVanBanNhiemVu(err error) bool { return LoiDauVaoVanBanNhiemVuGoc(err) != nil }
+
+// LoiDauVaoVanBanNhiemVuGoc returns the SENTINEL such a refusal wraps, or nil — the sentence the
+// HTTP layer answers with, never the wrapped chain (see LoiDauVaoNhiemVuGoc).
+func LoiDauVaoVanBanNhiemVuGoc(err error) error {
 	for _, mot := range []error{
 		ErrNhomVanBanKhongHopLe,
 		ErrThieuTrichYeuVanBan, ErrTrichYeuVanBanQuaDai, ErrSoKyHieuVanBanQuaDai,
 		ErrQuaNhieuVanBan, ErrVanBanTrungTrongYeuCau,
 	} {
 		if errors.Is(err, mot) {
-			return true
+			return mot
 		}
 	}
-	return false
+	return nil
 }
 
 // --- field checks ---------------------------------------------------------------------------------

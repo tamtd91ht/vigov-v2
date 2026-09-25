@@ -386,6 +386,16 @@ func (h *Handler) TaoNhiemVu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A MEETING-CONCLUSION SOURCE HAS ITS OWN DOOR, and this is not it. Only the split route
+	// (POST /api/v1/meetings/{id}/conclusions/{stt}/task) checks the conclusion exists, is live and is
+	// not marked "không phát sinh nhiệm vụ", under the meeting's lock; accepting the code here took
+	// any `source_id` and checked none of it. Refused before the use case, so nothing is opened.
+	if domain.NguonGiao(vao.Source) == domain.NguonKetLuanHop {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			domain.ErrNguonKetLuanPhaiTach.Error(), "")
+		return
+	}
+
 	// REFUSED BEFORE THE USE CASE IS REACHED, so a malformed date opens no transaction at all.
 	vanBan, err := vanBanVaoTrong(vao.Documents)
 	if err != nil {
@@ -619,16 +629,23 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 		// ADR 0038's two layers, plus the open question failing CLOSED. The sentence is the domain's
 		// own: it names what is missing — the leader on the record — which is the only thing the
 		// commune can act on.
-		httpx.WriteError(w, http.StatusForbidden, "forbidden", err.Error(), "")
+		httpx.WriteError(w, http.StatusForbidden, "forbidden",
+			cauTuChoi(err, domain.LoiThamQuyenLuiHanGoc(err)), "")
 
 	// --- 409: about the record ------------------------------------------------------------------
+	//
+	// THE DOMAIN'S OWN SENTENCE (cauTuChoi), NEVER err.Error(): a refusal raised inside the
+	// transaction arrives wrapped by app.bocNhiemVu with the operation AND THE COMMUNE ID, which is
+	// the operator's detail — the same leak the minutes register closed (traLoiLoiBienBan).
 	case errors.Is(err, domain.ErrConChuaXoa), errors.Is(err, domain.ErrConChuaXong):
 		// ADR 0037 decisions 3 and 4. The sentence carries the count and the register numbers,
 		// because "you may not" without "what is in the way" sends an officer hunting.
-		httpx.WriteError(w, http.StatusConflict, "task_tree", err.Error(), "")
+		httpx.WriteError(w, http.StatusConflict, "task_tree",
+			cauTuChoi(err, domain.ErrConChuaXoa, domain.ErrConChuaXong), "")
 	case errors.Is(err, domain.ErrChuTrinhCayNhiemVu), errors.Is(err, domain.ErrChaKhongTonTai),
 		errors.Is(err, domain.ErrCayNhiemVuQuaLon):
-		httpx.WriteError(w, http.StatusConflict, "task_tree", err.Error(), "")
+		httpx.WriteError(w, http.StatusConflict, "task_tree", cauTuChoi(err,
+			domain.ErrChuTrinhCayNhiemVu, domain.ErrChaKhongTonTai, domain.ErrCayNhiemVuQuaLon), "")
 	case errors.Is(err, petstore.ErrMaNhiemVuDaTonTai):
 		httpx.WriteError(w, http.StatusConflict, "code_taken",
 			"Mã nhiệm vụ này đã được dùng trong xã — kể cả khi nhiệm vụ mang mã đó đã bị xoá. "+
@@ -638,28 +655,35 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 			"Nhiệm vụ đã thay đổi trong lúc bạn đang mở màn hình. Hãy tải lại rồi thao tác lại.", "")
 	case errors.Is(err, domain.ErrChuyenTrangThaiNhiemVuSaiLuc),
 		errors.Is(err, domain.ErrTiepTucKhongBietTrangThaiTruoc):
-		httpx.WriteError(w, http.StatusConflict, "task_state", err.Error(), "")
+		httpx.WriteError(w, http.StatusConflict, "task_state", cauTuChoi(err,
+			domain.ErrChuyenTrangThaiNhiemVuSaiLuc, domain.ErrTiepTucKhongBietTrangThaiTruoc), "")
 	case errors.Is(err, domain.ErrDaCoDeNghiChoDuyet), errors.Is(err, domain.ErrDeNghiDaQuyetDinh),
 		errors.Is(err, domain.ErrNhiemVuChuaCoHan):
-		httpx.WriteError(w, http.StatusConflict, "task_state", err.Error(), "")
+		httpx.WriteError(w, http.StatusConflict, "task_state", cauTuChoi(err,
+			domain.ErrDaCoDeNghiChoDuyet, domain.ErrDeNghiDaQuyetDinh, domain.ErrNhiemVuChuaCoHan), "")
 	case errors.Is(err, domain.ErrVanBanKhongThuocNhiemVu), errors.Is(err, domain.ErrDoiNhomVanBan):
 		// 409 AND NOT 400, AND THE LINE IS THE ONE DRAWN ABOVE. The caller holds the right and the
 		// body is well formed; what is refused is this act on THIS record — the line is not on the
 		// task any more, or it sits in a group the request disagrees with. Both are states an
 		// officer fixes by reloading the drawer, which is what the sentences say.
-		httpx.WriteError(w, http.StatusConflict, "task_document", err.Error(), "")
+		httpx.WriteError(w, http.StatusConflict, "task_document",
+			cauTuChoi(err, domain.ErrVanBanKhongThuocNhiemVu, domain.ErrDoiNhomVanBan), "")
 
 	// --- 400: about what was sent, document block --------------------------------------------------
 	case domain.LaLoiDauVaoVanBanNhiemVu(err):
 		// The domain's own sentence: it names the field and the rule, holds no personal data and no
 		// internal detail. A second sentence written here would drift from it.
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			cauTuChoi(err, domain.LoiDauVaoVanBanNhiemVuGoc(err)), "")
 
 	// --- 400: about what was sent ----------------------------------------------------------------
 	case domain.LaLoiDauVaoNhiemVu(err):
 		// The domain's own sentence is returned: it names the field and the rule, holds no personal
-		// data and no internal detail, and a second sentence written here would drift from it.
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		// data and no internal detail, and a second sentence written here would drift from it. Some of
+		// these are raised inside the transaction (ErrHanMoiKhongLui, ErrTrangThaiNhiemVuKhongBiet)
+		// and arrive wrapped with the commune — hence cauTuChoi, not err.Error().
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			cauTuChoi(err, domain.LoiDauVaoNhiemVuGoc(err)), "")
 
 	default:
 		// The wrapped error carries the store failure and never reaches the client (rule 3,
@@ -669,6 +693,27 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 		httpx.WriteError(w, http.StatusInternalServerError, "internal",
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 	}
+}
+
+// cauTuChoi returns the sentence a domain refusal carries ON ITS OWN: the detailed refusal built on
+// the first matching sentinel (domain.LoiKemChiTiet — the count, the register numbers), or that
+// sentinel's sentence. Never err.Error(), which carries app.bocNhiemVu's operation and commune id.
+//
+// A NIL OR UNMATCHED LIST ANSWERS THE GENERIC SENTENCE rather than falling back to err.Error(): the
+// callers only reach here after errors.Is matched, so this branch is a mapping bug, and a mapping
+// bug must not be the one path that puts the commune id back on the wire.
+func cauTuChoi(err error, cacGoc ...error) string {
+	for _, goc := range cacGoc {
+		if goc == nil || !errors.Is(err, goc) {
+			continue
+		}
+		var chiTiet *domain.LoiKemChiTiet
+		if errors.As(err, &chiTiet) && errors.Is(chiTiet, goc) {
+			return chiTiet.Error()
+		}
+		return goc.Error()
+	}
+	return "Yêu cầu bị từ chối. Vui lòng tải lại rồi thao tác lại."
 }
 
 // thieuChuTheNhiemVu answers a request that reached a guarded write route with no principal, or with

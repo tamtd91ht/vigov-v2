@@ -107,9 +107,9 @@ func (s *BienBanHopStore) SoNhiemVuSongCuaKetLuan(ctx context.Context, tx *store
 // precondition of removing the minutes.
 //
 // SOFT-DELETED CONCLUSIONS ARE COUNTED TOO, on purpose and conservatively: a conclusion can only be
-// removed while it has no live task, but a task can reach one by a path this register does not
-// guard (POST /api/v1/tasks accepts a `ket-luan-hop` source — reported), and a meeting removed from
-// under a live task is a back-link to nothing.
+// removed while it has no live task, but tasks booked through POST /api/v1/tasks BEFORE that route
+// began refusing a `ket-luan-hop` source (domain.ErrNguonKetLuanPhaiTach) can point at one, and a
+// meeting removed from under a live task is a back-link to nothing.
 //
 // BOTH TABLES BOUND TO $1 — the subquery included — so no other commune's conclusion id can match.
 func (s *BienBanHopStore) SoNhiemVuSongCuaBienBan(ctx context.Context, tx *store.ScopedTx,

@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -549,6 +551,143 @@ func TestLoiNhiemVuAnhXaDungMa(t *testing.T) {
 				doiTrangThaiVao{Status: string(domain.ChoDuyet)})
 
 			doiMa(t, w, ca.muon)
+		})
+	}
+}
+
+// --- a meeting-conclusion source has one door -------------------------------------------------------------
+
+// TestTaoNhiemVu_NguonKetLuanHopThi400VaKhongGoiUseCase: the direct create checked neither the
+// conclusion's existence, its removal, its "không phát sinh" mark nor the meeting's lock — only the
+// split route does. The refusal points at that route and nothing is opened.
+func TestTaoNhiemVu_NguonKetLuanHopThi400VaKhongGoiUseCase(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("task.create"))
+
+	vao := thanTaoNV()
+	vao.Source = string(domain.NguonKetLuanHop)
+	vao.SourceID = "01JKETLUANBATKY0000000000"
+	w := m.goiGhiNV(t, http.MethodPost, hostA, duongTasks, canBoCuaXa(xaA), vao)
+
+	doiMa(t, w, http.StatusBadRequest)
+	e := loiTra(t, w)
+	if e.Code != "invalid_request" {
+		t.Errorf("mã lỗi = %q, muốn invalid_request", e.Code)
+	}
+	if e.Message != domain.ErrNguonKetLuanPhaiTach.Error() || !strings.Contains(e.Message, "Tách thành nhiệm vụ") {
+		t.Errorf("câu từ chối = %q — phải chỉ về nút Tách trên màn Biên bản họp", e.Message)
+	}
+	if m.ghiNhiemVu.goi != 0 {
+		t.Errorf("đã gọi use case %d lần với nguồn ket-luan-hop, muốn 0", m.ghiNhiemVu.goi)
+	}
+}
+
+// TestTaoNhiemVu_NguonKhacDiNguyenVenXuongUseCase pins the refusal's scope: every other source —
+// and none — still reaches the use case as sent.
+func TestTaoNhiemVu_NguonKhacDiNguyenVenXuongUseCase(t *testing.T) {
+	for _, nguon := range []string{"", string(domain.NguonTrucTiep), string(domain.NguonVanBanDen),
+		string(domain.NguonPhanAnh)} {
+		t.Run("nguồn="+nguon, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("task.create"))
+
+			vao := thanTaoNV()
+			vao.Source = nguon
+			if nguon != "" {
+				vao.SourceID = "01JNGUONKHAC0000000000000"
+			}
+			doiMa(t, m.goiGhiNV(t, http.MethodPost, hostA, duongTasks, canBoCuaXa(xaA), vao),
+				http.StatusCreated)
+			if m.ghiNhiemVu.goi != 1 || m.ghiNhiemVu.ycTao.NguonGiao != nguon ||
+				m.ghiNhiemVu.ycTao.NguonID != vao.SourceID {
+				t.Errorf("use case gọi %d lần với nguồn %q/%q, muốn 1 lần với %q/%q", m.ghiNhiemVu.goi,
+					m.ghiNhiemVu.ycTao.NguonGiao, m.ghiNhiemVu.ycTao.NguonID, nguon, vao.SourceID)
+			}
+		})
+	}
+}
+
+// --- refusal bodies carry the domain's sentence, never the wrapped chain ------------------------------------
+
+// xaBocThu is a FIXTURE commune id used only to wrap errors the way app.bocNhiemVu does. Its absence
+// from the body is the assertion; it is deliberately not xaA, so a body echoing the request's own
+// commune for some other reason cannot make the test pass or fail by accident.
+const xaBocThu = "01JXBOCTHUAAAAAAAAAAAAAAAA"
+
+// bocNhuApp wraps a refusal exactly as app.bocNhiemVu does: operation, then the commune id.
+func bocNhuApp(err error) error {
+	return fmt.Errorf("nhiem_vu: %s cho xã %s: %w", "chuyển trạng thái", xaBocThu, err)
+}
+
+// TestLoiNhiemVuKhongLoMaXaRaThan: before this, every 409 (and the 403/400 answered with the domain's
+// sentence) wrote err.Error(), so the commune id app.bocNhiemVu wraps in reached the wire. Each
+// mapped refusal is sent WRAPPED; the status must not move, the id must not appear, and the domain's
+// sentence — detail included — must.
+func TestLoiNhiemVuKhongLoMaXaRaThan(t *testing.T) {
+	for _, ca := range []struct {
+		ten  string
+		loi  error
+		muon int
+		ma   string
+		chua string // a fragment of the domain's own sentence that must survive
+	}{
+		// 409 — every error the mapping answers 409 for.
+		{"còn việc con chưa xoá", domain.LoiConChuaXoa(3), http.StatusConflict, "task_tree", "còn 3 việc con"},
+		{"còn việc con chưa xong", domain.LoiConChuaXong([]string{"NV20", "NV21"}), http.StatusConflict,
+			"task_tree", "NV20, NV21"},
+		{"chu trình cây", domain.ErrChuTrinhCayNhiemVu, http.StatusConflict, "task_tree",
+			domain.ErrChuTrinhCayNhiemVu.Error()},
+		{"không có nhiệm vụ cha", domain.ErrChaKhongTonTai, http.StatusConflict, "task_tree",
+			domain.ErrChaKhongTonTai.Error()},
+		{"cây quá lớn", domain.ErrCayNhiemVuQuaLon, http.StatusConflict, "task_tree",
+			domain.ErrCayNhiemVuQuaLon.Error()},
+		{"mã đã dùng", petstore.ErrMaNhiemVuDaTonTai, http.StatusConflict, "code_taken", "Mã đã cấp"},
+		{"đã chuyển trạng thái", petstore.ErrNhiemVuDaChuyenTrang, http.StatusConflict, "task_state",
+			"tải lại"},
+		{"bước chuyển sai lúc", domain.ErrChuyenTrangThaiNhiemVuSaiLuc, http.StatusConflict, "task_state",
+			domain.ErrChuyenTrangThaiNhiemVuSaiLuc.Error()},
+		{"tạm dừng về sai trạng thái", domain.ChuyenTrangThaiDuoc(domain.TamDung, domain.DangThucHien,
+			domain.MoiGiao), http.StatusConflict, "task_state", "đúng trạng thái trước đó"},
+		{"không biết trạng thái trước", domain.ErrTiepTucKhongBietTrangThaiTruoc, http.StatusConflict,
+			"task_state", domain.ErrTiepTucKhongBietTrangThaiTruoc.Error()},
+		{"đã có đề nghị chờ duyệt", domain.ErrDaCoDeNghiChoDuyet, http.StatusConflict, "task_state",
+			domain.ErrDaCoDeNghiChoDuyet.Error()},
+		{"đề nghị đã quyết định", domain.ErrDeNghiDaQuyetDinh, http.StatusConflict, "task_state",
+			domain.ErrDeNghiDaQuyetDinh.Error()},
+		{"nhiệm vụ chưa có hạn", domain.ErrNhiemVuChuaCoHan, http.StatusConflict, "task_state",
+			domain.ErrNhiemVuChuaCoHan.Error()},
+		{"văn bản không thuộc nhiệm vụ", domain.ErrVanBanKhongThuocNhiemVu, http.StatusConflict,
+			"task_document", domain.ErrVanBanKhongThuocNhiemVu.Error()},
+		{"đổi nhóm văn bản", domain.ErrDoiNhomVanBan, http.StatusConflict, "task_document",
+			domain.ErrDoiNhomVanBan.Error()},
+
+		// 403 and 400 that answer with the domain's sentence — the same leak, the same fix.
+		{"không phải lãnh đạo giao việc", domain.ErrKhongPhaiLanhDaoGiaoViec, http.StatusForbidden,
+			"forbidden", domain.ErrKhongPhaiLanhDaoGiaoViec.Error()},
+		{"hạn mới không lùi", domain.ErrHanMoiKhongLui, http.StatusBadRequest, "invalid_request",
+			domain.ErrHanMoiKhongLui.Error()},
+		{"trùng văn bản", domain.ErrVanBanTrungTrongYeuCau, http.StatusBadRequest, "invalid_request",
+			domain.ErrVanBanTrungTrongYeuCau.Error()},
+	} {
+		t.Run(ca.ten, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("task.update"))
+			m.ghiNhiemVu.loi = bocNhuApp(ca.loi)
+
+			w := m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),
+				doiTrangThaiVao{Status: string(domain.ChoDuyet)})
+
+			doiMa(t, w, ca.muon)
+			if e := loiTra(t, w); e.Code != ca.ma {
+				t.Errorf("mã lỗi = %q, muốn %q", e.Code, ca.ma)
+			}
+			than := w.Body.String()
+			if strings.Contains(than, xaBocThu) || strings.Contains(than, "cho xã") {
+				t.Errorf("thân lỗi lộ mã xã / chuỗi bọc: %s", than)
+			}
+			if e := loiTra(t, w); !strings.Contains(e.Message, ca.chua) {
+				t.Errorf("câu = %q, muốn chứa %q", e.Message, ca.chua)
+			}
 		})
 	}
 }
