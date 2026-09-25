@@ -79,7 +79,7 @@ https://zalo.me/s/<APP_ID>/?t=<tenant_ulid>&src=qr&v=1
 | Param | Why it exists |
 |---|---|
 | `t` | The **opaque ULID**, never a name or an administrative code. A QR printed on a noticeboard outlives renames, domain changes and mergers — this is where ADR 0004 pays off |
-| `src` | `qr` (noticeboard at the office) · `zns` (the commune sent it) · `share` (passed between citizens). Drives trust weighting below, and shows which channel actually works |
+| `src` | `qr` (a QR we issued, naming one commune) · `zns` (the commune sent it). **Nothing else** — `share` was removed by the owner on 2026-09-25 (ADR 0045 §Trả lời). Also shows which channel actually works |
 | `v` | Parameter schema version. **Printed QR codes live for years**; when the format changes, the old ones must still resolve |
 
 ### Trust weighting by source
@@ -88,11 +88,12 @@ https://zalo.me/s/<APP_ID>/?t=<tenant_ulid>&src=qr&v=1
 |---|---|---|
 | `qr` | Scanned at the commune's own noticeboard | Show the commune, **one tap to confirm** |
 | `zns` | The commune sent it to this citizen | Show the commune, one tap to confirm |
-| `share` | Passed between citizens, provenance unknown | Never pre-confirmed: the citizen reads the commune name and confirms explicitly |
+| *any other `src`, or `t` without `src`* | Not a channel we issue | **`t` is ignored** — behave exactly as *(none)*. Never pre-select, never "confirm explicitly" |
 | *(none)* | Opened from the app list or Zalo search | Main app: the server's remembered commune, else introduction only. Own app: the app's commune |
 
 Someone standing at the commune office should not be made to search for the commune they are
-standing in. Someone following a forwarded link should read what they are confirming.
+standing in. A commune enters the main app only through a link **we** issued that names it —
+there is no forwarded-link path to design for, so there is no picker to fall back on.
 
 ### A deep link never carries access
 

@@ -307,7 +307,10 @@ Mục này ghi thêm, không sửa phần trên: phần trên là đề xuất l
 | CÒN MỞ #3 — thu hồi phiên xã cũ khi đổi xã | **Thu hồi ngay.** Yêu cầu đổi xã mang token cũ; mỗi lúc một phiên còn sống |
 | UNKNOWN #5 — cùng cụm k8s | **Cùng cụm.** Cầu đi trong mạng cụm, có NetworkPolicy chỉ cho `vihat-miniapp` tới cổng cầu. TLS không bắt buộc; ĐIỀU KIỆN DỪNG #5 vẫn đứng nếu có ngày tách cụm |
 
-CÒN MỞ #4 (TTL), #5 (vòng đời xoay khoá), #6, #7 và UNKNOWN #1–#4 **vẫn mở**.
+| CÒN MỞ #4 — TTL phiên công dân ViGov | **Biến môi trường**, mặc định **1 tháng** (30 ngày). Hằng số toàn nền tảng, không theo xã (luật 1 bất biến 10 không áp) |
+| `src=share` (ADR 0005 §Mức tin) | **Bỏ.** QR chỉ đích danh một xã, do ta phát hành. `src` chỉ nhận `qr` · `zns`; mọi giá trị khác, hoặc `t` không kèm `src`, thì **bỏ qua `t`** — cư xử như mở không tham số |
+
+CÒN MỞ #5 (vòng đời xoay khoá), #6, #7 và UNKNOWN #1–#4 **vẫn mở**.
 
 ## ĐIỀU KIỆN DỪNG
 
