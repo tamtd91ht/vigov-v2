@@ -13,8 +13,8 @@ owns_facts:
 
 # 0044. Hai chế độ Mini App, một bản build `citizen-app`
 
-**Trạng thái:** đã chốt · **Ngày:** 2026-09-25 · **Thay thế một phần ADR 0005 và ADR 0018** (chỉ những
-điểm liệt kê ở §*Thay thế gì*; hai ADR ấy giữ nguyên từng chữ)
+**Trạng thái:** đã chốt · **Ngày:** 2026-09-25 · **Thay thế một phần ADR 0005** (chỉ những điểm
+liệt kê ở §*Thay thế gì*; ADR 0005 giữ nguyên từng chữ). ADR 0018 **không** bị thay — xem câu 5
 
 ## Bối cảnh
 
@@ -37,7 +37,8 @@ Các câu đã được chủ dự án trả lời ngày 25/09/2026:
 | 2 | Pháp nhân vận hành backend | **ViHAT Group**. Toàn bộ chạy trên cloud do ViHAT quản lý. Đây là **lần xác nhận của người** mà câu hỏi mở #28 chờ trước khi nộp Zalo |
 | 3 | Công dân dùng app của xã nào | **Chỉ tương tác với đúng xã đó**, không liên quan xã khác |
 | 4 | App chính có người dân thật dùng không | **Có** — nộp lên kho. Nhưng chỉ xem được nội dung xã khi mở bằng QR riêng do ta phát hành |
-| 5 | Ràng buộc 1 Mini App ↔ 1 OA xác thực, admin phải là cùng một người | Chấp nhận. Người phát triển sẽ xin quyền quản trị OA tương ứng |
+| 5 | Một OA xác thực có xác thực được **nhiều** Mini App không | **Có** — chủ dự án xác nhận *"hiện đang làm được"*. Người phát triển xin quyền quản trị OA để đứng admin cả hai phía. Vậy OA `Vihat` của ADR 0031 xác thực mọi app; ADR 0018 đứng nguyên |
+| 6 | App chính: đã quét QR xã A, tuần sau mở lại từ danh sách ghim (không QR) | **Quay lại đúng xã A** |
 
 ## Các phương án
 
@@ -57,7 +58,8 @@ quyết định, không do bản build hay tham số client.**
 | | App chính (demo) | App riêng của xã |
 |---|---|---|
 | Xã lấy từ | QR `t=<tenant_ulid>` (khuôn ADR 0005) → công dân xác nhận → máy chủ ghi vào phiên | App ID → bảng `app_id → tenant_id` → máy chủ gắn sẵn vào phiên |
-| Mở không kèm QR | **Chỉ màn giới thiệu Tập đoàn.** Không có màn chọn xã | Vào thẳng xã của app |
+| Mở không kèm QR | Đã từng xác nhận một xã → **quay lại xã ấy**. Chưa từng → **chỉ màn giới thiệu Tập đoàn**. Không có màn chọn xã | Vào thẳng xã của app |
+| Ai nhớ "xã đã xác nhận" | **Máy chủ**, theo danh tính công dân sau khi đăng nhập. Client không lưu xã xuống máy | Không cần nhớ |
 | Đổi xã | Không | Không |
 | Gửi phản ánh tới xã khác | Không | Không |
 
@@ -77,7 +79,7 @@ công thì **máy chủ biết chắc** token đến từ app nào. Từ App ID 
 
 | Cấu hình động, đọc lúc chạy theo `tenant_id` của phiên | Không cấu hình động được |
 |---|---|
-| Tên xã, địa chỉ, logo, đường dây nóng, giờ làm việc, lĩnh vực, nội dung giới thiệu xã, SLA (đã theo xã sẵn — ADR 0007) | Tên app, icon app và OA xác thực: khai trên trang quản trị Zalo cho từng App ID, không nằm trong bundle |
+| Tên xã, địa chỉ, logo, đường dây nóng, giờ làm việc, lĩnh vực, nội dung giới thiệu xã, SLA (đã theo xã sẵn — ADR 0007) | Tên app, icon app và liên kết tới OA xác thực: khai trên trang quản trị Zalo cho từng App ID, không nằm trong bundle |
 
 Thông báo ZNS **không đổi**. Tin vẫn gửi từ OA của từng xã qua `service-comms` (ADR 0018 vai trò
 thứ hai, ADR 0031 §*Cái gì KHÔNG đổi*).
@@ -89,26 +91,22 @@ thứ hai, ADR 0031 §*Cái gì KHÔNG đổi*).
 | 0005 | *"Chỉ có **một** Mini App"* | Một app chính **cộng** N app riêng, chung một bản build |
 | 0005 | Đường không tham số là màn chọn xã (picker, GPS, hồ sơ) | App chính: chỉ giới thiệu. App riêng: xã cố định |
 | 0005 | Gửi mới tới mọi xã đang hoạt động, tạo quan hệ `CAPACITY_TRANSIENT` | Phiên chỉ thao tác với **một** xã. Không gửi sang xã khác |
-| 0018 | Một OA xác thực ở tầng nền tảng | Mỗi App ID một OA xác thực của ViHAT Group, cùng một người làm admin |
 
 **Không thay:** ba lớp khám phá – phiên – uỷ quyền của 0005. Một API host duy nhất. Khuôn deep
-link `t`/`src`/`v`. Bảng alias xã sáp nhập. Tách hai vai trò OA của 0018.
+link `t`/`src`/`v`. Bảng alias xã sáp nhập. Toàn bộ ADR 0018: một OA xác thực (`Vihat`, ADR 0031)
+cho mọi app, tách khỏi OA gửi thông báo của từng xã.
 
 ## Hệ quả
 
 - **Dễ hơn:** thêm một xã = một dòng `app_id → tenant_id` + cấu hình hiển thị. Không build lại.
 - **Khó hơn:** cầu phiên `vihat-miniapp` → phiên công dân ViGov (mục sổ tiến độ
   `citizen-app/cau-phien-cong-dan-vigov`) phải mang App ID đã xác minh. Đây là việc chung của hai kho.
-- **Phải trả sau:** mỗi xã chính thức là một hồ sơ nộp Zalo và một OA xác thực. Đó là thủ tục,
-  không phải mã.
+- **Phải trả sau:** mỗi xã chính thức là một hồ sơ nộp Zalo kèm công văn của xã, và một lần liên
+  kết App ID mới với OA `Vihat`. Đó là thủ tục, không phải mã.
+- **Nhớ xã ở app chính cần danh tính:** máy chủ chỉ biết "công dân này đã xác nhận xã A" sau khi
+  biết công dân là ai. Thiết kế cầu phiên phải trả lời mở lại không QR thì nhận danh tính bằng
+  cách nào trước khi quyết định hiện giới thiệu hay vào xã A.
 - Chính sách riêng tư dùng chung mọi app, vì cùng một pháp nhân đứng tên và vận hành.
-
-## CÒN MỞ
-
-| # | Câu | Đề xuất |
-|---|---|---|
-| 1 | App chính: công dân đã quét QR xã A, **tuần sau mở lại từ danh sách ghim** (không có QR). Quay lại xã A, hay về màn giới thiệu? | Quay lại xã A — máy chủ nhớ xã đã xác nhận, client không lưu. **Chưa chốt** |
-| 2 | Zalo cho **một** OA xác thực nhiều app, hay buộc 1↔1 | Mức chứng cứ vẫn là nguồn thứ cấp (ADR 0018). Xác nhận lúc làm thủ tục app riêng đầu tiên |
 
 ## ĐIỀU KIỆN DỪNG
 
