@@ -176,6 +176,21 @@ pipeline {
               -o jsonpath='{.spec.template.spec.containers[*].image}')"
         '''
         script { env.DA_DAT = 'roi' }
+        // ĐỊA CHỈ NỘI BỘ của từng dịch vụ Go (`lib/may-chu/goc-dich-vu.ts`). Mặc định trong mã là
+        // tên Service của `deploy/base` (`http://identity:8080`); cụm dựng tay đặt tên
+        // `vigov-service-<dv>` — thiếu bước này thì mọi trang 500 vì không phân giải được tên.
+        // Đặt ở đây vì cụm này không có manifest nào khác làm nguồn (xem service-platform/Jenkinsfile).
+        // Tên NGẮN (không kèm namespace): mỗi namespace gọi dịch vụ của CHÍNH nó — prod không bao
+        // giờ gọi sang staging.
+        sh '''
+          set -eu
+          kubectl -n "$NS" set env deploy/"$TEN_K8S" \
+            IDENTITY_HTTP_ADDR=http://vigov-service-identity:8080 \
+            DOCUMENTS_HTTP_ADDR=http://vigov-service-documents:8080 \
+            PETITIONS_HTTP_ADDR=http://vigov-service-petitions:8080 \
+            FINANCE_HTTP_ADDR=http://vigov-service-finance:8080 \
+            COMMS_HTTP_ADDR=http://vigov-service-comms:8080
+        '''
         // `*=` — mọi container: trên cụm, container của Deployment này tên `vigov-service-reporting`.
         sh 'kubectl -n "$NS" set image deploy/"$TEN_K8S" "*=$ANH"'
         sh 'kubectl -n "$NS" rollout status deploy/"$TEN_K8S" --timeout=6m'
