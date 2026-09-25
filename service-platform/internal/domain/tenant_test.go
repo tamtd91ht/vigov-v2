@@ -61,3 +61,14 @@ func TestTenantValidate(t *testing.T) {
 		}
 	}
 }
+
+func TestKiemAppID(t *testing.T) {
+	for _, id := range []string{"", " ", " 123", "123 ", "\t123"} {
+		if err := KiemAppID(id); err == nil {
+			t.Errorf("KiemAppID(%q) nhận — app_id không được chuẩn hoá ngầm", id)
+		}
+	}
+	if err := KiemAppID("1234567890"); err != nil {
+		t.Errorf("KiemAppID hợp lệ bị từ chối: %v", err)
+	}
+}

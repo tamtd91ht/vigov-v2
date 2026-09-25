@@ -20,9 +20,11 @@ import (
 // other repository is built from *store.Scoped and inherits WHERE tenant_id = $1; this one
 // holds a raw handle instead.
 //
-// What keeps the exemption safe is that it reads exactly two tables — tenant and
-// tenant_domain — neither of which holds business data, and it returns exactly one commune or
-// none. It never returns a list, so there is no query here that could span communes.
+// What keeps the exemption safe is that it reads only registry tables — tenant, tenant_domain
+// and mini_app (mini_app.go) — none of which holds business data, and every method returns
+// exactly one row or none. It never returns a list, so there is no query here that could span
+// communes. A commune's own content (ho_so_hien_thi_xa) is NOT read here: that goes through the
+// scoped HoSoHienThiStore.
 type Directory struct {
 	db *sql.DB
 }

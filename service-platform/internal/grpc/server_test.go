@@ -95,11 +95,17 @@ func danhBaMau() *danhBaGia {
 // or missing metadata.
 func dung(t *testing.T, dir svcgrpc.Directory) (platformv1.PlatformServiceClient, platformv1.PlatformServiceClient) {
 	t.Helper()
+	return dungVoi(t, svcgrpc.Deps{Dir: dir, Apps: soMiniAppMau(), HoSo: hoSoMau()})
+}
+
+// dungVoi is dung with every dependency chosen by the test.
+func dungVoi(t *testing.T, d svcgrpc.Deps) (platformv1.PlatformServiceClient, platformv1.PlatformServiceClient) {
+	t.Helper()
 
 	lis := bufconn.Listen(1 << 20)
 	srv := grpc.NewServer(grpc.UnaryInterceptor(grpcx.UnaryServerInterceptor()))
 	platformv1.RegisterPlatformServiceServer(srv,
-		svcgrpc.NewServer(dir, slog.New(slog.NewTextHandler(io.Discard, nil))))
+		svcgrpc.NewServer(d, slog.New(slog.NewTextHandler(io.Discard, nil))))
 
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)

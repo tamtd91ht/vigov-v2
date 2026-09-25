@@ -140,6 +140,54 @@ service PlatformService {
   //   OK + app, MAIN      `tenant` always absent.
   //   INVALID_ARGUMENT    empty `app_id`.
   rpc ResolveMiniApp(ResolveMiniAppRequest) returns (ResolveMiniAppResponse);
+
+  // GetTenantProfile returns the display profile of THE COMMUNE IN "x-tenant-id" — office address,
+  // logo, hotline, working hours as text, introduction (ADR 0045, decision 5).
+  //
+  // NOT EXEMPT FROM "x-tenant-id", AND NOT IN THE REGISTRY CATEGORY ABOVE. The commune is read
+  // from metadata and the request has no field naming one: this is a commune's own content, read
+  // for that commune only (rule 1, forbidden #2). There is deliberately no way to ask for another
+  // commune's profile, and none may be added — that would be the cross-commune read ADR 0003
+  // keeps out of this service.
+  //
+  //   OK + no `profile`   the commune has not declared a profile (or it was soft-deleted). The
+  //                       consumer renders nothing; it never substitutes a default or another
+  //                       commune's profile.
+  //   OK + profile        fields that were not declared are "" — same rule as Tenant.province.
+  //   INVALID_ARGUMENT    no "x-tenant-id" (refused by the interceptor before this RPC runs).
+  rpc GetTenantProfile(GetTenantProfileRequest) returns (GetTenantProfileResponse);
+}
+
+// Empty on purpose: the commune is "x-tenant-id" in metadata, never a field (see the RPC).
+message GetTenantProfileRequest {}
+
+message GetTenantProfileResponse {
+  // ABSENT MEANS NOT DECLARED. See the status table on the RPC.
+  TenantProfile profile = 1;
+}
+
+// TenantProfile is what a citizen reads about one commune. Display only: nothing routes on, or
+// computes from, any field here.
+//
+// Every field is plain `string`, "" meaning "not declared" — not proto3 `optional`, for the reason
+// given on Tenant.province: the store has one spelling of "not declared", so presence would offer
+// a distinction nobody can make.
+message TenantProfile {
+  string office_address = 1;
+
+  // A URL to an image served elsewhere — not bytes and not a storage key; there is no file storage
+  // in ViGov yet (service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql).
+  string logo_url = 2;
+
+  // The commune's OFFICIAL hotline / office landline: public-service information, not personal
+  // data (open question #16). Published to citizens as is.
+  string hotline = 3;
+
+  // DISPLAY TEXT ONLY. The authoritative working-hours calendar — the one deadlines are counted
+  // against — is service-identity's (ADR 0007). A consumer must never parse this into hours.
+  string office_hours_text = 4;
+
+  string introduction = 5;
 }
 
 message ResolveMiniAppRequest {

@@ -28,6 +28,8 @@ import (
 	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-platform/internal/domain"
+	svcgrpc "github.com/vihat/vigov/service-platform/internal/grpc"
 )
 
 // khoaGoiGia is fake key material — the text says so in full (rule 8, forbidden #1).
@@ -50,6 +52,22 @@ func (danhBaGia) ByID(_ context.Context, id tenant.ID) (tenant.Tenant, error) {
 	return tenant.Tenant{ID: id, Host: hostThu, Active: true}, nil
 }
 
+func (danhBaGia) MiniApp(_ context.Context, appID string) (domain.MiniApp, error) {
+	return domain.MiniApp{AppID: appID, CheDo: domain.CheDoChinh}, nil
+}
+
+// hoSoGia answers only when a commune is in the context — which is what the chain must put there.
+type hoSoGia struct{}
+
+func (hoSoGia) Doc(ctx context.Context) (domain.HoSoHienThi, error) {
+	_ = tenant.MustFrom(ctx)
+	return domain.HoSoHienThi{DiaChiTruSo: "Trụ sở thử"}, nil
+}
+
+func depsGia() svcgrpc.Deps {
+	return svcgrpc.Deps{Dir: danhBaGia{}, Apps: danhBaGia{}, HoSo: hoSoGia{}}
+}
+
 // moMay starts the real server on an in-memory connection and returns a client dialled with the
 // given interceptors — so a test can choose to dial like a correctly configured service, or like
 // something that just opened a socket to the port.
@@ -57,7 +75,7 @@ func moMay(t *testing.T, opts ...grpc.DialOption) platformv1.PlatformServiceClie
 	t.Helper()
 
 	lis := bufconn.Listen(1 << 20)
-	srv := dungGRPCServer(khoaGoiGia, danhBaGia{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv := dungGRPCServer(khoaGoiGia, depsGia(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	go func() {
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			t.Errorf("Serve: %v", err)
@@ -177,5 +195,43 @@ func TestKhongCoKhoaGoiThiKhongDungDuocMayChu(t *testing.T) {
 			t.Fatal("dựng được máy chủ gRPC với GRPC_CALLER_KEY rỗng")
 		}
 	}()
-	_ = dungGRPCServer(nil, danhBaGia{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	_ = dungGRPCServer(nil, depsGia(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+}
+
+// GetTenantProfile is the first RPC on this port that DOES read the commune from context — the
+// case the comment above said would inherit whatever the chain guarantees. With the key and no
+// commune the server's own interceptor must refuse it; with both it answers.
+func TestGetTenantProfileQuaChuoiThat(t *testing.T) {
+	chiKhoa := moMay(t, grpc.WithChainUnaryInterceptor(grpcx.UnaryClientCallerAuth(khoaGoiGia)))
+	if _, err := chiKhoa.GetTenantProfile(context.Background(),
+		&platformv1.GetTenantProfileRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("GetTenantProfile không mang xã: mã = %v, muốn InvalidArgument (lỗi: %v)",
+			status.Code(err), err)
+	}
+
+	du := moMay(t, grpc.WithChainUnaryInterceptor(
+		grpcx.UnaryClientCallerAuth(khoaGoiGia),
+		grpcx.UnaryClientInterceptor(),
+	))
+	res, err := du.GetTenantProfile(tenant.Into(context.Background(), ulidThu),
+		&platformv1.GetTenantProfileRequest{})
+	if err != nil {
+		t.Fatalf("GetTenantProfile với khoá và xã vẫn bị từ chối: %v", err)
+	}
+	if res.GetProfile().GetOfficeAddress() != "Trụ sở thử" {
+		t.Errorf("hồ sơ = %+v", res.GetProfile())
+	}
+}
+
+// ResolveMiniApp IS NOT YET ON core/grpcx.methodsWithoutTenant. The owner granted it (ADR 0045,
+// answer to CÒN MỞ #1) but adding the name is a separate task that touches core. Until then the
+// server's chain refuses it — this pins that this task did not open the gate by some other route.
+// The task that adds the name flips this assertion to "succeeds with no commune".
+func TestResolveMiniAppChuaDuocMienXa(t *testing.T) {
+	cl := moMay(t, grpc.WithChainUnaryInterceptor(grpcx.UnaryClientCallerAuth(khoaGoiGia)))
+	if _, err := cl.ResolveMiniApp(context.Background(),
+		&platformv1.ResolveMiniAppRequest{AppId: "1234567890"}); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("ResolveMiniApp không mang xã: mã = %v, muốn InvalidArgument (lỗi: %v)",
+			status.Code(err), err)
+	}
 }

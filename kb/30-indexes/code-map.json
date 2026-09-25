@@ -1178,6 +1178,10 @@
       "kind": "func",
       "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:1067"
     },
+    "domain.CheDoMiniApp": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/mini_app.go:10"
+    },
     "domain.ChiSoDatDuToan": {
       "kind": "func",
       "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:943"
@@ -1702,6 +1706,10 @@
       "kind": "func",
       "at": "service-identity/internal/domain/phan_quyen_ghi.go:82"
     },
+    "domain.HoSoHienThi": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/mini_app.go:47"
+    },
     "domain.HoanThanhDungHanBanDau": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu.go:315"
@@ -1777,6 +1785,10 @@
     "domain.KhongChongCaNao": {
       "kind": "func",
       "at": "service-identity/internal/domain/lich_ghi.go:369"
+    },
+    "domain.KiemAppID": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/mini_app.go:36"
     },
     "domain.KiemCoQuanNhan": {
       "kind": "func",
@@ -2185,6 +2197,10 @@
     "domain.MacDinhTrangThaiNhiemVu": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhan_trang_thai_nhiem_vu.go:76"
+    },
+    "domain.MiniApp": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/mini_app.go:22"
     },
     "domain.MocDatDuoc": {
       "kind": "type",
@@ -2704,15 +2720,23 @@
     },
     "grpc.Deps": {
       "kind": "type",
-      "at": "service-identity/internal/grpc/server.go:141"
+      "at": "service-platform/internal/grpc/server.go:57"
     },
     "grpc.Directory": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:38"
+      "at": "service-platform/internal/grpc/server.go:40"
     },
     "grpc.GetTenant": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:80"
+      "at": "service-platform/internal/grpc/server.go:107"
+    },
+    "grpc.GetTenantProfile": {
+      "kind": "func",
+      "at": "service-platform/internal/grpc/server.go:187"
+    },
+    "grpc.HoSoHienThi": {
+      "kind": "type",
+      "at": "service-platform/internal/grpc/server.go:52"
     },
     "grpc.LichLamViecDoc": {
       "kind": "type",
@@ -2720,7 +2744,7 @@
     },
     "grpc.NewServer": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:51"
+      "at": "service-platform/internal/grpc/server.go:75"
     },
     "grpc.NgayLamBuDoc": {
       "kind": "type",
@@ -2756,7 +2780,11 @@
     },
     "grpc.ResolveHost": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:60"
+      "at": "service-platform/internal/grpc/server.go:87"
+    },
+    "grpc.ResolveMiniApp": {
+      "kind": "func",
+      "at": "service-platform/internal/grpc/server.go:137"
     },
     "grpc.ResolveStaffNames": {
       "kind": "func",
@@ -2772,7 +2800,11 @@
     },
     "grpc.Server": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:44"
+      "at": "service-platform/internal/grpc/server.go:64"
+    },
+    "grpc.SoMiniApp": {
+      "kind": "type",
+      "at": "service-platform/internal/grpc/server.go:47"
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
@@ -4184,15 +4216,15 @@
     },
     "store.ByHost": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:95"
+      "at": "service-platform/internal/store/directory.go:97"
     },
     "store.ByHostErr": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:128"
+      "at": "service-platform/internal/store/directory.go:130"
     },
     "store.ByID": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:158"
+      "at": "service-platform/internal/store/directory.go:160"
     },
     "store.CaLamBuDeGhi": {
       "kind": "type",
@@ -4412,7 +4444,11 @@
     },
     "store.Directory": {
       "kind": "type",
-      "at": "service-platform/internal/store/directory.go:26"
+      "at": "service-platform/internal/store/directory.go:28"
+    },
+    "store.Doc": {
+      "kind": "func",
+      "at": "service-platform/internal/store/ho_so_hien_thi.go:39"
     },
     "store.DoiHanXuLy": {
       "kind": "func",
@@ -4513,6 +4549,10 @@
     "store.HangMucKeHoachVonStore": {
       "kind": "type",
       "at": "service-finance/internal/store/hang_muc_ke_hoach_von.go:18"
+    },
+    "store.HoSoHienThiStore": {
+      "kind": "type",
+      "at": "service-platform/internal/store/ho_so_hien_thi.go:21"
     },
     "store.Huy": {
       "kind": "func",
@@ -4638,6 +4678,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/quyen.go:188"
     },
+    "store.MiniApp": {
+      "kind": "func",
+      "at": "service-platform/internal/store/mini_app.go:37"
+    },
     "store.MoKhoa": {
       "kind": "func",
       "at": "service-finance/internal/store/chung_tu_giai_ngan.go:408"
@@ -4692,7 +4736,7 @@
     },
     "store.NewDirectory": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:32"
+      "at": "service-platform/internal/store/directory.go:34"
     },
     "store.NewDuAnGhiStore": {
       "kind": "func",
@@ -4709,6 +4753,10 @@
     "store.NewHangMucKeHoachVonStore": {
       "kind": "func",
       "at": "service-finance/internal/store/hang_muc_ke_hoach_von.go:22"
+    },
+    "store.NewHoSoHienThiStore": {
+      "kind": "func",
+      "at": "service-platform/internal/store/ho_so_hien_thi.go:25"
     },
     "store.NewKhoiNhiemVuStore": {
       "kind": "func",

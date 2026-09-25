@@ -260,3 +260,10 @@ func (k kiemHan) ResolveMiniApp(context.Context, *platformv1.ResolveMiniAppReque
 	...grpc.CallOption) (*platformv1.ResolveMiniAppResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
 }
+
+// GetTenantProfile is a commune's display profile (ADR 0045, decision 5) — content read in a
+// commune's context, not a Host resolution. Present for the interface alone, like the three above.
+func (k kiemHan) GetTenantProfile(context.Context, *platformv1.GetTenantProfileRequest,
+	...grpc.CallOption) (*platformv1.GetTenantProfileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
+}

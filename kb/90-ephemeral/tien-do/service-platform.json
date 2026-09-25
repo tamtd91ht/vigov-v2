@@ -50,6 +50,14 @@
       "bang_chung": "service-platform/cmd/server/main.go:165: Handler bọc httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies) NGOÀI CÙNG, trước StripTenantHeaders/TenantMiddleware/xác thực — mọi lớp đọc cùng một địa chỉ khách cho một request. Các điểm gọi httpx.ClientIP không đổi. go build + go vet + go test ./... xanh cho core và bảy dịch vụ (chạy trong từng module); gofmt -l rỗng.",
       "no_confirm": [],
       "tiep_theo": "Giá trị ConfigMap TRUSTED_PROXY_CIDRS (dải pod của ingress-nginx và web-admin) do người vận hành cụm cung cấp — kho này không biết được. Chưa đặt thì IP trong vết = IP pod web-admin (đúng như trước, không bị giả mạo, nhưng không phải IP người dùng)."
+    },
+    {
+      "id": "so-mini-app-va-ho-so-hien-thi",
+      "viec": "Sổ app_id → chế độ/xã (MiniApp), hồ sơ hiển thị xã (TenantDisplayProfile), cài đặt ResolveMiniApp và GetTenantProfile — ADR 0044, 0045",
+      "trang_thai": "dang_lam",
+      "bang_chung": "service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql: hai bảng MỚI, không ALTER bảng cũ; CHECK (che_do = 'rieng') = (tenant_id IS NOT NULL); xoá mềm + trigger cấm xoá cứng. Store: internal/store/mini_app.go (Directory.MiniApp, đọc sổ không phạm vi xã), internal/store/ho_so_hien_thi.go (đọc qua core/store.Scoped). gRPC: internal/grpc/server.go ResolveMiniApp, GetTenantProfile. proto thêm GetTenantProfile; buf lint + buf breaking --against HEAD sạch. go vet + go test -race ./service-platform/... ./core/platformclient/... xanh. CÁC CA _pg_test.go BỊ BỎ QUA: máy này không có VIGOV_TEST_DSN, không có PostgreSQL, Docker không chạy — migration 0006 CHƯA CHẠY TRÊN CSDL THẬT NÀO — kiểm 2026-09-25",
+      "no_confirm": [],
+      "tiep_theo": "(1) Chạy các ca TestPgMiniApp*/TestPgHoSoHienThi* với VIGOV_TEST_DSN trước khi coi là xong. (2) ResolveMiniApp vẫn bị interceptor từ chối INVALID_ARGUMENT tới khi việc khác thêm tên vào core/grpcx.methodsWithoutTenant; cmd/server/main_test.go TestResolveMiniAppChuaDuocMienXa ghim điều đó và phải đổi chiều cùng lúc. (3) Chưa có đường GHI nào cho hai bảng: tuyến sửa hồ sơ cần khoá quyen (câu mở #27) và ghi vết cùng giao dịch. (4) Chưa chốt: bao nhiêu app chính, một xã được mấy app riêng — không có UNIQUE nào cho hai câu ấy. (5) Mục dang-viet-ten-tinh-thanh ở trên hẹn sửa ở 'migration 0006' — số ấy nay đã dùng, việc ấy sẽ là 0007 trở đi"
     }
   ]
 }

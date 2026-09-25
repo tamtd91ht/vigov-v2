@@ -1,13 +1,15 @@
 // Package grpc serves the platform contract to the other services.
 //
-// It answers exactly two questions — "which commune owns this Host" and "what is this
-// commune called" — and it is deliberately incapable of answering a third. ADR 0003: the
+// It answers registry questions — "which commune owns this Host", "what is this commune called",
+// "which mode and commune does this Mini App have" — plus ONE commune-scoped read, that commune's
+// own display profile (ADR 0045, decision 5). It is deliberately incapable of answering a
+// question about a commune's business content. ADR 0003: the
 // vendor operating the platform cannot read a commune's petitions or documents because THERE
 // IS NO PATH, not because a flag is switched off. A flag can be flipped; a path has to be
 // written, and writing one shows up in review.
 //
-// Neither RPC here is audited, and that is a decision rather than an omission. Rule 6 covers
-// WRITES to business data; these two read registry metadata, and ResolveHost runs on the edge
+// No RPC here is audited, and that is a decision rather than an omission. Rule 6 covers
+// WRITES to business data; every RPC here is a read, and ResolveHost runs on the edge
 // of every single request. An entry per Host resolution would add hundreds of rows a second
 // that record nothing anybody would ever look for, and bury the entries that carry legal
 // weight. The first RPC here that WRITES anything changes that answer.
@@ -40,16 +42,41 @@ type Directory interface {
 	ByID(ctx context.Context, id tenant.ID) (tenant.Tenant, error)
 }
 
+// SoMiniApp is the Mini App registry (ADR 0044). Unscoped for the reason store.Directory is: it
+// is what answers "which commune" for a dedicated app.
+type SoMiniApp interface {
+	MiniApp(ctx context.Context, appID string) (domain.MiniApp, error)
+}
+
+// HoSoHienThi reads the display profile of THE COMMUNE IN ctx. Scoped: no commune argument.
+type HoSoHienThi interface {
+	Doc(ctx context.Context) (domain.HoSoHienThi, error)
+}
+
+// Deps are what the server reads. Every field is required.
+type Deps struct {
+	Dir  Directory
+	Apps SoMiniApp
+	HoSo HoSoHienThi
+}
+
 // Server implements platformv1.PlatformServiceServer.
 type Server struct {
 	platformv1.UnimplementedPlatformServiceServer
 
-	dir Directory
-	log *slog.Logger
+	dir  Directory
+	apps SoMiniApp
+	hoSo HoSoHienThi
+	log  *slog.Logger
 }
 
-func NewServer(dir Directory, log *slog.Logger) *Server {
-	return &Server{dir: dir, log: log}
+// NewServer panics on a missing dependency, at construction: a nil one would otherwise surface as
+// a panic on the first call of that RPC, in production, as a 500 nobody can explain.
+func NewServer(d Deps, log *slog.Logger) *Server {
+	if d.Dir == nil || d.Apps == nil || d.HoSo == nil || log == nil {
+		panic("platform grpc: NewServer thiếu phụ thuộc")
+	}
+	return &Server{dir: d.Dir, apps: d.Apps, hoSo: d.HoSo, log: log}
 }
 
 // ResolveHost maps an incoming Host to a commune.
@@ -96,6 +123,86 @@ func (s *Server) GetTenant(ctx context.Context, req *platformv1.GetTenantRequest
 	// data and address; hiding it here would leave archival records referring to a commune
 	// nothing can name.
 	return &platformv1.GetTenantResponse{Tenant: sangProto(t)}, nil
+}
+
+// ResolveMiniApp answers, for ONE App ID, the mode and — for an active dedicated app whose commune
+// is active — the commune. The status table is on the RPC in platform.proto; this follows it.
+//
+// Runs with NO commune in context: it is what answers "which commune" for a dedicated app. Its
+// place on core/grpcx.methodsWithoutTenant is granted (ADR 0045, owner's answer to CÒN MỞ #1) but
+// wired by a separate task; until then the interceptor refuses it with INVALID_ARGUMENT. Nothing
+// below may therefore reach for tenant.MustFrom.
+//
+// Not audited: a metadata read with no "who" (ADR 0045 §Ghi vết).
+func (s *Server) ResolveMiniApp(ctx context.Context, req *platformv1.ResolveMiniAppRequest) (
+	*platformv1.ResolveMiniAppResponse, error) {
+
+	if err := domain.KiemAppID(req.GetAppId()); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "app_id không hợp lệ")
+	}
+
+	app, err := s.apps.MiniApp(ctx, req.GetAppId())
+	switch {
+	case errors.Is(err, store.ErrKhongCoMiniApp):
+		// OK with no app, per the contract — the caller refuses. Unknown, switched off and
+		// soft-deleted are one answer on purpose.
+		return &platformv1.ResolveMiniAppResponse{}, nil
+	case err != nil:
+		s.log.ErrorContext(ctx, "tra cứu mini app thất bại", "rpc", "ResolveMiniApp", "err", err)
+		return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
+	}
+
+	out := &platformv1.MiniApp{AppId: app.AppID}
+	switch app.CheDo {
+	case domain.CheDoChinh:
+		out.Mode = platformv1.MiniApp_MODE_MAIN
+	case domain.CheDoRieng:
+		out.Mode = platformv1.MiniApp_MODE_COMMUNE
+		if app.Xa == nil {
+			// store.Directory refuses this shape; reaching it means the two layers disagree, and
+			// answering without a commune would read to the caller as "commune inactive".
+			s.log.ErrorContext(ctx, "mini app riêng không mang xã", "rpc", "ResolveMiniApp")
+			return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
+		}
+		// ABSENT when the bound commune is inactive — TenantSummary is active by construction, and
+		// its absence under MODE_COMMUNE is the contract's signal to refuse. Never the successor.
+		if app.Xa.DangHoatDong {
+			out.Tenant = &platformv1.TenantSummary{
+				Id:          app.Xa.ID,
+				DisplayName: app.Xa.Ten,
+				Province:    app.Xa.TinhThanh,
+			}
+		}
+	default:
+		s.log.ErrorContext(ctx, "mini app có chế độ lạ", "rpc", "ResolveMiniApp", "che_do", string(app.CheDo))
+		return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
+	}
+	return &platformv1.ResolveMiniAppResponse{App: out}, nil
+}
+
+// GetTenantProfile returns the display profile of the commune in "x-tenant-id".
+//
+// NOT exempt: the interceptor has already refused a call without a commune, and the store reads
+// the commune from ctx. There is no request field that could name another one.
+func (s *Server) GetTenantProfile(ctx context.Context, _ *platformv1.GetTenantProfileRequest) (
+	*platformv1.GetTenantProfileResponse, error) {
+
+	hs, err := s.hoSo.Doc(ctx)
+	switch {
+	case errors.Is(err, store.ErrChuaCoHoSoHienThi):
+		return &platformv1.GetTenantProfileResponse{}, nil
+	case err != nil:
+		s.log.ErrorContext(ctx, "đọc hồ sơ hiển thị xã thất bại", "rpc", "GetTenantProfile", "err", err)
+		return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
+	}
+	// Field by field, like sangProto — ADR 0003's boundary.
+	return &platformv1.GetTenantProfileResponse{Profile: &platformv1.TenantProfile{
+		OfficeAddress:   hs.DiaChiTruSo,
+		LogoUrl:         hs.LogoURL,
+		Hotline:         hs.DuongDayNong,
+		OfficeHoursText: hs.GioLamViecHienThi,
+		Introduction:    hs.GioiThieu,
+	}}, nil
 }
 
 // loi maps a directory failure to a gRPC code.

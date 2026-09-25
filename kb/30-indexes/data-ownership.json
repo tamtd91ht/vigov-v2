@@ -194,6 +194,13 @@
       "source": "service-petitions/migrations/0007_bien_ban.sql:270"
     },
     {
+      "entity": "MiniApp",
+      "service": "platform",
+      "scope": "platform",
+      "table": "mini_app",
+      "source": "service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql:68"
+    },
+    {
       "entity": "OutboxEvent",
       "service": "petitions",
       "scope": "tenant",
@@ -332,6 +339,13 @@
       "scope": "tenant",
       "table": "loai_nhiem_vu",
       "source": "service-petitions/migrations/0003_danh_muc_nhiem_vu.sql:198"
+    },
+    {
+      "entity": "TenantDisplayProfile",
+      "service": "platform",
+      "scope": "tenant",
+      "table": "ho_so_hien_thi_xa",
+      "source": "service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql:127"
     },
     {
       "entity": "TenantSuccession",

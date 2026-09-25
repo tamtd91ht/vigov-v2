@@ -27,6 +27,7 @@ import (
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/migrate"
 	"github.com/vihat/vigov/core/secret"
+	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	svcgrpc "github.com/vihat/vigov/service-platform/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-platform/internal/http"
@@ -209,7 +210,14 @@ func run(log *slog.Logger) error {
 	// tenant.Directory, whose bool answer collapses the two. Caching this path needs a cache
 	// that preserves the distinction — TODO(next), it matters once every service edge resolves
 	// its Host through here (ADR 0004, decision 5).
-	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey, danhBa, log)
+	//
+	// The display profile is a commune's own content, so it gets the SCOPED store (core/store),
+	// never the directory's raw handle.
+	grpcSrv := dungGRPCServer(cfg.GRPCCallerKey, svcgrpc.Deps{
+		Dir:  danhBa,
+		Apps: danhBa,
+		HoSo: svcstore.NewHoSoHienThiStore(store.New(db)),
+	}, log)
 
 	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)
 	if err != nil {
@@ -292,7 +300,7 @@ func run(log *slog.Logger) error {
 // applies to every RPC with no exemption at all; "which commune" is exempt for ResolveHost,
 // because that call is what ESTABLISHES a commune. Folding either into the other is how the
 // tenant exemption list quietly becomes a list of RPCs that skip authentication.
-func dungGRPCServer(khoaGoi secret.Secret, danhBa svcgrpc.Directory, log *slog.Logger) *grpc.Server {
+func dungGRPCServer(khoaGoi secret.Secret, dv svcgrpc.Deps, log *slog.Logger) *grpc.Server {
 	srv := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			// Panics here, at construction, when GRPC_CALLER_KEY is empty. A server that starts
@@ -305,7 +313,7 @@ func dungGRPCServer(khoaGoi secret.Secret, danhBa svcgrpc.Directory, log *slog.L
 			grpcx.UnaryServerInterceptor(),
 		),
 	)
-	platformv1.RegisterPlatformServiceServer(srv, svcgrpc.NewServer(danhBa, log))
+	platformv1.RegisterPlatformServiceServer(srv, svcgrpc.NewServer(dv, log))
 	return srv
 }
 
