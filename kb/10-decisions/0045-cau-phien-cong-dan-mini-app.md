@@ -296,6 +296,19 @@ Không ghi vết: `ResolveMiniApp` (đọc siêu dữ liệu, không có "ai").
 | 6 | Service sở hữu bảng vết chưa thuộc xã | `service-identity` |
 | 7 | App riêng gắn xã đã sáp nhập | Từ chối, gắn lại bằng tay |
 
+### Trả lời của chủ dự án — 25/09/2026, sau khi ADR được viết
+
+Mục này ghi thêm, không sửa phần trên: phần trên là đề xuất lúc viết, mục này là câu trả lời.
+
+| CÒN MỞ / UNKNOWN | Trả lời |
+|---|---|
+| CÒN MỞ #1 — hai tên miễn xã | **Đồng ý** đưa `OpenCitizenSession` và `ResolveMiniApp` vào danh sách miễn của `core/grpcx` |
+| CÒN MỞ #2 — phiên chưa có số | **Đồng ý hướng §Phiên chưa có số.** Số điện thoại xin **một lần**, lúc công dân lần đầu cần danh tính (gửi phản ánh, tra cứu phiếu của mình) — không xin khi mở app. Sau đó tài khoản Zalo mang **cờ đã xác thực số**, các lần mở sau không hỏi lại. Chỉ xem thông tin xã thì không cần số |
+| CÒN MỞ #3 — thu hồi phiên xã cũ khi đổi xã | **Thu hồi ngay.** Yêu cầu đổi xã mang token cũ; mỗi lúc một phiên còn sống |
+| UNKNOWN #5 — cùng cụm k8s | **Cùng cụm.** Cầu đi trong mạng cụm, có NetworkPolicy chỉ cho `vihat-miniapp` tới cổng cầu. TLS không bắt buộc; ĐIỀU KIỆN DỪNG #5 vẫn đứng nếu có ngày tách cụm |
+
+CÒN MỞ #4 (TTL), #5 (vòng đời xoay khoá), #6, #7 và UNKNOWN #1–#4 **vẫn mở**.
+
 ## ĐIỀU KIỆN DỪNG
 
 1. Đề xuất đưa `GRPC_CALLER_KEY` cho `vihat-miniapp`, hoặc phục vụ RPC cầu trên cổng 9090
