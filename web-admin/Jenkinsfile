@@ -89,6 +89,16 @@ pipeline {
             exit 1
           fi
           echo "cụm: $(kubectl config current-context) · namespace: $NS"
+
+          # Deployment phải có sẵn — kiểm TRƯỚC khi dựng (lý do ở service-platform/Jenkinsfile).
+          if ! kubectl -n "$NS" get deploy/"$TEN_K8S" >/dev/null 2>&1; then
+            echo ""
+            echo "KHÔNG CÓ deploy/$TEN_K8S TRONG NAMESPACE $NS của cụm $(kubectl config current-context)."
+            echo "Hoặc manifest chưa được áp lên namespace này (deploy/README.md mục 4 và 7),"
+            echo "hoặc hệ thống đang chạy ở namespace khác — xem:  kubectl get deploy -A"
+            echo ""
+            exit 1
+          fi
         '''
         script {
           env.DA_DAT = 'chua'
@@ -189,6 +199,7 @@ pipeline {
             echo "THẤT BẠI — quay lại bản trước ở cụm"
             kubectl -n "$NS" rollout undo deploy/"$TEN_K8S"
             kubectl -n "$NS" rollout status deploy/"$TEN_K8S" --timeout=5m
+            exit 0
           '''
           currentBuild.displayName = "#${env.BUILD_NUMBER} ĐỎ ${env.TAG} → ${env.NS} · đã rollout undo · ${env.NGUOI_BAM}"
         }

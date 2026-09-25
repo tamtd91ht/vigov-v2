@@ -112,6 +112,18 @@ pipeline {
             exit 1
           fi
           echo "cụm: $(kubectl config current-context) · namespace: $NS"
+
+          # Deployment phải CÓ SẴN trên cụm — kiểm TRƯỚC khi dựng. Job chỉ đổi ảnh, không tạo
+          # Deployment (manifest áp tay, deploy/README.md mục 7). Kiểm muộn thì một lượt tốn cả
+          # cổng kiểm lẫn đóng ảnh rồi mới biết không có chỗ nào để đặt.
+          if ! kubectl -n "$NS" get deploy/"$TEN_K8S" >/dev/null 2>&1; then
+            echo ""
+            echo "KHÔNG CÓ deploy/$TEN_K8S TRONG NAMESPACE $NS của cụm $(kubectl config current-context)."
+            echo "Hoặc manifest chưa được áp lên namespace này (deploy/README.md mục 4 và 7),"
+            echo "hoặc hệ thống đang chạy ở namespace khác — xem:  kubectl get deploy -A"
+            echo ""
+            exit 1
+          fi
         '''
         script {
           // Cờ cho `post { failure }`: chỉ rút lại khi CỤM ĐÃ ĐỔI.
@@ -217,6 +229,9 @@ pipeline {
             echo "THẤT BẠI — quay lại bản trước ở cụm"
             kubectl -n "$NS" rollout undo deploy/"$TEN_K8S"
             kubectl -n "$NS" rollout status deploy/"$TEN_K8S" --timeout=5m
+            # `set +e` không đổi mã thoát của lệnh CUỐI; không có dòng này thì một undo hỏng làm
+            # khối post tự báo lỗi thêm một lần, che mất lỗi gốc ở stage phía trên.
+            exit 0
           '''
           currentBuild.displayName = "#${env.BUILD_NUMBER} ĐỎ ${env.TAG} → ${env.NS} · đã rollout undo · ${env.NGUOI_BAM}"
         }
