@@ -9,7 +9,7 @@
  *
  * ⚠ CHƯA CÓ PHIÊN ViGov THÌ KHÔNG VẼ Ô NHẬP và KHÔNG GỌI MẠNG — hôm nay là luôn luôn.
  */
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { type KetQuaGoi, traCuuPhieu } from "../api/goi-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
@@ -61,12 +61,24 @@ export function KetQuaTraCuu({ kq }: { kq: KetQuaGoi }): ReactNode {
   }
 }
 
-export function TraCuuPhieuScreen({ onQuayLai }: { onQuayLai: () => void }) {
+/**
+ * `ma_ban_dau`: mã đã chọn từ "Phản ánh của tôi" — điền sẵn vào ô và tra ngay khi mở, để người dân
+ * không phải gõ lại một mã họ vừa chạm vào. Vẫn đi qua ĐÚNG lời gọi tra cứu, với ĐÚNG phiên.
+ */
+export function TraCuuPhieuScreen({ onQuayLai, ma_ban_dau = "" }: { onQuayLai: () => void; ma_ban_dau?: string }) {
   const [phien] = useState(layPhienViGov);
-  const [ma, datMa] = useState("");
+  const [ma, datMa] = useState(ma_ban_dau);
   const [dangTra, datDangTra] = useState(false);
   const [thieuMa, datThieuMa] = useState(false);
   const [kq, datKq] = useState<KetQuaGoi | null>(null);
+  // Tra mã điền sẵn ĐÚNG MỘT LẦN, kể cả khi React dựng hiệu ứng hai lần (StrictMode).
+  const da_tra_san = useRef(false);
+
+  useEffect(() => {
+    if (phien === null || ma_ban_dau.trim() === "" || da_tra_san.current) return;
+    da_tra_san.current = true;
+    void tra();
+  }, [phien, ma_ban_dau]);
 
   const nutQuayLai = (
     <button type="button" className="quay-lai" onClick={onQuayLai}>

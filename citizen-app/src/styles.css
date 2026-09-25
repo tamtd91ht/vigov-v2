@@ -2782,3 +2782,70 @@ body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* "Phản ánh của tôi" — mỗi thẻ là MỘT NÚT to bằng cả thẻ. Viền + chữ, không chỉ màu. */
+.cd-cua-toi {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.cd-cua-toi__muc {
+  margin: 0 0 12px;
+}
+
+.cd-the-cua-toi {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 14px;
+  border: 2px solid var(--navy);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-body);
+  line-height: 1.55;
+  text-align: left;
+  color: var(--ink);
+}
+
+.cd-the-cua-toi:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.cd-the-cua-toi__ma {
+  display: block;
+  margin: 0 0 8px;
+  font-family: ui-monospace, "Courier New", monospace;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  word-break: break-all;
+  color: var(--navy);
+}
+
+.cd-the-cua-toi__dong {
+  display: block;
+  margin: 0 0 4px;
+}
+
+.cd-the-cua-toi__trang-thai {
+  color: var(--navy);
+}
+
+.cd-the-cua-toi__trich {
+  display: block;
+  margin: 6px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cd-the-cua-toi__xem {
+  display: block;
+  margin: 8px 0 0;
+  font-weight: 700;
+  text-decoration: underline;
+  color: var(--navy);
+}

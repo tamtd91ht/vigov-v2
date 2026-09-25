@@ -95,14 +95,18 @@ function NhanhKetThuc({ phieu }: { phieu: PhieuCuaToi }) {
  * Trạng thái bằng CHỮ, không bằng màu (README §Non-negotiables #6). Hai `null` của hai hạn nói hai
  * câu khác nhau: `han_tiep_nhan` null là KHÔNG ÁP DỤNG, `han_xu_ly_xong` null là CHƯA CÓ.
  */
+/**
+ * Lĩnh vực như người dân đọc: tên xã đặt, hoặc một câu — KHÔNG BAO GIỜ mã thô. Chung cho thẻ phiếu
+ * và danh sách "Phản ánh của tôi", để hai màn nói cùng một câu cho cùng một phiếu.
+ */
+export function nhanLinhVuc(linh_vuc: string, nhan_linh_vuc: string): string {
+  if (nhan_linh_vuc !== "") return nhan_linh_vuc;
+  return linh_vuc !== "" ? THE_PHIEU.da_phan_loai : THE_PHIEU.chua_phan_loai;
+}
+
 export function ThePhieu({ phieu }: { phieu: PhieuCuaToi }) {
   const giai_thich = giaiThichTrangThai(phieu.trang_thai);
-  const linh_vuc =
-    phieu.nhan_linh_vuc !== ""
-      ? phieu.nhan_linh_vuc
-      : phieu.linh_vuc !== ""
-        ? THE_PHIEU.da_phan_loai
-        : THE_PHIEU.chua_phan_loai;
+  const linh_vuc = nhanLinhVuc(phieu.linh_vuc, phieu.nhan_linh_vuc);
 
   const nguoi_gui = phieu.an_danh
     ? THE_PHIEU.an_danh

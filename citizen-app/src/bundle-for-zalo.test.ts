@@ -54,7 +54,7 @@ import { LOI_NHAN, nhanNguon } from "./features/kham-pha/goi-y";
 import { LOI_NHAN_DANG_LAM } from "./features/kham-pha/TrangXaScreen";
 import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
 import { NHAN_KENH_CONG_DAN } from "./cong-dan/man/KenhCongDan";
-import { KENH_CHUA_MO, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
+import { CUA_TOI, KENH_CHUA_MO, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
 
 /**
  * WHAT THIS CATCHES THAT NOTHING ELSE DOES:
@@ -530,7 +530,15 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     expect(day_du).toContain("Idempotency-Key");
     expect(goc, "bản NỘP mang tiêu đề chống gửi trùng của tuyến ViGov").not.toContain("Idempotency-Key");
 
-    for (const chuoi of [KENH_CHUA_MO.tieu_de, KHAN_CAP, TRA_CUU.khong_thay, NHAN_KENH_CONG_DAN]) {
+    // `CUA_TOI` (26/09/2026): màn "Phản ánh của tôi" — cũng CHỈ ở bản thử.
+    for (const chuoi of [
+      KENH_CHUA_MO.tieu_de,
+      KHAN_CAP,
+      TRA_CUU.khong_thay,
+      NHAN_KENH_CONG_DAN,
+      CUA_TOI.tieu_de,
+      CUA_TOI.trong,
+    ]) {
       expect(day_du, `bản thử thiếu: ${chuoi}`).toContain(chuoi);
       expect(goc, `bản NỘP vẫn chứa: ${chuoi}`).not.toContain(chuoi);
     }

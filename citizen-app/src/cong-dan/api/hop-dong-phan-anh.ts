@@ -4,6 +4,25 @@
  *
  *   POST /api/v1/my-citizen-reports            Bearer + Idempotency-Key  → 201 phieuCuaToiRa
  *   GET  /api/v1/my-citizen-reports/{maTraCuu} Bearer                    → 200 phieuCuaToiRa · 404
+ *   GET  /api/v1/my-citizen-reports            Bearer                    → 200 trang phieuCuaToiTomTatRa
+ *
+ * TUYẾN DANH SÁCH (26/09/2026), NGUYÊN VĂN HỢP ĐỒNG ĐÃ GIAO:
+ *
+ *   GET /api/v1/my-citizen-reports — CitizenOnly; citizen and commune come ONLY from the ViGov
+ *   citizen session token (never send tenant/phone/citizen id in query/body/header);
+ *   phone_verified_required: true.
+ *    Query: limit (1-100, default 20), cursor (opaque, pass back next_cursor verbatim),
+ *    sort=received_at (only), order=desc (only desc accepted; omit it), status (optional, one of
+ *    the nine codes).
+ *    200: {items: phieuCuaToiTomTatRa[], next_cursor: string ("" when has_more false),
+ *    has_more: boolean}; items always [] when none.
+ *    phieuCuaToiTomTatRa: {code: string (lookup code), status: string, field: string,
+ *    field_label: string, content_excerpt: string (≤140 chars, "…" if cut), clock_from: date-time,
+ *    acknowledge_due: date-time|null, resolve_due: date-time|null} — all keys always present.
+ *    Errors: 400 invalid params; 401 no/invalid session or no commune chosen; 500. No 403/404.
+ *
+ *   Client gửi ĐÚNG HAI tham số: `limit` và (từ trang thứ hai) `cursor`. `sort`/`order` bỏ đi vì
+ *   máy chủ chỉ có một cách xếp; `status` chưa màn nào dùng.
  *
  * Nguồn đối chiếu (đọc, không sửa): `service-petitions/internal/http/gui_phan_anh.go`,
  * `phieu_cua_toi.go`, `routes_cong_dan.go`.
@@ -202,6 +221,114 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
 /** Địa chỉ tuyến gửi, hoặc RỖNG khi chưa có máy chủ ViGov. */
 export function diaChiGuiPhanAnh(): string {
   return diaChiViGov(DUONG_DAN_PHAN_ANH_CUA_TOI);
+}
+
+/**
+ * MỘT DÒNG CỦA "PHẢN ÁNH CỦA TÔI" (`phieuCuaToiTomTatRa`). Ít hơn `PhieuCuaToi`: không địa chỉ,
+ * không người gửi, không kết quả — chạm vào dòng là mở màn tra cứu, nơi đọc đủ phiếu.
+ */
+export type PhieuCuaToiTomTat = {
+  readonly ma_tra_cuu: string;
+  readonly trang_thai: string;
+  readonly linh_vuc: string;
+  readonly nhan_linh_vuc: string;
+  /** Tối đa 140 ký tự, máy chủ đã cắt và thêm "…". */
+  readonly trich_noi_dung: string;
+  readonly goc_dem_han: string;
+  readonly han_tiep_nhan: string | null;
+  readonly han_xu_ly_xong: string | null;
+};
+
+/** Một trang. `con_nua = false` thì `con_tro` luôn rỗng. */
+export type TrangPhieuCuaToi = {
+  readonly muc: readonly PhieuCuaToiTomTat[];
+  readonly con_tro: string;
+  readonly con_nua: boolean;
+};
+
+/** Số dòng mỗi trang — trong khoảng 1..100 hợp đồng cho phép. */
+export const SO_DONG_MOI_TRANG = 20;
+
+function docTomTat(than: unknown): PhieuCuaToiTomTat | null {
+  if (typeof than !== "object" || than === null) return null;
+  const t = than as Record<string, unknown>;
+  const chuoi = (k: string): string | null => (typeof t[k] === "string" ? (t[k] as string) : null);
+  const chuoiHoacNull = (k: string): string | null | undefined =>
+    t[k] === null ? null : typeof t[k] === "string" ? (t[k] as string) : undefined;
+
+  const ma = chuoi("code");
+  const trang_thai = chuoi("status");
+  const linh_vuc = chuoi("field");
+  const nhan = chuoi("field_label");
+  const trich = chuoi("content_excerpt");
+  const goc = chuoi("clock_from");
+  const han_tiep_nhan = chuoiHoacNull("acknowledge_due");
+  const han_xu_ly = chuoiHoacNull("resolve_due");
+  if (
+    ma === null ||
+    ma === "" ||
+    trang_thai === null ||
+    linh_vuc === null ||
+    nhan === null ||
+    trich === null ||
+    goc === null ||
+    han_tiep_nhan === undefined ||
+    han_xu_ly === undefined
+  ) {
+    return null;
+  }
+  return {
+    ma_tra_cuu: ma,
+    trang_thai,
+    linh_vuc,
+    nhan_linh_vuc: nhan,
+    trich_noi_dung: trich,
+    goc_dem_han: goc,
+    han_tiep_nhan,
+    han_xu_ly_xong: han_xu_ly,
+  };
+}
+
+/**
+ * Thân trả lời của tuyến danh sách → `TrangPhieuCuaToi`, hoặc `null` nếu sai khuôn.
+ *
+ * MỘT DÒNG SAI KHUÔN LÀ CẢ TRANG SAI KHUÔN: bỏ lặng lẽ một dòng là giấu một phiếu của chính người
+ * dân khỏi danh sách của họ — họ sẽ tưởng phiếu ấy chưa từng được gửi.
+ *
+ * `has_more = true` mà con trỏ rỗng cũng là sai khuôn: bấm "Xem thêm" với con trỏ rỗng là tải lại
+ * trang đầu và nhân đôi danh sách.
+ */
+export function docTrangPhieuCuaToi(than: unknown): TrangPhieuCuaToi | null {
+  if (typeof than !== "object" || than === null) return null;
+  const t = than as Record<string, unknown>;
+  const items = t["items"];
+  const con_tro = t["next_cursor"];
+  const con_nua = t["has_more"];
+  if (!Array.isArray(items) || typeof con_tro !== "string" || typeof con_nua !== "boolean") return null;
+  if (con_nua && con_tro === "") return null;
+
+  const muc: PhieuCuaToiTomTat[] = [];
+  for (const mot of items) {
+    const p = docTomTat(mot);
+    if (p === null) return null;
+    muc.push(p);
+  }
+  return { muc, con_tro: con_nua ? con_tro : "", con_nua };
+}
+
+/**
+ * Địa chỉ tuyến danh sách, hoặc RỖNG.
+ *
+ * CHỈ `limit` VÀ `cursor`. Không một tham số nào nói "của ai" hay "xã nào": máy chủ lấy cả hai từ
+ * phiên (luật 4, cấm #1; luật 1, cấm #2). Con trỏ đi NGUYÊN VĂN — `URLSearchParams` mã hoá nó để
+ * một ký tự `&` hay `=` trong chuỗi mờ không đổi được tham số, và máy chủ giải mã về đúng chuỗi ấy.
+ */
+export function diaChiDanhSach(con_tro: string): string {
+  const goc = diaChiViGov(DUONG_DAN_PHAN_ANH_CUA_TOI);
+  if (goc === "") return "";
+  const q = new URLSearchParams({ limit: String(SO_DONG_MOI_TRANG) });
+  if (con_tro !== "") q.set("cursor", con_tro);
+  return `${goc}?${q.toString()}`;
 }
 
 /**

@@ -3,13 +3,15 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { guiPhanAnh, traCuuPhieu } from "./api/goi-vigov";
+import { guiPhanAnh, phanAnhCuaToi, traCuuPhieu } from "./api/goi-vigov";
 import { thanGuiPhanAnh } from "./api/hop-dong-phan-anh";
 import { taoLanGui } from "./api/lan-gui";
 import { layPhienViGov } from "./api/phien-vigov";
 import { diaChiViGov } from "./api/dia-chi-vigov";
 import { GuiPhanAnhScreen, kiemPhanAnh, PHAN_ANH_TRONG } from "./man/GuiPhanAnhScreen";
-import { KENH_CHUA_MO, GUI, nhanTrangThai, giaiThichTrangThai, TRANG_THAI } from "./man/noi-dung";
+import { KenhCongDan } from "./man/KenhCongDan";
+import { CUA_TOI, KENH_CHUA_MO, GUI, nhanTrangThai, giaiThichTrangThai, TRANG_THAI } from "./man/noi-dung";
+import { PhanAnhCuaToiScreen } from "./man/PhanAnhCuaToiScreen";
 import { thoiDiemVN } from "./man/thoi-diem";
 import { TraCuuPhieuScreen } from "./man/TraCuuPhieuScreen";
 
@@ -50,24 +52,48 @@ describe("nguồn phiên ViGov đóng — không một lời gọi mạng nào �
     expect(await guiPhanAnh(lan)).toEqual({ kieu: "chua-co-phien" });
     expect(await traCuuPhieu("MA-THU-01")).toEqual({ kieu: "chua-co-phien" });
     expect(await traCuuPhieu("")).toEqual({ kieu: "chua-co-phien" });
+    expect(await phanAnhCuaToi("")).toEqual({ kieu: "chua-co-phien" });
+    expect(await phanAnhCuaToi("c1")).toEqual({ kieu: "chua-co-phien" });
     expect(fetch_gia).not.toHaveBeenCalled();
   });
 
-  it("hai màn nói 'kênh chưa mở', không vẽ ô nhập nào, không gọi mạng", () => {
+  it("ba màn nói 'kênh chưa mở', không vẽ ô nhập nào, không gọi mạng", () => {
     const fetch_gia = vi.fn();
     vi.stubGlobal("fetch", fetch_gia);
 
     for (const man of [
       createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }),
       createElement(TraCuuPhieuScreen, { onQuayLai: () => {} }),
+      createElement(TraCuuPhieuScreen, { onQuayLai: () => {}, ma_ban_dau: "PA7K2QX9M4TD" }),
+      createElement(PhanAnhCuaToiScreen, { onQuayLai: () => {}, onMoPhieu: () => {}, onGuiPhanAnh: () => {} }),
     ]) {
       const html = renderToStaticMarkup(man);
       expect(html).toContain(KENH_CHUA_MO.tieu_de);
       expect(html).not.toMatch(/<(input|textarea|form)[\s/>]/);
       // Không nút gửi nào khi kênh đóng.
       expect(html).not.toContain(GUI.nut_tiep);
+      // Không đang tải, không "chưa gửi phản ánh nào" — chưa có phiên thì chưa biết gì cả.
+      expect(html).not.toContain(CUA_TOI.dang_tai);
+      expect(html).not.toContain(CUA_TOI.trong);
     }
     expect(fetch_gia).not.toHaveBeenCalled();
+  });
+
+  it("màn chọn việc có lối vào 'Phản ánh của tôi'", () => {
+    const html = renderToStaticMarkup(createElement(KenhCongDan, { onDong: () => {} }));
+    expect(html).toContain(`<button type="button" class="cd-nut">${CUA_TOI.tieu_de}</button>`);
+  });
+});
+
+describe("bản `goc` không mang màn 'Phản ánh của tôi'", () => {
+  it("`index.rong.ts` chỉ nhập KIỂU, và không nhắc tới màn danh sách", () => {
+    // Một `import` thường ở bản rỗng kéo mô-đun vào bản nộp. `bundle-for-zalo.test.ts` đo chuỗi
+    // của màn trên bundle thật; ca này bắt cùng lỗi sớm hơn một tầng, không cần dựng.
+    const rong = SAN_XUAT.find((f) => f.path === "./index.rong.ts")!.code;
+    const nhap = [...rong.matchAll(/^\s*import\b[^\n]*/gm)].map((m) => m[0]);
+    expect(nhap.length).toBeGreaterThan(0);
+    for (const dong of nhap) expect(dong, dong).toMatch(/^\s*import\s+type\b/);
+    expect(rong).not.toMatch(/PhanAnhCuaToi|CUA_TOI|cua-toi/);
   });
 });
 

@@ -20,15 +20,26 @@ vi.mock("./dia-chi-vigov", () => ({
 }));
 
 import { KetQuaGui } from "../man/GuiPhanAnhScreen";
-import { GUI, THE_PHIEU, TRA_CUU, TRANG_THAI } from "../man/noi-dung";
-import { KetQuaTraCuu } from "../man/TraCuuPhieuScreen";
+import { CUA_TOI, GUI, THE_PHIEU, TRA_CUU, TRANG_THAI } from "../man/noi-dung";
+import {
+  batDauTai,
+  DANH_SACH_DAU,
+  PhanAnhCuaToiScreen,
+  sauKhiTai,
+  ThanDanhSach,
+  ThePhieuTomTat,
+} from "../man/PhanAnhCuaToiScreen";
+import { KetQuaTraCuu, TraCuuPhieuScreen } from "../man/TraCuuPhieuScreen";
 
-import { guiPhanAnh, traCuuPhieu } from "./goi-vigov";
+import { guiPhanAnh, phanAnhCuaToi, traCuuPhieu } from "./goi-vigov";
 import {
   DO_DAI_NHANH_KET_THUC,
   docPhieu,
+  docTrangPhieuCuaToi,
   DUONG_DAN_PHAN_ANH_CUA_TOI,
   type PhanAnhMoi,
+  type PhieuCuaToiTomTat,
+  SO_DONG_MOI_TRANG,
   thanGuiPhanAnh,
   TRUONG_DUOC_NHAN,
 } from "./hop-dong-phan-anh";
@@ -390,5 +401,297 @@ describe("tra cứu phiếu — lý do và cơ quan nhận của hai nhánh kế
       expect(s).not.toHaveBeenCalled();
       s.mockRestore();
     }
+  });
+});
+
+/**
+ * "PHẢN ÁNH CỦA TÔI" — `GET /api/v1/my-citizen-reports` (danh sách), với phiên giả của tệp này.
+ */
+describe("phản ánh của tôi — lời gọi và đọc trang", () => {
+  const DONG_RA = {
+    code: "PA7K2QX9M4TD",
+    status: "dang-xu-ly",
+    field: "giao-thong",
+    field_label: "Giao thông",
+    content_excerpt: "Ổ gà lớn trước cổng chợ…",
+    clock_from: "2026-09-24T01:30:00Z",
+    acknowledge_due: "2026-09-24T03:30:00Z",
+    resolve_due: "2026-09-26T09:00:00Z",
+  };
+  const TRANG_RA = { items: [DONG_RA], next_cursor: "c1+/=&x", has_more: true };
+
+  /** Mọi tham số trên đường dẫn của một lời gọi. */
+  const thamSo = (g: LoiGoi) => new URL(g.dia_chi).searchParams;
+
+  it("GET đúng tuyến, bearer từ nguồn phiên, CHỈ `limit` ở trang đầu — không danh tính, không xã", async () => {
+    datFetch(traLoi(200, TRANG_RA));
+    const kq = await phanAnhCuaToi("");
+    expect(kq.kieu).toBe("xong");
+    expect(loi_goi).toHaveLength(1);
+
+    const g = loi_goi[0]!;
+    const url = new URL(g.dia_chi);
+    expect(`${url.origin}${url.pathname}`).toBe(`https://vigov.vidu.vn${DUONG_DAN_PHAN_ANH_CUA_TOI}`);
+    expect(g.tuy_chon.method).toBe("GET");
+    expect(g.tuy_chon.body).toBeUndefined();
+    expect(tieuDe(g)["Authorization"]).toBe("Bearer tok-thu-nghiem");
+    // Đúng hai tiêu đề — không tiêu đề nào mang xã hay danh tính, không khoá chống trùng.
+    expect(Object.keys(tieuDe(g)).sort()).toEqual(["Accept", "Authorization"]);
+    expect([...thamSo(g).keys()]).toEqual(["limit"]);
+    expect(thamSo(g).get("limit")).toBe(String(SO_DONG_MOI_TRANG));
+    expect(SO_DONG_MOI_TRANG).toBeGreaterThanOrEqual(1);
+    expect(SO_DONG_MOI_TRANG).toBeLessThanOrEqual(100);
+  });
+
+  it("trang sau truyền con trỏ NGUYÊN VĂN — kể cả ký tự `+ / = &`", async () => {
+    datFetch(traLoi(200, TRANG_RA));
+    await phanAnhCuaToi("c1+/=&x");
+    const q = thamSo(loi_goi[0]!);
+    expect(q.get("cursor")).toBe("c1+/=&x");
+    expect([...q.keys()].sort()).toEqual(["cursor", "limit"]);
+  });
+
+  it("không một tham số nào nói của ai / xã nào / xếp thế nào, ở mọi trang", async () => {
+    datFetch(traLoi(200, TRANG_RA));
+    await phanAnhCuaToi("");
+    await phanAnhCuaToi("c1");
+    expect(loi_goi).toHaveLength(2);
+    for (const g of loi_goi) {
+      for (const cam of [
+        "tenant",
+        "tenant_id",
+        "commune",
+        "xa",
+        "phone",
+        "reporter_phone",
+        "citizen_id",
+        "cong_dan_id",
+        "sort",
+        "order",
+        "status",
+      ]) {
+        expect(thamSo(g).has(cam), `tham số bị cấm: ${cam}`).toBe(false);
+      }
+    }
+  });
+
+  it("ánh xạ đủ trường, giữ hai `null` của hai hạn", async () => {
+    datFetch(
+      traLoi(200, {
+        items: [DONG_RA, { ...DONG_RA, code: "PB2", acknowledge_due: null, resolve_due: null }],
+        next_cursor: "",
+        has_more: false,
+      }),
+    );
+    const kq = await phanAnhCuaToi("");
+    if (kq.kieu !== "xong") throw new Error(`mong đợi xong, nhận ${kq.kieu}`);
+    expect(kq.trang.con_nua).toBe(false);
+    expect(kq.trang.con_tro).toBe("");
+    expect(kq.trang.muc[0]).toEqual({
+      ma_tra_cuu: "PA7K2QX9M4TD",
+      trang_thai: "dang-xu-ly",
+      linh_vuc: "giao-thong",
+      nhan_linh_vuc: "Giao thông",
+      trich_noi_dung: "Ổ gà lớn trước cổng chợ…",
+      goc_dem_han: "2026-09-24T01:30:00Z",
+      han_tiep_nhan: "2026-09-24T03:30:00Z",
+      han_xu_ly_xong: "2026-09-26T09:00:00Z",
+    });
+    expect(kq.trang.muc[1]!.han_tiep_nhan).toBeNull();
+    expect(kq.trang.muc[1]!.han_xu_ly_xong).toBeNull();
+  });
+
+  it("danh sách rỗng là một trang hợp lệ", () => {
+    expect(docTrangPhieuCuaToi({ items: [], next_cursor: "", has_more: false })).toEqual({
+      muc: [],
+      con_tro: "",
+      con_nua: false,
+    });
+  });
+
+  it("sai khuôn là null — một dòng hỏng làm hỏng cả trang, không bỏ lặng lẽ", () => {
+    const thieu_ma: Record<string, unknown> = { ...DONG_RA };
+    delete thieu_ma["code"];
+    for (const sai of [
+      null,
+      [],
+      { items: null, next_cursor: "", has_more: false },
+      { items: [], has_more: false },
+      { items: [], next_cursor: "", has_more: "false" },
+      // Còn nữa mà không có con trỏ: "Xem thêm" sẽ tải lại trang đầu và nhân đôi danh sách.
+      { items: [], next_cursor: "", has_more: true },
+      { items: [DONG_RA, thieu_ma], next_cursor: "", has_more: false },
+      { items: [{ ...DONG_RA, code: "" }], next_cursor: "", has_more: false },
+      { items: [{ ...DONG_RA, resolve_due: 5 }], next_cursor: "", has_more: false },
+      { items: [{ ...DONG_RA, content_excerpt: undefined }], next_cursor: "", has_more: false },
+    ]) {
+      expect(docTrangPhieuCuaToi(sai), JSON.stringify(sai)).toBeNull();
+    }
+  });
+
+  it("mỗi mã trạng thái rơi vào đúng một nhánh — 404/409/503 không mượn câu của tuyến khác", async () => {
+    for (const [status, kieu] of [
+      [400, "khong-hop-le"],
+      [401, "het-phien"],
+      [404, "loi-may-chu"],
+      [409, "loi-may-chu"],
+      [503, "loi-may-chu"],
+      [500, "loi-may-chu"],
+    ] as const) {
+      datFetch(traLoi(status, { code: "x", message: "y", trace_id: "" }));
+      expect((await phanAnhCuaToi("")).kieu, `mã ${status}`).toBe(kieu);
+    }
+    datFetch(traLoi(200, { items: "x" }));
+    expect((await phanAnhCuaToi("")).kieu, "200 sai khuôn").toBe("loi-may-chu");
+    datFetch(new Error("mất mạng"));
+    expect(await phanAnhCuaToi("")).toEqual({ kieu: "loi-mang" });
+  });
+
+  it("không phiên hoặc không địa chỉ: dừng TRƯỚC fetch", async () => {
+    const fetch_gia = vi.fn();
+    vi.stubGlobal("fetch", fetch_gia);
+    trang.phien = null;
+    expect(await phanAnhCuaToi("")).toEqual({ kieu: "chua-co-phien" });
+    trang.phien = { token: "", ten_xa: "Xã Thử Nghiệm" };
+    expect(await phanAnhCuaToi("c1")).toEqual({ kieu: "chua-co-phien" });
+    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm" };
+    trang.host = "";
+    expect(await phanAnhCuaToi("")).toEqual({ kieu: "chua-cau-hinh" });
+    expect(fetch_gia).not.toHaveBeenCalled();
+  });
+});
+
+describe("phản ánh của tôi — màn hình", () => {
+  const phieu = (ma: string, trang_thai = "da-tiep-nhan"): PhieuCuaToiTomTat => ({
+    ma_tra_cuu: ma,
+    trang_thai,
+    linh_vuc: "",
+    nhan_linh_vuc: "",
+    trich_noi_dung: "Đèn đường hỏng ở đầu ngõ",
+    goc_dem_han: "2026-09-24T01:30:00Z",
+    han_tiep_nhan: "2026-09-24T03:30:00Z",
+    han_xu_ly_xong: null,
+  });
+  const xong = (muc: PhieuCuaToiTomTat[], con_tro: string) =>
+    ({ kieu: "xong", trang: { muc, con_tro, con_nua: con_tro !== "" } }) as const;
+  const ve = (ds: typeof DANH_SACH_DAU) =>
+    renderToStaticMarkup(
+      createElement(ThanDanhSach, { ds, onMo: () => {}, onTai: () => {}, onGuiPhanAnh: () => {} }),
+    );
+
+  it("có phiên: màn mở ra ở trạng thái đang tải, có tên xã của phiên, chưa hiện câu 'chưa gửi'", () => {
+    const html = renderToStaticMarkup(
+      createElement(PhanAnhCuaToiScreen, { onQuayLai: () => {}, onMoPhieu: () => {}, onGuiPhanAnh: () => {} }),
+    );
+    expect(html).toContain(CUA_TOI.tieu_de);
+    expect(html).toContain("Xã Thử Nghiệm");
+    expect(html).toContain(CUA_TOI.dang_tai);
+    expect(html).not.toContain(CUA_TOI.trong);
+  });
+
+  it("rỗng: câu 'Bạn chưa gửi phản ánh nào.' và một nút Gửi phản ánh", () => {
+    const html = ve(sauKhiTai(DANH_SACH_DAU, xong([], "")));
+    expect(CUA_TOI.trong).toBe("Bạn chưa gửi phản ánh nào.");
+    expect(html).toContain(CUA_TOI.trong);
+    expect(html).toContain(`<button type="button" class="cd-nut">${GUI.tieu_de}</button>`);
+    expect(html).not.toContain(CUA_TOI.nut_xem_them);
+    expect(html).not.toContain(CUA_TOI.dang_tai);
+  });
+
+  it("'Xem thêm' NỐI trang sau vào cuối, dùng con trỏ của trang trước, và bỏ dòng trùng", () => {
+    let ds = sauKhiTai(DANH_SACH_DAU, xong([phieu("PA1"), phieu("PA2")], "c1"));
+    expect(ds.con_tro).toBe("c1");
+    expect(ve(ds)).toContain(CUA_TOI.nut_xem_them);
+
+    ds = batDauTai(ds);
+    expect(ds.dang_tai).toBe(true);
+    // Đang tải thêm: danh sách cũ VẪN hiện, không nháy về trạng thái rỗng.
+    expect(ve(ds)).toContain("PA1");
+    expect(ve(ds)).toContain(CUA_TOI.dang_tai_them);
+
+    ds = sauKhiTai(ds, xong([phieu("PA2"), phieu("PA3")], ""));
+    expect(ds.muc.map((p) => p.ma_tra_cuu)).toEqual(["PA1", "PA2", "PA3"]);
+    expect(ds.con_nua).toBe(false);
+    const html = ve(ds);
+    expect(html).not.toContain(CUA_TOI.nut_xem_them);
+    expect(html).toContain(CUA_TOI.het_danh_sach);
+    expect(html.indexOf("PA1")).toBeLessThan(html.indexOf("PA3"));
+  });
+
+  it("lỗi giữ nguyên danh sách đã có và mời Thử lại; hết phiên thì không mời", () => {
+    const co = sauKhiTai(DANH_SACH_DAU, xong([phieu("PA1")], "c1"));
+    const mang = sauKhiTai(batDauTai(co), { kieu: "loi-mang" });
+    expect(mang.muc).toHaveLength(1);
+    expect(mang.con_tro).toBe("c1");
+    expect(ve(mang)).toContain(CUA_TOI.loi_mang);
+    expect(ve(mang)).toContain(CUA_TOI.nut_thu_lai);
+    expect(ve(mang)).toContain("PA1");
+
+    const sau_lan_dau = sauKhiTai(DANH_SACH_DAU, { kieu: "khong-hop-le" });
+    expect(ve(sau_lan_dau)).toContain(CUA_TOI.loi_may_chu);
+    expect(ve(sau_lan_dau)).toContain(CUA_TOI.nut_thu_lai);
+    expect(ve(sau_lan_dau)).not.toContain(CUA_TOI.trong);
+
+    const het = sauKhiTai(DANH_SACH_DAU, { kieu: "het-phien" });
+    expect(ve(het)).toContain(CUA_TOI.het_phien);
+    expect(ve(het)).not.toContain(CUA_TOI.nut_thu_lai);
+
+    // Máy chủ nói chưa có phiên: màn đóng lại thành "kênh chưa mở".
+    expect(sauKhiTai(DANH_SACH_DAU, { kieu: "chua-co-phien" }).kenh_dong).toBe(true);
+  });
+
+  it("thẻ: mã to, trạng thái bằng chữ đã duyệt, lĩnh vực, trích đoạn, mốc +07 — đủ chín trạng thái", () => {
+    expect(Object.keys(TRANG_THAI)).toHaveLength(9);
+    for (const [ma_tt, { nhan }] of Object.entries(TRANG_THAI)) {
+      const html = renderToStaticMarkup(
+        createElement(ThePhieuTomTat, { phieu: phieu("PA7K2QX9M4TD", ma_tt), onMo: () => {} }),
+      );
+      expect(html, ma_tt).toContain(`<strong class="cd-the-cua-toi__trang-thai">${nhan}</strong>`);
+      expect(html, ma_tt).not.toContain(ma_tt);
+    }
+
+    const html = renderToStaticMarkup(
+      createElement(ThePhieuTomTat, {
+        phieu: { ...phieu("PA7K2QX9M4TD"), nhan_linh_vuc: "Giao thông", han_xu_ly_xong: "2026-09-26T09:00:00Z" },
+        onMo: () => {},
+      }),
+    );
+    expect(html).toContain('<span class="cd-the-cua-toi__ma">PA7K2QX9M4TD</span>');
+    expect(html).toContain("Giao thông");
+    expect(html).toContain("Đèn đường hỏng ở đầu ngõ");
+    expect(html).toContain(`${THE_PHIEU.gui_luc}: 24/09/2026 08:30`);
+    expect(html).toContain(`${THE_PHIEU.han_xu_ly}: 26/09/2026 16:00`);
+    // Mốc cố định, không đếm "quá hạn" ở client (ADR 0007).
+    expect(html).not.toMatch(/quá hạn/i);
+    // Cả thẻ là một nút.
+    expect(html).toMatch(/^<li class="cd-cua-toi__muc"><button type="button" class="cd-the-cua-toi">/);
+  });
+
+  it("thẻ: chưa có hạn xử lý thì KHÔNG hiện dòng hạn; mã lĩnh vực thô không bao giờ hiện", () => {
+    const html = renderToStaticMarkup(
+      createElement(ThePhieuTomTat, {
+        phieu: { ...phieu("PA1"), linh_vuc: "giao-thong", nhan_linh_vuc: "" },
+        onMo: () => {},
+      }),
+    );
+    expect(html).not.toContain(THE_PHIEU.han_xu_ly);
+    expect(html).not.toContain("giao-thong");
+    expect(html).toContain(THE_PHIEU.da_phan_loai);
+  });
+
+  it("chạm thẻ gọi onMo với đúng mã", () => {
+    const mo = vi.fn();
+    const el = ThePhieuTomTat({ phieu: phieu("PA9"), onMo: mo }) as unknown as {
+      props: { children: { props: { onClick: () => void } } };
+    };
+    el.props.children.props.onClick();
+    expect(mo).toHaveBeenCalledWith("PA9");
+  });
+
+  it("mở tra cứu từ danh sách: mã điền sẵn vào ô", () => {
+    const html = renderToStaticMarkup(
+      createElement(TraCuuPhieuScreen, { onQuayLai: () => {}, ma_ban_dau: "PA7K2QX9M4TD" }),
+    );
+    expect(html).toMatch(/<input[^>]*value="PA7K2QX9M4TD"/);
   });
 });

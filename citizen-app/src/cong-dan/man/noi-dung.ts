@@ -185,6 +185,30 @@ export const TRA_CUU = {
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
+ * MÀN "PHẢN ÁNH CỦA TÔI" — danh sách phiếu của chính người dân (chỉ bản thử `day-du`)
+ *
+ * Nhãn trạng thái KHÔNG viết lại ở đây: thẻ dùng `nhanTrangThai`, cùng bảng màn tra cứu dùng. Nhãn
+ * "Gửi lúc" / "Hạn xử lý xong" lấy từ `THE_PHIEU` để hai màn nói cùng một chữ cho cùng một mốc.
+ *
+ * KHÔNG CÓ CÂU "QUÁ HẠN": quá hạn đếm bằng GIỜ LÀM VIỆC (ADR 0007), và chỉ `identity` đếm được.
+ * Màn này chỉ hiện mốc hạn cố định máy chủ đã ghi.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const CUA_TOI = {
+  tieu_de: "Phản ánh của tôi",
+  dang_tai: "Đang tải danh sách phản ánh…",
+  trong: "Bạn chưa gửi phản ánh nào.",
+  nut_xem: "Xem chi tiết",
+  nut_xem_them: "Xem thêm",
+  dang_tai_them: "Đang tải thêm…",
+  nut_thu_lai: "Thử lại",
+  het_danh_sach: "Đã hiện hết phản ánh của bạn.",
+  het_phien: "Phiên làm việc đã hết hạn. Hãy đóng ứng dụng, mở lại rồi xem lại danh sách.",
+  loi_may_chu: "Hệ thống của xã đang gặp sự cố. Hãy chờ vài phút rồi bấm Thử lại.",
+  loi_mang: "Không tải được vì mạng yếu hoặc mất kết nối. Hãy kiểm tra mạng rồi bấm Thử lại.",
+} as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
  * THẺ PHIẾU — dùng chung cho màn kết quả gửi và màn tra cứu
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
