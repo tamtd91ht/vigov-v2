@@ -31,7 +31,6 @@ import type {
 } from "@/lib/api/schema.gen";
 import { gieoThoiHanMacDinh, layThoiHanXuLy, suaThoiHanXuLy } from "@/lib/api/thoi-han-xu-ly";
 import { namTheoDongHoMay } from "@/lib/nam";
-import { QUYEN_CAU_HINH_THOI_HAN, quyetDinhTheoKhoa } from "@/lib/quyen";
 
 import { khoiCanhBao, tinhTrangBang, type KhoiCanhBao } from "./chua-cau-hinh";
 import { DAN_LICH_LAM_VIEC, nhanCa, nhanGio, nhanNgay, tenThu } from "./nhan-lich-lam-viec";
@@ -80,6 +79,7 @@ import {
   nhanLoaiViec,
   nhanSoGio,
 } from "./nhan-thoi-han";
+import { quyetDinhGhiThoiHan } from "./quyen-tab";
 import { COT_GIO, NHAN_COT, banTuDong, soanSua, type BanNhapGio } from "./sua-thoi-han";
 
 /**
@@ -225,7 +225,7 @@ export function TabThoiHanXuLy() {
    * hành xử như "có quyền", và cũng không được hành xử như "thiếu quyền" — một câu giải thích
    * thiếu quyền hiện ra trong lúc còn đang đọc là nói một điều chưa biết đúng hay sai.
    */
-  const quyetDinhGhi = phien === null ? null : quyetDinhTheoKhoa(phien, QUYEN_CAU_HINH_THOI_HAN);
+  const quyetDinhGhi = phien === null ? null : quyetDinhGhiThoiHan(phien);
   const coQuyenGhi = quyetDinhGhi !== null && quyetDinhGhi.hien;
 
   useEffect(() => {

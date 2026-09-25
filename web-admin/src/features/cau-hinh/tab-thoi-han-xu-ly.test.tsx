@@ -8,8 +8,10 @@ import type {
   identity_danhSachNgayNghiLeRa,
   identity_danhSachSLARa,
   identity_dongSLARa,
+  identity_phienHienTaiRa,
 } from "@/lib/api/schema.gen";
 
+import { quyetDinhGhiThoiHan } from "./quyen-tab";
 import { ManThoiHanXuLy, type DuLieuTab, type ThaoTacThoiHan } from "./tab-thoi-han-xu-ly";
 
 /**
@@ -68,6 +70,17 @@ const DONG_SLA: identity_dongSLARa = {
 
 function ok<T>(duLieu: T): KetQua<T> {
   return { ok: true, duLieu };
+}
+
+function phienVoi(quyen: string[]): KetQua<identity_phienHienTaiRa> {
+  return ok<identity_phienHienTaiRa>({
+    sid: "01J000000000000000000SID",
+    expires_at: "2026-09-26T12:00:00Z",
+    staff: { code: "CB001", full_name: "Cán bộ thử", position: "Chuyên viên" },
+    role: null,
+    permissions: quyen,
+    must_change_password: false,
+  });
 }
 
 const SLA_CO_DONG = ok<identity_danhSachSLARa>({ items: [DONG_SLA], problems: [] });
@@ -248,6 +261,27 @@ describe("cổng quyền bọc phần GHI, không bọc bảng", () => {
     expect(html).not.toContain(">Xoá<");
     expect(html).not.toContain("Thêm ca làm việc");
     expect(html).not.toContain("Gieo thời hạn mặc định");
+  });
+
+  it("CHỈ có `admin.sla` (không `admin.lookup`, không khoá admin nào khác): dùng được tab", () => {
+    // Đi qua ĐÚNG phép quyết định mà `TabThoiHanXuLy` gọi, không qua một cờ gõ tay trong test.
+    const phien = phienVoi(["admin.sla"]);
+    const quyet = quyetDinhGhiThoiHan(phien);
+    expect(quyet).toEqual({ hien: true });
+
+    const html = ve({}, { coQuyenGhi: quyet.hien });
+    expect(html).toContain(">Sửa<");
+    expect(html).toContain("Thêm ca làm việc");
+  });
+
+  it("không có `admin.sla` (dù có mọi khoá admin khác): KHÔNG một nút ghi nào", () => {
+    const phien = phienVoi(["admin.lookup", "admin.org", "admin.user", "admin.role", "admin.audit"]);
+    const quyet = quyetDinhGhiThoiHan(phien);
+    expect(quyet).toEqual({ hien: false, vi: "khong-du-quyen" });
+
+    const html = ve({}, { coQuyenGhi: quyet.hien });
+    expect(html).not.toContain(">Sửa<");
+    expect(html).not.toContain("Thêm ca làm việc");
   });
 
   it("có quyền: nút ghi có mặt ở cả bốn bảng", () => {

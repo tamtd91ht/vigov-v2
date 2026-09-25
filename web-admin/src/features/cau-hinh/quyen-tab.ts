@@ -18,6 +18,7 @@
 import type { KetQua } from "@/lib/api/goi";
 import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen";
 import {
+  QUYEN_CAU_HINH_THOI_HAN,
   QUYEN_PHAN_QUYEN,
   QUYEN_QUAN_LY_NGUOI_DUNG,
   quyetDinhTheoKhoa,
@@ -46,7 +47,19 @@ export function quyetDinhTabPhanQuyen(ketQua: KetQua<identity_phienHienTaiRa>): 
 }
 
 /**
- * Phần chung của hai quyết định trên — nay nằm ở `lib/quyen.ts` vì nó có người dùng thứ ba và
+ * Phần GHI của tab "Thời hạn xử lý" — `admin.sla`. Khác hai tab trên ở chỗ nó không ẩn cả tab: ba
+ * bảng lịch đọc `any-authenticated`, còn `GET /api/v1/sla` thì máy chủ tự trả 403 cho người thiếu
+ * khoá (`tab-thoi-han-xu-ly.tsx`). Khoá này chỉ quyết định nút ghi có được vẽ hay không.
+ *
+ * Tách thành một hàm có tên để bài test nói được "chỉ có `admin.sla` là đủ dùng tab này" bằng đúng
+ * phép quyết định mà tab gọi, không bằng một bản chép.
+ */
+export function quyetDinhGhiThoiHan(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, QUYEN_CAU_HINH_THOI_HAN);
+}
+
+/**
+ * Phần chung của ba quyết định trên — nay nằm ở `lib/quyen.ts` vì nó có người dùng thứ ba và
  * thứ tư (`/giai-ngan`, `/phan-anh`). Đây chỉ còn là chỗ buộc mỗi tab vào ĐÚNG MỘT khoá.
  */
 function theoKhoaQuyen(ketQua: KetQua<identity_phienHienTaiRa>, khoa: string): QuyetDinhTab {

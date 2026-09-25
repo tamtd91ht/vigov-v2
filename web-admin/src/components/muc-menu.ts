@@ -1,7 +1,10 @@
 import { coQuyen } from "@/lib/quyen";
 import {
+  QUYEN_CAU_HINH_THOI_HAN,
+  QUYEN_PHAN_QUYEN,
   QUYEN_QUAN_LY_DANH_MUC,
   QUYEN_QUAN_LY_NGUOI_DUNG,
+  QUYEN_QUAN_LY_SO_DO,
   QUYEN_SOAN_THONG_BAO,
   QUYEN_XEM_GIAI_NGAN,
   QUYEN_XEM_NHIEM_VU,
@@ -24,9 +27,37 @@ export type MucMenu = {
   readonly nhan: string;
   /** Đường dẫn — `null` nghĩa là CHƯA CÓ MÀN, xem `CHUA_CO_MAN` dưới. */
   readonly duong: string | null;
-  /** Khoá quyền cần có để thấy mục. `null` = ai đăng nhập cũng thấy. */
-  readonly khoa: string | null;
+  /**
+   * Khoá quyền cần có để thấy mục. `null` = ai đăng nhập cũng thấy. Một DANH SÁCH = có bất kỳ khoá
+   * nào trong đó — chỉ dành cho mục dẫn tới một màn NHIỀU TAB mà mỗi tab tự canh khoá riêng của
+   * nó, xem `KHOA_MO_CAU_HINH`.
+   */
+  readonly khoa: string | readonly string[] | null;
 };
+
+/**
+ * Khoá mở MỤC MENU "Cấu hình" — mỗi khoá là khoá canh một tab trên `/cau-hinh`, không hơn.
+ *
+ * VÌ SAO MỘT PHÉP HỢP Ở ĐÂY KHÔNG TRÁI `quyetDinhTheoKhoa` ("một hàm, một khoá"): mục menu là CỬA
+ * VÀO một màn sáu tab, không phải một tab. Tab nào vẫn tự quyết theo đúng một khoá của nó
+ * (`features/cau-hinh/quyen-tab.ts`), nên có `admin.sla` thì vào được trang nhưng tab Người dùng
+ * vẫn ẩn. Canh cửa bằng MỘT khoá (`admin.lookup`, trước 26/09/2026) thì cán bộ chỉ giữ `admin.sla`
+ * không tìm thấy lối vào tab Thời hạn xử lý — mà bảng thời hạn rỗng là xã không nhận được phản ánh
+ * nào (`identity.ResolveDeadlines` từ chối).
+ *
+ * DANH SÁCH ĐÓNG, LIỆT KÊ TỪNG KHOÁ, chứ không phải `admin.*`: `admin.audit` (không tab nào ở đây)
+ * và `admin.user.delete` (nút ở `/danh-ba`) cố ý VẮNG. Thêm một tab có cổng quyền mới thì thêm
+ * đúng khoá của tab ấy vào đây, và chỉ khoá có thật trong bảng `quyen` (luật 5, bất biến 3c).
+ *
+ * Ẩn mục menu là tiện dụng, không phải biện pháp: mọi tuyến sau các tab tự kiểm khoá (luật 5, cấm #1).
+ */
+export const KHOA_MO_CAU_HINH: readonly string[] = [
+  QUYEN_QUAN_LY_SO_DO, // Sơ đồ tổ chức — nút ghi
+  QUYEN_QUAN_LY_NGUOI_DUNG, // Người dùng — cả tab
+  QUYEN_PHAN_QUYEN, // Phân quyền — cả tab
+  QUYEN_QUAN_LY_DANH_MUC, // Danh mục — nút ghi
+  QUYEN_CAU_HINH_THOI_HAN, // Thời hạn xử lý — bảng thời hạn và mọi nút ghi
+];
 
 export type NhomMenu = {
   readonly ten: string;
@@ -76,7 +107,7 @@ export const NHOM_MENU: readonly NhomMenu[] = [
       { nhan: "Nội dung Mini App", duong: "/noi-dung", khoa: QUYEN_XEM_NOI_DUNG },
       { nhan: "Danh bạ cán bộ", duong: "/danh-ba", khoa: QUYEN_QUAN_LY_NGUOI_DUNG },
       { nhan: "Báo cáo", duong: null, khoa: null },
-      { nhan: "Cấu hình", duong: "/cau-hinh", khoa: QUYEN_QUAN_LY_DANH_MUC },
+      { nhan: "Cấu hình", duong: "/cau-hinh", khoa: KHOA_MO_CAU_HINH },
     ],
   },
 ];
@@ -104,7 +135,8 @@ export function locMenu(
         if (m.duong === null) return true;
         if (m.khoa === null) return true;
         if (dsQuyen === null) return false;
-        return coQuyen(dsQuyen, m.khoa);
+        if (typeof m.khoa === "string") return coQuyen(dsQuyen, m.khoa);
+        return m.khoa.some((k) => coQuyen(dsQuyen, k));
       }),
     }))
     .filter((n) => n.muc.length > 0);
