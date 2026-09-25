@@ -47,6 +47,11 @@ type CitizenSession struct {
 	// CitizenID là định danh mờ của công dân, do máy chủ phát, không suy ra được số điện thoại.
 	// Nó tồn tại để luật 4 bất biến 2 thực hiện được: danh tính công dân đến TỪ PHIÊN, không
 	// bao giờ từ tham số yêu cầu.
+	//
+	// RỖNG NGHĨA LÀ PHIÊN CHƯA XÁC THỰC SỐ (ADR 0045 §Phiên chưa có số): cầu phiên Mini App phát
+	// phiên có xã ngay khi mở app, còn số điện thoại chỉ xin lúc công dân lần đầu cần danh tính.
+	// Phiên như thế ĐƯỢC XEM, KHÔNG được đọc hay ghi hồ sơ của chính mình: XaTuPhien từ chối nó
+	// trên mọi tuyến, chỉ tuyến khai tường minh XaTuPhienChiXem mới nhận.
 	CitizenID string
 
 	// TenantID là xã của phiên.
@@ -141,11 +146,42 @@ func CitizenSessionFrom(ctx context.Context) (CitizenSession, bool) {
 	return p, ok
 }
 
-// XaTuPhien declares that this route belongs to ONE commune, taken from the citizen session.
+// XaTuPhien declares that this route belongs to ONE commune, taken from the citizen session, AND
+// that it reads or writes the citizen's own records — so the session must carry a verified phone.
 //
 // Đây là lớp của MỌI tuyến nghiệp vụ. Không có phiên, hoặc phiên chưa gắn xã nào, thì 401 —
 // không có mặc định, không có "xã gần nhất", không có suy đoán từ bất cứ thứ gì client gửi.
+//
+// PHIÊN CHƯA XÁC THỰC SỐ BỊ TỪ CHỐI Ở ĐÂY, MẶC ĐỊNH (ADR 0045 §Phiên chưa có số, ĐIỀU KIỆN DỪNG
+// #6). Không có CitizenID thì truy vấn đường công dân không có gì để lọc theo danh tính (luật 4
+// bất biến 3). Tuyến CHỈ ĐỂ XEM phải khai XaTuPhienChiXem kèm lý do; tuyến quên khai thì phiên
+// chưa có số bị từ chối, ồn ào — đúng chiều an toàn.
+//
+// 403 VỚI MÃ RIÊNG chứ không phải 401 chung ba trường hợp trên, có chủ ý: người nhận là CHÍNH chủ
+// phiên, và câu trả lời không nói gì về hồ sơ của ai khác (luật 4 cấm #2 là về hồ sơ NGƯỜI KHÁC).
+// Mini App cần phân biệt nó để hỏi số điện thoại — gộp vào 401 thì app mở lại phiên mới, nhận lại
+// đúng phiên chưa có số, và lặp mãi.
 func XaTuPhien() func(http.Handler) http.Handler {
+	return lopXaTuPhien(false)
+}
+
+// XaTuPhienChiXem declares a VIEW-ONLY route of one commune: the commune comes from the session
+// exactly as in XaTuPhien, and a session WITHOUT a verified phone is accepted too.
+//
+// CHỈ CHO THỨ AI CŨNG XEM ĐƯỢC TRONG XÃ ẤY: hồ sơ hiển thị của xã, giới thiệu, danh mục. KHÔNG BAO
+// GIỜ cho tuyến đọc hay ghi hồ sơ của chính công dân — ở lớp này CitizenID có thể rỗng, nên không
+// có gì để lọc theo danh tính (ADR 0045 ĐIỀU KIỆN DỪNG #6). Một handler lớp này dùng
+// authz.Principal.ID làm bộ lọc là handler đọc hồ sơ của "công dân rỗng".
+//
+// LÝ DO LÀ BẮT BUỘC, cùng kỷ luật KhongThuocXa và authz.Public — luật 5 cấm #4.
+func XaTuPhienChiXem(lyDo string) func(http.Handler) http.Handler {
+	if strings.TrimSpace(lyDo) == "" {
+		panic("httpx: XaTuPhienChiXem cần một lý do cụ thể")
+	}
+	return lopXaTuPhien(true)
+}
+
+func lopXaTuPhien(chiXem bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -158,6 +194,11 @@ func XaTuPhien() func(http.Handler) http.Handler {
 				// bước nào.
 				WriteError(w, http.StatusUnauthorized, "unauthorized",
 					"Phiên không hợp lệ hoặc đã kết thúc. Vui lòng mở lại ứng dụng.", "")
+				return
+			}
+			if !chiXem && strings.TrimSpace(p.CitizenID) == "" {
+				WriteError(w, http.StatusForbidden, "chua_xac_thuc_so",
+					"Vui lòng xác nhận số điện thoại để tiếp tục.", "")
 				return
 			}
 			// tenant.Into, KHÔNG PHẢI IntoFull — và đó là điều đúng, không phải thiếu sót.

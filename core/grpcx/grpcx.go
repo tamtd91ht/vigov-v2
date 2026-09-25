@@ -118,6 +118,15 @@ const MethodResolveHost = "/vigov.platform.v1.PlatformService/ResolveHost"
 // that answers "which commune" when there is no domain to answer it. Same reason for a constant.
 const MethodResolveCitizenSession = "/vigov.identity.v1.IdentityService/ResolveCitizenSession"
 
+// MethodOpenCitizenSession is the citizen-session bridge (ADR 0045): the RPC that DECIDES the
+// commune of a new citizen session, so it cannot carry one. Served ONLY on identity's separate
+// bridge listener, behind the bridge key — never on the inter-service port.
+const MethodOpenCitizenSession = "/vigov.identity.v1.CitizenSessionBridgeService/OpenCitizenSession"
+
+// MethodResolveMiniApp answers which commune a dedicated Mini App is bound to (ADR 0044, 0045).
+// ONE app per call, never a list — the shape of ResolveHost, not of ListTenants.
+const MethodResolveMiniApp = "/vigov.platform.v1.PlatformService/ResolveMiniApp"
+
 // methodsWithoutTenant is the WHITELIST of RPCs allowed to travel without a commune.
 //
 // EXEMPTION IS BY LIST, NEVER BY DEFAULT. An implicit exemption — "no metadata, so probably
@@ -169,12 +178,27 @@ const MethodResolveCitizenSession = "/vigov.identity.v1.IdentityService/ResolveC
 // RESPONSE, derived from the session registry alone. And the reply carries no permission key and
 // no personal data: it resolves a session, it grants nothing (rule 4).
 //
+// OpenCitizenSession AND ResolveMiniApp WERE asked, and answered on 2026-09-25: the owner said
+// yes (ADR 0045, answer to CÒN MỞ #1). Both pass the same test with the same structural no: the
+// first DECIDES the commune of a citizen session, the second ANSWERS which commune a dedicated app
+// belongs to — neither can know it at call time. What keeps them from widening the hole:
+//
+//	OpenCitizenSession  its request has NO commune field declared for the caller (tenant_hint is
+//	                    a QR parameter that only counts with the citizen's explicit confirmation,
+//	                    in the main app); the commune comes back as an ANSWER. And it is served on
+//	                    identity's bridge listener only — the inter-service port does not register
+//	                    CitizenSessionBridgeService at all.
+//	ResolveMiniApp      one app per call, metadata only (ADR 0003), no listing — the asymmetry that
+//	                    keeps ListTenants off this list does not apply to it.
+//
 // ListTenants and ResolveTenantSuccession STAY ABSENT. One question being answered does not
 // answer the others — theirs is a different question with a different exposure, spelled out
 // above, and it has not been put to the user.
 var methodsWithoutTenant = map[string]struct{}{
 	MethodResolveHost:           {},
 	MethodResolveCitizenSession: {},
+	MethodOpenCitizenSession:    {},
+	MethodResolveMiniApp:        {},
 }
 
 // ExemptFromTenant reports whether fullMethod may be called without a commune.

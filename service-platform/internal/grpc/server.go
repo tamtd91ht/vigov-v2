@@ -128,10 +128,10 @@ func (s *Server) GetTenant(ctx context.Context, req *platformv1.GetTenantRequest
 // ResolveMiniApp answers, for ONE App ID, the mode and — for an active dedicated app whose commune
 // is active — the commune. The status table is on the RPC in platform.proto; this follows it.
 //
-// Runs with NO commune in context: it is what answers "which commune" for a dedicated app. Its
-// place on core/grpcx.methodsWithoutTenant is granted (ADR 0045, owner's answer to CÒN MỞ #1) but
-// wired by a separate task; until then the interceptor refuses it with INVALID_ARGUMENT. Nothing
-// below may therefore reach for tenant.MustFrom.
+// Runs with NO commune in context: it is what answers "which commune" for a dedicated app. It is
+// on core/grpcx.methodsWithoutTenant (ADR 0045, owner's answer to CÒN MỞ #1, added 2026-09-25),
+// so the interceptor lets it through with none. Nothing below may therefore reach for
+// tenant.MustFrom.
 //
 // Not audited: a metadata read with no "who" (ADR 0045 §Ghi vết).
 func (s *Server) ResolveMiniApp(ctx context.Context, req *platformv1.ResolveMiniAppRequest) (

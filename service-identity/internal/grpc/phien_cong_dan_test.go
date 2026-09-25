@@ -163,34 +163,45 @@ func TestPhienCongDanChuaChonXaVanLaPhienDungDuoc(t *testing.T) {
 	}
 }
 
-// A session with no sid cannot be revoked; a session with no citizen id cannot filter a
-// citizen-path query (rule 4, invariant 3). Serving either would hand the edge something that looks
-// valid and isolates nothing, so it is an error and not a quiet negative.
-func TestPhienCongDanThieuDinhDanhLaLoiChuKhongPhaiKhongCoPhien(t *testing.T) {
-	for ten, p := range map[string]httpx.CitizenSession{
-		"thiếu sid":      {CitizenID: idCongDan, TenantID: xaA},
-		"thiếu công dân": {ID: sidCongDan, TenantID: xaA},
-	} {
-		t.Run(ten, func(t *testing.T) {
-			s, nhatKy := may(t, func(d *Deps) {
-				d.PhienCongDan = &phienCongDanGia{p: p, ok: true}
-			})
+// A session with no sid cannot be revoked (rule 5, invariant 4). Serving it would hand the edge a
+// session nobody can end, so it is an error and not a quiet negative.
+func TestPhienCongDanThieuSidLaLoiChuKhongPhaiKhongCoPhien(t *testing.T) {
+	s, nhatKy := may(t, func(d *Deps) {
+		d.PhienCongDan = &phienCongDanGia{p: httpx.CitizenSession{CitizenID: idCongDan, TenantID: xaA}, ok: true}
+	})
 
-			_, err := s.ResolveCitizenSession(context.Background(),
-				&identityv1.ResolveCitizenSessionRequest{SessionToken: tokenGia})
-			if status.Code(err) != codes.Internal {
-				t.Fatalf("mã lỗi = %v, muốn Internal", status.Code(err))
-			}
-			// The alert says WHICH field is missing and never a value: one of them is a citizen
-			// identifier (rule 3).
-			ghi := nhatKy.String()
-			if !strings.Contains(ghi, "CẢNH BÁO HỢP ĐỒNG") {
-				t.Errorf("không có cảnh báo hợp đồng: %q", ghi)
-			}
-			if strings.Contains(ghi, idCongDan) || strings.Contains(ghi, sidCongDan) {
-				t.Error("cảnh báo mang định danh — luật 3")
-			}
-		})
+	_, err := s.ResolveCitizenSession(context.Background(),
+		&identityv1.ResolveCitizenSessionRequest{SessionToken: tokenGia})
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("mã lỗi = %v, muốn Internal", status.Code(err))
+	}
+	ghi := nhatKy.String()
+	if !strings.Contains(ghi, "CẢNH BÁO HỢP ĐỒNG") {
+		t.Errorf("không có cảnh báo hợp đồng: %q", ghi)
+	}
+	if strings.Contains(ghi, idCongDan) {
+		t.Error("cảnh báo mang định danh công dân — luật 3")
+	}
+}
+
+// ADR 0045 §Phiên chưa có số: an EMPTY citizen id is a real answer now — a bridge session whose
+// phone is not verified yet. It used to be refused here as a contract fault; it must pass through
+// unchanged, because core/httpx.XaTuPhien is the ONE wall that refuses it on every route reading
+// the citizen's own records. Refusing it here too would make every view-only screen of a freshly
+// opened Mini App answer 503.
+func TestPhienCongDanChuaCoSoDiQuaNguyenVen(t *testing.T) {
+	s, _ := may(t, func(d *Deps) {
+		d.PhienCongDan = &phienCongDanGia{p: httpx.CitizenSession{ID: sidCongDan, TenantID: xaA}, ok: true}
+	})
+
+	ra, err := s.ResolveCitizenSession(context.Background(),
+		&identityv1.ResolveCitizenSessionRequest{SessionToken: tokenGia})
+	if err != nil {
+		t.Fatalf("phiên chưa có số bị coi là lỗi: %v", err)
+	}
+	p := ra.GetSession()
+	if p == nil || p.GetSessionId() != sidCongDan || p.GetCitizenId() != "" || p.GetTenantId() != string(xaA) {
+		t.Fatalf("phiên trả về sai: %+v", p)
 	}
 }
 

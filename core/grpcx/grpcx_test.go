@@ -64,6 +64,16 @@ func TestDanhSachMienLaTuongMinh(t *testing.T) {
 	if !grpcx.ExemptFromTenant(grpcx.MethodResolveCitizenSession) {
 		t.Fatal("ResolveCitizenSession phải được miễn: nó CHÍNH LÀ thứ trả lời xã nào cho kênh công dân")
 	}
+	// Chủ dự án chốt 25/09/2026 (ADR 0045, trả lời CÒN MỞ #1). Tên viết bằng chuỗi ở đây, KHÔNG
+	// dùng hằng: đổi chính tả của hằng thì miễn trừ âm thầm rơi khỏi RPC thật và ca này phải đỏ.
+	for _, m := range []string{
+		"/vigov.identity.v1.CitizenSessionBridgeService/OpenCitizenSession",
+		"/vigov.platform.v1.PlatformService/ResolveMiniApp",
+	} {
+		if !grpcx.ExemptFromTenant(m) {
+			t.Fatalf("%s phải được miễn: nó QUYẾT ĐỊNH / TRẢ LỜI xã nào, không thể mang xã lúc gọi", m)
+		}
+	}
 	// Anything not named on the list is not exempt. This is the half of the rule that decays
 	// first: an exemption that applies by default applies to every RPC written afterwards.
 	//
@@ -96,6 +106,9 @@ func TestDanhSachMienLaTuongMinh(t *testing.T) {
 		"/vigov.platform.v1.PlatformService/GetTenant",
 		"/vigov.platform.v1.PlatformService/ListTenants",
 		"/vigov.platform.v1.PlatformService/ResolveTenantSuccession",
+		// GetTenantProfile reads THE COMMUNE IN CONTEXT; exempting it would make it answer for no
+		// commune — or for whichever one a later edit reads from the request.
+		"/vigov.platform.v1.PlatformService/GetTenantProfile",
 		"/vigov.identity.v1.IdentityService/BatchGetStaff",
 		"",
 		"/vigov.platform.v1.PlatformService/ResolveHostSomethingElse",

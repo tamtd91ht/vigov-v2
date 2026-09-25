@@ -36,6 +36,7 @@ import (
 	svcgrpc "github.com/vihat/vigov/service-identity/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-identity/internal/http"
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
+	"github.com/vihat/vigov/service-identity/internal/store/crosstenant"
 	"github.com/vihat/vigov/service-identity/migrations"
 )
 
@@ -182,6 +183,11 @@ func run(log *slog.Logger) error {
 	// route of this service touches it, because who may open or revoke a citizen session on an
 	// HTTP route is a question nobody has asked.
 	phienCongDan := idstore.NewPhienCongDanStore(db, log)
+	// The Zalo account behind a Mini App session (migration 0011, ADR 0045) — the second store built
+	// on the raw *sql.DB, for exactly one read: the remembered commune, needed BEFORE the scoped
+	// transaction can be opened, because it decides which commune that transaction is scoped to.
+	// Every write goes through the caller's transaction. See crosstenant.TaiKhoanZaloStore.
+	taiKhoanZalo := crosstenant.NewTaiKhoanZaloStore(db)
 
 	// 5. ONE signer, and the variable is used twice on purpose.
 	//
@@ -255,6 +261,14 @@ func run(log *slog.Logger) error {
 	// row, derives its tier, and writes the change and its audit entry in one transaction.
 	ghiLoaiDonViDanCu := app.NewDanhMucLoaiDonViDanCu(kho, loaiDonViDanCu)
 	ghiKhoiNhiemVu := app.NewDanhMucKhoiNhiemVu(kho, khoiNhiemVu)
+	// The citizen-session bridge (ADR 0045): two synchronous platform reads, then ONE identity
+	// transaction. `nenTang` is the same platform client every Host resolution uses — the bridge's
+	// two RPCs travel with the same caller key, ResolveMiniApp exempt from the commune, GetTenant
+	// carrying the commune about to be opened. Built even when the bridge listener is not started:
+	// it costs nothing, and a construction panic surfaces on every machine rather than only on the
+	// one that configures the bridge.
+	cauPhien := app.NewCauPhienCongDan(kho, nenTang, taiKhoanZalo, crosstenant.NewDinhDanhStore(),
+		phienCongDan, cfg.CitizenSessionTTL, log)
 
 	// 7. idempotency store. An empty REDIS_DSN is a valid deployment — local development with no
 	//    cache — and the routes then behave per the CheDoHong each one declared. A service must
@@ -501,15 +515,42 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("identity: không mở được cổng gRPC %q: %w", cfg.GRPCListenAddr, err)
 	}
 
+	// 10b. The citizen-session bridge — a SECOND gRPC listener (ADR 0045 §Tin cậy), serving
+	//      CitizenSessionBridgeService and nothing else, to one caller: the vihat-miniapp backend.
+	//
+	// NOT THE PORT ABOVE, AND NOT THE CALLER KEY. vihat-miniapp is not a ViGov service and must never
+	// hold GRPC_CALLER_KEY (it opens every RPC of every service, ADR 0025). Serving the bridge on the
+	// inter-service port with "a second key for one RPC" is ADR 0025 stop condition #3 and ADR 0045
+	// stop condition #1. Here the bridge key opens exactly one RPC because exactly one service is
+	// registered on this listener.
+	//
+	// STARTED ONLY WHEN CONFIGURED. Both CITIZEN_SESSION_BRIDGE_* variables or neither — config.Load
+	// refuses one without the other. Without them identity serves staff exactly as before.
+	//
+	// NO TLS, by the owner's answer to ADR 0045 UNKNOWN #5: vihat-miniapp runs in the SAME cluster, and
+	// a NetworkPolicy admits only its pods to this port. The day it leaves the cluster, this hop
+	// carries citizen bearer tokens in the clear — ADR 0045 stop condition #5.
+	var cauSrv *grpc.Server
+	var cauLis net.Listener
+	if cfg.CauPhienBat() {
+		cauSrv = dungCongCau(cfg.CitizenSessionBridgeKeys, svcgrpc.NewCauServer(cauPhien, log), log)
+		cauLis, err = net.Listen("tcp", cfg.CitizenSessionBridgeListenAddr)
+		if err != nil {
+			return fmt.Errorf("identity: không mở được cổng cầu phiên %q: %w", cfg.CitizenSessionBridgeListenAddr, err)
+		}
+	} else {
+		log.Info("cổng cầu phiên công dân KHÔNG mở — CITIZEN_SESSION_BRIDGE_LISTEN_ADDR / _KEYS chưa khai")
+	}
+
 	// 11. Graceful shutdown. A sign-in cut in half by a deploy would leave a session row whose
 	//     audit entry says a person signed in while no cookie was ever issued — a state the
 	//     retention rules do not permit (rule 2, invariant 6).
 	dungLai := make(chan os.Signal, 1)
 	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
-	// Buffered for TWO now, not one: either server may fail, and an unbuffered send from a
-	// goroutine nobody is reading any more would leak it.
-	loi := make(chan error, 2)
+	// Buffered for THREE: any of the servers may fail, and an unbuffered send from a goroutine
+	// nobody is reading any more would leak it.
+	loi := make(chan error, 3)
 	go func() {
 		log.Info("khởi động", "service", "identity", "addr", cfg.ListenAddr,
 			"env", cfg.Env,
@@ -529,6 +570,15 @@ func run(log *slog.Logger) error {
 			loi <- err
 		}
 	}()
+	if cauSrv != nil {
+		go func() {
+			log.Info("khởi động cổng cầu phiên công dân", "service", "identity",
+				"addr", cfg.CitizenSessionBridgeListenAddr, "so_khoa_cau", len(cfg.CitizenSessionBridgeKeys))
+			if err := cauSrv.Serve(cauLis); err != nil {
+				loi <- err
+			}
+		}()
+	}
 
 	select {
 	case err := <-loi:
@@ -537,6 +587,9 @@ func run(log *slog.Logger) error {
 		// while every guarded route in four other services answers 401 to valid sessions — which
 		// is exactly the outage this server was built to end.
 		grpcSrv.Stop()
+		if cauSrv != nil {
+			cauSrv.Stop()
+		}
 		_ = srv.Close()
 		return err
 
@@ -545,10 +598,15 @@ func run(log *slog.Logger) error {
 		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
 		defer huy()
 
-		// Both surfaces drain, and neither waits for the other.
+		// Every surface drains, and none waits for another. The bridge drains too: an
+		// OpenCitizenSession cut off mid-transaction rolls back cleanly, but one cut off after the
+		// commit and before the reply is a session nobody holds (citizen_session_bridge.proto).
 		xongGRPC := make(chan struct{})
 		go func() {
 			grpcSrv.GracefulStop()
+			if cauSrv != nil {
+				cauSrv.GracefulStop()
+			}
 			close(xongGRPC)
 		}()
 
@@ -561,6 +619,9 @@ func run(log *slog.Logger) error {
 			// stop here is visible in the logs; hanging is not.
 			log.Warn("gRPC không đóng kịp hạn, buộc dừng")
 			grpcSrv.Stop()
+			if cauSrv != nil {
+				cauSrv.Stop()
+			}
 		}
 		return errHTTP
 	}
@@ -605,6 +666,28 @@ func dungGRPCServer(khoaGoi secret.Secret, d svcgrpc.Deps, log *slog.Logger) *gr
 	// identity/http.Register does: incomplete wiring must fail where a human is watching a
 	// process fail to start, not at request time in four other services.
 	identityv1.RegisterIdentityServiceServer(srv, svcgrpc.NewServer(d))
+	return srv
+}
+
+// dungCongCau builds the citizen-session bridge listener's server with its COMPLETE chain. A named
+// function for the reason dungGRPCServer is one: main_test.go starts it over a real connection, so an
+// interceptor deleted from this chain — or a second service registered on it — turns something red.
+//
+// THE CHAIN: the bridge key FIRST, then the commune interceptor. OpenCitizenSession is exempt from the
+// commune (it decides it), so the second one lets it through with none; it is there so that the day
+// anything else is registered here, that thing must carry a commune rather than inheriting a port
+// that asks for none. Caller key (GRPC_CALLER_KEY) is deliberately ABSENT: the bridge caller never
+// holds it.
+func dungCongCau(khoaCau []secret.Secret, cau *svcgrpc.CauServer, log *slog.Logger) *grpc.Server {
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			// Panics at construction on an empty list or a short key.
+			grpcx.UnaryServerBridgeKey(khoaCau, log),
+			grpcx.UnaryServerInterceptor(),
+		),
+	)
+	// ONE service, and it must stay one: see the step 10b note in run().
+	identityv1.RegisterCitizenSessionBridgeServiceServer(srv, cau)
 	return srv
 }
 

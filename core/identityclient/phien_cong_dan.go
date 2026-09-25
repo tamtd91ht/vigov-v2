@@ -169,18 +169,19 @@ func (c *Client) TraCuuPhienCongDan(ctx context.Context, token string) (httpx.Ci
 		return httpx.CitizenSession{}, false, nil
 	}
 
-	if p.GetSessionId() == "" || p.GetCitizenId() == "" {
-		// A CONTRACT FAULT, AND AN ERROR RATHER THAN "no session". The message exists so these
-		// facts cannot be half-set. A session with no sid cannot be revoked; a session with no
-		// citizen id cannot filter a citizen-path query (rule 4, invariant 3), so serving it would
-		// hand the edge something that looks valid and isolates nothing. Served quietly it would be
-		// invisible for as long as the two ends disagree.
-		//
-		// WHICH FIELD IS MISSING, NEVER ITS VALUE: one of them is a citizen identifier (rule 3).
+	if p.GetSessionId() == "" {
+		// A CONTRACT FAULT, AND AN ERROR RATHER THAN "no session": a session with no sid cannot be
+		// revoked (rule 5, invariant 4). Served quietly it would be invisible for as long as the two
+		// ends disagree.
 		return httpx.CitizenSession{}, false, fmt.Errorf(
-			"identityclient: ResolveCitizenSession trả về phiên thiếu định danh (thiếu_sid=%t, thiếu_công_dân=%t)",
-			p.GetSessionId() == "", p.GetCitizenId() == "")
+			"identityclient: ResolveCitizenSession trả về phiên thiếu sid")
 	}
+
+	// AN EMPTY citizen_id IS A REAL ANSWER SINCE ADR 0045, and it is copied through like an empty
+	// tenant_id: a bridge session whose phone is not verified yet. It used to be refused here as a
+	// contract fault. The wall that refuses it is httpx.XaTuPhien, on every route that reads or
+	// writes the citizen's own records — one wall in one place, changed in the same commit as this
+	// line and as identity's handler (ADR 0045 §Phiên chưa có số, point 5).
 
 	// TENANT ID COPIED STRAIGHT THROUGH, INCLUDING EMPTY, AND THERE IS NO VALIDATION HERE.
 	//

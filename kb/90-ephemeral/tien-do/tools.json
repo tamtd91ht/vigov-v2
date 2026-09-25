@@ -138,6 +138,14 @@
       "bang_chung": "tools/ingress/sinhts.go (sinhTS, chuoiAnToanTS) kết xuất từ CÙNG []luatIngress của bangDinhTuyen, bỏ luật bắt hết `/`; sinhTuKho (dinhtuyen.go) trả cả hai nội dung, lỗi ở một bên thì không trả bên nào; main.go ghiCaHai ghi tệp tạm rồi mới đổi tên cả hai. Ca kiểm mới ở sinhts_test.go: TestTepTSKhopVoiHopDong (so byte tệp trên đĩa), TestBangTSKhopLuatIngress (đọc ĐỘC LẬP tệp TS và ingress.yaml trên đĩa, so cặp tiền tố → dịch vụ theo thứ tự + tập DichVuAPI), TestSinhTSBoLuatBatHetVaTuChoiDauVaoLa. `go test -count=1 ./ingress/...` trong tools: 17/17 XANH; `go vet` sạch; `gofmt -l ingress` rỗng; chạy bộ sinh hai lần: ingress.yaml không đổi, tệp TS cùng SHA-1. ĐỘT BIẾN: đổi dichVu của /api/v1/tasks sang identity trong tệp TS → 2 ca đỏ; phục hồi bằng chạy lại bộ sinh. `tsc --strict` riêng tệp ấy rc=0, `eslint` rc=0 — kiểm 2026-09-25",
       "no_confirm": [],
       "tiep_theo": "Bên TIÊU THỤ (proxy trong web-admin) là thẻ việc sau: khớp theo ĐOẠN đường dẫn, và đường không mục nào phủ thì TỪ CHỐI, không gửi về dịch vụ mặc định (luật 1). Tệp sinh chưa nằm trong danh sách `ignores` của web-admin/eslint.config.mjs như schema.gen.ts — hôm nay lint sạch nên chưa cần, nhưng một quy tắc lint mới đỏ trên nó sẽ là cảnh báo không ai được sửa."
+    },
+    {
+      "id": "apidoc-lop-chi-xem",
+      "viec": "apidoc nhận lớp xã thứ ba httpx.XaTuPhienChiXem (ADR 0045) và ghi phone_verified_required cho lớp tu-phien",
+      "trang_thai": "xong",
+      "bang_chung": "tools/apidoc/route.go: Kind tu-phien-chi-xem, lý do bắt buộc dạng hằng chuỗi; openapi.go xaJSON ghi reason + note cho lớp chỉ xem, phone_verified_required=true cho tu-phien. lop_xa_test.go thêm hai ca. go test xanh — kiểm 2026-09-25",
+      "no_confirm": [],
+      "tiep_theo": "kb/20-contracts/openapi.json đổi theo (thêm phone_verified_required vào mọi tuyến công dân tu-phien) sau make kb."
     }
   ]
 }

@@ -155,3 +155,44 @@ func TestTuyenCanBoKhongCanKhaiLopXa(t *testing.T) {
 		t.Fatalf("tuyến cán bộ có lớp xã: %+v", ts[0].Xa)
 	}
 }
+
+// ADR 0045: the view-only session class waives the PHONE, so its reason must reach the contract,
+// and the two session classes must stay distinguishable there.
+func TestXaTuPhienChiXemMangLyDoVaoHopDong(t *testing.T) {
+	ts, errs := trich(t, dauFileCongDan+`
+	// @summary  Hồ sơ hiển thị của xã
+	// @reply    200 -
+	mux.Handle("GET /api/v1/commune-profile",
+		authz.CitizenOnly()(
+			httpx.XaTuPhienChiXem("hồ sơ hiển thị của xã: ai mở app của xã cũng xem được")(
+				http.HandlerFunc(nil))))
+}
+`)
+	if len(errs) != 0 {
+		t.Fatalf("không mong đợi lỗi: %v", errs)
+	}
+	if ts[0].Xa.Kind != "tu-phien-chi-xem" || !strings.Contains(ts[0].Xa.LyDo, "hồ sơ hiển thị") {
+		t.Fatalf("lớp chỉ xem đọc sai: %+v", ts[0].Xa)
+	}
+	o := xaJSON(ts[0].Xa)
+	if !o.co("reason") || o.gt["tenant_in_context"] != true || o.co("phone_verified_required") {
+		t.Fatalf("x-vigov-tenant-class của lớp chỉ xem sai: %+v", o.gt)
+	}
+	if o := xaJSON(xaDecl{Kind: "tu-phien"}); o.gt["phone_verified_required"] != true {
+		t.Fatalf("lớp tu-phien không ghi đòi số đã xác thực: %+v", o.gt)
+	}
+}
+
+func TestXaTuPhienChiXemKhongCoLyDoLaLoi(t *testing.T) {
+	_, errs := trich(t, dauFileCongDan+`
+	// @summary  Hồ sơ hiển thị của xã
+	// @reply    200 -
+	mux.Handle("GET /api/v1/commune-profile",
+		authz.CitizenOnly()(
+			httpx.XaTuPhienChiXem("")(http.HandlerFunc(nil))))
+}
+`)
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "lý do") {
+		t.Fatalf("mong lỗi thiếu lý do, được: %v", errs)
+	}
+}

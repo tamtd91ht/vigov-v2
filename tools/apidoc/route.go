@@ -66,16 +66,21 @@ type idemDecl struct {
 	LyDo string // the mandatory reason for khong-can
 }
 
-// xaDecl is the commune class of a CITIZEN route — ADR 0022. There are two, and there is no
-// third: either the commune comes from the citizen session, or the route belongs to no commune
-// at all and may only serve the commune-resolution path.
+// xaDecl is the commune class of a CITIZEN route — ADR 0022. Either the commune comes from the
+// citizen session, or the route belongs to no commune at all and may only serve the
+// commune-resolution path.
+//
+// The session class has two strengths since ADR 0045: `tu-phien` (the default — the session must
+// carry a verified phone, because the route reads or writes the citizen's own records) and
+// `tu-phien-chi-xem` (view-only, accepts a session with no phone, reason mandatory). The weaker
+// one is a separate Kind so the contract shows every route that waived the phone.
 //
 // Kind is empty when a route declares nothing, which kiemTuyen refuses on a citizen route: an
 // undeclared class is deny, not allow (rule 5, invariant 2). The staff path has no class at
 // all — its commune comes from Host, at httpx.TenantMiddleware.
 type xaDecl struct {
-	Kind string // tu-phien | khong-thuoc-xa
-	LyDo string // the mandatory, specific reason for khong-thuoc-xa
+	Kind string // tu-phien | tu-phien-chi-xem | khong-thuoc-xa
+	LyDo string // the mandatory, specific reason for khong-thuoc-xa and tu-phien-chi-xem
 }
 
 var phuongThuc = map[string]bool{
@@ -441,6 +446,17 @@ func khaiBaoTrong(call *ast.CallExpr) (quyenDecl, idemDecl, xaDecl, error) {
 				return true
 			}
 			xa = xaDecl{Kind: "khong-thuoc-xa", LyDo: ly}
+		case "httpx.XaTuPhienChiXem":
+			ly, _ := chuoiLit(argDau(c))
+			// Same discipline as KhongThuocXa: the waiver of the phone must be readable in the
+			// contract, or a reviewer cannot tell a catalogue from a route that reads somebody's file.
+			if strings.TrimSpace(ly) == "" {
+				loi = errors.Join(loi, fmt.Errorf(
+					"httpx.XaTuPhienChiXem: thiếu lý do cụ thể dạng hằng chuỗi — tuyến nhận phiên "+
+						"chưa có số phải nói vì sao nó không đọc hồ sơ của ai (ADR 0045)"))
+				return true
+			}
+			xa = xaDecl{Kind: "tu-phien-chi-xem", LyDo: ly}
 		}
 		return true
 	})

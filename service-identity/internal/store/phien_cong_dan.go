@@ -272,7 +272,12 @@ func quetPhien(rows dongPhien) (httpx.CitizenSession, bool) {
 		return httpx.CitizenSession{}, false
 	}
 
-	var xa, sid, congDanID string
+	// cong_dan_id IS NULLABLE SINCE MIGRATION 0011 (ADR 0045 §Phiên chưa có số): a bridge session
+	// opened before the phone is verified has no citizen identity yet. Scanning NULL into a plain
+	// string is a Scan error, which below means "no session" — every such citizen would be signed
+	// out on every request. NULL becomes "", and "" is what core/httpx.XaTuPhien refuses.
+	var xa, sid string
+	var congDanID sql.NullString
 	if err := rows.Scan(&xa, &sid, &congDanID); err != nil {
 		return httpx.CitizenSession{}, false
 	}
@@ -287,7 +292,7 @@ func quetPhien(rows dongPhien) (httpx.CitizenSession, bool) {
 
 	return httpx.CitizenSession{
 		ID:        sid,
-		CitizenID: congDanID,
+		CitizenID: congDanID.String,
 		TenantID:  tenant.ID(xa),
 	}, true
 }
@@ -404,6 +409,114 @@ func (s *PhienCongDanStore) chen(ctx context.Context, tx *sql.Tx, xa string, p P
 		return "", "", fmt.Errorf("phiên công dân: tạo: %w", err)
 	}
 	return sid, token, nil
+}
+
+// PhienCauMoi is everything needed to open one citizen session through the Mini App bridge
+// (ADR 0045). A separate type from PhienMoi, because the invariant differs: a bridge session always
+// names its Zalo account and MAY lack a citizen identity (phone not verified yet), while every other
+// session must name a citizen.
+type PhienCauMoi struct {
+	// The tai_khoan_zalo row that opened it. Required.
+	TaiKhoanZaloID string
+
+	// The verified citizen identity, "" when the phone is not verified yet — stored as NULL, and
+	// refused by core/httpx.XaTuPhien on every route that reads the citizen's own records.
+	CongDanID string
+
+	// CITIZEN_SESSION_TTL, the owner's platform-wide constant (core/config).
+	ThoiHan time.Duration
+
+	// Diagnostics reported by the bridge caller. Never personal data (rule 3).
+	IP      string
+	ThietBi string
+}
+
+var ErrThieuTaiKhoanZalo = errors.New("phiên công dân: phiên qua cầu phải gắn tài khoản Zalo")
+
+const chenPhienCau = `
+INSERT INTO phien_cong_dan
+    (tenant_id, id, cong_dan_id, tai_khoan_zalo_id, bam_token, nguon, het_han_luc, ip_tao, thiet_bi)
+VALUES ($1, $2, NULLIF($3, ''), $4, $5, 'app', $6, $7, $8)`
+
+// TaoQuaCau opens a bridge session in THE COMMUNE OF THE TRANSACTION and returns sid, token and
+// expiry. Same properties as Tao: the commune is not a parameter, the token is returned once and
+// only its SHA-256 is stored, and a change of commune is a NEW row, never an update.
+//
+// THERE IS NO NO-COMMUNE VARIANT, ON PURPOSE. Open question #25's table for trails that belong to
+// no commune is not built, so a session with an empty tenant_id could not be audited in the same
+// transaction (rule 6, invariant 3) — the bridge answers "no commune" WITHOUT issuing a session.
+func (s *PhienCongDanStore) TaoQuaCau(ctx context.Context, tx *store.ScopedTx, p PhienCauMoi) (sid, token string, hetHan time.Time, err error) {
+	switch {
+	case strings.TrimSpace(p.TaiKhoanZaloID) == "":
+		return "", "", time.Time{}, ErrThieuTaiKhoanZalo
+	case p.ThoiHan <= 0:
+		return "", "", time.Time{}, ErrThieuThoiHan
+	case tx == nil:
+		return "", "", time.Time{}, ErrThieuGiaoDich
+	}
+	if !tx.TenantID().Valid() {
+		// Unreachable through core/store (For panics without a commune); checked because a bridge
+		// session with no commune is the one row this method must never write.
+		return "", "", time.Time{}, fmt.Errorf("phiên công dân: giao dịch không có xã hợp lệ")
+	}
+
+	sid, err = maNgauNhien()
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
+	token, err = maNgauNhien()
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
+	hetHan = time.Now().UTC().Add(p.ThoiHan)
+
+	if _, err := tx.Exec(ctx, chenPhienCau,
+		string(tx.TenantID()), sid, strings.TrimSpace(p.CongDanID), p.TaiKhoanZaloID, bamRefresh(token),
+		hetHan, catNgan(p.IP, 45), catNgan(p.ThietBi, 200)); err != nil {
+		// No token, no sid, no identifier in the message (rule 3).
+		return "", "", time.Time{}, fmt.Errorf("phiên công dân: tạo qua cầu: %w", err)
+	}
+	return sid, token, hetHan, nil
+}
+
+// ThuHoiCuaTaiKhoanZalo ends EVERY live session of one Zalo account, in EVERY commune, and returns
+// how many it ended.
+//
+// THE ONE REVOCATION HERE THAT CROSSES COMMUNES, and it is the owner's decision, not a convenience:
+// switching commune in the main app revokes the old session IMMEDIATELY — "mỗi lúc một phiên còn
+// sống" (ADR 0045, answer to CÒN MỞ #3). The old session is in the commune the citizen is LEAVING,
+// so a query scoped to the new commune cannot reach it.
+//
+// KEYED ON ONE ACCOUNT, NEVER ON A COMMUNE, and that is what keeps it from being a cross-commune
+// write in the sense rule 1 forbids: it touches only sessions this very account opened, the
+// citizen's own, the same shape crosstenant/doc.go calls shape 3.
+//
+// HOW THE OLD SESSIONS ARE FOUND IS AN ASSUMPTION, stated: the owner's answer says the switching
+// request carries the old token, and the contract (citizen_session_bridge.proto) has no field for
+// it. Revoking by account reaches every session the token could have named — and any other live
+// session of the same account — without reshaping the contract. Whether to add the token field
+// anyway is the contract owner's call (ledger service-identity/cau-phien-cong-dan-mini-app).
+func (s *PhienCongDanStore) ThuHoiCuaTaiKhoanZalo(ctx context.Context, tx *store.ScopedTx, taiKhoanID, lyDo string) (int64, error) {
+	if err := kiemThuHoi(taiKhoanID, lyDo, ErrThieuTaiKhoanZalo); err != nil {
+		return 0, err
+	}
+	if tx == nil {
+		return 0, ErrThieuGiaoDich
+	}
+	// @cross-tenant: đổi xã ở app chính phải thu hồi NGAY phiên ở xã cũ (ADR 0045, trả lời CÒN MỞ #3);
+	// phiên ấy nằm ở xã công dân đang rời đi. Khoá theo MỘT tài khoản Zalo — chỉ phiên do chính tài
+	// khoản ấy mở, không bao giờ theo xã, không bao giờ trả về dòng nào.
+	kq, err := tx.Underlying().ExecContext(ctx,
+		`UPDATE phien_cong_dan SET thu_hoi_luc = now(), thu_hoi_ly_do = $2
+		 WHERE tai_khoan_zalo_id = $1 AND thu_hoi_luc IS NULL`, taiKhoanID, lyDo)
+	if err != nil {
+		return 0, fmt.Errorf("phiên công dân: thu hồi theo tài khoản Zalo: %w", err)
+	}
+	n, err := kq.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("phiên công dân: đếm phiên đã thu hồi: %w", err)
+	}
+	return n, nil
 }
 
 // dongThuHoiPhienCongDan is shared by the three revocation paths so the predicate cannot drift

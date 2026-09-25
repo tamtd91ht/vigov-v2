@@ -197,28 +197,37 @@ func TestPhienCongDanChuaChonXaDiThangQua(t *testing.T) {
 }
 
 // A CONTRACT FAULT IS AN ERROR, NOT A QUIET NEGATIVE. Served quietly it would be invisible for as
-// long as the two ends disagree — and a session with no citizen id isolates nothing.
-func TestPhienCongDanThieuDinhDanhLaLoiHopDong(t *testing.T) {
-	for ten, p := range map[string]*identityv1.CitizenSessionPrincipal{
-		"thiếu sid":      {CitizenId: "01JE1BBBBBBBBBBBBBBBBBBBBB", TenantId: string(xaA)},
-		"thiếu công dân": {SessionId: "01JE1AAAAAAAAAAAAAAAAAAAAA", TenantId: string(xaA)},
-	} {
-		t.Run(ten, func(t *testing.T) {
-			cl := moMay(t, &mayChuCongDanGia{tra: p})
+// long as the two ends disagree — and a session with no sid cannot be revoked.
+func TestPhienCongDanThieuSidLaLoiHopDong(t *testing.T) {
+	cl := moMay(t, &mayChuCongDanGia{tra: &identityv1.CitizenSessionPrincipal{
+		CitizenId: "01JE1BBBBBBBBBBBBBBBBBBBBB", TenantId: string(xaA)}})
 
-			_, co, err := cl.TraCuuPhienCongDan(ngucCanhCongDan(), tokenCongDanGia)
-			if err == nil {
-				t.Fatal("phiên thiếu định danh được phục vụ như phiên thật")
-			}
-			if co {
-				t.Fatal("có phiên kèm lỗi hợp đồng")
-			}
-			// The message says WHICH field is missing and never its value: one of them is a citizen
-			// identifier (rule 3).
-			if strings.Contains(err.Error(), "01JE1BBBBBBBBBBBBBBBBBBBBB") {
-				t.Error("thông điệp lỗi mang định danh công dân — luật 3")
-			}
-		})
+	_, co, err := cl.TraCuuPhienCongDan(ngucCanhCongDan(), tokenCongDanGia)
+	if err == nil {
+		t.Fatal("phiên thiếu sid được phục vụ như phiên thật")
+	}
+	if co {
+		t.Fatal("có phiên kèm lỗi hợp đồng")
+	}
+	if strings.Contains(err.Error(), "01JE1BBBBBBBBBBBBBBBBBBBBB") {
+		t.Error("thông điệp lỗi mang định danh công dân — luật 3")
+	}
+}
+
+// ADR 0045 §Phiên chưa có số: an EMPTY citizen_id is a real answer — the phone is not verified yet.
+// Passed straight through, exactly like an empty tenant_id; httpx.XaTuPhien is what refuses it on
+// every route that reads the citizen's own records. Refusing it here would make every view-only
+// screen of a freshly opened Mini App look like an identity outage.
+func TestPhienCongDanChuaCoSoDiThangQua(t *testing.T) {
+	cl := moMay(t, &mayChuCongDanGia{tra: &identityv1.CitizenSessionPrincipal{
+		SessionId: "01JE1AAAAAAAAAAAAAAAAAAAAA", TenantId: string(xaA)}})
+
+	p, co, err := cl.TraCuuPhienCongDan(ngucCanhCongDan(), tokenCongDanGia)
+	if err != nil || !co {
+		t.Fatalf("phiên chưa có số bị từ chối: co=%v err=%v", co, err)
+	}
+	if p.CitizenID != "" || p.ID != "01JE1AAAAAAAAAAAAAAAAAAAAA" || p.TenantID != xaA {
+		t.Errorf("phiên sai: %+v", p)
 	}
 }
 

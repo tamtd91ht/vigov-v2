@@ -6910,7 +6910,8 @@
         "x-vigov-tenant-class": {
           "kind": "tu-phien",
           "tenant_in_context": true,
-          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)"
+          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
+          "phone_verified_required": true
         },
         "x-vigov-task": "1b3efe935db0",
         "x-vigov-idempotency": {
@@ -7027,7 +7028,8 @@
         "x-vigov-tenant-class": {
           "kind": "tu-phien",
           "tenant_in_context": true,
-          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)"
+          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
+          "phone_verified_required": true
         },
         "x-vigov-task": "6bee0a6a60f3",
         "responses": {

@@ -223,15 +223,26 @@ func TestGetTenantProfileQuaChuoiThat(t *testing.T) {
 	}
 }
 
-// ResolveMiniApp IS NOT YET ON core/grpcx.methodsWithoutTenant. The owner granted it (ADR 0045,
-// answer to CÒN MỞ #1) but adding the name is a separate task that touches core. Until then the
-// server's chain refuses it — this pins that this task did not open the gate by some other route.
-// The task that adds the name flips this assertion to "succeeds with no commune".
-func TestResolveMiniAppChuaDuocMienXa(t *testing.T) {
-	cl := moMay(t, grpc.WithChainUnaryInterceptor(grpcx.UnaryClientCallerAuth(khoaGoiGia)))
-	if _, err := cl.ResolveMiniApp(context.Background(),
-		&platformv1.ResolveMiniAppRequest{AppId: "1234567890"}); status.Code(err) != codes.InvalidArgument {
-		t.Errorf("ResolveMiniApp không mang xã: mã = %v, muốn InvalidArgument (lỗi: %v)",
-			status.Code(err), err)
+// ResolveMiniApp IS NOW ON core/grpcx.methodsWithoutTenant (owner's answer to ADR 0045 CÒN MỞ #1,
+// added 2026-09-25). This test used to pin the refusal; it now pins the grant — through the REAL
+// server chain, dialled with the caller key and deliberately WITHOUT the commune interceptor, so
+// nothing puts "x-tenant-id" on the wire. Success here can only mean the server's own chain lets
+// the exempt RPC through with no commune.
+//
+// The caller key is still required: the commune exemption is not an authentication exemption.
+func TestResolveMiniAppDuocMienXaNhungVanCanKhoa(t *testing.T) {
+	coKhoa := moMay(t, grpc.WithChainUnaryInterceptor(grpcx.UnaryClientCallerAuth(khoaGoiGia)))
+	ra, err := coKhoa.ResolveMiniApp(context.Background(), &platformv1.ResolveMiniAppRequest{AppId: "1234567890"})
+	if err != nil {
+		t.Fatalf("ResolveMiniApp có khoá, không mang xã: bị từ chối (%v) — miễn xã chưa có hiệu lực", err)
+	}
+	if ra.GetApp().GetAppId() != "1234567890" {
+		t.Errorf("app trả về = %+v", ra.GetApp())
+	}
+
+	khongKhoa := moMay(t)
+	if _, err := khongKhoa.ResolveMiniApp(context.Background(),
+		&platformv1.ResolveMiniAppRequest{AppId: "1234567890"}); status.Code(err) != codes.Unauthenticated {
+		t.Errorf("ResolveMiniApp không khoá: mã = %v, muốn Unauthenticated", status.Code(err))
 	}
 }

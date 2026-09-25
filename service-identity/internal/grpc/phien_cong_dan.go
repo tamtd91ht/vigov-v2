@@ -105,23 +105,22 @@ func (s *Server) ResolveCitizenSession(ctx context.Context, req *identityv1.Reso
 		return khongCoPhienCongDan(), nil
 	}
 
-	if p.ID == "" || p.CitizenID == "" {
+	if p.ID == "" {
 		// A CONTRACT FAULT IN THIS SERVICE, not an unusable token, and it is worth an error rather
-		// than a quiet negative. A session with no sid cannot be revoked and a session with no
-		// citizen id cannot filter a citizen-path query (rule 4, invariant 3) — so serving it would
-		// hand the edge a session that looks valid and isolates nothing. The registry's own scan
-		// cannot produce this today; it is checked because the cost of being wrong is a citizen
-		// reading another citizen's petition.
-		s.d.Log.ErrorContext(ctx, "CẢNH BÁO HỢP ĐỒNG: sổ phiên công dân trả về phiên thiếu định danh",
-			// Neither identifier is logged — one of them is the thing that is missing and the other
-			// is a citizen identifier (rule 3). Which one is absent is enough to find the row.
-			"thieu_sid", p.ID == "", "thieu_cong_dan", p.CitizenID == "")
+		// than a quiet negative: a session with no sid cannot be revoked (rule 5, invariant 4). The
+		// registry's own scan cannot produce this today; it is checked because serving it would hand
+		// the edge a session nobody can end.
+		s.d.Log.ErrorContext(ctx, "CẢNH BÁO HỢP ĐỒNG: sổ phiên công dân trả về phiên thiếu sid")
 		return nil, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
 	}
 
 	return &identityv1.ResolveCitizenSessionResponse{
 		Session: &identityv1.CitizenSessionPrincipal{
 			SessionId: p.ID,
+			// "" IS A REAL ANSWER SINCE ADR 0045 — a bridge session whose phone is not verified yet.
+			// It used to be refused here as a contract fault; it is passed through now, in the same
+			// change that taught core/identityclient to accept it and core/httpx.XaTuPhien to refuse
+			// it on every route that reads the citizen's own records (ADR 0045 §Phiên chưa có số, 5).
 			CitizenId: p.CitizenID,
 			// STRAIGHT THROUGH, INCLUDING EMPTY. See the note on the RPC: "" is the citizen who has
 			// not chosen a commune, and substituting anything for it is rule 1, forbidden #1.

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 	"testing"
@@ -42,14 +43,28 @@ func (d *dongGia) Scan(dest ...any) error {
 	}
 	h := d.hang[d.vt-1]
 	for i := range dest {
-		p, ok := dest[i].(*string)
-		if !ok {
+		switch p := dest[i].(type) {
+		case *string:
+			if h[i] == oNull {
+				// What database/sql does with NULL into a plain string: a Scan error.
+				return errors.New("dongGia: NULL vào chuỗi thường")
+			}
+			*p = h[i]
+		case *sql.NullString:
+			*p = sql.NullString{String: h[i], Valid: h[i] != oNull}
+			if !p.Valid {
+				p.String = ""
+			}
+		default:
 			return errors.New("dongGia: cột không phải chuỗi")
 		}
-		*p = h[i]
 	}
 	return nil
 }
+
+// oNull marks a NULL cell in dongGia — cong_dan_id of a session whose phone is not verified yet
+// (migration 0011).
+const oNull = "<NULL>"
 
 func (d *dongGia) Err() error { return d.loiDoc }
 
@@ -125,6 +140,24 @@ func TestQuetPhienChuaChonXaVanLaPhienDungDuoc(t *testing.T) {
 	}
 	if p.TenantID.Valid() {
 		t.Errorf("TenantID = %q — phải là giá trị rỗng, để mọi tuyến nghiệp vụ trả 401", p.TenantID)
+	}
+}
+
+func TestQuetPhienChuaCoSoVanLaPhienDungDuoc(t *testing.T) {
+	// cong_dan_id is NULL for a bridge session opened before the phone was verified (ADR 0045).
+	// The registry must answer "usable, no citizen yet" — a Scan error here would sign every such
+	// citizen out on every request. Refusing it is core/httpx.XaTuPhien's job, not this one's.
+	rows := &dongGia{hang: [][3]string{{"XA-01", "SID-02", oNull}}}
+
+	p, ok := quetPhien(rows)
+	if !ok {
+		t.Fatal("phiên chưa có số bị coi là không dùng được")
+	}
+	if p.ID != "SID-02" || string(p.TenantID) != "XA-01" {
+		t.Errorf("đọc sai phiên: %+v", p)
+	}
+	if p.CitizenID != "" {
+		t.Errorf("CitizenID = %q, muốn rỗng", p.CitizenID)
 	}
 }
 
@@ -287,5 +320,28 @@ func TestCaiDatDungInterfaceRiaCongDan(t *testing.T) {
 	var so httpx.CitizenSessions = &PhienCongDanStore{}
 	if _, ok := so.TraCuu(context.Background(), ""); ok {
 		t.Error("TraCuu với token rỗng phải trả ok=false")
+	}
+}
+
+func TestTaoQuaCauKiemDauVaoTruocGiaoDich(t *testing.T) {
+	s := &PhienCongDanStore{}
+	ctx := context.Background()
+	if _, _, _, err := s.TaoQuaCau(ctx, nil, PhienCauMoi{ThoiHan: time.Hour}); !errors.Is(err, ErrThieuTaiKhoanZalo) {
+		t.Errorf("thiếu tài khoản Zalo: err = %v", err)
+	}
+	if _, _, _, err := s.TaoQuaCau(ctx, nil, PhienCauMoi{TaiKhoanZaloID: "TK"}); !errors.Is(err, ErrThieuThoiHan) {
+		t.Errorf("thiếu thời hạn: err = %v — TTL là quyết định của cấu hình, không có mặc định ở đây", err)
+	}
+	if _, _, _, err := s.TaoQuaCau(ctx, nil, PhienCauMoi{TaiKhoanZaloID: "TK", ThoiHan: time.Hour}); !errors.Is(err, ErrThieuGiaoDich) {
+		t.Errorf("không giao dịch: err = %v", err)
+	}
+	if _, err := s.ThuHoiCuaTaiKhoanZalo(ctx, nil, "", "đổi xã"); !errors.Is(err, ErrThieuTaiKhoanZalo) {
+		t.Errorf("thu hồi không tài khoản: err = %v", err)
+	}
+	if _, err := s.ThuHoiCuaTaiKhoanZalo(ctx, nil, "TK", " "); !errors.Is(err, ErrThieuLyDo) {
+		t.Errorf("thu hồi không lý do: err = %v", err)
+	}
+	if _, err := s.ThuHoiCuaTaiKhoanZalo(ctx, nil, "TK", "đổi xã"); !errors.Is(err, ErrThieuGiaoDich) {
+		t.Errorf("thu hồi không giao dịch: err = %v", err)
 	}
 }

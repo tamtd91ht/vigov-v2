@@ -19,8 +19,10 @@
 // before the code is written:
 //
 //  1. A table that has NO tenant_id at all because a decision put it above the commune —
-//     today that is dinh_danh_cong_dan alone (ADR 0002: one phone number is one record for the
-//     whole platform). → dinh_danh_cong_dan.go
+//     dinh_danh_cong_dan (ADR 0002: one phone number is one record for the whole platform)
+//     → dinh_danh_cong_dan.go; and since 2026-09-25 tai_khoan_zalo (ADR 0045: the Zalo account
+//     behind a Mini App session, which answers "which commune" for the main app, so it cannot
+//     belong to one) → tai_khoan_zalo.go. Every statement there is keyed on ONE account.
 //  2. A lookup that must find a row BEFORE the commune is known, where the commune is then
 //     compared rather than assumed — ADR 0019, invariant 8: redeeming a pairing code has to
 //     find the code first so that a code belonging to another commune produces 401 AND AN

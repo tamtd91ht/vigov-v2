@@ -115,6 +115,14 @@
       "bang_chung": "core/config/config.go:310 TrustedProxies, :569 proxyTinCay — CIDR hoặc IP trơn, trống = không tin ai, mục hỏng hoặc 0.0.0.0/0, ::/0 làm Load hỏng, lỗi gọi tên biến và số thứ tự mục. core/httpx/client_ip.go:38 ClientIPTuProxyTinCay — đi X-Forwarded-For từ PHẢI sang TRÁI, dừng ở mục rác, không đọc X-Real-IP/Forwarded; edge.go:138 ClientIP đọc giá trị trong context, không có thì như cũ (socket). Ghi chú cũ edge.go về bản ipTu riêng của identity đã bỏ (ipTu đã uỷ quyền về đây). .env.example: dòng TRUSTED_PROXY_CIDRS= với chú giải. Kiểm mới: core/httpx/client_ip_test.go (14 ca bảng + X-Real-IP/Forwarded + không middleware + không nới sau khi gắn), core/config/trusted_proxy_test.go (5). go build + go vet + go test ./... xanh cho core và bảy dịch vụ (chạy trong từng module); gofmt -l rỗng.",
       "no_confirm": [],
       "tiep_theo": "Giá trị ConfigMap TRUSTED_PROXY_CIDRS (dải pod của ingress-nginx và web-admin) do người vận hành cụm cung cấp — kho này không biết được. Chưa đặt thì IP trong vết = IP pod web-admin (đúng như trước, không bị giả mạo, nhưng không phải IP người dùng)."
+    },
+    {
+      "id": "cau-phien-cong-dan-core",
+      "viec": "Phần core của cầu phiên ADR 0045: cấu hình cổng cầu + TTL, miễn xã hai RPC, khoá cầu, phiên chưa có số ở rìa công dân, platformclient đọc Mini App",
+      "trang_thai": "xong",
+      "bang_chung": "config/config.go: CITIZEN_SESSION_BRIDGE_LISTEN_ADDR (ConfigMap) + CITIZEN_SESSION_BRIDGE_KEYS (Secret, danh sách) — cả hai hoặc không, một nửa thì Load từ chối; CITIZEN_SESSION_TTL mặc định 720h, sai thì từ chối (không lùi về mặc định). .env.example có ba dòng giữ chỗ. grpcx/grpcx.go: OpenCitizenSession + ResolveMiniApp vào methodsWithoutTenant (chủ dự án chốt 25/09/2026). grpcx/bridge_auth.go UnaryServerBridgeKey: metadata x-vigov-bridge-key, so hằng thời gian với mọi khoá, khoá < 32 byte thì panic lúc dựng. httpx/citizen.go: XaTuPhien từ chối phiên CitizenID rỗng (403 chua_xac_thuc_so); XaTuPhienChiXem(lyDo) nhận nó. identityclient chấp nhận citizen_id rỗng. platformclient/mini_app.go: MiniApp, XaTrongNguCanh phân biệt 'không có' với 'không gọi được'. go test ./... xanh — kiểm 2026-09-25",
+      "no_confirm": [],
+      "tiep_theo": "Chưa có tuyến nào khai XaTuPhienChiXem — tuyến đầu tiên là hồ sơ hiển thị xã (việc riêng). tools/check_env_map.py sẽ đòi ba biến mới trong bảng deploy/cau-hinh/README.md."
     }
   ]
 }

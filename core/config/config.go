@@ -46,6 +46,9 @@
 //	ELASTICSEARCH_INDEX_PREFIX  ConfigMap   optional — refused by name at connect time
 //	DANGEROUS_AUTH_BYPASS       ConfigMap   optional — refused outright when ENV=prod
 //	TRUSTED_PROXY_CIDRS         ConfigMap   optional — empty trusts nobody; malformed refused by Load
+//	CITIZEN_SESSION_BRIDGE_LISTEN_ADDR  ConfigMap  optional — both bridge vars or neither; one alone refused by Load
+//	CITIZEN_SESSION_BRIDGE_KEYS         Secret     optional — both bridge vars or neither; one alone refused by Load
+//	CITIZEN_SESSION_TTL                 ConfigMap  optional — default 720h (30 days); malformed refused by Load
 //
 // THE TABLE IS HERE AND NOT IN A MANIFEST because the manifests are not in this repository's
 // gift and a classification that lives only in deploy/ is one nobody reading the config layer
@@ -308,6 +311,65 @@ type Config struct {
 	// 0.0.0.0/0 AND ::/0 ARE REFUSED BY NAME: trusting the whole internet as a proxy is exactly
 	// trusting a forged X-Forwarded-For from anyone, which is the thing the boundary exists to stop.
 	TrustedProxies []netip.Prefix
+
+	// CitizenSessionBridgeListenAddr is the address service-identity serves the citizen-session
+	// bridge on (ADR 0045 §Tin cậy): a SECOND gRPC listener, serving CitizenSessionBridgeService and
+	// nothing else, whose only caller is the vihat-miniapp backend.
+	//
+	// A SEPARATE PORT FROM GRPCListenAddr, AND THAT IS THE SECURITY PROPERTY, not tidiness. The
+	// bridge caller is not a ViGov service and never holds GRPC_CALLER_KEY (that key opens every RPC
+	// of every service, ADR 0025). "The bridge key opens exactly one RPC" holds because this
+	// listener registers exactly one service — a property of the wiring, not a list somebody keeps.
+	//
+	// k8s CONFIGMAP: a port is not a credential. NO DEFAULT, on purpose: the port has to match the
+	// NetworkPolicy rule that admits only the vihat-miniapp pods, and a default the code knows but
+	// the manifest does not is exactly the drift that opened the 8080 incident (ListenAddr above).
+	//
+	// OPTIONAL, AND ONLY TOGETHER WITH THE KEYS. Without the bridge identity still serves every
+	// staff request, so this is "cannot serve one flow", not "cannot serve one request" (rule 11,
+	// invariant 8). Both empty = bridge not started. Exactly one set = Load refuses: an address with
+	// no key is a port that would have to choose between answering nobody and answering everybody,
+	// and keys with no address are credentials sitting in a process that never uses them — the
+	// usual cause of both is a typo'd key in the manifest (ADR 0045 §Cấu hình).
+	CitizenSessionBridgeListenAddr string
+
+	// CitizenSessionBridgeKeys authenticate the bridge caller. ANY entry in the list is accepted;
+	// vihat-miniapp sends ONE.
+	//
+	// A LIST, UNLIKE GRPC_CALLER_KEY, because the two ends deploy independently (ADR 0045 §Xoay
+	// khoá): with a single value, rotating it would need both repositories released at the same
+	// instant, and in the gap every citizen sign-in fails. Rotate by adding the new key here,
+	// switching vihat-miniapp to it, then removing the old one. HOW OFTEN is not decided — ADR 0045
+	// CÒN MỞ #5, and rule 8 invariant 6 still owes that number.
+	//
+	// k8s SECRET, secret.Secret: the bytes are the credential (rule 8). Strength is checked where
+	// the key is USED — the bridge interceptor refuses a short key at construction — for the reason
+	// khoaKy gives: one owner per rule.
+	CitizenSessionBridgeKeys []secret.Secret
+
+	// CitizenSessionTTL is how long a citizen session issued through the bridge lives.
+	//
+	// A PLATFORM-WIDE CONSTANT BY THE OWNER'S DECISION (ADR 0045, answer to CÒN MỞ #4): an
+	// environment variable, default ONE MONTH. It is product policy, not a commune's value, so rule
+	// 1 invariant 10 does not apply. Not the 7 days of vihat-miniapp's own session — that is that
+	// repository's policy (ADR 0045 CÒN MỞ #4 records why the two are separate).
+	//
+	// OPTIONAL WITH THAT DEFAULT, because the owner stated the default; a deployment that says
+	// nothing gets the decided number, not a guessed one. A MALFORMED OR NON-POSITIVE VALUE IS
+	// REFUSED rather than falling back like TENANT_CACHE_TTL does: silently turning a typo into 30
+	// days would hide that the operator meant something else for the lifetime of a credential.
+	// Go duration syntax — "720h", not "30d".
+	CitizenSessionTTL time.Duration
+}
+
+// ThoiHanPhienCongDanMacDinh is CITIZEN_SESSION_TTL when the variable is unset — 30 days, the
+// owner's decision of 2026-09-25 (ADR 0045, answer to CÒN MỞ #4).
+const ThoiHanPhienCongDanMacDinh = 30 * 24 * time.Hour
+
+// CauPhienBat reports whether the citizen-session bridge listener is configured. Load guarantees
+// the address and the keys are either both present or both absent.
+func (c Config) CauPhienBat() bool {
+	return c.CitizenSessionBridgeListenAddr != "" && len(c.CitizenSessionBridgeKeys) > 0
 }
 
 const (
@@ -335,6 +397,8 @@ var (
 	ErrCoBienNguyHiem     = errors.New("config: cờ nguy hiểm đang bật trong môi trường thật")
 	ErrEnvKhongHopLe      = errors.New("config: ENV phải là dev, staging hoặc prod")
 	ErrProxyTinCayHong    = errors.New("config: TRUSTED_PROXY_CIDRS không hợp lệ")
+	ErrCauPhienNuaVoi     = errors.New("config: cầu phiên công dân cấu hình nửa vời")
+	ErrThoiHanPhienHong   = errors.New("config: CITIZEN_SESSION_TTL không hợp lệ")
 )
 
 // Load reads the configuration for one service.
@@ -393,8 +457,33 @@ func Load(serviceName string) (Config, error) {
 		return Config{}, err
 	}
 
+	// The citizen-session bridge: both halves or neither (see the fields). Named in the error,
+	// never with a value — the keys are credentials (rule 8).
+	diaChiCau := strings.TrimSpace(os.Getenv("CITIZEN_SESSION_BRIDGE_LISTEN_ADDR"))
+	var khoaCau []secret.Secret
+	for _, phan := range danhSach(os.Getenv("CITIZEN_SESSION_BRIDGE_KEYS")) {
+		khoaCau = append(khoaCau, secret.Secret(phan))
+	}
+	switch {
+	case diaChiCau != "" && len(khoaCau) == 0:
+		return Config{}, fmt.Errorf("%w: CITIZEN_SESSION_BRIDGE_LISTEN_ADDR có giá trị nhưng "+
+			"CITIZEN_SESSION_BRIDGE_KEYS trống — cổng cầu không có khoá (service %s)", ErrCauPhienNuaVoi, serviceName)
+	case diaChiCau == "" && len(khoaCau) > 0:
+		return Config{}, fmt.Errorf("%w: CITIZEN_SESSION_BRIDGE_KEYS có giá trị nhưng "+
+			"CITIZEN_SESSION_BRIDGE_LISTEN_ADDR trống — khoá nằm trong một tiến trình không mở cổng cầu (service %s)",
+			ErrCauPhienNuaVoi, serviceName)
+	}
+
+	thoiHanPhien, err := thoiHanPhienCongDan(os.Getenv("CITIZEN_SESSION_TTL"))
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg := Config{
-		TrustedProxies: proxy,
+		TrustedProxies:                 proxy,
+		CitizenSessionBridgeListenAddr: diaChiCau,
+		CitizenSessionBridgeKeys:       khoaCau,
+		CitizenSessionTTL:              thoiHanPhien,
 		// Trimmed: a trailing newline pasted into a ConfigMap would otherwise reach net.Listen
 		// as part of the port. The five services that used to read it per-service trimmed too.
 		ListenAddr:       firstNonEmpty(strings.TrimSpace(os.Getenv("LISTEN_ADDR")), ":8080"),
@@ -529,6 +618,27 @@ func duration(s string, mac time.Duration) time.Duration {
 		return mac
 	}
 	return d
+}
+
+// thoiHanPhienCongDan parses CITIZEN_SESSION_TTL. Empty is the owner's default; anything else
+// must be a positive Go duration.
+//
+// NOT duration() above, whose silent fallback is right for a cache TTL and wrong for the lifetime
+// of a credential: "30d" (not Go syntax) would quietly become the default, and the operator who
+// wrote "7 days" would never learn that citizens hold sessions four times longer.
+func thoiHanPhienCongDan(raw string) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ThoiHanPhienCongDanMacDinh, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %q không phải khoảng thời gian Go (ví dụ 720h)", ErrThoiHanPhienHong, raw)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("%w: %q phải lớn hơn 0", ErrThoiHanPhienHong, raw)
+	}
+	return d, nil
 }
 
 // khoaKy splits the comma-separated key list. The FIRST entry is the one that signs.

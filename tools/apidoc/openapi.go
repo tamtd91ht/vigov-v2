@@ -386,6 +386,13 @@ func xaJSON(x xaDecl) *om {
 	}
 	o.set("tenant_in_context", true)
 	o.set("source", "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)")
+	if x.Kind == "tu-phien-chi-xem" {
+		o.set("reason", x.LyDo)
+		o.set("note", "Chỉ xem: nhận cả phiên CHƯA xác thực số điện thoại, nên không được đọc hay ghi "+
+			"hồ sơ của chính công dân (ADR 0045).")
+		return o
+	}
+	o.set("phone_verified_required", true)
 	return o
 }
 

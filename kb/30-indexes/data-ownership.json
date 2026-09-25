@@ -360,6 +360,13 @@
       "scope": "tenant",
       "table": "lich_lam_viec",
       "source": "service-identity/migrations/0006_lich_lam_viec.sql:118"
+    },
+    {
+      "entity": "ZaloAccount",
+      "service": "identity",
+      "scope": "cross-tenant",
+      "table": "tai_khoan_zalo",
+      "source": "service-identity/migrations/0011_tai_khoan_zalo_va_phien_chua_co_so.sql:95"
     }
   ]
 }
