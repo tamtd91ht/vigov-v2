@@ -38,7 +38,8 @@ tiến độ tương ứng (khoá `tiep_theo`/`bang_chung`).
 | Hạ tầng dừng ở **Dockerfile + Jenkinsfile**; cụm k8s do devops (nay có hướng dẫn Rancher ở `deploy/README.md` §9, §11) | — | người dùng | `deploy/README.md` |
 | Trần `always_load` **27000 token** — đừng nâng (xem §5) | 21/09 | người dùng | `kb/INDEX.yaml:15` |
 | **Miễn xã** cho `ResolveCitizenSession`; `ListTenants`/`ResolveTenantSuccession` vẫn ngoài danh sách | 21/09 | người dùng | chú thích `core/grpcx/grpcx.go:158-177` (chưa có ADR — §3) |
-| **Ingress SINH từ `openapi.json`**, không liệt kê tay | 21/09 | người dùng | `deploy/README.md`, `tools/ingress/` |
+| **Ingress SINH từ `openapi.json`**, không liệt kê tay — **SỬA 25/09:** không còn là nơi định tuyến duy nhất; web-admin là cổng `/api/v1/*`, cùng một bảng sinh | 21/09 · 25/09 | người dùng | ADR 0043 · `tools/ingress/` |
+| **k8s chỉ cấp Secret + ConfigMap**, định tuyến nằm trong ứng dụng; mọi dịch vụ Go mặc định `:8080`; IP kiểm toán sau `TRUSTED_PROXY_CIDRS` | 25/09 | người dùng | ADR 0043 |
 | Sổ **đơn thư công dân** (`don_thu`) thuộc **`documents`** | 24/09 | người dùng | ADR 0039 |
 | Ô cấp quyền `vai_tro_quyen` là **cấu hình**: gỡ quyền = xoá cứng ô ấy kèm vết trước/sau đầy đủ; CHỈ bảng này | 24/09 | người dùng | ADR 0040 |
 | **#12 là quyết định của KHÁCH (22/09)**, không phải đề xuất nhà cung cấp — sổ từng ghi sai | 24/09 | người dùng xác nhận | `service-identity/che-so-di-dong-can-bo` |
@@ -85,7 +86,7 @@ Bảng *"Nợ khách chốt"* ở đầu `tien-do.md` sinh từ `no_confirm`; h�
 
 | Câu | Chặn gì | Chi tiết ở |
 |---|---|---|
-| **web-admin ra ngoài bằng đường nào** — A `node:http` + gốc nội bộ · B mở 443 · C biên đọc `X-Forwarded-Host` | **BLOCKER PHÁT HÀNH**: mọi trang web-admin 500. Kiểm lại 24/09: KHÔNG commit nào đụng `edge.go`, `netpol.yaml`, `tenant-config.ts` | `web-admin/goc-api-noi-bo` (treo) · §5 |
+| ~~web-admin ra ngoài bằng đường nào (A/B/C)~~ — **ĐÃ QUYẾT 25/09**: web-admin là cổng `/api/v1/*`. Còn lại: hai luật netpol mới chưa commit, `TRUSTED_PROXY_CIDRS` chưa đặt, kiểm thử đột biến cổng chưa chạy | trang web-admin hết 500 khi hai luật netpol được áp | ADR 0043 §"Việc còn mở" |
 | Xã mới lấy **người quản trị, vai trò và quyền đầu tiên** bằng cách nào (ADR 0003 cấm nhà cung cấp đụng dữ liệu nghiệp vụ; #13 cấm lối khôi phục của nhà cung cấp) | Ở một xã thật **không tài khoản nào cầm khoá nào** → ~97 tuyến 403, kể cả nút gieo SLA | `service-identity/xa-moi-khong-co-vai-tro-va-quyen` — cần ADR |
 | `/api/v1/<chưa định tuyến>` trả **404 HTML của web** hay **404 JSON** | hình dạng hiện tại là HTML | `deploy/base/mang/ingress.yaml:304-306` |
 | Miễn xã cho `ResolveCitizenSession` có cần **ADR riêng** không | không chặn mã | chú thích `core/grpcx/grpcx.go:158` |
@@ -156,15 +157,17 @@ phép kiểm xanh vì lý do sai. Gặp cái tiếp theo cùng dạng thì hỏi
 | Thư mục `<tên>@tmp/` lọt vào ngữ cảnh docker build | `dir()` của Jenkins để lại nó; `.dockerignore` có `*@tmp`, Jenkinsfile dùng `cd` (e0e1236, 29f8742) |
 | Rancher/RKE2 | netpol nhận REST chỉ từ namespace `ingress-nginx` nhưng RKE2 để controller ở `kube-system`; chỉ có flannel thì NetworkPolicy **không được cưỡng chế**; Import YAML không chạy kustomize; kubeconfig tải từ Rancher mang quyền người tải. `deploy/README.md` §11 |
 | Ingress dựng tay | Tuyến quên khai rơi về `/` và nhận 404 của web-admin; không bao giờ ghi lại Host; không mở 9090. `deploy/README.md` §9 |
-| `deploy/README.md:270` nói web-admin gọi `/api/v1` tương đối, "không cần địa chỉ backend" | **Sai với phía máy chủ**: `tenant-config.ts:121` gọi `https://<Host>/api/v1/communes/current` mỗi trang → cần egress mà netpol không cho. Câu README che mất blocker |
 
-### web-admin gọi ra ngoài — ba số đo (kiểm lại 24/09: vẫn đúng cả ba)
+### web-admin gọi ra ngoài — ĐÃ GIẢI 25/09 (ADR 0043)
 
-1. `fetch` của Node **không gửi được `Host`** do người gọi đặt (forbidden header; undici ghi đè). `node:http` thì được. Mã vẫn dùng `fetch` (`web-admin/src/lib/tenant-config.ts:121-129`).
-2. `core/httpx/edge.go:24` **chỉ đọc `r.Host`**, không `X-Forwarded-Host`. Đổi gốc mà bỏ Host → 404 mọi trang (404 hợp lệ nên không ai nghi). "Chữa" bằng cách đăng ký host nội bộ thành một xã → mọi tên miền in tên đúng xã ấy: **rò giữa hai cơ quan** (luật 1).
-3. REST identity là **8080** (`deploy/base/identity/service.yaml:8`), `netpol.yaml` chỉ mở **9090** và 443 thì không. Không phương án nào tránh được một dòng egress.
+Ba số đo 24/09 (undici ghi đè `Host`; biên Go chỉ đọc `r.Host`; netpol không mở REST cho
+web-admin) là lý do của ADR 0043 và được ghi ở đó. Cạm bẫy còn lại cho người sau:
 
-Kèm theo: bộ kiểm hiện tại thay `globalThis.fetch` rồi đọc `mock.calls[0]`, mà `Headers` GIỮ `Host` — nên ca "vẫn mang Host của xã" XANH trong khi sản xuất gửi host sai.
+| Triệu chứng | Sự thật |
+|---|---|
+| Ca kiểm "vẫn mang Host của xã" xanh với `fetch` giả | `Headers` giữ `Host`, undici thật thì không. Chỉ ca chạy `node:http` thật mới chứng minh (`web-admin/src/lib/may-chu/chuyen-tiep.test.ts`) |
+| Mọi lời gọi API qua web-admin 502, mọi pod xanh | Thiếu luật netpol `cho-phep-rest-tu-web-admin` / `cho-phep-web-admin-ra-rest` |
+| IP trong nhật ký kiểm toán là IP pod web-admin | `TRUSTED_PROXY_CIDRS` chưa đặt — đúng thiết kế, không phải lỗi (ADR 0043 §3) |
 
 ### Vẫn đúng từ bản trước (đã kiểm lại)
 

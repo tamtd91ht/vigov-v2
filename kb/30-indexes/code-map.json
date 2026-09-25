@@ -1020,31 +1020,27 @@
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:430"
+      "at": "core/config/config.go:444"
     },
     "config.Config": {
       "kind": "type",
-      "at": "core/config/config.go:74"
+      "at": "core/config/config.go:76"
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:305"
+      "at": "core/config/config.go:331"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:556"
-    },
-    "config.ListenAddrHoac": {
-      "kind": "func",
-      "at": "core/config/config.go:421"
+      "at": "core/config/config.go:611"
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:318"
+      "at": "core/config/config.go:345"
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:490"
+      "at": "core/config/config.go:504"
     },
     "crosstenant.DinhDanh": {
       "kind": "type",
@@ -3709,6 +3705,10 @@
     "httpx.ClientIP": {
       "kind": "func",
       "at": "core/httpx/edge.go:138"
+    },
+    "httpx.ClientIPTuProxyTinCay": {
+      "kind": "func",
+      "at": "core/httpx/client_ip.go:38"
     },
     "httpx.Error": {
       "kind": "type",

@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 277a639
+derived_from_commit: 7ef1388
 expires: 2026-12-24
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -103,17 +103,17 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 |---|---|---|---|---|
 | `_chung` | 20 | 2 | 8 | 6 |
 | `citizen-app` | 11 | 3 | 4 | 0 |
-| `core` | 10 | 0 | 1 | 1 |
-| `deploy` | 13 | 0 | 1 | 0 |
+| `core` | 12 | 0 | 1 | 1 |
+| `deploy` | 14 | 0 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
 | `proto` | 9 | 0 | 0 | 0 |
-| `service-comms` | 7 | 3 | 2 | 4 |
-| `service-documents` | 5 | 2 | 4 | 0 |
-| `service-finance` | 13 | 3 | 0 | 0 |
-| `service-identity` | 16 | 7 | 1 | 1 |
-| `service-petitions` | 11 | 7 | 5 | 0 |
-| `service-platform` | 3 | 1 | 0 | 1 |
-| `service-reporting` | 0 | 0 | 1 | 0 |
-| `tools` | 16 | 0 | 0 | 0 |
-| `web-admin` | 3 | 16 | 3 | 2 |
+| `service-comms` | 9 | 3 | 2 | 4 |
+| `service-documents` | 7 | 2 | 4 | 0 |
+| `service-finance` | 15 | 3 | 0 | 0 |
+| `service-identity` | 17 | 7 | 1 | 1 |
+| `service-petitions` | 13 | 7 | 5 | 0 |
+| `service-platform` | 4 | 1 | 0 | 1 |
+| `service-reporting` | 2 | 0 | 1 | 0 |
+| `tools` | 17 | 0 | 0 | 0 |
+| `web-admin` | 4 | 16 | 3 | 1 |
 

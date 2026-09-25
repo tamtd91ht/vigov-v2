@@ -3,7 +3,7 @@ id: multi-tenant-model
 tier: T0
 source: CURATED
 owner: architecture
-derived_from_commit: null
+derived_from_commit: ec3801f
 expires: null
 owns_facts:
   - "mô hình triển khai đa xã trên cloud và cách phân biệt xã"
@@ -54,7 +54,7 @@ với token**.
 |---|---|
 | Host không khớp xã nào | **404** — không phải 400, không rơi về xã mặc định, không tiết lộ xã nào tồn tại |
 | Token cấp cho xã A, gửi tới domain xã B | **401 + báo động + ghi nhật ký** — dấu hiệu tấn công, không phải lỗi người dùng |
-| Client tự gửi header tenant | Reverse proxy **xoá sạch** mọi header tenant từ ngoài vào |
+| Client tự gửi header tenant | **Xoá sạch** ở cổng web-admin **và** ở biên Go (ADR 0043) |
 | Không xác định được xã | **Từ chối.** Không bao giờ có tenant mặc định |
 | Cookie phiên | Đặt đúng host của từng xã. **Cấm** `domain=.vigov.vn` |
 | Việc nền (hàng đợi, cron) không có Host | Ngữ cảnh xã nằm **trong chính thông điệp** |
