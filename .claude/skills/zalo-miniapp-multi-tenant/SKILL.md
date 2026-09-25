@@ -1,6 +1,6 @@
 ---
 name: zalo-miniapp-multi-tenant
-description: Use when building citizen-facing screens or flows in the Zalo Mini App, especially resolving which commune the citizen is acting with, deep links, QR codes, the commune picker, or ZNS notifications. Triggers on: Zalo, Mini App, zmp-sdk, citizen app, deep link, QR, commune selection, commune picker, GPS, location, miniapp, citizen channel, ZNS, OA, notification.
+description: Use when building citizen-facing screens or flows in the Zalo Mini App, especially resolving which commune the citizen is acting with, the main app vs a commune's own app, App ID, deep links, QR codes, or ZNS notifications. Also load it when someone proposes a commune picker, GPS suggestion or a switch-commune button — ADR 0044 removed all three. Triggers on: Zalo, Mini App, zmp-sdk, citizen app, App ID, deep link, QR, commune selection, commune picker, GPS, location, miniapp, citizen channel, ZNS, OA, notification.
 ---
 
 # Skill: Zalo Mini App in a multi-commune system
@@ -13,47 +13,53 @@ the reason is not ours to change:
 | Platform fact | Consequence |
 |---|---|
 | A Mini App is identified by its **Zalo App ID**, not a domain | There is no commune domain to key off |
-| Each App ID needs its own registration and review | Hundreds of communes cannot be hundreds of apps |
-| Citizens find the app by searching Zalo | Many similarly named apps cause wrong choices, worst for elderly users |
+| Each App ID needs its own registration and review | A commune's own app is a Zalo filing plus the commune's official letter — procedure, not code |
+| Citizens find the app by searching Zalo | Similar names cause wrong choices, worst for elderly users |
 
-**One Mini App serves every commune.** The commune is resolved at runtime.
+**Two modes, ONE build of `citizen-app`** (ADR 0044, which partly supersedes ADR 0005):
 
-There is also no "app for Đà Nẵng" and no app-per-province. A province is a **filter in the
-picker**, never a separate app: province boundaries themselves were redrawn in 2025, so a
-discovery tree pinned to them is pinned to something that moves.
+| | Main app (demo) | A commune's own app |
+|---|---|---|
+| Commune comes from | QR `t=<tenant_ulid>` → citizen confirms → server writes it into the session | Verified App ID → platform table `app_id → tenant_id` → server binds it into the session |
+| Opened with no QR | Commune confirmed before → **back to that commune**. Never → **group introduction only** | Straight into the app's commune |
+
+Every session works with **exactly one commune**. There is no commune picker, no switch button,
+and no submitting to another commune. The full table, and why the server — not the client or
+the build — decides the mode: ADR 0044, not copied here.
+
+Never branch the build per commune (env var, constant, code branch, per-App-ID config file) —
+that is ADR 0044 stop condition #1 and rule 1 invariant 10.
 
 ---
 
 ## The three layers — keep them separate
 
-Collapsing discovery into session is the mistake this whole skill exists to prevent.
+ADR 0044 did not replace this. Collapsing discovery into session is the mistake this whole skill
+exists to prevent.
 
 | Layer | Answers | Source | Trusted? |
 |---|---|---|---|
-| **Discovery** | Which commune does the citizen *want* | QR · deep link · GPS · picker · profile | **No — a hint only** |
-| **Session** | Which commune is this session *acting in* | Server records it after the citizen confirms | **Yes — server-issued** |
+| **Discovery** | Which commune does this open point at | QR / deep link (main app) · App ID read by the client (own app) | **No — drives the UI only** |
+| **Session** | Which commune is this session *acting in* | Server: after the citizen confirms a QR, or from the App ID the app secret verified | **Yes — server-issued** |
 | **Authorization** | What may this citizen read/write there | Citizen↔commune relationship + rule 4 | **Yes** |
 
-A deep-link parameter is **client-supplied data**. Rule 1 forbids accepting a commune from the
-client — so the parameter drives the UI, and the server decides what it means:
+A deep-link parameter, and an App ID the client reads from its own URL, are **client-supplied
+data**. Rule 1 forbids accepting a commune from the client — so they drive the UI, and the
+server decides what they mean. An App ID that does not resolve, or resolves to an inactive
+commune → **refuse**; there is no default commune.
 
 | Operation | How the commune is authorised |
 |---|---|
 | **Read** own records | Citizen identity from session **and** an existing relationship |
-| **Submit** something new | Any **active** commune is allowed; the submission itself creates a `chua_khai` relationship — no residence declaration for this (citizen, commune) pair |
-| **Switch** commune | Explicit action, re-issues the session, **audited** |
-
-Submitting to a commune the citizen has no prior link to is legitimate — someone reports a
-pothole they saw while passing through. That is what the third capacity value exists for. It is
-**not** named "transient": the sender may be sitting in another province entirely, and the system
-has no way to know where they are. `chua_khai` states only what is actually known — no residence
-declaration yet. → ADR 0023.
+| **Submit** something new | **Only to the session's commune.** If the citizen has no prior link to it, the submission creates a `chua_khai` relationship (no residence declaration for this pair — ADR 0023) |
+| **Switch** commune | **No switch action.** Main app only: scanning another commune's QR asks for confirmation, then the server issues a **new** session — audited. Own app: never |
 
 ---
 
 ## The API host is singular
 
-The Mini App talks to **one citizen API host**. It never constructs a per-commune URL.
+The Mini App talks to **one citizen API host**, in both modes. It never constructs a
+per-commune URL.
 
 > *"The client says which commune"* — **forbidden**.
 > *"The server records which commune this session is acting in"* — **correct**.
@@ -80,13 +86,13 @@ https://zalo.me/s/<APP_ID>/?t=<tenant_ulid>&src=qr&v=1
 
 | `src` | Meaning | Behaviour |
 |---|---|---|
-| `qr` | Scanned at the commune's own noticeboard | Pre-select, **one tap to confirm** |
-| `zns` | The commune sent it to this citizen | Pre-select, one tap to confirm |
-| `share` | Passed between citizens, provenance unknown | **Always require explicit selection** |
-| *(none)* | Opened from the app list or Zalo search | Fall back to the profile, then GPS, then the picker |
+| `qr` | Scanned at the commune's own noticeboard | Show the commune, **one tap to confirm** |
+| `zns` | The commune sent it to this citizen | Show the commune, one tap to confirm |
+| `share` | Passed between citizens, provenance unknown | Never pre-confirmed: the citizen reads the commune name and confirms explicitly |
+| *(none)* | Opened from the app list or Zalo search | Main app: the server's remembered commune, else introduction only. Own app: the app's commune |
 
 Someone standing at the commune office should not be made to search for the commune they are
-standing in. Someone following a forwarded link should.
+standing in. Someone following a forwarded link should read what they are confirming.
 
 ### A deep link never carries access
 
@@ -107,34 +113,36 @@ This is where a "route by parameter" design usually breaks.
 | **Finding it in Zalo search** | **no** |
 | **Coming back next week** | **no** |
 
-Deep link is priority 1 **for the first visit**. From the second visit onward the default path
-is the saved profile. A design that treats the parameter as the main road fails on every
-user's second open.
+In the main app the QR is how a commune enters **the first time**. From then on the **server**
+remembers the confirmed commune against the citizen's identity; the client stores no commune on
+the device. That needs the citizen's identity **before** the server can answer — how a reopen
+without QR obtains it is the session-bridge design's question (ADR 0044 §*Hệ quả*), not
+something to improvise in the client. A design that treats the parameter as the main road fails
+on every user's second open.
 
 ---
 
-## The commune picker
+## No commune picker — and why that is not a gap
 
-Ordered for the citizen, not for the data model:
+ADR 0044 replaced ADR 0005's no-parameter path (picker, GPS, profile). Do not rebuild it:
 
-1. **Recently used** — most citizens deal with one or two communes, ever
-2. **GPS suggestion** — labelled as a suggestion, one tap to accept, **never auto-selected**
-3. **Search by name** — diacritic-insensitive, and **matching former names** (mergers mean the
-   name a citizen knows may no longer be the official one)
-4. **Browse by province** — the fallback, not the main route. **Two levels, not three**: since
-   01/07/2025 local government is province → commune and the district level has ceased to exist.
-   That is exactly why browsing comes last: one province expands into a flat list of a hundred
-   rows. Never re-introduce districts as a grouping tier, not even from historical data (ADR 0023)
+- **Main app**: without a QR the citizen sees only the group introduction. A picker would let
+  anyone enter any commune's content from a public store listing.
+- **Own app**: the commune is fixed by the verified App ID. A picker would be a second, weaker
+  source for a fact the server already knows.
+- **GPS** has no role in choosing a commune: locations are spoofable, and urban boundaries run
+  down the middle of streets.
 
-GPS suggests and never decides: locations are spoofable, and urban boundaries run down the
-middle of streets. Someone on the wrong side of a road is not in another commune.
+A QR printed for a **merged** commune must still resolve, with a notice — the platform
+service's **succession** table (`TenantSuccession`; ADR 0005, named in ADR 0023) still applies.
 
 ---
 
-## Notifications: one app, many Official Accounts
+## Notifications: one verifying OA, many sending OAs
 
-Each commune has **its own Zalo OA**, because citizens expect the sender to be *"UBND xã X"*.
-A commune's standing with its own residents is part of what the platform exists to serve.
+Each commune has **its own Zalo OA** for notifications, because citizens expect the sender to be
+*"UBND xã X"*. A commune's standing with its own residents is part of what the platform exists
+to serve.
 
 | # | Practice |
 |---|---|
@@ -144,9 +152,13 @@ A commune's standing with its own residents is part of what the platform exists 
 | 4 | Sending is eventually consistent with the business write: a petition must **never** fail to be accepted because a notification could not be sent |
 | 5 | Notification payloads carry a **business code**, never personal data — queues are persisted and backed up |
 
+The **verifying** OA is a different role: one OA, `Vihat` (ADR 0031), verifies **every** app —
+the main app and each commune's own app. The project owner confirmed 2026-09-25 that one OA can
+verify several apps (ADR 0044 answer 5), so ADR 0018 stands unchanged.
+
 → ADR `kb/10-decisions/0006-per-commune-zalo-oa.md` — **superseded by**
-`kb/10-decisions/0018-oa-xac-thuc-tach-khoi-oa-thong-bao.md` (Zalo binds ONE Mini App to ONE
-verifying OA; read 0018 before touching this section)
+`kb/10-decisions/0018-oa-xac-thuc-tach-khoi-oa-thong-bao.md` (verifying OA separate from
+per-commune notification OA; read 0018 before touching this section) · ADR 0031 · ADR 0044
 
 ---
 
@@ -154,12 +166,12 @@ verifying OA; read 0018 before touching this section)
 
 | # | Practice |
 |---|---|
-| 1 | GPS **suggests**, never **decides** |
-| 2 | Once selected, the commune name appears on **every** screen |
-| 3 | Switching commune is explicit, never automatic, and audited |
-| 4 | API base URL and commune data are read **at runtime**, never baked into the bundle |
+| 1 | The commune comes from the **server** — confirmed QR (main app) or verified App ID (own app). Never from GPS, a picker, or a client-read App ID |
+| 2 | The session's commune name appears on **every** screen |
+| 3 | No switch action. A new commune in the main app = new QR, explicit confirmation, **new session, audited** |
+| 4 | API base URL and commune data are read **at runtime**, never baked into the bundle; one build serves every App ID |
 | 5 | Confirm the commune at the **final step** before submitting anything |
-| 6 | The app works correctly when opened with **no parameter at all** |
+| 6 | The app works correctly when opened with **no parameter at all** — in both modes |
 | 7 | Nothing personal in logs, URLs, or file names |
 
 Items 2 and 5 are business rules, not polish: submitting to the wrong commune means that
@@ -177,9 +189,15 @@ for nothing and then loses trust.
    ADR 0023. Not "alias": commune A does not *become* commune B)
 4. Anything depending on a Zalo platform behaviour nobody has verified — **check the vendor
    documentation, do not assume**
+5. A proposal to put **per-commune values in the build**, or to let the **client choose the
+   commune** from the App ID or a URL parameter (ADR 0044 stop conditions #1, #2)
+6. A request for one citizen, inside one app, to act with **several communes**; or for a
+   commune's People's Committee to **own** its app (ADR 0044 stop conditions #3, #4)
 
 → Rule 1 · Rule 4 · `skills/accessibility-elderly` · `skills/citizen-identity-multi-tenant`
-→ `kb/00-foundation/multi-tenant-model.md` · ADR 0005 · ADR 0006 (superseded by 0018) · ADR 0018
-  (one verifying OA, per-commune notification OA) · ADR 0019 (QR session pairing) · ADR 0020
-  (citizen phone verification via `getPhoneNumber`) · ADR 0023 (entity, table and URL-resource
-  names for this channel; two-level local government)
+→ `kb/00-foundation/multi-tenant-model.md` · ADR 0005 (three layers, deep link — partly
+  superseded by 0044) · ADR 0006 (superseded by 0018) · ADR 0018 (one verifying OA,
+  per-commune notification OA) · ADR 0019 (QR session pairing) · ADR 0020 (citizen phone
+  verification via `getPhoneNumber`) · ADR 0023 (entity, table and URL-resource names for this
+  channel; two-level local government) · ADR 0031 (ViHAT Group, OA `Vihat`) · **ADR 0044 (two
+  modes, one build)**

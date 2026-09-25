@@ -3,7 +3,7 @@ id: multi-tenant-model
 tier: T0
 source: CURATED
 owner: architecture
-derived_from_commit: ec3801f
+derived_from_commit: df0dae4
 expires: null
 owns_facts:
   - "mô hình triển khai đa xã trên cloud và cách phân biệt xã"
@@ -24,26 +24,23 @@ owns_facts:
 | Web Quản trị | Cán bộ | **Domain** — `tanphu.vigov.vn` |
 | Zalo Mini App | Công dân | **KHÔNG dùng domain được** — xem dưới |
 
-**Vì sao Mini App khác:** Zalo Mini App định danh bằng **Zalo App ID**, không bằng domain.
-Mỗi App ID cần đăng ký và duyệt riêng với Zalo — 300 xã không thể là 300 mini app. Một
-Mini App phục vụ mọi xã, nên nó **không có domain để mà phân biệt**.
+**Vì sao Mini App khác:** Mini App định danh bằng **Zalo App ID**, không có domain của xã.
+**Hai chế độ, một bản build** (ADR 0044): app chính lấy xã từ QR, app riêng của xã từ App ID
+máy chủ xác minh. Mỗi phiên **đúng một xã** — không chọn xã, không đổi xã, không gửi sang xã khác.
 
-Kênh công dân tách **ba lớp**, không bao giờ gộp:
+Ba lớp (ADR 0005), không bao giờ gộp:
 
 | Lớp | Trả lời câu | Tin được |
 |---|---|---|
-| **Khám phá** | Công dân *muốn* làm việc với xã nào (QR · deep link · GPS · picker · hồ sơ) | **Không** — chỉ gợi ý |
-| **Phiên** | Phiên này *đang* thao tác ở xã nào | **Có** — server phát hành sau khi công dân xác nhận |
+| **Khám phá** | Lần mở này trỏ tới xã nào (QR · App ID client đọc) | **Không** — chỉ dẫn giao diện |
+| **Phiên** | Phiên này *đang* thao tác ở xã nào | **Có** — máy chủ phát hành |
 | **Uỷ quyền** | Công dân này được đọc/ghi gì ở xã đó | **Có** — quan hệ công dân↔xã + luật 4 |
 
-Tham số trên QR hay link là **dữ liệu client cung cấp**: nó dẫn giao diện, không cấp quyền.
-Mini App gọi **một API host duy nhất**, không bao giờ dựng URL theo từng xã.
+Mọi thứ client tự đọc là **dữ liệu client cung cấp**: dẫn giao diện, không cấp quyền. Mini App
+gọi **một API host duy nhất**. Tên xã của phiên hiện trên **mọi màn hình**, xác nhận lại ở bước
+cuối trước khi gửi.
 
-GPS **gợi ý**, không **quyết định**. Đã chọn xã thì tên xã hiện trên **mọi màn hình**, và xác
-nhận lại ở bước cuối trước khi gửi — gửi nhầm xã là sự cố nghiệp vụ thật.
-
-→ Chi tiết khuôn deep link, mức tin theo nguồn, màn hình chọn xã, và OA theo xã:
-ADR 0005 · ADR 0006 → **thay thế bởi ADR 0018** · ADR 0019 · `skills/zalo-miniapp-multi-tenant`
+→ ADR 0044 · 0005 · 0019 · OA: 0018 (thay 0006) · 0031 · `skills/zalo-miniapp-multi-tenant`
 
 ## Ranh giới tin cậy: `Host`
 
