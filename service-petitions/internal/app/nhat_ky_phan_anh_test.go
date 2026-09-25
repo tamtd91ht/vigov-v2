@@ -273,6 +273,56 @@ func TestDongNhatKyHongThiCaHanhViQuayLui(t *testing.T) {
 	}
 }
 
+// THE OTHER DIRECTION: the logbook row is written and a statement of the SAME act fails — the
+// petition's UPDATE, its audit entry, or the outbox row that follows the logbook row. The row must go
+// down with it: a timeline entry for an act that never committed tells an officer, and later an
+// inspection, that something happened to the petition when nothing did.
+//
+// Each statement the act actually ran on a clean pass is failed in turn, so an act that gains or loses
+// a statement is covered without editing this table. At least one case must fail AFTER the logbook
+// INSERT ran, or the "row written, act failed" direction was never exercised and this test would be
+// green for the wrong reason.
+func TestHanhViHongSauDongNhatKyThiDongNhatKyQuayLui(t *testing.T) {
+	loaiCau := []string{"UPDATE phieu_phan_anh", "INSERT INTO audit_log", "INSERT INTO su_kien_di"}
+	saiSauDongNhatKy := 0
+	for ten, hv := range sauHanhVi() {
+		sach := khoPhieuMau()
+		sach.hang = hv.hang()
+		ucSach, ctxSach := dungXuLy(t, sach, hanXuLyThu())
+		if err := hv.chay(ucSach, ctxSach, ghiChuThu); err != nil {
+			t.Fatalf("%s — lượt sạch: %v", ten, err)
+		}
+		for _, cau := range loaiCau {
+			if !sach.coCau(cau) {
+				continue
+			}
+			t.Run(ten+" / hỏng "+cau, func(t *testing.T) {
+				k := khoPhieuMau()
+				k.hang = hv.hang()
+				k.loiSau = cau
+				uc, ctx := dungXuLy(t, k, hanXuLyThu())
+
+				if err := hv.chay(uc, ctx, ghiChuThu); err == nil {
+					t.Fatalf("hành vi thành công dù %q hỏng", cau)
+				}
+				if k.daCommit != 0 || k.daRollback != 1 {
+					t.Errorf("commit %d, rollback %d — muốn 0 và 1: dòng nhật ký đã ghi có thể ở lại "+
+						"cho một hành vi không xảy ra", k.daCommit, k.daRollback)
+				}
+				for _, nk := range k.cau("INSERT INTO nhat_ky_phan_anh") {
+					if !nk.trongGiaoDich {
+						t.Error("dòng nhật ký ghi NGOÀI giao dịch — rollback không kéo được nó theo")
+					}
+					saiSauDongNhatKy++
+				}
+			})
+		}
+	}
+	if saiSauDongNhatKy == 0 {
+		t.Fatal("không ca nào hỏng SAU khi dòng nhật ký đã ghi — chiều 'dòng ghi được, hành vi hỏng' chưa được thử")
+	}
+}
+
 // --- the manual note ---------------------------------------------------------------------------------
 
 const (

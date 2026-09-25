@@ -776,3 +776,18 @@ func TestDocPhieuHasCitizen(t *testing.T) {
 		})
 	}
 }
+
+// TestHasCitizenLaTruongTuyChonTrongHopDong pins the CONTRACT half of has_citizen: tools/apidoc
+// declares a response key REQUIRED exactly when its json tag lacks `omitempty` (tools/apidoc/schema.go,
+// boQuaKhiRong). Dropping it makes every web-admin and citizen fixture written before the field fail a
+// new required key, and the openapi drift check in `make check` stops catching it the moment somebody
+// regenerates. An unset pointer must therefore be ABSENT, not `null`.
+func TestHasCitizenLaTruongTuyChonTrongHopDong(t *testing.T) {
+	b, err := json.Marshal(phieuPhanAnhRa{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"has_citizen"`) {
+		t.Errorf("has_citizen phát ra khi chưa đặt — mất omitempty, apidoc sẽ khai nó BẮT BUỘC: %s", b)
+	}
+}
