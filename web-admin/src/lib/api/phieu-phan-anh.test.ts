@@ -4,8 +4,11 @@ import {
   chuyenCapTrenPhieu,
   chuyenXuLyPhieu,
   dongPhieu,
+  duongDanNhatKyPhieu,
   duongDanSoPhanAnh,
+  ghiNhatKyPhieu,
   khongTiepNhanPhieu,
+  layNhatKyPhieu,
   layPhieuPhanAnh,
   phanLoaiPhieu,
   tienTrangThaiPhieu,
@@ -522,5 +525,183 @@ describe("hai nhánh rẽ — …/rejection và …/referral", () => {
       ok: false,
       thongBao: "Chỉ từ chối tiếp nhận hoặc chuyển cấp trên được phiếu đang ở bước phân loại.",
     });
+  });
+});
+
+/**
+ * NHẬT KÝ XỬ LÝ — GET/POST …/log-entries.
+ *
+ * Ba điều canh ở đây, mỗi điều là một cách hỏng không làm đỏ màn hình nào:
+ *   1. trang đầu KHÔNG gửi `cursor=` rỗng (máy chủ trả 400 đúng lần mở phiếu đầu tiên);
+ *   2. POST mang `Idempotency-Key` ĐÚNG khoá được truyền vào, và lần gửi lại mang LẠI khoá ấy —
+ *      khoá sinh trong hàm là hai dòng nhật ký giống hệt nhau sau một lần lỗi mạng;
+ *   3. thân ĐÚNG MỘT khoá `note`, đã cắt khoảng trắng — không `status`, không `actor_code`: người ghi
+ *      là PHIÊN, không phải thân yêu cầu.
+ */
+describe("nhật ký xử lý — …/log-entries", () => {
+  const DONG = {
+    id: "01JDONG",
+    at: "2026-09-26T03:00:00Z",
+    actor_code: "CB-00123",
+    action: "ghi-chu",
+    status: "dang-xu-ly",
+    unit: "",
+    assignee: "",
+    note: "Đã gọi đội vệ sinh.",
+  };
+
+  it("trang đầu: đúng tuyến, mã được mã hoá, KHÔNG có `cursor` rỗng", () => {
+    expect(duongDanNhatKyPhieu("PA/2026 0021", { limit: 20, cursor: null })).toBe(
+      "/api/v1/citizen-reports/PA%2F2026%200021/log-entries?limit=20",
+    );
+    expect(duongDanNhatKyPhieu("PA-2026-0021", { cursor: "" })).toBe(
+      "/api/v1/citizen-reports/PA-2026-0021/log-entries",
+    );
+  });
+
+  it("trang sau mang đúng con trỏ máy chủ phát ra, không `tenant`", async () => {
+    const gia = batFetch(
+      new Response(JSON.stringify({ items: [DONG], next_cursor: "", has_more: false }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const kq = await layNhatKyPhieu("PA-2026-0021", { limit: 20, cursor: "eyJrIjoi" });
+    const duong = String(gia.mock.calls[0]?.[0]);
+    expect(duong.startsWith("/api/v1/citizen-reports/PA-2026-0021/log-entries?")).toBe(true);
+    const truyVan = new URLSearchParams(duong.slice(duong.indexOf("?") + 1));
+    expect(truyVan.get("cursor")).toBe("eyJrIjoi");
+    expect(truyVan.get("limit")).toBe("20");
+    expect(duong).not.toMatch(/tenant/i);
+    expect(gia.mock.calls[0]?.[1]?.method).toBe("GET");
+    expect(kq).toEqual({ ok: true, duLieu: { items: [DONG], next_cursor: "", has_more: false } });
+  });
+
+  it("404 (mã không có HOẶC lĩnh vực hạn chế): một câu, nguyên văn", async () => {
+    batFetch(KHONG_TIM_THAY.clone());
+    expect(await layNhatKyPhieu("PA-2026-0021")).toEqual({
+      ok: false,
+      thongBao: "Không tìm thấy phiếu phản ánh.",
+    });
+  });
+
+  function batGhiNhatKy(trangThai = 201, than: unknown = DONG) {
+    const gia = vi.fn(
+      async (_duongDan: string, _tuyChon?: RequestInit) =>
+        new Response(JSON.stringify(than), {
+          status: trangThai,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", gia);
+    return gia;
+  }
+
+  it("POST: mong 201, thân ĐÚNG MỘT khoá `note` đã cắt, kèm Idempotency-Key", async () => {
+    const gia = batGhiNhatKy();
+    const kq = await ghiNhatKyPhieu("PA-2026-0021", "  Đã gọi đội vệ sinh.\nChờ xe rác.  ", "k-nhap");
+    expect(kq).toEqual({ ok: true, duLieu: DONG });
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/citizen-reports/PA-2026-0021/log-entries");
+    const tuyChon = gia.mock.calls[0]?.[1];
+    expect(tuyChon?.method).toBe("POST");
+    // Xuống dòng GIỮ NGUYÊN — chỉ cắt hai đầu.
+    expect(JSON.parse(String(tuyChon?.body))).toEqual({ note: "Đã gọi đội vệ sinh.\nChờ xe rác." });
+    expect(new Headers(tuyChon?.headers).get("Idempotency-Key")).toBe("k-nhap");
+  });
+
+  it("gửi lại CÙNG bản nháp: CÙNG khoá — hàm không tự sinh khoá", async () => {
+    const gia = batGhiNhatKy(500, { code: "internal", message: "Lỗi máy chủ.", trace_id: "x" });
+    await ghiNhatKyPhieu("PA-2026-0021", "Ghi chú", "k-co-dinh");
+    await ghiNhatKyPhieu("PA-2026-0021", "Ghi chú", "k-co-dinh");
+    const k0 = new Headers(gia.mock.calls[0]?.[1]?.headers).get("Idempotency-Key");
+    const k1 = new Headers(gia.mock.calls[1]?.[1]?.headers).get("Idempotency-Key");
+    expect(k0).toBe("k-co-dinh");
+    expect(k1).toBe(k0);
+  });
+
+  it("403 của luật nghiệp vụ: câu của máy chủ ra NGUYÊN VĂN", async () => {
+    const cau = "Bạn không được phân công phiếu này và không có quyền xử lý phản ánh của xã.";
+    batGhiNhatKy(403, { code: "forbidden", message: cau, trace_id: "x" });
+    expect(await ghiNhatKyPhieu("PA-2026-0021", "Ghi chú", "k")).toEqual({ ok: false, thongBao: cau });
+  });
+
+  it("200 thay vì 201 là KHÔNG thành công — mong đúng mã của hợp đồng", async () => {
+    batGhiNhatKy(200);
+    expect((await ghiNhatKyPhieu("PA-2026-0021", "Ghi chú", "k")).ok).toBe(false);
+  });
+});
+
+/**
+ * GHI CHÚ NỘI BỘ của sáu thao tác — `note` chỉ đi khi có chữ.
+ *
+ * `note: ""` trên dây là một dòng nhật ký với ghi chú rỗng — trông như cán bộ định viết rồi mất chữ.
+ */
+describe("ghi chú nội bộ trên sáu thao tác", () => {
+  function batGhi() {
+    const gia = vi.fn(
+      async (_duongDan: string, _tuyChon?: RequestInit) =>
+        new Response(JSON.stringify({ code: "PA-2026-0021" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", gia);
+    return gia;
+  }
+  const than = (gia: ReturnType<typeof batGhi>, i = 0) =>
+    JSON.parse(String(gia.mock.calls[i]?.[1]?.body)) as Record<string, unknown>;
+
+  const LY_DO = "Nội dung thuộc thẩm quyền ngành điện.";
+
+  it("có chữ: `note` đi kèm, đã cắt khoảng trắng, ở cả năm tuyến có thân", async () => {
+    const gia = batGhi();
+    await phanLoaiPhieu("PA-1", "rac-thai", "  Đã xem hiện trường.  ");
+    await chuyenXuLyPhieu("PA-1", "01JBOPHAN", "CB-00123", "Giao anh B.");
+    await dongPhieu("PA-1", "Đã dọn xong.", "Xe rác tới lúc 9h.");
+    await khongTiepNhanPhieu("PA-1", LY_DO, "Đã báo lãnh đạo.");
+    await chuyenCapTrenPhieu("PA-1", LY_DO, "Công ty điện lực", "Gửi công văn số 12.");
+
+    expect(than(gia, 0)).toEqual({ field: "rac-thai", note: "Đã xem hiện trường." });
+    expect(than(gia, 1)).toEqual({ unit: "01JBOPHAN", assignee: "CB-00123", note: "Giao anh B." });
+    expect(than(gia, 2)).toEqual({ result: "Đã dọn xong.", note: "Xe rác tới lúc 9h." });
+    expect(than(gia, 3)).toEqual({ reason: LY_DO, note: "Đã báo lãnh đạo." });
+    expect(than(gia, 4)).toEqual({
+      reason: LY_DO,
+      receiving_body: "Công ty điện lực",
+      note: "Gửi công văn số 12.",
+    });
+  });
+
+  it("trống hoặc toàn khoảng trắng: KHÔNG có khoá `note` nào", async () => {
+    const gia = batGhi();
+    for (const rong of [undefined, "", "   \n  "]) {
+      await phanLoaiPhieu("PA-1", "rac-thai", rong);
+      await chuyenXuLyPhieu("PA-1", "01JBOPHAN", undefined, rong);
+      await dongPhieu("PA-1", "Đã dọn xong.", rong);
+      await khongTiepNhanPhieu("PA-1", LY_DO, rong);
+      await chuyenCapTrenPhieu("PA-1", LY_DO, "Công an xã", rong);
+    }
+    for (let i = 0; i < gia.mock.calls.length; i++) {
+      expect(Object.keys(than(gia, i)), String(i)).not.toContain("note");
+    }
+    expect(gia.mock.calls.length).toBe(15);
+  });
+
+  it("tiến trạng thái có ghi chú: thân `{note}` DUY NHẤT, không trạng thái đích nào", async () => {
+    const gia = batGhi();
+    await tienTrangThaiPhieu("PA-1", "  Đã tới hiện trường.  ");
+    const tuyChon = gia.mock.calls[0]?.[1];
+    expect(JSON.parse(String(tuyChon?.body))).toEqual({ note: "Đã tới hiện trường." });
+    expect(new Headers(tuyChon?.headers).get("Content-Type")).toBe("application/json");
+  });
+
+  it("tiến trạng thái KHÔNG ghi chú: vẫn KHÔNG thân, KHÔNG `Content-Type`", async () => {
+    const gia = batGhi();
+    await tienTrangThaiPhieu("PA-1", "   ");
+    await tienTrangThaiPhieu("PA-1");
+    for (const i of [0, 1]) {
+      expect(gia.mock.calls[i]?.[1]?.body).toBeUndefined();
+      expect(gia.mock.calls[i]?.[1]?.headers).toEqual({});
+    }
   });
 });

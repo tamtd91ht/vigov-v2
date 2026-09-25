@@ -10,6 +10,7 @@ import type { KetQua } from "@/lib/api/goi";
 import type {
   identity_boPhanRa,
   identity_danhBaChonNguoiRa,
+  petitions_nhatKyPhieuRa,
   petitions_phieuPhanAnhRa,
 } from "@/lib/api/schema.gen";
 
@@ -19,17 +20,25 @@ import {
   CAU_THIEU_QUYEN_PHAN_CONG,
   CAU_THIEU_QUYEN_PHAN_LOAI,
   congThaoTac,
+  danhBaTheoMa,
   DE_BO_PHAN_PHAN_CONG,
+  GOI_Y_GHI_NHAT_KY,
+  NHAC_DU_LIEU_CA_NHAN,
+  NHAN_BO_PHAN_PHU_TRACH,
   NHAN_CHUYEN_CAP_TREN,
   NHAN_KHONG_TIEP_NHAN,
+  NHAN_NUT_GHI_NHAT_KY,
   NHAN_O_CO_QUAN,
+  NHAN_O_GHI_CHU_NOI_BO,
   NHAN_O_KET_QUA,
   NHAN_O_LY_DO,
   NHAN_TIEN_TRANG_THAI,
+  NHAT_KY_RONG,
   PHAM_VI_GIAO_CHO_TOI,
   PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
   SO_RONG,
+  TIEU_DE_NHAT_KY,
 } from "./nhan-phieu";
 import {
   BieuMauReNhanh,
@@ -37,8 +46,10 @@ import {
   DanhSachThe,
   HangLoc,
   KhoiChuaDung,
+  ONhapGhiChuNoiBo,
   ThePhieu,
 } from "./so-phan-anh";
+import { BieuMauGhiNhatKy, DanhSachNhatKy, NhatKyPhieu } from "./nhat-ky-phieu";
 
 const THU_MUC = fileURLToPath(new URL(".", import.meta.url));
 
@@ -353,7 +364,8 @@ describe("phần chưa dựng được — ra tới màn hình, không giấu tr
   it("khối ấy nêu đích danh bảng ảnh còn thiếu và hệ quả với luật “phải có ảnh sau”", () => {
     const html = renderToStaticMarkup(<KhoiChuaDung />);
     expect(html).toContain("anh_phan_anh");
-    expect(html).toContain("nhat_ky_phan_anh");
+    // Nhật ký xử lý ĐÃ dựng (26/09/2026) — nó không còn là "phần chưa dựng được".
+    expect(html).not.toContain("nhat_ky_phan_anh");
     // Hệ quả nặng nhất phải có mặt: không cưỡng chế được luật “không đóng phiếu khi thiếu ảnh sau”.
     expect(html).toContain("bat_buoc_anh_nghiem_thu");
     for (const p of PHAN_CHUA_DUNG) {
@@ -569,10 +581,230 @@ describe("Đóng phiếu — hai điểm đóng", () => {
 describe("lý do nhánh rẽ không rời khỏi thân POST", () => {
   it("mã nguồn màn hình không đụng tới bộ nhớ trình duyệt hay console", () => {
     // Lý do là chữ cán bộ gõ về việc của một công dân (luật 3). Nó chỉ được đi vào thân POST.
-    for (const tep of ["so-phan-anh.tsx", "nhan-phieu.ts"]) {
+    for (const tep of ["so-phan-anh.tsx", "nhan-phieu.ts", "nhat-ky-phieu.tsx"]) {
       const nguon = readFileSync(join(THU_MUC, tep), "utf-8");
       expect(nguon, tep).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie/);
       expect(nguon, tep).not.toMatch(/console\./);
     }
+  });
+});
+
+/**
+ * NHẬT KÝ XỬ LÝ (§8.7). Canh cả CA BỊ TỪ CHỐI: tài khoản người viết mã có mọi khoá, nên một nút
+ * `Ghi nhật ký` lọt ra khi chưa rõ quyền là thứ không ai thấy trong lúc phát triển.
+ */
+describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
+  const TB = new Map([["01JBOPHAN", "VĂN PHÒNG ĐẢNG ỦY"]]);
+  const DB = DANH_BA.ok ? danhBaTheoMa(DANH_BA.duLieu.items) : null;
+  const NUT_GHI = `>${NHAN_NUT_GHI_NHAT_KY}</button>`;
+
+  function dong(sua: Partial<petitions_nhatKyPhieuRa> = {}): petitions_nhatKyPhieuRa {
+    return {
+      id: "01JDONG1",
+      at: "2026-09-26T03:05:00Z",
+      actor_code: "CB-00200",
+      action: "ghi-chu",
+      status: "dang-xu-ly",
+      unit: "",
+      assignee: "",
+      note: "",
+      ...sua,
+    };
+  }
+
+  it("có `feedback.read`: khối nhật ký và nút `Ghi nhật ký` có mặt", () => {
+    const html = renderToStaticMarkup(
+      <NhatKyPhieu maTraCuu="PA-2026-0021" tenBoPhan={TB} danhBa={DB} coNutGhi={true} />,
+    );
+    expect(html).toContain(TIEU_DE_NHAT_KY);
+    expect(html).toContain(NUT_GHI);
+  });
+
+  it("CA BỊ TỪ CHỐI — không có quyền (hoặc phiên chưa rõ): KHÔNG có nút ghi, vẫn đọc được", () => {
+    const html = renderToStaticMarkup(
+      <NhatKyPhieu maTraCuu="PA-2026-0021" tenBoPhan={TB} danhBa={DB} coNutGhi={false} />,
+    );
+    expect(html).toContain(TIEU_DE_NHAT_KY);
+    expect(html).not.toContain(NUT_GHI);
+    expect(html).not.toContain(nhuTrongHTML(GOI_Y_GHI_NHAT_KY));
+  });
+
+  it("chi tiết phiếu: mặc định KHÔNG có nút ghi (fail closed); có khi được truyền quyền", () => {
+    expect(veChiTiet(congThaoTac(true, true, true))).not.toContain(NUT_GHI);
+    const html = renderToStaticMarkup(
+      <ChiTietPhieu
+        phieu={phieu()}
+        bayGio={BAY_GIO}
+        cong={congThaoTac(false, false, false)}
+        tenBoPhan={TEN_BO_PHAN}
+        boPhan={BO_PHAN}
+        danhBa={DANH_BA}
+        dangGui={false}
+        loiGhi={null}
+        coGhiNhatKy={true}
+        dong={() => {}}
+        phanLoai={() => {}}
+        chuyenXuLy={() => {}}
+        tienTrangThai={() => {}}
+        dongPhieuLai={() => {}}
+        khongTiepNhan={() => {}}
+        chuyenCapTren={() => {}}
+      />,
+    );
+    expect(html).toContain(NUT_GHI);
+  });
+
+  it("rỗng: câu nói nhật ký bắt đầu ghi từ 26/09/2026 — phiếu cũ không có dòng, theo thiết kế", () => {
+    const html = renderToStaticMarkup(<DanhSachNhatKy dong={[]} tenBoPhan={TB} danhBa={DB} />);
+    expect(html).toContain(NHAT_KY_RONG);
+    expect(NHAT_KY_RONG).toBe("Chưa có dòng nhật ký nào. Nhật ký bắt đầu ghi từ ngày 26/09/2026.");
+  });
+
+  it("một dòng: giờ Việt Nam, nhãn thao tác, chip trạng thái, MÃ người thực hiện", () => {
+    const html = renderToStaticMarkup(
+      <DanhSachNhatKy dong={[dong({ action: "chuyen-trang-thai" })]} tenBoPhan={TB} danhBa={DB} />,
+    );
+    // 03:05Z = 10:05 giờ Việt Nam.
+    expect(html).toContain("10:05 26/09/2026");
+    expect(html).toContain("Chuyển trạng thái");
+    expect(html).toContain("Đang xử lý");
+    // MÃ, không họ tên — dù danh bạ có người ấy (`Lê Văn C`): máy chủ không trả tên người ghi.
+    expect(html).toContain("CB-00200");
+    expect(html).not.toContain("Lê Văn C");
+    // Dòng không phải `phan-cong` thì không có ô bộ phận.
+    expect(html).not.toContain(nhuTrongHTML(NHAN_BO_PHAN_PHU_TRACH));
+  });
+
+  it("dòng `phan-cong`: có `Bộ phận / Phụ trách`, tên bộ phận và người phụ trách", () => {
+    const html = renderToStaticMarkup(
+      <DanhSachNhatKy
+        dong={[dong({ action: "phan-cong", unit: "01JBOPHAN", assignee: "CB-00123" })]}
+        tenBoPhan={TB}
+        danhBa={DB}
+      />,
+    );
+    expect(html).toContain(nhuTrongHTML(NHAN_BO_PHAN_PHU_TRACH));
+    expect(html).toContain("VĂN PHÒNG ĐẢNG ỦY");
+    expect(html).toContain("Trần Thị B");
+    expect(html).toContain("Chuyển xử lý");
+  });
+
+  it("ghi chú: chữ được THOÁT (không HTML nào chạy), xuống dòng giữ bằng lớp CSS", () => {
+    const html = renderToStaticMarkup(
+      <DanhSachNhatKy
+        dong={[dong({ note: "Dòng 1\nDòng 2 <img src=x onerror=alert(1)>" })]}
+        tenBoPhan={TB}
+        danhBa={DB}
+      />,
+    );
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+    expect(html).toContain("Dòng 1\nDòng 2");
+    expect(html).toContain('class="ghi-chu-nhat-ky"');
+  });
+
+  it("mã nguồn nhật ký KHÔNG dùng `dangerouslySetInnerHTML`", () => {
+    const nguon = readFileSync(join(THU_MUC, "nhat-ky-phieu.tsx"), "utf-8");
+    // Chữ ấy được nhắc trong chú thích để nói vì sao không dùng; canh THUỘC TÍNH JSX.
+    expect(nguon).not.toMatch(/dangerouslySetInnerHTML\s*=/);
+  });
+
+  it("biểu mẫu ghi: nhãn gắn với ô, gợi ý, bộ đếm /2000, lời nhắc không ghi SĐT/CCCD", () => {
+    const html = renderToStaticMarkup(
+      <BieuMauGhiNhatKy
+        id="bm"
+        noiDung=""
+        datNoiDung={() => {}}
+        dangGui={false}
+        loi={null}
+        gui={() => {}}
+        huy={() => {}}
+      />,
+    );
+    expect(html).toContain('for="bm-noi-dung"');
+    expect(html).toContain('id="bm-noi-dung"');
+    expect(html).toContain(nhuTrongHTML(GOI_Y_GHI_NHAT_KY));
+    expect(html).toMatch(/0(<!-- -->)?\/(<!-- -->)?2000(<!-- -->)? ký tự/);
+    expect(html).toContain(nhuTrongHTML(NHAC_DU_LIEU_CA_NHAN));
+    // Trống thì nút lưu khoá.
+    expect(html.match(/<button type="submit"[^>]*>/)?.[0]).toContain("disabled");
+  });
+
+  it("biểu mẫu ghi: câu 403/400 của máy chủ ra NGUYÊN VĂN", () => {
+    const cau = "Bạn không được phân công phiếu này.";
+    const html = renderToStaticMarkup(
+      <BieuMauGhiNhatKy
+        id="bm"
+        noiDung="Đã gọi điện."
+        datNoiDung={() => {}}
+        dangGui={false}
+        loi={cau}
+        gui={() => {}}
+        huy={() => {}}
+      />,
+    );
+    expect(html).toContain(cau);
+    expect(html.match(/<button type="submit"[^>]*>/)?.[0]).not.toContain("disabled");
+  });
+});
+
+describe("ghi chú nội bộ trên sáu thao tác — ô nhập", () => {
+  it("ô có nhãn gắn đúng id, và nói rõ KHÔNG gửi người dân", () => {
+    const html = renderToStaticMarkup(<ONhapGhiChuNoiBo id="gc" giaTri="" datGiaTri={() => {}} />);
+    expect(html).toContain('for="gc"');
+    expect(html).toContain('id="gc"');
+    expect(html).toContain(nhuTrongHTML(NHAN_O_GHI_CHU_NOI_BO));
+    expect(NHAN_O_GHI_CHU_NOI_BO).toContain("không gửi người dân");
+  });
+
+  it("có mặt ở phân loại, chuyển xử lý, tiến trạng thái, đóng phiếu", () => {
+    const html = veChiTiet(congThaoTac(true, true, true), phieu({ status: "da-tiep-nhan" }));
+    expect(html).toContain('id="ghi-chu-phan-loai"');
+    expect(html).toContain('id="ghi-chu-phan-cong"');
+    expect(html).toContain('id="ghi-chu-tien"');
+    const dongP = veChiTiet(congThaoTac(false, false, true), phieu({ status: "cho-dan-xac-nhan" }));
+    expect(dongP).toContain('id="ghi-chu-dong"');
+  });
+
+  it("có mặt ở hai nhánh rẽ, TÁCH khỏi ô lý do người dân đọc", () => {
+    for (const loai of ["khong-tiep-nhan", "chuyen-cap-tren"] as const) {
+      const html = renderToStaticMarkup(
+        <BieuMauReNhanh loai={loai} dangGui={false} gui={() => {}} huy={() => {}} />,
+      );
+      expect(html, loai).toContain(`id="ghi-chu-${loai}"`);
+      expect(html, loai).toContain(`id="ly-do-${loai}"`);
+    }
+  });
+
+  it("ghi chú quá 2000 ký tự khoá nút gửi của nhánh rẽ, dù lý do hợp lệ", () => {
+    const html = renderToStaticMarkup(
+      <BieuMauReNhanh
+        loai="khong-tiep-nhan"
+        dangGui={false}
+        gui={() => {}}
+        huy={() => {}}
+        lyDoBanDau="Vượt thẩm quyền của xã."
+        ghiChuBanDau={"ệ".repeat(2001)}
+      />,
+    );
+    expect(html.match(/<button type="submit"[^>]*>/)?.[0]).toContain("disabled");
+  });
+});
+
+describe("Đóng phiếu — `has_citizen` thắng kênh khi có mặt", () => {
+  it("kênh công dân nhưng `has_citizen: false`: có biểu mẫu đóng ở `da-xu-ly`", () => {
+    const html = veChiTiet(
+      congThaoTac(false, false, true),
+      phieu({ status: "da-xu-ly", channel: "zalo-mini-app", has_citizen: false }),
+    );
+    expect(html).toContain(O_KET_QUA);
+  });
+
+  it("kênh nhập hộ nhưng `has_citizen: true`: KHÔNG có biểu mẫu đóng ở `da-xu-ly`", () => {
+    const html = veChiTiet(
+      congThaoTac(false, false, true),
+      phieu({ status: "da-xu-ly", channel: "can-bo-nhap-ho", has_citizen: true }),
+    );
+    expect(html).not.toContain(O_KET_QUA);
   });
 });

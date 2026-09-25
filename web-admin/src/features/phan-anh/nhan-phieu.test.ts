@@ -6,10 +6,18 @@ import {
   buocLuongChinh,
   buocReNhanh,
   CO_QUAN_TOI_DA,
+  coCongDanXacNhan,
   demKyTu,
   dongDuocTrenManHinh,
+  GHI_CHU_TOI_DA,
+  laDongPhanCong,
   loiCoQuan,
+  loiGhiChuNhatKy,
+  loiGhiChuNoiBo,
   loiLyDo,
+  NHAN_THAO_TAC_NHAT_KY,
+  nhanThaoTacNhatKy,
+  type MaThaoTacNhatKy,
   LY_DO_TOI_DA,
   LY_DO_TOI_THIEU,
   reNhanhDuoc,
@@ -412,5 +420,108 @@ describe("phần chưa dựng được — hai ô rẽ nhánh đã rời danh s�
   it("không còn mục nào về hai nhánh rẽ", () => {
     const tatCa = PHAN_CHUA_DUNG.map((x) => `${x.ten} ${x.viSao}`).join(" ");
     expect(tatCa).not.toMatch(/rẽ nhánh|Không tiếp nhận|Chuyển cấp trên/);
+  });
+});
+
+describe("`has_citizen` QUYẾT ĐỊNH khi có mặt; vắng thì quay về luật kênh", () => {
+  function p(status: string, channel: string, has_citizen?: boolean | null): petitions_phieuPhanAnhRa {
+    return { status, channel, has_citizen } as petitions_phieuPhanAnhRa;
+  }
+
+  it("cờ `false` thắng kênh công dân: `da-xu-ly` đóng được", () => {
+    // Phiếu `zalo-mini-app` mà không có tài khoản — máy chủ cho đóng, luật kênh cũ thì không.
+    for (const k of MOI_KENH) {
+      expect(coCongDanXacNhan(p("da-xu-ly", k, false)), k).toBe(false);
+      expect(dongDuocTrenManHinh(p("da-xu-ly", k, false)), k).toBe(true);
+    }
+  });
+
+  it("cờ `true` thắng kênh nhập hộ: `da-xu-ly` KHÔNG đóng được — phải chờ dân xác nhận", () => {
+    for (const k of MOI_KENH) {
+      expect(coCongDanXacNhan(p("da-xu-ly", k, true)), k).toBe(true);
+      expect(dongDuocTrenManHinh(p("da-xu-ly", k, true)), k).toBe(false);
+    }
+  });
+
+  it("cờ vắng (`undefined` hoặc `null`): luật kênh `can-bo-nhap-ho` như trước", () => {
+    for (const co of [undefined, null]) {
+      for (const k of MOI_KENH) {
+        expect(dongDuocTrenManHinh(p("da-xu-ly", k, co)), `${k}/${co}`).toBe(k === "can-bo-nhap-ho");
+      }
+    }
+  });
+
+  it("cờ không mở điểm đóng nào khác: trạng thái khác vẫn không đóng được", () => {
+    for (const ma of MOI_TRANG_THAI.filter((m) => m !== "cho-dan-xac-nhan" && m !== "da-xu-ly")) {
+      expect(dongDuocTrenManHinh(p(ma, "zalo-mini-app", false)), ma).toBe(false);
+    }
+  });
+});
+
+describe("nhật ký xử lý — nhãn bảy mã thao tác", () => {
+  /** Danh sách đóng của máy chủ, gõ lại từ hợp đồng — KHÔNG sinh từ bảng nhãn đang kiểm. */
+  const BAY_MA = [
+    "phan-loai",
+    "phan-cong",
+    "chuyen-trang-thai",
+    "dong-phieu",
+    "khong-tiep-nhan",
+    "chuyen-cap-tren",
+    "ghi-chu",
+  ] as const satisfies readonly MaThaoTacNhatKy[];
+
+  // Mức KIỂU: hợp mọc thêm một mã mà danh sách trên không có → `tsc` đỏ tại đây.
+  type DuMa = Exclude<MaThaoTacNhatKy, (typeof BAY_MA)[number]> extends never ? true : never;
+  const _duMa: DuMa = true;
+  void _duMa;
+
+  it("bảng nhãn có ĐÚNG bảy khoá, không hơn", () => {
+    expect(Object.keys(NHAN_THAO_TAC_NHAT_KY).sort()).toEqual([...BAY_MA].sort());
+  });
+
+  it("nhãn nguyên văn chuyên gia nghiệp vụ chốt", () => {
+    expect(BAY_MA.map(nhanThaoTacNhatKy)).toEqual([
+      "Phân loại",
+      "Chuyển xử lý",
+      "Chuyển trạng thái",
+      "Đóng phiếu",
+      "Không tiếp nhận",
+      "Chuyển cấp trên",
+      "Ghi chú",
+    ]);
+  });
+
+  it("mã lạ: hiện nguyên mã và NÓI RA là chưa có nhãn, không đoán", () => {
+    expect(nhanThaoTacNhatKy("mo-lai")).toBe("mo-lai (mã thao tác chưa có nhãn trên màn hình này)");
+  });
+
+  it("chỉ dòng `phan-cong` mang bộ phận / phụ trách", () => {
+    for (const ma of BAY_MA) expect(laDongPhanCong(ma), ma).toBe(ma === "phan-cong");
+  });
+});
+
+describe("giới hạn ghi chú — 2000 ký tự của máy chủ", () => {
+  it("ô nhật ký: BẮT BUỘC có chữ; 2000 được, 2001 không", () => {
+    expect(GHI_CHU_TOI_DA).toBe(2000);
+    expect(loiGhiChuNhatKy("")).not.toBeNull();
+    expect(loiGhiChuNhatKy("  \n ")).not.toBeNull();
+    expect(loiGhiChuNhatKy("ệ".repeat(2000))).toBeNull();
+    expect(loiGhiChuNhatKy("ệ".repeat(2001))).not.toBeNull();
+  });
+
+  it("ghi chú nội bộ của sáu thao tác: TRỐNG là hợp lệ; 2001 không", () => {
+    expect(loiGhiChuNoiBo("")).toBeNull();
+    expect(loiGhiChuNoiBo("ệ".repeat(2000))).toBeNull();
+    expect(loiGhiChuNoiBo("ệ".repeat(2001))).not.toBeNull();
+  });
+});
+
+describe("phần chưa dựng được — nhật ký xử lý đã rời danh sách", () => {
+  it("không còn mục nào về nhật ký, còn mọi mục khác vẫn nguyên", () => {
+    const tatCa = PHAN_CHUA_DUNG.map((x) => `${x.ten} ${x.viSao}`).join(" ");
+    expect(tatCa).not.toMatch(/Nhật ký xử lý|nhat_ky_phan_anh/);
+    // Chín mục còn lại (mười trừ một) — bỏ nhầm một mục khác cùng lúc là đỏ ở đây.
+    expect(PHAN_CHUA_DUNG.length).toBe(9);
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh trước / sau"))).toBe(true);
   });
 });

@@ -448,22 +448,32 @@ export const CANH_BAO_RE_NHANH =
   "đọc được lý do này khi tra cứu phiếu của mình.";
 
 /**
+ * Phiếu có tài khoản công dân nào đứng sau để XÁC NHẬN không.
+ *
+ * `has_citizen` (thêm 26/09/2026) là đúng điều kiện máy chủ dùng — `cong_dan_id` khác rỗng — nói
+ * ra dưới dạng một cờ, không mang danh tính. Có cờ thì cờ QUYẾT ĐỊNH, kể cả khi nó trái với kênh:
+ * một phiếu `zalo-mini-app` mà không có tài khoản là chuyện có thật, và máy chủ cho đóng nó ở
+ * `da-xu-ly`.
+ *
+ * CỜ VẮNG (`undefined`/`null` — máy chủ cũ, hay tuyến chưa trả) THÌ QUAY VỀ LUẬT KÊNH CŨ: kênh
+ * `can-bo-nhap-ho` là phiếu cán bộ vào sổ thay dân, nên không có công dân. Sai lệch của luật ấy chỉ
+ * theo một chiều an toàn: thiếu nút mà máy chủ vẫn cho, không bao giờ có nút máy chủ từ chối.
+ */
+export function coCongDanXacNhan(phieu: petitions_phieuPhanAnhRa): boolean {
+  if (typeof phieu.has_citizen === "boolean") return phieu.has_citizen;
+  return phieu.channel !== "can-bo-nhap-ho";
+}
+
+/**
  * Nút `Đóng phiếu` có nghĩa ở phiếu này không — HAI ĐIỂM, cùng hai điểm `domain.DongDuoc` của máy
- * chủ, nhưng điểm thứ hai được SUY RA TỪ KÊNH chứ không từ đúng điều kiện máy chủ dùng:
+ * chủ:
  *
- *   cho-dan-xac-nhan                         luồng thường
- *   da-xu-ly  VÀ  kênh `can-bo-nhap-ho`      phiếu không có công dân nào để xác nhận
- *
- * ⚠ ĐIỀU KIỆN THẬT CỦA MÁY CHỦ LÀ `cong_dan_id` RỖNG, và hợp đồng KHÔNG trả trường ấy hay cờ nào
- * tương đương (`petitions_phieuPhanAnhRa`). Kênh `can-bo-nhap-ho` là phiếu cán bộ vào sổ thay dân,
- * nên không có tài khoản công dân — đó là tín hiệu DUY NHẤT màn hình đọc được. Sai lệch nếu có
- * chỉ theo một chiều an toàn: một phiếu kênh khác mà không có công dân sẽ THIẾU nút ở `da-xu-ly`
- * (máy chủ vẫn cho đóng), chứ không bao giờ có nút mà máy chủ từ chối vì lý do này. Đã báo về để
- * hợp đồng trả một cờ.
+ *   cho-dan-xac-nhan                                 luồng thường
+ *   da-xu-ly  VÀ  không có công dân để xác nhận       xem `coCongDanXacNhan`
  */
 export function dongDuocTrenManHinh(phieu: petitions_phieuPhanAnhRa): boolean {
   if (phieu.status === "cho-dan-xac-nhan") return true;
-  return phieu.status === "da-xu-ly" && phieu.channel === "can-bo-nhap-ho";
+  return phieu.status === "da-xu-ly" && !coCongDanXacNhan(phieu);
 }
 
 /** Phiếu đã đóng hoặc đã rẽ nhánh thì không còn bước kế tiếp trên luồng chính. */
@@ -579,6 +589,82 @@ export const PHAM_VI_TOAN_XA = "Toàn xã";
 export const PHAM_VI_GIAO_CHO_TOI = "Giao cho tôi";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
+ * NHẬT KÝ XỬ LÝ (§8.7) và GHI CHÚ NỘI BỘ của sáu thao tác
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Bảy mã thao tác của một dòng nhật ký — danh sách ĐÓNG của `service-petitions`.
+ *
+ * Hợp đồng khai `action` là `string` trơn (không `enum`), cùng lỗ hổng với `NHAN_TRANG_THAI` ở trên.
+ * `Record<MaThaoTacNhatKy, string>` bên dưới vì thế là chỗ canh ở mức KIỂU: thêm một mã vào hợp này
+ * mà quên nhãn là `tsc` đỏ. Mã lạ từ máy chủ thì rơi xuống nhánh dự phòng, nói rõ mã chưa có nhãn.
+ */
+export type MaThaoTacNhatKy =
+  | "phan-loai"
+  | "phan-cong"
+  | "chuyen-trang-thai"
+  | "dong-phieu"
+  | "khong-tiep-nhan"
+  | "chuyen-cap-tren"
+  | "ghi-chu";
+
+/** Nhãn nguyên văn do chuyên gia nghiệp vụ chốt. `phan-cong` hiện là "Chuyển xử lý", như nút §8.5. */
+export const NHAN_THAO_TAC_NHAT_KY: Readonly<Record<MaThaoTacNhatKy, string>> = {
+  "phan-loai": "Phân loại",
+  "phan-cong": "Chuyển xử lý",
+  "chuyen-trang-thai": "Chuyển trạng thái",
+  "dong-phieu": "Đóng phiếu",
+  "khong-tiep-nhan": "Không tiếp nhận",
+  "chuyen-cap-tren": "Chuyển cấp trên",
+  "ghi-chu": "Ghi chú",
+};
+
+export function nhanThaoTacNhatKy(ma: string): string {
+  return traNhan(NHAN_THAO_TAC_NHAT_KY, ma, "thao tác");
+}
+
+/** Chỉ dòng `phan-cong` mang bộ phận và người phụ trách; dòng khác hai trường ấy rỗng. */
+export function laDongPhanCong(ma: string): boolean {
+  return ma === "phan-cong";
+}
+
+/** Giới hạn của máy chủ cho một ghi chú nhật ký, và cho `note` của sáu thao tác. */
+export const GHI_CHU_TOI_DA = 2000;
+
+/** Câu lỗi của ô ghi nhật ký (BẮT BUỘC có chữ), hoặc `null` khi hợp lệ. */
+export function loiGhiChuNhatKy(ghiChu: string): string | null {
+  const n = demKyTu(ghiChu);
+  if (n === 0) return "Cần ghi nội dung nhật ký.";
+  if (n > GHI_CHU_TOI_DA) return `Nhật ký không được quá ${GHI_CHU_TOI_DA} ký tự (hiện có ${n}).`;
+  return null;
+}
+
+/** Câu lỗi của ô ghi chú nội bộ TUỲ CHỌN của sáu thao tác, hoặc `null` (trống là hợp lệ). */
+export function loiGhiChuNoiBo(ghiChu: string): string | null {
+  const n = demKyTu(ghiChu);
+  return n > GHI_CHU_TOI_DA
+    ? `Ghi chú nội bộ không được quá ${GHI_CHU_TOI_DA} ký tự (hiện có ${n}).`
+    : null;
+}
+
+export const TIEU_DE_NHAT_KY = "Nhật ký xử lý";
+export const DANG_TAI_NHAT_KY = "Đang tải nhật ký xử lý…";
+/** Phiếu vào sổ trước 26/09/2026 không có dòng nào — theo thiết kế, không phải lỗi. */
+export const NHAT_KY_RONG =
+  "Chưa có dòng nhật ký nào. Nhật ký bắt đầu ghi từ ngày 26/09/2026.";
+export const NHAN_XEM_THEM_NHAT_KY = "Xem thêm";
+export const NHAN_NUT_GHI_NHAT_KY = "Ghi nhật ký";
+export const NHAN_O_GHI_NHAT_KY = "Nội dung nhật ký";
+export const GOI_Y_GHI_NHAT_KY = "Đã làm gì, ai làm, còn vướng gì…";
+/** Luật 3: nhật ký là bản ghi lưu trữ, không phải chỗ chép số điện thoại hay số CCCD. */
+export const NHAC_DU_LIEU_CA_NHAN =
+  "Không ghi số điện thoại, số CCCD của người dân vào nhật ký.";
+export const NHAN_BO_PHAN_PHU_TRACH = "Bộ phận / Phụ trách";
+export const NHAN_NGUOI_THUC_HIEN = "Người thực hiện";
+
+export const NHAN_O_GHI_CHU_NOI_BO = "Ghi chú nội bộ (không gửi người dân)";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
  *
  * Không giấu trong chú thích, không vẽ một nút chắc chắn hỏng. Cùng khuôn `PHAN_CHUA_DUNG` của màn
@@ -599,14 +685,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "một ô ảnh trống: quy tắc §14.2 *“không đóng phiếu được khi thiếu ảnh sau xử lý”* hôm nay " +
       "KHÔNG được cưỡng chế ở đâu cả, vì cả bảng ảnh lẫn cờ `bat_buoc_anh_nghiem_thu` của ADR 0008 " +
       "đều chưa có. Nút Đóng phiếu bên dưới vì thế đóng được một phiếu chưa có ảnh nghiệm thu.",
-  },
-  {
-    ten: "Nhật ký xử lý, dòng thời gian (§8.7)",
-    viSao:
-      "Bảng `nhat_ky_phan_anh` chưa có và không tuyến nào đọc hay ghi nó (cùng migration, dòng " +
-      "34-36). Đây là bản ghi NGHIỆP VỤ cán bộ đọc, khác `audit_log` — vết kiểm toán không hiện ra " +
-      "cho xã. Dựng ô nhập `Đã làm gì, ai làm, còn vướng gì…` mà không có chỗ lưu là mời cán bộ gõ " +
-      "vào một cái hộp rồi mất.",
   },
   {
     ten: "Bốn thẻ KPI (§3), tab Bản đồ nhiệt (§9), tab Báo cáo (§10)",

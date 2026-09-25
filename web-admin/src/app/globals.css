@@ -1167,6 +1167,14 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* Ghi chú trong nhật ký xử lý phiếu là chữ cán bộ gõ, có xuống dòng. Lớp riêng chứ không mượn
+ * `.noi-dung-phan-anh`: đó là lời của NGƯỜI DÂN, và hai thứ sẽ được trình bày khác nhau vào ngày
+ * một trong hai đổi. Cùng hai thuộc tính, cùng lý do với khối trên. */
+.ghi-chu-nhat-ky {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* Ba bảng lịch là ba khối riêng, cách nhau rõ: chúng nói ba điều khác hẳn nhau — giờ làm, ngày
  * đóng cửa, ngày mở cửa ngoại lệ — và đọc liền nhau thì thành một bảng dài khó phân biệt. */
 .nhom-lich {
