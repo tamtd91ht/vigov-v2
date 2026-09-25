@@ -56,6 +56,19 @@ pipeline {
     stage('Kiểm công cụ') {
       steps {
         script {
+          // LƯỢT ĐẦU SAU KHI ĐỔI `parameters {}`: Jenkins chỉ HỌC danh sách tham số ở lượt ấy, nên
+          // lượt ấy chạy với mọi `params.*` là null — và `NS` thành `vigov-null`. Dừng ở đây, trước
+          // mọi lệnh kubectl, thay vì để shell đỏ vì biến chưa đặt (lượt #… ngày 25/09/2026).
+          if (params.HANH_DONG == null || params.MT == null) {
+            error('Jenkins vừa học tham số mới của job — lượt này không có tham số nào.\n' +
+                  'Bấm lại bằng "Build with Parameters". Cụm không bị đụng tới.')
+          }
+          // Đưa tham số vào môi trường của shell TƯỜNG MINH, không dựa vào việc Jenkins tự làm.
+          env.HANH_DONG = params.HANH_DONG
+          env.MT = params.MT
+          env.DICH_VU = params.DICH_VU
+          env.NS = "vigov-${params.MT}"
+
           env.NGUOI_BAM = nguoiBam()
           if (!env.NGUOI_BAM) {
             error('KHÔNG XÁC ĐỊNH ĐƯỢC AI BẤM LƯỢT NÀY — dừng. Lịch sử build của job này là nhật ký ' +
