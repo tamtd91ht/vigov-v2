@@ -13,6 +13,8 @@
  * | logo, map centre, SLA, catalogues  | from the platform service     |
  */
 
+import { goiNoiBo } from "./may-chu/goi-noi-bo";
+
 import type { identity_get_communes_current, identity_thongTinXa } from "./api/schema.gen";
 
 export type TenantConfig = {
@@ -97,52 +99,58 @@ export type TenantConfig = {
  * `tenant.server.ts`. The cost is one extra HTTP call per page render, on the same host, to
  * a route that is a single registry lookup — and that is the cheap side of this trade.
  *
- * THE ASSUMPTION THIS MAKES ABOUT DEPLOYMENT, stated rather than discovered later: the server
- * process must be able to reach the commune's own public host over TLS. That holds for the
- * documented topology — the Go service serves `/api` on the same host, in front of Next
- * (`src/proxy.ts`) — but it is a deployment fact, not a code fact. If an installation cannot
- * call its own public hostname from inside (split-horizon DNS, an internal certificate), the
- * fix is an INTERNAL API ORIGIN supplied as a platform-wide environment variable, read
- * server-side only. It would be a platform constant, not a per-commune value, so rule 8
- * invariant 5 allows it — and `NEXT_PUBLIC_` would still be wrong, because that ships into the
- * bundle. It is not introduced here because nothing measured says it is needed, and because an
- * unused variable in a deployment is a variable nobody keeps correct.
+ * WHERE THE CALL GOES (decided 25/09/2026; supersedes the earlier "call the commune's own
+ * public host over TLS"). The cluster sends every path — `/api` included — to THIS app, so the
+ * public host leads straight back here, and in production that loop answered 307 → throw → 500
+ * on `/dang-nhap`. The call now goes to identity's INTERNAL origin (`IDENTITY_HTTP_ADDR`, a
+ * platform constant, `lib/may-chu/goc-dich-vu.ts`) with the COMMUNE'S host in the `Host`
+ * header, because the Go edge resolves the commune from `r.Host` and nothing else
+ * (`core/httpx/edge.go:24`). That is why this uses `node:http` and not `fetch`: undici
+ * overwrites `Host` with the URL's host (`lib/may-chu/goi-noi-bo.ts`), which would ask identity
+ * about "the internal service name" — 404 on every page.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 export async function resolveTenant(host: string): Promise<TenantConfig | null> {
   const goc = gocAPI(host);
-  // A Host this application cannot even parse is not a commune. Refusing here is what stops
-  // the request's own Host from steering the fetch below at somewhere else entirely — the
-  // Host is a security input of the same weight as the token in a system told apart by domain
-  // (`kb/00-foundation/multi-tenant-model.md`, §Ranh giới tin cậy).
+  // A Host this application cannot even parse is not a commune. The connection target no
+  // longer comes from it (it is the internal origin), but the Host header sent below still
+  // does — and the Host is a security input of the same weight as the token in a system told
+  // apart by domain (`kb/00-foundation/multi-tenant-model.md`, §Ranh giới tin cậy). Only a
+  // plain, normalised host name goes on the wire.
   if (goc === null) return null;
 
   const duongDan: identity_get_communes_current["duongDan"] = "/api/v1/communes/current";
-  const phanHoi = await fetch(new URL(duongDan, goc), {
-    method: "GET",
-    // No credentials and no headers of any kind. The route is public, so there is nothing to
-    // authorise; and no `tenant_id` travels anywhere — the commune IS the host being asked.
-    cache: "no-store",
-    // A redirect here would be a way to make the server read some other commune's
-    // configuration and print it under this host. Refuse rather than follow.
-    redirect: "error",
-  });
+  // No credentials and no other headers. The route is public, so there is nothing to
+  // authorise; and no `tenant_id` travels anywhere — the commune IS the Host being asked.
+  // No cache either: `node:http` has none, and no process-level one is added (see above).
+  const phanHoi = await goiNoiBo("identity", { method: "GET", duongDan, host: goc.host });
+  const status = phanHoi.statusCode ?? 0;
 
   // 404 IS THE ONLY "NO". The edge answers it identically for a host that was never a commune
   // and for one that has been deactivated, on purpose: telling them apart lets anyone probing
   // domains enumerate which communes exist (`core/httpx/edge.go`). This side does not try to
   // tell them apart either.
-  if (phanHoi.status === 404) return null;
+  if (status === 404) {
+    phanHoi.resume();
+    return null;
+  }
 
   // ANYTHING ELSE IS A FAILURE TO ANSWER, NOT AN ANSWER OF "NO" — so it throws rather than
   // returning `null`. Returning `null` would render the 404 page, telling an operator during
   // an outage that a commune which does exist does not. Throwing fails closed just the same
   // (no page, no fallback commune) while staying honest about which of the two happened.
-  if (phanHoi.status !== 200) {
-    throw new Error(`không đọc được cấu hình xã: máy chủ trả ${phanHoi.status}`);
+  //
+  // A 3xx LANDS HERE TOO, and that is the point: `node:http` never follows redirects, and a
+  // redirect followed would be a way to make the server read some other commune's
+  // configuration and print it under this host.
+  if (status !== 200) {
+    phanHoi.resume();
+    throw new Error(`không đọc được cấu hình xã: máy chủ trả ${status}`);
   }
 
-  const than = (await phanHoi.json()) as identity_thongTinXa;
+  const khoi: Buffer[] = [];
+  for await (const k of phanHoi) khoi.push(k as Buffer);
+  const than = JSON.parse(Buffer.concat(khoi).toString("utf8")) as identity_thongTinXa;
   return {
     host: than.host,
     displayName: than.name,
@@ -152,13 +160,12 @@ export async function resolveTenant(host: string): Promise<TenantConfig | null> 
 }
 
 /**
- * The origin to ask, built from the request's own Host. `null` when the Host is not a plain
- * hostname — which is refused, not repaired.
+ * The request's own Host, normalised and validated; its `.host` is what goes into the `Host`
+ * header of the call to identity. `null` when the Host is not a plain hostname — which is
+ * refused, not repaired.
  *
- * WHY `https` IS FIXED AND NOT DERIVED FROM ANYTHING: the session cookie is `secure`
- * (`lib/session.ts`), so an installation served over plain HTTP could not hold a staff session
- * in the first place. Reading a scheme from a forwarded header instead would mean a client
- * header deciding how this server makes its next call.
+ * The `https://` prefix is only a vehicle for the parser: the connection itself goes to
+ * `IDENTITY_HTTP_ADDR`, never to this URL.
  *
  * WHY THE `URL` PARSER RATHER THAN A HAND-WRITTEN CHECK: the comparison below rejects anything
  * the parser reads as more than a host — a path (`xa.example/../other`), user info

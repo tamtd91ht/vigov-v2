@@ -8,12 +8,18 @@ import nextTypescript from "eslint-config-next/typescript";
  * "no such directory: ./lint" — tức là từ lúc nâng lên 16, lint của ứng dụng này không hề chạy,
  * mà vẫn xanh vì không ai gọi. Ở đây gọi thẳng `eslint` với bộ quy tắc của Next.
  *
- * `schema.gen.ts` nằm ngoài phạm vi lint: nó là tệp SINH RA, sửa tay sẽ mất ở lần sinh sau, nên
+ * `schema.gen.ts` và `dinh-tuyen.gen.ts` nằm ngoài phạm vi lint: chúng là tệp SINH RA, sửa tay sẽ mất ở lần sinh sau, nên
  * một cảnh báo lint trên nó là một cảnh báo không ai được phép sửa (luật 9, bất biến 8).
  */
 const cauHinh = [
   {
-    ignores: [".next/**", "node_modules/**", "next-env.d.ts", "src/lib/api/schema.gen.ts"],
+    ignores: [
+      ".next/**",
+      "node_modules/**",
+      "next-env.d.ts",
+      "src/lib/api/schema.gen.ts",
+      "src/lib/api/dinh-tuyen.gen.ts",
+    ],
   },
   ...nextVitals,
   ...nextTypescript,

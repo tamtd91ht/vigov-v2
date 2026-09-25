@@ -92,8 +92,9 @@ describe("ranh giới của mã nguồn web quản trị", () => {
 
   it("không có biến NEXT_PUBLIC_ nào", () => {
     // Biến tiền tố công khai được thay lúc BUILD và nằm luôn trong bundle. Một bundle không thể
-    // mang tên của 300 xã (luật 8, bất biến 4; luật 1, bất biến 10). Hiện ứng dụng này không
-    // cần biến nào cả: API ở cùng host nên đường dẫn tương đối là đủ.
+    // mang tên của 300 xã (luật 8, bất biến 4; luật 1, bất biến 10). Trình duyệt không cần biến
+    // nào: nó gọi `/api/v1/…` tương đối trên chính host của xã. Năm biến `*_HTTP_ADDR` mà cổng
+    // chuyển tiếp đọc chỉ sống ở máy chủ (`lib/may-chu/goc-dich-vu.ts`, `server-only`).
     const mau = new RegExp(["NEXT", "PUBLIC"].join("_") + "_");
     expect(viPham(mau)).toEqual([]);
   });

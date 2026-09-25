@@ -47,7 +47,17 @@ export default function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Mọi đường trừ tài nguyên tĩnh của Next và favicon. `/api` KHÔNG nằm trong ứng dụng này —
-  // API do dịch vụ Go phục vụ trên cùng host, phía trước Next, nên nó không đi qua đây.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Mọi đường trừ tài nguyên tĩnh của Next, favicon, `/api/` và `/healthz`.
+  //
+  // `/api/` ĐI QUA ỨNG DỤNG NÀY (app/api/v1/[...duong]/route.ts chuyển tiếp tới dịch vụ Go sở
+  // hữu tuyến) nhưng CỐ Ý không đi qua middleware: dịch vụ Go tự xác thực và tự kiểm quyền trên
+  // TỪNG lời gọi, nên ở đây không có gì để chặn. Chuyển hướng một lời gọi API thiếu cookie về
+  // `/dang-nhap` là sai — máy khách chờ một 401 JSON, và chính cú 307 ấy từng làm
+  // `resolveTenant` ném lỗi, kéo `/dang-nhap` thành 500. Loại ở `matcher` chứ không `return`
+  // sớm trong hàm, vì đường nào khớp middleware thì Next chép thân yêu cầu và CẮT nó ở
+  // `proxyClientMaxBodySize`, mặc định 10MB (next/dist/server/body-streams.js:93-105) — tệp
+  // đính kèm tới 25MB sẽ tới dịch vụ Go thiếu đuôi.
+  //
+  // `/healthz` là đầu dò k8s, gọi bằng IP pod: không cookie, không xã nào.
+  matcher: ["/((?!api/|healthz$|_next/static|_next/image|favicon.ico).*)"],
 };
