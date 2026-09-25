@@ -1,0 +1,106 @@
+-- 0014 — the index behind the citizen's own list, `GET /api/v1/my-citizen-reports` ("Phản ánh của
+-- tôi", commit 49b1e59).
+--
+-- THE QUERY IT SERVES is store.PhieuPhanAnhStore.DanhSachCuaCongDan
+-- (internal/store/phieu_phan_anh.go:217), as core/store.QueryPage assembles it:
+--
+--   WHERE tenant_id = $1 AND cong_dan_id = $2 AND deleted_at IS NULL [AND trang_thai = $3]
+--         [AND (goc_dem_han, id) < ($x, $y)]
+--   ORDER BY goc_dem_han DESC, id DESC LIMIT $n
+--
+-- NO EXISTING INDEX SERVES IT. The indexes on `phieu_phan_anh` are 0004:394 (tenant_id,
+-- vao_so_luc), 0004:400 (tenant_id, han_xu_ly_xong), 0004:406 (tenant_id, han_tiep_nhan),
+-- 0005:115 (tenant_id, tao_luc, id) and 0005:121 (tenant_id, han_phan_loai); 0011 adds none. None
+-- carries `cong_dan_id`, so today every page of one citizen's list reads the WHOLE commune's live
+-- register and sorts it — a cost that grows with the commune, paid by every citizen who opens the
+-- app.
+--
+-- WHY THESE COLUMNS, IN THIS ORDER:
+--
+--   tenant_id            first, like every index in this system (rule 1). It is also the hash
+--                        partition key, so the planner prunes to one partition before the index.
+--   cong_dan_id          the equality that narrows a commune's register to one citizen.
+--   goc_dem_han DESC,    the sort column and the tie-break, in the direction and order QueryPage
+--   id DESC              writes them, so the keyset comparison `(goc_dem_han, id) < (...)` is a
+--                        range scan that stops after LIMIT rows — no sort node, no OFFSET.
+--
+-- `trang_thai` IS DELIBERATELY NOT A KEY COLUMN. It is an optional filter; one citizen holds a
+-- handful of petitions, and filtering those in the heap costs nothing. Putting it before
+-- `goc_dem_han` would make the index useless for the unfiltered list, which is the default screen.
+--
+-- THE PARTIAL PREDICATE IS `deleted_at IS NULL`, TEXT-IDENTICAL TO THE STORE'S LIVE-ROW PREDICATE
+-- (phieu_phan_anh.go:226). The planner only uses a partial index when it can prove the query's
+-- WHERE implies the index's; an exact match is the one form that proof never misses. If the store
+-- ever changes that predicate, this index silently stops being used — results stay correct, only
+-- the plan degrades.
+--
+-- WHY A NEW FILE AND NOT AN EDIT OF 0004/0005: core/migrate compares the checksum of every applied
+-- file at startup. Editing an applied file either stops the service (ErrChecksumLech) or leaves two
+-- databases claiming one schema version while holding two schemas.
+--
+-- ---------------------------------------------------------------------------
+-- THE LOCK THIS TAKES, AND WHY IT IS ACCEPTABLE — read before applying to a large register.
+--
+-- PLAIN `CREATE INDEX`, the convention of 0007:261, 0012:372-377 and every migration in this
+-- repository, and the only form available here:
+--
+--   * CONCURRENTLY is refused on a partitioned parent (PostgreSQL builds a parent index
+--     non-concurrently only), and
+--   * core/migrate runs each file in ONE transaction with its progress row
+--     (core/migrate/migrate.go:32-33, 46-49), where CONCURRENTLY is refused anyway.
+--
+-- The statement on the parent cascades to all 32 partitions and to every partition attached later.
+-- It takes a SHARE lock on the parent and on each partition: READS PROCEED, WRITES WAIT — citizen
+-- intake, staff transitions and the petition logbook's same-transaction writes all queue behind it.
+-- Because the whole file is one transaction, those locks are held until COMMIT, i.e. for the sum of
+-- the 32 builds, not for one.
+--
+-- ACCEPTABLE AT CURRENT SIZES: the register has been live for one commune only since 76ea0e9, so it
+-- holds on the order of hundreds to low thousands of rows; a B-tree build over that is milliseconds,
+-- and a write that waits milliseconds is invisible to the citizen. THIS IS AN ASSUMPTION ABOUT
+-- PRODUCTION, NOT A MEASUREMENT. The operator applying it checks first:
+--
+--   SELECT count(*), pg_size_pretty(pg_total_relation_size('phieu_phan_anh')) FROM phieu_phan_anh;
+--
+-- If that ever reads in the millions, this file is the wrong tool: the right one is per-partition
+-- `CREATE INDEX CONCURRENTLY` outside core/migrate, then `CREATE INDEX ... ON ONLY` the parent and
+-- `ALTER INDEX ... ATTACH PARTITION` — a procedure run by a person, not at service start-up.
+--
+-- ---------------------------------------------------------------------------
+-- THE FIVE MIGRATION QUESTIONS, answered before the SQL.
+--
+--   1. HOW MANY ROWS PER COMMUNE: zero written. No row is inserted, updated or deleted in any
+--      commune; the index READS every live row of `phieu_phan_anh` once, to build.
+--      PER COMMUNE: an index is a schema object over the parent table, not commune data, so it
+--      cannot be applied commune by commune and does not need to be — there is no per-commune
+--      progress to record because there is no per-commune write. It covers every commune's
+--      partition in one statement, and every commune onboarded later gets it automatically.
+--   2. IF IT STOPS HALF-WAY: it cannot land half-applied. One file, one transaction, with the
+--      progress row written inside it; a failed build rolls back every partition's index. The
+--      statement is IF NOT EXISTS, so a retry costs nothing.
+--   3. HOW IT IS REVERSED: see REVERSAL at the bottom. Nothing is lost by reversing.
+--   4. WHICH READ PATHS CHANGE MEANING WHILE IT IS HALF-APPLIED: none — an index changes PLANS,
+--      never RESULTS, and it cannot be seen half-built outside its own transaction. The one
+--      observable effect while it runs is the write wait described above; reads, including the
+--      citizen list itself, keep answering from the existing plan until COMMIT.
+--   5. RETENTION: `phieu_phan_anh` is an ARCHIVAL RECORD (rule 7). This file touches no row, no
+--      column, no constraint and no trigger of it; `ho_so_luu_tru_bat_bien` (0004) is unchanged.
+-- ---------------------------------------------------------------------------
+
+CREATE INDEX IF NOT EXISTS phieu_phan_anh_cua_cong_dan
+    ON phieu_phan_anh (tenant_id, cong_dan_id, goc_dem_han DESC, id DESC)
+    WHERE deleted_at IS NULL;
+
+-- ---------------------------------------------------------------------------
+-- REVERSAL (migration question 3). Complete and lossless at any time — an index holds no record,
+-- only a copy of columns that stay in the table. In ONE transaction:
+--
+--   DROP INDEX IF EXISTS phieu_phan_anh_cua_cong_dan;   (the 32 partition indexes go with it)
+--
+-- and remove this file's row from `schema_migration` in the same transaction, otherwise the runner
+-- still believes the index is in place. DROP INDEX on a partitioned parent is not CONCURRENTLY
+-- either: it takes an ACCESS EXCLUSIVE lock on the parent and every partition for the drop, which is
+-- instantaneous. core/migrate has no automatic rollback (ADR 0013); this is done by a person.
+--
+-- The consequence of reversing is only a slower citizen list, never a wrong one.
+-- ---------------------------------------------------------------------------
