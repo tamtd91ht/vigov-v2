@@ -6,12 +6,12 @@
 # chính nó lúc khởi động. `reporting` thì chưa: 0 tuyến, nên nó KHÔNG có manifest, và đó là
 # một lựa chọn đã cân nhắc chứ không phải chỗ sót — xem `deploy/README.md`.
 #
-# NÓ KHÔNG PHỤC VỤ gRPC. `service-comms/cmd/server/main.go:133` chỉ mở một listener HTTP.
+# NÓ KHÔNG PHỤC VỤ gRPC. `service-comms/cmd/server/main.go:179` chỉ mở một listener HTTP.
 # Vì thế không có cổng 9090 và không có nhãn `vigov.vn/grpc` — khai một cổng không ai nghe là
 # mời người sau tin rằng có đường gọi tới nó.
 #
 # NÓ GỌI RA hai dịch vụ qua gRPC: `platform` (Host → xã) và `identity` (cookie phiên →
-# principal cán bộ, `main.go:112`). Thiếu địa chỉ của một trong hai thì tiến trình TỪ CHỐI
+# principal cán bộ, `main.go:117`). Thiếu địa chỉ của một trong hai thì tiến trình TỪ CHỐI
 # khởi động — fail closed, có tên — chứ không phục vụ với một nửa chuỗi kiểm.
 #
 # ⚠ HÔM NAY CHƯA CÓ ĐƯỜNG VÀO TỪ INTERNET, có chủ ý. `deploy/overlays/*/ingress.yaml` vẫn
@@ -90,17 +90,18 @@ spec:
             - { name: rest, containerPort: 8080 }
 
           env:
-            # BẮT BUỘC PHẢI CÓ DÒNG NÀY, khác `platform` và `identity` — chúng đọc
-            # `cfg.ListenAddr` vốn mặc định `:8080`, còn dịch vụ này gọi
-            # `cfg.ListenAddrHoac(":8087")` (main.go:131) nên KHÔNG đặt biến là tiến trình nghe
-            # ở 8087. Khi ấy hai thứ gãy cùng lúc và cả hai đều im: probe httpGet cổng 8080
-            # không ai trả lời, và NetworkPolicy quy tắc 2 chỉ mở 8080/3000 từ ingress.
+            # KHÔNG bắt buộc từ 2026-09-25: mọi dịch vụ Go đọc `cfg.ListenAddr`, mặc định `:8080`
+            # khi biến rỗng (`core/config/config.go`, quyết định chủ sản phẩm — đảo lại commit
+            # 0645284 từng cho mỗi dịch vụ một cổng mặc định riêng). Vẫn ghim tường minh để probe
+            # httpGet 8080, `containerPort` và NetworkPolicy quy tắc 2 (chỉ mở 8080/3000 từ ingress)
+            # cùng khớp với tiến trình ngay cả khi mặc định trong mã có lúc đổi. Đổi giá trị này
+            # thì phải đổi cả ba thứ ấy cùng lúc.
             - { name: LISTEN_ADDR, value: ":8080" }
             # Bắt buộc. `platformclient.Dial` từ chối khởi động khi rỗng — fail closed, có tên
-            # (`core/platformclient/directory.go:66`). Thiếu nó thì mọi xã trả 404.
+            # (`core/platformclient/directory.go:77`). Thiếu nó thì mọi xã trả 404.
             - { name: PLATFORM_GRPC_ADDR, value: platform:9090 }
             # Bắt buộc, cùng lý do: đây là đường DUY NHẤT để cookie phiên thành principal cán
-            # bộ (`main.go:112`). Dịch vụ này không sở hữu sổ phiên và không được import của
+            # bộ (`main.go:117`). Dịch vụ này không sở hữu sổ phiên và không được import của
             # identity (luật 2, cấm #1). Giá trị này đòi `identity` phải thật sự phơi cổng
             # 9090 — xem `deploy/base/identity/service.yaml`.
             - { name: IDENTITY_GRPC_ADDR, value: identity:9090 }
@@ -108,7 +109,7 @@ spec:
             - configMapRef: { name: cau-hinh-chung }
             # Secret PHẢI có ít nhất: DATABASE_DSN · GRPC_CALLER_KEY · SESSION_SIGNING_KEYS.
             # Ba khoá này là điều kiện KHỞI ĐỘNG, không phải tuỳ chọn: `core/config.Load` gom
-            # đủ tên còn thiếu rồi thoát (config.go:321-352). SESSION_SIGNING_KEYS nằm trong
+            # đủ tên còn thiếu rồi thoát (config.go:320-356). SESSION_SIGNING_KEYS nằm trong
             # danh sách kể cả khi dịch vụ này không tự phát phiên — Load đòi nó ở staging/prod.
             # ⚠ THÊM `REDIS_DSN` Ở STAGING/PROD. `config.Load` KHÔNG đòi nó, nên thiếu nó
             # không có gì đỏ — `idemStore` thành nil và mỗi tuyến hành xử theo `CheDoHong` nó
@@ -116,14 +117,14 @@ spec:
             # văn bản đã phát hành, tài khoản cán bộ. Pod xanh, probe xanh, tuyến chết.
             - secretRef: { name: bi-mat-comms }
 
-          # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý (`main.go:171`): nó trả lời "tiến
+          # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý (`main.go:269`): nó trả lời "tiến
           # trình này còn sống", đúng hay sai không phụ thuộc xã nào đang hỏi — nên probe
           # không cần gửi Host. HỆ QUẢ PHẢI BIẾT: nó vẫn xanh khi CSDL hỏng.
           startupProbe:
             httpGet: { path: /healthz, port: rest }
             periodSeconds: 5
             failureThreshold: 60          # 5 phút — di trú CSDL chạy TRONG tiến trình lúc
-                                          # khởi động (`main.go:197`, core/migrate.Chay) và ôm
+                                          # khởi động (`main.go:295`, core/migrate.Chay) và ôm
                                           # `pg_advisory_lock` suốt lượt chạy, nên replica thứ
                                           # hai ĐỢI replica thứ nhất. Probe chặt ở đây là một
                                           # vòng lặp khởi động lại.

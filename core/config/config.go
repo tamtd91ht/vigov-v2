@@ -72,20 +72,21 @@ import (
 
 // Config holds what is genuinely the same for every commune on this deployment.
 type Config struct {
-	// ListenAddr is the address this process serves on.
+	// ListenAddr is the address this process serves on: LISTEN_ADDR, or ":8080" when unset.
+	//
+	// ONE DEFAULT FOR EVERY SERVICE, decided by the owner on 2026-09-25 — and it reverses
+	// commit 0645284, which gave each service its own default (:8083, :8084, :8087, …) through
+	// a ListenAddrHoac(default) helper. That rationale was "distinct ports matter when several
+	// services share one developer machine"; it made the cluster pay for a laptop convenience.
+	// Under k8s every pod has its own IP, and the Service targetPort, the httpGet probes and the
+	// NetworkPolicy ingress rule all assume 8080. A per-service default meant that deleting one
+	// "redundant-looking" LISTEN_ADDR line from a manifest silently broke both the probe and the
+	// NetworkPolicy at once. With one default, the manifest line is optional and a pod that
+	// omits it still listens where everything in front of it expects.
+	//
+	// Running several services on one machine: set LISTEN_ADDR per process (.env.example lists
+	// suggested ports). Collisions there are loud (bind: address already in use) and cheap.
 	ListenAddr string
-
-	// listenAddrEnv is LISTEN_ADDR exactly as the environment gave it — empty when unset.
-	//
-	// WHY A SECOND, UNEXPORTED COPY: six services used to read LISTEN_ADDR themselves with
-	// `os.Getenv` because each wanted its own default port (:8085, :8087, …) and ListenAddr
-	// had already collapsed "unset" into ":8080". Two reads of one variable is two answers to
-	// one question, and the two had already drifted — every one of those six would have
-	// listened on a port the config layer did not know about.
-	//
-	// Unexported on purpose: the only way to use it is ListenAddrHoac, which forces the caller
-	// to state its default. A public field would let the next caller re-invent the collapse.
-	listenAddrEnv string
 
 	// GRPCListenAddr is the address this process serves gRPC on — a SEPARATE port from
 	// ListenAddr, not a shared one.
@@ -362,8 +363,9 @@ func Load(serviceName string) (Config, error) {
 	}
 
 	cfg := Config{
-		ListenAddr:       firstNonEmpty(os.Getenv("LISTEN_ADDR"), ":8080"),
-		listenAddrEnv:    strings.TrimSpace(os.Getenv("LISTEN_ADDR")),
+		// Trimmed: a trailing newline pasted into a ConfigMap would otherwise reach net.Listen
+		// as part of the port. The five services that used to read it per-service trimmed too.
+		ListenAddr:       firstNonEmpty(strings.TrimSpace(os.Getenv("LISTEN_ADDR")), ":8080"),
 		GRPCListenAddr:   firstNonEmpty(os.Getenv("GRPC_LISTEN_ADDR"), ":9090"),
 		DatabaseDSN:      secret.DSN(dsn),
 		RedisDSN:         secret.DSN(strings.TrimSpace(os.Getenv("REDIS_DSN"))),
@@ -403,26 +405,6 @@ func Load(serviceName string) (Config, error) {
 	}
 
 	return cfg, nil
-}
-
-// ListenAddrHoac reports the configured listen address, or this service's own default.
-//
-// IT EXISTS SO THE ENVIRONMENT IS READ EXACTLY ONCE (rule 11, invariant 1). Six services used
-// to call `os.Getenv("LISTEN_ADDR")` in their own main.go, each with a different hard-coded
-// fallback, because ListenAddr had already turned "unset" into ":8080". The result was two
-// sources for one fact that disagreed: the config layer believed :8080 while the process
-// listened on :8087.
-//
-// The default is the CALLER's, and that is deliberate: which port a service takes when nothing
-// says otherwise is a property of that service, not of the shared config package. Under k8s
-// every pod has its own address and they can all be :8080; the distinct ports only matter when
-// several services run on one developer machine, which is exactly where getting it wrong is
-// cheapest to discover and most annoying to live with.
-func (c Config) ListenAddrHoac(macDinh string) string {
-	if c.listenAddrEnv == "" {
-		return macDinh
-	}
-	return c.listenAddrEnv
 }
 
 // CanhBao lists the dangerous settings currently in force, for logging at startup.

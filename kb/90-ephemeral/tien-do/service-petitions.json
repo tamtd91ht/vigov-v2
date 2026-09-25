@@ -205,6 +205,14 @@
       "no_confirm": [],
       "tiep_theo": "(1) MÂU THUẪN VỚI CÂU ĐÃ CHỐT: b9a9718 đặt cờ bắt buộc ảnh nghiệm thu khi đóng phiếu phản ánh MẶC ĐỊNH TẮT; câu #7 (ADR 0008) chốt bat_buoc_anh_nghiem_thu mặc định TRUE — khách quyết, không tự chọn; cờ chưa dựng ở kho này. (2) Luật người đang giữ cho NHIỆM VỤ (a37ec96: người được giao làm mọi thứ, người liên quan chỉ ghi nhật ký) — kho này khai task.update (routes.go:961-962); người dùng 24/09 chỉ quyết luật ấy cho ĐƠN THƯ, ADR 0038 cấm áp chéo. (3) e1d0204: chủ trì ≡ thực hiện, chuyên viên ≡ người thực hiện chính — kho này giữ hai cặp rời; Giao cho tôi chỉ đọc nguoi_thuc_hien_ma (store/nhiem_vu.go:185-186). (4) b9a9718 hạn nhiệm vụ có giờ, điền sẵn +7 ngày 17:00 — kho này chọn 23:59 (web nhan-nhiem-vu.ts:624-639). Người dùng đã chọn 17:00 cho nhiệm vụ SINH TỪ ĐƠN THƯ (service-documents/so-don-thu-cong-dan C9) — hai lựa chọn phải khớp khi dựng.",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "listen-addr-mac-dinh-8080",
+      "viec": "cmd/server đọc cfg.ListenAddr (mặc định :8080) thay cho cfg.ListenAddrHoac(\":8084\")",
+      "trang_thai": "xong",
+      "bang_chung": "service-petitions/cmd/server/main.go:291: addr := cfg.ListenAddr. Quyết định chủ sản phẩm 25/09/2026 — một mặc định :8080 cho mọi dịch vụ; chạy cục bộ nhiều dịch vụ thì đặt LISTEN_ADDR=:8084 cho tiến trình này. go build ./... (go.work) xanh; go vet + go test ./core/config/... và năm dịch vụ xanh; gofmt -l rỗng; grep ListenAddrHoac trong *.go chỉ còn một dòng chú giải lý do ở core/config/config.go.",
+      "no_confirm": [],
+      "tiep_theo": "—"
     }
   ]
 }

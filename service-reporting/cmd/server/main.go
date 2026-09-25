@@ -70,8 +70,8 @@ func main() {
 	//	h = httpx.StripTenantHeaders(h)
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
-	// The default is this service's own — see config.ListenAddrHoac for why it lives here.
-	addr := cfg.ListenAddrHoac(":8088")
+	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
+	addr := cfg.ListenAddr
 	log.Info("starting", "service", "reporting", "addr", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Error("server stopped", "err", err)

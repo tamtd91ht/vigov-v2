@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-documents",
-  "cap_nhat": "2026-09-24",
+  "cap_nhat": "2026-09-25",
   "muc": [
     {
       "id": "loai-van-ban-tuyen-doc",
@@ -98,6 +98,14 @@
       "no_confirm": [],
       "tiep_theo": "Một card riêng cho tools/apidoc (ghi ở module này chỉ vì phát hiện ở đây; mục _chung đang có việc dở của phiên khác): thẻ trường (vd `apidoc:\"enum=a|b|c\"`) hoặc suy từ kiểu chuỗi có khối const — chọn một, đừng làm cả hai. Trường omitempty phải GIỮ tuỳ chọn. Sau đó áp cho vanBanDenRa.status/urgency, lichSuChuyenRa.status, tham số `status` của danh sách — KHÔNG đổi mã (C2 còn mở).",
       "menu": "van-ban-don-thu"
+    },
+    {
+      "id": "listen-addr-mac-dinh-8080",
+      "viec": "cmd/server đọc cfg.ListenAddr (mặc định :8080) thay cho cfg.ListenAddrHoac(\":8083\")",
+      "trang_thai": "xong",
+      "bang_chung": "service-documents/cmd/server/main.go:206: addr := cfg.ListenAddr. Quyết định chủ sản phẩm 25/09/2026 — một mặc định :8080 cho mọi dịch vụ; chạy cục bộ nhiều dịch vụ thì đặt LISTEN_ADDR=:8083 cho tiến trình này. go build ./... (go.work) xanh; go vet + go test ./core/config/... và năm dịch vụ xanh; gofmt -l rỗng; grep ListenAddrHoac trong *.go chỉ còn một dòng chú giải lý do ở core/config/config.go.",
+      "no_confirm": [],
+      "tiep_theo": "—"
     }
   ]
 }

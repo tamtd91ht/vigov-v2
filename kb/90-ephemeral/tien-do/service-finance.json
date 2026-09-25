@@ -131,6 +131,14 @@
       "bang_chung": "DA CHAY 23/09/2026. Luat nam o service-finance/internal/domain/chung_tu_giai_ngan.go:447 `TrangThaiSauKhiSua` (da-xac-nhan -> ke-toan-nhap) + internal/app/chung_tu_giai_ngan.go:349-367 (ha trang thai, xoa NguoiXacNhanID, va CHI khi co gi that su doi — nhanh khongDoiChungTu:337 tra ve truoc) + internal/store/chung_tu_giai_ngan.go:271 VeNhapSauKhiSua. Vao tu commit bda5dd5. BA CA KIEM XANH, chay that: TestSuaChungTuDaXacNhanThiVeNhapVaXoaNguoiXacNhan - TestSuaChungTuDaKhoaVanTuChoiChuKhongVeNhap - TestSuaChungTuDaXacNhanMaKhongDoiGiThiGiuNguyenXacNhan. PHAN PHIEN NAY THEM: kb/10-decisions/0036-sua-chung-tu-da-xac-nhan-thi-ve-nhap.md va docs/ui-ux/06-giai-ngan.md quy tac 3b — truoc do luat CHI song trong ma, dac ta van chi noi ve `Da khoa`, tuc dac ta va ma noi hai dieu khac nhau ve cung mot bang. Tiep nhan kb/50-doi-chieu/2026-09-23-feat-m8-multitenant-foundation.md muc 5 (ben kia: c3f4d6a).",
       "no_confirm": [],
       "tiep_theo": "KHONG CON VIEC MA. Ghi lai mot bai hoc ve phuong phap: phien nay tung bao voi chu du an rang luat con thieu, sau khi doc ChoSua() (dung la chi chan da-khoa) cong 60 dong dau cua Sua(); khoi veNhap nam o dong 349. Doc MOT HAM roi ket luan ve ca DUONG GHI la phuong phap sai, va no suyt tao ra mot lan viet lai thu da chay. ADR 0036 ghi canh bao nay tai cho."
+    },
+    {
+      "id": "listen-addr-mac-dinh-8080",
+      "viec": "cmd/server đọc cfg.ListenAddr (mặc định :8080) thay cho cfg.ListenAddrHoac(\":8086\")",
+      "trang_thai": "xong",
+      "bang_chung": "service-finance/cmd/server/main.go:167: addr := cfg.ListenAddr. Quyết định chủ sản phẩm 25/09/2026 — một mặc định :8080 cho mọi dịch vụ; chạy cục bộ nhiều dịch vụ thì đặt LISTEN_ADDR=:8086 cho tiến trình này. go build ./... (go.work) xanh; go vet + go test ./core/config/... và năm dịch vụ xanh; gofmt -l rỗng; grep ListenAddrHoac trong *.go chỉ còn một dòng chú giải lý do ở core/config/config.go.",
+      "no_confirm": [],
+      "tiep_theo": "—"
     }
   ]
 }

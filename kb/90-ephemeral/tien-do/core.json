@@ -99,6 +99,14 @@
       "no_confirm": [],
       "tiep_theo": "—",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "listen-addr-mot-mac-dinh-8080",
+      "viec": "core/config: LISTEN_ADDR một mặc định :8080 cho MỌI dịch vụ — bỏ ListenAddrHoac(macDinh) và trường listenAddrEnv",
+      "trang_thai": "xong",
+      "bang_chung": "Quyết định chủ sản phẩm 25/09/2026: 'mô hình microservice nên mặc định là 8080, cho phép cấu hình port trên k8s, nếu không cấu hình thì lấy 8080' — đảo lý do của commit 0645284 (mỗi dịch vụ một cổng mặc định). config.go: ListenAddr = TrimSpace(LISTEN_ADDR) hoặc :8080, chú giải trường ghi lý do đảo. Kiểm mới core/config/listen_addr_test.go: TestListenAddrMacDinh8080ChoMoiDichVu (bảy tên dịch vụ) · TestListenAddrChiKhoangTrangVanLa8080 · TestListenAddrDocTuMoiTruongCoCatKhoangTrang. go build ./... (go.work) xanh; go vet + go test ./core/config/... và năm dịch vụ xanh; gofmt -l rỗng; grep ListenAddrHoac trong *.go chỉ còn một dòng chú giải lý do ở core/config/config.go. .env.example ghi gợi ý cổng theo tiến trình khi chạy nhiều dịch vụ trên một máy (chỉ chú giải).",
+      "no_confirm": [],
+      "tiep_theo": "—"
     }
   ]
 }

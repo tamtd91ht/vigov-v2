@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-reporting",
-  "cap_nhat": "2026-09-22",
+  "cap_nhat": "2026-09-25",
   "muc": [
     {
       "id": "khung-rong-cho-khach-chot",
@@ -10,6 +10,14 @@
       "bang_chung": "service-reporting/internal/ chỉ có doc.go ở app, domain, event, store và một routes.go; migrations/ chỉ có 0001_init.sql + 0002_audit_log_append_only.sql. Commit cuối chạm vào phần mã: c199eec — kiểm 2026-09-20",
       "no_confirm": [],
       "tiep_theo": "Đây là service sẽ ĐỌC NHIỀU XÃ, nên nó không được viết một dòng nào trước khi khách chốt câu #4 — mức chi tiết cấp huyện/tỉnh được xem. `drift_guard` đang cảnh báo #4 bị lặng lẽ quyết vì đã có 13 chỗ mang đường đọc chéo. Cùng câu ấy chặn `service-identity/store-crosstenant`. Khi khởi công: mọi truy vấn chéo xã phải mang `// @cross-tenant: <lý do>` (luật 1 cấm #6) và bản thân lượt đọc chéo phải để lại vết kiểm (luật 6 bất biến 7) CÂU TỪNG CHẶN MỤC NÀY NAY ĐÃ CHỐT: #4 (ADR 0035 §D). Đó là ĐỀ XUẤT CỦA NHÀ CUNG CẤP ngày 22/09/2026, không phải trả lời của khách — đọc ADR 0035 trước khi dựa vào nó, và bảng \"cái gì đỏ nếu một mục bị phủ quyết\" ở cuối ADR ấy."
+    },
+    {
+      "id": "listen-addr-mac-dinh-8080",
+      "viec": "cmd/server đọc cfg.ListenAddr (mặc định :8080) thay cho cfg.ListenAddrHoac(\":8088\")",
+      "trang_thai": "xong",
+      "bang_chung": "service-reporting/cmd/server/main.go:74: addr := cfg.ListenAddr. Quyết định chủ sản phẩm 25/09/2026 — một mặc định :8080 cho mọi dịch vụ; chạy cục bộ nhiều dịch vụ thì đặt LISTEN_ADDR=:8088 cho tiến trình này. go build ./... (go.work) xanh; go vet + go test ./core/config/... và năm dịch vụ xanh; gofmt -l rỗng; grep ListenAddrHoac trong *.go chỉ còn một dòng chú giải lý do ở core/config/config.go.",
+      "no_confirm": [],
+      "tiep_theo": "—"
     }
   ]
 }
