@@ -18,6 +18,16 @@ import "time"
 // below arrive already aggregated from the store), and a slice of tasks hanging off a conclusion
 // would be a second place for the same fact to be wrong.
 
+// The two statuses of minutes (user decision 25/09/2026), the closed list of migration 0012's
+// `bien_ban_hop_trang_thai_hop_le`. migrations/bien_ban_vong_doi_test.go holds the two lists equal.
+//
+// There is no transition back: once `da-ky`, the database refuses any edit of the business columns
+// (trigger `bien_ban_hop_da_ky_bat_bien`), and a correction is SUPPLEMENTARY minutes.
+const (
+	TrangThaiBienBanDuThao = "du-thao"
+	TrangThaiBienBanDaKy   = "da-ky"
+)
+
 // BienBanHop is one meeting's minutes as the business sees it — `docs/ui-ux/04-bien-ban-hop.md` §5.
 //
 // IT CARRIES NO CITIZEN PERSONAL DATA. Everybody named on it is a member of staff, by business code
