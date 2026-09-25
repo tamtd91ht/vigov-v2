@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "tools",
-  "cap_nhat": "2026-09-24",
+  "cap_nhat": "2026-09-25",
   "muc": [
     {
       "id": "bo-sinh-tien-do",
@@ -122,6 +122,14 @@
       "bang_chung": "tools/xuat_tien_do.py viết lại (người dùng chọn 24/09/2026: % = phần xong / tổng phần; dự kiến = phần còn ÷ tốc độ đo được). Tốc độ đếm CHUYỂN TRẠNG THÁI THẬT (việc có ở mốc cũ, chưa xong, nay xong): hiệu số xong thô ra 26 việc/ngày + mốc 7 ngày vì việc ghi bù; đếm chuyển thật ra 4,5 việc/ngày từ 20/09 (sổ trẻ hơn 7 ngày → đo từ commit đầu có sổ, lần đầu ra 0 vì mốc 17/09 chưa có sổ — đã sửa). Màn web tính là một phần: thiếu nó chương 10 (màn chưa bấm được) in 100%. Treo nằm trong mẫu số. Chương chưa tách phần nào in 'Chưa khởi công' 0%. Kiểm: openpyxl -W error mở được, 3 sheet, freeze A2, autoFilter ở Chức năng/Việc còn lại, ô % định dạng 0%; hai lần xuất giống hệt từng byte; test_hooks 257/257 với ca khoá format v2. Kèm SỬA LỖI ĐẾM của tien_do_san_pham.so_chua_dung: đếm mọi `ten:` từ LẦN ĐẦU chữ PHAN_CHUA_DUNG xuất hiện (một chú thích), nên `ten: \"\"` của biểu mẫu giai-ngan bị đếm — .md in 7 (tổng 86), thật là 6 (tổng 85). Nay đếm trong khối khai báo; bản Excel đối chiếu hai phép đếm và từ chối (exit 1) nếu lệch.",
       "no_confirm": [],
       "tiep_theo": "v1 → v2 đổi cả tên sheet và tên cột (Hang_muc → 'Việc còn lại', Ma → Mã) — báo team trỏ lại công thức nếu đã dựng trên v1. Giới hạn đã nói trong sheet: 'phần' không đều nhau (một API = một ô màn = một việc sổ), tốc độ chỉ đếm việc sổ, không trừ ngày lễ, 3 chức năng chưa khởi công (01, 03, 13) chưa có trong mốc dự kiến."
+    },
+    {
+      "id": "xuat-tien-do-excel-v3",
+      "viec": "Bản Excel format v3 thay hẳn v2: báo cáo tiến độ kỹ thuật 7 sheet cho BA/PM (Tổng quan · Chức năng theo menu · API Backend · Danh mục API · Web Admin · Mini App · Deployment), theo mẫu người dùng duyệt 25/09/2026",
+      "trang_thai": "xong",
+      "bang_chung": "tools/xuat_tien_do.py viết lại, vẫn chỉ thư viện chuẩn (Jenkins python3.9: không `\\` trong f-string). HAI BƯỚC: `--excel --khung` sinh tmp/tien-do/noi-dung-<ngày>.json (bang_chung + ô `viet` trống; chạy lại giữ phần chữ cũ) → agent viết phần chữ → `--excel --tu <json>` đọc LẠI số liệu từ kho, kiểm phần chữ (đủ ô, tập trạng thái, `loi_van_phong`, dữ liệu cá nhân) rồi ghi .xlsx có định dạng, ô gộp, công thức (fullCalcOnLoad), liên kết nội bộ, lọc, đóng băng. Phần chữ chỉ sống trong tmp/ — không thành bản thứ hai của sự thật trong kho (luật 9). Người dùng quyết 25/09: không đặt câu hỏi trong báo cáo, việc chờ xác nhận ghi là 'Đang xử lý'. Kiểm: test_hooks 257/257 với ca khoá format v3 + 8 ca VAN_PHONG_XLSX_CASES (đột biến regex → 5/5 ca chặn đỏ); e2e: phần chữ sai → exit 5 chỉ đúng 2 ô; đích trong kho → exit 4; Excel 16 mở + CalculateFull: 51 công thức, 0 lỗi; số khớp bản duyệt (136 tuyến, 134/134, 10/14 màn, 76 đã dựng, 81 chưa dựng).",
+      "no_confirm": [],
+      "tiep_theo": "v2 → v3 đổi toàn bộ tên sheet/cột và bỏ % + mốc dự kiến — công thức team dựng trên Google Sheet bản v2 phải dựng lại. Màn `van-ban` chưa khai PHAN_CHUA_DUNG nên cột chưa dựng in 0 kèm dòng 'chưa khai' ở mục B; khai khối ấy ở web-admin thì bảng tự đúng."
     }
   ]
 }

@@ -895,12 +895,36 @@ CAN_SYNC_CASES = [
 # reordering one breaks them with no error. This frozen copy is DELIBERATELY a second copy: its
 # only job is to go red when `SHEETS` changes without `PHIEN_BAN_FORMAT` moving with it. Changing
 # the format = append columns at the end, bump the version, update this list, tell the team.
-FORMAT_XLSX = {2: [
-    ("Tổng quan", ["Hạng mục", "Hiện trạng", "Còn nội dung gì", "% hoàn thành", "Dự kiến xong"]),
-    ("Chức năng", ["Mã", "Chức năng", "Hiện trạng", "Còn nội dung gì", "% hoàn thành",
-                   "Dự kiến xong", "Cách tính %"]),
-    ("Việc còn lại", ["Mã", "Thuộc", "Việc", "Tình trạng", "Bước kế tiếp"]),
+# v3 (25/09/2026) replaced v2 wholesale — the user swapped the owner's 3-sheet % report for the
+# BA/PM technical report; the empty headers of "1. Tổng quan" are the merged Giá trị cells.
+FORMAT_XLSX = {3: [
+    ("1. Tổng quan", ["Chỉ số", "Giá trị", "", "", "", "Xem chi tiết"]),
+    ("2. Chức năng theo menu", ["#", "Menu / Phân hệ", "Service sở hữu", "API (gọi/tổng)",
+                                "Web Admin", "Đã làm (backend + web)", "Còn thiếu", "Đang xử lý",
+                                "Mức độ"]),
+    ("3. API Backend", ["Service", "Phạm vi nghiệp vụ", "Tuyến REST", "Đã làm",
+                        "Còn thiếu / rủi ro", "Trạng thái"]),
+    ("4. Danh mục API", ["Chương", "Method", "Đường dẫn", "Phân hệ", "Service", "Chức năng",
+                         "Kiểm soát truy cập", "Khoá quyền / lý do", "Chống trùng", "Web gọi"]),
+    ("5. Web Admin", ["#", "Mục menu", "Đường dẫn", "Khoá quyền xem", "Có màn", "Phần đã dựng",
+                      "Chức năng đã dựng", "Phần chưa dựng", "Ghi chú"]),
+    ("6. Mini App", ["#", "Màn / chức năng", "Nội dung", "Trạng thái", "Ghi chú"]),
+    ("7. Deployment", ["#", "Đơn vị", "Loại / cổng", "Dockerfile", "Jenkinsfile", "Manifest k8s",
+                       "Ghi chú"]),
 ]}
+
+# The report never asks its reader a question: work still awaiting a confirmation is written as
+# work IN PROGRESS (user decision 25/09/2026). `loi_van_phong` refuses the phrasings that undo it.
+VAN_PHONG_XLSX_CASES = [
+    ("Chờ khách: biểu mẫu Excel thật của xã", True, "đổ việc cho khách"),
+    ("Cần BA quyết: quyền xem danh bạ", True, "câu hỏi cho BA"),
+    ("Phân hệ bị chặn bởi đặc tả", True, "'bị chặn' phải thành 'đang xử lý'"),
+    ("Lọc 'Gửi cho tôi' treo (câu #27)", True, "treo + số câu hỏi mở"),
+    ("Công dân thấy giờ máy mình hay giờ xã?", True, "dấu hỏi"),
+    ("Đang xử lý mẫu ZNS cho từng OA xã.", False, "cách viết đúng"),
+    ("Lãnh đạo quyết định lùi hạn", False, "'quyết định' là nghiệp vụ, không phải câu hỏi"),
+    ("Chờ API thống kê.", False, "phụ thuộc kỹ thuật, không phải chờ khách"),
+]
 
 # The last gate before project data leaves for a shared Google Sheet (rule 3).
 CA_NHAN_XLSX_CASES = [
@@ -1209,6 +1233,13 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
         ok = duoc == mong
         print(f"{'  OK   ' if ok else '  FAIL '} [{'CHẶN' if mong else 'QUA '}] "
               f"{'xuat_tien_do.co_du_lieu_ca_nhan':24s} {nhan}")
+        if not ok:
+            sai.append((s, nhan, mong, duoc))
+    for s, mong, nhan in VAN_PHONG_XLSX_CASES:
+        duoc = xtd.loi_van_phong(s)
+        ok = duoc == mong
+        print(f"{'  OK   ' if ok else '  FAIL '} [{'CHẶN' if mong else 'QUA '}] "
+              f"{'xuat_tien_do.loi_van_phong':24s} {nhan}")
         if not ok:
             sai.append((s, nhan, mong, duoc))
 

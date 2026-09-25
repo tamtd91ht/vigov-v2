@@ -1,52 +1,47 @@
 #!/usr/bin/env python3
-"""Xuất tiến độ dự án ra MỘT tệp .xlsx ba sheet, viết bằng lời cho CHỦ DỰ ÁN đọc.
+"""Xuất báo cáo tiến độ kỹ thuật ra MỘT tệp .xlsx bảy sheet, cho BA / PM đọc.
 
-Chạy:  python tools/xuat_tien_do.py [đường-dẫn.xlsx]
-       python tools/tien_do_san_pham.py --excel [đường-dẫn.xlsx]      (cùng một việc)
-Mặc định: tmp/tien-do/vigov-tien-do-<YYYY-MM-DD>.xlsx  (tmp/ nằm trong .gitignore)
-Mã thoát: 0 = ghi xong · 1 = thiếu nguồn / hai phép đếm lệch nhau · 3 = có ô trông như dữ liệu
-          cá nhân, KHÔNG ghi tệp · 4 = đường dẫn nằm trong kho mà git không bỏ qua
+Chạy (qua `/tien-do-san-pham --excel`, xem .claude/commands/tien-do-san-pham.md):
+    python tools/xuat_tien_do.py --khung [noi-dung.json]      bước 1 — sinh khung + bằng chứng
+    (agent đọc bằng chứng, viết phần chữ vào khoá `viet` của tệp ấy)
+    python tools/xuat_tien_do.py --tu noi-dung.json [ra.xlsx]  bước 3 — kiểm rồi ghi .xlsx
+    python tools/tien_do_san_pham.py --excel …                (cùng một việc)
+Mặc định: tmp/tien-do/noi-dung-<ngày>.json · tmp/tien-do/vigov-tien-do-<ngày>.xlsx (tmp/ bị git bỏ qua)
+Mã thoát: 0 = ghi xong · 1 = thiếu nguồn · 3 = có ô trông như dữ liệu cá nhân, KHÔNG ghi tệp ·
+          4 = đường dẫn nằm trong kho mà git không bỏ qua · 5 = phần chữ thiếu / sai văn phong
 
-NGƯỜI ĐỌC VÀ CÂU HỎI (format v2, 24/09/2026): chủ dự án mở tệp để biết *"dự án đang ở giai đoạn
-nào, còn những gì, khi nào xong"*. Bản v1 trả lời bằng năm sheet số đếm thô cho người dựng công
-thức; người cần hình dung thì không đọc ra được. Nên v2 có ba sheet, cột viết bằng lời:
+NGƯỜI ĐỌC VÀ CÂU HỎI (format v3, 25/09/2026): BA và PM mở tệp để biết *"từng menu đã làm gì, còn
+thiếu gì, API / web / Mini App / deploy đang ở đâu"* mà không phải hỏi lại. Bản v2 (ba sheet có %
+và mốc dự kiến cho chủ dự án) được người dùng thay hẳn bằng mẫu này ngày 25/09/2026.
 
-    Tổng quan      giai đoạn · từng khối lớn · tốc độ đo được · cách tính
-    Chức năng      mỗi chương đặc tả: hiện trạng · còn gì · % · dự kiến
-    Việc còn lại   mỗi hạng mục sổ chưa xong — cột `Mã` (`module/id`) là khoá ổn định
+HAI LOẠI Ô, HAI NGUỒN — và ranh giới giữa chúng là lý do tệp này có hai bước:
+  * SỐ LIỆU ĐẾM ĐƯỢC (tuyến API, phần chưa dựng, menu, manifest, sổ theo module) sinh từ mã mỗi
+    lần xuất, bằng CÙNG các hàm của `tien_do_san_pham.py`. Tệp nội dung KHÔNG chứa được chúng —
+    bước 3 đọc lại từ kho, nên một con số trong JSON cũ không bao giờ lên được bảng.
+  * PHẦN CHỮ (đã làm / còn thiếu / đang xử lý / chức năng đã dựng / Mini App / checklist deploy)
+    là TÓM TẮT, và tóm tắt không sinh được bằng máy mà không thành bản chép dài của sổ. Nên agent
+    viết lại nó MỖI LẦN XUẤT từ bằng chứng bước 1 đưa ra, và nó chỉ sống trong tmp/ — không vào
+    git, nên không thành bản thứ hai của một sự thật trong kho (luật 9 #2). Văn bản cố định chép
+    vào tệp này sẽ đứng yên trong khi mã chạy, đúng loại bảng người đọc tin mà nó đã sai.
 
-CỘT % CÓ Ở ĐÂY, VÀ NÓ LÀ MỘT PHÉP ĐẾM, không phải một ước lượng. Bản .md vẫn không có cột ấy vì
-lý do nó ghi (23/09/2026: một tỷ lệ đếm mục sổ làm chủ dự án tưởng xong hết). Người dùng quyết
-24/09/2026 thêm % vào bản Excel với điều kiện truy ngược được. Nên mỗi dòng in kèm cột `Cách tính %`
-nêu từng số hạng, và công thức chọn phía BẢO THỦ:
-  * phần xong   = màn web đã có trang + API có mã web gọi + API công dân Mini App đã gọi
-                  + việc sổ `xong`
-  * phần còn    = màn web chưa có + API chưa ai gọi + phần màn tự khai chưa dựng
-                  (`PHAN_CHUA_DUNG*`) + việc sổ đang làm / chưa làm / TREO
-  TREO NẰM TRONG MẪU SỐ: loại nó ra thì % tăng đúng bằng những việc chưa ai làm — lặp lại chính
-  lỗi 23/09. Chương chưa tách được phần nào ghi "chưa khởi công", KHÔNG ghi 0/0 = 100%.
-
-DỰ KIẾN = phần còn ÷ TỐC ĐỘ ĐO ĐƯỢC. Tốc độ lấy từ git: số việc sổ chuyển sang `xong` trong 7 ngày
-lịch gần nhất, chia số ngày làm việc (thứ Hai–Sáu). Giới hạn in ngay trong sheet: đơn vị "phần"
-không đều nhau, việc ghi vào sổ ở trạng thái xong luôn làm tốc độ cao lên, không trừ ngày lễ,
-và chức năng chưa khởi công không có phần nào để chia.
-
-KHÔNG MỘT Ô NÀO VIẾT TAY: mọi số đọc từ CÙNG các hàm sinh `tien-do-san-pham.md`
-(`tien_do_san_pham.*`) và từ sổ `kb/90-ephemeral/tien-do/*.json`.
-
-TÊN SHEET VÀ TÊN CỘT LÀ FORMAT: đổi thì tăng PHIEN_BAN_FORMAT và cập nhật `FORMAT_XLSX` trong
-`tools/test_hooks.py` — ca ấy đỏ đúng để không ai đổi format mà quên báo team.
+VĂN PHONG LÀ MỘT RÀNG BUỘC CÓ RÀO: người dùng quyết 25/09/2026 — báo cáo không đặt câu hỏi cho
+người đọc; việc còn chờ xác nhận ghi là việc ĐANG XỬ LÝ. `loi_van_phong` từ chối những cụm biến
+một ô thành câu hỏi hay lời đổ lỗi ("chờ khách", "bị chặn", "câu #n", dấu hỏi).
 
 VÌ SAO THƯ VIỆN CHUẨN, không openpyxl: mọi công cụ của kho chỉ dùng thư viện chuẩn, và máy khác
-hay Jenkins có thể không có gói ấy. Một .xlsx chỉ là một zip các tệp XML.
+hay Jenkins có thể không có gói ấy. Một .xlsx chỉ là một zip các tệp XML. Công thức ghi không kèm
+giá trị đệm; `fullCalcOnLoad` bắt Excel / Google Sheet tính lại lúc mở.
 
-TRƯỚC KHI GHI, mọi ô chữ được soi bằng CÙNG mẫu số điện thoại / CCCD của `pii_guard`. Một Google
-Sheet chia sẻ cho cả team là một kênh ra ngoài — lớp chặn thứ hai đặt đúng ở cửa ra. Trúng thì
+TÊN SHEET VÀ CỘT BẢNG CHÍNH LÀ FORMAT: đổi thì tăng PHIEN_BAN_FORMAT và cập nhật `FORMAT_XLSX`
+trong `tools/test_hooks.py` — ca ấy đỏ đúng để không ai đổi format mà quên báo team.
+
+TRƯỚC KHI GHI, mọi ô chữ được soi bằng CÙNG mẫu số điện thoại / CCCD của `pii_guard`. Trúng thì
 từ chối và chỉ in TOẠ ĐỘ ô, không bao giờ in giá trị.
 """
 
 from __future__ import annotations
 
+import collections
 import datetime
 import io
 import json
@@ -70,28 +65,34 @@ sys.path.insert(0, os.path.join(ROOT, ".claude", "hooks"))
 import tien_do_san_pham as sp  # noqa: E402
 import _common as c  # noqa: E402
 
-PHIEN_BAN_FORMAT = 2
-
-NHAN_TT = {"dang_lam": "Đang làm", "chua_lam": "Chưa làm", "treo": "Tạm dừng", "xong": "Xong"}
-THU_TU_TT = ("dang_lam", "chua_lam", "treo", "xong")
+PHIEN_BAN_FORMAT = 3
 SO_TIEN_DO = os.path.join("kb", "90-ephemeral", "tien-do")
-CUA_SO_TOC_DO = 7   # ngày lịch — đủ dài để một ngày nghỉ không kéo tốc độ về 0
-
-# (tên sheet, [(tên cột, độ rộng)]) — THỨ TỰ NÀY LÀ FORMAT.
-SHEETS = [
-    ("Tổng quan", [("Hạng mục", 30), ("Hiện trạng", 60), ("Còn nội dung gì", 70),
-                   ("% hoàn thành", 13), ("Dự kiến xong", 40)]),
-    ("Chức năng", [("Mã", 6), ("Chức năng", 30), ("Hiện trạng", 50), ("Còn nội dung gì", 80),
-                   ("% hoàn thành", 13), ("Dự kiến xong", 40), ("Cách tính %", 50)]),
-    ("Việc còn lại", [("Mã", 36), ("Thuộc", 28), ("Việc", 60), ("Tình trạng", 12),
-                      ("Bước kế tiếp", 90)]),
-]
-
 MAX_O = 32000     # Excel giữ tối đa 32 767 ký tự một ô
 
+S1, S2, S3, S4, S5, S6, S7 = ("1. Tổng quan", "2. Chức năng theo menu", "3. API Backend",
+                              "4. Danh mục API", "5. Web Admin", "6. Mini App", "7. Deployment")
+# (tên sheet, [(cột bảng chính, độ rộng)]) — THỨ TỰ NÀY LÀ FORMAT. Cột trống ở Tổng quan là ô gộp
+# của cột Giá trị: lưới cột phải có đủ để bảng sổ theo module bên dưới dùng lại.
+SHEETS = [
+    (S1, [("Chỉ số", 42), ("Giá trị", 16), ("", 16), ("", 16), ("", 16), ("Xem chi tiết", 30)]),
+    (S2, [("#", 5), ("Menu / Phân hệ", 20), ("Service sở hữu", 17), ("API (gọi/tổng)", 11),
+          ("Web Admin", 22), ("Đã làm (backend + web)", 44), ("Còn thiếu", 50),
+          ("Đang xử lý", 40), ("Mức độ", 15)]),
+    (S3, [("Service", 20), ("Phạm vi nghiệp vụ", 34), ("Tuyến REST", 10), ("Đã làm", 52),
+          ("Còn thiếu / rủi ro", 52), ("Trạng thái", 15)]),
+    (S4, [("Chương", 9), ("Method", 9), ("Đường dẫn", 44), ("Phân hệ", 26), ("Service", 19),
+          ("Chức năng", 52), ("Kiểm soát truy cập", 24), ("Khoá quyền / lý do", 32),
+          ("Chống trùng", 11), ("Web gọi", 12)]),
+    (S5, [("#", 5), ("Mục menu", 20), ("Đường dẫn", 18), ("Khoá quyền xem", 19), ("Có màn", 9),
+          ("Phần đã dựng", 10), ("Chức năng đã dựng", 50), ("Phần chưa dựng", 10), ("Ghi chú", 34)]),
+    (S6, [("#", 5), ("Màn / chức năng", 30), ("Nội dung", 50), ("Trạng thái", 15), ("Ghi chú", 58)]),
+    (S7, [("#", 5), ("Đơn vị", 20), ("Loại / cổng", 30), ("Dockerfile", 11), ("Jenkinsfile", 11),
+          ("Manifest k8s", 13), ("Ghi chú", 56)]),
+]
 
-class PhanTram(float):
-    """Ô phần trăm (0..1) — ghi thành số với định dạng `0%`, để Google Sheet sắp xếp được."""
+MUC_DO = ("Cơ bản xong", "Đang hoàn thiện", "Đang xử lý", "Chưa khởi công")
+TRANG_THAI = ("Xong", "Đã dựng", "Cơ bản xong", "Đang hoàn thiện", "Đang làm", "Đang xử lý",
+              "Chưa làm", "Chưa khởi công")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -107,39 +108,25 @@ def co_du_lieu_ca_nhan(s: str) -> bool:
     return any(not c.SAFE_FAKE.match(m.group(0)) for m in MAU_CA_NHAN.finditer(s or ""))
 
 
-# ---------------------------------------------------------------------------------------------
-# Lời văn
-def cau(s: str, toi_da: int = 220) -> str:
-    """Bỏ ký hiệu markdown, gộp khoảng trắng, cắt ở ranh giới câu gần nhất.
+# Cụm làm một ô thành câu hỏi cho người đọc, hoặc thành lời đổ việc cho người khác. Không bắt chữ
+# "quyết định" trơn: API có "quyết định lùi hạn", "máy trạng thái quyết định bước nào".
+MAU_VAN_PHONG = re.compile(
+    r"\?|[Cc]hờ khách|[Cc]ần (?:BA|PM|khách)\b|[Cc]ần (?:người|ai) (?:quyết|chốt|xác nhận)"
+    r"|[Bb]ị chặn|\b[Tt]reo\b|[Tt]ạm dừng|câu (?:hỏi )?(?:mở )?#\s*\d+|[Nn]ợ khách|chưa ai quyết")
 
-    Sổ tiến độ viết cho phiên sau đọc — có backtick, có in đậm, có bước kế tiếp dài cả nghìn chữ.
-    Chủ dự án cần câu đầu; phần còn lại vẫn nguyên trong sổ, tra theo cột `Mã`.
-    """
+
+def loi_van_phong(s: str) -> bool:
+    return bool(MAU_VAN_PHONG.search(s or ""))
+
+
+def cau(s: str, toi_da: int = 300) -> str:
+    """Bỏ ký hiệu markdown, gộp khoảng trắng, cắt ở ranh giới câu gần nhất — cho phần bằng chứng."""
     s = re.sub(r"\s+", " ", re.sub(r"[`*]", "", s or "")).strip()
     if len(s) <= toi_da:
         return s
     cat = s[:toi_da]
     i = max(cat.rfind(". "), cat.rfind("; "), cat.rfind(" — "))
     return (cat[:i + 1] if i > toi_da // 2 else cat.rstrip()) + " …"
-
-
-def danh_sach(dong: list[str]) -> str:
-    return "\n".join(f"• {d}" for d in dong)
-
-
-# ---------------------------------------------------------------------------------------------
-# Thời gian
-def cong_ngay_lam_viec(d: datetime.date, n: int) -> datetime.date:
-    while n > 0:
-        d += datetime.timedelta(days=1)
-        if d.weekday() < 5:
-            n -= 1
-    return d
-
-
-def so_ngay_lam_viec(tu: datetime.date, den: datetime.date) -> int:
-    return sum(1 for i in range(1, (den - tu).days + 1)
-               if (tu + datetime.timedelta(days=i)).weekday() < 5)
 
 
 def git(*a: str) -> str:
@@ -150,97 +137,24 @@ def git(*a: str) -> str:
         return ""
 
 
-def trang_thai_theo_ma(ds: list[dict]) -> dict[str, str]:
-    return {f"{d.get('module')}/{x.get('id')}": x.get("trang_thai", "")
-            for d in ds for x in d.get("muc", [])}
-
-
-def toc_do(so_hien: list[dict], hom_nay: datetime.date) -> dict:
-    """Việc sổ chuyển sang `xong` mỗi ngày làm việc, đo từ git. `v` = None khi không đo được.
-
-    CHỈ ĐẾM CHUYỂN TRẠNG THÁI THẬT: việc đã có trong sổ ở mốc cũ, lúc ấy chưa xong, nay xong.
-    Đếm hiệu số `xong` thô thì mọi việc được GHI BÙ vào sổ ở trạng thái xong cũng thành tốc độ —
-    đo 24/09/2026 ra 26 việc/ngày và mốc "xong sau 7 ngày", đúng loại con số làm chủ dự án tưởng
-    xong hết (23/09/2026).
-    """
-    thu = SO_TIEN_DO.replace(os.sep, "/")
-
-    def so_tai(rev: str) -> list[dict]:
-        ra = []
-        for ten in git("ls-tree", "--name-only", rev, thu + "/").split():
-            if ten.endswith(".json"):
-                try:
-                    d = json.loads(git("show", f"{rev}:{ten}"))
-                    d.setdefault("module", os.path.basename(ten)[:-5])
-                    ra.append(d)
-                except Exception:
-                    pass
-        return ra
-
-    moc = (hom_nay - datetime.timedelta(days=CUA_SO_TOC_DO)).isoformat()
-    rev = git("rev-list", "-1", f"--before={moc}T23:59:59", "HEAD").strip()
-    cu = so_tai(rev) if rev else []
-    if not cu:
-        # Sổ trẻ hơn cửa sổ: mốc cũ chưa có sổ, so với nó thì mọi việc đều "mới" và tốc độ ra 0.
-        # Đo từ commit ĐẦU TIÊN có sổ — ô tốc độ in ngày mốc, nên người đọc thấy cửa sổ ngắn hơn.
-        rev = git("log", "--reverse", "--format=%H", "--", thu).split("\n", 1)[0].strip()
-        cu = so_tai(rev) if rev else []
-    if not cu:
-        return {"v": None, "ly_do": "không đọc được lịch sử git của sổ tiến độ"}
-    ngay = datetime.date.fromisoformat(git("show", "-s", "--format=%cs", rev).strip())
-    nlv = so_ngay_lam_viec(ngay, hom_nay)
-    truoc, nay = trang_thai_theo_ma(cu), trang_thai_theo_ma(so_hien)
-    tang = sum(1 for ma, tt in truoc.items() if tt != "xong" and nay.get(ma) == "xong")
-    if nlv <= 0 or tang <= 0:
-        return {"v": None, "ly_do": f"từ {ngay:%d/%m/%Y} tới nay không có việc nào chuyển sang Xong "
-                                    f"({nlv} ngày làm việc)"}
-    return {"v": tang / nlv, "tang": tang, "nlv": nlv, "tu": ngay, "rev": rev[:7]}
-
-
-def du_kien(con: int, td: dict, hom_nay: datetime.date, rieng: bool) -> str:
-    if con == 0:
-        return "Không còn phần nào được ghi nhận"
-    if td["v"] is None:
-        return "Chưa đo được tốc độ — " + td["ly_do"]
-    n = max(1, math.ceil(con / td["v"]))
-    ngay = cong_ngay_lam_viec(hom_nay, n)
-    if rieng:
-        return f"≈ {n} ngày làm việc — khoảng {ngay:%d/%m/%Y} nếu dồn sức riêng cho phần này"
-    return f"Khoảng {ngay:%d/%m/%Y} (≈ {n} ngày làm việc ở tốc độ hiện tại)"
+def doc(p: str) -> str:
+    try:
+        return io.open(p, encoding="utf-8").read()
+    except Exception:
+        return ""
 
 
 # ---------------------------------------------------------------------------------------------
-# Thu thập
+# Thu thập SỐ LIỆU — mọi thứ ở đây đọc từ kho, không từ tệp nội dung
 def doc_so() -> list[dict]:
     ra = []
     thu = os.path.join(ROOT, SO_TIEN_DO)
     for ten in sorted(os.listdir(thu)):
         if ten.endswith(".json"):
-            d = json.loads(io.open(os.path.join(thu, ten), encoding="utf-8").read())
+            d = json.loads(doc(os.path.join(thu, ten)))
             d.setdefault("module", ten[:-5])
             ra.append(d)
     return ra
-
-
-def menu_cua(x: dict) -> list[str]:
-    v = x.get("menu")
-    return [] if v is None else (v if isinstance(v, list) else [v])
-
-
-# Nhóm cho hạng mục sổ KHÔNG gắn menu nào — phần nền, hạ tầng, quy trình. Module lạ in đúng tên
-# module của nó: một nhóm "Khác" là chỗ một module mới biến mất khỏi tổng quan mà không ai thấy.
-NHOM = [
-    ("Backend API — phần nền", lambda m: m in ("core", "proto") or m.startswith("service-")),
-    ("Web quản trị — phần nền", lambda m: m == "web-admin"),
-    ("Web quản trị nền tảng", lambda m: m == "platform-admin"),
-    ("Mini App công dân", lambda m: m == "citizen-app"),
-    ("Hạ tầng & triển khai", lambda m: m == "deploy"),
-    ("Quy trình & công cụ dự án", lambda m: m in ("_chung", "tools")),
-]
-
-
-def nhom_cua(module: str) -> str:
-    return next((t for t, f in NHOM if f(module)), module)
 
 
 def tu(s: str) -> list[str]:
@@ -270,8 +184,17 @@ def ghep_menu(chuong: list[dict], menu: list[dict]) -> dict[str, dict]:
     return ra
 
 
-def thu_thap() -> dict[str, list[list]]:
-    hom_nay = datetime.date.today()
+def khoa_quyen() -> dict[str, str]:
+    """`QUYEN_XEM_NHIEM_VU` → `task.read`: menu khai tên hằng, người đọc cần chuỗi khoá thật."""
+    return dict(re.findall(r'export const (QUYEN_\w+)\s*=\s*"([^"]+)"',
+                           doc(os.path.join(ROOT, "web-admin", "src", "lib", "quyen.ts"))))
+
+
+KIND = {"permission": "Theo khoá quyền", "any-authenticated": "Mọi cán bộ đã đăng nhập",
+        "public": "Công khai (có lý do)", "citizen-only": "Chỉ công dân (phiên Mini App)"}
+
+
+def thu_thap() -> dict:
     chuong_goc = sp.cac_chuong()
     theo_chuong, tong_tuyen, _kk = sp.tuyen_theo_chuong()
     xong, biet_web = sp.viec_da_xong()
@@ -279,232 +202,308 @@ def thu_thap() -> dict[str, list[list]]:
     if not chuong_goc or tong_tuyen == 0 or not menu_goc:
         raise RuntimeError(f"đọc hụt: {len(chuong_goc)} chương · {tong_tuyen} tuyến · "
                            f"{len(menu_goc)} menu")
+    ten_ch = {slug: re.sub(r"^\d{2}\s*[—-]\s*", "", t or slug) for _s, slug, t in chuong_goc}
+    so_ch = {slug: s for s, slug, _t in chuong_goc}
     chuong = sp.dong_chuong(chuong_goc, theo_chuong, xong, biet_web)
     menu = sp.dong_menu(menu_goc)
-    app_goi = set(sp.tuyen_app_goi())
-    so = doc_so()
-    td = toc_do(so, hom_nay)
     menu_theo_chuong = ghep_menu(chuong, menu)
-    slug_ngan = {r["slug"].split("-", 1)[1]: r["slug"] for r in chuong}
+    app_goi = set(sp.tuyen_app_goi())
+    kq = khoa_quyen()
 
-    # Mỗi hạng mục sổ được đếm ĐÚNG MỘT LẦN: vào chương của menu đầu tiên nó gắn, hoặc vào nhóm
-    # của module nó. Đếm hai lần là % toàn dự án lệch theo số menu một việc gắn vào.
-    viec_chuong: dict[str, list[tuple[str, dict]]] = {}
-    viec_nhom: dict[str, list[tuple[str, dict]]] = {}
-    thuoc: dict[str, str] = {}
-    ten_chuong = {r["slug"]: f"{r['so']} · {r['ten']}" for r in chuong}
-    for d in so:
-        mod = d["module"]
-        for x in d.get("muc", []):
-            ma = f"{mod}/{x.get('id', '?')}"
-            slug = next((slug_ngan[s] for s in menu_cua(x) if s in slug_ngan), None)
-            if slug:
-                viec_chuong.setdefault(slug, []).append((ma, x))
-                thuoc[ma] = ten_chuong[slug]
+    # ---- tuyến API, từ hợp đồng ------------------------------------------------------------
+    hop_dong = json.loads(doc(sp.HOP_DONG) or "{}")
+    tuyen = []
+    for duong, ops in (hop_dong.get("paths") or {}).items():
+        for pt, op in ops.items():
+            if pt not in sp.PHUONG_THUC:
+                continue
+            man = (op.get("x-vigov-screen") or "").strip()
+            slug = man.split()[0] if man and not man.startswith("*") else ""
+            quyen = op.get("x-vigov-permission") or {}
+            kind = quyen.get("kind", "")
+            if kind == "citizen-only":
+                goi = "Mini App" if duong in app_goi and pt == "post" else "Chưa"
             else:
-                viec_nhom.setdefault(nhom_cua(mod), []).append((ma, x))
-                thuoc[ma] = nhom_cua(mod)
+                goi = "Có" if op.get("x-vigov-task") in xong else "Chưa"
+            ly_do = quyen.get("reason", "")
+            tuyen.append({
+                "so": so_ch.get(slug, ""), "slug": slug,
+                "chuong": f"{so_ch[slug]} — {ten_ch[slug]}" if slug in so_ch else "Chưa gắn chương đặc tả",
+                "pt": pt.upper(), "duong": duong,
+                "service": "service-" + ((op.get("tags") or ["?"])[0]),
+                "chuc_nang": op.get("summary", ""), "kind": KIND.get(kind, kind),
+                "khoa": quyen.get("key") or (ly_do if len(ly_do) <= 110
+                                             else ly_do[:107].rsplit(" ", 1)[0] + " …"),
+                "chong_trung": "Bắt buộc" if op.get("x-vigov-idempotency") else "",
+                "goi": goi,
+            })
+    tuyen.sort(key=lambda t: (t["so"] or "99", t["duong"], t["pt"]))
 
-    # ---- Chức năng --------------------------------------------------------------------------
-    cn: list[list] = []
-    tong = {"xong": 0, "con": 0, "treo": 0}
-    co_man, chua_kc = [], []
+    # ---- sổ tiến độ -----------------------------------------------------------------------
+    so = doc_so()
+    slug_ngan = {r["slug"].split("-", 1)[1]: r["slug"] for r in chuong}
+    viec_chuong: dict[str, list[dict]] = collections.defaultdict(list)
+    viec_module: dict[str, list[dict]] = collections.defaultdict(list)
+    so_module = []
+    for d in so:
+        dem = collections.Counter(x.get("trang_thai") for x in d.get("muc", []))
+        so_module.append((d["module"], dem["xong"], dem["dang_lam"] + dem["treo"], dem["chua_lam"],
+                          d.get("cap_nhat", "")))
+        for x in d.get("muc", []):
+            v = {"ma": f"{d['module']}/{x.get('id', '?')}", "trang_thai": x.get("trang_thai", ""),
+                 "viec": cau(x.get("viec", ""), 300)}
+            if x.get("trang_thai") != "xong":
+                v["tiep_theo"] = cau(x.get("tiep_theo", "") or "", 400)
+            menus = x.get("menu")
+            menus = [] if menus is None else (menus if isinstance(menus, list) else [menus])
+            for s in menus:
+                if s in slug_ngan:
+                    viec_chuong[slug_ngan[s]].append(v)
+            viec_module[d["module"]].append(v)
+
+    # ---- chương + menu --------------------------------------------------------------------
+    dem_sv = collections.defaultdict(collections.Counter)
+    for t in tuyen:
+        dem_sv[t["slug"]][t["service"]] += 1
+    ds_chuong, ds_menu = [], []
     for r in chuong:
         m = menu_theo_chuong.get(r["slug"])
-        viec = viec_chuong.get(r["slug"], [])
-        dem = {k: sum(1 for _ma, x in viec if x.get("trang_thai") == k) for k in THU_TU_TT}
-        cong_dan = [t for t in theo_chuong.get(r["slug"], []) if sp.la_cong_dan(t)]
-        app_xong = sum(1 for t in cong_dan if t["duong"] in app_goi)
-        pcd: list[str] | None = None
-        if m and m["duong"] is not None:
+        # Chương không có menu, tuyến hay việc (00) là phần giới thiệu của đặc tả, không phải menu.
+        if not m and not r["tuyen"] and not viec_chuong.get(r["slug"]):
+            continue
+        cd = [t for t in theo_chuong.get(r["slug"], []) if sp.la_cong_dan(t)]
+        api = (f"{r['da_goi']}/{r['web']}" if r["web"] else "0")
+        if cd:
+            api += f" (+{len(cd)} công dân)"
+        if m is None:
+            web = "Không có mục menu"
+        elif m["duong"] is None:
+            web = "Chưa có màn (mục menu giữ chỗ)"
+        else:
+            web = m["duong"] + (" — có màn" if m["co_man"] else " — chưa có trang")
+        ds_chuong.append({
+            "so": r["so"], "slug": r["slug"], "ten": r["ten"],
+            "service": " · ".join(s for s, _n in dem_sv[r["slug"]].most_common()) or "—",
+            "api": api, "web": web,
+            "chua_dung": ([x for f in sp.feature_cua_trang(m["duong"])
+                           for x in (sp.phan_chua_dung(f) or [])]
+                          if m and m["duong"] else []),
+            "tuyen": [f"{t['pt']} {t['duong']}" for t in tuyen if t["slug"] == r["slug"]],
+            "viec": viec_chuong.get(r["slug"], []),
+        })
+    for m in menu:
+        pcd = None
+        if m["duong"] is not None:
             khai = [p for p in (sp.phan_chua_dung(f) for f in sp.feature_cua_trang(m["duong"]))
                     if p is not None]
             pcd = [x for p in khai for x in p] if khai else None
             # Hai phép đếm trên cùng một nguồn phải ra một số — lệch là bản Excel in một danh
             # sách khác với con số `.md` đang báo. Từ chối thay vì chọn một bên.
-            so_md = m["chua_dung"]
-            if (so_md is None) != (pcd is None) or (pcd is not None and len(pcd) != so_md):
-                raise RuntimeError(f"phần chưa dựng của {m['nhan']!r}: .md đếm {so_md}, "
+            if (m["chua_dung"] is None) != (pcd is None) or (pcd is not None and len(pcd) != m["chua_dung"]):
+                raise RuntimeError(f"phần chưa dựng của {m['nhan']!r}: .md đếm {m['chua_dung']}, "
                                    f"Excel đọc {None if pcd is None else len(pcd)}")
-        api_con = r["web"] - r["da_goi"]
-        app_con = len(cong_dan) - app_xong
-        # Màn web là MỘT PHẦN của chức năng có mục menu. Thiếu phần này, chương 10 (một API đã có
-        # mã gọi, màn chưa bấm được) in 100% — đo 24/09/2026.
-        man_xong = 1 if m and m["duong"] is not None and m["co_man"] else 0
-        man_con = 1 if m and not man_xong else 0
-        n_xong = man_xong + r["da_goi"] + app_xong + dem["xong"]
-        n_con = (man_con + api_con + app_con + len(pcd or [])
-                 + dem["dang_lam"] + dem["chua_lam"] + dem["treo"])
-        chua_tach = r["tuyen"] == 0 and not viec and not pcd
+        ds_menu.append({"nhan": m["nhan"], "duong": m["duong"] or "—",
+                        "khoa": kq.get(m["khoa"] or "", m["khoa"] or "—"),
+                        "co_man": bool(m["duong"] and m["co_man"]), "chua_dung": pcd})
 
-        if not m and not r["tuyen"] and not viec:
-            cn.append([r["so"], r["ten"], "Chương giới thiệu của bản đặc tả, không phải một chức năng",
-                       "", "", "", "Không tính vào % dự án"])
-            continue
-
-        ht = []
-        if m is None:
-            ht.append("không có mục menu web")
-        elif m["duong"] is None:
-            ht.append("chưa có màn web (mục menu hiện nhưng chưa bấm được)")
-        elif m["co_man"]:
-            ht.append("đã có màn web")
-            co_man.append(r["ten"])
+    # ---- service + đơn vị triển khai -------------------------------------------------------
+    services = sorted(d for d in os.listdir(ROOT)
+                      if d.startswith("service-") and os.path.isdir(os.path.join(ROOT, d)))
+    don_vi = []
+    for ten in services + ["web-admin", "platform-admin", "citizen-app"]:
+        ngan = ten[len("service-"):] if ten.startswith("service-") else ten
+        svc_yaml = doc(os.path.join(ROOT, "deploy", "base", ngan, "service.yaml"))
+        if ten.startswith("service-"):
+            loai = "Go · REST" + (" + gRPC" if "grpc" in svc_yaml else "")
+        elif ten == "citizen-app":
+            loai = "Zalo Mini App (không chạy thành pod)"
         else:
-            ht.append("menu khai đường dẫn nhưng chưa có trang")
-        if r["web"]:
-            ht.append(f"mã web đã gọi {r['da_goi']}/{r['web']} API")
-        elif not r["tuyen"]:
-            ht.append("chưa có API nào")
-        if cong_dan:
-            ht.append(f"Mini App công dân đã gọi {app_xong}/{len(cong_dan)} API dành cho người dân")
-        if viec:
-            ht.append("sổ tiến độ: " + ", ".join(f"{dem[k]} {NHAN_TT[k].lower()}"
-                                                   for k in THU_TU_TT if dem[k]))
-        hien_trang = "; ".join(ht)
-        hien_trang = hien_trang[0].upper() + hien_trang[1:]
+            loai = "Next.js · HTTP"
+        co = lambda p: "Có" if os.path.exists(os.path.join(ROOT, *p)) else "Không"  # noqa: E731
+        don_vi.append({
+            "ten": ngan, "loai": loai, "dockerfile": co([ten, "Dockerfile"]),
+            "jenkinsfile": co([ten, "Jenkinsfile"]),
+            "manifest": ("Không áp dụng" if ten == "citizen-app"
+                         else co(["deploy", "base", ngan])),
+        })
 
-        con = ["Màn web của chức năng này chưa dựng"] if man_con else []
-        con += [cau(p, 160) for p in (pcd or [])]
-        con += [f"{cau(x.get('viec', ''), 160)} ({NHAN_TT.get(x.get('trang_thai'), '?').lower()})"
-                for _ma, x in viec if x.get("trang_thai") != "xong"]
-        if api_con:
-            con.append(f"{api_con} API máy chủ đã có nhưng chưa có màn web gọi tới")
-        if app_con:
-            con.append(f"{app_con} API dành cho người dân mà Mini App chưa gọi")
-        if m and m["duong"] is not None and pcd is None:
-            con.append("Màn này CHƯA KHAI phần nào còn thiếu so với đặc tả — cần rà lại; "
-                       "% bên cạnh có thể cao hơn thực tế")
-
-        if chua_tach:
-            chua_kc.append(r["ten"])
-            cn.append([r["so"], r["ten"], hien_trang + ". Chưa khởi công",
-                       "Toàn bộ chương — chưa tách thành phần việc nào",
-                       PhanTram(0), "Chưa ước được: chưa có phần việc nào để đo",
-                       "Chưa có phần nào được tách ra — ghi 0%, không phải 0/0"])
-            continue
-        tong["xong"] += n_xong
-        tong["con"] += n_con
-        tong["treo"] += dem["treo"]
-        cach = (f"{n_xong} xong / {n_xong + n_con} phần. Xong = "
-                + (f"{man_xong} màn web + " if m else "")
-                + f"{r['da_goi']} API có mã web gọi"
-                + (f" + {app_xong} API Mini App đã gọi" if cong_dan else "")
-                + f" + {dem['xong']} việc sổ xong. Còn = "
-                + (f"{man_con} màn web + " if m else "")
-                + f"{api_con} API chưa có mã web gọi"
-                + (f" + {app_con} API Mini App chưa gọi" if cong_dan else "")
-                + f" + {len(pcd or [])} phần màn chưa dựng + "
-                  f"{dem['dang_lam'] + dem['chua_lam'] + dem['treo']} việc sổ chưa xong")
-        cn.append([r["so"], r["ten"], hien_trang, danh_sach(con) or "Không còn phần nào được ghi nhận",
-                   PhanTram(n_xong / (n_xong + n_con)), du_kien(n_con, td, hom_nay, True), cach])
-
-    # ---- Tổng quan --------------------------------------------------------------------------
-    tq: list[list] = []
-    nhom_rows = []
-    for ten_nhom, _f in NHOM + [(k, None) for k in viec_nhom if k not in {t for t, _ in NHOM}]:
-        viec = viec_nhom.get(ten_nhom, [])
-        if not viec:
-            continue
-        dem = {k: sum(1 for _ma, x in viec if x.get("trang_thai") == k) for k in THU_TU_TT}
-        n_con = dem["dang_lam"] + dem["chua_lam"] + dem["treo"]
-        tong["xong"] += dem["xong"]
-        tong["con"] += n_con
-        tong["treo"] += dem["treo"]
-        mo = [x for _ma, x in viec if x.get("trang_thai") != "xong"]
-        con = [cau(x.get("viec", ""), 140) for x in mo[:8]]
-        if len(mo) > 8:
-            con.append(f"… và {len(mo) - 8} việc nữa — xem sheet Việc còn lại")
-        nhom_rows.append([ten_nhom,
-                          f"{dem['xong']} việc xong, {dem['dang_lam']} đang làm, "
-                          f"{dem['chua_lam']} chưa làm, {dem['treo']} tạm dừng",
-                          danh_sach(con) or "Không còn việc nào trong sổ",
-                          PhanTram(dem["xong"] / len(viec)),
-                          du_kien(n_con, td, hom_nay, True)])
-
-    n_cn = sum(1 for d in cn if d[4] != "")
-    tong_phan = tong["xong"] + tong["con"]
-    giai_doan = ("Đang ở giai đoạn THI CÔNG (lập trình). " if tong["con"] else
-                 "Phần thi công đo được đã xong. ")
-    tq.append([
-        "TOÀN DỰ ÁN",
-        giai_doan + f"{len(co_man)}/{n_cn} chức năng đã có màn web dùng được"
-        + (f"; {len(chua_kc)} chức năng chưa khởi công ({', '.join(chua_kc)})" if chua_kc else "")
-        + ".",
-        f"{tong['con']} phần việc còn lại, trong đó {tong['treo']} đang tạm dừng chờ điều kiện. "
-        "Sau thi công còn: triển khai lên hạ tầng thật, nộp và chờ Zalo duyệt Mini App, kiểm thử "
-        "nghiệm thu với khách, bàn giao (estimate §5–§8).",
-        PhanTram(tong["xong"] / tong_phan) if tong_phan else PhanTram(0),
-        du_kien(tong["con"], td, hom_nay, False)
-        + (f". CHƯA tính {len(chua_kc)} chức năng chưa khởi công" if chua_kc else "")
-        + " và các bước sau thi công",
-    ])
-    cn_xong = sum(1 for d in cn if isinstance(d[4], PhanTram) and d[4] >= 1)
-    cn_phan = [(d[4], d) for d in cn if isinstance(d[4], PhanTram)]
-    tq.append([
-        "Chức năng nghiệp vụ (chi tiết ở sheet Chức năng)",
-        f"{n_cn} chức năng: {cn_xong} đạt 100%, {len(co_man)} đã có màn web, "
-        f"{len(chua_kc)} chưa khởi công",
-        danh_sach([f"{d[1]}: {round(p * 100)}%" for p, d in cn_phan]),
-        "", "",
-    ])
-    tq.extend(nhom_rows)
-
-    tt_td = (f"{td['v']:.1f} việc sổ chuyển sang Xong mỗi ngày làm việc — {td['tang']} việc "
-             f"đã có trong sổ mà chưa xong, nay xong, từ "
-             f"{td['tu']:%d/%m/%Y} (commit {td['rev']}) tới hôm nay, {td['nlv']} ngày làm việc"
-             if td["v"] is not None else "Chưa đo được — " + td["ly_do"])
     commit = git("rev-parse", "--short", "HEAD").strip()
-    # Số liệu đọc từ CÂY LÀM VIỆC, không từ commit — cây bẩn thì nói ra (đo 24/09/2026, khi một
-    # tệp done/ sinh sai của phiên song song làm lệch một ô).
     ban = git("status", "--porcelain").splitlines()
-    if ban:
-        commit += f" + {len(ban)} tệp chưa commit — số liệu MỚI HƠN commit này"
-    tq += [["", "", "", "", ""],
-           ["CÁCH ĐỌC", "", "", "", ""],
-           ["Ngày xuất", datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), "", "", ""],
-           ["Commit", commit, "", "", ""],
-           ["Tốc độ đo được", tt_td, "", "", ""],
-           ["Cách tính %", "Phần xong ÷ tổng phần. Phần xong = màn web đã có + API có mã web gọi "
-            "+ API Mini App đã gọi + việc sổ Xong. Phần còn = màn web chưa có + API chưa ai gọi + "
-            "phần màn tự khai chưa dựng + việc sổ đang làm, chưa làm VÀ tạm dừng. Mỗi dòng sheet "
-            "Chức năng in từng số hạng ở cột Cách tính %", "", "", ""],
-           ["Cách tính dự kiến", "Phần còn ÷ tốc độ đo được, đếm ngày làm việc thứ Hai–Sáu từ hôm "
-            "nay. Dòng chức năng giả định dồn sức riêng cho chức năng ấy; các chức năng làm song "
-            "song nên KHÔNG cộng dồn các dòng — mốc cả dự án là dòng TOÀN DỰ ÁN", "", "", ""],
-           ["Giới hạn", "Các \"phần\" không đều nhau (một API, một ô trên màn, một việc sổ đều tính "
-            "là 1). Tốc độ chỉ đếm việc sổ chuyển sang Xong, còn phần còn lại gồm cả API và ô "
-            "trên màn. Việc mới phát sinh làm phần còn tăng, nên mốc dịch dần nếu phạm vi còn nở. "
-            "Không trừ ngày lễ. Chức năng chưa khởi công chưa có phần nào nên chưa có trong mốc "
-            "dự kiến", "", "", ""],
-           ["Phiên bản format", PHIEN_BAN_FORMAT, "", "", ""],
-           ["Nguồn", "tools/xuat_tien_do.py — sinh từ mã và sổ tiến độ, không ô nào viết tay. "
-            "Ghi chú của team để ở sheet RIÊNG tra theo cột Mã của Việc còn lại — Import → Replace "
-            "xoá mọi cột tự thêm", "", "", ""]]
-
-    # ---- Việc còn lại -----------------------------------------------------------------------
-    vc = []
-    for d in so:
-        for x in d.get("muc", []):
-            if x.get("trang_thai") == "xong":
-                continue
-            ma = f"{d['module']}/{x.get('id', '?')}"
-            vc.append([ma, thuoc[ma], cau(x.get("viec", ""), 400),
-                       NHAN_TT.get(x.get("trang_thai", ""), x.get("trang_thai", "")),
-                       cau(x.get("tiep_theo", "") or "", 400)])
-    vc.sort(key=lambda r: (r[1], [NHAN_TT[k] for k in THU_TU_TT].index(r[3])
-                           if r[3] in NHAN_TT.values() else 9, r[0]))
-
-    return {"Tổng quan": tq, "Chức năng": cn, "Việc còn lại": vc}
+    return {"chuong": ds_chuong, "menu": ds_menu, "tuyen": tuyen, "services": services,
+            "don_vi": don_vi, "so_module": so_module, "viec_module": dict(viec_module),
+            "commit": commit + (f" + {len(ban)} tệp chưa commit" if ban else "")}
 
 
 # ---------------------------------------------------------------------------------------------
-# Ghi .xlsx — tập con tối thiểu của SpreadsheetML
+# Bước 1 — khung nội dung
+HUONG_DAN = [
+    "Điền MỌI ô trong khoá `viet`; KHÔNG sửa `bang_chung` (bước 3 đọc lại số liệu từ kho, mọi thay đổi ở đó bị bỏ qua).",
+    "Nguồn viết: `bang_chung` + tệp sổ kb/90-ephemeral/tien-do/<module>.json + deploy/README.md mục 10. Mở tệp kiểm trước khi viết một khẳng định; không viết con số mà tool đã tự đếm (số API, số phần chưa dựng).",
+    "Văn phong: kỹ thuật, ngắn, một ý một câu, tiếng Việt có dấu. KHÔNG đặt câu hỏi cho người đọc. Việc còn chờ xác nhận / chờ bên khác → viết thành việc ĐANG XỬ LÝ (không 'chờ khách', 'cần BA quyết', 'bị chặn', 'treo', 'câu #n', không dấu hỏi) — tool từ chối các cụm ấy.",
+    f"`muc_do` của chương ∈ {list(MUC_DO)}. `trang_thai` mọi dòng khác ∈ {list(TRANG_THAI)}.",
+    "`web.<menu>.da_dung`: tên từng chức năng ĐÃ DỰNG trên màn, mỗi phần tử một chức năng, kèm § đặc tả nếu có. Tool đếm số lượng từ danh sách này.",
+    "Không đưa dữ liệu cá nhân (SĐT, CCCD, họ tên công dân) vào bất kỳ ô nào — luật 3.",
+]
+
+
+def khung_viet(sl: dict, cu: dict) -> dict:
+    """Khung `viet` đủ khoá cho số liệu hôm nay; giữ lại chữ đã viết ở lần trước nếu còn khớp."""
+    def giu(duong: list[str], mac_dinh):
+        v = cu
+        for k in duong:
+            if not isinstance(v, dict) or k not in v:
+                return mac_dinh
+            v = v[k]
+        return v
+
+    return {
+        "tom_tat": giu(["tom_tat"], ""),
+        "luu_y": giu(["luu_y"], ["", "", "", "", ""]),
+        "chuong": {r["so"]: giu(["chuong", r["so"]], {"da_lam": "", "con_thieu": "",
+                                                      "dang_xu_ly": "", "muc_do": ""})
+                   for r in sl["chuong"]},
+        "web": {m["nhan"]: giu(["web", m["nhan"]], {"da_dung": [], "ghi_chu": ""})
+                for m in sl["menu"]},
+        "web_ghi_chu_ky_thuat": giu(["web_ghi_chu_ky_thuat"], []),
+        "service": {s: giu(["service", s], {"pham_vi": "", "da_lam": "", "con_thieu": "",
+                                            "trang_thai": ""})
+                    for s in sl["services"]},
+        "nen_tang": giu(["nen_tang"], [{"hang_muc": "", "noi_dung": "", "da_lam": "",
+                                        "con_thieu": "", "trang_thai": ""}]),
+        "mini_app": giu(["mini_app"], {"mo_ta": "", "nhom": [
+            {"ten": "Giai đoạn 1 — …", "dong": [{"ten": "", "noi_dung": "", "trang_thai": "", "ghi_chu": ""}]},
+            {"ten": "Giai đoạn 2 — …", "dong": []},
+            {"ten": "Phát hành lên Zalo", "dong": []}]}),
+        "deploy": giu(["deploy"], {"mo_ta": "",
+                                   "ghi_chu_don_vi": {d["ten"]: "" for d in sl["don_vi"]},
+                                   "checklist": [{"buoc": "", "noi_dung": "", "trang_thai": "", "ghi_chu": ""}],
+                                   "rui_ro": []}),
+    }
+
+
+def ghi_khung(duong: str, sl: dict) -> None:
+    cu = {}
+    if os.path.exists(duong):
+        try:
+            cu = json.loads(doc(duong)).get("viet", {})
+        except Exception:
+            cu = {}
+    bc = {
+        "chuong": [{k: r[k] for k in ("so", "ten", "service", "api", "web", "chua_dung", "tuyen", "viec")}
+                   for r in sl["chuong"]],
+        "services": {s: {"so_tuyen": sum(1 for t in sl["tuyen"] if t["service"] == s),
+                         "viec": sl["viec_module"].get(s, [])} for s in sl["services"]},
+        "module_khac": {k: v for k, v in sl["viec_module"].items() if not k.startswith("service-")},
+        "don_vi_trien_khai": sl["don_vi"],
+    }
+    ra = {"phien_ban_format": PHIEN_BAN_FORMAT, "commit": sl["commit"],
+          "sinh_luc": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+          "_huong_dan": HUONG_DAN, "viet": khung_viet(sl, cu), "bang_chung": bc}
+    os.makedirs(os.path.dirname(duong) or ".", exist_ok=True)
+    io.open(duong, "w", encoding="utf-8").write(json.dumps(ra, ensure_ascii=False, indent=1))
+
+
+# ---------------------------------------------------------------------------------------------
+# Bước 3 — kiểm phần chữ
+def kiem_viet(v: dict, sl: dict) -> list[str]:
+    loi: list[str] = []
+
+    def chu(duong: str, s, bat_buoc: bool = True):
+        if not isinstance(s, str):
+            loi.append(f"{duong}: phải là chuỗi")
+        elif bat_buoc and not s.strip():
+            loi.append(f"{duong}: còn trống")
+        elif loi_van_phong(s):
+            loi.append(f"{duong}: sai văn phong (câu hỏi / 'chờ…' / 'bị chặn' — viết thành việc đang xử lý)")
+
+    def tt(duong: str, s, cho_phep):
+        if s not in cho_phep:
+            loi.append(f"{duong}: '{s}' không thuộc {list(cho_phep)}")
+
+    chu("viet.tom_tat", v.get("tom_tat"))
+    ly = v.get("luu_y") or []
+    if not ly:
+        loi.append("viet.luu_y: cần ít nhất một điểm")
+    for i, s in enumerate(ly):
+        chu(f"viet.luu_y[{i}]", s)
+    ch = v.get("chuong") or {}
+    for r in sl["chuong"]:
+        x = ch.get(r["so"])
+        if not isinstance(x, dict):
+            loi.append(f"viet.chuong.{r['so']}: thiếu ({r['ten']})")
+            continue
+        for k in ("da_lam", "con_thieu", "dang_xu_ly"):
+            chu(f"viet.chuong.{r['so']}.{k}", x.get(k))
+        tt(f"viet.chuong.{r['so']}.muc_do", x.get("muc_do"), MUC_DO)
+    for k in set(ch) - {r["so"] for r in sl["chuong"]}:
+        loi.append(f"viet.chuong.{k}: chương không còn trong đặc tả — tệp nội dung đã cũ")
+    web = v.get("web") or {}
+    for m in sl["menu"]:
+        x = web.get(m["nhan"])
+        if not isinstance(x, dict):
+            loi.append(f"viet.web.{m['nhan']}: thiếu")
+            continue
+        ds = x.get("da_dung") or []
+        if m["co_man"] and not ds:
+            loi.append(f"viet.web.{m['nhan']}.da_dung: màn đã có mà chưa liệt kê chức năng nào")
+        for i, s in enumerate(ds):
+            chu(f"viet.web.{m['nhan']}.da_dung[{i}]", s)
+        chu(f"viet.web.{m['nhan']}.ghi_chu", x.get("ghi_chu", ""), bat_buoc=False)
+    for k in set(web) - {m["nhan"] for m in sl["menu"]}:
+        loi.append(f"viet.web.{k}: mục menu không còn — tệp nội dung đã cũ")
+    for i, s in enumerate(v.get("web_ghi_chu_ky_thuat") or []):
+        chu(f"viet.web_ghi_chu_ky_thuat[{i}]", s)
+    sv = v.get("service") or {}
+    for s in sl["services"]:
+        x = sv.get(s)
+        if not isinstance(x, dict):
+            loi.append(f"viet.service.{s}: thiếu")
+            continue
+        for k in ("pham_vi", "da_lam", "con_thieu"):
+            chu(f"viet.service.{s}.{k}", x.get(k))
+        tt(f"viet.service.{s}.trang_thai", x.get("trang_thai"), TRANG_THAI)
+    for i, x in enumerate(v.get("nen_tang") or []):
+        for k in ("hang_muc", "noi_dung", "da_lam"):
+            chu(f"viet.nen_tang[{i}].{k}", x.get(k))
+        chu(f"viet.nen_tang[{i}].con_thieu", x.get("con_thieu", ""), bat_buoc=False)
+        tt(f"viet.nen_tang[{i}].trang_thai", x.get("trang_thai"), TRANG_THAI)
+    ma = v.get("mini_app") or {}
+    chu("viet.mini_app.mo_ta", ma.get("mo_ta"))
+    for i, n in enumerate(ma.get("nhom") or []):
+        chu(f"viet.mini_app.nhom[{i}].ten", n.get("ten"))
+        for j, x in enumerate(n.get("dong") or []):
+            p = f"viet.mini_app.nhom[{i}].dong[{j}]"
+            chu(p + ".ten", x.get("ten"))
+            chu(p + ".noi_dung", x.get("noi_dung"))
+            chu(p + ".ghi_chu", x.get("ghi_chu", ""), bat_buoc=False)
+            tt(p + ".trang_thai", x.get("trang_thai"), TRANG_THAI)
+    dp = v.get("deploy") or {}
+    chu("viet.deploy.mo_ta", dp.get("mo_ta"))
+    for k, s in (dp.get("ghi_chu_don_vi") or {}).items():
+        chu(f"viet.deploy.ghi_chu_don_vi.{k}", s, bat_buoc=False)
+    if not dp.get("checklist"):
+        loi.append("viet.deploy.checklist: cần ít nhất một bước")
+    for i, x in enumerate(dp.get("checklist") or []):
+        p = f"viet.deploy.checklist[{i}]"
+        chu(p + ".buoc", x.get("buoc"))
+        chu(p + ".noi_dung", x.get("noi_dung"))
+        chu(p + ".ghi_chu", x.get("ghi_chu", ""), bat_buoc=False)
+        tt(p + ".trang_thai", x.get("trang_thai"), TRANG_THAI)
+    for i, s in enumerate(dp.get("rui_ro") or []):
+        chu(f"viet.deploy.rui_ro[{i}]", s)
+    return loi
+
+
+# ---------------------------------------------------------------------------------------------
+# Ghi .xlsx — tập con SpreadsheetML đủ cho định dạng, ô gộp, công thức, liên kết trong tệp
 _XML_BAN = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
-CO_LOC = {"Chức năng", "Việc còn lại"}   # Tổng quan có khối CÁCH ĐỌC bên dưới — lọc sẽ giấu nó
 
 
-def ten_cot(i: int) -> str:
+class CongThuc(str):
+    """Ô công thức (không kèm dấu `=`)."""
+
+
+def ten_cot(i: int) -> str:   # 0 → A
     s = ""
     i += 1
     while i:
@@ -513,62 +512,446 @@ def ten_cot(i: int) -> str:
     return s
 
 
-def o_xml(ref: str, v, kieu: int) -> str:
-    if isinstance(v, PhanTram):
-        return f'<c r="{ref}" s="3"><v>{round(float(v), 4)}</v></c>'
-    if isinstance(v, (int, float)) and not isinstance(v, bool):
-        return f'<c r="{ref}" s="{kieu}"><v>{v}</v></c>'
-    s = _XML_BAN.sub("", str(v))[:MAX_O]
-    return (f'<c r="{ref}" s="{kieu}" t="inlineStr"><is><t xml:space="preserve">'
-            f'{escape(s)}</t></is></c>')
+F = "Arial"
+NAVY, TEAL, GRID = "1F3864", "2E75B6", "BFBFBF"
+MAU_TT = {"xanh": ("E2F0D9", "375623"), "vang": ("FFF2CC", "7F6000"), "xam": ("EDEDED", "404040")}
+TT_MAU = {"Cơ bản xong": "xanh", "Xong": "xanh", "Có": "xanh", "Đã dựng": "xanh", "Mini App": "xanh",
+          "Đang hoàn thiện": "vang", "Đang làm": "vang", "Đang xử lý": "vang",
+          "Chưa khởi công": "xam", "Chưa làm": "xam", "Không": "xam", "Không áp dụng": "xam",
+          "Chưa": "xam"}
 
 
-def sheet_xml(cot: list[tuple], dong: list[list], loc: bool) -> str:
-    n = len(dong) + 1
-    x = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
-         '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" '
-         'activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
-         "<cols>" + "".join(f'<col min="{i+1}" max="{i+1}" width="{w}" customWidth="1"/>'
-                            for i, (_t, w) in enumerate(cot)) + "</cols>",
-         "<sheetData>",
-         '<row r="1">' + "".join(o_xml(f"{ten_cot(i)}1", t, 1) for i, (t, _w) in
-                                 enumerate(cot)) + "</row>"]
-    for r, d in enumerate(dong, 2):
-        x.append(f'<row r="{r}">' + "".join(o_xml(f"{ten_cot(i)}{r}", v, 2)
-                                            for i, v in enumerate(d)) + "</row>")
-    x.append("</sheetData>")
-    if loc:
-        x.append(f'<autoFilter ref="A1:{ten_cot(len(cot) - 1)}{n}"/>')
-    x.append("</worksheet>")
-    return "".join(x)
+class KieuO:
+    """Bảng kiểu: mỗi tổ hợp (font, nền, viền, căn) một chỉ số `xf`, sinh khi dùng lần đầu."""
+
+    def __init__(self):
+        self.font = ['<font><sz val="10"/><name val="Arial"/></font>']
+        self.fill = ['<fill><patternFill patternType="none"/></fill>',
+                     '<fill><patternFill patternType="gray125"/></fill>']
+        self.border = ['<border><left/><right/><top/><bottom/><diagonal/></border>']
+        self.xf = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>']
+        self._idx: dict = {}
+
+    def _them(self, ds: list, x: str) -> int:
+        if x not in ds:
+            ds.append(x)
+        return ds.index(x)
+
+    def __call__(self, sz=10, b=False, i=False, u=False, mau="000000", ten=F, nen=None,
+                 vien=None, can="trai", boc=True) -> int:
+        k = (sz, b, i, u, mau, ten, nen, vien, can, boc)
+        if k in self._idx:
+            return self._idx[k]
+        fo = self._them(self.font, "<font>" + ("<b/>" if b else "") + ("<i/>" if i else "")
+                        + ('<u val="single"/>' if u else "") + f'<sz val="{sz}"/>'
+                        + f'<color rgb="FF{mau}"/><name val="{ten}"/></font>')
+        fi = 0 if not nen else self._them(
+            self.fill, f'<fill><patternFill patternType="solid"><fgColor rgb="FF{nen}"/>'
+                       f'<bgColor indexed="64"/></patternFill></fill>')
+        if vien == "luoi":
+            bo = self._them(self.border, "<border>" + "".join(
+                f'<{s} style="thin"><color rgb="FF{GRID}"/></{s}>'
+                for s in ("left", "right", "top", "bottom")) + "<diagonal/></border>")
+        elif vien == "duoi":
+            bo = self._them(self.border, f'<border><left/><right/><top/><bottom style="medium">'
+                                         f'<color rgb="FF{TEAL}"/></bottom><diagonal/></border>')
+        else:
+            bo = 0
+        ngang = {"trai": "", "giua": ' horizontal="center"'}[can]
+        dung = ' vertical="center"' if can == "giua" and not boc else ' vertical="top"'
+        boc_xml = ' wrapText="1"' if boc else ""   # Jenkins chạy python3.9: không `\` trong f-string
+        al = f"<alignment{ngang}{dung}{boc_xml}/>"
+        self.xf.append(f'<xf numFmtId="0" fontId="{fo}" fillId="{fi}" borderId="{bo}" xfId="0" '
+                       f'applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">{al}</xf>')
+        self._idx[k] = len(self.xf) - 1
+        return self._idx[k]
+
+    def xml(self) -> str:
+        return ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                f'<fonts count="{len(self.font)}">{"".join(self.font)}</fonts>'
+                f'<fills count="{len(self.fill)}">{"".join(self.fill)}</fills>'
+                f'<borders count="{len(self.border)}">{"".join(self.border)}</borders>'
+                '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+                f'<cellXfs count="{len(self.xf)}">{"".join(self.xf)}</cellXfs>'
+                # Kiểu "Normal": thiếu nó, một số trình đọc tự bù — tệp đi vào Google Sheet của
+                # cả team thì không để trình đọc phải đoán.
+                '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
+                "</styleSheet>")
 
 
-STYLES = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-          '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-          '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
-          '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
-          '<fills count="3"><fill><patternFill patternType="none"/></fill>'
-          '<fill><patternFill patternType="gray125"/></fill>'
-          '<fill><patternFill patternType="solid"><fgColor rgb="FFD9E1F2"/></patternFill></fill>'
-          '</fills>'
-          '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
-          '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-          '<cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
-          '<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'
-          '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1">'
-          '<alignment vertical="top" wrapText="1"/></xf>'
-          '<xf numFmtId="9" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" '
-          'applyAlignment="1"><alignment vertical="top"/></xf></cellXfs>'
-          # Kiểu "Normal" mặc định: thiếu nó, openpyxl cảnh báo và một số trình đọc tự bù — tệp
-          # đi vào Google Sheet của cả team thì không để trình đọc phải đoán.
-          '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
-          "</styleSheet>")
+class Sheet:
+    def __init__(self, ten: str, cot: list[tuple[str, int]], tab: str, k: KieuO):
+        self.ten, self.cot, self.tab, self.k = ten, cot, tab, k
+        self.o: dict[tuple[int, int], tuple] = {}
+        self.gop: list[str] = []
+        self.cao: dict[int, float] = {}
+        self.lien_ket: list[tuple[str, str]] = []
+        self.dong_bang: str | None = None
+        self.loc: str | None = None
+        self.r = 1
+        self.nc = len(cot)
+
+    def rong(self, j: int) -> int:
+        return self.cot[j - 1][1]
+
+    def dat(self, r: int, j: int, v, s: int):
+        self.o[(r, j)] = (v, s)
+
+    def gop_o(self, r1, j1, r2, j2):
+        self.gop.append(f"{ten_cot(j1 - 1)}{r1}:{ten_cot(j2 - 1)}{r2}")
+
+    def uoc_cao(self, r: int, vals: list, rong_rieng: dict | None = None):
+        dong = 1
+        for j, v in enumerate(vals, 1):
+            if v is None or isinstance(v, CongThuc):
+                continue
+            w = (rong_rieng or {}).get(j, self.rong(j))
+            moi = max(1, int(w * 1.0))   # ngắt theo từ nên một dòng chứa ít ký tự hơn độ rộng cột
+            dong = max(dong, sum(max(1, math.ceil(len(seg) / moi)) for seg in str(v).split("\n")))
+        self.cao[r] = min(409, 13.5 * dong + 5)
+
+    # ---- khối dựng sẵn ---------------------------------------------------------------------
+    def tieu_de(self, chu: str, phu: str):
+        k = self.k
+        self.gop_o(1, 1, 1, self.nc)
+        self.dat(1, 1, chu, k(15, b=True, mau="FFFFFF", nen=NAVY, boc=False, can="trai"))
+        for j in range(2, self.nc + 1):
+            self.dat(1, j, None, k(nen=NAVY))
+        self.cao[1] = 30
+        self.gop_o(2, 1, 2, self.nc)
+        self.dat(2, 1, phu, k(9, i=True, mau="595959"))
+        self.cao[2] = max(30, 13 * math.ceil(len(phu) / (sum(w for _t, w in self.cot) * 1.2)) + 6)
+        self.r = 4
+
+    def muc(self, chu: str):
+        s = self.k(11, b=True, mau=NAVY, vien="duoi")
+        self.gop_o(self.r, 1, self.r, self.nc)
+        self.dat(self.r, 1, chu, s)
+        for j in range(2, self.nc + 1):
+            self.dat(self.r, j, None, s)
+        self.cao[self.r] = 20
+        self.r += 1
+
+    def dau_bang(self, cot: list[str], gop: list[tuple[int, int]] = ()):
+        s = self.k(10, b=True, mau="FFFFFF", nen=TEAL, vien="luoi", can="giua")
+        for j, t in enumerate(cot, 1):
+            self.dat(self.r, j, t, s)
+        for a, b in gop:
+            self.gop_o(self.r, a, self.r, b)
+        self.uoc_cao(self.r, cot, {a: sum(self.rong(x) for x in range(a, b + 1)) for a, b in gop})
+        self.cao[self.r] = max(30, self.cao[self.r])
+        self.r += 1
+
+    def dong(self, vals: list, tt=(), giua=(), dam=(), soc=False, gop: list[tuple[int, int]] = (),
+             font_rieng: dict | None = None):
+        k = self.k
+        rong_rieng = {a: sum(self.rong(x) for x in range(a, b + 1)) for a, b in gop}
+        for j, v in enumerate(vals, 1):
+            can = "giua" if j in giua else "trai"
+            nen = "F7F9FC" if soc else None
+            if j in tt and isinstance(v, str) and v in TT_MAU:
+                bg, fg = MAU_TT[TT_MAU[v]]
+                s = k(10, b=True, mau=fg, nen=bg, vien="luoi", can=can)
+            elif font_rieng and j in font_rieng:
+                s = k(vien="luoi", nen=nen, can=can, **font_rieng[j])
+            else:
+                s = k(10, b=(j in dam), nen=nen, vien="luoi", can=can)
+            self.dat(self.r, j, v, s)
+        for a, b in gop:
+            self.gop_o(self.r, a, self.r, b)
+        self.uoc_cao(self.r, vals, rong_rieng)
+        self.r += 1
+        return self.r - 1
+
+    def ghi_chu(self, chu: str, nghieng: bool = True):
+        self.gop_o(self.r, 1, self.r, self.nc)
+        self.dat(self.r, 1, chu, self.k(9 if nghieng else 10, i=nghieng,
+                                        mau="595959" if nghieng else "262626"))
+        tong = sum(w for _t, w in self.cot)
+        self.cao[self.r] = max(15, 13.5 * math.ceil(len(chu) / (tong * 1.15)) + 4)
+        self.r += 1
+
+    # ---- XML ------------------------------------------------------------------------------
+    def xml(self) -> str:
+        x = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+             '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+             'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+             f'<sheetPr><tabColor rgb="FF{self.tab}"/><pageSetUpPr fitToPage="1"/></sheetPr>',
+             '<sheetViews><sheetView showGridLines="0" workbookViewId="0">']
+        if self.dong_bang:
+            m = re.match(r"([A-Z]+)(\d+)", self.dong_bang)
+            cot_n = sum((ord(ch) - 64) * 26 ** i for i, ch in enumerate(reversed(m.group(1)))) - 1
+            dong_n = int(m.group(2)) - 1
+            x.append(f'<pane xSplit="{cot_n}" ySplit="{dong_n}" topLeftCell="{self.dong_bang}" '
+                     f'activePane="bottomRight" state="frozen"/>')
+        x.append("</sheetView></sheetViews>")
+        x.append("<cols>" + "".join(f'<col min="{i}" max="{i}" width="{w}" customWidth="1"/>'
+                                    for i, (_t, w) in enumerate(self.cot, 1)) + "</cols><sheetData>")
+        for r in sorted({r for r, _j in self.o} | set(self.cao)):
+            cao = f' ht="{self.cao[r]:.1f}" customHeight="1"' if r in self.cao else ""
+            o = []
+            for j in sorted(jj for rr, jj in self.o if rr == r):
+                v, s = self.o[(r, j)]
+                ref = f"{ten_cot(j - 1)}{r}"
+                if v is None:
+                    o.append(f'<c r="{ref}" s="{s}"/>')
+                elif isinstance(v, CongThuc):
+                    o.append(f'<c r="{ref}" s="{s}"><f>{escape(str(v))}</f></c>')
+                elif isinstance(v, (int, float)) and not isinstance(v, bool):
+                    o.append(f'<c r="{ref}" s="{s}"><v>{v}</v></c>')
+                else:
+                    t = _XML_BAN.sub("", str(v))[:MAX_O]
+                    o.append(f'<c r="{ref}" s="{s}" t="inlineStr"><is><t xml:space="preserve">'
+                             f'{escape(t)}</t></is></c>')
+            x.append(f'<row r="{r}"{cao}>' + "".join(o) + "</row>")
+        x.append("</sheetData>")
+        if self.loc:
+            x.append(f'<autoFilter ref="{self.loc}"/>')
+        if self.gop:
+            x.append(f'<mergeCells count="{len(self.gop)}">'
+                     + "".join(f'<mergeCell ref="{g}"/>' for g in self.gop) + "</mergeCells>")
+        if self.lien_ket:
+            x.append("<hyperlinks>" + "".join(
+                f'<hyperlink ref="{ref}" location="{escape(loc)}" display="{escape(loc)}"/>'
+                for ref, loc in self.lien_ket) + "</hyperlinks>")
+        x.append('<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>'
+                 '<pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>')
+        return "".join(x)
 
 
-def ghi_xlsx(duong: str, du_lieu: dict[str, list[list]]) -> None:
-    ten = [t for t, _c in SHEETS]
-    loc = [(i, t, c_) for i, (t, c_) in enumerate(SHEETS) if t in CO_LOC]
+def q(ten: str) -> str:
+    return "'" + ten.replace("'", "''") + "'"
+
+
+# ---------------------------------------------------------------------------------------------
+# Dựng bảy sheet
+def dung(sl: dict, v: dict, ngay: str) -> tuple[list[Sheet], KieuO]:
+    k = KieuO()
+    cot = dict(SHEETS)
+    sh = {t: Sheet(t, cot[t], tab, k) for t, tab in
+          [(S1, NAVY), (S2, TEAL), (S3, "548235"), (S4, "548235"), (S5, "BF8F00"),
+           (S6, "7030A0"), (S7, "C00000")]}
+    hdr = lambda t: [ct for ct, _w in cot[t]]  # noqa: E731
+
+    # ---- 2. Chức năng theo menu -------------------------------------------------------------
+    s = sh[S2]
+    s.tieu_de("CHỨC NĂNG THEO TỪNG MENU / PHÂN HỆ",
+              "Mỗi dòng = một chương đặc tả (docs/ui-ux/NN-*.md) = một mục menu Web Admin. Cột API: "
+              "\"số tuyến web đã gọi / tổng tuyến web của chương\", tuyến kênh công dân ghi riêng. "
+              "Danh sách đầy đủ phần chưa dựng của từng màn ở sheet 5.")
+    s.dau_bang(hdr(S2))
+    c2a = s.r
+    for i, r in enumerate(sl["chuong"]):
+        x = v["chuong"][r["so"]]
+        s.dong([r["so"], r["ten"], r["service"], r["api"], r["web"], x["da_lam"], x["con_thieu"],
+                x["dang_xu_ly"], x["muc_do"]], tt=(9,), giua=(1, 4), dam=(2,), soc=i % 2 == 1)
+    c2b = s.r - 1
+    s.dong_bang, s.loc = f"C{c2a}", f"A{c2a - 1}:I{c2b}"
+    s.r += 1
+    s.ghi_chu("Mức độ: Cơ bản xong = luồng chính chạy, còn hạng mục phụ · Đang hoàn thiện = có API + "
+              "màn web gọi được, còn phần đặc tả chưa dựng · Đang xử lý = đang hoàn thiện đặc tả / phụ "
+              "thuộc trước khi dựng · Chưa khởi công = chưa có API và màn.")
+
+    # ---- 4. Danh mục API ------------------------------------------------------------------
+    s = sh[S4]
+    s.tieu_de("DANH MỤC API REST (SINH TỪ HỢP ĐỒNG)",
+              "Nguồn: kb/20-contracts/openapi.json. Cột \"Web gọi\": Có = đã có mã web-admin gọi tuyến "
+              "này; Mini App = citizen-app đang gọi. Lọc theo cột bằng nút ▼ ở dòng tiêu đề.")
+    s.dau_bang(hdr(S4))
+    c4a = s.r
+    for i, t in enumerate(sl["tuyen"]):
+        s.dong([t["so"] or "—", t["pt"], t["duong"], t["chuong"], t["service"], t["chuc_nang"],
+                t["kind"], t["khoa"], t["chong_trung"], t["goi"]], tt=(10,), giua=(1, 2, 9, 10),
+               soc=i % 2 == 1, font_rieng={3: {"sz": 9, "ten": "Consolas"}})
+    c4b = s.r - 1
+    s.dong_bang, s.loc = f"D{c4a}", f"A{c4a - 1}:J{c4b}"
+
+    # ---- 3. API Backend -------------------------------------------------------------------
+    s = sh[S3]
+    s.tieu_de("BACKEND — GO MICROSERVICES",
+              "Mỗi service sở hữu CSDL riêng; gọi chéo chỉ qua gRPC hoặc event. Mọi request mang "
+              "tenant_id (xã) lấy từ domain, không nhận từ client. Số tuyến REST đếm từ hợp đồng; "
+              "danh mục từng tuyến ở sheet 4.")
+    s.dau_bang(hdr(S3))
+    c3a = s.r
+    for i, ten in enumerate(sl["services"]):
+        x = v["service"][ten]
+        r = s.dong([ten, x["pham_vi"], CongThuc(f'COUNTIF({q(S4)}!$E:$E,A{s.r})'), x["da_lam"],
+                    x["con_thieu"], x["trang_thai"]], tt=(6,), giua=(3,), dam=(1, 3), soc=i % 2 == 1)
+    c3b = s.r - 1
+    s.dong(["Tổng", "", CongThuc(f"SUM(C{c3a}:C{c3b})"), "", "", ""], giua=(3,), dam=(1, 3))
+    if v.get("nen_tang"):
+        s.r += 1
+        s.muc("Nền tảng kỹ thuật dùng chung (core/)")
+        s.dau_bang(["Hạng mục", "Nội dung", "", "Đã làm", "Còn thiếu", "Trạng thái"], gop=[(2, 3)])
+        for i, x in enumerate(v["nen_tang"]):
+            s.dong([x["hang_muc"], x["noi_dung"], None, x["da_lam"], x.get("con_thieu", ""),
+                    x["trang_thai"]], tt=(6,), dam=(1,), soc=i % 2 == 1, gop=[(2, 3)])
+    s.dong_bang = f"B{c3a}"
+
+    # ---- 5. Web Admin ---------------------------------------------------------------------
+    s = sh[S5]
+    s.tieu_de("WEB ADMIN (NEXT.JS) — MÀN HÌNH CÁN BỘ",
+              "Cấu hình từng xã đọc lúc chạy theo domain (không đóng vào bundle). Kiểm quyền nằm ở máy "
+              "chủ; UI chỉ ẩn/hiện. \"Phần đã dựng\" đếm số chức năng ở cột bên cạnh (mỗi dòng một chức "
+              "năng). \"Phần chưa dựng\" là danh sách chính màn hình tự khai (PHAN_CHUA_DUNG) — chi tiết ở mục B.")
+    s.muc("A. Tổng hợp theo mục menu")
+    s.dau_bang(hdr(S5))
+    c5a = s.r
+    hang_menu = {}
+    for i, m in enumerate(sl["menu"], 1):
+        x = v["web"][m["nhan"]]
+        ds = "\n".join("• " + d for d in x.get("da_dung") or [])
+        r = s.r
+        s.dong([i, m["nhan"], m["duong"], m["khoa"], "Có" if m["co_man"] else "Không",
+                CongThuc(f'IF(LEN(G{r})=0,0,LEN(G{r})-LEN(SUBSTITUTE(G{r},CHAR(10),""))+1)'),
+                ds, None, x.get("ghi_chu", "")], tt=(5,), giua=(1, 5, 6, 8), dam=(2, 6, 8),
+               soc=i % 2 == 0)
+        s.cao[r] = max(s.cao[r], 13.5 * max(1, len(x.get("da_dung") or [])) + 5)
+        hang_menu[m["nhan"]] = r
+    c5b = s.r - 1
+    tong5 = s.dong(["", "Tổng", "", "", CongThuc(f'COUNTIF(E{c5a}:E{c5b},"Có")&"/"&COUNTA(E{c5a}:E{c5b})'),
+                    CongThuc(f"SUM(F{c5a}:F{c5b})"), "", CongThuc(f"SUM(H{c5a}:H{c5b})"), ""],
+                   giua=(5, 6, 8), dam=(2, 5, 6, 8))
+    s.r += 1
+    s.muc("B. Chi tiết phần chưa dựng trên từng màn (§ = mục trong đặc tả)")
+    s.dau_bang(["#", "Mục menu", "Phần chưa dựng", "", "", "", "", "Nguồn", ""], gop=[(3, 7), (8, 9)])
+    la, n = s.r, 0
+    for m in sl["menu"]:
+        if not m["co_man"]:
+            continue
+        if m["chua_dung"] is None:
+            ds, nguon = ["Màn chưa khai danh sách phần chưa dựng (PHAN_CHUA_DUNG)"], "Không khai — chưa đếm được"
+        else:
+            ds, nguon = m["chua_dung"], "Màn tự khai (PHAN_CHUA_DUNG)"
+        for it in ds:
+            n += 1
+            s.dong([n, m["nhan"], it, None, None, None, None, nguon, None], giua=(1,), soc=n % 2 == 0,
+                   gop=[(3, 7), (8, 9)])
+    lb = s.r - 1
+    for m in sl["menu"]:
+        r = hang_menu[m["nhan"]]
+        dem = (CongThuc(f"COUNTIF($B${la}:$B${lb},B{r})") if m["co_man"] and m["chua_dung"] is not None
+               else 0)
+        s.o[(r, 8)] = (dem, s.o[(r, 8)][1])
+    s.dong_bang = f"C{c5a}"
+    if v.get("web_ghi_chu_ky_thuat"):
+        s.r += 1
+        s.muc("C. Ghi chú kỹ thuật Web Admin")
+        for t in v["web_ghi_chu_ky_thuat"]:
+            s.ghi_chu("• " + t, nghieng=False)
+
+    # ---- 6. Mini App ----------------------------------------------------------------------
+    s = sh[S6]
+    s.tieu_de("ZALO MINI APP — KÊNH CÔNG DÂN", v["mini_app"]["mo_ta"])
+    dem_ma = 0
+    for nh in v["mini_app"].get("nhom") or []:
+        s.muc(nh["ten"])
+        s.dau_bang(hdr(S6))
+        for i, x in enumerate(nh.get("dong") or [], 1):
+            dem_ma += 1
+            s.dong([i, x["ten"], x["noi_dung"], x["trang_thai"], x.get("ghi_chu", "")],
+                   tt=(4,), giua=(1, 4), dam=(2,), soc=i % 2 == 0)
+        s.r += 1
+
+    # ---- 7. Deployment --------------------------------------------------------------------
+    s = sh[S7]
+    dp = v["deploy"]
+    s.tieu_de("DEPLOYMENT — CI/CD & KUBERNETES", dp["mo_ta"])
+    s.muc("A. Thành phần triển khai (đọc từ kho: Dockerfile, Jenkinsfile, deploy/base/<đơn vị>)")
+    s.dau_bang(hdr(S7))
+    for i, d in enumerate(sl["don_vi"], 1):
+        s.dong([i, d["ten"], d["loai"], d["dockerfile"], d["jenkinsfile"], d["manifest"],
+                (dp.get("ghi_chu_don_vi") or {}).get(d["ten"], "")],
+               tt=(4, 5, 6), giua=(1, 4, 5, 6), dam=(2,), soc=i % 2 == 0)
+    s.r += 1
+    s.muc("B. Checklist đưa lên môi trường (theo thứ tự thực hiện)")
+    s.dau_bang(["#", "Bước", "Nội dung", "Trạng thái", "", "", "Ghi chú / điều kiện xanh"], gop=[(4, 6)])
+    ka = s.r
+    for i, x in enumerate(dp["checklist"], 1):
+        s.dong([i, x["buoc"], x["noi_dung"], x["trang_thai"], None, None, x.get("ghi_chu", "")],
+               tt=(4,), giua=(1, 4), dam=(2,), soc=i % 2 == 0, gop=[(4, 6)])
+    kb_ = s.r - 1
+    tong7 = s.dong(["", "Tiến độ checklist",
+                    CongThuc(f'COUNTIF(D{ka}:D{kb_},"Xong")&" / "&COUNTA(D{ka}:D{kb_})&" bước xong"'),
+                    None, None, None, ""], dam=(2, 3), gop=[(3, 6)])
+    if dp.get("rui_ro"):
+        s.r += 1
+        s.muc("C. Rủi ro vận hành cần biết")
+        for t in dp["rui_ro"]:
+            s.ghi_chu("• " + t, nghieng=False)
+
+    # ---- 1. Tổng quan (dựng sau cùng vì trỏ vào các sheet kia) ------------------------------
+    s = sh[S1]
+    s.tieu_de("ViGov v2 — BÁO CÁO TIẾN ĐỘ KỸ THUẬT",
+              f"Ngày xuất: {ngay} · Commit {sl['commit']} · Số liệu đếm được sinh từ mã, hợp đồng "
+              "kb/20-contracts/openapi.json và sổ kb/90-ephemeral/tien-do/; phần nhận định tóm tắt từ "
+              "sổ tiến độ. Ô công thức tự cập nhật khi sửa các sheet chi tiết.")
+    s.muc("Tóm tắt")
+    s.ghi_chu(v["tom_tat"], nghieng=False)
+    s.dat(s.r - 1, 1, v["tom_tat"], k(10, b=True, mau=NAVY))
+    s.r += 1
+    s.muc("Chỉ số chính")
+    s.dau_bang(hdr(S1), gop=[(2, 5)])
+    kpi = [
+        ("Phân hệ trong đặc tả (menu)", f"COUNTA({q(S2)}!B{c2a}:B{c2b})", S2, True),
+        *[(f"   · {md}", f'COUNTIF({q(S2)}!I{c2a}:I{c2b},"{md}")', S2, False) for md in MUC_DO],
+        ("Tuyến API REST trong hợp đồng", f"COUNTA({q(S4)}!C{c4a}:C{c4b})", S4, True),
+        ("   · Tuyến cán bộ đã có màn Web Admin gọi",
+         f'COUNTIF({q(S4)}!J{c4a}:J{c4b},"Có")&" / "&(COUNTA({q(S4)}!C{c4a}:C{c4b})'
+         f'-COUNTIF({q(S4)}!G{c4a}:G{c4b},"Chỉ công dân*"))', S4, False),
+        ("   · Kênh công dân (Mini App gọi / tổng)",
+         f'COUNTIF({q(S4)}!J{c4a}:J{c4b},"Mini App")&" / "&COUNTIF({q(S4)}!G{c4a}:G{c4b},"Chỉ công dân*")',
+         S4, False),
+        ("Mục menu Web Admin có màn thật", f"{q(S5)}!E{tong5}", S5, True),
+        ("Chức năng đã dựng trên các màn web", f"{q(S5)}!F{tong5}", S5, True),
+        ("Phần đặc tả chưa dựng trên các màn web", f"{q(S5)}!H{tong5}", S5, True),
+        ("Checklist deployment", f"{q(S7)}!C{tong7}", S7, True),
+    ]
+    for i, (nhan, ct, dich, dam) in enumerate(kpi):
+        r = s.dong([nhan, CongThuc(ct), None, None, None, dich], giua=(2,), dam=(2,) if dam else (),
+                   soc=i % 2 == 1, gop=[(2, 5)],
+                   font_rieng={6: {"mau": "0563C1", "u": True}})
+        s.lien_ket.append((f"F{r}", f"{q(dich)}!A1"))
+    s.r += 1
+    s.muc("Điểm cần lưu ý")
+    for i, t in enumerate(v["luu_y"], 1):
+        s.ghi_chu(f"{i}. {t}", nghieng=False)
+    s.r += 1
+    s.muc("Sổ tiến độ theo module mã nguồn (số hạng mục công việc)")
+    s.dau_bang(["Module", "Xong", "Đang xử lý", "Chưa làm", "Cập nhật lần cuối", ""])
+    ma_, mb_ = s.r, s.r + len(sl["so_module"]) - 1
+    for i, (mod, a, b, cl, cn) in enumerate(sl["so_module"]):
+        s.dong([mod, a, b, cl, cn, ""], giua=(2, 3, 4, 5), soc=i % 2 == 1)
+    s.dong(["Tổng", CongThuc(f"SUM(B{ma_}:B{mb_})"), CongThuc(f"SUM(C{ma_}:C{mb_})"),
+            CongThuc(f"SUM(D{ma_}:D{mb_})"), CongThuc(f'SUM(B{ma_}:D{mb_})&" hạng mục"'), ""],
+           giua=(2, 3, 4, 5), dam=(1, 2, 3, 4, 5))
+    s.ghi_chu("Số hạng mục KHÔNG phải % hoàn thành sản phẩm — mỗi hạng mục to nhỏ khác nhau. Dùng để thấy "
+              "khối lượng đang mở, không dùng để tính %.")
+    s.r += 1
+    s.muc("Cách đọc file")
+    for t in ["Sheet 2 — Chức năng theo từng menu: đã làm gì, còn thiếu gì, đang xử lý gì.",
+              "Sheet 3 & 4 — Backend: tổng hợp theo service và danh mục đầy đủ từng API (lọc được).",
+              "Sheet 5 — Web Admin: từng mục menu, chức năng đã dựng và danh sách chi tiết phần chưa dựng.",
+              "Sheet 6 — Mini App: từng giai đoạn và phát hành lên Zalo.",
+              "Sheet 7 — Deployment: thành phần, checklist đưa lên cụm, rủi ro vận hành.",
+              f"Nguồn: tools/xuat_tien_do.py (format v{PHIEN_BAN_FORMAT}) — lệnh /tien-do-san-pham --excel."]:
+        s.ghi_chu("• " + t, nghieng=False)
+    s.r += 1
+    s.dat(s.r, 1, "Chú giải màu:", k(10, b=True))
+    for j, (nhan, mau) in enumerate([("Xong / Cơ bản xong", "xanh"), ("Đang xử lý / hoàn thiện", "vang"),
+                                     ("Chưa làm / khởi công", "xam")], 2):
+        bg, fg = MAU_TT[mau]
+        s.dat(s.r, j, nhan, k(9, b=True, mau=fg, nen=bg, vien="luoi", can="giua"))
+    s.cao[s.r] = 28
+
+    return [sh[t] for t, _c in SHEETS], k
+
+
+def ghi_xlsx(duong: str, cac: list[Sheet], k: KieuO) -> None:
+    n = len(cac)
+    loc = [(i, s) for i, s in enumerate(cac) if s.loc]
     tep = {
         "[Content_Types].xml":
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -578,7 +961,7 @@ def ghi_xlsx(duong: str, du_lieu: dict[str, list[list]]) -> None:
             '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
             '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
             + "".join(f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-                      for i in range(1, len(ten) + 1)) + "</Types>",
+                      for i in range(1, n + 1)) + "</Types>",
         "_rels/.rels":
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
@@ -587,25 +970,28 @@ def ghi_xlsx(duong: str, du_lieu: dict[str, list[list]]) -> None:
         "xl/workbook.xml":
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
-            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
-            + "".join(f'<sheet name="{escape(t)}" sheetId="{i}" r:id="rId{i}"/>'
-                      for i, t in enumerate(ten, 1))
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            '<bookViews><workbookView activeTab="0"/></bookViews><sheets>'
+            + "".join(f'<sheet name="{escape(s.ten)}" sheetId="{i}" r:id="rId{i}"/>'
+                      for i, s in enumerate(cac, 1))
             + "</sheets>"
-            + "<definedNames>" + "".join(
+            + ("<definedNames>" + "".join(
                 f'<definedName name="_xlnm._FilterDatabase" localSheetId="{i}" hidden="1">'
-                f"'{escape(t)}'!$A$1:${ten_cot(len(c_) - 1)}${len(du_lieu[t]) + 1}</definedName>"
-                for i, t, c_ in loc) + "</definedNames></workbook>",
+                f"{escape(q(s.ten))}!${s.loc.split(':')[0][0]}${s.loc.split(':')[0][1:]}:"
+                f"${s.loc.split(':')[1][0]}${s.loc.split(':')[1][1:]}</definedName>"
+                for i, s in loc) + "</definedNames>" if loc else "")
+            + '<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>',
         "xl/_rels/workbook.xml.rels":
             '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
             + "".join(f'<Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i}.xml"/>'
-                      for i in range(1, len(ten) + 1))
-            + f'<Relationship Id="rId{len(ten) + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+                      for i in range(1, n + 1))
+            + f'<Relationship Id="rId{n + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
             "</Relationships>",
-        "xl/styles.xml": STYLES,
     }
-    for i, (t, cot) in enumerate(SHEETS, 1):
-        tep[f"xl/worksheets/sheet{i}.xml"] = sheet_xml(cot, du_lieu[t], t in CO_LOC)
+    for i, s in enumerate(cac, 1):
+        tep[f"xl/worksheets/sheet{i}.xml"] = s.xml()
+    tep["xl/styles.xml"] = k.xml()   # sau cùng: các sheet thêm kiểu trong lúc sinh XML
 
     os.makedirs(os.path.dirname(duong) or ".", exist_ok=True)
     with zipfile.ZipFile(duong, "w", zipfile.ZIP_DEFLATED) as z:
@@ -633,44 +1019,100 @@ def git_bo_qua(duong: str) -> bool | None:
     return r.returncode == 0
 
 
-def main(argv: list[str]) -> int:
-    duong = argv[0] if argv else os.path.join(
-        ROOT, "tmp", "tien-do", f"vigov-tien-do-{datetime.date.today().isoformat()}.xlsx")
-    if not duong.lower().endswith(".xlsx"):
-        duong += ".xlsx"
+def _chan_trong_kho(duong: str) -> bool:
     if git_bo_qua(duong) is False:
-        print(f"[xuat_tien_do] ĐỎ — {duong} nằm trong kho và git KHÔNG bỏ qua nó. Tệp nhị phân "
-              "sinh ra không được vào git. Để mặc định (tmp/) hoặc một đường ngoài kho.",
-              file=sys.stderr)
-        return 4
+        print(f"[xuat_tien_do] ĐỎ — {duong} nằm trong kho và git KHÔNG bỏ qua nó. Tệp sinh ra "
+              "không được vào git. Để mặc định (tmp/) hoặc một đường ngoài kho.", file=sys.stderr)
+        return True
+    return False
+
+
+def main(argv: list[str]) -> int:
+    hom_nay = datetime.date.today().isoformat()
+    mac_json = os.path.join(ROOT, "tmp", "tien-do", f"noi-dung-{hom_nay}.json")
+    mac_xlsx = os.path.join(ROOT, "tmp", "tien-do", f"vigov-tien-do-{hom_nay}.xlsx")
+    khung = "--khung" in argv
+    tu_tep = None
+    con: list[str] = []
+    it = iter(argv)
+    for a in it:
+        if a == "--khung":
+            continue
+        if a == "--tu":
+            tu_tep = next(it, None)
+            continue
+        con.append(a)
+
     try:
-        du_lieu = thu_thap()
+        sl = thu_thap()
     except Exception as ex:
         print(f"[xuat_tien_do] ĐỎ — {ex}. Chạy `make kb` trước.", file=sys.stderr)
         return 1
 
-    trung = [f"'{t}'!{ten_cot(j)}{i + 2}"
-             for t, dong in du_lieu.items() for i, d in enumerate(dong)
-             for j, v in enumerate(d) if isinstance(v, str) and co_du_lieu_ca_nhan(v)]
+    if khung:
+        duong = con[0] if con else mac_json
+        if _chan_trong_kho(duong):
+            return 4
+        ghi_khung(duong, sl)
+        print(f"[xuat_tien_do] khung nội dung: {duong} — {len(sl['chuong'])} chương · "
+              f"{len(sl['menu'])} menu · {len(sl['services'])} service. Điền khoá `viet`, rồi chạy "
+              f"--tu {duong}")
+        return 0
+
+    if not tu_tep:
+        print("[xuat_tien_do] ĐỎ — thiếu phần chữ. Bản Excel có hai bước: `--excel --khung` sinh khung "
+              "+ bằng chứng, agent viết khoá `viet`, rồi `--excel --tu <tệp.json>`. Chạy qua lệnh "
+              "/tien-do-san-pham --excel.", file=sys.stderr)
+        return 5
+    try:
+        nd = json.loads(doc(tu_tep))
+        v = nd["viet"]
+    except Exception as ex:
+        print(f"[xuat_tien_do] ĐỎ — không đọc được {tu_tep}: {ex}", file=sys.stderr)
+        return 5
+    loi = kiem_viet(v, sl)
+    if loi:
+        print(f"[xuat_tien_do] ĐỎ — phần chữ chưa đạt ({len(loi)} chỗ), KHÔNG ghi tệp:", file=sys.stderr)
+        for x in loi[:60]:
+            print("  " + x, file=sys.stderr)
+        if len(loi) > 60:
+            print(f"  … và {len(loi) - 60} chỗ nữa", file=sys.stderr)
+        return 5
+    if nd.get("commit", "").split(" ")[0] != sl["commit"].split(" ")[0]:
+        print(f"[xuat_tien_do] lưu ý — phần chữ viết ở commit {nd.get('commit')}, kho đang ở "
+              f"{sl['commit']}. Số liệu là của hôm nay; rà lại phần chữ nếu mã đã đổi nhiều.")
+
+    duong = con[0] if con else mac_xlsx
+    if not duong.lower().endswith(".xlsx"):
+        duong += ".xlsx"
+    if _chan_trong_kho(duong):
+        return 4
+    cac, k = dung(sl, v, datetime.datetime.now().strftime("%d/%m/%Y %H:%M"))
+
+    trung = [f"'{s.ten}'!{ten_cot(j - 1)}{r}" for s in cac for (r, j), (val, _st) in s.o.items()
+             if isinstance(val, str) and not isinstance(val, CongThuc) and co_du_lieu_ca_nhan(val)]
     if trung:
         print("[xuat_tien_do] ĐỎ — ô trông như số điện thoại / CCCD thật, KHÔNG ghi tệp (luật 3):",
               file=sys.stderr)
         print("  " + ", ".join(trung[:20]) + (" …" if len(trung) > 20 else ""), file=sys.stderr)
-        print("  Sửa nguồn (thường là một mục sổ tiến độ) — không bao giờ in giá trị ra đây.",
-              file=sys.stderr)
+        print("  Sửa nguồn — không bao giờ in giá trị ra đây.", file=sys.stderr)
         return 3
 
     try:
-        ghi_xlsx(duong, du_lieu)
+        ghi_xlsx(duong, cac, k)
     except PermissionError:
         # Windows khoá tệp đang mở trong Excel. Người chạy lệnh này thường vừa mở bản hôm nay.
         print(f"[xuat_tien_do] ĐỎ — không ghi được {duong}: tệp đang mở (thường là trong Excel). "
               "Đóng tệp rồi chạy lại, hoặc truyền một đường dẫn khác.", file=sys.stderr)
         return 1
     print(f"[xuat_tien_do] {os.path.relpath(duong, ROOT) if git_bo_qua(duong) is not None else duong}"
-          f" — format v{PHIEN_BAN_FORMAT} · " + " · ".join(
-              f"{t} {len(du_lieu[t])}" for t, _c in SHEETS))
+          f" — format v{PHIEN_BAN_FORMAT} · {len(sl['chuong'])} chương · {len(sl['tuyen'])} tuyến · "
+          f"{len(sl['menu'])} menu · {dem_menu_co_man(sl)} màn")
     return 0
+
+
+def dem_menu_co_man(sl: dict) -> int:
+    return sum(1 for m in sl["menu"] if m["co_man"])
 
 
 if __name__ == "__main__":
