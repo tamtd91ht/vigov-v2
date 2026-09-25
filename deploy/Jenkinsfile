@@ -1,19 +1,26 @@
 // Job HẠ TẦNG `vigov-deploy` — bấm tay. Làm qua Jenkins những việc trước đây phải SSH vào máy
-// chủ mới làm được: kiểm cụm, áp manifest, xem log.
+// chủ mới làm được: kiểm cụm, xem log, và (một lần) nhân bản staging sang prod.
 //
 // ─────────────────────────────────────────────────────────────────────────────────────────
-// VÌ SAO CÓ JOB NÀY — chủ dự án, 25/09/2026: "tôi không vào được máy chủ Jenkins, chỉ build
-// được". Đặt ẢNH của từng dịch vụ vẫn là việc của job dịch vụ (`service-*/Jenkinsfile`, bấm tay:
-// đóng ảnh rồi `set image`). Job này lo phần job dịch vụ không làm: ĐƯA MANIFEST LÊN CỤM
-// (Deployment, Service, Ingress, NetworkPolicy, ConfigMap) — lần cài đầu, và mỗi lần `deploy/`
-// đổi.
+// MÔ HÌNH ĐANG CHẠY THẬT — đo 25/09/2026 bằng `kiem-tra` trên vigov-staging, chủ dự án chọn
+// "prod = nhân bản staging" cùng ngày:
 //
-// KHÔNG TẠO SECRET. Giá trị bí mật đi qua tham số Jenkins là đi qua lịch sử build, và máy chủ
-// này chỉ có plugin lõi. Secret tạo trong giao diện Rancher (deploy/cau-hinh/README.md);
-// `kiem-tra` báo cái nào còn thiếu, `ap-manifest` TỪ CHỐI chạy khi còn thiếu.
+//   Staging được dựng TAY trong Rancher, KHÔNG từ `deploy/base`. Tên thật trên cụm:
+//     Deployment/Service  vigov-service-<dịch vụ> · vigov-web-admin
+//     Secret              <dịch vụ>-secrets  (key DATABASE_DSN · GRPC_CALLER_KEY ·
+//                         SESSION_SIGNING_KEYS · REDIS_DSN — trừ platform: không REDIS_DSN)
+//     ConfigMap           common-config (key ENV)
+//     Ingress             một cái mỗi dịch vụ, HTTP cổng 80, host thật (admin.vigov.vn …)
+//
+//   `deploy/base` + `overlays/` KHÔNG mô tả cụm này (tên `platform`, `bi-mat-*`, Ingress
+//   `*.vigov.vn` bắt TLS). Việc `ap-manifest` đã GỠ: áp nó lên prod sẽ tạo bộ Deployment thứ
+//   hai chạy song song, và giành `*.vigov.vn` với Ingress của staging.
+//
+// Đặt ẢNH là việc của job dịch vụ (`service-*/Jenkinsfile`). Job này không tạo Secret từ giá
+// trị nào nhập vào — chỉ chép theo TÊN, dữ liệu đi qua ống, không in ra log.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 //
-// MÁY CHỦ BUILD CẦN: kubectl (kustomize có sẵn bên trong). Stage đầu kiểm.
+// MÁY CHỦ BUILD CẦN: kubectl · python3 (chỉ cho nhan-ban-staging). Stage đầu kiểm.
 
 pipeline {
   agent any
@@ -26,29 +33,24 @@ pipeline {
   }
 
   parameters {
-    // `sao-chep-tu-staging` là việc MỘT LẦN (chủ dự án, 25/09/2026): chạy xong thì gỡ khỏi danh
-    // sách này bằng một commit — xem stage cùng tên.
-    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'ap-manifest', 'xem-log', 'sao-chep-tu-staging'],
-           description: 'kiem-tra: chỉ đọc · ap-manifest: đưa deploy/overlays/<MT> lên cụm, ' +
-                        'giữ thẻ ảnh đang chạy · xem-log: log + sự kiện của DICH_VU · ' +
-                        'sao-chep-tu-staging: chép Secret + ConfigMap từ vigov-staging sang vigov-prod (MT=prod)')
+    // `nhan-ban-staging` là việc MỘT LẦN: chạy xong thì gỡ khỏi danh sách bằng một commit.
+    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'nhan-ban-staging'],
+           description: 'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
+                        'nhan-ban-staging: chép Deployment + Service từ vigov-staging sang vigov-prod (MT=prod)')
     choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
     choice(name: 'DICH_VU',
-           choices: ['platform', 'identity', 'comms', 'documents', 'finance', 'petitions', 'web-admin'],
+           choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
+                     'vigov-service-documents', 'vigov-service-finance', 'vigov-service-petitions',
+                     'vigov-service-reporting', 'vigov-web-admin'],
            description: 'Chỉ dùng cho xem-log')
     string(name: 'XAC_NHAN', defaultValue: '',
-           description: 'Cho ap-manifest và sao-chep-tu-staging: gõ đúng tên namespace đích ' +
-                        '(vigov-prod / vigov-staging). Một cú bấm nhầm không được sửa cụm prod.')
+           description: 'Cho nhan-ban-staging: gõ đúng vigov-prod. Một cú bấm nhầm không được sửa cụm prod.')
   }
 
   environment {
     // Kubeconfig của ViGov — KHÔNG phải `rancher-omi.yaml` nằm cạnh nó (tên chỉ khác bốn ký tự;
-    // chép nhầm là áp manifest ViGov vào cụm của dự án khác).
+    // chép nhầm là thao tác vào cụm của dự án khác).
     KUBECONFIG = '/u01/rancher/rancher-vigov.yaml'
-    NS = "vigov-${params.MT}"
-    // Thẻ giữ chỗ của `overlays/<mt>/kustomization.yaml`. Ảnh mang thẻ này là ảnh chưa từng
-    // được job dịch vụ đặt — không có gì để giữ lại.
-    THE_GIU_CHO = 'CHUA-TRIEN-KHAI-LAN-NAO'
   }
 
   stages {
@@ -57,13 +59,11 @@ pipeline {
       steps {
         script {
           // LƯỢT ĐẦU SAU KHI ĐỔI `parameters {}`: Jenkins chỉ HỌC danh sách tham số ở lượt ấy, nên
-          // lượt ấy chạy với mọi `params.*` là null — và `NS` thành `vigov-null`. Dừng ở đây, trước
-          // mọi lệnh kubectl, thay vì để shell đỏ vì biến chưa đặt (lượt #… ngày 25/09/2026).
+          // lượt ấy chạy với mọi `params.*` là null. Dừng trước mọi lệnh kubectl.
           if (params.HANH_DONG == null || params.MT == null) {
             error('Jenkins vừa học tham số mới của job — lượt này không có tham số nào.\n' +
                   'Bấm lại bằng "Build with Parameters". Cụm không bị đụng tới.')
           }
-          // Đưa tham số vào môi trường của shell TƯỜNG MINH, không dựa vào việc Jenkins tự làm.
           env.HANH_DONG = params.HANH_DONG
           env.MT = params.MT
           env.DICH_VU = params.DICH_VU
@@ -91,8 +91,8 @@ pipeline {
 
     stage('Kiểm tra') {
       steps {
-        // Chạy ở MỌI việc: `ap-manifest` cũng in trạng thái TRƯỚC khi đổi, để log của lượt ấy tự
-        // trả lời "trước đó cụm thế nào".
+        // Chạy ở MỌI việc: `nhan-ban-staging` cũng in trạng thái TRƯỚC khi đổi, để log của lượt
+        // ấy tự trả lời "trước đó cụm thế nào".
         sh '''
           set -u
           echo "── namespace"
@@ -104,11 +104,9 @@ pipeline {
           echo "── Service · Ingress · ConfigMap · NetworkPolicy"
           kubectl -n "$NS" get svc,ingress,configmap,networkpolicy || true
           echo "── Secret (CHỈ TÊN và LOẠI — không in giá trị)"
-          kubectl -n "$NS" get secret -o custom-columns=TEN:.metadata.name,LOAI:.type,SO_KEY:.data \
+          kubectl -n "$NS" get secret -o custom-columns=TEN:.metadata.name,LOAI:.type \
             --no-headers 2>/dev/null | awk '{print "   " $1 "  " $2}' || true
-          # TÊN KEY, không giá trị: go-template chỉ duyệt khoá của `.data`. Cần để đối chiếu một
-          # namespace dựng bằng YAML khác kho (staging mang `<dv>-secrets`/`common-config`, 25/09/2026)
-          # với tên key mà `core/config` đọc.
+          # TÊN KEY, không giá trị: go-template chỉ duyệt khoá của `.data`.
           echo "── Key của từng Secret (CHỈ TÊN KEY)"
           kubectl -n "$NS" get secret -o go-template='{{range .items}}   {{.metadata.name}}:{{range $k, $v := .data}} {{$k}}{{end}}{{"\\n"}}{{end}}' 2>/dev/null || true
           echo "── Key của từng ConfigMap (CHỈ TÊN KEY)"
@@ -119,183 +117,85 @@ pipeline {
           kubectl -n "$NS" get events --sort-by=.lastTimestamp 2>/dev/null | tail -25 || true
         '''
         script {
-          env.THIEU_SECRET = sh(returnStdout: true, script: '''
+          // Secret + ConfigMap mà các Deployment dựng theo staging đọc (`envFrom`).
+          env.THIEU = sh(returnStdout: true, script: '''
             set -u
-            if [ "$MT" = "prod" ]; then TLS=vigov-wildcard-tls; else TLS=vigov-staging-tls; fi
             thieu=""
-            for s in harbor-vigov "$TLS" bi-mat-platform bi-mat-identity bi-mat-comms \
-                     bi-mat-documents bi-mat-finance bi-mat-petitions; do
-              kubectl -n "$NS" get secret "$s" >/dev/null 2>&1 || thieu="$thieu $s"
+            for s in harbor-vigov platform-secrets identity-secrets comms-secrets documents-secrets \
+                     finance-secrets petitions-secrets reporting-secrets; do
+              kubectl -n "$NS" get secret "$s" >/dev/null 2>&1 || thieu="$thieu secret/$s"
             done
+            kubectl -n "$NS" get configmap common-config >/dev/null 2>&1 || thieu="$thieu configmap/common-config"
             echo "$thieu"
           ''').trim()
-          if (env.THIEU_SECRET) {
-            echo "⚠ THIẾU SECRET trong ${env.NS}: ${env.THIEU_SECRET}\n" +
-                 "  Tạo trong Rancher → Storage → Secrets, namespace ${env.NS}. Tên và key: deploy/cau-hinh/README.md mục 1–2."
+          if (env.THIEU) {
+            echo "⚠ THIẾU trong ${env.NS}: ${env.THIEU}"
           } else {
-            echo "✓ đủ 8 Secret trong ${env.NS}"
+            echo "✓ đủ 8 Secret + common-config trong ${env.NS}"
           }
         }
       }
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────
-    // VIỆC MỘT LẦN — chép Secret + ConfigMap từ vigov-staging sang vigov-prod.
+    // VIỆC MỘT LẦN — nhân bản Deployment + Service của staging sang prod.
     //
-    // Chủ dự án chọn 25/09/2026 để khỏi tạo tay. HỆ QUẢ ĐÃ NÓI VỚI CHỦ DỰ ÁN: chép nguyên thì
-    // prod dùng ĐÚNG CSDL + Redis của staging (DATABASE_DSN, REDIS_DSN đi theo), và cùng khoá ký
-    // phiên — hồ sơ thật nằm chung với dữ liệu thử. Muốn tách thì sửa DSN trong 6 `bi-mat-*` của
-    // prod trên Rancher TRƯỚC khi bấm job dịch vụ.
+    // Secret + common-config đã chép bằng lượt `sao-chep-tu-staging` ngày 25/09/2026 (việc ấy đã
+    // gỡ). Stage này chép phần còn lại, rồi đặt ENV=prod trong common-config của prod.
     //
-    // CHỈ TẠO MỚI, KHÔNG GHI ĐÈ: thứ prod đã có thì bỏ qua — chạy lại hai lần vô hại, và không
-    // bao giờ đạp lên một giá trị ai đó đã sửa tay ở prod.
+    // KHÔNG CHÉP INGRESS: staging đang giữ host thật (admin.vigov.vn …). Hai Ingress cùng host
+    // ở hai namespace là nginx chọn một bên theo cách không ai định trước — người dùng thật có
+    // thể rơi vào staging. Tên miền của prod là quyết định của chủ dự án; stage in host hiện có.
     //
-    // BỎ QUA: `cau-hinh-chung*` (prod tự sinh với ENV=prod khi ap-manifest — chép bản staging là
-    // prod chạy với ENV=staging) · `kube-root-ca.crt` (k8s tự tạo mỗi namespace) · token service
-    // account và bản ghi Helm (thuộc về namespace nguồn).
-    //
-    // KHÔNG IN GIÁ TRỊ: dữ liệu đi thẳng qua ống `get … | create -f -`, không qua biến, không qua
-    // tệp. Jenkins in LỆNH (`sh -x`), không in dữ liệu chảy trong ống.
-    //
-    // Chạy xong: gỡ `sao-chep-tu-staging` khỏi `choices` và xoá stage này, bằng một commit.
+    // CHỈ TẠO MỚI: thứ prod đã có thì bỏ qua (`deploy/nhan_ban_namespace.py`).
+    // Chạy xong: gỡ `nhan-ban-staging` khỏi `choices` và xoá stage này, bằng một commit.
     // ─────────────────────────────────────────────────────────────────────────────────────
-    stage('Sao chép từ staging') {
-      when { expression { params.HANH_DONG == 'sao-chep-tu-staging' } }
+    stage('Nhân bản staging') {
+      when { expression { params.HANH_DONG == 'nhan-ban-staging' } }
       steps {
         script {
-          if (params.MT != 'prod') { error('sao-chep-tu-staging chỉ chạy với MT=prod (đích là vigov-prod).') }
+          if (params.MT != 'prod') { error('nhan-ban-staging chỉ chạy với MT=prod (đích là vigov-prod).') }
           if (params.XAC_NHAN != 'vigov-prod') {
             error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không chép gì cả.")
           }
+          if (env.THIEU) {
+            error("vigov-prod còn thiếu: ${env.THIEU} — Deployment chép sang sẽ không khởi động được.")
+          }
         }
         sh '''
           set -eu
-          NGUON=vigov-staging
-          DICH=vigov-prod
-          kubectl get ns "$NGUON" >/dev/null
-          kubectl get ns "$DICH" >/dev/null
-
-          # Khung Secret TỐI GIẢN dựng lại từ nguồn: chỉ tên, loại, data (base64 nguyên văn).
-          # Không mang uid/resourceVersion/ownerReferences/nhãn của namespace nguồn.
-          MAU_SECRET='apiVersion: v1
-kind: Secret
-metadata:
-  name: __TEN__
-type: {{.type}}
-data:
-{{range $k, $v := .data}}  "{{$k}}": "{{$v}}"
-{{end}}'
-          MAU_CM='apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: __TEN__
-data:
-{{range $k, $v := .data}}  "{{$k}}": {{printf "%q" $v}}
-{{end}}'
-
-          da_chep=""; bo_qua=""
-
-          echo "── Secret"
-          for dong in $(kubectl -n "$NGUON" get secret \
-                          -o jsonpath='{range .items[*]}{.metadata.name}|{.type}{"\\n"}{end}'); do
-            ten="${dong%%|*}"; loai="${dong#*|}"
-            case "$loai" in
-              kubernetes.io/service-account-token|helm.sh/release.v1) bo_qua="$bo_qua $ten"; continue ;;
-            esac
-            dich="$ten"
-            [ "$ten" = "vigov-staging-tls" ] && dich="vigov-wildcard-tls"
-            if kubectl -n "$DICH" get secret "$dich" >/dev/null 2>&1; then
-              echo "   bỏ qua $dich — prod đã có, không ghi đè"; bo_qua="$bo_qua $dich"; continue
-            fi
-            kubectl -n "$NGUON" get secret "$ten" -o go-template="$MAU_SECRET" \
-              | sed "s|__TEN__|$dich|" \
-              | kubectl -n "$DICH" create -f - >/dev/null
-            echo "   đã chép $ten → $DICH/$dich ($loai)"; da_chep="$da_chep $dich"
+          PY=""
+          for p in python3 python3.12 python3.11 python3.10 python3.9 python3.8; do
+            if command -v "$p" >/dev/null 2>&1; then PY="$p"; break; fi
           done
+          [ -n "$PY" ] || { echo "MÁY CHỦ BUILD THIẾU: python3"; exit 1; }
 
-          echo "── ConfigMap"
-          for ten in $(kubectl -n "$NGUON" get configmap -o jsonpath='{range .items[*]}{.metadata.name}{"\\n"}{end}'); do
-            case "$ten" in
-              kube-root-ca.crt|cau-hinh-chung*) echo "   bỏ qua $ten — không thuộc về việc chép"; continue ;;
-            esac
-            if kubectl -n "$DICH" get configmap "$ten" >/dev/null 2>&1; then
-              echo "   bỏ qua $ten — prod đã có, không ghi đè"; continue
-            fi
-            kubectl -n "$NGUON" get configmap "$ten" -o go-template="$MAU_CM" \
-              | sed "s|__TEN__|$ten|" \
-              | kubectl -n "$DICH" create -f - >/dev/null
-            echo "   đã chép ConfigMap $ten → $DICH"; da_chep="$da_chep $ten"
-          done
+          # ENV=prod: bản chép từ staging mang ENV=staging, và `config.Load` chặt hơn ở prod
+          # (luật 8 bất biến 7). Pod nào đỏ vì cấu hình không đạt mức prod thì log nêu tên biến.
+          kubectl -n vigov-prod patch configmap common-config --type merge -p '{"data":{"ENV":"prod"}}'
+
+          da_co=$(kubectl -n vigov-prod get deploy,svc \
+                    -o jsonpath='{range .items[*]}{.kind}/{.metadata.name}{" "}{end}' 2>/dev/null || true)
+
+          kubectl -n vigov-staging get deploy,svc -o json \
+            | "$PY" deploy/nhan_ban_namespace.py vigov-staging vigov-prod $da_co \
+            > nhan-ban.json
+
+          if [ "$("$PY" -c 'import json,sys;print(len(json.load(open(sys.argv[1]))["items"]))' nhan-ban.json)" = "0" ]; then
+            echo "không có gì để tạo — prod đã có đủ"
+          else
+            kubectl -n vigov-prod create -f nhan-ban.json
+          fi
 
           echo ""
-          echo "ĐÃ CHÉP:${da_chep:- (không có gì)}"
-          echo "BỎ QUA:${bo_qua:- (không có gì)}"
+          echo "── Ingress của staging (KHÔNG chép — host thật đang ở đây)"
+          kubectl -n vigov-staging get ingress -o custom-columns=TEN:.metadata.name,HOST:.spec.rules[*].host --no-headers || true
           echo ""
-          echo "⚠ Prod đang dùng CSDL + Redis của staging (DSN chép nguyên). Muốn tách: sửa"
-          echo "  DATABASE_DSN / REDIS_DSN trong 6 bi-mat-* của vigov-prod trên Rancher, TRƯỚC khi bấm job dịch vụ."
-          echo "⚠ vigov-wildcard-tls là chứng chỉ của staging — HTTPS prod chỉ chạy nếu nó phủ tên miền prod."
-        '''
-      }
-    }
-
-    stage('Áp manifest') {
-      when { expression { params.HANH_DONG == 'ap-manifest' } }
-      steps {
-        script {
-          if (params.XAC_NHAN != env.NS) {
-            error("XAC_NHAN phải là đúng '${env.NS}'. Nhận được: '${params.XAC_NHAN}'. Không áp gì cả.")
-          }
-          if (env.THIEU_SECRET) {
-            error("Còn thiếu Secret: ${env.THIEU_SECRET} — áp manifest lúc này chỉ tạo ra pod " +
-                  "CrashLoopBackOff/ImagePullBackOff. Tạo đủ rồi bấm lại.")
-          }
-        }
-        // GIỮ THẺ ĐANG CHẠY. Manifest trong kho luôn mang thẻ giữ chỗ; áp thẳng là kéo MỌI dịch vụ
-        // đang chạy về ImagePullBackOff cùng lúc (deploy/README.md mục 7). Nên TRƯỚC khi áp, thay
-        // trong bản render `<ảnh>:CHUA-TRIEN-KHAI-LAN-NAO` bằng đúng ảnh đang chạy của Deployment
-        // ấy. Dịch vụ chưa có trên cụm, hoặc chưa từng được đặt ảnh thật, thì giữ thẻ giữ chỗ —
-        // đó là lần cài đầu, và job dịch vụ sẽ đặt ảnh thật sau.
-        //
-        // Không `--prune`: xoá một tài nguyên phải là việc có người quyết, không phải hệ quả phụ.
-        sh '''
-          set -eu
-          kubectl kustomize "deploy/overlays/$MT" > render.yaml
-          echo "đã render deploy/overlays/$MT — $(grep -c '^kind:' render.yaml) tài nguyên"
-
-          kubectl -n "$NS" get deploy \
-            -o jsonpath='{range .items[*]}{.spec.template.spec.containers[0].image}{"\\n"}{end}' \
-            > dang-chay.txt 2>/dev/null || : > dang-chay.txt
-
-          while read -r anh; do
-            [ -n "$anh" ] || continue
-            kho="${anh%:*}"; the="${anh##*:}"
-            if [ "$the" = "$THE_GIU_CHO" ]; then continue; fi
-            if grep -q "image: $kho:$THE_GIU_CHO" render.yaml; then
-              sed -i "s|image: $kho:$THE_GIU_CHO|image: $anh|" render.yaml
-              echo "giữ ảnh đang chạy: $anh"
-            fi
-          done < dang-chay.txt
-
-          echo "── khác biệt so với cụm (kubectl diff)"
-          kubectl diff -f render.yaml || true
-
-          echo "── áp"
-          kubectl apply -f render.yaml
-        '''
-      }
-    }
-
-    stage('Sau khi áp') {
-      when { expression { params.HANH_DONG == 'ap-manifest' } }
-      steps {
-        sh '''
-          set -u
           sleep 20
-          kubectl -n "$NS" get deploy -o wide || true
-          kubectl -n "$NS" get pod -o wide || true
+          kubectl -n vigov-prod get deploy,pod -o wide || true
           echo ""
-          echo "Pod đứng ImagePullBackOff với thẻ CHUA-TRIEN-KHAI-LAN-NAO là ĐÚNG ở lần cài đầu:"
-          echo "bấm job của từng dịch vụ (platform → identity → 4 dịch vụ còn lại → web-admin) để đặt ảnh thật."
+          echo "⚠ Prod đang dùng CSDL + Redis + khoá ký phiên của staging (Secret chép nguyên)."
+          echo "⚠ Prod CHƯA có Ingress: chưa ai vào được từ ngoài cụm cho tới khi chốt tên miền prod."
         '''
       }
     }
@@ -307,9 +207,9 @@ data:
           set -u
           echo "── mô tả deploy/$DICH_VU"
           kubectl -n "$NS" describe deploy/"$DICH_VU" | tail -40 || true
-          echo "── pod của $DICH_VU"
-          kubectl -n "$NS" get pod -l app.kubernetes.io/name="$DICH_VU" -o wide || true
-          for p in $(kubectl -n "$NS" get pod -l app.kubernetes.io/name="$DICH_VU" -o name 2>/dev/null); do
+          # Pod tìm theo TIỀN TỐ TÊN, không theo nhãn: Deployment dựng tay trong Rancher mang nhãn
+          # `workload.user.cattle.io/workloadselector`, khác nhãn của `deploy/base`.
+          for p in $(kubectl -n "$NS" get pod -o name 2>/dev/null | grep "^pod/$DICH_VU-" || true); do
             echo ""
             echo "════ $p — sự kiện"
             kubectl -n "$NS" describe "$p" | sed -n '/^Events:/,$p' || true

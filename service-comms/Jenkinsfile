@@ -10,9 +10,9 @@
 // `vigov-deploy` riêng: một lượt bấm là một dòng lịch sử trả lời cả "ảnh nào", "lên đâu" và
 // "ai bấm". Ở trang cấu hình job, mục Build Triggers KHÔNG tick gì.
 //
-// Chỉ `kubectl set image` + `rollout status`, không `kubectl apply`: manifest (NetworkPolicy,
-// Service, cấu hình) vẫn áp tay theo `deploy/README.md` mục 7, vì `apply -k` đẩy mọi dịch vụ
-// về thẻ `CHUA-TRIEN-KHAI-LAN-NAO`.
+// Chỉ `kubectl set image` + `rollout status`, không `kubectl apply`: Deployment, Service,
+// Ingress, Secret trên cụm được dựng TAY trong Rancher (staging, rồi nhân bản sang prod bằng
+// job `vigov-deploy`) — `deploy/base` không mô tả chúng. Đổi chúng là đổi trong Rancher.
 //
 // Bất biến TOÀN KHO (bất biến bộ não · tự kiểm hook · buf lint · gofmt cả kho · web) KHÔNG
 // chạy ở đây: chúng không thuộc về dịch vụ nào cả, nên chúng ở `Jenkinsfile` tại gốc.
@@ -51,9 +51,10 @@ pipeline {
     KUBECONFIG = '/u01/rancher/rancher-vigov.yaml'
     // Một môi trường, là HẰNG SỐ: đổi môi trường là đổi mã, đi qua commit.
     NS = 'vigov-prod'
-    // Tên Deployment = tên NGHIỆP VỤ trần (ADR 0016 §2); tên thùng là `server` ở mọi dịch vụ Go.
-    TEN_K8S = 'comms'
-    THUNG = 'server'
+    // Tên Deployment THẬT trên cụm, đo 25/09/2026 (`vigov-deploy` kiem-tra): cụm dựng tay trong
+    // Rancher đặt `vigov-service-<dịch vụ>`, KHÔNG phải tên trần của `deploy/base`. Prod là bản
+    // nhân của staging (chủ dự án chọn cùng ngày).
+    TEN_K8S = 'vigov-service-comms'
   }
 
   stages {
@@ -200,7 +201,10 @@ pipeline {
         // TỪ DÒNG NÀY TRỞ ĐI CỤM ĐÃ ĐỔI, nên từ đây `post { failure }` mới được phép rút lại.
         script { env.DA_DAT = 'roi' }
 
-        sh 'kubectl -n "$NS" set image deploy/"$TEN_K8S" "$THUNG=$ANH"'
+        // `*=` — MỌI container của Deployment: tên container trên cụm dựng tay không đồng nhất
+        // (đo được `vigov-web-admin` chứa container tên `vigov-service-reporting`), và mỗi
+        // Deployment ở đây chỉ có đúng một container.
+        sh 'kubectl -n "$NS" set image deploy/"$TEN_K8S" "*=$ANH"'
 
         // 6 phút: di trú CSDL chạy TRONG tiến trình lúc khởi động và ôm advisory lock
         // (core/migrate.Chay) — replica thứ hai đợi replica thứ nhất.

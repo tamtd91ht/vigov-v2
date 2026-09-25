@@ -36,9 +36,8 @@ pipeline {
     // Kubeconfig của ViGov — KHÔNG phải `rancher-omi.yaml` nằm cạnh nó (xem service-platform).
     KUBECONFIG = '/u01/rancher/rancher-vigov.yaml'
     NS = 'vigov-prod'
-    TEN_K8S = 'web-admin'
-    // Tên thùng của web là `web`, khác `server` của dịch vụ Go (deploy/base/web-admin).
-    THUNG = 'web'
+    // Tên Deployment THẬT trên cụm (dựng tay trong Rancher) — xem service-platform/Jenkinsfile.
+    TEN_K8S = 'vigov-web-admin'
   }
 
   stages {
@@ -177,7 +176,8 @@ pipeline {
               -o jsonpath='{.spec.template.spec.containers[*].image}')"
         '''
         script { env.DA_DAT = 'roi' }
-        sh 'kubectl -n "$NS" set image deploy/"$TEN_K8S" "$THUNG=$ANH"'
+        // `*=` — mọi container: trên cụm, container của Deployment này tên `vigov-service-reporting`.
+        sh 'kubectl -n "$NS" set image deploy/"$TEN_K8S" "*=$ANH"'
         sh 'kubectl -n "$NS" rollout status deploy/"$TEN_K8S" --timeout=6m'
         // Mốc ghi SAU khi đã chạy trên cụm: lượt đặt ảnh đỏ thì lượt bấm sau dựng và đặt lại.
         script {
