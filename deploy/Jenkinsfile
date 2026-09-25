@@ -34,14 +34,18 @@ pipeline {
 
   parameters {
     // `nhan-ban-staging` (một lần) đã chạy 25/09/2026 và đã gỡ — xem lịch sử git của tệp này.
-    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log'],
-           description: 'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU')
+    // `tao-xa-thang-binh` là việc MỘT LẦN (chủ dự án, 26/09/2026): chạy xong thì gỡ bằng một commit.
+    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'tao-xa-thang-binh'],
+           description: 'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
+                        'tao-xa-thang-binh: ghi Xã Thăng Bình + tên miền admin.vigov.vn vào sổ xã (MT=prod)')
     choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
     choice(name: 'DICH_VU',
            choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
                      'vigov-service-documents', 'vigov-service-finance', 'vigov-service-petitions',
                      'vigov-service-reporting', 'vigov-web-admin'],
            description: 'Chỉ dùng cho xem-log')
+    string(name: 'XAC_NHAN', defaultValue: '',
+           description: 'Cho tao-xa-thang-binh: gõ đúng vigov-prod.')
   }
 
   environment {
@@ -64,7 +68,7 @@ pipeline {
           // Một việc đã GỠ khỏi `choices` vẫn tới được đây qua "Rebuild" một lượt cũ (đo được
           // 25/09/2026: `sao-chep-tu-staging` chạy xanh mà không stage nào khớp). Xanh-mà-không-làm-
           // gì là dạng hỏng tệ nhất: người bấm tin là đã xong.
-          if (!(params.HANH_DONG in ['kiem-tra', 'xem-log'])) {
+          if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'tao-xa-thang-binh'])) {
             error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
                   'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
           }
@@ -136,6 +140,90 @@ pipeline {
             echo "✓ đủ 8 Secret + common-config trong ${env.NS}"
           }
         }
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // VIỆC MỘT LẦN — onboard Xã Thăng Bình (Thành phố Đà Nẵng) vào sổ xã của `platform`, gắn
+    // admin.vigov.vn (chính) và admin-stg.vigov.vn. Chủ dự án chọn 26/09/2026.
+    //
+    // Vì sao cần: admin.vigov.vn trả 404 `tenant_not_found` — sổ xã không có dòng nào. Kho
+    // không gieo xã nào (một xã thật là dữ liệu vận hành, không phải migration).
+    //
+    // tenant_id là ULID sinh MỘT lần lúc viết stage này (core/ulid.Moi) và cố định ở đây, để
+    // chạy lại không tạo xã thứ hai (luật 1 bất biến 2: id vô nghĩa, bất biến). Tên + tỉnh viết
+    // theo ADR 0017 ("Thành phố Đà Nẵng", đúng một cách viết mỗi tỉnh — ADR 0023).
+    //
+    // CHỈ THÊM, MỘT GIAO DỊCH, CÓ VẾT: dừng không ghi gì nếu id / tên miền / một xã trùng tên đã
+    // có; ghi `audit_log` của platform cùng giao dịch (luật 6), chủ thể là người bấm job.
+    //
+    // CHẠY Ở ĐÂU: pod `platform` là distroless (không shell, không psql), nên job dựng một pod
+    // `postgres:16-alpine` sống một lượt, đọc DATABASE_DSN từ `platform-secrets` (envFrom — DSN
+    // không đi qua log hay tham số). Pod tự xoá khi xong (`--rm`).
+    //
+    // Staging và prod đang DÙNG CHUNG CSDL (Secret chép nguyên 25/09/2026), nên một lượt ghi
+    // cho cả hai môi trường.
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    stage('Tạo xã Thăng Bình') {
+      when { expression { params.HANH_DONG == 'tao-xa-thang-binh' } }
+      steps {
+        script {
+          if (params.MT != 'prod') { error('tao-xa-thang-binh chỉ chạy với MT=prod.') }
+          if (params.XAC_NHAN != 'vigov-prod') {
+            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          }
+          // Tên người bấm đi THẲNG vào câu SQL của dòng vết bên dưới — chỉ nhận ký tự an toàn.
+          if (!(env.NGUOI_BAM ==~ /^[A-Za-z0-9._-]{1,64}$/)) {
+            error("Tên người bấm '${env.NGUOI_BAM}' có ký tự không an toàn cho câu SQL — dừng.")
+          }
+        }
+        writeFile file: 'tao-xa.sql', encoding: 'UTF-8', text: """\\set ON_ERROR_STOP on
+BEGIN;
+DO \$\$
+BEGIN
+  IF EXISTS (SELECT 1 FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8') THEN
+    RAISE EXCEPTION 'DUNG: xa 01M3CS7HHK72V71CGRRJHGR8E8 da co — khong ghi gi';
+  END IF;
+  IF EXISTS (SELECT 1 FROM tenant_domain WHERE host IN ('admin.vigov.vn', 'admin-stg.vigov.vn')) THEN
+    RAISE EXCEPTION 'DUNG: ten mien admin.vigov.vn / admin-stg.vigov.vn da gan cho mot xa — khong ghi gi';
+  END IF;
+  IF EXISTS (SELECT 1 FROM tenant WHERE lower(ten) LIKE '%thăng bình%') THEN
+    RAISE EXCEPTION 'DUNG: da co mot xa ten Thang Binh — khong tao xa thu hai';
+  END IF;
+END \$\$;
+INSERT INTO tenant (id, ten, tinh_thanh, dang_hoat_dong)
+  VALUES ('01M3CS7HHK72V71CGRRJHGR8E8', 'Xã Thăng Bình', 'Thành phố Đà Nẵng', true);
+INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES
+  ('admin.vigov.vn',     '01M3CS7HHK72V71CGRRJHGR8E8', true),
+  ('admin-stg.vigov.vn', '01M3CS7HHK72V71CGRRJHGR8E8', false);
+INSERT INTO audit_log (tenant_id, actor_id, actor_kind, action, subject, at, delta)
+  VALUES ('01M3CS7HHK72V71CGRRJHGR8E8', 'van-hanh:${env.NGUOI_BAM}', 'system', 'tao_xa',
+          'Xã Thăng Bình', now(),
+          jsonb_build_object('ten', 'Xã Thăng Bình', 'tinh_thanh', 'Thành phố Đà Nẵng',
+                             'ten_mien', jsonb_build_array('admin.vigov.vn', 'admin-stg.vigov.vn'),
+                             'qua', 'jenkins vigov-deploy #${env.BUILD_NUMBER}'));
+COMMIT;
+SELECT t.id, t.ten, t.tinh_thanh, t.dang_hoat_dong, d.host, d.la_chinh
+  FROM tenant t JOIN tenant_domain d ON d.tenant_id = t.id
+ WHERE t.id = '01M3CS7HHK72V71CGRRJHGR8E8';
+"""
+        sh '''
+          set -eu
+          echo "── các xã đang có trong sổ (trước khi ghi)"
+          OVR='{"apiVersion":"v1","spec":{"restartPolicy":"Never",
+                "imagePullSecrets":[{"name":"dockerhub-omicrm"}],
+                "containers":[{"name":"psql","image":"postgres:16-alpine","stdin":true,
+                  "envFrom":[{"secretRef":{"name":"platform-secrets"}}],
+                  "command":["sh","-c","psql \\"$DATABASE_DSN\\" -X -q -v ON_ERROR_STOP=1 -f -"]}]}}'
+          echo "SELECT id, ten, tinh_thanh, dang_hoat_dong FROM tenant ORDER BY tao_luc; SELECT host, tenant_id, la_chinh FROM tenant_domain ORDER BY host;" \
+            | kubectl -n vigov-prod run "vigov-psql-doc-$BUILD_NUMBER" --rm -i --restart=Never \
+                --image=postgres:16-alpine --overrides="$OVR" --quiet
+          echo "── ghi"
+          kubectl -n vigov-prod run "vigov-psql-ghi-$BUILD_NUMBER" --rm -i --restart=Never \
+              --image=postgres:16-alpine --overrides="$OVR" --quiet < tao-xa.sql
+          echo ""
+          echo "Xong. Thử lại: https://admin.vigov.vn/dang-nhap"
+        '''
       }
     }
 
