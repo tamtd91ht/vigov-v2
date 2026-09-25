@@ -118,6 +118,60 @@ service PlatformService {
   // units in Vietnam is certain rather than hypothetical. Same confinement as ListTenants:
   // registry only, TenantSummary only.
   rpc ResolveTenantSuccession(ResolveTenantSuccessionRequest) returns (ResolveTenantSuccessionResponse);
+
+  // ResolveMiniApp answers, for ONE Zalo Mini App ID, which mode the app runs in and — for a
+  // commune's dedicated app — which commune it is bound to (ADR 0044; ADR 0045 §Bảng app).
+  //
+  // Its caller is service-identity, inside CitizenSessionBridgeService.OpenCitizenSession, with an
+  // `app_id` the bridge verified. It is this service's because `tenant_id` is a ViGov concept:
+  // vihat-miniapp knows apps, never communes.
+  //
+  // SAME SHAPE AS ResolveHost: it runs BEFORE any commune is known — it is what answers "which
+  // commune" for a dedicated app — so it cannot carry "x-tenant-id". It needs a place on
+  // core/grpcx.methodsWithoutTenant, and adding one is a STOP CONDITION (ADR 0012, decision 1):
+  // NOT granted by this contract; refused with INVALID_ARGUMENT until the user answers. It answers
+  // about ONE app the caller already names, never a list — the asymmetry that keeps ListTenants
+  // off that list does not apply, and must not be introduced by adding a listing RPC here.
+  //
+  //   OK + no `app`       the app id is not registered. The caller REFUSES; no default app.
+  //   OK + app, COMMUNE   `tenant` set when the bound commune is active; ABSENT when it is not —
+  //                       the caller refuses and does NOT follow tenant_succession on its own
+  //                       (ADR 0045: re-binding an app after a merger is an operator's act).
+  //   OK + app, MAIN      `tenant` always absent.
+  //   INVALID_ARGUMENT    empty `app_id`.
+  rpc ResolveMiniApp(ResolveMiniAppRequest) returns (ResolveMiniAppResponse);
+}
+
+message ResolveMiniAppRequest {
+  // A Zalo Mini App ID. Not personal data, not a secret.
+  string app_id = 1;
+}
+
+message ResolveMiniAppResponse {
+  // ABSENT MEANS NOT REGISTERED. See the status table on the RPC.
+  MiniApp app = 1;
+}
+
+// MiniApp is one registered Zalo Mini App. Metadata only (ADR 0003): no secret — the app secret
+// lives in vihat-miniapp's secret store and never in ViGov (ADR 0032).
+message MiniApp {
+  string app_id = 1;
+
+  // Mirrors vigov.identity.v1.MiniAppMode value for value. Declared here as well because the
+  // platform owns the registry and must not import identity's package; the two enums are kept
+  // identical by review, and a third value is a decision (ADR 0044), not an edit.
+  Mode mode = 2;
+
+  enum Mode {
+    MODE_UNSPECIFIED = 0;
+    MODE_MAIN = 1;      // the ViHAT-owned main app
+    MODE_COMMUNE = 2;   // a commune's dedicated app, bound to exactly one commune
+  }
+
+  // The bound commune, ONLY when mode is COMMUNE AND that commune is active. TenantSummary is
+  // active by construction (see its comment), so absence under MODE_COMMUNE is the signal that the
+  // bound commune is no longer active.
+  TenantSummary tenant = 3;
 }
 
 message Tenant {

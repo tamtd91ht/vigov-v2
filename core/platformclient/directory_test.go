@@ -253,3 +253,10 @@ func (k kiemHan) ResolveTenantSuccession(context.Context, *platformv1.ResolveTen
 	...grpc.CallOption) (*platformv1.ResolveTenantSuccessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
 }
+
+// ResolveMiniApp belongs to the Mini App session bridge (ADR 0045), whose only caller is
+// service-identity — not to this per-Host reader. Present for the interface alone, like the two above.
+func (k kiemHan) ResolveMiniApp(context.Context, *platformv1.ResolveMiniAppRequest,
+	...grpc.CallOption) (*platformv1.ResolveMiniAppResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "không dùng trong test này")
+}
