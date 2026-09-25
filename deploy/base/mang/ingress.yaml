@@ -8,7 +8,7 @@
 # VÌ SAO KHÔNG CÒN MỘT DÒNG `/api/v1` → identity: dòng ấy đúng 100% vào ngày nó được
 # viết, khi mọi tài nguyên REST đều thuộc identity. Nay hợp đồng có
 #
-#     88 tuyến của 5 dịch vụ — identity 35 · petitions 24 · finance 16 · documents 7 · comms 6
+#     93 tuyến của 5 dịch vụ — identity 35 · petitions 29 · finance 16 · documents 7 · comms 6
 #
 # nên dòng gộp ấy đưa mọi tuyến không phải của identity tới identity và trả 404 — 404
 # trên một tuyến hành chính thật. Chủ dự án chốt lối (b), SINH Ingress từ openapi.json,
@@ -18,7 +18,7 @@
 # (deploy/overlays/<mt>/ingress-moi-truong.yaml). Bảng định tuyến thì giống nhau ở mọi
 # môi trường nên nó thuộc base — đúng ranh giới base/overlay kho này đang dùng.
 #
-# 35 luật định tuyến cho 88 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
+# 35 luật định tuyến cho 93 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -269,8 +269,11 @@ spec:
               service:
                 name: identity
                 port: { name: rest }
-          # petitions — 3 tuyến: /api/v1/meetings · /api/v1/meetings/{id}/conclusions
-          #   /api/v1/meetings/{id}/conclusions/{stt}/task
+          # petitions — 8 tuyến: /api/v1/meetings · /api/v1/meetings/{id}
+          #   /api/v1/meetings/{id}/conclusions · /api/v1/meetings/{id}/conclusions/{stt}
+          #   /api/v1/meetings/{id}/conclusions/{stt}/no-task-marker
+          #   /api/v1/meetings/{id}/conclusions/{stt}/task · /api/v1/meetings/{id}/conclusions/{stt}/tasks
+          #   /api/v1/meetings/{id}/signature
           - path: /api/v1/meetings
             pathType: Prefix
             backend:

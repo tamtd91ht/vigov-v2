@@ -115,8 +115,8 @@ type bienBanRa struct {
 	SignedAt *time.Time `json:"signed_at,omitempty"`
 	SignedBy string     `json:"signed_by,omitempty"`
 
-	// Secretary is a STAFF BUSINESS CODE; absent when the meeting named none.
-	Secretary string `json:"secretary,omitempty"`
+	// MinutesTaker is a STAFF BUSINESS CODE; absent when the meeting named none.
+	MinutesTaker string `json:"minutes_taker,omitempty"`
 
 	// Notice is the conclusion notice (Thông báo kết luận), TRANSCRIBED — absent until recorded. The
 	// number and the day travel together or not at all (the schema's CHECK).
@@ -206,7 +206,7 @@ func bienBanRaNgoai(b domain.BienBanHop) bienBanRa {
 		ConclusionDoneCount: klXong,
 		Status:              b.TrangThai,
 		SignedBy:            b.KyBoiMa,
-		Secretary:           b.ThuKyMa,
+		MinutesTaker:           b.ThuKyMa,
 		SupplementsID:       b.BoSungChoID,
 		CreatedBy:           b.NguoiTaoMa,
 		CreatedAt:           b.TaoLuc,

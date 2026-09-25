@@ -1202,6 +1202,17 @@ export type petitions_bienBanRa = {
   "conclusions": Array<petitions_ketLuanRa>;
   "task_count": number;
   "task_done_count": number;
+  "conclusion_count": number;
+  "conclusion_done_count": number;
+  "status": string;
+  "signed_at"?: string | null;
+  "signed_by"?: string;
+  "minutes_taker"?: string;
+  "notice"?: petitions_thongBaoKetLuanRa | null;
+  "supplements_id"?: string;
+  "supplemented_by"?: Array<string> | null;
+  "content"?: string | null;
+  "attendees"?: Array<string> | null;
   "created_by": string;
   "created_at": string;
 };
@@ -1272,11 +1283,17 @@ export type petitions_ketLuanRa = {
   "content": string;
   "task_count": number;
   "task_done_count": number;
+  "status": string;
+  "no_task": boolean;
   "created_at": string;
 };
 
 export type petitions_khongTiepNhanVao = {
   "reason": string;
+};
+
+export type petitions_kyBienBanVao = {
+  "notice"?: petitions_thongBaoVao | null;
 };
 
 export type petitions_loaiNhiemVuRa = {
@@ -1303,6 +1320,10 @@ export type petitions_mucUuTienRa = {
   "order": number;
   "source": string;
   "tier": number;
+};
+
+export type petitions_nhiemVuKetLuanRa = {
+  "items": Array<petitions_nhiemVuRa>;
 };
 
 export type petitions_nhiemVuRa = {
@@ -1332,6 +1353,9 @@ export type petitions_nhiemVuRa = {
   "created_by": string;
   "created_at": string;
   "documents"?: Array<petitions_nhiemVuVanBanRa> | null;
+  "meeting_id"?: string;
+  "meeting_title"?: string;
+  "conclusion_no"?: number;
 };
 
 export type petitions_nhiemVuVanBanRa = {
@@ -1405,6 +1429,22 @@ export type petitions_quyetDinhLuiHanVao = {
   "note"?: string;
 };
 
+export type petitions_suaBienBanVao = {
+  "title"?: string | null;
+  "held_on"?: string | null;
+  "reference_no"?: string | null;
+  "location"?: string | null;
+  "chaired_by"?: string | null;
+  "minutes_taker"?: string | null;
+  "attendees"?: Array<string> | null;
+  "content"?: string | null;
+  "notice"?: petitions_thongBaoVao | null;
+};
+
+export type petitions_suaKetLuanVao = {
+  "content": string;
+};
+
 export type petitions_suaLoaiNhiemVuVao = {
   "label"?: string | null;
   "order"?: number | null;
@@ -1472,6 +1512,8 @@ export type petitions_taoBienBanVao = {
   "content"?: string;
   "attendees"?: Array<string>;
   "conclusions"?: Array<string>;
+  "minutes_taker"?: string;
+  "supplements_id"?: string;
 };
 
 export type petitions_taoNhiemVuVao = {
@@ -1516,6 +1558,16 @@ export type petitions_themMucUuTienVao = {
   "tier"?: number | null;
 };
 
+export type petitions_thongBaoKetLuanRa = {
+  "reference_no": string;
+  "issued_on": string;
+};
+
+export type petitions_thongBaoVao = {
+  "reference_no": string;
+  "issued_on": string;
+};
+
 export type petitions_trangThaiNhiemVuRa = {
   "code": string;
   "label": string;
@@ -1532,6 +1584,10 @@ export type petitions_vanBanNhiemVuVao = {
   "reference"?: string;
   "date"?: string;
   "summary": string;
+};
+
+export type petitions_xoaBienBanVao = {
+  "reason": string;
 };
 
 export type petitions_xoaLoaiNhiemVuVao = {
@@ -2749,7 +2805,7 @@ export type petitions_get_meetings = {
   truyVan: {
     "limit"?: number;
     "cursor"?: string;
-    "sort"?: "created_at";
+    "sort"?: "held_on" | "created_at";
     "order"?: "asc" | "desc";
   };
   than: never;
@@ -2780,6 +2836,67 @@ export type petitions_post_meetings = {
   };
 };
 
+/** GET /api/v1/meetings/{id} — Một biên bản họp đầy đủ — nội dung, thành phần, thư ký, trạng thái ký, thông báo kết luận, biên bản bổ sung, kết luận kèm trạng thái suy ra */
+export type petitions_get_meetings_by_id = {
+  duongDan: "/api/v1/meetings/{id}";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_bienBanRa;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/meetings/{id} — Sửa biên bản họp còn nháp; với biên bản đã ký chỉ ghi được số/ngày Thông báo kết luận, một lần */
+export type petitions_patch_meetings_by_id = {
+  duongDan: "/api/v1/meetings/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: petitions_suaBienBanVao;
+  phanHoi: {
+    200: petitions_bienBanRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/meetings/{id} — Xoá mềm một biên bản họp còn nháp, kèm lý do — từ chối khi đã ký hoặc còn nhiệm vụ trỏ về kết luận */
+export type petitions_delete_meetings_by_id = {
+  duongDan: "/api/v1/meetings/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: petitions_xoaBienBanVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** POST /api/v1/meetings/{id}/conclusions — Thêm một kết luận vào biên bản đã có — số thứ tự nối tiếp số ĐÃ CẤP, kể cả khi kết luận mang số đó đã bị xoá */
 export type petitions_post_meetings_by_id_conclusions = {
   duongDan: "/api/v1/meetings/{id}/conclusions";
@@ -2800,6 +2917,94 @@ export type petitions_post_meetings_by_id_conclusions = {
   };
 };
 
+/** PATCH /api/v1/meetings/{id}/conclusions/{stt} — Sửa nội dung một kết luận của biên bản nháp — khoá khi kết luận đã tách thành nhiệm vụ */
+export type petitions_patch_meetings_by_id_conclusions_by_stt = {
+  duongDan: "/api/v1/meetings/{id}/conclusions/{stt}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+    "stt": string;
+  };
+  truyVan: {
+  };
+  than: petitions_suaKetLuanVao;
+  phanHoi: {
+    200: petitions_ketLuanRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/meetings/{id}/conclusions/{stt} — Xoá mềm một kết luận của biên bản nháp, kèm lý do — số thứ tự đã cấp không cấp lại */
+export type petitions_delete_meetings_by_id_conclusions_by_stt = {
+  duongDan: "/api/v1/meetings/{id}/conclusions/{stt}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+    "stt": string;
+  };
+  truyVan: {
+  };
+  than: petitions_xoaBienBanVao;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/meetings/{id}/conclusions/{stt}/no-task-marker — Đánh dấu một kết luận "không phát sinh nhiệm vụ" — tính là hoàn thành; từ chối khi đã có nhiệm vụ */
+export type petitions_put_meetings_by_id_conclusions_by_stt_no_task_marker = {
+  duongDan: "/api/v1/meetings/{id}/conclusions/{stt}/no-task-marker";
+  phuongThuc: "PUT";
+  thamSo: {
+    "id": string;
+    "stt": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_ketLuanRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/meetings/{id}/conclusions/{stt}/no-task-marker — Bỏ dấu "không phát sinh nhiệm vụ" của một kết luận thuộc biên bản nháp */
+export type petitions_delete_meetings_by_id_conclusions_by_stt_no_task_marker = {
+  duongDan: "/api/v1/meetings/{id}/conclusions/{stt}/no-task-marker";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+    "stt": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** POST /api/v1/meetings/{id}/conclusions/{stt}/task — Tách một kết luận họp thành một nhiệm vụ — nhiệm vụ giữ liên kết ngược về kết luận gốc qua cặp nguồn giao */
 export type petitions_post_meetings_by_id_conclusions_by_stt_task = {
   duongDan: "/api/v1/meetings/{id}/conclusions/{stt}/task";
@@ -2813,6 +3018,48 @@ export type petitions_post_meetings_by_id_conclusions_by_stt_task = {
   than: petitions_tachKetLuanVao;
   phanHoi: {
     201: petitions_nhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/meetings/{id}/conclusions/{stt}/tasks — Các nhiệm vụ còn hiệu lực tách từ một kết luận họp — hàng của sổ nhiệm vụ, theo thứ tự tách */
+export type petitions_get_meetings_by_id_conclusions_by_stt_tasks = {
+  duongDan: "/api/v1/meetings/{id}/conclusions/{stt}/tasks";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+    "stt": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_nhiemVuKetLuanRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/meetings/{id}/signature — Ký biên bản họp — chuyển nháp sang đã ký, khoá nội dung và kết luận; có thể kèm Thông báo kết luận */
+export type petitions_post_meetings_by_id_signature = {
+  duongDan: "/api/v1/meetings/{id}/signature";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: petitions_kyBienBanVao;
+  phanHoi: {
+    200: petitions_bienBanRa;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;

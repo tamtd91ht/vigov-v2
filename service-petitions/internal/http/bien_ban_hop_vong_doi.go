@@ -112,7 +112,7 @@ func (h *Handler) SuaBienBan(w http.ResponseWriter, r *http.Request) {
 		SoHieu:     vao.ReferenceNo,
 		DiaDiem:    vao.Location,
 		ChuTriMa:   vao.ChairedBy,
-		ThuKyMa:    vao.Secretary,
+		ThuKyMa:    vao.MinutesTaker,
 		NoiDung:    vao.Content,
 		ThanhPhan:  vao.Attendees,
 	}

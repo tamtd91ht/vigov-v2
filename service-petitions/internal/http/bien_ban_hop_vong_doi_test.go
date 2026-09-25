@@ -130,7 +130,7 @@ func TestSuaBienBan_ThanDiXuongUseCaseVaTraChiTiet(t *testing.T) {
 	m.capQuyen(t, "task.create")
 
 	w := m.goiGhiNVTho(t, http.MethodPatch, hostA, duongBB(idBBThu), canBoCuaXa(xaA),
-		`{"held_on":"2026-08-06","secretary":"","attendees":[],"notice":{"reference_no":"12/TB-UBND","issued_on":"2026-08-12"}}`)
+		`{"held_on":"2026-08-06","minutes_taker":"","attendees":[],"notice":{"reference_no":"12/TB-UBND","issued_on":"2026-08-12"}}`)
 	doiMa(t, w, http.StatusOK)
 
 	yc := m.ghiBienBan.ycSua
@@ -231,7 +231,7 @@ func TestTaoBienBan_BoSungVaThuKyDiXuongUseCase(t *testing.T) {
 	m.capQuyen(t, "task.create")
 	than := thanTaoBienBan()
 	than.SupplementsID = idBBThu
-	than.Secretary = "CB-00042"
+	than.MinutesTaker = "CB-00042"
 	doiMa(t, m.goiGhiNV(t, http.MethodPost, hostA, duongMeetings, canBoCuaXa(xaA), than), http.StatusCreated)
 	if m.ghiBienBan.ycTao.BoSungChoID != idBBThu || m.ghiBienBan.ycTao.ThuKyMa != "CB-00042" {
 		t.Errorf("yêu cầu tới use case = %+v", m.ghiBienBan.ycTao)

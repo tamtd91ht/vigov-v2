@@ -104,8 +104,8 @@ func TestDocBienBanTraDuTruong(t *testing.T) {
 	if b.SignedAt == nil || !b.SignedAt.Equal(mocKyBBA) || b.SignedBy != "CB-00031" {
 		t.Errorf("thời điểm/người ký sai: %v %q", b.SignedAt, b.SignedBy)
 	}
-	if b.Secretary != "CB-00042" {
-		t.Errorf("secretary = %q", b.Secretary)
+	if b.MinutesTaker != "CB-00042" {
+		t.Errorf("secretary = %q", b.MinutesTaker)
 	}
 	// The notice day is a CALENDAR DAY, like held_on.
 	if b.Notice == nil || b.Notice.ReferenceNo != "45/TB-UBND" || b.Notice.IssuedOn != "2026-08-12" {
@@ -158,7 +158,7 @@ func TestDocBienBanNhapVaBoSungKhongDauKhongPhatSinh(t *testing.T) {
 	w := m.goi(t, http.MethodGet, hostA, "/api/v1/meetings/bb-003", canBoCuaXa(xaA))
 	doiMa(t, w, http.StatusOK)
 	than := w.Body.String()
-	for _, vang := range []string{`"signed_at"`, `"signed_by"`, `"secretary"`, `"notice"`} {
+	for _, vang := range []string{`"signed_at"`, `"signed_by"`, `"minutes_taker"`, `"notice"`} {
 		if strings.Contains(than, vang) {
 			t.Errorf("biên bản nháp mang trường %s: %s", vang, than)
 		}

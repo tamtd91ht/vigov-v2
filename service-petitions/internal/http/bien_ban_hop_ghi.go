@@ -111,8 +111,8 @@ type taoBienBanVao struct {
 	// EMPTY IS A REAL STATE: §7.3 saves minutes with no conclusions ("nhập nháp trước, bổ sung sau").
 	Conclusions []string `json:"conclusions,omitempty"`
 
-	// Secretary is a STAFF BUSINESS CODE (migration 0012), optional — the name GET returns.
-	Secretary string `json:"secretary,omitempty"`
+	// MinutesTaker is a STAFF BUSINESS CODE (migration 0012), optional — the name GET returns.
+	MinutesTaker string `json:"minutes_taker,omitempty"`
 
 	// SupplementsID makes these SUPPLEMENTARY minutes (user decision 25/09/2026): the id of a live,
 	// SIGNED meeting of this commune. 404 when it names none; 400 when it names a draft (a draft is
@@ -143,7 +143,7 @@ type suaBienBanVao struct {
 	ReferenceNo *string      `json:"reference_no,omitempty"`
 	Location    *string      `json:"location,omitempty"`
 	ChairedBy   *string      `json:"chaired_by,omitempty"`
-	Secretary   *string      `json:"secretary,omitempty"`
+	MinutesTaker   *string      `json:"minutes_taker,omitempty"`
 	Attendees   *[]string    `json:"attendees,omitempty"`
 	Content     *string      `json:"content,omitempty"`
 	Notice      *thongBaoVao `json:"notice,omitempty"`
@@ -276,7 +276,7 @@ func (h *Handler) TaoBienBan(w http.ResponseWriter, r *http.Request) {
 		NoiDung:     vao.Content,
 		ThanhPhan:   vao.Attendees,
 		KetLuan:     vao.Conclusions,
-		ThuKyMa:     vao.Secretary,
+		ThuKyMa:     vao.MinutesTaker,
 		BoSungChoID: vao.SupplementsID,
 	}, nguoi)
 	if err != nil {
