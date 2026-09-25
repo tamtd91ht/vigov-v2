@@ -168,7 +168,7 @@ func TestMigration0008KhongPhaHuy(t *testing.T) {
 		{"drop column", "xoá cột trên hồ sơ lưu trữ"},
 		{"drop table", "xoá bảng"},
 		{"alter column", "đổi kiểu hoặc NOT NULL của cột có sẵn"},
-		{"create or replace function ho_so_luu_tru_cam_xoa_cung","thay hàm canh lưu trữ của 0004 — bảng khác đang dùng"},
+		{"create or replace function ho_so_luu_tru_cam_xoa_cung", "thay hàm canh lưu trữ của 0004 — bảng khác đang dùng"},
 		{"jsonb,", "tiền trong jsonb — xem đầu tệp: không kiểu, không khoá"},
 		{"numeric", "tiền không phải BIGINT đồng"},
 		{"double precision", "tiền dấu phẩy động"},
