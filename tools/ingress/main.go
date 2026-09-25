@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 func main() {
@@ -38,7 +39,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	noiDung, err := sinhTuKho(root)
+	yamlRa, tsRa, err := sinhTuKho(root)
 	if err != nil {
 		// The message carries the offending path; the caller has to fix the contract or the
 		// manifests, and the generator must not invent an answer for them.
@@ -46,12 +47,46 @@ func main() {
 		os.Exit(1)
 	}
 
-	dich := filepath.Join(root, duongTepSinh)
-	if err := os.WriteFile(dich, noiDung, 0o644); err != nil {
+	if err := ghiCaHai(root, map[string][]byte{duongTepSinh: yamlRa, duongTepTS: tsRa}); err != nil {
 		fmt.Fprintln(os.Stderr, "ingress:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("ingress: đã sinh %s\n", duongTepSinh)
+	fmt.Printf("ingress: đã sinh %s và %s\n", duongTepSinh, duongTepTS)
+}
+
+// ghiCaHai writes every file to a temporary sibling first and renames only once all of them
+// are on disk. The two outputs are two views of one routing table (Ingress and the admin-web
+// proxy); a failed write that left one updated and the other stale would route the same path
+// to two different services depending on which surface the request entered by.
+func ghiCaHai(root string, tep map[string][]byte) error {
+	ten := make([]string, 0, len(tep))
+	for t := range tep {
+		ten = append(ten, t)
+	}
+	sort.Strings(ten)
+
+	tam := make([]string, 0, len(ten))
+	donDep := func() {
+		for _, p := range tam {
+			_ = os.Remove(p) // best effort: the temp file is ours and carries nothing
+		}
+	}
+	for _, t := range ten {
+		dich := filepath.Join(root, t)
+		p := dich + ".tam"
+		if err := os.WriteFile(p, tep[t], 0o644); err != nil {
+			donDep()
+			return fmt.Errorf("ghi %s: %w", t, err)
+		}
+		tam = append(tam, p)
+	}
+	for i, t := range ten {
+		if err := os.Rename(tam[i], filepath.Join(root, t)); err != nil {
+			donDep()
+			return fmt.Errorf("đổi tên %s: %w", t, err)
+		}
+	}
+	return nil
 }
 
 // timGoc walks up from the working directory to the repository root, recognised by go.work.

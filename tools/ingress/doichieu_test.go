@@ -92,7 +92,7 @@ func docTuyenHopDong(t *testing.T) []tuyenHopDong {
 // because a route was added in Go, `make kb` refreshed openapi.json, and nobody re-ran this.
 func TestTepSinhRaKhopVoiHopDong(t *testing.T) {
 	root := goc(t)
-	muon, err := sinhTuKho(root)
+	muon, _, err := sinhTuKho(root)
 	if err != nil {
 		t.Fatalf("bộ sinh DỪNG: %v", err)
 	}

@@ -130,6 +130,14 @@
       "bang_chung": "tools/xuat_tien_do.py viết lại, vẫn chỉ thư viện chuẩn (Jenkins python3.9: không `\\` trong f-string). HAI BƯỚC: `--excel --khung` sinh tmp/tien-do/noi-dung-<ngày>.json (bang_chung + ô `viet` trống; chạy lại giữ phần chữ cũ) → agent viết phần chữ → `--excel --tu <json>` đọc LẠI số liệu từ kho, kiểm phần chữ (đủ ô, tập trạng thái, `loi_van_phong`, dữ liệu cá nhân) rồi ghi .xlsx có định dạng, ô gộp, công thức (fullCalcOnLoad), liên kết nội bộ, lọc, đóng băng. Phần chữ chỉ sống trong tmp/ — không thành bản thứ hai của sự thật trong kho (luật 9). Người dùng quyết 25/09: không đặt câu hỏi trong báo cáo, việc chờ xác nhận ghi là 'Đang xử lý'. Kiểm: test_hooks 257/257 với ca khoá format v3 + 8 ca VAN_PHONG_XLSX_CASES (đột biến regex → 5/5 ca chặn đỏ); e2e: phần chữ sai → exit 5 chỉ đúng 2 ô; đích trong kho → exit 4; Excel 16 mở + CalculateFull: 51 công thức, 0 lỗi; số khớp bản duyệt (136 tuyến, 134/134, 10/14 màn, 76 đã dựng, 81 chưa dựng).",
       "no_confirm": [],
       "tiep_theo": "v2 → v3 đổi toàn bộ tên sheet/cột và bỏ % + mốc dự kiến — công thức team dựng trên Google Sheet bản v2 phải dựng lại. Màn `van-ban` chưa khai PHAN_CHUA_DUNG nên cột chưa dựng in 0 kèm dòng 'chưa khai' ở mục B; khai khối ấy ở web-admin thì bảng tự đúng."
+    },
+    {
+      "id": "ingress-sinh-bang-dinh-tuyen-web-admin",
+      "viec": "tools/ingress sinh thêm web-admin/src/lib/api/dinh-tuyen.gen.ts — bảng tiền tố → dịch vụ để web quản trị làm proxy /api/v1/* (prod gửi MỌI lưu lượng admin.vigov.vn vào web-admin)",
+      "trang_thai": "xong",
+      "bang_chung": "tools/ingress/sinhts.go (sinhTS, chuoiAnToanTS) kết xuất từ CÙNG []luatIngress của bangDinhTuyen, bỏ luật bắt hết `/`; sinhTuKho (dinhtuyen.go) trả cả hai nội dung, lỗi ở một bên thì không trả bên nào; main.go ghiCaHai ghi tệp tạm rồi mới đổi tên cả hai. Ca kiểm mới ở sinhts_test.go: TestTepTSKhopVoiHopDong (so byte tệp trên đĩa), TestBangTSKhopLuatIngress (đọc ĐỘC LẬP tệp TS và ingress.yaml trên đĩa, so cặp tiền tố → dịch vụ theo thứ tự + tập DichVuAPI), TestSinhTSBoLuatBatHetVaTuChoiDauVaoLa. `go test -count=1 ./ingress/...` trong tools: 17/17 XANH; `go vet` sạch; `gofmt -l ingress` rỗng; chạy bộ sinh hai lần: ingress.yaml không đổi, tệp TS cùng SHA-1. ĐỘT BIẾN: đổi dichVu của /api/v1/tasks sang identity trong tệp TS → 2 ca đỏ; phục hồi bằng chạy lại bộ sinh. `tsc --strict` riêng tệp ấy rc=0, `eslint` rc=0 — kiểm 2026-09-25",
+      "no_confirm": [],
+      "tiep_theo": "Bên TIÊU THỤ (proxy trong web-admin) là thẻ việc sau: khớp theo ĐOẠN đường dẫn, và đường không mục nào phủ thì TỪ CHỐI, không gửi về dịch vụ mặc định (luật 1). Tệp sinh chưa nằm trong danh sách `ignores` của web-admin/eslint.config.mjs như schema.gen.ts — hôm nay lint sạch nên chưa cần, nhưng một quy tắc lint mới đỏ trên nó sẽ là cảnh báo không ai được sửa."
     }
   ]
 }
