@@ -55,14 +55,23 @@ spec:
             - { name: PORT,      value: "3000" }
             - { name: HOSTNAME,  value: "0.0.0.0" }   # mặc định của Next là 127.0.0.1 → probe không tới được
 
-          # `/` là trang duy nhất chắc chắn tồn tại hôm nay. Khi web-admin có một route
-          # /healthz riêng thì đổi sang nó — trang chủ kéo theo cả tầng render.
+          # web-admin là CỔNG của `/api/v1/*` (quyết định 25/09/2026: k8s chỉ cấp Secret +
+          # ConfigMap, định tuyến nằm trong ứng dụng). Nó đọc `*_HTTP_ADDR` — địa chỉ nội bộ
+          # của năm dịch vụ Go — và `ENV` từ ConfigMap chung. Không đặt thì mặc định
+          # `http://<dịch vụ>:8080`, tức đúng tên Service trong cùng namespace.
+          # KHÔNG có `secretRef`: web-admin không giữ bí mật nào.
+          envFrom:
+            - configMapRef: { name: cau-hinh-chung }
+
+          # `/healthz` không hỏi xã, không gọi backend. Probe `/` từng bị chuyển hướng sang
+          # `/dang-nhap`, trang ấy hỏi identity bằng Host là IP pod → 404 → pod không bao
+          # giờ Ready — và một identity chập chờn sẽ kéo cả web-admin khỏi vòng phục vụ.
           readinessProbe:
-            httpGet: { path: /, port: http }
+            httpGet: { path: /healthz, port: http }
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
-            httpGet: { path: /, port: http }
+            httpGet: { path: /healthz, port: http }
             periodSeconds: 20
             failureThreshold: 5
 
