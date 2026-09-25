@@ -67,6 +67,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/vihat/vigov/core/authz"
@@ -210,7 +211,13 @@ func (h *Handler) DanhSachPhieu(w http.ResponseWriter, r *http.Request) {
 
 	loc, chiGiaoChoToi, err := locPhieuTuQuery(thamSo)
 	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		thongBao := err.Error()
+		if errors.Is(err, petstore.ErrTimPhieuQuaDai) {
+			// The store's sentinel carries its package prefix (`phieu_phan_anh:`); the four other
+			// refusals of locPhieuTuQuery are this file's own sentences and are already fit to show.
+			thongBao = fmt.Sprintf("Chuỗi tìm kiếm quá dài (tối đa %d ký tự).", petstore.TimPhieuToiDa)
+		}
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", thongBao, "")
 		return
 	}
 	// "GIAO CHO TÔI" — THE CODE COMES FROM THE SESSION, NEVER FROM THE REQUEST. The query said only
@@ -606,21 +613,18 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 		httpx.WriteError(w, http.StatusConflict, "petition_state",
 			"Phiếu đã chuyển sang trạng thái khác trong lúc bạn đang mở màn hình. "+
 				"Hãy tải lại phiếu rồi thao tác lại.", "")
-	case errors.Is(err, domain.ErrPhanCongSaiLuc):
-		// THAM SỐ THỨ NĂM LÀ `traceID`, KHÔNG PHẢI TÊN TRƯỜNG. Chỗ này từng truyền `"unit"`, nên
-		// chuỗi ấy đi ra dây trong `trace_id` — trường người trực dùng để tìm lại một yêu cầu
-		// trong nhật ký lúc có sự cố. Một `trace_id` bằng `"unit"` không tìm được gì, và tệ hơn
-		// là nó TRÔNG NHƯ một trace id thật nên người tìm sẽ tin rồi đi tìm.
+	case errors.Is(err, domain.ErrPhanCongSaiLuc), errors.Is(err, domain.ErrDongSaiLuc),
+		errors.Is(err, domain.ErrKetThucNhanhSaiLuc), errors.Is(err, domain.ErrKhongConCamKet):
+		// THE FIXED SENTENCE (cauTuChoiPhieu), NEVER err.Error(). These four are raised INSIDE the
+		// transaction and arrive wrapped by app.bocPhieu — "xu_ly_phan_anh: đóng phiếu cho xã <ULID>:
+		// phan_anh: …" — so err.Error() put the commune's tenant id and this service's wrapping on the
+		// wire, to a screen that renders `message` verbatim (web-admin/src/lib/api/phieu-phan-anh.ts).
+		// The code stays `petition_state`: that is what a client branches on, and it did not change.
 		//
-		// `httpx.Error` hiện KHÔNG có trường `field`. Muốn trả tên trường cho biểu mẫu thì đó là
-		// một thay đổi ở `core/httpx` cho cả tám dịch vụ, không phải một đối số truyền lén ở đây.
-		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")
-	case errors.Is(err, domain.ErrDongSaiLuc):
-		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")
-	case errors.Is(err, domain.ErrKetThucNhanhSaiLuc):
-		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")
-	case errors.Is(err, domain.ErrKhongConCamKet):
-		httpx.WriteError(w, http.StatusConflict, "petition_state", err.Error(), "")
+		// THAM SỐ THỨ NĂM LÀ `traceID`, KHÔNG PHẢI TÊN TRƯỜNG. Chỗ này từng truyền `"unit"`, nên
+		// chuỗi ấy đi ra dây trong `trace_id`. `httpx.Error` KHÔNG có trường `field`; muốn trả tên
+		// trường thì đó là một thay đổi ở `core/httpx` cho cả tám dịch vụ.
+		h.tuChoiXuLy(w, r, http.StatusConflict, "petition_state", viec, err)
 	case errors.Is(err, app.ErrKhongPhaiNguoiDuocGiao):
 		// 403 AND NOT 409, WHICH IS THE OPPOSITE CALL FROM EVERY CASE AROUND IT. The three above
 		// refuse an act by somebody who HOLDS the right; this one refuses the caller themselves. A 409
@@ -662,9 +666,11 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 			"Chưa kiểm tra được cán bộ nhận việc nên phiếu CHƯA được phân công. "+
 				"Vui lòng thử lại sau ít phút.", "")
 	case domain.LaLoiXuLyPhanAnh(err):
-		// The domain's own sentence is returned: it names the field and the rule, holds no personal
-		// data and no internal detail, and a second sentence written here would drift from it.
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		// THE FIXED SENTENCE HERE TOO, although none of these is wrapped with the commune today (the
+		// shape checks run before app.bocPhieu is reached). err.Error() carried the `phan_anh:`
+		// package prefix onto an officer's screen, and it would carry the commune id the day one of
+		// these checks moves inside the transaction — a move nobody would think to test the wire for.
+		h.tuChoiXuLy(w, r, http.StatusBadRequest, "invalid_request", viec, err)
 	default:
 		// The wrapped error carries the store or identity failure and never reaches the client (rule
 		// 3, forbidden #3). The commune is logged because it is the only thing an operator can act on.
@@ -673,6 +679,89 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 		httpx.WriteError(w, http.StatusInternalServerError, "internal",
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 	}
+}
+
+// tuChoiXuLy answers a REFUSAL (409 about the record, 400 about what was typed) with the fixed
+// sentence for its kind, and logs the full chain for an operator.
+//
+// THE LOG LINE CARRIES THE WRAPPED ERROR, THE COMMUNE, THE ACT AND THE OFFICER'S BUSINESS CODE — and
+// nothing else. The chain is built by app.bocPhieu, which by construction holds no lookup code, no
+// content and no reporter (rule 3, invariants 1 and 2); the officer is named by `Principal.Ma`
+// (`CB-00123`), the same code the audit trail uses, never the internal id. INFO and not ERROR: a
+// refusal is the rule doing its job, not a fault anybody must be woken for.
+func (h *Handler) tuChoiXuLy(w http.ResponseWriter, r *http.Request, status int, ma, viec string,
+	err error) {
+	ctx := r.Context()
+	canBo := ""
+	if p, ok := authz.From(ctx); ok {
+		canBo = p.Ma
+	}
+	cau, co := cauTuChoiPhieu(err)
+	if !co {
+		// A MAPPING BUG, NOT A CASE: the caller matched a sentinel this table does not hold — somebody
+		// added a refusal to domain.LaLoiXuLyPhanAnh and not here. The generic sentence goes out
+		// rather than err.Error(), so the one path that forgot is not the one that leaks.
+		h.d.Log.Warn("xử lý phiếu phản ánh: từ chối chưa có câu trả lời cố định — THIẾU TRONG cacCauTuChoiPhieu",
+			"xa", string(tenant.MustFrom(ctx)), "viec", viec, "can_bo", canBo, "err", err)
+	} else {
+		h.d.Log.Info("xử lý phiếu phản ánh: từ chối "+viec,
+			"xa", string(tenant.MustFrom(ctx)), "can_bo", canBo, "ma_loi", ma, "err", err)
+	}
+	httpx.WriteError(w, status, ma, cau, "")
+}
+
+// cacCauTuChoiPhieu is the sentence an officer reads for each refusal of the six write routes.
+//
+// WRITTEN HERE AND NOT READ FROM THE SENTINEL. The domain's sentences are for the chain and the log:
+// they start with the package prefix (`phan_anh:`) and, by the time they reach this layer, are wrapped
+// with the operation and the commune. The screen shows `message` verbatim, so the wire sentence must
+// be one nobody has to strip. The price is two sentences per refusal; the table is kept beside the one
+// switch that uses it, and every row is pinned by TestTuChoiXuLyCauCoDinhKhongLoNoiBo.
+//
+// THE LIMITS ARE READ FROM domain, never retyped, so a bound that changes changes the sentence too.
+var cacCauTuChoiPhieu = []struct {
+	goc error
+	cau string
+}{
+	// --- 409: about the state of the record ---
+	{domain.ErrPhanCongSaiLuc, "Chưa phân công được phiếu này: phiếu phải được phân loại trước, và " +
+		"phiếu đã kết thúc thì không phân công nữa. Hãy tải lại phiếu để xem trạng thái hiện tại."},
+	{domain.ErrDongSaiLuc, "Chưa đóng được phiếu này: chỉ đóng phiếu đang chờ người dân xác nhận, " +
+		"hoặc phiếu đã xử lý mà không có người dân nào để xác nhận. Hãy tải lại phiếu để xem trạng " +
+		"thái hiện tại."},
+	{domain.ErrKetThucNhanhSaiLuc, "Chỉ từ chối tiếp nhận hoặc chuyển cấp trên được phiếu đang ở bước " +
+		"phân loại. Hãy tải lại phiếu để xem trạng thái hiện tại."},
+	{domain.ErrKhongConCamKet, "Phiếu đã kết thúc nên không còn thao tác nào trên phiếu này."},
+
+	// --- 400: about what was typed ---
+	{domain.ErrThieuLinhVuc, "Chưa chọn lĩnh vực: phân loại phải chốt lĩnh vực của phiếu."},
+	{domain.ErrLinhVucSaiDang, "Mã lĩnh vực không hợp lệ. Hãy chọn lĩnh vực trong danh sách."},
+	{domain.ErrThieuBoPhan, "Chưa chọn bộ phận nhận xử lý."},
+	{domain.ErrBoPhanQuaDai, fmt.Sprintf("Mã bộ phận quá dài (tối đa %d ký tự).", domain.BoPhanToiDa)},
+	{domain.ErrCanBoQuaDai, fmt.Sprintf("Mã cán bộ quá dài (tối đa %d ký tự).", domain.CanBoToiDa)},
+	{domain.ErrThieuKetQua, "Chưa nhập kết quả xử lý: không đóng phiếu mà không có kết quả cho người " +
+		"dân đọc."},
+	{domain.ErrKetQuaQuaNgan, fmt.Sprintf("Kết quả xử lý quá ngắn (tối thiểu %d ký tự): người dân "+
+		"phải đọc được xã đã làm gì.", domain.KetQuaToiThieu)},
+	{domain.ErrKetQuaQuaDai, fmt.Sprintf("Kết quả xử lý quá dài (tối đa %d ký tự).", domain.KetQuaToiDa)},
+	{domain.ErrThieuLyDo, "Chưa nhập lý do: người dân phải đọc được vì sao."},
+	{domain.ErrLyDoQuaNgan, fmt.Sprintf("Lý do quá ngắn (tối thiểu %d ký tự): người dân phải đọc được "+
+		"vì sao.", domain.LyDoToiThieu)},
+	{domain.ErrLyDoQuaDai, fmt.Sprintf("Lý do quá dài (tối đa %d ký tự).", domain.LyDoToiDa)},
+	{domain.ErrThieuCoQuanNhan, "Chưa nhập cơ quan tiếp nhận."},
+	{domain.ErrCoQuanNhanQuaDai, fmt.Sprintf("Tên cơ quan tiếp nhận quá dài (tối đa %d ký tự).",
+		domain.CoQuanNhanToiDa)},
+}
+
+// cauTuChoiPhieu returns the fixed sentence for the first sentinel in the chain. An unmatched error
+// answers the GENERIC sentence and `false` — never err.Error(); see tuChoiXuLy.
+func cauTuChoiPhieu(err error) (string, bool) {
+	for _, c := range cacCauTuChoiPhieu {
+		if errors.Is(err, c.goc) {
+			return c.cau, true
+		}
+	}
+	return "Yêu cầu bị từ chối. Vui lòng tải lại phiếu rồi thao tác lại.", false
 }
 
 // thieuChuTheXuLy answers a request that reached a guarded write route with no principal, or with one

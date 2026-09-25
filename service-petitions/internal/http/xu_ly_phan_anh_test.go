@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -912,6 +913,97 @@ func TestDongSaiBuocThi409(t *testing.T) {
 	doiMa(t, w, http.StatusConflict)
 	if loiTra(t, w).Code != "petition_state" {
 		t.Errorf("mã lỗi = %q, muốn petition_state", loiTra(t, w).Code)
+	}
+}
+
+// TestTuChoiXuLyCauCoDinhKhongLoNoiBo — every refusal of the write routes answers its FIXED sentence,
+// with its machine code unchanged, and the wire carries neither the commune's tenant id nor this
+// service's wrapping. The error is wrapped EXACTLY as app.bocPhieu wraps it, because the wrapped form
+// is what reaches the handler in production — a bare sentinel here would pass against the old code.
+//
+// AND THE FULL CHAIN IS IN THE LOG, with the officer's business code and without the lookup code:
+// an operator must still be able to see which commune and which act refused (rule 3, invariant 2).
+func TestTuChoiXuLyCauCoDinhKhongLoNoiBo(t *testing.T) {
+	cacCa := []struct {
+		goc    error
+		status int
+		ma     string
+	}{
+		{domain.ErrPhanCongSaiLuc, http.StatusConflict, "petition_state"},
+		{domain.ErrDongSaiLuc, http.StatusConflict, "petition_state"},
+		{domain.ErrKetThucNhanhSaiLuc, http.StatusConflict, "petition_state"},
+		{domain.ErrKhongConCamKet, http.StatusConflict, "petition_state"},
+		{domain.ErrThieuLinhVuc, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrLinhVucSaiDang, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrThieuBoPhan, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrBoPhanQuaDai, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrCanBoQuaDai, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrThieuKetQua, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrKetQuaQuaNgan, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrKetQuaQuaDai, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrThieuLyDo, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrLyDoQuaNgan, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrLyDoQuaDai, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrThieuCoQuanNhan, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrCoQuanNhanQuaDai, http.StatusBadRequest, "invalid_request"},
+	}
+	if len(cacCa) != len(cacCauTuChoiPhieu) {
+		t.Fatalf("bảng câu có %d dòng, bài kiểm có %d — một từ chối mới phải có mặt ở cả hai",
+			len(cacCauTuChoiPhieu), len(cacCa))
+	}
+	for _, ca := range cacCa {
+		t.Run(ca.goc.Error(), func(t *testing.T) {
+			m := dungMayChu(t)
+			var nhatKy bytes.Buffer
+			m.dungLai(t, func(d *Deps) { d.Log = slog.New(slog.NewTextHandler(&nhatKy, nil)) })
+			m.capQuyen(t, authz.Perm("feedback.resolve"))
+			// app.bocPhieu's shape, character for character, around the domain's own wrapping.
+			m.xuLy.loi = fmt.Errorf("xu_ly_phan_anh: đóng phiếu cho xã %s: %w", xaA,
+				fmt.Errorf("%w (tối đa 1 ký tự)", ca.goc))
+
+			w := m.goiThan(t, http.MethodPost, hostA, duongDong(maPhieuThuong), canBoCuaXa(xaA),
+				dongPhieuVao{Result: ketQuaThat})
+
+			doiMa(t, w, ca.status)
+			loi := loiTra(t, w)
+			if loi.Code != ca.ma {
+				t.Errorf("mã lỗi = %q, muốn %q", loi.Code, ca.ma)
+			}
+			muon, co := cauTuChoiPhieu(ca.goc)
+			if !co {
+				t.Fatalf("không có câu cố định cho %v", ca.goc)
+			}
+			if loi.Message != muon {
+				t.Errorf("message = %q, muốn câu cố định %q", loi.Message, muon)
+			}
+			for _, cam := range []string{string(xaA), "xu_ly_phan_anh", "phan_anh:", "cho xã",
+				ca.goc.Error()} {
+				if strings.Contains(w.Body.String(), cam) {
+					t.Errorf("thân lỗi lộ %q: %s", cam, w.Body.String())
+				}
+			}
+			log := nhatKy.String()
+			if !strings.Contains(log, string(xaA)) || !strings.Contains(log, maCanBo) {
+				t.Errorf("nhật ký thiếu xã hoặc mã cán bộ: %s", log)
+			}
+			if strings.Contains(log, maPhieuThuong) || strings.Contains(log, idCanBo) {
+				t.Errorf("nhật ký chứa mã tra cứu hoặc id nội bộ: %s", log)
+			}
+		})
+	}
+}
+
+// TestTimPhieuQuaDaiKhongLoTienTo — the list route's one store-owned refusal is re-worded; the
+// store sentinel's `phieu_phan_anh:` prefix does not reach the screen.
+func TestTimPhieuQuaDaiKhongLoTienTo(t *testing.T) {
+	m := dungMayChu(t)
+	w := m.goi(t, http.MethodGet, hostA,
+		"/api/v1/citizen-reports?q="+strings.Repeat("a", petstore.TimPhieuToiDa+1), canBoCuaXa(xaA))
+
+	doiMa(t, w, http.StatusBadRequest)
+	loi := loiTra(t, w)
+	if loi.Code != "invalid_request" || strings.Contains(loi.Message, "phieu_phan_anh") {
+		t.Errorf("lỗi = %+v", loi)
 	}
 }
 

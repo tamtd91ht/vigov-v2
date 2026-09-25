@@ -163,6 +163,21 @@ type phieuPhanAnhRa struct {
 	ReceivingBody string     `json:"receiving_body,omitempty"`
 	BranchEndedAt *time.Time `json:"branch_ended_at,omitempty"`
 
+	// HasCitizen says whether a citizen ACCOUNT stands behind the petition (`cong_dan_id` non-empty)
+	// — somebody the commune can notify and who can confirm the result. It is the fact
+	// domain.DongDuoc decides the closing point on (owner's decision of 2026-09-24): without it a
+	// screen cannot tell "close from `da-xu-ly`" from "wait for `cho-dan-xac-nhan`", and learns which
+	// by drawing the button and taking the 409.
+	//
+	// A BOOLEAN AND NEVER THE ID. `cong_dan_id` is the key of a citizen's identity in another
+	// service; nothing on a staff screen needs it, and a flag answers the one question asked.
+	//
+	// A POINTER WITH omitempty, SET ON EVERY RESPONSE BUILT BY phieuRaNgoai. The pointer makes `false`
+	// travel as `false` rather than vanish; omitempty makes tools/apidoc declare the key OPTIONAL
+	// (tools/apidoc/schema.go:723 — without it every existing fixture would fail a new required key).
+	// Absent therefore means "this server predates the field", never "no citizen".
+	HasCitizen *bool `json:"has_citizen,omitempty"`
+
 	Public bool `json:"public"`
 }
 
@@ -226,6 +241,10 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 		t := p.KetThucNhanhLuc
 		ra.BranchEndedAt = &t
 	}
+	// The SAME predicate domain.DongDuoc reads (`CongDanID == ""`), so the flag and the closing rule
+	// cannot disagree about which petitions have somebody to confirm.
+	coCongDan := p.CongDanID != ""
+	ra.HasCitizen = &coCongDan
 	return ra
 }
 

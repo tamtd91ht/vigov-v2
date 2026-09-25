@@ -743,3 +743,36 @@ func TestDocPhieuKhoHongThi500VaKhongLoNoiDung(t *testing.T) {
 		t.Errorf("lỗi nội bộ lọt ra ngoài: %s", than)
 	}
 }
+
+// --- has_citizen -----------------------------------------------------------------------------------
+
+// TestDocPhieuHasCitizen — the flag follows `cong_dan_id` both ways, `false` TRAVELS as `false` rather
+// than vanishing, and the id itself never reaches the wire. maPhieuThuong has an account behind it
+// (`cd-001`); maPhieuNhapHo was booked by an officer and has none.
+func TestDocPhieuHasCitizen(t *testing.T) {
+	for _, ca := range []struct {
+		ma   string
+		muon bool
+	}{{maPhieuThuong, true}, {maPhieuNhapHo, false}} {
+		t.Run(ca.ma, func(t *testing.T) {
+			m := dungMayChu(t)
+			w := m.goi(t, http.MethodGet, hostA, duong(ca.ma), canBoCuaXa(xaA))
+			doiMa(t, w, http.StatusOK)
+
+			var tho map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &tho); err != nil {
+				t.Fatalf("thân không phải JSON: %q", w.Body.String())
+			}
+			co, ok := tho["has_citizen"].(bool)
+			if !ok {
+				t.Fatalf("has_citizen vắng mặt hoặc không phải bool: %s", w.Body.String())
+			}
+			if co != ca.muon {
+				t.Errorf("has_citizen = %v, muốn %v", co, ca.muon)
+			}
+			if strings.Contains(w.Body.String(), "cd-001") || strings.Contains(w.Body.String(), "cong_dan") {
+				t.Errorf("mã công dân lọt ra bề mặt cán bộ: %s", w.Body.String())
+			}
+		})
+	}
+}
