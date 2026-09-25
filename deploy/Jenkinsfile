@@ -106,6 +106,15 @@ pipeline {
           echo "── Secret (CHỈ TÊN và LOẠI — không in giá trị)"
           kubectl -n "$NS" get secret -o custom-columns=TEN:.metadata.name,LOAI:.type,SO_KEY:.data \
             --no-headers 2>/dev/null | awk '{print "   " $1 "  " $2}' || true
+          # TÊN KEY, không giá trị: go-template chỉ duyệt khoá của `.data`. Cần để đối chiếu một
+          # namespace dựng bằng YAML khác kho (staging mang `<dv>-secrets`/`common-config`, 25/09/2026)
+          # với tên key mà `core/config` đọc.
+          echo "── Key của từng Secret (CHỈ TÊN KEY)"
+          kubectl -n "$NS" get secret -o go-template='{{range .items}}   {{.metadata.name}}:{{range $k, $v := .data}} {{$k}}{{end}}{{"\\n"}}{{end}}' 2>/dev/null || true
+          echo "── Key của từng ConfigMap (CHỈ TÊN KEY)"
+          kubectl -n "$NS" get configmap -o go-template='{{range .items}}   {{.metadata.name}}:{{range $k, $v := .data}} {{$k}}{{end}}{{"\\n"}}{{end}}' 2>/dev/null || true
+          echo "── Deployment đọc Secret/ConfigMap nào (envFrom) và biến env đặt thẳng"
+          kubectl -n "$NS" get deploy -o go-template='{{range .items}}   {{.metadata.name}}:{{range .spec.template.spec.containers}}{{range .envFrom}}{{if .secretRef}} secret/{{.secretRef.name}}{{end}}{{if .configMapRef}} configmap/{{.configMapRef.name}}{{end}}{{end}} | env:{{range .env}} {{.name}}{{end}}{{end}}{{"\\n"}}{{end}}' 2>/dev/null || true
           echo "── Sự kiện gần nhất"
           kubectl -n "$NS" get events --sort-by=.lastTimestamp 2>/dev/null | tail -25 || true
         '''
