@@ -116,9 +116,12 @@ pipeline {
           # Deployment phải CÓ SẴN trên cụm — kiểm TRƯỚC khi dựng. Job chỉ đổi ảnh, không tạo
           # Deployment (manifest áp tay, deploy/README.md mục 7). Kiểm muộn thì một lượt tốn cả
           # cổng kiểm lẫn đóng ảnh rồi mới biết không có chỗ nào để đặt.
-          if ! kubectl -n "$NS" get deploy/"$TEN_K8S" >/dev/null 2>&1; then
+          # In NGUYÊN VĂN lỗi của cụm: `Forbidden` (kubeconfig không có quyền ở namespace này) và
+          # `NotFound` (chưa áp manifest) sửa ở hai chỗ khác nhau, nên đoán hộ là chỉ sai đường.
+          if ! loi=$(kubectl -n "$NS" get deploy/"$TEN_K8S" -o name 2>&1); then
             echo ""
-            echo "KHÔNG CÓ deploy/$TEN_K8S TRONG NAMESPACE $NS của cụm $(kubectl config current-context)."
+            echo "cụm trả lời: $loi"
+            echo "KHÔNG ĐỌC ĐƯỢC deploy/$TEN_K8S TRONG NAMESPACE $NS của cụm $(kubectl config current-context)."
             echo "Hoặc manifest chưa được áp lên namespace này (deploy/README.md mục 4 và 7),"
             echo "hoặc hệ thống đang chạy ở namespace khác — xem:  kubectl get deploy -A"
             echo ""
