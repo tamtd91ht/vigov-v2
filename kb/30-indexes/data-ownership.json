@@ -229,6 +229,13 @@
       "source": "service-petitions/migrations/0004_phieu_phan_anh.sql:162"
     },
     {
+      "entity": "PetitionLogEntry",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "nhat_ky_phan_anh",
+      "source": "service-petitions/migrations/0013_nhat_ky_phan_anh.sql:76"
+    },
+    {
       "entity": "ProcessingDeadline",
       "service": "identity",
       "scope": "tenant",

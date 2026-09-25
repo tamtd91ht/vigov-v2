@@ -384,6 +384,9 @@ const KHOA_PHIEU_MONG_DOI = [
   "reason",
   "receiving_body",
   "branch_ended_at",
+  // Thêm 26/09/2026 (4ce8933): phiếu có công dân đứng sau để xác nhận không. Chỉ là cờ, không mang
+  // `cong_dan_id` — cho biết CÓ tài khoản, không cho biết AI.
+  "has_citizen",
 ] as const satisfies readonly KhoaPhieu[];
 
 /** Hợp đồng mọc thêm một trường mà danh sách trên không có → đỏ ngay tại đây. */

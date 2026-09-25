@@ -79,16 +79,17 @@ type nhatKyPhieuRa struct {
 	// ⚠ PERSONAL DATA MAY BE IN IT (rule 3) — staff-internal.
 	Note string `json:"note"`
 
-	// Attachments is ALWAYS [] today: there is no file store in this repository, and migration 0013
-	// reserves the column. The element shape is deliberately unpublished until that store exists.
-	Attachments []any `json:"attachments"`
+	// NO `attachments` FIELD, ON PURPOSE. Migration 0013 reserves `dinh_kem`, but there is no file
+	// store yet, so the element shape does not exist — and an untyped `[]any` on the wire is refused
+	// by web-admin's type generator (scripts/gen-api-types.mjs), rightly: it would reach tsc as an
+	// empty type. The day the store exists the field is added as an OPTIONAL one, which breaks no
+	// client.
 }
 
 func nhatKyRaNgoai(e domain.NhatKyPhanAnh) nhatKyPhieuRa {
 	return nhatKyPhieuRa{
 		ID: e.ID, At: e.ThoiDiem, ActorCode: e.NguoiMa, Action: string(e.HanhVi),
 		Status: string(e.TrangThai), Unit: e.BoPhanID, Assignee: e.CanBoXuLyMa, Note: e.NoiDung,
-		Attachments: []any{},
 	}
 }
 

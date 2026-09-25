@@ -3,8 +3,8 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 0f5ba90
-expires: 2026-12-24
+derived_from_commit: 2cc69f9
+expires: 2026-12-25
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
 ---
@@ -17,7 +17,7 @@ không dòng nào viết tay (luật 9, bất biến 1).
 Trục ở đây là **phân hệ sản phẩm**. Trục theo **module kho mã** nằm ở `kb/90-ephemeral/tien-do.md`;
 hai tệp trả lời hai câu khác nhau và không chép của nhau.
 
-Sinh ngày **2026-09-25** · hết hạn **2026-12-24**.
+Sinh ngày **2026-09-26** · hết hạn **2026-12-25**.
 
 ## 1 · Theo chương đặc tả
 
@@ -37,7 +37,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **06** Theo dõi giải ngân | 11 | 11/11 | ✓ |
 | **07** Thu – Chi ngân sách xã | 12 | 12/12 | ✓ |
 | **08** Thông báo | 2 | 2/2 | ✓ |
-| **09** Phản ánh của người dân | 10 | 8/8 +2 ngoài web | ✓ |
+| **09** Phản ánh của người dân | 13 | 8/10 +3 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
 | **11** Quản trị nội dung Mini App | 6 | 6/6 | ✓ |
 | **12** Danh bạ cán bộ | 5 | 5/5 | ✓ |
@@ -45,7 +45,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **14** Cấu hình hệ thống | 59 | 59/59 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 5 | 5/5 | ✓ |
 
-Tổng **145 tuyến** trong hợp đồng. **5** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **148 tuyến** trong hợp đồng. **5** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -68,7 +68,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 11 | Nội dung Mini App | `/noi-dung` | `QUYEN_XEM_NOI_DUNG` | ✓ | 11 |
 | 12 | Danh bạ cán bộ | `/danh-ba` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 4 |
 | 13 | Báo cáo | — | — | ✗ | |
-| 14 | Cấu hình | `/cau-hinh` | `QUYEN_QUAN_LY_DANH_MUC` | ✓ | 10 |
+| 14 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 10 |
 
 **10/14** mục menu có màn thật. **76** phần chưa dựng đang hiện trên các màn ấy.
 
@@ -81,12 +81,13 @@ một lời trấn an không có gì đứng sau.
 
 | | |
 |---|---|
-| Tuyến ViGov dành riêng kênh công dân (`citizen-only`) | 2 |
-| Trong đó `citizen-app` đang gọi | 1 |
+| Tuyến ViGov dành riêng kênh công dân (`citizen-only`) | 3 |
+| Trong đó `citizen-app` đang gọi | 2 |
 | Thư mục tính năng trong `citizen-app/src/features/` | 7 |
 
 | | Tuyến | `citizen-app` gọi chưa |
 |---|---|---|
+| GET | `/api/v1/my-citizen-reports` | ✓ |
 | POST | `/api/v1/my-citizen-reports` | ✓ |
 | GET | `/api/v1/my-citizen-reports/{maTraCuu}` | ✗ |
 
@@ -111,7 +112,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-documents` | 7 | 2 | 4 | 0 |
 | `service-finance` | 15 | 3 | 0 | 0 |
 | `service-identity` | 17 | 8 | 1 | 1 |
-| `service-petitions` | 13 | 7 | 5 | 0 |
+| `service-petitions` | 15 | 7 | 5 | 0 |
 | `service-platform` | 4 | 2 | 0 | 1 |
 | `service-reporting` | 2 | 0 | 1 | 0 |
 | `tools` | 18 | 0 | 0 | 0 |

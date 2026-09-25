@@ -198,8 +198,9 @@ func TestDocNhatKyTraDungHinhDangVaThuTu(t *testing.T) {
 		t.Errorf("dòng phân loại = %+v", pl)
 	}
 	for _, dong := range tho {
-		if v, co := dong["attachments"].([]any); !co || len(v) != 0 {
-			t.Errorf("attachments = %#v, muốn [] (không phải null)", dong["attachments"])
+		// No file store yet, so no attachments field at all — never an untyped promise on the wire.
+		if _, co := dong["attachments"]; co {
+			t.Error("có attachments dù chưa có kho tệp")
 		}
 		// The precedent resolves no names — the field must not appear as an empty promise.
 		if _, co := dong["actor_name"]; co {
@@ -326,8 +327,7 @@ func TestGhiChuTraVe201VaNguoiLaMaCanBo(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
 		t.Fatalf("thân: %s", w.Body.String())
 	}
-	if ra.Action != "ghi-chu" || ra.ActorCode != maCanBo || ra.Note != m.xuLy.ghiChu ||
-		ra.Attachments == nil {
+	if ra.Action != "ghi-chu" || ra.ActorCode != maCanBo || ra.Note != m.xuLy.ghiChu {
 		t.Errorf("thân 201 = %+v", ra)
 	}
 }

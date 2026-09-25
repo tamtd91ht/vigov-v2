@@ -1178,8 +1178,22 @@ export type page_Result_petitions_bienBanRa = {
   "has_more": boolean;
 };
 
+export type page_Result_petitions_nhatKyPhieuRa = {
+  "items": Array<petitions_nhatKyPhieuRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
 export type page_Result_petitions_nhiemVuRa = {
   "items": Array<petitions_nhiemVuRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
+export type page_Result_petitions_phieuCuaToiTomTatRa = {
+  "items": Array<petitions_phieuCuaToiTomTatRa>;
   /** empty when has_more is false */
   "next_cursor": string;
   "has_more": boolean;
@@ -1220,6 +1234,7 @@ export type petitions_bienBanRa = {
 export type petitions_chuyenCapTrenVao = {
   "reason": string;
   "receiving_body": string;
+  "note"?: string;
 };
 
 export type petitions_danhSachLoaiNhiemVuRa = {
@@ -1257,6 +1272,11 @@ export type petitions_doiTrangThaiVao = {
 
 export type petitions_dongPhieuVao = {
   "result": string;
+  "note"?: string;
+};
+
+export type petitions_ghiChuPhieuVao = {
+  "note": string;
 };
 
 export type petitions_guiPhanAnhVao = {
@@ -1290,6 +1310,7 @@ export type petitions_ketLuanRa = {
 
 export type petitions_khongTiepNhanVao = {
   "reason": string;
+  "note"?: string;
 };
 
 export type petitions_kyBienBanVao = {
@@ -1320,6 +1341,17 @@ export type petitions_mucUuTienRa = {
   "order": number;
   "source": string;
   "tier": number;
+};
+
+export type petitions_nhatKyPhieuRa = {
+  "id": string;
+  "at": string;
+  "actor_code": string;
+  "action": string;
+  "status": string;
+  "unit": string;
+  "assignee": string;
+  "note": string;
 };
 
 export type petitions_nhiemVuKetLuanRa = {
@@ -1370,10 +1402,12 @@ export type petitions_nhiemVuVanBanRa = {
 export type petitions_phanCongVao = {
   "unit": string;
   "assignee"?: string;
+  "note"?: string;
 };
 
 export type petitions_phanLoaiVao = {
   "field": string;
+  "note"?: string;
 };
 
 export type petitions_phieuCuaToiRa = {
@@ -1395,6 +1429,17 @@ export type petitions_phieuCuaToiRa = {
   "result": string;
   "reason"?: string;
   "receiving_body"?: string;
+};
+
+export type petitions_phieuCuaToiTomTatRa = {
+  "code": string;
+  "status": string;
+  "field": string;
+  "field_label": string;
+  "content_excerpt": string;
+  "clock_from": string;
+  "acknowledge_due": string | null;
+  "resolve_due": string | null;
 };
 
 export type petitions_phieuPhanAnhRa = {
@@ -1421,6 +1466,7 @@ export type petitions_phieuPhanAnhRa = {
   "reason"?: string;
   "receiving_body"?: string;
   "branch_ended_at"?: string | null;
+  "has_citizen"?: boolean | null;
   "public": boolean;
 };
 
@@ -2067,6 +2113,51 @@ export type petitions_post_citizen_reports_by_maTraCuu_closure = {
   than: petitions_dongPhieuVao;
   phanHoi: {
     200: petitions_phieuPhanAnhRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-reports/{maTraCuu}/log-entries — Nhật ký xử lý của một phiếu phản ánh — mới nhất trước, phân trang theo con trỏ */
+export type petitions_get_citizen_reports_by_maTraCuu_log_entries = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/log-entries";
+  phuongThuc: "GET";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "at";
+    "order"?: "asc" | "desc";
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_petitions_nhatKyPhieuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/log-entries — Ghi chú nội bộ vào nhật ký xử lý phiếu phản ánh (không đổi trạng thái) */
+export type petitions_post_citizen_reports_by_maTraCuu_log_entries = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/log-entries";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_ghiChuPhieuVao;
+  phanHoi: {
+    201: petitions_nhatKyPhieuRa;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
@@ -3065,6 +3156,28 @@ export type petitions_post_meetings_by_id_signature = {
     403: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/my-citizen-reports — Danh sách phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI trong xã của phiên, mới nhất trước — phân trang theo con trỏ, lọc tuỳ chọn theo trạng thái */
+export type petitions_get_my_citizen_reports = {
+  duongDan: "/api/v1/my-citizen-reports";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "received_at";
+    "order"?: "asc" | "desc";
+    "status": string;
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_petitions_phieuCuaToiTomTatRa;
+    400: httpx_Error;
+    401: httpx_Error;
     500: httpx_Error;
   };
 };

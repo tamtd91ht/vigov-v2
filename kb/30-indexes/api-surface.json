@@ -523,6 +523,51 @@
     },
     {
       "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/log-entries",
+      "operation_id": "petitions_get_citizen_reports_by_maTraCuu_log_entries",
+      "task_id": "88250d55f381",
+      "summary": "Nhật ký xử lý của một phiếu phản ánh — mới nhất trước, phân trang theo con trỏ",
+      "screen": "09-phan-anh-nguoi-dan §8.7",
+      "permission_kind": "permission",
+      "permission": "feedback.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_petitions.nhatKyPhieuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
+      "path": "/api/v1/citizen-reports/{maTraCuu}/log-entries",
+      "operation_id": "petitions_post_citizen_reports_by_maTraCuu_log_entries",
+      "task_id": "a33f7b14efff",
+      "summary": "Ghi chú nội bộ vào nhật ký xử lý phiếu phản ánh (không đổi trạng thái)",
+      "screen": "09-phan-anh-nguoi-dan §8.7",
+      "permission_kind": "permission",
+      "permission": "feedback.read",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "petitions.ghiChuPhieuVao",
+      "reply_schemas": {
+        "201": "petitions.nhatKyPhieuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
       "method": "POST",
       "path": "/api/v1/citizen-reports/{maTraCuu}/referral",
       "operation_id": "petitions_post_citizen_reports_by_maTraCuu_referral",
@@ -1615,6 +1660,25 @@
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/my-citizen-reports",
+      "operation_id": "petitions_get_my_citizen_reports",
+      "task_id": "a3a2d7adbf6b",
+      "summary": "Danh sách phiếu phản ánh CỦA CHÍNH NGƯỜI GỬI trong xã của phiên, mới nhất trước — phân trang theo con trỏ, lọc tuỳ chọn theo trạng thái",
+      "screen": "09-phan-anh-nguoi-dan §8",
+      "permission_kind": "citizen-only",
+      "tenant_class": "tu-phien",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_petitions.phieuCuaToiTomTatRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
     },
     {
       "service": "petitions",
