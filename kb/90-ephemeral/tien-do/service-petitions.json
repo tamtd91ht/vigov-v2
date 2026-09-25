@@ -221,6 +221,15 @@
       "bang_chung": "service-petitions/cmd/server/main.go:297 (bọc cả chuỗi cán bộ lẫn chuỗi công dân): Handler bọc httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies) NGOÀI CÙNG, trước StripTenantHeaders/TenantMiddleware/xác thực — mọi lớp đọc cùng một địa chỉ khách cho một request. Các điểm gọi httpx.ClientIP không đổi. go build + go vet + go test ./... xanh cho core và bảy dịch vụ (chạy trong từng module); gofmt -l rỗng.",
       "no_confirm": [],
       "tiep_theo": "Giá trị ConfigMap TRUSTED_PROXY_CIDRS (dải pod của ingress-nginx và web-admin) do người vận hành cụm cung cấp — kho này không biết được. Chưa đặt thì IP trong vết = IP pod web-admin (đúng như trước, không bị giả mạo, nhưng không phải IP người dùng)."
+    },
+    {
+      "viec": "Nhật ký xử lý phiếu phản ánh (§8.7) — nhat_ky_phan_anh: dòng tự động ở sáu thao tác, ghi chú tay, đọc theo trang",
+      "trang_thai": "xong",
+      "bang_chung": "26/09/2026: ee0732c migration 0013 (chỉ thêm, trigger cấm sửa/xoá) + commit mã cùng ngày (git log 'nhật ký xử lý phiếu'). go build/vet/test -p 1 service-petitions xanh; check_quyen, check_audit_actor PASS. Ca _pg_test SKIP (không Docker).",
+      "no_confirm": [],
+      "tiep_theo": "QUYẾT BỞI NHÀ CUNG CẤP theo khuyến nghị domain-expert (chủ dự án cho làm theo khuyến nghị 26/09, CHƯA ai duyệt từng điểm): (1) danh từ URL `log-entries` TỰ ĐẶT — ubiquitous-language.md §Tên tài nguyên chưa có dòng, ADR 0011 dặn hỏi; (2) ai ghi chú tay: người được giao HOẶC cầm feedback.resolve/assign/classify (khoá tuyến feedback.read) — 'người liên quan'/cùng bộ phận CHƯA QUYẾT (mục A ghi chú đối chiếu 24/09:108); (3) ghi chú được cả trên phiếu đã kết thúc; (4) KHÔNG nạp ngược từ audit_log cho phiếu cũ — việc chủ dự án quyết; (5) không trả tên người ghi (tiền lệ nhật ký nhiệm vụ cũng không), web hiện mã CB-…; (6) ghi chú tay bắt buộc Idempotency-Key (MoKhiHong) vì bảng chỉ thêm, trùng là không gỡ được. CÒN NỢ: tuyến /status nhận `note` nhưng hợp đồng không khai được (apidoc công bố mọi @request là required — tools/apidoc/openapi.go:251); nửa 'người nhận' của /log bên require cần sự kiện mới (luật 2 đk dừng #3); yêu cầu xoá theo NĐ 13 đụng trigger chỉ thêm — CHƯA QUYẾT; đính kèm (dinh_kem) chờ kho tệp; mở lại phiếu khi dựng phải ghi dòng. Ca pg chưa chạy thật.",
+      "menu": "phan-anh-nguoi-dan",
+      "id": "nhat-ky-xu-ly-phan-anh"
     }
   ]
 }

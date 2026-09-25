@@ -178,6 +178,7 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		// routes have their own four-case suites in xu_ly_phan_anh_test.go.
 		DanhSachPhieu: danhSachTuPhieuMau(phieuMau()),
 		XuLyPhieu:     &xuLyPhieuGia{},
+		NhatKyPhieu:   nhatKyMau(),
 		// The two TASK read routes. Register refuses a nil dependency at construction, and
 		// nothing in this file calls them — their own suite is nhiem_vu_test.go.
 		NhiemVu:         nhiemVuMau(),

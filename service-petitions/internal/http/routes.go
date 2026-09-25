@@ -260,16 +260,36 @@ type (
 		// app.QuyenXuLyCaXa. The holding rule of 2026-09-23 widened the WORKING path only, and the
 		// asymmetry in this interface is what makes the closing path impossible to widen by accident.
 		// The restricted fact beside it is a DIFFERENT KIND of argument: it can only ever narrow.
-		TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor, quyen app.QuyenXuLyCaXa,
-			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
-		Dong(ctx context.Context, ma, ketQua string, nguoi audit.Actor,
+		//
+		// `ghiChu` on TienTrangThai, Dong and KhongTiepNhan (and GhiChu on the three request structs) is
+		// the OPTIONAL internal note stored on the act's logbook row (migration 0013). Free text: it
+		// grants nothing, and it is neither of the two permission facts.
+		TienTrangThai(ctx context.Context, ma, ghiChu string, nguoi audit.Actor,
+			quyen app.QuyenXuLyCaXa, hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
+		Dong(ctx context.Context, ma, ketQua, ghiChu string, nguoi audit.Actor,
 			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
 		// The two terminal branches (user decisions 24-25/09/2026). Same uniformity: both take the
 		// restricted fact, so neither can end a report about a member of staff for a colleague.
-		KhongTiepNhan(ctx context.Context, ma, lyDo string, nguoi audit.Actor,
+		KhongTiepNhan(ctx context.Context, ma, lyDo, ghiChu string, nguoi audit.Actor,
 			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
 		ChuyenCapTren(ctx context.Context, ma string, yc app.YeuCauChuyenCapTren, nguoi audit.Actor,
 			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
+		// The manual internal note (POST …/log-entries). It takes the restricted fact like every act,
+		// and its own commune-wide fact — ANY of resolve/assign/classify — which only ever widens to
+		// the officers who already work on petitions commune-wide (app.duocGhiChu decides).
+		GhiChuNoiBo(ctx context.Context, ma, ghiChu string, nguoi audit.Actor,
+			quyen app.QuyenGhiChuCaXa, hanChe app.QuyenXemHanChe) (domain.NhatKyPhanAnh, error)
+	}
+
+	// NhatKyPhieuDoc is the READ of one petition's processing logbook, for
+	// GET /api/v1/citizen-reports/{maTraCuu}/log-entries.
+	//
+	// KEYED BY THE PETITION'S INTERNAL id, which the handler has only AFTER it read the petition
+	// through PhieuPhanAnhDoc — so the soft-delete and restricted-field checks of that read cannot be
+	// skipped by calling this one directly with a lookup code. *petstore.PhieuPhanAnhStore satisfies it.
+	NhatKyPhieuDoc interface {
+		NhatKyCuaPhieu(ctx context.Context, phieuID string, yc page.Request) (
+			page.Result[domain.NhatKyPhanAnh], error)
 	}
 )
 
@@ -355,6 +375,10 @@ type Deps struct {
 	DanhSachPhieu PhieuPhanAnhDanhSach
 	XuLyPhieu     XuLyPhieuPhanAnh
 
+	// The processing logbook's READ (migration 0013). Its one write, the manual note, is on
+	// XuLyPhieu because it opens a transaction and audits inside it, like the six acts.
+	NhatKyPhieu NhatKyPhieuDoc
+
 	// The TASK register — two read paths over one store, see NhiemVuDoc.
 	NhiemVu         NhiemVuDoc
 	DanhSachNhiemVu NhiemVuDanhSach
@@ -427,6 +451,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		// act a member of staff can perform on a petition, which means petitions come in and nothing
 		// can be done with them — the exact state this service was in before these routes existed.
 		panic("petitions/http: thiếu use case xử lý phiếu — bốn tuyến phân loại/phân công/chuyển trạng thái/đóng phiếu sẽ panic khi có người gọi")
+	case d.NhatKyPhieu == nil:
+		panic("petitions/http: thiếu đường đọc nhật ký xử lý phiếu — GET /api/v1/citizen-reports/{maTraCuu}/log-entries sẽ panic khi có người gọi")
 	case d.NhiemVu == nil:
 		panic("petitions/http: thiếu kho nhiệm vụ — GET /api/v1/tasks/{ma} sẽ panic khi có người gọi")
 	case d.DanhSachNhiemVu == nil:
@@ -778,6 +804,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	// idem.KhongCan: the UPDATE carries the expected status, so a double click advances the petition
 	// exactly one step and the second request answers 409.
 	//
+	// ⚠ NO @request LINE, AND THE ROUTE STILL ACCEPTS AN OPTIONAL BODY `{"note": "…"}` (tienTrangThaiVao,
+	// migration 0013). tools/apidoc publishes every @request as `requestBody.required: true`
+	// (tools/apidoc/openapi.go, the `t.Request != ""` branch) and has no optional-body form, so
+	// declaring it would tell every generated client that this bodiless call is now invalid. The note is
+	// therefore absent from the contract on THIS route only — a tools/apidoc gap, reported.
+	//
 	// @summary  Chuyển phiếu phản ánh sang bước kế tiếp của luồng chính (máy trạng thái quyết định bước nào)
 	// @screen   09-phan-anh-nguoi-dan §8.2
 	// @reply    200 phieuPhanAnhRa
@@ -861,6 +893,63 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "feedback.classify")(
 			idem.KhongCan("câu UPDATE mang `trang_thai = 'dang-phan-loai'`, nên lần gửi thứ hai không khớp dòng nào và trả 409 — đúng một lần chuyển, đúng một cơ quan nhận, đúng một vết")(
 				http.HandlerFunc(h.ChuyenCapTrenPhieu))))
+
+	// --- THE PROCESSING LOGBOOK (migration 0013). ONE READ, ONE WRITE --------------------------------
+	//
+	// STAFF-INTERNAL, AND ONLY EVER ON THIS MUX. Routing history and staff notes never reach the
+	// citizen (rule 4, forbidden #5; rule 10, invariant 7): routes_cong_dan.go mounts nothing of this,
+	// and GET /api/v1/my-citizen-reports/{maTraCuu} carries no field of it.
+	//
+	// `feedback.read` ON BOTH, and on the write it is the GATE, not the answer — the same shape as
+	// `…/status`. The condition that decides a note is app.duocGhiChu, on the row read FOR UPDATE: the
+	// officer the petition is assigned to, OR a holder of feedback.resolve / feedback.assign /
+	// feedback.classify (owner's decision, 2026-09-26). No key was invented (rule 5, invariant 3c).
+	//
+	// 404 is the one answer for no such code, another commune's code, a soft-deleted petition AND a
+	// `can-bo` petition without `feedback.restricted` — see Handler.khongTimThay.
+
+	// @summary  Nhật ký xử lý của một phiếu phản ánh — mới nhất trước, phân trang theo con trỏ
+	// @screen   09-phan-anh-nguoi-dan §8.7
+	// 401 is RequirePermission's answer to no session AND to a session of another commune (authz
+	// compares the commune before the key). 403: no `feedback.read`. NO idem.* DECLARATION: a GET
+	// changes no state.
+	//
+	// @reply    200 page.Result[nhatKyPhieuRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-reports/{maTraCuu}/log-entries",
+		authz.RequirePermission(d.Checker, "feedback.read")(
+			http.HandlerFunc(h.DocNhatKyPhieu)))
+
+	// GHI CHÚ NỘI BỘ — one manual note on the timeline, allowed on every status, final ones included.
+	//
+	// idem.Required(idem.MoKhiHong), THE SHAPE OF POST /api/v1/tasks AND NOT THE KhongCan OF THE ACTS
+	// ABOVE, and the reason is the table: those acts are bound to a status, so a second click matches
+	// no row and answers 409; a note is bound to nothing, and the table it lands in is APPEND-ONLY — a
+	// double submit would leave a duplicate entry that nobody can ever remove (rule 7). MoKhiHong: a
+	// cache outage lets a note through (a visible duplicate, corrected by writing another note)
+	// rather than refusing an officer mid-case.
+	//
+	// 403 is TWO causes and says so: no `feedback.read` at the gate, or — inside the use case — not the
+	// assignee and none of the three commune-wide keys (the sentence of the `…/status` route).
+	//
+	// @summary  Ghi chú nội bộ vào nhật ký xử lý phiếu phản ánh (không đổi trạng thái)
+	// @screen   09-phan-anh-nguoi-dan §8.7
+	// @request  ghiChuPhieuVao
+	// @reply    201 nhatKyPhieuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/log-entries",
+		authz.RequirePermission(d.Checker, "feedback.read")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.GhiChuPhieu))))
 
 	// --- THE TASK REGISTER. TWO READ ROUTES AND SIX WRITE ROUTES ---------------------------------
 	//

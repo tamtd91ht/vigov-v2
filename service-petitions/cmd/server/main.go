@@ -227,6 +227,8 @@ func chay(log *slog.Logger) error {
 		// runs on a client-supplied officer code before writing it (ResolveAssignableStaff).
 		DanhSachPhieu: phieu,
 		XuLyPhieu:     app.NewXuLyPhanAnh(kho, phieu, suKien, dinhDanh, dinhDanh),
+		// The processing logbook's read (migration 0013) — the SAME store the acts write it through.
+		NhatKyPhieu: phieu,
 		// The trail for a full-view read of a reporter's name and number. It takes the same
 		// *store.DB as the repositories because it opens its own transaction: rule 6, invariant 3
 		// admits no audit write outside one, and audit.Write takes only a *store.ScopedTx.

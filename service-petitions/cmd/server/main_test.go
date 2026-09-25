@@ -320,8 +320,10 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// route, and Register refuses a nil dependency at construction. A use case that is never
 		// invoked cannot dereference the nil handle. Their own four-case suites live in
 		// internal/http/xu_ly_phan_anh_test.go.
-		DanhSachPhieu:   khoPhieu{},
-		XuLyPhieu:       app.NewXuLyPhanAnh(nil, nil, nil, nil, nil),
+		DanhSachPhieu: khoPhieu{},
+		XuLyPhieu:     app.NewXuLyPhanAnh(nil, nil, nil, nil, nil),
+		// Never invoked here; Register refuses a nil. Own suite: internal/http/nhat_ky_phan_anh_test.go.
+		NhatKyPhieu:     petstore.NewPhieuPhanAnhStore(nil),
 		NhiemVu:         khoNhiemVu{},
 		DanhSachNhiemVu: khoNhiemVu{},
 		// The six task WRITE acts, built on a nil *store.DB for the same reason as every use case

@@ -389,7 +389,7 @@ func TestTienTrangThaiGhiSuKienVaLoiNhan(t *testing.T) {
 	})
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	sau, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), coQuyenCaXa, khongQuyenHanChe)
+	sau, err := uc.TienTrangThai(ctx, maPhieuThu, "", canBoThu(), coQuyenCaXa, khongQuyenHanChe)
 	if err != nil {
 		t.Fatalf("TienTrangThai: %v", err)
 	}
@@ -448,7 +448,7 @@ func TestVaoDangXuLyKhongConLoiNhan(t *testing.T) {
 	k.hang = phieuDaGiaoCho(maCanBoThu)
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	if _, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), coQuyenCaXa, khongQuyenHanChe); err != nil {
+	if _, err := uc.TienTrangThai(ctx, maPhieuThu, "", canBoThu(), coQuyenCaXa, khongQuyenHanChe); err != nil {
 		t.Fatalf("TienTrangThai: %v", err)
 	}
 	su := k.cau("INSERT INTO su_kien_di")
@@ -533,7 +533,7 @@ func TestPhieuKhongCongDanThiKhongGhiSuKien(t *testing.T) {
 	k.hang["cong_dan_id"] = nil
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	if _, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), coQuyenCaXa, khongQuyenHanChe); err != nil {
+	if _, err := uc.TienTrangThai(ctx, maPhieuThu, "", canBoThu(), coQuyenCaXa, khongQuyenHanChe); err != nil {
 		t.Fatalf("TienTrangThai: %v", err)
 	}
 	if k.coCau("INSERT INTO su_kien_di") {
@@ -581,7 +581,7 @@ func TestDongPhieuKhongCoKetQuaThiTuChoiTruocMoiThu(t *testing.T) {
 			k.hang = dongPhieuMau(map[string]any{"trang_thai": string(domain.ChoDanXacNhan)})
 			uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-			if _, err := uc.Dong(ctx, maPhieuThu, ketQua, canBoThu(), khongQuyenHanChe); err == nil {
+			if _, err := uc.Dong(ctx, maPhieuThu, ketQua, "", canBoThu(), khongQuyenHanChe); err == nil {
 				t.Fatal("đóng được phiếu mà người dân không đọc được gì")
 			}
 			if len(k.lenh) != 0 {
@@ -602,7 +602,7 @@ func TestDongPhieuGhiKetQuaVaBaoChoDan(t *testing.T) {
 	})
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	sau, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe)
+	sau, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe)
 	if err != nil {
 		t.Fatalf("Dong: %v", err)
 	}
@@ -652,7 +652,7 @@ func TestDongPhieuSaiBuocThiTuChoi(t *testing.T) {
 			k.hang = dongPhieuMau(map[string]any{"trang_thai": string(tt)})
 			uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-			if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe); !errors.Is(err, domain.ErrDongSaiLuc) {
+			if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe); !errors.Is(err, domain.ErrDongSaiLuc) {
 				t.Fatalf("lỗi = %v, muốn ErrDongSaiLuc", err)
 			}
 			if k.coCau("UPDATE phieu_phan_anh") {
@@ -705,7 +705,7 @@ func TestDongTuDaXuLyKhiKhongCoCongDan(t *testing.T) {
 	})
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	sau, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe)
+	sau, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe)
 	if err != nil {
 		t.Fatalf("Dong: %v", err)
 	}
@@ -743,7 +743,7 @@ func TestDongTuChoDanXacNhanGhiCoFalse(t *testing.T) {
 	})
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe); err != nil {
+	if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("Dong: %v", err)
 	}
 	if d := deltaDong(t, k); d["dong_khong_qua_xac_nhan"] != false {
@@ -763,7 +763,7 @@ func TestDongPhieuKhongCongDanSaiBuocThiTuChoi(t *testing.T) {
 			k.hang = dongPhieuMau(map[string]any{"trang_thai": string(tt), "cong_dan_id": nil})
 			uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-			if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe); !errors.Is(err, domain.ErrDongSaiLuc) {
+			if _, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe); !errors.Is(err, domain.ErrDongSaiLuc) {
 				t.Fatalf("lỗi = %v, muốn ErrDongSaiLuc", err)
 			}
 			if k.coCau("UPDATE phieu_phan_anh") || k.coCau("INSERT INTO audit_log") {
@@ -924,7 +924,7 @@ func TestTienTrangThaiBonOCuaLuatNamGiu(t *testing.T) {
 			k.hang = phieuDaGiaoCho(ca.giaoCho)
 			uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-			sau, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), ca.quyen, khongQuyenHanChe)
+			sau, err := uc.TienTrangThai(ctx, maPhieuThu, "", canBoThu(), ca.quyen, khongQuyenHanChe)
 
 			if ca.tienDuoc {
 				if err != nil {
@@ -963,7 +963,7 @@ func TestTienTrangThaiSoBangMaCanBoChuKhongPhaiIdNoiBo(t *testing.T) {
 	k.hang = phieuDaGiaoCho(maCanBoThu)
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	_, err := uc.TienTrangThai(ctx, maPhieuThu,
+	_, err := uc.TienTrangThai(ctx, maPhieuThu, "",
 		audit.Actor{ID: idCanBoNoiBoThu, Kind: "staff", IP: "10.0.0.7"}, khongQuyenCaXa,
 		khongQuyenHanChe)
 
@@ -989,7 +989,7 @@ func TestTienTrangThaiPhieuChuaGiaoThiChuoiRongKhongKhopVoiAi(t *testing.T) {
 	// The actor carries a REAL business code — so what is being proved is that an UNASSIGNED petition
 	// matches nobody, not that an empty actor is refused (coCanBoThucHien already does that, and it is
 	// asserted separately).
-	_, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), khongQuyenCaXa, khongQuyenHanChe)
+	_, err := uc.TienTrangThai(ctx, maPhieuThu, "", canBoThu(), khongQuyenCaXa, khongQuyenHanChe)
 	if !errors.Is(err, ErrKhongPhaiNguoiDuocGiao) {
 		t.Fatalf("lỗi = %v, muốn ErrKhongPhaiNguoiDuocGiao — phiếu chưa giao cho ai thì không khớp "+
 			"với ai", err)
@@ -1019,10 +1019,11 @@ func TestDongKhongNhanQuyenNguoiDuocGiao(t *testing.T) {
 	// this assertion survive a later parameter being added — it fails to compile if the one that
 	// WIDENS appears.
 	//
-	// The assignment on the row above is irrelevant to this act by construction.
-	var dong func(context.Context, string, string, audit.Actor, QuyenXemHanChe) (
+	// The assignment on the row above is irrelevant to this act by construction. The third string is
+	// the optional internal note (migration 0013) — free text, which grants nothing.
+	var dong func(context.Context, string, string, string, audit.Actor, QuyenXemHanChe) (
 		domain.PhieuPhanAnh, error) = uc.Dong
-	if _, err := dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), khongQuyenHanChe); err != nil {
+	if _, err := dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("Dong: %v", err)
 	}
 }
@@ -1087,11 +1088,11 @@ func bonHanhVi() map[string]hanhViPhieu {
 			return err
 		}},
 		"chuyển trạng thái": {domain.DaChuyenXuLy, func(uc *XuLyPhanAnh, ctx context.Context, q QuyenXemHanChe) error {
-			_, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), coQuyenCaXa, q)
+			_, err := uc.TienTrangThai(ctx, maPhieuThu, "", canBoThu(), coQuyenCaXa, q)
 			return err
 		}},
 		"đóng phiếu": {domain.ChoDanXacNhan, func(uc *XuLyPhanAnh, ctx context.Context, q QuyenXemHanChe) error {
-			_, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, canBoThu(), q)
+			_, err := uc.Dong(ctx, maPhieuThu, ketQuaThat, "", canBoThu(), q)
 			return err
 		}},
 	}
@@ -1194,7 +1195,7 @@ func TestTienTrangThaiPhieuHanCheTraLoiHanCheChuKhongPhaiKhongDuocGiao(t *testin
 	k.hang["can_bo_xu_ly_id"] = "CB-99999" // giao cho người khác
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	_, err := uc.TienTrangThai(ctx, maPhieuThu, canBoThu(), khongQuyenCaXa, khongQuyenHanChe)
+	_, err := uc.TienTrangThai(ctx, maPhieuThu, "", canBoThu(), khongQuyenCaXa, khongQuyenHanChe)
 
 	if !errors.Is(err, ErrPhieuHanChe) {
 		t.Fatalf("lỗi = %v, muốn ErrPhieuHanChe — 403 'phiếu không được giao cho bạn' xác nhận rằng "+

@@ -209,6 +209,7 @@ type mayChu struct {
 	vet        *vetXemGia
 	danhSach   *danhSachPhieuGia
 	xuLy       *xuLyPhieuGia
+	nhatKy     *nhatKyPhieuGia
 	nhiemVu    *nhiemVuGia
 	ghiNhiemVu *ghiNhiemVuGia
 	bienBan    *bienBanGia
@@ -228,6 +229,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	// commune B's page contains only commune B's.
 	danhSach := danhSachTuPhieuMau(phieu)
 	xuLy := &xuLyPhieuGia{}
+	// The processing logbook read, keyed by commune AND petition id — see nhatKyPhieuGia.
+	nhatKy := nhatKyMau()
 	// ONE fake for BOTH task read routes, keyed by commune — the same object the wiring in
 	// cmd/server gives to both Deps fields, so a test cannot accidentally prove that two different
 	// registers agree with each other.
@@ -280,6 +283,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			Vet:                 vet,
 			DanhSachPhieu:       danhSach,
 			XuLyPhieu:           xuLy,
+			NhatKyPhieu:         nhatKy,
 			NhiemVu:             nhiemVu,
 			DanhSachNhiemVu:     nhiemVu,
 			GhiNhiemVu:          ghiNhiemVu,
@@ -295,6 +299,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		vet:        vet,
 		danhSach:   danhSach,
 		xuLy:       xuLy,
+		nhatKy:     nhatKy,
 		nhiemVu:    nhiemVu,
 		ghiNhiemVu: ghiNhiemVu,
 		bienBan:    bienBan,
@@ -383,6 +388,7 @@ func depsDay() Deps {
 		Vet:                 &vetXemGia{},
 		DanhSachPhieu:       danhSachTuPhieuMau(phieuMau()),
 		XuLyPhieu:           &xuLyPhieuGia{},
+		NhatKyPhieu:         nhatKyMau(),
 		// BOTH TASK FIELDS, from ONE fake — the same shape cmd/server wires.
 		NhiemVu:         nhiemVuMau(),
 		DanhSachNhiemVu: nhiemVuMau(),
@@ -417,6 +423,8 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// state it was in before these routes existed — petitions arriving and nothing able to move
 		// them.
 		"thiếu use case xử lý phiếu": func(d *Deps) { d.XuLyPhieu = nil },
+		// The timeline column of the petition drawer (migration 0013).
+		"thiếu đường đọc nhật ký xử lý phiếu": func(d *Deps) { d.NhatKyPhieu = nil },
 		// THE CASE WITH THE QUIETEST FAILURE MODE. A nil here does not break a screen: it breaks
 		// only the branch that discloses a citizen's name and number, and only for an account
 		// holding `feedback.unmask`. Without this case, a wiring line dropped in a refactor ships.

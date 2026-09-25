@@ -86,6 +86,10 @@ type KhoPhieuXuLy interface {
 		lyDo string, luc time.Time) error
 	ChuyenCapTren(ctx context.Context, tx *store.ScopedTx, id string, tuTrangThai domain.TrangThai,
 		lyDo, coQuanNhan string, luc time.Time) error
+
+	// GhiNhatKy appends one row of the processing logbook (migration 0013) in the SAME transaction
+	// as the act it describes. Append-only: there is no method that edits or removes a row.
+	GhiNhatKy(ctx context.Context, tx *store.ScopedTx, e domain.NhatKyPhanAnh) error
 }
 
 // KhoSuKien records the obligation to tell the citizen, in the SAME transaction as the change.
@@ -174,10 +178,13 @@ const (
 	// petitions did this commune REFUSE" and "which did it pass on" as two different questions.
 	HanhViKhongTiepNhanPhanAnh = "khong_tiep_nhan_phan_anh"
 	HanhViChuyenCapTrenPhanAnh = "chuyen_cap_tren_phan_anh"
-	tenSuKienDoiTrangThai      = "petitions.status_changed.v1"
-	chuThePhaiLaCanBo          = "staff"
-	loiThieuChuThe             = "xu_ly_phan_anh: thiếu mã cán bộ thực hiện"
-	loiChuTheKhongPhaiCanBo    = "xu_ly_phan_anh: chủ thể không phải cán bộ"
+	// The manual internal note (POST …/log-entries). It moves nothing, and is audited anyway: it is a
+	// write to business data (rule 6, invariant 1).
+	HanhViGhiChuPhanAnh     = "ghi_chu_phan_anh"
+	tenSuKienDoiTrangThai   = "petitions.status_changed.v1"
+	chuThePhaiLaCanBo       = "staff"
+	loiThieuChuThe          = "xu_ly_phan_anh: thiếu mã cán bộ thực hiện"
+	loiChuTheKhongPhaiCanBo = "xu_ly_phan_anh: chủ thể không phải cán bộ"
 )
 
 // --- the holding rule: who may move a petition along ----------------------------------------------
@@ -350,6 +357,11 @@ var ErrChuaAnDinhDuocHanXuLy = errors.New(
 // trigger refuses to change.
 type YeuCauChotLinhVuc struct {
 	LinhVuc string
+
+	// GhiChu is the OPTIONAL internal note stored on this act's logbook row (see ghiNhatKy). It is on
+	// every one of the six acts, and on every one it is NOT in the audit delta (its length is), NOT on
+	// the event and NOT logged: it may hold citizen personal data (rule 3).
+	GhiChu string
 }
 
 // YeuCauPhanCong is the "Chuyển xử lý" block of docs/ui-ux/09 §8.5.
@@ -360,6 +372,7 @@ type YeuCauChotLinhVuc struct {
 type YeuCauPhanCong struct {
 	BoPhan string
 	CanBo  string
+	GhiChu string // optional internal note — see YeuCauChotLinhVuc.GhiChu
 }
 
 // XuLyPhanAnh owns the four staff acts.
@@ -428,6 +441,10 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 	nguoi audit.Actor, hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
 	linhVuc, err := domain.KiemLinhVuc(yc.LinhVuc)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+	ghiChu, err := domain.KiemGhiChuTuyChon(yc.GhiChu)
 	if err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
@@ -509,7 +526,7 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 		// BEFORE AND AFTER, INCLUDING THE DEADLINE THIS ACT FIXED (rule 6, invariant 5). The deadline
 		// is the whole reason this entry matters: it is the moment the authority committed to a date,
 		// and an inspection asking "when was this promised and by whom" has no other place to look.
-		delta, err := json.Marshal(map[string]any{
+		delta, err := json.Marshal(voiDoDaiGhiChu(map[string]any{
 			"truoc": map[string]any{
 				"trang_thai":     string(p.TrangThai),
 				"linh_vuc":       p.LinhVuc,
@@ -525,7 +542,7 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 			// forbids: that forbids a COLUMN that is written and then read as truth later. An audit
 			// entry states what was true at one moment and is never read as the current state.
 			"tre_tran_phan_loai": sau.QuaHanPhanLoai(bayGio),
-		})
+		}, ghiChu))
 		if err != nil {
 			return fmt.Errorf("xu_ly_phan_anh: mã hoá delta: %w", err)
 		}
@@ -535,6 +552,10 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 			Subject: p.MaTraCuu,
 			Delta:   delta,
 		}); err != nil {
+			return err
+		}
+		if err := uc.ghiNhatKy(ctx, tx, sau, domain.NhatKyPhanLoai, bayGio, nguoi, ghiChu,
+			false); err != nil {
 			return err
 		}
 
@@ -588,6 +609,10 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 	if err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
+	ghiChu, err := domain.KiemGhiChuTuyChon(yc.GhiChu)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
 	if err := coCanBoThucHien(nguoi); err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
@@ -626,7 +651,7 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 		// THE DELTA NAMES A DEPARTMENT AND A STAFF BUSINESS CODE, WHICH ARE NOT CITIZEN PERSONAL DATA
 		// (rule 3 is about the people a commune serves, and rule 6, invariant 2 requires the entry to
 		// say who was made responsible). Nothing about the reporter is in it.
-		delta, err := json.Marshal(map[string]any{
+		delta, err := json.Marshal(voiDoDaiGhiChu(map[string]any{
 			"truoc": map[string]any{
 				"trang_thai":      string(p.TrangThai),
 				"bo_phan_id":      p.BoPhanID,
@@ -637,7 +662,7 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 				"bo_phan_id":      boPhan,
 				"can_bo_xu_ly_id": canBo,
 			},
-		})
+		}, ghiChu))
 		if err != nil {
 			return fmt.Errorf("xu_ly_phan_anh: mã hoá delta: %w", err)
 		}
@@ -647,6 +672,12 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 			Subject: p.MaTraCuu,
 			Delta:   delta,
 		}); err != nil {
+			return err
+		}
+		// ON EVERY ASSIGNMENT, INCLUDING A RE-ASSIGNMENT THAT MOVES NO STATUS: "who held it at step N"
+		// is exactly what the row is for, and the petition's own columns only say who holds it NOW.
+		if err := uc.ghiNhatKy(ctx, tx, sau, domain.NhatKyPhanCong, bayGio, nguoi, ghiChu,
+			true); err != nil {
 			return err
 		}
 
@@ -727,9 +758,13 @@ func (uc *XuLyPhanAnh) kiemCanBoNhanViec(ctx context.Context, canBo string) erro
 // reassign the petition, and an authorisation decision made against a row that has since moved is an
 // authorisation decision made against nothing. Refusing here writes no business row, no audit entry
 // and no outbox row — the transaction rolls back with nothing in it.
-func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor,
+func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma, ghiChuTho string, nguoi audit.Actor,
 	quyen QuyenXuLyCaXa, hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
+	ghiChu, err := domain.KiemGhiChuTuyChon(ghiChuTho)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
 	if err := coCanBoThucHien(nguoi); err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
@@ -737,7 +772,7 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit
 	bayGio := uc.nayHoac()
 	var sau domain.PhieuPhanAnh
 
-	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		p, err := uc.kho.TheoMaTraCuuDeSua(ctx, tx, ma)
 		if err != nil {
 			return err
@@ -793,14 +828,14 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit
 			sau.XuLyXongLuc = xongLuc
 		}
 
-		delta, err := json.Marshal(map[string]any{
+		delta, err := json.Marshal(voiDoDaiGhiChu(map[string]any{
 			"truoc": map[string]any{"trang_thai": string(p.TrangThai)},
 			"sau":   map[string]any{"trang_thai": string(sangTrangThai)},
 			// DERIVED AT THE INSTANT OF THE ACT AND RECORDED, never stored as a column (rule 10,
 			// invariant 3). An inspection asking "was this finished on time" reads it from the entry
 			// that recorded the finishing, not from a flag somebody could have refreshed since.
 			"tre_han": sau.QuaHan(bayGio),
-		})
+		}, ghiChu))
 		if err != nil {
 			return fmt.Errorf("xu_ly_phan_anh: mã hoá delta: %w", err)
 		}
@@ -810,6 +845,10 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit
 			Subject: p.MaTraCuu,
 			Delta:   delta,
 		}); err != nil {
+			return err
+		}
+		if err := uc.ghiNhatKy(ctx, tx, sau, domain.NhatKyChuyenTrangThai, bayGio, nguoi, ghiChu,
+			false); err != nil {
 			return err
 		}
 		return uc.ghiSuKien(ctx, tx, sau, sangTrangThai, bayGio)
@@ -852,10 +891,14 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma string, nguoi audit
 // this act cannot check it. Writing a hardcoded TRUE would block every closing in every commune on a
 // table that does not exist; writing FALSE would silently drop a rule the customer stated. Neither is
 // chosen — it is reported as the gap it is.
-func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi audit.Actor,
+func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho, ghiChuTho string, nguoi audit.Actor,
 	hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
 	ketQua, err := domain.KiemKetQua(ketQuaTho)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+	ghiChu, err := domain.KiemGhiChuTuyChon(ghiChuTho)
 	if err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
@@ -906,7 +949,7 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi aud
 		// citizen personal data — which is exactly rule 6, forbidden #4. The result itself lives in
 		// `ket_qua_xu_ly`, on a row the archival trigger already protects from silent editing, so
 		// nothing is lost: the entry says a result WAS recorded and when, and the record holds it.
-		delta, err := json.Marshal(map[string]any{
+		delta, err := json.Marshal(voiDoDaiGhiChu(map[string]any{
 			"truoc":           map[string]any{"trang_thai": string(p.TrangThai)},
 			"sau":             map[string]any{"trang_thai": string(domain.DaDong)},
 			"do_dai_ket_qua":  len([]rune(ketQua)),
@@ -917,7 +960,7 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi aud
 			// so an inspection asking "which petitions were closed without anybody confirming" can
 			// query one key rather than infer it from the `truoc` status.
 			"dong_khong_qua_xac_nhan": boQuaXacNhan,
-		})
+		}, ghiChu))
 		if err != nil {
 			return fmt.Errorf("xu_ly_phan_anh: mã hoá delta: %w", err)
 		}
@@ -927,6 +970,12 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi aud
 			Subject: p.MaTraCuu,
 			Delta:   delta,
 		}); err != nil {
+			return err
+		}
+		// THE RESULT TEXT IS NOT COPIED INTO THE ROW. It lives in `ket_qua_xu_ly`; a second copy in an
+		// append-only table is a second permanent store of the same free text (rule 9, rule 3).
+		if err := uc.ghiNhatKy(ctx, tx, sau, domain.NhatKyDongPhieu, bayGio, nguoi, ghiChu,
+			false); err != nil {
 			return err
 		}
 		return uc.ghiSuKien(ctx, tx, sau, domain.DaDong, bayGio)
@@ -944,6 +993,7 @@ func (uc *XuLyPhanAnh) Dong(ctx context.Context, ma, ketQuaTho string, nguoi aud
 type YeuCauChuyenCapTren struct {
 	LyDo       string
 	CoQuanNhan string
+	GhiChu     string // optional internal note — see YeuCauChotLinhVuc.GhiChu
 }
 
 // KhongTiepNhan refuses the petition: the commune does not take it, and says why. Permission:
@@ -961,14 +1011,18 @@ type YeuCauChuyenCapTren struct {
 // A mandatory text the citizen reads (rule 10, invariant 6 in spirit: never end silently), the text
 // NEVER in the audit delta and NEVER on the event, the restricted-field refusal inside the
 // transaction, and one transaction for the three writes.
-func (uc *XuLyPhanAnh) KhongTiepNhan(ctx context.Context, ma, lyDoTho string, nguoi audit.Actor,
-	hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
+func (uc *XuLyPhanAnh) KhongTiepNhan(ctx context.Context, ma, lyDoTho, ghiChuTho string,
+	nguoi audit.Actor, hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
 	lyDo, err := domain.KiemLyDoKetThucNhanh(lyDoTho)
 	if err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
-	return uc.ketThucNhanh(ctx, ma, domain.KhongTiepNhan, lyDo, "", nguoi, hanChe)
+	ghiChu, err := domain.KiemGhiChuTuyChon(ghiChuTho)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+	return uc.ketThucNhanh(ctx, ma, domain.KhongTiepNhan, lyDo, "", ghiChu, nguoi, hanChe)
 }
 
 // ChuyenCapTren refers the petition to another body: the commune stops owning it, names who received
@@ -988,21 +1042,26 @@ func (uc *XuLyPhanAnh) ChuyenCapTren(ctx context.Context, ma string, yc YeuCauCh
 	if err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
-	return uc.ketThucNhanh(ctx, ma, domain.ChuyenCapTren, lyDo, coQuanNhan, nguoi, hanChe)
+	ghiChu, err := domain.KiemGhiChuTuyChon(yc.GhiChu)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+	return uc.ketThucNhanh(ctx, ma, domain.ChuyenCapTren, lyDo, coQuanNhan, ghiChu, nguoi, hanChe)
 }
 
-// ketThucNhanh is the shared body of the two branch acts. `lyDo` and `coQuanNhan` are ALREADY
-// validated; `coQuanNhan` is "" for a refusal.
+// ketThucNhanh is the shared body of the two branch acts. `lyDo`, `coQuanNhan` and `ghiChu` are
+// ALREADY validated; `coQuanNhan` is "" for a refusal, `ghiChu` is "" when no note was sent.
 //
 // ONE BODY FOR TWO ACTS, unlike the four acts above, because these two differ in ONE column and one
 // verb and are otherwise the same act with the same obligations. Two copies would be two places where
 // "the reason is not in the delta" could be kept in one and lost in the other.
 func (uc *XuLyPhanAnh) ketThucNhanh(ctx context.Context, ma string, nhanh domain.TrangThai,
-	lyDo, coQuanNhan string, nguoi audit.Actor, hanChe QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
+	lyDo, coQuanNhan, ghiChu string, nguoi audit.Actor, hanChe QuyenXemHanChe) (
+	domain.PhieuPhanAnh, error) {
 
-	viec, hanhVi := "không tiếp nhận", HanhViKhongTiepNhanPhanAnh
+	viec, hanhVi, dongNhatKy := "không tiếp nhận", HanhViKhongTiepNhanPhanAnh, domain.NhatKyKhongTiepNhan
 	if nhanh == domain.ChuyenCapTren {
-		viec, hanhVi = "chuyển cấp trên", HanhViChuyenCapTrenPhanAnh
+		viec, hanhVi, dongNhatKy = "chuyển cấp trên", HanhViChuyenCapTrenPhanAnh, domain.NhatKyChuyenCapTren
 	}
 	if err := coCanBoThucHien(nguoi); err != nil {
 		return domain.PhieuPhanAnh{}, err
@@ -1066,7 +1125,7 @@ func (uc *XuLyPhanAnh) ketThucNhanh(ctx context.Context, ma string, nhanh domain
 		if nhanh == domain.ChuyenCapTren {
 			delta["do_dai_co_quan_nhan"] = len([]rune(coQuanNhan))
 		}
-		than, err := json.Marshal(delta)
+		than, err := json.Marshal(voiDoDaiGhiChu(delta, ghiChu))
 		if err != nil {
 			return fmt.Errorf("xu_ly_phan_anh: mã hoá delta: %w", err)
 		}
@@ -1076,6 +1135,11 @@ func (uc *XuLyPhanAnh) ketThucNhanh(ctx context.Context, ma string, nhanh domain
 			Subject: p.MaTraCuu,
 			Delta:   than,
 		}); err != nil {
+			return err
+		}
+		// NEITHER THE REASON NOR THE RECEIVING BODY IS COPIED INTO THE ROW — both live on the petition,
+		// frozen by migration 0011's trigger. Only the optional internal note goes here.
+		if err := uc.ghiNhatKy(ctx, tx, sau, dongNhatKy, bayGio, nguoi, ghiChu, false); err != nil {
 			return err
 		}
 

@@ -126,6 +126,13 @@ type xuLyPhieuGia struct {
 	// to `can-bo` is how a test plays the fifth write route that forgot to hand the fact down.
 	linhVuc string
 
+	// ghiChu is the optional internal note the three string-signature acts and the manual note route
+	// hand down (migration 0013). The struct-carried ones are on ycLinhVuc / ycPhanCong / ycChuyen.
+	ghiChu string
+
+	// quyenGhiChu is the fact the manual note route hands down: ANY of resolve/assign/classify.
+	quyenGhiChu app.QuyenGhiChuCaXa
+
 	loi error
 }
 
@@ -174,28 +181,44 @@ func (x *xuLyPhieuGia) PhanCong(ctx context.Context, ma string, yc app.YeuCauPha
 	return x.tra()
 }
 
-func (x *xuLyPhieuGia) TienTrangThai(ctx context.Context, ma string, nguoi audit.Actor,
+func (x *xuLyPhieuGia) TienTrangThai(ctx context.Context, ma, ghiChu string, nguoi audit.Actor,
 	quyen app.QuyenXuLyCaXa, hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
 	x.ghi(ctx, "tien", ma, nguoi, hanChe)
-	x.quyenCaXa = quyen
+	x.quyenCaXa, x.ghiChu = quyen, ghiChu
 	return x.tra()
 }
 
-func (x *xuLyPhieuGia) Dong(ctx context.Context, ma, ketQua string, nguoi audit.Actor,
+func (x *xuLyPhieuGia) Dong(ctx context.Context, ma, ketQua, ghiChu string, nguoi audit.Actor,
 	hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
 	x.ghi(ctx, "dong", ma, nguoi, hanChe)
-	x.ketQua = ketQua
+	x.ketQua, x.ghiChu = ketQua, ghiChu
 	return x.tra()
 }
 
-func (x *xuLyPhieuGia) KhongTiepNhan(ctx context.Context, ma, lyDo string, nguoi audit.Actor,
+func (x *xuLyPhieuGia) KhongTiepNhan(ctx context.Context, ma, lyDo, ghiChu string, nguoi audit.Actor,
 	hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
 	x.ghi(ctx, "khong-tiep-nhan", ma, nguoi, hanChe)
-	x.lyDo = lyDo
+	x.lyDo, x.ghiChu = lyDo, ghiChu
 	return x.tra()
+}
+
+// GhiChuNoiBo RECORDS the two facts and the note, and answers with a row shaped like the real one.
+// Whether the note is ALLOWED is app.duocGhiChu's and is proved over the real store in internal/app.
+func (x *xuLyPhieuGia) GhiChuNoiBo(ctx context.Context, ma, ghiChu string, nguoi audit.Actor,
+	quyen app.QuyenGhiChuCaXa, hanChe app.QuyenXemHanChe) (domain.NhatKyPhanAnh, error) {
+
+	x.ghi(ctx, "ghi-chu", ma, nguoi, hanChe)
+	x.ghiChu, x.quyenGhiChu = ghiChu, quyen
+	if x.loi != nil {
+		return domain.NhatKyPhanAnh{}, x.loi
+	}
+	return domain.NhatKyPhanAnh{
+		ID: "nkpa-01JTHU", PhieuPhanAnhID: "pa-001", ThoiDiem: mocVaoSo, NguoiMa: nguoi.ID,
+		HanhVi: domain.NhatKyGhiChu, TrangThai: domain.DangPhanLoai, NoiDung: ghiChu,
+	}, nil
 }
 
 func (x *xuLyPhieuGia) ChuyenCapTren(ctx context.Context, ma string, yc app.YeuCauChuyenCapTren,
@@ -946,6 +969,8 @@ func TestTuChoiXuLyCauCoDinhKhongLoNoiBo(t *testing.T) {
 		{domain.ErrLyDoQuaDai, http.StatusBadRequest, "invalid_request"},
 		{domain.ErrThieuCoQuanNhan, http.StatusBadRequest, "invalid_request"},
 		{domain.ErrCoQuanNhanQuaDai, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrThieuGhiChu, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrGhiChuQuaDai, http.StatusBadRequest, "invalid_request"},
 	}
 	if len(cacCa) != len(cacCauTuChoiPhieu) {
 		t.Fatalf("bảng câu có %d dòng, bài kiểm có %d — một từ chối mới phải có mặt ở cả hai",

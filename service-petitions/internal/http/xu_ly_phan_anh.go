@@ -126,6 +126,16 @@ type phanLoaiVao struct {
 	// ⚠ ITS EXISTENCE IS NOT CHECKED. See domain.KiemLinhVuc for the full, measured statement of what
 	// that costs and why ADR 0026 stop condition #2 is the thing blocking it.
 	Field string `json:"field"`
+
+	// Note is the OPTIONAL internal note stored on this act's logbook row (migration 0013), on all six
+	// act bodies. `omitempty` IS WHAT KEEPS IT OPTIONAL IN THE PUBLISHED CONTRACT: tools/apidoc marks
+	// every field without it as required (tools/apidoc/schema.go, `boQuaKhiRong`), and a new required
+	// field breaks every client already sending this body.
+	//
+	// ⚠ PERSONAL DATA MAY BE IN IT (rule 3). Staff-internal: never on the citizen surface, never in the
+	// audit delta (its length is), never on the event, never logged. At most domain.GhiChuToiDa
+	// characters; blank after trim is treated as absent.
+	Note string `json:"note,omitempty"`
 }
 
 // phanCongVao is the body of POST …/{maTraCuu}/assignment — the "Chuyển xử lý" block of §8.5.
@@ -133,6 +143,16 @@ type phanCongVao struct {
 	Unit string `json:"unit"`
 	// Assignee is optional: "— Để bộ phận phân công —" is a real choice on that screen.
 	Assignee string `json:"assignee,omitempty"`
+	// Note: optional internal note — see phanLoaiVao.Note.
+	Note string `json:"note,omitempty"`
+}
+
+// tienTrangThaiVao is the OPTIONAL body of POST …/{maTraCuu}/status. It carries the internal note and
+// NOTHING ELSE — in particular never a target status (see TienTrangThaiPhieu). Absent or empty body is
+// valid and is the ordinary call.
+type tienTrangThaiVao struct {
+	// Note: optional internal note — see phanLoaiVao.Note.
+	Note string `json:"note,omitempty"`
 }
 
 // dongPhieuVao is the body of POST …/{maTraCuu}/closure.
@@ -142,6 +162,9 @@ type phanCongVao struct {
 // that was handled from one that was quietly filed away.
 type dongPhieuVao struct {
 	Result string `json:"result"`
+	// Note: optional internal note — see phanLoaiVao.Note. It is NOT the result: the result is what
+	// the citizen reads, the note is what colleagues read.
+	Note string `json:"note,omitempty"`
 }
 
 // khongTiepNhanVao is the body of POST …/{maTraCuu}/rejection.
@@ -150,6 +173,8 @@ type dongPhieuVao struct {
 // and migration 0011 refuses the status without it.
 type khongTiepNhanVao struct {
 	Reason string `json:"reason"`
+	// Note: optional internal note — see phanLoaiVao.Note.
+	Note string `json:"note,omitempty"`
 }
 
 // chuyenCapTrenVao is the body of POST …/{maTraCuu}/referral. BOTH fields are mandatory: a citizen
@@ -159,6 +184,8 @@ type chuyenCapTrenVao struct {
 	// ReceivingBody is free text — "Điện lực …", "Công an …" — by the user's decision: transfers go
 	// sideways as often as up, so there is no catalogue to pick from.
 	ReceivingBody string `json:"receiving_body"`
+	// Note: optional internal note — see phanLoaiVao.Note.
+	Note string `json:"note,omitempty"`
 }
 
 // --- the register list --------------------------------------------------------------------------
@@ -396,7 +423,7 @@ func (h *Handler) PhanLoaiPhieu(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	sau, err := h.d.XuLyPhieu.ChotLinhVuc(ctx, r.PathValue("maTraCuu"),
-		app.YeuCauChotLinhVuc{LinhVuc: vao.Field}, nguoi, h.coQuyenHanChe(ctx))
+		app.YeuCauChotLinhVuc{LinhVuc: vao.Field, GhiChu: vao.Note}, nguoi, h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "phân loại", err)
 		return
@@ -418,7 +445,8 @@ func (h *Handler) PhanCongPhieu(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	sau, err := h.d.XuLyPhieu.PhanCong(ctx, r.PathValue("maTraCuu"),
-		app.YeuCauPhanCong{BoPhan: vao.Unit, CanBo: vao.Assignee}, nguoi, h.coQuyenHanChe(ctx))
+		app.YeuCauPhanCong{BoPhan: vao.Unit, CanBo: vao.Assignee, GhiChu: vao.Note}, nguoi,
+		h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "phân công", err)
 		return
@@ -429,10 +457,14 @@ func (h *Handler) PhanCongPhieu(w http.ResponseWriter, r *http.Request) {
 // TienTrangThaiPhieu advances the petition ONE step along the main flow.
 // POST /api/v1/citizen-reports/{maTraCuu}/status
 //
-// NO BODY, AND THAT IS THE DESIGN. A target status on the wire is a client able to skip steps — to
-// jump a petition to `da-xu-ly` without anybody working on it — and the intermediate states would
-// then be optional in practice while looking mandatory in the lifecycle map. The server holds the
-// map; the caller says "advance".
+// NO TARGET STATUS ON THE WIRE, AND THAT IS THE DESIGN. A target status is a client able to skip
+// steps — to jump a petition to `da-xu-ly` without anybody working on it — and the intermediate states
+// would then be optional in practice while looking mandatory in the lifecycle map. The server holds
+// the map; the caller says "advance".
+//
+// AN OPTIONAL BODY IS ALLOWED SINCE MIGRATION 0013, and it carries one thing: the internal note for
+// this act's logbook row (tienTrangThaiVao). An absent or empty body is still the ordinary call, which
+// is why it is read with docThanTuyChon — and why the route declares no @request (see routes.go).
 //
 // # THIS HANDLER ANSWERS ONE QUESTION AND DECIDES NOTHING
 //
@@ -447,6 +479,10 @@ func (h *Handler) PhanCongPhieu(w http.ResponseWriter, r *http.Request) {
 // authz.RequirePermission, so this is a precondition rather than a case — but the safe value of a
 // permission fact is the one that grants nothing.
 func (h *Handler) TienTrangThaiPhieu(w http.ResponseWriter, r *http.Request) {
+	var vao tienTrangThaiVao
+	if !docThanTuyChon(w, r, &vao) {
+		return
+	}
 	nguoi, ok := nguoiThucHien(r)
 	if !ok {
 		h.thieuChuTheXuLy(w, r)
@@ -457,7 +493,7 @@ func (h *Handler) TienTrangThaiPhieu(w http.ResponseWriter, r *http.Request) {
 	if principal, co := authz.From(ctx); co {
 		quyen = app.QuyenXuLyCaXa(h.d.Checker.Allows(ctx, principal, QuyenXuLyCaXa))
 	}
-	sau, err := h.d.XuLyPhieu.TienTrangThai(ctx, r.PathValue("maTraCuu"), nguoi, quyen,
+	sau, err := h.d.XuLyPhieu.TienTrangThai(ctx, r.PathValue("maTraCuu"), vao.Note, nguoi, quyen,
 		h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "chuyển trạng thái", err)
@@ -479,7 +515,7 @@ func (h *Handler) DongPhieu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	sau, err := h.d.XuLyPhieu.Dong(ctx, r.PathValue("maTraCuu"), vao.Result, nguoi,
+	sau, err := h.d.XuLyPhieu.Dong(ctx, r.PathValue("maTraCuu"), vao.Result, vao.Note, nguoi,
 		h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "đóng phiếu", err)
@@ -501,7 +537,7 @@ func (h *Handler) KhongTiepNhanPhieu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	sau, err := h.d.XuLyPhieu.KhongTiepNhan(ctx, r.PathValue("maTraCuu"), vao.Reason, nguoi,
+	sau, err := h.d.XuLyPhieu.KhongTiepNhan(ctx, r.PathValue("maTraCuu"), vao.Reason, vao.Note, nguoi,
 		h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "không tiếp nhận", err)
@@ -524,7 +560,7 @@ func (h *Handler) ChuyenCapTrenPhieu(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	sau, err := h.d.XuLyPhieu.ChuyenCapTren(ctx, r.PathValue("maTraCuu"),
-		app.YeuCauChuyenCapTren{LyDo: vao.Reason, CoQuanNhan: vao.ReceivingBody}, nguoi,
+		app.YeuCauChuyenCapTren{LyDo: vao.Reason, CoQuanNhan: vao.ReceivingBody, GhiChu: vao.Note}, nguoi,
 		h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "chuyển cấp trên", err)
@@ -751,6 +787,8 @@ var cacCauTuChoiPhieu = []struct {
 	{domain.ErrThieuCoQuanNhan, "Chưa nhập cơ quan tiếp nhận."},
 	{domain.ErrCoQuanNhanQuaDai, fmt.Sprintf("Tên cơ quan tiếp nhận quá dài (tối đa %d ký tự).",
 		domain.CoQuanNhanToiDa)},
+	{domain.ErrThieuGhiChu, "Chưa nhập nội dung ghi chú."},
+	{domain.ErrGhiChuQuaDai, fmt.Sprintf("Ghi chú quá dài (tối đa %d ký tự).", domain.GhiChuToiDa)},
 }
 
 // cauTuChoiPhieu returns the fixed sentence for the first sentinel in the chain. An unmatched error

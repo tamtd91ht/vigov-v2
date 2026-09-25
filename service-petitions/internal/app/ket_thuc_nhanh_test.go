@@ -45,7 +45,7 @@ func haiNhanh() map[string]nhanhThu {
 	return map[string]nhanhThu{
 		"không tiếp nhận": {domain.KhongTiepNhan, HanhViKhongTiepNhanPhanAnh,
 			func(uc *XuLyPhanAnh, ctx context.Context, q QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
-				return uc.KhongTiepNhan(ctx, maPhieuThu, lyDoThat, canBoThu(), q)
+				return uc.KhongTiepNhan(ctx, maPhieuThu, lyDoThat, "", canBoThu(), q)
 			}},
 		"chuyển cấp trên": {domain.ChuyenCapTren, HanhViChuyenCapTrenPhanAnh,
 			func(uc *XuLyPhanAnh, ctx context.Context, q QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
@@ -156,7 +156,7 @@ func TestKhongTiepNhanKhongGhiCoQuanNhan(t *testing.T) {
 	k := phieuDangPhanLoai()
 	uc, ctx := dungXuLy(t, k, hanXuLyThu())
 
-	sau, err := uc.KhongTiepNhan(ctx, maPhieuThu, lyDoThat, canBoThu(), khongQuyenHanChe)
+	sau, err := uc.KhongTiepNhan(ctx, maPhieuThu, lyDoThat, "", canBoThu(), khongQuyenHanChe)
 	if err != nil {
 		t.Fatalf("KhongTiepNhan: %v", err)
 	}
@@ -250,19 +250,19 @@ func TestKetThucNhanhDauVaoSaiThiTuChoiTruocMoiThu(t *testing.T) {
 		muon error
 	}{
 		"từ chối/lý do rỗng": {func(uc *XuLyPhanAnh, ctx context.Context) error {
-			_, err := uc.KhongTiepNhan(ctx, maPhieuThu, "", canBoThu(), khongQuyenHanChe)
+			_, err := uc.KhongTiepNhan(ctx, maPhieuThu, "", "", canBoThu(), khongQuyenHanChe)
 			return err
 		}, domain.ErrThieuLyDo},
 		"từ chối/toàn khoảng trắng": {func(uc *XuLyPhanAnh, ctx context.Context) error {
-			_, err := uc.KhongTiepNhan(ctx, maPhieuThu, " \n\t ", canBoThu(), khongQuyenHanChe)
+			_, err := uc.KhongTiepNhan(ctx, maPhieuThu, " \n\t ", "", canBoThu(), khongQuyenHanChe)
 			return err
 		}, domain.ErrThieuLyDo},
 		"từ chối/quá ngắn": {func(uc *XuLyPhanAnh, ctx context.Context) error {
-			_, err := uc.KhongTiepNhan(ctx, maPhieuThu, "sai xã", canBoThu(), khongQuyenHanChe)
+			_, err := uc.KhongTiepNhan(ctx, maPhieuThu, "sai xã", "", canBoThu(), khongQuyenHanChe)
 			return err
 		}, domain.ErrLyDoQuaNgan},
 		"từ chối/quá dài": {func(uc *XuLyPhanAnh, ctx context.Context) error {
-			_, err := uc.KhongTiepNhan(ctx, maPhieuThu, quaDai, canBoThu(), khongQuyenHanChe)
+			_, err := uc.KhongTiepNhan(ctx, maPhieuThu, quaDai, "", canBoThu(), khongQuyenHanChe)
 			return err
 		}, domain.ErrLyDoQuaDai},
 		"chuyển/thiếu cơ quan": {func(uc *XuLyPhanAnh, ctx context.Context) error {
@@ -381,7 +381,7 @@ func TestKetThucNhanhThieuMaCanBoThiTuChoi(t *testing.T) {
 	nguoi := canBoThu()
 	nguoi.ID = ""
 
-	if _, err := uc.KhongTiepNhan(ctx, maPhieuThu, lyDoThat, nguoi, khongQuyenHanChe); err == nil {
+	if _, err := uc.KhongTiepNhan(ctx, maPhieuThu, lyDoThat, "", nguoi, khongQuyenHanChe); err == nil {
 		t.Fatal("ghi được dù vết không gọi tên được người làm")
 	}
 	if len(k.lenh) != 0 {

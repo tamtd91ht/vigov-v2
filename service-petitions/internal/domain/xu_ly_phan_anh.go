@@ -630,6 +630,8 @@ func LaLoiXuLyPhanAnh(err error) bool {
 		ErrThieuKetQua, ErrKetQuaQuaNgan, ErrKetQuaQuaDai,
 		ErrThieuLyDo, ErrLyDoQuaNgan, ErrLyDoQuaDai,
 		ErrThieuCoQuanNhan, ErrCoQuanNhanQuaDai,
+		// The internal note (migration 0013) — optional on the six acts, mandatory on the manual one.
+		ErrThieuGhiChu, ErrGhiChuQuaDai,
 		// ErrPhanCongSaiLuc, ErrDongSaiLuc, ErrKetThucNhanhSaiLuc AND ErrKhongConCamKet ARE
 		// DELIBERATELY NOT IN THIS LIST.
 		// They are refusals about the STATE OF THE RECORD, not about what the caller typed, and the
