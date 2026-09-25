@@ -4,6 +4,14 @@
   "cap_nhat": "2026-09-24",
   "muc": [
     {
+      "id": "netpol-duong-ra-tam-mo",
+      "viec": "NetworkPolicy đường ra tới CSDL đang TẠM MỞ 0.0.0.0/0 — nợ an ninh, chờ dải mạng thật của PostgreSQL/Redis",
+      "trang_thai": "treo",
+      "bang_chung": "24/09/2026: người dùng chọn gỡ ràng buộc địa chỉ ở luật `cho-phep-duong-ra` (deploy/base/mang/netpol.yaml) để deploy prod trước, 'bổ sung sau'. `cidr: 10.0.0.0/8` (giá trị giữ chỗ, chưa từng đúng) → `0.0.0.0/0`. GIỮ giới hạn cổng 5432/6379/9092. Không xoá hẳn luật vì quy tắc 1 `tu-choi-tat-ca` từ chối mọi đường ra: xoá là pod mất CSDL.",
+      "no_confirm": [],
+      "tiep_theo": "Chờ người dùng/đội hạ tầng đưa dải mạng thật của PostgreSQL, Redis (và Kafka ngày có). Khi có: thay `0.0.0.0/0` ở netpol.yaml, `kubectl kustomize deploy/overlays/prod`, áp CHỈ phần NetworkPolicy (áp cả bản render sẽ kéo cả bảy dịch vụ về thẻ CHUA-TRIEN-KHAI-LAN-NAO — deploy/README.md mục 11.5). CÁI GIÁ trong lúc chờ: một pod bị chiếm quyền gửi dữ liệu tới BẤT KỲ máy nào mở 5432/6379/9092 trên Internet, thay vì chỉ tới mạng nội bộ."
+    },
+    {
       "id": "rao-doi-chieu-khoa-quyen",
       "viec": "Không gì đối chiếu chuỗi khoá quyền trong mã Go với bảng `quyen` — ba khoá bịa sống qua nhiều phiên mà mọi phép kiểm vẫn xanh",
       "trang_thai": "xong",

@@ -51,8 +51,16 @@ spec:
 ---
 # 4. Đường RA: DNS, gRPC nội bộ, và hạ tầng dữ liệu NGOÀI cụm.
 #
-# `ipBlock` chứ không phải `0.0.0.0/0`: một dịch vụ hồ sơ hành chính không có lý do gì để
-# mở kết nối ra Internet. Dải dưới đây là chỗ bạn điền mạng đặt PostgreSQL / Redis / Kafka.
+# ⚠ TẠM MỞ `0.0.0.0/0` TỪ 24/09/2026 — NỢ, không phải thiết kế. Người dùng chọn gỡ ràng buộc
+# địa chỉ để deploy prod trước khi biết dải mạng của PostgreSQL / Redis, "bổ sung sau".
+# Theo dõi ở sổ `_chung/netpol-duong-ra-tam-mo`.
+#
+# Vẫn GIỮ giới hạn CỔNG: pod ra được mọi địa chỉ nhưng chỉ trên 5432 / 6379 / 9092. Xoá hẳn
+# luật này thì KHÔNG được — quy tắc 1 từ chối mọi đường ra, nên pod mất CSDL và chết ở bước
+# di trú. Cái giá của lúc tạm mở: một pod bị chiếm quyền gửi được dữ liệu tới BẤT KỲ máy nào
+# mở một trong ba cổng ấy, thay vì chỉ tới mạng nội bộ. Một dịch vụ hồ sơ hành chính không có
+# lý do gì để ra Internet, nên đích đúng là dải mạng thật của CSDL — thay `0.0.0.0/0` bằng dải
+# ấy ngay khi biết, rồi render lại (deploy/README.md mục 11.3).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -73,8 +81,52 @@ spec:
         - { port: 9090, protocol: TCP }
     - to:
         - ipBlock:
-            cidr: 10.0.0.0/8      # ← SỬA: dải mạng của PostgreSQL / Redis / Kafka
+            cidr: 0.0.0.0/0       # ← NỢ: thay bằng dải mạng thật của PostgreSQL / Redis / Kafka
       ports:
         - { port: 5432, protocol: TCP }
         - { port: 6379, protocol: TCP }
         - { port: 9092, protocol: TCP }
+---
+# 5. REST 8080 của dịch vụ Go: nhận thêm từ pod web-admin.
+#
+# Từ 25/09/2026 web-admin là CỔNG của `/api/v1/*` (k8s chỉ cấp Secret + ConfigMap, định
+# tuyến nằm trong ứng dụng — `web-admin/src/app/api/v1/[...duong]/route.ts`). Quy tắc 2 chỉ
+# mở 8080 từ namespace ingress-nginx, nên thiếu luật này thì mọi lời gọi API qua web-admin
+# là 502 dù mọi pod đều xanh.
+#
+# Chọn pod web-admin bằng NHÃN TÊN, không bằng `vigov.vn/be-mat: rest` — nhãn ấy cũng gắn
+# trên chính các pod Go, và mở theo nó là cho mọi dịch vụ gọi REST của nhau, một đường vòng
+# qua hợp đồng gRPC (luật 2).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cho-phep-rest-tu-web-admin
+spec:
+  podSelector:
+    matchLabels: { vigov.vn/be-mat: rest }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: web-admin }
+      ports:
+        - { port: 8080, protocol: TCP }
+---
+# 6. Đường RA của RIÊNG web-admin: tới REST 8080 của các pod trong namespace.
+#
+# Tách khỏi quy tắc 4 vì quy tắc 4 áp cho MỌI pod (`podSelector: {}`) — mở 8080 ở đó là cho
+# cả dịch vụ Go gọi REST của nhau.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cho-phep-web-admin-ra-rest
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: web-admin }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { vigov.vn/be-mat: rest }
+      ports:
+        - { port: 8080, protocol: TCP }
