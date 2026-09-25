@@ -17,6 +17,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/vihat/vigov/core/config"
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/migrate"
 	svchttp "github.com/vihat/vigov/service-reporting/internal/http"
 	"github.com/vihat/vigov/service-reporting/migrations"
@@ -73,7 +74,9 @@ func main() {
 	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
 	addr := cfg.ListenAddr
 	log.Info("starting", "service", "reporting", "addr", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	// OUTERMOST already, so that when the edge chain above is wired it sits inside this and every
+	// layer reads one client address per request (TRUSTED_PROXY_CIDRS, rule 6 invariant 2).
+	if err := http.ListenAndServe(addr, httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(mux)); err != nil {
 		log.Error("server stopped", "err", err)
 		os.Exit(1)
 	}

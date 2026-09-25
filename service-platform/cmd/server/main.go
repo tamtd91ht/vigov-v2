@@ -159,8 +159,10 @@ func run(log *slog.Logger) error {
 	ngoai.Handle("/", h)
 
 	srv := &http.Server{
-		Addr:              cfg.ListenAddr,
-		Handler:           ngoai,
+		Addr: cfg.ListenAddr,
+		// OUTERMOST, around everything above, so every layer reads one client address per
+		// request, crossing only the proxies TRUSTED_PROXY_CIDRS names.
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(ngoai),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

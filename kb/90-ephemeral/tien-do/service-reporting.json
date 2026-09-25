@@ -18,6 +18,14 @@
       "bang_chung": "service-reporting/cmd/server/main.go:74: addr := cfg.ListenAddr. Quyết định chủ sản phẩm 25/09/2026 — một mặc định :8080 cho mọi dịch vụ; chạy cục bộ nhiều dịch vụ thì đặt LISTEN_ADDR=:8088 cho tiến trình này. go build ./... (go.work) xanh; go vet + go test ./core/config/... và năm dịch vụ xanh; gofmt -l rỗng; grep ListenAddrHoac trong *.go chỉ còn một dòng chú giải lý do ở core/config/config.go.",
       "no_confirm": [],
       "tiep_theo": "—"
+    },
+    {
+      "id": "ip-khach-qua-proxy-tin-cay",
+      "viec": "Gắn httpx.ClientIPTuProxyTinCay ngoài cùng chuỗi HTTP — IP thật trong vết kiểm toán sau proxy đã cấu hình",
+      "trang_thai": "xong",
+      "bang_chung": "service-reporting/cmd/server/main.go:79 (khung, chưa có chuỗi biên — bọc sẵn ngoài mux): Handler bọc httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies) NGOÀI CÙNG, trước StripTenantHeaders/TenantMiddleware/xác thực — mọi lớp đọc cùng một địa chỉ khách cho một request. Các điểm gọi httpx.ClientIP không đổi. go build + go vet + go test ./... xanh cho core và bảy dịch vụ (chạy trong từng module); gofmt -l rỗng.",
+      "no_confirm": [],
+      "tiep_theo": "Giá trị ConfigMap TRUSTED_PROXY_CIDRS (dải pod của ingress-nginx và web-admin) do người vận hành cụm cung cấp — kho này không biết được. Chưa đặt thì IP trong vết = IP pod web-admin (đúng như trước, không bị giả mạo, nhưng không phải IP người dùng)."
     }
   ]
 }

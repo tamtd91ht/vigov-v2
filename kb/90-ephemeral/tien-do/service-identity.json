@@ -216,6 +216,14 @@
       "no_confirm": [],
       "tiep_theo": "Bên gọi hiện có: petitions /assignment (948772b). Nhiệm vụ, Văn bản nên gọi cùng RPC khi giao việc. Ai đổi locChonNguoi thì RPC đổi theo — cùng một hằng.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "ip-khach-qua-proxy-tin-cay",
+      "viec": "Gắn httpx.ClientIPTuProxyTinCay ngoài cùng chuỗi HTTP — IP thật trong vết kiểm toán sau proxy đã cấu hình",
+      "trang_thai": "xong",
+      "bang_chung": "service-identity/cmd/server/main.go:411: Handler bọc httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies) NGOÀI CÙNG, trước StripTenantHeaders/TenantMiddleware/xác thực — mọi lớp đọc cùng một địa chỉ khách cho một request. Các điểm gọi httpx.ClientIP không đổi. go build + go vet + go test ./... xanh cho core và bảy dịch vụ (chạy trong từng module); gofmt -l rỗng. Chú giải ipTu (internal/http/middleware.go:280) sửa: ranh giới tin cậy nay nằm ở core/httpx.",
+      "no_confirm": [],
+      "tiep_theo": "Giá trị ConfigMap TRUSTED_PROXY_CIDRS (dải pod của ingress-nginx và web-admin) do người vận hành cụm cung cấp — kho này không biết được. Chưa đặt thì IP trong vết = IP pod web-admin (đúng như trước, không bị giả mạo, nhưng không phải IP người dùng)."
     }
   ]
 }

@@ -405,8 +405,10 @@ func run(log *slog.Logger) error {
 	ngoai.Handle("/", h)
 
 	srv := &http.Server{
-		Addr:              cfg.ListenAddr,
-		Handler:           ngoai,
+		Addr: cfg.ListenAddr,
+		// OUTERMOST, around everything above: the login trail, XacThuc's cross-commune alert and
+		// every audited write must name one client address per request (TRUSTED_PROXY_CIDRS).
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(ngoai),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

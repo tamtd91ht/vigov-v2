@@ -107,6 +107,14 @@
       "bang_chung": "Quyết định chủ sản phẩm 25/09/2026: 'mô hình microservice nên mặc định là 8080, cho phép cấu hình port trên k8s, nếu không cấu hình thì lấy 8080' — đảo lý do của commit 0645284 (mỗi dịch vụ một cổng mặc định). config.go: ListenAddr = TrimSpace(LISTEN_ADDR) hoặc :8080, chú giải trường ghi lý do đảo. Kiểm mới core/config/listen_addr_test.go: TestListenAddrMacDinh8080ChoMoiDichVu (bảy tên dịch vụ) · TestListenAddrChiKhoangTrangVanLa8080 · TestListenAddrDocTuMoiTruongCoCatKhoangTrang. go build ./... (go.work) xanh; go vet + go test ./core/config/... và năm dịch vụ xanh; gofmt -l rỗng; grep ListenAddrHoac trong *.go chỉ còn một dòng chú giải lý do ở core/config/config.go. .env.example ghi gợi ý cổng theo tiến trình khi chạy nhiều dịch vụ trên một máy (chỉ chú giải).",
       "no_confirm": [],
       "tiep_theo": "—"
+    },
+    {
+      "id": "ip-khach-qua-proxy-tin-cay",
+      "viec": "core/config TRUSTED_PROXY_CIDRS + core/httpx.ClientIPTuProxyTinCay — IP thật của người dùng trong vết kiểm toán khi đi qua proxy đã CẤU HÌNH (luật 6 bất biến 2)",
+      "trang_thai": "xong",
+      "bang_chung": "core/config/config.go:310 TrustedProxies, :569 proxyTinCay — CIDR hoặc IP trơn, trống = không tin ai, mục hỏng hoặc 0.0.0.0/0, ::/0 làm Load hỏng, lỗi gọi tên biến và số thứ tự mục. core/httpx/client_ip.go:38 ClientIPTuProxyTinCay — đi X-Forwarded-For từ PHẢI sang TRÁI, dừng ở mục rác, không đọc X-Real-IP/Forwarded; edge.go:138 ClientIP đọc giá trị trong context, không có thì như cũ (socket). Ghi chú cũ edge.go về bản ipTu riêng của identity đã bỏ (ipTu đã uỷ quyền về đây). .env.example: dòng TRUSTED_PROXY_CIDRS= với chú giải. Kiểm mới: core/httpx/client_ip_test.go (14 ca bảng + X-Real-IP/Forwarded + không middleware + không nới sau khi gắn), core/config/trusted_proxy_test.go (5). go build + go vet + go test ./... xanh cho core và bảy dịch vụ (chạy trong từng module); gofmt -l rỗng.",
+      "no_confirm": [],
+      "tiep_theo": "Giá trị ConfigMap TRUSTED_PROXY_CIDRS (dải pod của ingress-nginx và web-admin) do người vận hành cụm cung cấp — kho này không biết được. Chưa đặt thì IP trong vết = IP pod web-admin (đúng như trước, không bị giả mạo, nhưng không phải IP người dùng)."
     }
   ]
 }

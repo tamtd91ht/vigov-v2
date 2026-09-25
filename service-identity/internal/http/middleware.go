@@ -279,11 +279,11 @@ func vanTay(s string) string {
 
 // ipTu reports the client address recorded on the audit trail.
 //
-// X-Forwarded-For IS DELIBERATELY NOT TRUSTED. Any client can set it, and a forged address in
-// an archival record is worse than a proxy's address: the trail then states, with the authority
-// of a government record, that somebody acted from an address they never used. When a trusted
-// reverse proxy is actually in place, this is the single function to change, and the trust
-// boundary has to be configured — not assumed.
+// X-Forwarded-For IS NOT TRUSTED HERE. Any client can set it, and a forged address in an
+// archival record is worse than a proxy's address: the trail then states, with the authority of
+// a government record, that somebody acted from an address they never used. The CONFIGURED trust
+// boundary (TRUSTED_PROXY_CIDRS) lives in core/httpx.ClientIPTuProxyTinCay, mounted outermost in
+// cmd/server/main.go; this function only reads the address that middleware settled on.
 //
 // IT DELEGATES RATHER THAN REPEATING, and the reason is the sentence just above. `core/httpx`
 // now holds the same logic for the four services that send this address to identity over gRPC.

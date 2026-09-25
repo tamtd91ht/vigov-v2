@@ -291,8 +291,10 @@ func chay(log *slog.Logger) error {
 	addr := cfg.ListenAddr
 	log.Info("starting", "service", "petitions", "addr", addr)
 	srv := &http.Server{
-		Addr:              addr,
-		Handler:           dungBien(mux, muxCongDan, soPhien, directory, dinhDanh, idemStore, log),
+		Addr: addr,
+		// OUTERMOST, around BOTH chains (staff and citizen): every layer reads one client address
+		// per request, crossing only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(dungBien(mux, muxCongDan, soPhien, directory, dinhDanh, idemStore, log)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

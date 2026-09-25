@@ -115,27 +115,36 @@ func Recover(traceIDFrom func(context.Context) string) func(http.Handler) http.H
 	}
 }
 
-// ClientIP reports the address the client connected from, as THIS process observed it on its
+// ClientIP reports the address the client connected from — the value ClientIPTuProxyTinCay
+// computed for this request, or, when that middleware is not mounted, the peer on THIS process's
 // own socket.
 //
-// X-Forwarded-For IS DELIBERATELY NOT TRUSTED. Any client can set it, and a forged address in
-// an archival record is worse than a proxy's address: the trail then states, with the authority
-// of a government record, that somebody acted from an address they never used (rule 6,
-// invariant 2). When a trusted reverse proxy is actually in place, this is the single function
-// to change, and the trust boundary has to be CONFIGURED — not assumed.
+// X-Forwarded-For IS NEVER TRUSTED HERE, only in ClientIPTuProxyTinCay, and only from hops the
+// deployment CONFIGURED (TRUSTED_PROXY_CIDRS). Any client can set that header, and a forged
+// address in an archival record is worse than a proxy's address: the trail then states, with the
+// authority of a government record, that somebody acted from an address they never used (rule 6,
+// invariant 2). A handler reading the header itself would reopen exactly that, so every call site
+// asks this function and nothing else.
 //
-// IT LIVES HERE, IN core, BECAUSE TWO EDGES NOW NEED THE SAME ANSWER: the staff-authentication
+// IT LIVES HERE, IN core, BECAUSE EVERY EDGE NEEDS THE SAME ANSWER: the staff-authentication
 // middleware sends this address to identity so the cross-commune alert names where a probe came
-// from, and identity's own XacThuc logs it directly. service-identity/internal/http/middleware.go
-// still carries its own `ipTu` with the same body; pointing it here is a one-line change that
-// belongs to whoever next edits that file, and until it happens the two copies are the thing to
-// keep an eye on — a trust boundary configured in one and not the other is a trail that
-// contradicts itself.
+// from, identity's XacThuc logs it, and every audited write records it. service-identity's `ipTu`
+// (internal/http/middleware.go) delegates here, so there is one trust boundary, not two that can
+// be configured differently and make the trail contradict itself.
 //
 // A client address is not personal data in the sense of rule 3: it identifies a connection, and
 // it is the only handle an operator has when the question is "where was this probe from". It is
 // still never returned to a client.
 func ClientIP(r *http.Request) string {
+	if ip, ok := r.Context().Value(khoaClientIP{}).(string); ok {
+		return ip
+	}
+	return diaChiSocket(r)
+}
+
+// diaChiSocket is the peer on this process's own socket — the answer that cannot be forged by the
+// client, only hidden behind a proxy.
+func diaChiSocket(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		// RemoteAddr is not always host:port — an in-process test server, a unix socket. Return

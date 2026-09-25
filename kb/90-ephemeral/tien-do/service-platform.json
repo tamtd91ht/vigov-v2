@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-09-21",
+  "cap_nhat": "2026-09-25",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -42,6 +42,14 @@
       "bang_chung": "ĐÃ ĐO: gỡ grpcx.UnaryServerInterceptor khỏi chuỗi dungGRPCServer dựng -> 0 ca đỏ; gỡ UnaryServerCallerAuth -> 2 ca đỏ. Nguyên nhân: mọi ca đều quay số CÓ gắn interceptor client nên x-tenant-id luôn trên dây. Ca mới TestMayChuTuChoiRpcKhongMangXaDuDaCoKhoa quay số có khoá và KHÔNG có interceptor xã phía client; đột biến lại -> đúng nó đỏ, một mình. Commit e3ed99b — kiểm 2026-09-20",
       "no_confirm": [],
       "tiep_theo": "PHẠM VI THẬT, đừng thổi lên: hai RPC của platform hiện không đọc xã từ context nên thiếu interceptor hôm nay KHÔNG rò gì. Thứ mất là lời KHAI rằng một RPC không được miễn thì phải mang xã (luật 1 cấm #1). Phát hiện ra nó là agent viết server identity khi so khuôn ca test của hai service — không cổng kiểm nào bắt được. Bài học cùng lớp với ba ca khác trong phiên: một rào chắn xanh không nói lên gì tới khi có người thử làm nó đỏ"
+    },
+    {
+      "id": "ip-khach-qua-proxy-tin-cay",
+      "viec": "Gắn httpx.ClientIPTuProxyTinCay ngoài cùng chuỗi HTTP — IP thật trong vết kiểm toán sau proxy đã cấu hình",
+      "trang_thai": "xong",
+      "bang_chung": "service-platform/cmd/server/main.go:165: Handler bọc httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies) NGOÀI CÙNG, trước StripTenantHeaders/TenantMiddleware/xác thực — mọi lớp đọc cùng một địa chỉ khách cho một request. Các điểm gọi httpx.ClientIP không đổi. go build + go vet + go test ./... xanh cho core và bảy dịch vụ (chạy trong từng module); gofmt -l rỗng.",
+      "no_confirm": [],
+      "tiep_theo": "Giá trị ConfigMap TRUSTED_PROXY_CIDRS (dải pod của ingress-nginx và web-admin) do người vận hành cụm cung cấp — kho này không biết được. Chưa đặt thì IP trong vết = IP pod web-admin (đúng như trước, không bị giả mạo, nhưng không phải IP người dùng)."
     }
   ]
 }

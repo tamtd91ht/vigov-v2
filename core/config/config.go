@@ -45,6 +45,7 @@
 //	ELASTICSEARCH_API_KEY       Secret      optional — refused by name at connect time
 //	ELASTICSEARCH_INDEX_PREFIX  ConfigMap   optional — refused by name at connect time
 //	DANGEROUS_AUTH_BYPASS       ConfigMap   optional — refused outright when ENV=prod
+//	TRUSTED_PROXY_CIDRS         ConfigMap   optional — empty trusts nobody; malformed refused by Load
 //
 // THE TABLE IS HERE AND NOT IN A MANIFEST because the manifests are not in this repository's
 // gift and a classification that lives only in deploy/ is one nobody reading the config layer
@@ -62,6 +63,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -283,6 +285,29 @@ type Config struct {
 	// DangerousAuthBypass disables authentication. It exists for local development only and
 	// is reported at every startup (rule 8, invariant 7).
 	DangerousAuthBypass bool
+
+	// TrustedProxies are the hops allowed to tell this process who the client was, through
+	// X-Forwarded-For. Read from TRUSTED_PROXY_CIDRS: comma-separated CIDRs or bare IPs (a bare IP
+	// is one host, /32 or /128). httpx.ClientIPTuProxyTinCay is the one consumer.
+	//
+	// k8s CONFIGMAP: an address range is not a credential. The value is the pod CIDR that
+	// ingress-nginx and web-admin run in, and it belongs to whoever operates the cluster — this
+	// repository cannot know it, so it has no default.
+	//
+	// OPTIONAL, AND EMPTY MEANS TRUST NOBODY — the behaviour before this field existed. A process
+	// with no configured proxy records the address on its own socket, which behind web-admin is
+	// web-admin's pod IP: wrong for an investigator, but never FORGED. That is the right failure
+	// for an audit trail (rule 6, invariant 2), and it is why blank is tolerated where a
+	// malformed value is not.
+	//
+	// MALFORMED IS FATAL, NOT SKIPPED. Skipping a typo'd entry silently trusts fewer hops than
+	// the operator wrote, and a "fixed" parser that fell back to trusting everything would let any
+	// client write its own address into a government record. Either way the trail looks normal and
+	// is wrong, so Load refuses and names the variable and the entry.
+	//
+	// 0.0.0.0/0 AND ::/0 ARE REFUSED BY NAME: trusting the whole internet as a proxy is exactly
+	// trusting a forged X-Forwarded-For from anyone, which is the thing the boundary exists to stop.
+	TrustedProxies []netip.Prefix
 }
 
 const (
@@ -309,6 +334,7 @@ var (
 	ErrThieuBienMoiTruong = errors.New("config: thiếu biến môi trường bắt buộc")
 	ErrCoBienNguyHiem     = errors.New("config: cờ nguy hiểm đang bật trong môi trường thật")
 	ErrEnvKhongHopLe      = errors.New("config: ENV phải là dev, staging hoặc prod")
+	ErrProxyTinCayHong    = errors.New("config: TRUSTED_PROXY_CIDRS không hợp lệ")
 )
 
 // Load reads the configuration for one service.
@@ -362,7 +388,13 @@ func Load(serviceName string) (Config, error) {
 		return Config{}, fmt.Errorf("%w: %q", ErrEnvKhongHopLe, env)
 	}
 
+	proxy, err := proxyTinCay(os.Getenv("TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg := Config{
+		TrustedProxies: proxy,
 		// Trimmed: a trailing newline pasted into a ConfigMap would otherwise reach net.Listen
 		// as part of the port. The five services that used to read it per-service trimmed too.
 		ListenAddr:       firstNonEmpty(strings.TrimSpace(os.Getenv("LISTEN_ADDR")), ":8080"),
@@ -527,6 +559,47 @@ func danhSach(raw string) []string {
 		}
 	}
 	return ra
+}
+
+// proxyTinCay parses TRUSTED_PROXY_CIDRS. Blank returns nil — trust nobody.
+//
+// The index in an error is the 1-based position in the RAW comma-split value, empty entries
+// counted, so it points at the same place an operator sees in the ConfigMap. danhSach is not used
+// here for that reason: it drops empty entries, which would shift the number off the line.
+func proxyTinCay(raw string) ([]netip.Prefix, error) {
+	var ra []netip.Prefix
+	for i, phan := range strings.Split(raw, ",") {
+		phan = strings.TrimSpace(phan)
+		if phan == "" {
+			continue
+		}
+		var p netip.Prefix
+		if strings.Contains(phan, "/") {
+			pp, err := netip.ParsePrefix(phan)
+			if err != nil {
+				return nil, fmt.Errorf("%w: mục thứ %d (%q): %w", ErrProxyTinCayHong, i+1, phan, err)
+			}
+			p = pp.Masked()
+		} else {
+			a, err := netip.ParseAddr(phan)
+			if err != nil {
+				return nil, fmt.Errorf("%w: mục thứ %d (%q): %w", ErrProxyTinCayHong, i+1, phan, err)
+			}
+			// Unmapped so "::ffff:10.0.0.5" means the same host as "10.0.0.5": the request side
+			// unmaps too, and a mapped prefix would otherwise never match anything.
+			a = a.Unmap().WithZone("")
+			p = netip.PrefixFrom(a, a.BitLen())
+		}
+		if !p.IsValid() {
+			return nil, fmt.Errorf("%w: mục thứ %d (%q)", ErrProxyTinCayHong, i+1, phan)
+		}
+		if p.Bits() == 0 {
+			return nil, fmt.Errorf("%w: mục thứ %d (%q) tin mọi địa chỉ — "+
+				"tức là tin X-Forwarded-For giả của bất kỳ ai", ErrProxyTinCayHong, i+1, phan)
+		}
+		ra = append(ra, p)
+	}
+	return ra, nil
 }
 
 // KhoaKyBytes hands the signing keys to pkg/token, in order.
