@@ -206,7 +206,7 @@ func bienBanRaNgoai(b domain.BienBanHop) bienBanRa {
 		ConclusionDoneCount: klXong,
 		Status:              b.TrangThai,
 		SignedBy:            b.KyBoiMa,
-		MinutesTaker:           b.ThuKyMa,
+		MinutesTaker:        b.ThuKyMa,
 		SupplementsID:       b.BoSungChoID,
 		CreatedBy:           b.NguoiTaoMa,
 		CreatedAt:           b.TaoLuc,

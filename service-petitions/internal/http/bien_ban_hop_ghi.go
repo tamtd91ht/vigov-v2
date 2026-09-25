@@ -138,15 +138,15 @@ type thongBaoVao struct {
 // NO way to clear a recorded notice: after signing it is frozen by the database, and on a draft it
 // can be replaced but not removed through this body (reported, 25/09/2026).
 type suaBienBanVao struct {
-	Title       *string      `json:"title,omitempty"`
-	HeldOn      *string      `json:"held_on,omitempty"`
-	ReferenceNo *string      `json:"reference_no,omitempty"`
-	Location    *string      `json:"location,omitempty"`
-	ChairedBy   *string      `json:"chaired_by,omitempty"`
-	MinutesTaker   *string      `json:"minutes_taker,omitempty"`
-	Attendees   *[]string    `json:"attendees,omitempty"`
-	Content     *string      `json:"content,omitempty"`
-	Notice      *thongBaoVao `json:"notice,omitempty"`
+	Title        *string      `json:"title,omitempty"`
+	HeldOn       *string      `json:"held_on,omitempty"`
+	ReferenceNo  *string      `json:"reference_no,omitempty"`
+	Location     *string      `json:"location,omitempty"`
+	ChairedBy    *string      `json:"chaired_by,omitempty"`
+	MinutesTaker *string      `json:"minutes_taker,omitempty"`
+	Attendees    *[]string    `json:"attendees,omitempty"`
+	Content      *string      `json:"content,omitempty"`
+	Notice       *thongBaoVao `json:"notice,omitempty"`
 }
 
 // kyBienBanVao is the OPTIONAL body of POST /api/v1/meetings/{id}/signature — an empty body signs

@@ -241,6 +241,19 @@ describe("trạng thái biên bản và kết luận — chữ cho mã của MÁ
     );
   });
 
+  /**
+   * CA DUY NHẤT PHÂN BIỆT ĐƯỢC "ĐỌC `status`" VỚI "SUY TỪ BỘ ĐẾM", và nó là ca thật: 1/3 việc xong,
+   * một việc chưa xong đã trễ. Máy chủ biết việc trễ (so với hạn, `dieuKienTreHan`), client thì
+   * KHÔNG — dây không mang số việc trễ. Client suy từ `task_count`/`task_done_count` sẽ vẽ
+   * "Đang thực hiện" màu xám cho đúng kết luận lãnh đạo cần thấy màu đỏ. Các ca trên dùng bộ đếm 0/0
+   * nên một phép suy "còn việc → đang thực hiện" đặt trước `switch` vẫn xanh qua chúng.
+   */
+  it("1/3 việc xong mà máy chủ nói quá hạn thì hiện QUÁ HẠN, chip đỏ — không suy lại từ bộ đếm", () => {
+    const kl = ketLuan({ task_count: 3, task_done_count: 1, status: "qua-han" });
+    expect(nhanTrangThaiKetLuan(kl)).toBe("Quá hạn");
+    expect(lopChipKetLuan(kl)).toBe("chip chip-cham");
+  });
+
   it("quá hạn là chip đỏ; hoàn thành và không phát sinh là chip xanh", () => {
     expect(lopChipKetLuan(ketLuan({ status: "qua-han" }))).toBe("chip chip-cham");
     expect(lopChipKetLuan(ketLuan({ status: "hoan-thanh" }))).toBe("chip chip-hoat-dong");
