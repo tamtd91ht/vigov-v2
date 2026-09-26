@@ -349,30 +349,43 @@ SELECT t.id, t.ten, t.dang_hoat_dong, d.host, d.la_chinh
 """
         sh '''
           set -eu
-          OVR='{"apiVersion":"v1","spec":{"restartPolicy":"Never",
+          MAU='{"apiVersion":"v1","spec":{"restartPolicy":"Never",
                 "imagePullSecrets":[{"name":"dockerhub-omicrm"}],
-                "containers":[{"name":"psql","image":"postgres:16-alpine","stdin":true,
+                "containers":[{"name":"psql","image":"postgres:16-alpine",
                   "envFrom":[{"secretRef":{"name":"platform-secrets"}}],
-                  "command":["sh","-c","psql \\"$DATABASE_DSN\\" -X -q -v ON_ERROR_STOP=1 -f -"]}]}}'
-          # Lượt #17 (26/09/2026) chết ở "timed out waiting for the condition": pod psql không lên
-          # Running trong 1 phút mặc định của `kubectl run` — thường là kéo postgres:16-alpine từ
-          # Docker Hub chậm/bị giới hạn. Đợi 5 phút, và khi hỏng thì IN SỰ KIỆN của pod để log nói
-          # nguyên nhân thật, rồi dọn pod (--rm không dọn khi chưa từng gắn được vào pod).
+                  "env":[{"name":"SQL_B64","value":"@SQL@"}],
+                  "command":["sh","-c","echo \\"$SQL_B64\\" | base64 -d | psql \\"$DATABASE_DSN\\" -X -q -v ON_ERROR_STOP=1 -f -"]}]}}'
+          # Lượt #17 và #18 (26/09/2026) chết ở "timed out waiting for the condition" dù pod đã
+          # Started ngay giây đầu (image có sẵn trên máy): `kubectl run -i` KHÔNG GẮN ĐƯỢC vào pod,
+          # psql ngồi đợi stdin tới khi bị giết. Nên bỏ stdin/attach: câu SQL vào pod qua biến môi
+          # trường (base64 — chỉ [A-Za-z0-9+/=], nhúng vào JSON an toàn; SQL này không chứa bí mật),
+          # pod tự chạy tới xong, job hỏi pha bằng `get` rồi đọc `logs`. Chỉ cần quyền
+          # create/get/delete pod + đọc log — không cần attach, không cần watch.
           chay_psql() {
             ten="$1"
-            if ! kubectl -n vigov-prod run "$ten" --rm -i --restart=Never \
-                  --image=postgres:16-alpine --overrides="$OVR" --quiet --pod-running-timeout=5m; then
-              echo "── pod $ten không chạy xong — sự kiện của pod:"
+            tep="$2"
+            OVR=$(printf '%s' "$MAU" | sed "s|@SQL@|$(base64 -w0 "$tep")|")
+            kubectl -n vigov-prod run "$ten" --restart=Never \
+                --image=postgres:16-alpine --overrides="$OVR" --quiet
+            pha=""; i=0
+            while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
+              pha=$(kubectl -n vigov-prod get pod "$ten" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              case "$pha" in Succeeded|Failed) break ;; esac
+              sleep 5; i=$((i+1))
+            done
+            kubectl -n vigov-prod logs "$ten" 2>&1 || true
+            if [ "$pha" != "Succeeded" ]; then
+              echo "── pod $ten kết thúc ở pha '$pha' — sự kiện của pod:"
               kubectl -n vigov-prod describe pod "$ten" 2>/dev/null | sed -n '/^Events:/,$p' || true
-              kubectl -n vigov-prod delete pod "$ten" --ignore-not-found --wait=false || true
-              return 1
             fi
+            kubectl -n vigov-prod delete pod "$ten" --ignore-not-found --wait=false || true
+            [ "$pha" = "Succeeded" ]
           }
           echo "── tên miền của xã và hai host mới (trước khi ghi)"
-          echo "SELECT host, tenant_id, la_chinh FROM tenant_domain WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' OR host IN ('thangbinh-danang.vigov.vn', 'thangbinh-danang.stg.vigov.vn') ORDER BY host;" \
-            | chay_psql "vigov-psql-doc-$BUILD_NUMBER"
+          echo "SELECT host, tenant_id, la_chinh FROM tenant_domain WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' OR host IN ('thangbinh-danang.vigov.vn', 'thangbinh-danang.stg.vigov.vn') ORDER BY host;" > doc-ten-mien.sql
+          chay_psql "vigov-psql-doc-$BUILD_NUMBER" doc-ten-mien.sql
           echo "── ghi"
-          chay_psql "vigov-psql-ghi-$BUILD_NUMBER" < doi-ten-mien.sql
+          chay_psql "vigov-psql-ghi-$BUILD_NUMBER" doi-ten-mien.sql
           echo ""
           echo "Xong. Thử: https://thangbinh-danang.vigov.vn/dang-nhap · https://thangbinh-danang.stg.vigov.vn/dang-nhap"
           echo "Bước kế: job service-platform (migration 0007)."
