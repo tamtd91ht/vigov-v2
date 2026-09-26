@@ -283,18 +283,17 @@ SELECT t.id, t.ten, t.tinh_thanh, t.dang_hoat_dong, d.host, d.la_chinh
     //      thật (cụm dựng tay trong Rancher — `deploy/base` KHÔNG được áp, nên đây là việc tay).
     //      Đổi tên miền chính trước khi host mới tới được pod là mọi đường dẫn dựng từ tên miền
     //      chính (thông báo, liên kết) trỏ vào một địa chỉ chưa ai trả lời.
-    //   2. VIỆC NÀY.
-    //   3. Job `service-platform` với migration 0007. 0007 thêm CHECK `tenant_domain_khong_danh_rieng`
-    //      (NOT VALID): không quét dòng cũ, nhưng MỌI UPDATE dòng admin.vigov.vn bị kiểm lại và bị
-    //      từ chối (23514) — tức câu UPDATE la_chinh dưới đây. Phép kiểm đầu tiên vì thế DỪNG nếu
-    //      ràng buộc ấy đã có: khi đó phải hỏi chủ dự án, không gỡ ràng buộc để chạy cho qua.
+    //   2. VIỆC NÀY — chạy được cả TRƯỚC lẫn SAU platform 0007: nó chỉ DELETE và INSERT, không
+    //      UPDATE dòng admin.*, nên CHECK `tenant_domain_khong_danh_rieng` không có gì để từ chối.
+    //      Thực tế 26/09/2026: 0007 áp lúc 07:50Z, TRƯỚC việc này (lượt #21 đo) — bản cũ có câu
+    //      UPDATE la_chinh và dừng ở phép kiểm 0007; chủ dự án chọn "xoá trước, chèn sau".
     //
     // GỠ hai dòng admin.vigov.vn / admin-stg.vigov.vn — chủ dự án quyết 26/09/2026 ("xóa đi, nó
     // là dùng cho pod web admin tổng quản lý multi domain"). Đó là dòng định tuyến, không phải hồ
     // sơ nghiệp vụ; trạng thái trước khi gỡ nằm trong delta `truoc` của dòng vết `doi_ten_mien`.
     // Gỡ xong thì 0007 VALIDATE CONSTRAINT được — nhưng việc ấy để một migration sau quyết.
     //
-    // CHỈ THÊM + ĐỔI MỘT CỜ, MỘT GIAO DỊCH, CÓ VẾT: mọi phép kiểm RAISE và không ghi gì; dòng
+    // GỠ HAI DÒNG + THÊM HAI DÒNG, MỘT GIAO DỊCH, CÓ VẾT: mọi phép kiểm RAISE và không ghi gì; dòng
     // `audit_log` cùng giao dịch, chủ thể là người bấm job (luật 6). Cách chạy psql và CSDL dùng
     // chung hai môi trường: như việc `tao-xa-thang-binh` ở trên.
     // ─────────────────────────────────────────────────────────────────────────────────────
@@ -315,10 +314,6 @@ SELECT t.id, t.ten, t.tinh_thanh, t.dang_hoat_dong, d.host, d.la_chinh
 BEGIN;
 DO \$\$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_constraint
-              WHERE conname = 'tenant_domain_khong_danh_rieng' AND conrelid = 'tenant_domain'::regclass) THEN
-    RAISE EXCEPTION 'DUNG: đã triển khai platform 0007 — chạy bước này trước khi triển khai platform. Không ghi gì';
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8') THEN
     RAISE EXCEPTION 'DUNG: xa 01M3CS7HHK72V71CGRRJHGR8E8 chua co trong so xa — khong ghi gi';
   END IF;
@@ -345,21 +340,22 @@ INSERT INTO audit_log (tenant_id, actor_id, actor_kind, action, subject, at, del
             'them', jsonb_build_array('thangbinh-danang.vigov.vn', 'thangbinh-danang.stg.vigov.vn'),
             'go', jsonb_build_array('admin.vigov.vn', 'admin-stg.vigov.vn'),
             'qua', 'jenkins vigov-deploy #${env.BUILD_NUMBER}'));
--- Hạ cờ chính TRƯỚC khi chèn: chỉ mục duy nhất `tenant_domain_mot_chinh` cho mỗi xã đúng một
--- dòng la_chinh.
-UPDATE tenant_domain SET la_chinh = false
- WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' AND la_chinh;
-INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES
-  ('thangbinh-danang.vigov.vn',     '01M3CS7HHK72V71CGRRJHGR8E8', true),
-  ('thangbinh-danang.stg.vigov.vn', '01M3CS7HHK72V71CGRRJHGR8E8', false)
-  ON CONFLICT (host) DO NOTHING;
 -- Gỡ hai tên miền cũ: chủ dự án quyết 26/09/2026 — admin.vigov.vn là tên miền của pod web quản
 -- trị tổng liên xã (chưa dựng), không phải của một xã. Đây là dòng ĐỊNH TUYẾN của sổ xã, không
 -- phải hồ sơ nghiệp vụ; dòng vết `doi_ten_mien` ở trên giữ nguyên trạng thái trước (`truoc`).
 -- Lọc đúng hai host VÀ đúng xã này — không bao giờ gỡ tên miền của xã khác.
+--
+-- XOÁ TRƯỚC, CHÈN SAU — không UPDATE (chủ dự án chọn 26/09/2026, sau lượt #21). Platform 0007 đã
+-- áp, và CHECK NOT VALID của nó kiểm MỌI phiên bản dòng mới: hạ cờ la_chinh của admin.vigov.vn
+-- bị từ chối (23514). DELETE không tạo phiên bản dòng mới nên CHECK không chạm; xoá xong thì xã
+-- không còn dòng chính nào, và chỉ mục `tenant_domain_mot_chinh` nhận dòng chính mới.
 DELETE FROM tenant_domain
  WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8'
    AND host IN ('admin.vigov.vn', 'admin-stg.vigov.vn');
+INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES
+  ('thangbinh-danang.vigov.vn',     '01M3CS7HHK72V71CGRRJHGR8E8', true),
+  ('thangbinh-danang.stg.vigov.vn', '01M3CS7HHK72V71CGRRJHGR8E8', false)
+  ON CONFLICT (host) DO NOTHING;
 DO \$\$
 BEGIN
   IF (SELECT count(*) FROM tenant_domain
