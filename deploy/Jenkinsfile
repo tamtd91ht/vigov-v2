@@ -382,7 +382,15 @@ SELECT t.id, t.ten, t.dang_hoat_dong, d.host, d.la_chinh
             [ "$pha" = "Succeeded" ]
           }
           echo "── tên miền của xã và hai host mới (trước khi ghi)"
-          echo "SELECT host, tenant_id, la_chinh FROM tenant_domain WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' OR host IN ('thangbinh-danang.vigov.vn', 'thangbinh-danang.stg.vigov.vn') ORDER BY host;" > doc-ten-mien.sql
+          # Lượt #19: phép kiểm báo xã chưa có trong sổ dù `tao-xa-thang-binh` được ghi là đã chạy.
+          # Đọc TOÀN BỘ sổ xã + CSDL đang nói chuyện + vết tao_xa, để biết xã thiếu thật hay DSN
+          # trỏ nhầm CSDL — trước khi ai tạo lại một xã có thể đã tồn tại ở nơi khác.
+          cat > doc-ten-mien.sql <<'SQL'
+SELECT current_database() AS csdl, inet_server_addr() AS may_chu, current_user AS vai;
+SELECT id, ten, tinh_thanh, dang_hoat_dong FROM tenant ORDER BY tao_luc;
+SELECT host, tenant_id, la_chinh FROM tenant_domain ORDER BY host;
+SELECT tenant_id, actor_id, action, subject, at FROM audit_log WHERE action IN ('tao_xa', 'doi_ten_mien') ORDER BY at;
+SQL
           chay_psql "vigov-psql-doc-$BUILD_NUMBER" doc-ten-mien.sql
           echo "── ghi"
           chay_psql "vigov-psql-ghi-$BUILD_NUMBER" doi-ten-mien.sql
