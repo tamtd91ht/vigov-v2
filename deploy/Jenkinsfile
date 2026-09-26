@@ -255,9 +255,10 @@ SELECT t.id, t.ten, t.tinh_thanh, t.dang_hoat_dong, d.host, d.la_chinh
     //      từ chối (23514) — tức câu UPDATE la_chinh dưới đây. Phép kiểm đầu tiên vì thế DỪNG nếu
     //      ràng buộc ấy đã có: khi đó phải hỏi chủ dự án, không gỡ ràng buộc để chạy cho qua.
     //
-    // KHÔNG XOÁ hai dòng admin.vigov.vn / admin-stg.vigov.vn. Từ bản platform chặn tên miền dành
-    // riêng, mã của platform từ chối phân giải chúng trước khi đọc bảng, nên chúng thôi có tác
-    // dụng mà vẫn còn làm hồ sơ (luật 7). Gỡ hay giữ là quyết định SAU NÀY của chủ dự án.
+    // GỠ hai dòng admin.vigov.vn / admin-stg.vigov.vn — chủ dự án quyết 26/09/2026 ("xóa đi, nó
+    // là dùng cho pod web admin tổng quản lý multi domain"). Đó là dòng định tuyến, không phải hồ
+    // sơ nghiệp vụ; trạng thái trước khi gỡ nằm trong delta `truoc` của dòng vết `doi_ten_mien`.
+    // Gỡ xong thì 0007 VALIDATE CONSTRAINT được — nhưng việc ấy để một migration sau quyết.
     //
     // CHỈ THÊM + ĐỔI MỘT CỜ, MỘT GIAO DỊCH, CÓ VẾT: mọi phép kiểm RAISE và không ghi gì; dòng
     // `audit_log` cùng giao dịch, chủ thể là người bấm job (luật 6). Cách chạy psql và CSDL dùng
@@ -308,15 +309,23 @@ INSERT INTO audit_log (tenant_id, actor_id, actor_kind, action, subject, at, del
                         FROM tenant_domain WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8'),
             'chinh_moi', 'thangbinh-danang.vigov.vn',
             'them', jsonb_build_array('thangbinh-danang.vigov.vn', 'thangbinh-danang.stg.vigov.vn'),
+            'go', jsonb_build_array('admin.vigov.vn', 'admin-stg.vigov.vn'),
             'qua', 'jenkins vigov-deploy #${env.BUILD_NUMBER}'));
 -- Hạ cờ chính TRƯỚC khi chèn: chỉ mục duy nhất `tenant_domain_mot_chinh` cho mỗi xã đúng một
--- dòng la_chinh. Không xoá dòng nào.
+-- dòng la_chinh.
 UPDATE tenant_domain SET la_chinh = false
  WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' AND la_chinh;
 INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES
   ('thangbinh-danang.vigov.vn',     '01M3CS7HHK72V71CGRRJHGR8E8', true),
   ('thangbinh-danang.stg.vigov.vn', '01M3CS7HHK72V71CGRRJHGR8E8', false)
   ON CONFLICT (host) DO NOTHING;
+-- Gỡ hai tên miền cũ: chủ dự án quyết 26/09/2026 — admin.vigov.vn là tên miền của pod web quản
+-- trị tổng liên xã (chưa dựng), không phải của một xã. Đây là dòng ĐỊNH TUYẾN của sổ xã, không
+-- phải hồ sơ nghiệp vụ; dòng vết `doi_ten_mien` ở trên giữ nguyên trạng thái trước (`truoc`).
+-- Lọc đúng hai host VÀ đúng xã này — không bao giờ gỡ tên miền của xã khác.
+DELETE FROM tenant_domain
+ WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8'
+   AND host IN ('admin.vigov.vn', 'admin-stg.vigov.vn');
 DO \$\$
 BEGIN
   IF (SELECT count(*) FROM tenant_domain
@@ -327,6 +336,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM tenant_domain
                   WHERE host = 'thangbinh-danang.vigov.vn' AND tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' AND la_chinh) THEN
     RAISE EXCEPTION 'DUNG: thangbinh-danang.vigov.vn khong thanh ten mien chinh (dong co san voi la_chinh=false?) — quay lui, khong ghi gi';
+  END IF;
+  IF EXISTS (SELECT 1 FROM tenant_domain WHERE host IN ('admin.vigov.vn', 'admin-stg.vigov.vn')) THEN
+    RAISE EXCEPTION 'DUNG: admin.vigov.vn / admin-stg.vigov.vn van con (gan cho xa khac?) — quay lui, khong ghi gi';
   END IF;
 END \$\$;
 COMMIT;
