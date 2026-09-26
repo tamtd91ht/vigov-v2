@@ -1,4 +1,5 @@
-import { CauHinhXaProvider, phanHienThi } from "@/components/cau-hinh-xa";
+import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { FormDangNhap } from "@/features/auth/form-dang-nhap";
 import { layCauHinhXa } from "@/lib/tenant.server";
 

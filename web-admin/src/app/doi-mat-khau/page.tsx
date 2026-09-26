@@ -1,4 +1,5 @@
-import { CauHinhXaProvider, phanHienThi } from "@/components/cau-hinh-xa";
+import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
+import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { FormDoiMatKhau } from "@/features/mat-khau/form-doi-mat-khau";
 import { NhacBatDoiMatKhau } from "@/features/mat-khau/nhac-bat-doi";

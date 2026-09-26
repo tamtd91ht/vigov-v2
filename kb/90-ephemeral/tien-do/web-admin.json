@@ -207,6 +207,12 @@
       "no_confirm": [],
       "tiep_theo": "SỬA 26/09/2026 (/develop-feature phan-anh-nguoi-dan, chủ dự án cho làm theo khuyến nghị): câu 'Mục menu /cau-hinh chỉ canh admin.lookup' (bàn giao §3:96) ĐÃ GIẢI — mục menu hiện khi cầm BẤT KỲ khoá nào canh một tab (admin.org · admin.user · admin.role · admin.lookup · admin.sla; KHOA_MO_CAU_HINH, muc-menu.ts); từng tab vẫn kiểm đúng một khoá; máy chủ Go vẫn là nơi cưỡng chế. Lý do: người cầm admin.sla phải vào được tab Thời hạn xử lý để gieo SLA — không có dòng SLA thì công dân gửi phản ánh nhận 503. Còn nợ: chú thích app/cau-hinh/page.tsx:49 ('HAI TRONG BỐN PHẦN') lỗi thời; danh sách khoá ở menu là ngoại lệ có chú thích của luật 'một khoá mỗi chức năng' (lib/quyen.ts:331). || CÂU CHỜ NGƯỜI DÙNG: (1) mặc định cột đầu Kanban 'Mới giao' hay 'Chưa thực hiện' (spec 02 §6 có hai tên) — đổi ở máy chủ nếu cần; (2) chip 'Hoàn thành trễ hạn' (so-nhiem-vu.tsx:1070,:1152) vẫn gõ cứng chữ 'Hoàn thành' — xã đổi nhãn hoan-thanh thì chip không theo; (3) mục menu /cau-hinh chỉ canh admin.lookup (muc-menu.ts:79) — người cầm admin.org/admin.role/admin.sla mà không cầm admin.lookup không vào được. CHƯA KIỂM: bố cục 320px trên trình duyệt; focus/Esc form Sơ đồ; nút đổi trạng thái gửi MÃ (trong handler click, không DOM).",
       "menu": "cau-hinh"
+    },
+    {
+      "id": "phan-hien-thi-ra-khoi-use-client",
+      "viec": "Sửa lỗi prod 26/09/2026: mọi trang (kể cả /dang-nhap) trắng với 'Attempted to call phanHienThi() from the server' — hàm thuần nằm trong tệp \"use client\" nên thành tham chiếu client",
+      "trang_thai": "xong",
+      "bang_chung": "phanHienThi + kiểu CauHinhXaHienThi dời sang src/lib/cau-hinh-xa-hien-thi.ts (không chỉ thị); 14 trang nhập từ đó. typecheck + eslint + vitest 1790 ca xanh — NHƯNG CŨNG XANH TRƯỚC KHI SỬA, không ca nào bắt được lỗi này. Kiểm thật: next build + next start với identity giả trả /api/v1/communes/current → GET /dang-nhap Host thangbinh-danang.vigov.vn = 200, có 'Xã Thăng Bình', không __next_error__, log Next sạch. CHƯA có phép kiểm tự động bắt 'hàm thường xuất từ tệp use client bị server gọi' — ứng viên cho rào/tools."
     }
   ]
 }
