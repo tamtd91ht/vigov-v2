@@ -33,4 +33,13 @@ describe("khối phần chưa dựng của màn Cấu hình", () => {
       PHAN_CHUA_DUNG.some((p) => /Loại đơn vị dân cư|Khối nhiệm vụ/i.test(`${p.ten} ${p.viSao}`)),
     ).toBe(false);
   });
+
+  it("không còn mục nói đơn vị mới chưa có người quản trị đầu tiên — đã quyết và đã dựng", () => {
+    // Quản trị đầu tiên của xã được gieo ở lần đăng nhập đầu tại tên miền của xã (ADR 0046
+    // §Quyết định 2, dựng ở `b55835a`). Mục cũ nói "chưa có đường nào" là câu sai hiện ra với
+    // cán bộ, và ca đầu tiên của tệp vẫn xanh khi câu ấy sai — nên ca này canh riêng nó.
+    expect(
+      PHAN_CHUA_DUNG.some((p) => /quản trị (ĐẦU TIÊN|đầu tiên)/i.test(`${p.ten} ${p.viSao}`)),
+    ).toBe(false);
+  });
 });

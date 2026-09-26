@@ -79,11 +79,4 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Hợp đồng chỉ có `GET /api/v1/roles`, chưa có tuyến tạo vai trò; và chưa chốt ai được tạo " +
       "vai trò mới cho một đơn vị.",
   },
-  {
-    ten: "Người quản trị đầu tiên và bộ vai trò ban đầu của một đơn vị mới",
-    viSao:
-      "Chưa có đường nào tạo vai trò, cấp quyền hay tài khoản quản trị ĐẦU TIÊN cho một đơn vị mới " +
-      "nhận hệ thống; việc này đang chờ một quyết định kiến trúc. Đơn vị mới vì thế chưa tự vào được " +
-      "màn này cho tới khi có quyết định ấy.",
-  },
 ];

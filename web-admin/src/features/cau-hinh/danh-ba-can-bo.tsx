@@ -484,19 +484,17 @@ export function DanhBaCanBo() {
       {/*
         ĐẶC TẢ CÓ, Ở ĐÂY KHÔNG — và mỗi dòng nói luôn cái gì mở khoá nó:
 
-          · Ô tìm `Tìm theo tên, thư điện tử, bộ phận…`: `GET /api/v1/staff` KHÔNG nhận tham số
-            tìm kiếm nào (`core/page/page.go` chỉ đọc limit/cursor/sort/order). Mở khoá bằng một
-            tham số truy vấn mới trên tuyến ấy — một thay đổi hợp đồng, phải qua khai báo route
-            trong `service-identity/internal/`, không phải một ô input ở đây.
-          · Bộ lọc theo bộ phận và theo trạng thái: cùng lý do, cùng tuyến, cùng cách mở khoá.
+          · Ô tìm và bộ lọc theo bộ phận: tuyến đã có — `POST /api/v1/staff/searches` nhận chữ
+            tìm và bộ lọc (`lib/api/can-bo.ts`); ô tìm và bộ lọc của tab này đang được dựng.
+          · Bộ lọc theo trạng thái (đang hoạt động / đã khoá): `LocCanBo` chỉ có bộ phận và công
+            khai — hợp đồng chưa có tham số trạng thái.
           · `⬆ Nhập từ Excel` và `⬇ Xuất Excel`: không có tuyến nào trong hợp đồng. Bản xuất còn
             kéo theo một quyết định chưa có: #11 chốt KHÔNG che số trên màn hình nội bộ nhưng
             VẪN CHE ở bản xuất, nên tuyến xuất phải có luật che riêng chứ không tái dùng tuyến đọc.
-          · `🖼 Ảnh đại diện` và ô `Hiện trên Mini App`: không có cột nào trong lược đồ. Ô Mini App
-            còn bị chặn bởi chính quyết định #12 — phải lưu SỰ ĐỒNG Ý của từng người kèm thời
-            điểm, và chưa có chỗ nào giữ bằng chứng ấy.
-          · `🗑 Xoá khỏi danh bạ`: xem `VI_SAO_KHONG_CO_NUT_XOA` — #10 tách xoá khỏi khoá và cho
-            nó một quyền riêng mà bảng `quyen` chưa có (phát hiện cho câu mở #27).
+          · `🖼 Ảnh đại diện`: không có cột nào trong lược đồ.
+          · Ô `Hiện trên Mini App` (#12, `PUT /staff/{id}/publication` kèm sự đồng ý) và
+            `🗑 Xoá khỏi danh bạ` (quyền `admin.user.delete`): CỐ Ý đặt ở màn `/danh-ba`, không ở
+            đây — xem `VI_SAO_KHONG_CO_NUT_XOA`.
       */}
       <p className="ghi-chu">{VI_SAO_KHONG_CO_NUT_XOA}</p>
 

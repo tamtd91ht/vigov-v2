@@ -44,14 +44,22 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  * VÀ Ở ĐÂY CHƯA CÓ THANH TAB NÀO: sáu phần dựng nối tiếp trong trang, theo đúng thứ tự tab của
  * đặc tả §0. Chưa dựng thanh chuyển tab vì nó đặt ra một câu chưa ai trả lời: tài khoản chỉ mở
  * được MỘT tab thì thanh ấy hiện một nút đứng trơ, hay không hiện? Đó là quyết định về giao diện
- * của khách, và đoán hộ thì phải đoán lại khi tab thứ năm mọc lên. Dựng nối tiếp không mất gì:
+ * của khách, và đoán hộ thì phải đoán lại khi tab thứ bảy mọc lên. Dựng nối tiếp không mất gì:
  * mỗi phần vẫn đọc dữ liệu của riêng nó, và phần nào thiếu quyền thì không gọi tuyến nào.
  *
- * HAI TRONG BỐN PHẦN TỰ ẨN/HIỆN THEO KHOÁ QUYỀN (`admin.user` · `admin.role`), HAI PHẦN KIA
- * KHÔNG — và sự khác nhau ấy đến từ máy chủ chứ không từ đây. Tuyến sau tab Người dùng và tab
- * Phân quyền khai `RequirePermission`; tám tuyến danh mục và địa bàn khai `any-authenticated`.
- * Dựng một cổng quyền ở giao diện cho hai tab sau sẽ là để GIAO DIỆN quyết định điều máy chủ
- * không từ chối — đúng hình dạng luật 5 cấm #1. Lý lẽ đầy đủ ở `features/cau-hinh/tab-danh-muc.tsx`.
+ * CỔNG QUYỀN Ở MỖI PHẦN ĐI THEO TUYẾN ĐỌC CỦA NÓ Ở MÁY CHỦ, không theo một luật chung ở đây:
+ *
+ *   | Phần            | Khoá           | Cổng bọc                                              |
+ *   |-----------------|----------------|-------------------------------------------------------|
+ *   | Người dùng      | `admin.user`   | cả phần — tuyến đọc khai `RequirePermission`          |
+ *   | Phân quyền      | `admin.role`   | cả phần — cùng lý do                                  |
+ *   | Sơ đồ tổ chức   | `admin.org`    | chỉ nút ghi — tuyến đọc `any-authenticated`           |
+ *   | Danh mục        | `admin.lookup` | chỉ nút ghi — cùng lý do                              |
+ *   | Thời hạn xử lý  | `admin.sla`    | chỉ nút ghi; `GET /sla` đòi khoá, máy chủ tự trả 403  |
+ *   | Thôn/Tổ dân phố | —              | không cổng — phần chỉ xem, tuyến `any-authenticated`  |
+ *
+ * Ẩn cả một phần mà máy chủ vẫn phục vụ là để GIAO DIỆN quyết định điều máy chủ không từ chối —
+ * đúng hình dạng luật 5 cấm #1. Lý lẽ đầy đủ ở `features/cau-hinh/tab-danh-muc.tsx`.
  *
  * BẢO VỆ ĐƯỜNG: `src/proxy.ts` chặn ở phía máy chủ trước khi trang này được dựng — chưa có
  * cookie phiên thì chuyển sang `/dang-nhap`. Nó cố ý KHÔNG kiểm quyền: quyền do dịch vụ kiểm
