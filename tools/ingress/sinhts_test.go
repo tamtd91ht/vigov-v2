@@ -20,10 +20,11 @@ import (
 // TestTepSinhRaKhopVoiHopDong.
 func TestTepTSKhopVoiHopDong(t *testing.T) {
 	root := goc(t)
-	_, muon, err := sinhTuKho(root)
+	tep, err := sinhTuKho(root)
 	if err != nil {
 		t.Fatalf("bộ sinh DỪNG: %v", err)
 	}
+	muon := tep[duongTepTS]
 	co, err := os.ReadFile(filepath.Join(root, duongTepTS))
 	if err != nil {
 		t.Fatalf("đọc %s: %v", duongTepTS, err)
@@ -88,41 +89,81 @@ func docTepTS(t *testing.T) (cacCap [][2]string, kieu []string) {
 	return cacCap, kieu
 }
 
-// TestBangTSKhopLuatIngress — the TS table and ingress.yaml, both read from disk, list the same
-// prefix→service pairs in the same order, excluding the "/" catch-all. Two surfaces, one
-// routing answer.
-func TestBangTSKhopLuatIngress(t *testing.T) {
+// TestBangTSKhopHostDichVuIngress — the TS table and ingress.yaml, both read from disk, name the
+// same set of services: every service the web proxy forwards to has its own API host, and no
+// API host exists for a service the table never routes to. Two surfaces, one list.
+func TestBangTSKhopHostDichVuIngress(t *testing.T) {
 	ts, kieu := docTepTS(t)
 
-	var ing [][2]string
-	dichVu := map[string]bool{}
-	for _, l := range docTepSinh(t).Spec.Rules[0].HTTP.Paths {
-		if l.Path == "/" {
+	dichVuTS := map[string]bool{}
+	for _, c := range ts {
+		dichVuTS[c[1]] = true
+		if c[0] == "/" || strings.HasSuffix(c[0], "/") {
+			t.Errorf("tienTo %q phải không có gạch chéo cuối và không là `/`", c[0])
+		}
+	}
+	var host []string
+	for _, r := range docTepSinh(t).Spec.Rules[1:] {
+		for _, p := range r.HTTP.Paths {
+			host = append(host, p.Backend.Service.Name)
+		}
+	}
+	sort.Strings(host)
+	tsDS := make([]string, 0, len(dichVuTS))
+	for d := range dichVuTS {
+		tsDS = append(tsDS, d)
+	}
+	sort.Strings(tsDS)
+	if strings.Join(host, ",") != strings.Join(tsDS, ",") {
+		t.Errorf("host dịch vụ trong ingress.yaml = %v, dịch vụ trong %s = %v", host, duongTepTS, tsDS)
+	}
+	if strings.Join(kieu, ",") != strings.Join(tsDS, ",") {
+		t.Errorf("DichVuAPI = %v, mong đúng tập dịch vụ có dòng, đã sắp: %v", kieu, tsDS)
+	}
+}
+
+// TestMoiTuyenHopDongCoDungMotDongTS is the prefix-level correspondence the Ingress used to
+// carry: every path of the REST contract is matched by exactly one TS entry (by path SEGMENT,
+// as the proxy matches), and that entry names the owning service. It also checks the FIRST
+// match in file order, so the table is right under a first-match reader as well.
+func TestMoiTuyenHopDongCoDungMotDongTS(t *testing.T) {
+	ts, _ := docTepTS(t)
+	for _, tuyen := range docTuyenHopDong(t) {
+		var khop []int
+		for i, c := range ts {
+			if laTienToDoan(c[0], tuyen.Duong) {
+				khop = append(khop, i)
+			}
+		}
+		if len(khop) != 1 {
+			t.Errorf("tuyến %s (%s) khớp %d dòng của %s, mong đúng 1", tuyen.Duong, tuyen.DichVu, len(khop), duongTepTS)
 			continue
 		}
-		ing = append(ing, [2]string{l.Path, l.Backend.Service.Name})
-		dichVu[l.Backend.Service.Name] = true
-	}
-
-	if len(ts) != len(ing) {
-		t.Fatalf("%s có %d dòng, ingress.yaml có %d luật API", duongTepTS, len(ts), len(ing))
-	}
-	for i := range ts {
-		if ts[i] != ing[i] {
-			t.Errorf("vị trí %d: TS %s → %s, ingress %s → %s", i, ts[i][0], ts[i][1], ing[i][0], ing[i][1])
-		}
-		if ts[i][0] == "/" || strings.HasSuffix(ts[i][0], "/") {
-			t.Errorf("tienTo %q phải không có gạch chéo cuối và không là `/`", ts[i][0])
+		if ts[khop[0]][1] != tuyen.DichVu {
+			t.Errorf("tuyến %s thuộc %s nhưng dòng %s trỏ tới %s", tuyen.Duong, tuyen.DichVu, ts[khop[0]][0], ts[khop[0]][1])
 		}
 	}
-
-	muonKieu := make([]string, 0, len(dichVu))
-	for d := range dichVu {
-		muonKieu = append(muonKieu, d)
+	for _, c := range ts {
+		duoc := false
+		for _, tuyen := range docTuyenHopDong(t) {
+			if laTienToDoan(c[0], tuyen.Duong) && tuyen.DichVu == c[1] {
+				duoc = true
+				break
+			}
+		}
+		if !duoc {
+			t.Errorf("dòng %s → %s không tuyến nào trong %s biện minh — dòng thừa", c[0], c[1], duongHopDong)
+		}
 	}
-	sort.Strings(muonKieu)
-	if strings.Join(kieu, ",") != strings.Join(muonKieu, ",") {
-		t.Errorf("DichVuAPI = %v, mong đúng tập dịch vụ có luật, đã sắp: %v", kieu, muonKieu)
+}
+
+// TestBangTSDaiTruocNgan — the file's ordering promise ("longest-first"), checked.
+func TestBangTSDaiTruocNgan(t *testing.T) {
+	ts, _ := docTepTS(t)
+	for i := 1; i < len(ts); i++ {
+		if len(ts[i][0]) > len(ts[i-1][0]) {
+			t.Errorf("dòng %q đứng SAU %q — bảng phải viết dài-trước-ngắn", ts[i][0], ts[i-1][0])
+		}
 	}
 }
 

@@ -2,23 +2,23 @@
 # lần sinh sau (luật 9, bất biến 8). Sinh lại: `go run ./tools/ingress` (hoặc `make kb`).
 #
 # NGUỒN CHUẨN: kb/20-contracts/openapi.json — chính nó sinh từ khai báo route trong
-# */internal/ (ADR 0014). Thêm một tuyến KHÔNG phải sửa tệp này: khai route trong Go,
-# chạy `make kb`, tệp này đổi theo. Quên sinh lại thì `go test ./tools/ingress` ĐỎ.
-#
-# VÌ SAO KHÔNG CÒN MỘT DÒNG `/api/v1` → identity: dòng ấy đúng 100% vào ngày nó được
-# viết, khi mọi tài nguyên REST đều thuộc identity. Nay hợp đồng có
+# */internal/ (ADR 0014). Dịch vụ nào có tuyến REST thì có một host API; thêm tuyến KHÔNG
+# phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
+# `go test ./tools/ingress` ĐỎ.
 #
 #     94 tuyến của 5 dịch vụ — identity 35 · petitions 30 · finance 16 · documents 7 · comms 6
 #
-# nên dòng gộp ấy đưa mọi tuyến không phải của identity tới identity và trả 404 — 404
-# trên một tuyến hành chính thật. Chủ dự án chốt lối (b), SINH Ingress từ openapi.json,
-# ngày 21/09/2026.
+# MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
+#   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
+#                            dịch vụ chủ theo web-admin/src/lib/api/dinh-tuyen.gen.ts (ADR 0043)
+#   <dịch vụ>.api.vigov.vn → dịch vụ ấy, một luật `/`
+# Bảng tiền tố → dịch vụ vì thế KHÔNG còn là các luật `paths` ở đây; nó chỉ còn là chú
+# giải trên từng host dịch vụ, và là bảng TS kia — cùng một lần phân giải hợp đồng.
 #
-# HOST và TLS KHÔNG nằm ở đây: chúng khác nhau giữa các môi trường, nên overlay vá vào
-# (deploy/overlays/<mt>/ingress-moi-truong.yaml). Bảng định tuyến thì giống nhau ở mọi
-# môi trường nên nó thuộc base — đúng ranh giới base/overlay kho này đang dùng.
+# HOST và TLS của từng môi trường do overlay vá vào (deploy/overlays/<mt>/ingress-moi-truong.yaml,
+# CŨNG SINH RA bởi bộ sinh này). Base mang host của prod.
 #
-# 35 luật định tuyến cho 94 tuyến hợp đồng, + 1 luật bắt hết cho web quản trị.
+# 1 host web + 5 host dịch vụ.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -30,302 +30,91 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "25m"
 spec:
   ingressClassName: nginx
-  # `tls:` do overlay THÊM VÀO — tên secret và danh sách host khác nhau từng môi trường.
+  # `tls:` do overlay THÊM VÀO — tên secret khác nhau từng môi trường.
+  #
+  # THỨ TỰ `rules` CÓ Ý NGHĨA: overlay vá host theo CHỈ SỐ (`/spec/rules/<i>/host`). Chỉ số 0 là
+  # host web; 1..n là host dịch vụ, xếp theo tên. Bản vá overlay `test` host cũ trước khi
+  # `replace`, nên overlay lệch chỉ số là `kustomize build` ĐỔ chứ không vá nhầm host.
   rules:
-    # MỘT quy tắc ký tự đại diện cho MỌI xã. `Host` thật đi nguyên vẹn tới pod —
-    # ingress-nginx giữ nguyên Host mặc định — và `httpx.TenantMiddleware` phân giải nó
-    # thành xã ở rìa ngoài cùng. Host không khớp xã nào ⇒ 404, không bao giờ một xã
-    # mặc định (luật 1, bất biến 3).
+    # HOST WEB — MỘT quy tắc ký tự đại diện cho MỌI xã. `Host` thật đi nguyên vẹn tới pod
+    # (ingress-nginx giữ nguyên Host mặc định) và `httpx.TenantMiddleware` phân giải nó thành
+    # xã ở rìa ngoài cùng. Host không khớp xã nào ⇒ 404, không bao giờ một xã mặc định
+    # (luật 1, bất biến 3). Thêm một xã = thêm DNS + một hàng trong sổ xã của `platform`.
     #
-    # Thêm một xã = thêm một bản ghi DNS + một hàng trong sổ đăng ký của `platform`.
-    # KHÔNG phải sửa tệp này. Đó là lý do nó là ký tự đại diện chứ không phải 200 dòng host.
-    #
-    # ĐÚNG MỘT phần tử trong `rules`, và overlay dựa vào điều đó: bản vá JSON6902 của nó
-    # trỏ vào `/spec/rules/0/host`. `TestOverlayVaDungChiSoLuatDuyNhat` giữ lời hứa ấy.
+    # Nhãn đầu `admin` · `admin-stg` · `api` · `api-stg` · `stg` · `www` khớp ký tự đại diện này
+    # nhưng là nhãn DÀNH RIÊNG: `platform` từ chối gán chúng cho một xã, nên chúng nhận 404.
     - host: "*.vigov.vn"
       http:
-        # THỨ TỰ CÓ Ý NGHĨA, và bản kê này viết dài-trước-ngắn.
-        #
-        # ingress-nginx tự sắp location theo độ dài giảm dần, nên trên controller ấy thứ tự
-        # trong tệp không quyết định kết quả khớp. Bản kê KHÔNG dựa vào đặc tính đó: viết
-        # dài-trước nó cũng đúng dưới một controller lấy khớp ĐẦU TIÊN, và đọc theo đúng
-        # thứ tự một người sẽ suy luận.
-        #
-        # `pathType: Prefix` khớp theo ĐOẠN đường dẫn, không theo ký tự: `/api/v1/roles`
-        # KHÔNG nuốt `/api/v1/role-permissions`. Nhờ đó gom theo tài nguyên là an toàn —
-        # và vì sao gom đúng tới mức TÀI NGUYÊN chứ không hơn: `task-blocs` là identity
-        # trong khi `task-priorities` và `task-types` là petitions. Một tiền tố `task` sẽ
-        # gửi hai tuyến của petitions sang identity.
         paths:
-          # finance — 2 tuyến: /api/v1/capital-plan-categories · /api/v1/capital-plan-categories/{id}
-          - path: /api/v1/capital-plan-categories
-            pathType: Prefix
-            backend:
-              service:
-                name: finance
-                port: { name: rest }
-          # identity — 2 tuyến: /api/v1/residential-unit-types · /api/v1/residential-unit-types/{id}
-          - path: /api/v1/residential-unit-types
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # finance — 2 tuyến: /api/v1/investment-projects · /api/v1/investment-projects/{id}
-          - path: /api/v1/investment-projects
-            pathType: Prefix
-            backend:
-              service:
-                name: finance
-                port: { name: rest }
-          # comms — 1 tuyến: /api/v1/content-categories
-          - path: /api/v1/content-categories
-            pathType: Prefix
-            backend:
-              service:
-                name: comms
-                port: { name: rest }
-          # documents — 3 tuyến: /api/v1/incoming-documents · /api/v1/incoming-documents/{id}
-          #   /api/v1/incoming-documents/{id}/routings
-          - path: /api/v1/incoming-documents
-            pathType: Prefix
-            backend:
-              service:
-                name: documents
-                port: { name: rest }
-          # petitions — 2 tuyến: /api/v1/my-citizen-reports · /api/v1/my-citizen-reports/{maTraCuu}
-          - path: /api/v1/my-citizen-reports
-            pathType: Prefix
-            backend:
-              service:
-                name: petitions
-                port: { name: rest }
-          # documents — 2 tuyến: /api/v1/outgoing-documents · /api/v1/outgoing-documents/{id}
-          - path: /api/v1/outgoing-documents
-            pathType: Prefix
-            backend:
-              service:
-                name: documents
-                port: { name: rest }
-          # finance — 1 tuyến: /api/v1/budget-indicators
-          - path: /api/v1/budget-indicators
-            pathType: Prefix
-            backend:
-              service:
-                name: finance
-                port: { name: rest }
-          # identity — 1 tuyến: /api/v1/residential-units
-          - path: /api/v1/residential-units
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # identity — 2 tuyến: /api/v1/swap-working-days · /api/v1/swap-working-days/{id}
-          - path: /api/v1/swap-working-days
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # identity — 1 tuyến: /api/v1/role-permissions
-          - path: /api/v1/role-permissions
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # petitions — 9 tuyến: /api/v1/citizen-reports · /api/v1/citizen-reports/{maTraCuu}
-          #   /api/v1/citizen-reports/{maTraCuu}/assignment
-          #   /api/v1/citizen-reports/{maTraCuu}/classification
-          #   /api/v1/citizen-reports/{maTraCuu}/closure · /api/v1/citizen-reports/{maTraCuu}/log-entries
-          #   /api/v1/citizen-reports/{maTraCuu}/referral · /api/v1/citizen-reports/{maTraCuu}/rejection
-          #   /api/v1/citizen-reports/{maTraCuu}/status
-          - path: /api/v1/citizen-reports
-            pathType: Prefix
-            backend:
-              service:
-                name: petitions
-                port: { name: rest }
-          # comms — 2 tuyến: /api/v1/map-asset-types · /api/v1/map-asset-types/{id}
-          - path: /api/v1/map-asset-types
-            pathType: Prefix
-            backend:
-              service:
-                name: comms
-                port: { name: rest }
-          # identity — 3 tuyến: /api/v1/public-holidays · /api/v1/public-holidays/defaults
-          #   /api/v1/public-holidays/{id}
-          - path: /api/v1/public-holidays
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # identity — 1 tuyến: /api/v1/staff-directory
-          - path: /api/v1/staff-directory
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # petitions — 2 tuyến: /api/v1/task-priorities · /api/v1/task-priorities/{id}
-          - path: /api/v1/task-priorities
-            pathType: Prefix
-            backend:
-              service:
-                name: petitions
-                port: { name: rest }
-          # finance — 1 tuyến: /api/v1/budget-entries/{id}
-          - path: /api/v1/budget-entries
-            pathType: Prefix
-            backend:
-              service:
-                name: finance
-                port: { name: rest }
-          # documents — 2 tuyến: /api/v1/document-types · /api/v1/document-types/{id}
-          - path: /api/v1/document-types
-            pathType: Prefix
-            backend:
-              service:
-                name: documents
-                port: { name: rest }
-          # comms — 1 tuyến: /api/v1/announcements
-          - path: /api/v1/announcements
-            pathType: Prefix
-            backend:
-              service:
-                name: comms
-                port: { name: rest }
-          # finance — 2 tuyến: /api/v1/budget-sheets · /api/v1/budget-sheets/{id}
-          - path: /api/v1/budget-sheets
-            pathType: Prefix
-            backend:
-              service:
-                name: finance
-                port: { name: rest }
-          # comms — 2 tuyến: /api/v1/content-items · /api/v1/content-items/{id}
-          - path: /api/v1/content-items
-            pathType: Prefix
-            backend:
-              service:
-                name: comms
-                port: { name: rest }
-          # finance — 4 tuyến: /api/v1/disbursements · /api/v1/disbursements/{id}
-          #   /api/v1/disbursements/{id}/confirmation · /api/v1/disbursements/{id}/lockout
-          - path: /api/v1/disbursements
-            pathType: Prefix
-            backend:
-              service:
-                name: finance
-                port: { name: rest }
-          # petitions — 2 tuyến: /api/v1/task-statuses · /api/v1/task-statuses/{code}
-          - path: /api/v1/task-statuses
-            pathType: Prefix
-            backend:
-              service:
-                name: petitions
-                port: { name: rest }
-          # identity — 3 tuyến: /api/v1/working-hours · /api/v1/working-hours/defaults
-          #   /api/v1/working-hours/{id}
-          - path: /api/v1/working-hours
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # finance — 4 tuyến: /api/v1/budget-lines · /api/v1/budget-lines/{id}
-          #   /api/v1/budget-lines/{id}/entries · /api/v1/budget-lines/{id}/headline
-          - path: /api/v1/budget-lines
-            pathType: Prefix
-            backend:
-              service:
-                name: finance
-                port: { name: rest }
-          # identity — 2 tuyến: /api/v1/task-blocs · /api/v1/task-blocs/{id}
-          - path: /api/v1/task-blocs
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # petitions — 2 tuyến: /api/v1/task-types · /api/v1/task-types/{id}
-          - path: /api/v1/task-types
-            pathType: Prefix
-            backend:
-              service:
-                name: petitions
-                port: { name: rest }
-          # identity — 2 tuyến: /api/v1/org-units · /api/v1/org-units/{id}
-          - path: /api/v1/org-units
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # identity — 1 tuyến: /api/v1/communes/current
-          - path: /api/v1/communes
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # petitions — 8 tuyến: /api/v1/meetings · /api/v1/meetings/{id}
-          #   /api/v1/meetings/{id}/conclusions · /api/v1/meetings/{id}/conclusions/{stt}
-          #   /api/v1/meetings/{id}/conclusions/{stt}/no-task-marker
-          #   /api/v1/meetings/{id}/conclusions/{stt}/task · /api/v1/meetings/{id}/conclusions/{stt}/tasks
-          #   /api/v1/meetings/{id}/signature
-          - path: /api/v1/meetings
-            pathType: Prefix
-            backend:
-              service:
-                name: petitions
-                port: { name: rest }
-          # identity — 3 tuyến: /api/v1/sessions · /api/v1/sessions/current · /api/v1/sessions/{sid}
-          - path: /api/v1/sessions
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # identity — 2 tuyến: /api/v1/roles · /api/v1/roles/{id}/permissions
-          - path: /api/v1/roles
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # identity — 9 tuyến: /api/v1/staff · /api/v1/staff/current/password
-          #   /api/v1/staff/searches · /api/v1/staff/{id} · /api/v1/staff/{id}/account
-          #   /api/v1/staff/{id}/lockout · /api/v1/staff/{id}/password · /api/v1/staff/{id}/publication
-          #   /api/v1/staff/{id}/role
-          - path: /api/v1/staff
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # petitions — 5 tuyến: /api/v1/tasks · /api/v1/tasks/{ma} · /api/v1/tasks/{ma}/extensions
-          #   /api/v1/tasks/{ma}/extensions/{deNghiID}/decision · /api/v1/tasks/{ma}/status
-          - path: /api/v1/tasks
-            pathType: Prefix
-            backend:
-              service:
-                name: petitions
-                port: { name: rest }
-          # identity — 3 tuyến: /api/v1/sla · /api/v1/sla/defaults · /api/v1/sla/{id}
-          - path: /api/v1/sla
-            pathType: Prefix
-            backend:
-              service:
-                name: identity
-                port: { name: rest }
-          # BẮT HẾT — web quản trị (Next.js). KHÔNG sinh từ hợp đồng.
-          # Một `/api/v1/<chưa định tuyến>` rơi vào đây và nhận 404 của web: nó KHÔNG tới
-          # một dịch vụ không sở hữu nó. Đó là hướng sai an toàn.
+          # BẮT HẾT — web quản trị (Next.js). KHÔNG sinh từ hợp đồng. `/api/v1/*` cũng tới đây và
+          # web chuyển tiếp; tiền tố lạ nhận 404 JSON, không tới dịch vụ nào (ADR 0043).
           - path: /
             pathType: Prefix
             backend:
               service:
                 name: web-admin
                 port: { name: http }
+    #
+    # comms — 4 tài nguyên: /api/v1/announcements · /api/v1/content-categories
+    #   /api/v1/content-items · /api/v1/map-asset-types
+    - host: "comms.api.vigov.vn"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: comms
+                port: { name: rest }
+    #
+    # documents — 3 tài nguyên: /api/v1/document-types · /api/v1/incoming-documents
+    #   /api/v1/outgoing-documents
+    - host: "documents.api.vigov.vn"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: documents
+                port: { name: rest }
+    #
+    # finance — 7 tài nguyên: /api/v1/budget-entries · /api/v1/budget-indicators
+    #   /api/v1/budget-lines · /api/v1/budget-sheets · /api/v1/capital-plan-categories
+    #   /api/v1/disbursements · /api/v1/investment-projects
+    - host: "finance.api.vigov.vn"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: finance
+                port: { name: rest }
+    #
+    # identity — 14 tài nguyên: /api/v1/communes · /api/v1/org-units · /api/v1/public-holidays
+    #   /api/v1/residential-unit-types · /api/v1/residential-units · /api/v1/role-permissions
+    #   /api/v1/roles · /api/v1/sessions · /api/v1/sla · /api/v1/staff · /api/v1/staff-directory
+    #   /api/v1/swap-working-days · /api/v1/task-blocs · /api/v1/working-hours
+    - host: "identity.api.vigov.vn"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port: { name: rest }
+    #
+    # petitions — 7 tài nguyên: /api/v1/citizen-reports · /api/v1/meetings
+    #   /api/v1/my-citizen-reports · /api/v1/task-priorities · /api/v1/task-statuses
+    #   /api/v1/task-types · /api/v1/tasks
+    - host: "petitions.api.vigov.vn"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: petitions
+                port: { name: rest }

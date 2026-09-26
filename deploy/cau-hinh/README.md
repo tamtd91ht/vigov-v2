@@ -11,7 +11,8 @@ tượng và tên key thì không được đổi** — manifest tham chiếu đ
 | Secret | `bi-mat-platform` | `DATABASE_DSN` · `GRPC_CALLER_KEY` · `SESSION_SIGNING_KEYS` | `platform` |
 | Secret | `bi-mat-identity` · `bi-mat-documents` · `bi-mat-finance` · `bi-mat-petitions` · `bi-mat-comms` | 3 key trên **+ `REDIS_DSN`** | dịch vụ cùng tên |
 | Secret `docker-registry` | `harbor-vigov` | (k8s tự đặt) | cả 7 pod |
-| Secret `tls` | staging: **`vigov-staging-tls`** · prod: **`vigov-wildcard-tls`** | `tls.crt` · `tls.key` | Ingress |
+| Secret `tls` — web | staging: **`vigov-staging-tls`** (`*.stg.vigov.vn`) · prod: **`vigov-wildcard-tls`** (`*.vigov.vn`) | `tls.crt` · `tls.key` | Ingress |
+| Secret `tls` — API | staging: **`vigov-api-staging-tls`** (`*.api-stg.vigov.vn`) · prod: **`vigov-api-wildcard-tls`** (`*.api.vigov.vn`) | `tls.crt` · `tls.key` | Ingress |
 
 `web-admin` không đọc biến nào — không có Secret riêng.
 
@@ -35,12 +36,14 @@ phải trỏ sáu CSDL khác nhau.
 
 ```sh
 NS=vigov-staging          # rồi vigov-prod
-TLS=vigov-staging-tls     # prod: vigov-wildcard-tls
+TLS=vigov-staging-tls           # prod: vigov-wildcard-tls
+TLS_API=vigov-api-staging-tls   # prod: vigov-api-wildcard-tls
 
 kubectl -n $NS create secret docker-registry harbor-vigov \
   --docker-server=harbor.omicrm.services --docker-username='<...>' --docker-password='<...>'
 
-kubectl -n $NS create secret tls $TLS --cert=<fullchain.pem> --key=<privkey.pem>
+kubectl -n $NS create secret tls $TLS     --cert=<fullchain web.pem> --key=<privkey web.pem>
+kubectl -n $NS create secret tls $TLS_API --cert=<fullchain api.pem> --key=<privkey api.pem>
 
 kubectl -n $NS create secret generic bi-mat-platform \
   --from-literal=DATABASE_DSN='<dsn của vigov_platform>' \
@@ -58,7 +61,7 @@ done
 kubectl apply -k deploy/overlays/${NS#vigov-}      # sinh ConfigMap cau-hinh-chung
 ```
 
-**Xanh khi** `kubectl -n $NS get secret` có đủ 8 cái: `harbor-vigov`, Secret TLS, 6 `bi-mat-*`.
+**Xanh khi** `kubectl -n $NS get secret` có đủ 9 cái: `harbor-vigov`, 2 Secret TLS, 6 `bi-mat-*`.
 
 | Thiếu | Triệu chứng |
 |---|---|
@@ -96,3 +99,22 @@ kubectl apply -k deploy/overlays/${NS#vigov-}      # sinh ConfigMap cau-hinh-chu
 | `IDENTITY_ADMIN_SEED_PASSWORD` | không | Secret `bi-mat-identity` — **chỉ `identity`**, key viết gạch dưới đúng như tên biến. Mật khẩu tài khoản `admin` tạo ở lần đăng nhập `admin` đầu tiên của một xã chưa có `admin` (bắt đổi mật khẩu ngay). Trống thì tắt; ngắn hơn 12 ký tự thì tắt và log báo lúc khởi động. **Gỡ key khi mọi xã đã đổi mật khẩu `admin`** |
 
 Vì sao từng quyết định như vậy: `deploy/README.md` mục 3.
+
+## 5. Tên miền — việc của người vận hành
+
+Mô hình bốn dạng host, nhãn dành riêng (`admin` · `admin-stg` · `api` · `api-stg` · `stg` ·
+`www`), vì sao chúng không chồng nhau và bẫy DNS nút trung gian rỗng: **ADR 0046**
+(`kb/10-decisions/0046-quy-hoach-ten-mien-va-quan-tri-dau-tien-cua-xa.md`). Ở đây chỉ có việc phải làm.
+
+| Việc | Ở đâu |
+|---|---|
+| 4 bản ghi DNS wildcard + 4 chứng chỉ wildcard (2 Secret TLS mỗi môi trường, tên ở mục 1) | ngoài kho |
+| Host của Ingress | `deploy/base/mang/ingress.yaml` + `overlays/<mt>/ingress-moi-truong.yaml` — **SINH RA** (`go run ./tools/ingress`). Cụm thật dựng tay trong Rancher (`deploy/README.md` đầu tệp) thì chép host theo hai tệp ấy, không theo trí nhớ |
+| Tên miền của một xã | một hàng `tenant_domain` của `platform` — không bao giờ một nhãn dành riêng, không bao giờ dưới `.api(-stg).vigov.vn` (platform từ chối) |
+
+**Thứ tự đổi tên miền Xã Thăng Bình** — sai thứ tự là xã mất đăng nhập hoặc bước 2 không chạy được:
+
+1. DNS + TLS + Ingress cho `thangbinh-danang.vigov.vn` và `thangbinh-danang.stg.vigov.vn` chạy thật.
+2. Job `vigov-deploy`, việc `doi-ten-mien-thang-binh` (`MT=prod`, `XAC_NHAN=vigov-prod`).
+3. Job `service-platform` (migration 0007). Sau 0007 mọi `UPDATE` dòng `admin.vigov.vn` bị CHECK
+   từ chối, nên bước 2 **tự dừng, không ghi gì** nếu 0007 đã chạy.

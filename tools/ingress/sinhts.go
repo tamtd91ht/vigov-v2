@@ -7,8 +7,14 @@ import (
 )
 
 // duongTepTS is the routing table the admin web reads to reverse-proxy /api/v1/* to the
-// owning Go service. In production the Ingress sends ALL of admin.vigov.vn to web-admin, so
-// this file — not ingress.yaml — is what decides which service answers an admin request.
+// owning Go service. The Ingress sends ALL of <xa>.vigov.vn to web-admin (one "/" rule, owner's
+// domain model of 2026-09-26), so this file — not ingress.yaml — is what decides which service
+// answers an admin request.
+//
+// Its header still says "same resolved rules as ingress.yaml … same longest-first order". Since
+// ingress.yaml carries one host per service instead of path rules that is only true of the
+// comments there; the text is left alone because changing it would change a file web-admin
+// ships, for no routing difference.
 //
 // It is rendered from the SAME resolved []luatIngress as ingress.yaml, never from a second
 // reading of the contract: two resolvers are two answers to "who owns this path", and the day

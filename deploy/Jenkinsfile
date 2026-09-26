@@ -34,10 +34,16 @@ pipeline {
 
   parameters {
     // `nhan-ban-staging` (một lần) đã chạy 25/09/2026 và đã gỡ — xem lịch sử git của tệp này.
-    // `tao-xa-thang-binh` là việc MỘT LẦN (chủ dự án, 26/09/2026): chạy xong thì gỡ bằng một commit.
-    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'tao-xa-thang-binh'],
+    // `tao-xa-thang-binh` là việc MỘT LẦN (chủ dự án, 26/09/2026): ĐÃ CHẠY — nay là lịch sử.
+    // `doi-ten-mien-thang-binh` là việc MỘT LẦN (chủ dự án, 26/09/2026). Hai việc gỡ bằng một commit
+    // khi chủ dự án xác nhận xong.
+    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh'],
            description: 'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
-                        'tao-xa-thang-binh: ghi Xã Thăng Bình + tên miền admin.vigov.vn vào sổ xã (MT=prod)')
+                        'doi-ten-mien-thang-binh: đặt thangbinh-danang.vigov.vn làm tên miền chính của Xã Thăng Bình ' +
+                        '+ thangbinh-danang.stg.vigov.vn (MT=prod; chạy SAU khi DNS/TLS/Ingress của hai host chạy, ' +
+                        'TRƯỚC job service-platform có migration 0007) · ' +
+                        'tao-xa-thang-binh: LỊCH SỬ — đã chạy 26/09/2026; chạy lại sẽ DỪNG ở phép kiểm, và sau ' +
+                        'platform 0007 câu INSERT admin.* của nó bị CHECK từ chối')
     choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
     choice(name: 'DICH_VU',
            choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
@@ -45,7 +51,7 @@ pipeline {
                      'vigov-service-reporting', 'vigov-web-admin'],
            description: 'Chỉ dùng cho xem-log')
     string(name: 'XAC_NHAN', defaultValue: '',
-           description: 'Cho tao-xa-thang-binh: gõ đúng vigov-prod.')
+           description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh: gõ đúng vigov-prod.')
   }
 
   environment {
@@ -68,7 +74,7 @@ pipeline {
           // Một việc đã GỠ khỏi `choices` vẫn tới được đây qua "Rebuild" một lượt cũ (đo được
           // 25/09/2026: `sao-chep-tu-staging` chạy xanh mà không stage nào khớp). Xanh-mà-không-làm-
           // gì là dạng hỏng tệ nhất: người bấm tin là đã xong.
-          if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'tao-xa-thang-binh'])) {
+          if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh'])) {
             error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
                   'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
           }
@@ -144,6 +150,12 @@ pipeline {
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────
+    // LỊCH SỬ — ĐÃ CHẠY 26/09/2026. Giữ nguyên câu SQL làm hồ sơ, KHÔNG sửa. Mô hình tên miền chốt
+    // cùng ngày biến admin.vigov.vn thành cổng quản trị liên xã của nhà cung cấp, không phải một
+    // xã; tên miền của xã nay đặt bằng việc `doi-ten-mien-thang-binh` phía dưới. Chạy lại việc này
+    // thì DỪNG ở phép kiểm đầu (xã đã có); trên một CSDL mới đã có platform 0007 thì câu INSERT
+    // admin.* bị CHECK `tenant_domain_khong_danh_rieng` từ chối — cả hai đều là hỏng-đóng, đúng.
+    //
     // VIỆC MỘT LẦN — onboard Xã Thăng Bình (Thành phố Đà Nẵng) vào sổ xã của `platform`, gắn
     // admin.vigov.vn (chính) và admin-stg.vigov.vn. Chủ dự án chọn 26/09/2026.
     //
@@ -223,6 +235,123 @@ SELECT t.id, t.ten, t.tinh_thanh, t.dang_hoat_dong, d.host, d.la_chinh
               --image=postgres:16-alpine --overrides="$OVR" --quiet < tao-xa.sql
           echo ""
           echo "Xong. Thử lại: https://admin.vigov.vn/dang-nhap"
+        '''
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // VIỆC MỘT LẦN — trỏ Xã Thăng Bình (01M3CS7HHK72V71CGRRJHGR8E8) sang tên miền của mô hình
+    // chủ dự án chốt 26/09/2026: `<xã>.vigov.vn` (prod) · `<xã>.stg.vigov.vn` (staging). Mô hình
+    // + nhãn dành riêng: ADR 0046; việc của người vận hành: deploy/cau-hinh/README.md mục 5.
+    //
+    // THỨ TỰ BẮT BUỘC — sai thứ tự là xã mất đăng nhập hoặc việc này không chạy được:
+    //   1. DNS + TLS + Ingress cho thangbinh-danang.vigov.vn và thangbinh-danang.stg.vigov.vn chạy
+    //      thật (cụm dựng tay trong Rancher — `deploy/base` KHÔNG được áp, nên đây là việc tay).
+    //      Đổi tên miền chính trước khi host mới tới được pod là mọi đường dẫn dựng từ tên miền
+    //      chính (thông báo, liên kết) trỏ vào một địa chỉ chưa ai trả lời.
+    //   2. VIỆC NÀY.
+    //   3. Job `service-platform` với migration 0007. 0007 thêm CHECK `tenant_domain_khong_danh_rieng`
+    //      (NOT VALID): không quét dòng cũ, nhưng MỌI UPDATE dòng admin.vigov.vn bị kiểm lại và bị
+    //      từ chối (23514) — tức câu UPDATE la_chinh dưới đây. Phép kiểm đầu tiên vì thế DỪNG nếu
+    //      ràng buộc ấy đã có: khi đó phải hỏi chủ dự án, không gỡ ràng buộc để chạy cho qua.
+    //
+    // KHÔNG XOÁ hai dòng admin.vigov.vn / admin-stg.vigov.vn. Từ bản platform chặn tên miền dành
+    // riêng, mã của platform từ chối phân giải chúng trước khi đọc bảng, nên chúng thôi có tác
+    // dụng mà vẫn còn làm hồ sơ (luật 7). Gỡ hay giữ là quyết định SAU NÀY của chủ dự án.
+    //
+    // CHỈ THÊM + ĐỔI MỘT CỜ, MỘT GIAO DỊCH, CÓ VẾT: mọi phép kiểm RAISE và không ghi gì; dòng
+    // `audit_log` cùng giao dịch, chủ thể là người bấm job (luật 6). Cách chạy psql và CSDL dùng
+    // chung hai môi trường: như việc `tao-xa-thang-binh` ở trên.
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    stage('Đổi tên miền Thăng Bình') {
+      when { expression { params.HANH_DONG == 'doi-ten-mien-thang-binh' } }
+      steps {
+        script {
+          if (params.MT != 'prod') { error('doi-ten-mien-thang-binh chỉ chạy với MT=prod.') }
+          if (params.XAC_NHAN != 'vigov-prod') {
+            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          }
+          // Tên người bấm đi THẲNG vào câu SQL của dòng vết bên dưới — chỉ nhận ký tự an toàn.
+          if (!(env.NGUOI_BAM ==~ /^[A-Za-z0-9._-]{1,64}$/)) {
+            error("Tên người bấm '${env.NGUOI_BAM}' có ký tự không an toàn cho câu SQL — dừng.")
+          }
+        }
+        writeFile file: 'doi-ten-mien.sql', encoding: 'UTF-8', text: """\\set ON_ERROR_STOP on
+BEGIN;
+DO \$\$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint
+              WHERE conname = 'tenant_domain_khong_danh_rieng' AND conrelid = 'tenant_domain'::regclass) THEN
+    RAISE EXCEPTION 'DUNG: đã triển khai platform 0007 — chạy bước này trước khi triển khai platform. Không ghi gì';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8') THEN
+    RAISE EXCEPTION 'DUNG: xa 01M3CS7HHK72V71CGRRJHGR8E8 chua co trong so xa — khong ghi gi';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM tenant WHERE id = '01M3CS7HHK72V71CGRRJHGR8E8' AND dang_hoat_dong) THEN
+    RAISE EXCEPTION 'DUNG: xa 01M3CS7HHK72V71CGRRJHGR8E8 khong con hoat dong — khong ghi gi';
+  END IF;
+  IF EXISTS (SELECT 1 FROM tenant_domain
+              WHERE host IN ('thangbinh-danang.vigov.vn', 'thangbinh-danang.stg.vigov.vn')
+                AND tenant_id <> '01M3CS7HHK72V71CGRRJHGR8E8') THEN
+    RAISE EXCEPTION 'DUNG: thangbinh-danang.vigov.vn / .stg.vigov.vn da gan cho MOT XA KHAC — khong ghi gi';
+  END IF;
+  IF EXISTS (SELECT 1 FROM tenant_domain
+              WHERE host = 'thangbinh-danang.vigov.vn' AND tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' AND la_chinh) THEN
+    RAISE EXCEPTION 'DUNG: thangbinh-danang.vigov.vn da la ten mien chinh — viec nay da chay, khong ghi gi';
+  END IF;
+END \$\$;
+INSERT INTO audit_log (tenant_id, actor_id, actor_kind, action, subject, at, delta)
+  VALUES ('01M3CS7HHK72V71CGRRJHGR8E8', 'van-hanh:${env.NGUOI_BAM}', 'system', 'doi_ten_mien',
+          'Xã Thăng Bình', now(),
+          jsonb_build_object(
+            'truoc', (SELECT jsonb_agg(jsonb_build_object('host', host, 'la_chinh', la_chinh) ORDER BY host)
+                        FROM tenant_domain WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8'),
+            'chinh_moi', 'thangbinh-danang.vigov.vn',
+            'them', jsonb_build_array('thangbinh-danang.vigov.vn', 'thangbinh-danang.stg.vigov.vn'),
+            'qua', 'jenkins vigov-deploy #${env.BUILD_NUMBER}'));
+-- Hạ cờ chính TRƯỚC khi chèn: chỉ mục duy nhất `tenant_domain_mot_chinh` cho mỗi xã đúng một
+-- dòng la_chinh. Không xoá dòng nào.
+UPDATE tenant_domain SET la_chinh = false
+ WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' AND la_chinh;
+INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES
+  ('thangbinh-danang.vigov.vn',     '01M3CS7HHK72V71CGRRJHGR8E8', true),
+  ('thangbinh-danang.stg.vigov.vn', '01M3CS7HHK72V71CGRRJHGR8E8', false)
+  ON CONFLICT (host) DO NOTHING;
+DO \$\$
+BEGIN
+  IF (SELECT count(*) FROM tenant_domain
+       WHERE host IN ('thangbinh-danang.vigov.vn', 'thangbinh-danang.stg.vigov.vn')
+         AND tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8') <> 2 THEN
+    RAISE EXCEPTION 'DUNG: sau khi ghi, hai ten mien moi khong cung thuoc xa 01M3CS7HHK72V71CGRRJHGR8E8 — quay lui, khong ghi gi';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM tenant_domain
+                  WHERE host = 'thangbinh-danang.vigov.vn' AND tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' AND la_chinh) THEN
+    RAISE EXCEPTION 'DUNG: thangbinh-danang.vigov.vn khong thanh ten mien chinh (dong co san voi la_chinh=false?) — quay lui, khong ghi gi';
+  END IF;
+END \$\$;
+COMMIT;
+SELECT t.id, t.ten, t.dang_hoat_dong, d.host, d.la_chinh
+  FROM tenant t JOIN tenant_domain d ON d.tenant_id = t.id
+ WHERE t.id = '01M3CS7HHK72V71CGRRJHGR8E8'
+ ORDER BY d.host;
+"""
+        sh '''
+          set -eu
+          OVR='{"apiVersion":"v1","spec":{"restartPolicy":"Never",
+                "imagePullSecrets":[{"name":"dockerhub-omicrm"}],
+                "containers":[{"name":"psql","image":"postgres:16-alpine","stdin":true,
+                  "envFrom":[{"secretRef":{"name":"platform-secrets"}}],
+                  "command":["sh","-c","psql \\"$DATABASE_DSN\\" -X -q -v ON_ERROR_STOP=1 -f -"]}]}}'
+          echo "── tên miền của xã và hai host mới (trước khi ghi)"
+          echo "SELECT host, tenant_id, la_chinh FROM tenant_domain WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' OR host IN ('thangbinh-danang.vigov.vn', 'thangbinh-danang.stg.vigov.vn') ORDER BY host;" \
+            | kubectl -n vigov-prod run "vigov-psql-doc-$BUILD_NUMBER" --rm -i --restart=Never \
+                --image=postgres:16-alpine --overrides="$OVR" --quiet
+          echo "── ghi"
+          kubectl -n vigov-prod run "vigov-psql-ghi-$BUILD_NUMBER" --rm -i --restart=Never \
+              --image=postgres:16-alpine --overrides="$OVR" --quiet < doi-ten-mien.sql
+          echo ""
+          echo "Xong. Thử: https://thangbinh-danang.vigov.vn/dang-nhap · https://thangbinh-danang.stg.vigov.vn/dang-nhap"
+          echo "Bước kế: job service-platform (migration 0007)."
         '''
       }
     }

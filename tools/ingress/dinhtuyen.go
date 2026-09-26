@@ -347,26 +347,39 @@ func bangDinhTuyen(tuyens []tuyenHopDong, cong func(string) (string, error)) ([]
 }
 
 // sinhTuKho is the whole pipeline: read the contract from the repository, resolve, render.
-// It returns the CONTENT of both generated files — ingress.yaml and the web-admin routing
-// table — and writes nothing, so the tests can compare them against the files on disk without
-// a temporary directory. Both come from ONE resolved rule list; an error in either render
-// returns neither, so the caller cannot write one file and not the other.
-func sinhTuKho(root string) (yamlRa, tsRa []byte, err error) {
+// It returns the CONTENT of every generated file, keyed by repository-relative path —
+// ingress.yaml, one host/TLS patch per overlay, and the web-admin routing table — and writes
+// nothing, so the tests can compare them against the files on disk without a temporary
+// directory. All come from ONE resolved rule list; an error in any render returns none, so
+// the caller cannot write one file and not the others.
+func sinhTuKho(root string) (map[string][]byte, error) {
 	raw, err := os.ReadFile(filepath.Join(root, duongHopDong))
 	if err != nil {
-		return nil, nil, fmt.Errorf("đọc %s: %w", duongHopDong, err)
+		return nil, fmt.Errorf("đọc %s: %w", duongHopDong, err)
 	}
 	tuyens, err := docHopDong(raw)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	luats, err := bangDinhTuyen(tuyens, congCuaDichVu(root))
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	ts, err := sinhTS(luats)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return sinhYAML(tuyens, luats), ts, nil
+	y, err := sinhYAML(tuyens, luats)
+	if err != nil {
+		return nil, err
+	}
+	ra := map[string][]byte{duongTepSinh: y, duongTepTS: ts}
+	for _, mt := range cacMoiTruong {
+		o, err := sinhOverlay(mt, luats)
+		if err != nil {
+			return nil, err
+		}
+		ra[duongOverlay(mt.Ten)] = o
+	}
+	return ra, nil
 }

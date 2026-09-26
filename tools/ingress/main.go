@@ -39,7 +39,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	yamlRa, tsRa, err := sinhTuKho(root)
+	tep, err := sinhTuKho(root)
 	if err != nil {
 		// The message carries the offending path; the caller has to fix the contract or the
 		// manifests, and the generator must not invent an answer for them.
@@ -47,17 +47,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := ghiCaHai(root, map[string][]byte{duongTepSinh: yamlRa, duongTepTS: tsRa}); err != nil {
+	if err := ghiCaHai(root, tep); err != nil {
 		fmt.Fprintln(os.Stderr, "ingress:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("ingress: đã sinh %s và %s\n", duongTepSinh, duongTepTS)
+	ten := make([]string, 0, len(tep))
+	for t := range tep {
+		ten = append(ten, t)
+	}
+	sort.Strings(ten)
+	for _, t := range ten {
+		fmt.Printf("ingress: đã sinh %s\n", t)
+	}
 }
 
 // ghiCaHai writes every file to a temporary sibling first and renames only once all of them
-// are on disk. The two outputs are two views of one routing table (Ingress and the admin-web
-// proxy); a failed write that left one updated and the other stale would route the same path
-// to two different services depending on which surface the request entered by.
+// are on disk. The outputs are views of one routing table (Ingress, its per-environment host
+// patches, and the admin-web proxy); a failed write that left one updated and another stale
+// would route the same path to two different services depending on which surface the request
+// entered by — or leave an overlay patching host indices base no longer has.
 func ghiCaHai(root string, tep map[string][]byte) error {
 	ten := make([]string, 0, len(tep))
 	for t := range tep {

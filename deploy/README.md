@@ -4,11 +4,13 @@
 
 > ⚠ **CỤM THẬT KHÔNG DỰNG TỪ `base/` + `overlays/` — đo 25/09/2026.** `vigov-staging` được dựng
 > TAY trong Rancher: Deployment `vigov-service-<dịch vụ>` / `vigov-web-admin`, Secret
-> `<dịch vụ>-secrets`, ConfigMap `common-config`, mỗi dịch vụ một Ingress HTTP (`admin.vigov.vn`…).
+> `<dịch vụ>-secrets`, ConfigMap `common-config`, mỗi dịch vụ một Ingress HTTP (đo 25/09 trên
+> `admin.vigov.vn`… — từ 26/09 `admin.vigov.vn` là cổng quản trị liên xã của nhà cung cấp, **không
+> phải một xã**; mô hình tên miền mới ở `deploy/cau-hinh/README.md` mục 5).
 > Chủ dự án chọn **prod = nhân bản staging** (job `vigov-deploy`, việc `nhan-ban-staging` — đã chạy
 > 25/09/2026: 8 Deployment + 8 Service, chưa có Ingress; việc ấy đã gỡ khỏi job), nên
 > job dịch vụ đặt ảnh vào `vigov-service-<dịch vụ>`. Phần lớn sổ tay dưới đây (tên `platform`,
-> `bi-mat-*`, `apply -k`, Ingress `*.vigov.vn` + TLS) mô tả `base/` — **KHÔNG áp nó lên cụm**:
+> `bi-mat-*`, `apply -k`, Ingress `*.vigov.vn` + `<dịch vụ>.api.vigov.vn` + TLS) mô tả `base/` — **KHÔNG áp nó lên cụm**:
 > nó tạo bộ Deployment thứ hai và giành tên miền với Ingress đang chạy. Lệch này là nợ, theo dõi
 > ở sổ `deploy/bo-vigov-deploy-job-dich-vu-tu-dat-anh`.
 
@@ -294,10 +296,10 @@ Bảng tên đối tượng + key: **`deploy/cau-hinh/README.md` mục 1**. Conf
 kustomize sinh kèm hậu tố băm (`cau-hinh-chung-679b259276`) để đổi giá trị là đổi tên, ép pod
 khởi động lại — vì thế không tạo tay.
 
-⚠ **Hai môi trường dùng HAI TÊN Secret TLS khác nhau** —
-`overlays/staging/ingress-moi-truong.yaml:16` và `overlays/prod/ingress-moi-truong.yaml:27`.
-Chép lệnh của prod sang staging là Ingress lên bình thường và **chỉ HTTPS đứt**. Host cũng
-khác: `*.staging.vigov.vn` với `*.vigov.vn`.
+⚠ **Hai môi trường dùng tên Secret TLS KHÁC NHAU, mỗi môi trường HAI cái** (web + API) — khối
+`tls` cuối `overlays/<mt>/ingress-moi-truong.yaml` (tệp sinh ra). Chép lệnh của prod sang staging
+là Ingress lên bình thường và **chỉ HTTPS đứt**. Host cũng khác: `*.stg.vigov.vn` +
+`*.api-stg.vigov.vn` với `*.vigov.vn` + `*.api.vigov.vn`.
 
 ⚠ **KEY PHẢI VIẾT GẠCH DƯỚI, KHÔNG PHẢI GẠCH NGANG — vì manifest dùng `envFrom`.**
 Bảng "một tên, hai cách viết" ở đầu mục này nói key ConfigMap/Secret viết `CÓ-GẠCH-NGANG`, và
@@ -521,7 +523,12 @@ ghi ở đầu `base/mang/ingress.yaml`. Tệp ấy sinh cùng bảng nên khôn
 |---|---|
 | `tools/ingress/` | Bộ sinh. Chạy trong mục `kb` của `Makefile`, **sau** `apidoc` — trước thì nó sinh từ hợp đồng cũ |
 | `base/mang/ingress.yaml` | **SINH RA.** Giống nhau ở mọi môi trường nên nó thuộc `base/` |
-| `overlays/<mt>/ingress-moi-truong.yaml` | Bản vá **JSON6902** cho host + TLS |
+| `overlays/<mt>/ingress-moi-truong.yaml` | **SINH RA.** Bản vá **JSON6902** cho host + TLS: vá host theo chỉ số, mỗi `replace` đi sau một `test` giá trị của base — base lệch chỉ số thì `kustomize build` đổ, không vá nhầm host |
+
+**Từ 26/09/2026** host web `*.vigov.vn` chỉ còn một luật `/` → `web-admin` (web tự chuyển tiếp
+`/api/v1/*`, ADR 0043); mỗi dịch vụ có tuyến REST có một host `<dịch vụ>.api.vigov.vn` → `/`.
+Danh sách dịch vụ lấy từ hợp đồng, không liệt kê tay. Bảng tiền tố → dịch vụ nay chỉ còn ở
+`web-admin/src/lib/api/dinh-tuyen.gen.ts` (và chú giải trong `ingress.yaml`).
 
 **Vì sao là JSON6902 chứ không phải một `Ingress` đầy đủ trong overlay:** `spec.rules` là danh
 sách không có khoá trộn, nên một strategic-merge patch chỉ cần *nhắc tới* `rules` là **thay cả

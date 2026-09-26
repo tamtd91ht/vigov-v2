@@ -1,16 +1,59 @@
-# Phần MÔI TRƯỜNG của Ingress — xem chú giải đầy đủ ở
-# `deploy/overlays/prod/ingress-moi-truong.yaml`. Bảng định tuyến SINH ra ở
-# `deploy/base/mang/ingress.yaml`, giống hệt nhau ở hai môi trường; chỉ host và TLS khác.
+# TỆP NÀY ĐƯỢC SINH RA bởi tools/ingress (`go run ./tools/ingress`, hoặc `make kb`). KHÔNG SỬA
+# TAY. Phần MÔI TRƯỜNG `staging` của Ingress — host và TLS, và CHỈ hai thứ ấy. Bảng định
+# tuyến ở `deploy/base/mang/ingress.yaml`, giống nhau ở mọi môi trường.
 #
-# Host staging có THÊM MỘT NHÃN (`*.staging.vigov.vn`), và đó không phải chi tiết trang trí:
-# `*.vigov.vn` chỉ khớp ĐÚNG MỘT nhãn, nên một xã trên staging không bao giờ rơi vào quy tắc
-# của prod và ngược lại.
+# VÌ SAO LÀ BẢN VÁ JSON6902 CHỨ KHÔNG PHẢI MỘT `Ingress` ĐẦY ĐỦ: `spec.rules` là danh sách KHÔNG
+# có khoá trộn, nên một strategic-merge patch chỉ cần NHẮC TỚI `rules` là THAY CẢ DANH SÁCH —
+# và kustomize không kêu một tiếng. JSON6902 chạm đúng từng trường `host`.
+#
+# Mỗi `replace` đi sau một `test` trên giá trị của base: base sinh lại với một dịch vụ mới làm
+# lệch chỉ số thì `kustomize build` ĐỔ, thay vì vá nhầm host của dịch vụ bên cạnh.
+#
+# Host web `*.stg.vigov.vn` và host API `*.api-stg.vigov.vn` — ký tự đại diện khớp ĐÚNG MỘT nhãn, nên
+# không host nào của môi trường này rơi vào quy tắc của môi trường khác.
+- op: test
+  path: /spec/rules/0/host
+  value: "*.vigov.vn"
 - op: replace
   path: /spec/rules/0/host
-  value: "*.staging.vigov.vn"
+  value: "*.stg.vigov.vn"
+- op: test
+  path: /spec/rules/1/host
+  value: "comms.api.vigov.vn"
+- op: replace
+  path: /spec/rules/1/host
+  value: "comms.api-stg.vigov.vn"
+- op: test
+  path: /spec/rules/2/host
+  value: "documents.api.vigov.vn"
+- op: replace
+  path: /spec/rules/2/host
+  value: "documents.api-stg.vigov.vn"
+- op: test
+  path: /spec/rules/3/host
+  value: "finance.api.vigov.vn"
+- op: replace
+  path: /spec/rules/3/host
+  value: "finance.api-stg.vigov.vn"
+- op: test
+  path: /spec/rules/4/host
+  value: "identity.api.vigov.vn"
+- op: replace
+  path: /spec/rules/4/host
+  value: "identity.api-stg.vigov.vn"
+- op: test
+  path: /spec/rules/5/host
+  value: "petitions.api.vigov.vn"
+- op: replace
+  path: /spec/rules/5/host
+  value: "petitions.api-stg.vigov.vn"
 
+# `add` chứ không `replace`: base cố ý KHÔNG khai `tls`, và `replace` đổ khi đường dẫn chưa có.
+# Hai Secret TLS tạo NGOÀI kho này — KHÔNG BAO GIỜ commit khoá. Tên: deploy/cau-hinh/README.md.
 - op: add
   path: /spec/tls
   value:
-    - hosts: ["*.staging.vigov.vn"]
+    - hosts: ["*.stg.vigov.vn"]
       secretName: vigov-staging-tls
+    - hosts: ["*.api-stg.vigov.vn"]
+      secretName: vigov-api-staging-tls
