@@ -22,6 +22,44 @@
 //
 // MÁY CHỦ BUILD CẦN: kubectl. Stage đầu kiểm.
 
+// Hàm shell `chay_psql <tên pod> <tệp .sql>` dùng chung cho các việc một lần ghi vào CSDL của
+// `platform`. Dán vào ĐẦU khối sh của stage: sh(CHAY_PSQL + '''...''').
+def CHAY_PSQL = '''
+          set -eu
+          MAU='{"apiVersion":"v1","spec":{"restartPolicy":"Never",
+                "imagePullSecrets":[{"name":"dockerhub-omicrm"}],
+                "containers":[{"name":"psql","image":"postgres:16-alpine",
+                  "envFrom":[{"secretRef":{"name":"platform-secrets"}}],
+                  "env":[{"name":"SQL_B64","value":"@SQL@"}],
+                  "command":["sh","-c","echo \\"$SQL_B64\\" | base64 -d | psql \\"$DATABASE_DSN\\" -X -q -v ON_ERROR_STOP=1 -f -"]}]}}'
+          # Lượt #17 và #18 (26/09/2026) chết ở "timed out waiting for the condition" dù pod đã
+          # Started ngay giây đầu (image có sẵn trên máy): `kubectl run -i` KHÔNG GẮN ĐƯỢC vào pod,
+          # psql ngồi đợi stdin tới khi bị giết. Nên bỏ stdin/attach: câu SQL vào pod qua biến môi
+          # trường (base64 — chỉ [A-Za-z0-9+/=], nhúng vào JSON an toàn; SQL này không chứa bí mật),
+          # pod tự chạy tới xong, job hỏi pha bằng `get` rồi đọc `logs`. Chỉ cần quyền
+          # create/get/delete pod + đọc log — không cần attach, không cần watch.
+          chay_psql() {
+            ten="$1"
+            tep="$2"
+            OVR=$(printf '%s' "$MAU" | sed "s|@SQL@|$(base64 -w0 "$tep")|")
+            kubectl -n vigov-prod run "$ten" --restart=Never \
+                --image=postgres:16-alpine --overrides="$OVR" --quiet
+            pha=""; i=0
+            while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
+              pha=$(kubectl -n vigov-prod get pod "$ten" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              case "$pha" in Succeeded|Failed) break ;; esac
+              sleep 5; i=$((i+1))
+            done
+            kubectl -n vigov-prod logs "$ten" 2>&1 || true
+            if [ "$pha" != "Succeeded" ]; then
+              echo "── pod $ten kết thúc ở pha '$pha' — sự kiện của pod:"
+              kubectl -n vigov-prod describe pod "$ten" 2>/dev/null | sed -n '/^Events:/,$p' || true
+            fi
+            kubectl -n vigov-prod delete pod "$ten" --ignore-not-found --wait=false || true
+            [ "$pha" = "Succeeded" ]
+          }
+'''
+
 pipeline {
   agent any
 
@@ -34,7 +72,8 @@ pipeline {
 
   parameters {
     // `nhan-ban-staging` (một lần) đã chạy 25/09/2026 và đã gỡ — xem lịch sử git của tệp này.
-    // `tao-xa-thang-binh` là việc MỘT LẦN (chủ dự án, 26/09/2026): ĐÃ CHẠY — nay là lịch sử.
+    // `tao-xa-thang-binh` là việc MỘT LẦN (chủ dự án, 26/09/2026): CHƯA GHI ĐƯỢC tới lượt #20 —
+    // chạy nó TRƯỚC `doi-ten-mien-thang-binh`.
     // `doi-ten-mien-thang-binh` là việc MỘT LẦN (chủ dự án, 26/09/2026). Hai việc gỡ bằng một commit
     // khi chủ dự án xác nhận xong.
     choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh'],
@@ -150,11 +189,14 @@ pipeline {
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────
-    // LỊCH SỬ — ĐÃ CHẠY 26/09/2026. Giữ nguyên câu SQL làm hồ sơ, KHÔNG sửa. Mô hình tên miền chốt
-    // cùng ngày biến admin.vigov.vn thành cổng quản trị liên xã của nhà cung cấp, không phải một
-    // xã; tên miền của xã nay đặt bằng việc `doi-ten-mien-thang-binh` phía dưới. Chạy lại việc này
-    // thì DỪNG ở phép kiểm đầu (xã đã có); trên một CSDL mới đã có platform 0007 thì câu INSERT
-    // admin.* bị CHECK `tenant_domain_khong_danh_rieng` từ chối — cả hai đều là hỏng-đóng, đúng.
+    // CHƯA TỪNG GHI ĐƯỢC — đo lượt #20 (26/09/2026): sổ xã của vigov_platform trống, không một
+    // dòng vết `tao_xa`. Lượt trước "chạy" bằng `kubectl run -i`, cách đã treo ở #17/#18, nên
+    // không ghi gì. Nay chạy qua `chay_psql`. Câu SQL giữ nguyên, KHÔNG sửa: nó gắn admin.vigov.vn
+    // tạm thời, và việc `doi-ten-mien-thang-binh` chạy NGAY SAU gỡ đi và đặt tên miền của xã
+    // (mô hình chốt cùng ngày: admin.vigov.vn là cổng liên xã của nhà cung cấp, không phải một
+    // xã). Hai dòng vết `tao_xa` + `doi_ten_mien` kể lại đủ. Chạy lại khi xã đã có thì DỪNG ở phép
+    // kiểm đầu; trên CSDL đã có platform 0007 thì INSERT admin.* bị CHECK
+    // `tenant_domain_khong_danh_rieng` từ chối — cả hai đều là hỏng-đóng, đúng.
     //
     // VIỆC MỘT LẦN — onboard Xã Thăng Bình (Thành phố Đà Nẵng) vào sổ xã của `platform`, gắn
     // admin.vigov.vn (chính) và admin-stg.vigov.vn. Chủ dự án chọn 26/09/2026.
@@ -171,7 +213,7 @@ pipeline {
     //
     // CHẠY Ở ĐÂU: pod `platform` là distroless (không shell, không psql), nên job dựng một pod
     // `postgres:16-alpine` sống một lượt, đọc DATABASE_DSN từ `platform-secrets` (envFrom — DSN
-    // không đi qua log hay tham số). Pod tự xoá khi xong (`--rm`).
+    // không đi qua log hay tham số). `chay_psql` xoá pod khi xong.
     //
     // Staging và prod đang DÙNG CHUNG CSDL (Secret chép nguyên 25/09/2026), nên một lượt ghi
     // cho cả hai môi trường.
@@ -219,23 +261,15 @@ SELECT t.id, t.ten, t.tinh_thanh, t.dang_hoat_dong, d.host, d.la_chinh
   FROM tenant t JOIN tenant_domain d ON d.tenant_id = t.id
  WHERE t.id = '01M3CS7HHK72V71CGRRJHGR8E8';
 """
-        sh '''
-          set -eu
+        sh(CHAY_PSQL + '''
           echo "── các xã đang có trong sổ (trước khi ghi)"
-          OVR='{"apiVersion":"v1","spec":{"restartPolicy":"Never",
-                "imagePullSecrets":[{"name":"dockerhub-omicrm"}],
-                "containers":[{"name":"psql","image":"postgres:16-alpine","stdin":true,
-                  "envFrom":[{"secretRef":{"name":"platform-secrets"}}],
-                  "command":["sh","-c","psql \\"$DATABASE_DSN\\" -X -q -v ON_ERROR_STOP=1 -f -"]}]}}'
-          echo "SELECT id, ten, tinh_thanh, dang_hoat_dong FROM tenant ORDER BY tao_luc; SELECT host, tenant_id, la_chinh FROM tenant_domain ORDER BY host;" \
-            | kubectl -n vigov-prod run "vigov-psql-doc-$BUILD_NUMBER" --rm -i --restart=Never \
-                --image=postgres:16-alpine --overrides="$OVR" --quiet
+          echo "SELECT id, ten, tinh_thanh, dang_hoat_dong FROM tenant ORDER BY tao_luc; SELECT host, tenant_id, la_chinh FROM tenant_domain ORDER BY host;" > doc-xa.sql
+          chay_psql "vigov-psql-doc-$BUILD_NUMBER" doc-xa.sql
           echo "── ghi"
-          kubectl -n vigov-prod run "vigov-psql-ghi-$BUILD_NUMBER" --rm -i --restart=Never \
-              --image=postgres:16-alpine --overrides="$OVR" --quiet < tao-xa.sql
+          chay_psql "vigov-psql-ghi-$BUILD_NUMBER" tao-xa.sql
           echo ""
-          echo "Xong. Thử lại: https://admin.vigov.vn/dang-nhap"
-        '''
+          echo "Xong. Bước kế: chạy lại job này với HANH_DONG=doi-ten-mien-thang-binh."
+        ''')
       }
     }
 
@@ -347,40 +381,7 @@ SELECT t.id, t.ten, t.dang_hoat_dong, d.host, d.la_chinh
  WHERE t.id = '01M3CS7HHK72V71CGRRJHGR8E8'
  ORDER BY d.host;
 """
-        sh '''
-          set -eu
-          MAU='{"apiVersion":"v1","spec":{"restartPolicy":"Never",
-                "imagePullSecrets":[{"name":"dockerhub-omicrm"}],
-                "containers":[{"name":"psql","image":"postgres:16-alpine",
-                  "envFrom":[{"secretRef":{"name":"platform-secrets"}}],
-                  "env":[{"name":"SQL_B64","value":"@SQL@"}],
-                  "command":["sh","-c","echo \\"$SQL_B64\\" | base64 -d | psql \\"$DATABASE_DSN\\" -X -q -v ON_ERROR_STOP=1 -f -"]}]}}'
-          # Lượt #17 và #18 (26/09/2026) chết ở "timed out waiting for the condition" dù pod đã
-          # Started ngay giây đầu (image có sẵn trên máy): `kubectl run -i` KHÔNG GẮN ĐƯỢC vào pod,
-          # psql ngồi đợi stdin tới khi bị giết. Nên bỏ stdin/attach: câu SQL vào pod qua biến môi
-          # trường (base64 — chỉ [A-Za-z0-9+/=], nhúng vào JSON an toàn; SQL này không chứa bí mật),
-          # pod tự chạy tới xong, job hỏi pha bằng `get` rồi đọc `logs`. Chỉ cần quyền
-          # create/get/delete pod + đọc log — không cần attach, không cần watch.
-          chay_psql() {
-            ten="$1"
-            tep="$2"
-            OVR=$(printf '%s' "$MAU" | sed "s|@SQL@|$(base64 -w0 "$tep")|")
-            kubectl -n vigov-prod run "$ten" --restart=Never \
-                --image=postgres:16-alpine --overrides="$OVR" --quiet
-            pha=""; i=0
-            while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
-              pha=$(kubectl -n vigov-prod get pod "$ten" -o jsonpath='{.status.phase}' 2>/dev/null || true)
-              case "$pha" in Succeeded|Failed) break ;; esac
-              sleep 5; i=$((i+1))
-            done
-            kubectl -n vigov-prod logs "$ten" 2>&1 || true
-            if [ "$pha" != "Succeeded" ]; then
-              echo "── pod $ten kết thúc ở pha '$pha' — sự kiện của pod:"
-              kubectl -n vigov-prod describe pod "$ten" 2>/dev/null | sed -n '/^Events:/,$p' || true
-            fi
-            kubectl -n vigov-prod delete pod "$ten" --ignore-not-found --wait=false || true
-            [ "$pha" = "Succeeded" ]
-          }
+        sh(CHAY_PSQL + '''
           echo "── tên miền của xã và hai host mới (trước khi ghi)"
           # Lượt #19: phép kiểm báo xã chưa có trong sổ dù `tao-xa-thang-binh` được ghi là đã chạy.
           # Đọc TOÀN BỘ sổ xã + CSDL đang nói chuyện + vết tao_xa, để biết xã thiếu thật hay DSN
@@ -397,7 +398,7 @@ SQL
           echo ""
           echo "Xong. Thử: https://thangbinh-danang.vigov.vn/dang-nhap · https://thangbinh-danang.stg.vigov.vn/dang-nhap"
           echo "Bước kế: job service-platform (migration 0007)."
-        '''
+        ''')
       }
     }
 
