@@ -282,14 +282,21 @@ export function timCanBo(
  *
  * `tuKhoa === null` là "không tìm" — không phải chuỗi rỗng, vì tuyến tìm từ chối chữ rỗng (400):
  * một lần tìm không chữ đã có tuyến của nó, và đó là danh sách.
+ *
+ * `sort` / `order` CHỈ ĐI NHÁNH GET. Hợp đồng của tuyến tìm không có hai trường ấy — kết quả tìm
+ * luôn theo mã tăng dần (`can_bo_tim.go`) — nên màn hình nào truyền chúng phải tự nói ra điều đó
+ * khi đang tìm (tab Người dùng của Cấu hình làm thế), chứ không để một mũi tên sắp xếp nói dối.
+ * Vắng thì máy chủ áp mặc định của chính nó; không giữ bản sao nào ở đây.
  */
 export function docTrangDanhBa(
   tuKhoa: TuKhoaHopLe | null,
-  thamSo: LocCanBo & { cursor?: string | null } = {},
+  thamSo: LocCanBo & { cursor?: string | null; sort?: KhoaSapXep; order?: ChieuSapXep } = {},
 ): Promise<KetQua<page_Result_identity_canBoTomTat>> {
-  // KHÔNG TRUYỀN `limit`, `sort`, `order`: để máy chủ áp mặc định của chính nó.
+  // KHÔNG TRUYỀN `limit`: để máy chủ áp mặc định của chính nó.
   const loc = { boPhan: thamSo.boPhan, congKhai: thamSo.congKhai, cursor: thamSo.cursor };
-  return tuKhoa === null ? layDanhSachCanBo(loc) : timCanBo(tuKhoa, loc);
+  return tuKhoa === null
+    ? layDanhSachCanBo({ ...loc, sort: thamSo.sort, order: thamSo.order })
+    : timCanBo(tuKhoa, loc);
 }
 
 /**

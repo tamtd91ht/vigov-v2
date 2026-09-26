@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import {
   BieuMauGhiCanBo,
@@ -28,14 +28,22 @@ import {
 import {
   KHOA_SAP_XEP,
   datKhoaCanBo,
+  docTrangDanhBa,
   doiVaiTroCanBo,
   layChiTietCanBo,
-  layDanhSachCanBo,
   suaCanBo,
   themCanBo,
   type ChieuSapXep,
   type KhoaSapXep,
 } from "@/lib/api/can-bo";
+import {
+  GOI_Y_O_TIM,
+  NUT_TIM,
+  ketQuaGuiTim,
+  maBoPhanLoc,
+  type LocDanhBa,
+} from "@/features/danh-ba/loc-danh-ba";
+import { KHONG_KHOP_LOC } from "@/features/danh-ba/nhan-danh-ba";
 import { docDanhMucDanhBa, type DanhMucDanhBa } from "@/lib/api/danh-muc";
 import type { identity_canBoTomTat, page_Result_identity_canBoTomTat } from "@/lib/api/schema.gen";
 import { capTaiKhoan, datLaiMatKhau } from "@/lib/api/tai-khoan";
@@ -70,8 +78,9 @@ import { bangTraTuKetQua, traTen, type BangTraDanhMuc, type KetTra } from "./tra
  * Bảng danh bạ cán bộ — `docs/ui-ux/14-cau-hinh.md §3`, tab "Người dùng".
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * MÀN HÌNH NÀY VẪN ÍT HƠN ĐẶC TẢ, VÀ ĐÓ LÀ CHỦ Ý. Hợp đồng REST phục vụ màn hình này bằng mười một
- * tuyến: bốn tuyến đọc (`GET /api/v1/staff`, `GET /api/v1/staff/{id}`, và hai danh mục của xã
+ * MÀN HÌNH NÀY VẪN ÍT HƠN ĐẶC TẢ, VÀ ĐÓ LÀ CHỦ Ý. Hợp đồng REST phục vụ màn hình này bằng mười hai
+ * tuyến: năm tuyến đọc (`GET /api/v1/staff`, `POST /api/v1/staff/searches` — tìm theo chữ, chữ đi
+ * trong thân —, `GET /api/v1/staff/{id}`, và hai danh mục của xã
  * `GET /api/v1/org-units` · `GET /api/v1/roles`) và **bảy tuyến ghi** hạ cánh 22/09/2026 —
  * `POST /staff`, `PATCH /staff/{id}`, `POST`/`DELETE /staff/{id}/lockout`, `PUT /staff/{id}/role`,
  * `POST /staff/{id}/account`, `PUT /staff/{id}/password`. Mỗi thứ đặc tả vẽ mà ở đây không có đều
@@ -106,6 +115,14 @@ export function DanhBaCanBo() {
   const [khoaSapXep, datKhoaSapXep] = useState<KhoaSapXep>("code");
   const [chieu, datChieu] = useState<ChieuSapXep>("asc");
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
+  /**
+   * Bộ lọc đang ÁP DỤNG — chữ tìm đã chuẩn hoá và id bộ phận. Không phải thứ đang gõ dở trong ô.
+   *
+   * CHỮ TÌM SỐNG Ở ĐÂY VÀ CHỈ Ở ĐÂY: state của component, chết cùng component. Không URL, không
+   * `searchParams`, không `localStorage`, không khoá bộ đệm — nó thường là họ tên hay số điện thoại
+   * (luật 3, cấm #4). Nó rời trình duyệt đúng một đường: thân `POST /api/v1/staff/searches`.
+   */
+  const [loc, datLoc] = useState<LocNguoiDung>(LOC_DAU);
   const [trangThai, datTrangThai] = useState<TrangThaiTrang>({ pha: "dangTai" });
   const [chiTiet, datChiTiet] = useState<TrangThaiChiTiet | null>(null);
   /** `null` là chưa đọc xong. Hai danh mục của xã, đọc MỘT lần cho cả màn hình — xem dưới. */
@@ -200,7 +217,16 @@ export function DanhBaCanBo() {
 
     // Không truyền `limit`: để máy chủ áp mặc định của chính nó (20). Giữ một bản sao của con
     // số ấy ở client là giữ một bản sẽ trôi.
-    layDanhSachCanBo({ sort: khoaSapXep, order: chieu, cursor: nganXep.hienTai }).then((ketQua) => {
+    //
+    // MỘT chỗ rẽ GET hay POST, và nó ở `docTrangDanhBa` — cùng hàm màn `/danh-ba` dùng. Có chữ tìm
+    // thì chữ, bộ phận và con trỏ đi trong thân POST; `sort`/`order` chỉ đi nhánh GET, vì tuyến tìm
+    // không nhận chúng (xem `ThanhSapXep` cho câu nói điều ấy ra màn hình).
+    docTrangDanhBa(loc.tuKhoa, {
+      boPhan: loc.boPhan,
+      cursor: nganXep.hienTai,
+      sort: khoaSapXep,
+      order: chieu,
+    }).then((ketQua) => {
       if (bo) return;
       datTrangThai(
         ketQua.ok ? { pha: "xong", trang: ketQua.duLieu } : { pha: "loi", thongBao: ketQua.thongBao },
@@ -210,7 +236,7 @@ export function DanhBaCanBo() {
     return () => {
       bo = true;
     };
-  }, [khoaSapXep, chieu, nganXep, lanDoc]);
+  }, [khoaSapXep, chieu, nganXep, loc, lanDoc]);
 
   /**
    * Chuyển trang. `dangTai` được đặt Ở ĐÂY, trong sự kiện bấm, chứ không trong thân effect:
@@ -252,6 +278,28 @@ export function DanhBaCanBo() {
     },
     [khoaSapXep, diToiTrang],
   );
+
+  /**
+   * Đổi chữ tìm hoặc bộ phận là VỀ TRANG ĐẦU, luôn luôn — cùng lý do với `doiSapXep`, và nặng hơn:
+   * con trỏ của trang 3 thuộc về truy vấn cũ, gửi nó kèm bộ lọc mới thì máy chủ hoặc từ chối, hoặc
+   * trả một trang giữa chừng của truy vấn mới và cán bộ không thấy những người đứng trước con trỏ.
+   *
+   * KHÔNG đụng `khoaSapXep`/`chieu`: bỏ tìm thì danh sách quay về đúng cách sắp xếp đang chọn.
+   */
+  const doiLoc = useCallback(
+    (doi: Partial<LocNguoiDung>) => {
+      datLoc((cu) => ({ ...cu, ...doi }));
+      diToiTrang(TRANG_DAU);
+    },
+    [diToiTrang],
+  );
+
+  const dangTim = loc.tuKhoa !== null;
+  // Thứ tự THẬT của trang đang hiện. Khi đang tìm, máy chủ luôn trả theo mã tăng dần
+  // (`service-identity/internal/http/can_bo_tim.go:40`), bất kể khoá đang chọn — nên chú thích
+  // bảng và `aria-sort` phải đọc từ đây, không từ state.
+  const khoaHien: KhoaSapXep = dangTim ? "code" : khoaSapXep;
+  const chieuHien: ChieuSapXep = dangTim ? "asc" : chieu;
 
   /**
    * Mở khối chi tiết của một cán bộ.
@@ -484,8 +532,14 @@ export function DanhBaCanBo() {
       {/*
         ĐẶC TẢ CÓ, Ở ĐÂY KHÔNG — và mỗi dòng nói luôn cái gì mở khoá nó:
 
-          · Ô tìm và bộ lọc theo bộ phận: tuyến đã có — `POST /api/v1/staff/searches` nhận chữ
-            tìm và bộ lọc (`lib/api/can-bo.ts`); ô tìm và bộ lọc của tab này đang được dựng.
+          · Ô tìm và bộ lọc theo bộ phận: ĐÃ DỰNG (26/09/2026) — `HangLocNguoiDung` dưới đây, đi
+            qua `docTrangDanhBa` như màn `/danh-ba`. Chữ gợi ý KHÔNG theo nguyên văn đặc tả
+            ("Tìm theo tên, thư điện tử, bộ phận…"): máy chủ tìm trên họ tên, chức danh và hai số
+            điện thoại (`store/can_bo_danh_sach.go`, `menhDeLocCanBo`), KHÔNG trên thư điện tử;
+            bộ phận là ô chọn riêng. Hứa tìm theo thư điện tử là để cán bộ gõ một địa chỉ, thấy
+            danh sách rỗng, và kết luận người đó không có trong hệ thống.
+          · Sắp xếp khi đang tìm: tuyến tìm không nhận `sort`/`order`, nên thanh sắp xếp nói ra
+            điều ấy thay vì hiện mũi tên không có tác dụng (`ThanhSapXep`).
           · Bộ lọc theo trạng thái (đang hoạt động / đã khoá): `LocCanBo` chỉ có bộ phận và công
             khai — hợp đồng chưa có tham số trạng thái.
           · `⬆ Nhập từ Excel` và `⬇ Xuất Excel`: không có tuyến nào trong hợp đồng. Bản xuất còn
@@ -557,7 +611,9 @@ export function DanhBaCanBo() {
         />
       )}
 
-      <ThanhSapXep khoa={khoaSapXep} chieu={chieu} doiSapXep={doiSapXep} />
+      <HangLocNguoiDung loc={loc} boPhan={mucBoPhan} doiLoc={doiLoc} />
+
+      <ThanhSapXep khoa={khoaSapXep} chieu={chieu} doiSapXep={dangTim ? null : doiSapXep} />
 
       {trangThai.pha === "dangTai" && <p role="status">Đang tải danh sách…</p>}
 
@@ -576,10 +632,12 @@ export function DanhBaCanBo() {
       {trangThai.pha === "xong" && trangThai.trang.items.length === 0 && (
         // TRẠNG THÁI RỖNG, KHÔNG PHẢI TRẠNG THÁI LỖI. Một xã vừa onboard có danh bạ rỗng thật;
         // máy chủ trả `items: []` chứ không bao giờ trả `null`. Câu chữ vì vậy phải nói rõ là
-        // "chưa có ai", để không ai đi tìm lỗi mạng ở một hệ thống đang chạy đúng.
+        // "chưa có ai", để không ai đi tìm lỗi mạng ở một hệ thống đang chạy đúng. Và khi đang
+        // tìm hay lọc thì câu ấy là SAI: "không ai khớp" không phải "xã chưa có ai".
         <p className="trang-thai-rong">
-          Đơn vị chưa có cán bộ nào trong danh bạ. Khi cán bộ được thêm vào, danh sách sẽ hiện ở
-          đây.
+          {loc.tuKhoa !== null || loc.boPhan !== ""
+            ? KHONG_KHOP_LOC
+            : "Đơn vị chưa có cán bộ nào trong danh bạ. Khi cán bộ được thêm vào, danh sách sẽ hiện ở đây."}
         </p>
       )}
 
@@ -600,9 +658,9 @@ export function DanhBaCanBo() {
           <BaoLoiDanhMuc nhan="Danh mục vai trò" bang={traVaiTro} />
           <BangCanBo
             danhSach={trangThai.trang.items}
-            khoa={khoaSapXep}
-            chieu={chieu}
-            doiSapXep={doiSapXep}
+            khoa={khoaHien}
+            chieu={chieuHien}
+            doiSapXep={dangTim ? null : doiSapXep}
             thaoTac={thaoTac}
             idDangMo={chiTiet?.id ?? null}
             traBoPhan={traBoPhan}
@@ -684,16 +742,24 @@ function lopNhanDanhMuc(ket: KetTra): string | undefined {
  * ngang, nên một nút nằm trong ô tiêu đề cột có thể đang ở ngoài khung nhìn.
  *
  * CHỈ HAI KHOÁ, và đó là toàn bộ những gì máy chủ nhận (xem `KHOA_SAP_XEP`).
+ *
+ * `doiSapXep === null` LÀ ĐANG TÌM: tuyến tìm không có tham số sắp xếp và luôn trả theo mã tăng
+ * dần, nên thanh này NÓI RA điều ấy thay vì vẽ hai nút bấm vào không có gì xảy ra — hay tệ hơn,
+ * một mũi tên "Ngày tạo ↓" nằm trên một bảng đang xếp theo mã. Không dùng nút `disabled`: nhiều
+ * trình đọc màn hình bỏ qua nút bị vô hiệu, và người dùng ấy không biết vì sao không có gì để bấm.
  */
-function ThanhSapXep({
+export function ThanhSapXep({
   khoa,
   chieu,
   doiSapXep,
 }: {
   khoa: KhoaSapXep;
   chieu: ChieuSapXep;
-  doiSapXep: (khoa: KhoaSapXep) => void;
+  doiSapXep: ((khoa: KhoaSapXep) => void) | null;
 }) {
+  if (doiSapXep === null) {
+    return <p className="ghi-chu">{CAU_SAP_XEP_KHI_TIM}</p>;
+  }
   return (
     <div className="thanh-sap-xep">
       <span className="nhan-sap-xep">Sắp xếp theo</span>
@@ -718,6 +784,114 @@ const NHAN_KHOA: Record<KhoaSapXep, string> = {
   code: "Mã cán bộ",
   created_at: "Ngày tạo",
 };
+
+/** Câu thay cho thanh sắp xếp khi đang tìm. Nói cả thứ tự thật lẫn cách lấy lại quyền chọn. */
+export const CAU_SAP_XEP_KHI_TIM =
+  "Kết quả tìm kiếm được sắp xếp theo mã cán bộ, tăng dần. Xoá nội dung ô tìm để sắp xếp theo cột khác.";
+
+/* ---- ô tìm và bộ lọc bộ phận ---------------------------------------------------------------- */
+
+/**
+ * Bộ lọc của tab Người dùng — HAI trong ba trường của `LocDanhBa` (màn `/danh-ba`).
+ *
+ * KHÔNG CÓ `hienThi` (công khai trên Mini App), và đó là quyết định chứ không thiếu sót: bộ lọc và
+ * ô công khai ở màn `/danh-ba`, không ở đây. Cũng không có bộ lọc trạng thái hoạt động — hợp đồng
+ * không có tham số ấy (`LocCanBo`).
+ */
+export type LocNguoiDung = Pick<LocDanhBa, "tuKhoa" | "boPhan">;
+
+export const LOC_DAU: LocNguoiDung = { tuKhoa: null, boPhan: "" };
+
+export const NHAN_O_TIM_NGUOI_DUNG = "Tìm người dùng";
+export const NHAN_LOC_BO_PHAN = "Bộ phận";
+export const TAT_CA_BO_PHAN = "Tất cả bộ phận";
+
+/**
+ * Hàng lọc — ô tìm và ô chọn bộ phận, kết hợp theo AND. Mọi phép quyết định là của `loc-danh-ba.ts`
+ * (`ketQuaGuiTim`, `maBoPhanLoc`) — cùng phép màn `/danh-ba` dùng, không chép lại.
+ *
+ * GỬI BẰNG SUBMIT (Enter hoặc nút Tìm), KHÔNG THEO TỪNG PHÍM: mỗi phím là một lời gọi mạng mang chữ
+ * gõ dở. Ngoại lệ duy nhất: ô vừa bị xoá TRẮNG trong lúc đang có một lần tìm → bỏ tìm ngay, vì để
+ * trên màn hình kết quả của một chữ không còn thấy ở đâu là để người dùng đọc sai danh sách.
+ *
+ * Ô NHẬP KHÔNG CÓ `name`, FORM LÀ `method="post"`, `autoComplete="off"`: cùng ba lớp với `HangLoc`
+ * của `/danh-ba` — trước khi JavaScript chạy xong, Enter trong một form GET đưa mọi ô có `name` lên
+ * URL; và trình duyệt nhớ những gì đã gõ để gợi ý cho người dùng sau trên máy dùng chung (luật 3,
+ * cấm #4). Không có `maxLength`: thuộc tính ấy đếm đơn vị UTF-16, không đếm ký tự.
+ */
+export function HangLocNguoiDung({
+  loc,
+  boPhan,
+  doiLoc,
+}: {
+  loc: LocNguoiDung;
+  boPhan: readonly MucChon[];
+  doiLoc: (doi: Partial<LocNguoiDung>) => void;
+}) {
+  const [oTim, datOTim] = useState("");
+  const [loiTim, datLoiTim] = useState("");
+
+  function gui(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const kq = ketQuaGuiTim(oTim);
+    if ("loi" in kq) {
+      datLoiTim(kq.loi);
+      return;
+    }
+    datLoiTim("");
+    doiLoc(kq.doi);
+  }
+
+  function go(giaTri: string) {
+    datOTim(giaTri);
+    if (giaTri.trim() === "" && loc.tuKhoa !== null) {
+      datLoiTim("");
+      doiLoc({ tuKhoa: null });
+    }
+  }
+
+  return (
+    <div className="hang-loc">
+      <form className="form-tra-cuu" role="search" method="post" onSubmit={gui}>
+        <div className="o-nhap">
+          <label htmlFor="tim-nguoi-dung">{NHAN_O_TIM_NGUOI_DUNG}</label>
+          <input
+            id="tim-nguoi-dung"
+            type="search"
+            value={oTim}
+            onChange={(e) => go(e.target.value)}
+            placeholder={GOI_Y_O_TIM}
+            autoComplete="off"
+            aria-describedby="loi-tim-nguoi-dung"
+            aria-invalid={loiTim !== ""}
+          />
+        </div>
+        <button className="nut-phu" type="submit">
+          {NUT_TIM}
+        </button>
+      </form>
+      <p id="loi-tim-nguoi-dung" className="thong-bao-loi" role="alert">
+        {loiTim}
+      </p>
+
+      <p className="chon-hang-muc">
+        <label htmlFor="loc-bo-phan-nguoi-dung">{NHAN_LOC_BO_PHAN}</label>{" "}
+        <select
+          id="loc-bo-phan-nguoi-dung"
+          value={loc.boPhan}
+          onChange={(e) => doiLoc({ boPhan: maBoPhanLoc(e.target.value, boPhan) })}
+        >
+          <option value="">{TAT_CA_BO_PHAN}</option>
+          {boPhan.map((bp) => (
+            <option key={bp.id} value={bp.id}>
+              {bp.name}
+            </option>
+          ))}
+        </select>
+      </p>
+    </div>
+  );
+}
 
 /**
  * Sáu hành động một dòng danh bạ mở ra. **KHÔNG hành động nào tên là "Xoá".**
@@ -854,7 +1028,8 @@ export function BangCanBo({
   danhSach: readonly identity_canBoTomTat[];
   khoa: KhoaSapXep;
   chieu: ChieuSapXep;
-  doiSapXep: (khoa: KhoaSapXep) => void;
+  /** `null` = đang tìm: hai ô tiêu đề hiện chữ, không hiện nút (xem `ThanhSapXep`). */
+  doiSapXep: ((khoa: KhoaSapXep) => void) | null;
   thaoTac: ThaoTacDong;
   idDangMo: string | null;
   /** Bảng tra đã dựng sẵn, đi XUỐNG như tham số. Không dòng nào tự đi hỏi máy chủ. */
@@ -970,18 +1145,27 @@ function OTieuDeSapXep({
   khoa: KhoaSapXep;
   khoaHienTai: KhoaSapXep;
   chieu: ChieuSapXep;
-  doiSapXep: (khoa: KhoaSapXep) => void;
+  doiSapXep: ((khoa: KhoaSapXep) => void) | null;
 }) {
   const dangSapXep = khoa === khoaHienTai;
+  const mui = dangSapXep ? (chieu === "asc" ? " ↑" : " ↓") : "";
   return (
     <th
       scope="col"
       aria-sort={dangSapXep ? (chieu === "asc" ? "ascending" : "descending") : "none"}
     >
-      <button type="button" className="nut-sap-xep" onClick={() => doiSapXep(khoa)}>
-        {NHAN_KHOA[khoa]}
-        {dangSapXep ? (chieu === "asc" ? " ↑" : " ↓") : " ⇅"}
-      </button>
+      {doiSapXep === null ? (
+        // Đang tìm: chữ thường, không nút. Mũi tên chỉ còn ở cột thật sự đang xếp (mã, tăng dần).
+        <>
+          {NHAN_KHOA[khoa]}
+          {mui}
+        </>
+      ) : (
+        <button type="button" className="nut-sap-xep" onClick={() => doiSapXep(khoa)}>
+          {NHAN_KHOA[khoa]}
+          {mui === "" ? " ⇅" : mui}
+        </button>
+      )}
     </th>
   );
 }
