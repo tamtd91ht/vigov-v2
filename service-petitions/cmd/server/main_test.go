@@ -302,6 +302,13 @@ type mayChu struct {
 
 func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 	t.Helper()
+	return dungMayChuCORS(t, pg, nil)
+}
+
+// dungMayChuCORS is dungMayChu with a CITIZEN_CORS_ALLOWED_ORIGINS value. nil is "not configured",
+// which is what every test above this helper's introduction ran with — and still does.
+func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *mayChu {
+	t.Helper()
 
 	kho := &khoGia{theo: map[tenant.ID][]domain.LoaiNhiemVu{
 		xaA: {{ID: "lnv-001", Ma: "theo-van-ban", Nhan: nhanXaA, DangDung: true, LaMacDinh: true}},
@@ -372,7 +379,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 	}
 	so := &soPhienGia{}
 	return &mayChu{
-		h:   dungBien(mux, muxCongDan, so, danhBa, pg, nil, log),
+		h:   dungBien(mux, muxCongDan, so, danhBa, pg, nil, nguonCORS, log),
 		kho: kho, pg: pg, so: so, gui: gui,
 	}
 }

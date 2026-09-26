@@ -46,6 +46,7 @@
 //	ELASTICSEARCH_INDEX_PREFIX  ConfigMap   optional — refused by name at connect time
 //	DANGEROUS_AUTH_BYPASS       ConfigMap   optional — refused outright when ENV=prod
 //	TRUSTED_PROXY_CIDRS         ConfigMap   optional — empty trusts nobody; malformed refused by Load
+//	CITIZEN_CORS_ALLOWED_ORIGINS  ConfigMap optional — empty = no CORS on the citizen edge; `*`/http refused by Load
 //	CITIZEN_SESSION_BRIDGE_LISTEN_ADDR  ConfigMap  optional — both bridge vars or neither; one alone refused by Load
 //	CITIZEN_SESSION_BRIDGE_KEYS         Secret     optional — both bridge vars or neither; one alone refused by Load
 //	CITIZEN_SESSION_TTL                 ConfigMap  optional — default 720h (30 days); malformed refused by Load
@@ -313,6 +314,27 @@ type Config struct {
 	// trusting a forged X-Forwarded-For from anyone, which is the thing the boundary exists to stop.
 	TrustedProxies []netip.Prefix
 
+	// CitizenCORSAllowedOrigins are the browser origins allowed to call the CITIZEN edge
+	// cross-origin — the Zalo Mini App webview, which is served from a Zalo domain and calls
+	// `<dịch vụ>.api.vigov.vn` (ADR 0046). Read from CITIZEN_CORS_ALLOWED_ORIGINS, comma-separated:
+	// exact https origins or `https://*.<suffix>`. The rule is on NguonCORS (cors.go).
+	//
+	// CITIZEN EDGE ONLY, NEVER STAFF. Staff reach the services same-origin through web-admin
+	// (ADR 0043) with a host-only cookie; a CORS grant there would be a way for another page to
+	// drive a staff session. httpx.CORSCongDan is mounted on the citizen chain and nowhere else.
+	//
+	// k8s CONFIGMAP: an origin list is not a credential. PLATFORM-WIDE: one Mini App serves every
+	// commune, so the origin it runs from is the same for all of them (rule 8, invariant 5).
+	//
+	// OPTIONAL, AND EMPTY MEANS NO CORS HEADERS AT ALL — the browser then blocks the Mini App, which
+	// is the fail-closed direction. Not required, because without it every service still serves
+	// every same-origin and server-to-server request (rule 11, invariant 8); only the Mini App flow
+	// stops, and it stops loudly on the first device test.
+	//
+	// `*` AND ANY NON-https ENTRY ARE REFUSED BY Load, never skipped: allow-all is the one value
+	// that must not be reachable, and a skipped typo would read as "CORS is broken" for an afternoon.
+	CitizenCORSAllowedOrigins NguonCORS
+
 	// CitizenSessionBridgeListenAddr is the address service-identity serves the citizen-session
 	// bridge on (ADR 0045 §Tin cậy): a SECOND gRPC listener, serving CitizenSessionBridgeService and
 	// nothing else, whose only caller is the vihat-miniapp backend.
@@ -476,6 +498,11 @@ func Load(serviceName string) (Config, error) {
 		return Config{}, err
 	}
 
+	nguonCORS, err := PhanTichNguonCORS(os.Getenv("CITIZEN_CORS_ALLOWED_ORIGINS"))
+	if err != nil {
+		return Config{}, err
+	}
+
 	// The citizen-session bridge: both halves or neither (see the fields). Named in the error,
 	// never with a value — the keys are credentials (rule 8).
 	diaChiCau := strings.TrimSpace(os.Getenv("CITIZEN_SESSION_BRIDGE_LISTEN_ADDR"))
@@ -500,6 +527,7 @@ func Load(serviceName string) (Config, error) {
 
 	cfg := Config{
 		TrustedProxies:                 proxy,
+		CitizenCORSAllowedOrigins:      nguonCORS,
 		CitizenSessionBridgeListenAddr: diaChiCau,
 		CitizenSessionBridgeKeys:       khoaCau,
 		CitizenSessionTTL:              thoiHanPhien,

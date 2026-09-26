@@ -296,7 +296,8 @@ func chay(log *slog.Logger) error {
 		Addr: addr,
 		// OUTERMOST, around BOTH chains (staff and citizen): every layer reads one client address
 		// per request, crossing only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(dungBien(mux, muxCongDan, soPhien, directory, dinhDanh, idemStore, log)),
+		Handler: httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(dungBien(mux, muxCongDan, soPhien, directory, dinhDanh,
+			idemStore, cfg.CitizenCORSAllowedOrigins, log)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -418,9 +419,21 @@ func chay(log *slog.Logger) error {
 //
 // Registering `tapCongDan` explicitly is what puts the intake on the citizen chain rather than on
 // the staff chain, where TenantMiddleware would answer 404 to every citizen who pressed send.
+//
+// # CORS — CITIZEN CHAIN ONLY, OUTERMOST ON IT (owner's decision 2026-09-26)
+//
+// The Mini App webview runs on a Zalo origin and calls `petitions.api.vigov.vn`, a reserved host
+// that never resolves to a commune (ADR 0046) — which is fine, because the split above is by PATH
+// and the citizen chain never asks `Host` anything. httpx.CORSCongDan sits OUTSIDE the whole citizen
+// chain so a preflight (no Authorization, by the browser's own rules) is answered 204 before
+// CitizenEdge or any route declaration sees it.
+//
+// IT IS NOT ON THE STAFF CHAIN AND MUST NEVER BE: staff are same-origin through web-admin (ADR 0043)
+// with a host-only cookie, and a CORS grant there lets another page drive a staff session.
+// main_test.go asserts a staff route carries no CORS header even for an allowed Origin.
 func dungBien(mux, muxCongDan http.Handler, soPhien httpx.CitizenSessions,
 	danhBa tenant.Directory, dinhDanh staffauth.Resolver,
-	idemStore idem.Store, log *slog.Logger) http.Handler {
+	idemStore idem.Store, nguonCORS httpx.NguonCORS, log *slog.Logger) http.Handler {
 
 	var h http.Handler = mux
 	h = staffauth.Middleware(dinhDanh, log)(h)
@@ -441,6 +454,7 @@ func dungBien(mux, muxCongDan http.Handler, soPhien httpx.CitizenSessions,
 	c = httpx.CitizenEdge(soPhien)(c)
 	c = httpx.Recover(traceID)(c)
 	c = httpx.StripTenantHeaders(c)
+	c = httpx.CORSCongDan(nguonCORS)(c)
 
 	ngoai := http.NewServeMux()
 	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

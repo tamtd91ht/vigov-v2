@@ -92,6 +92,7 @@ kubectl apply -k deploy/overlays/${NS#vigov-}      # sinh ConfigMap cau-hinh-chu
 | `ELASTICSEARCH_API_KEY` | không | chưa dùng — Secret ngày bật |
 | `ELASTICSEARCH_INDEX_PREFIX` | không | không khai |
 | `TRUSTED_PROXY_CIDRS` | không | ConfigMap `cau-hinh-chung` — dải IP pod web-admin. Trống thì audit ghi IP pod web-admin; mục sai hoặc `/0` thì pod không khởi động |
+| `CITIZEN_CORS_ALLOWED_ORIGINS` | không | ConfigMap `cau-hinh-chung` — origin của webview Zalo Mini App được gọi **tuyến công dân** (không bao giờ tuyến cán bộ). Đề xuất `https://h5.zdn.vn,https://zalo.me,https://*.zdn.vn,https://*.zalo.me`. Trống thì không gửi header CORS nào — trình duyệt chặn Mini App; `*`, `http://` hoặc có đường dẫn thì pod không khởi động |
 | `DANGEROUS_AUTH_BYPASS` | không | **không bao giờ khai** — `ENV=prod` từ chối khởi động |
 | `CITIZEN_SESSION_BRIDGE_LISTEN_ADDR` | không | ConfigMap — **chỉ `identity`**. Cổng cầu phiên Mini App (ADR 0045). Phải khai **cùng** `…_KEYS`; cả hai trống thì cầu không mở |
 | `CITIZEN_SESSION_BRIDGE_KEYS` | không | Secret `bi-mat-identity` — **chỉ `identity`**, và cùng giá trị ở Secret của `vihat-miniapp`. Danh sách `<khoa-moi>,<khoa-cu>`, mỗi khoá ≥ 32 byte. **Không bao giờ** trùng `GRPC_CALLER_KEY` |
