@@ -49,6 +49,7 @@
 //	CITIZEN_SESSION_BRIDGE_LISTEN_ADDR  ConfigMap  optional — both bridge vars or neither; one alone refused by Load
 //	CITIZEN_SESSION_BRIDGE_KEYS         Secret     optional — both bridge vars or neither; one alone refused by Load
 //	CITIZEN_SESSION_TTL                 ConfigMap  optional — default 720h (30 days); malformed refused by Load
+//	IDENTITY_ADMIN_SEED_PASSWORD        Secret     optional — empty = off; shorter than password.DaiToiThieu = off, reported by identity at startup
 //
 // THE TABLE IS HERE AND NOT IN A MANIFEST because the manifests are not in this repository's
 // gift and a classification that lives only in deploy/ is one nobody reading the config layer
@@ -360,6 +361,24 @@ type Config struct {
 	// days would hide that the operator meant something else for the lifetime of a credential.
 	// Go duration syntax — "720h", not "30d".
 	CitizenSessionTTL time.Duration
+
+	// IdentityAdminSeedPassword is the password of the default administrator identity creates in
+	// a commune at that commune's FIRST sign-in as `admin` (owner's decision, 2026-09-26; ledger
+	// item `xa-moi-khong-co-vai-tro-va-quyen`). Read by identity only.
+	//
+	// OPTIONAL, AND EMPTY MEANS THE FEATURE IS OFF — rule 11 invariant 8. Every service serves
+	// every request without it; identity merely stops seeding. Making it required would stop
+	// every service on every machine that has not set it, for a bootstrap step that is meant to
+	// be removed once every commune has changed its admin password.
+	//
+	// k8s SECRET (`bi-mat-identity`), secret.Secret: it is a live credential that opens the
+	// highest-privileged account of every commune not yet seeded (rule 8, rule 11 invariant 7).
+	// Its strength is judged where it is USED — identity refuses to seed with one shorter than
+	// password.DaiToiThieu — for the same one-owner-per-rule reason CitizenSessionBridgeKeys gives.
+	//
+	// Trimmed: a trailing newline pasted into a Secret would otherwise make the typed password
+	// never match, and the refusal would read as "wrong password" with nothing pointing here.
+	IdentityAdminSeedPassword secret.Secret
 }
 
 // ThoiHanPhienCongDanMacDinh is CITIZEN_SESSION_TTL when the variable is unset — 30 days, the
@@ -484,6 +503,7 @@ func Load(serviceName string) (Config, error) {
 		CitizenSessionBridgeListenAddr: diaChiCau,
 		CitizenSessionBridgeKeys:       khoaCau,
 		CitizenSessionTTL:              thoiHanPhien,
+		IdentityAdminSeedPassword:      secret.Secret(strings.TrimSpace(os.Getenv("IDENTITY_ADMIN_SEED_PASSWORD"))),
 		// Trimmed: a trailing newline pasted into a ConfigMap would otherwise reach net.Listen
 		// as part of the port. The five services that used to read it per-service trimmed too.
 		ListenAddr:       firstNonEmpty(strings.TrimSpace(os.Getenv("LISTEN_ADDR")), ":8080"),

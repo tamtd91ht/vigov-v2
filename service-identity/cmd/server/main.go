@@ -210,6 +210,15 @@ func run(log *slog.Logger) error {
 	// 6. use cases — the business write and its audit entry share one transaction inside these
 	//    (rule 6, invariant 3). The handlers only translate HTTP.
 	dangNhap := app.NewDangNhap(kho, canBo, phien, signer, log)
+	// The default administrator of a commune, created at its first `admin` sign-in (owner's
+	// decision 2026-09-26; app/gieo_quan_tri.go). Empty = off, silently: off is the expected state
+	// once every commune has changed its admin password. A value too short to be a password is
+	// said ONCE here, by name — never the value, never its length (rule 3, rule 8).
+	if err := dangNhap.BatGieoQuanTri(cfg.IdentityAdminSeedPassword); err != nil {
+		log.Warn("gieo quản trị mặc định TẮT", "ly_do", err.Error())
+	} else if !cfg.IdentityAdminSeedPassword.Rong() {
+		log.Info("gieo quản trị mặc định BẬT — gỡ IDENTITY_ADMIN_SEED_PASSWORD khi mọi xã đã đổi mật khẩu admin")
+	}
 	dangXuat := app.NewDangXuat(kho, phien)
 	// The WRITE surface of the staff register (open questions #10, #13, #14, #15, #16, all decided
 	// 2026-09-22). It is given the SAME *idstore.CanBoStore the two read fields below carry — one

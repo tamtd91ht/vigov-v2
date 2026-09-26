@@ -67,7 +67,7 @@ kubectl apply -k deploy/overlays/${NS#vigov-}      # sinh ConfigMap cau-hinh-chu
 | `REDIS_DSN` | pod xanh, nhưng 6 tuyến `POST` (cán bộ, văn bản đến/đi, chi, dự toán) trả 503 |
 | Secret TLS sai tên theo môi trường | Ingress lên, chỉ HTTPS đứt |
 
-## 4. Toàn bộ 20 biến — để đối chiếu
+## 4. Toàn bộ 21 biến — để đối chiếu
 
 `tools/check_env_map.py` đối chiếu bảng này với `core/config/config.go` trong `make check`.
 
@@ -93,5 +93,6 @@ kubectl apply -k deploy/overlays/${NS#vigov-}      # sinh ConfigMap cau-hinh-chu
 | `CITIZEN_SESSION_BRIDGE_LISTEN_ADDR` | không | ConfigMap — **chỉ `identity`**. Cổng cầu phiên Mini App (ADR 0045). Phải khai **cùng** `…_KEYS`; cả hai trống thì cầu không mở |
 | `CITIZEN_SESSION_BRIDGE_KEYS` | không | Secret `bi-mat-identity` — **chỉ `identity`**, và cùng giá trị ở Secret của `vihat-miniapp`. Danh sách `<khoa-moi>,<khoa-cu>`, mỗi khoá ≥ 32 byte. **Không bao giờ** trùng `GRPC_CALLER_KEY` |
 | `CITIZEN_SESSION_TTL` | không | ConfigMap — **chỉ `identity`**. Trống thì `720h` (30 ngày); sai cú pháp hoặc ≤ 0 thì pod không khởi động |
+| `IDENTITY_ADMIN_SEED_PASSWORD` | không | Secret `bi-mat-identity` — **chỉ `identity`**, key viết gạch dưới đúng như tên biến. Mật khẩu tài khoản `admin` tạo ở lần đăng nhập `admin` đầu tiên của một xã chưa có `admin` (bắt đổi mật khẩu ngay). Trống thì tắt; ngắn hơn 12 ký tự thì tắt và log báo lúc khởi động. **Gỡ key khi mọi xã đã đổi mật khẩu `admin`** |
 
 Vì sao từng quyết định như vậy: `deploy/README.md` mục 3.

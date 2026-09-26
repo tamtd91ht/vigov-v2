@@ -35,6 +35,10 @@ type DangNhap struct {
 	phien *idstore.PhienStore
 	ky    KyToken
 	log   *slog.Logger
+
+	// gieo is the default-administrator seed (gieo_quan_tri.go). nil = off, which is the state
+	// NewDangNhap leaves it in; only BatGieoQuanTri switches it on.
+	gieo *gieoQuanTri
 }
 
 func NewDangNhap(db *store.DB, canBo *idstore.CanBoStore, phien *idstore.PhienStore,
@@ -101,6 +105,23 @@ func (uc *DangNhap) Chay(ctx context.Context, yc YeuCauDangNhap) (KetQuaDangNhap
 	xa := tenant.MustFrom(ctx)
 
 	cb, err := uc.canBo.TheoEmail(ctx, yc.Email)
+
+	// The default-administrator seed (gieo_quan_tri.go) — reached ONLY when no live account
+	// matched AND the typed pair is `admin` + the configured value. Every other request skips
+	// this block without a statement or a hash, so it answers exactly as it did before the seed
+	// existed. After a seed — or after finding that one is not due — the account is simply read
+	// again and the ordinary path below decides, with its own password check, session and trail.
+	if errors.Is(err, idstore.ErrCanBoKhongTonTai) && uc.coTheGieo(yc) {
+		if gErr := uc.gieoQuanTriMacDinh(ctx, yc.IP); gErr != nil && !errors.Is(gErr, errKhongGieo) {
+			// Reached only by whoever typed the configured value, so this line tells a log reader
+			// nothing about which addresses exist. The error names a statement, never a value.
+			uc.log.Warn("gieo quản trị mặc định thất bại", "xa", string(xa), "err", gErr)
+			uc.thatBai(xa, yc)
+			return KetQuaDangNhap{}, ErrDangNhapThatBai
+		}
+		cb, err = uc.canBo.TheoEmail(ctx, yc.Email)
+	}
+
 	if err != nil {
 		if errors.Is(err, idstore.ErrCanBoKhongTonTai) {
 			uc.thatBai(xa, yc)

@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-09-25",
+  "cap_nhat": "2026-09-26",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -187,7 +187,7 @@
       "trang_thai": "chua_lam",
       "bang_chung": "Phát hiện 24/09/2026 (cross-context-scout, lượt /develop-feature Cấu hình): mọi `INSERT INTO vai_tro_quyen` đều nằm trong *_pg_test.go; không bước gieo/onboarding nào tạo `vai_tro`, `vai_tro_quyen`, `bo_phan`, `thon_to_dan_pho`. ~97 tuyến RequirePermission (identity 27 · petitions 24 · finance 22 · documents 12 · comms 11 · reporting 1) vì thế 403 với mọi tài khoản ở một xã mới — kể cả nút gieo SLA (`admin.sla`), tức vào sổ văn bản (409) và tiếp nhận phản ánh không gỡ được từ trong xã.",
       "no_confirm": [],
-      "tiep_theo": "QUYẾT ĐỊNH KIẾN TRÚC, KHÔNG TỰ CHỌN — cần ADR: xã có người quản trị đầu tiên, bộ vai trò và quyền đầu tiên bằng cách nào. Vướng: ADR 0003 (nhà cung cấp chỉ thao tác siêu dữ liệu), #13 ('KHÔNG mở đường khôi phục cho nhà cung cấp'), luật 1 điều kiện dừng #5 (nhà cung cấp đụng dữ liệu nghiệp vụ của xã), luật 5 điều kiện dừng #3. Ai được TẠO vai trò mới (spec §4.1 có tám vai trò mẫu nhưng không có nút thêm) cũng chưa ai quyết. Tuyến lưu cột Phân quyền (F1, 24/09) chỉ dùng được ở xã đã có một người cầm admin.role.",
+      "tiep_theo": "CHỦ DỰ ÁN QUYẾT 26/09/2026: người quản trị ĐẦU TIÊN của mỗi xã = tài khoản `admin` tạo ở LẦN ĐĂNG NHẬP ĐẦU tại tên miền của xã đó (xã biết từ Host/tenant_domain) khi mật khẩu gõ vào khớp biến IDENTITY_ADMIN_SEED_PASSWORD (Secret bi-mat-identity; không có trong git). Một giao dịch: vai trò quan-tri-he-thong 'Quản trị hệ thống' nhận MỌI khoá của bảng quyen, tài khoản phai_doi_mat_khau=true, vết gieo_quan_tri_mac_dinh (chủ thể system). Xã đã có email admin ở bất kỳ trạng thái nào thì không gieo, không ghi đè. Áp cả production. ĐÃ DỰNG (commit 'gieo quản trị mặc định'). CÒN NỢ: (1) ADR ghi quyết định này (kb/10-decisions) — nó đụng ADR 0003/#13 (đường của nhà cung cấp vào xã); (2) một bí mật mở admin ở MỌI xã chưa đổi mật khẩu — gỡ biến khỏi Secret khi các xã đã đổi; (3) ca _pg_test (ON CONFLICT trên bảng phân mảnh, 3 lượt đăng nhập đầu đồng thời) chưa chạy trên PostgreSQL thật. || QUYẾT ĐỊNH KIẾN TRÚC, KHÔNG TỰ CHỌN — cần ADR: xã có người quản trị đầu tiên, bộ vai trò và quyền đầu tiên bằng cách nào. Vướng: ADR 0003 (nhà cung cấp chỉ thao tác siêu dữ liệu), #13 ('KHÔNG mở đường khôi phục cho nhà cung cấp'), luật 1 điều kiện dừng #5 (nhà cung cấp đụng dữ liệu nghiệp vụ của xã), luật 5 điều kiện dừng #3. Ai được TẠO vai trò mới (spec §4.1 có tám vai trò mẫu nhưng không có nút thêm) cũng chưa ai quyết. Tuyến lưu cột Phân quyền (F1, 24/09) chỉ dùng được ở xã đã có một người cầm admin.role.",
       "menu": "cau-hinh"
     },
     {
