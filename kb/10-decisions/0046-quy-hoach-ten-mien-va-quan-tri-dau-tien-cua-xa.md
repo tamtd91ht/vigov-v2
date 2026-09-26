@@ -153,6 +153,15 @@ xoá mềm thì từ chối, không tạo lại.
 | Ca `_pg_test` của gieo (ON CONFLICT trên bảng phân mảnh, ba lần đăng nhập đầu đồng thời) chưa chạy trên PostgreSQL thật | Test xanh ở máy không Docker là SKIP, không phải bằng chứng |
 | Ai được **tạo vai trò mới** | Chưa ai quyết; gieo chỉ tạo đúng một vai trò |
 
+## Sửa đổi 26/09/2026 (cùng ngày, chủ dự án trả lời bảng "việc còn mở")
+
+| Việc | Quyết định | Dựng ở |
+|---|---|---|
+| Hai dòng `admin*.vigov.vn` | **Gỡ** — `admin.vigov.vn` là tên miền của pod web quản trị tổng liên xã (chưa dựng) | bước `doi-ten-mien-thang-binh` (`deploy/Jenkinsfile`), DELETE lọc đúng host + đúng xã, cùng giao dịch với vết `doi_ten_mien`. Sau khi gỡ, `VALIDATE` 0007 làm được bằng một migration sau |
+| Mini App và CORS | Chủ dự án giao nhà cung cấp đề xuất, cho **nới rộng một chút** vì triển khai phụ thuộc Zalo | `CITIZEN_CORS_ALLOWED_ORIGINS`, **chỉ** rìa công dân (`core/httpx/cors.go`); giá trị đề xuất `https://h5.zdn.vn,https://zalo.me,https://*.zdn.vn,https://*.zalo.me`; `*` trơn và `http` bị từ chối. Mini App gọi `https://petitions.api.vigov.vn` (`dia-chi-vigov.ts`) — rìa công dân lấy xã từ phiên nên host dành riêng không cản |
+| Staging dùng chung CSDL/Redis/khoá | **Chấp nhận tạm** — thực tế chỉ dùng prod, staging để dự phòng | — |
+| `<service>.api.vigov.vn` mở cả cổng rest | **Đồng ý** | — |
+
 ## Liên quan
 
 [0003](0003-platform-admin-metadata-only.md) · [0005](0005-miniapp-tenant-resolution.md) ·

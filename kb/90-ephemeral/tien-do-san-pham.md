@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 872ca37
+derived_from_commit: 420bc53
 expires: 2026-12-25
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -92,7 +92,7 @@ một lời trấn an không có gì đứng sau.
 | GET | `/api/v1/my-citizen-reports/{maTraCuu}` | ✗ |
 
 ⚠ **`citizen-app` hôm nay chưa gọi một tuyến ViGov nào**, và đó không phải thiếu sót của nó: nó đang
-gọi `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions` — bề mặt của **kho anh em**
+gọi `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
 `vihat-miniapp`, không phải của ViGov (CLAUDE.md, mục hai kho). Giai đoạn 2 — màn nghiệp vụ xã —
 bị chặn ở `service-identity`, xem `kb/90-ephemeral/tien-do/citizen-app.json`.
 
@@ -112,7 +112,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-documents` | 7 | 2 | 4 | 0 |
 | `service-finance` | 15 | 3 | 0 | 0 |
 | `service-identity` | 18 | 8 | 0 | 1 |
-| `service-petitions` | 15 | 7 | 5 | 0 |
+| `service-petitions` | 16 | 7 | 5 | 0 |
 | `service-platform` | 5 | 2 | 0 | 1 |
 | `service-reporting` | 2 | 0 | 1 | 0 |
 | `tools` | 18 | 0 | 0 | 0 |

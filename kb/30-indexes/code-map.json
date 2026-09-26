@@ -1068,31 +1068,47 @@
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:553"
+      "at": "core/config/config.go:581"
     },
     "config.CauPhienBat": {
       "kind": "func",
-      "at": "core/config/config.go:390"
+      "at": "core/config/config.go:412"
+    },
+    "config.ChoPhep": {
+      "kind": "func",
+      "at": "core/config/cors.go:43"
     },
     "config.Config": {
       "kind": "type",
-      "at": "core/config/config.go:80"
+      "at": "core/config/config.go:81"
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:412"
+      "at": "core/config/config.go:434"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:741"
+      "at": "core/config/config.go:769"
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:428"
+      "at": "core/config/config.go:450"
+    },
+    "config.NguonCORS": {
+      "kind": "type",
+      "at": "core/config/cors.go:21"
+    },
+    "config.PhanTichNguonCORS": {
+      "kind": "func",
+      "at": "core/config/cors.go:79"
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:613"
+      "at": "core/config/config.go:641"
+    },
+    "config.Rong": {
+      "kind": "func",
+      "at": "core/config/cors.go:31"
     },
     "crosstenant.DinhDanh": {
       "kind": "type",
@@ -3870,6 +3886,10 @@
       "kind": "type",
       "at": "service-petitions/internal/http/routes.go:254"
     },
+    "httpx.CORSCongDan": {
+      "kind": "func",
+      "at": "core/httpx/cors.go:57"
+    },
     "httpx.CitizenEdge": {
       "kind": "func",
       "at": "core/httpx/citizen.go:107"
@@ -3901,6 +3921,10 @@
     "httpx.KhongThuocXa": {
       "kind": "func",
       "at": "core/httpx/citizen.go:234"
+    },
+    "httpx.NguonCORS": {
+      "kind": "type",
+      "at": "core/httpx/cors.go:10"
     },
     "httpx.Recover": {
       "kind": "func",
