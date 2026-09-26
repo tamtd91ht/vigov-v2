@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "core",
-  "cap_nhat": "2026-09-25",
+  "cap_nhat": "2026-09-26",
   "muc": [
     {
       "id": "backfill-theo-xa",
@@ -65,7 +65,8 @@
       "trang_thai": "xong",
       "bang_chung": "core/identityclient/han_xu_ly.go (Client.HanXuLy) + han_xu_ly_test.go, 8 ca qua bufconn với CHUỖI INTERCEPTOR THẬT. TỰ CHẠY 22/09/2026: gofmt -l core RỖNG · go vet ./core/... rc=0 · go test -count=1 -p 1 ./core/... 19 gói ok. Ca đáng kể: máy chủ giả CỐ Ý trả ngược thứ tự hai mục để một bản cài đặt ánh xạ theo VỊ TRÍ sẽ đỏ; và TestHanXuLyKhongCoXaThiBiTuChoiTaiCho ghim rằng RPC này KHÔNG nằm trong grpcx.methodsWithoutTenant — gọi mà context không có xã thì interceptor phía client từ chối tại chỗ, máy chủ không nhận lời gọi nào.",
       "no_confirm": [],
-      "tiep_theo": "ĐẶT CẠNH TienGioLamViec CHỨ KHÔNG THAY NÓ: TienGioLamViec dành cho bên gọi TỰ giữ số giờ và không đọc `sla`; HanXuLy là đường cho bên gọi đọc cam kết CỦA XÃ. Bên gọi phản ánh/văn bản đến phải dùng HanXuLy — dùng TienGioLamViec với một con số tự chọn là tự đặt cam kết hộ cơ quan. BA ĐIỀU BẮT BUỘC VỚI BÊN GỌI, cả ba đều viết trong chú thích của hàm: (1) lỗi nghĩa là HỎNG LƯỢT TIẾP NHẬN — không ghi dòng, không cấp mã tra cứu (transaction-boundaries.json `tinh_han_xu_ly_luc_tiep_nhan`); (2) không rơi về một con số mặc định khi xã chưa cấu hình (luật 10 cấm #3); (3) gọi MỘT LẦN tại hành vi ấn định đồng hồ rồi LƯU — gọi lại để 'tính lại' là âm thầm dời một cam kết đã phát ra (luật 10 bất biến 2, ADR 0007 quyết định 6). CHƯA CÓ AI GỌI: service-petitions và service-documents vẫn chưa có tuyến ghi nào dùng hàm này — đó là việc của phiên sau, không phải của mục này."
+      "tiep_theo": "ĐẶT CẠNH TienGioLamViec CHỨ KHÔNG THAY NÓ: TienGioLamViec dành cho bên gọi TỰ giữ số giờ và không đọc `sla`; HanXuLy là đường cho bên gọi đọc cam kết CỦA XÃ. Bên gọi phản ánh/văn bản đến phải dùng HanXuLy — dùng TienGioLamViec với một con số tự chọn là tự đặt cam kết hộ cơ quan. BA ĐIỀU BẮT BUỘC VỚI BÊN GỌI, cả ba đều viết trong chú thích của hàm: (1) lỗi nghĩa là HỎNG LƯỢT TIẾP NHẬN — không ghi dòng, không cấp mã tra cứu (transaction-boundaries.json `tinh_han_xu_ly_luc_tiep_nhan`); (2) không rơi về một con số mặc định khi xã chưa cấu hình (luật 10 cấm #3); (3) gọi MỘT LẦN tại hành vi ấn định đồng hồ rồi LƯU — gọi lại để 'tính lại' là âm thầm dời một cam kết đã phát ra (luật 10 bất biến 2, ADR 0007 quyết định 6). CHƯA CÓ AI GỌI: service-petitions và service-documents vẫn chưa có tuyến ghi nào dùng hàm này — đó là việc của phiên sau, không phải của mục này.",
+      "menu": "cau-hinh"
     },
     {
       "id": "core-ulid",

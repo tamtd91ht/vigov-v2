@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "_chung",
-  "cap_nhat": "2026-09-24",
+  "cap_nhat": "2026-09-26",
   "muc": [
     {
       "id": "netpol-duong-ra-tam-mo",
@@ -81,7 +81,8 @@
       "trang_thai": "treo",
       "bang_chung": "ĐÃ ĐẾM BẰNG CÂY CÚ PHÁP, không bằng mắt: docs/ui-ux/14-cau-hinh.md:104 ghi 43 quyền / 11 nhóm; service-identity/migrations/0001_init.sql nạp 33 khoá / 10 nhóm; migration 0007 thêm 2 khoá nữa -> 35 khoá / 10 nhóm. Còn thiếu TÁM khoá và TRỌN MỘT NHÓM — kiểm 2026-09-21",
       "no_confirm": [],
-      "tiep_theo": "ĐÃ THÀNH CÂU HỎI MỞ #27, không còn là một ghi chú trôi nổi. Ngày 20/09 khách chốt thêm ĐÚNG HAI khoá cần ngay (feedback.classify, feedback.unmask — ADR 0030) và CỐ Ý để lại phần còn thiếu. ĐỪNG BỊA TÁM KHOÁ CÒN LẠI CHO ĐỦ SỐ: luật 5 nói tuyến không khai quyền là tuyến MỌI vai trò cán bộ gọi được, nhưng một khoá BỊA RA còn tệ hơn — nó hiện lên màn Phân quyền như một thẩm quyền có thật, quản trị xã tick vào, và không ai biết nó canh cái gì. Nhóm thứ 11 còn thiếu rất có thể là nhóm của một phân hệ chưa dựng. CÂU TỪNG CHẶN MỤC NÀY NAY ĐÃ CHỐT: #27 (ADR 0035 §D). Đó là ĐỀ XUẤT CỦA NHÀ CUNG CẤP ngày 22/09/2026, không phải trả lời của khách — đọc ADR 0035 trước khi dựa vào nó, và bảng \"cái gì đỏ nếu một mục bị phủ quyết\" ở cuối ADR ấy."
+      "tiep_theo": "ĐÃ THÀNH CÂU HỎI MỞ #27, không còn là một ghi chú trôi nổi. Ngày 20/09 khách chốt thêm ĐÚNG HAI khoá cần ngay (feedback.classify, feedback.unmask — ADR 0030) và CỐ Ý để lại phần còn thiếu. ĐỪNG BỊA TÁM KHOÁ CÒN LẠI CHO ĐỦ SỐ: luật 5 nói tuyến không khai quyền là tuyến MỌI vai trò cán bộ gọi được, nhưng một khoá BỊA RA còn tệ hơn — nó hiện lên màn Phân quyền như một thẩm quyền có thật, quản trị xã tick vào, và không ai biết nó canh cái gì. Nhóm thứ 11 còn thiếu rất có thể là nhóm của một phân hệ chưa dựng. CÂU TỪNG CHẶN MỤC NÀY NAY ĐÃ CHỐT: #27 (ADR 0035 §D). Đó là ĐỀ XUẤT CỦA NHÀ CUNG CẤP ngày 22/09/2026, không phải trả lời của khách — đọc ADR 0035 trước khi dựa vào nó, và bảng \"cái gì đỏ nếu một mục bị phủ quyết\" ở cuối ADR ấy.",
+      "menu": "cau-hinh"
     },
     {
       "id": "pii-trong-lich-su-git",

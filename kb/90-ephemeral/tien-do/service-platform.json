@@ -9,7 +9,8 @@
       "trang_thai": "xong",
       "bang_chung": "ADR 0024 chuyển quyền sở hữu danh mục SANG DỊCH VỤ SỞ HỮU, không nằm ở platform: service-{comms,documents,finance,petitions}/migrations/0003_danh_muc_*.sql + service-identity/migrations/0005 — kiểm 2026-09-20. ban-giao-phien.md §2.5 ghi \"platform: danh_muc chưa có\" là ĐÃ LỖI THỜI",
       "no_confirm": [],
-      "tiep_theo": "KHÔNG seed dòng nào, có chủ ý (commit fa10cf1)"
+      "tiep_theo": "KHÔNG seed dòng nào, có chủ ý (commit fa10cf1)",
+      "menu": "cau-hinh"
     },
     {
       "id": "webhook-zalo-mini-app",

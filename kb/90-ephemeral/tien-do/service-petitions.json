@@ -18,7 +18,8 @@
       "trang_thai": "xong",
       "bang_chung": "ĐỔI CHỦ SỞ HỮU, người dùng chốt 2026-09-20: ba bảng nằm ở service-identity/migrations/0006_lich_lam_viec.sql, KHÔNG ở petitions. Lý do: ADR 0007 đếm hạn cho cả `Văn bản đến`, nên lịch được hai service đọc và không thuộc service nào trong hai; ADR 0024 chốt sở hữu đi theo NHỊP ĐỔI, mà lịch đổi cùng bộ máy hành chính của xã. Chi tiết ở sổ service-identity/lich-lam-viec — kiểm 2026-09-20",
       "no_confirm": [],
-      "tiep_theo": "Phần CÒN LẠI của petitions là HÀM ĐẾM HẠN, không phải bảng: đọc ba bảng ấy qua gRPC của identity, và luật 10 cấm #2 cấm đếm bằng giờ treo tường. Một điều hàm ấy PHẢI làm mà lược đồ không cưỡng chế được: gặp một ngày có mặt ở CẢ ngay_nghi_le lẫn ngay_lam_bu thì TỪ CHỐI, đừng chọn bên thắng — một quy tắc ưu tiên lặng lẽ làm một trong hai dòng cấu hình đang hiện trên màn hình trở thành vô nghĩa mà không ai thấy"
+      "tiep_theo": "Phần CÒN LẠI của petitions là HÀM ĐẾM HẠN, không phải bảng: đọc ba bảng ấy qua gRPC của identity, và luật 10 cấm #2 cấm đếm bằng giờ treo tường. Một điều hàm ấy PHẢI làm mà lược đồ không cưỡng chế được: gặp một ngày có mặt ở CẢ ngay_nghi_le lẫn ngay_lam_bu thì TỪ CHỐI, đừng chọn bên thắng — một quy tắc ưu tiên lặng lẽ làm một trong hai dòng cấu hình đang hiện trên màn hình trở thành vô nghĩa mà không ai thấy",
+      "menu": "cau-hinh"
     },
     {
       "id": "danh-muc-nhiem-vu-tuyen-doc",
