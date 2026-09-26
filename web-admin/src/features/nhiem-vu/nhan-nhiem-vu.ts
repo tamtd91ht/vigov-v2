@@ -458,6 +458,21 @@ export function hoanThanhTreHan(hoanThanhLucISO: string | null, hanBanDauISO: st
   return xong > han;
 }
 
+/**
+ * Chữ của chip trên: `{nhãn hoan-thanh của xã} trễ hạn`.
+ *
+ * GHÉP TỪ NHÃN CỦA XÃ, KHÔNG GÕ CỨNG "Hoàn thành" (quyết định #21, 24/09/2026 — một nguồn): xã đổi
+ * nhãn `hoan-thanh` ở tab Danh mục mà chip vẫn hiện chữ cũ là đúng lỗi im lặng mà bảng nhãn được
+ * đọc từ máy chủ để chặn. Đường lui giữ nguyên của `nhanTrangThai`: đọc hỏng thì ra
+ * `Hoàn thành trễ hạn`, đúng chữ trước đây.
+ *
+ * ⚠ Ghép chuỗi giả định nhãn xã đặt là một cụm động từ/tính từ ("Đã hoàn thành" → "Đã hoàn thành
+ * trễ hạn"). Một nhãn dạng danh từ sẽ đọc gượng; chưa có quy tắc nào cho ca ấy và ở đây không bịa.
+ */
+export function nhanHoanThanhTreHan(bang: BangNhanTrangThai): string {
+  return `${nhanTrangThai(bang, "hoan-thanh")} trễ hạn`;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * ADR 0038 — AI DUYỆT ĐƯỢC ĐỀ NGHỊ LÙI HẠN
  * ══════════════════════════════════════════════════════════════════════════════════════════ */

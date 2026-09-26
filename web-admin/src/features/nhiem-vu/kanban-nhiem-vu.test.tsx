@@ -210,6 +210,7 @@ describe("thẻ nhiệm vụ §4.1", () => {
       <TheNhiemVu
         nhiemVu={nhiemVu(sua)}
         danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
         bayGio={BAY_GIO}
         maDangMo={maDangMo}
         moNhiemVu={() => {}}

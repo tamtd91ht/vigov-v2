@@ -16,6 +16,7 @@ import {
   TRANG_THAI_CHINH,
   docBangNhanTrangThai,
   ghiChuKanbanReNhanh,
+  nhanHoanThanhTreHan,
   type BangNhanTrangThai,
 } from "./nhan-nhiem-vu";
 import {
@@ -24,6 +25,7 @@ import {
   CanhBaoNhanTrangThai,
   ChiTietNhiemVu,
   HangLoc,
+  TheNhiemVu,
   type CotKanban,
   type DanhMucNhiemVu,
 } from "./so-nhiem-vu";
@@ -350,6 +352,56 @@ describe("không chỗ vẽ nào còn đọc nhãn mặc định khi xã đã đ
     expect(chuMacDinhLot(html)).toEqual([]);
     for (const ma of BANG_NHAN_MAC_DINH.thuTu) {
       expect(html).toContain(`<option value="${ma}">Xã đặt ${ma}</option>`);
+    }
+  });
+});
+
+/**
+ * Chip `Hoàn thành trễ hạn` từng gõ cứng ở hai chỗ vẽ (thẻ Kanban, bảng Danh sách). Nó không lọt
+ * lưới `chuMacDinhLot` vì chữ ấy không phải một nhãn đứng một mình — nên cần ca riêng.
+ */
+describe("chip hoàn thành trễ hạn theo nhãn `hoan-thanh` của xã", () => {
+  const TRE = {
+    status: "hoan-thanh",
+    original_due_at: "2026-06-20T23:59:59+07:00",
+    completed_at: "2026-08-25T02:00:00Z",
+  } as const;
+
+  it("xã đổi nhãn `hoan-thanh` → chip đổi theo", () => {
+    expect(nhanHoanThanhTreHan(bangDoiHet())).toBe("Xã đặt hoan-thanh trễ hạn");
+  });
+
+  it("đọc nhãn hỏng → đường lui, đúng chữ cũ `Hoàn thành trễ hạn`", () => {
+    const { bang } = docBangNhanTrangThai({ ok: false, thongBao: "Máy chủ bận." });
+    expect(nhanHoanThanhTreHan(bang)).toBe("Hoàn thành trễ hạn");
+  });
+
+  it("thẻ Kanban và bảng Danh sách đều vẽ chữ theo nhãn xã", () => {
+    const bang = bangDoiHet();
+    const the = renderToStaticMarkup(
+      <TheNhiemVu
+        nhiemVu={nhiemVu(TRE)}
+        danhMuc={DANH_MUC}
+        nhanTT={bang}
+        bayGio={BAY_GIO}
+        maDangMo={null}
+        moNhiemVu={() => {}}
+      />,
+    );
+    const ds = renderToStaticMarkup(
+      <BangNhiemVu
+        nhiemVu={[nhiemVu(TRE)]}
+        danhMuc={DANH_MUC}
+        nhanTT={bang}
+        tenBoPhan={new Map()}
+        bayGio={BAY_GIO}
+        maDangMo={null}
+        moNhiemVu={() => {}}
+      />,
+    );
+    for (const html of [the, ds]) {
+      expect(html).toContain(">Xã đặt hoan-thanh trễ hạn</span>");
+      expect(html).not.toContain("Hoàn thành trễ hạn");
     }
   });
 });

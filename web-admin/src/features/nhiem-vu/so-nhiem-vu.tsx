@@ -121,6 +121,7 @@ import {
   nhanBoDem,
   nhanDemCot,
   nhanHanThe,
+  nhanHoanThanhTreHan,
   nhanNgay,
   nhanNguonGiao,
   nhanNhomVanBan,
@@ -1007,6 +1008,7 @@ export function BangKanban({
                       <TheNhiemVu
                         nhiemVu={n}
                         danhMuc={danhMuc}
+                        nhanTT={nhanTT}
                         bayGio={bayGio}
                         maDangMo={maDangMo}
                         moNhiemVu={moNhiemVu}
@@ -1041,12 +1043,14 @@ export function BangKanban({
 export function TheNhiemVu({
   nhiemVu,
   danhMuc,
+  nhanTT,
   bayGio,
   maDangMo,
   moNhiemVu,
 }: {
   nhiemVu: petitions_nhiemVuRa;
   danhMuc: DanhMucNhiemVu;
+  nhanTT: BangNhanTrangThai;
   bayGio: Date;
   maDangMo: string | null;
   moNhiemVu: (n: petitions_nhiemVuRa) => void;
@@ -1070,7 +1074,7 @@ export function TheNhiemVu({
       </p>
       {hoanThanhTreHan(nhiemVu.completed_at, nhiemVu.original_due_at) && (
         <p>
-          <span className="chip chip-hoat-dong">Hoàn thành trễ hạn</span>
+          <span className="chip chip-hoat-dong">{nhanHoanThanhTreHan(nhanTT)}</span>
         </p>
       )}
       <button
@@ -1152,7 +1156,7 @@ export function BangNhiemVu({
                 <td>
                   <span className="chip chip-ngung">{nhanTrangThai(nhanTT, n.status)}</span>
                   {hoanThanhTreHan(n.completed_at, n.original_due_at) && (
-                    <span className="chip chip-hoat-dong">Hoàn thành trễ hạn</span>
+                    <span className="chip chip-hoat-dong">{nhanHoanThanhTreHan(nhanTT)}</span>
                   )}
                 </td>
                 <td className="o-thao-tac">
