@@ -99,6 +99,12 @@ func (d *Directory) ByHost(ctx context.Context, host string) (tenant.Tenant, boo
 	if err != nil {
 		return tenant.Tenant{}, false
 	}
+	// A platform address never names a commune, whatever tenant_domain holds for it — two such
+	// rows exist and are kept (rule 7; migration 0007). Refused BEFORE the query, with the same
+	// answer as an unknown Host, so the row is unreachable rather than merely unlikely.
+	if domain.LaTenMienDanhRieng(h) {
+		return tenant.Tenant{}, false
+	}
 
 	out, err := quetXa(d.db.QueryRowContext(ctx, truyVanTheoHost, h))
 	switch {
@@ -131,6 +137,11 @@ func (d *Directory) ByHostErr(ctx context.Context, host string) (tenant.Tenant, 
 	h, err := domain.NormaliseHost(host)
 	if err != nil {
 		return tenant.Tenant{}, fmt.Errorf("directory: %w", err)
+	}
+	// Same refusal as ByHost, and the SAME sentinel as an unknown Host: a distinct error would let
+	// a caller tell "reserved" from "unclaimed", and nothing needs that distinction.
+	if domain.LaTenMienDanhRieng(h) {
+		return tenant.Tenant{}, ErrKhongCoXa
 	}
 
 	out, err := quetXa(d.db.QueryRowContext(ctx, truyVanTheoHost, h))

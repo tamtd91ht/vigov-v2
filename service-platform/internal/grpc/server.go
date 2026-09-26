@@ -87,6 +87,16 @@ func NewServer(d Deps, log *slog.Logger) *Server {
 func (s *Server) ResolveHost(ctx context.Context, req *platformv1.ResolveHostRequest) (
 	*platformv1.ResolveHostResponse, error) {
 
+	// A platform address (admin.vigov.vn, *.api.vigov.vn, the apex …) never resolves to a commune,
+	// whatever tenant_domain holds — two such rows are kept by rule 7 (migration 0007). Refused
+	// BEFORE the directory is asked, and through loi with the unknown-Host sentinel so the answer
+	// is byte-for-byte the one an unclaimed Host gets: a distinct code would let an outside caller
+	// learn which addresses are the platform's. Nothing is logged here; the host is the caller's
+	// own input and the caller's client already records its negatives.
+	if domain.LaTenMienDanhRieng(req.GetHost()) {
+		return nil, s.loi(ctx, store.ErrKhongCoXa, "ResolveHost")
+	}
+
 	t, err := s.dir.ByHostErr(ctx, req.GetHost())
 	if err != nil {
 		return nil, s.loi(ctx, err, "ResolveHost")

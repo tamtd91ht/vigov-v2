@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-09-25",
+  "cap_nhat": "2026-09-26",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -58,6 +58,15 @@
       "bang_chung": "service-platform/migrations/0006_mini_app_va_ho_so_hien_thi.sql: hai bảng MỚI, không ALTER bảng cũ; CHECK (che_do = 'rieng') = (tenant_id IS NOT NULL); xoá mềm + trigger cấm xoá cứng. Store: internal/store/mini_app.go (Directory.MiniApp, đọc sổ không phạm vi xã), internal/store/ho_so_hien_thi.go (đọc qua core/store.Scoped). gRPC: internal/grpc/server.go ResolveMiniApp, GetTenantProfile. proto thêm GetTenantProfile; buf lint + buf breaking --against HEAD sạch. go vet + go test -race ./service-platform/... ./core/platformclient/... xanh. CÁC CA _pg_test.go BỊ BỎ QUA: máy này không có VIGOV_TEST_DSN, không có PostgreSQL, Docker không chạy — migration 0006 CHƯA CHẠY TRÊN CSDL THẬT NÀO — kiểm 2026-09-25",
       "no_confirm": [],
       "tiep_theo": "(1) Chạy các ca TestPgMiniApp*/TestPgHoSoHienThi* với VIGOV_TEST_DSN trước khi coi là xong. (2) XONG 25/09/2026: ResolveMiniApp đã vào core/grpcx.methodsWithoutTenant; cmd/server/main_test.go TestResolveMiniAppDuocMienXaNhungVanCanKhoa ghim chiều mới (qua chuỗi thật, không xã, vẫn cần khoá gọi). (3) Chưa có đường GHI nào cho hai bảng: tuyến sửa hồ sơ cần khoá quyen (câu mở #27) và ghi vết cùng giao dịch. (4) Chưa chốt: bao nhiêu app chính, một xã được mấy app riêng — không có UNIQUE nào cho hai câu ấy. (5) Mục dang-viet-ten-tinh-thanh ở trên hẹn sửa ở 'migration 0006' — số ấy nay đã dùng, việc ấy sẽ là 0007 trở đi"
+    },
+    {
+      "viec": "Tên miền dành riêng không bao giờ là xã — quy hoạch 4 tên miền (<xa>.vigov.vn · <xa>.stg.vigov.vn · <service>.api.vigov.vn · <service>.api-stg.vigov.vn), admin.vigov.vn là cổng quản trị tổng",
+      "trang_thai": "xong",
+      "bang_chung": "26/09/2026: domain.LaTenMienDanhRieng + chặn ở grpc.ResolveHost, store.ByHost, store.ByHostErr (trả y như tên miền lạ, không truy vấn); migration 0007 CHECK NOT VALID; ca khoá-bước Go↔SQL đọc chính tệp 0007 (đột biến bỏ 'www' bị bắt). go build/vet/test -p 1 service-platform xanh; check_khoa_duy_nhat PASS. _pg_test SKIP (không Docker).",
+      "no_confirm": [],
+      "tiep_theo": "CHỦ DỰ ÁN QUYẾT 26/09/2026 quy hoạch 4 tên miền; nhãn dành riêng admin · admin-stg · api · api-stg · stg · www (dưới vigov.vn và stg.vigov.vn), đỉnh vigov.vn/stg.vigov.vn, mọi host dưới .api.vigov.vn/.api-stg.vigov.vn. Hai dòng cũ admin.vigov.vn/admin-stg.vigov.vn → Xã Thăng Bình GIỮ NGUYÊN (không xoá — việc chủ dự án quyết) nhưng hết phân giải; CHECK NOT VALID khiến mọi UPDATE hai dòng ấy bị từ chối — KHÔNG chạy VALIDATE CONSTRAINT khi chúng còn. THỨ TỰ TRIỂN KHAI: DNS/TLS/Ingress mới → bước Jenkins doi-ten-mien-thang-binh → job service-platform (bật 0007 + chặn) — đảo thứ tự là khoá mình ngoài hệ thống. Bộ đệm tenant.NewCachedDirectory ở mỗi dịch vụ giữ ánh xạ cũ tối đa TENANT_CACHE_TTL (mặc định 30s) sau khi platform lên. Chưa chặn x.admin.vigov.vn / x.www.vigov.vn (ngoài phạm vi đã nêu). Không có tuyến Go nào ghi tenant_domain — CHECK là rào ghi duy nhất.",
+      "menu": null,
+      "id": "ten-mien-danh-rieng"
     }
   ]
 }
