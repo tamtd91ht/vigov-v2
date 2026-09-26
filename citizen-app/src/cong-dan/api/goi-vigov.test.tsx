@@ -16,7 +16,7 @@ const trang = vi.hoisted(() => ({
 
 vi.mock("./phien-vigov", () => ({ layPhienViGov: () => trang.phien }));
 vi.mock("./dia-chi-vigov", () => ({
-  diaChiViGov: (d: string) => (trang.host === "" ? "" : `${trang.host}${d}`),
+  diaChiViGov: (_dich_vu: "petitions", d: string) => (trang.host === "" ? "" : `${trang.host}${d}`),
 }));
 
 import { KetQuaGui } from "../man/GuiPhanAnhScreen";

@@ -218,9 +218,9 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
   };
 }
 
-/** Địa chỉ tuyến gửi, hoặc RỖNG khi chưa có máy chủ ViGov. */
+/** Địa chỉ tuyến gửi trên host của `service-petitions`, hoặc RỖNG khi host ấy chưa có. */
 export function diaChiGuiPhanAnh(): string {
-  return diaChiViGov(DUONG_DAN_PHAN_ANH_CUA_TOI);
+  return diaChiViGov("petitions", DUONG_DAN_PHAN_ANH_CUA_TOI);
 }
 
 /**
@@ -324,7 +324,7 @@ export function docTrangPhieuCuaToi(than: unknown): TrangPhieuCuaToi | null {
  * một ký tự `&` hay `=` trong chuỗi mờ không đổi được tham số, và máy chủ giải mã về đúng chuỗi ấy.
  */
 export function diaChiDanhSach(con_tro: string): string {
-  const goc = diaChiViGov(DUONG_DAN_PHAN_ANH_CUA_TOI);
+  const goc = diaChiViGov("petitions", DUONG_DAN_PHAN_ANH_CUA_TOI);
   if (goc === "") return "";
   const q = new URLSearchParams({ limit: String(SO_DONG_MOI_TRANG) });
   if (con_tro !== "") q.set("cursor", con_tro);
@@ -339,6 +339,6 @@ export function diaChiDanhSach(con_tro: string): string {
  * trường hợp khác). `encodeURIComponent` để một ký tự lạ người dân gõ không đổi được đường dẫn.
  */
 export function diaChiTraCuu(ma_tra_cuu: string): string {
-  const goc = diaChiViGov(DUONG_DAN_PHAN_ANH_CUA_TOI);
+  const goc = diaChiViGov("petitions", DUONG_DAN_PHAN_ANH_CUA_TOI);
   return goc === "" ? "" : `${goc}/${encodeURIComponent(ma_tra_cuu)}`;
 }

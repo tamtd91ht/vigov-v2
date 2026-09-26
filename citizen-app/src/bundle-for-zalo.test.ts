@@ -52,6 +52,7 @@ import {
 import { NHAN_KHAM_PHA } from "./features/kham-pha/index";
 import { LOI_NHAN, nhanNguon } from "./features/kham-pha/goi-y";
 import { LOI_NHAN_DANG_LAM } from "./features/kham-pha/TrangXaScreen";
+import { diaChiViGov } from "./cong-dan/api/dia-chi-vigov";
 import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
 import { NHAN_KENH_CONG_DAN } from "./cong-dan/man/KenhCongDan";
 import { CUA_TOI, KENH_CHUA_MO, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
@@ -529,6 +530,16 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     expect(dem(goc, DUONG_DAN_PHAN_ANH_CUA_TOI), "bản NỘP mang tuyến ViGov của kênh công dân").toBe(0);
     expect(day_du).toContain("Idempotency-Key");
     expect(goc, "bản NỘP mang tiêu đề chống gửi trùng của tuyến ViGov").not.toContain("Idempotency-Key");
+
+    // HOST CỦA `service-petitions` (ADR 0046, 26/09/2026). Đọc từ chính `diaChiViGov`, không gõ lại:
+    // đổi host thì ca này đi theo, thay vì xanh vì không bản nào chứa chuỗi gõ tay. Vế "bản thử CÓ"
+    // là thứ giữ cho vế "bản nộp KHÔNG" còn nội dung. Bản nộp là app của ViHAT Group, và một host
+    // `.vigov.vn` trong đó là một chi tiết cơ quan nhà nước lọt vào thứ người duyệt Zalo đọc.
+    const host_petitions = new URL(diaChiViGov("petitions", "/")).host;
+    expect(host_petitions, "bảng host của kênh công dân mất dòng `petitions`").toBe("petitions.api.vigov.vn");
+    expect(day_du, "bản thử không mang host của petitions").toContain(host_petitions);
+    expect(goc, "bản NỘP mang host ViGov của kênh công dân").not.toContain(host_petitions);
+    expect(goc, "bản NỘP mang một host `.api.vigov.vn` nào đó").not.toContain(".api.vigov.vn");
 
     // `CUA_TOI` (26/09/2026): màn "Phản ánh của tôi" — cũng CHỈ ở bản thử.
     for (const chuoi of [

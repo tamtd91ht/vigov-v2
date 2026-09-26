@@ -39,9 +39,18 @@ afterEach(() => {
 });
 
 describe("nguồn phiên ViGov đóng — không một lời gọi mạng nào đi ra", () => {
-  it("nguồn phiên trả `null`, và địa chỉ ViGov là chuỗi rỗng", () => {
+  it("nguồn phiên trả `null` — dù host của `petitions` đã có (ADR 0046)", () => {
     expect(layPhienViGov()).toBeNull();
-    expect(diaChiViGov("/api/v1/my-citizen-reports")).toBe("");
+    // Host đã chốt; cổng DUY NHẤT còn giữ yêu cầu lại là phiên. Ca ngay dưới chứng minh điều đó.
+    expect(diaChiViGov("petitions", "/api/v1/my-citizen-reports")).toBe(
+      "https://petitions.api.vigov.vn/api/v1/my-citizen-reports",
+    );
+  });
+
+  it("một tên dịch vụ ngoài bảng ra RỖNG, không ra `undefined/…` hay khoá của `Object.prototype`", () => {
+    for (const ten of ["identity", "toString", "__proto__", ""]) {
+      expect(diaChiViGov(ten as "petitions", "/api/v1/x"), ten).toBe("");
+    }
   });
 
   it("gửi và tra cứu dừng ở `chua-co-phien`, fetch KHÔNG được gọi", async () => {
