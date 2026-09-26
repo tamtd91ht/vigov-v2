@@ -18,6 +18,14 @@ describe("khối phần chưa dựng của màn Cấu hình", () => {
     }
   });
 
+  it("không còn mục nói thanh chuyển tab chưa dựng — đã quyết (26/09) và đã dựng", () => {
+    // Thanh tab dựng ở `khung-tab-cau-hinh.tsx`. Một mục "chưa có thanh tab" còn sót là câu sai
+    // hiện ra với cán bộ ngay bên dưới chính thanh tab ấy — và ca đầu tiên của tệp vẫn xanh.
+    expect(
+      PHAN_CHUA_DUNG.some((p) => /thanh (chuyển )?tab/i.test(`${p.ten} ${p.viSao}`)),
+    ).toBe(false);
+  });
+
   it("không còn mục nói tab Phân quyền chưa lưu được — phần ấy đã dựng", () => {
     expect(PHAN_CHUA_DUNG.some((p) => /Lưu.*Phân quyền|Phân quyền.*Lưu/i.test(p.ten))).toBe(false);
   });

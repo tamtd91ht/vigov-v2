@@ -4,12 +4,7 @@ import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { KhoiChuaDung } from "@/features/cau-hinh/khoi-chua-dung";
-import { TabDanhMuc } from "@/features/cau-hinh/tab-danh-muc";
-import { TabNguoiDung } from "@/features/cau-hinh/tab-nguoi-dung";
-import { TabPhanQuyen } from "@/features/cau-hinh/tab-phan-quyen";
-import { TabSoDoToChuc } from "@/features/cau-hinh/tab-so-do-to-chuc";
-import { TabThoiHanXuLy } from "@/features/cau-hinh/tab-thoi-han-xu-ly";
-import { TabThonToDanPho } from "@/features/cau-hinh/tab-thon-to-dan-pho";
+import { KhungTabCauHinh } from "@/features/cau-hinh/khung-tab-cau-hinh";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -41,13 +36,15 @@ import { layCauHinhXa } from "@/lib/tenant.server";
  * kiểm câu có còn đúng hay không. Một lời khai sai mà không cổng nào đỏ là thứ chỉ gỡ được bằng
  * cách xoá nguồn của nó.
  *
- * VÀ Ở ĐÂY CHƯA CÓ THANH TAB NÀO: sáu phần dựng nối tiếp trong trang, theo đúng thứ tự tab của
- * đặc tả §0. Chưa dựng thanh chuyển tab vì nó đặt ra một câu chưa ai trả lời: tài khoản chỉ mở
- * được MỘT tab thì thanh ấy hiện một nút đứng trơ, hay không hiện? Đó là quyết định về giao diện
- * của khách, và đoán hộ thì phải đoán lại khi tab thứ bảy mọc lên. Dựng nối tiếp không mất gì:
- * mỗi phần vẫn đọc dữ liệu của riêng nó, và phần nào thiếu quyền thì không gọi tuyến nào.
+ * THANH TAB — QUYẾT ĐỊNH CỦA NGƯỜI DÙNG (26/09): tài khoản mở được từ HAI tab trở lên thì hiện
+ * thanh tab; chỉ mở được MỘT tab thì KHÔNG hiện thanh, nội dung tab ấy hiện thẳng. Câu này từng
+ * để ngỏ (một nút tab đứng trơ, hay không hiện?) và sáu phần đã dựng nối tiếp cho tới khi có lời
+ * đáp. Phần dựng ở `features/cau-hinh/khung-tab-cau-hinh.tsx`, phần quyết định ở
+ * `features/cau-hinh/thanh-tab-cau-hinh.ts`. Chưa đọc xong phiên thì chưa dựng thanh — tab đầu
+ * hiện thẳng — để thanh chỉ có thể xuất hiện, không bao giờ hiện rồi biến mất.
  *
- * CỔNG QUYỀN Ở MỖI PHẦN ĐI THEO TUYẾN ĐỌC CỦA NÓ Ở MÁY CHỦ, không theo một luật chung ở đây:
+ * CỔNG QUYỀN Ở MỖI TAB ĐI THEO TUYẾN ĐỌC CỦA NÓ Ở MÁY CHỦ, không theo một luật chung ở đây. Thanh
+ * tab ẩn đúng hai tab mà trước đây cả phần bị ẩn, không thêm cổng nào:
  *
  *   | Phần            | Khoá           | Cổng bọc                                              |
  *   |-----------------|----------------|-------------------------------------------------------|
@@ -87,15 +84,8 @@ export default async function TrangCauHinh() {
           <p className="mo-ta-trang">
             Tổ chức, phân quyền, danh mục nghiệp vụ và thời hạn xử lý của đơn vị.
           </p>
-          {/* Thứ tự tab của đặc tả §0, giữ nguyên: Sơ đồ tổ chức · Thôn/Tổ dân phố · Người dùng ·
-              Phân quyền · Danh mục · Thời hạn xử lý. Sắp lại theo thứ tự dựng xong sẽ làm cán bộ đã
-              quen màn hình cũ phải đi tìm lại từng phần. */}
-          <TabSoDoToChuc />
-          <TabThonToDanPho />
-          <TabNguoiDung />
-          <TabPhanQuyen />
-          <TabDanhMuc />
-          <TabThoiHanXuLy />
+          {/* Thứ tự tab của đặc tả §0 nằm ở `TAB_CAU_HINH` (`thanh-tab-cau-hinh.ts`). */}
+          <KhungTabCauHinh />
           {/* Những phần của đặc tả chưa dựng, kèm lý do — ở CUỐI trang để không chen giữa các tab
               đang dùng được (`features/cau-hinh/nhan-cau-hinh.ts`). */}
           <KhoiChuaDung />

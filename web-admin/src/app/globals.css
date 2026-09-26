@@ -817,6 +817,42 @@ body {
   font-weight: 400;
 }
 
+/* ---- màn cấu hình · thanh tab (§0: tab đang chọn tô đậm + nền nhạt) ------------------------
+ * `flex-wrap`: ở 320px sáu nhãn xuống hai-ba hàng thay vì tràn ngang. Nút cao tối thiểu 44px để
+ * bấm được bằng ngón tay. Tab đang chọn khác tab thường ở CẢ chữ đậm, nền lẫn gạch dưới — không
+ * dựa vào màu riêng lẻ (`15-phu-luc §8`). */
+.thanh-tab-cau-hinh {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 1.5rem;
+  border-bottom: 1px solid var(--xam-vien);
+}
+
+.thanh-tab-cau-hinh [role="tab"] {
+  font: inherit;
+  min-height: 44px;
+  padding: 0.5rem 0.875rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0.375rem 0.375rem 0 0;
+  background: transparent;
+  color: var(--xam-chu);
+  cursor: pointer;
+}
+
+.thanh-tab-cau-hinh [role="tab"][aria-selected="true"] {
+  font-weight: 700;
+  color: #111827;
+  background: #e8eefc;
+  border-bottom-color: var(--xanh);
+}
+
+/* Mỗi phần tự đặt `margin-top: 2.5rem` từ thời còn dựng nối tiếp; ngay dưới thanh tab thì bớt đi. */
+.panel-cau-hinh > :first-child {
+  margin-top: 1.5rem;
+}
+
 /* ---- màn cấu hình · tab Thôn/Tổ dân phố và tab Danh mục -------------------------------- */
 
 .tab-thon-to-dan-pho,

@@ -24,13 +24,6 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Thanh chuyển tab (§0)",
-    viSao:
-      "Các phần của màn này đang dựng nối tiếp nhau trong trang. Thanh tab đặt ra một câu về giao " +
-      "diện chưa ai trả lời: tài khoản chỉ mở được một tab thì thanh ấy hiện một nút đứng một mình " +
-      "hay không hiện. Lý do đầy đủ ghi ở đầu `app/cau-hinh/page.tsx`.",
-  },
-  {
     ten: "Tab Sơ đồ tổ chức — xoá bộ phận (§1, §12.4)",
     viSao:
       "Hợp đồng chưa có tuyến xoá bộ phận. §12.4 đòi chặn khi bộ phận còn cán bộ HOẶC còn hồ sơ " +
