@@ -354,13 +354,25 @@ SELECT t.id, t.ten, t.dang_hoat_dong, d.host, d.la_chinh
                 "containers":[{"name":"psql","image":"postgres:16-alpine","stdin":true,
                   "envFrom":[{"secretRef":{"name":"platform-secrets"}}],
                   "command":["sh","-c","psql \\"$DATABASE_DSN\\" -X -q -v ON_ERROR_STOP=1 -f -"]}]}}'
+          # Lượt #17 (26/09/2026) chết ở "timed out waiting for the condition": pod psql không lên
+          # Running trong 1 phút mặc định của `kubectl run` — thường là kéo postgres:16-alpine từ
+          # Docker Hub chậm/bị giới hạn. Đợi 5 phút, và khi hỏng thì IN SỰ KIỆN của pod để log nói
+          # nguyên nhân thật, rồi dọn pod (--rm không dọn khi chưa từng gắn được vào pod).
+          chay_psql() {
+            ten="$1"
+            if ! kubectl -n vigov-prod run "$ten" --rm -i --restart=Never \
+                  --image=postgres:16-alpine --overrides="$OVR" --quiet --pod-running-timeout=5m; then
+              echo "── pod $ten không chạy xong — sự kiện của pod:"
+              kubectl -n vigov-prod describe pod "$ten" 2>/dev/null | sed -n '/^Events:/,$p' || true
+              kubectl -n vigov-prod delete pod "$ten" --ignore-not-found --wait=false || true
+              return 1
+            fi
+          }
           echo "── tên miền của xã và hai host mới (trước khi ghi)"
           echo "SELECT host, tenant_id, la_chinh FROM tenant_domain WHERE tenant_id = '01M3CS7HHK72V71CGRRJHGR8E8' OR host IN ('thangbinh-danang.vigov.vn', 'thangbinh-danang.stg.vigov.vn') ORDER BY host;" \
-            | kubectl -n vigov-prod run "vigov-psql-doc-$BUILD_NUMBER" --rm -i --restart=Never \
-                --image=postgres:16-alpine --overrides="$OVR" --quiet
+            | chay_psql "vigov-psql-doc-$BUILD_NUMBER"
           echo "── ghi"
-          kubectl -n vigov-prod run "vigov-psql-ghi-$BUILD_NUMBER" --rm -i --restart=Never \
-              --image=postgres:16-alpine --overrides="$OVR" --quiet < doi-ten-mien.sql
+          chay_psql "vigov-psql-ghi-$BUILD_NUMBER" < doi-ten-mien.sql
           echo ""
           echo "Xong. Thử: https://thangbinh-danang.vigov.vn/dang-nhap · https://thangbinh-danang.stg.vigov.vn/dang-nhap"
           echo "Bước kế: job service-platform (migration 0007)."
