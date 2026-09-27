@@ -49,6 +49,13 @@ import {
   CHI_TIET_THIEU_VAN_BAN,
   loiSauKhiDocLai,
   VAN_BAN_VUA_BI_DOI,
+  DANG_TAI_DANH_BA,
+  DE_BO_PHAN_TU_PHAN_CONG,
+  MOI_NGUOI_THUC_HIEN_NHAN,
+  cauLoiDanhBaGiaoViec,
+  cauLoiDanhBaLoc,
+  docDanhBaChonNguoi,
+  nhanTrongOChonCanBo,
   type DongVanBanNhap,
   type DongVanBanSua,
   type FormGiaoViecNhap,
@@ -280,6 +287,19 @@ describe("phần chưa dựng được", () => {
     expect(moiLyDo).toContain("Sắp đến hạn");
     expect(moiLyDo).toContain("task.assign");
     expect(moiLyDo).toContain("chuyen-tiep");
+  });
+
+  it("ba ô chọn cán bộ ĐÃ DỰNG (TASK-05): mục cũ rời danh sách, chỉ còn mục ô tìm theo tên", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026: mục "Ô chọn `Người thực hiện` · …" từng giải thích vì sao ba
+    // ô là ô gõ mã (danh bạ đứng sau `admin.user`). Ba ô nay đổ từ `GET /api/v1/staff-directory`.
+    // Một mục còn nằm đó sau khi đã dựng là mục đẩy người sau đi dựng lại thứ đã có.
+    expect(PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Ô chọn `Người thực hiện`"))).toBeUndefined();
+    const moiLyDo = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" ");
+    expect(moiLyDo).not.toContain("admin.user");
+    expect(moiLyDo).not.toContain("ô gõ mã cán bộ");
+    const oTim = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Gõ tên để tìm…"));
+    expect(oTim).toBeDefined();
+    expect(oTim?.viSao).toContain("danh bạ chọn người");
   });
 
   it("hai mục về văn bản chỉ đạo nói ĐÚNG thứ còn thiếu hôm nay, không còn nói bảng chưa có", () => {
@@ -884,5 +904,54 @@ describe("✎ Sửa — đọc lại trước khi lưu: không gỡ lặng lẽ 
     expect(VAN_BAN_VUA_BI_DOI).toContain("vừa được người khác thay đổi");
     expect(VAN_BAN_VUA_BI_DOI).toContain("Chưa lưu gì");
     expect(VAN_BAN_VUA_BI_DOI).toContain("Huỷ");
+  });
+});
+
+describe("danh bạ chọn người cho ba ô chọn cán bộ — BA pha, không hai", () => {
+  const CB = { code: "CB-00001", full_name: "Cán bộ giả", position: "", department_id: "" };
+
+  it("chưa đọc xong (`null`) ⇒ đang tải, không lỗi, không lựa chọn nào", () => {
+    expect(docDanhBaChonNguoi(null)).toEqual({ ds: [], dangTai: true, loi: null });
+  });
+
+  it("đọc hỏng ⇒ KHÔNG đang tải, câu máy chủ NGUYÊN VĂN, không lựa chọn nào — không đoán ai", () => {
+    expect(docDanhBaChonNguoi({ ok: false, thongBao: "Bạn chưa đăng nhập." })).toEqual({
+      ds: [],
+      dangTai: false,
+      loi: "Bạn chưa đăng nhập.",
+    });
+  });
+
+  it("đọc được ⇒ đúng `items` máy chủ trả, mã là mã nghiệp vụ", () => {
+    const db = docDanhBaChonNguoi({ ok: true, duLieu: { items: [CB] } });
+    expect(db).toEqual({ ds: [CB], dangTai: false, loi: null });
+    expect(db.ds[0]?.code).toMatch(/^CB-/);
+  });
+
+  it("đọc được mà RỖNG khác đang tải: ô không khoá, lựa chọn rỗng mang nghĩa của ô", () => {
+    const rong = docDanhBaChonNguoi({ ok: true, duLieu: { items: [] } });
+    expect(rong.dangTai).toBe(false);
+    expect(nhanTrongOChonCanBo(rong, DE_BO_PHAN_TU_PHAN_CONG)).toBe(DE_BO_PHAN_TU_PHAN_CONG);
+  });
+
+  it("chữ lựa chọn rỗng: đang tải thì nói đang tải; hỏng thì vẫn là nghĩa của ô", () => {
+    expect(nhanTrongOChonCanBo(docDanhBaChonNguoi(null), MOI_NGUOI_THUC_HIEN_NHAN)).toBe(
+      DANG_TAI_DANH_BA,
+    );
+    const hong = docDanhBaChonNguoi({ ok: false, thongBao: "x" });
+    expect(nhanTrongOChonCanBo(hong, MOI_NGUOI_THUC_HIEN_NHAN)).toBe(MOI_NGUOI_THUC_HIEN_NHAN);
+    expect(DE_BO_PHAN_TU_PHAN_CONG).toBe("— Để bộ phận tự phân công —");
+  });
+
+  it("câu lỗi của ô lọc mang câu máy chủ và nói ô còn lại gì", () => {
+    const cau = cauLoiDanhBaLoc("Máy chủ bận.");
+    expect(cau).toContain("Máy chủ bận.");
+    expect(cau).toContain(MOI_NGUOI_THUC_HIEN_NHAN);
+  });
+
+  it("câu lỗi của form Giao việc NÓI HỆ QUẢ: lãnh đạo giao việc không ghi lại được sau khi tạo", () => {
+    const cau = cauLoiDanhBaGiaoViec("Máy chủ bận.");
+    expect(cau).toContain("Máy chủ bận.");
+    expect(cau).toContain("lãnh đạo giao việc không ghi lại được sau khi tạo");
   });
 });

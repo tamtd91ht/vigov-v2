@@ -22,6 +22,8 @@
 
 import type { KetQua } from "@/lib/api/goi";
 import type {
+  identity_canBoChonNguoiRa,
+  identity_danhBaChonNguoiRa,
   petitions_danhSachTrangThaiNhiemVuRa,
   petitions_nhiemVuRa,
   petitions_nhiemVuVanBanRa,
@@ -609,6 +611,71 @@ export const CHUA_GIAO_BO_PHAN = "Chưa giao bộ phận nào";
 
 /** Lựa chọn mặc định của hai ô chọn ở §5.7 và §7.1 — nguyên văn đặc tả. */
 export const CHUA_XAC_DINH = "— Chưa xác định —";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * BA Ô CHỌN CÁN BỘ (§3 `Người thực hiện`; §7 `Người thực hiện` · `Lãnh đạo giao việc` ·
+ * `Chuyên viên theo dõi`) — đổ từ DANH BẠ CHỌN NGƯỜI
+ *
+ * Nguồn là `GET /api/v1/staff-directory` (`AnyAuthenticated`, chỉ mã · họ tên · chức vụ · bộ phận),
+ * KHÔNG phải `GET /api/v1/staff` (đứng sau `admin.user`). Giá trị gửi đi vẫn là MÃ NGHIỆP VỤ
+ * `CB-…` (`code`) — đúng loại ba trường `assignee` · `assigner` · `monitor` của hợp đồng giữ
+ * (luật 6, bất biến 8). Một ULID ở đó được máy chủ nhận nhưng không khớp cán bộ nào, lặng lẽ. Ô chọn dùng chung: `components/o-chon-can-bo.tsx`.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** §7 — lựa chọn rỗng của ô `Người thực hiện`, nguyên văn đặc tả. */
+export const DE_BO_PHAN_TU_PHAN_CONG = "— Để bộ phận tự phân công —";
+
+/** Chữ của lựa chọn rỗng trong lúc danh bạ còn đang tải — ô khoá, và nói vì sao. */
+export const DANG_TAI_DANH_BA = "Đang tải danh bạ cán bộ…";
+
+/**
+ * Danh bạ đọc ra cho ô chọn — BA pha, không hai.
+ *
+ * "Đang tải" và "tải hỏng" đều cho ra một mảng rỗng, nhưng nói hai câu khác hẳn: một ô rỗng không
+ * lời giải thích đọc lên là "xã không có cán bộ nào", và cán bộ sẽ giao việc cho bộ phận vì tưởng
+ * không còn cách nào khác.
+ */
+export type DanhBaChonNguoi = {
+  readonly ds: readonly identity_canBoChonNguoiRa[];
+  readonly dangTai: boolean;
+  /** Câu máy chủ, NGUYÊN VĂN, khi đọc hỏng. */
+  readonly loi: string | null;
+};
+
+export function docDanhBaChonNguoi(
+  kq: KetQua<identity_danhBaChonNguoiRa> | null,
+): DanhBaChonNguoi {
+  if (kq === null) return { ds: [], dangTai: true, loi: null };
+  if (!kq.ok) return { ds: [], dangTai: false, loi: kq.thongBao };
+  return { ds: kq.duLieu.items, dangTai: false, loi: null };
+}
+
+/** Chữ của lựa chọn rỗng: đang tải thì nói đang tải, còn lại là ý nghĩa của "không chọn ai". */
+export function nhanTrongOChonCanBo(db: DanhBaChonNguoi, macDinh: string): string {
+  return db.dangTai ? DANG_TAI_DANH_BA : macDinh;
+}
+
+/** Câu dưới ô lọc `Người thực hiện` khi danh bạ đọc hỏng. */
+export function cauLoiDanhBaLoc(thongBao: string): string {
+  return (
+    `Không tải được danh bạ cán bộ: ${thongBao} Ô lọc Người thực hiện tạm thời chỉ còn ` +
+    `"${MOI_NGUOI_THUC_HIEN_NHAN}".`
+  );
+}
+
+/**
+ * Câu trong form `Giao việc mới` khi danh bạ đọc hỏng. NÓI RA HỆ QUẢ, không chỉ nói lỗi: bấm
+ * `Giao việc` lúc này là tạo một nhiệm vụ không ghi cán bộ nào, và `Lãnh đạo giao việc` không sửa
+ * lại được sau khi tạo (ADR 0038) — không ai duyệt được đề nghị lùi hạn của nó, vĩnh viễn.
+ */
+export function cauLoiDanhBaGiaoViec(thongBao: string): string {
+  return (
+    `Không tải được danh bạ cán bộ: ${thongBao} Các ô chọn cán bộ chỉ còn lựa chọn trống. Giao ` +
+    "việc lúc này thì nhiệm vụ không ghi người thực hiện, lãnh đạo giao việc hay chuyên viên theo " +
+    "dõi — và lãnh đạo giao việc không ghi lại được sau khi tạo. Đóng biểu mẫu và mở lại trang " +
+    "để thử đọc lại danh bạ."
+  );
+}
 
 /** §5.8 — chú thích bắt buộc dưới ô đề nghị lùi hạn. */
 export const GHI_CHU_LUI_HAN =
@@ -1470,12 +1537,11 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "câu từ chối, nhưng lãnh đạo không có đề nghị nào để bấm.",
   },
   {
-    ten: "Ô chọn `Người thực hiện` · `Lãnh đạo giao việc` · `Chuyên viên theo dõi` (§3, §7)",
+    ten: "Ô tìm cán bộ `Gõ tên để tìm…` của `Lãnh đạo giao việc` và `Chuyên viên theo dõi` (§7)",
     viSao:
-      "Ba ô ấy cần danh bạ cán bộ, mà `GET /api/v1/staff` đứng sau `admin.user` — khoá quản trị " +
-      "danh bạ, không phải khoá nhiệm vụ. Một cán bộ có `task.create` mà không có `admin.user` sẽ " +
-      "nhận 403 khi màn hình đi đổ ba ô chọn ấy. Nên ba ô là **ô gõ mã cán bộ** (`CB-…`) chứ không " +
-      "phải ô chọn, và chúng nhận đúng loại giá trị ba cột kia giữ (luật 6, bất biến 8).",
+      "Đặc tả vẽ hai ô ấy là hộp tìm kiếm gõ tên. Màn này dùng ô chọn thả xuống thường của trình " +
+      "duyệt — cùng loại ô màn Phản ánh và Biên bản đang dùng — đổ từ danh bạ chọn người, có nhãn " +
+      "và đi được bằng bàn phím. Chỉ nhảy được theo chữ cái đầu, chưa lọc được theo một phần họ tên.",
   },
   {
     ten: "CỔNG QUYỀN Ở GIAO DIỆN cho bảy khoá `task.*`",

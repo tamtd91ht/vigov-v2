@@ -110,6 +110,7 @@ function bienBan(sua: Partial<petitions_bienBanRa> = {}): petitions_bienBanRa {
 function phepTach(sua: Partial<PhepTach> = {}): PhepTach {
   return {
     danhMuc: { loai: [], mucUuTien: [], khoi: [], boPhan: [] },
+    danhBa: null,
     dangGui: false,
     moOKetLuan: null,
     loi: null,

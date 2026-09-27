@@ -262,6 +262,7 @@ describe("màn Nhiệm vụ dùng NHÃN CỦA XÃ ở mọi chỗ hiện trạng
         datTim={() => {}}
         datLoc={() => {}}
         danhMuc={DANH_MUC}
+        danhBa={null}
         nhanTT={bangXa()}
       />,
     );
@@ -347,7 +348,7 @@ describe("không chỗ vẽ nào còn đọc nhãn mặc định khi xã đã đ
 
   it("ô lọc: bảy lựa chọn đều là nhãn xã", () => {
     const html = renderToStaticMarkup(
-      <HangLoc loc={{}} tim="" datTim={() => {}} datLoc={() => {}} danhMuc={DANH_MUC} nhanTT={bangDoiHet()} />,
+      <HangLoc loc={{}} tim="" datTim={() => {}} datLoc={() => {}} danhMuc={DANH_MUC} danhBa={null} nhanTT={bangDoiHet()} />,
     );
     expect(chuMacDinhLot(html)).toEqual([]);
     for (const ma of BANG_NHAN_MAC_DINH.thuTu) {

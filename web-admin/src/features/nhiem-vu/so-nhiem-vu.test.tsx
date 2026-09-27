@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   identity_boPhanRa,
+  identity_danhBaChonNguoiRa,
   petitions_deNghiLuiHanRa,
   petitions_nhiemVuRa,
   petitions_nhiemVuVanBanRa,
@@ -163,6 +164,22 @@ const DANH_MUC_CO_BAN: DanhMucNhiemVu = {
       tier: 1,
     },
   ],
+};
+
+/** Danh bạ chọn người giả — mã cán bộ giả, không số điện thoại, không email (đúng hợp đồng). */
+const DANH_BA: KetQua<identity_danhBaChonNguoiRa> = {
+  ok: true,
+  duLieu: {
+    items: [
+      { code: LANH_DAO, full_name: "Trần Văn Lãnh", position: "Chủ tịch", department_id: "" },
+      {
+        code: NGUOI_KHAC,
+        full_name: "Nguyễn Thị Thực",
+        position: "",
+        department_id: "01JBOPHAN",
+      },
+    ],
+  },
 };
 
 const TEN_BO_PHAN = new Map(BO_PHAN.map((b) => [b.id, b.name]));
@@ -489,6 +506,7 @@ describe("form Giao việc mới §7", () => {
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
+        danhBa={DANH_BA}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -507,6 +525,7 @@ describe("form Giao việc mới §7", () => {
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
+        danhBa={DANH_BA}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -521,6 +540,7 @@ describe("form Giao việc mới §7", () => {
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
+        danhBa={DANH_BA}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -536,6 +556,7 @@ describe("form Giao việc mới §7", () => {
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
+        danhBa={DANH_BA}
         coDanhSachVanBan
         dangGui={false}
         loi={null}
@@ -559,6 +580,7 @@ describe("form Giao việc mới §7", () => {
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC_CO_BAN}
+        danhBa={DANH_BA}
         coDanhSachVanBan
         dangGui={false}
         loi={null}
@@ -581,6 +603,7 @@ describe("form Giao việc mới §7", () => {
     const html = renderToStaticMarkup(
       <FormGiaoViec
         danhMuc={DANH_MUC}
+        danhBa={DANH_BA}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -615,10 +638,73 @@ describe("phần chưa dựng được — ra tới màn hình, không giấu tr
     for (const p of PHAN_CHUA_DUNG) {
       expect(html).toContain(nhuTrongHTML(p.ten));
     }
-    // Ba phát hiện nặng nhất, gọi đích danh thứ còn thiếu ở hợp đồng.
+    // Những phát hiện nặng nhất, gọi đích danh thứ còn thiếu ở hợp đồng.
     expect(html).toContain("KHÔNG phát ra `id`");
-    expect(html).toContain("admin.user");
     expect(html).toContain("task.extend");
+    // ĐỔI CÓ CHỦ Ý 27/09/2026 (TASK-05): bài này từng canh chữ `admin.user` — lý do ba ô cán bộ là
+    // ô gõ mã. Ba ô nay đổ từ `GET /api/v1/staff-directory`, nên mục ấy rời danh sách; phần còn
+    // thiếu thu lại đúng một điều — ô tìm theo tên đặc tả vẽ.
+    expect(html).not.toContain("admin.user");
+    expect(html).toContain("Gõ tên để tìm…");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * BA Ô CHỌN CÁN BỘ CỦA FORM GIAO VIỆC — đổ từ danh bạ chọn người, GỬI MÃ `CB-…`
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Đoạn HTML của MỘT `<select>` theo `id`, để phép so không xanh nhờ một ô khác. */
+function oChon(html: string, id: string): string {
+  const dau = html.indexOf(`<select id="${id}"`);
+  expect(dau).toBeGreaterThanOrEqual(0);
+  return html.slice(dau, html.indexOf("</select>", dau));
+}
+
+function veForm(danhBa: KetQua<identity_danhBaChonNguoiRa> | null): string {
+  return renderToStaticMarkup(
+    <FormGiaoViec
+      danhMuc={DANH_MUC}
+      danhBa={danhBa}
+      dangGui={false}
+      loi={null}
+      huy={() => {}}
+      giaoViec={() => {}}
+    />,
+  );
+}
+
+describe("form Giao việc — ô chọn cán bộ", () => {
+  it("giá trị mỗi lựa chọn là MÃ NGHIỆP VỤ `CB-…`, chữ hiện là họ tên · chức vụ", () => {
+    const html = veForm(DANH_BA);
+    for (const id of ["giao-nguoi-thuc-hien", "giao-lanh-dao", "giao-chuyen-vien"]) {
+      const o = oChon(html, id);
+      expect(o).toContain(`value="${LANH_DAO}"`);
+      expect(o).toContain(`value="${NGUOI_KHAC}"`);
+      expect(o).toContain(">Trần Văn Lãnh · Chủ tịch</option>");
+      expect(o).not.toContain("disabled");
+    }
+    // Có nhãn gắn đúng ô — ô chọn không nhãn là ô trình đọc màn hình đọc thành "hộp chọn".
+    expect(html).toContain('for="giao-lanh-dao"');
+    // Ô gõ mã cũ đã đi.
+    expect(html).not.toContain('placeholder="CB-…"');
+  });
+
+  it("danh bạ ĐỌC HỎNG: câu lỗi nguyên văn máy chủ, `role=\"alert\"`, ô chỉ còn lựa chọn trống", () => {
+    const html = veForm({ ok: false, thongBao: "Máy chủ danh bạ đang bảo trì." });
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Máy chủ danh bạ đang bảo trì.");
+    const o = oChon(html, "giao-lanh-dao");
+    expect(o.split("<option").length - 1).toBe(1);
+    expect(o).toContain('value=""');
+    expect(o).not.toContain("CB-");
+  });
+
+  it("danh bạ CHƯA ĐỌC XONG: ô khoá, nói đang tải, và nút Giao việc khoá", () => {
+    const html = veForm(null);
+    const o = oChon(html, "giao-nguoi-thuc-hien");
+    expect(o).toContain("disabled");
+    expect(o).toContain("Đang tải danh bạ cán bộ…");
+    expect(html).not.toContain('role="alert"');
   });
 });
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { OChonCanBo } from "@/components/o-chon-can-bo";
 import { duongDanBienBan } from "@/features/bien-ban/nhan-bien-ban";
 import {
   coTrangTruoc,
@@ -13,6 +14,7 @@ import {
   type NganXepConTro,
 } from "@/features/cau-hinh/ngan-xep-con-tro";
 import { usePhien } from "@/features/phien/phien-hien-tai";
+import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import {
   layKhoiNhiemVu,
@@ -34,6 +36,7 @@ import {
 import { layTrangThaiNhiemVu } from "@/lib/api/trang-thai-nhiem-vu";
 import type {
   identity_boPhanRa,
+  identity_danhBaChonNguoiRa,
   identity_khoiNhiemVuRa,
   page_Result_petitions_nhiemVuRa,
   petitions_danhSachTrangThaiNhiemVuRa,
@@ -57,6 +60,7 @@ import {
   CHU_THICH_HAI_O_TICK,
   COT_RONG,
   DANG_TAI_SO,
+  DE_BO_PHAN_TU_PHAN_CONG,
   DANG_TAI_VAN_BAN,
   GHI_CHU_DEM_COT,
   GHI_CHU_HAN_VIEC_CON,
@@ -74,6 +78,7 @@ import {
   MOI_KHOI_NHAN,
   MOI_LOAI_NHAN,
   MOI_MUC_UU_TIEN_NHAN,
+  MOI_NGUOI_THUC_HIEN_NHAN,
   MOI_NGUON_GIAO,
   MOI_NGUON_GIAO_NHAN,
   MOI_NHOM_VAN_BAN,
@@ -101,6 +106,8 @@ import {
   TRANG_THAI_RE_NHANH,
   TRICH_YEU_VAN_BAN_TOI_DA,
   canDocLaiTruocKhiLuu,
+  cauLoiDanhBaGiaoViec,
+  cauLoiDanhBaLoc,
   canhBaoSua,
   canhBaoVanBan,
   cauGiaiThichTrangThai,
@@ -110,6 +117,7 @@ import {
   coKhoiVanBanChiDao,
   cotPhaiDoc,
   docBangNhanTrangThai,
+  docDanhBaChonNguoi,
   dongCuaNhom,
   dongVanBan,
   formSuaTuChiTiet,
@@ -128,6 +136,7 @@ import {
   nhanNutGoVanBan,
   nhanOTieuDe,
   nhanTrangThai,
+  nhanTrongOChonCanBo,
   oHan,
   placeholderNhomVanBan,
   quyetDinhDuyetLuiHan,
@@ -336,6 +345,9 @@ export function SoNhiemVu() {
   const [kqNhanTT, datKqNhanTT] = useState<KetQua<petitions_danhSachTrangThaiNhiemVuRa> | null>(
     null,
   );
+  // `null` = chưa đọc xong. Giữ NGUYÊN `KetQua`: ô chọn cán bộ phải nói được câu lỗi của máy chủ,
+  // và phải phân biệt "đang tải" với "tải hỏng" (`docDanhBaChonNguoi`).
+  const [kqDanhBa, datKqDanhBa] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
 
   const [drawer, guiDrawer] = useReducer(chuyenDrawer, null);
   const [loiGhi, datLoiGhi] = useState<string | null>(null);
@@ -407,6 +419,12 @@ export function SoNhiemVu() {
         boPhan: boPhan.ok ? boPhan.duLieu.items : [],
       });
       datKqNhanTT(nhanTT);
+    });
+    // DANH BẠ CHỌN NGƯỜI — MỘT LẦN CHO CẢ MÀN, dùng chung cho ô lọc §3 và form Giao việc §7. Đọc
+    // RIÊNG, không nằm trong `Promise.all` trên: danh bạ chậm hay hỏng không được giữ năm danh mục
+    // kia lại, và ngược lại.
+    layDanhBaChonNguoi().then((kq) => {
+      if (!bo) datKqDanhBa(kq);
     });
     return () => {
       bo = true;
@@ -491,6 +509,7 @@ export function SoNhiemVu() {
       {moFormTao && (
         <FormGiaoViec
           danhMuc={danhMuc}
+          danhBa={kqDanhBa}
           // `POST /api/v1/tasks` nhận `documents`; màn Biên bản thì không — xem prop.
           coDanhSachVanBan
           dangGui={dangGui}
@@ -522,6 +541,7 @@ export function SoNhiemVu() {
         datTim={datTim}
         datLoc={datLocMoi}
         danhMuc={danhMuc}
+        danhBa={kqDanhBa}
         nhanTT={nhanTT}
       />
 
@@ -710,8 +730,8 @@ export function KhoiChuaDung() {
  * `Sắp đến hạn` đều bị máy chủ TỪ CHỐI bằng 400 kèm lý do, nên vẽ chúng ra là vẽ hai ô mà mỗi lần
  * bấm đổi quyển sổ thành một trang lỗi.
  *
- * Ô `Người thực hiện` là Ô GÕ MÃ CÁN BỘ chứ không phải ô chọn: danh bạ đứng sau `admin.user` —
- * xem `PHAN_CHUA_DUNG`.
+ * Ô `Người thực hiện` là Ô CHỌN từ danh bạ chọn người (`GET /api/v1/staff-directory`, mọi cán bộ
+ * đăng nhập đọc được). Giá trị là MÃ NGHIỆP VỤ `CB-…` — thứ `?assignee=` so khớp.
  */
 export function HangLoc({
   loc,
@@ -719,6 +739,7 @@ export function HangLoc({
   datTim,
   datLoc,
   danhMuc,
+  danhBa,
   nhanTT,
 }: {
   loc: BoLoc;
@@ -726,9 +747,13 @@ export function HangLoc({
   datTim: (s: string) => void;
   datLoc: (moi: BoLoc) => void;
   danhMuc: DanhMucNhiemVu;
+  /** Câu trả lời nguyên vẹn của danh bạ chọn người; `null` = chưa đọc xong. */
+  danhBa: KetQua<identity_danhBaChonNguoiRa> | null;
   /** Nhãn và thứ tự bảy trạng thái của xã — ô lọc hiện đúng chữ và thứ tự xã đặt. */
   nhanTT: BangNhanTrangThai;
 }) {
+  const db = docDanhBaChonNguoi(danhBa);
+
   function timNgay(e: FormEvent) {
     e.preventDefault();
     const canGon = tim.trim();
@@ -879,17 +904,22 @@ export function HangLoc({
         </select>
       </div>
 
-      <div className="o-nhap">
-        <label htmlFor="loc-nguoi-thuc-hien">Người thực hiện (mã cán bộ)</label>
-        <input
-          id="loc-nguoi-thuc-hien"
-          name="loc-nguoi-thuc-hien"
-          value={loc.nguoiThucHienMa ?? ""}
-          placeholder="CB-…"
-          autoComplete="off"
-          onChange={(e) => datLoc({ ...loc, nguoiThucHienMa: e.target.value || undefined })}
-        />
-      </div>
+      {/* Mã đi lên URL (`?assignee=CB-…`) — mã nghiệp vụ, không phải dữ liệu cá nhân; họ tên
+          chỉ nằm trong chữ của lựa chọn, không bao giờ lên URL (luật 3, cấm #4). */}
+      <OChonCanBo
+        id="loc-nguoi-thuc-hien"
+        nhan="Người thực hiện"
+        nhanTrong={nhanTrongOChonCanBo(db, MOI_NGUOI_THUC_HIEN_NHAN)}
+        giaTri={loc.nguoiThucHienMa ?? ""}
+        danhBa={db.ds}
+        khoa={db.dangTai}
+        dat={(ma) => datLoc({ ...loc, nguoiThucHienMa: ma || undefined })}
+      />
+      {db.loi !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {cauLoiDanhBaLoc(db.loi)}
+        </p>
+      )}
 
       <div className="o-chon">
         <label htmlFor="loc-qua-han">
@@ -2027,6 +2057,7 @@ export function KhoiLuiHan({
  */
 export function FormGiaoViec({
   danhMuc,
+  danhBa,
   coDanhSachVanBan = false,
   dangGui,
   loi,
@@ -2036,6 +2067,11 @@ export function FormGiaoViec({
   tieuDeCoSan,
 }: {
   danhMuc: DanhMucNhiemVu;
+  /**
+   * Câu trả lời nguyên vẹn của danh bạ chọn người; `null` = chưa đọc xong. BẮT BUỘC, không tuỳ
+   * chọn: bên gọi quên truyền thì `tsc` đỏ, thay vì một form có ba ô chọn rỗng không lời giải thích.
+   */
+  danhBa: KetQua<identity_danhBaChonNguoiRa> | null;
   /**
    * Vẽ và gửi ba danh sách văn bản §7.2. CHỈ màn Nhiệm vụ bật.
    *
@@ -2097,6 +2133,7 @@ export function FormGiaoViec({
   const theoVanBan = coKhoiVanBanChiDao(loaiChon);
   const hienVanBan = theoVanBan && coDanhSachVanBan;
   const chanVanBan = hienVanBan ? canhBaoVanBan(vanBan) : null;
+  const db = docDanhBaChonNguoi(danhBa);
 
   function themVanBan(nhom: NhomVanBan) {
     demKhoaVanBan.current += 1;
@@ -2117,7 +2154,7 @@ export function FormGiaoViec({
 
   function gui(e: FormEvent) {
     e.preventDefault();
-    if (tieuDe.trim() === "" || loaiChon === "" || chanVanBan !== null) return;
+    if (tieuDe.trim() === "" || loaiChon === "" || chanVanBan !== null || db.dangTai) return;
 
     const than: petitions_taoNhiemVuVao = thanGiaoViec(
       {
@@ -2268,33 +2305,34 @@ export function FormGiaoViec({
         </div>
       )}
 
-      {/* BA Ô GÕ MÃ CÁN BỘ, KHÔNG PHẢI BA Ô CHỌN — danh bạ đứng sau `admin.user`, xem
-          `PHAN_CHUA_DUNG`. Giá trị là MÃ NGHIỆP VỤ `CB-…`, đúng loại định danh ba cột kia giữ:
-          một ULID ở đây được máy chủ nhận nhưng không khớp cán bộ nào, và không có gì đỏ ở đâu
-          (luật 6, bất biến 8). */}
-      <div className="o-nhap">
-        <label htmlFor="giao-nguoi-thuc-hien">Người thực hiện (mã cán bộ, bỏ trống để bộ phận tự phân công)</label>
-        <input
-          id="giao-nguoi-thuc-hien"
-          name="giao-nguoi-thuc-hien"
-          value={nguoiThucHien}
-          placeholder="CB-…"
-          autoComplete="off"
-          onChange={(e) => datNguoiThucHien(e.target.value)}
-        />
-      </div>
+      {/* BA Ô CHỌN TỪ DANH BẠ CHỌN NGƯỜI (`GET /api/v1/staff-directory`). Giá trị là MÃ NGHIỆP VỤ
+          `CB-…` (`code`), đúng loại định danh ba trường kia giữ: một ULID ở đây được máy chủ nhận
+          nhưng không khớp cán bộ nào, và không có gì đỏ ở đâu (luật 6, bất biến 8). Danh bạ đọc
+          hỏng thì các ô chỉ còn lựa chọn trống và câu lỗi nói hệ quả — không đoán ai. */}
+      {db.loi !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {cauLoiDanhBaGiaoViec(db.loi)}
+        </p>
+      )}
+      <OChonCanBo
+        id="giao-nguoi-thuc-hien"
+        nhan="Người thực hiện"
+        nhanTrong={nhanTrongOChonCanBo(db, DE_BO_PHAN_TU_PHAN_CONG)}
+        giaTri={nguoiThucHien}
+        danhBa={db.ds}
+        khoa={db.dangTai}
+        dat={datNguoiThucHien}
+      />
 
-      <div className="o-nhap">
-        <label htmlFor="giao-lanh-dao">Lãnh đạo giao việc (mã cán bộ)</label>
-        <input
-          id="giao-lanh-dao"
-          name="giao-lanh-dao"
-          value={lanhDaoGiaoViec}
-          placeholder="CB-…"
-          autoComplete="off"
-          onChange={(e) => datLanhDaoGiaoViec(e.target.value)}
-        />
-      </div>
+      <OChonCanBo
+        id="giao-lanh-dao"
+        nhan="Lãnh đạo giao việc"
+        nhanTrong={nhanTrongOChonCanBo(db, CHUA_XAC_DINH)}
+        giaTri={lanhDaoGiaoViec}
+        danhBa={db.ds}
+        khoa={db.dangTai}
+        dat={datLanhDaoGiaoViec}
+      />
       {/* KHÔNG CHỈ LÀ NƠI NHẬN THÔNG BÁO: ô này quyết định AI DUYỆT ĐƯỢC ĐỀ NGHỊ LÙI HẠN (ADR
           0038), và bỏ trống nghĩa là KHÔNG AI duyệt được — vĩnh viễn, vì `PATCH` cố ý không sửa
           được cột này. Câu ấy đứng cạnh ô chứ không nằm trong tài liệu. */}
@@ -2304,17 +2342,15 @@ export function FormGiaoViec({
       </p>
 
       {theoVanBan && (
-        <div className="o-nhap">
-          <label htmlFor="giao-chuyen-vien">Chuyên viên Văn phòng tham mưu / theo dõi (mã cán bộ)</label>
-          <input
-            id="giao-chuyen-vien"
-            name="giao-chuyen-vien"
-            value={chuyenVien}
-            placeholder="CB-…"
-            autoComplete="off"
-            onChange={(e) => datChuyenVien(e.target.value)}
-          />
-        </div>
+        <OChonCanBo
+          id="giao-chuyen-vien"
+          nhan="Chuyên viên Văn phòng tham mưu / theo dõi"
+          nhanTrong={nhanTrongOChonCanBo(db, CHUA_XAC_DINH)}
+          giaTri={chuyenVien}
+          danhBa={db.ds}
+          khoa={db.dangTai}
+          dat={datChuyenVien}
+        />
       )}
 
       {hienVanBan && (
@@ -2366,7 +2402,17 @@ export function FormGiaoViec({
         <button
           type="submit"
           className="nut-chinh"
-          disabled={dangGui || tieuDe.trim() === "" || loaiChon === "" || chanVanBan !== null}
+          // Danh bạ CÒN ĐANG TẢI thì khoá: ba ô chọn chưa chọn được ai, và một nhiệm vụ tạo ra lúc
+          // ấy mang `Lãnh đạo giao việc` rỗng VĨNH VIỄN (`PATCH` không sửa cột ấy). Tải HỎNG thì
+          // không khoá — câu lỗi ngay trên nói hệ quả, và việc giao cho bộ phận vẫn phải làm được
+          // khi `identity` trục trặc (cùng chiều màn Phản ánh).
+          disabled={
+            dangGui ||
+            tieuDe.trim() === "" ||
+            loaiChon === "" ||
+            chanVanBan !== null ||
+            db.dangTai
+          }
         >
           Giao việc
         </button>

@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { OChonCanBo } from "@/components/o-chon-can-bo";
 import {
   coTrangTruoc,
   sangTrangSau,
@@ -80,7 +81,6 @@ import {
   laDaKy,
   lopChipBienBan,
   lopChipKetLuan,
-  luaChonCanBo,
   LY_DO_XOA_TOI_DA,
   neoBienBan,
   NGUON_GIAO_KHOA,
@@ -171,6 +171,11 @@ const KHONG_DANH_MUC: DanhMucNhiemVu = { loai: [], mucUuTien: [], khoi: [], boPh
 export type PhepTach = {
   /** Bốn danh mục đổ vào ô chọn của biểu mẫu Giao việc. */
   readonly danhMuc: DanhMucNhiemVu;
+  /**
+   * Câu trả lời NGUYÊN VẸN của danh bạ chọn người — `null` = chưa đọc xong. Ba ô chọn cán bộ của
+   * biểu mẫu Giao việc cần phân biệt "đang tải" với "tải hỏng" để nói đúng câu (xem `FormGiaoViec`).
+   */
+  readonly danhBa: KetQua<identity_danhBaChonNguoiRa> | null;
   readonly dangGui: boolean;
   /** Id của kết luận đang mở hộp, hoặc `null`. */
   readonly moOKetLuan: string | null;
@@ -533,6 +538,7 @@ export function SoBienBan() {
 
   const phepTach: PhepTach = {
     danhMuc,
+    danhBa: kqDanhBa,
     dangGui,
     moOKetLuan: moTachO,
     loi: loiTach,
@@ -1464,6 +1470,7 @@ export function DongKetLuan({
           <p className="ghi-chu">{NGUON_GIAO_KHOA}</p>
           <FormGiaoViec
             danhMuc={tach.danhMuc}
+            danhBa={tach.danhBa}
             dangGui={tach.dangGui}
             loi={loiTach}
             huy={tach.dong}
@@ -1518,38 +1525,6 @@ export function HangThemKetLuan({
         {NHAN_NUT_THEM_KET_LUAN}
       </button>
     </form>
-  );
-}
-
-/**
- * Ô chọn một cán bộ (Chủ trì, Thư ký) từ danh bạ chọn người. GỬI MÃ (`code`), HIỆN `Họ tên · Chức
- * vụ`. Giá trị đang lưu mà không còn trong danh bạ vẫn có một dòng — xem `luaChonCanBo`.
- */
-function OChonCanBo({
-  id,
-  nhan,
-  giaTri,
-  danhBa,
-  dat,
-}: {
-  id: string;
-  nhan: string;
-  giaTri: string;
-  danhBa: readonly identity_canBoChonNguoiRa[];
-  dat: (ma: string) => void;
-}) {
-  return (
-    <div className="o-nhap">
-      <label htmlFor={id}>{nhan}</label>
-      <select id={id} className="o-chon" value={giaTri} onChange={(e) => dat(e.target.value)}>
-        <option value="">{KHONG_GHI_CAN_BO}</option>
-        {luaChonCanBo(danhBa, giaTri).map((lc) => (
-          <option key={lc.ma} value={lc.ma}>
-            {lc.nhan}
-          </option>
-        ))}
-      </select>
-    </div>
   );
 }
 
@@ -1684,6 +1659,7 @@ export function FormNhapBienBan({
       <OChonCanBo
         id="chu-tri-bien-ban"
         nhan="Chủ trì"
+        nhanTrong={KHONG_GHI_CAN_BO}
         giaTri={gt.chuTri}
         danhBa={danhBa}
         dat={(ma) => doi({ chuTri: ma })}
@@ -1691,6 +1667,7 @@ export function FormNhapBienBan({
       <OChonCanBo
         id="thu-ky-bien-ban"
         nhan="Thư ký"
+        nhanTrong={KHONG_GHI_CAN_BO}
         giaTri={gt.thuKy}
         danhBa={danhBa}
         dat={(ma) => doi({ thuKy: ma })}
