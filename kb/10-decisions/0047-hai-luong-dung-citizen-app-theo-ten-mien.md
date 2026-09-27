@@ -3,9 +3,12 @@ id: 0047-hai-luong-dung-citizen-app-theo-ten-mien
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 81697bc
+derived_from_commit: 6f01382
 expires: null
 owns_facts:
+  - "một biến thể dựng citizen-app cho cả app chung và app riêng; 'demo' là cách nói về giai đoạn, không phải khái niệm kỹ thuật (trả lời 27/09/2026)"
+  - "đích đẩy của zmp-cli 4.0.3 là claim appId trong ZMP_TOKEN: một token một App ID, Jenkins giữ một credential cho mỗi App ID"
+  - "rủi ro đã chấp nhận: app chung xác nhận theo tên xã nhưng gửi tên miền, trỏ lại tên miền ở giữa đưa công dân vào xã không thấy tên"
   - "hai luồng dựng citizen-app: truyền tên miền xã thì đẩy lên App ID riêng của xã, không truyền thì đẩy lên app chung — một mã nguồn, một bundle, tên miền chỉ chọn App ID đích"
   - "vì sao tệp ánh xạ tên miền → App ID ở citizen-app/scripts không vi phạm ADR 0044 điều kiện dừng #1, và vì sao nó không phải nguồn sự thật về xã của một App ID"
   - "tham số QR/URL của app chung mang TÊN MIỀN xã thay cho t=<ULID>; máy chủ phân giải; tên miền không bao giờ được lưu làm tham chiếu xã"
@@ -134,6 +137,93 @@ quyết (ADR 0044). Toàn bộ cầu phiên, khoá cầu, cổng riêng (ADR 004
 | 3 | Phép kiểm đối chiếu tệp dựng với bảng `MiniApp` của platform | Chưa có; lệch hôm nay chỉ lộ khi công dân mở app |
 | 4 | Nội dung hai biến thể: `dung.mjs:6-7` hiện ghi `day-du` = thêm lớp khám phá, **danh mục xã mẫu, bảng chẩn đoán**, *"thử nghiệm, demo"*; còn `goc` = *"bản nộp, không lớp khám phá"*. Câu 5 đặt `day-du` cho app riêng **phát hành** và `goc` cho app chung **cần** nhận tham số tên miền | Chủ dự án chốt tên biến thể, chưa chốt nội dung. Phát hành `day-du` như hiện trạng là đưa danh mục xã mẫu và bảng chẩn đoán vào app thật của một xã |
 | 5 | Tên tham số tên miền và số phận `v` | Chi tiết cài đặt; không có QR nào đã in nên chưa có nợ |
+
+### Trả lời của chủ dự án — 27/09/2026, sau khi ADR được viết
+
+Mục này ghi thêm, không sửa phần trên: phần trên là quyết định lúc viết, mục này là câu trả lời và
+phần đính chính đo được sau đó. Chỗ nào mục này nói khác phần trên thì **mục này thắng**.
+
+#### 1. Câu 5 bị thay — một biến thể cho cả hai luồng
+
+> *"bỏ hoàn toàn demo đi, demo ở đây là ngôn ngữ nói hiểu về cách làm, không phải là khái niệm kỹ
+> thuật, về kỹ thuật nó là app dùng thật"*
+
+Chủ dự án chọn **"Gộp một biến thể"**:
+
+| Trước (câu 5, CÒN MỞ #4) | Nay |
+|---|---|
+| App chung = `goc`, app riêng = `day-du` | **Một biến thể** cho cả app chung và app riêng |
+| `day-du` mang danh mục xã mẫu, bảng chẩn đoán | **Bỏ** tách `goc`/`day-du`, **bỏ** danh mục xã mẫu, **bỏ** bảng chẩn đoán |
+| Jenkins chọn biến thể theo có/không tham số tên miền | Tham số tên miền **chỉ** chọn App ID đích (câu 1 đứng nguyên) |
+| Luật *"bản nộp không có chữ nhà nước"* — lượt quét từ cấm của `citizen-app/src/bundle-for-zalo.test.ts` | **Bị thay.** Bản nộp Zalo của app chung phải **nói rõ** app mang kênh phản ánh tới các xã |
+
+"Demo" từ nay chỉ là cách nói về **giai đoạn** làm việc với một xã (mục 2), không phải một bản dựng,
+một cờ hay một nhánh mã. **CÒN MỞ #4 đóng** theo bảng trên. Việc sửa mã `citizen-app` (bỏ biến thể,
+đổi lượt quét từ cấm) **chưa làm** ở thời điểm ghi mục này.
+
+#### 2. Hai giai đoạn với một xã — lời chủ dự án
+
+> *"Có 2 giai đoạn để thực hiện dự án với 1 xã bất kỳ, 1 là giai đoạn demo, lúc đó chưa xin được
+> công văn của xã để submit 1 app riêng cho xã đó, nên sẽ dùng app ở vihat-miniapp tạo ra 1 qr có
+> gắn domain của xã này để redirect về màn hình app citizen, thời điểm này tôi sẽ cấu hình thông tin
+> xã trên database (có thể từ web admin vihat), sau đó chạy lệnh tạo 1 qr app ở bản test để họ vào
+> trải nghiệm. giai đoạn 2 là sau khi chốt hợp đồng với xã, xin được công văn yêu cầu xác thực để
+> zalo chấp nhận submit app, lúc đó mới tiến hành submit app riêng cho xã (appId riêng), người dân
+> của xã đó vào kho mini app, tìm và chọn app này để sử dụng."*
+
+Thêm hai điểm chủ dự án nêu cùng lúc:
+
+- App chung **cũng được phát hành** lên kho Zalo (*"cả bản phát hành"*), không chỉ chạy bản thử.
+  QR có thể trỏ bản thử hoặc bản phát hành.
+- QR được sinh từ **khu vực vận hành ViHAT trong web-admin** → ADR 0048. Hai giai đoạn gốc: ADR
+  0044 §Bối cảnh.
+
+#### 3. Đính chính câu 8 — đích đẩy do token quyết, không do `APP_ID`
+
+Đo ở commit `60bf7a8`, đầu tệp `citizen-app/scripts/dich-den.mjs` (zmp-cli **4.0.3**):
+
+| Câu 8 và §*Câu 8 — cái giá* ghi | Thực tế đo được |
+|---|---|
+| `ZMP_TOKEN` ghi vào `.env` của đúng lần chạy rồi xoá | **Không ghi gì vào `.env`.** Đường app riêng đọc `ZMP_TOKEN` từ **môi trường** và kiểm claim `appId` của nó khớp App ID đích trước khi dựng (`citizen-app/scripts/deploy.mjs`, cùng commit) |
+| **Một** `ZMP_TOKEN` đẩy được lên **mọi** App ID | **Sai.** Đích đẩy là claim `appId` **trong** `ZMP_TOKEN`; `APP_ID` không có tác dụng. **Một token — một App ID** |
+
+Hệ quả cho Jenkins và luật 8:
+
+- Jenkins cần **một credential cho mỗi App ID** — N xã có app riêng là N credential, cộng một cho
+  app chung.
+- Lộ một token là thay được **đúng một** app, không phải mọi xã. Riêng token của **app chung** chạm
+  mọi xã đang dùng app chung ở giai đoạn 1 — đó là credential nặng nhất.
+- Luật 8 bất biến 6 vẫn chưa đạt: **vòng đời và cách xoay của từng credential chưa ai chốt**. CÒN MỞ
+  #1 nay đọc là *"vòng đời và cách xoay của N credential `ZMP_TOKEN`"*.
+
+#### 4. Rủi ro chủ dự án chọn chấp nhận — xác nhận theo tên, gửi theo tên miền
+
+Ở app chung, màn xác nhận hiện **tên xã** (tuyến câu 6), nhưng lời xác nhận gửi lên cầu **chỉ mang
+tên miền**; máy chủ phân giải tên miền **lúc xác nhận**. Nếu người vận hành trỏ lại tên miền (câu 4)
+đúng khoảng giữa hai lần ấy, công dân vào một xã **mà họ không thấy tên** trên màn xác nhận.
+
+| Vì sao chấp nhận | |
+|---|---|
+| Hiếm | Chỉ xảy ra khi có thao tác trỏ lại tên miền rơi đúng vào khoảng giữa lúc hiện tên và lúc xác nhận |
+| Chỉ người vận hành gây ra được | Công dân hay client không đổi được ánh xạ; việc trỏ lại có vết (ĐIỀU KIỆN DỪNG #6) |
+| Phiên nói thật | Phiên trả `tenant_display_name` của xã **thật sự** đã vào, không phải tên đã hiện trên màn xác nhận |
+
+App riêng **không có bước xác nhận nào**: *"Người dân vào app riêng là vào xã rồi còn xác nhận gì
+nữa"*. Xã của app riêng do bảng `mini_app` quyết (ADR 0044).
+
+#### 5. Đã dựng đến đâu — chứng cứ
+
+| Việc | Commit |
+|---|---|
+| `.proto`: trường tuỳ chọn `commune_host_hint` trên cầu (câu 7) | `39d4397` |
+| `GET /api/v1/communes?host=` ở `service-identity`, `CitizenOnly` + `KhongThuocXa`, chỉ trả tên và tỉnh (câu 6) — `service-identity/internal/http/danh_muc_xa.go` | `2f075b9` |
+| Identity phân giải `commune_host_hint` qua `ResolveHost`, thôi nhận `tenant_hint` | `6f01382` |
+| `deploy.mjs --domain` chọn App ID đích theo tên miền (câu 1–2) | `60bf7a8` |
+| `vihat-miniapp`: bên gọi cầu `OpenCitizenSession` — **tắt khi chưa cấu hình**, và **bị chặn** bởi UNKNOWN #2 của ADR 0045: chưa endpoint nào **đã đo** trả mã tài khoản Zalo | `vihat-miniapp` `e274d21` |
+
+**Luồng xác nhận của app chung chưa chạy được đầu–cuối.** Trước khi xác nhận, app chung mở một
+**phiên không xã**; phiên ấy đòi **bảng vết chưa thuộc xã** của câu mở #25 (ADR 0045:247-251) —
+**chưa dựng** (không migration nào tạo bảng ấy ở thời điểm ghi mục này).
 
 ## ĐIỀU KIỆN DỪNG
 
