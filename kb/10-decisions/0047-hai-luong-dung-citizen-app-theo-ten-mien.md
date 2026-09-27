@@ -239,7 +239,8 @@ như app chung. Chủ dự án chốt:
 | Câu | Nay |
 |---|---|
 | 1 — *"Không giá trị nào theo xã vào bundle"* | **Ngoại lệ đúng một:** `deploy.mjs --domain=<x> --vao-thang` nung tên miền `<x>` vào `__VIGOV_XA_CO_DINH__`. Không có cờ thì bundle vẫn là một, như câu 1 |
-| Mở app riêng có cờ | Không màn giới thiệu ViHAT, không bước *"Đúng xã này chưa?"* (khớp mục 4: *"vào app riêng là vào xã rồi"*). Tra `/communes`, mở phiên, vào thẳng kênh công dân. `d` trên QR bị bỏ qua — một app riêng chỉ phục vụ một xã |
+| Mở app riêng có cờ | Không bước *"Đúng xã này chưa?"* (khớp mục 4: *"vào app riêng là vào xã rồi"*). Tra `/communes`, mở phiên, vào thẳng kênh công dân. `d` trên QR bị bỏ qua — một app riêng chỉ phục vụ một xã |
+| Giao diện app riêng có cờ (chủ dự án, 27/09 khuya: *"bỏ hết thông tin VihatGroup đi"*, *"nút xác nhận xã … nên bỏ nó"*) | **Không một chữ ViHAT Group**: không màn giới thiệu, không thanh tab, không nút chat OA, header chỉ tên xã. **Không nút nào** trong lúc mở. Mở phiên không thành thì vẫn vào kênh ở chế độ không phiên (tin tức, danh bạ mở; gửi phản ánh nói "chưa mở") — không quay lại hỏi. Tra xã hỏng thì một câu và nút "Thử lại". Kênh là màn gốc, không nút "Quay lại". Mã phần thương mại vẫn nằm trong bundle nhưng không đường nào tới được — `App.tsx` `AppRieng` |
 | App riêng **không** cờ, và app chung | Như cũ: màn ViHAT, vào xã bằng QR `d` + xác nhận |
 
 Cài đặt — `citizen-app/scripts/deploy.mjs` (môi trường dựng `env_dung`) · `scripts/cau-hinh.mjs`

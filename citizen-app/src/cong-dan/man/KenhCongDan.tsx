@@ -46,7 +46,8 @@ export function KenhCongDan({
   onDong,
   ten_mien = null,
 }: {
-  onDong: () => void;
+  /** Không truyền = không có nút "Quay lại" (app riêng của xã: kênh là màn gốc, không có chỗ để về). */
+  onDong?: () => void;
   /** Tên miền xã công dân đã xác nhận ở lần mở này, hoặc `null`. Chỉ làm khoá tra `?host=`. */
   ten_mien?: string | null;
 }) {
@@ -93,9 +94,11 @@ export function KenhCongDan({
 
   return (
     <section className="cd-man" aria-label={NHAN_KENH_CONG_DAN}>
-      <button type="button" className="quay-lai" onClick={onDong}>
-        {QUAY_LAI}
-      </button>
+      {onDong !== undefined && (
+        <button type="button" className="quay-lai" onClick={onDong}>
+          {QUAY_LAI}
+        </button>
+      )}
       <h1 className="cd-tieu-de">{NHAN_KENH_CONG_DAN}</h1>
       {!co_phien && (
         <p className="cd-loi" role="status">

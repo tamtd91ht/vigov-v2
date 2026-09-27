@@ -271,6 +271,22 @@ export const XAC_NHAN_XA = {
     "Chưa mở được kênh làm việc với xã vì mạng yếu hoặc hệ thống đang bận. Hãy kiểm tra mạng rồi bấm “Đúng, tiếp tục” lần nữa.",
 } as const;
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * APP RIÊNG CỦA XÃ (`--vao-thang`, ADR 0047 §6) — không màn giới thiệu, không QR, không nút xác nhận
+ *
+ * Câu của đường QR ở trên nói "phần giới thiệu" và "quét lại mã QR" — cả hai đều không có trong app
+ * riêng. Người dân ở đây chỉ làm được một việc: thử lại.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const APP_RIENG = {
+  dang_mo: "Đang mở ứng dụng của xã…",
+  /** Máy chủ nói tên miền của bản dựng không thuộc xã nào đang hoạt động. */
+  khong_thay: "Ứng dụng này chưa được gắn với xã nào đang hoạt động. Vui lòng liên hệ Ủy ban nhân dân xã.",
+  /** Nền tảng tạm ngưng, lỗi máy chủ, mất mạng. */
+  chua_ket_noi: "Chưa kết nối được tới hệ thống của xã. Hãy kiểm tra mạng rồi bấm “Thử lại”.",
+  thu_lai: "Thử lại",
+} as const;
+
 /**
  * ĐÃ XÁC NHẬN XÃ NHƯNG CHƯA CÓ PHIÊN — câu trên màn chọn việc, thay vì để ba lối phản ánh im lặng.
  *

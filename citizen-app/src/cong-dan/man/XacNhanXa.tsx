@@ -24,7 +24,7 @@ import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { type KetQuaXacNhan, type MoPhienViGov, moPhienSauXacNhan } from "../api/mo-phien-vigov";
 
-import { XAC_NHAN_XA } from "./noi-dung";
+import { APP_RIENG, XAC_NHAN_XA } from "./noi-dung";
 import { GoiYXaScreen, phanGiaiGoiY, type XaGoiY } from "../../features/kham-pha";
 
 /** Trạng thái của màn, THUẦN — test dựng thẳng từng bước mà không cần DOM. */
@@ -83,9 +83,19 @@ export function buocTuDongSauTraXa(
     return { mo: kq.gia_tri[0]! };
   }
   if (kq.kieu === "xong" || kq.kieu === "khong-hop-le" || kq.kieu === "khong-thay") {
-    return { ket_thuc: { kieu: "ve-gioi-thieu", cau: XAC_NHAN_XA.khong_thay } };
+    return { ket_thuc: { kieu: "ve-gioi-thieu", cau: APP_RIENG.khong_thay } };
   }
-  return { ket_thuc: { kieu: "ve-gioi-thieu", cau: XAC_NHAN_XA.chua_ket_noi } };
+  return { ket_thuc: { kieu: "ve-gioi-thieu", cau: APP_RIENG.chua_ket_noi } };
+}
+
+/**
+ * APP RIÊNG: kết quả mở phiên → kết thúc, KHÔNG BAO GIỜ quay lại hỏi. Đường QR để `thu-lai` ở lại màn
+ * xác nhận cho bấm lại; app riêng không có nút ấy (chủ dự án bỏ, 27/09/2026), nên mọi nhánh chưa có
+ * phiên đều mở kênh ở chế độ không phiên — tin tức và danh bạ mở được, gửi phản ánh nói "chưa mở".
+ */
+export function buocTuDongSauMoPhien(xa: XaGoiY, kq: KetQuaXacNhan): KetThucXacNhan {
+  if (kq.kieu === "da-mo") return { kieu: "da-mo", ten_xa: kq.ten_xa, ten_mien: kq.ten_mien };
+  return { kieu: "xac-nhan-khong-phien", xa };
 }
 
 /**
@@ -170,12 +180,25 @@ export function XacNhanXa(props: {
 
   function moPhien(xa: XaGoiY) {
     datTrang({ kieu: "dang-mo", xa });
-    void moPhienSauXacNhan(moPhienViGov, ten_mien).then((kq) => sang(buocSauMoPhien(xa, kq)));
+    void moPhienSauXacNhan(moPhienViGov, ten_mien).then((kq) =>
+      tu_dong ? onKetThuc(buocTuDongSauMoPhien(xa, kq)) : sang(buocSauMoPhien(xa, kq)),
+    );
   }
 
   function xacNhan() {
     if (trang.kieu !== "hoi") return;
     moPhien(trang.xa);
+  }
+
+  // App riêng: chỉ một dòng trạng thái — không thẻ xã, không nút nào để bấm.
+  if (tu_dong) {
+    return (
+      <section className="goi-y" aria-busy="true">
+        <p className="goi-y__tiep" role="status">
+          {APP_RIENG.dang_mo}
+        </p>
+      </section>
+    );
   }
 
   return (

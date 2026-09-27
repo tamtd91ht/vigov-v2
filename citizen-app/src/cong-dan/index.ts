@@ -24,6 +24,7 @@
  *   hàm mở phiên mà `App.tsx` phải tiêm vào (`api/mo-phien-vigov.ts`) — kiểu không mang theo đường
  *   gọi nào.
  */
-export { KenhCongDan, NutVaoKenhCongDan } from "./man/KenhCongDan";
+export { KenhCongDan, NHAN_KENH_CONG_DAN, NutVaoKenhCongDan } from "./man/KenhCongDan";
+export { APP_RIENG } from "./man/noi-dung";
 export { type KetThucXacNhan, XacNhanXa } from "./man/XacNhanXa";
 export type { KetQuaMoPhien, MoPhienViGov, YeuCauMoPhien } from "./api/mo-phien-vigov";
