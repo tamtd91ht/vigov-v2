@@ -108,7 +108,7 @@
     },
     "app.DeNghiLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/app/nhiem_vu.go:1079"
+      "at": "service-petitions/internal/app/nhiem_vu.go:1096"
     },
     "app.DinhDanhKho": {
       "kind": "type",
@@ -124,7 +124,7 @@
     },
     "app.DoiTrangThai": {
       "kind": "func",
-      "at": "service-petitions/internal/app/nhiem_vu.go:895"
+      "at": "service-petitions/internal/app/nhiem_vu.go:912"
     },
     "app.DoiVaiTro": {
       "kind": "func",
@@ -388,7 +388,7 @@
     },
     "app.KiemNguonTrongGiaoDich": {
       "kind": "type",
-      "at": "service-petitions/internal/app/nhiem_vu.go:447"
+      "at": "service-petitions/internal/app/nhiem_vu.go:452"
     },
     "app.KyBienBan": {
       "kind": "func",
@@ -620,7 +620,7 @@
     },
     "app.QuyetDinhLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/app/nhiem_vu.go:1192"
+      "at": "service-petitions/internal/app/nhiem_vu.go:1209"
     },
     "app.SLA": {
       "kind": "type",
@@ -644,7 +644,7 @@
     },
     "app.Sua": {
       "kind": "func",
-      "at": "service-petitions/internal/app/nhiem_vu.go:693"
+      "at": "service-petitions/internal/app/nhiem_vu.go:710"
     },
     "app.SuaBang": {
       "kind": "func",
@@ -688,7 +688,7 @@
     },
     "app.Tao": {
       "kind": "func",
-      "at": "service-petitions/internal/app/nhiem_vu.go:439"
+      "at": "service-petitions/internal/app/nhiem_vu.go:444"
     },
     "app.TaoBang": {
       "kind": "func",
@@ -704,7 +704,7 @@
     },
     "app.TaoTuNguon": {
       "kind": "func",
-      "at": "service-petitions/internal/app/nhiem_vu.go:457"
+      "at": "service-petitions/internal/app/nhiem_vu.go:462"
     },
     "app.Them": {
       "kind": "func",
@@ -756,7 +756,7 @@
     },
     "app.Xoa": {
       "kind": "func",
-      "at": "service-petitions/internal/app/nhiem_vu.go:1004"
+      "at": "service-petitions/internal/app/nhiem_vu.go:1021"
     },
     "app.XoaBienBan": {
       "kind": "func",
@@ -808,7 +808,7 @@
     },
     "app.YeuCauDeNghiLuiHan": {
       "kind": "type",
-      "at": "service-petitions/internal/app/nhiem_vu.go:1064"
+      "at": "service-petitions/internal/app/nhiem_vu.go:1081"
     },
     "app.YeuCauDoiMatKhau": {
       "kind": "type",
@@ -816,7 +816,7 @@
     },
     "app.YeuCauDoiTrangThai": {
       "kind": "type",
-      "at": "service-petitions/internal/app/nhiem_vu.go:873"
+      "at": "service-petitions/internal/app/nhiem_vu.go:890"
     },
     "app.YeuCauGhiDot": {
       "kind": "type",
@@ -844,7 +844,7 @@
     },
     "app.YeuCauQuyetDinhLuiHan": {
       "kind": "type",
-      "at": "service-petitions/internal/app/nhiem_vu.go:1166"
+      "at": "service-petitions/internal/app/nhiem_vu.go:1183"
     },
     "app.YeuCauSuaBang": {
       "kind": "type",
@@ -1666,6 +1666,10 @@
       "kind": "type",
       "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:588"
     },
+    "domain.DeNghiLuiHanChoDuyet": {
+      "kind": "type",
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:617"
+    },
     "domain.DiemCham": {
       "kind": "func",
       "at": "service-finance/internal/domain/du_an.go:191"
@@ -1740,11 +1744,11 @@
     },
     "domain.DuocDeNghiLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:680"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:704"
     },
     "domain.DuocDuyetLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:717"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:741"
     },
     "domain.Error": {
       "kind": "func",
@@ -1936,7 +1940,7 @@
     },
     "domain.KiemLyDoLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:662"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:686"
     },
     "domain.KiemLyDoXoaBienBan": {
       "kind": "func",
@@ -2164,7 +2168,7 @@
     },
     "domain.LaLoiThamQuyenLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:744"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:768"
     },
     "domain.LaLoiXuLyPhanAnh": {
       "kind": "func",
@@ -2280,7 +2284,7 @@
     },
     "domain.LoiThamQuyenLuiHanGoc": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:749"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:773"
     },
     "domain.LuyKe": {
       "kind": "func",
@@ -2980,7 +2984,7 @@
     },
     "http.BienBanDanhSach": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:191"
+      "at": "service-petitions/internal/http/routes.go:211"
     },
     "http.BoDanhDauKhongPhatSinh": {
       "kind": "func",
@@ -3086,6 +3090,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/noi_dung_mini_app.go:396"
     },
+    "http.DanhSachDeNghiLuiHan": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/de_nghi_lui_han_cho_duyet.go:90"
+    },
     "http.DanhSachDuAn": {
       "kind": "func",
       "at": "service-finance/internal/http/du_an.go:184"
@@ -3178,9 +3186,13 @@
       "kind": "func",
       "at": "service-identity/internal/http/tai_khoan_can_bo.go:100"
     },
+    "http.DeNghiLuiHanChoDuyetDoc": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/routes.go:163"
+    },
     "http.DeNghiLuiHanNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:536"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:543"
     },
     "http.Deps": {
       "kind": "type",
@@ -3206,6 +3218,10 @@
       "kind": "func",
       "at": "service-finance/internal/http/dot_thu_chi.go:111"
     },
+    "http.DocNhatKyNhiemVu": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/nhat_ky_nhiem_vu.go:84"
+    },
     "http.DocNhatKyPhieu": {
       "kind": "func",
       "at": "service-petitions/internal/http/nhat_ky_phan_anh.go:104"
@@ -3224,7 +3240,7 @@
     },
     "http.DoiTrangThaiNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:490"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:497"
     },
     "http.DoiVaiTroCanBo": {
       "kind": "func",
@@ -3240,7 +3256,7 @@
     },
     "http.GhiBienBanUseCase": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:214"
+      "at": "service-petitions/internal/http/routes.go:234"
     },
     "http.GhiChuPhieu": {
       "kind": "func",
@@ -3268,7 +3284,7 @@
     },
     "http.GhiLoaiNhiemVu": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:326"
+      "at": "service-petitions/internal/http/routes.go:346"
     },
     "http.GhiLoaiTaiNguyen": {
       "kind": "type",
@@ -3280,7 +3296,7 @@
     },
     "http.GhiMucUuTien": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:332"
+      "at": "service-petitions/internal/http/routes.go:352"
     },
     "http.GhiNganSach": {
       "kind": "type",
@@ -3288,7 +3304,7 @@
     },
     "http.GhiNhiemVuUseCase": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:165"
+      "at": "service-petitions/internal/http/routes.go:185"
     },
     "http.GhiNoiDungMiniApp": {
       "kind": "type",
@@ -3300,7 +3316,7 @@
     },
     "http.GhiTrangThaiNhiemVu": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:340"
+      "at": "service-petitions/internal/http/routes.go:360"
     },
     "http.GhiVanBanDen": {
       "kind": "type",
@@ -3488,7 +3504,7 @@
     },
     "http.NhatKyPhieuDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:290"
+      "at": "service-petitions/internal/http/routes.go:310"
     },
     "http.NhiemVuCuaKetLuan": {
       "kind": "func",
@@ -3496,7 +3512,7 @@
     },
     "http.NhiemVuDanhSach": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:143"
+      "at": "service-petitions/internal/http/routes.go:152"
     },
     "http.NhiemVuDoc": {
       "kind": "type",
@@ -3556,7 +3572,7 @@
     },
     "http.QuyetDinhLuiHanNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:564"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:571"
     },
     "http.Register": {
       "kind": "func",
@@ -3648,7 +3664,7 @@
     },
     "http.SuaNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:439"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:446"
     },
     "http.SuaNoiDung": {
       "kind": "func",
@@ -3688,7 +3704,7 @@
     },
     "http.TaoNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:378"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:384"
     },
     "http.ThemBoPhan": {
       "kind": "func",
@@ -3880,11 +3896,11 @@
     },
     "http.XoaNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:517"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:524"
     },
     "http.XuLyPhieuPhanAnh": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:254"
+      "at": "service-petitions/internal/http/routes.go:274"
     },
     "httpx.CORSCongDan": {
       "kind": "func",
@@ -4522,6 +4538,10 @@
       "kind": "func",
       "at": "service-identity/internal/store/can_bo_danh_sach.go:202"
     },
+    "store.ChoDuyet": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/de_nghi_lui_han_cho_duyet.go:98"
+    },
     "store.ChonNguoi": {
       "kind": "func",
       "at": "service-identity/internal/store/can_bo_chon_nguoi.go:68"
@@ -4838,6 +4858,10 @@
       "kind": "type",
       "at": "service-documents/internal/store/loai_van_ban.go:24"
     },
+    "store.LocDeNghiChoDuyet": {
+      "kind": "type",
+      "at": "service-petitions/internal/store/de_nghi_lui_han_cho_duyet.go:43"
+    },
     "store.LocDuAn": {
       "kind": "type",
       "at": "service-finance/internal/store/du_an.go:138"
@@ -5125,6 +5149,10 @@
     "store.NhanTrangThaiNhiemVuStore": {
       "kind": "type",
       "at": "service-petitions/internal/store/nhan_trang_thai_nhiem_vu.go:23"
+    },
+    "store.NhatKyCuaNhiemVu": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/nhat_ky_nhiem_vu.go:50"
     },
     "store.NhatKyCuaPhieu": {
       "kind": "func",

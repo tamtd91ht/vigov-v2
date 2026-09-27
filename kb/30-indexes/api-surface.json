@@ -2768,6 +2768,26 @@
     {
       "service": "petitions",
       "method": "GET",
+      "path": "/api/v1/task-extensions",
+      "operation_id": "petitions_get_task_extensions",
+      "task_id": "ced63971b0e8",
+      "summary": "Hàng chờ duyệt lùi hạn của xã — các đề nghị đang chờ, cũ nhất trước, phân trang theo con trỏ; `approver=me` chỉ lấy đề nghị mà mình là lãnh đạo giao việc",
+      "screen": "02-nhiem-vu §5.8",
+      "permission_kind": "permission",
+      "permission": "task.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_petitions.deNghiChoDuyetRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
       "path": "/api/v1/task-priorities",
       "operation_id": "petitions_get_task_priorities",
       "task_id": "6689f9f46de8",
@@ -3139,6 +3159,27 @@
         "403": "httpx.Error",
         "404": "httpx.Error",
         "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/tasks/{ma}/log-entries",
+      "operation_id": "petitions_get_tasks_by_ma_log_entries",
+      "task_id": "dcc79e337716",
+      "summary": "Nhật ký & Trao đổi của một nhiệm vụ — mới nhất trước, phân trang theo con trỏ",
+      "screen": "02-nhiem-vu §5.9",
+      "permission_kind": "permission",
+      "permission": "task.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_petitions.nhatKyNhiemVuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"

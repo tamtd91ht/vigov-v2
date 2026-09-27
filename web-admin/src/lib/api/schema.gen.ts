@@ -1178,6 +1178,20 @@ export type page_Result_petitions_bienBanRa = {
   "has_more": boolean;
 };
 
+export type page_Result_petitions_deNghiChoDuyetRa = {
+  "items": Array<petitions_deNghiChoDuyetRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
+export type page_Result_petitions_nhatKyNhiemVuRa = {
+  "items": Array<petitions_nhatKyNhiemVuRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
 export type page_Result_petitions_nhatKyPhieuRa = {
   "items": Array<petitions_nhatKyPhieuRa>;
   /** empty when has_more is false */
@@ -1247,6 +1261,18 @@ export type petitions_danhSachMucUuTienRa = {
 
 export type petitions_danhSachTrangThaiNhiemVuRa = {
   "items": Array<petitions_trangThaiNhiemVuRa>;
+};
+
+export type petitions_deNghiChoDuyetRa = {
+  "id": string;
+  "task_code": string;
+  "task_title": string;
+  "task_due_at": string | null;
+  "task_assigner": string;
+  "new_due_at": string;
+  "reason": string;
+  "requested_by": string;
+  "requested_at": string;
 };
 
 export type petitions_deNghiLuiHanRa = {
@@ -1341,6 +1367,16 @@ export type petitions_mucUuTienRa = {
   "order": number;
   "source": string;
   "tier": number;
+};
+
+export type petitions_nhatKyNhiemVuRa = {
+  "id": string;
+  "at": string;
+  "actor_code": string;
+  "status": string;
+  "unit": string;
+  "assignee": string;
+  "note": string;
 };
 
 export type petitions_nhatKyPhieuRa = {
@@ -1570,6 +1606,7 @@ export type petitions_taoNhiemVuVao = {
   "title": string;
   "description"?: string;
   "priority"?: string;
+  "note"?: string;
   "source"?: string;
   "source_id"?: string;
   "unit"?: string;
@@ -4144,6 +4181,29 @@ export type identity_delete_task_blocs_by_id = {
   };
 };
 
+/** GET /api/v1/task-extensions — Hàng chờ duyệt lùi hạn của xã — các đề nghị đang chờ, cũ nhất trước, phân trang theo con trỏ; `approver=me` chỉ lấy đề nghị mà mình là lãnh đạo giao việc */
+export type petitions_get_task_extensions = {
+  duongDan: "/api/v1/task-extensions";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "requested_at";
+    "order"?: "asc" | "desc";
+    "approver"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_petitions_deNghiChoDuyetRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/task-priorities — Danh mục mức ưu tiên nhiệm vụ của xã, theo đúng thứ tự thang — dùng cho ô chọn và bộ lọc */
 export type petitions_get_task_priorities = {
   duongDan: "/api/v1/task-priorities";
@@ -4486,6 +4546,30 @@ export type petitions_post_tasks_by_ma_extensions_by_deNghiID_decision = {
     403: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/tasks/{ma}/log-entries — Nhật ký & Trao đổi của một nhiệm vụ — mới nhất trước, phân trang theo con trỏ */
+export type petitions_get_tasks_by_ma_log_entries = {
+  duongDan: "/api/v1/tasks/{ma}/log-entries";
+  phuongThuc: "GET";
+  thamSo: {
+    "ma": string;
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "at";
+    "order"?: "asc" | "desc";
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_petitions_nhatKyNhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
     500: httpx_Error;
   };
 };

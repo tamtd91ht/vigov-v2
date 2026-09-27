@@ -21,6 +21,7 @@ export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly d
   { tienTo: "/api/v1/map-asset-types", dichVu: "comms" },
   { tienTo: "/api/v1/public-holidays", dichVu: "identity" },
   { tienTo: "/api/v1/staff-directory", dichVu: "identity" },
+  { tienTo: "/api/v1/task-extensions", dichVu: "petitions" },
   { tienTo: "/api/v1/task-priorities", dichVu: "petitions" },
   { tienTo: "/api/v1/budget-entries", dichVu: "finance" },
   { tienTo: "/api/v1/document-types", dichVu: "documents" },

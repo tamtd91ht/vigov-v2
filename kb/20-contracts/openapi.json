@@ -11485,6 +11485,130 @@
         }
       }
     },
+    "/api/v1/task-extensions": {
+      "get": {
+        "summary": "Hàng chờ duyệt lùi hạn của xã — các đề nghị đang chờ, cũ nhất trước, phân trang theo con trỏ; `approver=me` chỉ lấy đề nghị mà mình là lãnh đạo giao việc",
+        "operationId": "petitions_get_task_extensions",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §5.8",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.read"
+        },
+        "x-vigov-task": "ced63971b0e8",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Số bản ghi mỗi trang. Vượt trần thì máy chủ TRẢ VỀ trần kèm con trỏ để đọc tiếp, không báo lỗi.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Con trỏ MỜ ĐỤC do máy chủ phát ra ở `next_cursor`, chuyền lại nguyên văn. Không phải số thứ tự trang; không có `offset`, và không có tổng số bản ghi.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Cột sắp xếp. Danh sách đóng — giá trị ngoài danh sách bị từ chối.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "requested_at"
+              ],
+              "default": "requested_at"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
+          },
+          {
+            "name": "approver",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_petitions.deNghiChoDuyetRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/task-priorities": {
       "get": {
         "summary": "Danh mục mức ưu tiên nhiệm vụ của xã, theo đúng thứ tự thang — dùng cho ô chọn và bộ lọc",
@@ -13082,6 +13206,142 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{ma}/log-entries": {
+      "parameters": [
+        {
+          "name": "ma",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Nhật ký & Trao đổi của một nhiệm vụ — mới nhất trước, phân trang theo con trỏ",
+        "operationId": "petitions_get_tasks_by_ma_log_entries",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §5.9",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.read"
+        },
+        "x-vigov-task": "dcc79e337716",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Số bản ghi mỗi trang. Vượt trần thì máy chủ TRẢ VỀ trần kèm con trỏ để đọc tiếp, không báo lỗi.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Con trỏ MỜ ĐỤC do máy chủ phát ra ở `next_cursor`, chuyền lại nguyên văn. Không phải số thứ tự trang; không có `offset`, và không có tổng số bản ghi.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Cột sắp xếp. Danh sách đóng — giá trị ngoài danh sách bị từ chối.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "at"
+              ],
+              "default": "at"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_petitions.nhatKyNhiemVuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
             "content": {
               "application/json": {
                 "schema": {
@@ -17859,6 +18119,54 @@
         ],
         "additionalProperties": false
       },
+      "page.Result_petitions.deNghiChoDuyetRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.deNghiChoDuyetRa"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "page.Result_petitions.nhatKyNhiemVuRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/petitions.nhatKyNhiemVuRa"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
       "page.Result_petitions.nhatKyPhieuRa": {
         "type": "object",
         "properties": {
@@ -18134,6 +18442,56 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.deNghiChoDuyetRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "task_code": {
+            "type": "string"
+          },
+          "task_title": {
+            "type": "string"
+          },
+          "task_due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "task_assigner": {
+            "type": "string"
+          },
+          "new_due_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "new_due_at",
+          "reason",
+          "requested_at",
+          "requested_by",
+          "task_assigner",
+          "task_code",
+          "task_due_at",
+          "task_title"
         ],
         "additionalProperties": false
       },
@@ -18492,6 +18850,43 @@
           "order",
           "source",
           "tier"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.nhatKyNhiemVuRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor_code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "assignee": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "actor_code",
+          "assignee",
+          "at",
+          "id",
+          "note",
+          "status",
+          "unit"
         ],
         "additionalProperties": false
       },
@@ -19425,6 +19820,9 @@
             "type": "string"
           },
           "priority": {
+            "type": "string"
+          },
+          "note": {
             "type": "string"
           },
           "source": {
