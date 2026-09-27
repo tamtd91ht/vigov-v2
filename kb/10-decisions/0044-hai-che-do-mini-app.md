@@ -96,6 +96,8 @@ thứ hai, ADR 0031 §*Cái gì KHÔNG đổi*).
 link `t`/`src`/`v`. Bảng alias xã sáp nhập. Toàn bộ ADR 0018: một OA xác thực (`Vihat`, ADR 0031)
 cho mọi app, tách khỏi OA gửi thông báo của từng xã.
 
+> Khuôn `t`/`src`/`v` thay bởi ADR 0047 (27/09/2026): tham số mang tên miền xã, `src` giữ nguyên.
+
 ## Hệ quả
 
 - **Dễ hơn:** thêm một xã = một dòng `app_id → tenant_id` + cấu hình hiển thị. Không build lại.
@@ -111,6 +113,7 @@ cho mọi app, tách khỏi OA gửi thông báo của từng xã.
 ## ĐIỀU KIỆN DỪNG
 
 1. Có đề xuất đặt **giá trị theo xã vào bản build** — biến môi trường, hằng số, nhánh mã, tệp cấu hình theo App ID
+   (tệp **chỉ chọn App ID đích** được nới — ADR 0047, 27/09/2026)
 2. Có đề xuất cho client **tự chọn xã** từ App ID hay tham số URL
 3. Có xã muốn **UBND xã đứng tên** app riêng — đổi bên chịu trách nhiệm dữ liệu, cần ADR mới
 4. Có yêu cầu một công dân trong một app thao tác với **nhiều xã**

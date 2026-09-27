@@ -60,6 +60,8 @@ https://zalo.me/s/<APP_ID>/?t=<tenant_ulid>&src=qr&v=1
 | `src` | `qr` · `zns` · `share` — cân mức tin, và đo kênh nào thật sự hiệu quả |
 | `v` | Phiên bản khuôn. QR in ra sống nhiều năm; đổi khuôn thì bản cũ vẫn phải đọc được |
 
+> Tham số `t` thay bởi tham số tên miền xã — ADR 0047 (27/09/2026).
+
 ### Mức tin theo nguồn
 
 `qr` và `zns` → chọn sẵn, một chạm xác nhận. `share` → **luôn bắt chọn tường minh**, vì
@@ -85,6 +87,8 @@ package. Quyết định không đổi, chỉ tên hằng đổi.*
 **Bảng alias `tenant cũ → tenant kế thừa`.** QR in cho xã đã sáp nhập vẫn phải mở được, kèm
 thông báo "xã này đã sáp nhập vào X". Không có bảng này thì mọi tấm QR đã in thành rác ngay
 lần sáp nhập đầu tiên — và sáp nhập là việc **chắc chắn xảy ra**.
+
+> Thông báo kế thừa qua `t` thay bởi trỏ tên miền cũ sang xã kế thừa — ADR 0047 (27/09/2026).
 
 Tìm kiếm trong picker cũng tra bảng này: tên người dân biết có thể không còn là tên chính thức.
 

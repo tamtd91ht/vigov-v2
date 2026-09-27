@@ -12,23 +12,28 @@ the reason is not ours to change:
 
 | Platform fact | Consequence |
 |---|---|
-| A Mini App is identified by its **Zalo App ID**, not a domain | There is no commune domain to key off |
+| A Mini App is identified by its **Zalo App ID**, not a domain | No request Host to key off. The shared app receives the commune's domain as a **URL parameter** instead — a lookup key the server resolves, never a trusted fact (ADR 0047) |
 | Each App ID needs its own registration and review | A commune's own app is a Zalo filing plus the commune's official letter — procedure, not code |
 | Citizens find the app by searching Zalo | Similar names cause wrong choices, worst for elderly users |
 
-**Two modes, ONE build of `citizen-app`** (ADR 0044, which partly supersedes ADR 0005):
+**Two modes, ONE build of `citizen-app`** (ADR 0044, which partly supersedes ADR 0005; the
+QR parameter and the build flow were changed by ADR 0047):
 
-| | Main app (demo) | A commune's own app |
+| | Main (shared) app | A commune's own app |
 |---|---|---|
-| Commune comes from | QR `t=<tenant_ulid>` → citizen confirms → server writes it into the session | Verified App ID → platform table `app_id → tenant_id` → server binds it into the session |
+| Commune comes from | QR/URL parameter carrying the commune's **domain** → server resolves it (`ResolveHost`) → citizen confirms once → server writes the **ULID** into the session. The citizen then works inside the shared app; no redirect to the own app | Verified App ID → platform table `app_id → tenant_id` → server binds it into the session |
 | Opened with no QR | Commune confirmed before → **back to that commune**. Never → **group introduction only** | Straight into the app's commune |
 
 Every session works with **exactly one commune**. There is no commune picker, no switch button,
 and no submitting to another commune. The full table, and why the server — not the client or
 the build — decides the mode: ADR 0044, not copied here.
 
-Never branch the build per commune (env var, constant, code branch, per-App-ID config file) —
-that is ADR 0044 stop condition #1 and rule 1 invariant 10.
+Never branch the build per commune (env var, constant, code branch) — that is ADR 0044 stop
+condition #1 and rule 1 invariant 10. The one exception is ADR 0047's **target-selection** file
+under `citizen-app/scripts/`: a domain passed at build time only picks **which App ID the same
+bundle is uploaded to**; nothing from it enters the bundle. It is **not** the source of truth for
+which commune an App ID serves — the platform `MiniApp` table is, and when the two disagree the
+server wins.
 
 ---
 
@@ -72,15 +77,19 @@ QR codes that break when a commune's domain is reassigned.
 
 ## Deep link format
 
-```
-https://zalo.me/s/<APP_ID>/?t=<tenant_ulid>&src=qr&v=1
-```
+`t=<tenant_ulid>` is **gone** (ADR 0047, 2026-09-27; no QR had been issued). The parameter now
+carries the commune's **domain** (e.g. `xa-a.vigov.vn`); its exact name and the fate of `v` are
+open in ADR 0047.
 
 | Param | Why it exists |
 |---|---|
-| `t` | The **opaque ULID**, never a name or an administrative code. A QR printed on a noticeboard outlives renames, domain changes and mergers — this is where ADR 0004 pays off |
+| domain | A **lookup key** the server resolves to a commune via platform `ResolveHost`. Never stored as the commune reference: session, remembered commune and audit keep the **ULID** (rule 1 invariant 2 / forbidden #5). After a merger the operator re-points the old domain to the successor commune, audited, so printed QRs keep opening |
 | `src` | `qr` (a QR we issued, naming one commune) · `zns` (the commune sent it). **Nothing else** — `share` was removed by the owner on 2026-09-25 (ADR 0045 §Trả lời). Also shows which channel actually works |
-| `v` | Parameter schema version. **Printed QR codes live for years**; when the format changes, the old ones must still resolve |
+
+The confirmation screen's commune name comes from an identity route (domain → name, province;
+`CitizenOnly` + `KhongThuocXa`, **never returns the ULID**) and the domain reaches the session
+bridge in a **new optional** `OpenCitizenSessionRequest` field — `tenant_hint` is never repurposed
+to carry a domain (rule 2 forbidden #4); the `.proto` owns the new field's name and shape. Both are **not built yet** (ADR 0047 answers 6, 7).
 
 ### Trust weighting by source
 
@@ -88,7 +97,7 @@ https://zalo.me/s/<APP_ID>/?t=<tenant_ulid>&src=qr&v=1
 |---|---|---|
 | `qr` | Scanned at the commune's own noticeboard | Show the commune, **one tap to confirm** |
 | `zns` | The commune sent it to this citizen | Show the commune, one tap to confirm |
-| *any other `src`, or `t` without `src`* | Not a channel we issue | **`t` is ignored** — behave exactly as *(none)*. Never pre-select, never "confirm explicitly" |
+| *any other `src`, or a domain without `src`* | Not a channel we issue | **The domain is ignored** — behave exactly as *(none)*. Never pre-select, never "confirm explicitly" |
 | *(none)* | Opened from the app list or Zalo search | Main app: the server's remembered commune, else introduction only. Own app: the app's commune |
 
 Someone standing at the commune office should not be made to search for the commune they are
@@ -134,8 +143,9 @@ ADR 0044 replaced ADR 0005's no-parameter path (picker, GPS, profile). Do not re
 - **GPS** has no role in choosing a commune: locations are spoofable, and urban boundaries run
   down the middle of streets.
 
-A QR printed for a **merged** commune must still resolve, with a notice — the platform
-service's **succession** table (`TenantSuccession`; ADR 0005, named in ADR 0023) still applies.
+A QR printed for a **merged** commune must still resolve. Since ADR 0047 that is done by
+re-pointing the old **domain** to the successor tenant (a tenant may hold several domains —
+`service-platform/internal/domain/tenant.go:19-25`), audited — not by a `t` lookup.
 
 ---
 
@@ -186,12 +196,14 @@ for nothing and then loses trust.
 1. A flow that would need the client to pick which backend to call
 2. A link that would grant access to a record rather than name a commune
 3. A commune that has merged — what a QR printed for the old one should do
-   (→ the platform service's **succession** table, `TenantSuccession`; ADR 0005, named in
-   ADR 0023. Not "alias": commune A does not *become* commune B)
+   (→ ADR 0047: re-point the old domain to the successor, audited. Not "alias": commune A does
+   not *become* commune B)
 4. Anything depending on a Zalo platform behaviour nobody has verified — **check the vendor
    documentation, do not assume**
-5. A proposal to put **per-commune values in the build**, or to let the **client choose the
-   commune** from the App ID or a URL parameter (ADR 0044 stop conditions #1, #2)
+5. A proposal to put **per-commune values in the build** beyond choosing the target App ID, or
+   to let the **client choose the commune** from the App ID or a URL parameter (ADR 0044 stop
+   conditions #1, #2; ADR 0047). Storing the **domain** as the commune reference anywhere
+   (ADR 0047 stop condition #1)
 6. A request for one citizen, inside one app, to act with **several communes**; or for a
    commune's People's Committee to **own** its app (ADR 0044 stop conditions #3, #4)
 
@@ -201,4 +213,4 @@ for nothing and then loses trust.
   per-commune notification OA) · ADR 0019 (QR session pairing) · ADR 0020 (citizen phone
   verification via `getPhoneNumber`) · ADR 0023 (entity, table and URL-resource names for this
   channel; two-level local government) · ADR 0031 (ViHAT Group, OA `Vihat`) · **ADR 0044 (two
-  modes, one build)**
+  modes, one build)** · **ADR 0047 (two build flows by domain; domain parameter replaces `t`)**

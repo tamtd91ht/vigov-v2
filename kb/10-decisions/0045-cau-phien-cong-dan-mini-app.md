@@ -53,6 +53,7 @@ ADR 0044 cần thêm hai điều mà hiện trạng không có: **App ID đã x�
 **Mặc định do phiên chính chọn** (ghi rõ là mặc định, không phải lời chủ dự án):
 
 - Liên kết trong ZNS trỏ tới **app riêng của xã nếu có**, nếu không thì app chính kèm `t`.
+  (`t` thay bởi tham số tên miền — ADR 0047, 27/09/2026)
 - ADR 0019 (QR ghép phiên) **không đổi**.
 - App Zalo cho cán bộ **ngoài phạm vi**.
 
@@ -317,7 +318,8 @@ CÒN MỞ #5 (vòng đời xoay khoá), #6, #7 và UNKNOWN #1–#4 **vẫn mở*
 1. Đề xuất đưa `GRPC_CALLER_KEY` cho `vihat-miniapp`, hoặc phục vụ RPC cầu trên cổng 9090
 2. Đề xuất cho client gửi xã, App ID hay số điện thoại **thẳng tới ViGov** thay vì qua cầu
 3. Một trường xã **khai cho bên gọi** thêm vào `OpenCitizenSessionRequest`
-4. Phát hành app riêng khi UNKNOWN #1 chưa đo
+   (trường gợi ý tên miền của ADR 0047 là gợi ý như `tenant_hint`, không phải trường này)
+4. Phát hành app riêng khi UNKNOWN #1 chưa đo — **thay bởi ADR 0047 (27/09/2026)**, UNKNOWN #1 vẫn phải đo
 5. Chặng cầu ra khỏi mạng cụm mà không có TLS
 6. Một tuyến công dân đọc hay ghi hồ sơ của chính mình mà nhận phiên chưa có số
 7. Gộp hai danh tính công dân, hoặc nhận hồ sơ cũ, khi tài khoản Zalo đổi số (ADR 0020 CÒN MỞ #1)

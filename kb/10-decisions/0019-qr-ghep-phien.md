@@ -93,6 +93,8 @@ dậy đi là hết kiểm soát. Nó yếu hơn phiên trong điện thoại c�
 | Sống bao lâu | Nhiều năm, đã in ra giấy | Hai phút, trên màn hình |
 | Đổi khuôn tham số | **Khoá khuôn.** `v` chỉ tăng, bản cũ phải đọc được **mãi mãi** | **Đổi tự do.** Không có nợ tương thích nào |
 
+> Khoá khuôn QR khám phá thay bởi ADR 0047 (27/09/2026): bỏ `t`, chưa QR nào đã in.
+
 Vòng đời lệch nhau **hai bậc độ lớn**, nên áp chung một quy tắc phiên bản thì hoặc là trói tay
 loại thứ hai một cách vô cớ, hoặc là nới loại thứ nhất tới mức một tấm QR đã in thành rác. Lý
 do `v` tồn tại và vì sao nó chỉ tăng nằm ở ADR 0005, không chép lại ở đây.
