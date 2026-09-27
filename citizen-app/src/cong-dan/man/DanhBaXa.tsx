@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { danhBaCanBoXa } from "../api/goi-vigov";
 import type { CanBoCongKhai } from "../api/hop-dong-cong-khai";
 import { dichGoi, sauKhiTaiDanhBa, type TrangDanhBa } from "./DanhBaCanBoScreen";
-import { DANH_BA, XA_GIAO_DIEN } from "./noi-dung";
+import { DANH_BA, XA_GIAO_DIEN, XA_TN } from "./noi-dung";
 
 import { BieuTuong } from "./BieuTuong";
 import { KhoiTrangThai } from "./khung-xa";
@@ -34,6 +34,31 @@ export function locCanBo(ds: readonly CanBoCongKhai[], tu_khoa: string): readonl
   );
 }
 
+/**
+ * Nhóm theo BỘ PHẬN, theo thứ tự máy chủ trả (không sắp lại). Bản mẫu chia "Lãnh đạo UBND xã" /
+ * "Bộ phận chuyên môn" bằng một trường nhóm ViGov không có; `bo_phan` là thứ xã thật sự nhập. Người
+ * không ghi bộ phận vào nhóm "Cán bộ khác" ở cuối. THUẦN.
+ */
+export function nhomTheoBoPhan(
+  ds: readonly CanBoCongKhai[],
+  nhan_khac: string,
+): { bo_phan: string; can_bo: CanBoCongKhai[] }[] {
+  const nhom: { bo_phan: string; can_bo: CanBoCongKhai[] }[] = [];
+  const khac: CanBoCongKhai[] = [];
+  for (const cb of ds) {
+    const bp = cb.bo_phan.trim();
+    if (bp === "") {
+      khac.push(cb);
+      continue;
+    }
+    const co = nhom.find((n) => n.bo_phan === bp);
+    if (co) co.can_bo.push(cb);
+    else nhom.push({ bo_phan: bp, can_bo: [cb] });
+  }
+  if (khac.length > 0) nhom.push({ bo_phan: nhan_khac, can_bo: khac });
+  return nhom;
+}
+
 function TheCanBoXa({ cb }: { cb: CanBoCongKhai }) {
   // Số cơ quan trước: công khai theo bản chất; di động chỉ khi người ấy đồng ý (#12).
   const so = cb.so_co_quan.trim() !== "" ? cb.so_co_quan : cb.di_dong;
@@ -46,7 +71,6 @@ function TheCanBoXa({ cb }: { cb: CanBoCongKhai }) {
       <span className="xa-can-bo__chu">
         <strong className="xa-can-bo__ten">{cb.ho_ten}</strong>
         {cb.chuc_vu !== "" && <span>{cb.chuc_vu}</span>}
-        {cb.bo_phan !== "" && <span className="xa-phu">{cb.bo_phan}</span>}
         {cb.so_co_quan.trim() !== "" && (
           <span className="xa-phu">
             {DANH_BA.so_co_quan}: {cb.so_co_quan.trim()}
@@ -110,13 +134,18 @@ export function ThanDanhBaXa(props: { trang: TrangDanhBa; onTai: () => void }) {
       {loc.length === 0 ? (
         <KhoiTrangThai bieu_tuong="users" cau={XA_GIAO_DIEN.khong_thay_can_bo} />
       ) : (
-        <ul className="xa-ds">
-          {loc.map((cb, i) => (
-            // Không có mã trong hợp đồng công khai (cố ý); danh sách không sắp lại, nên khoá là vị trí
-            // trong danh sách ĐÃ LỌC cộng tên — đủ ổn cho một lần xem.
-            <TheCanBoXa key={`${i}-${cb.ho_ten}`} cb={cb} />
-          ))}
-        </ul>
+        nhomTheoBoPhan(loc, XA_TN.nhom_khac).map((n) => (
+          <section key={n.bo_phan} className="xa-nhom">
+            <h2 className="xa-dau-khoi__tieu-de xa-nhom__tieu-de">{n.bo_phan}</h2>
+            <ul className="xa-ds">
+              {n.can_bo.map((cb, i) => (
+                // Không có mã trong hợp đồng công khai (cố ý); danh sách không sắp lại, nên khoá là vị trí
+                // trong nhóm cộng tên — đủ ổn cho một lần xem.
+                <TheCanBoXa key={`${i}-${cb.ho_ten}`} cb={cb} />
+              ))}
+            </ul>
+          </section>
+        ))
       )}
     </>
   );

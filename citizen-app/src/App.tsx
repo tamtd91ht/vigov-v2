@@ -5,6 +5,7 @@ import {
   KenhCongDan,
   type KetQuaMoPhien,
   type KetThucXacNhan,
+  type LayMaViTri,
   type MoPhienViGov,
   NutVaoKenhCongDan,
   TrangXa,
@@ -13,6 +14,7 @@ import {
 import { COMPANY } from "./content/company-profile";
 import { NutChatOA } from "./features/company-intro/NutChatOA";
 import { type KetQuaMoPhienQuaCau, moPhienCongDanQuaCau } from "./features/dang-nhap/cau-vigov";
+import { xinTokenViTri } from "./features/tinh-nang/zalo-api";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
 import { TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha";
 import {
@@ -206,8 +208,19 @@ export function App() {
  * chủ dự án chọn 28/09/2026; lớp vỏ này chỉ chọn nó.
  */
 export function AppRieng({ ten_mien }: { ten_mien: string }) {
-  return <TrangXa ten_mien={ten_mien} />;
+  return <TrangXa ten_mien={ten_mien} lay_ma_vi_tri={layMaViTri} />;
 }
+
+/**
+ * CẦU VỊ TRÍ CHO APP RIÊNG — lớp vỏ dựng hàm, nửa nhà nước chỉ khai kiểu (`LayMaViTri`), như
+ * hàm mở phiên của đường QR. `getLocation` CHỈ trả một token; token BỊ BỎ ở đây, không đi xuống nửa kia và không
+ * rời máy (bảng khai `getLocation`: `roi_khoi_may: ""`). Đổi token ra toạ độ cần máy chủ có app secret —
+ * chưa có; ngày có, tuyến ấy nhận token tại đây.
+ */
+const layMaViTri: LayMaViTri = async () => {
+  const kq = await xinTokenViTri();
+  return kq.kieu === "xong" ? "da-nhan-ma" : kq.kieu;
+};
 
 function AppChung() {
   const [vi_tri, datViTri] = useState<ViTri>({ man: DEFAULT_SCREEN_ID, lan: 0 });

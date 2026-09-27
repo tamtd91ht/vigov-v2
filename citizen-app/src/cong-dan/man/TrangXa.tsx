@@ -27,10 +27,11 @@ import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
 import { ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
 import { DauKhoi, DauManCon, KhoiTrangThai, OBieuTuong, TrangCon } from "./khung-xa";
 import { APP_RIENG, CUA_TOI, DANH_BA, TIN_XA, XA_GIAO_DIEN, XA_TN } from "./noi-dung";
-import { ChiTietPhieuTN, DanhSachPhieuTN, GuiPhanAnhTN, NhanTraiNghiem, ThePhieuTN } from "./PhanAnhAppXa";
+import { ChiTietPhieuTN, DanhSachPhieuTN, GuiPhanAnhTN, NhanTraiNghiem, ThePhieuTN, TraCuuPhieuTN } from "./PhanAnhAppXa";
 import { CaNhanXa, type CoChu, DinhDanhXa, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
 import { BaiTinXa, DanhSachTinXa, HangTin, useTinXa } from "./TinTucAppXa";
-import { type LayNguoiDung, layNguoiDungGiaLap, loiChao, type NguoiDungApp, type PhieuTraiNghiem } from "./trai-nghiem";
+import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
+import { type LayMaViTri, type LayNguoiDung, layNguoiDungGiaLap, loiChao, type NguoiDungApp } from "./trai-nghiem";
 
 export type XaCuaApp = { readonly ten: string; readonly tinh: string };
 
@@ -58,6 +59,7 @@ type ManXa =
   | { readonly kieu: "bai"; readonly id: string; readonly tu: TabXa }
   | { readonly kieu: "danh-ba" }
   | { readonly kieu: "tra-cuu" }
+  | { readonly kieu: "tra-cuu-phieu" }
   | { readonly kieu: "truyen-thanh" }
   | { readonly kieu: "video" }
   | { readonly kieu: "ban-do" }
@@ -143,7 +145,7 @@ function TrangChuXa(props: {
   xa: XaCuaApp;
   nguoi_dung: NguoiDungApp;
   tin: ReturnType<typeof useTinXa>;
-  phieu: readonly PhieuTraiNghiem[];
+  phieu: readonly PhieuCuaToi[];
   di: (m: ManXa) => void;
 }) {
   const { xa, tin, di, nguoi_dung } = props;
@@ -187,7 +189,7 @@ function TrangChuXa(props: {
 
         <DauKhoi tieu_de={XA_GIAO_DIEN.muc_phan_anh} onXemTatCa={() => di({ kieu: "tab", tab: "phan-anh" })} />
         {moi_nhat ? (
-          <ThePhieuTN phieu={moi_nhat} onMo={() => di({ kieu: "phieu", ma: moi_nhat.ma, tu: "trang-chu" })} />
+          <ThePhieuTN phieu={moi_nhat} onMo={() => di({ kieu: "phieu", ma: moi_nhat.ma_tra_cuu, tu: "trang-chu" })} />
         ) : (
           <div className="xa-the">
             <KhoiTrangThai bieu_tuong="chat" cau={XA_TN.chua_co_phieu} />
@@ -245,11 +247,16 @@ function ManDanhBa({ ten_mien, onQuayLai }: { ten_mien: string; onQuayLai: () =>
 
 /* ═════════════════════════════════ APP ═════════════════════════════════ */
 
-function AppCuaXa(props: { ten_mien: string; xa: XaCuaApp; lay_nguoi_dung: LayNguoiDung }) {
+function AppCuaXa(props: {
+  ten_mien: string;
+  xa: XaCuaApp;
+  lay_nguoi_dung: LayNguoiDung;
+  lay_ma_vi_tri?: LayMaViTri;
+}) {
   const { ten_mien, xa } = props;
   // NGƯỜI DÙNG VÀ PHIẾU CHỈ TRONG BỘ NHỚ (`trai-nghiem.ts`): đóng app là mất, không ghi xuống máy.
   const [nguoi_dung, datNguoiDung] = useState<NguoiDungApp | null>(null);
-  const [phieu, datPhieu] = useState<readonly PhieuTraiNghiem[]>([]);
+  const [phieu, datPhieu] = useState<readonly PhieuCuaToi[]>([]);
   const [co_chu, datCoChu] = useState<CoChu>("vua");
   const [man, datMan] = useState<ManXa>({ kieu: "tab", tab: "trang-chu" });
   const tin = useTinXa(ten_mien);
@@ -268,11 +275,23 @@ function AppCuaXa(props: { ten_mien: string; xa: XaCuaApp; lay_nguoi_dung: LayNg
   let man_con = null;
   switch (man.kieu) {
     case "bai":
-      man_con = <BaiTinXa ten_mien={ten_mien} id={man.id} onQuayLai={() => veTab(man.tu)} />;
+      man_con = (
+        <BaiTinXa
+          key={man.id}
+          ten_mien={ten_mien}
+          id={man.id}
+          ds={tin.ds.muc}
+          onMo={(id) => datMan({ kieu: "bai", id, tu: man.tu })}
+          onQuayLai={() => veTab(man.tu)}
+        />
+      );
       break;
     case "gui":
       man_con = (
         <GuiPhanAnhTN
+          ten_xa={xa.ten}
+          nguoi_dung={nguoi_dung}
+          lay_ma_vi_tri={props.lay_ma_vi_tri}
           onQuayLai={ve}
           onDaGui={(p) => datPhieu((ds) => [p, ...ds])}
           onXemPhieu={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
@@ -281,7 +300,7 @@ function AppCuaXa(props: { ten_mien: string; xa: XaCuaApp; lay_nguoi_dung: LayNg
       break;
     case "phieu":
       man_con = (
-        <ChiTietPhieuTN phieu={phieu.find((p) => p.ma === man.ma) ?? null} onQuayLai={() => veTab(man.tu)} />
+        <ChiTietPhieuTN phieu={phieu.find((p) => p.ma_tra_cuu === man.ma) ?? null} onQuayLai={() => veTab(man.tu)} />
       );
       break;
     case "danh-ba":
@@ -289,6 +308,9 @@ function AppCuaXa(props: { ten_mien: string; xa: XaCuaApp; lay_nguoi_dung: LayNg
       break;
     case "tra-cuu":
       man_con = <TraCuuHoSoXa onQuayLai={ve} />;
+      break;
+    case "tra-cuu-phieu":
+      man_con = <TraCuuPhieuTN phieu={phieu} onQuayLai={() => veTab("phan-anh")} />;
       break;
     case "truyen-thanh":
       man_con = (
@@ -327,7 +349,11 @@ function AppCuaXa(props: { ten_mien: string; xa: XaCuaApp; lay_nguoi_dung: LayNg
       <>
         <DauTab tieu_de={CUA_TOI.tieu_de} nhan_tn={nguoi_dung.nguon === "gia-lap"} />
         <div className="xa-trang xa-trang--tab">
-          <DanhSachPhieuTN phieu={phieu} onMo={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })} />
+          <DanhSachPhieuTN
+            phieu={phieu}
+            onMo={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
+            onTraCuu={() => datMan({ kieu: "tra-cuu-phieu" })}
+          />
         </div>
       </>
     );
@@ -375,8 +401,13 @@ export function TrangXa(props: {
    * lớp vỏ tiêm hàm thật vào đây — nửa này không nhập zmp-sdk (`ranh-gioi-hai-nua.test.ts` §3a).
    */
   lay_nguoi_dung?: LayNguoiDung;
+  /**
+   * Lấy MÃ vị trí (`getLocation`), do lớp vỏ tiêm — nửa này không nhập zmp-sdk. Không truyền thì màn gửi
+   * phản ánh không có nút vị trí (chạy thử ngoài Zalo, test).
+   */
+  lay_ma_vi_tri?: LayMaViTri;
 }) {
-  const { ten_mien, lay_nguoi_dung = layNguoiDungGiaLap } = props;
+  const { ten_mien, lay_nguoi_dung = layNguoiDungGiaLap, lay_ma_vi_tri } = props;
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
@@ -394,7 +425,9 @@ export function TrangXa(props: {
     // Tên miền là hằng của bản dựng; chỉ `lan` đổi.
   }, [lan]);
 
-  if (trang.kieu === "xong") return <AppCuaXa ten_mien={ten_mien} xa={trang.xa} lay_nguoi_dung={lay_nguoi_dung} />;
+  if (trang.kieu === "xong") {
+    return <AppCuaXa ten_mien={ten_mien} xa={trang.xa} lay_nguoi_dung={lay_nguoi_dung} lay_ma_vi_tri={lay_ma_vi_tri} />;
+  }
 
   return (
     <div className="xa-app">

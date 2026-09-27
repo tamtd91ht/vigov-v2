@@ -1,39 +1,46 @@
 /**
- * PHẢN ÁNH TRONG APP RIÊNG — bản trải nghiệm theo bản mẫu `vi-gov/zalo-miniapp`
- * (`features/my-feedback/*`, `features/send-feedback/*`).
+ * PHẢN ÁNH TRONG APP RIÊNG — giao diện theo bản mẫu `vi-gov/zalo-miniapp` (`features/my-feedback/*`,
+ * `features/send-feedback/*`), NỘI DUNG theo hợp đồng thật của `service-petitions`
+ * (`api/hop-dong-phan-anh.ts`): năm ô gửi đi, bảng trạng thái `TRANG_THAI`, lĩnh vực do cán bộ chốt,
+ * hai mốc hạn, kết quả, lý do không tiếp nhận, cơ quan nhận. Chữ dùng lại `GUI` · `TRA_CUU` · `THE_PHIEU`
+ * — hai app nói cùng một chữ cho cùng một thứ.
  *
  * PHIẾU CHỈ TRONG MÁY (`trai-nghiem.ts`): không một byte nào tới máy chủ của xã. Mọi màn gắn nhãn.
  *
  * KHÁC BẢN MẪU, CÓ CHỦ ĐÍCH:
- *   · KHÔNG CÓ BƯỚC CHỌN LĨNH VỰC. Lĩnh vực do cán bộ chốt, không do người dân chọn (ADR 0028, #23);
- *     bản mẫu có bước "Danh mục" kèm số ngày xử lý viết cứng — trái cả ADR ấy lẫn luật 10 (hạn tính
- *     bằng GIỜ LÀM VIỆC, theo cấu hình từng xã). Luồng còn hai bước: Nội dung → Xác nhận.
- *   · KHÔNG CÂU "CAM KẾT XỬ LÝ TRONG N NGÀY": con số ấy là cấu hình của xã (ADR 0007), chưa đọc được.
- *   · KHÔNG ẢNH HIỆN TRƯỜNG, KHÔNG GPS: ảnh cần kho tệp và đường tải lên, chưa có; vị trí nhập bằng chữ.
- *   · KHÔNG SỬA / THU HỒI / ĐÁNH GIÁ: các hành động ấy thuộc phiếu thật trên máy chủ.
+ *   · không bước chọn lĩnh vực — cán bộ chốt (ADR 0028, #23);
+ *   · không "cam kết xử lý trong N ngày" viết cứng — hạn đếm bằng giờ làm việc theo lịch từng xã
+ *     (ADR 0007), chỉ máy chủ đếm được; bản trải nghiệm nói thẳng là chưa tính hạn;
+ *   · không ảnh hiện trường — chưa có kho tệp và đường tải lên;
+ *   · vị trí: nút "Lấy vị trí hiện tại" xin quyền và nhận MÃ vị trí; toạ độ cần máy chủ đổi, chưa có,
+ *     nên không vẽ bản đồ, không đoán địa chỉ;
+ *   · không sửa / thu hồi / đánh giá — các hành động ấy cần tuyến máy chủ chưa có.
  * Mọi ô nhập đi qua `o-nhap.tsx` — tệp duy nhất của nửa nhà nước được có ô nhập.
  */
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
+import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
 import { thoiDiemVN } from "../../lib/thoi-diem";
 
 import { BieuTuong } from "./BieuTuong";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
-import { XA_TN } from "./noi-dung";
+import { GUI, giaiThichTrangThai, KHAN_CAP, nhanTrangThai, THE_PHIEU, TRA_CUU, TRANG_THAI, XA_TN } from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
 import {
+  type KetQuaViTri,
   kiemNhapPhieu,
+  type LayMaViTri,
   type LoiNhapPhieu,
   maPhieuTraiNghiem,
-  NHAN_TRANG_THAI_TN,
+  type NguoiDungApp,
+  nhomCua,
+  type NhomLoc,
   type NhapPhieu,
-  type PhieuTraiNghiem,
   taoPhieuTraiNghiem,
-  TOI_DA_DIA_CHI,
-  TOI_DA_NOI_DUNG,
-  TOI_DA_TIEU_DE,
-  type TrangThaiTraiNghiem,
+  traPhieuTraiNghiem,
+  VONG_DOI,
 } from "./trai-nghiem";
+import { DO_DAI_TOI_DA } from "../api/hop-dong-phan-anh";
 
 /** Nhãn "BẢN TRẢI NGHIỆM" — chữ, không chỉ màu. */
 export function NhanTraiNghiem() {
@@ -50,22 +57,31 @@ export function GhiChuTraiNghiem({ cau }: { cau: string }) {
   );
 }
 
-export function ChipTrangThai({ tt }: { tt: TrangThaiTraiNghiem }) {
-  return <span className={`xa-chip-tt xa-chip-tt--${tt}`}>{NHAN_TRANG_THAI_TN[tt]}</span>;
+function lopTrangThai(tt: string): string {
+  const nhom = nhomCua(tt);
+  if (tt === "khong-tiep-nhan" || tt === "chuyen-cap-tren") return "xa-chip-tt xa-chip-tt--ket-thuc";
+  return `xa-chip-tt xa-chip-tt--${nhom}`;
 }
 
+export function ChipTrangThai({ tt }: { tt: string }) {
+  return <span className={lopTrangThai(tt)}>{nhanTrangThai(tt)}</span>;
+}
+
+const gio = (iso: string) => thoiDiemVN(iso) ?? "";
+
 /** Một thẻ phiếu — dùng cả ở trang chủ ("phiếu mới nhất") và danh sách. */
-export function ThePhieuTN({ phieu, onMo }: { phieu: PhieuTraiNghiem; onMo: () => void }) {
+export function ThePhieuTN({ phieu, onMo }: { phieu: PhieuCuaToi; onMo: () => void }) {
   return (
     <button type="button" className="xa-the xa-hang-tin" onClick={onMo}>
       <span className="xa-o-bt xa-mau--hong" aria-hidden="true">
         <BieuTuong ten="chat" co={24} />
       </span>
       <span className="xa-hang-tin__chu">
-        <span className="xa-phu">{phieu.ma}</span>
-        <strong className="xa-hang-tin__tieu-de">{phieu.tieu_de}</strong>
+        <span className="xa-phu">{phieu.ma_tra_cuu}</span>
+        <strong className="xa-hang-tin__tieu-de xa-cat-2">{phieu.noi_dung}</strong>
         <span className="xa-phu">
-          {phieu.luc_gui} · {phieu.dia_chi}
+          {gio(phieu.goc_dem_han)}
+          {phieu.dia_chi !== "" ? ` · ${phieu.dia_chi}` : ""}
         </span>
         <span>
           <ChipTrangThai tt={phieu.trang_thai} />
@@ -78,24 +94,46 @@ export function ThePhieuTN({ phieu, onMo }: { phieu: PhieuTraiNghiem; onMo: () =
 
 /* ═══════════════════════════════ DANH SÁCH ═══════════════════════════════ */
 
-type Loc = TrangThaiTraiNghiem | "tat-ca";
-const THU_TU: readonly TrangThaiTraiNghiem[] = ["moi", "dang-xu-ly", "da-xu-ly"];
+const NHOM: ReadonlyArray<[NhomLoc, string]> = [
+  ["tat-ca", XA_TN.loc_tat_ca],
+  ["dang-cho", XA_TN.loc_dang_cho],
+  ["dang-xu-ly", XA_TN.loc_dang_xu_ly],
+  ["da-xong", XA_TN.loc_da_xong],
+];
 
-export function DanhSachPhieuTN({ phieu, onMo }: { phieu: readonly PhieuTraiNghiem[]; onMo: (ma: string) => void }) {
-  const [loc, datLoc] = useState<Loc>("tat-ca");
-  const hien = useMemo(() => (loc === "tat-ca" ? phieu : phieu.filter((p) => p.trang_thai === loc)), [phieu, loc]);
-  const dem = (tt: TrangThaiTraiNghiem) => phieu.filter((p) => p.trang_thai === tt).length;
+export function DanhSachPhieuTN(props: {
+  phieu: readonly PhieuCuaToi[];
+  onMo: (ma: string) => void;
+  onTraCuu: () => void;
+}) {
+  const { phieu } = props;
+  const [loc, datLoc] = useState<NhomLoc>("tat-ca");
+  const hien = useMemo(() => (loc === "tat-ca" ? phieu : phieu.filter((p) => nhomCua(p.trang_thai) === loc)), [phieu, loc]);
+  const dem = (n: NhomLoc) => (n === "tat-ca" ? phieu.length : phieu.filter((p) => nhomCua(p.trang_thai) === n).length);
 
   return (
     <>
       <GhiChuTraiNghiem cau={XA_TN.ghi_chu_phieu_tn} />
-      <div className="xa-chips" role="group" aria-label={XA_TN.loc_tat_ca}>
-        <button type="button" className={`xa-chip${loc === "tat-ca" ? " xa-chip--on" : ""}`} aria-pressed={loc === "tat-ca"} onClick={() => datLoc("tat-ca")}>
-          {XA_TN.loc_tat_ca} ({phieu.length})
-        </button>
-        {THU_TU.map((tt) => (
-          <button key={tt} type="button" className={`xa-chip${loc === tt ? " xa-chip--on" : ""}`} aria-pressed={loc === tt} onClick={() => datLoc(tt)}>
-            {NHAN_TRANG_THAI_TN[tt]} ({dem(tt)})
+      <button type="button" className="xa-the xa-hang xa-hang--vien" onClick={props.onTraCuu}>
+        <span className="xa-o-bt xa-mau--xanh" aria-hidden="true">
+          <BieuTuong ten="search" co={24} />
+        </span>
+        <span className="xa-hang__chu">
+          <strong>{TRA_CUU.tieu_de}</strong>
+          <span className="xa-phu">{TRA_CUU.goi_y_ma}</span>
+        </span>
+        <BieuTuong ten="right" co={20} />
+      </button>
+      <div className="xa-chips" role="group" aria-label={XA_TN.loc_nhom}>
+        {NHOM.map(([k, n]) => (
+          <button
+            key={k}
+            type="button"
+            className={`xa-chip${loc === k ? " xa-chip--on" : ""}`}
+            aria-pressed={loc === k}
+            onClick={() => datLoc(k)}
+          >
+            {n} ({dem(k)})
           </button>
         ))}
       </div>
@@ -104,8 +142,8 @@ export function DanhSachPhieuTN({ phieu, onMo }: { phieu: readonly PhieuTraiNghi
       ) : (
         <ul className="xa-ds">
           {hien.map((p) => (
-            <li key={p.ma}>
-              <ThePhieuTN phieu={p} onMo={() => onMo(p.ma)} />
+            <li key={p.ma_tra_cuu}>
+              <ThePhieuTN phieu={p} onMo={() => props.onMo(p.ma_tra_cuu)} />
             </li>
           ))}
         </ul>
@@ -116,42 +154,133 @@ export function DanhSachPhieuTN({ phieu, onMo }: { phieu: readonly PhieuTraiNghi
 
 /* ═══════════════════════════════ CHI TIẾT ═══════════════════════════════ */
 
-export function ChiTietPhieuTN({ phieu, onQuayLai }: { phieu: PhieuTraiNghiem | null; onQuayLai: () => void }) {
+function Dong({ nhan, children }: { nhan: string; children: ReactNode }) {
+  return (
+    <>
+      <p className="xa-nhan-o">{nhan}</p>
+      <div>{children}</div>
+    </>
+  );
+}
+
+/** Dòng thời gian theo vòng đời thật: bước đã qua, bước hiện tại, bước sắp tới. */
+export function DongThoiGian({ phieu }: { phieu: PhieuCuaToi }) {
+  const ket_thuc = phieu.trang_thai === "khong-tiep-nhan" || phieu.trang_thai === "chuyen-cap-tren";
+  const buoc = ket_thuc ? ["da-tiep-nhan", "dang-phan-loai", phieu.trang_thai] : VONG_DOI;
+  const hien_tai = buoc.indexOf(phieu.trang_thai);
+  return (
+    <ol className="xa-dong-tg">
+      {buoc.map((tt, i) => {
+        const lop = i < hien_tai ? "xa-dong-tg__buoc--qua" : i === hien_tai ? "xa-dong-tg__buoc--dang" : "xa-dong-tg__buoc--cho";
+        return (
+          <li key={tt} className={`xa-dong-tg__buoc ${lop}`} aria-current={i === hien_tai ? "step" : undefined}>
+            <strong>{TRANG_THAI[tt]?.nhan ?? nhanTrangThai(tt)}</strong>
+            {i === 0 && <span className="xa-phu">{gio(phieu.goc_dem_han)}</span>}
+            {i === hien_tai && giaiThichTrangThai(tt) && <span className="xa-phu">{giaiThichTrangThai(tt)}</span>}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+export function ThanPhieuTN({ phieu }: { phieu: PhieuCuaToi }) {
+  const nguoi_gui = phieu.an_danh
+    ? THE_PHIEU.an_danh
+    : [phieu.ho_ten_da_che || THE_PHIEU.khong_ghi_ten, phieu.dien_thoai_da_che].filter(Boolean).join(" · ");
+  return (
+    <>
+      <div className="xa-the xa-the--dem xa-khoi">
+        <p className="xa-phu">
+          {GUI.xong_ma}: <strong className="xa-ma">{phieu.ma_tra_cuu}</strong>
+        </p>
+        <Dong nhan={THE_PHIEU.trang_thai}>
+          <ChipTrangThai tt={phieu.trang_thai} />
+        </Dong>
+        <Dong nhan={THE_PHIEU.linh_vuc}>{phieu.nhan_linh_vuc || THE_PHIEU.chua_phan_loai}</Dong>
+        <Dong nhan={THE_PHIEU.gui_luc}>
+          {gio(phieu.goc_dem_han)} {THE_PHIEU.gio_vn}
+        </Dong>
+        <Dong nhan={THE_PHIEU.han_xem}>{phieu.han_tiep_nhan ? gio(phieu.han_tiep_nhan) : XA_TN.chua_tinh_han}</Dong>
+        <Dong nhan={THE_PHIEU.han_xu_ly}>{phieu.han_xu_ly_xong ? gio(phieu.han_xu_ly_xong) : THE_PHIEU.han_xu_ly_chua_co}</Dong>
+        <div className="xa-ke" />
+        <Dong nhan={THE_PHIEU.noi_dung}>
+          <p className="xa-giu-dong">{phieu.noi_dung}</p>
+        </Dong>
+        <Dong nhan={THE_PHIEU.dia_chi}>{phieu.dia_chi || THE_PHIEU.dia_chi_trong}</Dong>
+        <Dong nhan={THE_PHIEU.nguoi_gui}>{nguoi_gui}</Dong>
+        {phieu.ket_qua !== "" && (
+          <Dong nhan={THE_PHIEU.ket_qua}>
+            <p className="xa-giu-dong">{phieu.ket_qua}</p>
+          </Dong>
+        )}
+        {phieu.trang_thai === "khong-tiep-nhan" && (
+          <Dong nhan={THE_PHIEU.ly_do_khong_tiep_nhan}>{phieu.ly_do || THE_PHIEU.chua_ghi}</Dong>
+        )}
+        {phieu.trang_thai === "chuyen-cap-tren" && (
+          <>
+            <Dong nhan={THE_PHIEU.co_quan_tiep_nhan}>{phieu.co_quan_nhan || THE_PHIEU.chua_ghi}</Dong>
+            <Dong nhan={THE_PHIEU.ly_do_chuyen}>{phieu.ly_do || THE_PHIEU.chua_ghi}</Dong>
+            <p className="xa-phu">{THE_PHIEU.lien_he_co_quan}</p>
+          </>
+        )}
+      </div>
+      <div className="xa-the xa-the--dem xa-khoi">
+        <h2 className="xa-dau-khoi__tieu-de">{XA_TN.tien_trinh}</h2>
+        <DongThoiGian phieu={phieu} />
+      </div>
+    </>
+  );
+}
+
+export function ChiTietPhieuTN({ phieu, onQuayLai }: { phieu: PhieuCuaToi | null; onQuayLai: () => void }) {
   return (
     <>
       <DauManCon tieu_de={XA_TN.chi_tiet_tieu_de} onQuayLai={onQuayLai} />
       <TrangCon>
         {phieu === null ? (
-          <KhoiTrangThai bieu_tuong="chat" loi cau={XA_TN.loc_trong} />
+          <KhoiTrangThai bieu_tuong="chat" loi cau={TRA_CUU.khong_thay} />
         ) : (
           <>
             <GhiChuTraiNghiem cau={XA_TN.ghi_chu_phieu_tn} />
-            <div className="xa-the xa-the--dem xa-khoi">
-              <p className="xa-phu">
-                {XA_TN.ma_phieu}: <strong>{phieu.ma}</strong>
-              </p>
-              <h2 className="xa-bai__tieu-de">{phieu.tieu_de}</h2>
-              <ChipTrangThai tt={phieu.trang_thai} />
-              <div className="xa-ke" />
-              <p className="xa-nhan-o">{XA_TN.mo_ta}</p>
-              <p className="xa-giu-dong">{phieu.noi_dung}</p>
-              <p className="xa-nhan-o">{XA_TN.noi_xay_ra}</p>
-              <p>{phieu.dia_chi}</p>
-              <p className="xa-nhan-o">{XA_TN.gui_luc}</p>
-              <p>{phieu.luc_gui}</p>
-            </div>
-            <div className="xa-the xa-the--dem xa-khoi">
-              <h2 className="xa-dau-khoi__tieu-de">{XA_TN.tien_trinh}</h2>
-              <ol className="xa-dong-tg">
-                <li className="xa-dong-tg__buoc">
-                  <strong>{XA_TN.buoc_da_gui}</strong>
-                  <span className="xa-phu">{phieu.luc_gui}</span>
-                </li>
-                <li className="xa-dong-tg__buoc xa-dong-tg__buoc--dang">
-                  <strong>{XA_TN.buoc_cho_tiep_nhan}</strong>
-                </li>
-              </ol>
-            </div>
+            <ThanPhieuTN phieu={phieu} />
+          </>
+        )}
+      </TrangCon>
+    </>
+  );
+}
+
+/* ═══════════════════════════════ TRA CỨU PHIẾU ═══════════════════════════════ */
+
+export function TraCuuPhieuTN({ phieu, onQuayLai }: { phieu: readonly PhieuCuaToi[]; onQuayLai: () => void }) {
+  const [ma, datMa] = useState("");
+  const [kq, datKq] = useState<{ kieu: "thieu" } | { kieu: "khong-thay" } | { kieu: "thay"; p: PhieuCuaToi } | null>(null);
+  function tra() {
+    if (ma.trim() === "") return datKq({ kieu: "thieu" });
+    const p = traPhieuTraiNghiem(phieu, ma);
+    datKq(p === null ? { kieu: "khong-thay" } : { kieu: "thay", p });
+  }
+  return (
+    <>
+      <DauManCon tieu_de={TRA_CUU.tieu_de} onQuayLai={onQuayLai} />
+      <TrangCon>
+        <GhiChuTraiNghiem cau={XA_TN.ghi_chu_tra_cuu_tn} />
+        <div className="xa-the xa-the--dem xa-khoi">
+          <ONhapDong id="xa-ma-tra-cuu" nhan={TRA_CUU.nhan_ma} goi_y={TRA_CUU.goi_y_ma} gia_tri={ma} toi_da={40} onDoi={datMa} />
+          <button type="button" className="xa-nut" onClick={tra}>
+            <BieuTuong ten="search" co={20} />
+            {TRA_CUU.nut_tra}
+          </button>
+        </div>
+        {kq?.kieu === "thieu" && <KhoiTrangThai bieu_tuong="info" loi cau={TRA_CUU.thieu_ma} />}
+        {kq?.kieu === "khong-thay" && <KhoiTrangThai bieu_tuong="search" loi cau={TRA_CUU.khong_thay} />}
+        {kq?.kieu === "thay" && (
+          <>
+            <p className="xa-phu" role="status">
+              {TRA_CUU.tim_thay}
+            </p>
+            <ThanPhieuTN phieu={kq.p} />
           </>
         )}
       </TrangCon>
@@ -179,21 +308,65 @@ function ThanhBuoc({ buoc }: { buoc: 1 | 2 }) {
   );
 }
 
+const CAU_VI_TRI: Readonly<Record<KetQuaViTri, string>> = {
+  "da-nhan-ma": XA_TN.vi_tri_da_nhan,
+  "tu-choi": XA_TN.vi_tri_tu_choi,
+  "ngoai-zalo": XA_TN.vi_tri_ngoai_zalo,
+  "khong-lay-duoc": XA_TN.vi_tri_khong_lay_duoc,
+};
+
+/** Nút "Lấy vị trí hiện tại". Chỉ có khi lớp vỏ tiêm hàm lấy mã vị trí (chạy trong Zalo). */
+function NutViTri({ lay }: { lay: LayMaViTri }) {
+  const [dang, datDang] = useState(false);
+  const [kq, datKq] = useState<KetQuaViTri | null>(null);
+  async function bam() {
+    if (dang) return;
+    datDang(true);
+    datKq(await lay().catch(() => "khong-lay-duoc" as const));
+    datDang(false);
+  }
+  return (
+    <div className="xa-vi-tri">
+      <button type="button" className="xa-nut xa-nut--phu" onClick={() => void bam()} disabled={dang}>
+        <BieuTuong ten="pin" co={20} />
+        {dang ? XA_TN.vi_tri_dang_lay : XA_TN.vi_tri_nut}
+      </button>
+      <p className="xa-phu">{XA_TN.vi_tri_vi_sao}</p>
+      {kq !== null && (
+        <p className={kq === "da-nhan-ma" ? "xa-phu" : "xa-loi-o"} role="status">
+          {CAU_VI_TRI[kq]}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function GuiPhanAnhTN(props: {
+  ten_xa: string;
+  nguoi_dung: NguoiDungApp;
+  lay_ma_vi_tri?: LayMaViTri;
   onQuayLai: () => void;
-  onDaGui: (phieu: PhieuTraiNghiem) => void;
+  onDaGui: (phieu: PhieuCuaToi) => void;
   onXemPhieu: (ma: string) => void;
 }) {
   const [buoc, datBuoc] = useState<1 | 2>(1);
-  const [nhap, datNhap] = useState<NhapPhieu>({ tieu_de: "", noi_dung: "", dia_chi: "" });
+  const [nhap, datNhap] = useState<NhapPhieu>({
+    noi_dung: "",
+    dia_chi: "",
+    ho_ten: props.nguoi_dung.ho_ten,
+    dien_thoai: props.nguoi_dung.so_dien_thoai,
+    an_danh: false,
+  });
   const [loi, datLoi] = useState<LoiNhapPhieu>({});
-  const [xong, datXong] = useState<PhieuTraiNghiem | null>(null);
-  const doi = (k: keyof NhapPhieu) => (v: string) => datNhap((t) => ({ ...t, [k]: v }));
+  const [xong, datXong] = useState<PhieuCuaToi | null>(null);
+  const [hoi_huy, datHoiHuy] = useState(false);
+  const doi = (k: "noi_dung" | "dia_chi" | "ho_ten" | "dien_thoai") => (v: string) => datNhap((t) => ({ ...t, [k]: v }));
+  const co_noi_dung = nhap.noi_dung.trim() !== "" || nhap.dia_chi.trim() !== "";
 
   if (xong !== null) {
     return (
       <>
-        <DauManCon tieu_de={XA_TN.nut_gui} onQuayLai={props.onQuayLai} />
+        <DauManCon tieu_de={GUI.tieu_de} onQuayLai={props.onQuayLai} />
         <TrangCon>
           <div className="xa-ket-qua">
             <span className="xa-ket-qua__dau" aria-hidden="true">
@@ -202,10 +375,11 @@ export function GuiPhanAnhTN(props: {
             <h2 className="xa-bai__tieu-de">{XA_TN.xong_tieu_de}</h2>
             <p className="xa-phu">{XA_TN.xong_mo_ta}</p>
             <div className="xa-the xa-the--dem xa-ket-qua__ma">
-              <p className="xa-phu">{XA_TN.ma_phieu}</p>
-              <strong>{xong.ma}</strong>
+              <p className="xa-phu">{GUI.xong_ma}</p>
+              <strong>{xong.ma_tra_cuu}</strong>
+              <p className="xa-phu">{GUI.xong_giu_ma}</p>
             </div>
-            <button type="button" className="xa-nut xa-nut--hong" onClick={() => props.onXemPhieu(xong.ma)}>
+            <button type="button" className="xa-nut xa-nut--hong" onClick={() => props.onXemPhieu(xong.ma_tra_cuu)}>
               {XA_TN.nut_theo_doi}
             </button>
             <button type="button" className="xa-nut xa-nut--phu" onClick={props.onQuayLai}>
@@ -218,53 +392,106 @@ export function GuiPhanAnhTN(props: {
   }
 
   function tiep() {
-    const l = kiemNhapPhieu(nhap);
+    const l = kiemNhapPhieu(nhap, { thieu: GUI.thieu_noi_dung, qua_dai: (n) => GUI.qua_dai(XA_TN.o_nay, n) });
     datLoi(l);
     if (Object.keys(l).length === 0) datBuoc(2);
   }
 
   function gui() {
-    const luc = thoiDiemVN(new Date().toISOString()) ?? "";
-    const phieu = taoPhieuTraiNghiem(nhap, luc, maPhieuTraiNghiem());
+    const phieu = taoPhieuTraiNghiem(nhap, new Date().toISOString(), maPhieuTraiNghiem());
     props.onDaGui(phieu);
     datXong(phieu);
   }
 
+  function lui() {
+    if (buoc === 2) return datBuoc(1);
+    if (co_noi_dung) return datHoiHuy(true);
+    props.onQuayLai();
+  }
+
   return (
     <>
-      <DauManCon tieu_de={XA_TN.nut_gui} onQuayLai={buoc === 2 ? () => datBuoc(1) : props.onQuayLai} />
+      <DauManCon tieu_de={GUI.tieu_de} onQuayLai={lui} />
       <ThanhBuoc buoc={buoc} />
       <TrangCon>
         <GhiChuTraiNghiem cau={XA_TN.ghi_chu_gui_tn} />
+        {hoi_huy && (
+          <div className="xa-the xa-the--dem xa-khoi" role="alertdialog" aria-label={XA_TN.hoi_huy_tieu_de}>
+            <h2 className="xa-dau-khoi__tieu-de">{XA_TN.hoi_huy_tieu_de}</h2>
+            <p>{XA_TN.hoi_huy_cau}</p>
+            <button type="button" className="xa-nut" onClick={() => datHoiHuy(false)}>
+              {XA_TN.tiep_tuc_nhap}
+            </button>
+            <button type="button" className="xa-nut xa-nut--phu xa-nut--do-vien" onClick={props.onQuayLai}>
+              {XA_TN.huy_bo}
+            </button>
+          </div>
+        )}
         {buoc === 1 ? (
           <div className="xa-the xa-the--dem xa-khoi">
-            <ONhapDong id="xa-tieu-de" nhan={XA_TN.o_tieu_de} goi_y={XA_TN.goi_y_tieu_de} gia_tri={nhap.tieu_de} toi_da={TOI_DA_TIEU_DE} onDoi={doi("tieu_de")} />
-            {loi.tieu_de && <p className="xa-loi-o" role="alert">{loi.tieu_de}</p>}
-            <ONhapDoan id="xa-noi-dung" nhan={XA_TN.o_noi_dung} goi_y={XA_TN.goi_y_noi_dung} gia_tri={nhap.noi_dung} toi_da={TOI_DA_NOI_DUNG} bat_buoc onDoi={doi("noi_dung")} />
+            <div className="xa-ghi-chu">
+              <BieuTuong ten="alert" co={22} />
+              <p>{KHAN_CAP}</p>
+            </div>
+            <ONhapDoan id="xa-noi-dung" nhan={GUI.nhan_noi_dung} goi_y={GUI.goi_y_noi_dung} gia_tri={nhap.noi_dung} toi_da={DO_DAI_TOI_DA.noi_dung} bat_buoc onDoi={doi("noi_dung")} />
+            <p className="xa-phu xa-dem-ky-tu">
+              {[...nhap.noi_dung].length}/{DO_DAI_TOI_DA.noi_dung.toLocaleString("vi-VN")}
+            </p>
             {loi.noi_dung && <p className="xa-loi-o" role="alert">{loi.noi_dung}</p>}
-            <ONhapDong id="xa-dia-chi" nhan={XA_TN.o_dia_chi} goi_y={XA_TN.goi_y_dia_chi} gia_tri={nhap.dia_chi} toi_da={TOI_DA_DIA_CHI} onDoi={doi("dia_chi")} />
+            <ONhapDong id="xa-dia-chi" nhan={GUI.nhan_dia_chi} goi_y={GUI.goi_y_dia_chi} gia_tri={nhap.dia_chi} toi_da={DO_DAI_TOI_DA.dia_chi} onDoi={doi("dia_chi")} />
             {loi.dia_chi && <p className="xa-loi-o" role="alert">{loi.dia_chi}</p>}
+            {props.lay_ma_vi_tri && <NutViTri lay={props.lay_ma_vi_tri} />}
+            <p className="xa-phu">{GUI.chua_ho_tro_anh}</p>
+            <div className="xa-hang xa-hang--tinh xa-hang--sat">
+              <span className="xa-hang__chu">
+                <strong>{GUI.an_danh}</strong>
+                <span className="xa-phu">{GUI.an_danh_giai_thich}</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={nhap.an_danh}
+                aria-label={GUI.an_danh}
+                className={`xa-cong-tac${nhap.an_danh ? " xa-cong-tac--bat" : ""}`}
+                onClick={() => datNhap((t) => ({ ...t, an_danh: !t.an_danh }))}
+              >
+                <span className="xa-cong-tac__nut" />
+              </button>
+            </div>
+            {!nhap.an_danh && (
+              <>
+                <ONhapDong id="xa-ho-ten" nhan={GUI.nhan_ho_ten} gia_tri={nhap.ho_ten} toi_da={DO_DAI_TOI_DA.ho_ten} onDoi={doi("ho_ten")} />
+                {loi.ho_ten && <p className="xa-loi-o" role="alert">{loi.ho_ten}</p>}
+                <ONhapDong id="xa-dien-thoai" nhan={GUI.nhan_dien_thoai} gia_tri={nhap.dien_thoai} toi_da={DO_DAI_TOI_DA.dien_thoai} kieu_ban_phim="tel" onDoi={doi("dien_thoai")} />
+                {loi.dien_thoai && <p className="xa-loi-o" role="alert">{loi.dien_thoai}</p>}
+              </>
+            )}
             <button type="button" className="xa-nut xa-nut--hong" onClick={tiep}>
-              {XA_TN.nut_tiep}
+              {GUI.nut_tiep}
             </button>
           </div>
         ) : (
           <div className="xa-the xa-the--dem xa-khoi">
-            <h2 className="xa-dau-khoi__tieu-de">{XA_TN.kiem_tra_lai}</h2>
-            <p className="xa-nhan-o">{XA_TN.o_tieu_de}</p>
-            <p>
-              <strong>{nhap.tieu_de.trim()}</strong>
+            <h2 className="xa-dau-khoi__tieu-de">{GUI.xac_nhan_tieu_de}</h2>
+            <p>{GUI.xac_nhan_cau}</p>
+            <p className="xa-xa-nhan">
+              <strong>{props.ten_xa}</strong>
             </p>
-            <p className="xa-nhan-o">{XA_TN.o_noi_dung}</p>
-            <p className="xa-giu-dong">{nhap.noi_dung.trim()}</p>
-            <p className="xa-nhan-o">{XA_TN.o_dia_chi}</p>
-            <p>{nhap.dia_chi.trim()}</p>
+            <p className="xa-phu">{GUI.xac_nhan_hau_qua}</p>
+            <div className="xa-ke" />
+            <Dong nhan={THE_PHIEU.noi_dung}>
+              <p className="xa-giu-dong">{nhap.noi_dung.trim()}</p>
+            </Dong>
+            <Dong nhan={THE_PHIEU.dia_chi}>{nhap.dia_chi.trim() || THE_PHIEU.dia_chi_trong}</Dong>
+            <Dong nhan={THE_PHIEU.nguoi_gui}>
+              {nhap.an_danh ? THE_PHIEU.an_danh : [nhap.ho_ten.trim() || THE_PHIEU.khong_ghi_ten, nhap.dien_thoai.trim()].filter(Boolean).join(" · ")}
+            </Dong>
             <button type="button" className="xa-nut xa-nut--hong" onClick={gui}>
               <BieuTuong ten="send" co={20} />
-              {XA_TN.nut_gui}
+              {GUI.nut_gui(props.ten_xa)}
             </button>
             <button type="button" className="xa-nut xa-nut--phu" onClick={() => datBuoc(1)}>
-              {XA_TN.nut_lui}
+              {GUI.nut_sua}
             </button>
           </div>
         )}

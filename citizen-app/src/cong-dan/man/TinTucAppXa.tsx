@@ -6,12 +6,12 @@
  * `sauKhiTaiTin`, `sauKhiTaiBai`), cùng tuyến công khai theo tên miền, cùng "Xem thêm" thay cho cuộn
  * vô hạn. VĂN BẢN THUẦN: thân tin vẽ bằng nút chữ của React, chia đoạn theo dòng trống; không HTML.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { baiTinCuaXa, tinCuaXa } from "../api/goi-vigov";
 import { chiaDoan, type TinXaTomTat } from "../api/hop-dong-cong-khai";
 import { NGAY_KHONG_DOC_DUOC, ngayVN } from "../../lib/thoi-diem";
-import { TIN_XA } from "./noi-dung";
+import { TIN_XA, XA_TN } from "./noi-dung";
 import {
   batDauTaiTin,
   type DanhSachTin,
@@ -67,9 +67,29 @@ const CAU_LOI = {
   "khong-hop-le": TIN_XA.khong_hop_le,
 } as const;
 
+/**
+ * Chuyên mục có trong các tin ĐÃ TẢI, theo thứ tự gặp — nguồn chip lọc. Bản mẫu có ba loại viết cứng
+ * (Tin tức · Sự kiện · Thông báo); ViGov không có trường "loại", chỉ có `chuyen_muc` cán bộ gõ, nên chip
+ * lấy đúng những gì xã đã đăng. THUẦN.
+ */
+export function chuyenMucCua(ds: readonly TinXaTomTat[]): string[] {
+  const thay: string[] = [];
+  for (const t of ds) if (t.chuyen_muc !== "" && !thay.includes(t.chuyen_muc)) thay.push(t.chuyen_muc);
+  return thay;
+}
+
+/** Tin liên quan: cùng chuyên mục, bỏ tin đang đọc, tối đa 3. THUẦN. */
+export function tinLienQuan(ds: readonly TinXaTomTat[], dang_doc: TinXaTomTat | null, toi_da = 3): TinXaTomTat[] {
+  if (dang_doc === null || dang_doc.chuyen_muc === "") return [];
+  return ds.filter((t) => t.id !== dang_doc.id && t.chuyen_muc === dang_doc.chuyen_muc).slice(0, toi_da);
+}
+
 /** Danh sách tin — thân của tab "Tin tức". */
 export function DanhSachTinXa(props: { ds: DanhSachTin; onMo: (id: string) => void; onTai: () => void }) {
-  const { ds } = props;
+  const [chuyen_muc, datChuyenMuc] = useState<string | null>(null);
+  const cac_muc = useMemo(() => chuyenMucCua(props.ds.muc), [props.ds.muc]);
+  const ds: DanhSachTin =
+    chuyen_muc === null ? props.ds : { ...props.ds, muc: props.ds.muc.filter((t) => t.chuyen_muc === chuyen_muc) };
   if (!ds.da_co_trang_dau && ds.dang_tai) {
     return <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai} dang_tai />;
   }
@@ -83,9 +103,23 @@ export function DanhSachTinXa(props: { ds: DanhSachTin; onMo: (id: string) => vo
       />
     );
   }
+  const chips =
+    cac_muc.length > 1 ? (
+      <div className="xa-chips" role="group" aria-label={XA_TN.loc_chuyen_muc}>
+        <button type="button" className={`xa-chip${chuyen_muc === null ? " xa-chip--on" : ""}`} aria-pressed={chuyen_muc === null} onClick={() => datChuyenMuc(null)}>
+          {XA_TN.loc_tat_ca}
+        </button>
+        {cac_muc.map((m) => (
+          <button key={m} type="button" className={`xa-chip${chuyen_muc === m ? " xa-chip--on" : ""}`} aria-pressed={chuyen_muc === m} onClick={() => datChuyenMuc(m)}>
+            {m}
+          </button>
+        ))}
+      </div>
+    ) : null;
   if (ds.muc.length === 0) return <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.trong} />;
   return (
     <>
+      {chips}
       <ul className="xa-ds">
         {ds.muc.map((t, i) => (
           <li key={t.id}>{i === 0 ? <TheNoiBat tin={t} onMo={props.onMo} /> : <HangTin tin={t} onMo={props.onMo} />}</li>
@@ -135,7 +169,14 @@ export function useTinXa(ten_mien: string) {
 }
 
 /** Một bài — dải bìa + tiêu đề + ngày + toàn văn. Màn con, có nút quay lại. */
-export function BaiTinXa(props: { ten_mien: string; id: string; onQuayLai: () => void }) {
+export function BaiTinXa(props: {
+  ten_mien: string;
+  id: string;
+  onQuayLai: () => void;
+  /** Tin đã tải ở danh sách — nguồn "tin liên quan" (không gọi thêm mạng). */
+  ds?: readonly TinXaTomTat[];
+  onMo?: (id: string) => void;
+}) {
   const [trang, datTrang] = useState<TrangBai>({ kieu: "dang-tai" });
   const da_tai = useRef(false);
 
@@ -177,9 +218,28 @@ export function BaiTinXa(props: { ten_mien: string; id: string; onQuayLai: () =>
                 {doan}
               </p>
             ))}
+            <TinLienQuan ds={props.ds ?? []} bai={trang.bai} onMo={props.onMo} />
           </article>
         )}
       </TrangCon>
     </>
+  );
+}
+
+function TinLienQuan(props: { ds: readonly TinXaTomTat[]; bai: TinXaTomTat; onMo?: (id: string) => void }) {
+  const lq = tinLienQuan(props.ds, props.bai);
+  if (lq.length === 0 || props.onMo === undefined) return null;
+  const mo = props.onMo;
+  return (
+    <section className="xa-lien-quan">
+      <h2 className="xa-dau-khoi__tieu-de">{XA_TN.tin_lien_quan}</h2>
+      <ul className="xa-ds">
+        {lq.map((t) => (
+          <li key={t.id}>
+            <HangTin tin={t} onMo={mo} />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

@@ -3497,3 +3497,68 @@ button.xa-o-nhanh {
 .xa-cong-tac--bat .xa-cong-tac__nut {
   left: 30px;
 }
+
+/* ---------- phản ánh theo hợp đồng thật (28/09/2026) ---------- */
+.xa-chip-tt--dang-cho {
+  background: var(--xa-xanh-nhat);
+  color: var(--xa-navy);
+}
+.xa-chip-tt--da-xong {
+  background: var(--xa-luc-nhat);
+  color: var(--xa-luc-dam);
+}
+.xa-chip-tt--ket-thuc {
+  background: var(--xa-cam-nhat);
+  color: var(--xa-cam-dam);
+}
+.xa-dong-tg__buoc--cho {
+  color: var(--ink-muted);
+}
+.xa-dong-tg__buoc--cho::before {
+  border-color: var(--xa-vien);
+}
+.xa-cat-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.xa-ma {
+  color: var(--xa-navy);
+  letter-spacing: 0.5px;
+}
+.xa-hang--vien {
+  margin-bottom: 14px;
+}
+.xa-hang--sat {
+  padding-left: 0;
+  padding-right: 0;
+}
+.xa-vi-tri {
+  display: grid;
+  gap: 6px;
+}
+.xa-vi-tri p {
+  margin: 0;
+}
+.xa-dem-ky-tu {
+  text-align: right;
+  margin: -4px 0 0;
+}
+.xa-xa-nhan {
+  font-size: 1.15rem;
+  color: var(--xa-navy);
+}
+.xa-lien-quan {
+  margin-top: 22px;
+  display: grid;
+  gap: 10px;
+}
+.xa-nhom {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.xa-app .xa-nhom__tieu-de {
+  margin: 4px 0 0;
+}

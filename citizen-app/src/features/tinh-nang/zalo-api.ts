@@ -242,10 +242,12 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
   {
     api: "getLocation",
     nua: "ca-hai",
-    man: "Liên hệ",
-    tinh_nang: "Tìm văn phòng gần bạn",
+    // "Gửi phản ánh" THÊM 28/09/2026: ứng dụng riêng của một xã (`--vao-thang`) có nút "Lấy vị trí hiện
+    // tại" để cán bộ tìm đúng nơi xảy ra sự việc. Cùng một lời gọi, cùng ranh giới: chỉ nhận MÃ.
+    man: "Liên hệ · Gửi phản ánh (ứng dụng của xã)",
+    tinh_nang: "Tìm văn phòng gần bạn · Vị trí nơi xảy ra sự việc",
     de_lam_gi:
-      "Lấy mã vị trí sau khi bạn đồng ý chia sẻ. Toạ độ KHÔNG về máy bạn, nên bản dựng này chưa xếp được văn phòng theo khoảng cách và nói thẳng điều đó trên màn hình.",
+      "Lấy mã vị trí sau khi bạn đồng ý chia sẻ — để tìm văn phòng gần bạn, hoặc để ghi nơi xảy ra sự việc khi gửi phản ánh tới xã. Toạ độ KHÔNG về máy bạn, nên bản dựng này chưa xếp được văn phòng theo khoảng cách, chưa hiện được điểm trên bản đồ, và nói thẳng điều đó trên màn hình.",
     hoi_nguoi_dung: true,
     roi_khoi_may: "",
   },
