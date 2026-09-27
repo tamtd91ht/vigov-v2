@@ -6,8 +6,8 @@ owner: architecture
 derived_from_commit: 6f01382
 expires: null
 owns_facts:
-  - "khu vực vận hành ViHAT nằm trong cùng mã nguồn web-admin, chỉ phục vụ trên một host vận hành dành riêng, bật/tắt LÚC CHẠY theo cấu hình triển khai, không bao giờ nướng vào bundle"
-  - "vì sao on-premise cho một xã không cần sửa mã khu vận hành: cùng image, không đặt host vận hành thì cả khu trả 404"
+  - "khu vực vận hành ViHAT dựng trong app riêng platform-admin/ (sửa 27/09/2026, thay lựa chọn gộp vào web-admin), chạy trên host vận hành dành riêng"
+  - "vì sao on-premise cho một xã không cần sửa mã khu vận hành: không triển khai platform-admin, hoặc triển khai cho người vận hành tại chỗ"
   - "backend khu vận hành thuộc service-platform; người vận hành chỉ chạm siêu dữ liệu, mọi thao tác ghi ghi vết theo xã ĐÍCH"
   - "tài khoản vận hành ViHAT là một miền tài khoản tách khỏi tài khoản cán bộ xã, không mang tenant_id, không phải vai trò trong một xã"
 ---
@@ -100,6 +100,27 @@ của ADR 0046.
 - **Khó hơn:** `web-admin` mang hai bề mặt; mỗi tuyến mới phải khai nó thuộc bề mặt nào. Một tuyến
   vận hành lọt ra host xã là lỗi bảo mật, không phải lỗi giao diện.
 - **Chưa dựng:** toàn bộ. Không tuyến, bảng, trang nào của khu vận hành tồn tại ở `6f01382`.
+
+## Sửa của chủ dự án — 27/09/2026, sau khi ADR được viết
+
+Mục này ghi thêm, không sửa phần trên: phần trên là quyết định lúc viết, mục này là câu trả lời sau.
+
+**Điều kiện #1 bị thay.** Lúc chọn phương án 1, bảng so sánh đưa cho chủ dự án **bỏ sót** rằng kho
+đã có sẵn app `platform-admin/`: một khung gồm `src/lib/api.ts` và ba thư mục rỗng, được **cố ý**
+tách riêng theo ADR 0003 (`platform-admin/README.md`: *"A role can be granted. An application that
+was never given the client cannot be granted its way into the data."*). Đưa lại câu hỏi kèm sự
+thật ấy, chủ dự án chọn **dựng khu vận hành trong `platform-admin/`**.
+
+| Điều kiện | Nay là |
+|---|---|
+| #1 | **App riêng `platform-admin/`**, chạy trên host vận hành dành riêng. On-premise cho một xã: không triển khai app này, hoặc triển khai cho người vận hành tại chỗ — **không sửa mã**. App này **không có client** gọi service nghiệp vụ; đó là cơ chế ADR 0003, không phải cờ |
+| #2 | Giữ nguyên — backend ở `service-platform`, vết theo xã đích |
+| #3 | Giữ nguyên — tài khoản vận hành là miền riêng |
+
+Hệ quả: dòng *"Thay thế gì"* ở trên **không còn hiệu lực** — ADR 0003 §*Hệ quả* ("hai ứng dụng khác
+nhau") **đứng nguyên**. Giá bảo trì là hai app Next.js; phần giao diện dùng chung (nếu có) tách thành
+gói chung, không chép. Điều kiện dừng #5 đọc là: bật khu vận hành bằng `NEXT_PUBLIC_*` hay hằng số
+dựng **trong `web-admin`** là đưa bề mặt vận hành vào app của xã — vẫn cấm.
 
 ## ĐIỀU KIỆN DỪNG
 

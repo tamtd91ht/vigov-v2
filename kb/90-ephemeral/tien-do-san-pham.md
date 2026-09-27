@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 6f01382
+derived_from_commit: eb9932a
 expires: 2026-12-26
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -83,7 +83,7 @@ một lời trấn an không có gì đứng sau.
 |---|---|
 | Tuyến ViGov dành riêng kênh công dân (`citizen-only`) | 3 |
 | Trong đó `citizen-app` đang gọi | 2 |
-| Thư mục tính năng trong `citizen-app/src/features/` | 7 |
+| Thư mục tính năng trong `citizen-app/src/features/` | 6 |
 
 | | Tuyến | `citizen-app` gọi chưa |
 |---|---|---|

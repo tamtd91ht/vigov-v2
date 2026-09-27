@@ -47,7 +47,7 @@ thấy được** phiên đó. Không bao giờ là quyền thường trực.
 
 - Web quản trị tổng và web quản trị xã là **hai ứng dụng khác nhau**, không phải một ứng dụng
   đổi vai trò
-  — *27/09/2026: thay một phần bởi ADR 0048 (một mã nguồn `web-admin`, hai bề mặt tách bằng host
-  và miền tài khoản; ranh giới siêu dữ liệu ở trên giữ nguyên)*
+  — *27/09/2026: ADR 0048 xác nhận lại dòng này — khu vận hành ViHAT dựng trong `platform-admin/`,
+  không gộp vào `web-admin` (ADR 0048 §Sửa của chủ dự án)*
 - Hỗ trợ sự cố sẽ khó hơn: không nhìn được dữ liệu thật thì phải dựa vào nhật ký hệ thống và
   mô tả của xã. **Đây là cái giá đã chấp nhận.**
