@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 1033752
+derived_from_commit: 5f803af
 expires: 2026-12-26
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -39,8 +39,8 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **08** Thông báo | 2 | 2/2 | ✓ |
 | **09** Phản ánh của người dân | 13 | 10/10 +3 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
-| **11** Quản trị nội dung Mini App | 8 | 6/8 | ✓ |
-| **12** Danh bạ cán bộ | 6 | 5/6 | ✓ |
+| **11** Quản trị nội dung Mini App | 8 | 6/6 +2 ngoài web | ✓ |
+| **12** Danh bạ cán bộ | 6 | 5/5 +1 ngoài web | ✓ |
 | **13** Báo cáo điều hành | — | — | — |
 | **14** Cấu hình hệ thống | 59 | 59/59 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 5 | 5/5 | ✓ |
@@ -81,18 +81,21 @@ một lời trấn an không có gì đứng sau.
 
 | | |
 |---|---|
-| Tuyến ViGov dành riêng kênh công dân (`citizen-only`) | 3 |
-| Trong đó `citizen-app` đang gọi | 2 |
+| Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 6 |
+| Trong đó `citizen-app` đang gọi | 4 |
 | Thư mục tính năng trong `citizen-app/src/features/` | 6 |
 
 | | Tuyến | `citizen-app` gọi chưa |
 |---|---|---|
+| GET | `/api/v1/commune-news` | ✓ |
+| GET | `/api/v1/commune-news/{id}` | ✗ |
+| GET | `/api/v1/commune-staff` | ✓ |
 | GET | `/api/v1/my-citizen-reports` | ✓ |
 | POST | `/api/v1/my-citizen-reports` | ✓ |
 | GET | `/api/v1/my-citizen-reports/{maTraCuu}` | ✗ |
 
 ⚠ **`citizen-app` hôm nay chưa gọi một tuyến ViGov nào**, và đó không phải thiếu sót của nó: nó đang
-gọi `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
+gọi `/api/v1/commune-news`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
 `vihat-miniapp`, không phải của ViGov (CLAUDE.md, mục hai kho). Giai đoạn 2 — màn nghiệp vụ xã —
 bị chặn ở `service-identity`, xem `kb/90-ephemeral/tien-do/citizen-app.json`.
 

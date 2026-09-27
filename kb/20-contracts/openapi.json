@@ -6,7 +6,7 @@
     "version": "v1",
     "description": "Bề mặt HTTP mà web quản trị gọi, trích từ khai báo route trong */internal/. Xã được suy ra từ Host ở rìa ngoài cùng, nên KHÔNG có tenant_id trong đường dẫn hay query (luật 1). Mỗi operation khai quyền ở x-vigov-permission; thiếu khai báo là từ chối, không phải cho qua (luật 5). Phiên đi bằng cookie httpOnly do máy chủ đặt; client không tự gắn Authorization."
   },
-  "x-vigov-source": "*/internal/ — chú thích @summary/@screen/@request/@reply ngay trên câu lệnh đăng ký route",
+  "x-vigov-source": "*/internal/ — chú thích @summary/@screen/@request/@reply/@consumer ngay trên câu lệnh đăng ký route",
   "paths": {
     "/api/v1/announcements": {
       "get": {
@@ -2858,6 +2858,7 @@
           "kind": "public",
           "reason": "bảng tin xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; chỉ trả mục đã đăng (dang-hien) của đúng xã mà nền tảng phân giải từ tên miền, dạng văn bản thuần"
         },
+        "x-vigov-consumer": "citizen-app",
         "x-vigov-task": "b0dbfeba1b92",
         "parameters": [
           {
@@ -2982,6 +2983,7 @@
           "kind": "public",
           "reason": "toàn văn một tin xã đã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; tin chưa đăng hoặc của xã khác trả cùng một 404"
         },
+        "x-vigov-consumer": "citizen-app",
         "x-vigov-task": "990d3853914d",
         "parameters": [
           {
@@ -3059,6 +3061,7 @@
           "kind": "public",
           "reason": "danh bạ cán bộ xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/12-danh-ba-can-bo.md:117): người dân gọi điện cho xã không cần tài khoản; chỉ trả người được quản trị công khai từng người kèm đồng ý đã ghi nhận (#12)"
         },
+        "x-vigov-consumer": "citizen-app",
         "x-vigov-task": "82e815221f91",
         "parameters": [
           {
@@ -3125,6 +3128,7 @@
           "kind": "public",
           "reason": "Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền in trên mã QR ra tên và tỉnh của xã — siêu dữ liệu công khai mà trang đăng nhập của chính xã ấy vốn đã hiện; không trả mã xã, không trả tên miền"
         },
+        "x-vigov-consumer": "citizen-app",
         "x-vigov-task": "86a653af479d",
         "parameters": [
           {

@@ -646,6 +646,7 @@
       "screen": "11-noi-dung-mini-app §9",
       "permission_kind": "public",
       "permission_reason": "bảng tin xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; chỉ trả mục đã đăng (dang-hien) của đúng xã mà nền tảng phân giải từ tên miền, dạng văn bản thuần",
+      "consumer": "citizen-app",
       "idempotency": "",
       "reply_schemas": {
         "200": "page.Result_comms.tinXaRa",
@@ -665,6 +666,7 @@
       "screen": "11-noi-dung-mini-app §9",
       "permission_kind": "public",
       "permission_reason": "toàn văn một tin xã đã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; tin chưa đăng hoặc của xã khác trả cùng một 404",
+      "consumer": "citizen-app",
       "idempotency": "",
       "reply_schemas": {
         "200": "comms.tinXaRa",
@@ -685,6 +687,7 @@
       "screen": "12-danh-ba-can-bo §8",
       "permission_kind": "public",
       "permission_reason": "danh bạ cán bộ xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/12-danh-ba-can-bo.md:117): người dân gọi điện cho xã không cần tài khoản; chỉ trả người được quản trị công khai từng người kèm đồng ý đã ghi nhận (#12)",
+      "consumer": "citizen-app",
       "idempotency": "",
       "reply_schemas": {
         "200": "identity.danhBaCongKhaiRa",
@@ -703,6 +706,7 @@
       "summary": "Tra xã theo tên miền trong mã QR, để Mini App hỏi \"Làm việc với xã X?\" trước khi có phiên nào — không trả mã xã",
       "permission_kind": "public",
       "permission_reason": "Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền in trên mã QR ra tên và tỉnh của xã — siêu dữ liệu công khai mà trang đăng nhập của chính xã ấy vốn đã hiện; không trả mã xã, không trả tên miền",
+      "consumer": "citizen-app",
       "idempotency": "",
       "reply_schemas": {
         "200": "identity.danhMucXaRa",
