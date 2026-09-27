@@ -179,6 +179,17 @@ export function kiemToken(dich, token, bang) {
   return { ok: true, ly_do: `ZMP_TOKEN (môi trường) thuộc App ID ${claim}.` };
 }
 
+/**
+ * `ZMP_TOKEN` in the `.env` that `zmp-cli login` just wrote into a throwaway directory, or `null`.
+ * Tolerates quoting and CRLF because the writer's exact format is inside obfuscated vendor code.
+ */
+export function tokenTrongTepEnv(noi_dung) {
+  const dong = /^\s*ZMP_TOKEN\s*=\s*(.*?)\s*$/m.exec(String(noi_dung ?? "").replace(/\r/g, ""));
+  if (!dong) return null;
+  const gia_tri = dong[1].replace(/^(["'])(.*)\1$/, "$2");
+  return gia_tri === "" ? null : gia_tri;
+}
+
 /** Nhãn phiên bản trên console Zalo: đích · commit · lúc · dirty. */
 export function nhanPhienBan({ dich, sha, luc, dirty }) {
   const noi =

@@ -15,6 +15,7 @@ import {
   kiemToken,
   laPlaceholder,
   nhanPhienBan,
+  tokenTrongTepEnv,
 } from "./dich-den.mjs";
 import { APP_ID_APP_CHUNG, APP_ID_THEO_TEN_MIEN } from "./ung-dung-theo-ten-mien.mjs";
 
@@ -56,6 +57,24 @@ describe("tên miền: chỉ nhận tên máy trần", () => {
   ])("%s thì DỪNG", (ten, vi_sao) => {
     expect(() => kiemTenMien(ten)).toThrow(vi_sao);
   });
+});
+
+describe("token trong .env do zmp login ghi ra", () => {
+  const t = tokenCua("1111111111111111111");
+  it.each([
+    [`APP_ID=1111111111111111111\nZMP_TOKEN=${t}\n`],
+    [`APP_ID="1"\r\nZMP_TOKEN="${t}"\r\n`],
+    [`ZMP_TOKEN='${t}'`],
+  ])("đọc được token dù có nháy hay CRLF", (noi_dung) => {
+    expect(tokenTrongTepEnv(noi_dung)).toBe(t);
+  });
+
+  it.each([[""], ["APP_ID=1\n"], ["ZMP_TOKEN=\n"], ['ZMP_TOKEN=""'], [undefined]])(
+    "không có token thì null — deploy dừng, không đẩy bằng token rỗng",
+    (noi_dung) => {
+      expect(tokenTrongTepEnv(noi_dung)).toBeNull();
+    },
+  );
 });
 
 describe("tệp ánh xạ", () => {
@@ -298,7 +317,19 @@ describe("App ID và token KHÔNG BAO GIỜ tới được bundle", () => {
     expect(ma).not.toMatch(/process\.env(\.[A-Z_]+|\[[^\]]+\])\s*=[^=]/);
     expect(ma).toMatch(/function zmp\(env, /);
     // Và cổng token thật sự được nối: lần chạy thật dừng khi token không khớp đích.
-    expect(ma).toMatch(/kiemToken\(dich, process\.env\.ZMP_TOKEN/);
+    // The token checked is the one handed to zmp: from the shell, or from the login below.
+    expect(ma).toMatch(/let token = process\.env\.ZMP_TOKEN/);
+    expect(ma).toMatch(/token = dangNhapRieng\(dich\.app_id\)/);
+    expect(ma).toMatch(/kiemToken\(dich, token, /);
+    expect(ma).toMatch(/ZMP_TOKEN: token/);
     expect(ma).toMatch(/if \(!kiem_token\.ok && !chi_thu\)/);
+  });
+
+  it("`zmp login` chạy trong thư mục tạm — không bao giờ ghi đè `citizen-app/.env` của app chung", () => {
+    const ma = doc("./deploy.mjs");
+    const than = ma.slice(ma.indexOf("function dangNhapRieng("), ma.indexOf("function nghi("));
+    expect(than).toMatch(/mkdtempSync\(/);
+    expect(than).toMatch(/cwd: thu_muc/);
+    expect(than).toMatch(/rmSync\(thu_muc/);
   });
 });

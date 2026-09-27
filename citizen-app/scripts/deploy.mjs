@@ -14,9 +14,16 @@
  * là một, không biến thể (27/09/2026 — xem đầu `vite.config.ts`). `--bien-the` đã bỏ và bị từ chối.
  *
  * ⚠ ĐÍCH DO `ZMP_TOKEN` QUYẾT, KHÔNG DO `APP_ID` — đã đo, xem đầu `dich-den.mjs`. Nên đường app
- * riêng đòi `ZMP_TOKEN` trong MÔI TRƯỜNG và kiểm claim `appId` của nó khớp App ID đích trước khi
- * chạy gì cả; nó không bao giờ dùng `citizen-app/.env` của máy. Đường app chung giữ nguyên như
- * trước: không có token trong môi trường thì zmp-cli tự đọc `.env` (script không đọc tệp ấy).
+ * riêng lấy token từ MÔI TRƯỜNG, hoặc — khi môi trường không có — TỰ chạy `zmp login` (quét QR)
+ * cho đúng App ID ấy, rồi kiểm claim `appId` khớp App ID đích trước khi chạy gì cả; nó không bao
+ * giờ dùng `citizen-app/.env` của máy. Đường app chung giữ nguyên như trước: không có token trong
+ * môi trường thì zmp-cli tự đọc `.env` (script không đọc tệp ấy).
+ *
+ * VÌ SAO `login` CHẠY TRONG MỘT THƯ MỤC TẠM: `zmp login` ghi `APP_ID` + `ZMP_TOKEN` vào `.env` của
+ * thư mục đang đứng, và chỉ hỏi "Mini App ID" khi chưa thấy `APP_ID` ở đâu. Chạy trong `citizen-app`
+ * thì nó không hỏi (đã có `APP_ID` của app chung) và ghi đè token app chung — lần `zmp:deploy` app
+ * chung kế tiếp sẽ đẩy lên app của xã mà không lỗi nào báo. Thư mục tạm bị xoá ngay sau khi đọc
+ * token; token chỉ sống trong biến của script và môi trường của tiến trình con zmp.
  *
  * `--thu` in ra đúng kế hoạch và đúng dòng lệnh sẽ chạy, rồi dừng. Đọc kế hoạch mà không phải
  * đặt cược một lần đẩy để đọc nó.
@@ -48,6 +55,9 @@
  * duyệt là dòng đoán ra.
  */
 import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { docCauHinh } from "./cau-hinh.mjs";
 import {
@@ -57,6 +67,7 @@ import {
   kiemToken,
   laPlaceholder,
   nhanPhienBan,
+  tokenTrongTepEnv,
 } from "./dich-den.mjs";
 import { dung } from "./dung.mjs";
 import { APP_ID_APP_CHUNG, APP_ID_THEO_TEN_MIEN } from "./ung-dung-theo-ten-mien.mjs";
@@ -85,6 +96,30 @@ function zmp(env, ...args) {
   return r.status ?? 1;
 }
 
+/**
+ * `zmp login` for ONE App ID, inside a throwaway directory (see the header for why). Returns the
+ * token, or `null` if the login failed or wrote nothing — zmp-cli prints "Login failed!" and still
+ * exits 0, so the token file is the only trustworthy signal.
+ */
+function dangNhapRieng(app_id) {
+  const thu_muc = mkdtempSync(join(tmpdir(), "vigov-zmp-"));
+  try {
+    console.log(`\nĐăng nhập Zalo cho App ID ${app_id}.`);
+    console.log('  Chọn "1. Login Via QR Code With Zalo App", quét mã bằng tài khoản Zalo có quyền trên app này.\n');
+    // ZMP_TOKEN emptied so zmp-cli cannot pick up a token from this shell instead of logging in.
+    spawnSync("npx", ["--yes", ZMP, "login"], {
+      stdio: "inherit",
+      shell: process.platform === "win32",
+      cwd: thu_muc,
+      env: { ...process.env, APP_ID: app_id, ZMP_TOKEN: "" },
+    });
+    const tep = join(thu_muc, ".env");
+    return existsSync(tep) ? tokenTrongTepEnv(readFileSync(tep, "utf8")) : null;
+  } finally {
+    rmSync(thu_muc, { recursive: true, force: true });
+  }
+}
+
 /** Ngủ ĐỒNG BỘ: người chạy phải kịp đọc rồi Ctrl-C, mà Ctrl-C chỉ tới được khi chưa làm gì cả. */
 function nghi(mili_giay) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, mili_giay);
@@ -110,10 +145,6 @@ try {
 }
 const { phat_hanh, chi_thu } = co;
 
-// Token CHỈ đọc từ môi trường; `.env` của máy là việc của zmp-cli, script không mở nó. Kết quả
-// kiểm được in ra kế hoạch; lần chạy thật thì từ chối nếu không qua — `--thu` vẫn in hết để
-// người đọc thấy lần chạy thật SẼ bị chặn vì đâu.
-const kiem_token = kiemToken(dich, process.env.ZMP_TOKEN, APP_ID_THEO_TEN_MIEN);
 
 /**
  * CHẶN ĐƯỜNG ĐẨY KHI CHƯA KHAI ĐỊA CHỈ MÁY CHỦ — 20/09/2026, ngày bản nộp bắt đầu gọi máy chủ.
@@ -147,6 +178,25 @@ if (api_host === "" && !chi_thu) {
   );
   process.exit(2);
 }
+
+// Token đọc từ môi trường; `.env` của máy là việc của zmp-cli, script không mở nó. App riêng mà
+// môi trường không có token thì đăng nhập ngay tại đây — sau phép kiểm địa chỉ máy chủ, để không
+// bắt ai quét QR cho một lần chạy chắc chắn bị chặn. Token KHÔNG vào `process.env`: bước dựng kế
+// thừa `process.env` (xem `zmp()`). Kết quả kiểm được in ra kế hoạch; lần chạy thật thì từ chối nếu
+// không qua — `--thu` vẫn in hết để người đọc thấy lần chạy thật SẼ bị chặn vì đâu.
+let token = process.env.ZMP_TOKEN || undefined;
+const phai_dang_nhap = dich.loai === "app-rieng" && !laPlaceholder(dich.app_id) && token === undefined;
+if (phai_dang_nhap && !chi_thu) {
+  token = dangNhapRieng(dich.app_id) ?? undefined;
+  if (token === undefined) {
+    console.error("\nKhông đẩy: đăng nhập Zalo không thành công, không có token nào được ghi ra.\n");
+    process.exit(2);
+  }
+}
+const kiem_token =
+  phai_dang_nhap && chi_thu
+    ? { ok: true, ly_do: `lần chạy thật sẽ đăng nhập Zalo (quét QR) cho App ID ${dich.app_id}.` }
+    : kiemToken(dich, token, APP_ID_THEO_TEN_MIEN);
 
 const sha = git("rev-parse", "--short", "HEAD") || "khong-ro";
 const dirty = git("status", "--porcelain") !== "";
@@ -202,7 +252,9 @@ Không đẩy: ${kiem_token.ly_do}
 // cũng đọc đúng đích chứ không đọc `.env` của máy. Bản 4.0.3 không đọc nó (đã đo) — đích thật vẫn
 // là claim của token, và `kiemToken` vừa bảo đảm hai thứ ấy trùng nhau.
 const env_zmp =
-  dich.loai === "app-rieng" ? { ...process.env, APP_ID: dich.app_id } : { ...process.env };
+  dich.loai === "app-rieng"
+    ? { ...process.env, APP_ID: dich.app_id, ZMP_TOKEN: token }
+    : { ...process.env };
 
 if (phat_hanh) {
   // Chỉ đường PHÁT HÀNH mới đếm ngược. Bản thử nghiệm sai thì đẩy lại; bản phát hành sai thì đã
