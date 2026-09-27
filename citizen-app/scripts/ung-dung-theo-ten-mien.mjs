@@ -20,10 +20,13 @@
  *
  * GIÁ TRỊ dạng `<…>` là PLACEHOLDER: `--thu` in được kế hoạch với nó, lần chạy thật thì bị từ chối.
  * Dòng dưới là dòng VÍ DỤ duy nhất — `.example` là tên miền dành riêng (RFC 2606), không trỏ vào
- * xã nào. Chưa có App ID thật nào được giao cho kho này; đừng điền một con số đoán ra.
+ * xã nào. Chỉ điền App ID chủ dự án đã giao; đừng điền một con số đoán ra.
  */
 export const APP_ID_THEO_TEN_MIEN = {
   "xa-vi-du.vigov.example": "<APP-ID-MINI-APP-CUA-XA>",
+  // Given by the owner 2026-09-27. Its `mini_app` row in service-platform is entered by an
+  // operator; until then the app deploys but the server refuses to open it (ADR 0047, #3).
+  "thangbinh-danang.vigov.vn": "3291993990104489440",
 };
 
 /**

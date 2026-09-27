@@ -63,11 +63,18 @@ describe("tệp ánh xạ", () => {
     expect(() => kiemBangAnhXa(APP_ID_THEO_TEN_MIEN, APP_ID_APP_CHUNG)).not.toThrow();
   });
 
-  it("tệp thật chỉ có placeholder — không App ID nào được đoán ra", () => {
-    // Đổi ca này khi có App ID thật đầu tiên — và thêm dòng MiniApp tương ứng ở platform.
-    for (const app_id of Object.values(APP_ID_THEO_TEN_MIEN)) expect(laPlaceholder(app_id)).toBe(true);
+  it("tệp thật chỉ có App ID chủ dự án đã giao — không App ID nào được đoán ra", () => {
+    // Every real pair is pinned here, so adding one is a deliberate two-file change a reviewer
+    // sees — and the same pair needs its `mini_app` row in service-platform (ADR 0047, #3).
+    const DA_GIAO = {
+      "thangbinh-danang.vigov.vn": "3291993990104489440", // owner, 2026-09-27
+    };
+    const that = Object.fromEntries(
+      Object.entries(APP_ID_THEO_TEN_MIEN).filter(([, app_id]) => !laPlaceholder(app_id)),
+    );
+    expect(that).toEqual(DA_GIAO);
+    for (const app_id of Object.values(that)) expect(app_id).toMatch(/^\d+$/);
     expect(APP_ID_APP_CHUNG).toBeNull();
-    for (const ten of Object.keys(APP_ID_THEO_TEN_MIEN)) expect(ten).toMatch(/\.example$/);
   });
 
   it("khoá không phải tên miền trần thì DỪNG", () => {

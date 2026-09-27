@@ -167,6 +167,14 @@
       "no_confirm": [],
       "tiep_theo": "T2, T3 lượt này. Câu T1 do người dùng duyệt 27/09/2026 (chọn đề xuất). KHÔNG làm lượt này, cố ý: nút chép mã tra cứu (chưa rõ webview Zalo cho navigator.clipboard, zmp-sdk không có API clipboard); chính sách riêng tư nửa nhà nước (cần văn bản pháp lý của chủ dự án, luật 3). Mọi màn vẫn đóng tới khi có cầu phiên (cau-phien-cong-dan-vigov) — phía vihat-miniapp CHƯA KHỞI CÔNG (không tệp .go nào gọi OpenCitizenSession, HEAD 012f13e, đo 27/09). GIỚI HẠN T2: DOM tự dựng không mô phỏng sự kiện — ngày có phiên, kiểm nút Tra cứu/Gửi cần jsdom/happy-dom (phụ thuộc dev MỚI, phải hỏi) hoặc thêm sự kiện vào DOM tự dựng. CHƯA KIỂM của T3: tiêu điểm DI CHUYỂN THẬT (không có sự kiện trong DOM kiểm); chưa thử trên máy thật/webview Zalo; tiêu đề nhận tiêu điểm chưa có quy tắc :focus-visible riêng; vùng status gắn cùng lúc với chữ có thể không được một số trình đọc đọc ra (khuôn sẵn có của thư mục). PhanAnhCuaToiScreen không đổi (đã có status cho đang tải). Câu mới TRA_CUU.tim_thay chưa rà ngôn ngữ hành chính.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "app-id-thang-binh",
+      "viec": "Gắn App ID Mini App riêng của Thăng Bình (thangbinh-danang.vigov.vn) vào bảng đích đẩy (ADR 0047)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "citizen-app/scripts/ung-dung-theo-ten-mien.mjs: App ID chủ dự án giao 27/09/2026. dich-den.test.mjs ghim đúng các cặp đã giao (51/51 xanh). deploy.mjs --phat-hanh --thu --domain=thangbinh-danang.vigov.vn in đúng kế hoạch, chỉ dừng vì chưa đặt ZMP_TOKEN.",
+      "no_confirm": [],
+      "tiep_theo": "CÒN THIẾU dòng mini_app (che_do='rieng', tenant_id của Thăng Bình) ở service-platform — chưa có thì app đẩy lên được nhưng máy chủ từ chối mở. Người vận hành nhập tay tới khi platform-admin có màn cấu hình (việc sau, chủ dự án đã nói). Cần ZMP_TOKEN của đúng app này khi chạy thật."
     }
   ]
 }
