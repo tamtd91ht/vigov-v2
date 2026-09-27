@@ -11,6 +11,7 @@ import { diaChiViGov } from "./api/dia-chi-vigov";
 import { GuiPhanAnhScreen, kiemPhanAnh, PHAN_ANH_TRONG } from "./man/GuiPhanAnhScreen";
 import { KenhCongDan } from "./man/KenhCongDan";
 import { CUA_TOI, KENH_CHUA_MO, GUI, nhanTrangThai, giaiThichTrangThai, TRANG_THAI } from "./man/noi-dung";
+import * as NOI_DUNG from "./man/noi-dung";
 import { PhanAnhCuaToiScreen } from "./man/PhanAnhCuaToiScreen";
 import { thoiDiemVN } from "./man/thoi-diem";
 import { TraCuuPhieuScreen } from "./man/TraCuuPhieuScreen";
@@ -194,6 +195,24 @@ describe("chữ của màn hình", () => {
     for (const c of chuoi) {
       expect(c, `câu có mã lỗi: ${c}`).not.toMatch(/\b(4\d\d|5\d\d)\b|error|content|reporter_/i);
     }
+  });
+
+  it("không câu nào dạy việc 'đổi xã' — một phiên, một xã, không có lối đổi (ADR 0044)", () => {
+    // Đọc GIÁ TRỊ lúc chạy, không đọc mã nguồn: một câu dựng từ hàm vẫn bị quét.
+    const gom = (v: unknown): string[] =>
+      typeof v === "string"
+        ? [v]
+        : typeof v === "function"
+          ? gom(v(...Array<string>(v.length).fill("mẫu")))
+          : v && typeof v === "object"
+            ? Object.values(v).flatMap(gom)
+            : [];
+    const DOI_XA = /đổi xã/i;
+    const cau = gom(NOI_DUNG);
+    expect(cau.length).toBeGreaterThan(40);
+    expect(cau.filter((c) => DOI_XA.test(c))).toEqual([]);
+    // Phép kiểm còn sống: câu cũ bị bắt.
+    expect(DOI_XA.test("hãy quay lại và Đổi xã trước khi gửi")).toBe(true);
   });
 
   it("không `console.*` ở bất kỳ tệp nào của nửa nhà nước (luật 3)", () => {

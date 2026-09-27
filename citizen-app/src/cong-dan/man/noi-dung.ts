@@ -103,7 +103,7 @@ export const GUI = {
   xac_nhan_tieu_de: "Kiểm tra trước khi gửi",
   xac_nhan_cau: "Phản ánh sẽ được gửi tới:",
   xac_nhan_hau_qua:
-    "Chỉ xã này nhận và xử lý phản ánh. Nếu việc xảy ra ở xã khác, hãy quay lại và đổi xã trước khi gửi.",
+    "Chỉ xã này nhận và xử lý phản ánh. Nếu việc xảy ra ở xã khác, xin đừng gửi tại đây mà liên hệ Ủy ban nhân dân xã nơi xảy ra sự việc.",
   nut_gui: (ten_xa: string) => `Gửi tới ${ten_xa}`,
   nut_sua: "Sửa lại",
   dang_gui: "Đang gửi phản ánh…",
