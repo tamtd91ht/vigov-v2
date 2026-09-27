@@ -375,3 +375,105 @@ export const XA_GIAO_DIEN = {
   goi: "Gọi",
   goi_ai: (ten: string) => `Gọi ${ten}`,
 } as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * APP RIÊNG — BẢN TRẢI NGHIỆM ĐỦ MÀN theo bản mẫu `vi-gov/zalo-miniapp` (chủ dự án, 28/09/2026)
+ *
+ * Người dùng giả lập và phiếu chỉ trong máy (`trai-nghiem.ts`). Mọi chỗ ấy nói thẳng "bản trải
+ * nghiệm": người dân không được tưởng một phiếu chưa gửi đã tới xã.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const XA_TN = {
+  nhan_trai_nghiem: "BẢN TRẢI NGHIỆM",
+  // Định danh
+  dinh_danh_tieu_de: "Xác nhận tài khoản",
+  dinh_danh_mo_ta: "Liên kết tài khoản Zalo để dùng đầy đủ dịch vụ của xã:",
+  loi_ich_gui: "Gửi phản ánh tới Ủy ban nhân dân xã và theo dõi kết quả",
+  loi_ich_tra_cuu: "Tra cứu tiến độ hồ sơ của bạn",
+  loi_ich_tin: "Nhận tin tức, thông báo của xã",
+  nut_lien_ket: "Tiếp tục với tài khoản Zalo",
+  dang_lien_ket: "Đang liên kết…",
+  lien_ket_loi: "Chưa liên kết được. Hãy kiểm tra mạng rồi bấm lại.",
+  ghi_chu_dinh_danh:
+    "Bản trải nghiệm: ứng dụng dùng một tên và số điện thoại mẫu, chưa lấy từ Zalo. Không có thông tin nào của bạn được gửi đi.",
+  cam_ket_so: "Số điện thoại chỉ dùng để tiếp nhận và phản hồi phản ánh của bạn.",
+  // Trang chủ
+  thong_bao: "Thông báo",
+  o_tra_cuu_ho_so: "Tra cứu hồ sơ",
+  o_truyen_thanh: "Truyền thanh",
+  o_video: "Video",
+  o_ban_do: "Bản đồ kinh tế",
+  chua_co_phieu: "Bạn chưa gửi phản ánh nào.",
+  // Phản ánh
+  loc_tat_ca: "Tất cả",
+  loc_trong: "Chưa có phản ánh nào ở trạng thái này.",
+  ma_phieu: "Mã phiếu",
+  gui_luc: "Gửi lúc",
+  noi_xay_ra: "Nơi xảy ra",
+  mo_ta: "Mô tả",
+  tien_trinh: "Tiến trình xử lý",
+  buoc_da_gui: "Đã gửi phản ánh",
+  buoc_cho_tiep_nhan: "Chờ Ủy ban nhân dân xã tiếp nhận",
+  ghi_chu_phieu_tn:
+    "Đây là phiếu của bản trải nghiệm: phiếu chỉ lưu trên điện thoại này, CHƯA được gửi tới Ủy ban nhân dân xã, và sẽ mất khi đóng ứng dụng.",
+  chi_tiet_tieu_de: "Chi tiết phản ánh",
+  // Gửi phản ánh
+  buoc: (so: number, tong: number) => `Bước ${so}/${tong}`,
+  buoc_noi_dung: "Nội dung",
+  buoc_xac_nhan: "Xác nhận",
+  o_tieu_de: "Tiêu đề",
+  goi_y_tieu_de: "Ví dụ: Rác tồn đọng tại đầu ngõ 12",
+  o_noi_dung: "Mô tả chi tiết",
+  goi_y_noi_dung: "Mô tả sự việc, thời điểm xảy ra và mức độ ảnh hưởng.",
+  o_dia_chi: "Nơi xảy ra sự việc",
+  goi_y_dia_chi: "Ví dụ: Ngõ 12, thôn Đông",
+  kiem_tra_lai: "Kiểm tra lại thông tin",
+  nut_tiep: "Tiếp tục",
+  nut_lui: "Quay lại",
+  nut_gui: "Gửi phản ánh",
+  ghi_chu_gui_tn:
+    "Bản trải nghiệm: phản ánh sẽ được lưu trên điện thoại này để bạn xem thử, chưa được gửi tới Ủy ban nhân dân xã.",
+  xong_tieu_de: "Đã ghi nhận phản ánh (bản trải nghiệm)",
+  xong_mo_ta: "Phản ánh được lưu trên điện thoại này. Khi ứng dụng hoàn thiện, phản ánh sẽ được gửi thẳng tới Ủy ban nhân dân xã.",
+  nut_theo_doi: "Xem phiếu này",
+  nut_ve_trang_chu: "Về trang chủ",
+  // Tra cứu hồ sơ
+  tra_cuu_tieu_de: "Tra cứu hồ sơ một cửa",
+  o_ma_ho_so: "Mã hồ sơ",
+  goi_y_ma_ho_so: "Mã in trên giấy hẹn trả kết quả",
+  nut_tra_cuu: "Tra cứu",
+  tra_cuu_chua_ket_noi:
+    "Ứng dụng chưa kết nối với hệ thống một cửa của xã, nên chưa tra được hồ sơ. Bạn hãy liên hệ Bộ phận một cửa của Ủy ban nhân dân xã.",
+  tra_cuu_can_ma: "Vui lòng nhập mã hồ sơ cần tra cứu.",
+  // Màn chưa có dữ liệu
+  truyen_thanh_tieu_de: "Truyền thanh",
+  truyen_thanh_trong: "Chưa có bản tin truyền thanh nào trên ứng dụng.",
+  video_tieu_de: "Video tuyên truyền",
+  video_trong: "Chưa có video tuyên truyền nào trên ứng dụng.",
+  ban_do_tieu_de: "Bản đồ kinh tế số",
+  ban_do_trong: "Chưa có dữ liệu bản đồ kinh tế trên ứng dụng.",
+  thong_bao_trong: "Chưa có thông báo nào.",
+  // Cá nhân
+  tab_ca_nhan: "Cá nhân",
+  ca_nhan_tieu_de: "Cá nhân",
+  nhan_tai_khoan_mau: "Tài khoản mẫu",
+  tien_ich: "Tiện ích của tôi",
+  so_phieu: (n: number) => `${n} phiếu đã gửi`,
+  lich_su_tra_cuu: "Tra cứu hồ sơ một cửa",
+  lich_su_tra_cuu_phu: "Tra cứu tiến độ hồ sơ của bạn",
+  hien_thi: "Cài đặt hiển thị",
+  co_chu: "Cỡ chữ",
+  co_chu_vua: "Vừa",
+  co_chu_lon: "Lớn",
+  co_chu_rat_lon: "Rất lớn",
+  xem_truoc_co_chu: "Xem trước: kích thước chữ hiện tại",
+  muc_thong_bao: "Thông báo",
+  nhan_thong_bao: "Nhận thông báo từ chính quyền xã",
+  nhan_thong_bao_phu: "Kết quả phản ánh, tin khẩn của xã",
+  ve_ung_dung: "Về ứng dụng",
+  don_vi: "Đơn vị",
+  dang_xuat: "Đăng xuất",
+  hoi_dang_xuat: "Đăng xuất khỏi ứng dụng? Phiếu của bản trải nghiệm sẽ mất.",
+  dong_y_dang_xuat: "Đăng xuất",
+  huy: "Không",
+} as const;

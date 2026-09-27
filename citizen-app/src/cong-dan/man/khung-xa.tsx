@@ -39,7 +39,7 @@ export function DauKhoi({ tieu_de, onXemTatCa }: { tieu_de: string; onXemTatCa?:
 }
 
 /** Ô biểu tượng tròn nền nhạt; màu là tên một lớp `xa-mau--*` đã đo trong `styles.css`. */
-export function OBieuTuong({ ten, mau }: { ten: TenBieuTuong; mau: "hong" | "xanh" | "luc" | "cam" | "navy" }) {
+export function OBieuTuong({ ten, mau }: { ten: TenBieuTuong; mau: "hong" | "xanh" | "luc" | "cam" | "navy" | "tim" }) {
   return (
     <span className={`xa-o-bt xa-mau--${mau}`}>
       <BieuTuong ten={ten} co={24} />

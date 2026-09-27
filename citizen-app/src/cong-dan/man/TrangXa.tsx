@@ -2,38 +2,35 @@
  * APP RIÊNG CỦA MỘT XÃ — toàn bộ giao diện sau khi mở (`deploy.mjs --domain=<x> --vao-thang`, ADR 0047 §6).
  *
  * Mong muốn của chủ dự án (28/09/2026): chọn app của xã trên Zalo là thấy NGAY giao diện của xã ấy; xã
- * sau y hệt, không sửa mã. GIAO DIỆN theo bản mẫu `vi-gov/zalo-miniapp` do chủ dự án chỉ:
- * header xanh bo đáy, lưới truy cập nhanh, "Phản ánh của tôi", "Tin tức mới", thanh tab dưới có nút
- * "Gửi phản ánh" nổi ở giữa.
+ * sau y hệt, không sửa mã. GIAO DIỆN theo bản mẫu `vi-gov/zalo-miniapp`, ĐỦ CÁC MÀN (chủ dự án: "làm đủ
+ * các màn như bản mẫu đi"): định danh, trang chủ, phản ánh, tin tức, cá nhân, gửi phản ánh, tra cứu hồ
+ * sơ, danh bạ, truyền thanh, video, bản đồ, thông báo.
  *
- * Lấy từ bản mẫu: bố cục, màu, hình. KHÔNG lấy: router, `localStorage`, tên xã từ biến môi trường, lớp
- * gọi máy chủ của nó, màn định danh bắt buộc, quét căn cước, bản đồ, truyền thanh, video — những thứ
- * hoặc trái luật của kho này (luật 1 bất biến 10, luật 3, luật 4), hoặc chưa có máy chủ nào trả dữ liệu
- * thật. Ô nào không có dữ liệu thật thì KHÔNG hiện: một nút dẫn tới màn trống là thứ người lớn tuổi
- * bấm một lần rồi kết luận app hỏng.
+ * DỮ LIỆU:
+ *   · thật — tên xã (`/communes`), tin tức (`/commune-news`), danh bạ (`/commune-staff`), đều công khai
+ *     theo tên miền, không đăng nhập, không qua `vihat-miniapp`;
+ *   · trải nghiệm — người dùng giả lập và phiếu phản ánh CHỈ TRONG BỘ NHỚ (`trai-nghiem.ts`), gắn nhãn,
+ *     KHÔNG gửi vào hệ thống của xã;
+ *   · chưa có — truyền thanh, video, bản đồ, thông báo, tra cứu hồ sơ: trạng thái trống bằng lời.
  *
- * 1. Tra tên xã theo tên miền của bản dựng (`GET identity /api/v1/communes?host=`, công khai).
- * 2. Hiện app của xã. Tin tức, danh bạ đọc ngay — KHÔNG đăng nhập, KHÔNG qua `vihat-miniapp`.
+ * KHÔNG LẤY TỪ BẢN MẪU: router, `localStorage`, tên xã từ biến môi trường, lớp gọi máy chủ của nó, OTP,
+ * quét căn cước, bước chọn lĩnh vực (ADR 0028), số ngày cam kết viết cứng (luật 10).
  *
- * KHÔNG MỞ PHIÊN LÚC MỞ APP (ADR 0047 §6). Gửi, xem, tra cứu phản ánh cần phiên; đường đăng nhập theo
- * App ID của app xã CHƯA DỰNG, nên ba chỗ ấy nói thật "chưa đăng nhập được".
- *
- * Tên miền chỉ là KHOÁ TRA, không vẽ ra, không ghi log. Tên xã là thứ máy chủ trả.
+ * KHÔNG MỞ PHIÊN LÚC MỞ APP (ADR 0047 §6). Tên miền chỉ là KHOÁ TRA, không vẽ ra, không ghi log.
  */
 import { useEffect, useState } from "react";
 
 import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
-import { layPhienViGov } from "../api/phien-vigov";
 
-import { GuiPhanAnhScreen } from "./GuiPhanAnhScreen";
-import { APP_RIENG, CUA_TOI, DANH_BA, GUI, TIN_XA, TRA_CUU, XA_GIAO_DIEN } from "./noi-dung";
-import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
-import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
 import { ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
-import { ChuaDangNhap, DauKhoi, DauManCon, KhoiTrangThai, OBieuTuong, TrangCon } from "./khung-xa";
+import { DauKhoi, DauManCon, KhoiTrangThai, OBieuTuong, TrangCon } from "./khung-xa";
+import { APP_RIENG, CUA_TOI, DANH_BA, TIN_XA, XA_GIAO_DIEN, XA_TN } from "./noi-dung";
+import { ChiTietPhieuTN, DanhSachPhieuTN, GuiPhanAnhTN, NhanTraiNghiem, ThePhieuTN } from "./PhanAnhAppXa";
+import { CaNhanXa, type CoChu, DinhDanhXa, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
 import { BaiTinXa, DanhSachTinXa, HangTin, useTinXa } from "./TinTucAppXa";
+import { type LayNguoiDung, layNguoiDungGiaLap, loiChao, type NguoiDungApp, type PhieuTraiNghiem } from "./trai-nghiem";
 
 export type XaCuaApp = { readonly ten: string; readonly tinh: string };
 
@@ -52,19 +49,25 @@ export function xaTuKetQuaTra(
 
 /* ═════════════════════════════════ ĐIỀU HƯỚNG — không router ═════════════════════════════════ */
 
-export type TabXa = "trang-chu" | "phan-anh" | "tin-tuc" | "danh-ba";
+export type TabXa = "trang-chu" | "phan-anh" | "tin-tuc" | "ca-nhan";
 
 type ManXa =
   | { readonly kieu: "tab"; readonly tab: TabXa }
   | { readonly kieu: "gui" }
-  | { readonly kieu: "tra-cuu"; readonly ma?: string }
-  | { readonly kieu: "bai"; readonly id: string; readonly tu: TabXa };
+  | { readonly kieu: "phieu"; readonly ma: string; readonly tu: TabXa }
+  | { readonly kieu: "bai"; readonly id: string; readonly tu: TabXa }
+  | { readonly kieu: "danh-ba" }
+  | { readonly kieu: "tra-cuu" }
+  | { readonly kieu: "truyen-thanh" }
+  | { readonly kieu: "video" }
+  | { readonly kieu: "ban-do" }
+  | { readonly kieu: "thong-bao" };
 
 const TAB: ReadonlyArray<{ tab: TabXa; nhan: string; bieu_tuong: TenBieuTuong }> = [
   { tab: "trang-chu", nhan: XA_GIAO_DIEN.tab_trang_chu, bieu_tuong: "home" },
   { tab: "phan-anh", nhan: XA_GIAO_DIEN.tab_phan_anh, bieu_tuong: "chat" },
   { tab: "tin-tuc", nhan: XA_GIAO_DIEN.tab_tin_tuc, bieu_tuong: "news" },
-  { tab: "danh-ba", nhan: XA_GIAO_DIEN.tab_danh_ba, bieu_tuong: "users" },
+  { tab: "ca-nhan", nhan: XA_TN.tab_ca_nhan, bieu_tuong: "user" },
 ];
 
 /** Thanh tab dưới: hai tab — chỗ trống cho nút nổi — hai tab. */
@@ -100,9 +103,8 @@ function ThanhTabXa({ tab, onChon, onGui }: { tab: TabXa; onChon: (t: TabXa) => 
 /**
  * LOGO XÃ trên header. TẠM THỜI: `deploy.mjs --vao-thang` chép `scripts/logo-xa/<tên-miền>.png` vào bản
  * dựng thành `./logo-xa.png` (chủ dự án, 28/09/2026); nguồn thật sau này là hồ sơ hiển thị của xã ở
- * service-platform, cấu hình qua platform-admin. Không có tệp (bản dựng không kèm logo, chạy thử) thì
- * ảnh báo lỗi và ô trở về biểu tượng tòa nhà — không bao giờ một khung ảnh vỡ.
- * `alt=""`: tên xã đứng ngay cạnh bằng chữ; đọc thêm "logo" chỉ là tiếng ồn cho trình đọc màn hình.
+ * service-platform, cấu hình qua platform-admin. Không có tệp thì ô trở về biểu tượng tòa nhà.
+ * `alt=""`: tên xã đứng ngay cạnh bằng chữ.
  */
 function LogoXa() {
   const [loi, datLoi] = useState(false);
@@ -116,19 +118,37 @@ function LogoXa() {
   return <img className="xa-hero__logo" src="./logo-xa.png" alt="" onError={() => datLoi(true)} />;
 }
 
+/** Giờ Việt Nam (+07) — không theo múi giờ của máy (cùng lý do `lib/thoi-diem.ts`). */
+function gioVN(): number {
+  return (new Date().getUTCHours() + 7) % 24;
+}
+
+type OMenu = {
+  nhan: string;
+  bieu_tuong: TenBieuTuong;
+  mau: "hong" | "xanh" | "luc" | "cam" | "navy" | "tim";
+  man: ManXa;
+};
+
+const O_NHANH: readonly OMenu[] = [
+  { nhan: XA_GIAO_DIEN.o_gui, bieu_tuong: "megaphone", mau: "hong", man: { kieu: "gui" } },
+  { nhan: XA_TN.o_tra_cuu_ho_so, bieu_tuong: "search", mau: "xanh", man: { kieu: "tra-cuu" } },
+  { nhan: XA_TN.o_truyen_thanh, bieu_tuong: "radio", mau: "cam", man: { kieu: "truyen-thanh" } },
+  { nhan: XA_TN.o_video, bieu_tuong: "play", mau: "tim", man: { kieu: "video" } },
+  { nhan: XA_GIAO_DIEN.o_danh_ba, bieu_tuong: "phone", mau: "luc", man: { kieu: "danh-ba" } },
+  { nhan: XA_TN.o_ban_do, bieu_tuong: "map", mau: "navy", man: { kieu: "ban-do" } },
+];
+
 function TrangChuXa(props: {
   xa: XaCuaApp;
+  nguoi_dung: NguoiDungApp;
   tin: ReturnType<typeof useTinXa>;
-  co_phien: boolean;
+  phieu: readonly PhieuTraiNghiem[];
   di: (m: ManXa) => void;
 }) {
-  const { xa, tin, di } = props;
-  const o_nhanh: ReadonlyArray<{ nhan: string; bieu_tuong: TenBieuTuong; mau: "hong" | "xanh" | "luc"; man: ManXa }> = [
-    { nhan: XA_GIAO_DIEN.o_gui, bieu_tuong: "megaphone", mau: "hong", man: { kieu: "gui" } },
-    { nhan: XA_GIAO_DIEN.o_tra_cuu, bieu_tuong: "search", mau: "xanh", man: { kieu: "tra-cuu" } },
-    { nhan: XA_GIAO_DIEN.o_danh_ba, bieu_tuong: "phone", mau: "luc", man: { kieu: "tab", tab: "danh-ba" } },
-  ];
+  const { xa, tin, di, nguoi_dung } = props;
   const tin_moi = tin.ds.muc.slice(0, 3);
+  const moi_nhat = props.phieu[0];
 
   return (
     <div className="xa-trang">
@@ -136,16 +156,28 @@ function TrangChuXa(props: {
         <div className="xa-hero__hang">
           <LogoXa />
           <div className="xa-hero__chu">
-            <p className="xa-hero__chao">{XA_GIAO_DIEN.chao}</p>
-            <h1 className="xa-hero__ten">{xa.ten}</h1>
-            {xa.tinh !== "" && <p className="xa-hero__tinh">{xa.tinh}</p>}
+            <p className="xa-hero__chao">{loiChao(gioVN())}</p>
+            <p className="xa-hero__nguoi">{nguoi_dung.ho_ten}</p>
           </div>
+          <button
+            type="button"
+            className="xa-hero__chuong"
+            onClick={() => di({ kieu: "thong-bao" })}
+            aria-label={XA_TN.thong_bao}
+          >
+            <BieuTuong ten="bell" co={22} />
+          </button>
+        </div>
+        <div className="xa-hero__don-vi">
+          {nguoi_dung.nguon === "gia-lap" && <NhanTraiNghiem />}
+          <h1 className="xa-hero__ten">{xa.ten}</h1>
+          {xa.tinh !== "" && <p className="xa-hero__tinh">{xa.tinh}</p>}
         </div>
       </header>
 
       <div className="xa-trang__than">
         <div className="xa-luoi">
-          {o_nhanh.map((o) => (
+          {O_NHANH.map((o) => (
             <button key={o.nhan} type="button" className="xa-the xa-o-nhanh" onClick={() => di(o.man)}>
               <OBieuTuong ten={o.bieu_tuong} mau={o.mau} />
               <span className="xa-o-nhanh__nhan">{o.nhan}</span>
@@ -154,22 +186,24 @@ function TrangChuXa(props: {
         </div>
 
         <DauKhoi tieu_de={XA_GIAO_DIEN.muc_phan_anh} onXemTatCa={() => di({ kieu: "tab", tab: "phan-anh" })} />
-        {props.co_phien ? (
-          <button type="button" className="xa-the xa-hang-tin" onClick={() => di({ kieu: "tab", tab: "phan-anh" })}>
-            <span className="xa-hang-tin__chu">
-              <strong className="xa-hang-tin__tieu-de">{CUA_TOI.tieu_de}</strong>
-            </span>
-            <BieuTuong ten="right" co={20} />
-          </button>
+        {moi_nhat ? (
+          <ThePhieuTN phieu={moi_nhat} onMo={() => di({ kieu: "phieu", ma: moi_nhat.ma, tu: "trang-chu" })} />
         ) : (
-          <ChuaDangNhap cau={XA_GIAO_DIEN.chua_dang_nhap_ngan} />
+          <div className="xa-the">
+            <KhoiTrangThai bieu_tuong="chat" cau={XA_TN.chua_co_phieu} />
+          </div>
         )}
 
         <DauKhoi tieu_de={XA_GIAO_DIEN.muc_tin_moi} onXemTatCa={() => di({ kieu: "tab", tab: "tin-tuc" })} />
         {!tin.ds.da_co_trang_dau && tin.ds.dang_tai ? (
           <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai} dang_tai />
         ) : !tin.ds.da_co_trang_dau && tin.ds.loi !== null ? (
-          <KhoiTrangThai bieu_tuong="alert" loi cau={TIN_XA.loi_may_chu} nut={{ nhan: TIN_XA.nut_thu_lai, onBam: tin.taiTiep }} />
+          <KhoiTrangThai
+            bieu_tuong="alert"
+            loi
+            cau={TIN_XA.loi_may_chu}
+            nut={{ nhan: TIN_XA.nut_thu_lai, onBam: tin.taiTiep }}
+          />
         ) : tin_moi.length === 0 ? (
           <KhoiTrangThai bieu_tuong="news" cau={XA_GIAO_DIEN.tin_moi_trong} />
         ) : (
@@ -188,69 +222,98 @@ function TrangChuXa(props: {
 
 /* ═════════════════════════════════ CÁC TAB KHÁC ═════════════════════════════════ */
 
-function DauTab({ tieu_de }: { tieu_de: string }) {
+function DauTab({ tieu_de, nhan_tn }: { tieu_de: string; nhan_tn?: boolean }) {
   return (
     <div className="xa-dau-tab">
       <h1 className="xa-dau-con__tieu-de">{tieu_de}</h1>
+      {nhan_tn && <NhanTraiNghiem />}
     </div>
   );
 }
 
-function TabDanhBa({ ten_mien }: { ten_mien: string }) {
+function ManDanhBa({ ten_mien, onQuayLai }: { ten_mien: string; onQuayLai: () => void }) {
   const { trang, taiLai } = useDanhBaXa(ten_mien);
   return (
     <>
-      <DauTab tieu_de={DANH_BA.tieu_de} />
-      <div className="xa-trang xa-trang--tab">
+      <DauManCon tieu_de={DANH_BA.tieu_de} onQuayLai={onQuayLai} />
+      <TrangCon>
         <ThanDanhBaXa trang={trang} onTai={taiLai} />
-      </div>
+      </TrangCon>
     </>
   );
 }
 
 /* ═════════════════════════════════ APP ═════════════════════════════════ */
 
-function AppCuaXa({ ten_mien, xa }: { ten_mien: string; xa: XaCuaApp }) {
+function AppCuaXa(props: { ten_mien: string; xa: XaCuaApp; lay_nguoi_dung: LayNguoiDung }) {
+  const { ten_mien, xa } = props;
+  // NGƯỜI DÙNG VÀ PHIẾU CHỈ TRONG BỘ NHỚ (`trai-nghiem.ts`): đóng app là mất, không ghi xuống máy.
+  const [nguoi_dung, datNguoiDung] = useState<NguoiDungApp | null>(null);
+  const [phieu, datPhieu] = useState<readonly PhieuTraiNghiem[]>([]);
+  const [co_chu, datCoChu] = useState<CoChu>("vua");
   const [man, datMan] = useState<ManXa>({ kieu: "tab", tab: "trang-chu" });
-  // Đọc MỘT LẦN, cùng cách ba màn phản ánh đọc. App riêng hôm nay không mở phiên nào (ADR 0047 §6).
-  const [co_phien] = useState(() => layPhienViGov() !== null);
   const tin = useTinXa(ten_mien);
   const veTab = (tab: TabXa) => datMan({ kieu: "tab", tab });
+  const lop = `xa-app xa-co-chu--${co_chu}`;
 
-  if (man.kieu === "bai") {
+  if (nguoi_dung === null) {
     return (
-      <div className="xa-app">
-        <BaiTinXa ten_mien={ten_mien} id={man.id} onQuayLai={() => veTab(man.tu)} />
+      <div className={lop}>
+        <DinhDanhXa ten_xa={xa.ten} tinh={xa.tinh} lay={props.lay_nguoi_dung} onXong={datNguoiDung} />
       </div>
     );
   }
 
-  if (man.kieu === "gui" || man.kieu === "tra-cuu") {
-    const tieu_de = man.kieu === "gui" ? GUI.tieu_de : TRA_CUU.tieu_de;
-    return (
-      <div className="xa-app">
-        {co_phien ? (
-          man.kieu === "gui" ? (
-            <GuiPhanAnhScreen onQuayLai={() => veTab("trang-chu")} />
-          ) : (
-            <TraCuuPhieuScreen onQuayLai={() => veTab("trang-chu")} ma_ban_dau={man.ma ?? ""} />
-          )
-        ) : (
-          <>
-            <DauManCon tieu_de={tieu_de} onQuayLai={() => veTab("trang-chu")} />
-            <TrangCon>
-              <ChuaDangNhap cau={XA_GIAO_DIEN.chua_dang_nhap_day_du} />
-            </TrangCon>
-          </>
-        )}
-      </div>
-    );
+  const ve = () => veTab("trang-chu");
+  let man_con = null;
+  switch (man.kieu) {
+    case "bai":
+      man_con = <BaiTinXa ten_mien={ten_mien} id={man.id} onQuayLai={() => veTab(man.tu)} />;
+      break;
+    case "gui":
+      man_con = (
+        <GuiPhanAnhTN
+          onQuayLai={ve}
+          onDaGui={(p) => datPhieu((ds) => [p, ...ds])}
+          onXemPhieu={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
+        />
+      );
+      break;
+    case "phieu":
+      man_con = (
+        <ChiTietPhieuTN phieu={phieu.find((p) => p.ma === man.ma) ?? null} onQuayLai={() => veTab(man.tu)} />
+      );
+      break;
+    case "danh-ba":
+      man_con = <ManDanhBa ten_mien={ten_mien} onQuayLai={ve} />;
+      break;
+    case "tra-cuu":
+      man_con = <TraCuuHoSoXa onQuayLai={ve} />;
+      break;
+    case "truyen-thanh":
+      man_con = (
+        <ManChuaCoDuLieu tieu_de={XA_TN.truyen_thanh_tieu_de} bieu_tuong="radio" cau={XA_TN.truyen_thanh_trong} onQuayLai={ve} />
+      );
+      break;
+    case "video":
+      man_con = <ManChuaCoDuLieu tieu_de={XA_TN.video_tieu_de} bieu_tuong="play" cau={XA_TN.video_trong} onQuayLai={ve} />;
+      break;
+    case "ban-do":
+      man_con = <ManChuaCoDuLieu tieu_de={XA_TN.ban_do_tieu_de} bieu_tuong="map" cau={XA_TN.ban_do_trong} onQuayLai={ve} />;
+      break;
+    case "thong-bao":
+      man_con = <ManChuaCoDuLieu tieu_de={XA_TN.thong_bao} bieu_tuong="bell" cau={XA_TN.thong_bao_trong} onQuayLai={ve} />;
+      break;
+    default:
+      break;
   }
+  if (man_con !== null) return <div className={lop}>{man_con}</div>;
 
+  const tab = man.kieu === "tab" ? man.tab : "trang-chu";
   let than;
-  if (man.tab === "trang-chu") {
-    than = <TrangChuXa xa={xa} tin={tin} co_phien={co_phien} di={datMan} />;
-  } else if (man.tab === "tin-tuc") {
+  if (tab === "trang-chu") {
+    than = <TrangChuXa xa={xa} nguoi_dung={nguoi_dung} tin={tin} phieu={phieu} di={datMan} />;
+  } else if (tab === "tin-tuc") {
     than = (
       <>
         <DauTab tieu_de={TIN_XA.tieu_de} />
@@ -259,27 +322,42 @@ function AppCuaXa({ ten_mien, xa }: { ten_mien: string; xa: XaCuaApp }) {
         </div>
       </>
     );
-  } else if (man.tab === "danh-ba") {
-    than = <TabDanhBa ten_mien={ten_mien} />;
-  } else {
-    than = co_phien ? (
-      <PhanAnhCuaToiScreen onQuayLai={() => veTab("trang-chu")} onMoPhieu={(ma) => datMan({ kieu: "tra-cuu", ma })}
-        onGuiPhanAnh={() => datMan({ kieu: "gui" })}
-      />
-    ) : (
+  } else if (tab === "phan-anh") {
+    than = (
       <>
-        <DauTab tieu_de={CUA_TOI.tieu_de} />
+        <DauTab tieu_de={CUA_TOI.tieu_de} nhan_tn={nguoi_dung.nguon === "gia-lap"} />
         <div className="xa-trang xa-trang--tab">
-          <ChuaDangNhap cau={XA_GIAO_DIEN.chua_dang_nhap_day_du} />
+          <DanhSachPhieuTN phieu={phieu} onMo={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })} />
         </div>
+      </>
+    );
+  } else {
+    than = (
+      <>
+        <DauTab tieu_de={XA_TN.ca_nhan_tieu_de} nhan_tn={nguoi_dung.nguon === "gia-lap"} />
+        <CaNhanXa
+          nguoi_dung={nguoi_dung}
+          ten_xa={xa.ten}
+          tinh={xa.tinh}
+          so_phieu={phieu.length}
+          co_chu={co_chu}
+          onDoiCoChu={datCoChu}
+          onMoPhanAnh={() => veTab("phan-anh")}
+          onMoTraCuu={() => datMan({ kieu: "tra-cuu" })}
+          onDangXuat={() => {
+            datNguoiDung(null);
+            datPhieu([]);
+            veTab("trang-chu");
+          }}
+        />
       </>
     );
   }
 
   return (
-    <div className="xa-app">
+    <div className={lop}>
       <main id="main">{than}</main>
-      <ThanhTabXa tab={man.tab} onChon={veTab} onGui={() => datMan({ kieu: "gui" })} />
+      <ThanhTabXa tab={tab} onChon={veTab} onGui={() => datMan({ kieu: "gui" })} />
     </div>
   );
 }
@@ -292,8 +370,13 @@ type TrangTra =
 export function TrangXa(props: {
   /** Tên miền xã nung vào bản dựng (`lib/xa-co-dinh.ts`). */
   ten_mien: string;
+  /**
+   * Hành động DUY NHẤT lấy người dùng (`trai-nghiem.ts`). Mặc định: giả lập cố định. Ngày có quyền Zalo,
+   * lớp vỏ tiêm hàm thật vào đây — nửa này không nhập zmp-sdk (`ranh-gioi-hai-nua.test.ts` §3a).
+   */
+  lay_nguoi_dung?: LayNguoiDung;
 }) {
-  const { ten_mien } = props;
+  const { ten_mien, lay_nguoi_dung = layNguoiDungGiaLap } = props;
   const [trang, datTrang] = useState<TrangTra>({ kieu: "dang-tra" });
   /** Mỗi lần bấm "Thử lại" tăng một — hiệu ứng tra chạy lại đúng một lần cho mỗi giá trị. */
   const [lan, datLan] = useState(0);
@@ -311,7 +394,7 @@ export function TrangXa(props: {
     // Tên miền là hằng của bản dựng; chỉ `lan` đổi.
   }, [lan]);
 
-  if (trang.kieu === "xong") return <AppCuaXa ten_mien={ten_mien} xa={trang.xa} />;
+  if (trang.kieu === "xong") return <AppCuaXa ten_mien={ten_mien} xa={trang.xa} lay_nguoi_dung={lay_nguoi_dung} />;
 
   return (
     <div className="xa-app">

@@ -777,6 +777,10 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       ".xa-nut",
       ".xa-tab__muc",
       ".xa-noi",
+      ".xa-hero__chuong",
+      ".xa-chip",
+      ".xa-hang",
+      ".xa-cong-tac",
     ]) {
       expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
         new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
@@ -802,6 +806,13 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["câu lỗi trên nền trang", token("xa-loi"), token("xa-nen")],
     ["nhãn 'Gọi' trên nền xanh lá nhạt", token("xa-luc-dam"), token("xa-luc-nhat")],
     ["nhãn tab chưa chọn", token("ink-muted"), token("surface")],
+    ["nhãn BẢN TRẢI NGHIỆM", token("xa-navy"), token("xa-vang")],
+    ["chữ trắng trên nút hồng", "#ffffff", token("xa-hong-dam")],
+    ["chữ trắng trên nút đỏ", "#ffffff", token("xa-loi")],
+    ["chip 'Đang xử lý'", token("xa-cam-dam"), token("xa-cam-nhat")],
+    ["chip 'Mới tiếp nhận'", token("xa-navy"), token("xa-xanh-nhat")],
+    ["ghi chú trên nền cam nhạt", token("ink"), token("xa-cam-nhat")],
+    ["bước đang làm", token("xa-hong-dam"), token("surface")],
   ];
   for (const [gi, chu, nen] of cap) {
     it(`${gi} đạt 4,5:1`, () => {
