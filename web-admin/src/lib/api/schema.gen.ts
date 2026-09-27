@@ -129,6 +129,15 @@ export type comms_thongBaoRa = {
   "created_at": string;
 };
 
+export type comms_tinXaRa = {
+  "id": string;
+  "title": string;
+  "summary": string;
+  "published_on": string;
+  "category_name": string;
+  "body"?: string | null;
+};
+
 export type comms_xoaLoaiTaiNguyenVao = {
   "reason": string;
 };
@@ -736,6 +745,18 @@ export type identity_canBoChonNguoiRa = {
   "department_id": string;
 };
 
+export type identity_canBoCongKhaiRa = {
+  "full_name": string;
+  "position": string;
+  /** "" when the person sits in no unit */
+  "department_name": string;
+  /** office line — duty information (#16) */
+  "phone": string;
+  /** personal mobile — published under #12 consent */
+  "mobile": string;
+  "has_zalo": boolean;
+};
+
 export type identity_canBoGon = {
   /** cb.Ma — the business code, the one the audit trail shows */
   "code": string;
@@ -786,6 +807,10 @@ export type identity_cotPhanQuyenRa = {
 
 export type identity_danhBaChonNguoiRa = {
   "items": Array<identity_canBoChonNguoiRa>;
+};
+
+export type identity_danhBaCongKhaiRa = {
+  "items": Array<identity_canBoCongKhaiRa>;
 };
 
 export type identity_danhMucXaRa = {
@@ -1154,6 +1179,13 @@ export type page_Result_comms_noiDungRa = {
 
 export type page_Result_comms_thongBaoRa = {
   "items": Array<comms_thongBaoRa>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
+export type page_Result_comms_tinXaRa = {
+  "items": Array<comms_tinXaRa>;
   /** empty when has_more is false */
   "next_cursor": string;
   "has_more": boolean;
@@ -2275,20 +2307,79 @@ export type petitions_post_citizen_reports_by_maTraCuu_status = {
   };
 };
 
-/** GET /api/v1/communes — Tra xã theo tên miền trong mã QR, để Mini App hỏi "Làm việc với xã X?" trước khi công dân xác nhận — không trả mã xã */
+/** GET /api/v1/commune-news — Tin đã đăng của xã trên Zalo Mini App, theo tên miền của xã — mới nhất trước, văn bản thuần, phân trang con trỏ */
+export type comms_get_commune_news = {
+  duongDan: "/api/v1/commune-news";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "created_at";
+    "order"?: "asc" | "desc";
+    "host"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_comms_tinXaRa;
+    400: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/commune-news/{id} — Một tin đã đăng của xã, toàn văn dạng văn bản thuần — tin chưa đăng hay của xã khác trả cùng một 404 */
+export type comms_get_commune_news_by_id = {
+  duongDan: "/api/v1/commune-news/{id}";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+    "host"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: comms_tinXaRa;
+    400: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/commune-staff — Danh bạ cán bộ xã đã công khai trên Zalo Mini App, theo tên miền của xã — chỉ người đã đồng ý công khai */
+export type identity_get_commune_staff = {
+  duongDan: "/api/v1/commune-staff";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "host"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: identity_danhBaCongKhaiRa;
+    400: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/communes — Tra xã theo tên miền trong mã QR, để Mini App hỏi "Làm việc với xã X?" trước khi có phiên nào — không trả mã xã */
 export type identity_get_communes = {
   duongDan: "/api/v1/communes";
   phuongThuc: "GET";
   thamSo: {
   };
   truyVan: {
-    "host": string;
+    "host"?: string;
   };
   than: never;
   phanHoi: {
     200: identity_danhMucXaRa;
     400: httpx_Error;
-    401: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };

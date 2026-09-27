@@ -2846,28 +2846,291 @@
         }
       }
     },
+    "/api/v1/commune-news": {
+      "get": {
+        "summary": "Tin đã đăng của xã trên Zalo Mini App, theo tên miền của xã — mới nhất trước, văn bản thuần, phân trang con trỏ",
+        "operationId": "comms_get_commune_news",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §9",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "bảng tin xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; chỉ trả mục đã đăng (dang-hien) của đúng xã mà nền tảng phân giải từ tên miền, dạng văn bản thuần"
+        },
+        "x-vigov-task": "b0dbfeba1b92",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Số bản ghi mỗi trang. Vượt trần thì máy chủ TRẢ VỀ trần kèm con trỏ để đọc tiếp, không báo lỗi.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Con trỏ MỜ ĐỤC do máy chủ phát ra ở `next_cursor`, chuyền lại nguyên văn. Không phải số thứ tự trang; không có `offset`, và không có tổng số bản ghi.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Cột sắp xếp. Danh sách đóng — giá trị ngoài danh sách bị từ chối.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created_at"
+              ],
+              "default": "created_at"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/page.Result_comms.tinXaRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/commune-news/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Một tin đã đăng của xã, toàn văn dạng văn bản thuần — tin chưa đăng hay của xã khác trả cùng một 404",
+        "operationId": "comms_get_commune_news_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app §9",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "toàn văn một tin xã đã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; tin chưa đăng hoặc của xã khác trả cùng một 404"
+        },
+        "x-vigov-task": "990d3853914d",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.tinXaRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/commune-staff": {
+      "get": {
+        "summary": "Danh bạ cán bộ xã đã công khai trên Zalo Mini App, theo tên miền của xã — chỉ người đã đồng ý công khai",
+        "operationId": "identity_get_commune_staff",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-screen": "12-danh-ba-can-bo §8",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "danh bạ cán bộ xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/12-danh-ba-can-bo.md:117): người dân gọi điện cho xã không cần tài khoản; chỉ trả người được quản trị công khai từng người kèm đồng ý đã ghi nhận (#12)"
+        },
+        "x-vigov-task": "82e815221f91",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.danhBaCongKhaiRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/communes": {
       "get": {
-        "summary": "Tra xã theo tên miền trong mã QR, để Mini App hỏi \"Làm việc với xã X?\" trước khi công dân xác nhận — không trả mã xã",
+        "summary": "Tra xã theo tên miền trong mã QR, để Mini App hỏi \"Làm việc với xã X?\" trước khi có phiên nào — không trả mã xã",
         "operationId": "identity_get_communes",
         "tags": [
           "identity"
         ],
         "x-vigov-permission": {
-          "kind": "citizen-only"
-        },
-        "x-vigov-tenant-class": {
-          "kind": "khong-thuoc-xa",
-          "tenant_in_context": false,
-          "reason": "xác nhận xã trước khi vào: công dân quét QR mang tên miền của một xã CHƯA thuộc phiên, tuyến chỉ đọc tên và tỉnh của xã ấy từ sổ đăng ký nền tảng",
-          "note": "Chỉ đường phân giải xã. Không có xã trong context nên không chạm được dữ liệu nghiệp vụ (ADR 0022)."
+          "kind": "public",
+          "reason": "Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền in trên mã QR ra tên và tỉnh của xã — siêu dữ liệu công khai mà trang đăng nhập của chính xã ấy vốn đã hiện; không trả mã xã, không trả tên miền"
         },
         "x-vigov-task": "86a653af479d",
         "parameters": [
           {
             "name": "host",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -2886,16 +3149,6 @@
           },
           "400": {
             "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -14421,6 +14674,40 @@
         ],
         "additionalProperties": false
       },
+      "comms.tinXaRa": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "published_on": {
+            "type": "string"
+          },
+          "category_name": {
+            "type": "string"
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "category_name",
+          "id",
+          "published_on",
+          "summary",
+          "title"
+        ],
+        "additionalProperties": false
+      },
       "comms.xoaLoaiTaiNguyenVao": {
         "type": "object",
         "properties": {
@@ -16574,6 +16861,41 @@
         ],
         "additionalProperties": false
       },
+      "identity.canBoCongKhaiRa": {
+        "type": "object",
+        "properties": {
+          "full_name": {
+            "type": "string"
+          },
+          "position": {
+            "type": "string"
+          },
+          "department_name": {
+            "type": "string",
+            "description": "\"\" when the person sits in no unit"
+          },
+          "phone": {
+            "type": "string",
+            "description": "office line — duty information (#16)"
+          },
+          "mobile": {
+            "type": "string",
+            "description": "personal mobile — published under #12 consent"
+          },
+          "has_zalo": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "department_name",
+          "full_name",
+          "has_zalo",
+          "mobile",
+          "phone",
+          "position"
+        ],
+        "additionalProperties": false
+      },
       "identity.canBoGon": {
         "type": "object",
         "properties": {
@@ -16747,6 +17069,21 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/identity.canBoChonNguoiRa"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "identity.danhBaCongKhaiRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.canBoCongKhaiRa"
             }
           }
         },
@@ -18126,6 +18463,30 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/comms.thongBaoRa"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
+      "page.Result_comms.tinXaRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.tinXaRa"
             }
           },
           "next_cursor": {

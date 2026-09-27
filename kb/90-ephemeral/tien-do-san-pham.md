@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 5f186c9
+derived_from_commit: 1033752
 expires: 2026-12-26
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -39,13 +39,13 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **08** Thông báo | 2 | 2/2 | ✓ |
 | **09** Phản ánh của người dân | 13 | 10/10 +3 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 1 | 1/1 | ✓ |
-| **11** Quản trị nội dung Mini App | 6 | 6/6 | ✓ |
-| **12** Danh bạ cán bộ | 5 | 5/5 | ✓ |
+| **11** Quản trị nội dung Mini App | 8 | 6/8 | ✓ |
+| **12** Danh bạ cán bộ | 6 | 5/6 | ✓ |
 | **13** Báo cáo điều hành | — | — | — |
 | **14** Cấu hình hệ thống | 59 | 59/59 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 5 | 5/5 | ✓ |
 
-Tổng **151 tuyến** trong hợp đồng. **6** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **154 tuyến** trong hợp đồng. **6** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -56,7 +56,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | # | Mục menu | Đường dẫn | Khoá quyền | Màn | Chưa dựng |
 |---|---|---|---|---|---|
 | 1 | Tổng quan | — | — | ✗ | |
-| 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 15 |
+| 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 16 |
 | 3 | Sổ tay lãnh đạo | — | — | ✗ | |
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 4 |
 | 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | **không khai** |
@@ -70,7 +70,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 13 | Báo cáo | — | — | ✗ | |
 | 14 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 8 |
 
-**10/14** mục menu có màn thật. **71** phần chưa dựng đang hiện trên các màn ấy.
+**10/14** mục menu có màn thật. **72** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần

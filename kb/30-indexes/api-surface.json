@@ -637,20 +637,76 @@
       "declared_in": "service-petitions/internal/http/routes.go"
     },
     {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/commune-news",
+      "operation_id": "comms_get_commune_news",
+      "task_id": "b0dbfeba1b92",
+      "summary": "Tin đã đăng của xã trên Zalo Mini App, theo tên miền của xã — mới nhất trước, văn bản thuần, phân trang con trỏ",
+      "screen": "11-noi-dung-mini-app §9",
+      "permission_kind": "public",
+      "permission_reason": "bảng tin xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; chỉ trả mục đã đăng (dang-hien) của đúng xã mà nền tảng phân giải từ tên miền, dạng văn bản thuần",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "page.Result_comms.tinXaRa",
+        "400": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes_cong_khai.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/commune-news/{id}",
+      "operation_id": "comms_get_commune_news_by_id",
+      "task_id": "990d3853914d",
+      "summary": "Một tin đã đăng của xã, toàn văn dạng văn bản thuần — tin chưa đăng hay của xã khác trả cùng một 404",
+      "screen": "11-noi-dung-mini-app §9",
+      "permission_kind": "public",
+      "permission_reason": "toàn văn một tin xã đã công bố cho người dân trên Zalo Mini App (docs/ui-ux/11-noi-dung-mini-app.md:189-190): người dân đọc không cần tài khoản; tin chưa đăng hoặc của xã khác trả cùng một 404",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.tinXaRa",
+        "400": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes_cong_khai.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/commune-staff",
+      "operation_id": "identity_get_commune_staff",
+      "task_id": "82e815221f91",
+      "summary": "Danh bạ cán bộ xã đã công khai trên Zalo Mini App, theo tên miền của xã — chỉ người đã đồng ý công khai",
+      "screen": "12-danh-ba-can-bo §8",
+      "permission_kind": "public",
+      "permission_reason": "danh bạ cán bộ xã công bố cho người dân trên Zalo Mini App (docs/ui-ux/12-danh-ba-can-bo.md:117): người dân gọi điện cho xã không cần tài khoản; chỉ trả người được quản trị công khai từng người kèm đồng ý đã ghi nhận (#12)",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "identity.danhBaCongKhaiRa",
+        "400": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes_cong_dan.go"
+    },
+    {
       "service": "identity",
       "method": "GET",
       "path": "/api/v1/communes",
       "operation_id": "identity_get_communes",
       "task_id": "86a653af479d",
-      "summary": "Tra xã theo tên miền trong mã QR, để Mini App hỏi \"Làm việc với xã X?\" trước khi công dân xác nhận — không trả mã xã",
-      "permission_kind": "citizen-only",
-      "tenant_class": "khong-thuoc-xa",
-      "tenant_class_reason": "xác nhận xã trước khi vào: công dân quét QR mang tên miền của một xã CHƯA thuộc phiên, tuyến chỉ đọc tên và tỉnh của xã ấy từ sổ đăng ký nền tảng",
+      "summary": "Tra xã theo tên miền trong mã QR, để Mini App hỏi \"Làm việc với xã X?\" trước khi có phiên nào — không trả mã xã",
+      "permission_kind": "public",
+      "permission_reason": "Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền in trên mã QR ra tên và tỉnh của xã — siêu dữ liệu công khai mà trang đăng nhập của chính xã ấy vốn đã hiện; không trả mã xã, không trả tên miền",
       "idempotency": "",
       "reply_schemas": {
         "200": "identity.danhMucXaRa",
         "400": "httpx.Error",
-        "401": "httpx.Error",
         "500": "httpx.Error",
         "503": "httpx.Error"
       },
