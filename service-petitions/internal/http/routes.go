@@ -1274,8 +1274,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// of one (decided by the project owner, 27/09/2026).
 	//
 	// `task.read`, THE KEY OF THE TASK READS ABOVE (seeded at service-identity/migrations/
-	// 0001_init.sql:304), AND NOT `task.extend`. The list decides nothing: a pending request is part of
-	// the task a reader of the register already sees (the chip on the drawer). WHO MAY DECIDE is
+	// 0001_init.sql:304), AND NOT `task.extend` — the project owner's decision, 27/09/2026. The list
+	// decides nothing, but it IS the first GET that returns a request's reason text (`ly_do`); see the
+	// header of de_nghi_lui_han_cho_duyet.go. WHO MAY DECIDE is
 	// unchanged — `task.extend` at the decision route's gate plus ADR 0038's named-leader rule inside
 	// it. NO KEY WAS INVENTED (rule 5, invariant 3c).
 	//

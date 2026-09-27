@@ -8,7 +8,13 @@ package http
 // READ ONLY, AND IT GRANTS NOTHING. Who may DECIDE a request is unchanged: `task.extend` at the gate
 // of POST /api/v1/tasks/{ma}/extensions/{deNghiID}/decision and ADR 0038's named-leader rule inside
 // it. A request shown here to somebody who is not its leader is a request they can read and cannot
-// approve — the same thing the task drawer already shows any `task.read` holder.
+// approve.
+//
+// THIS IS A NEW READ SURFACE, NOT A COPY OF ONE: before this route no GET returned
+// `de_nghi_lui_han.ly_do` to anybody — only the requester saw it, in its own POST reply. Opening it to
+// every `task.read` holder of the commune was the project owner's decision (27/09/2026), on the ground
+// that `task.read` already exposes the same kind of free text (title, description, note). If the
+// reason text ever needs a narrower audience, this route is where it leaks first.
 //
 // A TOP-LEVEL RESOURCE, like task-types and task-priorities, and not a sub-route of one task: the
 // queue spans every task of the commune. The per-task routes …/tasks/{ma}/extensions stay as they are.

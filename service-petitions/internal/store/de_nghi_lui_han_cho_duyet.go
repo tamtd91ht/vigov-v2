@@ -62,7 +62,10 @@ type LocDeNghiChoDuyet struct {
 //	                   test could show
 //	outer tenant_id    QueryPage adds `WHERE tenant_id = $1` over the derived table as well; it is
 //	                   redundant with the two above and harmless, and it is the shape every page in
-//	                   this repository has
+//	                   this repository has. ⚠ IT BINDS ONLY THE `d` SIDE — the derived table exposes
+//	                   `d.tenant_id` alone. The `n` side is protected by the ON clause and nothing
+//	                   else: "simplifying" that clause away because the outer filter "covers it"
+//	                   attaches another commune's task (title, deadline, leader) to this page
 //
 // # WHAT IS EXCLUDED, AND WHERE
 //
