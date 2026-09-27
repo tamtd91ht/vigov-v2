@@ -1,11 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { OChonCanBo } from "@/components/o-chon-can-bo";
 import { duongDanBienBan } from "@/features/bien-ban/nhan-bien-ban";
+import type { DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import {
   coTrangTruoc,
   sangTrangSau,
@@ -53,6 +62,7 @@ import {
   CANH_BAO_HAN_MOT_LAN,
   CAU_LIEN_KET_HANG_CHO,
   CAU_LOC_TRANG_THAI_KHONG_CO_COT,
+  CAU_THIEU_QUYEN_DUYET_HOAN_THANH,
   CHI_QUA_HAN_NHAN,
   CHI_TIET_THIEU_VAN_BAN,
   CHUA_GIAO_BO_PHAN,
@@ -122,7 +132,14 @@ import {
   docDanhBaChonNguoi,
   dongCuaNhom,
   dongVanBan,
+  duocBamChuyen,
+  duongDanTuLoc,
   formSuaTuChiTiet,
+  locTuDuongDan,
+  mucUuTienMacDinh,
+  nhanCanBoDrawer,
+  nhanCanBoNgan,
+  quyenNhiemVu,
   ghiChuKanbanReNhanh,
   loiSauKhiDocLai,
   lyDoKhoaSua,
@@ -150,6 +167,7 @@ import {
   type DongVanBanSua,
   type FormSuaNhiemVu,
   type NhomVanBan,
+  type QuyenNhiemVu,
   type TrangThaiNhiemVu,
 } from "./nhan-nhiem-vu";
 import { HangChoLuiHan } from "./hang-cho-lui-han";
@@ -178,12 +196,13 @@ import { NhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
  * viết (luật 9, cấm #2).
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * KHÔNG CÓ CỔNG QUYỀN Ở GIAO DIỆN, và sự vắng mặt ấy được nói ra ở `PHAN_CHUA_DUNG` chứ không
- * giấu: `lib/quyen.ts` chưa có hằng cho bảy khoá `task.*` và lượt này không sửa tệp ấy. Lớp chặn
- * thật không đổi — mỗi tuyến khai `RequirePermission` và kiểm trên TỪNG yêu cầu (luật 5, cấm #1);
- * thứ thiếu là sự tiện dụng, cùng khuôn `document.read` đã chọn. NGOẠI LỆ DUY NHẤT là lớp hai của
- * ADR 0038, vì nó KHÔNG phải một khoá quyền: nó là phép so mã cán bộ với cột trên bản ghi, và nó
- * vẫn chạy đầy đủ ở đây.
+ * CỔNG NÚT THEO KHOÁ `task.*` (27/09/2026) — `quyenNhiemVu`, đọc danh sách quyền của PHIÊN. Nút
+ * `+ Giao việc mới` · `✎ Sửa` · khối Chuyển trạng thái · ô gửi đề nghị lùi hạn · Xoá · Duyệt lùi hạn
+ * ẩn với tài khoản thiếu khoá tương ứng. ĐÓ LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP: mỗi tuyến khai
+ * `RequirePermission` và kiểm trên TỪNG yêu cầu (luật 5, cấm #1). Phần ĐỌC vẫn không có cổng ở
+ * client — thiếu `task.read` thì câu 403 của máy chủ ra nguyên văn, cùng khuôn `document.read`.
+ * Lớp hai của ADR 0038 KHÔNG phải một khoá quyền: nó là phép so mã cán bộ với cột trên bản ghi, và
+ * nó vẫn chạy đầy đủ SAU lớp khoá.
  *
  * LỚP CSS: `.man-nhiem-vu` NAY ĐÃ CÓ — `globals.css:920-929`, thêm 23/09/2026 cùng lúc mở mục
  * menu. Khối này trước viết "`.man-nhiem-vu` không tồn tại", đúng lúc viết và hết đúng vài giờ
@@ -242,6 +261,15 @@ function taiCot(
 type BoLoc = Omit<LocNhiemVu, "limit" | "cursor">;
 
 const KHONG_LOC: BoLoc = {};
+
+/**
+ * `useSyncExternalStore` đòi một hàm đăng ký. Màn này CỐ Ý không nghe `popstate`: đường dẫn chỉ là
+ * bộ lọc LÚC MỞ; sau đó bộ lọc sống trong state và màn hình tự ghi nó ra (`replaceState` không bắn
+ * `popstate`). Nút Quay lại vì vậy rời màn chứ không lật lại từng ô lọc — đúng lý do dùng `replace`.
+ */
+function khongTheoDoiDuongDan(): () => void {
+  return () => {};
+}
 
 /** Ba danh mục đổ vào ô chọn, đọc một lần cho cả màn. */
 export type DanhMucNhiemVu = {
@@ -343,7 +371,30 @@ export function chuyenDrawer(s: DrawerNhiemVu | null, v: ViecDrawer): DrawerNhie
 }
 
 export function SoNhiemVu() {
-  const [loc, datLoc] = useState<BoLoc>(KHONG_LOC);
+  /**
+   * BỘ LỌC §3 CÓ HAI NGUỒN, THEO THỨ TỰ: cán bộ đã đổi một ô lọc trên màn (`locDaDoi`) thì đó là
+   * bộ lọc; chưa đổi gì thì bộ lọc là ĐƯỜNG DẪN lúc mở (`locTuDuongDan`) — đúng thứ một đường dẫn
+   * chia sẻ phải mang tới.
+   *
+   * `chuoiDuongDan` LÀ `null` Ở MÁY CHỦ VÀ LÚC HYDRATE (`useSyncExternalStore`, ảnh chụp máy chủ
+   * `null`): máy chủ không có `window`, và đọc `location` sớm ở client là HTML hai bên lệch nhau.
+   * KHÔNG LƯỢT ĐỌC SỔ NÀO CHẠY KHI NÓ CÒN `null` (`daDocDuongDan`): đọc sổ ngay với bộ lọc rỗng là
+   * HAI lượt đọc, và lượt không lọc về SAU sẽ vẽ cả quyển sổ dưới những ô lọc đang nói là một lát cắt.
+   */
+  const [locDaDoi, datLocDaDoi] = useState<BoLoc | null>(null);
+  const chuoiDuongDan = useSyncExternalStore(
+    khongTheoDoiDuongDan,
+    () => window.location.search,
+    () => null,
+  );
+  // `useMemo` vì `locTuDuongDan` trả một đối tượng MỚI mỗi lần gọi: không nhớ thì mỗi lần vẽ là một
+  // `loc` mới, và ba `useEffect` đọc sổ theo `loc` sẽ gọi mạng lại ở mọi lần vẽ.
+  const locDuongDan = useMemo(
+    () => (chuoiDuongDan === null ? null : locTuDuongDan(chuoiDuongDan)),
+    [chuoiDuongDan],
+  );
+  const loc: BoLoc = locDaDoi ?? locDuongDan ?? KHONG_LOC;
+  const daDocDuongDan = locDaDoi !== null || locDuongDan !== null;
   const [tim, datTim] = useState("");
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
   const [lanTai, datLanTai] = useState(0);
@@ -376,7 +427,27 @@ export function SoNhiemVu() {
   // gì làm câu trả lời cũ hết hiệu lực.
   const khoaKanban = `${JSON.stringify(loc)}|${lanTai}`;
 
+  /**
+   * GHI bộ lọc lên thanh địa chỉ mỗi lần CÁN BỘ đổi nó — `history.replaceState`, KHÔNG
+   * `router.replace`. Chưa đổi gì thì không ghi: đường dẫn lúc mở đang đúng là bộ lọc đang hiện.
+   *
+   * `router.replace` là một lượt điều hướng mềm: trang này `force-dynamic`, nên mỗi lần tick một ô
+   * lọc là một lượt máy chủ dựng lại trang và đọc lại cấu hình xã chỉ để đổi thanh địa chỉ.
+   * `replaceState` thì App Router của Next đồng bộ sẵn (từ 14.1) mà không gọi máy chủ. `replace`,
+   * không `push`: mỗi ô lọc là một mục lịch sử thì nút Quay lại phải bấm mười lần mới rời được màn.
+   *
+   * GIỮ `#…`: liên kết `#hang-cho-lui-han` của drawer dùng neo, và ghi đè mất nó là cắt đường ấy.
+   */
   useEffect(() => {
+    if (locDaDoi === null) return;
+    const chuoi = duongDanTuLoc(locDaDoi);
+    const { pathname, search, hash } = window.location;
+    const moi = `${pathname}${chuoi === "" ? "" : `?${chuoi}`}${hash}`;
+    if (moi !== `${pathname}${search}${hash}`) window.history.replaceState(null, "", moi);
+  }, [locDaDoi]);
+
+  useEffect(() => {
+    if (!daDocDuongDan) return;
     // CHỈ ĐỌC CHẾ ĐỘ ĐANG XEM. Không có dòng này thì mỗi lần đổi bộ lọc trên Kanban là SÁU lời gọi
     // thay vì năm, và lời gọi thứ sáu đọc một trang không ai vẽ ra.
     if (cheDoXem !== "danh-sach") return;
@@ -387,7 +458,7 @@ export function SoNhiemVu() {
     return () => {
       bo = true;
     };
-  }, [loc, nganXep.hienTai, khoa, cheDoXem]);
+  }, [loc, nganXep.hienTai, khoa, cheDoXem, daDocDuongDan]);
 
   /**
    * KANBAN ĐỌC CÙNG TUYẾN VÀ CÙNG BỘ LỌC VỚI DANH SÁCH — qua đúng `laySoNhiemVu`, nên mười tên
@@ -399,7 +470,7 @@ export function SoNhiemVu() {
    * phân trang trông y hệt một cột rỗng vì xã không có việc nào.
    */
   useEffect(() => {
-    if (cheDoXem !== "kanban") return;
+    if (!daDocDuongDan || cheDoXem !== "kanban") return;
     let bo = false;
     const ds = cotPhaiDoc(loc.trangThai);
     Promise.all(
@@ -413,7 +484,7 @@ export function SoNhiemVu() {
     return () => {
       bo = true;
     };
-  }, [loc, khoaKanban, cheDoXem]);
+  }, [loc, khoaKanban, cheDoXem, daDocDuongDan]);
 
   // NĂM DANH MỤC, ĐỌC MỘT LẦN CHO CẢ MÀN. Một danh mục hỏng thì ô lọc tương ứng rỗng — KHÔNG làm
   // hỏng quyển sổ: năm câu trả lời rời nhau, mỗi cái nói chuyện của nó. Riêng nhãn trạng thái
@@ -467,6 +538,11 @@ export function SoNhiemVu() {
   // FAIL CLOSED: chưa đọc xong phiên, hoặc đọc hỏng, thì KHÔNG có mã cán bộ — và không có mã thì
   // không so được với `lanh_dao_giao_viec_ma`, nên nút duyệt lùi hạn ẩn (luật 1, cấm #1).
   const maNguoiDangNhap = phien !== null && phien.ok ? phien.duLieu.staff.code : "";
+  // Cùng chiều FAIL CLOSED: phiên chưa đọc xong hoặc đọc hỏng thì MỌI cổng nút đóng.
+  const quyen = quyenNhiemVu(phien !== null && phien.ok ? phien.duLieu.permissions : null);
+  // Bảng tra họ tên theo mã — dựng MỘT LẦN mỗi lần danh bạ về, dùng chung cho thẻ, dòng và drawer.
+  // Không gọi mạng thêm lần nào: danh bạ đã đọc một lần cho cả màn ở khối danh mục trên.
+  const danhBaMa = useMemo(() => danhBaChoNhatKy(kqDanhBa), [kqDanhBa]);
 
   const so = taiTu(daTai, khoa);
   const cotKanban: readonly CotKanban[] = cotPhaiDoc(loc.trangThai).map((ma) => ({
@@ -478,7 +554,7 @@ export function SoNhiemVu() {
 
   /** Đổi bộ lọc là về trang đầu: con trỏ của bộ lọc cũ không có nghĩa với bộ lọc mới. */
   function datLocMoi(moi: BoLoc): void {
-    datLoc(moi);
+    datLocDaDoi(moi);
     datNganXep(TRANG_DAU);
   }
 
@@ -509,21 +585,23 @@ export function SoNhiemVu() {
 
       <CanhBaoNhanTrangThai canhBao={canhBaoNhanTT} />
 
-      <div className="cum-nut">
-        <button
-          type="button"
-          className="nut-chinh"
-          onClick={() => {
-            datMoFormTao((m) => !m);
-            datLoiGhi(null);
-          }}
-          aria-expanded={moFormTao}
-        >
-          {moFormTao ? "Đóng biểu mẫu giao việc" : "+ Giao việc mới"}
-        </button>
-      </div>
+      {quyen.giaoViec && (
+        <div className="cum-nut">
+          <button
+            type="button"
+            className="nut-chinh"
+            onClick={() => {
+              datMoFormTao((m) => !m);
+              datLoiGhi(null);
+            }}
+            aria-expanded={moFormTao}
+          >
+            {moFormTao ? "Đóng biểu mẫu giao việc" : "+ Giao việc mới"}
+          </button>
+        </div>
+      )}
 
-      {moFormTao && (
+      {moFormTao && quyen.giaoViec && (
         <FormGiaoViec
           danhMuc={danhMuc}
           danhBa={kqDanhBa}
@@ -555,8 +633,9 @@ export function SoNhiemVu() {
       {/* §5.8 — quyết định lùi hạn. Một MỤC trên sổ chứ không trong drawer: tuyến hàng chờ không
           lọc được theo nhiệm vụ (xem `HÀNG CHỜ DUYỆT LÙI HẠN`, `nhan-nhiem-vu.ts`). */}
       <HangChoLuiHan
-        danhBa={danhBaChoNhatKy(kqDanhBa)}
+        danhBa={danhBaMa}
         maNguoiDangNhap={maNguoiDangNhap}
+        coQuyenDuyetGiaHan={quyen.duyetGiaHan}
         lanLamMoi={lanHangCho}
         moNhiemVu={(ma) =>
           layNhiemVu(ma).then((kq) => {
@@ -610,6 +689,7 @@ export function SoNhiemVu() {
         <BangKanban
           cot={cotKanban}
           danhMuc={danhMuc}
+          danhBa={danhBaMa}
           nhanTT={nhanTT}
           bayGio={new Date()}
           maDangMo={maDrawer}
@@ -632,6 +712,7 @@ export function SoNhiemVu() {
           <BangNhiemVu
             nhiemVu={so.duLieu.items}
             danhMuc={danhMuc}
+            danhBa={danhBaMa}
             nhanTT={nhanTT}
             tenBoPhan={tenBoPhan}
             bayGio={new Date()}
@@ -677,6 +758,7 @@ export function SoNhiemVu() {
           lanLamMoiNhatKy={drawer.luotDoc}
           bayGio={new Date()}
           maNguoiDangNhap={maNguoiDangNhap}
+          quyen={quyen}
           dangGui={dangGui}
           loiGhi={loiGhi}
           dong={() => {
@@ -1016,6 +1098,7 @@ export type CotKanban = {
 export function BangKanban({
   cot,
   danhMuc,
+  danhBa = null,
   nhanTT,
   bayGio,
   maDangMo,
@@ -1023,6 +1106,8 @@ export function BangKanban({
 }: {
   cot: readonly CotKanban[];
   danhMuc: DanhMucNhiemVu;
+  /** Danh bạ tra theo mã — họ tên người thực hiện trên thẻ. `null` = chưa có, thẻ hiện mã. */
+  danhBa?: DanhBaTheoMa | null;
   /**
    * Nhãn và thứ tự của xã: tên cột VÀ thứ tự cột. §4.1 cố định năm cột chính; thứ tự năm cột ấy
    * theo `order` xã đặt (`theoThuTuXa`). Xếp Ở ĐÂY chứ không ở chỗ gọi, để thứ tự vẽ ra kiểm được
@@ -1085,6 +1170,7 @@ export function BangKanban({
                       <TheNhiemVu
                         nhiemVu={n}
                         danhMuc={danhMuc}
+                        danhBa={danhBa}
                         nhanTT={nhanTT}
                         bayGio={bayGio}
                         maDangMo={maDangMo}
@@ -1120,6 +1206,7 @@ export function BangKanban({
 export function TheNhiemVu({
   nhiemVu,
   danhMuc,
+  danhBa = null,
   nhanTT,
   bayGio,
   maDangMo,
@@ -1127,6 +1214,8 @@ export function TheNhiemVu({
 }: {
   nhiemVu: petitions_nhiemVuRa;
   danhMuc: DanhMucNhiemVu;
+  /** Xem `BangKanban`. Mã không có trong danh bạ thì hiện MÃ, không bao giờ để trống. */
+  danhBa?: DanhBaTheoMa | null;
   nhanTT: BangNhanTrangThai;
   bayGio: Date;
   maDangMo: string | null;
@@ -1146,7 +1235,7 @@ export function TheNhiemVu({
         {nhanHanThe(nhiemVu.due_at, bayGio)}
       </p>
       <p className="dong-phu">
-        {nhiemVu.assignee === "" ? CHUA_PHAN_CONG : nhiemVu.assignee} ·{" "}
+        {nhanCanBoNgan(nhiemVu.assignee, danhBa, CHUA_PHAN_CONG)} ·{" "}
         {nhanDanhMuc(danhMuc.mucUuTien, nhiemVu.priority)}
       </p>
       {hoanThanhTreHan(nhiemVu.completed_at, nhiemVu.original_due_at) && (
@@ -1167,6 +1256,20 @@ export function TheNhiemVu({
 }
 
 /**
+ * Nền hồng rất nhạt của hàng quá hạn (§4.2).
+ *
+ * MỘT GIÁ TRỊ INLINE, KHÔNG PHẢI MỘT LỚP CSS, và đó là giới hạn của lượt này chứ không phải một lựa
+ * chọn đáng giữ: lượt này không được sửa `globals.css`. `#fef3f2` là CÙNG màu nền `.khoi-chua-khai`
+ * đang dùng (`globals.css`), nên không thêm màu mới nào vào bảng màu. Ngày có lớp `.dong-qua-han`
+ * thì thay hằng này bằng lớp ấy — `data-tre-han` trên dòng đã là chỗ bám sẵn cho nó.
+ *
+ * MÀU KHÔNG PHẢI TÍN HIỆU DUY NHẤT (a11y): cùng dòng ấy, cột Hạn đã có chữ `(trễ N ngày)`. Độ tương
+ * phản của chữ đỏ `--do-loi` (`#b42318`) trên `#fef3f2` khoảng 6:1, trên ngưỡng 4.5:1; chữ thường
+ * còn tối hơn.
+ */
+const NEN_DONG_TRE_HAN = { backgroundColor: "#fef3f2" } as const;
+
+/**
  * Bảng Danh sách §4.2.
  *
  * KHÔNG CÓ CỘT Ô TICK: `Xoá đã chọn` không có tuyến nào (xem `PHAN_CHUA_DUNG`), và một ô tick
@@ -1174,10 +1277,13 @@ export function TheNhiemVu({
  *
  * KHÔNG CÓ CHIP `{n} việc con`: phản hồi không mang số việc con, và đếm trong trang đang mở cho ra
  * một con số PHỤ THUỘC VÀO TRANG.
+ *
+ * HÀNG QUÁ HẠN TÔ NỀN HỒNG RẤT NHẠT (§4.2) — xem `NEN_DONG_TRE_HAN`.
  */
 export function BangNhiemVu({
   nhiemVu,
   danhMuc,
+  danhBa = null,
   nhanTT,
   tenBoPhan,
   bayGio,
@@ -1186,6 +1292,8 @@ export function BangNhiemVu({
 }: {
   nhiemVu: readonly petitions_nhiemVuRa[];
   danhMuc: DanhMucNhiemVu;
+  /** Danh bạ tra theo mã — cột `Người thực hiện`. `null` = chưa có, cột hiện mã. */
+  danhBa?: DanhBaTheoMa | null;
   nhanTT: BangNhanTrangThai;
   tenBoPhan: ReadonlyMap<string, string>;
   bayGio: Date;
@@ -1215,13 +1323,19 @@ export function BangNhiemVu({
           {nhiemVu.map((n) => {
             const o = oHan(n.due_at, bayGio);
             return (
-              <tr key={n.code}>
+              <tr
+                key={n.code}
+                // SUY RA từ `due_at` so với bây giờ — cùng phép `oHan` cột Hạn dùng, không đọc cột
+                // cờ nào (luật 10, bất biến 3). Nên nền hồng và chữ `(trễ N ngày)` không lệch nhau.
+                data-tre-han={o.phanTre !== "" ? "" : undefined}
+                style={o.phanTre !== "" ? NEN_DONG_TRE_HAN : undefined}
+              >
                 <td className="ma-muc">{n.code}</td>
                 <td>
                   {n.title}
                   <span className="dong-phu">{nhanNguonGiao(n.source)}</span>
                 </td>
-                <td>{n.assignee === "" ? CHUA_PHAN_CONG : n.assignee}</td>
+                <td>{nhanCanBoNgan(n.assignee, danhBa, CHUA_PHAN_CONG)}</td>
                 <td>{n.unit === "" ? O_TRONG : (tenBoPhan.get(n.unit) ?? n.unit)}</td>
                 <td>{nhanDanhMuc(danhMuc.mucUuTien, n.priority)}</td>
                 <td>
@@ -1273,6 +1387,7 @@ export function ChiTietNhiemVu({
   lanLamMoiNhatKy = 0,
   bayGio,
   maNguoiDangNhap,
+  quyen,
   dangGui,
   loiGhi,
   dong,
@@ -1304,6 +1419,11 @@ export function ChiTietNhiemVu({
   bayGio: Date;
   /** `phien.staff.code` — mã nghiệp vụ `CB-…`, rỗng khi chưa đọc được phiên. */
   maNguoiDangNhap: string;
+  /**
+   * Cổng từng nút theo khoá `task.*` của phiên — `quyenNhiemVu`. BẮT BUỘC, không tuỳ chọn: một bên
+   * gọi quên truyền thì `tsc` đỏ, thay vì một mặc định lặng lẽ mở (hay đóng) mọi nút.
+   */
+  quyen: QuyenNhiemVu;
   dangGui: boolean;
   loiGhi: string | null;
   dong: () => void;
@@ -1325,16 +1445,17 @@ export function ChiTietNhiemVu({
 
   const o = oHan(nhiemVu.due_at, bayGio);
   const giaiThich = cauGiaiThichTrangThai(nhiemVu.status);
+  const danhBaMa = danhBaChoNhatKy(danhBa);
   const congDuyet = quyetDinhDuyetLuiHan(
     maNguoiDangNhap,
     nhiemVu.assigner,
-    // ⚠ LỚP MỘT (`task.extend`) TRUYỀN VÀO `true` VÌ MÀN HÌNH CHƯA ĐỌC ĐƯỢC KHOÁ NÀO — xem
-    // `PHAN_CHUA_DUNG`. Hệ quả có giới hạn và được nói thẳng: lãnh đạo được ghi trên bản ghi mà
-    // THIẾU `task.extend` sẽ thấy nút rồi nhận nguyên văn câu 403 của máy chủ. Lớp hai — phép so
-    // mã cán bộ của ADR 0038 — vẫn chạy đủ ngay dưới đây, và nó là lớp mà một khoá quyền không
-    // diễn đạt được.
-    true,
+    // LỚP MỘT — `task.extend` của PHIÊN. Có khoá CHƯA ĐỦ: lớp hai (ADR 0038, phép so mã cán bộ với
+    // `lanh_dao_giao_viec_ma` của chính bản ghi này) vẫn chạy ngay trong hàm, và máy chủ quyết
+    // lại cả hai trong giao dịch.
+    quyen.duyetGiaHan,
   );
+  const buocChuyen = MOI_TRANG_THAI.filter((t) => chuyenSangDuoc(nhiemVu.status, t));
+  const buocBamDuoc = buocChuyen.filter((t) => duocBamChuyen(quyen, t));
 
   return (
     <div className="khoi-chi-tiet" aria-labelledby="tieu-de-chi-tiet-nhiem-vu">
@@ -1351,7 +1472,7 @@ export function ChiTietNhiemVu({
         {nhiemVu.unit === ""
           ? CHUA_GIAO_BO_PHAN
           : (tenBoPhan.get(nhiemVu.unit) ?? nhiemVu.unit)}{" "}
-        · {nhiemVu.assignee === "" ? CHUA_PHAN_CONG : nhiemVu.assignee}
+        · {nhanCanBoDrawer(nhiemVu.assignee, danhBaMa, CHUA_PHAN_CONG)}
       </p>
 
       {/* ── DẢI BƯỚC §5.2 ─────────────────────────────────────────────────────────────────
@@ -1411,7 +1532,7 @@ export function ChiTietNhiemVu({
           {nhiemVu.unit === ""
             ? CHUA_GIAO_BO_PHAN
             : (tenBoPhan.get(nhiemVu.unit) ?? nhiemVu.unit)}{" "}
-          · {nhiemVu.assignee === "" ? CHUA_PHAN_CONG : nhiemVu.assignee}
+          · {nhanCanBoDrawer(nhiemVu.assignee, danhBaMa, CHUA_PHAN_CONG)}
         </dd>
 
         <dt>Mức ưu tiên</dt>
@@ -1439,7 +1560,7 @@ export function ChiTietNhiemVu({
         </dd>
 
         <dt>Lãnh đạo giao việc</dt>
-        <dd>{nhiemVu.assigner === "" ? O_TRONG : nhiemVu.assigner}</dd>
+        <dd>{nhanCanBoDrawer(nhiemVu.assigner, danhBaMa, O_TRONG)}</dd>
 
         <dt>Cơ quan chủ trì tham mưu</dt>
         <dd>
@@ -1449,7 +1570,7 @@ export function ChiTietNhiemVu({
         </dd>
 
         <dt>Chuyên viên theo dõi</dt>
-        <dd>{nhiemVu.monitor === "" ? O_TRONG : nhiemVu.monitor}</dd>
+        <dd>{nhanCanBoDrawer(nhiemVu.monitor, danhBaMa, O_TRONG)}</dd>
 
         <dt>Mô tả nhiệm vụ</dt>
         <dd>{nhiemVu.description === "" ? O_TRONG : nhiemVu.description}</dd>
@@ -1478,6 +1599,8 @@ export function ChiTietNhiemVu({
           tai={vanBan}
           nhiemVu={nhiemVu}
           tenBoPhan={tenBoPhan}
+          danhBa={danhBaMa}
+          coQuyenSua={quyen.capNhat}
           luu={suaKhoiVanBan}
           docLai={docLaiChiTiet}
         />
@@ -1489,7 +1612,7 @@ export function ChiTietNhiemVu({
         key={nhiemVu.code}
         maNhiemVu={nhiemVu.code}
         nhanTT={nhanTT}
-        danhBa={danhBaChoNhatKy(danhBa)}
+        danhBa={danhBaMa}
         tenBoPhan={tenBoPhan}
         lanLamMoi={lanLamMoiNhatKy}
       />
@@ -1506,48 +1629,59 @@ export function ChiTietNhiemVu({
 
           BƯỚC `hoan-thanh` VẪN HIỆN KỂ CẢ KHI CÒN VIỆC CON: màn hình không biết có việc con hay
           không (phản hồi không mang số ấy), và câu từ chối của máy chủ LIỆT KÊ MÃ việc con còn
-          lại — thông tin cán bộ cần, và là thông tin màn hình không tự dựng được. */}
-      <div className="form-danh-muc">
-        <h4>Chuyển trạng thái</h4>
-        <div className="o-nhap">
-          <label htmlFor="ghi-chu-chuyen-trang-thai">Ghi chú (không bắt buộc)</label>
-          <input
-            id="ghi-chu-chuyen-trang-thai"
-            name="ghi-chu-chuyen-trang-thai"
-            value={ghiChuChuyen}
-            autoComplete="off"
-            onChange={(e) => datGhiChuChuyen(e.target.value)}
-          />
+          lại — thông tin cán bộ cần, và là thông tin màn hình không tự dựng được.
+
+          CẢ KHỐI ĐỨNG SAU `task.update` — khoá tuyến `…/status` khai. Bước `hoan-thanh` đòi THÊM
+          `task.approve` (`duocBamChuyen`); thiếu khoá ấy thì nút ẩn và câu dưới nói vì sao, để cán
+          bộ không tưởng vòng đời thiếu bước. */}
+      {quyen.capNhat && (
+        <div className="form-danh-muc">
+          <h4>Chuyển trạng thái</h4>
+          <div className="o-nhap">
+            <label htmlFor="ghi-chu-chuyen-trang-thai">Ghi chú (không bắt buộc)</label>
+            <input
+              id="ghi-chu-chuyen-trang-thai"
+              name="ghi-chu-chuyen-trang-thai"
+              value={ghiChuChuyen}
+              autoComplete="off"
+              onChange={(e) => datGhiChuChuyen(e.target.value)}
+            />
+          </div>
+          <div className="cum-nut">
+            {buocBamDuoc.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className="nut-phu"
+                disabled={dangGui}
+                onClick={() => doiTrangThai(t, ghiChuChuyen.trim())}
+              >
+                Chuyển sang {nhanTrangThai(nhanTT, t)}
+              </button>
+            ))}
+          </div>
+          {buocChuyen.includes("hoan-thanh") && !buocBamDuoc.includes("hoan-thanh") && (
+            <p className="ghi-chu">{CAU_THIEU_QUYEN_DUYET_HOAN_THANH}</p>
+          )}
+          {buocChuyen.length === 0 && (
+            <p className="trang-thai-rong">
+              Vòng đời §6 không có lối ra khỏi trạng thái này — nhiệm vụ khép lại tại đây.
+            </p>
+          )}
         </div>
-        <div className="cum-nut">
-          {MOI_TRANG_THAI.filter((t) => chuyenSangDuoc(nhiemVu.status, t)).map((t) => (
-            <button
-              key={t}
-              type="button"
-              className="nut-phu"
-              disabled={dangGui}
-              onClick={() => doiTrangThai(t, ghiChuChuyen.trim())}
-            >
-              Chuyển sang {nhanTrangThai(nhanTT, t)}
-            </button>
-          ))}
-        </div>
-        {MOI_TRANG_THAI.filter((t) => chuyenSangDuoc(nhiemVu.status, t)).length === 0 && (
-          <p className="trang-thai-rong">
-            Vòng đời §6 không có lối ra khỏi trạng thái này — nhiệm vụ khép lại tại đây.
-          </p>
-        )}
-      </div>
+      )}
 
       <KhoiLuiHan
         congDuyet={congDuyet}
+        coQuyenDeNghi={quyen.capNhat}
         hanHienTai={nhiemVu.due_at}
         dangGui={dangGui}
         guiDeNghi={guiDeNghiLuiHan}
         quyetDinh={quyetDinh}
       />
 
-      {/* ── XOÁ MỀM §11.5 ────────────────────────────────────────────────────────────────── */}
+      {/* ── XOÁ MỀM §11.5 — `task.delete` ─────────────────────────────────────────────────── */}
+      {quyen.xoa && (
       <form
         className="form-danh-muc"
         onSubmit={(e) => {
@@ -1574,6 +1708,7 @@ export function ChiTietNhiemVu({
           Xoá nhiệm vụ
         </button>
       </form>
+      )}
     </div>
   );
 }
@@ -1599,12 +1734,18 @@ export function KhoiVanBanChiDao({
   tai,
   nhiemVu,
   tenBoPhan,
+  danhBa = null,
+  coQuyenSua,
   luu,
   docLai,
 }: {
   tai: TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
   nhiemVu: petitions_nhiemVuRa;
   tenBoPhan: ReadonlyMap<string, string>;
+  /** Danh bạ tra theo mã — họ tên chuyên viên theo dõi trong form sửa. */
+  danhBa?: DanhBaTheoMa | null;
+  /** `task.update` — khoá của `PATCH /api/v1/tasks/{ma}`. Thiếu thì KHÔNG vẽ nút `✎ Sửa`. */
+  coQuyenSua: boolean;
   luu: (than: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
   docLai: () => Promise<KetQua<petitions_nhiemVuRa>>;
 }) {
@@ -1621,7 +1762,7 @@ export function KhoiVanBanChiDao({
   const lyDoKhoa = lyDoKhoaSua(tai);
   // PHẢI CÓ ĐỦ BA ĐIỀU cùng lúc. Khối rời pha `xong` giữa chừng (đọc lại hỏng) thì form tự ẩn —
   // không sửa tiếp trên một tập máy chủ vừa không xác nhận được.
-  const hienForm = dangSua && tai.pha === "xong" && lyDoKhoa === null;
+  const hienForm = coQuyenSua && dangSua && tai.pha === "xong" && lyDoKhoa === null;
 
   function thoatSua() {
     traTieuDiem.current = true;
@@ -1632,7 +1773,7 @@ export function KhoiVanBanChiDao({
     <div className="form-danh-muc" aria-labelledby="tieu-de-khoi-van-ban">
       <div className="dau-khoi-chi-tiet">
         <h4 id="tieu-de-khoi-van-ban">{TIEU_DE_KHOI_VAN_BAN}</h4>
-        {!hienForm && (
+        {!hienForm && coQuyenSua && (
           <button
             ref={nutSua}
             type="button"
@@ -1646,7 +1787,7 @@ export function KhoiVanBanChiDao({
           </button>
         )}
       </div>
-      {!hienForm && lyDoKhoa !== null && (
+      {!hienForm && coQuyenSua && lyDoKhoa !== null && (
         <p id="ly-do-khoa-sua-van-ban" className="ghi-chu">
           {lyDoKhoa}
         </p>
@@ -1657,6 +1798,7 @@ export function KhoiVanBanChiDao({
           nhiemVu={nhiemVu}
           vanBan={tai.duLieu}
           tenBoPhan={tenBoPhan}
+          danhBa={danhBa}
           luu={luu}
           docLai={docLai}
           xong={thoatSua}
@@ -1726,6 +1868,7 @@ export function FormSuaKhoiVanBan({
   nhiemVu,
   vanBan,
   tenBoPhan,
+  danhBa = null,
   luu,
   docLai,
   xong,
@@ -1733,6 +1876,8 @@ export function FormSuaKhoiVanBan({
   nhiemVu: petitions_nhiemVuRa;
   vanBan: readonly petitions_nhiemVuVanBanRa[];
   tenBoPhan: ReadonlyMap<string, string>;
+  /** Danh bạ tra theo mã — ô chỉ đọc `Chuyên viên…`. `null` = chưa có, hiện mã. */
+  danhBa?: DanhBaTheoMa | null;
   luu: (than: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
   /**
    * Đọc lại chi tiết NGAY TRƯỚC một lần lưu có `documents` — xem `vanBanDaDoiOMayChu`. Thu hẹp khe
@@ -1854,7 +1999,7 @@ export function FormSuaKhoiVanBan({
         <dt>Cơ quan chủ trì tham mưu</dt>
         <dd>{tenCoQuanChuTri}</dd>
         <dt>Chuyên viên Văn phòng tham mưu / theo dõi</dt>
-        <dd>{nhiemVu.monitor === "" ? O_TRONG : nhiemVu.monitor}</dd>
+        <dd>{nhanCanBoDrawer(nhiemVu.monitor, danhBa, O_TRONG)}</dd>
       </dl>
       <p className="ghi-chu">{LY_DO_KHONG_SUA_CHU_TRI}</p>
 
@@ -1952,7 +2097,8 @@ export function FormSuaKhoiVanBan({
  * HAI NỬA CỦA KHỐI NÀY ĐỨNG SAU HAI KHOÁ KHÁC NHAU, và gộp chúng là làm hỏng đúng điều ADR 0038
  * dựng ra:
  *
- *   gửi đề nghị     `task.update` — việc của NGƯỜI ĐANG LÀM. Ô này luôn hiện.
+ *   gửi đề nghị     `task.update` — việc của NGƯỜI ĐANG LÀM. Ô này hiện với MỌI người cầm khoá
+ *                   ấy, dù họ có `task.extend` hay không.
  *   duyệt / từ chối `task.extend` ở cổng **và** đúng người ghi ở `lanh_dao_giao_viec_ma`.
  *
  * Bỏ lớp thứ hai thì **mọi lãnh đạo cầm khoá duyệt được mọi nhiệm vụ của cả xã**, kể cả của bộ
@@ -1962,12 +2108,18 @@ export function FormSuaKhoiVanBan({
  */
 export function KhoiLuiHan({
   congDuyet,
+  coQuyenDeNghi,
   hanHienTai,
   dangGui,
   guiDeNghi,
   quyetDinh,
 }: {
   congDuyet: ReturnType<typeof quyetDinhDuyetLuiHan>;
+  /**
+   * `task.update` — khoá của tuyến GỬI đề nghị (`POST …/extensions`). KHÔNG PHẢI `task.extend`:
+   * gắn ô đề nghị sau khoá duyệt là "chỉ người duyệt được mới xin được" (ADR 0038).
+   */
+  coQuyenDeNghi: boolean;
   hanHienTai: string | null;
   dangGui: boolean;
   guiDeNghi: (hanMoiISO: string, lyDo: string) => Promise<KetQua<petitions_deNghiLuiHanRa>>;
@@ -2004,7 +2156,7 @@ export function KhoiLuiHan({
         </p>
       )}
 
-      {hanHienTai !== null && (
+      {hanHienTai !== null && coQuyenDeNghi && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -2169,12 +2321,17 @@ export function FormGiaoViec({
 }) {
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
   const [tuSinhMa, datTuSinhMa] = useState(true);
+  /**
+   * `null` = cán bộ CHƯA ĐỤNG ô ưu tiên → ô theo mức mặc định của xã (`mucUuTienMacDinh`). Tách
+   * khỏi `""` có chủ ý: `""` là cán bộ CHỦ ĐỘNG chọn `— Chưa xác định —`, và lựa chọn ấy không được
+   * bị mức mặc định đè lại. Danh mục về SAU lúc form mở cũng vì thế vẫn chọn sẵn đúng mức mặc định.
+   */
+  const [mucUuTienDaChon, datMucUuTien] = useState<string | null>(null);
   const [ma, datMa] = useState("");
   const [loai, datLoai] = useState("");
   const [khoi, datKhoi] = useState("");
   const [tieuDe, datTieuDe] = useState(tieuDeCoSan ?? "");
   const [moTa, datMoTa] = useState("");
-  const [mucUuTien, datMucUuTien] = useState("");
   const [boPhan, datBoPhan] = useState("");
   const [nguoiThucHien, datNguoiThucHien] = useState("");
   const [lanhDaoGiaoViec, datLanhDaoGiaoViec] = useState("");
@@ -2197,6 +2354,9 @@ export function FormGiaoViec({
   // loại `Theo văn bản` là mặc định, nhưng đó là một dòng danh mục xã sửa được.
   const loaiMacDinh = danhMuc.loai.find((l) => l.is_default)?.code ?? "";
   const loaiChon = loai === "" ? loaiMacDinh : loai;
+  // §7.1 `Thường (mặc định)` — nhưng "Thường" là một dòng danh mục CỦA XÃ, không phải một chữ nung
+  // vào đây. Xã chưa đặt dòng mặc định nào thì ô đứng ở `— Chưa xác định —`.
+  const mucUuTien = mucUuTienDaChon ?? mucUuTienMacDinh(danhMuc.mucUuTien);
   const theoVanBan = coKhoiVanBanChiDao(loaiChon);
   const hienVanBan = theoVanBan && coDanhSachVanBan;
   const chanVanBan = hienVanBan ? canhBaoVanBan(vanBan) : null;

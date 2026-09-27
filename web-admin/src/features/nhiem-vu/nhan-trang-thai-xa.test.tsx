@@ -2,6 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { KetQua } from "@/lib/api/goi";
+import {
+  QUYEN_CAP_NHAT_NHIEM_VU,
+  QUYEN_DUYET_GIA_HAN,
+  QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
+  QUYEN_TAO_NHIEM_VU,
+  QUYEN_XOA_NHIEM_VU,
+} from "@/lib/quyen";
 import type {
   petitions_danhSachTrangThaiNhiemVuRa,
   petitions_deNghiLuiHanRa,
@@ -17,6 +24,7 @@ import {
   docBangNhanTrangThai,
   ghiChuKanbanReNhanh,
   nhanHoanThanhTreHan,
+  quyenNhiemVu,
   type BangNhanTrangThai,
 } from "./nhan-nhiem-vu";
 import {
@@ -116,6 +124,14 @@ function nhiemVu(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
 
 const DANH_MUC: DanhMucNhiemVu = { loai: [], mucUuTien: [], khoi: [], boPhan: [] };
 const BAY_GIO = new Date("2026-09-15T03:00:00Z");
+/** Đủ năm khoá ghi — tệp này canh NHÃN trên nút, không canh cổng (cổng ở `so-nhiem-vu.test.tsx`). */
+const DU_QUYEN = quyenNhiemVu([
+  QUYEN_TAO_NHIEM_VU,
+  QUYEN_CAP_NHAT_NHIEM_VU,
+  QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
+  QUYEN_XOA_NHIEM_VU,
+  QUYEN_DUYET_GIA_HAN,
+]);
 const KHONG_GOI = (): Promise<KetQua<petitions_deNghiLuiHanRa>> =>
   Promise.resolve({ ok: false, thongBao: "không gọi" });
 const KHONG_SUA = (): Promise<KetQua<petitions_nhiemVuRa>> =>
@@ -151,6 +167,7 @@ function veChiTiet(nhanTT: BangNhanTrangThai, status: string): string {
       tenBoPhan={new Map()}
       bayGio={BAY_GIO}
       maNguoiDangNhap=""
+      quyen={DU_QUYEN}
       dangGui={false}
       loiGhi={null}
       dong={() => {}}

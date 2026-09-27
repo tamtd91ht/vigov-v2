@@ -243,6 +243,31 @@ describe("thẻ nhiệm vụ §4.1", () => {
     expect(veThe({ assignee: "" })).toContain(nhuTrongHTML(CHUA_PHAN_CONG));
   });
 
+  it("danh bạ có người ấy: thẻ hiện HỌ TÊN; mã không có trong danh bạ: thẻ hiện MÃ, không để trống", () => {
+    const danhBa = new Map([
+      [
+        "CB-2026-3H8N2W",
+        { code: "CB-2026-3H8N2W", full_name: "Huỳnh Văn Ba", position: "", department_id: "" },
+      ],
+    ]);
+    const ve = (assignee: string) =>
+      renderToStaticMarkup(
+        <TheNhiemVu
+          nhiemVu={nhiemVu({ assignee })}
+          danhMuc={DANH_MUC}
+          danhBa={danhBa}
+          nhanTT={BANG_NHAN_MAC_DINH}
+          bayGio={BAY_GIO}
+          maDangMo={null}
+          moNhiemVu={() => {}}
+        />,
+      );
+    const coTen = ve("CB-2026-3H8N2W");
+    expect(coTen).toContain("Huỳnh Văn Ba");
+    expect(coTen).not.toContain("CB-2026-3H8N2W ·");
+    expect(ve("CB-2019-NGHIHUU")).toContain("CB-2019-NGHIHUU ·");
+  });
+
   it("chip `Hoàn thành trễ hạn` so với HẠN BAN ĐẦU, không với hạn hiện tại", () => {
     // So với `due_at` thì một lần lùi hạn được duyệt tự xoá dấu vết của chính nó khỏi báo cáo.
     const html = veThe({

@@ -9,6 +9,7 @@ import {
   CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
   CAU_KHONG_AI_DUYET_DUOC,
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
+  CAU_THIEU_QUYEN_DUYET_GIA_HAN,
   DANG_TAI_HANG_CHO,
   ID_HANG_CHO,
   LOC_HANG_CHO_MAC_DINH,
@@ -70,6 +71,8 @@ function ve(
   tuyChon: {
     loc?: LocHangCho;
     maNguoiDangNhap?: string;
+    /** `task.extend` của phiên. Mặc định CÓ — ca thiếu khoá truyền `false` tường minh. */
+    coQuyenDuyetGiaHan?: boolean;
     loiDong?: { id: string; thongBao: string } | null;
     loiThem?: string | null;
     dangQuyet?: string | null;
@@ -82,6 +85,7 @@ function ve(
       tai={tai}
       danhBa={DANH_BA}
       maNguoiDangNhap={tuyChon.maNguoiDangNhap ?? LANH_DAO}
+      coQuyenDuyetGiaHan={tuyChon.coQuyenDuyetGiaHan ?? true}
       dangQuyet={tuyChon.dangQuyet ?? null}
       loiDong={tuyChon.loiDong ?? null}
       loiMo={null}
@@ -120,7 +124,7 @@ describe("bộ lọc — mặc định `Chờ tôi duyệt`, và tham số đi l
 
 describe("dòng hàng chờ → chữ", () => {
   it("hạn đang có vs hạn đề nghị theo giờ Việt Nam; người đề nghị và lãnh đạo có họ tên KÈM mã", () => {
-    const h = hienDongHangCho(deNghi(), DANH_BA, LANH_DAO);
+    const h = hienDongHangCho(deNghi(), DANH_BA, LANH_DAO, true);
     expect(h.hanHienTai).toBe("20/6/2026");
     expect(h.hanDeNghi).toBe("15/7/2026");
     expect(h.nguoiDeNghi).toBe(`Nguyễn Thị Thực (${NGUOI_DE_NGHI})`);
@@ -129,28 +133,35 @@ describe("dòng hàng chờ → chữ", () => {
   });
 
   it("danh bạ chưa có: hiện MÃ, không bịa tên; nhiệm vụ không có hạn: dấu gạch", () => {
-    const h = hienDongHangCho(deNghi({ task_due_at: null }), null, LANH_DAO);
+    const h = hienDongHangCho(deNghi({ task_due_at: null }), null, LANH_DAO, true);
     expect(h.nguoiDeNghi).toBe(NGUOI_DE_NGHI);
     expect(h.hanHienTai).toBe(O_TRONG);
   });
 
   it("không ghi lãnh đạo: câu `không ai duyệt được`, KHÔNG phải câu bảo bổ sung", () => {
-    const h = hienDongHangCho(deNghi({ task_assigner: "" }), DANH_BA, LANH_DAO);
+    const h = hienDongHangCho(deNghi({ task_assigner: "" }), DANH_BA, LANH_DAO, true);
     expect(h.cauChan).toBe(CAU_KHONG_AI_DUYET_DUOC);
     expect(h.cauChan).not.toBe(CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC);
     expect(h.lanhDao).toBe(O_TRONG);
   });
 
   it("không ghi lãnh đạo VÀ phiên chưa đọc được: hai chuỗi rỗng KHÔNG khớp nhau", () => {
-    expect(hienDongHangCho(deNghi({ task_assigner: "" }), DANH_BA, "").cauChan).toBe(
+    expect(hienDongHangCho(deNghi({ task_assigner: "" }), DANH_BA, "", true).cauChan).toBe(
       CAU_KHONG_AI_DUYET_DUOC,
     );
   });
 
   it("lãnh đạo khác (bộ lọc Toàn xã): câu lớp hai ADR 0038, không có nút", () => {
-    expect(hienDongHangCho(deNghi(), DANH_BA, NGUOI_KHAC).cauChan).toBe(
+    expect(hienDongHangCho(deNghi(), DANH_BA, NGUOI_KHAC, true).cauChan).toBe(
       CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
     );
+  });
+
+  it("ĐÚNG lãnh đạo nhưng THIẾU `task.extend`: không nút, câu nói thiếu quyền — không phải câu lớp hai", () => {
+    // Lớp một đóng thì tuyến trả 403 trước khi chạm tới quy tắc ADR 0038, nên câu đúng là câu về
+    // QUYỀN. Câu "chỉ lãnh đạo giao việc…" ở đây sẽ nói sai với chính người được ghi trên bản ghi.
+    const h = hienDongHangCho(deNghi(), DANH_BA, LANH_DAO, false);
+    expect(h.cauChan).toBe(CAU_THIEU_QUYEN_DUYET_GIA_HAN);
   });
 });
 
@@ -200,6 +211,16 @@ describe("mục hàng chờ ra tới trang", () => {
     );
     expect(html).not.toContain(NUT_DUYET_NV19);
     expect(html).toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
+  });
+
+  it("CA BỊ TỪ CHỐI: đúng lãnh đạo, phiên THIẾU `task.extend` — không nút, câu thiếu quyền", () => {
+    const html = ve(
+      { pha: "xong", dong: [deNghi()], conNua: false },
+      { coQuyenDuyetGiaHan: false },
+    );
+    expect(html).not.toContain(NUT_DUYET_NV19);
+    expect(html).not.toContain(NUT_TU_CHOI_NV19);
+    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_GIA_HAN));
   });
 
   it("máy chủ từ chối quyết định: câu NGUYÊN VĂN dưới đúng dòng ấy, `role=\"alert\"`", () => {

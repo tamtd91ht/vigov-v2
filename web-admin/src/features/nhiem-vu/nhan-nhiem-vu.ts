@@ -22,9 +22,18 @@
 
 import { danhBaTheoMa, nhanThoiDiem, type DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import type { KetQua } from "@/lib/api/goi";
+import {
+  QUYEN_CAP_NHAT_NHIEM_VU,
+  QUYEN_DUYET_GIA_HAN,
+  QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
+  QUYEN_TAO_NHIEM_VU,
+  QUYEN_XOA_NHIEM_VU,
+  coQuyen,
+} from "@/lib/quyen";
 import type {
   identity_canBoChonNguoiRa,
   identity_danhBaChonNguoiRa,
+  petitions_mucUuTienRa,
   petitions_danhSachTrangThaiNhiemVuRa,
   petitions_deNghiChoDuyetRa,
   petitions_nhatKyNhiemVuRa,
@@ -212,7 +221,7 @@ export function theoThuTuXa<T extends string>(
 
 /**
  * Vòng đời §6 — **BẢN THỨ HAI** của `chuyenDuocSangNhiemVu`
- * (`service-petitions/internal/domain/nhiem_vu.go:77-85`), và cái giá của nó được nói ra ở đây
+ * (`service-petitions/internal/domain/nhiem_vu.go:76-84`), và cái giá của nó được nói ra ở đây
  * chứ không để người sau tự phát hiện.
  *
  * VÌ SAO VẪN CHẤP NHẬN ĐƯỢC: hợp đồng không có tuyến nào phát ra vòng đời, mà §5.2 đòi dải bước
@@ -522,9 +531,23 @@ export type QuyetDinhDuyetLuiHan =
   /** Có khoá, nhưng không phải người được ghi trên bản ghi này. */
   | { readonly hien: false; readonly vi: "khong-phai-lanh-dao-giao-viec"; readonly thongBao: string };
 
+/**
+ * KHÔNG KHUYÊN "HÃY BỔ SUNG", VÀ ĐÓ LÀ LÝ DO CÂU NÀY ĐƯỢC VIẾT LẠI (27/09/2026). Câu cũ bảo cán bộ
+ * bổ sung lãnh đạo giao việc — nhưng `PATCH /api/v1/tasks/{ma}` CỐ Ý không nhận `assigner`
+ * (`petitions_suaNhiemVuVao` không có trường ấy; ADR 0038: cột này CHÍNH LÀ người duyệt, nên người
+ * cầm `task.update` sửa được nó là tự đặt mình làm người duyệt). Một lời khuyên không làm theo được
+ * là một lời khuyên sai, và cán bộ sẽ đi tìm một ô không tồn tại.
+ */
 export const CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC =
-  "Nhiệm vụ này chưa ghi lãnh đạo giao việc nên chưa ai duyệt được đề nghị lùi hạn — hãy bổ sung " +
-  "lãnh đạo giao việc cho nhiệm vụ.";
+  "Nhiệm vụ này không ghi lãnh đạo giao việc, nên không ai duyệt được đề nghị lùi hạn. Lãnh đạo " +
+  "giao việc chỉ ghi được lúc giao việc, không bổ sung được trên màn hình này.";
+
+/**
+ * Tài khoản chưa được cấp quyền `Duyệt gia hạn` (`task.extend`). Nói ra ở hàng chờ, nơi đề nghị
+ * đã hiện sẵn: một dòng mất hai nút mà không một lời là cán bộ tưởng màn hình hỏng.
+ */
+export const CAU_THIEU_QUYEN_DUYET_GIA_HAN =
+  "Tài khoản của bạn chưa được cấp quyền duyệt gia hạn, nên không duyệt hay từ chối được đề nghị này.";
 
 export const CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC =
   "Chỉ lãnh đạo giao việc ghi trên nhiệm vụ này mới duyệt được đề nghị lùi hạn.";
@@ -623,6 +646,203 @@ export function danhBaChoNhatKy(kq: KetQua<identity_danhBaChonNguoiRa> | null): 
   const db = docDanhBaChonNguoi(kq);
   if (db.dangTai || db.loi !== null) return null;
   return danhBaTheoMa(db.ds);
+}
+
+/**
+ * Tên một cán bộ trên thẻ Kanban và cột `Người thực hiện` của bảng §4.2 — HỌ TÊN khi danh bạ có,
+ * còn lại là MÃ `CB-…`. Mã rỗng thì `rong` (`Chưa phân công` hay `—`, tuỳ ô).
+ *
+ * KHÔNG BAO GIỜ TRẢ CHUỖI RỖNG cho một mã có thật. Người đã nghỉ, người bị khoá và mọi lần danh bạ
+ * đọc hỏng đều rơi vào nhánh "không có trong danh bạ" — và ô ấy vẫn phải chỉ ra được đúng một người,
+ * tức là hiện mã. Một ô trống đọc ra là "chưa giao cho ai", đúng điều ngược lại.
+ *
+ * Ô CHẬT THÌ CHỈ HỌ TÊN; drawer thì `Họ tên (CB-…)` qua `nhanNguoiNhatKy` — xem `nhanCanBoDrawer`.
+ */
+export function nhanCanBoNgan(ma: string, danhBa: DanhBaTheoMa | null, rong: string): string {
+  if (ma === "") return rong;
+  const cb = danhBa?.get(ma);
+  return cb === undefined || cb.full_name === "" ? ma : cb.full_name;
+}
+
+/**
+ * Tên một cán bộ trong drawer §5 — `Họ tên (CB-…)`, hoặc mã khi danh bạ không có.
+ *
+ * MÃ CÒN LẠI TRÊN DÒNG vì drawer là chỗ đối chiếu hồ sơ: hai người trùng họ tên thì chỉ mã phân biệt
+ * được (luật 6, bất biến 8). Cùng phép với nhật ký §5.9, nên gọi lại đúng hàm ấy.
+ */
+export function nhanCanBoDrawer(ma: string, danhBa: DanhBaTheoMa | null, rong: string): string {
+  return ma === "" ? rong : nhanNguoiNhatKy(ma, danhBa);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * CỔNG NÚT THEO KHOÁ `task.*` — TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP
+ *
+ * Máy chủ kiểm từng khoá trên TỪNG yêu cầu (`authz.RequirePermission`, luật 5 cấm #1). Việc của
+ * khối này chỉ là để cán bộ không bấm vào một nút chắc chắn trả 403. Nếu nó có ngày trả `true`
+ * sai, hậu quả là một câu 403 nguyên văn trên màn — không phải một lần ghi lọt.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Tài khoản đang đăng nhập được bấm những nút nào của màn Nhiệm vụ. */
+export type QuyenNhiemVu = {
+  /** `+ Giao việc mới` — `task.create`. */
+  readonly giaoViec: boolean;
+  /** `✎ Sửa`, khối Chuyển trạng thái, ô GỬI đề nghị lùi hạn — `task.update`. */
+  readonly capNhat: boolean;
+  /** Bước `Chuyển sang Hoàn thành` — `task.update` VÀ `task.approve`. */
+  readonly duyetHoanThanh: boolean;
+  /** Xoá khỏi sổ — `task.delete`. */
+  readonly xoa: boolean;
+  /** LỚP MỘT của duyệt lùi hạn — `task.extend`. Lớp hai (ADR 0038) vẫn là `quyetDinhDuyetLuiHan`. */
+  readonly duyetGiaHan: boolean;
+};
+
+/**
+ * Danh sách quyền của phiên → cổng từng nút. `null` = phiên chưa đọc xong hoặc đọc hỏng.
+ *
+ * FAIL CLOSED: không đọc được quyền thì MỌI cổng đóng. "Chưa rõ" không được hành xử như "có" (luật
+ * 1, cấm #1). Mỗi khoá so CHÍNH XÁC qua `coQuyen` — không tiền tố, không `task.*` (luật 5, bất biến 3b).
+ *
+ * `duyetHoanThanh` ĐÒI CẢ HAI KHOÁ vì tuyến `…/status` khai `task.update` ở cổng, rồi đòi thêm
+ * `task.approve` cho riêng bước `hoan-thanh`: có `task.approve` mà thiếu `task.update` vẫn là 403 ở cổng.
+ */
+export function quyenNhiemVu(dsQuyen: readonly string[] | null): QuyenNhiemVu {
+  const ds = dsQuyen ?? [];
+  const capNhat = coQuyen(ds, QUYEN_CAP_NHAT_NHIEM_VU);
+  return {
+    giaoViec: coQuyen(ds, QUYEN_TAO_NHIEM_VU),
+    capNhat,
+    duyetHoanThanh: capNhat && coQuyen(ds, QUYEN_DUYET_HOAN_THANH_NHIEM_VU),
+    xoa: coQuyen(ds, QUYEN_XOA_NHIEM_VU),
+    duyetGiaHan: coQuyen(ds, QUYEN_DUYET_GIA_HAN),
+  };
+}
+
+/**
+ * Vòng đời có bước `hoan-thanh` nhưng tài khoản thiếu `task.approve`. Nói ra, vì một nút biến mất
+ * không lời đọc lên là "vòng đời thiếu bước" — cán bộ báo lỗi phần mềm thay vì xin cấp quyền.
+ */
+export const CAU_THIEU_QUYEN_DUYET_HOAN_THANH =
+  "Bước hoàn thành cần quyền duyệt hoàn thành. Tài khoản của bạn chưa được cấp quyền này.";
+
+/** Bước chuyển trạng thái này có cần hiện nút cho tài khoản này không — xem `quyenNhiemVu`. */
+export function duocBamChuyen(quyen: QuyenNhiemVu, sangTrangThai: string): boolean {
+  if (!quyen.capNhat) return false;
+  return sangTrangThai === "hoan-thanh" ? quyen.duyetHoanThanh : true;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * §7.1 — MỨC ƯU TIÊN MẶC ĐỊNH
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Mã mức ưu tiên xã đặt làm MẶC ĐỊNH, hoặc `""` (= `— Chưa xác định —`) khi xã chưa đặt dòng nào.
+ *
+ * KHÔNG GÕ CỨNG `Thường`. §7.1 viết `Thường (mặc định)`, nhưng thang ưu tiên là DANH MỤC CỦA XÃ
+ * (`GET /api/v1/task-priorities`, cột `is_default`): xã đổi tên, đổi mức mặc định, hoặc không có mức
+ * `Thường` nào. Nung chữ ấy vào bundle là một giá trị riêng của xã bị nung vào mã (luật 1, bất biến 10).
+ *
+ * CHỈ DÒNG ĐANG DÙNG. Một dòng mặc định đã ngừng dùng mà vẫn được chọn sẵn là chọn sẵn thứ xã đã bỏ.
+ */
+export function mucUuTienMacDinh(ds: readonly petitions_mucUuTienRa[]): string {
+  return ds.find((m) => m.is_default && m.active)?.code ?? "";
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * §3 — BỘ LỌC ĐỒNG BỘ VÀO ĐƯỜNG DẪN ("nên đồng bộ vào query string để chia sẻ link")
+ *
+ * CHÍN THAM SỐ, ĐÚNG CHÍN BỘ LỌC MÁY CHỦ NHẬN VÀ Ô LỌC ĐANG VẼ — cùng tên với tham số của
+ * `GET /api/v1/tasks` (`petitions_get_tasks["truyVan"]`), để một đường dẫn chia sẻ đọc lên là đúng
+ * câu hỏi gửi máy chủ.
+ *
+ * `q` (Ô TÌM) CỐ Ý KHÔNG LÊN ĐƯỜNG DẪN TRÌNH DUYỆT. Chữ tìm là chữ cán bộ gõ tự do, và tiêu đề
+ * nhiệm vụ có thể mang tên người dân (một việc giao từ phản ánh). Thanh địa chỉ đi vào lịch sử
+ * trình duyệt, vào dấu trang, vào đường dẫn dán sang Zalo — những nơi không ai kiểm soát (luật 3,
+ * cấm #4). Cái giá: một đường dẫn chia sẻ không mang theo từ khoá tìm.
+ *
+ * ĐỌC VÀO THÌ LỌC HẸP, KHÔNG TIN ĐƯỜNG DẪN. Tham số lạ bị bỏ qua. Ba tham số mà máy chủ trả **400**
+ * cho giá trị sai (`status`, `source`, `late`) và `scope` chỉ được nhận đúng giá trị hợp lệ — một
+ * đường dẫn gõ sai không được biến quyển sổ thành một trang lỗi. `scope=related` và `soon` máy chủ
+ * từ chối hẳn (xem `PHAN_CHUA_DUNG`), nên cũng bị bỏ. Năm tham số còn lại máy chủ không kiểm: mã lạ
+ * ⇒ trang rỗng, đúng như ô lọc chọn một mã lạ.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Bộ lọc đồng bộ được — cùng hình với phần lọc của `LocNhiemVu`, TRỪ `tim` (xem khối trên). */
+export type LocTrenDuongDan = {
+  phamVi?: "mine";
+  trangThai?: string;
+  nguonGiao?: string;
+  loai?: string;
+  khoi?: string;
+  mucUuTien?: string;
+  boPhanID?: string;
+  nguoiThucHienMa?: string;
+  chiTreHan?: true;
+};
+
+/** Độ dài tối đa nhận từ đường dẫn cho một mã tự do. Dài hơn là đường dẫn hỏng, không phải một mã. */
+const MA_TREN_DUONG_DAN_TOI_DA = 100;
+
+function maTuDo(v: string | null): string | undefined {
+  if (v === null) return undefined;
+  const s = v.trim();
+  return s === "" || s.length > MA_TREN_DUONG_DAN_TOI_DA ? undefined : s;
+}
+
+/** `?status=…&late=true…` → bộ lọc. Nhận chuỗi `location.search` (có hoặc không có `?`). */
+export function locTuDuongDan(search: string): LocTrenDuongDan {
+  const t = new URLSearchParams(search);
+  const loc: LocTrenDuongDan = {};
+
+  if (t.get("scope") === "mine") loc.phamVi = "mine";
+  const status = t.get("status");
+  if (status !== null && laTrangThaiNhiemVu(status)) loc.trangThai = status;
+  const source = t.get("source");
+  if (source !== null && laNguonGiao(source)) loc.nguonGiao = source;
+  if (t.get("late") === "true") loc.chiTreHan = true;
+
+  const loai = maTuDo(t.get("type"));
+  if (loai !== undefined) loc.loai = loai;
+  const khoi = maTuDo(t.get("bloc"));
+  if (khoi !== undefined) loc.khoi = khoi;
+  const uuTien = maTuDo(t.get("priority"));
+  if (uuTien !== undefined) loc.mucUuTien = uuTien;
+  const boPhan = maTuDo(t.get("unit"));
+  if (boPhan !== undefined) loc.boPhanID = boPhan;
+  const nguoi = maTuDo(t.get("assignee"));
+  if (nguoi !== undefined) loc.nguoiThucHienMa = nguoi;
+
+  return loc;
+}
+
+/**
+ * Bộ lọc → chuỗi truy vấn cho thanh địa chỉ, `""` khi không lọc gì. KHÔNG BAO GIỜ mang `q`.
+ *
+ * Nhận nguyên bộ lọc của màn hình, kể cả `tim`: tham số ấy bị bỏ ở ĐÂY, tại đúng một chỗ, để không
+ * nơi gọi nào phải nhớ bỏ nó.
+ */
+export function duongDanTuLoc(loc: {
+  readonly phamVi?: string;
+  readonly trangThai?: string;
+  readonly nguonGiao?: string;
+  readonly loai?: string;
+  readonly khoi?: string;
+  readonly mucUuTien?: string;
+  readonly boPhanID?: string;
+  readonly nguoiThucHienMa?: string;
+  readonly chiTreHan?: boolean;
+  readonly tim?: string;
+}): string {
+  const t = new URLSearchParams();
+  if (loc.phamVi === "mine") t.set("scope", "mine");
+  if (loc.trangThai) t.set("status", loc.trangThai);
+  if (loc.nguonGiao) t.set("source", loc.nguonGiao);
+  if (loc.loai) t.set("type", loc.loai);
+  if (loc.khoi) t.set("bloc", loc.khoi);
+  if (loc.mucUuTien) t.set("priority", loc.mucUuTien);
+  if (loc.boPhanID) t.set("unit", loc.boPhanID);
+  if (loc.nguoiThucHienMa) t.set("assignee", loc.nguoiThucHienMa);
+  if (loc.chiTreHan === true) t.set("late", "true");
+  return t.toString();
 }
 
 /** Một dòng nhật ký đã dịch sang chữ để vẽ. */
@@ -741,9 +961,9 @@ export function cauHangChoRong(loc: LocHangCho): string {
 }
 
 /**
- * Dòng có `task_assigner` rỗng. KHÁC `CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC` của drawer ở một chỗ có chủ
- * ý: không bảo "hãy bổ sung" — `PATCH` cố ý không nhận `assigner` (ADR 0038), nên từ màn này không
- * có đường nào bổ sung được, và một lời khuyên không làm theo được là một lời khuyên sai.
+ * Dòng có `task_assigner` rỗng. Cùng một sự thật với `CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC` của drawer,
+ * nói ngắn hơn vì đứng trên một dòng hàng chờ. Cả hai đều KHÔNG bảo "hãy bổ sung" — `PATCH` cố ý
+ * không nhận `assigner` (ADR 0038), nên từ màn này không có đường nào bổ sung được.
  */
 export const CAU_KHONG_AI_DUYET_DUOC =
   "Nhiệm vụ này không ghi lãnh đạo giao việc, nên không ai duyệt được đề nghị này.";
@@ -776,24 +996,24 @@ export type DongHangChoHien = {
  *
  * `cauChan` ĐI QUA `quyetDinhDuyetLuiHan` — đúng phép so mã cán bộ drawer dùng (ADR 0038 lớp hai),
  * không phải một phép so thứ hai. Đó là tiện dụng, không phải biện pháp: máy chủ kiểm lại trong
- * giao dịch và câu 403/409 của nó ra nguyên văn. Lớp một (`task.extend`) truyền `true` vì màn hình
- * chưa đọc được khoá nào — xem `PHAN_CHUA_DUNG`.
+ * giao dịch và câu 403/409 của nó ra nguyên văn. Lớp một (`task.extend`) là tham số cuối, đọc từ
+ * danh sách quyền của PHIÊN (`quyenNhiemVu`) — phiên chưa đọc được thì `false`, FAIL CLOSED.
  */
 export function hienDongHangCho(
   d: petitions_deNghiChoDuyetRa,
   danhBa: DanhBaTheoMa | null,
   maNguoiDangNhap: string,
+  coQuyenDuyetGiaHan: boolean,
 ): DongHangChoHien {
-  const cong = quyetDinhDuyetLuiHan(maNguoiDangNhap, d.task_assigner, true);
+  const cong = quyetDinhDuyetLuiHan(maNguoiDangNhap, d.task_assigner, coQuyenDuyetGiaHan);
   let cauChan: string | null = null;
   if (!cong.hien) {
     cauChan =
-      cong.vi === "chua-ghi-lanh-dao-giao-viec"
-        ? CAU_KHONG_AI_DUYET_DUOC
-        : cong.vi === "khong-phai-lanh-dao-giao-viec"
-          ? cong.thongBao
-          : // `thieu-quyen` không xảy ra khi lớp một là `true`; nếu có ngày xảy ra thì vẫn đóng.
-            CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC;
+      cong.vi === "thieu-quyen"
+        ? CAU_THIEU_QUYEN_DUYET_GIA_HAN
+        : cong.vi === "chua-ghi-lanh-dao-giao-viec"
+          ? CAU_KHONG_AI_DUYET_DUOC
+          : cong.thongBao;
   }
   return {
     id: d.id,
@@ -1781,17 +2001,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Đặc tả vẽ hai ô ấy là hộp tìm kiếm gõ tên. Màn này dùng ô chọn thả xuống thường của trình " +
       "duyệt — cùng loại ô màn Phản ánh và Biên bản đang dùng — đổ từ danh bạ chọn người, có nhãn " +
       "và đi được bằng bàn phím. Chỉ nhảy được theo chữ cái đầu, chưa lọc được theo một phần họ tên.",
-  },
-  {
-    ten: "CỔNG QUYỀN Ở GIAO DIỆN cho bảy khoá `task.*`",
-    viSao:
-      "Bảy khoá `task.read` · `task.create` · `task.update` · `task.approve` · `task.extend` · " +
-      "`task.delete` · `task.assign` ĐỀU CÓ trong bảng `quyen` và đều được tuyến khai, nhưng " +
-      "`lib/quyen.ts` chưa có hằng nào cho chúng và lượt này không được sửa tệp ấy. Hệ quả: màn " +
-      "hình vẽ đủ nút cho mọi tài khoản đọc được sổ, và câu 403 của máy chủ ra thẳng màn hình — " +
-      "cùng khuôn `document.read` đã chọn. Lớp chặn thật không đổi (máy chủ kiểm từng yêu cầu); " +
-      "thứ thiếu là sự tiện dụng. RIÊNG lớp hai của ADR 0038 vẫn chạy: nút duyệt vẫn ẩn với người " +
-      "không phải lãnh đạo giao việc ghi trên bản ghi.",
   },
   {
     ten: "KÉO-THẢ thẻ giữa các cột Kanban (§4.1)",

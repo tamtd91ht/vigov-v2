@@ -63,6 +63,7 @@ function tuKetQua(khoa: string, kq: KetQua<page_Result_petitions_deNghiChoDuyetR
 export function HangChoLuiHan({
   danhBa,
   maNguoiDangNhap,
+  coQuyenDuyetGiaHan,
   lanLamMoi,
   moNhiemVu,
   daQuyet,
@@ -71,6 +72,8 @@ export function HangChoLuiHan({
   danhBa: DanhBaTheoMa | null;
   /** `phien.staff.code`, rỗng khi chưa đọc được phiên. */
   maNguoiDangNhap: string;
+  /** `task.extend` của phiên — lớp MỘT; lớp hai (ADR 0038) là phép so mã ở `hienDongHangCho`. */
+  coQuyenDuyetGiaHan: boolean;
   /** Đổi thì đọc lại trang đầu — sau một lần gửi đề nghị hay một lần ghi trên sổ. */
   lanLamMoi: number;
   /** Mở drawer của một mã. Trả `KetQua` để câu lỗi (404 một câu) hiện ngay tại hàng chờ. */
@@ -163,6 +166,7 @@ export function HangChoLuiHan({
       }
       danhBa={danhBa}
       maNguoiDangNhap={maNguoiDangNhap}
+      coQuyenDuyetGiaHan={coQuyenDuyetGiaHan}
       dangQuyet={dangQuyet}
       loiDong={loiDong}
       loiMo={loiMo}
@@ -200,6 +204,7 @@ export function KhoiHangChoLuiHan({
   tai,
   danhBa,
   maNguoiDangNhap,
+  coQuyenDuyetGiaHan,
   dangQuyet,
   loiDong,
   loiMo,
@@ -216,6 +221,7 @@ export function KhoiHangChoLuiHan({
   tai: TaiHangCho;
   danhBa: DanhBaTheoMa | null;
   maNguoiDangNhap: string;
+  coQuyenDuyetGiaHan: boolean;
   /** `id` của đề nghị đang chờ máy chủ trả lời, hoặc `null`. */
   dangQuyet: string | null;
   loiDong: { id: string; thongBao: string } | null;
@@ -270,7 +276,7 @@ export function KhoiHangChoLuiHan({
       {tai.pha === "xong" && tai.dong.length > 0 && (
         <ol aria-label={`${TIEU_DE_HANG_CHO}, chờ lâu nhất trước`}>
           {tai.dong.map((d) => {
-            const h = hienDongHangCho(d, danhBa, maNguoiDangNhap);
+            const h = hienDongHangCho(d, danhBa, maNguoiDangNhap, coQuyenDuyetGiaHan);
             const idGhiChu = `ghi-chu-quyet-dinh-${h.id}`;
             const dangChay = dangQuyet === h.id;
             return (

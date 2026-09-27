@@ -211,7 +211,7 @@ export const QUYEN_XEM_VAN_BAN = "document.read";
 
 /**
  * Khoá quyền XEM sổ nhiệm vụ — `task.read`, "Xem nhiệm vụ"
- * (`service-identity/migrations/0001_init.sql:304`).
+ * (`service-identity/migrations/0001_init.sql:311`).
  *
  * MỘT HẰNG CHO MỘT KHOÁ ĐỌC — CÙNG KHUÔN `QUYEN_XEM_VAN_BAN` NGAY TRÊN: không cổng trong
  * THÂN MÀN, chỉ canh mục menu. Hằng này không dùng cho thân màn: `/nhiem-vu` và
@@ -225,24 +225,76 @@ export const QUYEN_XEM_VAN_BAN = "document.read";
  * `document.route` — một khoá GHI — và đã phải đổi sang `document.read` (24/09/2026). Lấy
  * `task.create` canh mục Nhiệm vụ sẽ chép lại đúng lỗi ấy.
  *
- * NĂM KHOÁ `task.*` CÒN LẠI CỐ Ý KHÔNG CÓ HẰNG: `task.create` · `update` · `extend` · `delete` ·
- * `assign` đều có thật trong bảng `quyen` (`0001_init.sql:299-305`) và tuyến đã khai, nhưng hôm
- * nay không chỗ nào ở client canh chúng. Một hằng không ai dùng là một hằng không ai thấy khi nó
- * sai — thêm nó vào lúc lắp cổng thật, không phải trước. `task.approve` có hằng riêng ngay dưới.
+ * CÁC KHOÁ `task.*` GHI CÓ HẰNG RIÊNG NGAY DƯỚI (27/09/2026), vì màn `/nhiem-vu` nay canh nút
+ * theo chúng. `task.assign` VẪN CỐ Ý KHÔNG CÓ HẰNG: nó có thật trong bảng `quyen`
+ * (`0001_init.sql:307`) nhưng KHÔNG tuyến nào khai nó (`service-petitions/internal/http/
+ * nhiem_vu_ghi.go` — "`task.assign` IS SEEDED AND IS USED BY NO ROUTE HERE"), nên không có nút
+ * nào để canh. Một hằng không ai dùng là một hằng không ai thấy khi nó sai — thêm nó vào ngày
+ * tuyến giao việc (§10 `giao-viec`) ra đời, không phải trước.
  */
 export const QUYEN_XEM_NHIEM_VU = "task.read";
 
 /**
- * Khoá quyền của nút `Ký biên bản` — `task.approve`, đúng chuỗi máy chủ khai trên
- * `POST /api/v1/meetings/{id}/signature` (`x-vigov-permission.key` trong
- * `kb/20-contracts/openapi.json`) và có thật trong bảng `quyen` (`0001_init.sql:299-305`).
+ * `task.create` — "Tạo nhiệm vụ" (`0001_init.sql:308`). Cổng của nút `+ Giao việc mới`.
+ *
+ * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên `POST /api/v1/tasks` (`x-vigov-permission.key`
+ * trong `kb/20-contracts/openapi.json`). Cũng là khoá của mọi tuyến ghi biên bản họp trừ tuyến ký.
+ *
+ * ẨN NÚT LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP — máy chủ kiểm khoá này trên từng lời gọi (luật 5, cấm #1).
+ */
+export const QUYEN_TAO_NHIEM_VU = "task.create";
+
+/**
+ * `task.update` — "Cập nhật tiến độ" (`0001_init.sql:312`). Máy chủ khai nó trên BA tuyến:
+ * `PATCH /api/v1/tasks/{ma}` (nút `✎ Sửa`), `POST …/status` (khối Chuyển trạng thái) và
+ * `POST …/extensions` (GỬI đề nghị lùi hạn).
+ *
+ * GỬI ĐỀ NGHỊ LÙI HẠN ĐỨNG SAU KHOÁ NÀY, KHÔNG SAU `task.extend` — đó là toàn bộ ADR 0038: người
+ * đang làm việc là người xin lùi hạn; gắn ô ấy sau khoá duyệt là "chỉ người duyệt được mới xin được".
+ */
+export const QUYEN_CAP_NHAT_NHIEM_VU = "task.update";
+
+/**
+ * `task.delete` — "Xoá nhiệm vụ khỏi sổ" (`0001_init.sql:309`), khoá của `DELETE /api/v1/tasks/{ma}`.
+ * Xoá mềm, kèm lý do bắt buộc; mã sổ đã cấp không bao giờ cấp lại (luật 7).
+ */
+export const QUYEN_XOA_NHIEM_VU = "task.delete";
+
+/**
+ * `task.extend` — "Duyệt gia hạn" (`0001_init.sql:310`), khoá của
+ * `POST /api/v1/tasks/{ma}/extensions/{deNghiID}/decision`.
+ *
+ * ⚠ KHOÁ NÀY MỚI LÀ LỚP MỘT. Có khoá chưa có nghĩa là duyệt được một đề nghị cụ thể: lớp hai của
+ * ADR 0038 — đúng người ghi ở `lanh_dao_giao_viec_ma` của CHÍNH nhiệm vụ ấy — vẫn chạy ở
+ * `quyetDinhDuyetLuiHan` và ở máy chủ. Bỏ lớp hai thì mọi lãnh đạo cầm khoá này duyệt được mọi
+ * nhiệm vụ của cả xã, vì luật 5 kiểm `(tenant_id, role, permission)` và không có chiều "bản ghi nào".
+ */
+export const QUYEN_DUYET_GIA_HAN = "task.extend";
+
+/**
+ * `task.approve` — "Duyệt hoàn thành" (`0001_init.sql:306`). HAI chỗ dùng, cùng một nghĩa: hành vi
+ * làm một hồ sơ trở thành CUỐI CÙNG.
+ *
+ *   `POST /api/v1/meetings/{id}/signature`           nút `Ký biên bản` — khoá của chính tuyến
+ *   `POST /api/v1/tasks/{ma}/status` → `hoan-thanh`  bước cuối §6 — tuyến khai `task.update`, và
+ *                                                    máy chủ đòi THÊM khoá này cho riêng bước ấy
+ *                                                    (`service-petitions/internal/http/nhiem_vu_ghi.go`)
  *
  * KHÔNG PHẢI `task.create`: người gõ biên bản chưa chắc là người được xác nhận nó — ký là hành vi
  * KHOÁ một hồ sơ lưu trữ, sau đó mọi sai sót phải đi đường biên bản bổ sung (luật 5, bất biến 3b).
+ * Và KHÔNG PHẢI `task.update`: cán bộ làm việc không tự duyệt hoàn thành việc của chính mình.
  *
  * ẨN NÚT LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP — máy chủ kiểm khoá này trên từng lời gọi (luật 5, cấm #1).
  */
 export const QUYEN_KY_BIEN_BAN = "task.approve";
+
+/**
+ * Cùng khoá `task.approve` với `QUYEN_KY_BIEN_BAN`, gọi theo nghĩa ở màn Nhiệm vụ. HAI TÊN, MỘT
+ * CHUỖI — không phải hai chuỗi: bảng `quyen` chỉ có một dòng "Duyệt hoàn thành", và tên hằng đọc
+ * theo chỗ dùng là để người đọc nút `Chuyển sang Hoàn thành` không phải hỏi vì sao nó canh bằng
+ * khoá "ký biên bản".
+ */
+export const QUYEN_DUYET_HOAN_THANH_NHIEM_VU = QUYEN_KY_BIEN_BAN;
 
 /**
  * Khoá quyền của sổ Thông báo nội bộ — `announcement.create`, "Soạn và gửi thông báo"

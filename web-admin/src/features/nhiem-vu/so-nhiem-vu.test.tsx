@@ -2,6 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { KetQua } from "@/lib/api/goi";
+import {
+  QUYEN_CAP_NHAT_NHIEM_VU,
+  QUYEN_DUYET_GIA_HAN,
+  QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
+  QUYEN_TAO_NHIEM_VU,
+  QUYEN_XOA_NHIEM_VU,
+} from "@/lib/quyen";
 import type {
   identity_boPhanRa,
   identity_danhBaChonNguoiRa,
@@ -16,6 +23,7 @@ import {
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
   CANH_BAO_HAN_MOT_LAN,
   CAU_LIEN_KET_HANG_CHO,
+  CAU_THIEU_QUYEN_DUYET_HOAN_THANH,
   CHUA_PHAN_CONG,
   CHI_TIET_THIEU_VAN_BAN,
   CHU_THICH_HAI_O_TICK,
@@ -39,6 +47,8 @@ import {
   mocCuoiNgay,
   ngayChoONhap,
   quyetDinhDuyetLuiHan,
+  quyenNhiemVu,
+  type QuyenNhiemVu,
 } from "./nhan-nhiem-vu";
 import {
   BangNhiemVu,
@@ -198,10 +208,24 @@ const KHONG_SUA = (): Promise<KetQua<petitions_nhiemVuRa>> =>
 
 type TaiVanBan = TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
 
+/**
+ * Đủ năm khoá ghi `task.*`. Các nhóm canh HÌNH DẠNG màn (vòng đời, lùi hạn, văn bản) dùng nó; nhóm
+ * `cổng nút theo khoá` ở cuối tệp canh chiều NGƯỢC LẠI — thiếu từng khoá một.
+ */
+const DU_QUYEN: QuyenNhiemVu = quyenNhiemVu([
+  QUYEN_TAO_NHIEM_VU,
+  QUYEN_CAP_NHAT_NHIEM_VU,
+  QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
+  QUYEN_XOA_NHIEM_VU,
+  QUYEN_DUYET_GIA_HAN,
+]);
+
 function veChiTiet(
   sua: Partial<petitions_nhiemVuRa> = {},
   maNguoiDangNhap = LANH_DAO,
   vanBan: TaiVanBan = { pha: "dangTai" },
+  quyen: QuyenNhiemVu = DU_QUYEN,
+  danhBa: KetQua<identity_danhBaChonNguoiRa> | null = null,
 ): string {
   return renderToStaticMarkup(
     <ChiTietNhiemVu
@@ -210,8 +234,10 @@ function veChiTiet(
       danhMuc={DANH_MUC}
       nhanTT={BANG_NHAN_MAC_DINH}
       tenBoPhan={TEN_BO_PHAN}
+      danhBa={danhBa}
       bayGio={BAY_GIO}
       maNguoiDangNhap={maNguoiDangNhap}
+      quyen={quyen}
       dangGui={false}
       loiGhi={null}
       dong={() => {}}
@@ -276,6 +302,7 @@ describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thu�
     const html = renderToStaticMarkup(
       <KhoiLuiHan
         congDuyet={quyetDinhDuyetLuiHan(LANH_DAO, LANH_DAO, true)}
+        coQuyenDeNghi
         hanHienTai="2026-06-20T23:59:59+07:00"
         dangGui={false}
         guiDeNghi={KHONG_GOI}
@@ -341,6 +368,7 @@ describe("câu từ chối của máy chủ vẽ THẲNG, không nuốt thành '
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maNguoiDangNhap={LANH_DAO}
+        quyen={DU_QUYEN}
         dangGui={false}
         loiGhi={cau}
         dong={() => {}}
@@ -655,7 +683,11 @@ describe("phần chưa dựng được — ra tới màn hình, không giấu tr
     }
     // Những phát hiện nặng nhất, gọi đích danh thứ còn thiếu ở hợp đồng.
     expect(html).toContain("KHÔNG phát ra `id`");
-    expect(html).toContain("task.extend");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (nhóm A, mục 7): bài này từng canh chữ `task.extend` — nó đến từ
+    // mục "CỔNG QUYỀN Ở GIAO DIỆN cho bảy khoá `task.*`". Cổng nay đã dựng (`quyenNhiemVu`), nên mục
+    // ấy rời danh sách; một mục còn nằm đó sau khi đã dựng là mục đẩy người sau đi dựng lại.
+    expect(html).not.toContain("CỔNG QUYỀN Ở GIAO DIỆN");
+    expect(html).not.toContain("chưa có hằng nào cho chúng");
     // ĐỔI CÓ CHỦ Ý 27/09/2026 (TASK-05): bài này từng canh chữ `admin.user` — lý do ba ô cán bộ là
     // ô gõ mã. Ba ô nay đổ từ `GET /api/v1/staff-directory`, nên mục ấy rời danh sách; phần còn
     // thiếu thu lại đúng một điều — ô tìm theo tên đặc tả vẽ.
@@ -1230,5 +1262,229 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
     );
     expect(html).toContain("Dòng đã có.");
     expect(html).toContain('role="alert">Con trỏ không hợp lệ.');
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * NHÓM A (27/09/2026) — họ tên thay mã, hàng quá hạn, mức ưu tiên mặc định, cổng nút theo khoá
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Một mã có thật trên bản ghi nhưng KHÔNG có trong danh bạ — người đã nghỉ, tài khoản bị khoá. */
+const NGUOI_DA_NGHI = "CB-2019-NGHIHUU";
+
+describe("họ tên thay mã `CB-…` — danh bạ đọc MỘT LẦN, mã lạ vẫn hiện mã", () => {
+  const DANH_BA_MA = new Map(
+    (DANH_BA.ok ? DANH_BA.duLieu.items : []).map((cb) => [cb.code, cb] as const),
+  );
+
+  function veBang(assignee: string, danhBa: typeof DANH_BA_MA | null): string {
+    return renderToStaticMarkup(
+      <BangNhiemVu
+        nhiemVu={[nhiemVu({ assignee })]}
+        danhMuc={DANH_MUC}
+        danhBa={danhBa}
+        nhanTT={BANG_NHAN_MAC_DINH}
+        tenBoPhan={TEN_BO_PHAN}
+        bayGio={BAY_GIO}
+        maDangMo={null}
+        moNhiemVu={() => {}}
+      />,
+    );
+  }
+
+  it("cột `Người thực hiện`: họ tên khi danh bạ có, KHÔNG còn mã trần", () => {
+    const html = veBang(NGUOI_KHAC, DANH_BA_MA);
+    expect(html).toContain("<td>Nguyễn Thị Thực</td>");
+    expect(html).not.toContain(`<td>${NGUOI_KHAC}</td>`);
+  });
+
+  it("mã KHÔNG có trong danh bạ: hiện MÃ, không bao giờ để trống", () => {
+    // VẾ CHỊU LỰC. Một ô trống đọc ra là "chưa giao cho ai" — với đúng người đã làm việc ấy.
+    const html = veBang(NGUOI_DA_NGHI, DANH_BA_MA);
+    expect(html).toContain(`<td>${NGUOI_DA_NGHI}</td>`);
+    expect(html).not.toContain("<td></td>");
+  });
+
+  it("danh bạ chưa về (hoặc hỏng): hiện MÃ; chưa phân công vẫn là `Chưa phân công`", () => {
+    expect(veBang(NGUOI_KHAC, null)).toContain(`<td>${NGUOI_KHAC}</td>`);
+    expect(veBang("", DANH_BA_MA)).toContain(nhuTrongHTML(CHUA_PHAN_CONG));
+  });
+
+  it("drawer: người thực hiện, lãnh đạo giao việc, chuyên viên — `Họ tên (CB-…)`, mã lạ là mã", () => {
+    const html = veChiTiet(
+      { assignee: NGUOI_KHAC, assigner: LANH_DAO, monitor: NGUOI_DA_NGHI },
+      LANH_DAO,
+      { pha: "dangTai" },
+      DU_QUYEN,
+      DANH_BA,
+    );
+    expect(html).toContain(`Nguyễn Thị Thực (${NGUOI_KHAC})`);
+    expect(html).toContain(`<dd>Trần Văn Lãnh (${LANH_DAO})</dd>`);
+    expect(html).toContain(`<dd>${NGUOI_DA_NGHI}</dd>`);
+  });
+});
+
+describe("§4.2 — hàng quá hạn tô nền hồng rất nhạt, SUY RA từ hạn", () => {
+  function veMotDong(sua: Partial<petitions_nhiemVuRa>): string {
+    return renderToStaticMarkup(
+      <BangNhiemVu
+        nhiemVu={[nhiemVu(sua)]}
+        danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
+        tenBoPhan={TEN_BO_PHAN}
+        bayGio={BAY_GIO}
+        maDangMo={null}
+        moNhiemVu={() => {}}
+      />,
+    );
+  }
+
+  it("quá hạn: nền hồng, VÀ chữ `(trễ N ngày)` cùng dòng — màu không đứng một mình", () => {
+    const html = veMotDong({});
+    expect(html).toMatch(/<tr data-tre-han="" style="background-color:#fef3f2">/);
+    expect(html).toContain("(trễ 86 ngày)");
+  });
+
+  it("chưa tới hạn, và không có hạn: không tô", () => {
+    for (const sua of [
+      { due_at: "2026-12-20T23:59:59+07:00" },
+      { due_at: null, original_due_at: null },
+    ]) {
+      const html = veMotDong(sua);
+      expect(html).not.toContain("background-color");
+      expect(html).not.toContain("data-tre-han");
+    }
+  });
+});
+
+describe("§7.1 — mức ưu tiên mặc định lấy từ DANH MỤC CỦA XÃ, không gõ cứng `Thường`", () => {
+  const muc = (code: string, label: string, is_default: boolean, active = true) => ({
+    id: `01J${code}`,
+    code,
+    label,
+    is_default,
+    active,
+    order: 1,
+    source: "he-thong",
+    tier: 1,
+  });
+
+  function oUuTien(mucUuTien: DanhMucNhiemVu["mucUuTien"]): string {
+    const html = renderToStaticMarkup(
+      <FormGiaoViec
+        danhMuc={{ ...DANH_MUC, mucUuTien }}
+        danhBa={DANH_BA}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        giaoViec={() => {}}
+      />,
+    );
+    return oChon(html, "giao-uu-tien");
+  }
+
+  it("xã đặt `binh-thuong` làm mặc định: ô chọn sẵn đúng dòng ấy", () => {
+    const o = oUuTien([muc("khan", "Khẩn", false), muc("binh-thuong", "Bình thường", true)]);
+    expect(o).toContain('<option value="binh-thuong" selected="">Bình thường</option>');
+    expect(o).not.toMatch(/<option value="" selected="">/);
+  });
+
+  it("xã CHƯA đặt dòng mặc định nào: ô đứng ở `— Chưa xác định —`", () => {
+    const o = oUuTien([muc("khan", "Khẩn", false), muc("cao", "Cao", false)]);
+    expect(o).toMatch(/<option value="" selected="">/);
+  });
+
+  it("dòng mặc định đã NGỪNG dùng: không chọn sẵn thứ xã đã bỏ", () => {
+    const o = oUuTien([muc("thuong", "Thường", true, false), muc("cao", "Cao", false)]);
+    expect(o).toMatch(/<option value="" selected="">/);
+  });
+});
+
+describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ ca được phép", () => {
+  it("phiên chưa đọc được (`null`): MỌI cổng đóng — fail closed", () => {
+    expect(quyenNhiemVu(null)).toEqual({
+      giaoViec: false,
+      capNhat: false,
+      duyetHoanThanh: false,
+      xoa: false,
+      duyetGiaHan: false,
+    });
+  });
+
+  it("so CHÍNH XÁC từng khoá: `task.read` không mở nút ghi nào, không có phép khớp `task.*`", () => {
+    const q = quyenNhiemVu(["task.read", "task.*", "task"]);
+    expect(Object.values(q).every((v) => v === false)).toBe(true);
+  });
+
+  it("`task.approve` mà thiếu `task.update`: vẫn KHÔNG hoàn thành được — cổng tuyến là `task.update`", () => {
+    expect(quyenNhiemVu([QUYEN_DUYET_HOAN_THANH_NHIEM_VU]).duyetHoanThanh).toBe(false);
+  });
+
+  it("chỉ đọc: không khối chuyển trạng thái, không ô đề nghị lùi hạn, không xoá, không ✎ Sửa", () => {
+    const html = veChiTiet(
+      { status: "dang-thuc-hien" },
+      NGUOI_KHAC,
+      { pha: "xong", duLieu: [] },
+      quyenNhiemVu([]),
+    );
+    expect(html).not.toContain("Chuyển sang");
+    expect(html).not.toContain("<h4>Chuyển trạng thái</h4>");
+    expect(html).not.toContain('id="han-moi-lui-han"');
+    expect(html).not.toContain('id="ly-do-xoa-nhiem-vu"');
+    expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_SUA));
+    // Phần ĐỌC vẫn nguyên: hạn, khối văn bản, nhật ký.
+    expect(html).toContain("Hạn ban đầu");
+    expect(html).toContain(nhuTrongHTML(TIEU_DE_KHOI_VAN_BAN));
+    expect(html).toContain("Nhật ký &amp; Trao đổi");
+  });
+
+  it("có `task.update`, thiếu `task.approve`: các bước khác còn, bước Hoàn thành ẩn KÈM câu nói vì sao", () => {
+    const html = veChiTiet(
+      { status: "cho-duyet" },
+      NGUOI_KHAC,
+      { pha: "dangTai" },
+      quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]),
+    );
+    expect(html).toContain("Chuyển sang Tạm dừng");
+    expect(html).not.toContain("Chuyển sang Hoàn thành");
+    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
+  });
+
+  it("đủ `task.update` + `task.approve`: bước Hoàn thành có, câu thiếu quyền KHÔNG hiện", () => {
+    const html = veChiTiet(
+      { status: "cho-duyet" },
+      NGUOI_KHAC,
+      { pha: "dangTai" },
+      quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU, QUYEN_DUYET_HOAN_THANH_NHIEM_VU]),
+    );
+    expect(html).toContain("Chuyển sang Hoàn thành");
+    expect(html).not.toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
+  });
+
+  it("ĐÚNG lãnh đạo giao việc nhưng THIẾU `task.extend`: không mời duyệt — lớp một đóng", () => {
+    const html = veChiTiet({}, LANH_DAO, { pha: "dangTai" }, quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]));
+    expect(html).not.toContain(`href="#${ID_HANG_CHO}"`);
+    expect(html).not.toContain(nhuTrongHTML(CAU_LIEN_KET_HANG_CHO));
+    // ADR 0038: ô XIN lùi hạn không đứng sau khoá duyệt — người cầm `task.update` vẫn gửi được.
+    expect(html).toContain('id="han-moi-lui-han"');
+  });
+
+  it("có `task.extend` nhưng KHÔNG phải lãnh đạo ghi trên bản ghi: lớp hai vẫn chặn", () => {
+    // Khoá thật KHÔNG thay được phép so mã của ADR 0038 — lớp hai chạy SAU lớp khoá, không thay nó.
+    const html = veChiTiet({}, NGUOI_KHAC, { pha: "dangTai" }, DU_QUYEN);
+    expect(html).not.toContain(`href="#${ID_HANG_CHO}"`);
+    expect(html).toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
+  });
+
+  it("`task.delete` một mình: chỉ ô xoá hiện", () => {
+    const html = veChiTiet({}, NGUOI_KHAC, { pha: "dangTai" }, quyenNhiemVu([QUYEN_XOA_NHIEM_VU]));
+    expect(html).toContain('id="ly-do-xoa-nhiem-vu"');
+    expect(html).not.toContain("Chuyển sang");
+    expect(html).not.toContain('id="han-moi-lui-han"');
+  });
+
+  it("`+ Giao việc mới` đứng sau `task.create` — không suy ra từ `task.update`", () => {
+    expect(quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]).giaoViec).toBe(false);
+    expect(quyenNhiemVu([QUYEN_TAO_NHIEM_VU]).giaoViec).toBe(true);
   });
 });

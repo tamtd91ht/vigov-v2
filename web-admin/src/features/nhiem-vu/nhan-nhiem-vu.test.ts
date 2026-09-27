@@ -66,6 +66,11 @@ import {
   cauLoiDanhBaLoc,
   docDanhBaChonNguoi,
   nhanTrongOChonCanBo,
+  duongDanTuLoc,
+  locTuDuongDan,
+  mucUuTienMacDinh,
+  nhanCanBoDrawer,
+  nhanCanBoNgan,
   type DongVanBanNhap,
   type DongVanBanSua,
   type FormGiaoViecNhap,
@@ -1147,5 +1152,116 @@ describe("PHAN_CHUA_DUNG — Duyệt / Từ chối lùi hạn (TASK-07)", () => 
     expect(muc).toBeDefined();
     expect(muc?.viSao).toContain("/api/v1/task-extensions");
     expect(muc?.viSao).toContain("KHÔNG lọc được theo nhiệm vụ");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * NHÓM A (27/09/2026)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("câu `chưa ghi lãnh đạo giao việc` nói ĐÚNG điều làm được", () => {
+  it("không còn bảo `bổ sung` — `PATCH` không nhận `assigner`, nên lời khuyên ấy không làm theo được", () => {
+    expect(CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC).not.toContain("hãy bổ sung");
+    expect(CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC).toContain("chỉ ghi được lúc giao việc");
+    expect(CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC).toContain("không bổ sung được");
+  });
+});
+
+describe("tên cán bộ ở ô chật — họ tên, mã lạ là mã, rỗng là câu của ô", () => {
+  const DANH_BA = new Map([
+    ["CB-1", { code: "CB-1", full_name: "Lê Văn Một", position: "", department_id: "" }],
+    ["CB-2", { code: "CB-2", full_name: "", position: "", department_id: "" }],
+  ]);
+
+  it("ba nhánh, không nhánh nào ra chuỗi rỗng cho một mã có thật", () => {
+    expect(nhanCanBoNgan("CB-1", DANH_BA, CHUA_PHAN_CONG)).toBe("Lê Văn Một");
+    // Danh bạ có dòng nhưng họ tên rỗng: vẫn là mã — ô trống đọc ra là "chưa giao cho ai".
+    expect(nhanCanBoNgan("CB-2", DANH_BA, CHUA_PHAN_CONG)).toBe("CB-2");
+    expect(nhanCanBoNgan("CB-9", DANH_BA, CHUA_PHAN_CONG)).toBe("CB-9");
+    expect(nhanCanBoNgan("CB-1", null, CHUA_PHAN_CONG)).toBe("CB-1");
+    expect(nhanCanBoNgan("", DANH_BA, CHUA_PHAN_CONG)).toBe(CHUA_PHAN_CONG);
+  });
+
+  it("drawer giữ MÃ cạnh họ tên — chỗ đối chiếu hồ sơ", () => {
+    expect(nhanCanBoDrawer("CB-1", DANH_BA, O_TRONG)).toBe("Lê Văn Một (CB-1)");
+    expect(nhanCanBoDrawer("CB-9", DANH_BA, O_TRONG)).toBe("CB-9");
+    expect(nhanCanBoDrawer("", DANH_BA, O_TRONG)).toBe(O_TRONG);
+  });
+});
+
+describe("§7.1 — `mucUuTienMacDinh`", () => {
+  const m = (code: string, is_default: boolean, active = true) => ({
+    id: code,
+    code,
+    label: code,
+    is_default,
+    active,
+    order: 1,
+    source: "he-thong",
+    tier: 1,
+  });
+
+  it("dòng xã đặt mặc định, đang dùng — không phải dòng tên `Thường`", () => {
+    expect(mucUuTienMacDinh([m("thuong", false), m("cao", true)])).toBe("cao");
+  });
+
+  it("không có dòng mặc định, hoặc dòng ấy đã ngừng dùng: `\"\"` (= Chưa xác định)", () => {
+    expect(mucUuTienMacDinh([m("thuong", false)])).toBe("");
+    expect(mucUuTienMacDinh([m("thuong", true, false)])).toBe("");
+    expect(mucUuTienMacDinh([])).toBe("");
+  });
+});
+
+describe("§3 — bộ lọc ↔ đường dẫn", () => {
+  const DAY_DU = {
+    phamVi: "mine" as const,
+    trangThai: "cho-duyet",
+    nguonGiao: "van-ban-den",
+    loai: "theo-van-ban",
+    khoi: "khoi-dang",
+    mucUuTien: "khan",
+    boPhanID: "01JBOPHAN",
+    nguoiThucHienMa: "CB-2026-3H8N2W",
+    chiTreHan: true as const,
+  };
+
+  it("đi rồi về: ghi ra đường dẫn rồi đọc lại được ĐÚNG bộ lọc ấy", () => {
+    expect(locTuDuongDan(duongDanTuLoc(DAY_DU))).toEqual(DAY_DU);
+    expect(locTuDuongDan(`?${duongDanTuLoc(DAY_DU)}`)).toEqual(DAY_DU);
+  });
+
+  it("tên tham số là tên của tuyến `GET /api/v1/tasks` — đường dẫn chia sẻ đọc lên đúng câu hỏi", () => {
+    const t = new URLSearchParams(duongDanTuLoc(DAY_DU));
+    expect([...t.keys()].sort()).toEqual(
+      ["assignee", "bloc", "late", "priority", "scope", "source", "status", "type", "unit"].sort(),
+    );
+  });
+
+  it("KHÔNG BAO GIỜ đưa chữ tìm lên thanh địa chỉ (luật 3, cấm #4)", () => {
+    const chuoi = duongDanTuLoc({ ...DAY_DU, tim: "Nguyễn Văn A 0900000000" });
+    expect(chuoi).not.toContain("q=");
+    expect(decodeURIComponent(chuoi)).not.toContain("Nguyễn");
+    expect(locTuDuongDan("?q=Nguy%E1%BB%85n")).toEqual({});
+  });
+
+  it("không lọc gì: chuỗi rỗng; `Toàn xã` và ô tick bỏ trống thì tham số vắng mặt hẳn", () => {
+    expect(duongDanTuLoc({})).toBe("");
+    expect(duongDanTuLoc({ phamVi: "all", chiTreHan: false })).toBe("");
+  });
+
+  it("tham số lạ bị bỏ qua; giá trị máy chủ trả 400 không được lọt vào", () => {
+    // Một đường dẫn gõ sai không được biến quyển sổ thành một trang lỗi.
+    expect(
+      locTuDuongDan(
+        "?status=xong-roi&source=zalo&late=false&scope=related&soon=72&che_do_xem=kanban&foo=1",
+      ),
+    ).toEqual({});
+    expect(locTuDuongDan("?late=TRUE")).toEqual({});
+  });
+
+  it("mã tự do rỗng hoặc dài bất thường bị bỏ, không gửi lên máy chủ", () => {
+    expect(locTuDuongDan("?assignee=&unit=%20%20")).toEqual({});
+    expect(locTuDuongDan(`?type=${"x".repeat(101)}`)).toEqual({});
+    expect(locTuDuongDan("?type=%20co-ban%20")).toEqual({ loai: "co-ban" });
   });
 });
