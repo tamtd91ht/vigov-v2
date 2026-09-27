@@ -266,6 +266,23 @@ gửi **App ID của app chung** (`internal/httpapi/sessions_vigov.go:101`, mộ
 Việc đổi token của app xã bằng secret của app chung **đã chạy được** trên máy thật 27/09 — một chứng cứ
 cho UNKNOWN #1 (Zalo không chặn), chưa phải phép đo có kiểm soát.
 
+**Hệ quả phía máy chủ của chế độ chính + `communeConfirmed=true` tự động** (đo trong mã,
+`service-identity/internal/app/cau_phien_cong_dan.go:214-227`, `:319-336`) — chưa được chủ dự án chốt:
+
+| Hệ quả | Vì sao |
+|---|---|
+| Xã đã nhớ của tài khoản Zalo **dưới App ID app chung** thành Thăng Bình | Chế độ chính + đã xác nhận → `NhoXa`. Mở app chung sau đó không kèm QR là vào Thăng Bình (ADR 0044 câu 6) |
+| Phiên của xã cũ bị **thu hồi** mỗi lần đổi | *"Mỗi lúc một phiên còn sống"*. Người dùng cả app chung (xã A qua QR) lẫn app Thăng Bình sẽ bị đăng xuất qua lại |
+| Vết `doi_xa_da_nho` ghi **như một lần công dân xác nhận** | Không ai bấm gì — chỉ mở app riêng. Vết mang `app_id` của app chung |
+
+Chấm dứt được khi cầu chọn theo App ID đã xác minh (chế độ **riêng**: xã từ `mini_app`, không nhớ xã,
+không `doi_xa_da_nho`) — cần `vihat-miniapp` nhận nhiều App ID và app secret của từng app.
+
+Việc chưa có đường tới trong app riêng: **chính sách quyền riêng tư** và màn quản lý quyền nằm ở phần
+thương mại (`features/company-intro/ContactScreen.tsx`), và nội dung chính sách ghi ViHAT Group là
+bên nhận dữ liệu. Tiêu đề thanh điều hướng Zalo đến từ `app-config.json` `app.title` = *"ViHAT Group"*
+(chung mọi bản dựng). Cả hai chưa được chủ dự án chốt cho app riêng.
+
 ## ĐIỀU KIỆN DỪNG
 
 1. Đề xuất lưu **tên miền** làm tham chiếu xã ở bất kỳ đâu (phiên, xã đã nhớ, vết, bản ghi nghiệp vụ)

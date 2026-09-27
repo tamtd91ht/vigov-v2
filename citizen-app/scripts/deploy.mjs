@@ -11,8 +11,9 @@
  * ```
  *
  * HAI LUỒNG (ADR 0047): có `--domain` thì đẩy lên App ID riêng của xã ấy (tra trong
- * `ung-dung-theo-ten-mien.mjs`), không có thì đẩy lên app chung. Tên miền CHỈ chọn đích; bundle
- * là một, không biến thể (27/09/2026 — xem đầu `vite.config.ts`). `--bien-the` đã bỏ và bị từ chối.
+ * `ung-dung-theo-ten-mien.mjs`), không có thì đẩy lên app chung. Tên miền chọn đích; bundle là một,
+ * không biến thể (27/09/2026 — xem đầu `vite.config.ts`) — TRỪ khi có `--vao-thang`: tên miền ấy được
+ * nung vào bundle và app riêng mở thẳng vào xã (ADR 0047 §6). `--bien-the` đã bỏ và bị từ chối.
  *
  * ⚠ ĐÍCH DO `ZMP_TOKEN` QUYẾT, KHÔNG DO `APP_ID` — đã đo, xem đầu `dich-den.mjs`. Nên đường app
  * riêng lấy token từ MÔI TRƯỜNG, hoặc — khi môi trường không có — TỰ chạy `zmp login` (quét QR)
@@ -195,6 +196,18 @@ if (api_host === "" && !chi_thu) {
 let token = process.env.ZMP_TOKEN || undefined;
 const phai_dang_nhap = dich.loai === "app-rieng" && !laPlaceholder(dich.app_id) && token === undefined;
 if (phai_dang_nhap && !chi_thu) {
+  // Không có bàn phím (Jenkins, một ống) thì không ai quét được QR: `zmp login` sẽ ngồi đợi tới khi
+  // job hết giờ. Một credential rỗng rơi vào đúng nhánh này — dừng và nói ra, đừng treo.
+  if (!process.stdin.isTTY) {
+    console.error(
+      "
+Không đẩy: ZMP_TOKEN rỗng hoặc không có, và đây không phải một cửa sổ lệnh có người ngồi để quét QR.
+" +
+        "  Trên Jenkins: kiểm credential zmp-token-<tên-miền> có giá trị.
+",
+    );
+    process.exit(2);
+  }
   token = dangNhapRieng(dich.app_id) ?? undefined;
   if (token === undefined) {
     console.error("\nKhông đẩy: đăng nhập Zalo không thành công, không có token nào được ghi ra.\n");

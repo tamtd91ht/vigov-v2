@@ -91,7 +91,9 @@ const ZMP_TOKEN_GIA = "gia-lap-zmp-token-khong-duoc-lot-vao-bundle";
  *
  * MỘT BẢN, KHÔNG BIẾN THỂ (27/09/2026, quyết định của chủ sản phẩm — xem đầu `vite.config.ts`).
  * Trước ngày này tệp này dựng hai biến thể (`goc` · `day-du`) rồi so hai bundle; nay app chung và
- * app riêng của xã chạy CÙNG MỘT bundle, nên chỉ có một thứ để đo.
+ * app riêng của xã chạy CÙNG MỘT bundle, nên chỉ có một thứ để đo. Ngoại lệ `--vao-thang` (ADR 0047
+ * §6) chỉ thêm một tên miền qua `VIGOV_XA_CO_DINH` — biến ấy KHÔNG có trong môi trường test, nên
+ * đây là bản không cờ; `scripts/cau-hinh.test.mjs` và `lib/xa-co-dinh.test.ts` canh phần có cờ.
  */
 async function dungBan(): Promise<EmittedFile[]> {
   const truoc = { APP_ID: process.env["APP_ID"], ZMP_TOKEN: process.env["ZMP_TOKEN"] };
@@ -294,8 +296,8 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
   /**
    * KHÔNG App ID, KHÔNG token, KHÔNG tên miền xã nào trong bundle — ADR 0047 điều kiện dừng #2.
    *
-   * Tên miền chỉ chọn App ID ĐÍCH lúc đẩy (`scripts/dich-den.mjs`); nó không bao giờ được vào nội
-   * dung. Một App ID hay tên miền xã trong bundle là một giá trị theo xã nung vào một bundle dùng
+   * Tên miền chỉ chọn App ID ĐÍCH lúc đẩy (`scripts/dich-den.mjs`); nó không vào nội dung — trừ bản
+   * dựng `--vao-thang` của đúng xã ấy (ADR 0047 §6), thứ ca này không dựng. Một App ID hay tên miền xã trong bundle là một giá trị theo xã nung vào một bundle dùng
    * chung — đúng thứ luật 1 bất biến 10 cấm. Bundle ở đây được dựng khi `APP_ID` và `ZMP_TOKEN`
    * CÓ trong môi trường (`dungBan`), nên ca này đo đúng tình huống của máy chạy `zmp deploy`.
    */

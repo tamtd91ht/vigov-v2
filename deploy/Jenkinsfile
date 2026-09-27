@@ -473,7 +473,7 @@ SQL
           echo "── ghi"
           chay_psql "vigov-psql-ghi-$BUILD_NUMBER" gan-mini-app.sql
           echo ""
-          echo "Xong. Bước kế: cd citizen-app && npm run zmp:phat-hanh -- --domain=thangbinh-danang.vigov.vn"
+          echo "Xong. Bước kế: cd citizen-app && npm run zmp:phat-hanh -- --domain=thangbinh-danang.vigov.vn --vao-thang"
         ''')
       }
     }

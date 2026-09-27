@@ -214,7 +214,8 @@ a false statement published under that name. Facts that are missing are left out
 **Không còn biến thể nào (27/09/2026).** Trước ngày này bản dựng tách hai (`goc` = bản nộp,
 `day-du` = thêm lớp khám phá, danh mục xã mẫu, trang xã, bảng chẩn đoán, kênh công dân) bằng
 `VIGOV_BIEN_THE` và ba cửa `resolve.alias` `bien-the/…`. Chủ sản phẩm đã bỏ khái niệm ấy: app chung
-giai đoạn 1 và app riêng của xã chạy **cùng một bundle**. Thứ bị gỡ theo:
+giai đoạn 1 và app riêng của xã chạy **cùng một bundle** — trừ app riêng dựng với `--vao-thang`,
+mang thêm tên miền xã (ADR 0047 §6). Thứ bị gỡ theo:
 
 | Đã gỡ | Thay bằng |
 |---|---|
@@ -661,8 +662,9 @@ kênh công dân của xã, không bước xác nhận (ADR 0047 §6).
 Đường app riêng lấy `ZMP_TOKEN` từ **môi trường**; không có thì script **tự chạy `zmp login`** (quét
 QR) cho đúng App ID ấy trong một thư mục tạm — không ghi đè `.env` của app chung — rồi kiểm claim
 `appId` khớp App ID đích trước khi dựng (`scripts/dich-den.mjs`, `kiemToken`). Đích thật do token
-quyết, không do `APP_ID` (đã đo, zmp-cli 4.0.3). App riêng chỉ **mở được** khi `service-platform`
-có dòng `mini_app` cho App ID ấy. App chung vẫn như cũ (`APP_ID_APP_CHUNG = null` nghĩa là token
+quyết, không do `APP_ID` (đã đo, zmp-cli 4.0.3). ⚠ Hôm nay phiên của app riêng đi qua cầu của
+`vihat-miniapp` dưới App ID **app chung**, nên dòng `mini_app` của App ID xã **chưa được tra tới**
+(ADR 0047 §6); nó cần khi cầu chọn theo App ID đã xác minh. App chung vẫn như cũ (`APP_ID_APP_CHUNG = null` nghĩa là token
 trong `.env` quyết đích). Dựng nằm **trong** script vì
 địa chỉ máy chủ được nung vào lúc dựng — dựng ngoài rồi đẩy trong là hai lệnh có thể lệch nhau.
 

@@ -124,6 +124,9 @@ chưa ai chốt — luật 8 bất biến 6 đòi con số ấy.
 | Chính | `t` + công dân **đã xác nhận** | `t` — phải đang hoạt động, không thì từ chối | Thành `t`; khác xã cũ thì ghi vết `doi_xa` kèm xã cũ |
 | Chính | Không xác nhận (có hay không có `t`) | Xã đã nhớ nếu còn hoạt động, không thì `""` | Không đổi |
 
+> 27/09/2026 — app riêng Thăng Bình dựng `--vao-thang` hiện đi dòng **Chính + đã xác nhận** (qua cầu
+> của app chung, `communeConfirmed` tự động lúc mở), chưa đi dòng **Riêng**: hệ quả ở ADR 0047 §6.
+
 **Vì sao app riêng không tự đi theo xã kế thừa (đề xuất):** app riêng mang tên xã A trên kho Zalo.
 Tự chuyển công dân sang xã X là để họ làm việc với một cơ quan khác dưới một cái tên họ không thấy
 — đúng thứ ADR 0044 câu 3 cấm. Gắn lại app sau sáp nhập là việc của người vận hành, có vết.
@@ -279,7 +282,7 @@ Không ghi vết: `ResolveMiniApp` (đọc siêu dữ liệu, không có "ai").
 
 | # | Câu | Chứng cứ đang có | Vì sao quan trọng |
 |---|---|---|---|
-| 1 | **Zalo có từ chối `accessToken` khi gửi kèm `secret_key` của một app KHÁC không?** | **Không có.** Lần đo duy nhất dùng token giả, dừng ở lỗi 452 trước khi kiểm secret (`vihat-miniapp/internal/zalo/wire.go:22-35`). Chỉ có một cặp app/secret (`config.go:33-34`) | Có → `vihat-miniapp` nhận gợi ý App ID từ client, đổi bằng secret ấy, và Zalo xác nhận thay ta. Không → *"App ID đã xác minh"* của ADR 0044 không có thật và phải tìm cách khác (API tra token trả app, nếu có). **Chưa đo thì chưa phát hành app riêng.** Hậu quả tệ nhất: công dân vào được một xã mà họ vốn vào được bằng QR công khai — **không** lộ dữ liệu của công dân khác, vì phiên vẫn chỉ đọc hồ sơ của chính mình (luật 4) |
+| 1 | **Zalo có từ chối `accessToken` khi gửi kèm `secret_key` của một app KHÁC không?** | **Không có.** Lần đo duy nhất dùng token giả, dừng ở lỗi 452 trước khi kiểm secret (`vihat-miniapp/internal/zalo/wire.go:22-35`). Chỉ có một cặp app/secret (`config.go:33-34`) | Có → `vihat-miniapp` nhận gợi ý App ID từ client, đổi bằng secret ấy, và Zalo xác nhận thay ta. Không → *"App ID đã xác minh"* của ADR 0044 không có thật và phải tìm cách khác (API tra token trả app, nếu có). **Chưa đo thì chưa phát hành app riêng.** *(Chốt chặn này bị ADR 0047 câu 8 gỡ, 27/09/2026 — câu hỏi vẫn mở.)* Hậu quả tệ nhất: công dân vào được một xã mà họ vốn vào được bằng QR công khai — **không** lộ dữ liệu của công dân khác, vì phiên vẫn chỉ đọc hồ sơ của chính mình (luật 4) |
 | 2 | Endpoint nào trả **mã tài khoản Zalo** từ `accessToken` mà không cần quyền số điện thoại; mã ấy **theo từng app** hay chung | **Không có.** Kho chỉ gọi `/v2.0/me/info`, trả mỗi số (`wire.go:59`, `:75`) | Không lấy được mã thì câu 2 không cài được. Mã theo app thì một người dùng hai app là hai tài khoản Zalo — vì thế khoá là (`app_id`, `zalo_user_id`) |
 | 3 | `getAccessToken()` có **hiện hộp xin quyền** trên máy thật không | Không có — chủ dự án nêu là CHƯA ĐO | Có hộp thì "âm thầm" của câu 2 không đúng |
 | 4 | `appsecret_proof` có bắt buộc cho lời gọi lấy mã tài khoản không | `wire.go:37-41` — chưa rõ, mặc định tắt | Sai thì mọi lần mở âm thầm hỏng |

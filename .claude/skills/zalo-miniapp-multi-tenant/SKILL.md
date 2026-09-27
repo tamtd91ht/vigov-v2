@@ -50,7 +50,7 @@ exists to prevent.
 
 | Layer | Answers | Source | Trusted? |
 |---|---|---|---|
-| **Discovery** | Which commune does this open point at | QR / deep link (main app) · App ID read by the client (own app) | **No — drives the UI only** |
+| **Discovery** | Which commune does this open point at | QR / deep link (main app) · App ID read by the client (own app) · domain baked by `--vao-thang` (own app, ADR 0047 §6) | **No — drives the UI only** |
 | **Session** | Which commune is this session *acting in* | Server: after the citizen confirms a QR, or from the App ID the app secret verified | **Yes — server-issued** |
 | **Authorization** | What may this citizen read/write there | Citizen↔commune relationship + rule 4 | **Yes** |
 
@@ -95,7 +95,7 @@ open in ADR 0047.
 The confirmation screen's commune name comes from an identity route (domain → name, province;
 `CitizenOnly` + `KhongThuocXa`, **never returns the ULID**) and the domain reaches the session
 bridge in a **new optional** `OpenCitizenSessionRequest` field — `tenant_hint` is never repurposed
-to carry a domain (rule 2 forbidden #4); the `.proto` owns the new field's name and shape. Both are **not built yet** (ADR 0047 answers 6, 7).
+to carry a domain (rule 2 forbidden #4); the `.proto` owns the new field's name and shape. Both are built (ADR 0047 §5: `39d4397`, `2f075b9`, `6f01382`).
 
 ### Trust weighting by source
 
@@ -145,7 +145,8 @@ ADR 0044 replaced ADR 0005's no-parameter path (picker, GPS, profile). Do not re
 - **Main app**: without a QR the citizen sees only the group introduction. A picker would let
   anyone enter any commune's content from a public store listing.
 - **Own app**: the commune is fixed by the verified App ID. A picker would be a second, weaker
-  source for a fact the server already knows.
+  source for a fact the server already knows. ⚠ Today (ADR 0047 §6) the Thăng Bình own app gets its
+  commune from the baked `--vao-thang` domain over the main-app bridge, not yet from a verified App ID.
 - **GPS** has no role in choosing a commune: locations are spoofable, and urban boundaries run
   down the middle of streets.
 

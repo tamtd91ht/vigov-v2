@@ -2,6 +2,9 @@
 //
 //   · dựng CÁI GÌ    — đúng một bundle cho mọi đích (ADR 0047 §Trả lời mục 1: không biến thể)
 //   · đẩy ĐI ĐÂU     — tham số DOMAIN: trống = APP CHUNG, có = APP RIÊNG của xã mang tên miền ấy
+//   · mở vào ĐÂU     — tham số VAO_THANG (chỉ kèm DOMAIN): nung tên miền vào bundle, app mở thẳng vào
+//                      xã, không màn ViHAT (ADR 0047 §6). Bỏ chọn khi đẩy app riêng là thay nó bằng
+//                      giao diện app chung — không lỗi nào báo, nên kế hoạch in dòng "Mở app"
 //   · đẩy BẰNG GÌ    — `node scripts/deploy.mjs`, KHÔNG BAO GIỜ gọi thẳng `zmp deploy`
 //
 // BẤM TAY, KHÔNG TỰ CHẠY. Không có `duongKichHoat()`: Mini App không có ảnh đang chạy để so mốc,
@@ -67,6 +70,9 @@ pipeline {
            description: 'TRỐNG = APP CHUNG. Có = APP RIÊNG của xã mang tên miền này (chữ thường, không ' +
                         'https://, không đường dẫn), phải có dòng trong scripts/ung-dung-theo-ten-mien.mjs ' +
                         'và credential zmp-token-<tên-miền> trong Jenkins.')
+    booleanParam(name: 'VAO_THANG', defaultValue: false,
+                 description: 'Chỉ kèm DOMAIN. Chọn = app riêng MỞ THẲNG vào xã ấy, không màn giới thiệu ViHAT ' +
+                              '(ADR 0047 §6). App riêng đã phát hành với cờ này thì lần đẩy sau cũng phải chọn.')
     booleanParam(name: 'PHAT_HANH', defaultValue: false,
                  description: 'Bỏ chọn = BẢN THỬ NGHIỆM (-t). Chọn = BẢN PHÁT HÀNH — ra người dùng thật / gửi ' +
                               'duyệt, và phải gõ XAC_NHAN.')
@@ -89,7 +95,8 @@ pipeline {
           // LƯỢT ĐẦU SAU KHI ĐỔI `parameters {}`: Jenkins chỉ HỌC danh sách tham số ở lượt ấy, nên
           // lượt ấy chạy với mọi `params.*` là null. `THU` null mà coi là "không thử" là đẩy thật một
           // lượt không ai chọn đích — dừng trước mọi lệnh.
-          if (params.DOMAIN == null || params.PHAT_HANH == null || params.THU == null || params.XAC_NHAN == null) {
+          if (params.DOMAIN == null || params.PHAT_HANH == null || params.THU == null || params.XAC_NHAN == null ||
+              params.VAO_THANG == null) {
             error('Jenkins vừa học tham số mới của job — lượt này không có tham số nào.\n' +
                   'Bấm lại bằng "Build with Parameters". Không có gì được dựng hay đẩy.')
           }
@@ -98,7 +105,7 @@ pipeline {
           // job (đo được ở deploy/Jenkinsfile 25/09/2026: một việc đã gỡ chạy xanh mà không làm gì).
           // Ở đây tham số lạ là một ý định cũ (ví dụ `BIEN_THE`, đã bỏ 27/09/2026) mà người bấm tưởng
           // vẫn có tác dụng — nói ra, đừng lặng lẽ bỏ qua.
-          List<String> biet = ['DOMAIN', 'PHAT_HANH', 'THU', 'XAC_NHAN']
+          List<String> biet = ['DOMAIN', 'VAO_THANG', 'PHAT_HANH', 'THU', 'XAC_NHAN']
           for (String k : params.keySet()) {
             if (!(k in biet)) {
               error("Tham số '${k}' không còn trong job này (đã gỡ). " +
@@ -106,8 +113,9 @@ pipeline {
             }
           }
           // Cùng lý do: một lượt cũ có thể mang giá trị kiểu khác (chuỗi 'true' thay cho boolean).
-          if (!(params.PHAT_HANH instanceof Boolean) || !(params.THU instanceof Boolean)) {
-            error('PHAT_HANH / THU không phải ô chọn đúng/sai — lượt này đến từ một cấu hình job cũ. ' +
+          if (!(params.PHAT_HANH instanceof Boolean) || !(params.THU instanceof Boolean) ||
+              !(params.VAO_THANG instanceof Boolean)) {
+            error('PHAT_HANH / THU / VAO_THANG không phải ô chọn đúng/sai — lượt này đến từ một cấu hình job cũ. ' +
                   'Bấm "Build with Parameters".')
           }
 
@@ -122,6 +130,10 @@ pipeline {
           env.DICH = tenMien ?: 'app-chung'
           env.CRED_ZMP = tenMien ? "zmp-token-${tenMien}" : 'zmp-token-app-chung'
           env.DOMAIN_XA = tenMien
+          if (params.VAO_THANG && !tenMien) {
+            error('VAO_THANG cần DOMAIN: nó nung đúng tên miền ấy vào app riêng của xã. App chung không bao giờ mở thẳng vào một xã.')
+          }
+          env.VAO_THANG_CO = params.VAO_THANG ? 'co' : 'khong'
           env.PHAT_HANH_CO = params.PHAT_HANH ? 'co' : 'khong'
           env.THU_CO = params.THU ? 'co' : 'khong'
 
@@ -202,12 +214,13 @@ pipeline {
           string(credentialsId: 'citizen-app-vigov-api-host', variable: 'VIGOV_API_HOST')
         ]) {
           // NHÁY ĐƠN: không một biến bí mật nào đi qua nội suy của Groovy. Cờ dựng từ biến môi trường
-          // không bí mật (DOMAIN_XA · PHAT_HANH_CO · THU_CO) ngay trong shell.
+          // không bí mật (DOMAIN_XA · VAO_THANG_CO · PHAT_HANH_CO · THU_CO) ngay trong shell.
           sh '''
             set -eu
             cd citizen-app
             set --
             if [ -n "$DOMAIN_XA" ]; then set -- "$@" "--domain=$DOMAIN_XA"; fi
+            if [ "$VAO_THANG_CO" = "co" ]; then set -- "$@" --vao-thang; fi
             if [ "$PHAT_HANH_CO" = "co" ]; then set -- "$@" --phat-hanh; fi
             if [ "$THU_CO" = "co" ]; then set -- "$@" --thu; fi
             node scripts/deploy.mjs "$@"

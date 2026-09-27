@@ -95,7 +95,8 @@ export function docCo(argv) {
       // nó đang tin rằng họ chọn được nội dung bản dựng, và điều đó không còn đúng.
       throw new Error(
         "--bien-the đã bỏ: bản dựng không còn biến thể nào, app chung và app riêng của xã chạy cùng " +
-          "một bundle. Bỏ cờ này; muốn đẩy app riêng của xã thì dùng --domain=<tên-miền>.",
+          "một bundle. Bỏ cờ này; muốn đẩy app riêng của xã thì dùng --domain=<tên-miền> " +
+          "(thêm --vao-thang để app mở thẳng vào xã).",
       );
     } else throw new Error(`Cờ "${c}" không có. Chỉ nhận: --domain=<tên-miền> · --vao-thang · --phat-hanh · --thu`);
   }

@@ -97,6 +97,10 @@ link `t`/`src`/`v`. Bảng alias xã sáp nhập. Toàn bộ ADR 0018: một OA 
 cho mọi app, tách khỏi OA gửi thông báo của từng xã.
 
 > Khuôn `t`/`src`/`v` thay bởi ADR 0047 (27/09/2026): tham số mang tên miền xã, `src` giữ nguyên.
+>
+> *"Một bản build"* và dòng *"App riêng … App ID → bảng → máy chủ gắn sẵn"* có ngoại lệ từ ADR 0047 §6
+> (27/09/2026): app riêng dựng `--vao-thang` mang tên miền xã trong bundle, và hôm nay phiên của nó đi
+> chế độ **chính** qua cầu `vihat-miniapp` (App ID app chung), chưa phải chế độ riêng.
 
 ## Hệ quả
 
@@ -113,7 +117,7 @@ cho mọi app, tách khỏi OA gửi thông báo của từng xã.
 ## ĐIỀU KIỆN DỪNG
 
 1. Có đề xuất đặt **giá trị theo xã vào bản build** — biến môi trường, hằng số, nhánh mã, tệp cấu hình theo App ID
-   (tệp **chỉ chọn App ID đích** được nới — ADR 0047, 27/09/2026)
+   (tệp **chỉ chọn App ID đích** được nới — ADR 0047, 27/09/2026; tên miền xã của `--vao-thang` — ADR 0047 §6)
 2. Có đề xuất cho client **tự chọn xã** từ App ID hay tham số URL
 3. Có xã muốn **UBND xã đứng tên** app riêng — đổi bên chịu trách nhiệm dữ liệu, cần ADR mới
 4. Có yêu cầu một công dân trong một app thao tác với **nhiều xã**

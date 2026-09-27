@@ -11,7 +11,10 @@
  *   nhập thương mại và truyền xuống. Không cạnh nhập cấm nào xuất hiện.
  *
  * ⚠ XÃ CHỈ VÀO PHIÊN BẰNG HÀNH VI XÁC NHẬN (ADR 0047 điều kiện dừng #4). `communeConfirmed` là hằng
- *   `true` ở đây vì hàm này CHỈ được gọi từ nút "Đúng, tiếp tục" — không có đường nào gọi nó khi mở app.
+ *   `true` ở đây vì hàm này được gọi từ đúng hai chỗ: nút "Đúng, tiếp tục" của đường QR, và — từ
+ *   a861a9b — lúc MỞ app riêng của xã (`XacNhanXa tu_dong`, ADR 0047 §6: mở app riêng là đã chọn xã).
+ *   Chỗ thứ hai gửi `true` mà không ai bấm; hệ quả phía máy chủ (xã đã nhớ, vết `doi_xa_da_nho`
+ *   dưới App ID app chung) ghi ở ADR 0047 §6.
  *
  * ⚠ TÊN XÃ CỦA PHIÊN LÀ TÊN MÁY CHỦ TRẢ CÙNG PHIÊN, không phải tên màn xác nhận vừa hiện (ADR 0047
  *   §Trả lời mục 4). Hai tên có thể khác nhau trong một ca hiếm đã được chấp nhận; khi ấy phiên nói thật.
