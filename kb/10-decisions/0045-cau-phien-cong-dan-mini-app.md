@@ -313,6 +313,13 @@ Mục này ghi thêm, không sửa phần trên: phần trên là đề xuất l
 
 CÒN MỞ #5 (vòng đời xoay khoá), #6, #7 và UNKNOWN #1–#4 **vẫn mở**.
 
+**27/09/2026 — chủ dự án thêm một trường vào phản hồi.** Câu *"Phản hồi mang `tenant_display_name`
+và không gì khác về xã"* ở §Hợp đồng được nới đúng **một** trường: tên miền **chính** của xã
+(`commune_primary_host`), để app — nhất là app riêng, bundle không mang giá trị theo xã (ADR 0047
+điều kiện dừng #2) — gọi các tuyến công khai `?host=` (tin xã, danh bạ xã). Đó là **khoá tra**, không
+phải nội dung hồ sơ hiển thị, và không bao giờ là tham chiếu xã (ADR 0047 điều kiện dừng #1). Nguồn,
+nghĩa của `""` và lý do không lấy từ gợi ý tên miền: chú thích trường trong `.proto`.
+
 ## ĐIỀU KIỆN DỪNG
 
 1. Đề xuất đưa `GRPC_CALLER_KEY` cho `vihat-miniapp`, hoặc phục vụ RPC cầu trên cổng 9090
