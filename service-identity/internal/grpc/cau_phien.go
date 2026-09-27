@@ -63,9 +63,12 @@ func (s *CauServer) OpenCitizenSession(ctx context.Context, req *identityv1.Open
 
 	// NEVER LOG req. See the note above.
 	kq, err := s.uc.Mo(ctx, app.YeuCauMoPhienCau{
-		AppID:       req.GetAppId(),
-		MaZalo:      req.GetZaloUserId(),
+		AppID:  req.GetAppId(),
+		MaZalo: req.GetZaloUserId(),
+		// tenant_hint is retired (ADR 0047) and mapped ONLY so the use case can refuse it; the
+		// commune a confirmation names arrives as commune_host_hint.
 		GoiYXa:      req.GetTenantHint(),
+		GoiYTenMien: req.GetCommuneHostHint(),
 		DaXacNhanXa: req.GetCommuneConfirmed(),
 		SoDaXacThuc: req.GetVerifiedPhone(),
 		IP:          req.GetClientIp(),

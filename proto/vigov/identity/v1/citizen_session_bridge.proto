@@ -21,9 +21,10 @@ import "google/protobuf/timestamp.proto";
 //     verification — which app, which Zalo account, and optionally the phone number Zalo attested.
 //
 // THE COMMUNE: this RPC is called before any commune is known — it is the call that DECIDES the
-// commune of the session — so it cannot carry "x-tenant-id". It needs a place on
-// core/grpcx.methodsWithoutTenant, and adding a name there is a STOP CONDITION (ADR 0012,
-// decision 1). NOT ADDED BY THIS CONTRACT. Until the user answers, the interceptor refuses it.
+// commune of the session — so it cannot carry "x-tenant-id". It therefore sits on
+// core/grpcx.methodsWithoutTenant; adding a name there is a STOP CONDITION (ADR 0012, decision 1),
+// and this one was asked and answered yes by the owner on 2026-09-25 (ADR 0045, CÒN MỞ #1). The
+// reason it does not widen the hole is written beside that list.
 //
 // NEVER LOG A MESSAGE OF THIS FILE. The generated String() prints every field in full
 // (`debug_redact` is a no-op in protobuf-go v1.36.12, measured 2026-09-20); the request carries a

@@ -183,9 +183,11 @@ const MethodResolveMiniApp = "/vigov.platform.v1.PlatformService/ResolveMiniApp"
 // first DECIDES the commune of a citizen session, the second ANSWERS which commune a dedicated app
 // belongs to — neither can know it at call time. What keeps them from widening the hole:
 //
-//	OpenCitizenSession  its request has NO commune field declared for the caller (tenant_hint is
-//	                    a QR parameter that only counts with the citizen's explicit confirmation,
-//	                    in the main app); the commune comes back as an ANSWER. And it is served on
+//	OpenCitizenSession  its request has NO commune field declared for the caller (commune_host_hint
+//	                    is a QR parameter — a commune's domain, resolved server-side by ResolveHost
+//	                    — that only counts with the citizen's explicit confirmation, in the main
+//	                    app; tenant_hint is retired and refused, ADR 0047); the commune comes back
+//	                    as an ANSWER. And it is served on
 //	                    identity's bridge listener only — the inter-service port does not register
 //	                    CitizenSessionBridgeService at all.
 //	ResolveMiniApp      one app per call, metadata only (ADR 0003), no listing — the asymmetry that

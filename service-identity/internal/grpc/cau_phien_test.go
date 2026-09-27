@@ -36,12 +36,12 @@ func TestCauServerChuyenDuTruongVaoUseCase(t *testing.T) {
 	s := NewCauServer(gia, nil)
 
 	ra, err := s.OpenCitizenSession(context.Background(), &identityv1.OpenCitizenSessionRequest{
-		AppId: "a", ZaloUserId: "z", TenantHint: "t", CommuneConfirmed: true,
+		AppId: "a", ZaloUserId: "z", CommuneHostHint: "xa-a.vigov.vn", CommuneConfirmed: true,
 		VerifiedPhone: "84900000000", ClientIp: "10.0.0.1", Device: "d"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gia.nhan != (app.YeuCauMoPhienCau{AppID: "a", MaZalo: "z", GoiYXa: "t", DaXacNhanXa: true,
+	if gia.nhan != (app.YeuCauMoPhienCau{AppID: "a", MaZalo: "z", GoiYTenMien: "xa-a.vigov.vn", DaXacNhanXa: true,
 		SoDaXacThuc: "84900000000", IP: "10.0.0.1", ThietBi: "d"}) {
 		t.Fatalf("use case nhận = %+v", gia.nhan)
 	}
@@ -49,6 +49,20 @@ func TestCauServerChuyenDuTruongVaoUseCase(t *testing.T) {
 		ra.GetTenantId() != "01JD8ZQK9M3NPXR7TVWYB2C4EA" || ra.GetTenantDisplayName() != "Xã Thăng Bình" ||
 		!ra.GetPhoneVerified() || ra.GetAppMode() != identityv1.MiniAppMode_MINI_APP_MODE_COMMUNE {
 		t.Fatalf("phản hồi = %v", ra)
+	}
+}
+
+// tenant_hint is retired, and still MAPPED: dropping it here would turn "refused" into "silently
+// ignored" — a caller still wired to the old field would confirm a commune nobody resolves.
+func TestCauServerVanChuyenTenantHintDeUseCaseTuChoi(t *testing.T) {
+	gia := &moPhienCauGia{}
+	s := NewCauServer(gia, nil)
+	if _, err := s.OpenCitizenSession(context.Background(), &identityv1.OpenCitizenSessionRequest{
+		AppId: "a", ZaloUserId: "z", TenantHint: "01JD8ZQK9M3NPXR7TVWYB2C4EA", CommuneHostHint: "xa-a.vigov.vn"}); err != nil {
+		t.Fatal(err)
+	}
+	if gia.nhan.GoiYXa != "01JD8ZQK9M3NPXR7TVWYB2C4EA" || gia.nhan.GoiYTenMien != "xa-a.vigov.vn" {
+		t.Fatalf("use case nhận = %+v — cả hai gợi ý phải tới use case", gia.nhan)
 	}
 }
 

@@ -16,16 +16,18 @@ import (
 //	(unknown)  app_id not registered           REFUSE                        —
 //	dedicated  bound commune active            that commune; hint IGNORED    not used
 //	dedicated  bound commune not active        REFUSE (no auto-succession)   —
-//	main       hint + citizen CONFIRMED        hint, must be active, else    becomes hint
-//	                                           REFUSE
+//	main       hint + citizen CONFIRMED        the commune the hint's        becomes that commune
+//	                                           domain resolves to; must be
+//	                                           active, else REFUSE
 //	main       not confirmed (hint or not)     remembered if still active,   unchanged
 //	                                           else NO COMMUNE
 //
 // Whether a commune is ACTIVE is a platform read, so this function returns a candidate plus the
 // rule for an inactive answer; the use case asks the registry and applies it.
 //
-// Communes are plain strings here: domain/ imports nothing but the standard library, and the
-// ULID check on the hint happens in the use case (core/tenant owns it).
+// Communes are plain strings here: domain/ imports nothing but the standard library. The hint the
+// bridge caller sends is a DOMAIN (`commune_host_hint`, ADR 0047); the use case resolves it with
+// platform ResolveHost and hands this table only the resulting ULID — the domain never reaches it.
 
 // CheDoApp is the mode of the Mini App the session is opened through (ADR 0044).
 type CheDoApp int
@@ -55,7 +57,9 @@ type DauVaoChonXa struct {
 	// only when the binding exists and the commune is active. "" under CheDoAppRieng = not active.
 	XaCuaAppRieng string
 
-	// GoiY is the QR's `t=`, verbatim. Client-supplied: on its own it enters nothing.
+	// GoiY is the commune ULID the platform resolved `commune_host_hint` to — never the domain
+	// itself. "" when there is no confirmation to resolve. Derived from client-supplied data: on its
+	// own it enters nothing.
 	GoiY string
 
 	// DaXacNhan is the citizen's explicit act on the confirmation screen.
@@ -91,7 +95,8 @@ var (
 	// merger is an operator's act, with a trail).
 	ErrAppRiengKhongCoXa = errors.New("cầu phiên: app riêng không gắn với xã nào đang hoạt động")
 
-	// ErrXacNhanKhongCoGoiY — commune_confirmed without tenant_hint: a wiring fault in the caller.
+	// ErrXacNhanKhongCoGoiY — commune_confirmed without commune_host_hint: a wiring fault in the
+	// caller.
 	ErrXacNhanKhongCoGoiY = errors.New("cầu phiên: có xác nhận xã mà không có tham số xã của QR")
 )
 
@@ -99,7 +104,7 @@ var (
 func ChonXa(v DauVaoChonXa) (UngVienXa, error) {
 	switch v.CheDo {
 	case CheDoAppRieng:
-		// tenant_hint is IGNORED in this mode, confirmed or not: the app IS the commune.
+		// commune_host_hint is IGNORED in this mode, confirmed or not: the app IS the commune.
 		if strings.TrimSpace(v.XaCuaAppRieng) == "" {
 			return UngVienXa{}, ErrAppRiengKhongCoXa
 		}

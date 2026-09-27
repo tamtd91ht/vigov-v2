@@ -198,6 +198,7 @@ func TestDanhMucXaHostSaiHinhDangLa400VaKhongHoiNenTang(t *testing.T) {
 		qHost("xa_qr.vigov.vn"),                // underscore
 		qHost("xã.vigov.vn"),                   // non-ASCII
 		qHost(strings.Repeat("a", 64) + ".vn"), // label over 63
+		qHost("10.0.0.1"),                      // IP literal — the shape the bridge refuses too
 	} {
 		w := goiDanhMucXa(h, q, tokCoSo)
 		if w.Code != http.StatusBadRequest {

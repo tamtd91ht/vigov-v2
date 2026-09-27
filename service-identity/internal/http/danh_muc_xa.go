@@ -4,10 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-identity/internal/domain"
 )
 
 // The Mini App's commune confirmation. GET /api/v1/communes?host=<domain>
@@ -75,7 +75,9 @@ type HandlerCongDan struct {
 //
 // ORDER IS THE DESIGN: the shape of the host is checked BEFORE the platform is asked. A malformed
 // value is the caller's mistake and costs nothing; sending it on would spend a platform call per
-// junk request on a route any holder of a citizen session can reach.
+// junk request on a route any holder of a citizen session can reach. The shape is
+// domain.HopLeTenMienXa — the SAME function the session bridge applies to `commune_host_hint`, so
+// this screen can never name a commune for a value the bridge then refuses.
 //
 // ONE ANSWER FOR UNKNOWN, RESERVED AND INACTIVE: 200 `{"items": []}`. service-platform already
 // answers reserved Hosts with the same NotFound as unclaimed ones (internal/grpc/server.go:96-98);
@@ -97,10 +99,10 @@ type HandlerCongDan struct {
 // no commune is in the context, so store.For(ctx) would panic.
 //
 // NO PERSONAL DATA IN THE LOG LINE: the Host is logged on an outage because it is a domain, not a
-// person; it has passed hopLeHost, so it cannot carry a log-injection payload either.
+// person; it has passed domain.HopLeTenMienXa, so it cannot carry a log-injection payload either.
 func (h *HandlerCongDan) DanhMucXa(w http.ResponseWriter, r *http.Request) {
 	gia := r.URL.Query()["host"]
-	if len(gia) != 1 || !hopLeHost(gia[0]) {
+	if len(gia) != 1 || !domain.HopLeTenMienXa(gia[0]) {
 		// The body never echoes what was sent.
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_host",
 			"Tên miền của xã không hợp lệ.", "")
@@ -120,33 +122,6 @@ func (h *HandlerCongDan) DanhMucXa(w http.ResponseWriter, r *http.Request) {
 		ra.Items = append(ra.Items, xaCongKhai{Name: xa.Name, Province: xa.Province})
 	}
 	vietJSON(w, http.StatusOK, ra)
-}
-
-// hopLeHost accepts a bare, LOWERCASE DNS hostname with at least one dot, and nothing else.
-//
-// STRICT ON PURPOSE. No scheme, no port, no path, no userinfo, no trailing dot, no uppercase — a QR
-// issued by the platform carries the canonical form, and a value that is not in it is not one this
-// route should normalise into something the caller did not send. Normalising is how two spellings
-// come to be accepted for one key.
-//
-// AT LEAST ONE DOT: no domain a commune is reached on is a single label, and it also keeps the
-// literal `current` — the staff selector at /api/v1/communes/current — from ever being valid here.
-func hopLeHost(s string) bool {
-	if len(s) == 0 || len(s) > 253 || !strings.Contains(s, ".") {
-		return false
-	}
-	for _, nhan := range strings.Split(s, ".") {
-		if len(nhan) == 0 || len(nhan) > 63 || nhan[0] == '-' || nhan[len(nhan)-1] == '-' {
-			return false
-		}
-		for i := 0; i < len(nhan); i++ {
-			c := nhan[i]
-			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 // newHandlerCongDan defaults the logger the same way NewHandler does.

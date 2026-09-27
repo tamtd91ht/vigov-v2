@@ -32,18 +32,35 @@ const (
 	cauAppRieng = "app-rieng-5678"
 	cauMaZalo   = "zalo-user-GIA-0000000000"
 	cauIP       = "10.0.0.9"
+
+	// The domains the fake platform resolves (ADR 0047). hostNenTang is a platform address, which
+	// ResolveHost answers with the same NotFound as an unclaimed one.
+	hostThu     = "xa-thu.vigov.vn"
+	hostKhac    = "xa-khac.vigov.vn"
+	hostKhongCo = "xa-khong-co.vigov.vn"
+	hostNenTang = "admin.vigov.vn"
 )
 
 // --- fakes --------------------------------------------------------------------------------------
 
 type cauNenTangGia struct {
-	apps   map[string]platformclient.MiniApp
-	xa     map[tenant.ID]tenant.Tenant
-	loiApp error
-	loiXa  error
+	apps map[string]platformclient.MiniApp
+	xa   map[tenant.ID]tenant.Tenant
+	// hosts maps a domain to the commune holding it; the commune's row (and so its Active) is
+	// read from xa, as the platform keeps one record per commune whatever the domain.
+	hosts   map[string]tenant.ID
+	loiApp  error
+	loiXa   error
+	loiHost error
+	goiApp  int
+	goiHost []string // every domain ResolveHost was asked about
+	// xaSauHost, when set, replaces what XaTrongNguCanh answers once ResolveHost has been asked —
+	// a deactivation landing between the two reads.
+	xaSauHost *tenant.Tenant
 }
 
 func (n *cauNenTangGia) MiniApp(_ context.Context, appID string) (platformclient.MiniApp, bool, error) {
+	n.goiApp++
 	if n.loiApp != nil {
 		return platformclient.MiniApp{}, false, n.loiApp
 	}
@@ -51,9 +68,30 @@ func (n *cauNenTangGia) MiniApp(_ context.Context, appID string) (platformclient
 	return a, ok, nil
 }
 
+func (n *cauNenTangGia) XaTheoHost(ctx context.Context, host string) (tenant.Tenant, bool, error) {
+	n.goiHost = append(n.goiHost, host)
+	if _, co := tenant.From(ctx); co {
+		// ResolveHost is exempt from the commune and is asked BEFORE one is known; a commune in the
+		// context here would mean the order of the use case changed.
+		return tenant.Tenant{}, false, errors.New("gia: ResolveHost gọi khi đã có xã trong context")
+	}
+	if n.loiHost != nil {
+		return tenant.Tenant{}, false, n.loiHost
+	}
+	id, ok := n.hosts[host]
+	if !ok {
+		return tenant.Tenant{}, false, nil // unclaimed and platform-reserved: one NotFound
+	}
+	t, ok := n.xa[id]
+	return t, ok, nil
+}
+
 func (n *cauNenTangGia) XaTrongNguCanh(ctx context.Context) (tenant.Tenant, bool, error) {
 	if n.loiXa != nil {
 		return tenant.Tenant{}, false, n.loiXa
+	}
+	if n.xaSauHost != nil && len(n.goiHost) > 0 {
+		return *n.xaSauHost, true, nil
 	}
 	t, ok := n.xa[tenant.MustFrom(ctx)]
 	return t, ok, nil
@@ -198,6 +236,7 @@ func dungBanThuCau(t *testing.T) banThuCau {
 			xaThu:  {ID: xaThu, Name: "Xã Thăng Bình", Active: true},
 			xaKhac: {ID: xaKhac, Name: "Xã Bình Dương", Active: true},
 		},
+		hosts: map[string]tenant.ID{hostThu: xaThu, hostKhac: xaKhac},
 	}
 	var buf bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
@@ -241,7 +280,7 @@ func TestCauAppKhongDangKyThiTuChoi(t *testing.T) {
 func TestCauAppRiengTheoXaCuaAppBoQuaGoiY(t *testing.T) {
 	b := dungBanThuCau(t)
 	yc := yeuCauCau(cauAppRieng)
-	yc.GoiYXa, yc.DaXacNhanXa = string(xaKhac), true
+	yc.GoiYTenMien, yc.DaXacNhanXa = hostKhac, true
 
 	kq, err := b.uc.Mo(context.Background(), yc)
 	if err != nil {
@@ -254,6 +293,9 @@ func TestCauAppRiengTheoXaCuaAppBoQuaGoiY(t *testing.T) {
 		if tk.XaDaNho != "" {
 			t.Fatal("app riêng ghi xã đã nhớ — chỉ app chính nhớ xã")
 		}
+	}
+	if len(b.nt.goiHost) != 0 {
+		t.Fatalf("app riêng đã hỏi ResolveHost %v — tên miền bị BỎ QUA ở chế độ này, tức là không hỏi", b.nt.goiHost)
 	}
 }
 
@@ -278,7 +320,7 @@ func TestCauAppRiengXaNgungThiTuChoiKhongDiTheoKeThua(t *testing.T) {
 func TestCauAppChinhXacNhanQRThiVaoXaVaNhoXa(t *testing.T) {
 	b := dungBanThuCau(t)
 	yc := yeuCauCau(cauAppChinh)
-	yc.GoiYXa, yc.DaXacNhanXa = string(xaThu), true
+	yc.GoiYTenMien, yc.DaXacNhanXa = hostThu, true
 
 	kq, err := b.uc.Mo(context.Background(), yc)
 	if err != nil {
@@ -300,7 +342,7 @@ func TestCauAppChinhXacNhanXaNgungThiTuChoi(t *testing.T) {
 	b := dungBanThuCau(t)
 	b.nt.xa[xaKhac] = tenant.Tenant{ID: xaKhac, Active: false}
 	yc := yeuCauCau(cauAppChinh)
-	yc.GoiYXa, yc.DaXacNhanXa = string(xaKhac), true
+	yc.GoiYTenMien, yc.DaXacNhanXa = hostKhac, true
 	if _, err := b.uc.Mo(context.Background(), yc); !errors.Is(err, ErrCauXaKhongHoatDong) {
 		t.Fatalf("err = %v, muốn ErrCauXaKhongHoatDong", err)
 	}
@@ -315,14 +357,17 @@ func TestCauAppChinhChuaXacNhanTheoXaDaNhoVaBoQuaGoiY(t *testing.T) {
 	b := dungBanThuCau(t)
 	b.k.taiKhoan[cauAppChinh+"|"+cauMaZalo] = crosstenant.TaiKhoanZalo{ID: "TK-A", XaDaNho: xaThu}
 	yc := yeuCauCau(cauAppChinh)
-	yc.GoiYXa = string(xaKhac) // QR of another commune, NOT confirmed
+	yc.GoiYTenMien = hostKhac // QR of another commune, NOT confirmed
 
 	kq, err := b.uc.Mo(context.Background(), yc)
 	if err != nil {
 		t.Fatalf("lỗi: %v", err)
 	}
 	if kq.Xa != xaThu || kq.Token == "" {
-		t.Fatalf("kết quả = %+v — chưa xác nhận thì theo xã đã nhớ, KHÔNG theo t=", kq)
+		t.Fatalf("kết quả = %+v — chưa xác nhận thì theo xã đã nhớ, KHÔNG theo tên miền của QR", kq)
+	}
+	if len(b.nt.goiHost) != 0 {
+		t.Fatalf("chưa xác nhận mà đã hỏi ResolveHost %v", b.nt.goiHost)
 	}
 	if b.k.taiKhoan[cauAppChinh+"|"+cauMaZalo].XaDaNho != xaThu {
 		t.Fatal("xã đã nhớ bị đổi khi chưa xác nhận")
@@ -352,7 +397,7 @@ func TestCauAppChinhXaDaNhoNgungThiKhongXaKhongGhiGi(t *testing.T) {
 func TestCauAppChinhChuaNhoGiThiKhongXaKhongPhienKhongGhi(t *testing.T) {
 	b := dungBanThuCau(t)
 	yc := yeuCauCau(cauAppChinh)
-	yc.GoiYXa = string(xaThu)      // unconfirmed QR
+	yc.GoiYTenMien = hostThu       // unconfirmed QR
 	yc.SoDaXacThuc = "84900000000" // even with a verified phone, nothing is written
 
 	kq, err := b.uc.Mo(context.Background(), yc)
@@ -375,13 +420,13 @@ func TestCauDoiXaThuHoiNgayPhienXaCuVaGhiVetHaiXa(t *testing.T) {
 
 	// First: confirmed into xaThu.
 	yc := yeuCauCau(cauAppChinh)
-	yc.GoiYXa, yc.DaXacNhanXa = string(xaThu), true
+	yc.GoiYTenMien, yc.DaXacNhanXa = hostThu, true
 	cu, err := b.uc.Mo(ctx, yc)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Then: QR of xaKhac, confirmed.
-	yc.GoiYXa = string(xaKhac)
+	yc.GoiYTenMien = hostKhac
 	moi, err := b.uc.Mo(ctx, yc)
 	if err != nil {
 		t.Fatal(err)
@@ -458,7 +503,7 @@ func TestCauCoSoThiLienKetDinhDanhVaLanSauKhongCanSo(t *testing.T) {
 func TestCauMotGiaoDichMoiMucVetBenTrong(t *testing.T) {
 	b := dungBanThuCau(t)
 	yc := yeuCauCau(cauAppChinh)
-	yc.GoiYXa, yc.DaXacNhanXa, yc.SoDaXacThuc = string(xaThu), true, "84900000000"
+	yc.GoiYTenMien, yc.DaXacNhanXa, yc.SoDaXacThuc = hostThu, true, "84900000000"
 
 	if _, err := b.uc.Mo(context.Background(), yc); err != nil {
 		t.Fatal(err)
@@ -484,7 +529,7 @@ func TestCauGhiPhienHongThiKhongGiDuocGiu(t *testing.T) {
 	b := dungBanThuCau(t)
 	b.k.loiTaoPhien = errors.New("ổ đĩa đầy")
 	yc := yeuCauCau(cauAppChinh)
-	yc.GoiYXa, yc.DaXacNhanXa = string(xaThu), true
+	yc.GoiYTenMien, yc.DaXacNhanXa = hostThu, true
 
 	if _, err := b.uc.Mo(context.Background(), yc); err == nil {
 		t.Fatal("ghi phiên hỏng mà vẫn trả thành công")
@@ -528,10 +573,12 @@ func TestCauXaDaNhoVuaDoiThiHuyKhongPhatPhienXaCu(t *testing.T) {
 func TestCauYeuCauSaiLaInvalidArgument(t *testing.T) {
 	b := dungBanThuCau(t)
 	for ten, sua := range map[string]func(*YeuCauMoPhienCau){
-		"thiếu app":               func(y *YeuCauMoPhienCau) { y.AppID = "" },
-		"thiếu mã Zalo":           func(y *YeuCauMoPhienCau) { y.MaZalo = " " },
-		"t= không phải ULID":      func(y *YeuCauMoPhienCau) { y.GoiYXa = "thang-binh" },
-		"xác nhận mà không có t=": func(y *YeuCauMoPhienCau) { y.DaXacNhanXa = true },
+		"thiếu app":                     func(y *YeuCauMoPhienCau) { y.AppID = "" },
+		"thiếu mã Zalo":                 func(y *YeuCauMoPhienCau) { y.MaZalo = " " },
+		"xác nhận mà không có tên miền": func(y *YeuCauMoPhienCau) { y.DaXacNhanXa = true },
+		"xác nhận, tên miền chỉ khoảng trắng": func(y *YeuCauMoPhienCau) {
+			y.DaXacNhanXa, y.GoiYTenMien = true, "   "
+		},
 	} {
 		t.Run(ten, func(t *testing.T) {
 			yc := yeuCauCau(cauAppChinh)
@@ -568,7 +615,7 @@ func TestCauKhongDuaSoHayMaZaloVaoVetHayLog(t *testing.T) {
 	b := dungBanThuCau(t)
 	const so = "84900000000"
 	yc := yeuCauCau(cauAppChinh)
-	yc.GoiYXa, yc.DaXacNhanXa, yc.SoDaXacThuc = string(xaThu), true, so
+	yc.GoiYTenMien, yc.DaXacNhanXa, yc.SoDaXacThuc = hostThu, true, so
 	if _, err := b.uc.Mo(context.Background(), yc); err != nil {
 		t.Fatal(err)
 	}

@@ -272,10 +272,11 @@ func run(log *slog.Logger) error {
 	// row, derives its tier, and writes the change and its audit entry in one transaction.
 	ghiLoaiDonViDanCu := app.NewDanhMucLoaiDonViDanCu(kho, loaiDonViDanCu)
 	ghiKhoiNhiemVu := app.NewDanhMucKhoiNhiemVu(kho, khoiNhiemVu)
-	// The citizen-session bridge (ADR 0045): two synchronous platform reads, then ONE identity
-	// transaction. `nenTang` is the same platform client every Host resolution uses — the bridge's
-	// two RPCs travel with the same caller key, ResolveMiniApp exempt from the commune, GetTenant
-	// carrying the commune about to be opened. Built even when the bridge listener is not started:
+	// The citizen-session bridge (ADR 0045, 0047): up to three synchronous platform reads, then ONE
+	// identity transaction. `nenTang` is the same platform client every Host resolution uses — the
+	// bridge's RPCs travel with the same caller key: ResolveMiniApp and ResolveHost (a confirmed
+	// commune domain, main app only) exempt from the commune, GetTenant carrying the commune about
+	// to be opened. Built even when the bridge listener is not started:
 	// it costs nothing, and a construction panic surfaces on every machine rather than only on the
 	// one that configures the bridge.
 	cauPhien := app.NewCauPhienCongDan(kho, nenTang, taiKhoanZalo, crosstenant.NewDinhDanhStore(),

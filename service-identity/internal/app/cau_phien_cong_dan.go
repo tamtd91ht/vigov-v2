@@ -25,7 +25,15 @@ import (
 // # THE ORDER IS THE CONSISTENCY DECISION (strong — transaction-boundaries.json,
 // phat_hanh_phien_cong_dan_qua_cau_mini_app)
 //
+//  0. The request's shape, before any platform call: `tenant_hint` (GoiYXa) is retired and refused
+//     when non-empty; `commune_host_hint` (GoiYTenMien) must have domain.HopLeTenMienXa's shape in
+//     EVERY mode, and must be present when the citizen confirmed.
 //  1. ResolveMiniApp — which app, which mode, which bound commune. Synchronous.
+//     1b. Main app with a confirmation only: ResolveHost on the domain (ADR 0047). Synchronous. From
+//     here on only the ULID exists — the domain is never stored: not in the session, the remembered
+//     commune, nor the audit entry (rule 1, forbidden #5), because a merger re-points a domain to
+//     the successor and a stored domain would re-attribute every record written before. A dedicated
+//     app never asks: the app IS the commune.
 //  2. The account's remembered commune (main app only), read before any transaction: the commune
 //     decides WHICH scoped transaction to open, so it cannot be read inside one.
 //  3. domain.ChonXa, then GetTenant with that commune IN CONTEXT: still active?
@@ -33,7 +41,8 @@ import (
 //     remembered commune and the revocation of the old sessions, the new session, and every audit
 //     entry. Nothing is written to any other service; no event is published.
 //
-// Platform unreachable at 1 or 3 → ErrCauNenTang (UNAVAILABLE). NEVER "use the commune it
+// Platform unreachable at 1, 1b or 3 → ErrCauNenTang (UNAVAILABLE); at 1b in particular an outage is
+// NEVER ErrCauXaKhongHoatDong, or a platform incident reads to the caller as "no such commune". NEVER "use the commune it
 // remembered last time": serving under a commune the registry could not confirm is exactly the
 // failure the strong consistency was chosen to prevent.
 //
@@ -70,6 +79,9 @@ type CauPhienCongDan struct {
 // NenTangCauPhien is the platform, as the bridge reads it. *platformclient.Directory satisfies it.
 type NenTangCauPhien interface {
 	MiniApp(ctx context.Context, appID string) (platformclient.MiniApp, bool, error)
+	// XaTheoHost is ResolveHost with the outage kept apart from "no commune holds it" (see
+	// platformclient.XaTheoHost). Unknown, platform-reserved and malformed are all ok=false.
+	XaTheoHost(ctx context.Context, host string) (tenant.Tenant, bool, error)
 	XaTrongNguCanh(ctx context.Context) (tenant.Tenant, bool, error)
 }
 
@@ -111,9 +123,15 @@ func NewCauPhienCongDan(db *store.DB, nenTang NenTangCauPhien, taiKhoan TaiKhoan
 // YeuCauMoPhienCau is OpenCitizenSessionRequest, field for field. Everything in it is a CLAIM BY
 // THE BRIDGE CALLER (ADR 0045 §Tin cậy). MaZalo and SoDaXacThuc are personal data (rule 3).
 type YeuCauMoPhienCau struct {
-	AppID       string
-	MaZalo      string
-	GoiYXa      string
+	AppID  string
+	MaZalo string
+	// GoiYXa is the RETIRED `tenant_hint` (ADR 0047 decision 4). Carried only so that a non-empty
+	// value can be REFUSED: a caller still wired to it would otherwise confirm a hint that is
+	// silently dropped. It never selects a commune.
+	GoiYXa string
+	// GoiYTenMien is `commune_host_hint`: a commune's domain, a lookup key and never a commune
+	// reference. Not personal data.
+	GoiYTenMien string
 	DaXacNhanXa bool
 	SoDaXacThuc string
 	IP          string
@@ -153,16 +171,20 @@ const (
 // Mo opens a citizen session. See the type for the order and why.
 func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaMoPhienCau, error) {
 	yc.AppID = strings.TrimSpace(yc.AppID)
-	yc.GoiYXa = strings.TrimSpace(yc.GoiYXa)
+	// GoiYXa is NOT trimmed: any non-empty value on the wire is the retired field in use.
+	yc.GoiYTenMien = strings.TrimSpace(yc.GoiYTenMien)
 	yc.SoDaXacThuc = strings.TrimSpace(yc.SoDaXacThuc)
 
 	// --- INVALID_ARGUMENT: wiring faults in the caller (the contract's list) -----------------
 	switch {
 	case yc.AppID == "", strings.TrimSpace(yc.MaZalo) == "":
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: thiếu app_id hoặc zalo_user_id", ErrCauYeuCauSai)
-	case yc.GoiYXa != "" && !tenant.ID(yc.GoiYXa).Valid():
-		return KetQuaMoPhienCau{}, fmt.Errorf("%w: tenant_hint không phải ULID", ErrCauYeuCauSai)
-	case yc.DaXacNhanXa && yc.GoiYXa == "":
+	case yc.GoiYXa != "":
+		return KetQuaMoPhienCau{}, fmt.Errorf("%w: tenant_hint đã ngừng dùng (ADR 0047)", ErrCauYeuCauSai)
+	case yc.GoiYTenMien != "" && !domain.HopLeTenMienXa(yc.GoiYTenMien):
+		// Never repaired, and never echoed: the message does not carry the value.
+		return KetQuaMoPhienCau{}, fmt.Errorf("%w: commune_host_hint sai hình dạng", ErrCauYeuCauSai)
+	case yc.DaXacNhanXa && yc.GoiYTenMien == "":
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: %w", ErrCauYeuCauSai, domain.ErrXacNhanKhongCoGoiY)
 	}
 
@@ -177,6 +199,27 @@ func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaM
 		return KetQuaMoPhienCau{}, fmt.Errorf("%w: app_id chưa đăng ký", ErrCauAppChuaSanSang)
 	}
 	cheDo := sangCheDo(app.CheDo)
+
+	// --- 1b. the confirmed domain → its commune (main app only) ------------------------------
+	// Resolved ONLY where it counts. A dedicated app, or a main-app open without confirmation,
+	// ignores the domain — and "ignored" means not even asked, so the platform is never told which
+	// domain an unconfirmed QR carried.
+	var goiY string
+	if cheDo == domain.CheDoAppChinh && yc.DaXacNhanXa {
+		t, co, err := uc.nenTang.XaTheoHost(ctx, yc.GoiYTenMien)
+		if err != nil {
+			// The domain is not personal data and has passed HopLeTenMienXa: safe to log.
+			uc.log.WarnContext(ctx, "cầu phiên: không phân giải được tên miền xã ở dịch vụ nền tảng — không phát phiên",
+				"app_id", yc.AppID, "host", yc.GoiYTenMien, "err", err)
+			return KetQuaMoPhienCau{}, fmt.Errorf("%w: %w", ErrCauNenTang, err)
+		}
+		if !co || !t.Active {
+			// Unclaimed, platform-reserved and deactivated: ONE answer, byte for byte, so the caller
+			// cannot probe which domains exist (citizen_session_bridge.proto status table).
+			return KetQuaMoPhienCau{}, ErrCauXaKhongHoatDong
+		}
+		goiY = string(t.ID)
+	}
 
 	// --- 2. the remembered commune (main app, not confirmed) ---------------------------------
 	var xaDaNho tenant.ID
@@ -194,7 +237,7 @@ func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaM
 	ungVien, err := domain.ChonXa(domain.DauVaoChonXa{
 		CheDo:         cheDo,
 		XaCuaAppRieng: string(app.XaRieng),
-		GoiY:          yc.GoiYXa,
+		GoiY:          goiY, // the resolved ULID, never the domain
 		DaXacNhan:     yc.DaXacNhanXa,
 		XaDaNho:       string(xaDaNho),
 	})
