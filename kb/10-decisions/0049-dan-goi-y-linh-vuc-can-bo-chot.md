@@ -13,7 +13,7 @@ owns_facts:
 
 # 0049. Người dân GỢI Ý lĩnh vực, cán bộ CHỐT lĩnh vực
 
-**Trạng thái:** đã chốt · **Ngày:** 2026-09-28 · **Chủ dự án chốt** (chọn hướng B) · **Sửa một phần ADR
+**Trạng thái:** BỊ THAY bởi ADR 0050 (28/09/2026, cùng ngày) · **Ngày:** 2026-09-28 · **Chủ dự án chốt** (chọn hướng B) · **Sửa một phần ADR
 0028** (câu mở #23) — quyết định E và F của 0028 đứng nguyên
 
 ## Bối cảnh

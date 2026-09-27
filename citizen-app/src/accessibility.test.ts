@@ -783,6 +783,7 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       ".xa-cong-tac",
       ".xa-o-4",
       ".xa-o-lv",
+      ".xa-sao__nut",
     ]) {
       expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
         new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
@@ -813,6 +814,9 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     ["chữ trắng trên nút đỏ", "#ffffff", token("xa-loi")],
     ["chip 'Đang xử lý'", token("xa-cam-dam"), token("xa-cam-nhat")],
     ["chip 'Mới tiếp nhận'", token("xa-navy"), token("xa-xanh-nhat")],
+    ["chip 'Đã xử lý xong'", token("xa-luc-dam"), token("xa-luc-nhat")],
+    ["chip 'Đã đóng'", token("ink-muted"), token("xa-nen")],
+    ["sao đã chấm (viền) trên thẻ", token("xa-cam-dam"), token("surface")],
     ["ghi chú trên nền cam nhạt", token("ink"), token("xa-cam-nhat")],
     ["bước đang làm", token("xa-hong-dam"), token("surface")],
   ];

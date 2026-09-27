@@ -146,6 +146,7 @@ const HINH = {
     </>
   ),
   send: <path d="M21,3.5L10.5,14M21,3.5l-6.6,17.2,-3.9,-6.7,-6.7,-3.9z" />,
+  star: <path d="M12,3.5l2.6,5.3,5.9,0.9,-4.3,4.1,1,5.8,-5.2,-2.7,-5.2,2.7,1,-5.8,-4.3,-4.1,5.9,-0.9z" />,
 } as const satisfies Record<string, ReactNode>;
 
 export type TenBieuTuong = keyof typeof HINH;

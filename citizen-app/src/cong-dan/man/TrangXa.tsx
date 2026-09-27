@@ -31,7 +31,7 @@ import { APP_RIENG, CUA_TOI, DANH_BA, TIN_XA, XA_GIAO_DIEN, XA_TN } from "./noi-
 import { ChiTietPhieuTN, DanhSachPhieuTN, GuiPhanAnhTN, NhanTraiNghiem, ThePhieuTN, TraCuuPhieuTN } from "./PhanAnhAppXa";
 import { CaNhanXa, type CoChu, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
 import { BaiTinXa, DanhSachTinXa, HangTin, useTinXa } from "./TinTucAppXa";
-import { type LayMaViTri, type LayTenZalo, type PhieuTN } from "./trai-nghiem";
+import { apDanhGia, type LayMaViTri, type LayTenZalo, type PhieuTN } from "./trai-nghiem";
 
 export type XaCuaApp = { readonly ten: string; readonly tinh: string };
 
@@ -159,8 +159,9 @@ function TrangChuXa(props: {
   di: (m: ManXa) => void;
 }) {
   const { xa, tin, di, ho_ten } = props;
-  const tin_moi = tin.ds.muc.slice(0, 3);
-  const moi_nhat = props.phieu[0];
+  // Hai phiếu, hai tin — đúng bố cục trang chủ của prototype (`HomePage.tsx`).
+  const tin_moi = tin.ds.muc.slice(0, 2);
+  const phieu_moi = props.phieu.slice(0, 2);
 
   return (
     <div className="xa-trang">
@@ -206,8 +207,14 @@ function TrangChuXa(props: {
               {XA_GIAO_DIEN.xem_tat_ca}
             </button>
           </div>
-          {moi_nhat ? (
-            <ThePhieuTN phieu={moi_nhat} onMo={() => di({ kieu: "phieu", ma: moi_nhat.ma_tra_cuu, tu: "trang-chu" })} />
+          {phieu_moi.length > 0 ? (
+            <ul className="xa-ds">
+              {phieu_moi.map((p) => (
+                <li key={p.ma_tra_cuu}>
+                  <ThePhieuTN phieu={p} onMo={() => di({ kieu: "phieu", ma: p.ma_tra_cuu, tu: "trang-chu" })} />
+                </li>
+              ))}
+            </ul>
           ) : (
             <KhoiTrangThai bieu_tuong="chat" cau={XA_TN.chua_co_phieu} />
           )}
@@ -314,7 +321,11 @@ function AppCuaXa(props: {
       break;
     case "phieu":
       man_con = (
-        <ChiTietPhieuTN phieu={phieu.find((p) => p.ma_tra_cuu === man.ma) ?? null} onQuayLai={() => veTab(man.tu)} />
+        <ChiTietPhieuTN
+          phieu={phieu.find((p) => p.ma_tra_cuu === man.ma) ?? null}
+          onQuayLai={() => veTab(man.tu)}
+          onDanhGia={(ma, sao, nx) => datPhieu((ds) => ds.map((p) => (p.ma_tra_cuu === ma ? apDanhGia(p, sao, nx) : p)))}
+        />
       );
       break;
     case "danh-ba":

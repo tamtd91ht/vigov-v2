@@ -88,9 +88,9 @@ export const VONG_DOI: readonly string[] = [
 
 /**
  * DANH MỤC LĨNH VỰC TẠM — mười hai tên của prototype khách (`../vigov-require/apps/miniapp`), cho bước
- * "chọn lĩnh vực gần đúng nhất" (ADR 0049). KHÔNG KÈM SỐ GIỜ NÀO: SLA là cấu hình từng xã (luật 10 cấm #3,
- * ADR 0049 điều kiện dừng #3). Lựa chọn là GỢI Ý cho cán bộ, không đặt hạn. Gỡ danh sách này khi có tuyến
- * đọc danh mục lĩnh vực của xã.
+ * "chọn lĩnh vực gần đúng nhất". Theo ADR 0050, lĩnh vực dân chọn LÀ lĩnh vực của phiếu và máy chủ đặt hạn
+ * từ nó lúc tạo phiếu. KHÔNG KÈM SỐ GIỜ NÀO: SLA là cấu hình từng xã, và chỉ `identity` đếm hạn (luật 10 cấm
+ * #2, #3). Gỡ danh sách này khi có tuyến đọc danh mục lĩnh vực của xã.
  */
 export const LINH_VUC_TAM: readonly string[] = [
   "Rác thải – Vệ sinh môi trường",
@@ -107,24 +107,74 @@ export const LINH_VUC_TAM: readonly string[] = [
   "Khác",
 ];
 
-/** Phiếu trải nghiệm = phiếu của hợp đồng thật + lĩnh vực DÂN GỢI Ý (ADR 0049), tách khỏi lĩnh vực cán bộ chốt. */
-export type PhieuTN = PhieuCuaToi & { readonly linh_vuc_goi_y: string };
+/** Đánh giá của dân sau khi xử lý (ADR 0050 điểm 2). */
+export type DanhGia = { readonly sao: number; readonly nhan_xet: string };
 
-/** Nhóm lọc ở danh sách — theo việc người dân muốn biết, không theo mã trạng thái. */
-export type NhomLoc = "tat-ca" | "dang-cho" | "dang-xu-ly" | "da-xong";
+/** Phiếu trải nghiệm = phiếu của hợp đồng thật + đánh giá (khi có) + số lần mở lại. */
+export type PhieuTN = PhieuCuaToi & { readonly danh_gia: DanhGia | null; readonly so_lan_mo_lai: number };
 
-export function nhomCua(trang_thai: string): Exclude<NhomLoc, "tat-ca"> {
-  if (trang_thai === "da-tiep-nhan" || trang_thai === "dang-phan-loai") return "dang-cho";
-  if (trang_thai === "da-chuyen-xu-ly" || trang_thai === "dang-xu-ly") return "dang-xu-ly";
-  return "da-xong";
+/** Ngưỡng mở lại: chấm từ số sao này trở xuống thì phiếu mở lại (`service.py` POOR_RATING, SRS M4.3.7). */
+export const SAO_MO_LAI = 2;
+
+/**
+ * Ghi đánh giá — đúng luật của kho yêu cầu (`service.py:804-840`): 1–2 sao đưa phiếu về "đang xử lý" và
+ * tăng số lần mở lại; 3 sao trở lên ghi nhận, trạng thái giữ nguyên. THUẦN.
+ */
+export function apDanhGia(p: PhieuTN, sao: number, nhan_xet: string): PhieuTN {
+  const s = Math.max(1, Math.min(5, Math.round(sao)));
+  const mo_lai = s <= SAO_MO_LAI;
+  return {
+    ...p,
+    danh_gia: { sao: s, nhan_xet: nhan_xet.trim() },
+    trang_thai: mo_lai ? "dang-xu-ly" : p.trang_thai,
+    so_lan_mo_lai: p.so_lan_mo_lai + (mo_lai ? 1 : 0),
+  };
+}
+
+/** Được chấm khi phiếu đã xử lý xong và chưa chấm (prototype: `canRate = status === "resolved"`). */
+export function duocDanhGia(p: PhieuTN): boolean {
+  return nhomCua(p.trang_thai) === "da-xu-ly-xong" && p.danh_gia === null;
 }
 
 /**
- * Năm ô người dân gõ — ĐÚNG năm trường máy chủ nhận hôm nay (`TRUONG_DUOC_NHAN`) — cộng lĩnh vực gợi ý
- * (ADR 0049), trường tuỳ chọn máy chủ CHƯA nhận.
+ * BỐN NHÓM NGƯỜI DÂN THẤY (ADR 0050 điểm 5, prototype `StatusChip.tsx` + `feedback-adapter.ts:79-89`): chín
+ * trạng thái của cán bộ gộp về bốn. Gộp ở đây, không ở máy chủ — bảng của cán bộ vẫn đủ chín.
+ */
+export type NhomLoc = "tat-ca" | "da-tiep-nhan" | "dang-xu-ly" | "da-xu-ly-xong" | "da-dong";
+
+export function nhomCua(trang_thai: string): Exclude<NhomLoc, "tat-ca"> {
+  if (trang_thai === "da-tiep-nhan" || trang_thai === "dang-phan-loai") return "da-tiep-nhan";
+  if (trang_thai === "da-chuyen-xu-ly" || trang_thai === "dang-xu-ly") return "dang-xu-ly";
+  if (trang_thai === "da-xu-ly" || trang_thai === "cho-dan-xac-nhan") return "da-xu-ly-xong";
+  return "da-dong";
+}
+
+export const NHAN_NHOM: Readonly<Record<Exclude<NhomLoc, "tat-ca">, string>> = {
+  "da-tiep-nhan": "Đã tiếp nhận",
+  "dang-xu-ly": "Đang xử lý",
+  "da-xu-ly-xong": "Đã xử lý xong",
+  "da-dong": "Đã đóng",
+};
+
+/** Nhãn từng bước trên dòng thời gian — chữ của prototype (`feedback-adapter.ts:91-101`). */
+export const NHAN_BUOC: Readonly<Record<string, string>> = {
+  "da-tiep-nhan": "Đã tiếp nhận",
+  "dang-phan-loai": "Đang phân loại",
+  "da-chuyen-xu-ly": "Đã chuyển bộ phận xử lý",
+  "dang-xu-ly": "Đang xử lý",
+  "da-xu-ly": "Đã xử lý xong",
+  "cho-dan-xac-nhan": "Chờ bà con xác nhận",
+  "da-dong": "Đã đóng",
+  "khong-tiep-nhan": "Không tiếp nhận",
+  "chuyen-cap-tren": "Chuyển cấp trên",
+};
+
+/**
+ * Năm ô của hợp đồng thật (`TRUONG_DUOC_NHAN`) cộng lĩnh vực dân chọn (ADR 0050 — máy chủ CHƯA nhận
+ * trường này). `an_danh` luôn `false` từ Mini App: không có công tắc; để trống tên là giấu tên (ADR 0050 #3).
  */
 export type NhapPhieu = {
-  readonly linh_vuc_goi_y: string;
+  readonly linh_vuc: string;
   readonly noi_dung: string;
   readonly dia_chi: string;
   readonly ho_ten: string;
@@ -166,11 +216,12 @@ export function maPhieuTraiNghiem(ngau_nhien: () => number = Math.random): strin
  */
 export function taoPhieuTraiNghiem(nhap: NhapPhieu, luc_gui_iso: string, ma: string): PhieuTN {
   return {
-    linh_vuc_goi_y: nhap.linh_vuc_goi_y,
+    danh_gia: null,
+    so_lan_mo_lai: 0,
     ma_tra_cuu: ma,
     trang_thai: "da-tiep-nhan",
-    linh_vuc: "",
-    nhan_linh_vuc: "",
+    linh_vuc: nhap.linh_vuc,
+    nhan_linh_vuc: nhap.linh_vuc,
     noi_dung: nhap.noi_dung.trim(),
     dia_chi: nhap.dia_chi.trim(),
     ho_ten_da_che: nhap.an_danh ? "" : cheHoTen(nhap.ho_ten),

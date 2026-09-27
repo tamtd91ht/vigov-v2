@@ -3,17 +3,22 @@ import { describe, expect, it } from "vitest";
 import type { CanBoCongKhai, TinXaTomTat } from "../api/hop-dong-cong-khai";
 import { TRUONG_DUOC_NHAN } from "../api/hop-dong-phan-anh";
 
-import { nhomTheoBoPhan } from "./DanhBaXa";
+import { locCanBo, nhomTheoBoPhan } from "./DanhBaXa";
 import { TRANG_THAI } from "./noi-dung";
+import { buocDaQua } from "./PhanAnhAppXa";
 import { chuyenMucCua, tinLienQuan } from "./TinTucAppXa";
 import {
+  apDanhGia,
   cheHoTen,
   cheSoDienThoai,
   chuCaiDau,
+  duocDanhGia,
   kiemNhapPhieu,
   LINH_VUC_TAM,
   loiChao,
   maPhieuTraiNghiem,
+  NHAN_BUOC,
+  NHAN_NHOM,
   nhomCua,
   type NhapPhieu,
   taoPhieuTraiNghiem,
@@ -23,7 +28,7 @@ import {
 
 const CAU = { thieu: "thiếu", qua_dai: (n: number) => `quá ${n}` };
 const NHAP: NhapPhieu = {
-  linh_vuc_goi_y: "Rác thải – Vệ sinh môi trường",
+  linh_vuc: "Rác thải – Vệ sinh môi trường",
   noi_dung: "  Rác tồn đọng đầu ngõ 12 ",
   dia_chi: " Ngõ 12 ",
   ho_ten: "Nguyễn Văn An",
@@ -65,17 +70,19 @@ describe("họ tên: xin quyền Zalo, không đăng nhập, không người dù
 });
 
 describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () => {
-  it("năm ô người dân gõ ứng đúng năm trường máy chủ nhận, cộng lĩnh vực gợi ý (ADR 0049)", () => {
+  it("năm ô người dân gõ ứng đúng năm trường máy chủ nhận, cộng lĩnh vực dân chọn (ADR 0050)", () => {
     // noi_dung · dia_chi · ho_ten · dien_thoai · an_danh ↔ content · address · reporter_name · reporter_phone · anonymous
-    expect(Object.keys(NHAP).filter((k) => k !== "linh_vuc_goi_y")).toHaveLength(TRUONG_DUOC_NHAN.length);
+    expect(Object.keys(NHAP).filter((k) => k !== "linh_vuc")).toHaveLength(TRUONG_DUOC_NHAN.length);
   });
 
-  it("lĩnh vực gợi ý nằm RIÊNG, không bao giờ thành lĩnh vực của phiếu hay đặt hạn (ADR 0049)", () => {
+  it("lĩnh vực dân chọn LÀ lĩnh vực của phiếu, nhưng Mini App không tự tính hạn (ADR 0050 #1, luật 10)", () => {
     const p = taoPhieuTraiNghiem(NHAP, "2026-09-28T01:00:00Z", "TN-AAAAAAAA");
-    expect(p.linh_vuc_goi_y).toBe("Rác thải – Vệ sinh môi trường");
-    expect(p.linh_vuc).toBe("");
-    expect(p.nhan_linh_vuc).toBe("");
+    expect(p.linh_vuc).toBe("Rác thải – Vệ sinh môi trường");
+    expect(p.nhan_linh_vuc).toBe("Rác thải – Vệ sinh môi trường");
+    expect(p.han_tiep_nhan).toBeNull();
     expect(p.han_xu_ly_xong).toBeNull();
+    expect(p.danh_gia).toBeNull();
+    expect(p.so_lan_mo_lai).toBe(0);
   });
 
   it("danh mục tạm: mười hai tên, không một con số giờ nào (luật 10 cấm #3)", () => {
@@ -100,7 +107,7 @@ describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () =
     expect(p).toMatchObject({
       ma_tra_cuu: "TN-AAAAAAAA",
       trang_thai: "da-tiep-nhan",
-      nhan_linh_vuc: "",
+      nhan_linh_vuc: "Rác thải – Vệ sinh môi trường",
       noi_dung: "Rác tồn đọng đầu ngõ 12",
       dia_chi: "Ngõ 12",
       ho_ten_da_che: "Nguyễn V. A.",
@@ -124,11 +131,46 @@ describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () =
     expect(traPhieuTraiNghiem([p], "TN-ZZZZZZZZ")).toBeNull();
   });
 
-  it("nhóm lọc theo việc người dân muốn biết", () => {
-    expect(nhomCua("da-tiep-nhan")).toBe("dang-cho");
-    expect(nhomCua("dang-xu-ly")).toBe("dang-xu-ly");
-    expect(nhomCua("da-dong")).toBe("da-xong");
-    expect(nhomCua("khong-tiep-nhan")).toBe("da-xong");
+  it("chín trạng thái gộp về đúng bốn nhóm người dân thấy (ADR 0050 #5)", () => {
+    const bang: Record<string, string> = {
+      "da-tiep-nhan": "da-tiep-nhan",
+      "dang-phan-loai": "da-tiep-nhan",
+      "da-chuyen-xu-ly": "dang-xu-ly",
+      "dang-xu-ly": "dang-xu-ly",
+      "da-xu-ly": "da-xu-ly-xong",
+      "cho-dan-xac-nhan": "da-xu-ly-xong",
+      "da-dong": "da-dong",
+      "khong-tiep-nhan": "da-dong",
+      "chuyen-cap-tren": "da-dong",
+    };
+    for (const [tt, nhom] of Object.entries(bang)) expect(nhomCua(tt), tt).toBe(nhom);
+    expect(Object.keys(NHAN_NHOM)).toHaveLength(4);
+    // Mọi trạng thái của cán bộ có nhãn bước trên dòng thời gian — không bước nào hiện mã thô.
+    for (const tt of Object.keys(TRANG_THAI)) expect(NHAN_BUOC[tt], tt).toBeDefined();
+  });
+
+  it("dòng thời gian chỉ các bước ĐÃ QUA; nhánh kết thúc dừng sau phân loại", () => {
+    expect(buocDaQua("da-tiep-nhan")).toEqual(["da-tiep-nhan"]);
+    expect(buocDaQua("dang-xu-ly")).toEqual(["da-tiep-nhan", "dang-phan-loai", "da-chuyen-xu-ly", "dang-xu-ly"]);
+    expect(buocDaQua("khong-tiep-nhan")).toEqual(["da-tiep-nhan", "dang-phan-loai", "khong-tiep-nhan"]);
+  });
+
+  it("đánh giá: chỉ khi đã xử lý xong và chưa chấm; 1–2 sao mở lại phiếu (ADR 0050 #2)", () => {
+    const moi = taoPhieuTraiNghiem(NHAP, "2026-09-28T01:00:00Z", "TN-AAAAAAAA");
+    expect(duocDanhGia(moi)).toBe(false);
+    const xong = { ...moi, trang_thai: "da-xu-ly" };
+    expect(duocDanhGia(xong)).toBe(true);
+
+    const thap = apDanhGia(xong, 2, "  chưa dọn hết ");
+    expect(thap).toMatchObject({ trang_thai: "dang-xu-ly", so_lan_mo_lai: 1, danh_gia: { sao: 2, nhan_xet: "chưa dọn hết" } });
+
+    const cao = apDanhGia(xong, 3, "");
+    expect(cao.trang_thai).toBe("da-xu-ly");
+    expect(cao.so_lan_mo_lai).toBe(0);
+    expect(duocDanhGia(cao)).toBe(false);
+    // Số sao ngoài khoảng bị kẹp về 1..5, không bao giờ ghi 0 hay 9.
+    expect(apDanhGia(xong, 9, "").danh_gia?.sao).toBe(5);
+    expect(apDanhGia(xong, 0, "").danh_gia?.sao).toBe(1);
   });
 
   it("không tệp nào của bản trải nghiệm gọi mạng hay ghi xuống máy", () => {
@@ -166,6 +208,17 @@ describe("tin tức và danh bạ: lọc và nhóm trên dữ liệu đã tải"
     const ds = [tin("1", "A"), tin("2", "A"), tin("3", "B"), tin("4", "A"), tin("5", "A"), tin("6", "A")];
     expect(tinLienQuan(ds, ds[0]!).map((t) => t.id)).toEqual(["2", "4", "5"]);
     expect(tinLienQuan(ds, tin("x", ""))).toEqual([]);
+  });
+
+  it("tìm danh bạ không phân biệt dấu, và theo số điện thoại khi từ khoá toàn là số", () => {
+    const cb = (ho_ten: string, chuc_vu: string, di_dong: string) =>
+      ({ ho_ten, bo_phan: "", chuc_vu, so_co_quan: "", di_dong, co_zalo: false }) as CanBoCongKhai;
+    const ds = [cb("Trần Thị Đào", "Chủ tịch", "0900 000 000"), cb("Lê Văn Bình", "Công an xã", "")];
+    expect(locCanBo(ds, "chu tich").map((c) => c.ho_ten)).toEqual(["Trần Thị Đào"]);
+    expect(locCanBo(ds, "dao").map((c) => c.ho_ten)).toEqual(["Trần Thị Đào"]);
+    expect(locCanBo(ds, "000 000").map((c) => c.ho_ten)).toEqual(["Trần Thị Đào"]);
+    // Chữ lẫn số không so theo số: "xa 000" không được khớp mọi số có chữ 0.
+    expect(locCanBo(ds, "xa 000")).toEqual([]);
   });
 
   it("danh bạ nhóm theo bộ phận, giữ thứ tự máy chủ, người không ghi bộ phận ở cuối", () => {

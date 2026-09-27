@@ -3499,17 +3499,51 @@ button.xa-o-nhanh {
 }
 
 /* ---------- phản ánh theo hợp đồng thật (28/09/2026) ---------- */
-.xa-chip-tt--dang-cho {
+/* Bốn nhóm người dân thấy (ADR 0050 #5). Nhãn là chữ, màu chỉ đi kèm. */
+.xa-chip-tt--da-tiep-nhan {
   background: var(--xa-xanh-nhat);
   color: var(--xa-navy);
 }
-.xa-chip-tt--da-xong {
+.xa-chip-tt--da-xu-ly-xong {
   background: var(--xa-luc-nhat);
   color: var(--xa-luc-dam);
 }
-.xa-chip-tt--ket-thuc {
-  background: var(--xa-cam-nhat);
+.xa-chip-tt--da-dong {
+  background: var(--xa-nen);
+  color: var(--ink-muted);
+}
+
+/* Lĩnh vực đã chọn, ở đầu bước mô tả */
+.xa-lv-dang {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--xa-xanh-nhat);
+}
+
+/* Đánh giá 1–5 sao — mỗi sao một vùng chạm riêng */
+.xa-sao {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+.xa-sao__nut {
+  min-height: calc(var(--tap-min) + 4px);
+  min-width: calc(var(--tap-min) + 4px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--ink-muted);
+}
+.xa-sao__nut--on {
   color: var(--xa-cam-dam);
+}
+.xa-sao__nut--on .xa-bt {
+  fill: var(--xa-vang);
+}
+.xa-sao__nut:disabled {
+  opacity: 1;
 }
 .xa-dong-tg__buoc--cho {
   color: var(--ink-muted);

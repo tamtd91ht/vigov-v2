@@ -25,12 +25,25 @@ function chuDau(ho_ten: string): string {
   return (cuoi[0] ?? "?").toUpperCase();
 }
 
-/** Lọc trên máy, không phân biệt hoa thường. Không dấu hiệu nào của từ khoá rời khỏi máy. */
+/** Bỏ dấu tiếng Việt và hoa thường — người lớn tuổi hay gõ không dấu ("chu tich"). */
+export function boDau(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+}
+
+/**
+ * Lọc trên máy, không phân biệt hoa thường, không phân biệt dấu, và theo SỐ điện thoại (bỏ dấu cách, chấm
+ * trong số) — như danh bạ của prototype. Không dấu hiệu nào của từ khoá rời khỏi máy.
+ */
 export function locCanBo(ds: readonly CanBoCongKhai[], tu_khoa: string): readonly CanBoCongKhai[] {
-  const q = tu_khoa.trim().toLocaleLowerCase("vi");
+  const q = boDau(tu_khoa.trim());
   if (q === "") return ds;
-  return ds.filter((cb) =>
-    [cb.ho_ten, cb.chuc_vu, cb.bo_phan].some((o) => o.toLocaleLowerCase("vi").includes(q)),
+  const so = q.replace(/\D/g, "");
+  // Chỉ so theo số khi từ khoá TOÀN là số (cho phép dấu cách, chấm, gạch) — "tổ 3" không khớp mọi số có chữ 3.
+  const theo_so = so.length >= 3 && /^[\d\s.\-+]+$/.test(q);
+  return ds.filter(
+    (cb) =>
+      [cb.ho_ten, cb.chuc_vu, cb.bo_phan].some((o) => boDau(o).includes(q)) ||
+      (theo_so && [cb.so_co_quan, cb.di_dong].some((o) => o.replace(/\D/g, "").includes(so))),
   );
 }
 
