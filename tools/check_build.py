@@ -210,6 +210,194 @@ def kiem_pipeline(duong: str, ten_rieng: str, loi: list[str]) -> None:
         )
 
 
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# citizen-app/Jenkinsfile — đẩy Mini App lên Zalo (ADR 0047 câu 8 + §Trả lời mục 3).
+#
+# Không có Dockerfile, không có ảnh, không có `duongKichHoat()`: nó không đi qua kiem_pipeline. Thứ
+# nó CẦM là `ZMP_TOKEN` — một token một App ID, và token của app chung thay được app mà mọi xã ở
+# giai đoạn 1 dùng (luật 8). Nên cái phải canh là đường đi của token, và lối đẩy duy nhất.
+#
+# CHỈ ĐỌC MÃ, KHÔNG ĐỌC CHÚ THÍCH. Khối chú thích đầu tệp NHẮC TỚI `withCredentials`, `.env` và
+# `zmp deploy` để giải thích vì sao — quét cả tệp thì một tệp đã gỡ `withCredentials` khỏi mã vẫn
+# "chứa" chuỗi ấy và vẫn xanh (cùng bài học của kiem_pipeline). Bỏ dòng mở đầu bằng `//` và khối
+# `/* … */`; chú thích CUỐI DÒNG được giữ lại, vì cắt ở `//` là cắt đôi mọi `https://` trong chuỗi.
+# Giới hạn thật: một `withCredentials(… ZMP_TOKEN …)` nằm trong chú thích cuối dòng vẫn làm ca
+# "phải có" xanh. Các ca "không được có" thì chỉ lệch về phía đỏ oan, không lệch về phía lọt.
+# ─────────────────────────────────────────────────────────────────────────────────────────
+
+CITIZEN_JENKINSFILE = os.path.join(GOC, "citizen-app", "Jenkinsfile")
+
+
+def bo_chu_thich_groovy(noi_dung: str) -> str:
+    """Bỏ khối `/* … */` và những dòng mở đầu bằng `//`. Giữ nguyên số dòng."""
+    khong_khoi = re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), noi_dung, flags=re.S)
+    return "\n".join("" if d.lstrip().startswith("//") else d for d in khong_khoi.split("\n"))
+
+
+def kiem_jenkins_citizen(noi_dung: str) -> list[str]:
+    """THUẦN: vào là văn bản của Jenkinsfile, ra là danh sách vi phạm. Không chạm đĩa, nên
+    `tu_kiem_citizen()` chấm được nó bằng chuỗi nguyên văn ở mọi lần chạy."""
+    ma = bo_chu_thich_groovy(noi_dung)
+    loi: list[str] = []
+
+    # 1. Token vào MÔI TRƯỜNG qua withCredentials — không qua tham số, không qua tệp.
+    if not re.search(r"withCredentials\s*\(\s*\[[^\]]*variable\s*:\s*['\"]ZMP_TOKEN['\"]", ma, re.S):
+        loi.append(
+            "không có `withCredentials([... variable: 'ZMP_TOKEN' ...])`\n"
+            "        → Token phải đến từ credential của Jenkins, chỉ trong môi trường của đúng một bước. "
+            "Thiếu nó thì hoặc token tới từ một ô nhập / một tệp trên máy build, hoặc zmp-cli rơi về "
+            "`citizen-app/.env` — token của app nào người dựng đăng nhập lần cuối (ADR 0047 §Trả lời mục 3)."
+        )
+
+    # 2. Credential SUY RA từ đích — một token một App ID. Ghim cả hai nhánh của quy ước tên.
+    if "zmp-token-app-chung" not in ma or not re.search(r"[\"']zmp-token-\$\{", ma):
+        loi.append(
+            "không suy ra credential theo đích (`zmp-token-app-chung` · `zmp-token-${tên-miền}`)\n"
+            "        → Đích đẩy là claim appId TRONG token. Một credential dùng chung, hay một ô chọn "
+            "credential lúc bấm, là cách ghép tên miền của xã A với token của xã B."
+        )
+
+    # 3. Token KHÔNG xuống tệp và KHÔNG ra log.
+    for so, dong in enumerate(ma.split("\n"), 1):
+        if "ZMP_TOKEN" in dong and re.search(r"(?<![0-9&])>>?(?!&)|\btee\b|writeFile", dong):
+            loi.append(
+                f"dòng {so} ghi ZMP_TOKEN xuống tệp: `{dong.strip()[:100]}`\n"
+                "        → Một token nằm trên đĩa máy build sống lâu hơn lượt chạy, đi theo bản sao lưu "
+                "workspace, và không ai xoá hộ khi lượt đỏ giữa chừng (luật 8)."
+            )
+        # Ca IN neo vào một THAM CHIẾU tới giá trị (`$ZMP_TOKEN`, `${ZMP_TOKEN}`, `env.ZMP_TOKEN`,
+        # `printenv ZMP_TOKEN`), không vào chữ trần: một câu báo lỗi NHẮC TÊN biến không làm lộ gì,
+        # và lượt đầu của phép kiểm này đã đỏ oan đúng trên một câu như thế ở tệp thật.
+        if re.search(r"\$\{?ZMP_TOKEN\b|env\.ZMP_TOKEN\b|printenv\s+ZMP_TOKEN\b", dong) and re.search(
+            r"\b(echo|printf|println|print)\b", dong
+        ):
+            loi.append(
+                f"dòng {so} in ZMP_TOKEN ra: `{dong.strip()[:100]}`\n"
+                "        → Mặt nạ `****` của Jenkins chỉ che đúng chuỗi nguyên văn; một bản base64, "
+                "một đoạn cắt hay một lần in qua `set -x` thì lọt vào log."
+            )
+    if re.search(r"(?<![0-9&])>>?\s*\S*\.env\b", ma) or re.search(
+        r"writeFile[^\n]*file\s*:\s*['\"][^'\"]*\.env['\"]", ma
+    ):
+        loi.append(
+            "ghi một tệp `.env`\n"
+            "        → `.env` của citizen-app là chỗ zmp-cli đọc token khi môi trường không có. Job đẩy "
+            "không có lý do gì để tạo ra nó."
+        )
+    for m in re.finditer(r"writeFile\b.{0,400}?ZMP_TOKEN", ma, re.S):
+        loi.append(
+            f"writeFile mang ZMP_TOKEN: `{m.group(0)[:100]!r}`\n"
+            "        → Cùng lý do: token không được xuống đĩa."
+        )
+
+    # 4. Lối đẩy duy nhất là scripts/deploy.mjs.
+    if not re.search(r"\bnode\s+scripts/deploy\.mjs\b", ma):
+        loi.append(
+            "không đẩy qua `node scripts/deploy.mjs`\n"
+            "        → Script ấy dựng → đồng bộ app-config.json → đẩy trong một mạch, và kiểm claim appId "
+            "của token khớp App ID đích trước khi chạy gì cả."
+        )
+    if re.search(r"\bzmp(?:-cli)?(?:@[\w.]+)?\s+(?:-\S+\s+)*deploy\b", ma):
+        loi.append(
+            "gọi thẳng `zmp deploy`\n"
+            "        → Bỏ qua phép kiểm token–đích của deploy.mjs: một token sai app đè lên app của một "
+            "xã khác, và một app-config.json của lần dựng trước nộp lên một app trắng trơn."
+        )
+
+    # 5. Hai chốt chặn người bấm — chép từ deploy/Jenkinsfile.
+    if not re.search(r"\bnguoiBam\s*\(\s*\)", ma):
+        loi.append("không xác định người bấm (`nguoiBam()`) — lượt thay app trên Zalo không có tên người.")
+    # Neo vào HÌNH DẠNG CỦA CHỐT (`if (params.PHAT_HANH && … XAC_NHAN …`), không vào việc hai tên
+    # cùng một dòng: dòng chặn-tham-số-null cũng nhắc cả hai, nên mẫu lỏng xanh trên chính nó.
+    if not re.search(r"if\s*\(\s*params\.PHAT_HANH\s*&&[^\n]*XAC_NHAN", ma):
+        loi.append("PHAT_HANH không đòi XAC_NHAN gõ tay — bản phát hành ra người dùng thật chỉ bằng một cú bấm.")
+
+    if re.search(r":latest\b", ma):
+        loi.append("dùng thẻ di động `latest`")
+    return loi
+
+
+# Ca PHẢI XANH và PHẢI ĐỎ của kiem_jenkins_citizen, chạy ở MỌI lần chạy tệp này (tức mọi `make
+# check`). Một phép kiểm mà không có gì chứng minh nó còn đỏ được là một phép kiểm không phân biệt
+# được với một phép kiểm đã chết — bài học của kiem_dong_em ở dưới.
+_CITIZEN_TOT = """
+// withCredentials, zmp deploy và > .env chỉ nhắc trong chú thích: không được tính.
+stage('x') { steps { script {
+  env.CRED_ZMP = tenMien ? "zmp-token-${tenMien}" : 'zmp-token-app-chung'
+  if (params.PHAT_HANH && params.XAC_NHAN.trim() != env.DICH) { error('x') }
+  env.NGUOI_BAM = nguoiBam()
+}
+  sh 'echo "https://vidu.test" 2>/dev/null >/dev/null'
+  withCredentials([string(credentialsId: env.CRED_ZMP, variable: 'ZMP_TOKEN')]) {
+    sh '''
+      cd citizen-app
+      node scripts/deploy.mjs "$@"
+    '''
+  }
+} }
+"""
+
+# (đoạn gốc, đoạn thay, mảnh câu báo PHẢI có). Mảnh câu để mỗi ca chứng minh ĐÚNG phép kiểm của nó
+# còn sống, không chỉ "có cái gì đó đỏ" — một đột biến làm đỏ hai phép kiểm sẽ che mất việc một
+# trong hai đã chết.
+_CITIZEN_HONG = {
+    "mất withCredentials": (
+        "withCredentials([string(credentialsId: env.CRED_ZMP, variable: 'ZMP_TOKEN')]) {", "{",
+        "withCredentials",
+    ),
+    "withCredentials chỉ còn trong chú thích": (
+        "  withCredentials([string(credentialsId: env.CRED_ZMP, variable: 'ZMP_TOKEN')]) {",
+        "  // withCredentials([string(credentialsId: env.CRED_ZMP, variable: 'ZMP_TOKEN')])\n  {",
+        "withCredentials",
+    ),
+    "token ghi xuống tệp": (
+        "      cd citizen-app\n", "      cd citizen-app\n      printf '%s' \"$ZMP_TOKEN\" >tok\n", "xuống tệp",
+    ),
+    "tạo tệp .env không nhắc tên biến": (
+        "      cd citizen-app\n", "      cd citizen-app\n      env | grep ZMP >> citizen-app/.env\n",
+        "ghi một tệp `.env`",
+    ),
+    "token qua tee": ("      cd citizen-app\n", "      cd citizen-app\n      printenv ZMP_TOKEN | tee tok\n", "xuống tệp"),
+    "token in ra log": ("      cd citizen-app\n", "      cd citizen-app\n      echo ${ZMP_TOKEN}\n", "in ZMP_TOKEN ra"),
+    "writeFile mang token, trải nhiều dòng": (
+        "  sh 'echo \"https://vidu.test\" 2>/dev/null >/dev/null'\n",
+        "  writeFile(file: 'x.txt',\n            text: env.ZMP_TOKEN)\n",
+        "writeFile mang ZMP_TOKEN",
+    ),
+    "gọi thẳng zmp deploy, bên cạnh deploy.mjs": (
+        "node scripts/deploy.mjs \"$@\"",
+        "node scripts/deploy.mjs \"$@\"\n      npx --yes zmp-cli@4.0.3 deploy -o dist -p",
+        "gọi thẳng `zmp deploy`",
+    ),
+    "không qua deploy.mjs": ("node scripts/deploy.mjs \"$@\"", "npm run build", "scripts/deploy.mjs"),
+    "một credential cho mọi đích": (
+        "tenMien ? \"zmp-token-${tenMien}\" : 'zmp-token-app-chung'", "'zmp-token'", "suy ra credential",
+    ),
+    "bỏ xác nhận phát hành, còn dòng chặn null": (
+        "if (params.PHAT_HANH && params.XAC_NHAN.trim() != env.DICH) { error('x') }",
+        "if (params.PHAT_HANH == null || params.XAC_NHAN == null) { error('x') }",
+        "XAC_NHAN",
+    ),
+    "bỏ người bấm": ("env.NGUOI_BAM = nguoiBam()", "env.NGUOI_BAM = 'ai-do'", "nguoiBam"),
+}
+
+
+def tu_kiem_citizen() -> list[str]:
+    """Chấm chính phép kiểm. Trả về danh sách ca SAI (rỗng là phép kiểm còn sống)."""
+    sai: list[str] = []
+    tot = kiem_jenkins_citizen(_CITIZEN_TOT)
+    if tot:
+        sai.append(f"ca PHẢI XANH bị đỏ oan: {tot[0].splitlines()[0]}")
+    for ten, (cu, moi, manh) in _CITIZEN_HONG.items():
+        if cu not in _CITIZEN_TOT:
+            sai.append(f"ca '{ten}' không đột biến được gì — mẫu gốc đã đổi, ca này đang chết")
+            continue
+        bao = kiem_jenkins_citizen(_CITIZEN_TOT.replace(cu, moi, 1))
+        if not any(manh in b for b in bao):
+            sai.append(f"ca PHẢI ĐỎ lọt qua: {ten} (không câu báo nào chứa '{manh}')")
+    return sai
+
+
 def kiem_dong_em(svcs: list[str], loi: list[str]) -> int:
     """Hạn `Shutdown` trong mã phải NHỎ HƠN `terminationGracePeriodSeconds` của manifest.
 
@@ -380,6 +568,21 @@ def main() -> int:
         if re.search(r":latest\b", nd):
             loi.append("web-admin/Jenkinsfile đẩy thẻ di động `latest`")
 
+    # citizen-app: không Dockerfile, không ảnh — chỉ Jenkinsfile đẩy lên Zalo. Tự chấm phép kiểm
+    # TRƯỚC, rồi mới chấm tệp thật: một phép kiểm đã chết thì dòng [PASS] của tệp thật vô nghĩa.
+    so_ca_citizen = 1 + len(_CITIZEN_HONG)
+    for s in tu_kiem_citizen():
+        loi.append(f"tools/check_build.py — phép kiểm citizen-app/Jenkinsfile: {s}")
+    if not os.path.isfile(CITIZEN_JENKINSFILE):
+        loi.append(
+            "citizen-app/Jenkinsfile KHÔNG TỒN TẠI — Mini App chỉ đẩy được từ máy của một người, bằng "
+            "token trong `.env` của máy ấy (ADR 0047 câu 8)."
+        )
+    else:
+        with open(CITIZEN_JENKINSFILE, encoding="utf-8") as f:
+            for l in kiem_jenkins_citizen(f.read()):
+                loi.append(f"citizen-app/Jenkinsfile {l}")
+
     if loi:
         print(f"[FAIL] hồ sơ dựng — {len(loi)} vấn đề trên {len(svcs)} dịch vụ + web")
         for l in loi:
@@ -392,7 +595,8 @@ def main() -> int:
     print(f"[PASS] hồ sơ dựng — {len(svcs)} dịch vụ + web · "
           f"{len(svcs) + 1} Dockerfile · {len(svcs) + 1} Jenkinsfile · "
           f"{len(BAT_BIEN)} bất biến an toàn · ngữ cảnh build kín · "
-          f"{so_dong_em} cặp hạn đóng-êm đối chiếu · 0 vi phạm")
+          f"{so_dong_em} cặp hạn đóng-êm đối chiếu · "
+          f"citizen-app/Jenkinsfile + {so_ca_citizen} ca tự chấm · 0 vi phạm")
     return 0
 
 

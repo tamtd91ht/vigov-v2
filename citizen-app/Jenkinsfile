@@ -1,0 +1,242 @@
+// Pipeline đẩy Mini App `citizen-app` lên Zalo. Tệp này thuộc về ỨNG DỤNG NÀY (ADR 0047 câu 8).
+//
+//   · dựng CÁI GÌ    — đúng một bundle cho mọi đích (ADR 0047 §Trả lời mục 1: không biến thể)
+//   · đẩy ĐI ĐÂU     — tham số DOMAIN: trống = APP CHUNG, có = APP RIÊNG của xã mang tên miền ấy
+//   · đẩy BẰNG GÌ    — `node scripts/deploy.mjs`, KHÔNG BAO GIỜ gọi thẳng `zmp deploy`
+//
+// BẤM TAY, KHÔNG TỰ CHẠY. Không có `duongKichHoat()`: Mini App không có ảnh đang chạy để so mốc,
+// và một lần đẩy lên Zalo là một quyết định có người bấm — không phải hệ quả của một lần push.
+//
+// VÌ SAO ĐI QUA `deploy.mjs` CHỨ KHÔNG GỌI `zmp deploy`: script ấy là nơi DUY NHẤT dựng → đồng bộ
+// `app-config.json` → đẩy trong một mạch, và là nơi kiểm claim `appId` trong `ZMP_TOKEN` khớp App
+// ID đích trước khi chạy gì cả (`scripts/dich-den.mjs`, `kiemToken`). Gọi thẳng zmp-cli là bỏ qua
+// cả hai: một token sai app đè lên app của một xã khác, và một `app-config.json` của lần dựng trước
+// nộp lên một app trắng trơn. `tools/check_build.py` canh điều này.
+//
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// ZMP_TOKEN — MỘT CREDENTIAL CHO MỖI APP ID (ADR 0047 §Trả lời mục 3)
+//
+//   Đích đẩy của zmp-cli 4.0.3 là claim `appId` TRONG `ZMP_TOKEN`, không phải `APP_ID`. Nên Jenkins
+//   giữ một credential loại "Secret text" cho MỖI App ID, và tên credential SUY RA từ đích — không
+//   phải một ô chọn, để người bấm không thể ghép tên miền của xã A với token của xã B:
+//
+//     | Đích | credentialsId |
+//     |---|---|
+//     | app chung (DOMAIN trống) | `zmp-token-app-chung` |
+//     | app riêng của `<tên-miền>` | `zmp-token-<tên-miền>` — nguyên văn, giữ dấu chấm (vd `zmp-token-xa-a.vigov.vn`) |
+//
+//   Giữ nguyên dấu chấm chứ không đổi sang gạch nối: đổi thì `a-b.c` và `a.b-c` cùng ra một tên, tức
+//   hai xã dùng chung một ô credential. Tên miền được kiểm hình dạng TRƯỚC khi ghép vào tên ấy.
+//
+//   Token vào MÔI TRƯỜNG của đúng một bước `sh`, qua `withCredentials` — KHÔNG ghi xuống tệp nào
+//   (không `.env`, không `writeFile`), KHÔNG in ra, và KHÔNG có mặt ở bước `npm ci` / test: mã của
+//   một gói phụ thuộc chạy lúc cài không có lý do gì được đọc token đẩy app. Các khối `sh` chứa
+//   token đều dùng NHÁY ĐƠN, để Groovy không nội suy bí mật vào dòng lệnh (dòng lệnh vào log của
+//   Jenkins và vào danh sách tiến trình của máy build).
+//
+//   Token của APP CHUNG là credential NẶNG NHẤT: nó thay được app mà mọi xã ở giai đoạn 1 dùng.
+//
+// ⚠ CÒN MỞ — ADR 0047 CÒN MỞ #1: VÒNG ĐỜI VÀ CÁCH XOAY của N credential `ZMP_TOKEN` CHƯA AI CHỐT.
+//   Luật 8 bất biến 6 đòi một con số và một quy trình; chủ dự án chưa nêu. Tệp này KHÔNG tự đặt
+//   con số nào. Cho tới khi có câu trả lời: không ai biết một token bị lộ còn dùng được bao lâu, và
+//   xoay token là việc tay trong Jenkins (thay giá trị của đúng credential ấy).
+//
+// VIGOV_API_HOST — credential "Secret text" `citizen-app-vigov-api-host`, KHÔNG phải tham số lúc
+//   bấm và không viết cứng ở đây. Nó được NUNG VÀO BUNDLE lúc dựng và quyết định hai mã đăng nhập
+//   của người dân đi tới máy chủ nào; một ô nhập lúc bấm là để một lần gõ nhầm gửi mã của người
+//   thật tới một nơi không ai chọn. Nó không phải bí mật (nó nằm trong bundle), nên giá trị bị
+//   Jenkins che thành `****` trong dòng "Máy chủ" của kế hoạch là cái giá chấp nhận được của việc
+//   giữ nó ngoài ô nhập — kiểm giá trị thật ở chính credential.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+//
+// MÁY CHỦ BUILD CẦN: node, npm, git — và mạng tới registry npm (`npx --yes zmp-cli@4.0.3`).
+// KHÔNG cần docker, KHÔNG cần kubectl: không có ảnh nào, không có cụm nào.
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    timeout(time: 30, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '200'))   // giữ lâu: đây là nhật ký các lần đẩy app
+    disableConcurrentBuilds()
+  }
+
+  parameters {
+    string(name: 'DOMAIN', defaultValue: '',
+           description: 'TRỐNG = APP CHUNG. Có = APP RIÊNG của xã mang tên miền này (chữ thường, không ' +
+                        'https://, không đường dẫn), phải có dòng trong scripts/ung-dung-theo-ten-mien.mjs ' +
+                        'và credential zmp-token-<tên-miền> trong Jenkins.')
+    booleanParam(name: 'PHAT_HANH', defaultValue: false,
+                 description: 'Bỏ chọn = BẢN THỬ NGHIỆM (-t). Chọn = BẢN PHÁT HÀNH — ra người dùng thật / gửi ' +
+                              'duyệt, và phải gõ XAC_NHAN.')
+    booleanParam(name: 'THU', defaultValue: true,
+                 description: 'Chọn (mặc định) = CHỈ IN KẾ HOẠCH rồi dừng, không dựng, không đẩy. Bỏ chọn ' +
+                              'để đẩy thật.')
+    string(name: 'XAC_NHAN', defaultValue: '',
+           description: 'Chỉ khi PHAT_HANH: gõ đúng tên miền của DOMAIN, hoặc app-chung nếu DOMAIN trống.')
+  }
+
+  environment {
+    UNG_DUNG = 'citizen-app'
+  }
+
+  stages {
+
+    stage('Kiểm tham số và công cụ') {
+      steps {
+        script {
+          // LƯỢT ĐẦU SAU KHI ĐỔI `parameters {}`: Jenkins chỉ HỌC danh sách tham số ở lượt ấy, nên
+          // lượt ấy chạy với mọi `params.*` là null. `THU` null mà coi là "không thử" là đẩy thật một
+          // lượt không ai chọn đích — dừng trước mọi lệnh.
+          if (params.DOMAIN == null || params.PHAT_HANH == null || params.THU == null || params.XAC_NHAN == null) {
+            error('Jenkins vừa học tham số mới của job — lượt này không có tham số nào.\n' +
+                  'Bấm lại bằng "Build with Parameters". Không có gì được dựng hay đẩy.')
+          }
+
+          // "Rebuild" một lượt cũ mang lại đúng tham số của lượt ấy — kể cả một tham số đã GỠ khỏi
+          // job (đo được ở deploy/Jenkinsfile 25/09/2026: một việc đã gỡ chạy xanh mà không làm gì).
+          // Ở đây tham số lạ là một ý định cũ (ví dụ `BIEN_THE`, đã bỏ 27/09/2026) mà người bấm tưởng
+          // vẫn có tác dụng — nói ra, đừng lặng lẽ bỏ qua.
+          List<String> biet = ['DOMAIN', 'PHAT_HANH', 'THU', 'XAC_NHAN']
+          for (String k : params.keySet()) {
+            if (!(k in biet)) {
+              error("Tham số '${k}' không còn trong job này (đã gỡ). " +
+                    'Bấm "Build with Parameters" — đừng "Rebuild" một lượt cũ.')
+            }
+          }
+          // Cùng lý do: một lượt cũ có thể mang giá trị kiểu khác (chuỗi 'true' thay cho boolean).
+          if (!(params.PHAT_HANH instanceof Boolean) || !(params.THU instanceof Boolean)) {
+            error('PHAT_HANH / THU không phải ô chọn đúng/sai — lượt này đến từ một cấu hình job cũ. ' +
+                  'Bấm "Build with Parameters".')
+          }
+
+          String tenMien = params.DOMAIN.trim()
+          // HÌNH DẠNG TRƯỚC, ĐỂ GHÉP TÊN CREDENTIAL AN TOÀN. `deploy.mjs` còn kiểm kỹ hơn (`kiemTenMien`)
+          // và kiểm tên miền CÓ trong tệp ánh xạ; ở đây chỉ chặn những gì không được phép đi vào một
+          // credentialsId: chữ hoa, scheme, cổng, đường dẫn, khoảng trắng.
+          if (tenMien && !(tenMien ==~ /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/)) {
+            error("DOMAIN '${tenMien}' không phải một tên miền trần (chữ thường, không https://, không cổng, " +
+                  'không đường dẫn). Ví dụ đúng: xa-a.vigov.vn. Để TRỐNG nếu muốn đẩy lên app chung.')
+          }
+          env.DICH = tenMien ?: 'app-chung'
+          env.CRED_ZMP = tenMien ? "zmp-token-${tenMien}" : 'zmp-token-app-chung'
+          env.DOMAIN_XA = tenMien
+          env.PHAT_HANH_CO = params.PHAT_HANH ? 'co' : 'khong'
+          env.THU_CO = params.THU ? 'co' : 'khong'
+
+          // XÁC NHẬN BẰNG CHỮ khi phát hành: gõ lại ĐÍCH chứ không gõ "yes". Gõ "yes" là phản xạ; gõ
+          // tên miền của xã là đọc lại xem mình sắp thay app của ai.
+          if (params.PHAT_HANH && params.XAC_NHAN.trim() != env.DICH) {
+            error("PHAT_HANH cần XAC_NHAN là đúng '${env.DICH}'. Nhận được: '${params.XAC_NHAN}'. " +
+                  'Không dựng, không đẩy gì cả.')
+          }
+
+          env.NGUOI_BAM = nguoiBam()
+          if (!env.NGUOI_BAM) {
+            error('KHÔNG XÁC ĐỊNH ĐƯỢC AI BẤM LƯỢT NÀY — dừng trước khi dựng. Lịch sử build của job này là ' +
+                  'nhật ký các lần thay app trên Zalo; một dòng không có tên người không trả lời được câu ' +
+                  '"ai đã phát hành bản này". Kiểm mục Build Triggers: phải để trống.')
+          }
+          String loai = params.THU ? 'THỬ (chỉ in kế hoạch)' : (params.PHAT_HANH ? 'PHÁT HÀNH' : 'bản thử nghiệm')
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.DICH} · ${loai} · ${env.NGUOI_BAM}"
+          echo "đích ${env.DICH} · credential ${env.CRED_ZMP} · ${loai} · bấm bởi ${env.NGUOI_BAM}"
+        }
+        // Kiểm TỪNG công cụ và in ra cái thiếu (cùng lý do với web-admin/Jenkinsfile).
+        sh '''
+          set -eu
+          thieu=""
+          for cc in node npm git; do
+            command -v "$cc" >/dev/null 2>&1 || thieu="$thieu $cc"
+          done
+          if [ -n "$thieu" ]; then
+            echo ""
+            echo "MÁY CHỦ BUILD THIẾU:$thieu"
+            echo "Dừng ở đây thay vì đổ giữa chừng với một lỗi không đọc được."
+            echo ""
+            exit 1
+          fi
+          node --version
+          echo "commit của kho: $(git rev-parse --short=12 HEAD)"
+          # MỘT `.env` CŨ TRONG WORKSPACE LÀ MỘT TOKEN NẰM TRÊN ĐĨA của máy build — thứ `zmp login` để
+          # lại, của app nào người ấy đăng nhập lần cuối. Đường app chung của `deploy.mjs` rơi về tệp
+          # ấy khi môi trường không có token; job này luôn có, nhưng một tệp như thế không được phép
+          # tồn tại ở đây. Dừng, không xoá hộ: ai đó phải biết nó đã nằm đó.
+          if [ -e citizen-app/.env ]; then
+            echo ""
+            echo "CÓ TỆP citizen-app/.env TRONG WORKSPACE — có thể là một token đẩy app nằm trên đĩa."
+            echo "Job này chỉ nhận token từ credential của Jenkins. Xoá tệp ấy trên máy build rồi bấm lại."
+            echo ""
+            exit 1
+          fi
+        '''
+      }
+    }
+
+    stage('Cổng kiểm của ứng dụng') {
+      steps {
+        // `cd` trong shell thay cho `dir('citizen-app')`: `dir()` để lại `citizen-app@tmp/` trong
+        // workspace. `npm ci` chứ không `npm install`: cài ĐÚNG những gì lock ghi.
+        //
+        // KHÔNG CÓ TOKEN Ở ĐÂY — cố ý. Test không cần nó, và script cài đặt của một gói phụ thuộc
+        // chạy ngay trong bước này.
+        //
+        // `--maxWorkers=1`: máy build dùng chung, và bộ test có một ca dựng thật cả bundle.
+        sh '''
+          set -eu
+          cd citizen-app
+          npm ci
+          npm run typecheck
+          npx vitest run --maxWorkers=1
+        '''
+      }
+    }
+
+    stage('Đẩy lên Zalo') {
+      steps {
+        // `withCredentials` đỏ ngay nếu credential của đích CHƯA CÓ — kể cả ở lượt THU. Đó là chủ
+        // đích: lượt thử phải nói đúng lần chạy thật sẽ dừng ở đâu, và "chưa có token cho xã này"
+        // là câu trả lời quan trọng nhất nó có thể đưa ra.
+        withCredentials([
+          string(credentialsId: env.CRED_ZMP, variable: 'ZMP_TOKEN'),
+          string(credentialsId: 'citizen-app-vigov-api-host', variable: 'VIGOV_API_HOST')
+        ]) {
+          // NHÁY ĐƠN: không một biến bí mật nào đi qua nội suy của Groovy. Cờ dựng từ biến môi trường
+          // không bí mật (DOMAIN_XA · PHAT_HANH_CO · THU_CO) ngay trong shell.
+          sh '''
+            set -eu
+            cd citizen-app
+            set --
+            if [ -n "$DOMAIN_XA" ]; then set -- "$@" "--domain=$DOMAIN_XA"; fi
+            if [ "$PHAT_HANH_CO" = "co" ]; then set -- "$@" --phat-hanh; fi
+            if [ "$THU_CO" = "co" ]; then set -- "$@" --thu; fi
+            node scripts/deploy.mjs "$@"
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      script {
+        String loai = env.THU_CO == 'co' ? 'thử — không đẩy' : (env.PHAT_HANH_CO == 'co' ? 'PHÁT HÀNH' : 'bản thử nghiệm')
+        currentBuild.description = "${env.DICH} · ${loai} · bấm bởi ${env.NGUOI_BAM}"
+      }
+    }
+  }
+}
+
+// AI BẤM LƯỢT NÀY — cùng hàm với service-platform/Jenkinsfile, lý do ở đó.
+String nguoiBam() {
+  List nn
+  try {
+    nn = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')
+  } catch (Throwable e) {
+    echo "Không đọc được nguyên nhân lượt build (${e.getClass().getSimpleName()})."
+    return ''
+  }
+  if (nn == null || nn.isEmpty()) { return '' }
+  def id = nn[0].userId
+  return id == null ? '' : id.toString().trim()
+}
