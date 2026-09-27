@@ -342,3 +342,32 @@ export const DANH_BA = {
   loi_may_chu: "Hệ thống của xã đang bận nên chưa tải được danh bạ. Hãy chờ vài phút rồi bấm Thử lại.",
   khong_hop_le: "Chưa tải được danh bạ của xã. Hãy đóng ứng dụng rồi quét lại mã QR của xã.",
 } as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * GIAO DIỆN APP RIÊNG CỦA XÃ — theo bản mẫu `vi-gov/zalo-miniapp` (chủ dự án chọn, 28/09/2026)
+ *
+ * Không câu nào nhắc "phần giới thiệu" hay "mã QR": app riêng không có cả hai.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const XA_GIAO_DIEN = {
+  chao: "Xin chào",
+  thanh_tab: "Các mục chính của ứng dụng",
+  tab_trang_chu: "Trang chủ",
+  tab_phan_anh: "Phản ánh",
+  tab_tin_tuc: "Tin tức",
+  tab_danh_ba: "Danh bạ",
+  nut_gui_noi: "Gửi phản ánh",
+  o_gui: "Gửi phản ánh",
+  o_tra_cuu: "Tra cứu phiếu",
+  o_danh_ba: "Danh bạ",
+  muc_phan_anh: "Phản ánh của tôi",
+  muc_tin_moi: "Tin tức mới",
+  xem_tat_ca: "Xem tất cả",
+  tin_moi_trong: "Chưa có tin nào được đăng.",
+  chua_dang_nhap_tieu_de: "Chưa đăng nhập được với xã",
+  chua_dang_nhap_ngan: "Ứng dụng chưa đăng nhập được với xã trên điện thoại này.",
+  tim_danh_ba: "Tìm theo tên, chức vụ, bộ phận",
+  khong_thay_can_bo: "Không tìm thấy cán bộ phù hợp.",
+  goi: "Gọi",
+  goi_ai: (ten: string) => `Gọi ${ten}`,
+} as const;

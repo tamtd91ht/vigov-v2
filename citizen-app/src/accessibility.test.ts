@@ -759,3 +759,53 @@ describe("chồng lớp của màn chủ, đo ở 320px", () => {
     }
   });
 });
+
+/**
+ * APP RIÊNG CỦA MỘT XÃ (`.xa-*`, ADR 0047 §6) — giao diện theo bản mẫu `vi-gov/zalo-miniapp`, đo bằng
+ * CÙNG thước với phần còn lại. Bản mẫu có chữ 14px, nhãn tab 10,5px và chữ phụ xám 3,2:1; những chỗ ấy
+ * đã được nâng khi đưa vào đây, và các ca dưới giữ chúng không tụt lại.
+ */
+describe("app riêng của xã: cùng thước với phần còn lại", () => {
+  it("mọi đích chạm của app riêng cao ít nhất calc(var(--tap-min) + 4px)", () => {
+    for (const lop of [
+      ".xa-dau-con__lui",
+      ".xa-o-nhanh",
+      ".xa-dau-khoi__them",
+      ".xa-hang-tin",
+      ".xa-noi-bat",
+      ".xa-can-bo__goi",
+      ".xa-nut",
+      ".xa-tab__muc",
+      ".xa-noi",
+    ]) {
+      expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
+        new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
+      );
+    }
+  });
+
+  it("không lớp .xa-* nào đặt cỡ chữ bằng số px dưới --text-small", () => {
+    for (const khop of styles.matchAll(/\.xa-[^{]*\{([^}]*)\}/g)) {
+      const co = /font-size:\s*(\d+(?:\.\d+)?)px/.exec(khop[1]!);
+      if (co) expect(Number(co[1]), khop[0].slice(0, 60)).toBeGreaterThanOrEqual(pixels("text-small"));
+    }
+  });
+
+  const cap: ReadonlyArray<[string, string, string]> = [
+    ["chữ trắng trên header và nút navy", "#ffffff", token("xa-navy")],
+    ["chữ phụ trên header", token("xa-hero-phu"), token("xa-navy")],
+    ["tiêu đề navy trên thẻ", token("xa-navy"), token("surface")],
+    ["tiêu đề navy trên nền trang", token("xa-navy"), token("xa-nen")],
+    ["chữ phụ trên thẻ", token("ink-muted"), token("surface")],
+    ["chữ phụ trên nền trang", token("ink-muted"), token("xa-nen")],
+    ["liên kết 'Xem tất cả' trên nền trang", token("xa-lien-ket"), token("xa-nen")],
+    ["câu lỗi trên nền trang", token("xa-loi"), token("xa-nen")],
+    ["nhãn 'Gọi' trên nền xanh lá nhạt", token("xa-luc-dam"), token("xa-luc-nhat")],
+    ["nhãn tab chưa chọn", token("ink-muted"), token("surface")],
+  ];
+  for (const [gi, chu, nen] of cap) {
+    it(`${gi} đạt 4,5:1`, () => {
+      expect(contrast(chu, nen)).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});

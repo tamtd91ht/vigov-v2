@@ -6,10 +6,8 @@ import {
   type KetQuaMoPhien,
   type KetThucXacNhan,
   type MoPhienViGov,
-  NHAN_KENH_CONG_DAN,
   NutVaoKenhCongDan,
   TrangXa,
-  type XaCuaApp,
   XacNhanXa,
 } from "./cong-dan";
 import { COMPANY } from "./content/company-profile";
@@ -204,26 +202,11 @@ export function App() {
  * tên đơn vị phát hành trên header. Không bước xác nhận, không đăng nhập lúc mở — `TrangXa` tra tên xã
  * qua tuyến công khai rồi hiện kênh công dân. Kênh là màn gốc: không nút "Quay lại".
  *
- * Header: tên xã khi đã tra được; trước đó để trống — không bao giờ một tên đoán từ tên miền.
+ * Toàn bộ giao diện nằm ở nửa nhà nước (`cong-dan/man/TrangXa.tsx`), theo bản mẫu `vi-gov/zalo-miniapp`
+ * chủ dự án chọn 28/09/2026; lớp vỏ này chỉ chọn nó.
  */
 export function AppRieng({ ten_mien }: { ten_mien: string }) {
-  const [xa, datXa] = useState<XaCuaApp | null>(null);
-
-  return (
-    <div className="app">
-      <header className="app-header">
-        <div className="app-header__hang">
-          <div className="app-header__ten">
-            <p className="app-header__owner">{xa === null ? "" : `${xa.ten}, ${xa.tinh}`}</p>
-            <p className="app-header__screen">{NHAN_KENH_CONG_DAN}</p>
-          </div>
-        </div>
-      </header>
-      <main className="app-main" id="main">
-        <TrangXa ten_mien={ten_mien} onXa={datXa} />
-      </main>
-    </div>
-  );
+  return <TrangXa ten_mien={ten_mien} />;
 }
 
 function AppChung() {
