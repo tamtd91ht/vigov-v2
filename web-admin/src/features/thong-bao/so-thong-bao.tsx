@@ -10,19 +10,28 @@ import {
   veTrangTruoc,
   type NganXepConTro,
 } from "@/features/cau-hinh/ngan-xep-con-tro";
+import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
 import type { KetQua } from "@/lib/api/goi";
-import type { comms_thongBaoRa, page_Result_comms_thongBaoRa } from "@/lib/api/schema.gen";
+import type {
+  comms_thongBaoRa,
+  identity_danhBaChonNguoiRa,
+  page_Result_comms_thongBaoRa,
+} from "@/lib/api/schema.gen";
 import { laySoThongBao, phatHanhThongBao, type PhatHanhThongBaoVao } from "@/lib/api/thong-bao";
 
 import {
   CANH_BAO_CHUA_GUI_THU,
   CANH_BAO_GHIM_TRONG_TRANG,
   CHIP_BAT_BUOC_XAC_NHAN,
+  CHON_NGUOI_NHAN_RONG,
   CHO_DANH_SACH_NGUOI_NHAN,
   CHO_NUT_GO,
   CHUA_CHON_THONG_BAO,
+  cauLoiDanhBa,
   coChipTrangThai,
+  DANG_TAI_DANH_BA,
   DANG_TAI_SO,
+  DANH_BA_NGUOI_NHAN_RONG,
   DAU_GACH,
   DAU_GHIM,
   GHI_CHU_GHIM_TRONG_TRANG,
@@ -34,17 +43,21 @@ import {
   NGUOI_NHAN_TOI_DA,
   NHAN_NUT_HUY,
   NHAN_NUT_PHAT_HANH,
+  NHAN_CHON_NGUOI_NHAN,
   NHAN_NUT_SOAN,
   nhanBoDemXacNhan,
+  nhanLuaChonNguoiNhan,
   nhanMoc,
   nhanTrangThai,
   nhanTrangThaiThu,
   NOI_DUNG_TOI_DA,
+  NUT_THEM_NGUOI_NHAN,
   PHAM_VI_DANG_HIEN,
   PHAN_CHUA_DUNG,
   PLACEHOLDER_TIEU_DE,
   SO_RONG,
   tachMaNguoiNhan,
+  themMaNguoiNhan,
   TIEU_DE_TOI_DA,
   trichNoiDung,
 } from "./nhan-thong-bao";
@@ -71,6 +84,19 @@ import {
  * đây ghi nó vào log, vào tên tệp hay vào một URL (luật 3, cấm #1 và #4). Mã cán bộ người nhận
  * cũng không — nó là định danh của một con người.
  */
+
+/**
+ * Đọc danh bạ cho ô chọn người nhận.
+ *
+ * DANH BẠ CHỌN NGƯỜI, KHÔNG PHẢI SỔ QUẢN TRỊ: `GET /api/v1/staff-directory` là `AnyAuthenticated`
+ * và chỉ trả mã · họ tên · chức vụ · bộ phận. `GET /api/v1/staff` đòi `admin.user` — một khoá quản
+ * trị mà người soạn thông báo gần như không bao giờ cầm, và nó trả cả số di động cá nhân mà ô chọn
+ * này không cần. KHÔNG truyền `permission`: ai trong xã cũng nhận được thông báo. Cả xã, không lọc
+ * bộ phận — người nhận chọn theo từng người (bộ phận trả 501, xem `PHAN_CHUA_DUNG`).
+ */
+export function docDanhBaNguoiNhan(): Promise<KetQua<identity_danhBaChonNguoiRa>> {
+  return layDanhBaChonNguoi();
+}
 
 /** Bao nhiêu thẻ một trang. Mỗi thẻ mang cả toàn văn nội dung, nên trang mỏng. */
 const SO_THE_MOI_TRANG = 10;
@@ -110,7 +136,21 @@ export function SoThongBao() {
   // `Idempotency-Key` sinh ra để làm.
   const [lanGhiXong, datLanGhiXong] = useState(0);
 
+  // Danh bạ cho ô chọn người nhận — đọc MỘT lần cho cả màn, không theo mỗi lần mở biểu mẫu. Hỏng
+  // thì biểu mẫu vẫn gửi được: ô gõ mã không phụ thuộc nó.
+  const [danhBa, datDanhBa] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
+
   const khoa = `${nganXep.hienTai ?? ""}|${lanTai}`;
+
+  useEffect(() => {
+    let bo = false;
+    docDanhBaNguoiNhan().then((kq) => {
+      if (!bo) datDanhBa(kq);
+    });
+    return () => {
+      bo = true;
+    };
+  }, []);
 
   useEffect(() => {
     let bo = false;
@@ -178,6 +218,7 @@ export function SoThongBao() {
           key={`bieu-mau|${lanGhiXong}`}
           dangGui={dangGui}
           loi={loiBieuMau}
+          danhBa={danhBa}
           huy={() => {
             datDangMoBieuMau(false);
             datLoiBieuMau(null);
@@ -394,24 +435,28 @@ export function ChiTietThongBao({ thongBao }: { thongBao: comms_thongBaoRa | nul
  * ĐẶC TẢ GỌI NÓ LÀ MODAL. Ở đây nó là một khối nằm trong trang — KHÔNG phải một lớp phủ — vì một
  * lớp phủ cần lớp CSS chưa có trong `globals.css`, và lượt này không được thêm CSS.
  *
- * BA THỨ CỦA §5 KHÔNG CÓ Ở ĐÂY: ô chọn bộ phận (máy chủ trả 501), ô chọn người nhận theo
- * `Họ tên — email` (`GET /api/v1/staff` đòi `admin.user`), và nút `Lưu nháp` (không có tuyến). Lý
- * do từng cái một nằm ở `PHAN_CHUA_DUNG`, hiện ngay đầu màn.
+ * HAI THỨ CỦA §5 KHÔNG CÓ Ở ĐÂY: ô chọn bộ phận (máy chủ trả 501) và nút `Lưu nháp` (không có
+ * tuyến). Ô chọn người nhận CÓ, trên danh bạ chọn người (`docDanhBaNguoiNhan`), nhưng không có email
+ * như §5 vẽ vì danh bạ ấy không trả email. Lý do từng cái nằm ở `PHAN_CHUA_DUNG`, hiện ngay đầu màn.
  */
 export function FormSoanThongBao({
   dangGui,
   loi,
+  danhBa,
   huy,
   phatHanh,
 }: {
   dangGui: boolean;
   loi: string | null;
+  /** `null` = đang tải. */
+  danhBa: KetQua<identity_danhBaChonNguoiRa> | null;
   huy: () => void;
   phatHanh: (than: PhatHanhThongBaoVao, khoaChongTrung: string) => void;
 }) {
   const [tieuDe, datTieuDe] = useState("");
   const [noiDung, datNoiDung] = useState("");
   const [nguoiNhan, datNguoiNhan] = useState("");
+  const [maDangChon, datMaDangChon] = useState("");
   const [ghim, datGhim] = useState(false);
   const [batBuocXacNhan, datBatBuocXacNhan] = useState(false);
   // §5: ô này **mặc định bật**. Cột `gui_thu_dien_tu` ghi lại ĐIỀU ĐÃ ĐƯỢC YÊU CẦU, nên giá trị
@@ -475,6 +520,47 @@ export function FormSoanThongBao({
           maxLength={NOI_DUNG_TOI_DA}
           onChange={(e) => datNoiDung(e.target.value)}
         />
+      </div>
+
+      <div className="o-nhap">
+        <label htmlFor="chon-nguoi-nhan-thong-bao">{NHAN_CHON_NGUOI_NHAN}</label>
+        {danhBa === null && <p role="status">{DANG_TAI_DANH_BA}</p>}
+        {danhBa !== null && !danhBa.ok && (
+          <p className="thong-bao-loi" role="alert">
+            {cauLoiDanhBa(danhBa.thongBao)}
+          </p>
+        )}
+        {danhBa !== null && danhBa.ok && danhBa.duLieu.items.length === 0 && (
+          <p className="trang-thai-rong">{DANH_BA_NGUOI_NHAN_RONG}</p>
+        )}
+        {danhBa !== null && danhBa.ok && danhBa.duLieu.items.length > 0 && (
+          <>
+            <select
+              id="chon-nguoi-nhan-thong-bao"
+              name="chon-nguoi-nhan-thong-bao"
+              value={maDangChon}
+              onChange={(e) => datMaDangChon(e.target.value)}
+            >
+              <option value="">{CHON_NGUOI_NHAN_RONG}</option>
+              {danhBa.duLieu.items.map((cb) => (
+                <option key={cb.code} value={cb.code}>
+                  {nhanLuaChonNguoiNhan(cb)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="nut-phu"
+              disabled={maDangChon === ""}
+              onClick={() => {
+                datNguoiNhan(themMaNguoiNhan(nguoiNhan, maDangChon));
+                datMaDangChon("");
+              }}
+            >
+              {NUT_THEM_NGUOI_NHAN}
+            </button>
+          </>
+        )}
       </div>
 
       <div className="o-nhap">

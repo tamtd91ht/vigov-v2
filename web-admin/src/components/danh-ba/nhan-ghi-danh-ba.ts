@@ -23,6 +23,9 @@ import type {
   identity_themCanBoVao,
 } from "@/lib/api/schema.gen";
 
+// Chỉ KIỂU, nên vòng nhập với component bị xoá khi biên dịch.
+import type { DangMoGhi } from "./bieu-mau-ghi-can-bo";
+
 /* ---- nhãn các ô nhập ----------------------------------------------------------------------- */
 
 export const O_HO_TEN = "Họ và tên";
@@ -123,6 +126,47 @@ export function canhBaoKhoa(khoa: boolean): string {
     ? "Sau khi khoá, cán bộ này không đăng nhập được nữa. Người này VẪN CÒN trong danh bạ và tên " +
         "vẫn hiện trên những hồ sơ đã xử lý."
     : "Sau khi mở khoá, cán bộ này đăng nhập lại được bình thường.";
+}
+
+/* ---- hai việc gỡ một người khỏi Mini App mà không qua nút "Rút" ------------------------------ */
+
+/**
+ * Quyết định của khách, 28/09/2026: ĐỔI SỐ DI ĐỘNG CÁ NHÂN của một người đang hiện trên Mini App thì
+ * máy chủ TỰ GỠ người ấy khỏi Mini App, vì sự đồng ý đã hỏi là đồng ý công khai SỐ CŨ — không phải
+ * số vừa gõ. Muốn hiện lại, phải hỏi ý lại và bấm công khai lại ở màn Danh bạ cán bộ.
+ *
+ * CHỈ LÀ LỜI BÁO, KHÔNG PHẢI PHÉP CHẶN: máy chủ là nơi gỡ thật (`service-identity`). Câu này có mặt
+ * để người sửa hồ sơ không bấm Lưu rồi mới phát hiện đồng nghiệp biến khỏi danh bạ của bà con.
+ */
+export const CANH_BAO_DOI_DI_DONG_CONG_KHAI =
+  "Cán bộ này đang hiện trên danh bạ Zalo Mini App. Đổi số di động sẽ gỡ cán bộ này khỏi danh bạ " +
+  "trên Mini App. Muốn hiện lại, phải hỏi ý và bấm công khai lại.";
+
+/**
+ * Có hiện `CANH_BAO_DOI_DI_DONG_CONG_KHAI` hay không: chỉ ở biểu mẫu SỬA, người ĐANG công khai, và ô
+ * di động KHÁC giá trị đang lưu.
+ *
+ * SO CHUỖI THÔ, KHÔNG CHUẨN HOÁ. Máy chủ lọc ký tự của số điện thoại theo quy tắc của nó
+ * (`domain/danh_ba_ghi.go`); chép quy tắc ấy xuống đây là bản sao thứ hai sẽ trôi. Hệ quả của so
+ * thô là báo THỪA (thêm một dấu cách cũng hiện lời báo) — chiều sai vô hại. Chiều ngược lại, báo
+ * THIẾU, là để một người biến khỏi Mini App mà không ai được nói trước.
+ */
+export function coCanhBaoDoiDiDong(dangMo: DangMoGhi, ban: BanNhapCanBo): boolean {
+  if (dangMo.kieu !== "sua") return false;
+  return dangMo.canBo.published && ban.diDongCaNhan !== dangMo.canBo.mobile;
+}
+
+/**
+ * Cùng quyết định 28/09/2026: KHOÁ một người đang hiện trên Mini App cũng gỡ người ấy, và MỞ KHOÁ
+ * KHÔNG hiện lại. Nửa thứ hai là nửa phải nói ra: người mở khoá sẽ tưởng mọi thứ trở về như cũ.
+ */
+export const CANH_BAO_KHOA_CONG_KHAI =
+  "Cán bộ này đang hiện trên danh bạ Zalo Mini App. Khoá tài khoản sẽ gỡ cán bộ này khỏi danh bạ " +
+  "trên Mini App, và mở khoá sau đó không tự hiện lại. Muốn hiện lại, phải hỏi ý và bấm công khai lại.";
+
+/** Có hiện `CANH_BAO_KHOA_CONG_KHAI` hay không: chỉ khi KHOÁ (không phải mở khoá) một người đang công khai. */
+export function coCanhBaoKhoaCongKhai(dangMo: DangMoGhi): boolean {
+  return dangMo.kieu === "khoa" && dangMo.khoa && dangMo.canBo.published;
 }
 
 /* ---- câu xác nhận sau khi ghi xong ---------------------------------------------------------- */

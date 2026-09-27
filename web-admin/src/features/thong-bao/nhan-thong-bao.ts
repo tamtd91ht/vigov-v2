@@ -6,7 +6,8 @@
  * cơ quan nhà nước là một chữ có người phải trả lời.
  */
 
-import type { comms_thongBaoRa } from "@/lib/api/schema.gen";
+import { nhanLuaChonCanBo } from "@/features/phan-anh/nhan-phieu";
+import type { comms_thongBaoRa, identity_canBoChonNguoiRa } from "@/lib/api/schema.gen";
 
 /* ── Trần độ dài, đúng bằng trần máy chủ ────────────────────────────────────────────────────
  *
@@ -79,10 +80,54 @@ export const CANH_BAO_CHUA_GUI_THU =
 export const CANH_BAO_GHIM_TRONG_TRANG =
   "Ghim chỉ nâng thẻ lên đầu TRANG ĐANG XEM, chưa phải đầu cả quyển sổ.";
 
-/** Câu đứng dưới ô nhập người nhận — nói rõ đây là MÃ, không phải họ tên. */
+/**
+ * Câu đứng dưới ô nhập người nhận — nói rõ đây là MÃ, không phải họ tên.
+ *
+ * Ô GÕ MÃ VẪN LÀ THỨ ĐI LÊN MÁY CHỦ: ô chọn theo họ tên ngay trên chỉ THÊM mã vào đây. Một nguồn cho
+ * `recipient_codes`, không hai — và ô gõ vẫn dùng được khi danh bạ tải hỏng.
+ */
 export const GHI_CHU_NGUOI_NHAN =
-  "Mỗi dòng một mã cán bộ, ví dụ CB-2026-7K3M9Q. Đây là mã nghiệp vụ, không phải họ tên — ô chọn " +
-  "theo tên và email chưa dựng được, xem phần chưa dựng được ở đầu màn.";
+  "Mỗi dòng một mã cán bộ, ví dụ CB-2026-7K3M9Q. Đây là mã nghiệp vụ, không phải họ tên. Chọn theo " +
+  "họ tên ở ô phía trên để thêm mã vào đây, hoặc gõ thẳng mã.";
+
+/** Nhãn ô chọn người nhận theo họ tên, và nút thêm người đã chọn vào ô mã. */
+export const NHAN_CHON_NGUOI_NHAN = "Chọn cán bộ nhận thông báo";
+export const CHON_NGUOI_NHAN_RONG = "— Chọn một cán bộ —";
+export const NUT_THEM_NGUOI_NHAN = "Thêm vào danh sách người nhận";
+export const DANG_TAI_DANH_BA = "Đang tải danh bạ cán bộ…";
+/** Danh bạ chỉ gồm người có tài khoản đang hoạt động, nên rỗng là một câu trả lời thật. */
+export const DANH_BA_NGUOI_NHAN_RONG =
+  "Danh bạ chưa có cán bộ nào có tài khoản đang hoạt động. Vẫn gõ được mã cán bộ vào ô dưới.";
+
+/** Danh bạ tải hỏng: câu của máy chủ nguyên văn, kèm lối còn lại. Ô gõ mã không phụ thuộc danh bạ. */
+export function cauLoiDanhBa(thongBao: string): string {
+  return `Không tải được danh bạ cán bộ: ${thongBao} Vẫn gõ được mã cán bộ vào ô dưới.`;
+}
+
+/**
+ * Một dòng của ô chọn: `Họ tên · Chức vụ — MÃ`.
+ *
+ * KHÔNG CÓ EMAIL như đặc tả §5 vẽ (`Họ tên — email`): danh bạ chọn người
+ * (`GET /api/v1/staff-directory`) cố ý không trả email — cùng cách ô chọn cán bộ của màn Phản ánh
+ * (`nhanLuaChonCanBo`). MÃ đứng cuối vì hai người trùng họ tên và chức vụ là chuyện có thật ở một
+ * xã, và mã là thứ thật sự được gửi đi.
+ */
+export function nhanLuaChonNguoiNhan(cb: identity_canBoChonNguoiRa): string {
+  return `${nhanLuaChonCanBo(cb)} — ${cb.code}`;
+}
+
+/**
+ * Thêm một mã vào ô "Gửi thêm đích danh": một dòng mới ở cuối, TRỪ KHI mã ấy đã có trong ô.
+ *
+ * Một mã hai lần là một người nhận hai lần trong đếm `recipient_count`. So bằng đúng phép tách
+ * `tachMaNguoiNhan` mà lần gửi dùng, để "đã có" ở đây nghĩa đúng như ở thân yêu cầu.
+ */
+export function themMaNguoiNhan(chu: string, ma: string): string {
+  const gon = ma.trim();
+  if (gon === "" || tachMaNguoiNhan(chu).includes(gon)) return chu;
+  const dau = chu.replace(/\s+$/, "");
+  return dau === "" ? gon : `${dau}\n${gon}`;
+}
 
 /** Chỗ đáng lẽ là nút `🗑 Gỡ` của §4 — một dòng chữ, không phải một nút mờ. */
 export const CHO_NUT_GO = "🗑 Gỡ — chưa dựng, xem phần chưa dựng được ở đầu màn";
@@ -332,13 +377,13 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "đều nhận 501 là một ô tệ hơn là không có ô.",
   },
   {
-    ten: "Ô chọn người nhận dạng `Họ tên — email` (§5)",
+    ten: "Thư điện tử trong ô chọn người nhận `Họ tên — email` (§5)",
     viSao:
-      "Tuyến duy nhất tra được danh bạ cán bộ — `GET /api/v1/staff` — đòi `admin.user`, một khoá " +
-      "quản trị hệ thống không liên quan tới việc soạn thông báo. Nên ô người nhận là ô GÕ MÃ " +
-      "nghiệp vụ, mỗi dòng một mã. Khác với ô `Chủ trì` của màn Biên bản họp — chỗ ấy bỏ hẳn ô đi " +
-      "được vì trường tuỳ chọn — ở đây người nhận là thứ DUY NHẤT còn gửi được: bỏ ô này là tuyến " +
-      "phát hành không còn đường nào chạy, vì một thông báo không người nhận bị máy chủ từ chối.",
+      "Ô chọn theo họ tên ĐÃ DỰNG, trên danh bạ chọn người `GET /api/v1/staff-directory` — mọi cán " +
+      "bộ đã đăng nhập của xã đọc được, không cần `admin.user`. Danh bạ ấy cố ý chỉ trả mã, họ tên, " +
+      "chức vụ và bộ phận — không số điện thoại, không email — nên mỗi dòng hiện `Họ tên · Chức vụ " +
+      "— mã` thay vì `Họ tên — email`. Hiện email ở đây nghĩa là mở một tuyến trả email cho mọi " +
+      "cán bộ, một thay đổi hợp đồng chứ không phải một việc của màn hình.",
   },
   {
     ten: "Nút `Lưu nháp` (§5)",

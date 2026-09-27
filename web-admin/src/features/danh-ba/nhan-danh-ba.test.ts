@@ -103,10 +103,13 @@ describe("danh sách phần chưa mở", () => {
     }
   });
 
-  it("nói thật rằng bà con CHƯA thấy danh bạ trên Mini App — tuyến đọc công khai chưa có", () => {
-    // Người quản trị vừa bấm công khai sẽ mở Mini App ra xem. Không nói trước thì họ kết luận
-    // thao tác hỏng, hoặc tệ hơn, tưởng số đã lên kênh công khai trong khi chưa.
-    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Bà con xem danh bạ"));
-    expect(muc?.viSao).toContain("chưa có trong hợp đồng");
+  it("KHÔNG còn nói bà con chưa thấy danh bạ trên Mini App — tuyến `GET /api/v1/commune-staff` đã có", () => {
+    // Câu cũ đúng cho tới khi tuyến đọc của Mini App được mở. Để nó lại là nói với người quản trị
+    // rằng số chưa lên kênh công khai, trong khi nó đã lên — đúng chiều sai nguy hiểm nhất với một
+    // số di động cá nhân.
+    for (const p of PHAN_CHUA_DUNG) {
+      expect(p.ten).not.toContain("Bà con xem danh bạ");
+      expect(p.viSao).not.toMatch(/bà con chưa thấy|Mini App đọc danh bạ/i);
+    }
   });
 });

@@ -153,6 +153,8 @@ describe("câu chữ nói trước hậu quả", () => {
     expect(CANH_BAO_CONG_KHAI).toContain("Nghị định 13/2023/NĐ-CP");
     expect(CANH_BAO_CONG_KHAI).toContain("công khai");
     expect(CANH_BAO_CONG_KHAI).toContain("đồng ý");
+    // Tuyến đọc của Mini App trả số di động KHÔNG CHE: người bấm phải biết điều ấy trước khi tick.
+    expect(CANH_BAO_CONG_KHAI).toContain("số di động cá nhân đầy đủ");
     expect(O_DA_HOI_Y).toContain("Đã hỏi ý và người này đồng ý");
   });
 

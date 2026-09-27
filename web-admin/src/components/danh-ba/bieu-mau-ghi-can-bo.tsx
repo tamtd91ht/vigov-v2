@@ -3,6 +3,8 @@
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
 import {
+  CANH_BAO_DOI_DI_DONG_CONG_KHAI,
+  CANH_BAO_KHOA_CONG_KHAI,
   CHON_KHONG_BO_PHAN,
   CHON_KHONG_VAI_TRO,
   GIAI_THICH_THEM,
@@ -20,6 +22,8 @@ import {
   O_MAY_BAN,
   O_VAI_TRO,
   canhBaoKhoa,
+  coCanhBaoDoiDiDong,
+  coCanhBaoKhoaCongKhai,
   tieuDeKhoa,
   tieuDeSua,
   tieuDeThem,
@@ -163,6 +167,14 @@ export function BieuMauGhiCanBo({
             doi={(v) => datBan({ ...ban, diDongCaNhan: v })}
             moTa="Số di động cá nhân. Đây là dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP."
           />
+          {/* Lời báo ngay dưới ô di động, CHỈ khi người này đang công khai và số vừa đổi — quyết
+              định 28/09/2026. Máy chủ mới là nơi gỡ khỏi Mini App; sau khi Lưu, chỗ gọi đọc lại
+              danh sách nên chip "Trên Mini App" phản ánh đúng điều máy chủ đã làm. */}
+          {coCanhBaoDoiDiDong(dangMo, ban) && (
+            <p className="canh-bao-pham-vi" role="status">
+              {CANH_BAO_DOI_DI_DONG_CONG_KHAI}
+            </p>
+          )}
         </>
       )}
 
@@ -201,6 +213,7 @@ export function BieuMauGhiCanBo({
       )}
 
       {dangMo.kieu === "khoa" && <p className="canh-bao-pham-vi">{canhBaoKhoa(dangMo.khoa)}</p>}
+      {coCanhBaoKhoaCongKhai(dangMo) && <p className="canh-bao-pham-vi">{CANH_BAO_KHOA_CONG_KHAI}</p>}
 
       {/*
         LỖI CỦA MÁY CHỦ HIỆN NGUYÊN VĂN, và đây là chỗ ba quy tắc khách chốt 22/09/2026 thật sự

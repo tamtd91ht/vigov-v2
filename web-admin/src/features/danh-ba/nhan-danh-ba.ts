@@ -186,13 +186,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Mini App”.",
   },
   {
-    ten: "Bà con xem danh bạ cán bộ trên Zalo Mini App",
-    viSao:
-      "Màn này ghi nhận ai được công khai, thứ tự hiển thị và thời điểm ghi nhận đồng ý. Tuyến để " +
-      "Zalo Mini App đọc danh bạ ấy chưa có trong hợp đồng, nên bà con chưa thấy thay đổi nào cho " +
-      "tới khi tuyến ấy được mở.",
-  },
-  {
     ten: "Ảnh đại diện (§4, §5)",
     viSao:
       "Không có trường nào tương ứng trong hợp đồng REST (identity.canBoTomTat) và chưa có tuyến " +

@@ -80,11 +80,18 @@ export function tieuDeCongKhai(hoTen: string): string {
 /**
  * Điều người bấm phải biết TRƯỚC khi tick: đây là công khai dữ liệu cá nhân, ra ngoài cơ quan, cho
  * bất kỳ ai. Không nói ra thì ô tick chỉ là một thủ tục bấm cho qua.
+ *
+ * CÂU THỨ HAI KỂ ĐÚNG NHỮNG GÌ BÀ CON THẤY, vì tuyến đọc của Mini App đã có:
+ * `GET /api/v1/commune-staff` (`identity`, công khai theo tên miền của xã) trả người đã công khai,
+ * đang hoạt động, chưa xoá — họ tên, chức vụ, khối/đơn vị, máy bàn, di động cá nhân KHÔNG CHE (quyết
+ * định của khách) và cờ có Zalo. Người đọc cần biết số hiện NGUYÊN VẸN trước khi hỏi ý đồng nghiệp.
  */
 export const CANH_BAO_CONG_KHAI =
   "Số di động cá nhân của người này sẽ hiện công khai cho mọi người dân dùng Zalo Mini App của " +
-  "xã. Đây là dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP: chỉ công khai khi đã hỏi ý chính người " +
-  "này và được người này đồng ý. Hệ thống ghi lại thời điểm và người xác nhận.";
+  "xã. Bà con sẽ thấy họ tên, chức vụ, khối/đơn vị, số máy bàn cơ quan, số di động cá nhân đầy đủ " +
+  "và việc số ấy có dùng Zalo hay không. Đây là dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP: chỉ " +
+  "công khai khi đã hỏi ý chính người này và được người này đồng ý. Hệ thống ghi lại thời điểm và " +
+  "người xác nhận.";
 
 export const O_DA_HOI_Y = "Đã hỏi ý và người này đồng ý công khai số di động lên Zalo Mini App";
 

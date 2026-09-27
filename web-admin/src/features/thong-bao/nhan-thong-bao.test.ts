@@ -13,6 +13,7 @@ import {
   nhanTrangThai,
   nhanTrangThaiThu,
   tachMaNguoiNhan,
+  themMaNguoiNhan,
   trichNoiDung,
 } from "./nhan-thong-bao";
 
@@ -200,5 +201,24 @@ describe("tách mã người nhận (§5)", () => {
     // Một biểu thức chính quy ở đây sẽ từ chối một mã thật vào ngày `identity` nới khuôn (luật 2).
     // Máy chủ vẫn từ chối thứ không phải mã: một họ tên có dấu cách, và `ChuanHoaMaCanBo` chặn nó.
     expect(tachMaNguoiNhan("MA-KIEU-MOI-2027")).toEqual(["MA-KIEU-MOI-2027"]);
+  });
+});
+
+describe("thêm một mã từ ô chọn vào ô người nhận", () => {
+  it("ô trống: đúng một mã, không dòng trắng thừa ở đầu", () => {
+    expect(themMaNguoiNhan("", "CB-00123")).toBe("CB-00123");
+  });
+
+  it("ô đã có mã khác: thêm ở một dòng mới, bỏ dòng trắng cuối", () => {
+    expect(themMaNguoiNhan("CB-00123\n\n", "CB-00124")).toBe("CB-00123\nCB-00124");
+  });
+
+  it("mã đã có trong ô: không thêm lần hai — một người không được đếm hai lần", () => {
+    expect(themMaNguoiNhan("CB-00123\nCB-00124", "CB-00124")).toBe("CB-00123\nCB-00124");
+    expect(tachMaNguoiNhan(themMaNguoiNhan("  CB-00123  ", "CB-00123"))).toEqual(["CB-00123"]);
+  });
+
+  it("mã rỗng: ô giữ nguyên", () => {
+    expect(themMaNguoiNhan("CB-00123", "")).toBe("CB-00123");
   });
 });

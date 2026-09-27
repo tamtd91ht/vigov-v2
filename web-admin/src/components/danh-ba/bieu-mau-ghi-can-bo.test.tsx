@@ -4,7 +4,14 @@ import { describe, expect, it } from "vitest";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
 import { BieuMauGhiCanBo, type DangMoGhi, type MucChon } from "./bieu-mau-ghi-can-bo";
-import { BAN_TRONG, banTuCanBo, type BanNhapCanBo } from "./nhan-ghi-danh-ba";
+import {
+  BAN_TRONG,
+  banTuCanBo,
+  CANH_BAO_DOI_DI_DONG_CONG_KHAI,
+  CANH_BAO_KHOA_CONG_KHAI,
+  coCanhBaoDoiDiDong,
+  type BanNhapCanBo,
+} from "./nhan-ghi-danh-ba";
 
 /**
  * BỐN QUY TẮC NGHIỆP VỤ ĐI QUA ĐÚNG TỆP NÀY, và cả bốn đều là loại "phá được bằng một dòng, xanh
@@ -274,5 +281,63 @@ describe("ô chọn danh mục giữ được giá trị mà danh mục không t
 
     expect(html).toContain("Không giữ vai trò nào");
     expect(html).toContain('<option value="">');
+  });
+});
+
+describe("lời báo gỡ khỏi Mini App — quyết định 28/09/2026", () => {
+  const DA_CONG_KHAI: identity_canBoTomTat = {
+    ...CAN_BO,
+    published: true,
+    consent_recorded_at: "2026-09-25T08:00:00Z",
+  };
+  const SO_MOI = "0900000001";
+
+  it("hiện khi người ĐANG công khai VÀ số di động vừa đổi", () => {
+    const html = ve(
+      { kieu: "sua", canBo: DA_CONG_KHAI },
+      { ban: { ...banTuCanBo(DA_CONG_KHAI), diDongCaNhan: SO_MOI } },
+    );
+    expect(html).toContain(CANH_BAO_DOI_DI_DONG_CONG_KHAI);
+  });
+
+  it("KHÔNG hiện khi người đang công khai nhưng số di động chưa đổi", () => {
+    // Sửa chức danh của một người đang công khai không gỡ ai. Báo ở đây là dạy người đọc bỏ qua
+    // lời báo, đúng lúc nó cần được đọc.
+    const html = ve(
+      { kieu: "sua", canBo: DA_CONG_KHAI },
+      { ban: { ...banTuCanBo(DA_CONG_KHAI), chucDanh: "Phó Chủ tịch" } },
+    );
+    expect(html).not.toContain(CANH_BAO_DOI_DI_DONG_CONG_KHAI);
+  });
+
+  it("KHÔNG hiện khi số đổi nhưng người ấy không công khai", () => {
+    const html = ve(FORM_SUA, { ban: { ...banTuCanBo(CAN_BO), diDongCaNhan: SO_MOI } });
+    expect(html).not.toContain(CANH_BAO_DOI_DI_DONG_CONG_KHAI);
+  });
+
+  it("xoá trắng số di động của người đang công khai cũng là đổi — lời báo hiện", () => {
+    expect(
+      coCanhBaoDoiDiDong(
+        { kieu: "sua", canBo: DA_CONG_KHAI },
+        { ...banTuCanBo(DA_CONG_KHAI), diDongCaNhan: "" },
+      ),
+    ).toBe(true);
+  });
+
+  it("không bao giờ hiện ở biểu mẫu THÊM — người mới chưa công khai được", () => {
+    expect(coCanhBaoDoiDiDong(FORM_THEM, { ...BAN_TRONG, diDongCaNhan: SO_MOI })).toBe(false);
+  });
+
+  it("khoá người đang công khai: báo gỡ, và nói mở khoá KHÔNG tự hiện lại", () => {
+    const html = ve({ kieu: "khoa", canBo: DA_CONG_KHAI, khoa: true });
+    expect(html).toContain(CANH_BAO_KHOA_CONG_KHAI);
+    expect(CANH_BAO_KHOA_CONG_KHAI).toContain("mở khoá sau đó không tự hiện lại");
+  });
+
+  it("khoá người KHÔNG công khai, hoặc mở khoá: không có lời báo Mini App", () => {
+    expect(ve(FORM_KHOA)).not.toContain(CANH_BAO_KHOA_CONG_KHAI);
+    expect(ve({ kieu: "khoa", canBo: DA_CONG_KHAI, khoa: false })).not.toContain(
+      CANH_BAO_KHOA_CONG_KHAI,
+    );
   });
 });

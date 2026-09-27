@@ -1,7 +1,10 @@
-import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
-import type { comms_thongBaoRa } from "@/lib/api/schema.gen";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { KetQua } from "@/lib/api/goi";
+import type { comms_thongBaoRa, identity_danhBaChonNguoiRa } from "@/lib/api/schema.gen";
 
 import {
   CANH_BAO_CHUA_GUI_THU,
@@ -9,7 +12,10 @@ import {
   CHO_DANH_SACH_NGUOI_NHAN,
   CHO_NUT_GO,
   CHUA_CHON_THONG_BAO,
+  DANG_TAI_DANH_BA,
+  DANH_BA_NGUOI_NHAN_RONG,
   GHI_CHU_GHIM_TRONG_TRANG,
+  NHAN_CHON_NGUOI_NHAN,
   NHAN_NUT_PHAT_HANH,
   PHAN_CHUA_DUNG,
   SO_RONG,
@@ -17,6 +23,7 @@ import {
 import {
   ChiTietThongBao,
   DanhSachThongBao,
+  docDanhBaNguoiNhan,
   FormSoanThongBao,
   KhoiChuaDung,
   TheThongBao,
@@ -194,9 +201,18 @@ describe("panel chi tiết §4", () => {
 });
 
 describe("biểu mẫu Soạn thông báo §5", () => {
-  function veForm(loi: string | null = null): string {
+  function veForm(
+    loi: string | null = null,
+    danhBa: KetQua<identity_danhBaChonNguoiRa> | null = { ok: true, duLieu: { items: [] } },
+  ): string {
     return renderToStaticMarkup(
-      <FormSoanThongBao dangGui={false} loi={loi} huy={() => {}} phatHanh={() => {}} />,
+      <FormSoanThongBao
+        dangGui={false}
+        loi={loi}
+        danhBa={danhBa}
+        huy={() => {}}
+        phatHanh={() => {}}
+      />,
     );
   }
 
@@ -284,5 +300,84 @@ describe("phần chưa dựng được — ra tới màn hình, không giấu tr
     expect(html).toContain("#27");
     // Vì sao ghim không sắp lại cả sổ.
     expect(html).toContain("core/page");
+  });
+});
+
+describe("ô chọn người nhận — danh bạ chọn người, không phải sổ quản trị", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("đọc `GET /api/v1/staff-directory`, KHÔNG phải `/api/v1/staff`, và không mang `permission`", async () => {
+    // `/api/v1/staff` đòi `admin.user` và trả số di động cá nhân. Người soạn thông báo không cầm
+    // khoá ấy, và ô chọn không cần số ấy.
+    const gia = vi.fn(
+      async (_duongDan: string, _tuyChon?: RequestInit) =>
+        new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", gia);
+
+    await docDanhBaNguoiNhan();
+
+    expect(gia).toHaveBeenCalledTimes(1);
+    const duong = gia.mock.calls[0]?.[0];
+    expect(duong).toBe("/api/v1/staff-directory");
+    expect(duong).not.toContain("permission");
+  });
+
+  it("màn Thông báo không nhập client của sổ quản trị `lib/api/can-bo`", () => {
+    // Canh ở mức nguồn: một lời gọi `layDanhSachCanBo` thêm vào sau này sẽ không đi qua
+    // `docDanhBaNguoiNhan`, nên ca trên vẫn xanh trong khi màn đã quay lại đòi `admin.user`.
+    const nguon = readFileSync(new URL("./so-thong-bao.tsx", import.meta.url), "utf8");
+    expect(nguon).not.toMatch(/@\/lib\/api\/can-bo["']/);
+    expect(nguon).toContain("@/lib/api/danh-ba-chon-nguoi");
+  });
+
+  const DANH_BA: KetQua<identity_danhBaChonNguoiRa> = {
+    ok: true,
+    duLieu: {
+      items: [
+        { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "01JBP" },
+        { code: "CB-00124", full_name: "Lê Văn C", position: "", department_id: "" },
+      ],
+    },
+  };
+
+  function veForm(danhBa: KetQua<identity_danhBaChonNguoiRa> | null): string {
+    return renderToStaticMarkup(
+      <FormSoanThongBao dangGui={false} loi={null} danhBa={danhBa} huy={() => {}} phatHanh={() => {}} />,
+    );
+  }
+
+  it("mỗi dòng mang họ tên, chức vụ và MÃ — giá trị gửi đi là mã nghiệp vụ", () => {
+    const html = veForm(DANH_BA);
+    expect(html).toContain(NHAN_CHON_NGUOI_NHAN);
+    expect(html).toContain('value="CB-00123"');
+    expect(html).toContain("Trần Thị B · Công chức — CB-00123");
+    expect(html).toContain("Lê Văn C — CB-00124");
+  });
+
+  it("đang tải: nói ra, không vẽ ô chọn rỗng", () => {
+    const html = veForm(null);
+    expect(html).toContain(DANG_TAI_DANH_BA);
+    expect(html).not.toContain('id="chon-nguoi-nhan-thong-bao"');
+    // Ô gõ mã vẫn có: biểu mẫu không phụ thuộc danh bạ.
+    expect(html).toContain('id="nguoi-nhan-thong-bao"');
+  });
+
+  it("tải hỏng: câu của máy chủ nguyên văn, và ô gõ mã vẫn dùng được", () => {
+    const html = veForm({ ok: false, thongBao: "Phiên làm việc đã hết hạn." });
+    expect(html).toContain("Phiên làm việc đã hết hạn.");
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('id="nguoi-nhan-thong-bao"');
+  });
+
+  it("danh bạ rỗng: một câu, không phải ô chọn chỉ có mục trống", () => {
+    const html = veForm({ ok: true, duLieu: { items: [] } });
+    expect(html).toContain(nhuTrongHTML(DANH_BA_NGUOI_NHAN_RONG));
+    expect(html).not.toContain('id="chon-nguoi-nhan-thong-bao"');
   });
 });
