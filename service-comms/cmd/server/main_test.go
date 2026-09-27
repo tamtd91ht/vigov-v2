@@ -140,7 +140,9 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		hostA: {ID: xaA, Host: hostA, Active: true},
 		hostB: {ID: xaB, Host: hostB, Active: true},
 	}
-	return &mayChu{h: dungBien(mux, danhBa, pg, nil, log), kho: kho, pg: pg}
+	// The public chain is the real one too (bien_cong_khai_test.go drives it); here it only has to be
+	// present so the staff tests run through the same outer mux main() builds.
+	return &mayChu{h: dungBien(mux, dungCongKhaiThu(t), danhBa, pg, nil, log), kho: kho, pg: pg}
 }
 
 func (m *mayChu) goi(t *testing.T, host, path, phieu string) *httptest.ResponseRecorder {

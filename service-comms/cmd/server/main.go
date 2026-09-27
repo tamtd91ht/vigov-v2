@@ -172,15 +172,28 @@ func main() {
 		Log:              log,
 	})
 
+	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `nenTang`
+	// is the SAME platform client the Host edge uses, asked through XaTheoHost so an outage is a 503 and
+	// never "no such commune". The two content stores are the SAME ones the staff routes use, reached
+	// only through their published-only reads.
+	muxCongKhai := http.NewServeMux()
+	svchttp.RegisterCongKhai(muxCongKhai, svchttp.DepsCongKhai{
+		Xa:      nenTang,
+		NoiDung: noiDung,
+		DanhMuc: danhMucNoiDung,
+		Log:     log,
+	})
+	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins)
+
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
 	addr := cfg.ListenAddr
 	log.Info("starting", "service", "comms", "addr", addr)
 	srv := &http.Server{
 		Addr: addr,
-		// OUTERMOST, around the whole edge chain: every layer reads one client address per
-		// request, crossing only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(dungBien(mux, directory, dinhDanh, idemStore, log)),
+		// OUTERMOST, around BOTH chains: every layer reads one client address per request, crossing
+		// only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
+		Handler:           httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies)(dungBien(mux, congKhai, directory, dinhDanh, idemStore, log)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -252,7 +265,18 @@ func main() {
 // process is alive, which is true or false regardless of which commune is asking. Behind Host
 // resolution it would fail whenever the platform service does, and an orchestrator would then
 // restart a healthy process during somebody else's outage.
-func dungBien(mux http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
+//
+// # TWO CHAINS, ONE PORT, SPLIT ON THE OUTER MUX BY PATH (since 2026-09-27)
+//
+//	/api/v1/commune-news, /api/v1/commune-news/…   PUBLIC chain (congKhai, dungBienCongKhai)
+//	everything else                                STAFF chain — commune from `Host`
+//
+// The split exists because the two disagree on the first question of every request — which commune.
+// The Mini App calls the reserved API host (ADR 0046), which TenantMiddleware answers 404, so a public
+// route mounted on the staff mux would start, pass every internal/http test, and 404 every resident.
+// `commune-news` is its own path ELEMENT: Go's ServeMux matches whole elements, so neither pattern can
+// capture `/api/v1/content-items/…`, the staff register. main_test.go asserts both directions.
+func dungBien(mux, congKhai http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
 	idemStore idem.Store, log *slog.Logger) http.Handler {
 
 	var h http.Handler = mux
@@ -272,8 +296,37 @@ func dungBien(mux http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Reso
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+	// BOTH patterns, and the first is load-bearing: the subtree pattern alone does NOT match the
+	// collection itself — ServeMux answers `/api/v1/commune-news` with a redirect to the slash form
+	// (service-petitions/cmd/server/main.go §TWO PATTERNS measured it), and following it lands on
+	// `/api/v1/commune-news/` — a path no public route matches, so the list would 404.
+	ngoai.Handle(svchttp.MauTinXa, congKhai)
+	ngoai.Handle(svchttp.MauTinXa+"/", congKhai)
 	ngoai.Handle("/", h)
 	return ngoai
+}
+
+// dungBienCongKhai builds the PUBLIC edge chain, outermost last:
+//
+//	CORSCongDan         the Mini App webview is cross-origin; a preflight is answered before anything
+//	                    below sees it. The SAME middleware and the SAME CITIZEN_CORS_ALLOWED_ORIGINS the
+//	                    citizen chains of petitions and identity use — the Mini App is one origin set.
+//	                    PUBLIC chain ONLY: staff are same-origin with a host-only cookie (ADR 0043)
+//	StripTenantHeaders  a client naming its own commune is granting itself access — heavier here, where
+//	                    there is no `Host` and no session to contradict it
+//	Recover             a panic becomes a traceable 500 — including tenant.MustFrom's, if a public
+//	                    handler ever reached a scoped store before resolving a commune
+//
+// NO TenantMiddleware, NO staffauth, NO idem: the reserved API host maps to no commune, there is no
+// session, and nothing on this surface writes. The commune is resolved per request from `?host=`.
+//
+// A NAMED FUNCTION so main_test.go can drive the real chain.
+func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS) http.Handler {
+	c := muxCongKhai
+	c = httpx.Recover(traceID)(c)
+	c = httpx.StripTenantHeaders(c)
+	c = httpx.CORSCongDan(nguonCORS)(c)
+	return c
 }
 
 // traceID returns the id a caller can quote when reporting a problem.

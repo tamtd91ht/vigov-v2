@@ -63,6 +63,8 @@ package http
 //	                    ADR 0022's citizen edge answers the commune from the SESSION
 //	                    (`httpx.XaTuPhien`), which is the opposite of public. Building it would mean
 //	                    deciding (b) and (c) by writing a route.
+//	                    SUPERSEDED 2026-09-27: the owner decided (b) Public and (c) `?host=` resolved by
+//	                    the platform; the read is GET /api/v1/commune-news — tin_xa_cong_khai.go.
 //	no danh bạ route    §9's `GET /api/cong/mini-app/danh-ba`, and §4's card. §10.7 is explicit that
 //	                    the flag lives on the STAFF DIRECTORY (`hien_tren_mini_app`, chapter 12),
 //	                    which service-identity owns — reading it here would be a service reaching
