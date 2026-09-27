@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -360,4 +361,16 @@ describe("app-config.json cho một lần đẩy", () => {
     const ma = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
     expect(ma).toMatch(/finally \{\s*if \(vao_thang\) writeFileSync\(TEP_APP_CONFIG, app_config_goc/);
   });
+});
+
+describe("mọi script dòng lệnh phải PHÂN TÍCH ĐƯỢC", () => {
+  // Các ca trên đọc `deploy.mjs` như VĂN BẢN — một dấu nháy hỏng vẫn xanh hết. Lần phát hành
+  // 28/09/2026 chết ngay dòng đầu vì đúng lỗi ấy. `node --check` phân tích mà không chạy gì.
+  const thu_muc = fileURLToPath(new URL(".", import.meta.url));
+  for (const ten of readdirSync(thu_muc).filter((t) => t.endsWith(".mjs") && !t.includes(".test."))) {
+    it(`${ten} qua node --check`, () => {
+      const r = spawnSync(process.execPath, ["--check", join(thu_muc, ten)], { encoding: "utf8" });
+      expect(r.status, r.stderr).toBe(0);
+    });
+  }
 });

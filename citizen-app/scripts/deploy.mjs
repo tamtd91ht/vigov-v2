@@ -201,11 +201,8 @@ if (phai_dang_nhap && !chi_thu) {
   // job hết giờ. Một credential rỗng rơi vào đúng nhánh này — dừng và nói ra, đừng treo.
   if (!process.stdin.isTTY) {
     console.error(
-      "
-Không đẩy: ZMP_TOKEN rỗng hoặc không có, và đây không phải một cửa sổ lệnh có người ngồi để quét QR.
-" +
-        "  Trên Jenkins: kiểm credential zmp-token-<tên-miền> có giá trị.
-",
+      "\nKhông đẩy: ZMP_TOKEN rỗng hoặc không có, và đây không phải một cửa sổ lệnh có người ngồi để quét QR.\n" +
+        "  Trên Jenkins: kiểm credential zmp-token-<tên-miền> có giá trị.\n",
     );
     process.exit(2);
   }
