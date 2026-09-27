@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: cb8fcb2
+derived_from_commit: 92e2d64
 expires: 2026-12-26
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -30,7 +30,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 |---|---|---|---|
 | **00** ViGov — Tổng quan hệ thống | — | — | — |
 | **01** Tổng quan điều hành | — | — | — |
-| **02** Quản lý nhiệm vụ | 11 | 9/11 | ✓ |
+| **02** Quản lý nhiệm vụ | 11 | 11/11 | ✓ |
 | **03** Sổ tay lãnh đạo | — | — | — |
 | **04** Biên bản và kết luận họp | 13 | 13/13 | ✓ |
 | **05** Văn bản đến & Đơn thư | 7 | 7/7 | ✓ |
@@ -56,7 +56,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | # | Mục menu | Đường dẫn | Khoá quyền | Màn | Chưa dựng |
 |---|---|---|---|---|---|
 | 1 | Tổng quan | — | — | ✗ | |
-| 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 17 |
+| 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 16 |
 | 3 | Sổ tay lãnh đạo | — | — | ✗ | |
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 4 |
 | 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | **không khai** |
@@ -70,7 +70,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 13 | Báo cáo | — | — | ✗ | |
 | 14 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 8 |
 
-**10/14** mục menu có màn thật. **73** phần chưa dựng đang hiện trên các màn ấy.
+**10/14** mục menu có màn thật. **72** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -103,7 +103,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 20 | 2 | 8 | 6 |
-| `citizen-app` | 11 | 4 | 4 | 0 |
+| `citizen-app` | 12 | 4 | 4 | 0 |
 | `core` | 13 | 0 | 1 | 1 |
 | `deploy` | 14 | 2 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
@@ -112,7 +112,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-documents` | 7 | 2 | 4 | 0 |
 | `service-finance` | 15 | 3 | 0 | 0 |
 | `service-identity` | 18 | 8 | 0 | 1 |
-| `service-petitions` | 18 | 7 | 5 | 0 |
+| `service-petitions` | 18 | 7 | 6 | 0 |
 | `service-platform` | 5 | 2 | 0 | 1 |
 | `service-reporting` | 2 | 0 | 1 | 0 |
 | `tools` | 18 | 0 | 0 | 0 |

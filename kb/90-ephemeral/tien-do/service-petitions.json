@@ -267,6 +267,15 @@
       "no_confirm": [],
       "tiep_theo": "Web: drawer hiện nhật ký (thẻ web-admin/man-nhiem-vu, lượt này). CÒN: POST …/log-entries (ghi chú tay) chờ luật người đang giữ cho nhiệm vụ (doi-chieu-24-09-nhiem-vu-phan-anh (2)); `Tiếp tục` sau tạm dừng chưa làm. Chỉ mục 0006:510-511 thiếu `id DESC` (nhật ký phản ánh 0013 có) — chỉ là hiệu năng, việc của data-migration-builder. Không có `actor_name`: service này không tra tên qua identity.",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "phan-anh-tuyen-cong-dan-con-thieu",
+      "viec": "BACKEND DEPENDENCY của kênh công dân Phản ánh (09): tuyến công dân cho ảnh hiện trường, xác nhận kết quả, đánh giá sao, mở lại, xem phiếu công khai — Mini App chưa dựng được màn nào trong số này vì máy chủ chưa có tuyến",
+      "trang_thai": "chua_lam",
+      "bang_chung": "Đo 27/09/2026 (/develop-miniapp phan-anh-nguoi-dan): routes_cong_dan.go chỉ có ba tuyến (:102 GET theo mã, :133 GET danh sách, :202 POST). Cột có sẵn chưa tuyến nào ghi: hien_cong_khai (0004:309), diem_hai_long/danh_gia_luc (0004:311-312), so_lan_mo_lai (0005:37-39). Chưa có bảng anh_phan_anh (0005:29-33). Màn công dân tự nói 'Ứng dụng chưa hỗ trợ đính kèm ảnh.' (citizen-app noi-dung.ts:97).",
+      "no_confirm": [],
+      "tiep_theo": "XUNG ĐỘT R6 ĐÃ CHỐT 27/09/2026 (người dùng chọn đề xuất): đánh giá 1–2 sao theo QUYẾT ĐỊNH 24/09 (ban-giao-phien.md:60) — vào HÀNG LÃNH ĐẠO XEM (mở lại hoặc giữ đóng kèm giải thích), KHÔNG tự mở lại, cán bộ KHÔNG nhập hộ đánh giá. Điều này trái đặc tả 09 §6:111, §8.6, §14.3 và phần nguong_sao_mo_lai của ADR 0008 — khi dựng backend phải viết ADR thay thế phần ấy của 0008 (/decision) TRƯỚC khi viết mã. CÒN PHẢI HỎI trước khi dựng: ảnh hiện trường là lần đầu gửi ảnh công dân vào kho tệp (luật 3 điều kiện dừng #2) + liên kết ký hạn (luật 4 bất biến 7); công khai: trạng thái nào hiện, người gửi có đồng ý không, khoá kiểm duyệt (chưa quyết, mục vong-doi-phieu-phan-anh). Tự đóng phiếu chờ dân sau N ngày làm việc theo xã (quyết 24/09) chưa dựng.",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }
