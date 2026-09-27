@@ -77,10 +77,9 @@ async function main() {
     logLevel: "warn",
     appType: "custom",
     server: { middlewareMode: true },
-    // KHÔNG QUÉT PHỤ THUỘC. Không có tệp cấu hình thì cũng không có `resolve.alias`, nên lượt
-    // quét mặc định bò từ `App.tsx` vào `bien-the/kham-pha` và in ra một cảnh báo đỏ "Are they
-    // installed?" — sai, và sai đúng kiểu làm người chạy tưởng bản sinh ra hỏng. Tệp này chỉ
-    // nạp ba mô-đun nội dung qua `ssrLoadModule`; nó không dựng bundle nên không cần lượt quét.
+    // KHÔNG QUÉT PHỤ THUỘC. Tệp này chỉ nạp ba mô-đun nội dung qua `ssrLoadModule`; nó không dựng
+    // bundle nên không cần lượt quét. (Trước 27/09/2026 lượt quét còn bò vào bí danh biến thể và
+    // in một cảnh báo đỏ sai; bí danh ấy đã gỡ, lý do "không cần" thì vẫn còn.)
     optimizeDeps: { noDiscovery: true, include: [] },
   });
 

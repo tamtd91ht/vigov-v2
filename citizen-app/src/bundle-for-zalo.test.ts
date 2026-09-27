@@ -5,6 +5,7 @@ import { build } from "vite";
 
 import appConfigRaw from "../app-config.json?raw";
 import indexHtml from "../index.html?raw";
+import tenMienRaw from "../scripts/ung-dung-theo-ten-mien.mjs?raw";
 import {
   CAU_DAU,
   MUC_CHINH_SACH,
@@ -43,15 +44,7 @@ import {
 // tệp test là để lại một cái tên không còn nói đúng việc ở hai tệp sản xuất.
 import { DUONG_DAN_YEU_CAU, thanYeuCau } from "./api/hop-dong-yeu-cau";
 import { DUONG_DAN_PHIEN, thanYeuCau as thanYeuCauPhien } from "./features/dang-nhap/hop-dong";
-import {
-  DEMO_DANH_MUC_XA,
-  DEMO_GHI_CHU,
-  DEMO_GHI_CHU_TRANG_XA,
-  DEMO_TEN_DICH_VU,
-} from "./features/kham-pha/demo-danh-muc-xa";
-import { NHAN_KHAM_PHA } from "./features/kham-pha/index";
-import { LOI_NHAN, nhanNguon } from "./features/kham-pha/goi-y";
-import { LOI_NHAN_DANG_LAM } from "./features/kham-pha/TrangXaScreen";
+import { nhanNguon, TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha/goi-y";
 import { diaChiViGov } from "./cong-dan/api/dia-chi-vigov";
 import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
 import { NHAN_KENH_CONG_DAN } from "./cong-dan/man/KenhCongDan";
@@ -86,15 +79,24 @@ type EmittedFile = { type: string; fileName: string; source?: unknown; code?: un
 declare const process: { env: Record<string, string | undefined> };
 
 /**
- * Dựng MỘT biến thể, trong bộ nhớ, qua đúng `vite.config.ts` mà `npm run build` dùng.
- *
- * Biến thể được chọn bằng `VIGOV_BIEN_THE` — cùng đường mà `scripts/dung.mjs` đi, chứ không phải
- * một cấu hình riêng dựng ra cho test. Một phép kiểm dựng bằng cấu hình của chính nó thì xanh mà
- * không nói gì về thứ sẽ được đẩy lên Zalo.
+ * App ID và token GIẢ đặt vào môi trường TRONG LÚC DỰNG — để ca "không App ID, không token" ở dưới
+ * đo trên một bundle dựng ra khi hai thứ ấy CÓ MẶT, đúng tình huống của máy chạy `zmp deploy`.
+ * Không có chúng trong môi trường thì ca ấy xanh vì không có gì để lọt.
  */
-async function dungBienThe(bien_the: "goc" | "day-du"): Promise<EmittedFile[]> {
-  const truoc = process.env["VIGOV_BIEN_THE"];
-  process.env["VIGOV_BIEN_THE"] = bien_the;
+const APP_ID_GIA = "1111111111111111111";
+const ZMP_TOKEN_GIA = "gia-lap-zmp-token-khong-duoc-lot-vao-bundle";
+
+/**
+ * Dựng bản đẩy lên Zalo, trong bộ nhớ, qua đúng `vite.config.ts` mà `npm run build` dùng.
+ *
+ * MỘT BẢN, KHÔNG BIẾN THỂ (27/09/2026, quyết định của chủ sản phẩm — xem đầu `vite.config.ts`).
+ * Trước ngày này tệp này dựng hai biến thể (`goc` · `day-du`) rồi so hai bundle; nay app chung và
+ * app riêng của xã chạy CÙNG MỘT bundle, nên chỉ có một thứ để đo.
+ */
+async function dungBan(): Promise<EmittedFile[]> {
+  const truoc = { APP_ID: process.env["APP_ID"], ZMP_TOKEN: process.env["ZMP_TOKEN"] };
+  process.env["APP_ID"] = APP_ID_GIA;
+  process.env["ZMP_TOKEN"] = ZMP_TOKEN_GIA;
   try {
     const result = await build({ logLevel: "silent", build: { write: false } });
     const outputs = (Array.isArray(result) ? result : [result]) as unknown as Array<{
@@ -102,8 +104,10 @@ async function dungBienThe(bien_the: "goc" | "day-du"): Promise<EmittedFile[]> {
     }>;
     return outputs.flatMap((output) => output.output);
   } finally {
-    if (truoc === undefined) delete process.env["VIGOV_BIEN_THE"];
-    else process.env["VIGOV_BIEN_THE"] = truoc;
+    for (const [k, v] of Object.entries(truoc)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
   }
 }
 
@@ -121,9 +125,12 @@ const toanVan = (tep: EmittedFile[]) =>
     .replace(/\\u([0-9a-fA-F]{4})/g, (_, ma) => String.fromCharCode(Number.parseInt(ma, 16)));
 
 let emitted: EmittedFile[] = [];
+/** Toàn văn bundle, đã giải mã. Dựng MỘT lần cho cả tệp. */
+let ban = "";
 
 beforeAll(async () => {
-  emitted = await dungBienThe("day-du");
+  emitted = await dungBan();
+  ban = toanVan(emitted);
 }, 120_000);
 
 const builtHtml = () => {
@@ -183,42 +190,28 @@ describe("the bundle that gets uploaded to Zalo", () => {
 });
 
 /**
- * HAI BIẾN THỂ — và đây là ca kiểm duy nhất biến "bản nộp đúng bằng thứ người duyệt đọc" từ lời
- * hứa thành sự thật đo được.
+ * MỘT BUNDLE — và đây là ca kiểm duy nhất biến "bản đẩy lên đúng bằng thứ người duyệt đọc" từ lời
+ * hứa thành sự thật đo được. Nó dựng THẬT rồi đọc bundle, vì `grep` trên bundle là câu trả lời cuối.
  *
- * | Biến thể | Nội dung | Dùng để |
- * |---|---|---|
- * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm sáu tính năng dùng chín quyền nền tảng | **BẢN NỘP** |
- * | `day-du` | Thêm lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Demo nội bộ |
+ * ⚠ 27/09/2026 — HAI BIẾN THỂ ĐÃ GỘP MỘT (quyết định của chủ sản phẩm, thay ADR 0047 D5). Những ca so
+ * `goc` với `day-du` đã bị xoá hoặc viết lại cho một bundle. Riêng một luật bị GỠ, không viết lại:
  *
- * Nó dựng THẬT cả hai biến thể rồi đọc bundle, vì không có cách nào khác nói chắc: `resolve.alias`
- * có thể bị một `import` thẳng đi vòng qua, một tệp có thể được nhập lại từ một đường khác, và
- * mọi phép kiểm còn lại của kho này vẫn xanh trong cả hai trường hợp. `grep` trên bundle là câu
- * trả lời cuối cùng.
+ *   "Bản `goc` không chứa MỘT từ nào của ngữ cảnh cơ quan nhà nước" (danh sách `TU_CAM`: "cơ quan",
+ *   "công dân", "chính quyền", "hành chính", "thủ tục", "Chọn xã", "Đổi xã") — cùng ca đối ứng của
+ *   nó, "`xã hội` vẫn còn nguyên". Luật ấy chỉ đúng khi có một bản nộp KHÔNG mang kênh công dân. Nay
+ *   app chung giai đoạn 1 và app riêng của xã chạy cùng một citizen-app có kênh công dân, nên luật
+ *   ấy đã bị thay thế, không phải bị quên. Đừng dựng lại nó.
  *
- * VÌ SAO CA "BẢN ĐẦY ĐỦ CÓ CHỨA" LẠI QUAN TRỌNG NGANG CA "BẢN GỐC KHÔNG CHỨA":
- *
- *   Không có nó, đổi tên một xã trong danh mục là đủ để mọi ca dưới xanh vĩnh viễn — bản gốc
- *   không chứa "Xã An Thịnh" vì **không bản nào** chứa nó nữa. Một phép kiểm xanh vì không tìm
- *   thấy gì là một phép kiểm đã chết mà không ai được báo.
+ * VÌ SAO MỌI CA "KHÔNG CHỨA" ĐI KÈM MỘT CA "CÓ CHỨA": không có vế "có", đổi một chữ là đủ để vế
+ * "không" xanh vĩnh viễn — bundle không chứa câu ấy vì KHÔNG BẢN NÀO chứa nó nữa.
  */
-describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt đọc", () => {
-  let goc = "";
-  let day_du = "";
-
-  beforeAll(async () => {
-    goc = toanVan(await dungBienThe("goc"));
-    day_du = toanVan(await dungBienThe("day-du"));
-  }, 360_000);
-
+describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người duyệt đọc", () => {
   /**
    * CHỮ CỦA BA TÍNH NĂNG — dùng lại đúng nguồn mà màn hình đọc (`features/tinh-nang/noi-dung.ts`),
    * không chép tay. Một danh sách chép tay sẽ lệch khi ai đó sửa một câu, và lúc nó lệch thì ca
-   * "bản nộp CÓ chứa" xanh vì **không tìm thấy gì**, chứ không vì bản nộp đúng.
+   * "CÓ chứa" xanh vì **không tìm thấy gì**, chứ không vì bundle đúng.
    */
   const CHUOI_SAU_TINH_NANG = () => [
-    // `tabLabel` không còn: màn Danh thiếp bỏ tab từ 21/09/2026 (khuya). Tiêu đề màn vẫn là chuỗi
-    // người duyệt đọc, và hai nhãn menu nhanh dẫn tới nó được kiểm ở ca "bốn khối mới" bên dưới.
     MAN_DANH_THIEP.headerTitle,
     CHI_HIEN_LEN_MAN_HINH,
     MA_RONG,
@@ -228,9 +221,8 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     ...Object.values(DANH_THIEP),
     ...Object.values(VAN_PHONG),
     ...Object.values(DANG_NHAP),
-    // Ba tính năng thêm vào. `KIEU_KET_NOI` là một bản đồ lồng nhau, nên trải phẳng ra tường
-    // minh: `Object.values` trên nó sẽ cho ra những đối tượng, và `toContain` trên một đối
-    // tượng là một phép kiểm xanh vì lý do sai.
+    // `KIEU_KET_NOI` là một bản đồ lồng nhau, nên trải phẳng ra tường minh: `Object.values` trên
+    // nó sẽ cho ra những đối tượng, và `toContain` trên một đối tượng là xanh vì lý do sai.
     ...Object.values(DUONG_TRUYEN),
     ...Object.values(THIEP_CUA_CHUNG_TOI),
     ...Object.values(SO_HOA_THIEP),
@@ -247,136 +239,90 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
     ]),
   ];
 
-  const CHUOI_LOP_KHAM_PHA = () => [
-    DEMO_GHI_CHU,
-    DEMO_GHI_CHU_TRANG_XA,
-    LOI_NHAN_DANG_LAM,
-    LOI_NHAN["nguon-yeu"],
-    LOI_NHAN["khong-tra-duoc"],
-    nhanNguon("qr"),
-    nhanNguon("zns"),
-    NHAN_KHAM_PHA.tieu_de_chon_xa,
-    NHAN_KHAM_PHA.nut_doi_xa,
-    "Chọn xã để tiếp tục",
-    "Bạn cần liên hệ với xã này?",
-    "Chọn xã khác",
-    "Dịch vụ của xã",
-    "Chưa mở",
-    ...Object.values(DEMO_TEN_DICH_VU),
-  ];
+  const dem = (chuoi: string) => ban.split(chuoi).length - 1;
 
-  /**
-   * DANH SÁCH TỪ CẤM — yêu cầu trực tiếp của người dùng, nên nó có một phép kiểm chứ không phải
-   * một lời hứa.
-   *
-   *   Bản nộp là một **ứng dụng sản phẩm của ViHAT Group**, một doanh nghiệp công nghệ. Không
-   *   một chi tiết nào trong nó được dính tới một cơ quan nhà nước: người đọc nó là khách hàng
-   *   doanh nghiệp và người duyệt của Zalo, và một app của một công ty phần mềm mà nói chuyện
-   *   "thủ tục" với "công dân" là một app không ai hiểu nổi nó bán gì.
-   *
-   * ⚠ MỘT CÁI BẪY ĐÃ TRÁNH, GHI LẠI ĐỂ KHÔNG AI ĐẶT LẠI: **không được cấm chuỗi "xã" trần**.
-   * "xã hội" là một từ thường và nằm trong câu tầm nhìn thương hiệu của ViHAT Group
-   * (`company-profile.ts`) — một câu đã công bố, không được sửa cho vừa một cái test. Nên danh
-   * sách dưới chỉ có những cụm từ chỉ mang nghĩa hành chính công.
-   */
-  const TU_CAM = [
-    "cơ quan",
-    "công dân",
-    "chính quyền",
-    "hành chính",
-    "thủ tục",
-    NHAN_KHAM_PHA.tieu_de_chon_xa,
-    NHAN_KHAM_PHA.nut_doi_xa,
-  ];
-
-  it("đo đúng thứ cần đo — bản NỘP có đủ chữ của sáu tính năng", () => {
-    // CA NÀY QUAN TRỌNG NGANG MỌI CA "KHÔNG CHỨA" DƯỚI ĐÂY. Thiếu nó thì đổi một chữ trong ba
-    // tính năng là đủ để mọi ca cấm xanh vĩnh viễn: bản `goc` không chứa câu ấy vì **không bản
-    // nào** chứa nó nữa. Một phép kiểm xanh vì không tìm thấy gì là một phép kiểm đã chết trong
-    // im lặng.
+  it("mang đủ chữ của sáu tính năng", () => {
     const chuoi = CHUOI_SAU_TINH_NANG();
     expect(chuoi.length).toBeGreaterThan(20);
     for (const mot of chuoi) {
-      expect(goc, `bản nộp thiếu: ${mot}`).toContain(mot);
+      expect(ban, `bundle thiếu: ${mot}`).toContain(mot);
     }
   });
 
-  it("bản NỘP không chứa MỘT từ nào của ngữ cảnh cơ quan nhà nước", () => {
-    for (const tu of TU_CAM) {
-      const so_lan = goc.split(tu).length - 1;
-      expect(so_lan, `bản nộp còn ${so_lan} lần "${tu}"`).toBe(0);
+  it("mang màn xác nhận xã — vỏ để card sau nối vào nguồn xã phía máy chủ", () => {
+    // Vế "CÓ" của ca "không còn bộ chọn xã" ngay dưới: màn xác nhận vẫn phải có mặt.
+    for (const chuoi of [
+      TIEU_DE_XAC_NHAN_XA,
+      nhanNguon("qr"),
+      nhanNguon("zns"),
+      "Bạn cần liên hệ với xã này?",
+      "Không phải xã này",
+    ]) {
+      expect(ban, `bundle thiếu: ${chuoi}`).toContain(chuoi);
     }
   });
 
-  it('nhưng "xã hội" — một từ thường trong câu tầm nhìn đã công bố — vẫn còn nguyên', () => {
-    // Mặt kia của ca trên, và là thứ ngăn người sau "dọn sạch" bằng cách cấm chuỗi `xã`: câu tầm
-    // nhìn của ViHAT Group là văn bản đã công bố dưới tên một pháp nhân, không phải chữ của ta.
-    expect(goc, "câu tầm nhìn đã công bố bị sửa để vừa một phép kiểm").toContain("xã hội");
-  });
-
-  it("đo đúng thứ cần đo — bản ĐẦY ĐỦ có chứa cả lớp khám phá", () => {
-    for (const xa of DEMO_DANH_MUC_XA) {
-      expect(day_du, `bản đầy đủ thiếu ${xa.ten}`).toContain(xa.ten);
-    }
-    for (const chuoi of CHUOI_LOP_KHAM_PHA()) {
-      expect(day_du, `bản đầy đủ thiếu: ${chuoi}`).toContain(chuoi);
-    }
-    // Và bản đầy đủ là bản gốc CỘNG THÊM, không phải một app khác: sáu tính năng vẫn còn nguyên.
-    for (const mot of CHUOI_SAU_TINH_NANG()) {
-      expect(day_du, `bản đầy đủ thiếu: ${mot}`).toContain(mot);
+  it("KHÔNG mang bộ chọn xã, nút đổi xã, trang xã mẫu hay danh mục xã mẫu (ADR 0044 câu 4 · 0047)", () => {
+    for (const chuoi of [
+      "Chọn xã khác",
+      "Đổi xã",
+      "Chọn xã để tiếp tục",
+      "Dịch vụ của xã",
+      "Số điện thoại trực",
+      // Tiền tố mã xã của danh mục mẫu cũ. Nó lọt lại là danh mục ấy lọt lại.
+      "01JDEMXA",
+    ]) {
+      expect(ban, `bundle vẫn chứa: ${chuoi}`).not.toContain(chuoi);
     }
   });
 
-  it("bản NỘP không chứa MỘT tên đơn vị hành chính nào của danh mục mẫu", () => {
-    // Tám tên này là tên ĐẶT RA. Một ứng dụng công bố dưới tên một pháp nhân có thật mà hiển thị
-    // những đơn vị không tồn tại là một sự cố, không phải một lỗi giao diện — và bản này là bản
-    // người duyệt đọc.
-    for (const xa of DEMO_DANH_MUC_XA) {
-      expect(goc, `bản nộp vẫn chứa ${xa.ten}`).not.toContain(xa.ten);
-      expect(goc, `bản nộp vẫn chứa tỉnh/thành đặt ra: ${xa.tinh}`).not.toContain(xa.tinh);
-      expect(goc, `bản nộp vẫn chứa mã xã ${xa.id}`).not.toContain(xa.id);
-      expect(goc.replace(/\s/g, ""), "bản nộp vẫn chứa số trực mẫu").not.toContain(
-        xa.dien_thoai_truc,
-      );
+  it("KHÔNG mang chữ 'demo' / 'dữ liệu mẫu' / 'trình diễn' — đây là app dùng thật", () => {
+    // Chủ sản phẩm, 27/09/2026: "demo ở đây là ngôn ngữ nói hiểu về cách làm, không phải là khái
+    // niệm kỹ thuật, về kỹ thuật nó là app dùng thật". Chỉ cấm những cụm tiếng Việt: chữ Latin
+    // "demo" trần có thể nằm trong mã của `zmp-sdk`, và một ca đỏ vì SDK là một ca sắp bị xoá.
+    for (const chuoi of ["trình diễn", "dữ liệu mẫu", "Dữ liệu mẫu", "danh mục mẫu", "Danh mục mẫu", "bản demo", "Bản demo"]) {
+      expect(ban, `bundle vẫn chứa: ${chuoi}`).not.toContain(chuoi);
     }
   });
 
-  it("bản NỘP không chứa chuỗi nào của lớp khám phá, kể cả hai nhãn của vỏ", () => {
-    for (const chuoi of CHUOI_LOP_KHAM_PHA()) {
-      // Bản rỗng trả chuỗi rỗng cho hai nhãn của vỏ; `""` thì `toContain` nào cũng đúng, nên
-      // chúng được kiểm bằng danh sách từ cấm ở trên chứ không ở đây.
-      if (chuoi === "") continue;
-      expect(goc, `bản nộp vẫn chứa: ${chuoi}`).not.toContain(chuoi);
+  it("KHÔNG mang bảng chẩn đoán", () => {
+    // Bảng in tham số nội bộ đã bị xoá khỏi mã. Nó lọt lại là một câu hỏi ở vòng duyệt.
+    expect(ban).not.toContain("Chẩn đoán tham số mở app");
+    expect(ban).not.toContain("URL Zalo dùng để mở app");
+  });
+
+  /**
+   * KHÔNG App ID, KHÔNG token, KHÔNG tên miền xã nào trong bundle — ADR 0047 điều kiện dừng #2.
+   *
+   * Tên miền chỉ chọn App ID ĐÍCH lúc đẩy (`scripts/dich-den.mjs`); nó không bao giờ được vào nội
+   * dung. Một App ID hay tên miền xã trong bundle là một giá trị theo xã nung vào một bundle dùng
+   * chung — đúng thứ luật 1 bất biến 10 cấm. Bundle ở đây được dựng khi `APP_ID` và `ZMP_TOKEN`
+   * CÓ trong môi trường (`dungBan`), nên ca này đo đúng tình huống của máy chạy `zmp deploy`.
+   */
+  it("không mang App ID, token, hay tên miền / App ID nào của tệp ánh xạ", () => {
+    expect(ban, "APP_ID của môi trường dựng lọt vào bundle").not.toContain(APP_ID_GIA);
+    expect(ban, "ZMP_TOKEN của môi trường dựng lọt vào bundle").not.toContain(ZMP_TOKEN_GIA);
+
+    // Khoá và giá trị của tệp ánh xạ, đọc từ chính tệp (`?raw`), không gõ lại.
+    const trong_tep = [...tenMienRaw.matchAll(/^\s*"([^"]+)"\s*:\s*"([^"]+)"/gm)].flatMap((m) => [
+      m[1]!,
+      m[2]!,
+    ]);
+    expect(trong_tep.length, "không đọc được dòng nào của tệp ánh xạ — ca này sẽ xanh vì rỗng").toBeGreaterThan(0);
+    for (const chuoi of trong_tep) {
+      expect(ban, `bundle mang "${chuoi}" của tệp ánh xạ tên miền → App ID`).not.toContain(chuoi);
     }
   });
 
   /**
-   * CẢ HAI BẢN ĐỀU GỌI MÁY CHỦ — VÀ PHÉP ĐO NÀY VỪA ĐƯỢC DỰNG LẠI VÌ TIỀN ĐỀ ĐÃ ĐẢO CHIỀU.
+   * ĐÚNG MỘT ĐƯỜNG GỌI CHO MỖI TUYẾN — "đúng một lần" là cách đo "đúng một chỗ gọi" mà không phải
+   * ghim một con số của SDK.
    *
-   * ⚠ BẢN TRƯỚC CỦA CA NÀY ĐÃ CHẾT TRONG IM LẶNG NẾU KHÔNG SỬA — ghi lại vì đây là đúng chế độ
-   * hỏng mà cả tệp này sinh ra để chặn, và lần này nó suýt xảy ra với chính tệp này:
-   *
-   *   Ngày 20/09 sáng, lời gọi máy chủ chỉ có ở bản `day-du`, nên ca này đo bằng HIỆU giữa hai
-   *   bản: đường dẫn vắng ở `goc`, tên trường hơn đúng 1, `fetch(` hơn đúng 1. Chiều cùng ngày,
-   *   bản nộp bắt đầu gọi thật. Cả ba vế ấy lập tức thành `0 === 0` — **xanh vĩnh viễn, vì không
-   *   còn gì để tìm**. Không một ca nào khác đỏ lên để báo rằng ca này vừa mất hết nội dung.
-   *
-   * NÊN PHÉP ĐO NAY ĐO ĐÚNG THỨ PHẢI ĐÚNG HÔM NAY: **cả hai bản đều PHẢI mang lời gọi của ta.**
-   *
-   *   1. Đường dẫn tuyến có mặt ở CẢ HAI, và **đúng một lần** ở mỗi bản. `zmp-sdk` không thể
-   *      tình cờ chứa chuỗi ấy, nên đây là vế chắc nhất — và "đúng một lần" là cách đo "đúng
-   *      một chỗ gọi" mà không phải ghim một con số của SDK.
-   *   2. Tên hai trường gửi đi có mặt ở cả hai, đọc từ chính `thanYeuCau` chứ không gõ lại: đổi
-   *      hợp đồng thì ca này đi theo, thay vì xanh vì không tìm thấy gì.
-   *   3. `fetch(` có mặt ở cả hai, và hai bản chênh nhau ĐÚNG 0 lần — khối đăng nhập không còn
-   *      cửa biến thể nào, nên một chênh lệch xuất hiện nghĩa là ai đó vừa dựng lại một cửa.
-   *
-   * ⚠ KHÔNG THỂ KHẲNG ĐỊNH MỘT CON SỐ TUYỆT ĐỐI CHO `fetch(`. ĐÃ ĐO 20/09/2026: riêng `zmp-sdk`
-   * đóng góp **14 lần** `fetch(` và **4 lần** `XMLHttpRequest` cho mọi bản dựng; mã của ta thêm
-   * đúng 1. Ghim "15" là một ca đỏ vào ngày Zalo phát hành một bản SDK khác — một lý do ta không
-   * sửa được, và một test đỏ vì lý do không sửa được là một test sắp bị ai đó xoá.
+   * ⚠ KHÔNG THỂ KHẲNG ĐỊNH MỘT CON SỐ TUYỆT ĐỐI CHO `fetch(`. ĐÃ ĐO 20/09/2026: riêng `zmp-sdk` đóng
+   * góp **14 lần** `fetch(` cho mọi bản dựng. Ghim một con số là một ca đỏ vào ngày Zalo phát hành
+   * một bản SDK khác — một lý do ta không sửa được.
    */
-  it("CẢ HAI bản đều mang đúng MỘT đường gọi máy chủ của ta", () => {
+  it("mang đúng MỘT đường gọi tuyến đăng nhập", () => {
     const ten_truong = Object.keys(
       JSON.parse(thanYeuCauPhien({ ma_so_dien_thoai: "x", ma_truy_cap: "y" })) as Record<
         string,
@@ -384,164 +330,47 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
       >,
     );
     expect(ten_truong.length, "hợp đồng không còn trường nào để đo").toBe(2);
-
-    const dem = (ban: string, chuoi: string) => ban.split(chuoi).length - 1;
-
-    for (const [ten, ban] of [
-      ["goc", goc],
-      ["day-du", day_du],
-    ] as const) {
-      expect(
-        dem(ban, DUONG_DAN_PHIEN),
-        `bản ${ten} phải nhắc tuyến đăng nhập ĐÚNG MỘT lần. 0 lần = khối đăng nhập không gọi ` +
-          "được máy chủ (nộp một nút không đăng nhập nổi); 2 lần trở lên = có chỗ gọi thứ hai.",
-      ).toBe(1);
-
-      for (const truong of ten_truong) {
-        expect(
-          dem(ban, truong),
-          `bản ${ten} không mang tên trường "${truong}" của hợp đồng đăng nhập`,
-        ).toBeGreaterThan(0);
-      }
-
-      expect(
-        (ban.match(/fetch\s*\(/g) ?? []).length,
-        `bản ${ten} không có một lời gọi mạng nào`,
-      ).toBeGreaterThan(0);
-    }
-
-    // CHÊNH ĐÚNG MỘT, VÀ MỘT ẤY CÓ TÊN — 24/09/2026. Trước ngày này hai bản phải bằng nhau (khối
-    // đăng nhập không còn cửa biến thể). Nay kênh công dân đứng sau `bien-the/cong-dan` và mang
-    // ĐÚNG MỘT `fetch(` (`cong-dan/api/goi-vigov.ts`) chỉ ở bản `day-du`. Chênh 0 = kênh công dân
-    // lọt vào bản nộp hoặc biến mất khỏi bản thử; chênh 2 = ai đó dựng thêm một cửa có lời gọi mạng.
-    // Ca "tuyến ViGov chỉ ở bản thử" ngay dưới trả lời CÁI MỘT ẤY là gì.
-    const demGoi = (ban: string) => (ban.match(/fetch\s*\(/g) ?? []).length;
     expect(
-      demGoi(day_du) - demGoi(goc),
-      "hai biến thể phải chênh nhau ĐÚNG MỘT lời gọi mạng — client ViGov của kênh công dân",
+      dem(DUONG_DAN_PHIEN),
+      "bundle phải nhắc tuyến đăng nhập ĐÚNG MỘT lần. 0 lần = khối đăng nhập không gọi được máy " +
+        "chủ; 2 lần trở lên = có chỗ gọi thứ hai.",
     ).toBe(1);
+    for (const truong of ten_truong) {
+      expect(dem(truong), `bundle không mang tên trường "${truong}" của hợp đồng đăng nhập`).toBeGreaterThan(0);
+    }
+    expect((ban.match(/fetch\s*\(/g) ?? []).length, "bundle không có một lời gọi mạng nào").toBeGreaterThan(0);
   });
 
-  /**
-   * TUYẾN THỨ HAI — BỀ MẶT YÊU CẦU (22/09/2026, giai đoạn B).
-   *
-   * Cùng khuôn với ca ngay trên, và cùng lý do: "đúng một lần" là cách đo "đúng một chỗ gọi" mà
-   * không phải ghim một con số của SDK. 0 lần = bề mặt yêu cầu không gọi được máy chủ (nộp hai màn
-   * không làm được gì); 2 lần trở lên = có chỗ gọi thứ hai mà không ai khai.
-   *
-   * ⚠ VÀ NĂM TÊN TRƯỜNG ĐỌC TỪ CHÍNH `thanYeuCau`, KHÔNG GÕ LẠI. Gõ lại là tạo bản sao thứ hai,
-   * và ngày hợp đồng đổi thì bản sao ấy làm ca này xanh vì KHÔNG TÌM THẤY GÌ.
-   */
-  it("CẢ HAI bản đều mang đúng MỘT đường gọi tuyến yêu cầu của ta", () => {
+  it("mang đúng MỘT đường gọi tuyến yêu cầu", () => {
     const ten_truong = Object.keys(
       JSON.parse(
         thanYeuCau({ loai: "consult", quan_tam: ["messaging"], quy_mo: "", ghi_chu: "", nguon: "" }),
       ) as Record<string, unknown>,
     );
     expect(ten_truong.length, "hợp đồng yêu cầu không còn trường nào để đo").toBe(5);
-
-    const dem = (ban: string, chuoi: string) => ban.split(chuoi).length - 1;
-
-    for (const [ten, ban] of [
-      ["goc", goc],
-      ["day-du", day_du],
-    ] as const) {
-      expect(
-        dem(ban, DUONG_DAN_YEU_CAU),
-        `bản ${ten} phải nhắc tuyến yêu cầu ĐÚNG MỘT lần`,
-      ).toBe(1);
-      // TÌM `ten:` CHỨ KHÔNG TÌM TÊN TRẦN, và khác biệt ấy quyết định ca này có nội dung hay không:
-      // `note`, `source`, `scale` là những từ tiếng Anh thường, gần như chắc chắn có mặt đâu đó
-      // trong bundle của `zmp-sdk` bất kể mã của ta gửi gì. Một `toContain("note")` vì thế xanh
-      // ngay cả khi hợp đồng đã bị xoá sạch — đúng kiểu xanh vì không tìm thấy gì. Bộ rút gọn
-      // KHÔNG đổi được tên khoá của một object literal đi lên dây, nên `note:` là cái neo đúng.
-      for (const truong of ten_truong) {
-        expect(
-          dem(ban, `${truong}:`),
-          `bản ${ten} không mang tên trường "${truong}" của hợp đồng yêu cầu`,
-        ).toBeGreaterThan(0);
-      }
+    expect(dem(DUONG_DAN_YEU_CAU), "bundle phải nhắc tuyến yêu cầu ĐÚNG MỘT lần").toBe(1);
+    // TÌM `ten:` CHỨ KHÔNG TÌM TÊN TRẦN: `note`, `source`, `scale` là những từ tiếng Anh thường,
+    // gần như chắc chắn có mặt trong `zmp-sdk`. Bộ rút gọn KHÔNG đổi được tên khoá của một object
+    // literal đi lên dây, nên `note:` là cái neo đúng.
+    for (const truong of ten_truong) {
+      expect(dem(`${truong}:`), `bundle không mang tên trường "${truong}" của hợp đồng yêu cầu`).toBeGreaterThan(0);
     }
   });
 
   /**
-   * KHỐI MỚI CỦA MÀN CHỦ (21/09/2026, tối) — menu nhanh · tin ViHAT · nút chat · câu slogan.
-   *
-   * Cùng lý do với ca "bản nộp có đủ chữ của sáu tính năng" ngay trên: không có ca "CÓ CHỨA" thì
-   * mọi ca "KHÔNG CHỨA" ở dưới xanh vĩnh viễn ngay khi một khối biến mất khỏi bản dựng.
+   * KÊNH CÔNG DÂN — CÓ MẶT trong bundle từ 27/09/2026 (trước đó chỉ ở bản `day-du`). Vẫn ĐÓNG: cầu
+   * phiên ViGov chưa có, nên không lời gọi nào đi ra (`cong-dan.test.tsx` đo điều đó). Đường dẫn
+   * tuyến và tiêu đề chống trùng là hai neo chắc nhất: `zmp-sdk` không thể tình cờ chứa chúng.
    */
-  it("bản NỘP mang đủ chữ của bốn khối mới trên màn chủ", () => {
-    const chuoi = [
-      SLOGAN_HERO.cau,
-      // Câu sản phẩm của bản mẫu — câu thứ hai trong hero, cùng nguồn với câu slogan.
-      CAU_SAN_PHAM.cau,
-      NHAN_LOAI_HINH,
-      NHAN_NUT_CHAT,
-      DUONG_DAN_CHAT_OA,
-      // CÂU GHI CHÚ KIỂM THEO MẢNH, KHÔNG KIỂM CẢ CÂU — và đây là ĐÚNG cái bẫy mà tệp này đã mắc
-      // một lần vào 18/09: `GHI_CHU_TIN` ghép `NGAY_CHUP_TIN` vào lúc chạy, nên bundle chỉ chứa
-      // hai mảnh rời. Một `toContain` trên chuỗi ghép xanh vì KHÔNG BẢN NÀO chứa nó.
-      NGAY_CHUP_TIN,
-      "không tự tải tin mới",
-      ...TIN_VIHAT.flatMap((bai) => [bai.tieu_de, bai.trich, bai.duong_dan]),
-      ...MUC_MENU_NHANH.flatMap((muc) => [muc.nhan, muc.phu]),
-    ];
-    expect(chuoi.length).toBeGreaterThan(15);
-    for (const mot of chuoi) {
-      expect(goc, `bản nộp thiếu: ${mot}`).toContain(mot);
-    }
-  });
+  it("mang kênh công dân: đúng MỘT đường gọi tuyến ViGov, và đủ chữ của các màn", () => {
+    expect(dem(DUONG_DAN_PHAN_ANH_CUA_TOI), "bundle phải nhắc tuyến ViGov đúng một lần").toBe(1);
+    expect(ban).toContain("Idempotency-Key");
 
-  /**
-   * CÂU KHAI "MỞ MỘT TRANG BÊN NGOÀI" — KIỂM THEO TỪNG MẢNH, KHÔNG KIỂM CHUỖI GHÉP.
-   *
-   * Câu ấy được GHÉP LÚC CHẠY từ `DICH_MO_RA_NGOAI` (`cauKhaiDichRaNgoai`), nên chuỗi đầy đủ
-   * KHÔNG hề có trong bundle — bundle chỉ chứa các mảnh rời. Kiểm chuỗi ghép ở đây là một phép
-   * kiểm xanh vì **không bản nào** chứa nó, đúng kiểu hỏng mà tệp này đã tự mắc một lần (18/09).
-   *
-   * Cũng KHÔNG kiểm con số đọc thành chữ: "năm" là một từ thường, có mặt khắp bundle ("12 năm",
-   * "thành lập"), nên một `toContain("năm")` xanh mà không nói lên gì. Số ấy được canh ở
-   * `content/dich-ra-ngoai.test.ts`, nơi đọc được cả danh sách lẫn văn bản.
-   */
-  it("từng đích mở ra ngoài đều được khai trong CẢ HAI bản dựng", () => {
-    for (const [ten, ban] of [
-      ["goc", goc],
-      ["day-du", day_du],
-    ] as const) {
-      expect(ban, `bản ${ten} không còn câu khai số chỗ mở trang ngoài`).toContain(
-        "chỗ ứng dụng mở một trang bên ngoài",
-      );
-      for (const dich of DICH_MO_RA_NGOAI) {
-        expect(ban, `bản ${ten} không khai đích "${dich.ma}"`).toContain(dich.trong_chinh_sach);
-      }
-    }
-  });
-
-  /**
-   * KÊNH CÔNG DÂN (24/09/2026) — CHỈ Ở BẢN THỬ, cho tới ngày cầu phiên ViGov có thật.
-   *
-   * Hai vế, như mọi ca ở tệp này: bản `day-du` PHẢI mang (nếu không, ca "bản nộp không chứa" xanh vì
-   * không bản nào chứa), bản `goc` KHÔNG được mang. Đường dẫn tuyến và tên tiêu đề chống trùng là
-   * hai neo chắc nhất: `zmp-sdk` không thể tình cờ chứa chúng.
-   */
-  it("tuyến ViGov và hai màn của kênh công dân CHỈ có ở bản thử, không có ở bản nộp", () => {
-    const dem = (ban: string, chuoi: string) => ban.split(chuoi).length - 1;
-    expect(dem(day_du, DUONG_DAN_PHAN_ANH_CUA_TOI), "bản thử phải nhắc tuyến ViGov đúng một lần").toBe(1);
-    expect(dem(goc, DUONG_DAN_PHAN_ANH_CUA_TOI), "bản NỘP mang tuyến ViGov của kênh công dân").toBe(0);
-    expect(day_du).toContain("Idempotency-Key");
-    expect(goc, "bản NỘP mang tiêu đề chống gửi trùng của tuyến ViGov").not.toContain("Idempotency-Key");
-
-    // HOST CỦA `service-petitions` (ADR 0046, 26/09/2026). Đọc từ chính `diaChiViGov`, không gõ lại:
-    // đổi host thì ca này đi theo, thay vì xanh vì không bản nào chứa chuỗi gõ tay. Vế "bản thử CÓ"
-    // là thứ giữ cho vế "bản nộp KHÔNG" còn nội dung. Bản nộp là app của ViHAT Group, và một host
-    // `.vigov.vn` trong đó là một chi tiết cơ quan nhà nước lọt vào thứ người duyệt Zalo đọc.
+    // HOST CỦA `service-petitions` (ADR 0046). Đọc từ chính `diaChiViGov`, không gõ lại.
     const host_petitions = new URL(diaChiViGov("petitions", "/")).host;
     expect(host_petitions, "bảng host của kênh công dân mất dòng `petitions`").toBe("petitions.api.vigov.vn");
-    expect(day_du, "bản thử không mang host của petitions").toContain(host_petitions);
-    expect(goc, "bản NỘP mang host ViGov của kênh công dân").not.toContain(host_petitions);
-    expect(goc, "bản NỘP mang một host `.api.vigov.vn` nào đó").not.toContain(".api.vigov.vn");
+    expect(ban, "bundle không mang host của petitions").toContain(host_petitions);
 
-    // `CUA_TOI` (26/09/2026): màn "Phản ánh của tôi" — cũng CHỈ ở bản thử.
     for (const chuoi of [
       KENH_CHUA_MO.tieu_de,
       KHAN_CAP,
@@ -550,33 +379,54 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
       CUA_TOI.tieu_de,
       CUA_TOI.trong,
     ]) {
-      expect(day_du, `bản thử thiếu: ${chuoi}`).toContain(chuoi);
-      expect(goc, `bản NỘP vẫn chứa: ${chuoi}`).not.toContain(chuoi);
+      expect(ban, `bundle thiếu: ${chuoi}`).toContain(chuoi);
     }
   });
 
-  it("bản NỘP không chứa bảng chẩn đoán", () => {
-    // Một bảng in tham số nội bộ nằm trong bundle của một đơn vị đang xin duyệt là một câu hỏi
-    // phải trả lời ở vòng duyệt, và "đó là công cụ nội bộ" không giúp được gì ở vòng đó.
-    expect(goc).not.toContain("Chẩn đoán tham số mở app");
-    expect(goc).not.toContain("URL Zalo dùng để mở app");
+  /**
+   * KHỐI CỦA MÀN CHỦ (21/09/2026, tối) — menu nhanh · tin ViHAT · nút chat · câu slogan.
+   *
+   * ⚠ CÂU GHI CHÚ KIỂM THEO MẢNH, KHÔNG KIỂM CẢ CÂU: `GHI_CHU_TIN` ghép `NGAY_CHUP_TIN` vào lúc chạy,
+   * nên bundle chỉ chứa hai mảnh rời. Một `toContain` trên chuỗi ghép xanh vì KHÔNG BẢN NÀO chứa nó.
+   */
+  it("mang đủ chữ của bốn khối trên màn chủ", () => {
+    const chuoi = [
+      SLOGAN_HERO.cau,
+      CAU_SAN_PHAM.cau,
+      NHAN_LOAI_HINH,
+      NHAN_NUT_CHAT,
+      DUONG_DAN_CHAT_OA,
+      NGAY_CHUP_TIN,
+      "không tự tải tin mới",
+      ...TIN_VIHAT.flatMap((bai) => [bai.tieu_de, bai.trich, bai.duong_dan]),
+      ...MUC_MENU_NHANH.flatMap((muc) => [muc.nhan, muc.phu]),
+    ];
+    expect(chuoi.length).toBeGreaterThan(15);
+    for (const mot of chuoi) {
+      expect(ban, `bundle thiếu: ${mot}`).toContain(mot);
+    }
   });
 
-  it("bản NỘP MANG `zmp-sdk` — nếu không thì sáu tính năng ấy không gọi được nền tảng", () => {
-    // Đảo chiều so với trước: `zmp-sdk` từng bị cấm trong bản `goc` vì bản ấy là một app giới
-    // thiệu tĩnh không xin quyền nào. Nay ba quyền thuộc về chính ứng dụng sản phẩm, nên SDK
-    // PHẢI có mặt — một bản nộp xin ba quyền mà không gọi tới nền tảng là một bản nộp có ba cái
-    // nút không làm gì, và vòng duyệt không có gì để cấp quyền cho.
-    expect(goc, "bản nộp không mang zmp-sdk").toContain("zmp-sdk");
+  /**
+   * CÂU KHAI "MỞ MỘT TRANG BÊN NGOÀI" — KIỂM THEO TỪNG MẢNH, KHÔNG KIỂM CHUỖI GHÉP: câu ấy được ghép
+   * lúc chạy từ `DICH_MO_RA_NGOAI`, nên chuỗi đầy đủ không có trong bundle.
+   */
+  it("khai từng đích mở ra ngoài", () => {
+    expect(ban, "bundle không còn câu khai số chỗ mở trang ngoài").toContain(
+      "chỗ ứng dụng mở một trang bên ngoài",
+    );
+    for (const dich of DICH_MO_RA_NGOAI) {
+      expect(ban, `bundle không khai đích "${dich.ma}"`).toContain(dich.trong_chinh_sach);
+    }
+  });
+
+  it("MANG `zmp-sdk` và đủ mười lời gọi nền tảng — nếu không thì các tính năng không gọi được", () => {
+    expect(ban, "bundle không mang zmp-sdk").toContain("zmp-sdk");
     for (const ten of [
       "getPhoneNumber",
-      // Lời gọi thứ mười, thêm cùng khối đăng nhập (ADR 0020). Thiếu nó trong bản nộp thì luồng
-      // đăng nhập một chạm không có gì để nộp lên vòng duyệt.
       "getAccessToken",
       "getLocation",
       "scanQRCode",
-      // Sáu quyền xin thêm. Zalo chỉ cấp khi bản nộp CÓ chỗ dùng chúng nhìn thấy được, và "nhìn
-      // thấy được" bắt đầu từ việc chính lời gọi ấy có mặt trong tệp được nộp.
       "getNetworkType",
       "keepScreen",
       "vibrate",
@@ -584,148 +434,92 @@ describe("hai biến thể — mỗi bản đúng bằng thứ người duyệt 
       "openMediaPicker",
       "downloadFile",
     ]) {
-      expect(goc, `bản nộp không gọi ${ten}`).toContain(ten);
+      expect(ban, `bundle không gọi ${ten}`).toContain(ten);
     }
   });
 
   /**
    * `serverUploadUrl` — CA NÀY KHÔNG KHẲNG ĐỊNH MỘT SỰ VẮNG MẶT, VÌ SỰ VẮNG MẶT ẤY KHÔNG CÓ THẬT.
    *
-   * ĐÃ ĐO, 18/09/2026, TRÊN BUNDLE THẬT: chuỗi ấy xuất hiện **2 lần** trong bản `goc`, và cả hai
-   * đều nằm trong mã của chính `zmp-sdk` — lược đồ tham số zod của `openMediaPicker`, và thân
-   * hàm đọc `e.serverUploadUrl` để truyền xuống tầng dưới. Trước khi ba tính năng này tồn tại nó
-   * đã có sẵn 1 lần (chỉ lược đồ); lần thứ hai xuất hiện vì `openMediaPicker` nay thật sự được
-   * gọi, nên thân hàm của nó không còn bị tree-shaking loại đi. Không có cách nào gỡ chuỗi ấy ra
-   * mà vẫn giữ SDK, và giữ SDK là điều kiện để chín quyền kia gọi được.
-   *
-   * NÊN PHÉP KIỂM ĐÚNG KHÔNG PHẢI "ĐẾM SỐ LẦN": một con số ghim cứng sẽ đỏ lên lần đầu Zalo phát
-   * hành một bản SDK khác, vì một lý do ta không sửa được — và một test đỏ vì lý do không sửa
-   * được là một test sắp bị ai đó xoá.
-   *
-   * PHÉP KIỂM ĐÚNG LÀ HÌNH DẠNG CỦA CHÍNH KHUYẾT TẬT: để ảnh rời khỏi máy, mã của ta phải GÁN
-   * MỘT CHUỖI cho tham số ấy. Lược đồ của SDK viết `serverUploadUrl:K().url().optional()`, thân
-   * hàm viết `e.serverUploadUrl` — không dạng nào là một chuỗi được gán. Còn phép bảo đảm mạnh
-   * thì nằm ở tầng mã nguồn: `phase1-collects-nothing.test.ts` cấm chuỗi ấy ở MỌI tệp, kể cả
-   * trong chính thư mục tính năng.
+   * ĐÃ ĐO, 18/09/2026: chuỗi ấy xuất hiện trong mã của chính `zmp-sdk` (lược đồ tham số và thân hàm
+   * của `openMediaPicker`). Phép kiểm đúng là HÌNH DẠNG của khuyết tật: để ảnh rời khỏi máy, mã của
+   * ta phải GÁN MỘT CHUỖI cho tham số ấy. Phép bảo đảm mạnh nằm ở `phase1-collects-nothing.test.ts`.
    */
   it("không tệp nào GÁN một địa chỉ cho `serverUploadUrl` — ảnh không có đường rời khỏi máy", () => {
-    for (const [ten, ban] of [
-      ["goc", goc],
-      ["day-du", day_du],
-    ] as const) {
-      const gan = ban.match(/serverUploadUrl\s*:\s*["'`]/g) ?? [];
-      expect(
-        gan,
-        `bản ${ten} gán một chuỗi cho serverUploadUrl. Tham số ấy là đường DUY NHẤT ` +
-          "openMediaPicker tải ảnh người dùng lên một máy chủ, và ứng dụng này không có máy chủ nào.",
-      ).toEqual([]);
-    }
+    expect(
+      ban.match(/serverUploadUrl\s*:\s*["'`]/g) ?? [],
+      "bundle gán một chuỗi cho serverUploadUrl — đường DUY NHẤT openMediaPicker tải ảnh lên máy chủ",
+    ).toEqual([]);
   });
 
-  /**
-   * CHÍNH SÁCH MÔ TẢ ĐÚNG BẢN DỰNG NÓ NẰM TRONG — nay là MỘT văn bản cho cả hai bản dựng.
-   *
-   * Bản trước của ca này kiểm hai câu mở đầu khác nhau, vì bản nộp khi ấy không gọi mạng. Tiền
-   * đề đó không còn: cả hai biến thể gọi máy chủ thật, nên hai bản phải nói **y hệt nhau** về
-   * quyền riêng tư. Ca này đổi chiều theo: nó khẳng định câu mở đầu MỚI có trong cả hai, và câu
-   * mở đầu CŨ — thứ đã thành sai — không còn trong bản nào.
-   */
-  it("một văn bản chính sách, giống hệt nhau ở cả hai bản dựng", () => {
-    const CAU_DAU_DA_THANH_SAI = "không lưu trữ và không gửi đi bất kỳ dữ liệu nào của bạn";
-    for (const [ten, ban] of [
-      ["goc", goc],
-      ["day-du", day_du],
-    ] as const) {
-      expect(ban, `bản ${ten} thiếu câu mở đầu chính sách`).toContain(CAU_DAU);
-      expect(
-        ban,
-        `bản ${ten} vẫn mang câu mở đầu CŨ — câu ấy thành sai từ ngày khối đăng nhập gọi máy chủ`,
-      ).not.toContain(CAU_DAU_DA_THANH_SAI);
-    }
+  it("mang câu mở đầu chính sách hiện hành, không mang câu cũ đã thành sai", () => {
+    expect(ban, "bundle thiếu câu mở đầu chính sách").toContain(CAU_DAU);
+    expect(
+      ban,
+      "bundle vẫn mang câu mở đầu CŨ — câu ấy thành sai từ ngày khối đăng nhập gọi máy chủ",
+    ).not.toContain("không lưu trữ và không gửi đi bất kỳ dữ liệu nào của bạn");
   });
 
-  it("mục Đăng nhập của chính sách có mặt ĐỦ trong cả hai bản", () => {
-    // Đây là mục khai việc gửi hai mã đi và việc máy chủ lưu số điện thoại. Thiếu nó trong bản
-    // nộp là giấu một hành vi mà mã CÓ — đúng thứ Nghị định 13 nhắm tới.
+  it("mang ĐỦ mục Đăng nhập của chính sách", () => {
+    // Đây là mục khai việc gửi hai mã đi và việc máy chủ lưu số điện thoại. Thiếu nó là giấu một
+    // hành vi mà mã CÓ — đúng thứ Nghị định 13 nhắm tới.
     const muc = MUC_CHINH_SACH.find((m) => m.ma === "dang-nhap");
     expect(muc, "chính sách không còn mục nào về đăng nhập").toBeDefined();
-    for (const [ten, ban] of [
-      ["goc", goc],
-      ["day-du", day_du],
-    ] as const) {
-      for (const doan of muc!.doan) {
-        expect(ban, `bản ${ten} thiếu đoạn chính sách: ${doan.slice(0, 40)}…`).toContain(doan);
-      }
+    for (const doan of muc!.doan) {
+      expect(ban, `bundle thiếu đoạn chính sách: ${doan.slice(0, 40)}…`).toContain(doan);
     }
   });
 
-  it("chính sách quyền riêng tư có mặt trong CẢ HAI bản, đủ mọi mục", () => {
-    // Xin ba quyền mà không có chính sách thì vòng duyệt trả về. Mục về ba quyền nay nằm trong
-    // danh sách chung, vì ba quyền có mặt ở MỌI bản dựng — không còn gì để tách.
-    for (const [ten, ban] of [
-      ["goc", goc],
-      ["day-du", day_du],
-    ] as const) {
-      expect(ban, `bản ${ten} thiếu tiêu đề chính sách`).toContain(TIEU_DE_CHINH_SACH);
-      // Câu mở đầu kiểm ở ca ngay trên, cùng với câu CŨ phải biến mất khỏi cả hai bản.
-      expect(ban, `bản ${ten} ghi sai phiên bản chính sách`).toContain(PHIEN_BAN_CHINH_SACH);
-      for (const m of MUC_CHINH_SACH) {
-        expect(ban, `bản ${ten} thiếu mục "${m.tieu_de}"`).toContain(m.tieu_de);
-      }
+  it("mang chính sách quyền riêng tư, đủ mọi mục, đúng phiên bản", () => {
+    expect(ban, "bundle thiếu tiêu đề chính sách").toContain(TIEU_DE_CHINH_SACH);
+    expect(ban, "bundle ghi sai phiên bản chính sách").toContain(PHIEN_BAN_CHINH_SACH);
+    for (const m of MUC_CHINH_SACH) {
+      expect(ban, `bundle thiếu mục "${m.tieu_de}"`).toContain(m.tieu_de);
     }
   });
 
   /**
-   * MẢNH CHỮ CÓ THẬT TRONG BUNDLE của mục chính sách về ba quyền.
-   *
-   * VÌ SAO KHÔNG KIỂM THẲNG TỪNG `doan`: một số đoạn được GHÉP LÚC CHẠY từ `NOI_DUNG_TINH_NANG`
-   * (`${nhan_ngan} — ${vi_sao}`), nên chuỗi ghép ấy KHÔNG hề có trong bundle — bundle chỉ chứa
-   * hai mảnh rời. Kiểm chuỗi ghép thì phép kiểm xanh vì **không bản nào** chứa nó. Đó đúng là
-   * kiểu hỏng tệp này sinh ra để bắt, và nó đã bắt được chính mình một lần vào 18/09 — giữ lại
-   * chú thích này thay vì sửa xong rồi xoá dấu vết.
+   * MẢNH CHỮ CÓ THẬT TRONG BUNDLE của mục chính sách về các quyền. Một số đoạn được GHÉP LÚC CHẠY
+   * (`${nhan_ngan} — ${vi_sao}`), nên kiểm theo mảnh, không theo chuỗi ghép.
    */
-  it("chính sách nói ĐỦ mục đích của cả ba quyền, trong cả hai bản", () => {
+  it("chính sách nói ĐỦ mục đích của các quyền", () => {
     const muc = MUC_CHINH_SACH.find((m) => m.ma === "cac-quyen");
-    expect(muc, "chính sách không còn mục nào về ba quyền").toBeDefined();
+    expect(muc, "chính sách không còn mục nào về các quyền").toBeDefined();
     const manh = muc!.doan.flatMap((doan) => doan.split(" — ")).filter((m) => m.length >= 30);
     expect(manh.length).toBeGreaterThan(3);
     for (const m of manh) {
-      expect(goc, `chính sách bản nộp thiếu: ${m.slice(0, 50)}…`).toContain(m);
-      expect(day_du, `chính sách bản đầy đủ thiếu: ${m.slice(0, 50)}…`).toContain(m);
+      expect(ban, `chính sách thiếu: ${m.slice(0, 50)}…`).toContain(m);
     }
   });
 
   it("vẫn ĐÚNG BẰNG một ứng dụng có nội dung — không phải một bản rỗng", () => {
-    // Gỡ nhầm tay thì bản nộp cũng "không chứa tên xã nào", và mọi ca trên vẫn xanh. Ca này là
+    // Gỡ nhầm tay thì bundle cũng "không chứa bộ chọn xã nào", và mọi ca trên vẫn xanh. Ca này là
     // thứ phân biệt "đã gỡ đúng phần thừa" với "đã gỡ mất app".
-    expect(goc).toContain(COMPANY.name);
+    expect(ban).toContain(COMPANY.name);
     for (const man of MAN_GIOI_THIEU) {
-      expect(goc, `bản nộp thiếu màn ${man.id}`).toContain(man.headerTitle);
+      expect(ban, `bundle thiếu màn ${man.id}`).toContain(man.headerTitle);
     }
-    // BỐN NHÃN TAB, đọc từ chính danh sách thanh tab vẽ ra. Một bản nộp thiếu chúng là một bản
-    // nộp không có thanh tab — thứ ca "không chứa tên xã nào" ở trên vẫn cho qua.
     expect(TABS, "thanh tab rỗng — ca này sẽ xanh vì không tìm thấy gì").toHaveLength(4);
     for (const man of TABS) {
-      expect(goc, `bản nộp thiếu nhãn tab ${man.id}`).toContain(man.cho.nhan);
+      expect(ban, `bundle thiếu nhãn tab ${man.id}`).toContain(man.cho.nhan);
     }
-    expect(goc, "bản nộp thiếu màn Danh thiếp").toContain(MAN_DANH_THIEP.headerTitle);
+    expect(ban, "bundle thiếu màn Danh thiếp").toContain(MAN_DANH_THIEP.headerTitle);
   });
 
-  it("nhẹ hơn bản đầy đủ — bằng chứng rằng mã thật sự biến mất, không chỉ bị giấu", () => {
-    expect(goc.length).toBeLessThan(day_du.length);
-  });
-
-  it("tên biến thể sai thì DỪNG, không dựng bằng mặc định", () => {
-    // Một cái tên gõ nhầm mà vẫn dựng tiếp nghĩa là dựng bản ĐẦY ĐỦ rồi đem nộp dưới nhãn khác —
-    // hỏng trong im lặng, đúng chỗ đắt nhất. Ca này gọi thẳng `vite build` với một tên sai.
-    return expect(dungBienThe("gôc" as "goc")).rejects.toThrow(/VIGOV_BIEN_THE/);
-  });
-
-  it("tên biến thể `quyen` nay cũng là một tên SAI", () => {
-    // Biến thể ấy đã bị gộp vào `goc`. Nếu nó vẫn dựng được thì ai đó đang đẩy lên Zalo một bản
-    // không tệp nào còn định nghĩa.
-    return expect(dungBienThe("quyen" as "goc")).rejects.toThrow(/VIGOV_BIEN_THE/);
-  });
+  it("một `VIGOV_BIEN_THE` còn sót trong môi trường không đổi được gì — không còn biến thể để chọn", async () => {
+    // Trước 27/09 tên sai thì bước dựng DỪNG. Nay biến ấy không còn được đọc ở đâu: một máy CI còn
+    // đặt `VIGOV_BIEN_THE=goc` phải dựng ra ĐÚNG bundle này, không phải một bản khác.
+    const truoc = process.env["VIGOV_BIEN_THE"];
+    process.env["VIGOV_BIEN_THE"] = "goc";
+    try {
+      const lai = toanVan(await dungBan());
+      expect(lai.length).toBe(ban.length);
+      expect(lai).toContain(NHAN_KENH_CONG_DAN);
+    } finally {
+      if (truoc === undefined) delete process.env["VIGOV_BIEN_THE"];
+      else process.env["VIGOV_BIEN_THE"] = truoc;
+    }
+  }, 120_000);
 });
 
 describe("what the submission says the app is called", () => {

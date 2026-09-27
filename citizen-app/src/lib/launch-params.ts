@@ -5,7 +5,7 @@
  *
  *   Đo ngày 18/09/2026 trên bản thử nghiệm Version 6, mở nguội qua deep link: `location.search`
  *   mang **đúng** những gì `getRouteParams()` mang — cả tham số nền tảng (`env`, `version`) lẫn
- *   tham số riêng (`t`, `src`, `debug`), đứng cạnh nhau trong cùng một chuỗi truy vấn.
+ *   tham số riêng (`t`, `src`), đứng cạnh nhau trong cùng một chuỗi truy vấn.
  *
  *   `zmp-sdk` tốn **256 kB thô / 64 kB gzip** vì nó kéo theo `zod` — đo được bằng cách dựng hai
  *   lần, có và không có nó. Nhập SDK **chỉ để đọc tham số** làm app tăng gần gấp đôi, trên mạng
@@ -15,7 +15,7 @@
  *
  *   Phép đo mới chạy trên MỘT đường mở. Nếu có một đường mở nào đó mà `location.search` rỗng
  *   trong khi `getRouteParams()` thì không, hậu quả là: **không có tham số ⇒ app giới thiệu bình
- *   thường ⇒ công dân tự chọn xã trong danh mục**. Không sai xã, không mất dữ liệu, không lỗi.
+ *   thường, không gợi ý xã nào**. Không sai xã, không mất dữ liệu, không lỗi.
  *
  *   Đó đúng là đường mà ADR 0005 bắt buộc phải chạy được (*"app phải chạy đúng khi mở không có
  *   tham số nào"*), và cũng là đường phổ biến nhất từ lần mở thứ hai trở đi: mở từ danh sách app
@@ -31,19 +31,6 @@
 export type KetQuaDo = {
   /** Theo `location.search` của chính trang. Nguồn duy nhất — xem chú thích đầu tệp. */
   url: Record<string, string>;
-  /**
-   * URL ĐẦY ĐỦ mà nền tảng dùng để mở app.
-   *
-   * Thêm 18/09/2026 vì một câu không tra được từ bên ngoài: **bản THỬ NGHIỆM mở bằng đường
-   * nào?** Đường công khai `https://zalo.me/s/<APP_ID>/` chỉ phục vụ bản đã phát hành — mở nó
-   * khi chưa phát hành thì Zalo trả "ứng dụng đang trong giai đoạn phát triển" trước khi mã
-   * của ta kịp chạy. Bản thử nghiệm mở được bằng QR do `zmp deploy` in ra, nhưng QR là ảnh:
-   * không đọc được khuôn link để mà nối tham số vào.
-   *
-   * Cách rẻ nhất để biết khuôn ấy là hỏi chính app lúc nó đang chạy. Tài liệu Zalo render bằng
-   * JavaScript nên không tra trực tiếp được — đã thử ba lần.
-   */
-  href: string;
 };
 
 /**
@@ -55,15 +42,7 @@ export type KetQuaDo = {
  * nháy ấy biến mất cùng với SDK.
  */
 export function thamSoMoApp(): KetQuaDo {
-  return { url: theoUrl(), href: duongDay() };
-}
-
-function duongDay(): string {
-  try {
-    return window.location.href;
-  } catch {
-    return "";
-  }
+  return { url: theoUrl() };
 }
 
 function theoUrl(): Record<string, string> {
@@ -72,21 +51,6 @@ function theoUrl(): Record<string, string> {
   } catch {
     return {};
   }
-}
-
-/**
- * Bảng chẩn đoán chỉ bật khi app được mở kèm `debug`.
- *
- * Cổng này có chủ đích và đã đóng: người dân và người duyệt của Zalo KHÔNG bao giờ thấy nó. Lý
- * do từng mở nó — *"link mở bản thử nghiệm không mang tham số nào, nên cổng `debug` giấu bảng
- * đúng lúc cần nó nhất"* — đã hết, vì đã đo được rằng tham số riêng đi tới app: nối `&debug=1`
- * vào đường liên kết là thấy bảng.
- *
- * Một bảng kỹ thuật hiện ra trong app của một đơn vị đang xin duyệt là thứ người duyệt sẽ hỏi,
- * và câu trả lời "đó là công cụ nội bộ" không giúp được gì ở vòng đó.
- */
-export function batChanDoan(ket_qua: KetQuaDo): boolean {
-  return "debug" in ket_qua.url;
 }
 
 /** Bảng tham số để dùng. Một nguồn, nên không còn gì phải gộp — xem chú thích đầu tệp. */

@@ -1,5 +1,3 @@
-import { fileURLToPath } from "node:url";
-
 import { defineConfig } from "vite";
 
 // MỘT NGUỒN SỰ THẬT cho cấu hình lúc dựng — `scripts/deploy.mjs` nhập đúng mô-đun này. Nó đọc
@@ -8,99 +6,26 @@ import { defineConfig } from "vite";
 import { docCauHinh } from "./scripts/cau-hinh.mjs";
 
 /**
- * HAI BIẾN THỂ BẢN DỰNG — `VIGOV_BIEN_THE`.
+ * MỘT BẢN DỰNG, KHÔNG BIẾN THỂ — 27/09/2026, quyết định của chủ sản phẩm.
  *
- * | Biến thể | Nội dung | Dùng để |
- * |---|---|---|
- * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm sáu tính năng dùng chín quyền nền tảng | **BẢN NỘP** |
- * | `day-du` (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Thử nghiệm, demo |
+ * Trước ngày này có hai biến thể (`goc` / `day-du`) tách nhau bằng `resolve.alias`, để bản nộp
+ * Zalo duyệt không mang lớp khám phá, danh mục xã mẫu, bảng chẩn đoán và kênh công dân. Chủ sản
+ * phẩm đã bỏ cả khái niệm ấy: "demo" chỉ là cách nói về giai đoạn làm, về kỹ thuật đây là app DÙNG
+ * THẬT. Giai đoạn 1 (trước công văn của xã) là app chung của ViHAT, mở bằng QR bản thử nghiệm mang
+ * tên miền xã; giai đoạn 2 là App ID riêng của xã. Cả hai chạy CÙNG MỘT citizen-app, nên không còn
+ * gì để tách: danh mục xã mẫu và bảng chẩn đoán đã bị xoá khỏi mã, không phải giấu sau alias.
  *
- * VÌ SAO BIẾN THỂ `quyen` KHÔNG CÒN: nó từng tồn tại vì ba màn quyền là một lớp trình diễn thêm
- * vào một app giới thiệu tĩnh — gỡ được, và bản nộp tối thiểu thì gỡ nó đi. Nay ba quyền ấy
- * thuộc về chính ứng dụng sản phẩm (quét danh thiếp · tìm văn phòng · đăng nhập bằng số Zalo), nên
- * `quyen` trùng hoàn toàn với `goc`. Hai biến thể nói cùng một thứ là hai biến thể sẽ lệch nhau.
- *
- * VÌ SAO TÁCH Ở TẦNG DỰNG CHỨ KHÔNG PHẢI MỘT CỜ LÚC CHẠY:
- *
- *   Một cờ lúc chạy để **tám tên đơn vị hành chính đặt ra** và số điện thoại mẫu nằm nguyên
- *   trong bundle gửi duyệt — chỉ là không vẽ ra. Tách ở tầng dựng thì bản `goc` **thật sự không
- *   chứa** chúng, và điều đó **kiểm được**: `grep` trên `dist/assets/app.js`, và một ca trong
- *   `src/bundle-for-zalo.test.ts` dựng thật rồi đọc bundle. Lời hứa thành sự thật đo được.
- *
- *   Đó cũng là điều làm việc này trung thực: bản nộp duyệt đúng bằng thứ người duyệt đọc. Không
- *   có gì bị giấu — chỉ là chọn nộp cái gì.
- *
- * VÌ SAO LÀ `resolve.alias` CHỨ KHÔNG PHẢI TREE-SHAKING: tree-shaking **không** loại được một
- * `import` tĩnh có mặt trong mã. Alias thì thay hẳn mô-đun ở bước phân giải, nên mã thật không
- * có đường nào đi vào bundle.
- *
- * VÌ SAO TÊN LÀ `VIGOV_BIEN_THE` CHỨ KHÔNG PHẢI `VIGOV_KHAM_PHA`: cờ này tắt **hai** thứ — lớp
- * khám phá và bảng chẩn đoán — nên một cái tên nói về riêng lớp khám phá là một cái tên nói
- * thiếu, và người sau sẽ thêm thứ thứ ba vào sau một cái tên không mô tả nó.
+ * Thứ bị gỡ theo: `VIGOV_BIEN_THE`, ba cửa `bien-the/…`, các tệp `index.rong.ts`. Tên miền xã chỉ
+ * chọn App ID ĐÍCH lúc đẩy (`scripts/deploy.mjs --domain=`); nó KHÔNG đổi nội dung bundle — bundle
+ * là một. (Tệp này không nhắc tên tệp chọn đích, kể cả trong chú thích: có một ca kiểm ghim theo
+ * CHUỖI rằng nó không nhập tệp ấy.)
  */
-const BIEN_THE_HOP_LE = ["goc", "day-du"] as const;
-type BienThe = (typeof BIEN_THE_HOP_LE)[number];
 
 /**
- * ĐỌC LÚC GỌI, KHÔNG PHẢI LÚC NẠP MÔ-ĐUN — `defineConfig` nhận một hàm chính vì việc này: một
- * tiến trình dựng hai biến thể liên tiếp (chính là `bundle-for-zalo.test.ts`) phải thấy giá trị
- * mới, chứ không thấy giá trị đã đóng băng lúc tệp cấu hình được nạp lần đầu.
- *
- * SAI TÊN THÌ DỪNG, KHÔNG ĐOÁN. `VIGOV_BIEN_THE=gôc` mà vẫn dựng tiếp nghĩa là dựng bản ĐẦY ĐỦ
- * rồi đem nộp duyệt dưới nhãn "bản gốc" — hỏng trong im lặng, và hỏng đúng ở chỗ đắt nhất.
- *
- * Giá trị đọc qua `cauHinh()`: `.env.local` cho máy local, biến shell đè lên nó. `npm run
- * build:goc` và `deploy.mjs` đặt biến shell, nên một dòng `VIGOV_BIEN_THE` trong tệp KHÔNG bao
- * giờ đổi được biến thể của một lệnh đã nói rõ nó dựng bản nào.
- */
-function docBienThe(): BienThe {
-  const dat = (cauHinh().VIGOV_BIEN_THE || "day-du").trim();
-  if (!(BIEN_THE_HOP_LE as readonly string[]).includes(dat)) {
-    throw new Error(
-      `VIGOV_BIEN_THE="${dat}" không phải biến thể nào cả. Chỉ nhận: ${BIEN_THE_HOP_LE.join(" · ")}.`,
-    );
-  }
-  return dat as BienThe;
-}
-
-const duongDan = (tuong_doi: string) => fileURLToPath(new URL(tuong_doi, import.meta.url));
-
-/**
- * Hai cái tên này là hai cửa duy nhất vào hai phần gỡ được. Tệp ngoài chỉ được nhập qua chúng —
- * nhập thẳng một tệp bên trong là đi vòng qua alias, và bản rút gọn khi ấy vẫn dựng xanh trong
- * khi mang theo đúng thứ đáng lẽ không có. `bien-the.test.ts` là thứ canh điều đó.
- *
- * Bản `goc` là BẢN NỘP: ứng dụng sản phẩm đủ sáu tính năng, **gồm cả khối đăng nhập gọi máy chủ
- * thật**, nhưng không tên đơn vị hành chính đặt ra, không số điện thoại mẫu, không bảng chẩn
- * đoán. `day-du` là bản demo nội bộ và có tất cả.
- */
-function aliasTheoBienThe(): Record<string, string> {
-  const day_du = docBienThe() === "day-du";
-  return {
-    "bien-the/kham-pha": duongDan(
-      day_du ? "./src/features/kham-pha/index.ts" : "./src/features/kham-pha/index.rong.ts",
-    ),
-    "bien-the/chan-doan": duongDan(
-      day_du ? "./src/features/diagnostics/index.ts" : "./src/features/diagnostics/index.rong.ts",
-    ),
-    // CỬA THỨ BA (24/09/2026): kênh công dân — hai màn "Gửi phản ánh" / "Tra cứu phiếu" và client
-    // ViGov. Cầu phiên công dân ViGov chưa có (`src/cong-dan/api/phien-vigov.ts`), nên bản NỘP
-    // không mang chúng. `bundle-for-zalo.test.ts` dựng thật và khẳng định tuyến ViGov vắng ở `goc`.
-    "bien-the/cong-dan": duongDan(
-      day_du ? "./src/cong-dan/index.ts" : "./src/cong-dan/index.rong.ts",
-    ),
-    // KHÔNG CÓ CỬA CHO KHỐI ĐĂNG NHẬP, VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH ĐÃ ĐẢO NGƯỢC MỘT LẦN — 20/09.
-    // Bản đầu đặt lời gọi máy chủ sau một cửa `bien-the/dang-nhap` để bản nộp không gọi mạng.
-    // Nay CẢ HAI biến thể gọi thật, nên không còn gì để tách; giữ lại cái cửa khi hai bên nó
-    // giống hệt nhau là giữ lại đúng cái bẫy mà biến thể `quyen` đã để lại một lần.
-  };
-}
-
-/**
- * ĐỊA CHỈ MÁY CHỦ — MỘT BIẾN LÚC DỰNG, cùng khuôn với `VIGOV_BIEN_THE` ngay trên.
+ * ĐỊA CHỈ MÁY CHỦ — BIẾN LÚC DỰNG DUY NHẤT.
  *
  * `VIGOV_API_HOST` đi vào mã dưới cái tên `__VIGOV_API_HOST__`, và chỉ `features/dang-nhap/`
- * đọc nó. ⚠ CẢ HAI BIẾN THỂ ĐỀU CẦN NÓ, kể cả BẢN NỘP: quên khai là nộp một nút đăng nhập nói
+ * đọc nó. ⚠ Bản đẩy lên Zalo CẦN NÓ: quên khai là nộp một nút đăng nhập nói
  * "người dựng bản cần đặt biến…". `scripts/deploy.mjs` chặn đường đẩy khi biến còn rỗng —
  * chặn ở đó chứ không ném lỗi lúc dựng, vì `npm test` và `npm run dev` phải chạy được trên một
  * máy chưa có địa chỉ máy chủ nào.
@@ -122,17 +47,14 @@ function diaChiMayChu(): string {
 /**
  * Đọc cấu hình MỘT LẦN MỖI LẦN DỰNG, không phải một lần mỗi tiến trình.
  *
- * `bundle-for-zalo.test.ts` dựng hai biến thể liên tiếp trong cùng một tiến trình bằng cách
- * đổi `process.env.VIGOV_BIEN_THE` giữa hai lần. Nhớ kết quả ở cấp mô-đun thì lần dựng thứ hai
- * đọc lại giá trị của lần đầu — và ca kiểm "hai biến thể" sẽ so bản `goc` với chính nó.
- *
  * Cache theo giá trị shell đang thấy: cùng một lần dựng thì đọc đĩa đúng một lần (kiểm danh
- * sách trắng cũng chỉ chạy một lần, thông báo lỗi không lặp ba lần), đổi shell thì đọc lại.
+ * sách trắng cũng chỉ chạy một lần, thông báo lỗi không lặp lại), đổi shell thì đọc lại — một
+ * tiến trình test đổi `VIGOV_API_HOST` giữa hai lần dựng phải thấy giá trị mới.
  */
 let nho: { khoa: string; gia_tri: ReturnType<typeof docCauHinh> } | null = null;
 
 function cauHinh(): ReturnType<typeof docCauHinh> {
-  const khoa = `${process.env.VIGOV_BIEN_THE ?? ""}\u0000${process.env.VIGOV_API_HOST ?? ""}`;
+  const khoa = process.env.VIGOV_API_HOST ?? "";
   if (nho === null || nho.khoa !== khoa) nho = { khoa, gia_tri: docCauHinh() };
   return nho.gia_tri;
 }
@@ -174,11 +96,10 @@ const thePlainScript = {
   },
 };
 
-// Hàm, không phải hằng: xem `docBienThe` — biến môi trường phải được đọc mỗi lần dựng.
+// Hàm, không phải hằng: biến môi trường phải được đọc mỗi lần dựng, không đóng băng lúc nạp tệp.
 export default defineConfig(() => ({
   base: "./",
   plugins: [thePlainScript],
-  resolve: { alias: aliasTheoBienThe() },
   define: { __VIGOV_API_HOST__: JSON.stringify(diaChiMayChu()) },
   build: {
     outDir: "dist",

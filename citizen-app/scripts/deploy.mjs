@@ -2,17 +2,16 @@
  * Dựng → đồng bộ `app-config.json` → đẩy lên Zalo. KHÔNG hỏi câu nào, nhưng NÓI RA nó sắp làm gì.
  *
  * ```
- * node scripts/deploy.mjs                                   APP CHUNG, `goc`,    bản thử nghiệm (-t)
- * node scripts/deploy.mjs --phat-hanh                       APP CHUNG, `goc`,    BẢN PHÁT HÀNH (bỏ -t)
- * node scripts/deploy.mjs --domain=<tên-miền-xã>            APP RIÊNG, `day-du`, bản thử nghiệm (-t)
+ * node scripts/deploy.mjs                                      APP CHUNG, bản thử nghiệm (-t)
+ * node scripts/deploy.mjs --phat-hanh                          APP CHUNG, BẢN PHÁT HÀNH (bỏ -t)
+ * node scripts/deploy.mjs --domain=<tên-miền-xã>               APP RIÊNG, bản thử nghiệm (-t)
  * node scripts/deploy.mjs --domain=<tên-miền-xã> --phat-hanh   APP RIÊNG, BẢN PHÁT HÀNH
- * node scripts/deploy.mjs … --thu                           IN RA rồi DỪNG, không làm gì cả
+ * node scripts/deploy.mjs … --thu                              IN RA rồi DỪNG, không làm gì cả
  * ```
  *
  * HAI LUỒNG (ADR 0047): có `--domain` thì đẩy lên App ID riêng của xã ấy (tra trong
  * `ung-dung-theo-ten-mien.mjs`), không có thì đẩy lên app chung. Tên miền CHỈ chọn đích; bundle
- * là một. Biến thể theo đó mà ra (`dich-den.mjs`, `chonBienThe`); `--bien-the` còn nhận nhưng chỉ
- * để khẳng định, trái luật thì dừng.
+ * là một, không biến thể (27/09/2026 — xem đầu `vite.config.ts`). `--bien-the` đã bỏ và bị từ chối.
  *
  * ⚠ ĐÍCH DO `ZMP_TOKEN` QUYẾT, KHÔNG DO `APP_ID` — đã đo, xem đầu `dich-den.mjs`. Nên đường app
  * riêng đòi `ZMP_TOKEN` trong MÔI TRƯỜNG và kiểm claim `appId` của nó khớp App ID đích trước khi
@@ -29,8 +28,9 @@
  *   sách ấy từ trang vừa dựng. Dựng xong mà quên đồng bộ thì `app-config.json` trỏ vào bản dựng
  *   của lần trước — không có lỗi nào báo ra.
  *
- *   Và bước dựng phải nằm ở đây vì **biến thể quyết định ở lúc dựng** (`vite.config.ts`). Dựng
- *   ngoài rồi đẩy trong là hai lệnh có thể lệch nhau: dựng `day-du`, đẩy dưới nhãn `goc`.
+ *   Và bước dựng phải nằm ở đây vì **địa chỉ máy chủ được nung vào lúc dựng** (`vite.config.ts`).
+ *   Dựng ngoài rồi đẩy trong là hai lệnh có thể lệch nhau: bundle mang một `VIGOV_API_HOST`, kế
+ *   hoạch in ra một địa chỉ khác.
  *
  * VÌ SAO CÓ ĐƯỜNG PHÁT HÀNH, TRONG KHI TRƯỚC ĐÂY CỐ Ý KHÔNG CÓ:
  *
@@ -43,15 +43,14 @@
  * bản trên Zalo KHÔNG ứng với commit nào cả — không ai dựng lại được nó, kể cả chính người vừa
  * đẩy. Nhãn nói ra điều đó thay vì để người đọc console tưởng `<sha>` là đủ để truy.
  *
- * Nhãn phiên bản mang cả BIẾN THỂ: hai lần đẩy cùng một commit, một `goc` một `day-du`, mà nhãn
- * giống nhau thì console Zalo có hai dòng không phân biệt được — và dòng người ta gửi đi duyệt
- * là dòng đoán ra.
+ * Nhãn phiên bản mang cả ĐÍCH: hai lần đẩy cùng một commit, một lên app chung một lên app của xã,
+ * mà nhãn giống nhau thì console Zalo có hai dòng không phân biệt được — và dòng người ta gửi đi
+ * duyệt là dòng đoán ra.
  */
 import { spawnSync } from "node:child_process";
 
 import { docCauHinh } from "./cau-hinh.mjs";
 import {
-  chonBienThe,
   chonDich,
   docCo,
   kiemBangAnhXa,
@@ -59,7 +58,7 @@ import {
   laPlaceholder,
   nhanPhienBan,
 } from "./dich-den.mjs";
-import { dung, MO_TA_BIEN_THE } from "./dung.mjs";
+import { dung } from "./dung.mjs";
 import { APP_ID_APP_CHUNG, APP_ID_THEO_TEN_MIEN } from "./ung-dung-theo-ten-mien.mjs";
 
 const ZMP = "zmp-cli@4.0.3";
@@ -101,11 +100,10 @@ ${loi.message}
   process.exit(2);
 }
 
-let co, bien_the, dich;
+let co, dich;
 try {
   kiemBangAnhXa(APP_ID_THEO_TEN_MIEN, APP_ID_APP_CHUNG);
   co = docCo(process.argv.slice(2));
-  bien_the = chonBienThe(co.ten_mien, co.bien_the);
   dich = chonDich(co.ten_mien, APP_ID_THEO_TEN_MIEN, APP_ID_APP_CHUNG);
 } catch (loi) {
   dungLai(loi);
@@ -126,8 +124,8 @@ const kiem_token = kiemToken(dich, process.env.ZMP_TOKEN, APP_ID_THEO_TEN_MIEN);
  * kèm một câu chữ kỹ thuật — hồ sơ bị trả về, và người phát hiện ra là người duyệt.
  *
  * VÌ SAO CHẶN Ở ĐÂY CHỨ KHÔNG NÉM LỖI TRONG `vite.config.ts`: `npm test` và `npm run dev` phải
- * chạy được trên một máy chưa có địa chỉ máy chủ nào — `bundle-for-zalo.test.ts` dựng cả hai
- * biến thể trong mọi lần chạy test. Ma sát đặt đúng chỗ có hậu quả: đường ĐẨY LÊN ZALO.
+ * chạy được trên một máy chưa có địa chỉ máy chủ nào — `bundle-for-zalo.test.ts` dựng thật
+ * bản đẩy lên Zalo trong mọi lần chạy test. Ma sát đặt đúng chỗ có hậu quả: đường ĐẨY LÊN ZALO.
  */
 // ĐỌC CÙNG MỘT NGUỒN VỚI BƯỚC DỰNG. Script này chạy NGOÀI Vite nên nó không tự thấy
 // `.env.local`; `docCauHinh` là chỗ duy nhất biết cách đọc tệp ấy. Nhập lại nó ở đây là cách
@@ -144,7 +142,7 @@ if (api_host === "" && !chi_thu) {
       "  Khối đăng nhập đọc biến này LÚC DỰNG. Thiếu nó, bản đẩy lên sẽ có một nút đăng nhập\n" +
       "  không đăng nhập được, và hiện một câu dành cho người dựng bản.\n" +
       "  Cách thường dùng: chép `.env.local.example` thành `.env.local` rồi điền địa chỉ.\n" +
-      "  Hoặc đặt cho đúng một lần chạy: VIGOV_API_HOST=https://<host> npm run zmp:deploy:goc\n" +
+      "  Hoặc đặt cho đúng một lần chạy: VIGOV_API_HOST=https://<host> npm run zmp:deploy\n" +
       "  (Thêm --thu để chỉ in ra kế hoạch mà không cần biến này.)\n",
   );
   process.exit(2);
@@ -154,10 +152,10 @@ const sha = git("rev-parse", "--short", "HEAD") || "khong-ro";
 const dirty = git("status", "--porcelain") !== "";
 const luc = new Date().toISOString().slice(0, 16).replace("T", " ");
 // Nhãn mang cả ĐÍCH: cùng một commit đẩy lên hai app thì console Zalo phải phân biệt được.
-const mota = nhanPhienBan({ bien_the, dich, sha, luc, dirty });
+const mota = nhanPhienBan({ dich, sha, luc, dirty });
 
-// IN RA TRƯỚC KHI LÀM. Người chạy lệnh phải đọc được ba điều quyết định hậu quả: dựng biến thể
-// nào, đẩy vào bản thử nghiệm hay bản phát hành, và nhãn nào sẽ hiện trong console Zalo.
+// IN RA TRƯỚC KHI LÀM. Người chạy lệnh phải đọc được những điều quyết định hậu quả: đẩy lên app
+// nào, vào bản thử nghiệm hay bản phát hành, và nhãn nào sẽ hiện trong console Zalo.
 const vach = "─".repeat(78);
 console.log(`\n${vach}`);
 console.log("  zmp deploy — ĐỌC TRƯỚC KHI ĐỂ NÓ CHẠY TIẾP");
@@ -176,7 +174,6 @@ console.log(
   }`,
 );
 console.log(`  Token    : ${kiem_token.ok ? "" : "KHÔNG QUA — "}${kiem_token.ly_do}`);
-console.log(`  Biến thể : ${bien_the}  (${MO_TA_BIEN_THE[bien_the]})`);
 console.log(
   phat_hanh
     ? "  Loại bản : PHÁT HÀNH — bỏ -t. Bản này ra người dùng thật / gửi duyệt."
@@ -224,9 +221,9 @@ if (phat_hanh) {
 
 if (chi_thu) {
   console.log("--thu: dừng ở đây, không dựng và không đẩy gì cả. Dòng lệnh sẽ chạy:");
-  // In cả hai biến LÚC DỰNG: biến thể quyết định nội dung, địa chỉ máy chủ quyết định nút đăng
-  // nhập nói chuyện với ai. Một bản diễn tập giấu mất biến thứ hai là một bản diễn tập nói sai.
-  console.log(`  VIGOV_BIEN_THE=${bien_the} VIGOV_API_HOST=${api_host || "<CHƯA KHAI>"} vite build`);
+  // In biến LÚC DỰNG: địa chỉ máy chủ quyết định nút đăng nhập nói chuyện với ai. Một bản diễn
+  // tập giấu mất nó là một bản diễn tập nói sai về lần chạy thật.
+  console.log(`  VIGOV_API_HOST=${api_host || "<CHƯA KHAI>"} vite build`);
   console.log(`  npx --yes ${ZMP} sync-config dist/index.html`);
   const tien_to = dich.loai === "app-rieng" ? `APP_ID=${dich.app_id} ZMP_TOKEN=<môi trường> ` : "";
   console.log(
@@ -237,7 +234,7 @@ if (chi_thu) {
   process.exit(0);
 }
 
-let ma = dung(bien_the);
+let ma = dung();
 if (ma !== 0) process.exit(ma);
 
 ma = zmp(env_zmp, "sync-config", "dist/index.html");

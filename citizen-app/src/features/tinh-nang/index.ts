@@ -9,8 +9,7 @@
  *   làm, không phải ba màn trình diễn. Một biến thể để gỡ chúng đi sẽ là một biến thể gỡ mất
  *   nửa ứng dụng — nên nó không còn, và ba tính năng được nhập thẳng.
  *
- *   Hai cửa còn lại — `bien-the/kham-pha` và `bien-the/chan-doan` — mới là thứ phân biệt bản
- *   `goc` (bản nộp) với bản `day-du` (demo nội bộ). Xem `vite.config.ts`.
+ *   Từ 27/09/2026 không còn cửa nào cả: bản dựng chỉ còn một (xem đầu `vite.config.ts`).
  */
 import type { ComponentType } from "react";
 

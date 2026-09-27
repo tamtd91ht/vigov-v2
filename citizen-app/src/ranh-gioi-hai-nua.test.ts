@@ -66,11 +66,11 @@ type Nua = "thuong-mai" | "nha-nuoc";
  * vào một nửa sẽ cấm nửa kia dùng thanh tab — tức là cấm một thứ không có hại, và một dây bẫy
  * cấm thứ vô hại là một dây bẫy sắp bị tắt.
  *
- * `features/kham-pha/` và `features/diagnostics/` cũng ở đây, và đó là một quyết định có hạn:
- * lớp khám phá nói chuyện xã/phường nên nó THUỘC VỀ nửa nhà nước về nghiệp vụ, nhưng hôm nay nó
- * là một lớp TRÌNH DIỄN sau `resolve.alias`, bị gỡ khỏi bản nộp, và nó đứng trên dữ liệu đặt ra.
- * Ngày nó nói chuyện với máy chủ thật, nó chuyển sang `./cong-dan/` — và ca "mọi tệp phải thuộc
- * đúng một khu" ở dưới là thứ bắt người chuyển phải khai lại bảng này thay vì để nó trôi.
+ * `features/kham-pha/` cũng ở đây, và đó là một quyết định có hạn: lớp khám phá nói chuyện
+ * xã/phường nên nó THUỘC VỀ nửa nhà nước về nghiệp vụ, nhưng hôm nay nó chỉ là vỏ màn xác nhận xã,
+ * chưa gọi máy chủ nào. Ngày nó nói chuyện với máy chủ thật, nó chuyển sang `./cong-dan/` — và ca
+ * "mọi tệp phải thuộc đúng một khu" ở dưới là thứ bắt người chuyển phải khai lại bảng này.
+ * (`features/diagnostics/` từng đứng cạnh nó; thư mục ấy đã bị xoá 27/09/2026.)
  */
 const KHU_VUC: Readonly<Record<Nua | "trung-lap", readonly string[]>> = {
   "thuong-mai": [
@@ -105,7 +105,6 @@ const KHU_VUC: Readonly<Record<Nua | "trung-lap", readonly string[]>> = {
     "./components/",
     "./lib/",
     "./features/kham-pha/",
-    "./features/diagnostics/",
   ],
 };
 
@@ -127,10 +126,17 @@ const KHU_VUC: Readonly<Record<Nua | "trung-lap", readonly string[]>> = {
  */
 const CUA_CLIENT_VIGOV = "./cong-dan/api/";
 
-/** Tiền tố khớp một trong các khu đã khai. */
+/**
+ * Tiền tố khớp một trong các khu đã khai.
+ *
+ * `${duong_dan}/` CŨNG ĐƯỢC THỬ: một lần nhập THƯ MỤC (`from "./cong-dan"`, đi qua `index.ts`) quy
+ * về `./cong-dan`, không có dấu `/` cuối, và không khớp tiền tố `./cong-dan/` nào. Thiếu vế ấy thì
+ * đúng cách `App.tsx` nhập kênh công dân từ 27/09/2026 là một điểm mù của cả ranh giới.
+ */
 function khuCua(duong_dan: string): Nua | "trung-lap" | null {
+  const thu = [duong_dan, `${duong_dan}/`];
   for (const [khu, tien_to] of Object.entries(KHU_VUC)) {
-    if (tien_to.some((t) => (t.endsWith("/") ? duong_dan.startsWith(t) : duong_dan === t))) {
+    if (tien_to.some((t) => (t.endsWith("/") ? thu.some((d) => d.startsWith(t)) : duong_dan === t))) {
       return khu as Nua | "trung-lap";
     }
   }
@@ -157,16 +163,11 @@ function tenModuleNhap(ma: string): string[] {
 /**
  * Quy một tên mô-đun về đường dẫn trong `src/`, hoặc `null` nếu nó không trỏ vào `src/`.
  *
- * Ba hình dạng phải quy: tương đối (`../content/x`), bí danh `@/…` (tsconfig `paths`), và bí danh
- * biến thể `bien-the/…` (`vite.config.ts` `resolve.alias`). Gói ngoài (`react`, `zmp-sdk`) trả
- * `null` — chúng không thuộc nửa nào.
+ * Hai hình dạng phải quy: tương đối (`../content/x`) và bí danh `@/…` (tsconfig `paths`). Gói
+ * ngoài (`react`, `zmp-sdk`) trả `null` — chúng không thuộc nửa nào. (Bí danh biến thể `bien-the/…`
+ * đã bị gỡ khỏi `vite.config.ts` 27/09/2026; một `bien-the/…` quay lại sẽ không dựng được.)
  */
 function giaiDuongDan(tu_tep: string, ten: string): string | null {
-  if (ten.startsWith("bien-the/kham-pha")) return "./features/kham-pha/index.ts";
-  if (ten.startsWith("bien-the/chan-doan")) return "./features/diagnostics/index.ts";
-  // Cửa thứ ba (24/09/2026). Không quy nó thì `App.tsx` nhập kênh công dân qua alias mà ranh giới
-  // KHÔNG nhìn thấy — `null` ở đây là "gói ngoài, không thuộc nửa nào", tức một điểm mù.
-  if (ten.startsWith("bien-the/cong-dan")) return "./cong-dan/index.ts";
   if (ten.startsWith("@/")) return `./${ten.slice(2)}`;
   if (!ten.startsWith(".")) return null;
 
@@ -208,7 +209,8 @@ function nhapClientViGovTuNgoai(tep: readonly TepNguon[]): ViPhamNhap[] {
     if (f.path.startsWith("./cong-dan/")) continue;
     for (const ten of tenModuleNhap(f.code)) {
       const toi = giaiDuongDan(f.path, ten);
-      if (toi !== null && toi.startsWith(CUA_CLIENT_VIGOV)) {
+      // `${toi}/` vì cùng lý do với `khuCua`: `from "./cong-dan/api"` là nhập THƯ MỤC client.
+      if (toi !== null && `${toi}/`.startsWith(CUA_CLIENT_VIGOV)) {
         ra.push({ tu: f.path, toi, khu_tu: khuCua(f.path) ?? "chưa khai", khu_toi: "client ViGov" });
       }
     }
@@ -258,8 +260,7 @@ describe("3a — ranh giới hai nửa, cấm cả hai chiều", () => {
     expect(
       vi_pham.map((v) => `${v.tu} (${v.khu_tu}) -> ${v.toi}`),
       `client ViGov chỉ được gọi từ bên trong \`./cong-dan/\`. Một đường nhập từ ngoài — nhất là ` +
-        `từ \`App.tsx\`, tệp KHÔNG nằm sau một \`resolve.alias\` nào — đưa tuyến phiên công dân ` +
-        `thẳng vào BẢN NỘP của nửa thương mại.`,
+        `từ \`App.tsx\` — cho nửa thương mại một đường tới tuyến phiên công dân.`,
     ).toEqual([]);
   });
 
@@ -276,8 +277,8 @@ describe("3a — ranh giới hai nửa, cấm cả hai chiều", () => {
       { path: "./features/company-intro/HomeScreen.tsx", code: 'import { X } from "../../cong-dan/phien";' },
       { path: "./content/company-profile.ts", code: 'const x = await import("../cong-dan/xa");' },
       { path: "./features/tinh-nang/zalo-api.ts", code: 'const x = require("@/cong-dan/phien");' },
-      // Qua alias cũng là nhập nửa nhà nước — cửa `bien-the/cong-dan` không phải lối tắt.
-      { path: "./features/company-intro/HomeScreen.tsx", code: 'import { KenhCongDan } from "bien-the/cong-dan";' },
+      // Nhập THƯ MỤC (qua `index.ts`) cũng là nhập nửa nhà nước — không có dấu `/` cuối không phải lối tắt.
+      { path: "./features/company-intro/HomeScreen.tsx", code: 'import { KenhCongDan } from "../../cong-dan";' },
       // nhà nước -> thương mại
       { path: "./cong-dan/TrangXa.tsx", code: 'import { COMPANY } from "../content/company-profile";' },
       { path: "./cong-dan/api/vigov.ts", code: 'import { thanYeuCau } from "@/features/dang-nhap/hop-dong";' },
@@ -294,7 +295,7 @@ describe("3a — ranh giới hai nửa, cấm cả hai chiều", () => {
     const HOP_LE: readonly TepNguon[] = [
       { path: "./App.tsx", code: 'import { COMPANY } from "./content/company-profile";' },
       { path: "./App.tsx", code: 'import { X } from "./cong-dan/index";' },
-      { path: "./App.tsx", code: 'import { KenhCongDan } from "bien-the/cong-dan";' },
+      { path: "./App.tsx", code: 'import { KenhCongDan } from "./cong-dan";' },
       { path: "./features/tinh-nang/zalo-api.ts", code: 'const sdk = await import("zmp-sdk");' },
       { path: "./features/company-intro/HomeScreen.tsx", code: 'import { useState } from "react";' },
       { path: "./cong-dan/index.ts", code: 'import { thamSo } from "../lib/launch-params";' },
@@ -310,6 +311,7 @@ describe("3a — ranh giới hai nửa, cấm cả hai chiều", () => {
       { path: "./features/dang-nhap/goi-may-chu.ts", code: 'import { x } from "../../cong-dan/api/phien";' },
       { path: "./features/tinh-nang/LienHeTinhNang.tsx", code: 'const c = await import("@/cong-dan/api/vigov");' },
       { path: "./lib/launch-params.ts", code: 'require("../cong-dan/api/vigov");' },
+      { path: "./App.tsx", code: 'import { goiViGov } from "./cong-dan/api";' },
     ];
     for (const tep of VI_PHAM) {
       expect(

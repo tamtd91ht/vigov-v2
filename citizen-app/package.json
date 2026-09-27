@@ -5,18 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/dung.mjs day-du",
-    "build:goc": "node scripts/dung.mjs goc",
+    "build": "node scripts/dung.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "ho-so": "node scripts/ho-so-zalo.mjs",
     "test": "vitest run",
     "zmp:login": "npx --yes zmp-cli@4.0.3 login",
     "zmp:sync": "npm run build && npx --yes zmp-cli@4.0.3 sync-config dist/index.html",
-    "zmp:deploy:goc": "node scripts/deploy.mjs --bien-the=goc",
-    "zmp:phat-hanh:goc": "node scripts/deploy.mjs --bien-the=goc --phat-hanh",
-    "zmp:deploy:xa": "node scripts/deploy.mjs --bien-the=day-du",
-    "zmp:phat-hanh:xa": "node scripts/deploy.mjs --bien-the=day-du --phat-hanh",
+    "zmp:deploy": "node scripts/deploy.mjs",
+    "zmp:phat-hanh": "node scripts/deploy.mjs --phat-hanh",
     "check:api": "node -e \"console.log('citizen-app: no generated REST types in phase 1 — the introduction app calls no backend. Phase 2 replaces this script.')\""
   },
   "dependencies": {

@@ -1,60 +1,44 @@
 /**
- * Dựng MỘT biến thể của bản nộp.
+ * Dựng bản đẩy lên Zalo — MỘT bản, không biến thể (27/09/2026, xem khối đầu `vite.config.ts`).
  *
- * | Biến thể | Nội dung | Dùng để |
- * |---|---|---|
- * | `goc` | Ứng dụng sản phẩm đầy đủ, gồm sáu tính năng dùng chín quyền nền tảng | BẢN NỘP |
- * | `day-du` | Thêm lớp khám phá + danh mục xã mẫu + bảng chẩn đoán | Thử nghiệm, demo |
- *
- * VÌ SAO PHẢI LÀ MỘT TỆP SCRIPT CHỨ KHÔNG PHẢI `VIGOV_BIEN_THE=goc vite build` TRONG package.json:
- *
- *   Trên Windows `npm run` chạy qua `cmd`, nơi cú pháp `BIEN=x lệnh` không đặt biến môi trường
- *   mà là một lỗi cú pháp. Node đặt biến giống nhau ở mọi máy. Đây cũng là lý do `deploy.mjs`
- *   tồn tại — cùng một ràng buộc, xem chú thích ở đó.
+ * VÌ SAO VẪN LÀ MỘT TỆP SCRIPT CHỨ KHÔNG PHẢI `vite build` TRẦN TRONG package.json: `deploy.mjs`
+ * gọi bước dựng như một hàm và đọc mã thoát của nó trước khi chạy `zmp`. Một lệnh shell thì phải
+ * trích dẫn đường dẫn, và trên Windows `npm run` chạy qua `cmd`.
  *
  * Gọi `vite` bằng `process.execPath` chứ không qua shell: không có chuỗi nào phải trích dẫn, nên
  * không có đường dẫn nào chứa dấu cách làm hỏng lệnh.
  *
- * ⚠ CÒN MỘT BIẾN LÚC DỰNG NỮA — `VIGOV_API_HOST`, địa chỉ máy chủ của khối đăng nhập. Tệp này
- * KHÔNG chặn khi nó rỗng (dựng thử và chạy test phải được), nhưng `deploy.mjs` thì CHẶN: đẩy
- * một bản chưa khai địa chỉ là nộp một nút đăng nhập không đăng nhập nổi.
+ * ⚠ BIẾN LÚC DỰNG DUY NHẤT LÀ `VIGOV_API_HOST`, địa chỉ máy chủ của khối đăng nhập. Tệp này KHÔNG
+ * chặn khi nó rỗng (dựng thử và chạy test phải được), nhưng `deploy.mjs` thì CHẶN: đẩy một bản chưa
+ * khai địa chỉ là nộp một nút đăng nhập không đăng nhập nổi.
  */
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const BIEN_THE = ["goc", "day-du"];
-
-export const MO_TA_BIEN_THE = {
-  goc: "ứng dụng sản phẩm đầy đủ (quét danh thiếp · tìm văn phòng · đăng nhập bằng số Zalo, CÓ gọi máy chủ) — BẢN NỘP, không lớp khám phá, không danh mục xã, không bảng chẩn đoán",
-  "day-du": "bản gốc + lớp khám phá + danh mục xã mẫu + bảng chẩn đoán",
-};
-
-/**
- * Dựng, trả về mã thoát.
- *
- * SAI TÊN BIẾN THỂ THÌ DỪNG. Một cái tên gõ nhầm mà vẫn dựng tiếp nghĩa là dựng bản ĐẦY ĐỦ rồi
- * đem nộp duyệt dưới nhãn "bản gốc" — hỏng trong im lặng, đúng chỗ đắt nhất. `vite.config.ts`
- * cũng kiểm lại một lần nữa, vì nó có thể được gọi thẳng chứ không qua tệp này.
- */
-export function dung(bien_the) {
-  if (!BIEN_THE.includes(bien_the)) {
-    console.error(`Biến thể "${bien_the}" không có. Chỉ nhận: ${BIEN_THE.join(" · ")}`);
-    return 2;
-  }
-
+/** Dựng, trả về mã thoát. */
+export function dung() {
   const vite = fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url));
   const goc_du_an = fileURLToPath(new URL("..", import.meta.url));
 
   const ket_qua = spawnSync(process.execPath, [vite, "build"], {
     cwd: goc_du_an,
     stdio: "inherit",
-    env: { ...process.env, VIGOV_BIEN_THE: bien_the },
+    env: process.env,
   });
   return ket_qua.status ?? 1;
 }
 
-// Chạy thẳng (`node scripts/dung.mjs goc`) thì dựng; được `deploy.mjs` nhập thì chỉ xuất hàm.
+// Chạy thẳng (`node scripts/dung.mjs`) thì dựng; được `deploy.mjs` nhập thì chỉ xuất hàm.
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exit(dung(process.argv[2] ?? "day-du"));
+  if (process.argv.length > 2) {
+    // Một tên biến thể cũ (`goc`, `day-du`) gõ theo thói quen phải DỪNG, không lặng lẽ bị bỏ qua:
+    // người gõ đang tin rằng họ chọn được nội dung bản dựng, và điều đó không còn đúng.
+    console.error(
+      `Không nhận tham số (${process.argv.slice(2).join(" ")}). Bản dựng không còn biến thể nào — ` +
+        "chạy `node scripts/dung.mjs` không tham số.",
+    );
+    process.exit(2);
+  }
+  process.exit(dung());
 }

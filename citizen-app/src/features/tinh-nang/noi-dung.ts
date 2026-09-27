@@ -252,9 +252,9 @@ export const DANH_THIEP = {
  * và cả hai đều `@zaloOnly`. Ngoài Zalo thì chúng không chạy — nói ra bằng một câu, không để
  * người dùng bấm vào một cái nút im lặng.
  *
- * CÂU NÀY TỪNG BẮT ĐẦU BẰNG "Chưa mở được", và `bundle-for-zalo.test.ts` đã bắt: "Chưa mở" là
- * nhãn của lớp khám phá (bản demo nội bộ), và bản NỘP phải không chứa một chuỗi nào của lớp ấy.
- * Ghi lại để lần sau ai định viết "Chưa mở…" ở đây thì biết vì sao nó đỏ.
+ * CÂU NÀY TỪNG BẮT ĐẦU BẰNG "Chưa mở được", và `bundle-for-zalo.test.ts` khi ấy đã bắt: "Chưa mở"
+ * là nhãn của trang xã mẫu, thứ bản nộp không được mang. Trang ấy đã bị xoá 27/09/2026; câu này
+ * vẫn giữ cách viết hiện tại vì nó nói việc cần làm, không nói "chưa".
  */
 export const LOI_MO_NGOAI =
   "Thao tác này chỉ chạy bên trong ứng dụng Zalo trên điện thoại. Bạn hãy mở lại trang này trong Zalo rồi bấm lại.";

@@ -28,7 +28,7 @@ import { KetQuaTraCuu, TraCuuPhieuScreen } from "./man/TraCuuPhieuScreen";
 
 /**
  * KÊNH CÔNG DÂN, VỚI NGUỒN PHIÊN THẬT — tức là ĐÓNG. Tệp này KHÔNG giả lập phiên: mọi ca ở đây chạy
- * đúng mã sẽ nằm trong bản thử hôm nay. Các ca cần một phiên giả (khoá chống trùng, thân gửi đi,
+ * đúng mã nằm trong bundle hôm nay. Các ca cần một phiên giả (khoá chống trùng, thân gửi đi,
  * 201/404) ở `api/goi-vigov.test.ts`, nơi `vi.mock` thay nguồn phiên cho RIÊNG tệp ấy.
  */
 
@@ -105,17 +105,8 @@ describe("nguồn phiên ViGov đóng — không một lời gọi mạng nào �
   });
 });
 
-describe("bản `goc` không mang màn 'Phản ánh của tôi'", () => {
-  it("`index.rong.ts` chỉ nhập KIỂU, và không nhắc tới màn danh sách", () => {
-    // Một `import` thường ở bản rỗng kéo mô-đun vào bản nộp. `bundle-for-zalo.test.ts` đo chuỗi
-    // của màn trên bundle thật; ca này bắt cùng lỗi sớm hơn một tầng, không cần dựng.
-    const rong = SAN_XUAT.find((f) => f.path === "./index.rong.ts")!.code;
-    const nhap = [...rong.matchAll(/^\s*import\b[^\n]*/gm)].map((m) => m[0]);
-    expect(nhap.length).toBeGreaterThan(0);
-    for (const dong of nhap) expect(dong, dong).toMatch(/^\s*import\s+type\b/);
-    expect(rong).not.toMatch(/PhanAnhCuaToi|CUA_TOI|cua-toi/);
-  });
-});
+// (Ca "`index.rong.ts` chỉ nhập KIỂU" đã bị xoá 27/09/2026 cùng bản rỗng ấy: bản dựng chỉ còn một
+// và nó MANG kênh công dân — `bundle-for-zalo.test.ts` đo sự có mặt ấy trên bundle thật.)
 
 describe("bearer chỉ đến từ `api/phien-vigov.ts` — kiểm tĩnh trên mã nguồn", () => {
   it("quét đúng cây mã thật của nửa nhà nước", () => {

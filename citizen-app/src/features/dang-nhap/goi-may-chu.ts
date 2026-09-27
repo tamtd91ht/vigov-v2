@@ -14,8 +14,8 @@
  * ⚠ TỆP NÀY CÓ MẶT TRONG BẢN NỘP, và điều đó vừa đảo chiều — 20/09/2026. Trước đây nó nằm sau
  * một cửa biến thể để bản nộp không gọi mạng; nay CẢ HAI biến thể gọi máy chủ thật, vì một nút
  * đăng nhập bấm là được thuyết phục vòng duyệt hơn hẳn một nút nói "bản này chưa nối máy chủ"
- * (điều 3.3.4). `bundle-for-zalo.test.ts` dựng thật cả hai biến thể rồi khẳng định CẢ HAI mang
- * đúng MỘT lời gọi, tới đúng MỘT tuyến.
+ * (điều 3.3.4). `bundle-for-zalo.test.ts` dựng thật bản đẩy lên Zalo (một bản, từ 27/09/2026)
+ * rồi khẳng định nó mang đúng MỘT lời gọi, tới đúng MỘT tuyến.
  *
  * ⚠ TỆP NÀY KHÔNG BIẾT HỢP ĐỒNG. Đường dẫn, tên trường gửi đi và hình dạng phản hồi nằm trọn
  * trong `hop-dong.ts`; ở đây chỉ còn cơ chế gọi. Hợp đồng đổi thì sửa một tệp, và tệp ấy không

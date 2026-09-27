@@ -1,21 +1,11 @@
 import { type ReactNode, useEffect, useState } from "react";
 
-import { LaunchParamsPanel } from "bien-the/chan-doan";
-import { CO_KENH_CONG_DAN, KenhCongDan, NutVaoKenhCongDan } from "bien-the/cong-dan";
-import {
-  ChonXaScreen,
-  CO_LOP_KHAM_PHA,
-  GoiYXaScreen,
-  NHAN_KHAM_PHA,
-  phanGiaiGoiY,
-  TrangXaScreen,
-  type XaDemo,
-} from "bien-the/kham-pha";
-
 import { TabBar } from "./components/TabBar";
+import { KenhCongDan, NutVaoKenhCongDan } from "./cong-dan";
 import { COMPANY } from "./content/company-profile";
 import { NutChatOA } from "./features/company-intro/NutChatOA";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
+import { GoiYXaScreen, phanGiaiGoiY, TIEU_DE_XAC_NHAN_XA, type XaGoiY } from "./features/kham-pha";
 import {
   DEFAULT_SCREEN_ID,
   type DiemDen,
@@ -23,7 +13,7 @@ import {
   type ScreenId,
 } from "./features/company-intro/screens";
 import { cuonToiMoc } from "./lib/cuon-toi";
-import { batChanDoan, type KetQuaDo, thamSo as thamSoLaunch, thamSoMoApp } from "./lib/launch-params";
+import { type KetQuaDo, thamSo as thamSoLaunch, thamSoMoApp } from "./lib/launch-params";
 
 /**
  * Phase 1 shell: four static screens, no navigation library, no state beyond the current tab.
@@ -55,10 +45,9 @@ export function KhungApp(props: {
   man: ScreenId;
   onChonMan: (id: ScreenId) => void;
   /** Xã công dân đã xác nhận, hoặc `null`. Xem ghi chú về trạng thái phía client trong `App`. */
-  xaDaChon: XaDemo | null;
-  onDoiXa: () => void;
+  xaDaChon: XaGoiY | null;
   /**
-   * Đang ở lớp khám phá: chọn hoặc xác nhận xã. Lúc ấy thanh tab BIẾN MẤT.
+   * Đang ở lớp khám phá: xác nhận xã. Lúc ấy thanh tab BIẾN MẤT.
    *
    * `skills/accessibility-elderly`, yêu cầu #4: mỗi màn một việc. Để thanh tab lại thì công dân
    * bấm nó, không có gì xảy ra (vì chưa có xã), và một nút bấm không phản hồi là cách nhanh
@@ -77,22 +66,13 @@ export function KhungApp(props: {
             {/* MỘT Ô, HAI CHỦ SỞ HỮU. Chưa chọn xã thì đây là đơn vị phát hành ứng dụng — thứ
                 Zalo đã duyệt. Chọn xã rồi thì đây là xã, trên mọi màn hình, không có ngoại lệ. */}
             <p className="app-header__owner">{props.xaDaChon ? props.xaDaChon.ten : COMPANY.name}</p>
-            {/* HAI NHÃN CỦA LỚP KHÁM PHÁ ĐỌC TỪ `bien-the/kham-pha`, KHÔNG VIẾT THẲNG Ở ĐÂY.
-                `App.tsx` không nằm sau alias, nên một chuỗi viết thẳng trong tệp này đi vào cả
-                bản `goc` — bản nộp — kể cả khi nhánh vẽ nó không bao giờ chạy. Xem chú thích
-                của `NHAN_KHAM_PHA` trong `features/kham-pha/index.ts`. */}
             <p className="app-header__screen">
-              {props.khamPha ? NHAN_KHAM_PHA.tieu_de_chon_xa : man.headerTitle}
+              {props.khamPha ? TIEU_DE_XAC_NHAN_XA : man.headerTitle}
             </p>
           </div>
 
-          {/* ĐỔI XÃ LÀ HÀNH ĐỘNG TƯỜNG MINH, KHÔNG BAO GIỜ TỰ ĐỘNG (ADR 0005). Nút chỉ có mặt
-              khi đã có xã để đổi — trước đó nó sẽ là một nút không nói lên điều gì. */}
-          {props.xaDaChon && (
-            <button type="button" className="app-header__doi-xa" onClick={props.onDoiXa}>
-              {NHAN_KHAM_PHA.nut_doi_xa}
-            </button>
-          )}
+          {/* KHÔNG CÓ NÚT "ĐỔI XÃ" (ADR 0044 câu 4 · ADR 0047): một phiên, một xã. Người cần xã
+              khác quét QR của xã ấy — không có danh mục nào trong app để đổi sang. */}
         </div>
       </header>
 
@@ -101,9 +81,8 @@ export function KhungApp(props: {
       </main>
 
       {/* NÚT CHAT NỔI BIẾN MẤT CÙNG LÚC VỚI THANH TAB, CÙNG MỘT LÝ DO (xem `khamPha` ở trên):
-          màn chọn xã là màn mỗi-màn-một-việc, và việc ấy là chọn đúng xã. Một nút nổi mời trò
-          chuyện với một doanh nghiệp giữa lúc ấy là một đường rẽ sai chỗ — và nó nằm đè lên đúng
-          góc màn hình mà danh sách xã đang cuộn qua. */}
+          màn xác nhận xã là màn mỗi-màn-một-việc, và việc ấy là xác nhận đúng xã. Một nút nổi mời
+          trò chuyện với một doanh nghiệp giữa lúc ấy là một đường rẽ sai chỗ. */}
       {!props.khamPha && <NutChatOA />}
 
       {!props.khamPha && <TabBar current={props.man} onSelect={props.onChonMan} />}
@@ -153,39 +132,34 @@ export function App() {
    *
    * Nó sống trong `useState`: mất khi app đóng, không được lưu xuống máy, không được gửi đi đâu,
    * và **không cấp quyền gì cả**. ADR 0005: xã của phiên do MÁY CHỦ ghi sau khi công dân xác
-   * nhận, và kênh công dân phía máy chủ chưa tồn tại (`ListTenants` còn chưa có cài đặt).
+   * nhận, và cầu phiên công dân ViGov chưa tồn tại (`cong-dan/api/phien-vigov.ts`).
    *
    * Khi tuyến ấy sống, dòng này được thay bằng xã đọc ra từ phiên do máy chủ trả về — không phải
    * được "đồng bộ thêm" với nó. Hai nguồn cho một sự thật thì một trong hai sẽ cũ, và cái cũ là
    * cái đi vào hồ sơ gửi nhầm cơ quan.
    */
-  const [xaDaChon, setXaDaChon] = useState<XaDemo | null>(null);
-  const [dangChonXa, setDangChonXa] = useState(false);
+  const [xaDaChon, setXaDaChon] = useState<XaGoiY | null>(null);
   const [boQuaKhamPha, setBoQuaKhamPha] = useState(false);
   /**
-   * Đang mở kênh công dân (gửi / tra cứu phản ánh). Chỉ có nghĩa ở bản `day-du`: ở bản `goc`,
-   * `CO_KENH_CONG_DAN` là `false` và cả kênh là bản rỗng (`bien-the/cong-dan`, `vite.config.ts`).
-   * App.tsx KHÔNG nhập client ViGov — chỉ mở màn của nửa nhà nước (`ranh-gioi-hai-nua.test.ts`).
+   * Đang mở kênh công dân (gửi / tra cứu phản ánh). App.tsx KHÔNG nhập client ViGov — chỉ mở màn
+   * của nửa nhà nước qua cửa `./cong-dan` (`ranh-gioi-hai-nua.test.ts`).
    */
   const [moKenhCongDan, setMoKenhCongDan] = useState(false);
 
   const p = thamSoLaunch(thamSo);
 
   /**
-   * LỚP KHÁM PHÁ (ADR 0005). Tham số `t` chỉ DẪN GIAO DIỆN — nó không chọn xã, không mở một app
-   * khác, và không được phép làm hai việc đó. Đây là lý do màn khám phá thay thế nội dung công ty
-   * chứ không "redirect": không có nơi nào để redirect tới cho tới khi tuyến công dân phía máy
-   * chủ tồn tại, và một Mini App chỉ có MỘT App ID cho mọi xã.
+   * LỚP KHÁM PHÁ (ADR 0005 · 0047). Tham số trên QR chỉ DẪN GIAO DIỆN — nó không chọn xã, không mở
+   * một app khác, và không được phép làm hai việc đó.
+   *
+   * ⚠ `null` Ở ĐÂY LÀ FAIL CLOSED, KHÔNG PHẢI CHỖ CÒN DỞ ĐỂ "ĐIỀN TẠM". Tên xã chỉ có một nguồn: máy
+   * chủ tra tên miền trên QR (`GET /api/v1/communes?host=`). Lời gọi ấy chưa được nối vào, nên không
+   * có xã nào để gợi ý, màn xác nhận không bao giờ hiện, và app mở phần giới thiệu. Không bao giờ
+   * dựng một tên xã từ tham số — công dân xác nhận theo TÊN, và một tên đoán ra là hồ sơ gửi nhầm
+   * cơ quan.
    */
-  const goiY = phanGiaiGoiY(p["t"] ?? "", p["src"] ?? "");
-
-  /**
-   * `CO_LOP_KHAM_PHA` đứng ĐẦU điều kiện, và nó không phải một cờ tính năng lúc chạy: ở biến thể
-   * `goc` nó là hằng `false` và các màn khám phá đã bị thay bằng bản rỗng (`vite.config.ts`).
-   * Thiếu nó thì một đường liên kết có `t` mở ra một màn hình trắng — thứ người duyệt của Zalo
-   * thấy trước tiên.
-   */
-  const dangKhamPha = CO_LOP_KHAM_PHA && !xaDaChon && !boQuaKhamPha && Boolean(p["t"]);
+  const goiY = phanGiaiGoiY(p["src"] ?? "", null);
+  const dangKhamPha = !xaDaChon && !boQuaKhamPha && goiY.kieu === "chon-san";
 
   /**
    * `key` MANG CẢ `moc` LẪN `lan`, VÀ ĐÓ LÀ THỨ LÀM MỤC "QUYỀN" TRÊN MÀN CHỦ CHẠY ĐƯỢC LẦN THỨ HAI.
@@ -198,55 +172,30 @@ export function App() {
   let noiDung: ReactNode = (
     <Screen key={`${currentId}:${vi_tri.moc ?? ""}:${vi_tri.lan}`} moc={vi_tri.moc} onDi={di} />
   );
-  if (CO_KENH_CONG_DAN && moKenhCongDan) {
+  if (moKenhCongDan) {
     noiDung = <KenhCongDan onDong={() => setMoKenhCongDan(false)} />;
-  } else if (dangChonXa) {
-    // Công dân tự bấm "Đổi xã": không cần giải thích gì, chính họ vừa yêu cầu.
+  } else if (dangKhamPha && goiY.kieu === "chon-san") {
     noiDung = (
-      <ChonXaScreen
-        li_do={null}
-        onChon={(xa) => {
-          setXaDaChon(xa);
-          setDangChonXa(false);
-        }}
-        onXemGioiThieu={() => {
-          setDangChonXa(false);
-          setBoQuaKhamPha(true);
-        }}
+      <GoiYXaScreen
+        xa={goiY.xa}
+        nguon={goiY.nguon}
+        onXacNhan={() => setXaDaChon(goiY.xa)}
+        onKhongPhai={() => setBoQuaKhamPha(true)}
       />
     );
-  } else if (dangKhamPha) {
-    noiDung =
-      goiY.kieu === "chon-san" ? (
-        <GoiYXaScreen
-          xa={goiY.xa}
-          nguon={goiY.nguon}
-          onXacNhan={() => setXaDaChon(goiY.xa)}
-          onChonXaKhac={() => setDangChonXa(true)}
-        />
-      ) : (
-        <ChonXaScreen
-          li_do={goiY.li_do}
-          onChon={(xa) => setXaDaChon(xa)}
-          onXemGioiThieu={() => setBoQuaKhamPha(true)}
-        />
-      );
   } else if (xaDaChon && currentId === DEFAULT_SCREEN_ID) {
     /**
-     * ĐÃ CHỌN XÃ THÌ TAB ĐẦU LÀ TRANG CỦA XÃ ẤY — không phải một tab thứ năm, và không phải một
-     * màn hình che mất thanh tab.
+     * ĐÃ XÁC NHẬN XÃ THÌ TAB ĐẦU MỞ LỐI VÀO KÊNH CÔNG DÂN — đặt TRÊN màn chủ, không thay nó.
      *
-     *   Thêm tab thì sổ màn hình có hai loại màn khác hẳn nhau trong một danh sách, và tab ấy
-     *   dẫn đi đâu khi chưa chọn xã là một câu không có câu trả lời đúng. Che thanh tab thì phần
-     *   giới thiệu — thứ Zalo đã duyệt — không còn đường tới.
-     *
-     *   Cách này giữ đúng một đường: bấm tab đầu là về trang xã, luôn luôn, kể cả sau khi công
-     *   dân đi xem phần giới thiệu. Không có ngõ cụt nào mở ra.
+     *   Trang xã mẫu (dịch vụ, số trực, giờ làm việc) đã bị xoá cùng danh mục xã mẫu: mọi chữ trên
+     *   đó là dữ liệu đặt ra, và một trang xã thật cần nguồn máy chủ chưa có. Nên ở đây chỉ còn
+     *   đúng thứ có thật — lối vào kênh — và phần giới thiệu, thứ Zalo đã duyệt, vẫn còn đường tới.
+     *   Chỗ đặt nút là quyết định của card nối nguồn xã (TASK-04b), không phải của card này.
      */
     noiDung = (
       <>
-        <TrangXaScreen xa={xaDaChon} />
-        {CO_KENH_CONG_DAN && <NutVaoKenhCongDan onBam={() => setMoKenhCongDan(true)} />}
+        <NutVaoKenhCongDan onBam={() => setMoKenhCongDan(true)} />
+        {noiDung}
       </>
     );
   }
@@ -268,11 +217,8 @@ export function App() {
         // xuống giữa một khối mà lần trước họ đi tới từ màn chủ.
         onChonMan={(id) => di({ man: id })}
         xaDaChon={xaDaChon}
-        onDoiXa={() => setDangChonXa(true)}
-        khamPha={dangChonXa || dangKhamPha}
+        khamPha={dangKhamPha}
       >
-        {/* Bảng chẩn đoán: chỉ mở bằng `debug`. Xem lib/launch-params.ts. */}
-        {batChanDoan(thamSo) && <LaunchParamsPanel thamSo={thamSo} />}
         {noiDung}
       </KhungApp>
     </NhaCungCapPhien>

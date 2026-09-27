@@ -20,7 +20,7 @@
     },
     "app.CauPhienCongDan": {
       "kind": "type",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:60"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:69"
     },
     "app.Chay": {
       "kind": "func",
@@ -112,7 +112,7 @@
     },
     "app.DinhDanhKho": {
       "kind": "type",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:85"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:97"
     },
     "app.DocHanXuLyXong": {
       "kind": "type",
@@ -240,7 +240,7 @@
     },
     "app.KetQuaMoPhienCau": {
       "kind": "type",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:124"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:142"
     },
     "app.KetQuaThemDuAn": {
       "kind": "type",
@@ -440,7 +440,7 @@
     },
     "app.Mo": {
       "kind": "func",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:154"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:172"
     },
     "app.MoKhoa": {
       "kind": "func",
@@ -448,11 +448,11 @@
     },
     "app.NenTangCauPhien": {
       "kind": "type",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:71"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:80"
     },
     "app.NewCauPhienCongDan": {
       "kind": "func",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:95"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:107"
     },
     "app.NewChungTuGiaiNgan": {
       "kind": "func",
@@ -600,7 +600,7 @@
     },
     "app.PhienCauKho": {
       "kind": "type",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:90"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:102"
     },
     "app.QuyenDuyetHoanThanh": {
       "kind": "type",
@@ -684,7 +684,7 @@
     },
     "app.TaiKhoanZaloKho": {
       "kind": "type",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:77"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:89"
     },
     "app.Tao": {
       "kind": "func",
@@ -836,7 +836,7 @@
     },
     "app.YeuCauMoPhienCau": {
       "kind": "type",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:113"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:125"
     },
     "app.YeuCauPhanCong": {
       "kind": "type",
@@ -1272,7 +1272,7 @@
     },
     "domain.CheDoApp": {
       "kind": "type",
-      "at": "service-identity/internal/domain/cau_phien.go:31"
+      "at": "service-identity/internal/domain/cau_phien.go:33"
     },
     "domain.CheDoMiniApp": {
       "kind": "type",
@@ -1320,7 +1320,7 @@
     },
     "domain.ChonXa": {
       "kind": "func",
-      "at": "service-identity/internal/domain/cau_phien.go:99"
+      "at": "service-identity/internal/domain/cau_phien.go:104"
     },
     "domain.ChuSoTimSoDienThoai": {
       "kind": "func",
@@ -1660,7 +1660,7 @@
     },
     "domain.DauVaoChonXa": {
       "kind": "type",
-      "at": "service-identity/internal/domain/cau_phien.go:51"
+      "at": "service-identity/internal/domain/cau_phien.go:53"
     },
     "domain.DeNghiLuiHan": {
       "kind": "type",
@@ -1829,6 +1829,10 @@
     "domain.HopLe": {
       "kind": "func",
       "at": "service-petitions/internal/domain/phieu_phan_anh.go:127"
+    },
+    "domain.HopLeTenMienXa": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/ten_mien_xa.go:30"
     },
     "domain.Is": {
       "kind": "func",
@@ -2376,7 +2380,7 @@
     },
     "domain.NguonXa": {
       "kind": "type",
-      "at": "service-identity/internal/domain/cau_phien.go:41"
+      "at": "service-identity/internal/domain/cau_phien.go:43"
     },
     "domain.NguongCanhBaoCham": {
       "kind": "type",
@@ -2724,7 +2728,7 @@
     },
     "domain.UngVienXa": {
       "kind": "type",
-      "at": "service-identity/internal/domain/cau_phien.go:69"
+      "at": "service-identity/internal/domain/cau_phien.go:73"
     },
     "domain.VaiTro": {
       "kind": "func",
@@ -2960,7 +2964,7 @@
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:208"
+      "at": "core/grpcx/grpcx.go:210"
     },
     "grpcx.UnaryClientCallerAuth": {
       "kind": "func",
@@ -2968,7 +2972,7 @@
     },
     "grpcx.UnaryClientInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:224"
+      "at": "core/grpcx/grpcx.go:226"
     },
     "grpcx.UnaryServerBridgeKey": {
       "kind": "func",
@@ -2980,7 +2984,7 @@
     },
     "grpcx.UnaryServerInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:257"
+      "at": "core/grpcx/grpcx.go:259"
     },
     "http.BienBanDanhSach": {
       "kind": "type",
@@ -3068,7 +3072,7 @@
     },
     "http.DanhMucXa": {
       "kind": "func",
-      "at": "service-identity/internal/http/danh_muc_xa.go:101"
+      "at": "service-identity/internal/http/danh_muc_xa.go:103"
     },
     "http.DanhSachBienBan": {
       "kind": "func",

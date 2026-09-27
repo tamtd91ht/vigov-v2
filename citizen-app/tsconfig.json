@@ -17,15 +17,6 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ],
-      "bien-the/kham-pha": [
-        "./src/features/kham-pha/index.ts"
-      ],
-      "bien-the/chan-doan": [
-        "./src/features/diagnostics/index.ts"
-      ],
-      "bien-the/cong-dan": [
-        "./src/cong-dan/index.ts"
       ]
     }
   },

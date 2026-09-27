@@ -186,7 +186,7 @@ export const TRA_CUU = {
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
- * MÀN "PHẢN ÁNH CỦA TÔI" — danh sách phiếu của chính người dân (chỉ bản thử `day-du`)
+ * MÀN "PHẢN ÁNH CỦA TÔI" — danh sách phiếu của chính người dân
  *
  * Nhãn trạng thái KHÔNG viết lại ở đây: thẻ dùng `nhanTrangThai`, cùng bảng màn tra cứu dùng. Nhãn
  * "Gửi lúc" / "Hạn xử lý xong" lấy từ `THE_PHIEU` để hai màn nói cùng một chữ cho cùng một mốc.

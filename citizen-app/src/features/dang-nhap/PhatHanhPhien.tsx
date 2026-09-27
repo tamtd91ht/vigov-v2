@@ -9,15 +9,14 @@
  *   (chính sách Mini App, điều 3.3.4).
  *
  *   Nên cửa ấy bị gỡ, chứ không giữ lại "cho chắc". Hai biến thể nói cùng một thứ là hai biến
- *   thể sẽ lệch nhau — đúng bài học của biến thể `quyen` đã ghi trong README. Hai cửa
- *   `bien-the/kham-pha` và `bien-the/chan-doan` thì GIỮ NGUYÊN: chúng vẫn có việc thật, vì bản
- *   nộp không được mang tên đơn vị hành chính nào.
+ *   thể sẽ lệch nhau — đúng bài học của biến thể `quyen` đã ghi trong README. (Từ 27/09/2026 hai
+ *   cửa còn lại cũng đã gỡ: bản dựng chỉ còn một — xem đầu `vite.config.ts`.)
  *
  * ⚠ CÁI KHÔNG ĐỔI: `phase1-collects-nothing.test.ts` vẫn cấm mọi lời gọi mạng ở MỌI TỆP, miễn
  * cho đúng một — `goi-may-chu.ts`. Tệp đang đọc nằm NGAY CẠNH nó và vẫn bị cấm; có một ca kiểm
  * cho lệnh cấm ăn một `fetch` đặt ở chính tệp này để chứng minh ngoại lệ hẹp đúng bằng một tệp.
  *
- * → ADR 0020 (một chạm, không OTP) · `hop-dong.ts` (khuôn của dây) · README §"Hai biến thể"
+ * → ADR 0020 (một chạm, không OTP) · `hop-dong.ts` (khuôn của dây) · README §"Một bản dựng"
  */
 import { useEffect, useState } from "react";
 

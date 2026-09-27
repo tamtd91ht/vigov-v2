@@ -132,7 +132,7 @@ export function tabDangSang(id: ScreenId): ScreenId {
 /**
  * Giữ lại cái tên cũ cho những chỗ chỉ quan tâm tới bốn màn giới thiệu công ty.
  *
- * `bundle-for-zalo.test.ts` dùng nó để khẳng định bản `goc` vẫn là một app có nội dung, chứ
+ * `bundle-for-zalo.test.ts` dùng nó để khẳng định bản đẩy lên Zalo vẫn là một app có nội dung, chứ
  * không phải một bản rỗng — và phép kiểm ấy không nên đỏ chỉ vì thứ tự tab đổi.
  *
  * ⚠ ĐÂY LÀ ĐÚNG `TABS`, KHÔNG PHẢI MỘT PHÉP LỌC THỨ HAI — đổi 22/09/2026. Trước đây nó loại trừ

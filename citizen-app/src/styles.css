@@ -189,8 +189,7 @@ body {
   background: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-green) 100%);
 }
 
-/* Tên chủ sở hữu bên trái, nút đổi xã bên phải. Nút KHÔNG co lại: tên xã dài thì tên xuống
-   dòng, chứ một nút hẹp hơn 44px là một nút bấm trượt. */
+/* Tên chủ sở hữu và tên màn. Không có nút đổi xã (ADR 0044 câu 4 · ADR 0047): một phiên, một xã. */
 .app-header__hang {
   display: flex;
   align-items: flex-start;
@@ -210,27 +209,6 @@ body {
   letter-spacing: 0.01em;
   line-height: 1.3;
   margin: 0;
-}
-
-/* Đổi xã là hành động tường minh (ADR 0005), nên nó là một nút thật, cao đủ 44px, có chữ —
-   không phải một biểu tượng bút chì mà người dùng phải đoán. */
-.app-header__doi-xa {
-  min-height: var(--tap-min);
-  min-width: var(--tap-min);
-  border: 1px solid var(--on-panel);
-  color: #ffffff;
-  font: inherit;
-  font-size: var(--text-small);
-  background: 0 0;
-  border-radius: 10px;
-  flex: none;
-  padding: 0 14px;
-  font-weight: 600;
-}
-
-.app-header__doi-xa:focus-visible {
-  outline: 3px solid #ffffff;
-  outline-offset: 2px;
 }
 
 .app-header__screen {
@@ -323,8 +301,9 @@ body {
   background-image: var(--nen-hero);
 }
 
-/* Chạm luôn vào thanh tiêu đề — nhưng CHỈ khi hero là thứ đầu tiên trong vùng cuộn. Bảng chẩn
-   đoán (`?debug`) chèn một khối lên trước nó; kéo hero lên 16px lúc ấy là kéo nó ĐÈ lên bảng. */
+/* Chạm luôn vào thanh tiêu đề — nhưng CHỈ khi hero là thứ đầu tiên trong vùng cuộn. Lối vào kênh
+   công dân (khi đã xác nhận xã) chèn một nút lên trước nó; kéo hero lên 16px lúc ấy là kéo nó ĐÈ
+   lên nút. */
 .app-main > .hero:first-child {
   margin-top: -16px;
 }
@@ -1054,82 +1033,6 @@ body {
   }
 }
 
-/* ---------- bảng chẩn đoán ----------
- *
- * KHÔNG phải giao diện sản phẩm. Nó chỉ hiện khi app được mở kèm tham số `debug`, và tồn tại để
- * đo một câu ADR 0018 còn treo: tham số deep link có tới app trong mọi đường mở không.
- *
- * Trông có chủ đích như một công cụ đo — viền đứt, nền khác hẳn — để không ai nhìn nhầm nó
- * thành một phần của app và tưởng người dân đang thấy thứ này.
- */
-.chan-doan {
-  margin: 0 0 16px;
-  padding: 12px 14px;
-  border: 2px dashed var(--hairline);
-  border-radius: 10px;
-  background: var(--surface);
-}
-
-.chan-doan__nhan {
-  margin: 0 0 8px;
-  font-size: var(--text-small);
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.chan-doan__trong,
-.chan-doan__do {
-  margin: 8px 0 0;
-  font-size: var(--text-small);
-  color: var(--ink-muted);
-}
-
-.chan-doan__bang {
-  margin: 0;
-}
-
-.chan-doan__dong {
-  display: flex;
-  gap: 10px;
-  padding: 4px 0;
-  border-top: 1px solid var(--hairline);
-}
-
-.chan-doan__dong dt {
-  min-width: 72px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.chan-doan__dong dd {
-  margin: 0;
-  /* Giá trị tham số có thể dài và không có khoảng trắng — để tràn ra thì bảng vỡ khung. */
-  word-break: break-all;
-  color: var(--ink);
-}
-
-.chan-doan__nguon {
-  margin-top: 10px;
-}
-
-.chan-doan__nhan-nguon {
-  margin: 0 0 4px;
-  font-size: var(--text-small);
-  font-weight: 700;
-  color: var(--ink-muted);
-}
-
-/* URL đầy đủ: dài, không có khoảng trắng, và là thứ cần ĐỌC ĐƯỢC BẰNG MẮT rồi gõ lại tay —
-   nên chữ to hơn mặc định của bảng chẩn đoán và ngắt dòng ở mọi ký tự. */
-.chan-doan__href {
-  font-family: ui-monospace, Cascadia Mono, Consolas, monospace;
-  font-size: var(--text-small);
-  color: var(--ink);
-  word-break: break-all;
-  margin: 0;
-  line-height: 1.5;
-}
-
 /* ---------- màn gợi ý xã (lớp khám phá, ADR 0005) ---------- */
 .goi-y {
   padding: 4px 0 8px;
@@ -1224,222 +1127,9 @@ body {
   font-size: 19px;
 }
 
-/* Đường thoát về phần giới thiệu công ty. Nhạt hơn vì nó không phải việc công dân tới để làm. */
-.goi-y__nut--nhat {
-  font-size: var(--text-small);
-  color: var(--ink-muted);
-  background: 0 0;
-  border-color: transparent;
-  font-weight: 500;
-}
-
 .goi-y__nut:focus-visible {
   outline: 3px solid var(--navy);
   outline-offset: 2px;
-}
-
-.chon-xa__dong:focus-visible {
-  outline: 3px solid var(--navy);
-  outline-offset: 2px;
-}
-
-/* ---------- màn chọn xã ---------- */
-.chon-xa__li-do {
-  margin: 0 0 16px;
-  padding: 12px 14px;
-  /* Viền trái + chữ, không chỉ màu: trạng thái không bao giờ báo bằng màu đơn thuần
-     (README §Non-negotiables #6). */
-  border-left: 4px solid var(--brand-green);
-  border-radius: 0 10px 10px 0;
-  background: var(--surface);
-  font-size: var(--text-small);
-  line-height: 1.55;
-  color: var(--ink);
-}
-
-.chon-xa__ds {
-  list-style: none;
-  margin: 0 0 12px;
-  padding: 0;
-}
-
-.chon-xa__dong {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: var(--tap-min);
-  margin: 0 0 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--hairline);
-  border-radius: 14px;
-  background: var(--surface);
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-}
-
-.chon-xa__chu {
-  flex: auto;
-  min-width: 0;
-}
-
-.chon-xa__ten {
-  display: block;
-  font-size: 19px;
-  line-height: 1.3;
-  font-weight: 700;
-  color: var(--navy);
-}
-
-.chon-xa__tinh {
-  display: block;
-  font-size: var(--text-small);
-  color: var(--ink-muted);
-}
-
-.chon-xa__tiep {
-  width: 22px;
-  height: 22px;
-  color: var(--navy);
-  flex: none;
-}
-
-/* Dòng nói đây là dữ liệu mẫu. Nhỏ nhưng ở cỡ chữ tối thiểu của app — một lời cảnh báo không
-   đọc được là một lời cảnh báo không được nói ra. */
-.demo-ghi-chu {
-  margin: 0 0 14px;
-  font-size: var(--text-small);
-  color: var(--ink-muted);
-}
-
-/* ---------- trang xã (mỗi xã một nội dung) ---------- */
-.trang-xa {
-  padding: 4px 0 8px;
-}
-
-/* Tên xã to và đứng đầu trang, ngoài header: header cuộn khỏi tầm mắt trên màn hình nhỏ, còn
-   câu trả lời cho "tôi đang ở xã nào" thì không được phép cuộn mất (bất di dịch #2). */
-.trang-xa__ten {
-  margin: 0;
-  font-size: 26px;
-  line-height: 1.25;
-  color: var(--navy);
-}
-
-.trang-xa__tinh {
-  margin: 2px 0 0;
-  font-size: var(--text-body);
-  color: var(--ink-muted);
-}
-
-.trang-xa__gioi-thieu {
-  margin: 10px 0 16px;
-  font-size: var(--text-body);
-  line-height: 1.55;
-  color: var(--ink);
-}
-
-/* Khối số trực: viền trái + nhãn bằng chữ, không phân biệt bằng riêng màu. */
-.trang-xa__truc {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 0 0 6px;
-  padding: 14px 16px;
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-left: 4px solid var(--brand-green);
-  border-radius: 14px;
-}
-
-.trang-xa__truc-chu {
-  display: block;
-  min-width: 0;
-}
-
-.trang-xa__nhan {
-  display: block;
-  font-size: var(--text-small);
-  color: var(--ink-muted);
-}
-
-/* Số điện thoại to hơn cả tiêu đề mục: đây là thứ người lớn tuổi đọc rồi bấm sang máy điện
-   thoại, thường là đọc một lần rồi nhớ từng cụm. */
-.trang-xa__so {
-  display: block;
-  font-size: 24px;
-  line-height: 1.25;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--navy);
-}
-
-.trang-xa__gio {
-  display: block;
-  margin-top: 4px;
-  font-size: var(--text-small);
-  line-height: 1.5;
-  color: var(--ink-muted);
-}
-
-.dich-vu {
-  list-style: none;
-  margin: 0 0 12px;
-  padding: 0;
-}
-
-.dich-vu__nut {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: var(--tap-min);
-  margin: 0 0 10px;
-  padding: 10px 14px;
-  border: 1px solid var(--hairline);
-  border-radius: 14px;
-  background: var(--surface);
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-}
-
-.dich-vu__nut:focus-visible {
-  outline: 3px solid var(--navy);
-  outline-offset: 2px;
-}
-
-.dich-vu__chu {
-  flex: auto;
-  min-width: 0;
-}
-
-.dich-vu__ten {
-  display: block;
-  font-size: 19px;
-  line-height: 1.3;
-  font-weight: 700;
-  color: var(--navy);
-}
-
-/* "Chưa mở" — trạng thái nói bằng CHỮ. Một chấm màu ở đây là một trạng thái mà người mù màu và
-   người dùng trình đọc màn hình không đọc được (README §Non-negotiables #6). */
-.dich-vu__trang-thai {
-  display: block;
-  font-size: var(--text-small);
-  color: var(--ink-muted);
-}
-
-.dich-vu__dang-lam {
-  margin: -4px 0 12px;
-  padding: 12px 14px;
-  border-left: 4px solid var(--brand-blue);
-  border-radius: 0 10px 10px 0;
-  background: var(--surface);
-  font-size: var(--text-small);
-  line-height: 1.55;
-  color: var(--ink);
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -2498,7 +2188,7 @@ body {
 }
 
 /* =============================================================================================
-   KÊNH CÔNG DÂN — "Gửi phản ánh" · "Tra cứu phiếu" (24/09/2026, nửa nhà nước, sau `bien-the/cong-dan`)
+   KÊNH CÔNG DÂN — "Gửi phản ánh" · "Tra cứu phiếu" (24/09/2026, nửa nhà nước)
 
    KHÔNG MỘT MÀU MỚI NÀO: chữ `--ink` / `--ink-muted` / `--navy` trên `--surface` / `--surface-alt`,
    nút chính trắng trên `--navy` — đúng những cặp `accessibility.test.ts` đã đo, và liệt kê lại dưới

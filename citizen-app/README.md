@@ -20,26 +20,25 @@ phases instead of two apps.
 
 | Phase | What ships | Why |
 |---|---|---|
-| **1 — now** | A **real, working product app of ViHAT Group**: the company introduction plus three features that use `getPhoneNumber` · `getLocation` · `scanQRCode`. The **discovery layer** — commune suggestion, commune picker, commune page — is built and ships only in the `day-du` build | This is the submission Zalo reviews, so the OA `Vihat` can verify the App ID **and** grant the three permissions. Zalo grants them only when the submission **visibly uses** them, and phase 2 needs all three on **this** App ID |
-| **2 — next** | The commune / citizen surface behind a real session | It lands on the **same App ID**, already verified |
+| **1 — now** | A **real, working app**, released on the shared ViHAT App ID: the company introduction, the six features, **and** the citizen channel (petition screens — closed until the ViGov citizen session bridge exists). Before a commune's official letter, the commune reaches it through a **test-version QR carrying the commune domain** | This is the submission Zalo reviews, so the OA `Vihat` can verify the App ID **and** grant the permissions. Zalo grants them only when the submission **visibly uses** them |
+| **2 — next** | The **same citizen-app**, deployed to the commune's own App ID (`npm run zmp:deploy -- --domain=<tên-miền-xã>`) | The domain only picks the target App ID; the bundle is identical (ADR 0047) |
 
-**No detail of a government body appears in the submitted build.** That is a requirement from the
-user, not a preference: this app is published under the name of a technology company that sells
-cloud contact-centre, CRM and AI solutions, and a product app that talks about "thủ tục" to
-"công dân" is an app nobody can tell what it sells. It is **measured**, not promised — see
-§"Hai biến thể bản dựng" and the forbidden-word sweep in `src/bundle-for-zalo.test.ts`.
-
-(`xã hội` inside ViHAT Group's published vision sentence is an ordinary word and **stays**. The
-sweep therefore lists whole administrative phrases, never the bare string `xã` — there is a test
-for that too, because "clean it up by banning `xã`" would edit a published legal-entity statement
-to fit a test.)
+**ONE build, no variants — decided by the product owner on 27/09/2026** (supersedes ADR 0047 D5):
+*"bỏ hoàn toàn demo đi, demo ở đây là ngôn ngữ nói hiểu về cách làm, không phải là khái niệm kỹ
+thuật, về kỹ thuật nó là app dùng thật"*. Both phases run the same real citizen-app, so the
+`goc` / `day-du` split, the sample commune catalogue, the diagnostics board and every "demo" word in
+the shipped app are gone. The earlier rule *"no detail of a government body appears in the submitted
+build"* only held while a submission without the citizen channel existed; it is **superseded**, not
+forgotten — see the comment at the top of the variant block in `src/bundle-for-zalo.test.ts`.
 
 **The discovery layer is a secondary view of the SAME app, never a second app.** A second App ID
 would need its own review, so "hiding the real app behind another App ID" buys nothing and costs
 a second approval.
 
-**Nothing of phase 2 gets deleted to make room for phase 1.** `src/lib/commune-resolution.ts`
-is the foundation phase 2 builds on and stays untouched.
+**No commune picker, no "Đổi xã", no GPS suggestion** (ADR 0044 answer 4 · ADR 0047). One session,
+one commune: the commune comes from the domain on the QR, the **server** turns that domain into a
+name (`GET /api/v1/communes?host=`), and the citizen confirms it. `src/lib/commune-resolution.ts`
+— an unwired skeleton of the old deeplink → profile → GPS → picker order — was deleted with them.
 
 ### Đổi pháp nhân đứng tên app — 21/09/2026
 
@@ -121,8 +120,8 @@ data. No individual's number belongs in this app.
 ## One app, every commune
 
 A Mini App is identified by its platform App ID, not a domain, so the "tell communes apart by
-domain" strategy does not apply here. The commune is resolved at runtime — see
-`src/lib/commune-resolution.ts`.
+domain" strategy does not apply to routing here. The commune **domain** travels on the QR only as a
+hint the server resolves (ADR 0047); the rule is written as code in `src/features/kham-pha/goi-y.ts`.
 
 ## Hai nửa nghiệp vụ trong MỘT bundle — ba ràng buộc, mỗi cái là một ca test
 
@@ -132,12 +131,12 @@ Dựng ngày 21/09/2026, **trước khi `src/cong-dan/` có tệp nghiệp vụ 
 | Nửa | Ở đâu |
 |---|---|
 | Thương mại (khách hàng doanh nghiệp) | `src/content/` · `src/features/company-intro/` · `src/features/tinh-nang/` · `src/features/dang-nhap/` |
-| **Nhà nước (công dân)** | **`src/cong-dan/`** — hai màn "Gửi phản ánh" · "Tra cứu phiếu" (24/09/2026), sau cửa `bien-the/cong-dan`: **chỉ ở bản `day-du`**, không có trong bản nộp. Hôm nay luôn nói "kênh chưa mở" và không gọi mạng — cầu phiên công dân ViGov chưa có (`src/cong-dan/api/phien-vigov.ts`) |
-| Lớp vỏ trung lập | `App.tsx` · `main.tsx` · `components/` · `lib/` · `features/kham-pha/` · `features/diagnostics/` |
+| **Nhà nước (công dân)** | **`src/cong-dan/`** — "Gửi phản ánh" · "Phản ánh của tôi" · "Tra cứu phiếu". **Có mặt trong bản dựng duy nhất** từ 27/09/2026. Hôm nay luôn nói "kênh chưa mở" và không gọi mạng — cầu phiên công dân ViGov chưa có (`src/cong-dan/api/phien-vigov.ts`) |
+| Lớp vỏ trung lập | `App.tsx` · `main.tsx` · `components/` · `lib/` · `features/kham-pha/` |
 
 1. **Ranh giới hai chiều.** Nửa này không nhập tệp của nửa kia — cả hai chiều. Và **không tệp nào
    ngoài `./cong-dan/` được nhập client API của ViGov** (`./cong-dan/api/`), kể cả lớp vỏ: `App.tsx`
-   không nằm sau `resolve.alias` nào, nên một `import` ở đó đi thẳng vào **bản nộp**. Một tệp không
+   chỉ mở màn qua cửa `./cong-dan` (`index.ts`). Một tệp không
    thuộc khu nào cũng đỏ — thư mục mới **buộc phải khai**, vì một thư mục ngoài mọi tiền tố là một
    thư mục ranh giới không cấm được gì.
 2. **Không lưu trữ định danh, ở cả hai nửa.** Một bundle là **một origin**: `localStorage` ·
@@ -158,19 +157,21 @@ thất bại**, không bằng suy luận; xem khối chú thích của ca ấy.
 
 | # | Rule |
 |---|---|
-| 1 | GPS **suggests**, never **decides** |
-| 2 | Once selected, the commune name appears on **every** screen |
-| 3 | Switching commune is an explicit action, never automatic |
+| 1 | **No GPS suggestion** — the commune comes from the QR domain, resolved by the server (ADR 0047) |
+| 2 | Once confirmed, the commune name appears on **every** screen |
+| 3 | **No switching commune** inside a session — one session, one commune (ADR 0044 answer 4) |
 | 4 | Identity comes from the session; the backend never trusts a client-supplied identity |
 | 5 | The commune is confirmed again at the final step before submitting |
 | 6 | Body text ≥ 16px · touch targets ≥ 44×44px · contrast ≥ 4.5:1 · status never by colour alone |
 | 7 | Error messages say what to do next, never an error code |
 | 8 | Nothing personal in logs, URLs, or file names |
 
-Rules 6, 7 and 8 bind phase 1. **Rules 1, 2 and 3 are live in the `day-du` build** (they have
-nothing to bind in `goc`, which knows no commune), in `src/features/kham-pha/`. Rules 4 and 5 wait
-for a server — the confirmed commune is client-side UI state, **not a session**; read the block at
-the top of `src/features/kham-pha/GoiYXaScreen.tsx` before building anything on top of it.
+Rules 6, 7 and 8 bind today. **Rules 1, 2 and 3 are coded** in `src/features/kham-pha/` and
+`App.tsx`, and pinned by `kham-pha.test.tsx`. Until the server lookup is wired (next card), **no
+commune name is ever shown**: with no server source the suggestion is empty and the app opens the
+introduction — fail closed, never a name built from the QR parameter. Rules 4 and 5 wait for the
+ViGov citizen session; read the block at the top of `src/features/kham-pha/GoiYXaScreen.tsx` before
+building anything on top of it.
 
 ## Error message shape
 
@@ -206,37 +207,31 @@ trần: một chú thích tách khỏi giá trị được, một trường thì
 real legal entity: an unsourced founding year, customer name, price, efficiency figure or award is
 a false statement published under that name. Facts that are missing are left out, never filled in.
 
-## Hai biến thể bản dựng
+## Một bản dựng
 
-Người chạy lệnh chọn **đẩy bản nào**. Biến thể quyết định ở **tầng dựng**, qua biến môi trường
-`VIGOV_BIEN_THE` (`vite.config.ts`).
+**Không còn biến thể nào (27/09/2026).** Trước ngày này bản dựng tách hai (`goc` = bản nộp,
+`day-du` = thêm lớp khám phá, danh mục xã mẫu, trang xã, bảng chẩn đoán, kênh công dân) bằng
+`VIGOV_BIEN_THE` và ba cửa `resolve.alias` `bien-the/…`. Chủ sản phẩm đã bỏ khái niệm ấy: app chung
+giai đoạn 1 và app riêng của xã chạy **cùng một bundle**. Thứ bị gỡ theo:
 
-| Biến thể | Nội dung | Dùng để | `dist/assets/app.js` |
-|---|---|---|---|
-| **`goc`** | Ứng dụng sản phẩm đầy đủ: bốn màn giới thiệu + tab Danh thiếp (ba tính năng) + hai khối trên màn Liên hệ (đăng nhập · tìm văn phòng) + trang chi tiết giải pháp + màn Quản lý quyền + bốn khối màn chủ (menu nhanh · giải pháp nổi bật · Tin ViHAT · quyền tóm tắt) + nút Chat nổi | **BẢN NỘP** | **602.274 B** thô · 164.993 B gzip |
-| **`day-du`** (mặc định) | `goc` + lớp khám phá + danh mục xã mẫu + trang xã + bảng chẩn đoán | Thử nghiệm nội bộ, demo | **613.821 B** thô · 167.989 B gzip |
+| Đã gỡ | Thay bằng |
+|---|---|
+| `VIGOV_BIEN_THE`, `resolve.alias`, `index.rong.ts`, `tsconfig` `paths` `bien-the/…` | Nhập thẳng `./features/kham-pha` và `./cong-dan` từ `App.tsx` |
+| Danh mục xã mẫu, bộ chọn xã, trang xã mẫu, nút "Đổi xã" | Chỉ còn màn xác nhận xã, chờ nguồn tên xã từ máy chủ |
+| Bảng chẩn đoán (`?debug`) | Không có gì — nó là công cụ đo, không phải tính năng |
+| `--bien-the`, `build:goc`, `zmp:deploy:goc` / `:xa`, `zmp:phat-hanh:goc` / `:xa` | Một cặp `zmp:deploy` / `zmp:phat-hanh`, cả hai nhận `--domain=` |
 
-Hai con số ấy **đo ngày 21/09/2026 (tối)**, bằng `node scripts/dung.mjs goc` và `… day-du`, đọc từ
-chính tệp phát ra (gzip mức 9). So với lần đo cùng ngày buổi chiều (591.294 / 602.844): **+10.980 B**
-ở bản nộp (+1,9%; gzip +2.423 B, +1,5%), **+10.977 B** ở bản đầy đủ. Toàn bộ phần tăng nằm ở phần
-CHUNG và **phần lớn là CHỮ**: hai bài tin chụp sẵn, sáu mục menu, câu slogan, câu khai đích ra ngoài
-trong chính sách. Không một thư viện nào được thêm; CSS mới là 4 khối thuần.
+Một `.env.local` cũ còn dòng `VIGOV_BIEN_THE` thì bước dựng **DỪNG** kèm lời nhắn "xoá dòng ấy";
+một cờ `--bien-the` gõ theo thói quen cũng **DỪNG**. Cả hai nói ra vì sao, thay vì lặng lẽ bỏ qua.
 
-Đoạn dưới là phép đo của lần trước, giữ lại để thấy cái giá của từng lượt:
-từ chính tệp phát ra. So với lần đo cùng ngày buổi sáng (576.805 / 588.346): **+14.489 B** ở bản
-nộp (+2,5%; gzip +3.136 B, +2,0%), **+14.498 B** ở bản đầy đủ. Trong đó **lớp nền/chiều sâu chỉ
-chiếm 1.492 B thô / 207 B gzip** — toàn bộ là CSS thuần, không một thư viện hoạt hoạ hay bộ icon
-nào được thêm; phần còn lại — hai bản tăng gần bằng nhau, vì mọi thứ thêm vào đều nằm ở phần
-CHUNG: ba chuỗi thương hiệu, dải chín mốc lịch sử, bảng khai mười hai lời gọi, màn Quản lý quyền và
-trang chi tiết giải pháp. Phần lớn số ấy là CHỮ, và đó là cái giá rẻ nhất trong toàn bộ bảng này.
+⚠ Kích thước bundle đo 21/09/2026 (602.274 B `goc` · 613.821 B `day-du`) **không còn đúng** cho bản
+dựng duy nhất và **chưa đo lại**.
 
-**KHỐI ĐĂNG NHẬP KHÔNG PHẢI MỘT BIẾN THỂ, VÀ NÓ TỪNG LÀ.** Bản đầu đặt lời gọi máy chủ sau một
-cửa `bien-the/dang-nhap` để bản nộp không gọi mạng. Tiền đề ấy đảo chiều trong cùng ngày: **bản
-nộp gọi máy chủ thật**, vì một nút đăng nhập bấm là được thuyết phục vòng duyệt hơn hẳn một nút
-nói "bản này chưa nối máy chủ" (điều 3.3.4). Cửa ấy bị **gỡ hẳn** — giữ một cơ chế tách đôi khi
-hai nửa nói y hệt nhau là giữ lại đúng cái bẫy biến thể `quyen` đã để lại một lần.
+**KHỐI ĐĂNG NHẬP TỪNG LÀ MỘT BIẾN THỂ.** Bản đầu đặt lời gọi máy chủ sau một cửa
+`bien-the/dang-nhap` để bản nộp không gọi mạng; tiền đề ấy đảo chiều trong cùng ngày 20/09 và cửa
+bị gỡ. Bài học giữ lại: giữ một cơ chế tách đôi khi hai nửa nói y hệt nhau là giữ một cái bẫy.
 
-**`VIGOV_API_HOST` — biến lúc dựng thứ hai, và CẢ HAI bản đều cần.** Địa chỉ máy chủ của khối
+**`VIGOV_API_HOST` — biến lúc dựng DUY NHẤT, và bản đẩy lên cần nó.** Địa chỉ máy chủ của khối
 đăng nhập, đọc trong `vite.config.ts` (`define`), chỉ `features/dang-nhap/` đọc tới. Không khai
 thì **fail closed**: không một lời gọi nào được phát đi, và màn hình nói ra rằng bản dựng chưa
 được khai địa chỉ. Không có địa chỉ mặc định — đoán một địa chỉ là gửi hai mã đăng nhập của một
@@ -244,7 +239,7 @@ người thật tới một máy chủ không ai chọn.
 
 ### `.env.local` — cấu hình cho máy đẩy bản
 
-Bản lên Zalo được đẩy từ **máy local**, nên hai biến trên nằm trong một tệp, không phải gõ vào
+Bản lên Zalo được đẩy từ **máy local**, nên biến trên nằm trong một tệp, không phải gõ vào
 shell mỗi lần:
 
 ```bash
@@ -276,8 +271,8 @@ chủ sẽ đặt secret key vào đây theo phản xạ. Nên:
 
 | Cơ chế | Chặn được gì |
 |---|---|
-| **Danh sách trắng hai tên** (`VIGOV_API_HOST`, `VIGOV_BIEN_THE`) trong `scripts/cau-hinh.mjs` | Một tên lạ trong `.env.local` làm **bước dựng DỪNG** kèm câu giải thích và chỉ ra chỗ đúng — đã thử: `ZALO_MINIAPP_SECRET_KEY` cho `exit=1` |
-| **`docCauHinh()` trả về ĐÚNG HAI KHOÁ**, không bao giờ trả cả môi trường | `loadEnv(…, "")` gom toàn bộ `process.env` (đo được **87 khoá**). Trả nguyên đống ấy ra là đặt sẵn đường cho một lượt sửa `define: { ...docCauHinh() }` nung `ZMP_TOKEN` vào bundle |
+| **Danh sách trắng một tên** (`VIGOV_API_HOST`) trong `scripts/cau-hinh.mjs` | Một tên lạ trong `.env.local` làm **bước dựng DỪNG** kèm câu giải thích và chỉ ra chỗ đúng — đã thử: `ZALO_MINIAPP_SECRET_KEY` cho `exit=1` |
+| **`docCauHinh()` trả về ĐÚNG CÁC KHOÁ CỦA DANH SÁCH TRẮNG**, không bao giờ trả cả môi trường | `loadEnv(…, "")` gom toàn bộ `process.env` (đo được **87 khoá**). Trả nguyên đống ấy ra là đặt sẵn đường cho một lượt sửa `define: { ...docCauHinh() }` nung `ZMP_TOKEN` vào bundle |
 
 **`.env` là TỆP KHÁC, và nó ở đúng chỗ của nó.** `citizen-app/.env` thuộc về `zmp-cli`
 (`APP_ID`, `ZMP_TOKEN` — token đăng nhập Zalo, một bí mật thật). Công cụ dòng lệnh đọc nó trên
@@ -286,12 +281,12 @@ theo luật của bước dựng là làm hỏng một thiết lập đang chạ
 
 ⚠ **Quên biến ấy = nộp một nút đăng nhập không đăng nhập nổi.** Nên `scripts/deploy.mjs` **chặn
 đường đẩy** khi nó rỗng, và in địa chỉ ra trước khi làm gì. Chặn ở đó chứ không ném lỗi lúc
-dựng, vì `npm test` dựng cả hai biến thể trong mọi lần chạy và phải chạy được trên máy chưa có
+dựng, vì `npm test` dựng thật bản đẩy lên trong mọi lần chạy và phải chạy được trên máy chưa có
 địa chỉ nào.
 
 ⚠ **Không một bí mật nào đi qua biến ấy.** `define` chèn giá trị thẳng vào bundle — tức vào tệp
 tải về máy người dùng (luật 8, bất biến 4). Khoá bí mật của Mini App chỉ nằm ở backend (ADR
-0020, bất biến 2). Gần trọn 536 kB của bản `goc` là **`zmp-sdk`** (≈264 kB thô / ≈66 kB gzip): app không
+0020, bất biến 2). Gần trọn 536 kB của bản `goc` cũ (đo 21/09) là **`zmp-sdk`** (≈264 kB thô / ≈66 kB gzip): app không
 có SDK từng nặng 254,39 kB. Đó là cái giá của việc chín quyền nay là sáu tính năng thật, và nó được
 trả một lần cho cả ứng dụng.
 
@@ -302,23 +297,12 @@ hiệu. Phần còn lại (≈19,95 kB thô) là mã của ba tính năng, câu 
 những nhánh của `zmp-sdk` mà sáu lời gọi mới kéo vào — thân hàm `openMediaPicker`,
 `downloadFile`, `keepScreen` trước đây bị tree-shaking loại đi vì không ai gọi tới.
 
-**Biến thể `quyen` không còn.** Nó từng tồn tại vì ba màn quyền là một lớp trình diễn thêm vào một
-app giới thiệu tĩnh — gỡ được, và "bản nộp tối thiểu" thì gỡ nó đi. Nay ba quyền ấy thuộc về chính
-ứng dụng sản phẩm, nên `quyen` trùng hoàn toàn với `goc`, và hai biến thể nói cùng một thứ là hai
-biến thể sẽ lệch nhau. `bien-the.test.ts` có một ca khẳng định cái tên ấy đã biến mất khỏi **cả
-hai** tệp giữ danh sách, và `bundle-for-zalo.test.ts` có một ca khẳng định `VIGOV_BIEN_THE=quyen`
-nay **ném lỗi** thay vì dựng ra một bản không ai còn định nghĩa.
+**Biến thể `quyen` không còn** (từ 20/09), rồi `goc` / `day-du` cũng không (27/09) — xem
+§"Một bản dựng".
 
-**Vì sao tách bằng BUILD chứ không bằng một cờ lúc chạy.** Một cờ lúc chạy để tám tên đơn vị
-hành chính **đặt ra**, tám số điện thoại mẫu và bảng chẩn đoán nằm nguyên trong bundle gửi
-duyệt — chỉ là không vẽ ra. Tách ở tầng dựng thì bản `goc` **thật sự không chứa** chúng, và
-điều đó **kiểm được bằng `grep` trên `dist/assets/app.js`**, không phải bằng lời hứa.
-
-### Grep thật trên bản `goc`, đo lại 21/09/2026 (tối)
+### Grep thật trên bản `goc` cũ, đo 21/09/2026 (tối) — giữ lại vì các con số của `zmp-sdk` vẫn đúng
 
 ```
-cơ quan: 0 · công dân: 0 · chính quyền: 0 · hành chính: 0 · thủ tục: 0 · Chọn xã: 0 · Đổi xã: 0
-xã hội: 1 (câu tầm nhìn đã công bố — phải còn)
 zalo.me: 25 — đường dẫn cửa sổ trò chuyện với Official Account của TA đếm ĐÚNG 1 lần
               (`https://zalo.me/<OA id>`); 24 lần còn lại nằm trong chính `zmp-sdk`
 vihatgroup.com: 4 = 1 địa chỉ trang chủ + 2 đường dẫn bài viết + 1 lời khai nguồn câu slogan
@@ -333,7 +317,7 @@ vihatgroup.com: 1 · vihatsoftware.com: 0 · #144a80: 1 · #1e3150: 0
 
 serverUploadUrl: 2 — CẢ HAI là của chính `zmp-sdk` (lược đồ zod của `openMediaPicker`, và thân
 hàm đọc `e.serverUploadUrl`). Mã của ta đóng góp 0. Phép đo đúng là "không tệp nào GÁN một
-chuỗi cho tham số ấy": 0 lần, ở cả hai biến thể. Xem `bundle-for-zalo.test.ts`.
+chuỗi cho tham số ấy": 0 lần. Xem `bundle-for-zalo.test.ts`.
 
 localStorage: 1 · sessionStorage: 0 · indexedDB: 0
 ⚠ MỘT LẦN `localStorage` ẤY LÀ CỦA `zmp-sdk`, KHÔNG PHẢI CỦA TA — đã mở ra xem: nó nằm trong lớp
@@ -342,33 +326,19 @@ trữ nào, và hai dây bẫy độc lập giữ điều đó ở TẦNG MÃ NG
 `ranh-gioi-hai-nua.test.ts` §3b). Ghi lại con số này vì một lần đếm `1` mà không giải thích sẽ
 làm phiên sau tưởng dây bẫy đã chết.
 
-fetch(: 15 = 14 của `zmp-sdk` + đúng 1 của ta
+fetch(: 15 = 14 của `zmp-sdk` + đúng 1 của ta   (bản dựng duy nhất nay mang thêm 2: tuyến yêu
+        cầu và client ViGov của kênh công dân — mỗi tuyến ĐÚNG MỘT lần, `bundle-for-zalo.test.ts`)
 ```
-
-Hai nhãn `Chọn xã` · `Đổi xã` từng **nằm lại** trong bản `goc`: `App.tsx` là vỏ chung, không nằm
-sau alias, nên chuỗi viết thẳng trong nó đi vào bundle gửi duyệt kể cả khi nhánh vẽ chúng không
-bao giờ chạy. Nay chúng đọc từ `NHAN_KHAM_PHA` sau cửa `bien-the/kham-pha`, và bản rỗng trả về
-chuỗi rỗng. Đó là lý do bảng trên đọc `0`.
-
-Cơ chế là `resolve.alias`, không phải tree-shaking — tree-shaking **không** loại được một
-`import` tĩnh đã có mặt trong mã. Hai cái tên `bien-the/kham-pha` và `bien-the/chan-doan` là
-**hai cửa duy nhất** vào hai phần gỡ được; bản `goc` thì cửa trỏ sang `index.rong.ts`.
 
 | Tệp | Việc nó làm |
 |---|---|
-| `src/features/kham-pha/index.ts` · `index.rong.ts` | Bề mặt lớp khám phá, và bản rỗng của nó — kể cả hai nhãn của vỏ |
-| `src/features/diagnostics/index.ts` · `index.rong.ts` | Như trên, cho bảng chẩn đoán |
-| `src/features/dang-nhap/PhatHanhPhien.tsx` | **Bước máy chủ** của khối đăng nhập — có mặt ở CẢ HAI bản dựng, không còn cửa biến thể nào |
+| `src/features/dang-nhap/PhatHanhPhien.tsx` | **Bước máy chủ** của khối đăng nhập |
 | `src/features/dang-nhap/hop-dong.ts` | **Hợp đồng với máy chủ, một tệp** — đường dẫn, tên hai trường gửi đi, hình dạng phản hồi, và `VIGOV_API_HOST`. Máy chủ là kho riêng `vihat-miniapp`, **đang dựng song song**: đổi hợp đồng là sửa tệp này và `dang-nhap.test.tsx` nằm cạnh, không sửa gì khác |
 | `src/features/dang-nhap/goi-may-chu.ts` | **Tệp DUY NHẤT trong kho được `fetch`.** Năm nhánh kết quả, không ném ra ngoài, không log |
-| `scripts/cau-hinh.mjs` · `cau-hinh.test.mjs` | Đọc `.env.local` cho CẢ bước dựng lẫn bước đẩy, và **danh sách trắng** chặn bí mật đặt nhầm chỗ. 10 ca: hai chiều của danh sách trắng · shell thắng tệp · trả đúng hai khoá · và ba ca ghim rằng cái rào **thật sự được nối vào** `vite.config.ts`, `deploy.mjs`, `.env.local.example` |
+| `scripts/cau-hinh.mjs` · `cau-hinh.test.mjs` | Đọc `.env.local` cho CẢ bước dựng lẫn bước đẩy, và **danh sách trắng** chặn bí mật đặt nhầm chỗ — kể cả `VIGOV_BIEN_THE` đã bỏ. Ca kiểm: hai chiều của danh sách trắng · tên đã bỏ bị chặn kèm lời nhắn · shell thắng tệp · trả đúng các khoá đã khai · và ba ca ghim rằng cái rào **thật sự được nối vào** `vite.config.ts`, `deploy.mjs`, `.env.local.example` |
 | `src/features/dang-nhap/dang-nhap.test.tsx` | 11 ca: năm nhánh của bước máy chủ · 401 và 502 KHÔNG được gộp · gọi đúng một lần bằng POST · thân yêu cầu mang đúng hai mã · bearer không ra màn hình |
 | `src/content/chinh-sach.test.ts` | 22 ca về chính văn bản pháp lý: câu "không gửi đi đâu" đã biến mất · mục Đăng nhập nói đủ **gửi gì · ai nhận · lưu gì · vì sao** · thời gian lưu nói đủ **không có hạn tự động · cửa yêu cầu xoá · phạm vi xoá** · nhật ký khai đủ **IP · thời điểm · kết quả · mã lý do · chỉ-ghi-thêm** · **lượt THẤT BẠI cũng bị ghi** · danh sách **KHÔNG lưu** · **90 ngày là TRẦN (dọn theo lô tuần, 83–90), áp cả dòng của lượt thất bại**, kèm ca canh chiều ngược nếu ai viết lại thành "đúng 90 ngày" · **dòng bằng chứng của một lần xoá** khai đủ bốn vế · và MỘT số phiên bản, vì chưa bản nào tới tay ai |
-| `src/features/kham-pha/bien-the.test.ts` | Hai bản rỗng khai đúng bề mặt · **không tệp nào nhập thẳng vòng qua alias** · danh sách biến thể ở `vite.config.ts` và `scripts/dung.mjs` **không lệch nhau** |
-| `src/bundle-for-zalo.test.ts` | Dựng thật **cả hai** biến thể rồi đọc bundle — bằng chứng cuối cùng, kèm lượt quét từ cấm |
-
-`tsc` luôn nhìn bản **đầy đủ** (`tsconfig.json` → `paths`); bản rỗng khai kiểu bằng `typeof`
-của bản thật, nên thiếu một export là `tsc --noEmit` đỏ chứ không phải bản `goc` vỡ lúc dựng.
+| `src/bundle-for-zalo.test.ts` | Dựng thật **bản duy nhất** rồi đọc bundle — bằng chứng cuối cùng: có đủ chữ của mọi màn · không bộ chọn xã / đổi xã / danh mục mẫu / chữ "demo" / bảng chẩn đoán · không App ID, token hay tên miền nào của tệp ánh xạ (dựng khi `APP_ID` và `ZMP_TOKEN` CÓ trong môi trường) · đúng MỘT đường gọi cho mỗi tuyến |
 
 ## Sáu tính năng thật — và chín quyền chúng cần
 
@@ -572,7 +542,7 @@ bản chưa từng tới tay một người dùng nào (bảng bằng chứng ng
 
 ### Văn bản nói gì — bốn điều nặng nhất
 
-**Một văn bản, đúng cho cả hai biến thể.** Không còn câu *"không lưu trữ và không gửi đi bất kỳ
+**Một văn bản, cho bản dựng duy nhất.** Không còn câu *"không lưu trữ và không gửi đi bất kỳ
 dữ liệu nào của bạn"*: nó thành sai ngày bản nộp bắt đầu gọi máy chủ, và bị gỡ trong đúng lượt
 làm nó sai. Câu mở đầu nay nói ngay ba điều: không lưu gì xuống máy · gửi đi **đúng một việc** ·
 và chỉ khi chính người dùng bấm đăng nhập.
@@ -668,28 +638,32 @@ lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý
 ### Chuỗi lệnh
 
 ```bash
-npm run zmp:login             # một lần, cần App ID
-npm run zmp:deploy            # bản ĐẦY ĐỦ, bản thử nghiệm (-t)
-npm run zmp:deploy:goc        # bản GỐC,    bản thử nghiệm (-t)
-npm run zmp:phat-hanh:goc     # bản GỐC,    BẢN PHÁT HÀNH (bỏ -t) — đây là bản đem duyệt
+npm run zmp:login                                   # một lần, cần App ID
+npm run zmp:deploy                                  # APP CHUNG, bản thử nghiệm (-t)
+npm run zmp:phat-hanh                               # APP CHUNG, BẢN PHÁT HÀNH (bỏ -t)
+npm run zmp:deploy -- --domain=<tên-miền-xã>        # APP RIÊNG của xã ấy, bản thử nghiệm
+npm run zmp:phat-hanh -- --domain=<tên-miền-xã>     # APP RIÊNG của xã ấy, BẢN PHÁT HÀNH
 ```
 
-Cả bốn đi qua `scripts/deploy.mjs`: dựng đúng biến thể → `sync-config` → `deploy`. Dựng nằm
-**trong** script vì biến thể quyết định lúc dựng — dựng ngoài rồi đẩy trong là hai lệnh có thể
-lệch nhau, và lần lệch ấy nộp bản `day-du` dưới nhãn `goc`.
+Cả bốn đi qua `scripts/deploy.mjs`: dựng → `sync-config` → `deploy`. **Bundle là một**; `--domain`
+chỉ chọn App ID ĐÍCH (tra trong `scripts/ung-dung-theo-ten-mien.mjs`). Tên miền không có trong bảng
+thì **DỪNG**, không rơi về app chung. Đường app riêng đòi `ZMP_TOKEN` trong **môi trường** và kiểm
+claim `appId` của nó khớp App ID đích trước khi chạy gì cả (`scripts/dich-den.mjs`, `kiemToken`) —
+vì đích thật do token quyết, không do `APP_ID` (đã đo, zmp-cli 4.0.3). Dựng nằm **trong** script vì
+địa chỉ máy chủ được nung vào lúc dựng — dựng ngoài rồi đẩy trong là hai lệnh có thể lệch nhau.
 
 ⚠ **Cả bốn đều cần `VIGOV_API_HOST`**, vì khối đăng nhập đọc địa chỉ máy chủ lúc dựng. Cách
 thường dùng là điền nó một lần vào `.env.local` (§"`.env.local` — cấu hình cho máy đẩy bản");
 đè cho đúng một lần chạy thì đặt biến shell, nó thắng tệp:
 
 ```bash
-npm run zmp:phat-hanh:goc                              # đọc .env.local
-VIGOV_API_HOST=https://<host> npm run zmp:phat-hanh:goc # đè tệp, cho một lần chạy
+npm run zmp:phat-hanh                               # đọc .env.local
+VIGOV_API_HOST=https://<host> npm run zmp:phat-hanh # đè tệp, cho một lần chạy
 ```
 
 Thiếu cả hai thì script **dừng với mã thoát 2 trước khi dựng gì cả** — đẩy một bản chưa khai địa
 chỉ là nộp một nút đăng nhập không đăng nhập nổi, kèm một câu chữ dành cho người dựng bản.
-Script cũng **in địa chỉ ấy ra** cùng biến thể và nhãn phiên bản trước khi làm gì: nó được nung
+Script cũng **in địa chỉ ấy ra** cùng đích, App ID, kết quả kiểm token và nhãn phiên bản trước khi làm gì: nó được nung
 thẳng vào bundle, nên người chạy lệnh phải đọc được nó. `--thu` thì không cần biến — nó chỉ in
 kế hoạch rồi dừng.
 
@@ -703,7 +677,7 @@ thì `app-config.json` trỏ vào bản dựng của lần trước.
 **Không hỏi câu nào.** CLI vốn dừng ba lần — *"This is not a ZMP Project?"*, *"where is your
 dist folder"*, *"description"* — và cả ba đã tắt bằng `-e`, `-o dist`, `-m`, cộng `-p`.
 
-Mô tả phiên bản **sinh theo từng lần đẩy**, không cố định: `<biến thể> · <sha ngắn> · <ngày giờ>`, cộng
+Mô tả phiên bản **sinh theo từng lần đẩy**, không cố định: `<đích> · <sha ngắn> · <ngày giờ>`, cộng
 `dirty` khi cây làm việc còn thay đổi chưa commit. Một nhãn cố định thì mọi bản trong console
 Zalo trông như nhau và lúc cần biết *"bản đang chạy là bản nào"* thì không còn gì để tra; còn
 `dirty` nói ra rằng bản ấy **không ứng với commit nào**. Tính trong `scripts/deploy.mjs` chứ không
@@ -711,7 +685,7 @@ trong `package.json`, vì trên Windows `npm run` chạy qua `cmd`, nơi `$(git 
 một chuỗi ký tự.
 
 `-t` là **bản thử nghiệm**. Bỏ `-t` là đẩy **bản phát hành**, và đường ấy có trong script
-(`zmp:phat-hanh:goc`). Script **in ra biến thể, loại bản và nhãn phiên bản trước khi làm gì**, rồi
+(`zmp:phat-hanh`). Script **in ra đích, loại bản và nhãn phiên bản trước khi làm gì**, rồi
 đường phát hành **dừng 5 giây** để người chạy kịp `Ctrl-C`. Đừng bỏ phần in ra và phần đếm ngược —
 đó là cái phanh còn lại.
 
@@ -733,68 +707,51 @@ Phiên bản ghim cứng để lần chạy sau ra đúng kết quả lần ch�
 
 | # | Cái gì | Ghi chú |
 |---|---|---|
-| 0 | **Xoá danh mục xã mẫu** — `src/features/kham-pha/demo-danh-muc-xa.ts` — trước khi kênh công dân phục vụ người thật | Tám tên đơn vị hành chính **đặt ra**, kèm nội dung riêng của từng xã. Số trực dùng **dải giả đã thoả thuận `090000000x`** (luật 3, bất biến 5) — `kham-pha.test.tsx` ghim dải ấy, `phase1-collects-nothing.test.ts` quét toàn cây mã và **chỉ** miễn đúng dải ấy. Nguồn thật là `ListTenants` của service `platform` — đã khai trong proto, **chưa có cài đặt** |
+| 0 | **Nối màn xác nhận xã vào nguồn máy chủ** — tên miền trên QR → `GET /api/v1/communes?host=` | Danh mục xã mẫu **đã xoá 27/09/2026**. Tới khi nối xong, không tên xã nào hiện ra và app mở phần giới thiệu (`kham-pha.test.tsx` dựng chính `App` để ghim điều đó). Card TASK-04b |
 | 1 | Ảnh chụp màn hình và mô tả trên store | Bắt buộc để duyệt. Icon thì đã có — `tools/logo.py` dựng từ `brand/lg_vhs_full.svg`. ⚠ Bảy ảnh trong `tmp/xin-quyen-zalo/anh/` chụp **18/09**, tức trước cả lần dựng lại giao diện 21/09 chiều **và** trước bốn khối mới của màn chủ + nút Chat nổi (21/09 tối) — phải chụp lại **toàn bộ**, không chỉ ảnh màn đăng nhập |
 | 2 | Các khoá còn lại trong `app-config.json` | `app.*` viết từ nguồn thứ cấp và **chưa đối chiếu** với Developer Console. Ba khoá `list*` thì đã do `sync-config` sinh, không phải đoán |
 
 ## Lớp khám phá — cái gì đang chạy, và cái gì còn thiếu
 
-Lớp KHÁM PHÁ của ADR 0005 **đã dựng xong và nằm trong biến thể `day-du`** — không nằm trong bản
-`goc` gửi duyệt. Ba lớp của ADR 0005 vẫn tách rời, và đây là bảng phải đọc trước khi sửa bất cứ
-thứ gì trong `src/features/kham-pha/`:
+Ba lớp của ADR 0005 vẫn tách rời, và đây là bảng phải đọc trước khi sửa bất cứ thứ gì trong
+`src/features/kham-pha/`:
 
 | Lớp | Trả lời | Nguồn | Tin được? | Trạng thái |
 |---|---|---|---|---|
-| **Khám phá** | Công dân MUỐN làm việc với xã nào | `t` + `src` trên đường liên kết · danh mục | **Không — chỉ là gợi ý** | **Đang chạy** |
-| **Phiên** | Phiên này ĐANG thao tác ở xã nào | Máy chủ ghi sau khi công dân xác nhận | Có | Chưa có máy chủ |
-| **Uỷ quyền** | Công dân này được đọc/ghi gì ở đó | Quan hệ công dân↔xã + luật 4 | Có | Chưa có máy chủ |
+| **Khám phá** | Công dân MUỐN làm việc với xã nào | tên miền + `src` trên QR, **máy chủ** tra ra tên | **Không — chỉ là gợi ý** | Vỏ màn xác nhận có; **nguồn máy chủ chưa nối** |
+| **Phiên** | Phiên này ĐANG thao tác ở xã nào | Máy chủ ghi sau khi công dân xác nhận | Có | Chưa có cầu phiên |
+| **Uỷ quyền** | Công dân này được đọc/ghi gì ở đó | Quan hệ công dân↔xã + luật 4 | Có | Chưa có cầu phiên |
 
 | Tệp | Việc nó làm |
 |---|---|
-| `src/features/kham-pha/goi-y.ts` | Mức tin theo nguồn, hàm thuần, có test |
-| `src/features/kham-pha/GoiYXaScreen.tsx` | Màn xác nhận: tên xã to, một chạm đồng ý |
-| `src/features/kham-pha/ChonXaScreen.tsx` | Danh mục xã, mỗi dòng một nút ≥44px, **không ô nhập** |
-| `src/features/kham-pha/TrangXaScreen.tsx` | Trang của xã đã chọn: giới thiệu · số trực · giờ làm việc · dịch vụ |
-| `src/features/kham-pha/demo-danh-muc-xa.ts` | Danh mục **tạm**, và nội dung riêng của từng xã — §Còn thiếu #0 |
-| `src/features/kham-pha/kham-pha.test.tsx` | 50 ca: mức tin, fail-closed, nội dung riêng từng xã, tên xã trên mọi màn hình |
-| `src/lib/launch-params.ts` · `src/features/diagnostics/` | Đọc `location.search`, và bảng đo chỉ hiện khi có `debug` |
-
-**Trang xã — mỗi xã một nội dung riêng.** Xác nhận xã xong thì **tab đầu trở thành trang của xã
-ấy**. Không thêm tab và không che thanh tab — phần giới thiệu và ba tính năng, thứ Zalo đã duyệt,
-luôn còn đường tới.
+| `src/features/kham-pha/goi-y.ts` | Mức tin theo nguồn, hàm thuần, có test. Không có xã từ máy chủ ⇒ không gợi ý |
+| `src/features/kham-pha/GoiYXaScreen.tsx` | Màn xác nhận: tên xã to · "Đúng, tiếp tục" · "Không phải xã này" (về phần giới thiệu). **Không có "Chọn xã khác"** |
+| `src/features/kham-pha/kham-pha.test.tsx` | Mức tin · fail closed ở cấp `App` · tên xã trên mọi màn hình · không tên xã nào viết thẳng trong mã · không còn lối chọn/đổi xã |
+| `src/lib/launch-params.ts` | Đọc `location.search` — không qua SDK |
 
 **Mức tin theo nguồn** — đây là quy tắc, không phải giao diện:
 
-| `src` | Hành vi |
-|---|---|
-| `qr` · `zns` | Chọn sẵn, một chạm xác nhận |
-| `share` · không khai · tra mã không ra | **Luôn** bắt chọn tường minh — liên kết chuyển tay không nói lên ý định người nhận |
+| `src` | Máy chủ tra ra xã | Hành vi |
+|---|---|---|
+| `qr` · `zns` | Có | Chọn sẵn, một chạm xác nhận |
+| `qr` · `zns` | Không | Không gợi ý — mở phần giới thiệu |
+| `share` · không khai · nguồn lạ | bất kỳ | Không gợi ý — liên kết chuyển tay không nói lên ý định người nhận |
 
-**HAI THỨ PHẢI ĐỔI KHI CÓ MÁY CHỦ, và cả hai đều không phải việc sửa giao diện:**
-
-1. Danh mục xã mẫu (`demo-danh-muc-xa.ts`) thay bằng **`ListTenants`** của service `platform` —
-   đã khai trong `proto/vigov/platform/v1/platform.proto`, **chưa có cài đặt**.
-1b. **Danh sách dịch vụ của xã là NGHIỆP VỤ, không phải giao diện.** Ở giai đoạn 2 danh sách ấy
-   đọc **lúc chạy** từ cấu hình của từng xã (luật 1, bất biến 10), **không bao giờ** là hằng số
-   trong mã. Hôm nay nó là hằng số **chỉ vì** đó là dữ liệu trình diễn.
-2. Xã đã xác nhận hôm nay là **trạng thái giao diện phía client**, không phải phiên: sống trong
-   `useState`, mất khi app đóng, không lưu xuống máy, không gửi đi đâu, **không cấp quyền gì**.
-   Thay bằng xã đọc từ phiên — **không phải "đồng bộ thêm" với nó**.
-
-`src/lib/commune-resolution.ts` vẫn **chưa được nối vào** — nó là bộ khung của giai đoạn 2.
+Đã xác nhận xã thì tab đầu hiện **lối vào kênh công dân** trên màn chủ (chỗ đặt nút là việc của
+card nối nguồn xã). Xã đã xác nhận hôm nay là **trạng thái giao diện phía client**, không phải
+phiên: sống trong `useState`, mất khi app đóng, không lưu xuống máy, không gửi đi đâu, **không cấp
+quyền gì**. Ngày có cầu phiên, thay bằng xã đọc từ phiên — **không phải "đồng bộ thêm" với nó**.
 
 ## Lệnh
 
 | Lệnh | Việc |
 |---|---|
-| `npm run dev` | Máy chủ phát triển Vite (biến thể **đầy đủ**) |
-| `npm run build` | Gói tĩnh vào `dist/` — biến thể **đầy đủ** |
-| `npm run build:goc` | Như trên, biến thể **gốc** (BẢN NỘP) |
+| `npm run dev` | Máy chủ phát triển Vite |
+| `npm run build` | Gói tĩnh vào `dist/` — bản dựng duy nhất |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest — sự thật đã công bố, hình dạng bundle, sổ màn hình, bộ bóc tách vCard, ba tính năng, **và hai biến thể đúng bằng thứ người duyệt đọc** |
-| `npm run zmp:sync` | Dựng (đầy đủ) rồi đồng bộ `app-config.json` theo trang đã dựng |
-| `npm run zmp:deploy` | Đầy đủ → bản thử nghiệm |
-| `npm run zmp:deploy:goc` | Gốc → bản thử nghiệm |
-| `npm run zmp:phat-hanh:goc` | Gốc → **bản phát hành**, có in ra và đếm ngược 5 giây |
+| `npm test` | Vitest — sự thật đã công bố, hình dạng bundle, sổ màn hình, bộ bóc tách vCard, các tính năng, kênh công dân, **và bundle đúng bằng thứ người duyệt đọc** |
+| `npm run zmp:sync` | Dựng rồi đồng bộ `app-config.json` theo trang đã dựng |
+| `npm run zmp:deploy [-- --domain=<tên-miền-xã>]` | App chung (hoặc app riêng của xã) → bản thử nghiệm |
+| `npm run zmp:phat-hanh [-- --domain=<tên-miền-xã>]` | App chung (hoặc app riêng của xã) → **bản phát hành**, có in ra và đếm ngược 5 giây |
 
 → Skills: `.claude/skills/zalo-miniapp-multi-tenant` · `.claude/skills/accessibility-elderly`

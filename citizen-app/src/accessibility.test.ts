@@ -76,16 +76,11 @@ describe("text and targets stay usable for an ageing eye", () => {
     expect(styles).toMatch(/\.tabbar__item\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
     expect(styles).toMatch(/\.action\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
 
-    // Lớp khám phá (ADR 0005): nút xác nhận xã, từng dòng trong danh mục xã, và nút đổi xã trên
-    // header. Đây là những nút một người lớn tuổi bấm khi đang đứng ở trụ sở xã, một tay cầm
-    // điện thoại — và bấm trượt ở đây nghĩa là gửi hồ sơ cho một xã khác.
+    // Lớp khám phá (ADR 0005): hai nút của màn xác nhận xã. Đây là những nút một người lớn tuổi
+    // bấm khi đang đứng ở trụ sở xã, một tay cầm điện thoại — và bấm trượt ở đây nghĩa là gửi hồ
+    // sơ cho một xã khác. (Dòng danh mục xã, nút đổi xã và nút dịch vụ của trang xã mẫu đã bị xoá
+    // 27/09/2026 cùng những màn ấy — ADR 0044 câu 4 · ADR 0047.)
     expect(styles).toMatch(/\.goi-y__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
-    expect(styles).toMatch(/\.chon-xa__dong\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
-    expect(styles).toMatch(/\.app-header__doi-xa\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
-
-    // Trang xã: mỗi mục dịch vụ là một nút. Chúng là những nút duy nhất trên màn ấy, và người
-    // bấm chúng là người vừa đứng dậy khỏi ghế chờ ở trụ sở xã.
-    expect(styles).toMatch(/\.dich-vu__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
 
     // Ba tính năng: nút xin quyền, nút "Quét mã khác", và nút hành động dùng chung (Gọi · Gửi
     // email · Mở liên kết · Chỉ đường). Bấm trượt ở đây thì hoặc mở nhầm máy ảnh, hoặc — tệ hơn —
@@ -239,38 +234,14 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     // chúng được đọc ở ngoài trời, trước cổng trụ sở xã, bởi một người đang cầm điện thoại xa
     // mắt. Chúng dùng lại đúng bảng màu đã đo ở trên — nhưng liệt kê riêng, vì một cặp màu chỉ
     // được bảo vệ khi có tên nó trong danh sách này: đổi `.xa-the__ten` sang --brand-blue thì
-    // không có dòng nào ở trên đỏ lên.
+    // không có dòng nào ở trên đỏ lên. (Các cặp của bộ chọn xã, dòng ghi chú dữ liệu mẫu, nút đổi
+    // xã và trang xã mẫu đã bị xoá 27/09/2026 cùng những màn ấy.)
     ["the commune name on the confirm card", token("navy"), token("surface")],
     ["the province line under the commune name", token("ink-muted"), token("surface")],
     ["the confirm button label", "#ffffff", token("navy")],
     ["the confirm button label at its blue glow", "#ffffff", token("panel-glow-blue")],
-    ["the reason line above the commune list", token("ink"), token("surface")],
-    ["a commune row in the picker", token("navy"), token("surface")],
-    ["the province of a commune row", token("ink-muted"), token("surface")],
-    ["the demo-data footnote", token("ink-muted"), token("surface-alt")],
-    ["the demo-data footnote on the blue wash", token("ink-muted"), token("surface-tint")],
-    ["the change-commune control in the header", "#ffffff", token("navy-deep")],
-    ["the change-commune control at the header glow", "#ffffff", token("navy")],
-
-    // TRANG XÃ. Cùng bảng màu, liệt kê riêng vì cùng một lý do như trên: đổi `.trang-xa__so`
-    // sang --brand-green thì không dòng nào ở trên đỏ lên, và số điện thoại trực — thứ người
-    // dân đọc rồi bấm sang máy — là chữ mất trước nhất khi ra nắng.
-    ["the commune name on its own page", token("navy"), token("surface-alt")],
-    ["the commune name on its own page, over the blue wash", token("navy"), token("surface-tint")],
-    [
-      "the commune name on its own page, over the green wash",
-      token("navy"),
-      token("surface-tint-green"),
-    ],
-    ["the province line on the commune page", token("ink-muted"), token("surface-alt")],
-    ["the one-line introduction of the commune", token("ink"), token("surface-alt")],
-    ["the duty-phone label", token("ink-muted"), token("surface")],
-    ["the duty-phone number", token("navy"), token("surface")],
-    ["the working hours under it", token("ink-muted"), token("surface")],
-    ["a service name on the commune page", token("navy"), token("surface")],
-    ["the 'not open yet' wording under a service", token("ink-muted"), token("surface")],
-    ["the under-construction note a tapped service opens", token("ink"), token("surface")],
-    ["the demo-data footnote on the commune page", token("ink-muted"), token("surface-alt")],
+    ["the 'not this commune' button label", token("ink"), token("surface")],
+    ["the reason line above the confirm card", token("ink-muted"), token("surface-alt")],
 
     // BA TÍNH NĂNG THẬT. Liệt kê riêng vì cùng lý do như trên: một cặp màu chỉ được bảo vệ khi có
     // tên nó trong danh sách này. Đây là chữ người dùng đọc TRƯỚC KHI quyết định có chia sẻ số

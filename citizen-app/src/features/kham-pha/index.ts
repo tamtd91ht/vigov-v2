@@ -1,53 +1,9 @@
 /**
- * CỬA DUY NHẤT vào lớp khám phá — và nó tồn tại để lớp này **biến mất được**.
+ * Bề mặt của lớp khám phá — màn xác nhận xã và quy tắc đọc gợi ý.
  *
- * VÌ SAO KHÔNG NHẬP THẲNG TỪNG TỆP:
- *
- *   Bản nộp Zalo duyệt (biến thể `goc`) không được chứa lớp khám phá, danh mục xã mẫu hay bảng
- *   chẩn đoán. Tree-shaking **không** làm được việc đó: một `import` tĩnh có mặt là mô-đun vào
- *   bundle, kể cả khi không nhánh nào gọi tới nó. Thứ làm được là `resolve.alias` — trỏ đúng
- *   cái tên `bien-the/kham-pha` sang `index.rong.ts` lúc dựng, và lúc ấy mã thật không có đường
- *   nào đi vào bundle.
- *
- *   Cả cơ chế ấy chỉ đứng được khi có **một** cửa. `App.tsx` nhập thẳng `./ChonXaScreen` là một
- *   đường vòng qua alias, và nó không báo lỗi gì cả: bản `goc` vẫn dựng xanh, vẫn chạy, và vẫn
- *   mang theo tám tên đơn vị hành chính đặt ra vào bản gửi duyệt. `bien-the.test.ts` là thứ giữ
- *   cho hai bản không lệch nhau; `bundle-for-zalo.test.ts` là thứ kiểm bản `goc` bằng cách dựng
- *   thật rồi đọc bundle, chứ không bằng lời hứa.
- *
- * → vite.config.ts (bảng biến thể) · README §"Hai biến thể bản dựng"
+ * Không còn đứng sau `resolve.alias` (27/09/2026): bản dựng chỉ còn một, nên không có bản rỗng nào
+ * để trỏ sang. Danh mục xã mẫu, bộ chọn xã và trang xã mẫu đã bị xoá khỏi mã (ADR 0044 câu 4 ·
+ * ADR 0047) — tên xã chỉ còn một nguồn: máy chủ.
  */
-export { ChonXaScreen } from "./ChonXaScreen";
 export { GoiYXaScreen } from "./GoiYXaScreen";
-export { TrangXaScreen } from "./TrangXaScreen";
-export { phanGiaiGoiY } from "./goi-y";
-export type { XaDemo } from "./demo-danh-muc-xa";
-
-/**
- * Lớp khám phá có mặt trong bản dựng này hay không.
- *
- * `App.tsx` đọc cờ này thay vì tự đoán: bản rỗng trả `false`, và khi ấy tham số `t` trên đường
- * liên kết **không dẫn đi đâu cả** — app là đúng bốn màn giới thiệu. Không có cờ này thì nhánh
- * khám phá vẫn chạy, chỉ là dựng ra một màn hình trắng vì các màn đã bị thay bằng bản rỗng, và
- * một màn trắng là thứ người duyệt của Zalo thấy trước tiên.
- *
- * Kiểu ghi rõ `boolean` chứ không để suy ra `true`: bản rỗng phải gán được vào cùng một kiểu.
- */
-export const CO_LOP_KHAM_PHA: boolean = true;
-
-/**
- * HAI NHÃN CỦA VỎ ỨNG DỤNG, NẰM SAU CỬA NÀY — và chúng nằm ở đây vì một lý do về BẢN NỘP.
- *
- * `App.tsx` là vỏ chung, không nằm sau alias, nên mọi chuỗi viết thẳng trong nó đi vào CẢ bản
- * `goc`. Trước đây hai nhãn "Chọn xã" và "Đổi xã" được viết thẳng ở đó: nhánh vẽ chúng chết ở
- * bản `goc` (không có lớp khám phá), nhưng **chuỗi vẫn nằm trong bundle gửi duyệt**.
- *
- * Bản `goc` nay là một ứng dụng sản phẩm của một doanh nghiệp công nghệ, và nó không được mang
- * theo một chữ nào về đơn vị hành chính. Nên hai nhãn chuyển ra sau cửa này, đúng cách nhãn tab
- * của lớp quyền đã làm trước đây: bản rỗng trả về chuỗi rỗng, và
- * `bundle-for-zalo.test.ts` dựng thật rồi đọc bundle để chứng minh chúng đã biến mất.
- */
-export const NHAN_KHAM_PHA: { tieu_de_chon_xa: string; nut_doi_xa: string } = {
-  tieu_de_chon_xa: "Chọn xã",
-  nut_doi_xa: "Đổi xã",
-};
+export { phanGiaiGoiY, TIEU_DE_XAC_NHAN_XA, type XaGoiY } from "./goi-y";

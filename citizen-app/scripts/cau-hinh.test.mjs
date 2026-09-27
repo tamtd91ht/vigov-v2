@@ -31,11 +31,24 @@ function thuMucCo(noi_dung) {
 }
 
 describe("danh sách trắng: tên nào được phép nằm trong .env.local", () => {
-  it("hai tên của bước dựng thì QUA", () => {
-    expect(TEN_BIEN_CHO_PHEP).toEqual(["VIGOV_BIEN_THE", "VIGOV_API_HOST"]);
-    expect(() =>
-      kiemTenBien("# ghi chú\nVIGOV_API_HOST=https://vidu.test\n\nVIGOV_BIEN_THE=goc\n"),
-    ).not.toThrow();
+  it("tên duy nhất của bước dựng thì QUA", () => {
+    // ĐÚNG MỘT TÊN (27/09/2026). `VIGOV_BIEN_THE` rời danh sách cùng hai biến thể bản dựng.
+    expect(TEN_BIEN_CHO_PHEP).toEqual(["VIGOV_API_HOST"]);
+    expect(() => kiemTenBien("# ghi chú\nVIGOV_API_HOST=https://vidu.test\n\n")).not.toThrow();
+  });
+
+  it("`VIGOV_BIEN_THE` còn sót trong một .env.local cũ thì DỪNG, và nói phải làm gì", () => {
+    // Mẫu `.env.local.example` trước 27/09 có dòng ấy, nên mọi máy đã chép mẫu đều còn nó. Bỏ qua
+    // nó là để người đặt tiếp tục tin rằng nó chọn được nội dung bản dựng.
+    let loi;
+    try {
+      kiemTenBien("VIGOV_API_HOST=https://vidu.test\nVIGOV_BIEN_THE=day-du\n");
+    } catch (e) {
+      loi = e;
+    }
+    expect(loi, "tên đã bỏ vừa lọt qua").toBeDefined();
+    expect(loi.message).toMatch(/VIGOV_BIEN_THE đã bỏ/);
+    expect(loi.message).toMatch(/Xoá dòng ấy/);
   });
 
   it("một tên LẠ thì NÉM LỖI, và lỗi nói ra hậu quả chứ không chỉ nói 'không hợp lệ'", () => {
@@ -65,12 +78,9 @@ describe("đọc cấu hình: tệp local, biến shell, và không gì khác", 
   it("đọc được giá trị từ .env.local — thứ mà `process.env` KHÔNG tự thấy", () => {
     // Đây là chính cái bẫy đã làm tệp local "không chạy": Vite không nạp `.env.local` vào
     // `process.env`, chỉ `loadEnv` mới đọc các tệp `.env*`.
-    const goc = thuMucCo("VIGOV_API_HOST=https://tu-tep.test\nVIGOV_BIEN_THE=goc\n");
+    const goc = thuMucCo("VIGOV_API_HOST=https://tu-tep.test\n");
     expect(process.env.VIGOV_API_HOST, "môi trường test đang có sẵn biến này").toBeUndefined();
-    expect(docCauHinh(goc)).toEqual({
-      VIGOV_BIEN_THE: "goc",
-      VIGOV_API_HOST: "https://tu-tep.test",
-    });
+    expect(docCauHinh(goc)).toEqual({ VIGOV_API_HOST: "https://tu-tep.test" });
   });
 
   it("biến shell THẮNG tệp — CI và một lần đẩy tay phải đè được tệp local", () => {
@@ -90,7 +100,7 @@ describe("đọc cấu hình: tệp local, biến shell, và không gì khác", 
     expect(() => docCauHinh(`${goc}/`)).not.toThrow();
   });
 
-  it("TRẢ VỀ ĐÚNG HAI KHOÁ, không bao giờ trả cả môi trường", () => {
+  it("TRẢ VỀ ĐÚNG CÁC KHOÁ CỦA DANH SÁCH TRẮNG, không bao giờ trả cả môi trường", () => {
     // ĐÂY LÀ RÀO THỨ HAI, VÀ NÓ CHẶN MỘT ĐƯỜNG RÒ KHÁC HẲN. `loadEnv(…, "")` gom TOÀN BỘ
     // `process.env` — đã đo: 87 khoá trên máy dựng hôm nay, trong đó `citizen-app/.env` (của
     // `zmp-cli`) có `ZMP_TOKEN`. Nếu hàm này trả nguyên đống ấy ra, một lượt sửa "cho tiện"
@@ -125,9 +135,10 @@ describe("cái rào thật sự được nối vào hai chỗ dùng", () => {
     expect(ma, "`diaChiMayChu` không đọc từ cấu hình chung").toMatch(
       /diaChiMayChu\(\)[^}]*cauHinh\(\)\.VIGOV_API_HOST/s,
     );
-    expect(ma, "`docBienThe` không đọc từ cấu hình chung").toMatch(
-      /docBienThe\(\)[^}]*cauHinh\(\)\.VIGOV_BIEN_THE/s,
-    );
+    // Và không còn đọc biến thể nào (27/09/2026): một `VIGOV_BIEN_THE` trở lại tệp này là hai bản
+    // dựng trở lại — thứ chủ sản phẩm đã bỏ.
+    expect(ma, "`vite.config.ts` lại đọc VIGOV_BIEN_THE").not.toMatch(/\.VIGOV_BIEN_THE\b|\[["']VIGOV_BIEN_THE["']\]/);
+    expect(ma, "`vite.config.ts` lại có `resolve.alias`").not.toMatch(/\balias\s*:/);
 
     // Và `define` chỉ được nhận ĐÚNG MỘT khoá đã đặt tên. Một ngày nào đó `define: { ...env }`
     // là ngày mọi biến môi trường của máy dựng đi vào bundle gửi lên Zalo.

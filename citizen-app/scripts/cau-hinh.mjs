@@ -27,10 +27,21 @@ import { loadEnv } from "vite";
 export const GOC_GOI = fileURLToPath(new URL("..", import.meta.url));
 
 /**
- * DANH SÁCH TRẮNG — HAI TÊN, KHÔNG HƠN. Thêm một tên vào đây là một quyết định, không phải một
+ * DANH SÁCH TRẮNG — MỘT TÊN, KHÔNG HƠN. Thêm một tên vào đây là một quyết định, không phải một
  * chỉnh sửa: xem khối cảnh báo ngay dưới.
+ *
+ * `VIGOV_BIEN_THE` RỜI DANH SÁCH NGÀY 27/09/2026, cùng hai biến thể bản dựng (xem đầu
+ * `vite.config.ts`). Một `.env.local` cũ còn dòng ấy sẽ bị CHẶN chứ không bị bỏ qua: người đặt nó
+ * đang tin rằng nó chọn được nội dung bản dựng, và điều đó không còn đúng — `TEN_DA_BO` ở dưới
+ * cho thông báo nói đúng việc cần làm.
  */
-export const TEN_BIEN_CHO_PHEP = ["VIGOV_BIEN_THE", "VIGOV_API_HOST"];
+export const TEN_BIEN_CHO_PHEP = ["VIGOV_API_HOST"];
+
+/** Tên từng hợp lệ, nay đã bỏ — kèm câu nói phải làm gì. Không phải một lối cho qua. */
+const TEN_DA_BO = {
+  VIGOV_BIEN_THE:
+    "VIGOV_BIEN_THE đã bỏ (27/09/2026): bản dựng không còn biến thể nào. Xoá dòng ấy khỏi .env.local.",
+};
 
 /** Tệp cấu hình local của bước DỰNG. `.env` là tệp KHÁC, của `zmp-cli` — xem `kiemTenBien`. */
 export const TEP_LOCAL = ".env.local";
@@ -54,7 +65,7 @@ export const TEP_LOCAL = ".env.local";
  *   trên máy, không phải mã đi vào bundle. Bắt nó theo danh sách trắng của bước DỰNG là làm
  *   hỏng một thiết lập đang chạy đúng.
  *
- *   Thứ đóng đường rò cho CẢ HAI tệp là `docCauHinh` bên dưới: nó **CHỌN ĐÚNG HAI KHOÁ** rồi
+ *   Thứ đóng đường rò cho CẢ HAI tệp là `docCauHinh` bên dưới: nó **CHỌN ĐÚNG CÁC KHOÁ ĐÃ KHAI** rồi
  *   trả về, không bao giờ trả cả môi trường. Nên `ZMP_TOKEN` không có đường nào đi vào `define`
  *   kể cả khi `loadEnv` đọc thấy nó — và có một ca kiểm ghim đúng điều đó.
  */
@@ -69,8 +80,11 @@ export function kiemTenBien(noi_dung, duong_dan = TEP_LOCAL) {
   const la = tenBienKhai(noi_dung).filter((ten) => !TEN_BIEN_CHO_PHEP.includes(ten));
   if (la.length === 0) return;
 
+  const da_bo = la.filter((ten) => Object.hasOwn(TEN_DA_BO, ten)).map((ten) => `\n${TEN_DA_BO[ten]}\n`);
+
   throw new Error(
     `${duong_dan} khai ${la.length} biến không nằm trong danh sách cho phép: ${la.join(", ")}.\n` +
+      da_bo.join("") +
       `\nTệp này chỉ nhận: ${TEN_BIEN_CHO_PHEP.join(" · ")}.\n` +
       "\nVÌ SAO DỪNG THAY VÌ BỎ QUA: mọi giá trị ở đây đi qua `define:` và được NUNG THẲNG vào " +
       "bundle gửi lên Zalo, rồi tải về máy người dùng. Một khoá bí mật đặt vào đây là một khoá " +
@@ -84,7 +98,7 @@ export function kiemTenBien(noi_dung, duong_dan = TEP_LOCAL) {
 /**
  * Đọc cấu hình lúc dựng: `.env.local` (nếu có) + biến shell, shell thắng.
  *
- * TRẢ VỀ ĐÚNG HAI KHOÁ, KHÔNG BAO GIỜ TRẢ CẢ MÔI TRƯỜNG. `loadEnv(…, "")` gom toàn bộ
+ * TRẢ VỀ ĐÚNG CÁC KHOÁ TRONG DANH SÁCH TRẮNG, KHÔNG BAO GIỜ TRẢ CẢ MÔI TRƯỜNG. `loadEnv(…, "")` gom toàn bộ
  * `process.env` — đã đo: 87 khoá trên máy dựng hôm nay. Trả nguyên đống ấy ra cho người gọi là
  * đặt sẵn một đường để `ZMP_TOKEN` hay `AWS_SECRET_ACCESS_KEY` đi vào `define` trong một lượt
  * sửa "cho tiện" nào đó về sau.

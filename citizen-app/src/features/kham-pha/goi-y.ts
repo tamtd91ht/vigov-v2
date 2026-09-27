@@ -1,57 +1,64 @@
 /**
- * LỚP KHÁM PHÁ (ADR 0005) — quy tắc đọc một đường liên kết, tách hẳn khỏi màn hình.
+ * LỚP KHÁM PHÁ (ADR 0005 · 0044 · 0047) — quy tắc đọc một đường liên kết, tách hẳn khỏi màn hình.
  *
  * ĐÂY LÀ NƠI CÂU "THAM SỐ KHÔNG CHỌN XÃ" ĐƯỢC VIẾT RA THÀNH MÃ, nên nó nằm trong một hàm thuần
  * và có test riêng: một quy tắc chỉ tồn tại bên trong JSX là một quy tắc không ai kiểm được.
  *
  * ADR 0005 tách ba lớp và cấm gộp:
  *
- *   Khám phá  — công dân MUỐN làm việc với xã nào.  QR · deep link · GPS · picker.  KHÔNG tin được.
+ *   Khám phá  — công dân MUỐN làm việc với xã nào.  QR · deep link.        KHÔNG tin được.
  *   Phiên     — phiên này ĐANG thao tác ở xã nào.   Máy chủ ghi sau khi công dân xác nhận.  Tin được.
  *   Uỷ quyền  — công dân này được đọc/ghi gì ở đó.  Quan hệ công dân↔xã + luật 4.  Tin được.
+ *
+ * ⚠ KHÔNG CÒN DANH MỤC XÃ, BỘ CHỌN XÃ, "ĐỔI XÃ" HAY GỢI Ý THEO GPS (ADR 0044 câu 4 · ADR 0047,
+ * quyết định 27/09/2026). Một phiên, một xã; xã đến từ tên miền trên QR, được MÁY CHỦ tra ra tên
+ * (`GET /api/v1/communes?host=`), rồi công dân xác nhận. Không có nguồn thứ hai.
  *
  * Tham số trên QR là **dữ liệu do client cung cấp**. Luật 1, cấm #2: nhận xã từ client là để một
  * client tự cấp quyền cho chính nó. Nên hàm này chỉ trả lời "màn hình nên dẫn người dùng đi đâu",
  * và không bao giờ trả lời "xã của phiên này là gì".
  */
-import { DEMO_timTheoMa, type XaDemo } from "./demo-danh-muc-xa";
 
 /**
- * MỨC TIN THEO NGUỒN — bảng này là phần đáng giá nhất của lớp khám phá.
+ * Xã như màn xác nhận cần: TÊN và TỈNH/THÀNH, nguyên văn máy chủ trả về.
  *
- * Người đang đứng ở trụ sở xã và vừa quét mã QR dán trên bảng tin thì không nên bị bắt đi tìm
- * lại chính cái xã mình đang đứng trong đó. Người mở một liên kết ai đó chuyển cho thì phải
- * chọn: một liên kết chuyển tay nói lên ý định của NGƯỜI GỬI, không nói gì về người nhận.
+ * Hình dạng theo `GET /api/v1/communes?host=` (`name`, `province`). Không có mã xã: công dân xác
+ * nhận theo TÊN, và một mã ở phía client là một thứ để ai đó gửi ngược lên như thể nó cấp quyền.
+ */
+export type XaGoiY = { readonly ten: string; readonly tinh: string };
+
+/**
+ * MỨC TIN THEO NGUỒN.
  *
- * `share` ở đây không phải "kém tin hơn một chút" — nó là một câu hỏi khác hẳn.
+ * Người đang đứng ở trụ sở xã và vừa quét mã QR dán trên bảng tin thì một chạm xác nhận là đủ.
+ * Người mở một liên kết ai đó chuyển cho thì không: một liên kết chuyển tay nói lên ý định của
+ * NGƯỜI GỬI, không nói gì về người nhận — nên nó không mở màn xác nhận, và app mở phần giới thiệu.
  */
 const NGUON_CHON_SAN = new Set(["qr", "zns"]);
 
-/** Lý do vì sao phải chọn tường minh. Mỗi lý do có một câu nói với công dân — xem `LOI_NHAN`. */
-export type LiDoPhaiChon = "nguon-yeu" | "khong-tra-duoc";
-
 export type GoiY =
-  /** Nguồn đủ tin VÀ tra được tên xã: chọn sẵn, một chạm xác nhận. */
-  | { kieu: "chon-san"; xa: XaDemo; nguon: string }
-  /** Mọi trường hợp còn lại: danh mục xã, chọn tường minh. */
-  | { kieu: "phai-chon"; li_do: LiDoPhaiChon };
+  /** Nguồn đủ tin VÀ máy chủ đã tra ra xã: một chạm xác nhận. */
+  | { kieu: "chon-san"; xa: XaGoiY; nguon: string }
+  /** Mọi trường hợp còn lại: không gợi ý xã nào, app mở phần giới thiệu. */
+  | { kieu: "khong-co" };
 
 /**
- * Đọc cặp (`t`, `src`) thành một gợi ý.
+ * Đọc (nguồn, xã máy chủ tra được) thành một gợi ý.
  *
  * FAIL CLOSED Ở HAI CHỖ, và cả hai đều cố ý:
  *
- *   1. `src` không nằm trong danh sách tin được → bắt chọn. Không có mặc định "coi như qr".
- *   2. Tra mã không ra xã → bắt chọn. **Không bao giờ hiện một cái tên đoán ra**: công dân xác
- *      nhận theo tên xã, nên một tên sai ở bước này là một hồ sơ gửi sang cơ quan khác.
+ *   1. `src` không nằm trong danh sách tin được → không gợi ý. Không có mặc định "coi như qr".
+ *   2. Máy chủ không tra ra xã (`null`) → không gợi ý. **Không bao giờ hiện một cái tên đoán ra**:
+ *      công dân xác nhận theo tên xã, nên một tên sai ở bước này là một hồ sơ gửi sang cơ quan khác.
  *
- * Cả hai nhánh đều dẫn tới cùng một màn danh mục, nên người dùng không bao giờ rơi vào ngõ cụt.
+ * `xa_tra_duoc` là KẾT QUẢ CỦA MÁY CHỦ, không phải tham số trên QR. Hôm nay chưa có lời gọi nào
+ * nối vào (`App.tsx` truyền `null`), nên hàm này luôn trả "không có" và app mở phần giới thiệu.
  */
-export function phanGiaiGoiY(maXa: string, nguon: string): GoiY {
-  const xa = maXa ? DEMO_timTheoMa(maXa) : null;
-  if (!xa) return { kieu: "phai-chon", li_do: "khong-tra-duoc" };
-  if (!NGUON_CHON_SAN.has(nguon)) return { kieu: "phai-chon", li_do: "nguon-yeu" };
-  return { kieu: "chon-san", xa, nguon };
+export function phanGiaiGoiY(nguon: string, xa_tra_duoc: XaGoiY | null): GoiY {
+  if (xa_tra_duoc === null) return { kieu: "khong-co" };
+  if (xa_tra_duoc.ten.trim() === "") return { kieu: "khong-co" };
+  if (!NGUON_CHON_SAN.has(nguon)) return { kieu: "khong-co" };
+  return { kieu: "chon-san", xa: xa_tra_duoc, nguon };
 }
 
 /**
@@ -67,10 +74,5 @@ export function nhanNguon(nguon: string): string {
   return "Đường liên kết bạn vừa mở";
 }
 
-/** Câu giải thích vì sao màn danh mục hiện ra. Nói việc cần làm, không nói mã lỗi (luật: README §7). */
-export const LOI_NHAN: Record<LiDoPhaiChon, string> = {
-  "nguon-yeu":
-    "Đường liên kết này được chuyển tay nên chưa đủ để chọn xã thay bạn. Bạn hãy chọn xã cần liên hệ.",
-  "khong-tra-duoc":
-    "Bạn hãy chọn xã cần liên hệ để tiếp tục.",
-};
+/** Tiêu đề header trong lúc công dân đang xác nhận xã. */
+export const TIEU_DE_XAC_NHAN_XA = "Xác nhận xã";

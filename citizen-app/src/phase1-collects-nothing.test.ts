@@ -26,8 +26,8 @@ import indexHtmlRaw from "../index.html?raw";
  *     `fetch`/XHR/WebSocket/…          →  miễn ĐÚNG BA TỆP ĐƯỢC KÊ TÊN (22/09 · 24/09/2026)
  *     `<form|input|textarea|select>`   →  miễn ĐÚNG HAI TỆP ĐƯỢC KÊ TÊN (22/09 · 24/09/2026)
  *
- *   ⚠ TỆP THỨ BA VÀ TỆP THỨ HAI (24/09/2026) thuộc KÊNH CÔNG DÂN, đứng sau `bien-the/cong-dan` —
- *   không có mặt trong bản nộp, và hôm nay không gọi mạng (cầu phiên ViGov chưa có).
+ *   ⚠ TỆP THỨ BA VÀ TỆP THỨ HAI (24/09/2026) thuộc KÊNH CÔNG DÂN — có mặt trong bản dựng duy nhất
+ *   từ 27/09/2026, và hôm nay không gọi mạng (cầu phiên ViGov chưa có).
  *     `getUserInfo`/`getSetting`/`authorize` · lưu trữ · `serverUploadUrl` · geolocation
  *                                      →  KHÔNG miễn cho gì cả, không một dòng nào
  *
@@ -67,7 +67,7 @@ const SO_DI_DONG = /(^|\D)0[35789]\d{8}(\D|$)/;
  * DẢI SỐ GIẢ ĐÃ THOẢ THUẬN — luật 3, bất biến 5: ví dụ và dữ liệu mẫu dùng `0900000000`.
  *
  * Đây là NGOẠI LỆ DUY NHẤT của phép quét dưới, và nó hẹp có chủ đích: đúng `090000000` cộng một
- * chữ số. Danh mục xã của bản trình diễn cần tám số khác nhau (`demo-danh-muc-xa.ts`), nên biến
+ * chữ số. Danh mục xã mẫu từng cần tám số khác nhau (tệp ấy đã bị xoá 27/09/2026), nên biến
  * thể `090000000x` được mở; mọi hình dạng khác vẫn là một số thật cho tới khi chứng minh ngược
  * lại, và một số thật lọt vào một ứng dụng đã xuất bản là sự cố không thu hồi được.
  *
@@ -151,7 +151,7 @@ const TEP_GOI_MANG: readonly string[] = [
    * ⚠ TỆP THỨ BA, 24/09/2026 — client ViGov của NỬA NHÀ NƯỚC (`/api/v1/my-citizen-reports`).
    *
    *   Khác hai tệp trên ở hai điểm, và cả hai phải đọc được từ đây: (1) nó đứng sau
-   *   `bien-the/cong-dan`, nên KHÔNG có mặt trong bản nộp (`bundle-for-zalo.test.ts` đo điều đó);
+   *   (có mặt trong bundle từ 27/09/2026 — `bundle-for-zalo.test.ts` đo đúng MỘT đường gọi);
    *   (2) hôm nay nó KHÔNG BAO GIỜ gọi mạng — hai cổng đóng (phiên ViGov `null`, địa chỉ ViGov rỗng)
    *   đứng trước `fetch`, và `cong-dan.test.ts` khẳng định không một lời gọi nào đi ra.
    *   `cong-dan/api/hop-dong-phan-anh.ts` nằm NGAY CẠNH và vẫn bị cấm — ca "SÁT BÊN" ở dưới.
@@ -183,7 +183,7 @@ const TEP_O_GHI_CHU = "./features/yeu-cau/OGhiChu.tsx";
  * TỆP THỨ HAI ĐƯỢC CÓ Ô NHẬP — 24/09/2026, kênh công dân (nửa nhà nước).
  *
  * "Gửi phản ánh" cần nội dung, nơi xảy ra, họ tên, số điện thoại; "Tra cứu phiếu" cần mã. Mọi ô ấy đi
- * qua ĐÚNG MỘT TỆP, và tệp ấy đứng sau `bien-the/cong-dan` nên không có mặt trong bản nộp. Hai màn
+ * qua ĐÚNG MỘT TỆP, và tệp ấy là thứ duy nhất được miễn. Hai màn
  * dùng nó (`GuiPhanAnhScreen.tsx`, `TraCuuPhieuScreen.tsx`) vẫn bị cấm — ca "SÁT BÊN" ở dưới.
  */
 const TEP_O_NHAP_CONG_DAN = "./cong-dan/man/o-nhap.tsx";
@@ -219,7 +219,7 @@ const TRIPWIRES: readonly Tripwire[] = [
   {
     // BA LỜI GỌI CỦA BA TÍNH NĂNG, và chỉ trong `src/features/tinh-nang/`. Ở mọi tệp khác chúng
     // vẫn bị cấm y như trước: một `getPhoneNumber` trong `App.tsx` là thu thập dữ liệu ngoài
-    // phạm vi đã nộp, và nó sẽ đi vào CẢ bản `goc` vì `App.tsx` không nằm sau alias.
+    // phạm vi đã nộp, và nó đi thẳng vào bundle.
     //
     // `scanQRCode` được THÊM VÀO lệnh cấm ở lần này — trước đây không tên nào canh nó, nên một
     // lời gọi máy ảnh lọt vào bất kỳ tệp nào mà không có gì đỏ lên.
@@ -228,7 +228,7 @@ const TRIPWIRES: readonly Tripwire[] = [
     // rộng phạm vi sang thư mục nào khác: `getNetworkType` · `keepScreen` · `vibrate` ·
     // `requestCameraPermission` · `openMediaPicker` · `downloadFile`. Chín cái tên, MỘT thư mục.
     // Một `openMediaPicker` xuất hiện trong `App.tsx` là mở cửa sổ chọn ảnh ngoài phạm vi đã
-    // nộp, và nó sẽ đi vào CẢ bản `goc` vì `App.tsx` không nằm sau alias.
+    // nộp, và nó đi thẳng vào bundle.
     // `getAccessToken` LÀ TÊN THỨ MƯỜI, THÊM VÀO LẦN NÀY. Khối `getPhoneNumber` trên màn Liên hệ
     // nay là KHỐI ĐĂNG NHẬP (ADR 0020), và luồng ấy gửi đi hai mã: mã số điện thoại và access
     // token của phiên Zalo. Nó chuyển từ lệnh cấm tuyệt đối ở trên xuống đây, tức là **được phép

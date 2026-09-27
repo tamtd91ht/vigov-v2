@@ -1,9 +1,8 @@
 /**
  * Vỏ của kênh công dân: một màn chọn việc (gửi · phản ánh của tôi · tra cứu), rồi đúng màn ấy.
  *
- * Nó đứng sau cửa `bien-the/cong-dan` (`vite.config.ts`): bản `goc` — BẢN NỘP — thay cả tệp này bằng
- * bản rỗng, nên không một chữ nào của kênh công dân đi vào bundle gửi Zalo duyệt cho tới ngày cầu
- * phiên ViGov có thật.
+ * Có mặt trong bản dựng duy nhất (27/09/2026). Chừng nào cầu phiên ViGov chưa có, mọi màn phía sau
+ * nói "kênh chưa mở" — `api/phien-vigov.ts`.
  */
 import { useState } from "react";
 
@@ -14,7 +13,7 @@ import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
 
 export const NHAN_KENH_CONG_DAN = "Phản ánh với xã";
 
-/** Nút mở kênh, đặt trên trang xã. Nhãn nằm ở đây — không viết thẳng trong `App.tsx`. */
+/** Nút mở kênh, đặt trên tab đầu khi đã xác nhận xã. Nhãn nằm ở đây — không viết thẳng trong `App.tsx`. */
 export function NutVaoKenhCongDan({ onBam }: { onBam: () => void }) {
   return (
     <button type="button" className="cd-nut" onClick={onBam}>

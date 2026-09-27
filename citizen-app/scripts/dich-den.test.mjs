@@ -8,7 +8,6 @@ import { describe, expect, it } from "vitest";
 import { docCauHinh, TEN_BIEN_CHO_PHEP, TEP_LOCAL } from "./cau-hinh.mjs";
 import {
   appIdTrongToken,
-  chonBienThe,
   chonDich,
   docCo,
   kiemBangAnhXa,
@@ -87,17 +86,23 @@ describe("tệp ánh xạ", () => {
 });
 
 describe("cờ dòng lệnh", () => {
-  it("không cờ nào là app chung, thử nghiệm", () => {
-    expect(docCo([])).toEqual({ ten_mien: null, bien_the: null, phat_hanh: false, chi_thu: false });
+  it("không cờ nào là app chung, bản thử nghiệm", () => {
+    expect(docCo([])).toEqual({ ten_mien: null, phat_hanh: false, chi_thu: false });
   });
 
-  it("đọc đủ bốn cờ", () => {
-    expect(docCo(["--domain=xa-a.vigov.example", "--bien-the=day-du", "--phat-hanh", "--thu"])).toEqual({
+  it("đọc đủ ba cờ", () => {
+    expect(docCo(["--domain=xa-a.vigov.example", "--phat-hanh", "--thu"])).toEqual({
       ten_mien: "xa-a.vigov.example",
-      bien_the: "day-du",
       phat_hanh: true,
       chi_thu: true,
     });
+  });
+
+  it("`--bien-the` (cờ đã bỏ 27/09/2026) thì DỪNG và nói vì sao — không lặng lẽ bị bỏ qua", () => {
+    // Người gõ cờ ấy đang tin rằng họ chọn được nội dung bản dựng. Bỏ qua nó là để họ tin tiếp.
+    for (const c of ["--bien-the=goc", "--bien-the=day-du", "--bien-the"]) {
+      expect(() => docCo([c]), c).toThrow(/đã bỏ.*không còn biến thể/s);
+    }
   });
 
   it("cờ gõ nhầm thì DỪNG, không lặng lẽ thành app chung", () => {
@@ -149,27 +154,6 @@ describe("chọn đích: tên miền → App ID", () => {
     // `in` / `bang[x]` thấy cả nguyên mẫu; `Object.hasOwn` thì không. Hai tên dưới không qua
     // `kiemTenMien` nên không tới được đây từ dòng lệnh — ca này canh hàm, không canh cờ.
     expect(() => chonDich("constructor", BANG, null)).toThrow(/chưa có/);
-  });
-});
-
-describe("biến thể theo có hay không tên miền (ADR 0047 câu 5)", () => {
-  it("có tên miền → day-du, không → goc", () => {
-    expect(chonBienThe("xa-a.vigov.example", null)).toBe("day-du");
-    expect(chonBienThe(null, null)).toBe("goc");
-  });
-
-  it("--bien-the khớp thì qua", () => {
-    expect(chonBienThe("xa-a.vigov.example", "day-du")).toBe("day-du");
-    expect(chonBienThe(null, "goc")).toBe("goc");
-  });
-
-  it("--bien-the trái luật thì DỪNG, cả hai chiều", () => {
-    expect(() => chonBienThe(null, "day-du")).toThrow(/APP CHUNG, luôn `goc`/);
-    expect(() => chonBienThe("xa-a.vigov.example", "goc")).toThrow(/APP RIÊNG .* luôn `day-du`/);
-  });
-
-  it("--bien-the lạ thì DỪNG", () => {
-    expect(() => chonBienThe(null, "demo")).toThrow(/không có/);
   });
 });
 
@@ -236,17 +220,17 @@ describe("token: đích thật là claim appId của ZMP_TOKEN", () => {
 });
 
 describe("nhãn phiên bản phân biệt được đích trên console Zalo", () => {
-  const chung = { bien_the: "goc", sha: "abc1234", luc: "2026-09-27 10:00", dirty: false };
+  const chung = { sha: "abc1234", luc: "2026-09-27 10:00", dirty: false };
 
   it("app chung và app riêng cùng commit ra hai nhãn khác nhau", () => {
+    // Nhãn không còn mang tên biến thể (27/09/2026): bundle là một, chỉ ĐÍCH phân biệt hai lần đẩy.
     const a = nhanPhienBan({ ...chung, dich: { loai: "app-chung", ten_mien: null, app_id: null } });
     const b = nhanPhienBan({
       ...chung,
-      bien_the: "day-du",
       dich: { loai: "app-rieng", ten_mien: "xa-a.vigov.example", app_id: "1111111111111111111" },
     });
-    expect(a).toBe("goc · app-chung · abc1234 · 2026-09-27 10:00");
-    expect(b).toBe("day-du · xa-a.vigov.example · app 1111111111111111111 · abc1234 · 2026-09-27 10:00");
+    expect(a).toBe("app-chung · abc1234 · 2026-09-27 10:00");
+    expect(b).toBe("xa-a.vigov.example · app 1111111111111111111 · abc1234 · 2026-09-27 10:00");
   });
 
   it("dirty vẫn hiện", () => {
@@ -278,10 +262,14 @@ describe("App ID và token KHÔNG BAO GIỜ tới được bundle", () => {
     }
   });
 
-  it("tệp ánh xạ không được nhập từ `vite.config.ts` hay bất kỳ tệp nào dưới `src/`", () => {
+  it("tệp ánh xạ không được nhập từ `vite.config.ts` hay bất kỳ tệp sản phẩm nào dưới `src/`", () => {
     // Vite chỉ gói thứ được nhập từ điểm vào, và `define` chỉ nhận khoá đặt tên (ca ở
     // cau-hinh.test.mjs). Nên "không ai trong đường dựng nhập tệp ánh xạ" là đủ để nó không vào
     // bundle — ca này ghim điều kiện ấy.
+    //
+    // TỆP TEST ĐƯỢC MIỄN (27/09/2026), và chỉ chúng: không điểm vào nào tới được một `*.test.*`, nên
+    // chúng không thể kéo tệp ánh xạ vào bundle. `bundle-for-zalo.test.ts` đọc tệp ấy bằng `?raw`
+    // để khẳng định điều mạnh hơn — không khoá / App ID nào của nó có mặt trong bundle dựng thật.
     const cam = /ung-dung-theo-ten-mien|dich-den/;
     expect(doc("../vite.config.ts")).not.toMatch(cam);
     const src = fileURLToPath(new URL("../src/", import.meta.url));
@@ -289,7 +277,7 @@ describe("App ID và token KHÔNG BAO GIỜ tới được bundle", () => {
       for (const ten of readdirSync(thu_muc)) {
         const duong = join(thu_muc, ten);
         if (statSync(duong).isDirectory()) di(duong);
-        else if (/\.(m?[jt]sx?)$/.test(ten)) {
+        else if (/\.(m?[jt]sx?)$/.test(ten) && !ten.includes(".test.")) {
           expect(readFileSync(duong, "utf8"), `${duong} nhập tệp chọn đích`).not.toMatch(cam);
         }
       }
