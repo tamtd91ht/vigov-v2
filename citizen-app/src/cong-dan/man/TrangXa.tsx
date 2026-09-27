@@ -15,7 +15,7 @@
  *   · chưa có — truyền thanh, video, bản đồ, thông báo, tra cứu hồ sơ: trạng thái trống bằng lời.
  *
  * KHÔNG LẤY TỪ BẢN MẪU: router, `localStorage`, tên xã từ biến môi trường, lớp gọi máy chủ của nó, OTP,
- * quét căn cước, bước chọn lĩnh vực (ADR 0028), số ngày cam kết viết cứng (luật 10).
+ * quét căn cước, số ngày cam kết viết cứng (luật 10). Bước chọn lĩnh vực CÓ, nhưng là GỢI Ý (ADR 0049).
  *
  * KHÔNG MỞ PHIÊN LÚC MỞ APP (ADR 0047 §6). Tên miền chỉ là KHOÁ TRA, không vẽ ra, không ghi log.
  */
