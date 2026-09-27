@@ -3,7 +3,7 @@ id: ban-giao-phien
 tier: T5
 source: CURATED
 owner: architecture
-derived_from_commit: 22dd2ff
+derived_from_commit: ac142ec
 expires: 2026-12-26
 owns_facts:
   - "quyết định đã chốt với người dùng/khách, cạm bẫy đã gặp, và câu đang chờ người dùng — tại 27/09/2026"
@@ -17,9 +17,17 @@ owns_facts:
 Viết bằng `/handover`. **MỘT tệp, ghi đè trọn vẹn mỗi lần** — tên không mang ngày, ngày nằm bên
 trong. Hết hạn **2026-12-26**; sau ngày đó tin `git log`, đừng tin tệp này.
 
-Mọi dòng giữ lại từ bản 24/09 (`d4a9c18`) đã được đối chiếu với đĩa ngày 27/09: mục sổ được trỏ
-tới còn tồn tại, ADR được trỏ tới có tệp. Ba câu §3 cũ đã được giải ở phiên khác và **đã bỏ**
-(xem cuối §3). Dòng nào không kiểm được thì ghi rõ là chưa kiểm lại.
+Viết lại chiều 27/09 sau lượt `/develop-miniapp phan-anh-nguoi-dan` (bản trước ở `81697bc`). Các
+dòng giữ lại từ bản sáng 27/09 **không được kiểm lại từng dòng** ở lượt này — chúng đã được đối
+chiếu với đĩa sáng cùng ngày. Chỉ những dòng lượt này chạm tới (Mini App, cầu phiên, khu vận hành)
+được viết lại từ đĩa. Dòng nào không kiểm được thì ghi rõ.
+
+> ⚠ **SỔ TIẾN ĐỘ CỦA LƯỢT NÀY CHƯA GHI.** Lần giao agent ghi `kb/90-ephemeral/tien-do/{citizen-app,
+> service-identity,service-platform}.json` bị lớp cấp quyền từ chối ("Out-of-Place Publication") và
+> không được làm vòng. `tien-do.md` **chưa phản ánh** các commit `0c3c407…ac142ec`. Việc đầu tiên của
+> phiên sau: `/progress` cho ba module ấy — `go-chon-xa-doi-xa-danh-muc-demo` → xong ở `eb9932a`; mục
+> mới cho tuyến `GET /api/v1/communes?host=`, hai luồng build, màn xác nhận xã theo tên miền
+> (TASK-04b, chưa làm), Jenkinsfile citizen-app (TASK-03, chưa làm), khu vận hành `platform-admin/`.
 
 ---
 
@@ -43,6 +51,14 @@ tiến độ tương ứng (khoá `tiep_theo`/`bang_chung`).
 | Quy hoạch **4 tên miền** và **người quản trị đầu tiên** của xã (tài khoản `admin` gieo ở lần đăng nhập đầu tại tên miền xã, mật khẩu từ biến `IDENTITY_ADMIN_SEED_PASSWORD`) | 26/09 | chủ dự án | ADR 0046 · `service-identity/xa-moi-khong-co-vai-tro-va-quyen` |
 | Mini App **hai chế độ**: app chính mở xã bằng QR, app riêng gắn xã theo App ID, một bản build | 25/09 | người dùng | ADR 0044 |
 | **Cầu phiên công dân** Mini App → ViGov (`OpenCitizenSession`, `ResolveMiniApp`) | 26/09 | người dùng | ADR 0045 · `citizen-app/cau-phien-cong-dan-vigov` |
+| **Hai giai đoạn với một xã** (lời chủ dự án): GĐ1 chưa có công văn → app chung của ViHAT, QR gắn **tên miền xã** trỏ vào bản test; GĐ2 có công văn → app riêng, App ID riêng, dân tìm trong kho. App chung **cũng phát hành**. "Demo" là cách gọi giai đoạn, **về kỹ thuật là app thật** | 27/09 | chủ dự án | ADR 0047 §Trả lời 27/09 |
+| Build: có `domain` → App ID riêng, không có → App ID chung; **một biến thể** (bỏ `goc`/`day-du`, danh mục mẫu, bảng chẩn đoán); tệp domain → App ID chỉ chọn nơi đẩy | 27/09 | chủ dự án | ADR 0047 · `citizen-app/scripts/ung-dung-theo-ten-mien.mjs` |
+| Tham số QR mang **tên miền xã**, bỏ hẳn `t=<ULID>`; máy chủ tra ra xã, chỉ lưu ULID; xã sáp nhập = trỏ tên miền cũ sang xã kế thừa, có vết. App chung: dân xác nhận một lần; app riêng: không xác nhận | 27/09 | chủ dự án | ADR 0047 |
+| Rủi ro **chấp nhận**: người vận hành trỏ tên miền đúng lúc dân đang xác nhận → vào xã chưa thấy tên | 27/09 | chủ dự án | ADR 0047 §Trả lời mục 4 |
+| **Cho phát hành app riêng trước khi đo UNKNOWN #1** (thay điều kiện dừng #4 của 0045); `ZMP_TOKEN` là credential Jenkins, **mỗi App ID một token** | 27/09 | chủ dự án | ADR 0047 D8 + §Trả lời mục 3 |
+| Tuyến tra tên miền → tên xã thuộc **service-identity** | 27/09 | chủ dự án | ADR 0047 D6 |
+| Khu vận hành ViHAT (tạo xã, tên miền, hồ sơ hiển thị, dòng `mini_app`, sinh QR) dựng trong **`platform-admin/`**, backend `service-platform`, tài khoản ViHAT là **miền riêng**. 12 câu thiết kế **chưa chốt** | 27/09 | chủ dự án | ADR 0048 — đọc §Sửa của chủ dự án; thân ADR ghi "trong web-admin" đã bị thay |
+| Commit hộ việc dở 5 ngày của `vihat-miniapp` (yêu cầu tư vấn/gọi lại/ZNS) nguyên trạng | 27/09 | chủ dự án | `vihat-miniapp` `44c42d7` |
 | Sổ **đơn thư công dân** (`don_thu`) thuộc **`documents`** | 24/09 | người dùng | ADR 0039 |
 | Ô cấp quyền `vai_tro_quyen` là **cấu hình**: gỡ quyền = xoá cứng ô ấy kèm vết trước/sau; CHỈ bảng này | 24/09 | người dùng | ADR 0040 |
 | **#12 là quyết định của KHÁCH (22/09)**, không phải đề xuất nhà cung cấp | 24/09 | người dùng xác nhận | `service-identity/che-so-di-dong-can-bo` |
@@ -97,7 +113,13 @@ Bảng *"Nợ khách chốt"* ở đầu `tien-do.md` sinh từ `no_confirm`; n�
 | Phạm vi đồng ý #12: đổi số của người **đang** công khai có phải hỏi lại; khoá người đang công khai có rút công khai; cán bộ tự ghi đồng ý cho mình | số mới lên kênh công khai dưới đồng ý cũ | `service-identity/danh-ba-can-bo-con-thieu` |
 | Hai câu ở `deploy/README.md` §11.0 (namespace ingress controller, CNI có thực thi NetworkPolicy) | phiên CI/deploy sửa `netpol.yaml`, `deploy/Jenkinsfile` | `deploy/README.md` §11.0 |
 | **Thu chi: biểu mẫu thật của xã** · KPI cân đối · chốt kỳ/quyết toán/người duyệt · công khai ngân sách | nhập Excel, số liệu nộp lên cấp trên | `service-finance/thu-chi-ngan-sach-82` |
-| **Cầu phiên công dân**: ADR 0045 đã quyết và phía ViGov đã dựng; còn phía `vihat-miniapp` gọi `OpenCitizenSession`, và ca pg của identity | công dân thật gọi tuyến CitizenOnly | `citizen-app/cau-phien-cong-dan-vigov` |
+| **Cầu phiên — UNKNOWN #2 của ADR 0045**: chưa endpoint Zalo nào ĐÃ ĐO trả mã tài khoản. `vihat-miniapp` đã dựng phía gọi (`e274d21`) nhưng chỗ nối `MaTaiKhoanZalo` trả `ErrMaTaiKhoanChuaDo` → bật cầu thì mọi lần đăng nhập 503. **Không đoán tên endpoint** — đo bằng `cmd/thu-zalo` (người có quyền console Zalo). Kèm ca pg của identity | công dân thật gọi mọi tuyến CitizenOnly | `citizen-app/cau-phien-cong-dan-vigov` · README `vihat-miniapp` |
+| **Phiên không xã** (app chung trước khi xác nhận) cần bảng "vết chưa thuộc xã" của câu mở #25 — chưa có migration | luồng quét QR → xác nhận của app chung | ADR 0045:247-250 · ADR 0047 §Trả lời mục 5 |
+| **Giá trị thật**: App ID app chung (`APP_ID_APP_CHUNG = null`), App ID từng xã, một `ZMP_TOKEN` mỗi App ID — chủ dự án cung cấp | mọi lần đẩy Zalo thật, TASK-03 | `citizen-app/scripts/ung-dung-theo-ten-mien.mjs` |
+| **Tên tham số URL** mang tên miền (và `v`) | TASK-04b, mẫu QR | ADR 0047 CÒN MỞ #5 |
+| **12 câu thiết kế khu vận hành** — nặng nhất: tài khoản ViHAT ở đâu, đăng nhập ra sao; nhận host vận hành ở rìa (rìa đang từ chối mọi host dành riêng, `59c72be`); ai thắng khi xã và ViHAT cùng sửa `ho_so_hien_thi_xa` | dựng `platform-admin/` (luật 5 điều kiện dừng #3) | ADR 0048 §Thiết kế |
+| URL **`GET /api/v1/communes?host=`** — `?host=` do agent chọn, chưa có dòng trong `ubiquitous-language.md` | đổi còn rẻ, chưa client nào gọi | `service-identity/internal/http/routes_cong_dan.go` |
+| Bật cầu thì tuyến thương mại `/api/v1/requests` của `vihat-miniapp` **mất phiên** — quyết định sản phẩm | bật cầu trên môi trường thật | README `vihat-miniapp` NỢ #15 |
 | Phản ánh phía công dân: ảnh hiện trường (lần đầu gửi ảnh công dân vào kho tệp — luật 3 điều kiện dừng #2), phiếu công khai | các màn Mini App tương ứng | `service-petitions/phan-anh-tuyen-cong-dan-con-thieu` |
 | **Bộ trạng thái riêng của VĂN BẢN ĐẾN** (C2) | tuyến đổi trạng thái văn bản đến | `service-documents/van-ban-den-tuyen-con-thieu` |
 | Ngày làm việc hay ngày lịch cho hạn KN Đ.28 / TC Đ.29 — **hỏi pháp chế**; cần ADR vì ADR 0007 tính GIỜ | gieo số SLA đơn thư | `service-documents/so-don-thu-cong-dan` |
@@ -113,9 +135,10 @@ mục menu `/cau-hinh` chỉ canh `admin.lookup` (mở theo mọi khoá tab, 26/
 
 ## 4. Phiên song song
 
-Lúc viết (27/09) có hai phiên khác trên kho này, cả hai **idle**: `vigov-v2-43` và `vigov-v2-53`
-(lượt Mini App phản ánh). Cây làm việc sạch, không việc dở chưa commit của ai. Chưa hỏi từng phiên
-giữ đường dẫn nào — phiên sau tự kiểm bằng ListAgents, đừng tin dòng này.
+Lúc viết (chiều 27/09) ListAgents thấy hai phiên **idle**: `disable-delete-result-keys-test` và
+`callbot-completion-notification` — tên không gợi kho này, chưa hỏi chúng giữ đường dẫn nào. Cây
+vigov-v2 sạch (chỉ `bash.exe.stackdump`, `img.png` chưa theo dõi — rác). Cây `vihat-miniapp` sạch ở
+`e274d21`. Phiên sau tự kiểm lại, đừng tin dòng này.
 
 ---
 
@@ -141,6 +164,17 @@ phép kiểm xanh vì lý do sai. Gặp cái tiếp theo cùng dạng thì hỏi
 | `tools/apidoc` không sinh được `enum` cho trường | `service-documents/apidoc-sinh-enum-cho-truong` (còn mở) |
 | IDE báo hàng chục lỗi biên dịch ngay sau khi agent sửa | Ảnh chụp giữa chừng của language server. Tin `go vet`/`go test`/`tsc` |
 | Commit 1145971 sửa chú thích trong hai migration **0001 đã áp** | `core/migrate` băm cả tệp → lệch checksum. `_chung/migration-0001-da-ap-bi-sua-chu-thich` (còn mở) |
+
+### Lượt Mini App 27/09 — hai kho, Zalo, quyền phiên
+
+| Triệu chứng | Sự thật |
+|---|---|
+| Hai scout báo "chưa có web quản trị cho ViHAT", chủ dự án chọn phương án dựa trên đó | Kho **đã có** `platform-admin/` (khung, cố ý tách theo ADR 0003). Chỉ lộ ra ở log `make check` (`typecheck platform-admin/`). Trước khi đề xuất một **bề mặt mới**: liệt kê thư mục gốc, đọc README từng app — đừng tin "không có" của scout |
+| Đặt `APP_ID` để chọn app đích cho `zmp deploy` | zmp-cli 4.0.3 **không đọc** `APP_ID` khi deploy: đích là **claim `appId` trong `ZMP_TOKEN`** (đo, đầu tệp `citizen-app/scripts/dich-den.mjs`). Một token một app |
+| Thêm tuyến Go, `make kb`, commit → `make check` đỏ ở `web` | `make kb` cập nhật `openapi.json` nhưng **không** sinh `web-admin/src/lib/api/schema.gen.ts`. Sau mọi thay đổi tuyến: `npm run gen:api` trong `web-admin`, cùng commit (`88c5bef` là bản vá cho đúng lỗi này) |
+| IDE đỏ lòm các tệp `vihat-miniapp` (`could not import …`) | Kho ấy không nằm trong `go.work` của vigov-v2 — nhiễu gopls. Tin `go build/vet/test` chạy **trong** kho ấy |
+| Kho anh em có việc dở chưa commit đúng các tệp agent sắp sửa | Luôn `git -C ../vihat-miniapp status` trước khi giao việc sang đó; 27/09 có 17 tệp dở 5 ngày |
+| `git push` và một lần giao agent ghi sổ bị **lớp cấp quyền** từ chối | Không phải hook. Không làm vòng — người dùng tự chạy (`! git push origin main`) hoặc cấp quyền. Push sau đó người dùng cho phép và đã chạy |
 
 ### Máy này (Windows, bộ nhớ hạn chế)
 
@@ -184,11 +218,14 @@ phép kiểm xanh vì lý do sai. Gặp cái tiếp theo cùng dạng thì hỏi
 PYTHONIOENCODING=utf-8 mingw32-make check    # GOCACHE=/d/gocache; trên máy này có thể phải chạy từng module
 ```
 
-**27/09, chạy thật:** `make check` **xanh trọn** ở `973da1d` (cổng bàn giao lượt Nhiệm vụ). Sau đó
-các commit web (`9e2fb7b`…`46ef484`) và ca kiểm (`eeb5ecc`) được kiểm bằng `go test -p 1` của
-`service-petitions` và tsc · lint · vitest của web-admin — đều xanh. Lần `make check` CUỐI ở `613c531`
-**bị dừng giữa chừng vì máy hết bộ nhớ**: `make kb` xong, các bước chạy tới lúc dừng đều PASS, phần
-còn lại **CHƯA KIỂM**. Chạy lại khi máy rảnh.
+**27/09 chiều, chạy thật:** `PYTHONIOENCODING=utf-8 mingw32-make check` **exit 0** trên cây của
+`eb9932a` (chạy ngay trước khi commit nó). `ac142ec` sau đó chỉ sửa ADR — kiểm bằng `make kb` + `make
+brain` 7/7, **không** chạy lại `make check`. `vihat-miniapp` ở `e274d21`: gofmt · build · vet ·
+`go test -count=1 ./...` xanh (ca DB `internal/store` SKIP vì thiếu `TEST_DATABASE_DSN`).
+
+**CHƯA KIỂM:** chưa lần `zmp deploy` thật nào (chỉ `--thu`); chưa chạy app trên máy thật / webview
+Zalo; cầu phiên chưa từng gọi thật giữa hai kho; `CITIZEN_CORS_ALLOWED_ORIGINS` cho pod identity chưa
+đối chiếu manifest.
 
 **Thứ cổng KHÔNG phủ:**
 
@@ -198,6 +235,7 @@ còn lại **CHƯA KIỂM**. Chạy lại khi máy rảnh.
 | **`golangci-lint`** | Không có trên máy; `lint` bỏ qua nó bằng tiền tố `-` (dòng `Error 2 (ignored)` là nó) |
 | **Jenkins / k8s** | Chưa ai đọc số build hay tag trên Harbor; `vigov-deploy` chưa từng chạm cụm |
 | **Trình duyệt** | vitest chạy node không DOM — effect, click, luồng async chỉ phủ qua hàm thuần và render tĩnh |
+| **Zalo** | Không ca kiểm nào gọi Zalo thật; `dich-den` kiểm claim token bằng JWT giả |
 | **Hook có NHÌN THẤY gì không** | Phép thử duy nhất đáng tin là đột biến |
 
 ---
