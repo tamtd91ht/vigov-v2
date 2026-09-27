@@ -638,7 +638,9 @@ lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý
 ### Chuỗi lệnh
 
 ```bash
+npm ci                                              # máy mới: cài đúng package-lock.json
 npm run zmp:login                                   # một lần, cần App ID
+npm run zmp:deploy -- --thu                         # in kế hoạch rồi dừng — chạy trước mọi lần đẩy thật
 npm run zmp:deploy                                  # APP CHUNG, bản thử nghiệm (-t)
 npm run zmp:phat-hanh                               # APP CHUNG, BẢN PHÁT HÀNH (bỏ -t)
 npm run zmp:deploy -- --domain=<tên-miền-xã>        # APP RIÊNG của xã ấy, bản thử nghiệm
@@ -649,7 +651,10 @@ Cả bốn đi qua `scripts/deploy.mjs`: dựng → `sync-config` → `deploy`. 
 chỉ chọn App ID ĐÍCH (tra trong `scripts/ung-dung-theo-ten-mien.mjs`). Tên miền không có trong bảng
 thì **DỪNG**, không rơi về app chung. Đường app riêng đòi `ZMP_TOKEN` trong **môi trường** và kiểm
 claim `appId` của nó khớp App ID đích trước khi chạy gì cả (`scripts/dich-den.mjs`, `kiemToken`) —
-vì đích thật do token quyết, không do `APP_ID` (đã đo, zmp-cli 4.0.3). Dựng nằm **trong** script vì
+vì đích thật do token quyết, không do `APP_ID` (đã đo, zmp-cli 4.0.3). ⚠ Bảng tên miền → App ID hiện
+**chỉ có một dòng ví dụ placeholder**, nên mọi lệnh `--domain` bị từ chối ở lần chạy thật — đúng như
+thiết kế, cho tới khi có App ID và `ZMP_TOKEN` thật của từng app riêng. App chung vẫn đẩy được
+(`APP_ID_APP_CHUNG = null` nghĩa là token trong `.env` quyết đích). Dựng nằm **trong** script vì
 địa chỉ máy chủ được nung vào lúc dựng — dựng ngoài rồi đẩy trong là hai lệnh có thể lệch nhau.
 
 ⚠ **Cả bốn đều cần `VIGOV_API_HOST`**, vì khối đăng nhập đọc địa chỉ máy chủ lúc dựng. Cách
