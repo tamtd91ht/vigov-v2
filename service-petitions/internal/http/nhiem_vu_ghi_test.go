@@ -213,6 +213,11 @@ func caCacTuyenGhiNhiemVu() []caGhiNhiemVu {
 		{"chuyển trạng thái", http.MethodPost, duongTrangThaiNV(maNVThu),
 			doiTrangThaiVao{Status: string(domain.ChoDuyet)},
 			authz.Perm("task.update"), authz.Perm("task.approve"), http.StatusOK},
+		// "Trả lại để làm tiếp": the GATE is still `task.update` — `task.approve` alone does not open
+		// the route. The second key and the reason are decided in app (TestTraLai_* there).
+		{"trả lại để làm tiếp", http.MethodPost, duongTrangThaiNV(maNVThu),
+			doiTrangThaiVao{Status: string(domain.DangThucHien), Note: "Thiếu biên bản nghiệm thu."},
+			authz.Perm("task.update"), authz.Perm("task.approve"), http.StatusOK},
 		{"xoá", http.MethodDelete, duongNV(maNVThu), xoaNhiemVuVao{Reason: "Trùng với NV05."},
 			authz.Perm("task.delete"), authz.Perm("task.update"), http.StatusNoContent},
 		// ⚠ FILING AN EXTENSION IS `task.update`, NOT `task.extend` — ADR 0038: the second key is
@@ -365,6 +370,25 @@ func TestDoiTrangThai_CoTaskApproveThiQuyenDuyetLaTrue(t *testing.T) {
 	doiMa(t, w, http.StatusOK)
 	if !m.ghiNhiemVu.duyet {
 		t.Error("quyền duyệt hoàn thành = false dù tài khoản có `task.approve`")
+	}
+}
+
+// TestTraLai_LyDoVaQuyenDuyetDiXuongUseCase: the reason travels in `note` unchanged and the
+// `task.approve` fact handed down is true — the two inputs app.DoiTrangThai decides the return on.
+func TestTraLai_LyDoVaQuyenDuyetDiXuongUseCase(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("task.update"), authz.Perm("task.approve"))
+
+	const lyDo = "Thiếu biên bản nghiệm thu."
+	w := m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),
+		doiTrangThaiVao{Status: string(domain.DangThucHien), Note: lyDo})
+
+	doiMa(t, w, http.StatusOK)
+	if m.ghiNhiemVu.ycTrangT.TrangThai != string(domain.DangThucHien) || m.ghiNhiemVu.ycTrangT.GhiChu != lyDo {
+		t.Errorf("use case nhận %+v", m.ghiNhiemVu.ycTrangT)
+	}
+	if !m.ghiNhiemVu.duyet {
+		t.Error("quyền duyệt = false dù tài khoản có `task.approve`")
 	}
 }
 
@@ -594,6 +618,7 @@ func TestLoiNhiemVuAnhXaDungMa(t *testing.T) {
 		{"chưa ghi lãnh đạo giao việc", domain.ErrChuaGhiLanhDaoGiaoViec, http.StatusForbidden},
 		{"tự duyệt đề nghị của mình", domain.ErrTuDuyetDeNghiCuaMinh, http.StatusForbidden},
 		{"thiếu quyền duyệt hoàn thành", app.ErrKhongDuocDuyetHoanThanh, http.StatusForbidden},
+		{"thiếu quyền trả lại để làm tiếp", app.ErrKhongDuocTraLai, http.StatusForbidden},
 
 		// ADR 0037 — about the RECORD.
 		{"còn việc con chưa xoá", domain.LoiConChuaXoa(3), http.StatusConflict},
@@ -610,6 +635,7 @@ func TestLoiNhiemVuAnhXaDungMa(t *testing.T) {
 		// About WHAT WAS SENT.
 		{"thiếu tiêu đề", domain.ErrThieuTieuDeNhiemVu, http.StatusBadRequest},
 		{"thiếu lý do xoá", domain.ErrThieuLyDoXoaNhiemVu, http.StatusBadRequest},
+		{"thiếu lý do trả lại", domain.ErrThieuLyDoTraLai, http.StatusBadRequest},
 
 		// A FAILURE IS NOT THE CLIENT'S FAULT. Answering 400 for a database outage makes a client
 		// retry with different input for ever while nobody is told the server is broken.
@@ -739,6 +765,10 @@ func TestLoiNhiemVuKhongLoMaXaRaThan(t *testing.T) {
 			"forbidden", domain.ErrKhongPhaiLanhDaoGiaoViec.Error()},
 		{"hạn mới không lùi", domain.ErrHanMoiKhongLui, http.StatusBadRequest, "invalid_request",
 			domain.ErrHanMoiKhongLui.Error()},
+		{"thiếu lý do trả lại", domain.ErrThieuLyDoTraLai, http.StatusBadRequest, "invalid_request",
+			domain.ErrThieuLyDoTraLai.Error()},
+		{"thiếu quyền trả lại", app.ErrKhongDuocTraLai, http.StatusForbidden, "forbidden",
+			"Trả lại nhiệm vụ đang chờ duyệt"},
 		{"trùng văn bản", domain.ErrVanBanTrungTrongYeuCau, http.StatusBadRequest, "invalid_request",
 			domain.ErrVanBanTrungTrongYeuCau.Error()},
 	} {

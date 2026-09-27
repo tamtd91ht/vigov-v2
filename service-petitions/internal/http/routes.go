@@ -1157,6 +1157,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// anything is read) and the narrower one is consulted in the handler and decided in
 	// app.duocHoanThanh, inside the transaction. NEITHER KEY IS INVENTED; both are seeded.
 	//
+	// THE SAME NARROWER KEY GUARDS ONE MORE MOVE: `cho-duyet` → `dang-thuc-hien`, "Trả lại để làm tiếp"
+	// (owner decision 2026-09-27), which also requires a non-empty `note` as its reason. Decided in
+	// app.DoiTrangThai on the locked row, because `dang-thuc-hien` is also the ordinary step from
+	// `da-tiep-nhan` and only the CURRENT status tells the two apart.
+	//
 	// THE TARGET IS ON THE WIRE, unlike the petition path's `…/status`. §6's lifecycle BRANCHES at
 	// every state, so there is no single "next" for the server to choose — what the server owns is
 	// the MAP, and a move the diagram does not draw is refused with a 409.
@@ -1164,7 +1169,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// idem.KhongCan: the UPDATE carries the expected status, so a double click moves the task exactly
 	// one step and the second request answers 409.
 	//
-	// @summary  Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong
+	// @summary  Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do
 	// @screen   02-nhiem-vu §6
 	// @request  doiTrangThaiVao
 	// @reply    200 nhiemVuRa

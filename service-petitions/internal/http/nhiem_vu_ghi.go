@@ -5,6 +5,7 @@ package http
 //	POST   /api/v1/tasks                                task.create
 //	PATCH  /api/v1/tasks/{ma}                           task.update
 //	POST   /api/v1/tasks/{ma}/status                    task.update   + task.approve for `hoan-thanh`
+//	                                                                  and for the return to `dang-thuc-hien`
 //	DELETE /api/v1/tasks/{ma}                           task.delete
 //	POST   /api/v1/tasks/{ma}/extensions                task.update
 //	POST   /api/v1/tasks/{ma}/extensions/{id}/decision  task.extend   + ADR 0038's second layer
@@ -26,6 +27,7 @@ package http
 // # TWO ROUTES CONSULT A SECOND KEY INSIDE THE HANDLER, AND NO STATUS CODE SHOWS IT
 //
 //	…/status  with `status = hoan-thanh`   ALSO needs `task.approve` (§6: "Duyệt hoàn thành")
+//	…/status  `cho-duyet` → `dang-thuc-hien` ALSO needs `task.approve` and a `note` (the reason)
 //	…/decision                             ALSO needs to BE the leader named on the record (ADR 0038)
 //
 // Both are read here as a FACT and decided in internal/app, inside the transaction, on the row read
@@ -244,6 +246,12 @@ type doiTrangThaiVao struct {
 	Status string `json:"status"`
 	// Note becomes the timeline entry (§5.9). Optional: when it is empty the entry carries a
 	// generated sentence naming the two statuses, because the timeline may not have a gap.
+	//
+	// ⚠ REQUIRED BY THE SERVER ON ONE MOVE ONLY — `cho-duyet` → `dang-thuc-hien`, "Trả lại để làm
+	// tiếp" (owner decision 2026-09-27), where it is the reason; empty or whitespace answers 400. It
+	// STAYS omitempty on the wire: whether it is required depends on the task's CURRENT status, which
+	// no schema of this body can express, and marking it required would break every other move of a
+	// published contract (rule 2, invariant 4).
 	Note string `json:"note,omitempty"`
 }
 
@@ -632,6 +640,10 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 		httpx.WriteError(w, http.StatusForbidden, "forbidden",
 			"Hoàn thành nhiệm vụ cần quyền duyệt hoàn thành. Tài khoản của bạn mới có quyền "+
 				"cập nhật tiến độ.", "")
+	case errors.Is(err, app.ErrKhongDuocTraLai):
+		httpx.WriteError(w, http.StatusForbidden, "forbidden",
+			"Trả lại nhiệm vụ đang chờ duyệt để làm tiếp cần quyền duyệt hoàn thành. Tài khoản của "+
+				"bạn mới có quyền cập nhật tiến độ.", "")
 	case domain.LaLoiThamQuyenLuiHan(err):
 		// ADR 0038's two layers, plus the open question failing CLOSED. The sentence is the domain's
 		// own: it names what is missing — the leader on the record — which is the only thing the

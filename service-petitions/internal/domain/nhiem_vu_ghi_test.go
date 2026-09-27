@@ -173,6 +173,10 @@ func TestChuyenTrangThaiTheoDungVongDoi(t *testing.T) {
 		{DaTiepNhanNV, DangThucHien, true},
 		{DangThucHien, ChoDuyet, true},
 		{ChoDuyet, HoanThanh, true},
+		// "Trả lại để làm tiếp" — owner decision 2026-09-27. The SHAPE is allowed here; the key and
+		// the reason are the write use case's.
+		{ChoDuyet, DangThucHien, true},
+		{ChoDuyet, DaTiepNhanNV, false},
 		{DangThucHien, TamDung, true},
 		{DangThucHien, ChuyenTiep, true},
 		// The jumps §6 does not draw. A client able to skip steps makes every intermediate state
@@ -189,6 +193,37 @@ func TestChuyenTrangThaiTheoDungVongDoi(t *testing.T) {
 		if !ca.duoc && err == nil {
 			t.Errorf("%s → %s được chấp nhận — vòng đời §6 không có bước này", ca.tu, ca.sang)
 		}
+	}
+}
+
+// TestTamDungTuChoDuyetKhongNhayThangVeDangThucHien: the new return edge is from `cho-duyet` ONLY. A
+// task paused while under review resumes into review, so pausing cannot be used as a side door
+// around the approval key the return requires.
+func TestTamDungTuChoDuyetKhongNhayThangVeDangThucHien(t *testing.T) {
+	if err := ChuyenTrangThaiDuoc(TamDung, ChoDuyet, ChoDuyet); err != nil {
+		t.Fatalf("tạm dừng từ chờ duyệt không tiếp tục về chờ duyệt được: %v", err)
+	}
+	err := ChuyenTrangThaiDuoc(TamDung, DangThucHien, ChoDuyet)
+	if !errors.Is(err, ErrChuyenTrangThaiNhiemVuSaiLuc) {
+		t.Fatalf("lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc — tạm dừng thành đường vòng qua bước trả lại", err)
+	}
+}
+
+func TestKiemLyDoTraLai(t *testing.T) {
+	for _, rong := range []string{"", "   ", "\t\n "} {
+		if _, err := KiemLyDoTraLai(rong); !errors.Is(err, ErrThieuLyDoTraLai) {
+			t.Errorf("lý do %q: lỗi = %v, muốn ErrThieuLyDoTraLai", rong, err)
+		}
+	}
+	if s, err := KiemLyDoTraLai("  Thiếu biên bản nghiệm thu.  "); err != nil || s != "Thiếu biên bản nghiệm thu." {
+		t.Errorf("lý do hợp lệ: %q, %v", s, err)
+	}
+	if _, err := KiemLyDoTraLai(strings.Repeat("ạ", NoiDungNhatKyToiDa+1)); !errors.Is(err, ErrNoiDungNhatKyQuaDai) {
+		t.Errorf("lý do quá dài: lỗi = %v, muốn ErrNoiDungNhatKyQuaDai", err)
+	}
+	// An input refusal, so the HTTP layer answers 400 rather than 500.
+	if !LaLoiDauVaoNhiemVu(ErrThieuLyDoTraLai) {
+		t.Error("ErrThieuLyDoTraLai không nằm trong danh sách lỗi đầu vào — sẽ trả 500")
 	}
 }
 

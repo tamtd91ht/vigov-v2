@@ -524,6 +524,151 @@ func TestDoiTrangThai_GhiNhatKyCungGiaoDichVaMangTrangThaiSau(t *testing.T) {
 	chiGhiTrongGiaoDich(t, k)
 }
 
+// --- "Trả lại để làm tiếp" (owner decision 2026-09-27) ------------------------------------------------
+
+const lyDoTraLaiThu = "Thiếu biên bản nghiệm thu của thôn 3."
+
+// TestTraLai_BaCauGhiTrongMotGiaoDich: the status, the timeline row carrying the REASON, and the
+// audit entry — one transaction, one commit (rule 6, invariant 3).
+func TestTraLai_BaCauGhiTrongMotGiaoDich(t *testing.T) {
+	k := khoNVMau()
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.ChoDuyet)
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	sau, err := uc.DoiTrangThai(ctx, maNVGoc,
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: "  " + lyDoTraLaiThu + " "},
+		canBoThu(), true)
+	if err != nil {
+		t.Fatalf("trả lại để làm tiếp bị từ chối: %v", err)
+	}
+	if sau.TrangThai != domain.DangThucHien || !sau.NgayHoanThanh.IsZero() {
+		t.Errorf("sau = %s / %v, muốn dang-thuc-hien và không có ngày hoàn thành", sau.TrangThai, sau.NgayHoanThanh)
+	}
+
+	doi := k.cau("UPDATE nhiem_vu")
+	if len(doi) != 1 {
+		t.Fatalf("ghi %d câu đổi trạng thái, muốn 1", len(doi))
+	}
+	// $3 target, $4 ngay_hoan_thanh (NULL — migration 0006's biconditional), $5 the expected source.
+	if doi[0].args[2] != string(domain.DangThucHien) || doi[0].args[3] != nil ||
+		doi[0].args[4] != string(domain.ChoDuyet) {
+		t.Errorf("câu đổi trạng thái mang %v / %v / %v", doi[0].args[2], doi[0].args[3], doi[0].args[4])
+	}
+
+	nk := k.cau("INSERT INTO nhat_ky_nhiem_vu")
+	if len(nk) != 1 {
+		t.Fatalf("ghi %d dòng nhật ký, muốn 1", len(nk))
+	}
+	// $5 author, $6 the state the act landed in, $9 the text — THE REASON, trimmed, not a generated
+	// "cho-duyet → dang-thuc-hien" sentence that tells the officer nothing.
+	if nk[0].args[4] != maCanBoThu || nk[0].args[5] != string(domain.DangThucHien) ||
+		nk[0].args[8] != lyDoTraLaiThu {
+		t.Errorf("dòng nhật ký = %v / %v / %q", nk[0].args[4], nk[0].args[5], nk[0].args[8])
+	}
+
+	vet := vetKiemToan(t, k)
+	if vet.args[1] != maCanBoThu || vet.args[4] != HanhViChuyenTrangNhiemVu || vet.args[5] != maNVGoc {
+		t.Errorf("vết = %v / %v / %v", vet.args[1], vet.args[4], vet.args[5])
+	}
+	delta, _ := vet.args[7].([]byte)
+	for _, co := range []string{`"tra_lai":true`, `"trang_thai":"cho-duyet"`, `"trang_thai":"dang-thuc-hien"`,
+		`"do_dai_ly_do":`} {
+		if !strings.Contains(string(delta), co) {
+			t.Errorf("delta thiếu %s: %s", co, delta)
+		}
+	}
+	// The sentence stays in the business record; audit_log keeps only its length.
+	if strings.Contains(string(delta), lyDoTraLaiThu) {
+		t.Error("nội dung lý do lọt vào audit_log")
+	}
+	chiGhiTrongGiaoDich(t, k)
+}
+
+// TestTraLai_ChiCoTaskUpdateThiTuChoi: `task.update` alone opens the route but not this move.
+func TestTraLai_ChiCoTaskUpdateThiTuChoi(t *testing.T) {
+	k := khoNVMau()
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.ChoDuyet)
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	_, err := uc.DoiTrangThai(ctx, maNVGoc,
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: lyDoTraLaiThu},
+		canBoThu(), false)
+	if !errors.Is(err, ErrKhongDuocTraLai) {
+		t.Fatalf("lỗi = %v, muốn ErrKhongDuocTraLai", err)
+	}
+	khongGhiGi(t, k)
+}
+
+// TestTraLai_ThieuLyDoThiTuChoi: empty and whitespace-only are both no reason.
+func TestTraLai_ThieuLyDoThiTuChoi(t *testing.T) {
+	for _, lyDo := range []string{"", "   \t"} {
+		t.Run("lý do="+lyDo, func(t *testing.T) {
+			k := khoNVMau()
+			k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.ChoDuyet)
+			uc, ctx := dungGhiNhiemVu(t, k)
+
+			_, err := uc.DoiTrangThai(ctx, maNVGoc,
+				YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: lyDo},
+				canBoThu(), true)
+			if !errors.Is(err, domain.ErrThieuLyDoTraLai) {
+				t.Fatalf("lỗi = %v, muốn ErrThieuLyDoTraLai", err)
+			}
+			khongGhiGi(t, k)
+		})
+	}
+}
+
+// TestTraLai_BuocThuongVaoDangThucHienKhongBiDoi: the ordinary forward step into the same status
+// (`da-tiep-nhan` → `dang-thuc-hien`) still needs neither the key nor a reason, and carries no flag.
+func TestTraLai_BuocThuongVaoDangThucHienKhongBiDoi(t *testing.T) {
+	k := khoNVMau()
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.DaTiepNhanNV)
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), false); err != nil {
+		t.Fatalf("bước thường bị từ chối: %v", err)
+	}
+	delta, _ := vetKiemToan(t, k).args[7].([]byte)
+	if strings.Contains(string(delta), "tra_lai") {
+		t.Errorf("bước thường bị đánh dấu trả lại: %s", delta)
+	}
+	chiGhiTrongGiaoDich(t, k)
+}
+
+// TestTraLai_TamDungSauTraLaiTiepTucVeDangThucHien: after a return the newest timeline row is
+// `dang-thuc-hien`, so a later pause resumes there — the "(trạng thái trước)" rule reads the return
+// like any other step.
+func TestTraLai_TamDungSauTraLaiTiepTucVeDangThucHien(t *testing.T) {
+	k := khoNVMau()
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.TamDung)
+	// NEWEST FIRST: paused, returned to dang-thuc-hien, before that under review.
+	k.nhatKy[idNVGoc] = []string{string(domain.TamDung), string(domain.DangThucHien), string(domain.ChoDuyet)}
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	if _, err := uc.DoiTrangThai(ctx, maNVGoc,
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), false); err != nil {
+		t.Fatalf("tiếp tục sau khi trả lại bị từ chối: %v", err)
+	}
+}
+
+// TestTamDung_TuChoDuyetKhongTraLaiDuocQuaTamDung: paused FROM review, a task cannot resume straight
+// into `dang-thuc-hien` — not even with the approval key and a reason. Resume first, then return.
+func TestTamDung_TuChoDuyetKhongTraLaiDuocQuaTamDung(t *testing.T) {
+	k := khoNVMau()
+	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.TamDung)
+	k.nhatKy[idNVGoc] = []string{string(domain.TamDung), string(domain.ChoDuyet)}
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	_, err := uc.DoiTrangThai(ctx, maNVGoc,
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: lyDoTraLaiThu},
+		canBoThu(), true)
+	if !errors.Is(err, domain.ErrChuyenTrangThaiNhiemVuSaiLuc) {
+		t.Fatalf("lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc", err)
+	}
+	khongGhiGi(t, k)
+}
+
 // TestTamDung_TiepTucVeDungTrangThaiTruocDocTuNhatKy is §6's "(trạng thái trước)".
 //
 // THERE IS NO `trang_thai_truoc` COLUMN AND THERE MUST NOT BE ONE: the fact is already in

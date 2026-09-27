@@ -100,6 +100,12 @@ var (
 	ErrLyDoNhiemVuQuaDai = fmt.Errorf(
 		"nhiệm vụ: lý do quá dài (tối đa %d ký tự)", LyDoNhiemVuToiDa)
 
+	// ErrThieuLyDoTraLai refuses "Trả lại để làm tiếp" with no reason. The officer receiving the work
+	// back has to be told what is missing, and a generated "cho-duyet → dang-thuc-hien" sentence tells
+	// them nothing (owner decision 2026-09-27).
+	ErrThieuLyDoTraLai = errors.New(
+		"nhiệm vụ: trả lại để làm tiếp phải ghi lý do — người thực hiện cần biết còn thiếu gì")
+
 	ErrThieuNoiDungNhatKy  = errors.New("nhiệm vụ: thiếu nội dung nhật ký")
 	ErrNoiDungNhatKyQuaDai = fmt.Errorf(
 		"nhiệm vụ: nội dung nhật ký quá dài (tối đa %d ký tự)", NoiDungNhatKyToiDa)
@@ -129,7 +135,7 @@ func LoiDauVaoNhiemVuGoc(err error) error {
 		ErrMaNhiemVuSaiDinhDang, ErrMaNhiemVuQuaDai,
 		ErrTienDoNgoaiKhoang,
 		ErrThieuLyDoXoaNhiemVu, ErrLyDoNhiemVuQuaDai,
-		ErrThieuNoiDungNhatKy, ErrNoiDungNhatKyQuaDai,
+		ErrThieuNoiDungNhatKy, ErrNoiDungNhatKyQuaDai, ErrThieuLyDoTraLai,
 		ErrTomTatKetQuaQuaDai, ErrGhiChuNhiemVuQuaDai,
 		ErrTrangThaiNhiemVuKhongBiet, ErrThieuLyDoLuiHan, ErrHanMoiKhongLui,
 	} {
@@ -490,6 +496,22 @@ func KiemNoiDungNhatKy(s string) (string, error) {
 	switch {
 	case s == "":
 		return "", ErrThieuNoiDungNhatKy
+	case len([]rune(s)) > NoiDungNhatKyToiDa:
+		return "", ErrNoiDungNhatKyQuaDai
+	}
+	return s, nil
+}
+
+// KiemLyDoTraLai checks the reason of "Trả lại để làm tiếp". MANDATORY, and bounded like any other
+// timeline entry because it IS the timeline entry: the reason is the `noi_dung` of the row the move
+// writes, so one limit applies and a second, different one would refuse a reason the log accepts.
+//
+// WHITESPACE IS NO REASON: it is trimmed first, so "   " is refused exactly like "".
+func KiemLyDoTraLai(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	switch {
+	case s == "":
+		return "", ErrThieuLyDoTraLai
 	case len([]rune(s)) > NoiDungNhatKyToiDa:
 		return "", ErrNoiDungNhatKyQuaDai
 	}

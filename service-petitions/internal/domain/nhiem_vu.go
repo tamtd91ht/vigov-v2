@@ -73,11 +73,18 @@ const (
 //	             raises. Reported as a finding.
 //
 // `tam-dung` IS THE ONE ENTRY THAT IS NOT A PLAIN LOOKUP — see the note on TamDungVeDuoc.
+//
+// `cho-duyet` → `dang-thuc-hien` IS THE ONE BACKWARD ARROW, and it is the owner's decision of
+// 2026-09-27 rather than §6's diagram: "Trả lại để làm tiếp / yêu cầu bổ sung". Without it a
+// reviewer who finds the work incomplete has only `tam-dung` (which resumes back into `cho-duyet`)
+// or `hoan-thanh` (signing off work they just judged unfinished). It adds NO STATUS — ADR 0035 §C's
+// closed list is untouched. The map only says the shape exists; who may take it and what it must
+// carry is LaTraLaiLamTiep's, enforced in the write use case.
 var chuyenDuocSangNhiemVu = map[TrangThaiNhiemVu][]TrangThaiNhiemVu{
 	MoiGiao:      {DaTiepNhanNV, TamDung, ChuyenTiep},
 	DaTiepNhanNV: {DangThucHien, TamDung, ChuyenTiep},
 	DangThucHien: {ChoDuyet, TamDung, ChuyenTiep},
-	ChoDuyet:     {HoanThanh, TamDung, ChuyenTiep},
+	ChoDuyet:     {HoanThanh, DangThucHien, TamDung, ChuyenTiep},
 	TamDung:      {MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet},
 	HoanThanh:    {},
 	ChuyenTiep:   {},
@@ -135,6 +142,21 @@ func (t TrangThaiNhiemVu) KetThuc() bool {
 // second is a rule. A paused task that resumed into `hoan-thanh` would be finished work nobody did.
 func TamDungVeDuoc(tu TrangThaiNhiemVu) bool {
 	return tu == MoiGiao || tu == DaTiepNhanNV || tu == DangThucHien || tu == ChoDuyet
+}
+
+// LaTraLaiLamTiep reports whether this move is "Trả lại để làm tiếp" — the reviewer sending work
+// under review back to the officer (owner decision 2026-09-27).
+//
+// A NAMED PREDICATE AND NOT A COMPARISON AT THE CALL SITE, because the move carries two obligations
+// the ordinary forward steps do not: only a holder of `task.approve` may take it (the same person who
+// could have signed it off), and a REASON is mandatory — the officer receiving the work back has to
+// be told what is missing, and the timeline is the only place that says so.
+//
+// IT ASKS ABOUT THE CURRENT STATUS, NOT THE PAUSE HISTORY. A task paused from `cho-duyet` can only
+// resume INTO `cho-duyet` (ChuyenTrangThaiDuoc), so the return is never reachable from `tam-dung`
+// directly and cannot be used to skip review by pausing first.
+func LaTraLaiLamTiep(tu, sang TrangThaiNhiemVu) bool {
+	return tu == ChoDuyet && sang == DangThucHien
 }
 
 // LaTrangThaiChinh reports whether this is one of the five columns the Kanban board draws.

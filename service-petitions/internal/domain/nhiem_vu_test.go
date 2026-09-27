@@ -95,6 +95,41 @@ func TestLuongChinhTheoDungSoDoDacTa(t *testing.T) {
 	}
 }
 
+// TestTraLaiLamTiepLaMuiTenLuiDuyNhat pins the owner's decision of 2026-09-27: `cho-duyet` may go
+// back to `dang-thuc-hien`, and NO OTHER backward arrow was added with it. A map loosened "while we
+// were there" would let work leave review into any earlier state.
+func TestTraLaiLamTiepLaMuiTenLuiDuyNhat(t *testing.T) {
+	if !ChoDuyet.ChuyenSangDuoc(DangThucHien) {
+		t.Fatal("cho-duyet -> dang-thuc-hien bị từ chối — chủ đầu tư đã quyết định có bước trả lại")
+	}
+	for _, c := range []struct{ tu, den TrangThaiNhiemVu }{
+		{ChoDuyet, DaTiepNhanNV},
+		{ChoDuyet, MoiGiao},
+		{DangThucHien, MoiGiao},
+		{DaTiepNhanNV, MoiGiao},
+		{HoanThanh, ChoDuyet},
+	} {
+		if c.tu.ChuyenSangDuoc(c.den) {
+			t.Errorf("%s -> %s được nhận — chỉ có một mũi tên lùi là cho-duyet -> dang-thuc-hien", c.tu, c.den)
+		}
+	}
+	// The predicate names that one move and nothing else — in particular NOT the ordinary forward
+	// step into the same status, which needs neither the approval key nor a reason.
+	if !LaTraLaiLamTiep(ChoDuyet, DangThucHien) {
+		t.Error("LaTraLaiLamTiep không nhận cho-duyet -> dang-thuc-hien")
+	}
+	for _, c := range []struct{ tu, den TrangThaiNhiemVu }{
+		{DaTiepNhanNV, DangThucHien},
+		{TamDung, DangThucHien},
+		{ChoDuyet, HoanThanh},
+		{ChoDuyet, TamDung},
+	} {
+		if LaTraLaiLamTiep(c.tu, c.den) {
+			t.Errorf("LaTraLaiLamTiep(%s, %s) = true — bước thường bị đòi quyền duyệt và lý do", c.tu, c.den)
+		}
+	}
+}
+
 func TestHaiNhanhRoiDuocTuMoiBuocChuaXong(t *testing.T) {
 	// §6, :229-231: the fan-in. Both branches leave from every unfinished main state.
 	for _, tu := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet} {

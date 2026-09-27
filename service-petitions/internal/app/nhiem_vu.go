@@ -190,6 +190,19 @@ type QuyenDuyetHoanThanh bool
 var ErrKhongDuocDuyetHoanThanh = errors.New(
 	"nhiem_vu: hoàn thành nhiệm vụ cần quyền duyệt hoàn thành, không chỉ quyền cập nhật tiến độ")
 
+// ErrKhongDuocTraLai refuses "Trả lại để làm tiếp" (`cho-duyet` → `dang-thuc-hien`) to somebody
+// without `task.approve`.
+//
+// THE SAME KEY AS SIGNING OFF, and that is the owner's decision of 2026-09-27: sending work back is
+// the reviewer's verdict on it, the other half of the decision `hoan-thanh` records. An officer holding
+// only `task.update` could otherwise pull their own work back out of review at will — the queue a
+// leader reads would then not be the queue that exists.
+//
+// A SEPARATE SENTINEL FROM ErrKhongDuocDuyetHoanThanh because the sentence differs: telling a person
+// who tried to return work that "completing needs the approval right" names an act they never tried.
+var ErrKhongDuocTraLai = errors.New(
+	"nhiem_vu: trả lại nhiệm vụ đang chờ duyệt cần quyền duyệt hoàn thành, không chỉ quyền cập nhật tiến độ")
+
 // GhiNhiemVu owns the six staff acts.
 type GhiNhiemVu struct {
 	db     *store.DB
@@ -893,11 +906,16 @@ type YeuCauDoiTrangThai struct {
 	// GhiChu is the officer's own line for the timeline. OPTIONAL: when it is empty the entry
 	// carries a generated sentence naming the two statuses, because the timeline may not have a gap
 	// and the schema refuses an empty entry — see domain.NoiDungChuyenTrangThai.
+	//
+	// ⚠ MANDATORY FOR ONE MOVE: "Trả lại để làm tiếp" (`cho-duyet` → `dang-thuc-hien`), where it is
+	// the REASON the work was sent back (domain.KiemLyDoTraLai). One field rather than a second one,
+	// because on that move the reason IS the timeline line — two fields would be two texts for one row.
 	GhiChu string
 }
 
 // DoiTrangThai moves the task. Route permission: `task.update`; the step INTO `hoan-thanh`
-// additionally needs `task.approve` and an entirely finished sub-tree.
+// additionally needs `task.approve` and an entirely finished sub-tree; the return from `cho-duyet`
+// to `dang-thuc-hien` additionally needs `task.approve` and a non-empty reason.
 //
 // # THE THREE CHECKS, IN THIS ORDER, INSIDE THE TRANSACTION
 //
@@ -905,6 +923,9 @@ type YeuCauDoiTrangThai struct {
 //     timeline supports.
 //  2. THE PERMISSION for the final step (`task.approve`).
 //  3. ADR 0037 DECISION 4 — the whole sub-tree, recursively.
+//
+// The return to `dang-thuc-hien` runs its own pair after the shape check: `task.approve`, then the
+// reason. It walks no tree — sending work back finishes nothing.
 //
 // THE ORDER IS DELIBERATE. 2 before 3 keeps a caller who may not complete the task from learning,
 // from the error message, which of its sub-tasks are still open — routing information about work
@@ -963,6 +984,23 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 			xongLuc = bayGio
 		}
 
+		// "TRẢ LẠI ĐỂ LÀM TIẾP" (owner decision 2026-09-27). PERMISSION BEFORE REASON, for the order
+		// the completion step uses: a caller who may not take this move is told so, not asked for
+		// a better sentence. Both refusals happen before anything is written.
+		//
+		// Decided HERE, on the row read under the lock, and not from the request: whether this is
+		// the return depends on the CURRENT status, and `dang-thuc-hien` is also the ordinary
+		// forward step from `da-tiep-nhan`, which needs neither the key nor a reason.
+		traLai := domain.LaTraLaiLamTiep(truoc.TrangThai, moiTT)
+		if traLai {
+			if !duyet {
+				return ErrKhongDuocTraLai
+			}
+			if _, err := domain.KiemLyDoTraLai(ghiChu); err != nil {
+				return err
+			}
+		}
+
 		if err := uc.kho.DoiTrangThai(ctx, tx, truoc.ID, truoc.TrangThai, moiTT, xongLuc); err != nil {
 			return err
 		}
@@ -979,14 +1017,23 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 			return err
 		}
 
-		delta, err := json.Marshal(map[string]any{
+		vet := map[string]any{
 			"truoc": map[string]any{"trang_thai": string(truoc.TrangThai)},
 			"sau":   map[string]any{"trang_thai": string(moiTT)},
 			// DERIVED AT THE INSTANT OF THE ACT AND RECORDED, never stored as a column (rule 10,
 			// invariant 3). An entry states what was true at one moment; a column would be read as
 			// the current truth later, which is the defect that rule forbids.
 			"tre_han": sau.TreHan(bayGio),
-		})
+		}
+		if traLai {
+			// THE REASON TEXT IS NOT IN THE DELTA, ITS LENGTH IS — the same line DeNghiLuiHan and
+			// Xoa draw. The sentence lives in `nhat_ky_nhiem_vu`, the business record written above
+			// in this transaction; `audit_log` is append-only for ever, and free text about the work
+			// can name a citizen's case. The flag is what lets an inspection find every return.
+			vet["tra_lai"] = true
+			vet["do_dai_ly_do"] = len([]rune(ghiChu))
+		}
+		delta, err := json.Marshal(vet)
 		if err != nil {
 			return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
 		}
