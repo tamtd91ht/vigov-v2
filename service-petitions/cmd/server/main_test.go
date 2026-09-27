@@ -366,7 +366,7 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// above: this file is about the EDGE CHAIN, it asserts on a read route, and Register refuses
 		// a nil dependency at construction. A use case that is never invoked cannot dereference the
 		// nil handle. Its own four-case suite lives in internal/http/nhiem_vu_ghi_test.go.
-		GhiNhiemVu:      app.NewGhiNhiemVu(nil, nil, nil),
+		GhiNhiemVu:      app.NewGhiNhiemVu(nil, nil, nil, nil),
 		DanhSachBienBan: khoBienBan{},
 		// The three meeting-register WRITE acts, on a nil *store.DB for the same reason: never
 		// invoked here, and Register refuses a nil dependency at construction. Its own four-case

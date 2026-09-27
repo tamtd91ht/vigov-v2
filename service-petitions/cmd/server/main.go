@@ -193,7 +193,12 @@ func chay(log *slog.Logger) error {
 	// the Deps literal because the MEETING register borrows one of its methods: §3's "Tách thành
 	// nhiệm vụ" creates a task through THIS use case, so there is exactly one create path, one
 	// transaction boundary and one place every rule about a task lives (app.GhiBienBanHop).
-	ghiNhiemVu := app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan)
+	//
+	// `dinhDanh` IS THE ASSIGNER CHECK (owner decision 2026-09-27): "Lãnh đạo giao việc" arrives in
+	// the body, and a task is created only if identity answers that code as an active staff member of
+	// this commune (ResolveAssignableStaff). The SAME client the petition path's assignee check uses,
+	// so the two never disagree about identity's health.
+	ghiNhiemVu := app.NewGhiNhiemVu(kho, nhiemVu, deNghiLuiHan, dinhDanh)
 
 	nhanTrangThai := petstore.NewNhanTrangThaiNhiemVuStore(kho)
 
@@ -247,9 +252,9 @@ func chay(log *slog.Logger) error {
 		// completion check and the upward cycle check — both of which must run on rows read under the
 		// lock, which is only possible inside the transaction this use case opens.
 		//
-		// NO identity CLIENT HERE, unlike XuLyPhieu above, and that is not an omission: §7.1 has a
-		// leader TYPE the task's deadline, so nothing on this path derives one. See the header of
-		// internal/app/nhiem_vu.go.
+		// NO identity DEADLINE READ HERE, unlike XuLyPhieu above, and that is not an omission: §7.1
+		// has a leader TYPE the task's deadline, so nothing on this path derives one. See the header
+		// of internal/app/nhiem_vu.go. The identity client it does hold is the assigner check only.
 		GhiNhiemVu: ghiNhiemVu,
 		// The meeting-minutes read route. No use case either, and for the same reason — with one
 		// thing worth naming: the two task counters on every card are computed by the STORE's

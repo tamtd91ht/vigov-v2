@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -574,6 +575,24 @@ func TestTachKetLuan_LoiCuaSoNhiemVuAnhXaNhuTuyenTaoNhiemVu(t *testing.T) {
 				thanTachNhiemVu())
 
 			doiMa(t, w, ca.muon)
+		})
+	}
+}
+
+// TestTachKetLuan_LoiKiemLanhDaoGiaoViecNhuTuyenTaoNhiemVu — the assigner check answers on the split's
+// door exactly as on POST /api/v1/tasks (the cases are shared: caLoiLanhDaoGiaoViec).
+func TestTachKetLuan_LoiKiemLanhDaoGiaoViecNhuTuyenTaoNhiemVu(t *testing.T) {
+	for _, ca := range caLoiLanhDaoGiaoViec {
+		t.Run(ca.ten, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("task.create"))
+			m.ghiBienBan.loi = fmt.Errorf("nhiem_vu: %s cho xã %s: %w", "giao việc mới", xaBocThu, ca.loi)
+
+			vao := thanTachNhiemVu()
+			vao.Assigner = "CB-00007"
+			w := m.goiGhiNV(t, http.MethodPost, hostA, duongTachNV(idBBThu, 1), canBoCuaXa(xaA), vao)
+
+			kiemLoiLanhDao(t, w, ca.muon, ca.ma, ca.chua)
 		})
 	}
 }

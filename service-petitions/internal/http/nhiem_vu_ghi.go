@@ -688,6 +688,25 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 		httpx.WriteError(w, http.StatusConflict, "task_document",
 			cauTuChoi(err, domain.ErrVanBanKhongThuocNhiemVu, domain.ErrDoiNhomVanBan), "")
 
+	// --- the assigner check (owner decision 2026-09-27) ------------------------------------------------
+	case errors.Is(err, app.ErrLanhDaoGiaoViecKhongHopLe):
+		// 400 `invalid_request`, THE STATUS AND CODE the petition path answers for an assignee identity
+		// did not accept (xu_ly_phan_anh.go, ErrCanBoKhongNhanDuocViec). ONE SENTENCE FOR FIVE REASONS
+		// and the code is not echoed: splitting "another commune" from "unknown" leaks existence across
+		// communes (rule 1), and "locked" publishes an employment fact.
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Người được chọn làm lãnh đạo giao việc không hợp lệ. Hãy chọn người khác trong danh sách.", "")
+	case errors.Is(err, app.ErrChuaKiemDuocLanhDaoGiaoViec):
+		// 503 AND NOT 400 OR 500: the check did not happen, which is neither a bad assigner nor a fault
+		// in this service. The same code the petition path uses for its assignee check, so a client
+		// retries both the same way. No staff code in the log line — the wrapped chain carries only
+		// the gRPC status core/identityclient already logged.
+		h.d.Log.Warn("CẢNH BÁO: từ chối giao việc vì chưa kiểm được lãnh đạo giao việc",
+			"xa", string(tenant.MustFrom(r.Context())), "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "assignee_check_unavailable",
+			"Chưa kiểm tra được lãnh đạo giao việc nên nhiệm vụ CHƯA được tạo. "+
+				"Vui lòng thử lại sau ít phút.", "")
+
 	// --- 400: about what was sent, document block --------------------------------------------------
 	case domain.LaLoiDauVaoVanBanNhiemVu(err):
 		// The domain's own sentence: it names the field and the rule, holds no personal data and no

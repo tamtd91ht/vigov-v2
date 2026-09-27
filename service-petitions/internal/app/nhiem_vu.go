@@ -203,11 +203,30 @@ var ErrKhongDuocDuyetHoanThanh = errors.New(
 var ErrKhongDuocTraLai = errors.New(
 	"nhiem_vu: trả lại nhiệm vụ đang chờ duyệt cần quyền duyệt hoàn thành, không chỉ quyền cập nhật tiến độ")
 
+// ErrLanhDaoGiaoViecKhongHopLe refuses a new task whose "Lãnh đạo giao việc" code identity did not
+// answer as an active staff member of THIS commune (owner decision 2026-09-27).
+//
+// ONE ERROR FOR FIVE REASONS — unknown, deleted, no account, locked, another commune — for the same
+// reason ErrCanBoKhongNhanDuocViec is one: telling "another commune" from "unknown" leaks that a code
+// exists elsewhere (rule 1), and telling "locked" apart publishes an employment fact about a person.
+var ErrLanhDaoGiaoViecKhongHopLe = errors.New(
+	"nhiem_vu: lãnh đạo giao việc được chọn không phải cán bộ đang làm việc của xã")
+
+// ErrChuaKiemDuocLanhDaoGiaoViec means identity could not be asked, so the task was NOT created.
+//
+// NEVER "not valid" AND NEVER "valid": the check did not happen. Writing the code unchecked on the
+// day identity is down would re-open the hole the check closes. Retryable — the handler answers 503.
+var ErrChuaKiemDuocLanhDaoGiaoViec = errors.New("nhiem_vu: chưa kiểm được lãnh đạo giao việc")
+
 // GhiNhiemVu owns the six staff acts.
 type GhiNhiemVu struct {
 	db     *store.DB
 	kho    KhoNhiemVuGhi
 	deNghi KhoDeNghiLuiHan
+
+	// giaoViec verifies the client-supplied "Lãnh đạo giao việc" code before a task is created. nil
+	// means the check is not wired, and creation with a non-empty code then REFUSES (fail closed).
+	giaoViec KiemCanBoGiaoViec
 
 	// sinhID is injected so a test can pin every generated id. In production it is ulid.Moi.
 	sinhID func() (string, error)
@@ -222,8 +241,9 @@ type GhiNhiemVu struct {
 	nay func() time.Time
 }
 
-func NewGhiNhiemVu(db *store.DB, kho KhoNhiemVuGhi, deNghi KhoDeNghiLuiHan) *GhiNhiemVu {
-	return &GhiNhiemVu{db: db, kho: kho, deNghi: deNghi, sinhID: ulid.Moi}
+func NewGhiNhiemVu(db *store.DB, kho KhoNhiemVuGhi, deNghi KhoDeNghiLuiHan,
+	giaoViec KiemCanBoGiaoViec) *GhiNhiemVu {
+	return &GhiNhiemVu{db: db, kho: kho, deNghi: deNghi, giaoViec: giaoViec, sinhID: ulid.Moi}
 }
 
 // nayHoac is the clock, UTC. `TIMESTAMPTZ` stores an instant rather than a wall reading, so the
@@ -505,6 +525,11 @@ func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi
 	if err := coCanBoThucHien(nguoi); err != nil {
 		return domain.NhiemVu{}, err
 	}
+	// BEFORE THE TRANSACTION, and HERE ONCE, because both doors — POST /api/v1/tasks and the meeting
+	// conclusion split — arrive at this function. See kiemLanhDaoGiaoViec.
+	if err := uc.kiemLanhDaoGiaoViec(ctx, moi.LanhDaoGiaoViecMa); err != nil {
+		return domain.NhiemVu{}, err
+	}
 	moi.NguoiTaoMa = nguoi.ID
 
 	id, err := uc.sinhID()
@@ -706,6 +731,49 @@ func chuanHoaTaoNhiemVu(yc YeuCauTaoNhiemVu) (domain.NhiemVu, error) {
 		NhiemVuChaID: yc.NhiemVuChaID,
 	}
 	return moi, nil
+}
+
+// kiemLanhDaoGiaoViec verifies the "Lãnh đạo giao việc" code a new task is about to store (owner
+// decision 2026-09-27): it must be an ACTIVE staff member of THIS commune — identity's
+// ResolveAssignableStaff predicate (not deleted, has an account, not locked), asked in the commune the
+// context carries, which is what makes another commune's code absent.
+//
+// WHY IT IS CHECKED AT ALL: the code arrives in the request body, so it is client-supplied, and under
+// ADR 0038 it IS the only person who may approve this task's extension requests. Stored unchecked, a
+// crafted body names a code of another commune or a former employee — and no extension on the task
+// can ever be approved, because the approver check compares it with a signed-in Principal.Ma.
+//
+// ⚠ task.extend IS DELIBERATELY NOT CHECKED HERE — the owner's decision of 2026-09-27, not an
+// omission. The assigner picker is filtered to holders of that right instead, and approving an
+// extension is still gated by task.extend at the approval act (ADR 0038). Do not "complete" this check
+// by adding a permission lookup: that is a second rule the owner declined.
+//
+// BEFORE THE TRANSACTION, for the reason kiemCanBoNhanViec gives: a gRPC round trip inside would hold
+// the register's lock for a network call, and an identity outage would become a register that hangs
+// rather than one that refuses.
+//
+// AN EMPTY CODE ASKS NOTHING. Creation accepts a task with no assigner today; ADR 0038 refuses at the
+// approval act instead (domain.ErrChuaGhiLanhDaoGiaoViec). It is NOT defaulted to nguoi_tao_ma — the
+// creator is not necessarily the leader who assigned the work.
+//
+// THE CODE CHECKED IS THE CODE STORED — not trimmed here, because chuanHoaTaoNhiemVu does not trim it
+// either; checking one string and storing another would verify nothing.
+func (uc *GhiNhiemVu) kiemLanhDaoGiaoViec(ctx context.Context, ma string) error {
+	if ma == "" {
+		return nil
+	}
+	if uc.giaoViec == nil {
+		// FAIL CLOSED: wiring without the check must refuse, never store the code unchecked.
+		return fmt.Errorf("%w: chưa nối dây kiểm cán bộ", ErrChuaKiemDuocLanhDaoGiaoViec)
+	}
+	duoc, err := uc.giaoViec.CanBoGiaoViecDuoc(ctx, []string{ma})
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrChuaKiemDuocLanhDaoGiaoViec, err)
+	}
+	if _, co := duoc[ma]; !co {
+		return ErrLanhDaoGiaoViecKhongHopLe
+	}
+	return nil
 }
 
 // --- 2. edit (§5.4's ✎ Sửa) -----------------------------------------------------------------------

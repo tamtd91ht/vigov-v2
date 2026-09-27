@@ -654,6 +654,61 @@ func TestLoiNhiemVuAnhXaDungMa(t *testing.T) {
 	}
 }
 
+// --- the assigner check (owner decision 2026-09-27) -------------------------------------------------------
+
+// caLoiLanhDaoGiaoViec is the check's two refusals as the WIRE must show them, whichever door the
+// create came through. Shared with bien_ban_hop_ghi_test.go so the two doors cannot drift apart.
+var caLoiLanhDaoGiaoViec = []struct {
+	ten  string
+	loi  error
+	muon int
+	ma   string
+	chua string
+}{
+	// THE SAME STATUS AND CODE the petition path answers for an assignee identity refused.
+	{"lãnh đạo không hợp lệ", app.ErrLanhDaoGiaoViecKhongHopLe, http.StatusBadRequest,
+		"invalid_request", "Hãy chọn người khác"},
+	{"chưa kiểm được lãnh đạo", fmt.Errorf("%w: %w", app.ErrChuaKiemDuocLanhDaoGiaoViec,
+		errors.New("rpc error: code = Unavailable")), http.StatusServiceUnavailable,
+		"assignee_check_unavailable", "CHƯA được tạo"},
+}
+
+// kiemLoiLanhDao asserts one refusal of the assigner check: status, code, the fixed sentence, and
+// neither the wrapped chain, the commune id nor the gRPC detail on the wire.
+func kiemLoiLanhDao(t *testing.T, w *httptest.ResponseRecorder, muon int, ma, chua string) {
+	t.Helper()
+	doiMa(t, w, muon)
+	e := loiTra(t, w)
+	if e.Code != ma {
+		t.Errorf("mã lỗi = %q, muốn %q", e.Code, ma)
+	}
+	if !strings.Contains(e.Message, chua) {
+		t.Errorf("câu = %q, muốn chứa %q", e.Message, chua)
+	}
+	than := w.Body.String()
+	for _, cam := range []string{xaBocThu, "cho xã", "rpc error", "nhiem_vu:", "CB-00007"} {
+		if strings.Contains(than, cam) {
+			t.Errorf("thân lỗi lộ %q: %s", cam, than)
+		}
+	}
+}
+
+func TestTaoNhiemVu_LoiKiemLanhDaoGiaoViecAnhXaDungMa(t *testing.T) {
+	for _, ca := range caLoiLanhDaoGiaoViec {
+		t.Run(ca.ten, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("task.create"))
+			m.ghiNhiemVu.loi = fmt.Errorf("nhiem_vu: %s cho xã %s: %w", "giao việc mới", xaBocThu, ca.loi)
+
+			vao := thanTaoNV()
+			vao.Assigner = "CB-00007"
+			w := m.goiGhiNV(t, http.MethodPost, hostA, duongTasks, canBoCuaXa(xaA), vao)
+
+			kiemLoiLanhDao(t, w, ca.muon, ca.ma, ca.chua)
+		})
+	}
+}
+
 // --- a meeting-conclusion source has one door -------------------------------------------------------------
 
 // TestTaoNhiemVu_NguonKetLuanHopThi400VaKhongGoiUseCase: the direct create checked neither the

@@ -564,7 +564,9 @@ func dungGhiNhiemVu(t *testing.T, k *khoNhiemVuGia) (*GhiNhiemVu, context.Contex
 	// ONE *store.DB behind both stores, exactly as cmd/server wires it: the transaction the use case
 	// opens is the transaction both stores write in, and two handles would be two pools.
 	kho := pkgstore.New(db)
-	uc := NewGhiNhiemVu(kho, petstore.NewNhiemVuStore(kho), petstore.NewDeNghiLuiHanStore(kho))
+	// NO ASSIGNER CHECK WIRED: the shared fixture (taoMau) names no assigner, so the check asks nothing
+	// and nil is never reached. Tests of the check set uc.giaoViec themselves (nhiem_vu_giao_viec_test.go).
+	uc := NewGhiNhiemVu(kho, petstore.NewNhiemVuStore(kho), petstore.NewDeNghiLuiHanStore(kho), nil)
 
 	// IDS ARE HANDED OUT IN ORDER so a test can name the one it expects. The first id of a create is
 	// the task, the second is its timeline row.
