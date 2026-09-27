@@ -530,6 +530,43 @@ describe("thân `Giao việc mới` — ô `Ghi chú` §7.2", () => {
   });
 });
 
+describe("thân `Giao việc mới` — ba ô cán bộ lên ĐÚNG trường, bằng MÃ `CB-…`", () => {
+  // ĐẮT NẾU SAI, VÀ IM LẶNG: `assigner` là lãnh đạo giao việc — theo ADR 0038 là NGƯỜI DUY NHẤT duyệt
+  // được đề nghị lùi hạn, và `PATCH` cố ý không sửa được nó. Tráo `assignee` ↔ `assigner` là người
+  // thực hiện tự duyệt lùi hạn cho chính mình, còn lãnh đạo mất quyền — máy chủ lưu bất kỳ mã nào nó
+  // nhận, nên không bài kiểm nào khác đỏ. Ba mã KHÁC NHAU để một phép tráo không thể trùng hợp đúng.
+  const THUC_HIEN = "CB-2026-GIATH1";
+  const LANH_DAO = "CB-2026-GIALD2";
+  const CHUYEN_VIEN = "CB-2026-GIACV3";
+
+  it("`Người thực hiện` ⇒ `assignee`, `Lãnh đạo giao việc` ⇒ `assigner`, `Chuyên viên` ⇒ `monitor`", () => {
+    const than = thanGiaoViec(
+      formDay({
+        nguoiThucHien: ` ${THUC_HIEN} `,
+        lanhDaoGiaoViec: ` ${LANH_DAO} `,
+        chuyenVien: CHUYEN_VIEN,
+      }),
+      { coDanhSachVanBan: true },
+    );
+    expect(than.assignee).toBe(THUC_HIEN);
+    expect(than.assigner).toBe(LANH_DAO);
+    expect(than.monitor).toBe(CHUYEN_VIEN);
+  });
+
+  it("bỏ trống hoặc toàn khoảng trắng ⇒ trường VẮNG MẶT, không gửi `\"\"`", () => {
+    const than = thanGiaoViec(formDay({ nguoiThucHien: "", lanhDaoGiaoViec: "  " }), {
+      coDanhSachVanBan: true,
+    });
+    expect(than).not.toHaveProperty("assignee");
+    expect(than).not.toHaveProperty("assigner");
+  });
+
+  it("màn Biên bản (Tách kết luận) dùng cùng hàm: lãnh đạo giao việc vẫn lên `assigner`", () => {
+    const than = thanGiaoViec(formDay({ lanhDaoGiaoViec: LANH_DAO }), { coDanhSachVanBan: false });
+    expect(than.assigner).toBe(LANH_DAO);
+  });
+});
+
 describe("thân `Giao việc mới` — trường ĐANG ẨN không lên dây", () => {
   it("`co-ban` SAU KHI đã gõ cơ quan chủ trì, chuyên viên và ba văn bản: không `documents`/`lead_unit`/`monitor`", () => {
     // Đúng thao tác thật: gõ đủ ở `Theo văn bản` rồi mới đổi loại. State vẫn giữ chữ đã gõ (đổi

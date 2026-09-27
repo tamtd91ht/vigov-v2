@@ -168,3 +168,53 @@ func TestChoDuyetConTroTrangSau(t *testing.T) {
 		t.Errorf("mốc id = %v, muốn dn-001 (dòng cuối trang 1)", l.args)
 	}
 }
+
+// TestChoDuyetLocLanhDaoVaConTroCungLuc — `Chờ tôi duyệt`, PAGE 2: the leader filter AND the cursor
+// in one statement. The leader placeholder is written by hand as `$3` while QueryPage numbers the
+// anchor and the limit after len(Args); the two only agree while the status stays the one arg before
+// the leader. Each half is tested alone above — this is the page where they meet, and the one a
+// leader with a long queue actually reaches. A drift here binds the leader code to the anchor's slot
+// (or the anchor time to the leader's), so page 2 either errors or filters on the wrong value.
+func TestChoDuyetLocLanhDaoVaConTroCungLuc(t *testing.T) {
+	xa := tenant.ID("01JA" + strings.Repeat("A", 22))
+	k := &khoGia{hangTheoCot: hangDeNghiCho()}
+	s := NewDeNghiLuiHanStore(pkgstore.New(moKhoGia(k)))
+	loc := LocDeNghiChoDuyet{LanhDaoGiaoViecMa: "CB-00123"}
+
+	trang1, err := s.ChoDuyet(ctxXa(xa), loc, parseCho(t, url.Values{"limit": {"1"}}))
+	if err != nil {
+		t.Fatalf("trang 1: %v", err)
+	}
+	if trang1.NextCursor == "" {
+		t.Fatal("trang 1 không có con trỏ — phép kiểm trang 2 sẽ xanh vì lý do sai")
+	}
+
+	k.lenh = nil
+	if _, err := s.ChoDuyet(ctxXa(xa), loc,
+		parseCho(t, url.Values{"limit": {"1"}, "cursor": {trang1.NextCursor}})); err != nil {
+		t.Fatalf("trang 2: %v", err)
+	}
+	l := k.lenh[0]
+	for _, muon := range []string{
+		"JOIN nhiem_vu n ON n.tenant_id = $1 AND n.id = d.nhiem_vu_id",
+		"AND lanh_dao_giao_viec_ma = $3",
+		"AND (thoi_diem, id) > ($4, $5)",
+		"LIMIT $6",
+	} {
+		if !strings.Contains(l.sql, muon) {
+			t.Errorf("trang 2 của `approver=me` thiếu %q: %s", muon, l.sql)
+		}
+	}
+	if len(l.args) != 6 {
+		t.Fatalf("tham số = %v, muốn đúng 6 (xã, trạng thái, lãnh đạo, mốc thời điểm, mốc id, limit+1)", l.args)
+	}
+	if l.args[0] != string(xa) || l.args[1] != string(domain.ChoDuyetLuiHan) || l.args[2] != "CB-00123" {
+		t.Errorf("$1..$3 = %v, muốn (xã, chờ duyệt, mã lãnh đạo)", l.args[:3])
+	}
+	if _, laThoiGian := l.args[3].(time.Time); !laThoiGian {
+		t.Errorf("$4 = %v (%T), muốn mốc thời điểm của dòng cuối trang 1", l.args[3], l.args[3])
+	}
+	if l.args[4] != "dn-001" {
+		t.Errorf("$5 = %v, muốn id dòng cuối trang 1 (dn-001)", l.args[4])
+	}
+}

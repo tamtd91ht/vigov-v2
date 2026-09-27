@@ -33,6 +33,10 @@ func themNhiemVuCoLanhDao(t *testing.T, db *sql.DB, xa, id, ma string, lanhDao a
 	}
 }
 
+// tieuDeNhiemVuXaKhac is the title of the OTHER commune's twin task — a string no row of this
+// commune carries, so finding it on the page is proof of a cross-commune join.
+const tieuDeNhiemVuXaKhac = "Nhiệm vụ của xã khác — không được hiện ở xã này."
+
 // TestPgHangChoLuiHanChiDangChoCuaXaVaNhiemVuConSong — pending only, this commune only (on BOTH
 // tables), soft-deleted requests and soft-deleted tasks excluded, oldest first across a cursor, and
 // the leader filter.
@@ -47,8 +51,19 @@ func TestPgHangChoLuiHanChiDangChoCuaXaVaNhiemVuConSong(t *testing.T) {
 	themNhiemVuCoLanhDao(t, db, xa, "nv-q3", "NV83", "CB-00123")
 	themNhiemVuCoLanhDao(t, db, xa, "nv-q4", "NV84", "CB-00123")
 	// THE SAME INTERNAL TASK ID in another commune, with a pending request: a join on id alone would
-	// attach it (rule 1).
-	themNhiemVuCoLanhDao(t, db, xaKhac, "nv-q1", "NV81", "CB-00123")
+	// attach it (rule 1). Its number, title and leader are ALL DIFFERENT from commune A's twin, so the
+	// leak shows as WRONG CONTENT on the page, not only as an extra row a keyset might swallow — the
+	// duplicate of dn-q1 shares its (thoi_diem, id), and a strict `>` anchor skips it on the next page.
+	// Its own INSERT rather than an UPDATE of the title, for the reason themNhiemVuCoLanhDao gives.
+	if _, err := db.Exec(
+		`INSERT INTO nhiem_vu
+		 (tenant_id, id, ma, loai, tieu_de, trang_thai, nguon_giao,
+		  han_xu_ly, han_ban_dau, tien_do, nguoi_tao_ma, lanh_dao_giao_viec_ma)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+		xaKhac, "nv-q1", "NV-KHAC-99", "theo-van-ban", tieuDeNhiemVuXaKhac, "dang-thuc-hien",
+		"truc-tiep", mocHanPg, mocHanPg, 0, "CB-00007", "CB-KHAC-00999"); err != nil {
+		t.Fatalf("thêm nhiệm vụ xã khác: %v", err)
+	}
 
 	for _, dn := range []struct{ xa, id, nv string }{
 		{xa, "dn-q1", "nv-q1"}, {xa, "dn-q2", "nv-q2"}, {xa, "dn-q3", "nv-q3"},
@@ -101,6 +116,27 @@ func TestPgHangChoLuiHanChiDangChoCuaXaVaNhiemVuConSong(t *testing.T) {
 	if a := trang1.Items[0]; a.NhiemVuMa != "NV81" || a.LanhDaoGiaoViecMa != "CB-00123" ||
 		!a.HanXuLyHienTai.Equal(mocHanGocPg) || !a.DeNghi.HanMoi.Equal(mocHanPg) {
 		t.Errorf("dòng 1 = %+v", a)
+	}
+
+	// ONE PAGE HOLDING THE WHOLE QUEUE, so no keyset anchor can hide a duplicated row: exactly the two
+	// requests of commune A, each carrying ITS OWN commune's task — never the other commune's twin.
+	ycCa, err := page.Parse(url.Values{"limit": {"100"}}, SapXepDeNghiChoDuyet)
+	if err != nil {
+		t.Fatalf("page.Parse cả hàng: %v", err)
+	}
+	ca, err := s.ChoDuyet(ctx, LocDeNghiChoDuyet{}, ycCa)
+	if err != nil {
+		t.Fatalf("đọc cả hàng: %v", err)
+	}
+	if len(ca.Items) != 2 {
+		t.Errorf("cả hàng có %d dòng, muốn 2 — dòng thừa là nhiệm vụ của xã khác gắn vào đề nghị của xã này", len(ca.Items))
+	}
+	for _, d := range ca.Items {
+		if d.NhiemVuMa == "NV-KHAC-99" || d.NhiemVuTieuDe == tieuDeNhiemVuXaKhac ||
+			d.LanhDaoGiaoViecMa == "CB-KHAC-00999" {
+			t.Errorf("đề nghị %s mang nhiệm vụ của XÃ KHÁC (%s · %q · %s) — JOIN không buộc xã ở ON",
+				d.DeNghi.ID, d.NhiemVuMa, d.NhiemVuTieuDe, d.LanhDaoGiaoViecMa)
+		}
 	}
 
 	chiToi, err := s.ChoDuyet(ctx, LocDeNghiChoDuyet{LanhDaoGiaoViecMa: "CB-00123"}, yc)
