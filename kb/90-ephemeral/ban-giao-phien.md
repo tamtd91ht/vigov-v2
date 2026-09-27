@@ -3,13 +3,13 @@ id: ban-giao-phien
 tier: T5
 source: CURATED
 owner: architecture
-derived_from_commit: ac142ec
+derived_from_commit: b736232
 expires: 2026-12-26
 owns_facts:
-  - "quyết định đã chốt với người dùng/khách, cạm bẫy đã gặp, và câu đang chờ người dùng — tại 27/09/2026"
+  - "quyết định đã chốt với người dùng/khách, cạm bẫy đã gặp, và câu đang chờ người dùng — tại 28/09/2026"
 ---
 
-# Bàn giao phiên — cập nhật 2026-09-27
+# Bàn giao phiên — cập nhật 2026-09-28
 
 **Đọc tệp này SAU `kb/INDEX.yaml` và tầng `always_load`, không thay thế chúng.** Nó chỉ trả lời:
 *đã quyết gì, đang chờ ai, và cạm bẫy nào đã tốn thời gian của người trước.*
@@ -17,17 +17,10 @@ owns_facts:
 Viết bằng `/handover`. **MỘT tệp, ghi đè trọn vẹn mỗi lần** — tên không mang ngày, ngày nằm bên
 trong. Hết hạn **2026-12-26**; sau ngày đó tin `git log`, đừng tin tệp này.
 
-Viết lại chiều 27/09 sau lượt `/develop-miniapp phan-anh-nguoi-dan` (bản trước ở `81697bc`). Các
-dòng giữ lại từ bản sáng 27/09 **không được kiểm lại từng dòng** ở lượt này — chúng đã được đối
-chiếu với đĩa sáng cùng ngày. Chỉ những dòng lượt này chạm tới (Mini App, cầu phiên, khu vận hành)
-được viết lại từ đĩa. Dòng nào không kiểm được thì ghi rõ.
-
-> ⚠ **SỔ TIẾN ĐỘ CỦA LƯỢT NÀY CHƯA GHI.** Lần giao agent ghi `kb/90-ephemeral/tien-do/{citizen-app,
-> service-identity,service-platform}.json` bị lớp cấp quyền từ chối ("Out-of-Place Publication") và
-> không được làm vòng. `tien-do.md` **chưa phản ánh** các commit `0c3c407…ac142ec`. Việc đầu tiên của
-> phiên sau: `/progress` cho ba module ấy — `go-chon-xa-doi-xa-danh-muc-demo` → xong ở `eb9932a`; mục
-> mới cho tuyến `GET /api/v1/communes?host=`, hai luồng build, màn xác nhận xã theo tên miền
-> (TASK-04b, chưa làm), Jenkinsfile citizen-app (TASK-03, chưa làm), khu vận hành `platform-admin/`.
+Viết lại 28/09 sau hai lượt `/develop-feature` (Nhiệm vụ, Danh bạ cán bộ); bản trước ở `836264f`.
+Các dòng giữ lại từ bản 27/09 **không được kiểm lại từng dòng** — chúng đã đối chiếu đĩa 27/09. Chỉ
+những dòng hai lượt này chạm tới được viết lại từ đĩa. Nợ sổ tiến độ ghi ở bản trước **đã trả**:
+lượt Mini App do phiên song song ghi (`e53d995`), hai lượt 28/09 ghi ở `b736232`.
 
 ---
 
@@ -59,6 +52,9 @@ tiến độ tương ứng (khoá `tiep_theo`/`bang_chung`).
 | Tuyến tra tên miền → tên xã thuộc **service-identity** | 27/09 | chủ dự án | ADR 0047 D6 |
 | Khu vận hành ViHAT (tạo xã, tên miền, hồ sơ hiển thị, dòng `mini_app`, sinh QR) dựng trong **`platform-admin/`**, backend `service-platform`, tài khoản ViHAT là **miền riêng**. 12 câu thiết kế **chưa chốt** | 27/09 | chủ dự án | ADR 0048 — đọc §Sửa của chủ dự án; thân ADR ghi "trong web-admin" đã bị thay |
 | Commit hộ việc dở 5 ngày của `vihat-miniapp` (yêu cầu tư vấn/gọi lại/ZNS) nguyên trạng | 27/09 | chủ dự án | `vihat-miniapp` `44c42d7` |
+| Nhiệm vụ: thêm mũi tên **trả lại để làm tiếp** `cho-duyet → dang-thuc-hien` (task.approve + lý do), không thêm trạng thái | 28/09 | chủ dự án (chọn đề xuất domain-expert) | `service-petitions/tra-lai-nhiem-vu-lam-tiep` |
+| Lãnh đạo giao việc: máy chủ CHỈ kiểm **cán bộ đang hoạt động của xã**, **không** kiểm task.extend; ô chọn lọc `staff-directory?permission=task.extend` (danh sách trắng một khoá) | 28/09 | chủ dự án | `service-petitions/lanh-dao-giao-viec-khong-kiem-khi-tao` · `service-identity/danh-ba-hep-loc-quyen-task-extend` |
+| Danh bạ: **đổi số di động** hoặc **khoá** người đang công khai → tự gỡ khỏi Mini App, xoá dấu đồng ý; mở khoá không hiện lại. Kênh công khai trả số di động **không che** cho người đã đồng ý (thay cách đọc #11 cho kênh này); Excel vẫn che | 28/09 | chủ dự án | `service-identity/rut-cong-khai-khi-doi-so-hoac-khoa` · `che-so-di-dong-can-bo` |
 | Sổ **đơn thư công dân** (`don_thu`) thuộc **`documents`** | 24/09 | người dùng | ADR 0039 |
 | Ô cấp quyền `vai_tro_quyen` là **cấu hình**: gỡ quyền = xoá cứng ô ấy kèm vết trước/sau; CHỈ bảng này | 24/09 | người dùng | ADR 0040 |
 | **#12 là quyết định của KHÁCH (22/09)**, không phải đề xuất nhà cung cấp | 24/09 | người dùng xác nhận | `service-identity/che-so-di-dong-can-bo` |
@@ -104,7 +100,9 @@ Bảng *"Nợ khách chốt"* ở đầu `tien-do.md` sinh từ `no_confirm`; n�
 | Câu | Chặn gì | Chi tiết ở |
 |---|---|---|
 | **Vòng đời nhiệm vụ lệch `vigov-require`** (52ec9b5 cho nhảy bước, bỏ chờ duyệt, mở lại việc đã xong) · **sửa mã NV** (7764c8a) · **sửa hạn không qua lùi hạn** (93cff7f) | mọi thay đổi bảng chuyển trạng thái / ô sửa mã, hạn ở §5.4 | `service-petitions/doi-chieu-26-09-nhiem-vu-truoc-neo` · `kb/50-doi-chieu/2026-09-26-feat-m8-multitenant-foundation-nhiem-vu.md` |
-| **Lãnh đạo giao việc không được kiểm lúc tạo nhiệm vụ** — người cầm `task.create` tự ghi mình làm lãnh đạo thì duyệt được lùi hạn (rủi ro có từ trước, isolation-reviewer 27/09) | tính đúng của ADR 0038 | `service-petitions/lanh-dao-giao-viec-khong-kiem-khi-tao` |
+| **Bảy xung đột vòng đời Nhiệm vụ** chờ khách, mỗi câu đã có đề xuất domain-expert 28/09 (nhảy bước = một hành vi gộp; giữ bước duyệt; KHÔNG mở lại — tạo việc mới liên kết; không sửa mã NV; "đính chính hạn" là hành vi riêng; hết ngày 23:59 và thống nhất với đơn thư C9 17:00; chủ trì ≠ thực hiện) | mọi thay đổi bảng chuyển, ô sửa mã/hạn | `service-petitions/doi-chieu-26-09-nhiem-vu-truoc-neo` · `doi-chieu-24-09-nhiem-vu-phan-anh` |
+| Nhiệm vụ nguồn `phan-anh` nhận `source_id` không kiểm · `task.approve` vừa ký biên bản vừa duyệt nhiệm vụ | liên kết phiếu↔nhiệm vụ; tách quyền | `service-petitions/nguon-phan-anh-source-id-khong-kiem` · `task-approve-hai-viec` |
+| Danh bạ #12 phần còn lại: đổi **số cơ quan / co_zalo** có gỡ công khai không (F1) · dọn dấu đồng ý của người khoá trước bản vá (F2, migration) · chặn công khai người đang khoá (F3) · tự ghi đồng ý cho mình | tuyến công khai Mini App | `service-identity/rut-cong-khai-khi-doi-so-hoac-khoa` |
 | Bốn câu đối chiếu 24/09 chạm Nhiệm vụ/Phản ánh: cờ ảnh nghiệm thu mặc định (b9a9718 TẮT ↔ #7 BẬT), luật người đang giữ cho NHIỆM VỤ (chặn cả phần ghi tay nhật ký §5.9), chủ trì ≡ thực hiện, hạn 17:00 ↔ 23:59 | các tuyến tương ứng | `service-petitions/doi-chieu-24-09-nhiem-vu-phan-anh` |
 | Cột đầu Kanban mặc định **"Mới giao"** hay **"Chưa thực hiện"** (spec 02 §6 có hai tên) | nay hiện "Mới giao" | `web-admin/cau-hinh-bon-chuc-nang-web` |
 | Người quản trị đầu tiên: **ADR 0046 đã có**, còn nợ gỡ `IDENTITY_ADMIN_SEED_PASSWORD` khỏi Secret khi mọi xã đã đổi mật khẩu | một bí mật mở `admin` ở mọi xã chưa đổi | `service-identity/xa-moi-khong-co-vai-tro-va-quyen` |
@@ -135,10 +133,13 @@ mục menu `/cau-hinh` chỉ canh `admin.lookup` (mở theo mọi khoá tab, 26/
 
 ## 4. Phiên song song
 
-Lúc viết (chiều 27/09) ListAgents thấy hai phiên **idle**: `disable-delete-result-keys-test` và
-`callbot-completion-notification` — tên không gợi kho này, chưa hỏi chúng giữ đường dẫn nào. Cây
-vigov-v2 sạch (chỉ `bash.exe.stackdump`, `img.png` chưa theo dõi — rác). Cây `vihat-miniapp` sạch ở
-`e274d21`. Phiên sau tự kiểm lại, đừng tin dòng này.
+Lúc viết (28/09) ListAgents thấy hai phiên cùng kho, cả hai **idle**: `vigov-v2-45` — tự khai giữ
+`citizen-app/src/App.tsx` (AppRieng), `citizen-app/src/cong-dan/man/{TrangXa,DanhBaXa,TinTucAppXa,
+khung-xa,BieuTuong}.tsx`, khối `.xa-*` cuối `styles.css`, `XA_GIAO_DIEN`/`APP_RIENG` trong
+`noi-dung.ts`, `citizen-app/scripts/*.mjs`, ADR 0047 §6; nhờ **giữ ổn định** `docDanhBa`
+(`hop-dong-cong-khai.ts`) và `sauKhiTaiDanhBa`/`dichGoi` (`DanhBaCanBoScreen.tsx`). `vigov-v2-60` —
+lượt Mini App tuyến công khai, không khai đường dẫn. Cây vigov-v2 sạch ngoài `bash.exe.stackdump`,
+`img.png` (rác). Phiên sau tự kiểm lại, đừng tin dòng này.
 
 ---
 
@@ -175,6 +176,17 @@ phép kiểm xanh vì lý do sai. Gặp cái tiếp theo cùng dạng thì hỏi
 | IDE đỏ lòm các tệp `vihat-miniapp` (`could not import …`) | Kho ấy không nằm trong `go.work` của vigov-v2 — nhiễu gopls. Tin `go build/vet/test` chạy **trong** kho ấy |
 | Kho anh em có việc dở chưa commit đúng các tệp agent sắp sửa | Luôn `git -C ../vihat-miniapp status` trước khi giao việc sang đó; 27/09 có 17 tệp dở 5 ngày |
 | `git push` và một lần giao agent ghi sổ bị **lớp cấp quyền** từ chối | Không phải hook. Không làm vòng — người dùng tự chạy (`! git push origin main`) hoặc cấp quyền. Push sau đó người dùng cho phép và đã chạy |
+
+### Lượt Nhiệm vụ + Danh bạ 28/09
+
+| Triệu chứng | Sự thật |
+|---|---|
+| Quyết định "kiểm theo quyền" nghe rẻ, builder dừng giữa card | identity **không có RPC** nào trả lời "mã X có cầm khoá K không" — `ResolveAssignableStaff` cố ý không lọc (`identity.proto:1528`), `ResolveStaffPrincipal` chỉ tra người gọi. Trước khi hứa kiểm quyền của **người thứ ba**, mở proto |
+| Bộ lọc chung `?permission=` trên tuyến AnyAuthenticated trông vô hại | Mọi tài khoản liệt kê được người giữ `admin.*`. Danh sách trắng một khoá, khoá khác trả **400** — trả rỗng cho khoá này, tên cho khoá kia cũng là lộ |
+| Kiểm quyền theo `ma` bằng câu SQL của bộ kiểm quyền | Bộ kiểm khớp trên `nd.id`, danh bạ trên `nguoi_dung.ma` — dùng nguyên thì không tìm ra ai, mọi lãnh đạo bị từ chối. Fixture phải cho id ≠ mã |
+| Agent báo "thay đổi không phải của tôi" trong `git status` | Là phiên song song đang làm dở. ListAgents + nhắn hỏi trước khi commit; stage **từng đường dẫn**. `make check` trên cây có việc dở của người khác là đo sai — kiểm riêng phần mình |
+| `citizen_commitment_guard` chặn một `const quaHan = o.phanTre !== ""` ở web | Dương tính giả (giá trị suy ra, không lưu). Viết lại inline — không đổi ngữ nghĩa, không tắt rào |
+| Builder sửa tệp bằng script Python thay vì Edit | PreToolUse hook **không chạy** trên các lần sửa ấy. Soát tay diff (số điện thoại, chuỗi bí mật) trước khi commit |
 
 ### Máy này (Windows, bộ nhớ hạn chế)
 
@@ -218,14 +230,14 @@ phép kiểm xanh vì lý do sai. Gặp cái tiếp theo cùng dạng thì hỏi
 PYTHONIOENCODING=utf-8 mingw32-make check    # GOCACHE=/d/gocache; trên máy này có thể phải chạy từng module
 ```
 
-**27/09 chiều, chạy thật:** `PYTHONIOENCODING=utf-8 mingw32-make check` **exit 0** trên cây của
-`eb9932a` (chạy ngay trước khi commit nó). `ac142ec` sau đó chỉ sửa ADR — kiểm bằng `make kb` + `make
-brain` 7/7, **không** chạy lại `make check`. `vihat-miniapp` ở `e274d21`: gofmt · build · vet ·
-`go test -count=1 ./...` xanh (ca DB `internal/store` SKIP vì thiếu `TEST_DATABASE_DSN`).
+**28/09, chạy thật:** `PYTHONIOENCODING=utf-8 mingw32-make check` **exit 0** trên cây sạch ở
+`b736232` (chỉ tệp này đang sửa). `vihat-miniapp` **không** kiểm lại ở lượt này (lần xanh cuối của
+phiên này ở `e274d21`; `cf47da8` là của phiên song song).
 
-**CHƯA KIỂM:** chưa lần `zmp deploy` thật nào (chỉ `--thu`); chưa chạy app trên máy thật / webview
-Zalo; cầu phiên chưa từng gọi thật giữa hai kho; `CITIZEN_CORS_ALLOWED_ORIGINS` cho pod identity chưa
-đối chiếu manifest.
+**CHƯA KIỂM:** chưa lần `zmp deploy` thật nào; chưa chạy app trên máy thật / webview Zalo; cầu phiên
+chưa từng gọi thật giữa hai kho; `CITIZEN_CORS_ALLOWED_ORIGINS` cho pod identity chưa đối chiếu
+manifest; ca đột biến của `rut-cong-khai-khi-doi-so-hoac-khoa` bị lớp cấp quyền từ chối; nút gửi
+khối Trả lại và lời gọi danh bạ trong effect (web không DOM).
 
 **Thứ cổng KHÔNG phủ:**
 
