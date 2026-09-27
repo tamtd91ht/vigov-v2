@@ -31,8 +31,7 @@ import { APP_RIENG, CUA_TOI, DANH_BA, TIN_XA, XA_GIAO_DIEN, XA_TN } from "./noi-
 import { ChiTietPhieuTN, DanhSachPhieuTN, GuiPhanAnhTN, NhanTraiNghiem, ThePhieuTN, TraCuuPhieuTN } from "./PhanAnhAppXa";
 import { CaNhanXa, type CoChu, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
 import { BaiTinXa, DanhSachTinXa, HangTin, useTinXa } from "./TinTucAppXa";
-import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
-import { type LayMaViTri, type LayTenZalo, loiChao } from "./trai-nghiem";
+import { type LayMaViTri, type LayTenZalo, type PhieuTN } from "./trai-nghiem";
 
 export type XaCuaApp = { readonly ten: string; readonly tinh: string };
 
@@ -64,7 +63,8 @@ type ManXa =
   | { readonly kieu: "truyen-thanh" }
   | { readonly kieu: "video" }
   | { readonly kieu: "ban-do" }
-  | { readonly kieu: "thong-bao" };
+  | { readonly kieu: "thong-bao" }
+  | { readonly kieu: "su-kien" };
 
 const TAB: ReadonlyArray<{ tab: TabXa; nhan: string; bieu_tuong: TenBieuTuong }> = [
   { tab: "trang-chu", nhan: XA_GIAO_DIEN.tab_trang_chu, bieu_tuong: "home" },
@@ -73,31 +73,26 @@ const TAB: ReadonlyArray<{ tab: TabXa; nhan: string; bieu_tuong: TenBieuTuong }>
   { tab: "ca-nhan", nhan: XA_TN.tab_ca_nhan, bieu_tuong: "user" },
 ];
 
-/** Thanh tab dưới: hai tab — chỗ trống cho nút nổi — hai tab. */
-function ThanhTabXa({ tab, onChon, onGui }: { tab: TabXa; onChon: (t: TabXa) => void; onGui: () => void }) {
-  const nut = (t: (typeof TAB)[number]) => (
-    <button
-      key={t.tab}
-      type="button"
-      className={`xa-tab__muc${t.tab === tab ? " xa-tab__muc--on" : ""}`}
-      aria-current={t.tab === tab ? "page" : undefined}
-      onClick={() => onChon(t.tab)}
-    >
-      <BieuTuong ten={t.bieu_tuong} co={24} />
-      <span>{t.nhan}</span>
-    </button>
-  );
+/**
+ * Thanh tab dưới — bốn mục, KHÔNG nút nổi, theo prototype khách (`BottomNav.tsx`). "Gửi phản ánh" có ở
+ * nhóm "Chính quyền số" trên trang chủ và ở đầu tab Phản ánh.
+ */
+function ThanhTabXa({ tab, onChon }: { tab: TabXa; onChon: (t: TabXa) => void }) {
   return (
-    <>
-      <button type="button" className="xa-noi" onClick={onGui} aria-label={XA_GIAO_DIEN.nut_gui_noi}>
-        <BieuTuong ten="megaphone" co={28} />
-      </button>
-      <nav className="xa-tab" aria-label={XA_GIAO_DIEN.thanh_tab}>
-        {TAB.slice(0, 2).map(nut)}
-        <span className="xa-tab__cho-noi" aria-hidden="true" />
-        {TAB.slice(2).map(nut)}
-      </nav>
-    </>
+    <nav className="xa-tab" aria-label={XA_GIAO_DIEN.thanh_tab}>
+      {TAB.map((t) => (
+        <button
+          key={t.tab}
+          type="button"
+          className={`xa-tab__muc${t.tab === tab ? " xa-tab__muc--on" : ""}`}
+          aria-current={t.tab === tab ? "page" : undefined}
+          onClick={() => onChon(t.tab)}
+        >
+          <BieuTuong ten={t.bieu_tuong} co={24} />
+          <span>{t.nhan}</span>
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -121,11 +116,6 @@ function LogoXa() {
   return <img className="xa-hero__logo" src="./logo-xa.png" alt="" onError={() => datLoi(true)} />;
 }
 
-/** Giờ Việt Nam (+07) — không theo múi giờ của máy (cùng lý do `lib/thoi-diem.ts`). */
-function gioVN(): number {
-  return (new Date().getUTCHours() + 7) % 24;
-}
-
 type OMenu = {
   nhan: string;
   bieu_tuong: TenBieuTuong;
@@ -133,20 +123,39 @@ type OMenu = {
   man: ManXa;
 };
 
-const O_NHANH: readonly OMenu[] = [
-  { nhan: XA_GIAO_DIEN.o_gui, bieu_tuong: "megaphone", mau: "hong", man: { kieu: "gui" } },
-  { nhan: XA_TN.o_tra_cuu_ho_so, bieu_tuong: "search", mau: "xanh", man: { kieu: "tra-cuu" } },
-  { nhan: XA_TN.o_truyen_thanh, bieu_tuong: "radio", mau: "cam", man: { kieu: "truyen-thanh" } },
-  { nhan: XA_TN.o_video, bieu_tuong: "play", mau: "tim", man: { kieu: "video" } },
-  { nhan: XA_GIAO_DIEN.o_danh_ba, bieu_tuong: "phone", mau: "luc", man: { kieu: "danh-ba" } },
-  { nhan: XA_TN.o_ban_do, bieu_tuong: "map", mau: "navy", man: { kieu: "ban-do" } },
+/**
+ * HAI NHÓM CHỨC NĂNG — đúng bố cục prototype khách (`FunctionGrid.tsx`): "Chính quyền số" và "Thông tin –
+ * Truyền thông", lưới bốn cột, nền màu phủ cả ô (ô to thì vùng chạm to). Chia nhóm để người dân tìm theo
+ * loại việc, và để xã thêm ô sau này không vỡ bố cục.
+ */
+const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: "navy" | "cam"; them?: { nhan: string; man: ManXa }; o: readonly OMenu[] }> = [
+  {
+    tieu_de: XA_TN.nhom_chinh_quyen,
+    vach: "navy",
+    o: [
+      { nhan: XA_GIAO_DIEN.o_gui, bieu_tuong: "megaphone", mau: "hong", man: { kieu: "gui" } },
+      { nhan: XA_TN.o_tra_cuu_ngan, bieu_tuong: "search", mau: "xanh", man: { kieu: "tra-cuu" } },
+      { nhan: XA_GIAO_DIEN.o_danh_ba, bieu_tuong: "phone", mau: "luc", man: { kieu: "danh-ba" } },
+    ],
+  },
+  {
+    tieu_de: XA_TN.nhom_thong_tin,
+    vach: "cam",
+    them: { nhan: XA_TN.xem_them, man: { kieu: "tab", tab: "tin-tuc" } },
+    o: [
+      { nhan: XA_TN.o_tin_tuc, bieu_tuong: "news", mau: "xanh", man: { kieu: "tab", tab: "tin-tuc" } },
+      { nhan: XA_TN.o_truyen_thanh, bieu_tuong: "radio", mau: "luc", man: { kieu: "truyen-thanh" } },
+      { nhan: XA_TN.o_video, bieu_tuong: "play", mau: "cam", man: { kieu: "video" } },
+      { nhan: XA_TN.o_su_kien, bieu_tuong: "clock", mau: "tim", man: { kieu: "su-kien" } },
+    ],
+  },
 ];
 
 function TrangChuXa(props: {
   xa: XaCuaApp;
   ho_ten: string | null;
   tin: ReturnType<typeof useTinXa>;
-  phieu: readonly PhieuCuaToi[];
+  phieu: readonly PhieuTN[];
   di: (m: ManXa) => void;
 }) {
   const { xa, tin, di, ho_ten } = props;
@@ -155,68 +164,78 @@ function TrangChuXa(props: {
 
   return (
     <div className="xa-trang">
-      <header className="xa-hero">
-        <div className="xa-hero__hang">
-          <LogoXa />
-          <div className="xa-hero__chu">
-            <p className="xa-hero__chao">{loiChao(gioVN())}</p>
-            {ho_ten !== null && <p className="xa-hero__nguoi">{ho_ten}</p>}
-          </div>
-          <button
-            type="button"
-            className="xa-hero__chuong"
-            onClick={() => di({ kieu: "thong-bao" })}
-            aria-label={XA_TN.thong_bao}
-          >
-            <BieuTuong ten="bell" co={22} />
-          </button>
+      {/* Header theo prototype (`AppHeader.tsx`): biểu trưng trái, tên xã giữa, lời chào dưới; góc phải
+          để trống cho bộ nút của Zalo. Màu giữ theo bản `vi-gov` chủ dự án đã chọn. */}
+      <header className="xa-dau-xa">
+        <LogoXa />
+        <div className="xa-dau-xa__chu">
+          <h1 className="xa-dau-xa__ten">{xa.ten}</h1>
+          <p className="xa-dau-xa__chao">{ho_ten !== null ? XA_TN.xin_chao_ten(ho_ten) : xa.tinh}</p>
         </div>
-        <div className="xa-hero__don-vi">
-          <h1 className="xa-hero__ten">{xa.ten}</h1>
-          {xa.tinh !== "" && <p className="xa-hero__tinh">{xa.tinh}</p>}
-        </div>
+        <button type="button" className="xa-hero__chuong" onClick={() => di({ kieu: "thong-bao" })} aria-label={XA_TN.thong_bao}>
+          <BieuTuong ten="bell" co={22} />
+        </button>
       </header>
 
       <div className="xa-trang__than">
-        <div className="xa-luoi">
-          {O_NHANH.map((o) => (
-            <button key={o.nhan} type="button" className="xa-the xa-o-nhanh" onClick={() => di(o.man)}>
-              <OBieuTuong ten={o.bieu_tuong} mau={o.mau} />
-              <span className="xa-o-nhanh__nhan">{o.nhan}</span>
+        {NHOM_CHUC_NANG.map((nhom) => (
+          <section key={nhom.tieu_de} className="xa-the xa-the--dem xa-nhom-cn">
+            <div className={`xa-dau-nhom xa-dau-nhom--${nhom.vach}`}>
+              <h2 className="xa-dau-khoi__tieu-de">{nhom.tieu_de}</h2>
+              {nhom.them && (
+                <button type="button" className="xa-dau-khoi__them" onClick={() => di(nhom.them!.man)}>
+                  {nhom.them.nhan}
+                </button>
+              )}
+            </div>
+            <div className="xa-luoi-4">
+              {nhom.o.map((o) => (
+                <button key={o.nhan} type="button" className={`xa-o-4 xa-mau--${o.mau}`} onClick={() => di(o.man)}>
+                  <BieuTuong ten={o.bieu_tuong} co={30} />
+                  <span className="xa-o-4__nhan">{o.nhan}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+
+        <section className="xa-the xa-the--dem xa-nhom-cn">
+          <div className="xa-dau-nhom xa-dau-nhom--luc">
+            <h2 className="xa-dau-khoi__tieu-de">{XA_GIAO_DIEN.muc_phan_anh}</h2>
+            <button type="button" className="xa-dau-khoi__them" onClick={() => di({ kieu: "tab", tab: "phan-anh" })}>
+              {XA_GIAO_DIEN.xem_tat_ca}
             </button>
-          ))}
-        </div>
-
-        <DauKhoi tieu_de={XA_GIAO_DIEN.muc_phan_anh} onXemTatCa={() => di({ kieu: "tab", tab: "phan-anh" })} />
-        {moi_nhat ? (
-          <ThePhieuTN phieu={moi_nhat} onMo={() => di({ kieu: "phieu", ma: moi_nhat.ma_tra_cuu, tu: "trang-chu" })} />
-        ) : (
-          <div className="xa-the">
-            <KhoiTrangThai bieu_tuong="chat" cau={XA_TN.chua_co_phieu} />
           </div>
-        )}
+          {moi_nhat ? (
+            <ThePhieuTN phieu={moi_nhat} onMo={() => di({ kieu: "phieu", ma: moi_nhat.ma_tra_cuu, tu: "trang-chu" })} />
+          ) : (
+            <KhoiTrangThai bieu_tuong="chat" cau={XA_TN.chua_co_phieu} />
+          )}
+        </section>
 
-        <DauKhoi tieu_de={XA_GIAO_DIEN.muc_tin_moi} onXemTatCa={() => di({ kieu: "tab", tab: "tin-tuc" })} />
-        {!tin.ds.da_co_trang_dau && tin.ds.dang_tai ? (
-          <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai} dang_tai />
-        ) : !tin.ds.da_co_trang_dau && tin.ds.loi !== null ? (
-          <KhoiTrangThai
-            bieu_tuong="alert"
-            loi
-            cau={TIN_XA.loi_may_chu}
-            nut={{ nhan: TIN_XA.nut_thu_lai, onBam: tin.taiTiep }}
-          />
-        ) : tin_moi.length === 0 ? (
-          <KhoiTrangThai bieu_tuong="news" cau={XA_GIAO_DIEN.tin_moi_trong} />
-        ) : (
-          <ul className="xa-ds">
-            {tin_moi.map((t) => (
-              <li key={t.id}>
-                <HangTin tin={t} onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
-              </li>
-            ))}
-          </ul>
-        )}
+        <section className="xa-the xa-the--dem xa-nhom-cn">
+          <div className="xa-dau-nhom xa-dau-nhom--navy">
+            <h2 className="xa-dau-khoi__tieu-de">{XA_GIAO_DIEN.muc_tin_moi}</h2>
+            <button type="button" className="xa-dau-khoi__them" onClick={() => di({ kieu: "tab", tab: "tin-tuc" })}>
+              {XA_GIAO_DIEN.xem_tat_ca}
+            </button>
+          </div>
+          {!tin.ds.da_co_trang_dau && tin.ds.dang_tai ? (
+            <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai} dang_tai />
+          ) : !tin.ds.da_co_trang_dau && tin.ds.loi !== null ? (
+            <KhoiTrangThai bieu_tuong="alert" loi cau={TIN_XA.loi_may_chu} nut={{ nhan: TIN_XA.nut_thu_lai, onBam: tin.taiTiep }} />
+          ) : tin_moi.length === 0 ? (
+            <KhoiTrangThai bieu_tuong="news" cau={XA_GIAO_DIEN.tin_moi_trong} />
+          ) : (
+            <ul className="xa-ds">
+              {tin_moi.map((t) => (
+                <li key={t.id}>
+                  <HangTin tin={t} onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );
@@ -257,7 +276,7 @@ function AppCuaXa(props: {
   // HỌ TÊN VÀ PHIẾU CHỈ TRONG BỘ NHỚ (`trai-nghiem.ts`): đóng app là mất, không ghi xuống máy. Không đăng
   // nhập, không màn định danh (chủ dự án, 28/09/2026) — họ tên xin quyền Zalo ở chỗ cần.
   const [ho_ten, datHoTen] = useState<string | null>(null);
-  const [phieu, datPhieu] = useState<readonly PhieuCuaToi[]>([]);
+  const [phieu, datPhieu] = useState<readonly PhieuTN[]>([]);
   const [co_chu, datCoChu] = useState<CoChu>("vua");
   const [man, datMan] = useState<ManXa>({ kieu: "tab", tab: "trang-chu" });
   const tin = useTinXa(ten_mien);
@@ -318,6 +337,30 @@ function AppCuaXa(props: {
     case "ban-do":
       man_con = <ManChuaCoDuLieu tieu_de={XA_TN.ban_do_tieu_de} bieu_tuong="map" cau={XA_TN.ban_do_trong} onQuayLai={ve} />;
       break;
+    case "su-kien": {
+      // ViGov chưa có trường "loại tin"; prototype mở tin loại sự kiện. Ở đây: tin mà chuyên mục có chữ
+      // "sự kiện" — đúng thứ xã đã đăng, không đoán.
+      const su_kien = tin.ds.muc.filter((t) => /sự kiện/i.test(t.chuyen_muc));
+      man_con = (
+        <>
+          <DauManCon tieu_de={XA_TN.su_kien_tieu_de} onQuayLai={ve} />
+          <TrangCon>
+            {su_kien.length === 0 ? (
+              <KhoiTrangThai bieu_tuong="clock" cau={XA_TN.su_kien_trong} />
+            ) : (
+              <ul className="xa-ds">
+                {su_kien.map((t) => (
+                  <li key={t.id}>
+                    <HangTin tin={t} onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </TrangCon>
+        </>
+      );
+      break;
+    }
     case "thong-bao":
       man_con = <ManChuaCoDuLieu tieu_de={XA_TN.thong_bao} bieu_tuong="bell" cau={XA_TN.thong_bao_trong} onQuayLai={ve} />;
       break;
@@ -344,6 +387,10 @@ function AppCuaXa(props: {
       <>
         <DauTab tieu_de={CUA_TOI.tieu_de} nhan_tn />
         <div className="xa-trang xa-trang--tab">
+          <button type="button" className="xa-nut xa-nut--hong xa-nut--dau" onClick={() => datMan({ kieu: "gui" })}>
+            <BieuTuong ten="megaphone" co={22} />
+            {XA_GIAO_DIEN.o_gui}
+          </button>
           <DanhSachPhieuTN
             phieu={phieu}
             onMo={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
@@ -375,7 +422,7 @@ function AppCuaXa(props: {
   return (
     <div className={lop}>
       <main id="main">{than}</main>
-      <ThanhTabXa tab={tab} onChon={veTab} onGui={() => datMan({ kieu: "gui" })} />
+      <ThanhTabXa tab={tab} onChon={veTab} />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   cheSoDienThoai,
   chuCaiDau,
   kiemNhapPhieu,
+  LINH_VUC_TAM,
   loiChao,
   maPhieuTraiNghiem,
   nhomCua,
@@ -22,6 +23,7 @@ import {
 
 const CAU = { thieu: "thiếu", qua_dai: (n: number) => `quá ${n}` };
 const NHAP: NhapPhieu = {
+  linh_vuc_goi_y: "Rác thải – Vệ sinh môi trường",
   noi_dung: "  Rác tồn đọng đầu ngõ 12 ",
   dia_chi: " Ngõ 12 ",
   ho_ten: "Nguyễn Văn An",
@@ -63,9 +65,22 @@ describe("họ tên: xin quyền Zalo, không đăng nhập, không người dù
 });
 
 describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () => {
-  it("năm ô người dân gõ ứng đúng năm trường máy chủ nhận", () => {
+  it("năm ô người dân gõ ứng đúng năm trường máy chủ nhận, cộng lĩnh vực gợi ý (ADR 0049)", () => {
     // noi_dung · dia_chi · ho_ten · dien_thoai · an_danh ↔ content · address · reporter_name · reporter_phone · anonymous
-    expect(Object.keys(NHAP)).toHaveLength(TRUONG_DUOC_NHAN.length);
+    expect(Object.keys(NHAP).filter((k) => k !== "linh_vuc_goi_y")).toHaveLength(TRUONG_DUOC_NHAN.length);
+  });
+
+  it("lĩnh vực gợi ý nằm RIÊNG, không bao giờ thành lĩnh vực của phiếu hay đặt hạn (ADR 0049)", () => {
+    const p = taoPhieuTraiNghiem(NHAP, "2026-09-28T01:00:00Z", "TN-AAAAAAAA");
+    expect(p.linh_vuc_goi_y).toBe("Rác thải – Vệ sinh môi trường");
+    expect(p.linh_vuc).toBe("");
+    expect(p.nhan_linh_vuc).toBe("");
+    expect(p.han_xu_ly_xong).toBeNull();
+  });
+
+  it("danh mục tạm: mười hai tên, không một con số giờ nào (luật 10 cấm #3)", () => {
+    expect(LINH_VUC_TAM).toHaveLength(12);
+    for (const lv of LINH_VUC_TAM) expect(lv).not.toMatch(/\d+\s*(giờ|ngày|h\b)/i);
   });
 
   it("vòng đời dùng đúng các trạng thái có nhãn trong TRANG_THAI", () => {

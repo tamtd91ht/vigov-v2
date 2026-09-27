@@ -78,6 +78,10 @@ mới biết phiếu ấy có phải an ninh trật tự hay không.
 | **Cho dân chọn lĩnh vực lúc gửi** | Ghép với quyết định C nó tạo một **lỗ khai thác thật**: dân chọn `An ninh trật tự` cho một ổ gà thì được 16 giờ, mà cán bộ phân loại lại **không kéo dài được** — nên mọi phiếu sẽ trôi về lĩnh vực khẩn nhất, và bảng SLA mất nghĩa từ dòng đầu tới dòng cuối. Nó còn đổi cả mô hình phân loại, vốn là việc của cán bộ |
 | **Nâng dòng mặc định lên 168 giờ** | Đó là hứa **rộng hơn với MỌI phiếu**, kể cả phiếu đáng lẽ 16 giờ. Một xã không thể nói với dân "việc gì cũng bảy ngày" chỉ vì phần mềm chưa biết phân loại |
 
+> 28/09/2026 — dòng đầu của bảng trên được **sửa một phần bởi ADR 0049**: dân được chọn "lĩnh vực gần
+> đúng nhất" như một GỢI Ý cho cán bộ; lĩnh vực của phiếu và hạn xử lý xong vẫn do cán bộ chốt, nên lỗ
+> khai thác nói ở dòng ấy vẫn đóng.
+
 Đường được chọn không hứa rộng hơn với ai, không cho ai tự nâng mức khẩn của mình, và trả
 lại đủ **12 dòng SLA** cho kênh công dân.
 

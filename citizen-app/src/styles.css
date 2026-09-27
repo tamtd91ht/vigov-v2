@@ -3562,3 +3562,103 @@ button.xa-o-nhanh {
 .xa-app .xa-nhom__tieu-de {
   margin: 4px 0 0;
 }
+
+/* ---------- bố cục trang chủ theo prototype khách (28/09/2026) ---------- */
+.xa-dau-xa {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 12px 16px;
+  background: linear-gradient(160deg, var(--xa-navy-dam) 0%, var(--xa-navy) 55%, var(--xa-navy-dam) 100%);
+  color: #ffffff;
+}
+.xa-dau-xa__chu {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+.xa-app .xa-dau-xa__ten {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.xa-dau-xa__chao {
+  margin: 2px 0 0;
+  font-size: var(--text-small);
+  color: var(--xa-hero-phu);
+}
+.xa-nhom-cn {
+  margin-bottom: 12px;
+  display: grid;
+  gap: 12px;
+}
+.xa-dau-nhom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 10px;
+  border-left: 4px solid var(--xa-navy);
+}
+.xa-dau-nhom--cam {
+  border-left-color: #c26a1a;
+}
+.xa-dau-nhom--luc {
+  border-left-color: var(--xa-luc-dam);
+}
+.xa-app .xa-dau-nhom .xa-dau-khoi__tieu-de {
+  flex: 1;
+  margin: 0;
+}
+.xa-luoi-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.xa-o-4 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 12px 2px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.xa-o-4__nhan {
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.xa-nut--dau {
+  margin-bottom: 14px;
+}
+
+/* bước chọn lĩnh vực (ADR 0049) */
+.xa-luoi-lv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.xa-o-lv {
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 10px 12px;
+  border: 1px solid var(--xa-vien);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.xa-o-lv--on {
+  border-color: var(--xa-navy);
+  background: var(--xa-xanh-nhat);
+  color: var(--xa-navy);
+}

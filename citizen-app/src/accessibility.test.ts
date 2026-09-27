@@ -781,6 +781,8 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       ".xa-chip",
       ".xa-hang",
       ".xa-cong-tac",
+      ".xa-o-4",
+      ".xa-o-lv",
     ]) {
       expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
         new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),

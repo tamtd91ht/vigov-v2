@@ -86,6 +86,30 @@ export const VONG_DOI: readonly string[] = [
   "da-dong",
 ];
 
+/**
+ * DANH MỤC LĨNH VỰC TẠM — mười hai tên của prototype khách (`../vigov-require/apps/miniapp`), cho bước
+ * "chọn lĩnh vực gần đúng nhất" (ADR 0049). KHÔNG KÈM SỐ GIỜ NÀO: SLA là cấu hình từng xã (luật 10 cấm #3,
+ * ADR 0049 điều kiện dừng #3). Lựa chọn là GỢI Ý cho cán bộ, không đặt hạn. Gỡ danh sách này khi có tuyến
+ * đọc danh mục lĩnh vực của xã.
+ */
+export const LINH_VUC_TAM: readonly string[] = [
+  "Rác thải – Vệ sinh môi trường",
+  "Hạ tầng giao thông",
+  "Cấp thoát nước",
+  "Điện",
+  "Trật tự đô thị – lấn chiếm vỉa hè",
+  "An ninh trật tự",
+  "Xây dựng không phép",
+  "Ô nhiễm (tiếng ồn, khí thải, nước thải)",
+  "Y tế – Giáo dục",
+  "Thái độ / tác phong cán bộ",
+  "An toàn thực phẩm",
+  "Khác",
+];
+
+/** Phiếu trải nghiệm = phiếu của hợp đồng thật + lĩnh vực DÂN GỢI Ý (ADR 0049), tách khỏi lĩnh vực cán bộ chốt. */
+export type PhieuTN = PhieuCuaToi & { readonly linh_vuc_goi_y: string };
+
 /** Nhóm lọc ở danh sách — theo việc người dân muốn biết, không theo mã trạng thái. */
 export type NhomLoc = "tat-ca" | "dang-cho" | "dang-xu-ly" | "da-xong";
 
@@ -95,8 +119,12 @@ export function nhomCua(trang_thai: string): Exclude<NhomLoc, "tat-ca"> {
   return "da-xong";
 }
 
-/** Năm ô người dân gõ — ĐÚNG năm trường máy chủ nhận (`TRUONG_DUOC_NHAN`). */
+/**
+ * Năm ô người dân gõ — ĐÚNG năm trường máy chủ nhận hôm nay (`TRUONG_DUOC_NHAN`) — cộng lĩnh vực gợi ý
+ * (ADR 0049), trường tuỳ chọn máy chủ CHƯA nhận.
+ */
 export type NhapPhieu = {
+  readonly linh_vuc_goi_y: string;
   readonly noi_dung: string;
   readonly dia_chi: string;
   readonly ho_ten: string;
@@ -136,8 +164,9 @@ export function maPhieuTraiNghiem(ngau_nhien: () => number = Math.random): strin
  * Phiếu vừa gửi, đúng hình dạng máy chủ trả cho người gửi: trạng thái `da-tiep-nhan`, chưa phân loại,
  * họ tên và số điện thoại ĐÃ CHE, RỖNG khi ẩn danh (cùng lời hứa của `thanGuiPhanAnh`).
  */
-export function taoPhieuTraiNghiem(nhap: NhapPhieu, luc_gui_iso: string, ma: string): PhieuCuaToi {
+export function taoPhieuTraiNghiem(nhap: NhapPhieu, luc_gui_iso: string, ma: string): PhieuTN {
   return {
+    linh_vuc_goi_y: nhap.linh_vuc_goi_y,
     ma_tra_cuu: ma,
     trang_thai: "da-tiep-nhan",
     linh_vuc: "",
@@ -157,7 +186,7 @@ export function taoPhieuTraiNghiem(nhap: NhapPhieu, luc_gui_iso: string, ma: str
 }
 
 /** Tra cứu trong các phiếu của lần mở này. Không phân biệt hoa thường, bỏ khoảng trắng. */
-export function traPhieuTraiNghiem(ds: readonly PhieuCuaToi[], ma: string): PhieuCuaToi | null {
+export function traPhieuTraiNghiem(ds: readonly PhieuTN[], ma: string): PhieuTN | null {
   const q = ma.trim().toUpperCase();
   return ds.find((p) => p.ma_tra_cuu === q) ?? null;
 }
