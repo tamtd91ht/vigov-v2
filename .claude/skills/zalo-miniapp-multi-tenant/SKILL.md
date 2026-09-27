@@ -145,8 +145,9 @@ ADR 0044 replaced ADR 0005's no-parameter path (picker, GPS, profile). Do not re
 - **Main app**: without a QR the citizen sees only the group introduction. A picker would let
   anyone enter any commune's content from a public store listing.
 - **Own app**: the commune is fixed by the verified App ID. A picker would be a second, weaker
-  source for a fact the server already knows. ⚠ Today (ADR 0047 §6) the Thăng Bình own app gets its
-  commune from the baked `--vao-thang` domain over the main-app bridge, not yet from a verified App ID.
+  source for a fact the server already knows. ⚠ Today (ADR 0047 §6) the Thăng Bình own app shows its
+  commune's PUBLIC view from the baked `--vao-thang` domain and opens NO session — never auto-open one
+  over the main-app bridge (it records a confirmation nobody made).
 - **GPS** has no role in choosing a commune: locations are spoofable, and urban boundaries run
   down the middle of streets.
 

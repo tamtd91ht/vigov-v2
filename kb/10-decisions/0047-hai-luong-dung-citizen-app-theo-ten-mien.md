@@ -239,13 +239,15 @@ như app chung. Chủ dự án chốt:
 | Câu | Nay |
 |---|---|
 | 1 — *"Không giá trị nào theo xã vào bundle"* | **Ngoại lệ đúng một:** `deploy.mjs --domain=<x> --vao-thang` nung tên miền `<x>` vào `__VIGOV_XA_CO_DINH__`. Không có cờ thì bundle vẫn là một, như câu 1 |
-| Mở app riêng có cờ | Không bước *"Đúng xã này chưa?"* (khớp mục 4: *"vào app riêng là vào xã rồi"*). Tra `/communes`, mở phiên, vào thẳng kênh công dân. `d` trên QR bị bỏ qua — một app riêng chỉ phục vụ một xã |
-| Giao diện app riêng có cờ (chủ dự án, 27/09 khuya: *"bỏ hết thông tin VihatGroup đi"*, *"nút xác nhận xã … nên bỏ nó"*) | **Không một chữ ViHAT Group**: không màn giới thiệu, không thanh tab, không nút chat OA, header chỉ tên xã. **Không nút nào** trong lúc mở. Mở phiên không thành thì vẫn vào kênh ở chế độ không phiên (tin tức, danh bạ mở; gửi phản ánh nói "chưa mở") — không quay lại hỏi. Tra xã hỏng thì một câu và nút "Thử lại". Kênh là màn gốc, không nút "Quay lại". Mã phần thương mại vẫn nằm trong bundle nhưng không đường nào tới được — `App.tsx` `AppRieng` |
+| Mở app riêng có cờ (chủ dự án, 28/09: *"chọn ra nó trên zalo mini app … vào ứng dụng thì sẽ thấy view của xã"*) | Mở là **trang của xã**: tra `/communes` theo tên miền, rồi kênh công dân — tin tức, danh bạ đọc ngay. **Không bước xác nhận, không đăng nhập lúc mở, không qua `vihat-miniapp`.** `d` trên QR bị bỏ qua — một app riêng chỉ phục vụ một xã. Xã sau (Sông Hàn…) y hệt, không sửa mã |
+| Giao diện app riêng có cờ (27/09 khuya: *"bỏ hết thông tin VihatGroup đi"*, *"nút xác nhận xã … nên bỏ nó"*) | **Không một chữ ViHAT Group**: không màn giới thiệu, không thanh tab, không nút chat OA; header chỉ tên xã; **thanh tiêu đề gốc của Zalo bị ẩn** (`app.actionBarHidden` cho đúng lần đẩy, vì `app.title` chung là *"ViHAT Group"* — 28/09: *"bỏ luôn view đó đi"*). Tra xã hỏng: một câu và nút "Thử lại". Kênh là màn gốc, không nút "Quay lại". Mã phần thương mại vẫn nằm trong bundle nhưng không đường nào tới được — `App.tsx` `AppRieng`, `cong-dan/man/TrangXa.tsx` |
+| Đăng nhập trong app riêng | **Chưa dựng.** Chỉ khi người dân làm việc cá nhân (gửi, xem phản ánh); máy chủ lấy xã từ App ID đã xác minh qua `mini_app`. Cần app secret của từng app và nơi giữ nó — quyết khi tới lượt. Tới lúc ấy ba lối phản ánh nói "chưa đăng nhập được" |
+| Chính sách quyền riêng tư trong app riêng | Chưa có đường tới. Chủ dự án 28/09: Zalo đòi lúc nộp duyệt thì làm lúc ấy |
 | App riêng **không** cờ, và app chung | Như cũ: màn ViHAT, vào xã bằng QR `d` + xác nhận |
 
 Cài đặt — `citizen-app/scripts/deploy.mjs` (môi trường dựng `env_dung`) · `scripts/cau-hinh.mjs`
 (`xaCoDinh`) · `vite.config.ts` (`define`) · `src/lib/xa-co-dinh.ts` · `src/App.tsx` ·
-`src/cong-dan/man/XacNhanXa.tsx` (`buocTuDongSauTraXa`).
+`src/cong-dan/man/TrangXa.tsx` · `scripts/dich-den.mjs` (`appConfigChoLanDay`).
 
 **Vì sao nung được mà không mở lỗ cô lập** (luật 1 bất biến 10, cấm #2):
 
@@ -259,29 +261,19 @@ Cài đặt — `citizen-app/scripts/deploy.mjs` (môi trường dựng `env_dun
 **Cái giá chủ dự án chấp nhận:** mỗi xã một bản dựng — sửa lỗi phải phát hành lại từng app riêng
 (đúng lý do ADR 0044 §*Phương án* từng loại *"build riêng cho từng xã"*).
 
-**Chưa đổi, và phải biết:** phiên của app riêng vẫn mở qua cầu của `vihat-miniapp`, và `vihat-miniapp`
-gửi **App ID của app chung** (`internal/httpapi/sessions_vigov.go:101`, một cặp App ID/secret —
-`internal/config/config.go:151-153`). Nên máy chủ thấy phiên ở chế độ **chính** kèm `commune_host_hint`
-đã xác nhận, không phải chế độ **riêng**; dòng `mini_app` của App ID xã chưa được đường này tra tới.
-Việc đổi token của app xã bằng secret của app chung **đã chạy được** trên máy thật 27/09 — một chứng cứ
-cho UNKNOWN #1 (Zalo không chặn), chưa phải phép đo có kiểm soát.
+**Vì sao app riêng không mở phiên lúc mở** (đo 27/09 khuya, bản a861a9b–6859c14 đã làm thế rồi bỏ):
+phiên chỉ mở được qua cầu của `vihat-miniapp`, cầu ấy gửi **App ID app chung**
+(`vihat-miniapp/internal/httpapi/sessions_vigov.go:101`), nên máy chủ đi chế độ **chính** + đã xác nhận
+(`service-identity/internal/app/cau_phien_cong_dan.go:214-227`, `:319-336`) và: đổi xã đã nhớ của
+tài khoản dưới App ID app chung, thu hồi phiên xã khác, ghi vết `doi_xa_da_nho` như một lần công dân
+xác nhận không ai bấm. Việc đổi token của app xã bằng secret của app chung **đã chạy được** trên máy
+thật 27/09 — một chứng cứ cho UNKNOWN #1 (Zalo không chặn), chưa phải phép đo có kiểm soát.
 
-**Hệ quả phía máy chủ của chế độ chính + `communeConfirmed=true` tự động** (đo trong mã,
-`service-identity/internal/app/cau_phien_cong_dan.go:214-227`, `:319-336`) — chưa được chủ dự án chốt:
-
-| Hệ quả | Vì sao |
-|---|---|
-| Xã đã nhớ của tài khoản Zalo **dưới App ID app chung** thành Thăng Bình | Chế độ chính + đã xác nhận → `NhoXa`. Mở app chung sau đó không kèm QR là vào Thăng Bình (ADR 0044 câu 6) |
-| Phiên của xã cũ bị **thu hồi** mỗi lần đổi | *"Mỗi lúc một phiên còn sống"*. Người dùng cả app chung (xã A qua QR) lẫn app Thăng Bình sẽ bị đăng xuất qua lại |
-| Vết `doi_xa_da_nho` ghi **như một lần công dân xác nhận** | Không ai bấm gì — chỉ mở app riêng. Vết mang `app_id` của app chung |
-
-Chấm dứt được khi cầu chọn theo App ID đã xác minh (chế độ **riêng**: xã từ `mini_app`, không nhớ xã,
-không `doi_xa_da_nho`) — cần `vihat-miniapp` nhận nhiều App ID và app secret của từng app.
-
-Việc chưa có đường tới trong app riêng: **chính sách quyền riêng tư** và màn quản lý quyền nằm ở phần
-thương mại (`features/company-intro/ContactScreen.tsx`), và nội dung chính sách ghi ViHAT Group là
-bên nhận dữ liệu. Tiêu đề thanh điều hướng Zalo đến từ `app-config.json` `app.title` = *"ViHAT Group"*
-(chung mọi bản dựng). Cả hai chưa được chủ dự án chốt cho app riêng.
+**Hướng của chủ dự án (28/09/2026), ghi lại chưa dựng:** *"mô hình SSO. Tất cả các cấu hình của xã
+bao gồm cả appId đều lưu database hết, platform-admin sẽ làm việc đó."* Hệ quả khi dựng: tệp
+`citizen-app/scripts/ung-dung-theo-ten-mien.mjs` (câu 2) là **tạm** — nguồn cặp tên miền ↔ App ID sẽ là
+bảng `mini_app` của `service-platform`, ghi qua platform-admin; việc một lần `gan-mini-app-thang-binh`
+trong `deploy/Jenkinsfile` gỡ khi màn ấy có.
 
 ## ĐIỀU KIỆN DỪNG
 

@@ -57,7 +57,7 @@
  * duyệt là dòng đoán ra.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -68,6 +68,7 @@ import {
   kiemBangAnhXa,
   kiemToken,
   laPlaceholder,
+  appConfigChoLanDay,
   nhanPhienBan,
   tokenTrongTepEnv,
 } from "./dich-den.mjs";
@@ -252,7 +253,7 @@ console.log(
 );
 console.log(
   vao_thang
-    ? `  Mở app   : VÀO THẲNG xã ${dich.ten_mien} — tên miền này nung vào bundle (--vao-thang)`
+    ? `  Mở app   : VÀO THẲNG xã ${dich.ten_mien} — tên miền này nung vào bundle, ẩn thanh tiêu đề Zalo (--vao-thang)`
     : "  Mở app   : màn giới thiệu ViHAT; vào xã bằng QR có `d`",
 );
 console.log(`  Nhãn     : ${mota}`);
@@ -316,7 +317,16 @@ if (chi_thu) {
 let ma = dung(env_dung);
 if (ma !== 0) process.exit(ma);
 
-ma = zmp(env_zmp, "sync-config", "dist/index.html");
-if (ma !== 0) process.exit(ma);
-
-process.exit(zmp(env_zmp, ...co_zmp));
+// `app-config.json` được COMMIT và dùng chung. App riêng `--vao-thang` đổi nó cho ĐÚNG lần đẩy này
+// (ẩn thanh tiêu đề Zalo — `appConfigChoLanDay`) rồi TRẢ LẠI nguyên văn, kể cả khi zmp hỏng giữa
+// chừng: một tệp bị bỏ quên ở trạng thái app riêng là lần đẩy app chung kế tiếp mất thanh tiêu đề.
+const TEP_APP_CONFIG = new URL("../app-config.json", import.meta.url);
+const app_config_goc = readFileSync(TEP_APP_CONFIG, "utf8");
+try {
+  if (vao_thang) writeFileSync(TEP_APP_CONFIG, appConfigChoLanDay(app_config_goc, true), "utf8");
+  ma = zmp(env_zmp, "sync-config", "dist/index.html");
+  if (ma === 0) ma = zmp(env_zmp, ...co_zmp);
+} finally {
+  if (vao_thang) writeFileSync(TEP_APP_CONFIG, app_config_goc, "utf8");
+}
+process.exit(ma);

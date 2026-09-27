@@ -14,6 +14,7 @@ import {
   kiemTenMien,
   kiemToken,
   laPlaceholder,
+  appConfigChoLanDay,
   nhanPhienBan,
   tokenTrongTepEnv,
 } from "./dich-den.mjs";
@@ -337,5 +338,26 @@ describe("App ID và token KHÔNG BAO GIỜ tới được bundle", () => {
     expect(than).toMatch(/mkdtempSync\(/);
     expect(than).toMatch(/cwd: thu_muc/);
     expect(than).toMatch(/rmSync\(thu_muc/);
+  });
+});
+
+describe("app-config.json cho một lần đẩy", () => {
+  const goc = readFileSync(new URL("../app-config.json", import.meta.url), "utf8");
+
+  it("không cờ thì nguyên văn — app chung không đổi một byte", () => {
+    expect(appConfigChoLanDay(goc, false)).toBe(goc);
+  });
+
+  it("--vao-thang ẩn thanh tiêu đề Zalo, giữ mọi khoá khác", () => {
+    const moi = JSON.parse(appConfigChoLanDay(goc, true));
+    const cu = JSON.parse(goc);
+    expect(moi.app.actionBarHidden).toBe(true);
+    expect({ ...moi.app, actionBarHidden: undefined }).toEqual({ ...cu.app, actionBarHidden: undefined });
+    expect(moi.listSyncJS).toEqual(cu.listSyncJS);
+  });
+
+  it("deploy.mjs trả tệp về nguyên văn trong `finally`", () => {
+    const ma = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
+    expect(ma).toMatch(/finally \{\s*if \(vao_thang\) writeFileSync\(TEP_APP_CONFIG, app_config_goc/);
   });
 });

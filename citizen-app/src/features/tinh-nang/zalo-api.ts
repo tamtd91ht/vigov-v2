@@ -222,12 +222,10 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // "Xác nhận xã" THÊM 27/09/2026: nút "Đúng, tiếp tục" trên màn xác nhận xã (sau khi quét QR của
     // xã) gọi lại chính lời gọi này để mở phiên làm việc với xã ấy. Cùng một lời gọi, một mục đích
     // mới — và câu `de_lam_gi` phải kể cả hai, vì đây là câu màn Quản lý quyền đọc cho người dùng.
-    // "Mở ứng dụng của xã" THÊM cùng ngày (ADR 0047 §6): app riêng dựng `--vao-thang` gọi nó NGAY LÚC
-    // MỞ, không có nút nào — câu phải nói đúng lúc ấy, không chỉ "bấm xác nhận".
-    man: "Liên hệ · Xác nhận xã · Mở ứng dụng của xã",
+    man: "Liên hệ · Xác nhận xã",
     tinh_nang: "Đăng nhập bằng số Zalo · Mở phiên làm việc với xã",
     de_lam_gi:
-      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận, hoặc ngay khi bạn mở ứng dụng riêng của một xã — là thứ mở phiên làm việc với đúng xã ấy.",
+      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập.",
   },

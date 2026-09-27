@@ -662,9 +662,9 @@ kênh công dân của xã, không bước xác nhận (ADR 0047 §6).
 Đường app riêng lấy `ZMP_TOKEN` từ **môi trường**; không có thì script **tự chạy `zmp login`** (quét
 QR) cho đúng App ID ấy trong một thư mục tạm — không ghi đè `.env` của app chung — rồi kiểm claim
 `appId` khớp App ID đích trước khi dựng (`scripts/dich-den.mjs`, `kiemToken`). Đích thật do token
-quyết, không do `APP_ID` (đã đo, zmp-cli 4.0.3). ⚠ Hôm nay phiên của app riêng đi qua cầu của
-`vihat-miniapp` dưới App ID **app chung**, nên dòng `mini_app` của App ID xã **chưa được tra tới**
-(ADR 0047 §6); nó cần khi cầu chọn theo App ID đã xác minh. App chung vẫn như cũ (`APP_ID_APP_CHUNG = null` nghĩa là token
+quyết, không do `APP_ID` (đã đo, zmp-cli 4.0.3). ⚠ Hôm nay app riêng **chưa mở phiên** (chỉ đọc
+tuyến công khai của xã), nên dòng `mini_app` của App ID xã **chưa được tra tới** (ADR 0047 §6); nó cần
+khi đường đăng nhập theo App ID đã xác minh được dựng. App chung vẫn như cũ (`APP_ID_APP_CHUNG = null` nghĩa là token
 trong `.env` quyết đích). Dựng nằm **trong** script vì
 địa chỉ máy chủ được nung vào lúc dựng — dựng ngoài rồi đẩy trong là hai lệnh có thể lệch nhau.
 

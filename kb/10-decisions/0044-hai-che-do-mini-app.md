@@ -99,8 +99,8 @@ cho mọi app, tách khỏi OA gửi thông báo của từng xã.
 > Khuôn `t`/`src`/`v` thay bởi ADR 0047 (27/09/2026): tham số mang tên miền xã, `src` giữ nguyên.
 >
 > *"Một bản build"* và dòng *"App riêng … App ID → bảng → máy chủ gắn sẵn"* có ngoại lệ từ ADR 0047 §6
-> (27/09/2026): app riêng dựng `--vao-thang` mang tên miền xã trong bundle, và hôm nay phiên của nó đi
-> chế độ **chính** qua cầu `vihat-miniapp` (App ID app chung), chưa phải chế độ riêng.
+> (27–28/09/2026): app riêng dựng `--vao-thang` mang tên miền xã trong bundle, mở ra là trang công khai
+> của xã; nó **chưa mở phiên** — đường phiên theo App ID đã xác minh chưa dựng.
 
 ## Hệ quả
 

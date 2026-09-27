@@ -2,13 +2,14 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { TabBar } from "./components/TabBar";
 import {
-  APP_RIENG,
   KenhCongDan,
   type KetQuaMoPhien,
   type KetThucXacNhan,
   type MoPhienViGov,
   NHAN_KENH_CONG_DAN,
   NutVaoKenhCongDan,
+  TrangXa,
+  type XaCuaApp,
   XacNhanXa,
 } from "./cong-dan";
 import { COMPANY } from "./content/company-profile";
@@ -198,78 +199,28 @@ export function App() {
 /**
  * APP RIÊNG CỦA MỘT XÃ (`deploy.mjs --domain=<x> --vao-thang`, ADR 0047 §6).
  *
- * KHÔNG MỘT CHỮ NÀO CỦA ViHAT GROUP (chủ dự án, 27/09/2026): không màn giới thiệu, không thanh tab
- * của phần thương mại, không nút chat OA, không tên đơn vị phát hành trên header. Không nút xác nhận
- * xã: mở app là tra xã rồi mở phiên (`XacNhanXa tu_dong`). Kênh công dân là màn gốc — không có nút
- * "Quay lại" vì không có chỗ nào để về.
+ * Chọn app của xã trên Zalo là thấy NGAY trang của xã ấy (chủ dự án, 28/09/2026). KHÔNG MỘT CHỮ NÀO
+ * CỦA ViHAT GROUP: không màn giới thiệu, không thanh tab của phần thương mại, không nút chat OA, không
+ * tên đơn vị phát hành trên header. Không bước xác nhận, không đăng nhập lúc mở — `TrangXa` tra tên xã
+ * qua tuyến công khai rồi hiện kênh công dân. Kênh là màn gốc: không nút "Quay lại".
  *
  * Header: tên xã khi đã tra được; trước đó để trống — không bao giờ một tên đoán từ tên miền.
- * Hỏng (xã không tìm thấy, mất mạng): một câu và nút "Thử lại", dựng lại bước tra từ đầu.
  */
 export function AppRieng({ ten_mien }: { ten_mien: string }) {
-  const [xa, datXa] = useState<XaCuaLanMo | null>(null);
-  const [loi, datLoi] = useState<string | null>(null);
-  /** Đổi `key` của `XacNhanXa` để bấm "Thử lại" dựng lại nó — nó chỉ tra một lần mỗi lần dựng. */
-  const [lan_thu, datLanThu] = useState(0);
-
-  function ketThuc(kq: KetThucXacNhan) {
-    if (kq.kieu === "da-mo") {
-      datXa({ ten: kq.ten_xa, tinh: null, ten_mien: khoaTraCongKhai(kq.ten_mien, ten_mien) });
-    } else if (kq.kieu === "xac-nhan-khong-phien") {
-      datXa({ ten: kq.xa.ten, tinh: kq.xa.tinh, ten_mien: khoaTraCongKhai(null, ten_mien) });
-    } else {
-      datLoi(kq.cau ?? APP_RIENG.chua_ket_noi);
-    }
-  }
-
-  let noi_dung: ReactNode;
-  if (xa !== null) {
-    noi_dung = <KenhCongDan ten_mien={xa.ten_mien} />;
-  } else if (loi !== null) {
-    noi_dung = (
-      <section className="cd-man">
-        <p className="cd-loi" role="status">
-          {loi}
-        </p>
-        <button
-          type="button"
-          className="cd-nut"
-          onClick={() => {
-            datLoi(null);
-            datLanThu((n) => n + 1);
-          }}
-        >
-          {APP_RIENG.thu_lai}
-        </button>
-      </section>
-    );
-  } else {
-    noi_dung = (
-      <XacNhanXa
-        key={lan_thu}
-        ten_mien={ten_mien}
-        nguon="app-rieng"
-        moPhienViGov={moPhienViGov}
-        onKetThuc={ketThuc}
-        tu_dong
-      />
-    );
-  }
+  const [xa, datXa] = useState<XaCuaApp | null>(null);
 
   return (
     <div className="app">
       <header className="app-header">
         <div className="app-header__hang">
           <div className="app-header__ten">
-            <p className="app-header__owner">
-              {xa === null ? "" : xa.tinh ? `${xa.ten}, ${xa.tinh}` : xa.ten}
-            </p>
+            <p className="app-header__owner">{xa === null ? "" : `${xa.ten}, ${xa.tinh}`}</p>
             <p className="app-header__screen">{NHAN_KENH_CONG_DAN}</p>
           </div>
         </div>
       </header>
       <main className="app-main" id="main">
-        {noi_dung}
+        <TrangXa ten_mien={ten_mien} onXa={datXa} />
       </main>
     </div>
   );

@@ -24,7 +24,7 @@ import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { type KetQuaXacNhan, type MoPhienViGov, moPhienSauXacNhan } from "../api/mo-phien-vigov";
 
-import { APP_RIENG, XAC_NHAN_XA } from "./noi-dung";
+import { XAC_NHAN_XA } from "./noi-dung";
 import { GoiYXaScreen, phanGiaiGoiY, type XaGoiY } from "../../features/kham-pha";
 
 /** Trạng thái của màn, THUẦN — test dựng thẳng từng bước mà không cần DOM. */
@@ -68,34 +68,6 @@ export function buocSauTraXa(kq: KetQuaCongKhai<readonly XaTraDuoc[]>, nguon: st
     return { ket_thuc: { kieu: "ve-gioi-thieu", cau: XAC_NHAN_XA.khong_thay } };
   }
   return { ket_thuc: { kieu: "ve-gioi-thieu", cau: XAC_NHAN_XA.chua_ket_noi } };
-}
-
-/**
- * APP RIÊNG CỦA XÃ (`--vao-thang`, 27/09/2026): kết quả tra xã → xã để mở phiên NGAY, hoặc kết thúc.
- * Không hỏi, không qua mức tin theo nguồn: người dân mở app riêng của xã là đã chọn xã, và tên miền
- * đến từ bản dựng chứ không từ một liên kết ai đó chuyển tay. Vẫn cần ĐÚNG MỘT xã, tên không rỗng —
- * mọi thứ khác fail closed y như đường QR.
- */
-export function buocTuDongSauTraXa(
-  kq: KetQuaCongKhai<readonly XaTraDuoc[]>,
-): { readonly mo: XaGoiY } | { readonly ket_thuc: KetThucXacNhan } {
-  if (kq.kieu === "xong" && kq.gia_tri.length === 1 && kq.gia_tri[0]!.ten.trim() !== "") {
-    return { mo: kq.gia_tri[0]! };
-  }
-  if (kq.kieu === "xong" || kq.kieu === "khong-hop-le" || kq.kieu === "khong-thay") {
-    return { ket_thuc: { kieu: "ve-gioi-thieu", cau: APP_RIENG.khong_thay } };
-  }
-  return { ket_thuc: { kieu: "ve-gioi-thieu", cau: APP_RIENG.chua_ket_noi } };
-}
-
-/**
- * APP RIÊNG: kết quả mở phiên → kết thúc, KHÔNG BAO GIỜ quay lại hỏi. Đường QR để `thu-lai` ở lại màn
- * xác nhận cho bấm lại; app riêng không có nút ấy (chủ dự án bỏ, 27/09/2026), nên mọi nhánh chưa có
- * phiên đều mở kênh ở chế độ không phiên — tin tức và danh bạ mở được, gửi phản ánh nói "chưa mở".
- */
-export function buocTuDongSauMoPhien(xa: XaGoiY, kq: KetQuaXacNhan): KetThucXacNhan {
-  if (kq.kieu === "da-mo") return { kieu: "da-mo", ten_xa: kq.ten_xa, ten_mien: kq.ten_mien };
-  return { kieu: "xac-nhan-khong-phien", xa };
 }
 
 /**
@@ -153,10 +125,8 @@ export function XacNhanXa(props: {
   /** Hàm mở phiên do `App.tsx` dựng từ client đăng nhập — xem `api/mo-phien-vigov.ts`. */
   moPhienViGov: MoPhienViGov;
   onKetThuc: (kq: KetThucXacNhan) => void;
-  /** App riêng của xã (`XA_CO_DINH`): tra xong là mở phiên luôn, không hỏi — `buocTuDongSauTraXa`. */
-  tu_dong?: boolean;
 }) {
-  const { ten_mien, nguon, moPhienViGov, onKetThuc, tu_dong = false } = props;
+  const { ten_mien, nguon, moPhienViGov, onKetThuc } = props;
   const [trang, datTrang] = useState<TrangXacNhan>({ kieu: "dang-tra" });
   // Tra ĐÚNG MỘT LẦN, kể cả khi React chạy hiệu ứng hai lần (StrictMode).
   const da_tra = useRef(false);
@@ -169,36 +139,15 @@ export function XacNhanXa(props: {
   useEffect(() => {
     if (da_tra.current) return;
     da_tra.current = true;
-    void traXaTheoTenMien(ten_mien).then((kq) => {
-      if (!tu_dong) return sang(buocSauTraXa(kq, nguon));
-      const b = buocTuDongSauTraXa(kq);
-      if ("ket_thuc" in b) onKetThuc(b.ket_thuc);
-      else moPhien(b.mo);
-    });
+    void traXaTheoTenMien(ten_mien).then((kq) => sang(buocSauTraXa(kq, nguon)));
     // Tên miền và nguồn đọc MỘT LẦN lúc mở app; không có gì đổi chúng giữa chừng.
   }, []);
 
-  function moPhien(xa: XaGoiY) {
-    datTrang({ kieu: "dang-mo", xa });
-    void moPhienSauXacNhan(moPhienViGov, ten_mien).then((kq) =>
-      tu_dong ? onKetThuc(buocTuDongSauMoPhien(xa, kq)) : sang(buocSauMoPhien(xa, kq)),
-    );
-  }
-
   function xacNhan() {
     if (trang.kieu !== "hoi") return;
-    moPhien(trang.xa);
-  }
-
-  // App riêng: chỉ một dòng trạng thái — không thẻ xã, không nút nào để bấm.
-  if (tu_dong) {
-    return (
-      <section className="goi-y" aria-busy="true">
-        <p className="goi-y__tiep" role="status">
-          {APP_RIENG.dang_mo}
-        </p>
-      </section>
-    );
+    const xa = trang.xa;
+    datTrang({ kieu: "dang-mo", xa });
+    void moPhienSauXacNhan(moPhienViGov, ten_mien).then((kq) => sang(buocSauMoPhien(xa, kq)));
   }
 
   return (

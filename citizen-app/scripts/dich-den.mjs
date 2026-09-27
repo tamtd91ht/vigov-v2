@@ -197,6 +197,20 @@ export function tokenTrongTepEnv(noi_dung) {
   return gia_tri === "" ? null : gia_tri;
 }
 
+/**
+ * `app-config.json` cho một lần đẩy. App riêng `--vao-thang` ẨN thanh tiêu đề gốc của Zalo
+ * (`app.actionBarHidden`, khoá mà trình giả lập của zmp-cli 4.0.3 đọc — `start/frame/index.html`):
+ * thanh ấy mang `app.title` chung mọi bản dựng ("ViHAT Group"), và app riêng không được mang chữ nào
+ * của ViHAT (chủ dự án, 27–28/09/2026). Không cờ thì trả NGUYÊN VĂN — app chung không đổi một byte.
+ */
+export function appConfigChoLanDay(noi_dung, vao_thang) {
+  if (!vao_thang) return noi_dung;
+  const cau_hinh = JSON.parse(noi_dung);
+  cau_hinh.app = { ...cau_hinh.app, actionBarHidden: true };
+  return `${JSON.stringify(cau_hinh, null, 2)}
+`;
+}
+
 /** Nhãn phiên bản trên console Zalo: đích · commit · lúc · dirty. */
 export function nhanPhienBan({ dich, sha, luc, dirty }) {
   const noi =

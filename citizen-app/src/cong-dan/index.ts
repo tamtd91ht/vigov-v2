@@ -25,6 +25,6 @@
  *   gọi nào.
  */
 export { KenhCongDan, NHAN_KENH_CONG_DAN, NutVaoKenhCongDan } from "./man/KenhCongDan";
-export { APP_RIENG } from "./man/noi-dung";
+export { TrangXa, type XaCuaApp } from "./man/TrangXa";
 export { type KetThucXacNhan, XacNhanXa } from "./man/XacNhanXa";
 export type { KetQuaMoPhien, MoPhienViGov, YeuCauMoPhien } from "./api/mo-phien-vigov";
