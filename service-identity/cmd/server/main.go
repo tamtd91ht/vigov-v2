@@ -21,7 +21,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"google.golang.org/grpc"
 
-	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/config"
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/grpcx"
@@ -180,10 +179,10 @@ func run(log *slog.Logger) error {
 	// The CITIZEN session registry (migration 0004) — the only store here built on the RAW *sql.DB
 	// rather than on `kho`, and the exemption is argued in full at NewPhienCongDanStore: this
 	// lookup is what ESTABLISHES the commune, so there is no commune with which to scope it
-	// (ADR 0022). It is READ by two things: the gRPC RPC ResolveCitizenSession, and this service's
-	// own citizen edge (step 9b, TraCuu only — the lookup that authenticates GET /api/v1/communes).
-	// No HTTP route OPENS or REVOKES a citizen session, because who may do that on an HTTP route is
-	// a question nobody has asked.
+	// (ADR 0022). It is READ by the gRPC RPC ResolveCitizenSession. This service has NO citizen HTTP
+	// edge since 2026-09-27: its two Mini App routes became Public (step 9b), so no HTTP route reads,
+	// opens or revokes a citizen session — who may do that on an HTTP route is a question nobody has
+	// asked.
 	phienCongDan := idstore.NewPhienCongDanStore(db, log)
 	// The Zalo account behind a Mini App session (migration 0011, ADR 0045) — the second store built
 	// on the raw *sql.DB, for exactly one read: the remembered commune, needed BEFORE the scoped
@@ -417,15 +416,16 @@ func run(log *slog.Logger) error {
 	h = httpx.Recover(traceID)(h)
 	h = httpx.StripTenantHeaders(h)
 
-	// 9b. THE CITIZEN SURFACE — its own mux, its own Deps, its own chain (rule 4, invariant 5; the
-	//     shape service-petitions set). `phienCongDan` is the SAME registry the gRPC
-	//     ResolveCitizenSession reads, used in-process: identity owns it, so there is no RPC to make.
-	//     `nenTang` is the SAME platform client every Host resolution uses.
-	muxCongDan := http.NewServeMux()
-	svchttp.RegisterCongDan(muxCongDan, svchttp.DepsCongDan{Xa: nenTang, Log: log})
-	c := dungBienCongDan(muxCongDan, phienCongDan, cfg.CitizenCORSAllowedOrigins)
+	// 9b. THE PUBLIC SURFACE — its own mux, its own Deps, its own chain (the separation rule 4,
+	//     invariant 5 asks of citizen routes). It REPLACES the citizen chain this step mounted until
+	//     2026-09-27: both Mini App routes are Public now (owner decision), and a Public route cannot
+	//     sit behind httpx.CitizenEdge. `nenTang` is the SAME platform client every Host resolution
+	//     uses; `canBo` is the SAME staff store, reached only through its DanhBaCongKhai read.
+	muxCongKhai := http.NewServeMux()
+	svchttp.RegisterCongKhai(muxCongKhai, svchttp.DepsCongKhai{Xa: nenTang, DanhBa: canBo, Log: log})
+	ck := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins)
 
-	ngoai := dungNgoai(h, c)
+	ngoai := dungNgoai(h, ck)
 
 	srv := &http.Server{
 		Addr: cfg.ListenAddr,
@@ -700,28 +700,28 @@ func dungCongCau(khoaCau []secret.Secret, cau *svcgrpc.CauServer, log *slog.Logg
 	return srv
 }
 
-// dungBienCongDan builds the CITIZEN edge chain, outermost last — the same order as
-// service-petitions' citizen chain, minus idem (this surface has no write):
+// dungBienCongKhai builds the PUBLIC edge chain, outermost last:
 //
-//	CORSCongDan         the Mini App webview is cross-origin; a preflight carries no Authorization
-//	                    and must be answered before anything below sees it. CITIZEN chain ONLY —
-//	                    staff are same-origin with a host-only cookie (ADR 0043)
+//	CORSCongDan         the Mini App webview is cross-origin. Answered before anything below sees a
+//	                    preflight. The SAME middleware and the SAME CITIZEN_CORS_ALLOWED_ORIGINS the
+//	                    citizen chains use — the Mini App is one origin set, not two. PUBLIC chain
+//	                    ONLY here — staff are same-origin with a host-only cookie (ADR 0043)
 //	StripTenantHeaders  a client naming its own commune is granting itself access — heavier here,
-//	                    where there is no `Host` to contradict it
-//	Recover             a panic becomes a traceable 500
-//	CitizenEdge         bearer token -> the session THIS service issued. Puts no commune in the
-//	                    context and refuses nothing; the route's declarations do both
-//	CitizenPrincipal    the same resolved session on the identity axis — one lookup, both axes
+//	                    where there is no `Host` and no session to contradict it
+//	Recover             a panic becomes a traceable 500 — including tenant.MustFrom's, if a public
+//	                    handler ever reached a scoped store without resolving a commune first
 //
-// NO TenantMiddleware AND NO XacThuc: the Mini App calls identity's API host, which is reserved
-// and maps to no commune (ADR 0046), and the citizen presents no staff cookie. Either one mounted
-// here would answer 404/401 to every citizen.
+// NO TenantMiddleware, NO XacThuc, NO CitizenEdge: the Mini App calls identity's API host, which is
+// reserved and maps to no commune (ADR 0046); it presents no staff cookie; and the routes are Public
+// by owner decision (2026-09-27). TenantMiddleware would 404 every request, XacThuc has nothing to
+// read, and CitizenEdge refuses (500) any success from a route that declared no citizen commune
+// class — which a Public route cannot declare (tools/apidoc).
 //
-// A NAMED FUNCTION so main_test.go can drive the real chain.
-func dungBienCongDan(muxCongDan http.Handler, so httpx.CitizenSessions, nguonCORS httpx.NguonCORS) http.Handler {
-	c := muxCongDan
-	c = authz.CitizenPrincipal()(c)
-	c = httpx.CitizenEdge(so)(c)
+// NO idem.Middleware: this surface has no write.
+//
+// A NAMED FUNCTION so bien_cong_dan_test.go can drive the real chain.
+func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS) http.Handler {
+	c := muxCongKhai
 	c = httpx.Recover(traceID)(c)
 	c = httpx.StripTenantHeaders(c)
 	c = httpx.CORSCongDan(nguonCORS)(c)
@@ -730,23 +730,26 @@ func dungBienCongDan(muxCongDan http.Handler, so httpx.CitizenSessions, nguonCOR
 
 // dungNgoai splits the two chains on the outer mux, by EXACT PATH.
 //
-// svchttp.MauDanhMucXa is registered WITHOUT a trailing slash, so it matches that one path and
-// nothing under it: `/api/v1/communes/current` — the staff sign-in screen's read, resolved from
-// `Host` — still falls to "/" and the staff chain. A subtree pattern (`/api/v1/communes/`) here
-// would send the staff route through CitizenEdge, where it has no session and answers 401 to the
-// sign-in screen. main_test.go asserts both directions.
+// svchttp.MauDanhMucXa and svchttp.MauDanhBaCongKhai are registered WITHOUT a trailing slash, so each
+// matches that one path and nothing under it: `/api/v1/communes/current` — the staff sign-in screen's
+// read, resolved from `Host` — still falls to "/" and the staff chain. A subtree pattern
+// (`/api/v1/communes/`) here would send the staff route through the public chain, where no commune is
+// ever resolved from `Host` and the sign-in screen's handler would panic on tenant.MustCurrent.
+// `commune-staff` is its own path ELEMENT, so it cannot capture `/api/v1/staff` or
+// `/api/v1/staff-directory` either. bien_cong_dan_test.go asserts both directions.
 //
 // /healthz is deliberately OUTSIDE both chains. It answers whether this process is alive, which is
 // true or false regardless of which commune is asking. Behind Host resolution it would fail
 // whenever the platform service does, and an orchestrator would then restart a healthy process
 // during somebody else's outage — turning one dependency's blip into an outage of its own.
-func dungNgoai(canBo, congDan http.Handler) *http.ServeMux {
+func dungNgoai(canBo, congKhai http.Handler) *http.ServeMux {
 	ngoai := http.NewServeMux()
 	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-	ngoai.Handle(svchttp.MauDanhMucXa, congDan)
+	ngoai.Handle(svchttp.MauDanhMucXa, congKhai)
+	ngoai.Handle(svchttp.MauDanhBaCongKhai, congKhai)
 	ngoai.Handle("/", canBo)
 	return ngoai
 }

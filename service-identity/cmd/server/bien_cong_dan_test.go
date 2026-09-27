@@ -1,12 +1,16 @@
 package main
 
-// THE CITIZEN EDGE OF THIS BINARY — the wiring, not the middleware (core/httpx proves that).
+// THE PUBLIC EDGE OF THIS BINARY — the wiring, not the middleware (core/httpx proves that).
 //
-// What only this file can see: that dungNgoai routes GET /api/v1/communes to the CITIZEN chain and
-// leaves /api/v1/communes/current on the STAFF chain, and that dungBienCongDan really installs the
-// session layer and CORS. A pattern changed from exact to subtree, or a middleware deleted, leaves
-// a service that starts and serves — and either 401s the staff sign-in screen or answers the Mini
-// App with no session check. Nothing else in the repository turns red for that.
+// The file name is historical: until 2026-09-27 this edge was the CITIZEN chain. The owner then made
+// both Mini App routes Public, and dungBienCongKhai replaced dungBienCongDan.
+//
+// What only this file can see: that dungNgoai routes GET /api/v1/communes and GET
+// /api/v1/commune-staff to the PUBLIC chain on the reserved API host, and leaves
+// /api/v1/communes/current, /api/v1/staff and /api/v1/staff-directory on the STAFF chain; and that
+// dungBienCongKhai really installs CORS. A pattern changed from exact to subtree, or a middleware
+// deleted, leaves a service that starts and serves — and either 404s the Mini App on the reserved
+// host or puts a staff route outside Host resolution. Nothing else in the repository turns red.
 
 import (
 	"context"
@@ -15,31 +19,27 @@ import (
 	"testing"
 
 	"github.com/vihat/vigov/core/config"
-	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-identity/internal/domain"
 	svchttp "github.com/vihat/vigov/service-identity/internal/http"
 )
 
 const (
 	hostApiIdentity = "identity.api.vigov.vn" // reserved, maps to no commune (ADR 0046)
-	tokCongDanThu   = "tok-cong-dan-thu"
 	nguonMiniAppThu = "https://h5.zdn.vn"
 )
-
-type soPhienThu struct{ goi int }
-
-func (s *soPhienThu) TraCuu(_ context.Context, tok string) (httpx.CitizenSession, bool) {
-	s.goi++
-	if tok == tokCongDanThu {
-		return httpx.CitizenSession{ID: "sid-thu", TenantID: ulidThu}, true // no phone: ADR 0045
-	}
-	return httpx.CitizenSession{}, false
-}
 
 type xaTheoHostThu struct{}
 
 func (xaTheoHostThu) XaTheoHost(context.Context, string) (tenant.Tenant, bool, error) {
 	return tenant.Tenant{ID: ulidThu, Name: "Xã Thử", Active: true}, true, nil
+}
+
+type danhBaThu struct{}
+
+func (danhBaThu) DanhBaCongKhai(ctx context.Context) ([]domain.CanBoCongKhai, error) {
+	tenant.MustFrom(ctx) // the handler must have resolved the commune before reading
+	return nil, nil
 }
 
 // canBoDanhDau stands in for the whole staff chain: it only records that it was reached.
@@ -50,30 +50,25 @@ func (c *canBoDanhDau) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusTeapot)
 }
 
-func dungNgoaiThu(t *testing.T) (http.Handler, *canBoDanhDau, *soPhienThu) {
+func dungNgoaiThu(t *testing.T) (http.Handler, *canBoDanhDau) {
 	t.Helper()
 	nguon, err := config.PhanTichNguonCORS("https://h5.zdn.vn,https://*.zalo.me")
 	if err != nil {
 		t.Fatalf("PhanTichNguonCORS: %v", err)
 	}
 	mux := http.NewServeMux()
-	svchttp.RegisterCongDan(mux, svchttp.DepsCongDan{Xa: xaTheoHostThu{}})
-	so := &soPhienThu{}
+	svchttp.RegisterCongKhai(mux, svchttp.DepsCongKhai{Xa: xaTheoHostThu{}, DanhBa: danhBaThu{}})
 	cb := &canBoDanhDau{}
-	return dungNgoai(cb, dungBienCongDan(mux, so, nguon)), cb, so
+	return dungNgoai(cb, dungBienCongKhai(mux, nguon)), cb
 }
 
-func goiThu(h http.Handler, method, path, tok, origin string) *httptest.ResponseRecorder {
+func goiThu(h http.Handler, method, path, origin string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, "https://"+hostApiIdentity+path, nil)
 	r.Host = hostApiIdentity
-	if tok != "" {
-		r.Header.Set("Authorization", "Bearer "+tok)
-	}
 	if origin != "" {
 		r.Header.Set("Origin", origin)
 		if method == http.MethodOptions {
 			r.Header.Set("Access-Control-Request-Method", "GET")
-			r.Header.Set("Access-Control-Request-Headers", "authorization")
 		}
 	}
 	w := httptest.NewRecorder()
@@ -81,61 +76,77 @@ func goiThu(h http.Handler, method, path, tok, origin string) *httptest.Response
 	return w
 }
 
-func TestDanhMucXaDiChuoiCongDanKhongDiChuoiCanBo(t *testing.T) {
-	h, cb, _ := dungNgoaiThu(t)
+var tuyenCongKhai = []string{svchttp.MauDanhMucXa, svchttp.MauDanhBaCongKhai}
 
-	if w := goiThu(h, http.MethodGet, svchttp.MauDanhMucXa+"?host=xa-thu.vigov.vn", tokCongDanThu, ""); w.Code != http.StatusOK {
-		t.Fatalf("có phiên công dân: mã = %d, muốn 200 — thân: %s", w.Code, w.Body.String())
-	}
-	// The session layer is really installed: without a token the SAME path is refused.
-	if w := goiThu(h, http.MethodGet, svchttp.MauDanhMucXa+"?host=xa-thu.vigov.vn", "", ""); w.Code != http.StatusUnauthorized {
-		t.Fatalf("không có phiên: mã = %d, muốn 401", w.Code)
-	}
-	if cb.goi != 0 {
-		t.Fatalf("chuỗi cán bộ bị gọi %d lần cho tuyến công dân", cb.goi)
-	}
-}
-
-func TestCommunesCurrentVanOChuoiCanBo(t *testing.T) {
-	// The staff sign-in screen's read. Sent through CitizenEdge it would have no session and answer
-	// 401 — the sign-in page unable to print the commune's name, with nothing red.
-	for _, path := range []string{"/api/v1/communes/current", "/api/v1/communes/", "/api/v1/staff"} {
-		h, cb, so := dungNgoaiThu(t)
-		goiThu(h, http.MethodGet, path, "", "")
-		if cb.goi != 1 || so.goi != 0 {
-			t.Errorf("%s: chuỗi cán bộ gọi %d lần, sổ phiên công dân %d lần — muốn 1 và 0", path, cb.goi, so.goi)
+func TestTuyenCongKhaiDiChuoiCongKhaiKhongCanPhien(t *testing.T) {
+	for _, p := range tuyenCongKhai {
+		h, cb := dungNgoaiThu(t)
+		// No Authorization header at all: Public by owner decision 2026-09-27.
+		if w := goiThu(h, http.MethodGet, p+"?host=xa-thu.vigov.vn", ""); w.Code != http.StatusOK {
+			t.Fatalf("%s không có phiên: mã = %d, muốn 200 — thân: %s", p, w.Code, w.Body.String())
+		}
+		if cb.goi != 0 {
+			t.Fatalf("%s: chuỗi cán bộ bị gọi %d lần cho tuyến công khai", p, cb.goi)
 		}
 	}
 }
 
-func TestPreflightDanhMucXa204KhongChamSoPhien(t *testing.T) {
-	h, _, so := dungNgoaiThu(t)
-	w := goiThu(h, http.MethodOptions, svchttp.MauDanhMucXa, "", "https://mini.zalo.me")
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("preflight: mã = %d, muốn 204", w.Code)
+func TestTuyenCanBoVanOChuoiCanBo(t *testing.T) {
+	// Sent through the public chain, the staff sign-in read would have no commune from `Host`, and the
+	// register and the picker would have no staff session check at all.
+	for _, path := range []string{"/api/v1/communes/current", "/api/v1/communes/", "/api/v1/staff",
+		"/api/v1/staff-directory", "/api/v1/commune-staff/x"} {
+		h, cb := dungNgoaiThu(t)
+		goiThu(h, http.MethodGet, path, "")
+		if cb.goi != 1 {
+			t.Errorf("%s: chuỗi cán bộ gọi %d lần — muốn 1", path, cb.goi)
+		}
 	}
-	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "https://mini.zalo.me" {
-		t.Errorf("Access-Control-Allow-Origin = %q", got)
+}
+
+func TestPreflightTuyenCongKhai204(t *testing.T) {
+	for _, p := range tuyenCongKhai {
+		h, cb := dungNgoaiThu(t)
+		w := goiThu(h, http.MethodOptions, p, "https://mini.zalo.me")
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("%s preflight: mã = %d, muốn 204", p, w.Code)
+		}
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != "https://mini.zalo.me" {
+			t.Errorf("%s: Access-Control-Allow-Origin = %q", p, got)
+		}
+		if cb.goi != 0 {
+			t.Errorf("%s: preflight chạm chuỗi cán bộ", p)
+		}
 	}
-	if so.goi != 0 {
-		t.Errorf("preflight chạm sổ phiên %d lần", so.goi)
+}
+
+func TestTuyenCongKhaiMangCORSChoNguonMiniApp(t *testing.T) {
+	for _, p := range tuyenCongKhai {
+		h, _ := dungNgoaiThu(t)
+		w := goiThu(h, http.MethodGet, p+"?host=xa-thu.vigov.vn", nguonMiniAppThu)
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != nguonMiniAppThu {
+			t.Errorf("%s: Access-Control-Allow-Origin = %q, muốn %q", p, got, nguonMiniAppThu)
+		}
+		if w.Header().Get("Access-Control-Allow-Credentials") != "" {
+			t.Errorf("%s: tuyến công khai cấp Allow-Credentials", p)
+		}
 	}
 }
 
 func TestTuyenCanBoKhongMangCORS(t *testing.T) {
-	h, _, _ := dungNgoaiThu(t)
-	w := goiThu(h, http.MethodGet, "/api/v1/communes/current", "", nguonMiniAppThu)
+	h, _ := dungNgoaiThu(t)
+	w := goiThu(h, http.MethodGet, "/api/v1/communes/current", nguonMiniAppThu)
 	if w.Header().Get("Access-Control-Allow-Origin") != "" {
 		t.Errorf("tuyến cán bộ mang header CORS: %v", w.Header())
 	}
 }
 
 func TestHealthzNgoaiCaHaiChuoi(t *testing.T) {
-	h, cb, so := dungNgoaiThu(t)
-	if w := goiThu(h, http.MethodGet, "/healthz", "", ""); w.Code != http.StatusOK {
+	h, cb := dungNgoaiThu(t)
+	if w := goiThu(h, http.MethodGet, "/healthz", ""); w.Code != http.StatusOK {
 		t.Fatalf("/healthz: mã = %d", w.Code)
 	}
-	if cb.goi != 0 || so.goi != 0 {
-		t.Errorf("/healthz đi qua một chuỗi: cán bộ %d, sổ phiên %d", cb.goi, so.goi)
+	if cb.goi != 0 {
+		t.Errorf("/healthz đi qua chuỗi cán bộ %d lần", cb.goi)
 	}
 }
