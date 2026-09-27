@@ -1,8 +1,22 @@
 import { describe, expect, it } from "vitest";
 
 import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
+// ⚠ Tệp TEST nhập client ViGov — được, vì lượt quét ranh giới (`ranh-gioi-hai-nua.test.ts`) bỏ mọi
+// tệp `.test.`. Tệp SẢN XUẤT `ket-xuat-ho-so.ts` thì không được, nên nó chép, và ca §5 khoá bản chép.
+import {
+  diaChiBaiTin,
+  diaChiDanhBa,
+  diaChiTinXa,
+  diaChiTraXa,
+  DUONG_DAN_DANH_BA,
+  DUONG_DAN_TIN_XA,
+  DUONG_DAN_XA,
+} from "../cong-dan/api/hop-dong-cong-khai";
+import { DANH_BA, TIN_XA } from "../cong-dan/man/noi-dung";
 import {
   thanYeuCau as thanYeuCauPhien,
+  thanYeuCauCauViGov,
+  TRUONG_GUI_DI_CAU_VIGOV,
   TRUONG_GUI_DI_PHIEN,
 } from "../features/dang-nhap/hop-dong";
 import { KHAI_BAO_LOI_GOI, type KhaiBaoLoiGoi } from "../features/tinh-nang/zalo-api";
@@ -10,7 +24,9 @@ import { KHAI_BAO_LOI_GOI, type KhaiBaoLoiGoi } from "../features/tinh-nang/zalo
 import type { MucChinhSach } from "./chinh-sach-rieng-tu";
 import {
   canhBaoVanXuoi,
+  DUONG_CONG_KHAI,
   DUONG_ROI_KHOI_MAY,
+  TEN_MAN_CONG_KHAI,
   khoiRoiKhoiMay,
   MOC_BAT_DAU,
   MOC_BAT_DAU_ROI_MAY,
@@ -401,14 +417,26 @@ describe("4 — khối sinh ra chỉ ăn phần giữa hai mốc", () => {
  *   Ba ca dưới là hai chiều của một cái khoá, cộng một ca chống "xanh vì không tìm thấy gì".
  */
 describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi thứ khai đều thật sự rời khỏi máy", () => {
-  it("quét đủ HAI tuyến — một lượt quét một tuyến sẽ xanh vì lý do sai", () => {
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(2);
+  it("quét đủ BẢY đường — một lượt quét thiếu đường sẽ xanh vì lý do sai", () => {
+    // 2 của 22/09 (đăng nhập · yêu cầu) + 5 của 27/09: bước xác nhận xã (cùng tuyến đăng nhập, thân
+    // khác) và bốn tuyến công khai của ViGov (tra xã · danh bạ · danh sách tin · một tin).
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(7);
     const tuyen = DUONG_ROI_KHOI_MAY.map((d) => d.tuyen);
-    expect(tuyen).toContain("/api/v1/sessions");
-    expect(tuyen).toContain("/api/v1/requests");
+    expect(tuyen.filter((t) => t === "/api/v1/sessions")).toHaveLength(2);
+    for (const t of [
+      "/api/v1/requests",
+      DUONG_DAN_XA,
+      DUONG_DAN_DANH_BA,
+      DUONG_DAN_TIN_XA,
+      `${DUONG_DAN_TIN_XA}/{id}`,
+    ]) {
+      expect(tuyen, `hồ sơ không khai tuyến ${t}`).toContain(t);
+    }
+    // Bước xác nhận xã in ĐÚNG bảng của nó, không mượn bảng của khối đăng nhập.
+    expect(DUONG_ROI_KHOI_MAY.map((d) => d.truong)).toContain(TRUONG_GUI_DI_CAU_VIGOV);
   });
 
-  it("MỌI khoá hai thân yêu cầu gửi đi đều có một dòng khai", () => {
+  it("MỌI khoá ba thân yêu cầu gửi đi đều có một dòng khai", () => {
     // Chiều "mã đi trước": thêm một trường vào `thanYeuCau` mà quên khai là ĐỎ ở đây.
     for (const [ten, than, bang] of [
       ["phiên đăng nhập", thanYeuCauPhien({ ma_so_dien_thoai: "x", ma_truy_cap: "y" }), TRUONG_GUI_DI_PHIEN],
@@ -416,6 +444,11 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
         "yêu cầu tư vấn",
         thanYeuCau({ loai: "consult", quan_tam: [], quy_mo: "", ghi_chu: "", nguon: "" }),
         TRUONG_GUI_DI,
+      ],
+      [
+        "xác nhận xã",
+        thanYeuCauCauViGov({ ma_truy_cap: "m", ten_mien_xa: "xa-vi-du.vigov.example" }),
+        TRUONG_GUI_DI_CAU_VIGOV,
       ],
     ] as const) {
       const khoa = Object.keys(JSON.parse(than) as Record<string, unknown>);
@@ -447,6 +480,54 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     }
     // Và nó nói ra rằng không tuyến nào mang một trường định danh — câu người duyệt hỏi đầu tiên.
     expect(khoi).toContain("tôi là ai");
+  });
+
+  /**
+   * BA TUYẾN CÔNG KHAI — BẢN CHÉP TRONG `ket-xuat-ho-so.ts`, KHOÁ VỚI ĐỊA CHỈ THẬT CLIENT DỰNG RA.
+   *
+   *   Tệp sản xuất không được nhập client ViGov (`ranh-gioi-hai-nua.test.ts` §3a), nên nó chép. Tệp test
+   *   này thì được (lượt quét ranh giới bỏ `.test.`), nên nó dựng địa chỉ bằng CHÍNH hàm của client và
+   *   đối chiếu hai chiều: tham số địa chỉ mang ⇄ dòng khai; đường dẫn đúng từng chữ.
+   */
+  it("mỗi tuyến công khai: đường dẫn đúng từng chữ, và tham số gửi đi ⇄ dòng khai, hai chiều", () => {
+    const TEN_MIEN = "xa-vi-du.vigov.example";
+    const tim = (t: string) => DUONG_CONG_KHAI.find((d) => d.tuyen === t);
+    const CA: ReadonlyArray<readonly [string, string, readonly string[]]> = [
+      // [tuyến khai, địa chỉ client dựng, tham số đường dẫn]
+      [DUONG_DAN_XA, diaChiTraXa(TEN_MIEN), []],
+      [DUONG_DAN_DANH_BA, diaChiDanhBa(TEN_MIEN), []],
+      [DUONG_DAN_TIN_XA, diaChiTinXa(TEN_MIEN, "con-tro-thu"), []],
+      [`${DUONG_DAN_TIN_XA}/{id}`, diaChiBaiTin(TEN_MIEN, "tin-thu"), ["id"]],
+    ];
+    expect(DUONG_CONG_KHAI).toHaveLength(CA.length);
+    for (const [tuyen, dia_chi, tham_so_duong_dan] of CA) {
+      const duong = tim(tuyen);
+      expect(duong, `hồ sơ không khai tuyến ${tuyen}`).toBeDefined();
+      expect(dia_chi, `client không dựng được địa chỉ cho ${tuyen} — ca này sẽ xanh vì rỗng`).not.toBe("");
+      const url = new URL(dia_chi);
+      // Đường dẫn: thay `{id}` bằng giá trị đã dựng rồi so từng chữ.
+      expect(url.pathname).toBe(tuyen.replace("{id}", "tin-thu"));
+      const gui_di = [...url.searchParams.keys(), ...tham_so_duong_dan].sort();
+      expect(duong!.truong.map((t) => t.khoa).sort(), `tuyến ${tuyen}: khai ⇄ gửi đi lệch nhau`).toEqual(gui_di);
+      // Không tuyến công khai nào tự nhận là "do người dùng bấm" khi nó chạy lúc mở app, và ngược lại.
+      expect(duong!.nguoi_dung_bam, tuyen).toBe(tuyen !== DUONG_DAN_XA);
+    }
+  });
+
+  it("tên màn chép trong hồ sơ đúng từng chữ tên màn thật", () => {
+    expect(TEN_MAN_CONG_KHAI.danh_ba).toBe(DANH_BA.tieu_de);
+    expect(TEN_MAN_CONG_KHAI.tin_xa).toBe(TIN_XA.tieu_de);
+  });
+
+  it("câu đầu khối KHÔNG còn nói 'không đường nào chạy lúc mở ứng dụng' — tra tên xã chạy lúc mở", () => {
+    const khoi = khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY);
+    expect(khoi).not.toContain("không đường nào chạy lúc mở ứng dụng");
+    expect(khoi).toContain("6 đường chạy khi chính người dùng bấm; 1 đường chạy mà không cần một cú bấm");
+    // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
+    const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
+    expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");
+    // Mỗi đường nói máy chủ nào nhận.
+    for (const d of DUONG_ROI_KHOI_MAY) expect(khoi).toContain(d.may_chu);
   });
 
   it("bắt được một tuyến vừa khai mà khối chưa in ra", () => {

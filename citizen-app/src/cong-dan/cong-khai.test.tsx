@@ -17,7 +17,7 @@ import { type KetQuaMoPhien, moPhienSauXacNhan, type YeuCauMoPhien } from "./api
 import { datPhienViGov, layPhienViGov } from "./api/phien-vigov";
 import { dichGoi, sauKhiTaiDanhBa, TheCanBo, ThanDanhBa } from "./man/DanhBaCanBoScreen";
 import { KenhCongDan } from "./man/KenhCongDan";
-import { DANH_BA, TIN_XA, XAC_NHAN_XA } from "./man/noi-dung";
+import { CHUA_DANG_NHAP_XA, CUA_TOI, DANH_BA, GUI, TIN_XA, TRA_CUU, XAC_NHAN_XA } from "./man/noi-dung";
 import {
   BaiTin,
   batDauTaiTin,
@@ -200,34 +200,51 @@ describe("xác nhận → mở phiên qua hàm TIÊM VÀO", () => {
     const goi: YeuCauMoPhien[] = [];
     const mo = async (yc: YeuCauMoPhien): Promise<KetQuaMoPhien> => {
       goi.push(yc);
-      return { kieu: "xong", token: "tok-vigov-thu", ten_xa: "Xã Của Phiên" };
+      return { kieu: "xong", token: "tok-vigov-thu", ten_xa: "Xã Của Phiên", ten_mien: null };
     };
     expect(layPhienViGov()).toBeNull();
     const kq = await moPhienSauXacNhan(mo, TEN_MIEN);
     expect(goi).toEqual([{ communeHostHint: TEN_MIEN, communeConfirmed: true }]);
-    // Bearer KHÔNG đi ngược lên màn hình — chỉ tên xã.
-    expect(kq).toEqual({ kieu: "da-mo", ten_xa: "Xã Của Phiên" });
+    // Bearer KHÔNG đi ngược lên màn hình — chỉ tên xã (và tên miền chính của phiên, nếu có).
+    expect(kq).toEqual({ kieu: "da-mo", ten_xa: "Xã Của Phiên", ten_mien: null });
     expect(layPhienViGov()).toEqual({ token: "tok-vigov-thu", ten_xa: "Xã Của Phiên" });
   });
 
+  it("tên miền chính của phiên đi lên màn hình khi đúng khuôn; sai khuôn thì `null` — kiểm lại ở nửa này", async () => {
+    const voi = (ten_mien: string | null) =>
+      moPhienSauXacNhan(async () => ({ kieu: "xong", token: "tok", ten_xa: "Xã Của Phiên", ten_mien }), TEN_MIEN);
+    expect(await voi("xa-khac.vigov.example")).toEqual({
+      kieu: "da-mo",
+      ten_xa: "Xã Của Phiên",
+      ten_mien: "xa-khac.vigov.example",
+    });
+    for (const sai of ["", "localhost", "https://xa.vn", "Xa.Vn", "xa.vn?host=khac"]) {
+      expect(await voi(sai), sai).toMatchObject({ kieu: "da-mo", ten_mien: null });
+    }
+    // Tên miền KHÔNG vào nguồn phiên: bearer và tên xã là tất cả những gì `phien-vigov.ts` giữ.
+    expect(layPhienViGov()).toEqual({ token: "tok", ten_xa: "Xã Của Phiên" });
+  });
+
   it("tên xã của phiên thắng tên màn xác nhận đã hiện (ADR 0047 §Trả lời mục 4)", () => {
-    expect(buocSauMoPhien({ ten: "Tên Đã Hiện", tinh: "T" }, { kieu: "da-mo", ten_xa: "Tên Của Phiên" })).toEqual({
-      ket_thuc: { kieu: "da-mo", ten_xa: "Tên Của Phiên" },
+    expect(
+      buocSauMoPhien({ ten: "Tên Đã Hiện", tinh: "T" }, { kieu: "da-mo", ten_xa: "Tên Của Phiên", ten_mien: TEN_MIEN }),
+    ).toEqual({
+      ket_thuc: { kieu: "da-mo", ten_xa: "Tên Của Phiên", ten_mien: TEN_MIEN },
     });
   });
 
-  it("cầu tắt · phiên không bearer · phiên không tên xã → KHÔNG có phiên, về giới thiệu kèm câu", async () => {
+  it("cầu tắt · phiên không bearer · phiên không tên xã → KHÔNG có phiên, nhưng xã ĐÃ xác nhận: mở phần công khai", async () => {
+    const xa = { ten: "Xã Thử Nghiệm", tinh: "Tỉnh Ví Dụ" };
     for (const tra of [
       { kieu: "chua-mo" },
-      { kieu: "xong", token: "", ten_xa: "Xã Của Phiên" },
-      { kieu: "xong", token: "tok", ten_xa: " " },
+      { kieu: "xong", token: "", ten_xa: "Xã Của Phiên", ten_mien: null },
+      { kieu: "xong", token: "tok", ten_xa: " ", ten_mien: TEN_MIEN },
     ] as const) {
       const kq = await moPhienSauXacNhan(async () => tra, TEN_MIEN);
       expect(kq, JSON.stringify(tra)).toEqual({ kieu: "chua-mo" });
       expect(layPhienViGov()).toBeNull();
-      expect(buocSauMoPhien({ ten: "a", tinh: "b" }, kq)).toEqual({
-        ket_thuc: { kieu: "ve-gioi-thieu", cau: XAC_NHAN_XA.chua_mo },
-      });
+      // Tên và tỉnh là của `/communes` — thứ công dân vừa đọc và bấm xác nhận — không dựng từ tham số.
+      expect(buocSauMoPhien(xa, kq)).toEqual({ ket_thuc: { kieu: "xac-nhan-khong-phien", xa } });
     }
   });
 
@@ -241,10 +258,9 @@ describe("xác nhận → mở phiên qua hàm TIÊM VÀO", () => {
     expect(buocSauMoPhien(xa, kq)).toEqual({ trang: { kieu: "hoi", xa, cau_loi: XAC_NHAN_XA.thu_lai } });
   });
 
-  it("ngoài Zalo → về giới thiệu, nói mở trong Zalo", () => {
-    expect(buocSauMoPhien({ ten: "a", tinh: "b" }, { kieu: "ngoai-zalo" })).toEqual({
-      ket_thuc: { kieu: "ve-gioi-thieu", cau: XAC_NHAN_XA.ngoai_zalo },
-    });
+  it("ngoài Zalo → không phiên, nhưng xã đã xác nhận: phần công khai vẫn mở", () => {
+    const xa = { ten: "a", tinh: "b" };
+    expect(buocSauMoPhien(xa, { kieu: "ngoai-zalo" })).toEqual({ ket_thuc: { kieu: "xac-nhan-khong-phien", xa } });
   });
 });
 
@@ -264,6 +280,41 @@ describe("kênh công dân: hai lối vào công khai chỉ có khi đã biết 
     expect(html).toContain(`<button type="button" class="cd-nut">${TIN_XA.tieu_de}</button>`);
     expect(html).toContain(`<button type="button" class="cd-nut">${DANH_BA.tieu_de}</button>`);
     expect(html).not.toContain(TEN_MIEN);
+  });
+});
+
+describe("kênh công dân KHÔNG phiên — nói ra, không im lặng", () => {
+  it("chưa có phiên → câu `role=status` TRƯỚC ba lối phản ánh; ba lối vẫn còn", () => {
+    const html = renderToStaticMarkup(createElement(KenhCongDan, { onDong: () => {}, ten_mien: TEN_MIEN }));
+    const chu = textOf(html);
+    expect(html).toMatch(/<p class="cd-loi" role="status">/);
+    expect(chu).toContain(CHUA_DANG_NHAP_XA.cau);
+    expect(chu).toContain(CHUA_DANG_NHAP_XA.con_lai);
+    // Câu đứng TRƯỚC nút đầu tiên: người dân đọc nó trước khi bấm.
+    expect(html.indexOf(CHUA_DANG_NHAP_XA.cau)).toBeLessThan(html.indexOf(GUI.tieu_de));
+    for (const nhan of [GUI.tieu_de, CUA_TOI.tieu_de, TRA_CUU.tieu_de]) {
+      expect(html).toContain(`<button type="button" class="cd-nut">${nhan}</button>`);
+    }
+  });
+
+  it("không tên miền → không hứa 'tin tức và danh bạ ở dưới'", () => {
+    const chu = textOf(renderToStaticMarkup(createElement(KenhCongDan, { onDong: () => {}, ten_mien: null })));
+    expect(chu).toContain(CHUA_DANG_NHAP_XA.cau);
+    expect(chu).not.toContain(CHUA_DANG_NHAP_XA.con_lai);
+  });
+
+  it("CÓ phiên → không có câu 'chưa đăng nhập được'", () => {
+    datPhienViGov({ token: "tok", ten_xa: "Xã Của Phiên" });
+    const html = renderToStaticMarkup(createElement(KenhCongDan, { onDong: () => {}, ten_mien: TEN_MIEN }));
+    expect(textOf(html)).not.toContain(CHUA_DANG_NHAP_XA.cau);
+    expect(html).toContain(TIN_XA.tieu_de);
+  });
+
+  it("câu ấy nói việc làm tiếp, không mã lỗi, không tên dịch vụ", () => {
+    for (const cau of Object.values(CHUA_DANG_NHAP_XA)) {
+      expect(cau).not.toMatch(/\b[45]\d\d\b|error|identity|vigov|host|token|phiên/i);
+    }
+    expect(CHUA_DANG_NHAP_XA.cau).toMatch(/Bộ phận tiếp nhận|gọi điện thoại/);
   });
 });
 

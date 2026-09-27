@@ -58,7 +58,12 @@ import { type KetQuaDo, thamSoMoApp, thamSoXa } from "./lib/launch-params";
 export function sangKieuCongDan(kq: KetQuaMoPhienQuaCau): KetQuaMoPhien {
   switch (kq.kieu) {
     case "xong":
-      return { kieu: "xong", token: kq.phien.token, ten_xa: kq.phien.ten_xa };
+      return {
+        kieu: "xong",
+        token: kq.phien.token,
+        ten_xa: kq.phien.ten_xa,
+        ten_mien: kq.phien.ten_mien_xa,
+      };
     case "cau-tat":
     case "chua-san-sang":
     case "chua-khai-host":
@@ -75,6 +80,36 @@ const moPhienViGov: MoPhienViGov = async (yc) =>
   sangKieuCongDan(await moPhienCongDanQuaCau(yc.communeHostHint));
 
 /**
+ * KHOÁ TRA `?host=` CHO HAI MÀN CÔNG KHAI (tin tức · danh bạ) — hoặc `null`, và hai màn ấy ẩn đi.
+ *
+ *   1. `communePrimaryHost` của PHIÊN, nếu phiên có và đúng khuôn. Phiên nói thật (ADR 0047 §Trả lời
+ *      mục 4): header đọc tên xã của phiên, nên tin tức và danh bạ phải là của CÙNG xã ấy — kể cả trong
+ *      ca hiếm phiên mở cho một xã khác `d`. Trên app riêng của một xã (không có `d`) đây là nguồn duy nhất.
+ *   2. Không thì `d` công dân vừa xác nhận ở lần mở này — đúng thứ `/communes` đã tra ra tên trên header.
+ *   3. Không có cả hai → `null`. Không đoán một xã.
+ *
+ * Đây KHÔNG phải đường cô lập xã: hai tuyến này công khai, chỉ trả thứ xã đã công bố, và không mang
+ * phiên. Nhưng thứ tự vẫn là một quyết định, nên nó có tên và có ca kiểm (`kham-pha.test.tsx`).
+ */
+export function khoaTraCongKhai(
+  ten_mien_phien: string | null,
+  ten_mien_da_xac_nhan: string | null,
+): string | null {
+  if (ten_mien_phien !== null) return ten_mien_phien;
+  return ten_mien_da_xac_nhan;
+}
+
+/**
+ * Xã đã xác nhận ở lần mở này — chỉ trong `useState`, mất khi app đóng (`ranh-gioi-hai-nua.test.ts` §3b).
+ *
+ *   `ten`       có phiên → `tenantDisplayName` của phiên; không phiên → `name` của `/communes`
+ *   `tinh`      chỉ khi KHÔNG phiên: `province` của `/communes`. Phiên không trả tỉnh, và ghép tỉnh của
+ *               `/communes` với tên của phiên là ghép hai nguồn có thể nói hai xã khác nhau
+ *   `ten_mien`  khoá tra của hai màn công khai (`khoaTraCongKhai`), hoặc `null`
+ */
+type XaCuaLanMo = { ten: string; tinh: string | null; ten_mien: string | null };
+
+/**
  * Vỏ ứng dụng, THUẦN — nhận mọi thứ qua tham số, không giữ trạng thái nào.
  *
  * Tách ra vì bất di dịch #2 ("đã chọn xã thì tên xã hiện trên MỌI màn hình") chỉ kiểm được khi
@@ -85,8 +120,11 @@ const moPhienViGov: MoPhienViGov = async (yc) =>
 export function KhungApp(props: {
   man: ScreenId;
   onChonMan: (id: ScreenId) => void;
-  /** Xã CỦA PHIÊN (tên máy chủ trả cùng phiên ViGov), hoặc `null`. Xem ghi chú trong `App`. */
-  xaDaChon: { readonly ten: string } | null;
+  /**
+   * Xã đã xác nhận, hoặc `null`. `ten` là tên xã của PHIÊN khi có phiên, tên `/communes` trả khi chưa;
+   * `tinh` chỉ có khi chưa có phiên. Xem `XaCuaLanMo`.
+   */
+  xaDaChon: { readonly ten: string; readonly tinh?: string | null } | null;
   /**
    * Đang ở lớp khám phá: xác nhận xã. Lúc ấy thanh tab BIẾN MẤT.
    *
@@ -106,7 +144,13 @@ export function KhungApp(props: {
           <div className="app-header__ten">
             {/* MỘT Ô, HAI CHỦ SỞ HỮU. Chưa chọn xã thì đây là đơn vị phát hành ứng dụng — thứ
                 Zalo đã duyệt. Chọn xã rồi thì đây là xã, trên mọi màn hình, không có ngoại lệ. */}
-            <p className="app-header__owner">{props.xaDaChon ? props.xaDaChon.ten : COMPANY.name}</p>
+            <p className="app-header__owner">
+              {props.xaDaChon === null
+                ? COMPANY.name
+                : props.xaDaChon.tinh
+                  ? `${props.xaDaChon.ten}, ${props.xaDaChon.tinh}`
+                  : props.xaDaChon.ten}
+            </p>
             <p className="app-header__screen">
               {props.khamPha ? TIEU_DE_XAC_NHAN_XA : man.headerTitle}
             </p>
@@ -169,17 +213,18 @@ export function App() {
   const [thamSo] = useState<KetQuaDo>(thamSoMoApp);
 
   /**
-   * XÃ CỦA PHIÊN — ĐỌC TỪ PHIÊN MÁY CHỦ TRẢ VỀ, KHÔNG PHẢI TỪ MÀN XÁC NHẬN.
+   * XÃ ĐÃ XÁC NHẬN Ở LẦN MỞ NÀY — `XaCuaLanMo`. Có hai cách tới đây, cả hai đều qua cú bấm xác nhận:
    *
-   * `ten_xa` là `tenantDisplayName` cầu phiên trả cùng phiên ViGov (ADR 0047 §Trả lời mục 4: "phiên
-   * nói thật"), nên header và bước xác nhận cuối trước khi gửi nói CÙNG một xã với xã máy chủ sẽ ghi
-   * phiếu. Chỉ có giá trị khi phiên đã mở; không phiên thì `null`, và app ở phần giới thiệu.
+   *   có phiên   `ten` là `tenantDisplayName` cầu phiên trả (ADR 0047 §Trả lời mục 4: "phiên nói
+   *              thật"), nên header và bước xác nhận cuối trước khi gửi nói CÙNG một xã với xã máy chủ
+   *              sẽ ghi phiếu.
+   *   không phiên (27/09/2026, quyết định của chủ sản phẩm) `ten` + `tinh` là thứ `/communes` trả cho
+   *              `d` và công dân vừa xác nhận. Chỉ tin tức và danh bạ mở được; gửi phản ánh vẫn cần phiên.
    *
-   * `ten_mien` là `d` công dân đã xác nhận ở LẦN MỞ NÀY — chỉ làm khoá tra `?host=` cho hai màn công
-   * khai (tin tức, danh bạ). Nó không phải tham chiếu xã: không được gửi làm "xã của tôi", không lưu,
-   * không vẽ ra (ADR 0047 điều kiện dừng #1). Cả hai sống trong `useState`: mất khi app đóng.
+   * `ten_mien` chỉ làm khoá tra `?host=`. Nó không phải tham chiếu xã: không được gửi làm "xã của
+   * tôi", không lưu, không vẽ ra (ADR 0047 điều kiện dừng #1). Tất cả sống trong `useState`.
    */
-  const [xa, datXa] = useState<{ ten_xa: string; ten_mien: string } | null>(null);
+  const [xa, datXa] = useState<XaCuaLanMo | null>(null);
   /** Lớp khám phá đã kết thúc (xác nhận xong, "không phải xã này", hoặc fail closed). */
   const [xongKhamPha, datXongKhamPha] = useState(false);
   /** Câu nói vì sao app về phần giới thiệu thay vì mở kênh — hoặc `null`. */
@@ -200,8 +245,12 @@ export function App() {
 
   function ketThucKhamPha(kq: KetThucXacNhan) {
     datXongKhamPha(true);
+    // `goiY === null` không tới được đây (màn xác nhận chỉ dựng khi có nó); nếu có thì KHÔNG đặt xã nào.
     if (kq.kieu === "da-mo" && goiY !== null) {
-      datXa({ ten_xa: kq.ten_xa, ten_mien: goiY.ten_mien });
+      datXa({ ten: kq.ten_xa, tinh: null, ten_mien: khoaTraCongKhai(kq.ten_mien, goiY.ten_mien) });
+      datThongBao(null);
+    } else if (kq.kieu === "xac-nhan-khong-phien" && goiY !== null) {
+      datXa({ ten: kq.xa.ten, tinh: kq.xa.tinh, ten_mien: khoaTraCongKhai(null, goiY.ten_mien) });
       datThongBao(null);
     } else if (kq.kieu === "ve-gioi-thieu") {
       datThongBao(kq.cau);
@@ -276,7 +325,7 @@ export function App() {
         // Bấm một tab là điều hướng KHÔNG CÓ MỐC: người bấm muốn về đầu màn ấy, không muốn bị thả
         // xuống giữa một khối mà lần trước họ đi tới từ màn chủ.
         onChonMan={(id) => di({ man: id })}
-        xaDaChon={xa === null ? null : { ten: xa.ten_xa }}
+        xaDaChon={xa === null ? null : { ten: xa.ten, tinh: xa.tinh }}
         khamPha={dangKhamPha}
       >
         {noiDung}

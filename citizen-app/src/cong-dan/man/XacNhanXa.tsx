@@ -12,8 +12,9 @@
  *      CLOSED: về phần giới thiệu kèm một câu. Không bao giờ hiện một cái tên dựng từ tham số.
  *   2. Công dân bấm "Đúng, tiếp tục" → hàm mở phiên TIÊM VÀO (`api/mo-phien-vigov.ts`) với
  *      `communeHostHint=<d>`, `communeConfirmed=true`.
- *   3. Có phiên → báo lên với TÊN XÃ CỦA PHIÊN. Không có (cầu tắt, phiên không bearer) → về phần giới
- *      thiệu kèm một câu. Không bao giờ giả vờ đã có phiên.
+ *   3. Có phiên → báo lên với TÊN XÃ CỦA PHIÊN. Không có (cầu tắt, phiên không bearer, ngoài Zalo) →
+ *      báo lên "đã xác nhận, không phiên" với tên + tỉnh `/communes` vừa trả: hai màn công khai mở,
+ *      gửi phản ánh thì không. Không bao giờ giả vờ đã có phiên.
  *
  * ⚠ TÊN MIỀN KHÔNG ĐƯỢC VẼ RA, KHÔNG GHI LOG. Nó lộ người này đang làm việc với xã nào.
  */
@@ -33,14 +34,22 @@ export type TrangXacNhan =
   | { readonly kieu: "dang-mo"; readonly xa: XaGoiY };
 
 /**
- * Cách lớp khám phá KẾT THÚC — thứ duy nhất đi lên `App.tsx`. Không có bearer, không có tên miền.
+ * Cách lớp khám phá KẾT THÚC — thứ duy nhất đi lên `App.tsx`. Không có bearer.
  *
- *   `da-mo`          có phiên ViGov; `ten_xa` là tên máy chủ trả CÙNG phiên
- *   `ve-gioi-thieu`  về phần giới thiệu; `cau` là câu nói vì sao (hoặc `null` khi công dân tự bấm
- *                    "Không phải xã này" — họ biết vì sao)
+ *   `da-mo`                 có phiên ViGov; `ten_xa` là tên máy chủ trả CÙNG phiên; `ten_mien` là
+ *                           `communePrimaryHost` của phiên (hoặc `null`)
+ *   `xac-nhan-khong-phien`  công dân ĐÃ bấm xác nhận, nhưng không mở được phiên (cầu tắt, xã chưa
+ *                           sẵn sàng, ngoài Zalo). `xa` là tên + tỉnh `/communes` vừa trả — đủ để mở
+ *                           hai màn công khai (27/09/2026, quyết định của chủ sản phẩm); gửi phản ánh
+ *                           vẫn cần phiên
+ *   `ve-gioi-thieu`         về phần giới thiệu; `cau` là câu nói vì sao (hoặc `null` khi công dân tự
+ *                           bấm "Không phải xã này" — họ biết vì sao)
+ *
+ * Tên miền `d` KHÔNG đi lên ở đây: `App.tsx` đã có nó (chính nó truyền `ten_mien` xuống màn này).
  */
 export type KetThucXacNhan =
-  | { readonly kieu: "da-mo"; readonly ten_xa: string }
+  | { readonly kieu: "da-mo"; readonly ten_xa: string; readonly ten_mien: string | null }
+  | { readonly kieu: "xac-nhan-khong-phien"; readonly xa: XaGoiY }
   | { readonly kieu: "ve-gioi-thieu"; readonly cau: string | null };
 
 export type Buoc = { readonly trang: TrangXacNhan } | { readonly ket_thuc: KetThucXacNhan };
@@ -61,17 +70,22 @@ export function buocSauTraXa(kq: KetQuaCongKhai<readonly XaTraDuoc[]>, nguon: st
   return { ket_thuc: { kieu: "ve-gioi-thieu", cau: XAC_NHAN_XA.chua_ket_noi } };
 }
 
-/** Kết quả mở phiên → bước kế. Chỉ `thu-lai` ở lại màn xác nhận: đó là nhánh duy nhất bấm lại có ích. */
+/**
+ * Kết quả mở phiên → bước kế. Chỉ `thu-lai` ở lại màn xác nhận: đó là nhánh duy nhất bấm lại có ích.
+ *
+ * `chua-mo` / `ngoai-zalo` KHÔNG còn về phần giới thiệu (27/09/2026): công dân đã xác nhận đúng xã, nên
+ * tin tức và danh bạ — hai tuyến công khai theo tên miền — mở ngay, không cần phiên. `xa` là thứ
+ * `/communes` đã trả và công dân vừa đọc trên màn này, không phải một tên dựng từ tham số.
+ */
 export function buocSauMoPhien(xa: XaGoiY, kq: KetQuaXacNhan): Buoc {
   switch (kq.kieu) {
     case "da-mo":
-      return { ket_thuc: { kieu: "da-mo", ten_xa: kq.ten_xa } };
+      return { ket_thuc: { kieu: "da-mo", ten_xa: kq.ten_xa, ten_mien: kq.ten_mien } };
     case "thu-lai":
       return { trang: { kieu: "hoi", xa, cau_loi: XAC_NHAN_XA.thu_lai } };
     case "ngoai-zalo":
-      return { ket_thuc: { kieu: "ve-gioi-thieu", cau: XAC_NHAN_XA.ngoai_zalo } };
-    default:
-      return { ket_thuc: { kieu: "ve-gioi-thieu", cau: XAC_NHAN_XA.chua_mo } };
+    case "chua-mo":
+      return { ket_thuc: { kieu: "xac-nhan-khong-phien", xa } };
   }
 }
 

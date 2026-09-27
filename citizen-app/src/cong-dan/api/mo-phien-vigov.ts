@@ -20,6 +20,7 @@
  *   chỉ `goi-vigov.ts` đọc nó ra.
  */
 import { datPhienViGov } from "./phien-vigov";
+import { laTenMien } from "../../lib/launch-params";
 
 /** Thứ nửa nhà nước gửi cho hàm mở phiên. Tên trường là tên trên dây của `vihat-miniapp`. */
 export type YeuCauMoPhien = {
@@ -37,7 +38,16 @@ export type YeuCauMoPhien = {
  *   `ngoai-zalo`  không chạy trong Zalo nên không có mã phiên Zalo nào
  */
 export type KetQuaMoPhien =
-  | { readonly kieu: "xong"; readonly token: string; readonly ten_xa: string }
+  | {
+      readonly kieu: "xong";
+      readonly token: string;
+      readonly ten_xa: string;
+      /**
+       * Tên miền công khai chính của xã CỦA PHIÊN (`communePrimaryHost`), hoặc `null`. Chỉ làm khoá tra
+       * `?host=` cho tin tức và danh bạ — không vào `phien-vigov.ts`, không gửi đi làm "xã của tôi".
+       */
+      readonly ten_mien: string | null;
+    }
   | { readonly kieu: "chua-mo" }
   | { readonly kieu: "thu-lai" }
   | { readonly kieu: "ngoai-zalo" };
@@ -46,7 +56,7 @@ export type MoPhienViGov = (yc: YeuCauMoPhien) => Promise<KetQuaMoPhien>;
 
 /** Kết quả cho màn hình — KHÔNG mang bearer. */
 export type KetQuaXacNhan =
-  | { kieu: "da-mo"; ten_xa: string }
+  | { kieu: "da-mo"; ten_xa: string; ten_mien: string | null }
   | { kieu: "chua-mo" }
   | { kieu: "thu-lai" }
   | { kieu: "ngoai-zalo" };
@@ -67,5 +77,8 @@ export async function moPhienSauXacNhan(mo: MoPhienViGov, ten_mien: string): Pro
   if (kq.kieu !== "xong") return { kieu: kq.kieu };
   if (kq.token === "" || kq.ten_xa.trim() === "") return { kieu: "chua-mo" };
   datPhienViGov({ token: kq.token, ten_xa: kq.ten_xa });
-  return { kieu: "da-mo", ten_xa: kq.ten_xa };
+  // KIỂM KHUÔN LẠI Ở ĐÂY dù nửa thương mại đã kiểm: hàm này nhận từ BÊN NGOÀI nửa nhà nước, và một tên
+  // miền sai khuôn đi vào `?host=` là để máy chủ phân tích một thứ không phải tên miền.
+  const ten_mien_phien = typeof kq.ten_mien === "string" && laTenMien(kq.ten_mien) ? kq.ten_mien : null;
+  return { kieu: "da-mo", ten_xa: kq.ten_xa, ten_mien: ten_mien_phien };
 }

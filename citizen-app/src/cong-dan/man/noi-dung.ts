@@ -265,13 +265,22 @@ export const XAC_NHAN_XA = {
   chua_ket_noi:
     "Chưa kết nối được tới hệ thống của xã. Bạn vẫn xem được phần giới thiệu. Hãy kiểm tra mạng, chờ ít phút rồi quét lại mã QR.",
   dang_mo: "Đang mở kênh làm việc với xã…",
-  /** Cầu phiên chưa bật, xã chưa sẵn sàng, hoặc máy chủ không phát phiên — bấm lại không đổi được gì. */
-  chua_mo:
-    "Ứng dụng chưa mở được kênh làm việc với xã trên điện thoại này. Bạn vẫn xem được phần giới thiệu. Để phản ánh, hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã hoặc gọi điện thoại cho xã.",
+  // Hai câu `chua_mo` · `ngoai_zalo` cũ đã bị gỡ 27/09/2026: hai nhánh ấy không còn về phần giới thiệu
+  // mà mở tin tức và danh bạ của xã vừa xác nhận; câu thay thế là `CHUA_DANG_NHAP_XA` ở dưới.
   thu_lai:
     "Chưa mở được kênh làm việc với xã vì mạng yếu hoặc hệ thống đang bận. Hãy kiểm tra mạng rồi bấm “Đúng, tiếp tục” lần nữa.",
-  ngoai_zalo:
-    "Hãy mở ứng dụng này trong Zalo để làm việc với xã. Bạn vẫn xem được phần giới thiệu ở đây.",
+} as const;
+
+/**
+ * ĐÃ XÁC NHẬN XÃ NHƯNG CHƯA CÓ PHIÊN — câu trên màn chọn việc, thay vì để ba lối phản ánh im lặng.
+ *
+ * Đứng NGAY TRÊN ba lối ấy: người dân đọc nó trước khi bấm. Ba lối vẫn còn (mỗi màn nói lại "kênh chưa
+ * mở" và chỉ đường tới trụ sở), vì một nút biến mất không báo là thứ người lớn tuổi không tìm lại được.
+ * `con_lai` chỉ hiện khi có tên miền — tức khi hai màn công khai thật sự có mặt ở dưới.
+ */
+export const CHUA_DANG_NHAP_XA = {
+  cau: "Ứng dụng chưa đăng nhập được với xã trên điện thoại này, nên chưa gửi phản ánh, xem phản ánh của bạn hay tra cứu phiếu được. Để phản ánh, hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã hoặc gọi điện thoại cho xã.",
+  con_lai: "Bạn vẫn đọc được tin tức và danh bạ cán bộ của xã ở dưới.",
 } as const;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

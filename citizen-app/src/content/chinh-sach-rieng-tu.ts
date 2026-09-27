@@ -299,6 +299,14 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       "MÁY CHỦ GHI MỘT DÒNG NHẬT KÝ CHO MỖI LƯỢT ĐĂNG NHẬP, KỂ CẢ LƯỢT KHÔNG THÀNH CÔNG. Nghĩa là: nếu bạn bấm đăng nhập rồi việc ấy hỏng giữa chừng — mã hết hạn, Zalo không trả lời, hoặc bạn thử quá nhiều lần — thì địa chỉ IP của bạn vẫn được ghi lại, dù bạn chưa từng đăng nhập thành công lần nào và chưa từng có tài khoản ở đây.",
       "Mỗi dòng nhật ký gồm: thời điểm, địa chỉ IP, lượt ấy thành công hay không, một mã lý do ngắn do chúng tôi đặt, và mã định danh nội bộ của bạn NẾU lượt ấy thành công. Nhật ký KHÔNG chứa số điện thoại của bạn, và cũng không chứa tên, thiết bị hay vị trí.",
       "Nhật ký này dùng để phát hiện lạm dụng — ví dụ một máy thử đăng nhập hàng loạt. Nó là loại dữ liệu CHỈ GHI THÊM: không sửa được và không xoá được, kể cả bởi chính chúng tôi, vì một nhật ký sửa được thì không chứng minh được gì khi có tranh chấp.",
+      // ⚠ BẢN NHÁP 27/09/2026 — CHỜ CHỦ DỰ ÁN DUYỆT, chưa công bố. Hai câu dưới khai thân gửi đi ở bước
+      // xác nhận xã (`features/dang-nhap/hop-dong.ts` `thanYeuCauCauViGov`). Câu đầu CHỨA NGUYÊN VĂN
+      // từng `trong_chinh_sach` của `TRUONG_GUI_DI_CAU_VIGOV`, và `chinh-sach.test.ts` khoá điều đó:
+      // đổi một câu khai ở bảng mà không đổi ở đây là ĐỎ. Viết sẵn, không ghép lúc chạy, vì
+      // `bundle-for-zalo.test.ts` đòi từng đoạn của mục này có mặt nguyên văn trong bundle.
+      // `PHIEN_BAN_CHINH_SACH` giữ 1.0: văn bản chưa từng tới tay người dùng nào (khối số phiên bản ở trên).
+      "Khi bạn bấm xác nhận làm việc với một xã, ứng dụng gửi tới máy chủ của Tập đoàn ViHAT Group đúng những thứ sau, và không gì khác: mã phiên Zalo của bạn, để máy chủ mở phiên làm việc với xã ấy — mã này KHÔNG chứa tên hay ảnh đại diện của bạn; tên miền của xã ấy, lấy từ mã QR hoặc đường liên kết bạn đã dùng để mở ứng dụng; và việc bạn đã bấm xác nhận đúng xã — máy chủ không mở phiên với xã nếu bạn chưa xác nhận.",
+      "Bước xác nhận xã không gửi mã số điện thoại của bạn, và không chạy nếu bạn không bấm xác nhận.",
       "Bạn có thể dùng ứng dụng mà KHÔNG đăng nhập: toàn bộ phần giới thiệu, danh thiếp, văn phòng và các tính năng khác vẫn dùng được, và hotline cùng email nằm ngay dưới nút đăng nhập.",
     ],
   },

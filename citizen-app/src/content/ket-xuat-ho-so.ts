@@ -18,7 +18,12 @@ import {
   TRUONG_GUI_DI,
   type TruongGuiDi,
 } from "../api/hop-dong-yeu-cau";
-import { DUONG_DAN_PHIEN, TRUONG_GUI_DI_PHIEN } from "../features/dang-nhap/hop-dong";
+import {
+  DUONG_DAN_PHIEN,
+  TRUONG_GUI_DI_CAU_VIGOV,
+  TRUONG_GUI_DI_PHIEN,
+} from "../features/dang-nhap/hop-dong";
+import { TIEU_DE_XAC_NHAN_XA } from "../features/kham-pha/goi-y";
 import type { KhaiBaoLoiGoi } from "../features/tinh-nang/zalo-api";
 
 import {
@@ -215,13 +220,24 @@ export function thayKhoiSinhRa(
 export const MOC_BAT_DAU_ROI_MAY = "<!-- BẮT ĐẦU KHỐI RỜI KHỎI MÁY — đừng sửa tay trong khối này -->";
 export const MOC_KET_THUC_ROI_MAY = "<!-- KẾT THÚC KHỐI RỜI KHỎI MÁY -->";
 
-/** Một đường dữ liệu rời khỏi máy: tuyến nào, xảy ra khi nào, và mang theo những gì. */
+/** Một đường dữ liệu rời khỏi máy: tuyến nào, tới máy chủ nào, xảy ra khi nào, và mang theo những gì. */
 export type DuongRoiKhoiMay = {
   /** Tên tuyến, đúng chữ trên dây. Người duyệt đối chiếu nó với Chính sách quyền riêng tư. */
   tuyen: string;
-  /** Hành động của NGƯỜI DÙNG làm tuyến này chạy. Không tuyến nào tự chạy lúc mở app. */
+  /**
+   * Máy chủ nhận — MÔ TẢ KỸ THUẬT (hệ thống nào, dịch vụ nào), không phải lời khai pháp nhân. Có từ
+   * 27/09/2026 vì ba tuyến công khai đi tới ViGov, không tới `vihat-miniapp`: một khối kể bảy tuyến mà
+   * không nói tuyến nào đi đâu để người đọc tưởng cả bảy cùng một nơi nhận.
+   */
+  may_chu: string;
+  /** Việc làm tuyến này chạy. */
   khi_nao: string;
-  /** Màn hình nơi hành động ấy xảy ra, đúng tiêu đề trên màn. */
+  /**
+   * `true` = chỉ chạy khi chính người dùng bấm. `false` = chạy KHÔNG cần một cú bấm — hôm nay đúng một
+   * tuyến: tra tên xã ngay lúc app mở bằng mã QR của xã. Câu đầu khối đếm từ cột này, không gõ tay.
+   */
+  nguoi_dung_bam: boolean;
+  /** Màn hình nơi việc ấy xảy ra, đúng tiêu đề trên màn. */
   man: string;
   truong: readonly TruongGuiDi[];
 };
@@ -235,15 +251,23 @@ export type DuongRoiKhoiMay = {
  * nào (`fetch` tới tuyến yêu cầu). Gộp chúng lại là mất đúng nửa mà lượt này vừa vá.
  */
 export function khoiRoiKhoiMay(duong: readonly DuongRoiKhoiMay[]): string {
+  const tu_chay = duong.filter((d) => !d.nguoi_dung_bam).length;
+  // ⚠ CÂU NÀY TỪNG GÕ CỨNG "không đường nào chạy lúc mở ứng dụng" — và thành SAI ngày 27/09/2026, khi
+  // màn xác nhận xã tra tên xã ngay lúc app mở bằng mã QR. Nay nó đếm từ cột `nguoi_dung_bam`.
+  const cau_khi_chay =
+    tu_chay === 0
+      ? `Cả ${duong.length} chỉ chạy khi chính người dùng bấm, và không đường nào chạy lúc mở ứng dụng.`
+      : `${duong.length - tu_chay} đường chạy khi chính người dùng bấm; ${tu_chay} đường chạy mà không cần một cú bấm — xem mục "Chạy khi" của từng đường.`;
   const dong: string[] = [
-    "> Khối này là **bản sinh ra** từ `TRUONG_GUI_DI_PHIEN`",
-    "> (`citizen-app/src/features/dang-nhap/hop-dong.ts`) và `TRUONG_GUI_DI`",
-    `> (\`citizen-app/src/api/hop-dong-yeu-cau.ts\`). Sinh lại: \`${LENH_SINH_LAI}\`.`,
+    "> Khối này là **bản sinh ra** từ `TRUONG_GUI_DI_PHIEN` và `TRUONG_GUI_DI_CAU_VIGOV`",
+    "> (`citizen-app/src/features/dang-nhap/hop-dong.ts`), `TRUONG_GUI_DI`",
+    "> (`citizen-app/src/api/hop-dong-yeu-cau.ts`) và bảng ba tuyến công khai trong",
+    `> \`citizen-app/src/content/ket-xuat-ho-so.ts\`. Sinh lại: \`${LENH_SINH_LAI}\`.`,
     "",
     "> **Đây là câu trả lời đầy đủ cho \"dữ liệu của tôi đi đâu\".** Phần văn xuôi của hồ sơ không",
     "> nhắc con số nào về việc này, có chủ đích: một con số gõ tay là con số sẽ sai ở lần đổi sau.",
     "",
-    `Ứng dụng có **${duong.length} đường** đưa dữ liệu ra khỏi máy. Cả ${duong.length} chỉ chạy khi chính người dùng bấm, và không đường nào chạy lúc mở ứng dụng.`,
+    `Ứng dụng có **${duong.length} đường** đưa dữ liệu ra khỏi máy. ${cau_khi_chay}`,
   ];
 
   duong.forEach((mot, thu_tu) => {
@@ -251,6 +275,7 @@ export function khoiRoiKhoiMay(duong: readonly DuongRoiKhoiMay[]): string {
       "",
       `### ${thu_tu + 1}. \`${mot.tuyen}\``,
       "",
+      `- **Máy chủ nhận:** ${mot.may_chu}`,
       `- **Chạy khi:** ${mot.khi_nao}`,
       `- **Màn hình:** ${mot.man}`,
       `- **Mang theo ${mot.truong.length} thứ, và không gì khác:**`,
@@ -269,29 +294,122 @@ export function khoiRoiKhoiMay(duong: readonly DuongRoiKhoiMay[]): string {
   return dong.join("\n");
 }
 
+/* ---------------------------------------------------------------------------------------------
+   BA TUYẾN CÔNG KHAI CỦA ViGov (tra xã · danh bạ · tin tức) — khai ở đây, KHÔNG nhập từ hợp đồng
+   ---------------------------------------------------------------------------------------------
+
+   ⚠ BẢN CHÉP, VÀ LÝ DO LÀ MỘT RANH GIỚI, KHÔNG PHẢI SỰ TIỆN TAY. Đường dẫn và tham số của ba tuyến
+   sống ở `cong-dan/api/hop-dong-cong-khai.ts` — client ViGov của nửa nhà nước. Tệp này thuộc nửa
+   thương mại, và `ranh-gioi-hai-nua.test.ts` §3a cấm MỌI tệp ngoài `./cong-dan/` nhập client ấy. Nên
+   chuỗi được chép, và `ket-xuat-ho-so.test.ts` (tệp test, nằm ngoài lượt quét ranh giới) khoá bản chép
+   HAI CHIỀU với địa chỉ thật mà client dựng ra: mỗi tham số địa chỉ ấy mang phải có một dòng khai, mỗi
+   dòng khai phải là một tham số có thật, và mỗi đường dẫn phải đúng từng chữ. Lệch một chữ là ĐỎ.
+
+   Không tuyến nào mang `Authorization`, số điện thoại hay một mã nào của Zalo: chúng chỉ trả thứ xã
+   đã công bố, theo tên miền. */
+
+const HOST_CONG_KHAI: TruongGuiDi = {
+  khoa: "host",
+  trong_chinh_sach:
+    "tên miền của xã — lấy từ mã QR hoặc đường liên kết đã mở ứng dụng, hoặc do phiên làm việc với xã trả về; không kèm số điện thoại, mã Zalo hay thông tin nào khác của bạn",
+};
+
+/** Ba tên màn, chép từ `cong-dan/man/noi-dung.ts` cùng lý do ranh giới — test khoá từng chữ. */
+export const TEN_MAN_CONG_KHAI = {
+  danh_ba: "Danh bạ cán bộ xã",
+  tin_xa: "Tin tức của xã",
+} as const;
+
+export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
+  {
+    tuyen: "/api/v1/communes",
+    may_chu: "ViGov — dịch vụ `identity`",
+    khi_nao:
+      "ứng dụng được mở bằng mã QR hoặc đường liên kết của một xã — chạy NGAY LÚC MỞ, trước khi người dùng bấm gì, để lấy tên và tỉnh của xã cho người dùng xác nhận",
+    nguoi_dung_bam: false,
+    man: TIEU_DE_XAC_NHAN_XA,
+    truong: [HOST_CONG_KHAI],
+  },
+  {
+    tuyen: "/api/v1/commune-staff",
+    may_chu: "ViGov — dịch vụ `identity`",
+    khi_nao: `người dùng tự bấm “${TEN_MAN_CONG_KHAI.danh_ba}”, sau khi đã xác nhận xã`,
+    nguoi_dung_bam: true,
+    man: TEN_MAN_CONG_KHAI.danh_ba,
+    truong: [HOST_CONG_KHAI],
+  },
+  {
+    tuyen: "/api/v1/commune-news",
+    may_chu: "ViGov — dịch vụ `comms`",
+    khi_nao: `người dùng tự bấm “${TEN_MAN_CONG_KHAI.tin_xa}” hoặc “Xem thêm tin”, sau khi đã xác nhận xã`,
+    nguoi_dung_bam: true,
+    man: TEN_MAN_CONG_KHAI.tin_xa,
+    truong: [
+      HOST_CONG_KHAI,
+      {
+        khoa: "cursor",
+        trong_chinh_sach:
+          "con trỏ trang tin do chính máy chủ trả ở trang trước, chỉ khi người dùng bấm “Xem thêm tin”",
+      },
+    ],
+  },
+  {
+    tuyen: "/api/v1/commune-news/{id}",
+    may_chu: "ViGov — dịch vụ `comms`",
+    khi_nao: "người dùng tự bấm “Đọc tin” trên một tin",
+    nguoi_dung_bam: true,
+    man: TEN_MAN_CONG_KHAI.tin_xa,
+    truong: [
+      HOST_CONG_KHAI,
+      { khoa: "id", trong_chinh_sach: "mã của tin người dùng bấm đọc, do chính máy chủ trả trong danh sách tin" },
+    ],
+  },
+];
+
 /**
- * HAI ĐƯỜNG DỮ LIỆU RỜI KHỎI MÁY, THEO ĐÚNG THỨ TỰ NGƯỜI DÙNG GẶP CHÚNG.
+ * CÁC ĐƯỜNG DỮ LIỆU RỜI KHỎI MÁY, THEO ĐÚNG THỨ TỰ NGƯỜI DÙNG GẶP CHÚNG.
  *
  * Đăng nhập trước, vì không đăng nhập thì không gửi được yêu cầu nào — thứ tự ấy cũng là thứ tự
- * người duyệt đọc: cửa vào, rồi thứ đi qua cửa.
+ * người duyệt đọc: cửa vào, rồi thứ đi qua cửa. Rồi tới lớp xã: tra tên xã, xác nhận xã, hai màn
+ * công khai.
  *
  * ⚠ THÊM MỘT DÒNG Ở ĐÂY LÀ MỘT THAY ĐỔI VỀ HÀNH VI XỬ LÝ DỮ LIỆU, không phải một dòng tài liệu:
  * nó phải đi kèm một mục trong Chính sách quyền riêng tư và một lần lên số phiên bản (xem bảng
- * lên số trong `chinh-sach-rieng-tu.ts`).
+ * lên số trong `chinh-sach-rieng-tu.ts`). Năm dòng thêm ngày 27/09/2026 KHÔNG lên số: văn bản chưa
+ * từng được công bố, cùng lý do khối số phiên bản ở đó nêu.
+ *
+ * ⚠ CHƯA KHAI Ở ĐÂY: các tuyến phản ánh của ViGov (`petitions`) — gửi phản ánh, "Phản ánh của tôi",
+ * tra cứu. Chúng mang nội dung phản ánh, họ tên và số điện thoại. Việc khai chúng chưa thuộc lượt nào.
  */
 export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
   {
     tuyen: DUONG_DAN_PHIEN,
+    may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group",
     khi_nao: "người dùng tự bấm nút đăng nhập và đồng ý chia sẻ số Zalo trên hộp thoại của Zalo",
+    nguoi_dung_bam: true,
     man: "Liên hệ — khối “Đăng nhập bằng số Zalo”",
     truong: TRUONG_GUI_DI_PHIEN,
   },
   {
     tuyen: DUONG_DAN_YEU_CAU,
+    may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group",
     khi_nao: "người dùng tự bấm “Gửi yêu cầu tư vấn” hoặc “Đề nghị gọi lại cho tôi”",
+    nguoi_dung_bam: true,
     man: "Tư vấn và báo giá",
     truong: TRUONG_GUI_DI,
   },
+  DUONG_CONG_KHAI[0]!,
+  {
+    // CÙNG TUYẾN với dòng đăng nhập, thân KHÁC: không `phoneToken`, thêm tên miền xã và cú xác nhận.
+    tuyen: DUONG_DAN_PHIEN,
+    may_chu:
+      "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group; máy chủ ấy chuyển tiếp sang ViGov — dịch vụ `identity` để mở phiên với xã",
+    khi_nao: "người dùng tự bấm “Đúng, tiếp tục” trên màn xác nhận xã",
+    nguoi_dung_bam: true,
+    man: TIEU_DE_XAC_NHAN_XA,
+    truong: TRUONG_GUI_DI_CAU_VIGOV,
+  },
+  ...DUONG_CONG_KHAI.slice(1),
 ];
 
 /* =============================================================================================

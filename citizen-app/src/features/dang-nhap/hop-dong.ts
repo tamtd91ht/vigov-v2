@@ -37,6 +37,8 @@
 import { diaChiApi } from "../../api/dia-chi";
 import type { TruongGuiDi } from "../../api/hop-dong-yeu-cau";
 
+import { laTenMien } from "../../lib/launch-params";
+
 import type { MaDangNhap } from "../tinh-nang/zalo-api";
 
 /**
@@ -139,7 +141,8 @@ export function docTraLoi(than: unknown): Phien | null {
  *
  *   gửi : { "accessToken", "communeHostHint": "<tên miền xã>", "communeConfirmed": true }
  *         — KHÔNG `phoneToken`: mở phiên sau khi xác nhận xã không xin số điện thoại (ADR 0045 câu 2)
- *   nhận: 201 { "vigovSession": { "token"?, "expiresAt"?, "tenantDisplayName", "phoneVerified" } }
+ *   nhận: 201 { "vigovSession": { "token"?, "expiresAt"?, "tenantDisplayName", "phoneVerified",
+ *                                  "communePrimaryHost"? } }
  *   lỗi : 400 · 401 · 422 xã/app chưa sẵn sàng · 502 · 503 cầu tạm ngưng
  *
  * ⚠ HAI PHIÊN, HAI KHOÁ, KHÔNG BAO GIỜ LẪN. Phiếu thương mại nằm ở `token` GỐC thân trả lời (`docTraLoi`
@@ -162,20 +165,25 @@ export type YeuCauCauViGov = {
 };
 
 /**
- * Ba trường nhánh cầu đưa ra khỏi máy. CHƯA đi vào chính sách quyền riêng tư hay hồ sơ nộp Zalo:
- * `content/ket-xuat-ho-so.ts` chỉ sinh từ `TRUONG_GUI_DI_PHIEN` — việc nối bảng này vào đó là quyết
- * định câu chữ pháp lý, không phải của lượt dựng này. Bảng đứng đây, khoá hai chiều với
- * `thanYeuCauCauViGov` (`cau-vigov.test.ts`), để ngày nối nó vào văn bản nó đúng bằng thân thật.
+ * Ba trường nhánh cầu đưa ra khỏi máy — và câu khai từng trường.
+ *
+ * ⚠ KHOÁ BA CHIỀU (27/09/2026): mọi khoá `thanYeuCauCauViGov` sinh ra có một dòng ở đây và ngược lại
+ * (`cau-vigov.test.ts`); mọi `trong_chinh_sach` có mặt NGUYÊN VĂN trong mục Đăng nhập của chính sách
+ * (`content/chinh-sach.test.ts`); và `content/ket-xuat-ho-so.ts` in bảng này vào khối "Những gì rời
+ * khỏi máy" của hồ sơ nộp Zalo. Câu trong chính sách là CHUỖI VIẾT SẴN, không ghép lúc chạy:
+ * `bundle-for-zalo.test.ts` đòi từng đoạn của mục Đăng nhập có mặt nguyên văn trong bundle.
+ *
+ * Mỗi câu khai viết để ĐỨNG TRONG MỘT DANH SÁCH cách nhau bằng `;` — không tự mang dấu `;`.
  */
 export const TRUONG_GUI_DI_CAU_VIGOV: readonly TruongGuiDi[] = [
   {
     khoa: "accessToken",
     trong_chinh_sach:
-      "mã phiên Zalo của bạn — để máy chủ mở phiên làm việc với xã bạn vừa xác nhận; KHÔNG chứa tên hay ảnh đại diện",
+      "mã phiên Zalo của bạn, để máy chủ mở phiên làm việc với xã ấy — mã này KHÔNG chứa tên hay ảnh đại diện của bạn",
   },
   {
     khoa: "communeHostHint",
-    trong_chinh_sach: "tên miền của xã trên mã QR bạn vừa quét — để máy chủ biết bạn muốn làm việc với xã nào",
+    trong_chinh_sach: "tên miền của xã ấy, lấy từ mã QR hoặc đường liên kết bạn đã dùng để mở ứng dụng",
   },
   {
     khoa: "communeConfirmed",
@@ -192,13 +200,34 @@ export function thanYeuCauCauViGov(yc: YeuCauCauViGov): string {
   });
 }
 
-/** Phiên ViGov như cầu trả về, đã đổi sang tên của ta. Không có mã xã, không có tên miền. */
+/**
+ * Phiên ViGov như cầu trả về, đã đổi sang tên của ta. Không có mã xã.
+ *
+ * `ten_mien_xa` là `communePrimaryHost` — tên miền công khai chính của xã CỦA PHIÊN. Nó CHỈ làm khoá
+ * tra `?host=` cho hai màn công khai (tin tức, danh bạ); nó không phải tham chiếu xã, không được gửi
+ * đi làm "xã của tôi", không vẽ ra, không lưu (ADR 0047 điều kiện dừng #1). `null` khi máy chủ không
+ * gửi, gửi `""` (phiên không xã, hoặc xã chưa có tên miền chính), hoặc gửi một chuỗi sai khuôn.
+ */
 export type PhienViGovQuaCau = {
   token: string;
   het_han: string;
   ten_xa: string;
   da_xac_thuc_so: boolean;
+  ten_mien_xa: string | null;
 };
+
+/**
+ * `communePrimaryHost` → tên miền đúng khuôn, hoặc `null`.
+ *
+ * TUỲ CHỌN VÀ KHÔNG LÀM HỎNG PHIÊN: trường này mới, và một máy chủ cũ không gửi nó. Sai khuôn thì chỉ
+ * mất hai màn công khai — không mất phiên, vì gửi phản ánh không cần tên miền. Chữ thường hoá trước khi
+ * kiểm, đúng cách `thamSoXa` đọc `d`: tên miền không phân biệt hoa thường, và khuôn `laTenMien` thì có.
+ */
+function docTenMienPhien(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const ten_mien = v.toLowerCase();
+  return laTenMien(ten_mien) ? ten_mien : null;
+}
 
 /**
  * Thân 201 → phiên ViGov, `"khong-co-phien"` khi máy chủ trả lời thật rằng không có phiên nào dùng
@@ -207,6 +236,7 @@ export type PhienViGovQuaCau = {
  *   • không có `vigovSession`           → cầu tắt (một bản máy chủ cũ trả phiếu thương mại)
  *   • `vigovSession` không có `token`    → phiên không xã; hợp đồng cố ý không phát bearer
  *   • `tenantDisplayName` rỗng           → "không xã nào" — không bao giờ thay bằng tên màn xác nhận
+ *   • `communePrimaryHost` vắng/""/sai   → phiên vẫn dùng được; `ten_mien_xa` = `null`
  */
 export function docTraLoiCauViGov(than: unknown): PhienViGovQuaCau | "khong-co-phien" | null {
   if (typeof than !== "object" || than === null) return null;
@@ -224,6 +254,7 @@ export function docTraLoiCauViGov(than: unknown): PhienViGovQuaCau | "khong-co-p
     het_han: typeof v.expiresAt === "string" ? v.expiresAt : "",
     ten_xa: v.tenantDisplayName,
     da_xac_thuc_so: v.phoneVerified,
+    ten_mien_xa: docTenMienPhien(v.communePrimaryHost),
   };
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
+import { thanYeuCauCauViGov, TRUONG_GUI_DI_CAU_VIGOV } from "../features/dang-nhap/hop-dong";
 import {
   DOAN_CHINH_SACH_TINH_NANG,
   TOKEN_KHONG_CHUA_GI,
@@ -113,6 +114,57 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
         `văn bản chính sách không còn nói tới: ${truong.trong_chinh_sach.slice(0, 40)}…`,
       ).toContain(truong.trong_chinh_sach);
     }
+  });
+
+  /**
+   * BƯỚC XÁC NHẬN XÃ (27/09/2026) — cùng khoá hai chiều, cho thân `thanYeuCauCauViGov`.
+   *
+   *   Thân ấy rời khỏi máy mang tên miền của xã và cú xác nhận. Câu khai nằm trong mục Đăng nhập dưới
+   *   dạng CHUỖI VIẾT SẴN (bundle phải mang nguyên văn từng đoạn của mục ấy), nên cái khoá ở đây là:
+   *   khoá của thân ⇄ bảng `TRUONG_GUI_DI_CAU_VIGOV` ⇄ từng câu khai có mặt nguyên văn trong mục ấy.
+   */
+  describe("bước xác nhận xã — thân gửi đi, bảng khai và văn bản khoá nhau", () => {
+    const khoaThan = () =>
+      Object.keys(
+        JSON.parse(thanYeuCauCauViGov({ ma_truy_cap: "m", ten_mien_xa: "xa-vi-du.vigov.example" })) as Record<
+          string,
+          unknown
+        >,
+      );
+    const mucDangNhap = () => MUC_CHINH_SACH.find((m) => m.ma === "dang-nhap")!.doan.join("\n");
+
+    it("MỌI khoá thân gửi đi có một dòng khai, và mọi dòng khai là một khoá thân gửi đi", () => {
+      const khoa = khoaThan();
+      expect(khoa.length, "thân bước xác nhận xã không còn trường nào để đo").toBeGreaterThan(0);
+      const da_khai = TRUONG_GUI_DI_CAU_VIGOV.map((t) => t.khoa);
+      for (const k of khoa) {
+        expect(da_khai, `bước xác nhận xã gửi "${k}" mà chính sách KHÔNG khai`).toContain(k);
+      }
+      for (const k of da_khai) {
+        expect(khoa, `chính sách khai "${k}" mà bước xác nhận xã không gửi`).toContain(k);
+      }
+    });
+
+    it("MỌI dòng khai có mặt NGUYÊN VĂN trong mục Đăng nhập — gỡ câu ấy khỏi văn bản là ĐỎ", () => {
+      expect(TRUONG_GUI_DI_CAU_VIGOV.length).toBeGreaterThan(0);
+      for (const t of TRUONG_GUI_DI_CAU_VIGOV) {
+        expect(mucDangNhap(), `mục Đăng nhập không còn nói tới: ${t.trong_chinh_sach.slice(0, 40)}…`).toContain(
+          t.trong_chinh_sach,
+        );
+      }
+    });
+
+    it("câu khai nói ai nhận, rằng không gì khác đi kèm, và rằng không gửi mã số điện thoại", () => {
+      const cau = MUC_CHINH_SACH.find((m) => m.ma === "dang-nhap")!.doan.find((d) =>
+        d.startsWith("Khi bạn bấm xác nhận làm việc với một xã"),
+      );
+      expect(cau, "không còn câu khai bước xác nhận xã").toBeDefined();
+      expect(cau).toMatch(/máy chủ của Tập đoàn ViHAT Group/);
+      expect(cau).toMatch(/và không gì khác/);
+      // Thân KHÔNG có `phoneToken` (ADR 0045 câu 2) — văn bản nói ra điều đó, và nói đúng.
+      expect(khoaThan()).not.toContain("phoneToken");
+      expect(mucDangNhap()).toMatch(/Bước xác nhận xã không gửi mã số điện thoại của bạn/);
+    });
   });
 
   it("mục về bề mặt yêu cầu nói đủ: phải đăng nhập · ZNS không chắc chắn · trần gọi lại · 24 tháng", () => {

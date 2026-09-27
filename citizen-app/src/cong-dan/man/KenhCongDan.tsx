@@ -2,18 +2,22 @@
  * Vỏ của kênh công dân: một màn chọn việc (gửi · phản ánh của tôi · tra cứu), rồi đúng màn ấy.
  *
  * Có mặt trong bản dựng duy nhất (27/09/2026). Chừng nào chưa có phiên ViGov, ba màn phản ánh nói
- * "kênh chưa mở" — `api/phien-vigov.ts`.
+ * "kênh chưa mở" — `api/phien-vigov.ts` — và màn chọn việc nói điều ấy TRƯỚC khi người dân bấm
+ * (`CHUA_DANG_NHAP_XA`).
  *
  * HAI MÀN CÔNG KHAI (27/09/2026): "Tin tức của xã" và "Danh bạ cán bộ xã". Chúng cần TÊN MIỀN xã cho
- * `?host=`, và nguồn DUY NHẤT của nó là `d` mà công dân đã xác nhận ở lần mở này (trong bộ nhớ của
- * `App.tsx`). Không có tên miền — mở app không qua QR, hoặc app riêng của một xã (bundle không được
- * mang giá trị theo xã, ADR 0047 điều kiện dừng #2) — thì hai lối vào BIẾN MẤT thay vì đoán một xã.
+ * `?host=`, và `App.tsx` là bên chọn nó (`khoaTraCongKhai`): tên miền chính của xã CỦA PHIÊN
+ * (`communePrimaryHost`), nếu không có thì `d` công dân đã xác nhận ở lần mở này. Không có cả hai —
+ * mở app không qua QR và phiên không mang tên miền — thì hai lối vào BIẾN MẤT thay vì đoán một xã
+ * (bundle không được mang giá trị theo xã, ADR 0047 điều kiện dừng #2).
  */
 import { useState } from "react";
 
+import { layPhienViGov } from "../api/phien-vigov";
+
 import { DanhBaCanBoScreen } from "./DanhBaCanBoScreen";
 import { GuiPhanAnhScreen } from "./GuiPhanAnhScreen";
-import { CUA_TOI, DANH_BA, GUI, QUAY_LAI, TIN_XA, TRA_CUU } from "./noi-dung";
+import { CHUA_DANG_NHAP_XA, CUA_TOI, DANH_BA, GUI, QUAY_LAI, TIN_XA, TRA_CUU } from "./noi-dung";
 import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
 import { TinTucXaScreen } from "./TinTucXaScreen";
 import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
@@ -47,6 +51,9 @@ export function KenhCongDan({
   ten_mien?: string | null;
 }) {
   const [man, datMan] = useState<Man>({ kieu: "chon" });
+  // Đọc MỘT LẦN lúc dựng, cùng cách ba màn phản ánh đọc (`useState(layPhienViGov)`): phiên chỉ được
+  // ghi trước khi kênh mở, ở bước xác nhận xã.
+  const [co_phien] = useState(() => layPhienViGov() !== null);
   const veChon = () => datMan({ kieu: "chon" });
 
   if (man.kieu === "gui") return <GuiPhanAnhScreen onQuayLai={veChon} />;
@@ -90,6 +97,12 @@ export function KenhCongDan({
         {QUAY_LAI}
       </button>
       <h1 className="cd-tieu-de">{NHAN_KENH_CONG_DAN}</h1>
+      {!co_phien && (
+        <p className="cd-loi" role="status">
+          {CHUA_DANG_NHAP_XA.cau}
+          {ten_mien !== null && ` ${CHUA_DANG_NHAP_XA.con_lai}`}
+        </p>
+      )}
       <button type="button" className="cd-nut" onClick={() => datMan({ kieu: "gui" })}>
         {GUI.tieu_de}
       </button>

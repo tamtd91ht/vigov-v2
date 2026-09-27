@@ -2,7 +2,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { App, KhungApp } from "../../App";
+import { App, KhungApp, khoaTraCongKhai } from "../../App";
 import { NHAN_KENH_CONG_DAN } from "../../cong-dan/man/KenhCongDan";
 import { XAC_NHAN_XA } from "../../cong-dan/man/noi-dung";
 import { COMPANY } from "../../content/company-profile";
@@ -226,6 +226,29 @@ describe("bất di dịch #2 — xác nhận xã rồi thì tên xã hiện trê
     }
   });
 
+  it("xác nhận xã mà KHÔNG có phiên → header mang tên VÀ tỉnh `/communes` trả, trên mọi màn", () => {
+    // 27/09/2026: tin tức và danh bạ mở ngay sau cú xác nhận, không cần phiên. Tên xã khi ấy là tên
+    // `/communes` trả — cùng tên công dân vừa đọc trên màn xác nhận — kèm tỉnh, như chính màn ấy nói.
+    for (const man of SCREENS) {
+      const markup = render(
+        <KhungApp man={man.id} onChonMan={() => {}} xaDaChon={{ ten: XA_THU.ten, tinh: XA_THU.tinh }}>
+          <p>nội dung</p>
+        </KhungApp>,
+      );
+      expect(dauTrang(markup), `màn ${man.id}`).toContain(`${XA_THU.ten}, ${XA_THU.tinh}`);
+    }
+  });
+
+  it("CÓ phiên → header chỉ mang tên xã của phiên, không ghép tỉnh của một nguồn khác", () => {
+    const markup = render(
+      <KhungApp man="home" onChonMan={() => {}} xaDaChon={{ ten: "Tên Của Phiên", tinh: null }}>
+        <p>nội dung</p>
+      </KhungApp>,
+    );
+    expect(dauTrang(markup)).toContain("Tên Của Phiên");
+    expect(dauTrang(markup)).not.toContain("Tên Của Phiên,");
+  });
+
   it("header KHÔNG có nút đổi xã — một phiên, một xã", () => {
     const markup = render(
       <KhungApp man="home" onChonMan={() => {}} xaDaChon={XA_THU}>
@@ -279,6 +302,30 @@ describe("bất di dịch #2 — xác nhận xã rồi thì tên xã hiện trê
 });
 
 // ---------------------------------------------------------------------------------------------
+
+/**
+ * KHOÁ TRA CỦA HAI MÀN CÔNG KHAI — tên miền chính của PHIÊN trước, `d` đã xác nhận sau, không thì `null`.
+ */
+describe("khoá tra `?host=` của tin tức và danh bạ", () => {
+  const D = "xa-vi-du.vigov.example";
+  const CUA_PHIEN = "xa-cua-phien.vigov.example";
+
+  it("phiên mang `communePrimaryHost` → dùng nó, kể cả khi `d` nói một xã khác (phiên nói thật)", () => {
+    expect(khoaTraCongKhai(CUA_PHIEN, D)).toBe(CUA_PHIEN);
+  });
+
+  it("app riêng của một xã (không `d`) → chỉ tên miền của phiên mở được hai màn", () => {
+    expect(khoaTraCongKhai(CUA_PHIEN, null)).toBe(CUA_PHIEN);
+  });
+
+  it("phiên không mang tên miền (vắng · rỗng · sai khuôn đều thành `null` ở bộ đọc) → `d` đã xác nhận", () => {
+    expect(khoaTraCongKhai(null, D)).toBe(D);
+  });
+
+  it("không có cả hai → `null`: hai màn ẩn, không đoán một xã", () => {
+    expect(khoaTraCongKhai(null, null)).toBeNull();
+  });
+});
 
 /**
  * ĐƯỜNG LIÊN KẾT KHÔNG ĐỦ ĐỂ HỎI MÁY CHỦ → KHÔNG TÊN XÃ NÀO, VÀ APP MỞ PHẦN GIỚI THIỆU. Ca này dựng
