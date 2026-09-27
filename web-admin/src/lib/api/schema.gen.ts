@@ -788,6 +788,10 @@ export type identity_danhBaChonNguoiRa = {
   "items": Array<identity_canBoChonNguoiRa>;
 };
 
+export type identity_danhMucXaRa = {
+  "items": Array<identity_xaCongKhai>;
+};
+
 export type identity_danhSachBoPhanRa = {
   "items": Array<identity_boPhanRa>;
 };
@@ -1122,6 +1126,11 @@ export type identity_vanDeSLARa = {
   "kind": string;
   "work_kind": string;
   "message": string;
+};
+
+export type identity_xaCongKhai = {
+  "name": string;
+  "province": string;
 };
 
 export type identity_xoaCanBoVao = {
@@ -2263,6 +2272,25 @@ export type petitions_post_citizen_reports_by_maTraCuu_status = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/communes — Tra xã theo tên miền trong mã QR, để Mini App hỏi "Làm việc với xã X?" trước khi công dân xác nhận — không trả mã xã */
+export type identity_get_communes = {
+  duongDan: "/api/v1/communes";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "host": string;
+  };
+  than: never;
+  phanHoi: {
+    200: identity_danhMucXaRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 
