@@ -225,9 +225,11 @@ describe("2 — bảng quyền của hồ sơ đọc từ mã nguồn, không ch
  *
  * ⚠ MẪU NEO VÀO CỤM "BÊN PHÁT HÀNH" / "CHỊU TRÁCH NHIỆM", KHÔNG NEO VÀO CHỮ `VihatSoftware`
  * TRẦN. Đã thử một mẫu rộng hơn (`ứng dụng này … của VihatSoftware`) và nó kêu oan ngay trên một
- * câu ĐÚNG: câu mở đầu của chính sách — *"Ứng dụng này không lưu … tới máy chủ của
+ * câu khi ấy ĐÚNG: câu mở đầu của chính sách — *"Ứng dụng này không lưu … tới máy chủ của
  * VihatSoftware"* — nằm gọn trong một câu, không có dấu chấm nào ở giữa. Một dây bẫy kêu oan ở
- * đúng câu quan trọng nhất là một dây bẫy sẽ bị tắt trong lần dọn tiếp theo.
+ * đúng câu quan trọng nhất là một dây bẫy sẽ bị tắt trong lần dọn tiếp theo. (Từ 25/09/2026 câu
+ * ấy nói "máy chủ của Tập đoàn ViHAT Group" — câu mở #28 — nhưng VihatSoftware vẫn đứng hợp lệ
+ * trong câu dài ở vai trò đơn vị thành viên / sở hữu trí tuệ, nên lý do neo hẹp vẫn còn nguyên.)
  *
  * Khoảng cách chặn ở 80 ký tự: đủ cho lối viết chèn vế "— đơn vị thành viên của Tập đoàn ViHAT
  * Group —" vào giữa, không đủ để nối hai mệnh đề chẳng liên quan trong cùng một câu dài.
@@ -269,16 +271,20 @@ describe("3 — bên phát hành và bên nhận dữ liệu là HAI câu khác 
     );
   });
 
-  it("VẪN GIỮ lời khai nơi nhận dữ liệu: máy chủ của VihatSoftware", () => {
-    // ⚠ CHIỀU NGƯỢC VỚI CA TRÊN, VÀ ĐÓ LÀ CHỦ ĐÍCH — câu hỏi mở #28. Máy chủ đổi hai mã đăng
-    // nhập là kho `vihat-miniapp`; ai vận hành nó sau khi chuyển quyền sở hữu app thì CHƯA AI
-    // TRẢ LỜI. Một lượt tìm-thay "VihatSoftware" -> "ViHAT Group" trên bản kết xuất sẽ làm ca ở
-    // trên xanh và biến văn bản thành lời khai SAI về nơi nhận dữ liệu cá nhân — đúng thứ Nghị
-    // định 13/2023 nhắm tới, và là thứ không sửa lại được sau khi công bố.
+  it("khai nơi nhận dữ liệu là máy chủ của Tập đoàn ViHAT Group, không còn VihatSoftware (#28)", () => {
+    // Câu hỏi mở #28 ĐÃ QUYẾT 25/09/2026 (ADR 0044 câu 2): bên vận hành `vihat-miniapp` và bên
+    // nhận dữ liệu là Tập đoàn ViHAT Group. Từ 21/09 tới 25/09 ca này ghim chiều ngược lại —
+    // "máy chủ của VihatSoftware" — vì khi ấy chưa ai xác nhận. Nay chuỗi cũ trong bản gửi Zalo là
+    // lời khai SAI nơi nhận dữ liệu cá nhân (Nghị định 13/2023), kể cả lối viết kèm "— đơn vị
+    // thành viên của Tập đoàn ViHAT Group". Mẫu cấm là `code_signals` của chính câu #28.
+    const chu = ketXuatVanBan(VAN_BAN_CHINH_SACH);
     expect(
-      ketXuatVanBan(VAN_BAN_CHINH_SACH),
-      "lời khai nơi nhận dữ liệu đã bị đổi tên hoặc bị xoá khỏi bản gửi Zalo",
-    ).toContain("máy chủ của VihatSoftware");
+      chu,
+      "lời khai nơi nhận dữ liệu bị xoá khỏi bản gửi Zalo hoặc chưa đổi sang ViHAT Group",
+    ).toContain("máy chủ của Tập đoàn ViHAT Group");
+    expect(chu, "bản gửi Zalo còn khai VihatSoftware là nơi nhận dữ liệu").not.toMatch(
+      /m[áa]y ch[ủu] c[ủu]a\s+vihat\s*software/i,
+    );
   });
 
   it("điều khoản KHÔNG tự viết ra một lời khai nơi nhận dữ liệu — nó chỉ sang chính sách", () => {
@@ -310,8 +316,10 @@ describe("3 — bên phát hành và bên nhận dữ liệu là HAI câu khác 
     }
 
     const KHONG_DUOC_KEU = [
-      "Ứng dụng này không lưu bất kỳ dữ liệu nào của bạn xuống máy, và chỉ gửi đi đúng MỘT việc: khi chính bạn bấm đăng nhập, nó gửi hai mã dùng một lần do Zalo cấp tới máy chủ của VihatSoftware.",
-      "Khi bạn bấm đăng nhập, ứng dụng gửi hai mã ấy tới máy chủ của VihatSoftware — đơn vị thành viên của Tập đoàn ViHAT Group.",
+      "Ứng dụng này không lưu bất kỳ dữ liệu nào của bạn xuống máy, và chỉ gửi đi ở đúng HAI việc, cả hai đều do chính bạn bấm: khi bạn đăng nhập, nó gửi hai mã dùng một lần do Zalo cấp. Cả hai đi tới máy chủ của Tập đoàn ViHAT Group.",
+      "Khi bạn bấm đăng nhập, ứng dụng gửi hai mã ấy tới máy chủ của Tập đoàn ViHAT Group.",
+      // VihatSoftware ở vai trò SỞ HỮU TRÍ TUỆ, cùng một câu với "ứng dụng" — câu đúng, phải lọt.
+      "Tên gọi, logo, nội dung giới thiệu, hình ảnh và mã nguồn của ứng dụng thuộc quyền của VihatSoftware và Tập đoàn ViHAT Group.",
       "Không dùng tên, logo hoặc nội dung của VihatSoftware và ViHAT Group cho mục đích thương mại khác.",
       "Tập đoàn ViHAT Group là bên phát hành ứng dụng này và là bên chịu trách nhiệm về chính sách này.",
     ];

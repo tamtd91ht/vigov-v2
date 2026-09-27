@@ -21,12 +21,12 @@
  * pháp tổng đài đám mây, CRM và ứng dụng AI cho doanh nghiệp. Mọi câu ở đây nói với một khách
  * hàng hoặc một đối tác đang tìm hiểu giải pháp.
  *
- * ⚠ HAI CÂU TRONG TỆP NÀY VẪN NÓI "máy chủ của VihatSoftware", VÀ ĐÓ LÀ CHỦ ĐÍCH (21/09/2026):
- * bên phát hành app nay là Tập đoàn ViHAT Group, nhưng máy chủ đổi mã là kho `vihat-miniapp` và
- * ai vận hành nó sau chuyển giao thì chưa ai trả lời. Hai câu ấy phải khớp từng chữ với chính
- * sách quyền riêng tư — người dùng đọc cả hai chỗ, và hai chỗ nói hai nơi nhận khác nhau là một
- * mâu thuẫn trong chính thứ Nghị định 13 bắt khai. Xem `content/chinh-sach-rieng-tu.ts`, khối
- * "CHUYỂN QUYỀN SỞ HỮU APP".
+ * ⚠ HAI CÂU TRONG TỆP NÀY NÓI "máy chủ của Tập đoàn ViHAT Group" — ĐỔI 25/09/2026 (câu mở #28):
+ * từ 21/09 tới 25/09 chúng cố ý còn nói "VihatSoftware" vì chưa ai xác nhận ai vận hành kho
+ * `vihat-miniapp` sau chuyển giao; chủ dự án đã xác nhận đó là Tập đoàn ViHAT Group (ADR 0044
+ * câu 2). Hai câu ấy phải khớp từng chữ với chính sách quyền riêng tư — người dùng đọc cả hai
+ * chỗ, và hai chỗ nói hai nơi nhận khác nhau là một mâu thuẫn trong chính thứ Nghị định 13 bắt
+ * khai. Xem `content/chinh-sach-rieng-tu.ts`, khối "CHUYỂN QUYỀN SỞ HỮU APP".
  */
 /**
  * SÁU TÍNH NĂNG, CHÍN QUYỀN NỀN TẢNG. Thứ tự này là thứ tự hiện ra.
@@ -77,9 +77,9 @@ export type NoiDungTinhNang = {
  */
 export const TOKEN_KHONG_CHUA_GI = {
   "dang-nhap":
-    "Số điện thoại của bạn không nằm trong mã này và không được gửi về máy. Chỉ máy chủ của VihatSoftware mới đổi được mã thành số điện thoại, và mã chỉ dùng được một lần trong 2 phút.",
+    "Số điện thoại của bạn không nằm trong mã này và không được gửi về máy. Chỉ máy chủ của Tập đoàn ViHAT Group mới đổi được mã thành số điện thoại, và mã chỉ dùng được một lần trong 2 phút.",
   "van-phong":
-    "Toạ độ của bạn không nằm trong mã này và không được gửi về máy. Chỉ máy chủ của VihatSoftware mới đổi được mã thành vị trí, và mã chỉ dùng được một lần trong 2 phút.",
+    "Toạ độ của bạn không nằm trong mã này và không được gửi về máy. Chỉ máy chủ của Tập đoàn ViHAT Group mới đổi được mã thành vị trí, và mã chỉ dùng được một lần trong 2 phút.",
 } as const;
 
 /** Lời hứa của chính bản dựng này. Xem `zalo-api.ts` về việc giữ nó. */

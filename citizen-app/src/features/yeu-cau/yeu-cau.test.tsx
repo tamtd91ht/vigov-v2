@@ -346,6 +346,14 @@ describe("bốn mã trạng thái, bốn nhãn tiếng Việt, một chỗ", () 
     expect(ngayDoc("khong-phai-ngay")).toBe("");
     expect(ngayDoc("2026-09-22T03:00:00Z")).not.toBe("");
   });
+
+  it("ngày giờ GHIM +07 (quyết định 27/09/2026) — so nguyên văn, ở mốc sát nửa đêm UTC", () => {
+    // 17:00Z là 00:00 hôm sau ở Việt Nam, 23:30Z là 06:30 hôm sau: đúng chỗ đọc theo múi của máy
+    // làm lệch cả NGÀY. Ca "không rỗng" ở trên xanh với mọi định dạng, nên không canh được điều này.
+    expect(ngayDoc("2026-09-24T17:00:00Z")).toBe("25/09/2026 00:00");
+    expect(ngayDoc("2026-09-24T23:30:00Z")).toBe("25/09/2026 06:30");
+    expect(ngayDoc("2026-09-24T16:59:00Z")).toBe("24/09/2026 23:59");
+  });
 });
 
 /* ============================================================================================

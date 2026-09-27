@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
-import { DOAN_CHINH_SACH_TINH_NANG } from "../features/tinh-nang/noi-dung";
+import {
+  DOAN_CHINH_SACH_TINH_NANG,
+  TOKEN_KHONG_CHUA_GI,
+} from "../features/tinh-nang/noi-dung";
 import { TRUONG_THIEP_CUA_CHUNG_TOI } from "../features/tinh-nang/vcard";
 
 import {
@@ -52,7 +55,7 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
     const chu = muc!.doan.join("\n");
 
     expect(chu, "không nói GỬI GÌ").toMatch(/hai mã/);
-    expect(chu, "không nói AI NHẬN").toMatch(/máy chủ của VihatSoftware/);
+    expect(chu, "không nói AI NHẬN").toMatch(/máy chủ của Tập đoàn ViHAT Group\./);
     expect(chu, "không nói MÁY CHỦ LƯU SỐ ĐIỆN THOẠI").toMatch(/LƯU SỐ ĐIỆN THOẠI/);
     expect(chu, "không nói VÌ SAO — đăng nhập và thông báo ZNS").toMatch(/tên đăng nhập/);
     expect(chu).toMatch(/ZNS/);
@@ -417,9 +420,13 @@ describe("nhật ký đăng nhập — khai ra, kèm mục đích", () => {
  *   | AI CHỊU TRÁCH NHIỆM về chính sách | văn bản pháp lý đứng tên sai pháp nhân |
  *   | AI NHẬN dữ liệu đăng nhập | khai sai nơi nhận dữ liệu cá nhân — đúng thứ Nghị định 13 nhắm tới |
  *
- *   Cách hỏng dễ xảy ra nhất là một lượt tìm-thay "VihatSoftware" → "ViHAT Group" chạy trên cả
- *   tệp: vế trên đúng, vế dưới thành một lời khai sai, và không có gì đỏ lên. Ba ca dưới đây là
- *   thứ đỏ lên.
+ *   Hai vế vẫn là hai câu, dù từ 25/09/2026 chúng mang CÙNG một tên: câu mở #28 đã quyết bên
+ *   vận hành `vihat-miniapp` và bên nhận dữ liệu là Tập đoàn ViHAT Group (ADR 0044 câu 2). Từ
+ *   21/09 tới 25/09 ca cuối ghim "máy chủ của VihatSoftware" vì khi ấy chưa ai xác nhận; nay nó
+ *   ghim chuỗi mới Ở TỪNG CHỖ khai nơi nhận, và cấm chuỗi cũ — kể cả lối viết "máy chủ của
+ *   VihatSoftware — đơn vị thành viên của Tập đoàn ViHAT Group", vì câu ấy vẫn nêu VihatSoftware
+ *   là nơi nhận. Tên VihatSoftware ở vai trò đơn vị thành viên (điều khoản, danh sách đơn vị)
+ *   không thuộc ca này.
  */
 describe("bên phát hành và bên nhận dữ liệu là HAI câu khác nhau", () => {
   it("nói bên chịu trách nhiệm về chính sách là ViHAT Group", () => {
@@ -439,13 +446,34 @@ describe("bên phát hành và bên nhận dữ liệu là HAI câu khác nhau",
     );
   });
 
-  it("GIỮ NGUYÊN lời khai nơi nhận dữ liệu: máy chủ của VihatSoftware", () => {
-    // ⚠ CA NÀY CANH CHIỀU NGƯỢC VỚI CA TRÊN, VÀ ĐÓ LÀ CHỦ ĐÍCH. Máy chủ đổi mã là kho
-    // `vihat-miniapp`; ai vận hành nó sau khi chuyển quyền sở hữu app là câu CHƯA AI TRẢ LỜI.
-    // Đổi tên bên nhận theo tên bên phát hành là khai một nơi nhận dữ liệu cá nhân không đúng
-    // sự thật — không sửa lại được sau khi công bố.
-    const chu = [CAU_DAU, ...MUC_CHINH_SACH.flatMap((m) => m.doan)].join("\n");
-    expect(chu, "lời khai nơi nhận dữ liệu đã bị đổi tên").toMatch(/máy chủ của VihatSoftware/);
+  it("khai nơi nhận dữ liệu là máy chủ của Tập đoàn ViHAT Group — ở ĐỦ mọi chỗ khai (#28)", () => {
+    // ⚠ GHIM TỪNG CHỖ, KHÔNG GHIM "CÓ Ở ĐÂU ĐÓ": văn bản khai nơi nhận ở câu đầu, mục Đăng nhập
+    // và mục Chuyển dữ liệu cho bên thứ ba; hai câu nữa nằm ngoài tệp chính sách, ở
+    // `TOKEN_KHONG_CHUA_GI`. Sửa nửa vời — một chỗ mới, một chỗ cũ — là hai nơi nhận khác nhau
+    // trong cùng thứ Nghị định 13 bắt khai, và một ca "toMatch trên toàn văn" vẫn xanh.
+    const muc = (ma: string) => MUC_CHINH_SACH.find((m) => m.ma === ma)!.doan.join("\n");
+    const choKhai: Record<string, string> = {
+      "câu đầu": CAU_DAU,
+      "mục Đăng nhập": muc("dang-nhap"),
+      "mục Chuyển dữ liệu cho bên thứ ba": muc("ben-thu-ba"),
+      "token đăng nhập": TOKEN_KHONG_CHUA_GI["dang-nhap"],
+      "token vị trí": TOKEN_KHONG_CHUA_GI["van-phong"],
+    };
+    for (const [cho, chu] of Object.entries(choKhai)) {
+      expect(chu, `${cho}: không khai nơi nhận là ViHAT Group`).toMatch(
+        /máy chủ của Tập đoàn ViHAT Group/,
+      );
+    }
+    // Mẫu của chính câu mở #28 (`code_signals`): chuỗi cũ còn sót ở BẤT KỲ đâu là một lời khai
+    // sai nơi nhận — kể cả khi nó kèm "đơn vị thành viên của Tập đoàn ViHAT Group".
+    const toanBo = [
+      CAU_DAU,
+      ...MUC_CHINH_SACH.flatMap((m) => m.doan),
+      ...Object.values(TOKEN_KHONG_CHUA_GI),
+    ].join("\n");
+    expect(toanBo, "còn sót lời khai nơi nhận cũ").not.toMatch(
+      /m[áa]y ch[ủu] c[ủu]a\s+vihat\s*software/i,
+    );
   });
 });
 

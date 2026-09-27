@@ -6,6 +6,7 @@ import type { MaDangNhap } from "../tinh-nang/zalo-api";
 import { diaChiPhien, docTraLoi, DUONG_DAN_PHIEN, thanYeuCau } from "./hop-dong";
 import { phatHanhPhien } from "./goi-may-chu";
 import { PhatHanhPhien } from "./PhatHanhPhien";
+import maPhatHanhPhien from "./PhatHanhPhien.tsx?raw";
 
 /**
  * KHỐI ĐĂNG NHẬP — PHÉP KIỂM CỦA BƯỚC MÁY CHỦ.
@@ -155,6 +156,16 @@ describe("màn hình: nói việc đang xảy ra và việc phải làm tiếp, 
     const ma_nguon = ve(<PhatHanhPhien ma={MA} />);
     expect(ma_nguon).not.toMatch(/\/api\/|http|[Tt]oken|401|502|fetch/);
   });
+
+  it("giờ hết hạn phiên GHIM +07 qua hàm dùng chung, không theo múi của máy (quyết định 27/09/2026)", () => {
+    // Nhánh "đã đăng nhập" chỉ vẽ sau `useEffect`, nên dựng tĩnh không tới được dòng "Phiên có
+    // hiệu lực tới …". Canh ở mã nguồn: dòng ấy đi qua `thoiDiemVN` (định dạng của nó có ca so
+    // nguyên văn ở `lib/thoi-diem.test.ts`), và không còn lời gọi `toLocale*String` nào ở đây.
+    const ma = maPhatHanhPhien;
+    expect(ma).toMatch(/import \{ thoiDiemVN \} from "\.\.\/\.\.\/lib\/thoi-diem"/);
+    expect(ma).toMatch(/thoiDiemVN\(trang_thai\.phien\.het_han\)/);
+    expect(ma, "còn định dạng giờ theo múi của máy").not.toMatch(/\.toLocale(Date|Time)?String\(/);
+  });
 });
 
 describe("hợp đồng: gửi ĐÚNG hai mã, không hơn", () => {
@@ -173,7 +184,7 @@ describe("hợp đồng: gửi ĐÚNG hai mã, không hơn", () => {
   });
 
   it("đường dẫn là tài nguyên CỦA KHO NÀY, không mượn từ vựng của kênh công dân nhà nước", () => {
-    // `vihat-miniapp` là backend thương mại của VihatSoftware, độc lập với ViGov. Mượn tên
+    // `vihat-miniapp` là backend thương mại của Tập đoàn ViHAT Group, độc lập với ViGov. Mượn tên
     // `citizen-session` của kênh nhà nước là bước đầu của việc người sau tưởng hai thứ là một —
     // và hai hệ thống bị tưởng là một thì dữ liệu của chúng sẽ được đối xử như nhau.
     expect(DUONG_DAN_PHIEN).toBe("/api/v1/sessions");

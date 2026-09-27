@@ -23,7 +23,7 @@ import { KenhCongDan } from "./man/KenhCongDan";
 import { CUA_TOI, KENH_CHUA_MO, GUI, LOI_GUI, nhanTrangThai, giaiThichTrangThai, TRA_CUU, TRANG_THAI } from "./man/noi-dung";
 import * as NOI_DUNG from "./man/noi-dung";
 import { PhanAnhCuaToiScreen } from "./man/PhanAnhCuaToiScreen";
-import { thoiDiemVN } from "./man/thoi-diem";
+import { thoiDiemVN } from "../lib/thoi-diem";
 import { KetQuaTraCuu, TraCuuPhieuScreen } from "./man/TraCuuPhieuScreen";
 
 /**

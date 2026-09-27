@@ -24,7 +24,7 @@ import { layPhienViGov } from "../api/phien-vigov";
 
 import { BangXa, KenhChuaMo, nhanLinhVuc } from "./khung";
 import { CUA_TOI, GUI, nhanTrangThai, QUAY_LAI, THE_PHIEU } from "./noi-dung";
-import { THOI_DIEM_KHONG_DOC_DUOC, thoiDiemVN } from "./thoi-diem";
+import { THOI_DIEM_KHONG_DOC_DUOC, thoiDiemVN } from "../../lib/thoi-diem";
 
 /** Ba câu lỗi người dân đọc được. Mọi mã lạ khác rơi vào `loi-may-chu`. */
 export type LoiDanhSach = "het-phien" | "loi-mang" | "loi-may-chu";

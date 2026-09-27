@@ -20,6 +20,7 @@
  */
 import { useEffect, useState } from "react";
 
+import { thoiDiemVN } from "../../lib/thoi-diem";
 import type { MaDangNhap } from "../tinh-nang/zalo-api";
 
 import { type KetQuaPhien, phatHanhPhien } from "./goi-may-chu";
@@ -60,11 +61,6 @@ const CHU_PHIEN = {
     "Bản dựng này chưa được khai địa chỉ máy chủ, nên chưa đăng nhập được. Người dựng bản cần đặt biến VIGOV_API_HOST rồi dựng lại.",
 } as const;
 
-/** Giờ hết hạn cho người đọc. Giá trị lạ thì bỏ hẳn dòng ấy, không hiện một chuỗi kỹ thuật. */
-function gioHetHan(han: string): string | null {
-  const luc = new Date(han);
-  return Number.isNaN(luc.getTime()) ? null : luc.toLocaleString("vi-VN");
-}
 
 /**
  * Đổi hai mã lấy một phiên, ngay sau khi người dùng vừa đồng ý.
@@ -119,7 +115,9 @@ export function PhatHanhPhien({ ma }: { ma: MaDangNhap }) {
   }
 
   if (trang_thai.kieu === "xong") {
-    const gio = gioHetHan(trang_thai.phien.het_han);
+    // Giờ hết hạn GHIM +07 (quyết định 27/09/2026, `lib/thoi-diem.ts`), không theo múi của máy.
+    // Giá trị lạ thì `null` và dòng ấy bỏ hẳn — không hiện một chuỗi kỹ thuật.
+    const gio = thoiDiemVN(trang_thai.phien.het_han);
     return (
       <>
         <p className="tn__xong">{CHU_PHIEN.xong}</p>

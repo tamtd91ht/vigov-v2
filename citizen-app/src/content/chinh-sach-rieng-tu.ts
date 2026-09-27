@@ -50,30 +50,35 @@
  *   MẤT KHỎI CẢ BẢN NỘP, không chỉ khỏi bản đầy đủ. Nó từng là câu mạnh nhất app này có để nói;
  *   hôm nay nó là một tuyên bố sai dưới tên một pháp nhân có thật.
  *
- * ⚠ CHUYỂN QUYỀN SỞ HỮU APP, 21/09/2026 — VÀ MỘT CÂU HỎI CHƯA AI TRẢ LỜI ĐANG TREO Ở ĐÂY:
+ * ⚠ CHUYỂN QUYỀN SỞ HỮU APP, 21/09/2026 — VÀ CÂU HỎI TỪNG TREO Ở ĐÂY ĐÃ CÓ LỜI ĐÁP 25/09/2026:
  *
  *   Bên phát hành ứng dụng đổi từ **VihatSoftware** sang **Tập đoàn ViHAT Group**. Văn bản này
  *   vì thế có hai vế phải tách bạch, và trộn chúng là hỏng theo hai kiểu khác nhau:
  *
  *   | Vế | Nói gì | Đã làm gì |
  *   |---|---|---|
- *   | **AI CHỊU TRÁCH NHIỆM** | ai phát hành app, ai chịu trách nhiệm về chính sách | đổi sang **ViHAT Group** |
- *   | **AI NHẬN DỮ LIỆU** | dữ liệu đăng nhập đi tới "máy chủ của VihatSoftware" (`vihat-miniapp`) | **GIỮ NGUYÊN** |
+ *   | **AI CHỊU TRÁCH NHIỆM** | ai phát hành app, ai chịu trách nhiệm về chính sách | đổi sang **ViHAT Group** (21/09) |
+ *   | **AI NHẬN DỮ LIỆU** | dữ liệu đăng nhập đi tới máy chủ `vihat-miniapp` | đổi sang **"máy chủ của Tập đoàn ViHAT Group"** (25/09, câu mở #28) |
  *
- *   Vế thứ hai giữ nguyên vì nó là một KHẲNG ĐỊNH SỰ THẬT về nơi nhận dữ liệu theo Nghị định
- *   13/2023: máy chủ ấy là kho `vihat-miniapp`, và **ai vận hành nó sau khi chuyển quyền sở hữu
- *   app thì chưa ai trả lời**. Lật nó sang ViHAT Group là khai sai nơi nhận dữ liệu cá nhân —
- *   đúng thứ Nghị định 13 nhắm tới, và là thứ không sửa lại được sau khi công bố.
+ *   Vế thứ hai là một KHẲNG ĐỊNH SỰ THẬT về nơi nhận dữ liệu theo Nghị định 13/2023, nên nó chỉ
+ *   được đổi khi có người xác nhận — và từ 21/09 tới 25/09 nó cố ý đứng yên ở "VihatSoftware" vì
+ *   chưa ai xác nhận ai vận hành `vihat-miniapp`. Chủ dự án xác nhận ngày 25/09/2026 (câu mở #28,
+ *   ADR 0044 câu 2): bên vận hành máy chủ ấy và bên nhận dữ liệu là **Tập đoàn ViHAT Group**,
+ *   cùng pháp nhân với bên phát hành. Từ đó chuỗi cũ "máy chủ của VihatSoftware" (kể cả lối viết
+ *   "— đơn vị thành viên của Tập đoàn ViHAT Group") là một lời khai SAI nơi nhận: nó vẫn nêu
+ *   VihatSoftware là nơi nhận. `chinh-sach.test.ts` và `ket-xuat-ho-so.test.ts` ghim chuỗi mới.
  *
- *   ⚠ HỆ QUẢ ĐÃ PHẢI XỬ LÝ NGAY, không chờ được: hai câu cũ nói nơi nhận ấy "là bên phát hành
- *   ứng dụng này, không phải một bên thứ ba". Vế trước nay SAI; vế sau là một kết luận pháp lý
- *   dựa trên vế trước. Cả hai đã được gỡ khỏi hai câu (mục Đăng nhập và mục Chuyển dữ liệu cho
- *   bên thứ ba), giữ lại đúng phần đo được. **CHỦ DỰ ÁN PHẢI QUYẾT** ai vận hành `vihat-miniapp`
- *   trước lần công bố đầu tiên; nếu là một pháp nhân khác bên phát hành thì văn bản này còn nợ
- *   một mục khai chuyển dữ liệu cho bên thứ ba, và mục ấy không ai được tự viết.
+ *   VihatSoftware VẪN xuất hiện ở vai trò ĐƠN VỊ THÀNH VIÊN (danh sách đơn vị, mốc lịch sử, điều
+ *   khoản sở hữu trí tuệ) — đó không phải lời khai bên nhận, và không được gộp vào việc sửa này.
  *
- *   `PHIEN_BAN_CHINH_SACH` GIỮ `1.0`: bản này chưa từng tới tay một người dùng nào, nên đây vẫn
- *   là cùng một lượt soạn thảo trước lần công bố đầu tiên — xem khối về số phiên bản bên dưới.
+ *   Hai câu cũ "là bên phát hành ứng dụng này, không phải một bên thứ ba" đã bị gỡ ngày 21/09 vì
+ *   khi ấy vế trước SAI. Chúng KHÔNG được thêm lại trong lượt 25/09: lượt ấy chỉ đổi tên bên nhận
+ *   theo đúng câu chữ chủ dự án chọn; viết lại một kết luận pháp lý về "bên thứ ba" là việc khác.
+ *
+ *   `PHIEN_BAN_CHINH_SACH` GIỮ `1.0` cả sau lượt 25/09, dù đổi bên nhận dữ liệu đúng là loại thay
+ *   đổi phải lên số: bản này chưa từng tới tay một người dùng nào (sổ tiến độ `nop-zalo-duyet` vẫn
+ *   `chua_lam`), nên đây vẫn là cùng một lượt soạn thảo trước lần công bố đầu tiên — xem khối về
+ *   số phiên bản bên dưới. Không ai từng đồng ý ở bản khai "VihatSoftware" để mà phải báo lại.
  *
  * ⚠ HAI THỜI HẠN, HAI CÂU TRẢ LỜI KHÁC NHAU, VÀ CẢ HAI ĐỀU ĐÃ CHỐT:
  *
@@ -221,7 +226,7 @@ export const TIEU_DE_CHINH_SACH = "Chính sách quyền riêng tư";
  * cho đúng một tệp) giữ hộ.
  */
 export const CAU_DAU =
-  "Ứng dụng này không lưu bất kỳ dữ liệu nào của bạn xuống máy, và chỉ gửi đi ở đúng HAI việc, cả hai đều do chính bạn bấm: khi bạn đăng nhập, nó gửi hai mã dùng một lần do Zalo cấp; và khi bạn bấm gửi một yêu cầu tư vấn, nó gửi những gì bạn vừa chọn và vừa gõ trong màn ấy. Cả hai đi tới máy chủ của VihatSoftware.";
+  "Ứng dụng này không lưu bất kỳ dữ liệu nào của bạn xuống máy, và chỉ gửi đi ở đúng HAI việc, cả hai đều do chính bạn bấm: khi bạn đăng nhập, nó gửi hai mã dùng một lần do Zalo cấp; và khi bạn bấm gửi một yêu cầu tư vấn, nó gửi những gì bạn vừa chọn và vừa gõ trong màn ấy. Cả hai đi tới máy chủ của Tập đoàn ViHAT Group.";
 
 /**
  * MỘT DANH SÁCH PHẲNG, ĐỌC TỪ TRÊN XUỐNG.
@@ -279,12 +284,13 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // ⚠ VẾ "bên phát hành ứng dụng này, không phải một bên thứ ba" ĐÃ BỊ GỠ KHỎI CÂU NÀY,
       // 21/09/2026, và việc gỡ là bắt buộc: từ ngày bên phát hành app là Tập đoàn ViHAT Group,
       // câu ấy khẳng định VihatSoftware là bên phát hành — một câu SAI, trong cùng một văn bản
-      // có mục "Bên xử lý dữ liệu" nói điều ngược lại. Thứ CÒN GIỮ NGUYÊN là vế sự thật: dữ
-      // liệu đi tới máy chủ của VihatSoftware (`vihat-miniapp`). AI VẬN HÀNH máy chủ ấy sau khi
-      // chuyển quyền sở hữu app, và vì thế nơi nhận có phải "bên thứ ba" theo Nghị định 13 hay
-      // không, là CÂU CHƯA AI TRẢ LỜI — nên văn bản này không khẳng định gì về nó. Khi chủ dự
-      // án trả lời, vế ấy quay lại (hoặc thành một mục khai chuyển dữ liệu cho bên thứ ba).
-      "Khi bạn bấm đăng nhập, ứng dụng gửi hai mã ấy tới máy chủ của VihatSoftware — đơn vị thành viên của Tập đoàn ViHAT Group. Máy chủ đổi mã tại Zalo bằng một khoá bí mật mà ứng dụng trên máy bạn không có và không được có.",
+      // có mục "Bên xử lý dữ liệu" nói điều ngược lại.
+      // ĐỔI BÊN NHẬN 25/09/2026 (câu mở #28, ADR 0044 câu 2): máy chủ `vihat-miniapp` do Tập đoàn
+      // ViHAT Group vận hành — cùng pháp nhân với bên phát hành. Câu cũ "máy chủ của
+      // VihatSoftware — đơn vị thành viên của Tập đoàn ViHAT Group" vì thế thành khai SAI nơi
+      // nhận dữ liệu cá nhân (Nghị định 13/2023), dù nghe như đã nhắc tới tập đoàn: chủ ngữ của
+      // "máy chủ của" vẫn là VihatSoftware. Câu chữ dưới đây là lối viết chủ dự án chọn 27/09.
+      "Khi bạn bấm đăng nhập, ứng dụng gửi hai mã ấy tới máy chủ của Tập đoàn ViHAT Group. Máy chủ đổi mã tại Zalo bằng một khoá bí mật mà ứng dụng trên máy bạn không có và không được có.",
       "MÁY CHỦ LƯU SỐ ĐIỆN THOẠI CỦA BẠN, và lưu để làm đúng hai việc: làm tên đăng nhập cho những lần bạn mở lại ứng dụng, và làm nơi nhận thông báo ZNS. Ngoài số điện thoại, ứng dụng không gửi thông tin nào khác của bạn đi.",
       "Máy chủ trả về một phiếu phiên, và giữ lại bản ghi của phiên ấy: thời điểm tạo, thời điểm hết hạn, và một bản mã hoá một chiều của chính phiếu — không phải phiếu. Phiên hết hạn sau 7 ngày. Ứng dụng trên máy bạn thì chỉ giữ phiếu trong bộ nhớ: không ghi xuống máy, không hiện ra màn hình, và mất đi khi bạn đóng ứng dụng.",
       // VIẾT LẠI CHO ĐÚNG SAU KHI ĐỌC LƯỢC ĐỒ THẬT
@@ -417,16 +423,17 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // ĐÃ SỬA HAI LẦN, VÀ LẦN THỨ HAI LÀ LẦN BỚT MỘT LỜI KHẲNG ĐỊNH:
       //   1. (20/09) câu cũ "nó không có đường gửi dữ liệu đi đâu cả" chỉ còn đúng ở bản nộp.
       //   2. (21/09) câu "không gửi cho BẤT KỲ BÊN THỨ BA NÀO" đứng được là nhờ một tiền đề đã
-      //      mất: bên nhận và bên phát hành app là MỘT. Từ khi app thuộc Tập đoàn ViHAT Group,
-      //      việc máy chủ của VihatSoftware có phải "bên thứ ba" theo Nghị định 13 hay không
-      //      phụ thuộc vào câu chưa ai trả lời — ai vận hành `vihat-miniapp` sau chuyển giao.
-      //      Nên câu nay nói ĐÚNG THỨ ĐO ĐƯỢC: có đúng một nơi nhận, và không còn nơi nào khác.
-      //      Khẳng định pháp lý về "bên thứ ba" chờ chủ dự án, không ai tự viết lại.
+      //      mất: bên nhận và bên phát hành app là MỘT. Từ 21/09 tới 25/09 ai vận hành
+      //      `vihat-miniapp` sau chuyển giao chưa ai trả lời, nên câu chỉ nói ĐÚNG THỨ ĐO ĐƯỢC:
+      //      có đúng một nơi nhận, và không còn nơi nào khác.
       // ⚠ CÂU NÀY SỬA LẦN THỨ BA (22/09/2026): nay có HAI bước gửi đi, không còn một. Bên NHẬN
       // thì KHÔNG ĐỔI — vẫn đúng một nơi — và việc phân biệt "mấy bước gửi" với "mấy nơi nhận" là
-      // toàn bộ giá trị của câu này. Câu hỏi mở #28 (ai vận hành `vihat-miniapp` sau chuyển giao)
-      // CHƯA AI TRẢ LỜI, nên không ai được tự viết lại vế "bên thứ ba" ở đây.
-      "Nơi duy nhất nhận gì đó từ ứng dụng là máy chủ của VihatSoftware — đơn vị thành viên của Tập đoàn ViHAT Group. Có hai bước gửi tới nơi ấy, và cả hai đều do chính bạn bấm: bước đăng nhập nói tại mục Đăng nhập, và bước gửi một yêu cầu tư vấn nói tại mục Yêu cầu tư vấn. Ngoài nơi ấy, ứng dụng không gửi dữ liệu của bạn đi đâu khác, trong nước hay ngoài nước.",
+      // toàn bộ giá trị của câu này.
+      // ⚠ SỬA LẦN THỨ TƯ (25/09/2026, câu chữ chọn 27/09): câu mở #28 ĐÃ QUYẾT — bên vận hành
+      // `vihat-miniapp` và bên nhận dữ liệu là Tập đoàn ViHAT Group. Nơi nhận vẫn là MỘT, chỉ tên
+      // đúng của nó đổi. Vế "bên thứ ba" không được thêm lại ở lượt này: lượt ấy chỉ sửa tên bên
+      // nhận, không viết một kết luận pháp lý mới.
+      "Nơi duy nhất nhận gì đó từ ứng dụng là máy chủ của Tập đoàn ViHAT Group. Có hai bước gửi tới nơi ấy, và cả hai đều do chính bạn bấm: bước đăng nhập nói tại mục Đăng nhập, và bước gửi một yêu cầu tư vấn nói tại mục Yêu cầu tư vấn. Ngoài nơi ấy, ứng dụng không gửi dữ liệu của bạn đi đâu khác, trong nước hay ngoài nước.",
       // ⚠ CÂU NÀY KHÔNG CÒN ĐƯỢC GÕ TAY — 21/09/2026. Nó được DỰNG RA từ `DICH_MO_RA_NGOAI`, và
       // đó là cách duy nhất con số và danh sách không lệch nhau được nữa.
       //

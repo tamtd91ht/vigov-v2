@@ -14,7 +14,8 @@
  *
  *   Khối này có mặt ở CẢ HAI biến thể, **và cả hai đều gọi máy chủ thật** — kể cả BẢN NỘP. Một
  *   nút đăng nhập bấm là được thuyết phục vòng duyệt hơn hẳn một nút nói "bản này chưa nối máy
- *   chủ" (điều 3.3.4). Máy chủ là `vihat-miniapp`, backend riêng của VihatSoftware.
+ *   chủ" (điều 3.3.4). Máy chủ là `vihat-miniapp`, backend riêng của Tập đoàn ViHAT Group
+ *   (bên vận hành, câu mở #28 — 25/09/2026).
  *
  * ⚠ RANH GIỚI THẬT, VÀ MÃ NÀY KHÔNG GIẢ VỜ VƯỢT QUA NÓ:
  *

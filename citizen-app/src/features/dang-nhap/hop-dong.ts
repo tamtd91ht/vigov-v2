@@ -7,7 +7,7 @@
  *   lỗi : 401 mã Zalo sai hoặc hết hạn · 502 máy chủ không với tới Zalo
  *
  * ⚠ MÁY CHỦ LÀ `vihat-miniapp` — KHO RIÊNG, KHÔNG PHẢI ViGov. Đây là backend thương mại của
- * VihatSoftware, độc lập với hệ thống hành chính. Đó là lý do tên tài nguyên là `sessions` chứ
+ * Tập đoàn ViHAT Group (bên vận hành, câu mở #28), độc lập với hệ thống hành chính. Đó là lý do tên tài nguyên là `sessions` chứ
  * không phải `citizen-sessions`: `citizen-session` là từ vựng của kênh công dân nhà nước, và
  * mượn từ vựng của một hệ thống khác là bước đầu của việc người sau tưởng hai thứ là một.
  *

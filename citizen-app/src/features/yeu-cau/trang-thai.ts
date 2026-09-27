@@ -15,6 +15,7 @@
  * không ai cam kết con số ấy, và người phát hiện ra là người đang chờ.
  */
 import type { LoaiYeuCau, MaTrangThai } from "../../api/hop-dong-yeu-cau";
+import { thoiDiemVN } from "../../lib/thoi-diem";
 
 export const NHAN_TRANG_THAI: Readonly<Record<MaTrangThai, string>> = {
   moi: "Đã tiếp nhận",
@@ -47,9 +48,11 @@ export const NHAN_LOAI: Readonly<Record<LoaiYeuCau, string>> = {
  *
  * Giá trị lạ thì trả chuỗi RỖNG và màn hình bỏ hẳn dòng ấy — không hiện "Invalid Date", thứ vừa
  * là một chuỗi kỹ thuật vừa là tiếng Anh, trên một màn hình tiếng Việt.
+ *
+ * GIỜ GHIM +07, KHÔNG THEO MÁY (quyết định 27/09/2026) — qua `lib/thoi-diem.ts`, cùng một hàm với
+ * nửa công dân. `toLocaleString` cũ đọc theo múi của máy: một yêu cầu gửi lúc 06:30 sáng giờ Việt
+ * Nam hiện thành buổi tối NGÀY HÔM TRƯỚC trên một máy đặt múi châu Âu hay châu Mỹ.
  */
 export function ngayDoc(rfc3339: string): string {
-  if (rfc3339 === "") return "";
-  const luc = new Date(rfc3339);
-  return Number.isNaN(luc.getTime()) ? "" : luc.toLocaleString("vi-VN");
+  return thoiDiemVN(rfc3339) ?? "";
 }

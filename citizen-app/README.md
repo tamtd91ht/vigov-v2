@@ -56,11 +56,13 @@ Ba hệ quả đã vào mã, và mỗi thứ có một ca kiểm giữ:
 | **Tầng nền** — chuyển sắc + bóng đổ thay cho đường kẻ | Hướng thị giác của chủ dự án (21/09): đây là một công ty **công nghệ** — AI · tổng đài · CRM · SMS · ZNS — nên nền phải có chiều sâu, không phẳng trơn. Bốn token mới, **CSS thuần, không thêm thư viện nào**: `--bong-the` · `--bong-noi` (bóng đổ dựng từ chính `--navy`, nên nó xanh chứ không xám) và `--nen-the` · `--nen-the-luc` (nền thẻ chuyển sắc). Xanh lá `#78bd1a` nay có mặt trên **bề mặt sáng** chứ không chỉ trên panel tối. ⚠ Một dải chuyển sắc là chỗ độ tương phản **chết đầu tiên**, và nó chết ở phía **dưới** thẻ: nên hai đầu của mỗi dải đều là màu đã đo, `accessibility.test.ts` có thêm **6 cặp đo chữ ở đầu kia** và **3 ca buộc dải chỉ đi qua token đã đo** |
 | Màu đậm `#1e3150` → **`#144a80`** | `#1e3150` là màu khung website **của công ty con**. `#144a80` là `--color-primary` của `vihatgroup.com`. Bốn chỗ giữ giá trị này, ba chỗ được `bundle-for-zalo.test.ts` ghim chung: `BRAND_NAVY` · `app-config.json` · `index.html` · `--navy`. Bộ icon **không** phải chỗ thứ năm — `tools/logo.py` đọc màu từ `fill` của vector logo |
 
-⚠ **Chính sách quyền riêng tư đổi ĐÚNG MỘT VẾ.** Vế "ai phát hành / ai chịu trách nhiệm" sang
-ViHAT Group; vế "dữ liệu đăng nhập đi tới **máy chủ của VihatSoftware**" (`vihat-miniapp`)
-**giữ nguyên** — đó là lời khai nơi nhận dữ liệu theo Nghị định 13, và **ai vận hành máy chủ ấy
-sau chuyển giao là câu chưa ai trả lời**. Ba ca trong `chinh-sach.test.ts` canh cả hai chiều, để
-một lượt tìm-thay trên cả tệp không biến lời khai ấy thành một lời khai sai.
+⚠ **Chính sách quyền riêng tư đổi hai vế vào HAI NGÀY KHÁC NHAU.** Vế "ai phát hành / ai chịu
+trách nhiệm" sang ViHAT Group ngày 21/09. Vế "dữ liệu đăng nhập đi tới máy chủ nào"
+(`vihat-miniapp`) là lời khai nơi nhận dữ liệu theo Nghị định 13, nên nó đứng yên ở
+"VihatSoftware" cho tới khi có người xác nhận bên vận hành: chủ dự án xác nhận ngày 25/09/2026
+(câu mở #28, ADR 0044 câu 2), và từ đó văn bản khai **"máy chủ của Tập đoàn ViHAT Group"** ở mọi
+chỗ. `chinh-sach.test.ts` và `ket-xuat-ho-so.test.ts` ghim chuỗi mới ở từng chỗ khai và cấm chuỗi
+cũ; tên VihatSoftware ở vai trò đơn vị thành viên / sở hữu trí tuệ thì vẫn ở lại.
 
 Why the verifying OA is an OA of the publisher and not a commune, and why the notification OA is a
 different OA per commune: `kb/10-decisions/0018-oa-xac-thuc-tach-khoi-oa-thong-bao.md` (ADR ấy
@@ -85,7 +87,7 @@ That call is the ONE outbound request this repository allows: one route, from ON
 
 What crosses the wire is **two single-use Zalo codes, never a phone number** — the number cannot
 reach the device at all (`GetPhoneNumberReturns` has only `token`). The server —
-**`vihat-miniapp`, VihatSoftware's own backend, a separate repository, not ViGov** — exchanges
+**`vihat-miniapp`, operated by ViHAT Group (open question #28, decided 25/09), a separate repository, not ViGov** — exchanges
 them and stores the phone number as the login name. The session ticket it returns lives in
 `useState`: never written to the device, never drawn on screen, gone when the app closes.
 
@@ -309,6 +311,8 @@ vihatgroup.com: 4 = 1 địa chỉ trang chủ + 2 đường dẫn bài viết +
 
 VihatSoftware: 7  = 5 câu "máy chủ của VihatSoftware" (cố ý) + 1 tên đơn vị thành viên
                     + 1 mốc lịch sử "Thành lập VihatSoftware" (mới 21/09)
+                    (từ 25/09 năm câu "máy chủ của …" nói Tập đoàn ViHAT Group — câu mở #28;
+                     con số 7 là phép đo NGÀY 21/09, chưa đo lại)
 "ViHAT Software" (có dấu cách): 0 — một chính tả trên màn, và đó là ca trong company-profile.test.ts
 vihatgroup.com: 1 · vihatsoftware.com: 0 · #144a80: 1 · #1e3150: 0
 2012: 0 — dải lịch sử bắt đầu 2013, đúng ngày thành lập
@@ -625,7 +629,7 @@ lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý
 | **Bản mẫu PM vs nguồn thật — bốn chỗ đã làm theo NGUỒN** | (1) "15 giải pháp, 3 nhóm nghiệp vụ" **không tồn tại** trên cả hai trang — số 15 là số **dự án** của công ty con; app dựng theo cấu trúc thật (4 dòng hệ sinh thái + 6 đơn vị thành viên). (2) Dải lịch sử bắt đầu **2013**, không phải 2012 — ngày thành lập là 06/12/2013, và một mốc trước ngày ấy là khẳng định sai về một pháp nhân. (3) **Không có mục AI nào**: toàn bộ nguồn về AI là MỘT câu gắn OMICall + một ô logo + một bài blog 2023; muốn hơn thì phải mở `omicall.com` và đó là quyết định của chủ dự án. (4) "12 năm" **không ghi cứng** — tính từ ngày thành lập. ⚠ Câu mô tả nguyên văn của khách vẫn mở đầu bằng "Hơn 12 năm", nên **từ 06/12/2026 con số tính ra (13) sẽ lệch với con số trong câu trích (12)**: chỗ sửa là khách công bố lại đoạn ấy, không phải mã sửa lời khách |
 | **Ô tìm kiếm trên màn Giải pháp** | Bản mẫu yêu cầu, **chưa làm**, và không nên làm bằng cách hiện tại: một ô tìm kiếm là một `<input>`, mà `phase1-collects-nothing.test.ts` cấm `<form\|input\|textarea\|select>` ở **mọi tệp**. Nới lệnh cấm ấy cho một ô lọc trên **bốn** mục là trả một giá không tương xứng. Cần ô tìm kiếm thật thì phải đi kèm quyết định: thu hẹp lệnh cấm ấy thế nào, và ca kiểm nào chứng minh nó còn bắt ở ngoài phạm vi mới |
 | **Màn "Quản lý quyền" không phải tab thứ sáu** | Đã đo, không đoán: `accessibility.test.ts` đo thanh tab trên máy 320px; với sáu tab mỗi nhãn chỉ còn ~4 ký tự cho từ dài nhất, mà "Trang", "thiếp", "ViHAT", "Quyền" đều 5. Nên nó là **màn con của tab Liên hệ**, ngay trên chính sách quyền riêng tư |
-| ⚠ **AI VẬN HÀNH `vihat-miniapp` SAU KHI APP ĐỔI CHỦ** | Chính sách khai nơi nhận dữ liệu đăng nhập là "máy chủ của VihatSoftware" — **giữ nguyên, cố ý**. Nhưng bên phát hành app nay là ViHAT Group, nên hai câu cũ *"bên phát hành ứng dụng này, không phải một bên thứ ba"* đã phải gỡ: vế đầu thành sai, vế sau là kết luận pháp lý dựa trên vế đầu. **Chủ dự án phải trả lời trước lần công bố đầu tiên**; nếu bên vận hành là một pháp nhân khác bên phát hành thì văn bản còn nợ một mục khai chuyển dữ liệu cho bên thứ ba — không ai được tự viết mục ấy |
+| **AI VẬN HÀNH `vihat-miniapp` SAU KHI APP ĐỔI CHỦ — ĐÃ TRẢ LỜI 25/09/2026** | Tập đoàn ViHAT Group — cùng pháp nhân với bên phát hành (câu mở #28, ADR 0044 câu 2). Văn bản nay khai nơi nhận là "máy chủ của Tập đoàn ViHAT Group". Vì bên vận hành và bên phát hành là một, văn bản không còn nợ mục khai chuyển dữ liệu cho bên thứ ba vì lý do này |
 | **URL trang chính sách** | Developer Console còn một ô URL ngoài bản trong app. Chưa biết đăng ở đâu, nên chưa dựng bộ sinh trang tĩnh — dựng cho một đích chưa biết là đoán. Khi chốt, trang ấy phải sinh ra TỪ `chinh-sach-rieng-tu.ts`, không chép tay, để trang đăng và app không lệch nhau |
 | ⚠ **ID CỦA OFFICIAL ACCOUNT TRONG NÚT CHAT — CHƯA ĐỐI CHIẾU CONSOLE** | Nút Chat nổi mở `https://zalo.me/<OA id>`, và con số ấy lấy **từ bản mẫu giao diện của PM** (`content/dich-ra-ngoai.ts`, `OA_NEN_TANG_ID`, kèm `OA_NEN_TANG_NGUON` nói rõ điều này). ADR 0018 §Hệ quả điểm 3: **mọi bề mặt OA bên trong Mini App phải trỏ về OA NỀN TẢNG** (`Vihat` sau ADR 0031), không trỏ về OA của xã nào. Nếu ID ấy không phải OA xác thực của Mini App thì người dùng bấm "quan tâm" và tưởng đã theo dõi đúng nơi. **Phải mở Developer Console đối chiếu một lần trước khi nộp** |
 | **Hai mục của bản mẫu KHÔNG được dựng: `Brochure` và `24/7`** | Dải menu của bản mẫu có tám mục; app dựng **sáu**. Sau hai cái tên ấy **không có tính năng nào** trong kho này và chưa ai nói chúng mở ra cái gì. Một nút không dẫn đi đâu là thứ người duyệt bấm vào đầu tiên. Có người nói rõ chúng làm gì thì thêm lại — chỗ thêm là `MUC_MENU_NHANH` trong `features/company-intro/MenuNhanh.tsx`, và ca "mỗi mốc là một `id` có thật" sẽ bắt nếu đích chưa tồn tại |

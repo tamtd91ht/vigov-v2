@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
 
 import { giaiThichTrangThai, KENH_CHUA_MO, NHAN_XA_DANG_GUI, nhanTrangThai, THE_PHIEU } from "./noi-dung";
-import { THOI_DIEM_KHONG_DOC_DUOC, thoiDiemVN } from "./thoi-diem";
+import { THOI_DIEM_KHONG_DOC_DUOC, thoiDiemVN } from "../../lib/thoi-diem";
 
 /**
  * TÊN XÃ CỦA PHIÊN, ĐẦU MỖI MÀN (README §Non-negotiables #2). Xã ấy là xã MÁY CHỦ sẽ ghi phiếu vào

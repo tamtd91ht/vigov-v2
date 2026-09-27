@@ -30,7 +30,7 @@ import { layPhienViGov } from "../api/phien-vigov";
 import { BangXa, KenhChuaMo, ThePhieu } from "./khung";
 import { GUI, KHAN_CAP, LOI_GUI, nhanTrangThai, QUAY_LAI } from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
-import { thoiDiemVN } from "./thoi-diem";
+import { thoiDiemVN } from "../../lib/thoi-diem";
 
 export const PHAN_ANH_TRONG: PhanAnhMoi = {
   noi_dung: "",
