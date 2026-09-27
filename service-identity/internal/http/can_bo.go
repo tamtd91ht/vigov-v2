@@ -92,12 +92,19 @@ type canBoTomTat struct {
 // why there is no Checker call here and why #27 is not blocking this route.
 //
 // WHAT #11 DID NOT OPEN, AND WHAT THIS FUNCTION'S NAME IS FOR: the same decision keeps the mask on
-// EXCEL EXPORTS and on anything published outside the authority (rule 3, invariant 4), and #12
-// keeps the mobile off the Mini App until that person's own consent is recorded (migration 0010;
-// written by PUT /api/v1/staff/{id}/publication). Neither the export nor a public Mini App READ
-// exists in this service today. When one is written
-// it must NOT reuse this function; the name says which surface this is, so that reuse has to be a
-// decision somebody takes rather than an import somebody copies.
+// EXCEL EXPORTS (rule 3, invariant 4) — no export exists in this service yet, and when one is
+// written it must NOT reuse this function.
+//
+// THE PUBLIC MINI APP READ IS A SEPARATE SURFACE WITH ITS OWN DECISION, and it does not reuse this
+// function either: GET /api/v1/commune-staff (danh_ba_cong_khai.go) returns the mobile UNMASKED,
+// but only for people published with their own recorded consent (#12, written by
+// PUT /api/v1/staff/{id}/publication). The owner's choice of 2026-09-27 supersedes the #11 wording
+// "masked on anything published outside the authority" FOR THAT CHANNEL ONLY: a number published
+// so a citizen can ring it is useless masked, and the consent is the explicit permission rule 3
+// invariant 3 names. See danh_ba_cong_khai.go and domain/danh_ba_cong_khai.go for the argument.
+//
+// The name says which surface this is, so that reuse on any other surface has to be a decision
+// somebody takes rather than an import somebody copies.
 //
 // IT IS STILL A FUNCTION AND NOT A DELETED LINE, so there is exactly one place to change if the
 // customer revisits #11 — and one place for a reader to find the argument.

@@ -31,8 +31,10 @@ package app
 //	                         writes `co_tai_khoan` or `mat_khau_hash`; the store has no parameter
 //	                         for either.
 //	A PUBLIC DIRECTORY READ  DatCongKhai below WRITES the Mini App publication (#12, migration
-//	                         0010). Nothing in this service READS it for a citizen yet: a public
-//	                         Mini App route is rule 4 stop condition #2 and has not been decided.
+//	                         0010). The public READ is not here: it is GET /api/v1/commune-staff
+//	                         (http/danh_ba_cong_khai.go, store.DanhBaCongKhai), opened by the owner's
+//	                         decision of 2026-09-27. Sua and DatKhoa below take a person OFF it
+//	                         when their mobile changes or their account is locked (2026-09-28).
 
 import (
 	"context"
@@ -385,7 +387,7 @@ func (uc *DanhBaCanBo) Sua(ctx context.Context, id string, yc YeuCauSuaCanBo,
 
 		// BEFORE AND AFTER, ONLY THE FIELDS THAT MOVED, PERSONAL DATA ALREADY MASKED (rule 6,
 		// invariant 5 and forbidden #4). See tomTatDoiHoSo.
-		return audit.Write(ctx, tx, audit.Entry{
+		if err := audit.Write(ctx, tx, audit.Entry{
 			Actor:   nguoi.Vet,
 			Action:  HanhViSuaCanBo,
 			Subject: truoc.Ma,
@@ -393,7 +395,31 @@ func (uc *DanhBaCanBo) Sua(ctx context.Context, id string, yc YeuCauSuaCanBo,
 				"truoc": tomTatDoiHoSo(truoc, sau, true),
 				"sau":   tomTatDoiHoSo(truoc, sau, false),
 			}),
-		})
+		}); err != nil {
+			return err
+		}
+
+		// #12, OWNER DECISION 2026-09-28: THE CONSENT WAS GIVEN FOR ONE NUMBER. A published person
+		// whose personal mobile changes is taken off the Mini App in this same transaction, and the
+		// consent marks go with it — so the new number reaches the public channel only after somebody
+		// asks the person again and records it through PUT /publication. Leaving them published
+		// would put a number on a public channel that nobody consented to, with the old consent
+		// marks on the row vouching for it.
+		//
+		// ONLY `di_dong_ca_nhan`. The owner's words were "Sửa số di động". The office line and
+		// `co_zalo` are also on the public route, but they were not named, and widening the trigger
+		// is the customer's call — reported, not decided here.
+		//
+		// The comparison is on the values chuanHoaSua already normalised (TrimSpace), the same
+		// comparison doiHoSo uses. A formatting-only change ("0900 000 001" → "0900000001") therefore
+		// COUNTS as a change and unpublishes: the wrong direction to err in is the public one.
+		if truoc.HienTrenMiniApp && truoc.DiDongCaNhan != sau.DiDongCaNhan {
+			var err error
+			if sau, err = uc.rutCongKhaiTuDong(ctx, tx, truoc, sau, nguoi, lyDoRutDoiDiDong); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return domain.CanBoTomTat{}, err
@@ -523,7 +549,7 @@ func (uc *DanhBaCanBo) DatKhoa(ctx context.Context, id string, khoa bool,
 		}
 		// NO PERSONAL DATA IN THIS DELTA AT ALL: one boolean moved. The person is named by
 		// Subject, which is their staff code.
-		return audit.Write(ctx, tx, audit.Entry{
+		if err := audit.Write(ctx, tx, audit.Entry{
 			Actor:   nguoi.Vet,
 			Action:  hanhVi,
 			Subject: truoc.Ma,
@@ -531,7 +557,31 @@ func (uc *DanhBaCanBo) DatKhoa(ctx context.Context, id string, khoa bool,
 				"truoc": map[string]any{"dang_hoat_dong": truoc.DangHoatDong},
 				"sau":   map[string]any{"dang_hoat_dong": sau.DangHoatDong},
 			}),
-		})
+		}); err != nil {
+			return err
+		}
+
+		// #12, OWNER DECISION 2026-09-28: A LOCKED PERSON IS TAKEN OFF THE MINI APP, CONSENT AND
+		// ALL, in this same transaction. The public read already hides locked rows
+		// (store.locDanhBaCongKhai), but hiding is not enough: with the marks left on the row,
+		// UNLOCKING would put the number straight back on the public channel — for somebody who may
+		// have left the commune — on a consent recorded for a job they no longer hold.
+		//
+		// UNLOCK NEVER REPUBLISHES, and it also CLEARS a publication that is still on the row. That
+		// second half exists only for rows locked BEFORE this rule (or published while locked, which
+		// PUT /publication does not refuse): without it, unlocking them is exactly the republish the
+		// owner ruled out. On every row locked after this change the branch finds nothing to do.
+		if truoc.HienTrenMiniApp {
+			lyDo := lyDoRutKhoaTaiKhoan
+			if !khoa {
+				lyDo = lyDoRutMoKhoaTaiKhoan
+			}
+			var err error
+			if sau, err = uc.rutCongKhaiTuDong(ctx, tx, truoc, sau, nguoi, lyDo); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return domain.CanBoTomTat{}, err
@@ -733,6 +783,53 @@ func (uc *DanhBaCanBo) DatCongKhai(ctx context.Context, id string, yc YeuCauCong
 		})
 	})
 	if err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	return sau, nil
+}
+
+// Why an AUTOMATIC unpublish happened, written into its audit delta as `ly_do_tu_dong`. Codes, not
+// sentences: an inspection filters on them, and a sentence gets reworded.
+const (
+	lyDoRutDoiDiDong      = "doi_di_dong_ca_nhan"
+	lyDoRutKhoaTaiKhoan   = "khoa_tai_khoan"
+	lyDoRutMoKhoaTaiKhoan = "mo_khoa_tai_khoan_con_cong_khai"
+)
+
+// rutCongKhaiTuDong takes one person off the Mini App as a CONSEQUENCE of another write in the same
+// transaction (a changed mobile, a lock), clearing both consent marks exactly as an explicit
+// unpublish does — through the same store.DatCongKhai statement, so migration 0010 §3's CHECKs see
+// the same row version either way. `hienTai` is the row as the first write left it; the returned
+// row is that plus the publication cleared. `thu_tu_danh_ba` is kept, as DatCongKhai keeps it.
+//
+// THE SAME VERB AS AN EXPLICIT UNPUBLISH, `rut_cong_khai_mini_app`, AND NOT A NEW ONE: "when was this
+// number taken off the public channel" is one question, and a second verb is a second place an
+// inspection has to know to look. What distinguishes the automatic case is `ly_do_tu_dong` in the
+// delta. The actor is the person whose act caused it — there is no system principal here, because
+// nothing ran that a person did not trigger.
+//
+// "truoc" is the PRE-EDIT row on purpose: on a mobile change it is the OLD number (masked) that was
+// on the public channel, which is the fact the entry exists to record.
+func (uc *DanhBaCanBo) rutCongKhaiTuDong(ctx context.Context, tx *store.ScopedTx,
+	truoc, hienTai domain.CanBoTomTat, nguoi NguoiThucHien, lyDo string) (domain.CanBoTomTat, error) {
+
+	sau := hienTai
+	sau.HienTrenMiniApp = false
+	sau.DongYCongKhaiLuc = nil
+	sau.DongYCongKhaiGhiBoi = ""
+	if err := uc.kho.DatCongKhai(ctx, tx, sau); err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	if err := audit.Write(ctx, tx, audit.Entry{
+		Actor:   nguoi.Vet,
+		Action:  HanhViRutCongKhaiMiniApp,
+		Subject: truoc.Ma,
+		Delta: deltaCanBo(map[string]any{
+			"truoc":         tomTatCongKhai(truoc),
+			"sau":           tomTatCongKhai(sau),
+			"ly_do_tu_dong": lyDo,
+		}),
+	}); err != nil {
 		return domain.CanBoTomTat{}, err
 	}
 	return sau, nil

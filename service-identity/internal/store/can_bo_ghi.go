@@ -219,9 +219,9 @@ func (s *CanBoStore) DatKhoa(ctx context.Context, tx *store.ScopedTx, id string,
 // THE THREE PUBLICATION COLUMNS ARE LITERALS, NOT PARAMETERS, and that is the property: no caller
 // can soft-delete a row and leave it published, whatever it passes. The read paths exclude
 // deleted rows, so a published deleted row would not show today — but "every read path remembers
-// `deleted_at IS NULL`" is a promise about code not yet written (the public Mini App directory
-// route has not been built), and a personal mobile on a public channel is not something to rest on
-// a promise. Clearing BOTH consent marks with the flag is what 0010 §3's
+// `deleted_at IS NULL`" is a promise about every read path written later (the public Mini App
+// directory, GET /api/v1/commune-staff, is one), and a personal mobile on a public channel is not
+// something to rest on a promise. Clearing BOTH consent marks with the flag is what 0010 §3's
 // `nguoi_dung_rut_cong_khai_xoa_dong_y` demands: an unpublished row carries no consent marks.
 //
 // `thu_tu_danh_ba` IS LEFT ALONE: it grants nothing on its own, and a soft delete keeps data.
