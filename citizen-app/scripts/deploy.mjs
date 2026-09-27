@@ -2,11 +2,22 @@
  * Dựng → đồng bộ `app-config.json` → đẩy lên Zalo. KHÔNG hỏi câu nào, nhưng NÓI RA nó sắp làm gì.
  *
  * ```
- * node scripts/deploy.mjs --bien-the=day-du              bản ĐẦY ĐỦ, bản thử nghiệm (-t)
- * node scripts/deploy.mjs --bien-the=goc                 bản GỐC,    bản thử nghiệm (-t)
- * node scripts/deploy.mjs --bien-the=goc --phat-hanh     bản GỐC,    BẢN PHÁT HÀNH (bỏ -t)
- * node scripts/deploy.mjs --bien-the=goc --phat-hanh --thu   IN RA rồi DỪNG, không làm gì cả
+ * node scripts/deploy.mjs                                   APP CHUNG, `goc`,    bản thử nghiệm (-t)
+ * node scripts/deploy.mjs --phat-hanh                       APP CHUNG, `goc`,    BẢN PHÁT HÀNH (bỏ -t)
+ * node scripts/deploy.mjs --domain=<tên-miền-xã>            APP RIÊNG, `day-du`, bản thử nghiệm (-t)
+ * node scripts/deploy.mjs --domain=<tên-miền-xã> --phat-hanh   APP RIÊNG, BẢN PHÁT HÀNH
+ * node scripts/deploy.mjs … --thu                           IN RA rồi DỪNG, không làm gì cả
  * ```
+ *
+ * HAI LUỒNG (ADR 0047): có `--domain` thì đẩy lên App ID riêng của xã ấy (tra trong
+ * `ung-dung-theo-ten-mien.mjs`), không có thì đẩy lên app chung. Tên miền CHỈ chọn đích; bundle
+ * là một. Biến thể theo đó mà ra (`dich-den.mjs`, `chonBienThe`); `--bien-the` còn nhận nhưng chỉ
+ * để khẳng định, trái luật thì dừng.
+ *
+ * ⚠ ĐÍCH DO `ZMP_TOKEN` QUYẾT, KHÔNG DO `APP_ID` — đã đo, xem đầu `dich-den.mjs`. Nên đường app
+ * riêng đòi `ZMP_TOKEN` trong MÔI TRƯỜNG và kiểm claim `appId` của nó khớp App ID đích trước khi
+ * chạy gì cả; nó không bao giờ dùng `citizen-app/.env` của máy. Đường app chung giữ nguyên như
+ * trước: không có token trong môi trường thì zmp-cli tự đọc `.env` (script không đọc tệp ấy).
  *
  * `--thu` in ra đúng kế hoạch và đúng dòng lệnh sẽ chạy, rồi dừng. Đọc kế hoạch mà không phải
  * đặt cược một lần đẩy để đọc nó.
@@ -39,7 +50,17 @@
 import { spawnSync } from "node:child_process";
 
 import { docCauHinh } from "./cau-hinh.mjs";
-import { BIEN_THE, dung, MO_TA_BIEN_THE } from "./dung.mjs";
+import {
+  chonBienThe,
+  chonDich,
+  docCo,
+  kiemBangAnhXa,
+  kiemToken,
+  laPlaceholder,
+  nhanPhienBan,
+} from "./dich-den.mjs";
+import { dung, MO_TA_BIEN_THE } from "./dung.mjs";
+import { APP_ID_APP_CHUNG, APP_ID_THEO_TEN_MIEN } from "./ung-dung-theo-ten-mien.mjs";
 
 const ZMP = "zmp-cli@4.0.3";
 const GIAY_CHO = 5;
@@ -49,11 +70,18 @@ function git(...args) {
   return r.status === 0 ? r.stdout.trim() : "";
 }
 
-/** `npx` là tệp lệnh của Windows, nên bước này cần shell — khác với `vite` trong dung.mjs. */
-function zmp(...args) {
+/**
+ * `npx` là tệp lệnh của Windows, nên bước này cần shell — khác với `vite` trong dung.mjs.
+ *
+ * `env` chỉ đi vào TIẾN TRÌNH CON của zmp, không bao giờ vào `process.env` của script này: bước
+ * dựng (`dung`) kế thừa `process.env`, và một App ID hay token đặt vào đó là một giá trị theo xã
+ * nằm ngay cạnh `define:` của Vite — đúng thứ ADR 0047 điều kiện dừng #2 cấm.
+ */
+function zmp(env, ...args) {
   const r = spawnSync("npx", ["--yes", ZMP, ...args], {
     stdio: "inherit",
     shell: process.platform === "win32",
+    env,
   });
   return r.status ?? 1;
 }
@@ -65,15 +93,29 @@ function nghi(mili_giay) {
 
 // ---------------------------------------------------------------------------------------------
 
-const co = process.argv.slice(2);
-const bien_the = (co.find((c) => c.startsWith("--bien-the="))?.split("=")[1] ?? "day-du").trim();
-const phat_hanh = co.includes("--phat-hanh");
-const chi_thu = co.includes("--thu");
-
-if (!BIEN_THE.includes(bien_the)) {
-  console.error(`--bien-the="${bien_the}" không có. Chỉ nhận: ${BIEN_THE.join(" · ")}`);
+/** Mọi lỗi chọn đích đều là exit 2 kèm câu nói phải làm gì — không bao giờ một stack trace. */
+function dungLai(loi) {
+  console.error(`
+${loi.message}
+`);
   process.exit(2);
 }
+
+let co, bien_the, dich;
+try {
+  kiemBangAnhXa(APP_ID_THEO_TEN_MIEN, APP_ID_APP_CHUNG);
+  co = docCo(process.argv.slice(2));
+  bien_the = chonBienThe(co.ten_mien, co.bien_the);
+  dich = chonDich(co.ten_mien, APP_ID_THEO_TEN_MIEN, APP_ID_APP_CHUNG);
+} catch (loi) {
+  dungLai(loi);
+}
+const { phat_hanh, chi_thu } = co;
+
+// Token CHỈ đọc từ môi trường; `.env` của máy là việc của zmp-cli, script không mở nó. Kết quả
+// kiểm được in ra kế hoạch; lần chạy thật thì từ chối nếu không qua — `--thu` vẫn in hết để
+// người đọc thấy lần chạy thật SẼ bị chặn vì đâu.
+const kiem_token = kiemToken(dich, process.env.ZMP_TOKEN, APP_ID_THEO_TEN_MIEN);
 
 /**
  * CHẶN ĐƯỜNG ĐẨY KHI CHƯA KHAI ĐỊA CHỈ MÁY CHỦ — 20/09/2026, ngày bản nộp bắt đầu gọi máy chủ.
@@ -109,15 +151,31 @@ if (api_host === "" && !chi_thu) {
 }
 
 const sha = git("rev-parse", "--short", "HEAD") || "khong-ro";
-const ban = git("status", "--porcelain") ? " · dirty" : "";
+const dirty = git("status", "--porcelain") !== "";
 const luc = new Date().toISOString().slice(0, 16).replace("T", " ");
-const mota = `${bien_the} · ${sha} · ${luc}${ban}`;
+// Nhãn mang cả ĐÍCH: cùng một commit đẩy lên hai app thì console Zalo phải phân biệt được.
+const mota = nhanPhienBan({ bien_the, dich, sha, luc, dirty });
 
 // IN RA TRƯỚC KHI LÀM. Người chạy lệnh phải đọc được ba điều quyết định hậu quả: dựng biến thể
 // nào, đẩy vào bản thử nghiệm hay bản phát hành, và nhãn nào sẽ hiện trong console Zalo.
 const vach = "─".repeat(78);
 console.log(`\n${vach}`);
 console.log("  zmp deploy — ĐỌC TRƯỚC KHI ĐỂ NÓ CHẠY TIẾP");
+console.log(
+  dich.loai === "app-rieng"
+    ? `  Đích     : APP RIÊNG của tên miền ${dich.ten_mien}`
+    : "  Đích     : APP CHUNG (không truyền --domain)",
+);
+console.log(
+  `  App ID   : ${
+    dich.app_id === null
+      ? "(tệp ánh xạ chưa khai App ID app chung — ZMP_TOKEN quyết)"
+      : laPlaceholder(dich.app_id)
+        ? `${dich.app_id}  (PLACEHOLDER — lần chạy thật sẽ bị từ chối)`
+        : dich.app_id
+  }`,
+);
+console.log(`  Token    : ${kiem_token.ok ? "" : "KHÔNG QUA — "}${kiem_token.ly_do}`);
 console.log(`  Biến thể : ${bien_the}  (${MO_TA_BIEN_THE[bien_the]})`);
 console.log(
   phat_hanh
@@ -135,6 +193,19 @@ console.log(`${vach}\n`);
 // `www`), `-p` chế độ không tương tác, `-m` nhãn phiên bản.
 const co_zmp = ["deploy", "-o", "dist", "-e", "-p", "-m", mota];
 if (!phat_hanh) co_zmp.splice(1, 0, "-t");
+
+if (!kiem_token.ok && !chi_thu) {
+  console.error(`
+Không đẩy: ${kiem_token.ly_do}
+`);
+  process.exit(2);
+}
+
+// App ID đích đi vào tiến trình con cùng token, để một bản zmp-cli sau này có đọc `APP_ID` thì
+// cũng đọc đúng đích chứ không đọc `.env` của máy. Bản 4.0.3 không đọc nó (đã đo) — đích thật vẫn
+// là claim của token, và `kiemToken` vừa bảo đảm hai thứ ấy trùng nhau.
+const env_zmp =
+  dich.loai === "app-rieng" ? { ...process.env, APP_ID: dich.app_id } : { ...process.env };
 
 if (phat_hanh) {
   // Chỉ đường PHÁT HÀNH mới đếm ngược. Bản thử nghiệm sai thì đẩy lại; bản phát hành sai thì đã
@@ -157,14 +228,19 @@ if (chi_thu) {
   // nhập nói chuyện với ai. Một bản diễn tập giấu mất biến thứ hai là một bản diễn tập nói sai.
   console.log(`  VIGOV_BIEN_THE=${bien_the} VIGOV_API_HOST=${api_host || "<CHƯA KHAI>"} vite build`);
   console.log(`  npx --yes ${ZMP} sync-config dist/index.html`);
-  console.log(`  npx --yes ${ZMP} ${co_zmp.map((c) => (c.includes(" ") ? `"${c}"` : c)).join(" ")}`);
+  const tien_to = dich.loai === "app-rieng" ? `APP_ID=${dich.app_id} ZMP_TOKEN=<môi trường> ` : "";
+  console.log(
+    `  ${tien_to}npx --yes ${ZMP} ${co_zmp.map((c) => (c.includes(" ") ? `"${c}"` : c)).join(" ")}`,
+  );
+  if (!kiem_token.ok) console.log(`
+⚠ Lần chạy thật sẽ DỪNG ở đây: ${kiem_token.ly_do}`);
   process.exit(0);
 }
 
 let ma = dung(bien_the);
 if (ma !== 0) process.exit(ma);
 
-ma = zmp("sync-config", "dist/index.html");
+ma = zmp(env_zmp, "sync-config", "dist/index.html");
 if (ma !== 0) process.exit(ma);
 
-process.exit(zmp(...co_zmp));
+process.exit(zmp(env_zmp, ...co_zmp));

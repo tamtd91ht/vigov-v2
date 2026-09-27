@@ -3066,6 +3066,10 @@
       "kind": "type",
       "at": "service-comms/internal/http/routes.go:142"
     },
+    "http.DanhMucXa": {
+      "kind": "func",
+      "at": "service-identity/internal/http/danh_muc_xa.go:101"
+    },
     "http.DanhSachBienBan": {
       "kind": "func",
       "at": "service-petitions/internal/http/bien_ban_hop.go:274"
@@ -3802,6 +3806,10 @@
       "kind": "func",
       "at": "service-identity/internal/http/can_bo_tim.go:59"
     },
+    "http.TraXaTheoHost": {
+      "kind": "type",
+      "at": "service-identity/internal/http/danh_muc_xa.go:28"
+    },
     "http.TrangThaiNhiemVuDoc": {
       "kind": "type",
       "at": "service-petitions/internal/http/routes.go:77"
@@ -4285,6 +4293,10 @@
     "platformclient.NewDirectory": {
       "kind": "func",
       "at": "core/platformclient/directory.go:103"
+    },
+    "platformclient.XaTheoHost": {
+      "kind": "func",
+      "at": "core/platformclient/host.go:34"
     },
     "platformclient.XaTrongNguCanh": {
       "kind": "func",

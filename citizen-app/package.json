@@ -13,9 +13,10 @@
     "test": "vitest run",
     "zmp:login": "npx --yes zmp-cli@4.0.3 login",
     "zmp:sync": "npm run build && npx --yes zmp-cli@4.0.3 sync-config dist/index.html",
-    "zmp:deploy": "node scripts/deploy.mjs --bien-the=day-du",
     "zmp:deploy:goc": "node scripts/deploy.mjs --bien-the=goc",
     "zmp:phat-hanh:goc": "node scripts/deploy.mjs --bien-the=goc --phat-hanh",
+    "zmp:deploy:xa": "node scripts/deploy.mjs --bien-the=day-du",
+    "zmp:phat-hanh:xa": "node scripts/deploy.mjs --bien-the=day-du --phat-hanh",
     "check:api": "node -e \"console.log('citizen-app: no generated REST types in phase 1 — the introduction app calls no backend. Phase 2 replaces this script.')\""
   },
   "dependencies": {
