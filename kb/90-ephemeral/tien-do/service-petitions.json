@@ -258,6 +258,15 @@
       "no_confirm": [],
       "tiep_theo": "Đối chiếu trước neo 26/09 (require-watcher, lượt /develop-feature nhiệm vụ) — CHƯA AI QUYẾT, không tự chọn bên: (1) CONFLICT vòng đời nhiệm vụ — vigov-require 52ec9b5 cho nhảy bước moi-giao→dang-thuc-hien, dang-thuc-hien→hoan-thanh (bỏ cho-duyet, tức bỏ task.approve), mở lại hoan-thanh, chuyen-tiep→da-tiep-nhan/dang-thuc-hien; kho này chuỗi cứng domain/nhiem_vu.go:76-84 khớp spec 02-nhiem-vu.md:227-231 — chủ dự án hỏi khách. (2) CONFLICT sửa mã NV qua PATCH (7764c8a) — kho này trigger cấm (0006_nhiem_vu.sql:155-160, luật 7 bất biến 3); spec :166 đặt ô mã trong khối sửa được. (3) CONFLICT sửa hạn không qua lùi hạn (93cff7f) — kho này PATCH không nhận due_at, trigger khoá han_ban_dau (0006:162-168); spec :168 đặt hạn trong khối sửa được; đổi tỷ lệ đúng hạn §11.3 — khách quyết. (4) NEW máy chủ trả allowed_transitions (56cfc3b) — web đang giữ bản sao bảng chuyển (nhan-nhiem-vu.ts:208-231); việc của contract-designer qua hop-dong-nhiem-vu-thieu-ba-mon. (5) NEW xoá nhiều = vòng lặp DELETE từng dòng phía máy khách (a037b76) — lý do web chưa dựng (thiếu tuyến xoa-nhieu) không còn đứng; còn hỏi: một lý do cho cả lô hay từng dòng. UNKNOWN: nhãn tre-han/hoan-thanh-tre-han phía bên kia nằm trong danh mục trạng thái — người giữ câu #21 trả lời.",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "nhiem-vu-nhat-ky-tuyen-doc",
+      "viec": "GET /api/v1/tasks/{ma}/log-entries — đọc Nhật ký & Trao đổi của nhiệm vụ (§5.9), phần ĐỌC",
+      "trang_thai": "xong",
+      "bang_chung": "7168cb1: internal/http/nhat_ky_nhiem_vu.go (DocNhatKyNhiemVu), internal/store/nhat_ky_nhiem_vu.go (một câu mỗi trang, tenant_id=$1 từ context), routes.go khai task.read (người dùng chốt 27/09). Kiểm: go build/vet + go test -count=1 -p 1 ./... xanh; 401/403/401-sai-xã/404 ba nguyên nhân cùng thân/200+con trỏ. Ca _pg_test SKIP (VIGOV_TEST_DSN trống) — chưa khẳng định nào chạy trên PostgreSQL thật.",
+      "no_confirm": [],
+      "tiep_theo": "Web: drawer hiện nhật ký (thẻ web-admin/man-nhiem-vu, lượt này). CÒN: POST …/log-entries (ghi chú tay) chờ luật người đang giữ cho nhiệm vụ (doi-chieu-24-09-nhiem-vu-phan-anh (2)); `Tiếp tục` sau tạm dừng chưa làm. Chỉ mục 0006:510-511 thiếu `id DESC` (nhật ký phản ánh 0013 có) — chỉ là hiệu năng, việc của data-migration-builder. Không có `actor_name`: service này không tra tên qua identity.",
+      "menu": "nhiem-vu"
     }
   ]
 }
