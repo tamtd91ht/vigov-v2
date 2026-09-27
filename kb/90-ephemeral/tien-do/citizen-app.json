@@ -191,7 +191,7 @@
       "trang_thai": "dang_lam",
       "bang_chung": "citizen-app/scripts/ung-dung-theo-ten-mien.mjs: App ID chủ dự án giao 27/09/2026. dich-den.test.mjs ghim đúng các cặp đã giao (51/51 xanh). deploy.mjs --phat-hanh --thu --domain=thangbinh-danang.vigov.vn in đúng kế hoạch, chỉ dừng vì chưa đặt ZMP_TOKEN. || 27/09 tối: deploy.mjs --domain tự chạy `zmp login` (QR) trong thư mục tạm khi môi trường không có ZMP_TOKEN, đọc token, xoá thư mục, kiểm claim appId rồi mới dựng/đẩy — một lệnh duy nhất. Test: tokenTrongTepEnv + ghim cwd tạm (60/60), make check exit 0. CHƯA quét QR thật lần nào: việc zmp-cli ghi .env vào thư mục đang đứng là đọc từ mã đã làm rối, chưa đo.",
       "no_confirm": [],
-      "tiep_theo": "CÒN THIẾU dòng mini_app (che_do='rieng', tenant_id của Thăng Bình) ở service-platform — chưa có thì app đẩy lên được nhưng máy chủ từ chối mở. Người vận hành nhập tay tới khi platform-admin có màn cấu hình (việc sau, chủ dự án đã nói). Cần ZMP_TOKEN của đúng app này khi chạy thật."
+      "tiep_theo": "Dòng mini_app: đã có việc một lần `gan-mini-app-thang-binh` trong job vigov-deploy (xem mục cùng tên ở deploy) — CHƯA BẤM. CÒN THIẾU dòng mini_app (che_do='rieng', tenant_id của Thăng Bình) ở service-platform — chưa có thì app đẩy lên được nhưng máy chủ từ chối mở. Người vận hành nhập tay tới khi platform-admin có màn cấu hình (việc sau, chủ dự án đã nói). Cần ZMP_TOKEN của đúng app này khi chạy thật."
     },
     {
       "id": "chinh-sach-dung-voi-ban-dung",
