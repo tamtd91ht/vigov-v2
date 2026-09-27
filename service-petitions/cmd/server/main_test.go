@@ -359,6 +359,9 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		NhatKyPhieu:     petstore.NewPhieuPhanAnhStore(nil),
 		NhiemVu:         khoNhiemVu{},
 		DanhSachNhiemVu: khoNhiemVu{},
+		// Never invoked here; Register refuses a nil. Own suite:
+		// internal/http/de_nghi_lui_han_cho_duyet_test.go.
+		DeNghiChoDuyet: petstore.NewDeNghiLuiHanStore(nil),
 		// The six task WRITE acts, built on a nil *store.DB for the same reason as every use case
 		// above: this file is about the EDGE CHAIN, it asserts on a read route, and Register refuses
 		// a nil dependency at construction. A use case that is never invoked cannot dereference the

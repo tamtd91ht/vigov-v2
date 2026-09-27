@@ -154,6 +154,17 @@ type (
 			page.Result[domain.NhiemVu], error)
 	}
 
+	// DeNghiLuiHanChoDuyetDoc is the approval queue of extension requests (§5.8), for
+	// GET /api/v1/task-extensions. *petstore.DeNghiLuiHanStore satisfies it.
+	//
+	// READ ONLY, AND ITS OWN INTERFACE rather than a method on the task readers: the rows are the
+	// extension table's (joined to their task), and the decision path — which WRITES that table —
+	// must stay unreachable from a GET.
+	DeNghiLuiHanChoDuyetDoc interface {
+		ChoDuyet(ctx context.Context, loc petstore.LocDeNghiChoDuyet, yc page.Request) (
+			page.Result[domain.DeNghiLuiHanChoDuyet], error)
+	}
+
 	// GhiNhiemVuUseCase is the six STAFF acts on a task, each of which opens a transaction and
 	// writes the business change, the timeline row and the audit entry inside it (rule 6,
 	// invariant 3).
@@ -392,6 +403,10 @@ type Deps struct {
 	NhiemVu         NhiemVuDoc
 	DanhSachNhiemVu NhiemVuDanhSach
 
+	// The approval queue of extension requests (§5.8) — a read over `de_nghi_lui_han` joined to its
+	// task. The two extension WRITES stay on GhiNhiemVu below.
+	DeNghiChoDuyet DeNghiLuiHanChoDuyetDoc
+
 	// The SIX WRITE acts on a task (migrations 0006 and 0008). A THIRD field rather than methods on
 	// either interface above, and for the reason the catalogue pair states: a read is a store call,
 	// while each of these opens a TRANSACTION and writes an audit entry inside it. Behind one
@@ -466,6 +481,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu kho nhiệm vụ — GET /api/v1/tasks/{ma} sẽ panic khi có người gọi")
 	case d.DanhSachNhiemVu == nil:
 		panic("petitions/http: thiếu đường đọc danh sách nhiệm vụ — GET /api/v1/tasks sẽ panic khi có người gọi")
+	case d.DeNghiChoDuyet == nil:
+		panic("petitions/http: thiếu đường đọc hàng chờ duyệt lùi hạn — GET /api/v1/task-extensions sẽ panic khi có người gọi")
 	case d.GhiNhiemVu == nil:
 		// THE SIX WRITE ROUTES AT ONCE. A nil here does not break one screen: it breaks giao việc,
 		// sửa, chuyển trạng thái, xoá and both halves of lùi hạn — which puts the task register back
@@ -1029,7 +1046,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// THE `Theo văn bản` DOCUMENT BLOCK OF §5.4 IS IN THE REPLY (`documents`, migration 0009). The
 	// progress log (§5.9) is NOT — it has its own paged route, …/{ma}/log-entries, below. The
-	// extension requests (§5.8) have a table and no read route yet.
+	// PENDING extension requests (§5.8) are read commune-wide through GET /api/v1/task-extensions,
+	// further down; a per-task history of decided requests still has no read route.
 	//
 	// @reply    200 nhiemVuRa
 	// @reply    401 httpx.Error
@@ -1250,6 +1268,33 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "task.extend")(
 			idem.KhongCan("câu UPDATE mang `trang_thai = 'cho-duyet'`, nên lần gửi thứ hai không khớp dòng nào — đúng một đề nghị, đúng một quyết định, đúng một vết")(
 				http.HandlerFunc(h.QuyetDinhLuiHanNhiemVu))))
+
+	// HÀNG CHỜ DUYỆT LÙI HẠN (§5.8) — the READ of every pending request of the commune. A top-level
+	// resource like task-types / task-priorities: the queue spans every task, so it is not a sub-route
+	// of one (decided by the project owner, 27/09/2026).
+	//
+	// `task.read`, THE KEY OF THE TASK READS ABOVE (seeded at service-identity/migrations/
+	// 0001_init.sql:304), AND NOT `task.extend`. The list decides nothing: a pending request is part of
+	// the task a reader of the register already sees (the chip on the drawer). WHO MAY DECIDE is
+	// unchanged — `task.extend` at the decision route's gate plus ADR 0038's named-leader rule inside
+	// it. NO KEY WAS INVENTED (rule 5, invariant 3c).
+	//
+	// `approver=me` narrows to the requests whose task names the CALLER as leader, resolved from the
+	// session principal's staff code and never from the request; any other value is 400, and 500 covers
+	// `approver=me` on a principal with no staff code — a wiring fault, refused rather than silently
+	// widened to the whole commune. 401 is RequirePermission's answer to no session AND to a session of
+	// another commune. NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Hàng chờ duyệt lùi hạn của xã — các đề nghị đang chờ, cũ nhất trước, phân trang theo con trỏ; `approver=me` chỉ lấy đề nghị mà mình là lãnh đạo giao việc
+	// @screen   02-nhiem-vu §5.8
+	// @reply    200 page.Result[deNghiChoDuyetRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/task-extensions",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.DanhSachDeNghiLuiHan)))
 
 	// --- MEETING MINUTES AND THEIR CONCLUSIONS. ONE READ ROUTE AND THREE WRITE ROUTES -----------
 	//

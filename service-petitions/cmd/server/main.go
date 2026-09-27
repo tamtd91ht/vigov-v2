@@ -238,6 +238,9 @@ func chay(log *slog.Logger) error {
 		// layer here would carry nothing.
 		NhiemVu:         nhiemVu,
 		DanhSachNhiemVu: nhiemVu,
+		// The approval queue of extension requests (§5.8) — the SAME store the two extension acts
+		// write through, so the queue lists exactly the rows those acts leave pending.
+		DeNghiChoDuyet: deNghiLuiHan,
 		// THE SIX WRITE ACTS. It is given *store.DB rather than a transaction because opening one is
 		// precisely what it is for: every act writes the business change, the timeline row (§5.9) and
 		// the audit entry inside it. It also owns the two tree walks of ADR 0037 — the recursive

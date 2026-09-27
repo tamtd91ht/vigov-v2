@@ -212,6 +212,7 @@ type mayChu struct {
 	nhatKy     *nhatKyPhieuGia
 	nhiemVu    *nhiemVuGia
 	ghiNhiemVu *ghiNhiemVuGia
+	deNghiCho  *deNghiChoDuyetGia
 	bienBan    *bienBanGia
 	ghiBienBan *ghiBienBanGia
 }
@@ -239,6 +240,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	// a read is a store call and each of these opens a transaction, so one object answering both
 	// would let a test prove that a write route "worked" by reading.
 	ghiNhiemVu := &ghiNhiemVuGia{}
+	// The approval queue of extension requests, keyed by commune — see deNghiChoDuyetGia.
+	deNghiCho := deNghiChoDuyetMau()
 	// The meeting register. Its fixtures are SEPARATE from the task register's on purpose: the
 	// counters on a card arrive already aggregated from the store, so a harness that derived them
 	// from nhiemVuMau() would be asserting that two fakes agree with each other rather than that the
@@ -286,6 +289,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			NhatKyPhieu:         nhatKy,
 			NhiemVu:             nhiemVu,
 			DanhSachNhiemVu:     nhiemVu,
+			DeNghiChoDuyet:      deNghiCho,
 			GhiNhiemVu:          ghiNhiemVu,
 			DanhSachBienBan:     bienBan,
 			GhiBienBan:          ghiBienBan,
@@ -302,6 +306,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		nhatKy:     nhatKy,
 		nhiemVu:    nhiemVu,
 		ghiNhiemVu: ghiNhiemVu,
+		deNghiCho:  deNghiCho,
 		bienBan:    bienBan,
 		ghiBienBan: ghiBienBan,
 	}
@@ -392,6 +397,7 @@ func depsDay() Deps {
 		// BOTH TASK FIELDS, from ONE fake — the same shape cmd/server wires.
 		NhiemVu:         nhiemVuMau(),
 		DanhSachNhiemVu: nhiemVuMau(),
+		DeNghiChoDuyet:  deNghiChoDuyetMau(),
 		GhiNhiemVu:      &ghiNhiemVuGia{},
 		DanhSachBienBan: bienBanMau(),
 		GhiBienBan:      &ghiBienBanGia{},
@@ -433,6 +439,7 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// not one screen: it is Nhiệm vụ, Sổ tay lãnh đạo, Biên bản họp and half of Tổng quan.
 		"thiếu kho nhiệm vụ":                 func(d *Deps) { d.NhiemVu = nil },
 		"thiếu đường đọc danh sách nhiệm vụ": func(d *Deps) { d.DanhSachNhiemVu = nil },
+		"thiếu đường đọc hàng chờ lùi hạn":   func(d *Deps) { d.DeNghiChoDuyet = nil },
 		// The meeting register. A nil here is the Biên bản họp screen, and with it the only place a
 		// commune can see WHERE its tasks came from.
 		"thiếu đường đọc danh sách biên bản": func(d *Deps) { d.DanhSachBienBan = nil },

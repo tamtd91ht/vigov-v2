@@ -603,6 +603,30 @@ type DeNghiLuiHan struct {
 	DuyetLuc time.Time
 }
 
+// DeNghiLuiHanChoDuyet is ONE ROW OF THE APPROVAL QUEUE (§5.8, GET /api/v1/task-extensions): a
+// pending request together with the four facts of its task the approve/reject block shows.
+//
+// A READ MODEL, NOT A SECOND RECORD. Every field comes from one joined statement over
+// `de_nghi_lui_han` and `nhiem_vu`, read in one pass so a page of N requests costs one query and not
+// N+1. Nothing writes through this type.
+//
+// `LanhDaoGiaoViecMa` IS THE TASK'S COLUMN, not a field of the request: ADR 0038 names the approver
+// ON THE TASK, so it is read from there at list time — exactly the value domain.DuocDuyetLuiHan
+// will compare when the decision route runs. Empty means the task names no leader, and ADR 0038's
+// open question applies: nobody can decide it yet.
+type DeNghiLuiHanChoDuyet struct {
+	DeNghi DeNghiLuiHan
+
+	NhiemVuMa     string
+	NhiemVuTieuDe string
+
+	// HanXuLyHienTai is `nhiem_vu.han_xu_ly` — the deadline the request would move. Zero when the
+	// column is NULL (a request cannot be filed on such a task, but the read does not assume it).
+	HanXuLyHienTai time.Time
+
+	LanhDaoGiaoViecMa string
+}
+
 var (
 	ErrThieuLyDoLuiHan = errors.New(
 		"nhiệm vụ: thiếu lý do lùi hạn — lãnh đạo giao việc không quyết được một đề nghị không nói vì sao")
