@@ -174,10 +174,10 @@
     {
       "id": "tao-nhiem-vu-thieu-ghi-chu",
       "viec": "BACKEND DEPENDENCY: POST /api/v1/tasks không nhận `note`, nên ô `Ghi chú` của §7.2 không gửi được lúc tạo",
-      "trang_thai": "chua_lam",
-      "bang_chung": "`taoNhiemVuVao` (kb/20-contracts/openapi.json; service-petitions/internal/http/nhiem_vu_ghi.go:100-146) không có thuộc tính `note`; PATCH thì có. Người dùng chọn 24/09: ẨN ô Ghi chú ở form tạo, nhập sau qua `✎ Sửa` §5.4 — không tạo rồi PATCH liền (không nguyên tử).",
+      "trang_thai": "xong",
+      "bang_chung": "0a41e48: `taoNhiemVuVao.Note` json:\"note,omitempty\" (service-petitions/internal/http/nhiem_vu_ghi.go:109-114) → app.chuanHoaTaoNhiemVu gọi đúng domain.KiemVanBanTuyChon như PATCH (internal/app/nhiem_vu.go:627-633) → cột ghi_chu ($21). Ghi chú KHÔNG vào audit_log, giống PATCH (app/nhiem_vu.go:593-596). Kiểm: go build/vet + go test -count=1 -p 1 ./... xanh (6 ca mới: app ×3, http ×3). Trước đó: người dùng 24/09 chọn ẨN ô Ghi chú ở form tạo cho tới khi POST nhận note.",
       "no_confirm": [],
-      "tiep_theo": "Thêm `note` tuỳ chọn vào thân tạo (đổi hợp đồng: thêm trường TUỲ CHỌN, không phá bên gọi cũ). Cùng lúc xem `tachKetLuanVao` (tách kết luận họp → nhiệm vụ) có cần như vậy không. Xong thì web hiện lại ô Ghi chú ở form tạo.",
+      "tiep_theo": "Web hiện lại ô Ghi chú ở form Giao việc — thẻ web-admin/man-nhiem-vu (lượt /develop-feature nhiệm vụ 26-27/09). tachKetLuanVao/TaoTuNguon KHÔNG đổi: nhiệm vụ tách từ kết luận họp có ghi chú rỗng; nếu sau này cần thì phép kiểm đã dùng chung. Muốn ghi chú vào vết kiểm toán thì phải đổi cả tạo lẫn sửa cùng lúc (che/độ dài, luật 3) — chưa ai yêu cầu.",
       "menu": "nhiem-vu"
     },
     {
@@ -249,6 +249,15 @@
       "tiep_theo": "CHỦ DỰ ÁN 26/09/2026: 'cho phép nới rộng cors xíu cũng được'. Giá trị đề xuất: https://h5.zdn.vn,https://zalo.me,https://*.zdn.vn,https://*.zalo.me (hai mục đầu = vihat-miniapp đang dùng). Bearer, không cookie → không Allow-Credentials. VIỆC NGOÀI KHO: thêm key CITIZEN_CORS_ALLOWED_ORIGINS (gạch dưới — envFrom giữ nguyên tên key) vào ConfigMap common-config của vigov-prod rồi bấm job service-petitions; kiểm Ingress petitions.api.vigov.vn cho OPTIONS đi qua. http://localhost (zmp start) bị từ chối — dev cục bộ Mini App không có CORS. Identity chưa gắn CORS (cầu phiên chưa dựng).",
       "menu": "phan-anh-nguoi-dan",
       "id": "cors-rira-cong-dan"
+    },
+    {
+      "id": "doi-chieu-26-09-nhiem-vu-truoc-neo",
+      "viec": "Tiếp nhận ghi chú đối chiếu trước neo cho Nhiệm vụ (M1 tasks tới 93cff7f) — ba xung đột vòng đời/mã/hạn, hai việc mới",
+      "trang_thai": "chua_lam",
+      "bang_chung": "`kb/50-doi-chieu/2026-09-26-feat-m8-multitenant-foundation-nhiem-vu.md` (sha_tu=sha_den=0053854, neo.json không đổi).",
+      "no_confirm": [],
+      "tiep_theo": "Đối chiếu trước neo 26/09 (require-watcher, lượt /develop-feature nhiệm vụ) — CHƯA AI QUYẾT, không tự chọn bên: (1) CONFLICT vòng đời nhiệm vụ — vigov-require 52ec9b5 cho nhảy bước moi-giao→dang-thuc-hien, dang-thuc-hien→hoan-thanh (bỏ cho-duyet, tức bỏ task.approve), mở lại hoan-thanh, chuyen-tiep→da-tiep-nhan/dang-thuc-hien; kho này chuỗi cứng domain/nhiem_vu.go:76-84 khớp spec 02-nhiem-vu.md:227-231 — chủ dự án hỏi khách. (2) CONFLICT sửa mã NV qua PATCH (7764c8a) — kho này trigger cấm (0006_nhiem_vu.sql:155-160, luật 7 bất biến 3); spec :166 đặt ô mã trong khối sửa được. (3) CONFLICT sửa hạn không qua lùi hạn (93cff7f) — kho này PATCH không nhận due_at, trigger khoá han_ban_dau (0006:162-168); spec :168 đặt hạn trong khối sửa được; đổi tỷ lệ đúng hạn §11.3 — khách quyết. (4) NEW máy chủ trả allowed_transitions (56cfc3b) — web đang giữ bản sao bảng chuyển (nhan-nhiem-vu.ts:208-231); việc của contract-designer qua hop-dong-nhiem-vu-thieu-ba-mon. (5) NEW xoá nhiều = vòng lặp DELETE từng dòng phía máy khách (a037b76) — lý do web chưa dựng (thiếu tuyến xoa-nhieu) không còn đứng; còn hỏi: một lý do cho cả lô hay từng dòng. UNKNOWN: nhãn tre-han/hoan-thanh-tre-han phía bên kia nằm trong danh mục trạng thái — người giữ câu #21 trả lời.",
+      "menu": "nhiem-vu"
     }
   ]
 }

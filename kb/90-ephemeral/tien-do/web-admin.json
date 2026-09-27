@@ -232,6 +232,15 @@
       "no_confirm": [],
       "tiep_theo": "Gỡ câu treo (3) của `cau-hinh-bon-chuc-nang-web`. Giới hạn đã ghi ở chú thích helper: ghép '<nhãn> trễ hạn' đọc tự nhiên khi nhãn là cụm động/tính từ; xã đặt nhãn dạng danh từ sẽ đọc gượng — chưa có quy tắc, chưa hỏi khách.",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "doi-chieu-26-09-nhiem-vu-truoc-neo",
+      "viec": "Tiếp nhận ghi chú đối chiếu trước neo cho màn Nhiệm vụ — bảng chuyển trạng thái, ô sửa mã/hạn, Xoá đã chọn",
+      "trang_thai": "chua_lam",
+      "bang_chung": "`kb/50-doi-chieu/2026-09-26-feat-m8-multitenant-foundation-nhiem-vu.md` — anh_huong gồm web-admin.",
+      "no_confirm": [],
+      "tiep_theo": "Phía web chỉ đổi SAU khi service-petitions/doi-chieu-26-09-nhiem-vu-truoc-neo có quyết định: CHUYEN_DUOC (nhan-nhiem-vu.ts:208-231) theo bảng máy chủ; ô sửa mã/hạn §5.4 chỉ khi (2)/(3) được chốt; `🗑 Xoá đã chọn` dựng được bằng vòng DELETE từng dòng khi chốt được lý do theo lô hay từng dòng. Chi tiết và hai phía: xem ghi chú. Chú thích nhan-nhiem-vu.ts:210 trỏ domain/nhiem_vu.go:77-85, đúng ra :76-84.",
+      "menu": "nhiem-vu"
     }
   ]
 }
