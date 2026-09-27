@@ -1403,6 +1403,14 @@ body {
  * theo mức ưu tiên hay theo tình trạng hạn: mức ưu tiên và chữ "Trễ N ngày" đã nằm THÀNH CHỮ
  * trên thẻ, và thêm một tầng màu mang nghĩa riêng là làm màu thành tín hiệu mà người không phân
  * biệt được màu sẽ mất (a11y §8 — màu không bao giờ là tín hiệu duy nhất). */
+/* Hàng quá hạn của bảng Danh sách §4.2 — "tô nền hồng rất nhạt". CÙNG màu nền `.khoi-chua-khai`, nên
+ * bảng màu không thêm màu nào. Màu là tín hiệu THỨ HAI: cùng dòng ấy cột Hạn có chữ `(trễ N ngày)`.
+ * Chữ đỏ `--do-loi` trên nền này khoảng 6:1, trên ngưỡng 4.5:1. Lớp chỉ được gắn khi dòng đã trễ —
+ * điều kiện SUY RA từ hạn so với bây giờ, cùng phép với chữ trong cột Hạn (luật 10, bất biến 3). */
+.dong-qua-han {
+  background: #fef3f2;
+}
+
 .the-nhiem-vu {
   background: #fff;
   border: 1px solid var(--xam-vien);

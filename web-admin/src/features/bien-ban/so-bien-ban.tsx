@@ -63,7 +63,7 @@ import type {
   petitions_nhiemVuRa,
 } from "@/lib/api/schema.gen";
 import { layTrangThaiNhiemVu } from "@/lib/api/trang-thai-nhiem-vu";
-import { coQuyen, QUYEN_KY_BIEN_BAN } from "@/lib/quyen";
+import { coQuyen, QUYEN_DUYET_GIA_HAN, QUYEN_KY_BIEN_BAN } from "@/lib/quyen";
 
 import {
   BIEU_MAU_TRONG,
@@ -176,6 +176,8 @@ export type PhepTach = {
    * biểu mẫu Giao việc cần phân biệt "đang tải" với "tải hỏng" để nói đúng câu (xem `FormGiaoViec`).
    */
   readonly danhBa: KetQua<identity_danhBaChonNguoiRa> | null;
+  /** Danh bạ đã lọc `permission=task.extend` cho ô `Lãnh đạo giao việc` — xem `FormGiaoViec`. */
+  readonly danhBaLanhDao: KetQua<identity_danhBaChonNguoiRa> | null;
   readonly dangGui: boolean;
   /** Id của kết luận đang mở hộp, hoặc `null`. */
   readonly moOKetLuan: string | null;
@@ -301,6 +303,8 @@ export function SoBienBan() {
 
   // Vòng đời.
   const [kqDanhBa, datKqDanhBa] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
+  const [kqDanhBaLanhDao, datKqDanhBaLanhDao] =
+    useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
   const [kqNhanTT, datKqNhanTT] = useState<KetQua<petitions_danhSachTrangThaiNhiemVuRa> | null>(
     null,
   );
@@ -372,6 +376,10 @@ export function SoBienBan() {
     });
     layDanhBaChonNguoi().then((kq) => {
       if (!bo) datKqDanhBa(kq);
+    });
+    // Ô `Lãnh đạo giao việc` của biểu mẫu Tách chỉ gợi người cầm quyền duyệt gia hạn (ADR 0038).
+    layDanhBaChonNguoi(undefined, QUYEN_DUYET_GIA_HAN).then((kq) => {
+      if (!bo) datKqDanhBaLanhDao(kq);
     });
     layTrangThaiNhiemVu().then((kq) => {
       if (!bo) datKqNhanTT(kq);
@@ -539,6 +547,7 @@ export function SoBienBan() {
   const phepTach: PhepTach = {
     danhMuc,
     danhBa: kqDanhBa,
+    danhBaLanhDao: kqDanhBaLanhDao,
     dangGui,
     moOKetLuan: moTachO,
     loi: loiTach,
@@ -1471,6 +1480,7 @@ export function DongKetLuan({
           <FormGiaoViec
             danhMuc={tach.danhMuc}
             danhBa={tach.danhBa}
+            danhBaLanhDao={tach.danhBaLanhDao}
             dangGui={tach.dangGui}
             loi={loiTach}
             huy={tach.dong}

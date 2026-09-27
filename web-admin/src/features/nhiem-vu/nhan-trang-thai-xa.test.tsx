@@ -20,6 +20,7 @@ import {
   BANG_NHAN_MAC_DINH,
   CANH_BAO_NHAN_MAC_DINH,
   PHAN_CHUA_DUNG,
+  SAP_XEP_MAC_DINH,
   TRANG_THAI_CHINH,
   docBangNhanTrangThai,
   ghiChuKanbanReNhanh,
@@ -265,6 +266,8 @@ describe("màn Nhiệm vụ dùng NHÃN CỦA XÃ ở mọi chỗ hiện trạng
         tenBoPhan={new Map()}
         bayGio={BAY_GIO}
         maDangMo={null}
+        sapXep={SAP_XEP_MAC_DINH}
+        doiSapXep={() => {}}
         moNhiemVu={() => {}}
       />,
     );
@@ -356,6 +359,8 @@ describe("không chỗ vẽ nào còn đọc nhãn mặc định khi xã đã đ
         tenBoPhan={new Map()}
         bayGio={BAY_GIO}
         maDangMo={null}
+        sapXep={SAP_XEP_MAC_DINH}
+        doiSapXep={() => {}}
         moNhiemVu={() => {}}
       />,
     );
@@ -414,6 +419,8 @@ describe("chip hoàn thành trễ hạn theo nhãn `hoan-thanh` của xã", () =
         tenBoPhan={new Map()}
         bayGio={BAY_GIO}
         maDangMo={null}
+        sapXep={SAP_XEP_MAC_DINH}
+        doiSapXep={() => {}}
         moNhiemVu={() => {}}
       />,
     );

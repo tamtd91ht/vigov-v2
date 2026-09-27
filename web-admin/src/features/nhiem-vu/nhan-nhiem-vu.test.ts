@@ -71,11 +71,20 @@ import {
   mucUuTienMacDinh,
   nhanCanBoDrawer,
   nhanCanBoNgan,
+  SAP_XEP_MAC_DINH,
+  ariaSapXep,
+  bamCotSapXep,
+  duocTraLai,
+  laBuocTraLai,
+  quyenNhiemVu,
+  sapXepDayDu,
+  yeuCauTraLai,
   type DongVanBanNhap,
   type DongVanBanSua,
   type FormGiaoViecNhap,
   type FormSuaNhiemVu,
 } from "./nhan-nhiem-vu";
+import { QUYEN_CAP_NHAT_NHIEM_VU, QUYEN_DUYET_HOAN_THANH_NHIEM_VU } from "@/lib/quyen";
 
 /**
  * Ca đáng lo nhất của tệp này KHÔNG phải ca định dạng ngày. Nó là `quyetDinhDuyetLuiHan` — cổng
@@ -178,6 +187,40 @@ describe("bảy trạng thái — §6", () => {
     // `tam-dung` và `chuyen-tiep` rẽ được từ bốn trạng thái chính, không từ `hoan-thanh`.
     expect(chuyenSangDuoc("dang-thuc-hien", "tam-dung")).toBe(true);
     expect(chuyenSangDuoc("hoan-thanh", "tam-dung")).toBe(false);
+  });
+
+  it("`cho-duyet` → `dang-thuc-hien` có trên bản đồ — mũi tên ngược duy nhất, `Trả lại để làm tiếp`", () => {
+    // Cùng bản đồ `service-petitions/internal/domain/nhiem_vu.go:87`.
+    expect(chuyenSangDuoc("cho-duyet", "dang-thuc-hien")).toBe(true);
+    // Không có mũi tên ngược nào khác.
+    expect(chuyenSangDuoc("dang-thuc-hien", "da-tiep-nhan")).toBe(false);
+    expect(chuyenSangDuoc("cho-duyet", "da-tiep-nhan")).toBe(false);
+  });
+
+  it("bước trả lại là một CẶP (từ, sang) — bước thuận `da-tiep-nhan` → `dang-thuc-hien` KHÔNG phải", () => {
+    expect(laBuocTraLai("cho-duyet", "dang-thuc-hien")).toBe(true);
+    expect(laBuocTraLai("da-tiep-nhan", "dang-thuc-hien")).toBe(false);
+    expect(laBuocTraLai("tam-dung", "dang-thuc-hien")).toBe(false);
+    expect(laBuocTraLai("cho-duyet", "hoan-thanh")).toBe(false);
+  });
+
+  it("lý do trả lại: rỗng hoặc toàn khoảng trắng ⇒ không gửi; có chữ ⇒ đích `dang-thuc-hien`, đã cắt", () => {
+    // Máy chủ cắt khoảng trắng rồi mới kiểm (`KiemLyDoTraLai`), nên `"   "` là 400 y như `""`.
+    expect(yeuCauTraLai("")).toBeNull();
+    expect(yeuCauTraLai("   \n\t ")).toBeNull();
+    expect(yeuCauTraLai("  Thiếu biên bản nghiệm thu \n")).toEqual({
+      trangThai: "dang-thuc-hien",
+      ghiChu: "Thiếu biên bản nghiệm thu",
+    });
+  });
+
+  it("ô trả lại đứng sau `task.update` VÀ `task.approve` — thiếu một trong hai là không có", () => {
+    expect(duocTraLai(quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU, QUYEN_DUYET_HOAN_THANH_NHIEM_VU]))).toBe(
+      true,
+    );
+    expect(duocTraLai(quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]))).toBe(false);
+    expect(duocTraLai(quyenNhiemVu([QUYEN_DUYET_HOAN_THANH_NHIEM_VU]))).toBe(false);
+    expect(duocTraLai(quyenNhiemVu(null))).toBe(false);
   });
 
   it("`hoan-thanh` và `chuyen-tiep` là hai ngõ cụt", () => {
@@ -1263,5 +1306,48 @@ describe("§3 — bộ lọc ↔ đường dẫn", () => {
     expect(locTuDuongDan("?assignee=&unit=%20%20")).toEqual({});
     expect(locTuDuongDan(`?type=${"x".repeat(101)}`)).toEqual({});
     expect(locTuDuongDan("?type=%20co-ban%20")).toEqual({ loai: "co-ban" });
+  });
+
+  it("sắp xếp đi rồi về qua đường dẫn — `sort`/`order`, đúng tên tuyến", () => {
+    const coSapXep = { ...DAY_DU, sapXep: "code" as const, chieu: "asc" as const };
+    expect(locTuDuongDan(duongDanTuLoc(coSapXep))).toEqual(coSapXep);
+    const t = new URLSearchParams(duongDanTuLoc(coSapXep));
+    expect(t.get("sort")).toBe("code");
+    expect(t.get("order")).toBe("asc");
+    // Con trỏ KHÔNG lên đường dẫn — nó gắn với đúng một cách sắp và sống vài giây.
+    expect([...t.keys()]).not.toContain("cursor");
+  });
+
+  it("`sort`/`order` lạ bị bỏ — máy chủ trả 400 cho chúng (`core/page/page.go:336-355`)", () => {
+    expect(locTuDuongDan("?sort=due_at&order=up")).toEqual({});
+    expect(locTuDuongDan("?sort=title")).toEqual({});
+    expect(locTuDuongDan("?order=desc")).toEqual({ chieu: "desc" });
+  });
+});
+
+describe("§4.2 — sắp xếp bảng Danh sách", () => {
+  it("mặc định là mặc định của máy chủ: `created_at` giảm dần; thiếu vế nào lấy vế ấy", () => {
+    expect(sapXepDayDu({})).toEqual({ cot: "created_at", chieu: "desc" });
+    // `page.NewAllowlist(page.Desc, …)`: chiều mặc định là GIẢM cho mọi cột, kể cả `code`.
+    expect(sapXepDayDu({ sapXep: "code" })).toEqual({ cot: "code", chieu: "desc" });
+    expect(sapXepDayDu({ chieu: "asc" })).toEqual({ cot: "created_at", chieu: "asc" });
+  });
+
+  it("bấm cùng cột thì đảo chiều; bấm cột khác thì theo chiều tự nhiên của cột ấy", () => {
+    const md = SAP_XEP_MAC_DINH;
+    expect(bamCotSapXep(md, "created_at")).toEqual({ cot: "created_at", chieu: "asc" });
+    // Mã: NV01, NV02… — thứ tự của chính quyển sổ.
+    expect(bamCotSapXep(md, "code")).toEqual({ cot: "code", chieu: "asc" });
+    expect(bamCotSapXep({ cot: "code", chieu: "asc" }, "code")).toEqual({ cot: "code", chieu: "desc" });
+    expect(bamCotSapXep({ cot: "code", chieu: "asc" }, "created_at")).toEqual({
+      cot: "created_at",
+      chieu: "desc",
+    });
+  });
+
+  it("`aria-sort` chỉ ở cột đang sắp, đúng chiều", () => {
+    expect(ariaSapXep({ cot: "code", chieu: "asc" }, "code")).toBe("ascending");
+    expect(ariaSapXep({ cot: "code", chieu: "desc" }, "code")).toBe("descending");
+    expect(ariaSapXep({ cot: "code", chieu: "asc" }, "created_at")).toBe("none");
   });
 });

@@ -44,12 +44,20 @@ import {
   PHAN_CHUA_DUNG,
   SO_RONG,
   TIEU_DE_KHOI_VAN_BAN,
+  CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN,
+  NHAN_NUT_TRA_LAI,
+  SAP_XEP_MAC_DINH,
+  cauLoiDanhBaLanhDao,
+  ghiChuTraLai,
   mocCuoiNgay,
   ngayChoONhap,
   quyetDinhDuyetLuiHan,
   quyenNhiemVu,
   type QuyenNhiemVu,
+  type SapXepSo,
 } from "./nhan-nhiem-vu";
+import { TRANG_DAU } from "@/features/cau-hinh/ngan-xep-con-tro";
+import { duongDanSoNhiemVu } from "@/lib/api/nhiem-vu";
 import {
   BangNhiemVu,
   ChiTietNhiemVu,
@@ -57,6 +65,8 @@ import {
   FormSuaKhoiVanBan,
   KhoiChuaDung,
   KhoiLuiHan,
+  KhoiTraLai,
+  bamSapXep,
   chuyenDrawer,
   type DanhMucNhiemVu,
   type DrawerNhiemVu,
@@ -407,6 +417,8 @@ describe("bảng danh sách §4.2", () => {
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
+        sapXep={SAP_XEP_MAC_DINH}
+        doiSapXep={() => {}}
         moNhiemVu={() => {}}
       />,
     );
@@ -426,6 +438,8 @@ describe("bảng danh sách §4.2", () => {
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
+        sapXep={SAP_XEP_MAC_DINH}
+        doiSapXep={() => {}}
         moNhiemVu={() => {}}
       />,
     );
@@ -450,6 +464,8 @@ describe("bảng danh sách §4.2", () => {
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
+        sapXep={SAP_XEP_MAC_DINH}
+        doiSapXep={() => {}}
         moNhiemVu={() => {}}
       />,
     );
@@ -465,6 +481,8 @@ describe("bảng danh sách §4.2", () => {
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
+        sapXep={SAP_XEP_MAC_DINH}
+        doiSapXep={() => {}}
         moNhiemVu={() => {}}
       />,
     );
@@ -480,6 +498,8 @@ describe("bảng danh sách §4.2", () => {
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
+        sapXep={SAP_XEP_MAC_DINH}
+        doiSapXep={() => {}}
         moNhiemVu={() => {}}
       />,
     );
@@ -541,6 +561,7 @@ describe("form Giao việc mới §7", () => {
       <FormGiaoViec
         danhMuc={DANH_MUC}
         danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -560,6 +581,7 @@ describe("form Giao việc mới §7", () => {
       <FormGiaoViec
         danhMuc={DANH_MUC}
         danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -575,6 +597,7 @@ describe("form Giao việc mới §7", () => {
       <FormGiaoViec
         danhMuc={DANH_MUC}
         danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -591,6 +614,7 @@ describe("form Giao việc mới §7", () => {
       <FormGiaoViec
         danhMuc={DANH_MUC}
         danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
         coDanhSachVanBan
         dangGui={false}
         loi={null}
@@ -621,6 +645,7 @@ describe("form Giao việc mới §7", () => {
       <FormGiaoViec
         danhMuc={DANH_MUC_CO_BAN}
         danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
         coDanhSachVanBan
         dangGui={false}
         loi={null}
@@ -645,6 +670,7 @@ describe("form Giao việc mới §7", () => {
       <FormGiaoViec
         danhMuc={DANH_MUC}
         danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
         dangGui={false}
         loi={null}
         huy={() => {}}
@@ -712,6 +738,9 @@ function veForm(danhBa: KetQua<identity_danhBaChonNguoiRa> | null): string {
     <FormGiaoViec
       danhMuc={DANH_MUC}
       danhBa={danhBa}
+      // Cùng câu trả lời cho ô lãnh đạo: các ca dưới canh BA PHA của danh bạ, không canh bộ lọc
+      // quyền — bộ lọc có nhóm riêng (`ô Lãnh đạo giao việc — chỉ người cầm quyền duyệt gia hạn`).
+      danhBaLanhDao={danhBa}
       dangGui={false}
       loi={null}
       huy={() => {}}
@@ -1287,6 +1316,8 @@ describe("họ tên thay mã `CB-…` — danh bạ đọc MỘT LẦN, mã lạ
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
+        sapXep={SAP_XEP_MAC_DINH}
+        doiSapXep={() => {}}
         moNhiemVu={() => {}}
       />,
     );
@@ -1334,6 +1365,8 @@ describe("§4.2 — hàng quá hạn tô nền hồng rất nhạt, SUY RA từ 
         tenBoPhan={TEN_BO_PHAN}
         bayGio={BAY_GIO}
         maDangMo={null}
+        sapXep={SAP_XEP_MAC_DINH}
+        doiSapXep={() => {}}
         moNhiemVu={() => {}}
       />,
     );
@@ -1341,7 +1374,9 @@ describe("§4.2 — hàng quá hạn tô nền hồng rất nhạt, SUY RA từ 
 
   it("quá hạn: nền hồng, VÀ chữ `(trễ N ngày)` cùng dòng — màu không đứng một mình", () => {
     const html = veMotDong({});
-    expect(html).toMatch(/<tr data-tre-han="" style="background-color:#fef3f2">/);
+    // LỚP, không còn giá trị inline — `.dong-qua-han` ở `globals.css`.
+    expect(html).toMatch(/<tr data-tre-han="" class="dong-qua-han">/);
+    expect(html).not.toContain("style=");
     expect(html).toContain("(trễ 86 ngày)");
   });
 
@@ -1351,9 +1386,222 @@ describe("§4.2 — hàng quá hạn tô nền hồng rất nhạt, SUY RA từ 
       { due_at: null, original_due_at: null },
     ]) {
       const html = veMotDong(sua);
-      expect(html).not.toContain("background-color");
+      expect(html).not.toContain("dong-qua-han");
       expect(html).not.toContain("data-tre-han");
     }
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * TASK-04 (27/09/2026) — trả lại để làm tiếp · ô lãnh đạo chỉ gợi người cầm `task.extend` ·
+ * sắp xếp bảng Danh sách
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("`Trả lại để làm tiếp` — chỉ ở `cho-duyet`, chỉ với `task.approve`, lý do bắt buộc", () => {
+  const Q_DUYET = quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU, QUYEN_DUYET_HOAN_THANH_NHIEM_VU]);
+  const Q_CAP_NHAT = quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]);
+  const NHAN_NUT = nhuTrongHTML(NHAN_NUT_TRA_LAI);
+
+  it("`cho-duyet` + `task.approve`: ô lý do bắt buộc, có nhãn, và nút KHOÁ khi ô còn trống", () => {
+    const html = veChiTiet({ status: "cho-duyet" }, NGUOI_KHAC, { pha: "dangTai" }, Q_DUYET);
+    expect(html).toContain(NHAN_NUT);
+    expect(html).toContain('<label for="ly-do-tra-lai">Lý do trả lại (bắt buộc)</label>');
+    expect(html).toMatch(/<textarea id="ly-do-tra-lai"[^>]*required=""/);
+    expect(html).toMatch(/<button type="submit" class="nut-phu" disabled="">Trả lại để làm tiếp<\/button>/);
+    // KHÔNG có nút thường `Chuyển sang Đang thực hiện` — cú bấm ấy sẽ gửi lý do rỗng, tức 400.
+    expect(html).not.toContain("Chuyển sang Đang thực hiện");
+    // Câu giải thích lấy tên trạng thái đích từ bảng nhãn, không gõ cứng.
+    expect(html).toContain(nhuTrongHTML(ghiChuTraLai(BANG_NHAN_MAC_DINH)));
+  });
+
+  it("`cho-duyet`, THIẾU `task.approve`: không có ô trả lại — và câu nói vì sao", () => {
+    const html = veChiTiet({ status: "cho-duyet" }, NGUOI_KHAC, { pha: "dangTai" }, Q_CAP_NHAT);
+    expect(html).not.toContain(NHAN_NUT);
+    expect(html).not.toContain('id="ly-do-tra-lai"');
+    expect(html).not.toContain("Chuyển sang Đang thực hiện");
+    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
+  });
+
+  it("phiên chưa đọc được: không có ô trả lại — fail closed", () => {
+    const html = veChiTiet({ status: "cho-duyet" }, NGUOI_KHAC, { pha: "dangTai" }, quyenNhiemVu(null));
+    expect(html).not.toContain(NHAN_NUT);
+  });
+
+  it("trạng thái khác `cho-duyet`: không có ô trả lại, kể cả với đủ khoá", () => {
+    for (const status of ["moi-giao", "da-tiep-nhan", "dang-thuc-hien", "tam-dung", "hoan-thanh"]) {
+      const html = veChiTiet({ status }, NGUOI_KHAC, { pha: "dangTai" }, Q_DUYET);
+      expect(html).not.toContain(NHAN_NUT);
+      expect(html).not.toContain('id="ly-do-tra-lai"');
+    }
+  });
+
+  it("bước THUẬN `da-tiep-nhan` → `dang-thuc-hien` vẫn là một nút thường, không đòi lý do", () => {
+    const html = veChiTiet({ status: "da-tiep-nhan" }, NGUOI_KHAC, { pha: "dangTai" }, Q_CAP_NHAT);
+    expect(html).toContain("Chuyển sang Đang thực hiện");
+    expect(html).not.toContain('id="ly-do-tra-lai"');
+  });
+
+  it("thành phần `KhoiTraLai` vẽ riêng: đúng một ô, một nút khoá lúc đầu", () => {
+    const html = renderToStaticMarkup(
+      <KhoiTraLai nhanTT={BANG_NHAN_MAC_DINH} dangGui={false} gui={() => {}} />,
+    );
+    expect(html.split('id="ly-do-tra-lai"').length - 1).toBe(1);
+    expect(html).toContain('maxLength="5000"');
+    expect(html).toContain('disabled=""');
+  });
+
+  // ⚠ LẦN BẤM GỬI KHÔNG ĐƯỢC CANH Ở ĐÂY: môi trường kiểm là Node không DOM, nên `onSubmit` của
+  // `KhoiTraLai` không chạy được. Hai mắt xích hai bên nó có bài riêng — `yeuCauTraLai` (lý do → đích
+  // `dang-thuc-hien` + `note` đã cắt, `nhan-nhiem-vu.test.ts`) và thân `{status, note}` của
+  // `doiTrangThaiNhiemVu` (`lib/api/nhiem-vu.test.ts`). Dây nối giữa là một dòng
+  // `gui(yeuCau.trangThai, yeuCau.ghiChu)` không bài nào chạy qua.
+
+  it("câu từ chối của máy chủ (403/400) ra NGUYÊN VĂN trong drawer", () => {
+    const cau = "Trả lại để làm tiếp phải ghi lý do — người thực hiện cần biết còn thiếu gì.";
+    const html = renderToStaticMarkup(
+      <ChiTietNhiemVu
+        nhiemVu={nhiemVu({ status: "cho-duyet" })}
+        vanBan={{ pha: "dangTai" }}
+        danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
+        tenBoPhan={TEN_BO_PHAN}
+        bayGio={BAY_GIO}
+        maNguoiDangNhap={NGUOI_KHAC}
+        quyen={Q_DUYET}
+        dangGui={false}
+        loiGhi={cau}
+        dong={() => {}}
+        doiTrangThai={() => {}}
+        xoa={() => {}}
+        guiDeNghiLuiHan={KHONG_GOI}
+        quyetDinh={KHONG_GOI}
+        suaKhoiVanBan={KHONG_SUA}
+        docLaiChiTiet={KHONG_SUA}
+      />,
+    );
+    expect(html).toContain(`role="alert">${nhuTrongHTML(cau)}</p>`);
+  });
+});
+
+describe("ô `Lãnh đạo giao việc` — chỉ người cầm quyền duyệt gia hạn", () => {
+  const CHI_LANH_DAO: KetQua<identity_danhBaChonNguoiRa> = {
+    ok: true,
+    duLieu: {
+      items: [{ code: LANH_DAO, full_name: "Trần Văn Lãnh", position: "Chủ tịch", department_id: "" }],
+    },
+  };
+
+  function veHaiDanhBa(
+    danhBa: KetQua<identity_danhBaChonNguoiRa> | null,
+    danhBaLanhDao: KetQua<identity_danhBaChonNguoiRa> | null,
+    loi: string | null = null,
+  ): string {
+    return renderToStaticMarkup(
+      <FormGiaoViec
+        danhMuc={DANH_MUC}
+        danhBa={danhBa}
+        danhBaLanhDao={danhBaLanhDao}
+        dangGui={false}
+        loi={loi}
+        huy={() => {}}
+        giaoViec={() => {}}
+        // Tiêu đề điền sẵn: tiêu đề trống cũng khoá nút gửi, và khi ấy hai ca "nút khoá / nút mở"
+        // dưới đây sẽ xanh hoặc đỏ vì tiêu đề chứ không vì danh bạ.
+        tieuDeCoSan="Việc giả của bài kiểm"
+      />,
+    );
+  }
+
+  it("ô lãnh đạo đổ từ danh bạ ĐÃ LỌC; hai ô kia vẫn đổ từ danh bạ cả xã", () => {
+    const html = veHaiDanhBa(DANH_BA, CHI_LANH_DAO);
+    const lanhDao = oChon(html, "giao-lanh-dao");
+    expect(lanhDao).toContain(`value="${LANH_DAO}"`);
+    expect(lanhDao).not.toContain(`value="${NGUOI_KHAC}"`);
+    for (const id of ["giao-nguoi-thuc-hien", "giao-chuyen-vien"]) {
+      expect(oChon(html, id)).toContain(`value="${NGUOI_KHAC}"`);
+    }
+  });
+
+  it("danh bạ đã lọc RỖNG: một câu nói không ai có quyền — KHÔNG vẽ ô chọn rỗng", () => {
+    const html = veHaiDanhBa(DANH_BA, { ok: true, duLieu: { items: [] } });
+    expect(html).not.toContain('<select id="giao-lanh-dao"');
+    expect(html).toContain(nhuTrongHTML(CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN));
+    // Không rỗng: nút gửi không bị khoá vì chuyện này — giao việc vẫn phải làm được.
+    expect(html).toMatch(/<button type="submit" class="nut-chinh">Giao việc<\/button>/);
+  });
+
+  it("danh bạ đã lọc ĐỌC HỎNG: câu máy chủ nguyên văn, `role=\"alert\"`, ô chỉ còn lựa chọn trống", () => {
+    const html = veHaiDanhBa(DANH_BA, { ok: false, thongBao: "Khoá quyền dùng để lọc không hợp lệ." });
+    expect(html).toContain(nhuTrongHTML(cauLoiDanhBaLanhDao("Khoá quyền dùng để lọc không hợp lệ.")));
+    const o = oChon(html, "giao-lanh-dao");
+    expect(o.split("<option").length - 1).toBe(1);
+    // Và câu "không ai có quyền" KHÔNG hiện — đọc hỏng không phải là "không có ai".
+    expect(html).not.toContain(nhuTrongHTML(CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN));
+  });
+
+  it("danh bạ đã lọc CÒN ĐANG TẢI: ô khoá và nút Giao việc khoá — lãnh đạo không ghi lại được sau", () => {
+    const html = veHaiDanhBa(DANH_BA, null);
+    expect(oChon(html, "giao-lanh-dao")).toContain("disabled");
+    expect(html).toMatch(/<button type="submit" class="nut-chinh" disabled="">Giao việc<\/button>/);
+  });
+
+  it("máy chủ từ chối lãnh đạo (400) hoặc không kiểm được (503): câu NGUYÊN VĂN trên form", () => {
+    for (const cau of [
+      "Người được chọn làm lãnh đạo giao việc không hợp lệ. Hãy chọn người khác trong danh sách.",
+      "Chưa kiểm tra được lãnh đạo giao việc nên nhiệm vụ CHƯA được tạo. Vui lòng thử lại sau ít phút.",
+    ]) {
+      const html = veHaiDanhBa(DANH_BA, CHI_LANH_DAO, cau);
+      expect(html).toContain(`role="alert">${nhuTrongHTML(cau)}</p>`);
+    }
+  });
+});
+
+describe("§4.2 — tiêu đề sắp được: Mã và Ngày giao, không cột nào khác", () => {
+  function veBangSapXep(sapXep: SapXepSo): string {
+    return renderToStaticMarkup(
+      <BangNhiemVu
+        nhiemVu={[nhiemVu()]}
+        danhMuc={DANH_MUC}
+        nhanTT={BANG_NHAN_MAC_DINH}
+        tenBoPhan={TEN_BO_PHAN}
+        bayGio={BAY_GIO}
+        maDangMo={null}
+        moNhiemVu={() => {}}
+        sapXep={sapXep}
+        doiSapXep={() => {}}
+      />,
+    );
+  }
+
+  it("đúng HAI nút sắp, `aria-sort` đúng chiều ở cột đang sắp, `none` ở cột kia", () => {
+    const html = veBangSapXep({ cot: "code", chieu: "asc" });
+    expect(html.split('class="nut-sap-xep"').length - 1).toBe(2);
+    expect(html).toContain('<th scope="col" aria-sort="ascending"><button type="button" class="nut-sap-xep">Mã ↑</button></th>');
+    expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Ngày giao ⇅</button>');
+    // Các cột còn lại là chữ thường — không mũi tên nào hứa một cách sắp máy chủ không có.
+    expect(html).toContain('<th scope="col">Hạn</th>');
+  });
+
+  it("mặc định (`created_at` giảm dần): mũi tên xuống ở Ngày giao; ô ngày hiện ngày giao", () => {
+    const html = veBangSapXep(SAP_XEP_MAC_DINH);
+    expect(html).toContain("Ngày giao ↓");
+    expect(html).toContain('<time dateTime="2026-06-01T02:00:00Z">1/6/2026</time>');
+  });
+
+  it("đổi cách sắp là VỀ TRANG ĐẦU — con trỏ cũ thuộc cách sắp cũ, máy chủ trả 400", () => {
+    // Đang ở trang 3 theo mặc định. Con trỏ giữ `sort`/`order` bên trong (`core/page/page.go:456`).
+    const loc = { trangThai: "cho-duyet" };
+    const moi = bamSapXep(loc, "code");
+    expect(moi.nganXep).toEqual(TRANG_DAU);
+    expect(moi.loc).toEqual({ trangThai: "cho-duyet", sapXep: "code", chieu: "asc" });
+    // Lượt đọc kế tiếp mang cách sắp mới và KHÔNG mang con trỏ nào.
+    const duong = duongDanSoNhiemVu({ ...moi.loc, cursor: moi.nganXep.hienTai, limit: 20 });
+    expect(duong).toBe("/api/v1/tasks?status=cho-duyet&sort=code&order=asc&limit=20");
+    // Bấm lại đúng cột: đảo chiều, vẫn về trang đầu.
+    expect(bamSapXep(moi.loc, "code")).toEqual({
+      loc: { trangThai: "cho-duyet", sapXep: "code", chieu: "desc" },
+      nganXep: TRANG_DAU,
+    });
   });
 });
 
@@ -1374,6 +1622,7 @@ describe("§7.1 — mức ưu tiên mặc định lấy từ DANH MỤC CỦA X�
       <FormGiaoViec
         danhMuc={{ ...DANH_MUC, mucUuTien }}
         danhBa={DANH_BA}
+        danhBaLanhDao={DANH_BA}
         dangGui={false}
         loi={null}
         huy={() => {}}

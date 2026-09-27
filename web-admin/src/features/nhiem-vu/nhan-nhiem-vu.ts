@@ -22,6 +22,7 @@
 
 import { danhBaTheoMa, nhanThoiDiem, type DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import type { KetQua } from "@/lib/api/goi";
+import type { ChieuSapXepNhiemVu, CotSapXepNhiemVu } from "@/lib/api/nhiem-vu";
 import {
   QUYEN_CAP_NHAT_NHIEM_VU,
   QUYEN_DUYET_GIA_HAN,
@@ -221,8 +222,13 @@ export function theoThuTuXa<T extends string>(
 
 /**
  * Vòng đời §6 — **BẢN THỨ HAI** của `chuyenDuocSangNhiemVu`
- * (`service-petitions/internal/domain/nhiem_vu.go:76-84`), và cái giá của nó được nói ra ở đây
+ * (`service-petitions/internal/domain/nhiem_vu.go:83-91`), và cái giá của nó được nói ra ở đây
  * chứ không để người sau tự phát hiện.
+ *
+ * `cho-duyet` → `dang-thuc-hien` là MŨI TÊN NGƯỢC DUY NHẤT — "Trả lại để làm tiếp", quyết định của
+ * chủ đầu tư 27/09/2026 (`nhiem_vu.go:77-82`), không có trên sơ đồ §6. Bản đồ chỉ nói HÌNH DẠNG ấy có;
+ * ai được đi bước ấy (`task.approve`) và nó phải mang gì (lý do) là của `laBuocTraLai` ở dưới, và của
+ * máy chủ (`app/nhiem_vu.go:1062-1070`).
  *
  * VÌ SAO VẪN CHẤP NHẬN ĐƯỢC: hợp đồng không có tuyến nào phát ra vòng đời, mà §5.2 đòi dải bước
  * biết ô nào **bấm được**. Bản sao này chỉ quyết định MỘT NÚT CÓ HIỆN HAY KHÔNG; nó không quyết
@@ -238,7 +244,7 @@ const CHUYEN_DUOC: Readonly<Record<TrangThaiNhiemVu, readonly TrangThaiNhiemVu[]
   "moi-giao": ["da-tiep-nhan", "tam-dung", "chuyen-tiep"],
   "da-tiep-nhan": ["dang-thuc-hien", "tam-dung", "chuyen-tiep"],
   "dang-thuc-hien": ["cho-duyet", "tam-dung", "chuyen-tiep"],
-  "cho-duyet": ["hoan-thanh", "tam-dung", "chuyen-tiep"],
+  "cho-duyet": ["hoan-thanh", "dang-thuc-hien", "tam-dung", "chuyen-tiep"],
   "tam-dung": ["moi-giao", "da-tiep-nhan", "dang-thuc-hien", "cho-duyet"],
   "hoan-thanh": [],
   "chuyen-tiep": [],
@@ -722,12 +728,78 @@ export function quyenNhiemVu(dsQuyen: readonly string[] | null): QuyenNhiemVu {
  * không lời đọc lên là "vòng đời thiếu bước" — cán bộ báo lỗi phần mềm thay vì xin cấp quyền.
  */
 export const CAU_THIEU_QUYEN_DUYET_HOAN_THANH =
-  "Bước hoàn thành cần quyền duyệt hoàn thành. Tài khoản của bạn chưa được cấp quyền này.";
+  "Bước hoàn thành và bước trả lại để làm tiếp cần quyền duyệt hoàn thành. Tài khoản của bạn chưa " +
+  "được cấp quyền này.";
 
-/** Bước chuyển trạng thái này có cần hiện nút cho tài khoản này không — xem `quyenNhiemVu`. */
+/**
+ * Bước chuyển trạng thái này có cần hiện nút THƯỜNG cho tài khoản này không — xem `quyenNhiemVu`.
+ *
+ * BƯỚC TRẢ LẠI (`laBuocTraLai`) KHÔNG ĐI QUA ĐÂY: nó không phải một nút `Chuyển sang …` mà là một ô lý
+ * do bắt buộc (`KhoiTraLai`), và cổng của nó là `duocTraLai`. Bên gọi lọc nó ra trước.
+ */
 export function duocBamChuyen(quyen: QuyenNhiemVu, sangTrangThai: string): boolean {
   if (!quyen.capNhat) return false;
   return sangTrangThai === "hoan-thanh" ? quyen.duyetHoanThanh : true;
+}
+
+/* ── "TRẢ LẠI ĐỂ LÀM TIẾP" — `cho-duyet` → `dang-thuc-hien` ─────────────────────────────────────
+ *
+ * Cùng tuyến `POST /api/v1/tasks/{ma}/status`, cùng thân (`status` + `note`). Hai điều khiến nó khác
+ * mọi bước khác, cả hai do MÁY CHỦ cưỡng chế (`app/nhiem_vu.go:1062-1070`):
+ *   - chỉ người cầm `task.approve` — CÙNG khoá với duyệt hoàn thành (`ErrKhongDuocTraLai`, :193-204):
+ *     trả lại là nửa kia của cùng một phán quyết;
+ *   - `note` là LÝ DO, bắt buộc, cắt khoảng trắng trước khi kiểm (`KiemLyDoTraLai`,
+ *     `domain/nhiem_vu_ghi.go:505-519`) — người nhận lại việc phải biết còn thiếu gì.
+ * `da-tiep-nhan` → `dang-thuc-hien` là bước THUẬN thường, không cần khoá lẫn lý do; nên câu hỏi là
+ * về CẶP (từ, sang), không bao giờ chỉ về trạng thái đích.
+ */
+
+/** Cặp (từ, sang) này có phải bước trả lại không — cùng vị từ với `domain.LaTraLaiLamTiep`. */
+export function laBuocTraLai(tu: string, sang: string): boolean {
+  return tu === "cho-duyet" && sang === "dang-thuc-hien";
+}
+
+/**
+ * Tài khoản có được thấy ô trả lại không. `task.update` (cổng tuyến) VÀ `task.approve` — đúng
+ * `duyetHoanThanh`, vì máy chủ đòi đúng hai khoá ấy. Ẩn là tiện dụng: máy chủ vẫn kiểm (luật 5, cấm #1).
+ */
+export function duocTraLai(quyen: QuyenNhiemVu): boolean {
+  return quyen.duyetHoanThanh;
+}
+
+/**
+ * Giới hạn của máy chủ: lý do CHÍNH LÀ dòng nhật ký mà bước ấy ghi, nên dùng chung
+ * `NoiDungNhatKyToiDa` (`service-petitions/internal/domain/nhiem_vu_ghi.go:43`). Ô dừng đúng chỗ;
+ * lệch khỏi máy chủ thì câu từ chối của máy chủ vẫn ra nguyên văn.
+ */
+export const LY_DO_TRA_LAI_TOI_DA = 5000;
+
+export const NHAN_NUT_TRA_LAI = "Trả lại để làm tiếp";
+export const NHAN_LY_DO_TRA_LAI = "Lý do trả lại (bắt buộc)";
+/**
+ * Câu dưới tiêu đề ô trả lại. Tên trạng thái đích lấy từ BẢNG NHÃN CỦA XÃ (quyết định #21 — một
+ * nguồn): xã đổi "Đang thực hiện" thành chữ khác mà câu này vẫn nói chữ cũ là cán bộ đọc hai tên cho
+ * một trạng thái.
+ */
+export function ghiChuTraLai(bang: BangNhanTrangThai): string {
+  return (
+    `Nhiệm vụ quay về trạng thái “${nhanTrangThai(bang, "dang-thuc-hien")}”. Lý do được ghi vào ` +
+    "nhật ký để người thực hiện biết còn thiếu gì."
+  );
+}
+
+/**
+ * Ô lý do → hai đối số của `doiTrangThaiNhiemVu`, hoặc `null` khi chưa có lý do — nút gửi khoá.
+ *
+ * CẮT Ở ĐÂY, CÙNG PHÉP VỚI MÁY CHỦ: `"   "` bị máy chủ từ chối y như `""`, nên để nút mở với một lý do
+ * toàn khoảng trắng là mời cán bộ bấm vào một câu 400. Trạng thái đích nằm TRONG hàm này, không ở chỗ
+ * gọi: ô trả lại chỉ có một đích, và một chỗ gọi gõ nhầm đích là một bước tiến gửi kèm lý do trả lại.
+ */
+export function yeuCauTraLai(
+  chuoi: string,
+): { readonly trangThai: "dang-thuc-hien"; readonly ghiChu: string } | null {
+  const s = chuoi.trim();
+  return s === "" ? null : { trangThai: "dang-thuc-hien", ghiChu: s };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -752,7 +824,12 @@ export function mucUuTienMacDinh(ds: readonly petitions_mucUuTienRa[]): string {
  *
  * CHÍN THAM SỐ, ĐÚNG CHÍN BỘ LỌC MÁY CHỦ NHẬN VÀ Ô LỌC ĐANG VẼ — cùng tên với tham số của
  * `GET /api/v1/tasks` (`petitions_get_tasks["truyVan"]`), để một đường dẫn chia sẻ đọc lên là đúng
- * câu hỏi gửi máy chủ.
+ * câu hỏi gửi máy chủ. CỘNG `sort` VÀ `order` của bảng Danh sách §4.2: một đường dẫn chia sẻ "việc
+ * xếp theo mã" phải mở ra đúng thứ tự ấy.
+ *
+ * `cursor` KHÔNG LÊN ĐƯỜNG DẪN: con trỏ sống vài giây giữa hai trang và gắn với đúng một cách sắp
+ * (`core/page/page.go:456-457`); một đường dẫn chia sẻ mang nó sẽ là trang lỗi 400 cho người nhận
+ * ngay khi họ đổi thứ tự.
  *
  * `q` (Ô TÌM) CỐ Ý KHÔNG LÊN ĐƯỜNG DẪN TRÌNH DUYỆT. Chữ tìm là chữ cán bộ gõ tự do, và tiêu đề
  * nhiệm vụ có thể mang tên người dân (một việc giao từ phản ánh). Thanh địa chỉ đi vào lịch sử
@@ -777,6 +854,8 @@ export type LocTrenDuongDan = {
   boPhanID?: string;
   nguoiThucHienMa?: string;
   chiTreHan?: true;
+  sapXep?: CotSapXepNhiemVu;
+  chieu?: ChieuSapXepNhiemVu;
 };
 
 /** Độ dài tối đa nhận từ đường dẫn cho một mã tự do. Dài hơn là đường dẫn hỏng, không phải một mã. */
@@ -811,6 +890,13 @@ export function locTuDuongDan(search: string): LocTrenDuongDan {
   const nguoi = maTuDo(t.get("assignee"));
   if (nguoi !== undefined) loc.nguoiThucHienMa = nguoi;
 
+  // Hai tham số máy chủ trả 400 cho giá trị lạ (`page.New`, `core/page/page.go:336-355`) — nên chỉ
+  // nhận đúng giá trị hợp lệ, cùng quy tắc với `status`.
+  const sort = t.get("sort");
+  if (sort !== null && laCotSapXep(sort)) loc.sapXep = sort;
+  const order = t.get("order");
+  if (order === "asc" || order === "desc") loc.chieu = order;
+
   return loc;
 }
 
@@ -831,6 +917,8 @@ export function duongDanTuLoc(loc: {
   readonly nguoiThucHienMa?: string;
   readonly chiTreHan?: boolean;
   readonly tim?: string;
+  readonly sapXep?: CotSapXepNhiemVu;
+  readonly chieu?: ChieuSapXepNhiemVu;
 }): string {
   const t = new URLSearchParams();
   if (loc.phamVi === "mine") t.set("scope", "mine");
@@ -842,8 +930,74 @@ export function duongDanTuLoc(loc: {
   if (loc.boPhanID) t.set("unit", loc.boPhanID);
   if (loc.nguoiThucHienMa) t.set("assignee", loc.nguoiThucHienMa);
   if (loc.chiTreHan === true) t.set("late", "true");
+  if (loc.sapXep) t.set("sort", loc.sapXep);
+  if (loc.chieu) t.set("order", loc.chieu);
   return t.toString();
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * §4.2 — SẮP XẾP BẢNG DANH SÁCH ("cột có thể sắp xếp (icon ⇅)")
+ *
+ * CHỈ HAI CỘT, vì máy chủ chỉ sắp được hai: `created_at` và `code` (`SapXepNhiemVu`,
+ * `service-petitions/internal/store/nhiem_vu.go:92-95`). Vì sao các cột khác không có mũi tên nằm
+ * ở `PHAN_CHUA_DUNG`. Một mũi tên sắp theo trang đang mở — chỉ 20 dòng — sẽ trông như sắp cả sổ
+ * trong khi chỉ xếp lại một lát cắt tuỳ con trỏ, nên không có mũi tên nào sắp ở trình duyệt.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+const MOI_COT_SAP_XEP: readonly CotSapXepNhiemVu[] = ["created_at", "code"];
+
+function laCotSapXep(s: string): s is CotSapXepNhiemVu {
+  return (MOI_COT_SAP_XEP as readonly string[]).includes(s);
+}
+
+/** Cách sắp đang áp dụng — cột và chiều, luôn đủ cả hai. */
+export type SapXepSo = { readonly cot: CotSapXepNhiemVu; readonly chieu: ChieuSapXepNhiemVu };
+
+/**
+ * Mặc định của máy chủ khi yêu cầu không mang `sort`/`order`: `created_at`, GIẢM DẦN — và giảm dần
+ * cho MỌI cột (`page.NewAllowlist(page.Desc, …)`, `store/nhiem_vu.go:92`).
+ *
+ * ⚠ BẢN SAO của một mặc định máy chủ, và cái giá được giới hạn thế này: bảng Danh sách LUÔN gửi cách
+ * sắp nó đang vẽ (`sapXepDayDu`), nên mũi tên trên đầu cột là đúng câu hỏi đã gửi đi — không phải một
+ * phỏng đoán về mặc định. Bản sao này chỉ quyết định màn hình gửi gì khi cán bộ chưa bấm cột nào.
+ */
+export const SAP_XEP_MAC_DINH: SapXepSo = { cot: "created_at", chieu: "desc" };
+
+/** Bộ lọc → cách sắp đủ hai vế. Thiếu vế nào thì lấy vế ấy của máy chủ, đúng như máy chủ làm. */
+export function sapXepDayDu(loc: {
+  readonly sapXep?: CotSapXepNhiemVu;
+  readonly chieu?: ChieuSapXepNhiemVu;
+}): SapXepSo {
+  return { cot: loc.sapXep ?? SAP_XEP_MAC_DINH.cot, chieu: loc.chieu ?? SAP_XEP_MAC_DINH.chieu };
+}
+
+/**
+ * Bấm tiêu đề một cột. Cùng cột ⇒ đảo chiều. Cột khác ⇒ chiều TỰ NHIÊN của cột ấy:
+ *   `code`        TĂNG DẦN — NV01, NV02… là thứ tự của chính quyển sổ (§4.3)
+ *   `created_at`  GIẢM DẦN — việc mới giao lên đầu, như lúc mở màn
+ *
+ * ⚠ ĐỔI CÁCH SẮP LÀ VỀ TRANG ĐẦU, và đó không phải lựa chọn giao diện: con trỏ mang `sort`/`order`
+ * bên trong và máy chủ trả 400 `invalid_cursor` cho con trỏ của một cách sắp khác
+ * (`core/page/page.go:456-457`). Hàm này chỉ trả cách sắp mới; màn hình đưa nó qua đúng lối đổi bộ
+ * lọc (`datLocMoi`), lối ấy đặt lại ngăn xếp con trỏ.
+ */
+export function bamCotSapXep(hienTai: SapXepSo, cot: CotSapXepNhiemVu): SapXepSo {
+  if (hienTai.cot === cot) return { cot, chieu: hienTai.chieu === "asc" ? "desc" : "asc" };
+  return { cot, chieu: cot === "code" ? "asc" : "desc" };
+}
+
+/** `aria-sort` của một tiêu đề cột — để trình đọc màn hình đọc đúng chiều. */
+export function ariaSapXep(
+  hienTai: SapXepSo,
+  cot: CotSapXepNhiemVu,
+): "ascending" | "descending" | "none" {
+  if (hienTai.cot !== cot) return "none";
+  return hienTai.chieu === "asc" ? "ascending" : "descending";
+}
+
+/** Nhãn hai cột sắp được — `Ngày giao` là `created_at`: lúc nhiệm vụ được giao cũng là lúc nó vào sổ. */
+export const NHAN_COT_MA = "Mã";
+export const NHAN_COT_NGAY_GIAO = "Ngày giao";
 
 /** Một dòng nhật ký đã dịch sang chữ để vẽ. */
 export type DongNhatKyHien = {
@@ -1137,6 +1291,35 @@ export function cauLoiDanhBaGiaoViec(thongBao: string): string {
     "việc lúc này thì nhiệm vụ không ghi người thực hiện, lãnh đạo giao việc hay chuyên viên theo " +
     "dõi — và lãnh đạo giao việc không ghi lại được sau khi tạo. Đóng biểu mẫu và mở lại trang " +
     "để thử đọc lại danh bạ."
+  );
+}
+
+/* ── Ô `Lãnh đạo giao việc` — CHỈ NGƯỜI CẦM `task.extend` ────────────────────────────────────
+ *
+ * Người ghi ở ô này là người DUYỆT đề nghị lùi hạn (ADR 0038), và cột ấy không sửa được sau khi tạo.
+ * Nên ô đọc danh bạ RIÊNG, lọc `permission=task.extend` (`layDanhBaChonNguoi`): gợi một người không
+ * cầm khoá ấy là tạo ra một nhiệm vụ không ai duyệt lùi hạn được, vĩnh viễn. Hai ô cán bộ còn lại đọc
+ * danh bạ cả xã như cũ.
+ *
+ * ĐÂY LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP: máy chủ kiểm lại lúc tạo rằng người được chọn là cán bộ
+ * đang hoạt động của xã (400 nguyên văn, commit 5af3d51), và kiểm `task.extend` lúc duyệt.
+ */
+
+/**
+ * Danh bạ đã lọc đọc được mà RỖNG: không ai trong xã đang cầm quyền duyệt gia hạn. Một câu thay cho
+ * một ô chọn rỗng — ô rỗng không lời đọc lên là "màn hình hỏng" — và nói hệ quả của việc giao lúc này.
+ */
+export const CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN =
+  "Hiện trong xã chưa có cán bộ nào được cấp quyền duyệt gia hạn, nên chưa có ai để chọn làm lãnh " +
+  "đạo giao việc. Giao việc lúc này thì nhiệm vụ không ghi lãnh đạo giao việc và không ai duyệt được " +
+  "đề nghị lùi hạn của nó. Người quản trị cấp quyền này ở màn Phân quyền.";
+
+/** Câu khi danh bạ lãnh đạo (đã lọc) đọc hỏng. Câu máy chủ đứng nguyên văn ở giữa. */
+export function cauLoiDanhBaLanhDao(thongBao: string): string {
+  return (
+    `Không tải được danh sách người có quyền duyệt gia hạn: ${thongBao} Ô Lãnh đạo giao việc chỉ ` +
+    "còn lựa chọn trống, và lãnh đạo giao việc không ghi lại được sau khi tạo. Đóng biểu mẫu và mở " +
+    "lại trang để thử đọc lại."
   );
 }
 
@@ -2000,7 +2183,18 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
     viSao:
       "Đặc tả vẽ hai ô ấy là hộp tìm kiếm gõ tên. Màn này dùng ô chọn thả xuống thường của trình " +
       "duyệt — cùng loại ô màn Phản ánh và Biên bản đang dùng — đổ từ danh bạ chọn người, có nhãn " +
-      "và đi được bằng bàn phím. Chỉ nhảy được theo chữ cái đầu, chưa lọc được theo một phần họ tên.",
+      "và đi được bằng bàn phím; ô `Lãnh đạo giao việc` chỉ gợi những người đang có quyền duyệt gia " +
+      "hạn. Chỉ nhảy được theo chữ cái đầu, chưa lọc được theo một phần họ tên.",
+  },
+  {
+    ten: "Sắp xếp theo `Hạn`, `Tên việc`, `Ưu tiên` và các cột khác của bảng Danh sách (§4.2)",
+    viSao:
+      "§4.2 cho mọi cột một mũi tên ⇅, nhưng máy chủ chỉ sắp được theo `Mã` và `Ngày giao` — hai " +
+      "cột có mũi tên trên bảng. `Hạn` có thể để trống, và phân trang theo mốc làm mất hẳn mọi việc " +
+      "không có hạn từ trang hai trở đi; cần việc trễ lên đầu thì dùng ô `Chỉ việc quá hạn`. `Tên " +
+      "việc` hay trích lời phản ánh của người dân, nên không đưa được lên đường dẫn. `Ưu tiên` là mã " +
+      "danh mục, xếp theo chữ cái sẽ ra một thứ tự không phải thứ tự của thang ưu tiên. Sắp lại " +
+      "trong trình duyệt chỉ xếp được 20 dòng đang hiện, trông như xếp cả sổ mà không phải.",
   },
   {
     ten: "KÉO-THẢ thẻ giữa các cột Kanban (§4.1)",

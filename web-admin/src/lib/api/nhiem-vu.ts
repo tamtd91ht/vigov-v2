@@ -33,7 +33,7 @@
  * nên `tsc` CHƯA đối chiếu những cái tên ấy với kiểu `truyVan` — gõ sai một tên thì máy chủ bỏ
  * qua nó và trả cả quyển sổ trong khi cán bộ tin mình đang xem một lát cắt. Vì thế mười cái tên
  * nằm trong ĐÚNG MỘT hàm và có bài kiểm đọc lại từng tên; nối chúng vào kiểu `truyVan` là việc
- * nên làm tiếp, ở đúng hàm ấy.
+ * nên làm tiếp, ở đúng hàm ấy. `sort` và `order` (thêm 27/09/2026) đã đi qua `thamSoTheoHopDong`.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
  * HAI BỘ LỌC CỦA §3 KHÔNG CÓ MẶT Ở ĐÂY VÀ SỰ VẮNG MẶT LÀ CHỦ Ý — máy chủ **TỪ CHỐI** chúng bằng
@@ -86,7 +86,7 @@ function duongDanNhiemVu(mau: string, ma: string): string {
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Bộ lọc của sổ nhiệm vụ — ĐÚNG mười tham số `locNhiemVuTuQuery` đọc, cộng phân trang.
+ * Bộ lọc của sổ nhiệm vụ — ĐÚNG mười tham số `locNhiemVuTuQuery` đọc, cộng sắp xếp và phân trang.
  *
  * KHÔNG CÓ `related` VÀ KHÔNG CÓ `soon`. Cả hai bị máy chủ TỪ CHỐI bằng 400 kèm lý do, nên một ô
  * lọc gửi chúng lên không phải "lọc không ăn" mà là "màn hình hỏng". Xem khối đầu tệp.
@@ -122,9 +122,27 @@ export type LocNhiemVu = {
   tim?: string;
   /** Chỉ việc đã quá hạn. Máy chủ chỉ nhận đúng chuỗi `true`. */
   chiTreHan?: boolean;
+  /**
+   * Cột sắp xếp — HAI giá trị, đúng danh sách trắng `SapXepNhiemVu`
+   * (`service-petitions/internal/store/nhiem_vu.go:92-95`). Kiểu lấy từ hợp đồng, nên máy chủ thêm
+   * hay bớt một cột là `tsc` đỏ ở đây. Vắng mặt = mặc định của máy chủ (`created_at`).
+   */
+  sapXep?: CotSapXepNhiemVu;
+  /** Chiều sắp xếp. Vắng mặt = mặc định của máy chủ, GIẢM DẦN cho mọi cột (`page.Desc`). */
+  chieu?: ChieuSapXepNhiemVu;
   limit?: number;
+  /**
+   * ⚠ CON TRỎ THUỘC VỀ ĐÚNG MỘT CÁCH SẮP XẾP. Máy chủ ghi `sort`/`order` vào trong con trỏ và TỪ CHỐI
+   * (400 `invalid_cursor`) một con trỏ gửi kèm cách sắp khác (`core/page/page.go:456-457`). Nên đổi
+   * `sapXep` hay `chieu` mà giữ con trỏ cũ là một trang lỗi — bên gọi phải về trang đầu.
+   */
   cursor?: string | null;
 };
+
+/** Hai cột máy chủ cho sắp — `petitions_get_tasks["truyVan"]["sort"]`, không gõ tay. */
+export type CotSapXepNhiemVu = NonNullable<petitions_get_tasks["truyVan"]["sort"]>;
+/** `asc` · `desc` — `petitions_get_tasks["truyVan"]["order"]`. */
+export type ChieuSapXepNhiemVu = NonNullable<petitions_get_tasks["truyVan"]["order"]>;
 
 /**
  * Gom TÊN tham số truy vấn về đúng một chỗ.
@@ -152,6 +170,12 @@ function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocNhiemVu): void {
   // `late` CHỈ NHẬN ĐÚNG CHUỖI `true`. Gửi `false` là **400**, không phải "không lọc" — nên ô
   // chưa tích thì tham số vắng mặt hẳn (`errLocTreHanNhiemVuKhongHopLe`).
   if (loc.chiTreHan === true) truyVan.set("late", "true");
+
+  // SẮP XẾP ĐI QUA `thamSoTheoHopDong`, không ghép chuỗi trần: hai tên này mới thêm, nên chúng là
+  // hai tên đầu tiên của hàm này được `tsc` đối chiếu với kiểu `truyVan` — cả tên lẫn giá trị.
+  const dat = thamSoTheoHopDong<petitions_get_tasks["truyVan"]>(truyVan);
+  dat("sort", loc.sapXep);
+  dat("order", loc.chieu);
 
   if (loc.limit !== undefined) truyVan.set("limit", String(loc.limit));
   // Con trỏ rỗng nghĩa là trang đầu. Gửi `cursor=` rỗng thì máy chủ trả 400 "con trỏ không hợp

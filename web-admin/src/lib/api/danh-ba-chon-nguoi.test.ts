@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { QUYEN_DUYET_GIA_HAN } from "@/lib/quyen";
+
 import { duongDanDanhBaChonNguoi, layDanhBaChonNguoi } from "./danh-ba-chon-nguoi";
 
 function batFetch(tra: Response) {
@@ -35,6 +37,20 @@ describe("danh bạ chọn người — GET /api/v1/staff-directory", () => {
   it("bộ phận rỗng hoặc toàn khoảng trắng: tham số vắng mặt hẳn, không gửi `unit=` rỗng", () => {
     expect(duongDanDanhBaChonNguoi("")).toBe("/api/v1/staff-directory");
     expect(duongDanDanhBaChonNguoi("   ")).toBe("/api/v1/staff-directory");
+  });
+
+  it("lọc người cầm quyền duyệt gia hạn: gửi `permission=task.extend`, chỉ khi được yêu cầu", async () => {
+    const gia = batFetch(
+      new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    await layDanhBaChonNguoi(undefined, QUYEN_DUYET_GIA_HAN);
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/staff-directory?permission=task.extend");
+    // Không truyền quyền thì tham số VẮNG MẶT HẲN — máy chủ từ chối `permission=` rỗng.
+    expect(duongDanDanhBaChonNguoi()).toBe("/api/v1/staff-directory");
+    expect(duongDanDanhBaChonNguoi("01JBOPHAN")).not.toContain("permission");
   });
 
   it("không một chỗ nào mang `tenant_id` — xã suy từ `Host`", () => {

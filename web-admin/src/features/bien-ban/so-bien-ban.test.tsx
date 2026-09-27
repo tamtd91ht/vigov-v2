@@ -111,6 +111,7 @@ function phepTach(sua: Partial<PhepTach> = {}): PhepTach {
   return {
     danhMuc: { loai: [], mucUuTien: [], khoi: [], boPhan: [] },
     danhBa: null,
+    danhBaLanhDao: null,
     dangGui: false,
     moOKetLuan: null,
     loi: null,

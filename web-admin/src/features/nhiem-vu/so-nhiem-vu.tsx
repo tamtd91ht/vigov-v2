@@ -40,9 +40,11 @@ import {
   suaNhiemVu,
   taoNhiemVu,
   xoaNhiemVu,
+  type CotSapXepNhiemVu,
   type LocNhiemVu,
 } from "@/lib/api/nhiem-vu";
 import { layTrangThaiNhiemVu } from "@/lib/api/trang-thai-nhiem-vu";
+import { QUYEN_DUYET_GIA_HAN } from "@/lib/quyen";
 import type {
   identity_boPhanRa,
   identity_danhBaChonNguoiRa,
@@ -60,6 +62,7 @@ import type {
 
 import {
   CANH_BAO_HAN_MOT_LAN,
+  CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN,
   CAU_LIEN_KET_HANG_CHO,
   CAU_LOC_TRANG_THAI_KHONG_CO_COT,
   CAU_THIEU_QUYEN_DUYET_HOAN_THANH,
@@ -85,6 +88,7 @@ import {
   LY_DO_KHONG_SUA_CHU_TRI,
   LY_DO_KHONG_SUA_HAN,
   LY_DO_KHONG_SUA_MA,
+  LY_DO_TRA_LAI_TOI_DA,
   MOI_BO_PHAN_NHAN,
   MOI_KHOI_NHAN,
   MOI_LOAI_NHAN,
@@ -98,6 +102,10 @@ import {
   MO_TA_FORM_GIAO_VIEC,
   NHAN_CHE_DO_DANH_SACH,
   NHAN_CHE_DO_KANBAN,
+  NHAN_COT_MA,
+  NHAN_COT_NGAY_GIAO,
+  NHAN_LY_DO_TRA_LAI,
+  NHAN_NUT_TRA_LAI,
   NHAN_NUT_HUY,
   NHAN_NUT_LUU,
   NHAN_NUT_SUA,
@@ -116,8 +124,11 @@ import {
   TRANG_THAI_CHINH,
   TRANG_THAI_RE_NHANH,
   TRICH_YEU_VAN_BAN_TOI_DA,
+  ariaSapXep,
+  bamCotSapXep,
   canDocLaiTruocKhiLuu,
   cauLoiDanhBaGiaoViec,
+  cauLoiDanhBaLanhDao,
   cauLoiDanhBaLoc,
   canhBaoSua,
   canhBaoVanBan,
@@ -133,6 +144,7 @@ import {
   dongCuaNhom,
   dongVanBan,
   duocBamChuyen,
+  duocTraLai,
   duongDanTuLoc,
   formSuaTuChiTiet,
   locTuDuongDan,
@@ -141,8 +153,11 @@ import {
   nhanCanBoNgan,
   quyenNhiemVu,
   ghiChuKanbanReNhanh,
+  ghiChuTraLai,
+  laBuocTraLai,
   loiSauKhiDocLai,
   lyDoKhoaSua,
+  yeuCauTraLai,
   hoanThanhTreHan,
   mocCuoiNgay,
   nhanBoDem,
@@ -159,10 +174,12 @@ import {
   oHan,
   placeholderNhomVanBan,
   quyetDinhDuyetLuiHan,
+  sapXepDayDu,
   thanGiaoViec,
   thanSuaNhiemVu,
   theoThuTuXa,
   type BangNhanTrangThai,
+  type SapXepSo,
   type DongVanBanNhap,
   type DongVanBanSua,
   type FormSuaNhiemVu,
@@ -261,6 +278,22 @@ function taiCot(
 type BoLoc = Omit<LocNhiemVu, "limit" | "cursor">;
 
 const KHONG_LOC: BoLoc = {};
+
+/**
+ * Bấm tiêu đề một cột sắp được của bảng §4.2 → bộ lọc mới VÀ ngăn xếp con trỏ mới.
+ *
+ * TRẢ CẢ HAI, KHÔNG CHỈ BỘ LỌC, vì hai thứ ấy không tách được: con trỏ mang `sort`/`order` bên trong
+ * và máy chủ trả 400 `invalid_cursor` cho con trỏ của một cách sắp khác (`core/page/page.go:456-457`).
+ * Đang ở trang 3 mà đổi thứ tự rồi giữ con trỏ trang 3 là một trang lỗi — nên hàm này trả thẳng
+ * `TRANG_DAU`, và chỗ gọi không có cách nào quên nó.
+ */
+export function bamSapXep(
+  loc: BoLoc,
+  cot: CotSapXepNhiemVu,
+): { readonly loc: BoLoc; readonly nganXep: NganXepConTro } {
+  const moi = bamCotSapXep(sapXepDayDu(loc), cot);
+  return { loc: { ...loc, sapXep: moi.cot, chieu: moi.chieu }, nganXep: TRANG_DAU };
+}
 
 /**
  * `useSyncExternalStore` đòi một hàm đăng ký. Màn này CỐ Ý không nghe `popstate`: đường dẫn chỉ là
@@ -413,6 +446,9 @@ export function SoNhiemVu() {
   // `null` = chưa đọc xong. Giữ NGUYÊN `KetQua`: ô chọn cán bộ phải nói được câu lỗi của máy chủ,
   // và phải phân biệt "đang tải" với "tải hỏng" (`docDanhBaChonNguoi`).
   const [kqDanhBa, datKqDanhBa] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
+  // Danh bạ RIÊNG của ô `Lãnh đạo giao việc`: chỉ người cầm `task.extend` (ADR 0038). Cùng ba pha.
+  const [kqDanhBaLanhDao, datKqDanhBaLanhDao] =
+    useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
 
   const [drawer, guiDrawer] = useReducer(chuyenDrawer, null);
   const [loiGhi, datLoiGhi] = useState<string | null>(null);
@@ -452,7 +488,16 @@ export function SoNhiemVu() {
     // thay vì năm, và lời gọi thứ sáu đọc một trang không ai vẽ ra.
     if (cheDoXem !== "danh-sach") return;
     let bo = false;
-    laySoNhiemVu({ ...loc, limit: SO_DONG_MOI_TRANG, cursor: nganXep.hienTai }).then((kq) => {
+    // CÁCH SẮP LUÔN ĐI TRÊN DÂY, kể cả khi cán bộ chưa bấm cột nào: mũi tên trên đầu cột vẽ từ
+    // `sapXepDayDu(loc)`, nên gửi đúng giá trị ấy là điều kiện để mũi tên nói thật về câu hỏi đã gửi.
+    const sx = sapXepDayDu(loc);
+    laySoNhiemVu({
+      ...loc,
+      sapXep: sx.cot,
+      chieu: sx.chieu,
+      limit: SO_DONG_MOI_TRANG,
+      cursor: nganXep.hienTai,
+    }).then((kq) => {
       if (!bo) datDaTai({ khoa, kq });
     });
     return () => {
@@ -513,6 +558,11 @@ export function SoNhiemVu() {
     // kia lại, và ngược lại.
     layDanhBaChonNguoi().then((kq) => {
       if (!bo) datKqDanhBa(kq);
+    });
+    // Lời gọi THỨ HAI, không lọc tại chỗ từ lời gọi trên: danh bạ không mang quyền của ai, và chỉ
+    // `identity` biết ai đang cầm `task.extend` trong xã.
+    layDanhBaChonNguoi(undefined, QUYEN_DUYET_GIA_HAN).then((kq) => {
+      if (!bo) datKqDanhBaLanhDao(kq);
     });
     return () => {
       bo = true;
@@ -605,6 +655,7 @@ export function SoNhiemVu() {
         <FormGiaoViec
           danhMuc={danhMuc}
           danhBa={kqDanhBa}
+          danhBaLanhDao={kqDanhBaLanhDao}
           // `POST /api/v1/tasks` nhận `documents`; màn Biên bản thì không — xem prop.
           coDanhSachVanBan
           dangGui={dangGui}
@@ -720,6 +771,12 @@ export function SoNhiemVu() {
             moNhiemVu={(n) => {
               guiDrawer({ loai: "mo", nhiemVu: n });
               datLoiGhi(null);
+            }}
+            sapXep={sapXepDayDu(loc)}
+            doiSapXep={(cot) => {
+              const moi = bamSapXep(loc, cot);
+              datLocDaDoi(moi.loc);
+              datNganXep(moi.nganXep);
             }}
           />
           <p className="ghi-chu">{nhanBoDem(so.duLieu.items.length)}</p>
@@ -1256,21 +1313,42 @@ export function TheNhiemVu({
 }
 
 /**
- * Nền hồng rất nhạt của hàng quá hạn (§4.2).
- *
- * MỘT GIÁ TRỊ INLINE, KHÔNG PHẢI MỘT LỚP CSS, và đó là giới hạn của lượt này chứ không phải một lựa
- * chọn đáng giữ: lượt này không được sửa `globals.css`. `#fef3f2` là CÙNG màu nền `.khoi-chua-khai`
- * đang dùng (`globals.css`), nên không thêm màu mới nào vào bảng màu. Ngày có lớp `.dong-qua-han`
- * thì thay hằng này bằng lớp ấy — `data-tre-han` trên dòng đã là chỗ bám sẵn cho nó.
- *
- * MÀU KHÔNG PHẢI TÍN HIỆU DUY NHẤT (a11y): cùng dòng ấy, cột Hạn đã có chữ `(trễ N ngày)`. Độ tương
- * phản của chữ đỏ `--do-loi` (`#b42318`) trên `#fef3f2` khoảng 6:1, trên ngưỡng 4.5:1; chữ thường
- * còn tối hơn.
+ * Tiêu đề một cột sắp được của bảng §4.2 — `aria-sort` cho trình đọc màn hình, một `<button>` để đi
+ * được bằng bàn phím, và mũi tên bằng CHỮ (`↑`/`↓`/`⇅`) chứ không bằng màu. Cùng khuôn ô tiêu đề sắp
+ * của danh bạ cán bộ (`features/cau-hinh/danh-ba-can-bo.tsx`, lớp `.nut-sap-xep` dùng chung).
  */
-const NEN_DONG_TRE_HAN = { backgroundColor: "#fef3f2" } as const;
+function OTieuDeSapXepNhiemVu({
+  cot,
+  nhan,
+  sapXep,
+  doiSapXep,
+}: {
+  cot: CotSapXepNhiemVu;
+  nhan: string;
+  sapXep: SapXepSo;
+  doiSapXep: (cot: CotSapXepNhiemVu) => void;
+}) {
+  const aria = ariaSapXep(sapXep, cot);
+  const mui = aria === "ascending" ? " ↑" : aria === "descending" ? " ↓" : " ⇅";
+  return (
+    <th scope="col" aria-sort={aria}>
+      <button type="button" className="nut-sap-xep" onClick={() => doiSapXep(cot)}>
+        {nhan}
+        {mui}
+      </button>
+    </th>
+  );
+}
 
 /**
  * Bảng Danh sách §4.2.
+ *
+ * HÀNG QUÁ HẠN: lớp `.dong-qua-han` (`globals.css`), bám vào đúng điều kiện `data-tre-han` đang đánh
+ * dấu. Màu không phải tín hiệu duy nhất — cùng dòng ấy cột Hạn có chữ `(trễ N ngày)`.
+ *
+ * CỘT `Ngày giao` KHÔNG CÓ TRONG BẢNG CỘT §4.2, và nó có mặt vì một lý do: §4.2 đòi cột sắp được, mà
+ * máy chủ chỉ sắp được theo `code` và `created_at`. Một cách sắp không có cột nào hiện giá trị của nó
+ * là một thứ tự cán bộ không kiểm được bằng mắt.
  *
  * KHÔNG CÓ CỘT Ô TICK: `Xoá đã chọn` không có tuyến nào (xem `PHAN_CHUA_DUNG`), và một ô tick
  * không dẫn tới thao tác nào là một ô tick mời cán bộ chọn hai mươi dòng rồi không tìm thấy nút.
@@ -1278,7 +1356,6 @@ const NEN_DONG_TRE_HAN = { backgroundColor: "#fef3f2" } as const;
  * KHÔNG CÓ CHIP `{n} việc con`: phản hồi không mang số việc con, và đếm trong trang đang mở cho ra
  * một con số PHỤ THUỘC VÀO TRANG.
  *
- * HÀNG QUÁ HẠN TÔ NỀN HỒNG RẤT NHẠT (§4.2) — xem `NEN_DONG_TRE_HAN`.
  */
 export function BangNhiemVu({
   nhiemVu,
@@ -1289,6 +1366,8 @@ export function BangNhiemVu({
   bayGio,
   maDangMo,
   moNhiemVu,
+  sapXep,
+  doiSapXep,
 }: {
   nhiemVu: readonly petitions_nhiemVuRa[];
   danhMuc: DanhMucNhiemVu;
@@ -1299,6 +1378,10 @@ export function BangNhiemVu({
   bayGio: Date;
   maDangMo: string | null;
   moNhiemVu: (n: petitions_nhiemVuRa) => void;
+  /** Cách sắp ĐÃ GỬI cho trang này (`sapXepDayDu`). Bắt buộc: mũi tên phải nói đúng câu hỏi đã gửi. */
+  sapXep: SapXepSo;
+  /** Bấm một tiêu đề sắp được. Bên gọi đưa về trang đầu — xem `bamSapXep`. */
+  doiSapXep: (cot: CotSapXepNhiemVu) => void;
 }) {
   if (nhiemVu.length === 0) return <p className="trang-thai-rong">{SO_RONG}</p>;
 
@@ -1307,8 +1390,19 @@ export function BangNhiemVu({
       <table className="bang-danh-muc">
         <thead>
           <tr>
-            <th scope="col">Mã</th>
+            <OTieuDeSapXepNhiemVu
+              cot="code"
+              nhan={NHAN_COT_MA}
+              sapXep={sapXep}
+              doiSapXep={doiSapXep}
+            />
             <th scope="col">Tên việc</th>
+            <OTieuDeSapXepNhiemVu
+              cot="created_at"
+              nhan={NHAN_COT_NGAY_GIAO}
+              sapXep={sapXep}
+              doiSapXep={doiSapXep}
+            />
             <th scope="col">Người thực hiện</th>
             <th scope="col">Bộ phận</th>
             <th scope="col">Ưu tiên</th>
@@ -1328,12 +1422,15 @@ export function BangNhiemVu({
                 // SUY RA từ `due_at` so với bây giờ — cùng phép `oHan` cột Hạn dùng, không đọc cột
                 // cờ nào (luật 10, bất biến 3). Nên nền hồng và chữ `(trễ N ngày)` không lệch nhau.
                 data-tre-han={o.phanTre !== "" ? "" : undefined}
-                style={o.phanTre !== "" ? NEN_DONG_TRE_HAN : undefined}
+                className={o.phanTre !== "" ? "dong-qua-han" : undefined}
               >
                 <td className="ma-muc">{n.code}</td>
                 <td>
                   {n.title}
                   <span className="dong-phu">{nhanNguonGiao(n.source)}</span>
+                </td>
+                <td>
+                  <time dateTime={n.created_at}>{nhanNgay(n.created_at)}</time>
                 </td>
                 <td>{nhanCanBoNgan(n.assignee, danhBa, CHUA_PHAN_CONG)}</td>
                 <td>{n.unit === "" ? O_TRONG : (tenBoPhan.get(n.unit) ?? n.unit)}</td>
@@ -1455,7 +1552,12 @@ export function ChiTietNhiemVu({
     quyen.duyetGiaHan,
   );
   const buocChuyen = MOI_TRANG_THAI.filter((t) => chuyenSangDuoc(nhiemVu.status, t));
-  const buocBamDuoc = buocChuyen.filter((t) => duocBamChuyen(quyen, t));
+  // Bước trả lại KHÔNG phải một nút `Chuyển sang …`: nó cần lý do bắt buộc, nên có khối riêng.
+  // Để nó lọt vào hàng nút thường là cho một cú bấm gửi lý do rỗng — đúng câu 400 của máy chủ.
+  const coBuocTraLai = buocChuyen.some((t) => laBuocTraLai(nhiemVu.status, t));
+  const buocBamDuoc = buocChuyen.filter(
+    (t) => !laBuocTraLai(nhiemVu.status, t) && duocBamChuyen(quyen, t),
+  );
 
   return (
     <div className="khoi-chi-tiet" aria-labelledby="tieu-de-chi-tiet-nhiem-vu">
@@ -1671,6 +1773,11 @@ export function ChiTietNhiemVu({
         </div>
       )}
 
+      {/* `key` theo mã: mở một nhiệm vụ khác thì lý do đang gõ dở không đi theo sang việc ấy. */}
+      {coBuocTraLai && duocTraLai(quyen) && (
+        <KhoiTraLai key={nhiemVu.code} nhanTT={nhanTT} dangGui={dangGui} gui={doiTrangThai} />
+      )}
+
       <KhoiLuiHan
         congDuyet={congDuyet}
         coQuyenDeNghi={quyen.capNhat}
@@ -1710,6 +1817,59 @@ export function ChiTietNhiemVu({
       </form>
       )}
     </div>
+  );
+}
+
+/**
+ * "Trả lại để làm tiếp" — `cho-duyet` → `dang-thuc-hien`, kèm LÝ DO BẮT BUỘC (`yeuCauTraLai`).
+ *
+ * MỘT Ô RIÊNG, KHÔNG DÙNG Ô `Ghi chú (không bắt buộc)` CỦA KHỐI TRÊN: cùng trường `note` trên dây,
+ * nhưng một ô ghi "không bắt buộc" không thể đồng thời là lý do bắt buộc của bước này. Nút khoá khi ô
+ * rỗng hoặc toàn khoảng trắng — cùng phép cắt máy chủ dùng (`KiemLyDoTraLai`).
+ *
+ * Bên gọi chỉ vẽ khối này khi vòng đời có bước ấy VÀ tài khoản cầm `task.update` + `task.approve`
+ * (`duocTraLai`). Câu từ chối của máy chủ — 403 thiếu quyền, 400 thiếu lý do — ra nguyên văn ở
+ * `loiGhi` của drawer, như mọi lần chuyển trạng thái khác.
+ */
+export function KhoiTraLai({
+  nhanTT,
+  dangGui,
+  gui,
+}: {
+  /** Nhãn của xã — tên trạng thái đích trong câu giải thích. */
+  nhanTT: BangNhanTrangThai;
+  dangGui: boolean;
+  gui: (trangThai: string, ghiChu: string) => void;
+}) {
+  const [lyDo, datLyDo] = useState("");
+  const yeuCau = yeuCauTraLai(lyDo);
+
+  return (
+    <form
+      className="form-danh-muc"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (yeuCau !== null) gui(yeuCau.trangThai, yeuCau.ghiChu);
+      }}
+    >
+      <h4>{NHAN_NUT_TRA_LAI}</h4>
+      <p className="ghi-chu">{ghiChuTraLai(nhanTT)}</p>
+      <div className="o-nhap">
+        <label htmlFor="ly-do-tra-lai">{NHAN_LY_DO_TRA_LAI}</label>
+        <textarea
+          id="ly-do-tra-lai"
+          name="ly-do-tra-lai"
+          rows={3}
+          required
+          maxLength={LY_DO_TRA_LAI_TOI_DA}
+          value={lyDo}
+          onChange={(e) => datLyDo(e.target.value)}
+        />
+      </div>
+      <button type="submit" className="nut-phu" disabled={dangGui || yeuCau === null}>
+        {NHAN_NUT_TRA_LAI}
+      </button>
+    </form>
   );
 }
 
@@ -2276,6 +2436,7 @@ export function KhoiLuiHan({
 export function FormGiaoViec({
   danhMuc,
   danhBa,
+  danhBaLanhDao,
   coDanhSachVanBan = false,
   dangGui,
   loi,
@@ -2290,6 +2451,12 @@ export function FormGiaoViec({
    * chọn: bên gọi quên truyền thì `tsc` đỏ, thay vì một form có ba ô chọn rỗng không lời giải thích.
    */
   danhBa: KetQua<identity_danhBaChonNguoiRa> | null;
+  /**
+   * Danh bạ ĐÃ LỌC `permission=task.extend` cho riêng ô `Lãnh đạo giao việc` — người ghi ở đó là
+   * người duyệt lùi hạn (ADR 0038). Cùng ba pha với `danhBa`. BẮT BUỘC vì cùng lý do: một bên gọi
+   * quên truyền thì `tsc` đỏ, thay vì ô ấy lặng lẽ gợi cả xã — kể cả người không bao giờ duyệt được.
+   */
+  danhBaLanhDao: KetQua<identity_danhBaChonNguoiRa> | null;
   /**
    * Vẽ và gửi ba danh sách văn bản §7.2. CHỈ màn Nhiệm vụ bật.
    *
@@ -2361,6 +2528,11 @@ export function FormGiaoViec({
   const hienVanBan = theoVanBan && coDanhSachVanBan;
   const chanVanBan = hienVanBan ? canhBaoVanBan(vanBan) : null;
   const db = docDanhBaChonNguoi(danhBa);
+  const dbLanhDao = docDanhBaChonNguoi(danhBaLanhDao);
+  // Đọc được mà rỗng: không ai trong xã cầm `task.extend`. Một câu thay cho một ô chọn rỗng.
+  const khongAiDuyetDuoc = !dbLanhDao.dangTai && dbLanhDao.loi === null && dbLanhDao.ds.length === 0;
+  // Danh bạ nào CÒN ĐANG TẢI thì khoá nút gửi — xem chú thích ở nút `Giao việc`.
+  const dangTaiDanhBa = db.dangTai || dbLanhDao.dangTai;
 
   function themVanBan(nhom: NhomVanBan) {
     demKhoaVanBan.current += 1;
@@ -2381,7 +2553,7 @@ export function FormGiaoViec({
 
   function gui(e: FormEvent) {
     e.preventDefault();
-    if (tieuDe.trim() === "" || loaiChon === "" || chanVanBan !== null || db.dangTai) return;
+    if (tieuDe.trim() === "" || loaiChon === "" || chanVanBan !== null || dangTaiDanhBa) return;
 
     const than: petitions_taoNhiemVuVao = thanGiaoViec(
       {
@@ -2552,22 +2724,42 @@ export function FormGiaoViec({
         dat={datNguoiThucHien}
       />
 
-      <OChonCanBo
-        id="giao-lanh-dao"
-        nhan="Lãnh đạo giao việc"
-        nhanTrong={nhanTrongOChonCanBo(db, CHUA_XAC_DINH)}
-        giaTri={lanhDaoGiaoViec}
-        danhBa={db.ds}
-        khoa={db.dangTai}
-        dat={datLanhDaoGiaoViec}
-      />
+      {/* LÃNH ĐẠO GIAO VIỆC — CHỈ NGƯỜI CẦM `task.extend` (`danhBaLanhDao`). Ba ca có chữ: đọc hỏng
+          (câu máy chủ nguyên văn), đọc được mà rỗng (không ai cầm quyền — một câu, không một ô rỗng),
+          còn lại là ô chọn. */}
+      {dbLanhDao.loi !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {cauLoiDanhBaLanhDao(dbLanhDao.loi)}
+        </p>
+      )}
+      {khongAiDuyetDuoc ? (
+        <div className="o-nhap">
+          <span>Lãnh đạo giao việc</span>
+          <p className="ghi-chu" id="giao-lanh-dao-trong">
+            {CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN}
+          </p>
+        </div>
+      ) : (
+        <OChonCanBo
+          id="giao-lanh-dao"
+          nhan="Lãnh đạo giao việc"
+          nhanTrong={nhanTrongOChonCanBo(dbLanhDao, CHUA_XAC_DINH)}
+          giaTri={lanhDaoGiaoViec}
+          danhBa={dbLanhDao.ds}
+          khoa={dbLanhDao.dangTai}
+          dat={datLanhDaoGiaoViec}
+        />
+      )}
       {/* KHÔNG CHỈ LÀ NƠI NHẬN THÔNG BÁO: ô này quyết định AI DUYỆT ĐƯỢC ĐỀ NGHỊ LÙI HẠN (ADR
           0038), và bỏ trống nghĩa là KHÔNG AI duyệt được — vĩnh viễn, vì `PATCH` cố ý không sửa
           được cột này. Câu ấy đứng cạnh ô chứ không nằm trong tài liệu. */}
-      <p className="ghi-chu">
-        {GHI_CHU_LANH_DAO_GIAO_VIEC} Bỏ trống thì không ai duyệt được đề nghị lùi hạn của nhiệm vụ
-        này, và ô này không sửa lại được sau khi tạo.
-      </p>
+      {/* Không ai để chọn thì câu `CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN` đã nói đủ hệ quả ấy. */}
+      {!khongAiDuyetDuoc && (
+        <p className="ghi-chu">
+          {GHI_CHU_LANH_DAO_GIAO_VIEC} Bỏ trống thì không ai duyệt được đề nghị lùi hạn của nhiệm vụ
+          này, và ô này không sửa lại được sau khi tạo.
+        </p>
+      )}
 
       {theoVanBan && (
         <OChonCanBo
@@ -2651,7 +2843,7 @@ export function FormGiaoViec({
             tieuDe.trim() === "" ||
             loaiChon === "" ||
             chanVanBan !== null ||
-            db.dangTai
+            dangTaiDanhBa
           }
         >
           Giao việc

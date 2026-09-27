@@ -111,6 +111,19 @@ describe("MƯỜI TÊN THAM SỐ — đọc lại từng cái một", () => {
     expect(duongDanSoNhiemVu({ cursor: "" })).not.toContain("cursor");
   });
 
+  it("sắp xếp: `sort` và `order` đúng tên hợp đồng; không chọn gì thì vắng mặt hẳn", () => {
+    const q = new URL(
+      duongDanSoNhiemVu({ sapXep: "code", chieu: "asc", limit: 20 }),
+      "https://xa.example",
+    ).searchParams;
+    expect(q.get("sort")).toBe("code");
+    expect(q.get("order")).toBe("asc");
+    expect(duongDanSoNhiemVu({ limit: 20 })).toBe("/api/v1/tasks?limit=20");
+    // Chỉ hai cột máy chủ nhận — `han_xu_ly` bị từ chối vì là cột NULL (store/nhiem_vu.go:83-85).
+    // @ts-expect-error — `sapXep` chỉ nhận `created_at` | `code`.
+    duongDanSoNhiemVu({ sapXep: "due_at" });
+  });
+
   it("đường dẫn tương đối, không host, không `tenant_id`", () => {
     const duong = duongDanSoNhiemVu({ trangThai: "moi-giao" });
     expect(duong.startsWith("/api/")).toBe(true);
@@ -276,6 +289,14 @@ describe("thân của sáu tuyến ghi", () => {
     expect(than(gia2)).toEqual({ status: "hoan-thanh", note: "đã nghiệm thu" });
   });
 
+  it("trả lại để làm tiếp: `dang-thuc-hien` KÈM lý do trong `note`", async () => {
+    // Cùng tuyến, cùng thân — máy chủ nhận ra bước trả lại từ trạng thái HIỆN TẠI của dòng
+    // (`app/nhiem_vu.go:1062`), không từ một trường riêng của yêu cầu.
+    const gia = batFetch(OK_JSON());
+    await doiTrangThaiNhiemVu("NV19", "dang-thuc-hien", "Thiếu biên bản nghiệm thu");
+    expect(than(gia)).toEqual({ status: "dang-thuc-hien", note: "Thiếu biên bản nghiệm thu" });
+  });
+
   it("xoá: DELETE có THÂN mang lý do, và 204 không thân vẫn là thành công", async () => {
     // Lý do bắt buộc (luật 7, bất biến 1). Đưa nó vào query string sẽ đẩy chữ tự do về một hồ sơ
     // của cơ quan nhà nước vào mọi log truy cập.
@@ -357,6 +378,37 @@ describe("câu từ chối của máy chủ đi NGUYÊN VĂN ra ngoài", () => {
       ok: false,
       thongBao: cau,
     });
+  });
+
+  it("tạo nhiệm vụ, lãnh đạo giao việc không hợp lệ (400) hoặc identity không trả lời (503): câu nguyên văn", async () => {
+    // Commit 5af3d51: máy chủ kiểm người được chọn là cán bộ đang hoạt động của xã lúc TẠO.
+    for (const [ma, code, cau] of [
+      [
+        400,
+        "invalid_request",
+        "Người được chọn làm lãnh đạo giao việc không hợp lệ. Hãy chọn người khác trong danh sách.",
+      ],
+      [
+        503,
+        "assignee_check_unavailable",
+        // Nguyên văn `service-petitions/internal/http/nhiem_vu_ghi.go:706-708`.
+        "Chưa kiểm tra được lãnh đạo giao việc nên nhiệm vụ CHƯA được tạo. Vui lòng thử lại sau ít phút.",
+      ],
+    ] as const) {
+      batFetch(
+        new Response(JSON.stringify({ code, message: cau, trace_id: "01JTRACE" }), {
+          status: ma,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      expect(
+        await taoNhiemVu(
+          { auto_code: true, type: "co-ban", title: "Việc giả", assigner: "CB-GIA" },
+          "khoa-gia",
+        ),
+      ).toEqual({ ok: false, thongBao: cau });
+      vi.unstubAllGlobals();
+    }
   });
 
   it("404 KHÔNG được dựng lại sự phân biệt ba nguyên nhân", async () => {
