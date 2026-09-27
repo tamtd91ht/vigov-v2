@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-09-26",
+  "cap_nhat": "2026-09-27",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -235,6 +235,23 @@
       "bang_chung": "migrations/0011_tai_khoan_zalo_va_phien_chua_co_so.sql: bảng tai_khoan_zalo (@entity ZaloAccount, cross-tenant, khoá (app_id, băm SHA-256 mã Zalo)), phien_cong_dan thêm tai_khoan_zalo_id, nới NOT NULL cong_dan_id kèm CHECK phien_cong_dan_co_chu_the. domain/cau_phien.go ChonXa = bảng §Chế độ. app/cau_phien_cong_dan.go: ResolveMiniApp → xã đã nhớ → GetTenant với xã trong ngữ cảnh → MỘT giao dịch (tài khoản khoá dòng, danh tính theo số, nhớ xã + thu hồi phiên cũ, phiên mới, ba loại vết mo_phien_cong_dan / doi_xa_da_nho / lien_ket_dinh_danh_zalo, chủ thể = mã danh tính hoặc mã tài khoản Zalo, loại citizen). store/crosstenant/tai_khoan_zalo.go, store/phien_cong_dan.go TaoQuaCau + ThuHoiCuaTaiKhoanZalo. grpc/cau_phien.go CauServer; cmd/server/main.go dungCongCau (khoá cầu → xã, CHỈ một dịch vụ). go vet + go test ./... xanh ở core và bảy dịch vụ; ca đột biến (bỏ thu hồi, bỏ chặn xung đột) làm đỏ cau_phien_cong_dan_test.go. CÁC CA cau_phien_pg_test.go BỊ BỎ QUA: không có VIGOV_TEST_DSN, không PostgreSQL, Docker không chạy — migration 0011 CHƯA CHẠY TRÊN CSDL THẬT — kiểm 2026-09-25",
       "no_confirm": [],
       "tiep_theo": "(1) Chạy cau_phien_pg_test.go và migration 0011 với VIGOV_TEST_DSN trước khi coi là xong. (2) Đổi xã thu hồi phiên cũ THEO TÀI KHOẢN ZALO, không theo token cũ: trả lời CÒN MỞ #3 nói yêu cầu mang token cũ, nhưng hợp đồng citizen_session_bridge.proto không có trường ấy — việc của contract-designer nếu vẫn muốn thêm. (3) proto chưa ghi: tên metadata khoá cầu x-vigov-bridge-key (core/grpcx.MetadataBridgeKey); citizen_id rỗng nay nghĩa là chưa xác thực số (CitizenSessionPrincipal); phản hồi không xã không có token; mã ABORTED khi xã đã nhớ vừa đổi; hai chú thích 'NOT ADDED BY THIS CONTRACT' về miễn xã nay đã cũ. (4) Manifest + NetworkPolicy cổng cầu: chỉ pod vihat-miniapp tới CITIZEN_SESSION_BRIDGE_LISTEN_ADDR, Secret CITIZEN-SESSION-BRIDGE-KEYS, ConfigMap CITIZEN-SESSION-BRIDGE-LISTEN-ADDR và CITIZEN-SESSION-TTL; identity phải gọi được platform ResolveMiniApp/GetTenant (đã có đường 9090). Bảng map deploy/cau-hinh/README.md cần ba dòng. (5) Vòng đời xoay khoá cầu (CÒN MỞ #5) chưa chốt — luật 8 bất biến 6 còn nợ con số. (6) Phiên không xã: chưa phát, vì bảng vết chưa thuộc xã của câu #25 chưa dựng; lời gọi không xã không ghi gì, kể cả số đã xác thực. (7) kb/30-indexes/transaction-boundaries.json mục phat_hanh_phien_cong_dan_qua_cau_mini_app còn ghi 'CHUA CAI DAT' và chưa có bước thu hồi phiên cũ"
+    },
+    {
+      "id": "tuyen-cong-khai-mini-app",
+      "viec": "Tuyến CÔNG KHAI cho Mini App: GET /api/v1/communes?host= (thôi CitizenOnly) + GET /api/v1/commune-staff?host=",
+      "trang_thai": "xong",
+      "bang_chung": "236265b (+ @consumer citizen-app ở f645dfe). Người dùng chốt 27/09: tin xã và danh bạ CÔNG KHAI theo đặc tả 12:117 (đảo quyết định CitizenOnly cùng ngày sau khi được nêu mâu thuẫn); xã tra từ host= qua platform XaTheoHost, không nhận tenant_id, không trả ULID; /communes công khai để bỏ phụ thuộc bảng vết phiên chưa thuộc xã (#25) cho luồng QR. commune-staff: hien_tren_mini_app + dấu đồng ý (#12) + dang_hoat_dong + chưa xoá mềm; trường full_name, position, department_name, phone, mobile, has_zalo (người dùng chọn gồm cả di động). go test -p 1 ./... xanh; ca pg SKIP (thiếu VIGOV_TEST_DSN).",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA CÓ giới hạn tần suất / đệm: danh bạ công khai quét được hết, mỗi yêu cầu một lời gọi platform — quyết định của chủ dự án. Tên tệp routes_cong_dan.go / bien_cong_dan_test.go nay chứa chuỗi CÔNG KHAI (git rm bị chặn quyền ở lượt builder) — đổi tên khi tiện. identity không còn chuỗi HTTP công dân nào; ResolveCitizenSession gRPC vẫn dùng kho phiên công dân. Chạy ca pg danh_ba_cong_khai_pg_test.go trên CSDL thật.",
+      "menu": "danh-ba-can-bo"
+    },
+    {
+      "id": "cau-phien-ten-mien-chinh",
+      "viec": "Cầu phiên trả commune_primary_host — tên miền chính của xã để Mini App (kể cả app riêng) đọc tin xã / danh bạ công khai",
+      "trang_thai": "xong",
+      "bang_chung": "dd0ca7c: KetQuaMoPhienCau.TenMienChinh từ Host của xã mà XaTrongNguCanh đọc (GetTenant, la_chinh); không lấy từ gợi ý, không vào hàng phiên/vết (ca sáp nhập ghim). Hợp đồng 92e0c77. go test -p 1 ./... xanh. Người dùng chốt 27/09.",
+      "no_confirm": [],
+      "tiep_theo": "Xã Thăng Bình: tên miền chính còn admin.vigov.vn (dành riêng) → trả '' tới khi chạy bước doi-ten-mien-thang-binh trên cụm."
     }
   ]
 }

@@ -440,7 +440,7 @@
     },
     "app.Mo": {
       "kind": "func",
-      "at": "service-identity/internal/app/cau_phien_cong_dan.go:172"
+      "at": "service-identity/internal/app/cau_phien_cong_dan.go:178"
     },
     "app.MoKhoa": {
       "kind": "func",
@@ -2900,7 +2900,7 @@
     },
     "grpc.GetTenantProfile": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:197"
+      "at": "service-platform/internal/grpc/server.go:210"
     },
     "grpc.HoSoHienThi": {
       "kind": "type",
@@ -2964,7 +2964,7 @@
     },
     "grpc.ResolveMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:147"
+      "at": "service-platform/internal/grpc/server.go:160"
     },
     "grpc.ResolveStaffNames": {
       "kind": "func",

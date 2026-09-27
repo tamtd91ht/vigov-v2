@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-09-26",
+  "cap_nhat": "2026-09-27",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -68,6 +68,14 @@
       "tiep_theo": "CHỦ DỰ ÁN QUYẾT 26/09/2026 quy hoạch 4 tên miền; nhãn dành riêng admin · admin-stg · api · api-stg · stg · www (dưới vigov.vn và stg.vigov.vn), đỉnh vigov.vn/stg.vigov.vn, mọi host dưới .api.vigov.vn/.api-stg.vigov.vn. Hai dòng cũ admin.vigov.vn/admin-stg.vigov.vn → Xã Thăng Bình GIỮ NGUYÊN (không xoá — việc chủ dự án quyết) nhưng hết phân giải; CHECK NOT VALID khiến mọi UPDATE hai dòng ấy bị từ chối — KHÔNG chạy VALIDATE CONSTRAINT khi chúng còn. THỨ TỰ TRIỂN KHAI: DNS/TLS/Ingress mới → bước Jenkins doi-ten-mien-thang-binh → job service-platform (bật 0007 + chặn) — đảo thứ tự là khoá mình ngoài hệ thống. Bộ đệm tenant.NewCachedDirectory ở mỗi dịch vụ giữ ánh xạ cũ tối đa TENANT_CACHE_TTL (mặc định 30s) sau khi platform lên. Chưa chặn x.admin.vigov.vn / x.www.vigov.vn (ngoài phạm vi đã nêu). Không có tuyến Go nào ghi tenant_domain — CHECK là rào ghi duy nhất.",
       "menu": null,
       "id": "ten-mien-danh-rieng"
+    },
+    {
+      "id": "get-tenant-khong-tra-ten-mien-danh-rieng",
+      "viec": "GetTenant để trống host khi tên miền chính là địa chỉ dành riêng (ADR 0046)",
+      "trang_thai": "xong",
+      "bang_chung": "dd0ca7c: lọc ở internal/grpc/server.go GetTenant (cùng tầng với chốt của ResolveHost); người gọi GetTenant duy nhất là cầu phiên identity (core/platformclient/mini_app.go:113). TestGetTenantHostChinhDanhRiengTraRong. go test -p 1 ./... xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Người gọi store.Directory.ByID nào vòng qua GetTenant sẽ không có bộ lọc — hiện không có."
     }
   ]
 }

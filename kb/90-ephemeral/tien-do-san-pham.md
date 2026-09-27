@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 5f803af
+derived_from_commit: 77e8f99
 expires: 2026-12-26
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -82,20 +82,20 @@ một lời trấn an không có gì đứng sau.
 | | |
 |---|---|
 | Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 6 |
-| Trong đó `citizen-app` đang gọi | 4 |
+| Trong đó `citizen-app` đang gọi | 5 |
 | Thư mục tính năng trong `citizen-app/src/features/` | 6 |
 
 | | Tuyến | `citizen-app` gọi chưa |
 |---|---|---|
 | GET | `/api/v1/commune-news` | ✓ |
-| GET | `/api/v1/commune-news/{id}` | ✗ |
+| GET | `/api/v1/commune-news/{id}` | ✓ |
 | GET | `/api/v1/commune-staff` | ✓ |
 | GET | `/api/v1/my-citizen-reports` | ✓ |
 | POST | `/api/v1/my-citizen-reports` | ✓ |
 | GET | `/api/v1/my-citizen-reports/{maTraCuu}` | ✗ |
 
 ⚠ **`citizen-app` hôm nay chưa gọi một tuyến ViGov nào**, và đó không phải thiếu sót của nó: nó đang
-gọi `/api/v1/commune-news`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
+gọi `/api/v1/commune-news`, `/api/v1/commune-news/{id}`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/my-citizen-reports`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
 `vihat-miniapp`, không phải của ViGov (CLAUDE.md, mục hai kho). Giai đoạn 2 — màn nghiệp vụ xã —
 bị chặn ở `service-identity`, xem `kb/90-ephemeral/tien-do/citizen-app.json`.
 
@@ -105,18 +105,18 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
-| `_chung` | 20 | 2 | 8 | 6 |
-| `citizen-app` | 12 | 4 | 4 | 0 |
+| `_chung` | 21 | 2 | 8 | 6 |
+| `citizen-app` | 15 | 7 | 2 | 0 |
 | `core` | 13 | 0 | 1 | 1 |
 | `deploy` | 14 | 2 | 1 | 0 |
 | `platform-admin` | 1 | 0 | 1 | 0 |
-| `proto` | 9 | 0 | 0 | 0 |
-| `service-comms` | 9 | 3 | 2 | 4 |
+| `proto` | 10 | 0 | 0 | 0 |
+| `service-comms` | 10 | 3 | 2 | 4 |
 | `service-documents` | 7 | 2 | 4 | 0 |
 | `service-finance` | 15 | 3 | 0 | 0 |
-| `service-identity` | 18 | 8 | 0 | 1 |
+| `service-identity` | 20 | 8 | 0 | 1 |
 | `service-petitions` | 18 | 7 | 7 | 0 |
-| `service-platform` | 5 | 2 | 0 | 1 |
+| `service-platform` | 6 | 2 | 0 | 1 |
 | `service-reporting` | 2 | 0 | 1 | 0 |
 | `tools` | 18 | 0 | 0 | 0 |
 | `web-admin` | 9 | 14 | 4 | 1 |
