@@ -15,7 +15,7 @@
  * ⚠ CHƯA CÓ PHIÊN ViGov THÌ KHÔNG VẼ BIỂU MẪU và KHÔNG GỌI MẠNG — hôm nay là luôn luôn
  * (`api/phien-vigov.ts`).
  */
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { guiPhanAnh, type KetQuaGoi } from "../api/goi-vigov";
 import {
@@ -54,6 +54,24 @@ export function kiemPhanAnh(pa: PhanAnhMoi): string | null {
   }
   return null;
 }
+
+/**
+ * CHỖ ĐẶT TIÊU ĐIỂM KHI ĐỔI BƯỚC — một `id` cho mỗi bước, phần tử mang nó có `tabIndex={-1}`.
+ *
+ * VÌ SAO: bấm "Tiếp tục" / "Gửi tới …" là nút vừa bấm BIẾN MẤT cùng bước cũ. Người dùng trình đọc
+ * màn hình bị bỏ lại trên một nút không còn, và không biết màn đã sang bước nào. Đưa tiêu điểm tới
+ * đầu bước mới thì trình đọc đọc ngay bước ấy nói gì (`skills/accessibility-elderly`).
+ *
+ * Bước "nhập" trỏ vào tiêu đề chung của màn: không trỏ vào ô nhập, vì tiêu điểm ở ô nhập là bàn
+ * phím điện thoại bật lên che nửa màn.
+ */
+export const ID_DAU_BUOC = {
+  nhap: "cd-gui-tieu-de",
+  "xac-nhan": "cd-xac-nhan-tieu-de",
+  "dang-gui": "cd-dang-gui",
+  xong: "cd-xong-tieu-de",
+  loi: "cd-loi-gui",
+} as const;
 
 /* ─────────────────────────── bước 1: nhập ─────────────────────────── */
 
@@ -140,8 +158,8 @@ export function BuocNhap(props: {
 
 export function BuocXacNhan(props: { ten_xa: string; onGui: () => void; onSua: () => void }) {
   return (
-    <div className="cd-buoc" aria-labelledby="cd-xac-nhan-tieu-de">
-      <h2 className="cd-tieu-de-phu" id="cd-xac-nhan-tieu-de">
+    <div className="cd-buoc" aria-labelledby={ID_DAU_BUOC["xac-nhan"]}>
+      <h2 className="cd-tieu-de-phu" id={ID_DAU_BUOC["xac-nhan"]} tabIndex={-1}>
         {GUI.xac_nhan_tieu_de}
       </h2>
       <p className="cd-cau">{GUI.xac_nhan_cau}</p>
@@ -162,15 +180,22 @@ export function BuocXacNhan(props: { ten_xa: string; onGui: () => void; onSua: (
 /**
  * MÃ TRA CỨU TO, ĐỨNG ĐẦU (luật 10, bất biến 1): đó là thứ duy nhất người dân có để hỏi lại về
  * phiếu này. Dưới nó là tình trạng và mốc cán bộ phải xem phiếu — `acknowledge_due`, giờ Việt Nam.
+ *
+ * `role="status"` CHỈ bọc câu và mã, không bọc cả khối: tiêu điểm đã tới tiêu đề (`ID_DAU_BUOC`),
+ * nên vùng thông báo chỉ cần đọc thêm mã. Bọc cả khối là trình đọc đọc lại cả thẻ phiếu lẫn nút.
  */
 export function KetQuaGui(props: { phieu: PhieuCuaToi; onGuiKhac: () => void }) {
   const { phieu } = props;
   const han_xem = phieu.han_tiep_nhan === null ? null : thoiDiemVN(phieu.han_tiep_nhan);
   return (
-    <div className="cd-buoc" role="status">
-      <h2 className="cd-tieu-de-phu">{GUI.xong_tieu_de}</h2>
-      <p className="cd-cau">{GUI.xong_ma}</p>
-      <p className="cd-ma-tra-cuu">{phieu.ma_tra_cuu}</p>
+    <div className="cd-buoc">
+      <h2 className="cd-tieu-de-phu" id={ID_DAU_BUOC.xong} tabIndex={-1}>
+        {GUI.xong_tieu_de}
+      </h2>
+      <div role="status">
+        <p className="cd-cau">{GUI.xong_ma}</p>
+        <p className="cd-ma-tra-cuu">{phieu.ma_tra_cuu}</p>
+      </div>
       <p className="cd-ghi-chu">{GUI.xong_giu_ma}</p>
       <p className="cd-cau">
         <strong>{nhanTrangThai(phieu.trang_thai)}</strong>
@@ -191,7 +216,7 @@ export function LoiGui(props: { nhanh: NhanhLoi; onGuiLai: () => void; onSua: ()
   const loi = LOI_GUI[props.nhanh];
   return (
     <div className="cd-buoc">
-      <p className="cd-loi" role="alert">
+      <p className="cd-loi" role="alert" id={ID_DAU_BUOC.loi} tabIndex={-1}>
         {loi.cau}
       </p>
       {loi.co_the_gui_lai && (
@@ -214,6 +239,15 @@ type Buoc =
   | { kieu: "dang-gui" }
   | { kieu: "xong"; phieu: PhieuCuaToi }
   | { kieu: "loi"; nhanh: NhanhLoi };
+
+/** Thân bước "đang gửi". `role="status"`: người không nhìn màn hình nghe được là đang gửi. */
+export function DangGui() {
+  return (
+    <p className="cd-cau" role="status" id={ID_DAU_BUOC["dang-gui"]} tabIndex={-1}>
+      {GUI.dang_gui}
+    </p>
+  );
+}
 
 /** Nhánh kết quả của lớp gọi → bước tiếp theo của màn. */
 export function buocSauKhiGui(kq: KetQuaGoi): Buoc | "kenh-chua-mo" {
@@ -238,6 +272,17 @@ export function GuiPhanAnhScreen({ onQuayLai }: { onQuayLai: () => void }) {
   const [kenhDong, datKenhDong] = useState(false);
   /** Lần gửi đang dở. Giữ qua "Gửi lại"; bỏ khi người dân quay lại sửa (`api/lan-gui.ts`). */
   const [lan, datLan] = useState<LanGui | null>(null);
+
+  // Đổi bước → tiêu điểm tới đầu bước mới (`ID_DAU_BUOC`). So với bước TRƯỚC, không dùng cờ "lần
+  // đầu": StrictMode chạy hiệu ứng hai lần lúc gắn, và cờ ấy sẽ kéo tiêu điểm ngay khi mở màn.
+  // Theo `kieu`, không theo cả `buoc`: bấm "Tiếp tục" mà còn thiếu nội dung vẫn là bước nhập, câu
+  // lỗi tự đọc ra (`role="alert"`) và tiêu điểm nên ở lại nút vừa bấm.
+  const buoc_truoc = useRef(buoc.kieu);
+  useEffect(() => {
+    if (buoc_truoc.current === buoc.kieu) return;
+    buoc_truoc.current = buoc.kieu;
+    document.getElementById(ID_DAU_BUOC[buoc.kieu])?.focus();
+  }, [buoc.kieu]);
 
   const nutQuayLai = (
     <button type="button" className="quay-lai" onClick={onQuayLai}>
@@ -307,11 +352,7 @@ export function GuiPhanAnhScreen({ onQuayLai }: { onQuayLai: () => void }) {
       than = <BuocXacNhan ten_xa={phien.ten_xa} onGui={guiLanDau} onSua={suaLai} />;
       break;
     case "dang-gui":
-      than = (
-        <p className="cd-cau" role="status">
-          {GUI.dang_gui}
-        </p>
-      );
+      than = <DangGui />;
       break;
     case "xong":
       than = (
@@ -341,7 +382,9 @@ export function GuiPhanAnhScreen({ onQuayLai }: { onQuayLai: () => void }) {
     <section className="cd-man" aria-label={GUI.tieu_de}>
       {nutQuayLai}
       <BangXa ten_xa={phien.ten_xa} />
-      <h1 className="cd-tieu-de">{GUI.tieu_de}</h1>
+      <h1 className="cd-tieu-de" id={ID_DAU_BUOC.nhap} tabIndex={-1}>
+        {GUI.tieu_de}
+      </h1>
       {than}
     </section>
   );

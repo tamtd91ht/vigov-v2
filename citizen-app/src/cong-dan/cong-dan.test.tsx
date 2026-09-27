@@ -8,13 +8,23 @@ import { thanGuiPhanAnh } from "./api/hop-dong-phan-anh";
 import { taoLanGui } from "./api/lan-gui";
 import { layPhienViGov } from "./api/phien-vigov";
 import { diaChiViGov } from "./api/dia-chi-vigov";
-import { GuiPhanAnhScreen, kiemPhanAnh, PHAN_ANH_TRONG } from "./man/GuiPhanAnhScreen";
+import type { PhieuCuaToi } from "./api/hop-dong-phan-anh";
+import {
+  BuocXacNhan,
+  DangGui,
+  GuiPhanAnhScreen,
+  ID_DAU_BUOC,
+  KetQuaGui,
+  kiemPhanAnh,
+  LoiGui,
+  PHAN_ANH_TRONG,
+} from "./man/GuiPhanAnhScreen";
 import { KenhCongDan } from "./man/KenhCongDan";
-import { CUA_TOI, KENH_CHUA_MO, GUI, nhanTrangThai, giaiThichTrangThai, TRANG_THAI } from "./man/noi-dung";
+import { CUA_TOI, KENH_CHUA_MO, GUI, LOI_GUI, nhanTrangThai, giaiThichTrangThai, TRA_CUU, TRANG_THAI } from "./man/noi-dung";
 import * as NOI_DUNG from "./man/noi-dung";
 import { PhanAnhCuaToiScreen } from "./man/PhanAnhCuaToiScreen";
 import { thoiDiemVN } from "./man/thoi-diem";
-import { TraCuuPhieuScreen } from "./man/TraCuuPhieuScreen";
+import { KetQuaTraCuu, TraCuuPhieuScreen } from "./man/TraCuuPhieuScreen";
 
 /**
  * KÊNH CÔNG DÂN, VỚI NGUỒN PHIÊN THẬT — tức là ĐÓNG. Tệp này KHÔNG giả lập phiên: mọi ca ở đây chạy
@@ -217,5 +227,94 @@ describe("chữ của màn hình", () => {
 
   it("không `console.*` ở bất kỳ tệp nào của nửa nhà nước (luật 3)", () => {
     expect(SAN_XUAT.filter((f) => /\bconsole\s*\./.test(f.code)).map((f) => f.path)).toEqual([]);
+  });
+});
+
+/**
+ * TRÌNH ĐỌC MÀN HÌNH — kiểm trên markup từng bước. `renderToStaticMarkup` không chạy hiệu ứng nên
+ * việc TIÊU ĐIỂM THẬT SỰ DỜI tới đầu bước KHÔNG được kiểm ở đây (cần bấm, mà khung gắn tự dựng của
+ * `man/hieu-ung-khong-phien.test.tsx` không mô phỏng sự kiện). Ở đây chỉ chứng minh: mỗi bước CÓ chỗ
+ * nhận tiêu điểm đúng `id` hiệu ứng tìm, và thông báo nằm đúng vùng.
+ */
+describe("trình đọc màn hình: đổi bước và kết quả được báo ra", () => {
+  const PHIEU: PhieuCuaToi = {
+    ma_tra_cuu: "PA7K2QX9M4TD",
+    trang_thai: "da-tiep-nhan",
+    linh_vuc: "",
+    nhan_linh_vuc: "",
+    noi_dung: "Đèn đường hỏng",
+    dia_chi: "",
+    ho_ten_da_che: "",
+    dien_thoai_da_che: "",
+    an_danh: true,
+    goc_dem_han: "2026-09-24T01:30:00Z",
+    han_tiep_nhan: null,
+    han_xu_ly_xong: null,
+    ket_qua: "",
+    ly_do: "",
+    co_quan_nhan: "",
+  };
+
+  /** Thẻ mở của phần tử mang `id` — rỗng khi không có. */
+  const theMo = (html: string, id: string) => html.match(new RegExp(`<[a-z0-9]+[^>]* id="${id}"[^>]*>`))?.[0] ?? "";
+
+  it("mỗi bước có đúng một chỗ nhận tiêu điểm, `tabindex=\"-1\"`, mang `id` hiệu ứng tìm", () => {
+    const buoc: Array<[keyof typeof ID_DAU_BUOC, string]> = [
+      ["xac-nhan", renderToStaticMarkup(createElement(BuocXacNhan, { ten_xa: "Xã Thử Nghiệm", onGui: () => {}, onSua: () => {} }))],
+      ["dang-gui", renderToStaticMarkup(createElement(DangGui))],
+      ["xong", renderToStaticMarkup(createElement(KetQuaGui, { phieu: PHIEU, onGuiKhac: () => {} }))],
+      ["loi", renderToStaticMarkup(createElement(LoiGui, { nhanh: "loi-mang", onGuiLai: () => {}, onSua: () => {} }))],
+    ];
+    for (const [kieu, html] of buoc) {
+      const the = theMo(html, ID_DAU_BUOC[kieu]);
+      expect(the, kieu).not.toBe("");
+      expect(the, kieu).toContain('tabindex="-1"');
+      expect(html.split(`id="${ID_DAU_BUOC[kieu]}"`).length - 1, kieu).toBe(1);
+    }
+    // Bước "nhập" trỏ vào tiêu đề chung của màn — chỉ vẽ được khi có phiên, nên kiểm trên mã nguồn.
+    const man = SAN_XUAT.find((f) => f.path === "./man/GuiPhanAnhScreen.tsx")!.code;
+    expect(man).toMatch(/<h1 className="cd-tieu-de" id=\{ID_DAU_BUOC\.nhap\} tabIndex=\{-1\}>/);
+    // Hiệu ứng tìm đúng bảng ấy, theo `kieu` của bước.
+    expect(man).toMatch(/getElementById\(ID_DAU_BUOC\[buoc\.kieu\]\)\?\.focus\(\)/);
+    expect(new Set(Object.values(ID_DAU_BUOC)).size).toBe(Object.keys(ID_DAU_BUOC).length);
+  });
+
+  it("'đang gửi' là một vùng `role=\"status\"`", () => {
+    expect(theMo(renderToStaticMarkup(createElement(DangGui)), ID_DAU_BUOC["dang-gui"])).toContain('role="status"');
+  });
+
+  it("gửi xong: `role=\"status\"` bọc câu và mã, KHÔNG bọc tiêu đề, thẻ phiếu hay nút", () => {
+    const html = renderToStaticMarkup(createElement(KetQuaGui, { phieu: PHIEU, onGuiKhac: () => {} }));
+    expect(html.split('role="status"').length - 1).toBe(1);
+    const vung = html.match(/<div role="status">([\s\S]*?)<\/div>/)?.[1] ?? "";
+    expect(vung).toContain(GUI.xong_ma);
+    expect(vung).toContain(PHIEU.ma_tra_cuu);
+    expect(vung).not.toContain(GUI.xong_tieu_de);
+    expect(vung).not.toContain("<button");
+  });
+
+  it("câu lỗi gửi vẫn là `role=\"alert\"`", () => {
+    const the = theMo(
+      renderToStaticMarkup(createElement(LoiGui, { nhanh: "loi-mang", onGuiLai: () => {}, onSua: () => {} })),
+      ID_DAU_BUOC.loi,
+    );
+    expect(the).toContain('role="alert"');
+    expect(LOI_GUI["loi-mang"].cau.length).toBeGreaterThan(0);
+  });
+
+  it("tra cứu thấy phiếu: một câu ngắn `role=\"status\"`, thẻ phiếu nằm NGOÀI vùng ấy", () => {
+    const html = renderToStaticMarkup(createElement(KetQuaTraCuu, { kq: { kieu: "xong", phieu: PHIEU } }));
+    expect(html).toContain(`<p class="cd-cau" role="status">${TRA_CUU.tim_thay}</p>`);
+    expect(html.split('role="status"').length - 1).toBe(1);
+    // Thẻ phiếu vẫn vẽ, và nằm SAU câu thông báo đã đóng — không lọt vào vùng `status`.
+    expect(html).toContain(PHIEU.noi_dung);
+    expect(html.indexOf(`${TRA_CUU.tim_thay}</p>`)).toBeLessThan(html.indexOf('class="cd-phieu"'));
+    expect(html).not.toContain('role="alert"');
+  });
+
+  it("tra cứu không thấy: vẫn `role=\"alert\"`, không có câu 'đã tìm thấy'", () => {
+    const html = renderToStaticMarkup(createElement(KetQuaTraCuu, { kq: { kieu: "khong-thay" } }));
+    expect(html).toContain('role="alert"');
+    expect(html).not.toContain(TRA_CUU.tim_thay);
   });
 });

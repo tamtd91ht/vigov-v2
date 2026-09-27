@@ -172,6 +172,7 @@ export const TRA_CUU = {
   goi_y_ma: "Mã được đưa cho bạn ngay khi gửi phản ánh.",
   nut_tra: "Tra cứu",
   dang_tra: "Đang tìm phiếu…",
+  tim_thay: "Đã tìm thấy phiếu. Thông tin phiếu ở ngay bên dưới.",
   thieu_ma: "Bạn chưa nhập mã tra cứu. Hãy nhập mã được đưa khi gửi phản ánh.",
   /**
    * MỘT CÂU cho "không có mã này", "phiếu của người khác", "phiếu của xã khác" — máy chủ trả cùng

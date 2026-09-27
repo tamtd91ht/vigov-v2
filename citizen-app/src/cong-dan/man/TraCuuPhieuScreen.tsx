@@ -30,7 +30,16 @@ const MA_TOI_DA = 64;
 export function KetQuaTraCuu({ kq }: { kq: KetQuaGoi }): ReactNode {
   switch (kq.kieu) {
     case "xong":
-      return <ThePhieu phieu={kq.phieu} />;
+      // Câu ngắn trong `role="status"`, thẻ phiếu NGOÀI vùng thông báo: tìm thấy thì người không
+      // nhìn màn hình cũng được báo, mà không bị đọc dồn cả thẻ một lượt (câu lỗi đã có `alert`).
+      return (
+        <>
+          <p className="cd-cau" role="status">
+            {TRA_CUU.tim_thay}
+          </p>
+          <ThePhieu phieu={kq.phieu} />
+        </>
+      );
     case "chua-co-phien":
     case "chua-cau-hinh":
       return <KenhChuaMo />;
