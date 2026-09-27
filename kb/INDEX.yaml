@@ -67,9 +67,9 @@ load_on_demand:              # tiết lộ dần — mô tả đủ để QUYẾ
     file: kb/90-ephemeral/ban-giao-phien.md
     tier: T5
     source: CURATED
-    expires: 2026-12-23
+    expires: 2026-12-26
     load_when: "mở phiên mới hoặc sang máy khác — quyết định đã chốt, ai đang chặn, cạm bẫy đã gặp"
-    warning: "hết hạn 21/12/2026. Sau đó tin `git log`, không tin tệp này"
+    warning: "hết hạn 26/12/2026. Sau đó tin `git log`, không tin tệp này"
 
   # MỘT tệp ĐỌC, NHIỀU tệp GHI — vì sao: docstring `tools/tien_do.py`. Đừng chép lại vào đây.
   - id: tien-do
