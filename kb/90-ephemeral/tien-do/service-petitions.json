@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-petitions",
-  "cap_nhat": "2026-09-26",
+  "cap_nhat": "2026-09-28",
   "muc": [
     {
       "id": "vong-doi-phieu-phan-anh",
@@ -280,11 +280,38 @@
     {
       "id": "lanh-dao-giao-viec-khong-kiem-khi-tao",
       "viec": "RỦI RO có từ trước: POST /api/v1/tasks nhận `assigner` (lãnh đạo giao việc) từ máy khách mà không kiểm là cán bộ của xã có task.extend — trong khi mã ấy quyết ai được duyệt lùi hạn (ADR 0038) và nay còn là khoá lọc approver=me",
-      "trang_thai": "chua_lam",
-      "bang_chung": "isolation-reviewer 27/09 (lượt /develop-feature nhiệm vụ): service-petitions/internal/app/nhiem_vu.go:686 `LanhDaoGiaoViecMa: yc.LanhDaoGiaoViecMa` chép thẳng; ô chọn danh bạ 77b3250 chỉ hạn chế ở GIAO DIỆN. Một người cầm task.create tự ghi mình (hay chuỗi bất kỳ) làm lãnh đạo thì duyệt được lùi hạn của người thực hiện; luật người đề nghị ≠ người duyệt chỉ chặn ca trực tiếp nhất. PATCH cố ý không nhận assigner nên không sửa được sau.",
+      "trang_thai": "xong",
+      "bang_chung": "5af3d51: kiểm một lần trong use case tạo (app/nhiem_vu.go TaoTuNguon), trước giao dịch, qua identity ResolveAssignableStaff — phủ cả POST /api/v1/tasks và tách từ kết luận họp. go vet + go test -p 1 service-petitions xanh; đột biến bỏ lời kiểm làm đỏ 7 ca. --- Nguyên văn cũ: isolation-reviewer 27/09 (lượt /develop-feature nhiệm vụ): service-petitions/internal/app/nhiem_vu.go:686 `LanhDaoGiaoViecMa: yc.LanhDaoGiaoViecMa` chép thẳng; ô chọn danh bạ 77b3250 chỉ hạn chế ở GIAO DIỆN. Một người cầm task.create tự ghi mình (hay chuỗi bất kỳ) làm lãnh đạo thì duyệt được lùi hạn của người thực hiện; luật người đề nghị ≠ người duyệt chỉ chặn ca trực tiếp nhất. PATCH cố ý không nhận assigner nên không sửa được sau.",
       "no_confirm": [],
-      "tiep_theo": "HỎI chủ dự án (thuộc #27 / ADR 0038): lãnh đạo giao việc có BẮT BUỘC là cán bộ đang hoạt động của xã và cầm task.extend không; nếu có thì kiểm ở máy chủ qua identity (RPC kiểu ResolveAssignableStaff mà Phản ánh đã dùng). Không tự quyết. Cùng lượt: DEBT nhỏ — core/store/page.go:178 trích nguyên spec.Table vào lỗi, nay Table là cả một câu SQL con (de_nghi_lui_han_cho_duyet.go) → chuỗi lỗi ghi vào log chứa SQL (hiện không có giá trị/PII).",
+      "tiep_theo": "CHỦ DỰ ÁN CHỐT 28/09 (lượt /develop-feature nhiệm vụ): máy chủ CHỈ kiểm 'cán bộ đang hoạt động của xã' — KHÔNG kiểm task.extend (ô chọn lọc theo quyền, 5f186c9/aca8352; tuyến duyệt lùi hạn vẫn đòi task.extend). Chú thích tại chỗ ghi rõ để không ai 'sửa' lặng lẽ. Còn: assigner trống vẫn nhận lúc tạo (ADR 0038 chặn lúc duyệt); lãnh đạo nghỉ/luân chuyển chưa có thao tác chuyển; DEBT core/store/page.go:178 như cũ.",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "tra-lai-nhiem-vu-lam-tiep",
+      "viec": "Trả lại nhiệm vụ để làm tiếp — mũi tên cho-duyet → dang-thuc-hien",
+      "trang_thai": "xong",
+      "bang_chung": "6792918: chỉ người cầm task.approve, lý do bắt buộc (trường note sẵn có của POST /tasks/{ma}/status), đổi trạng thái + nhật ký + vết một giao dịch; tạm dừng từ cho-duyet chỉ tiếp tục về cho-duyet. Web aca8352. Chủ dự án chốt 28/09 theo đề xuất domain-expert.",
+      "tiep_theo": "Không thêm trạng thái (ADR 0035 §C). Bảy xung đột vòng đời với vigov-require vẫn ở doi-chieu-26-09-nhiem-vu-truoc-neo.",
+      "menu": "nhiem-vu",
+      "no_confirm": []
+    },
+    {
+      "id": "nguon-phan-anh-source-id-khong-kiem",
+      "viec": "RỦI RO: POST /api/v1/tasks nhận nguon_giao=phan-anh (và van-ban-den) với source_id không ai kiểm",
+      "trang_thai": "chua_lam",
+      "bang_chung": "cross-context-scout 28/09: internal/http/nhiem_vu_ghi.go:116, :398-399 — cùng hình dạng lỗi ket-luan-hop trước fdd4822. Nửa van-ban-den đã có ở service-documents/tao-nhiem-vu-tu-ho-so-khac-service; nửa phan-anh chưa mục nào.",
+      "tiep_theo": "Chưa đọc chéo xã hôm nay vì không gì JOIN theo source_id; sẽ thành lỗ ngày ai dựng liên kết. Hỏi: từ chối nguồn phan-anh ở POST trực tiếp (chỉ tạo qua tuyến của phiếu) như ket-luan-hop?",
+      "menu": "nhiem-vu",
+      "no_confirm": []
+    },
+    {
+      "id": "task-approve-hai-viec",
+      "viec": "Khoá task.approve vừa để KÝ biên bản họp vừa để DUYỆT hoàn thành / trả lại nhiệm vụ",
+      "trang_thai": "chua_lam",
+      "bang_chung": "cross-context-scout 28/09: internal/http/routes.go:1543 (ký biên bản) và nhiem_vu_ghi.go:63 (hoàn thành).",
+      "tiep_theo": "Phát hiện cho #27, không tự INSERT khoá mới (luật 5 bất biến 3c). Cấp quyền ký biên bản là cấp luôn quyền duyệt nhiệm vụ — hỏi chủ dự án có chấp nhận không.",
+      "menu": "nhiem-vu",
+      "no_confirm": []
     }
   ]
 }

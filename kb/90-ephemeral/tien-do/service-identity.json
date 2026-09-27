@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-09-27",
+  "cap_nhat": "2026-09-28",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -85,7 +85,7 @@
       "trang_thai": "dang_lam",
       "bang_chung": "MÀN HÌNH NỘI BỘ ĐÃ THEO #11: service-identity/internal/http/can_bo.go — `maskDienThoai` thay bằng `soRaManHinhNoiBo` (không che), phản hồi nay mang CẢ HAI trường `phone` (dien_thoai_co_quan) và `mobile` (di_dong_ca_nhan) cho cả hai tuyến đọc lẫn năm tuyến ghi — cùng một hàm `raNgoai`, một lối ra duy nhất. Tên hàm mang tên BỀ MẶT có chủ ý: bản xuất Excel và kênh công khai VẪN phải che (luật 3 bất biến 4) và không được dùng lại hàm này. Ca kiểm đổi chiều kèm lý do: internal/http/can_bo_test.go TestCanBoKhongCheSoTrongNoiBoXaVaKhongLanHaiCot — mẫu thử cho hai cột HAI GIÁ TRỊ KHÁC NHAU nên việc tráo hai cột (hai chuỗi cạnh nhau, tráo không sinh lỗi ở đâu cả) bị bắt. Kiểm 2026-09-22 cùng lượt với tuyen-ghi-danh-ba-can-bo.",
       "no_confirm": [],
-      "tiep_theo": "SỬA 24/09/2026 (progress-reviewer trước /handover): #12 KHÔNG còn 'nguyên': cột công khai + đồng ý có ở migration 0010 (c47f14d), tuyến PUT /staff/{id}/publication ở 7e0ae99. Xem danh-ba-can-bo-con-thieu. || CÒN NGUYÊN #12: chưa có cột `hien_tren_mini_app`, chưa có cột lưu SỰ ĐỒNG Ý kèm thời điểm — đó là thứ duy nhất trả lời 'căn cứ nào để đưa số tôi lên'. Lượt này KHÔNG mở bất kỳ đường nào ra ngoài xã. MỘT ĐIỂM CẦN KHÁCH XÁC NHẬN, sinh ra từ chính #11: tuyến đọc danh sách cán bộ nay TRẢ dữ liệu cá nhân đầy đủ, trong khi luật 6 bất biến 7 nói 'đọc ĐẦY ĐỦ dữ liệu cá nhân thì phải ghi vết'. Lượt này GIỮ NGUYÊN hành vi cũ (không ghi vết mỗi lượt đọc) vì #11 cố ý không tạo khoá quyền nào, nên không có 'lượt đọc ngoại lệ' để ghi, và ghi vết mỗi trang danh sách sẽ chôn vùi các vết có giá trị pháp lý. Đây là điều kiện dừng #1 của luật 6 — GIỮ NGUYÊN chứ không phải ĐÃ CHỌN. #12 LÀ QUYẾT ĐỊNH CỦA KHÁCH, chốt 22/09/2026 — người dùng xác nhận 24/09/2026 trong lượt /develop-web-admin Danh bạ cán bộ (khớp commit 70e41e4 'người dùng chốt cả mười'). Câu cũ ở đây gọi nó là 'đề xuất của nhà cung cấp, đọc ADR 0035' là SAI: ADR 0035 không có mục #12. Hệ quả: bỏ công khai hàng loạt của đặc tả (§2, §8) là ĐÃ QUYẾT, không phải phủ quyết được rẻ.",
+      "tiep_theo": "SỬA 28/09 (chủ dự án): kênh công khai Mini App trả số di động KHÔNG che cho người đã đồng ý — lựa chọn 27/09 thay cách đọc #11 cho kênh này; xuất Excel vẫn che. Chú thích can_bo.go sửa ở 734e080. || SỬA 24/09/2026 (progress-reviewer trước /handover): #12 KHÔNG còn 'nguyên': cột công khai + đồng ý có ở migration 0010 (c47f14d), tuyến PUT /staff/{id}/publication ở 7e0ae99. Xem danh-ba-can-bo-con-thieu. || CÒN NGUYÊN #12: chưa có cột `hien_tren_mini_app`, chưa có cột lưu SỰ ĐỒNG Ý kèm thời điểm — đó là thứ duy nhất trả lời 'căn cứ nào để đưa số tôi lên'. Lượt này KHÔNG mở bất kỳ đường nào ra ngoài xã. MỘT ĐIỂM CẦN KHÁCH XÁC NHẬN, sinh ra từ chính #11: tuyến đọc danh sách cán bộ nay TRẢ dữ liệu cá nhân đầy đủ, trong khi luật 6 bất biến 7 nói 'đọc ĐẦY ĐỦ dữ liệu cá nhân thì phải ghi vết'. Lượt này GIỮ NGUYÊN hành vi cũ (không ghi vết mỗi lượt đọc) vì #11 cố ý không tạo khoá quyền nào, nên không có 'lượt đọc ngoại lệ' để ghi, và ghi vết mỗi trang danh sách sẽ chôn vùi các vết có giá trị pháp lý. Đây là điều kiện dừng #1 của luật 6 — GIỮ NGUYÊN chứ không phải ĐÃ CHỌN. #12 LÀ QUYẾT ĐỊNH CỦA KHÁCH, chốt 22/09/2026 — người dùng xác nhận 24/09/2026 trong lượt /develop-web-admin Danh bạ cán bộ (khớp commit 70e41e4 'người dùng chốt cả mười'). Câu cũ ở đây gọi nó là 'đề xuất của nhà cung cấp, đọc ADR 0035' là SAI: ADR 0035 không có mục #12. Hệ quả: bỏ công khai hàng loạt của đặc tả (§2, §8) là ĐÃ QUYẾT, không phải phủ quyết được rẻ.",
       "menu": "danh-ba-can-bo"
     },
     {
@@ -252,6 +252,24 @@
       "bang_chung": "dd0ca7c: KetQuaMoPhienCau.TenMienChinh từ Host của xã mà XaTrongNguCanh đọc (GetTenant, la_chinh); không lấy từ gợi ý, không vào hàng phiên/vết (ca sáp nhập ghim). Hợp đồng 92e0c77. go test -p 1 ./... xanh. Người dùng chốt 27/09.",
       "no_confirm": [],
       "tiep_theo": "Xã Thăng Bình: tên miền chính còn admin.vigov.vn (dành riêng) → trả '' tới khi chạy bước doi-ten-mien-thang-binh trên cụm."
+    },
+    {
+      "id": "danh-ba-hep-loc-quyen-task-extend",
+      "viec": "GET /api/v1/staff-directory?permission=task.extend — ô chọn Lãnh đạo giao việc chỉ gợi người cầm quyền duyệt",
+      "trang_thai": "xong",
+      "bang_chung": "5f186c9: danh sách trắng MỘT khoá (task.extend), khoá khác → 400 để tuyến AnyAuthenticated không liệt kê được người giữ admin.*; phép nối người→vai trò→quyền dùng chung với bộ kiểm quyền (noiGiuQuyen), so trên ma. go test xanh; ca pg SKIP (thiếu VIGOV_TEST_DSN).",
+      "tiep_theo": "Thêm khoá vào danh sách trắng là một lần duyệt có chủ đích (lộ người giữ khoá cho mọi tài khoản).",
+      "menu": "nhiem-vu",
+      "no_confirm": []
+    },
+    {
+      "id": "rut-cong-khai-khi-doi-so-hoac-khoa",
+      "viec": "Đổi số di động hoặc khoá tài khoản của cán bộ đang công khai → tự gỡ khỏi danh bạ Mini App (#12, Nghị định 13)",
+      "trang_thai": "xong",
+      "bang_chung": "734e080: cùng giao dịch gỡ công khai + xoá hai dấu đồng ý + vết rut_cong_khai_mini_app (ly_do_tu_dong); mở khoá không bao giờ công khai lại. Web cảnh báo e7c03bf. Chủ dự án chốt 28/09. 8 ca đơn vị xanh; ca pg SKIP; ca đột biến bị lớp cấp quyền từ chối — CHƯA CHẠY.",
+      "tiep_theo": "CÒN HỎI: (F1) đổi số cơ quan / co_zalo của người đang công khai có gỡ không — hiện KHÔNG (TestSuaTruongKhacThiVanCongKhai ghim); (F2) người bị khoá TRƯỚC bản vá còn dấu đồng ý — không lộ (tuyến công khai ẩn người khoá), dọn cần migration; (F3) PUT /publication không từ chối người đang khoá; (4) tự ghi đồng ý cho chính mình. Tuyến commune-staff chưa giới hạn tần suất.",
+      "menu": "danh-ba-can-bo",
+      "no_confirm": []
     }
   ]
 }
