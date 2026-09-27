@@ -390,6 +390,11 @@ type YeuCauTaoNhiemVu struct {
 	MoTa      string
 	MucUuTien string
 
+	// GhiChu is §5.4's note, the column PATCH already edits. OPTIONAL: empty is "no note" and the
+	// store writes NULL. Bounded by the SAME check PATCH runs (chuanHoaTaoNhiemVu), so the two doors
+	// into one column cannot disagree on what fits in it.
+	GhiChu string
+
 	NguonGiao string
 	NguonID   string
 
@@ -585,6 +590,10 @@ func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi
 			// can act on — it says the block was filled in at creation — and the text itself lives on
 			// rows the archival trigger already protects.
 			"so_dong_van_ban": len(thayDoiVB.Them),
+			// `ghi_chu` IS DELIBERATELY ABSENT, mirroring Sua's delta, which records no note either.
+			// It is free text that may name a citizen, and `audit_log` is permanent (rule 3, forbidden
+			// #5). Recording it here and not on PATCH would make the two doors into one column leave
+			// two different trails.
 		})
 		if err != nil {
 			return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
@@ -612,6 +621,13 @@ func chuanHoaTaoNhiemVu(yc YeuCauTaoNhiemVu) (domain.NhiemVu, error) {
 		return moi, err
 	}
 	moTa, err := domain.KiemVanBanTuyChon(yc.MoTa, domain.MoTaNhiemVuToiDa, domain.ErrMoTaNhiemVuQuaDai)
+	if err != nil {
+		return moi, err
+	}
+	// THE SAME CALL chuanHoaSuaNhiemVu MAKES FOR `note`, bound and sentinel included: one column, one
+	// rule, whichever door the value came through.
+	ghiChu, err := domain.KiemVanBanTuyChon(yc.GhiChu, domain.GhiChuNhiemVuToiDa,
+		domain.ErrGhiChuNhiemVuQuaDai)
 	if err != nil {
 		return moi, err
 	}
@@ -658,6 +674,7 @@ func chuanHoaTaoNhiemVu(yc YeuCauTaoNhiemVu) (domain.NhiemVu, error) {
 		Khoi:   yc.Khoi,
 		TieuDe: tieuDe,
 		MoTa:   moTa,
+		GhiChu: ghiChu,
 		// A NEW TASK STARTS AT `moi-giao` AND NOWHERE ELSE. §6's Kanban calls that column "Chưa thực
 		// hiện", and it is the only state §6 draws arrows out of and none into.
 		TrangThai:           domain.MoiGiao,

@@ -106,6 +106,12 @@ type taoNhiemVuVao struct {
 	Body     string `json:"description,omitempty"`
 	Priority string `json:"priority,omitempty"`
 
+	// Note is the same `ghi_chu` column PATCH's `note` edits, bounded by the same rule
+	// (app.chuanHoaTaoNhiemVu reuses PATCH's check). OMITEMPTY IS LOAD-BEARING: tools/apidoc reads a
+	// field without it as REQUIRED, and a required field added to this published contract would break
+	// every existing caller (rule 2, invariant 4). Absent and "" both mean "no note".
+	Note string `json:"note,omitempty"`
+
 	Source   string `json:"source,omitempty"`
 	SourceID string `json:"source_id,omitempty"`
 
@@ -411,6 +417,7 @@ func (h *Handler) TaoNhiemVu(w http.ResponseWriter, r *http.Request) {
 		TieuDe:              vao.Title,
 		MoTa:                vao.Body,
 		MucUuTien:           vao.Priority,
+		GhiChu:              vao.Note,
 		NguonGiao:           vao.Source,
 		NguonID:             vao.SourceID,
 		BoPhanID:            vao.Unit,

@@ -190,6 +190,80 @@ func TestTaoNhiemVu_HaiHanBangNhauKhiFormCoHan(t *testing.T) {
 	}
 }
 
+// TestTaoNhiemVu_GhiChuVaoCotGhiChu — the create form's note lands in `ghi_chu` ($21), the column
+// PATCH edits, is on the returned record, and stays OUT of the audit entry exactly as PATCH's does.
+func TestTaoNhiemVu_GhiChuVaoCotGhiChu(t *testing.T) {
+	k := khoNVMau()
+	k.soLonNhat = 18
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	const ghiChu = "Phối hợp với bộ phận địa chính trước khi khảo sát."
+	yc := taoMau()
+	yc.GhiChu = ghiChu
+
+	n, err := uc.Tao(ctx, yc, canBoThu())
+	if err != nil {
+		t.Fatalf("giao việc mới: %v", err)
+	}
+	if n.GhiChu != ghiChu {
+		t.Errorf("ghi chú trên bản ghi trả về = %q, muốn %q", n.GhiChu, ghiChu)
+	}
+	chen := k.cau("INSERT INTO nhiem_vu")
+	if len(chen) != 1 {
+		t.Fatalf("ghi %d dòng nhiệm vụ, muốn 1", len(chen))
+	}
+	if chen[0].args[20] != ghiChu {
+		t.Errorf("cột ghi_chu = %v, muốn %q", chen[0].args[20], ghiChu)
+	}
+	for _, a := range vetKiemToan(t, k).args {
+		if b, ok := a.([]byte); ok && strings.Contains(string(b), ghiChu) {
+			t.Error("nội dung ghi chú lọt vào audit_log — PATCH không ghi nó, tạo cũng không được")
+		}
+		if s, ok := a.(string); ok && strings.Contains(s, ghiChu) {
+			t.Error("nội dung ghi chú lọt vào audit_log — PATCH không ghi nó, tạo cũng không được")
+		}
+	}
+}
+
+func TestTaoNhiemVu_KhongCoGhiChuThiCotLaNull(t *testing.T) {
+	k := khoNVMau()
+	k.soLonNhat = 18
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	if _, err := uc.Tao(ctx, taoMau(), canBoThu()); err != nil {
+		t.Fatalf("giao việc mới: %v", err)
+	}
+	if v := k.cau("INSERT INTO nhiem_vu")[0].args[20]; v != nil {
+		t.Errorf("cột ghi_chu = %v, muốn NULL khi biểu mẫu không có ghi chú", v)
+	}
+}
+
+// TestTaoNhiemVu_GhiChuQuaDaiThiTuChoiNhuPATCH — the same bound and the same sentinel PATCH uses,
+// refused before any transaction opens.
+func TestTaoNhiemVu_GhiChuQuaDaiThiTuChoiNhuPATCH(t *testing.T) {
+	k := khoNVMau()
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	yc := taoMau()
+	yc.GhiChu = strings.Repeat("a", domain.GhiChuNhiemVuToiDa+1)
+
+	_, err := uc.Tao(ctx, yc, canBoThu())
+	if !errors.Is(err, domain.ErrGhiChuNhiemVuQuaDai) {
+		t.Fatalf("lỗi = %v, muốn ErrGhiChuNhiemVuQuaDai", err)
+	}
+	if k.batDau != 0 {
+		t.Errorf("mở %d giao dịch cho một ghi chú quá dài, muốn 0", k.batDau)
+	}
+	khongGhiGi(t, k)
+
+	// PATCH, same value: the same refusal. One column, one rule.
+	sua := yc.GhiChu
+	if _, err := uc.Sua(ctx, "NV01", petstore.SuaNhiemVu{GhiChu: &sua}, canBoThu()); !errors.Is(err,
+		domain.ErrGhiChuNhiemVuQuaDai) {
+		t.Fatalf("PATCH: lỗi = %v, muốn ErrGhiChuNhiemVuQuaDai", err)
+	}
+}
+
 func TestTaoNhiemVu_ChaKhongTonTaiThiTuChoiVaKhongGhiGi(t *testing.T) {
 	k := khoNVMau()
 	uc, ctx := dungGhiNhiemVu(t, k)

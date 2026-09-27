@@ -97,7 +97,10 @@ func (g *ghiNhiemVuGia) Tao(ctx context.Context, yc app.YeuCauTaoNhiemVu, nguoi 
 	domain.NhiemVu, error) {
 	g.ghi(ctx, "tao", "", nguoi)
 	g.ycTao = yc
-	return g.tra()
+	n, err := g.tra()
+	// ECHOED, as the real use case does: the note it was handed is the note on the booked row.
+	n.GhiChu = yc.GhiChu
+	return n, err
 }
 
 func (g *ghiNhiemVuGia) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemVu,
@@ -420,6 +423,76 @@ func TestTaoNhiemVu_KhongCoHanThiKhongDungHanNao(t *testing.T) {
 
 	if !m.ghiNhiemVu.ycTao.HanXuLy.IsZero() {
 		t.Errorf("hạn xử lý = %v, muốn rỗng khi biểu mẫu không điền hạn", m.ghiNhiemVu.ycTao.HanXuLy)
+	}
+}
+
+// TestTaoNhiemVu_GhiChuDiXuongUseCaseVaTraVeTrongChiTiet — the create form's `note` reaches the use
+// case unchanged and comes back in the detail shape, the same field PATCH answers with.
+func TestTaoNhiemVu_GhiChuDiXuongUseCaseVaTraVeTrongChiTiet(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("task.create"))
+
+	const ghiChu = "Phối hợp với bộ phận địa chính trước khi khảo sát."
+	vao := thanTaoNV()
+	vao.Note = ghiChu
+
+	w := m.goiGhiNV(t, http.MethodPost, hostA, duongTasks, canBoCuaXa(xaA), vao)
+	doiMa(t, w, http.StatusCreated)
+
+	if m.ghiNhiemVu.ycTao.GhiChu != ghiChu {
+		t.Errorf("ghi chú tới use case = %q, muốn %q", m.ghiNhiemVu.ycTao.GhiChu, ghiChu)
+	}
+	var ra struct {
+		Note string `json:"note"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+		t.Fatalf("thân trả về không phải JSON: %v", err)
+	}
+	if ra.Note != ghiChu {
+		t.Errorf("`note` trong chi tiết = %q, muốn %q", ra.Note, ghiChu)
+	}
+}
+
+// TestTaoNhiemVu_KhongGuiGhiChuVanDuocNhan pins that `note` is OPTIONAL on a published contract: a
+// body without it — every body web-admin sends today — is accepted and books an empty note.
+func TestTaoNhiemVu_KhongGuiGhiChuVanDuocNhan(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("task.create"))
+
+	w := m.goiGhiNVTho(t, http.MethodPost, hostA, duongTasks, canBoCuaXa(xaA),
+		`{"auto_code":true,"type":"theo-van-ban","title":"Rà soát tiến độ tuyến đường"}`)
+	doiMa(t, w, http.StatusCreated)
+
+	if m.ghiNhiemVu.ycTao.GhiChu != "" {
+		t.Errorf("ghi chú = %q, muốn rỗng khi thân không gửi `note`", m.ghiNhiemVu.ycTao.GhiChu)
+	}
+}
+
+// TestTaoNhiemVu_GhiChuQuaDaiThi400NhuPATCH — the create route maps the over-long note refusal onto
+// the same 400 `invalid_request` PATCH answers, with the domain's own sentence.
+func TestTaoNhiemVu_GhiChuQuaDaiThi400NhuPATCH(t *testing.T) {
+	for ten, goi := range map[string]func(m *mayChu) *httptest.ResponseRecorder{
+		"POST": func(m *mayChu) *httptest.ResponseRecorder {
+			return m.goiGhiNV(t, http.MethodPost, hostA, duongTasks, canBoCuaXa(xaA), thanTaoNV())
+		},
+		"PATCH": func(m *mayChu) *httptest.ResponseRecorder {
+			g := "x"
+			return m.goiGhiNV(t, http.MethodPatch, hostA, duongNV(maNVThu), canBoCuaXa(xaA),
+				suaNhiemVuVao{Note: &g})
+		},
+	} {
+		t.Run(ten, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("task.create"), authz.Perm("task.update"))
+			m.ghiNhiemVu.loi = domain.ErrGhiChuNhiemVuQuaDai
+
+			w := goi(m)
+			doiMa(t, w, http.StatusBadRequest)
+			if e := loiTra(t, w); e.Code != "invalid_request" ||
+				e.Message != domain.ErrGhiChuNhiemVuQuaDai.Error() {
+				t.Errorf("lỗi = %+v, muốn invalid_request với câu của domain", e)
+			}
+		})
 	}
 }
 
