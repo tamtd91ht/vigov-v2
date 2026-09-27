@@ -24,12 +24,12 @@ func TestNhatKyCuaNhiemVuBuocXaNhiemVuVaMoiNhatTruoc(t *testing.T) {
 		{
 			"id": "nknv-2", "nhiem_vu_id": "nv-001", "thoi_diem": luc, "nguoi_ma": "CB-00123",
 			"trang_thai_tai_thoi_diem": "dang-thuc-hien",
-			"bo_phan_id": "bp-001", "nguoi_phu_trach_ma": "CB-00777", "noi_dung": "Giao lại.",
+			"bo_phan_id":               "bp-001", "nguoi_phu_trach_ma": "CB-00777", "noi_dung": "Giao lại.",
 		},
 		{
 			"id": "nknv-1", "nhiem_vu_id": "nv-001", "thoi_diem": luc, "nguoi_ma": "CB-00123",
 			"trang_thai_tai_thoi_diem": "moi-giao",
-			"bo_phan_id": nil, "nguoi_phu_trach_ma": nil, "noi_dung": "Tạo nhiệm vụ.",
+			"bo_phan_id":               nil, "nguoi_phu_trach_ma": nil, "noi_dung": "Tạo nhiệm vụ.",
 		},
 	}}
 	s := NewNhiemVuStore(pkgstore.New(moKhoGia(k)))
