@@ -200,6 +200,14 @@
       "bang_chung": "4a665f0: hai câu khai bước xác nhận xã ở mục Đăng nhập (người dùng duyệt nguyên văn 27/09). Hồ sơ Zalo: 7 đường rời khỏi máy.",
       "no_confirm": [],
       "tiep_theo": "BỐN CÂU CŨ NAY SAI (chưa phát hành nên chưa ai đọc): 'chỉ gửi đi ở đúng HAI việc', 'Ngoài số điện thoại… không gửi thông tin nào khác', 'Nơi duy nhất nhận… là máy chủ của Tập đoàn ViHAT Group', 'Thứ nó gửi đi là hai mã đăng nhập'; chưa khai vihat-miniapp chuyển gì sang ViGov và kênh phản ánh gửi gì. Người dùng chọn 27/09: agent soạn bản sửa đầy đủ, chủ dự án duyệt — PHẢI XONG TRƯỚC khi nộp Zalo duyệt; pháp chế nên xem."
+    },
+    {
+      "id": "co-vao-thang-app-rieng",
+      "viec": "Cờ --vao-thang: app riêng của xã nung tên miền vào bundle và mở thẳng kênh công dân của xã (ADR 0047 §6)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "deploy.mjs --domain=<x> --vao-thang đặt VIGOV_XA_CO_DINH=<x> chỉ cho tiến trình dựng (không cờ thì xoá biến); cau-hinh.mjs xaCoDinh chỉ đọc shell, chặn trong .env.local; vite define __VIGOV_XA_CO_DINH__; src/lib/xa-co-dinh.ts; App.tsx bỏ qua d, XacNhanXa tu_dong (buocTuDongSauTraXa) rồi mở KenhCongDan. Dựng thật: bản có cờ chứa tên miền 1 lần, bản thường 0. vitest 848/848, tsc sạch, make check exit 0. ADR 0047 §6 + skill zalo-miniapp-multi-tenant + README sửa cùng lượt.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA CHẠY TRÊN MÁY THẬT: phát hành lại Thăng Bình bằng `npm run zmp:phat-hanh -- --domain=thangbinh-danang.vigov.vn --vao-thang` rồi mở app. Phiên vẫn qua cầu vihat-miniapp với App ID app chung (chế độ chính + host hint), dòng mini_app chưa được tra — ghi ở ADR 0047 §6."
     }
   ]
 }

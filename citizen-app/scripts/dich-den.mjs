@@ -79,9 +79,10 @@ export function kiemBangAnhXa(bang, app_chung) {
  * và một tham số để trống vì muốn app chung trông giống hệt nhau. Muốn app chung thì bỏ hẳn cờ.
  */
 export function docCo(argv) {
-  const co = { ten_mien: null, phat_hanh: false, chi_thu: false };
+  const co = { ten_mien: null, phat_hanh: false, chi_thu: false, vao_thang: false };
   for (const c of argv) {
     if (c === "--phat-hanh") co.phat_hanh = true;
+    else if (c === "--vao-thang") co.vao_thang = true;
     else if (c === "--thu") co.chi_thu = true;
     else if (c.startsWith("--domain=")) {
       const gia_tri = c.slice("--domain=".length);
@@ -96,7 +97,12 @@ export function docCo(argv) {
         "--bien-the đã bỏ: bản dựng không còn biến thể nào, app chung và app riêng của xã chạy cùng " +
           "một bundle. Bỏ cờ này; muốn đẩy app riêng của xã thì dùng --domain=<tên-miền>.",
       );
-    } else throw new Error(`Cờ "${c}" không có. Chỉ nhận: --domain=<tên-miền> · --phat-hanh · --thu`);
+    } else throw new Error(`Cờ "${c}" không có. Chỉ nhận: --domain=<tên-miền> · --vao-thang · --phat-hanh · --thu`);
+  }
+  // `--vao-thang` nung TÊN MIỀN CỦA `--domain` vào bundle. Không có `--domain` thì không có tên miền
+  // nào để nung — và app chung nung một xã là app chung mở vào xã ấy cho mọi người.
+  if (co.vao_thang && co.ten_mien === null) {
+    throw new Error("--vao-thang cần --domain=<tên-miền>: nó nung đúng tên miền ấy vào app riêng của xã.");
   }
   return co;
 }

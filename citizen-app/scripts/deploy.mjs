@@ -6,6 +6,7 @@
  * node scripts/deploy.mjs --phat-hanh                          APP CHUNG, BẢN PHÁT HÀNH (bỏ -t)
  * node scripts/deploy.mjs --domain=<tên-miền-xã>               APP RIÊNG, bản thử nghiệm (-t)
  * node scripts/deploy.mjs --domain=<tên-miền-xã> --phat-hanh   APP RIÊNG, BẢN PHÁT HÀNH
+ * node scripts/deploy.mjs --domain=<tên-miền-xã> --vao-thang   APP RIÊNG mở THẲNG vào xã ấy
  * node scripts/deploy.mjs … --thu                              IN RA rồi DỪNG, không làm gì cả
  * ```
  *
@@ -59,7 +60,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { docCauHinh } from "./cau-hinh.mjs";
+import { BIEN_XA_CO_DINH, docCauHinh } from "./cau-hinh.mjs";
 import {
   chonDich,
   docCo,
@@ -143,7 +144,14 @@ try {
 } catch (loi) {
   dungLai(loi);
 }
-const { phat_hanh, chi_thu } = co;
+const { phat_hanh, chi_thu, vao_thang } = co;
+
+// MÔI TRƯỜNG CỦA BƯỚC DỰNG. Tên miền xã chỉ vào bundle khi có `--vao-thang`, và luôn là đúng `--domain`
+// vừa chọn App ID đích. Không có cờ thì biến bị XOÁ khỏi môi trường dựng: một `VIGOV_XA_CO_DINH` còn
+// sót trong shell không được biến app chung thành app của một xã.
+const env_dung = { ...process.env };
+delete env_dung[BIEN_XA_CO_DINH];
+if (vao_thang) env_dung[BIEN_XA_CO_DINH] = dich.ten_mien;
 
 
 /**
@@ -229,6 +237,11 @@ console.log(
     ? "  Loại bản : PHÁT HÀNH — bỏ -t. Bản này ra người dùng thật / gửi duyệt."
     : "  Loại bản : THỬ NGHIỆM — có -t. Chỉ mở được bằng link bản thử nghiệm.",
 );
+console.log(
+  vao_thang
+    ? `  Mở app   : VÀO THẲNG xã ${dich.ten_mien} — tên miền này nung vào bundle (--vao-thang)`
+    : "  Mở app   : màn giới thiệu ViHAT; vào xã bằng QR có `d`",
+);
 console.log(`  Nhãn     : ${mota}`);
 // IN RA ĐỊA CHỈ MÁY CHỦ SẼ ĐI VÀO BUNDLE. Đây là thứ quyết định nút đăng nhập nói chuyện với ai,
 // và nó được nung vào tệp gửi đi — người chạy lệnh phải đọc được nó trước khi để lệnh chạy tiếp.
@@ -275,7 +288,8 @@ if (chi_thu) {
   console.log("--thu: dừng ở đây, không dựng và không đẩy gì cả. Dòng lệnh sẽ chạy:");
   // In biến LÚC DỰNG: địa chỉ máy chủ quyết định nút đăng nhập nói chuyện với ai. Một bản diễn
   // tập giấu mất nó là một bản diễn tập nói sai về lần chạy thật.
-  console.log(`  VIGOV_API_HOST=${api_host || "<CHƯA KHAI>"} vite build`);
+  const xa_dung = vao_thang ? ` ${BIEN_XA_CO_DINH}=${dich.ten_mien}` : "";
+  console.log(`  VIGOV_API_HOST=${api_host || "<CHƯA KHAI>"}${xa_dung} vite build`);
   console.log(`  npx --yes ${ZMP} sync-config dist/index.html`);
   const tien_to = dich.loai === "app-rieng" ? `APP_ID=${dich.app_id} ZMP_TOKEN=<môi trường> ` : "";
   console.log(
@@ -286,7 +300,7 @@ if (chi_thu) {
   process.exit(0);
 }
 
-let ma = dung();
+let ma = dung(env_dung);
 if (ma !== 0) process.exit(ma);
 
 ma = zmp(env_zmp, "sync-config", "dist/index.html");

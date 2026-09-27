@@ -21,7 +21,7 @@ phases instead of two apps.
 | Phase | What ships | Why |
 |---|---|---|
 | **1 — now** | A **real, working app**, released on the shared ViHAT App ID: the company introduction, the six features, **and** the citizen channel (petition screens — closed until the ViGov citizen session bridge exists). Before a commune's official letter, the commune reaches it through a **test-version QR carrying the commune domain** | This is the submission Zalo reviews, so the OA `Vihat` can verify the App ID **and** grant the permissions. Zalo grants them only when the submission **visibly uses** them |
-| **2 — next** | The **same citizen-app**, deployed to the commune's own App ID (`npm run zmp:deploy -- --domain=<tên-miền-xã>`) | The domain only picks the target App ID; the bundle is identical (ADR 0047) |
+| **2 — next** | The **same citizen-app**, deployed to the commune's own App ID (`npm run zmp:deploy -- --domain=<tên-miền-xã>`) | The domain picks the target App ID; add `--vao-thang` and it is also baked in, so the app opens straight into that commune (ADR 0047 §6) |
 
 **ONE build, no variants — decided by the product owner on 27/09/2026** (supersedes ADR 0047 D5):
 *"bỏ hoàn toàn demo đi, demo ở đây là ngôn ngữ nói hiểu về cách làm, không phải là khái niệm kỹ
@@ -649,16 +649,21 @@ npm run zmp:deploy                                  # APP CHUNG, bản thử ngh
 npm run zmp:phat-hanh                               # APP CHUNG, BẢN PHÁT HÀNH (bỏ -t)
 npm run zmp:deploy -- --domain=<tên-miền-xã>        # APP RIÊNG của xã ấy, bản thử nghiệm
 npm run zmp:phat-hanh -- --domain=<tên-miền-xã>     # APP RIÊNG của xã ấy, BẢN PHÁT HÀNH
+npm run zmp:phat-hanh -- --domain=<tên-miền-xã> --vao-thang   # APP RIÊNG mở THẲNG vào xã ấy
 ```
 
-Cả bốn đi qua `scripts/deploy.mjs`: dựng → `sync-config` → `deploy`. **Bundle là một**; `--domain`
-chỉ chọn App ID ĐÍCH (tra trong `scripts/ung-dung-theo-ten-mien.mjs`). Tên miền không có trong bảng
-thì **DỪNG**, không rơi về app chung. Đường app riêng đòi `ZMP_TOKEN` trong **môi trường** và kiểm
-claim `appId` của nó khớp App ID đích trước khi chạy gì cả (`scripts/dich-den.mjs`, `kiemToken`) —
-vì đích thật do token quyết, không do `APP_ID` (đã đo, zmp-cli 4.0.3). ⚠ Bảng tên miền → App ID hiện
-**chỉ có một dòng ví dụ placeholder**, nên mọi lệnh `--domain` bị từ chối ở lần chạy thật — đúng như
-thiết kế, cho tới khi có App ID và `ZMP_TOKEN` thật của từng app riêng. App chung vẫn đẩy được
-(`APP_ID_APP_CHUNG = null` nghĩa là token trong `.env` quyết đích). Dựng nằm **trong** script vì
+Tất cả đi qua `scripts/deploy.mjs`: dựng → `sync-config` → `deploy`. `--domain` chọn App ID ĐÍCH
+(tra trong `scripts/ung-dung-theo-ten-mien.mjs`). Tên miền không có trong bảng thì **DỪNG**, không
+rơi về app chung. Không có `--vao-thang` thì **bundle là một** cho mọi app: mở ra là màn giới thiệu
+ViHAT, vào xã bằng QR `d`. Có `--vao-thang` thì tên miền ấy được nung vào bundle và app mở thẳng vào
+kênh công dân của xã, không bước xác nhận (ADR 0047 §6).
+
+Đường app riêng lấy `ZMP_TOKEN` từ **môi trường**; không có thì script **tự chạy `zmp login`** (quét
+QR) cho đúng App ID ấy trong một thư mục tạm — không ghi đè `.env` của app chung — rồi kiểm claim
+`appId` khớp App ID đích trước khi dựng (`scripts/dich-den.mjs`, `kiemToken`). Đích thật do token
+quyết, không do `APP_ID` (đã đo, zmp-cli 4.0.3). App riêng chỉ **mở được** khi `service-platform`
+có dòng `mini_app` cho App ID ấy. App chung vẫn như cũ (`APP_ID_APP_CHUNG = null` nghĩa là token
+trong `.env` quyết đích). Dựng nằm **trong** script vì
 địa chỉ máy chủ được nung vào lúc dựng — dựng ngoài rồi đẩy trong là hai lệnh có thể lệch nhau.
 
 ⚠ **Cả bốn đều cần `VIGOV_API_HOST`**, vì khối đăng nhập đọc địa chỉ máy chủ lúc dựng. Cách
@@ -762,6 +767,6 @@ quyền gì**. Ngày có cầu phiên, thay bằng xã đọc từ phiên — **
 | `npm test` | Vitest — sự thật đã công bố, hình dạng bundle, sổ màn hình, bộ bóc tách vCard, các tính năng, kênh công dân, **và bundle đúng bằng thứ người duyệt đọc** |
 | `npm run zmp:sync` | Dựng rồi đồng bộ `app-config.json` theo trang đã dựng |
 | `npm run zmp:deploy [-- --domain=<tên-miền-xã>]` | App chung (hoặc app riêng của xã) → bản thử nghiệm |
-| `npm run zmp:phat-hanh [-- --domain=<tên-miền-xã>]` | App chung (hoặc app riêng của xã) → **bản phát hành**, có in ra và đếm ngược 5 giây |
+| `npm run zmp:phat-hanh [-- --domain=<tên-miền-xã> [--vao-thang]]` | App chung (hoặc app riêng của xã) → **bản phát hành**, có in ra và đếm ngược 5 giây. `--vao-thang`: app riêng mở thẳng vào xã |
 
 → Skills: `.claude/skills/zalo-miniapp-multi-tenant` · `.claude/skills/accessibility-elderly`

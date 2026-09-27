@@ -71,6 +71,24 @@ export function buocSauTraXa(kq: KetQuaCongKhai<readonly XaTraDuoc[]>, nguon: st
 }
 
 /**
+ * APP RIÊNG CỦA XÃ (`--vao-thang`, 27/09/2026): kết quả tra xã → xã để mở phiên NGAY, hoặc kết thúc.
+ * Không hỏi, không qua mức tin theo nguồn: người dân mở app riêng của xã là đã chọn xã, và tên miền
+ * đến từ bản dựng chứ không từ một liên kết ai đó chuyển tay. Vẫn cần ĐÚNG MỘT xã, tên không rỗng —
+ * mọi thứ khác fail closed y như đường QR.
+ */
+export function buocTuDongSauTraXa(
+  kq: KetQuaCongKhai<readonly XaTraDuoc[]>,
+): { readonly mo: XaGoiY } | { readonly ket_thuc: KetThucXacNhan } {
+  if (kq.kieu === "xong" && kq.gia_tri.length === 1 && kq.gia_tri[0]!.ten.trim() !== "") {
+    return { mo: kq.gia_tri[0]! };
+  }
+  if (kq.kieu === "xong" || kq.kieu === "khong-hop-le" || kq.kieu === "khong-thay") {
+    return { ket_thuc: { kieu: "ve-gioi-thieu", cau: XAC_NHAN_XA.khong_thay } };
+  }
+  return { ket_thuc: { kieu: "ve-gioi-thieu", cau: XAC_NHAN_XA.chua_ket_noi } };
+}
+
+/**
  * Kết quả mở phiên → bước kế. Chỉ `thu-lai` ở lại màn xác nhận: đó là nhánh duy nhất bấm lại có ích.
  *
  * `chua-mo` / `ngoai-zalo` KHÔNG còn về phần giới thiệu (27/09/2026): công dân đã xác nhận đúng xã, nên
@@ -125,8 +143,10 @@ export function XacNhanXa(props: {
   /** Hàm mở phiên do `App.tsx` dựng từ client đăng nhập — xem `api/mo-phien-vigov.ts`. */
   moPhienViGov: MoPhienViGov;
   onKetThuc: (kq: KetThucXacNhan) => void;
+  /** App riêng của xã (`XA_CO_DINH`): tra xong là mở phiên luôn, không hỏi — `buocTuDongSauTraXa`. */
+  tu_dong?: boolean;
 }) {
-  const { ten_mien, nguon, moPhienViGov, onKetThuc } = props;
+  const { ten_mien, nguon, moPhienViGov, onKetThuc, tu_dong = false } = props;
   const [trang, datTrang] = useState<TrangXacNhan>({ kieu: "dang-tra" });
   // Tra ĐÚNG MỘT LẦN, kể cả khi React chạy hiệu ứng hai lần (StrictMode).
   const da_tra = useRef(false);
@@ -139,15 +159,23 @@ export function XacNhanXa(props: {
   useEffect(() => {
     if (da_tra.current) return;
     da_tra.current = true;
-    void traXaTheoTenMien(ten_mien).then((kq) => sang(buocSauTraXa(kq, nguon)));
+    void traXaTheoTenMien(ten_mien).then((kq) => {
+      if (!tu_dong) return sang(buocSauTraXa(kq, nguon));
+      const b = buocTuDongSauTraXa(kq);
+      if ("ket_thuc" in b) onKetThuc(b.ket_thuc);
+      else moPhien(b.mo);
+    });
     // Tên miền và nguồn đọc MỘT LẦN lúc mở app; không có gì đổi chúng giữa chừng.
   }, []);
 
-  function xacNhan() {
-    if (trang.kieu !== "hoi") return;
-    const xa = trang.xa;
+  function moPhien(xa: XaGoiY) {
     datTrang({ kieu: "dang-mo", xa });
     void moPhienSauXacNhan(moPhienViGov, ten_mien).then((kq) => sang(buocSauMoPhien(xa, kq)));
+  }
+
+  function xacNhan() {
+    if (trang.kieu !== "hoi") return;
+    moPhien(trang.xa);
   }
 
   return (

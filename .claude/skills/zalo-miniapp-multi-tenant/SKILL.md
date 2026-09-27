@@ -35,6 +35,12 @@ bundle is uploaded to**; nothing from it enters the bundle. It is **not** the so
 which commune an App ID serves — the platform `MiniApp` table is, and when the two disagree the
 server wins.
 
+Second, narrower exception (ADR 0047 §6, 27/09/2026): `deploy.mjs --domain=<x> --vao-thang` bakes
+the domain `<x>` — and nothing else — into `__VIGOV_XA_CO_DINH__`, so a commune's own app opens
+straight into that commune with no group introduction and no confirmation step. It only steers the
+UI, like `d` on a public QR; the server still resolves the commune. Only `deploy.mjs` sets it, always
+equal to `--domain`. Widening it (another value, another source) is a new decision.
+
 ---
 
 ## The three layers — keep them separate
@@ -180,7 +186,7 @@ per-commune notification OA; read 0018 before touching this section) · ADR 0031
 | 1 | The commune comes from the **server** — confirmed QR (main app) or verified App ID (own app). Never from GPS, a picker, or a client-read App ID |
 | 2 | The session's commune name appears on **every** screen |
 | 3 | No switch action. A new commune in the main app = new QR, explicit confirmation, **new session, audited** |
-| 4 | API base URL and commune data are read **at runtime**, never baked into the bundle; one build serves every App ID |
+| 4 | API base URL and commune data are read **at runtime**, never baked into the bundle; one build serves every App ID — except the commune domain of a `--vao-thang` build (ADR 0047 §6) |
 | 5 | Confirm the commune at the **final step** before submitting anything |
 | 6 | The app works correctly when opened with **no parameter at all** — in both modes |
 | 7 | Nothing personal in logs, URLs, or file names |

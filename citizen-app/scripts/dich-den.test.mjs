@@ -113,15 +113,21 @@ describe("tệp ánh xạ", () => {
 
 describe("cờ dòng lệnh", () => {
   it("không cờ nào là app chung, bản thử nghiệm", () => {
-    expect(docCo([])).toEqual({ ten_mien: null, phat_hanh: false, chi_thu: false });
+    expect(docCo([])).toEqual({ ten_mien: null, phat_hanh: false, chi_thu: false, vao_thang: false });
   });
 
-  it("đọc đủ ba cờ", () => {
-    expect(docCo(["--domain=xa-a.vigov.example", "--phat-hanh", "--thu"])).toEqual({
+  it("đọc đủ bốn cờ", () => {
+    expect(docCo(["--domain=xa-a.vigov.example", "--vao-thang", "--phat-hanh", "--thu"])).toEqual({
       ten_mien: "xa-a.vigov.example",
       phat_hanh: true,
       chi_thu: true,
+      vao_thang: true,
     });
+  });
+
+  it("`--vao-thang` không kèm `--domain` thì DỪNG — app chung không bao giờ nung một xã", () => {
+    expect(() => docCo(["--vao-thang"])).toThrow(/cần --domain/);
+    expect(() => docCo(["--vao-thang", "--phat-hanh"])).toThrow(/cần --domain/);
   });
 
   it("`--bien-the` (cờ đã bỏ 27/09/2026) thì DỪNG và nói vì sao — không lặng lẽ bị bỏ qua", () => {

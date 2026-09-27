@@ -14,6 +14,7 @@ owns_facts:
   - "tham số QR/URL của app chung mang TÊN MIỀN xã thay cho t=<ULID>; máy chủ phân giải; tên miền không bao giờ được lưu làm tham chiếu xã"
   - "xã sáp nhập: trỏ tên miền cũ sang xã kế thừa, có vết, thay cho thông báo kế thừa qua t"
   - "vì sao phát hành app riêng được phép khi UNKNOWN #1 của ADR 0045 chưa đo, và cái giá của quyết định ấy"
+  - "cờ --vao-thang: app riêng nung tên miền xã vào bundle và mở thẳng vào xã, không màn ViHAT, không bước xác nhận — ngoại lệ duy nhất của câu 1 (chủ dự án, 27/09/2026)"
 ---
 
 # 0047. Hai luồng dựng `citizen-app` theo tên miền xã
@@ -115,6 +116,7 @@ UNKNOWN #1 **vẫn mở và vẫn phải đo** — quyết định này bỏ ch�
 | 0044 | Điều kiện dừng #1, chữ *"tệp cấu hình theo App ID"* | Nới cho **tệp chọn đích** (câu 2). Giá trị theo xã trong bundle vẫn cấm |
 | 0045 | ZNS trỏ *"app chính kèm `t`"* (`:55`) | App chính kèm tham số tên miền |
 | 0045 | Điều kiện dừng #4 | Câu 8 |
+| 0044 | Phương án bị loại *"Build riêng cho từng xã"* (`:47`) | Được dùng **hẹp** cho app riêng có `--vao-thang`: chỉ tên miền xã vào bundle (mục 6, 27/09 tối) |
 
 **Không thay:** ba lớp khám phá – phiên – uỷ quyền (ADR 0005). Một API host duy nhất. Xã do máy chủ
 quyết (ADR 0044). Toàn bộ cầu phiên, khoá cầu, cổng riêng (ADR 0045). QR ghép phiên và `src=pair`
@@ -225,12 +227,53 @@ nữa"*. Xã của app riêng do bảng `mini_app` quyết (ADR 0044).
 **phiên không xã**; phiên ấy đòi **bảng vết chưa thuộc xã** của câu mở #25 (ADR 0045:247-251) —
 **chưa dựng** (không migration nào tạo bảng ấy ở thời điểm ghi mục này).
 
+#### 6. Cờ `--vao-thang` — app riêng mở thẳng vào xã (27/09/2026, tối)
+
+Phát hành thử app riêng Thăng Bình (App ID `3291993990104489440`) cho thấy câu 1 để lại một lỗ: bundle
+**giống hệt từng byte** giữa app chung và app riêng, nên app riêng mở ra màn giới thiệu ViHAT Group
+như app chung. Chủ dự án chốt:
+
+> *"nên có 1 cờ đi … nếu có cờ đó thì vào thẳng app xã, nếu không có thì vào từ app vihat nhưng qr
+> chuyển hướng sang app citizen"* — cờ ở **lệnh đẩy** (lúc dựng), không ở tham số QR.
+
+| Câu | Nay |
+|---|---|
+| 1 — *"Không giá trị nào theo xã vào bundle"* | **Ngoại lệ đúng một:** `deploy.mjs --domain=<x> --vao-thang` nung tên miền `<x>` vào `__VIGOV_XA_CO_DINH__`. Không có cờ thì bundle vẫn là một, như câu 1 |
+| Mở app riêng có cờ | Không màn giới thiệu ViHAT, không bước *"Đúng xã này chưa?"* (khớp mục 4: *"vào app riêng là vào xã rồi"*). Tra `/communes`, mở phiên, vào thẳng kênh công dân. `d` trên QR bị bỏ qua — một app riêng chỉ phục vụ một xã |
+| App riêng **không** cờ, và app chung | Như cũ: màn ViHAT, vào xã bằng QR `d` + xác nhận |
+
+Cài đặt — `citizen-app/scripts/deploy.mjs` (môi trường dựng `env_dung`) · `scripts/cau-hinh.mjs`
+(`xaCoDinh`) · `vite.config.ts` (`define`) · `src/lib/xa-co-dinh.ts` · `src/App.tsx` ·
+`src/cong-dan/man/XacNhanXa.tsx` (`buocTuDongSauTraXa`).
+
+**Vì sao nung được mà không mở lỗ cô lập** (luật 1 bất biến 10, cấm #2):
+
+- Tên miền chỉ **dẫn giao diện**, cùng bản chất `d` trên QR công khai: tên xã vẫn do `/communes` trả,
+  xã của phiên vẫn do máy chủ phân giải (`ResolveHost`). Nó không cấp gì mà một QR mang `d` không cấp.
+- Người đặt duy nhất là `deploy.mjs`, và giá trị luôn là **đúng `--domain`** vừa chọn App ID đích —
+  không có đường nào để app của xã A mang tên miền xã B. `.env.local` đặt tên ấy thì bước dựng DỪNG;
+  shell còn sót tên ấy thì `deploy.mjs` xoá nó khỏi môi trường dựng khi không có cờ.
+- Không có ULID, cấu hình hay số liệu nào của xã trong bundle: tên, hồ sơ, SLA vẫn đọc lúc chạy.
+
+**Cái giá chủ dự án chấp nhận:** mỗi xã một bản dựng — sửa lỗi phải phát hành lại từng app riêng
+(đúng lý do ADR 0044 §*Phương án* từng loại *"build riêng cho từng xã"*).
+
+**Chưa đổi, và phải biết:** phiên của app riêng vẫn mở qua cầu của `vihat-miniapp`, và `vihat-miniapp`
+gửi **App ID của app chung** (`internal/httpapi/sessions_vigov.go:101`, một cặp App ID/secret —
+`internal/config/config.go:151-153`). Nên máy chủ thấy phiên ở chế độ **chính** kèm `commune_host_hint`
+đã xác nhận, không phải chế độ **riêng**; dòng `mini_app` của App ID xã chưa được đường này tra tới.
+Việc đổi token của app xã bằng secret của app chung **đã chạy được** trên máy thật 27/09 — một chứng cứ
+cho UNKNOWN #1 (Zalo không chặn), chưa phải phép đo có kiểm soát.
+
 ## ĐIỀU KIỆN DỪNG
 
 1. Đề xuất lưu **tên miền** làm tham chiếu xã ở bất kỳ đâu (phiên, xã đã nhớ, vết, bản ghi nghiệp vụ)
-2. Đề xuất tệp dựng hay bundle mang **giá trị theo xã** ngoài việc chọn App ID đích
+2. Đề xuất tệp dựng hay bundle mang **giá trị theo xã** ngoài việc chọn App ID đích — trừ tên miền
+   của `--vao-thang` (mục 6); nới ngoại lệ ấy (thêm giá trị khác, hay cho nguồn khác ngoài `--domain`
+   đặt nó) là quyết định mới
 3. Đề xuất để tệp dựng **quyết xã** của một App ID thay cho bảng platform
-4. Đổi nghĩa `tenant_hint`, hoặc cho tham số tên miền vào phiên mà **không** qua xác nhận
+4. Đổi nghĩa `tenant_hint`, hoặc cho tham số tên miền **của QR/URL** vào phiên mà **không** qua xác
+   nhận (tên miền nung bằng `--vao-thang` được miễn — mục 6)
 5. Tuyến tên miền → xã trả **ULID** cho client
 6. Trỏ tên miền sang xã khác mà **không ghi vết**
 

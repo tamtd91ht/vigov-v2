@@ -16,15 +16,15 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** Dựng, trả về mã thoát. */
-export function dung() {
+/** Dựng, trả về mã thoát. `env` mặc định là môi trường hiện tại; `deploy.mjs` truyền bản đã chọn. */
+export function dung(env = process.env) {
   const vite = fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url));
   const goc_du_an = fileURLToPath(new URL("..", import.meta.url));
 
   const ket_qua = spawnSync(process.execPath, [vite, "build"], {
     cwd: goc_du_an,
     stdio: "inherit",
-    env: process.env,
+    env,
   });
   return ket_qua.status ?? 1;
 }

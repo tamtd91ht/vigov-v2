@@ -41,7 +41,32 @@ export const TEN_BIEN_CHO_PHEP = ["VIGOV_API_HOST"];
 const TEN_DA_BO = {
   VIGOV_BIEN_THE:
     "VIGOV_BIEN_THE đã bỏ (27/09/2026): bản dựng không còn biến thể nào. Xoá dòng ấy khỏi .env.local.",
+  VIGOV_XA_CO_DINH:
+    "VIGOV_XA_CO_DINH KHÔNG đặt trong .env.local: một dòng quên ở đây biến MỌI bản dựng trên máy này " +
+    "thành app của một xã. Chỉ `deploy.mjs --domain=<tên-miền> --vao-thang` đặt nó, cho đúng một lần dựng.",
 };
+
+/**
+ * XÃ CỐ ĐỊNH CỦA BẢN DỰNG — tên miền xã nung vào bundle khi đẩy app riêng với `--vao-thang`
+ * (chủ dự án chọn 27/09/2026, thay ADR 0047 câu 1 cho riêng đường này). Rỗng = app chung.
+ *
+ * CHỈ ĐỌC BIẾN SHELL, KHÔNG ĐỌC `.env.local` — và `kiemTenBien` chặn tên này trong tệp ấy. Người đặt
+ * nó duy nhất là `deploy.mjs`, cho tiến trình con dựng, nên tên miền nung vào luôn là đúng `--domain`
+ * vừa chọn App ID đích: không có đường nào để app của xã A mang tên miền xã B.
+ *
+ * Giá trị sai khuôn thì DỪNG bước dựng: một tên miền hỏng nung vào là một app riêng mở ra trống.
+ */
+export const BIEN_XA_CO_DINH = "VIGOV_XA_CO_DINH";
+
+export function xaCoDinh(moi_truong = process.env) {
+  const gia_tri = (moi_truong[BIEN_XA_CO_DINH] ?? "").trim();
+  if (gia_tri === "") return "";
+  const nhan = gia_tri.split(".");
+  const dung_khuon =
+    gia_tri.length <= 253 && nhan.length >= 2 && nhan.every((n) => /^(?!-)[a-z0-9-]{1,63}(?<!-)$/.test(n));
+  if (!dung_khuon) throw new Error(`${BIEN_XA_CO_DINH}="${gia_tri}" không phải một tên miền trần chữ thường.`);
+  return gia_tri;
+}
 
 /** Tệp cấu hình local của bước DỰNG. `.env` là tệp KHÁC, của `zmp-cli` — xem `kiemTenBien`. */
 export const TEP_LOCAL = ".env.local";

@@ -22,6 +22,7 @@ import {
 } from "./features/company-intro/screens";
 import { cuonToiMoc } from "./lib/cuon-toi";
 import { type KetQuaDo, thamSoMoApp, thamSoXa } from "./lib/launch-params";
+import { XA_CO_DINH } from "./lib/xa-co-dinh";
 
 /**
  * Phase 1 shell: four static screens, no navigation library, no state beyond the current tab.
@@ -240,11 +241,17 @@ export function App() {
    * phiên nếu công dân chưa bấm xác nhận. `null` (không có `d`, `src` không tin được, `d` sai khuôn)
    * là mở như không tham số: KHÔNG một lời gọi nào tới `identity`/`comms`.
    */
-  const goiY = thamSoXa(thamSo);
+  //
+  // APP RIÊNG CỦA XÃ (`--vao-thang`, 27/09/2026): xã đến từ bản dựng, không từ QR — và `d` trên QR bị
+  // bỏ qua, vì một app riêng chỉ phục vụ đúng một xã. `nguon` không phải `qr`/`zns` nên `phanGiaiGoiY`
+  // không bao giờ "chọn sẵn" nó; đường tự động của `XacNhanXa` không đi qua hàm ấy (`buocTuDongSauTraXa`).
+  const goiY = XA_CO_DINH !== null ? { ten_mien: XA_CO_DINH, nguon: "app-rieng" } : thamSoXa(thamSo);
   const dangKhamPha = goiY !== null && xa === null && !xongKhamPha;
 
   function ketThucKhamPha(kq: KetThucXacNhan) {
     datXongKhamPha(true);
+    // App riêng: vào xã xong là vào THẲNG kênh công dân — màn chủ ViHAT không phải chỗ đến của nó.
+    if (XA_CO_DINH !== null && kq.kieu !== "ve-gioi-thieu") setMoKenhCongDan(true);
     // `goiY === null` không tới được đây (màn xác nhận chỉ dựng khi có nó); nếu có thì KHÔNG đặt xã nào.
     if (kq.kieu === "da-mo" && goiY !== null) {
       datXa({ ten: kq.ten_xa, tinh: null, ten_mien: khoaTraCongKhai(kq.ten_mien, goiY.ten_mien) });
@@ -279,6 +286,7 @@ export function App() {
         nguon={goiY.nguon}
         moPhienViGov={moPhienViGov}
         onKetThuc={ketThucKhamPha}
+        tu_dong={XA_CO_DINH !== null}
       />
     );
   } else if (thongBao !== null && currentId === DEFAULT_SCREEN_ID) {

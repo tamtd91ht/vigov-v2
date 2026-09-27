@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 // MỘT NGUỒN SỰ THẬT cho cấu hình lúc dựng — `scripts/deploy.mjs` nhập đúng mô-đun này. Nó đọc
 // `.env.local` bằng `loadEnv` (Vite KHÔNG tự nạp tệp ấy vào `process.env`), để biến shell thắng
 // tệp, và CHẶN mọi tên biến ngoài danh sách trắng. Đọc khối chú thích ở đó trước khi sửa.
-import { docCauHinh } from "./scripts/cau-hinh.mjs";
+import { docCauHinh, xaCoDinh } from "./scripts/cau-hinh.mjs";
 
 /**
  * MỘT BẢN DỰNG, KHÔNG BIẾN THỂ — 27/09/2026, quyết định của chủ sản phẩm.
@@ -17,7 +17,9 @@ import { docCauHinh } from "./scripts/cau-hinh.mjs";
  *
  * Thứ bị gỡ theo: `VIGOV_BIEN_THE`, ba cửa `bien-the/…`, các tệp `index.rong.ts`. Tên miền xã chỉ
  * chọn App ID ĐÍCH lúc đẩy (`scripts/deploy.mjs --domain=`); nó KHÔNG đổi nội dung bundle — bundle
- * là một. (Tệp này không nhắc tên tệp chọn đích, kể cả trong chú thích: có một ca kiểm ghim theo
+ * là một. NGOẠI LỆ DUY NHẤT (chủ dự án, 27/09/2026): thêm `--vao-thang` thì tên miền ấy được nung
+ * vào `__VIGOV_XA_CO_DINH__` và app mở thẳng vào xã — không có cờ ấy, bundle vẫn là một.
+ * (Tệp này không nhắc tên tệp chọn đích, kể cả trong chú thích: có một ca kiểm ghim theo
  * CHUỖI rằng nó không nhập tệp ấy.)
  */
 
@@ -100,7 +102,12 @@ const thePlainScript = {
 export default defineConfig(() => ({
   base: "./",
   plugins: [thePlainScript],
-  define: { __VIGOV_API_HOST__: JSON.stringify(diaChiMayChu()) },
+  // `__VIGOV_XA_CO_DINH__`: rỗng trừ khi `deploy.mjs --vao-thang` dựng app riêng của một xã — xem
+  // `xaCoDinh` trong scripts/cau-hinh.mjs và src/lib/xa-co-dinh.ts.
+  define: {
+    __VIGOV_API_HOST__: JSON.stringify(diaChiMayChu()),
+    __VIGOV_XA_CO_DINH__: JSON.stringify(xaCoDinh()),
+  },
   build: {
     outDir: "dist",
     // Zalo reviews and hosts a static bundle. Keeping sourcemaps out keeps the uploaded

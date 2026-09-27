@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { docCauHinh, kiemTenBien, TEN_BIEN_CHO_PHEP, TEP_LOCAL } from "./cau-hinh.mjs";
+import { docCauHinh, kiemTenBien, TEN_BIEN_CHO_PHEP, TEP_LOCAL, xaCoDinh } from "./cau-hinh.mjs";
 
 /**
  * CẤU HÌNH LÚC DỰNG — PHÉP KIỂM CỦA MỘT CÁI RÀO, KHÔNG PHẢI CỦA MỘT TIỆN ÍCH.
@@ -161,5 +161,34 @@ describe("cái rào thật sự được nối vào hai chỗ dùng", () => {
     // Placeholder, không phải một địa chỉ thật (luật 8, bất biến 6).
     expect(vidu).toMatch(/VIGOV_API_HOST=https:\/\/<[^>]+>/);
     for (const ten of TEN_BIEN_CHO_PHEP) expect(vidu).toContain(ten);
+  });
+});
+
+describe("xã cố định của bản dựng (`--vao-thang`, 27/09/2026)", () => {
+  it("không đặt thì rỗng — mọi bản dựng thường là app chung", () => {
+    expect(xaCoDinh({})).toBe("");
+    expect(xaCoDinh({ VIGOV_XA_CO_DINH: "  " })).toBe("");
+  });
+
+  it("tên miền trần thì nhận nguyên", () => {
+    expect(xaCoDinh({ VIGOV_XA_CO_DINH: "xa-a.vigov.example" })).toBe("xa-a.vigov.example");
+  });
+
+  it.each(["https://xa-a.vigov.example", "Xa-A.vigov.example", "localhost", "xa-a.vigov.example/x"])(
+    "%s thì DỪNG bước dựng — không nung một tên miền hỏng",
+    (gia_tri) => {
+      expect(() => xaCoDinh({ VIGOV_XA_CO_DINH: gia_tri })).toThrow(/tên miền trần/);
+    },
+  );
+
+  it("đặt trong `.env.local` thì CHẶN — chỉ deploy.mjs được đặt nó, cho một lần dựng", () => {
+    expect(() => kiemTenBien("VIGOV_XA_CO_DINH=xa-a.vigov.example\n")).toThrow(/--vao-thang/);
+  });
+
+  it("`deploy.mjs` xoá biến khỏi môi trường dựng khi không có cờ, và chỉ đặt nó bằng `--domain`", () => {
+    const ma = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
+    expect(ma).toMatch(/delete env_dung\[BIEN_XA_CO_DINH\]/);
+    expect(ma).toMatch(/if \(vao_thang\) env_dung\[BIEN_XA_CO_DINH\] = dich\.ten_mien;/);
+    expect(ma).toMatch(/dung\(env_dung\)/);
   });
 });
