@@ -3210,7 +3210,7 @@
       "path": "/api/v1/tasks/{ma}/status",
       "operation_id": "petitions_post_tasks_by_ma_status",
       "task_id": "bf5719ad43c6",
-      "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong",
+      "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do",
       "screen": "02-nhiem-vu §6",
       "permission_kind": "permission",
       "permission": "task.update",

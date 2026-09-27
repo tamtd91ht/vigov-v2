@@ -9881,6 +9881,14 @@
         "x-vigov-task": "8cb874693096",
         "parameters": [
           {
+            "name": "permission",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "unit",
             "in": "query",
             "required": false,
@@ -13456,7 +13464,7 @@
         }
       ],
       "post": {
-        "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong",
+        "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do",
         "operationId": "petitions_post_tasks_by_ma_status",
         "tags": [
           "petitions"

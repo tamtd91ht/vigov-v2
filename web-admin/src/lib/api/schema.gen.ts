@@ -3826,6 +3826,7 @@ export type identity_get_staff_directory = {
   thamSo: {
   };
   truyVan: {
+    "permission"?: string;
     "unit"?: string;
   };
   than: never;
@@ -4602,7 +4603,7 @@ export type petitions_get_tasks_by_ma_log_entries = {
   };
 };
 
-/** POST /api/v1/tasks/{ma}/status — Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong */
+/** POST /api/v1/tasks/{ma}/status — Chuyển trạng thái một nhiệm vụ theo vòng đời §6, kèm ghi nhật ký — hoàn thành cần quyền duyệt và mọi việc con đã xong; trả lại để làm tiếp cần quyền duyệt và lý do */
 export type petitions_post_tasks_by_ma_status = {
   duongDan: "/api/v1/tasks/{ma}/status";
   phuongThuc: "POST";
