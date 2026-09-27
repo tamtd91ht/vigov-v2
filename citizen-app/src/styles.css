@@ -2710,6 +2710,14 @@ body {
   place-items: center;
   flex: none;
 }
+.xa-hero__logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #ffffff;
+  object-fit: contain;
+  flex: none;
+}
 .xa-hero__chu {
   min-width: 0;
 }

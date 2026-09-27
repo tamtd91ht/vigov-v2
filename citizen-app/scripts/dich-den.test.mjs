@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -373,4 +373,19 @@ describe("mọi script dòng lệnh phải PHÂN TÍCH ĐƯỢC", () => {
       expect(r.status, r.stderr).toBe(0);
     });
   }
+});
+
+describe("logo xã tạm thời chỉ đi vào đúng bản dựng --vao-thang", () => {
+  const ma = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
+
+  it("chỉ chép khi có cờ, và xoá trong `finally` sau bước dựng", () => {
+    expect(ma).toMatch(/const LOGO_NGUON = vao_thang \?/);
+    expect(ma).toMatch(/if \(co_logo\) copyFileSync\(LOGO_NGUON, LOGO_DICH\)/);
+    expect(ma).toMatch(/finally \{[^}]*if \(co_logo\) rmSync\(LOGO_DICH/);
+  });
+
+  it("logo Thăng Bình có ở chỗ deploy.mjs tìm, và bản chép vào public/ bị git bỏ qua", () => {
+    expect(existsSync(new URL("./logo-xa/thangbinh-danang.vigov.vn.png", import.meta.url))).toBe(true);
+    expect(readFileSync(new URL("../.gitignore", import.meta.url), "utf8")).toMatch(/^public\/logo-xa\.png$/m);
+  });
 });

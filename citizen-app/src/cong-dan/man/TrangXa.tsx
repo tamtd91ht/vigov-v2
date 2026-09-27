@@ -27,7 +27,7 @@ import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { GuiPhanAnhScreen } from "./GuiPhanAnhScreen";
-import { APP_RIENG, CHUA_DANG_NHAP_XA, CUA_TOI, DANH_BA, GUI, TIN_XA, TRA_CUU, XA_GIAO_DIEN } from "./noi-dung";
+import { APP_RIENG, CUA_TOI, DANH_BA, GUI, TIN_XA, TRA_CUU, XA_GIAO_DIEN } from "./noi-dung";
 import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
 import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
@@ -97,6 +97,25 @@ function ThanhTabXa({ tab, onChon, onGui }: { tab: TabXa; onChon: (t: TabXa) => 
 
 /* ═════════════════════════════════ TRANG CHỦ ═════════════════════════════════ */
 
+/**
+ * LOGO XÃ trên header. TẠM THỜI: `deploy.mjs --vao-thang` chép `scripts/logo-xa/<tên-miền>.png` vào bản
+ * dựng thành `./logo-xa.png` (chủ dự án, 28/09/2026); nguồn thật sau này là hồ sơ hiển thị của xã ở
+ * service-platform, cấu hình qua platform-admin. Không có tệp (bản dựng không kèm logo, chạy thử) thì
+ * ảnh báo lỗi và ô trở về biểu tượng tòa nhà — không bao giờ một khung ảnh vỡ.
+ * `alt=""`: tên xã đứng ngay cạnh bằng chữ; đọc thêm "logo" chỉ là tiếng ồn cho trình đọc màn hình.
+ */
+function LogoXa() {
+  const [loi, datLoi] = useState(false);
+  if (loi) {
+    return (
+      <span className="xa-hero__dai-dien" aria-hidden="true">
+        <BieuTuong ten="build" co={24} />
+      </span>
+    );
+  }
+  return <img className="xa-hero__logo" src="./logo-xa.png" alt="" onError={() => datLoi(true)} />;
+}
+
 function TrangChuXa(props: {
   xa: XaCuaApp;
   tin: ReturnType<typeof useTinXa>;
@@ -115,9 +134,7 @@ function TrangChuXa(props: {
     <div className="xa-trang">
       <header className="xa-hero">
         <div className="xa-hero__hang">
-          <span className="xa-hero__dai-dien" aria-hidden="true">
-            <BieuTuong ten="build" co={24} />
-          </span>
+          <LogoXa />
           <div className="xa-hero__chu">
             <p className="xa-hero__chao">{XA_GIAO_DIEN.chao}</p>
             <h1 className="xa-hero__ten">{xa.ten}</h1>
@@ -222,7 +239,7 @@ function AppCuaXa({ ten_mien, xa }: { ten_mien: string; xa: XaCuaApp }) {
           <>
             <DauManCon tieu_de={tieu_de} onQuayLai={() => veTab("trang-chu")} />
             <TrangCon>
-              <ChuaDangNhap cau={CHUA_DANG_NHAP_XA.cau} />
+              <ChuaDangNhap cau={XA_GIAO_DIEN.chua_dang_nhap_day_du} />
             </TrangCon>
           </>
         )}
@@ -253,7 +270,7 @@ function AppCuaXa({ ten_mien, xa }: { ten_mien: string; xa: XaCuaApp }) {
       <>
         <DauTab tieu_de={CUA_TOI.tieu_de} />
         <div className="xa-trang xa-trang--tab">
-          <ChuaDangNhap cau={CHUA_DANG_NHAP_XA.cau} />
+          <ChuaDangNhap cau={XA_GIAO_DIEN.chua_dang_nhap_day_du} />
         </div>
       </>
     );

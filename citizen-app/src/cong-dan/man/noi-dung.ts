@@ -364,8 +364,12 @@ export const XA_GIAO_DIEN = {
   muc_tin_moi: "Tin tức mới",
   xem_tat_ca: "Xem tất cả",
   tin_moi_trong: "Chưa có tin nào được đăng.",
-  chua_dang_nhap_tieu_de: "Chưa đăng nhập được với xã",
-  chua_dang_nhap_ngan: "Ứng dụng chưa đăng nhập được với xã trên điện thoại này.",
+  // App riêng ĐÃ ở đúng xã; thứ còn thiếu là xác nhận NGƯỜI DÂN (tài khoản Zalo) — câu cũ "chưa đăng
+  // nhập được với xã" làm người đọc tưởng app vào nhầm xã (chủ dự án hỏi đúng câu ấy, 28/09/2026).
+  chua_dang_nhap_tieu_de: "Tính năng đang được hoàn thiện",
+  chua_dang_nhap_ngan: "Gửi và theo dõi phản ánh cần xác nhận tài khoản Zalo của bạn. Tính năng này đang được hoàn thiện.",
+  chua_dang_nhap_day_du:
+    "Gửi và theo dõi phản ánh cần xác nhận tài khoản Zalo của bạn. Tính năng này đang được hoàn thiện. Trong lúc chờ, bạn có thể đến Bộ phận tiếp nhận của Ủy ban nhân dân xã hoặc gọi điện cho cán bộ trong mục Danh bạ.",
   tim_danh_ba: "Tìm theo tên, chức vụ, bộ phận",
   khong_thay_can_bo: "Không tìm thấy cán bộ phù hợp.",
   goi: "Gọi",

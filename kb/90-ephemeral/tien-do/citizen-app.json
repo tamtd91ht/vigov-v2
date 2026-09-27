@@ -213,9 +213,9 @@
       "id": "giao-dien-app-rieng-theo-ban-mau",
       "viec": "Giao diện app riêng của xã theo bản mẫu vi-gov/zalo-miniapp (ADR 0047 §6)",
       "trang_thai": "dang_lam",
-      "bang_chung": "cong-dan/man/TrangXa.tsx (điều hướng không router: trang chủ, tab Phản ánh/Tin tức/Danh bạ, nút nổi Gửi phản ánh, màn con), BieuTuong.tsx (hình của bản mẫu viết lại bằng JSX, không innerHTML), khung-xa.tsx, TinTucAppXa.tsx, DanhBaXa.tsx (ô tìm qua ONhapDong), lớp .xa-* trong styles.css; accessibility.test.ts thêm ca vùng chạm + 10 cặp tương phản cho .xa-*. vitest 873+/873+, tsc sạch. Chạy dev với VIGOV_XA_CO_DINH=thangbinh-danang.vigov.vn: dữ liệu thật từ prod hiện đúng (Xã Thăng Bình, Thành phố Đà Nẵng).",
+      "bang_chung": "cong-dan/man/TrangXa.tsx (điều hướng không router: trang chủ, tab Phản ánh/Tin tức/Danh bạ, nút nổi Gửi phản ánh, màn con), BieuTuong.tsx (hình của bản mẫu viết lại bằng JSX, không innerHTML), khung-xa.tsx, TinTucAppXa.tsx, DanhBaXa.tsx (ô tìm qua ONhapDong), lớp .xa-* trong styles.css; accessibility.test.ts thêm ca vùng chạm + 10 cặp tương phản cho .xa-*. vitest 873+/873+, tsc sạch. Chạy dev với VIGOV_XA_CO_DINH=thangbinh-danang.vigov.vn: dữ liệu thật từ prod hiện đúng (Xã Thăng Bình, Thành phố Đà Nẵng). || 28/09: logo xã TẠM (chủ dự án: 'copy tạm, sau này cấu hình ở platform-admin') — citizen-app/scripts/logo-xa/thangbinh-danang.vigov.vn.png (192px), deploy.mjs chép vào public/logo-xa.png chỉ cho lần dựng --vao-thang rồi xoá trong finally; header hiện logo, lỗi ảnh thì về biểu tượng. Câu 'Chưa đăng nhập được với xã' đổi thành 'Tính năng đang được hoàn thiện'. Xem thử dev: logo tải được.",
       "no_confirm": [],
-      "tiep_theo": "Chủ dự án xem trên máy thật sau khi phát hành --vao-thang. Chưa theo bản mẫu: các màn gửi/xem/tra cứu phản ánh (chỉ hiện 'chưa đăng nhập được' tới khi có đăng nhập app riêng). Không hiện: tra cứu hồ sơ, truyền thanh, video, bản đồ, cá nhân — chưa có máy chủ."
+      "tiep_theo": "Logo: chuyển sang ho_so_hien_thi_xa.logo_url khi platform-admin có màn cấu hình; gỡ scripts/logo-xa/ cùng lúc. Chủ dự án xem trên máy thật sau khi phát hành --vao-thang. Chưa theo bản mẫu: các màn gửi/xem/tra cứu phản ánh (chỉ hiện 'chưa đăng nhập được' tới khi có đăng nhập app riêng). Không hiện: tra cứu hồ sơ, truyền thanh, video, bản đồ, cá nhân — chưa có máy chủ."
     }
   ]
 }

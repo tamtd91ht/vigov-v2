@@ -57,7 +57,7 @@
  * duyệt là dòng đoán ra.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -151,6 +151,16 @@ const { phat_hanh, chi_thu, vao_thang } = co;
 // MÔI TRƯỜNG CỦA BƯỚC DỰNG. Tên miền xã chỉ vào bundle khi có `--vao-thang`, và luôn là đúng `--domain`
 // vừa chọn App ID đích. Không có cờ thì biến bị XOÁ khỏi môi trường dựng: một `VIGOV_XA_CO_DINH` còn
 // sót trong shell không được biến app chung thành app của một xã.
+/**
+ * LOGO XÃ — TẠM THỜI (chủ dự án, 28/09/2026: "copy tạm sang đâu đó dùng trước, sau này nó sẽ cấu hình
+ * ở platform-admin"). Ảnh nằm ở `scripts/logo-xa/<tên-miền>.png`, được chép vào `public/logo-xa.png`
+ * cho ĐÚNG lần dựng `--vao-thang` rồi xoá ngay sau đó, nên không bản dựng nào khác mang logo của một
+ * xã. Nguồn thật sẽ là `ho_so_hien_thi_xa.logo_url` của service-platform, đọc lúc chạy.
+ */
+const LOGO_NGUON = vao_thang ? new URL(`./logo-xa/${dich.ten_mien}.png`, import.meta.url) : null;
+const LOGO_DICH = new URL("../public/logo-xa.png", import.meta.url);
+const co_logo = LOGO_NGUON !== null && existsSync(LOGO_NGUON);
+
 const env_dung = { ...process.env };
 delete env_dung[BIEN_XA_CO_DINH];
 if (vao_thang) env_dung[BIEN_XA_CO_DINH] = dich.ten_mien;
@@ -253,6 +263,9 @@ console.log(
     ? `  Mở app   : VÀO THẲNG xã ${dich.ten_mien} — tên miền này nung vào bundle, ẩn thanh tiêu đề Zalo (--vao-thang)`
     : "  Mở app   : màn giới thiệu ViHAT; vào xã bằng QR có `d`",
 );
+if (vao_thang) {
+  console.log(`  Logo xã  : ${co_logo ? `scripts/logo-xa/${dich.ten_mien}.png` : "(chưa có — header hiện biểu tượng)"}`);
+}
 console.log(`  Nhãn     : ${mota}`);
 // IN RA ĐỊA CHỈ MÁY CHỦ SẼ ĐI VÀO BUNDLE. Đây là thứ quyết định nút đăng nhập nói chuyện với ai,
 // và nó được nung vào tệp gửi đi — người chạy lệnh phải đọc được nó trước khi để lệnh chạy tiếp.
@@ -311,7 +324,14 @@ if (chi_thu) {
   process.exit(0);
 }
 
-let ma = dung(env_dung);
+if (co_logo) copyFileSync(LOGO_NGUON, LOGO_DICH);
+let ma;
+try {
+  ma = dung(env_dung);
+} finally {
+  // `dist/` đã có bản chép; tệp trong `public/` không được nằm lại cho lần dựng app chung kế tiếp.
+  if (co_logo) rmSync(LOGO_DICH, { force: true });
+}
 if (ma !== 0) process.exit(ma);
 
 // `app-config.json` được COMMIT và dùng chung. App riêng `--vao-thang` đổi nó cho ĐÚNG lần đẩy này
