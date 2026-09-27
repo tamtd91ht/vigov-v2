@@ -11,10 +11,8 @@ import {
   cheSoDienThoai,
   chuCaiDau,
   kiemNhapPhieu,
-  layNguoiDungGiaLap,
   loiChao,
   maPhieuTraiNghiem,
-  NGUOI_DUNG_GIA_LAP,
   nhomCua,
   type NhapPhieu,
   taoPhieuTraiNghiem,
@@ -31,12 +29,22 @@ const NHAP: NhapPhieu = {
   an_danh: false,
 };
 
-describe("bản trải nghiệm: người dùng giả lập", () => {
-  it("hành động duy nhất hôm nay trả người dùng giả lập cố định, số trong dải số giả", async () => {
-    const nd = await layNguoiDungGiaLap();
-    expect(nd).toEqual(NGUOI_DUNG_GIA_LAP);
-    expect(nd.nguon).toBe("gia-lap");
-    expect(nd.so_dien_thoai).toMatch(/^090000000\d$/);
+describe("họ tên: xin quyền Zalo, không đăng nhập, không người dùng giả lập", () => {
+  it("không còn người dùng giả lập hay màn định danh nào trong nửa nhà nước", () => {
+    const tep = import.meta.glob(["./*.ts", "./*.tsx"], { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    for (const [duong, ma] of Object.entries(tep)) {
+      if (duong.includes(".test.")) continue;
+      expect(ma, duong).not.toMatch(/NGUOI_DUNG_GIA_LAP|layNguoiDungGiaLap|DinhDanhXa/);
+    }
+  });
+
+  it("app riêng không xin quyền số điện thoại — Zalo chỉ trả mã, không có máy chủ đổi", () => {
+    const app = import.meta.glob("../../App.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    const ma = Object.values(app)[0]!;
+    const than = ma.slice(ma.indexOf("export function AppRieng("), ma.indexOf("function AppChung("));
+    expect(than.length).toBeGreaterThan(0);
+    expect(than).not.toMatch(/xinTokenSoDienThoai|xinHaiMaDangNhap/);
+    expect(than).toMatch(/layTenZalo/);
   });
 
   it("che số điện thoại và họ tên cùng khuôn máy chủ che cho người gửi", () => {

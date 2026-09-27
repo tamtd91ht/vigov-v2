@@ -27,12 +27,13 @@ import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
 import { GUI, giaiThichTrangThai, KHAN_CAP, nhanTrangThai, THE_PHIEU, TRA_CUU, TRANG_THAI, XA_TN } from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
 import {
+  type KetQuaLayTen,
   type KetQuaViTri,
   kiemNhapPhieu,
   type LayMaViTri,
   type LoiNhapPhieu,
+  type LayTenZalo,
   maPhieuTraiNghiem,
-  type NguoiDungApp,
   nhomCua,
   type NhomLoc,
   type NhapPhieu,
@@ -315,6 +316,47 @@ const CAU_VI_TRI: Readonly<Record<KetQuaViTri, string>> = {
   "khong-lay-duoc": XA_TN.vi_tri_khong_lay_duoc,
 };
 
+const CAU_TEN: Readonly<Record<Exclude<KetQuaLayTen["kieu"], "xong">, string>> = {
+  "tu-choi": XA_TN.ten_tu_choi,
+  "ngoai-zalo": XA_TN.ten_ngoai_zalo,
+  "khong-lay-duoc": XA_TN.ten_khong_lay_duoc,
+};
+
+/**
+ * Nút "Lấy họ tên từ Zalo" — HÀNH ĐỘNG XIN QUYỀN DUY NHẤT (`LayTenZalo`). Zalo tự bật hộp hỏi; người dân
+ * từ chối thì vẫn tự gõ được, và câu hiện ra nói đúng điều ấy.
+ */
+export function NutLayTen({ lay, onTen }: { lay: LayTenZalo; onTen: (ho_ten: string) => void }) {
+  const [dang, datDang] = useState(false);
+  const [cau, datCau] = useState<{ loi: boolean; chu: string } | null>(null);
+  async function bam() {
+    if (dang) return;
+    datDang(true);
+    const kq = await lay().catch((): KetQuaLayTen => ({ kieu: "khong-lay-duoc" }));
+    datDang(false);
+    if (kq.kieu === "xong") {
+      onTen(kq.ho_ten);
+      datCau({ loi: false, chu: XA_TN.ten_da_lay });
+    } else {
+      datCau({ loi: true, chu: CAU_TEN[kq.kieu] });
+    }
+  }
+  return (
+    <div className="xa-vi-tri">
+      <button type="button" className="xa-nut xa-nut--phu" onClick={() => void bam()} disabled={dang}>
+        <BieuTuong ten="user" co={20} />
+        {dang ? XA_TN.ten_dang : XA_TN.ten_nut}
+      </button>
+      <p className="xa-phu">{XA_TN.ten_vi_sao}</p>
+      {cau !== null && (
+        <p className={cau.loi ? "xa-loi-o" : "xa-phu"} role="status">
+          {cau.chu}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Nút "Lấy vị trí hiện tại". Chỉ có khi lớp vỏ tiêm hàm lấy mã vị trí (chạy trong Zalo). */
 function NutViTri({ lay }: { lay: LayMaViTri }) {
   const [dang, datDang] = useState(false);
@@ -343,7 +385,10 @@ function NutViTri({ lay }: { lay: LayMaViTri }) {
 
 export function GuiPhanAnhTN(props: {
   ten_xa: string;
-  nguoi_dung: NguoiDungApp;
+  /** Họ tên đã lấy từ Zalo ở lần mở này, hoặc `null`. */
+  ho_ten: string | null;
+  lay_ten?: LayTenZalo;
+  onTen: (ho_ten: string) => void;
   lay_ma_vi_tri?: LayMaViTri;
   onQuayLai: () => void;
   onDaGui: (phieu: PhieuCuaToi) => void;
@@ -353,8 +398,8 @@ export function GuiPhanAnhTN(props: {
   const [nhap, datNhap] = useState<NhapPhieu>({
     noi_dung: "",
     dia_chi: "",
-    ho_ten: props.nguoi_dung.ho_ten,
-    dien_thoai: props.nguoi_dung.so_dien_thoai,
+    ho_ten: props.ho_ten ?? "",
+    dien_thoai: "",
     an_danh: false,
   });
   const [loi, datLoi] = useState<LoiNhapPhieu>({});
@@ -460,8 +505,18 @@ export function GuiPhanAnhTN(props: {
             </div>
             {!nhap.an_danh && (
               <>
+                {props.lay_ten && (
+                  <NutLayTen
+                    lay={props.lay_ten}
+                    onTen={(t) => {
+                      datNhap((x) => ({ ...x, ho_ten: t }));
+                      props.onTen(t);
+                    }}
+                  />
+                )}
                 <ONhapDong id="xa-ho-ten" nhan={GUI.nhan_ho_ten} gia_tri={nhap.ho_ten} toi_da={DO_DAI_TOI_DA.ho_ten} onDoi={doi("ho_ten")} />
                 {loi.ho_ten && <p className="xa-loi-o" role="alert">{loi.ho_ten}</p>}
+                <p className="xa-phu">{XA_TN.so_tu_go}</p>
                 <ONhapDong id="xa-dien-thoai" nhan={GUI.nhan_dien_thoai} gia_tri={nhap.dien_thoai} toi_da={DO_DAI_TOI_DA.dien_thoai} kieu_ban_phim="tel" onDoi={doi("dien_thoai")} />
                 {loi.dien_thoai && <p className="xa-loi-o" role="alert">{loi.dien_thoai}</p>}
               </>

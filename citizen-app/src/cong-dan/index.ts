@@ -26,6 +26,6 @@
  */
 export { KenhCongDan, NutVaoKenhCongDan } from "./man/KenhCongDan";
 export { TrangXa, type XaCuaApp } from "./man/TrangXa";
-export type { KetQuaViTri, LayMaViTri } from "./man/trai-nghiem";
+export type { KetQuaLayTen, KetQuaViTri, LayMaViTri, LayTenZalo } from "./man/trai-nghiem";
 export { type KetThucXacNhan, XacNhanXa } from "./man/XacNhanXa";
 export type { KetQuaMoPhien, MoPhienViGov, YeuCauMoPhien } from "./api/mo-phien-vigov";

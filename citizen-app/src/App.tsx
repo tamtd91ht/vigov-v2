@@ -6,6 +6,7 @@ import {
   type KetQuaMoPhien,
   type KetThucXacNhan,
   type LayMaViTri,
+  type LayTenZalo,
   type MoPhienViGov,
   NutVaoKenhCongDan,
   TrangXa,
@@ -14,7 +15,7 @@ import {
 import { COMPANY } from "./content/company-profile";
 import { NutChatOA } from "./features/company-intro/NutChatOA";
 import { type KetQuaMoPhienQuaCau, moPhienCongDanQuaCau } from "./features/dang-nhap/cau-vigov";
-import { xinTokenViTri } from "./features/tinh-nang/zalo-api";
+import { layTenZalo, xinTokenViTri } from "./features/tinh-nang/zalo-api";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
 import { TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha";
 import {
@@ -208,7 +209,7 @@ export function App() {
  * chủ dự án chọn 28/09/2026; lớp vỏ này chỉ chọn nó.
  */
 export function AppRieng({ ten_mien }: { ten_mien: string }) {
-  return <TrangXa ten_mien={ten_mien} lay_ma_vi_tri={layMaViTri} />;
+  return <TrangXa ten_mien={ten_mien} lay_ten={layTenChoXa} lay_ma_vi_tri={layMaViTri} />;
 }
 
 /**
@@ -217,6 +218,17 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
  * rời máy (bảng khai `getLocation`: `roi_khoi_may: ""`). Đổi token ra toạ độ cần máy chủ có app secret —
  * chưa có; ngày có, tuyến ấy nhận token tại đây.
  */
+/**
+ * CẦU HỌ TÊN — `getUserInfo` kèm hộp xin quyền của Zalo. Chỉ tên đi xuống nửa nhà nước; tên rỗng là
+ * "không lấy được", không bao giờ một chuỗi rỗng giả làm tên.
+ */
+const layTenChoXa: LayTenZalo = async () => {
+  const kq = await layTenZalo();
+  if (kq.kieu !== "xong") return { kieu: kq.kieu };
+  const ho_ten = kq.du_lieu.trim();
+  return ho_ten === "" ? { kieu: "khong-lay-duoc" } : { kieu: "xong", ho_ten };
+};
+
 const layMaViTri: LayMaViTri = async () => {
   const kq = await xinTokenViTri();
   return kq.kieu === "xong" ? "da-nhan-ma" : kq.kieu;

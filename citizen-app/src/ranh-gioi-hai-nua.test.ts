@@ -553,7 +553,7 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
     ).toBe("");
   });
 
-  it("nửa nhà nước chưa khai lời gọi riêng nào — và bảng nói ra nó thừa hưởng những gì", () => {
+  it("nửa nhà nước khai đúng một lời gọi riêng (getUserInfo) — và bảng nói ra nó thừa hưởng những gì", () => {
     // Quyền cấp theo App ID: ngày `src/cong-dan/` có tệp đầu tiên, nó thừa hưởng NGUYÊN VẸN mọi
     // quyền mà nửa thương mại đã xin được, không ai cấp lại. Ca này ghim tình trạng hôm nay để
     // lần khai đầu tiên của nửa ấy là một thay đổi có người đọc, chứ không phải một dòng lặng lẽ.
@@ -561,7 +561,9 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
       KHAI_BAO_LOI_GOI.filter((k) => k.nua === "nha-nuoc").map((k) => k.api),
       "nửa nhà nước vừa khai một lời gọi riêng — cập nhật ca này cùng lúc, và kiểm lại xem màn " +
         "Quản lý quyền có còn nói đúng việc nửa ấy dùng quyền vào đâu không",
-    ).toEqual([]);
+      // 28/09/2026: lời khai đầu tiên của nửa nhà nước — lấy họ tên qua hộp xin quyền của Zalo cho ứng
+      // dụng riêng của xã (chủ dự án: "chỉ cần xin quyền để lấy được name"). Tên không rời máy.
+    ).toEqual(["getUserInfo"]);
     expect(
       KHAI_BAO_LOI_GOI.filter((k) => k.nua === "ca-hai").length,
       "không lời gọi nào được khai là dùng chung — nhưng quyền cấp theo App ID thì luôn dùng chung",

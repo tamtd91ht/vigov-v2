@@ -28,7 +28,7 @@ import indexHtmlRaw from "../index.html?raw";
  *
  *   ⚠ TỆP THỨ BA VÀ TỆP THỨ HAI (24/09/2026) thuộc KÊNH CÔNG DÂN — có mặt trong bản dựng duy nhất
  *   từ 27/09/2026, và hôm nay không gọi mạng (cầu phiên ViGov chưa có).
- *     `getUserInfo`/`getSetting`/`authorize` · lưu trữ · `serverUploadUrl` · geolocation
+ *     `getSetting`/`authorize` · lưu trữ · `serverUploadUrl` · geolocation
  *                                      →  KHÔNG miễn cho gì cả, không một dòng nào
  *
  *   ⚠ HAI DÒNG GIỮA VỪA ĐỔI 22/09/2026 (giai đoạn B: bề mặt "tư vấn & báo giá"). Ứng dụng từ hôm
@@ -208,13 +208,16 @@ const TRIPWIRES: readonly Tripwire[] = [
     // phải bị xoá. Luồng đăng nhập của ADR 0020 cần nó, và nó chỉ được gọi trong đúng một thư
     // mục như chín lời gọi kia.
     //
-    // BA TÊN CÒN LẠI KHÔNG ĐƯỢC NỚI THEO, VÀ ĐÓ LÀ CẢ Ý NGHĨA CỦA VIỆC TÁCH RA: `getUserInfo`
-    // trả về TÊN và ẢNH ĐẠI DIỆN — dữ liệu cá nhân thật, không phải một mã; `authorize` là đường
-    // xin thêm scope; `getSetting` đọc trạng thái quyền. Không tính năng nào trong app này cần
-    // chúng, nên chúng bị cấm ở MỌI tệp, kể cả trong `features/tinh-nang/`. Có một ca kiểm riêng
-    // ở cuối tệp cho đúng điều đó.
-    what: "a Zalo SDK call that asks the platform for citizen data (profile, permission state)",
-    pattern: /\b(getUserInfo|getSetting|authorize)\s*\(/,
+    // HAI TÊN CÒN LẠI KHÔNG ĐƯỢC NỚI THEO: `authorize` là đường xin thêm scope; `getSetting` đọc trạng
+    // thái quyền. Không tính năng nào cần chúng, nên chúng bị cấm ở MỌI tệp, kể cả trong
+    // `features/tinh-nang/`. Có một ca kiểm riêng ở cuối tệp cho đúng điều đó.
+    //
+    // `getUserInfo` RỜI LỆNH CẤM NÀY 28/09/2026, SANG LỆNH CẤM CÓ PHẠM VI NGAY DƯỚI — không bị xoá. Chủ dự
+    // án: "không còn đăng nhập nữa, chỉ cần xin quyền để lấy được name". Nó trả TÊN (và ảnh đại diện) —
+    // dữ liệu cá nhân thật — nên vẫn chỉ được gọi trong đúng một thư mục, qua hộp xin quyền của Zalo, và
+    // `zalo-api.ts` chỉ đọc `name`. Khai báo: `KHAI_BAO_LOI_GOI`, dòng `nua: "nha-nuoc"` đầu tiên.
+    what: "a Zalo SDK call that asks the platform for permission state or more scopes",
+    pattern: /\b(getSetting|authorize)\s*\(/,
   },
   {
     // BA LỜI GỌI CỦA BA TÍNH NĂNG, và chỉ trong `src/features/tinh-nang/`. Ở mọi tệp khác chúng
@@ -235,11 +238,12 @@ const TRIPWIRES: readonly Tripwire[] = [
     // trong đúng một thư mục** — không phải được phép ở mọi nơi. Số QUYỀN phải xin ở Developer
     // Console vẫn là chín: `index.d.ts` dòng 3009 ghi rằng từ SDK 2.35.0 lời gọi này không cần
     // người dùng xác nhận.
+    // `getUserInfo` LÀ TÊN THỨ MƯỜI MỘT (28/09/2026) — xem lệnh cấm tuyệt đối ngay trên.
     what:
-      'a platform call outside "src/features/tinh-nang/" — those ten are the ONLY platform ' +
+      'a platform call outside "src/features/tinh-nang/" — those eleven are the ONLY platform ' +
       "calls this app makes, and they live in exactly one directory",
     pattern:
-      /\b(getPhoneNumber|getAccessToken|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile)\s*\(/,
+      /\b(getPhoneNumber|getAccessToken|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile|getUserInfo)\s*\(/,
     chi_trong: [THU_MUC_TINH_NANG],
   },
   {
@@ -519,7 +523,7 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // của ADR 0020 chạy được. Ba tên ở lại thì KHÔNG được đi theo, và "không được đi theo" phải
     // có một ca cho nó ăn một vi phạm — đặt ngay trong thư mục mà chín lời gọi kia được phép.
     //
-    //   getUserInfo → tên và ảnh đại diện: dữ liệu cá nhân thật, không phải một mã;
+    //   (getUserInfo rời nhóm này 28/09/2026 — chủ dự án cần họ tên; nó sang lệnh cấm có phạm vi)
     //   authorize   → xin thêm scope, tức mở rộng đúng thứ vòng duyệt đã cấp;
     //   getSetting  → đọc trạng thái quyền của người dùng.
     //
@@ -530,12 +534,20 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // máy. Chỗ giữ phiên là `features/dang-nhap/kho-phien.tsx`, và nó chỉ dùng `useState`.
     const TUYET_DOI = TRIPWIRES.filter((t) => t.chi_trong === undefined);
     // BỐN TỪ 22/09/2026 (trước đó năm): lệnh cấm ô nhập chuyển sang nhóm CÓ PHẠM VI. Bốn cái còn
-    // lại — `getUserInfo`/`getSetting`/`authorize` · `serverUploadUrl` · lưu trữ · geolocation —
+    // lại — `getSetting`/`authorize` · `serverUploadUrl` · lưu trữ · geolocation —
     // vẫn tuyệt đối, và con số này là thứ đỏ lên nếu cái thứ năm mất tính tuyệt đối.
     expect(TUYET_DOI.length, "một lệnh cấm tuyệt đối vừa được cho một phạm vi").toBe(4);
 
+    // getUserInfo (28/09/2026) thuộc lệnh cấm CÓ PHẠM VI: được trong thư mục tính năng, vẫn đỏ ở mọi tệp
+    // khác — kể cả ngay trong nửa nhà nước, nơi đang dùng tên ấy (qua lớp vỏ, không gọi thẳng).
+    const CO_PHAM_VI = TRIPWIRES.filter((t) => t.chi_trong !== undefined);
+    const goiTen = (path: string) =>
+      CO_PHAM_VI.some((day) => viPham(day, [{ path, code: "const me = await getUserInfo();" }]).length === 1);
+    expect(goiTen("./cong-dan/man/TrangXa.tsx"), "getUserInfo lọt ra ngoài thư mục tính năng").toBe(true);
+    expect(goiTen("./App.tsx"), "getUserInfo lọt vào lớp vỏ").toBe(true);
+    expect(goiTen(`${THU_MUC_TINH_NANG}zalo-api.ts`), "getUserInfo bị cấm cả ở chỗ duy nhất được phép").toBe(false);
+
     const VI_PHAM = [
-      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "const me = await getUserInfo();" },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await authorize({ scopes: ["scope.userInfo"] });' },
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "const q = await getSetting();" },
       ...TEP_GOI_MANG.map((path) => ({ path, code: 'localStorage.setItem("phien", phien.token);' })),

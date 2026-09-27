@@ -1,17 +1,6 @@
 /**
- * BẢN TRẢI NGHIỆM CỦA APP RIÊNG MỘT XÃ — người dùng và phiếu phản ánh CHỈ SỐNG TRONG BỘ NHỚ.
- *
- * Chủ dự án, 28/09/2026: "Nếu phải xin quyền thì hãy fake tạm 1 cái tên và 1 số điện thoại… tôi muốn
- * nó phải là 1 hành động. Nếu lấy được ngay bây giờ thì trả về và lưu xuống hệ thống; nếu không lấy
- * được thì giả lập 1 thông tin cố định để trải nghiệm trước."
- *
- * HÔM NAY KHÔNG LẤY THẬT ĐƯỢC:
- *   · tên + ảnh: `getUserInfo` của zmp-sdk bật hộp xin quyền (NĐ 13/2023) — đúng điều kiện "phải xin
- *     quyền" chủ dự án đặt ra cho việc giả lập;
- *   · số điện thoại: `getPhoneNumber` chỉ trả một TOKEN; đổi ra số cần app secret của app xã ở máy chủ;
- *   · "lưu xuống hệ thống": cần đường đăng nhập app riêng → phiên ViGov, CHƯA DỰNG (ADR 0047 §6).
- * Nên `LayNguoiDung` — MỘT hành động, gắn vào nút "Tiếp tục với tài khoản Zalo" — hôm nay trả người
- * dùng giả lập cố định. Ngày có quyền, lớp vỏ (`App.tsx`) tiêm hàm thật vào ĐÚNG chỗ ấy.
+ * BẢN TRẢI NGHIỆM CỦA APP RIÊNG MỘT XÃ — phiếu phản ánh CHỈ SỐNG TRONG BỘ NHỚ; họ tên lấy từ Zalo bằng
+ * một hành động xin quyền (`LayTenZalo`), không đăng nhập, không người dùng giả lập (bỏ 28/09/2026).
  *
  * PHIẾU TRẢI NGHIỆM MANG ĐÚNG KIỂU `PhieuCuaToi` CỦA HỢP ĐỒNG THẬT (`api/hop-dong-phan-anh.ts`): năm ô
  * gửi đi (nội dung · nơi xảy ra · họ tên · điện thoại · ẩn danh), trạng thái trong bảng `TRANG_THAI`,
@@ -23,28 +12,25 @@
  * `useState`, mất khi đóng app, và MỌI màn hiện nó đều gắn nhãn "Bản trải nghiệm". Hai mốc hạn để
  * `null`: hạn đếm bằng GIỜ LÀM VIỆC theo lịch từng xã, chỉ `identity` đếm được (ADR 0007) — bản trải
  * nghiệm không bịa một ngày.
- *
- * Số điện thoại giả là `0900000000` — dải số giả đã thoả thuận (luật 3 bất biến 5).
+
  */
 import { DO_DAI_TOI_DA, type PhieuCuaToi } from "../api/hop-dong-phan-anh";
 
-export type NguoiDungApp = {
-  readonly ho_ten: string;
-  readonly so_dien_thoai: string;
-  /** `gia-lap`: thông tin mẫu cố định. `zalo`: lấy thật từ Zalo (chưa có đường nào trả giá trị này). */
-  readonly nguon: "gia-lap" | "zalo";
-};
-
-/** Hành động DUY NHẤT lấy người dùng. Hôm nay: `layNguoiDungGiaLap`. */
-export type LayNguoiDung = () => Promise<NguoiDungApp>;
-
-export const NGUOI_DUNG_GIA_LAP: NguoiDungApp = {
-  ho_ten: "Nguyễn Văn An",
-  so_dien_thoai: "0900000000",
-  nguon: "gia-lap",
-};
-
-export const layNguoiDungGiaLap: LayNguoiDung = async () => NGUOI_DUNG_GIA_LAP;
+/**
+ * HỌ TÊN TỪ ZALO — HÀNH ĐỘNG XIN QUYỀN DUY NHẤT (chủ dự án, 28/09/2026: "không còn đăng nhập nữa, chỉ cần
+ * xin quyền để lấy được name, phone number"). Lớp vỏ tiêm hàm thật (`getUserInfo`); nửa này chỉ khai kiểu.
+ *
+ * SỐ ĐIỆN THOẠI KHÔNG CÓ Ở ĐÂY, và đó là ranh giới của nền tảng chứ không phải sơ suất: `getPhoneNumber`
+ * chỉ trả MÃ, đổi ra số cần máy chủ có app secret của app xã (tài liệu zmp-sdk, bước 2–3). Xin quyền số
+ * điện thoại mà không dùng được là làm phiền người dân và là lý do Zalo trả hồ sơ duyệt — nên app không
+ * xin, người dân tự gõ số nếu muốn xã gọi lại.
+ */
+export type KetQuaLayTen =
+  | { readonly kieu: "xong"; readonly ho_ten: string }
+  | { readonly kieu: "tu-choi" }
+  | { readonly kieu: "ngoai-zalo" }
+  | { readonly kieu: "khong-lay-duoc" };
+export type LayTenZalo = () => Promise<KetQuaLayTen>;
 
 /**
  * MÃ VỊ TRÍ — kết quả của nút "Lấy vị trí hiện tại" ở màn gửi phản ánh. `getLocation` của zmp-sdk CHỈ

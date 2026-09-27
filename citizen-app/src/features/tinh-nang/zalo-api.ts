@@ -240,6 +240,20 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     roi_khoi_may: "Mã số điện thoại được gửi tới máy chủ để phát hành phiên đăng nhập.",
   },
   {
+    // THÊM 28/09/2026 — lời gọi ĐẦU TIÊN của riêng nửa nhà nước. Chủ dự án: "không còn đăng nhập nữa, chỉ
+    // cần xin quyền để lấy được name, phone number". Tên thì `getUserInfo` trả thẳng sau khi người dân
+    // đồng ý (NĐ 13/2023 — `autoRequestPermission`). Số điện thoại KHÔNG: `getPhoneNumber` chỉ trả mã,
+    // máy chủ mới đổi được — nên app riêng không gọi nó, người dân tự gõ số nếu muốn xã gọi lại.
+    api: "getUserInfo",
+    nua: "nha-nuoc",
+    man: "Gửi phản ánh · Cá nhân (ứng dụng của xã)",
+    tinh_nang: "Điền họ tên từ Zalo",
+    de_lam_gi:
+      "Lấy tên hiển thị Zalo của bạn sau khi bạn đồng ý, để điền sẵn ô họ tên khi gửi phản ánh tới xã. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh.",
+    hoi_nguoi_dung: true,
+    roi_khoi_may: "",
+  },
+  {
     api: "getLocation",
     nua: "ca-hai",
     // "Gửi phản ánh" THÊM 28/09/2026: ứng dụng riêng của một xã (`--vao-thang`) có nút "Lấy vị trí hiện
@@ -344,6 +358,14 @@ export function xinMaDangNhap(): Promise<KetQuaXin<MaDangNhap>> {
  */
 export function xinMaTruyCap(): Promise<KetQuaXin<string>> {
   return xin(async (sdk) => sdk.getAccessToken());
+}
+
+/**
+ * Tên hiển thị Zalo — kèm hộp xin quyền của chính Zalo (`autoRequestPermission`). Chỉ đọc `name`: `id`
+ * là định danh người dùng theo App ID và ảnh đại diện là dữ liệu cá nhân không màn nào cần.
+ */
+export function layTenZalo(): Promise<KetQuaXin<string>> {
+  return xin(async (sdk) => (await sdk.getUserInfo({ autoRequestPermission: true })).userInfo.name ?? "");
 }
 
 /** Token vị trí. Không đọc `latitude`/`longitude` — xem khối chú thích đầu tệp. */
