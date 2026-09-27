@@ -2846,6 +2846,87 @@
         }
       }
     },
+    "/api/v1/communes": {
+      "get": {
+        "summary": "Tra xã theo tên miền trong mã QR, để Mini App hỏi \"Làm việc với xã X?\" trước khi công dân xác nhận — không trả mã xã",
+        "operationId": "identity_get_communes",
+        "tags": [
+          "identity"
+        ],
+        "x-vigov-permission": {
+          "kind": "citizen-only"
+        },
+        "x-vigov-tenant-class": {
+          "kind": "khong-thuoc-xa",
+          "tenant_in_context": false,
+          "reason": "xác nhận xã trước khi vào: công dân quét QR mang tên miền của một xã CHƯA thuộc phiên, tuyến chỉ đọc tên và tỉnh của xã ấy từ sổ đăng ký nền tảng",
+          "note": "Chỉ đường phân giải xã. Không có xã trong context nên không chạm được dữ liệu nghiệp vụ (ADR 0022)."
+        },
+        "x-vigov-task": "86a653af479d",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/identity.danhMucXaRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/communes/current": {
       "get": {
         "summary": "Thông tin xã ứng với tên miền đang gọi, cho màn hình đăng nhập",
@@ -16666,6 +16747,21 @@
         ],
         "additionalProperties": false
       },
+      "identity.danhMucXaRa": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.xaCongKhai"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
       "identity.danhSachBoPhanRa": {
         "type": "object",
         "properties": {
@@ -17936,6 +18032,22 @@
           "kind",
           "message",
           "work_kind"
+        ],
+        "additionalProperties": false
+      },
+      "identity.xaCongKhai": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "province": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "province"
         ],
         "additionalProperties": false
       },
