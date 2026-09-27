@@ -19,7 +19,6 @@ import {
   CHI_TIET_THIEU_VAN_BAN,
   CHU_THICH_HAI_O_TICK,
   DANG_TAI_VAN_BAN,
-  GHI_CHU_KHONG_CO_O_GHI_CHU,
   GHI_CHU_LUI_HAN,
   KHOA_SUA_DANG_TAI,
   KHOA_SUA_LOI,
@@ -572,8 +571,14 @@ describe("form Giao việc mới §7", () => {
     expect(html).toContain("Nội dung nhiệm vụ / Trích yếu văn bản");
     expect(html).toContain('id="giao-co-quan-chu-tri"');
     expect(html).toContain('id="giao-chuyen-vien"');
-    // Ô `Ghi chú` KHÔNG có (hợp đồng tạo không nhận `note`), và form NÓI ra điều ấy.
-    expect(html).toContain(nhuTrongHTML(GHI_CHU_KHONG_CO_O_GHI_CHU));
+    // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (TASK-04): `POST /api/v1/tasks` nay nhận `note`, nên ô
+    // `Ghi chú` §7.2 có mặt — có nhãn, sau ba danh sách, dừng ở cùng giới hạn với form `✎ Sửa`.
+    expect(html).toContain('<label for="giao-ghi-chu">Ghi chú</label>');
+    expect(html).toMatch(/<textarea id="giao-ghi-chu"[^>]*maxLength="5000"/);
+    expect(html.indexOf('id="giao-ghi-chu"')).toBeGreaterThan(
+      html.indexOf('id="giao-them-van-ban-san-pham-dau-ra"'),
+    );
+    expect(html).not.toContain("không nhận ghi chú");
   });
 
   it("loại `co-ban`: ô tiêu đề thành `Tên nhiệm vụ`; cơ quan chủ trì, chuyên viên, ba danh sách BIẾN MẤT", () => {
@@ -594,6 +599,7 @@ describe("form Giao việc mới §7", () => {
     expect(html).not.toContain('id="giao-chuyen-vien"');
     expect(html).not.toContain("Thêm văn bản");
     expect(html).not.toContain("Văn bản cấp trên giao");
+    expect(html).not.toContain('id="giao-ghi-chu"');
   });
 
   it("màn Biên bản (không truyền prop): loại `theo-van-ban` mà KHÔNG có ba danh sách", () => {
@@ -613,6 +619,8 @@ describe("form Giao việc mới §7", () => {
     );
     expect(html).not.toContain("Thêm văn bản");
     expect(html).not.toContain("Văn bản cấp trên giao");
+    // `petitions.tachKetLuanVao` không có `note`: ô ấy ở đây là chữ gõ vào rồi mất.
+    expect(html).not.toContain('id="giao-ghi-chu"');
     expect(html).toContain('id="giao-co-quan-chu-tri"');
     expect(html).toContain('id="giao-chuyen-vien"');
   });

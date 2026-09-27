@@ -937,15 +937,6 @@ export const TRICH_YEU_VAN_BAN_TOI_DA = 1000;
 export const VAN_BAN_MOT_LAN_TOI_DA = 100;
 
 /**
- * Ô `Ghi chú` của §7.2 KHÔNG có ở form tạo: `petitions.taoNhiemVuVao` không nhận `note`. Vẽ ô ấy
- * ra thì chữ cán bộ gõ vào sẽ mất lặng lẽ; tạo rồi `PATCH` thêm là hai hành vi ghi cho một lần bấm.
- * Câu này đứng trong form để người tìm ô ấy biết nó ở đâu.
- */
-export const GHI_CHU_KHONG_CO_O_GHI_CHU =
-  "Ô Ghi chú (§7.2) không có ở đây: yêu cầu tạo nhiệm vụ không nhận ghi chú. Giao việc xong, mở " +
-  "nhiệm vụ và bấm ✎ Sửa ở khối Sổ theo dõi văn bản chỉ đạo để nhập ghi chú.";
-
-/**
  * Một dòng văn bản ĐANG NHẬP. `khoa` chỉ để React giữ đúng ô khi một dòng giữa bị gỡ — KHÔNG lên
  * dây: dòng mới không có `id` (hợp đồng: `id` rỗng nghĩa là dòng mới).
  */
@@ -975,6 +966,8 @@ export type FormGiaoViecNhap = {
   /** `YYYY-MM-DD` hoặc rỗng. */
   readonly han: string;
   readonly vanBan: readonly DongVanBanNhap[];
+  /** Ô `Ghi chú` §7.2 — chỉ `Theo văn bản`, chỉ màn Nhiệm vụ (xem `thanGiaoViec`). */
+  readonly ghiChu: string;
 };
 
 /**
@@ -1022,8 +1015,8 @@ export function canhBaoVanBan(
  * về `Theo văn bản` thì chữ đã gõ hiện lại, và lúc ấy nó ĐANG NHÌN THẤY nên gửi là đúng.
  *
  * `coDanhSachVanBan` LÀ QUYẾT ĐỊNH CỦA BÊN GỌI, KHÔNG PHẢI CỦA LOẠI: màn Biên bản dùng lại form này
- * để gửi `…/conclusions/{stt}/task`, và `petitions.tachKetLuanVao` KHÔNG có `documents`. Ở đó dù
- * loại là `Theo văn bản` cũng không có `documents`.
+ * để gửi `…/conclusions/{stt}/task`, và `petitions.tachKetLuanVao` KHÔNG có `documents` lẫn `note`.
+ * Ở đó dù loại là `Theo văn bản` cũng không có hai trường ấy.
  *
  * DÒNG VĂN BẢN: `summary` cắt khoảng trắng; `reference` và `date` VẮNG MẶT khi bỏ trống — không gửi
  * `""`. `date` đi NGUYÊN chuỗi `YYYY-MM-DD` của ô ngày, không bao giờ qua `Date`: máy chủ từ chối
@@ -1056,6 +1049,15 @@ export function thanGiaoViec(
   // nó thành `Hạn —`).
   if (f.han !== "") than.due_at = mocCuoiNgay(f.han);
   if (tuyChon.maCha !== undefined && tuyChon.maCha !== "") than.parent = tuyChon.maCha;
+
+  // GHI CHÚ: cùng cổng với ba danh sách văn bản, cùng hai lý do. §7.3 bỏ ô này ở loại khác `Theo
+  // văn bản` (cắt lúc gửi, như `lead_unit`); và `petitions.tachKetLuanVao` của màn Biên bản KHÔNG
+  // có `note` — gửi nó ở đó là chữ cán bộ gõ vào mất lặng lẽ. Cắt khoảng trắng như thân `PATCH`;
+  // rỗng thì VẮNG MẶT, không gửi `""`. Độ dài do máy chủ quyết (`GhiChuNhiemVuToiDa`), ô nhập chỉ
+  // dừng sớm ở cùng `GHI_CHU_NHIEM_VU_TOI_DA` của form `✎ Sửa`.
+  if (theoVanBan && tuyChon.coDanhSachVanBan && f.ghiChu.trim() !== "") {
+    than.note = f.ghiChu.trim();
+  }
 
   if (theoVanBan && tuyChon.coDanhSachVanBan && f.vanBan.length > 0) {
     than.documents = MOI_NHOM_VAN_BAN.flatMap((nhom) =>
@@ -1493,14 +1495,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "`petitions.nhiemVuRa` có `parent` (mã việc cha) nhưng KHÔNG có số việc con, và không có " +
       "tuyến liệt kê việc con của một mã. Đếm trong trang đang mở sẽ ra một con số phụ thuộc vào " +
       "trang — `2 việc con` ở trang này và `3 việc con` ở trang sau, cho cùng một nhiệm vụ.",
-  },
-  {
-    ten: "Ô `Ghi chú` ở form `Giao việc mới` (§7.2)",
-    viSao:
-      "`petitions.taoNhiemVuVao` không nhận `note`, nên form tạo không có ô Ghi chú. Ghi chú nhập " +
-      "được ngay sau khi giao việc, bằng nút `✎ Sửa` của khối SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO trong " +
-      "khung chi tiết. Tạo rồi tự gửi thêm một lần sửa sau lưng cán bộ là hai hành vi ghi cho một " +
-      "lần bấm, nên màn này không làm thế.",
   },
   {
     ten: "Sửa `Cơ quan chủ trì tham mưu` và `Chuyên viên theo dõi` ở form sửa (§5.4)",

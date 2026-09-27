@@ -65,7 +65,6 @@ import {
   GHI_CHU_DEM_COT,
   GHI_CHU_HAN_VIEC_CON,
   GHI_CHU_NHIEM_VU_TOI_DA,
-  GHI_CHU_KHONG_CO_O_GHI_CHU,
   GHI_CHU_LANH_DAO_GIAO_VIEC,
   GHI_CHU_LUI_HAN,
   GHI_CHU_THIEU_SO_THEO_DOI,
@@ -2046,7 +2045,8 @@ export function KhoiLuiHan({
  * HAI LOẠI, HAI BỘ TRƯỜNG (§7.2 / §7.3), rẽ nhánh trên MÃ `theo-van-ban` (mã tầng 3, xem
  * `LOAI_THEO_VAN_BAN`). Loại nào khác thì ô tiêu đề thành `Tên nhiệm vụ`, và cơ quan chủ trì /
  * chuyên viên / ba nhóm văn bản BIẾN KHỎI MÀN và KHÔNG LÊN DÂY — phần "không lên dây" ở
- * `thanGiaoViec`, nơi có bài kiểm. Ô `Ghi chú` của §7.2 không có: `taoNhiemVuVao` không nhận `note`.
+ * `thanGiaoViec`, nơi có bài kiểm. Ô `Ghi chú` của §7.2 đi cùng cổng với ba danh sách văn bản
+ * (`hienVanBan`): tuyến tách kết luận của màn Biên bản không nhận `note`.
  *
  * `Tự sinh mã` MẶC ĐỊNH BẬT, đúng §7.1: mã do máy chủ cấp theo dãy `NV01, NV02…`, và một mã đã
  * cấp thì không bao giờ cấp lại kể cả sau xoá mềm (luật 7, bất biến 3).
@@ -2116,6 +2116,7 @@ export function FormGiaoViec({
   const [chuyenVien, datChuyenVien] = useState("");
   const [han, datHan] = useState("");
   const [vanBan, datVanBan] = useState<readonly DongVanBanNhap[]>([]);
+  const [ghiChu, datGhiChu] = useState("");
   const demKhoaVanBan = useRef(0);
   // Id ô cần nhận tiêu điểm SAU lần vẽ kế tiếp: dòng vừa thêm chưa có trong DOM lúc bấm nút.
   const oCanTieuDiem = useRef<string | null>(null);
@@ -2172,6 +2173,7 @@ export function FormGiaoViec({
         chuyenVien,
         han,
         vanBan,
+        ghiChu,
       },
       { coDanhSachVanBan, maCha: maChaCoSan },
     );
@@ -2365,7 +2367,19 @@ export function FormGiaoViec({
               sua={suaVanBan}
             />
           ))}
-          <p className="ghi-chu">{GHI_CHU_KHONG_CO_O_GHI_CHU}</p>
+          {/* §7.2 đặt `Ghi chú` NGAY SAU ba danh sách. Cùng cổng `hienVanBan`: §7.3 bỏ ô này ở loại
+              khác, và màn Biên bản gửi tới tuyến không có `note`. */}
+          <div className="o-nhap">
+            <label htmlFor="giao-ghi-chu">Ghi chú</label>
+            <textarea
+              id="giao-ghi-chu"
+              name="giao-ghi-chu"
+              rows={3}
+              maxLength={GHI_CHU_NHIEM_VU_TOI_DA}
+              value={ghiChu}
+              onChange={(e) => datGhiChu(e.target.value)}
+            />
+          </div>
         </>
       )}
 

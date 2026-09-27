@@ -307,19 +307,19 @@ describe("phần chưa dựng được", () => {
     // đã có từ migration 0009; một lý do sai trên màn là lý do đẩy người sau đi dựng lại thứ đã có.
     //
     // ĐỔI CHIỀU CÓ CHỦ Ý 24/09/2026 (TASK-03): mục `Nút ✎ Sửa của khối SỔ THEO DÕI…` đã dựng xong
-    // nên BIẾN KHỎI danh sách; phần còn thiếu của nó thu lại đúng một điều — ô Ghi chú ở form TẠO.
+    // nên BIẾN KHỎI danh sách.
+    //
+    // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (TASK-04): mục `Ô Ghi chú ở form Giao việc mới` cũng biến khỏi
+    // danh sách — `POST /api/v1/tasks` nay nhận `note` (0a41e48) và form tạo đã có ô ấy.
     const mucSua = PHAN_CHUA_DUNG.find((p) => p.ten.includes("✎ Sửa"));
     const mucGhiChu = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Ghi chú` ở form `Giao việc mới`"));
     const muc43 = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Sổ theo dõi` (§4.3)"));
     expect(mucSua).toBeUndefined();
-    expect(mucGhiChu).toBeDefined();
+    expect(mucGhiChu).toBeUndefined();
     expect(muc43).toBeDefined();
-    for (const p of [mucGhiChu, muc43]) {
-      expect(p?.viSao).not.toContain("CHƯA TỒN TẠI");
-      expect(p?.viSao).not.toContain("chưa tồn tại");
-    }
-    expect(mucGhiChu?.viSao).toContain("taoNhiemVuVao");
-    expect(mucGhiChu?.viSao).toContain("✎ Sửa");
+    expect(muc43?.viSao).not.toContain("CHƯA TỒN TẠI");
+    expect(muc43?.viSao).not.toContain("chưa tồn tại");
+    expect(PHAN_CHUA_DUNG.map((p) => p.viSao).join(" ")).not.toContain("không nhận `note`");
     expect(muc43?.viSao).toContain("`GET /api/v1/tasks`");
     expect(muc43?.viSao).toContain("documents");
     expect(muc43?.viSao).toContain("xuat-so-theo-doi");
@@ -413,6 +413,7 @@ function formDay(sua: Partial<FormGiaoViecNhap> = {}): FormGiaoViecNhap {
     coQuanChuTri: "01JBOPHANGIA",
     chuyenVien: "CB-2026-GIA001",
     han: "",
+    ghiChu: "",
     vanBan: [
       // CỐ Ý XEN KẼ NHÓM theo thứ tự bấm: thân phải gom theo nhóm §5.4 mà giữ thứ tự trong nhóm.
       dongVB({ khoa: "a", nhom: "san-pham-dau-ra", trichYeu: "Báo cáo giả số một" }),
@@ -492,6 +493,29 @@ describe("thân `Giao việc mới` — ba nhóm văn bản", () => {
       "Công văn giả",
       "Báo cáo giả số một",
     ]);
+  });
+});
+
+describe("thân `Giao việc mới` — ô `Ghi chú` §7.2", () => {
+  it("gõ ghi chú ⇒ `note` lên dây, đã cắt khoảng trắng", () => {
+    const than = thanGiaoViec(formDay({ ghiChu: "  Ghi chú giả khi giao việc  " }), {
+      coDanhSachVanBan: true,
+    });
+    expect(than.note).toBe("Ghi chú giả khi giao việc");
+  });
+
+  it("bỏ trống hoặc toàn khoảng trắng ⇒ `note` VẮNG MẶT, không gửi `\"\"`", () => {
+    expect(thanGiaoViec(formDay(), { coDanhSachVanBan: true })).not.toHaveProperty("note");
+    const toanKhoangTrang = formDay({ ghiChu: "  \n\t  " });
+    expect(thanGiaoViec(toanKhoangTrang, { coDanhSachVanBan: true })).not.toHaveProperty("note");
+  });
+
+  it("loại `co-ban` (§7.3 bỏ ô) và màn Biên bản (tuyến không có `note`) ⇒ KHÔNG gửi `note`", () => {
+    const f = formDay({ ghiChu: "Ghi chú giả" });
+    expect(thanGiaoViec({ ...f, loai: "co-ban" }, { coDanhSachVanBan: true })).not.toHaveProperty(
+      "note",
+    );
+    expect(thanGiaoViec(f, { coDanhSachVanBan: false })).not.toHaveProperty("note");
   });
 });
 
