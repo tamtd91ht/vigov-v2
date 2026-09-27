@@ -38,12 +38,19 @@ func NewChecker(db *store.DB, log *slog.Logger) *Checker {
 // an account that exists and is currently shut. Both must hold, for the same fail-closed reason
 // stated at the top of this file — an error or an omission here widens access invisibly.
 const truyVanQuyenGoc = `
-SELECT vq.quyen_ma
+SELECT vq.quyen_ma` + noiGiuQuyen + `
+  AND nd.id = $2` + dieuKienGiuQuyen
+
+// noiGiuQuyen is the person → role → grant join, bound to the commune at every table, lifted out of
+// truyVanQuyenGoc for exactly one other reader: the picker's `permission` filter
+// (can_bo_chon_nguoi.go locGiuQuyen), which must find the SAME holders this check admits. The
+// person is left for the caller to pick — `nd.id = $2` here, `nd.ma` there — because that is the
+// one thing the two readers key differently.
+const noiGiuQuyen = `
 FROM nguoi_dung nd
 JOIN vai_tro       vt ON vt.tenant_id = nd.tenant_id AND vt.id         = nd.vai_tro_id
 JOIN vai_tro_quyen vq ON vq.tenant_id = nd.tenant_id AND vq.vai_tro_id = vt.id
-WHERE nd.tenant_id = $1
-  AND nd.id = $2` + dieuKienGiuQuyen
+WHERE nd.tenant_id = $1`
 
 // dieuKienGiuQuyen is THE definition of "this person can exercise a permission today", lifted out
 // of the query above so it has exactly one spelling.

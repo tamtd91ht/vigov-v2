@@ -35,15 +35,36 @@ type chonNguoiGia struct {
 	loi        error
 	goi        int
 	boPhanCuoi string
+	quyenCuoi  string
+
+	// giuQuyen is who holds which key, PER COMMUNE — the fake's stand-in for vai_tro_quyen. Read only
+	// when a permission filter arrives; which rows the real join admits is proven in
+	// store/can_bo_chon_nguoi_test.go.
+	giuQuyen map[tenant.ID]map[string][]string
 }
 
-func (c *chonNguoiGia) ChonNguoi(ctx context.Context, boPhanID string) ([]domain.CanBoChonNguoi, error) {
+func (c *chonNguoiGia) ChonNguoi(ctx context.Context, loc domain.LocChonNguoi) ([]domain.CanBoChonNguoi, error) {
 	c.goi++
-	c.boPhanCuoi = boPhanID
+	c.boPhanCuoi = loc.BoPhanID
+	c.quyenCuoi = loc.QuyenMa
 	if c.loi != nil {
 		return nil, c.loi
 	}
-	return c.theo[tenant.MustFrom(ctx)], nil
+	xa := tenant.MustFrom(ctx)
+	if loc.QuyenMa == "" {
+		return c.theo[xa], nil
+	}
+	giu := map[string]bool{}
+	for _, ma := range c.giuQuyen[xa][loc.QuyenMa] {
+		giu[ma] = true
+	}
+	var ra []domain.CanBoChonNguoi
+	for _, cb := range c.theo[xa] {
+		if giu[cb.Ma] {
+			ra = append(ra, cb)
+		}
+	}
+	return ra, nil
 }
 
 // chonNguoiMau gives the two communes DIFFERENT people under the same code CB-001, so a leak shows
@@ -57,6 +78,12 @@ func chonNguoiMau() *chonNguoiGia {
 		xaB: {
 			{Ma: "CB-001", HoTen: "Phạm Thị D", ChucVu: "Chủ tịch UBND xã", BoPhanID: "bp-b-001"},
 		},
+	}, giuQuyen: map[tenant.ID]map[string][]string{
+		// CB-005 holds task.extend in commune A. In commune B the code CB-001 holds it — the same
+		// code as commune A's other person, so a filter that ignored the commune would offer A's
+		// CB-001 as well.
+		xaA: {"task.extend": {"CB-005"}},
+		xaB: {"task.extend": {"CB-001"}},
 	}}
 }
 
@@ -251,5 +278,113 @@ func TestChonNguoiXaChuaCoAiTraMangRong(t *testing.T) {
 	doiMa(t, w, http.StatusOK)
 	if !strings.Contains(w.Body.String(), `"items":[]`) {
 		t.Errorf("items phải là [], nhận: %s", w.Body.String())
+	}
+}
+
+// --- the `permission` filter (owner decision 27/09/2026) ---------------------------------------
+
+func TestChonNguoiKhongCoPermissionThiNhuCu(t *testing.T) {
+	m := dungMayChu(t)
+
+	w := m.goi(t, "GET", hostA, duongChonNguoi, "", m.tokenCho(t, xaA, sidA))
+	doiMa(t, w, http.StatusOK)
+	if m.chonNguoi.quyenCuoi != "" {
+		t.Fatalf("không có ?permission mà kho nhận khoá %q", m.chonNguoi.quyenCuoi)
+	}
+	if len(docChonNguoi(t, w.Body.Bytes()).Items) != 2 {
+		t.Fatalf("không lọc quyền phải nhận đủ danh bạ: %s", w.Body.String())
+	}
+}
+
+func TestChonNguoiPermissionChiNguoiGiuQuyen(t *testing.T) {
+	m := dungMayChu(t)
+	m.dungLai(t, func(d *Deps) {
+		// AnyAuthenticated stays AnyAuthenticated: the CALLER needs no permission to filter by one.
+		d.Checker = checkerGia{}
+	})
+
+	w := m.goi(t, "GET", hostA, duongChonNguoi+"?permission=task.extend", "", m.tokenCho(t, xaA, sidA))
+	doiMa(t, w, http.StatusOK)
+	if m.chonNguoi.quyenCuoi != "task.extend" {
+		t.Fatalf("kho nhận khoá %q, muốn task.extend nguyên văn", m.chonNguoi.quyenCuoi)
+	}
+	ra := docChonNguoi(t, w.Body.Bytes())
+	if len(ra.Items) != 1 || ra.Items[0].Code != "CB-005" {
+		t.Fatalf("lọc task.extend ở xã A = %+v, muốn đúng CB-005", ra.Items)
+	}
+}
+
+func TestChonNguoiPermissionKhongVuotXa(t *testing.T) {
+	m := dungMayChu(t)
+
+	w := m.goi(t, "GET", hostB, duongChonNguoi+"?permission=task.extend", "", m.tokenCho(t, xaB, sidB))
+	doiMa(t, w, http.StatusOK)
+	if strings.Contains(w.Body.String(), "Đỗ Văn E") || strings.Contains(w.Body.String(), "Nguyễn Văn A") {
+		t.Fatalf("RÒ RỈ: xã B nhận người giữ quyền của xã A: %s", w.Body.String())
+	}
+	ra := docChonNguoi(t, w.Body.Bytes())
+	if len(ra.Items) != 1 || ra.Items[0].FullName != "Phạm Thị D" {
+		t.Fatalf("xã B phải nhận đúng người giữ quyền của mình: %+v", ra.Items)
+	}
+}
+
+func TestChonNguoiPermissionNgoaiDanhSachTra400KhongGoiKho(t *testing.T) {
+	// THE ALLOWLIST (quyenLanhDaoGiaoViec). A well-formed key off it is 400 — NOT 200 with [] — so an
+	// AnyAuthenticated account cannot list who holds admin.* or any other right. Widening the switch in
+	// kiemQuyenLoc turns this red, which is the review the constant's comment asks for.
+	m := dungMayChu(t)
+	// The fake says a holder EXISTS for each key, so a 200 here would leak a name, not just a count.
+	m.chonNguoi.giuQuyen[xaA]["admin.user"] = []string{maCanBo}
+	m.chonNguoi.giuQuyen[xaA]["task.approve"] = []string{maCanBo}
+	tok := m.tokenCho(t, xaA, sidA)
+
+	for _, k := range []string{"admin.user", "task.approve", "admin.role", "task.khong_ton_tai"} {
+		w := m.goi(t, "GET", hostA, duongChonNguoi+"?permission="+k, "", tok)
+		doiMa(t, w, http.StatusBadRequest)
+		e := loiTra(t, w)
+		if e.Code != "invalid_request" {
+			t.Errorf("%s: code = %q, muốn invalid_request", k, e.Code)
+		}
+		if !strings.Contains(e.Message, "chỉ hỗ trợ") {
+			t.Errorf("%s: thông điệp phải nói bộ lọc chỉ hỗ trợ khoá của ô chọn người, nhận %q", k, e.Message)
+		}
+		if strings.Contains(w.Body.String(), `"items"`) {
+			t.Errorf("%s: bị từ chối mà vẫn kèm danh sách: %s", k, w.Body.String())
+		}
+	}
+	if m.chonNguoi.goi != 0 {
+		t.Errorf("khoá ngoài danh sách cho phép mà vẫn chạy câu đọc %d lần", m.chonNguoi.goi)
+	}
+}
+
+func TestChonNguoiPermissionSaiDangTra400KhongGoiKho(t *testing.T) {
+	m := dungMayChu(t)
+	tok := m.tokenCho(t, xaA, sidA)
+
+	// `?permission=` (present, empty) is refused rather than read as "no filter": a client that meant
+	// to narrow must not receive everybody.
+	for _, q := range []string{"", "task", "task.extend.x", "TASK.EXTEND", "*", "task.%2A", "task%2Cextend",
+		strings.Repeat("a", 100) + ".b"} {
+		w := m.goi(t, "GET", hostA, duongChonNguoi+"?permission="+q, "", tok)
+		doiMa(t, w, http.StatusBadRequest)
+		if got := loiTra(t, w).Code; got != "invalid_request" {
+			t.Errorf("?permission=%s: code = %q, muốn invalid_request", q, got)
+		}
+	}
+	// Two keys is not "either" and not "the first": one key is the whole contract.
+	doiMa(t, m.goi(t, "GET", hostA, duongChonNguoi+"?permission=task.extend&permission=admin.user", "", tok),
+		http.StatusBadRequest)
+	if m.chonNguoi.goi != 0 {
+		t.Errorf("khoá quyền sai dạng mà vẫn chạy câu đọc %d lần", m.chonNguoi.goi)
+	}
+}
+
+func TestChonNguoiPermissionVaUnitCungChuyen(t *testing.T) {
+	m := dungMayChu(t)
+
+	doiMa(t, m.goi(t, "GET", hostA, duongChonNguoi+"?unit=bp-001&permission=task.extend", "",
+		m.tokenCho(t, xaA, sidA)), http.StatusOK)
+	if m.chonNguoi.boPhanCuoi != "bp-001" || m.chonNguoi.quyenCuoi != "task.extend" {
+		t.Fatalf("kho nhận (%q, %q), muốn (bp-001, task.extend)", m.chonNguoi.boPhanCuoi, m.chonNguoi.quyenCuoi)
 	}
 }

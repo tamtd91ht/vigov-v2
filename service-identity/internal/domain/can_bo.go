@@ -215,3 +215,56 @@ type CanBoChonNguoi struct {
 	ChucVu   string
 	BoPhanID string // "" when the person sits in no unit
 }
+
+// LocChonNguoi is the picker's two OPTIONAL narrowings. The zero value is the whole picker list.
+//
+// NEITHER ONE WIDENS: each is ANDed onto the picker predicate (store.locChonNguoi), so no value of
+// either can offer somebody the unfiltered list would not.
+type LocChonNguoi struct {
+	BoPhanID string // `unit` — one department; "" means every unit
+
+	// QuyenMa is `permission` — keep only people who HOLD this flat key, in this commune, today.
+	//
+	// WHY IT EXISTS (owner decision 27/09/2026): the "Lãnh đạo giao việc" box on the task form offers
+	// only people who hold `task.extend`. Filtering on the server and not in the browser because the
+	// browser cannot know: grants live in `vai_tro_quyen`, per commune, and the picker row carries no
+	// role. "" means no permission filter — NEVER "any permission".
+	QuyenMa string
+}
+
+// TranKhoaQuyen bounds a permission key read from a request. The longest seeded key is 19
+// characters (`feedback.restricted`); 64 is room for growth, and past it the value is not a key.
+const TranKhoaQuyen = 64
+
+// LaKhoaQuyenPhang reports whether s has the SHAPE of a permission key: one flat "<nhóm>.<việc>"
+// (rule 5, invariant 3b) — two non-empty lower-case ASCII segments of letters, digits or `_`,
+// joined by exactly one dot, the first segment starting with a letter.
+//
+// SHAPE ONLY, NOT EXISTENCE. Whether the key is in `quyen` is the database's answer, and a
+// well-shaped key nobody holds simply matches nobody. What this refuses is a value that could never
+// be a key — `task`, `task.extend.x`, `TASK.EXTEND`, `*` — which is a client defect worth a 400
+// rather than a silently empty picker.
+func LaKhoaQuyenPhang(s string) bool {
+	if len(s) == 0 || len(s) > TranKhoaQuyen {
+		return false
+	}
+	cham := -1
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '.':
+			if cham >= 0 {
+				return false // a second dot: `a.b.c` is a path, not a flat key
+			}
+			cham = i
+		case c >= 'a' && c <= 'z':
+		case (c >= '0' && c <= '9') || c == '_':
+			if i == 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return cham > 0 && cham < len(s)-1
+}

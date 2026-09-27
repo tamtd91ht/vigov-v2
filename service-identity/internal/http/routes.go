@@ -120,7 +120,7 @@ type (
 	// is the list of things a handler CAN do. The predicate and the narrow row are argued on
 	// idstore.CanBoStore.ChonNguoi and domain.CanBoChonNguoi.
 	DanhBaChonNguoi interface {
-		ChonNguoi(ctx context.Context, boPhanID string) ([]domain.CanBoChonNguoi, error)
+		ChonNguoi(ctx context.Context, loc domain.LocChonNguoi) ([]domain.CanBoChonNguoi, error)
 	}
 
 	// CanBoGhiDanhBa is the WRITE surface of the register — five use cases, one interface.

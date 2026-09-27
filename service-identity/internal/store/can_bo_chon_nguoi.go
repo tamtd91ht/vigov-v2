@@ -60,23 +60,54 @@ const locChonNguoi = `AND deleted_at IS NULL AND co_tai_khoan AND dang_hoat_dong
 // two people of the same name never swap places between two loads.
 const thuTuChonNguoi = ` ORDER BY ho_ten ASC, ma ASC`
 
-// ChonNguoi reads the commune's whole picker list, optionally narrowed to one unit.
+// locGiuQuyen narrows the picker to people who HOLD one permission key, in this commune, today —
+// the `permission` filter of GET /api/v1/staff-directory (owner decision 27/09/2026: the "Lãnh đạo
+// giao việc" box offers only holders of `task.extend`). The key is the placeholder %s.
+//
+// THE PREDICATE IS store.Checker's, NOT A SECOND SPELLING OF IT. The join (noiGiuQuyen) and the
+// conditions (dieuKienGiuQuyen) are truyVanQuyenGoc's own, shared by constant — so "offered as somebody who holds X" and
+// "allowed to do X" cannot drift. Looser here, and the box offers a person the extension route then
+// answers 403 for; stricter, and a real leader is missing from the box with nothing on screen
+// saying why.
+//
+// THE SEMI-JOIN IS ON `ma`, BOTH SIDES, AND THAT IS THE TRAP THIS CLAUSE EXISTS TO AVOID. The
+// Checker's query matches `nd.id` because a Principal carries the internal id; the picker's row is
+// keyed by the business code, and `id` and `ma` never hold the same value. `ma IN (SELECT nd.id …)`
+// compiles, runs, and matches nobody — an empty "Lãnh đạo" box in every commune, with every test
+// that uses equal ids green. `(tenant_id, ma)` is unique and deliberately NOT partial (migration
+// 0009 §2), so one code is one person, soft-deleted rows included.
+//
+// EVERY TABLE IS BOUND TO THE COMMUNE: `nd.tenant_id = $1` (the same $1 Scoped.Query binds for the
+// outer row) and each JOIN's ON clause repeats it — role ids are per commune, and a join on id alone
+// would read commune B's grant for a role id that happens to exist in both.
+//
+// AN UNKNOWN KEY MATCHES NOBODY, AND THAT IS THE ANSWER, NOT A FALLBACK: `vai_tro_quyen.quyen_ma`
+// REFERENCES `quyen(ma)`, so a key outside the catalogue is held by no one. Nothing here reads
+// `quyen` to turn that into an error — see the handler for why.
+const locGiuQuyen = ` AND ma IN (SELECT nd.ma` + noiGiuQuyen + dieuKienGiuQuyen + `
+  AND vq.quyen_ma = %s)`
+
+// ChonNguoi reads the commune's whole picker list, optionally narrowed (domain.LocChonNguoi).
 //
 // THE COMMUNE IS NOT A PARAMETER AND CANNOT BE ONE: Scoped.Query binds it to $1 from the context
-// (rule 1, invariant 5). boPhanID reaches the statement only as a bound parameter; "" means every
-// unit.
-func (s *CanBoStore) ChonNguoi(ctx context.Context, boPhanID string) ([]domain.CanBoChonNguoi, error) {
-	return s.chonNguoi(ctx, boPhanID, TranDanhBaChonNguoi)
+// (rule 1, invariant 5). Both filters reach the statement only as bound parameters; "" means "no
+// such filter", never "any".
+func (s *CanBoStore) ChonNguoi(ctx context.Context, loc domain.LocChonNguoi) ([]domain.CanBoChonNguoi, error) {
+	return s.chonNguoi(ctx, loc, TranDanhBaChonNguoi)
 }
 
 // chonNguoi takes the ceiling as a parameter only so a test can reach the refusal with a handful
 // of rows; production has exactly one caller, with TranDanhBaChonNguoi.
-func (s *CanBoStore) chonNguoi(ctx context.Context, boPhanID string, tran int) ([]domain.CanBoChonNguoi, error) {
+func (s *CanBoStore) chonNguoi(ctx context.Context, loc domain.LocChonNguoi, tran int) ([]domain.CanBoChonNguoi, error) {
 	tail := locChonNguoi
 	var args []any
-	if boPhanID != "" {
-		args = append(args, boPhanID)
+	if loc.BoPhanID != "" {
+		args = append(args, loc.BoPhanID)
 		tail += " AND bo_phan_id = $" + strconv.Itoa(len(args)+1)
+	}
+	if loc.QuyenMa != "" {
+		args = append(args, loc.QuyenMa)
+		tail += fmt.Sprintf(locGiuQuyen, "$"+strconv.Itoa(len(args)+1))
 	}
 	// LIMIT is the ceiling PLUS ONE — the only way "too many" is distinguishable from "exactly the
 	// ceiling". See BoPhanStore.DanhSach.

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/vihat/vigov/service-identity/internal/domain"
 )
 
 // The picker read (can_bo_chon_nguoi.go), run against the SAME fake engine and the SAME dataset as
@@ -19,7 +21,7 @@ import (
 
 func maChonNguoi(t *testing.T, b *banThuDS, xa, boPhan string) []string {
 	t.Helper()
-	ds, err := b.kho.ChonNguoi(ctxXa(xa), boPhan)
+	ds, err := b.kho.ChonNguoi(ctxXa(xa), domain.LocChonNguoi{BoPhanID: boPhan})
 	if err != nil {
 		t.Fatalf("ChonNguoi lỗi: %v", err)
 	}
@@ -105,7 +107,7 @@ func TestChonNguoiVuotTranThiTuChoiChuKhongCatBot(t *testing.T) {
 	// Commune A has two pickable people; a ceiling of one must REFUSE, and hand back no rows.
 	b := moBanThuDS(t)
 
-	ds, err := b.kho.chonNguoi(ctxXa(xaMau), "", 1)
+	ds, err := b.kho.chonNguoi(ctxXa(xaMau), domain.LocChonNguoi{}, 1)
 	if !errors.Is(err, ErrQuaNhieuCanBoChonNguoi) {
 		t.Fatalf("lỗi = %v, muốn ErrQuaNhieuCanBoChonNguoi", err)
 	}
@@ -113,7 +115,100 @@ func TestChonNguoiVuotTranThiTuChoiChuKhongCatBot(t *testing.T) {
 		t.Fatalf("từ chối mà vẫn trả %d dòng — cắt bớt trá hình", len(ds))
 	}
 	// Exactly at the ceiling is NOT over it.
-	if _, err := b.kho.chonNguoi(ctxXa(xaMau), "", 2); err != nil {
+	if _, err := b.kho.chonNguoi(ctxXa(xaMau), domain.LocChonNguoi{}, 2); err != nil {
 		t.Fatalf("đúng bằng trần mà bị từ chối: %v", err)
+	}
+}
+
+// --- the `permission` filter (owner decision 27/09/2026) ---------------------------------------
+//
+// The fixture of grants is dsVaiTro / dsCapQuyen in can_bo_danh_sach_test.go; each row there names
+// the defect it exists to expose.
+
+func maGiuQuyen(t *testing.T, b *banThuDS, xa string, loc domain.LocChonNguoi) string {
+	t.Helper()
+	ds, err := b.kho.ChonNguoi(ctxXa(xa), loc)
+	if err != nil {
+		t.Fatalf("ChonNguoi(%+v) lỗi: %v", loc, err)
+	}
+	var ma []string
+	for _, cb := range ds {
+		ma = append(ma, cb.Ma)
+	}
+	return strings.Join(ma, ",")
+}
+
+func TestChonNguoiLocQuyenChiNguoiGiuQuyen(t *testing.T) {
+	// MUTATIONS THAT MUST TURN THIS RED:
+	//   `ma IN (SELECT nd.id …)` (the Checker's key)   → "" — no ids equal any code
+	//   drop `AND vt.deleted_at IS NULL`                 → CB-001,CB-005 — a deleted role's grant
+	//   drop the outer or inner `dang_hoat_dong`         → never CB-003 alone: both must go, and the
+	//                                                      outer one is proven by the unfiltered test
+	b := moBanThuDS(t)
+
+	if got := maGiuQuyen(t, b, xaMau, domain.LocChonNguoi{QuyenMa: "task.extend"}); got != "CB-001" {
+		t.Fatalf("người giữ task.extend ở xã mẫu = %q, muốn CB-001 — CB-003 bị khoá, "+
+			"CB-005 chỉ có quyền qua vai trò đã xoá", got)
+	}
+}
+
+func TestChonNguoiLocQuyenKhongVuotXa(t *testing.T) {
+	b := moBanThuDS(t)
+
+	// Commune B's holder is B's, and only B's.
+	if got := maGiuQuyen(t, b, dsXaB, domain.LocChonNguoi{QuyenMa: "task.extend"}); got != "CB-900" {
+		t.Fatalf("xã B: người giữ task.extend = %q, muốn CB-900", got)
+	}
+	if got := maGiuQuyen(t, b, xaMau, domain.LocChonNguoi{QuyenMa: "task.extend"}); strings.Contains(got, "CB-9") {
+		t.Fatalf("RÒ RỈ GIỮA HAI XÃ: xã mẫu nhận người giữ quyền của xã B: %s", got)
+	}
+	// vt-001 exists in both communes; only B grants it admin.role. Reading that grant from A would
+	// offer CB-001 for a right A never gave.
+	if got := maGiuQuyen(t, b, xaMau, domain.LocChonNguoi{QuyenMa: "admin.role"}); got != "" {
+		t.Fatalf("xã mẫu nhận %q cho admin.role — quyền do xã B cấp cho vai trò cùng mã", got)
+	}
+}
+
+func TestChonNguoiLocQuyenKhoaLaThiRong(t *testing.T) {
+	// A well-shaped key nobody holds — including one outside the catalogue — matches nobody. EMPTY,
+	// never "the unfiltered list": that would be the default on a narrowing path.
+	b := moBanThuDS(t)
+
+	for _, k := range []string{"task.khong_ton_tai", "budget.confirm"} {
+		if got := maGiuQuyen(t, b, xaMau, domain.LocChonNguoi{QuyenMa: k}); got != "" {
+			t.Errorf("khoá %s không ai giữ mà nhận %q", k, got)
+		}
+	}
+}
+
+func TestChonNguoiLocQuyenLaThamSoRangBuocVaKetHopBoPhan(t *testing.T) {
+	b := moBanThuDS(t)
+
+	if got := maGiuQuyen(t, b, xaMau, domain.LocChonNguoi{BoPhanID: "bp-002", QuyenMa: "task.extend"}); got != "" {
+		t.Fatalf("bp-002 không có ai giữ task.extend mà nhận %q — hai bộ lọc phải cùng áp", got)
+	}
+	if got := maGiuQuyen(t, b, xaMau, domain.LocChonNguoi{BoPhanID: "bp-001", QuyenMa: "task.extend"}); got != "CB-001" {
+		t.Fatalf("bp-001 + task.extend = %q, muốn CB-001", got)
+	}
+	l := b.ghi.tatCa()
+	cuoi := l[len(l)-1]
+	if strings.Contains(cuoi.sql, "task.extend") {
+		t.Fatalf("khoá quyền bị nối vào câu lệnh thay vì ràng buộc: %q", cuoi.sql)
+	}
+	if cuoi.args[1] != "bp-001" || cuoi.args[2] != "task.extend" {
+		t.Fatalf("tham số ràng buộc = %v, muốn [xã, bp-001, task.extend, trần]", cuoi.args)
+	}
+	// The column list is unchanged by the filter — the privacy contract of the route.
+	if cot := cuoi.sql[:strings.Index(cuoi.sql, " FROM ")]; cot != "SELECT "+cotChonNguoi {
+		t.Fatalf("bộ lọc quyền đổi danh sách cột: %q", cot)
+	}
+}
+
+func TestChonNguoiKhongLocQuyenThiKhongNoiBangQuyen(t *testing.T) {
+	// Filter absent → the statement is the one it was before the filter existed.
+	b := moBanThuDS(t)
+	maChonNguoi(t, b, xaMau, "")
+	if l := b.ghi.chua("FROM nguoi_dung"); strings.Contains(l.sql, "vai_tro") {
+		t.Fatalf("không lọc quyền mà câu lệnh vẫn nối vai_tro: %q", l.sql)
 	}
 }

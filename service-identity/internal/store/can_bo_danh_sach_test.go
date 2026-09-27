@@ -90,14 +90,50 @@ var dsDuLieu = []hangND{
 		// The mobile is stored FORMATTED, with dots — the one row that proves the digit search strips
 		// the COLUMN as well as the text typed (TestTimCanBoSoDienThoaiSoChuSo).
 		dienThoaiCoQuan: "0900000005", diDongCaNhan: "0300.000.005", coTaiKhoan: true, dangHoatDong: true,
-		taoLuc: dsMoc.Add(4 * time.Minute)},
+		// vt-009 is a SOFT-DELETED role still carrying task.extend (dsVaiTro): the one pickable person
+		// whose only claim to the key is a role that no longer exists — see dsCapQuyen.
+		vaiTro: "vt-009", taoLuc: dsMoc.Add(4 * time.Minute)},
 
 	{xa: dsXaB, id: "ndb-01", ma: "CB-900", hoTen: "Vũ Thị F", email: "f@example.gov.vn",
 		dienThoaiCoQuan: "0900000009", diDongCaNhan: "0300000009", coTaiKhoan: true, dangHoatDong: true,
-		taoLuc: dsMoc.Add(30 * time.Minute)},
+		vaiTro: "vt-b01", taoLuc: dsMoc.Add(30 * time.Minute)},
 	{xa: dsXaB, id: "ndb-02", ma: "CB-901", hoTen: "Bùi Văn G", email: "g@example.gov.vn",
 		dienThoaiCoQuan: "0900000010", diDongCaNhan: "0300000010", coTaiKhoan: true, dangHoatDong: true,
 		taoLuc: dsMoc.Add(31 * time.Minute)},
+}
+
+// dsVaiTro and dsCapQuyen are the two per-commune tables the picker's `permission` filter joins
+// through (can_bo_chon_nguoi.go locGiuQuyen). EACH ROW IS THERE TO MAKE ONE DEFECT VISIBLE:
+//
+//	(A, vt-001, task.extend)  CB-001 — the one real holder in commune A
+//	(A, vt-002, task.extend)  CB-003 holds it too, but is LOCKED: must never be offered
+//	(A, vt-009 deleted, …)    CB-005's role is soft-deleted and still carries the grant; a join that
+//	                          forgot `vt.deleted_at IS NULL` would offer CB-005
+//	(B, vt-b01, task.extend)  CB-900, commune B's holder — never visible from A
+//	(B, vt-001, admin.role)   the SAME role id as CB-001's, granted a key only in B. A join that
+//	                          dropped the commune from a JOIN would read it and offer CB-001 for
+//	                          `admin.role` in A
+//
+// Every nguoi_dung id differs from its ma (nd-01 / CB-001), so a semi-join written `ma IN (SELECT
+// nd.id …)` — the Checker's key instead of the picker's — returns nobody instead of passing.
+var dsVaiTro = []struct {
+	xa, id string
+	daXoa  bool
+}{
+	{xa: xaMau, id: "vt-001"},
+	{xa: xaMau, id: "vt-002"},
+	{xa: xaMau, id: "vt-009", daXoa: true},
+	{xa: dsXaB, id: "vt-b01"},
+	{xa: dsXaB, id: "vt-001"},
+}
+
+var dsCapQuyen = []struct{ xa, vaiTro, quyen string }{
+	{xaMau, "vt-001", "task.extend"},
+	{xaMau, "vt-001", "task.read"},
+	{xaMau, "vt-002", "task.extend"},
+	{xaMau, "vt-009", "task.extend"},
+	{dsXaB, "vt-b01", "task.extend"},
+	{dsXaB, "vt-001", "admin.role"},
 }
 
 // idCuaXaMau is every visible row of the sample commune, in `ma` order — which for this dataset
@@ -653,6 +689,17 @@ var (
 	// dropped or widened key shows up as wrong rows rather than as a skipped conjunct.
 	dsReMaThuoc = regexp.MustCompile(`AND ma = ANY\(\$(\d+)\)`)
 
+	// The picker's `permission` filter: a semi-join through person → role → grant. MODELLED BY WHAT
+	// IT JOINS ON, not by its text: the outer key, the inner key and the role column are captured and
+	// evaluated against the rows, so `ma IN (SELECT nd.id …)` returns nobody. The commune bindings are
+	// literal — drop one and the clause no longer matches, and dsMenhDeLa refuses what is left. Each
+	// inner condition is modelled one by one (dsGiuQuyen), for the same reason as the outer ones.
+	dsReGiuQuyen = regexp.MustCompile(`(?s) AND ([a-z_]+) IN \(SELECT nd\.([a-z_]+)\s+FROM nguoi_dung nd` +
+		`\s+JOIN vai_tro\s+vt ON vt\.tenant_id = nd\.tenant_id AND vt\.id\s+= nd\.([a-z_]+)` +
+		`\s+JOIN vai_tro_quyen vq ON vq\.tenant_id = nd\.tenant_id AND vq\.vai_tro_id = vt\.id` +
+		`\s+WHERE nd\.tenant_id = \$1((?:\s+AND [a-z_.]+(?: IS NULL)?)*?)` +
+		`\s+AND vq\.quyen_ma = \$(\d+)\)`)
+
 	dsReBang    = regexp.MustCompile(`AND id = \$(\d+)`)
 	dsReCap     = regexp.MustCompile(`AND \(([a-z_]+), ([a-z_]+)\) ([<>]) \(\$(\d+), \$(\d+)\)`)
 	dsReThuTu   = regexp.MustCompile(`ORDER BY ([a-z_]+) (ASC|DESC)(?:, ([a-z_]+) (ASC|DESC))?`)
@@ -674,6 +721,18 @@ func dsChay(q string, args []driver.Value) (driver.Rows, error) {
 		if h.xa == args[0] {
 			ra = append(ra, h)
 		}
+	}
+
+	// The semi-join is evaluated FIRST and cut out of the statement, so the outer predicates below
+	// are matched against the outer WHERE only — the inner `nd.deleted_at IS NULL` must not stand in
+	// for an outer one somebody removed.
+	if m := dsReGiuQuyen.FindStringSubmatch(q); m != nil {
+		giu, err := dsGiuQuyen(m, args)
+		if err != nil {
+			return nil, err
+		}
+		ra = dsLoc(ra, func(h hangND) bool { return giu[h.giaTri(m[1])] })
+		q = strings.Replace(q, m[0], "", 1)
 	}
 
 	// The soft-delete predicate is MODELLED, not assumed: remove it from the store and these rows
@@ -830,6 +889,69 @@ func dsChay(q string, args []driver.Value) (driver.Rows, error) {
 		hg.hang = append(hg.hang, dong)
 	}
 	return hg, nil
+}
+
+// dsGiuQuyen evaluates the inner SELECT of the `permission` semi-join: the set of values of the
+// inner key column over the people of commune $1 who hold key $n through a role of commune $1.
+func dsGiuQuyen(m []string, args []driver.Value) (map[driver.Value]bool, error) {
+	cotTrong, cotVaiTro := m[2], m[3]
+	n, _ := strconv.Atoi(m[5])
+	khoa := args[n-1]
+	xa := args[0]
+
+	var boVaiTroXoa bool
+	var dk []func(hangND) bool
+	for _, c := range strings.Split(m[4], "AND") {
+		switch strings.TrimSpace(c) {
+		case "":
+		case "nd.deleted_at IS NULL":
+			dk = append(dk, func(h hangND) bool { return !h.daXoa })
+		case "nd.co_tai_khoan":
+			dk = append(dk, func(h hangND) bool { return h.coTaiKhoan })
+		case "nd.dang_hoat_dong":
+			dk = append(dk, func(h hangND) bool { return h.dangHoatDong })
+		case "vt.deleted_at IS NULL":
+			boVaiTroXoa = true
+		default:
+			return nil, fmt.Errorf("driver giả: điều kiện giữ quyền %q chưa được mô phỏng", strings.TrimSpace(c))
+		}
+	}
+
+	coVaiTro := func(id driver.Value) bool {
+		for _, v := range dsVaiTro {
+			if v.xa == xa && v.id == id && !(boVaiTroXoa && v.daXoa) {
+				return true
+			}
+		}
+		return false
+	}
+	duocCap := func(id driver.Value) bool {
+		for _, c := range dsCapQuyen {
+			if c.xa == xa && c.vaiTro == id && c.quyen == khoa {
+				return true
+			}
+		}
+		return false
+	}
+
+	ra := map[driver.Value]bool{}
+nguoi:
+	for _, h := range dsDuLieu {
+		if h.xa != xa {
+			continue
+		}
+		for _, f := range dk {
+			if !f(h) {
+				continue nguoi
+			}
+		}
+		vt := h.giaTri(cotVaiTro)
+		if vt == "" || !coVaiTro(vt) || !duocCap(vt) {
+			continue // an inner JOIN: no role (NULL), or no grant, means no row
+		}
+		ra[h.giaTri(cotTrong)] = true
+	}
+	return ra, nil
 }
 
 // dsMenhDeLa refuses a WHERE clause carrying a conjunct this engine does not implement.
