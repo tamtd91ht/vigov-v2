@@ -264,6 +264,34 @@ func TestGetTenantTraSieuDuLieu(t *testing.T) {
 	}
 }
 
+// THE admin.vigov.vn ROW: a real commune whose la_chinh domain is a platform address. GetTenant
+// still describes the commune, but its host is "" — never the reserved address, and never another
+// of the commune's hosts picked in its place.
+func TestGetTenantHostChinhDanhRiengTraRong(t *testing.T) {
+	t.Parallel()
+
+	for _, h := range []string{"admin.vigov.vn", "admin-stg.vigov.vn", "identity.api.vigov.vn", "vigov.vn"} {
+		dir := danhBaMau()
+		tp := dir.theoID[xaTanPhu]
+		tp.Host = h
+		dir.theoID[xaTanPhu] = tp
+		cli, _ := dung(t, dir)
+
+		res, err := cli.GetTenant(tenant.Into(ctxTest(t), xaTanPhu),
+			&platformv1.GetTenantRequest{Id: xaTanPhu.String()})
+		if err != nil {
+			t.Fatalf("%q: GetTenant lỗi: %v", h, err)
+		}
+		got := res.GetTenant()
+		if got.GetHost() != "" {
+			t.Errorf("host = %q, muốn rỗng — tên miền của nền tảng không bao giờ là tên miền của xã", got.GetHost())
+		}
+		if got.GetId() != xaTanPhu.String() || got.GetDisplayName() != "Phường Tân Phú" || !got.GetActive() {
+			t.Errorf("%q: xã vẫn phải được mô tả đủ, nhận %+v", h, got)
+		}
+	}
+}
+
 // A merged commune must stay describable: rule 7 keeps its data and its codes, and an archival
 // record referring to it still has to be able to render a name. Active=false is the answer,
 // NotFound is not.

@@ -132,6 +132,19 @@ func (s *Server) GetTenant(ctx context.Context, req *platformv1.GetTenantRequest
 	// A deactivated commune IS returned, with Active=false. Rule 7 keeps a merged commune's
 	// data and address; hiding it here would leave archival records referring to a commune
 	// nothing can name.
+	//
+	// A PLATFORM ADDRESS IS NEVER A COMMUNE'S HOST, even when it is the row marked la_chinh — the
+	// deploy pipeline wrote admin.vigov.vn / admin-stg.vigov.vn as a real commune's domain, and
+	// those rows are kept (rule 7; migration 0007). ResolveHost refuses them, so returning one here
+	// would hand a caller a "commune domain" that resolves to no commune: the Mini App would send
+	// it as ?host= to the public per-commune reads (citizen_session_bridge.proto,
+	// commune_primary_host). Blanked, never replaced by another of the commune's hosts: "" is the
+	// contract's "no primary domain", and picking a substitute is a choice the operator makes by
+	// marking a different row primary. Filtered HERE, where the reserved list lives, rather than in
+	// each consumer — the only caller today is core/platformclient XaTrongNguCanh.
+	if domain.LaTenMienDanhRieng(t.Host) {
+		t.Host = ""
+	}
 	return &platformv1.GetTenantResponse{Tenant: sangProto(t)}, nil
 }
 

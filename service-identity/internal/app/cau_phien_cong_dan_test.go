@@ -233,8 +233,9 @@ func dungBanThuCau(t *testing.T) banThuCau {
 			cauAppRieng: {AppID: cauAppRieng, CheDo: platformclient.CheDoAppRieng, XaRieng: xaThu},
 		},
 		xa: map[tenant.ID]tenant.Tenant{
-			xaThu:  {ID: xaThu, Name: "Xã Thăng Bình", Active: true},
-			xaKhac: {ID: xaKhac, Name: "Xã Bình Dương", Active: true},
+			// Host is what GetTenant reports: the commune's PRIMARY domain (tenant_domain.la_chinh).
+			xaThu:  {ID: xaThu, Host: hostThu, Name: "Xã Thăng Bình", Active: true},
+			xaKhac: {ID: xaKhac, Host: hostKhac, Name: "Xã Bình Dương", Active: true},
 		},
 		hosts: map[string]tenant.ID{hostThu: xaThu, hostKhac: xaKhac},
 	}
@@ -637,6 +638,85 @@ func TestCauKhongDuaSoHayMaZaloVaoVetHayLog(t *testing.T) {
 	}
 	if strings.Contains(b.log.String(), so) || strings.Contains(b.log.String(), cauMaZalo) {
 		t.Fatalf("dữ liệu cá nhân lọt vào log: %s", b.log.String())
+	}
+}
+
+// --- commune_primary_host (ADR 0047) --------------------------------------------------------------
+
+func TestCauTenMienChinhLaHostChinhCuaXa(t *testing.T) {
+	b := dungBanThuCau(t)
+	kq, err := b.uc.Mo(context.Background(), yeuCauCau(cauAppRieng))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kq.TenMienChinh != hostThu {
+		t.Fatalf("TenMienChinh = %q, muốn tên miền chính %q của xã gắn app", kq.TenMienChinh, hostThu)
+	}
+}
+
+func TestCauKhongXaThiKhongTenMienChinh(t *testing.T) {
+	b := dungBanThuCau(t)
+	kq, err := b.uc.Mo(context.Background(), yeuCauCau(cauAppChinh)) // nothing confirmed, nothing remembered
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kq.Xa != "" || kq.TenMienChinh != "" {
+		t.Fatalf("kết quả = %+v — không xã thì không tên miền", kq)
+	}
+}
+
+// GetTenant answers "" both when the commune has no la_chinh row and when that row is a reserved
+// platform address (service-platform blanks it — TestGetTenantHostChinhDanhRiengTraRong). Either
+// way the session is still issued and NOTHING is substituted: not the hint, not another host.
+func TestCauXaKhongCoTenMienChinhThiRongVaVanPhatPhien(t *testing.T) {
+	b := dungBanThuCau(t)
+	b.nt.xa[xaThu] = tenant.Tenant{ID: xaThu, Host: "", Name: "Xã Thăng Bình", Active: true}
+	yc := yeuCauCau(cauAppChinh)
+	yc.GoiYTenMien, yc.DaXacNhanXa = hostThu, true
+
+	kq, err := b.uc.Mo(context.Background(), yc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kq.Token == "" || kq.Xa != xaThu {
+		t.Fatalf("kết quả = %+v — thiếu tên miền chính không phải lỗi, phiên vẫn phát", kq)
+	}
+	if kq.TenMienChinh != "" {
+		t.Fatalf("TenMienChinh = %q, muốn rỗng — không bao giờ lấy gợi ý thế vào", kq.TenMienChinh)
+	}
+}
+
+// THE MERGER CASE: the absorbed commune's old domain was re-pointed to the successor, and the QR
+// still carries it. The answer is the successor's OWN primary domain, never an echo of the hint.
+func TestCauGoiYLaTenMienCuThiTraTenMienChinh(t *testing.T) {
+	b := dungBanThuCau(t)
+	const hostCuSapNhap = "xa-da-sap-nhap.vigov.vn"
+	b.nt.hosts[hostCuSapNhap] = xaThu
+	yc := yeuCauCau(cauAppChinh)
+	yc.GoiYTenMien, yc.DaXacNhanXa = hostCuSapNhap, true
+
+	kq, err := b.uc.Mo(context.Background(), yc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kq.Xa != xaThu || kq.TenMienChinh != hostThu {
+		t.Fatalf("kết quả = %+v — muốn xã kế thừa với tên miền chính %q, không phải gợi ý", kq, hostThu)
+	}
+
+	// ADR 0047 stop #1: neither domain reaches the session row nor any audit entry.
+	for _, l := range b.g.lenh {
+		for _, a := range l.args {
+			var s string
+			switch v := a.(type) {
+			case string:
+				s = v
+			case []byte:
+				s = string(v)
+			}
+			if strings.Contains(s, hostThu) || strings.Contains(s, hostCuSapNhap) {
+				t.Fatalf("tên miền lọt vào câu lệnh ghi CSDL: %q", s)
+			}
+		}
 	}
 }
 

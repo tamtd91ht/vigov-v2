@@ -32,7 +32,8 @@ func (m *moPhienCauGia) Mo(_ context.Context, yc app.YeuCauMoPhienCau) (app.KetQ
 
 func TestCauServerChuyenDuTruongVaoUseCase(t *testing.T) {
 	gia := &moPhienCauGia{kq: app.KetQuaMoPhienCau{Token: "tok", Sid: "sid", HetHan: time.Now().Add(time.Hour),
-		Xa: tenant.ID("01JD8ZQK9M3NPXR7TVWYB2C4EA"), TenXa: "Xã Thăng Bình", DaCoSo: true, CheDo: domain.CheDoAppRieng}}
+		Xa: tenant.ID("01JD8ZQK9M3NPXR7TVWYB2C4EA"), TenXa: "Xã Thăng Bình", TenMienChinh: "thangbinh.vigov.vn",
+		DaCoSo: true, CheDo: domain.CheDoAppRieng}}
 	s := NewCauServer(gia, nil)
 
 	ra, err := s.OpenCitizenSession(context.Background(), &identityv1.OpenCitizenSessionRequest{
@@ -49,6 +50,10 @@ func TestCauServerChuyenDuTruongVaoUseCase(t *testing.T) {
 		ra.GetTenantId() != "01JD8ZQK9M3NPXR7TVWYB2C4EA" || ra.GetTenantDisplayName() != "Xã Thăng Bình" ||
 		!ra.GetPhoneVerified() || ra.GetAppMode() != identityv1.MiniAppMode_MINI_APP_MODE_COMMUNE {
 		t.Fatalf("phản hồi = %v", ra)
+	}
+	// The use case's primary domain, NOT the request's hint (which differs here on purpose).
+	if ra.GetCommunePrimaryHost() != "thangbinh.vigov.vn" {
+		t.Fatalf("commune_primary_host = %q, muốn tên miền chính từ use case", ra.GetCommunePrimaryHost())
 	}
 }
 
@@ -72,7 +77,7 @@ func TestCauServerKhongXaThiKhongTokenKhongHan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ra.GetSessionToken() != "" || ra.GetTenantId() != "" || ra.GetExpiresAt() != nil ||
+	if ra.GetSessionToken() != "" || ra.GetTenantId() != "" || ra.GetExpiresAt() != nil || ra.GetCommunePrimaryHost() != "" ||
 		ra.GetAppMode() != identityv1.MiniAppMode_MINI_APP_MODE_MAIN {
 		t.Fatalf("phản hồi không xã = %v", ra)
 	}

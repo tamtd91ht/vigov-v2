@@ -145,8 +145,14 @@ type KetQuaMoPhienCau struct {
 	HetHan time.Time
 	Xa     tenant.ID
 	TenXa  string
-	DaCoSo bool
-	CheDo  domain.CheDoApp
+	// TenMienChinh is `commune_primary_host`: the commune's PRIMARY domain as GetTenant reports it
+	// (tenant_domain.la_chinh; service-platform blanks a reserved platform address). "" when Xa is
+	// "", and "" when the commune has no primary domain — never filled from GoiYTenMien, which after
+	// a merger may be the absorbed commune's old domain (ADR 0047, decision 4). Response only: it is
+	// written to no session row and no audit entry (ADR 0047, stop condition #1).
+	TenMienChinh string
+	DaCoSo       bool
+	CheDo        domain.CheDoApp
 }
 
 // The error classes the gRPC handler maps to the contract's status table. Each message is generic:
@@ -353,7 +359,7 @@ func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaM
 
 		kq = KetQuaMoPhienCau{
 			Token: token, Sid: sid, HetHan: hetHan,
-			Xa: xa, TenXa: t.Name, DaCoSo: congDan != "", CheDo: cheDo,
+			Xa: xa, TenXa: t.Name, TenMienChinh: t.Host, DaCoSo: congDan != "", CheDo: cheDo,
 		}
 		return nil
 	})

@@ -87,6 +87,8 @@ func (s *CauServer) OpenCitizenSession(ctx context.Context, req *identityv1.Open
 		TenantDisplayName: kq.TenXa,
 		PhoneVerified:     kq.DaCoSo,
 		AppMode:           sangMiniAppMode(kq.CheDo),
+		// The commune's primary domain from GetTenant, never the request's commune_host_hint.
+		CommunePrimaryHost: kq.TenMienChinh,
 	}
 	if kq.Token != "" {
 		ra.ExpiresAt = timestamppb.New(kq.HetHan)
