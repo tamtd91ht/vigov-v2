@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   deNghiLuiHan,
   doiTrangThaiNhiemVu,
+  duongDanHangChoLuiHan,
   duongDanNhatKyNhiemVu,
   duongDanSoNhiemVu,
+  layHangChoLuiHan,
   layNhatKyNhiemVu,
   layNhiemVu,
   quyetDinhLuiHan,
@@ -403,6 +405,36 @@ describe("GET /api/v1/tasks/{ma}/log-entries — nhật ký §5.9", () => {
     const gia = batFetch(new Response(JSON.stringify(trang), { status: 200 }));
     const kq = await layNhatKyNhiemVu("NV19", "c1", 20);
     expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/tasks/NV19/log-entries?limit=20&cursor=c1");
+    expect(kq).toEqual({ ok: true, duLieu: trang });
+  });
+});
+
+describe("GET /api/v1/task-extensions — hàng chờ duyệt lùi hạn §5.8", () => {
+  it("toàn xã = KHÔNG có `approver`; `Chờ tôi duyệt` = đúng chuỗi `me`, không mang mã cán bộ nào", () => {
+    expect(duongDanHangChoLuiHan()).toBe("/api/v1/task-extensions");
+    expect(duongDanHangChoLuiHan({ approver: "me" })).toBe("/api/v1/task-extensions?approver=me");
+    // `sort`/`order` không gửi: mặc định máy chủ đã là cũ nhất trước.
+    expect(duongDanHangChoLuiHan({ approver: "me", limit: 20 })).not.toContain("order=");
+    // Một mã cán bộ ở đây là client tự khai mình là ai (luật 1, cấm #2) — `tsc` phải chặn.
+    // @ts-expect-error — `approver` chỉ nhận `"me"`.
+    duongDanHangChoLuiHan({ approver: "CB-2026-7K3M9Q" });
+  });
+
+  it("trang đầu KHÔNG gửi `cursor=` rỗng; trang sau mang con trỏ", () => {
+    expect(duongDanHangChoLuiHan({ cursor: "" })).toBe("/api/v1/task-extensions");
+    expect(duongDanHangChoLuiHan({ cursor: null, limit: 20 })).toBe(
+      "/api/v1/task-extensions?limit=20",
+    );
+    expect(duongDanHangChoLuiHan({ approver: "me", limit: 20, cursor: "c 1" })).toBe(
+      "/api/v1/task-extensions?approver=me&limit=20&cursor=c+1",
+    );
+  });
+
+  it("gọi GET đúng tuyến và trả nguyên trang máy chủ", async () => {
+    const trang = { items: [], next_cursor: "", has_more: false };
+    const gia = batFetch(new Response(JSON.stringify(trang), { status: 200 }));
+    const kq = await layHangChoLuiHan({ approver: "me" });
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/task-extensions?approver=me");
     expect(kq).toEqual({ ok: true, duLieu: trang });
   });
 });

@@ -51,6 +51,7 @@ import type {
 
 import {
   CANH_BAO_HAN_MOT_LAN,
+  CAU_LIEN_KET_HANG_CHO,
   CAU_LOC_TRANG_THAI_KHONG_CO_COT,
   CHI_QUA_HAN_NHAN,
   CHI_TIET_THIEU_VAN_BAN,
@@ -69,6 +70,7 @@ import {
   GHI_CHU_LUI_HAN,
   GHI_CHU_THIEU_SO_THEO_DOI,
   GHI_CHU_TU_SINH_MA,
+  ID_HANG_CHO,
   KHONG_DOC_DUOC_VAN_BAN,
   LY_DO_KHONG_SUA_CHU_TRI,
   LY_DO_KHONG_SUA_HAN,
@@ -150,6 +152,7 @@ import {
   type NhomVanBan,
   type TrangThaiNhiemVu,
 } from "./nhan-nhiem-vu";
+import { HangChoLuiHan } from "./hang-cho-lui-han";
 import { NhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
 
 /**
@@ -298,6 +301,11 @@ export type ViecDrawer =
     }
   /** Một tuyến ghi trả về nhiệm vụ (tạo, đổi trạng thái). */
   | { readonly loai: "ghiXong"; readonly nhiemVu: petitions_nhiemVuRa }
+  /**
+   * Nhiệm vụ `ma` vừa đổi ở NƠI KHÁC — một quyết định lùi hạn ở hàng chờ, tuyến không trả nhiệm
+   * vụ. Drawer đang mở đúng mã ấy thì đọc lại; mở mã khác hoặc đóng thì không làm gì.
+   */
+  | { readonly loai: "docLai"; readonly ma: string }
   | { readonly loai: "dong" };
 
 export function chuyenDrawer(s: DrawerNhiemVu | null, v: ViecDrawer): DrawerNhiemVu | null {
@@ -316,6 +324,11 @@ export function chuyenDrawer(s: DrawerNhiemVu | null, v: ViecDrawer): DrawerNhie
           : { pha: "dangTai" };
       return { nhiemVu: v.nhiemVu, vanBan, luotDoc: (s?.luotDoc ?? 0) + 1 };
     }
+    case "docLai":
+      // GIỮ nguyên những gì đang hiện, chỉ tăng lượt: tuyến chi tiết thay cả nhiệm vụ lẫn khối
+      // văn bản khi về, và một lượt đọc cũ về sau bị bỏ.
+      if (s === null || s.nhiemVu.code !== v.ma) return s;
+      return { ...s, luotDoc: s.luotDoc + 1 };
     case "chiTietVe": {
       if (s === null || s.nhiemVu.code !== v.ma || s.luotDoc !== v.luotDoc) return s;
       if (!v.kq.ok) return { ...s, vanBan: { pha: "loi", thongBao: v.kq.thongBao } };
@@ -354,6 +367,9 @@ export function SoNhiemVu() {
   const [loiGhi, datLoiGhi] = useState<string | null>(null);
   const [dangGui, datDangGui] = useState(false);
   const [moFormTao, datMoFormTao] = useState(false);
+  // Tăng khi một đề nghị lùi hạn vừa gửi xong từ drawer — hàng chờ phải thấy nó. KHÔNG gắn vào
+  // `lanTai`: mỗi lần ghi trên sổ mà đọc lại hàng chờ là vứt mọi trang `Xem thêm` lãnh đạo đã mở.
+  const [lanHangCho, datLanHangCho] = useState(0);
 
   const khoa = `${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}`;
   // Kanban KHÔNG mang con trỏ: nó không phân trang, nên bộ lọc và lần ghi gần nhất là tất cả những
@@ -536,6 +552,28 @@ export function SoNhiemVu() {
         />
       )}
 
+      {/* §5.8 — quyết định lùi hạn. Một MỤC trên sổ chứ không trong drawer: tuyến hàng chờ không
+          lọc được theo nhiệm vụ (xem `HÀNG CHỜ DUYỆT LÙI HẠN`, `nhan-nhiem-vu.ts`). */}
+      <HangChoLuiHan
+        danhBa={danhBaChoNhatKy(kqDanhBa)}
+        maNguoiDangNhap={maNguoiDangNhap}
+        lanLamMoi={lanHangCho}
+        moNhiemVu={(ma) =>
+          layNhiemVu(ma).then((kq) => {
+            if (kq.ok) {
+              guiDrawer({ loai: "mo", nhiemVu: kq.duLieu });
+              datLoiGhi(null);
+            }
+            return kq;
+          })
+        }
+        daQuyet={(ma) => {
+          // Duyệt là đổi hạn xử lý: drawer đang mở đúng việc ấy và quyển sổ đều đã cũ.
+          guiDrawer({ loai: "docLai", ma });
+          datLanTai((n) => n + 1);
+        }}
+      />
+
       <HangLoc
         loc={loc}
         tim={tim}
@@ -663,7 +701,12 @@ export function SoNhiemVu() {
               datLanTai((n) => n + 1);
             });
           }}
-          guiDeNghiLuiHan={(hanMoi, lyDo) => deNghiLuiHan(drawer.nhiemVu.code, hanMoi, lyDo)}
+          guiDeNghiLuiHan={(hanMoi, lyDo) =>
+            deNghiLuiHan(drawer.nhiemVu.code, hanMoi, lyDo).then((kq) => {
+              if (kq.ok) datLanHangCho((n) => n + 1);
+              return kq;
+            })
+          }
           quyetDinh={(deNghiID, duyet, ghiChu) =>
             quyetDinhLuiHan(drawer.nhiemVu.code, deNghiID, duyet, ghiChu)
           }
@@ -2027,9 +2070,10 @@ export function KhoiLuiHan({
 
       {congDuyet.hien &&
         (deNghi === null ? (
+          // Drawer KHÔNG tự tìm đề nghị của việc này: tuyến hàng chờ không lọc theo nhiệm vụ, và
+          // lật cả hàng chờ của xã để tìm một dòng là một lời gọi mỗi trang. Chỉ đường thay vì tìm.
           <p className="trang-thai-rong">
-            Bạn là lãnh đạo giao việc của nhiệm vụ này, nhưng hợp đồng chưa có tuyến liệt kê đề nghị
-            đang chờ — xem phần chưa dựng được ở đầu màn.
+            <a href={`#${ID_HANG_CHO}`}>{CAU_LIEN_KET_HANG_CHO}</a>
           </p>
         ) : (
           <div className="cum-nut">

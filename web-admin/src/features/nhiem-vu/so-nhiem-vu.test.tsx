@@ -15,11 +15,13 @@ import {
   CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
   CANH_BAO_HAN_MOT_LAN,
+  CAU_LIEN_KET_HANG_CHO,
   CHUA_PHAN_CONG,
   CHI_TIET_THIEU_VAN_BAN,
   CHU_THICH_HAI_O_TICK,
   DANG_TAI_VAN_BAN,
   GHI_CHU_LUI_HAN,
+  ID_HANG_CHO,
   KHOA_SUA_DANG_TAI,
   KHOA_SUA_LOI,
   KHOA_SUA_NHOM_LA,
@@ -257,12 +259,15 @@ describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thu�
     expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
   });
 
-  it("ĐÚNG lãnh đạo giao việc: nút vẫn không hiện KHI CHƯA CÓ ĐỀ NGHỊ NÀO — và nói ra lý do", () => {
-    // Hợp đồng không có tuyến liệt kê đề nghị đang chờ. Vẽ hai nút không có `deNghiID` là vẽ hai
-    // nút chắc chắn 404.
+  it("ĐÚNG lãnh đạo giao việc, chưa có đề nghị trong tay: chỉ đường tới hàng chờ, không vẽ nút", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (TASK-07): hàng chờ `GET /api/v1/task-extensions` nay có, nhưng
+    // KHÔNG lọc được theo nhiệm vụ — nên drawer chỉ đường tới mục hàng chờ thay vì lật cả hàng chờ
+    // để tìm một dòng. Câu cũ "chưa có tuyến liệt kê" là một lý do sai trên màn.
     const html = veChiTiet({}, LANH_DAO);
     expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
-    expect(html).toContain("chưa có tuyến liệt kê đề nghị");
+    expect(html).not.toContain("chưa có tuyến liệt kê đề nghị");
+    expect(html).toContain(`href="#${ID_HANG_CHO}"`);
+    expect(html).toContain(nhuTrongHTML(CAU_LIEN_KET_HANG_CHO));
     // Và KHÔNG hiện câu "không phải lãnh đạo" — người này ĐÚNG là lãnh đạo giao việc.
     expect(html).not.toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
   });
@@ -277,7 +282,7 @@ describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thu�
         quyetDinh={KHONG_GOI}
       />,
     );
-    // Không có đề nghị nào trong bộ nhớ ⇒ vẫn là nhánh "chưa có tuyến liệt kê". Bài này canh
+    // Không có đề nghị nào trong bộ nhớ ⇒ vẫn là nhánh "chỉ đường tới hàng chờ". Bài này canh
     // nhánh CÒN LẠI: câu từ chối của lớp hai KHÔNG xuất hiện với đúng người.
     expect(html).not.toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
     expect(html).not.toContain(nhuTrongHTML(CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC));

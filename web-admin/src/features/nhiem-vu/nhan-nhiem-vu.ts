@@ -26,6 +26,7 @@ import type {
   identity_canBoChonNguoiRa,
   identity_danhBaChonNguoiRa,
   petitions_danhSachTrangThaiNhiemVuRa,
+  petitions_deNghiChoDuyetRa,
   petitions_nhatKyNhiemVuRa,
   petitions_nhiemVuRa,
   petitions_nhiemVuVanBanRa,
@@ -675,11 +676,14 @@ export function hienDongNhatKy(
  * và nếu kho phân trang theo vị trí thì dòng cuối trang trước trôi sang đầu trang sau. Hai dòng
  * cùng `id` còn là hai phần tử cùng `key` trong React — một trong hai sẽ không được vẽ lại đúng.
  * Giữ bản ĐÃ CÓ, theo thứ tự máy chủ trả.
+ *
+ * Chung kiểu theo `id` vì hàng chờ duyệt lùi hạn (`KhoiHangChoLuiHan`) cần đúng phép gộp này: một
+ * đề nghị mới gửi giữa hai lần `Xem thêm` cũng làm trôi dòng như vậy.
  */
-export function gopTrangNhatKy(
-  daCo: readonly petitions_nhatKyNhiemVuRa[],
-  trangMoi: readonly petitions_nhatKyNhiemVuRa[],
-): petitions_nhatKyNhiemVuRa[] {
+export function gopTrangNhatKy<T extends { readonly id: string }>(
+  daCo: readonly T[],
+  trangMoi: readonly T[],
+): T[] {
   const daThay = new Set(daCo.map((d) => d.id));
   const ra = [...daCo];
   for (const d of trangMoi) {
@@ -688,6 +692,130 @@ export function gopTrangNhatKy(
     ra.push(d);
   }
   return ra;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * HÀNG CHỜ DUYỆT LÙI HẠN §5.8 — `GET /api/v1/task-extensions`
+ *
+ * VÌ SAO LÀ MỘT MỤC TRÊN SỔ, KHÔNG PHẢI HAI NÚT TRONG DRAWER: §5.8 đặt ô ĐỀ NGHỊ trong drawer, và
+ * không vẽ chỗ nào cho quyết định. Tuyến hàng chờ KHÔNG lọc được theo nhiệm vụ, nên đưa quyết định
+ * vào drawer nghĩa là lật cả hàng chờ của xã — một lời gọi mỗi trang — chỉ để tìm một dòng. Nên
+ * quyết định nằm ở mục `Đề nghị lùi hạn chờ duyệt` trên sổ, và drawer chỉ đường tới đó.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Hai bộ lọc của hàng chờ. `cua-toi` là MẶC ĐỊNH — quyết định của người dùng 27/09/2026: web mở
+ * hàng chờ ở `Chờ tôi duyệt`, có lối chuyển sang toàn xã.
+ */
+export type LocHangCho = "cua-toi" | "toan-xa";
+
+export const LOC_HANG_CHO_MAC_DINH: LocHangCho = "cua-toi";
+
+/**
+ * Bộ lọc màn hình → tham số tuyến. `cua-toi` là `approver=me` — chuỗi `me`, KHÔNG phải mã cán bộ:
+ * máy chủ tự lấy mã từ phiên. `toan-xa` là tham số VẮNG MẶT, không phải `approver=` rỗng.
+ */
+export function thamSoHangCho(loc: LocHangCho): { approver?: "me" } {
+  return loc === "cua-toi" ? { approver: "me" } : {};
+}
+
+/** Tiêu đề mục — cũng là đích của liên kết trong drawer. */
+export const TIEU_DE_HANG_CHO = "Đề nghị lùi hạn chờ duyệt";
+
+/** `id` của mục, cho liên kết `#…` từ drawer. */
+export const ID_HANG_CHO = "hang-cho-lui-han";
+
+/** Nhãn cột `Chờ tôi duyệt` của Sổ tay lãnh đạo (`03-so-tay-lanh-dao.md`), nguyên văn. */
+export const NHAN_LOC_CHO_TOI = "Chờ tôi duyệt";
+export const NHAN_LOC_TOAN_XA = "Toàn xã";
+
+export const DANG_TAI_HANG_CHO = "Đang tải đề nghị lùi hạn…";
+
+export const NHAN_XEM_THEM_HANG_CHO = "Xem thêm";
+
+/** Hàng chờ rỗng — HAI câu, vì "không có gì chờ bạn" và "xã không có gì chờ" là hai sự thật khác. */
+export function cauHangChoRong(loc: LocHangCho): string {
+  return loc === "cua-toi"
+    ? "Không có đề nghị lùi hạn nào chờ bạn duyệt."
+    : "Xã không có đề nghị lùi hạn nào đang chờ duyệt.";
+}
+
+/**
+ * Dòng có `task_assigner` rỗng. KHÁC `CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC` của drawer ở một chỗ có chủ
+ * ý: không bảo "hãy bổ sung" — `PATCH` cố ý không nhận `assigner` (ADR 0038), nên từ màn này không
+ * có đường nào bổ sung được, và một lời khuyên không làm theo được là một lời khuyên sai.
+ */
+export const CAU_KHONG_AI_DUYET_DUOC =
+  "Nhiệm vụ này không ghi lãnh đạo giao việc, nên không ai duyệt được đề nghị này.";
+
+/** Liên kết trong drawer §5.8 tới hàng chờ. */
+export const CAU_LIEN_KET_HANG_CHO =
+  "Duyệt hoặc từ chối đề nghị lùi hạn ở mục “Đề nghị lùi hạn chờ duyệt” đầu sổ.";
+
+/** Một dòng hàng chờ đã dịch sang chữ để vẽ. */
+export type DongHangChoHien = {
+  readonly id: string;
+  readonly maNhiemVu: string;
+  readonly tieuDe: string;
+  /** Hạn đang có — `20/6/2026`, hoặc `—` khi nhiệm vụ không có hạn. */
+  readonly hanHienTai: string;
+  readonly hanDeNghi: string;
+  readonly lyDo: string;
+  /** `Họ tên (CB-…)` khi danh bạ có, còn lại là mã. */
+  readonly nguoiDeNghi: string;
+  /** Nguyên văn `requested_at` — cho `dateTime` của `<time>`. */
+  readonly lucDeNghiISO: string;
+  readonly lucDeNghi: string;
+  readonly lanhDao: string;
+  /** `null` = hiện hai nút. Còn lại là câu nói vì sao không có nút. */
+  readonly cauChan: string | null;
+};
+
+/**
+ * Dòng của máy chủ → chữ để vẽ.
+ *
+ * `cauChan` ĐI QUA `quyetDinhDuyetLuiHan` — đúng phép so mã cán bộ drawer dùng (ADR 0038 lớp hai),
+ * không phải một phép so thứ hai. Đó là tiện dụng, không phải biện pháp: máy chủ kiểm lại trong
+ * giao dịch và câu 403/409 của nó ra nguyên văn. Lớp một (`task.extend`) truyền `true` vì màn hình
+ * chưa đọc được khoá nào — xem `PHAN_CHUA_DUNG`.
+ */
+export function hienDongHangCho(
+  d: petitions_deNghiChoDuyetRa,
+  danhBa: DanhBaTheoMa | null,
+  maNguoiDangNhap: string,
+): DongHangChoHien {
+  const cong = quyetDinhDuyetLuiHan(maNguoiDangNhap, d.task_assigner, true);
+  let cauChan: string | null = null;
+  if (!cong.hien) {
+    cauChan =
+      cong.vi === "chua-ghi-lanh-dao-giao-viec"
+        ? CAU_KHONG_AI_DUYET_DUOC
+        : cong.vi === "khong-phai-lanh-dao-giao-viec"
+          ? cong.thongBao
+          : // `thieu-quyen` không xảy ra khi lớp một là `true`; nếu có ngày xảy ra thì vẫn đóng.
+            CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC;
+  }
+  return {
+    id: d.id,
+    maNhiemVu: d.task_code,
+    tieuDe: d.task_title,
+    hanHienTai: nhanNgay(d.task_due_at),
+    hanDeNghi: nhanNgay(d.new_due_at),
+    lyDo: d.reason,
+    nguoiDeNghi: nhanNguoiNhatKy(d.requested_by, danhBa),
+    lucDeNghiISO: d.requested_at,
+    lucDeNghi: nhanThoiDiem(d.requested_at),
+    lanhDao: d.task_assigner === "" ? O_TRONG : nhanNguoiNhatKy(d.task_assigner, danhBa),
+    cauChan,
+  };
+}
+
+/** Bỏ đề nghị vừa quyết định khỏi những dòng đang hiện — nó không còn chờ nữa. */
+export function boDeNghiDaQuyet<T extends { readonly id: string }>(
+  ds: readonly T[],
+  id: string,
+): T[] {
+  return ds.filter((d) => d.id !== id);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -1638,13 +1766,14 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "hoặc cho `parent` nhận mã sổ.",
   },
   {
-    ten: "Khối `Duyệt / Từ chối` đề nghị lùi hạn của người khác (§5.8)",
+    ten: "`Duyệt / Từ chối` ngay trong drawer của nhiệm vụ (§5.8)",
     viSao:
-      "Tuyến quyết định cần `deNghiID`, mà hợp đồng KHÔNG có tuyến nào liệt kê đề nghị đang chờ " +
-      "của một nhiệm vụ, và `petitions.nhiemVuRa` cũng không mang đề nghị nào. Màn hình chỉ cầm " +
-      "được id của đúng đề nghị VỪA GỬI trong cùng lượt mở — trong khi người duyệt theo ADR 0038 " +
-      "là một người KHÁC, mở drawer sau đó. Phép kiểm hai lớp của ADR 0038 vẫn chạy và vẫn hiện " +
-      "câu từ chối, nhưng lãnh đạo không có đề nghị nào để bấm.",
+      "Duyệt / Từ chối nay nằm ở mục `Đề nghị lùi hạn chờ duyệt` đầu sổ " +
+      "(`GET /api/v1/task-extensions`, mở sẵn ở `Chờ tôi duyệt`). Drawer chỉ đường tới đó chứ không " +
+      "hiện đề nghị đang chờ của chính nhiệm vụ ấy: tuyến hàng chờ KHÔNG lọc được theo nhiệm vụ, và " +
+      "`petitions.nhiemVuRa` không mang đề nghị nào — tìm một dòng là lật cả hàng chờ của xã, một " +
+      "lời gọi mỗi trang. Cần một bộ lọc `task` trên tuyến hàng chờ, hoặc đề nghị đang chờ trong " +
+      "phản hồi chi tiết.",
   },
   {
     ten: "Ô tìm cán bộ `Gõ tên để tìm…` của `Lãnh đạo giao việc` và `Chuyên viên theo dõi` (§7)",

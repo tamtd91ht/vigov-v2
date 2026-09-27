@@ -1094,3 +1094,21 @@ describe("§5.9 Nhật ký & Trao đổi — nửa đọc", () => {
     );
   });
 });
+
+describe("PHAN_CHUA_DUNG — Duyệt / Từ chối lùi hạn (TASK-07)", () => {
+  it("mục cũ `của người khác` đã rời; chỉ còn phần drawer không tự tìm được đề nghị của chính nó", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026: hàng chờ `GET /api/v1/task-extensions` nay có và đã dựng ở mục
+    // `Đề nghị lùi hạn chờ duyệt`. Mục cũ nói "hợp đồng KHÔNG có tuyến nào liệt kê đề nghị" — một
+    // lý do sai trên màn là lý do đẩy người sau đi dựng lại thứ đã có.
+    expect(
+      PHAN_CHUA_DUNG.find((p) => p.ten.includes("đề nghị lùi hạn của người khác")),
+    ).toBeUndefined();
+    expect(PHAN_CHUA_DUNG.map((p) => p.viSao).join(" ")).not.toContain(
+      "KHÔNG có tuyến nào liệt kê đề nghị",
+    );
+    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("ngay trong drawer"));
+    expect(muc).toBeDefined();
+    expect(muc?.viSao).toContain("/api/v1/task-extensions");
+    expect(muc?.viSao).toContain("KHÔNG lọc được theo nhiệm vụ");
+  });
+});

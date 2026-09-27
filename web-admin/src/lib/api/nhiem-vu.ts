@@ -11,6 +11,8 @@
  *   DELETE /api/v1/tasks/{ma}                                  task.delete
  *   POST   /api/v1/tasks/{ma}/extensions                       task.update  ← KHÔNG phải task.extend
  *   POST   /api/v1/tasks/{ma}/extensions/{deNghiID}/decision   task.extend  + ADR 0038 lớp hai
+ *   GET    /api/v1/task-extensions                             task.read    (hàng chờ duyệt §5.8,
+ *                                                              đến sau tám tuyến trên)
  *
  * HAI DÒNG CUỐI KHÔNG ĐƯỢC GỘP, và đó là toàn bộ ADR 0038: `task.extend` nhãn là **"Duyệt gia
  * hạn"** — quyền QUYẾT ĐỊNH. Gắn nó lên tuyến ĐỀ NGHỊ sẽ thành "chỉ người duyệt được mới xin
@@ -42,12 +44,14 @@
 
 import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./goi";
 import type {
+  page_Result_petitions_deNghiChoDuyetRa,
   page_Result_petitions_nhatKyNhiemVuRa,
   page_Result_petitions_nhiemVuRa,
   petitions_deNghiLuiHanRa,
   petitions_deNghiLuiHanVao,
   petitions_delete_tasks_by_ma,
   petitions_doiTrangThaiVao,
+  petitions_get_task_extensions,
   petitions_get_tasks,
   petitions_get_tasks_by_ma,
   petitions_get_tasks_by_ma_log_entries,
@@ -222,6 +226,51 @@ export function layNhatKyNhiemVu(
   return docJSON<page_Result_petitions_nhatKyNhiemVuRa>(
     duongDanNhatKyNhiemVu(ma, { limit, cursor: conTro }),
   );
+}
+
+/**
+ * Bộ lọc của hàng chờ duyệt lùi hạn.
+ *
+ * `approver` CHỈ CÓ HAI TRẠNG THÁI: vắng mặt (mọi đề nghị đang chờ của xã) hoặc đúng chuỗi `me`.
+ * `me` KHÔNG mang danh tính nào — máy chủ tự điền mã cán bộ từ PHIÊN; mọi giá trị khác là 400. Kiểu
+ * hẹp hơn kiểu hợp đồng (`string`) có chủ ý: một mã `CB-…` gửi vào đây là client tự khai mình là ai
+ * (luật 1, cấm #2), và `tsc` chặn nó trước khi máy chủ phải chặn.
+ */
+export type LocHangChoLuiHan = {
+  approver?: "me";
+  cursor?: string | null;
+  limit?: number;
+};
+
+/**
+ * Dựng đường dẫn đọc hàng chờ duyệt lùi hạn. Tách khỏi lời gọi mạng để kiểm được mà không thay
+ * `fetch`.
+ *
+ * Tên tham số đi qua `thamSoTheoHopDong`, nên máy chủ đổi tên là `tsc` đỏ ở đây. `sort`/`order`
+ * KHÔNG gửi: mặc định của máy chủ đã là cũ nhất trước — đề nghị chờ lâu nhất lên đầu.
+ */
+export function duongDanHangChoLuiHan(loc: LocHangChoLuiHan = {}): string {
+  const duongDan: petitions_get_task_extensions["duongDan"] = "/api/v1/task-extensions";
+  const truyVan = new URLSearchParams();
+  const dat = thamSoTheoHopDong<petitions_get_task_extensions["truyVan"]>(truyVan);
+  dat("approver", loc.approver);
+  dat("limit", loc.limit);
+  // Con trỏ rỗng/`null` = trang đầu, và KHÔNG gửi `cursor=` rỗng (máy chủ trả 400).
+  dat("cursor", loc.cursor);
+  const chuoi = truyVan.toString();
+  return chuoi === "" ? duongDan : `${duongDan}?${chuoi}`;
+}
+
+/**
+ * GET /api/v1/task-extensions — một trang đề nghị lùi hạn ĐANG CHỜ của xã. `task.read`.
+ *
+ * Tuyến KHÔNG có bộ lọc theo nhiệm vụ: đừng lật cả hàng chờ để tìm đề nghị của một việc — xem
+ * `features/nhiem-vu/hang-cho-lui-han.tsx`.
+ */
+export function layHangChoLuiHan(
+  loc: LocHangChoLuiHan = {},
+): Promise<KetQua<page_Result_petitions_deNghiChoDuyetRa>> {
+  return docJSON<page_Result_petitions_deNghiChoDuyetRa>(duongDanHangChoLuiHan(loc));
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
