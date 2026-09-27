@@ -37,10 +37,20 @@ type tuyen struct {
 	// xem truyvan.go.
 	Handler []string
 	Replies []traLoi // sorted by status
-	Quyen   quyenDecl
-	Idem    idemDecl
-	Xa      xaDecl
-	File    string // repo-relative, no line number: see the determinism note in main.go
+	// Consumer names the surface that calls this route when the permission kind alone cannot say
+	// it — `@consumer citizen-app`. Empty means the default: a staff route, web-admin's work.
+	//
+	// WHY AN ANNOTATION AND NOT A RULE ON authz.Public: "public" answers WHO MAY CALL, not WHO
+	// DOES. POST /api/v1/sessions and GET /api/v1/communes/current are public and web-admin calls
+	// both; GET /api/v1/communes and /api/v1/commune-news are public and only the Mini App calls
+	// them. Inferring the surface from the kind files one half into the wrong queue either way —
+	// on 2026-09-27 three Mini App routes landed in tasks/web/open/, inviting a staff screen for a
+	// citizen endpoint (viec.go, step 1).
+	Consumer string
+	Quyen    quyenDecl
+	Idem     idemDecl
+	Xa       xaDecl
+	File     string // repo-relative, no line number: see the determinism note in main.go
 
 	pkgDir string // where the annotated type names are resolved
 }
@@ -82,6 +92,14 @@ type xaDecl struct {
 	Kind string // tu-phien | tu-phien-chi-xem | khong-thuoc-xa
 	LyDo string // the mandatory, specific reason for khong-thuoc-xa and tu-phien-chi-xem
 }
+
+// nguoiDung is the closed list of `@consumer` values. A value outside it is an error, not a
+// free-text label: a typo (`citizen_app`, `miniapp`) would otherwise leave the route in the web
+// queue while its author believes it is out of it.
+//
+// web-admin is deliberately NOT a value. It is what an unannotated route already means, and a
+// second spelling of the default is a second source for one fact (rule 9).
+var nguoiDung = map[string]bool{"citizen-app": true}
 
 var phuongThuc = map[string]bool{
 	"GET": true, "POST": true, "PUT": true, "PATCH": true,
@@ -303,6 +321,15 @@ func phanTichChuThich(text string, t *tuyen) error {
 				return fmt.Errorf("@page khai hai lần")
 			}
 			t.Page = phanCon
+		case "@consumer":
+			if t.Consumer != "" {
+				return fmt.Errorf("@consumer khai hai lần")
+			}
+			if len(truong) != 2 || !nguoiDung[truong[1]] {
+				return fmt.Errorf("@consumer %q không nằm trong danh sách đóng — chỉ có `citizen-app`; "+
+					"tuyến không khai @consumer là tuyến của web-admin", phanCon)
+			}
+			t.Consumer = truong[1]
 		case "@request":
 			if t.Request != "" {
 				return fmt.Errorf("@request khai hai lần")
@@ -327,7 +354,7 @@ func phanTichChuThich(text string, t *tuyen) error {
 			}
 			t.Replies = append(t.Replies, traLoi{Status: ma, Kieu: kieu})
 		default:
-			return fmt.Errorf("thẻ chú thích không biết: %s — chỉ có @summary, @screen, @page, @request, @reply", the)
+			return fmt.Errorf("thẻ chú thích không biết: %s — chỉ có @summary, @screen, @page, @request, @reply, @consumer", the)
 		}
 	}
 	sort.Slice(t.Replies, func(i, j int) bool { return t.Replies[i].Status < t.Replies[j].Status })
@@ -364,6 +391,15 @@ func kiemTuyen(t *tuyen) error {
 		return fmt.Errorf("lớp xã (%s) khai trên tuyến %s — lớp xã CHỈ thuộc tuyến công dân "+
 			"authz.CitizenOnly(); xã của tuyến cán bộ đến từ Host (ADR 0022)",
 			t.Xa.Kind, t.Quyen.Kind)
+	}
+	// @consumer ONLY ON A PUBLIC ROUTE. On citizen-only it is a second copy of what the kind already
+	// says; on a staff kind (permission / any-authenticated) it is a contradiction — a citizen holds
+	// no staff token, so a Mini App consumer of a staff route is a design error to surface here,
+	// not a label to carry into the contract.
+	if t.Consumer != "" && t.Quyen.Kind != "public" {
+		return fmt.Errorf("@consumer %s khai trên tuyến %s — chỉ tuyến authz.Public cần nói ai gọi nó; "+
+			"tuyến citizen-only đã là kênh công dân, tuyến cán bộ thì công dân không gọi được",
+			t.Consumer, t.Quyen.Kind)
 	}
 	if t.Screen == "" {
 		fmt.Fprintf(os.Stderr, "apidoc: LƯU Ý %s %s không có @screen — web không biết màn hình nào dùng nó\n",

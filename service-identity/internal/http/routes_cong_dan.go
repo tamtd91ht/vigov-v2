@@ -74,6 +74,7 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
 	// @summary  Tra xã theo tên miền trong mã QR, để Mini App hỏi "Làm việc với xã X?" trước khi có phiên nào — không trả mã xã
+	// @consumer citizen-app
 	// NO @screen: docs/ui-ux/ has no section for the Mini App's QR confirmation screen, and naming
 	// one that does not describe it would be design intent invented here.
 	//
@@ -108,6 +109,7 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	//
 	// @summary  Danh bạ cán bộ xã đã công khai trên Zalo Mini App, theo tên miền của xã — chỉ người đã đồng ý công khai
 	// @screen   12-danh-ba-can-bo §8
+	// @consumer citizen-app
 	//
 	// 200 is the whole published directory, ordered by display order then unit name. `items: []` for a
 	// commune that published nobody AND for a domain no active commune holds — identical bytes.

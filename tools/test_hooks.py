@@ -926,6 +926,24 @@ VAN_PHONG_XLSX_CASES = [
     ("Chờ API thống kê.", False, "phụ thuộc kỹ thuật, không phải chờ khách"),
 ]
 
+# Which SURFACE a route counts on in the product report. `public` alone decides nothing: the
+# sign-in route is public and web-admin's, the commune news board is public and the Mini App's
+# (`x-vigov-consumer`, tools/apidoc/route.go). Measured 27/09/2026: three Mini App routes counted
+# in the web denominator because only `kind` was read.
+LA_CONG_DAN_CASES = [
+    ({"kind": "citizen-only", "consumer": ""}, True, "citizen-only là kênh công dân"),
+    ({"kind": "public", "consumer": "citizen-app"}, True, "công khai + @consumer citizen-app"),
+    ({"kind": "public", "consumer": ""}, False, "công khai không khai consumer — POST /sessions của web"),
+    ({"kind": "public"}, False, "hợp đồng cũ không có khoá consumer"),
+    ({"kind": "permission", "consumer": ""}, False, "tuyến cán bộ"),
+]
+NHAN_KIEM_SOAT_CASES = [
+    ("citizen-only", "", True, "nhãn citizen-only khớp công thức kênh công dân"),
+    ("public", "citizen-app", True, "nhãn công khai-Mini App khớp công thức kênh công dân"),
+    ("public", "", False, "công khai của web ở lại mẫu số web"),
+    ("permission", "", False, "tuyến theo khoá quyền ở lại mẫu số web"),
+]
+
 # The last gate before project data leaves for a shared Google Sheet (rule 3).
 CA_NHAN_XLSX_CASES = [
     ("gọi 0912345678 để hỏi", True, "số di động thật, văn bản trần"),
@@ -1242,6 +1260,25 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
               f"{'xuat_tien_do.loi_van_phong':24s} {nhan}")
         if not ok:
             sai.append((s, nhan, mong, duoc))
+
+    import tien_do_san_pham as tdsp  # noqa: E402
+    for t, mong, nhan in LA_CONG_DAN_CASES:
+        duoc = tdsp.la_cong_dan(t)
+        ok = duoc == mong
+        print(f"{'  OK   ' if ok else '  FAIL '} [{'APP ' if mong else 'WEB '}] "
+              f"{'tien_do_san_pham.la_cong_dan':24s} {nhan}")
+        if not ok:
+            sai.append((str(t), nhan, mong, duoc))
+    # The sheet-1 formulas count column G by the prefixes in KENH_CONG_DAN. A label for a citizen
+    # route that no prefix matches puts that route back into the WEB denominator with no error.
+    for kind, consumer, mong_app, nhan in NHAN_KIEM_SOAT_CASES:
+        nhan_o = xtd.nhan_kiem_soat(kind, consumer)
+        duoc = any(nhan_o.startswith(m.rstrip("*")) for m in xtd.KENH_CONG_DAN)
+        ok = duoc == mong_app
+        print(f"{'  OK   ' if ok else '  FAIL '} [{'APP ' if mong_app else 'WEB '}] "
+              f"{'xuat_tien_do.nhan_kiem_soat':24s} {nhan}")
+        if not ok:
+            sai.append((f"{kind}/{consumer}", nhan, mong_app, nhan_o))
 
     import codegraph_sync as cgs  # noqa: E402
     for lenh, mong, nhan in CAN_SYNC_CASES:

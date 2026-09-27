@@ -193,6 +193,19 @@ def khoa_quyen() -> dict[str, str]:
 KIND = {"permission": "Theo khoá quyền", "any-authenticated": "Mọi cán bộ đã đăng nhập",
         "public": "Công khai (có lý do)", "citizen-only": "Chỉ công dân (phiên Mini App)"}
 
+# Nhãn cột "Kiểm soát truy cập" của tuyến CÔNG KHAI mà chỉ Mini App gọi (`x-vigov-consumer`).
+# KHÔNG viết thành "Chỉ công dân…": tuyến ấy ai cũng gọi được, nói "chỉ công dân" là nói sai về
+# kiểm soát truy cập. Hai tiền tố trong KENH_CONG_DAN là thứ các công thức ở sheet 1 đếm — sửa
+# một nhãn mà quên danh sách này thì tuyến ấy lặng lẽ trở lại mẫu số của web.
+NHAN_CONG_KHAI_MINI_APP = "Kênh công dân — công khai (có lý do)"
+KENH_CONG_DAN = ("Chỉ công dân*", "Kênh công dân*")
+
+
+def nhan_kiem_soat(kind: str, consumer: str) -> str:
+    if kind == "public" and consumer == "citizen-app":
+        return NHAN_CONG_KHAI_MINI_APP
+    return KIND.get(kind, kind)
+
 
 def thu_thap() -> dict:
     chuong_goc = sp.cac_chuong()
@@ -221,8 +234,13 @@ def thu_thap() -> dict:
             slug = man.split()[0] if man and not man.startswith("*") else ""
             quyen = op.get("x-vigov-permission") or {}
             kind = quyen.get("kind", "")
-            if kind == "citizen-only":
-                goi = "Mini App" if duong in app_goi and pt == "post" else "Chưa"
+            consumer = op.get("x-vigov-consumer") or ""
+            if sp.la_cong_dan({"kind": kind, "consumer": consumer}):
+                # Tuyến công khai của Mini App chỉ có GET, và đường dẫn của nó không dùng chung với
+                # phương thức nào khác — nên có chuỗi đường dẫn trong citizen-app là đủ. Điều kiện
+                # `post` cũ giữ nguyên cho tuyến citizen-only.
+                goi = ("Mini App" if duong in app_goi and (pt == "post" or consumer == "citizen-app")
+                       else "Chưa")
             else:
                 goi = "Có" if op.get("x-vigov-task") in xong else "Chưa"
             ly_do = quyen.get("reason", "")
@@ -231,7 +249,7 @@ def thu_thap() -> dict:
                 "chuong": f"{so_ch[slug]} — {ten_ch[slug]}" if slug in so_ch else "Chưa gắn chương đặc tả",
                 "pt": pt.upper(), "duong": duong,
                 "service": "service-" + ((op.get("tags") or ["?"])[0]),
-                "chuc_nang": op.get("summary", ""), "kind": KIND.get(kind, kind),
+                "chuc_nang": op.get("summary", ""), "kind": nhan_kiem_soat(kind, consumer),
                 "khoa": quyen.get("key") or (ly_do if len(ly_do) <= 110
                                              else ly_do[:107].rsplit(" ", 1)[0] + " …"),
                 "chong_trung": "Bắt buộc" if op.get("x-vigov-idempotency") else "",
@@ -900,9 +918,10 @@ def dung(sl: dict, v: dict, ngay: str) -> tuple[list[Sheet], KieuO]:
         ("Tuyến API REST trong hợp đồng", f"COUNTA({q(S4)}!C{c4a}:C{c4b})", S4, True),
         ("   · Tuyến cán bộ đã có màn Web Admin gọi",
          f'COUNTIF({q(S4)}!J{c4a}:J{c4b},"Có")&" / "&(COUNTA({q(S4)}!C{c4a}:C{c4b})'
-         f'-COUNTIF({q(S4)}!G{c4a}:G{c4b},"Chỉ công dân*"))', S4, False),
+         + "".join(f'-COUNTIF({q(S4)}!G{c4a}:G{c4b},"{m}")' for m in KENH_CONG_DAN) + ")", S4, False),
         ("   · Kênh công dân (Mini App gọi / tổng)",
-         f'COUNTIF({q(S4)}!J{c4a}:J{c4b},"Mini App")&" / "&COUNTIF({q(S4)}!G{c4a}:G{c4b},"Chỉ công dân*")',
+         f'COUNTIF({q(S4)}!J{c4a}:J{c4b},"Mini App")&" / "&('
+         + "+".join(f'COUNTIF({q(S4)}!G{c4a}:G{c4b},"{m}")' for m in KENH_CONG_DAN) + ")",
          S4, False),
         ("Mục menu Web Admin có màn thật", f"{q(S5)}!E{tong5}", S5, True),
         ("Chức năng đã dựng trên các màn web", f"{q(S5)}!F{tong5}", S5, True),

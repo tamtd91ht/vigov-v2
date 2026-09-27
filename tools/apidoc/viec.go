@@ -181,7 +181,12 @@ func dongBoViec(goc string, tuyens []tuyen, mh manHinh) (ketQuaViec, error) {
 		// a decision about structure, not a defect, and it belongs to the project owner. Today the
 		// citizen surface is tracked in kb/90-ephemeral/tien-do/citizen-app.json like any other
 		// module.
-		if t.Quyen.Kind == "citizen-only" {
+		//
+		// A PUBLIC ROUTE THE MINI APP CALLS is the same case reached by a different declaration:
+		// `authz.Public` says who MAY call, `@consumer citizen-app` says who DOES (route.go, tuyen.
+		// Consumer). Measured 2026-09-27: GET /api/v1/commune-staff and both /api/v1/commune-news
+		// routes were filed here because only the kind was read.
+		if laKenhCongDan(t) {
 			continue
 		}
 		id := maViec(t.Service, t.Method, t.Path)
@@ -276,6 +281,11 @@ func dongBoViec(goc string, tuyens []tuyen, mh manHinh) (ketQuaViec, error) {
 	//    to scroll past.
 
 	return kq, nil
+}
+
+// laKenhCongDan says a route is the citizen channel's, not web-admin's — by either declaration.
+func laKenhCongDan(t tuyen) bool {
+	return t.Quyen.Kind == "citizen-only" || t.Consumer == "citizen-app"
 }
 
 func dungViec(t tuyen, id string) viec {

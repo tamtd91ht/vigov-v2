@@ -129,12 +129,19 @@ def tuyen_theo_chuong() -> tuple[dict[str, list[dict]], int, int]:
                 # còn lại là bề mặt cán bộ. Đọc từ hợp đồng chứ không đoán theo tên đường dẫn —
                 # `my-citizen-reports` tình cờ có chữ `citizen`, nhưng `citizen.verify` thì không.
                 "kind": ((op.get("x-vigov-permission") or {}).get("kind") or ""),
+                # `x-vigov-consumer` nói AI GỌI một tuyến `public` — thứ `kind` không nói được:
+                # POST /api/v1/sessions công khai và web gọi, GET /api/v1/commune-news công khai
+                # và chỉ Mini App gọi. Vắng khoá = mặc định, tức bề mặt cán bộ (tools/apidoc/route.go).
+                "consumer": op.get("x-vigov-consumer") or "",
             })
     return theo, tong, khong_khai
 
 
 def la_cong_dan(t: dict) -> bool:
-    return t["kind"] == "citizen-only"
+    """Tuyến thuộc kênh công dân: `citizen-only`, HOẶC `public` mà hợp đồng khai `consumer`
+    là `citizen-app`. Thiếu vế sau thì tuyến công khai của Mini App rơi vào mẫu số của web và đọc
+    thành "web còn thiếu màn" — đo ngày 27/09/2026 với commune-staff và commune-news."""
+    return t["kind"] == "citizen-only" or t.get("consumer") == "citizen-app"
 
 
 def tuyen_app_goi() -> list[str]:
@@ -351,7 +358,10 @@ def dong_chuong(chuong, theo_chuong, xong, biet_web) -> list[dict]:
         ds = theo_chuong.get(slug, [])
         # MẪU SỐ CHỈ GỒM TUYẾN THUỘC BỀ MẶT WEB — xem `viec_da_xong`. Tuyến kênh công dân không
         # có tệp việc màn hình nào, và đếm chúng vào đây là trừ điểm web vì việc của app khác.
-        web = [t for t in ds if t["viec"] in biet_web]
+        # `not la_cong_dan` nữa, vì tệp việc có thể CÒN LẠI sau khi tuyến được khai là của Mini
+        # App: `tools/apidoc` không dọn việc cũ ở open/ hay done/ (viec.go, bước 1), nên có tệp
+        # việc chưa đủ để chứng minh tuyến thuộc web.
+        web = [t for t in ds if t["viec"] in biet_web and not la_cong_dan(t)]
         ra.append({
             "so": so_ch,
             "slug": slug,
@@ -553,7 +563,8 @@ def main() -> int:
     goi_vigov = tuyen_app_goi()
     L.append("| | |")
     L.append("|---|---|")
-    L.append(f"| Tuyến ViGov dành riêng kênh công dân (`citizen-only`) | "
+    L.append(f"| Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm "
+             f"`@consumer citizen-app`) | "
              f"{len(cong_dan)} |")
     L.append(f"| Trong đó `citizen-app` đang gọi | "
              f"{sum(1 for t in cong_dan if t['duong'] in goi_vigov)} |")

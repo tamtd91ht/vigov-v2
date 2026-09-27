@@ -264,3 +264,63 @@ func TestMauRouteDungBienThiVanLaLoi(t *testing.T) {
 		t.Fatalf("mong lỗi mẫu không đọc được, được: %v", errs)
 	}
 }
+
+// `@consumer` is read, carried, and CLOSED: a value outside the list fails the run, because a
+// typo would otherwise leave a Mini App route in the web queue while its author thinks it left.
+func TestConsumerDocDuocVaDanhSachDong(t *testing.T) {
+	ts, errs := trich(t, dauFile+`
+	// @summary  Tin xã
+	// @consumer citizen-app
+	// @reply    200 -
+	mux.Handle("GET /api/v1/commune-news",
+		authz.Public("bảng tin xã cho Mini App")(http.HandlerFunc(nil)))
+}
+`)
+	if len(errs) != 0 {
+		t.Fatalf("không mong đợi lỗi: %v", errs)
+	}
+	if len(ts) != 1 || ts[0].Consumer != "citizen-app" {
+		t.Fatalf("@consumer không được đọc: %+v", ts)
+	}
+
+	for _, ca := range []struct{ gt, nhan string }{
+		{"miniapp", "tên gần đúng"},
+		{"citizen_app", "gạch dưới thay gạch ngang"},
+		{"web-admin", "mặc định không có cách viết thứ hai"},
+		{"", "để trống"},
+		{"citizen-app thừa", "thừa chữ"},
+	} {
+		_, errs := trich(t, dauFile+`
+	// @summary  Tin xã
+	// @consumer `+ca.gt+`
+	// @reply    200 -
+	mux.Handle("GET /api/v1/commune-news",
+		authz.Public("bảng tin xã cho Mini App")(http.HandlerFunc(nil)))
+}
+`)
+		if len(errs) == 0 {
+			t.Errorf("@consumer %q (%s) phải bị từ chối", ca.gt, ca.nhan)
+		}
+	}
+}
+
+// Only a PUBLIC route needs to say who calls it. On citizen-only it duplicates the kind; on a
+// staff kind it is a contradiction a citizen cannot satisfy — refuse both.
+func TestConsumerChiTrenTuyenCongKhai(t *testing.T) {
+	for _, quyen := range []string{
+		`authz.RequirePermission(d.Checker, "task.read")`,
+		`authz.AnyAuthenticated("mọi cán bộ")`,
+	} {
+		_, errs := trich(t, dauFile+`
+	// @summary  Sai chỗ
+	// @consumer citizen-app
+	// @reply    200 -
+	mux.Handle("GET /api/v1/sai",
+		`+quyen+`(http.HandlerFunc(nil)))
+}
+`)
+		if len(errs) == 0 {
+			t.Errorf("@consumer citizen-app trên %s phải bị từ chối", quyen)
+		}
+	}
+}

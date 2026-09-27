@@ -44,6 +44,7 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	//
 	// @summary  Tin đã đăng của xã trên Zalo Mini App, theo tên miền của xã — mới nhất trước, văn bản thuần, phân trang con trỏ
 	// @screen   11-noi-dung-mini-app §9
+	// @consumer citizen-app
 	//
 	// 200 is one page. An EMPTY page for a commune that published nothing AND for a domain no active
 	// commune holds — identical bytes.
@@ -64,6 +65,7 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	//
 	// @summary  Một tin đã đăng của xã, toàn văn dạng văn bản thuần — tin chưa đăng hay của xã khác trả cùng một 404
 	// @screen   11-noi-dung-mini-app §9
+	// @consumer citizen-app
 	//
 	// 404 is ONE answer for: no such id, another commune's id, not published, soft-deleted, or a domain
 	// no active commune holds.

@@ -452,3 +452,41 @@ func TestTrenKhoThatDemDuocMotSoLuongHopLy(t *testing.T) {
 		t.Error("một tuyến không tồn tại vẫn được coi là đã có màn hình — phép suy đang trả true cho mọi thứ")
 	}
 }
+
+// THE CAUSE OF GET /api/v1/communes LANDING IN done/ ON 2026-09-27, measured rather than guessed.
+//
+// It was NOT a prefix match inside coChuoi — that one compares complete literals and is pinned by
+// TestDuongDanLongNhauKhongNhanNham. It was dinh-tuyen.gen.ts: tools/ingress generates it FROM THE
+// CONTRACT, and its entry `{ tienTo: "/api/v1/communes" }` (there because /api/v1/communes/current
+// exists) is a complete literal equal to the route path. Exactly limit 3 of manhinh.go, reached by
+// a second generated file that the exclusion named by exact file name did not cover.
+func TestMoiTepGenBiLoaiTru(t *testing.T) {
+	goc := t.TempDir()
+	vietTep(t, goc, thuMucManHinh+"/dinh-tuyen.gen.ts", `
+export const DINH_TUYEN_API = [
+  { tienTo: "/api/v1/communes", dichVu: "identity" },
+] as const;
+`)
+	vietTep(t, goc, thuMucManHinh+"/cau-hinh-xa.ts",
+		`export const d = "/api/v1/communes/current";`)
+
+	mh, err := docManHinh(goc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ds := tuyenGia("GET", "/api/v1/communes")
+	if mh.daDung(ds) {
+		t.Fatal("bảng định tuyến sinh ra từ hợp đồng, hoặc lời gọi /api/v1/communes/current, " +
+			"bị đếm thành màn hình của GET /api/v1/communes")
+	}
+
+	// The other side: an exact call IS evidence, so the exclusion did not blind the detector.
+	vietTep(t, goc, thuMucManHinh+"/xa.ts", `export const d = "/api/v1/communes";`)
+	mh, err = docManHinh(goc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !mh.daDung(ds) {
+		t.Fatal("lời gọi đúng đường dẫn không được coi là đã có màn hình")
+	}
+}

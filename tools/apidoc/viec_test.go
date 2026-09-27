@@ -360,3 +360,31 @@ func demTep(t *testing.T, dir string) int {
 	}
 	return n
 }
+
+// A PUBLIC ROUTE IS NOT AUTOMATICALLY WEB-ADMIN'S, AND NOT AUTOMATICALLY THE MINI APP'S EITHER.
+//
+// Both halves are real on the same day: POST /api/v1/sessions is public and web-admin's sign-in
+// calls it; GET /api/v1/commune-news is public and only the Mini App calls it. On 2026-09-27 the
+// second kind was filed into tasks/web/open/ three times over, because only the kind was read.
+// `@consumer citizen-app` is what tells them apart — so both routes sit in ONE run here, and the
+// assertion names each file rather than counting.
+func TestTuyenCongKhaiCuaMiniAppKhongVaoHangDoiWeb(t *testing.T) {
+	goc := filepath.Join(t.TempDir(), "web")
+
+	tin := tuyenGia("GET", "/api/v1/commune-news")
+	tin.Service = "comms"
+	tin.Consumer = "citizen-app"
+	maTin := maViec(tin.Service, tin.Method, tin.Path)
+
+	kq := dongBo(t, goc, []tuyen{tuyenPhien, tin})
+
+	if kq.Moi != 1 {
+		t.Fatalf("sinh %d việc, muốn 1 — tuyến công khai của Mini App không phải việc của web", kq.Moi)
+	}
+	if _, err := os.Stat(filepath.Join(goc, "open", maPhien+".json")); err != nil {
+		t.Fatalf("tuyến công khai KHÔNG khai @consumer vẫn là việc của web, phải có trong open/: %v", err)
+	}
+	if d := oDau(goc, maTin); d != "" {
+		t.Fatalf("tuyến @consumer citizen-app bị đặt vào %s/ của hàng đợi web", d)
+	}
+}

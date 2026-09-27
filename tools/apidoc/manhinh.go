@@ -63,6 +63,10 @@ import (
 //     contract, so it names every path and every operation id in the repository. Scanning it
 //     answers "does this route exist", not "did anybody build it" — with it in scope the
 //     detector reported 42 of 42 open tasks finished, i.e. exactly the lie being fixed.
+//     THE EXCLUSION IS EVERY `*.gen.ts`, NOT ONE FILE NAME. dinh-tuyen.gen.ts (tools/ingress, also
+//     from the contract) lists each service's path PREFIX as a complete literal, and a prefix
+//     that equals a route path — "/api/v1/communes", there because /api/v1/communes/current
+//     exists — moved GET /api/v1/communes to done/ on 2026-09-27 with no client calling it.
 //  4. ONLY web-admin/src/lib/api IS SCANNED. A call made from anywhere else is invisible:
 //     GET /api/v1/communes/current lives in web-admin/src/lib/tenant-config.ts, and its task
 //     sits in done/ only because somebody moved it by hand back when that still happened.
@@ -77,9 +81,11 @@ import (
 // move an unbuilt task into done/, which is the failure that would silently drop a screen.
 var thuMucManHinh = filepath.Join("web-admin", "src", "lib", "api")
 
-// tepHopDong is generated from openapi.json and names every route in the repository, so it is
-// evidence of nothing. See limit 3 above — this exclusion is why the detector is not a tautology.
-const tepHopDong = "schema.gen.ts"
+// duoiTepSinh marks a file generated from openapi.json — schema.gen.ts names every route,
+// dinh-tuyen.gen.ts every path prefix — so it is evidence of nothing. See limit 3 above: this
+// exclusion is why the detector is not a tautology. A suffix, not a list of names, because the
+// next generator to write into this directory would otherwise reopen the same hole silently.
+const duoiTepSinh = ".gen.ts"
 
 // manHinh is the admin web's client layer, with every comment blanked out.
 //
@@ -107,7 +113,7 @@ func docManHinh(goc string) (manHinh, error) {
 			return nil
 		}
 		ten := d.Name()
-		if ten == tepHopDong {
+		if strings.HasSuffix(ten, duoiTepSinh) {
 			return nil
 		}
 		if ext := filepath.Ext(ten); ext != ".ts" && ext != ".tsx" {

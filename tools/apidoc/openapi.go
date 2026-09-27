@@ -98,6 +98,7 @@ type dongBeMat struct {
 	QuyenKieu   string            `json:"permission_kind"`
 	Quyen       string            `json:"permission,omitempty"`
 	QuyenLyDo   string            `json:"permission_reason,omitempty"`
+	Consumer    string            `json:"consumer,omitempty"`
 	XaLop       string            `json:"tenant_class,omitempty"`
 	XaLyDo      string            `json:"tenant_class_reason,omitempty"`
 	Idem        string            `json:"idempotency"`
@@ -178,6 +179,11 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 			op.set("x-vigov-screen", t.Screen)
 		}
 		op.set("x-vigov-permission", quyenJSON(t.Quyen))
+		// Emitted only when declared: an absent key IS the default (web-admin), and the report
+		// tools read its presence to put a public route on the Mini App side.
+		if t.Consumer != "" {
+			op.set("x-vigov-consumer", t.Consumer)
+		}
 		// Lớp xã CHỈ hiện trên tuyến công dân (ADR 0022). Trên tuyến cán bộ nó không tồn tại —
 		// xã ở đó đến từ Host — nên không phát ra một khoá rỗng để người đọc phải đoán nghĩa.
 		//
@@ -285,6 +291,7 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 			QuyenKieu:   t.Quyen.Kind,
 			Quyen:       t.Quyen.Key,
 			QuyenLyDo:   t.Quyen.LyDo,
+			Consumer:    t.Consumer,
 			XaLop:       t.Xa.Kind,
 			XaLyDo:      t.Xa.LyDo,
 			Idem:        t.Idem.Kind,
@@ -318,7 +325,7 @@ func dungTaiLieu(tuyens []tuyen, gm *giaiMa) (*om, *beMat, error) {
 			"Mỗi operation khai quyền ở x-vigov-permission; thiếu khai báo là từ chối, không phải cho qua (luật 5).",
 			"Phiên đi bằng cookie httpOnly do máy chủ đặt; client không tự gắn Authorization.",
 		}, " ")))
-	doc.set("x-vigov-source", "*/internal/ — chú thích @summary/@screen/@request/@reply ngay trên câu lệnh đăng ký route")
+	doc.set("x-vigov-source", "*/internal/ — chú thích @summary/@screen/@request/@reply/@consumer ngay trên câu lệnh đăng ký route")
 	doc.set("paths", paths)
 	doc.set("components", newOM().set("schemas", schemas))
 
