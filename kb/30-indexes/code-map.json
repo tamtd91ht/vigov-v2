@@ -3092,7 +3092,7 @@
     },
     "http.DanhSachDeNghiLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/http/de_nghi_lui_han_cho_duyet.go:90"
+      "at": "service-petitions/internal/http/de_nghi_lui_han_cho_duyet.go:96"
     },
     "http.DanhSachDuAn": {
       "kind": "func",
@@ -4540,7 +4540,7 @@
     },
     "store.ChoDuyet": {
       "kind": "func",
-      "at": "service-petitions/internal/store/de_nghi_lui_han_cho_duyet.go:98"
+      "at": "service-petitions/internal/store/de_nghi_lui_han_cho_duyet.go:101"
     },
     "store.ChonNguoi": {
       "kind": "func",

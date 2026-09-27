@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 92e2d64
+derived_from_commit: 613c531
 expires: 2026-12-26
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -112,7 +112,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-documents` | 7 | 2 | 4 | 0 |
 | `service-finance` | 15 | 3 | 0 | 0 |
 | `service-identity` | 18 | 8 | 0 | 1 |
-| `service-petitions` | 18 | 7 | 6 | 0 |
+| `service-petitions` | 18 | 7 | 7 | 0 |
 | `service-platform` | 5 | 2 | 0 | 1 |
 | `service-reporting` | 2 | 0 | 1 | 0 |
 | `tools` | 18 | 0 | 0 | 0 |
