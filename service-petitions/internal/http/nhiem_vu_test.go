@@ -59,6 +59,11 @@ type nhiemVuGia struct {
 	// §4 draws no documents, and a page that loaded three lists per row would be payload nobody
 	// renders.
 	goiVanBan int
+
+	// nhatKy is §5.9's progress log, KEYED BY COMMUNE AND BY THE TASK'S INTERNAL id — the commune read
+	// from the context as *store.Scoped does, so a handler that forgot either key reads nothing here.
+	// Declared in nhat_ky_nhiem_vu_test.go with its counters.
+	nhatKy nhatKyNhiemVuGia
 }
 
 func (n *nhiemVuGia) TheoMa(ctx context.Context, ma string) (domain.NhiemVu, error) {

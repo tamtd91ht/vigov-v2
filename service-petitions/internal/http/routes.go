@@ -137,6 +137,15 @@ type (
 		// too. It is keyed by the task's INTERNAL id, which the caller has from the row it just
 		// read.
 		VanBanCuaNhiemVu(ctx context.Context, nhiemVuID string) ([]domain.NhiemVuVanBan, error)
+
+		// §5.9's progress log (migration 0006), one page. ON THIS INTERFACE AND NOT A FIELD OF ITS
+		// OWN, for the reason VanBanCuaNhiemVu is: it is keyed by the task's INTERNAL id, which the
+		// handler has only after TheoMa — so the soft-delete and commune checks of that read cannot be
+		// skipped by calling this one with a register number. (The petition logbook has a separate
+		// NhatKyPhieuDoc because its read belongs to a different interface than the list; here the
+		// single-task read already is the narrow one.)
+		NhatKyCuaNhiemVu(ctx context.Context, nhiemVuID string, yc page.Request) (
+			page.Result[domain.NhatKyNhiemVu], error)
 	}
 
 	// NhiemVuDanhSach is the paginated read of the task register, for GET /api/v1/tasks.
@@ -1018,9 +1027,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// authz.xacNhanXa refuses before the permission is consulted, so no query runs and the response
 	// cannot differ by commune.
 	//
-	// THE `Theo văn bản` DOCUMENT BLOCK OF §5.4 IS NOT IN THE REPLY — `nhiem_vu_van_ban` does not
-	// exist yet (migration 0006 says so). Nor are the progress log (§5.9) and the extension requests
-	// (§5.8): both have tables now, and neither has a route in this pass.
+	// THE `Theo văn bản` DOCUMENT BLOCK OF §5.4 IS IN THE REPLY (`documents`, migration 0009). The
+	// progress log (§5.9) is NOT — it has its own paged route, …/{ma}/log-entries, below. The
+	// extension requests (§5.8) have a table and no read route yet.
 	//
 	// @reply    200 nhiemVuRa
 	// @reply    401 httpx.Error
@@ -1030,6 +1039,33 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/tasks/{ma}",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DocNhiemVu)))
+
+	// NHẬT KÝ & TRAO ĐỔI (§5.9) — the READ half only. The URL noun `log-entries` is the petition
+	// logbook's (GET /api/v1/citizen-reports/{maTraCuu}/log-entries), and so are the order (newest
+	// first), the cursor paging and the row shape: two timelines that read alike.
+	//
+	// `task.read`, THE KEY OF THE TWO READS ABOVE (seeded at service-identity/migrations/
+	// 0001_init.sql:304). The log is part of the task a reader of the register already sees. NO KEY
+	// WAS INVENTED (rule 5, invariant 3c).
+	//
+	// STILL ABSENT: POST …/log-entries (a manual note). Who may write one is the holder-rule
+	// question, and it is not decided here.
+	//
+	// 404 is the single answer GET /api/v1/tasks/{ma} gives, for the same three causes — the task is
+	// read first through the same reader, and the log only after. 401 is RequirePermission's answer to
+	// no session AND to a session of another commune. NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Nhật ký & Trao đổi của một nhiệm vụ — mới nhất trước, phân trang theo con trỏ
+	// @screen   02-nhiem-vu §5.9
+	// @reply    200 page.Result[nhatKyNhiemVuRa]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/tasks/{ma}/log-entries",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.DocNhatKyNhiemVu)))
 
 	// GIAO VIỆC MỚI (§7) — `task.create`, seeded at 0001_init.sql:301 ("Tạo nhiệm vụ").
 	//

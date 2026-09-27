@@ -145,6 +145,15 @@ func (khoNhiemVu) VanBanCuaNhiemVu(ctx context.Context, _ string) ([]domain.Nhie
 	return nil, nil
 }
 
+// NhatKyCuaNhiemVu — §5.9's progress log, same single assertion, and equally unreachable: TheoMa
+// refuses first.
+func (khoNhiemVu) NhatKyCuaNhiemVu(ctx context.Context, _ string, _ page.Request) (
+	page.Result[domain.NhatKyNhiemVu], error) {
+
+	_ = tenant.MustFrom(ctx)
+	return page.NewResult[domain.NhatKyNhiemVu](), nil
+}
+
 // khoBienBan stands in for the MEETING MINUTES register, present for the same reason as the stores
 // above: Register refuses incomplete Deps at construction. It asserts the one thing this file can
 // assert about a store — that the commune reached it.
