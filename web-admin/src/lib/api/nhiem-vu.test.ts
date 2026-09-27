@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   deNghiLuiHan,
   doiTrangThaiNhiemVu,
+  duongDanNhatKyNhiemVu,
   duongDanSoNhiemVu,
+  layNhatKyNhiemVu,
   layNhiemVu,
   quyetDinhLuiHan,
   suaNhiemVu,
@@ -376,5 +378,31 @@ describe("câu từ chối của máy chủ đi NGUYÊN VĂN ra ngoài", () => {
 
     expect(maBia).toEqual(daXoaMem);
     expect(maBia).toEqual({ ok: false, thongBao: "Không tìm thấy nhiệm vụ." });
+  });
+});
+
+describe("GET /api/v1/tasks/{ma}/log-entries — nhật ký §5.9", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("trang đầu KHÔNG gửi `cursor=` rỗng — máy chủ trả 400 cho con trỏ rỗng", () => {
+    expect(duongDanNhatKyNhiemVu("NV19")).toBe("/api/v1/tasks/NV19/log-entries");
+    expect(duongDanNhatKyNhiemVu("NV19", { cursor: "" })).toBe("/api/v1/tasks/NV19/log-entries");
+    expect(duongDanNhatKyNhiemVu("NV19", { cursor: null, limit: 20 })).toBe(
+      "/api/v1/tasks/NV19/log-entries?limit=20",
+    );
+  });
+
+  it("trang sau mang con trỏ; mã sổ do người gõ được mã hoá — không đổi tuyến được gọi", () => {
+    expect(duongDanNhatKyNhiemVu("NV 19/a", { cursor: "abc", limit: 20 })).toBe(
+      "/api/v1/tasks/NV%2019%2Fa/log-entries?limit=20&cursor=abc",
+    );
+  });
+
+  it("gọi GET đúng tuyến và trả nguyên trang máy chủ", async () => {
+    const trang = { items: [], next_cursor: "", has_more: false };
+    const gia = batFetch(new Response(JSON.stringify(trang), { status: 200 }));
+    const kq = await layNhatKyNhiemVu("NV19", "c1", 20);
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/tasks/NV19/log-entries?limit=20&cursor=c1");
+    expect(kq).toEqual({ ok: true, duLieu: trang });
   });
 });

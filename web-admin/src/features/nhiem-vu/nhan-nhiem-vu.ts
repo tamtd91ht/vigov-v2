@@ -20,11 +20,13 @@
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
+import { danhBaTheoMa, nhanThoiDiem, type DanhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import type { KetQua } from "@/lib/api/goi";
 import type {
   identity_canBoChonNguoiRa,
   identity_danhBaChonNguoiRa,
   petitions_danhSachTrangThaiNhiemVuRa,
+  petitions_nhatKyNhiemVuRa,
   petitions_nhiemVuRa,
   petitions_nhiemVuVanBanRa,
   petitions_suaNhiemVuVao,
@@ -237,8 +239,9 @@ const CHUYEN_DUOC: Readonly<Record<TrangThaiNhiemVu, readonly TrangThaiNhiemVu[]
  *
  * ⚠ LỎNG CÓ CHỦ Ý Ở `tam-dung`, đúng như miền nghiệp vụ: từ `tam-dung` thì bốn trạng thái chính
  * đều là hình dạng hợp lệ, nhưng chỉ ĐÚNG MỘT trong bốn là hợp lệ thật — trạng thái ngay trước
- * lúc tạm dừng. Máy chủ tìm nó trong nhật ký (`TrangThaiTruocTamDung`); màn hình **không tìm
- * được**, vì hợp đồng không có tuyến nhật ký nào. Xem `PHAN_CHUA_DUNG`.
+ * lúc tạm dừng. Máy chủ tìm nó trong nhật ký (`TrangThaiTruocTamDung`); màn hình **chưa tìm**:
+ * tuyến đọc nhật ký nay có, nhưng dòng ngay trước lúc dừng có thể nằm ở trang bất kỳ, và việc lần
+ * theo nó để thu hẹp bốn nút chưa dựng. Xem `PHAN_CHUA_DUNG`.
  */
 export function chuyenSangDuoc(hienTai: string, moi: string): boolean {
   if (!laTrangThaiNhiemVu(hienTai) || !laTrangThaiNhiemVu(moi)) return false;
@@ -574,6 +577,118 @@ export const COT_RONG = "Không có nhiệm vụ";
 
 /** Nhật ký rỗng (§5.9, phụ lục 15 §6). */
 export const NHAT_KY_RONG = "Chưa có ghi chép nào.";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * NHẬT KÝ & TRAO ĐỔI §5.9 — NỬA ĐỌC (`GET /api/v1/tasks/{ma}/log-entries`)
+ *
+ * Ô ghi tay `Đã làm được gì, còn vướng gì…` KHÔNG có ở đây: tuyến ghi chưa dựng, chờ luật "ai
+ * đang giữ việc thì được ghi". Xem `PHAN_CHUA_DUNG`.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Tiêu đề khối — nguyên văn §5.9. */
+export const TIEU_DE_NHAT_KY_NHIEM_VU = "Nhật ký & Trao đổi";
+
+/** Đang đọc trang đầu. `role="status"`, không phải `alert`. */
+export const DANG_TAI_NHAT_KY_NHIEM_VU = "Đang tải nhật ký…";
+
+export const NHAN_XEM_THEM_NHAT_KY_NHIEM_VU = "Xem thêm";
+
+/**
+ * Người ghi một dòng: `Họ tên (CB-…)` khi danh bạ có họ tên, còn lại là MÃ.
+ *
+ * MÃ LUÔN CÒN TRÊN DÒNG, kể cả khi đã có họ tên: nhật ký được đọc lại lúc khiếu nại, và mã là thứ
+ * còn chỉ ra được đúng một người nhiều năm sau — hai người trùng họ tên thì họ tên không làm được
+ * (luật 6, bất biến 8). Danh bạ chỉ gồm tài khoản đang hoạt động, nên người đã nghỉ chỉ còn mã —
+ * đó là một ca bình thường của nhật ký, không phải lỗi.
+ *
+ * Rỗng thì hiện gạch: máy chủ hứa luôn có mã, nên một ô trống là hợp đồng vỡ, và ô trống đọc ra là
+ * "không ai làm".
+ */
+export function nhanNguoiNhatKy(ma: string, danhBa: DanhBaTheoMa | null): string {
+  if (ma === "") return O_TRONG;
+  const cb = danhBa?.get(ma);
+  if (cb === undefined || cb.full_name === "") return ma;
+  return `${cb.full_name} (${ma})`;
+}
+
+/**
+ * Danh bạ màn hình đã đọc (TASK-05, một lần cho cả màn) → bảng tra theo mã cho nhật ký.
+ *
+ * `null` khi còn đang tải HOẶC tải hỏng: cả hai ca, dòng nhật ký hiện MÃ — thứ duy nhất màn hình
+ * biết chắc. Câu lỗi của danh bạ đã hiện ở ô lọc và form giao việc; nhắc lại trong drawer là câu
+ * thứ ba cho cùng một sự cố.
+ */
+export function danhBaChoNhatKy(kq: KetQua<identity_danhBaChonNguoiRa> | null): DanhBaTheoMa | null {
+  const db = docDanhBaChonNguoi(kq);
+  if (db.dangTai || db.loi !== null) return null;
+  return danhBaTheoMa(db.ds);
+}
+
+/** Một dòng nhật ký đã dịch sang chữ để vẽ. */
+export type DongNhatKyHien = {
+  readonly id: string;
+  /** Nguyên văn `at` — cho thuộc tính `dateTime` của `<time>`. */
+  readonly luc: string;
+  /** `14:20 09/09/2026`, giờ Việt Nam. */
+  readonly thoiDiem: string;
+  readonly nguoi: string;
+  /** Nhãn CỦA XÃ cho trạng thái SAU hành vi (một nguồn — `GET /api/v1/task-statuses`). */
+  readonly trangThai: string;
+  /** `Bộ phận · phụ trách` — CHỈ ở dòng đổi phân công; `null` ở mọi dòng khác. */
+  readonly phanCong: string | null;
+  readonly ghiChu: string;
+};
+
+/**
+ * Dòng của máy chủ → chữ để vẽ.
+ *
+ * `unit`/`assignee` RỖNG Ở DÒNG KHÔNG ĐỔI PHÂN CÔNG (`nhat_ky_nhiem_vu.go:52-57`), nên dòng
+ * `phanCong` chỉ hiện khi một trong hai có giá trị — §5.9 "thông tin bộ phận/phụ trách khi có thay
+ * đổi phân công". Có một vế thì vế kia hiện câu trạng thái thật, không phải ô trống.
+ */
+export function hienDongNhatKy(
+  d: petitions_nhatKyNhiemVuRa,
+  nhanTT: BangNhanTrangThai,
+  danhBa: DanhBaTheoMa | null,
+  tenBoPhan: ReadonlyMap<string, string>,
+): DongNhatKyHien {
+  const coPhanCong = d.unit !== "" || d.assignee !== "";
+  return {
+    id: d.id,
+    luc: d.at,
+    thoiDiem: nhanThoiDiem(d.at),
+    nguoi: nhanNguoiNhatKy(d.actor_code, danhBa),
+    trangThai: nhanTrangThai(nhanTT, d.status),
+    phanCong: coPhanCong
+      ? `${d.unit === "" ? CHUA_GIAO_BO_PHAN : (tenBoPhan.get(d.unit) ?? d.unit)} · ${
+          d.assignee === "" ? CHUA_PHAN_CONG : nhanNguoiNhatKy(d.assignee, danhBa)
+        }`
+      : null,
+    ghiChu: d.note,
+  };
+}
+
+/**
+ * Nối trang sau vào những dòng đã có, BỎ dòng trùng `id`.
+ *
+ * Trùng xảy ra thật: giữa hai lần bấm `Xem thêm`, một thao tác mới ghi thêm dòng ở ĐẦU nhật ký,
+ * và nếu kho phân trang theo vị trí thì dòng cuối trang trước trôi sang đầu trang sau. Hai dòng
+ * cùng `id` còn là hai phần tử cùng `key` trong React — một trong hai sẽ không được vẽ lại đúng.
+ * Giữ bản ĐÃ CÓ, theo thứ tự máy chủ trả.
+ */
+export function gopTrangNhatKy(
+  daCo: readonly petitions_nhatKyNhiemVuRa[],
+  trangMoi: readonly petitions_nhatKyNhiemVuRa[],
+): petitions_nhatKyNhiemVuRa[] {
+  const daThay = new Set(daCo.map((d) => d.id));
+  const ra = [...daCo];
+  for (const d of trangMoi) {
+    if (daThay.has(d.id)) continue;
+    daThay.add(d.id);
+    ra.push(d);
+  }
+  return ra;
+}
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * CÂU CHỮ CỦA MÀN HÌNH — §2, §3, §5, §7
@@ -1482,12 +1597,13 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "hình là dựng nguồn thứ hai cho một con số mà mọi chỗ `sắp đến hạn` phải đọc từ một cột duy nhất.",
   },
   {
-    ten: "Nhật ký & Trao đổi (§5.9) và `Tiếp tục` sau khi tạm dừng (§6)",
+    ten: "Ô ghi tay `Ghi nhật ký` (§5.9) và `Tiếp tục` sau khi tạm dừng (§6)",
     viSao:
-      "Hợp đồng không có tuyến nhật ký nào — tám tuyến Nhiệm vụ không gồm `POST .../nhat-ky` hay " +
-      "tuyến đọc dòng thời gian. Kéo theo một chỗ nữa: trạng thái trước lúc tạm dừng nằm TRONG " +
-      "nhật ký, nên màn hình không biết việc đang tạm dừng phải quay về đâu; nó hiện cả bốn lối và " +
-      "để máy chủ từ chối ba lối sai.",
+      "Khối Nhật ký & Trao đổi nay ĐỌC được (`GET /api/v1/tasks/{ma}/log-entries`), nhưng chưa " +
+      "GHI được: tuyến `POST` một dòng ghi tay chưa dựng, vì còn chờ luật người đang giữ việc — ai " +
+      "được ghi vào nhật ký của một nhiệm vụ. Mọi dòng hiện có là dòng máy chủ tự ghi ở mỗi thao tác. " +
+      "`Tiếp tục` sau tạm dừng: trạng thái trước lúc dừng nằm trong nhật ký, nhưng có thể ở trang " +
+      "bất kỳ, và màn hình chưa lần theo nó — nên hiện cả bốn lối và để máy chủ từ chối ba lối sai.",
   },
   {
     ten: "Chip `{n} việc con` trên thẻ (§4.1) và khối Nhiệm vụ con (§5.10)",

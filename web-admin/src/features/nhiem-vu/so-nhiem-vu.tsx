@@ -110,6 +110,7 @@ import {
   canhBaoSua,
   canhBaoVanBan,
   cauGiaiThichTrangThai,
+  danhBaChoNhatKy,
   cauTuKetLuan,
   chiaNhomVanBan,
   chuyenSangDuoc,
@@ -149,6 +150,7 @@ import {
   type NhomVanBan,
   type TrangThaiNhiemVu,
 } from "./nhan-nhiem-vu";
+import { NhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
 
 /**
  * Sổ Quản lý nhiệm vụ — `docs/ui-ux/02-nhiem-vu.md` §2 (bố cục), §3 (bộ lọc), §4.1 (bảng Kanban),
@@ -632,6 +634,9 @@ export function SoNhiemVu() {
           danhMuc={danhMuc}
           nhanTT={nhanTT}
           tenBoPhan={tenBoPhan}
+          danhBa={kqDanhBa}
+          // `luotDoc` tăng khi mở drawer VÀ sau mỗi lần ghi — đúng hai lúc nhật ký phải đọc lại.
+          lanLamMoiNhatKy={drawer.luotDoc}
           bayGio={new Date()}
           maNguoiDangNhap={maNguoiDangNhap}
           dangGui={dangGui}
@@ -1221,6 +1226,8 @@ export function ChiTietNhiemVu({
   danhMuc,
   nhanTT,
   tenBoPhan,
+  danhBa = null,
+  lanLamMoiNhatKy = 0,
   bayGio,
   maNguoiDangNhap,
   dangGui,
@@ -1247,6 +1254,10 @@ export function ChiTietNhiemVu({
    */
   nhanTT: BangNhanTrangThai;
   tenBoPhan: ReadonlyMap<string, string>;
+  /** Danh bạ chọn người màn hình đã đọc — tra họ tên cho nhật ký §5.9. `null` = chưa có. */
+  danhBa?: KetQua<identity_danhBaChonNguoiRa> | null;
+  /** Đổi thì nhật ký §5.9 đọc lại trang đầu. */
+  lanLamMoiNhatKy?: number;
   bayGio: Date;
   /** `phien.staff.code` — mã nghiệp vụ `CB-…`, rỗng khi chưa đọc được phiên. */
   maNguoiDangNhap: string;
@@ -1302,7 +1313,7 @@ export function ChiTietNhiemVu({
 
       {/* ── DẢI BƯỚC §5.2 ─────────────────────────────────────────────────────────────────
           THỜI GIAN ĐÃ Ở TRẠNG THÁI (`19 ngày 23 giờ`) HIỆN DẤU GẠCH, không hiện số 0: mốc đổi
-          trạng thái gần nhất nằm trong nhật ký, và hợp đồng không có tuyến nhật ký nào. Một con
+          trạng thái gần nhất nằm trong nhật ký, và dải bước chưa đọc nhật ký để tính nó. Một con
           số 0 ở đây đọc ra là "vừa chuyển xong", đúng điều ngược lại với "không biết". */}
       <ol aria-label="Các bước của vòng đời nhiệm vụ">
         {TRANG_THAI_CHINH.map((ma) => (
@@ -1428,6 +1439,17 @@ export function ChiTietNhiemVu({
           docLai={docLaiChiTiet}
         />
       )}
+
+      {/* §5.9 — NỬA ĐỌC. `key` theo mã: đổi nhiệm vụ là dựng lại khối, không mang "Xem thêm" đang
+          chạy hay câu lỗi của việc cũ sang việc mới. */}
+      <NhatKyNhiemVu
+        key={nhiemVu.code}
+        maNhiemVu={nhiemVu.code}
+        nhanTT={nhanTT}
+        danhBa={danhBaChoNhatKy(danhBa)}
+        tenBoPhan={tenBoPhan}
+        lanLamMoi={lanLamMoiNhatKy}
+      />
 
       {loiGhi !== null && (
         <p className="thong-bao-loi" role="alert">

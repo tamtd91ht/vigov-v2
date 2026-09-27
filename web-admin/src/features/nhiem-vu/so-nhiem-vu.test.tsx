@@ -29,6 +29,7 @@ import {
   LY_DO_KHONG_SUA_HAN,
   LY_DO_KHONG_SUA_MA,
   NHAN_NUT_SUA,
+  NHAT_KY_RONG,
   O_TRONG,
   PHAN_CHUA_DUNG,
   SO_RONG,
@@ -49,6 +50,7 @@ import {
   type DrawerNhiemVu,
   type TrangThaiTai,
 } from "./so-nhiem-vu";
+import { KhoiNhatKyNhiemVu, type TaiNhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không.
@@ -469,7 +471,7 @@ describe("drawer §5 — hai hạn cạnh nhau và hai ô tick", () => {
   });
 
   it("thời gian đã ở trạng thái hiện DẤU GẠCH, không hiện số 0", () => {
-    // Mốc đổi trạng thái gần nhất nằm trong nhật ký, và hợp đồng không có tuyến nhật ký nào. Một
+    // Mốc đổi trạng thái gần nhất nằm trong nhật ký, và dải bước chưa đọc nhật ký để tính nó. Một
     // số 0 ở đây đọc ra là "vừa chuyển xong", đúng điều ngược lại với "không biết".
     const html = veChiTiet();
     expect(html).toContain(O_TRONG);
@@ -1110,5 +1112,118 @@ describe("§5.4 — form `✎ Sửa`", () => {
     expect(html).toMatch(/<button type="submit"[^>]*disabled=""[^>]*>Lưu<\/button>/);
     expect(html).toContain("Chưa có gì thay đổi để lưu.");
     expect(html).toContain(">Huỷ</button>");
+  });
+});
+
+describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
+  const CB = "CB-2026-3H8N2W";
+  const DANH_BA_THEO_MA = new Map([
+    [CB, { code: CB, full_name: "Trần Thị B", position: "", department_id: "" }],
+  ]);
+
+  function veNhatKy(tai: TaiNhatKyNhiemVu, loiThem: string | null = null): string {
+    return renderToStaticMarkup(
+      <KhoiNhatKyNhiemVu
+        maNhiemVu="NV19"
+        tai={tai}
+        nhanTT={BANG_NHAN_MAC_DINH}
+        danhBa={DANH_BA_THEO_MA}
+        tenBoPhan={TEN_BO_PHAN}
+        loiThem={loiThem}
+        dangTaiThem={false}
+        xemThem={() => {}}
+      />,
+    );
+  }
+
+  it("drawer có khối, và lúc mở nó ĐANG TẢI (role=status) — chưa nói rỗng khi chưa biết", () => {
+    const html = veChiTiet();
+    expect(html).toContain("Nhật ký &amp; Trao đổi");
+    expect(html).toContain('role="status">Đang tải nhật ký…');
+    expect(html).not.toContain(nhuTrongHTML(NHAT_KY_RONG));
+  });
+
+  it("KHÔNG có ô ghi tay — tuyến ghi chưa dựng, chờ luật người đang giữ việc", () => {
+    const html = veChiTiet();
+    expect(html).not.toContain("Đã làm được gì, còn vướng gì");
+    expect(html).not.toContain("Ghi nhật ký</button>");
+  });
+
+  it("rỗng: câu §5.9 nguyên văn, không danh sách, không `Xem thêm`", () => {
+    const html = veNhatKy({ pha: "xong", dong: [], conNua: false });
+    expect(html).toContain(nhuTrongHTML(NHAT_KY_RONG));
+    expect(html).not.toContain("<ol");
+    expect(html).not.toContain("Xem thêm");
+  });
+
+  it("có dòng: thời điểm, họ tên kèm mã, nhãn trạng thái, bộ phận/phụ trách, ghi chú", () => {
+    const html = veNhatKy({
+      pha: "xong",
+      dong: [
+        {
+          id: "nknv-2",
+          at: "2026-09-09T07:20:00Z",
+          actor_code: CB,
+          status: "dang-thuc-hien",
+          unit: "01JBOPHAN",
+          assignee: CB,
+          note: "Giao lại cho <b>văn phòng</b>.",
+        },
+        {
+          id: "nknv-1",
+          at: "2026-09-01T02:00:00Z",
+          actor_code: "CB-00007",
+          status: "moi-giao",
+          unit: "",
+          assignee: "",
+          note: "Tạo nhiệm vụ.",
+        },
+      ],
+      conNua: true,
+    });
+    expect(html).toContain('dateTime="2026-09-09T07:20:00Z"');
+    expect(html).toContain("14:20");
+    expect(html).toContain("Trần Thị B (CB-2026-3H8N2W)");
+    // Người không có trong danh bạ: chỉ mã.
+    expect(html).toContain("<strong>CB-00007</strong>");
+    expect(html).toContain("Đang thực hiện");
+    expect(html).toContain("Mới giao");
+    expect(html).toContain("VĂN PHÒNG ĐẢNG ỦY · Trần Thị B (CB-2026-3H8N2W)");
+    // Ghi chú là TEXT, không phải HTML: thẻ trong đó bị thoát.
+    expect(html).toContain("&lt;b&gt;văn phòng&lt;/b&gt;");
+    expect(html).not.toContain("<b>văn phòng</b>");
+    // Mới nhất trước — đúng thứ tự máy chủ trả.
+    expect(html.indexOf("Giao lại")).toBeLessThan(html.indexOf("Tạo nhiệm vụ."));
+    expect(html).toContain("Xem thêm</button>");
+  });
+
+  it("đọc hỏng: câu máy chủ NGUYÊN VĂN, role=alert — và KHÔNG nói `Chưa có ghi chép nào.`", () => {
+    const html = veNhatKy({ pha: "loi", thongBao: "Không tìm thấy nhiệm vụ." });
+    expect(html).toContain('role="alert">Không tìm thấy nhiệm vụ.');
+    expect(html).not.toContain(nhuTrongHTML(NHAT_KY_RONG));
+    expect(html).not.toContain("Xem thêm");
+  });
+
+  it("`Xem thêm` hỏng: câu máy chủ hiện, các dòng đã tải vẫn ở lại", () => {
+    const html = veNhatKy(
+      {
+        pha: "xong",
+        dong: [
+          {
+            id: "a",
+            at: "2026-09-09T07:20:00Z",
+            actor_code: CB,
+            status: "moi-giao",
+            unit: "",
+            assignee: "",
+            note: "Dòng đã có.",
+          },
+        ],
+        conNua: true,
+      },
+      "Con trỏ không hợp lệ.",
+    );
+    expect(html).toContain("Dòng đã có.");
+    expect(html).toContain('role="alert">Con trỏ không hợp lệ.');
   });
 });

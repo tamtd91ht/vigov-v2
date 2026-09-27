@@ -40,8 +40,9 @@
  * một ô lọc thành một trang lỗi; nên chúng ra tới màn hình qua `PHAN_CHUA_DUNG`.
  */
 
-import { docJSON, docThanLoiGoi, goiGhi, type KetQua } from "./goi";
+import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./goi";
 import type {
+  page_Result_petitions_nhatKyNhiemVuRa,
   page_Result_petitions_nhiemVuRa,
   petitions_deNghiLuiHanRa,
   petitions_deNghiLuiHanVao,
@@ -49,6 +50,7 @@ import type {
   petitions_doiTrangThaiVao,
   petitions_get_tasks,
   petitions_get_tasks_by_ma,
+  petitions_get_tasks_by_ma_log_entries,
   petitions_nhiemVuRa,
   petitions_patch_tasks_by_ma,
   petitions_post_tasks,
@@ -181,6 +183,45 @@ export function laySoNhiemVu(
 export function layNhiemVu(ma: string): Promise<KetQua<petitions_nhiemVuRa>> {
   const mau: petitions_get_tasks_by_ma["duongDan"] = "/api/v1/tasks/{ma}";
   return docJSON<petitions_nhiemVuRa>(duongDanNhiemVu(mau, ma));
+}
+
+/**
+ * Dựng đường dẫn đọc NHẬT KÝ & TRAO ĐỔI (§5.9) của một nhiệm vụ. Tách khỏi lời gọi mạng để kiểm
+ * được mà không thay `fetch`.
+ *
+ * TÊN THAM SỐ ĐI QUA `thamSoTheoHopDong<…["truyVan"]>`, không ghép chuỗi trần như
+ * `themLocVaoTruyVan`: máy chủ đổi tên `limit`/`cursor` là `tsc` đỏ ở đây. `order` không gửi —
+ * mặc định của máy chủ đã là mới nhất trước, đúng thứ tự §5.9 vẽ.
+ */
+export function duongDanNhatKyNhiemVu(
+  ma: string,
+  trang: { limit?: number; cursor?: string | null } = {},
+): string {
+  const mau: petitions_get_tasks_by_ma_log_entries["duongDan"] = "/api/v1/tasks/{ma}/log-entries";
+  const truyVan = new URLSearchParams();
+  const dat = thamSoTheoHopDong<petitions_get_tasks_by_ma_log_entries["truyVan"]>(truyVan);
+  dat("limit", trang.limit);
+  // Con trỏ rỗng/`null` = trang đầu, và KHÔNG gửi `cursor=` rỗng (máy chủ trả 400).
+  dat("cursor", trang.cursor);
+  const chuoi = truyVan.toString();
+  const duongDan = duongDanNhiemVu(mau, ma);
+  return chuoi === "" ? duongDan : `${duongDan}?${chuoi}`;
+}
+
+/**
+ * GET /api/v1/tasks/{ma}/log-entries — một trang nhật ký, mới nhất trước. `task.read`.
+ *
+ * 404 MỘT CÂU CHO MỌI CA ("Không tìm thấy nhiệm vụ."), cùng lý do `layNhiemVu`: máy chủ đọc nhiệm
+ * vụ qua đúng bộ đọc của tuyến chi tiết trước khi chạm tới nhật ký.
+ */
+export function layNhatKyNhiemVu(
+  ma: string,
+  conTro?: string | null,
+  limit?: number,
+): Promise<KetQua<page_Result_petitions_nhatKyNhiemVuRa>> {
+  return docJSON<page_Result_petitions_nhatKyNhiemVuRa>(
+    duongDanNhatKyNhiemVu(ma, { limit, cursor: conTro }),
+  );
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import type { petitions_nhiemVuRa, petitions_nhiemVuVanBanRa } from "@/lib/api/schema.gen";
+import type {
+  petitions_nhatKyNhiemVuRa,
+  petitions_nhiemVuRa,
+  petitions_nhiemVuVanBanRa,
+} from "@/lib/api/schema.gen";
 
 import {
+  CHUA_GIAO_BO_PHAN,
+  CHUA_PHAN_CONG,
+  danhBaChoNhatKy,
+  gopTrangNhatKy,
+  hienDongNhatKy,
+  nhanNguoiNhatKy,
   BANG_NHAN_MAC_DINH,
   CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
@@ -173,7 +183,8 @@ describe("bảy trạng thái — §6", () => {
 
   it("`tam-dung` quay về được bốn trạng thái chính — lỏng CÓ CHỦ Ý", () => {
     // Chỉ ĐÚNG MỘT trong bốn là hợp lệ thật: trạng thái ngay trước lúc dừng. Máy chủ tìm nó trong
-    // nhật ký; màn hình không có tuyến nhật ký nào nên hiện cả bốn và để máy chủ từ chối ba lối sai.
+    // nhật ký; màn hình chưa lần theo nhật ký để thu hẹp, nên hiện cả bốn và để máy chủ từ chối ba
+    // lối sai.
     for (const t of ["moi-giao", "da-tiep-nhan", "dang-thuc-hien", "cho-duyet"]) {
       expect(chuyenSangDuoc("tam-dung", t)).toBe(true);
     }
@@ -977,5 +988,109 @@ describe("danh bạ chọn người cho ba ô chọn cán bộ — BA pha, khôn
     const cau = cauLoiDanhBaGiaoViec("Máy chủ bận.");
     expect(cau).toContain("Máy chủ bận.");
     expect(cau).toContain("lãnh đạo giao việc không ghi lại được sau khi tạo");
+  });
+});
+
+describe("§5.9 Nhật ký & Trao đổi — nửa đọc", () => {
+  const CB = "CB-00311";
+  const DANH_BA = new Map([
+    [CB, { code: CB, full_name: "Nguyễn Văn A", position: "Chuyên viên", department_id: "" }],
+    ["CB-00999", { code: "CB-00999", full_name: "", position: "", department_id: "" }],
+  ]);
+  const TEN_BO_PHAN = new Map([["bp-vpdu", "VĂN PHÒNG ĐẢNG ỦY"]]);
+
+  function dong(sua: Partial<petitions_nhatKyNhiemVuRa> = {}): petitions_nhatKyNhiemVuRa {
+    return {
+      id: "nknv-1",
+      at: "2026-09-09T07:20:00Z",
+      actor_code: CB,
+      status: "dang-thuc-hien",
+      unit: "",
+      assignee: "",
+      note: "Bắt đầu thực hiện.",
+      ...sua,
+    };
+  }
+
+  it("người ghi: có họ tên thì `Họ tên (mã)` — MÃ VẪN CÒN trên dòng", () => {
+    expect(nhanNguoiNhatKy(CB, DANH_BA)).toBe("Nguyễn Văn A (CB-00311)");
+  });
+
+  it("danh bạ chưa có / không có người ấy / họ tên rỗng → hiện MÃ, không bao giờ ô trống", () => {
+    expect(nhanNguoiNhatKy(CB, null)).toBe(CB);
+    expect(nhanNguoiNhatKy("CB-00001", DANH_BA)).toBe("CB-00001");
+    expect(nhanNguoiNhatKy("CB-00999", DANH_BA)).toBe("CB-00999");
+    expect(nhanNguoiNhatKy("", DANH_BA)).toBe(O_TRONG);
+  });
+
+  it("danh bạ đang tải hoặc tải hỏng → `null` (dòng hiện mã); đọc được → bảng tra theo mã", () => {
+    expect(danhBaChoNhatKy(null)).toBeNull();
+    expect(danhBaChoNhatKy({ ok: false, thongBao: "Máy chủ bận." })).toBeNull();
+    const bang = danhBaChoNhatKy({ ok: true, duLieu: { items: [...DANH_BA.values()] } });
+    expect(bang?.get(CB)?.full_name).toBe("Nguyễn Văn A");
+  });
+
+  it("dòng → chữ: giờ Việt Nam, nhãn trạng thái CỦA XÃ, ghi chú nguyên văn", () => {
+    const bangXa = {
+      ...BANG_NHAN_MAC_DINH,
+      nhan: { ...BANG_NHAN_MAC_DINH.nhan, "dang-thuc-hien": "Đang làm" },
+    };
+    const h = hienDongNhatKy(dong(), bangXa, DANH_BA, TEN_BO_PHAN);
+    expect(h.thoiDiem).toContain("14:20");
+    expect(h.thoiDiem).toContain("09/09/2026");
+    expect(h.luc).toBe("2026-09-09T07:20:00Z");
+    expect(h.trangThai).toBe("Đang làm");
+    expect(h.nguoi).toBe("Nguyễn Văn A (CB-00311)");
+    expect(h.ghiChu).toBe("Bắt đầu thực hiện.");
+  });
+
+  it("dòng KHÔNG đổi phân công (unit và assignee rỗng) thì không có dòng bộ phận/phụ trách", () => {
+    expect(hienDongNhatKy(dong(), BANG_NHAN_MAC_DINH, DANH_BA, TEN_BO_PHAN).phanCong).toBeNull();
+  });
+
+  it("dòng đổi phân công: tên bộ phận + người phụ trách; vế rỗng nói trạng thái thật", () => {
+    expect(
+      hienDongNhatKy(dong({ unit: "bp-vpdu", assignee: CB }), BANG_NHAN_MAC_DINH, DANH_BA, TEN_BO_PHAN)
+        .phanCong,
+    ).toBe("VĂN PHÒNG ĐẢNG ỦY · Nguyễn Văn A (CB-00311)");
+    expect(
+      hienDongNhatKy(dong({ unit: "bp-vpdu" }), BANG_NHAN_MAC_DINH, DANH_BA, TEN_BO_PHAN).phanCong,
+    ).toBe(`VĂN PHÒNG ĐẢNG ỦY · ${CHUA_PHAN_CONG}`);
+    expect(
+      hienDongNhatKy(dong({ assignee: CB }), BANG_NHAN_MAC_DINH, null, TEN_BO_PHAN).phanCong,
+    ).toBe(`${CHUA_GIAO_BO_PHAN} · ${CB}`);
+    // Bộ phận không có trong danh mục: hiện id, không bịa tên và không để trống.
+    expect(
+      hienDongNhatKy(dong({ unit: "bp-la" }), BANG_NHAN_MAC_DINH, null, TEN_BO_PHAN).phanCong,
+    ).toBe(`bp-la · ${CHUA_PHAN_CONG}`);
+  });
+
+  it("gộp trang: nối theo thứ tự máy chủ, BỎ dòng trùng `id`, giữ bản đã có", () => {
+    const a = dong({ id: "a" });
+    const b = dong({ id: "b", note: "cũ" });
+    const bLai = dong({ id: "b", note: "trôi sang trang sau" });
+    const c = dong({ id: "c" });
+    const ra = gopTrangNhatKy([a, b], [bLai, c]);
+    expect(ra.map((d) => d.id)).toEqual(["a", "b", "c"]);
+    expect(ra[1]?.note).toBe("cũ");
+    // Trùng ngay TRONG trang mới cũng chỉ một lần.
+    expect(gopTrangNhatKy([], [c, c]).map((d) => d.id)).toEqual(["c"]);
+  });
+
+  it("PHAN_CHUA_DUNG: mục cũ `Nhật ký & Trao đổi` đã rời; chỉ còn ô ghi tay và `Tiếp tục`", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (TASK-06): khối nhật ký nay đọc được. Mục cũ nói "hợp đồng
+    // không có tuyến nhật ký nào" — một lý do sai trên màn là lý do đẩy người sau đi dựng lại
+    // thứ đã có.
+    expect(
+      PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Nhật ký & Trao đổi (§5.9)")),
+    ).toBeUndefined();
+    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Ghi nhật ký` (§5.9)"));
+    expect(muc).toBeDefined();
+    expect(muc?.ten).toContain("Tiếp tục");
+    expect(muc?.viSao).toContain("/log-entries");
+    expect(muc?.viSao).toContain("người đang giữ việc");
+    expect(PHAN_CHUA_DUNG.map((p) => p.viSao).join(" ")).not.toContain(
+      "không có tuyến nhật ký nào",
+    );
   });
 });
