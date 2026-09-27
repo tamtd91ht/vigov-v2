@@ -32,7 +32,16 @@
  */
 import type { MaDangNhap } from "../tinh-nang/zalo-api";
 
-import { diaChiPhien, docTraLoi, type Phien, thanYeuCau } from "./hop-dong";
+import {
+  diaChiPhien,
+  docTraLoi,
+  docTraLoiCauViGov,
+  type Phien,
+  type PhienViGovQuaCau,
+  thanYeuCau,
+  thanYeuCauCauViGov,
+  type YeuCauCauViGov,
+} from "./hop-dong";
 
 /**
  * NĂM NHÁNH, cùng lối với `KetQuaXin` của `zalo-api.ts`: mỗi nhánh là một CÂU KHÁC NHAU trên
@@ -98,6 +107,84 @@ export async function phatHanhPhien(
     return phien === null ? { kieu: "khong-goi-duoc" } : { kieu: "xong", phien };
   } catch {
     // Mất mạng, quá hạn chờ, thân trả lời không phải JSON — cùng một việc cần làm tiếp.
+    return { kieu: "khong-goi-duoc" };
+  } finally {
+    clearTimeout(dong_ho);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * NHÁNH CẦU PHIÊN ViGov — cùng tuyến, cùng tệp gọi mạng, KHÔNG đụng `phatHanhPhien` ở trên
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Mỗi nhánh là một việc người dân làm tiếp — `App.tsx` dịch chúng sang kiểu của nửa nhà nước:
+ *
+ *   `xong`                phiên ViGov có bearer và tên xã
+ *   `cau-tat`             400 (nhánh cũ đòi `phoneToken` — cầu chưa bật), hoặc 201 không có phiên
+ *                         dùng được. Bấm lại không đổi được gì
+ *   `chua-san-sang`       422 — app hoặc xã chưa sẵn sàng ở ViGov
+ *   `ma-het-han`          401 — mã Zalo quá hạn; bấm lại lấy mã mới là xong
+ *   `tam-ngung`           502 · 503 · 429 — chờ rồi thử lại
+ *   `khong-goi-duoc`      mất mạng, quá hạn chờ, mã lạ, thân sai khuôn
+ *   `chua-khai-host`      bản dựng không có địa chỉ `vihat-miniapp` — không gọi
+ */
+export type KetQuaCauViGov =
+  | { kieu: "xong"; phien: PhienViGovQuaCau }
+  | { kieu: "cau-tat" }
+  | { kieu: "chua-san-sang" }
+  | { kieu: "ma-het-han" }
+  | { kieu: "tam-ngung" }
+  | { kieu: "khong-goi-duoc" }
+  | { kieu: "chua-khai-host" };
+
+/**
+ * Đổi access token Zalo + tên miền xã đã xác nhận lấy một phiên công dân ViGov, qua `vihat-miniapp`.
+ *
+ * ⚠ BEARER NHẬN VỀ LÀ CỦA ViGov (khoá `vigovSession`), không phải phiếu phiên của khối đăng nhập, và
+ *   nó KHÔNG vào `kho-phien.tsx`: nó đi thẳng về cho bên gọi (`App.tsx` → `cong-dan/`). Không log.
+ *
+ * `dia_chi` chỉ để phép kiểm đưa địa chỉ giả vào — cùng lý do với `phatHanhPhien`.
+ */
+export async function moPhienViGovQuaCau(
+  yc: YeuCauCauViGov,
+  dia_chi: string = diaChiPhien(),
+): Promise<KetQuaCauViGov> {
+  if (dia_chi === "") return { kieu: "chua-khai-host" };
+
+  const bo_dieu_khien = new AbortController();
+  const dong_ho = setTimeout(() => bo_dieu_khien.abort(), HAN_CHO_MS);
+
+  try {
+    const tra_loi = await fetch(dia_chi, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: thanYeuCauCauViGov(yc),
+      signal: bo_dieu_khien.signal,
+    });
+
+    switch (tra_loi.status) {
+      case 201:
+      case 200: {
+        const phien = docTraLoiCauViGov(await tra_loi.json());
+        if (phien === null) return { kieu: "khong-goi-duoc" };
+        if (phien === "khong-co-phien") return { kieu: "cau-tat" };
+        return { kieu: "xong", phien };
+      }
+      case 400:
+        return { kieu: "cau-tat" };
+      case 401:
+        return { kieu: "ma-het-han" };
+      case 422:
+        return { kieu: "chua-san-sang" };
+      case 429:
+      case 502:
+      case 503:
+        return { kieu: "tam-ngung" };
+      default:
+        return { kieu: "khong-goi-duoc" };
+    }
+  } catch {
     return { kieu: "khong-goi-duoc" };
   } finally {
     clearTimeout(dong_ho);

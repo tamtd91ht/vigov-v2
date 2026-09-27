@@ -2539,3 +2539,82 @@ body {
   text-decoration: underline;
   color: var(--navy);
 }
+
+/* =============================================================================================
+   TIN TỨC CỦA XÃ · DANH BẠ CÁN BỘ (27/09/2026) — dùng lại thẻ-nút `.cd-the-cua-toi` cho danh sách tin.
+   Thân tin là VĂN BẢN THUẦN: `pre-wrap` giữ dòng đơn trong một đoạn, không cần một thẻ nào từ máy chủ.
+   ============================================================================================= */
+.cd-tin__tieu-de {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 20px;
+  line-height: 1.4;
+  color: var(--navy);
+}
+
+.cd-tin__doan {
+  margin: 0 0 14px;
+  font-size: var(--text-body);
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cd-can-bo {
+  margin: 0 0 12px;
+  padding: 14px;
+  border: 2px solid var(--navy);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: var(--text-body);
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.cd-can-bo__ten {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.cd-can-bo__dong {
+  margin: 0 0 6px;
+}
+
+.cd-can-bo__zalo {
+  font-weight: 700;
+}
+
+.cd-can-bo__so {
+  margin: 10px 0 0;
+}
+
+.cd-can-bo__nhan {
+  display: block;
+  margin: 0 0 4px;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+}
+
+/* Liên kết gọi — một ĐÍCH CHẠM 48px như nút, gạch chân để không chỉ nhận ra bằng màu. */
+.cd-goi {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 10px 14px;
+  border: 1px solid var(--navy);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: var(--text-body);
+  font-weight: 700;
+  text-decoration: underline;
+  color: var(--navy);
+}
+
+.cd-goi:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}

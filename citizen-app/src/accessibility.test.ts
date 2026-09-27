@@ -129,7 +129,8 @@ describe("text and targets stay usable for an ageing eye", () => {
   it("kênh công dân: mọi đích chạm và ô nhập cao ít nhất 48px", () => {
     // Người dùng hai màn này thường lớn tuổi, đứng ngoài trời, một tay cầm máy; bấm trượt ở bước
     // xác nhận là gửi nhầm việc. Đọc cả con số từ CSS: hạ `--tap-min` thì ca này đỏ theo.
-    for (const lop of [".cd-nut", ".cd-nut-phu", ".cd-cong-tac", ".cd-o__nhap", ".cd-the-cua-toi"]) {
+    // `.cd-goi` (27/09/2026): liên kết gọi của danh bạ cán bộ — một đích chạm như nút.
+    for (const lop of [".cd-nut", ".cd-nut-phu", ".cd-cong-tac", ".cd-o__nhap", ".cd-the-cua-toi", ".cd-goi"]) {
       expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
         new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),
       );

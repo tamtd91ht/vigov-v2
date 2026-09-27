@@ -8,9 +8,12 @@
  * này" — về phần giới thiệu. Không có "Chọn xã khác": không còn danh mục xã nào để chọn, và một
  * phiên chỉ có một xã. Người cần xã khác quét QR của xã ấy.
  *
- * ⚠ XÁC NHẬN Ở ĐÂY **CHƯA PHẢI MỘT PHIÊN**. Bấm "Đúng, tiếp tục" chỉ báo lên `App.tsx`; xã của
- * phiên do MÁY CHỦ ghi sau hành vi xác nhận ấy (ADR 0005 · 0022), không do màn hình này nhớ.
- * Hôm nay chưa có nguồn máy chủ nào nối vào (`goi-y.ts`), nên màn này không bao giờ được vẽ ra.
+ * ⚠ XÁC NHẬN Ở ĐÂY **CHƯA PHẢI MỘT PHIÊN**. Bấm "Đúng, tiếp tục" chỉ báo lên bên gọi
+ * (`cong-dan/man/XacNhanXa.tsx`), bên ấy mới mở phiên; xã của phiên do MÁY CHỦ ghi sau hành vi xác
+ * nhận ấy (ADR 0005 · 0022 · 0047), không do màn hình này nhớ.
+ *
+ * MÀN NÀY VẪN THUẦN và vẫn ở lớp vỏ trung lập: nó không gọi máy chủ nào. Việc tra tên xã và mở phiên
+ * nằm ở `cong-dan/` — đúng chỗ `ranh-gioi-hai-nua.test.ts` đòi cho mã nói chuyện với ViGov.
  */
 import { nhanNguon, type XaGoiY } from "./goi-y";
 
@@ -22,6 +25,10 @@ type Props = {
   onXacNhan: () => void;
   /** "Không phải xã này" — về phần giới thiệu. Lối thoát bắt buộc: màn này giấu thanh tab. */
   onKhongPhai: () => void;
+  /** Đang mở phiên: câu báo, và nút xác nhận KHÔNG bấm lại được (một lần bấm, một lần mở). */
+  cau_dang_mo?: string;
+  /** Lần mở trước chưa được và bấm lại có thể được: câu nói việc cần làm. */
+  cau_loi?: string;
 };
 
 /** Trụ sở uỷ ban. Trang trí — câu chữ bên cạnh mới là nội dung, nên `aria-hidden`. */
@@ -42,7 +49,8 @@ function GlyphTruSo({ className }: { className?: string }) {
   );
 }
 
-export function GoiYXaScreen({ xa, nguon, onXacNhan, onKhongPhai }: Props) {
+export function GoiYXaScreen({ xa, nguon, onXacNhan, onKhongPhai, cau_dang_mo, cau_loi }: Props) {
+  const dang_mo = cau_dang_mo !== undefined;
   return (
     <section className="goi-y" aria-labelledby="goi-y-tieu-de">
       <p className="goi-y__nhan">{nhanNguon(nguon)}</p>
@@ -62,10 +70,32 @@ export function GoiYXaScreen({ xa, nguon, onXacNhan, onKhongPhai }: Props) {
         </span>
       </div>
 
-      <button type="button" className="goi-y__nut goi-y__nut--chinh" onClick={onXacNhan}>
+      {/* Câu xác nhận đọc thành lời: tên VÀ tỉnh, vì hai xã cùng tên ở hai tỉnh là chuyện có thật. */}
+      <p className="goi-y__tiep">
+        Bấm “Đúng, tiếp tục” để làm việc với {xa.ten}
+        {xa.tinh !== "" ? `, ${xa.tinh}` : ""}.
+      </p>
+
+      {cau_loi !== undefined && (
+        <p className="cd-loi" role="alert">
+          {cau_loi}
+        </p>
+      )}
+      {dang_mo && (
+        <p className="goi-y__tiep" role="status">
+          {cau_dang_mo}
+        </p>
+      )}
+
+      <button
+        type="button"
+        className="goi-y__nut goi-y__nut--chinh"
+        onClick={onXacNhan}
+        disabled={dang_mo}
+      >
         Đúng, tiếp tục
       </button>
-      <button type="button" className="goi-y__nut" onClick={onKhongPhai}>
+      <button type="button" className="goi-y__nut" onClick={onKhongPhai} disabled={dang_mo}>
         Không phải xã này
       </button>
 

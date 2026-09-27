@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { App, KhungApp } from "../../App";
 import { NHAN_KENH_CONG_DAN } from "../../cong-dan/man/KenhCongDan";
+import { XAC_NHAN_XA } from "../../cong-dan/man/noi-dung";
 import { COMPANY } from "../../content/company-profile";
 import { SCREENS } from "../company-intro/screens";
 import { GoiYXaScreen } from "./GoiYXaScreen";
@@ -128,8 +129,8 @@ describe("không tệp sản phẩm nào mang một tên đơn vị hành chính
 
 describe("mức tin theo nguồn — tham số gợi ý, không bao giờ quyết", () => {
   it("máy chủ chưa tra ra xã thì KHÔNG gợi ý gì, với mọi nguồn", () => {
-    // Đây là trạng thái của app HÔM NAY: chưa có nguồn máy chủ nào nối vào, nên `App.tsx` truyền
-    // `null`. Một nguồn "đủ tin" không được phép bù cho một tên xã không có.
+    // Máy chủ trả rỗng / lỗi thì `cong-dan/man/XacNhanXa.tsx` truyền `null`. Một nguồn "đủ tin"
+    // không được phép bù cho một tên xã không có.
     for (const nguon of ["qr", "zns", "share", "", "QR"]) {
       expect(phanGiaiGoiY(nguon, null)).toEqual({ kieu: "khong-co" });
     }
@@ -280,16 +281,25 @@ describe("bất di dịch #2 — xác nhận xã rồi thì tên xã hiện trê
 // ---------------------------------------------------------------------------------------------
 
 /**
- * APP HÔM NAY: CHƯA CÓ NGUỒN XÃ PHÍA MÁY CHỦ, CHƯA CÓ PHIÊN ViGov → KHÔNG TÊN XÃ NÀO, VÀ APP MỞ
- * PHẦN GIỚI THIỆU. Ca này dựng chính `App`, không dựng một mảnh của nó: ai đó "nối tạm" một tên xã
- * dựng từ tham số QR vào `App.tsx` thì đây là ca đỏ lên.
+ * ĐƯỜNG LIÊN KẾT KHÔNG ĐỦ ĐỂ HỎI MÁY CHỦ → KHÔNG TÊN XÃ NÀO, VÀ APP MỞ PHẦN GIỚI THIỆU. Ca này dựng
+ * chính `App`, không dựng một mảnh của nó: ai đó "nối tạm" một tên xã dựng từ tham số QR vào `App.tsx`
+ * thì đây là ca đỏ lên.
+ *
+ * 27/09/2026: tham số tên miền là `d` (ADR 0047 §Trả lời). `t` và `v` đã bỏ — chúng vẫn nằm trong
+ * danh sách dưới để ghim rằng chúng KHÔNG mở gì. `d` không kèm `src` tin được, hoặc sai khuôn, cũng thế.
  */
-describe("app mở bằng QR khi chưa có nguồn xã phía máy chủ — fail closed", () => {
+describe("app mở bằng một liên kết không đủ tin — fail closed, không hỏi máy chủ", () => {
   const MO = [
     "",
     "?src=qr&t=xa-vi-du.vigov.example",
     "?src=zns&t=xa-vi-du.vigov.example",
     "?src=qr&t=01JDEMXA00000000000000000A",
+    "?src=qr&v=2",
+    "?d=xa-vi-du.vigov.example",
+    "?src=share&d=xa-vi-du.vigov.example",
+    "?src=QR&d=xa-vi-du.vigov.example",
+    "?src=qr&d=https://xa-vi-du.vigov.example",
+    "?src=qr&d=xa%20vi%20du",
   ];
 
   it("không hiện màn xác nhận, không hiện tên xã nào, không hiện lối vào kênh công dân", () => {
@@ -311,4 +321,27 @@ describe("app mở bằng QR khi chưa có nguồn xã phía máy chủ — fail
       expect(markup, `mở bằng "${chuoi}"`).toContain("tabbar");
     }
   });
+});
+
+/**
+ * ĐƯỜNG LIÊN KẾT ĐỦ TIN (`d` đúng khuôn + `src` qr/zns) → LỚP KHÁM PHÁ MỞ Ở BƯỚC "ĐANG TÌM XÃ".
+ *
+ * `renderToStaticMarkup` không chạy hiệu ứng, nên lượt dựng đầu tiên là đúng thứ người dân thấy trong
+ * lúc app hỏi máy chủ: một câu chờ, KHÔNG một tên xã nào, KHÔNG tên miền nào, không thanh tab. Tên xã
+ * chỉ hiện khi máy chủ trả lời — `cong-dan/cong-khai.test.tsx` kiểm bước ấy.
+ */
+describe("app mở bằng QR có `d` — hỏi máy chủ, không tự dựng tên xã", () => {
+  for (const chuoi of ["?src=qr&d=xa-vi-du.vigov.example", "?d=xa-vi-du.vigov.example&src=zns"]) {
+    it(`mở bằng "${chuoi}": câu chờ, header 'Xác nhận xã', không tab, không tên xã, không tên miền`, () => {
+      const markup = moVoi(chuoi, () => render(<App />));
+      const chu = textOf(markup);
+      expect(chu).toContain(XAC_NHAN_XA.dang_tra);
+      expect(dauTrang(markup)).toContain(TIEU_DE_XAC_NHAN_XA);
+      expect(dauTrang(markup)).toContain(COMPANY.name);
+      expect(markup).not.toContain("tabbar");
+      expect(chu).not.toContain("xa-vi-du");
+      expect(chu).not.toContain("Bạn cần liên hệ với xã này?");
+      expect(chu).not.toContain(NHAN_KENH_CONG_DAN);
+    });
+  }
 });

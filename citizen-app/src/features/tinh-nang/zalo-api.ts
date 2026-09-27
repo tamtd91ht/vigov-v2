@@ -219,10 +219,13 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
      */
     api: "getAccessToken",
     nua: "ca-hai",
-    man: "Liên hệ",
-    tinh_nang: "Đăng nhập bằng số Zalo",
+    // "Xác nhận xã" THÊM 27/09/2026: nút "Đúng, tiếp tục" trên màn xác nhận xã (sau khi quét QR của
+    // xã) gọi lại chính lời gọi này để mở phiên làm việc với xã ấy. Cùng một lời gọi, một mục đích
+    // mới — và câu `de_lam_gi` phải kể cả hai, vì đây là câu màn Quản lý quyền đọc cho người dùng.
+    man: "Liên hệ · Xác nhận xã",
+    tinh_nang: "Đăng nhập bằng số Zalo · Mở phiên làm việc với xã",
     de_lam_gi:
-      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình.",
+      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập.",
   },
@@ -328,6 +331,17 @@ export function xinMaDangNhap(): Promise<KetQuaXin<MaDangNhap>> {
     const { token } = await sdk.getPhoneNumber();
     return { ma_so_dien_thoai: token ?? "", ma_truy_cap };
   });
+}
+
+/**
+ * CHỈ access token — cho nút xác nhận xã (mở phiên công dân ViGov qua cầu, ADR 0045 · 0047).
+ *
+ * KHÔNG KÈM `getPhoneNumber`, CÓ CHỦ ĐÍCH: mở phiên sau khi xác nhận xã không xin số điện thoại (ADR
+ * 0045 câu 2), và lời gọi này không hỏi người dùng (`index.d.ts` dòng 3009). Một hộp thoại xin số hiện
+ * ra ngay sau cú bấm "Đúng, tiếp tục" là hỏi một thứ người dân chưa cần đưa.
+ */
+export function xinMaTruyCap(): Promise<KetQuaXin<string>> {
+  return xin(async (sdk) => sdk.getAccessToken());
 }
 
 /** Token vị trí. Không đọc `latitude`/`longitude` — xem khối chú thích đầu tệp. */

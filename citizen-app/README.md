@@ -133,7 +133,7 @@ Dựng ngày 21/09/2026, **trước khi `src/cong-dan/` có tệp nghiệp vụ 
 | Nửa | Ở đâu |
 |---|---|
 | Thương mại (khách hàng doanh nghiệp) | `src/content/` · `src/features/company-intro/` · `src/features/tinh-nang/` · `src/features/dang-nhap/` |
-| **Nhà nước (công dân)** | **`src/cong-dan/`** — "Gửi phản ánh" · "Phản ánh của tôi" · "Tra cứu phiếu". **Có mặt trong bản dựng duy nhất** từ 27/09/2026. Hôm nay luôn nói "kênh chưa mở" và không gọi mạng — cầu phiên công dân ViGov chưa có (`src/cong-dan/api/phien-vigov.ts`) |
+| **Nhà nước (công dân)** | **`src/cong-dan/`** — xác nhận xã từ QR · "Gửi phản ánh" · "Phản ánh của tôi" · "Tra cứu phiếu" · "Tin tức của xã" · "Danh bạ cán bộ xã". **Có mặt trong bản dựng duy nhất** từ 27/09/2026. Ba màn phản ánh nói "kênh chưa mở" chừng nào cầu phiên chưa phát phiên ViGov (`src/cong-dan/api/phien-vigov.ts`); hàm mở phiên được `App.tsx` **tiêm vào** (`src/cong-dan/api/mo-phien-vigov.ts`), không nhập |
 | Lớp vỏ trung lập | `App.tsx` · `main.tsx` · `components/` · `lib/` · `features/kham-pha/` |
 
 1. **Ranh giới hai chiều.** Nửa này không nhập tệp của nửa kia — cả hai chiều. Và **không tệp nào
@@ -727,8 +727,8 @@ Ba lớp của ADR 0005 vẫn tách rời, và đây là bảng phải đọc tr
 
 | Lớp | Trả lời | Nguồn | Tin được? | Trạng thái |
 |---|---|---|---|---|
-| **Khám phá** | Công dân MUỐN làm việc với xã nào | tên miền + `src` trên QR, **máy chủ** tra ra tên | **Không — chỉ là gợi ý** | Vỏ màn xác nhận có; **nguồn máy chủ chưa nối** |
-| **Phiên** | Phiên này ĐANG thao tác ở xã nào | Máy chủ ghi sau khi công dân xác nhận | Có | Chưa có cầu phiên |
+| **Khám phá** | Công dân MUỐN làm việc với xã nào | `d` + `src` trên QR, **máy chủ** tra ra tên | **Không — chỉ là gợi ý** | Đã nối (`cong-dan/man/XacNhanXa.tsx`) |
+| **Phiên** | Phiên này ĐANG thao tác ở xã nào | Máy chủ ghi sau khi công dân xác nhận | Có | Phía app đã nối; cầu ở `vihat-miniapp` **tắt** (ADR 0045 UNKNOWN #2) nên hôm nay luôn về phần giới thiệu |
 | **Uỷ quyền** | Công dân này được đọc/ghi gì ở đó | Quan hệ công dân↔xã + luật 4 | Có | Chưa có cầu phiên |
 
 | Tệp | Việc nó làm |
@@ -736,7 +736,8 @@ Ba lớp của ADR 0005 vẫn tách rời, và đây là bảng phải đọc tr
 | `src/features/kham-pha/goi-y.ts` | Mức tin theo nguồn, hàm thuần, có test. Không có xã từ máy chủ ⇒ không gợi ý |
 | `src/features/kham-pha/GoiYXaScreen.tsx` | Màn xác nhận: tên xã to · "Đúng, tiếp tục" · "Không phải xã này" (về phần giới thiệu). **Không có "Chọn xã khác"** |
 | `src/features/kham-pha/kham-pha.test.tsx` | Mức tin · fail closed ở cấp `App` · tên xã trên mọi màn hình · không tên xã nào viết thẳng trong mã · không còn lối chọn/đổi xã |
-| `src/lib/launch-params.ts` | Đọc `location.search` — không qua SDK |
+| `src/lib/launch-params.ts` | Đọc `location.search` — không qua SDK. `d` (tên miền xã) chỉ được đọc khi `src` ∈ {`qr`, `zns`}; `t`, `v` bị lờ |
+| `src/cong-dan/man/XacNhanXa.tsx` | Tra `GET identity /api/v1/communes?host=<d>`, hỏi công dân, mở phiên qua hàm tiêm vào. Rỗng / lỗi → phần giới thiệu kèm một câu |
 
 **Mức tin theo nguồn** — đây là quy tắc, không phải giao diện:
 

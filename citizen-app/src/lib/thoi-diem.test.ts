@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { thoiDiemVN } from "./thoi-diem";
+import { ngayVN, thoiDiemVN } from "./thoi-diem";
 
 /**
  * GIỜ GHIM +07 Ở CẢ HAI NỬA — quyết định 27/09/2026.
@@ -36,5 +36,23 @@ describe("thoiDiemVN — mốc sát nửa đêm UTC", () => {
   it("chuỗi không đọc được thì `null`, không phải 'Invalid Date'", () => {
     expect(thoiDiemVN("")).toBeNull();
     expect(thoiDiemVN("khong-phai-thoi-diem")).toBeNull();
+  });
+});
+
+/**
+ * MỘT NGÀY, KHÔNG PHẢI MỘT THỜI ĐIỂM — `published_on` của tin xã là `YYYY-MM-DD`. Đi qua `thoiDiemVN`
+ * thì nó thành "27/09/2026 07:00": một giờ đăng không có thật.
+ */
+describe("ngayVN — ngày trần, không múi giờ", () => {
+  it("đổi chỗ ba phần, không cộng giờ", () => {
+    expect(ngayVN("2026-09-27")).toBe("27/09/2026");
+    expect(ngayVN("2026-12-31")).toBe("31/12/2026");
+    expect(ngayVN("2028-02-29")).toBe("29/02/2028");
+  });
+
+  it("không phải một ngày có thật, hoặc không đúng khuôn: `null`", () => {
+    for (const s of ["", "2026-02-30", "2026-13-01", "2026-9-27", "27/09/2026", "2026-09-27T00:00:00Z"]) {
+      expect(ngayVN(s), s).toBeNull();
+    }
   });
 });

@@ -1,11 +1,19 @@
 import { type ReactNode, useEffect, useState } from "react";
 
 import { TabBar } from "./components/TabBar";
-import { KenhCongDan, NutVaoKenhCongDan } from "./cong-dan";
+import {
+  KenhCongDan,
+  type KetQuaMoPhien,
+  type KetThucXacNhan,
+  type MoPhienViGov,
+  NutVaoKenhCongDan,
+  XacNhanXa,
+} from "./cong-dan";
 import { COMPANY } from "./content/company-profile";
 import { NutChatOA } from "./features/company-intro/NutChatOA";
+import { type KetQuaMoPhienQuaCau, moPhienCongDanQuaCau } from "./features/dang-nhap/cau-vigov";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
-import { GoiYXaScreen, phanGiaiGoiY, TIEU_DE_XAC_NHAN_XA, type XaGoiY } from "./features/kham-pha";
+import { TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha";
 import {
   DEFAULT_SCREEN_ID,
   type DiemDen,
@@ -13,7 +21,7 @@ import {
   type ScreenId,
 } from "./features/company-intro/screens";
 import { cuonToiMoc } from "./lib/cuon-toi";
-import { type KetQuaDo, thamSo as thamSoLaunch, thamSoMoApp } from "./lib/launch-params";
+import { type KetQuaDo, thamSoMoApp, thamSoXa } from "./lib/launch-params";
 
 /**
  * Phase 1 shell: four static screens, no navigation library, no state beyond the current tab.
@@ -28,10 +36,43 @@ import { type KetQuaDo, thamSo as thamSoLaunch, thamSoMoApp } from "./lib/launch
  *
  * WHY NOT A ROUTER:
  *
- *   Four sibling screens with no deep-linkable state do not need history. When phase 2 brings
- *   deep links (`https://zalo.me/s/<APP_ID>/?t=...`), routing becomes a real requirement and
- *   gets decided then, with that requirement in hand.
+ *   Four sibling screens with no deep-linkable state do not need history. The one deep link the app
+ *   reads (`?d=<commune domain>&src=qr|zns`, ADR 0047) opens ONE confirmation step, not a route, so
+ *   there is still nothing to route.
  */
+
+/**
+ * CẦU NỐI HAI NỬA — CHỖ DUY NHẤT KẾT QUẢ CỦA CLIENT ĐĂNG NHẬP THƯƠNG MẠI ĐỔI SANG KIỂU CỦA NỬA NHÀ NƯỚC.
+ *
+ * Nửa nhà nước cần mở phiên ViGov sau khi công dân xác nhận xã, nhưng không được nhập `zmp-sdk` hay
+ * client của `vihat-miniapp` (`ranh-gioi-hai-nua.test.ts` §3a). Nó chỉ khai KIỂU hàm nó cần
+ * (`MoPhienViGov`); lớp vỏ — được nhập cả hai nửa — dựng hàm ấy ở đây và tiêm xuống `XacNhanXa`.
+ *
+ * Bảng dịch theo VIỆC NGƯỜI DÂN LÀM TIẾP, không theo mã trạng thái:
+ *   xong                                        → có phiên
+ *   cau-tat · chua-san-sang · chua-khai-host    → `chua-mo`: bấm lại không đổi được gì
+ *   ma-het-han · tam-ngung · khong-goi-duoc ·
+ *   khong-lay-duoc-ma                           → `thu-lai`
+ *   ngoai-zalo                                  → `ngoai-zalo`
+ */
+export function sangKieuCongDan(kq: KetQuaMoPhienQuaCau): KetQuaMoPhien {
+  switch (kq.kieu) {
+    case "xong":
+      return { kieu: "xong", token: kq.phien.token, ten_xa: kq.phien.ten_xa };
+    case "cau-tat":
+    case "chua-san-sang":
+    case "chua-khai-host":
+      return { kieu: "chua-mo" };
+    case "ngoai-zalo":
+      return { kieu: "ngoai-zalo" };
+    default:
+      return { kieu: "thu-lai" };
+  }
+}
+
+/** `communeConfirmed` không đọc ở đây: kiểu của nó là hằng `true`, và thân gửi đi cũng ghi hằng ấy. */
+const moPhienViGov: MoPhienViGov = async (yc) =>
+  sangKieuCongDan(await moPhienCongDanQuaCau(yc.communeHostHint));
 
 /**
  * Vỏ ứng dụng, THUẦN — nhận mọi thứ qua tham số, không giữ trạng thái nào.
@@ -44,8 +85,8 @@ import { type KetQuaDo, thamSo as thamSoLaunch, thamSoMoApp } from "./lib/launch
 export function KhungApp(props: {
   man: ScreenId;
   onChonMan: (id: ScreenId) => void;
-  /** Xã công dân đã xác nhận, hoặc `null`. Xem ghi chú về trạng thái phía client trong `App`. */
-  xaDaChon: XaGoiY | null;
+  /** Xã CỦA PHIÊN (tên máy chủ trả cùng phiên ViGov), hoặc `null`. Xem ghi chú trong `App`. */
+  xaDaChon: { readonly ten: string } | null;
   /**
    * Đang ở lớp khám phá: xác nhận xã. Lúc ấy thanh tab BIẾN MẤT.
    *
@@ -128,38 +169,44 @@ export function App() {
   const [thamSo] = useState<KetQuaDo>(thamSoMoApp);
 
   /**
-   * ⚠ XÃ ĐÃ CHỌN LÀ **TRẠNG THÁI GIAO DIỆN PHÍA CLIENT**, KHÔNG PHẢI MỘT PHIÊN.
+   * XÃ CỦA PHIÊN — ĐỌC TỪ PHIÊN MÁY CHỦ TRẢ VỀ, KHÔNG PHẢI TỪ MÀN XÁC NHẬN.
    *
-   * Nó sống trong `useState`: mất khi app đóng, không được lưu xuống máy, không được gửi đi đâu,
-   * và **không cấp quyền gì cả**. ADR 0005: xã của phiên do MÁY CHỦ ghi sau khi công dân xác
-   * nhận, và cầu phiên công dân ViGov chưa tồn tại (`cong-dan/api/phien-vigov.ts`).
+   * `ten_xa` là `tenantDisplayName` cầu phiên trả cùng phiên ViGov (ADR 0047 §Trả lời mục 4: "phiên
+   * nói thật"), nên header và bước xác nhận cuối trước khi gửi nói CÙNG một xã với xã máy chủ sẽ ghi
+   * phiếu. Chỉ có giá trị khi phiên đã mở; không phiên thì `null`, và app ở phần giới thiệu.
    *
-   * Khi tuyến ấy sống, dòng này được thay bằng xã đọc ra từ phiên do máy chủ trả về — không phải
-   * được "đồng bộ thêm" với nó. Hai nguồn cho một sự thật thì một trong hai sẽ cũ, và cái cũ là
-   * cái đi vào hồ sơ gửi nhầm cơ quan.
+   * `ten_mien` là `d` công dân đã xác nhận ở LẦN MỞ NÀY — chỉ làm khoá tra `?host=` cho hai màn công
+   * khai (tin tức, danh bạ). Nó không phải tham chiếu xã: không được gửi làm "xã của tôi", không lưu,
+   * không vẽ ra (ADR 0047 điều kiện dừng #1). Cả hai sống trong `useState`: mất khi app đóng.
    */
-  const [xaDaChon, setXaDaChon] = useState<XaGoiY | null>(null);
-  const [boQuaKhamPha, setBoQuaKhamPha] = useState(false);
+  const [xa, datXa] = useState<{ ten_xa: string; ten_mien: string } | null>(null);
+  /** Lớp khám phá đã kết thúc (xác nhận xong, "không phải xã này", hoặc fail closed). */
+  const [xongKhamPha, datXongKhamPha] = useState(false);
+  /** Câu nói vì sao app về phần giới thiệu thay vì mở kênh — hoặc `null`. */
+  const [thongBao, datThongBao] = useState<string | null>(null);
   /**
    * Đang mở kênh công dân (gửi / tra cứu phản ánh). App.tsx KHÔNG nhập client ViGov — chỉ mở màn
    * của nửa nhà nước qua cửa `./cong-dan` (`ranh-gioi-hai-nua.test.ts`).
    */
   const [moKenhCongDan, setMoKenhCongDan] = useState(false);
 
-  const p = thamSoLaunch(thamSo);
-
   /**
-   * LỚP KHÁM PHÁ (ADR 0005 · 0047). Tham số trên QR chỉ DẪN GIAO DIỆN — nó không chọn xã, không mở
-   * một app khác, và không được phép làm hai việc đó.
-   *
-   * ⚠ `null` Ở ĐÂY LÀ FAIL CLOSED, KHÔNG PHẢI CHỖ CÒN DỞ ĐỂ "ĐIỀN TẠM". Tên xã chỉ có một nguồn: máy
-   * chủ tra tên miền trên QR (`GET /api/v1/communes?host=`). Lời gọi ấy chưa được nối vào, nên không
-   * có xã nào để gợi ý, màn xác nhận không bao giờ hiện, và app mở phần giới thiệu. Không bao giờ
-   * dựng một tên xã từ tham số — công dân xác nhận theo TÊN, và một tên đoán ra là hồ sơ gửi nhầm
-   * cơ quan.
+   * LỚP KHÁM PHÁ (ADR 0005 · 0047). `d` + `src` trên QR chỉ DẪN GIAO DIỆN — không chọn xã, không mở
+   * phiên nếu công dân chưa bấm xác nhận. `null` (không có `d`, `src` không tin được, `d` sai khuôn)
+   * là mở như không tham số: KHÔNG một lời gọi nào tới `identity`/`comms`.
    */
-  const goiY = phanGiaiGoiY(p["src"] ?? "", null);
-  const dangKhamPha = !xaDaChon && !boQuaKhamPha && goiY.kieu === "chon-san";
+  const goiY = thamSoXa(thamSo);
+  const dangKhamPha = goiY !== null && xa === null && !xongKhamPha;
+
+  function ketThucKhamPha(kq: KetThucXacNhan) {
+    datXongKhamPha(true);
+    if (kq.kieu === "da-mo" && goiY !== null) {
+      datXa({ ten_xa: kq.ten_xa, ten_mien: goiY.ten_mien });
+      datThongBao(null);
+    } else if (kq.kieu === "ve-gioi-thieu") {
+      datThongBao(kq.cau);
+    }
+  }
 
   /**
    * `key` MANG CẢ `moc` LẪN `lan`, VÀ ĐÓ LÀ THỨ LÀM MỤC "QUYỀN" TRÊN MÀN CHỦ CHẠY ĐƯỢC LẦN THỨ HAI.
@@ -173,17 +220,30 @@ export function App() {
     <Screen key={`${currentId}:${vi_tri.moc ?? ""}:${vi_tri.lan}`} moc={vi_tri.moc} onDi={di} />
   );
   if (moKenhCongDan) {
-    noiDung = <KenhCongDan onDong={() => setMoKenhCongDan(false)} />;
-  } else if (dangKhamPha && goiY.kieu === "chon-san") {
     noiDung = (
-      <GoiYXaScreen
-        xa={goiY.xa}
+      <KenhCongDan onDong={() => setMoKenhCongDan(false)} ten_mien={xa === null ? null : xa.ten_mien} />
+    );
+  } else if (dangKhamPha && goiY !== null) {
+    noiDung = (
+      <XacNhanXa
+        ten_mien={goiY.ten_mien}
         nguon={goiY.nguon}
-        onXacNhan={() => setXaDaChon(goiY.xa)}
-        onKhongPhai={() => setBoQuaKhamPha(true)}
+        moPhienViGov={moPhienViGov}
+        onKetThuc={ketThucKhamPha}
       />
     );
-  } else if (xaDaChon && currentId === DEFAULT_SCREEN_ID) {
+  } else if (thongBao !== null && currentId === DEFAULT_SCREEN_ID) {
+    // FAIL CLOSED CÓ LỜI: về phần giới thiệu, và nói bằng một câu vì sao — không mã lỗi, không tên
+    // miền. Chỉ trên tab đầu: đó là chỗ công dân vừa được đưa về.
+    noiDung = (
+      <>
+        <p className="cd-loi" role="status">
+          {thongBao}
+        </p>
+        {noiDung}
+      </>
+    );
+  } else if (xa !== null && currentId === DEFAULT_SCREEN_ID) {
     /**
      * ĐÃ XÁC NHẬN XÃ THÌ TAB ĐẦU MỞ LỐI VÀO KÊNH CÔNG DÂN — đặt TRÊN màn chủ, không thay nó.
      *
@@ -216,7 +276,7 @@ export function App() {
         // Bấm một tab là điều hướng KHÔNG CÓ MỐC: người bấm muốn về đầu màn ấy, không muốn bị thả
         // xuống giữa một khối mà lần trước họ đi tới từ màn chủ.
         onChonMan={(id) => di({ man: id })}
-        xaDaChon={xaDaChon}
+        xaDaChon={xa === null ? null : { ten: xa.ten_xa }}
         khamPha={dangKhamPha}
       >
         {noiDung}

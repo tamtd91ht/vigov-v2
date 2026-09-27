@@ -16,8 +16,14 @@
  *   3. MỖI LỜI GỌI SDK KHAI MỤC ĐÍCH TẠI CHỖ (`KHAI_BAO_LOI_GOI`). Nửa này hôm nay KHÔNG gọi SDK nào.
  *
  * ⚠ KHÔNG CÒN SAU `resolve.alias` (27/09/2026): bản dựng chỉ còn một, và nó mang kênh này. Kênh
- *   vẫn ĐÓNG — cầu phiên công dân ViGov chưa có (`api/phien-vigov.ts` luôn trả `null`), nên mọi màn
- *   nói "kênh chưa mở" và không gọi mạng. `App.tsx` nhập qua đúng tệp này, không nhập thẳng một tệp
- *   bên trong.
+ *   MỞ chỉ khi cầu phiên phát một phiên ViGov sau khi công dân xác nhận xã (`man/XacNhanXa.tsx`);
+ *   không có phiên thì ba màn phản ánh nói "kênh chưa mở" và không gọi mạng. `App.tsx` nhập qua đúng
+ *   tệp này, không nhập thẳng một tệp bên trong.
+ *
+ * ⚠ CỬA NÀY KHÔNG XUẤT `datPhienViGov` HAY BẤT CỨ HÀM NÀO CỦA `api/`. Thứ đi ra là MÀN và KIỂU của
+ *   hàm mở phiên mà `App.tsx` phải tiêm vào (`api/mo-phien-vigov.ts`) — kiểu không mang theo đường
+ *   gọi nào.
  */
 export { KenhCongDan, NutVaoKenhCongDan } from "./man/KenhCongDan";
+export { type KetThucXacNhan, XacNhanXa } from "./man/XacNhanXa";
+export type { KetQuaMoPhien, MoPhienViGov, YeuCauMoPhien } from "./api/mo-phien-vigov";

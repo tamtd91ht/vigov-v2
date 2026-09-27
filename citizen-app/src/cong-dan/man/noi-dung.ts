@@ -248,3 +248,72 @@ export const THE_PHIEU = {
    */
   chua_ghi: "Ứng dụng chưa nhận được thông tin này. Bạn hãy liên hệ Ủy ban nhân dân xã để hỏi.",
 } as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * XÁC NHẬN XÃ TỪ MÃ QR (ADR 0047 §Trả lời mục 4) — tra tên xã, rồi mở phiên sau khi xác nhận
+ *
+ * Mọi nhánh không thành đều về PHẦN GIỚI THIỆU kèm một câu — trừ `thu_lai`, nơi bấm lại có thể được.
+ * Không câu nào nhắc tên miền, mã lỗi hay tên dịch vụ: người dân không làm gì được với chúng.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const XAC_NHAN_XA = {
+  dang_tra: "Đang tìm xã theo mã QR bạn vừa quét…",
+  /** Máy chủ nói "không xã nào" (hoặc từ chối tên miền trên mã). */
+  khong_thay:
+    "Mã QR này chưa dẫn tới xã nào trên ứng dụng. Bạn vẫn xem được phần giới thiệu. Nếu cần làm việc với xã, hãy quét mã QR dán tại trụ sở Ủy ban nhân dân xã.",
+  /** Nền tảng tạm ngưng, lỗi máy chủ, mất mạng. */
+  chua_ket_noi:
+    "Chưa kết nối được tới hệ thống của xã. Bạn vẫn xem được phần giới thiệu. Hãy kiểm tra mạng, chờ ít phút rồi quét lại mã QR.",
+  dang_mo: "Đang mở kênh làm việc với xã…",
+  /** Cầu phiên chưa bật, xã chưa sẵn sàng, hoặc máy chủ không phát phiên — bấm lại không đổi được gì. */
+  chua_mo:
+    "Ứng dụng chưa mở được kênh làm việc với xã trên điện thoại này. Bạn vẫn xem được phần giới thiệu. Để phản ánh, hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã hoặc gọi điện thoại cho xã.",
+  thu_lai:
+    "Chưa mở được kênh làm việc với xã vì mạng yếu hoặc hệ thống đang bận. Hãy kiểm tra mạng rồi bấm “Đúng, tiếp tục” lần nữa.",
+  ngoai_zalo:
+    "Hãy mở ứng dụng này trong Zalo để làm việc với xã. Bạn vẫn xem được phần giới thiệu ở đây.",
+} as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * TIN TỨC CỦA XÃ — công khai, văn bản thuần
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const TIN_XA = {
+  tieu_de: "Tin tức của xã",
+  dang_tai: "Đang tải tin của xã…",
+  dang_tai_them: "Đang tải thêm tin…",
+  trong: "Hiện chưa có tin nào được đăng trên ứng dụng.",
+  nut_doc: "Đọc tin",
+  nut_xem_them: "Xem thêm tin",
+  nut_thu_lai: "Thử lại",
+  het_danh_sach: "Đã hiện hết tin của xã.",
+  ngay_dang: "Ngày đăng",
+  chuyen_muc: "Chuyên mục",
+  dang_tai_bai: "Đang mở tin…",
+  khong_thay: "Tin này không còn trên ứng dụng. Hãy bấm Quay lại để xem các tin khác.",
+  loi_mang: "Không tải được vì mạng yếu hoặc mất kết nối. Hãy kiểm tra mạng rồi bấm Thử lại.",
+  loi_may_chu: "Hệ thống của xã đang bận nên chưa tải được tin. Hãy chờ vài phút rồi bấm Thử lại.",
+  /** Tên miền trên mã bị từ chối giữa chừng — thử lại không đổi được gì. */
+  khong_hop_le: "Chưa tải được tin của xã. Hãy đóng ứng dụng rồi quét lại mã QR của xã.",
+} as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * DANH BẠ CÁN BỘ XÃ — công khai; chỉ người đã đồng ý công khai
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const DANH_BA = {
+  tieu_de: "Danh bạ cán bộ xã",
+  gioi_thieu: "Bấm vào một số điện thoại để gọi cho cán bộ ấy.",
+  dang_tai: "Đang tải danh bạ cán bộ…",
+  trong: "Hiện chưa có cán bộ nào được công khai số điện thoại trên ứng dụng. Bạn hãy đến trụ sở Ủy ban nhân dân xã để được hướng dẫn.",
+  chuc_vu: "Chức vụ",
+  bo_phan: "Bộ phận",
+  so_co_quan: "Điện thoại cơ quan",
+  di_dong: "Điện thoại di động",
+  goi: (so: string) => `Gọi ${so}`,
+  co_zalo: "Có dùng Zalo",
+  nut_thu_lai: "Thử lại",
+  loi_mang: "Không tải được vì mạng yếu hoặc mất kết nối. Hãy kiểm tra mạng rồi bấm Thử lại.",
+  loi_may_chu: "Hệ thống của xã đang bận nên chưa tải được danh bạ. Hãy chờ vài phút rồi bấm Thử lại.",
+  khong_hop_le: "Chưa tải được danh bạ của xã. Hãy đóng ứng dụng rồi quét lại mã QR của xã.",
+} as const;

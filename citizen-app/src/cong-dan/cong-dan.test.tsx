@@ -59,7 +59,9 @@ describe("nguồn phiên ViGov đóng — không một lời gọi mạng nào �
   });
 
   it("một tên dịch vụ ngoài bảng ra RỖNG, không ra `undefined/…` hay khoá của `Object.prototype`", () => {
-    for (const ten of ["identity", "toString", "__proto__", ""]) {
+    // `identity` từng đứng đầu danh sách này; nó vào bảng host ngày 27/09/2026 (màn xác nhận xã,
+    // danh bạ). `platform` giữ chỗ ấy: một dịch vụ CÓ THẬT mà Mini App không bao giờ được gọi thẳng.
+    for (const ten of ["platform", "toString", "__proto__", ""]) {
       expect(diaChiViGov(ten as "petitions", "/api/v1/x"), ten).toBe("");
     }
   });

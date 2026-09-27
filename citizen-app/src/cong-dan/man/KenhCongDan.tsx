@@ -1,14 +1,21 @@
 /**
  * Vỏ của kênh công dân: một màn chọn việc (gửi · phản ánh của tôi · tra cứu), rồi đúng màn ấy.
  *
- * Có mặt trong bản dựng duy nhất (27/09/2026). Chừng nào cầu phiên ViGov chưa có, mọi màn phía sau
- * nói "kênh chưa mở" — `api/phien-vigov.ts`.
+ * Có mặt trong bản dựng duy nhất (27/09/2026). Chừng nào chưa có phiên ViGov, ba màn phản ánh nói
+ * "kênh chưa mở" — `api/phien-vigov.ts`.
+ *
+ * HAI MÀN CÔNG KHAI (27/09/2026): "Tin tức của xã" và "Danh bạ cán bộ xã". Chúng cần TÊN MIỀN xã cho
+ * `?host=`, và nguồn DUY NHẤT của nó là `d` mà công dân đã xác nhận ở lần mở này (trong bộ nhớ của
+ * `App.tsx`). Không có tên miền — mở app không qua QR, hoặc app riêng của một xã (bundle không được
+ * mang giá trị theo xã, ADR 0047 điều kiện dừng #2) — thì hai lối vào BIẾN MẤT thay vì đoán một xã.
  */
 import { useState } from "react";
 
+import { DanhBaCanBoScreen } from "./DanhBaCanBoScreen";
 import { GuiPhanAnhScreen } from "./GuiPhanAnhScreen";
-import { CUA_TOI, GUI, QUAY_LAI, TRA_CUU } from "./noi-dung";
+import { CUA_TOI, DANH_BA, GUI, QUAY_LAI, TIN_XA, TRA_CUU } from "./noi-dung";
 import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
+import { TinTucXaScreen } from "./TinTucXaScreen";
 import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
 
 export const NHAN_KENH_CONG_DAN = "Phản ánh với xã";
@@ -27,13 +34,28 @@ type Man =
   | { kieu: "gui" }
   | { kieu: "cua-toi" }
   /** `tu_danh_sach`: mở từ "Phản ánh của tôi" — "Quay lại" về đúng danh sách ấy. */
-  | { kieu: "tra-cuu"; ma: string; tu_danh_sach: boolean };
+  | { kieu: "tra-cuu"; ma: string; tu_danh_sach: boolean }
+  | { kieu: "tin-tuc" }
+  | { kieu: "danh-ba" };
 
-export function KenhCongDan({ onDong }: { onDong: () => void }) {
+export function KenhCongDan({
+  onDong,
+  ten_mien = null,
+}: {
+  onDong: () => void;
+  /** Tên miền xã công dân đã xác nhận ở lần mở này, hoặc `null`. Chỉ làm khoá tra `?host=`. */
+  ten_mien?: string | null;
+}) {
   const [man, datMan] = useState<Man>({ kieu: "chon" });
   const veChon = () => datMan({ kieu: "chon" });
 
   if (man.kieu === "gui") return <GuiPhanAnhScreen onQuayLai={veChon} />;
+  if (man.kieu === "tin-tuc" && ten_mien !== null) {
+    return <TinTucXaScreen ten_mien={ten_mien} onQuayLai={veChon} />;
+  }
+  if (man.kieu === "danh-ba" && ten_mien !== null) {
+    return <DanhBaCanBoScreen ten_mien={ten_mien} onQuayLai={veChon} />;
+  }
 
   if (man.kieu === "cua-toi" || (man.kieu === "tra-cuu" && man.tu_danh_sach)) {
     // DANH SÁCH GIỮ NGUYÊN khi mở một phiếu: nó chỉ bị ẩn (`hidden`), không bị gỡ, nên "Quay lại"
@@ -81,6 +103,16 @@ export function KenhCongDan({ onDong }: { onDong: () => void }) {
       >
         {TRA_CUU.tieu_de}
       </button>
+      {ten_mien !== null && (
+        <>
+          <button type="button" className="cd-nut" onClick={() => datMan({ kieu: "tin-tuc" })}>
+            {TIN_XA.tieu_de}
+          </button>
+          <button type="button" className="cd-nut" onClick={() => datMan({ kieu: "danh-ba" })}>
+            {DANH_BA.tieu_de}
+          </button>
+        </>
+      )}
     </section>
   );
 }

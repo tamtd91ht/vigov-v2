@@ -132,6 +132,101 @@ export function docTraLoi(than: unknown): Phien | null {
   return { token, het_han: expiresAt };
 }
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * NHÁNH CẦU PHIÊN ViGov CỦA CÙNG TUYẾN — `POST /api/v1/sessions` khi `vihat-miniapp` bật cầu
+ * (ADR 0045 · ADR 0047 câu 7; `vihat-miniapp` `internal/httpapi/sessions.go:19-28`,
+ * `sessions_vigov.go:158-175`)
+ *
+ *   gửi : { "accessToken", "communeHostHint": "<tên miền xã>", "communeConfirmed": true }
+ *         — KHÔNG `phoneToken`: mở phiên sau khi xác nhận xã không xin số điện thoại (ADR 0045 câu 2)
+ *   nhận: 201 { "vigovSession": { "token"?, "expiresAt"?, "tenantDisplayName", "phoneVerified" } }
+ *   lỗi : 400 · 401 · 422 xã/app chưa sẵn sàng · 502 · 503 cầu tạm ngưng
+ *
+ * ⚠ HAI PHIÊN, HAI KHOÁ, KHÔNG BAO GIỜ LẪN. Phiếu thương mại nằm ở `token` GỐC thân trả lời (`docTraLoi`
+ *   ở trên); phiên ViGov nằm dưới `vigovSession`. `docTraLoiCauViGov` KHÔNG đọc `token` gốc — cầm nhầm
+ *   phiếu thương mại rồi gửi tới ViGov là đúng thứ ADR 0032 cấm. Và `docTraLoi` không đọc `vigovSession`:
+ *   hành vi của khối đăng nhập (Tư vấn · Yêu cầu của tôi) giữ nguyên.
+ *
+ * ⚠ CẦU TẮT (hôm nay, ADR 0045 UNKNOWN #2): nhánh cũ của máy chủ đòi `phoneToken` và trả 400 cho thân
+ *   này. Đó là đường BÌNH THƯỜNG hôm nay, không phải lỗi nối dây — `goi-may-chu.ts` đọc nó là "cầu tắt".
+ *
+ * ⚠ TÊN MIỀN XÃ LÀ GỢI Ý, KHÔNG PHẢI THAM CHIẾU XÃ: máy chủ ViGov phân giải nó lúc xác nhận (ADR 0047
+ *   câu 3). Nó rời khỏi máy trong thân này — nói ra ở `TRUONG_GUI_DI_CAU_VIGOV` ngay dưới.
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+export type YeuCauCauViGov = {
+  /** Access token của phiên Zalo (`getAccessToken`). */
+  ma_truy_cap: string;
+  /** Tên miền xã công dân vừa xác nhận trên màn xác nhận. */
+  ten_mien_xa: string;
+};
+
+/**
+ * Ba trường nhánh cầu đưa ra khỏi máy. CHƯA đi vào chính sách quyền riêng tư hay hồ sơ nộp Zalo:
+ * `content/ket-xuat-ho-so.ts` chỉ sinh từ `TRUONG_GUI_DI_PHIEN` — việc nối bảng này vào đó là quyết
+ * định câu chữ pháp lý, không phải của lượt dựng này. Bảng đứng đây, khoá hai chiều với
+ * `thanYeuCauCauViGov` (`cau-vigov.test.ts`), để ngày nối nó vào văn bản nó đúng bằng thân thật.
+ */
+export const TRUONG_GUI_DI_CAU_VIGOV: readonly TruongGuiDi[] = [
+  {
+    khoa: "accessToken",
+    trong_chinh_sach:
+      "mã phiên Zalo của bạn — để máy chủ mở phiên làm việc với xã bạn vừa xác nhận; KHÔNG chứa tên hay ảnh đại diện",
+  },
+  {
+    khoa: "communeHostHint",
+    trong_chinh_sach: "tên miền của xã trên mã QR bạn vừa quét — để máy chủ biết bạn muốn làm việc với xã nào",
+  },
+  {
+    khoa: "communeConfirmed",
+    trong_chinh_sach: "việc bạn đã bấm xác nhận đúng xã — máy chủ không mở phiên với xã nếu bạn chưa xác nhận",
+  },
+];
+
+/** `communeConfirmed` là HẰNG `true`: thân này chỉ được dựng sau cú bấm xác nhận. */
+export function thanYeuCauCauViGov(yc: YeuCauCauViGov): string {
+  return JSON.stringify({
+    accessToken: yc.ma_truy_cap,
+    communeHostHint: yc.ten_mien_xa,
+    communeConfirmed: true,
+  });
+}
+
+/** Phiên ViGov như cầu trả về, đã đổi sang tên của ta. Không có mã xã, không có tên miền. */
+export type PhienViGovQuaCau = {
+  token: string;
+  het_han: string;
+  ten_xa: string;
+  da_xac_thuc_so: boolean;
+};
+
+/**
+ * Thân 201 → phiên ViGov, `"khong-co-phien"` khi máy chủ trả lời thật rằng không có phiên nào dùng
+ * được, hoặc `null` khi sai khuôn.
+ *
+ *   • không có `vigovSession`           → cầu tắt (một bản máy chủ cũ trả phiếu thương mại)
+ *   • `vigovSession` không có `token`    → phiên không xã; hợp đồng cố ý không phát bearer
+ *   • `tenantDisplayName` rỗng           → "không xã nào" — không bao giờ thay bằng tên màn xác nhận
+ */
+export function docTraLoiCauViGov(than: unknown): PhienViGovQuaCau | "khong-co-phien" | null {
+  if (typeof than !== "object" || than === null) return null;
+  const { vigovSession } = than as Record<string, unknown>;
+  if (vigovSession === undefined) return "khong-co-phien";
+  if (typeof vigovSession !== "object" || vigovSession === null) return null;
+  const v = vigovSession as Record<string, unknown>;
+  if (typeof v.tenantDisplayName !== "string" || typeof v.phoneVerified !== "boolean") return null;
+  if (v.token !== undefined && typeof v.token !== "string") return null;
+  if (v.expiresAt !== undefined && typeof v.expiresAt !== "string") return null;
+  const token = typeof v.token === "string" ? v.token : "";
+  if (token === "" || v.tenantDisplayName.trim() === "") return "khong-co-phien";
+  return {
+    token,
+    het_han: typeof v.expiresAt === "string" ? v.expiresAt : "",
+    ten_xa: v.tenantDisplayName,
+    da_xac_thuc_so: v.phoneVerified,
+  };
+}
+
 /**
  * HOST ĐỌC LÚC DỰNG, KHÔNG PHẢI LÚC CHẠY — nay ở `api/dia-chi.ts`, một chỗ cho cả hai hợp đồng.
  *

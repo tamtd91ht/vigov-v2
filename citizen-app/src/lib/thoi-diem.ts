@@ -31,3 +31,23 @@ export function thoiDiemVN(iso: string): string | null {
 }
 
 export const THOI_DIEM_KHONG_DOC_DUOC = "Chưa rõ thời điểm";
+
+/**
+ * Một NGÀY máy chủ gửi dạng `YYYY-MM-DD` (ví dụ `published_on` của tin xã) → `dd/MM/yyyy`.
+ *
+ * ⚠ KHÔNG ĐI QUA `thoiDiemVN`. Một ngày không có giờ nên không có múi: `new Date("2026-09-27")` đọc
+ * nó là nửa đêm UTC, và cộng +07 sẽ in ra "27/09/2026 07:00" — một giờ không ai đăng tin lúc ấy.
+ * Chỉ đổi chỗ ba phần; ngày không có thật (`2026-02-30`) là `null`, không phải một ngày khác.
+ */
+export function ngayVN(ngay: string): string | null {
+  const khop = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ngay);
+  if (khop === null) return null;
+  const [, nam, thang, ngay_] = khop as unknown as [string, string, string, string];
+  const d = new Date(Date.UTC(Number(nam), Number(thang) - 1, Number(ngay_)));
+  if (d.getUTCFullYear() !== Number(nam) || d.getUTCMonth() !== Number(thang) - 1 || d.getUTCDate() !== Number(ngay_)) {
+    return null;
+  }
+  return `${ngay_}/${thang}/${nam}`;
+}
+
+export const NGAY_KHONG_DOC_DUOC = "Chưa rõ ngày";

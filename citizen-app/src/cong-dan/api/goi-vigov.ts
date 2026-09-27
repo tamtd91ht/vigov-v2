@@ -13,6 +13,11 @@
  *      mọi yêu cầu lại. Thứ tự hai cổng vì thế là bất biến: có host mà không có phiên thì vẫn
  *      không gửi gì.
  *
+ * ⚠ BA TUYẾN CÔNG KHAI (27/09/2026) — tra xã theo tên miền, danh bạ cán bộ, tin của xã — KHÔNG đi
+ *   qua cổng phiên và KHÔNG mang bearer: chúng chỉ trả thứ xã đã công bố (`hop-dong-cong-khai.ts`).
+ *   Cổng của chúng là TÊN MIỀN: không đúng khuôn (`lib/launch-params.ts` `laTenMien`) thì không gọi.
+ *   Chúng đi qua CÙNG MỘT `fetch(` ở `goi` bên dưới — tệp này vẫn chỉ có một chỗ gọi mạng.
+ *
  * ⚠ BEARER CHỈ ĐẾN TỪ `layPhienViGov()`. Không hàm nào ở đây nhận token qua tham số — một tham số
  * là một khe để ai đó nhét phiếu phiên của `vihat-miniapp` vào, và phiếu ấy KHÔNG phải phiên ViGov.
  *
@@ -28,8 +33,23 @@ import {
   type PhieuCuaToi,
   type TrangPhieuCuaToi,
 } from "./hop-dong-phan-anh";
+import {
+  type BaiTinXa,
+  type CanBoCongKhai,
+  diaChiBaiTin,
+  diaChiDanhBa,
+  diaChiTinXa,
+  diaChiTraXa,
+  docBaiTin,
+  docDanhBa,
+  docTrangTinXa,
+  docXa,
+  type TrangTinXa,
+  type XaTraDuoc,
+} from "./hop-dong-cong-khai";
 import type { LanGui } from "./lan-gui";
 import { layPhienViGov } from "./phien-vigov";
+import { laTenMien } from "../../lib/launch-params";
 
 /**
  * Mỗi nhánh là một VIỆC NGƯỜI DÂN PHẢI LÀM khác nhau.
@@ -85,17 +105,16 @@ function moCong(dia_chi: string): { token: string; dia_chi: string } | NhanhKhon
  */
 async function goi<T>(
   dia_chi: string,
-  tuy_chon: { method: "GET" | "POST"; token: string; khoa?: string; than?: string },
+  /** `token` VẮNG MẶT chỉ ở ba tuyến công khai — xem khối đầu tệp. */
+  tuy_chon: { method: "GET" | "POST"; token?: string; khoa?: string; than?: string },
   doc: (than: unknown) => T | null,
   khi_404: NhanhKhongThanh,
 ): Promise<{ kieu: "xong"; gia_tri: T } | NhanhKhongThanh> {
   const bo_dieu_khien = new AbortController();
   const dong_ho = setTimeout(() => bo_dieu_khien.abort(), HAN_CHO_MS);
 
-  const tieu_de: Record<string, string> = {
-    Accept: "application/json",
-    Authorization: `Bearer ${tuy_chon.token}`,
-  };
+  const tieu_de: Record<string, string> = { Accept: "application/json" };
+  if (tuy_chon.token !== undefined) tieu_de["Authorization"] = `Bearer ${tuy_chon.token}`;
   if (tuy_chon.than !== undefined) tieu_de["Content-Type"] = "application/json";
   if (tuy_chon.khoa !== undefined) tieu_de["Idempotency-Key"] = tuy_chon.khoa;
 
@@ -190,4 +209,77 @@ export async function phanAnhCuaToi(con_tro: string): Promise<KetQuaDanhSach> {
   if (kq.kieu === "xong") return { kieu: "xong", trang: kq.gia_tri };
   if (kq.kieu === "dang-xu-ly-truoc" || kq.kieu === "kenh-chua-mo") return { kieu: "loi-may-chu" };
   return kq;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * BA TUYẾN CÔNG KHAI THEO TÊN MIỀN XÃ — không phiên, không bearer
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Mỗi nhánh là một câu khác nhau trên màn:
+ *
+ *   `xong`          200, đúng khuôn
+ *   `khong-hop-le`  tên miền sai khuôn (KHÔNG gọi mạng) hoặc 400
+ *   `khong-thay`    404 — chỉ tuyến chi tiết tin có
+ *   `tam-ngung`     503 — nền tảng không phân giải được lúc này
+ *   `loi-may-chu`   500, mã lạ, thân sai khuôn
+ *   `loi-mang`      mất mạng, quá hạn chờ
+ *   `chua-cau-hinh` bảng host thiếu dòng — không gọi
+ */
+export type KetQuaCongKhai<T> =
+  | { kieu: "xong"; gia_tri: T }
+  | { kieu: "khong-hop-le" }
+  | { kieu: "khong-thay" }
+  | { kieu: "tam-ngung" }
+  | { kieu: "loi-may-chu" }
+  | { kieu: "loi-mang" }
+  | { kieu: "chua-cau-hinh" };
+
+async function goiCongKhai<T>(
+  ten_mien: string,
+  dia_chi: (ten_mien: string) => string,
+  doc: (than: unknown) => T | null,
+): Promise<KetQuaCongKhai<T>> {
+  // Cổng TÊN MIỀN đứng trước cổng địa chỉ: không có tên miền đúng khuôn thì không một byte nào đi ra.
+  if (!laTenMien(ten_mien)) return { kieu: "khong-hop-le" };
+  const url = dia_chi(ten_mien);
+  if (url === "") return { kieu: "chua-cau-hinh" };
+  const kq = await goi(url, { method: "GET" }, doc, { kieu: "khong-thay" });
+  switch (kq.kieu) {
+    case "xong":
+    case "khong-hop-le":
+    case "khong-thay":
+    case "loi-may-chu":
+    case "loi-mang":
+      return kq;
+    case "kenh-chua-mo":
+      return { kieu: "tam-ngung" };
+    default:
+      // 401 / 409 không có trong hợp đồng của ba tuyến công khai: tuyến lạc ở cụm.
+      return { kieu: "loi-may-chu" };
+  }
+}
+
+/**
+ * Tên và tỉnh của xã ứng với tên miền trên QR — cho màn xác nhận. Mảng rỗng là "không xã nào".
+ * Tên miền là KHOÁ TRA; kết quả không cấp gì, và không được nhớ làm xã của phiên.
+ */
+export function traXaTheoTenMien(ten_mien: string): Promise<KetQuaCongKhai<readonly XaTraDuoc[]>> {
+  return goiCongKhai(ten_mien, diaChiTraXa, docXa);
+}
+
+/** Danh bạ cán bộ xã đã công khai. Không ghi log gì: danh bạ mang số di động cá nhân. */
+export function danhBaCanBoXa(ten_mien: string): Promise<KetQuaCongKhai<readonly CanBoCongKhai[]>> {
+  return goiCongKhai(ten_mien, diaChiDanhBa, docDanhBa);
+}
+
+/** Một trang tin của xã, mới nhất trước. `con_tro` rỗng = trang đầu. */
+export function tinCuaXa(ten_mien: string, con_tro: string): Promise<KetQuaCongKhai<TrangTinXa>> {
+  return goiCongKhai(ten_mien, (t) => diaChiTinXa(t, con_tro), docTrangTinXa);
+}
+
+/** Toàn văn một tin. 404 là MỘT câu: tin chưa đăng, đã gỡ, hay của xã khác trả như nhau. */
+export function baiTinCuaXa(ten_mien: string, id: string): Promise<KetQuaCongKhai<BaiTinXa>> {
+  if (id === "") return Promise.resolve({ kieu: "khong-thay" });
+  return goiCongKhai(ten_mien, (t) => diaChiBaiTin(t, id), docBaiTin);
 }

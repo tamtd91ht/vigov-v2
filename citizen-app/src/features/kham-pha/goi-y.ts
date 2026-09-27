@@ -1,3 +1,5 @@
+import { NGUON_CHON_SAN } from "../../lib/launch-params";
+
 /**
  * LỚP KHÁM PHÁ (ADR 0005 · 0044 · 0047) — quy tắc đọc một đường liên kết, tách hẳn khỏi màn hình.
  *
@@ -33,8 +35,10 @@ export type XaGoiY = { readonly ten: string; readonly tinh: string };
  * Người đang đứng ở trụ sở xã và vừa quét mã QR dán trên bảng tin thì một chạm xác nhận là đủ.
  * Người mở một liên kết ai đó chuyển cho thì không: một liên kết chuyển tay nói lên ý định của
  * NGƯỜI GỬI, không nói gì về người nhận — nên nó không mở màn xác nhận, và app mở phần giới thiệu.
+ *
+ * Bảng nguồn tin được nằm ở `lib/launch-params.ts` (`NGUON_CHON_SAN`), vì chính nó quyết app có đi
+ * hỏi máy chủ hay không. Ở đây đọc lại cùng bảng ấy — một nguồn, không chép.
  */
-const NGUON_CHON_SAN = new Set(["qr", "zns"]);
 
 export type GoiY =
   /** Nguồn đủ tin VÀ máy chủ đã tra ra xã: một chạm xác nhận. */
@@ -51,8 +55,8 @@ export type GoiY =
  *   2. Máy chủ không tra ra xã (`null`) → không gợi ý. **Không bao giờ hiện một cái tên đoán ra**:
  *      công dân xác nhận theo tên xã, nên một tên sai ở bước này là một hồ sơ gửi sang cơ quan khác.
  *
- * `xa_tra_duoc` là KẾT QUẢ CỦA MÁY CHỦ, không phải tham số trên QR. Hôm nay chưa có lời gọi nào
- * nối vào (`App.tsx` truyền `null`), nên hàm này luôn trả "không có" và app mở phần giới thiệu.
+ * `xa_tra_duoc` là KẾT QUẢ CỦA MÁY CHỦ (`GET /api/v1/communes?host=`, gọi từ
+ * `cong-dan/man/XacNhanXa.tsx`), không phải tham số trên QR.
  */
 export function phanGiaiGoiY(nguon: string, xa_tra_duoc: XaGoiY | null): GoiY {
   if (xa_tra_duoc === null) return { kieu: "khong-co" };

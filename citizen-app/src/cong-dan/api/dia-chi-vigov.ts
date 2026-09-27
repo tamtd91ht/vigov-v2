@@ -6,18 +6,26 @@
  * `petitions.api.vigov.vn`. `<service>.api-stg.vigov.vn` có trong quy hoạch nhưng chủ dự án chỉ
  * chạy prod — không có dòng staging ở đây, và thêm một dòng như thế là quyết định của chủ dự án.
  *
- * ⚠ CHỈ `petitions` HÔM NAY. `identity` sẽ vào bảng này cùng lúc với cầu phiên công dân ViGov
- * (`phien-vigov.ts`, mục sổ `citizen-app/cau-phien-cong-dan-vigov`) — không sớm hơn: một host
- * không có tuyến nào gọi tới là một host không ai kiểm được nó đúng hay sai.
+ * BA DỊCH VỤ, MỖI DÒNG CÓ TUYẾN GỌI TỚI (27/09/2026) — một host không có tuyến nào gọi tới là một
+ * host không ai kiểm được nó đúng hay sai:
+ *
+ *   `petitions` — `/api/v1/my-citizen-reports…` (cần phiên ViGov)
+ *   `identity`  — `/api/v1/communes?host=` (màn xác nhận xã) · `/api/v1/commune-staff?host=` (danh bạ)
+ *   `comms`     — `/api/v1/commune-news?host=` · `/api/v1/commune-news/{id}?host=` (tin của xã)
+ *
+ *   Ba tuyến của `identity`/`comms` là CÔNG KHAI (không bearer). `?host=` mang tên miền xã trên QR
+ *   làm KHOÁ TRA cho máy chủ phân giải; nó không phải "client chọn xã" — không phiên nào, không bản
+ *   ghi nào được ghi theo nó (ADR 0047 câu 3).
  *
  * ⚠ ĐÂY LÀ HẰNG SỐ TOÀN NỀN TẢNG, KHÔNG PHẢI GIÁ TRỊ CỦA MỘT XÃ — vì thế nó được phép nằm trong mã
  * (luật 1, bất biến 10 chỉ cấm GIÁ TRỊ RIÊNG TỪNG XÃ ở đó). Host nói "dịch vụ nào", không nói "xã
  * nào": mọi xã gọi cùng một host, và xã của yêu cầu do PHIÊN quyết định ở máy chủ (ADR 0005), không
  * do Host. Đổi một xã sang host khác ở đây là cho client chọn xã — đúng thứ luật 1, cấm #2 chặn.
  *
- * ⚠ HOST KHÔNG BAO GIỜ LÀ LÝ DO MỘT YÊU CẦU ĐI RA. `goi-vigov.ts` mở cổng PHIÊN trước cổng địa chỉ:
- * hôm nay `layPhienViGov()` trả `null`, nên có host rồi mà vẫn không một byte nào rời máy
- * (`cong-dan.test.tsx` khẳng định điều đó trên mã thật).
+ * ⚠ HOST KHÔNG BAO GIỜ LÀ LÝ DO MỘT YÊU CẦU ĐI RA. Tuyến `petitions` đi qua cổng PHIÊN trước cổng
+ * địa chỉ (`goi-vigov.ts`): không phiên thì có host rồi vẫn không một byte nào rời máy
+ * (`cong-dan.test.tsx`). Ba tuyến công khai đi qua cổng TÊN MIỀN thay cho cổng phiên: không có một
+ * tên miền đúng khuôn, lấy từ đường liên kết của lần mở này, thì không gọi.
  *
  * ⚠ KHÔNG DÙNG LẠI `VIGOV_API_HOST`. Mặc cho cái tên, biến ấy là địa chỉ của `vihat-miniapp` —
  * backend THƯƠNG MẠI mà khối đăng nhập và bề mặt yêu cầu gọi (`api/dia-chi.ts`,
@@ -27,10 +35,12 @@
  * Chuỗi RỖNG vẫn là tín hiệu dừng (`chua-cau-hinh`) mà `goi-vigov.ts` đọc trước mọi lời gọi: một
  * dòng để trống, hoặc một tên dịch vụ không có trong bảng, là KHÔNG gọi — không bao giờ là đoán.
  */
-export type DichVuViGov = "petitions";
+export type DichVuViGov = "petitions" | "identity" | "comms";
 
 const MAY_CHU_THEO_DICH_VU: Readonly<Record<DichVuViGov, string>> = {
   petitions: "https://petitions.api.vigov.vn",
+  identity: "https://identity.api.vigov.vn",
+  comms: "https://comms.api.vigov.vn",
 };
 
 /** Địa chỉ đầy đủ của một tuyến ViGov trên host của dịch vụ sở hữu nó, hoặc chuỗi RỖNG. */
