@@ -112,6 +112,37 @@ spec:
       ports:
         - { port: 8080, protocol: TCP }
 ---
+# 7. Đường RA của RIÊNG petitions: kho tệp MinIO và máy quét clamd (ADR 0052, 📎 đính kèm nhật
+# ký nhiệm vụ — b37ec2d). Người dùng yêu cầu mở 29/09/2026.
+#
+# CHỈ pod petitions — dịch vụ duy nhất đang lưu tệp. Mở ở quy tắc 4 (`podSelector: {}`) là cho
+# mọi dịch vụ tới kho tệp, trong khi IAM của từng dịch vụ chỉ có `…/<service>/*`; biên mạng
+# không nên rộng hơn biên quyền.
+#
+# ⚠ ĐÍCH TẠM MỞ, cùng loại nợ với quy tắc 4 (`_chung/netpol-duong-ra-tam-mo`): chưa biết MinIO
+# và clamd chạy trong cụm hay ngoài cụm, nên cho cả hai — mọi namespace (clamd là Service k8s)
+# và mọi địa chỉ — nhưng GIỮ giới hạn CỔNG. Thay bằng namespace / dải mạng thật khi biết.
+#
+# CỔNG: 9000 là cổng API mặc định của MinIO; 3310 là cổng mặc định của clamd. Nếu
+# OBJECT_STORAGE_ENDPOINT hay MALWARE_SCANNER_ADDRESS dùng cổng khác, sửa ở đây — sai cổng thì
+# mọi lần tải lên trả 503 "chưa kiểm được" dù pod xanh.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cho-phep-petitions-ra-kho-tep
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: petitions }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {}
+        - ipBlock:
+            cidr: 0.0.0.0/0       # ← NỢ: thay bằng dải mạng thật của MinIO / clamd
+      ports:
+        - { port: 9000, protocol: TCP }
+        - { port: 3310, protocol: TCP }
+---
 # 6. Đường RA của RIÊNG web-admin: tới REST 8080 của các pod trong namespace.
 #
 # Tách khỏi quy tắc 4 vì quy tắc 4 áp cho MỌI pod (`podSelector: {}`) — mở 8080 ở đó là cho
