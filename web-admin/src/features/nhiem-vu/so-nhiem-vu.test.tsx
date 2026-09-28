@@ -53,6 +53,9 @@ import {
   TIEU_DE_KHOI_VAN_BAN,
   CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN,
   NHAN_NUT_TRA_LAI,
+  REOPEN_BUTTON,
+  REOPEN_REASON_LABEL,
+  reopenNote,
   SAP_XEP_MAC_DINH,
   cauLoiDanhBaLanhDao,
   ghiChuTraLai,
@@ -81,6 +84,7 @@ import {
   type TrangThaiTai,
 } from "./so-nhiem-vu";
 import { KhoiNhatKyNhiemVu, type TaiNhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
+import { serverTransitions } from "./task-transitions.fixture";
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không.
@@ -105,11 +109,15 @@ function nhuTrongHTML(s: string): string {
 const LANH_DAO = "CB-2026-7K3M9Q";
 const NGUOI_KHAC = "CB-2026-0P4X1Z";
 
+/**
+ * A row as the server returns it. `allowed_transitions` follows `status` (the server's list,
+ * `task-transitions.fixture.ts`) unless the case sets it — the drawer draws only what the row carries.
+ */
 function nhiemVu(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
   return {
     code: "NV19",
     child_count: 0,
-    allowed_transitions: [],
+    allowed_transitions: serverTransitions(sua.status ?? "dang-thuc-hien"),
     updated_at: "2026-06-01T02:00:00Z",
     type: "theo-van-ban",
     bloc: "khoi-dang",
@@ -474,8 +482,11 @@ describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thu�
   });
 });
 
-describe("vòng đời §6 — chỉ vẽ bước sơ đồ có", () => {
-  it("`dang-thuc-hien` mở đúng hai lối, KHÔNG có lối nhảy cóc sang `hoan-thanh`", () => {
+describe("vòng đời — chỉ vẽ bước máy chủ liệt kê", () => {
+  it("`dang-thuc-hien`: Chờ duyệt, Hoàn thành (thẳng, cần `task.approve`), Tạm dừng", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (lần hai): bài này ghim "KHÔNG có lối nhảy cóc sang
+    // `hoan-thanh`" theo chuỗi chặt §6. Chủ đầu tư chọn bảng require: `dang-thuc-hien` → `hoan-thanh`
+    // có thật (`nhiem_vu.go:100`), và danh sách nay đến từ máy chủ trên chính dòng (3b2330b).
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: bài này từng canh ba lối, kể cả `Chuyển sang Chuyển tiếp`.
     // Chủ đầu tư quyết định Chuyển tiếp là giao CÙNG nhiệm vụ cho nơi khác (khối §5.7,
     // `POST …/assignment`), và `…/status` nay trả 400 cho đích ấy (764bb92) — một nút ở đây là một
@@ -484,13 +495,16 @@ describe("vòng đời §6 — chỉ vẽ bước sơ đồ có", () => {
     expect(html).toContain("Chuyển sang Chờ duyệt");
     expect(html).toContain("Chuyển sang Tạm dừng");
     expect(html).not.toContain("Chuyển sang Chuyển tiếp");
-    expect(html).not.toContain("Chuyển sang Hoàn thành");
+    expect(html).toContain("Chuyển sang Hoàn thành");
   });
 
-  it("`hoan-thanh` là ngõ cụt: không nút nào, và câu nói rõ đó KHÔNG phải chuyện quyền", () => {
+  it("`hoan-thanh`: không nút thường nào — lối ra duy nhất là ô mở lại có lý do", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: bài này ghim `hoan-thanh` là ngõ cụt ("không có lối ra"). Máy
+    // chủ nay liệt kê bước mở lại (`nhiem_vu.go:104`); nó đi qua ô lý do, không qua hàng nút.
     const html = veChiTiet({ status: "hoan-thanh", completed_at: "2026-06-25T02:00:00Z" });
     expect(html).not.toContain("Chuyển sang");
-    expect(html).toContain("không có lối ra khỏi trạng thái này");
+    expect(html).not.toContain("không liệt kê lối ra nào");
+    expect(html).toContain('id="ly-do-mo-lai"');
   });
 
   it("bước `hoan-thanh` VẪN HIỆN dù có thể còn việc con — máy chủ mới là nơi liệt kê mã", () => {
@@ -1591,7 +1605,7 @@ describe("`Trả lại để làm tiếp` — chỉ ở `cho-duyet`, chỉ với
 
   it("thành phần `KhoiTraLai` vẽ riêng: đúng một ô, một nút khoá lúc đầu", () => {
     const html = renderToStaticMarkup(
-      <KhoiTraLai nhanTT={BANG_NHAN_MAC_DINH} dangGui={false} gui={() => {}} />,
+      <KhoiTraLai kind="return" nhanTT={BANG_NHAN_MAC_DINH} dangGui={false} gui={() => {}} />,
     );
     expect(html.split('id="ly-do-tra-lai"').length - 1).toBe(1);
     expect(html).toContain('maxLength="5000"');
@@ -1846,8 +1860,12 @@ describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ 
     expect(Object.values(q).every((v) => v === false)).toBe(true);
   });
 
-  it("`task.approve` mà thiếu `task.update`: vẫn KHÔNG hoàn thành được — cổng tuyến là `task.update`", () => {
-    expect(quyenNhiemVu([QUYEN_DUYET_HOAN_THANH_NHIEM_VU]).duyetHoanThanh).toBe(false);
+  it("`duyetHoanThanh` là `task.approve` MỘT MÌNH — cổng dòng là việc của `canMoveTask`", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: ca này ghim `false` (cổng tuyến là `task.update`). Từ ea55113 cổng
+    // tuyến `…/status` là `task.read` và dòng nhận NGƯỜI THỰC HIỆN không cần `task.update`, nên người
+    // thực hiện cầm `task.approve` duyệt được. Người không phải người thực hiện, thiếu `task.update`,
+    // vẫn không thấy khối — xem nhóm "người thực hiện" bên dưới.
+    expect(quyenNhiemVu([QUYEN_DUYET_HOAN_THANH_NHIEM_VU]).duyetHoanThanh).toBe(true);
   });
 
   it("chỉ đọc: không khối chuyển trạng thái, không ô đề nghị lùi hạn, không xoá, không ✎ Sửa", () => {
@@ -1869,8 +1887,10 @@ describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ 
   });
 
   it("có `task.update`, thiếu `task.approve`: các bước khác còn, bước Hoàn thành ẩn KÈM câu nói vì sao", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: ca này đứng ở `cho-duyet`, nơi máy chủ nay không còn liệt kê
+    // `tam-dung`. `dang-thuc-hien` liệt kê cả `tam-dung` lẫn `hoan-thanh` — đúng hình ca cần.
     const html = veChiTiet(
-      { status: "cho-duyet" },
+      { status: "dang-thuc-hien" },
       NGUOI_KHAC,
       { pha: "dangTai" },
       quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]),
@@ -1916,5 +1936,84 @@ describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ 
   it("`+ Giao việc mới` đứng sau `task.create` — không suy ra từ `task.update`", () => {
     expect(quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]).giaoViec).toBe(false);
     expect(quyenNhiemVu([QUYEN_TAO_NHIEM_VU]).giaoViec).toBe(true);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * W1 (28/09/2026) — danh sách bước của MÁY CHỦ, người thực hiện tự đổi trạng thái, mở lại
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("khối Chuyển trạng thái — người thực hiện, danh sách máy chủ, mở lại", () => {
+  const NGUOI_THUC_HIEN = "CB-2026-3H8N2W"; // `assignee` of the default row
+  const KHONG_KHOA = quyenNhiemVu([]);
+  const CHI_DUYET = quyenNhiemVu([QUYEN_DUYET_HOAN_THANH_NHIEM_VU]);
+  const Q_CAP_NHAT = quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]);
+
+  it("ĐƯỢC — người thực hiện, KHÔNG có `task.update`: khối hiện, đúng các bước máy chủ liệt kê", () => {
+    const html = veChiTiet({ status: "dang-thuc-hien" }, NGUOI_THUC_HIEN, { pha: "dangTai" }, KHONG_KHOA);
+    expect(html).toContain("<h4>Chuyển trạng thái</h4>");
+    expect(html).toContain("Chuyển sang Chờ duyệt");
+    expect(html).toContain("Chuyển sang Tạm dừng");
+    expect(html).not.toContain("Chuyển sang Hoàn thành");
+    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
+  });
+
+  it("BỊ TỪ CHỐI — không phải người thực hiện, không `task.update`: không khối, kể cả có `task.approve`", () => {
+    for (const q of [KHONG_KHOA, CHI_DUYET]) {
+      const html = veChiTiet({ status: "dang-thuc-hien" }, NGUOI_KHAC, { pha: "dangTai" }, q);
+      expect(html).not.toContain("<h4>Chuyển trạng thái</h4>");
+      expect(html).not.toContain("Chuyển sang");
+      expect(html).not.toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
+    }
+  });
+
+  it("BỊ TỪ CHỐI — phiên chưa đọc (mã rỗng) trên việc CHƯA phân công: không khớp, không khối", () => {
+    const html = veChiTiet({ status: "dang-thuc-hien", assignee: "" }, "", { pha: "dangTai" }, KHONG_KHOA);
+    expect(html).not.toContain("<h4>Chuyển trạng thái</h4>");
+  });
+
+  it("chỉ vẽ bước MÁY CHỦ liệt kê: danh sách rỗng ⇒ không nút nào, và câu nói vì sao", () => {
+    const html = veChiTiet({ status: "dang-thuc-hien", allowed_transitions: [] }, NGUOI_KHAC, { pha: "dangTai" }, DU_QUYEN);
+    expect(html).not.toContain("Chuyển sang");
+    expect(html).toContain("Máy chủ không liệt kê lối ra nào khỏi trạng thái này.");
+  });
+
+  it("`Tiếp tục` sau tạm dừng: đúng ba bước máy chủ trả, không còn `Chờ duyệt`", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: màn hình từng hiện bốn lối (kể cả `cho-duyet`) và để máy chủ
+    // từ chối ba lối sai theo luật "trạng thái trước lúc dừng". Luật ấy đã bỏ; danh sách là của máy chủ.
+    const html = veChiTiet({ status: "tam-dung" }, NGUOI_KHAC, { pha: "dangTai" }, Q_CAP_NHAT);
+    expect(html).toContain("Chuyển sang Mới giao");
+    expect(html).toContain("Chuyển sang Đã tiếp nhận");
+    expect(html).toContain("Chuyển sang Đang thực hiện");
+    expect(html).not.toContain("Chuyển sang Chờ duyệt");
+  });
+
+  it("`hoan-thanh` + `task.approve`: ô MỞ LẠI với lý do bắt buộc, nút khoá khi trống — không nút thường", () => {
+    const html = veChiTiet(
+      { status: "hoan-thanh", completed_at: "2026-06-25T02:00:00Z" },
+      NGUOI_KHAC,
+      { pha: "dangTai" },
+      DU_QUYEN,
+    );
+    expect(html).toContain(`<h4>${REOPEN_BUTTON}</h4>`);
+    expect(html).toContain(`<label for="ly-do-mo-lai">${REOPEN_REASON_LABEL}</label>`);
+    expect(html).toMatch(/<textarea id="ly-do-mo-lai"[^>]*required=""/);
+    expect(html).toMatch(new RegExp(`<button type="submit" class="nut-phu" disabled="">${REOPEN_BUTTON}</button>`));
+    expect(html).toContain(nhuTrongHTML(reopenNote(BANG_NHAN_MAC_DINH)));
+    // Không phải bước trả lại, và không phải một nút `Chuyển sang …` gửi lý do rỗng.
+    expect(html).not.toContain('id="ly-do-tra-lai"');
+    expect(html).not.toContain("Chuyển sang Đang thực hiện");
+  });
+
+  it("`hoan-thanh`, THIẾU `task.approve`: không ô mở lại — và câu nói vì sao", () => {
+    const html = veChiTiet({ status: "hoan-thanh" }, NGUOI_KHAC, { pha: "dangTai" }, Q_CAP_NHAT);
+    expect(html).not.toContain('id="ly-do-mo-lai"');
+    expect(html).not.toContain(REOPEN_BUTTON);
+    expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_HOAN_THANH));
+  });
+
+  it("người thực hiện cầm `task.approve` (không `task.update`): mở lại được việc của mình", () => {
+    const html = veChiTiet({ status: "hoan-thanh" }, NGUOI_THUC_HIEN, { pha: "dangTai" }, CHI_DUYET);
+    expect(html).toContain('id="ly-do-mo-lai"');
   });
 });

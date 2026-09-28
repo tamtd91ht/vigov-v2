@@ -194,10 +194,15 @@ describe("gate — `task.assign` AND a task that is not terminal, both direction
     }
   });
 
-  it("denied on a terminal task, whatever the keys — and without the key, everywhere", () => {
+  it("denied on a finished task, whatever the keys — and without the key, everywhere", () => {
     expect(canShowAssignment(WITH, "hoan-thanh")).toBe(false);
-    expect(canShowAssignment(WITH, "chuyen-tiep")).toBe(false);
     expect(canShowAssignment(WITHOUT, "dang-thuc-hien")).toBe(false);
+  });
+
+  it("an old `chuyen-tiep` row is NOT finished — the block shows (server `CheckAssignable`)", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this pinned `chuyen-tiep` as terminal (false). The server now
+    // moves such rows on and refuses assignment only on `hoan-thanh` (`task_assignment.go:121-126`).
+    expect(canShowAssignment(WITH, "chuyen-tiep")).toBe(true);
   });
 });
 
@@ -266,20 +271,27 @@ describe("the drawer — block present / absent, and the stepper's `Chuyển ti�
     expect(html).not.toContain(BLOCK_MARK);
   });
 
-  it("an OLD `chuyen-tiep` row: its label still renders, lit; terminal — no block, no moves", () => {
+  it("an OLD `chuyen-tiep` row: its label still renders, lit; it moves on as the server lists", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this pinned the row as terminal — no block, no moves, "không có
+    // lối ra". The server's map now lets it go to `da-tiep-nhan` / `dang-thuc-hien` and assignment
+    // refuses only `hoan-thanh`; the moves drawn are the row's `allowed_transitions`.
     const html = drawer(
-      task({ status: "chuyen-tiep" }),
+      task({ status: "chuyen-tiep", allowed_transitions: ["da-tiep-nhan", "dang-thuc-hien"] }),
       quyenNhiemVu([...ALL_WRITE_KEYS, TASK_ASSIGN_PERMISSION]),
     );
     expect(html).toContain('<span class="chip chip-hoat-dong">Chuyển tiếp</span>');
-    expect(html).not.toContain(BLOCK_MARK);
-    expect(html).not.toContain(`aria-controls="${ASSIGNMENT_UNIT_FIELD_ID}"`);
-    expect(html).not.toContain("Chuyển sang");
-    expect(html).toContain("không có lối ra khỏi trạng thái này");
+    expect(html).toContain(BLOCK_MARK);
+    expect(html).toContain("Chuyển sang Đã tiếp nhận");
+    expect(html).toContain("Chuyển sang Đang thực hiện");
+    expect(html).not.toContain("không có lối ra khỏi trạng thái này");
   });
 
   it("stepper: with the block shown, `Chuyển tiếp` is a button pointing at the block — not a move", () => {
-    const html = drawer(task(), quyenNhiemVu([...ALL_WRITE_KEYS, TASK_ASSIGN_PERMISSION]));
+    // The server's list for `dang-thuc-hien` (3b2330b) — the drawer draws only what the row carries.
+    const html = drawer(
+      task({ allowed_transitions: ["cho-duyet", "hoan-thanh", "tam-dung"] }),
+      quyenNhiemVu([...ALL_WRITE_KEYS, TASK_ASSIGN_PERMISSION]),
+    );
     expect(html).toMatch(
       new RegExp(
         `<button type="button" class="nut-phu" aria-controls="${ASSIGNMENT_UNIT_FIELD_ID}"[^>]*>` +

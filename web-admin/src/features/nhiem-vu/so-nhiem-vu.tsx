@@ -106,7 +106,6 @@ import {
   MOI_NGUON_GIAO,
   MOI_NGUON_GIAO_NHAN,
   MOI_NHOM_VAN_BAN,
-  MOI_TRANG_THAI,
   MOI_TRANG_THAI_NHAN,
   MO_TA_FORM_GIAO_VIEC,
   NHAN_CHE_DO_DANH_SACH,
@@ -151,8 +150,13 @@ import {
   danhBaChoNhatKy,
   cauTuKetLuan,
   chiaNhomVanBan,
-  chuyenSangDuoc,
+  canMoveTask,
   clickableTransitions,
+  lacksApprovalFor,
+  reasonMove,
+  reopenNote,
+  REOPEN_BUTTON,
+  REOPEN_REASON_LABEL,
   kanbanDropHint,
   kanbanMoveDoneText,
   kanbanMovePendingText,
@@ -163,7 +167,6 @@ import {
   docDanhBaChonNguoi,
   dongCuaNhom,
   dongVanBan,
-  duocTraLai,
   duongDanTuLoc,
   formSuaTuChiTiet,
   locTuDuongDan,
@@ -173,7 +176,6 @@ import {
   quyenNhiemVu,
   ghiChuKanbanReNhanh,
   ghiChuTraLai,
-  laBuocTraLai,
   loiSauKhiDocLai,
   lyDoKhoaSua,
   yeuCauTraLai,
@@ -202,6 +204,7 @@ import {
   type FormSuaNhiemVu,
   type NhomVanBan,
   type QuyenNhiemVu,
+  type ReasonMove,
   type TrangThaiNhiemVu,
 } from "./nhan-nhiem-vu";
 import { ChildTasks, ParentTaskField } from "./child-tasks";
@@ -869,6 +872,7 @@ export function SoNhiemVu({
           counts={taiTu(countsLoaded, khoaKanban)}
           move={{
             permissions: quyen,
+            staffCode: maNguoiDangNhap,
             pending: kanbanPending,
             result: kanbanResult,
             move: moveOnKanban,
@@ -1384,6 +1388,12 @@ export type KanbanMoveResult =
 export type KanbanMove = {
   /** The session's `task.*` keys. Hiding is convenience — the route checks again (rule 5). */
   readonly permissions: QuyenNhiemVu;
+  /**
+   * `phien.staff.code`, `""` while the session is unread. The task's ASSIGNEE may move it without
+   * `task.update` (ea55113) — `canMoveTask`. REQUIRED: a forgotten code would silently hide every
+   * assignee's own cards.
+   */
+  readonly staffCode: string;
   /** A move waiting for the server. One at a time: every control is disabled meanwhile. */
   readonly pending: { readonly code: string; readonly target: TrangThaiNhiemVu } | null;
   readonly result: KanbanMoveResult | null;
@@ -1504,7 +1514,7 @@ export function BangKanban({
     move !== null &&
     move.pending === null &&
     dragging !== null &&
-    clickableTransitions(dragging.status, move.permissions).includes(target);
+    clickableTransitions(dragging, move.permissions, move.staffCode).includes(target);
 
   const statusText =
     move === null
@@ -1659,18 +1669,17 @@ export function TheNhiemVu({
   onDragEnd?: () => void;
 }) {
   const treHan = oHan(nhiemVu.due_at, bayGio).phanTre !== "";
-  // Same list as the drawer's buttons. Empty (no `task.update`, or a dead-end status) → neither a
-  // drag handle nor a menu: a control that can only be refused is not offered.
-  const targets = move === null ? [] : clickableTransitions(nhiemVu.status, move.permissions);
+  // Same list as the drawer's buttons. Empty (neither `task.update` nor the assignee, or nothing the
+  // server lists) → neither a drag handle nor a menu: a control that can only be refused is not offered.
+  const targets =
+    move === null ? [] : clickableTransitions(nhiemVu, move.permissions, move.staffCode);
   const busy = move !== null && move.pending !== null;
   const pendingHere = move?.pending?.code === nhiemVu.code ? move.pending : null;
   const lastResult = move?.result ?? null;
   const refusal =
     lastResult !== null && !lastResult.ok && lastResult.code === nhiemVu.code ? lastResult : null;
   const canReturn =
-    move !== null &&
-    duocTraLai(move.permissions) &&
-    MOI_TRANG_THAI.some((t) => laBuocTraLai(nhiemVu.status, t) && chuyenSangDuoc(nhiemVu.status, t));
+    move !== null && reasonMove(nhiemVu, move.permissions, move.staffCode) === "return";
 
   return (
     <article
@@ -2024,12 +2033,15 @@ export function ChiTietNhiemVu({
   const o = oHan(nhiemVu.due_at, bayGio);
   const giaiThich = cauGiaiThichTrangThai(nhiemVu.status);
   const danhBaMa = danhBaChoNhatKy(danhBa);
-  const buocChuyen = MOI_TRANG_THAI.filter((t) => chuyenSangDuoc(nhiemVu.status, t));
-  // Bước trả lại KHÔNG phải một nút `Chuyển sang …`: nó cần lý do bắt buộc, nên có khối riêng.
-  // Để nó lọt vào hàng nút thường là cho một cú bấm gửi lý do rỗng — đúng câu 400 của máy chủ.
-  const coBuocTraLai = buocChuyen.some((t) => laBuocTraLai(nhiemVu.status, t));
+  // THE SERVER'S LIST (`allowed_transitions`, 3b2330b) — no second copy of the lifecycle here.
   // Shared with the Kanban menu — one list, so the two cannot offer different steps.
-  const buocBamDuoc = clickableTransitions(nhiemVu.status, quyen);
+  const buocBamDuoc = clickableTransitions(nhiemVu, quyen, maNguoiDangNhap);
+  // The return from review and the reopen are NOT `Chuyển sang …` buttons: both carry a mandatory
+  // reason, so they have their own form. In the plain row a click would send an empty note.
+  const reason = reasonMove(nhiemVu, quyen, maNguoiDangNhap);
+  // The status block: `task.update`, or this task's assignee (ea55113). Convenience — the route
+  // decides again on the row.
+  const showStatusBlock = canMoveTask(quyen, nhiemVu, maNguoiDangNhap);
   // §5.7 — `task.assign` and a task that is not terminal. Convenience; the route checks both.
   const showAssignment = canShowAssignment(quyen, nhiemVu.status);
 
@@ -2257,56 +2269,65 @@ export function ChiTietNhiemVu({
       )}
 
       {/* ── ĐỔI TRẠNG THÁI §6 ─────────────────────────────────────────────────────────────
-          CHỈ VẼ NHỮNG BƯỚC §6 CÓ. Một nút thừa ở đây không mở được gì — máy chủ kiểm lại bằng
-          `ChuyenTrangThaiDuoc` — nhưng một nút thiếu thì cán bộ báo ngay, vì họ đang cần bấm nó.
+          CHỈ VẼ NHỮNG BƯỚC MÁY CHỦ LIỆT KÊ trên chính dòng này (`allowed_transitions`).
 
           BƯỚC `hoan-thanh` VẪN HIỆN KỂ CẢ KHI CÒN VIỆC CON: `child_count` đếm việc con CÒN SỐNG, không
           đếm việc con CHƯA XONG, nên màn hình không biết bước ấy có bị chặn hay không. Câu từ chối
           của máy chủ LIỆT KÊ MÃ việc con còn lại — thông tin cán bộ cần, màn hình không tự dựng được.
 
-          CẢ KHỐI ĐỨNG SAU `task.update` — khoá tuyến `…/status` khai. Bước `hoan-thanh` đòi THÊM
-          `task.approve` (`duocBamChuyen`); thiếu khoá ấy thì nút ẩn và câu dưới nói vì sao, để cán
-          bộ không tưởng vòng đời thiếu bước. */}
-      {quyen.capNhat && (
+          CẢ KHỐI ĐỨNG SAU `canMoveTask` — `task.update`, hoặc đúng người thực hiện của việc này.
+          Bước vào `hoan-thanh`, mở lại và trả lại đòi THÊM `task.approve` (`transitionNeedsApproval`);
+          thiếu khoá ấy thì nút ẩn và câu dưới nói vì sao, để cán bộ không tưởng vòng đời thiếu bước. */}
+      {showStatusBlock && (
         <div className="form-danh-muc">
           <h4>Chuyển trạng thái</h4>
-          <div className="o-nhap">
-            <label htmlFor="ghi-chu-chuyen-trang-thai">Ghi chú (không bắt buộc)</label>
-            <input
-              id="ghi-chu-chuyen-trang-thai"
-              name="ghi-chu-chuyen-trang-thai"
-              value={ghiChuChuyen}
-              autoComplete="off"
-              onChange={(e) => datGhiChuChuyen(e.target.value)}
-            />
-          </div>
-          <div className="cum-nut">
-            {buocBamDuoc.map((t) => (
-              <button
-                key={t}
-                type="button"
-                className="nut-phu"
-                disabled={dangGui}
-                onClick={() => doiTrangThai(t, ghiChuChuyen.trim())}
-              >
-                Chuyển sang {nhanTrangThai(nhanTT, t)}
-              </button>
-            ))}
-          </div>
-          {buocChuyen.includes("hoan-thanh") && !buocBamDuoc.includes("hoan-thanh") && (
+          {/* No plain step (e.g. `hoan-thanh`, whose only move is the reopen form below): no note
+              field and no empty button row — a field that feeds nothing is a field somebody fills. */}
+          {buocBamDuoc.length > 0 && (
+            <>
+              <div className="o-nhap">
+                <label htmlFor="ghi-chu-chuyen-trang-thai">Ghi chú (không bắt buộc)</label>
+                <input
+                  id="ghi-chu-chuyen-trang-thai"
+                  name="ghi-chu-chuyen-trang-thai"
+                  value={ghiChuChuyen}
+                  autoComplete="off"
+                  onChange={(e) => datGhiChuChuyen(e.target.value)}
+                />
+              </div>
+              <div className="cum-nut">
+                {buocBamDuoc.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    className="nut-phu"
+                    disabled={dangGui}
+                    onClick={() => doiTrangThai(t, ghiChuChuyen.trim())}
+                  >
+                    Chuyển sang {nhanTrangThai(nhanTT, t)}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {lacksApprovalFor(nhiemVu, quyen, maNguoiDangNhap) && (
             <p className="ghi-chu">{CAU_THIEU_QUYEN_DUYET_HOAN_THANH}</p>
           )}
-          {buocChuyen.length === 0 && (
-            <p className="trang-thai-rong">
-              Vòng đời §6 không có lối ra khỏi trạng thái này — nhiệm vụ khép lại tại đây.
-            </p>
+          {nhiemVu.allowed_transitions.length === 0 && (
+            <p className="trang-thai-rong">Máy chủ không liệt kê lối ra nào khỏi trạng thái này.</p>
           )}
         </div>
       )}
 
       {/* `key` theo mã: mở một nhiệm vụ khác thì lý do đang gõ dở không đi theo sang việc ấy. */}
-      {coBuocTraLai && duocTraLai(quyen) && (
-        <KhoiTraLai key={nhiemVu.code} nhanTT={nhanTT} dangGui={dangGui} gui={doiTrangThai} />
+      {reason !== null && (
+        <KhoiTraLai
+          key={`${reason}-${nhiemVu.code}`}
+          kind={reason}
+          nhanTT={nhanTT}
+          dangGui={dangGui}
+          gui={doiTrangThai}
+        />
       )}
 
       {/* §5.7 — hand the SAME task to another unit or person ("Chuyển tiếp"), and for
@@ -2387,15 +2408,20 @@ export function ChiTietNhiemVu({
  * nhưng một ô ghi "không bắt buộc" không thể đồng thời là lý do bắt buộc của bước này. Nút khoá khi ô
  * rỗng hoặc toàn khoảng trắng — cùng phép cắt máy chủ dùng (`KiemLyDoTraLai`).
  *
- * Bên gọi chỉ vẽ khối này khi vòng đời có bước ấy VÀ tài khoản cầm `task.update` + `task.approve`
- * (`duocTraLai`). Câu từ chối của máy chủ — 403 thiếu quyền, 400 thiếu lý do — ra nguyên văn ở
- * `loiGhi` của drawer, như mọi lần chuyển trạng thái khác.
+ * Bên gọi chỉ vẽ khối này khi máy chủ liệt kê bước ấy VÀ tài khoản đi được nó (`reasonMove`). Câu
+ * từ chối của máy chủ — 403 thiếu quyền, 400 thiếu lý do — ra nguyên văn ở `loiGhi` của drawer.
+ *
+ * `kind="reopen"` (28/09/2026): the SAME form for `hoan-thanh` → `dang-thuc-hien`. Same target, same
+ * trimmed mandatory note (`yeuCauTraLai`), own title, label and field id. The server is about to require
+ * the note too; this screen requires it already. REQUIRED prop: no default kind to fall into.
  */
 export function KhoiTraLai({
+  kind,
   nhanTT,
   dangGui,
   gui,
 }: {
+  kind: ReasonMove;
   /** Nhãn của xã — tên trạng thái đích trong câu giải thích. */
   nhanTT: BangNhanTrangThai;
   dangGui: boolean;
@@ -2403,6 +2429,8 @@ export function KhoiTraLai({
 }) {
   const [lyDo, datLyDo] = useState("");
   const yeuCau = yeuCauTraLai(lyDo);
+  const title = kind === "reopen" ? REOPEN_BUTTON : NHAN_NUT_TRA_LAI;
+  const fieldId = kind === "reopen" ? "ly-do-mo-lai" : "ly-do-tra-lai";
 
   return (
     <form
@@ -2412,13 +2440,13 @@ export function KhoiTraLai({
         if (yeuCau !== null) gui(yeuCau.trangThai, yeuCau.ghiChu);
       }}
     >
-      <h4>{NHAN_NUT_TRA_LAI}</h4>
-      <p className="ghi-chu">{ghiChuTraLai(nhanTT)}</p>
+      <h4>{title}</h4>
+      <p className="ghi-chu">{kind === "reopen" ? reopenNote(nhanTT) : ghiChuTraLai(nhanTT)}</p>
       <div className="o-nhap">
-        <label htmlFor="ly-do-tra-lai">{NHAN_LY_DO_TRA_LAI}</label>
+        <label htmlFor={fieldId}>{kind === "reopen" ? REOPEN_REASON_LABEL : NHAN_LY_DO_TRA_LAI}</label>
         <textarea
-          id="ly-do-tra-lai"
-          name="ly-do-tra-lai"
+          id={fieldId}
+          name={fieldId}
           rows={3}
           required
           maxLength={LY_DO_TRA_LAI_TOI_DA}
@@ -2427,7 +2455,7 @@ export function KhoiTraLai({
         />
       </div>
       <button type="submit" className="nut-phu" disabled={dangGui || yeuCau === null}>
-        {NHAN_NUT_TRA_LAI}
+        {title}
       </button>
     </form>
   );

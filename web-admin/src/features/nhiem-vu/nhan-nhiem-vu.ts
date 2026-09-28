@@ -223,62 +223,32 @@ export function theoThuTuXa<T extends string>(
 }
 
 /**
- * Vòng đời §6 — **BẢN THỨ HAI** của `chuyenDuocSangNhiemVu`
- * (`service-petitions/internal/domain/nhiem_vu.go:83-91`), và cái giá của nó được nói ra ở đây
- * chứ không để người sau tự phát hiện.
+ * THE LIFECYCLE IS THE SERVER'S, READ FROM THE ROW — `allowed_transitions` (3b2330b).
  *
- * `cho-duyet` → `dang-thuc-hien` là MŨI TÊN NGƯỢC DUY NHẤT — "Trả lại để làm tiếp", quyết định của
- * chủ đầu tư 27/09/2026 (`nhiem_vu.go:77-82`), không có trên sơ đồ §6. Bản đồ chỉ nói HÌNH DẠNG ấy có;
- * ai được đi bước ấy (`task.approve`) và nó phải mang gì (lý do) là của `laBuocTraLai` ở dưới, và của
- * máy chủ (`app/nhiem_vu.go:1062-1070`).
+ * ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this file used to hold `CHUYEN_DUOC`, a hand-copied second map of
+ * `chuyenDuocSangNhiemVu` (`service-petitions/internal/domain/nhiem_vu.go:97-105`). It drifted the day
+ * the owner adopted require's table (reopen out of `hoan-thanh`, `dang-thuc-hien` → `hoan-thanh`
+ * direct, `cho-duyet` no longer pausable, no history rule on resuming) — with every test green, because
+ * the tests pinned the copy. Every task reply now carries the list the write path enforces
+ * (`AllowedTransitions`, `nhiem_vu.go:132-145`), so there is nothing left to copy.
  *
- * VÌ SAO VẪN CHẤP NHẬN ĐƯỢC: hợp đồng không có tuyến nào phát ra vòng đời, mà §5.2 đòi dải bước
- * biết ô nào **bấm được**. Bản sao này chỉ quyết định MỘT NÚT CÓ HIỆN HAY KHÔNG; nó không quyết
- * định lần ghi nào thành công. `POST /api/v1/tasks/{ma}/status` kiểm lại toàn bộ bằng
- * `ChuyenTrangThaiDuoc` và trả `ErrChuyenTrangThaiNhiemVuSaiLuc` cho bước nó không có.
- *
- * Nên bản sao này trôi theo hai chiều, cả hai đều HỎNG AN TOÀN:
- *   - rộng hơn máy chủ ⇒ một nút hiện ra rồi nhận câu từ chối nguyên văn của máy chủ;
- *   - hẹp hơn máy chủ ⇒ một nút thiếu, cán bộ báo ngay vì họ đang cần bấm nó.
- * Không chiều nào cho ra một lần GHI SAI, và đó là điều kiện để chấp nhận một bản sao.
- *
- * `chuyen-tiep` IS NO LONGER THE TARGET OF ANY MOVE (owner decision 28/09/2026, server 764bb92,
- * `nhiem_vu.go:70-77`): "Chuyển tiếp" is the SAME task handed to another unit or person — the
- * §5.7 block (`task-assignment-block.tsx`), `POST …/assignment` — and `…/status` now answers 400
- * for it. The code stays in the type, the labels and this map with NO way out, because rows that
- * already hold it are records: they keep their label and stay terminal (`ketThuc`).
+ * ⚠ IT IS THE SHAPE, NOT THE CALLER'S RIGHTS (`nhiem_vu.go:136-138`). A move needing `task.approve`
+ * is listed for everybody; who may take it is `mayTakeTransition` below.
  */
-const CHUYEN_DUOC: Readonly<Record<TrangThaiNhiemVu, readonly TrangThaiNhiemVu[]>> = {
-  "moi-giao": ["da-tiep-nhan", "tam-dung"],
-  "da-tiep-nhan": ["dang-thuc-hien", "tam-dung"],
-  "dang-thuc-hien": ["cho-duyet", "tam-dung"],
-  "cho-duyet": ["hoan-thanh", "dang-thuc-hien", "tam-dung"],
-  "tam-dung": ["moi-giao", "da-tiep-nhan", "dang-thuc-hien", "cho-duyet"],
-  "hoan-thanh": [],
-  "chuyen-tiep": [],
-};
-
-/**
- * Vòng đời CÓ bước này hay không — câu hỏi về HÌNH DẠNG, không phải về quyền.
- *
- * ⚠ LỎNG CÓ CHỦ Ý Ở `tam-dung`, đúng như miền nghiệp vụ: từ `tam-dung` thì bốn trạng thái chính
- * đều là hình dạng hợp lệ, nhưng chỉ ĐÚNG MỘT trong bốn là hợp lệ thật — trạng thái ngay trước
- * lúc tạm dừng. Máy chủ tìm nó trong nhật ký (`TrangThaiTruocTamDung`); màn hình **chưa tìm**:
- * tuyến đọc nhật ký nay có, nhưng dòng ngay trước lúc dừng có thể nằm ở trang bất kỳ, và việc lần
- * theo nó để thu hẹp bốn nút chưa dựng. Xem `PHAN_CHUA_DUNG`.
- */
-export function chuyenSangDuoc(hienTai: string, moi: string): boolean {
-  if (!laTrangThaiNhiemVu(hienTai) || !laTrangThaiNhiemVu(moi)) return false;
-  return CHUYEN_DUOC[hienTai].includes(moi);
+export function hasTransition(task: Pick<petitions_nhiemVuRa, "allowed_transitions">, target: string): boolean {
+  return task.allowed_transitions.includes(target);
 }
 
 /**
- * Vòng đời có lối ra khỏi trạng thái này không (`hoan-thanh` và `chuyen-tiep` là hai ngõ cụt).
+ * Finished — `hoan-thanh`, BY NAME.
  *
- * `chuyen-tiep` vẫn là ngõ cụt dù không bước nào còn dẫn TỚI nó: đó là những dòng cũ, hồ sơ lưu trữ.
+ * ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this was "the lifecycle has no way out", which made `hoan-thanh` and
+ * `chuyen-tiep` terminal. Neither is any more: `hoan-thanh` reopens and a legacy `chuyen-tiep` row
+ * moves on. The server says callers meaning "finished" must ask for `hoan-thanh` by name
+ * (`nhiem_vu.go:78-83`, `CheckAssignable` in `task_assignment.go:121-126`) — and so does this.
  */
 export function ketThuc(ma: string): boolean {
-  return laTrangThaiNhiemVu(ma) && CHUYEN_DUOC[ma].length === 0;
+  return ma === "hoan-thanh";
 }
 
 /**
@@ -298,11 +268,15 @@ export function cauGiaiThichTrangThai(ma: string): string {
     case "cho-duyet":
       return "Đã báo xong, đang chờ lãnh đạo duyệt hoàn thành.";
     case "hoan-thanh":
-      return "Đã duyệt hoàn thành. Nhiệm vụ khép lại ở đây.";
+      // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: "khép lại ở đây" became false the day reopen existed.
+      return "Đã duyệt hoàn thành. Người có quyền duyệt mở lại được, kèm lý do bắt buộc.";
     case "tam-dung":
-      return "Đang tạm dừng. Tiếp tục thì việc quay về đúng trạng thái trước lúc dừng.";
+      // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: the "back to the status before the pause" rule is gone from
+      // the server; resuming offers the server's list, and the clerk picks.
+      return "Đang tạm dừng. Tiếp tục thì chọn trạng thái việc quay về.";
     case "chuyen-tiep":
-      return "Đã chuyển cho bộ phận khác. Nhiệm vụ này khép lại tại đây.";
+      // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: a legacy `chuyen-tiep` row moves on (`nhiem_vu.go:71-72`).
+      return "Đã chuyển cho bộ phận khác theo cách ghi cũ. Bộ phận nhận tiếp nhận hoặc làm tiếp được.";
     default:
       return "";
   }
@@ -706,7 +680,12 @@ export type QuyenNhiemVu = {
   readonly giaoViec: boolean;
   /** `✎ Sửa`, khối Chuyển trạng thái, ô GỬI đề nghị lùi hạn — `task.update`. */
   readonly capNhat: boolean;
-  /** Bước `Chuyển sang Hoàn thành` — `task.update` VÀ `task.approve`. */
+  /**
+   * `task.approve` — the moves `transitionNeedsApproval` names. ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this
+   * was `task.update` AND `task.approve`. Since ea55113 the status route's gate is `task.read` and the
+   * row admits the ASSIGNEE without `task.update`, so an assignee holding `task.approve` may approve.
+   * Who may move the row at all is `canMoveTask`, not this key.
+   */
   readonly duyetHoanThanh: boolean;
   /** Xoá khỏi sổ — `task.delete`. */
   readonly xoa: boolean;
@@ -725,16 +704,14 @@ export type QuyenNhiemVu = {
  * FAIL CLOSED: không đọc được quyền thì MỌI cổng đóng. "Chưa rõ" không được hành xử như "có" (luật
  * 1, cấm #1). Mỗi khoá so CHÍNH XÁC qua `coQuyen` — không tiền tố, không `task.*` (luật 5, bất biến 3b).
  *
- * `duyetHoanThanh` ĐÒI CẢ HAI KHOÁ vì tuyến `…/status` khai `task.update` ở cổng, rồi đòi thêm
- * `task.approve` cho riêng bước `hoan-thanh`: có `task.approve` mà thiếu `task.update` vẫn là 403 ở cổng.
+ * `duyetHoanThanh` is `task.approve` ALONE — see the field.
  */
 export function quyenNhiemVu(dsQuyen: readonly string[] | null): QuyenNhiemVu {
   const ds = dsQuyen ?? [];
-  const capNhat = coQuyen(ds, QUYEN_CAP_NHAT_NHIEM_VU);
   return {
     giaoViec: coQuyen(ds, QUYEN_TAO_NHIEM_VU),
-    capNhat,
-    duyetHoanThanh: capNhat && coQuyen(ds, QUYEN_DUYET_HOAN_THANH_NHIEM_VU),
+    capNhat: coQuyen(ds, QUYEN_CAP_NHAT_NHIEM_VU),
+    duyetHoanThanh: coQuyen(ds, QUYEN_DUYET_HOAN_THANH_NHIEM_VU),
     xoa: coQuyen(ds, QUYEN_XOA_NHIEM_VU),
     duyetGiaHan: coQuyen(ds, QUYEN_DUYET_GIA_HAN),
     reassign: coQuyen(ds, TASK_ASSIGN_PERMISSION),
@@ -742,47 +719,120 @@ export function quyenNhiemVu(dsQuyen: readonly string[] | null): QuyenNhiemVu {
 }
 
 /**
- * Vòng đời có bước `hoan-thanh` nhưng tài khoản thiếu `task.approve`. Nói ra, vì một nút biến mất
- * không lời đọc lên là "vòng đời thiếu bước" — cán bộ báo lỗi phần mềm thay vì xin cấp quyền.
+ * The row lists a move needing `task.approve` and the account lacks it. Said out loud: a button that
+ * vanishes without a word reads as "the lifecycle lacks a step" — the clerk files a bug instead of
+ * asking for the right.
  */
 export const CAU_THIEU_QUYEN_DUYET_HOAN_THANH =
-  "Bước hoàn thành và bước trả lại để làm tiếp cần quyền duyệt hoàn thành. Tài khoản của bạn chưa " +
-  "được cấp quyền này.";
+  "Bước hoàn thành, bước trả lại để làm tiếp và bước mở lại việc đã hoàn thành cần quyền duyệt hoàn " +
+  "thành. Tài khoản của bạn chưa được cấp quyền này.";
 
-/**
- * Bước chuyển trạng thái này có cần hiện nút THƯỜNG cho tài khoản này không — xem `quyenNhiemVu`.
+/* ── WHO MAY MOVE A ROW, AND WHICH MOVES ───────────────────────────────────────────────────────
  *
- * BƯỚC TRẢ LẠI (`laBuocTraLai`) KHÔNG ĐI QUA ĐÂY: nó không phải một nút `Chuyển sang …` mà là một ô lý
- * do bắt buộc (`KhoiTraLai`), và cổng của nó là `duocTraLai`. Bên gọi lọc nó ra trước.
+ * Every gate here is CONVENIENCE (rule 5, forbidden #1): `POST /api/v1/tasks/{ma}/status` decides
+ * all of it again on the row under the lock, and its refusal shows verbatim.
+ *
+ * Two layers, both the server's (ea55113, 3b2330b):
+ *   1. the ROW — the task's assignee, or a holder of `task.update` (`canMoveTask`);
+ *   2. the MOVE — into `hoan-thanh`, the reopen out of it and the return from review also need
+ *      `task.approve` (`transitionNeedsApproval`, the server's `NeedsApproval`, `nhiem_vu.go:175`).
+ *
+ * `transitionNeedsApproval` IS A COPY of a server predicate — the one the reply does NOT carry
+ * (`allowed_transitions` is deliberately not filtered by the caller's keys). It decides only whether a
+ * button SHOWS: too wide ⇒ a button that earns a verbatim 403, too narrow ⇒ a missing button the clerk
+ * reports. Neither is a wrong write.
  */
-export function duocBamChuyen(quyen: QuyenNhiemVu, sangTrangThai: string): boolean {
-  if (!quyen.capNhat) return false;
-  return sangTrangThai === "hoan-thanh" ? quyen.duyetHoanThanh : true;
+
+/** `domain.IsReopen` — signed-off work taken back into progress (`nhiem_vu.go:168`). */
+export function isReopen(from: string, to: string): boolean {
+  return from === "hoan-thanh" && to === "dang-thuc-hien";
 }
 
-/* ── "TRẢ LẠI ĐỂ LÀM TIẾP" — `cho-duyet` → `dang-thuc-hien` ─────────────────────────────────────
- *
- * Cùng tuyến `POST /api/v1/tasks/{ma}/status`, cùng thân (`status` + `note`). Hai điều khiến nó khác
- * mọi bước khác, cả hai do MÁY CHỦ cưỡng chế (`app/nhiem_vu.go:1062-1070`):
- *   - chỉ người cầm `task.approve` — CÙNG khoá với duyệt hoàn thành (`ErrKhongDuocTraLai`, :193-204):
- *     trả lại là nửa kia của cùng một phán quyết;
- *   - `note` là LÝ DO, bắt buộc, cắt khoảng trắng trước khi kiểm (`KiemLyDoTraLai`,
- *     `domain/nhiem_vu_ghi.go:505-519`) — người nhận lại việc phải biết còn thiếu gì.
- * `da-tiep-nhan` → `dang-thuc-hien` là bước THUẬN thường, không cần khoá lẫn lý do; nên câu hỏi là
- * về CẶP (từ, sang), không bao giờ chỉ về trạng thái đích.
- */
+/** `domain.NeedsApproval` (`nhiem_vu.go:175-177`). */
+export function transitionNeedsApproval(from: string, to: string): boolean {
+  return to === "hoan-thanh" || isReopen(from, to) || laBuocTraLai(from, to);
+}
 
 /**
- * The plain `Chuyển sang …` steps this account may take from `status` — lifecycle shape
- * (`chuyenSangDuoc`) minus the return step (it needs a mandatory reason, `KhoiTraLai`) minus what
- * the session's keys do not allow (`duocBamChuyen`).
- *
- * ONE LIST FOR THE DRAWER AND THE KANBAN. Two filters would drift, and the drifted one would
- * offer a Kanban move the drawer hides — or hide one the drawer offers. Order is `MOI_TRANG_THAI`.
+ * Moves that carry a MANDATORY reason, so they are never a plain `Chuyển sang …` button (a click
+ * would send an empty note): the return from review, and the reopen. The reopen's reason is required
+ * by this screen already; the server is about to require it too (backend card in progress).
  */
-export function clickableTransitions(status: string, quyen: QuyenNhiemVu): TrangThaiNhiemVu[] {
+export function transitionNeedsReason(from: string, to: string): boolean {
+  return laBuocTraLai(from, to) || isReopen(from, to);
+}
+
+/**
+ * May this account move this ROW at all — `task.update`, or it is the task's assignee.
+ *
+ * FAIL CLOSED on the comparison: an empty session code (session unread) matches nothing, including a
+ * task with no assignee — `"" === ""` would otherwise hand every unassigned task to every account.
+ * Both sides are business codes (`CB-…`), never ids (`staff.code`, `nhiem_vu.assignee`).
+ */
+export function canMoveTask(
+  quyen: QuyenNhiemVu,
+  task: Pick<petitions_nhiemVuRa, "assignee">,
+  staffCode: string,
+): boolean {
+  return quyen.capNhat || (staffCode !== "" && staffCode === task.assignee);
+}
+
+/** One move, both layers: listed by the server, row allowed, approval held if needed. */
+export function mayTakeTransition(
+  quyen: QuyenNhiemVu,
+  task: Pick<petitions_nhiemVuRa, "assignee" | "status" | "allowed_transitions">,
+  staffCode: string,
+  target: string,
+): boolean {
+  if (!hasTransition(task, target) || !canMoveTask(quyen, task, staffCode)) return false;
+  return transitionNeedsApproval(task.status, target) ? quyen.duyetHoanThanh : true;
+}
+
+/**
+ * The plain `Chuyển sang …` steps this account may take on this task — the server's list, minus the
+ * steps needing a reason (their own form, `KhoiTraLai`), minus what `mayTakeTransition` refuses.
+ *
+ * ONE LIST FOR THE DRAWER AND THE KANBAN. Two filters would drift, and the drifted one would offer a
+ * Kanban move the drawer hides — or hide one the drawer offers. Order is `MOI_TRANG_THAI`; a code the
+ * screen does not know is left out (no label, no column) rather than drawn as a raw button.
+ */
+export function clickableTransitions(
+  task: Pick<petitions_nhiemVuRa, "assignee" | "status" | "allowed_transitions">,
+  quyen: QuyenNhiemVu,
+  staffCode: string,
+): TrangThaiNhiemVu[] {
   return MOI_TRANG_THAI.filter(
-    (t) => chuyenSangDuoc(status, t) && !laBuocTraLai(status, t) && duocBamChuyen(quyen, t),
+    (t) => !transitionNeedsReason(task.status, t) && mayTakeTransition(quyen, task, staffCode, t),
+  );
+}
+
+/** Which reason form the drawer shows for this task and account, or `null`. */
+export type ReasonMove = "return" | "reopen";
+
+export function reasonMove(
+  task: Pick<petitions_nhiemVuRa, "assignee" | "status" | "allowed_transitions">,
+  quyen: QuyenNhiemVu,
+  staffCode: string,
+): ReasonMove | null {
+  if (!mayTakeTransition(quyen, task, staffCode, "dang-thuc-hien")) return null;
+  if (laBuocTraLai(task.status, "dang-thuc-hien")) return "return";
+  if (isReopen(task.status, "dang-thuc-hien")) return "reopen";
+  return null;
+}
+
+/**
+ * The account may move the row, and the server lists an approval move it cannot take — the case
+ * `CAU_THIEU_QUYEN_DUYET_HOAN_THANH` exists for.
+ */
+export function lacksApprovalFor(
+  task: Pick<petitions_nhiemVuRa, "assignee" | "status" | "allowed_transitions">,
+  quyen: QuyenNhiemVu,
+  staffCode: string,
+): boolean {
+  return (
+    canMoveTask(quyen, task, staffCode) &&
+    !quyen.duyetHoanThanh &&
+    task.allowed_transitions.some((t) => transitionNeedsApproval(task.status, t))
   );
 }
 
@@ -835,17 +885,31 @@ export const KANBAN_RETURN_NOTE =
   "Trả lại để làm tiếp cần ghi lý do — bấm “Mở” trên thẻ và dùng khối “Trả lại để làm tiếp” " +
   "trong phần chi tiết.";
 
-/** Cặp (từ, sang) này có phải bước trả lại không — cùng vị từ với `domain.LaTraLaiLamTiep`. */
+/**
+ * Cặp (từ, sang) này có phải bước trả lại không — cùng vị từ với `domain.LaTraLaiLamTiep`.
+ *
+ * `note` là LÝ DO, bắt buộc, cắt khoảng trắng trước khi kiểm (`KiemLyDoTraLai`) — người nhận lại việc
+ * phải biết còn thiếu gì. `da-tiep-nhan` → `dang-thuc-hien` là bước THUẬN thường, nên câu hỏi là về
+ * CẶP (từ, sang), không bao giờ chỉ về trạng thái đích.
+ */
 export function laBuocTraLai(tu: string, sang: string): boolean {
   return tu === "cho-duyet" && sang === "dang-thuc-hien";
 }
 
+/** Reopen form texts (`KhoiTraLai kind="reopen"`). */
+export const REOPEN_BUTTON = "Mở lại để làm tiếp";
+export const REOPEN_REASON_LABEL = "Lý do mở lại (bắt buộc)";
+
 /**
- * Tài khoản có được thấy ô trả lại không. `task.update` (cổng tuyến) VÀ `task.approve` — đúng
- * `duyetHoanThanh`, vì máy chủ đòi đúng hai khoá ấy. Ẩn là tiện dụng: máy chủ vẫn kiểm (luật 5, cấm #1).
+ * Under the reopen title. The server clears the completion date on reopen and keeps the old one only
+ * in the timeline row and the audit entry (`nhiem_vu.go:161-167`) — said, so nobody reads the empty
+ * date as "never finished".
  */
-export function duocTraLai(quyen: QuyenNhiemVu): boolean {
-  return quyen.duyetHoanThanh;
+export function reopenNote(bang: BangNhanTrangThai): string {
+  return (
+    `Nhiệm vụ đã hoàn thành quay về trạng thái “${nhanTrangThai(bang, "dang-thuc-hien")}”. Ngày hoàn ` +
+    "thành cũ và lý do được ghi vào nhật ký."
+  );
 }
 
 /**
@@ -2308,13 +2372,11 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "hình là dựng nguồn thứ hai cho một con số mà mọi chỗ `sắp đến hạn` phải đọc từ một cột duy nhất.",
   },
   {
-    ten: "Ô ghi tay `Ghi nhật ký` (§5.9) và `Tiếp tục` sau khi tạm dừng (§6)",
+    ten: "Ô ghi tay `Ghi nhật ký` (§5.9)",
     viSao:
       "Khối Nhật ký & Trao đổi nay ĐỌC được (`GET /api/v1/tasks/{ma}/log-entries`), nhưng chưa " +
       "GHI được: tuyến `POST` một dòng ghi tay chưa dựng, vì còn chờ luật người đang giữ việc — ai " +
-      "được ghi vào nhật ký của một nhiệm vụ. Mọi dòng hiện có là dòng máy chủ tự ghi ở mỗi thao tác. " +
-      "`Tiếp tục` sau tạm dừng: trạng thái trước lúc dừng nằm trong nhật ký, nhưng có thể ở trang " +
-      "bất kỳ, và màn hình chưa lần theo nó — nên hiện cả bốn lối và để máy chủ từ chối ba lối sai.",
+      "được ghi vào nhật ký của một nhiệm vụ. Mọi dòng hiện có là dòng máy chủ tự ghi ở mỗi thao tác.",
   },
   {
     ten: "Sửa `Hạn hoàn thành` ở form sửa (§5.4, §5.6)",

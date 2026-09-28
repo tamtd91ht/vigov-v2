@@ -28,7 +28,7 @@ import {
   PHAN_CHUA_DUNG,
   TRANG_THAI_CHINH,
   TRANG_THAI_RE_NHANH,
-  chuyenSangDuoc,
+  hasTransition,
   hoanThanhTreHan,
   ketThuc,
   laTrangThaiNhiemVu,
@@ -74,8 +74,13 @@ import {
   SAP_XEP_MAC_DINH,
   ariaSapXep,
   bamCotSapXep,
-  duocTraLai,
+  canMoveTask,
+  isReopen,
+  lacksApprovalFor,
   laBuocTraLai,
+  reasonMove,
+  transitionNeedsApproval,
+  transitionNeedsReason,
   quyenNhiemVu,
   sapXepDayDu,
   yeuCauTraLai,
@@ -179,26 +184,14 @@ describe("bảy trạng thái — §6", () => {
     expect(nhanTrangThai(BANG_NHAN_MAC_DINH, "da-ban-giao")).toBe("da-ban-giao");
   });
 
-  it("vòng đời: chỉ có bước §6 vẽ ra", () => {
-    expect(chuyenSangDuoc("moi-giao", "da-tiep-nhan")).toBe(true);
-    expect(chuyenSangDuoc("cho-duyet", "hoan-thanh")).toBe(true);
-    // Nhảy cóc không có trong §6.
-    expect(chuyenSangDuoc("moi-giao", "hoan-thanh")).toBe(false);
-    // `tam-dung` rẽ được từ bốn trạng thái chính, không từ `hoan-thanh`.
-    expect(chuyenSangDuoc("dang-thuc-hien", "tam-dung")).toBe(true);
-    expect(chuyenSangDuoc("hoan-thanh", "tam-dung")).toBe(false);
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: `chuyen-tiep` từng rẽ được từ bốn trạng thái chính. Nay KHÔNG
-    // trạng thái nào dẫn tới nó — chuyển tiếp là giao lại cùng nhiệm vụ (`POST …/assignment`),
-    // đúng bản đồ máy chủ (`nhiem_vu.go:87-95`).
-    for (const tu of MOI_TRANG_THAI) expect(chuyenSangDuoc(tu, "chuyen-tiep")).toBe(false);
-  });
-
-  it("`cho-duyet` → `dang-thuc-hien` có trên bản đồ — mũi tên ngược duy nhất, `Trả lại để làm tiếp`", () => {
-    // Cùng bản đồ `service-petitions/internal/domain/nhiem_vu.go:87`.
-    expect(chuyenSangDuoc("cho-duyet", "dang-thuc-hien")).toBe(true);
-    // Không có mũi tên ngược nào khác.
-    expect(chuyenSangDuoc("dang-thuc-hien", "da-tiep-nhan")).toBe(false);
-    expect(chuyenSangDuoc("cho-duyet", "da-tiep-nhan")).toBe(false);
+  it("vòng đời là DANH SÁCH CỦA MÁY CHỦ trên dòng — màn hình không giữ bản sao nào", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: các ca ở đây từng ghim bản sao `CHUYEN_DUOC` (§6 chuỗi chặt,
+    // `tam-dung` về bốn trạng thái, `hoan-thanh` ngõ cụt). Máy chủ nay trả `allowed_transitions` trên
+    // mỗi dòng (3b2330b) theo bảng require; màn hình chỉ đọc nó.
+    const row = { allowed_transitions: ["cho-duyet", "hoan-thanh", "tam-dung"] };
+    expect(hasTransition(row, "hoan-thanh")).toBe(true);
+    expect(hasTransition(row, "da-tiep-nhan")).toBe(false);
+    expect(hasTransition({ allowed_transitions: [] }, "tam-dung")).toBe(false);
   });
 
   it("bước trả lại là một CẶP (từ, sang) — bước thuận `da-tiep-nhan` → `dang-thuc-hien` KHÔNG phải", () => {
@@ -218,30 +211,77 @@ describe("bảy trạng thái — §6", () => {
     });
   });
 
-  it("ô trả lại đứng sau `task.update` VÀ `task.approve` — thiếu một trong hai là không có", () => {
-    expect(duocTraLai(quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU, QUYEN_DUYET_HOAN_THANH_NHIEM_VU]))).toBe(
-      true,
-    );
-    expect(duocTraLai(quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]))).toBe(false);
-    expect(duocTraLai(quyenNhiemVu([QUYEN_DUYET_HOAN_THANH_NHIEM_VU]))).toBe(false);
-    expect(duocTraLai(quyenNhiemVu(null))).toBe(false);
+  it("cần `task.approve`: vào `hoan-thanh`, mở lại, trả lại — đúng `NeedsApproval` của máy chủ", () => {
+    expect(transitionNeedsApproval("dang-thuc-hien", "hoan-thanh")).toBe(true);
+    expect(transitionNeedsApproval("cho-duyet", "hoan-thanh")).toBe(true);
+    expect(transitionNeedsApproval("hoan-thanh", "dang-thuc-hien")).toBe(true);
+    expect(transitionNeedsApproval("cho-duyet", "dang-thuc-hien")).toBe(true);
+    expect(transitionNeedsApproval("da-tiep-nhan", "dang-thuc-hien")).toBe(false);
+    expect(transitionNeedsApproval("tam-dung", "dang-thuc-hien")).toBe(false);
+    expect(transitionNeedsApproval("dang-thuc-hien", "cho-duyet")).toBe(false);
   });
 
-  it("`hoan-thanh` và `chuyen-tiep` là hai ngõ cụt", () => {
+  it("mở lại là một CẶP (hoan-thanh → dang-thuc-hien), và nó cần lý do như bước trả lại", () => {
+    expect(isReopen("hoan-thanh", "dang-thuc-hien")).toBe(true);
+    expect(isReopen("tam-dung", "dang-thuc-hien")).toBe(false);
+    expect(transitionNeedsReason("hoan-thanh", "dang-thuc-hien")).toBe(true);
+    expect(transitionNeedsReason("cho-duyet", "dang-thuc-hien")).toBe(true);
+    expect(transitionNeedsReason("da-tiep-nhan", "dang-thuc-hien")).toBe(false);
+  });
+
+  const NGUOI_THUC_HIEN = "CB-2026-3H8N2W";
+  const NGUOI_KHAC = "CB-2026-0P4X1Z";
+  const DU = quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU, QUYEN_DUYET_HOAN_THANH_NHIEM_VU]);
+  const CHI_CAP_NHAT = quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]);
+  const CHI_DUYET = quyenNhiemVu([QUYEN_DUYET_HOAN_THANH_NHIEM_VU]);
+  const KHONG = quyenNhiemVu([]);
+  const choDuyet = {
+    status: "cho-duyet",
+    assignee: NGUOI_THUC_HIEN,
+    allowed_transitions: ["hoan-thanh", "dang-thuc-hien"],
+  };
+  const daXong = { status: "hoan-thanh", assignee: NGUOI_THUC_HIEN, allowed_transitions: ["dang-thuc-hien"] };
+
+  it("cổng dòng: `task.update` HOẶC đúng người thực hiện; phiên rỗng không khớp gì", () => {
+    expect(canMoveTask(CHI_CAP_NHAT, choDuyet, NGUOI_KHAC)).toBe(true);
+    expect(canMoveTask(KHONG, choDuyet, NGUOI_THUC_HIEN)).toBe(true);
+    expect(canMoveTask(KHONG, choDuyet, NGUOI_KHAC)).toBe(false);
+    expect(canMoveTask(CHI_DUYET, choDuyet, NGUOI_KHAC)).toBe(false);
+    expect(canMoveTask(KHONG, { assignee: "" }, "")).toBe(false);
+  });
+
+  it("ô lý do: trả lại ở `cho-duyet`, mở lại ở `hoan-thanh` — chỉ khi đi được bước ấy", () => {
+    expect(reasonMove(choDuyet, DU, NGUOI_KHAC)).toBe("return");
+    expect(reasonMove(daXong, DU, NGUOI_KHAC)).toBe("reopen");
+    // Người thực hiện có `task.approve` mà không có `task.update`: vẫn đi được (ea55113).
+    expect(reasonMove(daXong, CHI_DUYET, NGUOI_THUC_HIEN)).toBe("reopen");
+    // Thiếu `task.approve`.
+    expect(reasonMove(choDuyet, CHI_CAP_NHAT, NGUOI_KHAC)).toBeNull();
+    expect(reasonMove(daXong, CHI_CAP_NHAT, NGUOI_THUC_HIEN)).toBeNull();
+    // Có khoá mà không phải người của dòng, và không có `task.update`.
+    expect(reasonMove(daXong, CHI_DUYET, NGUOI_KHAC)).toBeNull();
+    // Máy chủ không liệt kê bước ấy ⇒ không có ô.
+    expect(reasonMove({ ...daXong, allowed_transitions: [] }, DU, NGUOI_KHAC)).toBeNull();
+    expect(reasonMove({ ...choDuyet, status: "da-tiep-nhan" }, DU, NGUOI_KHAC)).toBeNull();
+  });
+
+  it("câu thiếu quyền duyệt: chỉ khi đi được dòng, máy chủ liệt kê bước cần duyệt, và thiếu khoá", () => {
+    expect(lacksApprovalFor(choDuyet, CHI_CAP_NHAT, NGUOI_KHAC)).toBe(true);
+    expect(lacksApprovalFor(daXong, KHONG, NGUOI_THUC_HIEN)).toBe(true);
+    expect(lacksApprovalFor(choDuyet, DU, NGUOI_KHAC)).toBe(false);
+    // Không đi được dòng thì không nói chuyện quyền duyệt — cả khối đã ẩn.
+    expect(lacksApprovalFor(choDuyet, KHONG, NGUOI_KHAC)).toBe(false);
+    expect(
+      lacksApprovalFor({ status: "da-tiep-nhan", assignee: "", allowed_transitions: ["dang-thuc-hien", "tam-dung"] }, CHI_CAP_NHAT, NGUOI_KHAC),
+    ).toBe(false);
+  });
+
+  it("`hoan-thanh` là \"đã xong\" THEO TÊN; `chuyen-tiep` cũ không còn là ngõ cụt", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: `ketThuc` từng là "không có lối ra", nên `chuyen-tiep` là ngõ cụt.
+    // Máy chủ: hỏi `hoan-thanh` theo tên (`nhiem_vu.go:78-83`); dòng `chuyen-tiep` cũ đi tiếp được.
     expect(ketThuc("hoan-thanh")).toBe(true);
-    // Vẫn ngõ cụt dù không bước nào còn dẫn tới: những dòng cũ đã `chuyen-tiep` là hồ sơ lưu trữ.
-    expect(ketThuc("chuyen-tiep")).toBe(true);
+    expect(ketThuc("chuyen-tiep")).toBe(false);
     expect(ketThuc("tam-dung")).toBe(false);
-  });
-
-  it("`tam-dung` quay về được bốn trạng thái chính — lỏng CÓ CHỦ Ý", () => {
-    // Chỉ ĐÚNG MỘT trong bốn là hợp lệ thật: trạng thái ngay trước lúc dừng. Máy chủ tìm nó trong
-    // nhật ký; màn hình chưa lần theo nhật ký để thu hẹp, nên hiện cả bốn và để máy chủ từ chối ba
-    // lối sai.
-    for (const t of ["moi-giao", "da-tiep-nhan", "dang-thuc-hien", "cho-duyet"]) {
-      expect(chuyenSangDuoc("tam-dung", t)).toBe(true);
-    }
-    expect(chuyenSangDuoc("tam-dung", "hoan-thanh")).toBe(false);
   });
 });
 
@@ -1205,16 +1245,18 @@ describe("§5.9 Nhật ký & Trao đổi — nửa đọc", () => {
     expect(gopTrangNhatKy([], [c, c]).map((d) => d.id)).toEqual(["c"]);
   });
 
-  it("PHAN_CHUA_DUNG: mục cũ `Nhật ký & Trao đổi` đã rời; chỉ còn ô ghi tay và `Tiếp tục`", () => {
+  it("PHAN_CHUA_DUNG: mục cũ `Nhật ký & Trao đổi` đã rời; chỉ còn ô ghi tay — `Tiếp tục` đã dựng", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (TASK-06): khối nhật ký nay đọc được. Mục cũ nói "hợp đồng
     // không có tuyến nhật ký nào" — một lý do sai trên màn là lý do đẩy người sau đi dựng lại
     // thứ đã có.
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W1): `Tiếp tục` sau tạm dừng rời mục này — màn hình vẽ đúng
+    // danh sách máy chủ trả (`allowed_transitions`), luật "trạng thái trước lúc dừng" đã bỏ.
     expect(
       PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Nhật ký & Trao đổi (§5.9)")),
     ).toBeUndefined();
     const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Ghi nhật ký` (§5.9)"));
     expect(muc).toBeDefined();
-    expect(muc?.ten).toContain("Tiếp tục");
+    expect(PHAN_CHUA_DUNG.some((p) => `${p.ten} ${p.viSao}`.includes("Tiếp tục"))).toBe(false);
     expect(muc?.viSao).toContain("/log-entries");
     expect(muc?.viSao).toContain("người đang giữ việc");
     expect(PHAN_CHUA_DUNG.map((p) => p.viSao).join(" ")).not.toContain(

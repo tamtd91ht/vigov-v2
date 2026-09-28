@@ -28,6 +28,7 @@ import {
   quyenNhiemVu,
   type BangNhanTrangThai,
 } from "./nhan-nhiem-vu";
+import { serverTransitions } from "./task-transitions.fixture";
 import {
   BangKanban,
   BangNhiemVu,
@@ -165,7 +166,9 @@ function veKanban(nhanTT: BangNhanTrangThai): string {
 function veChiTiet(nhanTT: BangNhanTrangThai, status: string): string {
   return renderToStaticMarkup(
     <ChiTietNhiemVu
-      nhiemVu={nhiemVu({ status })}
+      // The server's list for `status` (3b2330b): the buttons whose labels this file checks exist
+      // only when the row carries them.
+      nhiemVu={nhiemVu({ status, allowed_transitions: serverTransitions(status) })}
       vanBan={{ pha: "dangTai" }}
       danhMuc={DANH_MUC}
       nhanTT={nhanTT}

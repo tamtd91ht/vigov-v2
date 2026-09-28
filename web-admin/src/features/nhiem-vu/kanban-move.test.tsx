@@ -15,6 +15,7 @@ import {
 } from "@/lib/quyen";
 
 import { menuKey } from "./kanban-move-menu";
+import { serverTransitions } from "./task-transitions.fixture";
 import {
   BANG_NHAN_MAC_DINH,
   KANBAN_MOVE_BUTTON,
@@ -46,10 +47,13 @@ import {
  * `noi-nhan-trang-thai.test.ts` — that the drop handler and the menu call the SAME function.
  */
 
+const ASSIGNEE = "CB-2026-3H8N2W";
+const OTHER = "CB-2026-0P4X1Z";
+
 const TASK: petitions_nhiemVuRa = {
   code: "NV19",
   child_count: 0,
-  allowed_transitions: [],
+  allowed_transitions: ["cho-duyet", "hoan-thanh", "tam-dung"],
   updated_at: "2026-06-01T02:00:00Z",
   type: "co-ban",
   bloc: "",
@@ -60,7 +64,7 @@ const TASK: petitions_nhiemVuRa = {
   source: "truc-tiep",
   source_id: "",
   unit: "",
-  assignee: "",
+  assignee: ASSIGNEE,
   assigner: "",
   lead_unit: "",
   monitor: "",
@@ -81,6 +85,12 @@ const CATALOGUES: DanhMucNhiemVu = { loai: [], mucUuTien: [], khoi: [], boPhan: 
 const UPDATE_ONLY = quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]);
 const UPDATE_AND_APPROVE = quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU, QUYEN_DUYET_HOAN_THANH_NHIEM_VU]);
 const NO_KEYS = quyenNhiemVu([]);
+const APPROVE_ONLY = quyenNhiemVu([QUYEN_DUYET_HOAN_THANH_NHIEM_VU]);
+
+/** A row in `status` carrying the server's list for it. */
+function at(status: string, patch: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
+  return { ...TASK, status, allowed_transitions: serverTransitions(status), ...patch };
+}
 
 const CHILDREN_LEFT =
   "còn 3 việc con (NV20, NV21, NV22) — hoàn thành hết việc con rồi mới hoàn thành việc cha";
@@ -109,7 +119,14 @@ function board(task: petitions_nhiemVuRa, move: KanbanMove | null): string {
 }
 
 function moveWith(sua: Partial<KanbanMove> = {}): KanbanMove {
-  return { permissions: UPDATE_ONLY, pending: null, result: null, move: () => {}, ...sua };
+  return {
+    permissions: UPDATE_ONLY,
+    staffCode: OTHER,
+    pending: null,
+    result: null,
+    move: () => {},
+    ...sua,
+  };
 }
 
 /** The HTML of ONE column, by status code. */
@@ -129,45 +146,100 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("which moves a card offers — the drawer's list, one source", () => {
-  it("`task.update`: forward step and the pause branch; never `hoan-thanh`", () => {
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this pinned `chuyen-tiep` as a branch step. The owner decided
-    // "Chuyển tiếp" is the SAME task handed elsewhere (`POST …/assignment`, the drawer's §5.7
-    // block) and `…/status` answers 400 for it (764bb92) — a menu item that can only be refused.
-    expect(clickableTransitions("dang-thuc-hien", UPDATE_ONLY)).toEqual(["cho-duyet", "tam-dung"]);
-    expect(clickableTransitions("cho-duyet", UPDATE_ONLY)).toEqual(["tam-dung"]);
+describe("which moves a card offers — the SERVER's list, one source", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: every case here used to read the screen's own copy of the
+  // lifecycle (`CHUYEN_DUOC`, `clickableTransitions(status, keys)`). The row now carries
+  // `allowed_transitions` (3b2330b) and the copy is gone; the cases pin that the screen draws the
+  // server's list, gated by (row: `task.update` or assignee) and (move: `task.approve` if needed).
+
+  it("`task.update`, not the assignee: the listed moves minus those needing approval", () => {
+    expect(clickableTransitions(at("dang-thuc-hien"), UPDATE_ONLY, OTHER)).toEqual(["cho-duyet", "tam-dung"]);
+    expect(clickableTransitions(at("moi-giao"), UPDATE_ONLY, OTHER)).toEqual([
+      "da-tiep-nhan",
+      "dang-thuc-hien",
+      "tam-dung",
+    ]);
+    // `cho-duyet` can no longer be paused — the server stopped listing it.
+    expect(clickableTransitions(at("cho-duyet"), UPDATE_ONLY, OTHER)).toEqual([]);
   });
 
-  it("`task.approve` adds `hoan-thanh`; the RETURN step stays out (it needs a reason)", () => {
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: `chuyen-tiep` left the list — see the case above.
-    expect(clickableTransitions("cho-duyet", UPDATE_AND_APPROVE)).toEqual(["hoan-thanh", "tam-dung"]);
+  it("`task.approve` adds `hoan-thanh` (straight from `dang-thuc-hien` too); reason moves stay out", () => {
+    expect(clickableTransitions(at("dang-thuc-hien"), UPDATE_AND_APPROVE, OTHER)).toEqual([
+      "cho-duyet",
+      "hoan-thanh",
+      "tam-dung",
+    ]);
+    // Return (cho-duyet → dang-thuc-hien) and reopen (hoan-thanh → dang-thuc-hien) need a reason.
+    expect(clickableTransitions(at("cho-duyet"), UPDATE_AND_APPROVE, OTHER)).toEqual(["hoan-thanh"]);
+    expect(clickableTransitions(at("hoan-thanh"), UPDATE_AND_APPROVE, OTHER)).toEqual([]);
   });
 
-  it("`chuyen-tiep` is offered from NO status, with every key — neither in the drawer nor on a card", () => {
+  it("`Tiếp tục` after a pause: exactly the server's three, no history rule", () => {
+    expect(clickableTransitions(at("tam-dung"), UPDATE_ONLY, OTHER)).toEqual([
+      "moi-giao",
+      "da-tiep-nhan",
+      "dang-thuc-hien",
+    ]);
+  });
+
+  it("THE ASSIGNEE without `task.update` moves their own task (ea55113)", () => {
+    expect(clickableTransitions(at("dang-thuc-hien"), NO_KEYS, ASSIGNEE)).toEqual(["cho-duyet", "tam-dung"]);
+    // ...and with `task.approve`, may approve their own task — the server's two layers, nothing more.
+    expect(clickableTransitions(at("dang-thuc-hien"), APPROVE_ONLY, ASSIGNEE)).toEqual([
+      "cho-duyet",
+      "hoan-thanh",
+      "tam-dung",
+    ]);
+  });
+
+  it("DENIED — neither `task.update` nor the assignee: nothing, even with `task.approve`", () => {
+    expect(clickableTransitions(at("dang-thuc-hien"), NO_KEYS, OTHER)).toEqual([]);
+    expect(clickableTransitions(at("dang-thuc-hien"), APPROVE_ONLY, OTHER)).toEqual([]);
+  });
+
+  it("DENIED — an unread session (empty code) never matches, not even an UNASSIGNED task", () => {
+    // `"" === ""` would hand every unassigned task to every account whose session failed to load.
+    expect(clickableTransitions(at("dang-thuc-hien", { assignee: "" }), NO_KEYS, "")).toEqual([]);
+  });
+
+  it("only what the row lists: an empty list draws nothing, an unknown code is left out", () => {
+    expect(
+      clickableTransitions(at("dang-thuc-hien", { allowed_transitions: [] }), UPDATE_AND_APPROVE, OTHER),
+    ).toEqual([]);
+    expect(
+      clickableTransitions(
+        at("dang-thuc-hien", { allowed_transitions: ["da-ban-giao", "tam-dung"] }),
+        UPDATE_ONLY,
+        OTHER,
+      ),
+    ).toEqual(["tam-dung"]);
+  });
+
+  it("`chuyen-tiep` is offered from NO status, with every key — the server lists it nowhere", () => {
     const allKeys = quyenNhiemVu([
       QUYEN_CAP_NHAT_NHIEM_VU,
       QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
       TASK_ASSIGN_PERMISSION,
     ]);
     for (const from of MOI_TRANG_THAI) {
-      expect(clickableTransitions(from, allKeys)).not.toContain("chuyen-tiep");
+      expect(clickableTransitions(at(from), allKeys, OTHER)).not.toContain("chuyen-tiep");
     }
   });
 
   it("menu, drop target and drawer buttons all read that ONE list (source wiring)", () => {
     // The menu is CLOSED in static markup, so rendering it proves nothing about its items; the
-    // case above is the proof, and this pins that all three places still read it.
+    // cases above are the proof, and this pins that all three places still read it.
     const source = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
     expect(source).toContain(
-      "const targets = move === null ? [] : clickableTransitions(nhiemVu.status, move.permissions);",
+      "move === null ? [] : clickableTransitions(nhiemVu, move.permissions, move.staffCode);",
     );
-    expect(source).toContain("clickableTransitions(dragging.status, move.permissions).includes(target)");
-    expect(source).toContain("const buocBamDuoc = clickableTransitions(nhiemVu.status, quyen);");
-  });
-
-  it("no keys, or a dead-end status: nothing", () => {
-    expect(clickableTransitions("dang-thuc-hien", NO_KEYS)).toEqual([]);
-    expect(clickableTransitions("hoan-thanh", UPDATE_AND_APPROVE)).toEqual([]);
+    expect(source).toContain(
+      "clickableTransitions(dragging, move.permissions, move.staffCode).includes(target)",
+    );
+    expect(source).toContain("const buocBamDuoc = clickableTransitions(nhiemVu, quyen, maNguoiDangNhap);");
+    expect(source).toContain("staffCode: maNguoiDangNhap,");
+    // No second lifecycle map may come back.
+    expect(source).not.toContain("CHUYEN_DUOC");
   });
 });
 
@@ -181,15 +253,23 @@ describe("the board — allowed, denied, pending, refused, done", () => {
     expect(html).toContain(`>${KANBAN_MOVE_BUTTON}</button>`);
   });
 
-  it("DENIED — no `task.update`: no drag handle, no menu; the card still opens", () => {
+  it("DENIED — no `task.update` and not the assignee: no drag handle, no menu; the card still opens", () => {
     const html = board(TASK, moveWith({ permissions: NO_KEYS }));
     expect(html).not.toContain("draggable");
     expect(html).not.toContain(KANBAN_MOVE_BUTTON);
     expect(html).toContain("Mở NV19");
   });
 
-  it("DENIED — a finished task offers no move at all, whatever the keys", () => {
-    const html = board({ ...TASK, status: "hoan-thanh" }, moveWith({ permissions: UPDATE_AND_APPROVE }));
+  it("ALLOWED — the ASSIGNEE without `task.update` gets the drag handle and the menu", () => {
+    const html = board(TASK, moveWith({ permissions: NO_KEYS, staffCode: ASSIGNEE }));
+    expect(html).toContain('draggable="true"');
+    expect(html).toContain(`aria-label="${KANBAN_MOVE_BUTTON} (NV19)"`);
+  });
+
+  it("a finished task: no drag, no menu — its only move (reopen) needs a reason, in the drawer", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: was "no move at all, whatever the keys" — `hoan-thanh` was a
+    // dead end. The server now lists the reopen; it is a reason form, never a card move.
+    const html = board(at("hoan-thanh"), moveWith({ permissions: UPDATE_AND_APPROVE }));
     expect(html).not.toContain("draggable");
     expect(html).not.toContain(KANBAN_MOVE_BUTTON);
   });
@@ -208,7 +288,7 @@ describe("the board — allowed, denied, pending, refused, done", () => {
 
   it("REFUSED: the server's sentence VERBATIM, `role=alert`, on the card that did not move", () => {
     const html = board(
-      { ...TASK, status: "cho-duyet" },
+      at("cho-duyet"),
       moveWith({
         permissions: UPDATE_AND_APPROVE,
         result: { code: "NV19", target: "hoan-thanh", via: "menu", ok: false, message: CHILDREN_LEFT },

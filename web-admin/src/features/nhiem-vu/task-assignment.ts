@@ -100,11 +100,14 @@ export function assignmentBody(
 }
 
 /**
- * Whether the block is drawn at all: `task.assign` of the SESSION and a task that is not terminal.
+ * Whether the block is drawn at all: `task.assign` of the SESSION and a task that is not finished.
  *
  * CONVENIENCE, NOT PROTECTION (rule 5, forbidden #1): the route checks `task.assign` and refuses a
- * terminal task with 409 whatever this says. A terminal task has no block because the one thing it
- * could do is be refused — `hoan-thanh` is signed-off work and an old `chuyen-tiep` row is a record.
+ * finished task with 409 whatever this says (`CheckAssignable`, `task_assignment.go:121-126`).
+ *
+ * ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: an old `chuyen-tiep` row used to be excluded too, as "terminal". The
+ * server no longer treats it so — it moves on to `da-tiep-nhan` / `dang-thuc-hien`, and
+ * `CheckAssignable` refuses only `hoan-thanh` — so hiding the block there hid an act the server allows.
  */
 export function canShowAssignment(permissions: QuyenNhiemVu, status: string): boolean {
   return permissions.reassign && !ketThuc(status);
