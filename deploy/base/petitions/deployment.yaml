@@ -7,9 +7,11 @@
 # `reporting` thì chưa: 0 tuyến, nên nó KHÔNG có manifest, và đó là một lựa chọn đã cân nhắc
 # chứ không phải chỗ sót — xem `deploy/README.md`.
 #
-# NÓ KHÔNG PHỤC VỤ gRPC. `service-petitions/cmd/server/main.go:293` chỉ mở một listener HTTP.
-# Vì thế không có cổng 9090 và không có nhãn `vigov.vn/grpc` — khai một cổng không ai nghe là
-# mời người sau tin rằng có đường gọi tới nó.
+# NÓ PHỤC VỤ gRPC từ 28/09/2026: `cmd/server/main.go` (`buildGRPCServer`) mở listener thứ hai ở
+# `GRPC_LISTEN_ADDR` (mặc định `:9090`) cho MỘT RPC — `CountOrgUnitHoldings`, identity hỏi trước
+# khi xoá một bộ phận (menu Cấu hình §12.4). Thiếu cổng 9090 ở đây và ở `service.yaml`, hoặc thiếu
+# nhãn `vigov.vn/grpc`, thì không có gì đỏ: chỉ có mọi lần xoá bộ phận ở identity bị từ chối với
+# câu "thử lại sau".
 #
 # NÓ GỌI RA hai dịch vụ qua gRPC: `platform` (Host → xã) và `identity` (cookie phiên →
 # principal cán bộ, `main.go:117`). Thiếu địa chỉ của một trong hai thì tiến trình TỪ CHỐI
@@ -52,6 +54,7 @@ spec:
         # từ-chối-tất-cả, nên thiếu nhãn = pod không nhận được yêu cầu nào, và KHÔNG CÓ GÌ BÁO:
         # pod xanh, probe xanh, rollout xanh, chỉ có người dùng gặp timeout.
         vigov.vn/be-mat: rest
+        vigov.vn/grpc: "co"      # NetworkPolicy quy tắc 3: nhận 9090 từ pod cùng namespace
     spec:
       # Không có khối này, scheduler được phép xếp mọi replica lên cùng một node, và rút node
       # đó là mất trọn dịch vụ. Nó cũng là thứ ràng buộc pod dôi ra của `maxSurge: 1` phải
@@ -97,6 +100,9 @@ spec:
 
           ports:
             - { name: rest, containerPort: 8080 }
+            # 9090 KHÔNG ĐƯỢC PHƠI RA INTERNET: không TLS (ADR 0025). Thứ chặn thật là NetworkPolicy
+            # quy tắc 3 (`mang/netpol.yaml`) cộng với `GRPC_CALLER_KEY` trên mỗi RPC — cả hai.
+            - { name: grpc, containerPort: 9090 }
 
           env:
             # KHÔNG bắt buộc từ 2026-09-25: mọi dịch vụ Go đọc `cfg.ListenAddr`, mặc định `:8080`

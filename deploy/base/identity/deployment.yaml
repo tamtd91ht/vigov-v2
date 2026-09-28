@@ -78,6 +78,13 @@ spec:
             # người ta đi tìm DNS cả buổi chiều.
             - name: PLATFORM_GRPC_ADDR
               value: platform:9090
+            # Hai chủ sở hữu hồ sơ identity hỏi trước khi xoá một bộ phận (`CountOrgUnitHoldings`,
+            # menu Cấu hình §12.4). Không có mặc định trong mã; thiếu thì lần xoá bị từ chối có
+            # tên biến. Đòi `petitions`/`documents` phơi cổng 9090 — xem `service.yaml` của chúng.
+            - name: PETITIONS_GRPC_ADDR
+              value: petitions:9090
+            - name: DOCUMENTS_GRPC_ADDR
+              value: documents:9090
           envFrom:
             - configMapRef: { name: cau-hinh-chung }
             # ⚠ THÊM `REDIS_DSN` Ở STAGING/PROD. `config.Load` KHÔNG đòi nó, nên thiếu nó

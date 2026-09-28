@@ -84,6 +84,8 @@ kubectl apply -k deploy/overlays/${NS#vigov-}      # sinh ConfigMap cau-hinh-chu
 | `LISTEN_ADDR` | không | đã viết sẵn trong `deployment.yaml` |
 | `PLATFORM_GRPC_ADDR` | không | đã viết sẵn trong `deployment.yaml` |
 | `IDENTITY_GRPC_ADDR` | không | đã viết sẵn trong `deployment.yaml` |
+| `PETITIONS_GRPC_ADDR` | không | đã viết sẵn trong `deployment.yaml` — **chỉ `identity`** (chặn xoá bộ phận còn giữ hồ sơ) |
+| `DOCUMENTS_GRPC_ADDR` | không | đã viết sẵn trong `deployment.yaml` — **chỉ `identity`** (chặn xoá bộ phận còn giữ hồ sơ) |
 | `GRPC_LISTEN_ADDR` | không | không khai — mặc định `:9090` |
 | `TENANT_CACHE_TTL` | không | không khai — mặc định `30s` |
 | `RABBITMQ_DSN` | không | chưa dùng — Secret ngày bật |

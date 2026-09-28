@@ -36,7 +36,9 @@
 //	REDIS_DSN                   Secret      optional — empty means no cache; CanhBao reports it
 //	PLATFORM_GRPC_ADDR          ConfigMap   optional here, refused by name at Dial
 //	IDENTITY_GRPC_ADDR          ConfigMap   optional here, refused by name at Dial
-//	LISTEN_ADDR                 ConfigMap   optional — default :8080
+//	PETITIONS_GRPC_ADDR         ConfigMap   optional here, refused by name at Dial (identity only)
+//	DOCUMENTS_GRPC_ADDR         ConfigMap   optional here, refused by name at Dial (identity only)
+//	LISTEN_ADDR                ConfigMap   optional — default :8080
 //	GRPC_LISTEN_ADDR            ConfigMap   optional — default :9090
 //	TENANT_CACHE_TTL            —           optional — default 30s, not set in the cluster
 //	RABBITMQ_DSN                Secret      optional — refused by name at connect time
@@ -246,6 +248,22 @@ type Config struct {
 	// TLS on it (ADR 0025); an address that leaves the cluster puts every staff session on the wire
 	// in the clear.
 	IdentityGRPCAddr string
+
+	// PetitionsGRPCAddr and DocumentsGRPCAddr are where petitions and documents answer
+	// CountOrgUnitHoldings — the question identity asks before it soft-deletes an org unit (menu
+	// Cấu hình §12.4; proto/vigov/{petitions,documents}/v1).
+	//
+	// THE SHAPE OF IdentityGRPCAddr: no default, empty allowed here, refused by name at Dial. Only
+	// identity reads them. A guessed address would not fail open — an unreachable owner refuses the
+	// delete (fail closed, core/petitionsclient) — but it would refuse EVERY org-unit delete with a
+	// "try again" message while both services are healthy, which sends somebody to inspect the
+	// wrong service.
+	//
+	// CLUSTER-INTERNAL ADDRESS ONLY. The hop is plaintext (ADR 0025; tools/security_debt.json). What
+	// travels on it is one org-unit id and two counts — no session token, no personal data — but the
+	// caller key does, and an address that leaves the cluster puts that key on the wire.
+	PetitionsGRPCAddr string
+	DocumentsGRPCAddr string
 
 	// GRPCCallerKey authenticates the CALLER on the inter-service gRPC port. ONE key, shared by
 	// every service on the deployment, read from GRPC_CALLER_KEY and sourced from a k8s secret.
@@ -626,6 +644,9 @@ func Load(serviceName string) (Config, error) {
 		RedisDSN:         secret.DSN(strings.TrimSpace(os.Getenv("REDIS_DSN"))),
 		PlatformGRPCAddr: strings.TrimSpace(os.Getenv("PLATFORM_GRPC_ADDR")),
 		IdentityGRPCAddr: strings.TrimSpace(os.Getenv("IDENTITY_GRPC_ADDR")),
+		// Trimmed for the same reason as the two above; see PetitionsGRPCAddr.
+		PetitionsGRPCAddr: strings.TrimSpace(os.Getenv("PETITIONS_GRPC_ADDR")),
+		DocumentsGRPCAddr: strings.TrimSpace(os.Getenv("DOCUMENTS_GRPC_ADDR")),
 		// NONE OF THE FOLLOWING FIVE APPEARS IN `thieu` ABOVE, and that is a decision rather
 		// than an omission. Nothing in this repository connects to RabbitMQ or Elasticsearch
 		// yet; a variable made required at Load stops all eight services from starting until

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,18 +19,23 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"google.golang.org/grpc"
 
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/config"
+	petitionsv1 "github.com/vihat/vigov/core/gen/vigov/petitions/v1"
+	"github.com/vihat/vigov/core/grpcx"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/migrate"
 	"github.com/vihat/vigov/core/platformclient"
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/staffauth"
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
+	svcgrpc "github.com/vihat/vigov/service-petitions/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-petitions/internal/http"
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 	"github.com/vihat/vigov/service-petitions/migrations"
@@ -334,26 +340,86 @@ func chay(log *slog.Logger) error {
 	// 20 GIÂY, và con số ấy phải NHỎ HƠN `terminationGracePeriodSeconds` của manifest (45). Ngược
 	// lại thì k8s `SIGKILL` trước khi hạn ở đây trôi hết, và toàn bộ đoạn mã này trở thành thứ
 	// trông như đang canh mà không bao giờ chạy tới cuối.
+	// THE gRPC SURFACE — its own port (GRPC_LISTEN_ADDR, default :9090), the same shape as platform
+	// and identity. One RPC today, CountOrgUnitHoldings, asked by identity before it deletes an org
+	// unit. The stores are the SAME objects the REST routes read, so "open" on the delete and on the
+	// register come from one place.
+	//
+	// Plaintext, like every gRPC port here (ADR 0025): the guard is GRPC_CALLER_KEY on every RPC plus
+	// NetworkPolicy rule 3 (deploy/base/mang/netpol.yaml) — both, not either.
+	grpcSrv := buildGRPCServer(cfg.GRPCCallerKey, svcgrpc.Deps{Petitions: phieu, Tasks: nhiemVu, Log: log})
+	grpcLis, err := net.Listen("tcp", cfg.GRPCListenAddr)
+	if err != nil {
+		return err
+	}
+
 	dungLai := make(chan os.Signal, 1)
 	signal.Notify(dungLai, os.Interrupt, syscall.SIGTERM)
 
-	// Có đệm: `ListenAndServe` hỏng sau khi đã có ai đọc kênh là một goroutine rò lại mãi mãi.
-	loi := make(chan error, 1)
+	// Buffered for two: either server may fail, and a send nobody reads would leak its goroutine.
+	loi := make(chan error, 2)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			loi <- err
+		}
+	}()
+	go func() {
+		log.Info("starting gRPC", "service", "petitions", "addr", cfg.GRPCListenAddr)
+		// Serve returns nil after GracefulStop, so there is no ErrServerClosed to filter.
+		if err := grpcSrv.Serve(grpcLis); err != nil {
 			loi <- err
 		}
 	}()
 
 	select {
 	case err := <-loi:
+		// One surface failing takes the process down rather than leaving it half-serving: REST up
+		// with gRPC down looks healthy while every org-unit delete in identity is refused.
+		grpcSrv.Stop()
+		_ = srv.Close()
 		return err
 	case <-dungLai:
 		log.Info("nhận tín hiệu dừng, đang đóng kết nối", "service", "petitions")
 		ctx, huy := context.WithTimeout(context.Background(), 20*time.Second)
 		defer huy()
-		return srv.Shutdown(ctx)
+
+		// Both surfaces drain in parallel, inside the same 20 seconds (< the manifest's 45).
+		grpcDone := make(chan struct{})
+		go func() {
+			grpcSrv.GracefulStop()
+			close(grpcDone)
+		}()
+		errHTTP := srv.Shutdown(ctx)
+		select {
+		case <-grpcDone:
+		case <-ctx.Done():
+			log.Warn("gRPC không đóng kịp hạn, buộc dừng", "service", "petitions")
+			grpcSrv.Stop()
+		}
+		return errHTTP
 	}
+}
+
+// buildGRPCServer builds the inter-service gRPC surface with its COMPLETE interceptor chain.
+//
+// A NAMED FUNCTION SO A TEST CAN START IT (grpc_server_test.go): core/grpcx proves the interceptors
+// refuse what they should, but only a test of THIS function sees whether this binary installs them.
+//
+// ORDER IS NOT NEGOTIABLE: caller key first, so an unauthenticated caller never reaches the commune
+// logic; then the commune from metadata into context. CountOrgUnitHoldings is NOT tenant-exempt, so
+// a call without "x-tenant-id" is refused with InvalidArgument before the handler (rule 1,
+// forbidden #1).
+func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps) *grpc.Server {
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			// Panics at construction when GRPC_CALLER_KEY is empty: a server without the key accepts
+			// every call it should refuse, and nothing looks wrong.
+			grpcx.UnaryServerCallerAuth(callerKey, d.Log),
+			grpcx.UnaryServerInterceptor(),
+		),
+	)
+	petitionsv1.RegisterPetitionsServiceServer(srv, svcgrpc.NewServer(d))
+	return srv
 }
 
 // dungBien builds the edge chain this binary serves.

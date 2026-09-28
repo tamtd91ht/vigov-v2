@@ -4,8 +4,9 @@ metadata:
   name: petitions
 spec:
   selector: { app.kubernetes.io/name: petitions }
-  # CHỈ cổng REST. Dịch vụ này không phục vụ gRPC (`cmd/server/main.go:136` chỉ mở một
-  # listener HTTP), nên khai thêm một cổng 9090 ở đây sẽ tạo một Endpoint không có ai nghe —
-  # và người sau sẽ đọc nó là "có đường gọi tới petitions qua gRPC".
   ports:
     - { name: rest, port: 8080, targetPort: rest }
+    # Tên DNS trong cụm: petitions.<namespace>.svc.cluster.local:9090
+    # Đây là giá trị `PETITIONS_GRPC_ADDR` của `identity` (chặn xoá bộ phận còn giữ hồ sơ,
+    # `CountOrgUnitHoldings`). Không có dòng này thì mọi lần xoá bộ phận bị từ chối.
+    - { name: grpc, port: 9090, targetPort: grpc }

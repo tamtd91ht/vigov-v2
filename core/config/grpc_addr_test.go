@@ -223,6 +223,45 @@ func TestIdentityGRPCAddrDocTuMoiTruong(t *testing.T) {
 	}
 }
 
+// The two owner addresses identity asks before deleting an org unit: no default, trimmed, and
+// never swapped. A swap would ask petitions for incoming documents and documents for petitions —
+// both answer UNIMPLEMENTED, every delete is refused, and the message says "try again".
+func TestOrgUnitOwnerGRPCAddrsHaveNoDefault(t *testing.T) {
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":        dsnGia,
+		"ENV":                 EnvDev,
+		"PETITIONS_GRPC_ADDR": "",
+		"DOCUMENTS_GRPC_ADDR": "",
+	})
+	cfg, err := Load("identity")
+	if err != nil {
+		t.Fatalf("Load lỗi: %v", err)
+	}
+	if cfg.PetitionsGRPCAddr != "" || cfg.DocumentsGRPCAddr != "" {
+		t.Errorf("địa chỉ phải để trống chứ không đoán: petitions=%q documents=%q",
+			cfg.PetitionsGRPCAddr, cfg.DocumentsGRPCAddr)
+	}
+}
+
+func TestOrgUnitOwnerGRPCAddrsReadTrimmedAndApart(t *testing.T) {
+	datMoiTruong(t, map[string]string{
+		"DATABASE_DSN":        dsnGia,
+		"ENV":                 EnvDev,
+		"PETITIONS_GRPC_ADDR": " petitions.noi-bo:9090\n",
+		"DOCUMENTS_GRPC_ADDR": "  documents.noi-bo:9090 ",
+	})
+	cfg, err := Load("identity")
+	if err != nil {
+		t.Fatalf("Load lỗi: %v", err)
+	}
+	if cfg.PetitionsGRPCAddr != "petitions.noi-bo:9090" {
+		t.Errorf("PetitionsGRPCAddr = %q", cfg.PetitionsGRPCAddr)
+	}
+	if cfg.DocumentsGRPCAddr != "documents.noi-bo:9090" {
+		t.Errorf("DocumentsGRPCAddr = %q", cfg.DocumentsGRPCAddr)
+	}
+}
+
 func TestHaiDiaChiGRPCKhongLanNhau(t *testing.T) {
 	// Two addresses, two variables, and a reader has to be able to tell which is which. They were
 	// briefly one field's worth of typing apart in the struct literal, and a swap there would point

@@ -4,8 +4,9 @@ metadata:
   name: documents
 spec:
   selector: { app.kubernetes.io/name: documents }
-  # CHỈ cổng REST. Dịch vụ này không phục vụ gRPC (`cmd/server/main.go:158` chỉ mở một
-  # `http.Server`), nên khai thêm một cổng 9090 ở đây sẽ tạo một Endpoint không có ai nghe —
-  # và người sau sẽ đọc nó là "có đường gọi tới documents qua gRPC".
   ports:
     - { name: rest, port: 8080, targetPort: rest }
+    # Tên DNS trong cụm: documents.<namespace>.svc.cluster.local:9090
+    # Đây là giá trị `DOCUMENTS_GRPC_ADDR` của `identity` (chặn xoá bộ phận còn giữ văn bản đến,
+    # `CountOrgUnitHoldings`). Không có dòng này thì mọi lần xoá bộ phận bị từ chối.
+    - { name: grpc, port: 9090, targetPort: grpc }
