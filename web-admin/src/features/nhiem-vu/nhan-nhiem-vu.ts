@@ -29,6 +29,7 @@ import {
   QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
   QUYEN_TAO_NHIEM_VU,
   QUYEN_XOA_NHIEM_VU,
+  TASK_ASSIGN_PERMISSION,
   coQuyen,
 } from "@/lib/quyen";
 import type {
@@ -240,12 +241,18 @@ export function theoThuTuXa<T extends string>(
  *   - rộng hơn máy chủ ⇒ một nút hiện ra rồi nhận câu từ chối nguyên văn của máy chủ;
  *   - hẹp hơn máy chủ ⇒ một nút thiếu, cán bộ báo ngay vì họ đang cần bấm nó.
  * Không chiều nào cho ra một lần GHI SAI, và đó là điều kiện để chấp nhận một bản sao.
+ *
+ * `chuyen-tiep` IS NO LONGER THE TARGET OF ANY MOVE (owner decision 28/09/2026, server 764bb92,
+ * `nhiem_vu.go:70-77`): "Chuyển tiếp" is the SAME task handed to another unit or person — the
+ * §5.7 block (`task-assignment-block.tsx`), `POST …/assignment` — and `…/status` now answers 400
+ * for it. The code stays in the type, the labels and this map with NO way out, because rows that
+ * already hold it are records: they keep their label and stay terminal (`ketThuc`).
  */
 const CHUYEN_DUOC: Readonly<Record<TrangThaiNhiemVu, readonly TrangThaiNhiemVu[]>> = {
-  "moi-giao": ["da-tiep-nhan", "tam-dung", "chuyen-tiep"],
-  "da-tiep-nhan": ["dang-thuc-hien", "tam-dung", "chuyen-tiep"],
-  "dang-thuc-hien": ["cho-duyet", "tam-dung", "chuyen-tiep"],
-  "cho-duyet": ["hoan-thanh", "dang-thuc-hien", "tam-dung", "chuyen-tiep"],
+  "moi-giao": ["da-tiep-nhan", "tam-dung"],
+  "da-tiep-nhan": ["dang-thuc-hien", "tam-dung"],
+  "dang-thuc-hien": ["cho-duyet", "tam-dung"],
+  "cho-duyet": ["hoan-thanh", "dang-thuc-hien", "tam-dung"],
   "tam-dung": ["moi-giao", "da-tiep-nhan", "dang-thuc-hien", "cho-duyet"],
   "hoan-thanh": [],
   "chuyen-tiep": [],
@@ -265,7 +272,11 @@ export function chuyenSangDuoc(hienTai: string, moi: string): boolean {
   return CHUYEN_DUOC[hienTai].includes(moi);
 }
 
-/** Vòng đời có lối ra khỏi trạng thái này không (`hoan-thanh` và `chuyen-tiep` là hai ngõ cụt). */
+/**
+ * Vòng đời có lối ra khỏi trạng thái này không (`hoan-thanh` và `chuyen-tiep` là hai ngõ cụt).
+ *
+ * `chuyen-tiep` vẫn là ngõ cụt dù không bước nào còn dẫn TỚI nó: đó là những dòng cũ, hồ sơ lưu trữ.
+ */
 export function ketThuc(ma: string): boolean {
   return laTrangThaiNhiemVu(ma) && CHUYEN_DUOC[ma].length === 0;
 }
@@ -701,6 +712,11 @@ export type QuyenNhiemVu = {
   readonly xoa: boolean;
   /** LỚP MỘT của duyệt lùi hạn — `task.extend`. Lớp hai (ADR 0038) vẫn là `quyetDinhDuyetLuiHan`. */
   readonly duyetGiaHan: boolean;
+  /**
+   * The §5.7 block `Giao việc, chuyển việc` — `task.assign` ALONE. Not implied by `task.update`:
+   * the assignment route declares `task.assign` and nothing else (`TASK_ASSIGN_PERMISSION`).
+   */
+  readonly reassign: boolean;
 };
 
 /**
@@ -721,6 +737,7 @@ export function quyenNhiemVu(dsQuyen: readonly string[] | null): QuyenNhiemVu {
     duyetHoanThanh: capNhat && coQuyen(ds, QUYEN_DUYET_HOAN_THANH_NHIEM_VU),
     xoa: coQuyen(ds, QUYEN_XOA_NHIEM_VU),
     duyetGiaHan: coQuyen(ds, QUYEN_DUYET_GIA_HAN),
+    reassign: coQuyen(ds, TASK_ASSIGN_PERMISSION),
   };
 }
 
@@ -1855,11 +1872,15 @@ export const LY_DO_KHONG_SUA_HAN =
   "lệ đúng hạn báo cáo lên lãnh đạo, trong khi con số ấy phải đếm theo đúng cam kết đã đưa ra. " +
   "Vì vậy `PATCH /api/v1/tasks/{ma}` không nhận `due_at`.";
 
-/** Vì sao `Cơ quan chủ trì` và `Chuyên viên` không sửa được. Cùng quy tắc một câu hai chỗ. */
+/**
+ * Why `Cơ quan chủ trì` and `Chuyên viên` are read-only in the §5.4 `✎ Sửa` form — and WHERE they
+ * are edited instead (user decision 28/09/2026): the §5.7 block, in the same single
+ * `POST …/assignment` call as unit and assignee, behind `task.assign`. `PATCH` still does not take
+ * them, and must not: it stands behind `task.update`, a different key.
+ */
 export const LY_DO_KHONG_SUA_CHU_TRI =
-  "`PATCH /api/v1/tasks/{ma}` không nhận `lead_unit` và `monitor`, nên cơ quan chủ trì tham mưu " +
-  "và chuyên viên theo dõi chỉ đặt được lúc giao việc. Sửa được chúng cần máy chủ mở thêm hai " +
-  "trường ấy trên tuyến sửa.";
+  "Cơ quan chủ trì tham mưu và chuyên viên theo dõi được sửa ở khối “Giao việc, chuyển việc” " +
+  "ngay trong phần chi tiết này, cùng lúc với bộ phận và người thực hiện — cần quyền Giao nhiệm vụ.";
 
 /** `✎ Sửa` khoá khi khối văn bản còn đang tải. */
 export const KHOA_SUA_DANG_TAI =
@@ -2273,23 +2294,6 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Ô đổi bộ phận / người thực hiện ở form sửa (§5.7)",
-    viSao:
-      "`task.assign` chưa có tuyến, và `PATCH /api/v1/tasks/{ma}` CỐ Ý không đổi `bo_phan_id` hay " +
-      "`nguoi_thuc_hien_ma`. Gộp việc giao người vào form sửa sẽ trao quyền giao việc cho mọi tài " +
-      "khoản cầm `task.update` — một khoá khác hẳn, và bảng `quyen` có sẵn `task.assign` để tách " +
-      "hai việc ấy ra.",
-  },
-  {
-    ten: "`Chuyển tiếp` — giao tiếp cùng nhiệm vụ cho nơi khác (§6)",
-    viSao:
-      "Nghĩa của `Chuyển tiếp` đã được chủ đầu tư quyết định ngày 28/09/2026: vẫn là CÙNG nhiệm " +
-      "vụ ấy, làm tiếp, được giao cho một đơn vị hoặc một người khác — không sinh nhiệm vụ mới. " +
-      "Phần máy chủ cho nghĩa ấy đang làm. Cho tới khi xong, bước `chuyen-tiep` trên màn vẫn chạy " +
-      "theo cách cũ: nhiệm vụ dừng ở trạng thái ấy, không có lối ra, và một nhiệm vụ cha còn việc " +
-      "con đã `chuyen-tiep` thì chưa hoàn thành được.",
-  },
-  {
     ten: "Bộ lọc `Liên quan đến tôi` (§3)",
     viSao:
       "Máy chủ TỪ CHỐI `?scope=related` kèm lý do: bộ lọc này cần `bộ phận tôi đang giữ`, mà hợp " +
@@ -2311,10 +2315,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "được ghi vào nhật ký của một nhiệm vụ. Mọi dòng hiện có là dòng máy chủ tự ghi ở mỗi thao tác. " +
       "`Tiếp tục` sau tạm dừng: trạng thái trước lúc dừng nằm trong nhật ký, nhưng có thể ở trang " +
       "bất kỳ, và màn hình chưa lần theo nó — nên hiện cả bốn lối và để máy chủ từ chối ba lối sai.",
-  },
-  {
-    ten: "Sửa `Cơ quan chủ trì tham mưu` và `Chuyên viên theo dõi` ở form sửa (§5.4)",
-    viSao: LY_DO_KHONG_SUA_CHU_TRI,
   },
   {
     ten: "Sửa `Hạn hoàn thành` ở form sửa (§5.4, §5.6)",

@@ -40,6 +40,7 @@ import {
   layNhiemVu,
   laySoNhiemVu,
   quyetDinhLuiHan,
+  reassignTask,
   suaNhiemVu,
   taoNhiemVu,
   xoaNhiemVu,
@@ -64,6 +65,7 @@ import type {
   petitions_nhiemVuVanBanRa,
   petitions_suaNhiemVuVao,
   petitions_taoNhiemVuVao,
+  petitions_taskAssignmentIn,
   petitions_taskCountsOut,
 } from "@/lib/api/schema.gen";
 
@@ -206,6 +208,12 @@ import { ChildTasks, ParentTaskField } from "./child-tasks";
 import { HangChoLuiHan } from "./hang-cho-lui-han";
 import { KanbanMoveMenu } from "./kanban-move-menu";
 import { NhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
+import {
+  ASSIGNMENT_STEPPER_HINT,
+  ASSIGNMENT_UNIT_FIELD_ID,
+  canShowAssignment,
+} from "./task-assignment";
+import { TaskAssignmentBlock } from "./task-assignment-block";
 import { TaskExtensionBlock } from "./task-extension-block";
 
 /**
@@ -232,8 +240,8 @@ import { TaskExtensionBlock } from "./task-extension-block";
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
  * CỔNG NÚT THEO KHOÁ `task.*` (27/09/2026) — `quyenNhiemVu`, đọc danh sách quyền của PHIÊN. Nút
- * `+ Giao việc mới` · `✎ Sửa` · khối Chuyển trạng thái · ô gửi đề nghị lùi hạn · Xoá · Duyệt lùi hạn
- * ẩn với tài khoản thiếu khoá tương ứng. ĐÓ LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP: mỗi tuyến khai
+ * `+ Giao việc mới` · `✎ Sửa` · khối Chuyển trạng thái · khối Giao việc, chuyển việc (`task.assign`)
+ * · ô gửi đề nghị lùi hạn · Xoá · Duyệt lùi hạn ẩn với tài khoản thiếu khoá tương ứng. ĐÓ LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP: mỗi tuyến khai
  * `RequirePermission` và kiểm trên TỪNG yêu cầu (luật 5, cấm #1). Phần ĐỌC vẫn không có cổng ở
  * client — thiếu `task.read` thì câu 403 của máy chủ ra nguyên văn, cùng khuôn `document.read`.
  * Lớp hai của ADR 0038 KHÔNG phải một khoá quyền: nó là phép so mã cán bộ với cột trên bản ghi, và
@@ -1075,6 +1083,20 @@ export function SoNhiemVu({
             })
           }
           docLaiChiTiet={() => layNhiemVu(drawer.nhiemVu.code)}
+          // §5.7 — same refresh as `✎ Sửa`: `ghiXong` takes the returned task (keeping the document
+          // block, which this reply does not carry) and bumps `luotDoc`, so the detail AND the
+          // timeline re-read; the register re-reads too — the card may have changed column
+          // (`moi-giao`). A refusal goes back to the block, verbatim.
+          reassign={(body) =>
+            reassignTask(drawer.nhiemVu.code, body).then((kq) => {
+              if (kq.ok) {
+                datLoiGhi(null);
+                guiDrawer({ loai: "ghiXong", nhiemVu: kq.duLieu });
+                datLanTai((n) => n + 1);
+              }
+              return kq;
+            })
+          }
         />
       )}
     </section>
@@ -1925,7 +1947,14 @@ export function ChiTietNhiemVu({
   openTaskByCode,
   saveParent,
   addChild,
+  reassign,
 }: {
+  /**
+   * `POST /api/v1/tasks/{ma}/assignment` — the §5.7 block. The caller refreshes the drawer, the
+   * timeline and the register on success, then hands the `KetQua` back so the block can show a
+   * refusal verbatim. REQUIRED: a caller that forgets it gets a red `tsc`.
+   */
+  reassign: (body: petitions_taskAssignmentIn) => Promise<KetQua<petitions_nhiemVuRa>>;
   /** Changes whenever this task's pending extension requests may have changed. */
   extensionRefreshKey: string;
   /** A decision in the drawer's block succeeded. */
@@ -2001,6 +2030,8 @@ export function ChiTietNhiemVu({
   const coBuocTraLai = buocChuyen.some((t) => laBuocTraLai(nhiemVu.status, t));
   // Shared with the Kanban menu — one list, so the two cannot offer different steps.
   const buocBamDuoc = clickableTransitions(nhiemVu.status, quyen);
+  // §5.7 — `task.assign` and a task that is not terminal. Convenience; the route checks both.
+  const showAssignment = canShowAssignment(quyen, nhiemVu.status);
 
   return (
     <div className="khoi-chi-tiet" aria-labelledby="tieu-de-chi-tiet-nhiem-vu">
@@ -2036,18 +2067,39 @@ export function ChiTietNhiemVu({
           </li>
         ))}
       </ol>
+      {/* `Chuyển tiếp` IS NO LONGER A STATUS MOVE (owner decision 28/09/2026; `…/status` answers
+          400). When the §5.7 block is shown, its branch chip is a button that MOVES FOCUS to that
+          block — no call is made here (user decision 2). Otherwise the chip stays plain text: an
+          old `chuyen-tiep` row keeps its label, lit, and stays terminal. */}
       <p className="ghi-chu">
         Rẽ nhánh:{" "}
-        {TRANG_THAI_RE_NHANH.map((ma) => (
-          <span key={ma}>
+        {TRANG_THAI_RE_NHANH.map((ma) => {
+          const chip = (
             <span
               className={ma === nhiemVu.status ? "chip chip-hoat-dong" : "chip chip-ngung"}
             >
               {nhanTrangThai(nhanTT, ma)}
-            </span>{" "}
-            {O_TRONG}{" "}
-          </span>
-        ))}
+            </span>
+          );
+          return (
+            <span key={ma}>
+              {ma === "chuyen-tiep" && showAssignment ? (
+                <button
+                  type="button"
+                  className="nut-phu"
+                  aria-controls={ASSIGNMENT_UNIT_FIELD_ID}
+                  aria-label={`${nhanTrangThai(nhanTT, ma)} — ${ASSIGNMENT_STEPPER_HINT}`}
+                  onClick={() => document.getElementById(ASSIGNMENT_UNIT_FIELD_ID)?.focus()}
+                >
+                  {chip}
+                </button>
+              ) : (
+                chip
+              )}{" "}
+              {O_TRONG}{" "}
+            </span>
+          );
+        })}
       </p>
       {giaiThich !== "" && <p className="ghi-chu">{giaiThich}</p>}
 
@@ -2255,6 +2307,20 @@ export function ChiTietNhiemVu({
       {/* `key` theo mã: mở một nhiệm vụ khác thì lý do đang gõ dở không đi theo sang việc ấy. */}
       {coBuocTraLai && duocTraLai(quyen) && (
         <KhoiTraLai key={nhiemVu.code} nhanTT={nhanTT} dangGui={dangGui} gui={doiTrangThai} />
+      )}
+
+      {/* §5.7 — hand the SAME task to another unit or person ("Chuyển tiếp"), and for
+          `theo-van-ban` the lead unit and monitor, in ONE call. `key` by code: another task's
+          half-made choice must not follow into this one. */}
+      {showAssignment && (
+        <TaskAssignmentBlock
+          key={`giao-lai-${nhiemVu.code}`}
+          task={nhiemVu}
+          units={danhMuc.boPhan}
+          directory={danhBa}
+          labels={nhanTT}
+          reassign={reassign}
+        />
       )}
 
       <KhoiLuiHan
@@ -2655,6 +2721,8 @@ export function FormSuaKhoiVanBan({
         <dt>Chuyên viên Văn phòng tham mưu / theo dõi</dt>
         <dd>{nhanCanBoDrawer(nhiemVu.monitor, danhBa, O_TRONG)}</dd>
       </dl>
+      {/* Read-only here ON PURPOSE (user decision 28/09/2026): edited in the §5.7 block, behind
+          `task.assign` — this form stands behind `task.update`, a different key. */}
       <p className="ghi-chu">{LY_DO_KHONG_SUA_CHU_TRI}</p>
 
       {MOI_NHOM_VAN_BAN.map((nhom) => (

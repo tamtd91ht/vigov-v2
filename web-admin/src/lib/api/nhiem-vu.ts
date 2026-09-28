@@ -8,6 +8,8 @@
  *   PATCH  /api/v1/tasks/{ma}                                  task.update
  *   POST   /api/v1/tasks/{ma}/status                           task.update  (+ task.approve ở tầng
  *                                                              nghiệp vụ cho bước `hoan-thanh`)
+ *   POST   /api/v1/tasks/{ma}/assignment                       task.assign  (§5.7 — giao lại /
+ *                                                              chuyển tiếp, quyết định 28/09/2026)
  *   DELETE /api/v1/tasks/{ma}                                  task.delete
  *   POST   /api/v1/tasks/{ma}/extensions                       task.update  ← KHÔNG phải task.extend
  *   POST   /api/v1/tasks/{ma}/extensions/{deNghiID}/decision   task.extend  + ADR 0038 lớp hai
@@ -23,7 +25,7 @@
  * KIỂU LẤY TỪ HỢP ĐỒNG, KHÔNG GÕ TAY: `petitions_nhiemVuRa`, `petitions_taoNhiemVuVao`,
  * `petitions_suaNhiemVuVao`, `petitions_doiTrangThaiVao`, `petitions_xoaNhiemVuVao`,
  * `petitions_deNghiLuiHanVao`, `petitions_quyetDinhLuiHanVao`, `petitions_deNghiLuiHanRa`,
- * `page_Result_petitions_nhiemVuRa` đều đến từ `schema.gen.ts`.
+ * `page_Result_petitions_nhiemVuRa`, `petitions_taskAssignmentIn` đều đến từ `schema.gen.ts`.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * THAM SỐ TRUY VẤN CỦA TUYẾN DANH SÁCH NAY ĐÃ ĐƯỢC HỢP ĐỒNG KHAI: `petitions_get_tasks["truyVan"]`
@@ -65,10 +67,12 @@ import type {
   petitions_post_tasks,
   petitions_post_tasks_by_ma_extensions,
   petitions_post_tasks_by_ma_extensions_by_deNghiID_decision,
+  petitions_post_tasks_by_ma_assignment,
   petitions_post_tasks_by_ma_status,
   petitions_quyetDinhLuiHanVao,
   petitions_suaNhiemVuVao,
   petitions_taoNhiemVuVao,
+  petitions_taskAssignmentIn,
   petitions_taskCountsOut,
   petitions_vanBanNhiemVuVao,
   petitions_xoaNhiemVuVao,
@@ -506,9 +510,12 @@ export function suaNhiemVu(
  * POST /api/v1/tasks/{ma}/status — §6 chuyển trạng thái. 200, trả về nhiệm vụ sau khi chuyển.
  *
  * TRẠNG THÁI ĐÍCH ĐI TRÊN DÂY, khác hẳn tuyến `…/status` của phiếu phản ánh — vì vòng đời §6 RẼ
- * NHÁNH ở mọi bước (`tam-dung` và `chuyen-tiep` rời được cả bốn trạng thái làm việc), nên không
- * có một "bước kế tiếp" nào để máy chủ tự chọn. Cái máy chủ vẫn giữ là TẤM BẢN ĐỒ: một bước sơ
- * đồ không vẽ thì trả 409.
+ * NHÁNH ở mọi bước (`tam-dung` rời được cả bốn trạng thái làm việc), nên không có một "bước kế
+ * tiếp" nào để máy chủ tự chọn. Cái máy chủ vẫn giữ là TẤM BẢN ĐỒ: một bước sơ đồ không vẽ thì trả
+ * 409.
+ *
+ * `chuyen-tiep` KHÔNG CÒN LÀ ĐÍCH CỦA TUYẾN NÀY (764bb92): máy chủ trả 400 và chỉ sang
+ * `giaoLaiNhiemVu`. Chuyển tiếp nay là giao CÙNG nhiệm vụ cho nơi khác, không phải một trạng thái.
  *
  * ⚠ BƯỚC `hoan-thanh` ĐI QUA HAI PHÉP KIỂM NỮA Ở MÁY CHỦ, và cả hai đều trả câu chữ mang thông
  * tin: `task.approve` (khoá hẹp hơn khoá cổng của tuyến), và **mọi việc con phải xong** — câu từ
@@ -526,6 +533,40 @@ export function doiTrangThaiNhiemVu(
       : { status: trangThai };
   return docThanLoiGoi<petitions_nhiemVuRa>(
     goiGhi(duongDanNhiemVu(mau, ma), "POST", than, 200),
+  );
+}
+
+/**
+ * POST /api/v1/tasks/{ma}/assignment — §5.7 "Giao việc, chuyển việc", `task.assign`. 200, returns
+ * the task after the act. Named after the server handler (`ReassignTask`).
+ *
+ * ABSENT MEANS "LEAVE IT", "" MEANS "CLEAR IT" — the server reads every field as a pointer. The
+ * caller (`assignmentBody`) sends ONLY what differs from the task as read: every staff code sent is
+ * checked with identity, so resending an unchanged monitor who has since left would refuse an
+ * unrelated change.
+ *
+ * FIELD BY FIELD, NOT `body` AS IS — same reason as `taoNhiemVu`: a structurally typed object
+ * carrying `status` or `due_at` would pass `tsc` and reach the wire. `note` goes only when it has
+ * text; it lands on the timeline under the server's own from→to sentence.
+ *
+ * THE SERVER'S REFUSALS ARE SHOWN VERBATIM by the caller: 400 (nothing sent, unit cleared, staff
+ * code not assignable — one sentence), 409 `no_change`, 409 `task_state` (terminal task), 503
+ * `assignee_check_unavailable`.
+ */
+export function reassignTask(
+  code: string,
+  body: petitions_taskAssignmentIn,
+): Promise<KetQua<petitions_nhiemVuRa>> {
+  const template: petitions_post_tasks_by_ma_assignment["duongDan"] =
+    "/api/v1/tasks/{ma}/assignment";
+  const sent: petitions_taskAssignmentIn = {};
+  if (body.unit !== undefined && body.unit !== null) sent.unit = body.unit;
+  if (body.assignee !== undefined && body.assignee !== null) sent.assignee = body.assignee;
+  if (body.lead_unit !== undefined && body.lead_unit !== null) sent.lead_unit = body.lead_unit;
+  if (body.monitor !== undefined && body.monitor !== null) sent.monitor = body.monitor;
+  if (body.note !== undefined && body.note !== "") sent.note = body.note;
+  return docThanLoiGoi<petitions_nhiemVuRa>(
+    goiGhi(duongDanNhiemVu(template, code), "POST", sent, 200),
   );
 }
 

@@ -226,11 +226,9 @@ export const QUYEN_XEM_VAN_BAN = "document.read";
  * `task.create` canh mục Nhiệm vụ sẽ chép lại đúng lỗi ấy.
  *
  * CÁC KHOÁ `task.*` GHI CÓ HẰNG RIÊNG NGAY DƯỚI (27/09/2026), vì màn `/nhiem-vu` nay canh nút
- * theo chúng. `task.assign` VẪN CỐ Ý KHÔNG CÓ HẰNG: nó có thật trong bảng `quyen`
- * (`0001_init.sql:307`) nhưng KHÔNG tuyến nào khai nó (`service-petitions/internal/http/
- * nhiem_vu_ghi.go` — "`task.assign` IS SEEDED AND IS USED BY NO ROUTE HERE"), nên không có nút
- * nào để canh. Một hằng không ai dùng là một hằng không ai thấy khi nó sai — thêm nó vào ngày
- * tuyến giao việc (§10 `giao-viec`) ra đời, không phải trước.
+ * theo chúng. `task.assign` có hằng từ 28/09/2026 (`TASK_ASSIGN_PERMISSION`), đúng ngày tuyến
+ * giao lại `POST /api/v1/tasks/{ma}/assignment` ra đời (764bb92) — trước đó nó cố ý không có hằng,
+ * vì một hằng không nút nào dùng là một hằng không ai thấy khi nó sai.
  */
 export const QUYEN_XEM_NHIEM_VU = "task.read";
 
@@ -270,6 +268,22 @@ export const QUYEN_XOA_NHIEM_VU = "task.delete";
  * nhiệm vụ của cả xã, vì luật 5 kiểm `(tenant_id, role, permission)` và không có chiều "bản ghi nào".
  */
 export const QUYEN_DUYET_GIA_HAN = "task.extend";
+
+/**
+ * `task.assign` (`service-identity/migrations/0001_init.sql:307`) — the key of
+ * `POST /api/v1/tasks/{ma}/assignment` (764bb92): hand the SAME task to another unit or person
+ * ("Chuyển tiếp", owner decision 28/09/2026) and edit lead unit / monitor. Gate of the drawer's
+ * §5.7 block `Giao việc, chuyển việc`.
+ *
+ * NOT `task.update`: deciding who holds a piece of work is not updating its progress. Folding it
+ * into `task.update` would hand every officer who logs progress the power to move work to another
+ * department — the table seeds a separate key precisely to keep those apart (rule 5, inv. 3b).
+ *
+ * English name (rule 12); the constants above are Vietnamese and stay so.
+ *
+ * HIDING IS CONVENIENCE, NOT PROTECTION — the server checks this key on every call (rule 5, #1).
+ */
+export const TASK_ASSIGN_PERMISSION = "task.assign";
 
 /**
  * `task.approve` — "Duyệt hoàn thành" (`0001_init.sql:306`). HAI chỗ dùng, cùng một nghĩa: hành vi

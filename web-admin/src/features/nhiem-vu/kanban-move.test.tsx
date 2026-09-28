@@ -8,12 +8,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import type { page_Result_petitions_nhiemVuRa, petitions_nhiemVuRa } from "@/lib/api/schema.gen";
 import { parseDrillDown } from "@/lib/drill-down";
-import { QUYEN_CAP_NHAT_NHIEM_VU, QUYEN_DUYET_HOAN_THANH_NHIEM_VU } from "@/lib/quyen";
+import {
+  QUYEN_CAP_NHAT_NHIEM_VU,
+  QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
+  TASK_ASSIGN_PERMISSION,
+} from "@/lib/quyen";
 
 import { menuKey } from "./kanban-move-menu";
 import {
   BANG_NHAN_MAC_DINH,
   KANBAN_MOVE_BUTTON,
+  MOI_TRANG_THAI,
   TRANG_THAI_CHINH,
   clickableTransitions,
   kanbanMoveDoneText,
@@ -123,21 +128,39 @@ afterEach(() => {
 });
 
 describe("which moves a card offers — the drawer's list, one source", () => {
-  it("`task.update`: forward step and the two branch steps; never `hoan-thanh`", () => {
-    expect(clickableTransitions("dang-thuc-hien", UPDATE_ONLY)).toEqual([
-      "cho-duyet",
-      "tam-dung",
-      "chuyen-tiep",
-    ]);
-    expect(clickableTransitions("cho-duyet", UPDATE_ONLY)).toEqual(["tam-dung", "chuyen-tiep"]);
+  it("`task.update`: forward step and the pause branch; never `hoan-thanh`", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this pinned `chuyen-tiep` as a branch step. The owner decided
+    // "Chuyển tiếp" is the SAME task handed elsewhere (`POST …/assignment`, the drawer's §5.7
+    // block) and `…/status` answers 400 for it (764bb92) — a menu item that can only be refused.
+    expect(clickableTransitions("dang-thuc-hien", UPDATE_ONLY)).toEqual(["cho-duyet", "tam-dung"]);
+    expect(clickableTransitions("cho-duyet", UPDATE_ONLY)).toEqual(["tam-dung"]);
   });
 
   it("`task.approve` adds `hoan-thanh`; the RETURN step stays out (it needs a reason)", () => {
-    expect(clickableTransitions("cho-duyet", UPDATE_AND_APPROVE)).toEqual([
-      "hoan-thanh",
-      "tam-dung",
-      "chuyen-tiep",
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: `chuyen-tiep` left the list — see the case above.
+    expect(clickableTransitions("cho-duyet", UPDATE_AND_APPROVE)).toEqual(["hoan-thanh", "tam-dung"]);
+  });
+
+  it("`chuyen-tiep` is offered from NO status, with every key — neither in the drawer nor on a card", () => {
+    const allKeys = quyenNhiemVu([
+      QUYEN_CAP_NHAT_NHIEM_VU,
+      QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
+      TASK_ASSIGN_PERMISSION,
     ]);
+    for (const from of MOI_TRANG_THAI) {
+      expect(clickableTransitions(from, allKeys)).not.toContain("chuyen-tiep");
+    }
+  });
+
+  it("menu, drop target and drawer buttons all read that ONE list (source wiring)", () => {
+    // The menu is CLOSED in static markup, so rendering it proves nothing about its items; the
+    // case above is the proof, and this pins that all three places still read it.
+    const source = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+    expect(source).toContain(
+      "const targets = move === null ? [] : clickableTransitions(nhiemVu.status, move.permissions);",
+    );
+    expect(source).toContain("clickableTransitions(dragging.status, move.permissions).includes(target)");
+    expect(source).toContain("const buocBamDuoc = clickableTransitions(nhiemVu.status, quyen);");
   });
 
   it("no keys, or a dead-end status: nothing", () => {

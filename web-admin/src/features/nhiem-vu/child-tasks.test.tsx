@@ -309,6 +309,7 @@ describe("(#10) `+ Thêm việc con` — the create form, prefilled with the par
         openTask={() => {}}
         openTaskByCode={NOT_CALLED}
         saveParent={NOT_CALLED}
+        reassign={NOT_CALLED}
         // What `SoNhiemVu` passes: `null` without `task.create` (see its `addChild` prop).
         addChild={
           q.giaoViec

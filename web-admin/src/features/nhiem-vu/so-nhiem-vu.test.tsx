@@ -235,6 +235,7 @@ const PASS2_DRAWER_PROPS = {
   openTaskByCode: KHONG_SUA,
   saveParent: KHONG_SUA,
   addChild: null,
+  reassign: KHONG_SUA,
 } as const;
 
 /**
@@ -472,11 +473,15 @@ describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thu�
 });
 
 describe("vòng đời §6 — chỉ vẽ bước sơ đồ có", () => {
-  it("`dang-thuc-hien` mở đúng ba lối, KHÔNG có lối nhảy cóc sang `hoan-thanh`", () => {
+  it("`dang-thuc-hien` mở đúng hai lối, KHÔNG có lối nhảy cóc sang `hoan-thanh`", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: bài này từng canh ba lối, kể cả `Chuyển sang Chuyển tiếp`.
+    // Chủ đầu tư quyết định Chuyển tiếp là giao CÙNG nhiệm vụ cho nơi khác (khối §5.7,
+    // `POST …/assignment`), và `…/status` nay trả 400 cho đích ấy (764bb92) — một nút ở đây là một
+    // nút chắc chắn hỏng.
     const html = veChiTiet({ status: "dang-thuc-hien" });
     expect(html).toContain("Chuyển sang Chờ duyệt");
     expect(html).toContain("Chuyển sang Tạm dừng");
-    expect(html).toContain("Chuyển sang Chuyển tiếp");
+    expect(html).not.toContain("Chuyển sang Chuyển tiếp");
     expect(html).not.toContain("Chuyển sang Hoàn thành");
   });
 
@@ -1823,12 +1828,14 @@ describe("§7.1 — mức ưu tiên mặc định lấy từ DANH MỤC CỦA X�
 
 describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ ca được phép", () => {
   it("phiên chưa đọc được (`null`): MỌI cổng đóng — fail closed", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: thêm cổng thứ sáu `reassign` (`task.assign`, khối §5.7).
     expect(quyenNhiemVu(null)).toEqual({
       giaoViec: false,
       capNhat: false,
       duyetHoanThanh: false,
       xoa: false,
       duyetGiaHan: false,
+      reassign: false,
     });
   });
 

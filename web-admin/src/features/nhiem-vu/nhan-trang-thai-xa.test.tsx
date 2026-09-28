@@ -186,6 +186,7 @@ function veChiTiet(nhanTT: BangNhanTrangThai, status: string): string {
       openTaskByCode={KHONG_SUA}
       saveParent={KHONG_SUA}
       addChild={null}
+      reassign={KHONG_SUA}
     />,
   );
 }

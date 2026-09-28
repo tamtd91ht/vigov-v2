@@ -184,9 +184,13 @@ describe("bảy trạng thái — §6", () => {
     expect(chuyenSangDuoc("cho-duyet", "hoan-thanh")).toBe(true);
     // Nhảy cóc không có trong §6.
     expect(chuyenSangDuoc("moi-giao", "hoan-thanh")).toBe(false);
-    // `tam-dung` và `chuyen-tiep` rẽ được từ bốn trạng thái chính, không từ `hoan-thanh`.
+    // `tam-dung` rẽ được từ bốn trạng thái chính, không từ `hoan-thanh`.
     expect(chuyenSangDuoc("dang-thuc-hien", "tam-dung")).toBe(true);
     expect(chuyenSangDuoc("hoan-thanh", "tam-dung")).toBe(false);
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: `chuyen-tiep` từng rẽ được từ bốn trạng thái chính. Nay KHÔNG
+    // trạng thái nào dẫn tới nó — chuyển tiếp là giao lại cùng nhiệm vụ (`POST …/assignment`),
+    // đúng bản đồ máy chủ (`nhiem_vu.go:87-95`).
+    for (const tu of MOI_TRANG_THAI) expect(chuyenSangDuoc(tu, "chuyen-tiep")).toBe(false);
   });
 
   it("`cho-duyet` → `dang-thuc-hien` có trên bản đồ — mũi tên ngược duy nhất, `Trả lại để làm tiếp`", () => {
@@ -225,6 +229,7 @@ describe("bảy trạng thái — §6", () => {
 
   it("`hoan-thanh` và `chuyen-tiep` là hai ngõ cụt", () => {
     expect(ketThuc("hoan-thanh")).toBe(true);
+    // Vẫn ngõ cụt dù không bước nào còn dẫn tới: những dòng cũ đã `chuyen-tiep` là hồ sơ lưu trữ.
     expect(ketThuc("chuyen-tiep")).toBe(true);
     expect(ketThuc("tam-dung")).toBe(false);
   });
@@ -344,8 +349,12 @@ describe("phần chưa dựng được", () => {
     const moiLyDo = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" ");
     expect(moiLyDo).toContain("Liên quan đến tôi");
     expect(moiLyDo).toContain("Sắp đến hạn");
-    expect(moiLyDo).toContain("task.assign");
-    expect(moiLyDo).toContain("chuyen-tiep");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: bài này từng canh chữ `task.assign` và `chuyen-tiep` — hai mục
+    // "Ô đổi bộ phận / người thực hiện" và "`Chuyển tiếp` … phần máy chủ đang làm". Cả hai nay đã
+    // dựng (khối §5.7, `POST …/assignment`), nên chúng rời danh sách; còn nằm đó là đẩy người sau
+    // đi dựng lại thứ đã có.
+    expect(moiLyDo).not.toContain("task.assign");
+    expect(moiLyDo).not.toContain("Phần máy chủ cho nghĩa ấy đang làm");
   });
 
   it("ba ô chọn cán bộ ĐÃ DỰNG (TASK-05): mục cũ rời danh sách, chỉ còn mục ô tìm theo tên", () => {
@@ -361,12 +370,15 @@ describe("phần chưa dựng được", () => {
     expect(PHAN_CHUA_DUNG.find((p) => p.ten.includes("Gõ tên để tìm…"))).toBeUndefined();
   });
 
-  it("TASK-03 lượt web 2 (28/09/2026): đúng BỐN mục rời — 14 → 10 — một mục viết lại, còn lại nguyên", () => {
+  it("giao lại §5.7 (28/09/2026): đúng BA mục rời — 10 → 7 — còn lại nguyên", () => {
     // A literal count on purpose. Pass 1 went 16 → 14 (#12, #14). Pass 2 removed exactly four
     // entries — #6 chip/children, #10 add child/move parent, #11 decide in the drawer, #15 real
     // column counts — and REWROTE (did not remove) the sort entry (#13), which keeps `Tên việc` and
-    // `Ưu tiên`. An 11 means one was left behind; a 9 means an unrelated entry was lost.
-    expect(PHAN_CHUA_DUNG.length).toBe(10);
+    // `Ưu tiên`.
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (giao lại, `task.assign`): 10 → 7. Exactly three entries left,
+    // all built by the §5.7 block — the unit/assignee box, `Chuyển tiếp`, and editing lead unit /
+    // monitor. An 8 means one was left behind; a 6 means an unrelated entry was lost.
+    expect(PHAN_CHUA_DUNG.length).toBe(7);
     const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ");
     expect(ten).not.toContain("việc con");
     expect(ten).not.toContain("VIỆC CON");
@@ -380,10 +392,10 @@ describe("phần chưa dựng được", () => {
     expect(deadline?.viSao).toBe(LY_DO_KHONG_SUA_HAN);
     expect(LY_DO_KHONG_SUA_HAN).toContain("28/09/2026");
     expect(LY_DO_KHONG_SUA_HAN).toContain("tỷ lệ đúng hạn báo cáo lên lãnh đạo");
-    const forwarded = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("`Chuyển tiếp`"));
-    expect(forwarded?.viSao).toContain("28/09/2026");
-    expect(forwarded?.viSao).toContain("CÙNG nhiệm vụ");
-    expect(forwarded?.viSao).toContain("Phần máy chủ cho nghĩa ấy đang làm");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: the three entries the §5.7 block built are gone.
+    expect(PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("`Chuyển tiếp`"))).toBeUndefined();
+    expect(ten).not.toContain("Ô đổi bộ phận / người thực hiện");
+    expect(ten).not.toContain("Cơ quan chủ trì tham mưu");
   });
 
   it("hai mục về văn bản chỉ đạo nói ĐÚNG thứ còn thiếu hôm nay, không còn nói bảng chưa có", () => {
@@ -941,11 +953,14 @@ describe("✎ Sửa — khi nào nút mở, khi nào Lưu khoá", () => {
     expect(cau).toContain("không đúng khuôn ngày");
   });
 
-  it("lý do không sửa được Hạn và Cơ quan chủ trì là MỘT câu, dùng chung với phần chưa dựng", () => {
+  it("lý do không sửa được Hạn là MỘT câu dùng chung; Cơ quan chủ trì nay CHỈ đường sang §5.7", () => {
     expect(PHAN_CHUA_DUNG.some((p) => p.viSao === LY_DO_KHONG_SUA_HAN)).toBe(true);
-    expect(PHAN_CHUA_DUNG.some((p) => p.viSao === LY_DO_KHONG_SUA_CHU_TRI)).toBe(true);
-    expect(LY_DO_KHONG_SUA_CHU_TRI).toContain("lead_unit");
-    expect(LY_DO_KHONG_SUA_CHU_TRI).toContain("monitor");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (quyết định của người dùng): câu này từng nói "`PATCH` không
+    // nhận `lead_unit` và `monitor`" và đứng trong phần chưa dựng. Hai trường ấy nay sửa ở khối
+    // Giao việc, chuyển việc (`task.assign`), nên câu chỉ đường sang đó và rời phần chưa dựng.
+    expect(PHAN_CHUA_DUNG.some((p) => p.viSao === LY_DO_KHONG_SUA_CHU_TRI)).toBe(false);
+    expect(LY_DO_KHONG_SUA_CHU_TRI).toContain("“Giao việc, chuyển việc”");
+    expect(LY_DO_KHONG_SUA_CHU_TRI).not.toContain("không nhận");
   });
 });
 
