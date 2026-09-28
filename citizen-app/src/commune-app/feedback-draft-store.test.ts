@@ -53,16 +53,16 @@ describe("feedback draft store — commune's own app only (ADR 0050 #7)", () => 
     expect(writes[0]!.value).not.toContain("phien-bi-mat");
   });
 
-  it("an anonymous draft keeps no name and no phone on the device", () => {
+  it("an anonymous draft still keeps name and phone, as require does (owner 28/09/2026)", () => {
     const { storage, writes } = fakeStorage();
     const store = createFeedbackDraftStore(() => storage);
     store.save({ ...DRAFT, an_danh: true });
     const stored = JSON.parse(writes[0]!.value) as NhapPhieu;
-    expect(stored.ho_ten).toBe("");
-    expect(stored.dien_thoai).toBe("");
+    expect(stored.ho_ten).toBe(DRAFT.ho_ten);
+    expect(stored.dien_thoai).toBe(DRAFT.dien_thoai);
     expect(stored.an_danh).toBe(true);
-    expect(writes[0]!.value).not.toContain(DRAFT.ho_ten);
-    expect(writes[0]!.value).not.toContain(DRAFT.dien_thoai);
+    // Turning anonymity off again restores what was typed, instead of an empty form.
+    expect(store.load()).toEqual({ ...DRAFT, an_danh: true });
   });
 
   it("bad JSON, wrong shape or wrong types → null, never a half-read draft", () => {

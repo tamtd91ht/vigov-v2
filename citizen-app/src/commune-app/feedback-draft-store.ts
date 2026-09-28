@@ -17,8 +17,7 @@
  *
  * WHAT IS WRITTEN: exactly the six fields of `NhapPhieu`, rebuilt one by one (never a spread of the
  * caller's object, so a field added to the form later is not written silently). The name and phone typed
- * for the feedback are kept as the prototype keeps them — EXCEPT when "Gửi ẩn danh" is on: then they are
- * written empty, so an anonymous draft does not leave the citizen's identity on the phone. Cleared on a
+ * for the feedback are kept as the prototype keeps them, anonymous or not (see `toStored`). Cleared on a
  * successful send and on "Bỏ nháp" / "Huỷ bỏ". Never sent anywhere.
  *
  * Every call is wrapped: storage may be full, disabled, or throw on access. A draft is a convenience — it
@@ -41,16 +40,20 @@ function isEmptyDraft(draft: NhapPhieu): boolean {
   return draft.noi_dung.trim() === "" && draft.dia_chi.trim() === "";
 }
 
-/** The exact record written — six fields, rebuilt explicitly. */
+/**
+ * The exact record written — six fields, rebuilt explicitly. Name and phone are kept even when "Gửi ẩn
+ * danh" is on (owner 28/09/2026: "theo require, ẩn danh cũng lưu họ tên" — require's `saveDraft` writes
+ * them unconditionally): anonymity is about what the STAFF see once sent, and switching it off again must
+ * not make the citizen retype. What leaves the phone is still decided at send time (`taoPhieuTraiNghiem`).
+ */
 function toStored(draft: NhapPhieu): NhapPhieu {
-  const anonymous = draft.an_danh === true;
   return {
     linh_vuc: draft.linh_vuc,
     noi_dung: draft.noi_dung,
     dia_chi: draft.dia_chi,
-    ho_ten: anonymous ? "" : draft.ho_ten,
-    dien_thoai: anonymous ? "" : draft.dien_thoai,
-    an_danh: anonymous,
+    ho_ten: draft.ho_ten,
+    dien_thoai: draft.dien_thoai,
+    an_danh: draft.an_danh === true,
   };
 }
 
