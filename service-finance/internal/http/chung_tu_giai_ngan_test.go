@@ -265,6 +265,7 @@ func dungMayChuChungTuVoi(t *testing.T, khoIdem idem.Store) *mayChuChungTu {
 		// Present so Register accepts the Deps; never called from this file. See routes_test.go.
 		NganSach:    &nganSachGia{},
 		GhiNganSach: &ghiNganSachGia{},
+		AuditLog:    &auditLogFake{},
 		Nay:         func() time.Time { return lucDaQua7096 },
 		Log:         im,
 	})

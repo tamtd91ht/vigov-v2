@@ -131,10 +131,11 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		GhiNgayLamBu:   ghiLichMau(),
 		// The deadline table, read and write. Unlike the calendar these ARE mounted — three routes
 		// under `admin.sla` — so Register would refuse this Deps without them.
-		SLA:    slaMau(),
-		GhiSLA: ghiSLAMau(),
-		CanBo:  &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
-		DanhBa: danhBaMau(),
+		SLA:      slaMau(),
+		GhiSLA:   ghiSLAMau(),
+		AuditLog: &auditLogFake{},
+		CanBo:    &canBoGia{theo: map[string]domain.CanBo{idNoiBo: canBoMau()}},
+		DanhBa:   danhBaMau(),
 		// Same reason again: the five write routes of the register are mounted by Register, so the
 		// use case behind them has to be wired even though nothing in this file calls them.
 		GhiDanhBa: ghiDanhBaMau(),

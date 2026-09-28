@@ -219,6 +219,10 @@ type Deps struct {
 	NganSach    NganSachDoc
 	GhiNganSach GhiNganSach
 
+	// AuditLog reads this service's own `audit_log` for the "Xem nhật ký hệ thống" screen (ADR 0054).
+	// *audit.Log in production. Refused at construction when missing.
+	AuditLog AuditLogReader
+
 	// Nay is the clock the derived disbursement figures are computed against. NIL IN PRODUCTION,
 	// where Handler.nay falls back to time.Now — see the reason there. It exists so the delay
 	// arithmetic of §3 can be exercised at the two dates it is most fragile on.
@@ -273,6 +277,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	}
 	if d.GhiNganSach == nil {
 		panic("finance/http: thiếu use case ghi thu-chi ngân sách — các tuyến ghi ngân sách sẽ panic khi có người gọi")
+	}
+	if d.AuditLog == nil {
+		panic("finance/http: thiếu bộ đọc nhật ký hệ thống — GET /api/v1/finance-audit-entries sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -1242,4 +1249,29 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "budget.confirm")(
 			idem.KhongCan("gỡ một đợt đã gỡ cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người gỡ và lý do")(
 				http.HandlerFunc(h.GoDotThuChi))))
+
+	// --- NHẬT KÝ HỆ THỐNG — this service's own audit log (ADR 0054) ------------------------------
+	//
+	// ONE OF FIVE ROUTES, one per service owning an `audit_log`; web-admin merges them (ADR 0054 §1,
+	// §6). The noun carries the service name because tools/ingress routes by the first path segment
+	// and five owners for one `audit-entries` segment is a STOP there (ADR 0054 §3).
+	//
+	// `admin.audit` — "Xem nhật ký hệ thống" — seeded at service-identity/migrations/0001_init.sql:280;
+	// no key invented (rule 5, invariant 3c). Staff of the request's commune only; there is no operator
+	// variant (ADR 0054 §2, ADR 0003:32).
+	//
+	// A GET THAT WRITES: every call leaves one `xem_nhat_ky_he_thong` entry, in the same transaction
+	// as the read (ADR 0054 §5) — so a page whose entry could not be written is a 500, never data.
+	// NO idem.* DECLARATION: repeating the read is a second read, and it is recorded as one.
+	//
+	// @summary  Nhật ký hệ thống của phân hệ Tài chính — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng
+	// @screen   14-cau-hinh §12.1
+	// @reply    200 page.Result[audit.EntryView]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/finance-audit-entries",
+		authz.RequirePermission(d.Checker, "admin.audit")(
+			http.HandlerFunc(h.ListAuditEntries)))
 }

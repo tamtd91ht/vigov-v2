@@ -249,6 +249,9 @@ type mayChu struct {
 	summary *fakeSummaryReader
 	queue   *fakeQueueReader
 
+	// The audit-log reader — see audit_entries_test.go.
+	auditLog *auditLogFake
+
 	// khoIdem is nil BY DEFAULT, and that is deliberate: a nil store is a valid deployment (local
 	// development with no Redis) and it is what makes the CheDoHong each route DECLARED the thing
 	// under test rather than Redis behaviour. The two routes that ISSUE A NUMBER declare
@@ -284,6 +287,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	}}
 	summary := sampleSummaryReader()
 	queue := sampleQueueReader()
+	auditLog := &auditLogFake{}
 
 	m := &mayChu{
 		thuMuc:  thuMucMau(),
@@ -306,11 +310,13 @@ func dungMayChu(t *testing.T) *mayChu {
 			GhiVanBanDi:      ghiDi,
 			IncomingSummary:  summary,
 			OverdueQueue:     queue,
+			AuditLog:         auditLog,
 			Clock:            func() time.Time { return testNow },
 			Log:              slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
-		summary: summary,
-		queue:   queue,
+		summary:  summary,
+		queue:    queue,
+		auditLog: auditLog,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -433,6 +439,7 @@ func TestRegisterTuChoiDepsThieuCheckerVaUseCaseGhi(t *testing.T) {
 		"thiếu Checker":                           func(d *Deps) { d.Checker = nil },
 		"missing incoming summary reader":         func(d *Deps) { d.IncomingSummary = nil },
 		"missing overdue queue":                   func(d *Deps) { d.OverdueQueue = nil },
+		"missing audit log reader":                func(d *Deps) { d.AuditLog = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			d := Deps{
@@ -446,6 +453,7 @@ func TestRegisterTuChoiDepsThieuCheckerVaUseCaseGhi(t *testing.T) {
 				GhiVanBanDi:      &ghiVanBanDiGia{},
 				IncomingSummary:  sampleSummaryReader(),
 				OverdueQueue:     sampleQueueReader(),
+				AuditLog:         &auditLogFake{},
 			}
 			bo(&d)
 			defer func() {

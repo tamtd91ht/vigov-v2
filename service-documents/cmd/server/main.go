@@ -21,6 +21,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"google.golang.org/grpc"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/config"
 	documentsv1 "github.com/vihat/vigov/core/gen/vigov/documents/v1"
 	"github.com/vihat/vigov/core/grpcx"
@@ -208,7 +209,9 @@ func run(log *slog.Logger) error {
 		// `critical` is 48 working hours of this commune's calendar, counted by identity (ADR 0007).
 		IncomingSummary: vanBanDen,
 		OverdueQueue:    app.NewIncomingDashboard(vanBanDen, dinhDanh),
-		Log:             log,
+		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
+		AuditLog: audit.NewLog(kho),
+		Log:      log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

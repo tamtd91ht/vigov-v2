@@ -21,8 +21,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/staffauth"
+	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-documents/internal/app"
 	"github.com/vihat/vigov/service-documents/internal/domain"
@@ -139,6 +141,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		GhiVanBanDi:      app.NewVanBanDi(nil, nil, nil),
 		IncomingSummary:  docstore.NewVanBanDenStore(nil),
 		OverdueQueue:     app.NewIncomingDashboard(docstore.NewVanBanDenStore(nil), nil),
+		AuditLog:         audit.NewLog(store.New(nil)),
 
 		Log: log,
 	})

@@ -134,6 +134,7 @@ func dungMayChuDuAnGhi(t *testing.T) *mayChuDuAnGhi {
 		Nguong:      nguongMau(),
 		NganSach:    &nganSachGia{},
 		GhiNganSach: &ghiNganSachGia{},
+		AuditLog:    &auditLogFake{},
 		Nay:         func() time.Time { return lucDaQua7096 },
 		Log:         im,
 	})

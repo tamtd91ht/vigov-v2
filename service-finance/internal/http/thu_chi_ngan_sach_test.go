@@ -380,6 +380,7 @@ func dungMayChuNganSach(t *testing.T) *mayChuNganSach {
 		Nguong:      nguongMacDinh(),
 		NganSach:    doc,
 		GhiNganSach: ghi,
+		AuditLog:    &auditLogFake{},
 		Nay:         func() time.Time { return lucDaQua7096 },
 		Log:         im,
 	})

@@ -115,6 +115,19 @@ type ScopedTx struct {
 func (s *ScopedTx) TenantID() tenant.ID { return s.tid }
 func (s *ScopedTx) Underlying() *sql.Tx { return s.tx }
 
+// Query runs a read of ONE table inside the transaction, already filtered by commune — the same
+// contract as Scoped.Query: this adds `WHERE tenant_id = $1` and binds it, and the caller's own
+// placeholders start at $2.
+//
+// WHY A READ INSIDE A TRANSACTION NEEDS ITS OWN METHOD: a read whose OWN audit entry must commit
+// with it (ADR 0054 §5 — reading the audit log is itself audited, in the same transaction) has to
+// run on the transaction's connection. Reaching for Underlying() instead would be a read with no
+// commune bound by construction, which is the hole this package exists to close.
+func (s *ScopedTx) Query(ctx context.Context, cot, bang, tail string, args ...any) (*sql.Rows, error) {
+	full := "SELECT " + cot + " FROM " + bang + " WHERE tenant_id = $1 " + tail
+	return s.tx.QueryContext(ctx, full, append([]any{string(s.tid)}, args...)...)
+}
+
 // Exec runs a write already scoped to the commune.
 func (s *ScopedTx) Exec(ctx context.Context, stmt string, args ...any) (sql.Result, error) {
 	return s.tx.ExecContext(ctx, stmt, args...)

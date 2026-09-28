@@ -21,6 +21,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"google.golang.org/grpc"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/documentsclient"
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
@@ -399,9 +400,11 @@ func run(log *slog.Logger) error {
 		// giao dịch mà vết kiểm toán dùng chung (luật 6 bất biến 3).
 		SLA:    sla,
 		GhiSLA: ghiSLA,
-		Signer: signer, // the SAME pointer app.NewDangNhap was given above
-		Phien:  phien,
-		CanBo:  canBo,
+		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
+		AuditLog: audit.NewLog(kho),
+		Signer:   signer, // the SAME pointer app.NewDangNhap was given above
+		Phien:    phien,
+		CanBo:    canBo,
 		// The SAME store behind two fields, and two fields on purpose: CanBoDoc is the
 		// three-condition read the session middleware runs on every request, CanBoDanhBa is the
 		// register the Cấu hình → Người dùng screen pages through. See the note on CanBoDanhBa.

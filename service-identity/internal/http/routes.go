@@ -519,6 +519,10 @@ type Deps struct {
 	DangNhap DangNhapUC
 	DangXuat DangXuatUC
 
+	// AuditLog reads this service's own `audit_log` for the "Xem nhật ký hệ thống" screen (ADR 0054).
+	// *audit.Log in production. Refused at construction when missing.
+	AuditLog AuditLogReader
+
 	Log *slog.Logger
 }
 
@@ -602,6 +606,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		// petition answer 409 `sla_chua_cau_hinh`. The service would start and the commune would be
 		// unable to do its work, with nothing saying why.
 		panic("identity/http: thiếu use case ghi thời hạn xử lý — xã sẽ không có cách nào cấu hình SLA, và mọi tuyến vào sổ vẫn bị từ chối")
+	case d.AuditLog == nil:
+		panic("identity/http: thiếu bộ đọc nhật ký hệ thống — GET /api/v1/identity-audit-entries sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -2257,4 +2263,29 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.sla")(
 			idem.KhongCan("bộ gieo chỉ CHÈN những dòng xã chưa có, quyết định bên trong đúng giao dịch ghi, và khoá duy nhất (tenant_id, loai_viec, linh_vuc_khoa) chặn dòng thứ hai — nên lần bấm thứ hai không ghi gì, không ghi đè con số xã đã sửa, và trả seeded: 0")(
 				http.HandlerFunc(h.GieoSLAMacDinh))))
+
+	// --- NHẬT KÝ HỆ THỐNG — this service's own audit log (ADR 0054) ------------------------------
+	//
+	// ONE OF FIVE ROUTES, one per service owning an `audit_log`; web-admin merges them (ADR 0054 §1,
+	// §6). The noun carries the service name because tools/ingress routes by the first path segment
+	// and five owners for one `audit-entries` segment is a STOP there (ADR 0054 §3).
+	//
+	// `admin.audit` — "Xem nhật ký hệ thống" — seeded at migrations/0001_init.sql:280;
+	// no key invented (rule 5, invariant 3c). Staff of the request's commune only; there is no operator
+	// variant (ADR 0054 §2, ADR 0003:32).
+	//
+	// A GET THAT WRITES: every call leaves one `xem_nhat_ky_he_thong` entry, in the same transaction
+	// as the read (ADR 0054 §5) — so a page whose entry could not be written is a 500, never data.
+	// NO idem.* DECLARATION: repeating the read is a second read, and it is recorded as one.
+	//
+	// @summary  Nhật ký hệ thống của phân hệ Tổ chức & tài khoản — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng
+	// @screen   14-cau-hinh §12.1
+	// @reply    200 page.Result[audit.EntryView]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/identity-audit-entries",
+		authz.RequirePermission(d.Checker, "admin.audit")(
+			http.HandlerFunc(h.ListAuditEntries)))
 }

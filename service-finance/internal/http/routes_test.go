@@ -226,6 +226,7 @@ func dungMayChuVoi(t *testing.T, c checkerGia) *mayChu {
 		// answer anything wrongly.
 		NganSach:    &nganSachGia{},
 		GhiNganSach: &ghiNganSachGia{},
+		AuditLog:    &auditLogFake{},
 		Nay:         func() time.Time { return lucDaQua7096 },
 		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}

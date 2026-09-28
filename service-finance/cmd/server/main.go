@@ -19,6 +19,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
@@ -159,7 +160,9 @@ func main() {
 		// writes in, and a second handle would be a second pool.
 		NganSach:    nganSach,
 		GhiNganSach: app.NewNganSach(kho, nganSach),
-		Log:         log,
+		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
+		AuditLog: audit.NewLog(kho),
+		Log:      log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

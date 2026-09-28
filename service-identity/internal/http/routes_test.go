@@ -697,6 +697,8 @@ type mayChu struct {
 	// the read is a store, the write is a use case. See slaGia / ghiSLAGia in sla_test.go.
 	sla    *slaGia
 	ghiSLA *ghiSLAGia
+	// The audit-log reader — see audit_entries_test.go.
+	auditLog *auditLogFake
 	// dangNhap and dangXuat are the same values as d.DangNhap / d.DangXuat, typed.
 	dangNhap *dangNhapGia
 	dangXuat *dangXuatGia
@@ -750,6 +752,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	ghiLich := ghiLichMau()
 	sla := slaMau()
 	ghiSLA := ghiSLAMau()
+	auditLog := &auditLogFake{}
 
 	d := Deps{
 		// Commune A grants the permission; commune B has the same account and grants nothing.
@@ -794,10 +797,12 @@ func dungMayChu(t *testing.T) *mayChu {
 		// cannot register a single incoming document.
 		SLA:    sla,
 		GhiSLA: ghiSLA,
-		Signer: signer,
-		Phien:  phien,
-		CanBo:  canBo,
-		DanhBa: danhBa,
+		// The audit-log reader — audit_entries_test.go.
+		AuditLog: auditLog,
+		Signer:   signer,
+		Phien:    phien,
+		CanBo:    canBo,
+		DanhBa:   danhBa,
 		// The five write routes. Register panics without it, which is how an unwired write surface
 		// is caught at construction rather than by the first administrator who tries to use it.
 		GhiDanhBa: ghiDanhBa,
@@ -860,6 +865,8 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		sla:    sla,
 		ghiSLA: ghiSLA,
+
+		auditLog: auditLog,
 
 		dangNhap: d.DangNhap.(*dangNhapGia),
 		dangXuat: d.DangXuat.(*dangXuatGia),

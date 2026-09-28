@@ -20,8 +20,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/staffauth"
+	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-finance/internal/app"
 	"github.com/vihat/vigov/service-finance/internal/domain"
@@ -134,6 +136,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// file, present because Register refuses a nil dependency at construction.
 		NganSach:    khoNganSachTrong{},
 		GhiNganSach: app.NewNganSach(nil, nil),
+		AuditLog:    audit.NewLog(pkgstore.New(nil)),
 		Log:         log,
 	})
 
