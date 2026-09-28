@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-09-27",
+  "cap_nhat": "2026-09-28",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -76,6 +76,14 @@
       "bang_chung": "dd0ca7c: lọc ở internal/grpc/server.go GetTenant (cùng tầng với chốt của ResolveHost); người gọi GetTenant duy nhất là cầu phiên identity (core/platformclient/mini_app.go:113). TestGetTenantHostChinhDanhRiengTraRong. go test -p 1 ./... xanh.",
       "no_confirm": [],
       "tiep_theo": "Người gọi store.Directory.ByID nào vòng qua GetTenant sẽ không có bộ lọc — hiện không có."
+    },
+    {
+      "id": "upload-policy",
+      "viec": "Giới hạn tải lên theo mục đích (ADR 0052 #10): bảng upload_policy + platform_audit_log + gRPC ListUploadPolicies",
+      "trang_thai": "dang_lam",
+      "bang_chung": "95de79b (28/09/2026): migrations/0008_upload_policy.sql (CHECK max_bytes > 0 và danh sách MIME không rỗng; platform_audit_log chỉ ghi thêm, không tenant_id, có actor_ip; seed 6 mục đích, mỗi dòng seed ghi vết actor 'system' action upload_policy.seeded), internal/{domain,store,grpc}/upload_policy*.go, Deps.Policies bắt buộc ở cmd/server/main.go. make check xanh (9 module -race, standalone). Ca PG SKIP — máy không có Postgres/Docker.",
+      "no_confirm": [],
+      "tiep_theo": "Giá trị seed là GIÁ TRỊ TẠM để chạy (video 2 GB mp4/quicktime; ảnh/logo 10 MB jpeg/png/webp/heic; ảnh phản ánh tối đa 5 tệp; scan văn bản 50 MB pdf/jpeg/png; đính kèm nội dung 50 MB chỉ pdf) — Vihat sửa ở khu vận hành. Chưa có đường sửa: REST ops.upload_policy.manage + ghi platform_audit_log chờ khu vận hành ADR 0048 bước 1–3 (tài khoản vận hành identity + TOTP → OPERATOR_HOST → platform-admin đăng nhập). Chưa chạy ca PG thật. DB không có CHECK buộc MIME thuộc danh sách của storage — chốt ở tầng ứng dụng."
     }
   ]
 }

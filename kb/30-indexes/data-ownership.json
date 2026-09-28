@@ -236,6 +236,13 @@
       "source": "service-petitions/migrations/0013_nhat_ky_phan_anh.sql:76"
     },
     {
+      "entity": "PlatformAuditEntry",
+      "service": "platform",
+      "scope": "platform",
+      "table": "platform_audit_log",
+      "source": "service-platform/migrations/0008_upload_policy.sql:132"
+    },
+    {
       "entity": "ProcessingDeadline",
       "service": "identity",
       "scope": "tenant",
@@ -360,6 +367,13 @@
       "scope": "platform",
       "table": "tenant_succession",
       "source": "service-platform/migrations/0003_tenant_succession.sql:78"
+    },
+    {
+      "entity": "UploadPolicy",
+      "service": "platform",
+      "scope": "platform",
+      "table": "upload_policy",
+      "source": "service-platform/migrations/0008_upload_policy.sql:60"
     },
     {
       "entity": "WorkingHours",

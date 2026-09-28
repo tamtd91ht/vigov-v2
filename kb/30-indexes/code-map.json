@@ -1068,11 +1068,11 @@
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:608"
+      "at": "core/config/config.go:621"
     },
     "config.CauPhienBat": {
       "kind": "func",
-      "at": "core/config/config.go:423"
+      "at": "core/config/config.go:428"
     },
     "config.CheckBucketPrefix": {
       "kind": "func",
@@ -1084,7 +1084,7 @@
     },
     "config.Config": {
       "kind": "type",
-      "at": "core/config/config.go:88"
+      "at": "core/config/config.go:89"
     },
     "config.Configured": {
       "kind": "func",
@@ -1092,15 +1092,19 @@
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:445"
+      "at": "core/config/config.go:450"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:807"
+      "at": "core/config/config.go:827"
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:461"
+      "at": "core/config/config.go:466"
+    },
+    "config.MalwareScanner": {
+      "kind": "type",
+      "at": "core/config/malware_scanner.go:26"
     },
     "config.Missing": {
       "kind": "func",
@@ -1113,6 +1117,10 @@
     "config.ObjectStorage": {
       "kind": "type",
       "at": "core/config/object_storage.go:31"
+    },
+    "config.ParseMalwareScannerAddresses": {
+      "kind": "func",
+      "at": "core/config/malware_scanner.go:51"
     },
     "config.ParsePublicMediaBaseURL": {
       "kind": "func",
@@ -1128,7 +1136,7 @@
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:679"
+      "at": "core/config/config.go:699"
     },
     "config.Rong": {
       "kind": "func",
@@ -2778,6 +2786,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/cau_phien.go:73"
     },
+    "domain.UploadPolicy": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/upload_policy.go:13"
+    },
     "domain.VaiTro": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhan_trang_thai_nhiem_vu.go:36"
@@ -2916,27 +2928,31 @@
     },
     "grpc.Deps": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:57"
+      "at": "service-platform/internal/grpc/server.go:64"
     },
     "grpc.Directory": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:40"
+      "at": "service-platform/internal/grpc/server.go:41"
     },
     "grpc.GetTenant": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:117"
+      "at": "service-platform/internal/grpc/server.go:126"
     },
     "grpc.GetTenantProfile": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:210"
+      "at": "service-platform/internal/grpc/server.go:219"
     },
     "grpc.HoSoHienThi": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:52"
+      "at": "service-platform/internal/grpc/server.go:53"
     },
     "grpc.LichLamViecDoc": {
       "kind": "type",
       "at": "service-identity/internal/grpc/lich_lam_viec.go:55"
+    },
+    "grpc.ListUploadPolicies": {
+      "kind": "func",
+      "at": "service-platform/internal/grpc/upload_policy.go:26"
     },
     "grpc.MoPhienCau": {
       "kind": "type",
@@ -2948,7 +2964,7 @@
     },
     "grpc.NewServer": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:75"
+      "at": "service-platform/internal/grpc/server.go:84"
     },
     "grpc.NgayLamBuDoc": {
       "kind": "type",
@@ -2988,11 +3004,11 @@
     },
     "grpc.ResolveHost": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:87"
+      "at": "service-platform/internal/grpc/server.go:96"
     },
     "grpc.ResolveMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:160"
+      "at": "service-platform/internal/grpc/server.go:169"
     },
     "grpc.ResolveStaffNames": {
       "kind": "func",
@@ -3008,11 +3024,15 @@
     },
     "grpc.Server": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:64"
+      "at": "service-platform/internal/grpc/server.go:72"
     },
     "grpc.SoMiniApp": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:47"
+      "at": "service-platform/internal/grpc/server.go:48"
+    },
+    "grpc.UploadPolicies": {
+      "kind": "type",
+      "at": "service-platform/internal/grpc/server.go:59"
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
@@ -4222,6 +4242,38 @@
       "kind": "func",
       "at": "tools/apidoc/openapi.go:43"
     },
+    "malwarescan.Config": {
+      "kind": "type",
+      "at": "core/malwarescan/malwarescan.go:49"
+    },
+    "malwarescan.New": {
+      "kind": "func",
+      "at": "core/malwarescan/malwarescan.go:108"
+    },
+    "malwarescan.Ping": {
+      "kind": "func",
+      "at": "core/malwarescan/malwarescan.go:351"
+    },
+    "malwarescan.Result": {
+      "kind": "type",
+      "at": "core/malwarescan/malwarescan.go:127"
+    },
+    "malwarescan.Scan": {
+      "kind": "func",
+      "at": "core/malwarescan/malwarescan.go:150"
+    },
+    "malwarescan.Scanner": {
+      "kind": "type",
+      "at": "core/malwarescan/malwarescan.go:96"
+    },
+    "malwarescan.String": {
+      "kind": "func",
+      "at": "core/malwarescan/malwarescan.go:133"
+    },
+    "malwarescan.Version": {
+      "kind": "func",
+      "at": "core/malwarescan/malwarescan.go:364"
+    },
     "migrate.Chay": {
       "kind": "func",
       "at": "core/migrate/migrate.go:109"
@@ -4356,15 +4408,19 @@
     },
     "platformclient.ByHost": {
       "kind": "func",
-      "at": "core/platformclient/directory.go:136"
+      "at": "core/platformclient/directory.go:142"
     },
     "platformclient.CheDoMiniApp": {
       "kind": "type",
       "at": "core/platformclient/mini_app.go:27"
     },
+    "platformclient.Client": {
+      "kind": "func",
+      "at": "core/platformclient/directory.go:119"
+    },
     "platformclient.Close": {
       "kind": "func",
-      "at": "core/platformclient/directory.go:116"
+      "at": "core/platformclient/directory.go:122"
     },
     "platformclient.Dial": {
       "kind": "func",
@@ -4472,11 +4528,15 @@
     },
     "storage.Class": {
       "kind": "type",
-      "at": "core/storage/key.go:17"
+      "at": "core/storage/key.go:18"
     },
     "storage.Client": {
       "kind": "type",
       "at": "core/storage/storage.go:103"
+    },
+    "storage.Close": {
+      "kind": "func",
+      "at": "core/storage/storage.go:408"
     },
     "storage.Config": {
       "kind": "type",
@@ -4488,7 +4548,7 @@
     },
     "storage.ExportPath": {
       "kind": "func",
-      "at": "core/storage/key.go:148"
+      "at": "core/storage/key.go:163"
     },
     "storage.ExtForMIME": {
       "kind": "func",
@@ -4496,19 +4556,19 @@
     },
     "storage.Format": {
       "kind": "func",
-      "at": "core/storage/storage.go:471"
+      "at": "core/storage/storage.go:518"
     },
     "storage.GoString": {
       "kind": "func",
-      "at": "core/storage/storage.go:469"
+      "at": "core/storage/storage.go:516"
     },
     "storage.Key": {
       "kind": "type",
-      "at": "core/storage/key.go:103"
+      "at": "core/storage/key.go:118"
     },
     "storage.LogValue": {
       "kind": "func",
-      "at": "core/storage/storage.go:470"
+      "at": "core/storage/storage.go:517"
     },
     "storage.New": {
       "kind": "func",
@@ -4516,31 +4576,35 @@
     },
     "storage.NewObjectID": {
       "kind": "func",
-      "at": "core/storage/key.go:116"
+      "at": "core/storage/key.go:131"
     },
     "storage.ObjectInfo": {
       "kind": "type",
       "at": "core/storage/storage.go:277"
     },
+    "storage.Open": {
+      "kind": "func",
+      "at": "core/storage/storage.go:371"
+    },
     "storage.ParseExportKey": {
       "kind": "func",
-      "at": "core/storage/key.go:249"
+      "at": "core/storage/key.go:264"
     },
     "storage.ParseKey": {
       "kind": "func",
-      "at": "core/storage/key.go:192"
+      "at": "core/storage/key.go:207"
     },
     "storage.ParseUploadKey": {
       "kind": "func",
-      "at": "core/storage/key.go:240"
+      "at": "core/storage/key.go:255"
     },
     "storage.Path": {
       "kind": "func",
-      "at": "core/storage/key.go:125"
+      "at": "core/storage/key.go:140"
     },
     "storage.PresignDownload": {
       "kind": "func",
-      "at": "core/storage/storage.go:480"
+      "at": "core/storage/storage.go:527"
     },
     "storage.PresignUpload": {
       "kind": "func",
@@ -4552,27 +4616,35 @@
     },
     "storage.PresignedURL": {
       "kind": "type",
-      "at": "core/storage/storage.go:463"
+      "at": "core/storage/storage.go:510"
     },
     "storage.Promote": {
       "kind": "func",
-      "at": "core/storage/storage.go:391"
+      "at": "core/storage/storage.go:438"
     },
     "storage.Promoted": {
       "kind": "type",
-      "at": "core/storage/storage.go:364"
+      "at": "core/storage/storage.go:411"
     },
     "storage.PublicURL": {
       "kind": "func",
-      "at": "core/storage/storage.go:501"
+      "at": "core/storage/storage.go:548"
     },
     "storage.PurgeAllVersions": {
       "kind": "func",
-      "at": "core/storage/storage.go:522"
+      "at": "core/storage/storage.go:569"
     },
     "storage.Purpose": {
       "kind": "type",
-      "at": "core/storage/key.go:56"
+      "at": "core/storage/key.go:57"
+    },
+    "storage.Purposes": {
+      "kind": "func",
+      "at": "core/storage/key.go:78"
+    },
+    "storage.Read": {
+      "kind": "func",
+      "at": "core/storage/storage.go:400"
     },
     "storage.ReadHead": {
       "kind": "func",
@@ -4588,7 +4660,7 @@
     },
     "storage.Service": {
       "kind": "type",
-      "at": "core/storage/key.go:32"
+      "at": "core/storage/key.go:33"
     },
     "storage.SniffMIME": {
       "kind": "func",
@@ -4600,15 +4672,15 @@
     },
     "storage.String": {
       "kind": "func",
-      "at": "core/storage/storage.go:468"
+      "at": "core/storage/storage.go:515"
     },
     "storage.URL": {
       "kind": "func",
-      "at": "core/storage/storage.go:467"
+      "at": "core/storage/storage.go:514"
     },
     "storage.UploadPath": {
       "kind": "func",
-      "at": "core/storage/key.go:138"
+      "at": "core/storage/key.go:153"
     },
     "store.Allows": {
       "kind": "func",
@@ -4672,15 +4744,15 @@
     },
     "store.ByHost": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:97"
+      "at": "service-platform/internal/store/directory.go:99"
     },
     "store.ByHostErr": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:136"
+      "at": "service-platform/internal/store/directory.go:138"
     },
     "store.ByID": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:171"
+      "at": "service-platform/internal/store/directory.go:173"
     },
     "store.CaLamBuDeGhi": {
       "kind": "type",
@@ -5098,6 +5170,10 @@
       "kind": "func",
       "at": "service-documents/internal/store/van_ban_den.go:267"
     },
+    "store.ListUploadPolicies": {
+      "kind": "func",
+      "at": "service-platform/internal/store/upload_policy.go:42"
+    },
     "store.LoaiDonViDanCuStore": {
       "kind": "type",
       "at": "service-identity/internal/store/loai_don_vi_dan_cu.go:18"
@@ -5228,7 +5304,7 @@
     },
     "store.NewDirectory": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:34"
+      "at": "service-platform/internal/store/directory.go:36"
     },
     "store.NewDuAnGhiStore": {
       "kind": "func",
@@ -5357,6 +5433,10 @@
     "store.NewThongBaoNoiBoStore": {
       "kind": "func",
       "at": "service-comms/internal/store/thong_bao_noi_bo.go:71"
+    },
+    "store.NewUploadPolicyStore": {
+      "kind": "func",
+      "at": "service-platform/internal/store/upload_policy.go:25"
     },
     "store.NewVaiTroStore": {
       "kind": "func",
@@ -5734,6 +5814,10 @@
       "kind": "func",
       "at": "core/store/scoped.go:116"
     },
+    "store.UploadPolicyStore": {
+      "kind": "type",
+      "at": "service-platform/internal/store/upload_policy.go:21"
+    },
     "store.VaiTroCuaCanBo": {
       "kind": "func",
       "at": "service-identity/internal/store/vai_tro.go:83"
@@ -5913,6 +5997,26 @@
     "ulid.Moi": {
       "kind": "func",
       "at": "core/ulid/ulid.go:41"
+    },
+    "uploadpolicy.AllowsMIME": {
+      "kind": "func",
+      "at": "core/platformclient/uploadpolicy/uploadpolicy.go:68"
+    },
+    "uploadpolicy.Client": {
+      "kind": "type",
+      "at": "core/platformclient/uploadpolicy/uploadpolicy.go:74"
+    },
+    "uploadpolicy.New": {
+      "kind": "func",
+      "at": "core/platformclient/uploadpolicy/uploadpolicy.go:104"
+    },
+    "uploadpolicy.Policy": {
+      "kind": "func",
+      "at": "core/platformclient/uploadpolicy/uploadpolicy.go:124"
+    },
+    "uploadpolicy.Reader": {
+      "kind": "type",
+      "at": "core/platformclient/uploadpolicy/uploadpolicy.go:88"
     }
   }
 }

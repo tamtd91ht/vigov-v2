@@ -132,6 +132,14 @@
       "bang_chung": "7eabf3e (28/09/2026): core/storage (khoá theo lớp/xã/thời gian, danh sách đóng, presigned POST ép dung lượng+loại ký theo tên miền công khai, SniffMIME, Promote có kiểm ETag/đích/loại, SHA256 streaming, PresignDownload + Content-Disposition làm sạch, PublicURL, PurgeAllVersions từ chối records) + core/config ObjectStorage (7 biến, đều tuỳ chọn; thiếu → ErrNotConfigured; nhiều host → từ chối) + .env.example + deploy/cau-hinh/README.md. Phụ thuộc mới minio-go v7.3.0. make check xanh (9 module -race, standalone, check_env_map 29 biến). Ca tích hợp MinIO thật SKIP — máy không có MinIO/Docker.",
       "no_confirm": [],
       "tiep_theo": "CHƯA CHẠY với MinIO thật: chạy TestIntegrationUploadPromoteDownloadPurge (hướng dẫn ở .env.example mục tests) trước khi service nào dùng. Card tiếp: (1) core/malwarescan — ClamAV clamd INSTREAM, MALWARE_SCANNER_ADDRESS, thiếu/không tới được thì từ chối; (2) hợp đồng platform cho dung lượng/loại tối đa theo mục đích (contract-designer, Vihat cấu hình ở khu vận hành ADR 0048); (3) comms: bảng stored_file + tuyến tải lên + video xử lý ngay + đăng lên public; (4) vigovctl storage purge; (5) phần công dân chờ cầu phiên. Devops: tạo ba bucket, luật vòng đời temp (upload/ 1 ngày, export/ 7 ngày), versioning bucket private, chính sách đọc ẩn danh chỉ GetObject cho public, khoá truy cập theo service giới hạn …/{service}/*, CORS, khai tên miền MinIO với Zalo (vihat-miniapp)."
+    },
+    {
+      "id": "upload-policy-reader",
+      "viec": "core/platformclient/uploadpolicy — đọc giới hạn tải lên theo mục đích từ platform",
+      "trang_thai": "xong",
+      "bang_chung": "95de79b: Reader.Policy(ctx, storage.Purpose) cache 60s theo khoá t:<tenant>, platform không tới được → ErrUnavailable (từ chối, không có mặc định); thu hẹp MIME vào danh sách của storage; storage.Purposes() + TestEnumAndStoragePurposesMatchBothWays chống lệch enum proto. Gói con để minio-go không vào bản dựng Docker của service không dùng kho tệp (make standalone xanh).",
+      "no_confirm": [],
+      "tiep_theo": "Khoá cache theo xã không giới hạn số lượng — chấp nhận được với số xã hiện tại; xem lại nếu vượt hàng nghìn xã."
     }
   ]
 }
