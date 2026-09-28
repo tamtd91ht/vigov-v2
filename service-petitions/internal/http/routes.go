@@ -186,6 +186,14 @@ type (
 		StaffOrgUnits(ctx context.Context, staffCode string) ([]string, error)
 	}
 
+	// TaskRegisterExporter is the Sổ theo dõi export (§4.3), for GET /api/v1/tasks/register-export.
+	// *app.TaskRegisterExport satisfies it. ITS OWN INTERFACE because it WRITES — the audit entry
+	// every export leaves — and a read interface must stay unable to write.
+	TaskRegisterExporter interface {
+		Export(ctx context.Context, req app.RegisterExportRequest, actor audit.Actor,
+			render func(app.TaskRegisterData) ([]byte, error)) ([]byte, int, error)
+	}
+
 	// DeNghiLuiHanChoDuyetDoc is the approval queue of extension requests (§5.8), for
 	// GET /api/v1/task-extensions. *petstore.DeNghiLuiHanStore satisfies it.
 	//
@@ -450,6 +458,9 @@ type Deps struct {
 	// Identity's two answers behind `soon=true` and `scope=related` on the task list and counts.
 	TaskFilterIdentity TaskFilterIdentity
 
+	// The Sổ theo dõi export — reads, resolves names, renders, and audits (app.TaskRegisterExport).
+	TaskRegisterExport TaskRegisterExporter
+
 	// The approval queue of extension requests (§5.8) — a read over `de_nghi_lui_han` joined to its
 	// task. The two extension WRITES stay on GhiNhiemVu below.
 	DeNghiChoDuyet DeNghiLuiHanChoDuyetDoc
@@ -538,6 +549,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	case d.TaskFilterIdentity == nil:
 		panic("petitions/http: thiếu đường hỏi identity cho bộ lọc nhiệm vụ — `soon=true` và `scope=related` " +
 			"trên GET /api/v1/tasks sẽ panic khi có người gọi")
+	case d.TaskRegisterExport == nil:
+		panic("petitions/http: thiếu use case xuất sổ theo dõi — GET /api/v1/tasks/register-export sẽ panic khi có người gọi")
 	case d.DeNghiChoDuyet == nil:
 		panic("petitions/http: thiếu đường đọc hàng chờ duyệt lùi hạn — GET /api/v1/task-extensions sẽ panic khi có người gọi")
 	case d.GhiNhiemVu == nil:
@@ -1106,6 +1119,34 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/tasks",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DanhSachNhiemVu)))
+
+	// XUẤT SỔ THEO DÕI (§4.3, :128) — the register as an .xlsx, columns in §4.3's order, under exactly
+	// the filters and sort of GET /api/v1/tasks. `task.read`, the list's own key (user decision
+	// 28/09/2026 — NO KEY INVENTED): the file shows what the list shows. It is NOT a personal-data
+	// export under rule 3 invariant 4 — a task carries no citizen's data — but it DOES carry staff full
+	// names, so every export writes ONE audit entry (`xuat_so_theo_doi_nhiem_vu`: who, the filters with
+	// the free-text search recorded as present only, the sort, the row count, and that staff names were
+	// included) BEFORE the file is sent; no trail, no file (app.TaskRegisterExport).
+	//
+	// 422 above 5.000 rows — refused, never truncated. 503 when identity cannot supply the names (no
+	// file with blanks where names belong), or cannot resolve `soon` / `scope=related`. 409 as the list.
+	//
+	// NO idem.* DECLARATION: a GET, and a repeated export is a second, separately audited export —
+	// which is the truth of what happened.
+	//
+	// @summary  Xuất Sổ theo dõi nhiệm vụ ra tệp Excel (.xlsx) — cùng bộ lọc và cách sắp với danh sách, cột đúng thứ tự §4.3; mỗi lần xuất được ghi vết
+	// @screen   02-nhiem-vu §4.3
+	// @reply    200 -
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/tasks/register-export",
+		authz.RequirePermission(d.Checker, "task.read")(
+			http.HandlerFunc(h.ExportTaskRegister)))
 
 	// SỐ LƯỢNG THEO TRẠNG THÁI (§4.1) — the real number over each Kanban column, under EXACTLY the
 	// filters of GET /api/v1/tasks (one parser, one predicate builder; see task_counts.go). `task.read`,

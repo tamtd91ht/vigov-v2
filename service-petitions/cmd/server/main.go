@@ -254,6 +254,10 @@ func chay(log *slog.Logger) error {
 		// `soon=true` and `scope=related` on the task list and counts ask identity — the SAME client
 		// every other identity question here uses, so they agree about identity's health.
 		TaskFilterIdentity: dinhDanh,
+		// The Sổ theo dõi export: the SAME task store the list reads (one filter, one sort, one keyset),
+		// the same identity client for the three name lookups, and *store.DB because it opens the
+		// transaction its audit entry is written in.
+		TaskRegisterExport: app.NewTaskRegisterExport(kho, nhiemVu, dinhDanh),
 		// The approval queue of extension requests (§5.8) — the SAME store the two extension acts
 		// write through, so the queue lists exactly the rows those acts leave pending.
 		DeNghiChoDuyet: deNghiLuiHan,

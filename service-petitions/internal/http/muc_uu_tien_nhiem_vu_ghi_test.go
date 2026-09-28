@@ -186,6 +186,7 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		CitizenReportSummary: citizenReportSummarySample(),
 		OverdueQueue:         overdueQueueSample(),
 		TaskFilterIdentity:   taskFilterIdentitySample(),
+		TaskRegisterExport:   &registerExportFake{},
 		Log:                  im,
 	})
 

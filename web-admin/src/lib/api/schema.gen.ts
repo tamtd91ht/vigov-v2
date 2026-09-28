@@ -5,6 +5,16 @@
 //
 // Hợp đồng: ViGov — REST API cho web quản trị v1
 
+export type comms_createMapFieldSchemaIn = {
+  "asset_type_code": string;
+  "field_code": string;
+  "label": string;
+  "value_type": string;
+  "options"?: Array<comms_fieldOptionIn>;
+  "is_required"?: boolean;
+  "sort_order"?: number;
+};
+
 export type comms_danhMucRa = {
   "id": string;
   "name": string;
@@ -22,6 +32,20 @@ export type comms_danhSachLoaiTaiNguyenRa = {
   "items": Array<comms_loaiTaiNguyenRa>;
 };
 
+export type comms_deleteMapFieldSchemaIn = {
+  "reason": string;
+};
+
+export type comms_fieldOptionIn = {
+  "value": string;
+  "label": string;
+};
+
+export type comms_fieldOptionOut = {
+  "value": string;
+  "label": string;
+};
+
 export type comms_loaiTaiNguyenRa = {
   /** ULID — what a map asset record references */
   "id": string;
@@ -34,6 +58,24 @@ export type comms_loaiTaiNguyenRa = {
   "order": number;
   "source": string;
   "tier": number;
+};
+
+export type comms_mapFieldSchemaListOut = {
+  "items": Array<comms_mapFieldSchemaOut>;
+};
+
+export type comms_mapFieldSchemaOut = {
+  "id": string;
+  /** `code` of a row of GET /api/v1/map-asset-types */
+  "asset_type_code": string;
+  "field_code": string;
+  "label": string;
+  "value_type": string;
+  /** [] unless value_type is `chon`, never null */
+  "options": Array<comms_fieldOptionOut>;
+  "is_required": boolean;
+  "sort_order": number;
+  "is_active": boolean;
 };
 
 export type comms_noiDungRa = {
@@ -136,6 +178,17 @@ export type comms_tinXaRa = {
   "published_on": string;
   "category_name": string;
   "body"?: string | null;
+};
+
+export type comms_updateMapFieldSchemaIn = {
+  "label"?: string | null;
+  "options"?: Array<comms_fieldOptionIn> | null;
+  "is_required"?: boolean | null;
+  "sort_order"?: number | null;
+  "is_active"?: boolean | null;
+  "asset_type_code"?: string | null;
+  "field_code"?: string | null;
+  "value_type"?: string | null;
 };
 
 export type comms_xoaLoaiTaiNguyenVao = {
@@ -976,6 +1029,43 @@ export type identity_ngayNghiLeRa = {
 export type identity_nhomQuyenRa = {
   "name": string;
   "permissions": Array<identity_quyenMucRa>;
+};
+
+export type identity_orgUnitImportCreatedOut = {
+  "created": Array<identity_orgUnitImportUnitOut>;
+};
+
+export type identity_orgUnitImportErrorOut = {
+  /** dòng trong bảng tính (tiêu đề là dòng 1); 0 = lỗi của cả tệp */
+  "row": number;
+  /** tên cột như trên tiêu đề; "" = lỗi của cả dòng hoặc cả tệp */
+  "column": string;
+  "message": string;
+};
+
+export type identity_orgUnitImportPreviewOut = {
+  "valid": boolean;
+  "units": Array<identity_orgUnitImportUnitOut>;
+  "errors": Array<identity_orgUnitImportErrorOut>;
+};
+
+export type identity_orgUnitImportRejectedOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "errors": Array<identity_orgUnitImportErrorOut>;
+};
+
+export type identity_orgUnitImportUnitOut = {
+  "row": number;
+  /** only once created */
+  "id"?: string;
+  "code": string;
+  "name": string;
+  "parent_id": string;
+  "parent_row"?: number;
+  "parent_code": string;
+  "order": number;
 };
 
 export type identity_phanHoiDangNhap = {
@@ -3208,6 +3298,85 @@ export type comms_delete_map_asset_types_by_id = {
   };
 };
 
+/** GET /api/v1/map-field-schemas — Các trường tuỳ biến của biểu mẫu tài nguyên bản đồ — của một nhóm hoặc mọi nhóm, kể cả trường đang tắt */
+export type comms_get_map_field_schemas = {
+  duongDan: "/api/v1/map-field-schemas";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "asset_type_code": string;
+  };
+  than: never;
+  phanHoi: {
+    200: comms_mapFieldSchemaListOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/map-field-schemas — Thêm một trường tuỳ biến vào biểu mẫu của một nhóm tài nguyên bản đồ */
+export type comms_post_map_field_schemas = {
+  duongDan: "/api/v1/map-field-schemas";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_createMapFieldSchemaIn;
+  phanHoi: {
+    201: comms_mapFieldSchemaOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/map-field-schemas/{id} — Sửa nhãn, lựa chọn (chỉ đổi nhãn hoặc thêm), bắt buộc, thứ tự hoặc bật/tắt một trường bản đồ */
+export type comms_patch_map_field_schemas_by_id = {
+  duongDan: "/api/v1/map-field-schemas/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_updateMapFieldSchemaIn;
+  phanHoi: {
+    200: comms_mapFieldSchemaOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/map-field-schemas/{id} — Xoá mềm một trường bản đồ, kèm lý do bắt buộc — mã trường không được cấp lại */
+export type comms_delete_map_field_schemas_by_id = {
+  duongDan: "/api/v1/map-field-schemas/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_deleteMapFieldSchemaIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/meetings — Danh sách biên bản họp của xã — mỗi biên bản kèm các kết luận và bộ đếm nhiệm vụ đã tách / đã xong */
 export type petitions_get_meetings = {
   duongDan: "/api/v1/meetings";
@@ -3571,6 +3740,64 @@ export type identity_post_org_units = {
     401: httpx_Error;
     403: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/org-units/import-previews — Kiểm tra một tệp Excel sơ đồ tổ chức trước khi nhập — không ghi gì */
+export type identity_post_org_units_import_previews = {
+  duongDan: "/api/v1/org-units/import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_orgUnitImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/org-units/import-template — Tải tệp Excel mẫu để nhập sơ đồ tổ chức — kèm danh sách chọn bộ phận cha đang có */
+export type identity_get_org_units_import_template = {
+  duongDan: "/api/v1/org-units/import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/org-units/imports — Nhập sơ đồ tổ chức từ tệp Excel — toàn bộ tệp hoặc không gì cả */
+export type identity_post_org_units_imports = {
+  duongDan: "/api/v1/org-units/imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: identity_orgUnitImportCreatedOut;
+    400: identity_orgUnitImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -4849,6 +5076,44 @@ export type petitions_post_tasks = {
     403: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/tasks/register-export — Xuất Sổ theo dõi nhiệm vụ ra tệp Excel (.xlsx) — cùng bộ lọc và cách sắp với danh sách, cột đúng thứ tự §4.3; mỗi lần xuất được ghi vết */
+export type petitions_get_tasks_register_export = {
+  duongDan: "/api/v1/tasks/register-export";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "assignee"?: string;
+    "bloc"?: string;
+    "from"?: string;
+    "late"?: string;
+    "metric"?: string;
+    "order"?: string;
+    "parent"?: string;
+    "priority"?: string;
+    "q"?: string;
+    "scope"?: string;
+    "soon"?: string;
+    "sort"?: string;
+    "source"?: string;
+    "status"?: string;
+    "to"?: string;
+    "type"?: string;
+    "unit"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 

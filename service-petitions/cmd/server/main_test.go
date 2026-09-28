@@ -383,6 +383,9 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// A typed nil client: never invoked here (no request sends `soon` or `scope=related`), and
 		// Register refuses a nil interface. Own suite: internal/http/task_filter_identity_test.go.
 		TaskFilterIdentity: (*identityclient.Client)(nil),
+		// Never invoked here; Register refuses a nil. Own suites: internal/app/task_register_export_test.go
+		// and internal/http/task_register_export_test.go.
+		TaskRegisterExport: app.NewTaskRegisterExport(nil, nil, nil),
 		// Never invoked here; Register refuses a nil. Own suite:
 		// internal/http/de_nghi_lui_han_cho_duyet_test.go.
 		DeNghiChoDuyet: petstore.NewDeNghiLuiHanStore(nil),

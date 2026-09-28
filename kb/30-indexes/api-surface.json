@@ -1507,6 +1507,96 @@
       "declared_in": "service-comms/internal/http/routes.go"
     },
     {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/map-field-schemas",
+      "operation_id": "comms_get_map_field_schemas",
+      "task_id": "d20d6b2f6a32",
+      "summary": "Các trường tuỳ biến của biểu mẫu tài nguyên bản đồ — của một nhóm hoặc mọi nhóm, kể cả trường đang tắt",
+      "screen": "14-cau-hinh §6",
+      "permission_kind": "permission",
+      "permission": "asset.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.mapFieldSchemaListOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/map-field-schemas",
+      "operation_id": "comms_post_map_field_schemas",
+      "task_id": "8d0e5a0ade26",
+      "summary": "Thêm một trường tuỳ biến vào biểu mẫu của một nhóm tài nguyên bản đồ",
+      "screen": "14-cau-hinh §6",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "comms.createMapFieldSchemaIn",
+      "reply_schemas": {
+        "201": "comms.mapFieldSchemaOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "DELETE",
+      "path": "/api/v1/map-field-schemas/{id}",
+      "operation_id": "comms_delete_map_field_schemas_by_id",
+      "task_id": "3e0033c12299",
+      "summary": "Xoá mềm một trường bản đồ, kèm lý do bắt buộc — mã trường không được cấp lại",
+      "screen": "14-cau-hinh §6",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xoá một trường đã xoá trả 404: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do",
+      "request_schema": "comms.deleteMapFieldSchemaIn",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "PATCH",
+      "path": "/api/v1/map-field-schemas/{id}",
+      "operation_id": "comms_patch_map_field_schemas_by_id",
+      "task_id": "69e64b676f8e",
+      "summary": "Sửa nhãn, lựa chọn (chỉ đổi nhãn hoặc thêm), bắt buộc, thứ tự hoặc bật/tắt một trường bản đồ",
+      "screen": "14-cau-hinh §6",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "options là cả danh sách chứ không phải phần thêm, và app.MapFieldSchemas.Update không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một trạng thái và đúng một vết",
+      "request_schema": "comms.updateMapFieldSchemaIn",
+      "reply_schemas": {
+        "200": "comms.mapFieldSchemaOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
       "service": "petitions",
       "method": "GET",
       "path": "/api/v1/meetings",
@@ -1900,6 +1990,72 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/org-units/import-previews",
+      "operation_id": "identity_post_org_units_import_previews",
+      "task_id": "28a0798b7c20",
+      "summary": "Kiểm tra một tệp Excel sơ đồ tổ chức trước khi nhập — không ghi gì",
+      "screen": "14-cau-hinh §1",
+      "permission_kind": "permission",
+      "permission": "admin.org",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xem trước không ghi gì và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái sơ đồ",
+      "reply_schemas": {
+        "200": "identity.orgUnitImportPreviewOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "GET",
+      "path": "/api/v1/org-units/import-template",
+      "operation_id": "identity_get_org_units_import_template",
+      "task_id": "0cebf957c5a4",
+      "summary": "Tải tệp Excel mẫu để nhập sơ đồ tổ chức — kèm danh sách chọn bộ phận cha đang có",
+      "screen": "14-cau-hinh §1",
+      "permission_kind": "permission",
+      "permission": "admin.org",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/org-units/imports",
+      "operation_id": "identity_post_org_units_imports",
+      "task_id": "ea0b277cd6f4",
+      "summary": "Nhập sơ đồ tổ chức từ tệp Excel — toàn bộ tệp hoặc không gì cả",
+      "screen": "14-cau-hinh §1",
+      "permission_kind": "permission",
+      "permission": "admin.org",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "reply_schemas": {
+        "201": "identity.orgUnitImportCreatedOut",
+        "400": "identity.orgUnitImportRejectedOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "413": "httpx.Error",
+        "415": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-identity/internal/http/routes.go"
@@ -3292,6 +3448,29 @@
         "403": "httpx.Error",
         "409": "httpx.Error",
         "500": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "GET",
+      "path": "/api/v1/tasks/register-export",
+      "operation_id": "petitions_get_tasks_register_export",
+      "task_id": "04935fafa4a5",
+      "summary": "Xuất Sổ theo dõi nhiệm vụ ra tệp Excel (.xlsx) — cùng bộ lọc và cách sắp với danh sách, cột đúng thứ tự §4.3; mỗi lần xuất được ghi vết",
+      "screen": "02-nhiem-vu §4.3",
+      "permission_kind": "permission",
+      "permission": "task.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes.go"
     },

@@ -192,6 +192,7 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		CitizenReportSummary: citizenReportSummarySample(),
 		OverdueQueue:         overdueQueueSample(),
 		TaskFilterIdentity:   taskFilterIdentitySample(),
+		TaskRegisterExport:   &registerExportFake{},
 		Log:                  im,
 	})
 

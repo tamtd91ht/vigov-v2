@@ -223,6 +223,9 @@ type mayChu struct {
 
 	// filterIdentity answers `soon=true` and `scope=related` — task_filter_identity_test.go.
 	filterIdentity *taskFilterIdentityFake
+
+	// registerExport is the Sổ theo dõi export — task_register_export_test.go.
+	registerExport *registerExportFake
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -264,6 +267,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	reportSummary := citizenReportSummarySample()
 	overdue := overdueQueueSample()
 	filterIdentity := taskFilterIdentitySample()
+	registerExport := &registerExportFake{}
 
 	m := &mayChu{
 		d: Deps{
@@ -303,6 +307,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			NhiemVu:              nhiemVu,
 			DanhSachNhiemVu:      nhiemVu,
 			TaskFilterIdentity:   filterIdentity,
+			TaskRegisterExport:   registerExport,
 			DeNghiChoDuyet:       deNghiCho,
 			GhiNhiemVu:           ghiNhiemVu,
 			DanhSachBienBan:      bienBan,
@@ -332,6 +337,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		overdue:       overdue,
 
 		filterIdentity: filterIdentity,
+		registerExport: registerExport,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -421,6 +427,7 @@ func depsDay() Deps {
 		NhiemVu:            nhiemVuMau(),
 		DanhSachNhiemVu:    nhiemVuMau(),
 		TaskFilterIdentity: taskFilterIdentitySample(),
+		TaskRegisterExport: &registerExportFake{},
 		DeNghiChoDuyet:     deNghiChoDuyetMau(),
 		GhiNhiemVu:         &ghiNhiemVuGia{},
 		DanhSachBienBan:    bienBanMau(),
@@ -470,6 +477,7 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"thiếu đường đọc hàng chờ lùi hạn":   func(d *Deps) { d.DeNghiChoDuyet = nil },
 		// `soon=true` and `scope=related`: a nil here panics on the first officer who ticks the box.
 		"thiếu đường hỏi identity cho bộ lọc nhiệm vụ": func(d *Deps) { d.TaskFilterIdentity = nil },
+		"thiếu use case xuất sổ theo dõi":              func(d *Deps) { d.TaskRegisterExport = nil },
 		// The meeting register. A nil here is the Biên bản họp screen, and with it the only place a
 		// commune can see WHERE its tasks came from.
 		"thiếu đường đọc danh sách biên bản": func(d *Deps) { d.DanhSachBienBan = nil },
