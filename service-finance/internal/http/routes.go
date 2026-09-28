@@ -1292,8 +1292,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// `override` IS A SUB-RESOURCE, THE SHAPE `no-task-marker` ALREADY USES: the commune's own
 	// wording is a state PUT sets and DELETE removes, and the message itself survives both — a shipped
-	// key cannot be deleted (14-cau-hinh §7). `DELETE …/{key}` would read as removing the message;
-	// `POST …/{key}/revert` is a verb in a path, which rest_api_guard refuses.
+	// key cannot be deleted (14-cau-hinh §7). `DELETE …/{code}` would read as removing the message;
+	// `POST …/{code}/revert` is a verb in a path, which rest_api_guard refuses.
 	//
 	// `admin.lookup` — "Quản lý danh mục" — ON ALL THREE, the key the requirement repository guards
 	// this screen with (../vigov-require/docs/spec/04-api.md:41-44), seeded at
@@ -1328,7 +1328,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
-	mux.Handle("PUT /api/v1/finance-system-messages/{key}/override",
+	mux.Handle("PUT /api/v1/finance-system-messages/{code}/override",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("đặt lại đúng câu đang dùng không ghi gì và không để vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.RewordSystemMessage))))
@@ -1346,7 +1346,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
-	mux.Handle("DELETE /api/v1/finance-system-messages/{key}/override",
+	mux.Handle("DELETE /api/v1/finance-system-messages/{code}/override",
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("khôi phục khi xã đã dùng câu mặc định thì không còn dòng nào để gỡ và không ghi gì")(
 				http.HandlerFunc(h.RestoreSystemMessage))))

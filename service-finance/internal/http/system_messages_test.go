@@ -263,7 +263,7 @@ func TestListSystemMessagesShape(t *testing.T) {
 	}
 	it := out.Items[0]
 	for k, want := range map[string]any{
-		"key": domain.KeyBudgetScopeNotice, "default_text": "Mặc định.", "current_text": "Câu của xã.",
+		"code": domain.KeyBudgetScopeNotice, "default_text": "Mặc định.", "current_text": "Câu của xã.",
 		"overridden": true, "updated_by": "CB-00777", "updated_at": "2026-09-28T03:00:00Z",
 	} {
 		if it[k] != want {

@@ -35,7 +35,7 @@ type SystemMessageService interface {
 // định" would bring back without a second request. `updated_at` / `updated_by` are absent while
 // the commune is on the default — nobody changed anything, so there is nobody to name.
 type systemMessageOut struct {
-	Key         string     `json:"key"`
+	Code        string     `json:"code"` // not "key": apidoc refuses credential-looking response fields (tools/apidoc/schema.go:257)
 	Description string     `json:"description"`
 	DefaultText string     `json:"default_text"`
 	CurrentText string     `json:"current_text"`
@@ -58,7 +58,7 @@ type rewordSystemMessageIn struct {
 
 func systemMessageToOut(m domain.SystemMessage) systemMessageOut {
 	return systemMessageOut{
-		Key: m.Key, Description: m.Description, DefaultText: m.DefaultText,
+		Code: m.Key, Description: m.Description, DefaultText: m.DefaultText,
 		CurrentText: m.CurrentText, Overridden: m.Overridden,
 		UpdatedAt: m.UpdatedAt, UpdatedBy: m.UpdatedBy,
 	}
@@ -78,7 +78,7 @@ func (h *Handler) ListSystemMessages(w http.ResponseWriter, r *http.Request) {
 	vietJSON(w, http.StatusOK, out)
 }
 
-// RewordSystemMessage serves PUT /api/v1/finance-system-messages/{key}/override.
+// RewordSystemMessage serves PUT /api/v1/finance-system-messages/{code}/override.
 func (h *Handler) RewordSystemMessage(w http.ResponseWriter, r *http.Request) {
 	actor, ok := nguoiThucHien(r)
 	if !ok {
@@ -89,7 +89,7 @@ func (h *Handler) RewordSystemMessage(w http.ResponseWriter, r *http.Request) {
 	if !docThan(w, r, &in) {
 		return
 	}
-	m, err := h.d.SystemMessages.Reword(r.Context(), r.PathValue("key"), in.Text, actor)
+	m, err := h.d.SystemMessages.Reword(r.Context(), r.PathValue("code"), in.Text, actor)
 	if err != nil {
 		h.writeSystemMessageError(w, r, "sửa", err)
 		return
@@ -97,14 +97,14 @@ func (h *Handler) RewordSystemMessage(w http.ResponseWriter, r *http.Request) {
 	vietJSON(w, http.StatusOK, systemMessageToOut(m))
 }
 
-// RestoreSystemMessage serves DELETE /api/v1/finance-system-messages/{key}/override.
+// RestoreSystemMessage serves DELETE /api/v1/finance-system-messages/{code}/override.
 func (h *Handler) RestoreSystemMessage(w http.ResponseWriter, r *http.Request) {
 	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.writeSystemMessageError(w, r, "khôi phục", errNoActor)
 		return
 	}
-	if _, err := h.d.SystemMessages.Restore(r.Context(), r.PathValue("key"), actor); err != nil {
+	if _, err := h.d.SystemMessages.Restore(r.Context(), r.PathValue("code"), actor); err != nil {
 		h.writeSystemMessageError(w, r, "khôi phục", err)
 		return
 	}
