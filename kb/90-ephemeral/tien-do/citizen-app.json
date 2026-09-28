@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "citizen-app",
-  "cap_nhat": "2026-09-28",
+  "cap_nhat": "2026-09-29",
   "_luu_y_lan_ghi_nay": "GHI 22/09/2026 LAN BA (HO SO XIN QUYEN ZALO). `make kb` KHONG chay (co phien khac dang lam do). Muc moi `ho-so-zalo-khoi-roi-khoi-may`. CANH BAO: HAI CAU SAI DA NAM TRONG HO SO PHAP LY VA DA DUOC GO — doc muc ay truoc khi sua `content/ket-xuat-ho-so.ts` hoac `scripts/ho-so-zalo.mjs`. --- GHI 22/09/2026 LAN HAI (GIAI DOAN B - be mat yeu cau, noi tuyen may chu). `make kb` KHONG chay trong luot nay (phien chinh chay o cuoi). Muc moi `be-mat-yeu-cau-tu-van-bao-gia`. ⚠ DOC MUC AY TRUOC KHI SUA `phase1-collects-nothing.test.ts`: hai day bay vua duoc THU HEP lan dau tien ke tu khi chung ra doi, va `chi_trong` doi tu mot CHUOI sang mot DANH SACH TEP. --- GHI 22/09/2026 (GIAI ĐOẠN A của việc thiết kế lại màn chủ) — `make kb` KHÔNG chạy trong lượt này (phiên chính sẽ chạy ở cuối), nên `kb/90-ephemeral/tien-do.md` còn là bản sinh của lần trước. Mục mới `man-chu-viec-cua-khach-khong-phai-quyen`. Không mục nào bị xoá, không `trang_thai` nào bị hạ. --- BỔ SUNG 21/09/2026 (khuya): mục `man-chu-khop-hero-tab-ban-mau` mới, và `make kb` CŨNG KHÔNG chạy trong lượt ấy (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vẫn là bản sinh của lần trước. Mục mới ấy khai một SỰ CỐ MẤT MÃ NGUỒN đã khôi phục: đọc `tiep_theo` của nó trước khi tin bất cứ dòng chú thích nào trong citizen-app/src/styles.css. --- Ghi chiều 21/09/2026. `make kb` CHƯA chạy trong phiên này (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vì thế còn là bản sinh của lần trước. Hai lần ghi tối 21/09 (mục `ho-so-zalo-sinh-tu-nguon` và `man-chu-theo-ban-mau-pm`) cũng KHÔNG chạy `make kb`. Lần ghi cuối còn dọn một chỗ sai lược đồ có SẴN: `no_confirm` của `ho-so-zalo-sinh-tu-nguon` chứa văn xuôi thay vì số hiệu câu hỏi, và `progress_guard` chặn mọi lần ghi vào tệp này cho tới khi nó được dọn; hai đoạn văn ấy CHUYỂN NGUYÊN VĂN xuống `tiep_theo` của chính mục đó, không xoá chữ nào.",
   "muc": [
     {
@@ -245,6 +245,15 @@
       "bang_chung": "T2 195fe45 (trai-nghiem.ts cryptoBytes, experience-ticket-code.test.ts). T4 b6cef55 (nhomCua = groupOf, chip --unknown trung tính, unknown-status-commune-app.test.tsx). T5 f49bc7d (chỉ chú thích + câu in của check:api). citizen-app vitest 961/961, tsc sạch; make -k check: citizen-app + web-admin (2203/2203) + mọi check_*.py PASS; lint/build/test Go ĐỎ vì việc CHƯA COMMIT của phiên song song ở service-identity (org_units.go) và service-petitions (nhiem_vu*), không phải do lượt này.",
       "no_confirm": [],
       "tiep_theo": "CÒN LẠI, chưa làm: (1) PhanAnhAppXa DongThoiGian vẫn hiện nguyên mã trạng thái lạ (NHAN_BUOC[tt] ?? tt, buocDaQua trả [tt]) — cùng loại lỗi T4 đã sửa cho chip. (2) phase1-collects-nothing.test.ts:158-159 chú thích lỗi thời ('cả hai cổng đóng', tên tệp cong-dan.test.ts). (3) PHÁT HIỆN: make check chạy check:api nhưng nó KHÔNG kiểm gì — không gì so kiểu REST viết tay của citizen-app với kb/20-contracts/openapi.json; một phép kiểm hợp đồng thật là việc riêng. (4) maPhieuTraiNghiem ném khi thiếu crypto thì nút gửi app riêng im lặng (webview Zalo có crypto). (5) T3 truy cập (công tắc ẩn danh hiện chữ, chuyển tiêu điểm theo bước, lý do nút Gửi khoá, tiêu điểm kết quả tra cứu) người dùng CHƯA chọn làm lượt này.",
+      "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "cham-sao-qua-mang",
+      "viec": "Dân chấm sao phiếu thật qua mạng — khối đánh giá trên màn tra cứu/phiếu của tôi gọi POST …/my-citizen-reports/{code}/rating",
+      "trang_thai": "xong",
+      "bang_chung": "139d9ab · npm run typecheck sạch; npm test 35 tệp / 986 ca xanh (petition-rating.test.tsx 25 ca). Hàng sao dùng chung star-picker.tsx với bản trải nghiệm.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA GỌI THỬ THẬT: trên máy thật vẫn chưa có phiên ViGov (ADR 0045 UNKNOWN #2), nên khối này chưa tới được. Câu lỗi là câu của client theo nhánh (goi-vigov.ts:73-74 không mang câu máy chủ). Chưa có ca DOM cho phần nối state (repo không có jsdom). Bản trải nghiệm vẫn giữ dữ liệu trong bộ nhớ.",
       "menu": "phan-anh-nguoi-dan"
     }
   ]
