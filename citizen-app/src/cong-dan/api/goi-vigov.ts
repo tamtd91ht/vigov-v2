@@ -30,6 +30,7 @@ import {
   diaChiTraCuu,
   docPhieu,
   docTrangPhieuCuaToi,
+  isPhoneNotVerified,
   type PhieuCuaToi,
   type TrangPhieuCuaToi,
 } from "./hop-dong-phan-anh";
@@ -58,7 +59,10 @@ import { laTenMien } from "../../lib/launch-params";
  *   `xong`                              201 / 200, có phiếu
  *   `khong-thay`                        404 — MỘT câu cho "không có", "của người khác", "xã khác"
  *   `het-phien`                         401 — phiên không dùng được
- *   `dang-xu-ly-truoc`                  409 — lần gửi trước (cùng khoá) còn đang chạy; chờ rồi gửi lại
+ *   `can-xac-thuc-so`                   403 `chua_xac_thuc_so` — phiên chưa có số điện thoại đã xác
+ *                                       thực; việc tiếp theo là HỎI công dân (`man/phone-verification.tsx`).
+ *                                       403 với mã khác là `loi-may-chu`: xin số không sửa được nó
+ *   `dang-xu-ly-truoc`                 409 — lần gửi trước (cùng khoá) còn đang chạy; chờ rồi gửi lại
  *   `khong-hop-le`                      400
  *   `kenh-chua-mo`                      503 — xã chưa cấu hình hạn; phiếu CHƯA được ghi nhận
  *   `loi-may-chu`                       500, mã lạ, hoặc thân sai khuôn
@@ -73,6 +77,7 @@ export type KetQuaGoi =
   | { kieu: "xong"; phieu: PhieuCuaToi }
   | { kieu: "khong-thay" }
   | { kieu: "het-phien" }
+  | { kieu: "can-xac-thuc-so" }
   | { kieu: "dang-xu-ly-truoc" }
   | { kieu: "khong-hop-le" }
   | { kieu: "kenh-chua-mo" }
@@ -136,6 +141,17 @@ async function goi<T>(
         return { kieu: "khong-hop-le" };
       case 401:
         return { kieu: "het-phien" };
+      case 403: {
+        // Thân hỏng ở đây KHÔNG được rơi xuống `catch` bên dưới: đó là nhánh `loi-mang`, và bảo người
+        // dân "kiểm tra mạng" cho một câu trả lời máy chủ đã gửi tới nơi là nói sai việc cần làm.
+        let body: unknown = null;
+        try {
+          body = await tra_loi.json();
+        } catch {
+          return { kieu: "loi-may-chu" };
+        }
+        return isPhoneNotVerified(body) ? { kieu: "can-xac-thuc-so" } : { kieu: "loi-may-chu" };
+      }
       case 404:
         return khi_404;
       case 409:

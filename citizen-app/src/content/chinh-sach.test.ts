@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
-import { thanYeuCauCauViGov, TRUONG_GUI_DI_CAU_VIGOV } from "../features/dang-nhap/hop-dong";
+import { bridgeBodyWithPhone, thanYeuCauCauViGov, TRUONG_GUI_DI_CAU_VIGOV } from "../features/dang-nhap/hop-dong";
 import {
   DOAN_CHINH_SACH_TINH_NANG,
   TOKEN_KHONG_CHUA_GI,
@@ -164,6 +164,28 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
       // Thân KHÔNG có `phoneToken` (ADR 0045 câu 2) — văn bản nói ra điều đó, và nói đúng.
       expect(khoaThan()).not.toContain("phoneToken");
       expect(mucDangNhap()).toMatch(/Bước xác nhận xã không gửi mã số điện thoại của bạn/);
+    });
+
+    /**
+     * ⚠ KHOẢNG HỞ CÒN NỢ — MỞ LẠI PHIÊN KÈM SỐ (28/09/2026).
+     *
+     *   Khi ViGov trả 403 `chua_xac_thuc_so`, công dân bấm đồng ý và thân `bridgeBodyWithPhone` đi ra —
+     *   bằng thân xác nhận xã CỘNG `phoneToken`. Mục Đăng nhập chưa có câu nói mã số đi ở đường này, tới
+     *   ViGov: đó là lời văn pháp lý của chủ dự án, không viết thay trong mã. Ca này ghim khoảng hở ở ĐÚNG
+     *   một khoá — thêm một trường nữa vào thân ấy là ĐỎ, và ngày câu chính sách được duyệt thì ca này
+     *   phải đổi thành khoá hai chiều như hai ca trên.
+     */
+    it("thân mở lại kèm số: ngoài ba khoá đã khai, CHỈ `phoneToken` — khoảng hở chính sách còn nợ", () => {
+      const withPhone = Object.keys(
+        JSON.parse(
+          bridgeBodyWithPhone({ ma_truy_cap: "m", ten_mien_xa: "xa-vi-du.vigov.example", ma_so_dien_thoai: "p" }),
+        ) as Record<string, unknown>,
+      );
+      const declared = TRUONG_GUI_DI_CAU_VIGOV.map((t) => t.khoa);
+      expect(withPhone.filter((k) => !declared.includes(k))).toEqual(["phoneToken"]);
+      for (const k of declared) expect(withPhone).toContain(k);
+      // Câu chính sách của bước xác nhận xã VẪN ĐÚNG: thân của bước ấy vẫn không mang mã số.
+      expect(khoaThan()).not.toContain("phoneToken");
     });
   });
 

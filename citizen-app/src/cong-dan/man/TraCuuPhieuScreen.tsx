@@ -12,11 +12,13 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { type KetQuaGoi, traCuuPhieu } from "../api/goi-vigov";
+import type { ReopenWithPhone } from "../api/mo-phien-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { BangXa, KenhChuaMo, ThePhieu } from "./khung";
 import { QUAY_LAI, TRA_CUU } from "./noi-dung";
 import { ONhapDong } from "./o-nhap";
+import { PhoneVerificationPanel, usePhoneVerification } from "./phone-verification";
 
 /** Độ dài tối đa ô mã. Mã do máy chủ sinh ngẫu nhiên và ngắn hơn nhiều; đây chỉ là trần ô nhập. */
 const MA_TOI_DA = 64;
@@ -74,8 +76,18 @@ export function KetQuaTraCuu({ kq }: { kq: KetQuaGoi }): ReactNode {
  * `ma_ban_dau`: mã đã chọn từ "Phản ánh của tôi" — điền sẵn vào ô và tra ngay khi mở, để người dân
  * không phải gõ lại một mã họ vừa chạm vào. Vẫn đi qua ĐÚNG lời gọi tra cứu, với ĐÚNG phiên.
  */
-export function TraCuuPhieuScreen({ onQuayLai, ma_ban_dau = "" }: { onQuayLai: () => void; ma_ban_dau?: string }) {
+export function TraCuuPhieuScreen({
+  onQuayLai,
+  ma_ban_dau = "",
+  reopenWithPhone,
+}: {
+  onQuayLai: () => void;
+  ma_ban_dau?: string;
+  /** Hàm mở lại phiên kèm số do lớp vỏ tiêm vào (`api/mo-phien-vigov.ts`). Vắng = không có đường ấy. */
+  reopenWithPhone?: ReopenWithPhone;
+}) {
   const [phien] = useState(layPhienViGov);
+  const phone = usePhoneVerification(reopenWithPhone);
   const [ma, datMa] = useState(ma_ban_dau);
   const [dangTra, datDangTra] = useState(false);
   const [thieuMa, datThieuMa] = useState(false);
@@ -111,10 +123,17 @@ export function TraCuuPhieuScreen({ onQuayLai, ma_ban_dau = "" }: { onQuayLai: (
       return;
     }
     datThieuMa(false);
+    phone.reset();
     datDangTra(true);
     datKq(null);
-    datKq(await traCuuPhieu(ma));
+    const result = await traCuuPhieu(ma);
     datDangTra(false);
+    if (result.kieu === "can-xac-thuc-so") {
+      // Gọi lại với CÙNG mã đã tra — `tra` của lần dựng này đã đọc `ma` ấy.
+      phone.onPhoneRequired(() => void tra());
+      return;
+    }
+    datKq(result);
   }
 
   return (
@@ -135,13 +154,26 @@ export function TraCuuPhieuScreen({ onQuayLai, ma_ban_dau = "" }: { onQuayLai: (
           {TRA_CUU.thieu_ma}
         </p>
       )}
-      <button type="button" className="cd-nut" disabled={dangTra} onClick={() => void tra()}>
+      <button
+        type="button"
+        className="cd-nut"
+        disabled={dangTra || phone.state?.kieu === "dang-xac-nhan"}
+        onClick={() => void tra()}
+      >
         {TRA_CUU.nut_tra}
       </button>
       {dangTra && (
         <p className="cd-cau" role="status">
           {TRA_CUU.dang_tra}
         </p>
+      )}
+      {phone.state !== null && (
+        <PhoneVerificationPanel
+          state={phone.state}
+          task="lookup"
+          onAllow={() => void phone.allow()}
+          onDecline={phone.decline}
+        />
       )}
       {kq !== null && <KetQuaTraCuu kq={kq} />}
     </section>

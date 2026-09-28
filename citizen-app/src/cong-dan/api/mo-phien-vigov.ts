@@ -19,7 +19,7 @@
  * ⚠ BEARER KHÔNG ĐI NGƯỢC LÊN. Kết quả trả cho màn hình chỉ có TÊN XÃ; bearer vào `phien-vigov.ts` và
  *   chỉ `goi-vigov.ts` đọc nó ra.
  */
-import { datPhienViGov } from "./phien-vigov";
+import { datPhienViGov, layPhienViGov } from "./phien-vigov";
 import { laTenMien } from "../../lib/launch-params";
 
 /** Thứ nửa nhà nước gửi cho hàm mở phiên. Tên trường là tên trên dây của `vihat-miniapp`. */
@@ -60,6 +60,78 @@ export type KetQuaXacNhan =
   | { kieu: "chua-mo" }
   | { kieu: "thu-lai" }
   | { kieu: "ngoai-zalo" };
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * MỞ LẠI PHIÊN KÈM SỐ ĐIỆN THOẠI — khi một tuyến phản ánh trả 403 `chua_xac_thuc_so` (quyết định của
+ * người dùng 28/09/2026; ADR 0045:64-65 "khi gửi hồ sơ thì thêm getPhoneNumber()")
+ *
+ * ⚠ HÀM TIÊM VÀO KHÔNG NHẬN THAM SỐ, VÀ ĐÓ LÀ CHỦ ĐÍCH:
+ *
+ *   • Mã số điện thoại của Zalo KHÔNG BAO GIỜ vào nửa này. Lớp vỏ xin nó, gửi nó đi trong ĐÚNG MỘT
+ *     lời gọi cầu, rồi bỏ; thứ quay về đây chỉ là phiên mới và một cờ `da_xac_thuc_so`.
+ *   • Tên miền gửi làm `communeHostHint` là tên miền công dân ĐÃ XÁC NHẬN ở lần mở này — lớp vỏ giữ
+ *     nó (`App.tsx`). Nửa này không có đường nào đưa một tên miền khác vào: không có tham số để đưa.
+ *
+ * ⚠ XÃ KHÔNG ĐƯỢC ĐỔI LẶNG LẼ (README §Non-negotiables #3): phiên mới chỉ thay phiên cũ khi tên xã
+ *   của nó TRÙNG tên xã phiên đang dùng. Lệch là `khac-xa` và phiên cũ giữ nguyên — công dân đã xác
+ *   nhận gửi tới một xã, và lần mở lại này không phải một lần xác nhận mới.
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Kết quả hàm mở lại mà lớp vỏ tiêm vào. Không mang mã số điện thoại. */
+export type ReopenWithPhoneResult =
+  | {
+      readonly kieu: "xong";
+      readonly token: string;
+      readonly ten_xa: string;
+      /** `phoneVerified` của phiên mới, nguyên văn máy chủ trả. */
+      readonly da_xac_thuc_so: boolean;
+    }
+  /** Công dân bấm "Từ chối" trên hộp thoại của Zalo — không lời gọi cầu nào đi ra. */
+  | { readonly kieu: "tu-choi" }
+  | { readonly kieu: "chua-mo" }
+  | { readonly kieu: "thu-lai" }
+  | { readonly kieu: "ngoai-zalo" };
+
+export type ReopenWithPhone = () => Promise<ReopenWithPhoneResult>;
+
+/**
+ * Kết quả cho màn hình — KHÔNG mang bearer, không mang gì của số điện thoại.
+ *
+ *   `da-xac-thuc`        phiên mới có số đã xác thực, đã GHI; màn gọi lại việc cũ đúng một lần
+ *   `van-chua-xac-thuc`  máy chủ mở lại được nhưng vẫn không xác thực được số — hỏi lại không đổi gì
+ *   `khac-xa`            phiên mới thuộc một xã khác xã đang làm việc — KHÔNG ghi
+ *   `tu-choi` · `chua-mo` · `thu-lai` · `ngoai-zalo` — như tên
+ */
+export type PhoneVerificationOutcome =
+  | { kieu: "da-xac-thuc" }
+  | { kieu: "van-chua-xac-thuc" }
+  | { kieu: "khac-xa" }
+  | { kieu: "tu-choi" }
+  | { kieu: "chua-mo" }
+  | { kieu: "thu-lai" }
+  | { kieu: "ngoai-zalo" };
+
+/**
+ * Gọi hàm mở lại đã tiêm, và chỉ ghi phiên mới khi nó SỬA ĐƯỢC việc: có bearer, cùng xã, đã xác thực số.
+ *
+ * Không ném ra ngoài. Không có phiên hiện tại thì không có gì để "mở lại" — `chua-mo`, không gọi.
+ */
+export async function reopenSessionWithPhone(reopen: ReopenWithPhone): Promise<PhoneVerificationOutcome> {
+  const current = layPhienViGov();
+  if (current === null) return { kieu: "chua-mo" };
+  let result: ReopenWithPhoneResult;
+  try {
+    result = await reopen();
+  } catch {
+    return { kieu: "thu-lai" };
+  }
+  if (result.kieu !== "xong") return { kieu: result.kieu };
+  if (result.token === "" || result.ten_xa.trim() === "") return { kieu: "chua-mo" };
+  if (result.ten_xa !== current.ten_xa) return { kieu: "khac-xa" };
+  if (!result.da_xac_thuc_so) return { kieu: "van-chua-xac-thuc" };
+  datPhienViGov({ token: result.token, ten_xa: result.ten_xa });
+  return { kieu: "da-xac-thuc" };
+}
 
 /**
  * Gọi hàm mở phiên đã tiêm với tên miền công dân vừa xác nhận, rồi ghi phiên vào bộ nhớ.

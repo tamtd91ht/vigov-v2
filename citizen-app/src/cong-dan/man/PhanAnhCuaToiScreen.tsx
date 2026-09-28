@@ -20,10 +20,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { type KetQuaDanhSach, phanAnhCuaToi } from "../api/goi-vigov";
 import type { PhieuCuaToiTomTat } from "../api/hop-dong-phan-anh";
+import type { ReopenWithPhone } from "../api/mo-phien-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { BangXa, KenhChuaMo, nhanLinhVuc } from "./khung";
 import { CUA_TOI, GUI, nhanTrangThai, QUAY_LAI, THE_PHIEU } from "./noi-dung";
+import { PhoneVerificationPanel, usePhoneVerification } from "./phone-verification";
 import { THOI_DIEM_KHONG_DOC_DUOC, thoiDiemVN } from "../../lib/thoi-diem";
 
 /** Ba câu lỗi người dân đọc được. Mọi mã lạ khác rơi vào `loi-may-chu`. */
@@ -201,17 +203,28 @@ export function PhanAnhCuaToiScreen(props: {
   onQuayLai: () => void;
   onMoPhieu: (ma: string) => void;
   onGuiPhanAnh: () => void;
+  /** Hàm mở lại phiên kèm số do lớp vỏ tiêm vào (`api/mo-phien-vigov.ts`). Vắng = không có đường ấy. */
+  reopenWithPhone?: ReopenWithPhone;
 }) {
   // Đọc một lần lúc dựng. `null` hôm nay — xem `api/phien-vigov.ts`.
   const [phien] = useState(layPhienViGov);
   const [ds, datDs] = useState<DanhSach>(DANH_SACH_DAU);
+  const phone = usePhoneVerification(props.reopenWithPhone);
   // Tải trang đầu ĐÚNG MỘT LẦN, kể cả khi React dựng hiệu ứng hai lần (StrictMode).
   const da_tai_dau = useRef(false);
 
   /** Tải trang kế — trang đầu khi `con_tro` còn rỗng. Dùng cho cả "Xem thêm" lẫn "Thử lại". */
   async function tai(con_tro: string) {
+    phone.reset();
     datDs(batDauTai);
     const kq = await phanAnhCuaToi(con_tro);
+    if (kq.kieu === "can-xac-thuc-so") {
+      // Không phải một lỗi của danh sách: dừng "đang tải", giữ nguyên những dòng đã có, và hỏi công dân.
+      // Gọi lại với CÙNG con trỏ.
+      datDs((truoc) => ({ ...truoc, dang_tai: false }));
+      phone.onPhoneRequired(() => void tai(con_tro));
+      return;
+    }
     datDs((truoc) => sauKhiTai(truoc, kq));
   }
 
@@ -250,6 +263,14 @@ export function PhanAnhCuaToiScreen(props: {
         }}
         onGuiPhanAnh={props.onGuiPhanAnh}
       />
+      {phone.state !== null && (
+        <PhoneVerificationPanel
+          state={phone.state}
+          task="mine"
+          onAllow={() => void phone.allow()}
+          onDecline={phone.decline}
+        />
+      )}
     </section>
   );
 }

@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { sangKieuCongDan } from "../../App";
+import { sangKieuCongDan, toReopenWithPhoneResult } from "../../App";
 
-import { moPhienCongDanQuaCau } from "./cau-vigov";
-import { moPhienViGovQuaCau, phatHanhPhien } from "./goi-may-chu";
+import { moPhienCongDanQuaCau, reopenCitizenSessionWithPhone } from "./cau-vigov";
+import { moPhienViGovQuaCau, phatHanhPhien, reopenViGovSessionWithPhone } from "./goi-may-chu";
 import {
+  BRIDGE_FIELDS_WITH_PHONE,
+  bridgeBodyWithPhone,
   docTraLoi,
   docTraLoiCauViGov,
   thanYeuCau,
@@ -201,6 +203,124 @@ describe("ghép: lấy mã Zalo rồi gọi cầu", () => {
       kieu: "khong-lay-duoc-ma",
     });
     expect(goi).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * MỞ LẠI PHIÊN KÈM SỐ (28/09/2026) — khi ViGov trả 403 `chua_xac_thuc_so` và công dân bấm đồng ý.
+ * Thân thứ hai của cùng tuyến; thân xác nhận xã ở trên KHÔNG đổi.
+ */
+describe("mở lại phiên kèm `phoneToken` — thân, lời gọi, và không một chỗ nào giữ mã số", () => {
+  const REQUEST = { ma_truy_cap: "ma-zalo", ten_mien_xa: TEN_MIEN, ma_so_dien_thoai: "ma-so-thu" };
+  const BOTH_CODES = { ma_truy_cap: "ma-zalo", ma_so_dien_thoai: "ma-so-thu" };
+
+  it("thân = ba khoá của bước xác nhận xã + `phoneToken`, khoá hai chiều với bảng khai", () => {
+    const body = JSON.parse(bridgeBodyWithPhone(REQUEST)) as Record<string, unknown>;
+    expect(body).toEqual({
+      accessToken: "ma-zalo",
+      communeHostHint: TEN_MIEN,
+      communeConfirmed: true,
+      phoneToken: "ma-so-thu",
+    });
+    expect(Object.keys(body).sort()).toEqual(BRIDGE_FIELDS_WITH_PHONE.map((t) => t.khoa).sort());
+    // Câu khai `phoneToken` là CHÍNH dòng của khối đăng nhập — tham chiếu, không phải bản chép thứ hai.
+    expect(BRIDGE_FIELDS_WITH_PHONE).toContain(TRUONG_GUI_DI_PHIEN.find((t) => t.khoa === "phoneToken"));
+  });
+
+  it("POST đúng tuyến, mang `phoneToken`, đọc `phoneVerified` của phiên mới", async () => {
+    datFetch(traLoi(201, { vigovSession: { ...PHIEN_VIGOV.vigovSession, phoneVerified: true } }));
+    const result = await reopenViGovSessionWithPhone(REQUEST, DIA_CHI);
+    expect(result).toMatchObject({ kieu: "xong", phien: { token: "tok-vigov-thu", da_xac_thuc_so: true } });
+    expect(loi_goi).toHaveLength(1);
+    expect(loi_goi[0]!.dia_chi).toBe(DIA_CHI);
+    expect(JSON.parse(loi_goi[0]!.tuy_chon.body as string)).toMatchObject({ phoneToken: "ma-so-thu" });
+    // Mã số KHÔNG nằm trên đường dẫn, không trong tiêu đề.
+    expect(loi_goi[0]!.dia_chi).not.toContain("ma-so-thu");
+    expect(JSON.stringify(loi_goi[0]!.tuy_chon.headers)).not.toContain("ma-so-thu");
+  });
+
+  it("cùng bảng mã trạng thái với lần mở đầu", async () => {
+    for (const [reply, kieu] of [
+      [traLoi(400, {}), "cau-tat"],
+      [traLoi(401, {}), "ma-het-han"],
+      [traLoi(422, {}), "chua-san-sang"],
+      [traLoi(502, {}), "tam-ngung"],
+      [new Error("mat mang"), "khong-goi-duoc"],
+    ] as const) {
+      datFetch(reply);
+      expect((await reopenViGovSessionWithPhone(REQUEST, DIA_CHI)).kieu).toBe(kieu);
+    }
+  });
+
+  it("ghép: lấy HAI mã rồi gọi cầu một lần, với đúng tên miền đã xác nhận", async () => {
+    const bridge = vi.fn(async () => ({ kieu: "cau-tat" as const }));
+    const result = await reopenCitizenSessionWithPhone(
+      TEN_MIEN,
+      async () => ({ kieu: "xong", du_lieu: BOTH_CODES }),
+      bridge,
+    );
+    expect(result).toEqual({ kieu: "cau-tat" });
+    expect(bridge).toHaveBeenCalledTimes(1);
+    expect(bridge).toHaveBeenCalledWith(REQUEST);
+  });
+
+  it("TỪ CHỐI trên hộp thoại của Zalo → `tu-choi`, KHÔNG gọi cầu", async () => {
+    const bridge = vi.fn();
+    expect(await reopenCitizenSessionWithPhone(TEN_MIEN, async () => ({ kieu: "tu-choi" }), bridge)).toEqual({
+      kieu: "tu-choi",
+    });
+    expect(bridge).not.toHaveBeenCalled();
+  });
+
+  it("ngoài Zalo · không lấy được · mã số rỗng · mã phiên rỗng → không gọi cầu", async () => {
+    const bridge = vi.fn();
+    expect(await reopenCitizenSessionWithPhone(TEN_MIEN, async () => ({ kieu: "ngoai-zalo" }), bridge)).toEqual({
+      kieu: "ngoai-zalo",
+    });
+    for (const codes of [
+      { ...BOTH_CODES, ma_so_dien_thoai: "" },
+      { ...BOTH_CODES, ma_truy_cap: "" },
+    ]) {
+      expect(
+        await reopenCitizenSessionWithPhone(TEN_MIEN, async () => ({ kieu: "xong", du_lieu: codes }), bridge),
+      ).toEqual({ kieu: "khong-lay-duoc-ma" });
+    }
+    expect(await reopenCitizenSessionWithPhone(TEN_MIEN, async () => ({ kieu: "khong-lay-duoc" }), bridge)).toEqual({
+      kieu: "khong-lay-duoc-ma",
+    });
+    expect(bridge).not.toHaveBeenCalled();
+  });
+
+  it("mã số không vào console, và không đi ngược lên kết quả", async () => {
+    const spies = (["log", "info", "warn", "error", "debug"] as const).map((m) =>
+      vi.spyOn(console, m).mockImplementation(() => {}),
+    );
+    try {
+      datFetch(traLoi(201, { vigovSession: { ...PHIEN_VIGOV.vigovSession, phoneVerified: true } }));
+      const result = await reopenCitizenSessionWithPhone(
+        TEN_MIEN,
+        async () => ({ kieu: "xong", du_lieu: BOTH_CODES }),
+        (yc) => reopenViGovSessionWithPhone(yc, DIA_CHI),
+      );
+      expect(JSON.stringify(result)).not.toContain("ma-so-thu");
+      expect(JSON.stringify(toReopenWithPhoneResult(result))).not.toContain("ma-so-thu");
+      for (const s of spies) expect(s).not.toHaveBeenCalled();
+    } finally {
+      for (const s of spies) s.mockRestore();
+    }
+  });
+
+  it("App.tsx dịch: `xong` mang cờ `da_xac_thuc_so`; `tu-choi` giữ nguyên; còn lại như lần mở đầu", () => {
+    expect(
+      toReopenWithPhoneResult({
+        kieu: "xong",
+        phien: { token: "t", het_han: "", ten_xa: "Xã Của Phiên", da_xac_thuc_so: true, ten_mien_xa: TEN_MIEN },
+      }),
+    ).toEqual({ kieu: "xong", token: "t", ten_xa: "Xã Của Phiên", da_xac_thuc_so: true });
+    expect(toReopenWithPhoneResult({ kieu: "tu-choi" })).toEqual({ kieu: "tu-choi" });
+    expect(toReopenWithPhoneResult({ kieu: "cau-tat" })).toEqual({ kieu: "chua-mo" });
+    expect(toReopenWithPhoneResult({ kieu: "tam-ngung" })).toEqual({ kieu: "thu-lai" });
+    expect(toReopenWithPhoneResult({ kieu: "ngoai-zalo" })).toEqual({ kieu: "ngoai-zalo" });
   });
 });
 

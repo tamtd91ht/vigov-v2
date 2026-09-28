@@ -30,4 +30,10 @@ export { KenhCongDan, NutVaoKenhCongDan } from "./man/KenhCongDan";
 export { TrangXa, type XaCuaApp } from "./man/TrangXa";
 export type { FeedbackDraftStore, KetQuaLayTen, KetQuaViTri, LayMaViTri, LayTenZalo, NhapPhieu } from "./man/trai-nghiem";
 export { type KetThucXacNhan, XacNhanXa } from "./man/XacNhanXa";
-export type { KetQuaMoPhien, MoPhienViGov, YeuCauMoPhien } from "./api/mo-phien-vigov";
+export type {
+  KetQuaMoPhien,
+  MoPhienViGov,
+  ReopenWithPhone,
+  ReopenWithPhoneResult,
+  YeuCauMoPhien,
+} from "./api/mo-phien-vigov";

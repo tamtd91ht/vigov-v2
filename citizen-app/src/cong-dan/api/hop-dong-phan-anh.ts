@@ -19,7 +19,13 @@
  *    phieuCuaToiTomTatRa: {code: string (lookup code), status: string, field: string,
  *    field_label: string, content_excerpt: string (≤140 chars, "…" if cut), clock_from: date-time,
  *    acknowledge_due: date-time|null, resolve_due: date-time|null} — all keys always present.
- *    Errors: 400 invalid params; 401 no/invalid session or no commune chosen; 500. No 403/404.
+ *    Errors: 400 invalid params; 401 no/invalid session or no commune chosen; 403 `chua_xac_thuc_so`
+ *    (session has no verified phone); 500. No 404.
+ *
+ *   ⚠ BẢN GIAO GHI "No 403/404" — SAI Ở VẾ 403 (sửa 28/09/2026). Cả ba tuyến ở đầu tệp đi qua lớp rìa
+ *   công dân, và lớp ấy trả 403 `{"code":"chua_xac_thuc_so"}` khi phiên chưa có số điện thoại đã xác
+ *   thực (`core/httpx/citizen.go:199-200`, `phone_verified_required: true` ở trên). Đọc nó là
+ *   `PHONE_NOT_VERIFIED_CODE` bên dưới; tài liệu phía máy chủ còn nợ dòng ấy.
  *
  *   Client gửi ĐÚNG HAI tham số: `limit` và (từ trang thứ hai) `cursor`. `sort`/`order` bỏ đi vì
  *   máy chủ chỉ có một cách xếp; `status` chưa màn nào dùng.
@@ -216,6 +222,23 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
     // Cơ quan nhận chỉ có nghĩa khi phiếu ĐƯỢC CHUYỂN; ở `khong-tiep-nhan` không ai nhận cả.
     co_quan_nhan: trang_thai === "chuyen-cap-tren" ? co_quan_nhan : "",
   };
+}
+
+/**
+ * Mã lỗi của thân 403 khi phiên chưa có số điện thoại đã xác thực — `core/httpx/citizen.go:199-200`
+ * (`WriteError` → `{code, message, trace_id}`, `core/httpx/edge.go:88-98`).
+ */
+export const PHONE_NOT_VERIFIED_CODE = "chua_xac_thuc_so";
+
+/**
+ * Thân 403 có phải "chưa xác thực số" không. CHỈ đọc `code`: `message` là câu của máy chủ, và màn
+ * người dân có câu riêng. Một 403 với mã khác (hay thân sai khuôn) KHÔNG phải nhánh này — nó là lỗi
+ * máy chủ, và xin số điện thoại cho nó là xin một thứ không sửa được gì.
+ */
+export function isPhoneNotVerified(body: unknown): boolean {
+  return (
+    typeof body === "object" && body !== null && (body as Record<string, unknown>)["code"] === PHONE_NOT_VERIFIED_CODE
+  );
 }
 
 /** Địa chỉ tuyến gửi trên host của `service-petitions`, hoặc RỖNG khi host ấy chưa có. */

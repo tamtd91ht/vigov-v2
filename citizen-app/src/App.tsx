@@ -10,12 +10,19 @@ import {
   type LayTenZalo,
   type MoPhienViGov,
   NutVaoKenhCongDan,
+  type ReopenWithPhone,
+  type ReopenWithPhoneResult,
   TrangXa,
   XacNhanXa,
 } from "./cong-dan";
 import { COMPANY } from "./content/company-profile";
 import { NutChatOA } from "./features/company-intro/NutChatOA";
-import { type KetQuaMoPhienQuaCau, moPhienCongDanQuaCau } from "./features/dang-nhap/cau-vigov";
+import {
+  type KetQuaMoPhienQuaCau,
+  moPhienCongDanQuaCau,
+  reopenCitizenSessionWithPhone,
+  type ReopenWithPhoneBridgeResult,
+} from "./features/dang-nhap/cau-vigov";
 import { layTenZalo, xinTokenViTri } from "./features/tinh-nang/zalo-api";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
 import { TIEU_DE_XAC_NHAN_XA } from "./features/kham-pha";
@@ -84,6 +91,33 @@ export function sangKieuCongDan(kq: KetQuaMoPhienQuaCau): KetQuaMoPhien {
 /** `communeConfirmed` không đọc ở đây: kiểu của nó là hằng `true`, và thân gửi đi cũng ghi hằng ấy. */
 const moPhienViGov: MoPhienViGov = async (yc) =>
   sangKieuCongDan(await moPhienCongDanQuaCau(yc.communeHostHint));
+
+/**
+ * Bảng dịch của lần MỞ LẠI KÈM SỐ — cùng bảng với `sangKieuCongDan`, thêm `tu-choi`, và nhánh `xong`
+ * mang `phoneVerified` của phiên mới thay cho tên miền (lần mở lại không đổi khoá tra của hai màn công
+ * khai). Không nhánh nào mang mã số điện thoại: mã ấy dừng ở `cau-vigov.ts`.
+ */
+export function toReopenWithPhoneResult(result: ReopenWithPhoneBridgeResult): ReopenWithPhoneResult {
+  if (result.kieu === "tu-choi") return { kieu: "tu-choi" };
+  if (result.kieu === "xong") {
+    const { token, ten_xa, da_xac_thuc_so } = result.phien;
+    return { kieu: "xong", token, ten_xa, da_xac_thuc_so };
+  }
+  const other = sangKieuCongDan(result);
+  // `sangKieuCongDan` chỉ trả `xong` cho `result.kieu === "xong"`, đã xử lý ở trên.
+  return other.kieu === "xong" ? { kieu: "thu-lai" } : other;
+}
+
+/**
+ * Hàm mở lại phiên kèm số cho kênh công dân, gắn với TÊN MIỀN CÔNG DÂN ĐÃ XÁC NHẬN ở lần mở này (`d`).
+ *
+ * VÌ SAO `d`, KHÔNG PHẢI `communePrimaryHost` của phiên: `communeHostHint` là gợi ý mà công dân đã bấm
+ * xác nhận; lần mở lại dùng lại ĐÚNG cú xác nhận ấy, không một tên miền nào khác. Nếu máy chủ phân giải
+ * nó ra một xã khác xã của phiên đang dùng, `reopenSessionWithPhone` (nửa nhà nước) từ chối thay phiên.
+ */
+function reopenWithPhoneFor(ten_mien_da_xac_nhan: string): ReopenWithPhone {
+  return async () => toReopenWithPhoneResult(await reopenCitizenSessionWithPhone(ten_mien_da_xac_nhan));
+}
 
 /**
  * KHOÁ TRA `?host=` CHO HAI MÀN CÔNG KHAI (tin tức · danh bạ) — hoặc `null`, và hai màn ấy ẩn đi.
@@ -325,7 +359,12 @@ function AppChung() {
   );
   if (moKenhCongDan) {
     noiDung = (
-      <KenhCongDan onDong={() => setMoKenhCongDan(false)} ten_mien={xa === null ? null : xa.ten_mien} />
+      <KenhCongDan
+        onDong={() => setMoKenhCongDan(false)}
+        ten_mien={xa === null ? null : xa.ten_mien}
+        // Chỉ có khi lần mở này đi qua bước xác nhận xã — nơi DUY NHẤT phiên ViGov được mở.
+        reopenWithPhone={goiY === null ? undefined : reopenWithPhoneFor(goiY.ten_mien)}
+      />
     );
   } else if (dangKhamPha && goiY !== null) {
     noiDung = (

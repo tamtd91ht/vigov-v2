@@ -33,6 +33,8 @@
 import type { MaDangNhap } from "../tinh-nang/zalo-api";
 
 import {
+  type BridgeRequestWithPhone,
+  bridgeBodyWithPhone,
   diaChiPhien,
   docTraLoi,
   docTraLoiCauViGov,
@@ -146,10 +148,26 @@ export type KetQuaCauViGov =
  *
  * `dia_chi` chỉ để phép kiểm đưa địa chỉ giả vào — cùng lý do với `phatHanhPhien`.
  */
-export async function moPhienViGovQuaCau(
-  yc: YeuCauCauViGov,
+export function moPhienViGovQuaCau(yc: YeuCauCauViGov, dia_chi: string = diaChiPhien()): Promise<KetQuaCauViGov> {
+  return callBridge(thanYeuCauCauViGov(yc), dia_chi);
+}
+
+/**
+ * MỞ LẠI phiên công dân ViGov KÈM mã số điện thoại — chỉ sau cú bấm đồng ý của công dân, khi ViGov trả
+ * 403 `chua_xac_thuc_so` (`hop-dong.ts` `bridgeBodyWithPhone`). Cùng tuyến, cùng các nhánh kết quả.
+ *
+ * ⚠ MÃ SỐ ĐIỆN THOẠI SỐNG ĐÚNG MỘT LỜI GỌI: nó vào thân, thân vào `fetch`, và không đi đâu khác — không
+ *   log, không lưu, không trả ngược lên. Thứ trả về chỉ là phiên và cờ `da_xac_thuc_so` của máy chủ.
+ */
+export function reopenViGovSessionWithPhone(
+  yc: BridgeRequestWithPhone,
   dia_chi: string = diaChiPhien(),
 ): Promise<KetQuaCauViGov> {
+  return callBridge(bridgeBodyWithPhone(yc), dia_chi);
+}
+
+/** Lời gọi cầu, dùng chung cho hai thân — một chỗ `fetch`, một bảng mã trạng thái. */
+async function callBridge(body: string, dia_chi: string): Promise<KetQuaCauViGov> {
   if (dia_chi === "") return { kieu: "chua-khai-host" };
 
   const bo_dieu_khien = new AbortController();
@@ -159,7 +177,7 @@ export async function moPhienViGovQuaCau(
     const tra_loi = await fetch(dia_chi, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: thanYeuCauCauViGov(yc),
+      body,
       signal: bo_dieu_khien.signal,
     });
 

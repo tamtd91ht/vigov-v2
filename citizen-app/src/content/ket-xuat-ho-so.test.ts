@@ -12,8 +12,10 @@ import {
   DUONG_DAN_TIN_XA,
   DUONG_DAN_XA,
 } from "../cong-dan/api/hop-dong-cong-khai";
-import { DANH_BA, TIN_XA } from "../cong-dan/man/noi-dung";
+import { CUA_TOI, DANH_BA, GUI, TIN_XA, TRA_CUU } from "../cong-dan/man/noi-dung";
 import {
+  BRIDGE_FIELDS_WITH_PHONE,
+  bridgeBodyWithPhone,
   thanYeuCau as thanYeuCauPhien,
   thanYeuCauCauViGov,
   TRUONG_GUI_DI_CAU_VIGOV,
@@ -26,6 +28,7 @@ import {
   canhBaoVanXuoi,
   DUONG_CONG_KHAI,
   DUONG_ROI_KHOI_MAY,
+  PHONE_VERIFICATION_SCREENS,
   TEN_MAN_CONG_KHAI,
   khoiRoiKhoiMay,
   MOC_BAT_DAU,
@@ -417,12 +420,19 @@ describe("4 — khối sinh ra chỉ ăn phần giữa hai mốc", () => {
  *   Ba ca dưới là hai chiều của một cái khoá, cộng một ca chống "xanh vì không tìm thấy gì".
  */
 describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi thứ khai đều thật sự rời khỏi máy", () => {
-  it("quét đủ BẢY đường — một lượt quét thiếu đường sẽ xanh vì lý do sai", () => {
+  it("quét đủ TÁM đường — một lượt quét thiếu đường sẽ xanh vì lý do sai", () => {
     // 2 của 22/09 (đăng nhập · yêu cầu) + 5 của 27/09: bước xác nhận xã (cùng tuyến đăng nhập, thân
-    // khác) và bốn tuyến công khai của ViGov (tra xã · danh bạ · danh sách tin · một tin).
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(7);
+    // khác) và bốn tuyến công khai của ViGov (tra xã · danh bạ · danh sách tin · một tin) + 1 của 28/09:
+    // mở lại phiên với xã KÈM `phoneToken` (cùng tuyến đăng nhập, thân thứ ba).
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(8);
     const tuyen = DUONG_ROI_KHOI_MAY.map((d) => d.tuyen);
-    expect(tuyen.filter((t) => t === "/api/v1/sessions")).toHaveLength(2);
+    expect(tuyen.filter((t) => t === "/api/v1/sessions")).toHaveLength(3);
+    // Lần mở lại in ĐÚNG bảng của nó — bảng có `phoneToken` — và nó chỉ chạy sau một cú bấm.
+    const reopenRow = DUONG_ROI_KHOI_MAY.find((d) => d.truong === BRIDGE_FIELDS_WITH_PHONE);
+    expect(reopenRow, "hồ sơ không khai lần mở lại phiên kèm số điện thoại").toBeDefined();
+    expect(reopenRow!.nguoi_dung_bam).toBe(true);
+    expect(reopenRow!.truong.map((t) => t.khoa)).toContain("phoneToken");
+    expect(reopenRow!.man).toBe(PHONE_VERIFICATION_SCREENS);
     for (const t of [
       "/api/v1/requests",
       DUONG_DAN_XA,
@@ -449,6 +459,11 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
         "xác nhận xã",
         thanYeuCauCauViGov({ ma_truy_cap: "m", ten_mien_xa: "xa-vi-du.vigov.example" }),
         TRUONG_GUI_DI_CAU_VIGOV,
+      ],
+      [
+        "mở lại phiên kèm số",
+        bridgeBodyWithPhone({ ma_truy_cap: "m", ten_mien_xa: "xa-vi-du.vigov.example", ma_so_dien_thoai: "p" }),
+        BRIDGE_FIELDS_WITH_PHONE,
       ],
     ] as const) {
       const khoa = Object.keys(JSON.parse(than) as Record<string, unknown>);
@@ -517,12 +532,13 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
   it("tên màn chép trong hồ sơ đúng từng chữ tên màn thật", () => {
     expect(TEN_MAN_CONG_KHAI.danh_ba).toBe(DANH_BA.tieu_de);
     expect(TEN_MAN_CONG_KHAI.tin_xa).toBe(TIN_XA.tieu_de);
+    expect(PHONE_VERIFICATION_SCREENS).toBe([GUI.tieu_de, CUA_TOI.tieu_de, TRA_CUU.tieu_de].join(" · "));
   });
 
   it("câu đầu khối KHÔNG còn nói 'không đường nào chạy lúc mở ứng dụng' — tra tên xã chạy lúc mở", () => {
     const khoi = khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY);
     expect(khoi).not.toContain("không đường nào chạy lúc mở ứng dụng");
-    expect(khoi).toContain("6 đường chạy khi chính người dùng bấm; 1 đường chạy mà không cần một cú bấm");
+    expect(khoi).toContain("7 đường chạy khi chính người dùng bấm; 1 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");

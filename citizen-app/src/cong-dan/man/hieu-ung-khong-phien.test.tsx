@@ -50,7 +50,7 @@ import { guiPhanAnh, phanAnhCuaToi, traCuuPhieu } from "../api/goi-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { GuiPhanAnhScreen } from "./GuiPhanAnhScreen";
-import { CUA_TOI, KENH_CHUA_MO, QUAY_LAI } from "./noi-dung";
+import { CUA_TOI, KENH_CHUA_MO, PHONE_VERIFICATION, QUAY_LAI } from "./noi-dung";
 import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
 import { TraCuuPhieuScreen } from "./TraCuuPhieuScreen";
 
@@ -323,6 +323,42 @@ describe("đối chứng: có phiên thì chính khung gắn này thấy hiệu 
     // Máy chủ nói "chưa có phiên" → màn đóng kênh, không kẹt ở "đang tải".
     expect(khung.textContent).toContain(KENH_CHUA_MO.tieu_de);
     await go();
+  });
+
+  /**
+   * 403 `chua_xac_thuc_so` NGAY LÚC GẮN (tải trang đầu / tra mã điền sẵn): màn HỎI, và chỉ hỏi — hàm mở
+   * lại phiên kèm số (thứ bật hộp thoại xin số của Zalo) KHÔNG được gọi khi công dân chưa bấm gì.
+   */
+  it("403 `chua_xac_thuc_so` lúc gắn: khung hỏi số hiện ra, KHÔNG tự xin số, không gọi lại", async () => {
+    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm" };
+    const reopen = vi.fn();
+    vi.mocked(phanAnhCuaToi).mockResolvedValueOnce({ kieu: "can-xac-thuc-so" });
+    const mine = await gan(
+      createElement(PhanAnhCuaToiScreen, {
+        onQuayLai: () => {},
+        onMoPhieu: () => {},
+        onGuiPhanAnh: () => {},
+        reopenWithPhone: reopen,
+      }),
+    );
+    expect(mine.khung.textContent).toContain(PHONE_VERIFICATION.title);
+    expect(mine.khung.textContent).toContain(PHONE_VERIFICATION.allow);
+    // Không kẹt ở "đang tải", không nói "chưa gửi phản ánh nào" — chưa biết gì về danh sách.
+    expect(mine.khung.textContent).not.toContain(CUA_TOI.dang_tai);
+    expect(mine.khung.textContent).not.toContain(CUA_TOI.trong);
+    expect(vi.mocked(phanAnhCuaToi)).toHaveBeenCalledTimes(1);
+    await mine.go();
+
+    vi.mocked(traCuuPhieu).mockResolvedValueOnce({ kieu: "can-xac-thuc-so" });
+    const lookup = await gan(
+      createElement(TraCuuPhieuScreen, { onQuayLai: () => {}, ma_ban_dau: "PA7K2QX9M4TD", reopenWithPhone: reopen }),
+    );
+    expect(lookup.khung.textContent).toContain(PHONE_VERIFICATION.title);
+    expect(vi.mocked(traCuuPhieu)).toHaveBeenCalledTimes(1);
+    await lookup.go();
+
+    expect(reopen).not.toHaveBeenCalled();
+    expect(fetch_gia).not.toHaveBeenCalled();
   });
 
   it("Tra cứu có mã điền sẵn gọi `traCuuPhieu(mã)` một lần", async () => {

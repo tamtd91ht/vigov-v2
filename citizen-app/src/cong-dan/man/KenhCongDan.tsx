@@ -13,6 +13,7 @@
  */
 import { useState } from "react";
 
+import type { ReopenWithPhone } from "../api/mo-phien-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { DanhBaCanBoScreen } from "./DanhBaCanBoScreen";
@@ -45,11 +46,17 @@ type Man =
 export function KenhCongDan({
   onDong,
   ten_mien = null,
+  reopenWithPhone,
 }: {
   /** Không truyền = không có nút "Quay lại" (app riêng của xã: kênh là màn gốc, không có chỗ để về). */
   onDong?: () => void;
   /** Tên miền xã công dân đã xác nhận ở lần mở này, hoặc `null`. Chỉ làm khoá tra `?host=`. */
   ten_mien?: string | null;
+  /**
+   * Mở lại phiên kèm số điện thoại khi một tuyến phản ánh trả 403 `chua_xac_thuc_so` — lớp vỏ dựng nó
+   * (`App.tsx`), ba màn phản ánh chỉ gọi nó SAU cú bấm đồng ý của công dân (`phone-verification.tsx`).
+   */
+  reopenWithPhone?: ReopenWithPhone;
 }) {
   const [man, datMan] = useState<Man>({ kieu: "chon" });
   // Đọc MỘT LẦN lúc dựng, cùng cách ba màn phản ánh đọc (`useState(layPhienViGov)`): phiên chỉ được
@@ -57,7 +64,7 @@ export function KenhCongDan({
   const [co_phien] = useState(() => layPhienViGov() !== null);
   const veChon = () => datMan({ kieu: "chon" });
 
-  if (man.kieu === "gui") return <GuiPhanAnhScreen onQuayLai={veChon} />;
+  if (man.kieu === "gui") return <GuiPhanAnhScreen onQuayLai={veChon} reopenWithPhone={reopenWithPhone} />;
   if (man.kieu === "tin-tuc" && ten_mien !== null) {
     return <TinTucXaScreen ten_mien={ten_mien} onQuayLai={veChon} />;
   }
@@ -77,6 +84,7 @@ export function KenhCongDan({
             onQuayLai={veChon}
             onMoPhieu={(ma) => datMan({ kieu: "tra-cuu", ma, tu_danh_sach: true })}
             onGuiPhanAnh={() => datMan({ kieu: "gui" })}
+            reopenWithPhone={reopenWithPhone}
           />
         </div>
         {man.kieu === "tra-cuu" && (
@@ -84,13 +92,14 @@ export function KenhCongDan({
             key={man.ma}
             ma_ban_dau={man.ma}
             onQuayLai={() => datMan({ kieu: "cua-toi" })}
+            reopenWithPhone={reopenWithPhone}
           />
         )}
       </>
     );
   }
 
-  if (man.kieu === "tra-cuu") return <TraCuuPhieuScreen onQuayLai={veChon} />;
+  if (man.kieu === "tra-cuu") return <TraCuuPhieuScreen onQuayLai={veChon} reopenWithPhone={reopenWithPhone} />;
 
   return (
     <section className="cd-man" aria-label={NHAN_KENH_CONG_DAN}>

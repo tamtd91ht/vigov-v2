@@ -25,11 +25,13 @@ import {
   thanGuiPhanAnh,
 } from "../api/hop-dong-phan-anh";
 import { type LanGui, taoLanGui } from "../api/lan-gui";
+import type { ReopenWithPhone } from "../api/mo-phien-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
 
 import { BangXa, KenhChuaMo, ThePhieu } from "./khung";
 import { GUI, KHAN_CAP, LOI_GUI, nhanTrangThai, QUAY_LAI } from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
+import { PhoneVerificationPanel, usePhoneVerification } from "./phone-verification";
 import { thoiDiemVN } from "../../lib/thoi-diem";
 
 export const PHAN_ANH_TRONG: PhanAnhMoi = {
@@ -71,6 +73,7 @@ export const ID_DAU_BUOC = {
   "dang-gui": "cd-dang-gui",
   xong: "cd-xong-tieu-de",
   loi: "cd-loi-gui",
+  "can-so": "cd-xac-thuc-so",
 } as const;
 
 /* ─────────────────────────── bước 1: nhập ─────────────────────────── */
@@ -238,7 +241,9 @@ type Buoc =
   | { kieu: "xac-nhan" }
   | { kieu: "dang-gui" }
   | { kieu: "xong"; phieu: PhieuCuaToi }
-  | { kieu: "loi"; nhanh: NhanhLoi };
+  | { kieu: "loi"; nhanh: NhanhLoi }
+  /** Máy chủ cần số điện thoại đã xác thực — khung `phone-verification.tsx`. Nháp `pa` vẫn nguyên. */
+  | { kieu: "can-so" };
 
 /** Thân bước "đang gửi". `role="status"`: người không nhìn màn hình nghe được là đang gửi. */
 export function DangGui() {
@@ -259,14 +264,25 @@ export function buocSauKhiGui(kq: KetQuaGoi): Buoc | "kenh-chua-mo" {
       return "kenh-chua-mo";
     case "khong-thay":
       return { kieu: "loi", nhanh: "loi-may-chu" };
+    case "can-xac-thuc-so":
+      return { kieu: "can-so" };
     default:
       return { kieu: "loi", nhanh: kq.kieu };
   }
 }
 
-export function GuiPhanAnhScreen({ onQuayLai }: { onQuayLai: () => void }) {
-  // Đọc một lần lúc dựng. `null` hôm nay — xem `api/phien-vigov.ts`.
+export function GuiPhanAnhScreen({
+  onQuayLai,
+  reopenWithPhone,
+}: {
+  onQuayLai: () => void;
+  /** Hàm mở lại phiên kèm số do lớp vỏ tiêm vào (`api/mo-phien-vigov.ts`). Vắng = không có đường ấy. */
+  reopenWithPhone?: ReopenWithPhone;
+}) {
+  // Đọc một lần lúc dựng. `null` hôm nay — xem `api/phien-vigov.ts`. Mở lại phiên kèm số không đổi
+  // TÊN XÃ (`reopenSessionWithPhone` từ chối phiên khác xã), nên bản đọc một lần này vẫn đúng.
   const [phien] = useState(layPhienViGov);
+  const phone = usePhoneVerification(reopenWithPhone);
   const [pa, datPa] = useState<PhanAnhMoi>(PHAN_ANH_TRONG);
   const [buoc, datBuoc] = useState<Buoc>({ kieu: "nhap", loi: null });
   const [kenhDong, datKenhDong] = useState(false);
@@ -304,7 +320,12 @@ export function GuiPhanAnhScreen({ onQuayLai }: { onQuayLai: () => void }) {
     datBuoc({ kieu: "dang-gui" });
     const tiep = buocSauKhiGui(await guiPhanAnh(lan_gui));
     if (tiep === "kenh-chua-mo") datKenhDong(true);
-    else {
+    else if (tiep.kieu === "can-so") {
+      // Gọi lại với CÙNG lần gửi — cùng thân, cùng `Idempotency-Key`: 403 trả về trước khi máy chủ ghi
+      // gì, nên đây vẫn là lần gửi ấy, không phải một phiếu mới.
+      datBuoc(tiep);
+      phone.onPhoneRequired(() => void gui(lan_gui));
+    } else {
       if (tiep.kieu === "xong") datLan(null);
       datBuoc(tiep);
     }
@@ -325,6 +346,7 @@ export function GuiPhanAnhScreen({ onQuayLai }: { onQuayLai: () => void }) {
   }
 
   function suaLai() {
+    phone.reset();
     datLan(null);
     datBuoc({ kieu: "nhap", loi: null });
   }
@@ -375,6 +397,30 @@ export function GuiPhanAnhScreen({ onQuayLai }: { onQuayLai: () => void }) {
           onSua={suaLai}
         />
       );
+      break;
+    case "can-so":
+      // `null` chỉ trong khoảnh khắc giữa "đã xác thực" và lần gọi lại — lần gọi ấy đưa màn sang
+      // "đang gửi" ngay.
+      than =
+        phone.state === null ? (
+          <DangGui />
+        ) : (
+          <>
+            <PhoneVerificationPanel
+              state={phone.state}
+              task="submit"
+              focusId={ID_DAU_BUOC["can-so"]}
+              draftKept
+              onAllow={() => void phone.allow()}
+              onDecline={phone.decline}
+            />
+            {phone.state.kieu !== "dang-xac-nhan" && (
+              <button type="button" className="cd-nut-phu" onClick={suaLai}>
+                {GUI.nut_sua}
+              </button>
+            )}
+          </>
+        );
       break;
   }
 

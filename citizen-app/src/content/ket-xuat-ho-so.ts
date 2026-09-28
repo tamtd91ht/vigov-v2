@@ -19,6 +19,7 @@ import {
   type TruongGuiDi,
 } from "../api/hop-dong-yeu-cau";
 import {
+  BRIDGE_FIELDS_WITH_PHONE,
   DUONG_DAN_PHIEN,
   TRUONG_GUI_DI_CAU_VIGOV,
   TRUONG_GUI_DI_PHIEN,
@@ -259,7 +260,7 @@ export function khoiRoiKhoiMay(duong: readonly DuongRoiKhoiMay[]): string {
       ? `Cả ${duong.length} chỉ chạy khi chính người dùng bấm, và không đường nào chạy lúc mở ứng dụng.`
       : `${duong.length - tu_chay} đường chạy khi chính người dùng bấm; ${tu_chay} đường chạy mà không cần một cú bấm — xem mục "Chạy khi" của từng đường.`;
   const dong: string[] = [
-    "> Khối này là **bản sinh ra** từ `TRUONG_GUI_DI_PHIEN` và `TRUONG_GUI_DI_CAU_VIGOV`",
+    "> Khối này là **bản sinh ra** từ `TRUONG_GUI_DI_PHIEN`, `TRUONG_GUI_DI_CAU_VIGOV` và `BRIDGE_FIELDS_WITH_PHONE`",
     "> (`citizen-app/src/features/dang-nhap/hop-dong.ts`), `TRUONG_GUI_DI`",
     "> (`citizen-app/src/api/hop-dong-yeu-cau.ts`) và bảng ba tuyến công khai trong",
     `> \`citizen-app/src/content/ket-xuat-ho-so.ts\`. Sinh lại: \`${LENH_SINH_LAI}\`.`,
@@ -313,6 +314,9 @@ const HOST_CONG_KHAI: TruongGuiDi = {
   trong_chinh_sach:
     "tên miền của xã — lấy từ mã QR hoặc đường liên kết đã mở ứng dụng, hoặc do phiên làm việc với xã trả về; không kèm số điện thoại, mã Zalo hay thông tin nào khác của bạn",
 };
+
+/** Ba màn phản ánh nơi xã có thể cần xác nhận số điện thoại — chép, khoá như `TEN_MAN_CONG_KHAI`. */
+export const PHONE_VERIFICATION_SCREENS = "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi";
 
 /** Ba tên màn, chép từ `cong-dan/man/noi-dung.ts` cùng lý do ranh giới — test khoá từng chữ. */
 export const TEN_MAN_CONG_KHAI = {
@@ -408,6 +412,19 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     nguoi_dung_bam: true,
     man: TIEU_DE_XAC_NHAN_XA,
     truong: TRUONG_GUI_DI_CAU_VIGOV,
+  },
+  {
+    // CÙNG TUYẾN, THÂN THỨ BA (28/09/2026): mở lại phiên với xã KÈM `phoneToken`, khi ViGov đòi số điện
+    // thoại đã xác thực để gửi hoặc xem phản ánh. Tên ba màn chép từ `cong-dan/man/noi-dung.ts` (tệp này
+    // không được nhập nửa nhà nước — cùng lý do `TEN_MAN_CONG_KHAI`); test khoá từng chữ.
+    tuyen: DUONG_DAN_PHIEN,
+    may_chu:
+      "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu số điện thoại ở lượt này; máy chủ ấy chuyển tiếp sang ViGov — dịch vụ `identity` để mở lại phiên với xã kèm số điện thoại đã xác thực",
+    khi_nao:
+      "xã cần xác nhận số điện thoại để gửi hoặc xem phản ánh, người dùng tự bấm “Đồng ý chia sẻ số điện thoại” và đồng ý trên hộp thoại của Zalo",
+    nguoi_dung_bam: true,
+    man: PHONE_VERIFICATION_SCREENS,
+    truong: BRIDGE_FIELDS_WITH_PHONE,
   },
   ...DUONG_CONG_KHAI.slice(1),
 ];

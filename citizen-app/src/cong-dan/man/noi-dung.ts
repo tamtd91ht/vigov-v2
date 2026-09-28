@@ -163,6 +163,47 @@ export const LOI_GUI: Readonly<
 };
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
+ * XÁC NHẬN SỐ ĐIỆN THOẠI — khi xã cần số của công dân mới gửi / xem được phản ánh
+ *
+ * Hiện ở cả ba màn phản ánh (`phone-verification.tsx`). Câu nói VÌ SAO trước, rồi nói Zalo sẽ hỏi gì,
+ * rồi mới tới nút: người lớn tuổi bấm một nút mà không biết nó dẫn tới hộp thoại nào là người sẽ bấm
+ * "Từ chối" ở hộp thoại ấy. Mỗi câu kết quả nói việc làm tiếp; không câu nào nhắc mã lỗi.
+ *
+ * `task` là vế "việc gì chưa làm được", để một câu dùng chung cho cả ba màn mà vẫn nói đúng màn ấy.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const PHONE_VERIFICATION_TASK = {
+  submit: "phản ánh chưa được gửi",
+  lookup: "chưa tra cứu được phiếu",
+  mine: "chưa xem được phản ánh của bạn",
+} as const;
+
+export type PhoneVerificationTask = keyof typeof PHONE_VERIFICATION_TASK;
+
+export const PHONE_VERIFICATION = {
+  title: "Cần xác nhận số điện thoại của bạn",
+  why: "Để gửi phản ánh và xem phản ánh của chính mình, xã cần biết số điện thoại Zalo của bạn. Nhờ số này, xã biết phản ánh là của ai, và chỉ bạn xem được phản ánh của bạn.",
+  zalo_asks:
+    "Khi bạn bấm nút dưới đây, Zalo sẽ hỏi bạn có đồng ý chia sẻ số điện thoại không. Số được gửi qua máy chủ của Tập đoàn ViHAT Group tới hệ thống của xã. Ứng dụng không lưu số này trên điện thoại.",
+  allow: "Đồng ý chia sẻ số điện thoại",
+  decline: "Không chia sẻ",
+  working: "Đang xác nhận số điện thoại…",
+  refused: (task: string) =>
+    `Bạn chưa chia sẻ số điện thoại, nên ${task}. Bạn vẫn có thể đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+  retry: (task: string) =>
+    `Chưa xác nhận được số điện thoại vì mạng yếu hoặc hệ thống đang bận, nên ${task}. Hãy kiểm tra mạng rồi bấm “Đồng ý chia sẻ số điện thoại” lần nữa.`,
+  outside_zalo: (task: string) =>
+    `Chỉ xác nhận được số điện thoại khi mở ứng dụng trong Zalo, nên ${task}. Hãy mở ứng dụng trong Zalo rồi làm lại.`,
+  unavailable: (task: string) =>
+    `Hệ thống của xã chưa xác nhận được số điện thoại qua ứng dụng lúc này, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+  still_unverified: (task: string) =>
+    `Xã chưa xác nhận được số điện thoại của bạn, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+  other_commune: (task: string) =>
+    `Ứng dụng chưa mở lại được phiên làm việc với đúng xã ghi ở đầu màn hình, nên ${task}. Hãy đóng ứng dụng rồi quét lại mã QR của xã.`,
+  draft_kept: "Nội dung bạn đã viết vẫn còn nguyên.",
+} as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
  * MÀN "TRA CỨU PHIẾU"
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 

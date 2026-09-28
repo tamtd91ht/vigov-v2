@@ -140,7 +140,9 @@ export function docTraLoi(than: unknown): Phien | null {
  * `sessions_vigov.go:158-175`)
  *
  *   gửi : { "accessToken", "communeHostHint": "<tên miền xã>", "communeConfirmed": true }
- *         — KHÔNG `phoneToken`: mở phiên sau khi xác nhận xã không xin số điện thoại (ADR 0045 câu 2)
+ *         — KHÔNG `phoneToken`: mở phiên sau khi xác nhận xã không xin số điện thoại (ADR 0045 câu 2).
+ *         Thân KÈM `phoneToken` là thân thứ hai, chỉ cho lần mở lại khi ViGov đòi số —
+ *         `bridgeBodyWithPhone` bên dưới
  *   nhận: 201 { "vigovSession": { "token"?, "expiresAt"?, "tenantDisplayName", "phoneVerified",
  *                                  "communePrimaryHost"? } }
  *   lỗi : 400 · 401 · 422 xã/app chưa sẵn sàng · 502 · 503 cầu tạm ngưng
@@ -197,6 +199,49 @@ export function thanYeuCauCauViGov(yc: YeuCauCauViGov): string {
     accessToken: yc.ma_truy_cap,
     communeHostHint: yc.ten_mien_xa,
     communeConfirmed: true,
+  });
+}
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────
+ * THÂN THỨ HAI CỦA NHÁNH CẦU — MỞ LẠI PHIÊN KÈM `phoneToken` (28/09/2026, quyết định của người dùng)
+ *
+ *   gửi : { "accessToken", "communeHostHint", "communeConfirmed": true, "phoneToken" }
+ *
+ * CHỈ chạy khi một tuyến phản ánh của ViGov trả 403 `chua_xac_thuc_so` VÀ công dân tự bấm "Đồng ý chia
+ * sẻ số điện thoại" rồi đồng ý trên hộp thoại của Zalo (`cong-dan/man/phone-verification.tsx`). Đúng
+ * luồng ADR 0045:64-65: "khi gửi hồ sơ thì thêm getPhoneNumber()"; `vihat-miniapp` nhận `phoneToken`
+ * TUỲ CHỌN ở nhánh này (`internal/httpapi/sessions_vigov.go:24-26, 77-94`) và chuyển số sang ViGov mà
+ * không lưu vào CSDL thương mại (cùng tệp, điểm 2).
+ *
+ * THÂN CỦA BƯỚC XÁC NHẬN XÃ Ở TRÊN KHÔNG ĐỔI: nó vẫn không mang `phoneToken`, và câu "Bước xác nhận xã
+ * không gửi mã số điện thoại của bạn" trong chính sách vẫn đúng. Đây là một thân KHÁC, một hàm KHÁC,
+ * để không đường nào gắn nhầm mã số vào cú bấm "Đúng, tiếp tục".
+ *
+ * ⚠ CHÍNH SÁCH QUYỀN RIÊNG TƯ CHƯA CÓ CÂU CHO THÂN NÀY. Câu khai `phoneToken` dưới đây là câu của khối
+ *   đăng nhập, dùng lại nguyên văn (nó đúng cho cả hai); nhưng mục Đăng nhập của chính sách chưa nói
+ *   rằng mã số còn đi ở đường này, tới ViGov. Câu ấy là lời văn pháp lý của chủ dự án — CÒN NỢ, không
+ *   viết thay ở đây. `content/chinh-sach.test.ts` ghim đúng khoảng hở ấy (`phoneToken`, và chỉ nó).
+ * ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** Yêu cầu mở lại: bước xác nhận xã + mã số điện thoại của `getPhoneNumber`. */
+export type BridgeRequestWithPhone = YeuCauCauViGov & Pick<MaDangNhap, "ma_so_dien_thoai">;
+
+/**
+ * Bốn trường thân mở lại đưa ra khỏi máy. Ba dòng đầu LÀ `TRUONG_GUI_DI_CAU_VIGOV`; dòng `phoneToken` LÀ
+ * dòng của `TRUONG_GUI_DI_PHIEN` — tham chiếu, không chép, để một câu khai không có hai bản trôi xa nhau.
+ */
+export const BRIDGE_FIELDS_WITH_PHONE: readonly TruongGuiDi[] = [
+  ...TRUONG_GUI_DI_CAU_VIGOV,
+  TRUONG_GUI_DI_PHIEN.find((t) => t.khoa === "phoneToken")!,
+];
+
+/** Thân mở lại. `communeConfirmed` vẫn là hằng `true`: xã là xã công dân đã xác nhận ở lần mở này. */
+export function bridgeBodyWithPhone(yc: BridgeRequestWithPhone): string {
+  return JSON.stringify({
+    accessToken: yc.ma_truy_cap,
+    communeHostHint: yc.ten_mien_xa,
+    communeConfirmed: true,
+    phoneToken: yc.ma_so_dien_thoai,
   });
 }
 

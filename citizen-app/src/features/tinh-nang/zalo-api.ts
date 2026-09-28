@@ -222,22 +222,29 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // "Xác nhận xã" THÊM 27/09/2026: nút "Đúng, tiếp tục" trên màn xác nhận xã (sau khi quét QR của
     // xã) gọi lại chính lời gọi này để mở phiên làm việc với xã ấy. Cùng một lời gọi, một mục đích
     // mới — và câu `de_lam_gi` phải kể cả hai, vì đây là câu màn Quản lý quyền đọc cho người dùng.
-    man: "Liên hệ · Xác nhận xã",
+    // "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi" THÊM 28/09/2026: lần mở lại phiên kèm số
+    // điện thoại (dòng `getPhoneNumber` ngay dưới) lấy lại mã phiên này trước.
+    man: "Liên hệ · Xác nhận xã · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
     tinh_nang: "Đăng nhập bằng số Zalo · Mở phiên làm việc với xã",
     de_lam_gi:
-      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy.",
+      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy. Khi xã cần xác nhận số điện thoại của bạn, ứng dụng lấy lại mã này để mở lại phiên ấy kèm số điện thoại bạn đồng ý chia sẻ.",
     hoi_nguoi_dung: false,
-    roi_khoi_may: "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập.",
+    roi_khoi_may: "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập, hoặc để mở phiên làm việc với xã.",
   },
   {
+    // "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi" THÊM 28/09/2026 (quyết định của người
+    // dùng): khi ViGov trả 403 `chua_xac_thuc_so`, ba màn ấy hỏi công dân rồi — chỉ sau cú bấm đồng ý —
+    // gọi lại lời gọi này qua `xinMaDangNhap` (`features/dang-nhap/cau-vigov.ts`
+    // `reopenCitizenSessionWithPhone`). Cùng lời gọi, thêm một nơi mã đi tới — nên câu phải kể thêm.
     api: "getPhoneNumber",
     nua: "ca-hai",
-    man: "Liên hệ",
-    tinh_nang: "Đăng nhập bằng số Zalo",
+    man: "Liên hệ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
+    tinh_nang: "Đăng nhập bằng số Zalo · Xác nhận số điện thoại với xã",
     de_lam_gi:
-      "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ đổi được mã thành số. Số ấy làm tên đăng nhập của bạn, là nơi nhận thông báo ZNS, và là số chúng tôi gọi lại nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá.",
+      "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ đổi được mã thành số. Số ấy làm tên đăng nhập của bạn, là nơi nhận thông báo ZNS, và là số chúng tôi gọi lại nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá. Khi xã cần xác nhận số điện thoại của bạn để gửi hoặc xem phản ánh, ứng dụng nói rõ vì sao và hỏi bạn trước; chỉ khi bạn bấm đồng ý, mã mới được gửi qua máy chủ của chúng tôi tới hệ thống của xã.",
     hoi_nguoi_dung: true,
-    roi_khoi_may: "Mã số điện thoại được gửi tới máy chủ để phát hành phiên đăng nhập.",
+    roi_khoi_may:
+      "Mã số điện thoại được gửi tới máy chủ để phát hành phiên đăng nhập, hoặc để mở lại phiên làm việc với xã kèm số điện thoại đã xác nhận.",
   },
   {
     // THÊM 28/09/2026 — lời gọi ĐẦU TIÊN của riêng nửa nhà nước. Chủ dự án: "không còn đăng nhập nữa, chỉ
