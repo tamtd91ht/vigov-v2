@@ -317,3 +317,112 @@ func TestParse_RefusesWhatIsNotAPlainWorkbook(t *testing.T) {
 		})
 	}
 }
+
+// renameWorkbookPart moves the workbook part to a name that is not `.xml`, rewriting the package
+// relationship that points at it — the shape excelize follows, whatever the name says.
+func renameWorkbookPart(t *testing.T, src []byte, newName string, body func(orig []byte) []byte) []byte {
+	t.Helper()
+	zr, err := zip.NewReader(bytes.NewReader(src), int64(len(src)))
+	if err != nil {
+		t.Fatalf("zip: %v", err)
+	}
+	var out bytes.Buffer
+	zw := zip.NewWriter(&out)
+	for _, f := range zr.File {
+		rc, _ := f.Open()
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		name := f.Name
+		switch name {
+		case "xl/workbook.xml":
+			name, b = newName, body(b)
+		case "xl/_rels/workbook.xml.rels":
+			// excelize derives the workbook's own rels path from the workbook part's name.
+			name = "xl/_rels/" + strings.TrimPrefix(newName, "xl/") + ".rels"
+		case "_rels/.rels":
+			b = bytes.ReplaceAll(b, []byte("xl/workbook.xml"), []byte(newName))
+		}
+		w, _ := zw.Create(name)
+		_, _ = w.Write(b)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("zip close: %v", err)
+	}
+	return out.Bytes()
+}
+
+// THE GUARD DOES NOT TRUST THE NAME. excelize finds the workbook through `_rels/.rels`, so a workbook
+// part named `xl/wb.bin` is still XML-decoded — and before this fix it skipped the depth guard.
+func TestInspect_RefusesDeepPartWhateverItsName(t *testing.T) {
+	good := buildWorkbook(t, map[int][]any{1: headerRow(), 2: {"A"}})
+
+	// The premise: excelize really does open a workbook whose main part has a non-.xml name.
+	renamed := renameWorkbookPart(t, good, "xl/wb.bin", func(b []byte) []byte { return b })
+	f, err := excelize.OpenReader(bytes.NewReader(renamed))
+	if err != nil {
+		t.Fatalf("excelize mở tệp đổi tên phần workbook: %v", err)
+	}
+	if got := f.GetSheetList(); len(got) != 1 {
+		f.Close()
+		t.Fatalf("excelize phải đọc được workbook qua quan hệ, nhận các trang %v", got)
+	}
+	f.Close()
+	if err := inspect(renamed); err != nil {
+		t.Fatalf("workbook hợp lệ dưới tên khác bị từ chối: %v", err)
+	}
+
+	deep := renameWorkbookPart(t, good, "xl/wb.bin", func([]byte) []byte { return nested(maxXMLDepth + 1) })
+	if err := inspect(deep); !errors.Is(err, ErrNotXLSX) {
+		t.Fatalf("inspect(xl/wb.bin lồng %d tầng) = %v, muốn ErrNotXLSX", maxXMLDepth+1, err)
+	}
+	if _, _, err := Parse(deep); !errors.Is(err, ErrNotXLSX) {
+		t.Fatalf("Parse(xl/wb.bin lồng sâu) = %v, muốn ErrNotXLSX trước khi excelize mở tệp", err)
+	}
+
+	// Depth is refused even when the stream breaks AFTER the deep part — Unmarshal recurses first.
+	deepThenBroken := rewriteZip(t, good, nil, map[string][]byte{
+		"xl/media/x.bin": append(nested(maxXMLDepth + 1)[:len(nested(maxXMLDepth+1))-maxXMLDepth*2], 0),
+	})
+	if err := inspect(deepThenBroken); !errors.Is(err, ErrNotXLSX) {
+		t.Fatalf("inspect(lồng sâu rồi hỏng) = %v, muốn ErrNotXLSX", err)
+	}
+
+	// A sheet under a non-.xml name, truncated, would import its first half silently: refused.
+	var sheet []byte
+	zr, _ := zip.NewReader(bytes.NewReader(good), int64(len(good)))
+	for _, zf := range zr.File {
+		if zf.Name == "xl/worksheets/sheet1.xml" {
+			rc, _ := zf.Open()
+			sheet, _ = io.ReadAll(rc)
+			rc.Close()
+		}
+	}
+	truncatedSheet := rewriteZip(t, good, nil, map[string][]byte{"xl/worksheets/sheet2.bin": sheet[:len(sheet)-40]})
+	if err := inspect(truncatedSheet); !errors.Is(err, ErrNotXLSX) {
+		t.Fatalf("inspect(trang .bin cắt cụt) = %v, muốn ErrNotXLSX", err)
+	}
+}
+
+// BINARY ENTRIES STAY IMPORTABLE: a picture or printer settings is scanned too, breaks before its
+// first element, and is accepted — a real file saved from Excel carries both.
+func TestInspect_AcceptsBinaryParts(t *testing.T) {
+	good := buildWorkbook(t, map[int][]any{1: headerRow(), 2: {"A"}})
+	withBinary := rewriteZip(t, good, nil, map[string][]byte{
+		"xl/media/image1.png":                     []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR<a><b>"),
+		"xl/media/image2.jpeg":                    {0xFF, 0xD8, 0xFF, 0xE0, '<', 'a', '>'},
+		"xl/printerSettings/printerSettings1.bin": []byte("M\x00i\x00c\x00r\x00o\x00<a>"),
+		"xl/embeddings/empty.bin":                 {},
+		"docProps/thumbnail.wmf":                  {0xD7, 0xCD, 0xC6, 0x9A, 0, 0},
+	})
+	if err := inspect(withBinary); err != nil {
+		t.Fatalf("tệp có ảnh / thiết lập máy in bị từ chối: %v", err)
+	}
+	rows, rowErrs, err := Parse(withBinary)
+	if err != nil || len(rowErrs) != 0 || len(rows) != 1 {
+		t.Fatalf("Parse(tệp có phần nhị phân): %v %+v %+v", err, rowErrs, rows)
+	}
+	// Named as XML, the same binary bytes are refused: an .xml part must be well-formed outright.
+	if err := inspect(rewriteZip(t, good, nil, map[string][]byte{"xl/custom.xml": {0x89, 'P', 'N', 'G'}})); !errors.Is(err, ErrNotXLSX) {
+		t.Fatalf("inspect(.xml nhị phân) = %v, muốn ErrNotXLSX", err)
+	}
+}

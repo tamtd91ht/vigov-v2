@@ -15,8 +15,8 @@
 //  3. MACROS ARE REFUSED, not ignored: a vbaProject part, or a macro-enabled content type, and the
 //     file is rejected. Nothing here would run a macro, but a file that carries one is not the file
 //     the template produced, and it would travel on in backups as something this system accepted.
-//  4. EVERY XML PART IS CHECKED WELL-FORMED, AND NO DEEPER THAN maxXMLDepth (GO-2026-6088), before
-//     excelize opens the file. excelize's row iterator stops SILENTLY at a
+//  4. EVERY ZIP ENTRY — whatever its name — IS SCANNED AS XML, NO DEEPER THAN maxXMLDepth
+//     (GO-2026-6088), and every XML part must be well-formed, before excelize opens the file (checkPart). excelize's row iterator stops SILENTLY at a
 //     decoding error, so a truncated sheet would import its first half and report success — exactly
 //     the partial write an all-or-nothing import exists to prevent.
 //  5. NO FORMULA IS EVALUATED. Cells are read raw (RawCellValue): a formula cell yields the value the
@@ -38,6 +38,7 @@ import (
 
 	"github.com/vihat/vigov/service-identity/internal/domain"
 	"github.com/xuri/excelize/v2"
+	"golang.org/x/net/html/charset"
 )
 
 // MaxFileBytes caps the upload. A template of 500 rows is under 40 KB; 2 MB is fifty times that.
@@ -85,7 +86,7 @@ func inspect(data []byte) error {
 	}
 	var total uint64
 	var contentTypes []byte
-	var xmlParts []*zip.File
+	var parts []*zip.File
 	for _, f := range zr.File {
 		total += f.UncompressedSize64
 		if total > maxUnzippedBytes {
@@ -100,12 +101,8 @@ func inspect(data []byte) error {
 				return ErrNotXLSX
 			}
 		}
-		// EVERY XML-bearing part, not only the ones this package reads: excelize unmarshals styles,
-		// theme, relationships, drawings and comments on open, and each is an encoding/xml decode of
-		// untrusted bytes (see maxXMLDepth).
-		if isXMLPart(name) {
-			xmlParts = append(xmlParts, f)
-		}
+		// EVERY ENTRY, WHATEVER ITS NAME — see checkPart for why the name cannot be trusted.
+		parts = append(parts, f)
 	}
 	if contentTypes == nil {
 		return ErrNotXLSX
@@ -117,8 +114,8 @@ func inspect(data []byte) error {
 	if !strings.Contains(ct, contentTypeMainXLSX) {
 		return ErrNotXLSX
 	}
-	for _, f := range xmlParts {
-		if err := wellFormed(f); err != nil {
+	for _, f := range parts {
+		if err := checkPart(f); err != nil {
 			return ErrNotXLSX
 		}
 	}
@@ -152,36 +149,91 @@ const maxXMLDepth = 64
 // errXMLTooDeep — a part nests deeper than maxXMLDepth.
 var errXMLTooDeep = errors.New("orgunitxlsx: XML lồng quá sâu")
 
-// isXMLPart reports whether a zip entry holds XML excelize may decode: `.xml`, relationship parts
-// (`.rels`) and legacy VML drawings (`.vml`). Binary parts (images, printer settings) are not XML.
-func isXMLPart(name string) bool {
+// isXMLName reports whether an entry is NAMED as XML: `.xml`, relationship parts (`.rels`) and legacy
+// VML drawings (`.vml`). Such an entry must be well-formed outright. The name is NOT what decides
+// whether excelize decodes an entry — see checkPart.
+func isXMLName(name string) bool {
 	return strings.HasSuffix(name, ".xml") || strings.HasSuffix(name, ".rels") || strings.HasSuffix(name, ".vml")
 }
 
-// wellFormed decodes one XML part to its end, token by token, refusing nesting past maxXMLDepth.
-// encoding/xml expands no external entities and has no DTD processing, so this is not itself an XXE
-// surface.
+// checkPart is the XML guard of ONE zip entry, and it runs on EVERY entry.
+//
+// WHY NOT ONLY THE `.xml` ONES: excelize finds its parts through relationship TARGETS, not names — the
+// workbook part is whatever `_rels/.rels` points at (excelize@v2.11.0 workbook.go getWorkbookPath),
+// the sheets are whatever the workbook's relationships point at — and it XML-decodes each one. A
+// workbook part named `xl/wb.bin` skipped a name-based guard and reached encoding/xml's recursive
+// Unmarshal: stack exhaustion on Go < 1.26.6 (GO-2026-6088), which is fatal and kills the replica.
+// Chasing the targets instead is weaker still: a relationship's declared Type is attacker text too,
+// and excelize loads sheets by rId whatever Type says.
+//
+// WHY THIS RULE PROVABLY COVERS EVERY PART EXCELIZE DECODES: the scan uses the same decoder excelize
+// builds (xmlDecoder: encoding/xml, Strict, the same CharsetReader), over the same bytes, so it sees
+// the same token stream. Unmarshal's recursion only ever follows the element depth of the tokens it
+// has read, so:
+//
+//   - depth past maxXMLDepth anywhere in the stream is refused, EVEN IF the stream is broken later —
+//     Unmarshal would already have recursed that deep before reaching the break;
+//   - a stream that breaks after at least one element is refused: that is truncated or corrupted XML,
+//     and excelize's row iterator would import the half before the break silently;
+//   - a stream that breaks BEFORE ITS FIRST ELEMENT is accepted when the entry is not named as XML:
+//     that is binary (a PNG's first byte is not UTF-8, a printerSettings .bin opens with NUL bytes),
+//     and excelize's decoder gets no element out of it either, so it can neither recurse nor import a
+//     row. This is what keeps a real file with a picture or printer settings importable.
+//
+// excelize's own re-decodes (extLst fragments wrapped in one extra element) are inner XML of a part
+// already scanned, so they add one level at most.
+func checkPart(f *zip.File) error {
+	elements, err := scanXML(f)
+	if err == nil || errors.Is(err, errXMLTooDeep) {
+		return err
+	}
+	if elements > 0 || isXMLName(strings.ToLower(strings.ReplaceAll(f.Name, "\\", "/"))) {
+		return err
+	}
+	return nil
+}
+
+// wellFormed decodes one XML part to its end, refusing any error and nesting past maxXMLDepth.
 func wellFormed(f *zip.File) error {
+	_, err := scanXML(f)
+	return err
+}
+
+// xmlDecoder is excelize's decoder, built the way excelize@v2.11.0 builds it (excelize.go
+// xmlNewDecoder, with the default Options.CharsetReader = charset.NewReaderLabel). A decoder that
+// differed — no CharsetReader, say — would stop at an `encoding="…"` declaration that excelize reads
+// straight through, and would count no depth where excelize recurses.
+func xmlDecoder(r io.Reader) *xml.Decoder {
+	dec := xml.NewDecoder(r)
+	dec.CharsetReader = charset.NewReaderLabel
+	return dec
+}
+
+// scanXML decodes one entry token by token, counting start elements and refusing nesting past
+// maxXMLDepth. encoding/xml expands no external entities and has no DTD processing, so this is not
+// itself an XXE surface; Token() is iterative, so the scan is safe on the input it refuses.
+func scanXML(f *zip.File) (int, error) {
 	rc, err := f.Open()
 	if err != nil {
-		return fmt.Errorf("orgunitxlsx: mở phần %q: %w", f.Name, err)
+		return 0, fmt.Errorf("orgunitxlsx: mở phần %q: %w", f.Name, err)
 	}
 	defer rc.Close()
-	dec := xml.NewDecoder(io.LimitReader(rc, maxUnzippedBytes+1))
-	depth := 0
+	dec := xmlDecoder(io.LimitReader(rc, maxUnzippedBytes+1))
+	depth, elements := 0, 0
 	for {
 		tok, err := dec.Token()
 		if errors.Is(err, io.EOF) {
-			return nil
+			return elements, nil
 		}
 		if err != nil {
-			return fmt.Errorf("orgunitxlsx: phần %q không hợp lệ: %w", f.Name, err)
+			return elements, fmt.Errorf("orgunitxlsx: phần %q không hợp lệ: %w", f.Name, err)
 		}
 		switch tok.(type) {
 		case xml.StartElement:
 			depth++
+			elements++
 			if depth > maxXMLDepth {
-				return fmt.Errorf("%w: phần %q", errXMLTooDeep, f.Name)
+				return elements, fmt.Errorf("%w: phần %q", errXMLTooDeep, f.Name)
 			}
 		case xml.EndElement:
 			depth--

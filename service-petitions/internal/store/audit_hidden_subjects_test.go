@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"io"
 	"strings"
@@ -111,6 +112,38 @@ func TestRestrictedPetitionAuditSubjects_HiddenWithoutSeeHidden(t *testing.T) {
 	}
 }
 
+// A READ ENTRY NEVER ECHOES A CAN-BO LOOKUP CODE (ADR 0030, ADR 0054 §4): the read withholds the
+// read entries whose delta names a restricted petition, and the entry this read writes records only
+// that a subject was searched.
+func TestRestrictedPetitionAuditSubjects_ReadEntriesDoNotEchoTheSubject(t *testing.T) {
+	s := readWith(t, false)
+	if !strings.Contains(s.sql, "OR delta->>'subject' NOT IN (SELECT h.s FROM ("+RestrictedPetitionAuditSubjects+") AS h(s)") {
+		t.Errorf("read entries naming a restricted petition are not withheld:\n%s", s.sql)
+	}
+
+	d := &ahDB{}
+	l := audit.NewLog(pkgstore.New(sql.OpenDB(ahConnector{d: d})),
+		audit.WithHiddenSubjects(RestrictedPetitionAuditSubjects))
+	if _, err := l.Read(ctxXa(xaThu), audit.Actor{ID: "CB-00123", Kind: "staff", IP: "10.0.0.7"},
+		audit.Query{Subject: "PA-AH1-0000-0001", SeeHidden: true}); err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	var wrote bool
+	for _, st := range d.stmts {
+		if !strings.Contains(st.sql, "INSERT INTO audit_log") {
+			continue
+		}
+		wrote = true
+		b, _ := st.args[len(st.args)-1].([]byte)
+		if strings.Contains(string(b), "PA-AH1-0000-0001") || !strings.Contains(string(b), `"subject_filtered":true`) {
+			t.Errorf("read entry delta = %s, want subject_filtered and no lookup code", b)
+		}
+	}
+	if !wrote {
+		t.Fatal("the read wrote no entry")
+	}
+}
+
 func TestRestrictedPetitionAuditSubjects_ShownWithSeeHidden(t *testing.T) {
 	s := readWith(t, true)
 	if strings.Contains(s.sql, "NOT IN") || strings.Contains(s.sql, "phieu_phan_anh") {
@@ -205,6 +238,48 @@ func TestPgRestrictedPetitionAuditSubjects(t *testing.T) {
 			if !c.see && e.Subject == "PA-AH1-0000-0001" {
 				t.Error("a can-bo petition's entry reached a reader without feedback.restricted")
 			}
+		}
+	}
+
+	// READ ENTRIES IN THE OLD SHAPE — the searched subject inside the delta — are withheld from a
+	// reader without the right when they name a restricted petition, and kept otherwise.
+	if err := handle.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		for _, delta := range []string{
+			`{"subject":"PA-AH1-0000-0001","cursor":false,"returned":1,"outcome":"ok"}`,
+			`{"subject":"PA-AH2-0000-0002","cursor":false,"returned":1,"outcome":"ok"}`,
+			`{"cursor":false,"returned":3,"outcome":"ok"}`,
+		} {
+			if err := audit.Write(ctx, tx, audit.Entry{Actor: reader, Action: audit.ActionReadLog,
+				Subject: reader.ID, Delta: []byte(delta)}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("write old-shape read entries: %v", err)
+	}
+	for _, c := range []struct {
+		see  bool
+		minN int
+	}{{false, 2}, {true, 3}} {
+		res, err := l.Read(ctx, reader, audit.Query{Action: audit.ActionReadLog, SeeHidden: c.see})
+		if err != nil {
+			t.Fatalf("Read(read entries, SeeHidden=%v): %v", c.see, err)
+		}
+		restrictedEchoes := 0
+		for _, e := range res.Items {
+			if raw, ok := e.Delta.(json.RawMessage); ok && strings.Contains(string(raw), "PA-AH1-0000-0001") {
+				restrictedEchoes++
+			}
+		}
+		if !c.see && restrictedEchoes != 0 {
+			t.Error("a read entry echoing a restricted lookup code reached a reader without feedback.restricted")
+		}
+		if c.see && restrictedEchoes == 0 {
+			t.Error("SeeHidden did not show the read entry naming the restricted petition")
+		}
+		if len(res.Items) < c.minN {
+			t.Errorf("SeeHidden=%v: %d read entries, want at least %d — entries without a hidden subject must stay", c.see, len(res.Items), c.minN)
 		}
 	}
 }

@@ -57,7 +57,7 @@ func Dial(addr string, khoa secret.Secret, log *slog.Logger) (*Client, error) {
 		return nil, fmt.Errorf("documentsclient: thiếu địa chỉ DOCUMENTS_GRPC_ADDR")
 	}
 	conn, err := grpc.NewClient(addr,
-		// @security-exception: service-to-service gRPC has no TLS yet — same channel as identityclient/platformclient (tools/security_debt.json, expires 2026-12-28), converted together when internal TLS lands; carries one org-unit id and one count, no personal data
+		// @security-exception: service-to-service gRPC has no TLS yet — same channel as identityclient/platformclient (tools/security_debt.json, expires 2026-12-28), converted together when internal TLS lands; carries one org-unit id and one count, no personal data — but ALSO the deployment-wide GRPC_CALLER_KEY (x-vigov-caller-key metadata, one key shared by every service) and the commune id (x-tenant-id), both readable by anyone on the cluster network until TLS lands
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithChainUnaryInterceptor(
 			grpcx.UnaryClientCallerAuth(khoa),

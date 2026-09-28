@@ -227,14 +227,14 @@ func (l *Log) Read(ctx context.Context, reader Actor, q Query) (page.Result[Entr
 		if out, err = l.readPage(ctx, tx, f); err != nil {
 			return err
 		}
-		d := f.summary("ok")
+		d := l.summary(f, "ok")
 		d.Returned = len(out.Items)
 		return l.writeReadEntry(ctx, tx, reader, d)
 	})
 	if err != nil {
 		// The transaction rolled back, the page with it. Record that the read was attempted.
 		if werr := s.Tx(ctx, func(tx *store.ScopedTx) error {
-			return l.writeReadEntry(ctx, tx, reader, f.summary("error"))
+			return l.writeReadEntry(ctx, tx, reader, l.summary(f, "error"))
 		}); werr != nil {
 			err = fmt.Errorf("%w (và không ghi được vết của lượt đọc lỗi: %v)", err, werr)
 		}
@@ -280,7 +280,22 @@ func (l *Log) readPage(ctx context.Context, tx *store.ScopedTx, f filter) (page.
 		add(" AND subject = $%d", f.subject)
 	}
 	if l.hidden != "" && !f.seeHidden {
-		tail.WriteString(" AND subject NOT IN (SELECT h.s FROM (" + l.hidden + ") AS h(s) WHERE h.s IS NOT NULL)")
+		hiddenSet := "(SELECT h.s FROM (" + l.hidden + ") AS h(s) WHERE h.s IS NOT NULL)"
+		tail.WriteString(" AND subject NOT IN " + hiddenSet)
+		// A READ ENTRY ECHOES ITS FILTER. Before readDelta stopped recording the subject (see
+		// Log.summary), a read entry carried the searched subject in delta->>'subject' — for petitions
+		// a can-bo lookup code — and `returned` told whether it matched. Listing action=ActionReadLog
+		// would then hand a reader without the right the very code the clause above withholds, and
+		// confirm the complaint exists (ADR 0030; ADR 0054 §4). So read entries naming a hidden
+		// subject are withheld too; this covers every entry already written in the old shape.
+		// ONLY `subject` can carry such a code: `actor` is a staff code, `action` a verb, from/to
+		// instants. A read entry without the key (delta NULL, or the new shape) is kept — the IS NULL
+		// arm stops `NOT IN` over a NULL from hiding it. Needs `delta` to be JSONB, which it is in the
+		// one service configured with hidden subjects (service-petitions migrations/0001_init.sql).
+		fmt.Fprintf(&tail, " AND (action <> $%d OR delta->>'subject' IS NULL OR delta->>'subject' NOT IN ", next)
+		tail.WriteString(hiddenSet + ")")
+		args = append(args, ActionReadLog)
+		next++
 	}
 	if a, ok := f.req.After(); ok {
 		fmt.Fprintf(&tail, " AND (at, id) < ($%d, $%d)", next, next+1)
@@ -334,13 +349,16 @@ func (l *Log) readPage(ctx context.Context, tx *store.ScopedTx, f filter) (page.
 // readDelta is the filter summary the read's own entry carries (ADR 0054 §5). No entry that was
 // returned is copied into it — only what was asked, and how many came back.
 type readDelta struct {
-	From     string `json:"from,omitempty"`
-	To       string `json:"to,omitempty"`
-	Actor    string `json:"actor,omitempty"`
-	Action   string `json:"action,omitempty"`
-	Subject  string `json:"subject,omitempty"`
-	Cursor   bool   `json:"cursor"`
-	Returned int    `json:"returned"`
+	From    string `json:"from,omitempty"`
+	To      string `json:"to,omitempty"`
+	Actor   string `json:"actor,omitempty"`
+	Action  string `json:"action,omitempty"`
+	Subject string `json:"subject,omitempty"`
+	// SubjectFiltered replaces Subject when the Log hides subjects (WithHiddenSubjects): the entry
+	// records THAT a subject was searched, never which one — see Log.summary.
+	SubjectFiltered bool `json:"subject_filtered,omitempty"`
+	Cursor          bool `json:"cursor"`
+	Returned        int  `json:"returned"`
 	// Outcome is "ok", "rejected" (the filter was refused, nothing read) or "error" (the read or its
 	// entry failed, nothing returned). Reason is set for "rejected" only, as a code — the rejected
 	// raw values are not copied, since nothing was read with them.
@@ -348,10 +366,23 @@ type readDelta struct {
 	Reason  string `json:"reason,omitempty"`
 }
 
-func (f filter) summary(outcome string) readDelta {
+// summary is the read's own entry for a validated filter.
+//
+// WHEN THE LOG HIDES SUBJECTS, THE SEARCHED SUBJECT IS NOT RECORDED — only that there was one. The
+// entry is read later by anybody holding the log-reading right, and for petitions that right does not
+// include the restricted field (ADR 0030): a stored subject would be a can-bo lookup code, and
+// `returned` would confirm it exists. readPage also withholds old entries that carry it; not writing
+// it at all means no future reader, filter or export can learn it. This holds even when THIS reader
+// may see hidden subjects: the entry outlives the request, and its next reader may not.
+// The cost: an auditor cannot tell which subject a colleague searched. Logs without hidden subjects
+// (identity, documents, finance, comms) record the subject as before.
+func (l *Log) summary(f filter, outcome string) readDelta {
 	d := readDelta{
 		Actor: f.actor, Action: f.action, Subject: f.subject,
 		Cursor: f.cursor, Outcome: outcome,
+	}
+	if l.hidden != "" {
+		d.Subject, d.SubjectFiltered = "", f.subject != ""
 	}
 	if f.hasFrom {
 		d.From = f.from.UTC().Format(time.RFC3339Nano)

@@ -532,6 +532,85 @@ func TestRead_HiddenSubjects(t *testing.T) {
 	}
 }
 
+// A READ ENTRY MUST NOT LEAK A HIDDEN SUBJECT (ADR 0030, ADR 0054 §4), both ways: entries already
+// written with the searched subject in their delta are withheld from a reader without SeeHidden, and
+// new entries do not record the value at all.
+func TestRead_HiddenSubjectsNeverEchoedByReadEntries(t *testing.T) {
+	const sub = "SELECT ma_tra_cuu FROM phieu_phan_anh WHERE tenant_id = $1 AND linh_vuc = 'can-bo'"
+	hiddenSet := "(SELECT h.s FROM (" + sub + ") AS h(s) WHERE h.s IS NOT NULL)"
+
+	// (a) the old shape is withheld — listing the read entries explicitly included.
+	d := &rdDB{}
+	l, ctx := newLog(t, d, WithHiddenSubjects(sub))
+	if _, err := l.Read(ctx, reader, Query{Action: ActionReadLog}); err != nil {
+		t.Fatal(err)
+	}
+	s := theRead(t, d)
+	want := "AND (action <> $3 OR delta->>'subject' IS NULL OR delta->>'subject' NOT IN " + hiddenSet + ")"
+	if !strings.Contains(s.sql, want) {
+		t.Fatalf("read entries naming a hidden subject are not withheld:\n%s", s.sql)
+	}
+	if s.args[1] != ActionReadLog || s.args[2] != ActionReadLog {
+		t.Errorf("args = %v, want $2 the action filter and $3 the read verb", s.args)
+	}
+
+	// (b) the new entry records THAT a subject was searched, never which one — even for a reader who
+	// may see hidden subjects, because the entry's next reader may not.
+	for _, see := range []bool{false, true} {
+		d := &rdDB{}
+		l, ctx := newLog(t, d, WithHiddenSubjects(sub))
+		if _, err := l.Read(ctx, reader, Query{Subject: "PA-CANBO-0001", SeeHidden: see}); err != nil {
+			t.Fatal(err)
+		}
+		e := readEntries(t, d)
+		if len(e) != 1 || e[0].Subject != "" || !e[0].SubjectFiltered {
+			t.Errorf("SeeHidden=%v: entry = %+v, want subject_filtered and no subject", see, e)
+		}
+		for _, x := range d.of("exec") {
+			if b, _ := x.args[7].([]byte); strings.Contains(string(b), "PA-CANBO-0001") {
+				t.Errorf("SeeHidden=%v: the searched code reached the stored delta: %s", see, b)
+			}
+		}
+		if see && strings.Contains(theRead(t, d).sql, "NOT IN") {
+			t.Errorf("SeeHidden still withheld entries")
+		}
+	}
+
+	// The error path records the same shape.
+	de := &rdDB{queryErr: errors.New("connection reset")}
+	le, ctxe := newLog(t, de, WithHiddenSubjects(sub))
+	_, _ = le.Read(ctxe, reader, Query{Subject: "PA-CANBO-0001"})
+	if e := readEntries(t, de); len(e) != 1 || e[0].Outcome != "error" || e[0].Subject != "" || !e[0].SubjectFiltered {
+		t.Errorf("error entry = %+v, want subject_filtered and no subject", e)
+	}
+
+	// No subject searched: no flag.
+	dn := &rdDB{}
+	ln, ctxn := newLog(t, dn, WithHiddenSubjects(sub))
+	if _, err := ln.Read(ctxn, reader, Query{}); err != nil {
+		t.Fatal(err)
+	}
+	if e := readEntries(t, dn); len(e) != 1 || e[0].SubjectFiltered {
+		t.Errorf("entry = %+v, want no subject_filtered when no subject was searched", e)
+	}
+}
+
+// A Log WITHOUT hidden subjects (identity, documents, finance, comms) is unchanged: the subject is
+// recorded, and the read entries are not filtered by their delta.
+func TestRead_WithoutHiddenSubjectsRecordsTheSubject(t *testing.T) {
+	d := &rdDB{}
+	l, ctx := newLog(t, d)
+	if _, err := l.Read(ctx, reader, Query{Action: ActionReadLog, Subject: "VB-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if s := theRead(t, d); strings.Contains(s.sql, "delta->>") || strings.Contains(s.sql, "NOT IN") {
+		t.Errorf("a Log without hidden subjects filters by delta:\n%s", s.sql)
+	}
+	if e := readEntries(t, d); len(e) != 1 || e[0].Subject != "VB-1" || e[0].SubjectFiltered {
+		t.Errorf("entry = %+v, want the subject recorded as before", e)
+	}
+}
+
 func TestRead_LimitAboveCapIsCapped(t *testing.T) {
 	d := &rdDB{}
 	l, ctx := newLog(t, d)
