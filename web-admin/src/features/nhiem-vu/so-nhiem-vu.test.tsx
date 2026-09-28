@@ -2094,3 +2094,17 @@ describe("khối Chuyển trạng thái — người thực hiện, danh sách m
     expect(html).toContain('id="ly-do-mo-lai"');
   });
 });
+
+describe("W5 — tab `Liên quan đến tôi` và ô `Sắp đến hạn` trên hàng lọc", () => {
+  const SRC = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+
+  it("ba tab phạm vi và ô tick mới có mặt, gửi đúng giá trị (đọc mã: không có DOM)", () => {
+    expect(SRC).toContain('onClick={() => datLoc({ ...loc, phamVi: "related" })}');
+    expect(SRC).toContain("{SCOPE_RELATED_LABEL}");
+    expect(SRC).toContain("onChange={(e) => datLoc({ ...loc, dueSoon: e.target.checked ? true : undefined })}");
+    expect(SRC).toContain("{DUE_SOON_FILTER_LABEL}");
+    // The Kanban counts are read with the SAME `loc` as the cards (`getTaskCounts(loc)` shares the
+    // filter builder with the list — see lib/api/nhiem-vu.test.ts).
+    expect(SRC).toContain("getTaskCounts(loc).then(");
+  });
+});

@@ -124,6 +124,9 @@ import {
   TITLE_COLUMN_LABEL,
   O_TRONG,
   PHAM_VI_CUA_TOI,
+  SCOPE_RELATED_LABEL,
+  SCOPE_RELATED_NOTE,
+  DUE_SOON_FILTER_LABEL,
   PHAM_VI_TOAN_XA,
   PHAN_CHUA_DUNG,
   SO_KY_HIEU_VAN_BAN_TOI_DA,
@@ -1269,14 +1272,15 @@ export function HangLoc({
 
   return (
     <div className="hang-loc">
-      {/* HAI TAB PHẠM VI. `mine` KHÔNG mang theo danh tính nào — máy chủ điền mã cán bộ từ PHIÊN
-          (`nhiem_vu.go:273-288`). Một tab gửi lên `?assignee=CB-…` của chính mình sẽ là client tự
-          khai mình là ai, điều luật 1 cấm #2 không cho phép. */}
+      {/* BA TAB PHẠM VI (§3). `mine` và `related` KHÔNG mang theo danh tính nào — máy chủ lấy mã cán
+          bộ từ PHIÊN, và với `related` tự hỏi `identity` bộ phận của người ấy. Một tab gửi lên
+          `?assignee=CB-…` của chính mình sẽ là client tự khai mình là ai (luật 1, cấm #2).
+          ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): tab thứ ba có từ khi máy chủ phục vụ `scope=related`. */}
       <div className="o-chon" role="group" aria-label="Phạm vi">
         <button
           type="button"
           className="nut-phu"
-          aria-pressed={loc.phamVi !== "mine"}
+          aria-pressed={loc.phamVi !== "mine" && loc.phamVi !== "related"}
           onClick={() => datLoc({ ...loc, phamVi: undefined })}
         >
           {PHAM_VI_TOAN_XA}
@@ -1289,7 +1293,21 @@ export function HangLoc({
         >
           {PHAM_VI_CUA_TOI}
         </button>
+        <button
+          type="button"
+          className="nut-phu"
+          aria-pressed={loc.phamVi === "related"}
+          aria-describedby={loc.phamVi === "related" ? "pham-vi-lien-quan-ghi-chu" : undefined}
+          onClick={() => datLoc({ ...loc, phamVi: "related" })}
+        >
+          {SCOPE_RELATED_LABEL}
+        </button>
       </div>
+      {loc.phamVi === "related" && (
+        <p id="pham-vi-lien-quan-ghi-chu" className="ghi-chu">
+          {SCOPE_RELATED_NOTE}
+        </p>
+      )}
 
       {/* Ô TÌM GỬI BẰNG SUBMIT, KHÔNG GỬI THEO TỪNG PHÍM: mỗi phím là một lời gọi mang chữ cán bộ
           đang gõ vào một URL, và một URL đi vào mọi log truy cập (luật 3, cấm #4). */}
@@ -1439,6 +1457,21 @@ export function HangLoc({
             onChange={(e) => datLoc({ ...loc, chiTreHan: e.target.checked ? true : undefined })}
           />{" "}
           {CHI_QUA_HAN_NHAN}
+        </label>
+      </div>
+
+      {/* §3 `☐ Sắp đến hạn` (W5). Only the switch goes up — `soon=true`, never a number: the
+          threshold is the commune's own, read by the server from identity. A commune that set none
+          gets the server's 409 sentence in place of the page, verbatim. Unticked = absent. */}
+      <div className="o-chon">
+        <label htmlFor="loc-sap-den-han">
+          <input
+            id="loc-sap-den-han"
+            type="checkbox"
+            checked={loc.dueSoon === true}
+            onChange={(e) => datLoc({ ...loc, dueSoon: e.target.checked ? true : undefined })}
+          />{" "}
+          {DUE_SOON_FILTER_LABEL}
         </label>
       </div>
     </div>

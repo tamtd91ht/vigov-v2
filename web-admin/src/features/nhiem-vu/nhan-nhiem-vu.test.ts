@@ -398,10 +398,12 @@ describe("phần chưa dựng được", () => {
     }
   });
 
-  it("hai chỗ máy chủ TỪ CHỐI bộ lọc đều có mặt — không vẽ ô tick chắc chắn hỏng", () => {
+  it("hai bộ lọc máy chủ từng TỪ CHỐI đã rời danh sách — nay được phục vụ (W5, 3a4e60f)", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): ca này ghim hai mục `Liên quan đến tôi` và `Sắp đến hạn`
+    // CÓ MẶT. Máy chủ nay phục vụ `scope=related` và `soon=true`, và màn hình đã vẽ cả hai.
     const moiLyDo = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" ");
-    expect(moiLyDo).toContain("Liên quan đến tôi");
-    expect(moiLyDo).toContain("Sắp đến hạn");
+    expect(moiLyDo).not.toContain("Liên quan đến tôi");
+    expect(moiLyDo).not.toContain("Sắp đến hạn");
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: bài này từng canh chữ `task.assign` và `chuyen-tiep` — hai mục
     // "Ô đổi bộ phận / người thực hiện" và "`Chuyển tiếp` … phần máy chủ đang làm". Cả hai nay đã
     // dựng (khối §5.7, `POST …/assignment`), nên chúng rời danh sách; còn nằm đó là đẩy người sau
@@ -433,7 +435,8 @@ describe("phần chưa dựng được", () => {
     // monitor. An 8 means one was left behind; a 6 means an unrelated entry was lost.
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): 7 → 6 — `Sửa Hạn hoàn thành` was built.
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): 6 → 5 — the sort entry was built (backend P9).
-    expect(PHAN_CHUA_DUNG.length).toBe(5);
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): 5 → 3 — `Liên quan đến tôi` and `Sắp đến hạn` were built.
+    expect(PHAN_CHUA_DUNG.length).toBe(3);
     const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ");
     expect(ten).not.toContain("việc con");
     expect(ten).not.toContain("VIỆC CON");
@@ -1411,7 +1414,9 @@ describe("§3 — bộ lọc ↔ đường dẫn", () => {
     // Một đường dẫn gõ sai không được biến quyển sổ thành một trang lỗi.
     expect(
       locTuDuongDan(
-        "?status=xong-roi&source=zalo&late=false&scope=related&soon=72&che_do_xem=kanban&foo=1",
+        // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): `scope=related` is a real value now — it moved to the
+        // round-trip case below. `soon=72` is still refused: only `true` exists.
+        "?status=xong-roi&source=zalo&late=false&scope=nobody&soon=72&che_do_xem=kanban&foo=1",
       ),
     ).toEqual({});
     expect(locTuDuongDan("?late=TRUE")).toEqual({});
@@ -1650,5 +1655,15 @@ describe("409 `task_changed` — phát hiện bằng DỮ LIỆU đọc lại, k
     expect(changedSince({ ok: true, duLieu: { updated_at: "B" } }, "A")).toBe(true);
     expect(changedSince({ ok: true, duLieu: { updated_at: "A" } }, "A")).toBe(false);
     expect(changedSince({ ok: false, thongBao: "x" }, "A")).toBe(false);
+  });
+});
+
+describe("W5 — `Liên quan đến tôi` và `Sắp đến hạn` đi rồi về qua đường dẫn", () => {
+  it("`scope=related` và `soon=true` sống sót; chỉ đúng chữ `true`", () => {
+    const loc = { phamVi: "related" as const, dueSoon: true as const };
+    expect(locTuDuongDan(duongDanTuLoc(loc))).toEqual(loc);
+    expect(locTuDuongDan("?scope=mine&soon=true")).toEqual({ phamVi: "mine", dueSoon: true });
+    expect(locTuDuongDan("?soon=TRUE")).toEqual({});
+    expect(duongDanTuLoc({ dueSoon: false })).toBe("");
   });
 });

@@ -11,6 +11,8 @@ import {
   layHangChoLuiHan,
   layNhatKyNhiemVu,
   layNhiemVu,
+  laySoNhiemVu,
+  taskCountsPath,
   quyetDinhLuiHan,
   suaNhiemVu,
   taoNhiemVu,
@@ -84,13 +86,38 @@ describe("MƯỜI TÊN THAM SỐ — đọc lại từng cái một", () => {
     expect(q.get("cursor")).toBe("01JCONTRO");
   });
 
-  it("KHÔNG GỬI `related` và KHÔNG GỬI `soon` — hai tham số máy chủ TỪ CHỐI bằng 400", () => {
-    // Cả hai không phải "lọc không ăn": `errPhamViChuaHoTro` và `errLocSapDenHanChuaCo` biến
-    // quyển sổ thành một trang lỗi. Kiểu `phamVi` chỉ nhận `all | mine`, nên bài này canh phần
-    // `tsc` không canh: không có đường nào trong tệp đặt hai tên ấy vào truy vấn.
+  it("`scope=related` và `soon=true` ĐI khi được chọn; vắng mặt khi không — không danh tính, không con số", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): ca này ghim "KHÔNG GỬI `related`, KHÔNG GỬI `soon`" — máy
+    // chủ từng trả 400 cho cả hai. 3a4e60f phục vụ cả hai; màn hình gửi đúng chữ máy chủ nhận.
     const duong = duongDanSoNhiemVu({ phamVi: "all" });
     expect(duong).not.toContain("related");
     expect(duong).not.toContain("soon");
+    const q = new URLSearchParams(duongDanSoNhiemVu({ phamVi: "related", dueSoon: true }).split("?")[1]);
+    expect(q.get("scope")).toBe("related");
+    expect(q.get("soon")).toBe("true");
+    // No identity rides along: the server takes the caller from the session.
+    expect([...q.keys()].sort()).toEqual(["scope", "soon"]);
+    // Unticked is ABSENT, never `soon=false` (the server answers 400 to anything but `true`).
+    expect(duongDanSoNhiemVu({ dueSoon: false })).toBe("/api/v1/tasks");
+  });
+
+  it("Kanban counts use the SAME filters — `related` and `soon` reach `/task-counts` too", () => {
+    const q = new URLSearchParams(taskCountsPath({ phamVi: "related", dueSoon: true }).split("?")[1]);
+    expect(q.get("scope")).toBe("related");
+    expect(q.get("soon")).toBe("true");
+  });
+
+  it("409 `due_soon_not_configured`: the server's sentence comes back VERBATIM", async () => {
+    const cau =
+      "Xã chưa cấu hình ngưỡng sắp đến hạn cho nhiệm vụ, nên chưa lọc được việc sắp đến hạn. " +
+      "Vui lòng cấu hình tại Cấu hình → Thời hạn xử lý.";
+    batFetch(
+      new Response(JSON.stringify({ code: "due_soon_not_configured", message: cau, trace_id: "01JT" }), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    expect(await laySoNhiemVu({ dueSoon: true })).toEqual({ ok: false, thongBao: cau });
   });
 
   it("`che_do_xem` KHÔNG đi lên máy chủ — Kanban / Danh sách chọn CÁCH BÀY, không đổi dòng nào", () => {

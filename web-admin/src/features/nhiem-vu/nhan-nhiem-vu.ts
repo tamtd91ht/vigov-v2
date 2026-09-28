@@ -1034,7 +1034,8 @@ export function mucUuTienMacDinh(ds: readonly petitions_mucUuTienRa[]): string {
 
 /** Bộ lọc đồng bộ được — cùng hình với phần lọc của `LocNhiemVu`, TRỪ `tim` (xem khối trên). */
 export type LocTrenDuongDan = {
-  phamVi?: "mine";
+  phamVi?: "mine" | "related";
+  dueSoon?: true;
   trangThai?: string;
   nguonGiao?: string;
   loai?: string;
@@ -1061,7 +1062,9 @@ export function locTuDuongDan(search: string): LocTrenDuongDan {
   const t = new URLSearchParams(search);
   const loc: LocTrenDuongDan = {};
 
-  if (t.get("scope") === "mine") loc.phamVi = "mine";
+  const scope = t.get("scope");
+  if (scope === "mine" || scope === "related") loc.phamVi = scope;
+  if (t.get("soon") === "true") loc.dueSoon = true;
   const status = t.get("status");
   if (status !== null && laTrangThaiNhiemVu(status)) loc.trangThai = status;
   const source = t.get("source");
@@ -1105,12 +1108,13 @@ export function duongDanTuLoc(loc: {
   readonly boPhanID?: string;
   readonly nguoiThucHienMa?: string;
   readonly chiTreHan?: boolean;
+  readonly dueSoon?: boolean;
   readonly tim?: string;
   readonly sapXep?: CotSapXepNhiemVu;
   readonly chieu?: ChieuSapXepNhiemVu;
 }): string {
   const t = new URLSearchParams();
-  if (loc.phamVi === "mine") t.set("scope", "mine");
+  if (loc.phamVi === "mine" || loc.phamVi === "related") t.set("scope", loc.phamVi);
   if (loc.trangThai) t.set("status", loc.trangThai);
   if (loc.nguonGiao) t.set("source", loc.nguonGiao);
   if (loc.loai) t.set("type", loc.loai);
@@ -1119,6 +1123,7 @@ export function duongDanTuLoc(loc: {
   if (loc.boPhanID) t.set("unit", loc.boPhanID);
   if (loc.nguoiThucHienMa) t.set("assignee", loc.nguoiThucHienMa);
   if (loc.chiTreHan === true) t.set("late", "true");
+  if (loc.dueSoon === true) t.set("soon", "true");
   if (loc.sapXep) t.set("sort", loc.sapXep);
   if (loc.chieu) t.set("order", loc.chieu);
   return t.toString();
@@ -1456,6 +1461,16 @@ export const CHI_QUA_HAN_NHAN = "Chỉ việc quá hạn";
 /** Hai tab phạm vi DỰNG ĐƯỢC. Tab thứ ba (`Liên quan đến tôi`) — xem `PHAN_CHUA_DUNG`. */
 export const PHAM_VI_TOAN_XA = "Toàn xã";
 export const PHAM_VI_CUA_TOI = "Giao cho tôi";
+/** §3 — verbatim. What it covers is said by the tab's description, `SCOPE_RELATED_NOTE`. */
+export const SCOPE_RELATED_LABEL = "Liên quan đến tôi";
+/**
+ * §3's definition, said while the tab is on so nobody reads "related" as "assigned to me":
+ * the server's `relatedCondition` covers exactly these (require, 3a4e60f).
+ */
+export const SCOPE_RELATED_NOTE =
+  "Liên quan đến tôi: việc tôi giao, tôi theo dõi, tôi đã xử lý, hoặc do bộ phận tôi đang giữ.";
+/** §3 checkbox — verbatim. The threshold is the commune's (`Cấu hình → Thời hạn xử lý`), never shown as a number here. */
+export const DUE_SOON_FILTER_LABEL = "Sắp đến hạn";
 
 /** §5.3 — ô `ĐANG GIAO CHO` khi nhiệm vụ chưa về bộ phận nào. Không phải dấu gạch: một trạng thái thật. */
 export const CHUA_GIAO_BO_PHAN = "Chưa giao bộ phận nào";
@@ -2565,20 +2580,6 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
-  {
-    ten: "Bộ lọc `Liên quan đến tôi` (§3)",
-    viSao:
-      "Máy chủ TỪ CHỐI `?scope=related` kèm lý do: bộ lọc này cần `bộ phận tôi đang giữ`, mà hợp " +
-      "đồng phiên cán bộ không trả về bộ phận. Trả lời bằng ba vế còn lại sẽ tệ hơn từ chối — cán " +
-      "bộ có việc do bộ phận mình đang giữ sẽ KHÔNG thấy nó trên đúng cái tab mang tên ấy.",
-  },
-  {
-    ten: "Ô tick `Sắp đến hạn` (§3)",
-    viSao:
-      "Máy chủ TỪ CHỐI `?soon=`: ngưỡng là `sla.gio_sap_den_han`, số giờ của TỪNG XÃ, và chưa có " +
-      "đường đọc số ấy. Con số `72 giờ` ở đặc tả là MẶC ĐỊNH xã ghi đè được, nên nung nó vào màn " +
-      "hình là dựng nguồn thứ hai cho một con số mà mọi chỗ `sắp đến hạn` phải đọc từ một cột duy nhất.",
-  },
   {
     ten: "Nút `📎 Đính kèm` của ô Ghi nhật ký (§5.9)",
     viSao:

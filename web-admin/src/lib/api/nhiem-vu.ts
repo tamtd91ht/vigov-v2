@@ -42,10 +42,10 @@
  * nên làm tiếp, ở đúng hàm ấy. `sort` và `order` (thêm 27/09/2026) đã đi qua `thamSoTheoHopDong`.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * HAI BỘ LỌC CỦA §3 KHÔNG CÓ MẶT Ở ĐÂY VÀ SỰ VẮNG MẶT LÀ CHỦ Ý — máy chủ **TỪ CHỐI** chúng bằng
- * 400 kèm lý do chứ không bỏ qua: `scope=related` cần "bộ phận tôi đang giữ" mà phiên cán bộ
- * không mang, `soon=` cần `sla.gio_sap_den_han` của TỪNG XÃ mà chưa có đường đọc. Gửi lên là đổi
- * một ô lọc thành một trang lỗi; nên chúng ra tới màn hình qua `PHAN_CHUA_DUNG`.
+ * ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5, máy chủ 3a4e60f): `scope=related` và `soon=true` NAY ĐƯỢC PHỤC
+ * VỤ. Máy chủ tự hỏi `identity` — bộ phận của người đăng nhập (từ PHIÊN), ngưỡng sắp đến hạn của XÃ
+ * — và không bao giờ bỏ lọc khi hỏi hỏng: 409 `due_soon_not_configured` khi xã chưa đặt ngưỡng, 503
+ * `task_filter_unavailable` khi không hỏi được. Câu của máy chủ ra NGUYÊN VĂN ở chỗ đáng lẽ là trang.
  */
 
 import { isPeriodMetric, type TaskMetric } from "@/lib/drill-down";
@@ -103,8 +103,7 @@ function duongDanNhiemVu(mau: string, ma: string): string {
 /**
  * Bộ lọc của sổ nhiệm vụ — ĐÚNG mười tham số `locNhiemVuTuQuery` đọc, cộng sắp xếp và phân trang.
  *
- * KHÔNG CÓ `related` VÀ KHÔNG CÓ `soon`. Cả hai bị máy chủ TỪ CHỐI bằng 400 kèm lý do, nên một ô
- * lọc gửi chúng lên không phải "lọc không ăn" mà là "màn hình hỏng". Xem khối đầu tệp.
+ * `related` và `dueSoon` có từ W5 — xem khối đầu tệp.
  *
  * KHÔNG CÓ `che_do_xem`: Kanban / Danh sách / Sổ theo dõi chọn CÁCH BÀY cùng một tập dòng, nên
  * máy chủ cố ý không đọc nó (`nhiem_vu.go:409`). Gửi lên là dựng một tham số không ai đọc.
@@ -115,7 +114,13 @@ export type LocNhiemVu = {
    * `?scope=mine` **không** mang theo danh tính nào (`nhiem_vu.go:273-288`). Đó là điều kiện để
    * nó không phải một lời client tự khai mình là ai (luật 1, cấm #2).
    */
-  phamVi?: "all" | "mine";
+  phamVi?: "all" | "mine" | "related";
+  /**
+   * §3 `☐ Sắp đến hạn` — `soon=true`. The THRESHOLD is the commune's (identity, working hours); the
+   * screen sends only the switch and never a number — `72 giờ` in the spec is a default the commune
+   * overrides (rule 10, forbidden #3).
+   */
+  dueSoon?: boolean;
   /** Một trong bảy mã trạng thái §6. Sai mã là **400**, không phải bị bỏ qua. */
   trangThai?: string;
   /** Một trong bốn mã nguồn giao §3. Sai mã là **400**. */
@@ -207,6 +212,9 @@ function appendTaskFilters(truyVan: URLSearchParams, loc: LocNhiemVu): void {
   // `scope=all` là mặc định của máy chủ và không cần predicate nào, nên tab "Toàn xã" gửi tham
   // số vắng mặt hẳn — ít một tham số là ít một chỗ có thể gõ sai.
   if (loc.phamVi === "mine") truyVan.set("scope", "mine");
+  // `related` carries NO identity either: the server reads the caller's code from the session and
+  // asks identity for their units (`nhiem_vu.go:602-611`). It narrows; it never grants.
+  if (loc.phamVi === "related") truyVan.set("scope", "related");
 
   if (loc.trangThai !== undefined && loc.trangThai !== "") truyVan.set("status", loc.trangThai);
   if (loc.nguonGiao !== undefined && loc.nguonGiao !== "") truyVan.set("source", loc.nguonGiao);
@@ -222,6 +230,8 @@ function appendTaskFilters(truyVan: URLSearchParams, loc: LocNhiemVu): void {
   // `late` CHỈ NHẬN ĐÚNG CHUỖI `true`. Gửi `false` là **400**, không phải "không lọc" — nên ô
   // chưa tích thì tham số vắng mặt hẳn (`errLocTreHanNhiemVuKhongHopLe`).
   if (loc.chiTreHan === true) truyVan.set("late", "true");
+  // Same rule as `late`: ONLY `true` is accepted, an unticked box sends nothing (`nhiem_vu.go:718-726`).
+  if (loc.dueSoon === true) truyVan.set("soon", "true");
 
   // `petitions_get_task_counts["truyVan"]` carries the same filter names; typing against the
   // counts route checks the names against BOTH routes' shared subset, not only the list route.
