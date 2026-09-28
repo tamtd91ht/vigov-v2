@@ -58,6 +58,7 @@
 //	OBJECT_STORAGE_SECRET_KEY           Secret     optional — as above
 //	OBJECT_STORAGE_REGION               ConfigMap  optional — default us-east-1 (see ObjectStorage.Region)
 //	OBJECT_STORAGE_BUCKET_PREFIX        ConfigMap  optional — absent = uploads refused; malformed refused by Load
+//	MALWARE_SCANNER_ADDRESS             ConfigMap  optional — absent = uploads refused (malwarescan.ErrNotConfigured); malformed refused by Load
 //
 // THE TABLE IS HERE AND NOT IN A MANIFEST because the manifests are not in this repository's
 // gift and a classification that lives only in deploy/ is one nobody reading the config layer
@@ -412,6 +413,10 @@ type Config struct {
 	// ObjectStorage is the MinIO/S3 connection of ADR 0052, consumed by core/storage.New. Every
 	// field optional; the reasons are on the type (object_storage.go).
 	ObjectStorage ObjectStorage
+
+	// MalwareScanner is the clamd connection of ADR 0052 §9, consumed by core/malwarescan.New.
+	// Optional; the reasons are on the type (malware_scanner.go).
+	MalwareScanner MalwareScanner
 }
 
 // ThoiHanPhienCongDanMacDinh is CITIZEN_SESSION_TTL when the variable is unset — 30 days, the
@@ -551,8 +556,16 @@ func Load(serviceName string) (Config, error) {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
+	// Malware scanner (ADR 0052 §9): optional like object storage — see MalwareScanner. A
+	// malformed entry is fatal.
+	scannerAddresses, err := ParseMalwareScannerAddresses(os.Getenv("MALWARE_SCANNER_ADDRESS"))
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+
 	cfg := Config{
 		ObjectStorage:                  objectStorage,
+		MalwareScanner:                 MalwareScanner{Addresses: scannerAddresses},
 		TrustedProxies:                 proxy,
 		CitizenCORSAllowedOrigins:      nguonCORS,
 		CitizenSessionBridgeListenAddr: diaChiCau,
@@ -655,6 +668,13 @@ func (c Config) CanhBao() []string {
 	// the clear from the browser to the store.
 	if c.Env != EnvDev && strings.HasPrefix(c.ObjectStorage.PublicEndpoint, "http://") {
 		ra = append(ra, "OBJECT_STORAGE_PUBLIC_ENDPOINT dùng http:// — presigned URL đi qua mạng không mã hoá")
+	}
+	// Storage without a scanner: every upload is refused at complete (ADR 0052 §9, fail closed).
+	// Not an error — the service still serves everything else — but nobody configures storage
+	// meaning "refuse every upload", so it is said at startup rather than at the first citizen.
+	if c.ObjectStorage.Configured() && !c.MalwareScanner.Configured() {
+		ra = append(ra, "OBJECT_STORAGE_* đã cấu hình nhưng MALWARE_SCANNER_ADDRESS trống — "+
+			"mọi lần tải tệp lên sẽ bị từ chối vì không quét được mã độc")
 	}
 	// Only reachable in dev — Load refuses to start anywhere else.
 	if len(c.SessionSigningKeys) == 0 {

@@ -159,6 +159,19 @@ func TestIntegrationUploadPromoteDownloadPurge(t *testing.T) {
 	if _, err := c.ReadHead(ctx, BucketTemp, up, `"not-the-etag"`, SniffBytes); !errors.Is(err, ErrChanged) {
 		t.Errorf("stale etag: %v, want ErrChanged", err)
 	}
+	// Open — the reader the malware scan streams — bound to the same ETag.
+	rc, size, err := c.Open(ctx, BucketTemp, up, st.ETag)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	streamed, err := io.ReadAll(rc)
+	rc.Close()
+	if err != nil || size != int64(len(png)) || !bytes.Equal(streamed, png) {
+		t.Fatalf("Open streamed %d bytes (size %d), err %v", len(streamed), size, err)
+	}
+	if _, _, err := c.Open(ctx, BucketTemp, up, `"not-the-etag"`); !errors.Is(err, ErrChanged) {
+		t.Errorf("Open with stale etag: %v, want ErrChanged", err)
+	}
 	sum, err := c.SHA256(ctx, BucketTemp, up, st.ETag)
 	if err != nil {
 		t.Fatalf("SHA256: %v", err)

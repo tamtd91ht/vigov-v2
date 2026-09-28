@@ -12,7 +12,7 @@
 //
 //	a. service: Key{…}.UploadPath() → PresignUpload            (declared type + size limit)
 //	b. browser: POST straight to the temp bucket
-//	c. service: Stat → ReadHead + SniffMIME → SHA256 → malware scan → Promote(etag)
+//	c. service: Stat → ReadHead + SniffMIME → Open + malwarescan.Scan → SHA256 → Promote(etag)
 //
 // Every step of (c) is bound to the ETag returned by Stat. The presigned POST stays usable for its
 // whole TTL, so without that binding a client could replace the object AFTER it was scanned and
@@ -359,6 +359,53 @@ func (c *Client) SHA256(ctx context.Context, b Bucket, key, ifMatchETag string) 
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
+
+// Open streams an object for reading in place — the malware scan of the complete step reads the
+// temp object through it without buffering (core/malwarescan.Scan takes the reader and the size).
+// The caller must Close the reader.
+//
+// ifMatchETag is REQUIRED, like Promote's: the bytes read here are vouched for (scanned) and then
+// promoted, so they must be the bytes of the ETag the caller inspected. A replaced object fails
+// with ErrChanged, a missing one with ErrNotFound — both before any byte is returned, because the
+// request is made here rather than on the first Read. Errors during Read are mapped the same way.
+func (c *Client) Open(ctx context.Context, b Bucket, key, ifMatchETag string) (io.ReadCloser, int64, error) {
+	if ifMatchETag == "" {
+		return nil, 0, fmt.Errorf("%w: ifMatchETag is required", ErrInvalidArgument)
+	}
+	name, _, err := c.checkKey(b, key)
+	if err != nil {
+		return nil, 0, err
+	}
+	opts := minio.GetObjectOptions{}
+	if err := opts.SetMatchETag(ifMatchETag); err != nil {
+		return nil, 0, fmt.Errorf("storage: if-match: %w", err)
+	}
+	obj, err := c.api.GetObject(ctx, name, key, opts)
+	if err != nil {
+		return nil, 0, mapErr("open", err)
+	}
+	// minio's GetObject is lazy; Stat sends the conditional GET now, so the precondition and
+	// existence are settled before the caller starts streaming.
+	st, err := obj.Stat()
+	if err != nil {
+		_ = obj.Close()
+		return nil, 0, mapErr("open", err)
+	}
+	return &objectReader{obj: obj}, st.Size, nil
+}
+
+// objectReader maps read errors to this package's sentinels, like every other call here.
+type objectReader struct{ obj *minio.Object }
+
+func (r *objectReader) Read(p []byte) (int, error) {
+	n, err := r.obj.Read(p)
+	if err != nil && err != io.EOF {
+		return n, mapErr("read", err)
+	}
+	return n, err
+}
+
+func (r *objectReader) Close() error { return r.obj.Close() }
 
 // Promoted describes the object Promote wrote.
 type Promoted struct {

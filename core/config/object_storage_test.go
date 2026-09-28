@@ -20,6 +20,9 @@ var objectStorageVars = []string{
 	"OBJECT_STORAGE_ENDPOINT", "OBJECT_STORAGE_PUBLIC_ENDPOINT", "OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL",
 	"OBJECT_STORAGE_ACCESS_KEY", "OBJECT_STORAGE_SECRET_KEY", "OBJECT_STORAGE_REGION",
 	"OBJECT_STORAGE_BUCKET_PREFIX",
+	// Not object storage, but CanhBao pairs the two (malware_scanner.go): forced empty too so the
+	// machine's own environment cannot decide whether a warning appears.
+	"MALWARE_SCANNER_ADDRESS",
 }
 
 // withObjectStorage sets the baseline plus the given object-storage values; every other
@@ -44,6 +47,8 @@ func fullObjectStorage() map[string]string {
 		"OBJECT_STORAGE_ACCESS_KEY":            fakeAccessKey,
 		"OBJECT_STORAGE_SECRET_KEY":            fakeSecretKey + "\n",
 		"OBJECT_STORAGE_BUCKET_PREFIX":         "vigov-test",
+		// A complete upload configuration includes the scanner (ADR 0052 §9).
+		"MALWARE_SCANNER_ADDRESS": "clamd.internal.example:3310",
 	}
 }
 
