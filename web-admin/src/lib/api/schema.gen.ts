@@ -5,6 +5,24 @@
 //
 // Hợp đồng: ViGov — REST API cho web quản trị v1
 
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export type audit_EntryView = {
+  "at": string;
+  "actor_kind": string;
+  "actor_code": string;
+  "actor_ip": string;
+  "action": string;
+  "subject": string;
+  "delta": JsonValue;
+};
+
 export type comms_createMapFieldSchemaIn = {
   "asset_type_code": string;
   "field_code": string;
@@ -521,6 +539,7 @@ export type finance_danhSachDuAnRa = {
   "year": number;
   "delay_threshold": number;
   "delay_threshold_source": string;
+  "scope_notice"?: string;
 };
 
 export type finance_danhSachHangMucRa = {
@@ -601,6 +620,7 @@ export type finance_duAnRa = {
   "disbursement_deadline": string;
   "delay_threshold": number;
   "delay_threshold_source": string;
+  "scope_notice"?: string;
 };
 
 export type finance_ghiDotVao = {
@@ -656,6 +676,10 @@ export type finance_phanBoVao = {
   "funding_source_id": string;
   /** đồng */
   "amount": number;
+};
+
+export type finance_rewordSystemMessageIn = {
+  "text": string;
 };
 
 export type finance_soTienRa = {
@@ -722,6 +746,22 @@ export type finance_suaHangMucVao = {
   "code"?: string | null;
   "source"?: string | null;
   "tier"?: number | null;
+};
+
+export type finance_systemMessageListOut = {
+  "items": Array<finance_systemMessageOut>;
+};
+
+export type finance_systemMessageOut = {
+  /** not "key": apidoc refuses credential-looking response fields (tools/apidoc/schema.go:257) */
+  "code": string;
+  "description": string;
+  "default_text": string;
+  "current_text": string;
+  "overridden": boolean;
+  "updated_at"?: string | null;
+  /** staff business code (rule 6, inv 8) */
+  "updated_by"?: string;
 };
 
 export type finance_taoBangVao = {
@@ -1354,6 +1394,13 @@ export type identity_xoaLichVao = {
   "reason": string;
 };
 
+export type page_Result_audit_EntryView = {
+  "items": Array<audit_EntryView>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
 export type page_Result_comms_noiDungRa = {
   "items": Array<comms_noiDungRa>;
   /** empty when has_more is false */
@@ -1777,6 +1824,10 @@ export type petitions_ratingInput = {
   "comment"?: string;
 };
 
+export type petitions_rewordSystemMessageIn = {
+  "text": string;
+};
+
 export type petitions_suaBienBanVao = {
   "title"?: string | null;
   "held_on"?: string | null;
@@ -1835,6 +1886,21 @@ export type petitions_suaTrangThaiNhiemVuVao = {
   "order"?: number | null;
   "code"?: string | null;
   "active"?: boolean | null;
+};
+
+export type petitions_systemMessageListOut = {
+  "items": Array<petitions_systemMessageOut>;
+};
+
+export type petitions_systemMessageOut = {
+  "code": string;
+  "description": string;
+  "default_text": string;
+  "current_text": string;
+  "overridden": boolean;
+  "updated_at"?: string | null;
+  /** staff business code (rule 6, inv 8) */
+  "updated_by"?: string;
 };
 
 export type petitions_tachKetLuanVao = {
@@ -2624,6 +2690,31 @@ export type petitions_post_citizen_reports_by_maTraCuu_status = {
   };
 };
 
+/** GET /api/v1/comms-audit-entries — Nhật ký hệ thống của phân hệ Thông tin – truyền thông — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng */
+export type comms_get_comms_audit_entries = {
+  duongDan: "/api/v1/comms-audit-entries";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "action"?: string;
+    "actor"?: string;
+    "cursor"?: string;
+    "from"?: string;
+    "limit"?: string;
+    "subject"?: string;
+    "to"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_audit_EntryView;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/commune-news — Tin đã đăng của xã trên Zalo Mini App, theo tên miền của xã — mới nhất trước, văn bản thuần, phân trang con trỏ */
 export type comms_get_commune_news = {
   duongDan: "/api/v1/commune-news";
@@ -3032,6 +3123,137 @@ export type documents_delete_document_types_by_id = {
     403: httpx_Error;
     404: httpx_Error;
     409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/documents-audit-entries — Nhật ký hệ thống của phân hệ Văn bản — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng */
+export type documents_get_documents_audit_entries = {
+  duongDan: "/api/v1/documents-audit-entries";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "action"?: string;
+    "actor"?: string;
+    "cursor"?: string;
+    "from"?: string;
+    "limit"?: string;
+    "subject"?: string;
+    "to"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_audit_EntryView;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/finance-audit-entries — Nhật ký hệ thống của phân hệ Tài chính — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng */
+export type finance_get_finance_audit_entries = {
+  duongDan: "/api/v1/finance-audit-entries";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "action"?: string;
+    "actor"?: string;
+    "cursor"?: string;
+    "from"?: string;
+    "limit"?: string;
+    "subject"?: string;
+    "to"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_audit_EntryView;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/finance-system-messages — Lời hệ thống của phân hệ Tài chính: câu mặc định, câu xã đang dùng và ai sửa lần cuối */
+export type finance_get_finance_system_messages = {
+  duongDan: "/api/v1/finance-system-messages";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: finance_systemMessageListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/finance-system-messages/{code}/override — Xã sửa lời một câu hệ thống của phân hệ Tài chính */
+export type finance_put_finance_system_messages_by_code_override = {
+  duongDan: "/api/v1/finance-system-messages/{code}/override";
+  phuongThuc: "PUT";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: finance_rewordSystemMessageIn;
+  phanHoi: {
+    200: finance_systemMessageOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/finance-system-messages/{code}/override — Khôi phục câu mặc định của phần mềm cho một câu hệ thống của phân hệ Tài chính */
+export type finance_delete_finance_system_messages_by_code_override = {
+  duongDan: "/api/v1/finance-system-messages/{code}/override";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    204: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/identity-audit-entries — Nhật ký hệ thống của phân hệ Tổ chức & tài khoản — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng */
+export type identity_get_identity_audit_entries = {
+  duongDan: "/api/v1/identity-audit-entries";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "action"?: string;
+    "actor"?: string;
+    "cursor"?: string;
+    "from"?: string;
+    "limit"?: string;
+    "subject"?: string;
+    "to"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_audit_EntryView;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
     500: httpx_Error;
   };
 };
@@ -3467,7 +3689,7 @@ export type comms_get_map_field_schemas = {
   thamSo: {
   };
   truyVan: {
-    "asset_type_code": string;
+    "asset_type_code"?: string;
   };
   than: never;
   phanHoi: {
@@ -4149,6 +4371,87 @@ export type petitions_get_overdue_tasks = {
     403: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/petitions-audit-entries — Nhật ký hệ thống của phân hệ Tiếp dân – Nhiệm vụ — vết thao tác của xã, mới nhất trước, lọc theo thời gian · người · động từ · đối tượng */
+export type petitions_get_petitions_audit_entries = {
+  duongDan: "/api/v1/petitions-audit-entries";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "action"?: string;
+    "actor"?: string;
+    "cursor"?: string;
+    "from"?: string;
+    "limit"?: string;
+    "subject"?: string;
+    "to"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_audit_EntryView;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/petitions-system-messages — Lời hệ thống của phân hệ Tiếp dân – Nhiệm vụ: câu mặc định, câu xã đang dùng và ai sửa lần cuối */
+export type petitions_get_petitions_system_messages = {
+  duongDan: "/api/v1/petitions-system-messages";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_systemMessageListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/petitions-system-messages/{code}/override — Xã sửa lời một câu hệ thống của phân hệ Tiếp dân – Nhiệm vụ */
+export type petitions_put_petitions_system_messages_by_code_override = {
+  duongDan: "/api/v1/petitions-system-messages/{code}/override";
+  phuongThuc: "PUT";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: petitions_rewordSystemMessageIn;
+  phanHoi: {
+    200: petitions_systemMessageOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/petitions-system-messages/{code}/override — Khôi phục câu mặc định của phần mềm cho một câu hệ thống của phân hệ Tiếp dân – Nhiệm vụ */
+export type petitions_delete_petitions_system_messages_by_code_override = {
+  duongDan: "/api/v1/petitions-system-messages/{code}/override";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "code": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    204: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
   };
 };
 

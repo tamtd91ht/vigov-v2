@@ -40,8 +40,10 @@ afterEach(() => {
 });
 
 describe("tab nào của màn Cấu hình được hiện", () => {
-  it("đủ bốn khoá cổng → tám tab, đúng thứ tự và nhãn của §0", async () => {
-    const phien = await phienVoi(phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup"]));
+  it("đủ năm khoá cổng → mười tab, đúng thứ tự và nhãn của §0, Nhật ký hệ thống cuối", async () => {
+    const phien = await phienVoi(
+      phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.audit"]),
+    );
     const hien = cacTabHien(TAB_CAU_HINH, phien);
     expect(nhan(hien)).toEqual([
       "Sơ đồ tổ chức",
@@ -50,8 +52,10 @@ describe("tab nào của màn Cấu hình được hiện", () => {
       "Phân quyền",
       "Danh mục",
       "Trường bản đồ",
+      "Lời hệ thống",
       "Thời hạn xử lý",
       "Máy chủ thư",
+      "Nhật ký hệ thống",
     ]);
     expect(coThanhTab(phien, hien.length)).toBe(true);
   });
@@ -69,6 +73,26 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toContain("Máy chủ thư");
     const denied = await phienVoi(phanHoiPhien(["asset.read", "admin.org", "admin.sla"]));
     expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Máy chủ thư");
+  });
+
+  it("Lời hệ thống đi theo `admin.lookup` — khoá của cả sáu tuyến system-messages", async () => {
+    const holder = await phienVoi(phanHoiPhien(["admin.lookup"]));
+    expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toContain("Lời hệ thống");
+    const denied = await phienVoi(phanHoiPhien(["admin.audit", "admin.org", "admin.sla", "asset.read"]));
+    expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Lời hệ thống");
+  });
+
+  it("Nhật ký hệ thống đi theo `admin.audit`, và chỉ khoá ấy — ca bị từ chối", async () => {
+    const holder = await phienVoi(phanHoiPhien(["admin.audit"]));
+    const shown = nhan(cacTabHien(TAB_CAU_HINH, holder));
+    expect(shown).toContain("Nhật ký hệ thống");
+    // `admin.audit` không mở tab nào khác có cổng (luật 5, bất biến 3b).
+    expect(shown).not.toContain("Người dùng");
+    expect(shown).not.toContain("Lời hệ thống");
+    const denied = await phienVoi(
+      phanHoiPhien(["admin.user", "admin.role", "admin.lookup", "admin.audits", "ADMIN.AUDIT"]),
+    );
+    expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Nhật ký hệ thống");
   });
 
   it("thiếu mọi khoá cổng → bốn tab; Người dùng, Phân quyền, Trường bản đồ, Máy chủ thư ẩn", async () => {
@@ -110,6 +134,8 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(hien).not.toContain("Phân quyền");
     expect(hien).not.toContain("Trường bản đồ");
     expect(hien).not.toContain("Máy chủ thư");
+    expect(hien).not.toContain("Lời hệ thống");
+    expect(hien).not.toContain("Nhật ký hệ thống");
   });
 
   it("chưa đọc xong phiên → tab có cổng chưa hiện, và CHƯA dựng thanh", () => {

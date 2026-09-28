@@ -405,6 +405,19 @@ export const REPORT_READ_PERMISSION = "report.read";
 export const ASSET_READ_PERMISSION = "asset.read";
 
 /**
+ * `admin.audit` — "Xem nhật ký hệ thống" (`service-identity/migrations/0001_init.sql:280`). The key
+ * of all five `GET /api/v1/<service>-audit-entries` routes (`x-vigov-permission` in
+ * `kb/20-contracts/openapi.json`, ADR 0054 §1), and so the gate of the whole "Nhật ký hệ thống" tab:
+ * without it every read answers 403 and the tab has nothing to show.
+ *
+ * NOT implied by any other `admin.*` key, and implies none (rule 5, invariant 3b) — reading the
+ * trail of who did what is not managing accounts, and managing accounts is not reading the trail.
+ *
+ * HIDING IS CONVENIENCE, NOT PROTECTION — each service checks this key on every call (rule 5, #1).
+ */
+export const AUDIT_READ_PERMISSION = "admin.audit";
+
+/**
  * `feedback.unmask` — "Xem đầy đủ họ tên và số điện thoại người gửi"
  * (`service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql:59`). No screen gates on it
  * (the server decides what it returns); it is named here only because the Phân quyền tab warns when

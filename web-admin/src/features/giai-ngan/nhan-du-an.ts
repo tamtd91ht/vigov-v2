@@ -181,15 +181,8 @@ export function nhanNguongCham(phanVan: number): string {
   return `Ngưỡng cảnh báo chậm: ${DINH_DANG_PHAN_VAN.format(phanVan / 100)} điểm`;
 }
 
-/**
- * Banner BẮT BUỘC hiện ở đầu màn (`06-giai-ngan §1`), nguyên văn.
- *
- * Không phải trang trí và không được rút gọn: nó là câu xã trả lời khi ai đó đối chiếu số trên
- * màn hình này với sổ sách kế toán và thấy lệch.
- */
-export const CANH_BAO_KHONG_PHAI_KE_TOAN =
-  "ViGov là công cụ theo dõi và điều hành, không phải phần mềm kế toán. Số liệu phục vụ chỉ " +
-  "đạo, không thay thế sổ sách kế toán và không đối chiếu với Kho bạc.";
+// Banner BẮT BUỘC của §1 ("không phải phần mềm kế toán") KHÔNG còn là hằng ở đây từ 29/09/2026:
+// câu ấy là `budget.scope_notice` do máy chủ gửi (`scope_notice`), xã sửa được — xem `scope-notice.tsx`.
 
 /** Trạng thái rỗng: năm ngân sách chưa có dự án nào. Bình thường, không phải lỗi. */
 export function nhanNamRong(nam: number): string {

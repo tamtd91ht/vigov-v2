@@ -14,7 +14,6 @@ import { KhoiChungTu } from "./chung-tu-du-an";
 import { KhoiSuaXoaDuAn } from "./ghi-du-an";
 import { KhoiChuaDungGhi } from "./khoi-chua-dung-ghi";
 import {
-  CANH_BAO_KHONG_PHAI_KE_TOAN,
   lopTienDo,
   nhanNgay,
   nhanTien,
@@ -22,6 +21,7 @@ import {
   nhanTyLeGiaiNgan,
   tienDoDuAn,
 } from "./nhan-du-an";
+import { ScopeNotice } from "./scope-notice";
 
 /**
  * Trang chi tiết một dự án — `docs/ui-ux/06-giai-ngan.md §8`, cộng `[✎ Sửa dự án]`, `🗑 Gỡ dự án`
@@ -103,7 +103,8 @@ export function ChiTietDuAn({ id }: { id: string }) {
         <Link href="/giai-ngan">← Theo dõi giải ngân</Link>
       </p>
       <h2 id="tieu-de-chi-tiet-du-an">Chi tiết dự án</h2>
-      <p className="canh-bao-pham-vi">{CANH_BAO_KHONG_PHAI_KE_TOAN}</p>
+      {/* Câu của máy chủ trên chính dự án (`scope_notice`), chỉ khi dự án đã về — `scope-notice.tsx`. */}
+      {trangThai.pha === "xong" && <ScopeNotice text={trangThai.duAn.scope_notice} />}
 
       {/* DỰ ÁN VỪA BỊ GỠ THÌ KHÔNG DỰNG LẠI NÓ. Máy chủ trả 204 không thân, và đọc lại sẽ ra 404 —
           một câu "Không tìm thấy dự án" ngay sau một thao tác thành công đọc như một lỗi. */}

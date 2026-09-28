@@ -5,9 +5,10 @@
  * được MỘT tab thì KHÔNG hiện thanh, nội dung tab ấy hiện thẳng. Một nút tab đứng một mình không
  * chọn được gì, chỉ chiếm chỗ.
  *
- * TAB NÀO HIỆN ĐI ĐÚNG THEO CỔNG ĐÃ CÓ, không theo một luật mới đặt ở đây. Bốn tab có cổng —
+ * TAB NÀO HIỆN ĐI ĐÚNG THEO CỔNG ĐÃ CÓ, không theo một luật mới đặt ở đây. Sáu tab có cổng —
  * Người dùng (`admin.user`), Phân quyền (`admin.role`), Trường bản đồ (`asset.read`, khoá tuyến ĐỌC
- * `GET /map-field-schemas`) và Máy chủ thư (`admin.lookup`, khoá cả ba tuyến mail-settings) — gọi
+ * `GET /map-field-schemas`), Lời hệ thống và Máy chủ thư (`admin.lookup`, khoá mọi tuyến của hai
+ * tab ấy, cả tuyến đọc) và Nhật ký hệ thống (`admin.audit`, khoá năm tuyến `*-audit-entries`) — gọi
  * đúng hàm của `quyen-tab.ts` mà chính tab ấy gọi, để chỉ có MỘT nguồn quyết định. Bốn tab kia KHÔNG
  * có cổng (`cong: null`) vì tuyến đọc của chúng mở cho mọi tài khoản đã đăng nhập; riêng `GET /sla`
  * thì máy chủ tự trả 403 và tab Thời hạn xử lý hiện nguyên câu ấy. Thêm cổng cho bốn tab này là để
@@ -20,10 +21,12 @@ import type { KetQua } from "@/lib/api/goi";
 import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen";
 
 import {
+  auditLogTabDecision,
   mailServerTabDecision,
   mapFieldTabDecision,
   quyetDinhTabNguoiDung,
   quyetDinhTabPhanQuyen,
+  systemMessagesTabDecision,
   type QuyetDinhTab,
 } from "./quyen-tab";
 
@@ -34,8 +37,10 @@ export type MaTabCauHinh =
   | "phan-quyen"
   | "danh-muc"
   | "truong-ban-do"
+  | "loi-he-thong"
   | "thoi-han-xu-ly"
-  | "may-chu-thu";
+  | "may-chu-thu"
+  | "nhat-ky-he-thong";
 
 /** `null` là chưa đọc xong phiên — cùng ba trạng thái với `PhienDaDoc` của `PhienProvider`. */
 export type PhienDoc = KetQua<identity_phienHienTaiRa> | null;
@@ -48,9 +53,11 @@ export type MoTaTab<M extends string = MaTabCauHinh> = {
 };
 
 /**
- * Tám tab đã dựng, đúng thứ tự và đúng nhãn của §0. Hai tab chưa dựng (Lời hệ thống, Tự động hoá)
- * KHÔNG có nút ở đây — một nút bấm vào không ra gì là một lời hứa suông; chúng nằm ở `KhoiChuaDung`
- * kèm lý do.
+ * Mười tab đã dựng. Chín tab đầu đúng thứ tự và đúng nhãn của §0; tab chưa dựng (Tự động hoá) KHÔNG
+ * có nút ở đây — một nút bấm vào không ra gì là một lời hứa suông; nó nằm ở `KhoiChuaDung` kèm lý do.
+ *
+ * "Nhật ký hệ thống" không có trong thanh tab của §0 — đặc tả chỉ nói quyền `admin.audit` để xem
+ * (§12.1) — nên nó đứng CUỐI, sau mọi tab của §0 (ADR 0054 §6: dựng cùng lượt với khoá menu).
  */
 export const TAB_CAU_HINH: readonly MoTaTab[] = [
   { ma: "so-do-to-chuc", nhan: "Sơ đồ tổ chức", cong: null },
@@ -59,8 +66,10 @@ export const TAB_CAU_HINH: readonly MoTaTab[] = [
   { ma: "phan-quyen", nhan: "Phân quyền", cong: quyetDinhTabPhanQuyen },
   { ma: "danh-muc", nhan: "Danh mục", cong: null },
   { ma: "truong-ban-do", nhan: "Trường bản đồ", cong: mapFieldTabDecision },
+  { ma: "loi-he-thong", nhan: "Lời hệ thống", cong: systemMessagesTabDecision },
   { ma: "thoi-han-xu-ly", nhan: "Thời hạn xử lý", cong: null },
   { ma: "may-chu-thu", nhan: "Máy chủ thư", cong: mailServerTabDecision },
+  { ma: "nhat-ky-he-thong", nhan: "Nhật ký hệ thống", cong: auditLogTabDecision },
 ];
 
 /**

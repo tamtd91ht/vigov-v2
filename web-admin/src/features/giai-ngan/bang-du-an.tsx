@@ -15,7 +15,6 @@ import { coQuyen, QUYEN_GHI_NGAN_SACH } from "@/lib/quyen";
 import { KhoiThemDuAn } from "./ghi-du-an";
 import { KhoiChuaDungGhi } from "./khoi-chua-dung-ghi";
 import {
-  CANH_BAO_KHONG_PHAI_KE_TOAN,
   GHI_CHU_CHI_XEM_GIAI_NGAN,
   hangMucDuAn,
   lopHangMuc,
@@ -29,6 +28,7 @@ import {
   nhanTyLeGiaiNgan,
   tienDoDuAn,
 } from "./nhan-du-an";
+import { ScopeNotice } from "./scope-notice";
 
 /**
  * Bảng dự án đầu tư của một năm ngân sách — `docs/ui-ux/06-giai-ngan.md §7`, cộng nút `+ Thêm dự
@@ -137,9 +137,9 @@ export function BangDuAn() {
     <section className="man-giai-ngan" aria-labelledby="tieu-de-du-an">
       <h2 id="tieu-de-du-an">Dự án đầu tư</h2>
 
-      {/* BANNER BẮT BUỘC (§1), nguyên văn. Không phải `role="alert"`: nó luôn ở đó, không phải
-          một sự kiện vừa xảy ra. */}
-      <p className="canh-bao-pham-vi">{CANH_BAO_KHONG_PHAI_KE_TOAN}</p>
+      {/* BANNER BẮT BUỘC (§1) — câu của MÁY CHỦ (`scope_notice`, xã sửa được ở Lời hệ thống), nên nó
+          chỉ hiện khi danh sách đã về. Không câu dự phòng ở client: xem `scope-notice.tsx`. */}
+      {trangThai.pha === "xong" && <ScopeNotice text={trangThai.duLieu.scope_notice} />}
       <p className="ghi-chu">{GHI_CHU_CHI_XEM_GIAI_NGAN}</p>
 
       <KhoiChuaDungGhi />

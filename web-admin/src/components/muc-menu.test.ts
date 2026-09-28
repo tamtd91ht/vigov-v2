@@ -64,13 +64,23 @@ describe("locMenu", () => {
     expect(tenMuc(locMenu(NHOM_MENU, null))).toEqual(tenMuc(locMenu(NHOM_MENU, [])));
   });
 
-  it("khoá cùng nhóm `admin.*` mà KHÔNG canh tab nào (`admin.audit`) không mở mục nào", () => {
+  it("khoá cùng nhóm `admin.*` mà KHÔNG canh tab nào (`admin.user.delete`) không mở mục nào", () => {
     // Một phép khớp tiền tố `admin.*` sẽ mở luôn Cấu hình và Danh bạ — đúng điều luật 5 bất biến
     // 3b cấm, và `coQuyen` so chuỗi chính xác để chặn.
-    const ten = tenMuc(locMenu(NHOM_MENU, ["admin.audit", "admin.user.delete"]));
+    //
+    // SỬA CÓ CHỦ Ý 29/09/2026: ca này từng dùng `admin.audit` làm "khoá không canh tab nào". Tab Nhật
+    // ký hệ thống (ADR 0054) nay canh đúng khoá ấy, nên nó mở mục Cấu hình — và CHỈ mục ấy (ca dưới).
+    const ten = tenMuc(locMenu(NHOM_MENU, ["admin.user.delete", "admin.users", "admin"]));
     expect(ten).not.toContain("Cấu hình");
     expect(ten).not.toContain("Danh bạ cán bộ");
     expect(ten).toHaveLength(3);
+  });
+
+  it("chỉ có `admin.audit`: THẤY mục Cấu hình (tab Nhật ký hệ thống), không thấy Danh bạ", () => {
+    const names = tenMuc(locMenu(NHOM_MENU, ["admin.audit"]));
+    expect(names).toContain("Cấu hình");
+    expect(names).not.toContain("Danh bạ cán bộ");
+    expect(names).toHaveLength(4);
   });
 
   it("chỉ có `document.read`: THẤY mục Văn bản & Đơn thư", () => {
@@ -120,7 +130,7 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
     expect(ten).toHaveLength(4);
   });
 
-  it.each(["admin.org", "admin.user", "admin.role", "admin.lookup", "admin.sla"])(
+  it.each(["admin.org", "admin.user", "admin.role", "admin.lookup", "admin.sla", "admin.audit"])(
     "chỉ có `%s`: thấy mục Cấu hình",
     (khoa) => {
       expect(tenMuc(locMenu(NHOM_MENU, [khoa]))).toContain("Cấu hình");
@@ -129,7 +139,7 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
 
   it("không khoá nào trong tập ấy: KHÔNG thấy mục Cấu hình — ca bị từ chối", () => {
     const ten = tenMuc(
-      locMenu(NHOM_MENU, ["document.read", "task.read", "feedback.read", "admin.audit"]),
+      locMenu(NHOM_MENU, ["document.read", "task.read", "feedback.read", "admin.user.delete"]),
     );
     expect(ten).not.toContain("Cấu hình");
   });
@@ -151,7 +161,11 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
   });
 
   it("tập khoá liệt kê từng khoá, không chứa khoá không canh tab nào", () => {
-    expect(KHOA_MO_CAU_HINH).not.toContain("admin.audit");
+    // SỬA CÓ CHỦ Ý 29/09/2026 (ADR 0054 §6): ca này từng ghim `admin.audit` VẮNG, vì khi ấy chưa tab
+    // nào canh nó. Tab Nhật ký hệ thống nay canh đúng khoá ấy, nên nó phải CÓ MẶT — vắng thì cán bộ
+    // chỉ giữ `admin.audit` không tìm thấy lối vào tab của mình. `admin.user.delete` vẫn vắng: nút
+    // của nó ở `/danh-ba`, không ở đây.
+    expect(KHOA_MO_CAU_HINH).toContain("admin.audit");
     expect(KHOA_MO_CAU_HINH).not.toContain("admin.user.delete");
   });
 });

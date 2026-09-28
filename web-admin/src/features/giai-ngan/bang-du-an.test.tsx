@@ -5,7 +5,12 @@ import type { finance_danhSachDuAnRa, finance_duAnRa } from "@/lib/api/schema.ge
 
 import { BangDanhSach } from "./bang-du-an";
 import { ThongTinDuAn } from "./chi-tiet-du-an";
-import { CANH_BAO_KHONG_PHAI_KE_TOAN, nhanTyLeGiaiNgan } from "./nhan-du-an";
+import * as projectLabels from "./nhan-du-an";
+import { nhanTyLeGiaiNgan } from "./nhan-du-an";
+import { ScopeNotice } from "./scope-notice";
+
+/** A commune-reworded `budget.scope_notice` — deliberately NOT the software's default wording. */
+const COMMUNE_WORDING = "Số liệu trên màn này chỉ để điều hành, không thay sổ kế toán của xã.";
 
 /**
  * Canh những QUYẾT ĐỊNH CÓ RA TỚI TRANG hay không — bổ cho các ca kiểm module thuần, vốn chỉ canh
@@ -108,8 +113,8 @@ describe("trang chi tiết dự án kết xuất ra trang", () => {
   it("banner 'không phải phần mềm kế toán' KHÔNG nằm trong khối chi tiết — nó ở đầu màn", () => {
     // Canh đúng chỗ: khối chi tiết chỉ nói về dự án. Banner là phạm vi của cả màn hình và được
     // dựng ở `ChiTietDuAn`, không lặp lại bên trong từng khối.
-    const html = renderToStaticMarkup(<ThongTinDuAn duAn={duAn()} />);
-    expect(html).not.toContain(CANH_BAO_KHONG_PHAI_KE_TOAN);
+    const html = renderToStaticMarkup(<ThongTinDuAn duAn={duAn({ scope_notice: COMMUNE_WORDING })} />);
+    expect(html).not.toContain(COMMUNE_WORDING);
   });
 
   it("hai mốc ngày đứng RIÊNG: thời hạn giải ngân không thay được ngày hoàn thành", () => {
@@ -139,5 +144,29 @@ describe("trang chi tiết dự án kết xuất ra trang", () => {
 
     expect(html).not.toContain("01JBOPHAN");
     expect(html).not.toContain("01JCANBO");
+  });
+});
+
+describe("banner phạm vi (`scope_notice`) — câu của máy chủ, không câu của web", () => {
+  it("hiện NGUYÊN VĂN câu máy chủ gửi, kể cả khi xã đã sửa lời", () => {
+    const html = renderToStaticMarkup(<ScopeNotice text={COMMUNE_WORDING} />);
+    expect(html).toBe(`<p class="canh-bao-pham-vi">${COMMUNE_WORDING}</p>`);
+  });
+
+  it("vắng hoặc trống thì KHÔNG hiện gì — không tự bịa câu dự phòng", () => {
+    expect(renderToStaticMarkup(<ScopeNotice text={undefined} />)).toBe("");
+    expect(renderToStaticMarkup(<ScopeNotice text="   " />)).toBe("");
+  });
+
+  it("không còn hằng câu banner ở client — bản sao thứ hai của lời hệ thống `budget.scope_notice`", () => {
+    // Hằng cũ `CANH_BAO_KHONG_PHAI_KE_TOAN` giữ lời mặc định; xã sửa lời thì màn này vẫn hiện câu cũ.
+    expect(Object.keys(projectLabels)).not.toContain("CANH_BAO_KHONG_PHAI_KE_TOAN");
+  });
+
+  it("`scope_notice` là trường của hợp đồng, ở cả danh sách lẫn từng dự án", () => {
+    const list: finance_danhSachDuAnRa = { ...danhSach([]), scope_notice: COMMUNE_WORDING };
+    const project: finance_duAnRa = duAn({ scope_notice: COMMUNE_WORDING });
+    expect(renderToStaticMarkup(<ScopeNotice text={list.scope_notice} />)).toContain(COMMUNE_WORDING);
+    expect(renderToStaticMarkup(<ScopeNotice text={project.scope_notice} />)).toContain(COMMUNE_WORDING);
   });
 });

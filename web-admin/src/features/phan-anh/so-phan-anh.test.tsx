@@ -891,7 +891,8 @@ describe("drawer — moderation buttons (§8.3), gated by `feedback.assign`", ()
       phieu({ field: "can-bo", field_label: "", publication_status: "an" }),
     );
     expect(html).not.toContain(NUT_CONG_KHAI);
-    expect(html).toContain("Phản ánh về tác phong cán bộ không bao giờ được hiển thị công khai.");
+    // The box's pre-action hint (no publish button is offered), worded as the message's default.
+    expect(html).toContain("Phản ánh về thái độ, tác phong cán bộ không được hiển thị công khai.");
   });
 
   it("no write path passed (default): read-only, whatever the permissions", () => {
@@ -903,7 +904,9 @@ describe("drawer — moderation buttons (§8.3), gated by `feedback.assign`", ()
   });
 
   it("409 `never_public`: the server's sentence shows in the drawer's alert line, verbatim", () => {
-    const cau = "Phản ánh về tác phong cán bộ không bao giờ được hiển thị công khai.";
+    // A commune-reworded `feedback.never_public` — NOT the default — so the test proves the line
+    // shows what the server sent, not a sentence the web keeps.
+    const cau = "Xã không công khai phản ánh liên quan đến cán bộ, công chức.";
     const html = veChiTietVoiCongKhai(congThaoTac(false, true, false), phieu(), cau);
     expect(html).toContain(`<p class="thong-bao-loi" role="alert">${cau}</p>`);
   });

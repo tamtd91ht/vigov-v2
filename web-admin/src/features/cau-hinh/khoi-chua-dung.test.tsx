@@ -50,10 +50,20 @@ describe("khối phần chưa dựng của màn Cấu hình", () => {
     expect(muc.viSao).toMatch(/chỉ nhập được Sơ đồ tổ chức/);
   });
 
-  it("ba mục của các thẻ việc khác vẫn còn: Lời hệ thống, Tự động hoá, Nhật ký hệ thống", () => {
-    for (const re of [/Lời hệ thống/, /Tự động hoá/, /nhật ký hệ thống/i]) {
-      expect(PHAN_CHUA_DUNG.some((p) => re.test(p.ten))).toBe(true);
-    }
+  it("còn Tự động hoá; Lời hệ thống chỉ còn 32 câu `report.*`", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => /Tự động hoá/.test(p.ten))).toBe(true);
+    const messageItems = PHAN_CHUA_DUNG.filter((p) => /Lời hệ thống/.test(p.ten));
+    expect(messageItems).toHaveLength(1);
+    // Tab Lời hệ thống đã dựng cho Phản ánh và Thu – Chi: mục còn lại chỉ nói về nhóm Báo cáo, và
+    // lý do là chủ sở hữu chưa chốt — không phải "chưa có tab".
+    expect(messageItems[0]!.ten).toMatch(/report\.\*/);
+    expect(messageItems[0]!.ten).toMatch(/32/);
+    expect(messageItems[0]!.viSao).toMatch(/ADR 0024/);
+    expect(messageItems[0]!.ten).not.toMatch(/^Tab Lời hệ thống/);
+  });
+
+  it("không còn mục Xem nhật ký hệ thống — tab đã dựng (ADR 0054)", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => /nhật ký hệ thống/i.test(`${p.ten} ${p.viSao}`))).toBe(false);
   });
 
   it("Danh mục: không còn mục nói Loại đơn vị dân cư / Khối nhiệm vụ chưa ghi được — đã dựng", () => {

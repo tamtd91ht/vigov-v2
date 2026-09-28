@@ -756,8 +756,10 @@ describe("kiểm duyệt công khai — PUT …/publication", () => {
     expect(JSON.parse(String(gia.mock.calls[0]?.[1]?.body))).toEqual({ status: "an" });
   });
 
-  it("409 `never_public`: the server's fixed sentence reaches the screen VERBATIM", async () => {
-    const cau = "Phản ánh về tác phong cán bộ không bao giờ được hiển thị công khai.";
+  it("409 `never_public`: the commune's configured sentence reaches the screen VERBATIM", async () => {
+    // `feedback.never_public` is a system message the commune may reword; the server sends the
+    // commune's sentence. A reworded one here, so no client copy of the default could pass this.
+    const cau = "Xã không công khai phản ánh liên quan đến cán bộ, công chức.";
     batPut(409, { code: "never_public", message: cau, trace_id: "01JTRACE" });
     const kq = await setPetitionPublication("PA-2026-0021", "cong-khai");
     expect(kq.ok).toBe(false);

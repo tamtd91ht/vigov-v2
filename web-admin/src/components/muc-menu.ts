@@ -1,5 +1,6 @@
 import { coQuyen } from "@/lib/quyen";
 import {
+  AUDIT_READ_PERMISSION,
   QUYEN_CAU_HINH_THOI_HAN,
   QUYEN_PHAN_QUYEN,
   QUYEN_QUAN_LY_DANH_MUC,
@@ -46,9 +47,11 @@ export type MucMenu = {
  * không tìm thấy lối vào tab Thời hạn xử lý — mà bảng thời hạn rỗng là xã không nhận được phản ánh
  * nào (`identity.ResolveDeadlines` từ chối).
  *
- * DANH SÁCH ĐÓNG, LIỆT KÊ TỪNG KHOÁ, chứ không phải `admin.*`: `admin.audit` (không tab nào ở đây)
- * và `admin.user.delete` (nút ở `/danh-ba`) cố ý VẮNG. Thêm một tab có cổng quyền mới thì thêm
- * đúng khoá của tab ấy vào đây, và chỉ khoá có thật trong bảng `quyen` (luật 5, bất biến 3c).
+ * DANH SÁCH ĐÓNG, LIỆT KÊ TỪNG KHOÁ, chứ không phải `admin.*`: `admin.user.delete` (nút ở
+ * `/danh-ba`) cố ý VẮNG. `admin.audit` VẮNG cho tới 29/09/2026 vì chưa tab nào canh nó; nay tab Nhật
+ * ký hệ thống canh nó, nên nó vào đây cùng lượt dựng tab (ADR 0054 §6). Thêm một tab có cổng quyền
+ * mới thì thêm đúng khoá của tab ấy vào đây, và chỉ khoá có thật trong bảng `quyen` (luật 5, bất
+ * biến 3c).
  *
  * Ẩn mục menu là tiện dụng, không phải biện pháp: mọi tuyến sau các tab tự kiểm khoá (luật 5, cấm #1).
  */
@@ -58,6 +61,7 @@ export const KHOA_MO_CAU_HINH: readonly string[] = [
   QUYEN_PHAN_QUYEN, // Phân quyền — cả tab
   QUYEN_QUAN_LY_DANH_MUC, // Danh mục — nút ghi
   QUYEN_CAU_HINH_THOI_HAN, // Thời hạn xử lý — bảng thời hạn và mọi nút ghi
+  AUDIT_READ_PERMISSION, // Nhật ký hệ thống — cả tab
 ];
 
 export type NhomMenu = {

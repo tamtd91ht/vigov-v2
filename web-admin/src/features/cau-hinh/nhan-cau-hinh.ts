@@ -24,10 +24,10 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Tab Lời hệ thống (§7)",
+    ten: "Lời hệ thống — 32 câu nhóm Báo cáo `report.*` (§7)",
     viSao:
-      "Chưa chốt dịch vụ nào sở hữu 32 khoá `report.*` của bảng `loi_he_thong` (ADR 0024, mục " +
-      "để trống), nên chưa có bảng và chưa có tuyến.",
+      "Câu của Phản ánh và Thu – Chi đã sửa được ở tab Lời hệ thống. Riêng 32 khoá `report.*` thì " +
+      "chưa chốt dịch vụ nào sở hữu (ADR 0024, mục để trống), nên chưa có bảng và chưa có tuyến.",
   },
   {
     ten: "Tab Tự động hoá (§9)",
@@ -42,11 +42,5 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "các quyết định về mật khẩu đầu tiên, mã cán bộ và số điện thoại (câu hỏi #9, #15, #16), và " +
       "cách ánh xạ các cột của tệp vào những quyết định ấy chưa được thiết kế. Thôn / Tổ dân phố, " +
       "Người dùng và Danh mục đều chưa có tuyến nhập nào trong hợp đồng.",
-  },
-  {
-    ten: "Xem nhật ký hệ thống (§12.1, quyền `admin.audit`)",
-    viSao:
-      "Chưa có tuyến đọc nhật ký. Nhật ký nằm rải ở từng dịch vụ, nên một màn xem chung cần một " +
-      "hợp đồng giữa các dịch vụ trước.",
   },
 ];

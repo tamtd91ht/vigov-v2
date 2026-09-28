@@ -421,8 +421,9 @@ export type PublicationTarget = "cong-khai" | "an";
  * IT MOVES NO LIFECYCLE STATUS and notifies nobody (server, `petition_publication.go`); the 200 body
  * is the petition as it now stands, and the screen re-renders from it rather than patching locally.
  *
- * 409 `never_public` is the NORMAL answer for a staff-conduct (`can-bo`) petition: the server's fixed
- * sentence goes to the screen verbatim. Rewriting it here would be a second copy of the rule.
+ * 409 `never_public` is the NORMAL answer for a staff-conduct (`can-bo`) petition: the server's
+ * sentence — the commune's `feedback.never_public`, rewordable on the Lời hệ thống tab — goes to the
+ * screen verbatim. Rewriting it here would be a second copy of the rule and of the commune's wording.
  *
  * NO Idempotency-Key: the route declares none — it sets an absolute value, and sending the same value
  * again writes nothing.

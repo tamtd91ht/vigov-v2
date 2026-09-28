@@ -4,8 +4,10 @@ import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
+import { AuditLogTab } from "./audit-log-tab";
 import { MailServerTab } from "./mail-server-tab";
 import { MapFieldTab } from "./map-field-tab";
+import { SystemMessagesTab } from "./system-messages-tab";
 import { TabDanhMuc } from "./tab-danh-muc";
 import { TabNguoiDung } from "./tab-nguoi-dung";
 import { TabPhanQuyen } from "./tab-phan-quyen";
@@ -27,8 +29,10 @@ const NOI_DUNG: Record<MaTabCauHinh, () => ReactNode> = {
   "phan-quyen": () => <TabPhanQuyen />,
   "danh-muc": () => <TabDanhMuc />,
   "truong-ban-do": () => <MapFieldTab />,
+  "loi-he-thong": () => <SystemMessagesTab />,
   "thoi-han-xu-ly": () => <TabThoiHanXuLy />,
   "may-chu-thu": () => <MailServerTab />,
+  "nhat-ky-he-thong": () => <AuditLogTab />,
 };
 
 const idTab = (ma: MaTabCauHinh) => `tab-cau-hinh-${ma}`;

@@ -19,6 +19,7 @@ import type { KetQua } from "@/lib/api/goi";
 import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen";
 import {
   ASSET_READ_PERMISSION,
+  AUDIT_READ_PERMISSION,
   QUYEN_CAU_HINH_THOI_HAN,
   QUYEN_PHAN_QUYEN,
   QUYEN_QUAN_LY_DANH_MUC,
@@ -83,6 +84,23 @@ export function mapFieldWriteDecision(ketQua: KetQua<identity_phienHienTaiRa>): 
  */
 export function mailServerTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
   return theoKhoaQuyen(ketQua, QUYEN_QUAN_LY_DANH_MUC);
+}
+
+/**
+ * Tab "Lời hệ thống" — `admin.lookup`. The server declares that key on all six routes (GET list ·
+ * PUT override · DELETE override, for petitions and finance alike), read included, so the tab hides
+ * as a whole without it. Same key as Máy chủ thư, a separate function so each tab names its own gate.
+ */
+export function systemMessagesTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, QUYEN_QUAN_LY_DANH_MUC);
+}
+
+/**
+ * Tab "Nhật ký hệ thống" — `admin.audit`, the key of all five `<service>-audit-entries` reads
+ * (ADR 0054 §1). No write half: the trail is append-only and this tab only reads it.
+ */
+export function auditLogTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, AUDIT_READ_PERMISSION);
 }
 
 /**

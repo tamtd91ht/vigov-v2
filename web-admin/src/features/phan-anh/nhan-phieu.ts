@@ -230,9 +230,19 @@ const PUBLICATION_VIEW: Readonly<Record<string, { label: string; hint: string }>
   },
 };
 
-/** The server's own sentence for `never_public` (`petition_publication.go`), shown as the hint. */
+/**
+ * The box's hint on a staff-conduct petition — a UI hint shown BEFORE any action, explaining why no
+ * publish button is offered. It is NOT the refusal: the refusal is the 409 `never_public` sentence,
+ * which is a system message the commune may reword (`feedback.never_public`, Lời hệ thống tab) and
+ * which the drawer shows verbatim from the server.
+ *
+ * Worded as the software's DEFAULT of that message (`service-petitions/internal/domain/
+ * system_message.go`) so the two read alike on a commune that has not reworded it. A commune that
+ * has sees its own sentence on refusal and this hint in the box — the hint describes the rule, the
+ * refusal is the commune's voice.
+ */
 export const NEVER_PUBLIC_HINT =
-  "Phản ánh về tác phong cán bộ không bao giờ được hiển thị công khai.";
+  "Phản ánh về thái độ, tác phong cán bộ không được hiển thị công khai.";
 
 export type PublicationView = {
   /** The stored value, or the one derived from `public` when the server predates the field. */

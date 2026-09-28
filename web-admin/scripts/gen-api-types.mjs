@@ -62,9 +62,32 @@ function tuChoi(duong, viSao) {
   );
 }
 
+// THE EMPTY SCHEMA `{}` — "any JSON value", and why it is NOT `unknown`.
+//
+// JSON Schema reads `{}` as "any value". tools/apidoc emits it on purpose for exactly one kind of
+// field: a Go `any` that carries a JSON document whose shape differs per record — today
+// `audit.EntryView.delta`, the audit delta stored per verb (core/audit/read.go:89-92). A per-verb
+// shape cannot live in a generated type.
+//
+// It becomes a named recursive `JsonValue`, not `unknown`: the screen can still only reach into it
+// by narrowing, but tsc knows it is serialisable data (no functions, no Date, no undefined), so
+// `JSON.stringify` and a `typeof` walk are type-checked. Only the BARE `{}` (a `description` at most)
+// takes this branch — a schema with any other key and no `type` is still a hole and still refused.
+const JSON_VALUE = "JsonValue";
+const JSON_VALUE_DECL =
+  `export type ${JSON_VALUE} =\n` +
+  `  | string\n  | number\n  | boolean\n  | null\n` +
+  `  | ${JSON_VALUE}[]\n  | { [key: string]: ${JSON_VALUE} };`;
+let jsonValueUsed = false;
+
 /** Dịch một schema OpenAPI sang biểu thức kiểu TypeScript. */
 function dichKieu(schema, duong) {
   if (!schema || typeof schema !== "object") tuChoi(duong, "schema rỗng");
+
+  if (Object.keys(schema).every((k) => k === "description")) {
+    jsonValueUsed = true;
+    return JSON_VALUE;
+  }
 
   if (schema.$ref) {
     const tien = "#/components/schemas/";
@@ -263,6 +286,9 @@ function sinh(hopDong) {
       ra.push("");
     }
   }
+  // Declared once, after the header, and only when some schema used it — a contract with no
+  // bare `{}` produces byte-identical output to before this branch existed.
+  if (jsonValueUsed) ra.splice(7, 0, JSON_VALUE_DECL, "");
   return ra.join("\n");
 }
 
