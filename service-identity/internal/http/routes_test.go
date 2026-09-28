@@ -671,8 +671,10 @@ type mayChu struct {
 	vaiTro    *vaiTroGia
 	boPhan    *boPhanGia
 	ghiBoPhan *ghiBoPhanGia // the org chart's write use case — bo_phan_ghi_test.go
-	vaiTroMuc *vaiTroMucGia
-	maTran    *maTranGia
+	// orgUnitImports is the chart's Excel import — org_unit_import_test.go.
+	orgUnitImports *orgUnitImportsFake
+	vaiTroMuc      *vaiTroMucGia
+	maTran         *maTranGia
 	// ghiPhanQuyen is the column save of the same matrix — a use case. See phanQuyenGhiGia.
 	ghiPhanQuyen *phanQuyenGhiGia
 	// roleTemplates is the template-role seed — see roleTemplatesFake in role_template_test.go.
@@ -732,6 +734,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	vaiTro := vaiTroMau()
 	boPhan := boPhanMau()
 	ghiBoPhan := ghiBoPhanMau()
+	orgUnitImports := orgUnitImportsSample()
 	vaiTroMuc := vaiTroMucMau()
 	maTran := maTranMau()
 	ghiPhanQuyen := phanQuyenGhiMau()
@@ -759,8 +762,10 @@ func dungMayChu(t *testing.T) *mayChu {
 		VaiTro:    vaiTro,
 		BoPhan:    boPhan,
 		GhiBoPhan: ghiBoPhan,
-		VaiTroMuc: vaiTroMuc,
-		MaTran:    maTran,
+		// The Excel import. Register panics without it.
+		OrgUnitImports: orgUnitImports,
+		VaiTroMuc:      vaiTroMuc,
+		MaTran:         maTran,
 		// The column save. Register panics without it.
 		GhiPhanQuyen: ghiPhanQuyen,
 		// The template-role seed. Register panics without it.
@@ -834,7 +839,9 @@ func dungMayChu(t *testing.T) *mayChu {
 		boPhan:    boPhan,
 		ghiBoPhan: ghiBoPhan,
 		vaiTroMuc: vaiTroMuc,
-		maTran:    maTran,
+
+		orgUnitImports: orgUnitImports,
+		maTran:         maTran,
 
 		ghiPhanQuyen:  ghiPhanQuyen,
 		roleTemplates: roleTemplates,

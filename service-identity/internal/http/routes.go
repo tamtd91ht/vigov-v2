@@ -243,6 +243,14 @@ type (
 		Sua(ctx context.Context, id string, yc app.YeuCauSuaBoPhan, nguoi app.NguoiThucHien) (domain.BoPhan, error)
 	}
 
+	// OrgUnitImporting is the Excel import of the same chart: POST /api/v1/org-units/import-previews
+	// and POST /api/v1/org-units/imports, under `admin.org`. A USE CASE, and separate from BoPhanGhi:
+	// its one write path runs a whole file in one transaction, all or nothing (app.OrgUnitImporter).
+	OrgUnitImporting interface {
+		Preview(ctx context.Context, rows []domain.OrgUnitImportRow) (app.OrgUnitImportResult, error)
+		Import(ctx context.Context, rows []domain.OrgUnitImportRow, actor app.NguoiThucHien) (app.OrgUnitImportResult, error)
+	}
+
 	// VaiTroDanhMuc is the commune's role catalogue, for GET /api/v1/roles.
 	//
 	// SEPARATE FROM VaiTroDoc ON PURPOSE, even though one store implements both. That one answers
@@ -454,8 +462,10 @@ type Deps struct {
 	BoPhan  BoPhanDanhMuc
 	// GhiBoPhan — the write surface of the same chart. A use case: see BoPhanGhi.
 	GhiBoPhan BoPhanGhi
-	VaiTroMuc VaiTroDanhMuc
-	MaTran    MaTranQuyenDoc
+	// OrgUnitImports — the Excel import of the same chart. A use case: see OrgUnitImporting.
+	OrgUnitImports OrgUnitImporting
+	VaiTroMuc      VaiTroDanhMuc
+	MaTran         MaTranQuyenDoc
 	// GhiPhanQuyen — the column save behind the same matrix. A use case: see PhanQuyenGhi.
 	GhiPhanQuyen PhanQuyenGhi
 	// RoleTemplates — the template-role seed behind POST /api/v1/roles/defaults. See RoleTemplateSeeding.
@@ -549,6 +559,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu kho bộ phận — GET /api/v1/org-units sẽ panic khi có người gọi")
 	case d.GhiBoPhan == nil:
 		panic("identity/http: thiếu use case ghi sơ đồ tổ chức — POST và PATCH /api/v1/org-units sẽ panic khi có người gọi")
+	case d.OrgUnitImports == nil:
+		panic("identity/http: thiếu use case nhập sơ đồ tổ chức từ Excel — POST /api/v1/org-units/import-previews và /imports sẽ panic khi có người gọi")
 	case d.VaiTroMuc == nil:
 		panic("identity/http: thiếu kho danh mục vai trò — GET /api/v1/roles sẽ panic khi có người gọi")
 	case d.MaTran == nil:
@@ -1340,6 +1352,82 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.org")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi tên, cha và thứ tự đều bằng đúng dòng vừa đọc, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.SuaBoPhan))))
+
+	// --- the org chart, IMPORT FROM EXCEL. THREE ROUTES, ALL `admin.org` ------------------------
+	//
+	// User decision 2026-09-28: org units only (staff import deferred), all or nothing, `admin.org` —
+	// the key the form's create route above already declares; no key invented (rule 5, invariant 3c).
+	// The URL nouns are VENDOR-CHOSEN (ADR 0011): `imports` is the house nominalisation of "import"
+	// (rest_api_guard NOMINALISED), `import-previews` the record of a check that writes nothing, and
+	// `import-template` the file a person fills in. Why the preview is a route and not a `dry_run`
+	// flag: internal/http/org_unit_import.go.
+
+	// The template. GET /api/v1/org-units/import-template
+	//
+	// `admin.org` AND NOT AnyAuthenticated like the list: the hidden sheet is the same list of units
+	// the list route returns, but the file exists only to feed the import, which is `admin.org`.
+	//
+	// NO idem.* DECLARATION: a GET changes no state.
+	//
+	// @summary  Tải tệp Excel mẫu để nhập sơ đồ tổ chức — kèm danh sách chọn bộ phận cha đang có
+	// @screen   14-cau-hinh §1
+	// 200 is the .xlsx itself (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet).
+	//
+	// @reply    200 -
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/org-units/import-template",
+		authz.RequirePermission(d.Checker, "admin.org")(
+			http.HandlerFunc(h.OrgUnitImportTemplate)))
+
+	// Checking a filled file. POST /api/v1/org-units/import-previews
+	//
+	// multipart/form-data, one part `file` (.xlsx, ≤ 2 MB, ≤ 500 rows). 200 WHETHER OR NOT THE FILE IS
+	// VALID: `valid: false` with every {row, column, message} is the answer this route exists to give.
+	// 413 is a body or file over its cap, or a workbook that inflates past its cap. 415 is a request
+	// that is not multipart, or a file that is not a plain .xlsx — .xls, .xlsm with macros, .csv, an
+	// encrypted workbook, a renamed document.
+	//
+	// @summary  Kiểm tra một tệp Excel sơ đồ tổ chức trước khi nhập — không ghi gì
+	// @screen   14-cau-hinh §1
+	// @reply    200 orgUnitImportPreviewOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/org-units/import-previews",
+		authz.RequirePermission(d.Checker, "admin.org")(
+			idem.KhongCan("xem trước không ghi gì và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái sơ đồ")(
+				http.HandlerFunc(h.PreviewOrgUnitImport))))
+
+	// Importing a filled file. POST /api/v1/org-units/imports
+	//
+	// idem.Required(idem.DongKhiHong), THE SAME CALL AS POST /api/v1/org-units: every unit created is
+	// a permanent code (rule 7), and a double submit of a file WITH GENERATED CODES would be refused
+	// by the planner only if the first one had committed — two in flight at once are what the key
+	// stops. A 400 releases the key, so the corrected file may go with the same one.
+	//
+	// 400 `import_invalid` carries EVERY error as {row, column, message}; nothing was written. 409
+	// `org_chart_changed`: the chart changed between the check and the write (a code taken
+	// concurrently); the whole file was rolled back. 413 / 415 as on the preview.
+	//
+	// @summary  Nhập sơ đồ tổ chức từ tệp Excel — toàn bộ tệp hoặc không gì cả
+	// @screen   14-cau-hinh §1
+	// @reply    201 orgUnitImportCreatedOut
+	// @reply    400 orgUnitImportRejectedOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/org-units/imports",
+		authz.RequirePermission(d.Checker, "admin.org")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ImportOrgUnits))))
 
 	// The commune's role catalogue. GET /api/v1/roles
 	//

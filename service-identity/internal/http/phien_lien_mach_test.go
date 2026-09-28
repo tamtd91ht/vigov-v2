@@ -102,8 +102,10 @@ func dungMayChuHaiSigner(t *testing.T, kySigner, giaiSigner *token.Signer) http.
 		VaiTro:    vaiTroMau(),
 		BoPhan:    boPhanMau(),
 		GhiBoPhan: ghiBoPhanMau(),
-		VaiTroMuc: vaiTroMucMau(),
-		MaTran:    maTranMau(),
+		// Mounted by Register (the org-chart import), so wired; nothing in this file calls it.
+		OrgUnitImports: orgUnitImportsSample(),
+		VaiTroMuc:      vaiTroMucMau(),
+		MaTran:         maTranMau(),
 		// Mounted by Register, so wired; nothing in this file calls it.
 		GhiPhanQuyen: phanQuyenGhiMau(),
 		// Mounted by Register (POST /api/v1/roles/defaults), so wired; nothing in this file calls it.

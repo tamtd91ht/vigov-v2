@@ -269,6 +269,9 @@ func run(log *slog.Logger) error {
 	// check reads the rows it then writes, under locks, inside one transaction. No delete — see
 	// app.SoDoToChuc.
 	ghiBoPhan := app.NewSoDoToChuc(kho, boPhan)
+	// The Excel import of the same chart (user decision 2026-09-28): the SAME store, so an imported
+	// unit is inserted and its parent locked by the very statements the form uses.
+	orgUnitImports := app.NewOrgUnitImporter(kho, boPhan)
 	// The WRITE surfaces of the two reference catalogues: POST / PATCH / DELETE on
 	// /api/v1/residential-unit-types and /api/v1/task-blocs, under `admin.lookup` (user decision
 	// 2026-09-24: full catalogues). Given the SAME stores as the read fields; each use case locks the
@@ -321,6 +324,8 @@ func run(log *slog.Logger) error {
 		// Sơ đồ tổ chức: một kho ĐỌC (kèm số cán bộ mỗi bộ phận), một use case GHI (thêm, đổi tên, dời,
 		// đổi thứ tự) dưới khoá `admin.org`. Chưa có tuyến xoá — lý lẽ ở app/so_do_to_chuc.go.
 		GhiBoPhan: ghiBoPhan,
+		// Nhập sơ đồ tổ chức từ Excel — toàn bộ tệp hoặc không gì cả, dưới khoá `admin.org`.
+		OrgUnitImports: orgUnitImports,
 		// Cùng một *VaiTroStore, hai trường: một trả lời "vai trò của người gọi", một trả
 		// lời "xã này có những vai trò nào". Hai câu hỏi, hai interface hẹp.
 		VaiTroMuc: vaiTro,

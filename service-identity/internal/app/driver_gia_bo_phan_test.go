@@ -144,6 +144,22 @@ func (c *connBoPhanGia) QueryContext(_ context.Context, q string, args []driver.
 		}
 		return &rowsGia{cot: cot}, nil
 
+	case strings.Contains(q, "FROM bo_phan") && strings.Contains(q, "ORDER BY thu_tu, ten, id"):
+		// The import's snapshot (idstore.BoPhanStore.ImportSnapshot): every row of the commune at $1,
+		// soft-deleted ones included and flagged. Only the commune bound at $1 is answered, so a
+		// snapshot that dropped the commune filter would see nothing of this one's chart.
+		xa := tenant.ID(chuoiThu(args, 0))
+		if !strings.Contains(q, "tenant_id = $1") {
+			return nil, fmt.Errorf("driver giả: ảnh chụp không lọc theo xã: %q", q)
+		}
+		var ra [][]driver.Value
+		for _, h := range c.k.hang {
+			if h.xa == xa {
+				ra = append(ra, []driver.Value{h.id, h.ma, h.ten, h.cha, h.daXoa})
+			}
+		}
+		return &rowsGia{cot: []string{"id", "ma", "ten", "cha_id", "da_xoa"}, hang: ra}, nil
+
 	case strings.Contains(q, "SELECT ma FROM bo_phan"):
 		xa, goc := tenant.ID(chuoiThu(args, 0)), chuoiThu(args, 1)
 		var ra [][]driver.Value
