@@ -3504,6 +3504,12 @@ button.xa-o-nhanh {
   background: var(--xa-nen);
   color: var(--ink-muted);
 }
+/* A status this app has no name for yet: a bordered, uncoloured chip, so it cannot be read as any of the
+   four groups by colour — the sentence inside says what to do. */
+.xa-chip-tt--unknown {
+  border: 1px solid currentColor;
+  font-weight: 400;
+}
 
 /* Lĩnh vực đã chọn, ở đầu bước mô tả */
 .xa-lv-dang {

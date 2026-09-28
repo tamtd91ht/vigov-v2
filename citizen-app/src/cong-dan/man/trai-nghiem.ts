@@ -162,12 +162,12 @@ export function duocDanhGia(p: PhieuTN): boolean {
 export type NhomLoc = StatusFilter;
 
 /**
- * Nhóm của app riêng — KHÔNG ĐỔI HÀNH VI: mã lạ rơi vào "Đã đóng". Phiếu của app này sinh trong bộ nhớ với
- * một trong chín mã, nên nhánh ấy hôm nay không tới được; ngày app đọc phiếu từ máy chủ phải xét lại (theo
- * `groupOf`, như app chung — mã lạ không được thành "Đã đóng").
+ * Nhóm của app riêng — exactly `groupOf`, as in the shared app: an unknown code is `null`, NEVER a guessed
+ * group. Falling back to "Đã đóng" told the citizen a ticket still open was closed; the screens now show the
+ * shared neutral sentence (`nhanTrangThai`) and the ticket appears only under "Tất cả", never under a group.
  */
-export function nhomCua(trang_thai: string): StatusGroup {
-  return groupOf(trang_thai) ?? "da-dong";
+export function nhomCua(trang_thai: string): StatusGroup | null {
+  return groupOf(trang_thai);
 }
 
 export const NHAN_NHOM = STATUS_GROUP_LABEL;

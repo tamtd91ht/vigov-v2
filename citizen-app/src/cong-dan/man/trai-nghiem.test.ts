@@ -150,12 +150,12 @@ describe("bản trải nghiệm: phiếu theo đúng hợp đồng thật", () =
     };
     for (const [tt, nhom] of Object.entries(bang)) expect(nhomCua(tt), tt).toBe(nhom);
     for (const [code, group] of Object.entries(bang)) expect(groupOf(code), code).toBe(group);
-    // PINNED: the shared module does NOT guess a group for an unknown code (the shared app shows a neutral
-    // sentence); the commune app's `nhomCua` keeps its old fallback, "Đã đóng" — unreachable today because
-    // its tickets are created in memory with one of the nine codes.
+    // PINNED: neither app guesses a group for an unknown code — the commune app's `nhomCua` is `groupOf`,
+    // so a ticket still open is never shown as "Đã đóng" (both apps show the neutral sentence instead).
     expect(groupOf("trang-thai-moi")).toBeNull();
     expect(groupOf("toString")).toBeNull();
-    expect(nhomCua("trang-thai-moi")).toBe("da-dong");
+    expect(nhomCua("trang-thai-moi")).toBeNull();
+    expect(nhomCua("toString")).toBeNull();
     expect(Object.keys(NHAN_NHOM)).toHaveLength(4);
     // One table, two names — not two copies that can drift.
     expect(NHAN_NHOM).toBe(STATUS_GROUP_LABEL);

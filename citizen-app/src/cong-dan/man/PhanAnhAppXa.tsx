@@ -24,7 +24,7 @@ import { thoiDiemVN } from "../../lib/thoi-diem";
 
 import { BieuTuong } from "./BieuTuong";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
-import { GUI, giaiThichTrangThai, KHAN_CAP, THE_PHIEU, TRA_CUU, XA_PA, XA_TN } from "./noi-dung";
+import { GUI, giaiThichTrangThai, KHAN_CAP, nhanTrangThai, THE_PHIEU, TRA_CUU, XA_PA, XA_TN } from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
 import {
   duocDanhGia,
@@ -64,9 +64,13 @@ export function GhiChuTraiNghiem({ cau }: { cau: string }) {
   );
 }
 
-/** Nhãn một trong BỐN nhóm người dân thấy (ADR 0050 #5). */
+/**
+ * Nhãn một trong BỐN nhóm người dân thấy (ADR 0050 #5). An unknown code gets the shared app's neutral
+ * sentence (`nhanTrangThai`) and a neutral style — never a guessed group, never the raw code.
+ */
 export function ChipTrangThai({ tt }: { tt: string }) {
   const nhom = nhomCua(tt);
+  if (nhom === null) return <span className="xa-chip-tt xa-chip-tt--unknown">{nhanTrangThai(tt)}</span>;
   return <span className={`xa-chip-tt xa-chip-tt--${nhom}`}>{NHAN_NHOM[nhom]}</span>;
 }
 
