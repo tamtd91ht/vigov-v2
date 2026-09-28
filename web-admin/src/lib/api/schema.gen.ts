@@ -1640,6 +1640,7 @@ export type petitions_suaMucUuTienVao = {
 };
 
 export type petitions_suaNhiemVuVao = {
+  "code"?: string | null;
   "bloc"?: string | null;
   "title"?: string | null;
   "description"?: string | null;
@@ -4831,7 +4832,7 @@ export type petitions_get_tasks_by_ma = {
   };
 };
 
-/** PATCH /api/v1/tasks/{ma} — Sửa thông tin mô tả của một nhiệm vụ — không đụng tới hạn, trạng thái hay phân công; tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa) */
+/** PATCH /api/v1/tasks/{ma} — Sửa thông tin mô tả hoặc mã của một nhiệm vụ — không đụng tới hạn, trạng thái hay phân công; đổi mã thì mã cũ giữ lại vĩnh viễn, không cấp lại (409 `code_taken` khi mã mới đã từng cấp); tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa) */
 export type petitions_patch_tasks_by_ma = {
   duongDan: "/api/v1/tasks/{ma}";
   phuongThuc: "PATCH";

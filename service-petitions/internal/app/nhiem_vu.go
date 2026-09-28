@@ -30,7 +30,9 @@ package app
 // THE DATABASE IS THE FLOOR AND THIS LAYER IS THE SENTENCE. Said once, here:
 //
 //	the seven statuses               migration 0006, `nhiem_vu_trang_thai_hop_le`
-//	`ma` and `han_ban_dau` immutable         0006, trigger `nhiem_vu_bat_bien`
+//	`han_ban_dau` immutable                  0006, trigger `nhiem_vu_bat_bien`
+//	`ma` changes only via the ledger         0015, same trigger replaced + `task_issued_code`
+//	an issued code is never issued again     0015, PRIMARY KEY (tenant_id, code), append-only
 //	hard removal refused outright            0006, same trigger
 //	one pending extension per task           0006, UNIQUE (tenant_id, nhiem_vu_id, moc_cho_duyet)
 //	the request AS FILED is immutable        0006, trigger `de_nghi_lui_han_bat_bien`
@@ -104,6 +106,9 @@ type KhoNhiemVuGhi interface {
 
 	Tao(ctx context.Context, tx *store.ScopedTx, n domain.NhiemVu) error
 	Sua(ctx context.Context, tx *store.ScopedTx, id string, n domain.NhiemVu) error
+	// ChangeCode is the ONE statement pair that moves `ma`: it issues the new code into
+	// `task_issued_code`, then renames the row (migration 0015). The old code stays issued.
+	ChangeCode(ctx context.Context, tx *store.ScopedTx, id, oldCode, newCode string) error
 	DoiTrangThai(ctx context.Context, tx *store.ScopedTx, id string,
 		tu, sang domain.TrangThaiNhiemVu, ngayHoanThanh time.Time) error
 	DoiHanXuLy(ctx context.Context, tx *store.ScopedTx, id string, hanCu, hanMoi time.Time) error
@@ -893,6 +898,15 @@ func (uc *GhiNhiemVu) kiemLanhDaoGiaoViec(ctx context.Context, ma string) error 
 //
 // NOTHING IS WRITTEN WHEN NOTHING CHANGED — no UPDATE and no audit entry. That is what makes the
 // route's `idem.KhongCan` declaration a property rather than a hope.
+//
+// # RENAMING THE TASK (`code`, vigov-require 7764c8a, user decision 28/09/2026)
+//
+// The new code must never have been issued in this commune — not as a current code, not on a
+// soft-deleted task, not as a code some task was renamed away from (MaDaDung reads `task_issued_code`)
+// — or the act is refused with ErrMaNhiemVuDaTonTai (409). The old code stays issued for ever: the
+// ledger is append-only, so neither a rename nor the next auto-generated code can hand it out again
+// (rule 7, invariant 3). The rename writes a timeline row naming both codes and the audit entry
+// carries `ma` before and after.
 func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemVu,
 	nguoi audit.Actor) (domain.NhiemVu, error) {
 
@@ -981,6 +995,19 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 
 		sau = sua.Apdung(truoc)
 
+		renamed := sau.Ma != truoc.Ma
+		if renamed {
+			// THE UNIQUE KEY OF THE LEDGER IS THE REAL GUARD; THIS IS THE READABLE MESSAGE. It asks the
+			// ledger, not the register: a code renamed away from is on no row of `nhiem_vu`.
+			taken, err := uc.kho.MaDaDung(ctx, tx, sau.Ma)
+			if err != nil {
+				return err
+			}
+			if taken {
+				return petstore.ErrMaNhiemVuDaTonTai
+			}
+		}
+
 		if sau.NhiemVuChaID != truoc.NhiemVuChaID && sau.NhiemVuChaID != "" {
 			// THE ONE PATH THAT CAN CLOSE A CYCLE. A task created under a parent has no descendants
 			// to loop back through; MOVING an existing task under one of its own descendants is how
@@ -991,8 +1018,24 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			}
 		}
 
+		if renamed {
+			// BEFORE the descriptive UPDATE, so a refusal from the ledger's key or from a racing rename
+			// (the WHERE clause carries the old code) leaves nothing else half-written in this act.
+			if err := uc.kho.ChangeCode(ctx, tx, truoc.ID, truoc.Ma, sau.Ma); err != nil {
+				return err
+			}
+		}
 		if err := uc.kho.Sua(ctx, tx, truoc.ID, sau); err != nil {
 			return err
+		}
+		if renamed {
+			// THE TIMELINE ROW, IN THE SAME TRANSACTION. §5.9's drawer is where an officer who knew the
+			// task as NV12 finds out it is NV15 now; without it the register silently shows a number
+			// nobody gave out on paper. The instant is the act's own, like every other row of this Save.
+			if err := uc.ghiNhatKy(ctx, tx, sau, bayGio, nguoi.ID,
+				"Đổi mã: "+truoc.Ma+" → "+sau.Ma); err != nil {
+				return err
+			}
 		}
 
 		// THE BLOCK IS APPLIED IN THE SAME TRANSACTION AS THE COLUMNS. §5.4 draws one `✎ Sửa` over
@@ -1019,6 +1062,9 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			// THE PARENT BY ITS REGISTER NUMBER AS WELL AS ITS id (rule 6's reader): an inspection
 			// years from now reads `NV19` without a lookup; the id stays for the row it points at.
 			"truoc": map[string]any{
+				// `ma` BEFORE AND AFTER, always — equal when the Save did not rename. An inspection that
+				// holds NV12 from the minutes finds, in this pair, the entry that turned it into NV15.
+				"ma":              truoc.Ma,
 				"tieu_de":         truoc.TieuDe,
 				"khoi":            truoc.Khoi,
 				"muc_uu_tien":     truoc.MucUuTien,
@@ -1028,6 +1074,7 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 				"so_dong_van_ban": len(vanBanTruoc),
 			},
 			"sau": map[string]any{
+				"ma":              sau.Ma,
 				"tieu_de":         sau.TieuDe,
 				"khoi":            sau.Khoi,
 				"muc_uu_tien":     sau.MucUuTien,
@@ -1056,9 +1103,13 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)
 		}
 		return audit.Write(ctx, tx, audit.Entry{
-			Actor:   nguoi,
-			Action:  HanhViSuaNhiemVu,
-			Subject: truoc.Ma,
+			Actor:  nguoi,
+			Action: HanhViSuaNhiemVu,
+			// THE CODE THE TASK CARRIES AFTER THIS ACT — the same as before unless it was a rename. On a
+			// rename the reader arrives holding the CURRENT code (the one on the screen), and this entry
+			// is the one that names the old code in its delta: every later entry is filed under the new
+			// code, and this one links the two. `task_issued_code` answers the reverse question.
+			Subject: sau.Ma,
 			Delta:   delta,
 		})
 	})
@@ -1071,6 +1122,15 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 // chuanHoaSuaNhiemVu trims and bounds the fields that were actually sent. A nil pointer is "not
 // mentioned" and is left alone — see petstore.SuaNhiemVu.
 func chuanHoaSuaNhiemVu(sua *petstore.SuaNhiemVu) error {
+	if sua.Code != nil {
+		// THE SAME CHECK A TYPED CODE PASSES ON CREATE — one value space for `ma`, whichever door it came
+		// through. An empty string is refused here, not read as "not mentioned": nil is that.
+		code, err := domain.KiemMaNhiemVu(*sua.Code)
+		if err != nil {
+			return err
+		}
+		sua.Code = &code
+	}
 	if sua.TieuDe != nil {
 		s, err := domain.KiemTieuDeNhiemVu(*sua.TieuDe)
 		if err != nil {

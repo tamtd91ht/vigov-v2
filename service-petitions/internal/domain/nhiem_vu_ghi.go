@@ -203,9 +203,10 @@ func KiemVanBanTuyChon(s string, tran int, quaDai error) (string, error) {
 // slash or a Vietnamese diacritic in it is a number that cannot be typed back, cannot be searched
 // for reliably, and reaches the register as a different string depending on who encoded it.
 //
-// IT IS NEVER REISSUED, so this check is the LAST moment the value can be refused: migration
-// 0006's trigger refuses every later change to `ma`, and `UNIQUE (tenant_id, ma)` counts
-// soft-deleted rows.
+// IT IS NEVER REISSUED. A task may be RENAMED through PATCH (user decision 28/09/2026), and this is
+// the check the new code passes too; but every code ever issued stays in `task_issued_code`
+// (migration 0015), so a code refused as taken is refused for ever, and a code issued once is never
+// issued again — to this task or any other.
 func KiemMaNhiemVu(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

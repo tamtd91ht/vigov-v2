@@ -17,9 +17,11 @@ package store
 //  4. EVERY UPDATE THAT MOVES THE LIFECYCLE CARRIES THE EXPECTED STATUS in its WHERE clause, so two
 //     officers acting on one task at the same moment cannot both succeed. The second matches no row
 //     and the caller sees a refusal, never a silent overwrite.
-//  5. `ma`, `han_ban_dau`, `nguoi_tao_ma`, `nguon_giao` AND `nguon_id` APPEAR IN NO UPDATE HERE.
-//     The first two are refused by the `nhiem_vu_bat_bien` trigger underneath; the last three are
-//     facts about how the row came into being. Their absence is what keeps that floor unreachable.
+//  5. `han_ban_dau`, `nguoi_tao_ma`, `nguon_giao` AND `nguon_id` APPEAR IN NO UPDATE HERE, and `ma`
+//     appears in exactly ONE — ChangeCode, which issues the new code into `task_issued_code` in the
+//     same call (migration 0015; user decision 28/09/2026). `han_ban_dau` is refused by the
+//     `nhiem_vu_bat_bien` trigger underneath, and so is a change of `ma` that skipped the ledger; the
+//     last three are facts about how the row came into being.
 //  6. THERE IS NO `DELETE` STATEMENT IN THIS FILE AND THERE MUST NEVER BE ONE. A task is an
 //     administrative record carrying the commune's own progress log (rule 7; §11.5 says so in the
 //     specification's own words), and the trigger refuses a hard delete anyway.
@@ -44,13 +46,13 @@ var (
 	// on by reloading. Folding the two together would make a normal race look like data loss.
 	ErrNhiemVuDaChuyenTrang = errors.New("nhiem_vu: nhiệm vụ không còn ở trạng thái vừa đọc")
 
-	// ErrMaNhiemVuDaTonTai — the register number is already taken in this commune, SOFT-DELETED
-	// ROWS INCLUDED.
+	// ErrMaNhiemVuDaTonTai — the register number has already been ISSUED in this commune: it is some
+	// task's current code, a soft-deleted task's code, or a code a task was renamed away from.
 	//
-	// Counting deleted rows is not strictness for its own sake: `UNIQUE (tenant_id, ma)` counts them
-	// too, deliberately and with the reasoning written into migration 0006. `NV19` is written on
-	// paper minutes and quoted in meeting conclusions; two tasks that have ever carried one number
-	// cannot be told apart afterwards (rule 7, invariant 3).
+	// All three count, and that is not strictness for its own sake: `NV19` is written on paper
+	// minutes and quoted in meeting conclusions; two tasks that have ever carried one number cannot be
+	// told apart afterwards (rule 7, invariant 3). Since migration 0015 the fact lives in
+	// `task_issued_code`, because a renamed code leaves every row of `nhiem_vu`.
 	ErrMaNhiemVuDaTonTai = errors.New("nhiem_vu: mã nhiệm vụ đã được dùng trong xã này")
 
 	// ErrDeNghiKhongTonTai — no live extension request with that id, on that task, in this commune.
@@ -171,14 +173,20 @@ func (s *NhiemVuStore) ChaCua(ctx context.Context, tx *store.ScopedTx, id string
 
 // SoLonNhatDaCap reads the highest number already issued in this commune's `NV…` series.
 //
+// # IT READS THE LEDGER, NOT THE REGISTER (migration 0015, 28/09/2026)
+//
+// Once a code can be renamed, `nhiem_vu` no longer holds every code ever issued: NV12 renamed to
+// KH-01 leaves no row carrying NV12, so a maximum over the register could drop below 12 and mint
+// NV12 again — exactly the defect vigov-require's `code_ever_used` has. `task_issued_code` holds
+// every code ever issued, current, soft-deleted and renamed-away alike, so its maximum is the true
+// high-water mark and the next number is by construction one no task has ever carried.
+//
 // # WHY `max()` IS SAFE HERE AND IS NOT SAFE FOR THE DOCUMENT REGISTER
 //
 // service-documents mints from a COUNTER ROW and says why in its own file: "a number computed from
-// rows goes DOWN when a row is removed". That is true of a register rows can leave — and rows never
-// leave this one. A task is soft-deleted, never deleted (the `nhiem_vu_bat_bien` trigger refuses a
-// hard delete outright), and THIS STATEMENT DELIBERATELY DOES NOT FILTER `deleted_at`: a
-// soft-deleted `NV19` still owns the number 19, exactly as `UNIQUE (tenant_id, ma)` says it does.
-// So the maximum is a high-water mark that cannot go backwards.
+// rows goes DOWN when a row is removed". That is true of a table rows can leave — and rows never
+// leave this one: the ledger is append-only, enforced by a trigger (0015). So the maximum is a
+// high-water mark that cannot go backwards.
 //
 // # WHAT IT STILL DOES NOT GIVE, SAID PLAINLY RATHER THAN DISCOVERED
 //
@@ -198,8 +206,8 @@ func (s *NhiemVuStore) ChaCua(ctx context.Context, tx *store.ScopedTx, id string
 func (s *NhiemVuStore) SoLonNhatDaCap(ctx context.Context, tx *store.ScopedTx) (int, error) {
 	// `substring(ma from 3)` skips the `NV` prefix; the `~` pattern is what guarantees the rest is
 	// digits, so the cast cannot fail on a hand-typed code.
-	const stmt = `SELECT COALESCE(MAX(substring(ma from 3)::bigint), 0) FROM nhiem_vu
-		WHERE tenant_id = $1 AND ma ~ '^NV[0-9]+$'`
+	const stmt = `SELECT COALESCE(MAX(substring(code from 3)::bigint), 0) FROM task_issued_code
+		WHERE tenant_id = $1 AND code ~ '^NV[0-9]+$'`
 
 	var so int64
 	if err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID())).Scan(&so); err != nil {
@@ -208,18 +216,19 @@ func (s *NhiemVuStore) SoLonNhatDaCap(ctx context.Context, tx *store.ScopedTx) (
 	return int(so), nil
 }
 
-// MaDaDung reports whether this commune has already issued that register number.
+// MaDaDung reports whether this commune has already issued that register number — to any task, at
+// any time, whether the task still carries it, was soft-deleted, or was renamed away from it.
 //
-// THE UNIQUE KEY IS THE REAL GUARD; THIS IS THE READABLE MESSAGE — the same split
-// LoaiNhiemVuStore.MaDaDung makes, and for the same reason. Two concurrent creates of one code can
-// both pass this check and the second will hit `UNIQUE (tenant_id, ma)` and roll the whole
-// transaction back: no duplicate row, an unhelpful 500. This turns the ordinary case into a
-// sentence somebody can act on.
+// THE PRIMARY KEY OF `task_issued_code` IS THE REAL GUARD; THIS IS THE READABLE MESSAGE — the same
+// split LoaiNhiemVuStore.MaDaDung makes. Two concurrent acts issuing one code can both pass this check
+// and the second hits the key (through the insert trigger on create, through ChangeCode on a rename)
+// and rolls the whole transaction back: no duplicate, an unhelpful 500. This turns the ordinary case
+// into a sentence somebody can act on.
 //
-// `deleted_at` DELIBERATELY ABSENT FROM THE PREDICATE. An issued number is never reissued (rule 7,
-// invariant 3), so a soft-deleted row still owns its code.
+// IT READS THE LEDGER (migration 0015) and not `nhiem_vu`: a code renamed away from is on no row of
+// the register, and a check over the register would hand it out again.
 func (s *NhiemVuStore) MaDaDung(ctx context.Context, tx *store.ScopedTx, ma string) (bool, error) {
-	const stmt = `SELECT count(*) FROM nhiem_vu WHERE tenant_id = $1 AND ma = $2`
+	const stmt = `SELECT count(*) FROM task_issued_code WHERE tenant_id = $1 AND code = $2`
 
 	var n int
 	if err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), ma).Scan(&n); err != nil {
@@ -283,8 +292,10 @@ func (s *NhiemVuStore) Tao(ctx context.Context, tx *store.ScopedTx, n domain.Nhi
 //
 // # WHAT IS NOT IN THIS STRUCT IS THE DESIGN, AND EACH ABSENCE IS A DIFFERENT RULE
 //
-//	ma, han_ban_dau        the trigger refuses them, and rule 7 is why: an issued number is never
-//	                       renumbered, and the original commitment is the denominator of §11.3.
+//	han_ban_dau            the trigger refuses it, and rule 7 is why: the original commitment is the
+//	                       denominator of §11.3.
+//	                       (`ma` IS in the struct since 28/09/2026 — see Code — but is written by
+//	                       ChangeCode, never by Sua's UPDATE.)
 //	han_xu_ly              IT MOVES THROUGH THE EXTENSION FLOW AND NOWHERE ELSE. A PATCH able to
 //	                       rewrite a deadline would make `de_nghi_lui_han` decorative — the leader's
 //	                       approval could be walked around by the person who wanted more time.
@@ -309,6 +320,16 @@ type SuaNhiemVu struct {
 	// lock, is that same instant — somebody else wrote the task in between. nil keeps the behaviour
 	// every existing client relies on (additive, 28/09/2026). NOT A COLUMN WRITE: nothing folds it.
 	ExpectedUpdatedAt *time.Time
+
+	// Code renames the task — the PATCH body's `code` (vigov-require 7764c8a, user decision
+	// 28/09/2026). The new code must never have been issued in this commune, and the old one stays
+	// issued for ever (migration 0015, `task_issued_code`).
+	//
+	// ⚠ Apdung folds it and CoGiDoi counts it, but store.Sua DOES NOT WRITE IT. The one statement that
+	// moves `ma` is ChangeCode, which issues the new code into the ledger in the same call — the
+	// trigger refuses a change of `ma` that skipped the ledger, so a Sua that wrote it would only ever
+	// fail, inside the business transaction.
+	Code *string
 
 	Khoi         *string
 	TieuDe       *string
@@ -370,7 +391,8 @@ type SuaNhiemVu struct {
 // declaration becomes a lie, and the second request files an entry saying nothing changed.
 func (s SuaNhiemVu) CoGiDoi(n domain.NhiemVu) bool {
 	switch {
-	case s.Khoi != nil && *s.Khoi != n.Khoi,
+	case s.Code != nil && *s.Code != n.Ma,
+		s.Khoi != nil && *s.Khoi != n.Khoi,
 		s.TieuDe != nil && *s.TieuDe != n.TieuDe,
 		s.MoTa != nil && *s.MoTa != n.MoTa,
 		s.MucUuTien != nil && *s.MucUuTien != n.MucUuTien,
@@ -392,6 +414,9 @@ func (s SuaNhiemVu) CoGiDoi(n domain.NhiemVu) bool {
 // answers to "what did this act change", and the one that drifts is whichever is edited second —
 // which is the one an inspection reads.
 func (s SuaNhiemVu) Apdung(n domain.NhiemVu) domain.NhiemVu {
+	if s.Code != nil {
+		n.Ma = *s.Code
+	}
 	if s.Khoi != nil {
 		n.Khoi = *s.Khoi
 	}
@@ -453,6 +478,37 @@ func (s *NhiemVuStore) Sua(ctx context.Context, tx *store.ScopedTx, id string, n
 		return fmt.Errorf("nhiem_vu: sửa nhiệm vụ: %w", err)
 	}
 	return doiMotDongNhiemVu(kq, "sửa nhiệm vụ")
+}
+
+// ChangeCode renames one task: it ISSUES the new code to the task in `task_issued_code`, then moves
+// `nhiem_vu.ma` — two statements, in this order, inside the caller's transaction (migration 0015).
+//
+// # THE ORDER IS WHAT THE TRIGGER CHECKS
+//
+// `nhiem_vu_bat_bien` lets `ma` change only when the NEW code is already in the ledger, issued to THIS
+// task. The INSERT is therefore not bookkeeping after the fact; it is the precondition the database
+// enforces. The OLD code needs no statement: it has been in the ledger since it was issued, and the
+// ledger is append-only — so it stays reserved for ever, which is the half of the decision that
+// vigov-require's version does not keep.
+//
+// A CODE ALREADY ISSUED FAILS THE LEDGER'S PRIMARY KEY, which rolls the whole act back. The caller
+// asks MaDaDung first so the ordinary case is a 409 sentence; this key is what holds under a race.
+//
+// THE UPDATE'S WHERE CLAUSE CARRIES THE OLD CODE, so a second rename racing this one matches no row
+// and is told to reload rather than renaming a task that already moved.
+func (s *NhiemVuStore) ChangeCode(ctx context.Context, tx *store.ScopedTx, id, oldCode, newCode string) error {
+	const issue = `INSERT INTO task_issued_code (tenant_id, code, task_id) VALUES ($1, $2, $3)`
+	if _, err := tx.Exec(ctx, issue, string(tx.TenantID()), newCode, id); err != nil {
+		return fmt.Errorf("task_issued_code: cấp mã mới: %w", err)
+	}
+
+	const stmt = `UPDATE nhiem_vu SET ma = $3, cap_nhat_luc = now()
+		WHERE tenant_id = $1 AND id = $2 AND ma = $4 AND deleted_at IS NULL`
+	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, newCode, oldCode)
+	if err != nil {
+		return fmt.Errorf("nhiem_vu: đổi mã nhiệm vụ: %w", err)
+	}
+	return doiMotDongNhiemVu(kq, "đổi mã")
 }
 
 // UpdatedAtTx reads `cap_nhat_luc` of one task INSIDE the caller's transaction — after the act's own

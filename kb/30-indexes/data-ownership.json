@@ -362,6 +362,13 @@
       "source": "service-petitions/migrations/0006_nhiem_vu.sql:555"
     },
     {
+      "entity": "TaskIssuedCode",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "task_issued_code",
+      "source": "service-petitions/migrations/0015_task_issued_code.sql:111"
+    },
+    {
       "entity": "TaskLogEntry",
       "service": "petitions",
       "scope": "tenant",

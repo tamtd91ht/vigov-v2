@@ -203,11 +203,20 @@ type vanBanNhiemVuVao struct {
 // note, a progress of 0, an unticked box, a detached parent — so a full replacement could not tell
 // "not mentioned" from "set to zero".
 //
-// WHAT IS NOT HERE IS petstore.SuaNhiemVu's list and its reasoning. The two that matter most:
+// WHAT IS NOT HERE IS petstore.SuaNhiemVu's list and its reasoning (`code` IS here since 28/09/2026
+// and is written through the issued-code ledger, never by the plain UPDATE). The two that matter most:
 // `due_at` is absent because a deadline moves through the extension flow and nowhere else, and
 // `assigner` is absent because that column IS the approver under ADR 0038 — a `task.update` holder
 // able to rewrite it could name themselves the approver of their own extension requests.
 type suaNhiemVuVao struct {
+	// Code RENAMES the task (vigov-require 7764c8a, user decision 28/09/2026). Same format a typed code
+	// has on create. 409 `code_taken` when the code was EVER issued in this commune — including a code
+	// some task was renamed away from; the old code of this task is kept reserved for ever.
+	//
+	// ⚠ THE `{ma}` OF EVERY TASK ROUTE CHANGES WITH IT. The reply carries the new `code`; a client
+	// holding the old one (an open drawer, a copied link) gets 404 from then on — the old code is not
+	// resolved to the task. OPTIONAL, like every field of this published body (rule 2, invariant 4).
+	Code          *string `json:"code,omitempty"`
 	Bloc          *string `json:"bloc,omitempty"`
 	Title         *string `json:"title,omitempty"`
 	Body          *string `json:"description,omitempty"`
@@ -503,6 +512,7 @@ func (h *Handler) SuaNhiemVu(w http.ResponseWriter, r *http.Request) {
 	}
 
 	n, err := h.d.GhiNhiemVu.Sua(r.Context(), r.PathValue("ma"), petstore.SuaNhiemVu{
+		Code:                     vao.Code,
 		Khoi:                     vao.Bloc,
 		TieuDe:                   vao.Title,
 		MoTa:                     vao.Body,
@@ -708,8 +718,8 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 			domain.ErrChuTrinhCayNhiemVu, domain.ErrChaKhongTonTai, domain.ErrCayNhiemVuQuaLon), "")
 	case errors.Is(err, petstore.ErrMaNhiemVuDaTonTai):
 		httpx.WriteError(w, http.StatusConflict, "code_taken",
-			"Mã nhiệm vụ này đã được dùng trong xã — kể cả khi nhiệm vụ mang mã đó đã bị xoá. "+
-				"Mã đã cấp thì không cấp lại.", "")
+			"Mã nhiệm vụ này đã được dùng trong xã — kể cả khi nhiệm vụ mang mã đó đã bị xoá "+
+				"hoặc đã đổi sang mã khác. Mã đã cấp thì không cấp lại.", "")
 	case errors.Is(err, app.ErrTaskEditConflict):
 		// Optimistic locking (28/09/2026). Its OWN code, not `task_state`: the client knows exactly what
 		// happened — its copy is stale — and can reload and show the officer the newer version.
