@@ -5,6 +5,7 @@ import { ThanhBen } from "@/components/thanh-ben";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { SoVanBanDen } from "@/features/van-ban/so-van-ban-den";
 import { SoVanBanDi } from "@/features/van-ban/so-van-ban-di";
+import { drillDownKey, parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -39,8 +40,15 @@ export const metadata = {
   title: "Văn bản & đơn thư · ViGov",
 };
 
-export default async function TrangVanBan() {
+export default async function TrangVanBan({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   const xa = await layCauHinhXa();
+  // Lọc mở từ trang Tổng quan (SRS M7.2.2). Đọc ở MÁY CHỦ và chuyển xuống bằng prop: màn danh sách
+  // không tự đọc thanh địa chỉ. `key` theo lọc — đổi lọc là dựng lại màn từ trang đầu.
+  const drillDown = parseDrillDown("incoming-documents", await searchParams);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -53,7 +61,7 @@ export default async function TrangVanBan() {
           <p className="mo-ta-trang">
             Vào sổ văn bản đến, cấp số văn bản đi, phân công xử lý và theo dõi hạn giải quyết.
           </p>
-          <SoVanBanDen />
+          <SoVanBanDen key={drillDownKey(drillDown)} drillDown={drillDown} />
           <SoVanBanDi />
         </main>
         </div>

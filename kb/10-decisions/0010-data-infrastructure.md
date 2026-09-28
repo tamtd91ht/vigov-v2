@@ -19,6 +19,9 @@ owns_facts:
 > và **ClamAV** (quét mã độc). Bảng dưới giữ nguyên văn ngày 16/09; sự thật hiện hành về hai thành
 > phần ấy thuộc về `kb/10-decisions/0052-object-storage-minio.md`.
 
+> 28/09/2026 → ADR 0053: /tong-quan đếm trực tiếp, không qua reporting
+> (`kb/10-decisions/0053-tong-quan-dem-truc-tiep-o-service-so-huu.md`).
+
 ## Bối cảnh
 
 ADR 0004 chốt `tenant_id` là shard key nhưng không nói dùng CSDL nào, và không nhắc tới hàng

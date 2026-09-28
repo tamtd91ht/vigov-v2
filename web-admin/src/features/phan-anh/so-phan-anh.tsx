@@ -32,6 +32,8 @@ import type {
 } from "@/lib/api/schema.gen";
 import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
 import { coQuyen } from "@/lib/quyen";
+import { DrillDownBanner } from "@/components/drill-down-banner";
+import { NO_DRILL_DOWN, drillDownQuery, type DrillDown } from "@/lib/drill-down";
 
 import {
   buocLuongChinh,
@@ -164,11 +166,29 @@ type BoLoc = Omit<LocPhanAnh, "limit" | "cursor">;
 
 const KHONG_LOC: BoLoc = {};
 
-export function SoPhanAnh() {
-  const [loc, datLoc] = useState<BoLoc>(KHONG_LOC);
+/** Câu của dải lọc Tổng quan trên sổ này — nói ra đúng những gì màn tạm tắt. */
+export const DRILL_DOWN_NOTE_CITIZEN_REPORTS =
+  "Bộ lọc, ô tìm và phạm vi tạm tắt để danh sách khớp đúng con số ở trang Tổng quan. " +
+  "Bấm “Bỏ lọc” để dùng lại.";
+
+export function SoPhanAnh({
+  drillDown = NO_DRILL_DOWN,
+}: {
+  /** Lọc mở từ trang Tổng quan, đọc ở máy chủ (`app/phan-anh/page.tsx`). */
+  drillDown?: DrillDown<"citizen-reports">;
+} = {}) {
+  // LỌC TỔNG QUAN ĐANG BẬT THÌ NÓ LÀ BỘ LỌC DUY NHẤT: hàng lọc §4 không vẽ, nên không lối nào ghép
+  // thêm một ô vào lát cắt của con số. Màn được dựng lại khi lọc đổi (`key` ở trang), nên giá trị
+  // đầu của state là đủ.
+  const drillDownActive = drillDown.kind === "active";
+  const [loc, datLoc] = useState<BoLoc>(() =>
+    drillDownActive ? drillDownQuery(drillDown) : KHONG_LOC,
+  );
   const [tim, datTim] = useState("");
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
   const [lanTai, datLanTai] = useState(0);
+  // Cán bộ đã tự đổi bộ lọc: câu "đường dẫn lọc không hợp lệ — đang hiện toàn bộ" hết đúng.
+  const [filtersChanged, setFiltersChanged] = useState(false);
 
   const [daTai, datDaTai] = useState<{
     khoa: string;
@@ -237,6 +257,7 @@ export function SoPhanAnh() {
   function datLocMoi(moi: BoLoc): void {
     datLoc(moi);
     datNganXep(TRANG_DAU);
+    setFiltersChanged(true);
   }
 
   /** Một lần ghi xong: giữ phiếu máy chủ vừa trả, xoá lỗi cũ, và đọc lại quyển sổ. */
@@ -269,14 +290,23 @@ export function SoPhanAnh() {
 
       <KhoiChuaDung />
 
-      <HangLoc
-        loc={loc}
-        tim={tim}
-        datTim={datTim}
-        datLoc={datLocMoi}
-        boPhan={daTaiBoPhan}
-        thon={daTaiThon}
+      <DrillDownBanner
+        drillDown={drillDown}
+        clearHref="/phan-anh"
+        note={DRILL_DOWN_NOTE_CITIZEN_REPORTS}
+        showInvalid={!filtersChanged}
       />
+
+      {!drillDownActive && (
+        <HangLoc
+          loc={loc}
+          tim={tim}
+          datTim={datTim}
+          datLoc={datLocMoi}
+          boPhan={daTaiBoPhan}
+          thon={daTaiThon}
+        />
+      )}
 
       {so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
       {so.pha === "loi" && (

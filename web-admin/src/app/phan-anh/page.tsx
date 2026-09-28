@@ -7,6 +7,7 @@ import { TraCuuPhieu } from "@/features/phan-anh/tra-cuu-phieu";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { QUYEN_XEM_PHAN_ANH } from "@/lib/quyen";
+import { drillDownKey, parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -24,8 +25,15 @@ export const metadata = {
   title: "Phản ánh của người dân · ViGov",
 };
 
-export default async function TrangPhanAnh() {
+export default async function TrangPhanAnh({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   const xa = await layCauHinhXa();
+  // Lọc mở từ trang Tổng quan (SRS M7.2.2). Đọc ở MÁY CHỦ và chuyển xuống bằng prop: màn danh sách
+  // không tự đọc thanh địa chỉ. `key` theo lọc — đổi lọc là dựng lại màn từ trang đầu.
+  const drillDown = parseDrillDown("citizen-reports", await searchParams);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -50,7 +58,7 @@ export default async function TrangPhanAnh() {
                 sau một khoá hẹp hơn). Bốn thao tác ghi có cổng RIÊNG bên trong, và một trong bốn
                 — `Đóng phiếu` — cố ý đứng sau khoá khác với nút tiến trạng thái; xem
                 `QUYEN_DONG_PHAN_ANH` ở `lib/quyen.ts`. */}
-            <SoPhanAnh />
+            <SoPhanAnh key={drillDownKey(drillDown)} drillDown={drillDown} />
             <TraCuuPhieu />
           </CongQuyen>
         </main>

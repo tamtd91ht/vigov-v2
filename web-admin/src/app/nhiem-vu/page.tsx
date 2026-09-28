@@ -4,6 +4,7 @@ import { DauTrang } from "@/components/dau-trang";
 import { ThanhBen } from "@/components/thanh-ben";
 import { SoNhiemVu } from "@/features/nhiem-vu/so-nhiem-vu";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { drillDownKey, parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
 import { layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -27,8 +28,15 @@ export const metadata = {
   title: "Quản lý nhiệm vụ · ViGov",
 };
 
-export default async function TrangNhiemVu() {
+export default async function TrangNhiemVu({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   const xa = await layCauHinhXa();
+  // Lọc mở từ trang Tổng quan (SRS M7.2.2). Đọc ở MÁY CHỦ và chuyển xuống bằng prop: màn danh sách
+  // không tự đọc thanh địa chỉ. `key` theo lọc — đổi lọc là dựng lại màn từ trang đầu.
+  const drillDown = parseDrillDown("tasks", await searchParams);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -41,7 +49,7 @@ export default async function TrangNhiemVu() {
             <p className="mo-ta-trang">
               Giao việc từ kết luận họp, theo dõi tiến độ và đôn đốc tự động.
             </p>
-            <SoNhiemVu />
+            <SoNhiemVu key={drillDownKey(drillDown)} drillDown={drillDown} />
           </main>
         </div>
       </PhienProvider>

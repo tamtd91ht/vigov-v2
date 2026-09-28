@@ -33,6 +33,8 @@ import {
   vaoSoVanBanDen,
   type LocVanBanDen,
 } from "@/lib/api/van-ban";
+import { DrillDownBanner } from "@/components/drill-down-banner";
+import { NO_DRILL_DOWN, drillDownQuery, type DrillDown } from "@/lib/drill-down";
 import { namTheoDongHoMay } from "@/lib/nam";
 import { QUYEN_CHUYEN_VAN_BAN, QUYEN_GHI_SO_VAN_BAN, quyetDinhTheoKhoa } from "@/lib/quyen";
 
@@ -189,7 +191,26 @@ function banTuDong(vb: documents_vanBanDenRa): BanNhapDen {
 
 /* ---- vỏ đọc dữ liệu ------------------------------------------------------------------------ */
 
-export function SoVanBanDen() {
+/**
+ * Câu của dải lọc Tổng quan trên sổ này. NĂM CỦA SỔ tắt cùng các ô khác, và đó là ô dễ quên nhất:
+ * `open`/`overdue` đếm mọi năm, còn một kỳ `arrived` có thể vắt qua ngày 01/01.
+ */
+export const DRILL_DOWN_NOTE_INCOMING =
+  "Năm của sổ, bộ lọc, ô tìm và thứ tự tạm tắt để danh sách khớp đúng con số ở trang Tổng quan. " +
+  "Bấm “Bỏ lọc” để dùng lại.";
+
+export function SoVanBanDen({
+  drillDown = NO_DRILL_DOWN,
+}: {
+  /**
+   * Lọc mở từ trang Tổng quan — đọc ở MÁY CHỦ (`app/van-ban/page.tsx`) và chuyển xuống bằng prop.
+   * Quyển sổ vẫn KHÔNG tự đọc hay ghi thanh địa chỉ (`ngan-van-ban-den.test.tsx`, ca cuối).
+   */
+  drillDown?: DrillDown<"incoming-documents">;
+} = {}) {
+  const drillDownActive = drillDown.kind === "active";
+  // Cán bộ đã tự đổi bộ lọc: câu "đường dẫn lọc không hợp lệ — đang hiện toàn bộ" hết đúng.
+  const [filtersChanged, setFiltersChanged] = useState(false);
   const [namGoc] = useState(namTheoDongHoMay);
   const [nam, datNam] = useState(namGoc);
   const [trangThai, datTrangThai] = useState("");
@@ -251,16 +272,21 @@ export function SoVanBanDen() {
   const quyetDinhChuyen = phien === null ? null : quyetDinhTheoKhoa(phien, QUYEN_CHUYEN_VAN_BAN);
 
   const loc = useMemo<LocVanBanDen>(
-    () => ({
-      nam,
-      trangThai,
-      loaiVanBan: loaiLoc,
-      boPhanDangGiu: boPhanLoc,
-      tim,
-      ...sapXepTheoThuTu(thuTu),
-      cursor: nganXep.hienTai,
-    }),
-    [nam, trangThai, loaiLoc, boPhanLoc, tim, thuTu, nganXep],
+    () =>
+      // LỌC TỔNG QUAN LÀ BỘ LỌC DUY NHẤT KHI BẬT — kể cả `nam` VẮNG MẶT (xem `DRILL_DOWN_NOTE_INCOMING`).
+      // Hàng lọc không vẽ, nên các state kia đứng ở giá trị đầu và không được ghép vào.
+      drillDownActive
+        ? { ...drillDownQuery(drillDown), cursor: nganXep.hienTai }
+        : {
+            nam,
+            trangThai,
+            loaiVanBan: loaiLoc,
+            boPhanDangGiu: boPhanLoc,
+            tim,
+            ...sapXepTheoThuTu(thuTu),
+            cursor: nganXep.hienTai,
+          },
+    [drillDownActive, drillDown, nam, trangThai, loaiLoc, boPhanLoc, tim, thuTu, nganXep],
   );
 
   useEffect(() => {
@@ -351,7 +377,10 @@ export function SoVanBanDen() {
   }, [banChuyen, dangGuiChuyen, xem]);
 
   /** Đổi một bộ lọc, ô tìm hay thứ tự là về TRANG ĐẦU — `doiLocVeTrangDau`. */
-  const doiLoc = useCallback((dat: () => void) => doiLocVeTrangDau(dat, datNganXep), []);
+  const doiLoc = useCallback((dat: () => void) => {
+    setFiltersChanged(true);
+    doiLocVeTrangDau(dat, datNganXep);
+  }, []);
 
   const mo = useCallback((m: DangMoDen, banDau: BanNhapDen) => {
     datDangMo(m);
@@ -457,6 +486,8 @@ export function SoVanBanDen() {
 
   return (
     <ManSoVanBanDen
+      drillDown={drillDown}
+      showInvalidDrillDown={!filtersChanged}
       kq={kq !== null && kq.loc === loc ? kq.kq : null}
       bayGio={new Date()}
       nam={nam}
@@ -535,6 +566,8 @@ export function SoVanBanDen() {
  * định ấy có ra tới trang hay không thì không ca nào canh.
  */
 export function ManSoVanBanDen({
+  drillDown = NO_DRILL_DOWN,
+  showInvalidDrillDown = true,
   kq,
   bayGio,
   nam,
@@ -564,6 +597,9 @@ export function ManSoVanBanDen({
   ngan = null,
   form,
 }: {
+  /** Lọc mở từ trang Tổng quan. Bật thì hàng lọc không vẽ và dải "Đang xem" nói lọc gì. */
+  drillDown?: DrillDown<"incoming-documents">;
+  showInvalidDrillDown?: boolean;
   kq: KetQua<page_Result_documents_vanBanDenRa> | null;
   /** Thời điểm hiện tại TRUYỀN VÀO, không đọc đồng hồ trong lúc vẽ: bài kiểm phải đứng được ở
    *  hai phía của một hạn. */
@@ -625,23 +661,32 @@ export function ManSoVanBanDen({
 
       {form}
 
-      <LocSoVanBanDen
-        nam={nam}
-        namGoc={namGoc}
-        datNam={datNam}
-        trangThai={trangThai}
-        datTrangThai={datTrangThai}
-        loaiLoc={loaiLoc}
-        datLoaiLoc={datLoaiLoc}
-        boPhanLoc={boPhanLoc}
-        datBoPhanLoc={datBoPhanLoc}
-        tim={tim}
-        datTim={datTim}
-        thuTu={thuTu}
-        datThuTu={datThuTu}
-        traLoai={traLoai}
-        traBoPhan={traBoPhan}
+      <DrillDownBanner
+        drillDown={drillDown}
+        clearHref="/van-ban"
+        note={DRILL_DOWN_NOTE_INCOMING}
+        showInvalid={showInvalidDrillDown}
       />
+
+      {drillDown.kind !== "active" && (
+        <LocSoVanBanDen
+          nam={nam}
+          namGoc={namGoc}
+          datNam={datNam}
+          trangThai={trangThai}
+          datTrangThai={datTrangThai}
+          loaiLoc={loaiLoc}
+          datLoaiLoc={datLoaiLoc}
+          boPhanLoc={boPhanLoc}
+          datBoPhanLoc={datBoPhanLoc}
+          tim={tim}
+          datTim={datTim}
+          thuTu={thuTu}
+          datThuTu={datThuTu}
+          traLoai={traLoai}
+          traBoPhan={traBoPhan}
+        />
+      )}
 
       <BangVanBanDen
         kq={kq}

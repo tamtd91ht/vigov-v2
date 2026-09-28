@@ -44,7 +44,9 @@ import {
   type LocNhiemVu,
 } from "@/lib/api/nhiem-vu";
 import { layTrangThaiNhiemVu } from "@/lib/api/trang-thai-nhiem-vu";
+import { NO_DRILL_DOWN, type DrillDown } from "@/lib/drill-down";
 import { QUYEN_DUYET_GIA_HAN } from "@/lib/quyen";
+import { DrillDownBanner } from "@/components/drill-down-banner";
 import type {
   identity_boPhanRa,
   identity_danhBaChonNguoiRa,
@@ -403,7 +405,21 @@ export function chuyenDrawer(s: DrawerNhiemVu | null, v: ViecDrawer): DrawerNhie
   }
 }
 
-export function SoNhiemVu() {
+/**
+ * Câu của dải lọc Tổng quan trên sổ này — nói ra đúng những gì màn tạm tắt để số dòng bằng con số.
+ * Kanban tắt vì mỗi cột chỉ đọc 20 thẻ và không vẽ các trạng thái rẽ nhánh (`Tạm dừng` là một).
+ */
+export const DRILL_DOWN_NOTE_TASKS =
+  "Bộ lọc, ô tìm, phạm vi và chế độ Kanban tạm tắt để danh sách khớp đúng con số ở trang Tổng quan. " +
+  "Bấm “Bỏ lọc” để dùng lại.";
+
+export function SoNhiemVu({
+  drillDown = NO_DRILL_DOWN,
+}: {
+  /** Lọc mở từ trang Tổng quan, đọc ở máy chủ (`app/nhiem-vu/page.tsx`). */
+  drillDown?: DrillDown<"tasks">;
+} = {}) {
+  const drillDownActive = drillDown.kind === "active";
   /**
    * BỘ LỌC §3 CÓ HAI NGUỒN, THEO THỨ TỰ: cán bộ đã đổi một ô lọc trên màn (`locDaDoi`) thì đó là
    * bộ lọc; chưa đổi gì thì bộ lọc là ĐƯỜNG DẪN lúc mở (`locTuDuongDan`) — đúng thứ một đường dẫn
@@ -422,16 +438,36 @@ export function SoNhiemVu() {
   );
   // `useMemo` vì `locTuDuongDan` trả một đối tượng MỚI mỗi lần gọi: không nhớ thì mỗi lần vẽ là một
   // `loc` mới, và ba `useEffect` đọc sổ theo `loc` sẽ gọi mạng lại ở mọi lần vẽ.
-  const locDuongDan = useMemo(
-    () => (chuoiDuongDan === null ? null : locTuDuongDan(chuoiDuongDan)),
-    [chuoiDuongDan],
+  //
+  // ĐƯỜNG DẪN MANG LỌC TỔNG QUAN (`drillDown` khác `none`) THÌ CÁC Ô LỌC §3 TRÊN ĐƯỜNG DẪN BỊ BỎ QUA:
+  // hợp lệ thì chỉ lọc ấy được gửi (con số phải bằng số dòng); hỏng thì câu trên màn nói "đang hiện
+  // toàn bộ danh sách", và nó chỉ đúng khi không ô lọc nào của đường dẫn lén đi kèm.
+  const locDuongDan = useMemo<BoLoc | null>(() => {
+    if (drillDown.kind === "active") {
+      return { metric: drillDown.metric, from: drillDown.period?.from, to: drillDown.period?.to };
+    }
+    if (drillDown.kind === "invalid") return KHONG_LOC;
+    return chuoiDuongDan === null ? null : locTuDuongDan(chuoiDuongDan);
+  }, [chuoiDuongDan, drillDown]);
+  // LỌC TỔNG QUAN ĐANG BẬT: cán bộ chỉ đổi được THỨ TỰ (bấm đầu cột) — thứ tự không đổi số dòng. Mọi
+  // thứ khác của `locDaDoi` bị bỏ, để không lối nào ghép thêm một ô lọc vào lát cắt của con số.
+  // `useMemo` BẮT BUỘC ở nhánh lọc: nó dựng một đối tượng MỚI, và `loc` mới mỗi lần vẽ là ba effect
+  // đọc sổ gọi mạng lại mỗi lần vẽ — một vòng lặp, vì mỗi câu trả lời lại gây một lần vẽ.
+  const loc: BoLoc = useMemo(
+    () =>
+      drillDownActive && locDuongDan !== null
+        ? { ...locDuongDan, sapXep: locDaDoi?.sapXep, chieu: locDaDoi?.chieu }
+        : (locDaDoi ?? locDuongDan ?? KHONG_LOC),
+    [drillDownActive, locDuongDan, locDaDoi],
   );
-  const loc: BoLoc = locDaDoi ?? locDuongDan ?? KHONG_LOC;
   const daDocDuongDan = locDaDoi !== null || locDuongDan !== null;
   const [tim, datTim] = useState("");
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
   const [lanTai, datLanTai] = useState(0);
   const [cheDoXem, datCheDoXem] = useState<CheDoXem>("kanban");
+  // Kanban không cho số dòng bằng con số: 20 thẻ mỗi cột, không có cột rẽ nhánh. Lọc Tổng quan bật
+  // thì luôn là Danh sách, có phân trang.
+  const viewMode: CheDoXem = drillDownActive ? "danh-sach" : cheDoXem;
 
   const [daTai, datDaTai] = useState<{
     khoa: string;
@@ -476,17 +512,20 @@ export function SoNhiemVu() {
    */
   useEffect(() => {
     if (locDaDoi === null) return;
+    // Lọc Tổng quan đang bật: đường dẫn ĐANG đúng là thứ màn hiện. Ghi đè nó bằng bộ lọc §3 là xoá
+    // `metric` khỏi thanh địa chỉ, và lần tải lại sau đó mở cả quyển sổ.
+    if (drillDownActive) return;
     const chuoi = duongDanTuLoc(locDaDoi);
     const { pathname, search, hash } = window.location;
     const moi = `${pathname}${chuoi === "" ? "" : `?${chuoi}`}${hash}`;
     if (moi !== `${pathname}${search}${hash}`) window.history.replaceState(null, "", moi);
-  }, [locDaDoi]);
+  }, [locDaDoi, drillDownActive]);
 
   useEffect(() => {
     if (!daDocDuongDan) return;
     // CHỈ ĐỌC CHẾ ĐỘ ĐANG XEM. Không có dòng này thì mỗi lần đổi bộ lọc trên Kanban là SÁU lời gọi
     // thay vì năm, và lời gọi thứ sáu đọc một trang không ai vẽ ra.
-    if (cheDoXem !== "danh-sach") return;
+    if (viewMode !== "danh-sach") return;
     let bo = false;
     // CÁCH SẮP LUÔN ĐI TRÊN DÂY, kể cả khi cán bộ chưa bấm cột nào: mũi tên trên đầu cột vẽ từ
     // `sapXepDayDu(loc)`, nên gửi đúng giá trị ấy là điều kiện để mũi tên nói thật về câu hỏi đã gửi.
@@ -503,7 +542,7 @@ export function SoNhiemVu() {
     return () => {
       bo = true;
     };
-  }, [loc, nganXep.hienTai, khoa, cheDoXem, daDocDuongDan]);
+  }, [loc, nganXep.hienTai, khoa, viewMode, daDocDuongDan]);
 
   /**
    * KANBAN ĐỌC CÙNG TUYẾN VÀ CÙNG BỘ LỌC VỚI DANH SÁCH — qua đúng `laySoNhiemVu`, nên mười tên
@@ -515,7 +554,7 @@ export function SoNhiemVu() {
    * phân trang trông y hệt một cột rỗng vì xã không có việc nào.
    */
   useEffect(() => {
-    if (!daDocDuongDan || cheDoXem !== "kanban") return;
+    if (!daDocDuongDan || viewMode !== "kanban") return;
     let bo = false;
     const ds = cotPhaiDoc(loc.trangThai);
     Promise.all(
@@ -529,7 +568,7 @@ export function SoNhiemVu() {
     return () => {
       bo = true;
     };
-  }, [loc, khoaKanban, cheDoXem, daDocDuongDan]);
+  }, [loc, khoaKanban, viewMode, daDocDuongDan]);
 
   // NĂM DANH MỤC, ĐỌC MỘT LẦN CHO CẢ MÀN. Một danh mục hỏng thì ô lọc tương ứng rỗng — KHÔNG làm
   // hỏng quyển sổ: năm câu trả lời rời nhau, mỗi cái nói chuyện của nó. Riêng nhãn trạng thái
@@ -704,18 +743,28 @@ export function SoNhiemVu() {
         }}
       />
 
-      <HangLoc
-        loc={loc}
-        tim={tim}
-        datTim={datTim}
-        datLoc={datLocMoi}
-        danhMuc={danhMuc}
-        danhBa={kqDanhBa}
-        nhanTT={nhanTT}
+      <DrillDownBanner
+        drillDown={drillDown}
+        clearHref="/nhiem-vu"
+        note={DRILL_DOWN_NOTE_TASKS}
+        showInvalid={locDaDoi === null}
       />
+
+      {!drillDownActive && (
+        <HangLoc
+          loc={loc}
+          tim={tim}
+          datTim={datTim}
+          datLoc={datLocMoi}
+          danhMuc={danhMuc}
+          danhBa={kqDanhBa}
+          nhanTT={nhanTT}
+        />
+      )}
 
       {/* CỤM CHỌN CHẾ ĐỘ XEM — §2, bên phải hàng lọc 2. HAI nút chứ không phải ba: `Sổ theo dõi`
           §4.3 cần `documents` trên tuyến đọc sổ, và tuyến ấy cố ý không trả — xem `PHAN_CHUA_DUNG`. */}
+      {!drillDownActive && (
       <div className="o-chon" role="group" aria-label="Chế độ xem">
         <button
           type="button"
@@ -734,9 +783,10 @@ export function SoNhiemVu() {
           {NHAN_CHE_DO_DANH_SACH}
         </button>
       </div>
-      <p className="ghi-chu">{GHI_CHU_THIEU_SO_THEO_DOI}</p>
+      )}
+      {!drillDownActive && <p className="ghi-chu">{GHI_CHU_THIEU_SO_THEO_DOI}</p>}
 
-      {cheDoXem === "kanban" && (
+      {viewMode === "kanban" && (
         <BangKanban
           cot={cotKanban}
           danhMuc={danhMuc}
@@ -751,14 +801,14 @@ export function SoNhiemVu() {
         />
       )}
 
-      {cheDoXem === "danh-sach" && so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
-      {cheDoXem === "danh-sach" && so.pha === "loi" && (
+      {viewMode === "danh-sach" && so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
+      {viewMode === "danh-sach" && so.pha === "loi" && (
         <p className="thong-bao-loi" role="alert">
           {so.thongBao}
         </p>
       )}
 
-      {cheDoXem === "danh-sach" && so.pha === "xong" && (
+      {viewMode === "danh-sach" && so.pha === "xong" && (
         <>
           <BangNhiemVu
             nhiemVu={so.duLieu.items}

@@ -19,6 +19,9 @@ owns_facts:
 > thư `don_thu` thuộc `documents`. Bảng dưới giữ nguyên văn ngày 15/09; sự thật hiện hành về đơn
 > thư thuộc về `kb/10-decisions/0039-so-don-thu-thuoc-van-thu.md`.
 
+> 28/09/2026 → ADR 0053: /tong-quan đếm trực tiếp, không qua reporting
+> (`kb/10-decisions/0053-tong-quan-dem-truc-tiep-o-service-so-huu.md`).
+
 ## Bối cảnh
 
 Đề xuất ban đầu của chủ đầu tư là `admin-service · auth-service · report-service ·

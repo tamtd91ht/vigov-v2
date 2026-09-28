@@ -42,6 +42,8 @@
  * một ô lọc thành một trang lỗi; nên chúng ra tới màn hình qua `PHAN_CHUA_DUNG`.
  */
 
+import { isPeriodMetric, type TaskMetric } from "@/lib/drill-down";
+
 import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./goi";
 import type {
   page_Result_petitions_deNghiChoDuyetRa,
@@ -137,6 +139,14 @@ export type LocNhiemVu = {
    * `sapXep` hay `chieu` mà giữ con trỏ cũ là một trang lỗi — bên gọi phải về trang đầu.
    */
   cursor?: string | null;
+  /**
+   * Lọc theo MỘT số liệu của trang Tổng quan (SRS M7.2.2) — tập dòng đứng sau con số ấy, cùng một
+   * vị từ SQL với phép đếm (`service-petitions/internal/domain/summary_metrics.go:3-11`).
+   */
+  metric?: TaskMetric;
+  /** Kỳ nửa mở [from, to), RFC3339. CHỈ gửi với số liệu theo kỳ — xem `themLocVaoTruyVan`. */
+  from?: string;
+  to?: string;
 };
 
 /** Hai cột máy chủ cho sắp — `petitions_get_tasks["truyVan"]["sort"]`, không gõ tay. */
@@ -176,6 +186,15 @@ function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocNhiemVu): void {
   const dat = thamSoTheoHopDong<petitions_get_tasks["truyVan"]>(truyVan);
   dat("sort", loc.sapXep);
   dat("order", loc.chieu);
+
+  // SỐ LIỆU CỦA TỔNG QUAN. Kỳ đi lên CHỈ khi số liệu đếm theo kỳ: máy chủ bỏ qua kỳ ở số liệu tồn
+  // (`summary.go:182-185`), nên gửi nó là gửi một câu hỏi máy chủ không trả lời — và `from`/`to` mà
+  // không có `metric` thì càng không nghĩa gì.
+  dat("metric", loc.metric);
+  if (loc.metric !== undefined && isPeriodMetric("tasks", loc.metric)) {
+    dat("from", loc.from);
+    dat("to", loc.to);
+  }
 
   if (loc.limit !== undefined) truyVan.set("limit", String(loc.limit));
   // Con trỏ rỗng nghĩa là trang đầu. Gửi `cursor=` rỗng thì máy chủ trả 400 "con trỏ không hợp

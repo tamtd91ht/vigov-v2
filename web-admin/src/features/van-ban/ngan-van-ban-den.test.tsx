@@ -318,6 +318,15 @@ describe("lý do chuyển không rò ra ngoài (luật 3)", () => {
 
   it("mã nguồn ngăn và sổ không có đường ghi nào ra console, bộ nhớ trình duyệt hay URL", () => {
     // Vế tĩnh của ca trên: ca trên chỉ chạy một đường đi; ca này canh cả hai tệp, bỏ chú thích.
+    //
+    // 28/09/2026, SRS M7.2.2 ("Làm luôn bộ nhận"): trang `/van-ban` nay ĐỌC ba tham số lọc Tổng quan
+    // (`metric`, `from`, `to`) từ đường dẫn. Lệnh cấm dưới đây KHÔNG nới, vì việc đọc ấy không nằm
+    // trong hai tệp này: `app/van-ban/page.tsx` đọc `searchParams` ở MÁY CHỦ, đi qua đúng một hàm
+    // thuần (`parseDrillDown`, `lib/drill-down.ts`) chỉ nhìn ba khoá ấy, rồi chuyển xuống bằng prop
+    // `drillDown`. Ba khoá ấy không mang dữ liệu cá nhân — tên một số liệu và hai mốc thời gian — nên
+    // điều ca này canh (lý do chuyển, trích yếu không bao giờ lên URL, luật 3 cấm #4) vẫn nguyên. Để
+    // giữ nguyên hình dạng ấy, ca này còn cấm thêm hai tệp tự đọc thanh địa chỉ (`location`,
+    // `searchParams`): quyển sổ đọc URL là bước đầu của quyển sổ GHI trạng thái của nó lên URL.
     for (const tep of ["./ngan-van-ban-den.tsx", "./so-van-ban-den.tsx"]) {
       const nguon = readFileSync(new URL(tep, import.meta.url), "utf8")
         .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
@@ -326,6 +335,7 @@ describe("lý do chuyển không rò ra ngoài (luật 3)", () => {
       expect(nguon, tep).not.toMatch(/console\./);
       expect(nguon, tep).not.toMatch(/localStorage|sessionStorage|indexedDB/);
       expect(nguon, tep).not.toMatch(/history\.(push|replace)State|router\.(push|replace)|useSearchParams/);
+      expect(nguon, tep).not.toMatch(/\blocation\b|searchParams/);
     }
   });
 });

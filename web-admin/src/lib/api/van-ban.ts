@@ -29,6 +29,8 @@
  * ấy đúng cho MỌI tuyến và được nói một lần ở `goi.ts`. Đọc tệp ấy trước khi sửa gì ở đây.
  */
 
+import { isPeriodMetric, type IncomingDocumentMetric } from "@/lib/drill-down";
+
 import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./goi";
 import type {
   documents_capSoVanBanDiVao,
@@ -122,6 +124,15 @@ export type LocVanBanDen = ThamSoTrangVanBan & {
    * phải 200 ký tự: chữ có dấu tốn 2–3 byte.
    */
   tim?: string;
+  /**
+   * Lọc theo MỘT số liệu của trang Tổng quan (SRS M7.2.2). ⚠ `nam` phải VẮNG khi có `metric`:
+   * `open`/`overdue` đếm cả quyển sổ mọi năm, và một kỳ `arrived` có thể vắt qua ranh giới năm —
+   * gửi kèm `year` là cắt bớt đúng những dòng làm nên con số.
+   */
+  metric?: IncomingDocumentMetric;
+  /** Kỳ nửa mở [from, to), RFC3339. CHỈ đi lên với `arrived` — máy chủ trả 400 ở hai số liệu kia. */
+  from?: string;
+  to?: string;
 };
 
 /** Ba bộ lọc của sổ văn bản đi — `van_ban_di.go:260`. Sổ đi KHÔNG có trạng thái và không có bộ phận. */
@@ -162,6 +173,14 @@ export function duongDanSoVanBanDen(loc: LocVanBanDen = {}): string {
   const dat = thamSoTheoHopDong<TruyVanDen>(truyVan);
   dat("status", loc.trangThai);
   dat("holding_unit", loc.boPhanDangGiu);
+  // KỲ CHỈ ĐI LÊN VỚI SỐ LIỆU THEO KỲ. `open`/`overdue` kèm `from`/`to` là **400**, và `from`/`to`
+  // không kèm `metric` cũng là 400 (`http/incoming_dashboard.go:110-145`) — nên điều kiện nằm ở
+  // đây, một chỗ, chứ không trông vào từng màn gọi.
+  dat("metric", loc.metric);
+  if (loc.metric !== undefined && isPeriodMetric("incoming-documents", loc.metric)) {
+    dat("from", loc.from);
+    dat("to", loc.to);
+  }
 
   const chuoi = truyVan.toString();
   return chuoi === "" ? duongDan : `${duongDan}?${chuoi}`;

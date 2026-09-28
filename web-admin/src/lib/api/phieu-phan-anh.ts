@@ -41,6 +41,8 @@
  * tên (`phieu-phan-anh.test.ts`).
  */
 
+import { isPeriodMetric, type CitizenReportMetric } from "@/lib/drill-down";
+
 import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./goi";
 import type {
   petitions_chuyenCapTrenVao,
@@ -146,6 +148,14 @@ export type LocPhanAnh = {
   chiTreHan?: boolean;
   limit?: number;
   cursor?: string | null;
+  /**
+   * Lọc theo MỘT số liệu của trang Tổng quan (SRS M7.2.2). Máy chủ đọc `feedback.restricted` qua
+   * cùng một hàm cho số đếm và danh sách, nên con số và số dòng khớp nhau với mọi tài khoản.
+   */
+  metric?: CitizenReportMetric;
+  /** Kỳ nửa mở [from, to), RFC3339. CHỈ gửi với số liệu theo kỳ. */
+  from?: string;
+  to?: string;
 };
 
 /**
@@ -169,6 +179,15 @@ function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocPhanAnh): void {
   // `late` CHỈ NHẬN ĐÚNG CHUỖI `true`. Gửi `false` là **400**, không phải "không lọc" — nên ô
   // chưa tích thì tham số vắng mặt hẳn (`locPhieuTuQuery`, `errLocTreHanKhongHopLe`).
   if (loc.chiTreHan === true) truyVan.set("late", "true");
+
+  // SỐ LIỆU CỦA TỔNG QUAN — ba tên mới đi qua `thamSoTheoHopDong`, nên `tsc` đối chiếu chúng với
+  // kiểu `truyVan`. Kỳ chỉ đi lên với số liệu theo kỳ, cùng quy tắc sổ Nhiệm vụ.
+  const dat = thamSoTheoHopDong<petitions_get_citizen_reports["truyVan"]>(truyVan);
+  dat("metric", loc.metric);
+  if (loc.metric !== undefined && isPeriodMetric("citizen-reports", loc.metric)) {
+    dat("from", loc.from);
+    dat("to", loc.to);
+  }
 
   if (loc.limit !== undefined) truyVan.set("limit", String(loc.limit));
   // Con trỏ rỗng nghĩa là trang đầu. Gửi `cursor=` rỗng thì máy chủ trả 400 "con trỏ không hợp
