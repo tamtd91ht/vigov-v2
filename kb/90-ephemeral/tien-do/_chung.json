@@ -1,8 +1,24 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "_chung",
-  "cap_nhat": "2026-09-27",
+  "cap_nhat": "2026-09-28",
   "muc": [
+    {
+      "id": "luat-13-an-ninh-mang-dot-1",
+      "viec": "Bộ não bám TCVN 14423:2026 — đợt 1: luật 13, hook, cổng toàn kho, make vuln, 2 skill, lệnh, agent, 5 câu hỏi mở",
+      "trang_thai": "xong",
+      "bang_chung": "Chủ dự án chốt 28/09/2026: LẬP luật 13, nâng trần nạp sẵn 27000 → 28000; lập agent riêng `security-reviewer`; quét lỗ hổng theo phương án B (tách `make vuln` khỏi `make check`, bắt buộc ở `vigov-gate` + chạy mỗi đêm). Đã dựng: `.claude/rules/critical/13-security-baseline.md` · `.claude/hooks/security_guard.py` (BLOCK, 16 ca) + nhánh rule 13 trong `bash_content_guard` (2 ca) · `tools/check_security.py` (mục `security` của `make check`) + sổ nợ `tools/security_debt.json` (5 mục, bánh cóc: hết hạn/đã sửa mà còn dòng đều đỏ — đã thử cả ba nhánh đỏ) · `tools/check_vuln.py` + `tools/vuln_exceptions.json` (mục `vuln`; Jenkinsfile gốc thêm stage 'Quét lỗ hổng' + `cron('H 2 * * *')`) · skill `security-baseline`, `security-logging`; mở rộng `session-and-token`, `infra-config`, `nextjs-multi-tenant`, `rest-api-design` · lệnh `/review-security` · agent `security-reviewer` (ROUTING §1 10b, §4, §5.1 2b, §5.3, §9) · câu hỏi mở #35–#39 (cấp độ, mật khẩu↔MFA, phạm vi MFA, khoá phiên, khoá đăng nhập sai) — mẫu dò đo 0 lần khớp trên mã hiện tại. ĐO TRƯỚC KHI BẬT: mẫu của hook khớp đúng 3 chỗ ngoài test (2 `insecure.NewCredentials`, 1 `math/rand/v2` rải tải ClamAV) — cả ba vào sổ nợ.",
+      "no_confirm": [],
+      "tiep_theo": "Xem mục `luat-13-dot-2`."
+    },
+    {
+      "id": "luat-13-dot-2",
+      "viec": "TCVN 14423 — việc còn lại sau đợt 1 của luật 13",
+      "trang_thai": "chua_lam",
+      "bang_chung": "`make vuln` ĐỎ trên máy trạm 28/09/2026: mọi phát hiện Go nằm ở THƯ VIỆN CHUẨN go1.26.2 (crypto/tls, crypto/x509, net, encoding/xml, encoding/asn1…), vá ở go1.26.6; npm sạch cả 3 app. Ảnh phát hành dựng từ `golang:1.26` (thẻ trôi, `service-*/Dockerfile` ARG GO_VERSION=1.26) nên có thể đã được vá lúc build, nhưng không tái lập được. Bản `go` trên máy Jenkins chưa đo — stage 'Quét lỗ hổng' sẽ đỏ nếu nó cũ hơn 1.26.6.",
+      "no_confirm": [35, 36, 37, 38, 39],
+      "tiep_theo": "(1) HỎI chủ dự án: chốt bộ công cụ Go (`toolchain go1.26.6` trong go.work + GO_VERSION cố định trong Dockerfile) — đổi build nên phải hỏi. (2) Dựng `core/ratelimit` (Redis, khoá `t:<tenant>:rl:…`) rồi mở rộng `rest_api_guard` đòi khai giới hạn tần suất ở tuyến không cần phiên cán bộ (advisory trước, BLOCK sau) — luật 13 bất biến 7. (3) `session_start` báo số nợ an ninh mỗi phiên. (4) golangci-lint: bỏ tiền tố `-` ở Makefile:101 CHỈ SAU KHI máy Jenkins cài nó (deploy/README.md:566), thêm `.golangci.yml` có gosec. (5) Trả nợ trong `tools/security_debt.json` trước hạn: header bảo mật web-admin/platform-admin (30/11/2026), TLS gRPC nội bộ (28/12/2026). (6) Các tính năng khoá đăng nhập, khoá phiên, MFA, mật khẩu chờ #36–#39."
+    },
     {
       "id": "netpol-duong-ra-tam-mo",
       "viec": "NetworkPolicy đường ra tới CSDL đang TẠM MỞ 0.0.0.0/0 — nợ an ninh, chờ dải mạng thật của PostgreSQL/Redis",
