@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "core",
-  "cap_nhat": "2026-09-28",
+  "cap_nhat": "2026-09-29",
   "muc": [
     {
       "id": "backfill-theo-xa",
@@ -149,6 +149,33 @@
       "no_confirm": [],
       "tiep_theo": "Bên gọi phải tự chia lô 200 khoá.",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "core-crypto-phong-bi-theo-xa",
+      "viec": "core/crypto — mã hoá phong bì theo xã (ADR 0009): DEK theo xã bọc bằng KEK SECRET_ENCRYPTION_KEYS",
+      "trang_thai": "xong",
+      "bang_chung": "45f4f11 (+ gofmt e88d8b6). go test ./core/crypto ./core/config ok; check_env_map, check_security PASS. Người dùng 28/09/2026: 'làm xong 8 phần của cấu hình' + 'làm theo đề xuất, đối chiếu vigov-require'.",
+      "tiep_theo": "CÒN NỢ (ADR 0009 sửa đổi 28/09): tần suất xoay KEK, quy trình khi nghi lộ, ai giữ bản sao lưu KEK — sao lưu KEK là CỔNG PHÁT HÀNH. Khuyến nghị mỗi service một giá trị riêng (chưa cưỡng chế).",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "core-client-dem-ho-so-bo-phan",
+      "viec": "core/petitionsclient + core/documentsclient — client CountOrgUnitHoldings (ADR 0056)",
+      "trang_thai": "xong",
+      "bang_chung": "d1b43da (hợp đồng), a4d670f (Dial/Close). Kênh không TLS dùng // @security-exception (người dùng chọn 28/09/2026). go test ok.",
+      "tiep_theo": "Khi dựng TLS nội bộ: đổi CẢ BỐN kênh cùng lúc (identityclient, platformclient trong security_debt.json hạn 2026-12-28, và hai dòng @security-exception này — hai dòng này KHÔNG tự đỏ khi tới hạn).",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "core-audit-bo-doc-nhat-ky",
+      "viec": "core/audit.Log — bộ đọc nhật ký hệ thống dùng chung (ADR 0054)",
+      "trang_thai": "xong",
+      "bang_chung": "f1871ed (+ ScopedTx.Query ở core/store). 15 ca trên driver giả. Mỗi lần đọc ghi vết xem_nhat_ky_he_thong cùng giao dịch.",
+      "tiep_theo": "Ca PostgreSQL thật chưa chạy (thiếu VIGOV_TEST_DSN). platform/reporting hoãn (ADR 0054 §2).",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }

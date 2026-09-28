@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-09-28",
+  "cap_nhat": "2026-09-29",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -296,6 +296,42 @@
       "no_confirm": [],
       "tiep_theo": "Chưa ai GỌI: service-petitions dùng ba RPC cho xuất Sổ theo dõi .xlsx và nhập nhiệm vụ từ Excel (agent khác). Rule 3 bất biến 4: xuất Excel CÓ họ tên cán bộ (ResolveStaffNames) — hợp đồng nói việc che là của BÊN GỌI; câu mở #11 chỉ bỏ che trên màn hình nội bộ, chưa ai quyết cho tệp xuất. Ca pg SKIP (không VIGOV_TEST_DSN).",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "tam-vai-tro-mau",
+      "viec": "POST /api/v1/roles/defaults — gieo tám vai trò mẫu (ADR 0055), thay mục 'Thêm vai trò mới'",
+      "trang_thai": "xong",
+      "bang_chung": "1a7b192. go test ok; check_quyen PASS (36 khoá; số khoá 33/23/16/12/8/6/6/4 đối chiếu từ migration). Người dùng 28/09/2026: 'làm xong 8 phần của cấu hình' + 'làm theo đề xuất, đối chiếu vigov-require'.",
+      "tiep_theo": "CẦN KHÁCH XÁC NHẬN (ADR 0055, nhà cung cấp theo vigov-require): F4 Trưởng thôn có feedback.read cả xã (NĐ 13); F5 petition.read của Chuyên viên và Cán bộ một cửa gồm cả tố cáo (danh tính người tố cáo phải giữ kín). Không mẫu nào có feedback.classify/unmask — xã chỉ dùng mẫu thì chỉ quản trị phân loại được. Ca pg chưa chạy.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "xoa-bo-phan",
+      "viec": "DELETE /api/v1/org-units/{id} — xoá mềm, chặn khi còn cán bộ / bộ phận con / hồ sơ mở (ADR 0056)",
+      "trang_thai": "xong",
+      "bang_chung": "a4d670f. go test ok; check_security PASS. Hợp nhất §12.4 + vigov-require; dự án Thu–Chi không tính (người dùng 28/09/2026).",
+      "tiep_theo": "PHÁT HIỆN chưa sửa: (1) tuyến ghi cán bộ vẫn đặt được cán bộ vào bộ phận đã xoá (FK không soi deleted_at) — nên kiểm bộ phận còn sống; (2) danh bạ công khai Mini App (store/danh_ba_cong_khai.go:70) lọc bp.deleted_at — cán bộ bị khoá ở bộ phận đã xoá hiện tên bộ phận trống; (3) mở lại phiếu/nhiệm vụ đã kết thúc về bộ phận đã xoá cần buộc giao lại. Cần PETITIONS_GRPC_ADDR + DOCUMENTS_GRPC_ADDR trong ConfigMap, thiếu thì xoá trả 503. Ca pg chưa chạy.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "nhap-excel-bo-phan",
+      "viec": "Nhập sơ đồ tổ chức từ Excel — mẫu tệp, xem trước, nhập (§1)",
+      "trang_thai": "xong",
+      "bang_chung": "6982547. excelize v2.11.0; giới hạn 2 MB/500 dòng/giải nén; XML lồng ≤64. go test ok.",
+      "tiep_theo": "check_vuln ĐỎ toàn kho vì thư viện chuẩn bộ Go 1.26.2 trên máy (GO-2026-6088 encoding/xml, GO-2026-5039) — cần bộ Go ≥1.26.6 ở máy và CI. apidoc chưa khai được thân multipart + kiểu xlsx (đề xuất bổ sung generator ghi ở 8cf36fb). Nhập thôn (§2), người dùng (§3), danh mục (§5) chưa có tuyến.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "nhat-ky-he-thong-identity",
+      "viec": "GET /api/v1/identity-audit-entries (ADR 0054)",
+      "trang_thai": "xong",
+      "bang_chung": "f1871ed; chỉ mục migration 0015.",
+      "tiep_theo": "Ca pg chưa chạy.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }

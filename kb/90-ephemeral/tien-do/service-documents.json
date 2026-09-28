@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-documents",
-  "cap_nhat": "2026-09-28",
+  "cap_nhat": "2026-09-29",
   "muc": [
     {
       "id": "loai-van-ban-tuyen-doc",
@@ -123,6 +123,24 @@
       "no_confirm": [],
       "tiep_theo": "QUYẾT ĐỊNH CỦA NGƯỜI DÙNG cho khối này (hai khoá, kỳ, `ngay_den` tạm chờ khách, ngưỡng 48 giờ làm việc chờ khách) nay ở kb/10-decisions/0053-tong-quan-dem-truc-tiep-o-service-so-huu.md §2, §4, §5. Vẫn dang_lam vì ca PostgreSQL chưa chạy (ADR 0053 §9). || Phiên chính: chạy make check sau khi builder service-petitions xong; chạy go test ./internal/store với VIGOV_TEST_DSN để TestPgEachDrillDownHasAsManyRowsAsItsFigure thật sự chạy, rồi mới đổi sang `xong`. tools/apidoc chỉ ghi MỘT khoá quyền cho hai tuyến mới (khoá RequirePermission cuối cùng) — hợp đồng openapi.json ghi thiếu report.read. Ngưỡng 48 giờ làm việc và mốc `ngay_den` (đặc tả §4.2 ghi 'vào sổ trong kỳ') cần khách xác nhận.",
       "menu": "tong-quan-dieu-hanh"
+    },
+    {
+      "id": "dem-ho-so-bo-phan-grpc",
+      "viec": "Máy chủ gRPC CountOrgUnitHoldings — văn bản đến chưa kết thúc theo bộ phận (ADR 0056)",
+      "trang_thai": "xong",
+      "bang_chung": "4dd6c33.",
+      "tiep_theo": "—",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "nhat-ky-he-thong-documents",
+      "viec": "GET /api/v1/documents-audit-entries (ADR 0054)",
+      "trang_thai": "xong",
+      "bang_chung": "f1871ed; chỉ mục migration 0005.",
+      "tiep_theo": "—",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }

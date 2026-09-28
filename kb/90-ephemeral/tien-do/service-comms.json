@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-09-27",
+  "cap_nhat": "2026-09-29",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -157,6 +157,33 @@
       "bang_chung": "1033752 (+ @consumer citizen-app ở f645dfe). Chỉ dang-hien (lọc SQL + HienChoDan từng dòng); tiêu đề/tóm tắt/thân bài đổi sang văn bản thuần ở máy chủ (người dùng chốt 27/09 — HTML chưa làm sạch không tới dân), thư viện chuẩn; tin xã khác/chưa đăng/không có → cùng một 404; phân trang con trỏ; CORS dùng lại CITIZEN_CORS_ALLOWED_ORIGINS. go test -p 1 ./... xanh; ca pg SKIP.",
       "no_confirm": [],
       "tiep_theo": "Giả định cần chủ dự án xem: cả sáu loại nội dung (kể cả banner, video) đều ra danh sách; sắp theo tao_luc. Không đếm lượt xem, không ảnh. domain/ten_mien_xa.go là BẢN CHÉP HopLeTenMienXa của identity — nên chuyển vào core/ cùng helper xaTheoHost (đang lặp ở hai service). Chưa giới hạn tần suất."
+    },
+    {
+      "id": "truong-ban-do",
+      "viec": "Trường bản đồ theo xã — /api/v1/map-field-schemas (§6)",
+      "trang_thai": "xong",
+      "bang_chung": "4aba001, 8cf36fb. Tắt ≠ Xoá theo vigov-require; kiểu dữ liệu bất biến. go test ok.",
+      "tiep_theo": "Chưa có sổ tài nguyên bản đồ (doi_tuong_ban_do) nên trường chưa mô tả dữ liệu nào; chưa xã nào có loại tài nguyên (0003 không gieo) nên mọi POST trả 409 asset_type_missing tới khi xã thêm loại. Trigger/CHECK chưa chạy trên pg.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "may-chu-thu",
+      "viec": "Máy chủ thư của xã — /api/v1/mail-settings + gửi thử, mật khẩu niêm bằng core/crypto (§10)",
+      "trang_thai": "xong",
+      "bang_chung": "1da36e3, 8cf36fb. Chỉ STARTTLS/TLS kiểm chứng chỉ; cổng 25/465/587/2525. go test ok.",
+      "tiep_theo": "VIỆC CỦA CHỦ DỰ ÁN: (1) đặt SECRET_ENCRYPTION_KEYS vào Secret bi-mat-comms và SAO LƯU KEK trước khi lưu mật khẩu đầu tiên; (2) NetworkPolicy deploy/base/mang/netpol.yaml chưa mở 465/587 ra ngoài — gửi thử trong cụm sẽ 502. Chưa dựng: lùi về máy chủ thư của tỉnh (§10), gửi thông báo nội bộ thật qua cấu hình này. Tạo/bọc lại DEK ghi vết bằng chủ thể hệ thống — cần chủ dự án duyệt (ADR 0009 còn nợ #4).",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "nhat-ky-he-thong-comms",
+      "viec": "GET /api/v1/comms-audit-entries (ADR 0054)",
+      "trang_thai": "xong",
+      "bang_chung": "dc191cf; chỉ mục migration 0009.",
+      "tiep_theo": "—",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }

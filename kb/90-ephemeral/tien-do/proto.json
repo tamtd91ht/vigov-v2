@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "proto",
-  "cap_nhat": "2026-09-28",
+  "cap_nhat": "2026-09-29",
   "muc": [
     {
       "id": "resolve-staff-names",
@@ -101,6 +101,15 @@
       "no_confirm": [],
       "tiep_theo": "Chưa ai GỌI: service-petitions dùng ba RPC cho xuất Sổ theo dõi .xlsx và nhập nhiệm vụ từ Excel (agent khác). Rule 3 bất biến 4: xuất Excel CÓ họ tên cán bộ (ResolveStaffNames) — hợp đồng nói việc che là của BÊN GỌI; câu mở #11 chỉ bỏ che trên màn hình nội bộ, chưa ai quyết cho tệp xuất. Ca pg SKIP (không VIGOV_TEST_DSN).",
       "menu": "nhiem-vu"
+    },
+    {
+      "id": "count-org-unit-holdings",
+      "viec": "CountOrgUnitHoldings ở petitions.proto + documents.proto (ADR 0056)",
+      "trang_thai": "xong",
+      "bang_chung": "d1b43da — buf lint + breaking PASS.",
+      "tiep_theo": "—",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }

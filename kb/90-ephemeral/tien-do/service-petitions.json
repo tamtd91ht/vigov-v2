@@ -366,6 +366,33 @@
       "no_confirm": [],
       "tiep_theo": "Người dùng quyết 28/09: KHÔNG chép hiệu ứng phụ da-tiep-nhan→dang-phan-loai của require. Không nhận cho-duyet từ cán bộ; không ghi dòng nhật ký (require không ghi); không báo dân. CHƯA CHẠY trên PostgreSQL thật. Trang công khai cho dân đọc (đọc phiếu cong-khai) CHƯA CÓ tuyến. Bật/tắt lĩnh vực can-bo theo xã và khoá chỉ-lãnh-đạo: câu #27, chưa làm.",
       "menu": "phan-anh-nguoi-dan"
+    },
+    {
+      "id": "dem-ho-so-bo-phan-grpc",
+      "viec": "Máy chủ gRPC CountOrgUnitHoldings — phiếu chưa kết thúc + nhiệm vụ chưa hoàn thành theo bộ phận (ADR 0056)",
+      "trang_thai": "xong",
+      "bang_chung": "4dd6c33. go test ok; ca pg SKIP.",
+      "tiep_theo": "—",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "nhat-ky-he-thong-petitions",
+      "viec": "GET /api/v1/petitions-audit-entries — ẩn vết phiếu lĩnh vực can-bo khi thiếu feedback.restricted (ADR 0054)",
+      "trang_thai": "xong",
+      "bang_chung": "58cef0f; chỉ mục migration 0019.",
+      "tiep_theo": "Ngày có đường tạo nhiệm vụ từ phiếu, vết nhiệm vụ có thể lộ phiếu hạn chế — xét cùng tính năng ấy.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "loi-he-thong-phan-anh",
+      "viec": "Lời hệ thống feedback.* — xã sửa câu, khôi phục mặc định; nhánh từ chối đọc câu theo xã (§7)",
+      "trang_thai": "xong",
+      "bang_chung": "b6e8b0a. 4 khoá nối nhánh thật (reason_required, assignment_required, invalid_transition, never_public). go test ok.",
+      "tiep_theo": "after_photo_required và unknown_field chưa có mã nào phát. 32 khoá report.* chưa có chủ (ADR 0024) — không dựng.",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }

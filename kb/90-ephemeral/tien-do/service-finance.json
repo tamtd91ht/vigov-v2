@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-finance",
-  "cap_nhat": "2026-09-26",
+  "cap_nhat": "2026-09-29",
   "muc": [
     {
       "id": "hang-muc-ke-hoach-von-tuyen-doc",
@@ -149,6 +149,24 @@
       "bang_chung": "service-finance/cmd/server/main.go:173: Handler bọc httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies) NGOÀI CÙNG, trước StripTenantHeaders/TenantMiddleware/xác thực — mọi lớp đọc cùng một địa chỉ khách cho một request. Các điểm gọi httpx.ClientIP không đổi. go build + go vet + go test ./... xanh cho core và bảy dịch vụ (chạy trong từng module); gofmt -l rỗng.",
       "no_confirm": [],
       "tiep_theo": "Giá trị ConfigMap TRUSTED_PROXY_CIDRS (dải pod của ingress-nginx và web-admin) do người vận hành cụm cung cấp — kho này không biết được. Chưa đặt thì IP trong vết = IP pod web-admin (đúng như trước, không bị giả mạo, nhưng không phải IP người dùng)."
+    },
+    {
+      "id": "nhat-ky-he-thong-finance",
+      "viec": "GET /api/v1/finance-audit-entries (ADR 0054)",
+      "trang_thai": "xong",
+      "bang_chung": "f1871ed; chỉ mục migration 0009.",
+      "tiep_theo": "—",
+      "no_confirm": [],
+      "menu": "cau-hinh"
+    },
+    {
+      "id": "loi-he-thong-budget-scope-notice",
+      "viec": "Lời hệ thống budget.scope_notice — xã sửa câu; scope_notice trên tuyến dự án (§7)",
+      "trang_thai": "xong",
+      "bang_chung": "fdd3903, 8cf36fb, cce8bba (trường 'key'→'code' vì apidoc). go test ok.",
+      "tiep_theo": "—",
+      "no_confirm": [],
+      "menu": "cau-hinh"
     }
   ]
 }
