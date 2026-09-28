@@ -86,11 +86,11 @@ func TestPgCotNhiemVuTrongMaKhopVoiLuocDoThat(t *testing.T) {
 		cot  []string
 	}{
 		{"nhiem_vu", append(tachCot(cotNhiemVu),
-			// THREE COLUMNS THAT NEVER APPEAR IN A SELECT LIST, because the statement is built
-			// around them and cannot run without them.
+			// TWO COLUMNS THAT NEVER APPEAR IN A SELECT LIST, because the statement is built around
+			// them and cannot run without them. (`cap_nhat_luc` stood here too until 28/09/2026; it
+			// is in cotNhiemVu now, as the PATCH precondition token.)
 			"tenant_id",  // the predicate that keeps two public authorities apart (rule 1)
 			"deleted_at", // the predicate that keeps removed rows out of every read (rule 7)
-			"cap_nhat_luc",
 		)},
 		// THE TWO TABLES THAT HAVE NO STORE YET. They are asserted here because migration 0006
 		// creates them and the NEXT pass writes against them: a column misspelled today is cheapest

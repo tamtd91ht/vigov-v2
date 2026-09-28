@@ -240,6 +240,18 @@ type suaNhiemVuVao struct {
 	// OPTIONAL, like every field of this body and for the reason `taoNhiemVuVao.Documents` states:
 	// this is a published contract with a real client behind it (rule 2, invariant 4).
 	Documents *[]vanBanNhiemVuVao `json:"documents,omitempty"`
+
+	// ExpectedUpdatedAt is the OPTIONAL precondition (optimistic locking, 28/09/2026): send back the
+	// `updated_at` of the task as this screen read it, and the edit is refused with 409 `task_changed`
+	// if anybody wrote the task since. Absent keeps today's behaviour — this is a published contract
+	// (rule 2, invariant 4), so it can only be ADDED as optional.
+	//
+	// A BODY FIELD AND NOT AN `If-Match` HEADER, deliberately: the contract generator (tools/apidoc)
+	// publishes body fields into kb/20-contracts/openapi.json and web-admin's generated types, but has
+	// no way to declare a custom request header — so a header would be a precondition no client could
+	// discover from the contract, which is the "screen built by guessing" failure
+	// skills/rest-api-design names. The semantics are If-Match's; only the carrier differs.
+	ExpectedUpdatedAt *time.Time `json:"expected_updated_at,omitempty"`
 }
 
 // doiTrangThaiVao is the body of POST /api/v1/tasks/{ma}/status.
@@ -502,6 +514,7 @@ func (h *Handler) SuaNhiemVu(w http.ResponseWriter, r *http.Request) {
 		CapTrenCongNhanHoanThanh: vao.SuperiorAcknowledged,
 		ParentCode:               vao.Parent,
 		VanBan:                   vanBan,
+		ExpectedUpdatedAt:        vao.ExpectedUpdatedAt,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiNhiemVu(w, r, "sửa nhiệm vụ", err)
@@ -697,6 +710,11 @@ func (h *Handler) traLoiLoiNhiemVu(w http.ResponseWriter, r *http.Request, viec 
 		httpx.WriteError(w, http.StatusConflict, "code_taken",
 			"Mã nhiệm vụ này đã được dùng trong xã — kể cả khi nhiệm vụ mang mã đó đã bị xoá. "+
 				"Mã đã cấp thì không cấp lại.", "")
+	case errors.Is(err, app.ErrTaskEditConflict):
+		// Optimistic locking (28/09/2026). Its OWN code, not `task_state`: the client knows exactly what
+		// happened — its copy is stale — and can reload and show the officer the newer version.
+		httpx.WriteError(w, http.StatusConflict, "task_changed",
+			"Nhiệm vụ đã được người khác sửa sau khi bạn mở. Hãy tải lại để xem bản mới nhất rồi sửa lại.", "")
 	case errors.Is(err, petstore.ErrNhiemVuDaChuyenTrang):
 		httpx.WriteError(w, http.StatusConflict, "task_state",
 			"Nhiệm vụ đã thay đổi trong lúc bạn đang mở màn hình. Hãy tải lại rồi thao tác lại.", "")

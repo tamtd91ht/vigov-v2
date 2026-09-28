@@ -193,6 +193,12 @@ type nhiemVuRa struct {
 	CreatedBy string    `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
 
+	// UpdatedAt is `cap_nhat_luc` — the instant of the row's last write. ADDED 28/09/2026 as the
+	// token for PATCH's optional `expected_updated_at` precondition: send it back unchanged. It is
+	// fresh on every write reply (the use case reads it after its own write). NOT a business fact —
+	// "last activity on the work" is the timeline's question; a log entry does not move this value.
+	UpdatedAt time.Time `json:"updated_at"`
+
 	// Documents is §5.4's "SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO" — the three dynamic lists of §7.2, in the
 	// order the block is drawn (group, then position).
 	//
@@ -352,6 +358,7 @@ func nhiemVuRaNgoai(n domain.NhiemVu) nhiemVuRa {
 		ChildCount:           n.ChildCount,
 		CreatedBy:            n.NguoiTaoMa,
 		CreatedAt:            n.TaoLuc,
+		UpdatedAt:            n.UpdatedAt,
 		// nil IN, nil OUT — the register list never loads the block, and `null` on the wire says
 		// exactly that. See the note on the field; it is the one place this response has two
 		// meanings for one absence, and they are both needed.

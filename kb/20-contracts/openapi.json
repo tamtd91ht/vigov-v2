@@ -14050,7 +14050,7 @@
         }
       },
       "patch": {
-        "summary": "Sửa thông tin mô tả của một nhiệm vụ — không đụng tới hạn, trạng thái hay phân công",
+        "summary": "Sửa thông tin mô tả của một nhiệm vụ — không đụng tới hạn, trạng thái hay phân công; tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa)",
         "operationId": "petitions_patch_tasks_by_ma",
         "tags": [
           "petitions"
@@ -20658,6 +20658,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
           "documents": {
             "type": [
               "array",
@@ -20704,7 +20708,8 @@
           "superior_acknowledged",
           "title",
           "type",
-          "unit"
+          "unit",
+          "updated_at"
         ],
         "additionalProperties": false
       },
@@ -21327,6 +21332,13 @@
             "items": {
               "$ref": "#/components/schemas/petitions.vanBanNhiemVuVao"
             }
+          },
+          "expected_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         },
         "additionalProperties": false

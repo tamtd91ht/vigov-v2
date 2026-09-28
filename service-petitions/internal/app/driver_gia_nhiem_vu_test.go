@@ -120,6 +120,9 @@ var (
 	mocHanMoiNV  = time.Date(2026, 8, 20, 9, 30, 0, 0, time.UTC)
 	mocTaoNV     = time.Date(2026, 6, 1, 3, 30, 0, 0, time.UTC)
 	mocThaoTacNV = time.Date(2026, 9, 23, 8, 5, 0, 0, time.UTC)
+	// mocSuaNV is the row's `cap_nhat_luc` — WITH microseconds, so the precondition's comparison at
+	// the column's precision is exercised, not a round second.
+	mocSuaNV = time.Date(2026, 9, 21, 6, 40, 12, 345678000, time.UTC)
 )
 
 // dongNhiemVuGia is one `nhiem_vu` row as the driver hands it back.
@@ -155,6 +158,8 @@ func dongNhiemVuGia(id, ma string, sua map[string]driver.Value) map[string]drive
 		"nguoi_tao_ma":                  "CB-00123",
 		"tao_luc":                       mocTaoNV,
 		"nhiem_vu_cha_id":               nil,
+		// `cap_nhat_luc` — the PATCH precondition token. Distinct from every other fixture instant.
+		"cap_nhat_luc": mocSuaNV,
 	}
 	for k, v := range sua {
 		d[k] = v

@@ -115,6 +115,10 @@ type KhoNhiemVuGhi interface {
 
 	GhiNhatKy(ctx context.Context, tx *store.ScopedTx, e domain.NhatKyNhiemVu) error
 
+	// UpdatedAtTx reads `cap_nhat_luc` after an act's own write, for the reply's `updated_at` — the
+	// PATCH precondition token (refreshUpdatedAt).
+	UpdatedAtTx(ctx context.Context, tx *store.ScopedTx, id string) (time.Time, error)
+
 	// §5.4's document block (migration 0009). FOUR METHODS ON THIS INTERFACE AND NOT A FIFTH
 	// INTERFACE, unlike KhoDeNghiLuiHan below, and the difference is what the rows ARE: a line is a
 	// FIELD VALUE of the task, written by the same acts that write the task itself, while an
@@ -412,6 +416,34 @@ func (uc *GhiNhiemVu) nhanCha(ctx context.Context, tx *store.ScopedTx, parentCod
 	return cha, nil
 }
 
+// ErrTaskEditConflict refuses a PATCH whose `expected_updated_at` is not the row's `cap_nhat_luc` —
+// somebody else wrote the task after this client read it (optimistic locking, 28/09/2026). 409.
+//
+// WHY A REFUSAL AND NOT "LAST WRITE WINS": PATCH folds the fields it was sent onto the row it reads, so
+// two drawers open on one task each save their own view, and the second silently undoes whatever the
+// first changed in the fields both sent — a title, a progress figure a leader already read. The
+// precondition turns that into a sentence telling the second officer to reload.
+var ErrTaskEditConflict = errors.New(
+	"nhiem_vu: nhiệm vụ đã được sửa sau khi bạn mở — tải lại để xem bản mới nhất rồi sửa lại")
+
+// sameInstant compares two instants at the column's precision: PostgreSQL keeps MICROSECONDS, so a
+// token that crossed JSON and came back is compared on the digits the database actually stored.
+func sameInstant(a, b time.Time) bool {
+	return a.Truncate(time.Microsecond).Equal(b.Truncate(time.Microsecond))
+}
+
+// refreshUpdatedAt puts the row's `cap_nhat_luc` — as the act's own write just set it — on the task an
+// act replies with. Without it the reply carries the value read BEFORE the write, and the client's
+// next PATCH would fail its own precondition against the edit it just made.
+func (uc *GhiNhiemVu) refreshUpdatedAt(ctx context.Context, tx *store.ScopedTx, n *domain.NhiemVu) error {
+	t, err := uc.kho.UpdatedAtTx(ctx, tx, n.ID)
+	if err != nil {
+		return err
+	}
+	n.UpdatedAt = t
+	return nil
+}
+
 // attachReplyTreeFacts fills `parent` (register number) and `child_count` on the task an act is about
 // to reply with, inside that act's transaction. One task, so at most two statements.
 func (uc *GhiNhiemVu) attachReplyTreeFacts(ctx context.Context, tx *store.ScopedTx, n *domain.NhiemVu) error {
@@ -597,6 +629,9 @@ func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi
 
 	bayGio := uc.nayHoac()
 	moi.TaoLuc = bayGio
+	// THE PATCH PRECONDITION TOKEN, written by the INSERT itself (store.Tao) so the create reply's
+	// `updated_at` is the stored value — truncated to the column's microsecond precision here, once.
+	moi.UpdatedAt = bayGio.Truncate(time.Microsecond)
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		if kiemNguon != nil {
@@ -884,6 +919,13 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			return err
 		}
 
+		// THE PRECONDITION, FIRST, ON THE LOCKED ROW (optimistic locking, 28/09/2026). OPTIONAL: a
+		// client that sent no `expected_updated_at` keeps today's behaviour. Before the no-op check,
+		// so a stale client is told to reload even when its body changes nothing.
+		if sua.ExpectedUpdatedAt != nil && !sameInstant(*sua.ExpectedUpdatedAt, truoc.UpdatedAt) {
+			return ErrTaskEditConflict
+		}
+
 		// THE NEW PARENT, BY REGISTER NUMBER, RESOLVED AND LOCKED BEFORE "did anything change" is
 		// asked — the comparison is between two INTERNAL ids, and the request carried a number. ""
 		// detaches the task and needs no lookup. The cycle check comes later, and only if the parent
@@ -960,6 +1002,9 @@ func (uc *GhiNhiemVu) Sua(ctx context.Context, ma string, sua petstore.SuaNhiemV
 			return err
 		}
 		if sau.VanBan, err = uc.kho.VanBanCuaNhiemVuDeSua(ctx, tx, truoc.ID); err != nil {
+			return err
+		}
+		if err := uc.refreshUpdatedAt(ctx, tx, &sau); err != nil {
 			return err
 		}
 		// THE TREE FACTS OF BOTH SIDES IN ONE BATCH: `sau` for the reply, `truoc` so the trail can name
@@ -1195,6 +1240,9 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 		sau.TrangThai = moiTT
 		sau.NgayHoanThanh = xongLuc
 		if err := uc.attachReplyTreeFacts(ctx, tx, &sau); err != nil {
+			return err
+		}
+		if err := uc.refreshUpdatedAt(ctx, tx, &sau); err != nil {
 			return err
 		}
 

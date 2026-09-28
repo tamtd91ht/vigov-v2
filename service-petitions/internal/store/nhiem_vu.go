@@ -65,7 +65,8 @@ const cotNhiemVu = `id, ma, loai, khoi, tieu_de, mo_ta, trang_thai, muc_uu_tien,
 	han_xu_ly, han_ban_dau, ngay_hoan_thanh,
 	tien_do, tom_tat_ket_qua, ghi_chu,
 	lanh_dao_phe_duyet_hoan_thanh, cap_tren_cong_nhan_hoan_thanh,
-	nguoi_tao_ma, tao_luc, nhiem_vu_cha_id`
+	nguoi_tao_ma, tao_luc, nhiem_vu_cha_id,
+	cap_nhat_luc`
 
 // SapXepNhiemVu is the closed set of sorts GET /api/v1/tasks offers.
 //
@@ -698,6 +699,9 @@ func quetNhiemVu(r quangKiem) (domain.NhiemVu, error) {
 		// shift here are the three adjacent TIMESTAMPTZs whose confusion produces a wrong figure
 		// rather than an error.
 		&n.NguoiTaoMa, &n.TaoLuc, &nhiemVuCha,
+		// `cap_nhat_luc` — NOT NULL DEFAULT now() (migration 0006), the PATCH precondition token.
+		// Appended at the tail for the reason above.
+		&n.UpdatedAt,
 	}
 	if err := r.Scan(dich...); err != nil {
 		return domain.NhiemVu{}, fmt.Errorf("nhiem_vu: đọc dòng: %w", err)

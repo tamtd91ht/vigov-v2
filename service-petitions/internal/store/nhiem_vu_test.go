@@ -40,6 +40,7 @@ var (
 	mocHanNVThu    = time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
 	mocHanGocNVThu = time.Date(2026, 6, 20, 10, 0, 0, 0, time.UTC)
 	mocTaoNVThu    = time.Date(2026, 6, 1, 3, 30, 0, 0, time.UTC)
+	mocSuaNVThu    = time.Date(2026, 9, 20, 4, 15, 30, 123456000, time.UTC)
 )
 
 // dongNhiemVu is one row of `nhiem_vu` as the driver hands it back.
@@ -74,6 +75,9 @@ func dongNhiemVu(sua map[string]driver.Value) map[string]driver.Value {
 		"cap_tren_cong_nhan_hoan_thanh": false,
 		"nguoi_tao_ma":                  "CB-00123",
 		"tao_luc":                       mocTaoNVThu,
+		// `cap_nhat_luc` — the PATCH precondition token (28/09/2026). DISTINCT from `tao_luc`, so a
+		// Scan that read the wrong one of the two instants shows up as a wrong value.
+		"cap_nhat_luc": mocSuaNVThu,
 		// `nhiem_vu_cha_id` — migration 0008. NON-NULL IN THE FIXTURE ON PURPOSE: NULL is the
 		// ordinary case, so a Scan that dropped this column would still pass every assertion if the
 		// sample were nil. A root task is covered by the case that overrides it.

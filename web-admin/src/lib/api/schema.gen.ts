@@ -1499,6 +1499,7 @@ export type petitions_nhiemVuRa = {
   "child_count": number;
   "created_by": string;
   "created_at": string;
+  "updated_at": string;
   "documents"?: Array<petitions_nhiemVuVanBanRa> | null;
   "meeting_id"?: string;
   "meeting_title"?: string;
@@ -1650,6 +1651,7 @@ export type petitions_suaNhiemVuVao = {
   "superior_acknowledged"?: boolean | null;
   "parent"?: string | null;
   "documents"?: Array<petitions_vanBanNhiemVuVao> | null;
+  "expected_updated_at"?: string | null;
 };
 
 export type petitions_suaTrangThaiNhiemVuVao = {
@@ -4829,7 +4831,7 @@ export type petitions_get_tasks_by_ma = {
   };
 };
 
-/** PATCH /api/v1/tasks/{ma} — Sửa thông tin mô tả của một nhiệm vụ — không đụng tới hạn, trạng thái hay phân công */
+/** PATCH /api/v1/tasks/{ma} — Sửa thông tin mô tả của một nhiệm vụ — không đụng tới hạn, trạng thái hay phân công; tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa) */
 export type petitions_patch_tasks_by_ma = {
   duongDan: "/api/v1/tasks/{ma}";
   phuongThuc: "PATCH";

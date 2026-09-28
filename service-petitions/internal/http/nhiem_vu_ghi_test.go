@@ -86,6 +86,7 @@ func (g *ghiNhiemVuGia) tra() (domain.NhiemVu, error) {
 		ID: "nv-001", Ma: "NV19", Loai: "theo-van-ban", TieuDe: "Rà soát tiến độ tuyến đường",
 		TrangThai: domain.DangThucHien, NguonGiao: domain.NguonTrucTiep,
 		LanhDaoGiaoViecMa: "CB-00007", NguoiTaoMa: maCanBo,
+		UpdatedAt: time.Date(2026, 9, 21, 6, 40, 12, 345678000, time.UTC),
 	}, nil
 }
 

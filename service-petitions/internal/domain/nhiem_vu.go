@@ -305,6 +305,13 @@ type NhiemVu struct {
 
 	TaoLuc time.Time
 
+	// UpdatedAt is `cap_nhat_luc` — the instant of the row's last write, which every UPDATE of the
+	// register sets to now(). IT IS A PRECONDITION TOKEN AND NOTHING ELSE: PATCH compares the value a
+	// client read with the row under the lock (optimistic locking, 28/09/2026), so two officers editing
+	// one task cannot silently overwrite each other. It is NOT a business fact — no report reads it,
+	// and "when was the work last touched" is the timeline's question, not this column's.
+	UpdatedAt time.Time
+
 	// VanBan is §5.4's "SỔ THEO DÕI VĂN BẢN CHỈ ĐẠO" — the three lists of referenced documents
 	// (migration 0009, and nhiem_vu_van_ban.go in this package for what a line is).
 	//

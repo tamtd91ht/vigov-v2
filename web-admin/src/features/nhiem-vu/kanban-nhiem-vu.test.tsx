@@ -44,6 +44,7 @@ function nhiemVu(sua: Partial<petitions_nhiemVuRa> = {}): petitions_nhiemVuRa {
     code: "NV19",
     child_count: 0,
     allowed_transitions: [],
+    updated_at: "2026-06-01T02:00:00Z",
     type: "theo-van-ban",
     bloc: "khoi-dang",
     priority: "cao",

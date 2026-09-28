@@ -128,6 +128,9 @@ func (uc *GhiNhiemVu) Reassign(ctx context.Context, ma string, req TaskAssignmen
 		if err := uc.attachReplyTreeFacts(ctx, tx, &after); err != nil {
 			return err
 		}
+		if err := uc.refreshUpdatedAt(ctx, tx, &after); err != nil {
+			return err
+		}
 
 		// THE TIMELINE ROW carries the NEW holder in its own columns (ghiNhatKy copies them from the
 		// task) and the from→to sentence in its text — §5.9's "thông tin bộ phận/phụ trách khi có thay

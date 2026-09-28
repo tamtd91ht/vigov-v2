@@ -143,6 +143,7 @@ var (
 	mocHanGocNVA = time.Date(2026, 6, 20, 10, 0, 0, 0, time.UTC)
 	mocXongNVA   = time.Date(2026, 7, 10, 9, 0, 0, 0, time.UTC)
 	mocTaoNVA    = time.Date(2026, 6, 1, 3, 30, 0, 0, time.UTC)
+	mocSuaNVA    = time.Date(2026, 9, 21, 6, 40, 12, 345678000, time.UTC)
 )
 
 // nhiemVuMau gives commune A two tasks with DIFFERENT shapes and commune B one task whose number
@@ -169,7 +170,7 @@ func nhiemVuMau() *nhiemVuGia {
 				BoPhanID: "bp-vpdu", NguoiThucHienMa: "CB-00311",
 				LanhDaoGiaoViecMa: "CB-00007", ChuyenVienTheoDoiMa: "CB-00412",
 				HanXuLy: mocHanNVA, HanBanDau: mocHanGocNVA,
-				TienDo: 40, NguoiTaoMa: maCanBo, TaoLuc: mocTaoNVA,
+				TienDo: 40, NguoiTaoMa: maCanBo, TaoLuc: mocTaoNVA, UpdatedAt: mocSuaNVA,
 				// The two tree facts the store attaches (store.attachTreeFacts): NV19 is a root
 				// with three live children.
 				ChildCount: 3,
@@ -184,7 +185,7 @@ func nhiemVuMau() *nhiemVuGia {
 				NguoiThucHienMa: maCanBo,
 				HanXuLy:         mocHanNVA, HanBanDau: mocHanGocNVA,
 				NgayHoanThanh: mocXongNVA,
-				TienDo:        100, NguoiTaoMa: maCanBo, TaoLuc: mocTaoNVA,
+				TienDo:        100, NguoiTaoMa: maCanBo, TaoLuc: mocTaoNVA, UpdatedAt: mocSuaNVA,
 				// A child of NV19: the INTERNAL parent id is in no response field, and the wire
 				// carries the register number the store resolved.
 				NhiemVuChaID: "nv-001", ParentCode: maNhiemVuA,
@@ -195,7 +196,7 @@ func nhiemVuMau() *nhiemVuGia {
 				ID: "nv-b-001", Ma: maNhiemVuB,
 				Loai: "kiem-tra", TieuDe: "Nhiệm vụ của xã B.",
 				TrangThai: domain.MoiGiao, NguonGiao: domain.NguonTrucTiep,
-				NguoiTaoMa: maCanBo, TaoLuc: mocTaoNVA,
+				NguoiTaoMa: maCanBo, TaoLuc: mocTaoNVA, UpdatedAt: mocSuaNVA,
 			},
 		},
 	}}

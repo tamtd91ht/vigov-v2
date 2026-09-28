@@ -256,8 +256,8 @@ func (s *NhiemVuStore) Tao(ctx context.Context, tx *store.ScopedTx, n domain.Nhi
 		nguon_giao, nguon_id, bo_phan_id, nguoi_thuc_hien_ma, lanh_dao_giao_viec_ma,
 		co_quan_chu_tri_id, chuyen_vien_theo_doi_ma,
 		han_xu_ly, han_ban_dau, tien_do, tom_tat_ket_qua, ghi_chu,
-		nhiem_vu_cha_id, nguoi_tao_ma)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`
+		nhiem_vu_cha_id, nguoi_tao_ma, cap_nhat_luc)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`
 
 	_, err := tx.Exec(ctx, stmt,
 		string(tx.TenantID()), n.ID, n.Ma, n.Loai, rongThanhNull(n.Khoi), n.TieuDe,
@@ -268,7 +268,11 @@ func (s *NhiemVuStore) Tao(ctx context.Context, tx *store.ScopedTx, n domain.Nhi
 		// ONE VALUE, TWO COLUMNS. See the note above before separating them.
 		khongThanhNull(n.HanXuLy), khongThanhNull(n.HanXuLy),
 		n.TienDo, rongThanhNull(n.TomTatKetQua), rongThanhNull(n.GhiChu),
-		rongThanhNull(n.NhiemVuChaID), n.NguoiTaoMa)
+		rongThanhNull(n.NhiemVuChaID), n.NguoiTaoMa,
+		// `cap_nhat_luc` WRITTEN, NOT DEFAULTED (28/09/2026): the value the create reply carries as
+		// `updated_at`, so a client can PATCH with it without first re-reading the task. The caller
+		// passes it at microsecond precision, the column's own.
+		n.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("nhiem_vu: ghi nhiệm vụ: %w", err)
 	}
@@ -300,6 +304,12 @@ func (s *NhiemVuStore) Tao(ctx context.Context, tx *store.ScopedTx, n domain.Nhi
 // them have a meaningful zero — a cleared note, a progress of 0, an unticked box — and PUT-shaped
 // replacement cannot tell those from "the client did not send this field".
 type SuaNhiemVu struct {
+	// ExpectedUpdatedAt is the OPTIONAL precondition: the `updated_at` the client read. When set, the
+	// edit is refused (app.ErrTaskEditConflict, 409) unless the row's `cap_nhat_luc`, read under the
+	// lock, is that same instant — somebody else wrote the task in between. nil keeps the behaviour
+	// every existing client relies on (additive, 28/09/2026). NOT A COLUMN WRITE: nothing folds it.
+	ExpectedUpdatedAt *time.Time
+
 	Khoi         *string
 	TieuDe       *string
 	MoTa         *string
@@ -443,6 +453,24 @@ func (s *NhiemVuStore) Sua(ctx context.Context, tx *store.ScopedTx, id string, n
 		return fmt.Errorf("nhiem_vu: sửa nhiệm vụ: %w", err)
 	}
 	return doiMotDongNhiemVu(kq, "sửa nhiệm vụ")
+}
+
+// UpdatedAtTx reads `cap_nhat_luc` of one task INSIDE the caller's transaction — after the act's own
+// write, so it answers the value that write set (now() is the transaction's instant). The write
+// replies carry it as `updated_at`, and a stale value there would make the client's NEXT PATCH fail
+// its own precondition.
+func (s *NhiemVuStore) UpdatedAtTx(ctx context.Context, tx *store.ScopedTx, id string) (time.Time, error) {
+	const stmt = `SELECT cap_nhat_luc FROM nhiem_vu
+		WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+	var t time.Time
+	err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), id).Scan(&t)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, ErrNhiemVuKhongTonTai
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("nhiem_vu: đọc thời điểm ghi cuối: %w", err)
+	}
+	return t, nil
 }
 
 // DoiTrangThai moves the task along §6's lifecycle and records the instant it was finished when

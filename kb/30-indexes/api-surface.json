@@ -3320,7 +3320,7 @@
       "path": "/api/v1/tasks/{ma}",
       "operation_id": "petitions_patch_tasks_by_ma",
       "task_id": "aee8d171aa28",
-      "summary": "Sửa thông tin mô tả của một nhiệm vụ — không đụng tới hạn, trạng thái hay phân công",
+      "summary": "Sửa thông tin mô tả của một nhiệm vụ — không đụng tới hạn, trạng thái hay phân công; tuỳ chọn kèm `expected_updated_at` để chặn ghi đè (409 khi đã có người sửa)",
       "screen": "02-nhiem-vu §5.4",
       "permission_kind": "permission",
       "permission": "task.update",
