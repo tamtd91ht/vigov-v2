@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
@@ -137,7 +138,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		NganSach:       khoNganSachTrong{},
 		GhiNganSach:    app.NewNganSach(nil, nil),
 		AuditLog:       audit.NewLog(pkgstore.New(nil)),
-		SystemMessages: app.NewSystemMessages(nil, nil),
+		SystemMessages: app.NewSystemMessages(nil, emptyOverrideStore{}),
 		Log:            log,
 	})
 
@@ -371,4 +372,31 @@ func (khoNganSachTrong) BangDayDu(context.Context, int, domain.LoaiBang) (domain
 
 func (khoNganSachTrong) DotCuaKhoanMuc(context.Context, string) (domain.DotCuaKhoanMuc, error) {
 	return domain.DotCuaKhoanMuc{}, domain.ErrKhongThayKhoanMuc
+}
+
+// emptyOverrideStore is the override table of a commune that reworded nothing — every commune until
+// somebody opens Cấu hình → Lời hệ thống. The project list READS it now (`scope_notice`, du_an.go),
+// so the real use case needs a store that answers; the write methods are never reached from here.
+type emptyOverrideStore struct{}
+
+var errNoWritePath = errors.New("emptyOverrideStore: no write path in this file")
+
+func (emptyOverrideStore) ListLive(context.Context) ([]domain.MessageOverride, error) {
+	return nil, nil
+}
+
+func (emptyOverrideStore) LiveForUpdate(context.Context, *pkgstore.ScopedTx, string) (*domain.MessageOverride, error) {
+	return nil, errNoWritePath
+}
+
+func (emptyOverrideStore) AddOverride(context.Context, *pkgstore.ScopedTx, domain.MessageOverride) error {
+	return errNoWritePath
+}
+
+func (emptyOverrideStore) UpdateText(context.Context, *pkgstore.ScopedTx, domain.MessageOverride) error {
+	return errNoWritePath
+}
+
+func (emptyOverrideStore) SoftDelete(context.Context, *pkgstore.ScopedTx, string, string, string, time.Time) error {
+	return errNoWritePath
 }

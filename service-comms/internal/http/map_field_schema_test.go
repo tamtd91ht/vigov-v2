@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -281,22 +282,26 @@ func TestMapFieldRoutes_RightPermissionRightCommune(t *testing.T) {
 func TestPatchMapFieldRefusesImmutableFields(t *testing.T) {
 	// Type, key and group are immutable — refused even when the value is unchanged, so a client
 	// that posts the row back learns it could not have changed them.
-	for name, body := range map[string]string{
-		"value_type":      `{"label":"X","value_type":"chon"}`,
-		"field_code":      `{"label":"X","field_code":"legal_form"}`,
-		"asset_type_code": `{"label":"X","asset_type_code":"nhom-mau"}`,
+	// The message names the field by its SCREEN label (14-cau-hinh §6), not its JSON name: the
+	// sentence is printed to staff verbatim.
+	for name, tc := range map[string]struct{ body, label string }{
+		"value_type":      {`{"label":"X","value_type":"chon"}`, "kiểu dữ liệu"},
+		"field_code":      {`{"label":"X","field_code":"legal_form"}`, "mã trường"},
+		"asset_type_code": {`{"label":"X","asset_type_code":"nhom-mau"}`, "nhóm tài nguyên"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newMapFieldServer(t)
 			s.grant(xaA, "admin.lookup")
-			w := s.call(t, http.MethodPatch, hostA, mapFieldPath+"/mf-001", canBoGhi(xaA), body)
+			w := s.call(t, http.MethodPatch, hostA, mapFieldPath+"/mf-001", canBoGhi(xaA), tc.body)
 			doiMa(t, w, http.StatusBadRequest)
 			if s.fake.calls != 0 {
 				t.Error("immutable field in the body and the use case still ran")
 			}
-			if e := loiTra(t, w); !strings.Contains(e.Message, name) {
-				t.Errorf("message does not name the refused field: %q", e.Message)
+			e := loiTra(t, w)
+			if !strings.Contains(e.Message, tc.label) {
+				t.Errorf("message does not name the refused field %q: %q", tc.label, e.Message)
 			}
+			assertNoInternalWording(t, e.Message)
 		})
 	}
 }
@@ -332,6 +337,56 @@ func TestMapFieldErrorsMapToStatuses(t *testing.T) {
 				t.Errorf("internal failure leaked to the client: %q", e.Message)
 			}
 		})
+	}
+}
+
+func TestMapFieldRefusalsAnswerFixedSentences(t *testing.T) {
+	// EVERY row of the table, each wrapped the way domain and app wrap it — `%w (tối đa 64 ký tự)`
+	// and the use case's commune prefix — so neither the sentinel's wording nor the wrapped detail
+	// can reach the body.
+	for _, row := range mapFieldSchemaRefusals {
+		t.Run(row.err.Error(), func(t *testing.T) {
+			s := newMapFieldServer(t)
+			s.grant(xaA, "admin.lookup")
+			s.fake.err = fmt.Errorf("truong_ban_do: thêm cho xã %s: %w", xaA, fmt.Errorf("%w (tối đa 64 ký tự)", row.err))
+			w := s.call(t, http.MethodPost, hostA, mapFieldPath, canBoGhi(xaA), createMapFieldBody)
+			doiMa(t, w, http.StatusBadRequest)
+			e := loiTra(t, w)
+			if e.Code != "invalid_request" || e.Message != row.message {
+				t.Fatalf("got %q / %q, want invalid_request / %q", e.Code, e.Message, row.message)
+			}
+			assertNoInternalWording(t, e.Message)
+		})
+	}
+
+	t.Run("option removed is a 409 with a fixed sentence", func(t *testing.T) {
+		s := newMapFieldServer(t)
+		s.grant(xaA, "admin.lookup")
+		s.fake.err = domain.ErrOptionRemoved
+		w := s.call(t, http.MethodPatch, hostA, mapFieldPath+"/mf-001", canBoGhi(xaA), `{"label":"X"}`)
+		doiMa(t, w, http.StatusConflict)
+		assertNoInternalWording(t, loiTra(t, w).Message)
+	})
+
+	t.Run("malformed list filter", func(t *testing.T) {
+		s := newMapFieldServer(t)
+		s.grant(xaA, "asset.read")
+		w := s.call(t, http.MethodGet, hostA, mapFieldPath+"?asset_type_code=Sai", canBoGhi(xaA), "")
+		doiMa(t, w, http.StatusBadRequest)
+		assertNoInternalWording(t, loiTra(t, w).Message)
+	})
+}
+
+func TestListMapFieldsFilterIsOptional(t *testing.T) {
+	// The contract publishes `asset_type_code` as optional (assetTypeFilter says why that needed a
+	// separate function). This pins the handler half: absent and empty both list every group.
+	for _, q := range []string{"", "?asset_type_code="} {
+		s := newMapFieldServer(t)
+		s.grant(xaA, "asset.read")
+		doiMa(t, s.call(t, http.MethodGet, hostA, mapFieldPath+q, canBoGhi(xaA), ""), http.StatusOK)
+		if s.fake.calls != 1 || s.fake.lastTypeCode != "" {
+			t.Errorf("%q: calls=%d filter=%q, want one unfiltered read", q, s.fake.calls, s.fake.lastTypeCode)
+		}
 	}
 }
 

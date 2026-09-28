@@ -42,6 +42,30 @@ type systemMessagesFake struct {
 	err     error
 	list    []domain.SystemMessage
 	result  domain.SystemMessage
+
+	// Text is recorded apart from `calls`: the investment-project reads call it on every request,
+	// and the three routes above count their own calls.
+	textCalls   int
+	textKey     string
+	textCommune tenant.ID
+	textOut     string // "" answers the shipped default, which is what a commune that reworded nothing reads
+	textErr     error
+}
+
+func (f *systemMessagesFake) Text(ctx context.Context, key string) (string, error) {
+	f.textCalls++
+	f.textKey, f.textCommune = key, tenant.MustFrom(ctx)
+	if f.textErr != nil {
+		return "", f.textErr
+	}
+	if f.textOut != "" {
+		return f.textOut, nil
+	}
+	m, ok := domain.LookupShippedMessage(key)
+	if !ok {
+		return "", domain.ErrUnknownMessageKey
+	}
+	return m.DefaultText, nil
 }
 
 func (f *systemMessagesFake) record(ctx context.Context, op string) {

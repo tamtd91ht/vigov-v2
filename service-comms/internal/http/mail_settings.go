@@ -203,8 +203,10 @@ func (h *Handler) writeMailSettingsError(w http.ResponseWriter, r *http.Request,
 		httpx.WriteError(w, http.StatusConflict, "mail_settings_missing",
 			"Xã chưa lưu cấu hình máy chủ thư. Hãy lưu cấu hình trước khi gửi thử.", "")
 		return
-	case isMailSettingsInputError(err):
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+	}
+	if msg, ok := refusalMessage(mailSettingsRefusals, err); ok {
+		h.logRefusal(r, "máy chủ thư: từ chối "+op, err)
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", msg, "")
 		return
 	}
 	for _, f := range mailSendFailures {
@@ -223,16 +225,27 @@ func (h *Handler) writeMailSettingsError(w http.ResponseWriter, r *http.Request,
 	httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
 }
 
-func isMailSettingsInputError(err error) bool {
-	for _, e := range []error{
-		domain.ErrMailHostEmpty, domain.ErrMailHostShape, domain.ErrMailPortNotAllowed,
-		domain.ErrMailSecurityUnknown, domain.ErrMailUsernameEmpty, domain.ErrMailUsernameShape,
-		domain.ErrMailFromAddress, domain.ErrMailFromName, domain.ErrMailPasswordShape,
-		domain.ErrMailRecipient,
-	} {
-		if errors.Is(err, e) {
-			return true
-		}
-	}
-	return false
+// mailSettingsRefusals — the 400s of the three mail-settings routes, one fixed sentence per sentinel
+// (see `refusal` in map_field_schema.go for why the domain's own sentence never reaches the body).
+// Field names are the labels of docs/ui-ux/14-cau-hinh.md §10.
+//
+// NO BOUND IS WRITTEN AS A NUMBER HERE. The domain keeps them unexported (mailFromNameMax,
+// allowedMailPorts), and a number retyped into a sentence is a second copy that drifts. The port
+// sentence names the two ports §10 itself recommends and does not claim they are the only ones.
+var mailSettingsRefusals = []refusal{
+	{domain.ErrMailHostEmpty, "Chưa nhập máy chủ SMTP."},
+	{domain.ErrMailHostShape, "Máy chủ SMTP phải là tên máy (ví dụ smtp.xa.gov.vn) hoặc địa chỉ IP, " +
+		"không kèm cổng hay giao thức."},
+	{domain.ErrMailPortNotAllowed, "Cổng này không dùng được cho máy chủ thư. Thường dùng 587 với START TLS, " +
+		"hoặc 465 với TLS ngay từ đầu."},
+	{domain.ErrMailSecurityUnknown, "Hãy chọn START TLS hoặc TLS ngay từ đầu. Hệ thống không gửi thư qua " +
+		"kết nối không mã hoá."},
+	{domain.ErrMailUsernameEmpty, "Chưa nhập tài khoản."},
+	{domain.ErrMailUsernameShape, "Tài khoản quá dài hoặc chứa ký tự không hợp lệ."},
+	{domain.ErrMailFromAddress, "Địa chỉ gửi phải là một địa chỉ thư điện tử hợp lệ, không kèm tên hiển thị."},
+	{domain.ErrMailFromName, "Tên hiển thị của người gửi quá dài, hoặc chứa ký tự xuống dòng hay ký tự " +
+		"không hợp lệ."},
+	{domain.ErrMailPasswordShape, "Mật khẩu quá dài hoặc chứa ký tự không hợp lệ."},
+	{domain.ErrMailRecipient, "Địa chỉ nhận thư thử phải là một địa chỉ thư điện tử hợp lệ, không kèm tên " +
+		"hiển thị."},
 }

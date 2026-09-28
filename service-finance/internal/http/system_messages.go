@@ -22,6 +22,9 @@ import (
 // carrying the row and its audit entry.
 type SystemMessageService interface {
 	Messages(ctx context.Context) ([]domain.SystemMessage, error)
+	// Text is the sentence in force for one key — what a route that EMITS the sentence reads
+	// (`scope_notice` on the investment-project reads, du_an.go).
+	Text(ctx context.Context, key string) (string, error)
 	Reword(ctx context.Context, key, text string, actor audit.Actor) (domain.SystemMessage, error)
 	Restore(ctx context.Context, key string, actor audit.Actor) (domain.SystemMessage, error)
 }

@@ -98,6 +98,13 @@ type duAnRa struct {
 	// so wrapping that reply would rename a field web-admin already builds against.
 	DelayThreshold       int64  `json:"delay_threshold"`
 	DelayThresholdSource string `json:"delay_threshold_source"`
+
+	// ScopeNotice is `budget.scope_notice` as THIS commune words it — filled on the DETAIL route only.
+	// The list carries the same sentence ONCE at the top level; repeating a sentence of up to
+	// domain.MessageTextMax characters on every item of a year's projects would be kilobytes of one
+	// fact. Absent on list items and on the write replies, which is why it is optional. Same reason as
+	// the delay pair above for putting it on this type: the detail route returns a bare duAnRa.
+	ScopeNotice string `json:"scope_notice,omitempty"`
 }
 
 type danhSachDuAnRa struct {
@@ -121,6 +128,20 @@ type danhSachDuAnRa struct {
 	// permission decision — so every commune is on `mac-dinh`, and the honest thing is to say so
 	// rather than to present the vendor's number as the commune's own choice.
 	DelayThresholdSource string `json:"delay_threshold_source"`
+
+	// ScopeNotice is the banner §1 of 06-giai-ngan requires above these figures — `budget.scope_notice`
+	// resolved for THIS commune (its own wording if it reworded it under Cấu hình → Lời hệ thống, the
+	// shipped sentence otherwise).
+	//
+	// SENT BY THE SERVER BECAUSE THE WEB HAD IT HARDCODED, which made the Cấu hình screen a lie: a
+	// commune could reword the sentence and every budget screen went on printing the vendor's (rule 1,
+	// invariant 10). Carried on the reads the screen already makes, under the `budget.read` they
+	// already require, rather than on a new route — no new URL, no new permission decision.
+	//
+	// OPTIONAL IN THE CONTRACT (a published reply only grows optional fields — rule 2, forbidden #4's
+	// principle, applied to REST),
+	// but this route always fills it: a failed read is a 500, never the default.
+	ScopeNotice string `json:"scope_notice,omitempty"`
 }
 
 func ngayRa(t time.Time) string {
@@ -248,6 +269,10 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
 	}
+	notice, ok := h.scopeNotice(w, r)
+	if !ok {
+		return
+	}
 	nay := h.nay()
 
 	// make(..., 0, ...) and not a nil slice: `items` must marshal as [] and never as null. A client
@@ -258,6 +283,7 @@ func (h *Handler) DanhSachDuAn(w http.ResponseWriter, r *http.Request) {
 		Year:                 nam,
 		DelayThreshold:       int64(nguong.Gia),
 		DelayThresholdSource: string(nguong.Nguon),
+		ScopeNotice:          notice,
 	}
 	for _, mot := range ds {
 		ra.Items = append(ra.Items, duAnRaNgoai(mot, nay, nguong))
@@ -307,5 +333,30 @@ func (h *Handler) ChiTietDuAn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vietJSON(w, http.StatusOK, duAnRaNgoai(mot, h.nay(), nguong))
+	notice, ok := h.scopeNotice(w, r)
+	if !ok {
+		return
+	}
+	ra := duAnRaNgoai(mot, h.nay(), nguong)
+	ra.ScopeNotice = notice
+	vietJSON(w, http.StatusOK, ra)
+}
+
+// scopeNotice reads `budget.scope_notice` for the request's commune, through app.SystemMessages —
+// never domain's default directly, or a commune's own wording is ignored (rule 1, invariant 10).
+//
+// A FAILURE IS A 500, NOT THE DEFAULT SENTENCE, for the reason app.SystemMessages.Text gives: a
+// commune that replaced the wording must never be shown the vendor's because a read failed, with
+// nothing saying so. It answers the request itself and reports false; the caller only returns.
+func (h *Handler) scopeNotice(w http.ResponseWriter, r *http.Request) (string, bool) {
+	ctx := r.Context()
+	text, err := h.d.SystemMessages.Text(ctx, domain.KeyBudgetScopeNotice)
+	if err != nil {
+		h.d.Log.Error("lời hệ thống budget.scope_notice: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return "", false
+	}
+	return text, true
 }

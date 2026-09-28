@@ -16,7 +16,9 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
@@ -131,16 +133,12 @@ type deleteMapFieldSchemaIn struct {
 func (h *Handler) ListMapFieldSchemas(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var typeCode string
-	if raw := r.URL.Query().Get("asset_type_code"); raw != "" {
-		c, err := domain.ChuanHoaMa(raw)
-		if err != nil {
-			// Not echoed: the message names the parameter, not what was sent.
-			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-				"Tham số `asset_type_code` không đúng dạng mã nhóm tài nguyên.", "")
-			return
-		}
-		typeCode = c
+	typeCode, err := assetTypeFilter(r.URL.Query())
+	if err != nil {
+		// Not echoed: the message names the filter, not what was sent.
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Mã nhóm tài nguyên dùng để lọc không đúng dạng.", "")
+		return
 	}
 
 	// Scoped in the store: MapFieldSchemaStore.List reads through db.For(ctx).Query.
@@ -161,6 +159,25 @@ func (h *Handler) ListMapFieldSchemas(w http.ResponseWriter, r *http.Request) {
 		out.Items = append(out.Items, mapFieldSchemaToOut(m))
 	}
 	vietJSON(w, http.StatusOK, out)
+}
+
+// assetTypeFilter reads the OPTIONAL `asset_type_code` filter: absent or empty means every group,
+// present means it must be a well-formed code.
+//
+// A SEPARATE FUNCTION BECAUSE OF THE CONTRACT, not for reuse. tools/apidoc marks a query parameter
+// `required` when it feeds the condition of an `if` that answers 400 in the handler
+// (tools/apidoc/truyvan.go, docThanHam). Validated inline, this optional filter was published as
+// REQUIRED, and a client built from openapi.json would have had to send a filter the server never
+// asks for. Here the 400 branch depends on an error returned from a call, which the generator does
+// not trace, so the parameter comes out `required: false` — which is what the handler does. That
+// leans on a LIMIT of the generator, not on a rule it enforces: inline the check again and the
+// contract goes back to `required: true` with no test turning red.
+func assetTypeFilter(q url.Values) (string, error) {
+	raw := thamSoLoc(q, "asset_type_code")
+	if raw == "" {
+		return "", nil
+	}
+	return domain.ChuanHoaMa(raw)
 }
 
 // CreateMapFieldSchema — POST /api/v1/map-field-schemas
@@ -282,10 +299,15 @@ func (h *Handler) writeMapFieldSchemaError(w http.ResponseWriter, r *http.Reques
 		httpx.WriteError(w, http.StatusConflict, "catalogue_full",
 			"Xã đã đạt số trường bản đồ tối đa. Hãy xoá bớt trường không dùng.", "")
 	case errors.Is(err, domain.ErrOptionRemoved):
-		httpx.WriteError(w, http.StatusConflict, "option_removed", err.Error(), "")
-	case isMapFieldSchemaInputError(err):
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		h.logRefusal(r, "trường bản đồ: từ chối "+op, err)
+		httpx.WriteError(w, http.StatusConflict, "option_removed",
+			"Không bỏ được một lựa chọn đã có. Có thể đổi nhãn hoặc thêm lựa chọn mới.", "")
 	default:
+		if msg, ok := refusalMessage(mapFieldSchemaRefusals, err); ok {
+			h.logRefusal(r, "trường bản đồ: từ chối "+op, err)
+			httpx.WriteError(w, http.StatusBadRequest, "invalid_request", msg, "")
+			return
+		}
 		// The wrapped error never reaches the client (rule 3, forbidden #3).
 		h.d.Log.Error("trường bản đồ: "+op+" lỗi hệ thống",
 			"xa", string(tenant.MustFrom(r.Context())), "err", err)
@@ -293,23 +315,80 @@ func (h *Handler) writeMapFieldSchemaError(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// isMapFieldSchemaInputError lists the request refusals explicitly — see laLoiDauVao for why a
-// default of 400 is wrong.
-func isMapFieldSchemaInputError(err error) bool {
-	for _, e := range []error{
-		domain.ErrMaTrong, domain.ErrMaSaiDinhDang, domain.ErrMaQuaDai,
-		domain.ErrFieldCodeEmpty, domain.ErrFieldCodeShape, domain.ErrFieldCodeTooLong,
-		domain.ErrFieldLabelEmpty, domain.ErrFieldLabelTooLong,
-		domain.ErrValueTypeUnknown, domain.ErrSortOrderRange,
-		domain.ErrOptionsRequired, domain.ErrOptionsNotAllowed, domain.ErrOptionsTooMany,
-		domain.ErrOptionValueEmpty, domain.ErrOptionValueTooLong,
-		domain.ErrOptionLabelEmpty, domain.ErrOptionLabelTooLong, domain.ErrOptionValueDup,
-		domain.ErrAssetTypeImmutable, domain.ErrFieldCodeImmutable, domain.ErrValueTypeImmutable,
-		domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
-	} {
-		if errors.Is(err, e) {
-			return true
+// refusal pairs one domain sentinel with the sentence staff read when it refuses their request.
+//
+// WRITTEN HERE AND NOT READ FROM THE SENTINEL. The domain's sentences are for the error chain and
+// the log: they start with the package prefix (`truong_ban_do:`, `may_chu_thu:`), quote the JSON
+// field name in backticks, and by the time they reach this layer may carry a wrapped detail. The
+// screen prints `message` verbatim, so the wire sentence must be one nobody has to strip — the
+// same split as service-petitions/internal/http/xu_ly_phan_anh.go cacCauTuChoiPhieu. The price is
+// two sentences per refusal; each table sits beside the one switch that uses it, and every row is
+// pinned by a test asserting no prefix and no backtick reaches the body.
+//
+// THE TABLE IS ALSO THE LIST OF 400s. A sentinel missing from it falls through to 500, never to a
+// default 400 — see laLoiDauVao for why "unknown means the client's fault" is wrong.
+type refusal struct {
+	err     error
+	message string
+}
+
+// refusalMessage returns the fixed sentence for the first row whose sentinel is in err's chain.
+func refusalMessage(table []refusal, err error) (string, bool) {
+	for _, row := range table {
+		if errors.Is(err, row.err) {
+			return row.message, true
 		}
 	}
-	return false
+	return "", false
+}
+
+// logRefusal records a refusal with its full chain — the chain goes to the log and nowhere else.
+// INFO and not ERROR: the rule doing its job is not a fault anybody must be woken for. The chain
+// names a rule and a field, never a value the person typed.
+func (h *Handler) logRefusal(r *http.Request, msg string, err error) {
+	h.d.Log.Info(msg, "xa", string(tenant.MustFrom(r.Context())), "err", err)
+}
+
+// mapFieldSchemaRefusals — the 400s of the four map-field routes. Field names are the labels of
+// docs/ui-ux/14-cau-hinh.md §6 (`Nhóm tài nguyên`, `Mã trường`, `Nhãn hiển thị`, `Kiểu dữ liệu`,
+// `Thứ tự`). The bounds are read from domain, never retyped, so a bound that changes changes the
+// sentence too.
+//
+// ErrMa* HERE IS THE ASSET GROUP'S CODE: the only catalogue code these routes take is
+// `asset_type_code` (app.MapFieldSchemas.Create normalises it with domain.ChuanHoaMa).
+var mapFieldSchemaRefusals = []refusal{
+	{domain.ErrMaTrong, "Chưa chọn nhóm tài nguyên."},
+	{domain.ErrMaSaiDinhDang, "Mã nhóm tài nguyên không đúng dạng: chỉ gồm chữ thường a-z, số và dấu gạch ngang."},
+	{domain.ErrMaQuaDai, fmt.Sprintf("Mã nhóm tài nguyên quá dài (tối đa %d ký tự).", domain.MaToiDa)},
+
+	{domain.ErrFieldCodeEmpty, "Chưa nhập mã trường."},
+	{domain.ErrFieldCodeShape, "Mã trường không đúng dạng: bắt đầu bằng chữ thường a-z, chỉ gồm chữ thường a-z, " +
+		"số và dấu gạch dưới, ví dụ legal_form."},
+	{domain.ErrFieldCodeTooLong, fmt.Sprintf("Mã trường quá dài (tối đa %d ký tự).", domain.FieldCodeMaxLen)},
+	// "trống hoặc chứa ký tự không hợp lệ": domain.normalizeText answers the EMPTY sentinel for a
+	// control character too, so "chưa nhập" alone would be false for a label that has text.
+	{domain.ErrFieldLabelEmpty, "Nhãn hiển thị đang trống hoặc chứa ký tự không hợp lệ."},
+	{domain.ErrFieldLabelTooLong, fmt.Sprintf("Nhãn hiển thị quá dài (tối đa %d ký tự).", domain.FieldLabelMaxLen)},
+	{domain.ErrValueTypeUnknown, "Kiểu dữ liệu không hợp lệ. Hãy chọn một trong: Văn bản, Số nguyên, " +
+		"Số thập phân, Đúng/Sai, Ngày, Chọn trong danh sách."},
+	{domain.ErrSortOrderRange, fmt.Sprintf("Thứ tự phải từ 0 đến %d.", domain.FieldSortOrderMax)},
+
+	{domain.ErrOptionsRequired, "Kiểu Chọn trong danh sách cần ít nhất một lựa chọn."},
+	{domain.ErrOptionsNotAllowed, "Chỉ kiểu Chọn trong danh sách mới có danh sách lựa chọn."},
+	{domain.ErrOptionsTooMany, fmt.Sprintf("Quá nhiều lựa chọn (tối đa %d).", domain.FieldOptionsMax)},
+	{domain.ErrOptionValueEmpty, "Một lựa chọn đang trống giá trị hoặc giá trị chứa ký tự không hợp lệ."},
+	{domain.ErrOptionValueTooLong, fmt.Sprintf("Giá trị của một lựa chọn quá dài (tối đa %d ký tự).",
+		domain.FieldOptionValueMaxLen)},
+	{domain.ErrOptionLabelEmpty, "Một lựa chọn đang trống nhãn hoặc nhãn chứa ký tự không hợp lệ."},
+	{domain.ErrOptionLabelTooLong, fmt.Sprintf("Nhãn của một lựa chọn quá dài (tối đa %d ký tự).",
+		domain.FieldLabelMaxLen)},
+	{domain.ErrOptionValueDup, "Có hai lựa chọn trùng giá trị. Mỗi lựa chọn cần một giá trị riêng."},
+
+	{domain.ErrAssetTypeImmutable, "Không đổi được nhóm tài nguyên của trường đã có. Hãy thêm trường mới ở nhóm khác."},
+	{domain.ErrFieldCodeImmutable, "Không đổi được mã trường. Hãy sửa nhãn hiển thị, hoặc thêm trường mới."},
+	{domain.ErrValueTypeImmutable, "Không đổi được kiểu dữ liệu: dữ liệu đã ghi theo kiểu cũ sẽ không đọc " +
+		"được. Hãy thêm trường mới."},
+
+	{domain.ErrThieuLyDoXoa, "Chưa nhập lý do xoá."},
+	{domain.ErrLyDoXoaQuaDai, fmt.Sprintf("Lý do xoá quá dài (tối đa %d ký tự).", domain.LyDoXoaToiDa)},
 }

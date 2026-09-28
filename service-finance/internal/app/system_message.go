@@ -86,6 +86,30 @@ func (uc *SystemMessages) Messages(ctx context.Context) ([]domain.SystemMessage,
 	return out, nil
 }
 
+// Text returns the sentence in force for ONE key in the request's commune: the commune's wording if
+// it has one, the shipped default otherwise. It is the read every route that EMITS a sentence uses
+// (the Messages comment above says why no route may read the constant directly).
+//
+// SAME FAILURE RULE AS Messages: a store error is an error, never the default. The budget banner
+// read through here sits above public-money figures; showing the vendor's sentence to a commune that
+// replaced it, because a read failed, is the silent wrong answer this layer exists to refuse.
+func (uc *SystemMessages) Text(ctx context.Context, key string) (string, error) {
+	shipped, ok := domain.LookupShippedMessage(key)
+	if !ok {
+		return "", domain.ErrUnknownMessageKey
+	}
+	live, err := uc.store.ListLive(ctx)
+	if err != nil {
+		return "", wrapMessage(ctx, "đọc", err)
+	}
+	for i := range live {
+		if live[i].Key == key {
+			return domain.ResolveMessage(shipped, &live[i]).CurrentText, nil
+		}
+	}
+	return domain.ResolveMessage(shipped, nil).CurrentText, nil
+}
+
 // Reword sets the commune's own wording of one key.
 //
 // A NO-OP WRITES NOTHING AND AUDITS NOTHING — including sending the DEFAULT while the commune is on

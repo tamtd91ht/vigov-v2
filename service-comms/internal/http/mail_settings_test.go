@@ -342,3 +342,37 @@ func TestMailErrorsMapToStatuses(t *testing.T) {
 		})
 	}
 }
+
+func TestMailRefusalsAnswerFixedSentences(t *testing.T) {
+	// EVERY row, not a sample: the table is the list of 400s, and the row a test skips is the row whose
+	// sentence nobody reads until an administrator sees `may_chu_thu: \`port\`` on the screen.
+	for _, row := range mailSettingsRefusals {
+		t.Run(row.err.Error(), func(t *testing.T) {
+			s := newMailServer(t)
+			s.grant(xaA, "admin.lookup")
+			// Wrapped the way a use case wraps it: the detail after the sentinel must not travel either.
+			s.fake.err = fmt.Errorf("máy chủ thư: lưu cho xã %s: %w", xaA, row.err)
+			w := s.call(t, http.MethodPut, hostA, mailPath, canBoGhi(xaA), putMailBody)
+			doiMa(t, w, http.StatusBadRequest)
+			e := loiTra(t, w)
+			if e.Code != "invalid_request" || e.Message != row.message {
+				t.Fatalf("got %q / %q, want invalid_request / %q", e.Code, e.Message, row.message)
+			}
+			assertNoInternalWording(t, e.Message)
+		})
+	}
+}
+
+// assertNoInternalWording is the one check both refusal tables are pinned by: no package prefix, no
+// backticked JSON field name, no wrapped chain, no commune id.
+func assertNoInternalWording(t *testing.T, msg string) {
+	t.Helper()
+	for _, bad := range []string{"`", "may_chu_thu", "truong_ban_do", "danh_muc", ": %", string(xaA)} {
+		if strings.Contains(msg, bad) {
+			t.Errorf("message carries internal wording %q: %q", bad, msg)
+		}
+	}
+	if strings.TrimSpace(msg) == "" {
+		t.Error("empty message")
+	}
+}

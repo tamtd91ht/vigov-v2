@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -387,3 +388,76 @@ func TestRegisterTuChoiKhiThieuChecker(t *testing.T) {
 }
 
 var _ authz.Checker = checkerGia{}
+
+// --- budget.scope_notice travels with the figures (rule 1, invariant 10) ------------------------
+
+func TestDuAnReadsCarryTheCommunesScopeNotice(t *testing.T) {
+	// THE COMMUNE'S OWN WORDING, not the constant: before this the web hardcoded the banner, so a
+	// commune that reworded it under Cấu hình → Lời hệ thống kept reading the vendor's sentence.
+	const own = "Số liệu trên màn hình này chỉ để theo dõi, không dùng thay sổ kế toán của xã."
+	for _, tc := range []struct{ name, path string }{
+		{"list", "/api/v1/investment-projects?year=2026"},
+		{"detail", "/api/v1/investment-projects/da-001"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := dungMayChuVoi(t, coQuyen("budget.read"))
+			fake := m.d.SystemMessages.(*systemMessagesFake)
+			fake.textOut = own
+			w := m.goi(t, http.MethodGet, hostA, tc.path, canBoCua(xaA))
+			doiMa(t, w, http.StatusOK)
+
+			var got struct {
+				ScopeNotice string `json:"scope_notice"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.ScopeNotice != own {
+				t.Errorf("scope_notice = %q, want the commune's own wording", got.ScopeNotice)
+			}
+			// Read under the request's commune, for the one key this service ships.
+			if fake.textKey != domain.KeyBudgetScopeNotice || fake.textCommune != xaA {
+				t.Errorf("Text(%q) in commune %q, want %q in %q", fake.textKey, fake.textCommune,
+					domain.KeyBudgetScopeNotice, xaA)
+			}
+		})
+	}
+}
+
+func TestDuAnListCarriesScopeNoticeOnceNotPerItem(t *testing.T) {
+	m := dungMayChuVoi(t, coQuyen("budget.read"))
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/investment-projects?year=2026", canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
+	var ra danhSachDuAnRa
+	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+		t.Fatal(err)
+	}
+	m0, _ := domain.LookupShippedMessage(domain.KeyBudgetScopeNotice)
+	if ra.ScopeNotice != m0.DefaultText {
+		t.Errorf("top-level scope_notice = %q, want the shipped default for a commune that reworded nothing", ra.ScopeNotice)
+	}
+	if len(ra.Items) == 0 {
+		t.Fatal("fixture has no project in 2026 — the per-item half of this test asserts nothing")
+	}
+	for _, it := range ra.Items {
+		if it.ScopeNotice != "" {
+			t.Fatalf("item %s repeats scope_notice", it.ID)
+		}
+	}
+}
+
+func TestDuAnReadsRefuseWhenScopeNoticeCannotBeRead(t *testing.T) {
+	// FAIL CLOSED: a commune that replaced the sentence must never see the vendor's because the read
+	// failed. 500, and the store's words stay in the log.
+	for _, path := range []string{"/api/v1/investment-projects?year=2026", "/api/v1/investment-projects/da-001"} {
+		m := dungMayChuVoi(t, coQuyen("budget.read"))
+		m.d.SystemMessages.(*systemMessagesFake).textErr = errors.New("cơ sở dữ liệu không phản hồi")
+		w := m.goi(t, http.MethodGet, hostA, path, canBoCua(xaA))
+		doiMa(t, w, http.StatusInternalServerError)
+		body := w.Body.String()
+		m0, _ := domain.LookupShippedMessage(domain.KeyBudgetScopeNotice)
+		if strings.Contains(body, "không phản hồi") || strings.Contains(body, m0.DefaultText) {
+			t.Errorf("%s: body leaks the failure or falls back to the default: %s", path, body)
+		}
+	}
+}
