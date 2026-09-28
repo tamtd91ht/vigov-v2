@@ -141,6 +141,41 @@ export function nhanNguoiGui(phieu: petitions_phieuPhanAnhRa): string {
   return phan.join(" · ");
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * SCENE LOCATION (§8.4) — requirement `FeedbackDetailDrawer.tsx:394-406`
+ *
+ * TEXT ONLY, NO MAP. The requirement draws a mini-map; drawing one means asking a tile service for
+ * the tiles around the point, which sends a citizen's scene coordinates (personal data, rule 3) to an
+ * outside party for the first time — a rule 3 stop condition the owner has not decided — and would
+ * need a new CSP origin (rule 13). For the same reason there is no "open in maps" link: it would put
+ * the coordinates into a third-party URL. The gap is listed in `PHAN_CHUA_DUNG`.
+ *
+ * SHOWN ON ANONYMOUS PETITIONS TOO, like `address`: the server returns both under `feedback.read`
+ * regardless of the flag, because the officer cannot deal with a scene they cannot find. What the
+ * flag hides is the reporter (`nhanNguoiGui`), not the place.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const SCENE_LOCATION_LABEL = "Vị trí hiện trường";
+/** Requirement `FeedbackDetailDrawer.tsx:402`, verbatim. */
+export const SCENE_NO_ADDRESS = "Không có địa chỉ ghi kèm";
+export const SCENE_NO_COORDINATES = "Người dân không gửi toạ độ";
+export const SCENE_COORDINATES_NOTE = "Toạ độ do người dân gửi kèm từ ứng dụng";
+
+/**
+ * `"21.028511, 105.804817"` — six decimals, the precision the server stores (~0.1 m), latitude first.
+ *
+ * `null` unless BOTH are finite numbers: half a coordinate is no location, and printing `NaN` or a
+ * lone latitude would look like a place when there is none.
+ */
+export function sceneCoordinates(
+  petition: Pick<petitions_phieuPhanAnhRa, "lat" | "lng">,
+): string | null {
+  const { lat, lng } = petition;
+  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+}
+
 /**
  * Trạng thái của MỘT hạn xử lý.
  *
@@ -875,12 +910,23 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "đều chưa có. Nút Đóng phiếu bên dưới vì thế đóng được một phiếu chưa có ảnh nghiệm thu.",
   },
   {
+    ten: "Bản đồ nhỏ ghim vị trí hiện trường, và tên thôn cạnh địa chỉ (§8.4)",
+    viSao:
+      "Toạ độ `lat`/`lng` người dân gửi kèm nay đã về và hiện thành chữ ở ô `Vị trí hiện trường`. " +
+      "Bản đồ nhỏ thì chưa vẽ: vẽ nó là xin ảnh nền bản đồ quanh điểm ấy từ một nhà cung cấp bên " +
+      "ngoài, tức là gửi toạ độ của người dân ra một dịch vụ ngoài lần đầu — việc chủ dự án chưa " +
+      "quyết (luật 3, điểm dừng #2). Vì cùng lý do, màn này không có liên kết “mở bản đồ”. Tên " +
+      "thôn thì phiếu trả về không mang, nên không hiện cạnh địa chỉ.",
+  },
+  {
     ten: "Bốn thẻ KPI (§3), tab Bản đồ nhiệt (§9), tab Báo cáo (§10)",
     viSao:
       "Tuyến đếm `GET /api/v1/citizen-report-summary` (ADR 0053) đã có và trang Tổng quan đang dùng " +
       "nó, nhưng nó chỉ trả số tiếp nhận, đang xử lý, đúng hạn và trễ hạn — không có điểm hài lòng " +
       "trung bình, số phiếu bị đánh giá thấp hay số phiếu chờ kiểm duyệt của hai thẻ còn lại. Không " +
-      "có tuyến bản đồ nhiệt, hợp đồng không trả `lat`/`lng`, và không tuyến nào đếm theo lĩnh vực, " +
+      "có tuyến bản đồ nhiệt: phiếu nay đã mang `lat`/`lng` (toạ độ người dân gửi kèm), nhưng vẽ " +
+      "bản đồ nhiệt cần một nhà cung cấp bản đồ, tức là gửi toạ độ của người dân ra một dịch vụ " +
+      "ngoài — việc chủ dự án chưa quyết (luật 3, điểm dừng #2). Không tuyến nào đếm theo lĩnh vực, " +
       "bộ phận hay thôn cho tab Báo cáo. Dựng những con số ấy bằng cách đếm trang đang xem sẽ là con " +
       "số của MỘT TRANG chứ không của cả xã — và đó là con số lãnh đạo đọc rồi báo cáo lên trên.",
   },

@@ -410,6 +410,13 @@ const KHOA_PHIEU_MONG_DOI = [
   "rating_comment",
   "rated_at",
   "reopen_count",
+  // Added 29/09/2026 (b5d17bb): the scene coordinates the citizen optionally sent from the Mini App,
+  // six decimals. Personal data (rule 3 lists coordinates) that follows `address`: returned under
+  // `feedback.read`, anonymous petitions included — the flag hides the reporter, not the place. The
+  // screens show them as TEXT only; no map tile or outbound link sends them anywhere
+  // (`features/phan-anh/nhan-phieu.ts`, `sceneCoordinates`).
+  "lat",
+  "lng",
 ] as const satisfies readonly KhoaPhieu[];
 
 /** Hợp đồng mọc thêm một trường mà danh sách trên không có → đỏ ngay tại đây. */

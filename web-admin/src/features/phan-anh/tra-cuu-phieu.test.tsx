@@ -119,6 +119,63 @@ describe("phiếu phản ánh kết xuất ra trang", () => {
   });
 });
 
+describe("vị trí hiện trường — màn tra cứu (§8.4)", () => {
+  it("coordinates reach the page as text, six decimals, with the provenance note", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ lat: 21.028511, lng: 105.804817 })} bayGio={BAY_GIO} />,
+    );
+    expect(html).toContain("Vị trí hiện trường");
+    expect(html).toContain("Tổ 6, thôn Hà Lam");
+    expect(html).toContain("21.028511, 105.804817");
+    expect(html).toContain("Toạ độ do người dân gửi kèm từ ứng dụng");
+    expect(html).not.toContain("Người dân không gửi toạ độ");
+  });
+
+  it("absent coordinates are SAID; an empty address uses the requirement's sentence", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ address: "", lat: null, lng: null })} bayGio={BAY_GIO} />,
+    );
+    expect(html).toContain("Người dân không gửi toạ độ");
+    expect(html).toContain("Không có địa chỉ ghi kèm");
+    expect(html).not.toContain("Toạ độ do người dân gửi kèm");
+  });
+
+  it("anonymous: the place stays, the reporter goes", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu
+        phieu={phieu({
+          anonymous: true,
+          reporter_name: "",
+          reporter_phone: "",
+          lat: 21.028511,
+          lng: 105.804817,
+        })}
+        bayGio={BAY_GIO}
+      />,
+    );
+    expect(html).toContain("Người gửi ẩn danh");
+    expect(html).not.toContain("Nguyễn");
+    expect(html).toContain("Tổ 6, thôn Hà Lam");
+    expect(html).toContain("21.028511, 105.804817");
+  });
+
+  it("no map: no iframe, no image, no outbound link carrying the coordinates", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ lat: 21.028511, lng: 105.804817 })} bayGio={BAY_GIO} />,
+    );
+    expect(html).not.toMatch(/<(iframe|img|a)\b/);
+    expect(html).not.toMatch(/href="[^"]*21\.028511/);
+  });
+
+  it("the address is escaped text — no raw HTML runs (rule 13)", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ address: "<img src=x onerror=alert(1)>" })} bayGio={BAY_GIO} />,
+    );
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+  });
+});
+
 describe("đánh giá, mở lại, công khai — màn tra cứu", () => {
   it("chưa đánh giá: nói ra, không để khối trống", () => {
     const html = renderToStaticMarkup(<ThongTinPhieu phieu={phieu()} bayGio={BAY_GIO} />);

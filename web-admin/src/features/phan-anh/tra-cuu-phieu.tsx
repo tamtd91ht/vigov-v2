@@ -17,9 +17,10 @@ import {
   nhanThoiDiem,
   nhanTrangThai,
   reopenLine,
+  SCENE_LOCATION_LABEL,
   trangThaiHan,
 } from "./nhan-phieu";
-import { CitizenRatingBlock, PublicationBox } from "./citizen-report-blocks";
+import { CitizenRatingBlock, PublicationBox, SceneLocation } from "./citizen-report-blocks";
 
 /**
  * Tra cứu một phiếu phản ánh theo **mã tra cứu** — `docs/ui-ux/09-phan-anh-nguoi-dan.md §8`.
@@ -153,8 +154,10 @@ export function ThongTinPhieu({
             những gì buộc phiếu vào một người có tên. */}
         <dd className="noi-dung-phan-anh">{phieu.content}</dd>
 
-        <dt>Địa chỉ</dt>
-        <dd>{phieu.address === "" ? "Không có" : phieu.address}</dd>
+        <dt>{SCENE_LOCATION_LABEL}</dt>
+        <dd>
+          <SceneLocation petition={phieu} />
+        </dd>
 
         {/* BA MỐC THỜI GIAN, KHÔNG PHẢI HAI, và không mốc nào thay được mốc kia:
             `clock_from` là lúc người dân bấm gửi — GỐC ĐẾM của cả hai hạn, và là thứ duy nhất

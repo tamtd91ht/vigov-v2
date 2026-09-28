@@ -53,6 +53,8 @@ import {
   ratingStars,
   ratingView,
   reopenLine,
+  SCENE_LOCATION_LABEL,
+  sceneCoordinates,
 } from "./nhan-phieu";
 
 function phieu(sua: Partial<petitions_phieuPhanAnhRa> = {}): petitions_phieuPhanAnhRa {
@@ -652,9 +654,10 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
   it("không còn mục nào về nhật ký, còn mọi mục khác vẫn nguyên", () => {
     const tatCa = PHAN_CHUA_DUNG.map((x) => `${x.ten} ${x.viSao}`).join(" ");
     expect(tatCa).not.toMatch(/Nhật ký xử lý|nhat_ky_phan_anh/);
-    // Tám mục: chín trừ hai (lọc đánh giá thấp và nút công khai đã dựng) cộng một (§8.6 không
-    // dựng theo quyết định của chủ dự án) — bỏ nhầm một mục khác cùng lúc là đỏ ở đây.
-    expect(PHAN_CHUA_DUNG.length).toBe(8);
+    // Chín mục: chín trừ hai (lọc đánh giá thấp và nút công khai đã dựng) cộng một (§8.6 không
+    // dựng theo quyết định của chủ dự án) cộng một (bản đồ nhỏ §8.4 — toạ độ đã về, nhà cung cấp
+    // bản đồ chưa được quyết) — bỏ nhầm một mục khác cùng lúc là đỏ ở đây.
+    expect(PHAN_CHUA_DUNG.length).toBe(9);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh trước / sau"))).toBe(true);
   });
 });
@@ -680,5 +683,39 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
     expect(muc?.viSao).toContain("citizen-report-summary");
     expect(muc?.viSao).toContain("`lat`/`lng`");
     expect(muc?.viSao).toContain("bản đồ nhiệt");
+  });
+});
+
+describe("vị trí hiện trường — toạ độ đã về, bản đồ chưa (§8.4)", () => {
+  const tatCa = () => PHAN_CHUA_DUNG.map((x) => `${x.ten} ${x.viSao}`).join(" ");
+
+  it("no entry still claims the contract lacks `lat`/`lng`", () => {
+    expect(tatCa()).not.toContain("hợp đồng không trả `lat`/`lng`");
+  });
+
+  it("the heatmap and the mini-map both name the undecided map provider (rule 3 stop #2)", () => {
+    const kpi = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Bốn thẻ KPI"));
+    expect(kpi?.viSao).toContain("nhà cung cấp bản đồ");
+    expect(kpi?.viSao).toContain("luật 3, điểm dừng #2");
+    const ban = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Bản đồ nhỏ"));
+    expect(ban?.ten).toContain("§8.4");
+    expect(ban?.viSao).toContain("luật 3, điểm dừng #2");
+    expect(ban?.viSao).toContain(SCENE_LOCATION_LABEL);
+  });
+
+  it("six decimals, latitude first", () => {
+    expect(sceneCoordinates({ lat: 21.028511, lng: 105.804817 })).toBe("21.028511, 105.804817");
+    // Padded, not trimmed: the precision stays readable as six places.
+    expect(sceneCoordinates({ lat: 21.5, lng: 105 })).toBe("21.500000, 105.000000");
+    expect(sceneCoordinates({ lat: -0.0000004, lng: 0 })).toBe("-0.000000, 0.000000");
+  });
+
+  it("absent, null, half, or not finite: no coordinates at all", () => {
+    expect(sceneCoordinates({})).toBeNull();
+    expect(sceneCoordinates({ lat: null, lng: null })).toBeNull();
+    expect(sceneCoordinates({ lat: 21.028511 })).toBeNull();
+    expect(sceneCoordinates({ lat: 21.028511, lng: null })).toBeNull();
+    expect(sceneCoordinates({ lat: Number.NaN, lng: 105.804817 })).toBeNull();
+    expect(sceneCoordinates({ lat: 21.028511, lng: Number.POSITIVE_INFINITY })).toBeNull();
   });
 });

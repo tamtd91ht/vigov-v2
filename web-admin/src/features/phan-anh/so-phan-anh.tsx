@@ -99,12 +99,18 @@ import {
   reNhanhDuoc,
   reopenLine,
   ratingStars,
+  SCENE_LOCATION_LABEL,
   SO_RONG,
   TIM_PLACEHOLDER,
   trangThaiHan,
   type CongThaoTac,
 } from "./nhan-phieu";
-import { CitizenRatingBlock, PublicationBox, starsLabel } from "./citizen-report-blocks";
+import {
+  CitizenRatingBlock,
+  PublicationBox,
+  SceneLocation,
+  starsLabel,
+} from "./citizen-report-blocks";
 import { NhatKyPhieu } from "./nhat-ky-phieu";
 import {
   QUYEN_DONG_PHAN_ANH,
@@ -848,8 +854,10 @@ export function ChiTietPhieu({
         <dt>Nội dung</dt>
         <dd className="noi-dung-phan-anh">{phieu.content}</dd>
 
-        <dt>Địa chỉ</dt>
-        <dd>{phieu.address === "" ? "Chưa rõ vị trí" : phieu.address}</dd>
+        <dt>{SCENE_LOCATION_LABEL}</dt>
+        <dd>
+          <SceneLocation petition={phieu} />
+        </dd>
 
         <dt>Người dân gửi lúc</dt>
         <dd>{nhanThoiDiem(phieu.clock_from)}</dd>

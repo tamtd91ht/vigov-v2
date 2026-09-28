@@ -343,6 +343,47 @@ describe("dữ liệu cá nhân — màn hình hiện đúng thứ máy chủ g�
   });
 });
 
+describe("vị trí hiện trường — khối chi tiết (§8.4)", () => {
+  const ALL_GATES = congThaoTac(true, true, true);
+
+  it("coordinates as text, six decimals, with the provenance note", () => {
+    const html = veChiTiet(ALL_GATES, phieu({ lat: 21.028511, lng: 105.804817 }));
+    expect(html).toContain("Vị trí hiện trường");
+    expect(html).toContain("Tổ 6, thôn Hà Lam");
+    expect(html).toContain("21.028511, 105.804817");
+    expect(html).toContain("Toạ độ do người dân gửi kèm từ ứng dụng");
+  });
+
+  it("absent coordinates are SAID, not a vanished row", () => {
+    const html = veChiTiet(ALL_GATES, phieu());
+    expect(html).toContain("Vị trí hiện trường");
+    expect(html).toContain("Người dân không gửi toạ độ");
+    expect(html).not.toContain("Toạ độ do người dân gửi kèm");
+  });
+
+  it("anonymous: location shown, reporter hidden", () => {
+    const html = veChiTiet(
+      ALL_GATES,
+      phieu({ anonymous: true, reporter_name: "", reporter_phone: "", lat: 21.028511, lng: 105.804817 }),
+    );
+    expect(html).toContain("Người gửi ẩn danh");
+    expect(html).not.toContain("Nguyễn");
+    expect(html).not.toContain("09****0000");
+    expect(html).toContain("21.028511, 105.804817");
+  });
+
+  it("no map frame and no link carrying the coordinates; the address is escaped (rule 13)", () => {
+    const html = veChiTiet(
+      ALL_GATES,
+      phieu({ address: "<img src=x onerror=alert(1)>", lat: 21.028511, lng: 105.804817 }),
+    );
+    expect(html).not.toContain("<iframe");
+    expect(html).not.toMatch(/href="[^"]*21\.028511/);
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+  });
+});
+
 describe("lĩnh vực hạn chế — màn hình KHÔNG nói ra rằng có phiếu bị giấu", () => {
   it("sổ rỗng thì hiện câu trạng thái rỗng, không một chữ nào về phiếu bị ẩn", () => {
     // Máy chủ loại hẳn phiếu `can-bo` khỏi trang VÀ khỏi con trỏ khi tài khoản thiếu

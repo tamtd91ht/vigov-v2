@@ -11,15 +11,45 @@ import {
   RATING_MAX_STARS,
   RATING_TITLE,
   ratingView,
+  SCENE_COORDINATES_NOTE,
+  SCENE_NO_ADDRESS,
+  SCENE_NO_COORDINATES,
+  sceneCoordinates,
 } from "./nhan-phieu";
 
 /**
- * Two read blocks shared by the register drawer (`so-phan-anh.tsx`) and the lookup view
+ * Three read blocks shared by the register drawer (`so-phan-anh.tsx`) and the lookup view
  * (`tra-cuu-phieu.tsx`), so both screens say the same thing about the same petition.
  *
  * NO HOOKS HERE, on purpose: `chon-can-bo.test.tsx` calls `ChiTietPhieu` as a plain function with a
  * call-order `useState` mock, and a hook in a child it renders inline would shift that order.
  */
+
+/**
+ * The `<dd>` of the `Vị trí hiện trường` row: the address line, then the coordinates as TEXT (see
+ * `sceneCoordinates` for why there is no map). A row, not the requirement's vanishing section —
+ * absence is SAID, same choice as `CitizenRatingBlock`: an officer must tell "the citizen sent no
+ * coordinates" from "the screen did not load them".
+ *
+ * No copy button: the codebase has no clipboard pattern, and `mat-khau-tam.tsx` records why one was
+ * refused (`navigator.clipboard` is absent during server rendering).
+ */
+export function SceneLocation({ petition }: { petition: petitions_phieuPhanAnhRa }) {
+  const coordinates = sceneCoordinates(petition);
+  return (
+    <>
+      <p>{petition.address === "" ? SCENE_NO_ADDRESS : petition.address}</p>
+      {coordinates === null ? (
+        <p className="trang-thai-rong">{SCENE_NO_COORDINATES}</p>
+      ) : (
+        <>
+          <p>{coordinates}</p>
+          <p className="ghi-chu">{SCENE_COORDINATES_NOTE}</p>
+        </>
+      )}
+    </>
+  );
+}
 
 /**
  * `Đánh giá của người dân` — requirement `FeedbackDetailDrawer.tsx:441-482`.
