@@ -437,7 +437,8 @@ describe("phần chưa dựng được", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): 6 → 5 — the sort entry was built (backend P9).
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): 5 → 3 — `Liên quan đến tôi` and `Sắp đến hạn` were built.
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W6): 3 → 2 — the Sổ theo dõi view was built.
-    expect(PHAN_CHUA_DUNG.length).toBe(2);
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W7): 2 → 1 — the Excel import was built; only 📎 remains.
+    expect(PHAN_CHUA_DUNG.length).toBe(1);
     const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ");
     expect(ten).not.toContain("việc con");
     expect(ten).not.toContain("VIỆC CON");

@@ -2601,12 +2601,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "không nhận tệp, và nhật ký nhiệm vụ chưa có kho tệp nào để đặt tệp vào. Vẽ nút 📎 lúc này là " +
       "một nút chắc chắn hỏng — tệp cán bộ chọn sẽ không đi tới đâu. Đây là phần việc của máy chủ.",
   },
-  {
-    ten: "⬆ Nhập từ Excel (§8)",
-    viSao:
-      "Nút nhập chưa vẽ trên màn này. (`🗑 Xoá đã chọn` §2 và `Xuất Excel` của Sổ theo dõi §4.3 đã " +
-      "dựng.)",
-  },
 ];
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

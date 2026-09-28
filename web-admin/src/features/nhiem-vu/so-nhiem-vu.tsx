@@ -234,6 +234,9 @@ import {
   type TaskSelectionState,
 } from "./batch-delete";
 import { ChildTasks, ParentTaskField } from "./child-tasks";
+import { saveFile } from "./save-file";
+import { TaskImportDialog } from "./task-import-dialog";
+import { IMPORT_OPEN_BUTTON } from "./task-import";
 import {
   APPROVAL_TICKED,
   APPROVAL_UNTICKED,
@@ -580,6 +583,9 @@ export function SoNhiemVu({
   const [childCreated, setChildCreated] = useState<{ parent: string; text: string } | null>(null);
   // `Xuất Excel` of the Sổ theo dõi (W6): one export at a time; the answer stays until the next.
   const [exporting, setExporting] = useState(false);
+  // `⬆ Nhập từ Excel` (W7, §8). Focus returns to the opening button when the dialog closes.
+  const [importOpen, setImportOpen] = useState(false);
+  const importButtonRef = useRef<HTMLButtonElement>(null);
   const [exportResult, setExportResult] = useState<KetQua<string> | null>(null);
   // `🗑 Xoá đã chọn` (§2). Survives paging and view switches on purpose: the clerk selects across
   // pages; the bar always says how many are selected, so nothing is chosen out of sight silently.
@@ -851,6 +857,17 @@ export function SoNhiemVu({
 
       {quyen.giaoViec && (
         <div className="cum-nut">
+          {/* §1 draws `[⬆ Nhập từ Excel] [+ Giao việc mới]` — both `task.create` (the import IS
+              creation; the route checks again). */}
+          <button
+            ref={importButtonRef}
+            type="button"
+            className="nut-phu"
+            aria-expanded={importOpen}
+            onClick={() => setImportOpen((o) => !o)}
+          >
+            {IMPORT_OPEN_BUTTON}
+          </button>
           <button
             type="button"
             className="nut-chinh"
@@ -864,6 +881,17 @@ export function SoNhiemVu({
             {moFormTao ? "Đóng biểu mẫu giao việc" : "+ Giao việc mới"}
           </button>
         </div>
+      )}
+
+      {importOpen && quyen.giaoViec && (
+        <TaskImportDialog
+          onClose={() => {
+            setImportOpen(false);
+            importButtonRef.current?.focus();
+          }}
+          // The new rows are read from the server, never spliced in: the register reloads.
+          onImported={() => datLanTai((n) => n + 1)}
+        />
       )}
 
       {moFormTao && quyen.giaoViec && (
@@ -1852,21 +1880,6 @@ export function BangKanban({
       <p className="ghi-chu">{ghiChuKanbanReNhanh(nhanTT)}</p>
     </>
   );
-}
-
-/**
- * Save a downloaded file. A temporary `<a download>` on an object URL — no navigation, so the page
- * and its filters stay. The URL is released a moment later (released at once, some browsers cancel).
- */
-function saveFile(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**

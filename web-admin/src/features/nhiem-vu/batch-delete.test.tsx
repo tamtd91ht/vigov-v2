@@ -299,12 +299,13 @@ describe("page wiring (source) and PHAN_CHUA_DUNG", () => {
     );
   });
 
-  it("`Xoá đã chọn` left PHAN_CHUA_DUNG; only the Excel import stays", () => {
+  it("`Xoá đã chọn` left PHAN_CHUA_DUNG; no Excel entry remains either", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W4): the entry named three parts; one is built.
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W6): the tracking-book export is built too.
     const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ");
     expect(ten).not.toContain("Xoá đã chọn");
-    expect(ten).toContain("Nhập từ Excel");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W7): the Excel import is built — the entry is gone.
+    expect(ten).not.toContain("Nhập từ Excel");
     expect(ten).not.toContain("Xuất Sổ theo dõi");
   });
 });
