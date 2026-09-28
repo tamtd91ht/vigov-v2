@@ -206,10 +206,12 @@ type nhiemVuRa struct {
 	// OF THEM:
 	//
 	//	null  NOT SENT ON THIS SURFACE. The register LIST (GET /api/v1/tasks) does not carry the
-	//	      block — §4's card does not draw it, and three lists of free text per row of every page
-	//	      is payload nobody renders. It says NOTHING about whether the task has lines.
-	//	[]    THIS TASK HAS NO LINES. Only the detail read and the two write routes answer this, and
-	//	      they always answer with an array.
+	//	      block BY DEFAULT — §4.1's card and §4.2's table do not draw it, and three lists of free
+	//	      text per row of every page is payload nobody renders. It says NOTHING about whether the
+	//	      task has lines.
+	//	[]    THIS TASK HAS NO LINES. The detail read, the two write routes, and the LIST UNDER
+	//	      `include=documents` (§4.3's Sổ theo dõi, added 28/09/2026 — one batched read per page)
+	//	      answer this, and they always answer with an array.
 	//
 	// Rendering `null` as "no documents" is how a card would report an empty block for a task with
 	// three. The distinction is the same one `domain.NhiemVu.VanBan` carries inside the service.
@@ -359,8 +361,8 @@ func nhiemVuRaNgoai(n domain.NhiemVu) nhiemVuRa {
 		CreatedBy:            n.NguoiTaoMa,
 		CreatedAt:            n.TaoLuc,
 		UpdatedAt:            n.UpdatedAt,
-		// nil IN, nil OUT — the register list never loads the block, and `null` on the wire says
-		// exactly that. See the note on the field; it is the one place this response has two
+		// nil IN, nil OUT — the register list loads the block only under `include=documents`, and
+		// an absent field on the wire says exactly that. See the note on the field; it is the one place this response has two
 		// meanings for one absence, and they are both needed.
 		Documents: vanBanRaNgoai(n.VanBan),
 	}
@@ -453,6 +455,14 @@ func (h *Handler) DanhSachNhiemVu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// `include=documents` is a PROJECTION, not a filter, so it is parsed here and never reaches
+	// LocNhiemVu — GET /api/v1/task-counts shares that struct and has no rows to attach a block to.
+	withDocuments, err := taskListIncludeFromQuery(thamSo)
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		return
+	}
+
 	loc, ok := h.taskFilterFromRequest(w, r, thamSo)
 	if !ok {
 		return
@@ -466,6 +476,41 @@ func (h *Handler) DanhSachNhiemVu(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "internal",
 			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
+	}
+
+	if withDocuments {
+		// ONE STATEMENT FOR THE WHOLE PAGE (skills/load-data-once), keyed by the internal ids of the
+		// rows just read — so the blocks cannot belong to another commune's tasks, and the store binds
+		// `tenant_id` to $1 as well.
+		//
+		// A FAILURE IS A 500, NOT A PAGE OF EMPTY BLOCKS: `documents: []` on every row would state
+		// that no task on the page references a document — a statement about the register made from
+		// a failure to read it, on the one view (§4.3) whose columns ARE those documents.
+		ids := make([]string, 0, len(kq.Items))
+		for _, n := range kq.Items {
+			ids = append(ids, n.ID)
+		}
+		blocks, err := h.d.DanhSachNhiemVu.DocumentsForTasks(ctx, ids)
+		if err == nil {
+			for i := range kq.Items {
+				// A MISSING KEY IS A BROKEN READER, NOT AN EMPTY BLOCK. The store answers every asked
+				// id with a non-nil slice; rendering an absent one as `[]` would be the very statement
+				// the paragraph above refuses to make.
+				b, asked := blocks[kq.Items[i].ID]
+				if !asked || b == nil {
+					err = errDocumentsBlockMissing
+					break
+				}
+				kq.Items[i].VanBan = b
+			}
+		}
+		if err != nil {
+			h.d.Log.Error("danh sách nhiệm vụ: lỗi đọc văn bản của trang",
+				"xa", string(tenant.MustFrom(ctx)), "err", err)
+			httpx.WriteError(w, http.StatusInternalServerError, "internal",
+				"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+			return
+		}
 	}
 
 	// page.Result[T] DIRECTLY — tools/apidoc understands it, so there is no second three-field
@@ -483,6 +528,26 @@ func (h *Handler) DanhSachNhiemVu(w http.ResponseWriter, r *http.Request) {
 		ra.Items = append(ra.Items, nhiemVuRaNgoai(n))
 	}
 	vietJSON(w, http.StatusOK, ra)
+}
+
+// taskListIncludeFromQuery reads `include`, the list's one optional projection.
+//
+// `include=documents` IS THE ONLY ACCEPTED VALUE, AND IT IS OPT-IN ON PURPOSE. The Kanban card (§4.1)
+// and the Danh sách table (§4.2) draw no document; only the Sổ theo dõi (§4.3) does. Sending three
+// lists of free text on every row of every page by default would be payload two of the three views
+// never render — and it would change the default shape of a published reply, where an opt-in adds a
+// field only for the caller that names it (additive, rule 2 invariant 7's spirit on the REST side).
+//
+// ANYTHING ELSE IS REFUSED rather than ignored, for the reason the filters are: a misspelt
+// `include=document` silently dropped is a Sổ theo dõi whose three document columns read empty.
+func taskListIncludeFromQuery(q map[string][]string) (bool, error) {
+	if s := q["include"]; len(s) > 0 {
+		if len(s) != 1 || s[0] != "documents" {
+			return false, errTaskIncludeInvalid
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 // taskFilterFromRequest turns the query string into the store's filter, resolving `scope=mine` from
@@ -649,6 +714,11 @@ var (
 			"mà hợp đồng phiên cán bộ hiện không trả về bộ phận")
 	errParentCodeTooLong = fmt.Errorf(
 		"`parent` là mã nhiệm vụ của việc cha (ví dụ NV19), tối đa %d ký tự", domain.MaNhiemVuToiDa)
+	errTaskIncludeInvalid = errors.New(
+		"`include` chỉ nhận giá trị `documents`; bỏ hẳn tham số nếu không cần khối văn bản")
+	// errDocumentsBlockMissing never reaches a client (it becomes the generic 500).
+	errDocumentsBlockMissing = errors.New(
+		"danh sách nhiệm vụ: kho không trả khối văn bản cho một nhiệm vụ đã hỏi")
 	errLocSapDenHanChuaCo = errors.New(
 		"`soon` chưa dùng được: ngưỡng `sắp đến hạn` là số giờ của từng xã trong bảng `sla`, " +
 			"và chưa có đường đọc số ấy — máy chủ không tự đặt một con số thay xã")

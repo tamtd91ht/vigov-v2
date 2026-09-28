@@ -4772,6 +4772,7 @@ export type petitions_get_tasks = {
     "assignee"?: string;
     "bloc"?: string;
     "from"?: string;
+    "include"?: string;
     "late"?: string;
     "metric"?: string;
     "parent"?: string;

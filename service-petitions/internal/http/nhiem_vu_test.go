@@ -64,6 +64,13 @@ type nhiemVuGia struct {
 	// renders.
 	goiVanBan int
 
+	// pageDocumentReads counts the PAGE-WIDE block reads (`include=documents`) and pageDocumentIDs
+	// keeps the ids the last one was asked for. omitDocumentKey, when set, makes that read omit one
+	// asked id.
+	pageDocumentReads int
+	pageDocumentIDs   []string
+	omitDocumentKey   string
+
 	// nhatKy is §5.9's progress log, KEYED BY COMMUNE AND BY THE TASK'S INTERNAL id — the commune read
 	// from the context as *store.Scoped does, so a handler that forgot either key reads nothing here.
 	// Declared in nhat_ky_nhiem_vu_test.go with its counters.
@@ -133,6 +140,39 @@ func (n *nhiemVuGia) VanBanCuaNhiemVu(ctx context.Context, nhiemVuID string) (
 		ds = []domain.NhiemVuVanBan{}
 	}
 	return ds, nil
+}
+
+// DocumentsForTasks is the page-wide block read. It COUNTS ITSELF SEPARATELY from VanBanCuaNhiemVu
+// (pageDocumentReads), so a list handler that fell back to one read per row shows up as
+// goiVanBan > 0, and it records the ids it was asked for. It fails on the same loiVanBan switch.
+func (n *nhiemVuGia) DocumentsForTasks(ctx context.Context, taskIDs []string) (
+	map[string][]domain.NhiemVuVanBan, error) {
+
+	n.pageDocumentReads++
+	n.pageDocumentIDs = append([]string(nil), taskIDs...)
+	_ = tenant.MustFrom(ctx)
+	if n.loiVanBan != nil {
+		return nil, n.loiVanBan
+	}
+	if n.omitDocumentKey != "" {
+		// A broken reader that forgot one asked id — the handler must refuse, not render `[]`.
+		out := map[string][]domain.NhiemVuVanBan{}
+		for _, id := range taskIDs {
+			if id != n.omitDocumentKey {
+				out[id] = []domain.NhiemVuVanBan{}
+			}
+		}
+		return out, nil
+	}
+	out := make(map[string][]domain.NhiemVuVanBan, len(taskIDs))
+	for _, id := range taskIDs {
+		ds := n.vanBan[id]
+		if ds == nil {
+			ds = []domain.NhiemVuVanBan{}
+		}
+		out[id] = ds
+	}
+	return out, nil
 }
 
 // The fixture instants are FIXED, not relative to time.Now(): a deadline expressed as "two hours ago"

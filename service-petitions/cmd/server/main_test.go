@@ -146,6 +146,18 @@ func (khoNhiemVu) CountByStatus(ctx context.Context, _ petstore.LocNhiemVu) (
 	return map[domain.TrangThaiNhiemVu]int{}, nil
 }
 
+// DocumentsForTasks — the list's page-wide block read (`include=documents`), same single assertion.
+func (khoNhiemVu) DocumentsForTasks(ctx context.Context, ids []string) (
+	map[string][]domain.NhiemVuVanBan, error) {
+
+	_ = tenant.MustFrom(ctx)
+	out := make(map[string][]domain.NhiemVuVanBan, len(ids))
+	for _, id := range ids {
+		out[id] = []domain.NhiemVuVanBan{}
+	}
+	return out, nil
+}
+
 // VanBanCuaNhiemVu — §5.4's document block, asserting the same one thing: the commune reached the
 // store. It is unreachable in practice from these tests, because TheoMa above always refuses first.
 func (khoNhiemVu) VanBanCuaNhiemVu(ctx context.Context, _ string) ([]domain.NhiemVuVanBan, error) {

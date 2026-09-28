@@ -28,7 +28,9 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/store"
@@ -52,10 +54,11 @@ const thuTuVanBan = ` ORDER BY nhom, thu_tu`
 //
 // # IT IS A SEPARATE CALL FROM TheoMa AND NOT A JOIN, AND THAT IS THE POINT
 //
-// The register LIST must not pay for this: §4's card does not draw the block, and a join would put
-// three lists of free text onto every row of every page. Keeping it a second call means the surface
-// that needs it asks for it, and `domain.NhiemVu.VanBan` stays nil everywhere else — which is the
-// distinction the response type carries onto the wire.
+// The register LIST must not pay for this by default: §4's card does not draw the block, and a join
+// would put three lists of free text onto every row of every page. Keeping it a second call means the
+// surface that needs it asks for it — the list does so only under `include=documents`, through
+// DocumentsForTasks, one statement per page — and `domain.NhiemVu.VanBan` stays nil everywhere else,
+// which is the distinction the response type carries onto the wire.
 //
 // IT RUNS OUTSIDE A TRANSACTION, like every other read path in this service. The task and its lines
 // are therefore read at two instants, and a concurrent edit could land between them. What that costs
@@ -73,6 +76,67 @@ func (s *NhiemVuStore) VanBanCuaNhiemVu(ctx context.Context, nhiemVuID string) (
 	defer rows.Close()
 
 	return quetDanhSachVanBan(rows)
+}
+
+// DocumentsForTasks reads the blocks of a WHOLE PAGE of tasks in ONE statement — the register list
+// under `include=documents` (the Sổ theo dõi of §4.3 draws three document columns per row), and the
+// register export. skills/load-data-once: a page of 100 tasks is one round trip here, never 100.
+//
+// EVERY REQUESTED id IS A KEY OF THE RESULT, mapped to a NON-nil slice — empty when the task has no
+// live line. That is the same `[]` vs nil distinction VanBanCuaNhiemVu keeps: a task on the page whose
+// block was read and is empty must reach the wire as `[]`, never as an absent field that says "not
+// loaded".
+//
+// NO STATEMENT FOR AN EMPTY id LIST — `IN ()` is not valid SQL, and an empty page needs no read.
+//
+// THE ids ARE BOUND PLACEHOLDERS ($2…), and `tenant_id = $1` comes from the context through
+// store.Scoped.Query, so a colliding id of another commune can never contribute a line (rule 1).
+// The caller bounds the list: a page is at most page.MaxLimit rows.
+func (s *NhiemVuStore) DocumentsForTasks(ctx context.Context, taskIDs []string) (
+	map[string][]domain.NhiemVuVanBan, error) {
+
+	out := make(map[string][]domain.NhiemVuVanBan, len(taskIDs))
+	args := make([]any, 0, len(taskIDs))
+	for _, id := range taskIDs {
+		if _, seen := out[id]; seen || id == "" {
+			continue
+		}
+		out[id] = []domain.NhiemVuVanBan{}
+		args = append(args, id)
+	}
+	if len(args) == 0 {
+		return out, nil
+	}
+
+	var b strings.Builder
+	b.WriteString(`AND deleted_at IS NULL AND nhiem_vu_id IN (`)
+	writePlaceholders(&b, len(args))
+	// Grouped per task, then the block's own order — so each task's slice arrives already in the
+	// order §5.4 draws it, exactly as VanBanCuaNhiemVu returns one block.
+	b.WriteString(` ORDER BY nhiem_vu_id, nhom, thu_tu`)
+
+	rows, err := s.db.For(ctx).Query(ctx, cotVanBanNhiemVu, "nhiem_vu_van_ban", b.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("nhiem_vu_van_ban: đọc văn bản của một trang nhiệm vụ: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		v, err := quetVanBanNhiemVu(rows)
+		if err != nil {
+			return nil, err
+		}
+		if _, asked := out[v.NhiemVuID]; !asked {
+			// Cannot happen through the IN list; refusing it keeps a mis-bound statement from
+			// attaching a line to a task nobody asked about.
+			return nil, errors.New("nhiem_vu_van_ban: dòng văn bản thuộc nhiệm vụ ngoài trang")
+		}
+		out[v.NhiemVuID] = append(out[v.NhiemVuID], v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("nhiem_vu_van_ban: duyệt văn bản của một trang nhiệm vụ: %w", err)
+	}
+	return out, nil
 }
 
 // VanBanCuaNhiemVuDeSua reads the same block INSIDE the caller's transaction.

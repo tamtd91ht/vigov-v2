@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/authz"
+	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
@@ -154,6 +155,106 @@ func TestDanhSachNhiemVu_KhongDocKhoiVanBanVaTraNull(t *testing.T) {
 	if trang.Items[0].Documents != nil {
 		t.Errorf("documents = %+v trên sổ, muốn nil", trang.Items[0].Documents)
 	}
+}
+
+// --- the register list under include=documents (§4.3's Sổ theo dõi) --------------------------------
+
+// TestTaskListIncludeDocumentsOneReadPerPage — the opt-in carries the block on EVERY row, `[]` for a
+// task with none, through ONE page-wide read and zero per-row reads.
+func TestTaskListIncludeDocumentsOneReadPerPage(t *testing.T) {
+	m := dungMayChu(t)
+	m.nhiemVu.vanBan = vanBanCuaNVA()
+
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/tasks?include=documents", canBoCuaXa(xaA))
+
+	doiMa(t, w, http.StatusOK)
+	if m.nhiemVu.pageDocumentReads != 1 || m.nhiemVu.goiVanBan != 0 {
+		t.Fatalf("đọc khối văn bản: %d lần cho cả trang, %d lần từng dòng — muốn 1 và 0 "+
+			"(skills/load-data-once)", m.nhiemVu.pageDocumentReads, m.nhiemVu.goiVanBan)
+	}
+	if got := strings.Join(m.nhiemVu.pageDocumentIDs, ","); got != "nv-001,nv-002" {
+		t.Errorf("hỏi khối văn bản cho %q, muốn đúng mã nội bộ của các dòng trên trang", got)
+	}
+
+	page := docTrangNhiemVu(t, w.Body.Bytes())
+	if len(page.Items) != 2 {
+		t.Fatalf("trang có %d dòng, muốn 2", len(page.Items))
+	}
+	for _, it := range page.Items {
+		if it.Documents == nil {
+			t.Fatalf("%s: thiếu `documents` dù đã hỏi include=documents", it.Code)
+		}
+	}
+	if ds := *page.Items[0].Documents; len(ds) != 2 || ds[0].ID != "vb-1" || ds[1].Position != 4 {
+		t.Errorf("%s: documents = %+v, muốn hai dòng vb-1 rồi vị trí 4", page.Items[0].Code, ds)
+	}
+	if len(*page.Items[1].Documents) != 0 {
+		t.Errorf("%s: documents = %+v, muốn []", page.Items[1].Code, *page.Items[1].Documents)
+	}
+	if !strings.Contains(w.Body.String(), `"documents":[]`) {
+		t.Errorf("nhiệm vụ không có văn bản phải mang `\"documents\":[]`, không vắng mặt: %s", w.Body.String())
+	}
+}
+
+// TestTaskListIncludeDocumentsAsksOnlyOwnCommune — the ids handed to the block read are the rows of
+// the commune the request arrived in, and no other (rule 1).
+func TestTaskListIncludeDocumentsAsksOnlyOwnCommune(t *testing.T) {
+	m := dungMayChu(t)
+	m.dungLai(t, func(d *Deps) {
+		d.Checker = checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{
+			xaB: {idCanBo: {authz.Perm("task.read"): true}},
+		}}
+	})
+	m.nhiemVu.vanBan = vanBanCuaNVA()
+
+	w := m.goi(t, http.MethodGet, hostB, "/api/v1/tasks?include=documents", canBoCuaXa(xaB))
+
+	doiMa(t, w, http.StatusOK)
+	if got := strings.Join(m.nhiemVu.pageDocumentIDs, ","); got != "nv-b-001" {
+		t.Errorf("xã B hỏi khối văn bản cho %q, muốn chỉ nv-b-001", got)
+	}
+	if strings.Contains(w.Body.String(), "vb-1") {
+		t.Errorf("dòng văn bản của xã A lọt sang xã B: %s", w.Body.String())
+	}
+}
+
+// TestTaskListIncludeInvalidIs400WithNoRead — a misspelt projection silently dropped is a Sổ theo dõi
+// whose three document columns read empty.
+func TestTaskListIncludeInvalidIs400WithNoRead(t *testing.T) {
+	for _, q := range []string{"include=document", "include=documents,log", "include=documents&include=documents"} {
+		m := dungMayChu(t)
+
+		w := m.goi(t, http.MethodGet, hostA, "/api/v1/tasks?"+q, canBoCuaXa(xaA))
+
+		doiMa(t, w, http.StatusBadRequest)
+		if m.nhiemVu.goi != 0 || m.nhiemVu.pageDocumentReads != 0 {
+			t.Errorf("%s: đã đọc kho (%d, %d) dù tham số bị từ chối", q, m.nhiemVu.goi, m.nhiemVu.pageDocumentReads)
+		}
+	}
+}
+
+// TestTaskListIncludeDocumentsFailureIs500 — a failed block read is a 500, never a page of `[]`.
+func TestTaskListIncludeDocumentsFailureIs500(t *testing.T) {
+	m := dungMayChu(t)
+	m.nhiemVu.loiVanBan = errors.New("kho hỏng")
+
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/tasks?include=documents", canBoCuaXa(xaA))
+
+	doiMa(t, w, http.StatusInternalServerError)
+	if strings.Contains(w.Body.String(), "kho hỏng") {
+		t.Errorf("lộ lỗi hệ thống ra client: %s", w.Body.String())
+	}
+}
+
+// TestTaskListIncludeDocumentsMissingKeyIs500 — a reader that answers without one asked id is broken;
+// rendering that row as `[]` would state it has no documents.
+func TestTaskListIncludeDocumentsMissingKeyIs500(t *testing.T) {
+	m := dungMayChu(t)
+	m.nhiemVu.omitDocumentKey = "nv-002"
+
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/tasks?include=documents", canBoCuaXa(xaA))
+
+	doiMa(t, w, http.StatusInternalServerError)
 }
 
 // --- the write routes --------------------------------------------------------------------------------

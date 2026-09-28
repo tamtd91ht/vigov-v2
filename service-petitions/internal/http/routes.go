@@ -160,6 +160,12 @@ type (
 			page.Result[domain.NhiemVu], error)
 		CountByStatus(ctx context.Context, loc petstore.LocNhiemVu) (
 			map[domain.TrangThaiNhiemVu]int, error)
+
+		// DocumentsForTasks is §5.4's document block for a WHOLE PAGE in one statement, keyed by
+		// the tasks' INTERNAL ids — the list under `include=documents` (§4.3's Sổ theo dõi). Every
+		// asked id comes back with a non-nil slice. On this interface and not on NhiemVuDoc because
+		// it is the list's projection, bound to the same page the list just read.
+		DocumentsForTasks(ctx context.Context, taskIDs []string) (map[string][]domain.NhiemVuVanBan, error)
 	}
 
 	// DeNghiLuiHanChoDuyetDoc is the approval queue of extension requests (§5.8), for
