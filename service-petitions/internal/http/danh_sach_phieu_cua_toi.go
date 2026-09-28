@@ -54,6 +54,11 @@ type phieuCuaToiTomTatRa struct {
 	ClockFrom      time.Time  `json:"clock_from"`
 	AcknowledgeDue *time.Time `json:"acknowledge_due"`
 	ResolveDue     *time.Time `json:"resolve_due"`
+
+	// Rating and RatedAt — the citizen's own verdict, copied from phieuCuaToiRa with its omitempty
+	// semantics (absent until they rate), so a card can show the stars without opening the detail.
+	Rating  *int       `json:"rating,omitempty"`
+	RatedAt *time.Time `json:"rated_at,omitempty"`
 }
 
 // tomTatPhieuCuaToi derives the card FROM the citizen-safe detail response, never from the domain
@@ -70,6 +75,8 @@ func tomTatPhieuCuaToi(ra phieuCuaToiRa) phieuCuaToiTomTatRa {
 		ClockFrom:      ra.ClockFrom,
 		AcknowledgeDue: ra.AcknowledgeDue,
 		ResolveDue:     ra.ResolveDue,
+		Rating:         ra.Rating,
+		RatedAt:        ra.RatedAt,
 	}
 }
 

@@ -101,6 +101,15 @@ type LocPhieu struct {
 	// locPhieuThanhSQL, and read the warning there before touching it.
 	ChiTreHan bool
 
+	// RatingMax restricts the page to petitions the citizen RATED at most this many stars — the
+	// "đánh giá thấp" slice a leader reads (ADR 0050 point 2). 0 = no rating filter; otherwise 1..5,
+	// validated by the handler. An UNRATED petition is never in the slice: `diem_hai_long <= $n` is
+	// NULL for a NULL rating, and "no verdict" is not a poor verdict.
+	//
+	// The rating stays on the row after a reopen, so a petition reopened by a 1-star rating is in the
+	// slice while it is being worked on again — which is the point of looking at it.
+	RatingMax int
+
 	// ChoPhepHanChe opens the restricted field `can-bo` — reports ABOUT a member of staff.
 	//
 	// # THE ZERO VALUE IS THE CLOSED ONE, AND THAT IS THE WHOLE DESIGN OF THIS FIELD
@@ -217,6 +226,12 @@ func locPhieuThanhSQL(loc LocPhieu) (string, []any) {
 		dieuKien += ` AND han_xu_ly_xong IS NOT NULL AND (
 			(xu_ly_xong_luc IS NULL AND han_xu_ly_xong < now())
 			OR (xu_ly_xong_luc IS NOT NULL AND xu_ly_xong_luc > han_xu_ly_xong))`
+	}
+
+	if loc.RatingMax > 0 {
+		// BOUND, like every other filter. `IS NOT NULL` is spelled out although `<=` already excludes a
+		// NULL rating, so the reader does not have to know three-valued logic to see it.
+		them(" AND diem_hai_long IS NOT NULL AND diem_hai_long <= $%d", loc.RatingMax)
 	}
 
 	if loc.Metric != "" {

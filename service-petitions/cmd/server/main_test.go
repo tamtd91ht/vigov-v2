@@ -413,6 +413,7 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 	svchttp.RegisterCongDan(muxCongDan, svchttp.DepsCongDan{
 		Phieu:       khoPhieuCongDan{},
 		GuiPhieu:    gui,
+		Rating:      app.NewRatePetition(nil, nil, nil),
 		NhanLinhVuc: khoNhanLinhVuc{},
 		Log:         log,
 	})

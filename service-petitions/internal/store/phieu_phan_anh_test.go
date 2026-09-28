@@ -81,6 +81,10 @@ func dongPhieu(sua map[string]driver.Value) map[string]driver.Value {
 		"ly_do_ket_thuc_nhanh": nil,
 		"co_quan_nhan":         nil,
 		"ket_thuc_nhanh_luc":   nil,
+		// The rating (ADR 0050 point 2) — NULL until the citizen rates.
+		"diem_hai_long":  nil,
+		"rating_comment": nil,
+		"danh_gia_luc":   nil,
 		// Only cotPhieuCoTaoLuc asks for it; the map is shared by both shapes, and a value the SELECT
 		// did not ask for is simply not read.
 		"tao_luc": mocVaoSo,

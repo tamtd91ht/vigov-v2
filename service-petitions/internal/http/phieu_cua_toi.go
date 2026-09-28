@@ -78,6 +78,10 @@ type DepsCongDan struct {
 	// in front of a member of the public who has just typed out a complaint.
 	GuiPhieu GuiPhanAnhCongDan
 
+	// Rating is the citizen's star rating — the second write on this surface, and the first that can
+	// MOVE a petition (1–2 stars reopens it, ADR 0050 point 2). Required, for GuiPhieu's reason.
+	Rating CitizenRating
+
 	// NhanLinhVuc is the commune's own wording for the field code, so the citizen reads
 	// "Rác thải – Vệ sinh môi trường" rather than `rac-thai`. The SAME interface the staff route
 	// uses, and sharing it is right here: it is a commune's public vocabulary, not a staff-only
@@ -202,6 +206,16 @@ type phieuCuaToiRa struct {
 	// the citizen screen shows it, and ClockFrom plus the status already explain the petition.
 	Reason        string `json:"reason,omitempty"`
 	ReceivingBody string `json:"receiving_body,omitempty"`
+
+	// Rating and RatedAt are the citizen's OWN verdict (ADR 0050 point 2), so the Mini App can say
+	// "bạn đã đánh giá n sao". Absent until they rate; a later rating replaces an earlier one.
+	//
+	// OMITEMPTY POINTERS so tools/apidoc marks them optional and yesterday's fixtures stay valid. The
+	// comment is NOT echoed back: nobody asked the screen to show it, and it is free text a
+	// next holder of the phone number would inherit (the second reason on ReporterPhone).
+	// `reopen_count` is NOT here either — see the note on this type.
+	Rating  *int       `json:"rating,omitempty"`
+	RatedAt *time.Time `json:"rated_at,omitempty"`
 }
 
 // phieuCuaToiRaNgoai builds the citizen response.
@@ -249,6 +263,10 @@ func phieuCuaToiRaNgoai(p domain.PhieuPhanAnh, nhan string) phieuCuaToiRa {
 	if p.TrangThai == domain.KhongTiepNhan || p.TrangThai == domain.ChuyenCapTren {
 		ra.Reason = p.LyDoKetThucNhanh
 		ra.ReceivingBody = p.CoQuanNhan
+	}
+	if p.Rating != 0 {
+		stars, at := p.Rating, p.RatedAt
+		ra.Rating, ra.RatedAt = &stars, &at
 	}
 	return ra
 }

@@ -371,6 +371,20 @@ func locPhieuTuQuery(q map[string][]string) (loc petstore.LocPhieu, chiGiaoChoTo
 		loc.ChiTreHan = true
 	}
 
+	// `rating_max=<1..5>` — the petitions the citizen rated AT MOST that many stars (ADR 0050 point 2),
+	// e.g. `rating_max=2` for the ones a low rating reopened. Snake case like `late` and `scope`; `max`
+	// because the slice is "this bad or worse", which is the question a leader asks.
+	//
+	// EXACTLY ONE DIGIT 1..5 AND NOTHING ELSE, refused otherwise rather than parsed leniently — the
+	// `late=true` discipline: `rating_max=0`, `=6`, `=+2` or `= 2` silently read as "no filter" would
+	// show the whole register under a box that says "đánh giá thấp".
+	if s, co := q["rating_max"]; co {
+		if len(s) == 0 || len(s[0]) != 1 || s[0][0] < '1' || s[0][0] > '5' {
+			return loc, false, errRatingMaxInvalid
+		}
+		loc.RatingMax = int(s[0][0] - '0')
+	}
+
 	// §4's scope tabs, SPELLED AS GET /api/v1/tasks SPELLS THEM (locNhiemVuTuQuery): one screen
 	// family, one vocabulary, so the web client does not learn two words for "Giao cho tôi". `all` is
 	// the default and needs no predicate.
@@ -403,6 +417,8 @@ var (
 		"`channel` không phải một trong bốn kênh tiếp nhận")
 	errLocTreHanKhongHopLe = errors.New(
 		"`late` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc theo trễ hạn")
+	errRatingMaxInvalid = errors.New(
+		"`rating_max` chỉ nhận một số từ 1 đến 5; bỏ hẳn tham số nếu không lọc theo đánh giá")
 	// errPhamViKhongHopLe (the unknown-`scope` refusal) is declared in nhiem_vu.go. The task list has
 	// accepted `related` since 28/09/2026 and refuses with its own errTaskScopeInvalid; this list still
 	// takes the two words that sentence names.

@@ -179,6 +179,30 @@ type phieuPhanAnhRa struct {
 	HasCitizen *bool `json:"has_citizen,omitempty"`
 
 	Public bool `json:"public"`
+
+	// Rating, RatingComment and RatedAt are the CITIZEN'S verdict (ADR 0050 point 2) — `diem_hai_long`,
+	// `rating_comment`, `danh_gia_luc`. ABSENT until the citizen rates; a later rating replaces an
+	// earlier one (the earlier one is in the audit trail).
+	//
+	// RatingComment IS CITIZEN FREE TEXT AND FOLLOWS `content` EXACTLY: not masked (an officer who
+	// cannot read "rác vẫn còn ở cuối ngõ" cannot act on it), shown to whoever may read the petition —
+	// `feedback.read`, plus `feedback.restricted` on `can-bo`, which the read path already enforces by
+	// answering 404 before this struct is built — and shown on an ANONYMOUS petition too, as `content`
+	// is. What masking protects is the identifiers of a named person; the citizen's own words about the
+	// work are what the commune has to act on.
+	//
+	// OMITEMPTY on all three (pointers where zero is not "absent"), so tools/apidoc marks them optional
+	// and yesterday's fixtures stay valid.
+	Rating        *int       `json:"rating,omitempty"`
+	RatingComment string     `json:"rating_comment,omitempty"`
+	RatedAt       *time.Time `json:"rated_at,omitempty"`
+
+	// ReopenCount is `so_lan_mo_lai`: how many times a citizen's low rating reopened the petition. ZERO
+	// IS A MEANINGFUL ANSWER ("never reopened"), so it is a pointer SET ON EVERY RESPONSE — `0` travels
+	// as `0` — with omitempty only so tools/apidoc declares it optional (the HasCitizen precedent).
+	// Absent therefore means "this server predates the field", never "not reopened". There is no cap
+	// (ADR 0050): this is a monitoring figure, "một phiếu có thể quay vòng mãi".
+	ReopenCount *int `json:"reopen_count,omitempty"`
 }
 
 // phieuRaNgoai builds the response. `xemDayDu` is the ONLY switch between masked and full, and it
@@ -245,6 +269,14 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 	// cannot disagree about which petitions have somebody to confirm.
 	coCongDan := p.CongDanID != ""
 	ra.HasCitizen = &coCongDan
+
+	if p.Rating != 0 {
+		stars, at := p.Rating, p.RatedAt
+		ra.Rating, ra.RatedAt = &stars, &at
+		ra.RatingComment = p.RatingComment
+	}
+	reopened := p.SoLanMoLai
+	ra.ReopenCount = &reopened
 	return ra
 }
 

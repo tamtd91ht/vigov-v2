@@ -55,7 +55,8 @@ func TestChuyenTrangThaiChiTheoDungDuongDaChot(t *testing.T) {
 		{DaChuyenXuLy, DangXuLy},
 		{DangXuLy, DaXuLy},
 		{DaXuLy, ChoDanXacNhan},
-		{DaXuLy, DaDong}, // chỉ khi không có công dân để xác nhận — quyết định 2026-09-24, DongDuoc
+		{DaXuLy, DaDong},   // chỉ khi không có công dân để xác nhận — quyết định 2026-09-24, DongDuoc
+		{DaXuLy, DangXuLy}, // mở lại vì dân chấm 1–2 sao ở "đã xử lý" — ADR 0050 điểm 2, chốt 28/09/2026
 		{ChoDanXacNhan, DaDong},
 		{ChoDanXacNhan, DangXuLy}, // mở lại vì đánh giá thấp
 		{DaDong, DangXuLy},        // mở lại vì đánh giá thấp

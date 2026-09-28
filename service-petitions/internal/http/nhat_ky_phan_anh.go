@@ -58,11 +58,16 @@ type nhatKyPhieuRa struct {
 	// At is the instant of the act, from the same clock as the act itself.
 	At time.Time `json:"at"`
 
-	// ActorCode is the STAFF BUSINESS CODE of who acted (`CB-00123`), never an internal id.
+	// ActorCode is the STAFF BUSINESS CODE of who acted (`CB-00123`), never an internal id — or the
+	// fixed marker `cong-dan` (domain.CitizenLogActor) on a row the citizen caused by rating. Never the
+	// citizen's id: see domain.CitizenLogActor.
 	ActorCode string `json:"actor_code"`
 
-	// Action is one of the seven codes of migration 0013: `phan-loai`, `phan-cong`,
-	// `chuyen-trang-thai`, `dong-phieu`, `khong-tiep-nhan`, `chuyen-cap-tren`, `ghi-chu`.
+	// Action is one of the codes of migration 0013 — `phan-loai`, `phan-cong`, `chuyen-trang-thai`,
+	// `dong-phieu`, `khong-tiep-nhan`, `chuyen-cap-tren`, `ghi-chu` — or one of the two rating codes
+	// (ADR 0050 point 2): `danh-gia` (rated, status unchanged) and `mo-lai-theo-danh-gia` (rated 1–2
+	// stars, the petition reopened). On those two, Note carries "Người dân đánh giá n sao[ — phiếu được
+	// mở lại]" and never the citizen's comment.
 	Action string `json:"action"`
 
 	// Status is the status the petition stood in at this moment — AFTER the act, for an act that

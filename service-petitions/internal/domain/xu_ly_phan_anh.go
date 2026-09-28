@@ -242,6 +242,31 @@ func ViecTiepTheo(p PhieuPhanAnh, moi TrangThai) string {
 	return soan(p)
 }
 
+// reopenMessage is what a citizen is told when THEIR OWN low rating reopened the petition.
+//
+// WHY IT IS NOT AN ENTRY OF loiNhanChoDan: that table is keyed by the TARGET status, and the target
+// here is `dang-xu-ly` — which is deliberately absent, because the staff advance into it owes the
+// citizen nothing (ADR 0041 §Không báo). A reopening is a different fact with the same target, which
+// is exactly ADR 0041 open item #3: "extend the mechanism, do not add a second list". This is one
+// sentence for one kind of transition, beside the table, and ReopenNextStep is its only reader.
+//
+// ADR 0041:53 and ADR 0050 point 2 decided that the reopening NOTIFIES. The WORDING below is the
+// implementer's, reported as an assumption: it names no threshold (ADR 0050 — "giao diện dân không
+// nói ngưỡng"), NO DEADLINE (none is recomputed, and the stored one has usually already passed by the
+// time a petition is reopened — naming it would read as a new promise), and nothing the citizen typed.
+const reopenMessage = "Theo đánh giá của ông/bà, phản ánh đã được mở lại để xã tiếp tục xử lý. " +
+	"Dùng mã tra cứu để xem tiến độ."
+
+// ReopenNextStep returns the sentence owed to the citizen when their rating reopened petition `p`.
+// `p` is the petition AFTER the change. The restricted field `can-bo` gets loiNhanHanChe and nothing
+// more, exactly as ViecTiepTheo decides it for every other transition.
+func ReopenNextStep(p PhieuPhanAnh) string {
+	if p.LinhVuc == LinhVucHanChe {
+		return loiNhanHanChe
+	}
+	return reopenMessage
+}
+
 // BaoChoDan reports whether this transition owes the citizen a message (rule 10, invariant 5).
 //
 // IT IS DERIVED FROM loiNhanChoDan AND NOT FROM A SECOND LIST. Two lists would be two answers, and
@@ -264,8 +289,13 @@ func BaoChoDan(t TrangThai) bool {
 //	dang-phan-loai -> da-chuyen-xu-ly  names the department answerable for it       — feedback.assign
 //	cho-dan-xac-nhan -> da-dong        records a result the citizen can read        — feedback.resolve
 //	                                   (also da-xu-ly -> da-dong when nobody can confirm — DongDuoc)
-//	cho-dan-xac-nhan / da-dong -> dang-xu-ly   REOPENING, governed by three per-commune flags of
-//	                                   ADR 0008 that no table in this repository holds yet
+//	da-xu-ly / cho-dan-xac-nhan -> dang-xu-ly   REOPENING, done ONLY by the citizen's 1–2 star rating
+//	                                   (ADR 0050 point 2; app.RatePetition). A member of staff has no
+//	                                   route that reopens, and `da-xu-ly` here leads to
+//	                                   `cho-dan-xac-nhan` — so adding the reopen edge to the lifecycle
+//	                                   map widened nothing on this route
+//	da-dong -> dang-xu-ly              in the map, reached by NO act today (a rating is refused on a
+//	                                   closed petition — domain.RatingOpen)
 //
 // The map in phieu_phan_anh.go is still the authority on what the lifecycle ALLOWS; this one is the
 // narrower question "which move does the plain advance route perform", and ChuyenSangDuoc is

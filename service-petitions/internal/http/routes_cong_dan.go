@@ -58,6 +58,9 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	case d.NhanLinhVuc == nil:
 		panic("petitions/http: thiếu kho nhãn lĩnh vực — " +
 			"GET /api/v1/my-citizen-reports/{maTraCuu} sẽ panic khi có người gọi")
+	case d.Rating == nil:
+		panic("petitions/http: thiếu use case đánh giá phản ánh của công dân — " +
+			"POST /api/v1/my-citizen-reports/{maTraCuu}/rating sẽ panic khi có người dân chấm sao")
 	}
 
 	h := NewHandlerCongDan(d)
@@ -204,4 +207,52 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 			httpx.XaTuPhien()(
 				idem.Required(idem.MoKhiHong)(
 					http.HandlerFunc(h.GuiPhieu)))))
+
+	// --- the citizen rates their own petition (ADR 0050 point 2) --------------------------------
+	//
+	// A SUB-PATH OF `my-citizen-reports/{code}`, so it rides the citizen chain through the same
+	// prefix rule cmd/server already has (`tienToCongDan`) — no new edge wiring, and tools/ingress
+	// routes it with the resource it belongs to.
+	//
+	// `rating`, A NOUN FOR THE SUB-RESOURCE THE CITIZEN WRITES, the name the owner gave the route and
+	// migration 0017 gave the column (`rating_comment`). kb/00-foundation/ubiquitous-language.md has no
+	// row for "đánh giá" yet — a finding for that table, not a second English word invented here.
+	//
+	// `idem.Required(idem.MoKhiHong)` — THE SAME CHOICE AS THE INTAKE ABOVE, and the second layer is
+	// stated rather than assumed: a double-tapped 1–2 star rating is caught by the lifecycle too — the
+	// first one reopened the petition, the second finds `dang-xu-ly` and is a 409, so no second
+	// reopening is possible even with Redis down. A double-tapped 3–5 star rating writes the same value
+	// twice and two audit entries, which is the cost of MoKhiHong accepted over refusing every citizen
+	// for the length of a cache outage.
+	//
+	// @summary  Công dân chấm 1–5 sao cho phiếu phản ánh CỦA CHÍNH MÌNH khi phiếu đã xử lý / chờ xác nhận — 1–2 sao tự mở lại phiếu (không tính lại hạn)
+	// @screen   09-phan-anh-nguoi-dan §8
+	// @request  ratingInput
+	// 200 carries the petition in the SAME shape the GET answers: its status (`dang-xu-ly` after a
+	// reopening, unchanged otherwise) and the rating just recorded.
+	//
+	// 400 is a body that is not JSON, stars outside 1..5 (or missing), or a comment over 1000 characters.
+	//
+	// 401 is the same three situations the other citizen routes fold together (ADR 0022).
+	//
+	// 404 is the SAME FOUR CAUSES AND THE SAME BODY as the GET: no such code · another citizen's code ·
+	// another commune's code · soft deleted (rule 4, forbidden #2).
+	//
+	// 409 is the petition not being at `da-xu-ly` / `cho-dan-xac-nhan` (not finished yet, already
+	// reopened, closed, or a terminal branch), or it moved while the request ran — and idem's answer to
+	// a duplicate still in flight.
+	//
+	// NO 403: citizens hold no permissions (rule 5, invariant 6).
+	//
+	// @reply    200 phieuCuaToiRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/my-citizen-reports/{maTraCuu}/rating",
+		authz.CitizenOnly()(
+			httpx.XaTuPhien()(
+				idem.Required(idem.MoKhiHong)(
+					http.HandlerFunc(h.RatePetition)))))
 }

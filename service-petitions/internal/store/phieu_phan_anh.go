@@ -55,7 +55,8 @@ const cotPhieu = `id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vu
 	goc_dem_han, vao_so_luc, han_tiep_nhan, han_xu_ly_xong, han_phan_loai,
 	phan_loai_luc, xu_ly_xong_luc, dong_luc, ket_qua_xu_ly,
 	hien_cong_khai, so_lan_mo_lai,
-	ly_do_ket_thuc_nhanh, co_quan_nhan, ket_thuc_nhanh_luc`
+	ly_do_ket_thuc_nhanh, co_quan_nhan, ket_thuc_nhanh_luc,
+	diem_hai_long, rating_comment, danh_gia_luc`
 
 // TheoMaTraCuu reads one petition by the code the citizen was handed.
 //
@@ -284,6 +285,11 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		lat, lng                                                        sql.NullFloat64
 		hanTiepNhan, hanXuLyXong, hanPhanLoai                           sql.NullTime
 		phanLoaiLuc, xuLyXongLuc, dongLuc, ketThucNhanhLuc              sql.NullTime
+
+		// The rating (ADR 0050 point 2). All three NULL until the citizen rates.
+		ratingStars   sql.NullInt64
+		ratingComment sql.NullString
+		ratedAt       sql.NullTime
 	)
 
 	// POSITIONAL — in lockstep with cotPhieu. See the note there.
@@ -295,6 +301,7 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		&phanLoaiLuc, &xuLyXongLuc, &dongLuc, &ketQua,
 		&p.HienCongKhai, &p.SoLanMoLai,
 		&lyDoKetThuc, &coQuanNhan, &ketThucNhanhLuc,
+		&ratingStars, &ratingComment, &ratedAt,
 	}
 	if err := r.Scan(append(dich, them...)...); err != nil {
 		return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: đọc dòng: %w", err)
@@ -315,6 +322,11 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 	p.LyDoKetThucNhanh = lyDoKetThuc.String
 	p.CoQuanNhan = coQuanNhan.String
 	p.KetThucNhanhLuc = ketThucNhanhLuc.Time
+	// NULL -> 0 / "" / zero time: "nobody has rated". 0 is outside 0004's CHECK, so it cannot be a
+	// real rating and cannot be confused with one.
+	p.Rating = int(ratingStars.Int64)
+	p.RatingComment = ratingComment.String
+	p.RatedAt = ratedAt.Time
 	if lat.Valid {
 		v := lat.Float64
 		p.Lat = &v

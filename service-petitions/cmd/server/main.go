@@ -311,6 +311,9 @@ func chay(log *slog.Logger) error {
 		// `suKien` is the SAME outbox store the staff acts write through: the intake records its
 		// `da-tiep-nhan` notification in the transaction that creates the row (rule 10, invariant 5).
 		GuiPhieu: app.NewGuiPhanAnh(kho, phieu, suKien, dinhDanh),
+		// The citizen's star rating (ADR 0050 point 2). The SAME outbox store as the intake: a 1–2 star
+		// rating reopens the petition, and that transition's notification is written in its transaction.
+		Rating: app.NewRatePetition(kho, phieu, suKien),
 		// THE SAME label catalogue the staff routes read. Sharing is right here and only here: the
 		// commune's wording for a field code is its public vocabulary, and two readers of one
 		// catalogue are two things to keep in step.

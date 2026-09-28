@@ -263,6 +263,7 @@ func dungMayChuCongDan(t *testing.T) *mayChuCongDan {
 		// construction, and it is deliberately NOT exercised here: this file is about the READ
 		// surface. The write surface has its own suite, gui_phan_anh_test.go.
 		GuiPhieu:    soPhieuMoi(),
+		Rating:      newRatingFake(),
 		NhanLinhVuc: nhanLinhVucMau(),
 		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
@@ -358,6 +359,7 @@ func chuoiCongDanVoi(t *testing.T, m *mayChuCongDan, so httpx.CitizenSessions) h
 	RegisterCongDan(mux, DepsCongDan{
 		Phieu:       m.phieu,
 		GuiPhieu:    soPhieuMoi(),
+		Rating:      newRatingFake(),
 		NhanLinhVuc: nhanLinhVucMau(),
 		Log:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
@@ -590,6 +592,7 @@ func TestRegisterCongDanThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"thiếu kho phiếu theo danh tính": func(d *DepsCongDan) { d.Phieu = nil },
 		"thiếu use case tiếp nhận":       func(d *DepsCongDan) { d.GuiPhieu = nil },
 		"thiếu kho nhãn lĩnh vực":        func(d *DepsCongDan) { d.NhanLinhVuc = nil },
+		"thiếu use case đánh giá":        func(d *DepsCongDan) { d.Rating = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {
@@ -597,7 +600,8 @@ func TestRegisterCongDanThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 					t.Error("dựng được tuyến công dân với phụ thuộc thiếu — lỗi sẽ nổ trước mặt người dân")
 				}
 			}()
-			d := DepsCongDan{Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), NhanLinhVuc: nhanLinhVucMau()}
+			d := DepsCongDan{Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(),
+				NhanLinhVuc: nhanLinhVucMau()}
 			bo(&d)
 			RegisterCongDan(http.NewServeMux(), d)
 		})
@@ -613,7 +617,7 @@ func TestRegisterCongDanDuPhuThuocThiKhongPanic(t *testing.T) {
 		}
 	}()
 	RegisterCongDan(http.NewServeMux(), DepsCongDan{
-		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), NhanLinhVuc: nhanLinhVucMau(),
+		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(),
 	})
 }
 

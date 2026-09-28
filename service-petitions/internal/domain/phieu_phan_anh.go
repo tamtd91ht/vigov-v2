@@ -59,12 +59,18 @@ const (
 // rather than being left out, so the difference between "a state with no way out" and "a state
 // nobody wrote down" is visible in the source.
 //
-// REOPENING (`cho-dan-xac-nhan` and `da-dong` back to `dang-xu-ly`) is in the map because §6
-// puts it there: a 1–2 star rating reopens the petition. WHETHER it may is per-commune
-// configuration — `cho_phep_mo_lai`, `nguong_sao_mo_lai`, `so_lan_mo_lai_toi_da` (ADR 0008) —
-// and this map does not answer that. A transition being SHAPED correctly and a transition being
-// PERMITTED are two questions; conflating them would hard-code a flag ADR 0008 created to be a
-// flag.
+// REOPENING (`da-xu-ly`, `cho-dan-xac-nhan` and `da-dong` back to `dang-xu-ly`) is in the map
+// because §6 puts it there: a 1–2 star rating reopens the petition. ADR 0050 point 2 (round 2 and
+// 3, 28/09/2026) REPLACED ADR 0008's per-commune flags with a fixed rule — 1 or 2 stars reopens, no
+// cap, no recomputed deadline, no switch to turn it off — so no configuration is read for it.
+//
+// `da-xu-ly -> dang-xu-ly` WAS ADDED BY THE OWNER'S DECISION OF 28/09/2026 (ADR 0050 §Cái giá names
+// its absence): a citizen may rate at `da-xu-ly` as well as at `cho-dan-xac-nhan`, so a low rating
+// there must be able to reopen. THE EDGE IS REACHABLE FROM EXACTLY ONE ACT — the citizen's rating
+// (app.RatePetition, through domain.ReopenByRatingAllowed). The staff advance route cannot reach it:
+// it never takes a target and moves only along tienTrinhChinh, where `da-xu-ly` leads to
+// `cho-dan-xac-nhan`. A shaped edge is not a permitted one, for the same reason as the closing edge
+// below.
 //
 // `da-xu-ly -> da-dong` WAS ADDED BY THE OWNER'S DECISION OF 2026-09-24: a petition with NOBODY WHO
 // CAN CONFIRM IT — no citizen account behind it (`cong_dan_id` empty: staff-booked, `can-bo-nhap-ho`)
@@ -76,7 +82,7 @@ var chuyenDuocSang = map[TrangThai][]TrangThai{
 	DangPhanLoai:  {DaChuyenXuLy, KhongTiepNhan, ChuyenCapTren},
 	DaChuyenXuLy:  {DangXuLy},
 	DangXuLy:      {DaXuLy},
-	DaXuLy:        {ChoDanXacNhan, DaDong},
+	DaXuLy:        {ChoDanXacNhan, DaDong, DangXuLy},
 	ChoDanXacNhan: {DaDong, DangXuLy},
 	DaDong:        {DangXuLy},
 	KhongTiepNhan: {},
@@ -275,6 +281,18 @@ type PhieuPhanAnh struct {
 
 	HienCongKhai bool
 	SoLanMoLai   int
+
+	// THE CITIZEN'S RATING (ADR 0050 point 2): `diem_hai_long`, `rating_comment`, `danh_gia_luc`.
+	// Rating is 0 when the column is NULL — nobody has rated — and 1..5 otherwise (0004's CHECK).
+	// A later rating REPLACES an earlier one; the earlier values survive only in the audit entry.
+	//
+	// RatingComment IS CITIZEN FREE TEXT and carries the same standing as NoiDung (rule 3): never
+	// logged, never in an error message, never in an audit delta (its length is), never on an event.
+	//
+	// Written only by store.RecordRating / store.ReopenByRating (POST …/my-citizen-reports/{code}/rating).
+	Rating        int
+	RatingComment string
+	RatedAt       time.Time
 
 	// TaoLuc is when the ROW was created, and it is filled ONLY by the paginated read — the cursor
 	// offers it as a sort column and nothing else in this service uses it.

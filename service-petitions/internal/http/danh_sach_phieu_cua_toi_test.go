@@ -87,7 +87,7 @@ func TestDanhSachCuaToiPrincipalCanBoBiTuChoi(t *testing.T) {
 	m := dungMayChuCongDan(t)
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
-		Phieu: m.phieu, GuiPhieu: soPhieuMoi(), NhanLinhVuc: nhanLinhVucMau(),
+		Phieu: m.phieu, GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	canBo := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1199,6 +1199,20 @@ func (uc *XuLyPhanAnh) ghiSuKien(ctx context.Context, tx *store.ScopedTx,
 // the "no recipient, no row" rule could drift apart. `p` is the petition AFTER the change.
 func ghiSuKienDoiTrangThai(ctx context.Context, tx *store.ScopedTx, suKien KhoSuKien,
 	sinhID func() (string, error), p domain.PhieuPhanAnh, moi domain.TrangThai, luc time.Time) error {
+	return writeStatusChangedEvent(ctx, tx, suKien, sinhID, p, moi, luc, domain.ViecTiepTheo(p, moi))
+}
+
+// writeStatusChangedEvent is the body of ghiSuKienDoiTrangThai with the citizen's sentence passed IN.
+//
+// IT EXISTS FOR ONE SECOND CALLER, the citizen's rating (petition_rating.go): a reopening enters
+// `dang-xu-ly`, which the status-keyed table deliberately leaves silent (ADR 0041 §Không báo), yet the
+// reopening itself owes the citizen a word (ADR 0041:53, ADR 0050 point 2). Passing the sentence keeps
+// ONE builder of the message shape, the occurrence rule and the "no recipient, no row" rule — the
+// extension ADR 0041 open item #3 asks for, rather than a second copy of this body. `nextStep` "" means
+// the transition owes nothing, exactly as before.
+func writeStatusChangedEvent(ctx context.Context, tx *store.ScopedTx, suKien KhoSuKien,
+	sinhID func() (string, error), p domain.PhieuPhanAnh, moi domain.TrangThai, luc time.Time,
+	nextStep string) error {
 
 	if p.CongDanID == "" {
 		return nil
@@ -1220,10 +1234,10 @@ func ghiSuKienDoiTrangThai(ctx context.Context, tx *store.ScopedTx, suKien KhoSu
 	// is named, travels INSIDE the composed sentence: CitizenMessage has no structured deadline field,
 	// and the contract says timing is phrased by the publisher, the only service that knows which of
 	// the two clocks has been set.
-	if viec := domain.ViecTiepTheo(p, moi); viec != "" {
+	if nextStep != "" {
 		tin.CitizenMessage = &petitionsv1.CitizenMessage{
 			StatusLabel: domain.NhanTrangThai(moi),
-			NextStep:    viec,
+			NextStep:    nextStep,
 		}
 	}
 

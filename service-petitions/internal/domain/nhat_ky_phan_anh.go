@@ -30,7 +30,38 @@ const (
 	NhatKyKhongTiepNhan   HanhViNhatKy = "khong-tiep-nhan"
 	NhatKyChuyenCapTren   HanhViNhatKy = "chuyen-cap-tren"
 	NhatKyGhiChu          HanhViNhatKy = "ghi-chu"
+
+	// The citizen's rating (ADR 0050 point 2) — the two rows the requirement repository writes as
+	// timeline events (`service.py:826-838`). TWO CODES AND NOT ONE, so the drawer can tell "rated,
+	// nothing moved" from "rated and the petition came back" without parsing the sentence.
+	//
+	// ⚠ BOTH NEED MIGRATION 0013's CHECK WIDENED (a new migration, `nhat_ky_phan_anh_hanh_vi_hop_le`).
+	// Until it lands every rating rolls back on the CHECK; internal/app's
+	// TestLogActionsAreAllowedByTheSchema is red for exactly that reason.
+	LogActionCitizenRating  HanhViNhatKy = "danh-gia"
+	LogActionReopenByRating HanhViNhatKy = "mo-lai-theo-danh-gia"
 )
+
+// CitizenLogActor is what `nguoi_ma` holds on a row the CITIZEN caused.
+//
+// A FIXED MARKER AND NOT THE CITIZEN'S ID, and this is a deliberate departure from the requirement
+// repository (which stores the citizen's user id as `actor_id`). The column is read on a STAFF screen,
+// and this repository never puts `cong_dan_id` there — phieuPhanAnhRa carries `has_citizen`, a boolean,
+// for that reason — and on an ANONYMOUS petition an id on the timeline would let staff link one
+// person's anonymous reports together (ADR 0008). The trail keeps the real actor: audit_log.actor_id is
+// the citizen id with Kind "citizen". `cong-dan` cannot collide with a staff business code (`CB-…`) and
+// satisfies the column's non-blank CHECK.
+const CitizenLogActor = "cong-dan"
+
+// RatingLogText is the timeline sentence for a rating — the requirement repository's wording
+// (`service.py:830-834`). It carries the stars and nothing the citizen typed: the comment lives in
+// `phieu_phan_anh.rating_comment` only.
+func RatingLogText(stars int, reopened bool) string {
+	if reopened {
+		return fmt.Sprintf("Người dân đánh giá %d sao — phiếu được mở lại", stars)
+	}
+	return fmt.Sprintf("Người dân đánh giá %d sao", stars)
+}
 
 // NhatKyPhanAnh is one timeline row.
 //
