@@ -354,12 +354,20 @@ func TestPasswordChangeAndMFAResetRevokeSessions(t *testing.T) {
 	findRevokeAll(t, stmts, RevokeReasonPasswordChanged)
 
 	stmts = runTx(t, &recorder{}, func(tx *Tx) error {
-		return tx.ActivateTOTP(context.Background(), accountID, "own-hash", 59000000, t0)
+		return tx.ActivateTOTP(context.Background(), accountID, "own-hash", 59000000, []byte("proved-sealed"), t0)
 	})
 	expect(t, "ActivateTOTP", assignments(t, stmts[0]), map[string]driver.Value{
 		"id": accountID, "totp_enrolled_at": t0, "totp_last_step": int64(59000000), "password_hash": "own-hash",
 	})
 	findRevokeAll(t, stmts, RevokeReasonPasswordChanged)
+	// Security review finding 2: the UPDATE fires only while the column holds the proved bytes.
+	q := strings.Join(strings.Fields(stmts[0].query), " ")
+	if !strings.Contains(q, "AND pending_totp_secret_sealed = $5") {
+		t.Errorf("activation is not conditional on the proved ciphertext: %s", q)
+	}
+	if b, ok := stmts[0].args[4].([]byte); !ok || string(b) != "proved-sealed" {
+		t.Errorf("$5 bound as %#v, want the proved ciphertext", stmts[0].args[4])
+	}
 
 	stmts = runTx(t, &recorder{}, func(tx *Tx) error { return tx.ResetMFA(context.Background(), accountID, t0) })
 	var voided bool
@@ -426,7 +434,7 @@ func TestRecordTOTPStepIsStrictlyGreater(t *testing.T) {
 		t.Errorf("replay guard is not a strict compare: %s", q)
 	}
 	stmts := runTx(t, &recorder{}, func(tx *Tx) error {
-		ok, err := tx.RecordTOTPStep(context.Background(), accountID, 100)
+		ok, err := tx.RecordTOTPStep(context.Background(), accountID, 100, t0)
 		if !ok {
 			t.Error("step reported as replay with 1 row affected")
 		}
@@ -438,7 +446,7 @@ func TestRecordTOTPStepIsStrictlyGreater(t *testing.T) {
 
 	// Zero rows affected = the step was not later than the last accepted one = a replay.
 	runTx(t, &recorder{zeroRows: true}, func(tx *Tx) error {
-		ok, err := tx.RecordTOTPStep(context.Background(), accountID, 100)
+		ok, err := tx.RecordTOTPStep(context.Background(), accountID, 100, t0)
 		if ok {
 			t.Error("a step the database refused was reported as accepted")
 		}
@@ -599,5 +607,105 @@ func TestPermissionCheckMatchesDomainList(t *testing.T) {
 		if inSQL[i] != string(k) {
 			t.Errorf("key %d: SQL %q, Go %q", i, inSQL[i], k)
 		}
+	}
+}
+
+// UpgradePasswordHash binds old and new hash in the right places and — unlike SetPassword — sends no
+// revoke-all statement: the credential did not change, and revoking would sign out the session the
+// sign-in just opened.
+func TestUpgradePasswordHashIsConditionalAndRevokesNothing(t *testing.T) {
+	stmts := runTx(t, &recorder{}, func(tx *Tx) error {
+		return tx.UpgradePasswordHash(context.Background(), accountID, "old-hash", "new-hash", t0)
+	})
+	if len(stmts) != 1 {
+		t.Fatalf("want exactly one statement, got %d", len(stmts))
+	}
+	// password_hash appears twice (SET and WHERE), so assignments() cannot tell them apart; read the
+	// two placeholders directly.
+	expect(t, "UpgradePasswordHash", assignments(t, stmts[0]), map[string]driver.Value{
+		"id": accountID, "updated_at": t0,
+	})
+	q := strings.Join(strings.Fields(stmts[0].query), " ")
+	if !strings.Contains(q, "SET password_hash = $3") || stmts[0].args[2] != "new-hash" {
+		t.Errorf("new hash not bound to SET: %s %v", q, stmts[0].args)
+	}
+	if !strings.Contains(q, "WHERE id = $1 AND password_hash = $2") || stmts[0].args[1] != "old-hash" {
+		t.Errorf("upgrade is not conditional on the old hash: %s %v", q, stmts[0].args)
+	}
+
+	r := &recorder{zeroRows: true}
+	db := sql.OpenDB(recConnector{r: r})
+	defer db.Close()
+	err := New(db).InTx(context.Background(), func(tx *Tx) error {
+		return tx.UpgradePasswordHash(context.Background(), accountID, "old-hash", "new-hash", t0)
+	})
+	if !errors.Is(err, ErrStateConflict) {
+		t.Errorf("hash changed in between: err = %v, want ErrStateConflict", err)
+	}
+}
+
+func TestListAccountsScansEveryRow(t *testing.T) {
+	enrolled := t0.Add(-time.Hour)
+	row := func(id, code string, disabled any) []driver.Value {
+		return []driver.Value{id, code, "a@example.test", "Name", false, enrolled, false, int64(0), nil,
+			disabled, "", "", t0, "system", t0}
+	}
+	r := &recorder{queryRows: map[string][][]driver.Value{"ORDER BY code": {
+		row(accountID, "VH-00001", nil), row("01JD9A00000000000000000002", "VH-00002", t0),
+	}}}
+	db := sql.OpenDB(recConnector{r: r})
+	defer db.Close()
+	got, err := New(db).ListAccounts(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Code != "VH-00001" || got[0].Disabled() || !got[1].Disabled() ||
+		got[0].TOTPEnrolledAt == nil || !got[0].TOTPEnrolledAt.Equal(enrolled) {
+		t.Fatalf("accounts = %+v", got)
+	}
+	if strings.Contains(r.stmts[0].query, "password_hash") || strings.Contains(r.stmts[0].query, "totp_secret_sealed,") {
+		t.Error("the listing selects a credential column")
+	}
+}
+
+func TestSchemaReady(t *testing.T) {
+	for _, tc := range []struct {
+		ready bool
+		want  error
+	}{{true, nil}, {false, ErrSchemaMissing}} {
+		r := &recorder{queryRows: map[string][][]driver.Value{"to_regclass": {{tc.ready}}}}
+		db := sql.OpenDB(recConnector{r: r})
+		err := New(db).SchemaReady(context.Background())
+		db.Close()
+		if !errors.Is(err, tc.want) && !(tc.want == nil && err == nil) {
+			t.Errorf("ready=%v: err = %v, want %v", tc.ready, err, tc.want)
+		}
+	}
+	for _, table := range []string{"operator_account", "operator_session", "operator_permission_grant",
+		"operator_recovery_code", "operator_audit_log"} {
+		if !strings.Contains(schemaReady, "'"+table+"'") {
+			t.Errorf("SchemaReady does not check %s", table)
+		}
+	}
+}
+
+// The database cap (migration 0013) and domain.SessionLifetime are two literals for one owner
+// decision; this is what holds them equal.
+func TestSessionLifetimeCapMatchesDomain(t *testing.T) {
+	b, err := fs.ReadFile(migrations.FS, "0013_operator_session_lifetime_cap.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`CHECK \(expires_at <= created_at \+ interval '(\d+) hours'\)`).FindSubmatch(b)
+	if m == nil {
+		t.Fatal("0013 has no operator_session_lifetime_cap CHECK in the expected shape")
+	}
+	hours, _ := strconv.Atoi(string(m[1]))
+	if time.Duration(hours)*time.Hour != domain.SessionLifetime {
+		t.Errorf("SQL cap is %d hours, domain.SessionLifetime is %v — one of them moved alone", hours, domain.SessionLifetime)
+	}
+	// The pre-check that refuses existing rows must use the same interval.
+	if !strings.Contains(string(b), "WHERE expires_at > created_at + interval '"+string(m[1])+" hours'") {
+		t.Error("0013's refusal pre-check uses a different interval than its CHECK")
 	}
 }

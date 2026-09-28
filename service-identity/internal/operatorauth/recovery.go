@@ -21,8 +21,11 @@ import (
 //
 // The alphabet is RFC 4648 base32 (A–Z, 2–7): it has no 0, 1 or 8, so an operator who types one
 // of those off paper meant O, I or B, and HashRecoveryCode reads it that way.
+//
+// HOW MANY codes a batch holds is NOT decided here: domain.RecoveryCodeCount is the one owner of
+// that figure (the store refuses any other batch size), and the caller passes it in. A second
+// constant here would be a second copy of an owner's decision, free to drift.
 const (
-	RecoveryCodeCount = 10
 	recoveryCodeChars = 16
 	recoveryGroupSize = 4
 	recoveryAlphabet  = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"

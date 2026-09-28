@@ -3,6 +3,9 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -169,6 +172,37 @@ type OperatorAccount struct {
 	CreatedBy          string
 	UpdatedAt          time.Time
 }
+
+// String renders an account WITHOUT its personal fields (rule 3; security review of TASK-03,
+// finding 3): only the id, the business code and state flags, then a withheld marker. The fields are
+// exported because the store fills them and the CLI lists them, so fmt would print them by
+// reflection on any `%+v` — and slog would too. Format, GoString and LogValue close every path;
+// Format is the load-bearing one (fmt consults String only for some verbs, so a `%d` would
+// otherwise walk the fields).
+func (a OperatorAccount) String() string {
+	return "domain.OperatorAccount{id:" + a.ID + " code:" + a.Code +
+		" must_change_password:" + strconv.FormatBool(a.MustChangePassword) +
+		" totp_enrolled:" + strconv.FormatBool(a.TOTPEnrolled()) +
+		" totp_pending:" + strconv.FormatBool(a.TOTPPending) +
+		" failed_attempts:" + strconv.Itoa(a.FailedAttempts) +
+		" locked:" + strconv.FormatBool(a.LockedUntil != nil) +
+		" disabled:" + strconv.FormatBool(a.Disabled()) + " personal_fields:withheld}"
+}
+
+// GoString keeps %#v from printing the personal fields.
+func (a OperatorAccount) GoString() string { return a.String() }
+
+// Format renders String on every verb.
+func (a OperatorAccount) Format(f fmt.State, verb rune) {
+	if verb == 'q' {
+		_, _ = io.WriteString(f, strconv.Quote(a.String()))
+		return
+	}
+	_, _ = io.WriteString(f, a.String())
+}
+
+// LogValue keeps slog from printing the personal fields.
+func (a OperatorAccount) LogValue() slog.Value { return slog.StringValue(a.String()) }
 
 // Disabled reports an administrative lock (rule 7: soft — the row and its history stay).
 func (a OperatorAccount) Disabled() bool { return a.DisabledAt != nil }

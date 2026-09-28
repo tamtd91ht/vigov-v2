@@ -11,7 +11,7 @@ import (
 var recoveryShape = regexp.MustCompile(`^[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4}$`)
 
 func TestGenerateRecoveryCodes(t *testing.T) {
-	codes, hashes, err := GenerateRecoveryCodes(RecoveryCodeCount)
+	codes, hashes, err := GenerateRecoveryCodes(10)
 	if err != nil {
 		t.Fatal(err)
 	}

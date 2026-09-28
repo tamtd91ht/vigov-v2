@@ -3,7 +3,7 @@ package operatorauth
 import (
 	"crypto/hmac"
 	"crypto/rand"
-	// @security-exception: HMAC-SHA1 is the RFC 6238 TOTP default the owner fixed on 2026-09-28 (ADR 0048 #10) for authenticator-app compatibility; used only inside HMAC, whose security does not rest on SHA-1 collision resistance. Never used as a bare hash.
+	// @security-exception: HMAC-SHA1 is the RFC 6238 TOTP default the owner fixed on 2026-09-28 (ADR 0048 §"Chốt bước 1 — 28/09/2026", row "Tham số") for authenticator-app compatibility; used only inside HMAC, whose security does not rest on SHA-1 collision resistance. Never used as a bare hash.
 	"crypto/sha1"
 	"crypto/subtle"
 	"encoding/base32"
@@ -17,7 +17,7 @@ import (
 	"github.com/vihat/vigov/core/secret"
 )
 
-// TOTP parameters, fixed by the owner on 2026-09-28 (ADR 0048 #10): RFC 6238 defaults, which is
+// TOTP parameters, fixed by the owner on 2026-09-28 (ADR 0048 §"Chốt bước 1", row "Tham số"): RFC 6238 defaults, which is
 // what every mainstream authenticator app assumes when the URI names nothing else.
 //
 // WHY HMAC-SHA1 IS ACCEPTABLE: the attacks on SHA-1 are collision attacks; HMAC's security rests
@@ -130,6 +130,17 @@ func Verify(s secret.Secret, code string, now time.Time) (step int64, ok bool) {
 		return 0, false
 	}
 	return matchedStep, true
+}
+
+// CodeAt returns the 6-digit code an authenticator app shows for s at `now` — what Verify
+// accepts. For tests of the code that CALLS Verify, which otherwise have no way to produce a valid
+// code without re-implementing RFC 6238 (and importing SHA-1 a second time). Holding s is already
+// holding the second factor, so exposing this grants nothing. Returns "" for a malformed secret.
+func CodeAt(s secret.Secret, now time.Time) string {
+	if len(s) != TOTPSecretSize {
+		return ""
+	}
+	return hotp(s.Lo(), uint64(TimeStep(now)), TOTPDigits)
 }
 
 func sixDigits(code string) bool {

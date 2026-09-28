@@ -79,3 +79,26 @@ func TestMigration0012NoDestructiveStatement(t *testing.T) {
 		}
 	}
 }
+
+const file0013 = "0013_operator_session_lifetime_cap.sql"
+
+// The 8-hour cap is written, added only if absent, and refuses (never rewrites) rows already over
+// it. Agreement with domain.SessionLifetime is checked in internal/store/operatorstore, which may
+// import domain; this package may not reach into internal/.
+func TestMigration0013SessionLifetimeCap(t *testing.T) {
+	sql := maChay(t, file0013)
+	for _, want := range []string{
+		"add constraint operator_session_lifetime_cap check (expires_at <= created_at + interval '8 hours')",
+		"where conname = 'operator_session_lifetime_cap' and conrelid = 'operator_session'::regclass",
+		"raise exception 'operator_session has % row(s) whose expiry exceeds created_at + 8 hours'",
+	} {
+		if !strings.Contains(sql, want) {
+			t.Errorf("0013 NO LONGER contains %q", want)
+		}
+	}
+	for _, bad := range []string{"update operator_session", "delete from", "drop table", "drop column", "drop constraint"} {
+		if strings.Contains(sql, bad) {
+			t.Errorf("0013 contains %q in its executable part — it must refuse, never rewrite", bad)
+		}
+	}
+}

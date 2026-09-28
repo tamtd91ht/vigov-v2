@@ -29,6 +29,8 @@ import (
 
 var sharedDB *sql.DB
 
+var testDSN, testSchema string
+
 func TestMain(m *testing.M) {
 	dsn := os.Getenv("VIGOV_TEST_DSN")
 	if dsn == "" {
@@ -59,6 +61,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	sharedDB = db
+	// Kept for tests that need a SECOND pool (sharedDB has one connection, so two concurrent
+	// transactions on it would simply queue in database/sql and prove nothing about row locks).
+	testDSN, testSchema = dsn, schema
 	code := m.Run()
 	// A schema this suite created in a test database; it holds no archival data.
 	if _, err := db.ExecContext(context.Background(), "DROP SCHEMA IF EXISTS "+schema+" CASCADE"); err != nil {
@@ -218,7 +223,7 @@ func TestPGTOTPReplayStepCompare(t *testing.T) {
 		if err := tx.SetPendingTOTP(ctx, a.ID, []byte("sealed-secret"), now); err != nil {
 			return err
 		}
-		return tx.ActivateTOTP(ctx, a.ID, "own-hash", 1000, now)
+		return tx.ActivateTOTP(ctx, a.ID, "own-hash", 1000, []byte("sealed-secret"), now)
 	}); err != nil {
 		t.Fatalf("enrol: %v", err)
 	}
@@ -229,7 +234,7 @@ func TestPGTOTPReplayStepCompare(t *testing.T) {
 		var ok bool
 		if err := s.InTx(ctx, func(tx *Tx) error {
 			var err error
-			ok, err = tx.RecordTOTPStep(ctx, a.ID, c.step)
+			ok, err = tx.RecordTOTPStep(ctx, a.ID, c.step, now)
 			return err
 		}); err != nil {
 			t.Fatal(err)

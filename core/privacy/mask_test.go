@@ -22,6 +22,22 @@ func TestMaskCccd(t *testing.T) {
 	}
 }
 
+func TestMaskEmail(t *testing.T) {
+	cases := map[string]string{
+		"operator.one@example.test": "o***@example.test",
+		" a@example.test ":          "a***@example.test",
+		"no-at-sign":                "**********",
+		"@example.test":             "*************",
+		"a@b@example.test":          "****************",
+		"":                          "",
+	}
+	for in, want := range cases {
+		if got := MaskEmail(in); got != want {
+			t.Errorf("MaskEmail(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestMaskName(t *testing.T) {
 	if got, want := MaskName("Nguyễn Văn An"), "Nguyễn V. A."; got != want {
 		t.Errorf("got %q, want %q", got, want)

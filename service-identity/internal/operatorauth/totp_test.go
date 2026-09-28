@@ -139,3 +139,19 @@ func TestProvisioningURIRefusesPIIAndBadInput(t *testing.T) {
 		t.Errorf("short secret: got %v", err)
 	}
 }
+
+func TestCodeAtIsWhatVerifyAccepts(t *testing.T) {
+	s, err := GenerateSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 28, 8, 0, 0, 0, time.UTC)
+	code := CodeAt(s, now)
+	step, ok := Verify(s, code, now)
+	if !ok || step != TimeStep(now) {
+		t.Fatalf("CodeAt output refused by Verify: ok=%v step=%d", ok, step)
+	}
+	if CodeAt(secret.Secret("short"), now) != "" {
+		t.Fatal("a malformed secret must yield no code")
+	}
+}

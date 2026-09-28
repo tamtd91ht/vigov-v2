@@ -181,6 +181,75 @@ func (s *Store) ByEmail(ctx context.Context, email string) (domain.OperatorAccou
 	return accountBy(ctx, s.db, selectAccountByEmail, email)
 }
 
+// selectAllAccounts — every operator account, disabled ones included (rule 7: a disabled account
+// is kept and must stay visible to whoever might enable it again). Ordered by code so the CLI
+// listing is stable. The operator realm is a handful of Vihat staff, so no paging.
+const selectAllAccounts = `SELECT ` + accountColumns + ` FROM operator_account ORDER BY code`
+
+// ListAccounts reads every operator account, for the server-side CLI's `list`.
+func (s *Store) ListAccounts(ctx context.Context) ([]domain.OperatorAccount, error) {
+	if s == nil || s.db == nil {
+		return nil, ErrNoDB
+	}
+	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). The operator register
+	// itself, read only by the server-side CLI; it joins no table that carries tenant_id.
+	rows, err := s.db.QueryContext(ctx, selectAllAccounts)
+	if err != nil {
+		return nil, fmt.Errorf("operatorstore: list accounts: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.OperatorAccount
+	for rows.Next() {
+		var a domain.OperatorAccount
+		var enrolled, locked, disabled sql.NullTime
+		if err := rows.Scan(&a.ID, &a.Code, &a.Email, &a.DisplayName, &a.MustChangePassword, &enrolled,
+			&a.TOTPPending, &a.FailedAttempts, &locked, &disabled, &a.DisabledBy, &a.DisabledReason,
+			&a.CreatedAt, &a.CreatedBy, &a.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("operatorstore: list accounts: scan: %w", err)
+		}
+		a.TOTPEnrolledAt = timePtr(enrolled)
+		a.LockedUntil = timePtr(locked)
+		a.DisabledAt = timePtr(disabled)
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("operatorstore: list accounts: %w", err)
+	}
+	return out, nil
+}
+
+// ErrSchemaMissing means migration 0012 has not been applied to this database.
+var ErrSchemaMissing = errors.New("operatorstore: operator tables are missing (migration 0012 not applied)")
+
+// schemaReady asks for every table this package writes. to_regclass answers NULL for a missing
+// relation instead of raising, so one row says which state the database is in.
+const schemaReady = `SELECT to_regclass('operator_account') IS NOT NULL
+	AND to_regclass('operator_session') IS NOT NULL
+	AND to_regclass('operator_permission_grant') IS NOT NULL
+	AND to_regclass('operator_recovery_code') IS NOT NULL
+	AND to_regclass('operator_audit_log') IS NOT NULL`
+
+// SchemaReady refuses (ErrSchemaMissing) when the operator tables are absent.
+//
+// FOR THE SERVER-SIDE CLI, WHICH DOES NOT MIGRATE. Migrations belong to the service at start-up
+// (cmd/server step 2b), where they are embedded and run once; a CLI that also migrated would be a
+// second, unscheduled path changing the schema of a live database. Checking first turns "relation
+// operator_account does not exist" deep inside a half-run command into one clear sentence.
+func (s *Store) SchemaReady(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return ErrNoDB
+	}
+	var ok bool
+	// @cross-tenant: catalogue lookup only (to_regclass); reads no row of any table.
+	if err := s.db.QueryRowContext(ctx, schemaReady).Scan(&ok); err != nil {
+		return fmt.Errorf("operatorstore: schema check: %w", err)
+	}
+	if !ok {
+		return ErrSchemaMissing
+	}
+	return nil
+}
+
 // ByID reads one account inside the transaction.
 func (t *Tx) ByID(ctx context.Context, id string) (domain.OperatorAccount, error) {
 	return accountBy(ctx, t.tx, selectAccountByID, id)
@@ -194,6 +263,29 @@ func (t *Tx) ByCode(ctx context.Context, code string) (domain.OperatorAccount, e
 // ByEmail reads one account inside the transaction.
 func (t *Tx) ByEmail(ctx context.Context, email string) (domain.OperatorAccount, error) {
 	return accountBy(ctx, t.tx, selectAccountByEmail, email)
+}
+
+// forUpdate turns an account read into a ROW LOCK held until the transaction ends.
+//
+// WHY EVERY CREDENTIAL CHECK STARTS HERE (security review of TASK-03, confirmed): under READ
+// COMMITTED a plain read lets N parallel sign-ins all see "not locked", all N TOTP guesses get
+// checked, and the one that succeeds runs ResetFailures — clearing a lock another attempt set in
+// the meantime. With FOR UPDATE the attempts on one account run one after another: each sees the
+// failure count and lock the previous one committed, so the 5-attempt limit holds under
+// concurrency. The rows are few (one operator) and the transactions short, so the queueing costs
+// nothing an honest operator would notice.
+const forUpdate = ` FOR UPDATE`
+
+// ByEmailForUpdate reads one account by sign-in email AND locks its row until the transaction
+// ends. The entry point of every sign-in and enrolment attempt.
+func (t *Tx) ByEmailForUpdate(ctx context.Context, email string) (domain.OperatorAccount, error) {
+	return accountBy(ctx, t.tx, selectAccountByEmail+forUpdate, email)
+}
+
+// ByIDForUpdate reads one account by id AND locks its row — for a signed-in operator re-proving a
+// factor (password change, recovery-code regeneration).
+func (t *Tx) ByIDForUpdate(ctx context.Context, id string) (domain.OperatorAccount, error) {
+	return accountBy(ctx, t.tx, selectAccountByID+forUpdate, id)
 }
 
 // Credentials is the secret material of one account, handed only to the code that verifies it.
@@ -319,18 +411,23 @@ const activateTOTP = `UPDATE operator_account
 	SET totp_secret_sealed = pending_totp_secret_sealed, pending_totp_secret_sealed = NULL,
 	    totp_enrolled_at = $2, totp_last_step = $3, password_hash = $4,
 	    must_change_password = false, updated_at = $2
-	WHERE id = $1 AND pending_totp_secret_sealed IS NOT NULL AND disabled_at IS NULL`
+	WHERE id = $1 AND pending_totp_secret_sealed = $5 AND disabled_at IS NULL`
 
 // ActivateTOTP promotes the pending secret to the active factor, records the step of the code that
 // proved it (so that very code cannot be replayed), sets the operator's own password and clears
 // must_change_password. It is a password change, so every live session is revoked.
-func (t *Tx) ActivateTOTP(ctx context.Context, accountID, passwordHash string, step int64, now time.Time) error {
-	if passwordHash == "" {
+//
+// provedSealed IS THE EXACT CIPHERTEXT THE CODE WAS VERIFIED AGAINST, and the UPDATE only fires
+// while the column still holds those bytes. Without it, a BeginEnrollment that replaced the pending
+// secret between the verification and this statement would get ITS secret activated — a factor
+// nobody proved possession of. Zero rows = ErrStateConflict; the caller refuses the enrolment.
+func (t *Tx) ActivateTOTP(ctx context.Context, accountID, passwordHash string, step int64, provedSealed []byte, now time.Time) error {
+	if passwordHash == "" || len(provedSealed) == 0 {
 		return ErrMissingField
 	}
 	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). One row, keyed on one
 	// account id.
-	res, err := t.tx.ExecContext(ctx, activateTOTP, accountID, now, step, passwordHash)
+	res, err := t.tx.ExecContext(ctx, activateTOTP, accountID, now, step, passwordHash, provedSealed)
 	if err != nil {
 		return fmt.Errorf("operatorstore: activate totp: %w", err)
 	}
@@ -341,18 +438,28 @@ func (t *Tx) ActivateTOTP(ctx context.Context, accountID, passwordHash string, s
 	return err
 }
 
-const recordTOTPStep = `UPDATE operator_account
+// notLocked is the lockout guard carried by every statement that ACCEPTS a factor or clears the
+// failure state. The row lock (ByEmailForUpdate) is the primary defence; this is the second, in the
+// statement itself, so a caller that forgot to lock still cannot accept a code on a locked account.
+// $now is the placeholder of the statement's own "now".
+func notLocked(col, now string) string {
+	return `(` + col + ` IS NULL OR ` + col + ` <= ` + now + `)`
+}
+
+var recordTOTPStep = `UPDATE operator_account
 	SET totp_last_step = $2
 	WHERE id = $1 AND totp_secret_sealed IS NOT NULL
-	  AND (totp_last_step IS NULL OR totp_last_step < $2)`
+	  AND (totp_last_step IS NULL OR totp_last_step < $2)
+	  AND ` + notLocked("locked_until", "$3")
 
 // RecordTOTPStep accepts a verified TOTP step ONLY IF it is strictly later than the last one
-// accepted. One atomic UPDATE, so two concurrent sign-ins with the same code cannot both pass:
-// the second finds the condition false. Returns false for a replayed (or older) step.
-func (t *Tx) RecordTOTPStep(ctx context.Context, accountID string, step int64) (bool, error) {
+// accepted AND the account is not locked at now. One atomic UPDATE, so two concurrent sign-ins with
+// the same code cannot both pass: the second finds the condition false. Returns false for a
+// replayed (or older) step, or while a lock is in force.
+func (t *Tx) RecordTOTPStep(ctx context.Context, accountID string, step int64, now time.Time) (bool, error) {
 	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). One row, keyed on one
 	// account id.
-	res, err := t.tx.ExecContext(ctx, recordTOTPStep, accountID, step)
+	res, err := t.tx.ExecContext(ctx, recordTOTPStep, accountID, step, now)
 	if err != nil {
 		return false, fmt.Errorf("operatorstore: record totp step: %w", err)
 	}
@@ -405,11 +512,13 @@ func (t *Tx) RegisterFailure(ctx context.Context, accountID string, now time.Tim
 	return false, time.Time{}, nil
 }
 
-const resetFailures = `UPDATE operator_account
+var resetFailures = `UPDATE operator_account
 	SET failed_attempts = 0, locked_until = NULL, updated_at = $2
-	WHERE id = $1`
+	WHERE id = $1 AND ` + notLocked("locked_until", "$2")
 
-// ResetFailures clears the failure count and any lockout — after a successful sign-in.
+// ResetFailures clears the failure count and an EXPIRED lockout — after a successful sign-in. It
+// NEVER clears a lock still in force: that was the race the security review confirmed, a success
+// wiping out a lock set by a parallel attempt. ErrAccountLocked when a lock is in force.
 func (t *Tx) ResetFailures(ctx context.Context, accountID string, now time.Time) error {
 	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). One row, keyed on one
 	// account id.
@@ -417,7 +526,18 @@ func (t *Tx) ResetFailures(ctx context.Context, accountID string, now time.Time)
 	if err != nil {
 		return fmt.Errorf("operatorstore: reset failures: %w", err)
 	}
-	return requireOne(res, "reset failures", ErrNotFound)
+	if err := requireOne(res, "reset failures", ErrNotFound); err != nil {
+		// No account, or a lock in force: read the row to say which (the RegisterFailure shape).
+		a, rerr := t.ByID(ctx, accountID)
+		if rerr != nil {
+			return rerr
+		}
+		if a.LockedAt(now) {
+			return ErrAccountLocked
+		}
+		return err
+	}
+	return nil
 }
 
 const setPassword = `UPDATE operator_account
@@ -441,6 +561,31 @@ func (t *Tx) SetPassword(ctx context.Context, accountID, passwordHash string, mu
 	}
 	_, err = t.RevokeAllSessions(ctx, accountID, RevokeReasonPasswordChanged, now)
 	return err
+}
+
+const upgradePasswordHash = `UPDATE operator_account
+	SET password_hash = $3, updated_at = $4
+	WHERE id = $1 AND password_hash = $2`
+
+// UpgradePasswordHash replaces a hash made with weaker argon2 parameters by a hash of THE SAME
+// password under the current ones — after a successful sign-in, the only moment the plaintext is
+// available (the staff precedent, app/dang_nhap.go).
+//
+// NOT SetPassword, AND IT MUST NOT REVOKE SESSIONS: the credential does not change, and revoking
+// would sign out the very session the sign-in just opened. Conditional on the OLD hash, so a
+// password change that committed in between is never overwritten by the stale plaintext. Returns
+// ErrStateConflict when that happened (nothing to do).
+func (t *Tx) UpgradePasswordHash(ctx context.Context, accountID, oldHash, newHash string, now time.Time) error {
+	if oldHash == "" || newHash == "" {
+		return ErrMissingField
+	}
+	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). One row, keyed on one
+	// account id.
+	res, err := t.tx.ExecContext(ctx, upgradePasswordHash, accountID, oldHash, newHash, now)
+	if err != nil {
+		return fmt.Errorf("operatorstore: upgrade password hash: %w", err)
+	}
+	return requireOne(res, "upgrade password hash", ErrStateConflict)
 }
 
 const disableAccount = `UPDATE operator_account
@@ -793,13 +938,16 @@ func (t *Tx) ReplaceRecoveryCodes(ctx context.Context, accountID string, digests
 	return batch, nil
 }
 
-const useRecoveryCode = `UPDATE operator_recovery_code
+var useRecoveryCode = `UPDATE operator_recovery_code
 	SET used_at = $3
-	WHERE operator_account_id = $1 AND code_hash = $2 AND used_at IS NULL AND voided_at IS NULL`
+	WHERE operator_account_id = $1 AND code_hash = $2 AND used_at IS NULL AND voided_at IS NULL
+	  AND EXISTS (SELECT 1 FROM operator_account a
+	               WHERE a.id = $1 AND ` + notLocked("a.locked_until", "$3") + `)`
 
 // UseRecoveryCode consumes one code atomically, given its digest (operatorauth.HashRecoveryCode of
-// what the operator typed): true when a live code of THIS account matched. A code already used,
-// voided, or belonging to another account returns false — one answer for all.
+// what the operator typed): true when a live code of THIS account matched and the account is not
+// locked at now. A code already used, voided, belonging to another account, or presented while a
+// lock is in force returns false — one answer for all, and a locked account keeps its code.
 func (t *Tx) UseRecoveryCode(ctx context.Context, accountID string, digest []byte, now time.Time) (bool, error) {
 	if accountID == "" || len(digest) != sha256.Size {
 		return false, nil
