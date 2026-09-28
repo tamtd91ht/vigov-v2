@@ -218,6 +218,24 @@ func TestKiemLyDoTraLai(t *testing.T) {
 	}
 }
 
+// TestCheckReopenReason (P12): the reopen's reason follows the return's rule with its own sentinel.
+func TestCheckReopenReason(t *testing.T) {
+	for _, blank := range []string{"", "   ", "\t\n "} {
+		if _, err := CheckReopenReason(blank); !errors.Is(err, ErrReopenReasonMissing) {
+			t.Errorf("lý do %q: lỗi = %v, muốn ErrReopenReasonMissing", blank, err)
+		}
+	}
+	if s, err := CheckReopenReason("  Cấp trên yêu cầu bổ sung.  "); err != nil || s != "Cấp trên yêu cầu bổ sung." {
+		t.Errorf("lý do hợp lệ: %q, %v", s, err)
+	}
+	if _, err := CheckReopenReason(strings.Repeat("ạ", NoiDungNhatKyToiDa+1)); !errors.Is(err, ErrNoiDungNhatKyQuaDai) {
+		t.Errorf("lý do quá dài: lỗi = %v, muốn ErrNoiDungNhatKyQuaDai", err)
+	}
+	if !LaLoiDauVaoNhiemVu(ErrReopenReasonMissing) {
+		t.Error("ErrReopenReasonMissing không nằm trong danh sách lỗi đầu vào — sẽ trả 500")
+	}
+}
+
 func TestChuyenTrangThaiLaKhongBietThiTuChoi(t *testing.T) {
 	err := ChuyenTrangThaiDuoc(DangThucHien, TrangThaiNhiemVu("dang-lam-do"))
 	if !errors.Is(err, ErrTrangThaiNhiemVuKhongBiet) {

@@ -121,6 +121,13 @@ var (
 	ErrThieuLyDoTraLai = errors.New(
 		"nhiệm vụ: trả lại để làm tiếp phải ghi lý do — người thực hiện cần biết còn thiếu gì")
 
+	// ErrReopenReasonMissing refuses a reopen (`hoan-thanh` → `dang-thuc-hien`) with no reason — the
+	// same rule the return from review has (P12, user decision 28/09/2026). Undoing a sign-off takes
+	// work out of §11.3's completed figures; the timeline must say why, or the next reader sees a
+	// finished task quietly become unfinished.
+	ErrReopenReasonMissing = errors.New(
+		"nhiệm vụ: mở lại nhiệm vụ đã hoàn thành phải ghi lý do — người đọc sau cần biết vì sao việc đã xong lại phải làm tiếp")
+
 	ErrThieuNoiDungNhatKy  = errors.New("nhiệm vụ: thiếu nội dung nhật ký")
 	ErrNoiDungNhatKyQuaDai = fmt.Errorf(
 		"nhiệm vụ: nội dung nhật ký quá dài (tối đa %d ký tự)", NoiDungNhatKyToiDa)
@@ -150,7 +157,7 @@ func LoiDauVaoNhiemVuGoc(err error) error {
 		ErrMaNhiemVuSaiDinhDang, ErrMaNhiemVuQuaDai,
 		ErrTienDoNgoaiKhoang,
 		ErrThieuLyDoXoaNhiemVu, ErrLyDoNhiemVuQuaDai,
-		ErrThieuNoiDungNhatKy, ErrNoiDungNhatKyQuaDai, ErrThieuLyDoTraLai,
+		ErrThieuNoiDungNhatKy, ErrNoiDungNhatKyQuaDai, ErrThieuLyDoTraLai, ErrReopenReasonMissing,
 		ErrTomTatKetQuaQuaDai, ErrGhiChuNhiemVuQuaDai,
 		ErrTrangThaiNhiemVuKhongBiet, ErrThieuLyDoLuiHan, ErrHanMoiKhongLui,
 		ErrForwardingIsAssignment, ErrDueAtEmpty,
@@ -534,6 +541,22 @@ func KiemLyDoTraLai(s string) (string, error) {
 	switch {
 	case s == "":
 		return "", ErrThieuLyDoTraLai
+	case len([]rune(s)) > NoiDungNhatKyToiDa:
+		return "", ErrNoiDungNhatKyQuaDai
+	}
+	return s, nil
+}
+
+// CheckReopenReason checks the reason of a reopen. MANDATORY, trimmed, and bounded like any timeline
+// entry — KiemLyDoTraLai's rule with the reopen's own sentinel, so the refusal names the act tried.
+//
+// THE LENGTH BOUND HERE IS THE NOTE'S; the whole reopen line (ReopenLogText, which prefixes the cleared
+// completion instant) is bounded again by the caller, because that line is what the row stores.
+func CheckReopenReason(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	switch {
+	case s == "":
+		return "", ErrReopenReasonMissing
 	case len([]rune(s)) > NoiDungNhatKyToiDa:
 		return "", ErrNoiDungNhatKyQuaDai
 	}

@@ -795,7 +795,8 @@ func TestReopen_ClearsCompletionAndTrailKeepsOldInstant(t *testing.T) {
 	uc, ctx := dungGhiNhiemVu(t, k)
 
 	sau, err := uc.DoiTrangThai(ctx, maNVGoc,
-		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), true, true)
+		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: reopenReasonSample},
+		canBoThu(), true, true)
 	if err != nil {
 		t.Fatalf("mở lại: %v", err)
 	}
@@ -819,7 +820,8 @@ func TestReopen_ClearsCompletionAndTrailKeepsOldInstant(t *testing.T) {
 
 	delta, _ := vetKiemToan(t, k).args[7].([]byte)
 	for _, co := range []string{`"mo_lai":true`, `"ngay_hoan_thanh":"2026-09-20T03:00:00Z"`,
-		`"ngay_hoan_thanh":null`, `"trang_thai":"hoan-thanh"`, `"trang_thai":"dang-thuc-hien"`} {
+		`"ngay_hoan_thanh":null`, `"trang_thai":"hoan-thanh"`, `"trang_thai":"dang-thuc-hien"`,
+		`"do_dai_ly_do":`} {
 		if !strings.Contains(string(delta), co) {
 			t.Errorf("delta thiếu %s: %s", co, delta)
 		}
@@ -857,6 +859,41 @@ func TestReopen_WithoutApprovalRefused(t *testing.T) {
 		YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)}, canBoThu(), false, true)
 	if !errors.Is(err, ErrReopenNeedsApproval) {
 		t.Fatalf("lỗi = %v, muốn ErrReopenNeedsApproval", err)
+	}
+	khongGhiGi(t, k)
+}
+
+// reopenReasonSample is a reopen's mandatory reason (P12).
+const reopenReasonSample = "Cấp trên yêu cầu bổ sung số liệu quý III."
+
+// TestReopen_WithoutReasonRefused (P12): empty and whitespace-only are both no reason, and NOTHING is
+// written — no UPDATE, no timeline row, no audit entry.
+func TestReopen_WithoutReasonRefused(t *testing.T) {
+	for _, reason := range []string{"", "   \t"} {
+		t.Run("lý do="+reason, func(t *testing.T) {
+			k := khoNVHoanThanh()
+			uc, ctx := dungGhiNhiemVu(t, k)
+
+			_, err := uc.DoiTrangThai(ctx, maNVGoc,
+				YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien), GhiChu: reason}, canBoThu(), true, true)
+			if !errors.Is(err, domain.ErrReopenReasonMissing) {
+				t.Fatalf("lỗi = %v, muốn ErrReopenReasonMissing", err)
+			}
+			khongGhiGi(t, k)
+		})
+	}
+}
+
+// TestReopen_PermissionBeforeReason (P12): with neither the key nor a reason, the refusal is the KEY —
+// a caller who may not reopen is told so, not asked for a better sentence.
+func TestReopen_PermissionBeforeReason(t *testing.T) {
+	k := khoNVHoanThanh()
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	_, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{TrangThai: string(domain.DangThucHien)},
+		canBoThu(), false, true)
+	if !errors.Is(err, ErrReopenNeedsApproval) {
+		t.Fatalf("lỗi = %v, muốn ErrReopenNeedsApproval trước lỗi thiếu lý do", err)
 	}
 	khongGhiGi(t, k)
 }

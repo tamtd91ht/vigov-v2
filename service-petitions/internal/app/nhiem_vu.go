@@ -1253,16 +1253,18 @@ type YeuCauDoiTrangThai struct {
 	// carries a generated sentence naming the two statuses, because the timeline may not have a gap
 	// and the schema refuses an empty entry — see domain.NoiDungChuyenTrangThai.
 	//
-	// ⚠ MANDATORY FOR ONE MOVE: "Trả lại để làm tiếp" (`cho-duyet` → `dang-thuc-hien`), where it is
-	// the REASON the work was sent back (domain.KiemLyDoTraLai). One field rather than a second one,
-	// because on that move the reason IS the timeline line — two fields would be two texts for one row.
+	// ⚠ MANDATORY FOR TWO MOVES: "Trả lại để làm tiếp" (`cho-duyet` → `dang-thuc-hien`), where it is
+	// the REASON the work was sent back (domain.KiemLyDoTraLai), and the reopen (`hoan-thanh` →
+	// `dang-thuc-hien`, domain.CheckReopenReason, P12). One field rather than a second one, because on
+	// those moves the reason IS the timeline line — two fields would be two texts for one row.
 	GhiChu string
 }
 
 // DoiTrangThai moves the task. Route permission: `task.update`; every step INTO `hoan-thanh`
 // additionally needs `task.approve` and an entirely finished sub-tree; the return from `cho-duyet`
 // to `dang-thuc-hien` additionally needs `task.approve` and a non-empty reason; the REOPEN
-// `hoan-thanh` → `dang-thuc-hien` additionally needs `task.approve`, clears `ngay_hoan_thanh`, and
+// `hoan-thanh` → `dang-thuc-hien` additionally needs `task.approve` and a non-empty reason (P12),
+// clears `ngay_hoan_thanh`, and
 // keeps the cleared instant in the timeline row and the audit entry. domain.NeedsApproval names the
 // three.
 //
@@ -1342,8 +1344,18 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 		// in the timeline sentence and in the audit entry's `truoc`, both written below in this
 		// transaction; nothing else remembers it.
 		moLai := domain.IsReopen(truoc.TrangThai, moiTT)
-		if moLai && !bool(duyet) {
-			return ErrReopenNeedsApproval
+		if moLai {
+			// PERMISSION BEFORE REASON, the order the return from review uses: a caller who may not
+			// reopen is told so, not asked for a better sentence (P12, user decision 28/09/2026).
+			if !bool(duyet) {
+				return ErrReopenNeedsApproval
+			}
+			// THE REASON IS MANDATORY, like the return's. Decided on the locked row, because whether
+			// this is a reopen depends on the CURRENT status: `dang-thuc-hien` is also an ordinary
+			// forward step that needs no reason.
+			if ghiChu, err = domain.CheckReopenReason(ghiChu); err != nil {
+				return err
+			}
 		}
 
 		// "TRẢ LẠI ĐỂ LÀM TIẾP" (owner decision 2026-09-27). PERMISSION BEFORE REASON, for the order
@@ -1422,8 +1434,10 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 			vet["do_dai_ly_do"] = len([]rune(ghiChu))
 		}
 		if moLai {
-			// The flag lets an inspection find every reopen; the note's TEXT stays out, as above.
+			// The flag lets an inspection find every reopen; the reason's TEXT stays out and its
+			// length goes in, exactly as for the return above.
 			vet["mo_lai"] = true
+			vet["do_dai_ly_do"] = len([]rune(ghiChu))
 		}
 		delta, err := json.Marshal(vet)
 		if err != nil {

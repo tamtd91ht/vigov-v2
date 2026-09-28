@@ -1002,6 +1002,9 @@ func TestLoiNhiemVuKhongLoMaXaRaThan(t *testing.T) {
 			"Trả lại nhiệm vụ đang chờ duyệt"},
 		{"thiếu quyền mở lại", app.ErrReopenNeedsApproval, http.StatusForbidden, "forbidden",
 			"Mở lại nhiệm vụ đã hoàn thành"},
+		// P12: the reopen's missing reason is the client's input — 400 with the domain's sentence.
+		{"thiếu lý do mở lại", domain.ErrReopenReasonMissing, http.StatusBadRequest, "invalid_request",
+			domain.ErrReopenReasonMissing.Error()},
 		{"trùng văn bản", domain.ErrVanBanTrungTrongYeuCau, http.StatusBadRequest, "invalid_request",
 			domain.ErrVanBanTrungTrongYeuCau.Error()},
 	} {
