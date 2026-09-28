@@ -51,6 +51,13 @@
 //	CITIZEN_SESSION_BRIDGE_KEYS         Secret     optional — both bridge vars or neither; one alone refused by Load
 //	CITIZEN_SESSION_TTL                 ConfigMap  optional — default 720h (30 days); malformed refused by Load
 //	IDENTITY_ADMIN_SEED_PASSWORD        Secret     optional — empty = off; shorter than password.DaiToiThieu = off, reported by identity at startup
+//	OBJECT_STORAGE_ENDPOINT             ConfigMap  optional — absent = uploads refused (storage.ErrNotConfigured); >1 host or malformed refused by Load
+//	OBJECT_STORAGE_PUBLIC_ENDPOINT      ConfigMap  optional — as above; presigned URLs are signed against this host
+//	OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL  ConfigMap  optional — absent = storage.PublicURL refused; malformed refused by Load
+//	OBJECT_STORAGE_ACCESS_KEY           Secret     optional — one pair per service (ADR 0052 §3); absent = uploads refused
+//	OBJECT_STORAGE_SECRET_KEY           Secret     optional — as above
+//	OBJECT_STORAGE_REGION               ConfigMap  optional — default us-east-1 (see ObjectStorage.Region)
+//	OBJECT_STORAGE_BUCKET_PREFIX        ConfigMap  optional — absent = uploads refused; malformed refused by Load
 //
 // THE TABLE IS HERE AND NOT IN A MANIFEST because the manifests are not in this repository's
 // gift and a classification that lives only in deploy/ is one nobody reading the config layer
@@ -401,6 +408,10 @@ type Config struct {
 	// Trimmed: a trailing newline pasted into a Secret would otherwise make the typed password
 	// never match, and the refusal would read as "wrong password" with nothing pointing here.
 	IdentityAdminSeedPassword secret.Secret
+
+	// ObjectStorage is the MinIO/S3 connection of ADR 0052, consumed by core/storage.New. Every
+	// field optional; the reasons are on the type (object_storage.go).
+	ObjectStorage ObjectStorage
 }
 
 // ThoiHanPhienCongDanMacDinh is CITIZEN_SESSION_TTL when the variable is unset — 30 days, the
@@ -525,7 +536,23 @@ func Load(serviceName string) (Config, error) {
 		return Config{}, err
 	}
 
+	// Object storage (ADR 0052): optional, and absent is not an error — see ObjectStorage. A
+	// MALFORMED value is, including more than one endpoint host.
+	objectStorage, err := parseObjectStorage(
+		os.Getenv("OBJECT_STORAGE_ENDPOINT"),
+		os.Getenv("OBJECT_STORAGE_PUBLIC_ENDPOINT"),
+		os.Getenv("OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL"),
+		os.Getenv("OBJECT_STORAGE_ACCESS_KEY"),
+		os.Getenv("OBJECT_STORAGE_SECRET_KEY"),
+		os.Getenv("OBJECT_STORAGE_REGION"),
+		os.Getenv("OBJECT_STORAGE_BUCKET_PREFIX"),
+	)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+
 	cfg := Config{
+		ObjectStorage:                  objectStorage,
 		TrustedProxies:                 proxy,
 		CitizenCORSAllowedOrigins:      nguonCORS,
 		CitizenSessionBridgeListenAddr: diaChiCau,
@@ -617,6 +644,17 @@ func (c Config) CanhBao() []string {
 	if c.Env != EnvDev && len(c.ElasticsearchAddrs) > 0 && c.ElasticsearchAPIKey.Rong() {
 		ra = append(ra, "ELASTICSEARCH_ADDRS có giá trị nhưng ELASTICSEARCH_API_KEY trống — "+
 			"cụm tìm kiếm chứa nội dung phản ánh đang mở, không xác thực")
+	}
+	// Object storage half-configured: the same "typo'd key" shape as the pairs above. Silent
+	// when nothing is set — most services never upload.
+	if o := c.ObjectStorage; !o.untouched() && !o.Configured() {
+		ra = append(ra, "OBJECT_STORAGE_* cấu hình nửa vời — thiếu "+strings.Join(o.Missing(), ", ")+
+			"; mọi lần tải tệp lên sẽ bị từ chối")
+	}
+	// A presigned URL is a bearer credential (ADR 0052 §Cái giá). Over plain http it travels in
+	// the clear from the browser to the store.
+	if c.Env != EnvDev && strings.HasPrefix(c.ObjectStorage.PublicEndpoint, "http://") {
+		ra = append(ra, "OBJECT_STORAGE_PUBLIC_ENDPOINT dùng http:// — presigned URL đi qua mạng không mã hoá")
 	}
 	// Only reachable in dev — Load refuses to start anywhere else.
 	if len(c.SessionSigningKeys) == 0 {

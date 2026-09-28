@@ -1,0 +1,570 @@
+// Package storage is the object-storage library of ADR 0052: a thin wrapper over MinIO/S3 that
+// does five things — presigned POST, stat, server-side copy, presigned GET, delete every
+// version — plus the key scheme and the type sniffing those need.
+//
+// IT IS A LIBRARY, NOT A SERVICE (ADR 0001:96). Metadata lives in each owning service's own
+// `stored_file` table (rule 2 invariant 1); this package knows nothing about it, nothing about
+// permissions and nothing about the audit trail. The caller checks permission / citizen session
+// and commune BEFORE asking for a presigned URL — the binding of a URL to a person happens at
+// issue time, because a presigned URL is a bearer credential for its whole TTL (ADR 0052 §Cái giá).
+//
+// THE UPLOAD FLOW IT SERVES (ADR 0052 §1):
+//
+//	a. service: Key{…}.UploadPath() → PresignUpload            (declared type + size limit)
+//	b. browser: POST straight to the temp bucket
+//	c. service: Stat → ReadHead + SniffMIME → SHA256 → malware scan → Promote(etag)
+//
+// Every step of (c) is bound to the ETag returned by Stat. The presigned POST stays usable for its
+// whole TTL, so without that binding a client could replace the object AFTER it was scanned and
+// before it was copied — Promote would then store bytes nobody scanned.
+//
+// WHAT IT NEVER LOGS: this package does not log at all. Callers may log an object key (keys
+// carry no personal data by construction — ADR 0052 §3) but never a presigned URL or form field
+// (bearer credentials) and never an original file name (personal data, rule 3).
+package storage
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+
+	"github.com/vihat/vigov/core/config"
+)
+
+// Config is config.ObjectStorage. An alias, not a copy: one struct, one owner (rule 9), and a
+// service hands cfg.ObjectStorage straight to New.
+type Config = config.ObjectStorage
+
+// UploadTTL is how long a presigned upload stays valid — 15 minutes, fixed by ADR 0052 §1a.
+// Also the ceiling: PresignUpload refuses a longer one, because a longer window is a longer
+// time in which a leaked form can write into the commune's tree.
+const UploadTTL = 15 * time.Minute
+
+// MaxDownloadTTL caps a presigned GET. ADR 0052 says "short-lived" without a number; the cap
+// reuses the upload figure so there is one number to reason about. A presigned GET is checked
+// when the request starts, so a long video download does not need a longer TTL.
+const MaxDownloadTTL = 15 * time.Minute
+
+var (
+	// ErrNotConfigured: the object-storage settings are absent. The caller refuses the upload.
+	ErrNotConfigured = errors.New("storage: object storage is not configured")
+	// ErrNotFound: no such object (or version).
+	ErrNotFound = errors.New("storage: object not found")
+	// ErrChanged: the object no longer has the ETag the caller checked — it was replaced after
+	// Stat. The caller must restart the completion step, never proceed.
+	ErrChanged = errors.New("storage: object changed since it was inspected")
+	// ErrTypeNotAllowed: the sniffed type is not on the allow-list.
+	ErrTypeNotAllowed = errors.New("storage: file type not allowed")
+	// ErrInvalidArgument: a call that violates the contract of this package.
+	ErrInvalidArgument = errors.New("storage: invalid argument")
+	// ErrExists: the destination key is already taken. Objects are immutable (ADR 0052 §1).
+	ErrExists = errors.New("storage: destination object already exists")
+	// ErrTempCleanup: Promote succeeded but the temp object could not be deleted. The returned
+	// Promoted value IS valid; the temp lifecycle rule removes the leftover within a day.
+	ErrTempCleanup = errors.New("storage: promoted, but the temp object was not removed")
+	// ErrRecordsNotPurgeable: purging a `records` object outside the temp bucket. Deleting an
+	// administrative record is a STOP CONDITION (ADR 0052 §ĐIỀU KIỆN DỪNG #1, rule 7).
+	ErrRecordsNotPurgeable = errors.New("storage: records are never purged by this library")
+)
+
+// Bucket is one of the three functional buckets of ADR 0052 §2.
+type Bucket int
+
+const (
+	BucketPrivate Bucket = iota + 1 // every private business file; versioned; presigned GET only
+	BucketPublic                    // approved derivatives only; anonymous GetObject
+	BucketTemp                      // upload/… (1 day) and export/… (7 days)
+)
+
+func (b Bucket) suffix() (string, bool) {
+	switch b {
+	case BucketPrivate:
+		return "private", true
+	case BucketPublic:
+		return "public", true
+	case BucketTemp:
+		return "temp", true
+	}
+	return "", false
+}
+
+// Client talks to one MinIO deployment through two endpoints.
+type Client struct {
+	api       *minio.Client // internal endpoint: every call that reaches the server
+	signer    *minio.Client // public endpoint: presigning only, never dialled (Region is set)
+	prefix    string
+	mediaBase string
+}
+
+// New builds a Client. Absent settings return ErrNotConfigured naming the missing variables; a
+// malformed value (including more than one endpoint host) is refused with the config error.
+// It opens no connection.
+func New(cfg Config) (*Client, error) {
+	if missing := cfg.Missing(); len(missing) > 0 {
+		return nil, fmt.Errorf("%w: missing %s", ErrNotConfigured, strings.Join(missing, ", "))
+	}
+	// Re-validated here and not only in config.Load: a Config can be built by hand, and the
+	// single-host rule has to hold for every path into this constructor.
+	endpoint, err := config.ParseSingleEndpoint("OBJECT_STORAGE_ENDPOINT", cfg.Endpoint)
+	if err != nil {
+		return nil, err
+	}
+	public, err := config.ParseSingleEndpoint("OBJECT_STORAGE_PUBLIC_ENDPOINT", cfg.PublicEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	mediaBase, err := config.ParsePublicMediaBaseURL(cfg.PublicMediaBaseURL)
+	if err != nil {
+		return nil, err
+	}
+	if err := config.CheckBucketPrefix(cfg.BucketPrefix); err != nil {
+		return nil, err
+	}
+	region := cfg.Region
+	if region == "" {
+		region = config.ObjectStorageDefaultRegion
+	}
+	api, err := newMinio(endpoint, region, cfg)
+	if err != nil {
+		return nil, err
+	}
+	signer, err := newMinio(public, region, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{api: api, signer: signer, prefix: cfg.BucketPrefix, mediaBase: mediaBase}, nil
+}
+
+// newMinio builds one minio client for a validated `scheme://host[:port]`.
+//
+// PATH-STYLE ADDRESSING, always: MinIO behind one domain serves `host/bucket/key`; virtual-host
+// style would need a wildcard DNS record and certificate per bucket that nobody has provisioned.
+func newMinio(endpoint, region string, cfg Config) (*minio.Client, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("storage: endpoint: %w", err)
+	}
+	c, err := minio.New(u.Host, &minio.Options{
+		// .Lo() at the final point of consumption, per core/secret.
+		Creds:        credentials.NewStaticV4(string(cfg.AccessKey.Lo()), string(cfg.SecretKey.Lo()), ""),
+		Secure:       u.Scheme == "https",
+		Region:       region,
+		BucketLookup: minio.BucketLookupPath,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("storage: client for %s: %w", u.Host, err)
+	}
+	return c, nil
+}
+
+// BucketName returns `{prefix}-{private|public|temp}`.
+func (c *Client) BucketName(b Bucket) (string, error) {
+	s, ok := b.suffix()
+	if !ok {
+		return "", fmt.Errorf("%w: unknown bucket %d", ErrInvalidArgument, int(b))
+	}
+	return c.prefix + "-" + s, nil
+}
+
+// checkKey validates that key has the shape that belongs in bucket — `upload/…` or `export/…`
+// in temp, a destination key elsewhere — and returns the bucket name and the parsed key. Every
+// call that names an object goes through it, so no operation can act on a free-form string.
+func (c *Client) checkKey(b Bucket, key string) (string, Key, error) {
+	name, err := c.BucketName(b)
+	if err != nil {
+		return "", Key{}, err
+	}
+	var k Key
+	if b == BucketTemp {
+		if !strings.HasPrefix(key, TempUploadPrefix) && !strings.HasPrefix(key, TempExportPrefix) {
+			return "", Key{}, fmt.Errorf("%w: temp keys start with %s or %s", ErrInvalidKey, TempUploadPrefix, TempExportPrefix)
+		}
+		k, err = parseAnyKey(key)
+	} else {
+		k, err = ParseKey(key)
+	}
+	if err != nil {
+		return "", Key{}, err
+	}
+	return name, k, nil
+}
+
+// PresignedPost is the form a browser POSTs to upload: every Fields entry as a form field, then
+// the file as the last field named "file".
+//
+// URL AND FIELDS ARE A BEARER CREDENTIAL for their TTL: anybody holding them can write that one
+// key. Every fmt and slog path renders "***"; encoding/json does NOT, on purpose — the handler has
+// to send them to the client. Never log the struct, the URL or a field.
+type PresignedPost struct {
+	URL       string
+	Fields    map[string]string
+	ExpiresAt time.Time
+}
+
+const redactedPost = "storage.PresignedPost{***}"
+
+func (p PresignedPost) String() string                { return redactedPost }
+func (p PresignedPost) GoString() string              { return redactedPost }
+func (p PresignedPost) LogValue() slog.Value          { return slog.StringValue(redactedPost) }
+func (p PresignedPost) Format(f fmt.State, verb rune) { _, _ = io.WriteString(f, redactedPost) }
+
+// PresignUpload issues a presigned POST into the temp bucket for one upload key.
+//
+// The policy fixes the bucket, the exact key, the exact Content-Type (which must be an allowed
+// type whose extension matches the key) and content-length-range [1, maxBytes] — so the size
+// limit is enforced by MinIO, not by trust in the client (ADR 0052 §1a). maxBytes comes from the
+// platform-owned limit for the purpose (ADR 0052 §10); this package has no default for it.
+// ttl 0 means UploadTTL; anything above UploadTTL is refused.
+//
+// Signed against the PUBLIC endpoint, offline.
+func (c *Client) PresignUpload(ctx context.Context, uploadKey string, maxBytes int64, contentType string, ttl time.Duration) (PresignedPost, error) {
+	k, err := ParseUploadKey(uploadKey)
+	if err != nil {
+		return PresignedPost{}, err
+	}
+	ext, ok := ExtForMIME(contentType)
+	if !ok {
+		return PresignedPost{}, fmt.Errorf("%w: declared type %q", ErrTypeNotAllowed, contentType)
+	}
+	if ext != k.Ext {
+		return PresignedPost{}, fmt.Errorf("%w: declared type %q does not match key extension %q", ErrInvalidArgument, contentType, k.Ext)
+	}
+	if maxBytes <= 0 {
+		return PresignedPost{}, fmt.Errorf("%w: maxBytes must be positive", ErrInvalidArgument)
+	}
+	if ttl == 0 {
+		ttl = UploadTTL
+	}
+	if ttl < time.Second || ttl > UploadTTL {
+		return PresignedPost{}, fmt.Errorf("%w: upload ttl must be between 1s and %s", ErrInvalidArgument, UploadTTL)
+	}
+	bucket, err := c.BucketName(BucketTemp)
+	if err != nil {
+		return PresignedPost{}, err
+	}
+	expires := time.Now().UTC().Add(ttl)
+	p := minio.NewPostPolicy()
+	for _, set := range []error{
+		p.SetBucket(bucket),
+		p.SetKey(uploadKey),
+		p.SetContentType(contentType),
+		p.SetContentLengthRange(1, maxBytes),
+		p.SetExpires(expires),
+	} {
+		if set != nil {
+			return PresignedPost{}, fmt.Errorf("storage: post policy: %w", set)
+		}
+	}
+	u, fields, err := c.signer.PresignedPostPolicy(ctx, p)
+	if err != nil {
+		return PresignedPost{}, fmt.Errorf("storage: presign upload: %w", err)
+	}
+	return PresignedPost{URL: u.String(), Fields: fields, ExpiresAt: expires}, nil
+}
+
+// ObjectInfo is what Stat reports.
+type ObjectInfo struct {
+	Key          string
+	Size         int64
+	ETag         string
+	ContentType  string
+	VersionID    string
+	LastModified time.Time
+}
+
+// Stat reads an object's metadata.
+func (c *Client) Stat(ctx context.Context, b Bucket, key string) (ObjectInfo, error) {
+	name, _, err := c.checkKey(b, key)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+	st, err := c.api.StatObject(ctx, name, key, minio.StatObjectOptions{})
+	if err != nil {
+		return ObjectInfo{}, mapErr("stat", err)
+	}
+	return ObjectInfo{
+		Key: st.Key, Size: st.Size, ETag: st.ETag, ContentType: st.ContentType,
+		VersionID: st.VersionID, LastModified: st.LastModified,
+	}, nil
+}
+
+// ReadHead returns the first n bytes of an object (fewer if it is shorter) with one range GET,
+// for SniffMIME. ifMatchETag, when set, fails with ErrChanged if the object was replaced.
+func (c *Client) ReadHead(ctx context.Context, b Bucket, key, ifMatchETag string, n int) ([]byte, error) {
+	if n <= 0 {
+		return nil, fmt.Errorf("%w: n must be positive", ErrInvalidArgument)
+	}
+	name, _, err := c.checkKey(b, key)
+	if err != nil {
+		return nil, err
+	}
+	opts := minio.GetObjectOptions{}
+	if err := opts.SetRange(0, int64(n)-1); err != nil {
+		return nil, fmt.Errorf("storage: range: %w", err)
+	}
+	if ifMatchETag != "" {
+		if err := opts.SetMatchETag(ifMatchETag); err != nil {
+			return nil, fmt.Errorf("storage: if-match: %w", err)
+		}
+	}
+	obj, err := c.api.GetObject(ctx, name, key, opts)
+	if err != nil {
+		return nil, mapErr("read head", err)
+	}
+	defer obj.Close()
+	head, err := io.ReadAll(io.LimitReader(obj, int64(n)))
+	if err != nil {
+		// A zero-length object has no byte 0 to range over. The presigned policy's minimum of 1
+		// byte makes this unreachable for uploads; answer "empty" rather than an error elsewhere.
+		if s3Error(err).Code == "InvalidRange" {
+			return []byte{}, nil
+		}
+		return nil, mapErr("read head", err)
+	}
+	return head, nil
+}
+
+// SHA256 streams an object through SHA-256 and returns the lowercase hex digest. Nothing is
+// buffered beyond io.Copy's block. ifMatchETag as for ReadHead.
+func (c *Client) SHA256(ctx context.Context, b Bucket, key, ifMatchETag string) (string, error) {
+	name, _, err := c.checkKey(b, key)
+	if err != nil {
+		return "", err
+	}
+	opts := minio.GetObjectOptions{}
+	if ifMatchETag != "" {
+		if err := opts.SetMatchETag(ifMatchETag); err != nil {
+			return "", fmt.Errorf("storage: if-match: %w", err)
+		}
+	}
+	obj, err := c.api.GetObject(ctx, name, key, opts)
+	if err != nil {
+		return "", mapErr("sha256", err)
+	}
+	defer obj.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, obj); err != nil {
+		return "", mapErr("sha256", err)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// Promoted describes the object Promote wrote.
+type Promoted struct {
+	Key         string
+	Size        int64
+	ETag        string
+	VersionID   string
+	ContentType string // the SNIFFED type
+}
+
+// Promote copies an uploaded temp object to its final key server-side, then deletes the temp
+// object. Call it only after the malware scan passed (ADR 0052 §9: nothing leaves temp unscanned).
+//
+//   - ifMatchETag is REQUIRED: the ETag from the Stat the caller scanned and hashed against. The
+//     sniff and the copy are both conditional on it, so an object replaced after inspection fails
+//     with ErrChanged instead of being stored unscanned.
+//   - The destination must be the upload key's own destination — same class, commune, month,
+//     service, purpose, object id and variant. Only the extension may differ, because it follows
+//     the sniffed type while the upload key followed the declared one; a mismatch is refused.
+//   - The type is sniffed here again and must match dst.Ext; the final object's Content-Type is
+//     the sniffed type, never the client's. No user metadata is copied (ADR 0052 §3: the original
+//     name lives in stored_file, not on the object).
+//   - Only BucketPrivate is accepted. Putting an original into the public bucket is a STOP
+//     CONDITION (ADR 0052 §ĐIỀU KIỆN DỪNG #2); publishing an approved derivative is a separate
+//     operation this library does not have yet.
+//   - An existing destination is refused (ErrExists): objects are immutable.
+//
+// Single-request server-side copy, so objects up to 5 GiB — above the 2 GB video ceiling of
+// ADR 0052 §10.
+func (c *Client) Promote(ctx context.Context, srcUploadKey, ifMatchETag string, dst Key, b Bucket) (Promoted, error) {
+	if b != BucketPrivate {
+		return Promoted{}, fmt.Errorf("%w: uploads are promoted into the private bucket only", ErrInvalidArgument)
+	}
+	if ifMatchETag == "" {
+		return Promoted{}, fmt.Errorf("%w: ifMatchETag is required", ErrInvalidArgument)
+	}
+	src, err := ParseUploadKey(srcUploadKey)
+	if err != nil {
+		return Promoted{}, err
+	}
+	dstKey, err := dst.Path()
+	if err != nil {
+		return Promoted{}, err
+	}
+	if !sameObject(src, dst) {
+		return Promoted{}, fmt.Errorf("%w: destination is not the upload's own destination", ErrInvalidArgument)
+	}
+	head, err := c.ReadHead(ctx, BucketTemp, srcUploadKey, ifMatchETag, SniffBytes)
+	if err != nil {
+		return Promoted{}, err
+	}
+	mime, ext, ok := SniffMIME(head)
+	if !ok {
+		return Promoted{}, ErrTypeNotAllowed
+	}
+	if ext != dst.Ext {
+		return Promoted{}, fmt.Errorf("%w: destination extension %q, sniffed %q", ErrInvalidArgument, dst.Ext, ext)
+	}
+	tempName, err := c.BucketName(BucketTemp)
+	if err != nil {
+		return Promoted{}, err
+	}
+	dstName, err := c.BucketName(b)
+	if err != nil {
+		return Promoted{}, err
+	}
+	if _, err := c.api.StatObject(ctx, dstName, dstKey, minio.StatObjectOptions{}); err == nil {
+		return Promoted{}, ErrExists
+	} else if !errors.Is(mapErr("stat", err), ErrNotFound) {
+		return Promoted{}, mapErr("stat destination", err)
+	}
+	if _, err := c.api.CopyObject(ctx,
+		minio.CopyDestOptions{Bucket: dstName, Object: dstKey, ContentType: mime, ReplaceMetadata: true},
+		minio.CopySrcOptions{Bucket: tempName, Object: srcUploadKey, MatchETag: ifMatchETag},
+	); err != nil {
+		return Promoted{}, mapErr("copy", err)
+	}
+	st, err := c.api.StatObject(ctx, dstName, dstKey, minio.StatObjectOptions{})
+	if err != nil {
+		return Promoted{}, mapErr("stat promoted", err)
+	}
+	out := Promoted{Key: dstKey, Size: st.Size, ETag: st.ETag, VersionID: st.VersionID, ContentType: mime}
+	if err := c.api.RemoveObject(ctx, tempName, srcUploadKey, minio.RemoveObjectOptions{}); err != nil {
+		return out, fmt.Errorf("%w: %w", ErrTempCleanup, err)
+	}
+	return out, nil
+}
+
+// sameObject compares everything but the extension.
+func sameObject(a, b Key) bool {
+	return a.Class == b.Class &&
+		strings.EqualFold(a.TenantID, b.TenantID) &&
+		a.CreatedAt.UTC().Year() == b.CreatedAt.UTC().Year() &&
+		a.CreatedAt.UTC().Month() == b.CreatedAt.UTC().Month() &&
+		a.Service == b.Service && a.Purpose == b.Purpose &&
+		strings.EqualFold(a.ObjectID, b.ObjectID) && a.Variant == b.Variant
+}
+
+// PresignedURL is a presigned GET. A BEARER CREDENTIAL for its TTL: fmt and slog render "***";
+// it is a string kind without MarshalJSON, so encoding/json writes the real URL — which is how a
+// handler returns it. URL() hands it over explicitly.
+type PresignedURL string
+
+const redactedURL = "storage.PresignedURL{***}"
+
+func (u PresignedURL) URL() string                   { return string(u) }
+func (u PresignedURL) String() string                { return redactedURL }
+func (u PresignedURL) GoString() string              { return redactedURL }
+func (u PresignedURL) LogValue() slog.Value          { return slog.StringValue(redactedURL) }
+func (u PresignedURL) Format(f fmt.State, verb rune) { _, _ = io.WriteString(f, redactedURL) }
+
+// PresignDownload issues a presigned GET signed against the PUBLIC endpoint, offline.
+//
+// The response type and disposition are forced through the signed query: the type is the one
+// the key's extension stands for (the extension came from the sniffed type), and the disposition
+// is `inline` for media, `attachment` otherwise, with filename sanitised (ContentDisposition).
+// filename is the stored original name — personal data; it is never logged here and must not be
+// logged by the caller. ttl must be in (0, MaxDownloadTTL]; the caller chooses, there is no default.
+func (c *Client) PresignDownload(ctx context.Context, b Bucket, key string, ttl time.Duration, filename string) (PresignedURL, error) {
+	name, k, err := c.checkKey(b, key)
+	if err != nil {
+		return "", err
+	}
+	if ttl < time.Second || ttl > MaxDownloadTTL {
+		return "", fmt.Errorf("%w: download ttl must be between 1s and %s", ErrInvalidArgument, MaxDownloadTTL)
+	}
+	mime := mimeByExt[k.Ext]
+	params := url.Values{}
+	params.Set("response-content-type", mime)
+	params.Set("response-content-disposition", ContentDisposition(filename, mime))
+	u, err := c.signer.PresignedGetObject(ctx, name, key, ttl, params)
+	if err != nil {
+		return "", fmt.Errorf("storage: presign download: %w", err)
+	}
+	return PresignedURL(u.String()), nil
+}
+
+// PublicURL is the anonymous URL of an object in the public bucket. Only `public-media` keys
+// live there (ADR 0052 §2), so any other class is refused.
+func (c *Client) PublicURL(key string) (string, error) {
+	if c.mediaBase == "" {
+		return "", fmt.Errorf("%w: OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL is empty", ErrNotConfigured)
+	}
+	k, err := ParseKey(key)
+	if err != nil {
+		return "", err
+	}
+	if k.Class != ClassPublicMedia {
+		return "", fmt.Errorf("%w: only %s objects are public", ErrInvalidArgument, ClassPublicMedia)
+	}
+	return c.mediaBase + "/" + key, nil
+}
+
+// PurgeAllVersions deletes every version and delete marker of one key. In the versioned private
+// bucket a plain delete only adds a marker and the bytes stay (ADR 0052 §Cái giá), so a purge
+// that is meant to remove data has to name each version.
+//
+// IDEMPOTENT: a key with no versions left returns nil, so a purge worker can retry freely.
+// `records` objects are refused outside the temp bucket (ErrRecordsNotPurgeable). Whether a purge
+// is due — retain_until, legal_hold — is the caller's decision; this function only executes it.
+func (c *Client) PurgeAllVersions(ctx context.Context, b Bucket, key string) error {
+	name, k, err := c.checkKey(b, key)
+	if err != nil {
+		return err
+	}
+	if b != BucketTemp && k.Class == ClassRecords {
+		return ErrRecordsNotPurgeable
+	}
+	for obj := range c.api.ListObjectsIter(ctx, name, minio.ListObjectsOptions{Prefix: key, WithVersions: true}) {
+		if obj.Err != nil {
+			return mapErr("list versions", obj.Err)
+		}
+		if obj.Key != key {
+			continue // a longer key sharing the prefix
+		}
+		err := c.api.RemoveObject(ctx, name, key, minio.RemoveObjectOptions{VersionID: obj.VersionID})
+		if err != nil && !errors.Is(mapErr("purge", err), ErrNotFound) {
+			return mapErr("purge", err)
+		}
+	}
+	return nil
+}
+
+// mapErr turns S3 error codes into this package's sentinels, keeping the original wrapped.
+//
+// A MISSING BUCKET IS NOT ErrNotFound: it is a misconfigured prefix, and treating it as "object
+// already gone" would let a purge worker mark every file purged against a bucket that never existed.
+func mapErr(op string, err error) error {
+	resp := s3Error(err)
+	switch {
+	case resp.Code == "NoSuchBucket":
+		return fmt.Errorf("storage: %s: bucket does not exist: %w", op, err)
+	case resp.Code == "NoSuchKey" || resp.Code == "NoSuchVersion" || resp.StatusCode == http.StatusNotFound:
+		return fmt.Errorf("storage: %s: %w: %w", op, ErrNotFound, err)
+	case resp.Code == "PreconditionFailed" || resp.StatusCode == http.StatusPreconditionFailed:
+		return fmt.Errorf("storage: %s: %w: %w", op, ErrChanged, err)
+	}
+	return fmt.Errorf("storage: %s: %w", op, err)
+}
+
+// s3Error unwraps to minio's ErrorResponse. minio.ToErrorResponse only type-asserts, so an error
+// wrapped once on its way here would read as "no code" and fall through every case above.
+func s3Error(err error) minio.ErrorResponse {
+	var resp minio.ErrorResponse
+	if errors.As(err, &resp) {
+		return resp
+	}
+	return minio.ErrorResponse{}
+}

@@ -70,7 +70,7 @@ kubectl apply -k deploy/overlays/${NS#vigov-}      # sinh ConfigMap cau-hinh-chu
 | `REDIS_DSN` | pod xanh, nhưng 6 tuyến `POST` (cán bộ, văn bản đến/đi, chi, dự toán) trả 503 |
 | Secret TLS sai tên theo môi trường | Ingress lên, chỉ HTTPS đứt |
 
-## 4. Toàn bộ 21 biến — để đối chiếu
+## 4. Toàn bộ 29 biến — để đối chiếu
 
 `tools/check_env_map.py` đối chiếu bảng này với `core/config/config.go` trong `make check`.
 
@@ -98,6 +98,13 @@ kubectl apply -k deploy/overlays/${NS#vigov-}      # sinh ConfigMap cau-hinh-chu
 | `CITIZEN_SESSION_BRIDGE_KEYS` | không | Secret `bi-mat-identity` — **chỉ `identity`**, và cùng giá trị ở Secret của `vihat-miniapp`. Danh sách `<khoa-moi>,<khoa-cu>`, mỗi khoá ≥ 32 byte. **Không bao giờ** trùng `GRPC_CALLER_KEY` |
 | `CITIZEN_SESSION_TTL` | không | ConfigMap — **chỉ `identity`**. Trống thì `720h` (30 ngày); sai cú pháp hoặc ≤ 0 thì pod không khởi động |
 | `IDENTITY_ADMIN_SEED_PASSWORD` | không | Secret `bi-mat-identity` — **chỉ `identity`**, key viết gạch dưới đúng như tên biến. Mật khẩu tài khoản `admin` tạo ở lần đăng nhập `admin` đầu tiên của một xã chưa có `admin` (bắt đổi mật khẩu ngay). Trống thì tắt; ngắn hơn 12 ký tự thì tắt và log báo lúc khởi động. **Gỡ key khi mọi xã đã đổi mật khẩu `admin`** |
+| `OBJECT_STORAGE_ENDPOINT` | không | ConfigMap — chỉ dịch vụ lưu tệp (ADR 0052). Endpoint S3 nội bộ, `https://host:port`, **đúng một host** (MinIO phân tán thì đặt load balancer phía trước); nhiều host hoặc sai dạng thì pod không khởi động. Trống thì mọi lần tải lên bị từ chối |
+| `OBJECT_STORAGE_PUBLIC_ENDPOINT` | không | ConfigMap — endpoint S3 trình duyệt thấy; presigned URL ký theo host này. Cùng luật một host |
+| `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | không | ConfigMap — chỉ dịch vụ đăng media Mini App (`comms`). URL gốc của bucket public, đặt CDN được |
+| `OBJECT_STORAGE_ACCESS_KEY` | không | Secret `bi-mat-<dịch vụ>` — **mỗi dịch vụ một khoá**, IAM giới hạn vào `…/{service}/*` |
+| `OBJECT_STORAGE_SECRET_KEY` | không | Secret `bi-mat-<dịch vụ>` — cặp với khoá trên |
+| `OBJECT_STORAGE_REGION` | không | ConfigMap — trống thì `us-east-1` (mặc định của MinIO); phải trùng region của máy chủ, sai thì mọi presigned URL trả 403 |
+| `OBJECT_STORAGE_BUCKET_PREFIX` | không | ConfigMap — bucket là `{prefix}-private`, `-public`, `-temp` (ví dụ tiền tố `vigov-prod`); sai dạng thì pod không khởi động |
 
 Vì sao từng quyết định như vậy: `deploy/README.md` mục 3.
 
