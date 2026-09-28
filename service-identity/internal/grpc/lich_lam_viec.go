@@ -186,28 +186,9 @@ func (s *Server) AdvanceWorkingHours(ctx context.Context, req *identityv1.Advanc
 func (s *Server) tienGioLamViec(ctx context.Context, xa tenant.ID, tuMoc time.Time, gio []int, cho string) (
 	[]domain.MocDatDuoc, error) {
 
-	tuan, err := s.d.Lich.DanhSach(ctx)
+	tuan, docNam, err := s.readCalendar(ctx, xa, cho)
 	if err != nil {
-		// Including ErrQuaNhieuCaLamViec: a calendar over its ceiling has stopped being a working
-		// week (an import run twice, a fixture on a live database), and the store's own note says
-		// the caller answers 500 — the HTTP route does exactly that. It is not one of the four
-		// configuration faults the contract names.
-		return nil, s.loiLich(ctx, err, xa, cho+"/lich_lam_viec")
-	}
-
-	// LAZY, ONE YEAR AT A TIME, AND ONLY FOR A YEAR THE WALK ENTERS. A 16-hour deadline in March
-	// reads one year of closures and one of swap days; it is not charged for the year after, and a
-	// configuration fault in a year the count never reaches cannot change this answer.
-	docNam := func(nam int) ([]domain.NgayNghiLe, []domain.CaLamBu, error) {
-		nghi, err := s.d.NghiLe.TheoNam(ctx, nam)
-		if err != nil {
-			return nil, nil, err
-		}
-		bu, err := s.d.LamBu.TheoNam(ctx, nam)
-		if err != nil {
-			return nil, nil, err
-		}
-		return nghi, bu, nil
+		return nil, err
 	}
 
 	dat, err := domain.TienGioLamViec(tuMoc, tuan, docNam, gio)
@@ -215,6 +196,41 @@ func (s *Server) tienGioLamViec(ctx context.Context, xa tenant.ID, tuMoc time.Ti
 		return nil, s.loiLich(ctx, err, xa, cho+"/tinh")
 	}
 	return dat, nil
+}
+
+// readCalendar reads this commune's ordinary week and returns the lazy per-year reader of its
+// closures and swap days — the ONE calendar read every working-hours RPC here enters through
+// (AdvanceWorkingHours and ResolveDeadlines via tienGioLamViec, ResolveDueSoonCutoff directly). Two
+// copies of this would be two calendars, identical today and different on the first bug fix.
+//
+// The returned error is already a gRPC status.
+func (s *Server) readCalendar(ctx context.Context, xa tenant.ID, cho string) (
+	[]domain.CaLamViec, domain.DocLichNam, error) {
+
+	week, err := s.d.Lich.DanhSach(ctx)
+	if err != nil {
+		// Including ErrQuaNhieuCaLamViec: a calendar over its ceiling has stopped being a working
+		// week (an import run twice, a fixture on a live database), and the store's own note says
+		// the caller answers 500 — the HTTP route does exactly that. It is not one of the four
+		// configuration faults the contract names.
+		return nil, nil, s.loiLich(ctx, err, xa, cho+"/lich_lam_viec")
+	}
+
+	// LAZY, ONE YEAR AT A TIME, AND ONLY FOR A YEAR THE WALK ENTERS. A 16-hour deadline in March
+	// reads one year of closures and one of swap days; it is not charged for the year after, and a
+	// configuration fault in a year the count never reaches cannot change this answer.
+	readYear := func(year int) ([]domain.NgayNghiLe, []domain.CaLamBu, error) {
+		closures, err := s.d.NghiLe.TheoNam(ctx, year)
+		if err != nil {
+			return nil, nil, err
+		}
+		swaps, err := s.d.LamBu.TheoNam(ctx, year)
+		if err != nil {
+			return nil, nil, err
+		}
+		return closures, swaps, nil
+	}
+	return week, readYear, nil
 }
 
 // loiLich maps a calendar failure to a gRPC code, and the mapping is the part of this file that is

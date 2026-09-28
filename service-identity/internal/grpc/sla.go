@@ -125,7 +125,7 @@ func (s *Server) ResolveDeadlines(ctx context.Context, req *identityv1.ResolveDe
 	// one thing worse than refusing to make a commitment is inventing one.
 	dong, co := domain.DongTheoLinhVuc(ds, loai, req.GetLinhVuc())
 	if !co {
-		return nil, s.loiThieuCauHinhSLA(ctx, ds, loai, xa)
+		return nil, s.loiThieuCauHinhSLA(ctx, ds, loai, xa, "ResolveDeadlines")
 	}
 
 	// THE HOURS ARE VALIDATED BEFORE THE ARITHMETIC, and the code is FAILED_PRECONDITION because
@@ -201,16 +201,20 @@ func (s *Server) ResolveDeadlines(ctx context.Context, req *identityv1.ResolveDe
 // THE NAMES ARE domain.LoaiVanDeSLA's, not new strings invented here: the configuration screen
 // shows those values, and a second vocabulary for one fault is a fault an operator cannot match
 // between a log line and a screen.
+//
+// `rpc` NAMES THE ENTRANCE IN THE LOG: ResolveDeadlines and ResolveDueSoonCutoff read the same table
+// and hit the same hole, and an operator must be able to tell which one was refused. A fixed string
+// from the call site, never a value from the request.
 func (s *Server) loiThieuCauHinhSLA(ctx context.Context, ds []domain.DongSLA,
-	loai domain.LoaiViec, xa tenant.ID) error {
+	loai domain.LoaiViec, xa tenant.ID, rpc string) error {
 
 	if len(ds) == 0 {
-		s.d.Log.WarnContext(ctx, "ResolveDeadlines: xã chưa cấu hình bảng thời hạn xử lý — TỪ CHỐI",
+		s.d.Log.WarnContext(ctx, rpc+": xã chưa cấu hình bảng thời hạn xử lý — TỪ CHỐI",
 			"xa", string(xa), "loai_van_de", string(domain.VanDeSLATrong), "loai_viec", string(loai))
 		return status.Error(codes.FailedPrecondition,
 			"xã chưa cấu hình bảng thời hạn xử lý — không có hạn nào để hứa, phải cấu hình trước khi tiếp nhận")
 	}
-	s.d.Log.WarnContext(ctx, "ResolveDeadlines: loại việc không có dòng mặc định trong bảng thời hạn xử lý — TỪ CHỐI",
+	s.d.Log.WarnContext(ctx, rpc+": loại việc không có dòng mặc định trong bảng thời hạn xử lý — TỪ CHỐI",
 		"xa", xa.String(), "loai_van_de", string(domain.VanDeThieuDongMacDinh), "loai_viec", string(loai))
 	return status.Errorf(codes.FailedPrecondition,
 		"bảng thời hạn xử lý của xã không có dòng nào dùng được cho loại việc %s — thiếu dòng mặc định", loai)

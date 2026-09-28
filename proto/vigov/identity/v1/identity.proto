@@ -25,10 +25,13 @@ import "google/protobuf/timestamp.proto";
 //   `nhiem-vu`), belongs to neither, and changes with the same administrative policy the
 //   calendar does.
 //
-// TWO RPCs LEAVE THIS SERVICE FROM THAT PAIR, AND THE SPLIT IS DELIBERATE — see ResolveDeadlines
+// THREE RPCs LEAVE THIS SERVICE FROM THAT PAIR, AND THE SPLIT IS DELIBERATE — see ResolveDeadlines
 // for the argument. AdvanceWorkingHours is the calendar alone, for a caller that already holds
-// the number of hours; ResolveDeadlines is both halves, for a caller fixing a commitment. Neither
-// hands out the calendar itself, and no third path exists.
+// the number of hours; ResolveDeadlines is both halves, for a caller fixing a commitment;
+// ResolveDueSoonCutoff (added 2026-09-28) is both halves again, for a caller FILTERING a list by
+// `gio_sap_den_han`. All three answer INSTANTS, none hands out the calendar or an `sla` number of
+// hours, and all three walk the same one implementation of the count. Until 2026-09-28 this
+// paragraph said "no third path exists"; a fourth is a sentence somebody has to write here first.
 //
 // CONTRACT RULE — the commune travels in gRPC METADATA, never in a message body.
 //
@@ -553,6 +556,137 @@ service IdentityService {
   // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
   rpc ResolveAssignableStaff(ResolveAssignableStaffRequest) returns (ResolveAssignableStaffResponse);
 
+  // ResolveLiveOrgUnits answers ONE question about org-unit ids a caller is about to WRITE onto a
+  // record as the unit holding work: is this a live `bo_phan` of the commune named by "x-tenant-id"?
+  //
+  // WHY IT EXISTS (user decision 2026-09-28). service-petitions stores identity's `bo_phan.id` on a
+  // task (`bo_phan_id`, `co_quan_chu_tri_id`) and on a petition assignment, and the id arrives in the
+  // request BODY — client-supplied. Until this RPC nothing could verify it: domain.KiemPhanCong only
+  // trims and bounds it, and task_assignment.go says so in its header. A crafted body could hand work
+  // to a unit of ANOTHER commune, to a unit removed from the org chart, or to an id that names
+  // nothing — and the work then sits with no unit, forever, on a list nobody opens. This is the unit
+  // half of the check ResolveAssignableStaff makes for people, and it has the same shape on purpose.
+  //
+  // # THE PREDICATE — the whole of what "live" means
+  //
+  // An id is LIVE when a `bo_phan` row with that id exists in the commune named by "x-tenant-id" and
+  // its `deleted_at IS NULL`. That is EXACTLY the predicate of GET /api/v1/org-units (the org chart
+  // the assignment box is filled from, store.truyVanBoPhanKemSoCanBo). THE TWO MUST NEVER DIVERGE: a
+  // unit the box offers and this RPC refuses is a choice that always fails, and a unit this RPC
+  // accepts and the box hides is an assignment only a crafted body can make. Whoever changes one
+  // changes both, in the same commit.
+  //
+  // `bo_phan` has no "inactive" state today — only soft deletion (migration 0001). A later
+  // "tạm ngưng" column is a change to this predicate AND to the org chart's, together.
+  //
+  // # ONE ANSWER FOR EVERY REFUSAL — absent
+  //
+  // Unknown, soft-deleted and ANOTHER COMMUNE'S id are indistinguishable in the response. Telling
+  // "another commune" apart from "unknown" would leak that the id exists in a commune the caller may
+  // not read (rule 1). The caller's sentence to its user is one: "bộ phận này không nhận được việc".
+  //
+  // # A LOOKUP BY IDS THE CALLER ALREADY HOLDS — NEVER A LIST
+  //
+  // An empty request answers empty, never "every live unit": the org chart is GET /api/v1/org-units,
+  // a staff-facing route, and a second path to it here is not wanted. The response never carries an
+  // id that was not requested.
+  //
+  // # UNLIKE ResolveStaffNames, A CALLER DECIDES FROM THIS
+  //
+  // Absent MUST be refused by the caller (fail closed); present may be written. A point-in-time
+  // answer — a unit removed a millisecond later is not seen — and that window is accepted for the
+  // reason ResolveAssignableStaff states. NEVER cached across requests.
+  //
+  // # No personal data; the commune travels in metadata; not audited
+  //
+  // Ids in, ids out. "x-tenant-id" is what makes another commune's id absent, so this method is not a
+  // candidate for core/grpcx.methodsWithoutTenant (ADR 0012, decision 1). The audited act is the
+  // caller's WRITE of the unit, inside the caller's own transaction.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or more ids. FEWER THAN REQUESTED IS ORDINARY — it is "not live".
+  //   INVALID_ARGUMENT    more than 50 ids in one call. Never a silent truncation.
+  //   NOT_FOUND           NEVER produced. A unit that is not live is an ABSENT id.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. Refuse the write with a retryable error (503);
+  //                       never fall back to writing the id unchecked.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry.
+  rpc ResolveLiveOrgUnits(ResolveLiveOrgUnitsRequest) returns (ResolveLiveOrgUnitsResponse);
+
+  // ResolveStaffOrgUnits answers which live org unit(s) ONE member of staff sits in, in the commune
+  // named by "x-tenant-id" — keyed by the staff BUSINESS CODE.
+  //
+  // WHY IT EXISTS (user decision 2026-09-28): the task register's "Liên quan đến tôi" tab
+  // (`scope=related`) includes tasks held by "bộ phận tôi đang giữ", and the petitions service has no
+  // way to learn the signed-in person's unit. It refuses that tab today, citing this contract.
+  //
+  // # WHY A SEPARATE RPC AND NOT A FIELD ON StaffPrincipal — the decision this RPC records
+  //
+  // The obvious shape is `StaffPrincipal.org_unit_ids`: one hop fewer. It is REJECTED, for reasons
+  // the omission list on StaffPrincipal already states and that still hold:
+  //
+  //   COST ON THE HOTTEST PATH. ResolveStaffPrincipal runs on EVERY staff request of four services.
+  //   A unit on it is a join paid on every one of those requests, to serve ONE filter tab of ONE
+  //   screen. Here the hop is paid only by a request that asked for `scope=related`.
+  //
+  //   A PRINCIPAL IS AUTHORISATION STATE, AND A UNIT ON IT GETS DECIDED FROM. StaffPrincipal is what
+  //   every guard works on. A unit there is one edit away from a guard that grants "same unit may
+  //   edit" in a calling service — authorisation decided outside the service that owns the grants
+  //   (rule 5). This RPC's answer narrows a LIST; it grants nothing, and the caller must never use it
+  //   in a guard.
+  //
+  //   `bo_phan` IS ON THE OMISSION LIST BY NAME. StaffName refuses it because TODAY'S unit is not the
+  //   unit a person held when they acted. That argument does not bite here — "Liên quan đến tôi" asks
+  //   precisely about TODAY — but it is why the answer lives on a shape named for today's question,
+  //   not on a message that travels with every request and could be copied onto a record.
+  //
+  // WHAT THE REJECTED SHAPE WOULD HAVE BOUGHT, STATED: one fewer hop on `scope=related`. That is the
+  // whole of it.
+  //
+  // # Keyed by the business code, and singular
+  //
+  // The caller holds authz.Principal.Ma for the signed-in person — the value every holder check
+  // compares with — so that is the key, not the internal id. NOT BATCHED, for the reason
+  // ResolveStaffPrincipal is not: the caller is one HTTP request asking about one person, and there
+  // is no list from which a second code could arrive.
+  //
+  // IT DOES NOT CHECK THAT THE CODE IS THE CALLER. Identity cannot see the end user across this hop
+  // (ADR 0025: the caller key names no service and no principal). The caller passes its OWN
+  // principal's code, from the session, never from the request (rule 4, invariant 2 in its staff
+  // form). The answer is not sensitive either way: GET /api/v1/staff-directory already shows every
+  // account of the commune each person's `department_id`.
+  //
+  // # THE PREDICATE
+  //
+  // The `nguoi_dung` row with that `ma` in this commune, `deleted_at IS NULL`, joined to its
+  // `bo_phan` row in the SAME commune with `deleted_at IS NULL`. A unit removed from the org chart is
+  // not answered: the unit a person "holds" is one that can still hold work, and ResolveLiveOrgUnits
+  // refuses a removed unit on every write.
+  //
+  // # EMPTY IS ONE ANSWER FOR FOUR CASES
+  //
+  // Unknown code, soft-deleted record, a record with NO unit (`bo_phan_id` is nullable), and a unit
+  // that was removed: all answer an empty list. For the caller every one of them means the same
+  // thing — the "bộ phận tôi đang giữ" clause matches nothing — and telling them apart would publish
+  // facts about a person to every service that can call this.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  zero or one unit today — see ResolveStaffOrgUnitsResponse.
+  //   INVALID_ARGUMENT    `ma` empty. The caller has a staff principal whose code is never empty
+  //                       (rule 6, invariant 8), so this is a wiring fault and is answered loudly.
+  //   NOT_FOUND           NEVER produced. An unknown code answers empty.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "no unit": answering the tab with the
+  //                       unit clause dropped hides the very tasks the tab is named for, and a short
+  //                       list reports nothing. Answer 503.
+  //
+  // RETRYING IS SAFE: it writes nothing, publishes nothing, and leaves no audit entry. NEVER cached
+  // across requests: a person moved to another unit must see the new unit's work on the next load.
+  rpc ResolveStaffOrgUnits(ResolveStaffOrgUnitsRequest) returns (ResolveStaffOrgUnitsResponse);
+
   rpc ListCitizenCommunes(ListCitizenCommunesRequest) returns (ListCitizenCommunesResponse);
 
   // AdvanceWorkingHours moves an instant forward through ONE commune's working calendar and
@@ -884,6 +1018,93 @@ service IdentityService {
   // RETRYING A FAILED CALL IS SAFE: this RPC writes nothing, publishes nothing, and leaves no
   // audit entry. The audited act is the INTAKE, written by the caller in its own transaction.
   rpc ResolveDeadlines(ResolveDeadlinesRequest) returns (ResolveDeadlinesResponse);
+
+  // ResolveDueSoonCutoff answers, for ONE commune, ONE kind of work and ONE instant, the LATEST
+  // deadline that counts as "sắp đến hạn" at that instant.
+  //
+  // WHAT "SẮP ĐẾN HẠN" MEANS, and it is the specification's sentence, not this contract's: a record is
+  // due soon when the WORKING hours REMAINING before its deadline are at most `sla.gio_sap_den_han`
+  // (migration 0008, the comment on that column; docs/ui-ux/14-cau-hinh.md §8). The number is the
+  // COMMUNE'S, per kind of work and field — there is no 72 anywhere in code (rule 10, forbidden #3).
+  //
+  // WHY IT EXISTS (user decision 2026-09-28): the task register's "Sắp đến hạn" filter (`soon=true`)
+  // is refused today because nothing publishes the commune's threshold.
+  //
+  // # WHY IT RETURNS AN INSTANT AND NOT THE NUMBER OF HOURS — read before "simplifying" it
+  //
+  // ADR 0029 §Bổ sung (user, 2026-09-22) fixed that an RPC reading `sla` returns INSTANTS, not hours,
+  // and that `gio_sap_den_han` does not leave this service AS HOURS. The reason is unchanged: with the
+  // hours in hand a caller must turn "72 working hours" into something comparable with a stored
+  // deadline, and the only arithmetic within reach — `now + 72h`, `deadline - 72h` — counts nights,
+  // weekends, `ngay_nghi_le` and `ngay_lam_bu` as working time. That is rule 10, forbidden #2, and it
+  // agrees with the right answer on every ordinary afternoon and disagrees on exactly the days an
+  // officer is surprised by a task that was never flagged.
+  //
+  // ADR 0029 ALSO SAID THIS COLUMN NEEDS A "BACKWARD" COUNT FROM THE DEADLINE, WHICH DOES NOT EXIST.
+  // That is true for a PER-RECORD instant (when to ring the bell for one task). It is NOT needed for
+  // a FILTER, and that is the whole trick of this RPC: for any deadline D after `as_of`,
+  //
+  //   working hours in [as_of, D] <= N   ⟺   D <= due_soon_until
+  //
+  // where `due_soon_until` is the LATEST instant by which at most N working hours have elapsed since
+  // `as_of` — a FORWARD walk, through the same calendar and the same single implementation
+  // (domain.TienGioLamViec's walk) every deadline in this system is computed with. One call per list
+  // request answers every row of the page by a plain comparison in SQL.
+  //
+  // # "LATEST", NOT "EARLIEST" — the opposite of `Deadline.due_at`, on purpose
+  //
+  // `due_at` is the EARLIEST instant N hours are reached, because a commitment must not gain a gap
+  // nobody granted. Here the question is the reverse — "is at most N left" — so every instant up to
+  // the next moment working time would accrue again still has exactly N left. When the N-th hour
+  // ends at a session boundary (17:00 Friday), the answer is the START of the next working session
+  // (Monday 07:30), and a task whose hand-entered deadline is Friday 23:59 is correctly due soon.
+  // With "earliest" it would silently drop out of the filter every time the count ended on a
+  // boundary — which, counted from a night or a weekend with N a whole number of working days, is
+  // every time.
+  //
+  // # THE COMPARISON THE CALLER MAKES, and nothing else
+  //
+  //   due soon   ⟺   as_of < deadline  AND  deadline <= due_soon_until
+  //
+  // A deadline AT OR BEFORE `as_of` is OVERDUE, not due soon — that is the caller's `late` filter,
+  // derived the same way (rule 10, invariant 3). Nothing here is stored: the answer is a function of
+  // `as_of`, so a caller writing it into a column has built the `is_overdue` flag rule 10 forbids,
+  // one step removed.
+  //
+  // ONE FIELD, ONE THRESHOLD. A list MIXING fields whose rows carry different `gio_sap_den_han`
+  // cannot be filtered with one cutoff — ask once per field, or filter a kind of work whose records
+  // carry no field. Tasks (`nhiem-vu`) carry none today, so their caller sends `linh_vuc` "" and reads
+  // the default row.
+  //
+  // # A commune with no configuration is REFUSED — FAILED_PRECONDITION, never a number
+  //
+  // Exactly the three cases of ResolveDeadlines: no `sla` row at all; no row usable for this
+  // `work_kind`; the `linh_vuc` has no row AND the kind has no default row. `sla` is empty for every
+  // commune today, so this is the ORDINARY answer at the moment. The caller tells its user the filter
+  // is not configured for this commune — it never substitutes 72 and never drops the filter
+  // silently. The four calendar faults of AdvanceWorkingHours land here too, and so does a
+  // non-positive or absurd `gio_sap_den_han` (the number came from the commune's table).
+  //
+  // # The commune travels in metadata; not audited; retry is safe
+  //
+  // "x-tenant-id" names WHOSE threshold and WHOSE calendar; there is no field that could name a
+  // second one, and an exemption from carrying it is not expressible. A read of configuration: it
+  // writes nothing, publishes nothing, and leaves no audit entry.
+  //
+  // # THE STATUS CODES ARE PART OF THE CONTRACT
+  //
+  //   OK                  `due_soon_until` is set, and is at or after `as_of`.
+  //   INVALID_ARGUMENT    the CALLER is wrong: `work_kind` unspecified, `as_of` missing or invalid.
+  //   FAILED_PRECONDITION the COMMUNE'S CONFIGURATION is missing or wrong — above.
+  //   NOT_FOUND           NEVER produced.
+  //   UNAUTHENTICATED     NEVER produced by this RPC — it belongs to the caller-key interceptor.
+  //   UNAVAILABLE etc.    the call did not happen. It is NOT "nothing is due soon": refuse the
+  //                       filter with a retryable error (503), never answer the page without it.
+  //
+  // NOT CACHED ACROSS REQUESTS. The answer moves with `as_of`, and a commune correcting its holidays
+  // or its threshold must see the filter change on the next load (ADR 0007 decision 6 governs stored
+  // commitments; nothing is stored here).
+  rpc ResolveDueSoonCutoff(ResolveDueSoonCutoffRequest) returns (ResolveDueSoonCutoffResponse);
 }
 
 message Staff {
@@ -1544,6 +1765,61 @@ message ResolveAssignableStaffResponse {
   repeated string assignable_ma = 1;
 }
 
+message ResolveLiveOrgUnitsRequest {
+  // THE ORG-UNIT IDS the caller is about to write — identity's `bo_phan.id`, the value
+  // service-petitions stores in `bo_phan_id` and `co_quan_chu_tri_id`. NOT `bo_phan.ma` (the slug):
+  // the record being written stores the id, so the id is what has to be verified.
+  //
+  // Duplicates are collapsed by the server; order carries no meaning. A blank string matches no row
+  // and is simply absent from the answer.
+  //
+  // AT MOST 50 ids per call — the same ceiling as ResolveAssignableStaffRequest.ma, from the same
+  // derivation: one assignment names one unit and perhaps a lead unit. More is INVALID_ARGUMENT,
+  // never a silent truncation.
+  //
+  // AN EMPTY LIST IS A VALID REQUEST AND ANSWERS EMPTY. It is NOT "every live unit".
+  //
+  // THERE IS NO SECOND FIELD, AND THAT IS THE DESIGN: a predicate here turns a verification into a
+  // listing of the org chart.
+  repeated string ids = 1;
+}
+
+// Wrapped, not a bare repeated string: adding a field later must not change the RPC signature.
+message ResolveLiveOrgUnitsResponse {
+  // The requested ids that are live `bo_phan` rows of this commune — a SUBSET of the request, each at
+  // most once, in no meaningful order. The caller checks membership by value.
+  //
+  // AN ID IS ABSENT when it does not exist, is soft deleted, or belongs to ANOTHER COMMUNE than the
+  // one in "x-tenant-id". The three are deliberately indistinguishable (rule 1), and the caller treats
+  // every one of them the same way: refuse the write.
+  repeated string live_ids = 1;
+}
+
+message ResolveStaffOrgUnitsRequest {
+  // The staff BUSINESS CODE — `nguoi_dung.ma`, the value authz.Principal.Ma carries. The caller sends
+  // ITS OWN principal's code, taken from the session and never from a request parameter.
+  //
+  // `ma` AND NOT `code`, for the reason ResolveStaffNamesRequest.ma gives (ADR 0011).
+  //
+  // Empty is INVALID_ARGUMENT — see the status-code table on the RPC.
+  string ma = 1;
+}
+
+// Wrapped, not a bare repeated string: adding a field later must not change the RPC signature.
+message ResolveStaffOrgUnitsResponse {
+  // The live org units this person sits in — identity's `bo_phan.id`, the same value
+  // service-petitions stores in `bo_phan_id`, so the caller compares by value with no translation.
+  //
+  // AT MOST ONE ELEMENT TODAY: `nguoi_dung.bo_phan_id` is a single nullable column. Repeated for the
+  // reason `Staff.roles` is: the schema is the narrower fact of the two, and a caller written against
+  // a list keeps working the day a person can sit in two units. A caller must not assume more than
+  // one, and must not assume at least one.
+  //
+  // EMPTY IS AN ORDINARY ANSWER — no unit, unknown code, removed record, removed unit — see the RPC.
+  // It means the unit clause of the caller's filter matches nothing. It never means "every unit".
+  repeated string org_unit_ids = 1;
+}
+
 message ListCitizenCommunesRequest { string citizen_id = 1; }
 message ListCitizenCommunesResponse { repeated CitizenCommune items = 1; }
 
@@ -1703,7 +1979,9 @@ enum WorkKind {
 //   `gio_sap_den_han` is a count of working hours REMAINING BEFORE the deadline, so producing it
 //   means walking the calendar BACKWARD from an instant — arithmetic that does not exist in this
 //   service and that nothing has specified. Reusing the forward walk would silently answer a
-//   different question.
+//   different question. (STILL TRUE FOR A PER-RECORD INSTANT, and it is why this enum has no third
+//   value. A LIST FILTER by that column does not need the backward walk — ResolveDueSoonCutoff
+//   answers it with a forward one from the caller's `now`, and its comment gives the equivalence.)
 //
 //   `gio_bao_lanh_dao` and `gio_bao_chu_tich` HAVE NO AGREED ANCHOR. The specification says it two
 //   ways at once — §8 heads the columns "sau 24 giờ" without saying after what, while §9's
@@ -1841,4 +2119,43 @@ message Deadline {
   // a `time.Duration` — walks straight through nights, weekends, `ngay_nghi_le` and `ngay_lam_bu`
   // while looking like it respected the unit. That is rule 10, forbidden #2, and it is the exact
   // shape this whole RPC exists to make unnecessary.
+}
+
+message ResolveDueSoonCutoffRequest {
+  // Which kind of work the threshold is read for. UNSPECIFIED is INVALID_ARGUMENT — there is no
+  // default kind of work, and guessing one reads another domain's number.
+  WorkKind work_kind = 1;
+
+  // The field code, "" FOR THE DEFAULT ROW — same meaning, same fallback and same caveat as
+  // ResolveDeadlinesRequest.linh_vuc: a non-empty code with no row of its own falls back to the
+  // default row (the specification's rule), so a misspelled code is indistinguishable from an
+  // unconfigured one. `nhiem-vu` records carry no field today, so a task caller sends "".
+  string linh_vuc = 2;
+
+  // The instant "remaining" is measured from — the caller's `now` for the page it is building.
+  //
+  // SUPPLIED BY THE CALLER, AND UNSET IS INVALID_ARGUMENT. No server-side "now" default: the caller
+  // compares the answer against the SAME `now` it uses for its `late` filter, and two clocks one
+  // request apart put a record on neither list or on both.
+  //
+  // NOT COMPARED WITH `now` here; any instant is answerable.
+  google.protobuf.Timestamp as_of = 3;
+}
+
+// Wrapped, not a bare Timestamp: adding a field later must not change the RPC signature.
+message ResolveDueSoonCutoffResponse {
+  // The LATEST instant by which at most `sla.gio_sap_den_han` working hours have elapsed since
+  // `as_of`, through this commune's calendar. A deadline D is due soon ⟺ as_of < D <= this.
+  //
+  // AN INSTANT FOR A COMPARISON, NEVER FOR STORAGE. It moves with `as_of`. Writing it onto a record
+  // builds a stored "is due soon" state — the class rule 10, invariant 3 forbids.
+  //
+  // NEVER UNSET IN AN OK RESPONSE. "Not configured" is FAILED_PRECONDITION, never an empty field a
+  // caller could read as year 1 and filter every record out with.
+  //
+  // THERE IS NO `working_hours` FIELD, deliberately, for the reason ADR 0029 §Bổ sung gives and the
+  // RPC comment restates: the number of hours invites arithmetic nobody outside this service may do.
+  // A screen that wants to PRINT "72 giờ làm việc" is a real, later need; it is additive, and whoever
+  // adds it names the screen and carries the warning on `Deadline`.
+  google.protobuf.Timestamp due_soon_until = 1;
 }

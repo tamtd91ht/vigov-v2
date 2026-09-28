@@ -120,6 +120,9 @@ func may(t *testing.T, sua func(*Deps)) (*Server, *bytes.Buffer) {
 		// The assignable-code read. Its fake lives in giao_viec_test.go and answers NOTHING by
 		// default, so a test has to say which codes it made assignable.
 		GiaoViec: &giaoViecGia{},
+		// The org-unit reads. Its fake lives in org_units_test.go and answers NOTHING by default, so
+		// a test has to say which units it made live and who sits where.
+		OrgUnits: &orgUnitFake{},
 		Quyen:    quyenGia{quyen: []authz.Perm{"admin.user", "task.extend"}},
 		// The citizen session registry — a default that answers successfully, like every other
 		// collaborator here, so a test about ResolveCitizenSession overrides only the one thing it
@@ -572,6 +575,7 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 			Lo:           &loGia{},
 			Ten:          &tenGia{},
 			GiaoViec:     &giaoViecGia{},
+			OrgUnits:     &orgUnitFake{},
 			Quyen:        quyenGia{},
 			PhienCongDan: &phienCongDanGia{},
 			Lich:         &lichGia{},
@@ -594,6 +598,8 @@ func TestNewServerTuChoiNoiDayKhongDu(t *testing.T) {
 		"thiếu quyền":          func(d *Deps) { d.Quyen = nil },
 		// Missing it is every assignment write in the calling services answering 503.
 		"thiếu kho giao việc": func(d *Deps) { d.GiaoViec = nil },
+		// Missing it is every unit assignment in the calling services answering 503.
+		"thiếu kho bộ phận": func(d *Deps) { d.OrgUnits = nil },
 		// Missing it is not "one RPC unavailable": every OTHER service's citizen edge is built on
 		// this one lookup, so the whole citizen channel of the platform goes with it.
 		"thiếu sổ phiên công dân": func(d *Deps) { d.PhienCongDan = nil },

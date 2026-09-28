@@ -278,6 +278,15 @@
       "bang_chung": "f3f1039 internal/operatorauth (TOTP RFC 6238, AES-256-GCM có key id + AAD, token op1. không có trường xã — hỏng chéo với token cán bộ v1 cả hai chiều, mã khôi phục 80 bit) + core/config OPERATOR_SESSION_SIGNING_KEYS/OPERATOR_TOTP_ENCRYPTION_KEY (tuỳ chọn). 8cf5902 migration 0012 (5 bảng @scope platform, mã VH-00001, operator_audit_log chỉ ghi thêm) + operatorstore. ec3900a use case + cmd/operatorctl (create/grant/revoke/disable/enable/reset-mfa/list, bắt buộc --ticket) + sửa theo rà bảo mật (FOR UPDATE chống vượt ngưỡng khoá song song, kích hoạt đúng mã TOTP đã chứng minh, struct ẩn thông tin đăng nhập, 0013 CHECK phiên ≤ 8 giờ). 07c664e chốt 28/09: khoá 12 giờ + unlock, nhàn rỗi 5 phút, mật khẩu tạm 24 giờ / TOTP chờ 10 phút (0014), vết totp_enrollment_started, khoá do người cầm phiên đoán sai thì thu hồi phiên. make check xanh (core/identity/platform -race, standalone, check_security). Ca PG SKIP — máy không Docker.",
       "no_confirm": [],
       "tiep_theo": "CHƯA CÓ tuyến: bước 2 (service-platform biên OPERATOR_HOST + gRPC identity mở/kiểm phiên vận hành — thêm RPC vào methodsWithoutTenant là ĐIỀU KIỆN DỪNG ADR 0012, hỏi trước), bắt buộc giới hạn tần suất theo IP lẫn tài khoản (khoá 12 giờ biến thành DoS nếu thiếu). Chưa wire vào cmd/server (NewTokenSigner lỗi khoá ngắn phải là lỗi khởi động). Chưa chạy ca PG thật (có ca song song FOR UPDATE). operatorctl chưa có trong ảnh Docker — devops chọn cách chạy. Nợ: lệnh re-seal khi xoay OPERATOR_TOTP_ENCRYPTION_KEY (bỏ khoá cũ trước khi re-seal là cả miền không đăng nhập được); vân tay email trong log không có khoá, dò ngược được (kế thừa từ đường cán bộ); đổi mật khẩu định kỳ / lịch sử / khoá sau 45 ngày không dùng (TCVN §5.6, câu mở #36); make vuln đỏ toàn kho (go1.26.2 stdlib)."
+    },
+    {
+      "id": "grpc-org-units-va-nguong-sap-den-han",
+      "viec": "Máy chủ ba RPC: bộ phận còn hiệu lực trong xã, bộ phận của cán bộ theo mã, mốc cuối 'sắp đến hạn' từ sla.gio_sap_den_han",
+      "trang_thai": "xong",
+      "bang_chung": "Chưa commit. internal/grpc/org_units.go, due_soon.go; store/org_unit_lookup.go; domain.DueSoonCutoff dùng chung workingWalk với TienGioLamViec (tách vòng đi, không thêm bản cài đặt thứ hai). Phép so tương đương với bộ đếm từng phút độc lập (due_soon_cutoff_test.go). gofmt/vet/test -p 1 xanh.",
+      "no_confirm": [],
+      "tiep_theo": "Chưa ai GỌI: bọc core/identityclient (ngoài phạm vi lượt này) và service-petitions dùng ba RPC (bỏ errPhamViChuaHoTro/errLocSapDenHanChuaCo, kiểm unit/lead unit trước khi ghi). CẦN NGƯỜI DÙNG XÁC NHẬN: (1) #3 trả MỐC CUỐI thay vì 'số giờ' như yêu cầu ghi — lý do ADR 0029 §Bổ sung 28/09; (2) tên tiếng Anh 'due soon' cho 'Sắp đến hạn' chưa có trong ubiquitous-language (luật 12). Ca pg SKIP (không VIGOV_TEST_DSN).",
+      "menu": "nhiem-vu"
     }
   ]
 }

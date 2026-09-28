@@ -166,6 +166,10 @@ type Deps struct {
 	// records on purpose). Declared in giao_viec.go, at the point of use.
 	GiaoViec CanBoGiaoViec
 
+	// The org-unit reads behind ResolveLiveOrgUnits and ResolveStaffOrgUnits (org_units.go). Unit ids
+	// in, unit ids out; the "live" predicate is the org chart's, shared by constant in the store.
+	OrgUnits OrgUnitReader
+
 	// The CITIZEN session registry, read by ResolveCitizenSession and by nothing else here.
 	//
 	// A SEPARATE FIELD FROM Phien, AND THE TWO MUST NEVER BE MERGED — the same discipline
@@ -232,6 +236,8 @@ func NewServer(d Deps) *Server {
 		panic("identity/grpc: thiếu kho đọc tên cán bộ — ResolveStaffNames sẽ panic, và hồ sơ lưu trữ hiện mã trần ở chỗ tên người xử lý")
 	case d.GiaoViec == nil:
 		panic("identity/grpc: thiếu kho kiểm cán bộ giao việc được — ResolveAssignableStaff sẽ panic, và mọi tuyến giao việc phải trả 503")
+	case d.OrgUnits == nil:
+		panic("identity/grpc: thiếu kho bộ phận — ResolveLiveOrgUnits và ResolveStaffOrgUnits sẽ panic, và mọi tuyến giao việc theo bộ phận phải trả 503")
 	case d.Quyen == nil:
 		panic("identity/grpc: thiếu kho quyền — ResolveStaffPrincipal sẽ trả principal rỗng quyền, không phân biệt được với người thật sự không có quyền")
 	case d.PhienCongDan == nil:

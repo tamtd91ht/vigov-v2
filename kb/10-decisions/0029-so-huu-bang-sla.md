@@ -12,6 +12,7 @@ owns_facts:
   - "cái giá của việc identity giữ thêm một khái niệm không dính tới con người"
   - "hệ quả: bảng sla chưa tồn tại và đang chặn mọi tuyến ghi của petitions lẫn documents"
   - "RPC đọc bảng sla trả MỐC HẠN đã cộng xong chứ không trả số giờ — chốt 22/09/2026"
+  - "bộ lọc sắp đến hạn đọc gio_sap_den_han qua một MỐC CUỐI đi xuôi từ now, không qua số giờ — 28/09/2026"
 ---
 
 # 0029. Bảng `sla` thuộc `identity` — đặt cạnh lịch làm việc
@@ -192,6 +193,35 @@ một màn hình để xã điền. Đó là tiến bộ thật, nhưng **không
 (§8 ghi "sau 24 giờ" không nói sau cái gì; §9 đếm từ lúc trễ hạn và **nhân đôi** cho chủ tịch thay
 vì đọc cột thứ hai). Tính leo thang từ chúng là báo cho lãnh đạo một xã trên một căn cứ **không ai
 chọn**, và bản tin không nói được nó dùng căn cứ nào.
+
+## BỔ SUNG 28/09/2026 — `gio_sap_den_han` ra khỏi service dưới dạng **MỐC CUỐI**, vẫn không phải số giờ
+
+**Người dùng chốt làm** bộ lọc "Sắp đến hạn" của sổ nhiệm vụ (`soon=true`). **Hình dạng do
+`contract-designer` chọn** và cần người dùng xác nhận: yêu cầu ban đầu ghi *"trả số giờ"*, nhưng
+trả số giờ là đi ngược §Bổ sung 22/09 ngay trên — bên gọi cầm 72 thì phép cộng duy nhất trong tầm
+tay là giờ đồng hồ (luật 10 cấm #2).
+
+**`IdentityService.ResolveDueSoonCutoff`** nhận (loại việc, lĩnh vực, `as_of` = `now` của bên gọi) và
+trả **một mốc**: mốc **MUỘN NHẤT** mà tính từ `as_of` đã trôi qua **tối đa N giờ làm việc**, N là
+`gio_sap_den_han` của xã. Bên gọi lọc `as_of < hạn ≤ mốc` bằng một phép so trong SQL.
+
+| Câu §"Ba cột không ra khỏi service" nói | Còn đúng không |
+|---|---|
+| `gio_sap_den_han` cần phép đếm **ngược** từ mốc hạn | **Đúng cho một MỐC RIÊNG TỪNG PHIẾU** (lúc nào rung chuông cho một việc) — vẫn chưa có, vẫn chưa ai đặc tả |
+| … nên không ra khỏi service | **Không cần cho một BỘ LỌC**: với mọi hạn D, *giờ làm việc còn lại ≤ N* ⟺ *D ≤ mốc cuối* — một phép đi **xuôi**, cùng một cài đặt (`domain.TienGioLamViec` và `domain.DueSoonCutoff` dùng chung `workingWalk`) |
+
+**Vì sao "muộn nhất" chứ không "sớm nhất" như `due_at`:** khi giờ thứ N hết đúng ranh giới ca (17:00
+thứ Sáu), mọi thời điểm tới đầu ca kế tiếp vẫn còn đúng N giờ. Lấy mốc sớm nhất thì một nhiệm vụ hạn
+23:59 tối ấy rơi khỏi bộ lọc — và tính từ đêm hay cuối tuần với N tròn ngày thì lần nào cũng rơi.
+Kiểm bằng phép so tương đương với một bộ đếm từng phút độc lập
+(`service-identity/internal/domain/due_soon_cutoff_test.go`).
+
+**Xã chưa cấu hình → `FAILED_PRECONDITION`**, đúng ba ca của `ResolveDeadlines`. Không 72, không lặng lẽ
+bỏ bộ lọc. Nhiệm vụ không mang lĩnh vực nên đọc **dòng mặc định** của `nhiem-vu`.
+
+**Hai cột báo lãnh đạo vẫn không ra** — mốc neo vẫn chưa ai trả lời.
+
+→ Ranh giới giao dịch: `kb/30-indexes/transaction-boundaries.json`, `loc_so_nhiem_vu_theo_cau_hinh_cua_identity`
 
 → ADR 0007 (giờ làm việc, ba bảng lịch, SLA không hồi tố): `kb/10-decisions/0007-sla-working-hours.md`
 → ADR 0024 (quyền sở hữu đi theo nhịp đổi, phép thử `tenant_id`): `kb/10-decisions/0024-so-huu-danh-muc-tham-chieu.md`

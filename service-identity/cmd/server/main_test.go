@@ -133,6 +133,12 @@ func (lamBuGia) TheoNam(context.Context, int) ([]domain.CaLamBu, error)     { re
 // reason; what each fault answers is defended in internal/grpc.
 func (slaGia) DanhSach(context.Context) ([]domain.DongSLA, error) { return nil, nil }
 
+// orgUnitFake answers no live unit and no unit for anybody.
+type orgUnitFake struct{}
+
+func (orgUnitFake) LiveIDs(context.Context, []string) ([]string, error)    { return nil, nil }
+func (orgUnitFake) UnitsOfStaff(context.Context, string) ([]string, error) { return nil, nil }
+
 func noiDayGia(t *testing.T) svcgrpc.Deps {
 	t.Helper()
 	ky, err := token.NewSigner([]secret.Secret{khoaKyGia})
@@ -148,6 +154,8 @@ func noiDayGia(t *testing.T) svcgrpc.Deps {
 		// Answers every code asked as assignable — the predicate is defended in internal/store; this
 		// only needs the RPC reachable through the real interceptor chain.
 		GiaoViec: giaoViecGia{},
+		// Answers nothing — these wiring tests only need the two org-unit RPCs reachable.
+		OrgUnits: orgUnitFake{},
 		Quyen:    quyenGia{},
 		// Required, or NewServer refuses to build: every OTHER service's citizen edge is built on
 		// this one lookup (svcgrpc.Deps.PhienCongDan).

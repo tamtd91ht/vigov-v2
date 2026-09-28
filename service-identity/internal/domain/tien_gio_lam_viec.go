@@ -186,76 +186,34 @@ func TienGioLamViec(tuMoc time.Time, tuan []CaLamViec, docNam DocLichNam, gio []
 		return nil, err
 	}
 
-	// THE WEEKLY CALENDAR IS CHECKED WHOLE, BEFORE THE WALK, and both of VanDeCuaLich's problems
-	// are refusals here. It is the same function the configuration screen renders, so a week this
-	// refuses to count is exactly the week that screen shows as broken.
-	if vd := VanDeCuaLich(tuan); len(vd) > 0 {
-		return nil, loiTuVanDeLich(vd[0])
-	}
-
-	mui, err := MuiGio()
+	w, err := newWorkingWalk(tuMoc, tuan, docNam)
 	if err != nil {
 		return nil, err
 	}
-
-	theoThu := map[int][]caTrongNgay{}
-	for _, c := range tuan {
-		theoThu[c.Thu] = append(theoThu[c.Thu], caTrongNgay{BatDau: c.BatDau, KetThuc: c.KetThuc})
-	}
-	for thu := range theoThu {
-		// The store already orders by (thu, bat_dau); sorting a copy costs nothing and removes an
-		// assumption this arithmetic would otherwise be silently wrong about if the read changed.
-		sapXepCa(theoThu[thu])
-	}
-
-	nam := &lichTheoNam{doc: docNam, daNap: map[int]lichMotNam{}}
-
-	// Everything below is instants. tuMoc keeps whatever zone it arrived in — comparisons between
-	// instants do not care — while every boundary built from the calendar is built in mui.
-	batDauVN := tuMoc.In(mui)
-	chanTroi := batDauVN.AddDate(0, 0, ChanTroiNgay)
-	ngayCuoi := nuaDem(chanTroi, mui)
+	chanTroi := w.horizon
 
 	ra := make([]MocDatDuoc, 0, len(moc))
 	var daCong time.Duration
 	i := 0
 
-	for ngay := nuaDem(batDauVN, mui); !ngay.After(ngayCuoi) && i < len(moc); ngay = ngay.AddDate(0, 0, 1) {
-		cas, err := caCuaNgay(ngay, theoThu, nam)
-		if err != nil {
-			return nil, err
-		}
-		for _, ca := range cas {
-			mo := ngay.Add(time.Duration(ca.BatDau) * time.Second)
-			dong := ngay.Add(time.Duration(ca.KetThuc) * time.Second)
-			if !dong.After(tuMoc) {
-				// The whole session is behind the starting instant. Nothing is credited for it —
-				// ADR 0007 decision 8: no session is ever counted in part for time the authority
-				// was closed.
-				continue
-			}
-			if mo.Before(tuMoc) {
-				// Received DURING a session: the clock starts where the record arrived, not at the
-				// session's opening.
-				mo = tuMoc
-			}
-			dai := dong.Sub(mo)
+	err = w.each(func(mo, dong time.Time) bool {
+		dai := dong.Sub(mo)
 
-			// `>=` AND NOT `>`, AND THIS IS THE OFF-BY-ONE-SESSION THE CONTRACT WRITES DOWN. When
-			// the count runs out exactly at this session's end, the answer is that end — 11:30,
-			// not the afternoon's 13:30.
-			for i < len(moc) && daCong+dai >= moc[i] {
-				ra = append(ra, MocDatDuoc{
-					Gio:    int(moc[i] / time.Hour),
-					DatLuc: mo.Add(moc[i] - daCong),
-				})
-				i++
-			}
-			daCong += dai
-			if i == len(moc) {
-				break
-			}
+		// `>=` AND NOT `>`, AND THIS IS THE OFF-BY-ONE-SESSION THE CONTRACT WRITES DOWN. When
+		// the count runs out exactly at this session's end, the answer is that end — 11:30,
+		// not the afternoon's 13:30.
+		for i < len(moc) && daCong+dai >= moc[i] {
+			ra = append(ra, MocDatDuoc{
+				Gio:    int(moc[i] / time.Hour),
+				DatLuc: mo.Add(moc[i] - daCong),
+			})
+			i++
 		}
+		daCong += dai
+		return i == len(moc)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	if i < len(moc) {
@@ -280,6 +238,179 @@ func TienGioLamViec(tuMoc time.Time, tuan []CaLamViec, docNam DocLichNam, gio []
 		}
 	}
 	return ra, nil
+}
+
+// DueSoonCutoff answers the LATEST instant by which at most `hours` working hours have elapsed
+// since asOf, through this commune's calendar — the answer behind ResolveDueSoonCutoff.
+//
+// # Why "latest", and why that makes a forward walk enough
+//
+// The question a "sắp đến hạn" filter asks about a deadline D is "are at most N working hours left
+// between now and D". Working time accrued from asOf only grows with D, so the set of deadlines for
+// which the answer is yes is everything up to ONE instant: the last moment before working time
+// would start accruing past N. That instant is found walking FORWARD from asOf — the backward walk
+// from each D that ADR 0029 says does not exist is not needed to answer a filter.
+//
+// It differs from TienGioLamViec's EARLIEST answer only when the N-th hour ends exactly at a session
+// boundary: TienGioLamViec says 17:00 Friday, this says the START of the next working session,
+// because every instant between the two still has exactly N hours left. Without that, a
+// hand-entered deadline of Friday 23:59 drops out of the filter whenever the count lands on a
+// boundary — which, counted from a night or a weekend with N a whole number of days, is always.
+//
+// # One walk, not a second implementation
+//
+// The sessions, their clipping at asOf (ADR 0007 decision 8), the holidays, the swap days, every
+// refusal and the horizon all come from the SAME workingWalk TienGioLamViec uses. What is here is
+// only the stopping rule. ADR 0007 forbids two implementations of the count; this is one count
+// with two questions asked of it.
+//
+// # Refusals
+//
+// Everything TienGioLamViec refuses, for the same reasons, plus LoiVuotChanTroi when the next
+// session start lies past the horizon. A zero or negative `hours` is a plain error — the gRPC
+// boundary answers the commune's non-positive value itself, so reaching here means this service's
+// own two halves disagree.
+func DueSoonCutoff(asOf time.Time, tuan []CaLamViec, docNam DocLichNam, hours int) (time.Time, error) {
+	if docNam == nil {
+		return time.Time{}, fmt.Errorf("lịch làm việc: thiếu hàm đọc ngày nghỉ lễ và ngày làm bù")
+	}
+	if hours <= 0 {
+		return time.Time{}, fmt.Errorf("lịch làm việc: ngưỡng %d giờ làm việc không hợp lệ", hours)
+	}
+	need := time.Duration(hours) * time.Hour
+
+	w, err := newWorkingWalk(asOf, tuan, docNam)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	var (
+		accrued time.Duration
+		cutoff  time.Time
+		found   bool
+	)
+	err = w.each(func(start, end time.Time) bool {
+		length := end.Sub(start)
+		if length <= 0 {
+			// A session that accrues nothing moves nothing: returning its start would claim a later
+			// working instant began there when none did.
+			return false
+		}
+		if accrued == need {
+			// The count ended EXACTLY at the previous session's end. Every instant from there up to
+			// this opening still has N hours left; one nanosecond after it does not.
+			cutoff, found = start, true
+			return true
+		}
+		if accrued+length > need {
+			// STRICTLY greater: the N-th hour ends inside this session, and the next instant is past it.
+			cutoff, found = start.Add(need-accrued), true
+			return true
+		}
+		accrued += length
+		return false
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+	if !found || cutoff.After(w.horizon) {
+		return time.Time{}, &LoiKhongTinhDuocHan{
+			Loai: LoiVuotChanTroi,
+			ChiTiet: fmt.Sprintf(
+				"lịch làm việc: ngưỡng sắp đến hạn %d giờ làm việc không đo được trong %d ngày kể từ mốc — "+
+					"lịch nghỉ lễ và ngày làm bù chỉ được khai trước khoảng một năm",
+				hours, ChanTroiNgay),
+		}
+	}
+	return cutoff, nil
+}
+
+// workingWalk is ONE commune's calendar, validated and ready to be walked from one instant.
+//
+// IT EXISTS SO THE WALK HAS ONE IMPLEMENTATION. TienGioLamViec (earliest instant N hours are
+// reached) and DueSoonCutoff (latest instant at most N have elapsed) ask two different questions of
+// the SAME sequence of working intervals; each owns only its stopping rule. Everything that decides
+// WHICH intervals exist — the week, holidays, swap days, the refusals, clipping at the start,
+// the zone, the horizon — lives here and nowhere else.
+type workingWalk struct {
+	from      time.Time
+	horizon   time.Time
+	lastDay   time.Time
+	zone      *time.Location
+	byWeekday map[int][]caTrongNgay
+	years     *lichTheoNam
+}
+
+// newWorkingWalk validates the weekly calendar and resolves the zone — the prologue both questions
+// share, in the order TienGioLamViec has always run it.
+func newWorkingWalk(from time.Time, week []CaLamViec, readYear DocLichNam) (*workingWalk, error) {
+	if readYear == nil {
+		return nil, fmt.Errorf("lịch làm việc: thiếu hàm đọc ngày nghỉ lễ và ngày làm bù")
+	}
+
+	// THE WEEKLY CALENDAR IS CHECKED WHOLE, BEFORE THE WALK, and both of VanDeCuaLich's problems
+	// are refusals here. It is the same function the configuration screen renders, so a week this
+	// refuses to count is exactly the week that screen shows as broken.
+	if vd := VanDeCuaLich(week); len(vd) > 0 {
+		return nil, loiTuVanDeLich(vd[0])
+	}
+
+	zone, err := MuiGio()
+	if err != nil {
+		return nil, err
+	}
+
+	byWeekday := map[int][]caTrongNgay{}
+	for _, c := range week {
+		byWeekday[c.Thu] = append(byWeekday[c.Thu], caTrongNgay{BatDau: c.BatDau, KetThuc: c.KetThuc})
+	}
+	for weekday := range byWeekday {
+		// The store already orders by (thu, bat_dau); sorting a copy costs nothing and removes an
+		// assumption this arithmetic would otherwise be silently wrong about if the read changed.
+		sapXepCa(byWeekday[weekday])
+	}
+
+	// Everything below is instants. `from` keeps whatever zone it arrived in — comparisons between
+	// instants do not care — while every boundary built from the calendar is built in zone.
+	horizon := from.In(zone).AddDate(0, 0, ChanTroiNgay)
+	return &workingWalk{
+		from:      from,
+		horizon:   horizon,
+		lastDay:   nuaDem(horizon, zone),
+		zone:      zone,
+		byWeekday: byWeekday,
+		years:     &lichTheoNam{doc: readYear, daNap: map[int]lichMotNam{}},
+	}, nil
+}
+
+// each hands visit every working interval at or after `from`, in order, up to the horizon's date,
+// until visit returns true. An interval is [start, end) of one session, clipped at `from`.
+func (w *workingWalk) each(visit func(start, end time.Time) bool) error {
+	for day := nuaDem(w.from.In(w.zone), w.zone); !day.After(w.lastDay); day = day.AddDate(0, 0, 1) {
+		sessions, err := caCuaNgay(day, w.byWeekday, w.years)
+		if err != nil {
+			return err
+		}
+		for _, s := range sessions {
+			start := day.Add(time.Duration(s.BatDau) * time.Second)
+			end := day.Add(time.Duration(s.KetThuc) * time.Second)
+			if !end.After(w.from) {
+				// The whole session is behind the starting instant. Nothing is credited for it —
+				// ADR 0007 decision 8: no session is ever counted in part for time the authority
+				// was closed.
+				continue
+			}
+			if start.Before(w.from) {
+				// Received DURING a session: the clock starts where the record arrived, not at the
+				// session's opening.
+				start = w.from
+			}
+			if visit(start, end) {
+				return nil
+			}
+		}
+	}
+	return nil
 }
 
 // caTrongNgay is one session of ONE date, after the weekly calendar and the swap days have been

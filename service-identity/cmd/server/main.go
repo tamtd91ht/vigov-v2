@@ -486,6 +486,9 @@ func run(log *slog.Logger) error {
 		// *CanBoStore, whose predicate is the picker's (locChonNguoi) by shared constant, so the
 		// codes the assignee dropdown offers and the codes an assignment write accepts cannot drift.
 		GiaoViec: canBo,
+		// The org-unit reads behind ResolveLiveOrgUnits and ResolveStaffOrgUnits — the SAME
+		// *idstore.BoPhanStore the org chart route reads, so "live" means one thing on both.
+		OrgUnits: boPhan,
 		// The SAME *idstore.Checker that guards every route, through its QuyenCua method. One
 		// grant predicate for the guard and for the principal: a second one would drift, and
 		// drift in either direction is a defect with no error attached.
