@@ -536,10 +536,10 @@ func TestHaiSoLonCoDuThamSoLoc(t *testing.T) {
 		ten  []string
 	}{
 		{"GET /api/v1/tasks", []string{
-			"assignee", "bloc", "late", "priority", "q", "scope", "soon", "source", "status",
-			"type", "unit"}},
+			"assignee", "bloc", "from", "late", "metric", "priority", "q", "scope", "soon", "source",
+			"status", "to", "type", "unit"}},
 		{"GET /api/v1/citizen-reports", []string{
-			"channel", "field", "hamlet", "late", "q", "scope", "status", "unit"}},
+			"channel", "field", "from", "hamlet", "late", "metric", "q", "scope", "status", "to", "unit"}},
 	} {
 		x, ok := theoKhoa[tr.khoa]
 		if !ok {

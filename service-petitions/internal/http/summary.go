@@ -1,0 +1,340 @@
+package http
+
+// The leadership overview (/tong-quan) routes of the two registers this service owns: one summary of
+// figures per register, and one "Cần xử lý ngay" overdue queue per register.
+//
+// EVERY FIGURE HAS A LIST. The `metric` values accepted by GET /api/v1/tasks and
+// GET /api/v1/citizen-reports are the JSON field names of the two summaries below, and each is read
+// through the SAME predicate the figure is counted with (store.taskMetricCondition,
+// store.citizenReportMetricCondition). So `task-summary.overdue == 12` and
+// `GET /api/v1/tasks?metric=overdue` lists twelve rows, with no second definition to drift.
+//
+// NO PERCENTAGE ON THE WIRE. The client divides, and shows a dash when a sample is zero; a server that
+// answered 0% for an empty sample would publish a false figure about a public authority.
+//
+// THE PERIOD IS THE CLIENT'S. `from` and `to` are RFC 3339 instants, half-open [from, to); the screen
+// decides the week (Monday start, Asia/Ho_Chi_Minh) and the "same elapsed portion" comparison and asks
+// twice. Both bounds are required on the summaries, because each summary carries period figures;
+// `from >= to` is refused.
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-petitions/internal/app"
+	"github.com/vihat/vigov/service-petitions/internal/domain"
+	petstore "github.com/vihat/vigov/service-petitions/internal/store"
+)
+
+// The read sides the four routes depend on. NARROW, one per register, for the reason every reader
+// in routes.go states: a route depending on a wider surface than it uses is how the next person
+// justifies reaching through it.
+type (
+	// TaskSummaryReader — *petstore.NhiemVuStore satisfies it.
+	TaskSummaryReader interface {
+		TaskSummary(ctx context.Context, p domain.Period) (domain.TaskSummary, error)
+	}
+
+	// CitizenReportSummaryReader — *petstore.PhieuPhanAnhStore satisfies it. `restricted` is the
+	// reader's `feedback.restricted` fact; false excludes the `can-bo` field.
+	CitizenReportSummaryReader interface {
+		CitizenReportSummary(ctx context.Context, p domain.Period, restricted bool) (
+			domain.CitizenReportSummary, error)
+	}
+
+	// OverdueQueueReader — *app.OverdueQueue satisfies it. A USE CASE and not a store: `critical`
+	// needs identity's working-hours calendar.
+	OverdueQueueReader interface {
+		Tasks(ctx context.Context, limit int) ([]domain.OverdueItem, error)
+		CitizenReports(ctx context.Context, limit int, restricted app.QuyenXemHanChe) ([]domain.OverdueItem, error)
+	}
+)
+
+// --- replies -------------------------------------------------------------------------------------
+
+// taskSummaryOut is GET /api/v1/task-summary. The field names ARE the `metric` values of
+// GET /api/v1/tasks (domain.TaskMetric).
+//
+//	in_progress · overdue · suspended   stock — the register now; `from`/`to` do not move them
+//	completed · on_time_sample · on_time  period — inside [from, to)
+//
+// The on-time ratio is on_time / on_time_sample, measured against the ORIGINAL deadline
+// (`han_ban_dau`), and it has no value when on_time_sample is 0.
+type taskSummaryOut struct {
+	InProgress   int `json:"in_progress"`
+	Overdue      int `json:"overdue"`
+	Suspended    int `json:"suspended"`
+	Completed    int `json:"completed"`
+	OnTimeSample int `json:"on_time_sample"`
+	OnTime       int `json:"on_time"`
+}
+
+// citizenReportSummaryOut is GET /api/v1/citizen-report-summary. The field names ARE the `metric`
+// values of GET /api/v1/citizen-reports (domain.CitizenReportMetric).
+//
+//	in_progress                        stock
+//	received · on_time_sample · on_time · late   period
+//
+// on_time + late == on_time_sample. The sample includes petitions that missed the classification
+// ceiling (open question #26, ADR 0035 §C), always as late — see store.citizenReportMetricCondition.
+type citizenReportSummaryOut struct {
+	Received     int `json:"received"`
+	InProgress   int `json:"in_progress"`
+	OnTimeSample int `json:"on_time_sample"`
+	OnTime       int `json:"on_time"`
+	Late         int `json:"late"`
+}
+
+// overdueItemOut is one row of a "Cần xử lý ngay" panel. NO PERSONAL DATA and no free text — code,
+// category key and deadline only (domain.OverdueItem).
+type overdueItemOut struct {
+	// Kind is WHICH deadline was missed: `han-xu-ly` (task), `han-phan-loai` (petition still
+	// unclassified past its ceiling) or `han-xu-ly-xong` (petition past its resolve deadline).
+	Kind string `json:"kind"`
+	// Code is the task number or the petition lookup code — what the record's detail route takes.
+	Code string `json:"code"`
+	// CategoryCode is the task-type code or the petition field code, for the client to resolve against
+	// the commune's catalogue. EMPTY for a petition that is still unclassified.
+	CategoryCode string `json:"category_code"`
+	// MissedDeadline is the stored deadline that passed. The list is ordered by it, oldest first.
+	MissedDeadline time.Time `json:"missed_deadline"`
+	// Critical is true once CriticalWorkingHours WORKING hours have passed since MissedDeadline, as
+	// identity's calendar counts them.
+	Critical bool `json:"critical"`
+}
+
+// overdueQueueOut wraps the rows. `items` is [] — never null — when nothing is overdue.
+type overdueQueueOut struct {
+	Items []overdueItemOut `json:"items"`
+}
+
+// --- parsing -------------------------------------------------------------------------------------
+
+var (
+	errPeriodMissing = errors.New(
+		"`from` và `to` là bắt buộc: hai mốc thời gian RFC 3339, khoảng nửa mở [from, to)")
+	errPeriodFormat = errors.New(
+		"`from`/`to` phải là mốc thời gian RFC 3339 có múi giờ, ví dụ 2026-09-28T00:00:00+07:00")
+	errPeriodOrder = errors.New("`from` phải sớm hơn `to`")
+	errTaskMetric  = errors.New(
+		"`metric` không phải một chỉ số tổng quan nhiệm vụ: in_progress, overdue, suspended, " +
+			"completed, on_time_sample, on_time")
+	errCitizenReportMetric = errors.New(
+		"`metric` không phải một chỉ số tổng quan phản ánh: received, in_progress, on_time_sample, " +
+			"on_time, late")
+	errQueueLimit = errors.New("`limit` phải là số nguyên dương")
+)
+
+// firstValue is the first value of one query parameter, "" when absent.
+func firstValue(q map[string][]string, k string) string {
+	if v, ok := q[k]; ok && len(v) > 0 {
+		return v[0]
+	}
+	return ""
+}
+
+// parsePeriod reads `from` and `to`. BOTH REQUIRED; REFUSED, NEVER REPAIRED — a missing bound read as
+// "all time", or a swapped pair silently put right, answers a question the screen did not ask with a
+// number that looks entirely plausible.
+func parsePeriod(q map[string][]string) (domain.Period, error) {
+	from, to := firstValue(q, "from"), firstValue(q, "to")
+	if from == "" || to == "" {
+		return domain.Period{}, errPeriodMissing
+	}
+	f, err := time.Parse(time.RFC3339, from)
+	if err != nil {
+		return domain.Period{}, errPeriodFormat
+	}
+	t, err := time.Parse(time.RFC3339, to)
+	if err != nil {
+		return domain.Period{}, errPeriodFormat
+	}
+	p, err := domain.NewPeriod(f, t)
+	if err != nil {
+		return domain.Period{}, errPeriodOrder
+	}
+	return p, nil
+}
+
+// parseQueueLimit reads `limit`: absent means OverdueQueueMax, above it is CLAMPED to it (a client
+// asking for more gets the maximum, not an error — skills/rest-api-design §5), and anything that is
+// not a positive integer is refused.
+func parseQueueLimit(q map[string][]string) (int, error) {
+	s := firstValue(q, "limit")
+	if s == "" {
+		return petstore.OverdueQueueMax, nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 {
+		return 0, errQueueLimit
+	}
+	if n > petstore.OverdueQueueMax {
+		n = petstore.OverdueQueueMax
+	}
+	return n, nil
+}
+
+// parseTaskMetric reads the drill-down pair of GET /api/v1/tasks. `metric` absent: nothing is read and
+// nothing changes — `from`/`to` alone were ignored before this filter existed and still are. A stock
+// metric ignores `from`/`to`; a period metric requires them.
+func parseTaskMetric(q map[string][]string, loc *petstore.LocNhiemVu) error {
+	s := firstValue(q, "metric")
+	if s == "" {
+		return nil
+	}
+	m := domain.TaskMetric(s)
+	if !m.Valid() {
+		return errTaskMetric
+	}
+	loc.Metric = m
+	if m.PeriodBound() {
+		p, err := parsePeriod(q)
+		if err != nil {
+			return err
+		}
+		loc.Period = p
+	}
+	return nil
+}
+
+// parseCitizenReportMetric is parseTaskMetric for GET /api/v1/citizen-reports.
+func parseCitizenReportMetric(q map[string][]string, loc *petstore.LocPhieu) error {
+	s := firstValue(q, "metric")
+	if s == "" {
+		return nil
+	}
+	m := domain.CitizenReportMetric(s)
+	if !m.Valid() {
+		return errCitizenReportMetric
+	}
+	loc.Metric = m
+	if m.PeriodBound() {
+		p, err := parsePeriod(q)
+		if err != nil {
+			return err
+		}
+		loc.Period = p
+	}
+	return nil
+}
+
+// --- handlers ------------------------------------------------------------------------------------
+
+// TaskSummary serves GET /api/v1/task-summary.
+//
+// NO AUDIT ENTRY: counts over one commune's register, no personal data, no cross-commune read
+// (rule 6, invariant 7).
+func (h *Handler) TaskSummary(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, err := parsePeriod(r.URL.Query())
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		return
+	}
+	s, err := h.d.TaskSummary.TaskSummary(ctx, p)
+	if err != nil {
+		h.d.Log.Error("tổng quan nhiệm vụ: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	vietJSON(w, http.StatusOK, taskSummaryOut{
+		InProgress:   s.InProgress,
+		Overdue:      s.Overdue,
+		Suspended:    s.Suspended,
+		Completed:    s.Completed,
+		OnTimeSample: s.OnTimeSample,
+		OnTime:       s.OnTime,
+	})
+}
+
+// CitizenReportSummary serves GET /api/v1/citizen-report-summary.
+//
+// `feedback.restricted` IS READ THROUGH THE SAME HELPER THE REGISTER LIST USES (coQuyenHanChe), so a
+// reader without it gets figures that exclude the `can-bo` field — the same rows their drill-down list
+// can reach. A figure that counted rows the list hides would come up short on click, and would tell a
+// colleague that reports about staff exist.
+func (h *Handler) CitizenReportSummary(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	p, err := parsePeriod(r.URL.Query())
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		return
+	}
+	s, err := h.d.CitizenReportSummary.CitizenReportSummary(ctx, p, bool(h.coQuyenHanChe(ctx)))
+	if err != nil {
+		h.d.Log.Error("tổng quan phản ánh: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	vietJSON(w, http.StatusOK, citizenReportSummaryOut{
+		Received:     s.Received,
+		InProgress:   s.InProgress,
+		OnTimeSample: s.OnTimeSample,
+		OnTime:       s.OnTime,
+		Late:         s.Late,
+	})
+}
+
+// OverdueTasks serves GET /api/v1/overdue-tasks.
+func (h *Handler) OverdueTasks(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	n, err := parseQueueLimit(r.URL.Query())
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		return
+	}
+	items, err := h.d.OverdueQueue.Tasks(ctx, n)
+	h.writeOverdueQueue(w, r, items, err)
+}
+
+// OverdueCitizenReports serves GET /api/v1/overdue-citizen-reports. The restricted field is excluded
+// unless the reader holds `feedback.restricted`, exactly as on the summary.
+func (h *Handler) OverdueCitizenReports(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	n, err := parseQueueLimit(r.URL.Query())
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
+		return
+	}
+	items, err := h.d.OverdueQueue.CitizenReports(ctx, n, h.coQuyenHanChe(ctx))
+	h.writeOverdueQueue(w, r, items, err)
+}
+
+// writeOverdueQueue renders a queue, or its failure.
+//
+// 503 WHEN IDENTITY CANNOT ANSWER, NOT A LIST WITH `critical: false` (app.ErrWorkingHoursUnavailable):
+// the panel would look calm at the one moment it cannot know. WARN, like the other identity refusals
+// in this service — this process is healthy; the wrapped chain carries the gRPC code identityclient
+// already logged.
+func (h *Handler) writeOverdueQueue(w http.ResponseWriter, r *http.Request, items []domain.OverdueItem, err error) {
+	ctx := r.Context()
+	switch {
+	case errors.Is(err, app.ErrWorkingHoursUnavailable):
+		h.d.Log.Warn("CẢNH BÁO: không dựng được hàng đợi quá hạn vì chưa tính được giờ làm việc",
+			"xa", string(tenant.MustFrom(ctx)), "duong", r.URL.Path, "err", err)
+		httpx.WriteError(w, http.StatusServiceUnavailable, "working_hours_unavailable",
+			"Chưa tính được mức độ nghiêm trọng theo lịch làm việc của xã. Vui lòng thử lại sau ít phút.", "")
+		return
+	case err != nil:
+		h.d.Log.Error("hàng đợi quá hạn: lỗi hệ thống",
+			"xa", string(tenant.MustFrom(ctx)), "duong", r.URL.Path, "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+	out := overdueQueueOut{Items: make([]overdueItemOut, 0, len(items))}
+	for _, it := range items {
+		out.Items = append(out.Items, overdueItemOut{
+			Kind:           string(it.Kind),
+			Code:           it.Code,
+			CategoryCode:   it.CategoryCode,
+			MissedDeadline: it.MissedDeadline,
+			Critical:       it.Critical,
+		})
+	}
+	vietJSON(w, http.StatusOK, out)
+}

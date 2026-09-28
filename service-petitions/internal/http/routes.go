@@ -429,6 +429,13 @@ type Deps struct {
 	// Vet writes the trail for a full-view read. Required, not optional — see the panic switch.
 	Vet VetXemNguoiGui
 
+	// THE LEADERSHIP OVERVIEW (/tong-quan) — summary.go. The two summaries are store reads (counts
+	// over one register, one statement each); the queue is a use case because its `critical` flag is
+	// asked of identity's working-hours calendar.
+	TaskSummary          TaskSummaryReader
+	CitizenReportSummary CitizenReportSummaryReader
+	OverdueQueue         OverdueQueueReader
+
 	Log *slog.Logger
 }
 
@@ -504,6 +511,13 @@ func Register(mux *http.ServeMux, d Deps) {
 		// nobody re-reads.
 		panic("petitions/http: thiếu đường ghi vết xem đầy đủ — quyền feedback.unmask mở họ tên và số " +
 			"điện thoại người gửi, và luật 6 bất biến 7 không cho phép đọc đầy đủ mà không ghi vết")
+	case d.TaskSummary == nil:
+		panic("petitions/http: thiếu đường đếm tổng quan nhiệm vụ — GET /api/v1/task-summary sẽ panic khi có người gọi")
+	case d.CitizenReportSummary == nil:
+		panic("petitions/http: thiếu đường đếm tổng quan phản ánh — GET /api/v1/citizen-report-summary sẽ panic khi có người gọi")
+	case d.OverdueQueue == nil:
+		panic("petitions/http: thiếu use case hàng đợi quá hạn — GET /api/v1/overdue-tasks và " +
+			"GET /api/v1/overdue-citizen-reports sẽ panic khi có người gọi")
 	}
 
 	h := NewHandler(d)
@@ -1301,6 +1315,93 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/task-extensions",
 		authz.RequirePermission(d.Checker, "task.read")(
 			http.HandlerFunc(h.DanhSachDeNghiLuiHan)))
+
+	// --- THE LEADERSHIP OVERVIEW (/tong-quan, docs/ui-ux/01). FOUR READ ROUTES ---------------------
+	//
+	// TWO KEYS ON EACH, AND BOTH ARE REAL GUARDS: `report.read` — the overview is a report — AND the
+	// module's own read key, `task.read` or `feedback.read`. A leader who may read reports but not the
+	// petition register must not learn its figures from a tile, and an officer who may read the
+	// register but not reports must not get the report through the back door. Both keys are seeded
+	// (service-identity/migrations/0001_init.sql); none was invented (rule 5, invariant 3c).
+	//
+	// EXPRESSED AS TWO NESTED authz.RequirePermission, because core/authz has no "all of" guard and
+	// adding one is outside this service. `report.read` IS THE INNER ONE ON PURPOSE: tools/apidoc
+	// records the LAST RequirePermission it visits in a statement, which is the innermost, so the
+	// contract names the overview's distinguishing key. The module key is not in openapi.json — a
+	// known limit of the generator, reported, not papered over with a comment the generator reads.
+	//
+	// 401 is the answer to no session AND to a session of another commune (authz.xacNhanXa refuses
+	// before any permission is read); 403 to an account missing EITHER key.
+	//
+	// NO idem.* DECLARATION: a GET changes no state. NO AUDIT ENTRY: counts and codes of one commune,
+	// no personal data (rule 6, invariant 7).
+
+	// @summary  Tổng quan nhiệm vụ của xã — số đang thực hiện · quá hạn · tạm dừng (hiện trạng) và hoàn thành · mẫu đúng hạn · đúng hạn trong kỳ [from, to)
+	// @screen   01-tong-quan-dieu-hanh §4.1
+	// 400: `from`/`to` missing, not RFC 3339, or from >= to. Counts only — the client divides and shows
+	// a dash for an empty sample.
+	//
+	// @reply    200 taskSummaryOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/task-summary",
+		authz.RequirePermission(d.Checker, "task.read")(
+			authz.RequirePermission(d.Checker, "report.read")(
+				http.HandlerFunc(h.TaskSummary))))
+
+	// `feedback.restricted` absent -> the `can-bo` field is excluded from EVERY figure, as it is from the
+	// register list the figures drill down into. It changes no status code.
+	//
+	// @summary  Tổng quan phản ánh của xã — số đang xử lý (hiện trạng) và tiếp nhận · mẫu đúng hạn · đúng hạn · trễ hạn trong kỳ [from, to)
+	// @screen   01-tong-quan-dieu-hanh §4.5
+	// @reply    200 citizenReportSummaryOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-report-summary",
+		authz.RequirePermission(d.Checker, "feedback.read")(
+			authz.RequirePermission(d.Checker, "report.read")(
+				http.HandlerFunc(h.CitizenReportSummary))))
+
+	// BOUNDED AT TEN AND NOT CURSOR-PAGINATED, with the reason: the panel is a top-ten by design
+	// (§5, "tối đa 10 mục") and the full set is the register list with `metric=overdue`. `limit` above
+	// ten is clamped to ten.
+	//
+	// 503 when identity cannot answer the working-hours question behind `critical` — refused rather than
+	// answered with `critical: false` for every row.
+	//
+	// @summary  Nhiệm vụ quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã, loại, hạn đã lỡ, có nghiêm trọng không
+	// @screen   01-tong-quan-dieu-hanh §5
+	// @reply    200 overdueQueueOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/overdue-tasks",
+		authz.RequirePermission(d.Checker, "task.read")(
+			authz.RequirePermission(d.Checker, "report.read")(
+				http.HandlerFunc(h.OverdueTasks))))
+
+	// Same shape as the task panel. A petition is overdue here when it is still unclassified past its
+	// classification ceiling, or when its work is not done past its resolve deadline; `kind` says which.
+	// NO CONTENT AND NO REPORTER on the wire. `feedback.restricted` absent -> `can-bo` excluded.
+	//
+	// @summary  Phản ánh quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã tra cứu, lĩnh vực, hạn đã lỡ (phân loại hay xử lý xong), có nghiêm trọng không
+	// @screen   01-tong-quan-dieu-hanh §5
+	// @reply    200 overdueQueueOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("GET /api/v1/overdue-citizen-reports",
+		authz.RequirePermission(d.Checker, "feedback.read")(
+			authz.RequirePermission(d.Checker, "report.read")(
+				http.HandlerFunc(h.OverdueCitizenReports))))
 
 	// --- MEETING MINUTES AND THEIR CONCLUSIONS. ONE READ ROUTE AND THREE WRITE ROUTES -----------
 	//

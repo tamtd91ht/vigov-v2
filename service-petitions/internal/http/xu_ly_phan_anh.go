@@ -386,6 +386,13 @@ func locPhieuTuQuery(q map[string][]string) (loc petstore.LocPhieu, chiGiaoChoTo
 	default:
 		return loc, false, errPhamViKhongHopLe
 	}
+
+	// The overview drill-down (`metric`, plus `from`/`to` for a period figure) — summary.go. The
+	// restricted-field exclusion the handler sets afterwards applies to it too, exactly as it does to
+	// the figure.
+	if err := parseCitizenReportMetric(q, &loc); err != nil {
+		return loc, false, err
+	}
 	return loc, chiGiaoChoToi, nil
 }
 

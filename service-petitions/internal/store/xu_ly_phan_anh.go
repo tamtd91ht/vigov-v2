@@ -114,6 +114,12 @@ type LocPhieu struct {
 	// would return short pages — a page of 20 that renders 14 — and the cursor would still have
 	// advanced past the six. The officer would see gaps in a register and have no way to know.
 	ChoPhepHanChe bool
+
+	// Metric restricts the page to the rows behind ONE overview figure
+	// (GET /api/v1/citizen-report-summary), through the very predicate that figure is counted with —
+	// citizenReportMetricCondition. "" = no metric. Period is read only when Metric is period-bound.
+	Metric domain.CitizenReportMetric
+	Period domain.Period
 }
 
 // dieuKienTim is the free-text predicate, built with the placeholder already chosen.
@@ -131,6 +137,14 @@ func dieuKienTim(n int) string {
 		" OR noi_dung ILIKE " + p +
 		" OR COALESCE(dia_chi,'') ILIKE " + p + ")"
 }
+
+// restrictedFieldExclusion keeps petitions in the restricted field `can-bo` out of a read. THE ONE
+// SPELLING, shared by the register list below and by every overview figure and the overdue queue
+// (citizen_report_summary.go): a figure that counted `can-bo` rows its reader cannot list would be a
+// number whose drill-down comes up short — and would tell a colleague that reports about staff exist.
+//
+// `linh_vuc IS NULL` IS KEPT: an unclassified petition is in no field yet, so it is not restricted.
+const restrictedFieldExclusion = ` AND (linh_vuc IS NULL OR linh_vuc <> '` + domain.LinhVucHanChe + `')`
 
 // locPhieuThanhSQL turns the validated filter struct into a predicate and its bound values.
 //
@@ -152,7 +166,7 @@ func locPhieuThanhSQL(loc LocPhieu) (string, []any) {
 	// §14.5), not a value any layer above may choose — a parameter here would be a caller able to
 	// pick which field it is not allowed to see.
 	if !loc.ChoPhepHanChe {
-		dieuKien += ` AND (linh_vuc IS NULL OR linh_vuc <> '` + domain.LinhVucHanChe + `')`
+		dieuKien += restrictedFieldExclusion
 	}
 
 	if loc.TrangThai != "" {
@@ -204,6 +218,14 @@ func locPhieuThanhSQL(loc LocPhieu) (string, []any) {
 			(xu_ly_xong_luc IS NULL AND han_xu_ly_xong < now())
 			OR (xu_ly_xong_luc IS NOT NULL AND xu_ly_xong_luc > han_xu_ly_xong))`
 	}
+
+	if loc.Metric != "" {
+		// THE FIGURE'S OWN PREDICATE — see citizen_report_summary.go. The restricted-field exclusion
+		// above applies to the figure too (CitizenReportSummary takes the same fact), so the two stay equal.
+		var extra string
+		extra, args = citizenReportMetricFilter(loc.Metric, loc.Period, args)
+		dieuKien += extra
+	}
 	return dieuKien, args
 }
 
@@ -251,6 +273,9 @@ func quetPhieuCoTaoLuc(r quangKiem) (domain.PhieuPhanAnh, error) {
 func (s *PhieuPhanAnhStore) DanhSach(ctx context.Context, loc LocPhieu, yc page.Request) (
 	page.Result[domain.PhieuPhanAnh], error) {
 
+	if err := validateCitizenReportMetric(loc); err != nil {
+		return page.NewResult[domain.PhieuPhanAnh](), err
+	}
 	dieuKien, args := locPhieuThanhSQL(loc)
 
 	return store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{

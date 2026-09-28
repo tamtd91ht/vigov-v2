@@ -215,6 +215,11 @@ type mayChu struct {
 	deNghiCho  *deNghiChoDuyetGia
 	bienBan    *bienBanGia
 	ghiBienBan *ghiBienBanGia
+
+	// The leadership overview — summary_test.go.
+	taskSummary   *taskSummaryFake
+	reportSummary *citizenReportSummaryFake
+	overdue       *overdueQueueFake
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -251,6 +256,10 @@ func dungMayChu(t *testing.T) *mayChu {
 	// field is separate: a read is a store call and each of these opens a transaction, so one object
 	// answering both would let a test prove a write route "worked" by reading.
 	ghiBienBan := &ghiBienBanGia{}
+	// The overview's three reads, keyed by commune — see summary_test.go.
+	taskSummary := taskSummarySample()
+	reportSummary := citizenReportSummarySample()
+	overdue := overdueQueueSample()
 
 	m := &mayChu{
 		d: Deps{
@@ -279,21 +288,24 @@ func dungMayChu(t *testing.T) *mayChu {
 			GhiMucUuTien:   &ghiDanhMucGiaUuTien{},
 			// Task-status wording: own suite in trang_thai_nhiem_vu_test.go; present because
 			// Register refuses a nil dependency.
-			TrangThaiNhiemVu:    docTrangThaiMau(),
-			GhiTrangThaiNhiemVu: &ghiTrangThaiGia{},
-			Phieu:               phieu,
-			NhanLinhVuc:         nhan,
-			Vet:                 vet,
-			DanhSachPhieu:       danhSach,
-			XuLyPhieu:           xuLy,
-			NhatKyPhieu:         nhatKy,
-			NhiemVu:             nhiemVu,
-			DanhSachNhiemVu:     nhiemVu,
-			DeNghiChoDuyet:      deNghiCho,
-			GhiNhiemVu:          ghiNhiemVu,
-			DanhSachBienBan:     bienBan,
-			GhiBienBan:          ghiBienBan,
-			Log:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
+			TrangThaiNhiemVu:     docTrangThaiMau(),
+			GhiTrangThaiNhiemVu:  &ghiTrangThaiGia{},
+			Phieu:                phieu,
+			NhanLinhVuc:          nhan,
+			Vet:                  vet,
+			DanhSachPhieu:        danhSach,
+			XuLyPhieu:            xuLy,
+			NhatKyPhieu:          nhatKy,
+			NhiemVu:              nhiemVu,
+			DanhSachNhiemVu:      nhiemVu,
+			DeNghiChoDuyet:       deNghiCho,
+			GhiNhiemVu:           ghiNhiemVu,
+			DanhSachBienBan:      bienBan,
+			GhiBienBan:           ghiBienBan,
+			TaskSummary:          taskSummary,
+			CitizenReportSummary: reportSummary,
+			OverdueQueue:         overdue,
+			Log:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		thuMuc:     thuMucMau(),
 		loai:       loai,
@@ -309,6 +321,10 @@ func dungMayChu(t *testing.T) *mayChu {
 		deNghiCho:  deNghiCho,
 		bienBan:    bienBan,
 		ghiBienBan: ghiBienBan,
+
+		taskSummary:   taskSummary,
+		reportSummary: reportSummary,
+		overdue:       overdue,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -401,6 +417,10 @@ func depsDay() Deps {
 		GhiNhiemVu:      &ghiNhiemVuGia{},
 		DanhSachBienBan: bienBanMau(),
 		GhiBienBan:      &ghiBienBanGia{},
+		// The leadership overview.
+		TaskSummary:          taskSummarySample(),
+		CitizenReportSummary: citizenReportSummarySample(),
+		OverdueQueue:         overdueQueueSample(),
 	}
 }
 
@@ -447,6 +467,10 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// and with it §3, the ONE path by which a conclusion becomes a task and keeps a back-link to
 		// where it came from.
 		"thiếu use case ghi biên bản": func(d *Deps) { d.GhiBienBan = nil },
+		// The leadership overview: two tiles' worth of figures and the "Cần xử lý ngay" panel.
+		"thiếu đường đếm tổng quan nhiệm vụ": func(d *Deps) { d.TaskSummary = nil },
+		"thiếu đường đếm tổng quan phản ánh": func(d *Deps) { d.CitizenReportSummary = nil },
+		"thiếu use case hàng đợi quá hạn":    func(d *Deps) { d.OverdueQueue = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {

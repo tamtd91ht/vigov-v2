@@ -187,7 +187,11 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		GhiNhiemVu:      &ghiNhiemVuGia{},
 		DanhSachBienBan: bienBanMau(),
 		GhiBienBan:      &ghiBienBanGia{},
-		Log:             im,
+		// The overview reads — present because Register refuses a nil dependency.
+		TaskSummary:          taskSummarySample(),
+		CitizenReportSummary: citizenReportSummarySample(),
+		OverdueQueue:         overdueQueueSample(),
+		Log:                  im,
 	})
 
 	var h http.Handler = mux

@@ -545,6 +545,12 @@ func locNhiemVuTuQuery(q map[string][]string) (petstore.LocNhiemVu, bool, error)
 	// over the same rows, so it changes no predicate and no sort; accepting it here would be a
 	// parameter the server ignores, which the next reader has to prove is ignored.
 
+	// The overview drill-down (`metric`, plus `from`/`to` for a period figure) — summary.go. ANDed with
+	// every filter above; absent, it changes nothing.
+	if err := parseTaskMetric(q, &loc); err != nil {
+		return loc, false, err
+	}
+
 	return loc, canChuThe, nil
 }
 

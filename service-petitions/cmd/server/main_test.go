@@ -372,7 +372,12 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// invoked here, and Register refuses a nil dependency at construction. Its own four-case
 		// suite lives in internal/http/bien_ban_hop_ghi_test.go.
 		GhiBienBan: app.NewGhiBienBanHop(nil, nil, nil),
-		Log:        log,
+		// The overview reads, on nil handles: never invoked here, and Register refuses a nil
+		// dependency. Own suite: internal/http/summary_test.go.
+		TaskSummary:          petstore.NewNhiemVuStore(nil),
+		CitizenReportSummary: petstore.NewPhieuPhanAnhStore(nil),
+		OverdueQueue:         app.NewOverdueQueue(nil, nil, nil),
+		Log:                  log,
 	})
 
 	// THE CITIZEN SURFACE, REGISTERED THE WAY main() REGISTERS IT — its own mux, its own Deps.

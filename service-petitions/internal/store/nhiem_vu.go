@@ -140,6 +140,14 @@ type LocNhiemVu struct {
 	// DERIVED IN SQL, NEVER READ FROM A COLUMN (rule 10, invariant 3). See the predicate in
 	// locNhiemVuThanhSQL, and read the warning there before touching it.
 	ChiTreHan bool
+
+	// Metric restricts the page to the rows behind ONE overview figure (GET /api/v1/task-summary),
+	// through the very predicate that figure is counted with — taskMetricCondition. "" = no metric.
+	//
+	// Period is read only when Metric is period-bound, and must then be valid; the stock figures
+	// ignore it. Both are validated by the handler and again by DanhSach (validateTaskMetric).
+	Metric domain.TaskMetric
+	Period domain.Period
 }
 
 // dieuKienTimNhiemVu is the free-text predicate, built with the placeholder already chosen.
@@ -220,6 +228,14 @@ func locNhiemVuThanhSQL(loc LocNhiemVu) (string, []any) {
 		// against, and a `now` passed from a handler is a second clock that can disagree with it.
 		dieuKien += " AND " + dieuKienTreHan
 	}
+
+	if loc.Metric != "" {
+		// THE FIGURE'S OWN PREDICATE, NOT A LOOK-ALIKE — see task_summary.go. ANDed with every other
+		// filter, so the page equals the figure only when no other filter narrows it.
+		var extra string
+		extra, args = taskMetricFilter(loc.Metric, loc.Period, args)
+		dieuKien += extra
+	}
 	return dieuKien, args
 }
 
@@ -256,6 +272,9 @@ var mocNhiemVu = store.NewMoc[domain.NhiemVu](SapXepNhiemVu,
 func (s *NhiemVuStore) DanhSach(ctx context.Context, loc LocNhiemVu, yc page.Request) (
 	page.Result[domain.NhiemVu], error) {
 
+	if err := validateTaskMetric(loc); err != nil {
+		return page.NewResult[domain.NhiemVu](), err
+	}
 	dieuKien, args := locNhiemVuThanhSQL(loc)
 
 	kq, err := store.QueryPage(ctx, s.db.For(ctx), store.PageSpec{

@@ -266,7 +266,14 @@ func chay(log *slog.Logger) error {
 		// is for (rule 6, invariant 3) — and it is given `ghiNhiemVu` above rather than its own task
 		// store, because §3's split must not become a SECOND way to create a task.
 		GhiBienBan: app.NewGhiBienBanHop(kho, bienBan, ghiNhiemVu),
-		Log:        log,
+		// THE LEADERSHIP OVERVIEW. The two summaries are the SAME stores the register lists read, so a
+		// figure and the list it drills into run the same predicate against the same table. The queue
+		// is given `dinhDanh` for its `critical` flag — the SAME identity client every deadline path
+		// uses, so they never disagree about identity's health.
+		TaskSummary:          nhiemVu,
+		CitizenReportSummary: phieu,
+		OverdueQueue:         app.NewOverdueQueue(nhiemVu, phieu, dinhDanh),
+		Log:                  log,
 	})
 
 	// THE CITIZEN SURFACE — ITS OWN MUX, and that is rule 4, invariant 5 made mechanical rather
