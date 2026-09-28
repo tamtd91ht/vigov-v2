@@ -307,9 +307,9 @@
     {
       "id": "nguon-phan-anh-source-id-khong-kiem",
       "viec": "RỦI RO: POST /api/v1/tasks nhận nguon_giao=phan-anh (và van-ban-den) với source_id không ai kiểm",
-      "trang_thai": "chua_lam",
-      "bang_chung": "cross-context-scout 28/09: internal/http/nhiem_vu_ghi.go:116, :398-399 — cùng hình dạng lỗi ket-luan-hop trước fdd4822. Nửa van-ban-den đã có ở service-documents/tao-nhiem-vu-tu-ho-so-khac-service; nửa phan-anh chưa mục nào.",
-      "tiep_theo": "Chưa đọc chéo xã hôm nay vì không gì JOIN theo source_id; sẽ thành lỗ ngày ai dựng liên kết. Hỏi: từ chối nguồn phan-anh ở POST trực tiếp (chỉ tạo qua tuyến của phiếu) như ket-luan-hop?",
+      "trang_thai": "xong",
+      "bang_chung": "NGƯỜI DÙNG CHỐT 28/09/2026 (theo đề xuất): từ chối nguồn phan-anh ở POST trực tiếp, như ket-luan-hop (fdd4822). Dựng ở commit card P1 (feat(petitions): từ chối tạo nhiệm vụ trực tiếp từ nguồn phản ánh): sentinel `ErrPetitionSourceNotDirect` (internal/domain/nhiem_vu_ghi.go:90-103), handler chặn trước use case (internal/http/nhiem_vu_ghi.go:419-425), chặn đáy trong `TaoTuNguon` (internal/app/nhiem_vu.go:541-546). Ca: TestCreateTask_PetitionSourceIs400AndNeverReachesUseCase, TestCreateTask_PetitionSourceWithoutCheckIsRefused. Kiểm: gofmt · vet · go test -p 1 xanh; check_quyen · check_audit_actor PASS. Gốc: cross-context-scout 28/09 — internal/http/nhiem_vu_ghi.go:116, :398-399.",
+      "tiep_theo": "HỆ QUẢ: hôm nay KHÔNG còn lối nào tạo nhiệm vụ từ phản ánh — tuyến của phiếu (docs/ui-ux/09-phan-anh-nguoi-dan.md:333 `tao-nhiem-vu`) chưa dựng; là card riêng của menu Phản ánh. Nửa van-ban-den vẫn ở service-documents/tao-nhiem-vu-tu-ho-so-khac-service.",
       "menu": "nhiem-vu",
       "no_confirm": []
     },

@@ -87,6 +87,21 @@ var (
 		"nhiệm vụ: nhiệm vụ từ kết luận họp chỉ tạo được bằng nút \"Tách thành nhiệm vụ\" trên " +
 			"màn hình Biên bản họp — biểu mẫu giao việc trực tiếp không nhận nguồn này")
 
+	// ErrPetitionSourceNotDirect refuses `phan-anh` on the DIRECT create (POST /api/v1/tasks), the
+	// same way and for the same reason as ErrNguonKetLuanPhaiTach (commit fdd4822).
+	//
+	// The direct create took `phan-anh` with any `source_id` and checked none of it: not that the
+	// petition exists, not that it is live, not that it belongs to this commune. Nothing JOINs on that
+	// id today, so nothing leaks yet — but the day a back-link to the petition is drawn, a task naming
+	// another commune's petition id reads across the boundary (rule 1). A task from a petition belongs
+	// on the petition's own record, where the petition row can be read and locked in the task's
+	// transaction (§13 of chapter 09 proposes `…/tao-nhiem-vu`; NOT BUILT as of 28/09/2026, so today
+	// no path books a `phan-anh` task at all). The code stays valid in NguonGiao.HopLe: existing rows
+	// keep it, and that route will write it.
+	ErrPetitionSourceNotDirect = errors.New(
+		"nhiệm vụ: nhiệm vụ từ phản ánh chỉ tạo được từ chính phiếu phản ánh trên màn hình Phản ánh " +
+			"người dân — biểu mẫu giao việc trực tiếp không nhận nguồn này")
+
 	ErrMaNhiemVuSaiDinhDang = errors.New(
 		"nhiệm vụ: mã nhiệm vụ chỉ nhận chữ in hoa, chữ số, dấu gạch ngang và dấu gạch dưới")
 	ErrMaNhiemVuQuaDai = fmt.Errorf(
@@ -131,7 +146,7 @@ func LaLoiDauVaoNhiemVu(err error) bool { return LoiDauVaoNhiemVuGoc(err) != nil
 func LoiDauVaoNhiemVuGoc(err error) error {
 	for _, mot := range []error{
 		ErrThieuTieuDeNhiemVu, ErrTieuDeNhiemVuQuaDai, ErrMoTaNhiemVuQuaDai,
-		ErrThieuLoaiNhiemVu, ErrNguonGiaoKhongHopLe, ErrNguonKetLuanPhaiTach,
+		ErrThieuLoaiNhiemVu, ErrNguonGiaoKhongHopLe, ErrNguonKetLuanPhaiTach, ErrPetitionSourceNotDirect,
 		ErrMaNhiemVuSaiDinhDang, ErrMaNhiemVuQuaDai,
 		ErrTienDoNgoaiKhoang,
 		ErrThieuLyDoXoaNhiemVu, ErrLyDoNhiemVuQuaDai,

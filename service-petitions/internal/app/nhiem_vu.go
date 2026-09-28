@@ -538,6 +538,12 @@ func (uc *GhiNhiemVu) TaoTuNguon(ctx context.Context, yc YeuCauTaoNhiemVu, nguoi
 	if kiemNguon == nil && domain.NguonGiao(yc.NguonGiao) == domain.NguonKetLuanHop {
 		return domain.NhiemVu{}, domain.ErrNguonKetLuanPhaiTach
 	}
+	// THE SAME FOR A PETITION SOURCE (ErrPetitionSourceNotDirect): without a check that reads the
+	// petition inside this transaction, `source_id` is whatever the caller sent — possibly another
+	// commune's petition id.
+	if kiemNguon == nil && domain.NguonGiao(yc.NguonGiao) == domain.NguonPhanAnh {
+		return domain.NhiemVu{}, domain.ErrPetitionSourceNotDirect
+	}
 
 	moi, err := chuanHoaTaoNhiemVu(yc)
 	if err != nil {

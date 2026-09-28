@@ -777,11 +777,36 @@ func TestTaoNhiemVu_NguonKetLuanHopThi400VaKhongGoiUseCase(t *testing.T) {
 	}
 }
 
+// TestCreateTask_PetitionSourceIs400AndNeverReachesUseCase: the direct create checked neither that
+// the petition exists, is live, nor belongs to this commune (user decision 28/09/2026).
+func TestCreateTask_PetitionSourceIs400AndNeverReachesUseCase(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("task.create"))
+
+	vao := thanTaoNV()
+	vao.Source = string(domain.NguonPhanAnh)
+	vao.SourceID = "01JPHANANHBATKY0000000000"
+	w := m.goiGhiNV(t, http.MethodPost, hostA, duongTasks, canBoCuaXa(xaA), vao)
+
+	doiMa(t, w, http.StatusBadRequest)
+	e := loiTra(t, w)
+	if e.Code != "invalid_request" {
+		t.Errorf("mã lỗi = %q, muốn invalid_request", e.Code)
+	}
+	if e.Message != domain.ErrPetitionSourceNotDirect.Error() || !strings.Contains(e.Message, "phiếu phản ánh") {
+		t.Errorf("câu từ chối = %q — phải chỉ về phiếu phản ánh", e.Message)
+	}
+	if m.ghiNhiemVu.goi != 0 {
+		t.Errorf("đã gọi use case %d lần với nguồn phan-anh, muốn 0", m.ghiNhiemVu.goi)
+	}
+}
+
 // TestTaoNhiemVu_NguonKhacDiNguyenVenXuongUseCase pins the refusal's scope: every other source —
 // and none — still reaches the use case as sent.
+//
+// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: `phan-anh` left this list — it is now refused (test above).
 func TestTaoNhiemVu_NguonKhacDiNguyenVenXuongUseCase(t *testing.T) {
-	for _, nguon := range []string{"", string(domain.NguonTrucTiep), string(domain.NguonVanBanDen),
-		string(domain.NguonPhanAnh)} {
+	for _, nguon := range []string{"", string(domain.NguonTrucTiep), string(domain.NguonVanBanDen)} {
 		t.Run("nguồn="+nguon, func(t *testing.T) {
 			m := dungMayChu(t)
 			m.capQuyen(t, authz.Perm("task.create"))

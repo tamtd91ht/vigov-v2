@@ -416,6 +416,13 @@ func (h *Handler) TaoNhiemVu(w http.ResponseWriter, r *http.Request) {
 			domain.ErrNguonKetLuanPhaiTach.Error(), "")
 		return
 	}
+	// A PETITION SOURCE LIKEWISE (user decision 28/09/2026, ErrPetitionSourceNotDirect): nothing here
+	// can check that `source_id` names a live petition of THIS commune.
+	if domain.NguonGiao(vao.Source) == domain.NguonPhanAnh {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			domain.ErrPetitionSourceNotDirect.Error(), "")
+		return
+	}
 
 	// REFUSED BEFORE THE USE CASE IS REACHED, so a malformed date opens no transaction at all.
 	vanBan, err := vanBanVaoTrong(vao.Documents)

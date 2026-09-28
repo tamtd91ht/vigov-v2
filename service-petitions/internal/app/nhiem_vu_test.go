@@ -356,11 +356,34 @@ func TestTaoNhiemVu_NguonKetLuanHopKhongQuaTachThiTuChoi(t *testing.T) {
 	khongGhiGi(t, k)
 }
 
-// TestTaoNhiemVu_NguonKhacVanQua pins the refusal's scope: the other three sources still book.
-// ⚠ `van-ban-den` and `phan-anh` are NOT checked against their source record here either — that is
-// a cross-service contract and a separate decision, reported, not closed by this test.
+// TestCreateTask_PetitionSourceWithoutCheckIsRefused is the backstop behind the HTTP refusal: no
+// caller of Tao reads the petition, so a `phan-anh` task through it points at whatever id it was
+// sent — possibly another commune's petition.
+func TestCreateTask_PetitionSourceWithoutCheckIsRefused(t *testing.T) {
+	k := khoNVMau()
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	yc := taoMau()
+	yc.NguonGiao = string(domain.NguonPhanAnh)
+	yc.NguonID = "01JPHANANHKHONGCOTRONGSO0"
+
+	_, err := uc.Tao(ctx, yc, canBoThu())
+	if !errors.Is(err, domain.ErrPetitionSourceNotDirect) {
+		t.Fatalf("lỗi = %v, muốn ErrPetitionSourceNotDirect", err)
+	}
+	if k.batDau != 0 {
+		t.Errorf("mở %d giao dịch cho một nguồn bị từ chối, muốn 0", k.batDau)
+	}
+	khongGhiGi(t, k)
+}
+
+// TestTaoNhiemVu_NguonKhacVanQua pins the refusal's scope: the other two sources still book.
+// ⚠ `van-ban-den` is NOT checked against its source record here either — that is a cross-service
+// contract and a separate decision, reported, not closed by this test.
+//
+// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: `phan-anh` left this list — Tao now refuses it without a check.
 func TestTaoNhiemVu_NguonKhacVanQua(t *testing.T) {
-	for _, nguon := range []domain.NguonGiao{domain.NguonTrucTiep, domain.NguonVanBanDen, domain.NguonPhanAnh} {
+	for _, nguon := range []domain.NguonGiao{domain.NguonTrucTiep, domain.NguonVanBanDen} {
 		t.Run(string(nguon), func(t *testing.T) {
 			k := khoNVMau()
 			k.soLonNhat = 18
