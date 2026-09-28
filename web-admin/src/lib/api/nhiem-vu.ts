@@ -50,7 +50,16 @@
 
 import { isPeriodMetric, type TaskMetric } from "@/lib/drill-down";
 
-import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong, type KetQua } from "./goi";
+import {
+  CHUNG,
+  LOI_KHONG_RO,
+  docJSON,
+  docThanLoiGoi,
+  goiGhi,
+  thamSoTheoHopDong,
+  thongBaoLoi,
+  type KetQua,
+} from "./goi";
 import type {
   page_Result_petitions_deNghiChoDuyetRa,
   page_Result_petitions_nhatKyNhiemVuRa,
@@ -64,6 +73,7 @@ import type {
   petitions_get_tasks,
   petitions_get_tasks_by_ma,
   petitions_get_tasks_by_ma_log_entries,
+  petitions_get_tasks_register_export,
   petitions_nhatKyNhiemVuRa,
   petitions_nhiemVuRa,
   petitions_patch_tasks_by_ma,
@@ -170,6 +180,12 @@ export type LocNhiemVu = {
    * nội bộ: hợp đồng không phát id, và `nhiemVuRa.parent` giữ đúng loại giá trị này.
    */
   parent?: string;
+  /**
+   * `include=documents` (90d12ff) — the three §5.4 document lists on EVERY row, for the Sổ theo dõi
+   * view (§4.3) only. A PROJECTION, not a filter: it never goes to `/task-counts` (`appendTaskFilters`
+   * does not know it), and Kanban / Danh sách never ask for it — payload two of three views ignore.
+   */
+  includeDocuments?: boolean;
 };
 
 /** Ba cột máy chủ cho sắp — `petitions_get_tasks["truyVan"]["sort"]`, không gõ tay. */
@@ -192,6 +208,8 @@ function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocNhiemVu): void {
   const dat = thamSoTheoHopDong<petitions_get_tasks["truyVan"]>(truyVan);
   dat("sort", loc.sapXep);
   dat("order", loc.chieu);
+  // The ONE accepted spelling; anything else is a 400, never silently ignored (`nhiem_vu.go:540-550`).
+  if (loc.includeDocuments === true) dat("include", "documents");
 
   if (loc.limit !== undefined) truyVan.set("limit", String(loc.limit));
   // Con trỏ rỗng nghĩa là trang đầu. Gửi `cursor=` rỗng thì máy chủ trả 400 "con trỏ không hợp
@@ -277,6 +295,76 @@ export function taskCountsPath(loc: LocNhiemVu = {}): string {
   appendTaskFilters(truyVan, loc);
   const chuoi = truyVan.toString();
   return chuoi === "" ? duongDan : `${duongDan}?${chuoi}`;
+}
+
+/**
+ * Path of `GET /api/v1/tasks/register-export` — the Sổ theo dõi as .xlsx (backend P10).
+ *
+ * THE LIST'S FILTERS (`appendTaskFilters`, the same builder) AND ITS SORT — the file is exactly the
+ * register on screen, in §4.3's column order, which the server writes. NO `limit`, `cursor`,
+ * `include`: the export is every matching row (refused above 5 000 with 422, never truncated), and it
+ * always carries the documents.
+ */
+export function registerExportPath(loc: LocNhiemVu = {}): string {
+  const duongDan: petitions_get_tasks_register_export["duongDan"] = "/api/v1/tasks/register-export";
+  const truyVan = new URLSearchParams();
+  appendTaskFilters(truyVan, loc);
+  const dat = thamSoTheoHopDong<petitions_get_tasks_register_export["truyVan"]>(truyVan);
+  dat("sort", loc.sapXep);
+  dat("order", loc.chieu);
+  const chuoi = truyVan.toString();
+  return chuoi === "" ? duongDan : `${duongDan}?${chuoi}`;
+}
+
+/** The file of one export: bytes and the name to save them under. */
+export type RegisterFile = { readonly blob: Blob; readonly fileName: string };
+
+/** Used when the reply names no file — never a name carrying the commune or a search term. */
+export const REGISTER_EXPORT_FALLBACK_NAME = "so-theo-doi-nhiem-vu.xlsx";
+
+/**
+ * `filename="…"` / `filename*=UTF-8''…` of a Content-Disposition, or the fallback. A path component
+ * in the name is dropped: the browser decides where to save, not the header.
+ */
+export function registerFileName(header: string | null): string {
+  if (header === null) return REGISTER_EXPORT_FALLBACK_NAME;
+  const star = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(header);
+  let name: string | undefined;
+  if (star?.[1] !== undefined) {
+    try {
+      name = decodeURIComponent(star[1].trim());
+    } catch {
+      name = undefined;
+    }
+  }
+  if (name === undefined) name = /filename\s*=\s*"?([^";]+)"?/i.exec(header)?.[1]?.trim();
+  const base = name?.split(/[\\/]/).pop()?.trim();
+  return base === undefined || base === "" ? REGISTER_EXPORT_FALLBACK_NAME : base;
+}
+
+/**
+ * GET /api/v1/tasks/register-export — `task.read`. Every export is audited by the server BEFORE the
+ * file is sent (who, the filters, the row count); there is no idempotency key — a second click is a
+ * second export, which is the truth.
+ *
+ * READ AS A BLOB, NOT NAVIGATED TO: a refusal — 422 `register_export_too_large`, 503
+ * `register_names_unavailable` / `task_filter_unavailable`, 409 `due_soon_not_configured` — must come
+ * back as the server's sentence on this screen, and a navigation would put the JSON error in a tab.
+ */
+export async function downloadTaskRegister(loc: LocNhiemVu = {}): Promise<KetQua<RegisterFile>> {
+  let phanHoi: Response;
+  try {
+    phanHoi = await fetch(registerExportPath(loc), { ...CHUNG, method: "GET" });
+  } catch {
+    return { ok: false, thongBao: LOI_KHONG_RO };
+  }
+  if (phanHoi.status !== 200) return { ok: false, thongBao: await thongBaoLoi(phanHoi) };
+  try {
+    const blob = await phanHoi.blob();
+    return { ok: true, duLieu: { blob, fileName: registerFileName(phanHoi.headers.get("Content-Disposition")) } };
+  } catch {
+    return { ok: false, thongBao: LOI_KHONG_RO };
+  }
 }
 
 /** GET /api/v1/task-counts — `task.read`, all seven status codes, same filters as the list. */

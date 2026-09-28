@@ -13,6 +13,10 @@ import {
   layNhiemVu,
   laySoNhiemVu,
   taskCountsPath,
+  downloadTaskRegister,
+  registerExportPath,
+  registerFileName,
+  REGISTER_EXPORT_FALLBACK_NAME,
   quyetDinhLuiHan,
   suaNhiemVu,
   taoNhiemVu,
@@ -635,4 +639,76 @@ describe("POST /api/v1/tasks/{ma}/log-entries — ô ghi tay §5.9 (60011e8)", (
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.thongBao).toBe(cau);
   });
+});
+
+describe("Sổ theo dõi (W6) — `include=documents` và `register-export`", () => {
+  it("`include=documents` ONLY when asked, and never on `/task-counts`", () => {
+    expect(duongDanSoNhiemVu({ includeDocuments: true })).toBe("/api/v1/tasks?include=documents");
+    expect(duongDanSoNhiemVu({})).not.toContain("include");
+    expect(taskCountsPath({ includeDocuments: true } as never)).toBe("/api/v1/task-counts");
+  });
+
+  it("export path: the list's filters AND sort; no limit, cursor or include", () => {
+    const p = registerExportPath({
+      phamVi: "related",
+      dueSoon: true,
+      trangThai: "dang-thuc-hien",
+      sapXep: "priority",
+      chieu: "asc",
+      limit: 20,
+      cursor: "01JCUR",
+      includeDocuments: true,
+    });
+    const q = new URLSearchParams(p.split("?")[1]);
+    expect(p.startsWith("/api/v1/tasks/register-export?")).toBe(true);
+    expect(q.get("scope")).toBe("related");
+    expect(q.get("soon")).toBe("true");
+    expect(q.get("status")).toBe("dang-thuc-hien");
+    expect(q.get("sort")).toBe("priority");
+    expect(q.get("order")).toBe("asc");
+    for (const k of ["limit", "cursor", "include"]) expect(q.has(k)).toBe(false);
+  });
+
+  it("file name from Content-Disposition — UTF-8 form first, path parts dropped, fallback otherwise", () => {
+    expect(registerFileName('attachment; filename="so-theo-doi.xlsx"')).toBe("so-theo-doi.xlsx");
+    expect(registerFileName("attachment; filename*=UTF-8''s%E1%BB%95.xlsx")).toBe("sổ.xlsx");
+    expect(registerFileName('attachment; filename="../../x.xlsx"')).toBe("x.xlsx");
+    expect(registerFileName(null)).toBe(REGISTER_EXPORT_FALLBACK_NAME);
+    expect(registerFileName("attachment")).toBe(REGISTER_EXPORT_FALLBACK_NAME);
+  });
+
+  it("200 ⇒ the bytes and the name; GET with the session cookie, same origin", async () => {
+    const gia = batFetch(
+      new Response(new Uint8Array([80, 75]), {
+        status: 200,
+        headers: { "Content-Disposition": 'attachment; filename="so.xlsx"' },
+      }),
+    );
+    const r = await downloadTaskRegister({ trangThai: "moi-giao" });
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/tasks/register-export?status=moi-giao");
+    expect(gia.mock.calls[0]?.[1]?.method).toBe("GET");
+    expect(gia.mock.calls[0]?.[1]?.credentials).toBe("same-origin");
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.duLieu.fileName).toBe("so.xlsx");
+      expect(r.duLieu.blob.size).toBe(2);
+    }
+  });
+
+  for (const [status, code] of [
+    [422, "register_export_too_large"],
+    [503, "register_names_unavailable"],
+    [409, "due_soon_not_configured"],
+  ] as const) {
+    it(`${status} \`${code}\` ⇒ the server's sentence VERBATIM, no file`, async () => {
+      const cau = `Câu giả của máy chủ cho ${code}.`;
+      batFetch(
+        new Response(JSON.stringify({ code, message: cau, trace_id: "01JT" }), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      expect(await downloadTaskRegister()).toEqual({ ok: false, thongBao: cau });
+    });
+  }
 });

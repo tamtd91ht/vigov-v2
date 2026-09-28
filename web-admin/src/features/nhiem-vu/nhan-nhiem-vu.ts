@@ -2424,14 +2424,11 @@ export function loiSauKhiDocLai(
  * BẢNG KANBAN §4.1 — CÂU CHỮ VÀ HAI PHÉP QUYẾT ĐỊNH
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-/** Hai chế độ xem DỰNG ĐƯỢC. Chế độ thứ ba (`Sổ theo dõi` §4.3) — xem `PHAN_CHUA_DUNG`. */
+/** Chế độ xem Kanban và Danh sách; chế độ thứ ba (`Sổ theo dõi` §4.3) là `REGISTER_VIEW_LABEL`. */
 export const NHAN_CHE_DO_KANBAN = "▦ Kanban";
 export const NHAN_CHE_DO_DANH_SACH = "☰ Danh sách";
 
 /** Đặt cạnh cụm chọn chế độ xem, để cán bộ không đi tìm cái nút thứ ba của đặc tả. */
-export const GHI_CHU_THIEU_SO_THEO_DOI =
-  "Đặc tả có chế độ xem thứ ba — Sổ theo dõi (§4.3) — và nó chưa dựng được. Lý do nằm ở phần " +
-  "chưa dựng được đầu màn.";
 
 /**
  * Cột Kanban nào còn phải đọc, sau khi tính bộ lọc `Trạng thái` của §3.
@@ -2495,6 +2492,23 @@ export function kanbanPartialNote(shown: number, total: number | null): string {
   return total === null
     ? `Đang hiện ${shown} việc đầu của cột — xem đủ ở chế độ Danh sách.`
     : `Đang hiện ${shown} trong ${total} việc của cột — xem đủ ở chế độ Danh sách.`;
+}
+
+/**
+ * The ONE sentence of a board whose every column was refused for the same reason — typically 409
+ * `due_soon_not_configured` under `☐ Sắp đến hạn`, or a 503 from identity. Five copies of one
+ * sentence (plus a sixth in the counts line) read as five problems; one reads as the one it is.
+ * `null` when any column loaded, or when columns failed differently — then each says its own.
+ */
+export function kanbanSharedError(
+  cot: readonly { readonly tai: { readonly pha: string; readonly thongBao?: string } }[],
+): string | null {
+  if (cot.length < 2) return null;
+  const first = cot[0]?.tai;
+  if (first === undefined || first.pha !== "loi" || first.thongBao === undefined) return null;
+  return cot.every((c) => c.tai.pha === "loi" && c.tai.thongBao === first.thongBao)
+    ? first.thongBao
+    : null;
 }
 
 /** Prefix of the server's sentence when the counts cannot be read. The cards still show. */
@@ -2588,21 +2602,10 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "một nút chắc chắn hỏng — tệp cán bộ chọn sẽ không đi tới đâu. Đây là phần việc của máy chủ.",
   },
   {
-    ten: "⬆ Nhập từ Excel (§8) · Xuất Sổ theo dõi (§4.3)",
+    ten: "⬆ Nhập từ Excel (§8)",
     viSao:
-      "Hai tuyến §10 đề xuất — `nhap-excel`, `xuat-so-theo-doi` — chưa có trong hợp đồng, nên hai " +
-      "nút này chưa vẽ. (`🗑 Xoá đã chọn` §2 đã dựng: không cần tuyến gom, màn hình gọi tuyến xoá " +
-      "từng nhiệm vụ lần lượt, cùng một lý do.)",
-  },
-  {
-    ten: "Chế độ xem `Sổ theo dõi` (§4.3)",
-    viSao:
-      "Cụm chọn chế độ xem có HAI nút chứ không phải ba. Bảng §4.3 lấy quá nửa số cột từ ba nhóm " +
-      "văn bản chỉ đạo, mà tuyến đọc sổ `GET /api/v1/tasks` CỐ Ý không trả `documents` — trên sổ, " +
-      "trường ấy vắng mặt nghĩa là `không phục vụ ở đây`, không phải `không có văn bản`. Đọc chi " +
-      "tiết từng dòng để ghép bảng là một lời gọi cho mỗi dòng của mỗi trang. Nút xuất Excel giữ " +
-      "đúng thứ tự cột cũng chưa có tuyến (`xuat-so-theo-doi` không có trong hợp đồng). Cả hai là " +
-      "phần việc của máy chủ.",
+      "Nút nhập chưa vẽ trên màn này. (`🗑 Xoá đã chọn` §2 và `Xuất Excel` của Sổ theo dõi §4.3 đã " +
+      "dựng.)",
   },
 ];
 

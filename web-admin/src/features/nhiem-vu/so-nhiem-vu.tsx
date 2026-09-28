@@ -37,6 +37,7 @@ import { layLichLamViec } from "@/lib/api/lich-lam-viec";
 import {
   deNghiLuiHan,
   doiTrangThaiNhiemVu,
+  downloadTaskRegister,
   getTaskCounts,
   layNhiemVu,
   laySoNhiemVu,
@@ -91,9 +92,9 @@ import {
   GHI_CHU_NHIEM_VU_TOI_DA,
   GHI_CHU_LANH_DAO_GIAO_VIEC,
   GHI_CHU_LUI_HAN,
-  GHI_CHU_THIEU_SO_THEO_DOI,
   GHI_CHU_TU_SINH_MA,
   KANBAN_COUNTS_ERROR,
+  kanbanSharedError,
   KHONG_DOC_DUOC_VAN_BAN,
   LY_DO_KHONG_SUA_CHU_TRI,
   LY_DO_TRA_LAI_TOI_DA,
@@ -233,6 +234,20 @@ import {
   type TaskSelectionState,
 } from "./batch-delete";
 import { ChildTasks, ParentTaskField } from "./child-tasks";
+import {
+  APPROVAL_TICKED,
+  APPROVAL_UNTICKED,
+  REGISTER_COLUMNS,
+  REGISTER_DOCS_MISSING,
+  REGISTER_EXPORT_BUTTON,
+  REGISTER_EXPORT_NOTE,
+  REGISTER_EXPORT_PENDING,
+  REGISTER_EXPORT_REFUSED,
+  REGISTER_UNKNOWN_GROUP,
+  REGISTER_VIEW_LABEL,
+  registerExportDoneText,
+  registerRowDocuments,
+} from "./task-register";
 import { HangChoLuiHan } from "./hang-cho-lui-han";
 import { KanbanMoveMenu } from "./kanban-move-menu";
 import { NhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
@@ -299,7 +314,8 @@ const SO_DONG_MOI_TRANG = 20;
 const SO_THE_MOI_COT = 20;
 
 /** Hai chế độ xem dựng được (§2, §4). Kanban là MẶC ĐỊNH, đúng tiêu đề §4.1. */
-type CheDoXem = "kanban" | "danh-sach";
+/** `so-theo-doi` = §4.3 Sổ theo dõi (W6): the list's rows read with `include=documents`. */
+type CheDoXem = "kanban" | "danh-sach" | "so-theo-doi";
 
 export type TrangThaiTai<T> =
   | { pha: "dangTai" }
@@ -562,13 +578,18 @@ export function SoNhiemVu({
   const [childFormSending, setChildFormSending] = useState(false);
   const [childFormError, setChildFormError] = useState<string | null>(null);
   const [childCreated, setChildCreated] = useState<{ parent: string; text: string } | null>(null);
+  // `Xuất Excel` of the Sổ theo dõi (W6): one export at a time; the answer stays until the next.
+  const [exporting, setExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<KetQua<string> | null>(null);
   // `🗑 Xoá đã chọn` (§2). Survives paging and view switches on purpose: the clerk selects across
   // pages; the bar always says how many are selected, so nothing is chosen out of sight silently.
   const [selection, setSelection] = useState<TaskSelectionState>(EMPTY_SELECTION);
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
   const [batchResults, setBatchResults] = useState<readonly BatchDeleteResult[] | null>(null);
 
-  const khoa =`${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}`;
+  // The register view reads the SAME page with `include=documents`: a different answer, so a
+  // different key — switching view must not show a page read without the documents.
+  const khoa = `${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}|${viewMode === "so-theo-doi" ? "docs" : ""}`;
   // Kanban KHÔNG mang con trỏ: nó không phân trang, nên bộ lọc và lần ghi gần nhất là tất cả những
   // gì làm câu trả lời cũ hết hiệu lực.
   const khoaKanban = `${JSON.stringify(loc)}|${lanTai}`;
@@ -599,7 +620,7 @@ export function SoNhiemVu({
     if (!daDocDuongDan) return;
     // CHỈ ĐỌC CHẾ ĐỘ ĐANG XEM. Không có dòng này thì mỗi lần đổi bộ lọc trên Kanban là SÁU lời gọi
     // thay vì năm, và lời gọi thứ sáu đọc một trang không ai vẽ ra.
-    if (viewMode !== "danh-sach") return;
+    if (viewMode === "kanban") return;
     let bo = false;
     // CÁCH SẮP LUÔN ĐI TRÊN DÂY, kể cả khi cán bộ chưa bấm cột nào: mũi tên trên đầu cột vẽ từ
     // `sapXepDayDu(loc)`, nên gửi đúng giá trị ấy là điều kiện để mũi tên nói thật về câu hỏi đã gửi.
@@ -610,6 +631,7 @@ export function SoNhiemVu({
       chieu: sx.chieu,
       limit: SO_DONG_MOI_TRANG,
       cursor: nganXep.hienTai,
+      includeDocuments: viewMode === "so-theo-doi",
     }).then((kq) => {
       if (!bo) datDaTai({ khoa, kq });
     });
@@ -786,6 +808,27 @@ export function SoNhiemVu({
     datLanTai((n) => n + 1);
   }
 
+  /**
+   * `Xuất Excel` — the register under the SAME filters and sort the screen shows (`sapXepDayDu`),
+   * every matching row. A refusal (422 too large, 503 names unavailable, 409 no due-soon threshold)
+   * is the server's sentence, verbatim; nothing is downloaded then.
+   */
+  function exportRegister(): void {
+    if (exporting) return;
+    setExporting(true);
+    setExportResult(null);
+    const sx = sapXepDayDu(loc);
+    downloadTaskRegister({ ...loc, sapXep: sx.cot, chieu: sx.chieu }).then((r) => {
+      setExporting(false);
+      if (!r.ok) {
+        setExportResult(r);
+        return;
+      }
+      saveFile(r.duLieu.blob, r.duLieu.fileName);
+      setExportResult({ ok: true, duLieu: r.duLieu.fileName });
+    });
+  }
+
   // `null` without `task.delete`: no checkbox anywhere (convenience — the route checks, rule 5).
   const taskSelection: TaskSelection | null = quyen.xoa
     ? {
@@ -896,8 +939,8 @@ export function SoNhiemVu({
         />
       )}
 
-      {/* CỤM CHỌN CHẾ ĐỘ XEM — §2, bên phải hàng lọc 2. HAI nút chứ không phải ba: `Sổ theo dõi`
-          §4.3 cần `documents` trên tuyến đọc sổ, và tuyến ấy cố ý không trả — xem `PHAN_CHUA_DUNG`. */}
+      {/* CỤM CHỌN CHẾ ĐỘ XEM — §2, bên phải hàng lọc 2. ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W6): BA nút.
+          `Sổ theo dõi` §4.3 đọc cùng trang với Danh sách, kèm `include=documents` (90d12ff). */}
       {!drillDownActive && (
       <div className="o-chon" role="group" aria-label="Chế độ xem">
         <button
@@ -916,9 +959,16 @@ export function SoNhiemVu({
         >
           {NHAN_CHE_DO_DANH_SACH}
         </button>
+        <button
+          type="button"
+          className="nut-phu"
+          aria-pressed={cheDoXem === "so-theo-doi"}
+          onClick={() => datCheDoXem("so-theo-doi")}
+        >
+          {REGISTER_VIEW_LABEL}
+        </button>
       </div>
       )}
-      {!drillDownActive && <p className="ghi-chu">{GHI_CHU_THIEU_SO_THEO_DOI}</p>}
 
       {quyen.xoa && (selection.size > 0 || batchResults !== null || batchProgress !== null) && (
         <BatchDeleteBar
@@ -957,15 +1007,54 @@ export function SoNhiemVu({
         />
       )}
 
-      {viewMode === "danh-sach" && so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
-      {viewMode === "danh-sach" && so.pha === "loi" && (
+      {viewMode === "so-theo-doi" && (
+        <div className="cum-nut">
+          <button type="button" className="nut-phu" disabled={exporting} onClick={exportRegister}>
+            {REGISTER_EXPORT_BUTTON}
+          </button>
+          <p className="ghi-chu">{REGISTER_EXPORT_NOTE}</p>
+          {/* Always in the DOM in this view: a live region inserted later is not always announced. */}
+          <p role="status">
+            {exporting
+              ? REGISTER_EXPORT_PENDING
+              : exportResult !== null && exportResult.ok
+                ? registerExportDoneText(exportResult.duLieu)
+                : ""}
+          </p>
+          {!exporting && exportResult !== null && !exportResult.ok && (
+            <p className="thong-bao-loi" role="alert">
+              {REGISTER_EXPORT_REFUSED} {exportResult.thongBao}
+            </p>
+          )}
+        </div>
+      )}
+
+      {viewMode !== "kanban" && so.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
+      {viewMode !== "kanban" && so.pha === "loi" && (
         <p className="thong-bao-loi" role="alert">
           {so.thongBao}
         </p>
       )}
 
-      {viewMode === "danh-sach" && so.pha === "xong" && (
+      {viewMode === "so-theo-doi" && so.pha === "xong" && (
+        <BangSoTheoDoi
+          nhiemVu={so.duLieu.items}
+          danhMuc={danhMuc}
+          danhBa={danhBaMa}
+          tenBoPhan={tenBoPhan}
+          bayGio={new Date()}
+          maDangMo={maDrawer}
+          moNhiemVu={(n) => {
+            guiDrawer({ loai: "mo", nhiemVu: n });
+            datLoiGhi(null);
+          }}
+          selection={taskSelection}
+        />
+      )}
+
+      {viewMode !== "kanban" && so.pha === "xong" && (
         <>
+          {viewMode === "danh-sach" && (
           <BangNhiemVu
             nhiemVu={so.duLieu.items}
             danhMuc={danhMuc}
@@ -986,6 +1075,7 @@ export function SoNhiemVu({
             }}
             selection={taskSelection}
           />
+          )}
           <p className="ghi-chu">{nhanBoDem(so.duLieu.items.length)}</p>
           <p className="ghi-chu">{NO_DEADLINE_LAST_NOTE}</p>
           <p className="ghi-chu">{NO_PRIORITY_LAST_NOTE}</p>
@@ -1631,6 +1721,9 @@ export function BangKanban({
   const totalOf = (status: TrangThaiNhiemVu): number | null =>
     counts.pha === "xong" ? kanbanColumnCount(counts.duLieu.by_status, status) : null;
 
+  // Every column refused for ONE reason (e.g. 409 under `Sắp đến hạn`): say it ONCE, above the board.
+  const sharedError = kanbanSharedError(cot);
+
   const dropAllowed = (target: TrangThaiNhiemVu): boolean =>
     move !== null &&
     move.pending === null &&
@@ -1653,6 +1746,11 @@ export function BangKanban({
       {move !== null && (
         <p ref={statusRef} role="status" tabIndex={-1} className="trang-thai-chuyen-cot">
           {statusText}
+        </p>
+      )}
+      {sharedError !== null && (
+        <p className="thong-bao-loi" role="alert">
+          {sharedError}
         </p>
       )}
       <div className="bang-cuon" role="region" aria-label="Bảng Kanban nhiệm vụ" tabIndex={0}>
@@ -1702,7 +1800,7 @@ export function BangKanban({
               {/* NĂM CỘT LÀ NĂM CÂU TRẢ LỜI RỜI NHAU. Một cột hỏng thì bốn cột kia vẫn là sổ —
                   và câu hỏng của nó hiện nguyên văn ở đúng cột ấy, không nuốt thành một lỗi chung. */}
               {c.tai.pha === "dangTai" && <p role="status">{DANG_TAI_SO}</p>}
-              {c.tai.pha === "loi" && (
+              {c.tai.pha === "loi" && sharedError === null && (
                 <p className="thong-bao-loi" role="alert">
                   {c.tai.thongBao}
                 </p>
@@ -1743,7 +1841,7 @@ export function BangKanban({
         </div>
       </div>
 
-      {counts.pha === "loi" && (
+      {counts.pha === "loi" && counts.thongBao !== sharedError && (
         <p className="thong-bao-loi" role="alert">
           {KANBAN_COUNTS_ERROR} {counts.thongBao}
         </p>
@@ -1753,6 +1851,154 @@ export function BangKanban({
           Kanban hoàn toàn, và §4.1 muốn thế. Không nói ra thì người giao việc kết luận nó đã bị xoá. */}
       <p className="ghi-chu">{ghiChuKanbanReNhanh(nhanTT)}</p>
     </>
+  );
+}
+
+/**
+ * Save a downloaded file. A temporary `<a download>` on an object URL — no navigation, so the page
+ * and its filters stay. The URL is released a moment later (released at once, some browsers cancel).
+ */
+function saveFile(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Sổ theo dõi §4.3 — the register as the commune office's book of directive documents. Columns
+ * EXACTLY `REGISTER_COLUMNS` (§4.3 order, the export's order too), after the `☐` column that only a
+ * `task.delete` holder sees (W4).
+ *
+ * NAMES RESOLVED AS THE LIST RESOLVES THEM: units through `tenBoPhan`, staff through the directory
+ * (`nhanCanBoNgan` — the name when known, the code otherwise, never blank). Documents come from the
+ * row itself (`include=documents`); a row without the block says so instead of drawing three `—`.
+ *
+ * Read-only: nothing is edited here; the code opens the drawer, as on the list.
+ */
+export function BangSoTheoDoi({
+  nhiemVu,
+  danhMuc,
+  danhBa = null,
+  tenBoPhan,
+  bayGio,
+  maDangMo,
+  moNhiemVu,
+  selection = null,
+}: {
+  nhiemVu: readonly petitions_nhiemVuRa[];
+  danhMuc: DanhMucNhiemVu;
+  danhBa?: DanhBaTheoMa | null;
+  tenBoPhan: ReadonlyMap<string, string>;
+  bayGio: Date;
+  maDangMo: string | null;
+  moNhiemVu: (n: petitions_nhiemVuRa) => void;
+  selection?: TaskSelection | null;
+}) {
+  if (nhiemVu.length === 0) return <p className="trang-thai-rong">{SO_RONG}</p>;
+  const unit = (id: string) => (id === "" ? O_TRONG : (tenBoPhan.get(id) ?? id));
+
+  return (
+    <div className="bang-cuon" role="region" aria-label="Sổ theo dõi nhiệm vụ" tabIndex={0}>
+      <table className="bang-danh-muc">
+        <thead>
+          <tr>
+            {selection !== null && (
+              <th scope="col">
+                <span className="an-thi-giac">Chọn</span>
+              </th>
+            )}
+            {REGISTER_COLUMNS.map((c) => (
+              <th key={c} scope="col">
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {nhiemVu.map((n) => {
+            const o = oHan(n.due_at, bayGio);
+            const docs = registerRowDocuments(n);
+            return (
+              <tr
+                key={n.code}
+                data-tre-han={o.phanTre !== "" ? "" : undefined}
+                className={o.phanTre !== "" ? "dong-qua-han" : undefined}
+              >
+                {selection !== null && (
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={selectLabel(n.code)}
+                      checked={selection.selected.has(n.code)}
+                      disabled={selection.disabled}
+                      onChange={() => selection.toggle(n)}
+                    />
+                  </td>
+                )}
+                <td className="ma-muc">
+                  <button
+                    type="button"
+                    className="nut-phu"
+                    onClick={() => moNhiemVu(n)}
+                    aria-expanded={n.code === maDangMo}
+                  >
+                    {n.code}
+                  </button>
+                </td>
+                <td>
+                  {n.title}
+                  {n.description !== "" && <span className="dong-phu">{n.description}</span>}
+                  {n.bloc !== "" && (
+                    <span className="chip chip-ngung">{nhanDanhMuc(danhMuc.khoi, n.bloc)}</span>
+                  )}
+                </td>
+                <td>{unit(n.lead_unit)}</td>
+                <td>{nhanCanBoNgan(n.monitor, danhBa, O_TRONG)}</td>
+                <td>
+                  {unit(n.unit)}
+                  <span className="dong-phu">{nhanCanBoNgan(n.assignee, danhBa, CHUA_PHAN_CONG)}</span>
+                </td>
+                {MOI_NHOM_VAN_BAN.map((g, i) => (
+                  <td key={g}>
+                    {docs === null ? (
+                      // Once per row, in the first document column — not three times.
+                      i === 0 ? <span className="thong-bao-loi">{REGISTER_DOCS_MISSING}</span> : O_TRONG
+                    ) : docs.byGroup[g].length === 0 ? (
+                      O_TRONG
+                    ) : (
+                      <ul>
+                        {docs.byGroup[g].map((v) => (
+                          <li key={v.id}>
+                            {dongVanBan(v.reference, v.date)}
+                            {v.summary !== "" && <span className="dong-phu">{v.summary}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {docs !== null && docs.unknown > 0 && i === MOI_NHOM_VAN_BAN.length - 1 && (
+                      <span className="dong-phu">{REGISTER_UNKNOWN_GROUP}</span>
+                    )}
+                  </td>
+                ))}
+                <td>
+                  {o.ngay}
+                  {o.phanTre !== "" && <span className="nhan-lech"> {o.phanTre}</span>}
+                </td>
+                <td>{n.result_summary === "" ? O_TRONG : n.result_summary}</td>
+                <td>{n.note === "" ? O_TRONG : n.note}</td>
+                <td>{n.leader_approved ? APPROVAL_TICKED : APPROVAL_UNTICKED}</td>
+                <td>{n.superior_acknowledged ? APPROVAL_TICKED : APPROVAL_UNTICKED}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

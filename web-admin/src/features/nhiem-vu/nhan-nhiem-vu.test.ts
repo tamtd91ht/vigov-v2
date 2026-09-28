@@ -436,7 +436,8 @@ describe("phần chưa dựng được", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3): 7 → 6 — `Sửa Hạn hoàn thành` was built.
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W3b): 6 → 5 — the sort entry was built (backend P9).
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): 5 → 3 — `Liên quan đến tôi` and `Sắp đến hạn` were built.
-    expect(PHAN_CHUA_DUNG.length).toBe(3);
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W6): 3 → 2 — the Sổ theo dõi view was built.
+    expect(PHAN_CHUA_DUNG.length).toBe(2);
     const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ");
     expect(ten).not.toContain("việc con");
     expect(ten).not.toContain("VIỆC CON");
@@ -463,16 +464,14 @@ describe("phần chưa dựng được", () => {
     // danh sách — `POST /api/v1/tasks` nay nhận `note` (0a41e48) và form tạo đã có ô ấy.
     const mucSua = PHAN_CHUA_DUNG.find((p) => p.ten.includes("✎ Sửa"));
     const mucGhiChu = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Ghi chú` ở form `Giao việc mới`"));
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W6): mục `Chế độ xem Sổ theo dõi (§4.3)` cũng rời — màn ấy và
+    // nút Xuất Excel đã dựng (`include=documents`, `register-export`).
     const muc43 = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Sổ theo dõi` (§4.3)"));
     expect(mucSua).toBeUndefined();
     expect(mucGhiChu).toBeUndefined();
-    expect(muc43).toBeDefined();
-    expect(muc43?.viSao).not.toContain("CHƯA TỒN TẠI");
-    expect(muc43?.viSao).not.toContain("chưa tồn tại");
+    expect(muc43).toBeUndefined();
     expect(PHAN_CHUA_DUNG.map((p) => p.viSao).join(" ")).not.toContain("không nhận `note`");
-    expect(muc43?.viSao).toContain("`GET /api/v1/tasks`");
-    expect(muc43?.viSao).toContain("documents");
-    expect(muc43?.viSao).toContain("xuat-so-theo-doi");
+    expect(PHAN_CHUA_DUNG.map((p) => p.viSao).join(" ")).not.toContain("chưa tồn tại");
   });
 });
 

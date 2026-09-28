@@ -367,14 +367,10 @@ describe("phần chưa dựng được của lượt này ra tới danh sách, k
     expect(PHAN_CHUA_DUNG.find((p) => p.ten.includes("KÉO-THẢ"))).toBeUndefined();
   });
 
-  it("con số thật của cột ĐÃ DỰNG (#15) — mục cũ rời; chế độ xem thứ ba vẫn được khai", () => {
+  it("con số thật của cột ĐÃ DỰNG (#15) — mục cũ rời; chế độ xem thứ ba ĐÃ DỰNG (W6) — mục ấy rời", () => {
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("SỐ LƯỢNG THẬT"))).toBe(false);
-    const soTheoDoi = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Chế độ xem `Sổ theo dõi`"));
-    expect(soTheoDoi).toBeDefined();
-    // SỬA CÓ CHỦ Ý 24/09/2026: lý do cũ ("bảng `nhiem_vu_van_ban` chưa tồn tại") đã sai từ khi
-    // bảng có. Bài này nay canh LÝ DO THẬT — tuyến sổ không trả `documents` — chứ không chỉ canh
-    // rằng mục ấy có mặt, vì một mục có mặt với lý do sai vẫn xanh ở phép kiểm cũ.
-    expect(soTheoDoi?.viSao).toContain("`GET /api/v1/tasks`");
-    expect(soTheoDoi?.viSao).not.toContain("chưa tồn tại");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W6): ca này ghim mục `Chế độ xem Sổ theo dõi` CÓ MẶT với lý do
+    // "tuyến sổ không trả `documents`". `include=documents` (90d12ff) và màn Sổ theo dõi nay có.
+    expect(PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Chế độ xem `Sổ theo dõi`"))).toBeUndefined();
   });
 });
