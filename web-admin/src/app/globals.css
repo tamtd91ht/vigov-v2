@@ -1579,3 +1579,35 @@ body {
   width: 100%;
   box-sizing: border-box;
 }
+
+/* ---- 📎 Đính kèm của nhật ký nhiệm vụ (§5.9, A4) ------------------------------------------------
+   44px targets and 16px text for EVERY control of the block — the picker, `Bỏ`, `Kiểm tra lại`,
+   `Tải về` — scoped here rather than changing `.nut-phu` site-wide. The file input is visually
+   hidden and stays in the tab order; its label (the visible `📎 Đính kèm`) shows the focus ring. */
+.task-attachments {
+  font-size: 1rem;
+}
+
+.task-attachments .nut-phu {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  font-size: 1rem;
+}
+
+.task-attachments label.nut-phu {
+  display: inline-flex;
+  align-items: center;
+}
+
+.task-attachments input[type="file"]:focus-visible + label.nut-phu {
+  outline: 3px solid var(--xanh);
+  outline-offset: 2px;
+}
+
+.task-attachments li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.25rem 0;
+}

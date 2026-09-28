@@ -10,6 +10,8 @@ import type {
   petitions_nhatKyNhiemVuRa,
 } from "@/lib/api/schema.gen";
 
+import { ATTACH_WAIT_NOTE, anyInFlight, storedIds } from "./task-attachments";
+import { AttachmentPicker, TimelineAttachments, useAttachmentUploads } from "./task-attachments-ui";
 import {
   DANG_TAI_NHAT_KY_NHIEM_VU,
   LOG_ENTRY_BUTTON,
@@ -29,8 +31,8 @@ import {
 
 /**
  * Nhật ký & Trao đổi của MỘT nhiệm vụ (§5.9): dòng thời gian mới nhất trước, `Xem thêm` theo con
- * trỏ, và — cho người `canWriteLogEntry` cho phép — ô ghi tay (`TaskLogEntryForm`). `📎 Đính kèm` không
- * có — xem `PHAN_CHUA_DUNG`.
+ * trỏ, và — cho người `canWriteLogEntry` cho phép — ô ghi tay (`TaskLogEntryForm`) kèm `📎 Đính kèm`
+ * (A4, ADR 0052). Mỗi dòng hiện tệp đính kèm của nó, tải về qua liên kết ngắn hạn.
  *
  * CÙNG KHUÔN `features/phan-anh/nhat-ky-phieu.tsx`, KHÔNG DÙNG CHUNG THÀNH PHẦN: hai hợp đồng khác
  * hình dạng (dòng phiếu có `action` và dòng `phan-cong` riêng; dòng nhiệm vụ không có `action`, còn
@@ -187,16 +189,19 @@ export function TaskLogEntryForm({
   const [done, setDone] = useState(false);
   const note = logEntryNote(text);
   const fieldId = `ghi-nhat-ky-${taskCode}`;
+  // `📎 Đính kèm` (A4). Only STORED files go with the entry; the entry waits while any still moves.
+  const files = useAttachmentUploads(taskCode);
+  const waiting = anyInFlight(files.items);
 
   return (
     <form
       className="form-danh-muc"
       onSubmit={(e) => {
         e.preventDefault();
-        if (note === null || sending) return;
+        if (note === null || sending || waiting) return;
         setSending(true);
         setDone(false);
-        addTaskLogEntry(taskCode, note, key).then((r) => {
+        addTaskLogEntry(taskCode, note, key, storedIds(files.items)).then((r) => {
           setSending(false);
           if (!r.ok) {
             // THE SERVER'S SENTENCE VERBATIM — the 403 names who may write.
@@ -205,6 +210,7 @@ export function TaskLogEntryForm({
           }
           setRefusal(null);
           setText("");
+          files.clear();
           setKey(crypto.randomUUID());
           setDone(true);
           onWritten();
@@ -230,13 +236,22 @@ export function TaskLogEntryForm({
       <p id={`${fieldId}-ghi-chu`} className="ghi-chu">
         {LOG_ENTRY_NOTE}
       </p>
+      <AttachmentPicker
+        fieldId={fieldId}
+        items={files.items}
+        disabled={sending}
+        onAdd={files.add}
+        onRetry={files.retry}
+        onRemove={files.remove}
+      />
+      {waiting && <p className="ghi-chu">{ATTACH_WAIT_NOTE}</p>}
       {refusal !== null && (
         <p className="thong-bao-loi" role="alert">
           {refusal}
         </p>
       )}
       {done && <p role="status">{LOG_ENTRY_DONE}</p>}
-      <button type="submit" className="nut-chinh" disabled={sending || note === null}>
+      <button type="submit" className="nut-chinh" disabled={sending || waiting || note === null}>
         {LOG_ENTRY_BUTTON}
       </button>
     </form>
@@ -307,6 +322,9 @@ export function KhoiNhatKyNhiemVu({
                 </div>
                 {h.phanCong !== null && <p className="ghi-chu">{h.phanCong}</p>}
                 <p className="ghi-chu-nhat-ky">{h.ghiChu}</p>
+                {/* `attachments` is always present on a row (b37ec2d); `?? []` only guards a reply
+                    from before that commit, which would otherwise crash the whole timeline. */}
+                <TimelineAttachments taskCode={maNhiemVu} attachments={d.attachments ?? []} />
               </li>
             );
           })}

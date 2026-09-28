@@ -1332,6 +1332,9 @@ export function CanhBaoNhanTrangThai({ canhBao }: { canhBao: string | null }) {
  * bức tường chữ trên đầu màn hình là bức tường người ta học cách không đọc.
  */
 export function KhoiChuaDung() {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): every part of the spec is built — `0 phần … chưa dựng được`
+  // above a register would read as a broken screen. An empty list draws nothing.
+  if (PHAN_CHUA_DUNG.length === 0) return null;
   return (
     <details className="khoi-chua-khai">
       <summary>
@@ -1352,10 +1355,8 @@ export function KhoiChuaDung() {
 /**
  * Bộ lọc §3.
  *
- * TÁM Ô, ĐÚNG TÁM THAM SỐ MÁY CHỦ NHẬN — không vẽ ô nào không có tuyến đứng sau. Hai ô của đặc
- * tả vắng mặt CÓ CHỦ Ý và lý do ra tới `PHAN_CHUA_DUNG`: tab `Liên quan đến tôi` và ô tick
- * `Sắp đến hạn` đều bị máy chủ TỪ CHỐI bằng 400 kèm lý do, nên vẽ chúng ra là vẽ hai ô mà mỗi lần
- * bấm đổi quyển sổ thành một trang lỗi.
+ * Mọi ô đều có tuyến đứng sau. ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): tab `Liên quan đến tôi` và ô tick
+ * `Sắp đến hạn` từng vắng mặt vì máy chủ từ chối; nay máy chủ phục vụ cả hai (3a4e60f).
  *
  * Ô `Người thực hiện` là Ô GÕ TÊN ĐỂ TÌM (`StaffCombobox`) trên danh bạ chọn người
  * (`GET /api/v1/staff-directory`, mọi cán bộ đăng nhập đọc được). Chữ gõ lọc TẠI CHỖ, không đi lên

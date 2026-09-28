@@ -391,7 +391,9 @@ describe("phần chưa dựng được", () => {
   it("mỗi mục có TÊN và LÝ DO — không mục nào để trống lý do", () => {
     // Một mục không nói vì sao là một mục người sau đọc thành "chưa làm tới", rồi dựng nó lên và
     // gặp lại đúng bức tường cũ.
-    expect(PHAN_CHUA_DUNG.length).toBeGreaterThan(0);
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): the list is EMPTY — every part of the spec is built. The
+    // rule for an entry still holds for any entry added later.
+    expect(PHAN_CHUA_DUNG).toEqual([]);
     for (const p of PHAN_CHUA_DUNG) {
       expect(p.ten).not.toBe("");
       expect(p.viSao.length).toBeGreaterThan(40);
@@ -438,7 +440,8 @@ describe("phần chưa dựng được", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W5): 5 → 3 — `Liên quan đến tôi` and `Sắp đến hạn` were built.
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W6): 3 → 2 — the Sổ theo dõi view was built.
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W7): 2 → 1 — the Excel import was built; only 📎 remains.
-    expect(PHAN_CHUA_DUNG.length).toBe(1);
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): 1 → 0 — `📎 Đính kèm` was built (ADR 0052, b37ec2d).
+    expect(PHAN_CHUA_DUNG.length).toBe(0);
     const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ");
     expect(ten).not.toContain("việc con");
     expect(ten).not.toContain("VIỆC CON");
@@ -1204,6 +1207,8 @@ describe("§5.9 Nhật ký & Trao đổi — nửa đọc", () => {
       unit: "",
       assignee: "",
       note: "Bắt đầu thực hiện.",
+      // Always present on a row since b37ec2d (`📎 Đính kèm`, A4).
+      attachments: [],
       ...sua,
     };
   }
@@ -1284,12 +1289,10 @@ describe("§5.9 Nhật ký & Trao đổi — nửa đọc", () => {
     ).toBeUndefined();
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W2): ô ghi tay nay GHI được (60011e8); mục chỉ còn `📎 Đính kèm`,
     // thứ máy chủ không nhận. Mục cũ nói "chờ luật người đang giữ việc" — luật ấy đã có.
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): the `📎 Đính kèm` entry left too — attachments are built.
     const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("Ghi nhật ký (§5.9)"));
-    expect(muc).toBeDefined();
-    expect(muc?.ten).toContain("📎 Đính kèm");
+    expect(muc).toBeUndefined();
     expect(PHAN_CHUA_DUNG.some((p) => `${p.ten} ${p.viSao}`.includes("Tiếp tục"))).toBe(false);
-    expect(muc?.viSao).toContain("/log-entries");
-    expect(muc?.viSao).not.toContain("người đang giữ việc");
     expect(PHAN_CHUA_DUNG.map((p) => p.viSao).join(" ")).not.toContain(
       "không có tuyến nhật ký nào",
     );

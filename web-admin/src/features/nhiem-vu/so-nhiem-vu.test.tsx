@@ -1399,14 +1399,17 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
 
   // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W2): ca này ghim "KHÔNG có ô ghi tay — tuyến ghi chưa dựng". Tuyến
   // nay có (60011e8), nên ô hiện cho người được ghi và VẮNG cho người không được — cả hai chiều dưới.
-  it("CÓ ô ghi tay cho người cầm `task.update`: nhãn, gợi ý §5.9, nút khoá khi trống, không 📎", () => {
+  it("CÓ ô ghi tay cho người cầm `task.update`: nhãn, gợi ý §5.9, nút khoá khi trống, và `📎 Đính kèm`", () => {
     const html = veChiTiet();
     expect(html).toContain('<label for="ghi-nhat-ky-NV19">Ghi vào nhật ký của nhiệm vụ</label>');
     expect(html).toContain('placeholder="Đã làm được gì, còn vướng gì…"');
     expect(html).toMatch(/<textarea id="ghi-nhat-ky-NV19"[^>]*maxLength="5000"/);
     expect(html).toMatch(/<button type="submit" class="nut-chinh" disabled="">➤ Ghi nhật ký<\/button>/);
     expect(html).toContain("Dòng đã ghi không sửa, không xoá được");
-    expect(html).not.toContain("📎");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): this pinned "no 📎" — the server had no file store. It has
+    // one now (ADR 0052, b37ec2d); the picker is part of the form, behind the same gate.
+    expect(html).toContain("📎 Đính kèm");
+    expect(html).toMatch(/<input id="ghi-nhat-ky-NV19-dinh-kem"[^>]*type="file"[^>]*multiple=""/);
     // The form sits INSIDE the §5.9 block, above the timeline.
     const khoi = html.slice(html.indexOf('aria-labelledby="tieu-de-nhat-ky-nhiem-vu-NV19"'));
     expect(khoi.indexOf("ghi-nhat-ky-NV19")).toBeLessThan(khoi.indexOf("Đang tải nhật ký"));
@@ -1436,7 +1439,8 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
     const src = readFileSync(fileURLToPath(new URL("./nhat-ky-nhiem-vu.tsx", import.meta.url)), "utf8");
     expect(src).toContain("const khoaDoc = `${maNhiemVu}|${lanLamMoi}|${written}`;");
     expect(src).toContain("onWritten={() => setWritten((n) => n + 1)}");
-    expect(src).toContain("addTaskLogEntry(taskCode, note, key)");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): the entry now carries the STORED attachment ids.
+    expect(src).toContain("addTaskLogEntry(taskCode, note, key, storedIds(files.items))");
     const ok = src.indexOf("setRefusal(null);");
     expect(src.indexOf("setKey(crypto.randomUUID());")).toBeGreaterThan(ok);
     expect(src.indexOf("setRefusal(r.thongBao);")).toBeLessThan(ok);
@@ -1461,6 +1465,7 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
           unit: "01JBOPHAN",
           assignee: CB,
           note: "Giao lại cho <b>văn phòng</b>.",
+          attachments: [],
         },
         {
           id: "nknv-1",
@@ -1470,6 +1475,7 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
           unit: "",
           assignee: "",
           note: "Tạo nhiệm vụ.",
+          attachments: [],
         },
       ],
       conNua: true,
@@ -1510,6 +1516,7 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
             unit: "",
             assignee: "",
             note: "Dòng đã có.",
+            attachments: [],
           },
         ],
         conNua: true,

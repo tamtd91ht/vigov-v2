@@ -599,7 +599,7 @@ export const NHAT_KY_RONG = "Chưa có ghi chép nào.";
  * NHẬT KÝ & TRAO ĐỔI §5.9 — NỬA ĐỌC (`GET /api/v1/tasks/{ma}/log-entries`)
  *
  * ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W2): ô ghi tay `Đã làm được gì, còn vướng gì…` NAY CÓ —
- * `POST /api/v1/tasks/{ma}/log-entries` (60011e8). Chỉ `📎 Đính kèm` còn thiếu: xem `PHAN_CHUA_DUNG`.
+ * `POST /api/v1/tasks/{ma}/log-entries` (60011e8). `📎 Đính kèm` có từ A4 (ADR 0052, b37ec2d).
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /** Tiêu đề khối — nguyên văn §5.9. */
@@ -2594,13 +2594,6 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
-  {
-    ten: "Nút `📎 Đính kèm` của ô Ghi nhật ký (§5.9)",
-    viSao:
-      "Ô ghi tay nay GHI được (`POST /api/v1/tasks/{ma}/log-entries`), nhưng chỉ nhận chữ: tuyến ấy " +
-      "không nhận tệp, và nhật ký nhiệm vụ chưa có kho tệp nào để đặt tệp vào. Vẽ nút 📎 lúc này là " +
-      "một nút chắc chắn hỏng — tệp cán bộ chọn sẽ không đi tới đâu. Đây là phần việc của máy chủ.",
-  },
 ];
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

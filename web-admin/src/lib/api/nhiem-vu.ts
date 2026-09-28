@@ -666,9 +666,13 @@ export function addTaskLogEntry(
   code: string,
   note: string,
   idempotencyKey: string,
+  attachments: readonly string[] = [],
 ): Promise<KetQua<petitions_nhatKyNhiemVuRa>> {
   const mau: petitions_post_tasks_by_ma_log_entries["duongDan"] = "/api/v1/tasks/{ma}/log-entries";
-  const body: petitions_taskLogEntryIn = { note };
+  // `attachments` (A4, b37ec2d): ids of COMPLETED uploads of this officer for this task. Absent when
+  // none — never `[]` sent for nothing, so an entry without files is byte-for-byte the old one.
+  const body: petitions_taskLogEntryIn =
+    attachments.length === 0 ? { note } : { note, attachments: [...attachments] };
   return docThanLoiGoi<petitions_nhatKyNhiemVuRa>(
     goiGhi(duongDanNhiemVu(mau, code), "POST", body, 201, { "Idempotency-Key": idempotencyKey }),
   );
