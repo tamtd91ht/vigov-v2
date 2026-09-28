@@ -20,7 +20,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/staffauth"
+	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	commsapp "github.com/vihat/vigov/service-comms/internal/app"
 	"github.com/vihat/vigov/service-comms/internal/domain"
@@ -141,6 +143,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// calls it; its four-case suite is internal/http/mail_settings_test.go.
 		MailSettings:      commsapp.NewMailSettingsAdmin(nil, nil, nil, nil),
 		WriteMailSettings: commsapp.NewMailSettingsAdmin(nil, nil, nil, nil),
+		AuditLog:          audit.NewLog(pkgstore.New(nil)),
 		Log:               log,
 	})
 

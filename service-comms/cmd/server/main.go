@@ -19,6 +19,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/crypto"
 	"github.com/vihat/vigov/core/httpx"
@@ -200,7 +201,9 @@ func main() {
 		WriteMapFieldSchemas: commsapp.NewMapFieldSchemas(kho, mapFieldSchemas),
 		MailSettings:         mailSettings,
 		WriteMailSettings:    mailSettings,
-		Log:                  log,
+		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
+		AuditLog: audit.NewLog(kho),
+		Log:      log,
 	})
 
 	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `nenTang`

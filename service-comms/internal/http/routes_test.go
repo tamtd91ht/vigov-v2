@@ -171,7 +171,9 @@ func dungMayChu(t *testing.T) *mayChu {
 			// The mail server: present because Register refuses a nil one; its suite is mail_settings_test.go.
 			MailSettings:      &fakeMailSettings{},
 			WriteMailSettings: &fakeMailSettings{},
-			Log:               slog.New(slog.NewTextHandler(io.Discard, nil)),
+			// The audit-log reader: present because Register refuses a nil one; its suite is audit_entries_test.go.
+			AuditLog: &auditLogFake{},
+			Log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 	}
 

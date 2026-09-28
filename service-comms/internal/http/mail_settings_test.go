@@ -101,6 +101,7 @@ func newMailServer(t *testing.T) *mailServer {
 		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
 		MailSettings:         fake,
 		WriteMailSettings:    fake,
+		AuditLog:             &auditLogFake{},
 		Log:                  log,
 	})
 

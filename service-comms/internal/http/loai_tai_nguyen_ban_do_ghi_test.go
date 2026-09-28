@@ -176,7 +176,9 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		// The mail server: present because Register refuses a nil one; its suite is mail_settings_test.go.
 		MailSettings:      &fakeMailSettings{},
 		WriteMailSettings: &fakeMailSettings{},
-		Log:               im,
+		// The audit-log reader: present because Register refuses a nil one; its suite is audit_entries_test.go.
+		AuditLog: &auditLogFake{},
+		Log:      im,
 	})
 
 	var h http.Handler = mux
