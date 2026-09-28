@@ -3,9 +3,14 @@ id: 0048-khu-van-hanh-vihat-trong-web-admin
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 6f01382
+derived_from_commit: 301c816
 expires: null
 owns_facts:
+  - "tài khoản vận hành ở service-identity, bảng riêng (operator_account, operator_session, operator_permission_grant), không tenant_id (chốt 28/09/2026)"
+  - "token vận hành mang realm operator và sid tra sổ phiên vận hành; lớp biên thứ hai chỉ ở service-platform nhận đúng một host từ OPERATOR_HOST (tuỳ chọn; vắng → cả khu 404)"
+  - "quyền vận hành là danh sách khoá ops.<nhóm>.<việc> của realm operator, không phải dòng trong bảng quyen theo xã"
+  - "đăng nhập vận hành bắt buộc MFA: mật khẩu + TOTP, mã khôi phục dùng một lần"
+  - "vì sao thay đổi cấu hình toàn nền tảng ghi vết ở platform_audit_log không tenant_id, còn thao tác nhắm một xã ghi ở audit_log của xã đích"
   - "khu vực vận hành ViHAT dựng trong app riêng platform-admin/ (sửa 27/09/2026, thay lựa chọn gộp vào web-admin), chạy trên host vận hành dành riêng"
   - "vì sao on-premise cho một xã không cần sửa mã khu vận hành: không triển khai platform-admin, hoặc triển khai cho người vận hành tại chỗ"
   - "backend khu vận hành thuộc service-platform; người vận hành chỉ chạm siêu dữ liệu, mọi thao tác ghi ghi vết theo xã ĐÍCH"
@@ -14,8 +19,10 @@ owns_facts:
 
 # 0048. Khu vực vận hành ViHAT trong `web-admin`
 
-**Trạng thái:** **đã chốt hướng** (chủ dự án, 27/09/2026 — ba điều kiện ở §*Quyết định*) · mọi phần
-ghi *"đề xuất, chờ xác nhận"* **chưa được chốt** · **Nối tiếp** ADR 0003 và ADR 0046
+**Trạng thái:** **đã chốt hướng** (chủ dự án, 27/09/2026 — ba điều kiện ở §*Quyết định*; điều kiện
+#1 sửa ở §*Sửa của chủ dự án — 27/09/2026*) · **§Thiết kế #1–#4, #10 đã chốt** 28/09/2026 (§*Chốt
+của chủ dự án — 28/09/2026*); #8 trả lời bởi ADR 0052 · **#5, #6 (định dạng mã), #7, #9, #11, #12
+vẫn chưa chốt** — mọi phần khác ghi *"đề xuất, chờ xác nhận"* **chưa được chốt** · **Nối tiếp** ADR 0003 và ADR 0046
 §*`admin.vigov.vn` — chưa dựng, và cần ADR riêng* · **Thay thế một phần** ADR 0003 §*Hệ quả* (chỉ
 điểm ở §*Thay thế gì*; thân ADR 0003 giữ nguyên, chỉ thêm một dòng trỏ có ngày)
 
@@ -70,16 +77,16 @@ xác nhận.
 
 | # | Câu chưa chốt | Đề xuất | Luật chạm tới |
 |---|---|---|---|
-| 1 | Tài khoản vận hành nằm ở đâu | Bảng mới ở `service-identity` (identity đã giữ đăng nhập, băm mật khẩu, sổ phiên), **tách bảng** khỏi tài khoản cán bộ. Phương án kia — ở `service-platform` — gom khu vận hành vào một service nhưng nhân đôi mã đăng nhập | Luật 2 bất biến 1 (một chủ sở hữu) — cần khai ở `data-ownership.json` |
-| 2 | Đăng nhập thế nào | Phiên/token **miền riêng**: token không mang `tenant_id`, mang một trường miền `van_hanh`; có `sid` tra sổ phiên mỗi yêu cầu (luật 5 bất biến 4). Token cán bộ xã **không bao giờ** được nhận ở tuyến vận hành và ngược lại. Cookie host-only trên host vận hành (luật 1 cấm #3) | Luật 5 bất biến 4, luật 1 bất biến 8 |
-| 3 | Mô hình quyền cho người vận hành | Bảng `quyen` là **theo xã** (luật 5 bất biến 3c). Đề xuất: một danh sách khoá **riêng của miền vận hành**, không trộn vào `quyen`. Cần khoá mà `quyen` không có là **phát hiện cho câu mở #27**, không phải một `INSERT` mới | Luật 5 bất biến 3, 3c; câu mở #27 |
-| 4 | Biên nhận ra host vận hành ra sao | `core/httpx` hôm nay từ chối mọi host dành riêng (ADR 0046, `59c72be`). Đề xuất: một **lớp biên thứ hai** chỉ ở platform, nhận **đúng một** host đọc từ cấu hình triển khai (hằng số toàn nền tảng — luật 8 bất biến 5), mọi host khác → 404; biên xã giữ nguyên việc từ chối host dành riêng. Tên biến và đường đọc qua `core/config` là **điều kiện dừng #1 của luật 11** | Luật 1 bất biến 3, luật 11 |
+| 1 | **Đã chốt 28/09 — xem §*Chốt của chủ dự án — 28/09/2026* #1.** Tài khoản vận hành nằm ở đâu | Bảng mới ở `service-identity` (identity đã giữ đăng nhập, băm mật khẩu, sổ phiên), **tách bảng** khỏi tài khoản cán bộ. Phương án kia — ở `service-platform` — gom khu vận hành vào một service nhưng nhân đôi mã đăng nhập | Luật 2 bất biến 1 (một chủ sở hữu) — cần khai ở `data-ownership.json` |
+| 2 | **Đã chốt 28/09 — xem §*Chốt của chủ dự án — 28/09/2026* #2 + #4.** Đăng nhập thế nào | Phiên/token **miền riêng**: token không mang `tenant_id`, mang một trường miền `van_hanh`; có `sid` tra sổ phiên mỗi yêu cầu (luật 5 bất biến 4). Token cán bộ xã **không bao giờ** được nhận ở tuyến vận hành và ngược lại. Cookie host-only trên host vận hành (luật 1 cấm #3) | Luật 5 bất biến 4, luật 1 bất biến 8 |
+| 3 | **Đã chốt 28/09 — xem §*Chốt của chủ dự án — 28/09/2026* #3.** Mô hình quyền cho người vận hành | Bảng `quyen` là **theo xã** (luật 5 bất biến 3c). Đề xuất: một danh sách khoá **riêng của miền vận hành**, không trộn vào `quyen`. Cần khoá mà `quyen` không có là **phát hiện cho câu mở #27**, không phải một `INSERT` mới | Luật 5 bất biến 3, 3c; câu mở #27 |
+| 4 | **Đã chốt 28/09 — xem §*Chốt của chủ dự án — 28/09/2026* #2 + #4.** Biên nhận ra host vận hành ra sao | `core/httpx` hôm nay từ chối mọi host dành riêng (ADR 0046, `59c72be`). Đề xuất: một **lớp biên thứ hai** chỉ ở platform, nhận **đúng một** host đọc từ cấu hình triển khai (hằng số toàn nền tảng — luật 8 bất biến 5), mọi host khác → 404; biên xã giữ nguyên việc từ chối host dành riêng. Tên biến và đường đọc qua `core/config` là **điều kiện dừng #1 của luật 11** | Luật 1 bất biến 3, luật 11 |
 | 5 | Liệt kê xã **liên xã** bởi người vận hành | Đọc sổ xã là siêu dữ liệu nền tảng, nhưng vẫn là một truy vấn qua nhiều xã. Đề xuất: đánh dấu `// @cross-tenant: <lý do>` và **ghi vết lần đọc** như một lần đọc liên xã | Luật 1 cấm #6, luật 6 bất biến 7 |
 | 6 | Ghi vết theo xã đích | Mục vết ở `audit_log` của platform, `tenant_id` = **xã đích**, cùng giao dịch với thay đổi (luật 6 bất biến 3). "Ai" là **mã nghiệp vụ** của người vận hành (luật 6 bất biến 8) — **định dạng mã chưa chốt**. Tạo xã: xã đích là chính xã vừa tạo | Luật 6 bất biến 2, 3, 8 |
 | 7 | Cột `tao_boi` / `cap_nhat_boi` của `ho_so_hien_thi_xa` chú thích *"staff business code"* (`0006…:155`) và bảng *"edited by its staff"* (`:113`) | Hai miền cùng ghi một bảng: người vận hành khai lúc nhận xã, cán bộ xã sửa sau. Mã của hai miền phải **phân biệt được bằng mắt** trong cùng một cột. Ai thắng khi cả hai cùng sửa — **chưa đề xuất**, cần chủ dự án | Luật 6 bất biến 8 |
-| 8 | Lưu tệp logo | Hôm nay `logo_url` là URL tới ảnh do hệ khác phục vụ (`0006…:134-137`). Luật *"tệp nghiệp vụ mới là riêng tư"* áp khi có kho tệp. Logo **vốn để công khai** cho công dân xem — đề xuất: đối tượng tiền tố `t:<tenant_id>` (luật 1 bất biến 7), công khai được khai **tường minh** kèm lý do, không phải mặc định | Luật 1 bất biến 7; nguyên tắc *Closed by default* |
+| 8 | **Đã trả lời bởi ADR 0052 §2–§3 — xem §*Chốt của chủ dự án — 28/09/2026*.** Lưu tệp logo | Hôm nay `logo_url` là URL tới ảnh do hệ khác phục vụ (`0006…:134-137`). Luật *"tệp nghiệp vụ mới là riêng tư"* áp khi có kho tệp. Logo **vốn để công khai** cho công dân xem — đề xuất: đối tượng tiền tố `t:<tenant_id>` (luật 1 bất biến 7), công khai được khai **tường minh** kèm lý do, không phải mặc định | Luật 1 bất biến 7; nguyên tắc *Closed by default* |
 | 9 | Sinh QR có phải một lần ghi không | QR in ra sống nhiều năm (ADR 0019). Đề xuất: ghi vết **lần phát hành QR** (tên miền, bản thử hay phát hành, ai) theo xã đích | Luật 6 bất biến 1 |
-| 10 | Ai ở ViHAT cầm tài khoản vận hành, có MFA không | **Chưa đề xuất** — quyết định tổ chức của ViHAT. Đề xuất duy nhất: MFA bắt buộc, vì một tài khoản ở đây chạm siêu dữ liệu của **mọi** xã | Luật 8 |
+| 10 | **MFA đã chốt 28/09 — xem §*Chốt của chủ dự án — 28/09/2026* #10.** Ai ở ViHAT cầm tài khoản vận hành, có MFA không | **Chưa đề xuất** — quyết định tổ chức của ViHAT. Đề xuất duy nhất: MFA bắt buộc, vì một tài khoản ở đây chạm siêu dữ liệu của **mọi** xã | Luật 8 |
 | 11 | On-premise: ai vận hành | **Chưa đề xuất** — tuỳ hợp đồng: ViHAT từ xa, hay người của xã. Mã không đổi theo câu trả lời (điều kiện #1); chỉ đổi ai cầm tài khoản | Luật 1 điều kiện dừng #5 nếu là ViHAT |
 | 12 | Hai dòng cũ `admin*.vigov.vn` → Xã Thăng Bình | Gỡ theo bước `doi-ten-mien-thang-binh` của ADR 0046:160 **trước khi** host vận hành lên sống, để một host không thuộc cùng lúc hai bề mặt trong sổ | ADR 0046, luật 7 |
 
@@ -122,11 +129,63 @@ nhau") **đứng nguyên**. Giá bảo trì là hai app Next.js; phần giao di�
 gói chung, không chép. Điều kiện dừng #5 đọc là: bật khu vận hành bằng `NEXT_PUBLIC_*` hay hằng số
 dựng **trong `web-admin`** là đưa bề mặt vận hành vào app của xã — vẫn cấm.
 
+## Chốt của chủ dự án — 28/09/2026 (§Thiết kế #1–#4, #10)
+
+Mục này ghi thêm, không sửa phần trên. Ở cả năm câu, chủ dự án chọn **đúng đề xuất của người thiết
+kế**; bảng dưới ghi hình dạng đã chốt. Tên bảng, trường, khoá viết tiếng Anh theo ADR 0051 — tên
+tiếng Việt ở §*Thiết kế* (như miền `van_hanh`) nhường cho tên ở đây. **Chưa dựng gì**: mỗi dòng là
+điều phải đúng khi dựng.
+
+| # | Đã chốt | Vì sao | Luật |
+|---|---|---|---|
+| 1 | Tài khoản vận hành ở **`service-identity`**, **bảng riêng**: `operator_account`, `operator_session`, `operator_permission_grant`. **Không** `tenant_id`. Tách hẳn khỏi tài khoản cán bộ xã — không bảng chung, không cột phân loại. Khai chủ sở hữu bằng `@entity` lúc dựng để `data-ownership.json` sinh ra | identity đã giữ băm mật khẩu và sổ phiên; đặt ở platform là nhân đôi mã đăng nhập. Bảng riêng để không truy vấn nào của cán bộ xã chạm được tài khoản vận hành, và ngược lại | Luật 2 bất biến 1; luật 5 cấm #2 |
+| 2 + 4 | **Token miền riêng**: không `tenant_id`, mang realm `operator`, có `sid` tra **sổ phiên vận hành** mỗi yêu cầu. Token cán bộ xã **không bao giờ** được nhận ở tuyến vận hành, và ngược lại (ĐIỀU KIỆN DỪNG #6). Cookie **host-only** trên host vận hành. **Lớp biên thứ hai chỉ ở `service-platform`** (và app `platform-admin`) nhận **đúng một** host, đọc từ biến mới **`OPERATOR_HOST`** — hằng số toàn nền tảng, **tuỳ chọn**: vắng → **cả khu vận hành 404**. Biên xã giữ nguyên việc từ chối host dành riêng. Biến đi qua `core/config` và `.env.example` lúc dựng | Vắng biến = 404 là đường on-premise của điều kiện #1: không đặt thì khu không tồn tại, không sửa mã. Tuỳ chọn chứ không bắt buộc, vì bắt buộc thì mọi triển khai chưa có khu vận hành đều không khởi động được (luật 11 dừng #2). Một host, không danh sách: hai host vận hành là hai bề mặt phải canh | Luật 1 bất biến 3, 8, cấm #3; luật 5 bất biến 4; luật 8 bất biến 5; luật 11 |
+| 3 | Quyền vận hành là **danh sách khoá riêng của realm `operator`**, **không** phải dòng trong bảng `quyen` theo xã — luật 5 bất biến 3c không bị chạm. Dạng khoá `ops.<nhóm>.<việc>`. Bộ đầu: `ops.tenant.manage` · `ops.domain.manage` · `ops.profile.manage` · `ops.mini_app.manage` · `ops.upload_policy.manage` · `ops.qr.issue`. Cấp **thẳng cho tài khoản** vận hành (ít người, không cần vai trò). Mọi lần cấp / thu hồi đều **ghi vết** | `quyen` là theo xã; trộn khoá vận hành vào đó là cho một quyền vượt xã chỗ đứng trong sổ của xã. Tiền tố `ops.` để một khoá vận hành không bao giờ trùng tên một khoá xã | Luật 5 bất biến 3, 3c, 5 |
+| 10 | **MFA bắt buộc**: mật khẩu + **TOTP** (ứng dụng xác thực), kèm **mã khôi phục dùng một lần**. Không có đăng nhập vận hành nào thiếu yếu tố thứ hai | Một tài khoản ở đây chạm siêu dữ liệu của **mọi** xã; lộ một mật khẩu là lộ sổ tên miền của cả nền tảng | Luật 8 |
+
+Câu *ai ở ViHAT cầm tài khoản* của #10 là quyết định tổ chức của ViHAT, **không** thuộc ADR này.
+
+**Liên quan, chốt cùng ngày (việc giới hạn tải lên, ADR 0052 §10):**
+
+| Điều | Đã chốt |
+|---|---|
+| Thay đổi cấu hình **toàn nền tảng** (không có xã đích — ví dụ giới hạn tải lên) | Ghi vết ở bảng mới **`platform_audit_log`**, append-only, **không** `tenant_id`. Không bịa một xã giả cho chỗ trống ấy — một `tenant_id` giả là giá trị mặc định trên đường cô lập (luật 1 cấm #1). Migration đang dựng: `service-platform/migrations/0008_upload_policy.sql` (chưa commit ở `301c816`) |
+| Thao tác vận hành **nhắm một xã** | Không đổi so với §Thiết kế #6: `audit_log` của platform, `tenant_id` = xã đích, cùng giao dịch |
+| **Định dạng mã nghiệp vụ** của người vận hành (§Thiết kế #6) | **Vẫn chưa chốt.** Đề xuất của người thiết kế, **chưa chốt**: một tiền tố khác hẳn mã cán bộ xã, ví dụ `VH-…`, để trong cùng một cột "ai" (cả #7) nhìn là biết miền nào (luật 6 bất biến 8) |
+
+**§Thiết kế #8 (lưu logo)** đã có câu trả lời ở ADR 0052: logo là bản dẫn xuất đã duyệt trong bucket
+`vigov-{env}-public` (§2), khoá đối tượng mang tiền tố xã `t_{tenant_id}` chứ không `t:` (§3 — lý
+do chính tả ở đó). Đề xuất `t:<tenant_id>` ở dòng #8 đọc theo ADR 0052.
+
+### Còn mở — chưa chốt
+
+| # | Câu | Ghi chú |
+|---|---|---|
+| 5 | Ghi vết lần **liệt kê xã liên xã** của người vận hành | Đề xuất ở §Thiết kế #5 chưa được xác nhận |
+| 6 | **Định dạng mã nghiệp vụ** của người vận hành | Đề xuất `VH-…` ở trên, chưa chốt |
+| 7 | Ai thắng khi người vận hành và cán bộ xã cùng sửa `ho_so_hien_thi_xa` | Chưa có đề xuất — cần chủ dự án |
+| 9 | **Hình dạng vết** của lần phát hành QR | Đề xuất ở §Thiết kế #9 chưa được xác nhận |
+| 11 | On-premise: ai vận hành | Tuỳ hợp đồng; mã không đổi |
+| 12 | Gỡ hai dòng cũ `admin*.vigov.vn` → Xã Thăng Bình | Phải xong **trước khi** host vận hành lên sống |
+
+### Thứ tự dựng
+
+Mỗi bước là một thẻ việc riêng, **mỗi thẻ qua cổng riêng** (ROUTING §0.3) — chốt ở mục này không
+thay cho cổng của từng thẻ.
+
+1. `service-identity`: tài khoản vận hành + TOTP + mã khôi phục + sổ phiên vận hành + cấp quyền
+   `ops.*` (và vết cấp / thu hồi)
+2. `service-platform`: lớp biên vận hành đọc `OPERATOR_HOST` + middleware xác thực realm `operator`
+3. `platform-admin`: màn đăng nhập (mật khẩu + TOTP)
+4. Tuyến vận hành đầu tiên: giới hạn tải lên (ADR 0052 §10), quyền `ops.upload_policy.manage`, vết ở
+   `platform_audit_log`
+
 ## ĐIỀU KIỆN DỪNG
 
 1. Một vai trò, hay tài khoản, có thẩm quyền **vượt một xã** — luật 5 điều kiện dừng #3. Chính
    miền tài khoản vận hành là trường hợp này: hình dạng của nó cần chủ dự án xác nhận (§*Thiết kế*
-   #1–#3)
+   #1–#3). **28/09/2026: #1–#3 đã chốt** — xem §*Chốt của chủ dự án — 28/09/2026*; điều kiện này còn
+   áp cho mọi mở rộng thẩm quyền vượt các khoá `ops.*` đã chốt
 2. Người vận hành cần chạm **dữ liệu nghiệp vụ** của một xã — luật 1 điều kiện dừng #5; ADR 0003
    chỉ cho phiên hỗ trợ do xã cấp
 3. Một màn đọc dữ liệu **qua nhiều xã** ngoài sổ xã — luật 1 điều kiện dừng #2 (báo cáo huyện/tỉnh
