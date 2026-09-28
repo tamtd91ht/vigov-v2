@@ -163,7 +163,10 @@ func dungMayChuThongBao(t *testing.T) *mayChuThongBao {
 		// And the map field schema — see map_field_schema_test.go.
 		MapFieldSchemas:      &fakeMapFieldSchemas{},
 		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
-		Log:                  im,
+		// The mail server: present because Register refuses a nil one; its suite is mail_settings_test.go.
+		MailSettings:      &fakeMailSettings{},
+		WriteMailSettings: &fakeMailSettings{},
+		Log:               im,
 	})
 
 	// The real edge chain in the real order. idem.Middleware sits INSIDE TenantMiddleware because

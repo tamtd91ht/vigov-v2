@@ -168,7 +168,10 @@ func dungMayChu(t *testing.T) *mayChu {
 			// suite is map_field_schema_test.go.
 			MapFieldSchemas:      &fakeMapFieldSchemas{},
 			WriteMapFieldSchemas: &fakeMapFieldSchemas{},
-			Log:                  slog.New(slog.NewTextHandler(io.Discard, nil)),
+			// The mail server: present because Register refuses a nil one; its suite is mail_settings_test.go.
+			MailSettings:      &fakeMailSettings{},
+			WriteMailSettings: &fakeMailSettings{},
+			Log:               slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 	}
 

@@ -20,6 +20,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/vihat/vigov/core/config"
+	"github.com/vihat/vigov/core/crypto"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/identityclient"
@@ -30,6 +31,7 @@ import (
 	"github.com/vihat/vigov/core/tenant"
 	commsapp "github.com/vihat/vigov/service-comms/internal/app"
 	svchttp "github.com/vihat/vigov/service-comms/internal/http"
+	"github.com/vihat/vigov/service-comms/internal/mail"
 	commsstore "github.com/vihat/vigov/service-comms/internal/store"
 	"github.com/vihat/vigov/service-comms/migrations"
 )
@@ -158,6 +160,27 @@ func main() {
 	// case; the use case owns the transaction its audit entry shares.
 	mapFieldSchemas := commsstore.NewMapFieldSchemaStore(kho)
 
+	// The commune's mail server (migration 0008) and the envelope that seals its password (ADR 0009).
+	//
+	// A NIL *crypto.Envelope IS A VALID PROCESS, and a deliberate one: SECRET_ENCRYPTION_KEYS is
+	// optional at config.Load (core/config/secret_encryption.go), because making it required would
+	// stop this service on every machine to protect one screen. Without it the two mail-settings
+	// WRITE routes answer 503 by name and write nothing; every other route keeps serving. A MALFORMED
+	// value never reaches here — config.Load refuses it and the pod does not start.
+	var envelope *crypto.Envelope
+	if cfg.SecretEncryptionConfigured() {
+		envelope, err = crypto.New(cfg.SecretEncryptionKeys, commsstore.NewDataEncryptionKeyStore(kho))
+		if err != nil {
+			log.Error("không dựng được bộ niêm bí mật theo xã", "service", "comms", "err", err)
+			os.Exit(1)
+		}
+	} else {
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet",
+			"SECRET_ENCRYPTION_KEYS trống — lưu và gửi thử máy chủ thư của xã sẽ trả 503 (ADR 0009)")
+	}
+	mailSettings := commsapp.NewMailSettingsAdmin(kho, commsstore.NewMailSettingsStore(kho), envelope,
+		mail.NewSender(nil, mail.DefaultTimeout))
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:       staffauth.Checker{},
@@ -175,6 +198,8 @@ func main() {
 		GhiLoaiTaiNguyen:     commsapp.NewDanhMucLoaiTaiNguyen(kho, loaiTaiNguyen),
 		MapFieldSchemas:      mapFieldSchemas,
 		WriteMapFieldSchemas: commsapp.NewMapFieldSchemas(kho, mapFieldSchemas),
+		MailSettings:         mailSettings,
+		WriteMailSettings:    mailSettings,
 		Log:                  log,
 	})
 

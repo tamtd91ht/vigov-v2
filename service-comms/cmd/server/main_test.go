@@ -137,7 +137,11 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// four-case suite is internal/http/map_field_schema_test.go.
 		MapFieldSchemas:      commsstore.NewMapFieldSchemaStore(nil),
 		WriteMapFieldSchemas: commsapp.NewMapFieldSchemas(nil, nil),
-		Log:                  log,
+		// The mail server, on a nil *store.DB and a nil envelope for the same reason: nothing here
+		// calls it; its four-case suite is internal/http/mail_settings_test.go.
+		MailSettings:      commsapp.NewMailSettingsAdmin(nil, nil, nil, nil),
+		WriteMailSettings: commsapp.NewMailSettingsAdmin(nil, nil, nil, nil),
+		Log:               log,
 	})
 
 	danhBa := thuMucGia{

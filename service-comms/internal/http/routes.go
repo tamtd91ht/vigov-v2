@@ -167,6 +167,22 @@ type MapFieldSchemaWriter interface {
 	Delete(ctx context.Context, id, reason string, actor audit.Actor) error
 }
 
+// --- the commune's mail server (docs/ui-ux/14-cau-hinh.md §10) ------------------------------------
+//
+// Split the same way: the read opens no transaction; each write puts its audit entry inside the
+// transaction it opens (rule 6, invariant 3). Both are satisfied by app.MailSettingsAdmin.
+
+// MailSettingsReader is the READ half. It returns no password — the view has no field for one.
+type MailSettingsReader interface {
+	Get(ctx context.Context) (app.MailSettingsView, error)
+}
+
+// MailSettingsWriter is the WRITE half: saving, and sending the fixed test message.
+type MailSettingsWriter interface {
+	Save(ctx context.Context, req app.SaveMailSettingsRequest, actor audit.Actor) (app.MailSettingsView, error)
+	SendTestMessage(ctx context.Context, recipient string, actor audit.Actor) error
+}
+
 type Deps struct {
 	// Checker WAS unused and deliberately outside the refusal switch, and the comment here said so:
 	// no mounted route declared authz.RequirePermission. The three catalogue WRITE routes below do,
@@ -192,6 +208,10 @@ type Deps struct {
 	// The map field schema (migration 0007) — see internal/http/map_field_schema.go.
 	MapFieldSchemas      MapFieldSchemaReader
 	WriteMapFieldSchemas MapFieldSchemaWriter
+
+	// The commune's mail server (migration 0008) — see internal/http/mail_settings.go.
+	MailSettings      MailSettingsReader
+	WriteMailSettings MailSettingsWriter
 
 	Log *slog.Logger
 }
@@ -235,8 +255,14 @@ func Register(mux *http.ServeMux, d Deps) {
 	if d.WriteMapFieldSchemas == nil {
 		panic("comms/http: thiếu use case ghi trường bản đồ — POST/PATCH/DELETE /api/v1/map-field-schemas sẽ panic khi có người gọi")
 	}
+	if d.MailSettings == nil {
+		panic("comms/http: thiếu kho máy chủ thư — GET /api/v1/mail-settings sẽ panic khi có người gọi")
+	}
+	if d.WriteMailSettings == nil {
+		panic("comms/http: thiếu use case ghi máy chủ thư — PUT /api/v1/mail-settings và POST …/test-messages sẽ panic khi có người gọi")
+	}
 	if d.Checker == nil {
-		panic("comms/http: thiếu authz.Checker — mười lăm tuyến có khai quyền sẽ không kiểm được quyền")
+		panic("comms/http: thiếu authz.Checker — mười tám tuyến có khai quyền sẽ không kiểm được quyền")
 	}
 
 	h := NewHandler(d)
@@ -734,4 +760,83 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.lookup")(
 			idem.KhongCan("xoá một trường đã xoá trả 404: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.DeleteMapFieldSchema))))
+
+	// --- the commune's mail server (Cấu hình → Máy chủ thư) -------------------------------------------
+	//
+	// `mail-settings` IS VENDOR-CHOSEN: ubiquitous-language.md §Tên tài nguyên trên URL has no row for
+	// it. See internal/http/mail_settings.go.
+	//
+	// `admin.lookup` ON ALL THREE, READ INCLUDED, AND IT IS THE REQUIREMENT REPOSITORY'S KEY FOR THESE
+	// ROUTES (../vigov-require/docs/spec/04-api.md:33-35), seeded at
+	// service-identity/migrations/0001_init.sql:281. No key was invented (rule 5, 3c). The read is NOT
+	// AnyAuthenticated, unlike the catalogue reads: this is one administrative screen, and the host
+	// and account of the commune's mail server feed no other.
+	//
+	// NO idem.* DECLARATION ON THE GET: it changes no state.
+	//
+	// @summary  Cấu hình máy chủ thư của xã — không bao giờ trả mật khẩu, chỉ báo đã đặt hay chưa
+	// @screen   14-cau-hinh §10
+	// @reply    200 mailSettingsOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/mail-settings",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			http.HandlerFunc(h.GetMailSettings)))
+
+	// PUT AND NOT PATCH: §10 is one form saved whole (`💾 Lưu cấu hình`), and every field is sent. The
+	// one exception is the password, which is write-only: blank means keep — unless host, port or
+	// account changed, which is a 400.
+	//
+	// 503 `encryption_not_configured` when the platform has no SECRET_ENCRYPTION_KEYS — refused before
+	// anything is written, whether or not the body carries a password.
+	//
+	// idem.KhongCan: the result is the state the body names. A save that changes nothing and carries
+	// no password writes and audits nothing; one that carries a password re-seals it (fresh nonce) and
+	// files a second entry saying the password was set again — which is true.
+	//
+	// @summary  Lưu cấu hình máy chủ thư của xã — mật khẩu chỉ ghi, để trống là giữ nguyên, đổi máy chủ/cổng/tài khoản thì phải nhập lại
+	// @screen   14-cau-hinh §10
+	// @request  mailSettingsIn
+	// @reply    200 mailSettingsOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    503 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/mail-settings",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.KhongCan("lưu là ghi đè cả cấu hình bằng trạng thái trong thân; không đổi gì và không kèm mật khẩu thì không ghi và không có vết, kèm mật khẩu thì lần thứ hai chỉ niêm lại cùng mật khẩu và ghi đúng một vết nói điều đó")(
+				http.HandlerFunc(h.PutMailSettings))))
+
+	// `✉ Gửi thử` — THE FIRST OUTBOUND MAIL OF THIS SERVICE. A fixed test message, no citizen data, to
+	// the one address the administrator typed, through the commune's stored settings over TLS with
+	// the certificate verified (internal/mail). The attempt is audited before the send.
+	//
+	// 502 when the commune's server refused or could not be reached, with a code per category and a
+	// sentence that never quotes the server. 409 when nothing has been saved yet.
+	//
+	// idem.Required(MoKhiHong): a double click must not send two messages; a cache outage costs at
+	// worst a second test message to the administrator's own address, which is not worth refusing
+	// the button over.
+	//
+	// ⚠ IN THE CLUSTER TODAY THIS ANSWERS 502 `mail_connect_failed` FOR EVERY COMMUNE:
+	// deploy/base/mang/netpol.yaml opens egress on 5432 / 6379 / 9092 only. Opening 465/587 for comms
+	// is a network decision for the owner, not a change made from here.
+	//
+	// @summary  Gửi một thư thử cố định tới địa chỉ quản trị viên nhập, qua máy chủ thư đã lưu của xã
+	// @screen   14-cau-hinh §10
+	// @request  mailTestIn
+	// @reply    200 mailTestOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    502 httpx.Error
+	// @reply    503 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/mail-settings/test-messages",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.SendTestMail))))
 }

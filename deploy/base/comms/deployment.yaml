@@ -115,6 +115,10 @@ spec:
             # không có gì đỏ — `idemStore` thành nil và mỗi tuyến hành xử theo `CheDoHong` nó
             # khai. Bảy lời gọi `idem.Required(idem.DongKhiHong)` trong kho trả 503: tiền, số
             # văn bản đã phát hành, tài khoản cán bộ. Pod xanh, probe xanh, tuyến chết.
+            # ⚠ THÊM `SECRET_ENCRYPTION_KEYS` vào CHÍNH Secret này (ADR 0009): khoá gốc niêm mật
+            # khẩu máy chủ thư của từng xã. `config.Load` không đòi — thiếu thì chỉ hai tuyến ghi
+            # `/api/v1/mail-settings` trả 503, mọi tuyến khác vẫn chạy; sai dạng thì pod không
+            # khởi động. SAO LƯU KHOÁ TÁCH KHỎI BẢN SAO LƯU CSDL trước lần lưu đầu tiên.
             - secretRef: { name: bi-mat-comms }
 
           # /healthz nằm NGOÀI chuỗi phân giải xã, có chủ ý (`main.go:269`): nó trả lời "tiến

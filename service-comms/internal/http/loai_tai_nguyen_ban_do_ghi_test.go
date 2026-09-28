@@ -173,7 +173,10 @@ func dungMayChuGhi(t *testing.T) *mayChuGhi {
 		// And the map field schema — see map_field_schema_test.go.
 		MapFieldSchemas:      &fakeMapFieldSchemas{},
 		WriteMapFieldSchemas: &fakeMapFieldSchemas{},
-		Log:                  im,
+		// The mail server: present because Register refuses a nil one; its suite is mail_settings_test.go.
+		MailSettings:      &fakeMailSettings{},
+		WriteMailSettings: &fakeMailSettings{},
+		Log:               im,
 	})
 
 	var h http.Handler = mux

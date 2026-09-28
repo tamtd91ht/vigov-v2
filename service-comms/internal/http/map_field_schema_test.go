@@ -106,7 +106,10 @@ func newMapFieldServer(t *testing.T) *mapFieldServer {
 		GhiDanhMucNoiDung:    &ghiDanhMucNDGia{},
 		MapFieldSchemas:      fake,
 		WriteMapFieldSchemas: fake,
-		Log:                  log,
+		// The mail server: present because Register refuses a nil one; its suite is mail_settings_test.go.
+		MailSettings:      &fakeMailSettings{},
+		WriteMailSettings: &fakeMailSettings{},
+		Log:               log,
 	})
 
 	// The real edge chain in the real order, idem with a nil store (a valid deployment) so each
