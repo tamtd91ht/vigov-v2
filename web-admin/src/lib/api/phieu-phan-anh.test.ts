@@ -11,6 +11,7 @@ import {
   layNhatKyPhieu,
   layPhieuPhanAnh,
   phanLoaiPhieu,
+  setPetitionPublication,
   tienTrangThaiPhieu,
 } from "./phieu-phan-anh";
 import type { petitions_phieuCuaToiRa, petitions_phieuPhanAnhRa } from "./schema.gen";
@@ -205,6 +206,15 @@ describe("đường dẫn đọc sổ phản ánh", () => {
     }
   });
 
+  it("`Bị đánh giá thấp`: `rating_max=2`; unticked, the parameter is ABSENT", () => {
+    const duong = duongDanSoPhanAnh({ ratingMax: 2, trangThai: "da-dong" });
+    const truyVan = new URLSearchParams(duong.slice(duong.indexOf("?") + 1));
+    expect(truyVan.get("rating_max")).toBe("2");
+    expect(truyVan.get("status")).toBe("da-dong");
+    // `rating_max=` empty is a 400 — the box unticked must send nothing at all.
+    expect(duongDanSoPhanAnh({ ratingMax: undefined })).toBe("/api/v1/citizen-reports");
+  });
+
   it("không một chỗ nào mang `tenant_id`", () => {
     // Client tự khai xã là client tự cấp quyền (luật 1, cấm #2). Xã suy từ `Host` ở rìa ngoài cùng.
     const duong = duongDanSoPhanAnh({ trangThai: "da-dong", boPhanID: "01JBOPHAN" });
@@ -390,6 +400,16 @@ const KHOA_PHIEU_MONG_DOI = [
   // Thêm 26/09/2026 (4ce8933): phiếu có công dân đứng sau để xác nhận không. Chỉ là cờ, không mang
   // `cong_dan_id` — cho biết CÓ tài khoản, không cho biết AI.
   "has_citizen",
+  // Added 28/09/2026 (ADR 0050 points 2 and 8), all five read by the drawer and the lookup view:
+  // `publication_status` is the staff moderation of the public page (`public` is now derived from
+  // it); `rating` · `rating_comment` · `rated_at` are the CITIZEN'S verdict — `rating_comment` is the
+  // citizen's own words and follows `content` (not masked, never logged); `reopen_count` counts the
+  // reopenings a low rating caused. None is a staff note or routing history (rule 4, forbidden #5).
+  "publication_status",
+  "rating",
+  "rating_comment",
+  "rated_at",
+  "reopen_count",
 ] as const satisfies readonly KhoaPhieu[];
 
 /** Hợp đồng mọc thêm một trường mà danh sách trên không có → đỏ ngay tại đây. */
@@ -703,5 +723,51 @@ describe("ghi chú nội bộ trên sáu thao tác", () => {
       expect(gia.mock.calls[i]?.[1]?.body).toBeUndefined();
       expect(gia.mock.calls[i]?.[1]?.headers).toEqual({});
     }
+  });
+});
+
+describe("kiểm duyệt công khai — PUT …/publication", () => {
+  function batPut(status = 200, than: unknown = { code: "PA-2026-0021", publication_status: "cong-khai" }) {
+    const gia = vi.fn(async (_duongDan: string, _tuyChon?: RequestInit) =>
+      new Response(JSON.stringify(than), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", gia);
+    return gia;
+  }
+
+  it("PUT the right route, body EXACTLY `{status}`, path code encoded, no Idempotency-Key", async () => {
+    const gia = batPut();
+    const kq = await setPetitionPublication("PA/2026 0021", "cong-khai");
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/citizen-reports/PA%2F2026%200021/publication");
+    const tuyChon = gia.mock.calls[0]?.[1];
+    expect(tuyChon?.method).toBe("PUT");
+    expect(JSON.parse(String(tuyChon?.body))).toEqual({ status: "cong-khai" });
+    expect(new Headers(tuyChon?.headers).has("Idempotency-Key")).toBe(false);
+    // 200 carries the petition as it now stands — the screen re-renders from it.
+    expect(kq.ok && kq.duLieu.publication_status).toBe("cong-khai");
+  });
+
+  it("hide sends `an`", async () => {
+    const gia = batPut(200, { code: "PA-2026-0021", publication_status: "an" });
+    await setPetitionPublication("PA-2026-0021", "an");
+    expect(JSON.parse(String(gia.mock.calls[0]?.[1]?.body))).toEqual({ status: "an" });
+  });
+
+  it("409 `never_public`: the server's fixed sentence reaches the screen VERBATIM", async () => {
+    const cau = "Phản ánh về tác phong cán bộ không bao giờ được hiển thị công khai.";
+    batPut(409, { code: "never_public", message: cau, trace_id: "01JTRACE" });
+    const kq = await setPetitionPublication("PA-2026-0021", "cong-khai");
+    expect(kq.ok).toBe(false);
+    expect(kq.ok === false && kq.thongBao).toBe(cau);
+  });
+
+  it("403 without `feedback.assign`: the server's sentence, not a client-side one", async () => {
+    const cau = "Tài khoản không có quyền thực hiện thao tác này.";
+    batPut(403, { code: "forbidden", message: cau, trace_id: "01JTRACE" });
+    const kq = await setPetitionPublication("PA-2026-0021", "an");
+    expect(kq.ok === false && kq.thongBao).toBe(cau);
   });
 });

@@ -118,3 +118,65 @@ describe("phiếu phản ánh kết xuất ra trang", () => {
     expect(html).toContain("Rác tồn đọng ở đầu ngõ ba ngày chưa ai dọn.");
   });
 });
+
+describe("đánh giá, mở lại, công khai — màn tra cứu", () => {
+  it("chưa đánh giá: nói ra, không để khối trống", () => {
+    const html = renderToStaticMarkup(<ThongTinPhieu phieu={phieu()} bayGio={BAY_GIO} />);
+    expect(html).toContain("Đánh giá của người dân");
+    expect(html).toContain("Người dân chưa đánh giá");
+    expect(html).not.toContain("Đã mở lại");
+  });
+
+  it("2 sao, mở lại 1 lần: sao, nhận xét, câu đỏ của bản yêu cầu, dòng mở lại dưới hạn", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu
+        phieu={phieu({
+          status: "dang-xu-ly",
+          rating: 2,
+          rating_comment: "Vẫn còn rác ở cuối ngõ.",
+          rated_at: "2026-09-28T03:05:00Z",
+          reopen_count: 1,
+        })}
+        bayGio={BAY_GIO}
+      />,
+    );
+    expect(html).toContain("★★☆☆☆");
+    expect(html).toContain("2/5");
+    expect(html).toContain("10:05 28/09/2026");
+    expect(html).toContain("Vẫn còn rác ở cuối ngõ.");
+    expect(html).toContain("Đánh giá thấp — phiếu đã tự mở lại để xử lý tiếp.");
+    expect(html).toContain("Đã mở lại 1 lần do người dân chấm điểm thấp");
+  });
+
+  it("nhận xét của dân được THOÁT — không HTML nào chạy (luật 13)", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu
+        phieu={phieu({ rating: 1, rating_comment: "<img src=x onerror=alert(1)>" })}
+        bayGio={BAY_GIO}
+      />,
+    );
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img");
+  });
+
+  it("màn tra cứu KHÔNG có nút công khai, kể cả phiếu đang chờ duyệt", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu phieu={phieu({ publication_status: "cho-duyet" })} bayGio={BAY_GIO} />,
+    );
+    expect(html).toContain("Chưa cho hiện công khai");
+    expect(html).not.toContain("Cho hiện công khai</button>");
+    expect(html).not.toContain("Ẩn khỏi trang công khai</button>");
+    // Nor the "no permission" sentence: read-only here is about the screen, not the account.
+    expect(html).not.toContain("feedback.assign");
+  });
+
+  it("đang công khai: nhãn trạng thái đúng", () => {
+    const html = renderToStaticMarkup(
+      <ThongTinPhieu
+        phieu={phieu({ publication_status: "cong-khai", public: true })}
+        bayGio={BAY_GIO}
+      />,
+    );
+    expect(html).toContain("Đang hiện công khai");
+  });
+});

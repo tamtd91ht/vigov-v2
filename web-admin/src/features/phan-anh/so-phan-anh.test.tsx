@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { ReactElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { KhungQuyen } from "@/features/quyen/cong-quyen";
 import type { KetQua } from "@/lib/api/goi";
@@ -50,6 +51,7 @@ import {
   ThePhieu,
 } from "./so-phan-anh";
 import { BieuMauGhiNhatKy, DanhSachNhatKy, NhatKyPhieu } from "./nhat-ky-phieu";
+import { PublicationBox } from "./citizen-report-blocks";
 
 const THU_MUC = fileURLToPath(new URL(".", import.meta.url));
 
@@ -806,5 +808,286 @@ describe("Đóng phiếu — `has_citizen` thắng kênh khi có mặt", () => {
       phieu({ status: "da-xu-ly", channel: "can-bo-nhap-ho", has_citizen: true }),
     );
     expect(html).not.toContain(O_KET_QUA);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * RATING, REOPENING, PUBLIC-PAGE MODERATION (ADR 0050 points 2 and 8)
+ *
+ * The denied case is tested as hard as the allowed one: the developer's account holds every key, so
+ * a button leaking past its gate is invisible during development.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+const NUT_CONG_KHAI = "Cho hiện công khai</button>";
+const NUT_AN = "Ẩn khỏi trang công khai</button>";
+
+function veChiTietVoiCongKhai(
+  cong: ReturnType<typeof congThaoTac>,
+  p: petitions_phieuPhanAnhRa,
+  loiGhi: string | null = null,
+): string {
+  return renderToStaticMarkup(
+    <ChiTietPhieu
+      phieu={p}
+      bayGio={BAY_GIO}
+      cong={cong}
+      tenBoPhan={TEN_BO_PHAN}
+      boPhan={BO_PHAN}
+      danhBa={DANH_BA}
+      dangGui={false}
+      loiGhi={loiGhi}
+      dong={() => {}}
+      phanLoai={() => {}}
+      chuyenXuLy={() => {}}
+      tienTrangThai={() => {}}
+      dongPhieuLai={() => {}}
+      khongTiepNhan={() => {}}
+      chuyenCapTren={() => {}}
+      setPublication={() => {}}
+    />,
+  );
+}
+
+describe("drawer — moderation buttons (§8.3), gated by `feedback.assign`", () => {
+  it("WITH `feedback.assign`, pending: both buttons, the state label and its hint", () => {
+    const html = veChiTietVoiCongKhai(
+      congThaoTac(false, true, false),
+      phieu({ publication_status: "cho-duyet" }),
+    );
+    expect(html).toContain(NUT_CONG_KHAI);
+    expect(html).toContain(NUT_AN);
+    expect(html).toContain("Chưa cho hiện công khai");
+    expect(html).toContain("Người gửi vẫn tra cứu được phiếu của mình");
+  });
+
+  it("DENIED — without `feedback.assign`: NO button, and the sentence names the key", () => {
+    for (const cong of [congThaoTac(false, false, false), congThaoTac(true, false, true)]) {
+      const html = veChiTietVoiCongKhai(cong, phieu({ publication_status: "cho-duyet" }));
+      expect(html).not.toContain(NUT_CONG_KHAI);
+      expect(html).not.toContain(NUT_AN);
+      expect(html).toContain("không đổi được việc hiển thị phiếu này trên trang công khai");
+      expect(html).toContain("feedback.assign");
+    }
+  });
+
+  it("public: only `Ẩn`; hidden: only `Cho hiện`", () => {
+    const cong = veChiTietVoiCongKhai(
+      congThaoTac(false, true, false),
+      phieu({ publication_status: "cong-khai", public: true }),
+    );
+    expect(cong).toContain("Đang hiện công khai");
+    expect(cong).not.toContain(NUT_CONG_KHAI);
+    expect(cong).toContain(NUT_AN);
+
+    const an = veChiTietVoiCongKhai(congThaoTac(false, true, false), phieu({ publication_status: "an" }));
+    expect(an).toContain("Không cho hiện công khai");
+    expect(an).toContain(NUT_CONG_KHAI);
+    expect(an).not.toContain(NUT_AN);
+  });
+
+  it("`can-bo` petition: NEVER `Cho hiện công khai`, even with the key", () => {
+    const html = veChiTietVoiCongKhai(
+      congThaoTac(true, true, true),
+      phieu({ field: "can-bo", field_label: "", publication_status: "an" }),
+    );
+    expect(html).not.toContain(NUT_CONG_KHAI);
+    expect(html).toContain("Phản ánh về tác phong cán bộ không bao giờ được hiển thị công khai.");
+  });
+
+  it("no write path passed (default): read-only, whatever the permissions", () => {
+    // `veChiTiet` passes no `setPublication`.
+    const html = veChiTiet(congThaoTac(true, true, true), phieu({ publication_status: "cho-duyet" }));
+    expect(html).not.toContain(NUT_CONG_KHAI);
+    expect(html).not.toContain(NUT_AN);
+    expect(html).toContain("Chưa cho hiện công khai");
+  });
+
+  it("409 `never_public`: the server's sentence shows in the drawer's alert line, verbatim", () => {
+    const cau = "Phản ánh về tác phong cán bộ không bao giờ được hiển thị công khai.";
+    const html = veChiTietVoiCongKhai(congThaoTac(false, true, false), phieu(), cau);
+    expect(html).toContain(`<p class="thong-bao-loi" role="alert">${cau}</p>`);
+  });
+});
+
+type ThuocTinh = Record<string, unknown> & { children?: ReactNode };
+
+/** Every inline element of a tree, depth first (components are not expanded). */
+function moiPhanTu(nut: ReactNode, ra: ReactElement<ThuocTinh>[] = []): ReactElement<ThuocTinh>[] {
+  if (Array.isArray(nut)) {
+    for (const con of nut) moiPhanTu(con as ReactNode, ra);
+    return ra;
+  }
+  if (nut !== null && typeof nut === "object" && "props" in nut) {
+    const pt = nut as ReactElement<ThuocTinh>;
+    ra.push(pt);
+    moiPhanTu(pt.props.children, ra);
+  }
+  return ra;
+}
+
+function textOf(nut: ReactNode): string {
+  if (typeof nut === "string" || typeof nut === "number") return String(nut);
+  if (Array.isArray(nut)) return nut.map(textOf).join("");
+  if (nut !== null && typeof nut === "object" && "props" in nut) {
+    return textOf((nut as ReactElement<ThuocTinh>).props.children);
+  }
+  return "";
+}
+
+describe("moderation buttons send the right target", () => {
+  it("`Cho hiện` → `cong-khai`, `Ẩn` → `an`", () => {
+    const setPublication = vi.fn();
+    // PublicationBox has no hooks, so it can be called as a function and its buttons driven directly.
+    const tree = PublicationBox({
+      petition: phieu({ publication_status: "cho-duyet" }),
+      mayModerate: true,
+      setPublication,
+    });
+    const buttons = moiPhanTu(tree).filter((e) => e.type === "button");
+    const byText = (t: string) => buttons.find((b) => textOf(b.props.children).includes(t));
+    (byText("Cho hiện công khai")?.props.onClick as () => void)();
+    (byText("Ẩn khỏi trang công khai")?.props.onClick as () => void)();
+    expect(setPublication.mock.calls).toEqual([["cong-khai"], ["an"]]);
+  });
+
+  it("buttons are disabled while a write is in flight", () => {
+    const html = renderToStaticMarkup(
+      <PublicationBox
+        petition={phieu({ publication_status: "cho-duyet" })}
+        mayModerate={true}
+        busy={true}
+        setPublication={() => {}}
+      />,
+    );
+    expect(html.match(/<button[^>]*disabled/g)?.length).toBe(2);
+  });
+});
+
+describe("drawer — rating block and reopen line", () => {
+  it("not rated: “Người dân chưa đánh giá”, no reopen line", () => {
+    const html = veChiTiet(congThaoTac(false, false, false), phieu({ reopen_count: 0 }));
+    expect(html).toContain("Đánh giá của người dân");
+    expect(html).toContain("Người dân chưa đánh giá");
+    expect(html).not.toContain("Đã mở lại");
+  });
+
+  it("1 star, reopened twice: stars, comment, red sentence, reopen line under the deadlines", () => {
+    const html = veChiTiet(
+      congThaoTac(false, false, false),
+      phieu({
+        rating: 1,
+        rating_comment: "Chưa ai đến xem.",
+        rated_at: "2026-09-28T03:05:00Z",
+        reopen_count: 2,
+      }),
+    );
+    expect(html).toContain("★☆☆☆☆");
+    expect(html).toContain("1/5");
+    expect(html).toContain("“Chưa ai đến xem.”");
+    expect(html).toContain('<p class="nhan-lech">Đánh giá thấp — phiếu đã tự mở lại để xử lý tiếp.</p>');
+    expect(html).toContain('<p class="nhan-lech">Đã mở lại 2 lần do người dân chấm điểm thấp</p>');
+    // The reopen line sits in the `Hạn xử lý xong` cell, after the deadline.
+    expect(html.indexOf("Hạn xử lý xong")).toBeLessThan(html.indexOf("Đã mở lại 2 lần"));
+    expect(html.indexOf("Đã mở lại 2 lần")).toBeLessThan(html.indexOf("Đang giao cho"));
+  });
+
+  it("5 stars: no red sentence", () => {
+    const html = veChiTiet(congThaoTac(false, false, false), phieu({ rating: 5, reopen_count: 1 }));
+    expect(html).toContain("★★★★★");
+    expect(html).not.toContain("Đánh giá thấp");
+    // An earlier reopening is still on record and still said.
+    expect(html).toContain("Đã mở lại 1 lần");
+  });
+
+  it("card corner: stars once rated, nothing before", () => {
+    const the = (p: petitions_phieuPhanAnhRa) =>
+      renderToStaticMarkup(
+        <ThePhieu phieu={p} tenBoPhan={TEN_BO_PHAN} bayGio={BAY_GIO} dangMo={false} mo={() => {}} />,
+      );
+    expect(the(phieu({ rating: 2 }))).toContain('aria-label="2/5 sao"');
+    expect(the(phieu({ rating: 2 }))).toContain("★★☆☆☆");
+    expect(the(phieu())).not.toContain("★");
+  });
+});
+
+describe("filter `Bị đánh giá thấp` (§4) → `ratingMax: 2`", () => {
+  function hang(loc: Parameters<typeof HangLoc>[0]["loc"], datLoc = vi.fn()) {
+    return {
+      datLoc,
+      tree: HangLoc({ loc, tim: "", datTim: () => {}, datLoc, boPhan: BO_PHAN, thon: [] }),
+    };
+  }
+
+  it("the box exists, labelled, unticked by default; ticked when the filter is on", () => {
+    expect(renderToStaticMarkup(hang({}).tree)).toMatch(
+      /<input id="loc-danh-gia-thap" type="checkbox"\/> (<!-- -->)?Bị đánh giá thấp/,
+    );
+    expect(renderToStaticMarkup(hang({ ratingMax: 2 }).tree)).toMatch(
+      /id="loc-danh-gia-thap" type="checkbox" checked=""/,
+    );
+  });
+
+  it("ticking sets `ratingMax: 2` and keeps the other filters; unticking removes it", () => {
+    const { tree, datLoc } = hang({ trangThai: "da-dong", chiTreHan: true });
+    const o = moiPhanTu(tree).find((e) => e.props.id === "loc-danh-gia-thap");
+    (o?.props.onChange as (e: { target: { checked: boolean } }) => void)({ target: { checked: true } });
+    expect(datLoc).toHaveBeenLastCalledWith({ trangThai: "da-dong", chiTreHan: true, ratingMax: 2 });
+
+    const tat = hang({ ratingMax: 2 });
+    const o2 = moiPhanTu(tat.tree).find((e) => e.props.id === "loc-danh-gia-thap");
+    (o2?.props.onChange as (e: { target: { checked: boolean } }) => void)({ target: { checked: false } });
+    expect(tat.datLoc).toHaveBeenLastCalledWith({ ratingMax: undefined });
+  });
+});
+
+describe("log — the two citizen-rating rows", () => {
+  const TB = new Map([["01JBOPHAN", "VĂN PHÒNG ĐẢNG ỦY"]]);
+  // A directory that WOULD match if the marker were looked up — it must not be.
+  const DB = danhBaTheoMa([
+    { code: "cong-dan", full_name: "Không được hiện", position: "", department_id: "" },
+  ]);
+
+  function dongNhatKy(sua: Partial<petitions_nhatKyPhieuRa>): petitions_nhatKyPhieuRa {
+    return {
+      id: "01JDONG9",
+      at: "2026-09-28T03:05:00Z",
+      actor_code: "cong-dan",
+      action: "danh-gia",
+      status: "cho-dan-xac-nhan",
+      unit: "",
+      assignee: "",
+      note: "Người dân đánh giá 4 sao",
+      ...sua,
+    };
+  }
+
+  it("`danh-gia`: labelled, actor reads “Người dân”, never the directory", () => {
+    const html = renderToStaticMarkup(
+      <DanhSachNhatKy dong={[dongNhatKy({})]} tenBoPhan={TB} danhBa={DB} />,
+    );
+    expect(html).toContain("<strong>Người dân đánh giá</strong>");
+    expect(html).toContain("<dd>Người dân</dd>");
+    expect(html).not.toContain("Không được hiện");
+    expect(html).not.toContain(">cong-dan<");
+    expect(html).toContain("Người dân đánh giá 4 sao");
+  });
+
+  it("`mo-lai-theo-danh-gia`: labelled, with the server's note", () => {
+    const html = renderToStaticMarkup(
+      <DanhSachNhatKy
+        dong={[
+          dongNhatKy({
+            action: "mo-lai-theo-danh-gia",
+            status: "dang-xu-ly",
+            note: "Người dân đánh giá 2 sao — phiếu được mở lại",
+          }),
+        ]}
+        tenBoPhan={TB}
+        danhBa={DB}
+      />,
+    );
+    expect(html).toContain("<strong>Mở lại do đánh giá thấp</strong>");
+    expect(html).toContain("Người dân đánh giá 2 sao — phiếu được mở lại");
+    expect(html).not.toContain("chưa có nhãn");
   });
 });

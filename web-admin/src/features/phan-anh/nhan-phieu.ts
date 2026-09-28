@@ -204,11 +204,153 @@ export function lopHan(h: TrangThaiHan): string | undefined {
   return h.loai === "quaHan" ? "nhan-lech" : undefined;
 }
 
-/** Ô "Hiển thị với người dân" (§8.3), hai ca, cùng câu chú thích đặc tả ghi. */
-export function nhanHienCongKhai(hien: boolean): string {
-  return hien
-    ? "Đang hiện công khai. Người dân xem được phiếu này trên trang công khai của xã."
-    : "Chưa cho hiện công khai. Chỉ cán bộ trong xã xem được. Người gửi vẫn tra cứu được phiếu của mình.";
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * "HIỂN THỊ VỚI NGƯỜI DÂN" (§8.3, §14.4) — publication_status, ADR 0050 point 8
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The field of staff-conduct petitions. Never public — the server refuses with 409 `never_public`. */
+export const STAFF_CONDUCT_FIELD = "can-bo";
+
+/**
+ * The three stored values, and what the box says for each. Labels and hints are the requirement's
+ * wording (`vigov-require/apps/admin/src/lib/feedback-display.ts:75-94`, spec §8.3), not ours.
+ */
+const PUBLICATION_VIEW: Readonly<Record<string, { label: string; hint: string }>> = {
+  "cho-duyet": {
+    label: "Chưa cho hiện công khai",
+    hint: "Chỉ cán bộ trong xã xem được. Người gửi vẫn tra cứu được phiếu của mình.",
+  },
+  "cong-khai": {
+    label: "Đang hiện công khai",
+    hint: "Mọi người dân đều xem được phiếu này trên Mini App của xã.",
+  },
+  an: {
+    label: "Không cho hiện công khai",
+    hint: "Đã chặn hiện ra ngoài. Chỉ cán bộ trong xã xem được.",
+  },
+};
+
+/** The server's own sentence for `never_public` (`petition_publication.go`), shown as the hint. */
+export const NEVER_PUBLIC_HINT =
+  "Phản ánh về tác phong cán bộ không bao giờ được hiển thị công khai.";
+
+export type PublicationView = {
+  /** The stored value, or the one derived from `public` when the server predates the field. */
+  readonly status: string;
+  readonly label: string;
+  readonly hint: string;
+  /** Whether `Cho hiện công khai` has any meaning on this petition. */
+  readonly canPublish: boolean;
+  /** Whether `Ẩn khỏi trang công khai` has any meaning on this petition. */
+  readonly canHide: boolean;
+};
+
+/**
+ * The state of the `Hiển thị với người dân` box.
+ *
+ * `publication_status` ABSENT means the server predates the field (it is set on every response now),
+ * so the state is derived from `public`: `true` is `cong-khai`; `false` cannot tell "waiting" from
+ * "hidden", and `cho-duyet`'s label — "Chưa cho hiện công khai" — is the one sentence true of both.
+ *
+ * AN UNKNOWN VALUE shows the raw code and says it has no label, and offers NO button: guessing what an
+ * unknown state means is guessing what a click on it would do.
+ *
+ * The buttons follow the requirement drawer (`FeedbackDetailDrawer.tsx:270,292`): publish unless already
+ * public, hide unless already hidden. A `can-bo` petition never gets the publish button — the server
+ * would refuse it with 409 — but keeps the hide button when it is somehow not hidden.
+ */
+export function publicationView(p: petitions_phieuPhanAnhRa): PublicationView {
+  const status =
+    p.publication_status !== undefined && p.publication_status !== ""
+      ? p.publication_status
+      : p.public
+        ? "cong-khai"
+        : "cho-duyet";
+  const view = PUBLICATION_VIEW[status];
+  if (view === undefined) {
+    return {
+      status,
+      label: traNhan({}, status, "trạng thái công khai"),
+      hint: "",
+      canPublish: false,
+      canHide: false,
+    };
+  }
+  const staffConduct = p.field === STAFF_CONDUCT_FIELD;
+  return {
+    status,
+    label: view.label,
+    hint: staffConduct ? NEVER_PUBLIC_HINT : view.hint,
+    canPublish: status !== "cong-khai" && !staffConduct,
+    canHide: status !== "an",
+  };
+}
+
+/** Button labels — spec §8.3 verbatim. */
+export const PUBLISH_BUTTON_LABEL = "👁 Cho hiện công khai";
+export const HIDE_BUTTON_LABEL = "🚫 Ẩn khỏi trang công khai";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * THE CITIZEN'S RATING (§8.3, §14.3) — rating, rating_comment, rated_at, reopen_count; ADR 0050 pt 2
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const RATING_MAX_STARS = 5;
+
+/**
+ * At or below this, the rating is LOW: the spec's filter "phiếu 1–2 sao" (§4) and the server's fixed
+ * reopen threshold "1 hoặc 2 sao" (ADR 0050 point 2 — a fixed number, not configuration).
+ */
+export const LOW_RATING_MAX = 2;
+
+export const RATING_TITLE = "Đánh giá của người dân";
+export const NOT_RATED = "Người dân chưa đánh giá";
+/** The requirement's sentence (`FeedbackDetailDrawer.tsx:477`). */
+export const LOW_RATING_REOPENED = "Đánh giá thấp — phiếu đã tự mở lại để xử lý tiếp.";
+export const LOW_RATING_FILTER_LABEL = "Bị đánh giá thấp";
+
+/** `★★☆☆☆` — filled first. Out-of-range values are clamped: the stars never claim more than five. */
+export function ratingStars(rating: number): string {
+  const filled = Math.max(0, Math.min(RATING_MAX_STARS, Math.round(rating)));
+  return "★".repeat(filled) + "☆".repeat(RATING_MAX_STARS - filled);
+}
+
+export type RatingView =
+  | { readonly kind: "none" }
+  | {
+      readonly kind: "rated";
+      readonly stars: string;
+      /** `4/5` */
+      readonly score: string;
+      /** Vietnam time, or `null` when the server sent no time. */
+      readonly at: string | null;
+      /** The citizen's own words — shown like `content`, as text, never as HTML. `""` when none. */
+      readonly comment: string;
+      readonly low: boolean;
+      /** Show `LOW_RATING_REOPENED`: a low rating AND the server counts at least one reopening. */
+      readonly reopened: boolean;
+    };
+
+export function ratingView(p: petitions_phieuPhanAnhRa): RatingView {
+  if (p.rating === undefined || p.rating === null) return { kind: "none" };
+  const low = p.rating <= LOW_RATING_MAX;
+  return {
+    kind: "rated",
+    stars: ratingStars(p.rating),
+    score: `${p.rating}/${RATING_MAX_STARS}`,
+    at: p.rated_at === undefined || p.rated_at === null ? null : nhanThoiDiem(p.rated_at),
+    comment: p.rating_comment ?? "",
+    low,
+    reopened: low && (p.reopen_count ?? 0) > 0,
+  };
+}
+
+/**
+ * The line under the deadlines (`FeedbackDetailDrawer.tsx:242-246`). `null` at zero, and when the
+ * server predates the field — absent is "unknown", never "reopened 0 times" said out loud.
+ */
+export function reopenLine(reopenCount: number | null | undefined): string | null {
+  if (reopenCount === undefined || reopenCount === null || reopenCount <= 0) return null;
+  return `Đã mở lại ${reopenCount} lần do người dân chấm điểm thấp`;
 }
 
 /** Câu dẫn của ô nhập mã. Màn tra cứu nay đứng CẠNH quyển sổ, không thay cho nó. */
@@ -355,6 +497,12 @@ export type CongThaoTac = {
    * `lib/quyen.ts`.
    */
   readonly dongPhieu: boolean;
+  /**
+   * The two public-page buttons (PUT …/publication). The route's key is `feedback.assign` — the same
+   * key as `phanCong`, so it is derived from the same argument rather than read twice. UX only: the
+   * server enforces the key, and its 403 reaches the screen verbatim.
+   */
+  readonly moderate: boolean;
 };
 
 /**
@@ -372,7 +520,7 @@ export type CongThaoTac = {
  * cho "gọn" là lấy mất đúng điều luật nắm giữ mở ra cho trưởng thôn.
  */
 export function congThaoTac(coPhanLoai: boolean, coPhanCong: boolean, coDong: boolean): CongThaoTac {
-  return { phanLoai: coPhanLoai, phanCong: coPhanCong, dongPhieu: coDong };
+  return { phanLoai: coPhanLoai, phanCong: coPhanCong, dongPhieu: coDong, moderate: coPhanCong };
 }
 
 /**
@@ -496,6 +644,11 @@ export const CAU_THIEU_QUYEN_PHAN_CONG =
   "Tài khoản của bạn không có quyền chuyển xử lý phản ánh (feedback.assign), nên không có khối " +
   "Chuyển xử lý.";
 
+/** Under the `Hiển thị với người dân` box when the account lacks `feedback.assign`. Names the key. */
+export const PUBLICATION_DENIED =
+  "Tài khoản của bạn không có quyền chuyển xử lý phản ánh (feedback.assign), nên không đổi được " +
+  "việc hiển thị phiếu này trên trang công khai.";
+
 /** Nhãn nút tiến trạng thái. Không nêu tên bước kế tiếp: máy chủ giữ bản đồ, không phải màn này. */
 export const NHAN_TIEN_TRANG_THAI = "Chuyển sang bước kế tiếp";
 
@@ -593,7 +746,7 @@ export const PHAM_VI_GIAO_CHO_TOI = "Giao cho tôi";
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Bảy mã thao tác của một dòng nhật ký — danh sách ĐÓNG của `service-petitions`.
+ * Chín mã thao tác của một dòng nhật ký — danh sách ĐÓNG của `service-petitions`.
  *
  * Hợp đồng khai `action` là `string` trơn (không `enum`), cùng lỗ hổng với `NHAN_TRANG_THAI` ở trên.
  * `Record<MaThaoTacNhatKy, string>` bên dưới vì thế là chỗ canh ở mức KIỂU: thêm một mã vào hợp này
@@ -606,7 +759,11 @@ export type MaThaoTacNhatKy =
   | "dong-phieu"
   | "khong-tiep-nhan"
   | "chuyen-cap-tren"
-  | "ghi-chu";
+  | "ghi-chu"
+  // The citizen's rating (ADR 0050 point 2, `domain.LogActionCitizenRating` /
+  // `LogActionReopenByRating`): rated with nothing moved, and rated 1–2 stars so the petition came back.
+  | "danh-gia"
+  | "mo-lai-theo-danh-gia";
 
 /** Nhãn nguyên văn do chuyên gia nghiệp vụ chốt. `phan-cong` hiện là "Chuyển xử lý", như nút §8.5. */
 export const NHAN_THAO_TAC_NHAT_KY: Readonly<Record<MaThaoTacNhatKy, string>> = {
@@ -617,10 +774,31 @@ export const NHAN_THAO_TAC_NHAT_KY: Readonly<Record<MaThaoTacNhatKy, string>> = 
   "khong-tiep-nhan": "Không tiếp nhận",
   "chuyen-cap-tren": "Chuyển cấp trên",
   "ghi-chu": "Ghi chú",
+  // The two sentences the server writes as the note carry the stars ("Người dân đánh giá n sao[ —
+  // phiếu được mở lại]"); these labels only name the act, so the row does not repeat the number.
+  "danh-gia": "Người dân đánh giá",
+  "mo-lai-theo-danh-gia": "Mở lại do đánh giá thấp",
 };
 
 export function nhanThaoTacNhatKy(ma: string): string {
   return traNhan(NHAN_THAO_TAC_NHAT_KY, ma, "thao tác");
+}
+
+/** The fixed actor marker of rows a CITIZEN caused (`domain.CitizenLogActor`). */
+export const CITIZEN_LOG_ACTOR = "cong-dan";
+
+/**
+ * The `Người thực hiện` cell of a log row.
+ *
+ * `cong-dan` IS A MARKER, NOT A STAFF CODE, and it is never looked up in the staff directory: the server
+ * writes it instead of the citizen's id on purpose, so an anonymous citizen's reports cannot be linked
+ * on a staff screen (ADR 0008). Every other value is a staff business code and is shown as is (rule 6,
+ * invariant 8).
+ */
+export function logActorLabel(actorCode: string): string {
+  if (actorCode === "") return "—";
+  if (actorCode === CITIZEN_LOG_ACTOR) return "Người dân";
+  return actorCode;
 }
 
 /** Chỉ dòng `phan-cong` mang bộ phận và người phụ trách; dòng khác hai trường ấy rỗng. */
@@ -689,9 +867,12 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
     ten: "Bốn thẻ KPI (§3), tab Bản đồ nhiệt (§9), tab Báo cáo (§10)",
     viSao:
-      "Không có tuyến thống kê, không có tuyến heatmap, và hợp đồng không trả `lat`/`lng`. Bốn con " +
-      "số KPI hay một bảng “theo lĩnh vực” dựng bằng cách đếm trang đang xem sẽ là con số của MỘT " +
-      "TRANG chứ không của cả xã — và đó là con số lãnh đạo đọc rồi báo cáo lên trên.",
+      "Tuyến đếm `GET /api/v1/citizen-report-summary` (ADR 0053) đã có và trang Tổng quan đang dùng " +
+      "nó, nhưng nó chỉ trả số tiếp nhận, đang xử lý, đúng hạn và trễ hạn — không có điểm hài lòng " +
+      "trung bình, số phiếu bị đánh giá thấp hay số phiếu chờ kiểm duyệt của hai thẻ còn lại. Không " +
+      "có tuyến bản đồ nhiệt, hợp đồng không trả `lat`/`lng`, và không tuyến nào đếm theo lĩnh vực, " +
+      "bộ phận hay thôn cho tab Báo cáo. Dựng những con số ấy bằng cách đếm trang đang xem sẽ là con " +
+      "số của MỘT TRANG chứ không của cả xã — và đó là con số lãnh đạo đọc rồi báo cáo lên trên.",
   },
   {
     ten: "Tab phạm vi `Liên quan đến tôi` (§4, phụ lục §5.1)",
@@ -701,16 +882,11 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "`Toàn xã` và `Giao cho tôi` thì đã có.",
   },
   {
-    ten: "Lọc `Bị đánh giá thấp`, ghi nhận đánh giá của người dân (§4, §8.6)",
+    ten: "Biểu mẫu `Ghi nhận đánh giá của người dân` (§8.6)",
     viSao:
-      "Hợp đồng không trả `diem_hai_long` và không có tuyến ghi đánh giá. Cơ chế 1–2 sao tự mở lại " +
-      "phiếu do ba cờ cấu hình của ADR 0008 điều khiển, và không bảng nào trong kho này giữ chúng.",
-  },
-  {
-    ten: "Nút `👁 Cho hiện công khai` / `🚫 Ẩn khỏi trang công khai` (§8.3)",
-    viSao:
-      "Hợp đồng trả `public` để ĐỌC nhưng không có tuyến ghi nó. Ô kiểm duyệt bên dưới vì thế là " +
-      "chữ chỉ đọc.",
+      "Không dựng theo quyết định của chủ dự án: cán bộ không ghi đánh giá thay người dân. Điểm " +
+      "đánh giá chỉ đến từ chính người dân trên Mini App (ADR 0050 điểm 2), và màn này hiện điểm ấy " +
+      "ở khối `Đánh giá của người dân`.",
   },
   {
     ten: "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",

@@ -20,8 +20,10 @@ import {
   khongTiepNhanPhieu,
   laySoPhanAnh,
   phanLoaiPhieu,
+  setPetitionPublication,
   tienTrangThaiPhieu,
   type LocPhanAnh,
+  type PublicationTarget,
 } from "@/lib/api/phieu-phan-anh";
 import type {
   identity_boPhanRa,
@@ -63,6 +65,8 @@ import {
   loiLyDo,
   lopHan,
   LY_DO_TOI_DA,
+  LOW_RATING_FILTER_LABEL,
+  LOW_RATING_MAX,
   MOI_BO_PHAN_NHAN,
   MOI_DIA_BAN_NHAN,
   MOI_KENH,
@@ -82,7 +86,6 @@ import {
   nhanCanBoXuLy,
   nhanHan,
   nhanLuaChonCanBo,
-  nhanHienCongKhai,
   nhanKenh,
   nhanLinhVuc,
   nhanNguoiGui,
@@ -94,11 +97,14 @@ import {
   phanLoaiDuoc,
   RE_NHANH,
   reNhanhDuoc,
+  reopenLine,
+  ratingStars,
   SO_RONG,
   TIM_PLACEHOLDER,
   trangThaiHan,
   type CongThaoTac,
 } from "./nhan-phieu";
+import { CitizenRatingBlock, PublicationBox, starsLabel } from "./citizen-report-blocks";
 import { NhatKyPhieu } from "./nhat-ky-phieu";
 import {
   QUYEN_DONG_PHAN_ANH,
@@ -382,6 +388,9 @@ export function SoPhanAnh({
           chuyenCapTren={(lyDo, coQuan, ghiChu) =>
             chay(chuyenCapTrenPhieu(dangMo.code, lyDo, coQuan, ghiChu))
           }
+          // Same path as the six processing acts: the 200 body replaces the open petition, a refusal
+          // (409 `never_public`, 403) goes verbatim to the drawer's error line.
+          setPublication={(target) => chay(setPetitionPublication(dangMo.code, target))}
         />
       )}
     </section>
@@ -413,7 +422,7 @@ export function KhoiChuaDung() {
 }
 
 /**
- * Bộ lọc §4: hai tab phạm vi và bảy ô, đúng những tham số máy chủ nhận — không vẽ ô nào không có
+ * Bộ lọc §4: hai tab phạm vi và tám ô (thêm `Bị đánh giá thấp` → `rating_max=2`), đúng những tham số máy chủ nhận — không vẽ ô nào không có
  * tuyến đứng sau. Phạm vi nằm CHUNG `BoLoc` với bảy ô, nên đổi tab giữ nguyên các ô đang chọn và
  * về trang đầu như mọi bộ lọc khác; cùng cách giữ trạng thái (state của trang, không lên URL).
  */
@@ -578,6 +587,22 @@ export function HangLoc({
           {CHI_TRE_HAN_NHAN}
         </label>
       </div>
+
+      <div className="o-chon">
+        <label htmlFor="loc-danh-gia-thap">
+          <input
+            id="loc-danh-gia-thap"
+            type="checkbox"
+            checked={loc.ratingMax === LOW_RATING_MAX}
+            // Spec §4 "phiếu 1–2 sao" → `rating_max=2`. Unticked, the parameter is ABSENT — never an
+            // empty `rating_max=`, which the server answers with 400.
+            onChange={(e) =>
+              datLoc({ ...loc, ratingMax: e.target.checked ? LOW_RATING_MAX : undefined })
+            }
+          />{" "}
+          {LOW_RATING_FILTER_LABEL}
+        </label>
+      </div>
     </div>
   );
 }
@@ -648,6 +673,17 @@ export function ThePhieu({
         <span className="chip chip-ngung">{nhanTrangThai(phieu.status)}</span>
         <span className="chip">{nhanLinhVuc(linhVuc)}</span>
         {hanXuLy.loai === "quaHan" && <span className="chip nhan-lech">Quá hạn</span>}
+        {/* §7 corner: the citizen's stars once rated. The channel stays in the list below — dropping it
+            for the stars, as the spec's single corner does, would hide it on every rated card. */}
+        {phieu.rating !== undefined && phieu.rating !== null && (
+          <span
+            className={phieu.rating <= LOW_RATING_MAX ? "chip nhan-lech" : "chip"}
+            role="img"
+            aria-label={starsLabel(phieu.rating)}
+          >
+            {ratingStars(phieu.rating)}
+          </span>
+        )}
       </div>
 
       {/* Nội dung phản ánh KHÔNG che (cán bộ không đọc được thì không xử lý được), nhưng nó là
@@ -705,6 +741,7 @@ export function ChiTietPhieu({
   dongPhieuLai,
   khongTiepNhan,
   chuyenCapTren,
+  setPublication,
 }: {
   phieu: petitions_phieuPhanAnhRa;
   bayGio: Date;
@@ -732,6 +769,11 @@ export function ChiTietPhieu({
   dongPhieuLai: (ketQua: string, ghiChu: string) => KetQuaGui;
   khongTiepNhan: (lyDo: string, ghiChu: string) => KetQuaGui;
   chuyenCapTren: (lyDo: string, coQuanTiepNhan: string, ghiChu: string) => KetQuaGui;
+  /**
+   * PUT …/publication. Optional so a caller without a write path renders the box read-only; the
+   * buttons also need `cong.moderate`.
+   */
+  setPublication?: (target: PublicationTarget) => KetQuaGui;
 }) {
   const [linhVucChon, datLinhVucChon] = useState("");
   const [boPhanChon, datBoPhanChon] = useState("");
@@ -759,6 +801,7 @@ export function ChiTietPhieu({
   const hanXuLy = trangThaiHan(phieu.resolve_due, "chuaCo", bayGio);
   const hanPhanLoai = trangThaiHan(phieu.classify_due, "khongApDung", bayGio);
   const giaiThich = cauGiaiThichTrangThai(phieu.status);
+  const reopened = reopenLine(phieu.reopen_count);
 
   return (
     <div className="khoi-chi-tiet" aria-labelledby="tieu-de-chi-tiet-phieu">
@@ -824,6 +867,10 @@ export function ChiTietPhieu({
         <dt>Hạn xử lý xong</dt>
         <dd>
           <span className={lopHan(hanXuLy)}>{nhanHan(hanXuLy)}</span>
+          {/* Requirement `FeedbackDetailDrawer.tsx:242-246`. The deadline is NOT recomputed on a
+              reopening (ADR 0050 point 2) — this line is what explains an old deadline on a
+              petition that is back in progress. */}
+          {reopened !== null && <p className="nhan-lech">{reopened}</p>}
         </dd>
 
         <dt>Đang giao cho</dt>
@@ -832,7 +879,16 @@ export function ChiTietPhieu({
         </dd>
 
         <dt>Hiển thị với người dân</dt>
-        <dd>{nhanHienCongKhai(phieu.public)}</dd>
+        <dd>
+          <PublicationBox
+            petition={phieu}
+            mayModerate={cong.moderate}
+            busy={dangGui}
+            setPublication={
+              setPublication === undefined ? undefined : (target) => void setPublication(target)
+            }
+          />
+        </dd>
 
         {/* Kết quả CHỈ hiện khi đã có: một ô trống ở đây trông như một trường chưa điền, trong khi
             phiếu chưa đóng thì nó chưa tồn tại. */}
@@ -867,11 +923,15 @@ export function ChiTietPhieu({
         )}
       </dl>
 
+      {/* Right under the list, so a refusal of the publication buttons above (409 `never_public`)
+          reads next to the box that caused it. */}
       {loiGhi !== null && (
         <p className="thong-bao-loi" role="alert">
           {loiGhi}
         </p>
       )}
+
+      <CitizenRatingBlock petition={phieu} headingId="tieu-de-danh-gia-phieu" />
 
       {/* ── 1. PHÂN LOẠI ─────────────────────────────────────────────────────────────────── */}
       {cong.phanLoai ? (

@@ -33,7 +33,6 @@ import {
   nhanBoPhan,
   nhanCanBoXuLy,
   nhanHan,
-  nhanHienCongKhai,
   nhanKenh,
   nhanLinhVuc,
   nhanLuaChonCanBo,
@@ -44,6 +43,16 @@ import {
   phanLoaiDuoc,
   RE_NHANH,
   trangThaiHan,
+  CITIZEN_LOG_ACTOR,
+  congThaoTac,
+  LOW_RATING_MAX,
+  LOW_RATING_REOPENED,
+  logActorLabel,
+  NEVER_PUBLIC_HINT,
+  publicationView,
+  ratingStars,
+  ratingView,
+  reopenLine,
 } from "./nhan-phieu";
 
 function phieu(sua: Partial<petitions_phieuPhanAnhRa> = {}): petitions_phieuPhanAnhRa {
@@ -202,10 +211,121 @@ describe("thời điểm", () => {
   });
 });
 
-describe("hiển thị với người dân", () => {
-  it("hai ca nói hai câu khác nhau, và ca chưa công khai giữ nguyên lời trấn an của đặc tả", () => {
-    expect(nhanHienCongKhai(false)).toContain("Người gửi vẫn tra cứu được phiếu của mình");
-    expect(nhanHienCongKhai(true)).not.toBe(nhanHienCongKhai(false));
+describe("hiển thị với người dân — `publication_status` (§8.3, ADR 0050 điểm 8)", () => {
+  it("three stored values, three labels — the requirement's wording, and the spec's reassurance kept", () => {
+    const cho = publicationView(phieu({ publication_status: "cho-duyet" }));
+    const cong = publicationView(phieu({ publication_status: "cong-khai", public: true }));
+    const an = publicationView(phieu({ publication_status: "an" }));
+    expect([cho.label, cong.label, an.label]).toEqual([
+      "Chưa cho hiện công khai",
+      "Đang hiện công khai",
+      "Không cho hiện công khai",
+    ]);
+    expect(cho.hint).toBe("Chỉ cán bộ trong xã xem được. Người gửi vẫn tra cứu được phiếu của mình.");
+  });
+
+  it("buttons: publish unless public, hide unless hidden", () => {
+    const cho = publicationView(phieu({ publication_status: "cho-duyet" }));
+    expect([cho.canPublish, cho.canHide]).toEqual([true, true]);
+    const cong = publicationView(phieu({ publication_status: "cong-khai", public: true }));
+    expect([cong.canPublish, cong.canHide]).toEqual([false, true]);
+    const an = publicationView(phieu({ publication_status: "an" }));
+    expect([an.canPublish, an.canHide]).toEqual([true, false]);
+  });
+
+  it("`can-bo` (staff conduct): NEVER a publish button, and the hint is the server's sentence", () => {
+    for (const status of ["cho-duyet", "an"]) {
+      const v = publicationView(phieu({ field: "can-bo", publication_status: status }));
+      expect(v.canPublish, status).toBe(false);
+      expect(v.hint, status).toBe(NEVER_PUBLIC_HINT);
+    }
+    // Somehow not hidden (an old row): hiding it stays possible.
+    expect(publicationView(phieu({ field: "can-bo", publication_status: "cho-duyet" })).canHide).toBe(
+      true,
+    );
+  });
+
+  it("field ABSENT (older server): derived from `public`, never a fourth state", () => {
+    expect(publicationView(phieu({ public: true })).status).toBe("cong-khai");
+    expect(publicationView(phieu({ public: false })).status).toBe("cho-duyet");
+    expect(publicationView(phieu({ public: false, publication_status: "" })).status).toBe("cho-duyet");
+  });
+
+  it("unknown value: raw code said out loud, NO button — never a guess at what a click does", () => {
+    const v = publicationView(phieu({ publication_status: "tam-an" }));
+    expect(v.label).toContain("tam-an");
+    expect(v.label).toContain("chưa có nhãn");
+    expect([v.canPublish, v.canHide]).toEqual([false, false]);
+  });
+
+  it("the gate is `feedback.assign` — the same argument as `Chuyển xử lý`, nothing else", () => {
+    expect(congThaoTac(false, true, false).moderate).toBe(true);
+    expect(congThaoTac(true, false, true).moderate).toBe(false);
+  });
+});
+
+describe("đánh giá của người dân — rating, rating_comment, rated_at, reopen_count", () => {
+  it("no rating: `none`, whatever reopen_count says", () => {
+    expect(ratingView(phieu()).kind).toBe("none");
+    expect(ratingView(phieu({ rating: null, reopen_count: 2 })).kind).toBe("none");
+  });
+
+  it("rated 4: stars, score, Vietnam time, comment as sent — not low", () => {
+    const v = ratingView(
+      phieu({
+        rating: 4,
+        rated_at: "2026-09-28T03:05:00Z",
+        rating_comment: "Đã dọn sạch.",
+        reopen_count: 0,
+      }),
+    );
+    expect(v).toEqual({
+      kind: "rated",
+      stars: "★★★★☆",
+      score: "4/5",
+      at: "10:05 28/09/2026",
+      comment: "Đã dọn sạch.",
+      low: false,
+      reopened: false,
+    });
+  });
+
+  it("rated ≤2 AND reopened at least once: the requirement's red sentence applies", () => {
+    for (const rating of [1, 2]) {
+      const v = ratingView(phieu({ rating, reopen_count: 1 }));
+      expect(v.kind === "rated" && v.low && v.reopened, String(rating)).toBe(true);
+    }
+    expect(LOW_RATING_REOPENED).toBe("Đánh giá thấp — phiếu đã tự mở lại để xử lý tiếp.");
+    expect(LOW_RATING_MAX).toBe(2);
+  });
+
+  it("rated ≤2 but reopen_count 0 or absent: NOT claimed as reopened", () => {
+    for (const reopen_count of [0, null, undefined]) {
+      const v = ratingView(phieu({ rating: 2, reopen_count }));
+      expect(v.kind === "rated" && v.reopened, String(reopen_count)).toBe(false);
+    }
+  });
+
+  it("3 stars is not low, even with an earlier reopening on record", () => {
+    const v = ratingView(phieu({ rating: 3, reopen_count: 1 }));
+    expect(v.kind === "rated" && (v.low || v.reopened)).toBe(false);
+  });
+
+  it("missing time or comment: `null` / empty, never 'Invalid Date' or 'undefined'", () => {
+    const v = ratingView(phieu({ rating: 5 }));
+    expect(v.kind === "rated" && v.at).toBeNull();
+    expect(v.kind === "rated" && v.comment).toBe("");
+  });
+
+  it("stars clamp to 0..5", () => {
+    expect(ratingStars(0)).toBe("☆☆☆☆☆");
+    expect(ratingStars(5)).toBe("★★★★★");
+    expect(ratingStars(9)).toBe("★★★★★");
+  });
+
+  it("reopen line: only when the server counts at least one reopening", () => {
+    expect(reopenLine(2)).toBe("Đã mở lại 2 lần do người dân chấm điểm thấp");
+    for (const n of [0, null, undefined]) expect(reopenLine(n), String(n)).toBeNull();
   });
 });
 
@@ -458,9 +578,9 @@ describe("`has_citizen` QUYẾT ĐỊNH khi có mặt; vắng thì quay về lu�
   });
 });
 
-describe("nhật ký xử lý — nhãn bảy mã thao tác", () => {
+describe("nhật ký xử lý — nhãn chín mã thao tác", () => {
   /** Danh sách đóng của máy chủ, gõ lại từ hợp đồng — KHÔNG sinh từ bảng nhãn đang kiểm. */
-  const BAY_MA = [
+  const LOG_ACTIONS = [
     "phan-loai",
     "phan-cong",
     "chuyen-trang-thai",
@@ -468,19 +588,22 @@ describe("nhật ký xử lý — nhãn bảy mã thao tác", () => {
     "khong-tiep-nhan",
     "chuyen-cap-tren",
     "ghi-chu",
+    // `domain.LogActionCitizenRating` / `LogActionReopenByRating` (ADR 0050 point 2).
+    "danh-gia",
+    "mo-lai-theo-danh-gia",
   ] as const satisfies readonly MaThaoTacNhatKy[];
 
   // Mức KIỂU: hợp mọc thêm một mã mà danh sách trên không có → `tsc` đỏ tại đây.
-  type DuMa = Exclude<MaThaoTacNhatKy, (typeof BAY_MA)[number]> extends never ? true : never;
+  type DuMa = Exclude<MaThaoTacNhatKy, (typeof LOG_ACTIONS)[number]> extends never ? true : never;
   const _duMa: DuMa = true;
   void _duMa;
 
-  it("bảng nhãn có ĐÚNG bảy khoá, không hơn", () => {
-    expect(Object.keys(NHAN_THAO_TAC_NHAT_KY).sort()).toEqual([...BAY_MA].sort());
+  it("bảng nhãn có ĐÚNG chín khoá, không hơn", () => {
+    expect(Object.keys(NHAN_THAO_TAC_NHAT_KY).sort()).toEqual([...LOG_ACTIONS].sort());
   });
 
   it("nhãn nguyên văn chuyên gia nghiệp vụ chốt", () => {
-    expect(BAY_MA.map(nhanThaoTacNhatKy)).toEqual([
+    expect(LOG_ACTIONS.map(nhanThaoTacNhatKy)).toEqual([
       "Phân loại",
       "Chuyển xử lý",
       "Chuyển trạng thái",
@@ -488,7 +611,16 @@ describe("nhật ký xử lý — nhãn bảy mã thao tác", () => {
       "Không tiếp nhận",
       "Chuyển cấp trên",
       "Ghi chú",
+      "Người dân đánh giá",
+      "Mở lại do đánh giá thấp",
     ]);
+  });
+
+  it("actor `cong-dan` reads “Người dân”; staff codes as is; empty is a dash", () => {
+    expect(CITIZEN_LOG_ACTOR).toBe("cong-dan");
+    expect(logActorLabel("cong-dan")).toBe("Người dân");
+    expect(logActorLabel("CB-00123")).toBe("CB-00123");
+    expect(logActorLabel("")).toBe("—");
   });
 
   it("mã lạ: hiện nguyên mã và NÓI RA là chưa có nhãn, không đoán", () => {
@@ -496,7 +628,7 @@ describe("nhật ký xử lý — nhãn bảy mã thao tác", () => {
   });
 
   it("chỉ dòng `phan-cong` mang bộ phận / phụ trách", () => {
-    for (const ma of BAY_MA) expect(laDongPhanCong(ma), ma).toBe(ma === "phan-cong");
+    for (const ma of LOG_ACTIONS) expect(laDongPhanCong(ma), ma).toBe(ma === "phan-cong");
   });
 });
 
@@ -520,8 +652,33 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
   it("không còn mục nào về nhật ký, còn mọi mục khác vẫn nguyên", () => {
     const tatCa = PHAN_CHUA_DUNG.map((x) => `${x.ten} ${x.viSao}`).join(" ");
     expect(tatCa).not.toMatch(/Nhật ký xử lý|nhat_ky_phan_anh/);
-    // Chín mục còn lại (mười trừ một) — bỏ nhầm một mục khác cùng lúc là đỏ ở đây.
-    expect(PHAN_CHUA_DUNG.length).toBe(9);
+    // Tám mục: chín trừ hai (lọc đánh giá thấp và nút công khai đã dựng) cộng một (§8.6 không
+    // dựng theo quyết định của chủ dự án) — bỏ nhầm một mục khác cùng lúc là đỏ ở đây.
+    expect(PHAN_CHUA_DUNG.length).toBe(8);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh trước / sau"))).toBe(true);
+  });
+});
+
+describe("phần chưa dựng được — đánh giá và kiểm duyệt công khai đã rời danh sách", () => {
+  const tatCa = () => PHAN_CHUA_DUNG.map((x) => `${x.ten} ${x.viSao}`).join(" ");
+
+  it("no entry claims the low-rated filter or the public toggle is missing", () => {
+    expect(tatCa()).not.toContain("Lọc `Bị đánh giá thấp`");
+    expect(tatCa()).not.toContain("diem_hai_long");
+    expect(tatCa()).not.toContain("Cho hiện công khai");
+    expect(tatCa()).not.toMatch(/không có tuyến ghi nó/);
+  });
+
+  it("§8.6 stays listed, with the reason — a decision, not a missing route", () => {
+    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("§8.6"));
+    expect(muc?.viSao).toContain("cán bộ không ghi đánh giá thay người dân");
+  });
+
+  it("the KPI entry no longer says there is no summary route (ADR 0053) and names what is missing", () => {
+    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Bốn thẻ KPI"));
+    expect(muc?.viSao).not.toContain("Không có tuyến thống kê");
+    expect(muc?.viSao).toContain("citizen-report-summary");
+    expect(muc?.viSao).toContain("`lat`/`lng`");
+    expect(muc?.viSao).toContain("bản đồ nhiệt");
   });
 });

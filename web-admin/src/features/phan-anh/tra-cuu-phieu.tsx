@@ -11,14 +11,15 @@ import {
   linhVucPhanAnh,
   lopHan,
   nhanHan,
-  nhanHienCongKhai,
   nhanKenh,
   nhanLinhVuc,
   nhanNguoiGui,
   nhanThoiDiem,
   nhanTrangThai,
+  reopenLine,
   trangThaiHan,
 } from "./nhan-phieu";
+import { CitizenRatingBlock, PublicationBox } from "./citizen-report-blocks";
 
 /**
  * Tra cứu một phiếu phản ánh theo **mã tra cứu** — `docs/ui-ux/09-phan-anh-nguoi-dan.md §8`.
@@ -32,8 +33,9 @@ import {
  * MÀN NÀY KHÔNG BỊ THAY THẾ, nó đứng CẠNH quyển sổ: mã tra cứu mở thẳng đúng một phiếu, kể cả
  * phiếu không khớp bộ lọc đang chọn — đúng việc cán bộ làm khi người dân gọi điện đọc mã.
  *
- * Bốn thẻ KPI, tab Bản đồ nhiệt và tab Báo cáo thì VẪN không có gì đứng sau; danh sách đầy đủ
- * những phần ấy nằm ở `PHAN_CHUA_DUNG` và hiện trên màn, không giấu ở đây.
+ * Bốn thẻ KPI, tab Bản đồ nhiệt và tab Báo cáo thì VẪN chưa dựng được (tuyến đếm của ADR 0053 chỉ
+ * phủ một phần); danh sách đầy đủ những phần ấy nằm ở `PHAN_CHUA_DUNG` và hiện trên màn, không giấu
+ * ở đây.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
  * MÃ TRA CỨU KHÔNG ĐOÁN ĐƯỢC, VÀ MÀN HÌNH NÀY KHÔNG LÀM NÓ ĐOÁN ĐƯỢC. Không gợi ý, không tự hoàn
@@ -125,6 +127,7 @@ export function ThongTinPhieu({
   const linhVuc = linhVucPhanAnh(phieu.field, phieu.field_label);
   const hanTiepNhan = trangThaiHan(phieu.acknowledge_due, "khongApDung", bayGio);
   const hanXuLy = trangThaiHan(phieu.resolve_due, "chuaCo", bayGio);
+  const reopened = reopenLine(phieu.reopen_count);
 
   return (
     <div className="khoi-chi-tiet">
@@ -171,11 +174,18 @@ export function ThongTinPhieu({
         <dt>Hạn xử lý xong</dt>
         <dd>
           <span className={lopHan(hanXuLy)}>{nhanHan(hanXuLy)}</span>
+          {reopened !== null && <p className="nhan-lech">{reopened}</p>}
         </dd>
 
+        {/* READ-ONLY here: this screen has no write surface (see the header). The buttons live in
+            the register's drawer, next to the other processing acts. */}
         <dt>Hiển thị với người dân</dt>
-        <dd>{nhanHienCongKhai(phieu.public)}</dd>
+        <dd>
+          <PublicationBox petition={phieu} mayModerate={false} />
+        </dd>
       </dl>
+
+      <CitizenRatingBlock petition={phieu} headingId="tieu-de-danh-gia-tra-cuu" />
     </div>
   );
 }

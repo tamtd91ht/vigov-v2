@@ -1,5 +1,5 @@
 /**
- * Mười tuyến của sổ Phản ánh người dân (`docs/ui-ux/09-phan-anh-nguoi-dan.md`), đúng bộ tuyến
+ * Mười một tuyến của sổ Phản ánh người dân (`docs/ui-ux/09-phan-anh-nguoi-dan.md`), đúng bộ tuyến
  * `service-petitions/internal/http/routes.go` khai — không nhiều hơn, không ít hơn.
  *
  *   GET  /api/v1/citizen-reports                            feedback.read
@@ -10,6 +10,7 @@
  *   POST /api/v1/citizen-reports/{maTraCuu}/closure         feedback.resolve
  *   POST /api/v1/citizen-reports/{maTraCuu}/rejection       feedback.classify
  *   POST /api/v1/citizen-reports/{maTraCuu}/referral        feedback.classify
+ *   PUT  /api/v1/citizen-reports/{maTraCuu}/publication     feedback.assign
  *   GET  /api/v1/citizen-reports/{maTraCuu}/log-entries     feedback.read
  *   POST /api/v1/citizen-reports/{maTraCuu}/log-entries     feedback.read + luật nghiệp vụ, Idempotency-Key
  *
@@ -63,6 +64,8 @@ import type {
   petitions_post_citizen_reports_by_maTraCuu_referral,
   petitions_post_citizen_reports_by_maTraCuu_rejection,
   petitions_post_citizen_reports_by_maTraCuu_status,
+  petitions_publicationIn,
+  petitions_put_citizen_reports_by_maTraCuu_publication,
   page_Result_petitions_nhatKyPhieuRa,
   page_Result_petitions_phieuPhanAnhRa,
 } from "./schema.gen";
@@ -122,8 +125,8 @@ export function layPhieuPhanAnh(maTraCuu: string): Promise<KetQua<petitions_phie
  *
  * `LIÊN QUAN ĐẾN TÔI` KHÔNG CÓ Ở ĐÂY VÀ KIỂU `phamVi` KHÔNG CHO GỬI NÓ: máy chủ trả **400** cho
  * `scope=related` (thế nào là "liên quan" chưa được chốt — `xu_ly_phan_anh.go`, `errPhamVi…`), nên
- * một tab gửi nó là một tab biến quyển sổ thành trang lỗi. `danh_gia_thap` cũng không có: hợp đồng
- * không trả điểm hài lòng. Cả hai ra tới màn hình qua `PHAN_CHUA_DUNG`.
+ * một tab gửi nó là một tab biến quyển sổ thành trang lỗi — ra tới màn hình qua `PHAN_CHUA_DUNG`.
+ * Lọc `Bị đánh giá thấp` thì NAY ĐÃ CÓ: `ratingMax` → `rating_max` (ADR 0050 điểm 2).
  */
 export type LocPhanAnh = {
   /**
@@ -146,6 +149,13 @@ export type LocPhanAnh = {
   tim?: string;
   /** Chỉ phiếu đã quá hạn XỬ LÝ XONG. Máy chủ chỉ nhận đúng chuỗi `true`. */
   chiTreHan?: boolean;
+  /**
+   * Only petitions the citizen rated AT MOST this many stars; unrated ones are excluded by the server.
+   * The server accepts exactly the digits 1–5 and answers 400 to anything else, so the type admits
+   * nothing else. The screen's `Bị đánh giá thấp` box sends 2 — spec §4 "phiếu 1–2 sao", the same
+   * threshold that reopens a petition (ADR 0050 point 2).
+   */
+  ratingMax?: 1 | 2 | 3 | 4 | 5;
   limit?: number;
   cursor?: string | null;
   /**
@@ -183,6 +193,8 @@ function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocPhanAnh): void {
   // SỐ LIỆU CỦA TỔNG QUAN — ba tên mới đi qua `thamSoTheoHopDong`, nên `tsc` đối chiếu chúng với
   // kiểu `truyVan`. Kỳ chỉ đi lên với số liệu theo kỳ, cùng quy tắc sổ Nhiệm vụ.
   const dat = thamSoTheoHopDong<petitions_get_citizen_reports["truyVan"]>(truyVan);
+  // Absent when the box is unticked — never `rating_max=` empty, which the server answers with 400.
+  dat("rating_max", loc.ratingMax === undefined ? undefined : String(loc.ratingMax));
   dat("metric", loc.metric);
   if (loc.metric !== undefined && isPeriodMetric("citizen-reports", loc.metric)) {
     dat("from", loc.from);
@@ -396,6 +408,38 @@ export function chuyenCapTrenPhieu(
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
+ * PUBLIC-PAGE MODERATION (§8.3, §14.4) — PUT …/publication, `feedback.assign`
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The two acts a member of staff can record. `cho-duyet` is refused by the server (400): it means
+ * "nobody decided", and no act can record that. */
+export type PublicationTarget = "cong-khai" | "an";
+
+/**
+ * PUT …/publication — show the petition on the commune's public page, or hide it.
+ *
+ * IT MOVES NO LIFECYCLE STATUS and notifies nobody (server, `petition_publication.go`); the 200 body
+ * is the petition as it now stands, and the screen re-renders from it rather than patching locally.
+ *
+ * 409 `never_public` is the NORMAL answer for a staff-conduct (`can-bo`) petition: the server's fixed
+ * sentence goes to the screen verbatim. Rewriting it here would be a second copy of the rule.
+ *
+ * NO Idempotency-Key: the route declares none — it sets an absolute value, and sending the same value
+ * again writes nothing.
+ */
+export function setPetitionPublication(
+  maTraCuu: string,
+  status: PublicationTarget,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const mau: petitions_put_citizen_reports_by_maTraCuu_publication["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/publication";
+  const than: petitions_publicationIn = { status };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(
+    goiGhi(duongDanPhieu(mau, maTraCuu), "PUT", than, 200),
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHẬT KÝ XỬ LÝ (§8.7) — GET/POST …/log-entries
  *
  * BẢN GHI NGHIỆP VỤ CÁN BỘ ĐỌC, KHÁC `audit_log`: vết kiểm toán không hiện cho xã, còn nhật ký này là
@@ -406,6 +450,9 @@ export function chuyenCapTrenPhieu(
  *
  * `actor_code` LÀ MÃ CÁN BỘ (`CB-…`), không họ tên: máy chủ không trả tên, và màn hình hiện đúng mã
  * (luật 6, bất biến 8 — mã là thứ còn đọc được nhiều năm sau).
+ *
+ * EXCEPTION: rows the CITIZEN caused (`danh-gia`, `mo-lai-theo-danh-gia`) carry the fixed marker
+ * `cong-dan`, not a staff code and never the citizen's id (`domain.CitizenLogActor`).
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /** Phân trang của nhật ký. `order` mặc định của máy chủ là `desc` — mới nhất trước. */

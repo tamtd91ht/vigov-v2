@@ -17,6 +17,7 @@ import {
   GHI_CHU_TOI_DA,
   GOI_Y_GHI_NHAT_KY,
   laDongPhanCong,
+  logActorLabel,
   loiGhiChuNhatKy,
   NHAC_DU_LIEU_CA_NHAN,
   NHAN_BO_PHAN_PHU_TRACH,
@@ -225,6 +226,7 @@ export function NhatKyPhieu({
  *
  * NGƯỜI THỰC HIỆN LÀ MÃ CÁN BỘ, không họ tên: máy chủ không trả tên, và mã là thứ còn chỉ ra được
  * đúng một người nhiều năm sau (luật 6, bất biến 8). Rỗng thì hiện gạch, không để ô trống.
+ * Rows the citizen caused carry the marker `cong-dan` and read "Người dân" (`logActorLabel`).
  */
 export function DanhSachNhatKy({
   dong,
@@ -256,7 +258,8 @@ export function DanhSachNhatKy({
               </>
             )}
             <dt>{NHAN_NGUOI_THUC_HIEN}</dt>
-            <dd>{d.actor_code === "" ? "—" : d.actor_code}</dd>
+            {/* `cong-dan` reads "Người dân" and is never looked up in the staff directory. */}
+            <dd>{logActorLabel(d.actor_code)}</dd>
           </dl>
           {d.note !== "" && <p className="ghi-chu-nhat-ky">{d.note}</p>}
         </li>
