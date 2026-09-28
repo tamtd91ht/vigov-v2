@@ -178,6 +178,17 @@ type phieuPhanAnhRa struct {
 	// Absent therefore means "this server predates the field", never "no citizen".
 	HasCitizen *bool `json:"has_citizen,omitempty"`
 
+	// PublicationStatus is `publication_status` (migration 0017, ADR 0050 point 8): the staff
+	// moderation of the public page — `cho-duyet` · `cong-khai` · `an`. Separate from `status`.
+	//
+	// SET ON EVERY RESPONSE (the store never reads it empty), with omitempty ONLY so tools/apidoc
+	// declares it optional and yesterday's web-admin fixtures stay valid — the ReopenCount precedent.
+	// Absent therefore means "this server predates the field", never a fourth value.
+	PublicationStatus string `json:"publication_status,omitempty"`
+
+	// Public is DERIVED from PublicationStatus (`cong-khai`) and kept for the clients that already read
+	// it. It no longer reads the superseded `hien_cong_khai`, which no code writes to true. One fact,
+	// one source: the two fields on the wire can never disagree because one is computed from the other.
 	Public bool `json:"public"`
 
 	// Rating, RatingComment and RatedAt are the CITIZEN'S verdict (ADR 0050 point 2) — `diem_hai_long`,
@@ -226,7 +237,9 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 		Unit:       p.BoPhanID,
 		Assignee:   p.CanBoXuLyID,
 		Result:     p.KetQuaXuLy,
-		Public:     p.HienCongKhai,
+		Public:     p.PublicationStatus == domain.PublicationPublic,
+
+		PublicationStatus: string(p.PublicationStatus),
 	}
 
 	// An anonymous petition carries NEITHER field, not a masked one and not a full one. A masked

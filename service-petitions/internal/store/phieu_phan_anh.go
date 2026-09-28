@@ -54,7 +54,7 @@ const cotPhieu = `id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vu
 	trang_thai, bo_phan_id, can_bo_xu_ly_id,
 	goc_dem_han, vao_so_luc, han_tiep_nhan, han_xu_ly_xong, han_phan_loai,
 	phan_loai_luc, xu_ly_xong_luc, dong_luc, ket_qua_xu_ly,
-	hien_cong_khai, so_lan_mo_lai,
+	publication_status, so_lan_mo_lai,
 	ly_do_ket_thuc_nhanh, co_quan_nhan, ket_thuc_nhanh_luc,
 	diem_hai_long, rating_comment, danh_gia_luc`
 
@@ -290,6 +290,10 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		ratingStars   sql.NullInt64
 		ratingComment sql.NullString
 		ratedAt       sql.NullTime
+
+		// `publication_status` (migration 0017) is NOT NULL with a default, so a plain string. It sits in
+		// the position `hien_cong_khai` used to hold — that column is superseded and no longer read.
+		publication string
 	)
 
 	// POSITIONAL — in lockstep with cotPhieu. See the note there.
@@ -299,7 +303,7 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		&tt, &boPhan, &canBo,
 		&p.GocDemHan, &p.VaoSoLuc, &hanTiepNhan, &hanXuLyXong, &hanPhanLoai,
 		&phanLoaiLuc, &xuLyXongLuc, &dongLuc, &ketQua,
-		&p.HienCongKhai, &p.SoLanMoLai,
+		&publication, &p.SoLanMoLai,
 		&lyDoKetThuc, &coQuanNhan, &ketThucNhanhLuc,
 		&ratingStars, &ratingComment, &ratedAt,
 	}
@@ -309,6 +313,7 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 
 	p.Kenh = domain.KenhTiepNhan(kenh)
 	p.TrangThai = domain.TrangThai(tt)
+	p.PublicationStatus = domain.PublicationStatus(publication)
 	p.CongDanID = congDan.String
 	p.LinhVuc = linhVuc.String
 	p.DiaChi = diaChi.String
@@ -356,11 +361,20 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 // actually produced. It is done once, here, so no caller assembles its own arguments and gets
 // the direction wrong.
 func (s *PhieuPhanAnhStore) Tao(ctx context.Context, tx *store.ScopedTx, p domain.PhieuPhanAnh) error {
+	// `publication_status` IS WRITTEN EXPLICITLY AND NEVER LEFT TO THE COLUMN DEFAULT: the default
+	// `cho-duyet` is wrong for a petition born in `can-bo`, which must be `an` from its first row
+	// (domain.InitialPublicationStatus). An empty value is refused here rather than defaulted — the
+	// caller forgot to decide, and a default on this path is exactly the silent choice rule 1's
+	// forbidden #1 warns about in another dimension. `hien_cong_khai` is no longer named: it is
+	// superseded (migration 0017) and takes its column default, false.
+	if !p.PublicationStatus.Valid() {
+		return errors.New("phieu_phan_anh: ghi phiếu: thiếu publication_status — use case chưa quyết định")
+	}
 	const stmt = `INSERT INTO phieu_phan_anh (
 		tenant_id, id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vuc,
 		dia_chi, thon_id, lat, lng, nguoi_gui_ho_ten, nguoi_gui_dien_thoai, an_danh,
 		trang_thai, goc_dem_han, vao_so_luc, han_tiep_nhan, han_xu_ly_xong, han_phan_loai,
-		hien_cong_khai)
+		publication_status)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`
 
 	_, err := tx.Exec(ctx, stmt,
@@ -375,7 +389,7 @@ func (s *PhieuPhanAnhStore) Tao(ctx context.Context, tx *store.ScopedTx, p domai
 		// "KHÔNG ÁP DỤNG" — that channel's form settles the field at booking, so there is no
 		// unclassified interval to bound.
 		khongThanhNull(p.HanPhanLoai),
-		p.HienCongKhai)
+		string(p.PublicationStatus))
 	if err != nil {
 		// NOT the content, NOT the reporter, NOT the lookup code — an INSERT error message can
 		// carry the whole row on some drivers, and this row is citizen personal data (rule 3).
@@ -401,18 +415,23 @@ func (s *PhieuPhanAnhStore) Tao(ctx context.Context, tx *store.ScopedTx, p domai
 // THE WHERE CLAUSE CARRIES THE EXPECTED STATUS, so two officers classifying the same petition at
 // the same moment cannot both succeed. The second one matches no row, and the caller sees zero
 // rows affected — a refusal, not a silent overwrite of the first one's field and deadline.
+//
+// `publication_status` IS PASSED IN, ALREADY DECIDED (domain.PublicationAfterClassification), and is
+// in the same statement for the reason the four are: classifying a published petition INTO `can-bo`
+// must hide it in the very act that makes it staff conduct, or migration 0017's CHECK
+// `phieu_phan_anh_staff_conduct_never_public` refuses the whole classification.
 func (s *PhieuPhanAnhStore) ChotLinhVuc(ctx context.Context, tx *store.ScopedTx,
 	id, linhVuc string, tuTrangThai domain.TrangThai, sangTrangThai domain.TrangThai,
-	phanLoaiLuc, hanXuLyXong time.Time) error {
+	phanLoaiLuc, hanXuLyXong time.Time, publication domain.PublicationStatus) error {
 
 	const stmt = `UPDATE phieu_phan_anh
 		SET linh_vuc = $3, trang_thai = $4, phan_loai_luc = $5, han_xu_ly_xong = $6,
-		    cap_nhat_luc = now()
+		    publication_status = $8, cap_nhat_luc = now()
 		WHERE tenant_id = $1 AND id = $2 AND trang_thai = $7 AND deleted_at IS NULL`
 
 	kq, err := tx.Exec(ctx, stmt,
 		string(tx.TenantID()), id, linhVuc, string(sangTrangThai), phanLoaiLuc,
-		khongThanhNull(hanXuLyXong), string(tuTrangThai))
+		khongThanhNull(hanXuLyXong), string(tuTrangThai), string(publication))
 	if err != nil {
 		return fmt.Errorf("phieu_phan_anh: chốt lĩnh vực: %w", err)
 	}

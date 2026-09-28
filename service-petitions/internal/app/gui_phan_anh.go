@@ -349,10 +349,13 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		// HanXuLyXong IS LEFT ZERO ON PURPOSE -> SQL NULL -> "CHƯA CÓ". It is fixed by the act that
 		// settles the field (ADR 0028 decision E), and the opposite NULL — `han_tiep_nhan` NULL,
 		// "KHÔNG ÁP DỤNG" — belongs to the staff-booked channel alone.
-		//
-		// HienCongKhai IS LEFT false: a petition is not public until somebody has read it. The
-		// citizen who filed it can always find their own, which is a different path.
 	}
+	// THE PUBLIC PAGE (ADR 0050 point 8): nobody has decided yet (`cho-duyet`), or `an` for a petition
+	// born in the staff-conduct field. Computed FROM THE FIELD THE ROW CARRIES rather than written as a
+	// literal: this channel leaves the field unset today, and the day it does not, a staff-conduct
+	// petition must still be born hidden. The citizen who filed it can always find their own, which is
+	// a different path.
+	moi.PublicationStatus = domain.InitialPublicationStatus(moi.LinhVuc)
 
 	// STEP 3 — the row and its trail, in ONE transaction (rule 6, invariant 3). There is no ordering
 	// here in which the petition exists and the trail does not: either both commit or neither does.
@@ -375,14 +378,15 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, congDan audi
 		// through, what the authority committed to and by when, and which optional boxes the citizen
 		// filled — without one character of what they typed.
 		delta, err := json.Marshal(map[string]any{
-			"kenh_tiep_nhan":  string(kenhCongDan),
-			"trang_thai":      string(moi.TrangThai),
-			"an_danh":         moi.AnDanh,
-			"goc_dem_han":     moi.GocDemHan,
-			"han_tiep_nhan":   moi.HanTiepNhan,
-			"han_phan_loai":   moi.HanPhanLoai,
-			"truong_da_dien":  truongDaDien(moi),
-			"do_dai_noi_dung": len([]rune(moi.NoiDung)),
+			"kenh_tiep_nhan":     string(kenhCongDan),
+			"trang_thai":         string(moi.TrangThai),
+			"an_danh":            moi.AnDanh,
+			"goc_dem_han":        moi.GocDemHan,
+			"han_tiep_nhan":      moi.HanTiepNhan,
+			"han_phan_loai":      moi.HanPhanLoai,
+			"truong_da_dien":     truongDaDien(moi),
+			"do_dai_noi_dung":    len([]rune(moi.NoiDung)),
+			"publication_status": string(moi.PublicationStatus),
 		})
 		if err != nil {
 			return fmt.Errorf("gui_phan_anh: mã hoá delta: %w", err)

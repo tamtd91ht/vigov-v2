@@ -30,8 +30,9 @@ func TestTheoMaTraCuuDocBaCotNhanh(t *testing.T) {
 			p.KetThucNhanhLuc)
 	}
 	// The columns AROUND them are unchanged — an inserted destination would have shifted these.
-	if p.SoLanMoLai != 0 || p.HienCongKhai {
-		t.Errorf("cột lân cận bị lệch: so_lan_mo_lai=%d hien_cong_khai=%v", p.SoLanMoLai, p.HienCongKhai)
+	if p.SoLanMoLai != 0 || p.PublicationStatus != "cho-duyet" {
+		t.Errorf("cột lân cận bị lệch: so_lan_mo_lai=%d publication_status=%q", p.SoLanMoLai,
+			p.PublicationStatus)
 	}
 }
 

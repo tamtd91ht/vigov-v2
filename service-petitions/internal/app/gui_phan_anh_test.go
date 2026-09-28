@@ -246,8 +246,9 @@ func TestGuiLuuHanTiepNhanDaTinh(t *testing.T) {
 	if dong.TrangThai != domain.DaTiepNhan {
 		t.Errorf("trang_thai = %q, muốn %q", dong.TrangThai, domain.DaTiepNhan)
 	}
-	if dong.HienCongKhai {
-		t.Error("hien_cong_khai = true — phiếu chưa ai đọc không được lên trang công khai")
+	if dong.PublicationStatus != domain.PublicationPending {
+		t.Errorf("publication_status = %q, muốn cho-duyet — phiếu chưa ai đọc không được lên trang công khai",
+			dong.PublicationStatus)
 	}
 	if p.MaTraCuu != maCoDinh {
 		t.Errorf("mã tra cứu trả về = %q, muốn %q", p.MaTraCuu, maCoDinh)

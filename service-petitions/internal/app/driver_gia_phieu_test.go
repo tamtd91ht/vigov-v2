@@ -130,6 +130,7 @@ func dongPhieuMau(sua map[string]any) map[string]driver.Value {
 		"dong_luc":             nil,
 		"ket_qua_xu_ly":        nil,
 		"hien_cong_khai":       false,
+		"publication_status":   string(domain.PublicationPending),
 		"so_lan_mo_lai":        int64(0),
 		"ly_do_ket_thuc_nhanh": nil,
 		"co_quan_nhan":         nil,

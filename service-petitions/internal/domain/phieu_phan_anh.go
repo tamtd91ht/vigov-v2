@@ -279,8 +279,11 @@ type PhieuPhanAnh struct {
 	CoQuanNhan       string
 	KetThucNhanhLuc  time.Time
 
-	HienCongKhai bool
-	SoLanMoLai   int
+	// PublicationStatus is `publication_status` (migration 0017, ADR 0050 point 8) — staff moderation
+	// of the public page, separate from TrangThai. It REPLACES the superseded `hien_cong_khai`, which
+	// no code reads any more. Never "" on a row read from the store; see petition_publication.go.
+	PublicationStatus PublicationStatus
+	SoLanMoLai        int
 
 	// THE CITIZEN'S RATING (ADR 0050 point 2): `diem_hai_long`, `rating_comment`, `danh_gia_luc`.
 	// Rating is 0 when the column is NULL — nobody has rated — and 1..5 otherwise (0004's CHECK).

@@ -76,7 +76,9 @@ func dongPhieu(sua map[string]driver.Value) map[string]driver.Value {
 		// fixture holding free text about a case is a fixture somebody copies into a log line.
 		"ket_qua_xu_ly":  nil,
 		"hien_cong_khai": false,
-		"so_lan_mo_lai":  int64(0),
+		// Read in the position `hien_cong_khai` used to hold (migration 0017 supersedes that column).
+		"publication_status": "cho-duyet",
+		"so_lan_mo_lai":      int64(0),
 		// The branch columns (migration 0011) are NULL on every status but the two branches.
 		"ly_do_ket_thuc_nhanh": nil,
 		"co_quan_nhan":         nil,

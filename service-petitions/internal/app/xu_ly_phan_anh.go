@@ -75,7 +75,8 @@ type KhoPhieuXuLy interface {
 	TheoMaTraCuu(ctx context.Context, ma string) (domain.PhieuPhanAnh, error)
 	TheoMaTraCuuDeSua(ctx context.Context, tx *store.ScopedTx, ma string) (domain.PhieuPhanAnh, error)
 	ChotLinhVuc(ctx context.Context, tx *store.ScopedTx, id, linhVuc string,
-		tuTrangThai, sangTrangThai domain.TrangThai, phanLoaiLuc, hanXuLyXong time.Time) error
+		tuTrangThai, sangTrangThai domain.TrangThai, phanLoaiLuc, hanXuLyXong time.Time,
+		publication domain.PublicationStatus) error
 	PhanCong(ctx context.Context, tx *store.ScopedTx, id, boPhanID, canBoID string,
 		tuTrangThai, sangTrangThai domain.TrangThai) error
 	DoiTrangThai(ctx context.Context, tx *store.ScopedTx, id string,
@@ -90,6 +91,11 @@ type KhoPhieuXuLy interface {
 	// GhiNhatKy appends one row of the processing logbook (migration 0013) in the SAME transaction
 	// as the act it describes. Append-only: there is no method that edits or removes a row.
 	GhiNhatKy(ctx context.Context, tx *store.ScopedTx, e domain.NhatKyPhanAnh) error
+
+	// SetPublicationStatus records a staff moderation decision (ADR 0050 point 8) and moves nothing
+	// else on the row — see petition_publication.go.
+	SetPublicationStatus(ctx context.Context, tx *store.ScopedTx, id string,
+		from, to domain.PublicationStatus) error
 }
 
 // KhoSuKien records the obligation to tell the citizen, in the SAME transaction as the change.
@@ -512,8 +518,13 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 		// that already carries promises.
 		hanChot := domain.HanSomHon(p.HanXuLyXong, han)
 
+		// CLASSIFYING INTO `can-bo` HIDES THE PETITION, IN THE SAME STATEMENT (ADR 0050 point 8,
+		// migration 0017 header question 4). Any other field leaves the staff moderation decision where
+		// it was. Decided here, on the locked row, so the value compared is the one the database holds.
+		publication := domain.PublicationAfterClassification(p.PublicationStatus, linhVuc)
+
 		if err := uc.kho.ChotLinhVuc(ctx, tx, p.ID, linhVuc,
-			p.TrangThai, domain.DangPhanLoai, bayGio, hanChot); err != nil {
+			p.TrangThai, domain.DangPhanLoai, bayGio, hanChot, publication); err != nil {
 			return err
 		}
 
@@ -522,20 +533,25 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 		sau.TrangThai = domain.DangPhanLoai
 		sau.PhanLoaiLuc = bayGio
 		sau.HanXuLyXong = hanChot
+		sau.PublicationStatus = publication
 
 		// BEFORE AND AFTER, INCLUDING THE DEADLINE THIS ACT FIXED (rule 6, invariant 5). The deadline
 		// is the whole reason this entry matters: it is the moment the authority committed to a date,
 		// and an inspection asking "when was this promised and by whom" has no other place to look.
 		delta, err := json.Marshal(voiDoDaiGhiChu(map[string]any{
+			// `publication_status` ON BOTH SIDES, so a classification that hid a published petition
+			// (field `can-bo`) is visible in the trail as the change it is (rule 6, invariant 5).
 			"truoc": map[string]any{
-				"trang_thai":     string(p.TrangThai),
-				"linh_vuc":       p.LinhVuc,
-				"han_xu_ly_xong": lucRaVet(p.HanXuLyXong),
+				"trang_thai":         string(p.TrangThai),
+				"linh_vuc":           p.LinhVuc,
+				"han_xu_ly_xong":     lucRaVet(p.HanXuLyXong),
+				"publication_status": string(p.PublicationStatus),
 			},
 			"sau": map[string]any{
-				"trang_thai":     string(domain.DangPhanLoai),
-				"linh_vuc":       linhVuc,
-				"han_xu_ly_xong": lucRaVet(hanChot),
+				"trang_thai":         string(domain.DangPhanLoai),
+				"linh_vuc":           linhVuc,
+				"han_xu_ly_xong":     lucRaVet(hanChot),
+				"publication_status": string(publication),
 			},
 			// The ceiling this act was measured against, and whether it was met. DERIVED at the
 			// instant of the act and RECORDED — which is not the stored flag rule 10, invariant 3

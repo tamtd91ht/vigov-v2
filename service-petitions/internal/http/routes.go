@@ -351,6 +351,11 @@ type (
 		// the officers who already work on petitions commune-wide (app.duocGhiChu decides).
 		GhiChuNoiBo(ctx context.Context, ma, ghiChu string, nguoi audit.Actor,
 			quyen app.QuyenGhiChuCaXa, hanChe app.QuyenXemHanChe) (domain.NhatKyPhanAnh, error)
+		// SetPublication is the staff moderation of the public page (PUT …/publication, ADR 0050 point
+		// 8). It takes the restricted fact like every act, so a colleague cannot even hide a report
+		// about a member of staff; it moves no lifecycle status.
+		SetPublication(ctx context.Context, ma, status string, nguoi audit.Actor,
+			hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error)
 	}
 
 	// NhatKyPhieuDoc is the READ of one petition's processing logbook, for
@@ -996,6 +1001,34 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "feedback.classify")(
 			idem.KhongCan("câu UPDATE mang `trang_thai = 'dang-phan-loai'`, nên lần gửi thứ hai không khớp dòng nào và trả 409 — đúng một lần chuyển, đúng một cơ quan nhận, đúng một vết")(
 				http.HandlerFunc(h.ChuyenCapTrenPhieu))))
+
+	// CÔNG KHAI — staff moderation of the public page (ADR 0050 point 8, SRS M4.3.1 P0). The
+	// requirement's `POST /{id}/moderation` (`router.py:349-361`), respelled for this surface:
+	// `publication` is the nominalisation rest_api_guard itself names for "publish", matching the column
+	// `publication_status` (migration 0017), and PUT because the body is an absolute state — a
+	// sub-resource you set, like PUT …/no-task-marker.
+	//
+	// `feedback.assign`, the requirement's key (`router.py:352`), seeded at
+	// service-identity/migrations/0001_init.sql. NO KEY WAS INVENTED (rule 5, invariant 3c).
+	//
+	// IT MOVES NO LIFECYCLE STATUS (user decision 28/09/2026) and owes the citizen no message: it is
+	// not a transition and not in ADR 0041's table. A `can-bo` petition is refused `cong-khai` with 409
+	// `never_public`; to a caller without `feedback.restricted` it is 404, as on every write route.
+	//
+	// @summary  Đặt trạng thái công khai của phiếu phản ánh — cho hiện công khai hoặc ẩn khỏi trang công khai (không đổi trạng thái xử lý)
+	// @screen   09-phan-anh-nguoi-dan §14.4
+	// @request  publicationIn
+	// @reply    200 phieuPhanAnhRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/citizen-reports/{maTraCuu}/publication",
+		authz.RequirePermission(d.Checker, "feedback.assign")(
+			idem.KhongCan("PUT đặt một trạng thái tuyệt đối; đã đúng giá trị thì use case không ghi gì, nên gửi lại để lại đúng một dòng và đúng một vết")(
+				http.HandlerFunc(h.SetPublication))))
 
 	// --- THE PROCESSING LOGBOOK (migration 0013). ONE READ, ONE WRITE --------------------------------
 	//

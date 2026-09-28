@@ -133,6 +133,9 @@ type xuLyPhieuGia struct {
 	// quyenGhiChu is the fact the manual note route hands down: ANY of resolve/assign/classify.
 	quyenGhiChu app.QuyenGhiChuCaXa
 
+	// publication is the status the publication route handed down.
+	publication string
+
 	loi error
 }
 
@@ -219,6 +222,18 @@ func (x *xuLyPhieuGia) GhiChuNoiBo(ctx context.Context, ma, ghiChu string, nguoi
 		ID: "nkpa-01JTHU", PhieuPhanAnhID: "pa-001", ThoiDiem: mocVaoSo, NguoiMa: nguoi.ID,
 		HanhVi: domain.NhatKyGhiChu, TrangThai: domain.DangPhanLoai, NoiDung: ghiChu,
 	}, nil
+}
+
+// SetPublication RECORDS the requested status; whether it is allowed is the use case's, proved over
+// the real store in internal/app/petition_publication_test.go.
+func (x *xuLyPhieuGia) SetPublication(ctx context.Context, ma, status string, nguoi audit.Actor,
+	hanChe app.QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
+
+	x.ghi(ctx, "cong-khai", ma, nguoi, hanChe)
+	x.publication = status
+	p, err := x.tra()
+	p.PublicationStatus = domain.PublicationStatus(status)
+	return p, err
 }
 
 func (x *xuLyPhieuGia) ChuyenCapTren(ctx context.Context, ma string, yc app.YeuCauChuyenCapTren,
@@ -335,6 +350,11 @@ func caCacTuyen() []caTuyen {
 		{"chuyển cấp trên", http.MethodPost, duongChuyenCapTren(maPhieuThuong),
 			chuyenCapTrenVao{Reason: lyDoThatHTTP, ReceivingBody: coQuanThatHTTP},
 			authz.Perm("feedback.classify"), authz.Perm("feedback.resolve")},
+		// PUBLICATION (ADR 0050 point 8) — the requirement's `feedback.assign`. `feedback.read`, the key
+		// every reader of the register holds, must not open it.
+		{"công khai", http.MethodPut, duong(maPhieuThuong) + "/publication",
+			publicationIn{Status: "cong-khai"},
+			authz.Perm("feedback.assign"), authz.Perm("feedback.read")},
 	}
 }
 

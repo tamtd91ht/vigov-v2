@@ -198,7 +198,7 @@ func phieuCuaToiMau() *phieuCuaToiGia {
 				// (rule 10, invariant 7); a fixture that left them empty could not tell a handler
 				// that leaks them from one that does not.
 				BoPhanID: "bp-001", CanBoXuLyID: "nd-001",
-				HienCongKhai: true, SoLanMoLai: 2,
+				PublicationStatus: domain.PublicationPublic, SoLanMoLai: 2,
 			},
 			maCuaNguoiKhac: {
 				ID: "pa-002", MaTraCuu: maCuaNguoiKhac, Kenh: domain.KenhZaloMiniApp,
