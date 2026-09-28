@@ -201,6 +201,10 @@ type (
 			domain.DeNghiLuiHan, error)
 		QuyetDinhLuiHan(ctx context.Context, ma, deNghiID string, yc app.YeuCauQuyetDinhLuiHan,
 			nguoi audit.Actor) (domain.DeNghiLuiHan, error)
+		// Reassign is the seventh act, `task.assign` (owner decision 28/09/2026): the same row handed to
+		// another unit/person, plus lead unit and monitor. See internal/app/task_assignment.go.
+		Reassign(ctx context.Context, ma string, req app.TaskAssignmentRequest, nguoi audit.Actor) (
+			domain.NhiemVu, error)
 	}
 
 	// BienBanDanhSach is the paginated read of the meeting-minutes register, for
@@ -1029,9 +1033,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	//	                         that WOULD need a computed deadline — §8's Excel import, splitting a
 	//	                         meeting conclusion — have a contract to call when they are built.)
 	//
-	// STILL ABSENT, AND DELIBERATELY: §10's `giao-viec`. Assignment is `task.assign`'s act and PATCH
-	// cannot move `bo_phan_id` or `nguoi_thuc_hien_ma` — folding it in would hand assignment to every
-	// holder of `task.update`. Reported as a finding.
+	// §10's `giao-viec` — ANSWERED 28/09/2026: `task.assign` now has its own route,
+	// POST /api/v1/tasks/{ma}/assignment, below. PATCH still cannot move `bo_phan_id` or
+	// `nguoi_thuc_hien_ma` — folding it in would hand assignment to every holder of `task.update`.
 
 	// @summary  Danh sách nhiệm vụ của xã — phân trang theo con trỏ, lọc theo trạng thái · loại · khối · ưu tiên · bộ phận · người thực hiện · nguồn giao · trễ hạn · việc con của một mã (`parent=NV19`); sắp theo `created_at` · `code` · `due_at` (việc không có hạn luôn ở cuối)
 	// @screen   02-nhiem-vu §3, §4, §5.10
@@ -1234,6 +1238,43 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "task.update")(
 			idem.KhongCan("câu UPDATE mang trạng thái đang chờ, nên bấm hai lần vẫn chỉ chuyển đúng một bước và lần thứ hai trả 409")(
 				http.HandlerFunc(h.DoiTrangThaiNhiemVu))))
+
+	// GIAO LẠI / CHUYỂN TIẾP (§5.4, §10) — `task.assign`, seeded at service-identity/migrations/0001_init.sql:307 ("Giao nhiệm vụ").
+	//
+	// OWNER DECISION 28/09/2026: "Chuyển tiếp" is the SAME task handed to another unit or person, and
+	// it is one act with "đổi bộ phận / người thực hiện". The body also edits "Cơ quan chủ trì tham mưu"
+	// and "Chuyên viên theo dõi", under this same key (#7). A change of unit or assignee sends the task
+	// back to `moi-giao` so the new holder acknowledges it; lead unit / monitor alone change no status.
+	// THE DEADLINE NEVER MOVES HERE — only an approved extension moves it (ADR 0038).
+	//
+	// `assignment` IS THE PETITION PATH'S NOUN (POST /api/v1/citizen-reports/{maTraCuu}/assignment) and
+	// the one skills/rest-api-design §3 names for this very act. It has NO row in the URL table of
+	// kb/00-foundation/ubiquitous-language.md — raised as a finding, not added here.
+	//
+	// 400 covers a body naming no field, an empty `unit`, a staff code identity does not accept in
+	// this commune (ONE answer for unknown / another commune / locked), and `note` too long. 409 covers
+	// a terminal task (`task_state`) and a request that changes nothing (`no_change`). 503: identity
+	// could not be asked, so nothing was written.
+	//
+	// idem.KhongCan: the UPDATE carries the expected status, and a second identical request finds
+	// every field already applied — the use case writes nothing and answers 409 `no_change`. One row,
+	// one timeline entry, one audit entry.
+	//
+	// @summary  Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác, và sửa cơ quan chủ trì · chuyên viên theo dõi — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên
+	// @screen   02-nhiem-vu §5.4
+	// @request  taskAssignmentIn
+	// @reply    200 nhiemVuRa
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/tasks/{ma}/assignment",
+		authz.RequirePermission(d.Checker, "task.assign")(
+			idem.KhongCan("câu UPDATE mang trạng thái đang chờ và lần gửi thứ hai thấy mọi trường đã đúng nên không ghi gì, trả 409 — đúng một lần giao, đúng một dòng nhật ký, đúng một vết")(
+				http.HandlerFunc(h.ReassignTask))))
 
 	// XOÁ (§11.5) — `task.delete`, seeded at 0001_init.sql:302 ("Xoá nhiệm vụ khỏi sổ").
 	//

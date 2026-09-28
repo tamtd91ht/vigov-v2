@@ -290,9 +290,10 @@ func (s *NhiemVuStore) Tao(ctx context.Context, tx *store.ScopedTx, n domain.Nhi
 //	                       `task.update` that could rewrite it would let anybody holding that key
 //	                       name themselves the approver of their own extension requests — the
 //	                       escalation the two-layer rule exists to prevent.
-//	bo_phan_id,            assignment is `task.assign`'s act (§6, §10), with a route of its own that
-//	nguoi_thuc_hien_ma     this pass did not build. Folding it in here would grant assignment to
-//	                       every holder of `task.update`.
+//	bo_phan_id,            assignment is `task.assign`'s act (§6, §10), with a route of its own:
+//	nguoi_thuc_hien_ma,    POST /api/v1/tasks/{ma}/assignment (Reassign below, 28/09/2026). Folding
+//	co_quan_chu_tri_id,    it in here would grant assignment to every holder of `task.update` — and
+//	chuyen_vien_theo_doi_ma  the owner put lead unit and monitor under `task.assign` too (#7).
 //	nguon_giao, nguon_id   facts about how the row came into being.
 //
 // EVERY FIELD IS A POINTER, so "not mentioned" and "set to empty" are distinguishable. Three of
@@ -472,6 +473,33 @@ func (s *NhiemVuStore) DoiTrangThai(ctx context.Context, tx *store.ScopedTx, id 
 		return fmt.Errorf("nhiem_vu: đổi trạng thái nhiệm vụ: %w", err)
 	}
 	return doiMotDongNhiemVu(kq, "đổi trạng thái")
+}
+
+// Reassign writes the four holder columns and the status the assignment act lands the task in
+// (owner decision 28/09/2026; domain/task_assignment.go).
+//
+// ⚠ NO `han_*` COLUMN IS IN THE SET LIST, AND THAT ABSENCE IS THE DECISION. A deadline moves only
+// through an approved extension (ADR 0038, DoiHanXuLy); a hand-over that could move it would let a
+// `task.assign` holder rewrite a commitment the leader made. `ngay_hoan_thanh` is absent too: the act
+// refuses terminal tasks, so the column is NULL on every row this reaches.
+//
+// THE WHERE CLAUSE CARRIES THE EXPECTED STATUS, like DoiTrangThai: this act can move the lifecycle
+// (back to `moi-giao`), so two officers acting at once cannot both succeed.
+func (s *NhiemVuStore) Reassign(ctx context.Context, tx *store.ScopedTx, id string,
+	expected domain.TrangThaiNhiemVu, n domain.NhiemVu) error {
+
+	const stmt = `UPDATE nhiem_vu
+		SET bo_phan_id = $3, nguoi_thuc_hien_ma = $4, co_quan_chu_tri_id = $5,
+		    chuyen_vien_theo_doi_ma = $6, trang_thai = $7, cap_nhat_luc = now()
+		WHERE tenant_id = $1 AND id = $2 AND trang_thai = $8 AND deleted_at IS NULL`
+
+	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id,
+		rongThanhNull(n.BoPhanID), rongThanhNull(n.NguoiThucHienMa), rongThanhNull(n.CoQuanChuTriID),
+		rongThanhNull(n.ChuyenVienTheoDoiMa), string(n.TrangThai), string(expected))
+	if err != nil {
+		return fmt.Errorf("nhiem_vu: giao lại nhiệm vụ: %w", err)
+	}
+	return doiMotDongNhiemVu(kq, "giao lại")
 }
 
 // DoiHanXuLy moves the CURRENT commitment, and only it.

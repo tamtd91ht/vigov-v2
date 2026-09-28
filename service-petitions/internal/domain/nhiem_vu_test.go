@@ -131,14 +131,21 @@ func TestTraLaiLamTiepLaMuiTenLuiDuyNhat(t *testing.T) {
 }
 
 func TestHaiNhanhRoiDuocTuMoiBuocChuaXong(t *testing.T) {
-	// §6, :229-231: the fan-in. Both branches leave from every unfinished main state.
+	// §6, :229-231: the fan-in. `tam-dung` leaves from every unfinished main state.
 	for _, tu := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet} {
 		if !tu.ChuyenSangDuoc(TamDung) {
 			t.Errorf("%s không tạm dừng được", tu)
 		}
-		if !tu.ChuyenSangDuoc(ChuyenTiep) {
-			t.Errorf("%s không chuyển tiếp được", tu)
+		// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: this used to require `chuyen-tiep` to be reachable from every
+		// working state. The owner decided forwarding is the assignment act on the SAME row
+		// (task_assignment.go), so NO state may move into `chuyen-tiep` any more.
+		if tu.ChuyenSangDuoc(ChuyenTiep) {
+			t.Errorf("%s vẫn chuyển sang chuyen-tiep được — chuyển tiếp nay là thao tác giao lại", tu)
 		}
+	}
+	// The code itself stays VALID: rows that already hold it are records (rule 7).
+	if !ChuyenTiep.HopLe() || !ChuyenTiep.KetThuc() {
+		t.Error("chuyen-tiep phải còn là mã hợp lệ và là trạng thái kết thúc cho các dòng cũ")
 	}
 }
 

@@ -107,6 +107,10 @@ type KhoNhiemVuGhi interface {
 	DoiTrangThai(ctx context.Context, tx *store.ScopedTx, id string,
 		tu, sang domain.TrangThaiNhiemVu, ngayHoanThanh time.Time) error
 	DoiHanXuLy(ctx context.Context, tx *store.ScopedTx, id string, hanCu, hanMoi time.Time) error
+	// Reassign is the assignment act's one UPDATE (task_assignment.go) — the holder columns and the
+	// status, never a deadline.
+	Reassign(ctx context.Context, tx *store.ScopedTx, id string, expected domain.TrangThaiNhiemVu,
+		n domain.NhiemVu) error
 	XoaMem(ctx context.Context, tx *store.ScopedTx, id, nguoiMa, lyDo string, luc time.Time) error
 
 	GhiNhatKy(ctx context.Context, tx *store.ScopedTx, e domain.NhatKyNhiemVu) error
@@ -1041,9 +1045,10 @@ func chuanHoaSuaNhiemVu(sua *petstore.SuaNhiemVu) error {
 // THE TARGET IS A PARAMETER HERE AND IS NOT ONE ON THE PETITION PATH, and the difference is the
 // shape of the two lifecycles. A petition has ONE main flow, so "advance" names the next step
 // unambiguously and a target on the wire would let a client skip steps. §6's task lifecycle
-// BRANCHES at every state — `tam-dung` and `chuyen-tiep` leave all four working states — so there
-// is no single "next", and the server's job is to refuse the moves the diagram does not draw rather
-// than to choose among three.
+// BRANCHES at every state — `tam-dung` leaves all four working states, and `cho-duyet` can go back
+// — so there is no single "next", and the server's job is to refuse the moves the diagram does not
+// draw rather than to choose among them. (`chuyen-tiep` was the second branch until 28/09/2026; it
+// is now the assignment act, task_assignment.go.)
 type YeuCauDoiTrangThai struct {
 	TrangThai string
 
@@ -1078,8 +1083,10 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 	nguoi audit.Actor, duyet QuyenDuyetHoanThanh) (domain.NhiemVu, error) {
 
 	moiTT := domain.TrangThaiNhiemVu(yc.TrangThai)
-	if !moiTT.HopLe() {
-		return domain.NhiemVu{}, domain.ErrTrangThaiNhiemVuKhongBiet
+	// BEFORE THE TRANSACTION: an unknown code and the retired `chuyen-tiep` target (owner decision
+	// 28/09/2026 — forwarding is now the assignment act) are refused without taking a row lock.
+	if err := domain.CheckStatusTarget(moiTT); err != nil {
+		return domain.NhiemVu{}, err
 	}
 	ghiChu, err := domain.KiemVanBanTuyChon(yc.GhiChu, domain.NoiDungNhatKyToiDa,
 		domain.ErrNoiDungNhatKyQuaDai)

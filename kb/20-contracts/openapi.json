@@ -14145,6 +14145,123 @@
         }
       }
     },
+    "/api/v1/tasks/{ma}/assignment": {
+      "parameters": [
+        {
+          "name": "ma",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác, và sửa cơ quan chủ trì · chuyên viên theo dõi — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên",
+        "operationId": "petitions_post_tasks_by_ma_assignment",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "02-nhiem-vu §5.4",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "task.assign"
+        },
+        "x-vigov-task": "de24216303f4",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.taskAssignmentIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.nhiemVuRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tasks/{ma}/extensions": {
       "parameters": [
         {
@@ -21310,6 +21427,39 @@
           "title",
           "type"
         ],
+        "additionalProperties": false
+      },
+      "petitions.taskAssignmentIn": {
+        "type": "object",
+        "properties": {
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assignee": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lead_unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "monitor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
         "additionalProperties": false
       },
       "petitions.taskCountsOut": {

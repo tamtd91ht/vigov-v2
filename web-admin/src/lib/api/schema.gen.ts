@@ -1709,6 +1709,14 @@ export type petitions_taoNhiemVuVao = {
   "documents"?: Array<petitions_vanBanNhiemVuVao>;
 };
 
+export type petitions_taskAssignmentIn = {
+  "unit"?: string | null;
+  "assignee"?: string | null;
+  "lead_unit"?: string | null;
+  "monitor"?: string | null;
+  "note"?: string;
+};
+
 export type petitions_taskCountsOut = {
   "by_status": Array<petitions_taskStatusCountOut>;
 };
@@ -4855,6 +4863,28 @@ export type petitions_delete_tasks_by_ma = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/tasks/{ma}/assignment — Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác, và sửa cơ quan chủ trì · chuyên viên theo dõi — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên */
+export type petitions_post_tasks_by_ma_assignment = {
+  duongDan: "/api/v1/tasks/{ma}/assignment";
+  phuongThuc: "POST";
+  thamSo: {
+    "ma": string;
+  };
+  truyVan: {
+  };
+  than: petitions_taskAssignmentIn;
+  phanHoi: {
+    200: petitions_nhiemVuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
   };
 };
 

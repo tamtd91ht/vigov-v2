@@ -138,6 +138,8 @@ func LoiDauVaoNhiemVuGoc(err error) error {
 		ErrThieuNoiDungNhatKy, ErrNoiDungNhatKyQuaDai, ErrThieuLyDoTraLai,
 		ErrTomTatKetQuaQuaDai, ErrGhiChuNhiemVuQuaDai,
 		ErrTrangThaiNhiemVuKhongBiet, ErrThieuLyDoLuiHan, ErrHanMoiKhongLui,
+		ErrForwardingIsAssignment,
+		ErrAssignmentEmpty, ErrAssignmentUnitEmpty, ErrAssignmentFieldTooLong,
 	} {
 		if errors.Is(err, mot) {
 			return mot
@@ -430,6 +432,35 @@ var ErrTrangThaiNhiemVuKhongBiet = errors.New(
 var ErrChuyenTrangThaiNhiemVuSaiLuc = errors.New(
 	"nhiệm vụ: vòng đời không có bước chuyển này từ trạng thái hiện tại")
 
+// ErrForwardingIsAssignment refuses `chuyen-tiep` as the target of a status move.
+//
+// OWNER DECISION 28/09/2026: "Chuyển tiếp" is the SAME task handed to another unit or person, which is
+// the assignment act (POST /api/v1/tasks/{ma}/assignment, `task.assign`). A status move into
+// `chuyen-tiep` would park the row in a terminal state with nobody holding the work, while the
+// deadline kept running — so the move is refused with a sentence naming the act that does it.
+//
+// A SENTINEL OF ITS OWN, NOT ErrChuyenTrangThaiNhiemVuSaiLuc: "the lifecycle has no such move" would
+// send the caller looking for a status to pass through first, and there is none.
+var ErrForwardingIsAssignment = errors.New(
+	"nhiệm vụ: chuyển tiếp nay là thao tác giao lại cho bộ phận/người khác " +
+		"(POST /api/v1/tasks/{ma}/assignment, quyền task.assign), không còn là một trạng thái để chuyển sang")
+
+// CheckStatusTarget is the part of a move's check that depends on the TARGET alone: one of the seven
+// codes, and not the retired `chuyen-tiep`.
+//
+// ONE FUNCTION, CALLED BEFORE THE TRANSACTION (app.DoiTrangThai) AND INSIDE ChuyenTrangThaiDuoc, so the
+// refusal of `chuyen-tiep` is written once. `chuyen-tiep` STAYS a valid code (HopLe) — rows that hold
+// it are records (rule 7) and every read path still renders them.
+func CheckStatusTarget(moi TrangThaiNhiemVu) error {
+	if !moi.HopLe() {
+		return ErrTrangThaiNhiemVuKhongBiet
+	}
+	if moi == ChuyenTiep {
+		return ErrForwardingIsAssignment
+	}
+	return nil
+}
+
 // ErrTiepTucKhongBietTrangThaiTruoc refuses resuming a paused task when the log cannot say what it
 // was paused FROM.
 //
@@ -562,8 +593,8 @@ func TrangThaiTruocTamDung(nhatKy []MocNhatKy) (TrangThaiNhiemVu, bool) {
 // `tam-dung` the legal target is a fact about THIS TASK'S HISTORY that no map can hold — see
 // TrangThaiNhiemVu.ChuyenSangDuoc, which is deliberately loose for exactly this case.
 func ChuyenTrangThaiDuoc(hienTai, moi, truocTamDung TrangThaiNhiemVu) error {
-	if !moi.HopLe() {
-		return ErrTrangThaiNhiemVuKhongBiet
+	if err := CheckStatusTarget(moi); err != nil {
+		return err
 	}
 	if hienTai == TamDung {
 		if truocTamDung == "" {

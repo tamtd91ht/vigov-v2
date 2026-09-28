@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 903b535
+derived_from_commit: ad7f821
 expires: 2026-12-27
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -30,7 +30,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 |---|---|---|---|
 | **00** ViGov — Tổng quan hệ thống | — | — | — |
 | **01** Tổng quan điều hành | 6 | 6/6 | ✓ |
-| **02** Quản lý nhiệm vụ | 12 | 11/12 | ✓ |
+| **02** Quản lý nhiệm vụ | 13 | 12/13 | ✓ |
 | **03** Sổ tay lãnh đạo | — | — | — |
 | **04** Biên bản và kết luận họp | 13 | 13/13 | ✓ |
 | **05** Văn bản đến & Đơn thư | 7 | 7/7 | ✓ |
@@ -45,7 +45,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **14** Cấu hình hệ thống | 59 | 59/59 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 5 | 5/5 | ✓ |
 
-Tổng **161 tuyến** trong hợp đồng. **6** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **162 tuyến** trong hợp đồng. **6** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -56,7 +56,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | # | Mục menu | Đường dẫn | Khoá quyền | Màn | Chưa dựng |
 |---|---|---|---|---|---|
 | 1 | Tổng quan | `/tong-quan` | `REPORT_READ_PERMISSION` | ✓ | **không khai** |
-| 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 14 |
+| 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 10 |
 | 3 | Sổ tay lãnh đạo | — | — | ✗ | |
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 4 |
 | 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | **không khai** |
@@ -70,7 +70,7 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 13 | Báo cáo | — | — | ✗ | |
 | 14 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 8 |
 
-**11/14** mục menu có màn thật. **69** phần chưa dựng đang hiện trên các màn ấy.
+**11/14** mục menu có màn thật. **65** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **2 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -115,7 +115,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-documents` | 7 | 3 | 4 | 0 |
 | `service-finance` | 15 | 3 | 0 | 0 |
 | `service-identity` | 22 | 9 | 0 | 1 |
-| `service-petitions` | 21 | 8 | 8 | 0 |
+| `service-petitions` | 21 | 9 | 8 | 0 |
 | `service-platform` | 6 | 3 | 0 | 1 |
 | `service-reporting` | 2 | 0 | 1 | 0 |
 | `tools` | 18 | 0 | 0 | 0 |

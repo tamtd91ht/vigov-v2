@@ -178,7 +178,9 @@ func TestChuyenTrangThaiTheoDungVongDoi(t *testing.T) {
 		{ChoDuyet, DangThucHien, true},
 		{ChoDuyet, DaTiepNhanNV, false},
 		{DangThucHien, TamDung, true},
-		{DangThucHien, ChuyenTiep, true},
+		// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: was `true`. Forwarding is now the assignment act, and the
+		// status move is refused with ErrForwardingIsAssignment (TestForwardingIsNoLongerAStatusMove).
+		{DangThucHien, ChuyenTiep, false},
 		// The jumps §6 does not draw. A client able to skip steps makes every intermediate state
 		// optional in practice while looking mandatory in the map.
 		{MoiGiao, HoanThanh, false},
@@ -193,6 +195,24 @@ func TestChuyenTrangThaiTheoDungVongDoi(t *testing.T) {
 		if !ca.duoc && err == nil {
 			t.Errorf("%s → %s được chấp nhận — vòng đời §6 không có bước này", ca.tu, ca.sang)
 		}
+	}
+}
+
+// TestForwardingIsNoLongerAStatusMove — owner decision 28/09/2026. From EVERY state, including a paused
+// one, `chuyen-tiep` as a target answers the sentinel that names the assignment act — not the generic
+// "no such move", which would send the caller looking for an intermediate status.
+func TestForwardingIsNoLongerAStatusMove(t *testing.T) {
+	for _, from := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet, TamDung, HoanThanh} {
+		err := ChuyenTrangThaiDuoc(from, ChuyenTiep, DangThucHien)
+		if !errors.Is(err, ErrForwardingIsAssignment) {
+			t.Errorf("%s → chuyen-tiep: lỗi = %v, muốn ErrForwardingIsAssignment", from, err)
+		}
+	}
+	if !LaLoiDauVaoNhiemVu(ErrForwardingIsAssignment) {
+		t.Error("ErrForwardingIsAssignment phải là lỗi đầu vào (400), không phải 500")
+	}
+	if err := CheckStatusTarget("moi-nghi-ra"); !errors.Is(err, ErrTrangThaiNhiemVuKhongBiet) {
+		t.Errorf("mã lạ: lỗi = %v, muốn ErrTrangThaiNhiemVuKhongBiet", err)
 	}
 }
 

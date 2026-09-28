@@ -55,6 +55,8 @@ type ghiNhiemVuGia struct {
 	lyDoXoa     string
 	deNghiID    string
 
+	ycAssignment app.TaskAssignmentRequest
+
 	// duyet is the fact the STATUS route hands down: does the caller hold `task.approve`?
 	//
 	// RECORDED RATHER THAN ACTED ON. Which moves it refuses is app.duocHoanThanh's and is proved over
@@ -135,6 +137,13 @@ func (g *ghiNhiemVuGia) QuyetDinhLuiHan(ctx context.Context, ma, deNghiID string
 	g.ghi(ctx, "quyet-dinh", ma, nguoi)
 	g.deNghiID, g.ycQuyetDinh = deNghiID, yc
 	return g.traDeNghi()
+}
+
+func (g *ghiNhiemVuGia) Reassign(ctx context.Context, ma string, req app.TaskAssignmentRequest,
+	nguoi audit.Actor) (domain.NhiemVu, error) {
+	g.ghi(ctx, "giao-lai", ma, nguoi)
+	g.ycAssignment = req
+	return g.tra()
 }
 
 // --- fixtures --------------------------------------------------------------------------------------
@@ -229,6 +238,11 @@ func caCacTuyenGhiNhiemVu() []caGhiNhiemVu {
 		{"quyết định lùi hạn", http.MethodPost, duongQuyetDinh(maNVThu, "dn-001"),
 			quyetDinhLuiHanVao{Decision: "approve"},
 			authz.Perm("task.extend"), authz.Perm("task.update"), http.StatusOK},
+		// GIAO LẠI / CHUYỂN TIẾP (owner decision 28/09/2026) — `task.assign`, and `task.update` must NOT
+		// open it: folding assignment into the edit right is exactly what the separate key prevents.
+		{"giao lại", http.MethodPost, taskAssignmentPath(maNVThu),
+			taskAssignmentIn{Unit: strPtr("bp-dia-chinh")},
+			authz.Perm("task.assign"), authz.Perm("task.update"), http.StatusOK},
 	}
 }
 

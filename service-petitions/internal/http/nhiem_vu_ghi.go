@@ -9,6 +9,7 @@ package http
 //	DELETE /api/v1/tasks/{ma}                           task.delete
 //	POST   /api/v1/tasks/{ma}/extensions                task.update
 //	POST   /api/v1/tasks/{ma}/extensions/{id}/decision  task.extend   + ADR 0038's second layer
+//	POST   /api/v1/tasks/{ma}/assignment                task.assign   (task_assignment.go)
 //
 // # EVERY KEY ALREADY EXISTS IN `quyen`, AND ALL SIX WERE CHECKED AGAINST THE TABLE FIRST
 //
@@ -19,10 +20,9 @@ package http
 // the tests stayed green, because a fake checker grants any string. `tools/check_quyen.py` scans the
 // whole repository against the table on every `make check`.
 //
-// `task.assign` IS SEEDED AND IS USED BY NO ROUTE HERE, and that is this pass's boundary rather than
-// an oversight: §10's `giao-viec` route is not built, and PATCH deliberately cannot move
-// `bo_phan_id` or `nguoi_thuc_hien_ma` — folding assignment into the edit route would hand it to
-// every holder of `task.update`. Reported as a finding.
+// `task.assign` (0001_init.sql:307) GUARDS ITS OWN ROUTE SINCE 28/09/2026 — …/assignment, in
+// task_assignment.go. PATCH still deliberately cannot move `bo_phan_id` or `nguoi_thuc_hien_ma`:
+// folding assignment into the edit route would hand it to every holder of `task.update`.
 //
 // # TWO ROUTES CONSULT A SECOND KEY INSIDE THE HANDLER, AND NO STATUS CODE SHOWS IT
 //
@@ -245,9 +245,10 @@ type suaNhiemVuVao struct {
 // doiTrangThaiVao is the body of POST /api/v1/tasks/{ma}/status.
 //
 // THE TARGET IS ON THE WIRE HERE AND IS NOT ON THE PETITION PATH, and the difference is the shape of
-// the two lifecycles: §6's task lifecycle BRANCHES at every state — `tam-dung` and `chuyen-tiep`
-// leave all four working states — so there is no single "next" for the server to choose. What the
-// server still owns is the MAP: a move the diagram does not draw is refused.
+// the two lifecycles: §6's task lifecycle BRANCHES — `tam-dung` leaves all four working states — so
+// there is no single "next" for the server to choose. What the server still owns is the MAP: a move
+// the diagram does not draw is refused. `chuyen-tiep` is refused with 400 since 28/09/2026: forwarding
+// is the assignment act (POST …/assignment), and the refusal says so.
 type doiTrangThaiVao struct {
 	Status string `json:"status"`
 	// Note becomes the timeline entry (§5.9). Optional: when it is empty the entry carries a

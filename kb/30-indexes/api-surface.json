@@ -3341,6 +3341,31 @@
     {
       "service": "petitions",
       "method": "POST",
+      "path": "/api/v1/tasks/{ma}/assignment",
+      "operation_id": "petitions_post_tasks_by_ma_assignment",
+      "task_id": "de24216303f4",
+      "summary": "Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác, và sửa cơ quan chủ trì · chuyên viên theo dõi — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên",
+      "screen": "02-nhiem-vu §5.4",
+      "permission_kind": "permission",
+      "permission": "task.assign",
+      "idempotency": "khong-can",
+      "idempotency_reason": "câu UPDATE mang trạng thái đang chờ và lần gửi thứ hai thấy mọi trường đã đúng nên không ghi gì, trả 409 — đúng một lần giao, đúng một dòng nhật ký, đúng một vết",
+      "request_schema": "petitions.taskAssignmentIn",
+      "reply_schemas": {
+        "200": "petitions.nhiemVuRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-petitions/internal/http/routes.go"
+    },
+    {
+      "service": "petitions",
+      "method": "POST",
       "path": "/api/v1/tasks/{ma}/extensions",
       "operation_id": "petitions_post_tasks_by_ma_extensions",
       "task_id": "211081491a63",

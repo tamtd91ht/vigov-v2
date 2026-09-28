@@ -57,8 +57,9 @@ const (
 // already owns the unsuffixed name in this package, and two lifecycles cannot share one map name.
 // The compiler says so loudly, which is the right place to find it.
 //
-// THE MAIN FLOW is the diagram at :227 read left to right. The two branch states are reachable
-// from each of the four unfinished main states, which is what the fan-in at :229-231 draws.
+// THE MAIN FLOW is the diagram at :227 read left to right. `tam-dung` is reachable from each of the
+// four unfinished main states, which is what the fan-in at :229-231 draws; the diagram's second
+// branch, `chuyen-tiep`, is no longer a move (see below).
 //
 // `hoan-thanh` AND `chuyen-tiep` ARE TERMINAL, and they appear as keys with EMPTY lists rather
 // than being left out, so "a state with no way out" is visibly different from "a state nobody
@@ -66,11 +67,14 @@ const (
 //
 //	hoan-thanh   §6 draws no arrow leaving it, and §5.4's two approval tick boxes say in the
 //	             interface itself that they "không làm đổi trạng thái nhiệm vụ".
-//	chuyen-tiep  §6 says it "sinh bản ghi liên kết" — the work continues as ANOTHER task in
-//	             another department, and this row stops here. ⚠ NO COLUMN LINKS THE TWO ROWS, and
-//	             migration 0006 does not invent one: which end holds the link, and whether the new
-//	             task inherits the deadline, are the same unanswered questions the sub-task tree
-//	             raises. Reported as a finding.
+//	chuyen-tiep  NO LONGER A TARGET OF ANY MOVE — owner decision 28/09/2026. "Chuyển tiếp" is now the
+//	             SAME ROW handed to another unit or person: the assignment act
+//	             (POST /api/v1/tasks/{ma}/assignment, task_assignment.go), which resets the status to
+//	             `moi-giao` and leaves the deadline alone. The code STAYS in this map, in the CHECK
+//	             constraint and in the labels, because rows that already hold it are records and are
+//	             never rewritten (rule 7). It stays TERMINAL for those rows: the "another task in
+//	             another department" reading §6 drew had no link column, so nothing can continue
+//	             them. CheckStatusTarget refuses it as a target with a sentence naming the new act.
 //
 // `tam-dung` IS THE ONE ENTRY THAT IS NOT A PLAIN LOOKUP — see the note on TamDungVeDuoc.
 //
@@ -81,10 +85,10 @@ const (
 // closed list is untouched. The map only says the shape exists; who may take it and what it must
 // carry is LaTraLaiLamTiep's, enforced in the write use case.
 var chuyenDuocSangNhiemVu = map[TrangThaiNhiemVu][]TrangThaiNhiemVu{
-	MoiGiao:      {DaTiepNhanNV, TamDung, ChuyenTiep},
-	DaTiepNhanNV: {DangThucHien, TamDung, ChuyenTiep},
-	DangThucHien: {ChoDuyet, TamDung, ChuyenTiep},
-	ChoDuyet:     {HoanThanh, DangThucHien, TamDung, ChuyenTiep},
+	MoiGiao:      {DaTiepNhanNV, TamDung},
+	DaTiepNhanNV: {DangThucHien, TamDung},
+	DangThucHien: {ChoDuyet, TamDung},
+	ChoDuyet:     {HoanThanh, DangThucHien, TamDung},
 	TamDung:      {MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet},
 	HoanThanh:    {},
 	ChuyenTiep:   {},
