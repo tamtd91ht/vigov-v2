@@ -6,6 +6,7 @@ import {
   duongDanHangChoLuiHan,
   duongDanNhatKyNhiemVu,
   duongDanSoNhiemVu,
+  getTaskCounts,
   layHangChoLuiHan,
   layNhatKyNhiemVu,
   layNhiemVu,
@@ -493,5 +494,57 @@ describe("GET /api/v1/task-extensions — hàng chờ duyệt lùi hạn §5.8",
     const kq = await layHangChoLuiHan({ approver: "me" });
     expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/task-extensions?approver=me");
     expect(kq).toEqual({ ok: true, duLieu: trang });
+  });
+});
+
+describe("TASK-03 lượt web 2 — parent by register code, `task=` on the queue, `/task-counts`", () => {
+  it("PATCH `parent`: a register code goes as-is; `\"\"` detaches and is NOT dropped", async () => {
+    const set = batFetch(OK_JSON());
+    await suaNhiemVu("NV25", { parent: "NV19" });
+    expect(set.mock.calls[0]?.[0]).toBe("/api/v1/tasks/NV25");
+    expect(than(set)).toEqual({ parent: "NV19" });
+
+    const detach = batFetch(OK_JSON());
+    await suaNhiemVu("NV25", { parent: "" });
+    expect(than(detach)).toEqual({ parent: "" });
+  });
+
+  it("409 `task_tree`: the server's sentence comes back VERBATIM — no rewrite, no code", async () => {
+    const message = "Không đặt được NV19 làm việc cha: NV19 đang là việc con của NV25.";
+    batFetch(
+      new Response(JSON.stringify({ code: "task_tree", message, trace_id: "t-1" }), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    expect(await suaNhiemVu("NV25", { parent: "NV19" })).toEqual({ ok: false, thongBao: message });
+  });
+
+  it("create a child: `parent` carries the register code", async () => {
+    const gia = batFetch(new Response("{}", { status: 201 }));
+    await taoNhiemVu({ auto_code: true, type: "co-ban", title: "Việc con", parent: "NV19" }, "k-1");
+    expect((than(gia) as { parent?: string }).parent).toBe("NV19");
+  });
+
+  it("the queue filtered to ONE task: `task=NV19`", () => {
+    expect(duongDanHangChoLuiHan({ task: "NV19", limit: 20 })).toBe(
+      "/api/v1/task-extensions?task=NV19&limit=20",
+    );
+    expect(duongDanHangChoLuiHan({ task: "", approver: "me" })).toBe(
+      "/api/v1/task-extensions?approver=me",
+    );
+  });
+
+  it("GET /api/v1/task-counts returns `by_status` as sent", async () => {
+    const body = { by_status: [{ status: "moi-giao", count: 4 }] };
+    const gia = batFetch(new Response(JSON.stringify(body), { status: 200 }));
+    const kq = await getTaskCounts({ trangThai: "moi-giao", limit: 20 });
+    expect(gia.mock.calls[0]?.[0]).toBe("/api/v1/task-counts?status=moi-giao");
+    expect(kq).toEqual({ ok: true, duLieu: body });
+  });
+
+  it("list `parent=` filter", () => {
+    expect(duongDanSoNhiemVu({ parent: "NV19" })).toBe("/api/v1/tasks?parent=NV19");
+    expect(duongDanSoNhiemVu({ parent: "" })).toBe("/api/v1/tasks");
   });
 });

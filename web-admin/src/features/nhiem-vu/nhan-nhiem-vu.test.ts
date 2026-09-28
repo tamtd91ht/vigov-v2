@@ -361,10 +361,21 @@ describe("phần chưa dựng được", () => {
     expect(PHAN_CHUA_DUNG.find((p) => p.ten.includes("Gõ tên để tìm…"))).toBeUndefined();
   });
 
-  it("TASK-02 lượt web 1 (28/09/2026): đúng HAI mục rời — 16 → 14 — và hai mục viết lại theo quyết định", () => {
-    // A literal count on purpose: the task removed exactly #12 (type-to-search) and #14
-    // (drag-drop). A 15 here means one was left behind; a 13 means an unrelated entry was lost.
-    expect(PHAN_CHUA_DUNG.length).toBe(14);
+  it("TASK-03 lượt web 2 (28/09/2026): đúng BỐN mục rời — 14 → 10 — một mục viết lại, còn lại nguyên", () => {
+    // A literal count on purpose. Pass 1 went 16 → 14 (#12, #14). Pass 2 removed exactly four
+    // entries — #6 chip/children, #10 add child/move parent, #11 decide in the drawer, #15 real
+    // column counts — and REWROTE (did not remove) the sort entry (#13), which keeps `Tên việc` and
+    // `Ưu tiên`. An 11 means one was left behind; a 9 means an unrelated entry was lost.
+    expect(PHAN_CHUA_DUNG.length).toBe(10);
+    const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ");
+    expect(ten).not.toContain("việc con");
+    expect(ten).not.toContain("VIỆC CON");
+    expect(ten).not.toContain("ngay trong drawer");
+    expect(ten).not.toContain("SỐ LƯỢNG THẬT");
+    const sort = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Sắp xếp theo"));
+    expect(sort?.ten).toBe("Sắp xếp theo `Tên việc` và `Ưu tiên` của bảng Danh sách (§4.2)");
+    expect(sort?.viSao).toContain("`Hạn`");
+    expect(sort?.viSao).not.toContain("làm mất hẳn mọi việc không có hạn");
     const deadline = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Sửa `Hạn hoàn thành`"));
     expect(deadline?.viSao).toBe(LY_DO_KHONG_SUA_HAN);
     expect(LY_DO_KHONG_SUA_HAN).toContain("28/09/2026");
@@ -1206,10 +1217,12 @@ describe("PHAN_CHUA_DUNG — Duyệt / Từ chối lùi hạn (TASK-07)", () => 
     expect(PHAN_CHUA_DUNG.map((p) => p.viSao).join(" ")).not.toContain(
       "KHÔNG có tuyến nào liệt kê đề nghị",
     );
-    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("ngay trong drawer"));
-    expect(muc).toBeDefined();
-    expect(muc?.viSao).toContain("/api/v1/task-extensions");
-    expect(muc?.viSao).toContain("KHÔNG lọc được theo nhiệm vụ");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (TASK-03 lượt web 2): tuyến nay nhận `task=NV19`, và drawer có
+    // khối đề nghị đang chờ của chính nhiệm vụ ấy — mục "ngay trong drawer" rời danh sách.
+    expect(PHAN_CHUA_DUNG.find((p) => p.ten.includes("ngay trong drawer"))).toBeUndefined();
+    expect(PHAN_CHUA_DUNG.map((p) => p.viSao).join(" ")).not.toContain(
+      "KHÔNG lọc được theo nhiệm vụ",
+    );
   });
 });
 
@@ -1334,8 +1347,11 @@ describe("§3 — bộ lọc ↔ đường dẫn", () => {
   });
 
   it("`sort`/`order` lạ bị bỏ — máy chủ trả 400 cho chúng (`core/page/page.go:336-355`)", () => {
-    expect(locTuDuongDan("?sort=due_at&order=up")).toEqual({});
+    // `due_at` IS a server column since 28/09/2026 (#13) — only the bad `order` is dropped.
+    expect(locTuDuongDan("?sort=due_at&order=up")).toEqual({ sapXep: "due_at" });
+    expect(locTuDuongDan("?sort=title&order=up")).toEqual({});
     expect(locTuDuongDan("?sort=title")).toEqual({});
+    expect(locTuDuongDan("?sort=priority")).toEqual({});
     expect(locTuDuongDan("?order=desc")).toEqual({ chieu: "desc" });
   });
 });
@@ -1358,6 +1374,19 @@ describe("§4.2 — sắp xếp bảng Danh sách", () => {
       cot: "created_at",
       chieu: "desc",
     });
+  });
+
+  it("(#13) `Hạn` sắp được: bấm lần đầu là hạn SỚM NHẤT trước, bấm lại thì đảo", () => {
+    expect(bamCotSapXep(SAP_XEP_MAC_DINH, "due_at")).toEqual({ cot: "due_at", chieu: "asc" });
+    expect(bamCotSapXep({ cot: "due_at", chieu: "asc" }, "due_at")).toEqual({
+      cot: "due_at",
+      chieu: "desc",
+    });
+    expect(ariaSapXep({ cot: "due_at", chieu: "desc" }, "due_at")).toBe("descending");
+    // Round-trips through the address bar like the other two columns.
+    const t = new URLSearchParams(duongDanTuLoc({ sapXep: "due_at", chieu: "asc" }));
+    expect(t.get("sort")).toBe("due_at");
+    expect(locTuDuongDan(`?${t.toString()}`)).toEqual({ sapXep: "due_at", chieu: "asc" });
   });
 
   it("`aria-sort` chỉ ở cột đang sắp, đúng chiều", () => {

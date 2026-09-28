@@ -95,6 +95,7 @@ function board(task: petitions_nhiemVuRa, move: KanbanMove | null): string {
       bayGio={new Date("2026-09-15T03:00:00Z")}
       maDangMo={null}
       moNhiemVu={() => {}}
+      counts={{ pha: "dangTai" }}
       move={move}
     />,
   );

@@ -42,6 +42,7 @@ import type {
   petitions_nhiemVuVanBanRa,
   petitions_suaNhiemVuVao,
   petitions_taoNhiemVuVao,
+  petitions_taskStatusCountOut,
   petitions_vanBanNhiemVuVao,
 } from "@/lib/api/schema.gen";
 
@@ -1001,13 +1002,14 @@ export function duongDanTuLoc(loc: {
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * §4.2 — SẮP XẾP BẢNG DANH SÁCH ("cột có thể sắp xếp (icon ⇅)")
  *
- * CHỈ HAI CỘT, vì máy chủ chỉ sắp được hai: `created_at` và `code` (`SapXepNhiemVu`,
- * `service-petitions/internal/store/nhiem_vu.go:92-95`). Vì sao các cột khác không có mũi tên nằm
- * ở `PHAN_CHUA_DUNG`. Một mũi tên sắp theo trang đang mở — chỉ 20 dòng — sẽ trông như sắp cả sổ
- * trong khi chỉ xếp lại một lát cắt tuỳ con trỏ, nên không có mũi tên nào sắp ở trình duyệt.
+ * BA CỘT, vì máy chủ sắp được ba: `created_at`, `code` và — từ ad7f821 — `due_at`
+ * (`petitions_get_tasks["truyVan"]["sort"]`). Việc KHÔNG CÓ HẠN luôn nằm CUỐI ở cả hai chiều (máy
+ * chủ quyết, `NO_DEADLINE_LAST_NOTE` nói ra). Vì sao `Tên việc` và `Ưu tiên` vẫn không có mũi
+ * tên nằm ở `PHAN_CHUA_DUNG`. Một mũi tên sắp theo trang đang mở — chỉ 20 dòng — sẽ trông như sắp
+ * cả sổ trong khi chỉ xếp lại một lát cắt tuỳ con trỏ, nên không có mũi tên nào sắp ở trình duyệt.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-const MOI_COT_SAP_XEP: readonly CotSapXepNhiemVu[] = ["created_at", "code"];
+const MOI_COT_SAP_XEP: readonly CotSapXepNhiemVu[] = ["created_at", "code", "due_at"];
 
 function laCotSapXep(s: string): s is CotSapXepNhiemVu {
   return (MOI_COT_SAP_XEP as readonly string[]).includes(s);
@@ -1038,6 +1040,7 @@ export function sapXepDayDu(loc: {
  * Bấm tiêu đề một cột. Cùng cột ⇒ đảo chiều. Cột khác ⇒ chiều TỰ NHIÊN của cột ấy:
  *   `code`        TĂNG DẦN — NV01, NV02… là thứ tự của chính quyển sổ (§4.3)
  *   `created_at`  GIẢM DẦN — việc mới giao lên đầu, như lúc mở màn
+ *   `due_at`      TĂNG DẦN — hạn sớm nhất (kể cả hạn đã qua) lên đầu: câu hỏi "việc nào gấp nhất"
  *
  * ⚠ ĐỔI CÁCH SẮP LÀ VỀ TRANG ĐẦU, và đó không phải lựa chọn giao diện: con trỏ mang `sort`/`order`
  * bên trong và máy chủ trả 400 `invalid_cursor` cho con trỏ của một cách sắp khác
@@ -1046,7 +1049,7 @@ export function sapXepDayDu(loc: {
  */
 export function bamCotSapXep(hienTai: SapXepSo, cot: CotSapXepNhiemVu): SapXepSo {
   if (hienTai.cot === cot) return { cot, chieu: hienTai.chieu === "asc" ? "desc" : "asc" };
-  return { cot, chieu: cot === "code" ? "asc" : "desc" };
+  return { cot, chieu: cot === "created_at" ? "desc" : "asc" };
 }
 
 /** `aria-sort` của một tiêu đề cột — để trình đọc màn hình đọc đúng chiều. */
@@ -1058,9 +1061,17 @@ export function ariaSapXep(
   return hienTai.chieu === "asc" ? "ascending" : "descending";
 }
 
-/** Nhãn hai cột sắp được — `Ngày giao` là `created_at`: lúc nhiệm vụ được giao cũng là lúc nó vào sổ. */
+/** Nhãn ba cột sắp được — `Ngày giao` là `created_at`: lúc nhiệm vụ được giao cũng là lúc nó vào sổ. */
 export const NHAN_COT_MA = "Mã";
 export const NHAN_COT_NGAY_GIAO = "Ngày giao";
+export const DUE_COLUMN_LABEL = "Hạn";
+
+/**
+ * Under the list, always visible. The server puts tasks WITHOUT a deadline last in BOTH directions;
+ * unsaid, a clerk who flips `Hạn` to descending expects them first and concludes they are missing.
+ */
+export const NO_DEADLINE_LAST_NOTE =
+  "Sắp theo Hạn: việc không có hạn luôn nằm cuối danh sách, dù sắp tăng hay giảm.";
 
 /** Một dòng nhật ký đã dịch sang chữ để vẽ. */
 export type DongNhatKyHien = {
@@ -1134,10 +1145,10 @@ export function gopTrangNhatKy<T extends { readonly id: string }>(
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * HÀNG CHỜ DUYỆT LÙI HẠN §5.8 — `GET /api/v1/task-extensions`
  *
- * VÌ SAO LÀ MỘT MỤC TRÊN SỔ, KHÔNG PHẢI HAI NÚT TRONG DRAWER: §5.8 đặt ô ĐỀ NGHỊ trong drawer, và
- * không vẽ chỗ nào cho quyết định. Tuyến hàng chờ KHÔNG lọc được theo nhiệm vụ, nên đưa quyết định
- * vào drawer nghĩa là lật cả hàng chờ của xã — một lời gọi mỗi trang — chỉ để tìm một dòng. Nên
- * quyết định nằm ở mục `Đề nghị lùi hạn chờ duyệt` trên sổ, và drawer chỉ đường tới đó.
+ * HAI CHỖ QUYẾT ĐỊNH, MỘT CỔNG VÀ MỘT TUYẾN: mục `Đề nghị lùi hạn chờ duyệt` trên sổ, và — từ khi
+ * tuyến nhận `task=NV19` (ad7f821) — khối đề nghị đang chờ trong drawer của chính nhiệm vụ ấy
+ * (`task-extension-block.tsx`). Cả hai vẽ dòng qua `hienDongHangCho` và gọi `quyetDinhLuiHan` với
+ * cùng ghi chú tuỳ chọn đã cắt khoảng trắng, nên không chỗ nào mời duyệt khi chỗ kia không mời.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /**
@@ -1185,9 +1196,30 @@ export function cauHangChoRong(loc: LocHangCho): string {
 export const CAU_KHONG_AI_DUYET_DUOC =
   "Nhiệm vụ này không ghi lãnh đạo giao việc, nên không ai duyệt được đề nghị này.";
 
-/** Liên kết trong drawer §5.8 tới hàng chờ. */
-export const CAU_LIEN_KET_HANG_CHO =
-  "Duyệt hoặc từ chối đề nghị lùi hạn ở mục “Đề nghị lùi hạn chờ duyệt” đầu sổ.";
+/* ── Drawer block: this task's pending extension requests (#11) ─────────────────────────── */
+
+export const TASK_EXTENSIONS_TITLE = "Đề nghị lùi hạn đang chờ duyệt";
+export const TASK_EXTENSIONS_LOADING = "Đang tải đề nghị lùi hạn của nhiệm vụ này…";
+export const TASK_EXTENSIONS_EMPTY = "Nhiệm vụ này không có đề nghị lùi hạn nào đang chờ duyệt.";
+/** Same label and optional-note rule as the queue on the register (`hang-cho-lui-han.tsx`). */
+export const DECISION_NOTE_LABEL = "Ghi chú quyết định (không bắt buộc)";
+
+/**
+ * The one sentence the drawer block says when this account may not decide — or `null`.
+ *
+ * TASK-LEVEL, NOT PER ROW: every row of the block belongs to the same task, so `task_assigner` is
+ * the same on all of them and the queue's per-row sentence would repeat itself. Missing
+ * `task.extend` is only worth saying when there IS a request to decide (`coDeNghi`): the other two
+ * reasons are facts about the task, true with or without one.
+ */
+export function extensionBlockNote(
+  cong: QuyetDinhDuyetLuiHan,
+  coDeNghi: boolean,
+): string | null {
+  if (cong.hien) return null;
+  if (cong.vi === "thieu-quyen") return coDeNghi ? CAU_THIEU_QUYEN_DUYET_GIA_HAN : null;
+  return cong.thongBao;
+}
 
 /** Một dòng hàng chờ đã dịch sang chữ để vẽ. */
 export type DongHangChoHien = {
@@ -2134,20 +2166,98 @@ export function ghiChuKanbanReNhanh(bang: BangNhanTrangThai): string {
 }
 
 /**
- * Con số trên đầu cột — **SỐ THẺ ĐÃ TẢI VỀ**, không phải tổng số việc của cột.
- *
- * `page.Result` của tuyến đọc sổ chỉ mang `items` · `next_cursor` · `has_more`: **KHÔNG CÓ TỔNG
- * SỐ**. Nên một con số trần ở đây sẽ đọc ra là "cột này có 20 việc" trong khi sự thật là "cột này
- * có ít nhất 20 việc", và con số ấy đi thẳng vào một câu báo cáo miệng với lãnh đạo. Dấu `+` là
- * toàn bộ phần trung thực của nhãn này; `GHI_CHU_DEM_COT` nói nốt phần còn lại.
+ * The number on a Kanban column header — the REAL total from `GET /api/v1/task-counts` (#15),
+ * counted under the board's own filters (`appendTaskFilters`). `null` when the answer has no row
+ * for that status: the server promises all seven, so a missing one is a broken contract, and the
+ * header shows `—` rather than a `0` that reads as "no work here".
  */
-export function nhanDemCot(soThe: number, conNua: boolean): string {
-  return conNua ? `${soThe}+` : String(soThe);
+export function kanbanColumnCount(
+  counts: readonly petitions_taskStatusCountOut[],
+  status: string,
+): number | null {
+  return counts.find((c) => c.status === status)?.count ?? null;
 }
 
-export const GHI_CHU_DEM_COT =
-  "Số trên đầu mỗi cột là số thẻ đã tải về cột ấy; dấu + nghĩa là còn nữa. Tuyến đọc sổ trả về " +
-  "từng trang và không trả tổng số, nên đây không phải tổng số việc của cột.";
+/**
+ * Said under a column that shows fewer cards than it counts. The board reads 20 cards per column
+ * and has no paging; without this line `57` above twenty cards reads as a board that lost 37.
+ * `total === null` (counts unreadable) still says the column goes on, from `has_more`.
+ */
+export function kanbanPartialNote(shown: number, total: number | null): string {
+  return total === null
+    ? `Đang hiện ${shown} việc đầu của cột — xem đủ ở chế độ Danh sách.`
+    : `Đang hiện ${shown} trong ${total} việc của cột — xem đủ ở chế độ Danh sách.`;
+}
+
+/** Prefix of the server's sentence when the counts cannot be read. The cards still show. */
+export const KANBAN_COUNTS_ERROR = "Không đọc được số nhiệm vụ của từng cột:";
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * VIỆC CHA — VIỆC CON §4.1, §5.10 (ADR 0037) — `parent` là MÃ SỔ, `child_count` do máy chủ đếm
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * The `{n} việc con` chip on a card and a list row, or `null` for a task with none.
+ *
+ * `child_count` IS COUNTED BY THE SERVER over the direct live children — never counted from the
+ * page on screen, which would give `2` on this page and `3` on the next for the same task.
+ */
+export function childCountLabel(childCount: number): string | null {
+  return childCount > 0 ? `${childCount} việc con` : null;
+}
+
+export const CHILD_TASKS_TITLE = "Nhiệm vụ con";
+export const CHILD_TASKS_LOADING = "Đang tải các việc con…";
+export const CHILD_TASKS_EMPTY = "Nhiệm vụ này chưa có việc con nào.";
+export const ADD_CHILD_BUTTON = "+ Thêm việc con";
+
+/** Shown above the create form when it was opened from a drawer. */
+export function childFormNote(parentCode: string): string {
+  return `Việc con của ${parentCode}. Mã việc cha được gửi kèm; máy chủ kiểm việc cha còn đó, cùng xã và chưa quá số tầng cho phép.`;
+}
+
+export function childCreatedText(code: string): string {
+  return `Đã giao việc con ${code}.`;
+}
+
+export const PARENT_TITLE = "Việc cha";
+export const PARENT_NONE = "Không thuộc việc cha nào — đây là một việc gốc.";
+export const PARENT_INPUT_LABEL = "Mã việc cha (mã sổ, ví dụ NV19)";
+export const PARENT_SAVE_BUTTON = "Đặt làm việc cha";
+export const PARENT_DETACH_BUTTON = "Gỡ khỏi việc cha";
+
+/**
+ * `PATCH` body that moves the task under another parent, or `null` (button disabled).
+ *
+ * TRIMMED, NOT CASE-FOLDED: a register code is whatever the commune issued (§7.1 allows typing
+ * one), and guessing `nv19` means `NV19` would be a second rule the server does not have. Every
+ * invalid parent — unknown, another commune's, deleted, a cycle, too deep — is the SERVER's 409
+ * `task_tree`, shown verbatim; none of those checks is copied here.
+ *
+ * Empty is `null`, never `{ parent: "" }`: emptying the box is not a way to detach. Detaching is
+ * its own button (`DETACH_PARENT_BODY`), so a cleared box cannot silently cut a task from its tree.
+ */
+export function parentPatchBody(input: string, current: string): petitions_suaNhiemVuVao | null {
+  const code = input.trim();
+  if (code === "" || code === current) return null;
+  return { parent: code };
+}
+
+/** `PATCH parent: ""` detaches (ad7f821). */
+export const DETACH_PARENT_BODY: petitions_suaNhiemVuVao = { parent: "" };
+
+/**
+ * Append the next page of children, dropping codes already shown — a child created between two
+ * `Xem thêm` clicks shifts rows across the page boundary. Keyed by `code`: children are task rows,
+ * which carry no `id`.
+ */
+export function mergeChildPages(
+  shown: readonly petitions_nhiemVuRa[],
+  next: readonly petitions_nhiemVuRa[],
+): petitions_nhiemVuRa[] {
+  const seen = new Set(shown.map((t) => t.code));
+  return [...shown, ...next.filter((t) => !seen.has(t.code))];
+}
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * NHỮNG PHẦN CỦA ĐẶC TẢ **KHÔNG DỰNG ĐƯỢC**, VÀ CHÚNG PHẢI RA TỚI MÀN HÌNH
@@ -2203,13 +2313,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "bất kỳ, và màn hình chưa lần theo nó — nên hiện cả bốn lối và để máy chủ từ chối ba lối sai.",
   },
   {
-    ten: "Chip `{n} việc con` trên thẻ (§4.1) và khối Nhiệm vụ con (§5.10)",
-    viSao:
-      "`petitions.nhiemVuRa` có `parent` (mã việc cha) nhưng KHÔNG có số việc con, và không có " +
-      "tuyến liệt kê việc con của một mã. Đếm trong trang đang mở sẽ ra một con số phụ thuộc vào " +
-      "trang — `2 việc con` ở trang này và `3 việc con` ở trang sau, cho cùng một nhiệm vụ.",
-  },
-  {
     ten: "Sửa `Cơ quan chủ trì tham mưu` và `Chuyên viên theo dõi` ở form sửa (§5.4)",
     viSao: LY_DO_KHONG_SUA_CHU_TRI,
   },
@@ -2225,42 +2328,13 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "tác hàng loạt là bấm từng dòng chứ không phải một nút gom.",
   },
   {
-    ten: "THÊM VIỆC CON (§5.10) và chuyển việc sang cha khác (§5.4)",
+    ten: "Sắp xếp theo `Tên việc` và `Ưu tiên` của bảng Danh sách (§4.2)",
     viSao:
-      "`petitions.taoNhiemVuVao.parent` và `petitions.suaNhiemVuVao.parent` nhận **id nội bộ** " +
-      "của việc cha, nhưng `petitions.nhiemVuRa` KHÔNG phát ra `id` của chính nó — chỉ có `code` " +
-      "(`NV19`) và `parent` (id của cha). Nên một màn hình đang mở NV19 biết cha của NV19 là ai mà " +
-      "không bao giờ biết id của NV19, tức không gửi nổi một yêu cầu tạo việc con. Vẽ ô ấy ra rồi " +
-      "gửi `NV19` vào `parent` sẽ là 409 `task_tree` ở mọi lần bấm. Cần thêm `id` vào phản hồi, " +
-      "hoặc cho `parent` nhận mã sổ.",
-  },
-  {
-    ten: "`Duyệt / Từ chối` ngay trong drawer của nhiệm vụ (§5.8)",
-    viSao:
-      "Duyệt / Từ chối nay nằm ở mục `Đề nghị lùi hạn chờ duyệt` đầu sổ " +
-      "(`GET /api/v1/task-extensions`, mở sẵn ở `Chờ tôi duyệt`). Drawer chỉ đường tới đó chứ không " +
-      "hiện đề nghị đang chờ của chính nhiệm vụ ấy: tuyến hàng chờ KHÔNG lọc được theo nhiệm vụ, và " +
-      "`petitions.nhiemVuRa` không mang đề nghị nào — tìm một dòng là lật cả hàng chờ của xã, một " +
-      "lời gọi mỗi trang. Cần một bộ lọc `task` trên tuyến hàng chờ, hoặc đề nghị đang chờ trong " +
-      "phản hồi chi tiết.",
-  },
-  {
-    ten: "Sắp xếp theo `Hạn`, `Tên việc`, `Ưu tiên` và các cột khác của bảng Danh sách (§4.2)",
-    viSao:
-      "§4.2 cho mọi cột một mũi tên ⇅, nhưng máy chủ chỉ sắp được theo `Mã` và `Ngày giao` — hai " +
-      "cột có mũi tên trên bảng. `Hạn` có thể để trống, và phân trang theo mốc làm mất hẳn mọi việc " +
-      "không có hạn từ trang hai trở đi; cần việc trễ lên đầu thì dùng ô `Chỉ việc quá hạn`. `Tên " +
-      "việc` hay trích lời phản ánh của người dân, nên không đưa được lên đường dẫn. `Ưu tiên` là mã " +
-      "danh mục, xếp theo chữ cái sẽ ra một thứ tự không phải thứ tự của thang ưu tiên. Sắp lại " +
-      "trong trình duyệt chỉ xếp được 20 dòng đang hiện, trông như xếp cả sổ mà không phải.",
-  },
-  {
-    ten: "SỐ LƯỢNG THẬT của mỗi cột Kanban (§4.1)",
-    viSao:
-      "`page.Result` chỉ mang `items` · `next_cursor` · `has_more` — KHÔNG có tổng số. Nên đầu cột " +
-      "hiện số thẻ đã tải kèm dấu `+` khi còn nữa, chứ không hiện một con số trần: `20` đọc ra là " +
-      "`cột này có 20 việc`, trong khi sự thật là `ít nhất 20`, và con số ấy đi thẳng vào một câu " +
-      "báo cáo với lãnh đạo. Kanban cũng vì thế không có phân trang từng cột — xem tiếp ở Danh sách.",
+      "§4.2 cho mọi cột một mũi tên ⇅, nhưng máy chủ chỉ sắp được theo `Mã`, `Ngày giao` và `Hạn` " +
+      "— ba cột có mũi tên trên bảng. `Tên việc` hay trích lời phản ánh của người dân, nên không " +
+      "đưa được lên đường dẫn. `Ưu tiên` là mã danh mục, xếp theo chữ cái sẽ ra một thứ tự không " +
+      "phải thứ tự của thang ưu tiên. Sắp lại trong trình duyệt chỉ xếp được 20 dòng đang hiện, " +
+      "trông như xếp cả sổ mà không phải.",
   },
   {
     ten: "Chế độ xem `Sổ theo dõi` (§4.3)",

@@ -12,6 +12,7 @@ import {
 import type {
   identity_boPhanRa,
   identity_danhBaChonNguoiRa,
+  petitions_deNghiChoDuyetRa,
   petitions_deNghiLuiHanRa,
   petitions_nhiemVuRa,
   petitions_nhiemVuVanBanRa,
@@ -22,8 +23,14 @@ import {
   CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC,
   CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC,
   CANH_BAO_HAN_MOT_LAN,
-  CAU_LIEN_KET_HANG_CHO,
+  CAU_THIEU_QUYEN_DUYET_GIA_HAN,
   CAU_THIEU_QUYEN_DUYET_HOAN_THANH,
+  DECISION_NOTE_LABEL,
+  TASK_EXTENSIONS_EMPTY,
+  TASK_EXTENSIONS_LOADING,
+  TASK_EXTENSIONS_TITLE,
+  extensionBlockNote,
+  hienDongHangCho,
   CHUA_PHAN_CONG,
   CHI_TIET_THIEU_VAN_BAN,
   CHU_THICH_HAI_O_TICK,
@@ -57,7 +64,8 @@ import {
   type SapXepSo,
 } from "./nhan-nhiem-vu";
 import { TRANG_DAU } from "@/features/cau-hinh/ngan-xep-con-tro";
-import { duongDanSoNhiemVu } from "@/lib/api/nhiem-vu";
+import { duongDanHangChoLuiHan, duongDanSoNhiemVu } from "@/lib/api/nhiem-vu";
+import { TaskExtensionList, taskExtensionsQuery } from "./task-extension-block";
 import {
   BangNhiemVu,
   ChiTietNhiemVu,
@@ -219,6 +227,16 @@ const KHONG_SUA = (): Promise<KetQua<petitions_nhiemVuRa>> =>
 
 type TaiVanBan = TrangThaiTai<readonly petitions_nhiemVuVanBanRa[]>;
 
+/** Pass-2 drawer props (#6 #10 #11) that no test in this group exercises — inert. */
+const PASS2_DRAWER_PROPS = {
+  extensionRefreshKey: "0",
+  onExtensionDecided: () => {},
+  openTask: () => {},
+  openTaskByCode: KHONG_SUA,
+  saveParent: KHONG_SUA,
+  addChild: null,
+} as const;
+
 /**
  * Đủ năm khoá ghi `task.*`. Các nhóm canh HÌNH DẠNG màn (vòng đời, lùi hạn, văn bản) dùng nó; nhóm
  * `cổng nút theo khoá` ở cuối tệp canh chiều NGƯỢC LẠI — thiếu từng khoá một.
@@ -258,6 +276,7 @@ function veChiTiet(
       quyetDinh={KHONG_GOI}
       suaKhoiVanBan={KHONG_SUA}
       docLaiChiTiet={KHONG_SUA}
+      {...PASS2_DRAWER_PROPS}
     />,
   );
 }
@@ -296,34 +315,143 @@ describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thu�
     expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
   });
 
-  it("ĐÚNG lãnh đạo giao việc, chưa có đề nghị trong tay: chỉ đường tới hàng chờ, không vẽ nút", () => {
-    // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (TASK-07): hàng chờ `GET /api/v1/task-extensions` nay có, nhưng
-    // KHÔNG lọc được theo nhiệm vụ — nên drawer chỉ đường tới mục hàng chờ thay vì lật cả hàng chờ
-    // để tìm một dòng. Câu cũ "chưa có tuyến liệt kê" là một lý do sai trên màn.
+  it("ĐÚNG lãnh đạo giao việc: drawer có khối đề nghị CỦA CHÍNH nhiệm vụ này, không còn chỉ đường", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (TASK-03 lượt web 2, #11): tuyến nay nhận `task=NV19`, nên drawer
+    // đọc đề nghị của chính việc này thay vì chỉ đường tới hàng chờ đầu sổ.
     const html = veChiTiet({}, LANH_DAO);
+    expect(html).toContain(nhuTrongHTML(TASK_EXTENSIONS_TITLE));
+    expect(html).toContain(nhuTrongHTML(TASK_EXTENSIONS_LOADING));
+    expect(html).not.toContain(`href="#${ID_HANG_CHO}"`);
+    // Still loading ⇒ no row ⇒ no button yet.
     expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
-    expect(html).not.toContain("chưa có tuyến liệt kê đề nghị");
-    expect(html).toContain(`href="#${ID_HANG_CHO}"`);
-    expect(html).toContain(nhuTrongHTML(CAU_LIEN_KET_HANG_CHO));
     // Và KHÔNG hiện câu "không phải lãnh đạo" — người này ĐÚNG là lãnh đạo giao việc.
     expect(html).not.toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
   });
 
-  it("có đề nghị trong tay VÀ đúng lãnh đạo: hai nút ra tới trang", () => {
+  it("(#11) khối đề nghị: cùng đường gọi với hàng chờ — `task=` của đúng một nhiệm vụ", () => {
+    expect(duongDanHangChoLuiHan(taskExtensionsQuery("NV19"))).toBe(
+      "/api/v1/task-extensions?task=NV19&limit=20",
+    );
+    // No `approver=me`: a request the viewer cannot decide is still shown, read-only.
+    expect(duongDanHangChoLuiHan(taskExtensionsQuery("NV19"))).not.toContain("approver");
+  });
+
+  describe("(#11) đề nghị đang chờ trong drawer — nút Duyệt / Từ chối theo ĐÚNG cổng của hàng chờ", () => {
+    const row: petitions_deNghiChoDuyetRa = {
+      id: "01JDENGHI",
+      task_code: "NV19",
+      task_title: "Báo cáo tổng kết",
+      task_due_at: "2026-06-20T23:59:59+07:00",
+      task_assigner: LANH_DAO,
+      new_due_at: "2026-07-20T23:59:59+07:00",
+      reason: "Chờ số liệu của thôn",
+      requested_by: NGUOI_KHAC,
+      requested_at: "2026-06-18T02:00:00Z",
+    };
+    function list(
+      session: string,
+      canApprove: boolean,
+      rows: readonly petitions_deNghiChoDuyetRa[] = [row],
+      assigner = LANH_DAO,
+    ): string {
+      return renderToStaticMarkup(
+        <TaskExtensionList
+          load={{ phase: "done", rows: rows.map((r) => ({ ...r, task_assigner: assigner })) }}
+          assigner={assigner}
+          directory={null}
+          sessionStaffCode={session}
+          canApproveExtension={canApprove}
+          deciding={null}
+          rowError={null}
+          notes={{}}
+          setNote={() => {}}
+          decide={() => {}}
+        />,
+      );
+    }
+
+    it("đúng lãnh đạo giao việc + `task.extend`: đề nghị hiện, HAI nút và ô ghi chú tuỳ chọn", () => {
+      const html = list(LANH_DAO, true);
+      expect(html).toContain("Chờ số liệu của thôn");
+      expect(html).toContain('aria-label="Duyệt lùi hạn NV19"');
+      expect(html).toContain('aria-label="Từ chối lùi hạn NV19"');
+      expect(html).toContain(nhuTrongHTML(DECISION_NOTE_LABEL));
+      expect(html).not.toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
+    });
+
+    it("người KHÁC: đề nghị vẫn hiện CHỈ ĐỌC, không nút, và câu nói vì sao", () => {
+      const html = list(NGUOI_KHAC, true);
+      expect(html).toContain("Chờ số liệu của thôn");
+      expect(html).not.toContain(NUT_DUYET);
+      expect(html).not.toContain("Từ chối lùi hạn");
+      expect(html).toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
+    });
+
+    it("đúng người nhưng THIẾU `task.extend`: chỉ đọc, kèm câu thiếu quyền — lớp một đóng", () => {
+      const html = list(LANH_DAO, false);
+      expect(html).not.toContain(NUT_DUYET);
+      expect(html).toContain(nhuTrongHTML(CAU_THIEU_QUYEN_DUYET_GIA_HAN));
+    });
+
+    it("phiên chưa đọc được và nhiệm vụ không ghi lãnh đạo: FAIL CLOSED, `\"\" === \"\"` không mở nút", () => {
+      expect(list("", true)).not.toContain(NUT_DUYET);
+      const html = list("", true, [row], "");
+      expect(html).not.toContain(NUT_DUYET);
+      expect(html).toContain(nhuTrongHTML(CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC));
+    });
+
+    it("gate is the queue's own `hienDongHangCho` — same answer for every session", () => {
+      for (const [session, canApprove] of [
+        [LANH_DAO, true],
+        [LANH_DAO, false],
+        [NGUOI_KHAC, true],
+        ["", true],
+      ] as const) {
+        const queueSaysButtons = hienDongHangCho(row, null, session, canApprove).cauChan === null;
+        expect(list(session, canApprove).includes(NUT_DUYET)).toBe(queueSaysButtons);
+      }
+    });
+
+    it("đọc HỎNG: câu máy chủ nguyên văn, KHÔNG nói `không có đề nghị nào`", () => {
+      const cau = "không đủ quyền: thiếu task.read";
+      const html = renderToStaticMarkup(
+        <TaskExtensionList
+          load={{ phase: "error", message: cau }}
+          assigner={LANH_DAO}
+          directory={null}
+          sessionStaffCode={LANH_DAO}
+          canApproveExtension
+          deciding={null}
+          rowError={null}
+          notes={{}}
+          setNote={() => {}}
+          decide={() => {}}
+        />,
+      );
+      expect(html).toContain(`role="alert">${nhuTrongHTML(cau)}</p>`);
+      expect(html).not.toContain(nhuTrongHTML(TASK_EXTENSIONS_EMPTY));
+    });
+
+    it("`extensionBlockNote`: thiếu `task.extend` chỉ đáng nói khi CÓ đề nghị", () => {
+      const thieu = quyetDinhDuyetLuiHan(LANH_DAO, LANH_DAO, false);
+      expect(extensionBlockNote(thieu, false)).toBeNull();
+      expect(extensionBlockNote(thieu, true)).toBe(CAU_THIEU_QUYEN_DUYET_GIA_HAN);
+      expect(extensionBlockNote(quyetDinhDuyetLuiHan(LANH_DAO, LANH_DAO, true), true)).toBeNull();
+    });
+  });
+
+  it("ô gửi đề nghị KHÔNG còn nút quyết định nào của riêng nó — một cổng, một chỗ", () => {
     const html = renderToStaticMarkup(
       <KhoiLuiHan
-        congDuyet={quyetDinhDuyetLuiHan(LANH_DAO, LANH_DAO, true)}
         coQuyenDeNghi
         hanHienTai="2026-06-20T23:59:59+07:00"
         dangGui={false}
         guiDeNghi={KHONG_GOI}
-        quyetDinh={KHONG_GOI}
       />,
     );
-    // Không có đề nghị nào trong bộ nhớ ⇒ vẫn là nhánh "chỉ đường tới hàng chờ". Bài này canh
-    // nhánh CÒN LẠI: câu từ chối của lớp hai KHÔNG xuất hiện với đúng người.
-    expect(html).not.toContain(nhuTrongHTML(CAU_KHONG_PHAI_LANH_DAO_GIAO_VIEC));
-    expect(html).not.toContain(nhuTrongHTML(CAU_CHUA_GHI_LANH_DAO_GIAO_VIEC));
+    expect(html).toContain("Gửi đề nghị lùi hạn");
+    expect(html).not.toContain(NUT_DUYET);
+    expect(html).not.toContain("Từ chối");
   });
 
   it("ô đề nghị lùi hạn LUÔN hiện với người đang làm việc — KHÔNG bị gắn sau khoá duyệt", () => {
@@ -389,6 +517,7 @@ describe("câu từ chối của máy chủ vẽ THẲNG, không nuốt thành '
         quyetDinh={KHONG_GOI}
         suaKhoiVanBan={KHONG_SUA}
         docLaiChiTiet={KHONG_SUA}
+        {...PASS2_DRAWER_PROPS}
       />,
     );
     expect(html).toContain(nhuTrongHTML(cau));
@@ -708,8 +837,10 @@ describe("phần chưa dựng được — ra tới màn hình, không giấu tr
     for (const p of PHAN_CHUA_DUNG) {
       expect(html).toContain(nhuTrongHTML(p.ten));
     }
-    // Những phát hiện nặng nhất, gọi đích danh thứ còn thiếu ở hợp đồng.
-    expect(html).toContain("KHÔNG phát ra `id`");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: bài này từng canh chữ "KHÔNG phát ra `id`" — lý do Thêm việc
+    // con không gửi được. Từ ad7f821 `parent` nhận MÃ SỔ, khối Nhiệm vụ con đã dựng
+    // (`child-tasks.tsx`), nên mục ấy rời danh sách.
+    expect(html).not.toContain("KHÔNG phát ra `id`");
     // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (nhóm A, mục 7): bài này từng canh chữ `task.extend` — nó đến từ
     // mục "CỔNG QUYỀN Ở GIAO DIỆN cho bảy khoá `task.*`". Cổng nay đã dựng (`quyenNhiemVu`), nên mục
     // ấy rời danh sách; một mục còn nằm đó sau khi đã dựng là mục đẩy người sau đi dựng lại.
@@ -1487,6 +1618,7 @@ describe("`Trả lại để làm tiếp` — chỉ ở `cho-duyet`, chỉ với
         quyetDinh={KHONG_GOI}
         suaKhoiVanBan={KHONG_SUA}
         docLaiChiTiet={KHONG_SUA}
+        {...PASS2_DRAWER_PROPS}
       />,
     );
     expect(html).toContain(`role="alert">${nhuTrongHTML(cau)}</p>`);
@@ -1593,7 +1725,7 @@ describe("ô `Lãnh đạo giao việc` — chỉ người cầm quyền duyệt
   });
 });
 
-describe("§4.2 — tiêu đề sắp được: Mã và Ngày giao, không cột nào khác", () => {
+describe("§4.2 — tiêu đề sắp được: Mã, Ngày giao và Hạn, không cột nào khác", () => {
   function veBangSapXep(sapXep: SapXepSo): string {
     return renderToStaticMarkup(
       <BangNhiemVu
@@ -1610,13 +1742,16 @@ describe("§4.2 — tiêu đề sắp được: Mã và Ngày giao, không cột
     );
   }
 
-  it("đúng HAI nút sắp, `aria-sort` đúng chiều ở cột đang sắp, `none` ở cột kia", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: was "đúng HAI nút sắp" with `Hạn` as plain text. The server sorts
+  // by `due_at` since ad7f821, so `Hạn` gets the third button; `Tên việc` stays plain.
+  it("đúng BA nút sắp, `aria-sort` đúng chiều ở cột đang sắp, `none` ở hai cột kia", () => {
     const html = veBangSapXep({ cot: "code", chieu: "asc" });
-    expect(html.split('class="nut-sap-xep"').length - 1).toBe(2);
+    expect(html.split('class="nut-sap-xep"').length - 1).toBe(3);
     expect(html).toContain('<th scope="col" aria-sort="ascending"><button type="button" class="nut-sap-xep">Mã ↑</button></th>');
     expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Ngày giao ⇅</button>');
+    expect(html).toContain('aria-sort="none"><button type="button" class="nut-sap-xep">Hạn ⇅</button>');
     // Các cột còn lại là chữ thường — không mũi tên nào hứa một cách sắp máy chủ không có.
-    expect(html).toContain('<th scope="col">Hạn</th>');
+    expect(html).toContain('<th scope="col">Tên việc</th>');
   });
 
   it("mặc định (`created_at` giảm dần): mũi tên xuống ở Ngày giao; ô ngày hiện ngày giao", () => {
@@ -1750,7 +1885,7 @@ describe("cổng nút theo khoá `task.*` — CA BỊ TỪ CHỐI, không chỉ 
   it("ĐÚNG lãnh đạo giao việc nhưng THIẾU `task.extend`: không mời duyệt — lớp một đóng", () => {
     const html = veChiTiet({}, LANH_DAO, { pha: "dangTai" }, quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU]));
     expect(html).not.toContain(`href="#${ID_HANG_CHO}"`);
-    expect(html).not.toContain(nhuTrongHTML(CAU_LIEN_KET_HANG_CHO));
+    expect(html).not.toContain(nhuTrongHTML(NUT_DUYET));
     // ADR 0038: ô XIN lùi hạn không đứng sau khoá duyệt — người cầm `task.update` vẫn gửi được.
     expect(html).toContain('id="han-moi-lui-han"');
   });

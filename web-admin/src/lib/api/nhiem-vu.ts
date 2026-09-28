@@ -12,7 +12,9 @@
  *   POST   /api/v1/tasks/{ma}/extensions                       task.update  ← KHÔNG phải task.extend
  *   POST   /api/v1/tasks/{ma}/extensions/{deNghiID}/decision   task.extend  + ADR 0038 lớp hai
  *   GET    /api/v1/task-extensions                             task.read    (hàng chờ duyệt §5.8,
- *                                                              đến sau tám tuyến trên)
+ *                                                              đến sau tám tuyến trên; `task=` lọc
+ *                                                              theo một nhiệm vụ)
+ *   GET    /api/v1/task-counts                                 task.read    (số thật đầu cột Kanban)
  *
  * HAI DÒNG CUỐI KHÔNG ĐƯỢC GỘP, và đó là toàn bộ ADR 0038: `task.extend` nhãn là **"Duyệt gia
  * hạn"** — quyền QUYẾT ĐỊNH. Gắn nó lên tuyến ĐỀ NGHỊ sẽ thành "chỉ người duyệt được mới xin
@@ -53,6 +55,7 @@ import type {
   petitions_deNghiLuiHanVao,
   petitions_delete_tasks_by_ma,
   petitions_doiTrangThaiVao,
+  petitions_get_task_counts,
   petitions_get_task_extensions,
   petitions_get_tasks,
   petitions_get_tasks_by_ma,
@@ -66,6 +69,7 @@ import type {
   petitions_quyetDinhLuiHanVao,
   petitions_suaNhiemVuVao,
   petitions_taoNhiemVuVao,
+  petitions_taskCountsOut,
   petitions_vanBanNhiemVuVao,
   petitions_xoaNhiemVuVao,
 } from "./schema.gen";
@@ -147,9 +151,14 @@ export type LocNhiemVu = {
   /** Kỳ nửa mở [from, to), RFC3339. CHỈ gửi với số liệu theo kỳ — xem `themLocVaoTruyVan`. */
   from?: string;
   to?: string;
+  /**
+   * Chỉ những việc con TRỰC TIẾP còn sống của một việc cha — MÃ SỔ của cha (`NV19`), không phải id
+   * nội bộ: hợp đồng không phát id, và `nhiemVuRa.parent` giữ đúng loại giá trị này.
+   */
+  parent?: string;
 };
 
-/** Hai cột máy chủ cho sắp — `petitions_get_tasks["truyVan"]["sort"]`, không gõ tay. */
+/** Ba cột máy chủ cho sắp — `petitions_get_tasks["truyVan"]["sort"]`, không gõ tay. */
 export type CotSapXepNhiemVu = NonNullable<petitions_get_tasks["truyVan"]["sort"]>;
 /** `asc` · `desc` — `petitions_get_tasks["truyVan"]["order"]`. */
 export type ChieuSapXepNhiemVu = NonNullable<petitions_get_tasks["truyVan"]["order"]>;
@@ -162,6 +171,30 @@ export type ChieuSapXepNhiemVu = NonNullable<petitions_get_tasks["truyVan"]["ord
  * hoàn toàn bình thường — nên chúng đứng một chỗ và có bài kiểm đọc lại từng tên.
  */
 function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocNhiemVu): void {
+  appendTaskFilters(truyVan, loc);
+
+  // SẮP XẾP ĐI QUA `thamSoTheoHopDong`, không ghép chuỗi trần: hai tên này mới thêm, nên chúng là
+  // hai tên đầu tiên của hàm này được `tsc` đối chiếu với kiểu `truyVan` — cả tên lẫn giá trị.
+  const dat = thamSoTheoHopDong<petitions_get_tasks["truyVan"]>(truyVan);
+  dat("sort", loc.sapXep);
+  dat("order", loc.chieu);
+
+  if (loc.limit !== undefined) truyVan.set("limit", String(loc.limit));
+  // Con trỏ rỗng nghĩa là trang đầu. Gửi `cursor=` rỗng thì máy chủ trả 400 "con trỏ không hợp
+  // lệ" — đúng vào lần mở màn hình đầu tiên.
+  if (loc.cursor !== undefined && loc.cursor !== null && loc.cursor !== "") {
+    truyVan.set("cursor", loc.cursor);
+  }
+}
+
+/**
+ * The FILTER half of a task query — everything that decides WHICH rows, nothing that decides their
+ * order or page. Shared by the register (`themLocVaoTruyVan`) and the Kanban counts
+ * (`taskCountsPath`) on purpose: a column header counting under different filters than the cards
+ * beneath it is a number that silently disagrees with the board, and it is the number that gets
+ * read out to leadership. One builder means the two cannot drift.
+ */
+function appendTaskFilters(truyVan: URLSearchParams, loc: LocNhiemVu): void {
   // `scope=all` là mặc định của máy chủ và không cần predicate nào, nên tab "Toàn xã" gửi tham
   // số vắng mặt hẳn — ít một tham số là ít một chỗ có thể gõ sai.
   if (loc.phamVi === "mine") truyVan.set("scope", "mine");
@@ -181,11 +214,10 @@ function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocNhiemVu): void {
   // chưa tích thì tham số vắng mặt hẳn (`errLocTreHanNhiemVuKhongHopLe`).
   if (loc.chiTreHan === true) truyVan.set("late", "true");
 
-  // SẮP XẾP ĐI QUA `thamSoTheoHopDong`, không ghép chuỗi trần: hai tên này mới thêm, nên chúng là
-  // hai tên đầu tiên của hàm này được `tsc` đối chiếu với kiểu `truyVan` — cả tên lẫn giá trị.
-  const dat = thamSoTheoHopDong<petitions_get_tasks["truyVan"]>(truyVan);
-  dat("sort", loc.sapXep);
-  dat("order", loc.chieu);
+  // `petitions_get_task_counts["truyVan"]` carries the same filter names; typing against the
+  // counts route checks the names against BOTH routes' shared subset, not only the list route.
+  const dat = thamSoTheoHopDong<petitions_get_task_counts["truyVan"]>(truyVan);
+  dat("parent", loc.parent);
 
   // SỐ LIỆU CỦA TỔNG QUAN. Kỳ đi lên CHỈ khi số liệu đếm theo kỳ: máy chủ bỏ qua kỳ ở số liệu tồn
   // (`summary.go:182-185`), nên gửi nó là gửi một câu hỏi máy chủ không trả lời — và `from`/`to` mà
@@ -194,13 +226,6 @@ function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocNhiemVu): void {
   if (loc.metric !== undefined && isPeriodMetric("tasks", loc.metric)) {
     dat("from", loc.from);
     dat("to", loc.to);
-  }
-
-  if (loc.limit !== undefined) truyVan.set("limit", String(loc.limit));
-  // Con trỏ rỗng nghĩa là trang đầu. Gửi `cursor=` rỗng thì máy chủ trả 400 "con trỏ không hợp
-  // lệ" — đúng vào lần mở màn hình đầu tiên.
-  if (loc.cursor !== undefined && loc.cursor !== null && loc.cursor !== "") {
-    truyVan.set("cursor", loc.cursor);
   }
 }
 
@@ -218,6 +243,26 @@ export function laySoNhiemVu(
   loc: LocNhiemVu = {},
 ): Promise<KetQua<page_Result_petitions_nhiemVuRa>> {
   return docJSON<page_Result_petitions_nhiemVuRa>(duongDanSoNhiemVu(loc));
+}
+
+/**
+ * Path of `GET /api/v1/task-counts` — the real per-status totals behind the Kanban headers (#15).
+ *
+ * FILTERS ONLY, through `appendTaskFilters` — the same builder as the list. `sort`, `order`,
+ * `limit` and `cursor` are dropped even when the caller passes them: the counts route declares none
+ * of them, and a total does not depend on order or page.
+ */
+export function taskCountsPath(loc: LocNhiemVu = {}): string {
+  const duongDan: petitions_get_task_counts["duongDan"] = "/api/v1/task-counts";
+  const truyVan = new URLSearchParams();
+  appendTaskFilters(truyVan, loc);
+  const chuoi = truyVan.toString();
+  return chuoi === "" ? duongDan : `${duongDan}?${chuoi}`;
+}
+
+/** GET /api/v1/task-counts — `task.read`, all seven status codes, same filters as the list. */
+export function getTaskCounts(loc: LocNhiemVu = {}): Promise<KetQua<petitions_taskCountsOut>> {
+  return docJSON<petitions_taskCountsOut>(taskCountsPath(loc));
 }
 
 /**
@@ -281,6 +326,8 @@ export function layNhatKyNhiemVu(
  */
 export type LocHangChoLuiHan = {
   approver?: "me";
+  /** Register code (`NV19`): only that task's pending requests — the drawer's block (#11). */
+  task?: string;
   cursor?: string | null;
   limit?: number;
 };
@@ -297,6 +344,7 @@ export function duongDanHangChoLuiHan(loc: LocHangChoLuiHan = {}): string {
   const truyVan = new URLSearchParams();
   const dat = thamSoTheoHopDong<petitions_get_task_extensions["truyVan"]>(truyVan);
   dat("approver", loc.approver);
+  dat("task", loc.task);
   dat("limit", loc.limit);
   // Con trỏ rỗng/`null` = trang đầu, và KHÔNG gửi `cursor=` rỗng (máy chủ trả 400).
   dat("cursor", loc.cursor);
@@ -307,8 +355,8 @@ export function duongDanHangChoLuiHan(loc: LocHangChoLuiHan = {}): string {
 /**
  * GET /api/v1/task-extensions — một trang đề nghị lùi hạn ĐANG CHỜ của xã. `task.read`.
  *
- * Tuyến KHÔNG có bộ lọc theo nhiệm vụ: đừng lật cả hàng chờ để tìm đề nghị của một việc — xem
- * `features/nhiem-vu/hang-cho-lui-han.tsx`.
+ * `task=NV19` (ad7f821) lọc theo MỘT nhiệm vụ — lối của drawer (`task-extension-block.tsx`), thay
+ * cho việc lật cả hàng chờ của xã để tìm một dòng.
  */
 export function layHangChoLuiHan(
   loc: LocHangChoLuiHan = {},

@@ -9,6 +9,7 @@ import {
   useState,
   useSyncExternalStore,
   type FormEvent,
+  type ReactNode,
 } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
@@ -35,6 +36,7 @@ import type { KetQua } from "@/lib/api/goi";
 import {
   deNghiLuiHan,
   doiTrangThaiNhiemVu,
+  getTaskCounts,
   layNhiemVu,
   laySoNhiemVu,
   quyetDinhLuiHan,
@@ -62,12 +64,13 @@ import type {
   petitions_nhiemVuVanBanRa,
   petitions_suaNhiemVuVao,
   petitions_taoNhiemVuVao,
+  petitions_taskCountsOut,
 } from "@/lib/api/schema.gen";
 
 import {
+  ADD_CHILD_BUTTON,
   CANH_BAO_HAN_MOT_LAN,
   CAU_KHONG_AI_CO_QUYEN_DUYET_GIA_HAN,
-  CAU_LIEN_KET_HANG_CHO,
   CAU_LOC_TRANG_THAI_KHONG_CO_COT,
   CAU_THIEU_QUYEN_DUYET_HOAN_THANH,
   CHI_QUA_HAN_NHAN,
@@ -80,14 +83,14 @@ import {
   DANG_TAI_SO,
   DE_BO_PHAN_TU_PHAN_CONG,
   DANG_TAI_VAN_BAN,
-  GHI_CHU_DEM_COT,
+  DUE_COLUMN_LABEL,
   GHI_CHU_HAN_VIEC_CON,
   GHI_CHU_NHIEM_VU_TOI_DA,
   GHI_CHU_LANH_DAO_GIAO_VIEC,
   GHI_CHU_LUI_HAN,
   GHI_CHU_THIEU_SO_THEO_DOI,
   GHI_CHU_TU_SINH_MA,
-  ID_HANG_CHO,
+  KANBAN_COUNTS_ERROR,
   KHONG_DOC_DUOC_VAN_BAN,
   LY_DO_KHONG_SUA_CHU_TRI,
   LY_DO_KHONG_SUA_HAN,
@@ -115,6 +118,7 @@ import {
   NHAN_NUT_SUA,
   NHAN_THEM_VAN_BAN,
   NHAN_TIEU_DE_THEO_VAN_BAN,
+  NO_DEADLINE_LAST_NOTE,
   O_TRONG,
   PHAM_VI_CUA_TOI,
   PHAM_VI_TOAN_XA,
@@ -137,6 +141,11 @@ import {
   canhBaoSua,
   canhBaoVanBan,
   cauGiaiThichTrangThai,
+  childCountLabel,
+  childCreatedText,
+  childFormNote,
+  kanbanColumnCount,
+  kanbanPartialNote,
   danhBaChoNhatKy,
   cauTuKetLuan,
   chiaNhomVanBan,
@@ -169,7 +178,6 @@ import {
   hoanThanhTreHan,
   mocCuoiNgay,
   nhanBoDem,
-  nhanDemCot,
   nhanHanThe,
   nhanHoanThanhTreHan,
   nhanNgay,
@@ -181,7 +189,6 @@ import {
   nhanTrongOChonCanBo,
   oHan,
   placeholderNhomVanBan,
-  quyetDinhDuyetLuiHan,
   sapXepDayDu,
   thanGiaoViec,
   thanSuaNhiemVu,
@@ -195,9 +202,11 @@ import {
   type QuyenNhiemVu,
   type TrangThaiNhiemVu,
 } from "./nhan-nhiem-vu";
+import { ChildTasks, ParentTaskField } from "./child-tasks";
 import { HangChoLuiHan } from "./hang-cho-lui-han";
 import { KanbanMoveMenu } from "./kanban-move-menu";
 import { NhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
+import { TaskExtensionBlock } from "./task-extension-block";
 
 /**
  * Sổ Quản lý nhiệm vụ — `docs/ui-ux/02-nhiem-vu.md` §2 (bố cục), §3 (bộ lọc), §4.1 (bảng Kanban),
@@ -248,7 +257,8 @@ const SO_DONG_MOI_TRANG = 20;
  * Bao nhiêu thẻ đọc cho MỘT cột Kanban.
  *
  * Kanban KHÔNG có phân trang từng cột — năm ngăn xếp con trỏ song song là năm chỗ để lạc, và đặc
- * tả không vẽ nút trang nào trên bảng. Cột đầy thì đầu cột hiện `20+` và cán bộ sang Danh sách.
+ * tả không vẽ nút trang nào trên bảng. Đầu cột hiện TỔNG THẬT (`/task-counts`); cột có nhiều hơn số
+ * thẻ đang hiện thì dưới cột nói ra (`kanbanPartialNote`) và cán bộ sang Danh sách.
  */
 const SO_THE_MOI_COT = 20;
 
@@ -504,6 +514,18 @@ export function SoNhiemVu({
   // that was moved, not in a drawer that may be showing another task.
   const [kanbanPending, setKanbanPending] = useState<KanbanMove["pending"]>(null);
   const [kanbanResult, setKanbanResult] = useState<KanbanMoveResult | null>(null);
+  // Real per-status totals for the Kanban headers (#15), keyed like the columns.
+  const [countsLoaded, setCountsLoaded] = useState<{
+    khoa: string;
+    kq: KetQua<petitions_taskCountsOut>;
+  } | null>(null);
+  // `+ Thêm việc con` (#10): the create form, opened INSIDE the drawer of the parent it names.
+  // Its own sending/error state: the drawer's `loiGhi` is shown by the drawer too, and one refusal
+  // printed twice reads as two refusals.
+  const [childFormFor, setChildFormFor] = useState<string | null>(null);
+  const [childFormSending, setChildFormSending] = useState(false);
+  const [childFormError, setChildFormError] = useState<string | null>(null);
+  const [childCreated, setChildCreated] = useState<{ parent: string; text: string } | null>(null);
 
   const khoa =`${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}`;
   // Kanban KHÔNG mang con trỏ: nó không phân trang, nên bộ lọc và lần ghi gần nhất là tất cả những
@@ -575,6 +597,12 @@ export function SoNhiemVu({
       })),
     ).then((cot) => {
       if (!bo) datDaTaiKanban({ khoa: khoaKanban, cot });
+    });
+    // THE SAME `loc` AS THE COLUMNS, through the same filter builder (`appendTaskFilters`): a
+    // header counting under other filters than its cards is a number that disagrees with the board.
+    // Read separately: a failed count must not hold the cards back, nor the other way round.
+    getTaskCounts(loc).then((kq) => {
+      if (!bo) setCountsLoaded({ khoa: khoaKanban, kq });
     });
     return () => {
       bo = true;
@@ -711,6 +739,7 @@ export function SoNhiemVu({
             className="nut-chinh"
             onClick={() => {
               datMoFormTao((m) => !m);
+              setChildFormFor(null);
               datLoiGhi(null);
             }}
             aria-expanded={moFormTao}
@@ -829,6 +858,7 @@ export function SoNhiemVu({
             guiDrawer({ loai: "mo", nhiemVu: n });
             datLoiGhi(null);
           }}
+          counts={taiTu(countsLoaded, khoaKanban)}
           move={{
             permissions: quyen,
             pending: kanbanPending,
@@ -867,6 +897,7 @@ export function SoNhiemVu({
             }}
           />
           <p className="ghi-chu">{nhanBoDem(so.duLieu.items.length)}</p>
+          <p className="ghi-chu">{NO_DEADLINE_LAST_NOTE}</p>
           <nav className="dieu-huong-trang" aria-label="Phân trang sổ nhiệm vụ">
             <button
               type="button"
@@ -935,6 +966,99 @@ export function SoNhiemVu({
           }
           quyetDinh={(deNghiID, duyet, ghiChu) =>
             quyetDinhLuiHan(drawer.nhiemVu.code, deNghiID, duyet, ghiChu)
+          }
+          // The drawer's pending-request block re-reads on every drawer re-read AND when the queue
+          // on the register moves (`lanHangCho`): a request sent or decided there is this block's.
+          extensionRefreshKey={`${drawer.luotDoc}|${lanHangCho}`}
+          onExtensionDecided={(ma) => {
+            // Approving moves `due_at`: the drawer, the register and the queue are all stale.
+            guiDrawer({ loai: "docLai", ma });
+            datLanTai((n) => n + 1);
+            datLanHangCho((n) => n + 1);
+          }}
+          openTask={(n) => {
+            guiDrawer({ loai: "mo", nhiemVu: n });
+            datLoiGhi(null);
+          }}
+          openTaskByCode={(ma) =>
+            layNhiemVu(ma).then((kq) => {
+              if (kq.ok) {
+                guiDrawer({ loai: "mo", nhiemVu: kq.duLieu });
+                datLoiGhi(null);
+              }
+              return kq;
+            })
+          }
+          saveParent={(than) =>
+            suaNhiemVu(drawer.nhiemVu.code, than).then((kq) => {
+              if (kq.ok) {
+                guiDrawer({ loai: "ghiXong", nhiemVu: kq.duLieu });
+                datLanTai((n) => n + 1);
+              }
+              // A refusal (409 `task_tree`) goes back to the field VERBATIM — see `ParentTaskField`.
+              return kq;
+            })
+          }
+          addChild={
+            // `+ Thêm việc con` stands behind the SAME key as `+ Giao việc mới` — `task.create`
+            // (`quyen.giaoViec`), the key of `POST /api/v1/tasks`. The server checks it anyway.
+            quyen.giaoViec
+              ? {
+                  open: childFormFor === drawer.nhiemVu.code,
+                  created:
+                    childCreated !== null && childCreated.parent === drawer.nhiemVu.code
+                      ? childCreated.text
+                      : null,
+                  toggle: () => {
+                    // ONE create form on the page at a time: both render the same field ids
+                    // (`giao-loai`…), and two labels pointing at one id is a broken form for a
+                    // screen reader.
+                    datMoFormTao(false);
+                    setChildFormFor((f) =>
+                      f === drawer.nhiemVu.code ? null : drawer.nhiemVu.code,
+                    );
+                    setChildFormError(null);
+                    setChildCreated(null);
+                  },
+                  form: (
+                    <FormGiaoViec
+                      // A new form (and a new idempotency key) per parent.
+                      key={drawer.nhiemVu.code}
+                      danhMuc={danhMuc}
+                      danhBa={kqDanhBa}
+                      danhBaLanhDao={kqDanhBaLanhDao}
+                      coDanhSachVanBan
+                      staffSearch
+                      maChaCoSan={drawer.nhiemVu.code}
+                      dangGui={childFormSending}
+                      loi={childFormError}
+                      huy={() => {
+                        setChildFormFor(null);
+                        setChildFormError(null);
+                      }}
+                      giaoViec={(than, khoaChongTrung) => {
+                        const parentCode = drawer.nhiemVu.code;
+                        setChildFormSending(true);
+                        taoNhiemVu(than, khoaChongTrung).then((kq) => {
+                          setChildFormSending(false);
+                          if (!kq.ok) {
+                            // VERBATIM — an invalid parent is the server's 409 `task_tree` sentence.
+                            setChildFormError(kq.thongBao);
+                            return;
+                          }
+                          setChildFormError(null);
+                          setChildFormFor(null);
+                          setChildCreated({ parent: parentCode, text: childCreatedText(kq.duLieu.code) });
+                          // STAY ON THE PARENT: re-read it (its `child_count`, its children block)
+                          // instead of jumping to the new child, which would lose the tree.
+                          guiDrawer({ loai: "docLai", ma: parentCode });
+                          datLanTai((n) => n + 1);
+                        });
+                      }}
+                    />
+                  ),
+                }
+              : null
           }
           // §5.4 `✎ Sửa`. Thành công: phản hồi PATCH MANG `documents` (`app/nhiem_vu.go:696-741`),
           // nên `ghiXong` thay cả trường vô hướng lẫn khối văn bản, rồi đọc lại sổ như mọi lần ghi
@@ -1299,12 +1423,18 @@ export function BangKanban({
   bayGio,
   maDangMo,
   moNhiemVu,
+  counts,
   move = null,
 }: {
   cot: readonly CotKanban[];
   danhMuc: DanhMucNhiemVu;
   /** Danh bạ tra theo mã — họ tên người thực hiện trên thẻ. `null` = chưa có, thẻ hiện mã. */
   danhBa?: DanhBaTheoMa | null;
+  /**
+   * `GET /api/v1/task-counts` under the board's filters — the header numbers (#15). REQUIRED: a
+   * caller that forgets it gets a red `tsc`, not headers that silently fall back to card counts.
+   */
+  counts: TrangThaiTai<petitions_taskCountsOut>;
   /** Moving cards — see `KanbanMove`. `null` = read-only board. */
   move?: KanbanMove | null;
   /**
@@ -1345,6 +1475,8 @@ export function BangKanban({
     (tong, c) => tong + (c.tai.pha === "xong" ? c.tai.duLieu.items.length : 0),
     0,
   );
+  const totalOf = (status: TrangThaiNhiemVu): number | null =>
+    counts.pha === "xong" ? kanbanColumnCount(counts.duLieu.by_status, status) : null;
 
   const dropAllowed = (target: TrangThaiNhiemVu): boolean =>
     move !== null &&
@@ -1403,9 +1535,11 @@ export function BangKanban({
                 {/* NHÃN CỘT LÀ NHÃN CỦA XÃ — cùng một chữ với chip và ô lọc. Chữ "Chưa thực hiện"
                     của §4.1 là thứ xã tự đặt cho `moi-giao` ở tab Danh mục (xem `nhan-nhiem-vu.ts`). */}
                 {nhanTrangThai(nhanTT, c.ma)}{" "}
-                {c.tai.pha === "xong" && (
+                {/* THE REAL TOTAL (#15), not the cards loaded. Unreadable or missing → `—`, never
+                    a `0` that reads as "nothing here". Still loading → no chip yet. */}
+                {counts.pha !== "dangTai" && (
                   <span className="chip chip-ngung">
-                    {nhanDemCot(c.tai.duLieu.items.length, c.tai.duLieu.has_more)}
+                    {totalOf(c.ma) === null ? O_TRONG : String(totalOf(c.ma))}
                   </span>
                 )}
               </h3>
@@ -1443,13 +1577,24 @@ export function BangKanban({
                   ))}
                 </ul>
               )}
+              {/* 20 cards under a header of 57 must say so — the board has no per-column paging. */}
+              {c.tai.pha === "xong" &&
+                (c.tai.duLieu.has_more || (totalOf(c.ma) ?? 0) > c.tai.duLieu.items.length) && (
+                  <p className="ghi-chu">
+                    {kanbanPartialNote(c.tai.duLieu.items.length, totalOf(c.ma))}
+                  </p>
+                )}
             </section>
           ))}
         </div>
       </div>
 
+      {counts.pha === "loi" && (
+        <p className="thong-bao-loi" role="alert">
+          {KANBAN_COUNTS_ERROR} {counts.thongBao}
+        </p>
+      )}
       <p className="ghi-chu">{nhanBoDem(soThe)}</p>
-      <p className="ghi-chu">{GHI_CHU_DEM_COT}</p>
       {/* Chỗ một cán bộ tìm lại việc "biến mất" của mình: một việc vừa sang `tam-dung` rời khỏi
           Kanban hoàn toàn, và §4.1 muốn thế. Không nói ra thì người giao việc kết luận nó đã bị xoá. */}
       <p className="ghi-chu">{ghiChuKanbanReNhanh(nhanTT)}</p>
@@ -1464,7 +1609,7 @@ export function BangKanban({
  * phân biệt được màu đọc ra bằng không (a11y). Khi lớp CSS viền trái được thêm, nó là tín hiệu THỨ
  * HAI chồng lên chữ này chứ không thay chữ này.
  *
- * KHÔNG CÓ CHIP `{n} việc con`: phản hồi không mang số việc con — xem `PHAN_CHUA_DUNG`.
+ * CHIP `{n} việc con` (#6) from `child_count`, which the SERVER counts — see `childCountLabel`.
  */
 export function TheNhiemVu({
   nhiemVu,
@@ -1537,6 +1682,11 @@ export function TheNhiemVu({
         {nhanCanBoNgan(nhiemVu.assignee, danhBa, CHUA_PHAN_CONG)} ·{" "}
         {nhanDanhMuc(danhMuc.mucUuTien, nhiemVu.priority)}
       </p>
+      {childCountLabel(nhiemVu.child_count) !== null && (
+        <p>
+          <span className="chip chip-ngung">{childCountLabel(nhiemVu.child_count)}</span>
+        </p>
+      )}
       {hoanThanhTreHan(nhiemVu.completed_at, nhiemVu.original_due_at) && (
         <p>
           <span className="chip chip-hoat-dong">{nhanHoanThanhTreHan(nhanTT)}</span>
@@ -1618,9 +1768,11 @@ function OTieuDeSapXepNhiemVu({
  * KHÔNG CÓ CỘT Ô TICK: `Xoá đã chọn` không có tuyến nào (xem `PHAN_CHUA_DUNG`), và một ô tick
  * không dẫn tới thao tác nào là một ô tick mời cán bộ chọn hai mươi dòng rồi không tìm thấy nút.
  *
- * KHÔNG CÓ CHIP `{n} việc con`: phản hồi không mang số việc con, và đếm trong trang đang mở cho ra
- * một con số PHỤ THUỘC VÀO TRANG.
+ * CHIP `{n} việc con` (#6) under the title, from the server's `child_count` — never counted from
+ * the page on screen, which would give a number that depends on the page.
  *
+ * `Hạn` IS SORTABLE (#13, `due_at`); tasks without a deadline stay last in both directions, and
+ * the screen says so under the table (`NO_DEADLINE_LAST_NOTE`).
  */
 export function BangNhiemVu({
   nhiemVu,
@@ -1671,7 +1823,12 @@ export function BangNhiemVu({
             <th scope="col">Người thực hiện</th>
             <th scope="col">Bộ phận</th>
             <th scope="col">Ưu tiên</th>
-            <th scope="col">Hạn</th>
+            <OTieuDeSapXepNhiemVu
+              cot="due_at"
+              nhan={DUE_COLUMN_LABEL}
+              sapXep={sapXep}
+              doiSapXep={doiSapXep}
+            />
             <th scope="col">Trạng thái</th>
             <th scope="col">
               <span className="an-thi-giac">Thao tác</span>
@@ -1693,6 +1850,9 @@ export function BangNhiemVu({
                 <td>
                   {n.title}
                   <span className="dong-phu">{nhanNguonGiao(n.source)}</span>
+                  {childCountLabel(n.child_count) !== null && (
+                    <span className="chip chip-ngung">{childCountLabel(n.child_count)}</span>
+                  )}
                 </td>
                 <td>
                   <time dateTime={n.created_at}>{nhanNgay(n.created_at)}</time>
@@ -1759,7 +1919,34 @@ export function ChiTietNhiemVu({
   quyetDinh,
   suaKhoiVanBan,
   docLaiChiTiet,
+  extensionRefreshKey,
+  onExtensionDecided,
+  openTask,
+  openTaskByCode,
+  saveParent,
+  addChild,
 }: {
+  /** Changes whenever this task's pending extension requests may have changed. */
+  extensionRefreshKey: string;
+  /** A decision in the drawer's block succeeded. */
+  onExtensionDecided: (taskCode: string) => void;
+  /** Open another task's drawer from a register row (a child). */
+  openTask: (task: petitions_nhiemVuRa) => void;
+  /** Open another task's drawer by register code (the parent). */
+  openTaskByCode: (code: string) => Promise<KetQua<unknown>>;
+  /** `PATCH /api/v1/tasks/{ma}` with `{ parent }` — the `Việc cha` field. */
+  saveParent: (body: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
+  /**
+   * `+ Thêm việc con`, or `null` without `task.create`. REQUIRED, not optional: a caller that
+   * forgets it gets a red `tsc`, not a drawer that silently lost the button.
+   */
+  addChild: {
+    readonly open: boolean;
+    readonly toggle: () => void;
+    readonly form: ReactNode;
+    /** `Đã giao việc con NV25.` after a success, else `null`. */
+    readonly created: string | null;
+  } | null;
   nhiemVu: petitions_nhiemVuRa;
   /**
    * Khối văn bản §5.4, đọc từ TUYẾN CHI TIẾT — không bao giờ từ `nhiemVu.documents` của một dòng
@@ -1808,14 +1995,6 @@ export function ChiTietNhiemVu({
   const o = oHan(nhiemVu.due_at, bayGio);
   const giaiThich = cauGiaiThichTrangThai(nhiemVu.status);
   const danhBaMa = danhBaChoNhatKy(danhBa);
-  const congDuyet = quyetDinhDuyetLuiHan(
-    maNguoiDangNhap,
-    nhiemVu.assigner,
-    // LỚP MỘT — `task.extend` của PHIÊN. Có khoá CHƯA ĐỦ: lớp hai (ADR 0038, phép so mã cán bộ với
-    // `lanh_dao_giao_viec_ma` của chính bản ghi này) vẫn chạy ngay trong hàm, và máy chủ quyết
-    // lại cả hai trong giao dịch.
-    quyen.duyetGiaHan,
-  );
   const buocChuyen = MOI_TRANG_THAI.filter((t) => chuyenSangDuoc(nhiemVu.status, t));
   // Bước trả lại KHÔNG phải một nút `Chuyển sang …`: nó cần lý do bắt buộc, nên có khối riêng.
   // Để nó lọt vào hàng nút thường là cho một cú bấm gửi lý do rỗng — đúng câu 400 của máy chủ.
@@ -1972,6 +2151,42 @@ export function ChiTietNhiemVu({
         />
       )}
 
+      {/* §5.4 `Việc cha` (#10) and §5.10 `Nhiệm vụ con` (#6). `key` by code, like the log below:
+          another task's half-typed parent code or "Xem thêm" page must not follow into this one. */}
+      <ParentTaskField
+        key={`cha-${nhiemVu.code}`}
+        code={nhiemVu.code}
+        parent={nhiemVu.parent}
+        canEdit={quyen.capNhat}
+        save={saveParent}
+        openParent={openTaskByCode}
+      />
+      <ChildTasks
+        key={`con-${nhiemVu.code}`}
+        parentCode={nhiemVu.code}
+        refreshKey={lanLamMoiNhatKy}
+        labels={nhanTT}
+        directory={danhBaMa}
+        now={bayGio}
+        openTask={openTask}
+      />
+      {addChild !== null && (
+        <div className="form-danh-muc">
+          <div className="cum-nut">
+            <button
+              type="button"
+              className="nut-phu"
+              aria-expanded={addChild.open}
+              onClick={addChild.toggle}
+            >
+              {addChild.open ? "Đóng biểu mẫu việc con" : ADD_CHILD_BUTTON}
+            </button>
+          </div>
+          {addChild.created !== null && <p role="status">{addChild.created}</p>}
+          {addChild.open && addChild.form}
+        </div>
+      )}
+
       {/* §5.9 — NỬA ĐỌC. `key` theo mã: đổi nhiệm vụ là dựng lại khối, không mang "Xem thêm" đang
           chạy hay câu lỗi của việc cũ sang việc mới. */}
       <NhatKyNhiemVu
@@ -1993,9 +2208,9 @@ export function ChiTietNhiemVu({
           CHỈ VẼ NHỮNG BƯỚC §6 CÓ. Một nút thừa ở đây không mở được gì — máy chủ kiểm lại bằng
           `ChuyenTrangThaiDuoc` — nhưng một nút thiếu thì cán bộ báo ngay, vì họ đang cần bấm nó.
 
-          BƯỚC `hoan-thanh` VẪN HIỆN KỂ CẢ KHI CÒN VIỆC CON: màn hình không biết có việc con hay
-          không (phản hồi không mang số ấy), và câu từ chối của máy chủ LIỆT KÊ MÃ việc con còn
-          lại — thông tin cán bộ cần, và là thông tin màn hình không tự dựng được.
+          BƯỚC `hoan-thanh` VẪN HIỆN KỂ CẢ KHI CÒN VIỆC CON: `child_count` đếm việc con CÒN SỐNG, không
+          đếm việc con CHƯA XONG, nên màn hình không biết bước ấy có bị chặn hay không. Câu từ chối
+          của máy chủ LIỆT KÊ MÃ việc con còn lại — thông tin cán bộ cần, màn hình không tự dựng được.
 
           CẢ KHỐI ĐỨNG SAU `task.update` — khoá tuyến `…/status` khai. Bước `hoan-thanh` đòi THÊM
           `task.approve` (`duocBamChuyen`); thiếu khoá ấy thì nút ẩn và câu dưới nói vì sao, để cán
@@ -2043,12 +2258,27 @@ export function ChiTietNhiemVu({
       )}
 
       <KhoiLuiHan
-        congDuyet={congDuyet}
         coQuyenDeNghi={quyen.capNhat}
         hanHienTai={nhiemVu.due_at}
         dangGui={dangGui}
         guiDeNghi={guiDeNghiLuiHan}
-        quyetDinh={quyetDinh}
+      />
+
+      {/* §5.8 — this task's pending requests and, for the recorded assigner holding `task.extend`,
+          Duyệt / Từ chối (#11). Same row gate and route as the queue on the register. */}
+      <TaskExtensionBlock
+        key={`lui-han-${nhiemVu.code}`}
+        taskCode={nhiemVu.code}
+        assigner={nhiemVu.assigner}
+        directory={danhBaMa}
+        sessionStaffCode={maNguoiDangNhap}
+        // LAYER ONE — `task.extend` of the SESSION. Not enough on its own: layer two (ADR 0038,
+        // the business-code comparison with this record's assigner) runs inside the row gate, and
+        // the server decides both again in the transaction.
+        canApproveExtension={quyen.duyetGiaHan}
+        refreshKey={extensionRefreshKey}
+        decide={quyetDinh}
+        onDecided={onExtensionDecided}
       />
 
       {/* ── XOÁ MỀM §11.5 — `task.delete` ─────────────────────────────────────────────────── */}
@@ -2528,17 +2758,20 @@ export function FormSuaKhoiVanBan({
  * Bỏ lớp thứ hai thì **mọi lãnh đạo cầm khoá duyệt được mọi nhiệm vụ của cả xã**, kể cả của bộ
  * phận họ không liên quan — vì luật 5 kiểm `(tenant_id, role, permission)` và không có chiều "bản
  * ghi nào".
+ *
+ * THIS COMPONENT IS NOW ONLY THE FIRST HALF (28/09/2026, #11). The second half — the pending
+ * requests and Duyệt / Từ chối — is `TaskExtensionBlock`, right below it in the drawer, which reads
+ * `GET /api/v1/task-extensions?task=` and gates each row exactly like the queue on the register.
+ * The old in-memory decision buttons (only for a request sent in this very drawer session) are
+ * gone: two decision surfaces in one drawer would be two gates to keep equal.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 export function KhoiLuiHan({
-  congDuyet,
   coQuyenDeNghi,
   hanHienTai,
   dangGui,
   guiDeNghi,
-  quyetDinh,
 }: {
-  congDuyet: ReturnType<typeof quyetDinhDuyetLuiHan>;
   /**
    * `task.update` — khoá của tuyến GỬI đề nghị (`POST …/extensions`). KHÔNG PHẢI `task.extend`:
    * gắn ô đề nghị sau khoá duyệt là "chỉ người duyệt được mới xin được" (ADR 0038).
@@ -2547,11 +2780,6 @@ export function KhoiLuiHan({
   hanHienTai: string | null;
   dangGui: boolean;
   guiDeNghi: (hanMoiISO: string, lyDo: string) => Promise<KetQua<petitions_deNghiLuiHanRa>>;
-  quyetDinh: (
-    deNghiID: string,
-    duyet: boolean,
-    ghiChu?: string,
-  ) => Promise<KetQua<petitions_deNghiLuiHanRa>>;
 }) {
   const [hanMoi, datHanMoi] = useState("");
   const [lyDo, datLyDo] = useState("");
@@ -2567,6 +2795,8 @@ export function KhoiLuiHan({
     }
     datLoi(null);
     datDeNghi(kq.duLieu);
+    datHanMoi("");
+    datLyDo("");
   }
 
   return (
@@ -2625,58 +2855,14 @@ export function KhoiLuiHan({
         </p>
       )}
 
+      {/* The request itself appears in `TaskExtensionBlock` below, re-read from the server —
+          the caller bumps its refresh key on success. */}
       {deNghi !== null && (
-        <dl className="danh-sach-truong">
-          <dt>Đề nghị đang chờ</dt>
-          <dd>
-            Hạn mới {nhanNgay(deNghi.new_due_at)} · người đề nghị {deNghi.requested_by} · trạng thái{" "}
-            {deNghi.status}
-          </dd>
-        </dl>
+        <p role="status">
+          Đã gửi đề nghị lùi hạn tới {nhanNgay(deNghi.new_due_at)}. Đề nghị hiện ở mục “Đề nghị lùi
+          hạn đang chờ duyệt” ngay dưới.
+        </p>
       )}
-
-      {/* ── QUYẾT ĐỊNH — LỚP HAI CỦA ADR 0038 ────────────────────────────────────────────
-          ẨN MỘT NÚT LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP (luật 5, cấm #1): máy chủ kiểm lại cùng
-          hai câu hỏi ấy trong giao dịch, trên dòng đọc dưới khoá. Việc của khối này là để cán bộ
-          không bấm vào một thứ chắc chắn bị từ chối, và để người KHÔNG phải lãnh đạo giao việc đọc
-          được vì sao. */}
-      {!congDuyet.hien && congDuyet.vi !== "thieu-quyen" && (
-        <p className="trang-thai-rong">{congDuyet.thongBao}</p>
-      )}
-
-      {congDuyet.hien &&
-        (deNghi === null ? (
-          // Drawer KHÔNG tự tìm đề nghị của việc này: tuyến hàng chờ không lọc theo nhiệm vụ, và
-          // lật cả hàng chờ của xã để tìm một dòng là một lời gọi mỗi trang. Chỉ đường thay vì tìm.
-          <p className="trang-thai-rong">
-            <a href={`#${ID_HANG_CHO}`}>{CAU_LIEN_KET_HANG_CHO}</a>
-          </p>
-        ) : (
-          <div className="cum-nut">
-            <button
-              type="button"
-              className="nut-chinh"
-              disabled={dangGui || dangChay}
-              onClick={() => {
-                datDangChay(true);
-                quyetDinh(deNghi.id, true).then(xong);
-              }}
-            >
-              Duyệt lùi hạn
-            </button>
-            <button
-              type="button"
-              className="nut-phu"
-              disabled={dangGui || dangChay}
-              onClick={() => {
-                datDangChay(true);
-                quyetDinh(deNghi.id, false).then(xong);
-              }}
-            >
-              Từ chối
-            </button>
-          </div>
-        ))}
     </div>
   );
 }
@@ -2741,7 +2927,11 @@ export function FormGiaoViec({
   loi: string | null;
   huy: () => void;
   giaoViec: (than: petitions_taoNhiemVuVao, khoaChongTrung: string) => void;
-  /** Id nội bộ của việc cha, khi có. Hôm nay KHÔNG BAO GIỜ có — xem `PHAN_CHUA_DUNG`. */
+  /**
+   * REGISTER CODE of the parent (`NV19`) when the form is opened by `+ Thêm việc con` (#10) — the
+   * contract's `parent` takes a register code since ad7f821. Sent as-is; every invalid parent is
+   * the server's 409 `task_tree`, shown verbatim through `loi`.
+   */
   maChaCoSan?: string;
   /**
    * Điền sẵn ô `Nội dung nhiệm vụ` — `04-bien-ban-hop.md` §3, khi biểu mẫu này mở từ một kết
@@ -2854,6 +3044,9 @@ export function FormGiaoViec({
     <form className="form-danh-muc" onSubmit={gui}>
       <h4>Giao việc mới</h4>
       <p className="ghi-chu">{MO_TA_FORM_GIAO_VIEC}</p>
+      {maChaCoSan !== undefined && maChaCoSan !== "" && (
+        <p className="ghi-chu">{childFormNote(maChaCoSan)}</p>
+      )}
 
       <div className="o-chon">
         <label htmlFor="giao-loai">Loại nhiệm vụ</label>

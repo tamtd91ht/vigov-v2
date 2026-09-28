@@ -155,6 +155,7 @@ function veKanban(nhanTT: BangNhanTrangThai): string {
       bayGio={BAY_GIO}
       maDangMo={null}
       moNhiemVu={() => {}}
+      counts={{ pha: "dangTai" }}
     />,
   );
 }
@@ -179,6 +180,12 @@ function veChiTiet(nhanTT: BangNhanTrangThai, status: string): string {
       quyetDinh={KHONG_GOI}
       suaKhoiVanBan={KHONG_SUA}
       docLaiChiTiet={KHONG_SUA}
+      extensionRefreshKey="0"
+      onExtensionDecided={() => {}}
+      openTask={() => {}}
+      openTaskByCode={KHONG_SUA}
+      saveParent={KHONG_SUA}
+      addChild={null}
     />,
   );
 }

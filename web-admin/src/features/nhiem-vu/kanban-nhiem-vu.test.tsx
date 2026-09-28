@@ -1,21 +1,29 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { page_Result_petitions_nhiemVuRa, petitions_nhiemVuRa } from "@/lib/api/schema.gen";
+import type {
+  page_Result_petitions_nhiemVuRa,
+  petitions_nhiemVuRa,
+  petitions_taskCountsOut,
+} from "@/lib/api/schema.gen";
 
 import {
   BANG_NHAN_MAC_DINH,
   CAU_LOC_TRANG_THAI_KHONG_CO_COT,
   CHUA_PHAN_CONG,
   COT_RONG,
-  GHI_CHU_DEM_COT,
+  KANBAN_COUNTS_ERROR,
+  MOI_TRANG_THAI,
   PHAN_CHUA_DUNG,
   TRANG_THAI_CHINH,
+  childCountLabel,
   cotPhaiDoc,
   ghiChuKanbanReNhanh,
-  nhanDemCot,
+  kanbanColumnCount,
+  kanbanPartialNote,
 } from "./nhan-nhiem-vu";
 import { BangKanban, TheNhiemVu, type CotKanban, type DanhMucNhiemVu } from "./so-nhiem-vu";
+import type { TrangThaiTai } from "./so-nhiem-vu"; // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
 
 /**
  * Bảng Kanban §4.1.
@@ -105,7 +113,15 @@ function namCot(
   }));
 }
 
-function veBang(cot: readonly CotKanban[]): string {
+/** All seven codes, as `GET /api/v1/task-counts` promises. */
+function allCounts(byStatus: Partial<Record<string, number>> = {}): petitions_taskCountsOut {
+  return { by_status: MOI_TRANG_THAI.map((status) => ({ status, count: byStatus[status] ?? 0 })) };
+}
+
+function veBang(
+  cot: readonly CotKanban[],
+  counts: TrangThaiTai<petitions_taskCountsOut> = { pha: "xong", duLieu: allCounts() },
+): string {
   return renderToStaticMarkup(
     <BangKanban
       cot={cot}
@@ -114,6 +130,7 @@ function veBang(cot: readonly CotKanban[]): string {
       bayGio={BAY_GIO}
       maDangMo={null}
       moNhiemVu={() => {}}
+      counts={counts}
     />,
   );
 }
@@ -144,21 +161,51 @@ describe("năm cột §4.1", () => {
   });
 });
 
-describe("con số đầu cột — số THẺ ĐÃ TẢI, không phải tổng số việc", () => {
-  it("`has_more` biến con số thành `20+`", () => {
-    // `page.Result` không mang tổng số. Một con số trần đọc ra là "cột này có 20 việc" trong khi
-    // sự thật là "ít nhất 20", và con số ấy đi thẳng vào một câu báo cáo với lãnh đạo.
-    expect(nhanDemCot(20, true)).toBe("20+");
-    expect(nhanDemCot(7, false)).toBe("7");
-    expect(nhanDemCot(0, false)).toBe("0");
+describe("(#15) con số đầu cột — TỔNG THẬT từ `/task-counts`, không phải số thẻ đã tải", () => {
+  it("`kanbanColumnCount` đọc đúng mã; mã vắng mặt là `null`, không phải 0", () => {
+    const d = allCounts({ "cho-duyet": 57 });
+    expect(kanbanColumnCount(d.by_status, "cho-duyet")).toBe(57);
+    expect(kanbanColumnCount(d.by_status, "moi-giao")).toBe(0);
+    expect(kanbanColumnCount([], "moi-giao")).toBeNull();
   });
 
-  it("dấu + ra tới trang, và câu giải thích đứng cùng bảng", () => {
+  it("đầu cột hiện 57 dù chỉ 2 thẻ đã tải — và dưới cột nói ra phần còn lại", () => {
     const html = veBang(
       namCot({ "dang-thuc-hien": trang([nhiemVu(), nhiemVu({ code: "NV20" })], true) }),
+      { pha: "xong", duLieu: allCounts({ "dang-thuc-hien": 57 }) },
     );
-    expect(html).toContain(">2+<");
-    expect(html).toContain(nhuTrongHTML(GHI_CHU_DEM_COT));
+    expect(html).toContain('<span class="chip chip-ngung">57</span>');
+    expect(html).not.toContain(">2+<");
+    expect(html).toContain(nhuTrongHTML(kanbanPartialNote(2, 57)));
+    // The old "cards loaded, not a total" disclaimer is gone — it would now be false.
+    expect(html).not.toContain("không phải tổng số việc của cột");
+  });
+
+  it("đang đọc số: chưa có chip số nào — không vẽ một số chưa biết", () => {
+    const html = veBang(namCot(), { pha: "dangTai" });
+    expect(html).not.toContain('<span class="chip chip-ngung">0</span>');
+    expect(html).not.toContain(KANBAN_COUNTS_ERROR);
+  });
+
+  it("đọc số HỎNG: đầu cột `—`, câu máy chủ nguyên văn, và các thẻ VẪN hiện", () => {
+    const cau = "không đủ quyền: thiếu task.read";
+    const html = veBang(namCot({ "dang-thuc-hien": trang([nhiemVu()], true) }), {
+      pha: "loi",
+      thongBao: cau,
+    });
+    expect(html).toContain('<span class="chip chip-ngung">—</span>');
+    expect(html).not.toContain('<span class="chip chip-ngung">0</span>');
+    expect(html).toContain(`role="alert">${KANBAN_COUNTS_ERROR} ${nhuTrongHTML(cau)}</p>`);
+    expect(html).toContain("Mở NV19");
+    // `has_more` still says the column goes on, even without a total.
+    expect(html).toContain(nhuTrongHTML(kanbanPartialNote(1, null)));
+  });
+
+  it("thứ tự cột vẫn theo bảng nhãn của xã (`/task-statuses`), không theo thứ tự trả về của số", () => {
+    const d = allCounts();
+    const html = veBang(namCot(), { pha: "xong", duLieu: { by_status: [...d.by_status].reverse() } });
+    const vi = TRANG_THAI_CHINH.map((ma) => html.indexOf(`id="cot-kanban-${ma}"`));
+    expect([...vi].sort((a, b) => a - b)).toEqual(vi);
   });
 });
 
@@ -300,9 +347,13 @@ describe("thẻ nhiệm vụ §4.1", () => {
     expect(html).not.toContain('type="checkbox"');
   });
 
-  it("KHÔNG vẽ chip `{n} việc con` — phản hồi không mang số ấy", () => {
-    const html = veBang(namCot({ "dang-thuc-hien": trang([nhiemVu()]) }));
-    expect(html).not.toContain("việc con");
+  it("(#6) chip `{n} việc con` CHỈ khi `child_count > 0` — số do máy chủ đếm", () => {
+    expect(childCountLabel(0)).toBeNull();
+    expect(childCountLabel(1)).toBe("1 việc con");
+    expect(childCountLabel(3)).toBe("3 việc con");
+    expect(veThe({ child_count: 3 })).toContain('<span class="chip chip-ngung">3 việc con</span>');
+    // Zero children: no chip at all — not "0 việc con".
+    expect(veThe({ child_count: 0 })).not.toContain("việc con");
   });
 });
 
@@ -314,8 +365,8 @@ describe("phần chưa dựng được của lượt này ra tới danh sách, k
     expect(PHAN_CHUA_DUNG.find((p) => p.ten.includes("KÉO-THẢ"))).toBeUndefined();
   });
 
-  it("con số thật của cột và chế độ xem thứ ba đều được khai", () => {
-    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("SỐ LƯỢNG THẬT"))).toBe(true);
+  it("con số thật của cột ĐÃ DỰNG (#15) — mục cũ rời; chế độ xem thứ ba vẫn được khai", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("SỐ LƯỢNG THẬT"))).toBe(false);
     const soTheoDoi = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("Chế độ xem `Sổ theo dõi`"));
     expect(soTheoDoi).toBeDefined();
     // SỬA CÓ CHỦ Ý 24/09/2026: lý do cũ ("bảng `nhiem_vu_van_ban` chưa tồn tại") đã sai từ khi
