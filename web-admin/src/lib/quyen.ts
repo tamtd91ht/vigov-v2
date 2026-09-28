@@ -393,6 +393,26 @@ export const QUYEN_XOA_DONG_DANH_BA = "admin.user.delete";
 export const REPORT_READ_PERMISSION = "report.read";
 
 /**
+ * `asset.read` — "Xem bản đồ tài nguyên" (`service-identity/migrations/0001_init.sql:287`). The READ
+ * key of `GET /api/v1/map-field-schemas` (`x-vigov-permission` in `kb/20-contracts/openapi.json`),
+ * and so the gate of the whole "Trường bản đồ" tab: without it the list answers 403 and the tab has
+ * nothing to show.
+ *
+ * NOT `admin.lookup`: the four WRITE routes of that tab declare `admin.lookup`, so the tab gates its
+ * buttons on `QUYEN_QUAN_LY_DANH_MUC` and its visibility on this key — two keys, never one inferred
+ * from the other (rule 5, invariant 3b).
+ */
+export const ASSET_READ_PERMISSION = "asset.read";
+
+/**
+ * `feedback.unmask` — "Xem đầy đủ họ tên và số điện thoại người gửi"
+ * (`service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql:59`). No screen gates on it
+ * (the server decides what it returns); it is named here only because the Phân quyền tab warns when
+ * no role but the default administrator holds it (ADR 0055 §Cái giá).
+ */
+export const CITIZEN_REPORT_UNMASK_PERMISSION = "feedback.unmask";
+
+/**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
  *
  * TỪNG NẰM RIÊNG TRONG `features/cau-hinh/quyen-tab.ts` VÀ NAY Ở ĐÂY, vì nó có người dùng thứ

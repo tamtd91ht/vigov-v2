@@ -18,8 +18,10 @@
 import type { KetQua } from "@/lib/api/goi";
 import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen";
 import {
+  ASSET_READ_PERMISSION,
   QUYEN_CAU_HINH_THOI_HAN,
   QUYEN_PHAN_QUYEN,
+  QUYEN_QUAN_LY_DANH_MUC,
   QUYEN_QUAN_LY_NGUOI_DUNG,
   quyetDinhTheoKhoa,
   type QuyetDinhHien,
@@ -56,6 +58,31 @@ export function quyetDinhTabPhanQuyen(ketQua: KetQua<identity_phienHienTaiRa>): 
  */
 export function quyetDinhGhiThoiHan(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
   return theoKhoaQuyen(ketQua, QUYEN_CAU_HINH_THOI_HAN);
+}
+
+/**
+ * Tab "Trường bản đồ" — `asset.read`, the key `GET /api/v1/map-field-schemas` declares. The whole
+ * tab hides without it: its only read answers 403 then, so there is nothing to show.
+ *
+ * Its write buttons gate separately on `admin.lookup` (`mapFieldWriteDecision`): the four write
+ * routes declare that key, and neither key implies the other (rule 5, invariant 3b).
+ */
+export function mapFieldTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, ASSET_READ_PERMISSION);
+}
+
+/** Write half of "Trường bản đồ" — `admin.lookup`, the key of POST/PATCH/DELETE map-field-schemas. */
+export function mapFieldWriteDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, QUYEN_QUAN_LY_DANH_MUC);
+}
+
+/**
+ * Tab "Máy chủ thư" — `admin.lookup`. ONE key for read AND write, because the server declares that
+ * key on all three routes (GET · PUT mail-settings, POST test-messages): unlike Danh mục, the read
+ * is not open to every account, so the tab hides as a whole.
+ */
+export function mailServerTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, QUYEN_QUAN_LY_DANH_MUC);
 }
 
 /**

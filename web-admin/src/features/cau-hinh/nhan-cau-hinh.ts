@@ -24,21 +24,6 @@ export type PhanChuaDung = {
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   {
-    ten: "Tab Sơ đồ tổ chức — xoá bộ phận (§1, §12.4)",
-    viSao:
-      "Hợp đồng chưa có tuyến xoá bộ phận. §12.4 đòi chặn khi bộ phận còn cán bộ HOẶC còn hồ sơ " +
-      "đang giữ, mà hồ sơ nằm ở các dịch vụ khác — cần một hợp đồng giữa các dịch vụ trước khi có " +
-      "tuyến xoá.",
-  },
-  {
-    ten: "Tab Trường bản đồ (§6)",
-    viSao:
-      "Hợp đồng chưa có tuyến nào. Đặc tả cũng chưa tự khớp: §6 vẽ ba thao tác `✎` · `Tắt` · `🗑` " +
-      "trên mỗi trường, trong khi §11 chỉ đề xuất `GET/POST`, và câu chú thích mô tả việc xoá " +
-      "đúng bằng kết quả của việc tắt (ẩn khỏi biểu mẫu, giữ dữ liệu). Cần chốt xoá và tắt khác " +
-      "nhau thế nào trước khi dựng.",
-  },
-  {
     ten: "Tab Lời hệ thống (§7)",
     viSao:
       "Chưa chốt dịch vụ nào sở hữu 32 khoá `report.*` của bảng `loi_he_thong` (ADR 0024, mục " +
@@ -51,25 +36,17 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "mà không có gì chạy phía sau là một lời hứa suông.",
   },
   {
-    ten: "Tab Máy chủ thư (§10)",
+    ten: "Nút Nhập từ Excel ở tab Thôn / Tổ dân phố, Người dùng và Danh mục (§2, §3, §5)",
     viSao:
-      "§12.6 đòi mật khẩu SMTP được mã hoá khi lưu. Kho chưa có gói mã hoá dùng chung và chưa có " +
-      "khoá bí mật cho việc ấy — một khoá bí mật mới cần người phụ trách hạ tầng quyết định.",
-  },
-  {
-    ten: "Nút Nhập từ Excel (§1, §2, §3, §5)",
-    viSao: "Hợp đồng chưa có tuyến nhập Excel nào cho các danh sách của màn này.",
+      "Trên màn này hiện chỉ nhập được Sơ đồ tổ chức từ Excel. Nhập danh sách cán bộ phải đi đúng " +
+      "các quyết định về mật khẩu đầu tiên, mã cán bộ và số điện thoại (câu hỏi #9, #15, #16), và " +
+      "cách ánh xạ các cột của tệp vào những quyết định ấy chưa được thiết kế. Thôn / Tổ dân phố, " +
+      "Người dùng và Danh mục đều chưa có tuyến nhập nào trong hợp đồng.",
   },
   {
     ten: "Xem nhật ký hệ thống (§12.1, quyền `admin.audit`)",
     viSao:
       "Chưa có tuyến đọc nhật ký. Nhật ký nằm rải ở từng dịch vụ, nên một màn xem chung cần một " +
       "hợp đồng giữa các dịch vụ trước.",
-  },
-  {
-    ten: "Thêm vai trò mới ở tab Phân quyền (§4)",
-    viSao:
-      "Hợp đồng chỉ có `GET /api/v1/roles`, chưa có tuyến tạo vai trò; và chưa chốt ai được tạo " +
-      "vai trò mới cho một đơn vị.",
   },
 ];

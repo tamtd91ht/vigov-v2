@@ -39,11 +39,13 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
   });
 
-  it("đủ quyền → thanh sáu tab; tab đầu được chọn và là tab duy nhất có tabindex=0", () => {
-    phienGia = phienCo(["admin.user", "admin.role"]);
+  it("đủ quyền → thanh tám tab; tab đầu được chọn và là tab duy nhất có tabindex=0", () => {
+    phienGia = phienCo(["admin.user", "admin.role", "asset.read", "admin.lookup"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).toContain('role="tablist"');
-    expect(soNutTab(html)).toBe(6);
+    expect(soNutTab(html)).toBe(8);
+    expect(html).toContain('aria-controls="panel-cau-hinh-truong-ban-do"');
+    expect(html).toContain('aria-controls="panel-cau-hinh-may-chu-thu"');
     expect((html.match(/aria-selected="true"/g) ?? []).length).toBe(1);
     expect((html.match(/role="tab"[^>]*tabindex="0"/g) ?? []).length).toBe(1);
     expect(html).toContain('aria-controls="panel-cau-hinh-phan-quyen"');
@@ -58,6 +60,16 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).not.toContain(">Phân quyền</button>");
     expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
     expect(html).not.toContain("panel-cau-hinh-phan-quyen");
+    expect(html).not.toContain("panel-cau-hinh-truong-ban-do");
+    expect(html).not.toContain("panel-cau-hinh-may-chu-thu");
+  });
+
+  it("CA BỊ TỪ CHỐI: `admin.lookup` mà thiếu `asset.read` → có Máy chủ thư, không có Trường bản đồ", () => {
+    phienGia = phienCo(["admin.lookup"]);
+    const html = renderToStaticMarkup(<KhungTabCauHinh />);
+    expect(html).toContain(">Máy chủ thư</button>");
+    expect(html).not.toContain(">Trường bản đồ</button>");
+    expect(html).not.toContain("panel-cau-hinh-truong-ban-do");
   });
 
   it("phiên đọc hỏng → câu của máy chủ vẫn ra tới màn hình", () => {

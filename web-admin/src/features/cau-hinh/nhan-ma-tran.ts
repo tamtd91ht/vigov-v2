@@ -72,8 +72,9 @@ export function nhanChuaCauHinh(thieu: ThieuTruc): string {
   switch (thieu) {
     case "vaiTro":
       return (
-        "Đơn vị chưa có vai trò nào, nên ma trận chưa có cột nào để hiển thị. Vai trò được lập khi " +
-        "đơn vị được khởi tạo — liên hệ quản trị hệ thống nếu đơn vị đã hoạt động mà danh sách vẫn trống."
+        "Đơn vị chưa có vai trò nào, nên ma trận chưa có cột nào để hiển thị. Người có quyền phân " +
+        "quyền có thể bấm Tạo tám vai trò mẫu ở trên — liên hệ quản trị hệ thống nếu đơn vị đã hoạt " +
+        "động mà danh sách vẫn trống."
       );
     case "danhMucQuyen":
       return (

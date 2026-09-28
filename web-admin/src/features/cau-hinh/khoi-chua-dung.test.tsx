@@ -30,10 +30,30 @@ describe("khối phần chưa dựng của màn Cấu hình", () => {
     expect(PHAN_CHUA_DUNG.some((p) => /Lưu.*Phân quyền|Phân quyền.*Lưu/i.test(p.ten))).toBe(false);
   });
 
-  it("Sơ đồ tổ chức: không còn mục thêm/sửa bộ phận — đã dựng; mục xoá bộ phận vẫn còn", () => {
+  it("Sơ đồ tổ chức: không còn mục thêm/sửa/xoá bộ phận — cả ba đã dựng (xoá: ADR 0056)", () => {
     const soDo = PHAN_CHUA_DUNG.filter((p) => /Sơ đồ tổ chức/.test(p.ten));
-    expect(soDo.some((p) => /thêm|sửa/i.test(p.ten))).toBe(false);
-    expect(soDo.some((p) => /xoá bộ phận/i.test(p.ten))).toBe(true);
+    expect(soDo.some((p) => /thêm|sửa|xoá bộ phận/i.test(p.ten))).toBe(false);
+  });
+
+  it("không còn mục Trường bản đồ, Máy chủ thư, Thêm vai trò mới — đã dựng / đã quyết (ADR 0055)", () => {
+    for (const re of [/Trường bản đồ/, /Máy chủ thư/, /Thêm vai trò/i]) {
+      expect(PHAN_CHUA_DUNG.some((p) => re.test(p.ten))).toBe(false);
+    }
+  });
+
+  it("mục Nhập Excel nói Sơ đồ tổ chức nhập được rồi, và chỉ còn §2 · §3 · §5", () => {
+    const excel = PHAN_CHUA_DUNG.filter((p) => /Excel/.test(p.ten));
+    expect(excel).toHaveLength(1);
+    const muc = excel[0]!;
+    expect(muc.ten).not.toMatch(/§1/);
+    expect(muc.ten).toMatch(/§2.*§3.*§5/);
+    expect(muc.viSao).toMatch(/chỉ nhập được Sơ đồ tổ chức/);
+  });
+
+  it("ba mục của các thẻ việc khác vẫn còn: Lời hệ thống, Tự động hoá, Nhật ký hệ thống", () => {
+    for (const re of [/Lời hệ thống/, /Tự động hoá/, /nhật ký hệ thống/i]) {
+      expect(PHAN_CHUA_DUNG.some((p) => re.test(p.ten))).toBe(true);
+    }
   });
 
   it("Danh mục: không còn mục nói Loại đơn vị dân cư / Khối nhiệm vụ chưa ghi được — đã dựng", () => {

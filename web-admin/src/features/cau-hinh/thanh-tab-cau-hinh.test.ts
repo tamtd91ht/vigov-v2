@@ -40,8 +40,8 @@ afterEach(() => {
 });
 
 describe("tab nào của màn Cấu hình được hiện", () => {
-  it("đủ `admin.user` và `admin.role` → sáu tab, đúng thứ tự và nhãn của §0", async () => {
-    const phien = await phienVoi(phanHoiPhien(["admin.user", "admin.role"]));
+  it("đủ bốn khoá cổng → tám tab, đúng thứ tự và nhãn của §0", async () => {
+    const phien = await phienVoi(phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup"]));
     const hien = cacTabHien(TAB_CAU_HINH, phien);
     expect(nhan(hien)).toEqual([
       "Sơ đồ tổ chức",
@@ -49,12 +49,29 @@ describe("tab nào của màn Cấu hình được hiện", () => {
       "Người dùng",
       "Phân quyền",
       "Danh mục",
+      "Trường bản đồ",
       "Thời hạn xử lý",
+      "Máy chủ thư",
     ]);
     expect(coThanhTab(phien, hien.length)).toBe(true);
   });
 
-  it("thiếu cả `admin.user` lẫn `admin.role` → bốn tab; Người dùng và Phân quyền ẩn", async () => {
+  it("Trường bản đồ đi theo `asset.read` (khoá ĐỌC), không theo `admin.lookup`", async () => {
+    // `admin.lookup` là khoá GHI của tab ấy: có nó mà không có `asset.read` thì GET vẫn 403.
+    const writeOnly = await phienVoi(phanHoiPhien(["admin.lookup"]));
+    expect(nhan(cacTabHien(TAB_CAU_HINH, writeOnly))).not.toContain("Trường bản đồ");
+    const readOnly = await phienVoi(phanHoiPhien(["asset.read"]));
+    expect(nhan(cacTabHien(TAB_CAU_HINH, readOnly))).toContain("Trường bản đồ");
+  });
+
+  it("Máy chủ thư đi theo `admin.lookup` — khoá của cả ba tuyến mail-settings", async () => {
+    const holder = await phienVoi(phanHoiPhien(["admin.lookup"]));
+    expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toContain("Máy chủ thư");
+    const denied = await phienVoi(phanHoiPhien(["asset.read", "admin.org", "admin.sla"]));
+    expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Máy chủ thư");
+  });
+
+  it("thiếu mọi khoá cổng → bốn tab; Người dùng, Phân quyền, Trường bản đồ, Máy chủ thư ẩn", async () => {
     const phien = await phienVoi(phanHoiPhien(["task.read"]));
     const hien = cacTabHien(TAB_CAU_HINH, phien);
     expect(nhan(hien)).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục", "Thời hạn xử lý"]);
@@ -68,7 +85,7 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(hien).not.toContain("Người dùng");
   });
 
-  it("KHÔNG thêm cổng mới: `admin.org` / `admin.lookup` / `admin.sla` không quyết định tab nào hiện", async () => {
+  it("KHÔNG thêm cổng cho bốn tab đọc mở: `admin.org` / `admin.sla` không quyết định tab nào hiện", async () => {
     // Tuyến đọc của bốn tab này mở cho mọi tài khoản đã đăng nhập (GET /sla thì máy chủ tự 403).
     // Giao diện ẩn chúng là giao diện từ chối điều máy chủ không từ chối — luật 5, cấm #1.
     const khong = await phienVoi(phanHoiPhien([]));
@@ -80,7 +97,7 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     ]);
   });
 
-  it("phiên hết hạn (401) → đóng khi không chắc: hai tab có cổng ẩn", async () => {
+  it("phiên hết hạn (401) → đóng khi không chắc: mọi tab có cổng ẩn", async () => {
     const phien = await phienVoi(
       new Response(JSON.stringify({ code: "unauthenticated", message: "Phiên đã hết hạn" }), {
         status: 401,
@@ -91,6 +108,8 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     const hien = nhan(cacTabHien(TAB_CAU_HINH, phien));
     expect(hien).not.toContain("Người dùng");
     expect(hien).not.toContain("Phân quyền");
+    expect(hien).not.toContain("Trường bản đồ");
+    expect(hien).not.toContain("Máy chủ thư");
   });
 
   it("chưa đọc xong phiên → tab có cổng chưa hiện, và CHƯA dựng thanh", () => {

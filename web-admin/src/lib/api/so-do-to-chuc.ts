@@ -1,5 +1,6 @@
 /**
- * Hai tuyến GHI của Sơ đồ tổ chức (`docs/ui-ux/14-cau-hinh.md §1`) — thêm và sửa một bộ phận.
+ * Ba tuyến GHI của Sơ đồ tổ chức (`docs/ui-ux/14-cau-hinh.md §1`) — thêm, sửa, xoá mềm một bộ phận.
+ * Nhập từ Excel ở `org-unit-import.ts`.
  *
  * TUYẾN ĐỌC KHÔNG Ở ĐÂY: `GET /api/v1/org-units` đã có chủ là `layDanhMucBoPhan` trong
  * `danh-muc.ts`, và màn Sơ đồ tổ chức dùng lại đúng hàm ấy. Hàm đọc thứ hai của cùng một tuyến là
@@ -15,14 +16,18 @@
  * biên dịch; thân được dựng TỪNG TRƯỜNG để chặn lúc chạy — một `...than` là đường để `code` đi lên
  * vào ngày ai đó truyền vào một dòng đọc được từ máy chủ.
  *
- * KHÔNG CÓ TUYẾN XOÁ, và không có hàm xoá nào chờ sẵn ở đây: hợp đồng chưa có tuyến ấy, vì §12.4
- * đòi chặn khi bộ phận còn hồ sơ đang giữ ở các dịch vụ khác (`bo_phan.go:24`).
+ * XOÁ (`DELETE /api/v1/org-units/{id}`, ADR 0056) là xoá MỀM kèm lý do bắt buộc, và máy chủ từ chối
+ * khi bộ phận còn cán bộ, bộ phận con hay hồ sơ đang mở ở phân hệ khác (§12.4) — xem `deleteOrgUnit`.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import { docThanKetQua, goiGhi, type KetQua } from "./goi";
+import { CHUNG, docThanKetQua, errorMessageOr, goiGhi, LOI_KHONG_RO, type KetQua } from "./goi";
 import type {
   identity_boPhanDaGhiRa,
+  identity_delete_org_units_by_id,
+  identity_orgUnitDeleteIn,
+  identity_orgUnitHoldingsOut,
+  identity_orgUnitInUseOut,
   identity_patch_org_units_by_id,
   identity_post_org_units,
   identity_suaBoPhanVao,
@@ -83,4 +88,81 @@ export function suaBoPhan(id: string, than: SuaBoPhanVao): Promise<KetQua<identi
   };
   const duongDan = MAU_DUONG_DAN_SUA.replace("{id}", encodeURIComponent(id));
   return goiGhi(duongDan, "PATCH", thanGui, 200).then(docThanKetQua<identity_boPhanDaGhiRa>);
+}
+
+const DELETE_PATH = "/api/v1/org-units/{id}" satisfies identity_delete_org_units_by_id["duongDan"];
+
+/**
+ * One delete attempt. A refusal because the unit still HOLDS something carries the counts, so the
+ * screen can say what must be moved first; every other refusal is the server's sentence only.
+ */
+export type OrgUnitDeleteResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly message: string;
+      /** Only on 409 `org_unit_in_use`; `null` for every other refusal. */
+      readonly holdings: identity_orgUnitHoldingsOut | null;
+    };
+
+/** 503 whose body is not the server's (a proxy page): the same fact, said without the server. */
+export const DELETE_UNAVAILABLE_FALLBACK =
+  "Chưa kiểm được hồ sơ bộ phận đang giữ ở các phân hệ khác, nên chưa xoá. Vui lòng thử lại sau ít phút.";
+
+/**
+ * DELETE /api/v1/org-units/{id} — SOFT delete, reason required (rule 7, invariant 1). 204, no body.
+ *
+ * WHY NOT `goiGhi`: it reduces every refusal to `message`, and the 409 here carries `holdings` —
+ * the counts are the answer to "what do I move before I can delete". The branch is on the HTTP
+ * STATUS and the SHAPE of the body, never on `code` (`goi.ts`): a 409 without a readable
+ * `holdings` object is shown as its sentence alone.
+ *
+ * 503 IS NEVER "DELETED": it means petitions or documents did not answer, and an unanswered
+ * question is not "holds nothing" (ADR 0056). The server's sentence says so; a proxy page gets
+ * `DELETE_UNAVAILABLE_FALLBACK`.
+ *
+ * NO `Idempotency-Key`: the contract declares none, and deleting an already-deleted unit is a 404,
+ * not a second row.
+ */
+export async function deleteOrgUnit(id: string, reason: string): Promise<OrgUnitDeleteResult> {
+  const body: identity_orgUnitDeleteIn = { reason };
+  let res: Response;
+  try {
+    res = await fetch(DELETE_PATH.replace("{id}", encodeURIComponent(id)), {
+      ...CHUNG,
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    // No log: the body carries the reason staff typed (rule 3).
+    return { ok: false, message: LOI_KHONG_RO, holdings: null };
+  }
+
+  if (res.status === 204) return { ok: true };
+  if (res.status === 409) return readInUse(res);
+  if (res.status === 503) {
+    return { ok: false, message: await errorMessageOr(res, DELETE_UNAVAILABLE_FALLBACK), holdings: null };
+  }
+  return { ok: false, message: await errorMessageOr(res, LOI_KHONG_RO), holdings: null };
+}
+
+async function readInUse(res: Response): Promise<OrgUnitDeleteResult> {
+  try {
+    const body = (await res.json()) as Partial<identity_orgUnitInUseOut>;
+    const message = typeof body.message === "string" && body.message !== "" ? body.message : LOI_KHONG_RO;
+    const h = body.holdings;
+    const holdings = h !== null && typeof h === "object" && isHoldings(h) ? h : null;
+    return { ok: false, message, holdings };
+  } catch {
+    return { ok: false, message: LOI_KHONG_RO, holdings: null };
+  }
+}
+
+/** Every count present and a number — a partial object is not shown as "0 of the missing kind". */
+function isHoldings(h: object): h is identity_orgUnitHoldingsOut {
+  const r = h as Record<string, unknown>;
+  return (["staff", "child_units", "open_petitions", "open_tasks", "open_incoming_documents"] as const).every(
+    (k) => typeof r[k] === "number",
+  );
 }

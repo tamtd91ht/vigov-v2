@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type { identity_boPhanRa } from "@/lib/api/schema.gen";
+import { deleteOrgUnit } from "@/lib/api/so-do-to-chuc";
 import { QUYEN_QUAN_LY_SO_DO, quyetDinhTheoKhoa } from "@/lib/quyen";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
@@ -26,7 +27,6 @@ import {
   CAU_THIEU_QUYEN_GHI,
   CHON_KHONG_CO_CHA,
   DANG_TAI,
-  GHI_CHU_CHUA_XOA,
   GIAI_THICH_O_CHA_SUA,
   GIAI_THICH_O_MA_THEM,
   GIAI_THICH_O_TEN,
@@ -51,11 +51,16 @@ import {
   tieuDeThemCon,
   tieuDeThemGoc,
 } from "./nhan-so-do";
+import { DELETE_REASON_ID, OrgUnitDeleteForm } from "./org-unit-delete-form";
+import type { DeleteRefusal } from "./org-unit-delete-form";
+import { DELETE_BUTTON, deleteButtonLabel, deletedSentence } from "./org-unit-delete";
+import { IMPORT_BUTTON } from "./org-unit-import-flow";
+import { OrgUnitImportPanel } from "./org-unit-import-panel";
+import { kiemLyDoXoa } from "./tang-danh-muc";
 
 /**
  * Tab "Sơ đồ tổ chức" — `docs/ui-ux/14-cau-hinh.md §1`: cây bộ phận của đơn vị; thêm, đổi tên,
- * dời sang bộ phận cha khác, đổi thứ tự. KHÔNG CÓ XOÁ — hợp đồng chưa có tuyến ấy
- * (`PHAN_CHUA_DUNG`, `nhan-cau-hinh.ts`).
+ * dời sang bộ phận cha khác, đổi thứ tự, XOÁ MỀM kèm lý do (ADR 0056), và nhập từ Excel.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * CÂY HIỆN CHO MỌI TÀI KHOẢN, CHỈ NÚT GHI MỚI ẨN — cùng khuôn tab Danh mục, và vì cùng một lý do ở
@@ -66,8 +71,12 @@ import {
  * ĐỌC LẠI SAU MỖI LẦN GHI, KHÔNG VÁ TẠI CHỖ. Phản hồi của hai tuyến ghi KHÔNG mang `staff_count`
  * (`bo_phan.go:53`), nên vẽ lại thẻ từ phản hồi ấy là in "0 cán bộ" cho một bộ phận mười hai người.
  *
- * NÚT `⬆ Nhập từ Excel` CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY: không tuyến nào đứng sau nó. Một nút bấm vào
- * không có gì xảy ra khiến cán bộ tin mình thao tác sai.
+ * XOÁ: máy chủ là bên chặn khi bộ phận còn cán bộ, bộ phận con hay hồ sơ đang mở ở phân hệ khác
+ * (409 kèm số đếm từng loại; 503 khi chưa hỏi được phân hệ khác — KHÔNG BAO GIỜ là "đã xoá"). Nút
+ * `🗑` vì vậy hiện trên mọi thẻ, kể cả thẻ "0 cán bộ": con số ấy chỉ là một trong năm thứ được đếm.
+ *
+ * MỘT BIỂU MẪU MỞ MỘT LÚC: mở biểu mẫu xoá thì đóng biểu mẫu thêm/sửa và ngược lại — hai bản nháp
+ * mở cùng lúc trên màn 320px là một bản nháp không nhìn thấy.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 export function TabSoDoToChuc() {
@@ -86,6 +95,14 @@ export function TabSoDoToChuc() {
    * không giữ phần tử: sau một lần lưu, cây được đọc lại và nút có thể là một phần tử MỚI.
    */
   const nutDaMo = useRef<string | null>(null);
+
+  /** The unit whose delete form is open, and that form's state. */
+  const [removing, setRemoving] = useState<identity_boPhanRa | null>(null);
+  const [reason, setReason] = useState("");
+  const [deleteLocalError, setDeleteLocalError] = useState("");
+  const [refusal, setRefusal] = useState<DeleteRefusal | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const phien = usePhien();
   /** Ba trạng thái: chưa đọc xong phiên thì chưa vẽ nút ghi nào, cũng chưa nói "thiếu quyền". */
@@ -107,6 +124,10 @@ export function TabSoDoToChuc() {
 
   // Mở biểu mẫu → tiêu điểm vào ô đầu tiên. Đóng → tiêu điểm về nút đã mở nó.
   useEffect(() => {
+    if (removing !== null) {
+      document.getElementById(DELETE_REASON_ID)?.focus();
+      return;
+    }
     if (dangMo !== null) {
       document.getElementById(O_TEN_ID)?.focus();
       return;
@@ -115,13 +136,14 @@ export function TabSoDoToChuc() {
       document.getElementById(nutDaMo.current)?.focus();
       nutDaMo.current = null;
     }
-  }, [dangMo]);
+  }, [dangMo, removing]);
 
   const items = useMemo(() => (tai.pha === "xong" ? tai.items : []), [tai]);
   const cay = useMemo(() => dungCay(items), [items]);
 
   const mo = useCallback((m: DangMo, banDau: BanNhap, idNut: string) => {
     nutDaMo.current = idNut;
+    setRemoving(null);
     datDangMo(m);
     datBan(banDau);
     datLoiTaiCho("");
@@ -140,9 +162,51 @@ export function TabSoDoToChuc() {
           idNutMo("themCon", cha.id),
         ),
       sua: (bp) => mo({ kieu: "sua", bp }, banSua(bp), idNutMo("sua", bp.id)),
+      xoa: (bp) => {
+        nutDaMo.current = deleteButtonId(bp.id);
+        datDangMo(null);
+        setRemoving(bp);
+        setReason("");
+        setDeleteLocalError("");
+        setRefusal(null);
+        datCauDaXong("");
+      },
     }),
     [mo],
   );
+
+  const closeDelete = useCallback(() => {
+    setRemoving(null);
+    setDeleteLocalError("");
+    setRefusal(null);
+  }, []);
+
+  const submitDelete = useCallback(() => {
+    if (removing === null || deleting) return;
+    const checked = kiemLyDoXoa(reason);
+    if (!checked.ok) {
+      setDeleteLocalError(checked.loi);
+      return;
+    }
+    setDeleteLocalError("");
+    setRefusal(null);
+    setDeleting(true);
+    const unit = removing;
+    void deleteOrgUnit(unit.id, checked.giaTri).then((r) => {
+      setDeleting(false);
+      if (!r.ok) {
+        // The form stays open with the reason as typed: once what the unit holds is moved, the
+        // same click is the retry.
+        setRefusal({ message: r.message, holdings: r.holdings });
+        return;
+      }
+      // The card is gone after the reload, so focus has nowhere to return to.
+      nutDaMo.current = null;
+      setRemoving(null);
+      datCauDaXong(deletedSentence(unit.name));
+      datLanDoc((n) => n + 1);
+    });
+  }, [deleting, reason, removing]);
 
   const dong = useCallback(() => {
     datDangMo(null);
@@ -188,6 +252,19 @@ export function TabSoDoToChuc() {
       />
     );
   const neo = dangMo === null ? undefined : theNeo(dangMo);
+  const deleteForm =
+    removing === null ? null : (
+      <OrgUnitDeleteForm
+        unit={removing}
+        reason={reason}
+        setReason={setReason}
+        localError={deleteLocalError}
+        refusal={refusal}
+        sending={deleting}
+        onSubmit={submitDelete}
+        onCancel={closeDelete}
+      />
+    );
 
   return (
     <section className="tab-so-do-to-chuc" aria-labelledby="tieu-de-so-do">
@@ -208,8 +285,24 @@ export function TabSoDoToChuc() {
         coQuyenGhi={coQuyenGhi}
         thieuQuyen={quyetDinhGhi !== null && !quyetDinhGhi.hien && quyetDinhGhi.vi === "khong-du-quyen"}
         thaoTac={thaoTac}
-        bieuMauDauTab={neo === null ? bieuMau : null}
-        bieuMauTaiThe={neo !== undefined && neo !== null ? { id: neo, node: bieuMau } : null}
+        onOpenImport={() => setImportOpen(true)}
+        bieuMauDauTab={
+          importOpen && coQuyenGhi ? (
+            <OrgUnitImportPanel
+              onImported={() => datLanDoc((n) => n + 1)}
+              onClose={() => setImportOpen(false)}
+            />
+          ) : neo === null ? (
+            bieuMau
+          ) : null
+        }
+        bieuMauTaiThe={
+          removing !== null
+            ? { id: removing.id, node: deleteForm }
+            : neo !== undefined && neo !== null
+              ? { id: neo, node: bieuMau }
+              : null
+        }
       />
     </section>
   );
@@ -223,12 +316,18 @@ type TrangThaiTai =
   | { pha: "loi"; thongBao: string }
   | { pha: "xong"; items: readonly identity_boPhanRa[] };
 
-/** Ba thao tác mà nút trên tab gọi. */
+/** Bốn thao tác mà nút trên tab gọi. */
 export type ThaoTacCay = {
   readonly themGoc: () => void;
   readonly themCon: (cha: identity_boPhanRa) => void;
   readonly sua: (bp: identity_boPhanRa) => void;
+  readonly xoa: (bp: identity_boPhanRa) => void;
 };
+
+/** `id` of a card's delete button — focus returns there when the delete form is cancelled. */
+export function deleteButtonId(unitId: string): string {
+  return `nut-xoa-bo-phan-${unitId}`;
+}
 
 /**
  * Thân tab: nút thêm, câu thiếu quyền, cây hoặc trạng thái rỗng/lỗi.
@@ -243,6 +342,7 @@ export function KhungSoDo({
   coQuyenGhi,
   thieuQuyen,
   thaoTac,
+  onOpenImport,
   bieuMauDauTab,
   bieuMauTaiThe,
 }: {
@@ -251,13 +351,17 @@ export function KhungSoDo({
   coQuyenGhi: boolean;
   thieuQuyen: boolean;
   thaoTac: ThaoTacCay;
+  onOpenImport: () => void;
   bieuMauDauTab: ReactNode;
   bieuMauTaiThe: { id: string; node: ReactNode } | null;
 }) {
   return (
     <>
       {coQuyenGhi && (
-        <p>
+        <p className="cum-nut">
+          <button type="button" className="nut-phu" onClick={onOpenImport}>
+            {IMPORT_BUTTON}
+          </button>
           <button
             type="button"
             className="nut-phu"
@@ -269,7 +373,6 @@ export function KhungSoDo({
         </p>
       )}
       {thieuQuyen && <p className="trang-thai-rong">{CAU_THIEU_QUYEN_GHI}</p>}
-      <p className="ghi-chu">{GHI_CHU_CHUA_XOA}</p>
 
       {bieuMauDauTab}
 
@@ -338,9 +441,7 @@ function CapBoPhan({
 }
 
 /**
- * Một thẻ bộ phận: tên, mã, số cán bộ, và — khi có `admin.org` — hai nút `＋` và `✎`.
- *
- * KHÔNG CÓ NÚT `🗑`, KỂ CẢ NÚT MỜ. Một nút xoá bấm vào không có gì xảy ra còn tệ hơn không có nút.
+ * Một thẻ bộ phận: tên, mã, số cán bộ, và — khi có `admin.org` — ba nút `＋`, `✎` và `🗑`.
  */
 function TheBoPhan({
   bp,
@@ -384,6 +485,15 @@ function TheBoPhan({
             onClick={() => thaoTac.sua(bp)}
           >
             {NUT_SUA_BO_PHAN}
+          </button>
+          <button
+            type="button"
+            className="nut-phu nut-xoa"
+            id={deleteButtonId(bp.id)}
+            aria-label={deleteButtonLabel(bp.name)}
+            onClick={() => thaoTac.xoa(bp)}
+          >
+            {DELETE_BUTTON}
           </button>
         </span>
       )}

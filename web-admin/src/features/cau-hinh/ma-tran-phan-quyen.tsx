@@ -11,6 +11,9 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import { oDaCap, trangThaiMaTran, type BangDaCap } from "./ma-tran-quyen";
+import { RoleTemplateSeedPanel } from "./role-template-seed-panel";
+import { unheldPermissionWarnings } from "./role-templates";
+import type { UnheldWarning } from "./role-templates";
 import {
   CHU_THICH_BANG_SUA,
   CHU_THICH_BANG_XEM,
@@ -79,11 +82,15 @@ export function MaTranPhanQuyen({
 }) {
   /** `null` là CHƯA ĐỌC XONG, khác hẳn "đọc xong và hỏng". Ba pha, không hai (`goi.ts`). */
   const [phanHoi, datPhanHoi] = useState<KetQua<identity_maTranQuyenRa> | null>(null);
+  /** Bumped after "Tạo tám vai trò mẫu" succeeds: the new columns exist only on the server. */
+  const [reloadCount, setReloadCount] = useState(0);
 
   /**
-   * MỘT LỜI GỌI, MỘT LẦN, CHO CẢ MÀN HÌNH — `[]` ở cuối effect là phần quan trọng nhất của khối
-   * này. Hàng, cột và ô đã cấp về trong cùng một phản hồi vì ma trận chỉ đúng khi ba thứ ấy được
-   * đọc ở cùng một thời điểm (`lib/api/phan-quyen.ts`).
+   * MỘT LỜI GỌI CHO CẢ MA TRẬN — một lần khi mở màn, và một lần nữa sau mỗi lần gieo vai trò mẫu
+   * thành công (`reloadCount`), không lần nào khác. Hàng, cột và ô đã cấp về trong cùng một phản hồi
+   * vì ma trận chỉ đúng khi ba thứ ấy được đọc ở cùng một thời điểm (`lib/api/phan-quyen.ts`). Đọc
+   * lại thì bản sửa chưa lưu của mọi cột bị dựng lại từ bản mới — cái giá được chấp nhận, vì cột mới
+   * vừa gieo phải hiện ra đúng quyền máy chủ đã cấp.
    *
    * `bo` chặn một phản hồi đến muộn ghi vào một component đã rời màn hình.
    *
@@ -99,9 +106,17 @@ export function MaTranPhanQuyen({
     return () => {
       bo = true;
     };
-  }, []);
+  }, [reloadCount]);
 
   const trangThai = useMemo(() => trangThaiMaTran(phanHoi), [phanHoi]);
+  /** From the SAVED grants only — see `unheldPermissionWarnings`. */
+  const warnings = useMemo(
+    () =>
+      trangThai.pha === "coDuLieu"
+        ? unheldPermissionWarnings(trangThai.nhom, trangThai.vaiTro, trangThai.daCap)
+        : [],
+    [trangThai],
+  );
 
   /**
    * Bản sửa, dựng lại MỖI LẦN có phản hồi đọc mới. `null` khi chưa có ma trận để sửa. Cặp
@@ -131,6 +146,12 @@ export function MaTranPhanQuyen({
 
       {/* Câu hướng dẫn của đặc tả §4 khi sửa được; câu chỉ-xem khi không. */}
       <p className="ghi-chu">{choSua ? HUONG_DAN_SUA : GHI_CHU_CHI_XEM}</p>
+
+      {/* The seed button follows the same gate as the ticks: `admin.role`, the key the route
+          declares. Convenience only — the server checks it, and #14, on the call. */}
+      {choSua && <RoleTemplateSeedPanel onSeeded={() => setReloadCount((n) => n + 1)} />}
+
+      <UnheldPermissionWarnings warnings={warnings} />
 
       {trangThai.pha === "dangDoc" && <p role="status">Đang tải ma trận phân quyền…</p>}
 
@@ -306,6 +327,23 @@ export function BangMaTran({
           </tbody>
         ))}
       </table>
+    </div>
+  );
+}
+
+/**
+ * The ADR 0055 warning lines, one per watched key no working role holds. Exported so the test
+ * renders it with data it controls (the parent reads the API inside an effect).
+ *
+ * TEXT, NOT COLOUR: the sentence names the key and the consequence; the styling is a second signal.
+ */
+export function UnheldPermissionWarnings({ warnings }: { warnings: readonly UnheldWarning[] }) {
+  if (warnings.length === 0) return null;
+  return (
+    <div className="canh-bao-pham-vi" role="note">
+      {warnings.map((w) => (
+        <p key={w.code}>{w.sentence}</p>
+      ))}
     </div>
   );
 }

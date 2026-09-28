@@ -4,6 +4,8 @@ import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
+import { MailServerTab } from "./mail-server-tab";
+import { MapFieldTab } from "./map-field-tab";
 import { TabDanhMuc } from "./tab-danh-muc";
 import { TabNguoiDung } from "./tab-nguoi-dung";
 import { TabPhanQuyen } from "./tab-phan-quyen";
@@ -24,7 +26,9 @@ const NOI_DUNG: Record<MaTabCauHinh, () => ReactNode> = {
   "nguoi-dung": () => <TabNguoiDung />,
   "phan-quyen": () => <TabPhanQuyen />,
   "danh-muc": () => <TabDanhMuc />,
+  "truong-ban-do": () => <MapFieldTab />,
   "thoi-han-xu-ly": () => <TabThoiHanXuLy />,
+  "may-chu-thu": () => <MailServerTab />,
 };
 
 const idTab = (ma: MaTabCauHinh) => `tab-cau-hinh-${ma}`;
@@ -36,7 +40,7 @@ const idPanel = (ma: MaTabCauHinh) => `panel-cau-hinh-${ma}`;
  *
  * PANEL KHÔNG ĐƯỢC CHỌN VẪN ĐƯỢC GIỮ (`hidden`), không gỡ khỏi cây: một cột Phân quyền đang sửa dở
  * hay một biểu mẫu nhập nửa chừng mà mất chỉ vì bấm sang tab khác là mất việc của cán bộ. Cái giá là
- * mọi tab được phép đều đọc dữ liệu của nó ngay khi mở màn — đúng như khi sáu phần còn dựng nối tiếp.
+ * mọi tab được phép đều đọc dữ liệu của nó ngay khi mở màn — đúng như khi các phần còn dựng nối tiếp.
  *
  * Tab đang chọn chỉ nằm trong state của component: không ghi `localStorage`, không đồng bộ URL.
  */
@@ -66,8 +70,8 @@ export function KhungTabCauHinh() {
 
   return (
     <>
-      {/* Phiên đọc hỏng thì hai tab có cổng bị ẩn (đóng khi không chắc). Câu của máy chủ — thường là
-          "phiên đã hết hạn" — phải còn ra tới màn hình, như khi hai phần ấy tự hiện nó. */}
+      {/* Phiên đọc hỏng thì các tab có cổng bị ẩn (đóng khi không chắc). Câu của máy chủ — thường là
+          "phiên đã hết hạn" — phải còn ra tới màn hình, như khi các phần ấy tự hiện nó. */}
       {phien !== null && !phien.ok && (
         <p className="thong-bao-loi" role="alert">
           {phien.thongBao}

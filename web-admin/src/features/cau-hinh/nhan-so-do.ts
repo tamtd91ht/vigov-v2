@@ -123,12 +123,5 @@ export function nhanCayRong(themDuoc: boolean): string {
 
 /** Câu hiện thay cho các nút ghi khi tài khoản không có `admin.org`. */
 export const CAU_THIEU_QUYEN_GHI =
-  "Tài khoản của bạn chỉ xem được sơ đồ tổ chức. Việc thêm và sửa bộ phận cần quyền Quản lý sơ " +
-  "đồ tổ chức.";
-
-/**
- * Vì sao thẻ không có nút `🗑 Xoá bộ phận` của đặc tả — nói ngay trong tab, một lần. Lý do đầy đủ
- * nằm ở mục "xoá bộ phận" của `PHAN_CHUA_DUNG` (`nhan-cau-hinh.ts`); câu này không chép lại lý do.
- */
-export const GHI_CHU_CHUA_XOA =
-  "Chưa xoá được bộ phận từ màn hình này. Lý do ghi ở phần chưa dựng cuối trang.";
+  "Tài khoản của bạn chỉ xem được sơ đồ tổ chức. Việc thêm, sửa, xoá bộ phận và nhập từ Excel cần " +
+  "quyền Quản lý sơ đồ tổ chức.";

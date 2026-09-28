@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { suaBoPhan, themBoPhan, type SuaBoPhanVao } from "./so-do-to-chuc";
+import { DELETE_UNAVAILABLE_FALLBACK, deleteOrgUnit, suaBoPhan, themBoPhan, type SuaBoPhanVao } from "./so-do-to-chuc";
+import { LOI_KHONG_RO } from "./goi";
 
 /**
  * Hai tuyến ghi của Sơ đồ tổ chức. Tệp này canh những gì KHÔNG nhìn thấy trên một màn hình chạy tốt:
@@ -100,5 +101,54 @@ describe("suaBoPhan — PATCH /api/v1/org-units/{id}", () => {
     const cau = "Không thể dời một bộ phận vào dưới chính nó hay dưới một bộ phận con của nó.";
     batFetch(() => phanHoi(409, { code: "org_unit_cycle", message: cau, trace_id: "t" }));
     expect(await suaBoPhan("01JBP1", { parent_id: "01JCON" })).toEqual({ ok: false, thongBao: cau });
+  });
+});
+
+describe("deleteOrgUnit — DELETE /api/v1/org-units/{id}", () => {
+  it("DELETE with the reason in the BODY (never the query), id in the path, no Idempotency-Key", async () => {
+    const fake = batFetch(() => new Response(null, { status: 204 }));
+    expect(await deleteOrgUnit("01J/BP", "Sáp nhập vào Văn phòng")).toEqual({ ok: true });
+    const g = loiGoi(fake);
+    expect(g.duongDan).toBe("/api/v1/org-units/01J%2FBP");
+    expect(g.phuongThuc).toBe("DELETE");
+    expect(g.than).toEqual({ reason: "Sáp nhập vào Văn phòng" });
+    expect(g.header.get("Idempotency-Key")).toBeNull();
+    expect(g.duongDan).not.toContain("?");
+  });
+
+  it("409 org_unit_in_use carries the holdings and the server's sentence", async () => {
+    const message = "Bộ phận còn 3 cán bộ, 2 nhiệm vụ chưa hoàn thành — chuyển trước khi xoá.";
+    const holdings = { staff: 3, child_units: 0, open_petitions: 0, open_tasks: 2, open_incoming_documents: 0 };
+    batFetch(() => phanHoi(409, { code: "org_unit_in_use", message, trace_id: "t", holdings }));
+    expect(await deleteOrgUnit("01JBP1", "x")).toEqual({ ok: false, message, holdings });
+  });
+
+  it("409 whose holdings are partial is shown as its sentence alone — never '0' for a missing kind", async () => {
+    batFetch(() => phanHoi(409, { code: "org_unit_in_use", message: "Còn giữ hồ sơ.", holdings: { staff: 1 } }));
+    expect(await deleteOrgUnit("01JBP1", "x")).toEqual({ ok: false, message: "Còn giữ hồ sơ.", holdings: null });
+  });
+
+  it("503 is never 'deleted': the server's sentence, or the honest fallback when a proxy answered", async () => {
+    const sentence = "Chưa kiểm được hồ sơ bộ phận đang giữ ở phân hệ phản ánh hoặc văn bản, nên chưa xoá.";
+    batFetch(() => phanHoi(503, { code: "org_unit_delete_unavailable", message: sentence }));
+    expect(await deleteOrgUnit("01JBP1", "x")).toEqual({ ok: false, message: sentence, holdings: null });
+
+    batFetch(() => new Response("<html>503</html>", { status: 503 }));
+    expect(await deleteOrgUnit("01JBP1", "x")).toEqual({
+      ok: false,
+      message: DELETE_UNAVAILABLE_FALLBACK,
+      holdings: null,
+    });
+  });
+
+  it("404 and network failure are sentences, no holdings", async () => {
+    batFetch(() => phanHoi(404, { code: "org_unit_not_found", message: "Không tìm thấy bộ phận." }));
+    expect(await deleteOrgUnit("01JBP1", "x")).toEqual({
+      ok: false,
+      message: "Không tìm thấy bộ phận.",
+      holdings: null,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("mạng hỏng"))));
+    expect(await deleteOrgUnit("01JBP1", "x")).toEqual({ ok: false, message: LOI_KHONG_RO, holdings: null });
   });
 });

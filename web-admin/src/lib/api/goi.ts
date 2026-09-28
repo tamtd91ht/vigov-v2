@@ -52,6 +52,24 @@ export async function thongBaoLoi(phanHoi: Response): Promise<string> {
   }
 }
 
+/**
+ * Like `thongBaoLoi`, but the sentence used when the body is NOT the server's `httpx.Error` is the
+ * caller's, not `LOI_KHONG_RO`.
+ *
+ * FOR ONE CASE ONLY: a status a PROXY also produces with an HTML page of its own — 413 from the
+ * ingress body cap, 502/503 when the service behind it is down. "Không kết nối được máy chủ" is
+ * then wrong: the connection worked and something refused. The caller picks the sentence by the
+ * STATUS it is handling; when the server did write a message, that message still wins, verbatim.
+ */
+export async function errorMessageOr(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = (await res.json()) as httpx_Error;
+    return typeof body?.message === "string" && body.message !== "" ? body.message : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export const CHUNG: RequestInit = {
   // same-origin: cookie phiên đi kèm vì API nằm trên chính host của xã. Không dùng "include" —
   // "include" chỉ cần thiết khi gửi sang origin khác, mà gửi phiên sang origin khác là đúng

@@ -6,21 +6,23 @@ import type { identity_boPhanRa } from "@/lib/api/schema.gen";
 import { banSua, banThem, dungCay, luaChonCha, moThem } from "./cay-bo-phan";
 import {
   CAU_THIEU_QUYEN_GHI,
-  GHI_CHU_CHUA_XOA,
   NUT_SUA_BO_PHAN,
   NUT_THEM_BO_PHAN,
   NUT_THEM_CON,
   nhanCayRong,
 } from "./nhan-so-do";
-import { BieuMauBoPhan, KhungSoDo, type ThaoTacCay } from "./tab-so-do-to-chuc";
+import { DELETE_BUTTON } from "./org-unit-delete";
+import { IMPORT_BUTTON } from "./org-unit-import-flow";
+import { BieuMauBoPhan, KhungSoDo } from "./tab-so-do-to-chuc";
+import type { ThaoTacCay } from "./tab-so-do-to-chuc";
 
 /**
  * Canh việc các quyết định của `cay-bo-phan.ts` CÓ RA TỚI TRANG: nút ghi ẩn khi thiếu `admin.org`,
- * không có nút xoá nào, câu 409 hiện nguyên văn, biểu mẫu sửa không có ô nhập mã. Kết xuất bằng
- * `react-dom/server` trong Node — không jsdom (lý do ở `vitest.config.mts`).
+ * nút xoá và nút nhập Excel chỉ có khi có `admin.org`, câu 409 hiện nguyên văn, biểu mẫu sửa không
+ * có ô nhập mã. Kết xuất bằng `react-dom/server` trong Node — không jsdom (lý do ở `vitest.config.mts`).
  */
 
-const KHONG_LAM_GI: ThaoTacCay = { themGoc: () => {}, themCon: () => {}, sua: () => {} };
+const KHONG_LAM_GI: ThaoTacCay = { themGoc: () => {}, themCon: () => {}, sua: () => {}, xoa: () => {} };
 
 function bp(id: string, name: string, parent_id = "", order = 0): identity_boPhanRa {
   return { id, code: id.toLowerCase(), name, parent_id, order, staff_count: 3 };
@@ -37,6 +39,7 @@ function khung(coQuyenGhi: boolean, thieuQuyen = !coQuyenGhi, items = MAU) {
       coQuyenGhi={coQuyenGhi}
       thieuQuyen={thieuQuyen}
       thaoTac={KHONG_LAM_GI}
+      onOpenImport={() => {}}
       bieuMauDauTab={null}
       bieuMauTaiThe={null}
     />,
@@ -68,11 +71,18 @@ describe("thẻ bộ phận và nút ghi", () => {
     expect(html).not.toContain(CAU_THIEU_QUYEN_GHI);
   });
 
-  it("không vẽ nút xoá nào, kể cả nút mờ — và nói ra là chưa xoá được", () => {
+  it("có admin.org: 🗑 Xoá trên TỪNG thẻ, tên đọc được kèm tên bộ phận; và nút Nhập từ Excel", () => {
     const html = khung(true);
-    expect(html).not.toContain("🗑");
+    expect(html.split(DELETE_BUTTON).length - 1).toBe(MAU.length);
+    expect(html).toContain('aria-label="Xoá bộ phận VĂN PHÒNG"');
+    expect(html).toContain(IMPORT_BUTTON);
+  });
+
+  it("CA BỊ TỪ CHỐI: thiếu admin.org → không nút xoá, không nút nhập Excel", () => {
+    const html = khung(false);
+    expect(html).not.toContain(DELETE_BUTTON);
+    expect(html).not.toContain(IMPORT_BUTTON);
     expect(html).not.toMatch(/Xoá bộ phận/);
-    expect(html).toContain(GHI_CHU_CHUA_XOA);
   });
 
   it("con nằm trong danh sách lồng của cha", () => {
@@ -97,6 +107,7 @@ describe("thẻ bộ phận và nút ghi", () => {
         coQuyenGhi={false}
         thieuQuyen={false}
         thaoTac={KHONG_LAM_GI}
+        onOpenImport={() => {}}
         bieuMauDauTab={null}
         bieuMauTaiThe={null}
       />,
